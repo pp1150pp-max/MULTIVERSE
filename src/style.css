@@ -326,3 +326,21 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 .char-slot .cdel:hover { color: #ff8a7a; border-color: #6b2a1a; }
 .char-slot .cdel.armed { color: #fff; background: #8a2a1a; border-color: #ff8a7a; }
 #btn-enter-world:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ---------------------------------------------------------------- online */
+
+.plate.ally .pname { color: #9fe0ff; }
+.plate.ally .pfill { background: #3ec05a; }
+.loot-label.locked { opacity: 0.55; }
+#chat { position: absolute; left: 12px; bottom: 92px; width: min(420px, 45vw); pointer-events: auto; }
+#chat input {
+  width: 100%; font-family: inherit; font-size: 14px; padding: 6px 10px; color: var(--ink);
+  background: rgba(12, 10, 8, 0.9); border: 1px solid var(--gold); border-radius: 4px; outline: none;
+}
+.log-line.chat { color: #ffffff; }
+.log-line.chat b { color: #9fe0ff; font-weight: 600; }
+.log-line.system { color: #b9b09a; font-style: italic; }
+#hud-online { margin-top: 2px; font-size: 12px; color: #9fe0ff; text-shadow: 0 0 3px #000; }
+#disconnect { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(0, 0, 0, 0.75); pointer-events: auto; z-index: 7; }
+#disconnect h2 { font-family: 'Cinzel', 'Kanit', serif; color: #ffcf9a; margin: 0; font-size: 30px; }
+#disconnect p { color: var(--ink-dim); margin: 0; }

@@ -40,7 +40,7 @@ export class AutoPlay {
       let best = null as { x: number; z: number } | null;
       let bd = 9;
       for (const l of g.loots) {
-        if (l.dead || l.dropped || (l.kind.type === 'item' && !p.hasBagSpace())) continue;
+        if (l.dead || l.dropped || !l.canTake(p.id, g.time) || (l.kind.type === 'item' && !p.hasBagSpace())) continue;
         const d = dist(l);
         if (d < bd) {
           bd = d;

@@ -11,6 +11,11 @@ export interface Intent {
   skills: SkillSlot[];
   dash: boolean;
   potion: 'hp' | 'mp' | null;
+  /**
+   * Online only: where the client walked its character this frame. The server checks the
+   * distance is possible before passing it on; the simulation then uses it instead of `move`/`moveTo`.
+   */
+  pos?: Vec2 | null;
 }
 
 export const IDLE_INTENT: Intent = { move: null, moveTo: null, aim: { x: 0, z: 0 }, basic: false, skills: [], dash: false, potion: null };

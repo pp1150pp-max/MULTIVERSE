@@ -1,13 +1,12 @@
 import * as THREE from 'three';
 import type { Vec2 } from '../shared/types';
-import { ZONE_1, type ZoneDef } from '../shared/data/zones';
+import type { ZoneDef } from '../shared/data/zones';
 import { NPC_IDS, NPC_INFO, NPC_TALK_RANGE, type NpcId } from '../shared/data/npcs';
-import { Sim } from '../shared/sim/Sim';
 import type { Player } from '../shared/sim/Player';
 import type { Monster } from '../shared/sim/Monster';
 import type { Loot } from '../shared/sim/Loot';
-import type { Projectile } from '../shared/sim/Projectile';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../shared/sim/types';
+import type { Backend, ProjectileLike } from './backend';
 import { World } from './world';
 import { Input } from './input';
 import { Effects } from './effects';
@@ -17,7 +16,6 @@ import { AutoPlay } from './autoplay';
 import { SpriteActor } from './SpriteActor';
 import { sheets } from './assets';
 import { LootView, MonsterView, PlayerView, ProjectileView, ViewSet } from './views';
-import { writeSave, type SaveData } from './save';
 
 /** Camera sits along this direction from its target: 45° yaw, ~47° pitch. */
 const ISO_DIR = new THREE.Vector3(1, 1.45, 1).normalize();
@@ -30,16 +28,21 @@ export type { Intent };
 
 export interface Npc { id: NpcId; name: string; action: string; x: number; z: number; actor: SpriteActor }
 
+/** Saving for singleplayer; online characters are saved by the server. */
+export interface LocalPersist {
+  metSeeker: boolean;
+  save(game: Game): void;
+}
+
 /**
- * Singleplayer: runs the shared simulation locally and draws it. All game rules live in
- * src/shared/sim; this class only handles input, camera, rendering and the HUD.
+ * Draws the world and handles input, camera and HUD. The world itself comes from a Backend:
+ * a local simulation (singleplayer) or the server (multiplayer). All game rules live in src/shared.
  */
 export class Game {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
   readonly camera: THREE.OrthographicCamera;
-  readonly zone: ZoneDef = ZONE_1;
-  readonly sim: Sim;
+  readonly zone: ZoneDef;
   readonly world: World;
   readonly input: Input;
   readonly fx: Effects;
@@ -63,12 +66,13 @@ export class Game {
   private readonly ndc = new THREE.Vector2();
   private readonly playerViews: ViewSet<Player, PlayerView>;
   private readonly monsterViews: ViewSet<Monster, MonsterView>;
-  private readonly projectileViews: ViewSet<Projectile, ProjectileView>;
+  private readonly projectileViews: ViewSet<ProjectileLike, ProjectileView>;
   private readonly lootViews: ViewSet<Loot, LootView>;
   private saveT = 0;
   private last = 0;
 
-  constructor(container: HTMLElement, save: SaveData) {
+  constructor(container: HTMLElement, readonly backend: Backend, private readonly persist: LocalPersist | null) {
+    this.zone = backend.zone;
     this.renderer = new THREE.WebGLRenderer({ antialias: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -80,14 +84,14 @@ export class Game {
     this.camera = new THREE.OrthographicCamera(-aspect, aspect, 1, -1, 0.1, 400);
     this.updateProjection();
 
-    this.sim = new Sim(this.zone);
-    this.world = new World(this.scene, this.sim.terrain);
+    this.world = new World(this.scene, backend.terrain);
     this.input = new Input(this.renderer.domElement);
     this.fx = new Effects(this.scene);
     this.floating = new Floating(document.getElementById('float-layer')!);
 
-    this.player = this.sim.addPlayer(save);
-    this.metSeeker = save.metSeeker;
+    this.player = backend.me;
+    // Online, the Seeker's intro is only shown when you talk to him.
+    this.metSeeker = persist?.metSeeker ?? true;
     this.camTarget.set(this.player.x, 0, this.player.z);
 
     this.playerViews = new ViewSet((p) => new PlayerView(p, this.scene));
@@ -97,7 +101,7 @@ export class Game {
     this.syncViews();
 
     for (const id of NPC_IDS) {
-      const pos = this.sim.terrain.npcPos[id];
+      const pos = backend.terrain.npcPos[id];
       const actor = new SpriteActor(sheets[id], 1.95, 0.4);
       actor.group.position.set(pos.x, 0, pos.z);
       actor.face(-1, -1);
@@ -113,9 +117,9 @@ export class Game {
     window.addEventListener('beforeunload', () => this.save());
   }
 
-  get monsters(): Monster[] { return this.sim.monsters; }
-  get loots(): Loot[] { return this.sim.loots; }
-  get time(): number { return this.sim.time; }
+  get monsters(): readonly Monster[] { return this.backend.monsters; }
+  get loots(): readonly Loot[] { return this.backend.loots; }
+  get time(): number { return this.backend.time; }
 
   start(): void {
     this.last = performance.now();
@@ -158,19 +162,19 @@ export class Game {
   }
 
   save(): void {
-    writeSave({ v: 1, ...this.player.toData(), metSeeker: this.metSeeker });
+    this.persist?.save(this);
   }
 
   respawn(): void {
-    this.sim.respawn(this.player);
+    this.backend.respawn();
   }
 
   npcDistance(id: NpcId): number {
-    return this.sim.npcDistance(this.player, id);
+    return this.backend.npcDistance(id);
   }
 
   dropFromBag(i: number): void {
-    this.sim.dropFromBag(this.player, i);
+    this.backend.drop(i);
   }
 
   private updateProjection(): void {
@@ -186,10 +190,10 @@ export class Game {
   // ------------------------------------------------------------ simulation → screen
 
   private syncViews(): void {
-    this.playerViews.sync(this.sim.players);
-    this.monsterViews.sync(this.sim.monsters);
-    this.projectileViews.sync(this.sim.projectiles);
-    this.lootViews.sync(this.sim.loots);
+    this.playerViews.sync(this.backend.players);
+    this.monsterViews.sync(this.backend.monsters);
+    this.projectileViews.sync(this.backend.projectiles);
+    this.lootViews.sync(this.backend.loots);
   }
 
   private viewById(id: number): PlayerView | MonsterView | undefined {
@@ -312,6 +316,7 @@ export class Game {
     if (i.pressed('KeyI') || i.pressed('KeyB')) this.hud.toggleBag();
     if (i.pressed('KeyH')) this.hud.toggleHelp();
     if (i.pressed('Escape')) this.hud.closePanels();
+    if (i.pressed('Enter') && this.backend.online) this.hud.openChat();
     if (i.wheel) {
       this.viewSize = Math.max(10, Math.min(28, this.viewSize + i.wheel * 1.2));
       this.updateProjection();
@@ -324,10 +329,10 @@ export class Game {
       if (this.hud.dialogOpen) intent = { ...intent, move: null, moveTo: null, basic: false, skills: [], dash: false };
       else if (this.autoPlay) intent = this.auto.intent(this, intent);
     }
-    this.sim.step(dt, (pl) => (pl === p ? intent : IDLE_INTENT));
+    const events = this.backend.frame(dt, intent);
 
     this.syncViews();
-    for (const ev of this.sim.drainEvents()) this.handleEvent(ev);
+    for (const ev of events) this.handleEvent(ev);
     for (const v of this.playerViews.values()) v.update(dt, this.fx);
     for (const v of this.monsterViews.values()) v.update(dt);
     for (const v of this.projectileViews.values()) v.update();

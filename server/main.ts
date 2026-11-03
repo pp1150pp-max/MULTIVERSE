@@ -13,6 +13,7 @@ import {
   type AuthResponse, type CharacterSummary, type MeResponse,
 } from '../src/shared/api';
 import { newCharacterData } from '../src/shared/sim/Player';
+import { GameWorld } from './world';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const PORT = Number(process.env.PORT ?? 2567);
@@ -202,6 +203,8 @@ const server = createServer(async (req, res) => {
   }
 });
 
+const world = new GameWorld(db, server);
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\nMULTIVERSE server พร้อมแล้ว — port ${PORT}`);
   console.log(`  เครื่องนี้:   http://localhost:${PORT}`);
@@ -216,6 +219,7 @@ server.listen(PORT, '0.0.0.0', () => {
 });
 
 const shutdown = () => {
+  world.saveAll();
   server.close();
   db.close();
   process.exit(0);

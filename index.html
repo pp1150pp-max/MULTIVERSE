@@ -24,6 +24,7 @@
             </div>
           </div>
           <div id="hud-zone"></div>
+          <div id="hud-online" class="hidden"></div>
         </div>
 
         <div id="boss-bar" class="hidden">
@@ -41,6 +42,7 @@
         </div>
 
         <div id="log"></div>
+        <div id="chat" class="hidden"><input id="chat-input" maxlength="120" placeholder="พิมพ์ข้อความ แล้วกด Enter (Esc = ยกเลิก)" autocomplete="off" /></div>
 
         <div id="hud-bottom">
           <div class="bars">
@@ -135,6 +137,12 @@
           <button id="btn-respawn">ฟื้นคืนชีพที่แคมป์</button>
         </div>
 
+        <div id="disconnect" class="hidden">
+          <h2>หลุดการเชื่อมต่อ</h2>
+          <p id="disconnect-msg"></p>
+          <button id="btn-reconnect" class="primary">กลับไปหน้าเมนู</button>
+        </div>
+
         <div id="tooltip" class="hidden"></div>
       </div>
 
@@ -203,7 +211,7 @@
                 <button id="btn-enter-world" class="primary" disabled>เข้าสู่โลก</button>
                 <button class="btn-back" type="button">← กลับ</button>
               </div>
-              <p id="enter-note" class="hint">ระบบเล่นออนไลน์ (เข้าโลกเดียวกับเพื่อน) จะเปิดในอัปเดตถัดไป ตอนนี้สร้างและเลือกตัวละครรอไว้ได้เลย</p>
+              <p class="hint">เลือกตัวละคร แล้วกด “เข้าสู่โลก” เพื่อเล่นในโลกเดียวกับทุกคนที่ออนไลน์อยู่</p>
             </div>
           </div>
           <div class="menu-foot">Prototype v0.2 · Zone 1: Emerald Forest</div>
