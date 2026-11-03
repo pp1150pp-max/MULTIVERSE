@@ -6,16 +6,21 @@ import { MONSTERS } from '../data/monsters';
 import { expGapMult, expToNext, mitigate, MAX_LEVEL } from '../formulas';
 import { rollItem } from '../data/items';
 import { enhanceCost, itemName, MAX_PLUS, plusOf, rollEnhance, type EnhanceResult } from '../data/enhance';
-import { POTION_PRICE } from '../data/shop';
+import { entryName, potionName, POTIONS } from '../data/potions';
 import { NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { rand, randInt } from '../rng';
-import type { Item } from '../types';
+import { isPotion, RARITY_LABEL, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
 import { Terrain } from './terrain';
-import { Player, type CharacterData } from './Player';
+import { Player, type CharacterData, type LootFilter, type SortKey } from './Player';
 import { Monster } from './Monster';
 import { Projectile, type ProjOpts } from './Projectile';
 import { Loot, LOOT_PRIORITY_TIME, type LootKind } from './Loot';
 import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type SimEvent } from './types';
+
+/** Gear of this rarity that "sell all" may take: never potions or enhanced items. */
+export function isBulkSellable(e: BagEntry | null, rarity: Rarity): e is Item {
+  return !!e && !isPotion(e) && e.rarity === rarity && !plusOf(e);
+}
 
 interface Spawner { area: SpawnArea; alive: number; queue: number[]; boss: boolean }
 
@@ -259,12 +264,12 @@ export class Sim {
     if (m.isBoss) {
       const n = randInt(r, 2, 3);
       for (let i = 0; i < n; i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, cls, 1.5) }, owner);
-      this.spawnLoot(m, { type: 'potion', pot: 'hp' }, owner);
-      this.spawnLoot(m, { type: 'potion', pot: 'mp' }, owner);
+      this.spawnLoot(m, { type: 'potion', pot: 'hp', size: 's', count: 1 }, owner);
+      this.spawnLoot(m, { type: 'potion', pot: 'mp', size: 's', count: 1 }, owner);
       return;
     }
     if (r() < d.itemChance) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, cls) }, owner);
-    if (r() < d.potionChance) this.spawnLoot(m, { type: 'potion', pot: r() < 0.6 ? 'hp' : 'mp' }, owner);
+    if (r() < d.potionChance) this.spawnLoot(m, { type: 'potion', pot: r() < 0.6 ? 'hp' : 'mp', size: 's', count: 1 }, owner);
   }
 
   private spawnLoot(m: Monster, kind: LootKind, owner?: number): void {
@@ -282,9 +287,9 @@ export class Sim {
       p.gold += k.amount;
       this.text(p.x, p.topY, p.z, `+${k.amount} G`, 'gold', 0.7, p.id);
     } else if (k.type === 'potion') {
-      if (k.pot === 'hp') p.hpPots++;
-      else p.mpPots++;
-      this.text(p.x, p.topY, p.z, k.pot === 'hp' ? '+ยา HP' : '+ยา MP', k.pot === 'hp' ? 'heal' : 'mana', 0.7, p.id);
+      if (!p.addPotions(k.pot, k.size, k.count)) return false;
+      this.text(p.x, p.topY, p.z, `+${potionName(k.pot, k.size)}${k.count > 1 ? ` ×${k.count}` : ''}`, k.pot === 'hp' ? 'heal' : 'mana', 0.7, p.id);
+      this.inventoryChanged(p);
     } else {
       if (!p.addToBag(k.item)) return false;
       this.events.push({ t: 'item', to: p.id, item: k.item });
@@ -297,8 +302,11 @@ export class Sim {
     const item = p.takeFromBag(i);
     if (!item) return false;
     const a = Math.random() * Math.PI * 2;
-    this.loots.push(new Loot(this.newId(), p.x + Math.cos(a), p.z + Math.sin(a), p.x, p.z, { type: 'item', item }, { dropped: true }));
-    this.log(`วาง ${itemName(item)} ลงบนพื้น (เก็บคืนได้ภายใน 60 วินาที)`, '#b9b09a', p.id);
+    const kind: LootKind = isPotion(item)
+      ? { type: 'potion', pot: item.potion, size: item.size, count: item.count }
+      : { type: 'item', item };
+    this.loots.push(new Loot(this.newId(), p.x + Math.cos(a), p.z + Math.sin(a), p.x, p.z, kind, { dropped: true }));
+    this.log(`วาง ${entryName(item)} ลงบนพื้น (เก็บคืนได้ภายใน 60 วินาที)`, '#b9b09a', p.id);
     this.afterChange(p);
     return true;
   }
@@ -316,21 +324,38 @@ export class Sim {
   }
 
   private afterChange(p: Player): void {
-    this.events.push({ t: 'inventory', to: p.id });
+    this.inventoryChanged(p);
     this.events.push({ t: 'save', to: p.id });
   }
 
-  buyPotion(p: Player, kind: 'hp' | 'mp', n: number): boolean {
+  /** The bag changed in a small way (a potion drunk or picked up): refresh it, no save needed. */
+  inventoryChanged(p: Player): void {
+    this.events.push({ t: 'inventory', to: p.id });
+  }
+
+  setLootFilter(p: Player, f: LootFilter): void {
+    p.lootFilter = { rarities: [...f.rarities], potions: f.potions };
+    this.events.push({ t: 'save', to: p.id });
+  }
+
+  sortBag(p: Player, key: SortKey, desc: boolean): void {
+    p.sortBag(key, desc);
+    this.afterChange(p);
+  }
+
+  buyPotion(p: Player, kind: PotionKind, size: PotionSize, n: number): boolean {
     if (!this.near(p, 'merchant') || n <= 0) return false;
-    const cost = POTION_PRICE[kind] * n;
+    const cost = POTIONS[kind][size].price * n;
     if (p.gold < cost) {
       this.log('ทองไม่พอ', '#ff8a6a', p.id);
       return false;
     }
+    if (!p.addPotions(kind, size, n)) {
+      this.log('กระเป๋าเต็ม — ยาช่องละไม่เกิน 10 ขวด', '#ff8a6a', p.id);
+      return false;
+    }
     p.gold -= cost;
-    if (kind === 'hp') p.hpPots += n;
-    else p.mpPots += n;
-    this.log(`ซื้อยา ${kind.toUpperCase()} × ${n} (−${cost} G)`, '#f2c230', p.id);
+    this.log(`ซื้อ${potionName(kind, size)} × ${n} (−${cost} G)`, '#f2c230', p.id);
     this.afterChange(p);
     return true;
   }
@@ -338,27 +363,29 @@ export class Sim {
   sellItem(p: Player, i: number): number {
     const item = p.bag[i];
     if (!item || !this.near(p, 'merchant')) return 0;
+    const name = entryName(item);
     const v = p.sell(i);
-    this.log(`ขาย ${itemName(item)} ได้ ${v} G`, '#f2c230', p.id);
+    this.log(`ขาย ${name} ได้ ${v} G`, '#f2c230', p.id);
     this.afterChange(p);
     return v;
   }
 
-  sellAllCommon(p: Player): number {
+  /** Sells every bag item of this rarity. Enhanced (+N) items are kept. */
+  sellAllOfRarity(p: Player, rarity: Rarity): number {
     if (!this.near(p, 'merchant')) return 0;
     let n = 0;
     let total = 0;
     p.bag.forEach((it, i) => {
-      if (it && it.rarity === 'common' && !plusOf(it)) {
+      if (isBulkSellable(it, rarity)) {
         total += p.sell(i);
         n++;
       }
     });
     if (!n) {
-      this.log('ไม่มีของระดับธรรมดาในกระเป๋า', '#b9b09a', p.id);
+      this.log(`ไม่มีของระดับ${RARITY_LABEL[rarity]}ในกระเป๋า (ของที่ตีบวกแล้วจะไม่ถูกขาย)`, '#b9b09a', p.id);
       return 0;
     }
-    this.log(`ขายของธรรมดา ${n} ชิ้น ได้ ${total} G`, '#f2c230', p.id);
+    this.log(`ขายของระดับ${RARITY_LABEL[rarity]} ${n} ชิ้น ได้ ${total} G`, '#f2c230', p.id);
     this.afterChange(p);
     return total;
   }
@@ -366,7 +393,7 @@ export class Sim {
   /** One enhancement attempt on a weapon the player owns (equipped or in the bag). */
   enhance(p: Player, uid: string): { result: EnhanceResult; item: Item } | null {
     if (!this.near(p, 'blacksmith')) return null;
-    const item = [p.equipment.weapon, ...p.bag].find((w) => w && w.uid === uid && w.slot === 'weapon');
+    const item = [p.equipment.weapon, ...p.bag].find((w): w is Item => !!w && !isPotion(w) && w.uid === uid && w.slot === 'weapon');
     if (!item || plusOf(item) >= MAX_PLUS) return null;
     const cost = enhanceCost(item);
     if (p.gold < cost) return null;

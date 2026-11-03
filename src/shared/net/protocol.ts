@@ -1,9 +1,10 @@
 // WebSocket messages between the browser and the game server (JSON). The server runs the
 // simulation; clients send their input and get snapshots of what is near them plus SimEvents.
 import type { SkillSlot } from '../data/classes';
-import type { ClassId, Item, SlotId, Stats, Vec2 } from '../types';
+import type { BagEntry, ClassId, Item, PotionKind, PotionSize, Rarity, SlotId, Stats, Vec2 } from '../types';
 import type { LootKind } from '../sim/Loot';
 import type { SimEvent } from '../sim/types';
+import type { LootFilter, PotionSelect, SortKey } from '../sim/Player';
 import type { EnhanceResult } from '../data/enhance';
 
 export const WS_PATH = '/ws';
@@ -36,9 +37,13 @@ export type ActionMsg =
   | { t: 'act'; a: 'equip'; i: number }
   | { t: 'act'; a: 'unequip'; slot: SlotId }
   | { t: 'act'; a: 'drop'; i: number }
-  | { t: 'act'; a: 'buy'; kind: 'hp' | 'mp'; n: number }
+  | { t: 'act'; a: 'buy'; kind: PotionKind; size: PotionSize; n: number }
+  | { t: 'act'; a: 'sort'; key: SortKey; desc: boolean }
+  /** Auto Play on/off. The server plays it, so it keeps farming while the browser tab is hidden. */
+  | { t: 'act'; a: 'auto'; on: boolean }
+  | { t: 'act'; a: 'lootFilter'; filter: LootFilter }
   | { t: 'act'; a: 'sell'; i: number }
-  | { t: 'act'; a: 'sellCommon' }
+  | { t: 'act'; a: 'sellRarity'; rarity: Rarity }
   | { t: 'act'; a: 'enhance'; uid: string; req: number };
 
 export type ClientMsg =
@@ -75,14 +80,14 @@ export interface LootSnap {
 /** Only sent to the player it belongs to. */
 export interface PrivateSnap {
   hp: number; mp: number; exp: number; level: number; gold: number;
-  hpPots: number; mpPots: number; stats: Stats;
+  potSel: PotionSelect; lootFilter: LootFilter; stats: Stats;
   cd: Partial<Record<SkillSlot, number>>; potCd: number;
-  /** True while the server moves the character (dash, knockback, stun, dead) — follow its position. */
+  /** True while the server moves the character (dash, knockback, stun, dead, Auto Play) — follow its position. */
   serverMoves: boolean;
   /** Changes when the server teleports the character (respawn) — jump straight there. */
   epoch: number;
   /** Bag and equipment, only when they changed since the last snapshot. */
-  inv?: { equipment: Partial<Record<SlotId, Item>>; bag: (Item | null)[] };
+  inv?: { equipment: Partial<Record<SlotId, Item>>; bag: (BagEntry | null)[] };
 }
 
 export interface SnapshotMsg {

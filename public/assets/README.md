@@ -110,3 +110,12 @@ python tools/extract_sheet.py ภาพชีต.png public/assets/sprites/playe
 ตัวผู้เล่นสูงประมาณ 1.9 ยูนิตต่อ 1 ช่อง ถ้าภาพจริงดูเล็กหรือใหญ่เกินไป ให้ปรับค่านี้
 
 เปิด DevTools (F12) → Console จะมีข้อความ `[assets] N loaded from files: ...` บอกว่าไฟล์ไหนโหลดสำเร็จ
+
+## ภาพแผนที่ (CraftPix Summer Tileset)
+
+ต้นไม้ พุ่มไม้ หิน ตอไม้ เต็นท์ กองไฟ รั้ว ธง บ่อน้ำ ถังไม้ เกวียน หีบ หอสังเกตการณ์ (`sprites/props/`)
+และพื้นหญ้า/ทราย (`sprites/ground/`) มาจาก [CraftPix — Free Simple Summer Top-Down Vector Tileset](https://craftpix.net/)
+License: https://craftpix.net/file-licenses/
+
+ไฟล์ถูกแปลงด้วย `python tools/import_craftpix.py` (ลบเงาในภาพ เพราะเกมวาดเงาเอง และตัดขอบว่างออก)
+ถ้าจะเปลี่ยนว่าภาพไหนใช้กับอะไร ให้แก้ตาราง `PROPS` ในสคริปต์นั้นแล้วรันใหม่

@@ -6,13 +6,15 @@ import type { Server as HttpServer } from 'node:http';
 import type { Db } from './db';
 import { Sim } from '../src/shared/sim/Sim';
 import { ZONE_1 } from '../src/shared/data/zones';
-import type { Player } from '../src/shared/sim/Player';
+import { SORT_KEYS, type LootFilter, type Player } from '../src/shared/sim/Player';
+import { POTION_SIZES } from '../src/shared/data/potions';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../src/shared/sim/types';
+import { AutoPlay, type AutoWorld } from '../src/shared/sim/autoplay';
 import {
   CHAT_MAX, INTEREST_RADIUS, SNAPSHOT_HZ, TICK_HZ, WS_PATH, r2,
   type ClientMsg, type InputMsg, type ActionMsg, type PrivateSnap, type ServerMsg, type SnapshotMsg,
 } from '../src/shared/net/protocol';
-import { SLOTS, type SlotId, type Vec2 } from '../src/shared/types';
+import { RARITIES, SLOTS, type SlotId, type Vec2 } from '../src/shared/types';
 import type { SkillSlot } from '../src/shared/data/classes';
 
 const AUTOSAVE_MS = 30_000;
@@ -32,6 +34,10 @@ interface Session {
   skills: SkillSlot[];
   dash: boolean;
   potion: 'hp' | 'mp' | null;
+  /** Server-side Auto Play, when the player turned it on. */
+  auto: AutoPlay | null;
+  /** When the last input message arrived (a hidden browser tab stops sending them). */
+  lastInputAt: number;
   /** Position the client reported and the server accepted, applied on the next tick. */
   pendingPos: Vec2 | null;
   lastPosAt: number;
@@ -64,6 +70,9 @@ function eventPos(ev: SimEvent): Vec2 | null {
 function serverMoves(p: Player): boolean {
   return !p.alive || p.isDashing || p.stunT > 0 || Math.abs(p.kbx) + Math.abs(p.kbz) > 0.05;
 }
+
+/** Input older than this is treated as "let go of everything" so a stalled client doesn't keep walking. */
+const INPUT_STALE_MS = 500;
 
 export class GameWorld {
   readonly sim = new Sim(ZONE_1);
@@ -145,7 +154,7 @@ export class GameWorld {
     const s: Session = {
       ws, accountId: acc.id, username: acc.username, charId, player,
       move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null,
-      pendingPos: null, lastPosAt: performance.now(), epoch: 0, lastInv: '', outbox: [], lastChatAt: 0, saveDue: null,
+      auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), epoch: 0, lastInv: '', outbox: [], lastChatAt: 0, saveDue: null,
     };
     this.sessions.add(s);
     this.byPlayer.set(player, s);
@@ -169,6 +178,7 @@ export class GameWorld {
 
   private onInput(s: Session, m: InputMsg): void {
     const p = s.player;
+    s.lastInputAt = performance.now();
     s.move = vec(m.move);
     s.aim = vec(m.aim) ?? s.aim;
     s.basic = m.basic === true;
@@ -178,7 +188,7 @@ export class GameWorld {
 
     const pos = vec(m.pos);
     const now = performance.now();
-    if (!pos || serverMoves(p)) {
+    if (!pos || serverMoves(p) || s.auto) {
       s.lastPosAt = now;
       return;
     }
@@ -209,13 +219,28 @@ export class GameWorld {
         if (i >= 0 && i < p.bag.length) sim.dropFromBag(p, i);
         break;
       case 'buy':
-        if (m.kind === 'hp' || m.kind === 'mp') sim.buyPotion(p, m.kind, Math.max(0, Math.min(99, Math.floor(num(m.n)))));
+        if ((m.kind === 'hp' || m.kind === 'mp') && POTION_SIZES.includes(m.size)) {
+          sim.buyPotion(p, m.kind, m.size, Math.max(0, Math.min(99, Math.floor(num(m.n)))));
+        }
+        break;
+      case 'auto':
+        s.auto = m.on === true && ZONE_1.allowAutoPlay ? (s.auto ?? new AutoPlay()) : null;
+        s.pendingPos = null;
+        break;
+      case 'lootFilter': {
+        const f = m.filter as Partial<LootFilter> | undefined;
+        if (!f || !Array.isArray(f.rarities)) break;
+        sim.setLootFilter(p, { rarities: RARITIES.filter((r) => f.rarities!.includes(r)), potions: f.potions !== false });
+        break;
+      }
+      case 'sort':
+        if (SORT_KEYS.includes(m.key)) sim.sortBag(p, m.key, m.desc === true);
         break;
       case 'sell':
         if (i >= 0 && i < p.bag.length) sim.sellItem(p, i);
         break;
-      case 'sellCommon':
-        sim.sellAllCommon(p);
+      case 'sellRarity':
+        if (RARITIES.includes(m.rarity)) sim.sellAllOfRarity(p, m.rarity);
         break;
       case 'enhance': {
         const out = typeof m.uid === 'string' ? sim.enhance(p, m.uid) : null;
@@ -245,10 +270,16 @@ export class GameWorld {
   private intentOf = (p: Player): Intent => {
     const s = this.byPlayer.get(p);
     if (!s) return IDLE_INTENT;
-    const it: Intent = {
-      move: s.move, moveTo: null, aim: s.aim, basic: s.basic, skills: s.skills,
+    const fresh = performance.now() - s.lastInputAt < INPUT_STALE_MS;
+    let it: Intent = {
+      move: fresh ? s.move : null, moveTo: null, aim: s.aim,
+      basic: fresh && s.basic, skills: fresh ? s.skills : [],
       dash: s.dash, potion: s.potion, pos: s.pendingPos,
     };
+    if (s.auto) {
+      const world: AutoWorld = { player: p, monsters: this.sim.monsters, loots: this.sim.loots, time: this.sim.time, zone: ZONE_1 };
+      it = s.auto.intent(world, { ...it, move: null, pos: null });
+    }
     s.dash = false;
     s.potion = null;
     s.pendingPos = null;
@@ -299,8 +330,8 @@ export class GameWorld {
     const inv = JSON.stringify([p.equipment, p.bag]);
     const me: PrivateSnap = {
       hp: r2(p.hp), mp: r2(p.mp), exp: p.exp, level: p.level, gold: p.gold,
-      hpPots: p.hpPots, mpPots: p.mpPots, stats: p.stats, cd: p.cd, potCd: r2(p.potCd),
-      serverMoves: serverMoves(p), epoch: s.epoch,
+      potSel: p.potSel, lootFilter: p.lootFilter, stats: p.stats, cd: p.cd, potCd: r2(p.potCd),
+      serverMoves: serverMoves(p) || !!s.auto, epoch: s.epoch,
     };
     if (inv !== s.lastInv) {
       s.lastInv = inv;

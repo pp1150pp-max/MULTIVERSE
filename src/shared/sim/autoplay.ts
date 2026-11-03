@@ -1,14 +1,29 @@
-import type { Game } from './Game';
-import type { Intent } from '../shared/sim/types';
-import type { Monster } from '../shared/sim/Monster';
-import { MONSTERS } from '../shared/data/monsters';
-import type { SkillSlot } from '../shared/data/classes';
+import type { Intent } from './types';
+import type { Monster } from './Monster';
+import type { Player } from './Player';
+import type { Loot } from './Loot';
+import { MONSTERS } from '../data/monsters';
+import type { SkillSlot } from '../data/classes';
+import type { ZoneDef } from '../data/zones';
+
+/** What the bot needs to see. The browser's Game fits this (singleplayer); the server builds one per player online. */
+export interface AutoWorld {
+  readonly player: Player;
+  readonly monsters: readonly Monster[];
+  readonly loots: readonly Loot[];
+  readonly time: number;
+  readonly zone: ZoneDef;
+}
 
 const RANGE: Record<string, number> = { sword: 1.9, mage: 8.5, gunslinger: 9 };
+/** Loot within this distance is fetched even while monsters attack; up to LOOT_FAR when it's calm. */
+const LOOT_NEAR = 5;
+const LOOT_FAR = 9;
 
 /**
- * Open-world farming bot. Manual input always wins for that frame,
- * so the player can steer or fight at any time while Auto stays on.
+ * Open-world farming bot. Singleplayer runs it in the browser; online the server runs it, so it
+ * keeps farming while the tab is hidden. Walking by hand turns it off (Game.update); manual attacks
+ * and skills just win for that frame while Auto stays on.
  * Bosses are skipped on purpose — those are meant to be fought by hand.
  */
 export class AutoPlay {
@@ -21,7 +36,7 @@ export class AutoPlay {
     this.roam = null;
   }
 
-  intent(g: Game, manual: Intent): Intent {
+  intent(g: AutoWorld, manual: Intent): Intent {
     const p = g.player;
     if (manual.move || manual.moveTo || manual.basic) {
       this.reset();
@@ -31,26 +46,26 @@ export class AutoPlay {
     const dist = (a: { x: number; z: number }) => Math.hypot(a.x - p.x, a.z - p.z);
 
     if (!out.potion && p.potCd <= 0) {
-      if (p.hp < p.maxHp * 0.45 && p.hpPots > 0) out.potion = 'hp';
-      else if (p.mp < p.stats.maxMp * 0.15 && p.mpPots > 0) out.potion = 'mp';
+      if (p.hp < p.maxHp * 0.45 && p.potionCount('hp') > 0) out.potion = 'hp';
+      else if (p.mp < p.stats.maxMp * 0.15 && p.potionCount('mp') > 0) out.potion = 'mp';
     }
 
+    // Loot close by is picked up even mid-fight; farther loot only when nothing is attacking.
+    // Loot that doesn't fit in the bag (or the loot filter skips) is ignored, so a full bag just keeps fighting.
     const threatened = g.monsters.some((m) => m.isHostile && dist(m) < 3.5);
-    if (!threatened) {
-      let best = null as { x: number; z: number } | null;
-      let bd = 9;
-      for (const l of g.loots) {
-        if (l.dead || l.dropped || !l.canTake(p.id, g.time) || (l.kind.type === 'item' && !p.hasBagSpace())) continue;
-        const d = dist(l);
-        if (d < bd) {
-          bd = d;
-          best = l;
-        }
+    let best = null as { x: number; z: number } | null;
+    let bd = threatened ? LOOT_NEAR : LOOT_FAR;
+    for (const l of g.loots) {
+      if (l.dead || l.dropped || !l.canTake(p.id, g.time) || !p.wantsLoot(l.kind, false) || !p.canFit(l.kind)) continue;
+      const d = dist(l);
+      if (d < bd) {
+        bd = d;
+        best = l;
       }
-      if (best) {
-        out.moveTo = { x: best.x, z: best.z };
-        return out;
-      }
+    }
+    if (best) {
+      out.moveTo = { x: best.x, z: best.z };
+      return out;
     }
 
     const t = this.target;
@@ -95,13 +110,13 @@ export class AutoPlay {
     return out;
   }
 
-  private tryCast(g: Game, out: Intent, slot: SkillSlot): void {
+  private tryCast(g: AutoWorld, out: Intent, slot: SkillSlot): void {
     const p = g.player;
     const sk = p.skill(slot);
     if (sk && (p.cd[slot] ?? 0) <= 0 && p.mp >= sk.mp + 5 && !out.skills.includes(slot)) out.skills.push(slot);
   }
 
-  private pickTarget(g: Game): Monster | null {
+  private pickTarget(g: AutoWorld): Monster | null {
     const p = g.player;
     let best: Monster | null = null;
     let bs = Infinity;
@@ -120,7 +135,7 @@ export class AutoPlay {
   }
 
   /** Walk toward the best farming spot for the current level. */
-  private roamPoint(g: Game): { x: number; z: number } {
+  private roamPoint(g: AutoWorld): { x: number; z: number } {
     const p = g.player;
     if (this.roam && Math.hypot(this.roam.x - p.x, this.roam.z - p.z) > 1) return this.roam;
     const areas = g.zone.spawns.filter((s) => MONSTERS[s.monster].levels[0] <= p.level + 1);
