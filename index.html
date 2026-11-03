@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Multiverse — The Shattering</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6' fill='%23f2d58a'/><circle cx='8' cy='8' r='3' fill='%23fff8e0'/></svg>" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Kanit:wght@300;400;600&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="app">
+      <div id="float-layer"></div>
+
+      <div id="hud" class="hidden">
+        <div id="hud-topleft">
+          <div class="char-card">
+            <div id="hud-portrait"></div>
+            <div>
+              <div id="hud-name"></div>
+              <div id="hud-level"></div>
+              <div id="hud-gold"></div>
+            </div>
+          </div>
+          <div id="hud-zone"></div>
+        </div>
+
+        <div id="boss-bar" class="hidden">
+          <div id="boss-name"></div>
+          <div class="bar"><div id="boss-fill" class="fill"></div></div>
+        </div>
+
+        <div id="hud-topright">
+          <canvas id="minimap" width="176" height="176"></canvas>
+          <div class="hud-buttons">
+            <button id="btn-auto">AUTO: OFF (F)</button>
+            <button id="btn-bag">กระเป๋า (I)</button>
+            <button id="btn-help">ช่วยเหลือ (H)</button>
+          </div>
+        </div>
+
+        <div id="log"></div>
+
+        <div id="hud-bottom">
+          <div class="bars">
+            <div class="bar hp"><div id="hp-fill" class="fill"></div><span id="hp-text"></span></div>
+            <div class="bar mp"><div id="mp-fill" class="fill"></div><span id="mp-text"></span></div>
+          </div>
+          <div id="skillbar"></div>
+          <div id="expbar"><div id="exp-fill" class="fill"></div><span id="exp-text"></span></div>
+        </div>
+
+        <div id="inventory" class="panel hidden">
+          <div class="panel-head"><span>ตัวละคร &amp; กระเป๋า</span><button id="inv-close">✕</button></div>
+          <div class="inv-body">
+            <div class="inv-left">
+              <div id="equip-slots"></div>
+              <div id="stat-list"></div>
+            </div>
+            <div class="inv-right">
+              <div id="bag-grid"></div>
+              <div class="inv-foot"><span id="inv-gold"></span><span id="inv-pots"></span></div>
+              <div class="hint" id="bag-hint"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="shop" class="panel hidden">
+          <div class="panel-head"><span>พ่อค้า — Merchant</span><button id="shop-close">✕</button></div>
+          <p class="npc-line">“ของดีราคาถูก! มีอะไรจะขายก็เอามาได้เลย ข้ารับซื้อทุกอย่าง”</p>
+          <div class="shop-section">ซื้อ</div>
+          <div class="shop-row">
+            <span class="shop-item">❤️ ยา HP <small>ฟื้น HP 40%</small></span>
+            <span class="shop-price" id="price-hp"></span>
+            <button data-buy="hp:1">ซื้อ 1</button><button data-buy="hp:10">ซื้อ 10</button>
+          </div>
+          <div class="shop-row">
+            <span class="shop-item">💧 ยา MP <small>ฟื้น MP 50%</small></span>
+            <span class="shop-price" id="price-mp"></span>
+            <button data-buy="mp:1">ซื้อ 1</button><button data-buy="mp:10">ซื้อ 10</button>
+          </div>
+          <div class="shop-section">ขาย</div>
+          <p class="hint" style="margin-top:0">คลิกขวาที่ไอเทมในกระเป๋าเพื่อขาย (ขายได้ที่พ่อค้าเท่านั้น)</p>
+          <button id="sell-common">ขายของระดับ “ธรรมดา” ทั้งหมดในกระเป๋า</button>
+          <div class="shop-foot"><span id="shop-gold"></span><span id="shop-pots"></span></div>
+        </div>
+
+        <div id="forge" class="panel hidden">
+          <div class="panel-head"><span>ช่างตีเหล็ก — Blacksmith</span><button id="forge-close">✕</button></div>
+          <p class="npc-line">“เอาอาวุธมาให้ข้า จะตีให้คมกว่าเดิม… แต่ยิ่งบวกสูง ยิ่งเสี่ยงนะ”</p>
+          <div class="shop-section">เลือกอาวุธ</div>
+          <div id="forge-list"></div>
+          <div id="forge-detail"></div>
+          <button id="forge-go" class="primary">🔨 ตีบวก</button>
+          <div id="forge-result"></div>
+          <details class="forge-rates">
+            <summary>ตารางโอกาสสำเร็จ</summary>
+            <div id="forge-table"></div>
+          </details>
+        </div>
+
+        <div id="confirm" class="panel hidden">
+          <div id="confirm-text"></div>
+          <div class="confirm-btns"><button id="confirm-yes" class="primary"></button><button id="confirm-no">ยกเลิก</button></div>
+        </div>
+
+        <div id="help" class="panel hidden">
+          <div class="panel-head"><span>วิธีควบคุม</span><button id="help-close">✕</button></div>
+          <table>
+            <tr><td>WASD / ลูกศร</td><td>เดิน</td></tr>
+            <tr><td>คลิกขวา (ค้าง)</td><td>เดินไปยังจุดที่คลิก</td></tr>
+            <tr><td>คลิกซ้าย (ค้าง)</td><td>โจมตีไปทางเมาส์ (ชี้ที่มอนสเตอร์เพื่อล็อกเป้า)</td></tr>
+            <tr><td>Q / E / R</td><td>สกิล (เล็งด้วยเมาส์)</td></tr>
+            <tr><td>Space</td><td>Dash (ไม่รับดาเมจระหว่างพุ่ง)</td></tr>
+            <tr><td>1 / 2</td><td>ยา HP / ยา MP</td></tr>
+            <tr><td>F</td><td>เปิด/ปิด Auto Play (เฉพาะ Open World)</td></tr>
+            <tr><td>I หรือ B</td><td>กระเป๋า &amp; ตัวละคร</td></tr>
+            <tr><td>T</td><td>คุยกับ NPC เมื่ออยู่ใกล้ (The Seeker · พ่อค้า · ช่างตีเหล็ก ที่แคมป์)</td></tr>
+            <tr><td>ล้อเมาส์</td><td>ซูมกล้อง</td></tr>
+            <tr><td>Esc</td><td>ปิดหน้าต่าง</td></tr>
+          </table>
+          <p class="hint">ไอเทมที่ดรอปจะเก็บอัตโนมัติเมื่อเดินผ่าน · ขายของได้ที่พ่อค้าเท่านั้น (คลิกขวาในกระเป๋านอกร้าน = วางของลงพื้น) · มอนสเตอร์ชื่อสีเทาให้ EXP น้อยลง · ระวังวงสีแดงบนพื้น — นั่นคือท่าโจมตีที่กำลังจะมา ให้ Dash หลบ!</p>
+        </div>
+
+        <div id="dialog" class="hidden">
+          <div class="dialog-name">The Seeker</div>
+          <div id="dialog-text"></div>
+          <div id="dialog-next"></div>
+        </div>
+
+        <div id="death" class="hidden">
+          <h2>คุณพ่ายแพ้</h2>
+          <p>แสงแห่ง The Origin ยังไม่ทอดทิ้งคุณ…</p>
+          <button id="btn-respawn">ฟื้นคืนชีพที่แคมป์</button>
+        </div>
+
+        <div id="tooltip" class="hidden"></div>
+      </div>
+
+      <div id="menu" class="hidden">
+        <div class="menu-inner">
+          <h1>MULTIVERSE</h1>
+          <div class="subtitle">— The Shattering —</div>
+          <div class="lore">
+            <p>ในอดีต จักรวาลเคยเป็นหนึ่งเดียว เรียกว่า <b>The First Cosmos</b> ก่อนจะเกิดการระเบิดครั้งใหญ่ <b>The Shattering</b> ทำให้จักรวาลแตกออกเป็นมิติต่าง ๆ</p>
+            <p>กาลเวลาผ่านไป ความมืดที่เรียกว่า <b>The Devourer</b> เริ่มกลืนกินดวงดาวและมิติ ในวันที่โลกของคุณกำลังล่มสลาย แสงสีทองขาวปริศนาได้ปรากฏขึ้น…</p>
+            <p>คุณตื่นขึ้นอีกครั้ง พร้อมกับ <b>The Seeker</b> ผู้ตามหาความจริงเบื้องหลังพลังโบราณที่ชื่อว่า <b>The Origin</b></p>
+          </div>
+          <div class="name-row">
+            <label for="name-input">ชื่อตัวละคร</label>
+            <input id="name-input" maxlength="16" placeholder="Wanderer" />
+          </div>
+          <div id="class-cards"></div>
+          <div class="menu-buttons">
+            <button id="btn-continue" class="hidden"></button>
+            <button id="btn-start" class="primary">เริ่มการเดินทางใหม่</button>
+          </div>
+          <div class="menu-foot">Prototype v0.1 · Zone 1: Emerald Forest</div>
+        </div>
+      </div>
+
+      <div id="loading">กำลังโหลด…</div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

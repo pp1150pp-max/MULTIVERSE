@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ทดสอบแอนิเมชัน — Sword (Cyberblade)</title>
+<style>
+  :root {
+    --bg: #14161c; --panel: #1d2029; --panel2: #252935; --line: #323746;
+    --text: #e6e8ee; --dim: #9aa0b0; --accent: #5aa0ff;
+    --ok: #4cc38a; --warn: #f0b429; --err: #ef5b5b; --info: #7aa7d9;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 "Segoe UI", "Leelawadee UI", "Noto Sans Thai", Tahoma, sans-serif; }
+  header { padding: 16px 24px; border-bottom: 1px solid var(--line); display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .sub { color: var(--dim); font-size: 13px; }
+  main { display: grid; grid-template-columns: 260px 1fr; min-height: calc(100vh - 62px); }
+  aside { border-right: 1px solid var(--line); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  section.view { padding: 16px 24px 48px; display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+  h2 { font-size: 15px; margin: 0 0 8px; }
+  h3 { font-size: 13px; margin: 14px 0 6px; color: var(--dim); font-weight: normal; }
+  .muted { color: var(--dim); }
+  button, select { background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 10px; font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.on { background: #5aa0ff33; border-color: var(--accent); }
+  button.attn { background: var(--ok); border-color: var(--ok); color: #fff; }
+  label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+  input[type=range] { width: 120px; }
+  kbd { background: var(--panel2); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; font-size: 12px; }
+  code { background: var(--panel2); padding: 0 4px; border-radius: 4px; font-size: 12px; }
+
+  #drop { border: 2px dashed var(--line); border-radius: 10px; padding: 18px 12px; text-align: center; color: var(--dim); font-size: 13px; }
+  #drop.over { border-color: var(--accent); background: #5aa0ff14; color: var(--text); }
+  #drop strong { color: var(--text); display: block; margin-bottom: 6px; font-size: 14px; }
+  #drop .btns { display: flex; gap: 6px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
+
+  #animList { display: flex; flex-direction: column; gap: 4px; }
+  .animItem { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
+  .animItem:hover { background: var(--panel); }
+  .animItem.sel { background: var(--panel2); border-color: var(--line); }
+  .animItem.missing { opacity: .45; cursor: default; }
+  .animItem .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--line); }
+  .animItem .name { flex: 1; }
+  .animItem .meta { color: var(--dim); font-size: 12px; text-align: right; }
+  .animItem .edited { color: var(--warn); font-size: 12px; }
+  .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.err { background: var(--err); }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 18px; }
+  .toolbar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .toolbar .group, .group { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .sep { width: 1px; height: 22px; background: var(--line); }
+  .titleRow { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+  .titleRow h2 { margin: 0; }
+
+  #dirGrid { display: flex; gap: 14px; flex-wrap: wrap; }
+  .dirBox { display: flex; flex-direction: column; gap: 6px; }
+  .dirBox .cap { display: flex; justify-content: space-between; font-size: 13px; }
+  .dirBox canvas { border-radius: 6px; border: 1px solid var(--line); display: block; cursor: pointer; }
+  .dirBox.editing canvas { border-color: var(--accent); }
+  .badge { font-size: 11px; padding: 0 6px; border-radius: 8px; }
+  .badge.warn { background: #f0b42926; color: var(--warn); }
+  .badge.ok { background: #4cc38a22; color: var(--ok); }
+
+  .edLayout { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+  #edCanvas { border-radius: 8px; border: 1px solid var(--line); display: block; cursor: grab; outline: none; max-width: 100%; touch-action: none; }
+  #edCanvas:focus { border-color: var(--accent); }
+  #edCanvas.dragging { cursor: grabbing; }
+  .edSide { flex: 1; min-width: 280px; }
+  #edInfo { background: var(--panel2); border-radius: 8px; padding: 10px 12px; font-variant-numeric: tabular-nums; }
+  #edInfo .big { font-size: 16px; }
+  .pad { display: grid; grid-template-columns: repeat(3, 44px); gap: 4px; }
+  .pad button { padding: 6px 0; }
+
+  #strip { width: 100%; display: block; border-radius: 6px; cursor: pointer; }
+
+  #issues { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  #issues li { padding: 8px 10px 8px 34px; border-radius: 6px; background: var(--panel2); position: relative; }
+  #issues li::before { position: absolute; left: 10px; top: 8px; font-weight: bold; }
+  #issues li.err::before { content: "✕"; color: var(--err); }
+  #issues li.warn::before { content: "!"; color: var(--warn); left: 14px; }
+  #issues li.info::before { content: "i"; color: var(--info); left: 14px; }
+  #issues li.ok::before { content: "✓"; color: var(--ok); }
+  #issues li.err { box-shadow: inset 3px 0 var(--err); }
+  #issues li.warn { box-shadow: inset 3px 0 var(--warn); }
+  #issues li .detail { color: var(--dim); font-size: 13px; }
+
+  table.frames { border-collapse: collapse; font-size: 13px; }
+  table.frames th, table.frames td { border: 1px solid var(--line); padding: 3px 8px; text-align: center; }
+  table.frames th { color: var(--dim); font-weight: normal; }
+  table.frames td { cursor: pointer; font-variant-numeric: tabular-nums; }
+  table.frames td.cur { outline: 2px solid var(--accent); outline-offset: -2px; }
+  table.frames td.ok { color: var(--ok); } table.frames td.warn { color: var(--warn); } table.frames td.err { color: var(--err); }
+  table.frames td.moved { background: #f0b42914; }
+  .tableWrap { overflow-x: auto; }
+
+  #game { display: block; border-radius: 8px; border: 1px solid var(--line); outline: none; max-width: 100%; }
+  #game:focus { border-color: var(--accent); }
+  .keys { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--dim); margin-top: 8px; }
+
+  #empty { text-align: center; padding: 60px 20px; color: var(--dim); }
+  #empty .big { font-size: 40px; }
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--line);
+    padding: 8px 16px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 10; }
+  #toast.show { opacity: 1; }
+  details summary { cursor: pointer; color: var(--dim); }
+  details p, details ol { font-size: 13px; color: var(--dim); margin: 6px 0 0; }
+  details ol { padding-left: 18px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ทดสอบแอนิเมชัน — Sword (Cyberblade)</h1>
+  <span class="sub">ลากไฟล์ PNG มาวางเพื่อดูแอนิเมชัน ตรวจสเปก แก้ตำแหน่งรายเฟรม แยก/รวมรูป · ไฟล์เปิดในเครื่องนี้เท่านั้น ไม่มีการอัปโหลดขึ้นเว็บ</span>
+</header>
+<main>
+  <aside>
+    <div id="drop">
+      <strong>ลากไฟล์มาวางตรงนี้</strong>
+      ชีตทั้งท่า เช่น <code>run.png</code><br>
+      เฟรมแยก เช่น <code>run_left_03.png</code><br>
+      หรือไฟล์ <code>.zip</code> ที่แยกเฟรมไว้
+      <div class="btns">
+        <button class="primary" id="pickFiles">เลือกไฟล์</button>
+        <button id="pickFolder">เลือกโฟลเดอร์</button>
+      </div>
+      <input type="file" id="fileInput" accept="image/png,.zip" multiple hidden>
+      <input type="file" id="folderInput" webkitdirectory hidden>
+    </div>
+    <div>
+      <h2>ท่าทั้งหมด</h2>
+      <div id="animList"></div>
+    </div>
+    <details>
+      <summary>ความหมายของสี</summary>
+      <p>
+        <span style="color:var(--ok)">●</span> ผ่าน<br>
+        <span style="color:var(--warn)">●</span> ใช้ได้ แต่ควรแก้<br>
+        <span style="color:var(--err)">●</span> ต้องแก้ก่อนส่ง<br>
+        <span style="color:var(--line)">●</span> ยังไม่มีไฟล์<br>
+        <span style="color:var(--warn)">✎</span> แก้ไขแล้ว ยังไม่ได้ดาวน์โหลด
+      </p>
+    </details>
+    <details>
+      <summary>แยกรูป / รวมรูป ทำยังไง</summary>
+      <ol>
+        <li>เปิดชีต เช่น <code>run.png</code> แล้วกด <b>แยกเป็นเฟรม (.zip)</b></li>
+        <li>แตก zip แล้วแก้ทีละรูปในโปรแกรมวาด ห้ามเปลี่ยนชื่อไฟล์และขนาด 256×256</li>
+        <li>ลากไฟล์ที่แก้แล้ว (หรือทั้งโฟลเดอร์/zip) กลับมาวางที่หน้านี้ ระบบจะรวมเป็นชีตให้</li>
+        <li>ถ้าเปิดชีตเดิมค้างไว้ ลากมาแค่เฟรมที่แก้ก็พอ ระบบจะแทนที่เฉพาะเฟรมนั้น</li>
+        <li>กด <b>ดาวน์โหลดชีต</b> จะได้ไฟล์ <code>run.png</code> ที่ใช้ในเกมได้ทันที</li>
+      </ol>
+    </details>
+  </aside>
+
+  <section class="view">
+    <div id="empty">
+      <div class="big">🗂️</div>
+      <p>ยังไม่มีไฟล์ ลาก PNG ของท่าต่าง ๆ (เช่น <code>idle.png</code>, <code>run.png</code>) มาวางที่ช่องด้านซ้ายหรือที่ไหนก็ได้ในหน้านี้</p>
+    </div>
+
+    <div id="content" hidden>
+      <div class="panel">
+        <div class="toolbar">
+          <div class="group">
+            <button id="prevBtn" title="เฟรมก่อนหน้า (←)">◀</button>
+            <button id="playBtn" class="primary" style="min-width:76px" title="เล่น/หยุด (Space)">⏸ หยุด</button>
+            <button id="nextBtn" title="เฟรมถัดไป (→)">▶</button>
+            <span id="frameLabel" class="muted" style="min-width:90px"></span>
+          </div>
+          <div class="sep"></div>
+          <div class="group">
+            FPS <input type="range" id="fps" min="1" max="30" step="1"> <span id="fpsLabel" style="min-width:20px"></span>
+            <button id="fpsReset" title="กลับเป็นค่า FPS ตามสเปก">ค่าตามสเปก</button>
+          </div>
+          <div class="sep"></div>
+          <div class="group">
+            ขนาด <select id="zoom"><option value="0.75">75%</option><option value="1" selected>100%</option><option value="1.5">150%</option><option value="2">200%</option></select>
+            พื้นหลัง <select id="bgSel"><option value="checker">ตารางโปร่งใส</option><option value="dark">มืด</option><option value="grass">หญ้า</option><option value="white">ขาว</option></select>
+          </div>
+        </div>
+        <div class="toolbar" style="margin-top:10px">
+          <label><input type="checkbox" id="optGuides" checked> เส้นนำ (เท้า / กลางตัว / หัว)</label>
+          <label><input type="checkbox" id="optShadow"> เงาแบบในเกม</label>
+          <label><input type="checkbox" id="optOnion"> เฟรมก่อนหน้าแบบจาง (onion skin)</label>
+          <label><input type="checkbox" id="optBox"> กรอบเนื้อภาพ</label>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="titleRow">
+          <h2 id="animTitle"></h2>
+          <div class="group">
+            <button id="dlSheet" title="ดาวน์โหลดชีตทั้งท่า (รวมการแก้ไขแล้ว) เอาไปใช้ในเกมได้เลย">⬇ ดาวน์โหลดชีต (.png)</button>
+            <button id="dlFrames" title="แยกทุกเฟรมเป็นไฟล์ 256×256 เพื่อเอาไปแก้ทีละรูป">✂ แยกเป็นเฟรม (.zip)</button>
+          </div>
+        </div>
+        <div id="dirGrid"></div>
+      </div>
+
+      <div class="panel">
+        <h2>แก้ไขรายเฟรม — เลื่อนตัวละครให้เท้าติดพื้น</h2>
+        <p class="muted" style="margin:0 0 12px">ลากภาพด้วยเมาส์ หรือคลิกที่ภาพแล้วกดลูกศร (กด <kbd>Shift</kbd> ค้าง = ทีละ 10 px) ·
+          <kbd>[</kbd> <kbd>]</kbd> เปลี่ยนเฟรม · <kbd>F</kbd> จัดเท้าเฟรมนี้ลงเส้นแดง · แก้เสร็จแล้วกด “ดาวน์โหลดชีต”</p>
+        <div class="edLayout">
+          <canvas id="edCanvas" width="512" height="512" tabindex="0"></canvas>
+          <div class="edSide">
+            <div class="group" id="edDirs"></div>
+            <div class="group" style="margin-top:8px">
+              <button id="edPrev">◀</button>
+              <span id="edFrameLabel" style="min-width:90px;text-align:center"></span>
+              <button id="edNext">▶</button>
+            </div>
+            <div id="edInfo" style="margin-top:10px"></div>
+
+            <h3>เลื่อนตัวละคร (1 px ต่อครั้ง)</h3>
+            <div class="pad">
+              <span></span><button data-move="0,-1" title="ขึ้น">▲</button><span></span>
+              <button data-move="-1,0" title="ซ้าย">◀</button><button data-move="0,1" title="ลง">▼</button><button data-move="1,0" title="ขวา">▶</button>
+            </div>
+
+            <h3>จัดเท้าลงเส้นแดงอัตโนมัติ</h3>
+            <div class="group">
+              <button id="alignFrame">เฟรมนี้</button>
+              <button id="alignDir">ทุกเฟรมของทิศนี้</button>
+              <button id="alignAll">ทุกเฟรมทั้งท่า</button>
+            </div>
+
+            <h3>ยกเลิกการเลื่อน</h3>
+            <div class="group">
+              <button id="resetFrame">รีเซ็ตเฟรมนี้</button>
+              <button id="resetAll">รีเซ็ตทั้งท่า</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>ผลตรวจสเปก</h2>
+        <ul id="issues"></ul>
+      </div>
+
+      <div class="panel">
+        <h2>ตำแหน่งเท้ารายเฟรม <span class="muted" style="font-weight:normal;font-size:13px">(ระยะห่างจากเส้นแดง หน่วย px: 0 = พอดี, + = ต่ำกว่าเส้น, − = ลอยเหนือเส้น · ช่องสีเหลืองอ่อน = เลื่อนแล้ว · คลิกช่องเพื่อไปแก้เฟรมนั้น)</span></h2>
+        <div class="tableWrap"><table class="frames" id="frameTable"></table></div>
+      </div>
+
+      <div class="panel">
+        <h2>ทั้งชีต <span class="muted" style="font-weight:normal;font-size:13px">(คลิกเพื่อไปที่เฟรมนั้น)</span></h2>
+        <canvas id="strip"></canvas>
+      </div>
+
+      <div class="panel">
+        <h2>ทดลองเล่นเหมือนในเกม</h2>
+        <p class="muted" style="margin:0 0 10px">คลิกที่ฉากก่อน แล้วใช้คีย์บอร์ดบังคับตัวละคร ท่าที่ยังไม่มีไฟล์จะถูกข้ามไป</p>
+        <div class="toolbar" style="margin-bottom:10px">
+          <div class="group">ขนาดตัวในฉาก <input type="range" id="gameScale" min="0.3" max="1.2" step="0.05" value="0.6"> <span id="gameScaleLabel"></span></div>
+        </div>
+        <canvas id="game" width="900" height="460" tabindex="0"></canvas>
+        <div class="keys">
+          <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / ลูกศร เดิน</span>
+          <span><kbd>J</kbd> หรือ <kbd>Space</kbd> โจมตี (กดต่อเนื่องเป็นคอมโบ 1→2→3)</span>
+          <span><kbd>Shift</kbd> พุ่งหลบ</span>
+          <span><kbd>Q</kbd> <kbd>E</kbd> <kbd>R</kbd> สกิล</span>
+          <span><kbd>H</kbd> โดนตี</span>
+          <span><kbd>K</kbd> ตาย</span>
+          <span><kbd>L</kbd> ฟื้น</span>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+"use strict";
+// ---------- สเปก (ตรงกับ README.md ในโฟลเดอร์ art_templates/sword) ----------
+const FRAME = 256;          // ขนาด 1 เฟรม
+const FOOT_Y = 240;         // เส้นแดง: ขอบล่างของเท้า (ห่างจากขอบล่าง 16 px)
+const HEAD_Y = 40;          // เส้นประเทา: ความสูงหัวโดยประมาณ
+const CENTER_X = 128;       // เส้นประฟ้า
+const FOOT_TOL = 3;         // ยอมให้คลาดได้ ±3 px
+const ED_SCALE = 2;         // ขยายภาพในช่องแก้ไขรายเฟรม
+const DIRS = ["down", "left", "right", "up"];
+const DIR_TH = { down: "หน้า (down)", left: "ซ้าย (left)", right: "ขวา (right)", up: "หลัง (up)" };
+// ชื่อไฟล์เฟรมแยก: <ท่า>_<ทิศ>_<เลขเฟรม>.png เช่น run_left_03.png
+const FRAME_RE = /^(.+?)_(down|left|right|up|row\d+)_(\d+)\.png$/i;
+
+// free = ท่าที่ตัวละครขยับขึ้นลงได้ตามธรรมชาติ (ไม่เตือนเรื่องเท้า)
+const SPEC = {
+  idle:     { th: "ยืนนิ่ง",            frames: 4, fps: 6,  loop: true },
+  run:      { th: "วิ่ง",               frames: 8, fps: 12, loop: true },
+  attack:   { th: "โจมตี คอมโบ 1",      frames: 6, fps: 14, attack: true },
+  attack_2: { th: "โจมตี คอมโบ 2",      frames: 6, fps: 14, attack: true },
+  attack_3: { th: "โจมตี คอมโบ 3",      frames: 6, fps: 14, attack: true },
+  dash:     { th: "พุ่งหลบ",            frames: 5, fps: 16, free: true },
+  hit:      { th: "โดนตี",              frames: 3, fps: 12 },
+  death:    { th: "ตาย",                frames: 8, fps: 10, free: true },
+  revive:   { th: "ฟื้นคืนชีพ",          frames: 8, fps: 10, free: true },
+  skill_q:  { th: "Q — Whirlwind",      frames: 8, fps: 14 },
+  skill_e:  { th: "E — Charge",         frames: 6, fps: 16, free: true },
+  skill_r:  { th: "R — Earthquake",     frames: 8, fps: 12, free: true },
+};
+
+// ---------- สถานะ ----------
+const anims = {};           // name -> anim (ดู makeAnim)
+let current = null;
+let frame = 0, acc = 0, playing = true, fpsOverride = null;
+let zoom = 1, bgMode = "checker";
+let edRow = 0;              // ทิศที่กำลังแก้ในช่องแก้ไขรายเฟรม
+let uiDirty = false;        // ให้ลูปหลักวาด UI ใหม่หลังแก้ไข
+const $ = (id) => document.getElementById(id);
+const ctx2d = (cv) => cv.getContext("2d", { willReadFrequently: true });
+const dirKey = (r) => DIRS[r] || "row" + (r + 1);
+const dirLabel = (r) => DIRS[r] ? DIR_TH[DIRS[r]] : "แถว " + (r + 1);
+const pad2 = (n) => String(n).padStart(2, "0");
+
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 3000);
+}
+
+// ---------- ZIP (เขียน/อ่าน แบบไม่ต้องใช้ไลบรารี) ----------
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(d) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < d.length; i++) c = CRC_TABLE[(c ^ d[i]) & 255] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+function makeZip(entries) {      // entries: [{ name, data: Uint8Array }] — เก็บแบบไม่บีบอัด (PNG บีบอัดอยู่แล้ว)
+  const enc = new TextEncoder();
+  const parts = [], central = [];
+  let offset = 0;
+  for (const e of entries) {
+    const nm = enc.encode(e.name), crc = crc32(e.data), len = e.data.length;
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true);
+    h.setUint16(12, 0x21, true); h.setUint32(14, crc, true); h.setUint32(18, len, true); h.setUint32(22, len, true);
+    h.setUint16(26, nm.length, true);
+    parts.push(h, nm, e.data);
+    const c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true);
+    c.setUint16(14, 0x21, true); c.setUint32(16, crc, true); c.setUint32(20, len, true); c.setUint32(24, len, true);
+    c.setUint16(28, nm.length, true); c.setUint32(42, offset, true);
+    central.push(c, nm);
+    offset += 30 + nm.length + len;
+  }
+  const csize = central.reduce((s, p) => s + p.byteLength, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, entries.length, true); end.setUint16(10, entries.length, true);
+  end.setUint32(12, csize, true); end.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, end], { type: "application/zip" });
+}
+
+async function unzipPngs(file) {
+  const buf = new Uint8Array(await file.arrayBuffer());
+  const dv = new DataView(buf.buffer);
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--)
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error("not a zip");
+  const count = dv.getUint16(eocd + 10, true);
+  let p = dv.getUint32(eocd + 16, true);
+  const out = [], dec = new TextDecoder();
+  for (let k = 0; k < count; k++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+    const nlen = dv.getUint16(p + 28, true), elen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true);
+    const lho = dv.getUint32(p + 42, true);
+    const name = dec.decode(buf.subarray(p + 46, p + 46 + nlen));
+    p += 46 + nlen + elen + clen;
+    if (!/\.png$/i.test(name) || name.includes("__MACOSX")) continue;
+    const start = lho + 30 + dv.getUint16(lho + 26, true) + dv.getUint16(lho + 28, true);
+    let data = buf.subarray(start, start + csize);
+    if (method === 8) data = new Uint8Array(await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());
+    else if (method !== 0) continue;
+    out.push(new File([data], name.split("/").pop(), { type: "image/png" }));
+  }
+  return out;
+}
+
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url; link.download = name;
+  document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+const canvasBlob = (cv) => new Promise((res) => cv.toBlob(res, "image/png"));
+
+// ---------- โหลดไฟล์ ----------
+async function loadFiles(fileList) {
+  const files = [];
+  for (const f of fileList) {
+    if (/\.zip$/i.test(f.name)) {
+      try { files.push(...await unzipPngs(f)); }
+      catch { toast("เปิดไฟล์ " + f.name + " ไม่ได้"); }
+    } else if (/\.png$/i.test(f.name)) files.push(f);
+  }
+  if (!files.length) { toast("ไม่พบไฟล์ .png หรือ .zip"); return; }
+
+  const sheets = [], groups = {};
+  for (const f of files) {
+    const m = f.name.match(FRAME_RE);
+    if (!m) { sheets.push(f); continue; }
+    const name = m[1].toLowerCase(), dir = m[2].toLowerCase(), idx = parseInt(m[3], 10) - 1;
+    const row = dir.startsWith("row") ? parseInt(dir.slice(3), 10) - 1 : DIRS.indexOf(dir);
+    if (idx < 0 || row < 0) continue;
+    (groups[name] = groups[name] || []).push({ file: f, row, idx });
+  }
+
+  let first = null;
+  for (const f of sheets) {
+    try { const a = await loadSheet(f); first = first || a.name; }
+    catch { toast("เปิดไฟล์ " + f.name + " ไม่ได้"); }
+  }
+  for (const [name, list] of Object.entries(groups)) {
+    try {
+      const replaced = !!anims[name];
+      await mergeFrames(name, list);
+      first = first || name;
+      toast(replaced ? `แทนที่ ${list.length} เฟรมใน ${name}.png แล้ว — อย่าลืมกดดาวน์โหลดชีต`
+                     : `รวม ${list.length} เฟรมเป็น ${name}.png แล้ว — กดดาวน์โหลดชีตเพื่อเอาไปใช้`);
+    } catch { toast("รวมเฟรมของ " + name + " ไม่ได้"); }
+  }
+  renderList();
+  if (first) select(first);
+}
+
+async function loadSheet(file) {
+  const bmp = await createImageBitmap(file);
+  const raw = file.name.replace(/\.png$/i, "").toLowerCase();
+  const name = raw.replace(/_template$/, "");
+  const cv = document.createElement("canvas");
+  cv.width = bmp.width; cv.height = bmp.height;
+  ctx2d(cv).drawImage(bmp, 0, 0);
+  return (anims[name] = makeAnim(name, cv, file.name, { isTemplate: raw.endsWith("_template") }));
+}
+
+// รวมเฟรมแยกเป็นชีต ถ้ามีชีตท่านี้เปิดอยู่แล้ว จะแทนที่เฉพาะเฟรมที่ส่งมา
+async function mergeFrames(name, list) {
+  const base = anims[name];
+  let frames = base ? base.frames : 0, rows = base ? base.rows : 4;
+  for (const it of list) { frames = Math.max(frames, it.idx + 1); rows = Math.max(rows, it.row + 1); }
+  const cv = document.createElement("canvas");
+  cv.width = frames * FRAME; cv.height = rows * FRAME;
+  const g = ctx2d(cv);
+  if (base) g.drawImage(base.img, 0, 0);
+  const wrongSize = [];
+  for (const it of list) {
+    const bmp = await createImageBitmap(it.file);
+    const x = it.idx * FRAME, y = it.row * FRAME;
+    g.clearRect(x, y, FRAME, FRAME);
+    if (bmp.width === FRAME && bmp.height === FRAME) g.drawImage(bmp, x, y);
+    else {
+      // ขนาดไม่ตรง: ย่อให้พอดีช่อง วางกลาง และให้ขอบล่างอยู่ที่เส้นเท้า
+      wrongSize.push(it.file.name);
+      const s = Math.min(1, FRAME / bmp.width, FRAME / bmp.height);
+      const w = bmp.width * s, h = bmp.height * s;
+      g.drawImage(bmp, x + (FRAME - w) / 2, y + (h <= FOOT_Y ? FOOT_Y - h : FRAME - h), w, h);
+    }
+  }
+  const notes = [];
+  if (wrongSize.length) notes.push({ level: "warn", text: "เฟรมแยกบางไฟล์ไม่ใช่ 256 × 256 px ระบบจัดวางให้อัตโนมัติ ควรตรวจตำแหน่งอีกครั้ง", detail: wrongSize.join(", ") });
+  notes.push({ level: "info", text: base ? `แทนที่ ${list.length} เฟรมจากไฟล์เฟรมแยก` : `รวมจากไฟล์เฟรมแยก ${list.length} ไฟล์`, detail: "กด “ดาวน์โหลดชีต” เพื่อบันทึกเป็น " + name + ".png" });
+  return (anims[name] = makeAnim(name, cv, name + ".png", { notes, dirty: true }));
+}
+
+function makeAnim(name, src, file, extra = {}) {
+  const spec = SPEC[name] || {};
+  const a = {
+    name, file, src, spec, isTemplate: false, dirty: false, notes: [],
+    w: src.width, h: src.height,
+    frames: Math.max(1, Math.floor(src.width / FRAME)),
+    rows: Math.max(1, Math.floor(src.height / FRAME)),
+    fps: spec.fps || 12, loop: !!spec.loop,
+    img: document.createElement("canvas"),
+    ...extra,
+  };
+  a.img.width = a.w; a.img.height = a.h;
+  a.offsets = Array.from({ length: a.rows }, () => Array.from({ length: a.frames }, () => ({ dx: 0, dy: 0 })));
+  ctx2d(a.img).drawImage(src, 0, 0);
+  a.srcCells = scanAll(src, a);     // ตำแหน่งเดิมก่อนเลื่อน ใช้คำนวณการจัดเท้าอัตโนมัติ
+  a.cells = scanAll(a.img, a);
+  buildReport(a);
+  return a;
+}
+
+// ---------- ตรวจสเปก ----------
+function analyzeFrame(d, W, x0, y0, x1, y1) {
+  let top = -1, bottom = -1, left = FRAME, right = -1;
+  let clear = 0, total = 0, mass = 0, mx = 0, edge = 0;
+  for (let y = y0; y < y1; y++) {
+    let rowSolid = 0;
+    for (let x = x0; x < x1; x++) {
+      const al = d[(y * W + x) * 4 + 3];
+      total++;
+      if (al === 0) { clear++; continue; }
+      const lx = x - x0, ly = y - y0;
+      if (al > 16 && (lx === 0 || ly === 0 || lx === FRAME - 1 || ly === FRAME - 1)) edge++;
+      if (al > 40) {
+        rowSolid++;
+        if (lx < left) left = lx;
+        if (lx > right) right = lx;
+        mass += al; mx += al * lx;
+      }
+    }
+    if (rowSolid >= 2) {            // ต้องมีอย่างน้อย 2 พิกเซล กันจุดหลงตัวเดียว
+      if (top < 0) top = y - y0;
+      bottom = y - y0 + 1;          // ขอบล่างแบบ exclusive: เท้าพอดีเส้นแดง = 240
+    }
+  }
+  return {
+    empty: bottom < 0, top, bottom, left, right: right + 1,
+    cx: mass ? mx / mass : CENTER_X,
+    clearRatio: total ? clear / total : 0,
+    edge,
+  };
+}
+
+function scanAll(cv, a) {
+  const d = ctx2d(cv).getImageData(0, 0, a.w, a.h).data;
+  const cells = [];
+  for (let r = 0; r < a.rows; r++) {
+    cells[r] = [];
+    for (let c = 0; c < a.frames; c++)
+      cells[r][c] = analyzeFrame(d, a.w, c * FRAME, r * FRAME, Math.min((c + 1) * FRAME, a.w), Math.min((r + 1) * FRAME, a.h));
+  }
+  return cells;
+}
+
+function buildReport(a) {
+  const issues = [...a.notes];
+  const add = (level, text, detail) => issues.push({ level, text, detail });
+  const spec = a.spec;
+  const known = !!SPEC[a.name];
+
+  if (a.isTemplate) add("err", "นี่คือไฟล์แม่แบบ (_template)", "ซ่อนเลเยอร์แม่แบบก่อน Export และตั้งชื่อไฟล์ใหม่เป็น " + a.name + ".png");
+  if (!known) add("info", `ชื่อไฟล์ "${a.file}" ไม่ตรงกับชื่อท่าในสเปก`, "ชื่อที่ใช้ได้: " + Object.keys(SPEC).map(k => k + ".png").join(", "));
+
+  if (a.w % FRAME !== 0) add("err", `ความกว้าง ${a.w} px หารด้วย 256 ไม่ลงตัว`, `ต้องกว้าง 256 × จำนวนเฟรมพอดี เช่น ${a.frames} เฟรม = ${a.frames * FRAME} px`);
+  if (a.h !== FRAME * 4) {
+    if (a.h % FRAME === 0) add("warn", `ความสูง ${a.h} px (${a.rows} แถว) แต่สเปกคือ 1024 px (4 ทิศ)`, "เรียงแถวจากบนลงล่าง: หน้า → ซ้าย → ขวา → หลัง");
+    else add("err", `ความสูง ${a.h} px หารด้วย 256 ไม่ลงตัว`, "ต้องสูง 1024 px (4 ทิศ × 256)");
+  }
+  if (known && a.frames !== spec.frames)
+    add("info", `มี ${a.frames} เฟรม (สเปกแนะนำ ${spec.frames} เฟรม)`, "ไม่ผิด แค่แจ้งให้ทราบ เกมจะอ่านจำนวนเฟรมตามความกว้างของไฟล์");
+
+  const fmtList = (list) => {
+    const byRow = {};
+    for (const [r, c] of list) (byRow[r] = byRow[r] || []).push(c + 1);
+    return Object.entries(byRow).map(([r, cs]) => `${dirLabel(+r)}: เฟรม ${cs.join(", ")}`).join(" · ");
+  };
+
+  const notClear = [], empties = [], edges = [], feetOff = [];
+  for (let r = 0; r < a.rows; r++) for (let c = 0; c < a.frames; c++) {
+    const f = a.cells[r][c];
+    if (f.clearRatio < 0.2) notClear.push([r, c]);
+    if (f.empty) empties.push([r, c]);
+    else if (Math.abs(f.bottom - FOOT_Y) > FOOT_TOL) feetOff.push([r, c]);
+    if (f.edge > 0) edges.push([r, c]);
+  }
+  if (notClear.length) add("err", "พื้นหลังไม่โปร่งใส", "Export เป็น PNG แบบมีช่องโปร่งใส (RGBA) และซ่อนเลเยอร์พื้นหลัง/แม่แบบ — " + fmtList(notClear));
+  if (empties.length) add("err", "มีเฟรมว่างเปล่า", fmtList(empties));
+  if (edges.length) add("warn", "ภาพชนขอบช่อง 256 px", "ส่วนที่เลยขอบจะไปโผล่ในเฟรมข้าง ๆ หรือโดนตัดหาย — " + fmtList(edges));
+
+  if (feetOff.length && !notClear.length) {
+    const detail = "ใช้ส่วน “แก้ไขรายเฟรม” กดจัดเท้าอัตโนมัติ หรือเลื่อนเองได้ — " + fmtList(feetOff);
+    if (spec.free) add("info", "บางเฟรมเท้าไม่อยู่บนเส้นแดง (ท่านี้ลอยหรือล้มได้ ถ้าตั้งใจก็ไม่เป็นไร)", detail);
+    else add("warn", "บางเฟรมเท้าไม่อยู่บนเส้นแดง ตัวจะดูกระตุกขึ้นลงหรือลอย", detail);
+  }
+
+  // ความสูงตัว และการส่ายซ้ายขวา (เช็คเฉพาะท่ายืน/วิ่ง)
+  if (!notClear.length && (a.name === "idle" || a.name === "run")) {
+    const heights = [], drift = [];
+    for (let r = 0; r < a.rows; r++) {
+      const cxs = [];
+      for (let c = 0; c < a.frames; c++) {
+        const f = a.cells[r][c]; if (f.empty) continue;
+        heights.push(f.bottom - f.top); cxs.push(f.cx);
+      }
+      if (cxs.length && Math.max(...cxs) - Math.min(...cxs) > 20) drift.push(dirLabel(r));
+    }
+    if (a.name === "idle" && heights.length) {
+      const avg = Math.round(heights.reduce((s, v) => s + v, 0) / heights.length);
+      if (avg < 170 || avg > 230) add("info", `ตัวละครสูงเฉลี่ย ${avg} px (สเปกประมาณ 200 px ถึงเส้นประเทา)`, "ทุกท่าควรสเกลตัวละครเท่ากัน ไม่อย่างนั้นตัวจะยืดหดตอนเปลี่ยนท่า");
+    }
+    if (drift.length) add("info", "ตำแหน่งตัวส่ายซ้ายขวาค่อนข้างมาก", "ตรวจว่าตัวละครอยู่กลางช่องทุกเฟรม — " + drift.join(", "));
+  }
+
+  if (spec.attack) {
+    const dur = a.frames / a.fps;
+    if (dur > 0.55) add("info", `ท่ายาว ${dur.toFixed(2)} วินาที (${a.frames} เฟรม @ ${a.fps} FPS)`, "ท่าโจมตีปกติควรจบใน 0.4–0.5 วินาที อาจลดจำนวนเฟรมได้");
+  }
+
+  const moved = countMoved(a);
+  if (moved) add("info", `เลื่อนตำแหน่งไปแล้ว ${moved} เฟรม`, a.dirty ? "ยังไม่ได้ดาวน์โหลด — กด “ดาวน์โหลดชีต” เพื่อบันทึกเป็น " + a.name + ".png" : "ดาวน์โหลดแล้ว");
+
+  const order = { err: 0, warn: 1, info: 2, ok: 3 };
+  issues.sort((x, y) => order[x.level] - order[y.level]);
+  if (!issues.some(i => i.level === "err" || i.level === "warn"))
+    issues.unshift({ level: "ok", text: "ผ่านสเปกทั้งหมด", detail: `${a.w} × ${a.h} px · ${a.frames} เฟรม × ${a.rows} ทิศ · พื้นหลังโปร่งใส · เท้าอยู่บนเส้นแดง` });
+  a.report = issues;
+  a.level = issues.some(i => i.level === "err") ? "err" : issues.some(i => i.level === "warn") ? "warn" : "ok";
+}
+
+function countMoved(a) {
+  let n = 0;
+  for (const row of a.offsets) for (const o of row) if (o.dx || o.dy) n++;
+  return n;
+}
+
+// ---------- แก้ไขรายเฟรม ----------
+function drawCell(a, r, c) {
+  const g = ctx2d(a.img), o = a.offsets[r][c];
+  const x = c * FRAME, y = r * FRAME;
+  g.clearRect(x, y, FRAME, FRAME);
+  g.save();
+  g.beginPath(); g.rect(x, y, FRAME, FRAME); g.clip();
+  g.drawImage(a.src, x, y, FRAME, FRAME, x + o.dx, y + o.dy, FRAME, FRAME);
+  g.restore();
+  const d = g.getImageData(x, y, FRAME, FRAME).data;
+  a.cells[r][c] = analyzeFrame(d, FRAME, 0, 0, FRAME, FRAME);
+}
+
+function setOffset(a, r, c, dx, dy) {
+  dx = Math.max(-FRAME, Math.min(FRAME, dx)); dy = Math.max(-FRAME, Math.min(FRAME, dy));
+  const o = a.offsets[r][c];
+  if (o.dx === dx && o.dy === dy) return false;
+  o.dx = dx; o.dy = dy;
+  drawCell(a, r, c);
+  a.dirty = true; uiDirty = true;
+  return true;
+}
+
+function alignFeet(a, cells) {
+  let n = 0;
+  for (const [r, c] of cells) {
+    const s = a.srcCells[r][c];
+    if (s.empty) continue;
+    if (setOffset(a, r, c, a.offsets[r][c].dx, FOOT_Y - s.bottom)) n++;
+  }
+  toast(n ? `จัดเท้าลงเส้นแดงแล้ว ${n} เฟรม` : "เท้าอยู่บนเส้นแดงอยู่แล้ว");
+}
+
+function allCells(a, onlyRow = null) {
+  const list = [];
+  for (let r = 0; r < a.rows; r++) {
+    if (onlyRow !== null && r !== onlyRow) continue;
+    for (let c = 0; c < a.frames; c++) list.push([r, c]);
+  }
+  return list;
+}
+
+function nudge(dx, dy) {
+  const a = anims[current]; if (!a) return;
+  playing = false;
+  const o = a.offsets[edRow][frame];
+  setOffset(a, edRow, frame, o.dx + dx, o.dy + dy);
+  updateLabels();
+}
+
+function renderEdDirs() {
+  const a = anims[current], box = $("edDirs");
+  box.innerHTML = "";
+  for (let r = 0; r < a.rows; r++) {
+    const b = document.createElement("button");
+    b.textContent = dirLabel(r);
+    if (r === edRow) b.className = "on";
+    b.onclick = () => setEdRow(r);
+    box.appendChild(b);
+  }
+}
+function setEdRow(r) {
+  edRow = r; renderEdDirs();
+  document.querySelectorAll(".dirBox").forEach((el, i) => el.classList.toggle("editing", i === edRow));
+  updateLabels();
+}
+
+function updateEdInfo() {
+  const a = anims[current]; if (!a) return;
+  const f = a.cells[edRow][frame], o = a.offsets[edRow][frame];
+  $("edFrameLabel").textContent = `เฟรม ${frame + 1} / ${a.frames}`;
+  let foot;
+  if (f.empty) foot = `<span style="color:var(--err)">เฟรมว่าง</span>`;
+  else {
+    const off = f.bottom - FOOT_Y;
+    foot = off === 0 ? `<span style="color:var(--ok)">พอดีเส้นแดง ✓</span>`
+      : Math.abs(off) <= FOOT_TOL ? `<span style="color:var(--ok)">ห่างเส้นแดง ${Math.abs(off)} px (ยอมรับได้)</span>`
+      : off < 0 ? `<span style="color:var(--warn)">ลอยเหนือเส้นแดง ${-off} px</span>`
+      : `<span style="color:var(--warn)">จมต่ำกว่าเส้นแดง ${off} px</span>`;
+  }
+  const sign = (v) => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v);
+  $("edInfo").innerHTML =
+    `<div class="big">${dirLabel(edRow)} · เฟรม ${frame + 1}</div>` +
+    `<div>เท้า: ${foot}</div>` +
+    `<div class="muted">เลื่อนจากต้นฉบับ: X ${sign(o.dx)} px, Y ${sign(o.dy)} px</div>` +
+    (f.edge ? `<div style="color:var(--warn)">⚠ ภาพชนขอบช่อง อาจถูกตัด</div>` : "");
+}
+
+function renderEditor() {
+  const a = anims[current]; if (!a) return;
+  const cv = $("edCanvas"), g = cv.getContext("2d"), s = ED_SCALE, size = FRAME * s;
+  g.imageSmoothingEnabled = false;
+  fillBg(g, size, size, bgMode);
+  if ($("optShadow").checked) drawShadow(g, CENTER_X * s, FOOT_Y * s - 2 * s, s);
+  if ($("optOnion").checked && a.frames > 1)
+    drawFrame(g, a, (frame - 1 + a.frames) % a.frames, edRow, 0, 0, s, 0.28);
+  drawFrame(g, a, frame, edRow, 0, 0, s);
+  drawGuides(g, s, size, true);
+  const f = a.cells[edRow][frame];
+  if (!f.empty) {
+    g.strokeStyle = "rgba(255,220,80,0.9)"; g.lineWidth = 1; g.setLineDash([]);
+    g.strokeRect(f.left * s + 0.5, f.top * s + 0.5, (f.right - f.left) * s - 1, (f.bottom - f.top) * s - 1);
+    // ลูกศรบอกระยะจากเท้าถึงเส้นแดง
+    const off = f.bottom - FOOT_Y;
+    if (Math.abs(off) > FOOT_TOL) {
+      const x = (f.left + f.right) / 2 * s;
+      g.strokeStyle = g.fillStyle = "#f0b429"; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(x, f.bottom * s); g.lineTo(x, FOOT_Y * s); g.stroke();
+      g.font = "bold 14px Segoe UI, Leelawadee UI, sans-serif";
+      g.fillText((off < 0 ? "ลอย " : "จม ") + Math.abs(off) + " px", x + 8, (f.bottom + FOOT_Y) / 2 * s + 5);
+    }
+  }
+}
+
+// ---------- ดาวน์โหลด ----------
+async function downloadSheet() {
+  const a = anims[current]; if (!a) return;
+  downloadBlob(await canvasBlob(a.img), a.name + ".png");
+  a.dirty = false; uiDirty = true;
+  toast(`ดาวน์โหลด ${a.name}.png แล้ว — เอาไปวางใน public/assets/sprites/player/sword/ ได้เลย`);
+}
+
+async function downloadFrames() {
+  const a = anims[current]; if (!a) return;
+  const cv = document.createElement("canvas"); cv.width = cv.height = FRAME;
+  const g = cv.getContext("2d");
+  const entries = [];
+  for (let r = 0; r < a.rows; r++) for (let c = 0; c < a.frames; c++) {
+    g.clearRect(0, 0, FRAME, FRAME);
+    g.drawImage(a.img, c * FRAME, r * FRAME, FRAME, FRAME, 0, 0, FRAME, FRAME);
+    const data = new Uint8Array(await (await canvasBlob(cv)).arrayBuffer());
+    entries.push({ name: `${a.name}/${a.name}_${dirKey(r)}_${pad2(c + 1)}.png`, data });
+  }
+  const readme =
+    "﻿วิธีใช้ไฟล์เฟรมแยก\r\n\r\n" +
+    `- ชื่อไฟล์คือ <ท่า>_<ทิศ>_<เลขเฟรม>.png เช่น ${a.name}_left_03.png\r\n` +
+    "- ทิศ: down = หน้า, left = ซ้าย, right = ขวา, up = หลัง\r\n" +
+    "- ทุกไฟล์ขนาด 256 x 256 px พื้นหลังโปร่งใส ห้ามครอปหรือเปลี่ยนขนาด และห้ามเปลี่ยนชื่อไฟล์\r\n" +
+    "- เท้าต้องอยู่ที่ y = 240 (ห่างจากขอบล่าง 16 px)\r\n\r\n" +
+    "แก้เสร็จแล้ว ลากไฟล์ทั้งหมด (หรือทั้งโฟลเดอร์/ไฟล์ zip) กลับเข้าหน้า animation_tester.html\r\n" +
+    `ระบบจะรวมเป็น ${a.name}.png ให้ แล้วกด "ดาวน์โหลดชีต"\r\n\r\n` +
+    `ถ้าแก้แค่บางเฟรม: เปิด ${a.name}.png ในหน้าทดสอบก่อน แล้วลากมาเฉพาะเฟรมที่แก้ ระบบจะแทนที่เฉพาะเฟรมนั้น\r\n`;
+  entries.push({ name: `${a.name}/README.txt`, data: new TextEncoder().encode(readme) });
+  downloadBlob(makeZip(entries), `${a.name}_frames.zip`);
+  toast(`แยก ${a.frames * a.rows} เฟรมเป็น ${a.name}_frames.zip แล้ว`);
+}
+
+// ---------- รายการท่า ----------
+function renderList() {
+  const box = $("animList"); box.innerHTML = "";
+  const names = [...Object.keys(SPEC), ...Object.keys(anims).filter(n => !SPEC[n])];
+  for (const n of names) {
+    const a = anims[n];
+    const el = document.createElement("div");
+    el.className = "animItem" + (a ? "" : " missing") + (n === current ? " sel" : "");
+    el.innerHTML = `<span class="dot ${a ? a.level : ""}"></span><span class="name">${n}${SPEC[n] ? `<br><span class="meta">${SPEC[n].th}</span>` : ""}</span>` +
+      `<span class="meta">${a ? a.frames + " เฟรม" : "—"}${a && a.dirty ? `<br><span class="edited" title="แก้ไขแล้ว ยังไม่ได้ดาวน์โหลด">✎ ยังไม่บันทึก</span>` : ""}</span>`;
+    if (a) el.onclick = () => select(n);
+    box.appendChild(el);
+  }
+  const has = Object.keys(anims).length > 0;
+  $("empty").hidden = has; $("content").hidden = !has;
+}
+
+function select(name) {
+  current = name; frame = 0; acc = 0; fpsOverride = null;
+  const a = anims[name];
+  if (edRow >= a.rows) edRow = 0;
+  $("fps").value = a.fps;
+  renderList(); buildDirGrid(); renderIssues(); renderTable(); setEdRow(edRow);
+}
+
+function refreshAfterEdit() {
+  const a = anims[current]; if (!a) return;
+  buildReport(a);
+  renderList(); renderIssues(); renderTable(); updateBadges(); updateLabels();
+}
+
+function curFps() { const a = anims[current]; return fpsOverride ?? (a ? a.fps : 12); }
+
+function updateLabels() {
+  const a = anims[current]; if (!a) return;
+  $("frameLabel").textContent = `เฟรม ${frame + 1} / ${a.frames}`;
+  $("fpsLabel").textContent = curFps();
+  $("playBtn").textContent = playing ? "⏸ หยุด" : "▶ เล่น";
+  const sp = a.spec.th ? ` — ${a.spec.th}` : "";
+  const dur = (a.frames / curFps()).toFixed(2);
+  $("animTitle").innerHTML = `${a.file}${sp} <span class="muted" style="font-weight:normal;font-size:13px">· ${a.w} × ${a.h} px · ${a.frames} เฟรม · ${curFps()} FPS · ยาว ${dur} วินาที${a.loop ? " · เล่นวน" : ""}</span>`;
+  $("dlSheet").classList.toggle("attn", a.dirty);
+  document.querySelectorAll("#frameTable td").forEach(td => td.classList.toggle("cur", +td.dataset.c === frame && +td.dataset.r === edRow));
+  updateEdInfo();
+}
+
+function renderIssues() {
+  const ul = $("issues"); ul.innerHTML = "";
+  for (const i of anims[current].report) {
+    const li = document.createElement("li"); li.className = i.level;
+    li.innerHTML = `<div>${i.text}</div>${i.detail ? `<div class="detail">${i.detail}</div>` : ""}`;
+    ul.appendChild(li);
+  }
+}
+
+function renderTable() {
+  const a = anims[current], t = $("frameTable");
+  let html = "<tr><th></th>" + Array.from({ length: a.frames }, (_, c) => `<th>${c + 1}</th>`).join("") + "</tr>";
+  for (let r = 0; r < a.rows; r++) {
+    html += `<tr><th>${dirLabel(r)}</th>`;
+    for (let c = 0; c < a.frames; c++) {
+      const f = a.cells[r][c], o = a.offsets[r][c];
+      let txt, cls;
+      if (f.empty) { txt = "ว่าง"; cls = "err"; }
+      else {
+        const off = f.bottom - FOOT_Y;
+        txt = off === 0 ? "0" : (off > 0 ? "+" : "−") + Math.abs(off);
+        cls = Math.abs(off) <= FOOT_TOL ? "ok" : (a.spec.free ? "" : "warn");
+        if (f.edge) txt += " ⚠ขอบ";
+      }
+      if (o.dx || o.dy) cls += " moved";
+      html += `<td class="${cls}" data-r="${r}" data-c="${c}" title="ล่างสุด y=${f.bottom} · บนสุด y=${f.top}${o.dx || o.dy ? ` · เลื่อนแล้ว X ${o.dx}, Y ${o.dy}` : ""}">${txt}</td>`;
+    }
+    html += "</tr>";
+  }
+  t.innerHTML = html;
+  t.querySelectorAll("td").forEach(td => td.onclick = () => {
+    playing = false; frame = +td.dataset.c; setEdRow(+td.dataset.r);
+  });
+}
+
+// ---------- กล่อง 4 ทิศ ----------
+let dirCanvases = [], dirBadges = [];
+function buildDirGrid() {
+  const a = anims[current], grid = $("dirGrid");
+  grid.innerHTML = ""; dirCanvases = []; dirBadges = [];
+  for (let r = 0; r < a.rows; r++) {
+    const box = document.createElement("div"); box.className = "dirBox" + (r === edRow ? " editing" : "");
+    box.innerHTML = `<div class="cap"><span>${dirLabel(r)}</span><span></span></div>`;
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = Math.round(FRAME * zoom);
+    cv.title = "คลิกเพื่อแก้ทิศนี้";
+    cv.onclick = () => setEdRow(r);
+    box.appendChild(cv); grid.appendChild(box);
+    dirCanvases.push(cv); dirBadges.push(box.querySelector(".cap span:last-child"));
+  }
+  updateBadges();
+}
+function updateBadges() {
+  const a = anims[current];
+  dirBadges.forEach((el, r) => {
+    let bad = 0;
+    for (let c = 0; c < a.frames; c++) {
+      const f = a.cells[r][c];
+      if (f.empty || f.edge || (!a.spec.free && Math.abs(f.bottom - FOOT_Y) > FOOT_TOL)) bad++;
+    }
+    el.className = "badge " + (bad ? "warn" : "ok");
+    el.textContent = bad ? `ควรเช็ค ${bad} เฟรม` : "ผ่าน";
+  });
+}
+
+const checkerPats = new WeakMap();
+function fillBg(g, w, h, mode) {
+  if (mode === "checker") {
+    let pat = checkerPats.get(g);
+    if (!pat) {
+      const p = document.createElement("canvas"); p.width = p.height = 16;
+      const pg = p.getContext("2d");
+      pg.fillStyle = "#2a2e39"; pg.fillRect(0, 0, 16, 16);
+      pg.fillStyle = "#353a47"; pg.fillRect(0, 0, 8, 8); pg.fillRect(8, 8, 8, 8);
+      pat = g.createPattern(p, "repeat");
+      checkerPats.set(g, pat);
+    }
+    g.fillStyle = pat;
+  } else g.fillStyle = { dark: "#1a1d24", grass: "#4f7d3b", white: "#ffffff" }[mode];
+  g.fillRect(0, 0, w, h);
+}
+
+function drawFrame(g, a, col, row, dx, dy, s, alpha = 1) {
+  if (row >= a.rows) row = 0;
+  g.globalAlpha = alpha;
+  g.drawImage(a.img, col * FRAME, row * FRAME, FRAME, FRAME, dx, dy, FRAME * s, FRAME * s);
+  g.globalAlpha = 1;
+}
+
+function drawShadow(g, cx, cy, s) {
+  g.fillStyle = "rgba(0,0,0,0.32)";
+  g.beginPath(); g.ellipse(cx, cy, 46 * s, 13 * s, 0, 0, Math.PI * 2); g.fill();
+}
+
+function drawGuides(g, s, size, force = false) {
+  if (!force && !$("optGuides").checked) return;
+  g.lineWidth = 1;
+  g.strokeStyle = "rgba(235,60,60,0.9)"; g.setLineDash([]);
+  g.beginPath(); g.moveTo(0, FOOT_Y * s + 0.5); g.lineTo(size, FOOT_Y * s + 0.5); g.stroke();
+  g.setLineDash([6, 5]);
+  g.strokeStyle = "rgba(90,160,255,0.85)";
+  g.beginPath(); g.moveTo(CENTER_X * s + 0.5, 0); g.lineTo(CENTER_X * s + 0.5, size); g.stroke();
+  g.strokeStyle = "rgba(170,170,170,0.8)";
+  g.beginPath(); g.moveTo(0, HEAD_Y * s + 0.5); g.lineTo(size, HEAD_Y * s + 0.5); g.stroke();
+  g.setLineDash([]);
+}
+
+function renderDirs() {
+  const a = anims[current]; if (!a) return;
+  const s = zoom, size = FRAME * s;
+  const shadow = $("optShadow").checked, onion = $("optOnion").checked, box = $("optBox").checked;
+  dirCanvases.forEach((cv, r) => {
+    const g = cv.getContext("2d");
+    g.imageSmoothingEnabled = s < 1;
+    fillBg(g, size, size, bgMode);
+    if (shadow) drawShadow(g, CENTER_X * s, FOOT_Y * s - 2 * s, s);
+    if (onion && a.frames > 1) drawFrame(g, a, (frame - 1 + a.frames) % a.frames, r, 0, 0, s, 0.28);
+    drawFrame(g, a, frame, r, 0, 0, s);
+    drawGuides(g, s, size);
+    const f = a.cells[r] && a.cells[r][frame];
+    if (box && f && !f.empty) {
+      g.strokeStyle = "rgba(255,220,80,0.9)"; g.lineWidth = 1;
+      g.strokeRect(f.left * s + 0.5, f.top * s + 0.5, (f.right - f.left) * s - 1, (f.bottom - f.top) * s - 1);
+    }
+    if (f && f.edge) {
+      g.strokeStyle = "rgba(240,180,41,0.95)"; g.lineWidth = 3;
+      g.strokeRect(1.5, 1.5, size - 3, size - 3);
+    }
+  });
+}
+
+// ---------- แถบทั้งชีต ----------
+function renderStrip() {
+  const a = anims[current]; if (!a) return;
+  const cv = $("strip");
+  const w = cv.clientWidth || 800;
+  const sc = Math.min(1, w / a.w);
+  const h = Math.round(a.h * sc);
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const g = cv.getContext("2d");
+  g.imageSmoothingEnabled = true;
+  fillBg(g, w, h, bgMode);
+  g.drawImage(a.img, 0, 0, a.w * sc, a.h * sc);
+  g.strokeStyle = "rgba(255,255,255,0.12)"; g.lineWidth = 1;
+  for (let c = 1; c < a.frames; c++) { g.beginPath(); g.moveTo(c * FRAME * sc + 0.5, 0); g.lineTo(c * FRAME * sc + 0.5, h); g.stroke(); }
+  for (let r = 1; r < a.rows; r++) { g.beginPath(); g.moveTo(0, r * FRAME * sc + 0.5); g.lineTo(a.w * sc, r * FRAME * sc + 0.5); g.stroke(); }
+  g.strokeStyle = "#5aa0ff"; g.lineWidth = 2;
+  g.strokeRect(frame * FRAME * sc + 1, 1, FRAME * sc - 2, a.rows * FRAME * sc - 2);
+}
+$("strip").onclick = (e) => {
+  const a = anims[current]; if (!a) return;
+  const cv = $("strip"), rect = cv.getBoundingClientRect();
+  const sc = Math.min(1, cv.width / a.w);
+  const c = Math.floor((e.clientX - rect.left) * (cv.width / rect.width) / (FRAME * sc));
+  const r = Math.floor((e.clientY - rect.top) * (cv.height / rect.height) / (FRAME * sc));
+  if (c >= 0 && c < a.frames) { playing = false; frame = c; setEdRow(r >= 0 && r < a.rows ? r : edRow); }
+};
+
+// ---------- ฉากทดลองเล่น ----------
+const game = {
+  x: 450, y: 260, dir: "down", anim: "idle", frame: 0, acc: 0,
+  action: null, combo: 0, comboTimer: 0, queued: false, dead: false, dashV: null,
+  keys: new Set(), scale: 0.6,
+};
+const MOVE_SPEED = 170, DASH_SPEED = 480;
+const DIR_VEC = { down: [0, 1], up: [0, -1], left: [-1, 0], right: [1, 0] };
+
+function playAction(name) {
+  if (!anims[name]) { toast(`ยังไม่มีไฟล์ ${name}.png`); return false; }
+  game.action = name; game.anim = name; game.frame = 0; game.acc = 0; game.queued = false;
+  return true;
+}
+
+$("game").addEventListener("keydown", (e) => {
+  const k = e.key.toLowerCase();
+  if (["arrowup", "arrowdown", "arrowleft", "arrowright", " ", "shift"].includes(k) || (k.length === 1 && "wasdjqerhkl".includes(k))) e.preventDefault();
+  if (e.repeat) return;
+  game.keys.add(k);
+  if (k === "k" && !game.dead) { if (playAction("death")) game.dead = true; return; }
+  if (k === "l" && game.dead) { game.dead = false; if (!playAction("revive")) game.action = null; return; }
+  if (game.dead) return;
+  if (k === "j" || k === " ") {
+    if (game.action && !SPEC[game.action]?.attack) return;
+    if (game.action) { game.queued = true; return; }
+    game.combo = game.comboTimer > 0 ? (game.combo + 1) % 3 : 0;
+    let name = ["attack", "attack_2", "attack_3"][game.combo];
+    if (!anims[name]) { game.combo = 0; name = "attack"; }
+    playAction(name);
+  }
+  if (game.action) return;
+  if (k === "shift" && playAction("dash")) {
+    const v = moveVector();
+    game.dashV = (v[0] || v[1]) ? v : DIR_VEC[game.dir];
+  }
+  if (k === "q") playAction("skill_q");
+  if (k === "e" && playAction("skill_e")) game.dashV = DIR_VEC[game.dir];
+  if (k === "r") playAction("skill_r");
+  if (k === "h") playAction("hit");
+});
+$("game").addEventListener("keyup", (e) => game.keys.delete(e.key.toLowerCase()));
+$("game").addEventListener("blur", () => game.keys.clear());
+$("gameScale").oninput = (e) => { game.scale = +e.target.value; $("gameScaleLabel").textContent = Math.round(game.scale * 100) + "%"; };
+$("gameScaleLabel").textContent = "60%";
+
+function moveVector() {
+  const K = game.keys;
+  let x = 0, y = 0;
+  if (K.has("a") || K.has("arrowleft")) x -= 1;
+  if (K.has("d") || K.has("arrowright")) x += 1;
+  if (K.has("w") || K.has("arrowup")) y -= 1;
+  if (K.has("s") || K.has("arrowdown")) y += 1;
+  const l = Math.hypot(x, y);
+  return l ? [x / l, y / l] : [0, 0];
+}
+
+function updateGame(dt) {
+  const cv = $("game");
+  game.comboTimer = Math.max(0, game.comboTimer - dt);
+  if (!game.action && !game.dead) {
+    const [vx, vy] = moveVector();
+    if (vx || vy) {
+      game.dir = vx < 0 ? "left" : vx > 0 ? "right" : vy < 0 ? "up" : "down";
+      game.x += vx * MOVE_SPEED * dt; game.y += vy * MOVE_SPEED * dt;
+      setLoop(anims.run ? "run" : "idle");
+    } else setLoop("idle");
+  }
+  if (game.dashV && game.action) {
+    const sp = game.action === "dash" ? DASH_SPEED : DASH_SPEED * 0.8;
+    game.x += game.dashV[0] * sp * dt; game.y += game.dashV[1] * sp * dt;
+  }
+  game.x = Math.max(40, Math.min(cv.width - 40, game.x));
+  game.y = Math.max(120, Math.min(cv.height - 20, game.y));
+
+  const a = anims[game.anim];
+  if (!a) return;
+  game.acc += dt;
+  const step = 1 / a.fps;
+  while (game.acc >= step) {
+    game.acc -= step;
+    game.frame++;
+    if (game.frame >= a.frames) {
+      if (game.action) {
+        const was = game.action;
+        if (was === "death") { game.frame = a.frames - 1; game.acc = 0; break; }
+        game.action = null; game.dashV = null; game.frame = 0;
+        if (SPEC[was]?.attack) {
+          game.comboTimer = 0.45;
+          if (game.queued) {
+            game.queued = false;
+            game.combo = (game.combo + 1) % 3;
+            const next = ["attack", "attack_2", "attack_3"][game.combo];
+            if (anims[next]) { playAction(next); break; }
+            game.combo = 0; game.comboTimer = 0;
+          }
+        }
+        setLoop("idle"); break;
+      } else game.frame = 0;
+    }
+  }
+}
+
+function setLoop(name) {
+  if (!anims[name]) name = Object.keys(anims).find(n => SPEC[n]?.loop) || Object.keys(anims)[0];
+  if (game.anim !== name) { game.anim = name; game.frame = 0; game.acc = 0; }
+}
+
+let grassPat = null;
+function renderGame() {
+  const cv = $("game"), g = cv.getContext("2d");
+  if (!grassPat) {
+    const p = document.createElement("canvas"); p.width = p.height = 64;
+    const pg = p.getContext("2d");
+    pg.fillStyle = "#4a7a37"; pg.fillRect(0, 0, 64, 64);
+    for (let i = 0; i < 40; i++) {
+      pg.fillStyle = i % 2 ? "#558a3f" : "#426d31";
+      pg.fillRect((i * 37) % 64, (i * 23) % 64, 2, 3);
+    }
+    grassPat = g.createPattern(p, "repeat");
+  }
+  g.fillStyle = grassPat; g.fillRect(0, 0, cv.width, cv.height);
+  const s = game.scale;
+  drawShadow(g, game.x, game.y - 2 * s, s);
+  const a = anims[game.anim];
+  if (a) {
+    const row = Math.min(DIRS.indexOf(game.dir), a.rows - 1);
+    g.imageSmoothingEnabled = true;
+    drawFrame(g, a, Math.min(game.frame, a.frames - 1), row, game.x - CENTER_X * s, game.y - FOOT_Y * s, s);
+  }
+  g.fillStyle = "rgba(0,0,0,0.45)"; g.fillRect(8, 8, 260, 24);
+  g.fillStyle = "#fff"; g.font = "13px Segoe UI, Leelawadee UI, sans-serif";
+  g.fillText(`ท่า: ${game.anim}  ·  ทิศ: ${game.dir}${game.dead ? "  ·  (กด L เพื่อฟื้น)" : ""}`, 16, 25);
+  if (document.activeElement !== cv) {
+    g.fillStyle = "rgba(0,0,0,0.5)"; g.fillRect(0, cv.height - 44, cv.width, 44);
+    g.fillStyle = "#fff"; g.font = "16px Segoe UI, Leelawadee UI, sans-serif"; g.textAlign = "center";
+    g.fillText("คลิกที่ฉากเพื่อเริ่มบังคับตัวละคร", cv.width / 2, cv.height - 17);
+    g.textAlign = "left";
+  }
+}
+
+// ---------- ลูปหลัก ----------
+let last = performance.now();
+function tick(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  const a = anims[current];
+  if (a && playing) {
+    acc += dt;
+    const step = 1 / curFps();
+    let changed = false;
+    while (acc >= step) { acc -= step; frame = (frame + 1) % a.frames; changed = true; }
+    if (changed) updateLabels();
+  }
+  if (uiDirty) { uiDirty = false; refreshAfterEdit(); }
+  if (a) { renderDirs(); renderEditor(); renderStrip(); updateGame(dt); renderGame(); }
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+// ---------- ปุ่มและตัวเลือก ----------
+const stepFrame = (d) => { const a = anims[current]; if (!a) return; playing = false; frame = (frame + d + a.frames) % a.frames; updateLabels(); };
+$("playBtn").onclick = () => { playing = !playing; updateLabels(); };
+$("prevBtn").onclick = () => stepFrame(-1);
+$("nextBtn").onclick = () => stepFrame(1);
+$("edPrev").onclick = () => stepFrame(-1);
+$("edNext").onclick = () => stepFrame(1);
+$("fps").oninput = (e) => { fpsOverride = +e.target.value; updateLabels(); };
+$("fpsReset").onclick = () => { fpsOverride = null; $("fps").value = anims[current].fps; updateLabels(); };
+$("zoom").onchange = (e) => { zoom = +e.target.value; buildDirGrid(); };
+$("bgSel").onchange = (e) => { bgMode = e.target.value; };
+$("dlSheet").onclick = downloadSheet;
+$("dlFrames").onclick = downloadFrames;
+
+document.querySelectorAll("[data-move]").forEach(b => b.onclick = (e) => {
+  const [dx, dy] = b.dataset.move.split(",").map(Number);
+  const m = e.shiftKey ? 10 : 1;
+  nudge(dx * m, dy * m);
+});
+$("alignFrame").onclick = () => { playing = false; alignFeet(anims[current], [[edRow, frame]]); updateLabels(); };
+$("alignDir").onclick = () => alignFeet(anims[current], allCells(anims[current], edRow));
+$("alignAll").onclick = () => alignFeet(anims[current], allCells(anims[current]));
+$("resetFrame").onclick = () => { playing = false; setOffset(anims[current], edRow, frame, 0, 0); updateLabels(); };
+$("resetAll").onclick = () => {
+  const a = anims[current];
+  if (!countMoved(a)) return;
+  if (!confirm(`ยกเลิกการเลื่อนทั้งหมดของ ${a.name} ใช่ไหม?`)) return;
+  for (const [r, c] of allCells(a)) setOffset(a, r, c, 0, 0);
+};
+
+// ลากภาพในช่องแก้ไขเพื่อเลื่อนตัวละคร
+const ed = $("edCanvas");
+let drag = null;
+ed.addEventListener("pointerdown", (e) => {
+  const a = anims[current]; if (!a) return;
+  ed.focus(); playing = false; updateLabels();
+  const o = a.offsets[edRow][frame];
+  const px = ed.getBoundingClientRect().width / ed.width * ED_SCALE;   // พิกเซลหน้าจอต่อ 1 px ของเฟรม
+  drag = { x: e.clientX, y: e.clientY, dx: o.dx, dy: o.dy, px };
+  ed.setPointerCapture(e.pointerId); ed.classList.add("dragging");
+});
+ed.addEventListener("pointermove", (e) => {
+  if (!drag) return;
+  setOffset(anims[current], edRow, frame,
+    drag.dx + Math.round((e.clientX - drag.x) / drag.px),
+    drag.dy + Math.round((e.clientY - drag.y) / drag.px));
+});
+const endDrag = () => { drag = null; ed.classList.remove("dragging"); };
+ed.addEventListener("pointerup", endDrag);
+ed.addEventListener("pointercancel", endDrag);
+ed.addEventListener("keydown", (e) => {
+  const m = e.shiftKey ? 10 : 1;
+  const mv = { ArrowLeft: [-m, 0], ArrowRight: [m, 0], ArrowUp: [0, -m], ArrowDown: [0, m] }[e.key];
+  if (mv) { e.preventDefault(); nudge(mv[0], mv[1]); return; }
+  if (e.code === "BracketLeft") { e.preventDefault(); stepFrame(-1); }
+  if (e.code === "BracketRight") { e.preventDefault(); stepFrame(1); }
+  if (e.code === "KeyF") { e.preventDefault(); $("alignFrame").click(); }
+});
+
+document.addEventListener("keydown", (e) => {
+  const el = document.activeElement;
+  if (!current || el.tagName === "CANVAS" || /INPUT|SELECT/.test(el.tagName)) return;
+  if (e.key === " ") { e.preventDefault(); $("playBtn").click(); }
+  if (e.key === "ArrowLeft") stepFrame(-1);
+  if (e.key === "ArrowRight") stepFrame(1);
+});
+
+window.addEventListener("beforeunload", (e) => {
+  if (Object.values(anims).some(a => a.dirty)) { e.preventDefault(); e.returnValue = ""; }
+});
+
+$("pickFiles").onclick = () => $("fileInput").click();
+$("pickFolder").onclick = () => $("folderInput").click();
+$("fileInput").onchange = (e) => { loadFiles(e.target.files); e.target.value = ""; };
+$("folderInput").onchange = (e) => { loadFiles(e.target.files); e.target.value = ""; };
+
+const drop = $("drop");
+let dragDepth = 0;
+window.addEventListener("dragenter", (e) => { e.preventDefault(); dragDepth++; drop.classList.add("over"); });
+window.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; drop.classList.remove("over"); } });
+window.addEventListener("dragover", (e) => e.preventDefault());
+window.addEventListener("drop", (e) => {
+  e.preventDefault(); dragDepth = 0; drop.classList.remove("over");
+  loadFiles(e.dataTransfer.files);
+});
+
+renderList();
+</script>
+</body>
+</html>
