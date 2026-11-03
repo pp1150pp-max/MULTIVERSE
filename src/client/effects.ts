@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { fxTex } from './assets';
+import type { FxApi } from '../shared/sim/types';
 
 interface Fx {
   obj: THREE.Object3D;
@@ -22,7 +23,7 @@ function disposeObj(obj: THREE.Object3D): void {
   });
 }
 
-export class Effects {
+export class Effects implements FxApi {
   private list: Fx[] = [];
 
   constructor(private readonly scene: THREE.Scene) {}

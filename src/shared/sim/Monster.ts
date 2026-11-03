@@ -1,9 +1,8 @@
-import type { Game } from '../Game';
 import { Unit } from './Unit';
-import { SpriteActor } from '../SpriteActor';
-import { sheets } from '../assets';
-import type { MonsterDef } from '../../shared/data/monsters';
-import type { SpawnArea } from '../../shared/data/zones';
+import type { Sim } from './Sim';
+import type { Player } from './Player';
+import type { MonsterDef } from '../data/monsters';
+import type { SpawnArea } from '../data/zones';
 
 type State = 'idle' | 'chase' | 'return' | 'charge';
 type Windup = 'melee' | 'slam' | 'charge';
@@ -20,6 +19,10 @@ export class Monster extends Unit {
   windupT = 0;
   enraged = false;
   deadT = 0;
+  /** Who it is fighting. Picked from all players, so it works the same alone or online. */
+  target: Player | null = null;
+  /** Damage dealt by each player id — EXP is split by these shares. */
+  readonly damageBy = new Map<number, number>();
   private wanderT = Math.random() * 3;
   private wandering = false;
   private wx = 0;
@@ -34,8 +37,8 @@ export class Monster extends Unit {
   private chargeHit = false;
   private slamCd = 5;
 
-  constructor(def: MonsterDef, level: number, area: SpawnArea, x: number, z: number) {
-    super(new SpriteActor(sheets[def.id], def.height, def.radius * 1.1));
+  constructor(id: number, def: MonsterDef, level: number, area: SpawnArea, x: number, z: number) {
+    super(id);
     this.def = def;
     this.area = area;
     this.level = level;
@@ -48,8 +51,7 @@ export class Monster extends Unit {
     this.radius = def.radius;
     this.x = x;
     this.z = z;
-    this.actor.face(Math.random() - 0.5, Math.random() - 0.5);
-    this.syncView();
+    this.face(Math.random() - 0.5, Math.random() - 0.5);
   }
 
   get maxHp(): number { return this.maxHpV; }
@@ -59,15 +61,17 @@ export class Monster extends Unit {
     return this.alive && (this.state === 'chase' || this.state === 'charge' || this.windupT > 0);
   }
 
-  onHit(g: Game): void {
+  onHit(sim: Sim, attacker: Player): void {
     this.aggroT = 12;
+    if (!this.target?.alive) this.target = attacker;
     if (this.state !== 'charge') this.state = 'chase';
     if (this.def.behavior === 'skittish' && Math.random() < 0.4) this.fleeT = 1.2;
     if (this.def.pack) {
-      for (const m of g.monsters) {
+      for (const m of sim.monsters) {
         if (m !== this && m.alive && m.def.id === this.def.id && Math.hypot(m.x - this.x, m.z - this.z) < 9) {
           m.aggroT = 12;
           m.state = 'chase';
+          if (!m.target?.alive) m.target = attacker;
         }
       }
     }
@@ -76,26 +80,48 @@ export class Monster extends Unit {
   calm(): void {
     this.aggroT = 0;
     this.windupT = 0;
+    this.target = null;
     if (this.state !== 'return') this.state = 'idle';
   }
 
-  update(dt: number, g: Game): void {
+  /** Nearest living player, for monsters that attack on sight. */
+  private nearestPlayer(sim: Sim): { p: Player; d: number } | null {
+    let best: { p: Player; d: number } | null = null;
+    for (const p of sim.players) {
+      if (!p.alive) continue;
+      const d = Math.hypot(p.x - this.x, p.z - this.z);
+      if (!best || d < best.d) best = { p, d };
+    }
+    return best;
+  }
+
+  update(dt: number, sim: Sim): void {
     if (!this.alive) {
       this.deadT += dt;
-      this.actor.setOpacity(Math.max(0, 1 - this.deadT / 0.8));
-      this.actor.group.position.y = -this.deadT * 0.25;
+      this.moving = false;
       return;
     }
-    this.tickStatus(dt, g);
+    this.moving = false;
+    this.tickStatus(dt, sim.terrain);
     this.atkCd -= dt;
     this.chargeCd -= dt;
     this.slamCd -= dt;
     this.aggroT -= dt;
     this.fleeT -= dt;
 
-    const p = g.player;
-    const dx = p.x - this.x;
-    const dz = p.z - this.z;
+    // Lose a dead target; aggressive monsters pick up whoever walks into range.
+    if (this.target && !this.target.alive) this.target = null;
+    const b = this.def.behavior;
+    if ((b === 'aggressive' || b === 'boss') && this.state !== 'return') {
+      const n = this.nearestPlayer(sim);
+      if (n && n.d < this.def.aggroRange) {
+        this.aggroT = Math.max(this.aggroT, 4);
+        if (!this.target) this.target = n.p;
+      }
+    }
+    const p = this.target;
+    const dx = p ? p.x - this.x : 0;
+    const dz = p ? p.z - this.z : 0;
     const d = Math.hypot(dx, dz) || 0.001;
     let mx = 0;
     let mz = 0;
@@ -104,14 +130,14 @@ export class Monster extends Unit {
     if (this.stunT > 0) {
       this.windupT = 0;
       if (this.state === 'charge') this.state = 'chase';
-      return this.finish(dt, false);
+      return;
     }
 
     if (this.windupT > 0) {
       this.windupT -= dt;
-      if (this.windKind !== 'charge') this.actor.face(dx, dz);
-      if (this.windupT <= 0) this.resolveWindup(g, d, dx, dz);
-      return this.finish(dt, false);
+      if (this.windKind !== 'charge' && p) this.face(dx, dz);
+      if (this.windupT <= 0) this.resolveWindup(sim, d);
+      return;
     }
 
     if (this.state === 'charge') {
@@ -119,9 +145,14 @@ export class Monster extends Unit {
       mx = this.chargeDx;
       mz = this.chargeDz;
       spd *= 3.6;
-      if (!this.chargeHit && p.alive && d < this.radius + p.radius + 0.3) {
-        this.chargeHit = true;
-        g.hitPlayer(this, 1.6, { kb: 9, fromX: this.x, fromZ: this.z });
+      if (!this.chargeHit) {
+        for (const pl of sim.players) {
+          if (pl.alive && Math.hypot(pl.x - this.x, pl.z - this.z) < this.radius + pl.radius + 0.3) {
+            this.chargeHit = true;
+            sim.hitPlayer(this, pl, 1.6, { kb: 9, fromX: this.x, fromZ: this.z });
+            break;
+          }
+        }
       }
       if (this.chargeT <= 0) {
         this.state = 'chase';
@@ -132,6 +163,7 @@ export class Monster extends Unit {
       if (this.state !== 'return' && leash > (this.isBoss ? 18 : 22)) {
         this.state = 'return';
         this.aggroT = 0;
+        this.target = null;
       }
       if (this.state === 'return') {
         const hx = this.area.x - this.x;
@@ -142,16 +174,14 @@ export class Monster extends Unit {
           this.state = 'idle';
           this.hp = this.maxHp;
           this.enraged = false;
+          this.damageBy.clear();
         } else {
           mx = hx / hd;
           mz = hz / hd;
           spd *= 1.4;
         }
       } else {
-        const b = this.def.behavior;
-        const sees = (b === 'aggressive' || b === 'boss') && d < this.def.aggroRange;
-        if (sees) this.aggroT = Math.max(this.aggroT, 4);
-        const hostile = p.alive && this.aggroT > 0;
+        const hostile = !!p && this.aggroT > 0;
 
         if (hostile && this.fleeT > 0) {
           mx = -dx / d;
@@ -162,7 +192,7 @@ export class Monster extends Unit {
           this.state = 'chase';
           if (this.isBoss && !this.enraged && this.hp < this.maxHp * 0.5) {
             this.enraged = true;
-            g.onBossEnrage(this);
+            sim.onBossEnrage(this);
           }
           const reach = this.def.attackRange + p.radius;
           if (b === 'charger' && this.chargeCd <= 0 && d > 2.5 && d < 8) {
@@ -171,13 +201,13 @@ export class Monster extends Unit {
             this.windKind = 'charge';
             this.windupT = 0.65;
             this.chargeCd = 6;
-            g.fx.lineTelegraph(this.x, this.z, Math.atan2(dz, dx), 8, this.radius * 2, 0.65);
-            this.actor.face(dx, dz);
+            sim.fx('lineTelegraph', this.x, this.z, Math.atan2(dz, dx), 8, this.radius * 2, 0.65);
+            this.face(dx, dz);
           } else if (this.isBoss && this.slamCd <= 0 && d < 5) {
             this.windKind = 'slam';
             this.windupT = 1.1;
             this.slamCd = this.enraged ? 5 : 7;
-            g.fx.telegraph(this.x, this.z, 4.2, 1.1);
+            sim.fx('telegraph', this.x, this.z, 4.2, 1.1);
           } else if (d <= reach) {
             if (this.atkCd <= 0) {
               this.windKind = 'melee';
@@ -191,6 +221,7 @@ export class Monster extends Unit {
           }
         } else {
           this.state = 'idle';
+          this.target = null;
           this.wanderT -= dt;
           if (this.wanderT <= 0) {
             this.wandering = Math.random() < 0.55;
@@ -214,33 +245,32 @@ export class Monster extends Unit {
       }
     }
 
-    const moving = mx !== 0 || mz !== 0;
-    if (moving) {
+    this.moving = mx !== 0 || mz !== 0;
+    if (this.moving) {
       this.x += mx * spd * this.speedMult() * dt;
       this.z += mz * spd * this.speedMult() * dt;
-      g.world.resolve(this);
-      this.actor.face(mx, mz);
-    } else if (this.state === 'chase') {
-      this.actor.face(dx, dz);
+      sim.terrain.resolve(this);
+      this.face(mx, mz);
+    } else if (this.state === 'chase' && p) {
+      this.face(dx, dz);
     }
-    this.finish(dt, moving);
   }
 
-  private finish(dt: number, moving: boolean): void {
-    this.syncView();
-    this.actor.update(dt, moving, this.state === 'idle' ? 6 : 10);
-  }
-
-  private resolveWindup(g: Game, d: number, dx: number, dz: number): void {
-    const p = g.player;
+  private resolveWindup(sim: Sim, d: number): void {
+    const p = this.target;
     if (this.windKind === 'melee') {
-      g.fx.slash(this.x, this.z, Math.atan2(dz, dx), Math.PI * 0.6, this.def.attackRange + 0.6, '#ff8a6a');
-      if (p.alive && d <= this.def.attackRange + p.radius + 0.5) g.hitPlayer(this, 1, {});
+      const ang = Math.atan2(this.faceZ, this.faceX);
+      sim.fx('slash', this.x, this.z, ang, Math.PI * 0.6, this.def.attackRange + 0.6, '#ff8a6a');
+      if (p?.alive && d <= this.def.attackRange + p.radius + 0.5) sim.hitPlayer(this, p, 1, {});
     } else if (this.windKind === 'slam') {
-      g.fx.ring(this.x, this.z, 4.2, '#ffb070', 0.45);
-      g.fx.burst(this.x, 0.3, this.z, '#c9a27a', 14, 6);
-      g.shake(0.45);
-      if (p.alive && d <= 4.2 + p.radius) g.hitPlayer(this, 2, { stun: 0.7, kb: 7, fromX: this.x, fromZ: this.z });
+      sim.fx('ring', this.x, this.z, 4.2, '#ffb070', 0.45);
+      sim.fx('burst', this.x, 0.3, this.z, '#c9a27a', 14, 6);
+      sim.shake(0.45);
+      for (const pl of sim.players) {
+        if (pl.alive && Math.hypot(pl.x - this.x, pl.z - this.z) <= 4.2 + pl.radius) {
+          sim.hitPlayer(this, pl, 2, { stun: 0.7, kb: 7, fromX: this.x, fromZ: this.z });
+        }
+      }
     } else {
       this.state = 'charge';
       this.chargeT = 8 / (this.def.speed * 3.6);

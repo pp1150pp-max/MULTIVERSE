@@ -1,19 +1,10 @@
-// Local save for the offline prototype. When the Colyseus server lands,
-// this becomes the account/character record stored server-side.
-import type { ClassId, Item, SlotId } from '../shared/types';
+// Local save for singleplayer. Online characters are stored by the server instead.
 import { starterWeapon } from '../shared/data/items';
+import type { CharacterData } from '../shared/sim/Player';
+import type { ClassId } from '../shared/types';
 
-export interface SaveData {
+export interface SaveData extends CharacterData {
   v: 1;
-  name: string;
-  classId: ClassId;
-  level: number;
-  exp: number;
-  gold: number;
-  hpPots: number;
-  mpPots: number;
-  equipment: Partial<Record<SlotId, Item>>;
-  bag: (Item | null)[];
   metSeeker: boolean;
 }
 

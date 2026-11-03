@@ -1,6 +1,6 @@
 import type { Game } from './Game';
-import type { Monster } from './entities/Monster';
-import type { Loot } from './entities/Loot';
+import type { Monster } from '../shared/sim/Monster';
+import type { Loot } from '../shared/sim/Loot';
 import { RARITY_COLOR } from '../shared/types';
 import { itemName } from '../shared/data/enhance';
 import { expGapMult } from '../shared/formulas';
