@@ -3,13 +3,13 @@
 import * as THREE from 'three';
 import type { Player } from '../shared/sim/Player';
 import type { Monster } from '../shared/sim/Monster';
-import type { Projectile } from '../shared/sim/Projectile';
 import { DROPPED_LIFE, LOOT_POP_TIME, type Loot } from '../shared/sim/Loot';
 import type { SimEvent } from '../shared/sim/types';
 import { SpriteActor } from './SpriteActor';
 import { AnimatedActor, type Actor } from './AnimatedActor';
 import { animSets, sheets } from './assets';
 import type { Effects } from './effects';
+import type { ProjectileLike } from './backend';
 
 type AnimEvent = Extract<SimEvent, { t: 'anim' }>;
 
@@ -110,7 +110,7 @@ export class MonsterView {
 export class ProjectileView {
   private readonly sprite: THREE.Sprite;
 
-  constructor(readonly pr: Projectile, private readonly scene: THREE.Scene, private readonly fx: Effects) {
+  constructor(readonly pr: ProjectileLike, private readonly scene: THREE.Scene, private readonly fx: Effects) {
     this.sprite = fx.glowSprite(pr.o.color, pr.o.size);
     scene.add(this.sprite);
     this.update();

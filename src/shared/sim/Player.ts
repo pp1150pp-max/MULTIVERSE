@@ -62,7 +62,7 @@ export class Player extends Unit {
   private faceLockT = 0;
   private aimX = 0;
   private aimZ = 0;
-  private dashT = 0;
+  dashT = 0;
   private dashVx = 0;
   private dashVz = 0;
   private chargeHit = new Set<Monster>();
@@ -245,8 +245,8 @@ export class Player extends Unit {
     this.aimZ = aim.z - this.z;
 
     // Movement intent first so Dash uses the current walk direction.
-    if (it.move) this.moveTarget = null;
-    if (it.moveTo) this.moveTarget = { ...it.moveTo };
+    if (it.move || it.pos) this.moveTarget = null;
+    if (it.moveTo && !it.pos) this.moveTarget = { ...it.moveTo };
     let mx = 0;
     let mz = 0;
     let remaining = Infinity;
@@ -302,8 +302,21 @@ export class Player extends Unit {
       this.faceLockT = 0.25;
     }
 
-    const moving = mx !== 0 || mz !== 0;
-    if (moving) {
+    let moving = mx !== 0 || mz !== 0;
+    if (it.pos) {
+      // Online: the client already walked here (the server checked the distance).
+      const dx = it.pos.x - this.x;
+      const dz = it.pos.z - this.z;
+      const d = Math.hypot(dx, dz);
+      this.x = it.pos.x;
+      this.z = it.pos.z;
+      sim.terrain.resolve(this);
+      moving = d > 0.002;
+      if (moving) {
+        mx = dx / d;
+        mz = dz / d;
+      }
+    } else if (moving) {
       const step = Math.min(this.moveSpeed * dt, remaining);
       this.x += mx * step;
       this.z += mz * step;

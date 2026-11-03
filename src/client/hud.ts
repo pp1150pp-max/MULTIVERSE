@@ -40,12 +40,14 @@ export class Hud {
   private forgeOpen = false;
   private forgeSel: string | null = null;
   private confirmYes: (() => void) | null = null;
+  private enhancing = false;
 
   constructor(private readonly g: Game) {
     $('hud').classList.remove('hidden');
     this.mm = $<HTMLCanvasElement>('minimap').getContext('2d')!;
     $('hud-name').textContent = g.player.name;
     $('hud-zone').textContent = `${g.zone.name} · ${g.zone.nameTh}  (Lv.${g.zone.levels[0]}–${g.zone.levels[1]})`;
+    $('hud-online').classList.toggle('hidden', !g.backend.online);
     this.buildSkillbar();
 
     $('btn-auto').onclick = () => g.toggleAuto();
@@ -55,12 +57,23 @@ export class Hud {
     $('inv-close').onclick = () => this.toggleBag(false);
     $('help-close').onclick = () => this.toggleHelp(false);
     $('dialog').onclick = () => this.advanceDialog();
+    $('btn-reconnect').onclick = () => location.reload();
+    const chat = $<HTMLInputElement>('chat-input');
+    chat.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') {
+        const text = chat.value.trim();
+        if (text) g.backend.chat(text);
+        this.closeChat();
+      } else if (e.key === 'Escape') this.closeChat();
+    });
+    chat.addEventListener('blur', () => this.closeChat());
 
     const bag = $('bag-grid');
     bag.addEventListener('click', (e) => {
       const i = this.cellIndex(e);
       if (i < 0) return;
-      g.player.equipFromBag(i);
+      g.backend.equip(i);
       this.hideTip();
       this.markInventory();
     });
@@ -72,7 +85,7 @@ export class Hud {
       this.hideTip();
       if (this.shopOpen) {
         // Selling only works while talking to the merchant.
-        g.sim.sellItem(g.player, i);
+        g.backend.sell(i);
         this.afterTrade();
         return;
       }
@@ -99,7 +112,7 @@ export class Hud {
     eq.addEventListener('click', (e) => {
       const slot = (e.target as HTMLElement).closest<HTMLElement>('[data-slot]')?.dataset.slot as SlotId | undefined;
       if (!slot) return;
-      g.player.unequip(slot);
+      g.backend.unequip(slot);
       this.hideTip();
       this.markInventory();
     });
@@ -183,6 +196,7 @@ export class Hud {
     $('exp-text').textContent = `EXP ${((p.exp / need) * 100).toFixed(1)}%`;
     $('hud-level').textContent = `Lv.${p.level} ${p.cls.name}`;
     $('hud-gold').textContent = `${p.gold.toLocaleString()} G`;
+    if (this.g.backend.online) $('hud-online').textContent = `🌐 ออนไลน์ ${this.g.backend.onlineCount} คน · กด Enter เพื่อแชท`;
 
     for (const s of this.slotEls) {
       if (s.kind === 'hp' || s.kind === 'mp') {
@@ -291,6 +305,7 @@ export class Hud {
 
   markInventory(): void {
     this.invDirty = true;
+    if (this.forgeOpen) this.renderForge();
   }
 
   toggleBag(force?: boolean): void {
@@ -306,6 +321,7 @@ export class Hud {
 
   closePanels(): void {
     if (this.confirmYes) return this.closeConfirm();
+    this.closeChat();
     this.toggleBag(false);
     this.toggleHelp(false);
     this.closeShop();
@@ -362,12 +378,12 @@ export class Hud {
   }
 
   private buyPotion(kind: 'hp' | 'mp', n: number): void {
-    this.g.sim.buyPotion(this.g.player, kind, n);
+    this.g.backend.buyPotion(kind, n);
     this.afterTrade();
   }
 
   private sellAllCommon(): void {
-    this.g.sim.sellAllCommon(this.g.player);
+    this.g.backend.sellAllCommon();
     this.afterTrade();
   }
 
@@ -447,9 +463,10 @@ export class Hud {
     go.textContent = p.gold < cost ? `ทองไม่พอ (มี ${p.gold.toLocaleString()} G)` : `🔨 ตีบวก (${cost.toLocaleString()} G)`;
   }
 
-  private enhance(): void {
-    if (!this.forgeSel) return;
-    const out = this.g.sim.enhance(this.g.player, this.forgeSel);
+  private async enhance(): Promise<void> {
+    if (!this.forgeSel || this.enhancing) return;
+    this.enhancing = true;
+    const out = await this.g.backend.enhance(this.forgeSel).finally(() => (this.enhancing = false));
     if (!out) return;
     const { result, item } = out;
     const res = $('forge-result');
@@ -535,15 +552,56 @@ export class Hud {
 
   // ------------------------------------------------------------ log / overlays
 
+  // ------------------------------------------------------------ online
+
+  openChat(): void {
+    const box = $('chat');
+    if (!box.classList.contains('hidden')) return;
+    box.classList.remove('hidden');
+    // Focus after this frame so the Enter that opened it doesn't also send it.
+    setTimeout(() => $<HTMLInputElement>('chat-input').focus(), 0);
+  }
+
+  closeChat(): void {
+    const input = $<HTMLInputElement>('chat-input');
+    input.value = '';
+    $('chat').classList.add('hidden');
+    input.blur();
+  }
+
+  /** A chat line; an empty name means a server notice (someone joined or left). */
+  chatLine(name: string, text: string): void {
+    const el = document.createElement('div');
+    if (name) {
+      el.className = 'log-line chat';
+      const b = document.createElement('b');
+      b.textContent = `${name}: `;
+      el.append(b, document.createTextNode(text));
+    } else {
+      el.className = 'log-line system';
+      el.textContent = text;
+    }
+    this.pushLog(el, 15000);
+  }
+
+  showDisconnect(msg: string): void {
+    $('disconnect-msg').textContent = msg;
+    $('disconnect').classList.remove('hidden');
+  }
+
   log(msg: string, color = '#e8e2d0'): void {
     const el = document.createElement('div');
     el.className = 'log-line';
     el.style.color = color;
     el.textContent = msg;
+    this.pushLog(el, 7000);
+  }
+
+  private pushLog(el: HTMLElement, fadeMs: number): void {
     const box = $('log');
     box.append(el);
-    while (box.children.length > 7) box.firstChild?.remove();
-    setTimeout(() => el.classList.add('fade'), 7000);
+    while (box.children.length > 9) box.firstChild?.remove();
+    setTimeout(() => el.classList.add('fade'), fadeMs);
   }
 
   logItem(item: Item): void {

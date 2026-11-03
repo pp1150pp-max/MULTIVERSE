@@ -1,6 +1,7 @@
 import type { Game } from './Game';
 import type { Monster } from '../shared/sim/Monster';
 import type { Loot } from '../shared/sim/Loot';
+import type { Player } from '../shared/sim/Player';
 import { RARITY_COLOR } from '../shared/types';
 import { itemName } from '../shared/data/enhance';
 import { expGapMult } from '../shared/formulas';
@@ -13,6 +14,7 @@ export class Floating {
   private nums: Num[] = [];
   private plates = new Map<Monster, Plate>();
   private labels = new Map<Loot, HTMLDivElement>();
+  private names = new Map<Player, Plate>();
   private prompt: HTMLDivElement;
 
   constructor(private readonly root: HTMLElement) {
@@ -91,6 +93,40 @@ export class Floating {
       }
     }
 
+    // Other players: name, level and HP above their heads.
+    const seenP = new Set<Player>();
+    for (const p of g.backend.players) {
+      if (p === g.player) continue;
+      const s = g.toScreen(p.x, p.topY + 0.35, p.z);
+      if (!s.on) continue;
+      seenP.add(p);
+      let pl = this.names.get(p);
+      if (!pl) {
+        const el = document.createElement('div');
+        el.className = 'plate ally';
+        const name = document.createElement('div');
+        name.className = 'pname';
+        const bar = document.createElement('div');
+        bar.className = 'pbar';
+        const fill = document.createElement('div');
+        fill.className = 'pfill';
+        bar.append(fill);
+        el.append(name, bar);
+        this.root.append(el);
+        pl = { el, fill };
+        this.names.set(p, pl);
+      }
+      (pl.el.firstChild as HTMLElement).textContent = `Lv.${p.level} ${p.name}${p.alive ? '' : ' 💀'}`;
+      pl.el.style.transform = `translate(${s.sx}px, ${s.sy}px) translate(-50%, -100%)`;
+      pl.fill.style.width = `${(Math.max(0, p.hp) / Math.max(1, p.maxHp)) * 100}%`;
+    }
+    for (const [p, pl] of this.names) {
+      if (!seenP.has(p)) {
+        pl.el.remove();
+        this.names.delete(p);
+      }
+    }
+
     const seenLoot = new Set<Loot>();
     for (const l of g.loots) {
       if (l.dead || l.kind.type !== 'item') continue;
@@ -101,11 +137,14 @@ export class Floating {
       if (!el) {
         el = document.createElement('div');
         el.className = 'loot-label';
-        el.textContent = itemName(l.kind.item);
         el.style.color = RARITY_COLOR[l.kind.item.rarity];
         this.root.append(el);
         this.labels.set(l, el);
       }
+      // 🔒 = another player did the most damage and still has first pick.
+      const locked = !l.canTake(g.player.id, g.time);
+      el.textContent = locked ? `🔒 ${itemName(l.kind.item)}` : itemName(l.kind.item);
+      el.classList.toggle('locked', locked);
       el.style.transform = `translate(${s.sx}px, ${s.sy}px) translate(-50%, -100%)`;
     }
     for (const [l, el] of this.labels) {

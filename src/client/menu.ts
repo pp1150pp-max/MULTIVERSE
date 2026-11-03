@@ -5,6 +5,12 @@ import { MAX_CHARACTERS, checkCharacterName, checkPassword, checkUsername, type 
 import type { ClassId } from '../shared/types';
 import { loadSave, newSave, writeSave, type SaveData } from './save';
 import * as api from './net/api';
+import { connectOnline, type OnlineBackend } from './net/online';
+
+export interface Launchers {
+  single(data: SaveData): void;
+  online(backend: OnlineBackend): void;
+}
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -84,7 +90,7 @@ class OnlineMenu {
   private readonly chosenClass: () => ClassId;
   private armedDelete: { id: number; t: number } | null = null;
 
-  constructor() {
+  constructor(private readonly launch: (b: OnlineBackend) => void) {
     this.chosenClass = buildClassCards($('online-class-cards'));
     $('login-box').addEventListener('submit', (e) => {
       e.preventDefault();
@@ -94,6 +100,26 @@ class OnlineMenu {
     $('btn-logout').onclick = () => void this.logout();
     $('btn-create-char').onclick = () => void this.onCreateClick();
     $('char-list').addEventListener('click', (e) => this.onListClick(e));
+    $('btn-enter-world').onclick = () => void this.enterWorld();
+  }
+
+  private async enterWorld(): Promise<void> {
+    const token = api.savedToken();
+    if (this.busy || this.selected === null || !token) return;
+    this.busy = true;
+    const btn = $<HTMLButtonElement>('btn-enter-world');
+    btn.disabled = true;
+    $('char-error').textContent = 'กำลังเข้าสู่โลก…';
+    try {
+      const backend = await connectOnline(token, this.selected);
+      $('char-error').textContent = '';
+      this.launch(backend);
+    } catch (e) {
+      $('char-error').textContent = (e as Error).message;
+      btn.disabled = false;
+    } finally {
+      this.busy = false;
+    }
   }
 
   /** Called when the player picks Multiplayer: skip the login form if a saved token still works. */
@@ -187,8 +213,7 @@ class OnlineMenu {
     createBtn.textContent = this.creating ? '✔ ยืนยันสร้างตัวละคร' : '+ สร้างตัวละคร';
     createBtn.classList.toggle('primary', this.creating);
     if (this.creating) $<HTMLInputElement>('new-char-name').focus();
-    // Entering the shared world arrives with the next update (world sync).
-    $<HTMLButtonElement>('btn-enter-world').disabled = true;
+    $<HTMLButtonElement>('btn-enter-world').disabled = this.creating || this.selected === null;
   }
 
   private onListClick(e: Event): void {
@@ -263,9 +288,9 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);
 }
 
-export function buildMenu(launch: (d: SaveData) => void): void {
-  setupSingle(launch);
-  const online = new OnlineMenu();
+export function buildMenu(launch: Launchers): void {
+  setupSingle(launch.single);
+  const online = new OnlineMenu(launch.online);
   $('btn-mode-single').onclick = () => show('single');
   $('btn-mode-online').onclick = () => {
     show('online');

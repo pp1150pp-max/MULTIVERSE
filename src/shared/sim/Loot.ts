@@ -11,6 +11,8 @@ export type LootKind =
 export const LOOT_POP_TIME = 0.35;
 /** Items the player throws on the ground vanish after this many seconds. */
 export const DROPPED_LIFE = 60;
+/** The player who did the most damage may pick up a monster's drops alone for this long. */
+export const LOOT_PRIORITY_TIME = 10;
 
 export class Loot {
   dead = false;
@@ -20,6 +22,9 @@ export class Loot {
   readonly dropped: boolean;
   private armed: boolean;
   private blockedMsgT = 0;
+  /** Player id with pickup priority until `ownerUntil` (simulation time), or null for anyone. */
+  owner: number | null;
+  ownerUntil: number;
 
   constructor(
     readonly id: number,
@@ -28,10 +33,17 @@ export class Loot {
     readonly fromX: number,
     readonly fromZ: number,
     readonly kind: LootKind,
-    opts: { dropped?: boolean } = {},
+    opts: { dropped?: boolean; owner?: number; ownerUntil?: number } = {},
   ) {
     this.dropped = !!opts.dropped;
     this.armed = !this.dropped;
+    this.owner = opts.owner ?? null;
+    this.ownerUntil = opts.ownerUntil ?? 0;
+  }
+
+  /** Whether this player may pick it up right now. */
+  canTake(playerId: number, time: number): boolean {
+    return this.owner === null || this.owner === playerId || time >= this.ownerUntil;
   }
 
   update(dt: number, sim: Sim): void {
@@ -46,7 +58,7 @@ export class Loot {
     let p: Player | null = null;
     let d = Infinity;
     for (const pl of sim.players) {
-      if (!pl.alive) continue;
+      if (!pl.alive || !this.canTake(pl.id, sim.time)) continue;
       const pd = Math.hypot(pl.x - this.x, pl.z - this.z);
       if (pd < d) {
         d = pd;

@@ -14,7 +14,7 @@ import { Terrain } from './terrain';
 import { Player, type CharacterData } from './Player';
 import { Monster } from './Monster';
 import { Projectile, type ProjOpts } from './Projectile';
-import { Loot, type LootKind } from './Loot';
+import { Loot, LOOT_PRIORITY_TIME, type LootKind } from './Loot';
 import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type SimEvent } from './types';
 
 interface Spawner { area: SpawnArea; alive: number; queue: number[]; boss: boolean }
@@ -252,23 +252,27 @@ export class Sim {
       }
     }
     const cls = (top ?? this.players[0])?.cls.id ?? 'sword';
+    // The top damage dealer gets first pick for a while, then anyone can take it.
+    const owner = top?.id;
     const gold = Math.round(randInt(r, d.gold[0], d.gold[1]) * (1 + 0.1 * (m.level - d.levels[0])));
-    this.spawnLoot(m, { type: 'gold', amount: gold });
+    this.spawnLoot(m, { type: 'gold', amount: gold }, owner);
     if (m.isBoss) {
       const n = randInt(r, 2, 3);
-      for (let i = 0; i < n; i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, cls, 1.5) });
-      this.spawnLoot(m, { type: 'potion', pot: 'hp' });
-      this.spawnLoot(m, { type: 'potion', pot: 'mp' });
+      for (let i = 0; i < n; i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, cls, 1.5) }, owner);
+      this.spawnLoot(m, { type: 'potion', pot: 'hp' }, owner);
+      this.spawnLoot(m, { type: 'potion', pot: 'mp' }, owner);
       return;
     }
-    if (r() < d.itemChance) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, cls) });
-    if (r() < d.potionChance) this.spawnLoot(m, { type: 'potion', pot: r() < 0.6 ? 'hp' : 'mp' });
+    if (r() < d.itemChance) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, cls) }, owner);
+    if (r() < d.potionChance) this.spawnLoot(m, { type: 'potion', pot: r() < 0.6 ? 'hp' : 'mp' }, owner);
   }
 
-  private spawnLoot(m: Monster, kind: LootKind): void {
+  private spawnLoot(m: Monster, kind: LootKind, owner?: number): void {
     const a = Math.random() * Math.PI * 2;
     const dist = 0.5 + Math.random() * (m.isBoss ? 2 : 1);
-    this.loots.push(new Loot(this.newId(), m.x + Math.cos(a) * dist, m.z + Math.sin(a) * dist, m.x, m.z, kind));
+    this.loots.push(new Loot(this.newId(), m.x + Math.cos(a) * dist, m.z + Math.sin(a) * dist, m.x, m.z, kind, {
+      owner, ownerUntil: this.time + LOOT_PRIORITY_TIME,
+    }));
   }
 
   /** Called by Loot when a player touches it. Returns false if it can't be picked up. */
