@@ -397,6 +397,7 @@ export class OnlineBackend implements Backend {
   drop(i: number): void { this.send({ t: 'act', a: 'drop', i }); }
   buyPotion(kind: PotionKind, size: PotionSize, n: number): void { this.send({ t: 'act', a: 'buy', kind, size, n }); }
   sortBag(key: SortKey, desc: boolean): void { this.send({ t: 'act', a: 'sort', key, desc }); }
+  setAuto(on: boolean): void { this.send({ t: 'act', a: 'auto', on }); }
   sell(i: number): void { this.send({ t: 'act', a: 'sell', i }); }
   sellAllOfRarity(rarity: Rarity): void { this.send({ t: 'act', a: 'sellRarity', rarity }); }
 

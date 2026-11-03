@@ -39,6 +39,8 @@ export type ActionMsg =
   | { t: 'act'; a: 'drop'; i: number }
   | { t: 'act'; a: 'buy'; kind: PotionKind; size: PotionSize; n: number }
   | { t: 'act'; a: 'sort'; key: SortKey; desc: boolean }
+  /** Auto Play on/off. The server plays it, so it keeps farming while the browser tab is hidden. */
+  | { t: 'act'; a: 'auto'; on: boolean }
   | { t: 'act'; a: 'sell'; i: number }
   | { t: 'act'; a: 'sellRarity'; rarity: Rarity }
   | { t: 'act'; a: 'enhance'; uid: string; req: number };
@@ -79,7 +81,7 @@ export interface PrivateSnap {
   hp: number; mp: number; exp: number; level: number; gold: number;
   potSel: PotionSelect; stats: Stats;
   cd: Partial<Record<SkillSlot, number>>; potCd: number;
-  /** True while the server moves the character (dash, knockback, stun, dead) — follow its position. */
+  /** True while the server moves the character (dash, knockback, stun, dead, Auto Play) — follow its position. */
   serverMoves: boolean;
   /** Changes when the server teleports the character (respawn) — jump straight there. */
   epoch: number;

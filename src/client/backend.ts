@@ -46,6 +46,8 @@ export interface Backend {
   drop(bagIndex: number): void;
   buyPotion(kind: PotionKind, size: PotionSize, n: number): void;
   sortBag(key: SortKey, desc: boolean): void;
+  /** Online the server runs Auto Play; singleplayer runs it in Game, so this does nothing there. */
+  setAuto(on: boolean): void;
   sell(bagIndex: number): void;
   sellAllOfRarity(rarity: Rarity): void;
   enhance(uid: string): Promise<EnhanceOutcome>;
@@ -82,6 +84,7 @@ export class LocalBackend implements Backend {
   drop(i: number): void { this.sim.dropFromBag(this.me, i); }
   buyPotion(kind: PotionKind, size: PotionSize, n: number): void { this.sim.buyPotion(this.me, kind, size, n); }
   sortBag(key: SortKey, desc: boolean): void { this.sim.sortBag(this.me, key, desc); }
+  setAuto(): void { /* Game runs Auto Play itself */ }
   sell(i: number): void { this.sim.sellItem(this.me, i); }
   sellAllOfRarity(rarity: Rarity): void { this.sim.sellAllOfRarity(this.me, rarity); }
   enhance(uid: string): Promise<EnhanceOutcome> { return Promise.resolve(this.sim.enhance(this.me, uid)); }
