@@ -1,8 +1,8 @@
 import type { Game } from './Game';
-import { NPC_TALK_RANGE, type NpcId } from './npcs';
+import { NPC_USE_RANGE, type NpcId } from '../shared/data/npcs';
 import type { SkillSlot } from '../shared/data/classes';
 import {
-  dropsOnFail, effectiveStats, enhanceCost, itemName, MAX_PLUS, plusOf, rollEnhance, sellValue, successRate,
+  dropsOnFail, effectiveStats, enhanceCost, itemName, MAX_PLUS, plusOf, sellValue, successRate,
   DROP_ON_FAIL_FROM,
 } from '../shared/data/enhance';
 import { POTION_PRICE } from '../shared/data/shop';
@@ -18,8 +18,6 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const KEY_LABEL: Record<SkillSlot, string> = { basic: 'LMB', q: 'Q', e: 'E', r: 'R', dash: 'SPACE' };
 const SLOT_ICON: Record<SlotId, string> = { weapon: '🗡️', helmet: '⛑️', armor: '🥋', boots: '👢', ring: '💍' };
 const POTION_CD = 1.5;
-/** Shop windows close once the player walks this far from the NPC. */
-const SHOP_LEAVE_RANGE = NPC_TALK_RANGE + 2;
 const fmtNum = (v: number) => String(Math.round(v * 10) / 10);
 
 const SEEKER_LINES = [
@@ -74,8 +72,7 @@ export class Hud {
       this.hideTip();
       if (this.shopOpen) {
         // Selling only works while talking to the merchant.
-        const v = g.player.sell(i);
-        this.log(`ขาย ${itemName(item)} ได้ ${v} G`, '#f2c230');
+        g.sim.sellItem(g.player, i);
         this.afterTrade();
         return;
       }
@@ -216,10 +213,10 @@ export class Hud {
     }
 
     if (this.shopOpen) {
-      if (this.g.npcDistance('merchant') > SHOP_LEAVE_RANGE || !p.alive) this.closeShop();
+      if (this.g.npcDistance('merchant') > NPC_USE_RANGE || !p.alive) this.closeShop();
       else this.renderShopMoney();
     }
-    if (this.forgeOpen && (this.g.npcDistance('blacksmith') > SHOP_LEAVE_RANGE || !p.alive)) this.closeForge();
+    if (this.forgeOpen && (this.g.npcDistance('blacksmith') > NPC_USE_RANGE || !p.alive)) this.closeForge();
 
     this.mmT -= dt;
     if (this.mmT <= 0) {
@@ -365,35 +362,19 @@ export class Hud {
   }
 
   private buyPotion(kind: 'hp' | 'mp', n: number): void {
-    const p = this.g.player;
-    const cost = POTION_PRICE[kind] * n;
-    if (p.gold < cost) return this.log('ทองไม่พอ', '#ff8a6a');
-    p.gold -= cost;
-    if (kind === 'hp') p.hpPots += n;
-    else p.mpPots += n;
-    this.log(`ซื้อยา ${kind.toUpperCase()} × ${n} (−${cost} G)`, '#f2c230');
+    this.g.sim.buyPotion(this.g.player, kind, n);
     this.afterTrade();
   }
 
   private sellAllCommon(): void {
-    const p = this.g.player;
-    let n = 0;
-    let total = 0;
-    p.bag.forEach((it, i) => {
-      if (it && it.rarity === 'common' && !plusOf(it)) {
-        total += p.sell(i);
-        n++;
-      }
-    });
-    if (!n) return this.log('ไม่มีของระดับธรรมดาในกระเป๋า', '#b9b09a');
-    this.log(`ขายของธรรมดา ${n} ชิ้น ได้ ${total} G`, '#f2c230');
+    this.g.sim.sellAllCommon(this.g.player);
     this.afterTrade();
   }
 
+  /** The trade itself (and its log line / save) happens in the simulation; just refresh the panels. */
   private afterTrade(): void {
     this.markInventory();
     this.renderShopMoney();
-    this.g.save();
   }
 
   // ------------------------------------------------------------ blacksmith
@@ -467,32 +448,20 @@ export class Hud {
   }
 
   private enhance(): void {
-    const g = this.g;
-    const p = g.player;
-    const item = this.forgeWeapons().find((w) => w.uid === this.forgeSel);
-    if (!item || plusOf(item) >= MAX_PLUS) return;
-    const cost = enhanceCost(item);
-    if (p.gold < cost) return;
-    p.gold -= cost;
-    const result = rollEnhance(item, Math.random);
-    if (item === p.equipment.weapon) p.recompute();
+    if (!this.forgeSel) return;
+    const out = this.g.sim.enhance(this.g.player, this.forgeSel);
+    if (!out) return;
+    const { result, item } = out;
     const res = $('forge-result');
     if (result === 'success') {
       res.className = 'ok';
       res.textContent = `สำเร็จ! ${itemName(item)}`;
-      this.log(`🔨 ตีบวกสำเร็จ → ${itemName(item)}`, '#ffd34a');
-      g.fx.burst(p.x, 1.2, p.z, '#ffd34a', 14, 3);
-      g.floating.text(p.x, p.topY + 0.3, p.z, `+${plusOf(item)} สำเร็จ!`, 'lvl', 1.4);
     } else {
       res.className = 'fail';
       res.textContent = result === 'drop' ? `ล้มเหลว! ระดับลดลงเหลือ +${plusOf(item)}` : 'ล้มเหลว… ระดับเท่าเดิม';
-      this.log(`🔨 ตีบวก ${item.name} ล้มเหลว${result === 'drop' ? ` ระดับลดเหลือ +${plusOf(item)}` : ''}`, '#ff8a6a');
-      g.fx.burst(p.x, 1.2, p.z, '#8a8f96', 10, 2);
-      g.floating.text(p.x, p.topY + 0.3, p.z, 'ล้มเหลว', 'hurt', 1.2);
     }
     this.markInventory();
     this.renderForge();
-    g.save();
   }
 
   private rateTable(): string {
@@ -610,9 +579,8 @@ export class Hud {
   private closeDialog(): void {
     this.dialogOpen = false;
     $('dialog').classList.add('hidden');
-    const p = this.g.player;
-    if (!p.metSeeker) {
-      p.metSeeker = true;
+    if (!this.g.metSeeker) {
+      this.g.metSeeker = true;
       this.g.save();
       const boss = MONSTERS[this.g.zone.boss.monster];
       this.log(`ภารกิจ: ฝึกฝนในป่ามรกต แล้วปราบ ${boss.name}`, '#ffd34a');

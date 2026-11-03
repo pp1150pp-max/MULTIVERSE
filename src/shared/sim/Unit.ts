@@ -1,6 +1,6 @@
-import type { Game } from '../Game';
-import type { Actor } from '../AnimatedActor';
+import type { Terrain } from './terrain';
 
+/** Anything that moves, fights and can die. Pure state — the renderer reads it each frame. */
 export abstract class Unit {
   x = 0;
   z = 0;
@@ -14,12 +14,22 @@ export abstract class Unit {
   invulnT = 0;
   kbx = 0;
   kbz = 0;
+  /** Direction the sprite should face, and whether it is walking (renderer hints). */
+  faceX = 0;
+  faceZ = 1;
+  moving = false;
 
-  constructor(readonly actor: Actor) {}
+  constructor(readonly id: number) {}
 
   abstract get maxHp(): number;
   /** Height above ground for nameplates and damage numbers. */
   abstract get topY(): number;
+
+  face(dx: number, dz: number): void {
+    if (dx * dx + dz * dz < 1e-6) return;
+    this.faceX = dx;
+    this.faceZ = dz;
+  }
 
   speedMult(): number {
     return this.slowT > 0 ? 1 - this.slowAmt : 1;
@@ -33,7 +43,7 @@ export abstract class Unit {
     this.kbz = (dz / d) * power;
   }
 
-  protected tickStatus(dt: number, g: Game): void {
+  protected tickStatus(dt: number, terrain: Terrain): void {
     this.stunT = Math.max(0, this.stunT - dt);
     this.slowT = Math.max(0, this.slowT - dt);
     this.invulnT = Math.max(0, this.invulnT - dt);
@@ -43,14 +53,9 @@ export abstract class Unit {
       const decay = Math.exp(-10 * dt);
       this.kbx *= decay;
       this.kbz *= decay;
-      g.world.resolve(this);
+      terrain.resolve(this);
     } else {
       this.kbx = this.kbz = 0;
     }
-  }
-
-  syncView(): void {
-    this.actor.group.position.x = this.x;
-    this.actor.group.position.z = this.z;
   }
 }

@@ -1,39 +1,30 @@
 import * as THREE from 'three';
-import type { ZoneDef } from '../shared/data/zones';
+import type { Terrain } from '../shared/sim/terrain';
 import { mulberry32, pick, rand, type Rng } from '../shared/rng';
 import { fxTex, sheets } from './assets';
 
-export interface Collider { x: number; z: number; r: number }
 interface Fadeable { mat: THREE.SpriteMaterial; x: number; z: number; w: number; h: number; o: number }
-type Seg = [number, number, number, number];
 
 const S = Math.SQRT1_2;
 
+/** Draws a zone: painted ground plus the props laid out by the shared Terrain. */
 export class World {
-  readonly colliders: Collider[] = [];
   readonly groundCanvas: HTMLCanvasElement;
   readonly half: number;
   readonly bound: number;
-  private readonly segs: Seg[] = [];
   private readonly fadeables: Fadeable[] = [];
   private readonly flames: THREE.Sprite[] = [];
   private readonly sharedMats = new Map<string, THREE.SpriteMaterial>();
   private readonly shadowGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
   private readonly shadowMat: THREE.MeshBasicMaterial;
   private t = 0;
-  /** Camp NPC spots, set while placing props. */
-  npcPos = { seeker: { x: 0, z: 0 }, merchant: { x: 0, z: 0 }, blacksmith: { x: 0, z: 0 } };
 
-  constructor(private readonly scene: THREE.Scene, readonly zone: ZoneDef) {
-    this.half = zone.half;
-    this.bound = zone.half - 8;
-    for (const line of [zone.path, ...zone.branches]) {
-      for (let i = 1; i < line.length; i++) this.segs.push([line[i - 1][0], line[i - 1][1], line[i][0], line[i][1]]);
-    }
-    const rng = mulberry32(zone.seed);
+  constructor(private readonly scene: THREE.Scene, private readonly terrain: Terrain) {
+    this.half = terrain.half;
+    this.bound = terrain.bound;
     this.shadowMat = new THREE.MeshBasicMaterial({ map: fxTex.shadow, transparent: true, depthWrite: false, opacity: 0.4 });
 
-    this.groundCanvas = this.paintGround(rng);
+    this.groundCanvas = this.paintGround(mulberry32(terrain.zone.seed));
     const tex = new THREE.CanvasTexture(this.groundCanvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.magFilter = THREE.NearestFilter;
@@ -51,43 +42,28 @@ export class World {
     outer.position.y = -0.05;
     scene.add(outer);
 
-    this.placeProps(rng);
-  }
-
-  distToPath(x: number, z: number): number {
-    let best = Infinity;
-    for (const [ax, az, bx, bz] of this.segs) {
-      const vx = bx - ax;
-      const vz = bz - az;
-      const t = Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / (vx * vx + vz * vz)));
-      const d = Math.hypot(x - (ax + vx * t), z - (az + vz * t));
-      if (d < best) best = d;
+    for (const p of terrain.props) this.addProp(p.key, p.x, p.z, p.height, p.fade);
+    const fire = terrain.props.find((p) => p.key === 'campfire');
+    if (fire) {
+      const flame = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: fxTex.glow, color: '#ffa040', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.55,
+      }));
+      flame.position.set(fire.x, 0.5, fire.z);
+      scene.add(flame);
+      this.flames.push(flame);
     }
-    return best;
   }
 
-  isBlocked(x: number, z: number, r: number): boolean {
-    if (Math.abs(x) > this.bound || Math.abs(z) > this.bound) return true;
-    return this.colliders.some((c) => Math.hypot(c.x - x, c.z - z) < c.r + r);
+  private get zone() {
+    return this.terrain.zone;
   }
 
-  /** Push a circle out of static colliders and keep it inside the zone. */
-  resolve(u: { x: number; z: number; radius: number }): void {
-    for (const c of this.colliders) {
-      const dx = u.x - c.x;
-      const dz = u.z - c.z;
-      const min = c.r + u.radius;
-      if (Math.abs(dx) > min || Math.abs(dz) > min) continue;
-      const d2 = dx * dx + dz * dz;
-      if (d2 < min * min) {
-        const d = Math.sqrt(d2) || 0.001;
-        const push = (min - d) / d;
-        u.x += dx * push;
-        u.z += dz * push;
-      }
-    }
-    u.x = Math.max(-this.bound, Math.min(this.bound, u.x));
-    u.z = Math.max(-this.bound, Math.min(this.bound, u.z));
+  private get segs() {
+    return this.terrain.pathSegments;
+  }
+
+  private distToPath(x: number, z: number): number {
+    return this.terrain.distToPath(x, z);
   }
 
   /** Fade trees that stand between the camera and the player. */
@@ -115,7 +91,7 @@ export class World {
     }
   }
 
-  addProp(key: string, x: number, z: number, height: number, collideR: number, fade = false): THREE.Sprite {
+  private addProp(key: string, x: number, z: number, height: number, fade: boolean): void {
     const sh = sheets[key];
     let mat: THREE.SpriteMaterial;
     if (fade) {
@@ -134,76 +110,7 @@ export class World {
     sd.scale.set(w * 0.8, 1, w * 0.45);
     sd.position.set(x, 0.015, z);
     this.scene.add(sd);
-    if (collideR > 0) this.colliders.push({ x, z, r: collideR });
     if (fade) this.fadeables.push({ mat, x, z, w, h: height, o: 1 });
-    return spr;
-  }
-
-  private addTree(r: Rng, x: number, z: number): void {
-    this.addProp(pick(r, ['tree_0', 'tree_1', 'tree_2']), x, z, rand(r, 4.6, 6.4), 0.55, true);
-  }
-
-  private placeProps(r: Rng): void {
-    const zone = this.zone;
-    const H = this.half;
-    const B = this.bound;
-    const near = (x: number, z: number, p: { x: number; z: number }, d: number) => Math.hypot(x - p.x, z - p.z) < d;
-
-    // Dense forest wall around the playable area.
-    for (let x = -H + 1; x <= H - 1; x += 2.6) {
-      for (let z = -H + 1; z <= H - 1; z += 2.6) {
-        if (Math.max(Math.abs(x), Math.abs(z)) < B - 1) continue;
-        this.addTree(r, x + rand(r, -1, 1), z + rand(r, -1, 1));
-      }
-    }
-
-    // Camp at the start point, with The Seeker.
-    const s = zone.start;
-    this.addProp('tent', s.x + 3, s.z - 4, 3, 1.4);
-    this.addProp('tent', s.x - 4, s.z + 3, 3, 1.4);
-    this.addProp('campfire', s.x, s.z, 1, 0.5);
-    const flame = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: fxTex.glow, color: '#ffa040', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.55,
-    }));
-    flame.position.set(s.x, 0.5, s.z);
-    this.scene.add(flame);
-    this.flames.push(flame);
-    this.addProp('sign', s.x - 5, s.z - 6.5, 1.4, 0.2);
-    this.addProp('runestone', s.x + 5, s.z + 3.5, 2.2, 0.5);
-    this.npcPos = {
-      seeker: { x: s.x + 3.5, z: s.z + 1.5 },
-      merchant: { x: s.x - 1.5, z: s.z + 5 },
-      blacksmith: { x: s.x + 5, z: s.z - 1.5 },
-    };
-    for (let a = 0; a < Math.PI * 2; a += Math.PI / 9) {
-      const fx = s.x + Math.cos(a) * 9;
-      const fz = s.z + Math.sin(a) * 9;
-      if (this.distToPath(fx, fz) < 3 || Math.abs(fx) > B || Math.abs(fz) > B) continue;
-      this.addProp('fence', fx, fz, 1.1, 0.6);
-    }
-
-    // Boss clearing ring of runestones.
-    const b = zone.boss;
-    for (let a = 0.3; a < Math.PI * 2; a += Math.PI / 4) {
-      this.addProp(a % 2 > 1 ? 'rock_1' : 'runestone', b.x + Math.cos(a) * 11, b.z + Math.sin(a) * 11, 2.2, 0.6);
-    }
-
-    // Scattered forest inside.
-    let placed = 0;
-    for (let i = 0; i < 1600 && placed < 280; i++) {
-      const x = rand(r, -B + 2, B - 2);
-      const z = rand(r, -B + 2, B - 2);
-      if (this.distToPath(x, z) < 3.2) continue;
-      if (near(x, z, s, 11) || near(x, z, b, 13)) continue;
-      if (zone.spawns.some((sp) => near(x, z, sp, sp.radius * 0.55))) continue;
-      if (this.colliders.some((c) => Math.hypot(c.x - x, c.z - z) < 2.2)) continue;
-      const roll = r();
-      if (roll < 0.55) this.addTree(r, x, z);
-      else if (roll < 0.8) this.addProp(pick(r, ['bush_0', 'bush_1']), x, z, rand(r, 0.9, 1.3), 0);
-      else if (roll < 0.93) this.addProp(pick(r, ['rock_0', 'rock_1']), x, z, rand(r, 0.7, 1.1), 0.5);
-      else this.addProp('stump', x, z, 0.8, 0.4);
-      placed++;
-    }
   }
 
   private paintGround(r: Rng): HTMLCanvasElement {

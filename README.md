@@ -36,21 +36,25 @@ npm run build      # สร้างไฟล์สำหรับขึ้น�
 ## โครงสร้างโค้ด
 
 ```
-src/shared/      ← ข้อมูลและสูตรคำนวณล้วน ๆ (ไม่มีโค้ดกราฟิก) ส่วนนี้จะย้ายไปใช้บนเซิร์ฟเวอร์ Colyseus ได้
-  data/classes.ts    คลาสและสกิล
-  data/monsters.ts   ค่าสถานะมอนสเตอร์
-  data/zones.ts      แผนที่ จุดเกิด และเส้นทาง
-  data/items.ts      การสุ่มไอเทม
-  data/enhance.ts    กฎการตีบวกอาวุธ
-  data/shop.ts       ราคาของที่พ่อค้า
+src/shared/      ← กติกาเกมล้วน ๆ ไม่มีโค้ดกราฟิก ใช้ร่วมกันระหว่าง singleplayer กับ server
+  sim/Sim.ts         ตัวจำลองโลก: มอนสเตอร์, การต่อสู้, ของดรอป, EXP, ร้านค้า, ตีบวก
+  sim/Player.ts      ตัวละครผู้เล่น (สเตตัส, กระเป๋า, สกิล, Dash)
+  sim/Monster.ts     AI มอนสเตอร์ (เลือกเป้าจากผู้เล่นทุกคน, เก็บดาเมจแยกรายคน)
+  sim/skills.ts      การทำงานของสกิลทุกตัว
+  sim/terrain.ts     ตำแหน่งต้นไม้/หิน/แคมป์ และการชน
+  sim/types.ts       Intent (คำสั่งจากผู้เล่น) และ SimEvent (สิ่งที่ต้องแสดงบนจอ)
+  data/              ข้อมูลเกม: คลาส, มอนสเตอร์, แผนที่, ไอเทม, ตีบวก, ร้านค้า, NPC
 src/client/      ← ฝั่งแสดงผล: Three.js, HUD และ input
-  Game.ts            game loop, การต่อสู้, การดรอปของ
-  entities/          Player, Monster, Projectile, Loot
-  skills.ts          การทำงานของสกิลทุกตัว
+  Game.ts            รัน Sim ในเบราว์เซอร์ (singleplayer), กล้อง, เมาส์/คีย์บอร์ด
+  views.ts           สไปรต์ของผู้เล่น/มอน/กระสุน/ของดรอป ที่อ่านค่าจาก Sim ทุกเฟรม
+  world.ts           วาดพื้นและพร็อพตามตำแหน่งจาก terrain
   autoplay.ts        บอท Auto Play
   placeholder.ts     ภาพตัวแทนที่วาดด้วยโค้ด
 public/assets/   ← ใส่ไฟล์ภาพจริงที่นี่ (ดู public/assets/README.md)
 ```
+
+**กติกาสำคัญ:** โค้ดใน `src/shared/` ห้าม import `three` หรือใช้ `document` / `window`
+เพราะ server จะรันโค้ดชุดนี้ด้วย ถ้า Sim อยากให้แสดงอะไรบนจอ ให้ส่งเป็น `SimEvent` แทน
 
 ## เฟสถัดไป (ยังไม่ได้ทำ)
 

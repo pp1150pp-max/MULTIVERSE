@@ -1,5 +1,6 @@
-import type { Game, Intent } from './Game';
-import type { Monster } from './entities/Monster';
+import type { Game } from './Game';
+import type { Intent } from '../shared/sim/types';
+import type { Monster } from '../shared/sim/Monster';
 import { MONSTERS } from '../shared/data/monsters';
 import type { SkillSlot } from '../shared/data/classes';
 
