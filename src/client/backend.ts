@@ -3,14 +3,14 @@
 // only talk to this interface, so both modes look and play the same.
 import { Sim } from '../shared/sim/Sim';
 import type { Terrain } from '../shared/sim/terrain';
-import type { Player, CharacterData } from '../shared/sim/Player';
+import type { Player, CharacterData, LootFilter, SortKey } from '../shared/sim/Player';
 import type { Monster } from '../shared/sim/Monster';
 import type { Loot } from '../shared/sim/Loot';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../shared/sim/types';
 import { zoneById, type ZoneDef } from '../shared/data/zones';
 import type { NpcId } from '../shared/data/npcs';
 import type { EnhanceResult } from '../shared/data/enhance';
-import type { Item, SlotId } from '../shared/types';
+import type { Item, PotionKind, PotionSize, Rarity, SlotId } from '../shared/types';
 
 /** What a projectile view needs; the local simulation's Projectile fits this too. */
 export interface ProjectileLike {
@@ -44,9 +44,13 @@ export interface Backend {
   equip(bagIndex: number): void;
   unequip(slot: SlotId): void;
   drop(bagIndex: number): void;
-  buyPotion(kind: 'hp' | 'mp', n: number): void;
+  buyPotion(kind: PotionKind, size: PotionSize, n: number): void;
+  sortBag(key: SortKey, desc: boolean): void;
+  /** Online the server runs Auto Play; singleplayer runs it in Game, so this does nothing there. */
+  setAuto(on: boolean): void;
+  setLootFilter(f: LootFilter): void;
   sell(bagIndex: number): void;
-  sellAllCommon(): void;
+  sellAllOfRarity(rarity: Rarity): void;
   enhance(uid: string): Promise<EnhanceOutcome>;
   chat(text: string): void;
   npcDistance(id: NpcId): number;
@@ -95,9 +99,12 @@ export class LocalBackend implements Backend {
   equip(i: number): void { this.me.equipFromBag(i); }
   unequip(slot: SlotId): void { this.me.unequip(slot); }
   drop(i: number): void { this.sim.dropFromBag(this.me, i); }
-  buyPotion(kind: 'hp' | 'mp', n: number): void { this.sim.buyPotion(this.me, kind, n); }
+  buyPotion(kind: PotionKind, size: PotionSize, n: number): void { this.sim.buyPotion(this.me, kind, size, n); }
+  sortBag(key: SortKey, desc: boolean): void { this.sim.sortBag(this.me, key, desc); }
+  setAuto(): void { /* Game runs Auto Play itself */ }
+  setLootFilter(f: LootFilter): void { this.sim.setLootFilter(this.me, f); }
   sell(i: number): void { this.sim.sellItem(this.me, i); }
-  sellAllCommon(): void { this.sim.sellAllCommon(this.me); }
+  sellAllOfRarity(rarity: Rarity): void { this.sim.sellAllOfRarity(this.me, rarity); }
   enhance(uid: string): Promise<EnhanceOutcome> { return Promise.resolve(this.sim.enhance(this.me, uid)); }
   chat(): void { /* nobody to talk to */ }
   npcDistance(id: NpcId): number { return this.sim.npcDistance(this.me, id); }

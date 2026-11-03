@@ -7,10 +7,23 @@ import { CLASSES, type ClassDef, type SkillDef, type SkillSlot } from '../data/c
 import { addInto, BASE_MOVE_SPEED, emptyStats } from '../formulas';
 import { effectiveStats, sellValue } from '../data/enhance';
 import { starterWeapon } from '../data/items';
-import type { ClassId, Item, SlotId, Stats, Vec2 } from '../types';
+import { POTIONS, POTION_SIZES, POTION_STACK, stackSellValue } from '../data/potions';
+import {
+  isPotion, RARITIES, SLOTS,
+  type BagEntry, type ClassId, type Item, type PotionKind, type PotionSize, type Rarity, type SlotId, type Stats, type Vec2,
+} from '../types';
+import type { LootKind } from './Loot';
 
 export const BAG_SIZE = 30;
 export const POTION_CD = 1.5;
+
+export type SortKey = 'rarity' | 'level' | 'slot' | 'value';
+export const SORT_KEYS: SortKey[] = ['rarity', 'level', 'slot', 'value'];
+/** Which potion size the quick keys (1 / 2) use. */
+export type PotionSelect = Record<PotionKind, PotionSize>;
+/** What the player picks up from monster drops. Gold is always picked up. */
+export interface LootFilter { rarities: Rarity[]; potions: boolean }
+export const DEFAULT_LOOT_FILTER: LootFilter = { rarities: [...RARITIES], potions: true };
 
 /** Everything about a character that gets saved (browser storage now, the server database later). */
 export interface CharacterData {
@@ -19,10 +32,12 @@ export interface CharacterData {
   level: number;
   exp: number;
   gold: number;
-  hpPots: number;
-  mpPots: number;
   equipment: Partial<Record<SlotId, Item>>;
-  bag: (Item | null)[];
+  bag: (BagEntry | null)[];
+  /** Missing in saves from before potion sizes existed. */
+  potSel?: PotionSelect;
+  /** Missing in older saves = pick up everything. */
+  lootFilter?: LootFilter;
   /** Zone id the character is in. Missing on saves from before there were zones (= the forest). */
   zone?: string;
 }
@@ -35,10 +50,9 @@ export function newCharacterData(name: string, classId: ClassId): CharacterData 
     level: 1,
     exp: 0,
     gold: 0,
-    hpPots: 5,
-    mpPots: 5,
     equipment: { weapon: starterWeapon(classId) },
-    bag: [],
+    bag: [{ potion: 'hp', size: 's', count: 5 }, { potion: 'mp', size: 's', count: 5 }],
+    potSel: { hp: 's', mp: 's' },
   };
 }
 
@@ -48,10 +62,10 @@ export class Player extends Unit {
   exp: number;
   gold: number;
   mp = 0;
-  hpPots: number;
-  mpPots: number;
   equipment: Partial<Record<SlotId, Item>>;
-  bag: (Item | null)[];
+  bag: (BagEntry | null)[];
+  potSel: PotionSelect;
+  lootFilter: LootFilter;
   stats: Stats = emptyStats();
   cd: Partial<Record<SkillSlot, number>> = {};
   potCd = 0;
@@ -81,11 +95,11 @@ export class Player extends Unit {
     this.level = data.level;
     this.exp = data.exp;
     this.gold = data.gold;
-    this.hpPots = data.hpPots;
-    this.mpPots = data.mpPots;
     this.equipment = { ...data.equipment };
     this.bag = Array.from({ length: BAG_SIZE }, (_, i) => data.bag[i] ?? null);
     this.zone = data.zone;
+    this.potSel = { hp: 's', mp: 's', ...data.potSel };
+    this.lootFilter = data.lootFilter ? { ...data.lootFilter, rarities: [...data.lootFilter.rarities] } : { ...DEFAULT_LOOT_FILTER, rarities: [...RARITIES] };
     this.radius = 0.4;
     this.recompute();
     this.hp = this.maxHp;
@@ -119,11 +133,11 @@ export class Player extends Unit {
       level: this.level,
       exp: this.exp,
       gold: this.gold,
-      hpPots: this.hpPots,
-      mpPots: this.mpPots,
       equipment: this.equipment,
       bag: this.bag,
       zone: this.zone,
+      potSel: this.potSel,
+      lootFilter: this.lootFilter,
     };
   }
 
@@ -140,9 +154,28 @@ export class Player extends Unit {
     return this.bag.includes(null);
   }
 
+  /** Whether the loot filter lets this player pick it up (gold always; a thrown-away item always). */
+  wantsLoot(kind: LootKind, dropped: boolean): boolean {
+    if (kind.type === 'gold' || dropped) return true;
+    if (kind.type === 'potion') return this.lootFilter.potions;
+    return this.lootFilter.rarities.includes(kind.item.rarity);
+  }
+
+  /** Whether there is bag room for it right now. */
+  canFit(kind: LootKind): boolean {
+    if (kind.type === 'gold') return true;
+    if (kind.type === 'potion') return this.potionRoom(kind.pot, kind.size) >= kind.count;
+    return this.hasBagSpace();
+  }
+
+  /** Clicking gear wears it; clicking a potion makes its quick key use that size. */
   equipFromBag(i: number): void {
     const item = this.bag[i];
     if (!item) return;
+    if (isPotion(item)) {
+      this.potSel[item.potion] = item.size;
+      return;
+    }
     this.bag[i] = this.equipment[item.slot] ?? null;
     this.equipment[item.slot] = item;
     this.recompute();
@@ -159,17 +192,120 @@ export class Player extends Unit {
   sell(i: number): number {
     const item = this.bag[i];
     if (!item) return 0;
-    const v = sellValue(item);
+    const v = isPotion(item) ? stackSellValue(item) : sellValue(item);
     this.bag[i] = null;
     this.gold += v;
     return v;
   }
 
   /** Takes an item out of the bag so it can be thrown on the ground. */
-  takeFromBag(i: number): Item | null {
+  takeFromBag(i: number): BagEntry | null {
     const item = this.bag[i];
     this.bag[i] = null;
     return item;
+  }
+
+  // ------------------------------------------------------------ potions
+
+  /** Bottles of this kind (and size, if given) in the bag. */
+  potionCount(kind: PotionKind, size?: PotionSize): number {
+    let n = 0;
+    for (const e of this.bag) if (isPotion(e) && e.potion === kind && (!size || e.size === size)) n += e.count;
+    return n;
+  }
+
+  /** How many more of these potions fit: room left in matching stacks plus empty slots. */
+  potionRoom(kind: PotionKind, size: PotionSize): number {
+    let n = 0;
+    for (const e of this.bag) {
+      if (!e) n += POTION_STACK;
+      else if (isPotion(e) && e.potion === kind && e.size === size) n += POTION_STACK - e.count;
+    }
+    return n;
+  }
+
+  /** Adds all `n` potions (topping up stacks first), or nothing if they don't all fit. */
+  addPotions(kind: PotionKind, size: PotionSize, n: number): boolean {
+    if (n <= 0 || this.potionRoom(kind, size) < n) return false;
+    for (const e of this.bag) {
+      if (n <= 0) break;
+      if (isPotion(e) && e.potion === kind && e.size === size && e.count < POTION_STACK) {
+        const add = Math.min(n, POTION_STACK - e.count);
+        e.count += add;
+        n -= add;
+      }
+    }
+    for (let i = 0; i < this.bag.length && n > 0; i++) {
+      if (this.bag[i]) continue;
+      const add = Math.min(n, POTION_STACK);
+      this.bag[i] = { potion: kind, size, count: add };
+      n -= add;
+    }
+    return true;
+  }
+
+  /** Removes one bottle, from the emptiest stack so full stacks stay full. */
+  private takePotion(kind: PotionKind, size: PotionSize): boolean {
+    let at = -1;
+    let least = Infinity;
+    this.bag.forEach((e, i) => {
+      if (isPotion(e) && e.potion === kind && e.size === size && e.count < least) {
+        least = e.count;
+        at = i;
+      }
+    });
+    const e = this.bag[at];
+    if (!isPotion(e)) return false;
+    if (--e.count <= 0) this.bag[at] = null;
+    return true;
+  }
+
+  /** The size the quick key drinks: the chosen one, or the smallest left once that runs out. */
+  potionToUse(kind: PotionKind): PotionSize | null {
+    if (this.potionCount(kind, this.potSel[kind]) > 0) return this.potSel[kind];
+    return POTION_SIZES.find((s) => this.potionCount(kind, s) > 0) ?? null;
+  }
+
+  // ------------------------------------------------------------ sorting
+
+  /**
+   * Rearranges the bag by `key`. Gear is ordered by that key (ties: slot, rarity, level);
+   * potions always come after the gear, merged into full stacks. Empty slots go last.
+   */
+  sortBag(key: SortKey, desc: boolean): void {
+    const items: Item[] = [];
+    const pots = new Map<string, number>();
+    for (const e of this.bag) {
+      if (!e) continue;
+      if (isPotion(e)) pots.set(`${e.potion}:${e.size}`, (pots.get(`${e.potion}:${e.size}`) ?? 0) + e.count);
+      else items.push(e);
+    }
+    const rank = (it: Item): number => {
+      switch (key) {
+        case 'rarity': return RARITIES.indexOf(it.rarity);
+        case 'level': return it.level;
+        case 'slot': return SLOTS.indexOf(it.slot);
+        case 'value': return sellValue(it);
+      }
+    };
+    const dir = desc ? -1 : 1;
+    items.sort((a, b) =>
+      dir * (rank(a) - rank(b)) ||
+      SLOTS.indexOf(a.slot) - SLOTS.indexOf(b.slot) ||
+      RARITIES.indexOf(b.rarity) - RARITIES.indexOf(a.rarity) ||
+      b.level - a.level,
+    );
+    // Potions: HP before MP, then by size (by price when sorting by sell value).
+    const potOrder = (['hp', 'mp'] as const).flatMap((k) => POTION_SIZES.map((s) => [k, s] as const));
+    if (key === 'value') potOrder.sort((a, b) => dir * (POTIONS[a[0]][a[1]].price - POTIONS[b[0]][b[1]].price));
+    const stacks: BagEntry[] = [];
+    for (const [k, s] of potOrder) {
+      for (let n = pots.get(`${k}:${s}`) ?? 0; n > 0; n -= POTION_STACK) {
+        stacks.push({ potion: k, size: s, count: Math.min(n, POTION_STACK) });
+      }
+    }
+    const all = [...items, ...stacks];
+    this.bag = Array.from({ length: BAG_SIZE }, (_, i) => all[i] ?? null);
   }
 
   // ------------------------------------------------------------ actions
@@ -191,22 +327,22 @@ export class Player extends Unit {
     return Math.min(0.5, 0.95 / this.attackRate);
   }
 
-  private usePotion(kind: 'hp' | 'mp'): void {
+  private usePotion(kind: PotionKind): void {
     if (this.potCd > 0) return;
     const sim = this.sim;
+    const size = this.potionToUse(kind);
+    if (!size || !this.takePotion(kind, size)) {
+      return sim.text(this.x, this.topY, this.z, `ไม่มียา ${kind.toUpperCase()}`, 'info', undefined, this.id);
+    }
+    sim.inventoryChanged(this);
+    const amount = POTIONS[kind][size].amount;
     if (kind === 'hp') {
-      if (this.hpPots <= 0) return sim.text(this.x, this.topY, this.z, 'ไม่มียา HP', 'info', undefined, this.id);
-      this.hpPots--;
-      const heal = Math.round(this.maxHp * 0.4);
-      this.hp = Math.min(this.maxHp, this.hp + heal);
-      sim.text(this.x, this.topY, this.z, `+${heal}`, 'heal');
+      this.hp = Math.min(this.maxHp, this.hp + amount);
+      sim.text(this.x, this.topY, this.z, `+${amount}`, 'heal');
       sim.fx('burst', this.x, 1, this.z, '#ff6a6a', 8, 2);
     } else {
-      if (this.mpPots <= 0) return sim.text(this.x, this.topY, this.z, 'ไม่มียา MP', 'info', undefined, this.id);
-      this.mpPots--;
-      const gain = Math.round(this.stats.maxMp * 0.5);
-      this.mp = Math.min(this.stats.maxMp, this.mp + gain);
-      sim.text(this.x, this.topY, this.z, `+${gain} MP`, 'mana');
+      this.mp = Math.min(this.stats.maxMp, this.mp + amount);
+      sim.text(this.x, this.topY, this.z, `+${amount} MP`, 'mana');
       sim.fx('burst', this.x, 1, this.z, '#6aa0ff', 8, 2);
     }
     this.potCd = POTION_CD;

@@ -61,3 +61,20 @@ export interface Item {
   /** Weapon enhancement level from the blacksmith (+0 when missing). */
   plus?: number;
 }
+
+export type PotionKind = 'hp' | 'mp';
+export type PotionSize = 's' | 'm' | 'l';
+
+/** Potions of one kind and size sharing a bag slot (up to POTION_STACK). */
+export interface PotionStack {
+  potion: PotionKind;
+  size: PotionSize;
+  count: number;
+}
+
+/** Anything a bag slot can hold. */
+export type BagEntry = Item | PotionStack;
+
+export function isPotion(e: BagEntry | null | undefined): e is PotionStack {
+  return !!e && 'potion' in e;
+}

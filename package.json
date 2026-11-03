@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc --noEmit -p server",
     "server": "tsx server/main.ts",
-    "online": "vite build && tsx server/main.ts"
+    "online": "vite build && tsx server/main.ts --public",
+    "firewall": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/allow-firewall.ps1"
   },
   "dependencies": {
     "three": "^0.170.0",

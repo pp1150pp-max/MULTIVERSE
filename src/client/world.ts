@@ -94,9 +94,15 @@ export class World {
     this.groundCanvas = this.paintGround(mulberry32(terrain.zone.seed));
     const tex = new THREE.CanvasTexture(this.groundCanvas);
     tex.colorSpace = THREE.SRGBColorSpace;
-    tex.magFilter = THREE.NearestFilter;
-    tex.minFilter = THREE.LinearFilter;
-    tex.generateMipmaps = false;
+    if (this.tiled) {
+      tex.magFilter = THREE.LinearFilter;
+      tex.minFilter = THREE.LinearMipmapLinearFilter;
+      tex.anisotropy = 4;
+    } else {
+      tex.magFilter = THREE.NearestFilter;
+      tex.minFilter = THREE.LinearFilter;
+      tex.generateMipmaps = false;
+    }
     this.groundTex = tex;
     this.add(new THREE.Mesh(
       new THREE.PlaneGeometry(this.half * 2, this.half * 2).rotateX(-Math.PI / 2),
@@ -104,7 +110,7 @@ export class World {
     ));
     const outer = new THREE.Mesh(
       new THREE.PlaneGeometry(800, 800).rotateX(-Math.PI / 2),
-      this.own(new THREE.MeshBasicMaterial({ color: this.pal.background })),
+      this.own(new THREE.MeshBasicMaterial({ color: this.tiled ? '#3e6e2b' : this.pal.background })),
     );
     outer.position.y = -0.05;
     this.add(outer);
@@ -233,7 +239,100 @@ export class World {
     if (fade) this.fadeables.push({ mat, x, z, w, h: height, o: 1 });
   }
 
+  /** The forest uses the CraftPix grass/sand tiles; other zones are painted from their palette. */
+  private get tiled(): boolean {
+    return this.zone.theme === 'forest';
+  }
+
   private paintGround(r: Rng): HTMLCanvasElement {
+    return this.tiled ? this.paintTiledGround(r) : this.paintPaletteGround(r);
+  }
+
+  /**
+   * Grass and sand from the CraftPix tileset. Its edge tiles only fit a square grid, so paths and
+   * clearings are drawn as shapes filled with the sand tile, with the tileset's edge look
+   * (light rim, dark outline, shaded sand) painted around them.
+   */
+  private paintTiledGround(r: Rng): HTMLCanvasElement {
+    const N = 2048;
+    const H = this.half;
+    const k = N / (2 * H);
+    const c = document.createElement('canvas');
+    c.width = c.height = N;
+    const ctx = c.getContext('2d')!;
+    const P = (x: number, z: number): [number, number] => [(x + H) * k, (z + H) * k];
+    const tile = (key: string, worldSize: number): CanvasPattern => {
+      const img = sheets[key].texture.image as HTMLImageElement | HTMLCanvasElement;
+      const pat = ctx.createPattern(img, 'repeat')!;
+      pat.setTransform(new DOMMatrix().scaleSelf((worldSize * k) / img.width));
+      return pat;
+    };
+
+    ctx.fillStyle = tile('ground_grass', 6);
+    ctx.fillRect(0, 0, N, N);
+    // Soft light and dark patches so wide grass doesn't look flat.
+    for (let i = 0; i < 180; i++) {
+      const x = r() * N;
+      const y = r() * N;
+      const rad = 40 + r() * 160;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
+      g.addColorStop(0, r() < 0.5 ? 'rgba(255,250,190,0.09)' : 'rgba(20,60,20,0.1)');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+    }
+
+    const PATH_W = 4.4;
+    const clearings: [number, number, number][] = [
+      [this.zone.start.x, this.zone.start.z, 8],
+      [this.zone.boss.x, this.zone.boss.z, 10],
+    ];
+    const lines = [this.zone.path, ...this.zone.branches];
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    /** Paths and clearings grown by `extra` world units on every side. */
+    const sandShape = (extra: number, fill: string | CanvasPattern) => {
+      ctx.strokeStyle = fill;
+      ctx.fillStyle = fill;
+      ctx.lineWidth = (PATH_W + extra * 2) * k;
+      for (const l of lines) {
+        ctx.beginPath();
+        l.forEach(([x, z], i) => {
+          const [px, py] = P(x, z);
+          if (i) ctx.lineTo(px, py);
+          else ctx.moveTo(px, py);
+        });
+        ctx.stroke();
+      }
+      for (const [x, z, rad] of clearings) {
+        const [px, py] = P(x, z);
+        ctx.beginPath();
+        ctx.arc(px, py, (rad + extra) * k, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    };
+    sandShape(0.55, '#9bbf3b');
+    sandShape(0.35, '#384b21');
+    sandShape(0.18, '#d49558');
+    sandShape(0, tile('ground_sand', 6));
+
+    this.paintEdge(ctx, P);
+    return c;
+  }
+
+  /** Darkens everything outside the walkable area. */
+  private paintEdge(ctx: CanvasRenderingContext2D, P: (x: number, z: number) => [number, number]): void {
+    const N = ctx.canvas.width;
+    const [lo] = P(-this.bound, 0);
+    const [hi] = P(this.bound, 0);
+    ctx.fillStyle = this.pal.edge;
+    ctx.fillRect(0, 0, N, lo);
+    ctx.fillRect(0, hi, N, N - hi);
+    ctx.fillRect(0, lo, lo, hi - lo);
+    ctx.fillRect(hi, lo, N - hi, hi - lo);
+  }
+
+  private paintPaletteGround(r: Rng): HTMLCanvasElement {
     const N = 2048;
     const H = this.half;
     const k = N / (2 * H);
