@@ -1,11 +1,12 @@
 import type { Sim } from './Sim';
 import type { Player } from './Player';
-import type { Item } from '../types';
+import type { Item, PotionKind, PotionSize } from '../types';
 
 export type LootKind =
   | { type: 'gold'; amount: number }
   | { type: 'item'; item: Item }
-  | { type: 'potion'; pot: 'hp' | 'mp' };
+  /** `count` > 1 when a player throws a whole stack on the ground. */
+  | { type: 'potion'; pot: PotionKind; size: PotionSize; count: number };
 
 /** Seconds of the pop-out arc when loot drops; it can't be picked up before it lands. */
 export const LOOT_POP_TIME = 0.35;

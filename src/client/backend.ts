@@ -3,14 +3,14 @@
 // only talk to this interface, so both modes look and play the same.
 import { Sim } from '../shared/sim/Sim';
 import type { Terrain } from '../shared/sim/terrain';
-import type { Player, CharacterData } from '../shared/sim/Player';
+import type { Player, CharacterData, SortKey } from '../shared/sim/Player';
 import type { Monster } from '../shared/sim/Monster';
 import type { Loot } from '../shared/sim/Loot';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../shared/sim/types';
 import type { ZoneDef } from '../shared/data/zones';
 import type { NpcId } from '../shared/data/npcs';
 import type { EnhanceResult } from '../shared/data/enhance';
-import type { Item, SlotId } from '../shared/types';
+import type { Item, PotionKind, PotionSize, SlotId } from '../shared/types';
 
 /** What a projectile view needs; the local simulation's Projectile fits this too. */
 export interface ProjectileLike {
@@ -44,7 +44,8 @@ export interface Backend {
   equip(bagIndex: number): void;
   unequip(slot: SlotId): void;
   drop(bagIndex: number): void;
-  buyPotion(kind: 'hp' | 'mp', n: number): void;
+  buyPotion(kind: PotionKind, size: PotionSize, n: number): void;
+  sortBag(key: SortKey, desc: boolean): void;
   sell(bagIndex: number): void;
   sellAllCommon(): void;
   enhance(uid: string): Promise<EnhanceOutcome>;
@@ -79,7 +80,8 @@ export class LocalBackend implements Backend {
   equip(i: number): void { this.me.equipFromBag(i); }
   unequip(slot: SlotId): void { this.me.unequip(slot); }
   drop(i: number): void { this.sim.dropFromBag(this.me, i); }
-  buyPotion(kind: 'hp' | 'mp', n: number): void { this.sim.buyPotion(this.me, kind, n); }
+  buyPotion(kind: PotionKind, size: PotionSize, n: number): void { this.sim.buyPotion(this.me, kind, size, n); }
+  sortBag(key: SortKey, desc: boolean): void { this.sim.sortBag(this.me, key, desc); }
   sell(i: number): void { this.sim.sellItem(this.me, i); }
   sellAllCommon(): void { this.sim.sellAllCommon(this.me); }
   enhance(uid: string): Promise<EnhanceOutcome> { return Promise.resolve(this.sim.enhance(this.me, uid)); }

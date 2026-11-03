@@ -163,6 +163,15 @@ button.primary { background: linear-gradient(#a8812f, #6b4f1a); border-color: va
 .cell .ph { opacity: 0.25; }
 .cell.empty { cursor: default; }
 .inv-foot { display: flex; justify-content: space-between; margin-top: 8px; font-size: 13px; }
+.bag-sort { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 12px; color: var(--ink-dim); }
+.bag-sort select {
+  font: inherit; color: var(--ink, #e8e2d0); background: #15110c; border: 1px solid var(--panel-edge); border-radius: 4px; padding: 3px 4px;
+}
+.bag-sort button { padding: 3px 8px; font-size: 12px; }
+.cell .psize { position: absolute; left: 2px; top: 0; font-size: 9px; color: #fff; text-shadow: 0 0 2px #000; }
+.cell.pot .ilv { color: #fff; font-size: 10px; font-weight: 600; text-shadow: 0 0 2px #000; }
+.cell.quick { outline: 2px solid var(--gold-hi); outline-offset: 1px; }
+.skill-hp .extra, .skill-mp .extra { font-size: 11px; }
 
 #tooltip {
   position: fixed; z-index: 10; pointer-events: none; min-width: 200px; max-width: 280px;

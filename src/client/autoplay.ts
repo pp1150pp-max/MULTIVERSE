@@ -7,8 +7,8 @@ import type { SkillSlot } from '../shared/data/classes';
 const RANGE: Record<string, number> = { sword: 1.9, mage: 8.5, gunslinger: 9 };
 
 /**
- * Open-world farming bot. Manual input always wins for that frame,
- * so the player can steer or fight at any time while Auto stays on.
+ * Open-world farming bot. Walking by hand turns it off (Game.update); manual attacks and
+ * skills just win for that frame while Auto stays on.
  * Bosses are skipped on purpose — those are meant to be fought by hand.
  */
 export class AutoPlay {
@@ -31,8 +31,8 @@ export class AutoPlay {
     const dist = (a: { x: number; z: number }) => Math.hypot(a.x - p.x, a.z - p.z);
 
     if (!out.potion && p.potCd <= 0) {
-      if (p.hp < p.maxHp * 0.45 && p.hpPots > 0) out.potion = 'hp';
-      else if (p.mp < p.stats.maxMp * 0.15 && p.mpPots > 0) out.potion = 'mp';
+      if (p.hp < p.maxHp * 0.45 && p.potionCount('hp') > 0) out.potion = 'hp';
+      else if (p.mp < p.stats.maxMp * 0.15 && p.potionCount('mp') > 0) out.potion = 'mp';
     }
 
     const threatened = g.monsters.some((m) => m.isHostile && dist(m) < 3.5);

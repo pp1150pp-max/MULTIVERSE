@@ -6,7 +6,8 @@ import type { Server as HttpServer } from 'node:http';
 import type { Db } from './db';
 import { Sim } from '../src/shared/sim/Sim';
 import { ZONE_1 } from '../src/shared/data/zones';
-import type { Player } from '../src/shared/sim/Player';
+import { SORT_KEYS, type Player } from '../src/shared/sim/Player';
+import { POTION_SIZES } from '../src/shared/data/potions';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../src/shared/sim/types';
 import {
   CHAT_MAX, INTEREST_RADIUS, SNAPSHOT_HZ, TICK_HZ, WS_PATH, r2,
@@ -209,7 +210,12 @@ export class GameWorld {
         if (i >= 0 && i < p.bag.length) sim.dropFromBag(p, i);
         break;
       case 'buy':
-        if (m.kind === 'hp' || m.kind === 'mp') sim.buyPotion(p, m.kind, Math.max(0, Math.min(99, Math.floor(num(m.n)))));
+        if ((m.kind === 'hp' || m.kind === 'mp') && POTION_SIZES.includes(m.size)) {
+          sim.buyPotion(p, m.kind, m.size, Math.max(0, Math.min(99, Math.floor(num(m.n)))));
+        }
+        break;
+      case 'sort':
+        if (SORT_KEYS.includes(m.key)) sim.sortBag(p, m.key, m.desc === true);
         break;
       case 'sell':
         if (i >= 0 && i < p.bag.length) sim.sellItem(p, i);
@@ -299,7 +305,7 @@ export class GameWorld {
     const inv = JSON.stringify([p.equipment, p.bag]);
     const me: PrivateSnap = {
       hp: r2(p.hp), mp: r2(p.mp), exp: p.exp, level: p.level, gold: p.gold,
-      hpPots: p.hpPots, mpPots: p.mpPots, stats: p.stats, cd: p.cd, potCd: r2(p.potCd),
+      potSel: p.potSel, stats: p.stats, cd: p.cd, potCd: r2(p.potCd),
       serverMoves: serverMoves(p), epoch: s.epoch,
     };
     if (inv !== s.lastInv) {

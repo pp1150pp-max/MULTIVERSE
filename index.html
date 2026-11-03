@@ -61,6 +61,17 @@
               <div id="stat-list"></div>
             </div>
             <div class="inv-right">
+              <div class="bag-sort">
+                <span>เรียงตาม</span>
+                <select id="sort-key">
+                  <option value="rarity">ความหายาก</option>
+                  <option value="level">เลเวลของ</option>
+                  <option value="slot">ประเภทช่อง</option>
+                  <option value="value">ราคาขาย</option>
+                </select>
+                <button id="sort-dir" data-desc="1">มาก → น้อย</button>
+                <button id="sort-go">เรียง</button>
+              </div>
               <div id="bag-grid"></div>
               <div class="inv-foot"><span id="inv-gold"></span><span id="inv-pots"></span></div>
               <div class="hint" id="bag-hint"></div>
@@ -72,18 +83,10 @@
           <div class="panel-head"><span>พ่อค้า — Merchant</span><button id="shop-close">✕</button></div>
           <p class="npc-line">“ของดีราคาถูก! มีอะไรจะขายก็เอามาได้เลย ข้ารับซื้อทุกอย่าง”</p>
           <div class="shop-section">ซื้อ</div>
-          <div class="shop-row">
-            <span class="shop-item">❤️ ยา HP <small>ฟื้น HP 40%</small></span>
-            <span class="shop-price" id="price-hp"></span>
-            <button data-buy="hp:1">ซื้อ 1</button><button data-buy="hp:10">ซื้อ 10</button>
-          </div>
-          <div class="shop-row">
-            <span class="shop-item">💧 ยา MP <small>ฟื้น MP 50%</small></span>
-            <span class="shop-price" id="price-mp"></span>
-            <button data-buy="mp:1">ซื้อ 1</button><button data-buy="mp:10">ซื้อ 10</button>
-          </div>
+          <div id="shop-buy"></div>
+          <p class="hint" style="margin-top:0">ยาเก็บในกระเป๋า ช่องละไม่เกิน 10 ขวด</p>
           <div class="shop-section">ขาย</div>
-          <p class="hint" style="margin-top:0">คลิกขวาที่ไอเทมในกระเป๋าเพื่อขาย (ขายได้ที่พ่อค้าเท่านั้น)</p>
+          <p class="hint" style="margin-top:0">คลิกขวาที่ของในกระเป๋าเพื่อขาย (ยาขายทั้งช่อง ได้ครึ่งราคา) · ขายได้ที่พ่อค้าเท่านั้น</p>
           <button id="sell-common">ขายของระดับ “ธรรมดา” ทั้งหมดในกระเป๋า</button>
           <div class="shop-foot"><span id="shop-gold"></span><span id="shop-pots"></span></div>
         </div>
@@ -115,8 +118,8 @@
             <tr><td>คลิกซ้าย (ค้าง)</td><td>โจมตีไปทางเมาส์ (ชี้ที่มอนสเตอร์เพื่อล็อกเป้า)</td></tr>
             <tr><td>Q / E / R</td><td>สกิล (เล็งด้วยเมาส์)</td></tr>
             <tr><td>Space</td><td>Dash (ไม่รับดาเมจระหว่างพุ่ง)</td></tr>
-            <tr><td>1 / 2</td><td>ยา HP / ยา MP</td></tr>
-            <tr><td>F</td><td>เปิด/ปิด Auto Play (เฉพาะ Open World)</td></tr>
+            <tr><td>1 / 2</td><td>ยา HP / ยา MP (คลิกยาในกระเป๋าเพื่อเลือกขนาดที่จะใช้)</td></tr>
+            <tr><td>F</td><td>เปิด/ปิด Auto Play (เฉพาะ Open World · เดินเองแล้ว Auto จะปิด)</td></tr>
             <tr><td>I หรือ B</td><td>กระเป๋า &amp; ตัวละคร</td></tr>
             <tr><td>T</td><td>คุยกับ NPC เมื่ออยู่ใกล้ (The Seeker · พ่อค้า · ช่างตีเหล็ก ที่แคมป์)</td></tr>
             <tr><td>ล้อเมาส์</td><td>ซูมกล้อง</td></tr>

@@ -151,14 +151,14 @@ export class Game {
     return { sx, sy, on };
   }
 
-  toggleAuto(force?: boolean): void {
+  toggleAuto(force?: boolean, offMsg = 'ปิด Auto Play'): void {
     if (!this.zone.allowAutoPlay) {
       this.hud.log('พื้นที่นี้ไม่รองรับ Auto Play', '#ff8a6a');
       return;
     }
     this.autoPlay = force ?? !this.autoPlay;
     this.auto.reset();
-    this.hud.log(this.autoPlay ? 'เปิด Auto Play — ขยับหรือโจมตีเองได้ตลอดเวลา' : 'ปิด Auto Play', '#9fd8ff');
+    this.hud.log(this.autoPlay ? 'เปิด Auto Play — โจมตีเองได้ตลอด · เดินเองเมื่อไหร่ Auto จะปิด' : offMsg, '#9fd8ff');
   }
 
   save(): void {
@@ -327,6 +327,7 @@ export class Game {
     if (p.alive) {
       intent = this.manualIntent();
       if (this.hud.dialogOpen) intent = { ...intent, move: null, moveTo: null, basic: false, skills: [], dash: false };
+      else if (this.autoPlay && (intent.move || intent.moveTo)) this.toggleAuto(false, 'ปิด Auto Play — เดินเอง');
       else if (this.autoPlay) intent = this.auto.intent(this, intent);
     }
     const events = this.backend.frame(dt, intent);

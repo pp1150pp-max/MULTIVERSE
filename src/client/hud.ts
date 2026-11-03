@@ -5,12 +5,15 @@ import {
   dropsOnFail, effectiveStats, enhanceCost, itemName, MAX_PLUS, plusOf, sellValue, successRate,
   DROP_ON_FAIL_FROM,
 } from '../shared/data/enhance';
-import { POTION_PRICE } from '../shared/data/shop';
+import {
+  entryName, POTION_ICON, POTION_SIZES, POTION_SIZE_LABEL, POTION_STACK, POTIONS, potionName, potionSellPrice,
+} from '../shared/data/potions';
+import type { SortKey } from '../shared/sim/Player';
 import { MONSTERS } from '../shared/data/monsters';
 import { expToNext } from '../shared/formulas';
 import {
-  RARITY_COLOR, RARITY_LABEL, SLOTS, SLOT_LABEL, STAT_KEYS, STAT_LABEL,
-  type Item, type SlotId, type StatKey,
+  isPotion, RARITY_COLOR, RARITY_LABEL, SLOTS, SLOT_LABEL, STAT_KEYS, STAT_LABEL,
+  type BagEntry, type Item, type PotionKind, type PotionSize, type PotionStack, type SlotId, type StatKey,
 } from '../shared/types';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -19,6 +22,7 @@ const KEY_LABEL: Record<SkillSlot, string> = { basic: 'LMB', q: 'Q', e: 'E', r: 
 const SLOT_ICON: Record<SlotId, string> = { weapon: '🗡️', helmet: '⛑️', armor: '🥋', boots: '👢', ring: '💍' };
 const POTION_CD = 1.5;
 const fmtNum = (v: number) => String(Math.round(v * 10) / 10);
+const POTION_COLOR: Record<PotionKind, string> = { hp: '#e8323c', mp: '#3a7bff' };
 
 const SEEKER_LINES = [
   'ในที่สุดเจ้าก็ตื่นแล้ว… เจ้าคือผู้รอดชีวิตจากโลกที่ถูก The Devourer กลืนกิน',
@@ -30,7 +34,7 @@ const SEEKER_LINES = [
 
 export class Hud {
   dialogOpen = false;
-  private slotEls: { kind: SkillSlot | 'hp' | 'mp'; el: HTMLElement; cd: HTMLElement; extra: HTMLElement }[] = [];
+  private slotEls: { kind: SkillSlot | PotionKind; el: HTMLElement; cd: HTMLElement; extra: HTMLElement }[] = [];
   private invDirty = true;
   private bagOpen = false;
   private mmT = 0;
@@ -73,7 +77,9 @@ export class Hud {
     bag.addEventListener('click', (e) => {
       const i = this.cellIndex(e);
       if (i < 0) return;
+      const entry = g.player.bag[i];
       g.backend.equip(i);
+      if (isPotion(entry)) this.log(`ปุ่ม ${entry.potion === 'hp' ? 1 : 2} จะใช้${potionName(entry.potion, entry.size)}`, '#9fd8ff');
       this.hideTip();
       this.markInventory();
     });
@@ -83,14 +89,23 @@ export class Hud {
       const item = i >= 0 ? g.player.bag[i] : null;
       if (!item) return;
       this.hideTip();
+      const name = `<b style="color:${this.entryColor(item)}">${entryName(item)}</b>`;
       if (this.shopOpen) {
         // Selling only works while talking to the merchant.
-        g.backend.sell(i);
-        this.afterTrade();
+        const sell = () => {
+          if (g.player.bag[i] !== item) return;
+          g.backend.sell(i);
+          this.afterTrade();
+        };
+        // A whole stack of potions is worth asking about first.
+        if (isPotion(item) && item.count > 1) {
+          const each = potionSellPrice(item.potion, item.size);
+          this.confirm(`ขาย ${name} ทั้งช่อง?<br><small>ได้ ${each * item.count} G (ขวดละ ${each} G)</small>`, 'ขาย', sell);
+        } else sell();
         return;
       }
       this.confirm(
-        `วาง <b style="color:${RARITY_COLOR[item.rarity]}">${itemName(item)}</b> ลงบนพื้น?<br><small>เก็บคืนได้ภายใน 60 วินาที · ถ้าจะขาย ให้ไปหาพ่อค้าที่แคมป์</small>`,
+        `วาง ${name} ลงบนพื้น?<br><small>เก็บคืนได้ภายใน 60 วินาที · ถ้าจะขาย ให้ไปหาพ่อค้าที่แคมป์</small>`,
         'วางลงพื้น',
         () => {
           if (g.player.bag[i] !== item) return;
@@ -103,10 +118,23 @@ export class Hud {
     bag.addEventListener('mousemove', (e) => {
       const i = this.cellIndex(e);
       const item = i >= 0 ? g.player.bag[i] : null;
-      if (item) this.showTip(item, e, this.shopOpen ? 'คลิกซ้าย: สวมใส่ · คลิกขวา: ขาย' : 'คลิกซ้าย: สวมใส่ · คลิกขวา: วางลงพื้น');
+      if (isPotion(item)) this.showPotionTip(item, e, this.shopOpen ? 'คลิกซ้าย: ใช้กับปุ่มด่วน · คลิกขวา: ขายทั้งช่อง' : 'คลิกซ้าย: ใช้กับปุ่มด่วน · คลิกขวา: วางลงพื้น');
+      else if (item) this.showTip(item, e, this.shopOpen ? 'คลิกซ้าย: สวมใส่ · คลิกขวา: ขาย' : 'คลิกซ้าย: สวมใส่ · คลิกขวา: วางลงพื้น');
       else this.hideTip();
     });
     bag.addEventListener('mouseleave', () => this.hideTip());
+
+    $('sort-dir').onclick = () => {
+      const b = $('sort-dir');
+      const desc = b.dataset.desc !== '1';
+      b.dataset.desc = desc ? '1' : '0';
+      b.textContent = desc ? 'มาก → น้อย' : 'น้อย → มาก';
+    };
+    $('sort-go').onclick = () => {
+      g.backend.sortBag($<HTMLSelectElement>('sort-key').value as SortKey, $('sort-dir').dataset.desc === '1');
+      this.hideTip();
+      this.markInventory();
+    };
 
     const eq = $('equip-slots');
     eq.addEventListener('click', (e) => {
@@ -126,13 +154,16 @@ export class Hud {
 
     // Merchant
     $('shop-close').onclick = () => this.closeShop();
-    $('price-hp').textContent = `${POTION_PRICE.hp} G`;
-    $('price-mp').textContent = `${POTION_PRICE.mp} G`;
+    $('shop-buy').innerHTML = (['hp', 'mp'] as const).flatMap((k) => POTION_SIZES.map((s) =>
+      `<div class="shop-row"><span class="shop-item">${POTION_ICON[k]} ${potionName(k, s)} <small>ฟื้น ${POTIONS[k][s].amount} ${k.toUpperCase()}</small></span>` +
+      `<span class="shop-price">${POTIONS[k][s].price} G</span>` +
+      `<button data-buy="${k}:${s}:1">ซื้อ 1</button><button data-buy="${k}:${s}:${POTION_STACK}">ซื้อ ${POTION_STACK}</button></div>`,
+    )).join('');
     $('shop').addEventListener('click', (e) => {
       const b = (e.target as HTMLElement).closest<HTMLElement>('[data-buy]');
       if (!b) return;
-      const [kind, n] = b.dataset.buy!.split(':') as ['hp' | 'mp', string];
-      this.buyPotion(kind, Number(n));
+      const [kind, size, n] = b.dataset.buy!.split(':') as [PotionKind, PotionSize, string];
+      this.buyPotion(kind, size, Number(n));
     });
     $('sell-common').onclick = () => this.sellAllCommon();
 
@@ -168,7 +199,7 @@ export class Hud {
   private buildSkillbar(): void {
     const bar = $('skillbar');
     bar.innerHTML = '';
-    const add = (kind: SkillSlot | 'hp' | 'mp', icon: string, key: string, title: string) => {
+    const add = (kind: SkillSlot | PotionKind, icon: string, key: string, title: string) => {
       const el = document.createElement('div');
       el.className = `skill skill-${kind}`;
       el.innerHTML = `<div class="icon">${icon}</div><div class="cd"></div><div class="key">${key}</div><div class="extra"></div>`;
@@ -179,8 +210,8 @@ export class Hud {
     for (const s of this.g.player.cls.skills) {
       add(s.slot, s.icon, KEY_LABEL[s.slot], `${s.name} (${s.nameTh})\n${s.desc}${s.mp ? `\nMP ${s.mp}` : ''}${s.cooldown ? ` · คูลดาวน์ ${s.cooldown} วิ` : ''}`);
     }
-    add('hp', '❤️', '1', 'ยาฟื้น HP 40%');
-    add('mp', '💧', '2', 'ยาฟื้น MP 50%');
+    add('hp', '❤️', '1', '');
+    add('mp', '💧', '2', '');
   }
 
   // ------------------------------------------------------------ per-frame
@@ -200,8 +231,10 @@ export class Hud {
 
     for (const s of this.slotEls) {
       if (s.kind === 'hp' || s.kind === 'mp') {
-        const count = s.kind === 'hp' ? p.hpPots : p.mpPots;
-        s.extra.textContent = String(count);
+        const size = p.potionToUse(s.kind) ?? p.potSel[s.kind];
+        const count = p.potionCount(s.kind, size);
+        s.extra.textContent = `${POTION_SIZE_LABEL[size]} ${count}`;
+        s.el.title = `${potionName(s.kind, size)} — ฟื้น ${POTIONS[s.kind][size].amount} ${s.kind.toUpperCase()}\nคลิกยาในกระเป๋าเพื่อเลือกขนาด`;
         s.cd.style.height = `${(Math.max(0, p.potCd) / POTION_CD) * 100}%`;
         s.el.classList.toggle('empty', count <= 0);
         continue;
@@ -370,15 +403,20 @@ export class Hud {
   private renderShopMoney(): void {
     const p = this.g.player;
     $('shop-gold').textContent = `💰 ${p.gold.toLocaleString()} G`;
-    $('shop-pots').textContent = `❤️ ${p.hpPots}  💧 ${p.mpPots}`;
+    $('shop-pots').textContent = this.potionTotals();
     $('shop').querySelectorAll<HTMLButtonElement>('[data-buy]').forEach((b) => {
-      const [kind, n] = b.dataset.buy!.split(':') as ['hp' | 'mp', string];
-      b.disabled = p.gold < POTION_PRICE[kind] * Number(n);
+      const [kind, size, n] = b.dataset.buy!.split(':') as [PotionKind, PotionSize, string];
+      b.disabled = p.gold < POTIONS[kind][size].price * Number(n) || p.potionRoom(kind, size) < Number(n);
     });
   }
 
-  private buyPotion(kind: 'hp' | 'mp', n: number): void {
-    this.g.backend.buyPotion(kind, n);
+  private potionTotals(): string {
+    const p = this.g.player;
+    return `❤️ ${p.potionCount('hp')}  💧 ${p.potionCount('mp')}`;
+  }
+
+  private buyPotion(kind: PotionKind, size: PotionSize, n: number): void {
+    this.g.backend.buyPotion(kind, size, n);
     this.afterTrade();
   }
 
@@ -414,7 +452,7 @@ export class Hud {
     const p = this.g.player;
     const list: Item[] = [];
     if (p.equipment.weapon) list.push(p.equipment.weapon);
-    for (const it of p.bag) if (it && it.slot === 'weapon') list.push(it);
+    for (const it of p.bag) if (it && !isPotion(it) && it.slot === 'weapon') list.push(it);
     return list;
   }
 
@@ -491,8 +529,18 @@ export class Hud {
     return html + '</table><div class="hint">ทุกระดับเพิ่มพลังโจมตีและโอกาสคริติคอลของอาวุธ</div>';
   }
 
-  private itemCell(item: Item | null | undefined, attrs: string, placeholder = '', selected = false): string {
+  private entryColor(e: BagEntry): string {
+    return isPotion(e) ? POTION_COLOR[e.potion] : RARITY_COLOR[e.rarity];
+  }
+
+  private itemCell(item: BagEntry | null | undefined, attrs: string, placeholder = '', selected = false): string {
     if (!item) return `<div class="cell empty" ${attrs}>${placeholder}</div>`;
+    if (isPotion(item)) {
+      // The outline marks the size the quick key uses.
+      const quick = this.g.player.potSel[item.potion] === item.size;
+      return `<div class="cell pot${quick ? ' quick' : ''}" ${attrs} style="--rc:${POTION_COLOR[item.potion]}">${POTION_ICON[item.potion]}` +
+        `<span class="psize">${POTION_SIZE_LABEL[item.size]}</span><span class="ilv">×${item.count}</span></div>`;
+    }
     const icon = item.slot === 'weapon'
       ? { sword: '🗡️', mage: '🪄', gunslinger: '🔫' }[this.g.player.cls.id]
       : SLOT_ICON[item.slot];
@@ -513,10 +561,10 @@ export class Hud {
       `<div class="stat"><span>${STAT_LABEL[k]}</span><b>${fmt(k, p.stats[k])}</b></div>`,
     ).join('');
     $('inv-gold').textContent = `💰 ${p.gold.toLocaleString()} G`;
-    $('inv-pots').textContent = `❤️ ${p.hpPots}  💧 ${p.mpPots}`;
+    $('inv-pots').textContent = this.potionTotals();
     $('bag-hint').textContent = this.shopOpen
-      ? 'คลิกซ้าย = สวมใส่ · คลิกขวา = ขายให้พ่อค้า · คลิกช่องสวมใส่ = ถอด'
-      : 'คลิกซ้าย = สวมใส่ · คลิกขวา = วางลงพื้น · คลิกช่องสวมใส่ = ถอด · ขายของได้ที่พ่อค้าเท่านั้น';
+      ? 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = ขายให้พ่อค้า · คลิกช่องสวมใส่ = ถอด'
+      : 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = วางลงพื้น · คลิกช่องสวมใส่ = ถอด · ขายของได้ที่พ่อค้าเท่านั้น';
   }
 
   private showTip(item: Item, e: MouseEvent, hint: string): void {
@@ -539,6 +587,21 @@ export class Hud {
       `<div class="tt-sub">${RARITY_LABEL[item.rarity]} · ${SLOT_LABEL[item.slot]} · iLv.${item.level}${plusOf(item) ? ` · ตีบวก +${plusOf(item)}` : ''}</div>` +
       `<div class="tt-stats">${lines || '<div>—</div>'}</div>` +
       `<div class="tt-hint">${hint}</div><div class="tt-val">ขายให้พ่อค้าได้ ${sellValue(item)} G</div>`;
+    this.placeTip(tip, e);
+  }
+
+  private showPotionTip(s: PotionStack, e: MouseEvent, hint: string): void {
+    const tip = $('tooltip');
+    const quick = this.g.player.potSel[s.potion] === s.size;
+    tip.innerHTML =
+      `<div class="tt-name" style="color:${POTION_COLOR[s.potion]}">${potionName(s.potion, s.size)}</div>` +
+      `<div class="tt-sub">ยา · ${s.count} / ${POTION_STACK} ขวด${quick ? ` · ใช้กับปุ่ม ${s.potion === 'hp' ? 1 : 2} อยู่` : ''}</div>` +
+      `<div class="tt-stats"><div>ฟื้น ${POTIONS[s.potion][s.size].amount} ${s.potion.toUpperCase()} ต่อขวด</div></div>` +
+      `<div class="tt-hint">${hint}</div><div class="tt-val">ขายให้พ่อค้าได้ขวดละ ${potionSellPrice(s.potion, s.size)} G</div>`;
+    this.placeTip(tip, e);
+  }
+
+  private placeTip(tip: HTMLElement, e: MouseEvent): void {
     tip.classList.remove('hidden');
     const x = Math.min(e.clientX + 16, window.innerWidth - tip.offsetWidth - 8);
     const y = Math.min(e.clientY + 16, window.innerHeight - tip.offsetHeight - 8);

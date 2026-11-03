@@ -3,7 +3,7 @@
 // and Auto Play work unchanged), smooths their movement between snapshots, and walks your own
 // character immediately so controls feel instant. The server checks every reported position.
 import { Terrain } from '../../shared/sim/terrain';
-import { Player, type CharacterData } from '../../shared/sim/Player';
+import { Player, type CharacterData, type SortKey } from '../../shared/sim/Player';
 import { Monster } from '../../shared/sim/Monster';
 import { Loot } from '../../shared/sim/Loot';
 import type { Sim } from '../../shared/sim/Sim';
@@ -11,7 +11,7 @@ import type { Intent, SimEvent } from '../../shared/sim/types';
 import { MONSTERS } from '../../shared/data/monsters';
 import { ZONE_1, type SpawnArea } from '../../shared/data/zones';
 import type { NpcId } from '../../shared/data/npcs';
-import type { SlotId, Vec2 } from '../../shared/types';
+import type { PotionKind, PotionSize, SlotId, Vec2 } from '../../shared/types';
 import type { SkillSlot } from '../../shared/data/classes';
 import { INPUT_HZ, WS_PATH, type ClientMsg, type ServerMsg, type SnapshotMsg } from '../../shared/net/protocol';
 import type { Backend, EnhanceOutcome, ProjectileLike } from '../backend';
@@ -103,7 +103,7 @@ export class OnlineBackend implements Backend {
     const mine = first.players.find((p) => p.id === myId)!;
     const data: CharacterData = {
       name: mine.name, classId: mine.cls, level: first.me.level, exp: first.me.exp, gold: first.me.gold,
-      hpPots: first.me.hpPots, mpPots: first.me.mpPots,
+      potSel: first.me.potSel,
       equipment: first.me.inv?.equipment ?? {}, bag: first.me.inv?.bag ?? [],
     };
     this.me = new Player(myId, NO_SIM, data);
@@ -172,7 +172,7 @@ export class OnlineBackend implements Backend {
       let p = this.playerMap.get(ps.id);
       if (!p) {
         p = new Player(ps.id, NO_SIM, {
-          name: ps.name, classId: ps.cls, level: ps.lv, exp: 0, gold: 0, hpPots: 0, mpPots: 0, equipment: {}, bag: [],
+          name: ps.name, classId: ps.cls, level: ps.lv, exp: 0, gold: 0, equipment: {}, bag: [],
         });
         p.x = ps.x;
         p.z = ps.z;
@@ -278,8 +278,7 @@ export class OnlineBackend implements Backend {
     me.exp = pv.exp;
     me.level = pv.level;
     me.gold = pv.gold;
-    me.hpPots = pv.hpPots;
-    me.mpPots = pv.mpPots;
+    me.potSel = { ...pv.potSel };
     me.stats = pv.stats;
     me.cd = { ...pv.cd };
     me.potCd = pv.potCd;
@@ -396,7 +395,8 @@ export class OnlineBackend implements Backend {
   equip(i: number): void { this.send({ t: 'act', a: 'equip', i }); }
   unequip(slot: SlotId): void { this.send({ t: 'act', a: 'unequip', slot }); }
   drop(i: number): void { this.send({ t: 'act', a: 'drop', i }); }
-  buyPotion(kind: 'hp' | 'mp', n: number): void { this.send({ t: 'act', a: 'buy', kind, n }); }
+  buyPotion(kind: PotionKind, size: PotionSize, n: number): void { this.send({ t: 'act', a: 'buy', kind, size, n }); }
+  sortBag(key: SortKey, desc: boolean): void { this.send({ t: 'act', a: 'sort', key, desc }); }
   sell(i: number): void { this.send({ t: 'act', a: 'sell', i }); }
   sellAllCommon(): void { this.send({ t: 'act', a: 'sellCommon' }); }
 
