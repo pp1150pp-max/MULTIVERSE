@@ -208,13 +208,18 @@ const world = new GameWorld(db, server);
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\nMULTIVERSE server พร้อมแล้ว — port ${PORT}`);
   console.log(`  เครื่องนี้:   http://localhost:${PORT}`);
+  let tailscale = false;
   for (const list of Object.values(networkInterfaces())) {
     for (const a of list ?? []) {
       if (a.family !== 'IPv4' || a.internal) continue;
-      const tag = a.address.startsWith('100.') ? 'Tailscale' : 'วง LAN';
-      console.log(`  ${tag.padEnd(10)} http://${a.address}:${PORT}`);
+      // Tailscale hands out addresses in 100.64.0.0/10.
+      const [o1, o2] = a.address.split('.').map(Number);
+      const isTs = o1 === 100 && o2 >= 64 && o2 <= 127;
+      tailscale ||= isTs;
+      console.log(`  ${(isTs ? 'Tailscale' : 'วง LAN').padEnd(10)} http://${a.address}:${PORT}${isTs ? '   ← ส่งที่อยู่นี้ให้เพื่อนนอกบ้าน' : ''}`);
     }
   }
+  if (!tailscale) console.log('  (ยังไม่เจอ Tailscale — ถ้าจะเล่นกับเพื่อนนอกบ้าน ดูวิธีตั้งใน docs/TAILSCALE.md)');
   console.log(`  ฐานข้อมูล:  ${DB_FILE}\n`);
 });
 
