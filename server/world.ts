@@ -1,11 +1,11 @@
-// The shared online world: one Sim for Emerald Forest, driven by every connected player's input.
-// The server decides all combat, loot and EXP; clients only move their own character, and the
-// server checks those moves are possible.
+// The shared online world: one Sim per zone, driven by the input of the players in it. Walking
+// through a portal moves a player's session to the other zone's Sim. The server decides all combat,
+// loot and EXP; clients only move their own character, and the server checks those moves are possible.
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server as HttpServer } from 'node:http';
 import type { Db } from './db';
 import { Sim } from '../src/shared/sim/Sim';
-import { ZONE_1 } from '../src/shared/data/zones';
+import { ZONES, zoneById } from '../src/shared/data/zones';
 import type { Player } from '../src/shared/sim/Player';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../src/shared/sim/types';
 import {
@@ -24,6 +24,8 @@ interface Session {
   accountId: number;
   username: string;
   charId: number;
+  /** The zone this session is playing in. */
+  sim: Sim;
   player: Player;
   // Latest input; dash/potion are one-shot until the next tick uses them.
   move: Vec2 | null;
@@ -66,7 +68,7 @@ function serverMoves(p: Player): boolean {
 }
 
 export class GameWorld {
-  readonly sim = new Sim(ZONE_1);
+  readonly sims = new Map(Object.values(ZONES).map((z) => [z.id, new Sim(z)]));
   private readonly sessions = new Set<Session>();
   private readonly byPlayer = new Map<Player, Session>();
   private last = performance.now();
@@ -141,15 +143,16 @@ export class GameWorld {
         s.ws.close();
       }
     }
-    const player = this.sim.addPlayer(data);
+    const sim = this.sims.get(zoneById(data.zone).id)!;
+    const player = sim.addPlayer(data);
     const s: Session = {
-      ws, accountId: acc.id, username: acc.username, charId, player,
+      ws, accountId: acc.id, username: acc.username, charId, sim, player,
       move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null,
       pendingPos: null, lastPosAt: performance.now(), epoch: 0, lastInv: '', outbox: [], lastChatAt: 0, saveDue: null,
     };
     this.sessions.add(s);
     this.byPlayer.set(player, s);
-    this.send(ws, { t: 'welcome', you: player.id, time: this.sim.time });
+    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id });
     this.broadcastSystem(`${player.name} เข้าสู่โลก`);
     console.log(`[world] ${acc.username} joined as ${player.name} (${this.sessions.size} online)`);
     return s;
@@ -160,7 +163,7 @@ export class GameWorld {
     this.save(s);
     this.sessions.delete(s);
     this.byPlayer.delete(s.player);
-    this.sim.removePlayer(s.player);
+    s.sim.removePlayer(s.player);
     this.broadcastSystem(`${s.player.name} ออกจากเกม`);
     console.log(`[world] ${s.username} left (${this.sessions.size} online)`);
   }
@@ -185,7 +188,7 @@ export class GameWorld {
     // Accept the move only if the character could have walked that far since the last one.
     const from = s.pendingPos ?? p;
     const maxStep = p.moveSpeed * Math.min((now - s.lastPosAt) / 1000, 0.5) * 1.4 + 0.3;
-    if (Math.hypot(pos.x - from.x, pos.z - from.z) <= maxStep && !this.sim.terrain.isBlocked(pos.x, pos.z, 0)) {
+    if (Math.hypot(pos.x - from.x, pos.z - from.z) <= maxStep && !s.sim.terrain.isBlocked(pos.x, pos.z, 0)) {
       s.pendingPos = pos;
       s.lastPosAt = now;
     }
@@ -193,7 +196,7 @@ export class GameWorld {
 
   private onAction(s: Session, m: ActionMsg): void {
     const p = s.player;
-    const sim = this.sim;
+    const sim = s.sim;
     const i = num((m as { i?: unknown }).i, -1);
     switch (m.a) {
       case 'respawn':
@@ -259,26 +262,35 @@ export class GameWorld {
     const now = performance.now();
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
-    this.sim.step(dt, this.intentOf);
-
-    for (const ev of this.sim.drainEvents()) {
-      if (ev.t === 'save') {
-        const s = this.sessionById(ev.to);
-        if (s) s.saveDue ??= now + 2000;
-        continue;
-      }
-      if (ev.t === 'revived') {
-        const s = this.sessionById(ev.id);
-        if (s) s.epoch++;
-      }
-      const at = eventPos(ev);
-      const to = 'to' in ev ? ev.to : undefined;
-      for (const s of this.sessions) {
-        if (to !== undefined && to !== s.player.id) continue;
-        if (at && Math.hypot(at.x - s.player.x, at.z - s.player.z) > INTEREST_RADIUS + 6) continue;
-        s.outbox.push(ev);
+    const travels: { s: Session; zone: string }[] = [];
+    for (const sim of this.sims.values()) {
+      sim.step(dt, this.intentOf);
+      for (const ev of sim.drainEvents()) {
+        if (ev.t === 'save') {
+          const s = this.sessionById(sim, ev.to);
+          if (s) s.saveDue ??= now + 2000;
+          continue;
+        }
+        if (ev.t === 'travel') {
+          const s = this.sessionById(sim, ev.to);
+          if (s) travels.push({ s, zone: ev.zone });
+          continue;
+        }
+        if (ev.t === 'revived') {
+          const s = this.sessionById(sim, ev.id);
+          if (s) s.epoch++;
+        }
+        const at = eventPos(ev);
+        const to = 'to' in ev ? ev.to : undefined;
+        for (const s of this.sessions) {
+          if (s.sim !== sim) continue;
+          if (to !== undefined && to !== s.player.id) continue;
+          if (at && Math.hypot(at.x - s.player.x, at.z - s.player.z) > INTEREST_RADIUS + 6) continue;
+          s.outbox.push(ev);
+        }
       }
     }
+    for (const t of travels) this.travel(t.s, t.zone);
 
     if (++this.tickN % Math.round(TICK_HZ / SNAPSHOT_HZ) === 0) {
       for (const s of this.sessions) this.sendSnapshot(s);
@@ -288,9 +300,39 @@ export class GameWorld {
     }
   }
 
-  private sessionById(id: number): Session | undefined {
-    for (const s of this.sessions) if (s.player.id === id) return s;
+  /** Player ids are per zone, so look them up within one Sim. */
+  private sessionById(sim: Sim, id: number): Session | undefined {
+    for (const s of this.sessions) if (s.sim === sim && s.player.id === id) return s;
     return undefined;
+  }
+
+  /** Moves a session's character into another zone's Sim, keeping HP/MP. */
+  private travel(s: Session, zoneId: string): void {
+    const dest = this.sims.get(zoneId);
+    if (!dest || dest === s.sim || !this.sessions.has(s)) return;
+    const old = s.player;
+    const from = s.sim;
+    from.removePlayer(old);
+    this.byPlayer.delete(old);
+    const p = dest.addPlayer(old.toData(), from.zone.id);
+    p.hp = Math.min(old.hp, p.maxHp);
+    p.mp = Math.min(old.mp, p.stats.maxMp);
+    p.cd = { ...old.cd };
+    p.potCd = old.potCd;
+    s.sim = dest;
+    s.player = p;
+    this.byPlayer.set(p, s);
+    s.move = null;
+    s.basic = false;
+    s.skills = [];
+    s.pendingPos = null;
+    s.lastPosAt = performance.now();
+    s.epoch++;
+    s.lastInv = '';
+    s.outbox = [];
+    this.send(s.ws, { t: 'zone', zone: dest.zone.id, you: p.id, x: r2(p.x), z: r2(p.z) });
+    this.save(s);
+    console.log(`[world] ${s.username} → ${dest.zone.name}`);
   }
 
   private sendSnapshot(s: Session): void {
@@ -306,7 +348,7 @@ export class GameWorld {
       s.lastInv = inv;
       me.inv = { equipment: p.equipment, bag: p.bag };
     }
-    const sim = this.sim;
+    const sim = s.sim;
     const msg: SnapshotMsg = {
       t: 'snap',
       time: r2(sim.time),

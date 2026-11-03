@@ -1,6 +1,6 @@
 // Zone layout and collision, without any rendering. Built from the zone seed, so the browser and
 // the server get exactly the same trees, rocks and camp.
-import type { ZoneDef } from '../data/zones';
+import type { ZoneDef, ZoneTheme } from '../data/zones';
 import { NPC_IDS, type NpcId } from '../data/npcs';
 import { mulberry32, pick, rand, type Rng } from '../rng';
 import type { Vec2 } from '../types';
@@ -9,6 +9,21 @@ export interface Collider { x: number; z: number; r: number }
 /** One prop to draw. `fade` = turns see-through when the player walks behind it. */
 export interface PropSpec { key: string; x: number; z: number; height: number; fade: boolean }
 type Seg = [number, number, number, number];
+
+/** Prop keys each theme scatters around. Every key needs an entry in the client's SHEET_SPECS. */
+const THEME_PROPS: Record<ZoneTheme, { trees: string[]; bushes: string[]; rocks: string[]; stump: string; extra: string[] }> = {
+  forest: { trees: ['tree_0', 'tree_1', 'tree_2'], bushes: ['bush_0', 'bush_1'], rocks: ['rock_0', 'rock_1'], stump: 'stump', extra: [] },
+  marsh: {
+    trees: ['swamp_tree_0', 'swamp_tree_1', 'swamp_tree_2', 'willow'],
+    bushes: ['reeds_0', 'reeds_1', 'fern'],
+    rocks: ['mossrock_0', 'mossrock_1'],
+    stump: 'swamp_stump',
+    extra: ['mushrooms'],
+  },
+};
+
+/** How close a player has to walk to a portal to use it. */
+export const PORTAL_RANGE = 1.4;
 
 export class Terrain {
   readonly half: number;
@@ -73,8 +88,12 @@ export class Terrain {
     if (collideR > 0) this.colliders.push({ x, z, r: collideR });
   }
 
+  private get set() {
+    return THEME_PROPS[this.zone.theme];
+  }
+
   private addTree(r: Rng, x: number, z: number): void {
-    this.addProp(pick(r, ['tree_0', 'tree_1', 'tree_2']), x, z, rand(r, 4.6, 6.4), 0.55, true);
+    this.addProp(pick(r, this.set.trees), x, z, rand(r, 4.6, 6.4), 0.55, true);
   }
 
   private placeProps(r: Rng): void {
@@ -111,23 +130,28 @@ export class Terrain {
     // Boss clearing ring of runestones.
     const b = zone.boss;
     for (let a = 0.3; a < Math.PI * 2; a += Math.PI / 4) {
-      this.addProp(a % 2 > 1 ? 'rock_1' : 'runestone', b.x + Math.cos(a) * 11, b.z + Math.sin(a) * 11, 2.2, 0.6);
+      this.addProp(a % 2 > 1 ? this.set.rocks[1] : 'runestone', b.x + Math.cos(a) * 11, b.z + Math.sin(a) * 11, 2.2, 0.6);
     }
 
+    // Portals: walk-through, so no collider.
+    for (const p of zone.portals) this.addProp('portal', p.x, p.z, 3.4, 0);
+
     // Scattered forest inside.
+    const set = this.set;
     let placed = 0;
     for (let i = 0; i < 1600 && placed < 280; i++) {
       const x = rand(r, -B + 2, B - 2);
       const z = rand(r, -B + 2, B - 2);
       if (this.distToPath(x, z) < 3.2) continue;
-      if (near(x, z, s, 11) || near(x, z, b, 13)) continue;
+      if (near(x, z, s, 11) || near(x, z, b, 13) || zone.portals.some((p) => near(x, z, p, 5))) continue;
       if (zone.spawns.some((sp) => near(x, z, sp, sp.radius * 0.55))) continue;
       if (this.colliders.some((c) => Math.hypot(c.x - x, c.z - z) < 2.2)) continue;
       const roll = r();
       if (roll < 0.55) this.addTree(r, x, z);
-      else if (roll < 0.8) this.addProp(pick(r, ['bush_0', 'bush_1']), x, z, rand(r, 0.9, 1.3), 0);
-      else if (roll < 0.93) this.addProp(pick(r, ['rock_0', 'rock_1']), x, z, rand(r, 0.7, 1.1), 0.5);
-      else this.addProp('stump', x, z, 0.8, 0.4);
+      else if (roll < 0.8) this.addProp(pick(r, set.bushes), x, z, rand(r, 0.9, 1.3), 0);
+      else if (roll < (set.extra.length ? 0.9 : 0.93)) this.addProp(pick(r, set.rocks), x, z, rand(r, 0.7, 1.1), 0.5);
+      else if (roll < 0.95 && set.extra.length) this.addProp(pick(r, set.extra), x, z, rand(r, 0.8, 1.1), 0);
+      else this.addProp(set.stump, x, z, 0.8, 0.4);
       placed++;
     }
   }

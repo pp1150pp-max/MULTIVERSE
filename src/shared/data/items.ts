@@ -21,6 +21,13 @@ const BASES: BaseItem[] = [
   { id: 'boots', slot: 'boots', names: { any: 'Leather Boots' }, main: { def: 3, moveSpeed: 5 }, minLevel: 5 },
   { id: 'ring_copper', slot: 'ring', names: { any: 'Copper Ring' }, main: {}, minLevel: 1 },
   { id: 'ring_jade', slot: 'ring', names: { any: 'Jade Ring' }, main: { maxHp: 10 }, minLevel: 6 },
+  // Misty Marsh tier
+  { id: 'weapon_4', slot: 'weapon', names: { sword: 'Bogsteel Saber', mage: 'Willow Wand', gunslinger: 'Marsh Repeater' }, main: { atk: 14 }, minLevel: 13 },
+  { id: 'weapon_5', slot: 'weapon', names: { sword: 'Witchbane Blade', mage: 'Lantern Staff', gunslinger: 'Wisplight Pistol' }, main: { atk: 18 }, minLevel: 18 },
+  { id: 'hood', slot: 'helmet', names: { any: 'Mossweave Hood' }, main: { def: 6, maxHp: 14 }, minLevel: 12 },
+  { id: 'scale', slot: 'armor', names: { sword: 'Serpent Scale Mail', mage: 'Fen Robe', gunslinger: 'Oilskin Coat' }, main: { def: 10, maxHp: 30 }, minLevel: 14 },
+  { id: 'waders', slot: 'boots', names: { any: 'Marsh Waders' }, main: { def: 5, moveSpeed: 6 }, minLevel: 12 },
+  { id: 'ring_wisp', slot: 'ring', names: { any: 'Wisp Ring' }, main: { maxHp: 18 }, minLevel: 16 },
 ];
 
 const AFFIXES: { stat: StatKey; min: number; max: number; per: number }[] = [

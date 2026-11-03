@@ -46,7 +46,7 @@ export class Hud {
     $('hud').classList.remove('hidden');
     this.mm = $<HTMLCanvasElement>('minimap').getContext('2d')!;
     $('hud-name').textContent = g.player.name;
-    $('hud-zone').textContent = `${g.zone.name} · ${g.zone.nameTh}  (Lv.${g.zone.levels[0]}–${g.zone.levels[1]})`;
+    this.showZoneName();
     $('hud-online').classList.toggle('hidden', !g.backend.online);
     this.buildSkillbar();
 
@@ -156,6 +156,21 @@ export class Hud {
     $('confirm-no').onclick = () => this.closeConfirm();
 
     this.log(`ยินดีต้อนรับสู่ ${g.zone.name} — กด H เพื่อดูวิธีควบคุม`, '#cfe8ff');
+  }
+
+  private showZoneName(): void {
+    const z = this.g.zone;
+    $('hud-zone').textContent = `${z.name} · ${z.nameTh}  (Lv.${z.levels[0]}–${z.levels[1]})`;
+  }
+
+  /** Called after walking through a portal. */
+  onZoneChanged(): void {
+    const z = this.g.zone;
+    this.showZoneName();
+    this.closePanels();
+    this.markInventory();
+    this.log(`เดินทางสู่ ${z.name} · ${z.nameTh} (Lv.${z.levels[0]}–${z.levels[1]})`, '#9fffd8');
+    this.log(z.subtitle, '#b9c9c0');
   }
 
   private cellIndex(e: Event): number {

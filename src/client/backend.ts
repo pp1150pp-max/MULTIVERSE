@@ -7,7 +7,7 @@ import type { Player, CharacterData } from '../shared/sim/Player';
 import type { Monster } from '../shared/sim/Monster';
 import type { Loot } from '../shared/sim/Loot';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../shared/sim/types';
-import type { ZoneDef } from '../shared/data/zones';
+import { zoneById, type ZoneDef } from '../shared/data/zones';
 import type { NpcId } from '../shared/data/npcs';
 import type { EnhanceResult } from '../shared/data/enhance';
 import type { Item, SlotId } from '../shared/types';
@@ -55,14 +55,15 @@ export interface Backend {
 export class LocalBackend implements Backend {
   readonly online = false;
   readonly onlineCount = 1;
-  readonly me: Player;
-  private readonly sim: Sim;
+  me: Player;
+  private sim: Sim;
 
-  constructor(readonly zone: ZoneDef, data: CharacterData) {
+  constructor(zone: ZoneDef, data: CharacterData) {
     this.sim = new Sim(zone);
     this.me = this.sim.addPlayer(data);
   }
 
+  get zone(): ZoneDef { return this.sim.zone; }
   get terrain(): Terrain { return this.sim.terrain; }
   get players(): readonly Player[] { return this.sim.players; }
   get monsters(): readonly Monster[] { return this.sim.monsters; }
@@ -72,7 +73,22 @@ export class LocalBackend implements Backend {
 
   frame(dt: number, intent: Intent): SimEvent[] {
     this.sim.step(dt, (p) => (p === this.me ? intent : IDLE_INTENT));
-    return this.sim.drainEvents();
+    const events = this.sim.drainEvents();
+    const travel = events.find((e) => e.t === 'travel' && e.to === this.me.id);
+    if (travel?.t === 'travel') this.travel(travel.zone);
+    return events;
+  }
+
+  /** Starts a fresh simulation of the destination zone with this character in it. */
+  private travel(zoneId: string): void {
+    const old = this.me;
+    const from = this.sim.zone.id;
+    this.sim = new Sim(zoneById(zoneId));
+    this.me = this.sim.addPlayer(old.toData(), from);
+    this.me.hp = Math.min(old.hp, this.me.maxHp);
+    this.me.mp = Math.min(old.mp, this.me.stats.maxMp);
+    this.me.cd = { ...old.cd };
+    this.me.potCd = old.potCd;
   }
 
   respawn(): void { this.sim.respawn(this.me); }

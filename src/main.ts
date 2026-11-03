@@ -5,7 +5,7 @@ import { buildMenu, portrait } from './client/menu';
 import { LocalBackend } from './client/backend';
 import type { OnlineBackend } from './client/net/online';
 import { writeSave, type SaveData } from './client/save';
-import { ZONE_1 } from './shared/data/zones';
+import { zoneById } from './shared/data/zones';
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -17,7 +17,7 @@ function start(game: Game, classId: string): void {
 }
 
 function launchSingle(data: SaveData): void {
-  const game = new Game($('app'), new LocalBackend(ZONE_1, data), {
+  const game = new Game($('app'), new LocalBackend(zoneById(data.zone), data), {
     metSeeker: data.metSeeker,
     save: (g) => writeSave({ v: 1, ...g.player.toData(), metSeeker: g.metSeeker }),
   });

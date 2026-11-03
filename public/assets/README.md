@@ -31,6 +31,12 @@
 | `sprites/monsters/wild_boar.png` | Wild Boar |
 | `sprites/monsters/forest_wolf.png` | Forest Wolf |
 | `sprites/monsters/forest_bear.png` | Forest Bear (Mini Boss) |
+| `sprites/monsters/bog_toad.png` | Bog Toad (Zone 2) |
+| `sprites/monsters/marsh_leech.png` | Marsh Leech (Zone 2) |
+| `sprites/monsters/swamp_serpent.png` | Swamp Serpent (Zone 2) |
+| `sprites/monsters/mire_ghoul.png` | Mire Ghoul (Zone 2) |
+| `sprites/monsters/will_o_wisp.png` | Will-o'-Wisp (Zone 2) |
+| `sprites/monsters/bog_witch.png` | Bog Witch (Boss Zone 2) |
 
 ## ตัวละครแบบแอนิเมชันเต็มชุด (เช่น Sword — Cyberblade)
 
@@ -99,7 +105,12 @@ python tools/extract_sheet.py ภาพชีต.png public/assets/sprites/playe
 ## ภาพเดี่ยว (ฉากประกอบ / ไอคอน) — 1 ภาพต่อ 1 ไฟล์
 
 `sprites/props/`: `tree_0.png` `tree_1.png` `tree_2.png` `bush_0.png` `bush_1.png` `rock_0.png` `rock_1.png`
-`stump.png` `tent.png` `campfire.png` `sign.png` `fence.png` `runestone.png`
+`stump.png` `tent.png` `campfire.png` `sign.png` `fence.png` `runestone.png` `portal.png`
+
+Zone 2 (Misty Marsh): `swamp_tree_0.png` `swamp_tree_1.png` `swamp_tree_2.png` `willow.png` `reeds_0.png` `reeds_1.png`
+`fern.png` `mushrooms.png` `mossrock_0.png` `mossrock_1.png` `swamp_stump.png`
+
+ภาพขนาดใหญ่ (ช่องละสูงเกิน 72px) เกมจะย่อแบบเนียน (mipmap) ให้เอง ไม่ต้องย่อไฟล์ให้พอดีเป๊ะ
 
 `sprites/icons/`: `coin.png` `potion_hp.png` `potion_mp.png`
 `bag_common.png` `bag_uncommon.png` `bag_rare.png` `bag_epic.png` `bag_legendary.png`

@@ -61,4 +61,6 @@ export type SimEvent =
   | { t: 'died'; id: number }
   | { t: 'revived'; id: number }
   /** Something worth saving right away happened to this player (level up, trade, …). */
-  | { t: 'save'; to: number };
+  | { t: 'save'; to: number }
+  /** This player walked into a portal. Whoever drives the Sim moves them to that zone. */
+  | { t: 'travel'; to: number; zone: string };

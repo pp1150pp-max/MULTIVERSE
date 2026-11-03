@@ -23,6 +23,8 @@ export interface CharacterData {
   mpPots: number;
   equipment: Partial<Record<SlotId, Item>>;
   bag: (Item | null)[];
+  /** Zone id the character is in. Missing on saves from before there were zones (= the forest). */
+  zone?: string;
 }
 
 /** A fresh level 1 character with the class starter weapon and a few potions. */
@@ -57,6 +59,10 @@ export class Player extends Unit {
   moveTarget: Vec2 | null = null;
   /** Shown once per session when low-level monsters start giving less EXP. */
   lowExpHinted = false;
+  zone: string | undefined;
+  /** False right after arriving through a portal, until the player steps away from it. */
+  portalReady = true;
+  portalMsgAt = -99;
   dashKind: 'dash' | 'charge' = 'dash';
   private atkT = 0;
   private faceLockT = 0;
@@ -79,6 +85,7 @@ export class Player extends Unit {
     this.mpPots = data.mpPots;
     this.equipment = { ...data.equipment };
     this.bag = Array.from({ length: BAG_SIZE }, (_, i) => data.bag[i] ?? null);
+    this.zone = data.zone;
     this.radius = 0.4;
     this.recompute();
     this.hp = this.maxHp;
@@ -116,6 +123,7 @@ export class Player extends Unit {
       mpPots: this.mpPots,
       equipment: this.equipment,
       bag: this.bag,
+      zone: this.zone,
     };
   }
 
