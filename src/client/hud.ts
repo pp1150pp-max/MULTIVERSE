@@ -131,6 +131,16 @@ export class Hud {
       b.dataset.desc = desc ? '1' : '0';
       b.textContent = desc ? 'มาก → น้อย' : 'น้อย → มาก';
     };
+    const lf = $('loot-filter');
+    lf.innerHTML = '<span>เก็บ</span>' +
+      RARITIES.map((r) => `<label style="color:${RARITY_COLOR[r]}"><input type="checkbox" data-rarity="${r}">${RARITY_LABEL[r]}</label>`).join('') +
+      '<label><input type="checkbox" data-potions>ยา</label>';
+    lf.addEventListener('change', () => {
+      const rarities = RARITIES.filter((r) => lf.querySelector<HTMLInputElement>(`[data-rarity="${r}"]`)!.checked);
+      const potions = lf.querySelector<HTMLInputElement>('[data-potions]')!.checked;
+      g.backend.setLootFilter({ rarities, potions });
+    });
+    lf.title = 'ของระดับที่ไม่ได้ติ๊กจะไม่ถูกเก็บ (ทั้งตอน Auto และเดินเอง) · ทองเก็บเสมอ';
     $('sort-go').onclick = () => {
       g.backend.sortBag($<HTMLSelectElement>('sort-key').value as SortKey, $('sort-dir').dataset.desc === '1');
       this.hideTip();
@@ -577,6 +587,9 @@ export class Hud {
     ).join('');
     $('inv-gold').textContent = `💰 ${p.gold.toLocaleString()} G`;
     $('inv-pots').textContent = this.potionTotals();
+    const lf = $('loot-filter');
+    for (const r of RARITIES) lf.querySelector<HTMLInputElement>(`[data-rarity="${r}"]`)!.checked = p.lootFilter.rarities.includes(r);
+    lf.querySelector<HTMLInputElement>('[data-potions]')!.checked = p.lootFilter.potions;
     $('bag-hint').textContent = this.shopOpen
       ? 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = ขายให้พ่อค้า · คลิกช่องสวมใส่ = ถอด'
       : 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = วางลงพื้น · คลิกช่องสวมใส่ = ถอด · ขายของได้ที่พ่อค้าเท่านั้น';

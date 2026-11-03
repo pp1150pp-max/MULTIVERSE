@@ -16,6 +16,9 @@ export interface AutoWorld {
 }
 
 const RANGE: Record<string, number> = { sword: 1.9, mage: 8.5, gunslinger: 9 };
+/** Loot within this distance is fetched even while monsters attack; up to LOOT_FAR when it's calm. */
+const LOOT_NEAR = 5;
+const LOOT_FAR = 9;
 
 /**
  * Open-world farming bot. Singleplayer runs it in the browser; online the server runs it, so it
@@ -47,22 +50,22 @@ export class AutoPlay {
       else if (p.mp < p.stats.maxMp * 0.15 && p.potionCount('mp') > 0) out.potion = 'mp';
     }
 
+    // Loot close by is picked up even mid-fight; farther loot only when nothing is attacking.
+    // Loot that doesn't fit in the bag (or the loot filter skips) is ignored, so a full bag just keeps fighting.
     const threatened = g.monsters.some((m) => m.isHostile && dist(m) < 3.5);
-    if (!threatened) {
-      let best = null as { x: number; z: number } | null;
-      let bd = 9;
-      for (const l of g.loots) {
-        if (l.dead || l.dropped || !l.canTake(p.id, g.time) || (l.kind.type === 'item' && !p.hasBagSpace())) continue;
-        const d = dist(l);
-        if (d < bd) {
-          bd = d;
-          best = l;
-        }
+    let best = null as { x: number; z: number } | null;
+    let bd = threatened ? LOOT_NEAR : LOOT_FAR;
+    for (const l of g.loots) {
+      if (l.dead || l.dropped || !l.canTake(p.id, g.time) || !p.wantsLoot(l.kind, false) || !p.canFit(l.kind)) continue;
+      const d = dist(l);
+      if (d < bd) {
+        bd = d;
+        best = l;
       }
-      if (best) {
-        out.moveTo = { x: best.x, z: best.z };
-        return out;
-      }
+    }
+    if (best) {
+      out.moveTo = { x: best.x, z: best.z };
+      return out;
     }
 
     const t = this.target;

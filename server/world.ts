@@ -6,7 +6,7 @@ import type { Server as HttpServer } from 'node:http';
 import type { Db } from './db';
 import { Sim } from '../src/shared/sim/Sim';
 import { ZONE_1 } from '../src/shared/data/zones';
-import { SORT_KEYS, type Player } from '../src/shared/sim/Player';
+import { SORT_KEYS, type LootFilter, type Player } from '../src/shared/sim/Player';
 import { POTION_SIZES } from '../src/shared/data/potions';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../src/shared/sim/types';
 import { AutoPlay, type AutoWorld } from '../src/shared/sim/autoplay';
@@ -227,6 +227,12 @@ export class GameWorld {
         s.auto = m.on === true && ZONE_1.allowAutoPlay ? (s.auto ?? new AutoPlay()) : null;
         s.pendingPos = null;
         break;
+      case 'lootFilter': {
+        const f = m.filter as Partial<LootFilter> | undefined;
+        if (!f || !Array.isArray(f.rarities)) break;
+        sim.setLootFilter(p, { rarities: RARITIES.filter((r) => f.rarities!.includes(r)), potions: f.potions !== false });
+        break;
+      }
       case 'sort':
         if (SORT_KEYS.includes(m.key)) sim.sortBag(p, m.key, m.desc === true);
         break;
@@ -324,7 +330,7 @@ export class GameWorld {
     const inv = JSON.stringify([p.equipment, p.bag]);
     const me: PrivateSnap = {
       hp: r2(p.hp), mp: r2(p.mp), exp: p.exp, level: p.level, gold: p.gold,
-      potSel: p.potSel, stats: p.stats, cd: p.cd, potCd: r2(p.potCd),
+      potSel: p.potSel, lootFilter: p.lootFilter, stats: p.stats, cd: p.cd, potCd: r2(p.potCd),
       serverMoves: serverMoves(p) || !!s.auto, epoch: s.epoch,
     };
     if (inv !== s.lastInv) {

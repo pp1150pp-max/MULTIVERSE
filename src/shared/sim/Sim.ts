@@ -11,7 +11,7 @@ import { NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { rand, randInt } from '../rng';
 import { isPotion, RARITY_LABEL, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
 import { Terrain } from './terrain';
-import { Player, type CharacterData, type SortKey } from './Player';
+import { Player, type CharacterData, type LootFilter, type SortKey } from './Player';
 import { Monster } from './Monster';
 import { Projectile, type ProjOpts } from './Projectile';
 import { Loot, LOOT_PRIORITY_TIME, type LootKind } from './Loot';
@@ -331,6 +331,11 @@ export class Sim {
   /** The bag changed in a small way (a potion drunk or picked up): refresh it, no save needed. */
   inventoryChanged(p: Player): void {
     this.events.push({ t: 'inventory', to: p.id });
+  }
+
+  setLootFilter(p: Player, f: LootFilter): void {
+    p.lootFilter = { rarities: [...f.rarities], potions: f.potions };
+    this.events.push({ t: 'save', to: p.id });
   }
 
   sortBag(p: Player, key: SortKey, desc: boolean): void {

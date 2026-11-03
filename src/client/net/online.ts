@@ -3,7 +3,7 @@
 // and Auto Play work unchanged), smooths their movement between snapshots, and walks your own
 // character immediately so controls feel instant. The server checks every reported position.
 import { Terrain } from '../../shared/sim/terrain';
-import { Player, type CharacterData, type SortKey } from '../../shared/sim/Player';
+import { Player, type CharacterData, type LootFilter, type SortKey } from '../../shared/sim/Player';
 import { Monster } from '../../shared/sim/Monster';
 import { Loot } from '../../shared/sim/Loot';
 import type { Sim } from '../../shared/sim/Sim';
@@ -94,6 +94,7 @@ export class OnlineBackend implements Backend {
   private faceLockT = 0;
   private sendT = 0;
   private pendingDash = false;
+  private filterPending = false;
   private pendingPotion: 'hp' | 'mp' | null = null;
   private enhanceReq = 0;
   private readonly enhanceWait = new Map<number, (o: EnhanceOutcome) => void>();
@@ -103,7 +104,7 @@ export class OnlineBackend implements Backend {
     const mine = first.players.find((p) => p.id === myId)!;
     const data: CharacterData = {
       name: mine.name, classId: mine.cls, level: first.me.level, exp: first.me.exp, gold: first.me.gold,
-      potSel: first.me.potSel,
+      potSel: first.me.potSel, lootFilter: first.me.lootFilter,
       equipment: first.me.inv?.equipment ?? {}, bag: first.me.inv?.bag ?? [],
     };
     this.me = new Player(myId, NO_SIM, data);
@@ -279,6 +280,7 @@ export class OnlineBackend implements Backend {
     me.level = pv.level;
     me.gold = pv.gold;
     me.potSel = { ...pv.potSel };
+    if (!this.filterPending) me.lootFilter = pv.lootFilter;
     me.stats = pv.stats;
     me.cd = { ...pv.cd };
     me.potCd = pv.potCd;
@@ -398,6 +400,13 @@ export class OnlineBackend implements Backend {
   buyPotion(kind: PotionKind, size: PotionSize, n: number): void { this.send({ t: 'act', a: 'buy', kind, size, n }); }
   sortBag(key: SortKey, desc: boolean): void { this.send({ t: 'act', a: 'sort', key, desc }); }
   setAuto(on: boolean): void { this.send({ t: 'act', a: 'auto', on }); }
+  setLootFilter(filter: LootFilter): void {
+    // Show the change right away; snapshots sent before the server saw it would otherwise flip it back.
+    this.me.lootFilter = filter;
+    this.filterPending = true;
+    setTimeout(() => (this.filterPending = false), 800);
+    this.send({ t: 'act', a: 'lootFilter', filter });
+  }
   sell(i: number): void { this.send({ t: 'act', a: 'sell', i }); }
   sellAllOfRarity(rarity: Rarity): void { this.send({ t: 'act', a: 'sellRarity', rarity }); }
 

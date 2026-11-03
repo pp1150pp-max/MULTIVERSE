@@ -10,8 +10,9 @@ import { starterWeapon } from '../data/items';
 import { POTIONS, POTION_SIZES, POTION_STACK, stackSellValue } from '../data/potions';
 import {
   isPotion, RARITIES, SLOTS,
-  type BagEntry, type ClassId, type Item, type PotionKind, type PotionSize, type SlotId, type Stats, type Vec2,
+  type BagEntry, type ClassId, type Item, type PotionKind, type PotionSize, type Rarity, type SlotId, type Stats, type Vec2,
 } from '../types';
+import type { LootKind } from './Loot';
 
 export const BAG_SIZE = 30;
 export const POTION_CD = 1.5;
@@ -20,6 +21,9 @@ export type SortKey = 'rarity' | 'level' | 'slot' | 'value';
 export const SORT_KEYS: SortKey[] = ['rarity', 'level', 'slot', 'value'];
 /** Which potion size the quick keys (1 / 2) use. */
 export type PotionSelect = Record<PotionKind, PotionSize>;
+/** What the player picks up from monster drops. Gold is always picked up. */
+export interface LootFilter { rarities: Rarity[]; potions: boolean }
+export const DEFAULT_LOOT_FILTER: LootFilter = { rarities: [...RARITIES], potions: true };
 
 /** Everything about a character that gets saved (browser storage now, the server database later). */
 export interface CharacterData {
@@ -32,6 +36,8 @@ export interface CharacterData {
   bag: (BagEntry | null)[];
   /** Missing in saves from before potion sizes existed. */
   potSel?: PotionSelect;
+  /** Missing in older saves = pick up everything. */
+  lootFilter?: LootFilter;
 }
 
 /** A fresh level 1 character with the class starter weapon and a few potions. */
@@ -57,6 +63,7 @@ export class Player extends Unit {
   equipment: Partial<Record<SlotId, Item>>;
   bag: (BagEntry | null)[];
   potSel: PotionSelect;
+  lootFilter: LootFilter;
   stats: Stats = emptyStats();
   cd: Partial<Record<SkillSlot, number>> = {};
   potCd = 0;
@@ -85,6 +92,7 @@ export class Player extends Unit {
     this.equipment = { ...data.equipment };
     this.bag = Array.from({ length: BAG_SIZE }, (_, i) => data.bag[i] ?? null);
     this.potSel = { hp: 's', mp: 's', ...data.potSel };
+    this.lootFilter = data.lootFilter ? { ...data.lootFilter, rarities: [...data.lootFilter.rarities] } : { ...DEFAULT_LOOT_FILTER, rarities: [...RARITIES] };
     this.radius = 0.4;
     this.recompute();
     this.hp = this.maxHp;
@@ -121,6 +129,7 @@ export class Player extends Unit {
       equipment: this.equipment,
       bag: this.bag,
       potSel: this.potSel,
+      lootFilter: this.lootFilter,
     };
   }
 
@@ -135,6 +144,20 @@ export class Player extends Unit {
 
   hasBagSpace(): boolean {
     return this.bag.includes(null);
+  }
+
+  /** Whether the loot filter lets this player pick it up (gold always; a thrown-away item always). */
+  wantsLoot(kind: LootKind, dropped: boolean): boolean {
+    if (kind.type === 'gold' || dropped) return true;
+    if (kind.type === 'potion') return this.lootFilter.potions;
+    return this.lootFilter.rarities.includes(kind.item.rarity);
+  }
+
+  /** Whether there is bag room for it right now. */
+  canFit(kind: LootKind): boolean {
+    if (kind.type === 'gold') return true;
+    if (kind.type === 'potion') return this.potionRoom(kind.pot, kind.size) >= kind.count;
+    return this.hasBagSpace();
   }
 
   /** Clicking gear wears it; clicking a potion makes its quick key use that size. */

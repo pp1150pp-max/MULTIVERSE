@@ -59,7 +59,7 @@ export class Loot {
     let p: Player | null = null;
     let d = Infinity;
     for (const pl of sim.players) {
-      if (!pl.alive || !this.canTake(pl.id, sim.time)) continue;
+      if (!pl.alive || !this.canTake(pl.id, sim.time) || !pl.wantsLoot(this.kind, this.dropped)) continue;
       const pd = Math.hypot(pl.x - this.x, pl.z - this.z);
       if (pd < d) {
         d = pd;
