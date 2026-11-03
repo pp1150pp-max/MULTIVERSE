@@ -9,3 +9,6 @@ Thumbs.db
 .env.*
 server/data/
 tools/bin/
+
+# Raw asset packs (only the converted PNGs in public/assets are used)
+craftpix-net-*/

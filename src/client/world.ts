@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Terrain } from '../shared/sim/terrain';
-import { mulberry32, pick, rand, type Rng } from '../shared/rng';
+import { mulberry32, type Rng } from '../shared/rng';
 import { fxTex, sheets } from './assets';
 
 interface Fadeable { mat: THREE.SpriteMaterial; x: number; z: number; w: number; h: number; o: number }
@@ -27,9 +27,9 @@ export class World {
     this.groundCanvas = this.paintGround(mulberry32(terrain.zone.seed));
     const tex = new THREE.CanvasTexture(this.groundCanvas);
     tex.colorSpace = THREE.SRGBColorSpace;
-    tex.magFilter = THREE.NearestFilter;
-    tex.minFilter = THREE.LinearFilter;
-    tex.generateMipmaps = false;
+    tex.magFilter = THREE.LinearFilter;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.anisotropy = 4;
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(this.half * 2, this.half * 2).rotateX(-Math.PI / 2),
       new THREE.MeshBasicMaterial({ map: tex }),
@@ -37,7 +37,7 @@ export class World {
     scene.add(ground);
     const outer = new THREE.Mesh(
       new THREE.PlaneGeometry(800, 800).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: '#16301a' }),
+      new THREE.MeshBasicMaterial({ color: '#3e6e2b' }),
     );
     outer.position.y = -0.05;
     scene.add(outer);
@@ -56,14 +56,6 @@ export class World {
 
   private get zone() {
     return this.terrain.zone;
-  }
-
-  private get segs() {
-    return this.terrain.pathSegments;
-  }
-
-  private distToPath(x: number, z: number): number {
-    return this.terrain.distToPath(x, z);
   }
 
   /** Fade trees that stand between the camera and the player. */
@@ -113,6 +105,11 @@ export class World {
     if (fade) this.fadeables.push({ mat, x, z, w, h: height, o: 1 });
   }
 
+  /**
+   * Grass and sand from the CraftPix tileset. Its edge tiles only fit a square grid, so paths and
+   * clearings are drawn as shapes filled with the sand tile, with the tileset's edge look
+   * (light rim, dark outline, shaded sand) painted around them.
+   */
   private paintGround(r: Rng): HTMLCanvasElement {
     const N = 2048;
     const H = this.half;
@@ -121,54 +118,40 @@ export class World {
     c.width = c.height = N;
     const ctx = c.getContext('2d')!;
     const P = (x: number, z: number): [number, number] => [(x + H) * k, (z + H) * k];
+    const tile = (key: string, worldSize: number): CanvasPattern => {
+      const img = sheets[key].texture.image as HTMLImageElement | HTMLCanvasElement;
+      const pat = ctx.createPattern(img, 'repeat')!;
+      pat.setTransform(new DOMMatrix().scaleSelf((worldSize * k) / img.width));
+      return pat;
+    };
 
-    ctx.fillStyle = '#4e8a39';
+    ctx.fillStyle = tile('ground_grass', 6);
     ctx.fillRect(0, 0, N, N);
-    const patch = ['rgba(34,82,34,0.35)', 'rgba(120,170,72,0.28)', 'rgba(62,112,46,0.32)', 'rgba(140,150,70,0.18)'];
-    for (let i = 0; i < 520; i++) {
+    // Soft light and dark patches so wide grass doesn't look flat.
+    for (let i = 0; i < 180; i++) {
       const x = r() * N;
       const y = r() * N;
-      const rad = 20 + r() * 130;
+      const rad = 40 + r() * 160;
       const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
-      g.addColorStop(0, pick(r, patch));
+      g.addColorStop(0, r() < 0.5 ? 'rgba(255,250,190,0.09)' : 'rgba(20,60,20,0.1)');
       g.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = g;
       ctx.fillRect(x - rad, y - rad, rad * 2, rad * 2);
     }
-    const specks = ['#3f7530', '#5a9842', '#36692a', '#6aa94c', '#47823a', '#7bb85a'];
-    for (let i = 0; i < 70000; i++) {
-      ctx.fillStyle = specks[(r() * specks.length) | 0];
-      ctx.fillRect((r() * N) | 0, (r() * N) | 0, 2 + ((r() * 2) | 0), 2);
-    }
-    for (let i = 0; i < 9000; i++) {
-      const x = (r() * N) | 0;
-      const y = (r() * N) | 0;
-      ctx.fillStyle = '#356628';
-      ctx.fillRect(x, y, 1, 4);
-      ctx.fillRect(x + 2, y + 1, 1, 3);
-      ctx.fillStyle = '#7fbf5c';
-      ctx.fillRect(x + 1, y, 1, 2);
-    }
 
-    const clearing = (x: number, z: number, rad: number) => {
-      const [px, py] = P(x, z);
-      const g = ctx.createRadialGradient(px, py, 0, px, py, rad * k);
-      g.addColorStop(0, 'rgba(150,122,82,0.95)');
-      g.addColorStop(0.7, 'rgba(140,115,75,0.6)');
-      g.addColorStop(1, 'rgba(140,115,75,0)');
-      ctx.fillStyle = g;
-      ctx.fillRect(px - rad * k, py - rad * k, rad * 2 * k, rad * 2 * k);
-    };
-    clearing(this.zone.start.x, this.zone.start.z, 9);
-    clearing(this.zone.boss.x, this.zone.boss.z, 12);
-
+    const PATH_W = 4.4;
+    const clearings: [number, number, number][] = [
+      [this.zone.start.x, this.zone.start.z, 8],
+      [this.zone.boss.x, this.zone.boss.z, 10],
+    ];
+    const lines = [this.zone.path, ...this.zone.branches];
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    const lines = [this.zone.path, ...this.zone.branches];
-    const strokes: [number, string][] = [[4.8, '#6f5434'], [3.8, '#9c7f57'], [2.4, '#a98b62']];
-    for (const [w, col] of strokes) {
-      ctx.lineWidth = w * k;
-      ctx.strokeStyle = col;
+    /** Paths and clearings grown by `extra` world units on every side. */
+    const sandShape = (extra: number, fill: string | CanvasPattern) => {
+      ctx.strokeStyle = fill;
+      ctx.fillStyle = fill;
+      ctx.lineWidth = (PATH_W + extra * 2) * k;
       for (const l of lines) {
         ctx.beginPath();
         l.forEach(([x, z], i) => {
@@ -178,33 +161,17 @@ export class World {
         });
         ctx.stroke();
       }
-    }
-    const pebbles = ['#8a6c48', '#b5976b', '#7a5e3e', '#c2a77c'];
-    for (const [ax, az, bx, bz] of this.segs) {
-      const len = Math.hypot(bx - ax, bz - az);
-      for (let t = 0; t < len; t += 0.35) {
-        const f = t / len;
-        const [px, py] = P(ax + (bx - ax) * f + rand(r, -1.6, 1.6), az + (bz - az) * f + rand(r, -1.6, 1.6));
-        ctx.fillStyle = pick(r, pebbles);
-        ctx.fillRect(px | 0, py | 0, 2 + ((r() * 3) | 0), 2);
+      for (const [x, z, rad] of clearings) {
+        const [px, py] = P(x, z);
+        ctx.beginPath();
+        ctx.arc(px, py, (rad + extra) * k, 0, Math.PI * 2);
+        ctx.fill();
       }
-    }
-
-    const flowers = ['#f5f1e0', '#f6d84a', '#ee8fb4', '#a9c9ff', '#ffffff'];
-    for (let i = 0; i < 700; i++) {
-      const x = rand(r, -H, H);
-      const z = rand(r, -H, H);
-      if (this.distToPath(x, z) < 3) continue;
-      const col = pick(r, flowers);
-      const n = 3 + ((r() * 7) | 0);
-      for (let j = 0; j < n; j++) {
-        const [px, py] = P(x + rand(r, -1.2, 1.2), z + rand(r, -1.2, 1.2));
-        ctx.fillStyle = col;
-        ctx.fillRect(px | 0, py | 0, 3, 3);
-        ctx.fillStyle = '#c9a227';
-        ctx.fillRect((px | 0) + 1, (py | 0) + 1, 1, 1);
-      }
-    }
+    };
+    sandShape(0.55, '#9bbf3b');
+    sandShape(0.35, '#384b21');
+    sandShape(0.18, '#d49558');
+    sandShape(0, tile('ground_sand', 6));
 
     const [lo] = P(-this.bound, 0);
     const [hi] = P(this.bound, 0);

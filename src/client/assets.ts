@@ -22,6 +22,8 @@ interface SheetSpec {
   /** Side-row direction for real PNG files (concept sheet faces left). Placeholders face right. */
   fileSideFaces: 'left' | 'right';
   placeholder: () => HTMLCanvasElement;
+  /** Painted (non-pixel) art: filter smoothly instead of keeping hard pixel edges. */
+  smooth?: boolean;
 }
 
 const BASE = 'assets/sprites/';
@@ -29,6 +31,20 @@ const sheet = (path: string, placeholder: () => HTMLCanvasElement): SheetSpec =>
   ({ path: BASE + path, cols: 3, rows: 3, fileSideFaces: 'left', placeholder });
 const single = (path: string, placeholder: () => HTMLCanvasElement): SheetSpec =>
   ({ path: BASE + path, cols: 1, rows: 1, fileSideFaces: 'left', placeholder });
+/** Map props and ground tiles come from the CraftPix summer tileset (see tools/import_craftpix.py). */
+const prop = (key: string, placeholder: () => HTMLCanvasElement): SheetSpec =>
+  ({ ...single(`props/${key}.png`, placeholder), smooth: true });
+const ground = (key: string, color: string): SheetSpec =>
+  ({ ...single(`ground/${key}.png`, () => flatTile(color)), smooth: true });
+
+function flatTile(color: string): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, 64, 64);
+  return c;
+}
 
 export const SHEET_SPECS: Record<string, SheetSpec> = {
   sword: sheet('player/sword.png', () => makeSheet(32, drawHuman('sword'))),
@@ -55,19 +71,33 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
     bodyRx: 0.36, bodyRy: 0.22, head: 0.16, ears: 'round', earSize: 0.08, tail: 'none', legLen: 0.13, legW: 0.1, snout: 0.08, belly: true,
   }))),
 
-  tree_0: single('props/tree_0.png', () => drawTree(0)),
-  tree_1: single('props/tree_1.png', () => drawTree(1)),
-  tree_2: single('props/tree_2.png', () => drawTree(2)),
-  bush_0: single('props/bush_0.png', () => drawBush(0)),
-  bush_1: single('props/bush_1.png', () => drawBush(1)),
-  rock_0: single('props/rock_0.png', () => drawRock(0)),
-  rock_1: single('props/rock_1.png', () => drawRock(1)),
-  stump: single('props/stump.png', drawStump),
-  tent: single('props/tent.png', drawTent),
-  campfire: single('props/campfire.png', drawCampfire),
-  sign: single('props/sign.png', drawSign),
-  fence: single('props/fence.png', drawFence),
-  runestone: single('props/runestone.png', drawRunestone),
+  tree_0: prop('tree_0', () => drawTree(0)),
+  tree_1: prop('tree_1', () => drawTree(1)),
+  tree_2: prop('tree_2', () => drawTree(2)),
+  bush_0: prop('bush_0', () => drawBush(0)),
+  bush_1: prop('bush_1', () => drawBush(1)),
+  bush_2: prop('bush_2', () => drawBush(0)),
+  rock_0: prop('rock_0', () => drawRock(0)),
+  rock_1: prop('rock_1', () => drawRock(1)),
+  rock_2: prop('rock_2', () => drawRock(1)),
+  pebble_0: prop('pebble_0', () => drawRock(0)),
+  pebble_1: prop('pebble_1', () => drawRock(0)),
+  stump: prop('stump', drawStump),
+  stump_tall: prop('stump_tall', drawStump),
+  tent: prop('tent', drawTent),
+  campfire: prop('campfire', drawCampfire),
+  sign: prop('sign', drawSign),
+  banner_red: prop('banner_red', drawSign),
+  flag: prop('flag', drawSign),
+  fence: prop('fence', drawFence),
+  runestone: prop('runestone', drawRunestone),
+  well: prop('well', drawRunestone),
+  barrel: prop('barrel', drawStump),
+  cart: prop('cart', drawFence),
+  chest: prop('chest', drawStump),
+  watchtower: prop('watchtower', drawFence),
+  ground_grass: ground('grass', '#6ea843'),
+  ground_sand: ground('sand', '#e8b973'),
 
   icon_coin: single('icons/coin.png', () => drawIcon('coin')),
   icon_potion_hp: single('icons/potion_hp.png', () => drawIcon('potion_hp')),
@@ -90,11 +120,11 @@ export const animSets: Record<string, AnimSet> = {};
 export const assetSources: Record<string, 'file' | 'placeholder'> = {};
 export const fxTex = {} as { glow: THREE.Texture; shadow: THREE.Texture };
 
-function prep(tex: THREE.Texture): void {
+function prep(tex: THREE.Texture, smooth = false): void {
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
-  tex.generateMipmaps = false;
+  tex.magFilter = smooth ? THREE.LinearFilter : THREE.NearestFilter;
+  tex.minFilter = smooth ? THREE.LinearMipmapLinearFilter : THREE.NearestFilter;
+  tex.generateMipmaps = smooth;
 }
 
 async function loadAnimSet(loader: THREE.TextureLoader, key: string, dir: string): Promise<void> {
@@ -138,15 +168,17 @@ export async function loadAssets(): Promise<void> {
     Object.entries(SHEET_SPECS).map(async ([key, spec]) => {
       let tex: THREE.Texture;
       let sideFaces = spec.fileSideFaces;
+      let smooth = false;
       try {
         tex = await loader.loadAsync(spec.path);
         assetSources[key] = 'file';
+        smooth = !!spec.smooth;
       } catch {
         tex = new THREE.CanvasTexture(spec.placeholder());
         sideFaces = 'right';
         assetSources[key] = 'placeholder';
       }
-      prep(tex);
+      prep(tex, smooth);
       const img = tex.image as { width: number; height: number };
       sheets[key] = {
         texture: tex,

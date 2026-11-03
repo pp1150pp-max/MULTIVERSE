@@ -96,8 +96,17 @@ export class Terrain {
     this.addProp('tent', s.x + 3, s.z - 4, 3, 1.4);
     this.addProp('tent', s.x - 4, s.z + 3, 3, 1.4);
     this.addProp('campfire', s.x, s.z, 1, 0.5);
-    this.addProp('sign', s.x - 5, s.z - 6.5, 1.4, 0.2);
-    this.addProp('runestone', s.x + 5, s.z + 3.5, 2.2, 0.5);
+    this.addProp('sign', s.x - 5, s.z - 6.5, 2, 0.2);
+    this.addProp('runestone', s.x + 5, s.z + 3.5, 2.6, 0.5);
+    // Camp life: the merchant's stock, the blacksmith's cart, a well and a lookout tower.
+    this.addProp('well', s.x - 6, s.z - 1.5, 2, 0.9);
+    this.addProp('barrel', s.x - 3.2, s.z + 6.2, 0.9, 0.35);
+    this.addProp('barrel', s.x - 0.3, s.z + 6.7, 0.9, 0.35);
+    this.addProp('chest', s.x + 0.9, s.z + 6.2, 0.8, 0.45);
+    this.addProp('cart', s.x + 6.8, s.z - 3.6, 1.2, 0.8);
+    this.addProp('banner_red', s.x + 6.6, s.z + 0.3, 2, 0.2);
+    this.addProp('flag', s.x - 2, s.z - 7, 1.8, 0.15);
+    this.addProp('watchtower', s.x + 9, s.z - 10, 4.2, 1.1);
     this.npcPos.seeker = { x: s.x + 3.5, z: s.z + 1.5 };
     this.npcPos.merchant = { x: s.x - 1.5, z: s.z + 5 };
     this.npcPos.blacksmith = { x: s.x + 5, z: s.z - 1.5 };
@@ -108,10 +117,26 @@ export class Terrain {
       this.addProp('fence', fx, fz, 1.1, 0.6);
     }
 
+    // Pebbles along the paths (no collision).
+    for (const [ax, az, bx, bz] of this.segs) {
+      const len = Math.hypot(bx - ax, bz - az);
+      for (let t = rand(r, 2, 6); t < len; t += rand(r, 5, 11)) {
+        const f = t / len;
+        const side = r() < 0.5 ? -1 : 1;
+        const off = side * rand(r, 2.6, 3.4);
+        const nx = -(bz - az) / len;
+        const nz = (bx - ax) / len;
+        const x = ax + (bx - ax) * f + nx * off;
+        const z = az + (bz - az) * f + nz * off;
+        if (near(x, z, s, 10) || Math.abs(x) > B || Math.abs(z) > B) continue;
+        this.addProp(pick(r, ['pebble_0', 'pebble_1']), x, z, rand(r, 0.3, 0.45), 0);
+      }
+    }
+
     // Boss clearing ring of runestones.
     const b = zone.boss;
     for (let a = 0.3; a < Math.PI * 2; a += Math.PI / 4) {
-      this.addProp(a % 2 > 1 ? 'rock_1' : 'runestone', b.x + Math.cos(a) * 11, b.z + Math.sin(a) * 11, 2.2, 0.6);
+      this.addProp(a % 2 > 1 ? 'rock_0' : 'runestone', b.x + Math.cos(a) * 11, b.z + Math.sin(a) * 11, a % 2 > 1 ? 1.5 : 2.6, 0.6);
     }
 
     // Scattered forest inside.
@@ -125,9 +150,10 @@ export class Terrain {
       if (this.colliders.some((c) => Math.hypot(c.x - x, c.z - z) < 2.2)) continue;
       const roll = r();
       if (roll < 0.55) this.addTree(r, x, z);
-      else if (roll < 0.8) this.addProp(pick(r, ['bush_0', 'bush_1']), x, z, rand(r, 0.9, 1.3), 0);
-      else if (roll < 0.93) this.addProp(pick(r, ['rock_0', 'rock_1']), x, z, rand(r, 0.7, 1.1), 0.5);
-      else this.addProp('stump', x, z, 0.8, 0.4);
+      else if (roll < 0.78) this.addProp(pick(r, ['bush_0', 'bush_1', 'bush_2']), x, z, rand(r, 0.9, 1.3), 0);
+      else if (roll < 0.9) this.addProp(pick(r, ['rock_0', 'rock_1', 'rock_2']), x, z, rand(r, 0.7, 1.1), 0.5);
+      else if (roll < 0.95) this.addProp('stump', x, z, 0.8, 0.4);
+      else this.addProp('stump_tall', x, z, 1.3, 0.5);
       placed++;
     }
   }
