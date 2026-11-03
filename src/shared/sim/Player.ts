@@ -6,6 +6,7 @@ import { castSkill, basicAttack } from './skills';
 import { CLASSES, type ClassDef, type SkillDef, type SkillSlot } from '../data/classes';
 import { addInto, BASE_MOVE_SPEED, emptyStats } from '../formulas';
 import { effectiveStats, sellValue } from '../data/enhance';
+import { starterWeapon } from '../data/items';
 import type { ClassId, Item, SlotId, Stats, Vec2 } from '../types';
 
 export const BAG_SIZE = 30;
@@ -22,6 +23,21 @@ export interface CharacterData {
   mpPots: number;
   equipment: Partial<Record<SlotId, Item>>;
   bag: (Item | null)[];
+}
+
+/** A fresh level 1 character with the class starter weapon and a few potions. */
+export function newCharacterData(name: string, classId: ClassId): CharacterData {
+  return {
+    name,
+    classId,
+    level: 1,
+    exp: 0,
+    gold: 0,
+    hpPots: 5,
+    mpPots: 5,
+    equipment: { weapon: starterWeapon(classId) },
+    bag: [],
+  };
 }
 
 export class Player extends Unit {
