@@ -14,12 +14,15 @@ import {
 } from '../src/shared/api';
 import { newCharacterData } from '../src/shared/sim/Player';
 import { GameWorld } from './world';
+import { startTunnel } from './tunnel';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const PORT = Number(process.env.PORT ?? 2567);
 const DB_FILE = process.env.DB_FILE ?? join(ROOT, 'server', 'data', 'multiverse.db');
 const DIST = join(ROOT, 'dist');
 const MAX_BODY = 16 * 1024;
+/** `--public`: also open a Cloudflare link so friends can join from anywhere (npm run online). */
+const PUBLIC = process.argv.includes('--public');
 
 const db = new Db(DB_FILE);
 const limiter = new AttemptLimiter();
@@ -57,8 +60,16 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 
+const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+
+/**
+ * Who sent the request, for the failed-login brake. Everyone arriving through the Cloudflare tunnel
+ * shows up as this computer, so trust Cloudflare's header — but only on connections from the tunnel.
+ */
 function clientIp(req: IncomingMessage): string {
-  return req.socket.remoteAddress ?? 'unknown';
+  const remote = req.socket.remoteAddress ?? 'unknown';
+  const cf = req.headers['cf-connecting-ip'];
+  return LOOPBACK.has(remote) && typeof cf === 'string' && cf ? cf : remote;
 }
 
 function bearer(req: IncomingMessage): string {
@@ -208,23 +219,22 @@ const world = new GameWorld(db, server);
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\nMULTIVERSE server พร้อมแล้ว — port ${PORT}`);
   console.log(`  เครื่องนี้:   http://localhost:${PORT}`);
-  let tailscale = false;
   for (const list of Object.values(networkInterfaces())) {
     for (const a of list ?? []) {
       if (a.family !== 'IPv4' || a.internal) continue;
-      // Tailscale hands out addresses in 100.64.0.0/10.
-      const [o1, o2] = a.address.split('.').map(Number);
-      const isTs = o1 === 100 && o2 >= 64 && o2 <= 127;
-      tailscale ||= isTs;
-      console.log(`  ${(isTs ? 'Tailscale' : 'วง LAN').padEnd(10)} http://${a.address}:${PORT}${isTs ? '   ← ส่งที่อยู่นี้ให้เพื่อนนอกบ้าน' : ''}`);
+      console.log(`  Wi-Fi บ้าน:  http://${a.address}:${PORT}`);
     }
   }
-  if (!tailscale) console.log('  (ยังไม่เจอ Tailscale — ถ้าจะเล่นกับเพื่อนนอกบ้าน ดูวิธีตั้งใน docs/TAILSCALE.md)');
   console.log(`  ฐานข้อมูล:  ${DB_FILE}\n`);
+  if (PUBLIC) void startTunnel(PORT).then((t) => (tunnel = t));
+  else console.log('  (อยากได้ลิงก์ให้เพื่อนนอกบ้าน: ปิดหน้าต่างนี้ แล้วใช้ npm run online แทน)\n');
 });
+
+let tunnel: Awaited<ReturnType<typeof startTunnel>> = null;
 
 const shutdown = () => {
   world.saveAll();
+  tunnel?.kill();
   server.close();
   db.close();
   process.exit(0);

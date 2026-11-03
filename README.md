@@ -15,13 +15,14 @@ npm run build      # สร้างไฟล์สำหรับขึ้น�
 ## เปิด Server สำหรับเล่นออนไลน์ (Multiplayer)
 
 ```bash
-npm run online     # build เกม แล้วเปิด server ที่ port 2567 (ให้เพื่อนเข้าผ่านเบราว์เซอร์ได้เลย)
-npm run server     # เปิดเฉพาะ server (ใช้คู่กับ npm run dev ตอนพัฒนา — Vite ส่ง /api ต่อให้เอง)
+npm run online     # build เกม เปิด server และสร้างลิงก์ https://….trycloudflare.com ให้เพื่อนกดเข้าเล่น
+npm run server     # เปิดเฉพาะ server ไม่มีลิงก์ (ใช้คู่กับ npm run dev ตอนพัฒนา — Vite ส่ง /api ต่อให้เอง)
 ```
 
-- พอเปิด server แล้ว หน้าจอจะแสดงที่อยู่สำหรับเข้าเล่น เช่น `http://localhost:2567` และที่อยู่ในวง LAN / Tailscale
-- ครั้งแรกให้รัน `npm run firewall` (ต้องกด Yes ให้สิทธิ์ Admin) เพื่อให้ Windows ยอมให้เพื่อนเข้า
-- **เล่นกับเพื่อนนอกบ้าน:** ดูคู่มือ [docs/TAILSCALE.md](docs/TAILSCALE.md) มีขั้นตอนทั้งของเจ้าของ server และของเพื่อน
+- **เล่นกับเพื่อน:** ดูคู่มือ [docs/PLAY-WITH-FRIENDS.md](docs/PLAY-WITH-FRIENDS.md)
+  `npm run online` จะแสดงลิงก์และคัดลอกไว้ให้ (ครั้งแรกจะดาวน์โหลดโปรแกรม cloudflared ของ Cloudflare มาไว้ที่ `tools/bin/` เอง)
+  เพื่อนกดลิงก์แล้วเล่นได้เลย ไม่ต้องติดตั้งอะไร (ลิงก์เปลี่ยนทุกครั้งที่เปิด server ใหม่)
+- เพื่อนที่ต่อ Wi-Fi บ้านเดียวกัน เข้าที่ `http://192.168.x.x:2567` ได้ด้วย ครั้งแรกต้องรัน `npm run firewall`
 - บัญชีและตัวละครออนไลน์เก็บในไฟล์ `server/data/multiverse.db` (ไฟล์นี้ไม่ขึ้น GitHub)
   สำรองข้อมูลได้โดยปิด server แล้ว copy ไฟล์นั้นเก็บไว้
 - รหัสผ่านถูกเข้ารหัส (scrypt) ก่อนเก็บ และถ้าใส่ผิดเกิน 10 ครั้งใน 10 นาที จะถูกพักการลองชั่วคราว
@@ -75,6 +76,7 @@ server/          ← game server (Node.js): API บัญชี/ตัวละ�
   db.ts              ตาราง accounts / sessions / characters
   auth.ts            เข้ารหัสรหัสผ่าน, token, กันการเดารหัส
   world.ts           โลกออนไลน์: รัน Sim, รับ input, ตรวจตำแหน่ง, ส่ง snapshot, แชท, เซฟ
+  tunnel.ts          สร้างลิงก์ Cloudflare ให้เพื่อน (npm run online)
 src/shared/api.ts  ← รูปแบบข้อมูล API และกติกาตรวจชื่อ/รหัสผ่าน (ใช้ร่วมกันทั้งเบราว์เซอร์และ server)
 src/shared/net/protocol.ts ← ข้อความ WebSocket ระหว่างเบราว์เซอร์กับ server
 src/client/      ← ฝั่งแสดงผล: Three.js, HUD และ input
