@@ -1,6 +1,5 @@
 // Local save for singleplayer. Online characters are stored by the server instead.
-import { starterWeapon } from '../shared/data/items';
-import type { CharacterData } from '../shared/sim/Player';
+import { newCharacterData, type CharacterData } from '../shared/sim/Player';
 import type { ClassId } from '../shared/types';
 
 export interface SaveData extends CharacterData {
@@ -30,17 +29,5 @@ export function writeSave(d: SaveData): void {
 }
 
 export function newSave(name: string, classId: ClassId): SaveData {
-  return {
-    v: 1,
-    name,
-    classId,
-    level: 1,
-    exp: 0,
-    gold: 0,
-    hpPots: 5,
-    mpPots: 5,
-    equipment: { weapon: starterWeapon(classId) },
-    bag: [],
-    metSeeker: false,
-  };
+  return { v: 1, ...newCharacterData(name, classId), metSeeker: false };
 }

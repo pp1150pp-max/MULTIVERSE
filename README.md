@@ -12,6 +12,19 @@ npm run dev        # เปิด http://localhost:5173
 npm run build      # สร้างไฟล์สำหรับขึ้นเว็บไว้ใน dist/
 ```
 
+## เปิด Server สำหรับเล่นออนไลน์ (Multiplayer)
+
+```bash
+npm run online     # build เกม แล้วเปิด server ที่ port 2567 (ให้เพื่อนเข้าผ่านเบราว์เซอร์ได้เลย)
+npm run server     # เปิดเฉพาะ server (ใช้คู่กับ npm run dev ตอนพัฒนา — Vite ส่ง /api ต่อให้เอง)
+```
+
+- พอเปิด server แล้ว หน้าจอจะแสดงที่อยู่สำหรับเข้าเล่น เช่น `http://localhost:2567` และที่อยู่ในวง LAN / Tailscale
+- บัญชีและตัวละครออนไลน์เก็บในไฟล์ `server/data/multiverse.db` (ไฟล์นี้ไม่ขึ้น GitHub)
+  สำรองข้อมูลได้โดยปิด server แล้ว copy ไฟล์นั้นเก็บไว้
+- รหัสผ่านถูกเข้ารหัส (scrypt) ก่อนเก็บ และถ้าใส่ผิดเกิน 10 ครั้งใน 10 นาที จะถูกพักการลองชั่วคราว
+- ตัวละคร Singleplayer กับ Multiplayer แยกกันเด็ดขาด
+
 ## สิ่งที่มีใน Prototype นี้
 
 - **Zone 1: Emerald Forest** (Lv.1–10) มีแคมป์จุดเกิด, The Seeker (NPC บทนำ), ทางเดิน และป่าที่จะโปร่งใสเมื่อตัวละครเดินไปอยู่ด้านหลัง
@@ -44,8 +57,15 @@ src/shared/      ← กติกาเกมล้วน ๆ ไม่มีโ
   sim/terrain.ts     ตำแหน่งต้นไม้/หิน/แคมป์ และการชน
   sim/types.ts       Intent (คำสั่งจากผู้เล่น) และ SimEvent (สิ่งที่ต้องแสดงบนจอ)
   data/              ข้อมูลเกม: คลาส, มอนสเตอร์, แผนที่, ไอเทม, ตีบวก, ร้านค้า, NPC
+server/          ← game server (Node.js): API บัญชี/ตัวละคร + ฐานข้อมูล SQLite + เสิร์ฟไฟล์เกม
+  main.ts            จุดเริ่ม server และ API ทั้งหมด
+  db.ts              ตาราง accounts / sessions / characters
+  auth.ts            เข้ารหัสรหัสผ่าน, token, กันการเดารหัส
+src/shared/api.ts  ← รูปแบบข้อมูล API และกติกาตรวจชื่อ/รหัสผ่าน (ใช้ร่วมกันทั้งเบราว์เซอร์และ server)
 src/client/      ← ฝั่งแสดงผล: Three.js, HUD และ input
   Game.ts            รัน Sim ในเบราว์เซอร์ (singleplayer), กล้อง, เมาส์/คีย์บอร์ด
+  menu.ts            หน้าเมนู: เลือกโหมด, login/สมัคร, เลือก/สร้าง/ลบตัวละคร
+  net/api.ts         เรียก API ของ server
   views.ts           สไปรต์ของผู้เล่น/มอน/กระสุน/ของดรอป ที่อ่านค่าจาก Sim ทุกเฟรม
   world.ts           วาดพื้นและพร็อพตามตำแหน่งจาก terrain
   autoplay.ts        บอท Auto Play

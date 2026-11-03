@@ -1,0 +1,277 @@
+// Title menu: pick Singleplayer or Multiplayer, then the matching panel.
+import { animSets, sheets } from './assets';
+import { CLASSES, CLASS_IDS } from '../shared/data/classes';
+import { MAX_CHARACTERS, checkCharacterName, checkPassword, checkUsername, type CharacterSummary } from '../shared/api';
+import type { ClassId } from '../shared/types';
+import { loadSave, newSave, writeSave, type SaveData } from './save';
+import * as api from './net/api';
+
+const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+
+export function portrait(key: string, size: number): HTMLCanvasElement {
+  // First cell = front view, frame 0 — of the idle animation when there is a full set.
+  const set = animSets[key];
+  const sh = sheets[key];
+  const img = (set ? set.textures.idle.image : sh.texture.image) as CanvasImageSource & { width: number; height: number };
+  const cw = set ? set.manifest.frameWidth : img.width / sh.cols;
+  const ch = set ? set.manifest.frameHeight : img.height / sh.rows;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d')!;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, 0, 0, cw, ch, 0, 0, size, size);
+  return c;
+}
+
+/** Fills a container with clickable class cards; returns a getter for the chosen class. */
+function buildClassCards(container: HTMLElement): () => ClassId {
+  let chosen: ClassId = 'sword';
+  for (const id of CLASS_IDS) {
+    const c = CLASSES[id];
+    const card = document.createElement('div');
+    card.className = 'class-card';
+    card.append(portrait(id, 96));
+    const body = document.createElement('div');
+    body.innerHTML =
+      `<h3>${c.name} <small>${c.nameTh}</small></h3><p>${c.desc}</p>` +
+      `<ul>${c.skills.filter((s) => s.slot !== 'dash').map((s) => `<li>${s.icon} <b>${s.name}</b> — ${s.nameTh}</li>`).join('')}</ul>`;
+    card.append(body);
+    card.onclick = () => {
+      chosen = id;
+      container.querySelectorAll('.class-card').forEach((el) => el.classList.toggle('selected', el === card));
+    };
+    container.append(card);
+  }
+  (container.firstElementChild as HTMLElement).classList.add('selected');
+  return () => chosen;
+}
+
+type Panel = 'mode' | 'single' | 'online';
+
+function show(panel: Panel): void {
+  $('mode-select').classList.toggle('hidden', panel !== 'mode');
+  $('single-panel').classList.toggle('hidden', panel !== 'single');
+  $('online-panel').classList.toggle('hidden', panel !== 'online');
+}
+
+// ------------------------------------------------------------ singleplayer
+
+function setupSingle(launch: (d: SaveData) => void): void {
+  const save = loadSave();
+  const chosen = buildClassCards($('class-cards'));
+  if (save) {
+    const btn = $('btn-continue');
+    btn.classList.remove('hidden');
+    btn.textContent = `เล่นต่อ: ${save.name} · Lv.${save.level} ${CLASSES[save.classId].name}`;
+    btn.onclick = () => launch(save);
+  }
+  $('btn-start').onclick = () => {
+    if (save && !confirm('การเริ่มเกมใหม่จะลบตัวละครเดิม ต้องการดำเนินการต่อหรือไม่?')) return;
+    const name = $<HTMLInputElement>('name-input').value.trim().slice(0, 16) || 'Wanderer';
+    const data = newSave(name, chosen());
+    writeSave(data);
+    launch(data);
+  };
+}
+
+// ------------------------------------------------------------ multiplayer
+
+class OnlineMenu {
+  private chars: CharacterSummary[] = [];
+  private selected: number | null = null;
+  private creating = false;
+  private busy = false;
+  private readonly chosenClass: () => ClassId;
+  private armedDelete: { id: number; t: number } | null = null;
+
+  constructor() {
+    this.chosenClass = buildClassCards($('online-class-cards'));
+    $('login-box').addEventListener('submit', (e) => {
+      e.preventDefault();
+      void this.auth('login');
+    });
+    $('btn-register').onclick = () => void this.auth('register');
+    $('btn-logout').onclick = () => void this.logout();
+    $('btn-create-char').onclick = () => void this.onCreateClick();
+    $('char-list').addEventListener('click', (e) => this.onListClick(e));
+  }
+
+  /** Called when the player picks Multiplayer: skip the login form if a saved token still works. */
+  async open(): Promise<void> {
+    $('login-error').textContent = '';
+    if (!api.savedToken()) return this.showLogin();
+    try {
+      const me = await api.me();
+      await this.showCharacters(me.username);
+    } catch (e) {
+      this.showLogin(e instanceof api.ApiFailure && e.status !== 401 ? e.message : '');
+    }
+  }
+
+  private showLogin(error = ''): void {
+    $('login-box').classList.remove('hidden');
+    $('char-box').classList.add('hidden');
+    $('login-error').textContent = error;
+    $<HTMLInputElement>('login-user').focus();
+  }
+
+  private async auth(kind: 'login' | 'register'): Promise<void> {
+    if (this.busy) return;
+    const username = $<HTMLInputElement>('login-user').value.trim();
+    const password = $<HTMLInputElement>('login-pass').value;
+    const err = $('login-error');
+    if (kind === 'register') {
+      const bad = checkUsername(username) ?? checkPassword(password);
+      if (bad) return void (err.textContent = bad);
+    } else if (!username || !password) {
+      return void (err.textContent = 'กรุณาใส่ชื่อผู้ใช้และรหัสผ่าน');
+    }
+    this.busy = true;
+    err.textContent = kind === 'login' ? 'กำลังเข้าสู่ระบบ…' : 'กำลังสมัคร…';
+    try {
+      const r = kind === 'login' ? await api.login(username, password) : await api.register(username, password);
+      $<HTMLInputElement>('login-pass').value = '';
+      err.textContent = '';
+      await this.showCharacters(r.username);
+    } catch (e) {
+      err.textContent = (e as Error).message;
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  private async logout(): Promise<void> {
+    await api.logout();
+    this.chars = [];
+    this.selected = null;
+    this.showLogin();
+  }
+
+  private async showCharacters(username: string): Promise<void> {
+    $('account-name').textContent = username;
+    $('login-box').classList.add('hidden');
+    $('char-box').classList.remove('hidden');
+    $('char-error').textContent = '';
+    this.chars = await api.listCharacters();
+    if (!this.chars.some((c) => c.id === this.selected)) this.selected = this.chars[0]?.id ?? null;
+    this.creating = this.chars.length === 0;
+    this.render();
+  }
+
+  private render(): void {
+    const list = $('char-list');
+    list.innerHTML = '';
+    for (let i = 0; i < MAX_CHARACTERS; i++) {
+      const c = this.chars[i];
+      const slot = document.createElement('div');
+      if (!c) {
+        slot.className = 'char-slot empty';
+        slot.dataset.new = '1';
+        slot.textContent = '+ ช่องว่าง';
+        list.append(slot);
+        continue;
+      }
+      slot.className = `char-slot${c.id === this.selected && !this.creating ? ' selected' : ''}`;
+      slot.dataset.id = String(c.id);
+      slot.append(portrait(c.classId, 80));
+      const armed = this.armedDelete?.id === c.id && Date.now() - this.armedDelete.t < 3000;
+      slot.insertAdjacentHTML('beforeend',
+        `<div class="cname">${escapeHtml(c.name)}</div><div class="cmeta">Lv.${c.level} ${CLASSES[c.classId].name}</div>` +
+        `<button class="cdel${armed ? ' armed' : ''}" data-del="${c.id}" title="ลบตัวละคร">${armed ? 'กดอีกครั้งเพื่อลบ' : '✕'}</button>`);
+      list.append(slot);
+    }
+    const full = this.chars.length >= MAX_CHARACTERS;
+    $('char-create').classList.toggle('hidden', !this.creating);
+    const createBtn = $<HTMLButtonElement>('btn-create-char');
+    createBtn.classList.toggle('hidden', full && !this.creating);
+    createBtn.textContent = this.creating ? '✔ ยืนยันสร้างตัวละคร' : '+ สร้างตัวละคร';
+    createBtn.classList.toggle('primary', this.creating);
+    if (this.creating) $<HTMLInputElement>('new-char-name').focus();
+    // Entering the shared world arrives with the next update (world sync).
+    $<HTMLButtonElement>('btn-enter-world').disabled = true;
+  }
+
+  private onListClick(e: Event): void {
+    const t = e.target as HTMLElement;
+    const del = t.closest<HTMLElement>('[data-del]');
+    if (del) {
+      e.stopPropagation();
+      void this.onDelete(Number(del.dataset.del));
+      return;
+    }
+    const slot = t.closest<HTMLElement>('.char-slot');
+    if (!slot) return;
+    if (slot.dataset.new) {
+      this.creating = true;
+    } else {
+      this.creating = false;
+      this.selected = Number(slot.dataset.id);
+    }
+    $('char-error').textContent = '';
+    this.render();
+  }
+
+  private async onCreateClick(): Promise<void> {
+    if (!this.creating) {
+      this.creating = true;
+      return this.render();
+    }
+    if (this.busy) return;
+    const name = $<HTMLInputElement>('new-char-name').value.trim();
+    const err = $('char-error');
+    const bad = checkCharacterName(name);
+    if (bad) return void (err.textContent = bad);
+    this.busy = true;
+    try {
+      const c = await api.createCharacter(name, this.chosenClass());
+      $<HTMLInputElement>('new-char-name').value = '';
+      this.chars.push(c);
+      this.selected = c.id;
+      this.creating = false;
+      err.textContent = '';
+      this.render();
+    } catch (e) {
+      err.textContent = (e as Error).message;
+      if (e instanceof api.ApiFailure && e.status === 401) this.showLogin('กรุณาเข้าสู่ระบบใหม่');
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  /** First click arms the delete button for 3 seconds; the second click deletes. */
+  private async onDelete(id: number): Promise<void> {
+    if (!this.armedDelete || this.armedDelete.id !== id || Date.now() - this.armedDelete.t > 3000) {
+      this.armedDelete = { id, t: Date.now() };
+      this.render();
+      setTimeout(() => this.render(), 3100);
+      return;
+    }
+    this.armedDelete = null;
+    try {
+      await api.deleteCharacter(id);
+      this.chars = this.chars.filter((c) => c.id !== id);
+      if (this.selected === id) this.selected = this.chars[0]?.id ?? null;
+      if (!this.chars.length) this.creating = true;
+      this.render();
+    } catch (e) {
+      $('char-error').textContent = (e as Error).message;
+    }
+  }
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);
+}
+
+export function buildMenu(launch: (d: SaveData) => void): void {
+  setupSingle(launch);
+  const online = new OnlineMenu();
+  $('btn-mode-single').onclick = () => show('single');
+  $('btn-mode-online').onclick = () => {
+    show('online');
+    void online.open();
+  };
+  document.querySelectorAll<HTMLElement>('.btn-back').forEach((b) => (b.onclick = () => show('mode')));
+  show('mode');
+  $('menu').classList.remove('hidden');
+}

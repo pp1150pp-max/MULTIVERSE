@@ -147,16 +147,66 @@
             <p>กาลเวลาผ่านไป ความมืดที่เรียกว่า <b>The Devourer</b> เริ่มกลืนกินดวงดาวและมิติ ในวันที่โลกของคุณกำลังล่มสลาย แสงสีทองขาวปริศนาได้ปรากฏขึ้น…</p>
             <p>คุณตื่นขึ้นอีกครั้ง พร้อมกับ <b>The Seeker</b> ผู้ตามหาความจริงเบื้องหลังพลังโบราณที่ชื่อว่า <b>The Origin</b></p>
           </div>
-          <div class="name-row">
-            <label for="name-input">ชื่อตัวละคร</label>
-            <input id="name-input" maxlength="16" placeholder="Wanderer" />
+          <div id="mode-select" class="menu-buttons mode-buttons">
+            <button id="btn-mode-single" class="mode-btn primary">
+              <b>Singleplayer</b><small>เล่นคนเดียว · เซฟในเครื่องนี้ ไม่ต้องสมัคร</small>
+            </button>
+            <button id="btn-mode-online" class="mode-btn">
+              <b>Multiplayer</b><small>เล่นกับเพื่อน · ต้องเข้าสู่ระบบ</small>
+            </button>
           </div>
-          <div id="class-cards"></div>
-          <div class="menu-buttons">
-            <button id="btn-continue" class="hidden"></button>
-            <button id="btn-start" class="primary">เริ่มการเดินทางใหม่</button>
+
+          <div id="single-panel" class="hidden">
+            <div class="name-row">
+              <label for="name-input">ชื่อตัวละคร</label>
+              <input id="name-input" maxlength="16" placeholder="Wanderer" />
+            </div>
+            <div id="class-cards" class="class-grid"></div>
+            <div class="menu-buttons">
+              <button id="btn-continue" class="hidden"></button>
+              <button id="btn-start" class="primary">เริ่มการเดินทางใหม่</button>
+              <button class="btn-back">← กลับ</button>
+            </div>
           </div>
-          <div class="menu-foot">Prototype v0.1 · Zone 1: Emerald Forest</div>
+
+          <div id="online-panel" class="hidden">
+            <form id="login-box" class="online-box" autocomplete="on">
+              <h2>เข้าสู่ระบบ</h2>
+              <div class="form-row"><label for="login-user">ชื่อผู้ใช้</label><input id="login-user" name="username" maxlength="16" autocomplete="username" /></div>
+              <div class="form-row"><label for="login-pass">รหัสผ่าน</label><input id="login-pass" name="password" type="password" maxlength="72" autocomplete="current-password" /></div>
+              <div id="login-error" class="form-error"></div>
+              <div class="menu-buttons">
+                <button id="btn-login" type="submit" class="primary">เข้าสู่ระบบ</button>
+                <button id="btn-register" type="button">สมัครสมาชิกใหม่</button>
+                <button class="btn-back" type="button">← กลับ</button>
+              </div>
+              <p class="hint">สมัครใหม่: ใส่ชื่อผู้ใช้ (A–Z, 0–9, _ ยาว 3–16 ตัว) และรหัสผ่านอย่างน้อย 6 ตัว แล้วกด “สมัครสมาชิกใหม่”</p>
+            </form>
+
+            <div id="char-box" class="online-box hidden">
+              <div class="char-head">
+                <h2>เลือกตัวละคร</h2>
+                <span>บัญชี <b id="account-name"></b> <button id="btn-logout" type="button">ออกจากระบบ</button></span>
+              </div>
+              <div id="char-list"></div>
+              <div id="char-create" class="hidden">
+                <h3>สร้างตัวละครใหม่</h3>
+                <div class="name-row">
+                  <label for="new-char-name">ชื่อตัวละคร</label>
+                  <input id="new-char-name" maxlength="16" placeholder="ชื่อในเกม (ห้ามซ้ำกับคนอื่น)" />
+                </div>
+                <div id="online-class-cards" class="class-grid"></div>
+              </div>
+              <div id="char-error" class="form-error"></div>
+              <div class="menu-buttons">
+                <button id="btn-create-char" class="hidden">+ สร้างตัวละคร</button>
+                <button id="btn-enter-world" class="primary" disabled>เข้าสู่โลก</button>
+                <button class="btn-back" type="button">← กลับ</button>
+              </div>
+              <p id="enter-note" class="hint">ระบบเล่นออนไลน์ (เข้าโลกเดียวกับเพื่อน) จะเปิดในอัปเดตถัดไป ตอนนี้สร้างและเลือกตัวละครรอไว้ได้เลย</p>
+            </div>
+          </div>
+          <div class="menu-foot">Prototype v0.2 · Zone 1: Emerald Forest</div>
         </div>
       </div>
 
