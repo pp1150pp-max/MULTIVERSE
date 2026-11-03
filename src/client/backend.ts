@@ -10,7 +10,7 @@ import { IDLE_INTENT, type Intent, type SimEvent } from '../shared/sim/types';
 import type { ZoneDef } from '../shared/data/zones';
 import type { NpcId } from '../shared/data/npcs';
 import type { EnhanceResult } from '../shared/data/enhance';
-import type { Item, PotionKind, PotionSize, SlotId } from '../shared/types';
+import type { Item, PotionKind, PotionSize, Rarity, SlotId } from '../shared/types';
 
 /** What a projectile view needs; the local simulation's Projectile fits this too. */
 export interface ProjectileLike {
@@ -47,7 +47,7 @@ export interface Backend {
   buyPotion(kind: PotionKind, size: PotionSize, n: number): void;
   sortBag(key: SortKey, desc: boolean): void;
   sell(bagIndex: number): void;
-  sellAllCommon(): void;
+  sellAllOfRarity(rarity: Rarity): void;
   enhance(uid: string): Promise<EnhanceOutcome>;
   chat(text: string): void;
   npcDistance(id: NpcId): number;
@@ -83,7 +83,7 @@ export class LocalBackend implements Backend {
   buyPotion(kind: PotionKind, size: PotionSize, n: number): void { this.sim.buyPotion(this.me, kind, size, n); }
   sortBag(key: SortKey, desc: boolean): void { this.sim.sortBag(this.me, key, desc); }
   sell(i: number): void { this.sim.sellItem(this.me, i); }
-  sellAllCommon(): void { this.sim.sellAllCommon(this.me); }
+  sellAllOfRarity(rarity: Rarity): void { this.sim.sellAllOfRarity(this.me, rarity); }
   enhance(uid: string): Promise<EnhanceOutcome> { return Promise.resolve(this.sim.enhance(this.me, uid)); }
   chat(): void { /* nobody to talk to */ }
   npcDistance(id: NpcId): number { return this.sim.npcDistance(this.me, id); }

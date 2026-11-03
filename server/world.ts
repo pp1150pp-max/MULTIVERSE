@@ -13,7 +13,7 @@ import {
   CHAT_MAX, INTEREST_RADIUS, SNAPSHOT_HZ, TICK_HZ, WS_PATH, r2,
   type ClientMsg, type InputMsg, type ActionMsg, type PrivateSnap, type ServerMsg, type SnapshotMsg,
 } from '../src/shared/net/protocol';
-import { SLOTS, type SlotId, type Vec2 } from '../src/shared/types';
+import { RARITIES, SLOTS, type SlotId, type Vec2 } from '../src/shared/types';
 import type { SkillSlot } from '../src/shared/data/classes';
 
 const AUTOSAVE_MS = 30_000;
@@ -220,8 +220,8 @@ export class GameWorld {
       case 'sell':
         if (i >= 0 && i < p.bag.length) sim.sellItem(p, i);
         break;
-      case 'sellCommon':
-        sim.sellAllCommon(p);
+      case 'sellRarity':
+        if (RARITIES.includes(m.rarity)) sim.sellAllOfRarity(p, m.rarity);
         break;
       case 'enhance': {
         const out = typeof m.uid === 'string' ? sim.enhance(p, m.uid) : null;

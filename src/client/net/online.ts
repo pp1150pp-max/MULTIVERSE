@@ -11,7 +11,7 @@ import type { Intent, SimEvent } from '../../shared/sim/types';
 import { MONSTERS } from '../../shared/data/monsters';
 import { ZONE_1, type SpawnArea } from '../../shared/data/zones';
 import type { NpcId } from '../../shared/data/npcs';
-import type { PotionKind, PotionSize, SlotId, Vec2 } from '../../shared/types';
+import type { PotionKind, PotionSize, Rarity, SlotId, Vec2 } from '../../shared/types';
 import type { SkillSlot } from '../../shared/data/classes';
 import { INPUT_HZ, WS_PATH, type ClientMsg, type ServerMsg, type SnapshotMsg } from '../../shared/net/protocol';
 import type { Backend, EnhanceOutcome, ProjectileLike } from '../backend';
@@ -398,7 +398,7 @@ export class OnlineBackend implements Backend {
   buyPotion(kind: PotionKind, size: PotionSize, n: number): void { this.send({ t: 'act', a: 'buy', kind, size, n }); }
   sortBag(key: SortKey, desc: boolean): void { this.send({ t: 'act', a: 'sort', key, desc }); }
   sell(i: number): void { this.send({ t: 'act', a: 'sell', i }); }
-  sellAllCommon(): void { this.send({ t: 'act', a: 'sellCommon' }); }
+  sellAllOfRarity(rarity: Rarity): void { this.send({ t: 'act', a: 'sellRarity', rarity }); }
 
   enhance(uid: string): Promise<EnhanceOutcome> {
     const req = ++this.enhanceReq;

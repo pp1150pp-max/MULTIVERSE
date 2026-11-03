@@ -9,11 +9,12 @@ import {
   entryName, POTION_ICON, POTION_SIZES, POTION_SIZE_LABEL, POTION_STACK, POTIONS, potionName, potionSellPrice,
 } from '../shared/data/potions';
 import type { SortKey } from '../shared/sim/Player';
+import { isBulkSellable } from '../shared/sim/Sim';
 import { MONSTERS } from '../shared/data/monsters';
 import { expToNext } from '../shared/formulas';
 import {
-  isPotion, RARITY_COLOR, RARITY_LABEL, SLOTS, SLOT_LABEL, STAT_KEYS, STAT_LABEL,
-  type BagEntry, type Item, type PotionKind, type PotionSize, type PotionStack, type SlotId, type StatKey,
+  isPotion, RARITIES, RARITY_COLOR, RARITY_LABEL, SLOTS, SLOT_LABEL, STAT_KEYS, STAT_LABEL,
+  type BagEntry, type Item, type PotionKind, type PotionSize, type PotionStack, type Rarity, type SlotId, type StatKey,
 } from '../shared/types';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -165,7 +166,12 @@ export class Hud {
       const [kind, size, n] = b.dataset.buy!.split(':') as [PotionKind, PotionSize, string];
       this.buyPotion(kind, size, Number(n));
     });
-    $('sell-common').onclick = () => this.sellAllCommon();
+    $('sell-rarity').innerHTML = RARITIES.map((r) =>
+      `<button data-sell="${r}" style="--rc:${RARITY_COLOR[r]}">${RARITY_LABEL[r]}</button>`).join('');
+    $('sell-rarity').addEventListener('click', (e) => {
+      const r = (e.target as HTMLElement).closest<HTMLElement>('[data-sell]')?.dataset.sell as Rarity | undefined;
+      if (r) this.sellAllOfRarity(r);
+    });
 
     // Blacksmith
     $('forge-close').onclick = () => this.closeForge();
@@ -420,9 +426,18 @@ export class Hud {
     this.afterTrade();
   }
 
-  private sellAllCommon(): void {
-    this.g.backend.sellAllCommon();
-    this.afterTrade();
+  private sellAllOfRarity(r: Rarity): void {
+    const items = this.g.player.bag.filter((e) => isBulkSellable(e, r));
+    const label = `<b style="color:${RARITY_COLOR[r]}">${RARITY_LABEL[r]}</b>`;
+    if (!items.length) {
+      this.log(`ไม่มีของระดับ${RARITY_LABEL[r]}ในกระเป๋า (ของที่ตีบวกแล้วจะไม่ถูกขาย)`, '#b9b09a');
+      return;
+    }
+    const total = items.reduce((s, it) => s + sellValue(it), 0);
+    this.confirm(`ขายของระดับ ${label} ทั้งหมด ${items.length} ชิ้น?<br><small>ได้ ${total.toLocaleString()} G · ของที่ตีบวกแล้วจะไม่ถูกขาย</small>`, 'ขายทั้งหมด', () => {
+      this.g.backend.sellAllOfRarity(r);
+      this.afterTrade();
+    });
   }
 
   /** The trade itself (and its log line / save) happens in the simulation; just refresh the panels. */

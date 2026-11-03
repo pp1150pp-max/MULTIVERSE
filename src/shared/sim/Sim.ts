@@ -9,13 +9,18 @@ import { enhanceCost, itemName, MAX_PLUS, plusOf, rollEnhance, type EnhanceResul
 import { entryName, potionName, POTIONS } from '../data/potions';
 import { NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { rand, randInt } from '../rng';
-import { isPotion, type Item, type PotionKind, type PotionSize } from '../types';
+import { isPotion, RARITY_LABEL, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
 import { Terrain } from './terrain';
 import { Player, type CharacterData, type SortKey } from './Player';
 import { Monster } from './Monster';
 import { Projectile, type ProjOpts } from './Projectile';
 import { Loot, LOOT_PRIORITY_TIME, type LootKind } from './Loot';
 import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type SimEvent } from './types';
+
+/** Gear of this rarity that "sell all" may take: never potions or enhanced items. */
+export function isBulkSellable(e: BagEntry | null, rarity: Rarity): e is Item {
+  return !!e && !isPotion(e) && e.rarity === rarity && !plusOf(e);
+}
 
 interface Spawner { area: SpawnArea; alive: number; queue: number[]; boss: boolean }
 
@@ -360,21 +365,22 @@ export class Sim {
     return v;
   }
 
-  sellAllCommon(p: Player): number {
+  /** Sells every bag item of this rarity. Enhanced (+N) items are kept. */
+  sellAllOfRarity(p: Player, rarity: Rarity): number {
     if (!this.near(p, 'merchant')) return 0;
     let n = 0;
     let total = 0;
     p.bag.forEach((it, i) => {
-      if (it && !isPotion(it) && it.rarity === 'common' && !plusOf(it)) {
+      if (isBulkSellable(it, rarity)) {
         total += p.sell(i);
         n++;
       }
     });
     if (!n) {
-      this.log('ไม่มีของระดับธรรมดาในกระเป๋า', '#b9b09a', p.id);
+      this.log(`ไม่มีของระดับ${RARITY_LABEL[rarity]}ในกระเป๋า (ของที่ตีบวกแล้วจะไม่ถูกขาย)`, '#b9b09a', p.id);
       return 0;
     }
-    this.log(`ขายของธรรมดา ${n} ชิ้น ได้ ${total} G`, '#f2c230', p.id);
+    this.log(`ขายของระดับ${RARITY_LABEL[rarity]} ${n} ชิ้น ได้ ${total} G`, '#f2c230', p.id);
     this.afterChange(p);
     return total;
   }

@@ -1,7 +1,7 @@
 // WebSocket messages between the browser and the game server (JSON). The server runs the
 // simulation; clients send their input and get snapshots of what is near them plus SimEvents.
 import type { SkillSlot } from '../data/classes';
-import type { BagEntry, ClassId, Item, PotionKind, PotionSize, SlotId, Stats, Vec2 } from '../types';
+import type { BagEntry, ClassId, Item, PotionKind, PotionSize, Rarity, SlotId, Stats, Vec2 } from '../types';
 import type { LootKind } from '../sim/Loot';
 import type { SimEvent } from '../sim/types';
 import type { PotionSelect, SortKey } from '../sim/Player';
@@ -40,7 +40,7 @@ export type ActionMsg =
   | { t: 'act'; a: 'buy'; kind: PotionKind; size: PotionSize; n: number }
   | { t: 'act'; a: 'sort'; key: SortKey; desc: boolean }
   | { t: 'act'; a: 'sell'; i: number }
-  | { t: 'act'; a: 'sellCommon' }
+  | { t: 'act'; a: 'sellRarity'; rarity: Rarity }
   | { t: 'act'; a: 'enhance'; uid: string; req: number };
 
 export type ClientMsg =
