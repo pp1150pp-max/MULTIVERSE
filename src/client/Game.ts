@@ -12,7 +12,7 @@ import { Input } from './input';
 import { Effects } from './effects';
 import { Floating } from './floating';
 import { Hud } from './hud';
-import { AutoPlay } from '../shared/sim/autoplay';
+import { AUTO_HINT_COLOR, AutoPlay } from '../shared/sim/autoplay';
 import { AutoRing } from './autoRing';
 import { AUTO_PX_PER_UNIT } from '../shared/sim/Player';
 import { SpriteActor } from './SpriteActor';
@@ -367,7 +367,11 @@ export class Game {
       if (this.hud.dialogOpen) intent = { ...intent, move: null, moveTo: null, basic: false, skills: [], dash: false };
       else if (this.autoPlay && (intent.move || intent.moveTo)) this.toggleAuto(false, 'ปิด Auto Play — เดินเอง');
       // Online the server plays Auto (so it keeps going in a hidden tab); here it only gets our manual input.
-      else if (this.autoPlay && !this.backend.online) intent = this.auto.intent(this, intent);
+      else if (this.autoPlay && !this.backend.online) {
+        intent = this.auto.intent(this, intent);
+        const hint = this.auto.takeHint();
+        if (hint) this.hud.log(hint, AUTO_HINT_COLOR);
+      }
     }
     const events = this.backend.frame(dt, intent);
     if (this.backend.zone !== this.zone) this.changeZone();

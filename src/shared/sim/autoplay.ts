@@ -19,6 +19,12 @@ const RANGE: Record<string, number> = { sword: 1.9, mage: 8.5, gunslinger: 9 };
 /** Loot within this distance is fetched even while monsters attack; up to LOOT_FAR when it's calm. */
 const LOOT_NEAR = 5;
 const LOOT_FAR = 9;
+/** Seconds with nothing to fight before Auto tells the player: quickly when no monster lives in the circle at all,
+ *  later when it is only waiting for respawns. Then at most one message per IDLE_HINT_EVERY. */
+const IDLE_HINT_EMPTY = 3;
+const IDLE_HINT_WAITING = 15;
+const IDLE_HINT_EVERY = 30;
+export const AUTO_HINT_COLOR = '#ffb36a';
 
 /**
  * Open-world farming bot. Singleplayer runs it in the browser; online the server runs it, so it
@@ -34,10 +40,37 @@ export class AutoPlay {
   /** Centre of the farming circle: where Auto was switched on. */
   private anchor: { x: number; z: number } | null = null;
 
+  private idleSince: number | null = null;
+  private hintAt = -Infinity;
+  private hint: string | null = null;
+
   /** Auto was just switched on here. */
   start(x: number, z: number): void {
     this.anchor = { x, z };
+    this.idleSince = null;
+    this.hintAt = -Infinity;
     this.reset();
+  }
+
+  /** A message for the player (nothing to fight in the circle), once; whoever runs the bot shows it. */
+  takeHint(): string | null {
+    const h = this.hint;
+    this.hint = null;
+    return h;
+  }
+
+  /** Called every frame Auto has no monster to fight. */
+  private noteIdle(g: AutoWorld): void {
+    this.idleSince ??= g.time;
+    if (g.time - this.hintAt < IDLE_HINT_EVERY) return;
+    const a = this.anchor ?? g.player;
+    const R = this.radius(g.player);
+    const hasArea = g.zone.spawns.some((s) => Math.hypot(s.x - a.x, s.z - a.z) < R + s.radius);
+    if (g.time - this.idleSince < (hasArea ? IDLE_HINT_WAITING : IDLE_HINT_EMPTY)) return;
+    this.hintAt = g.time;
+    this.hint = hasArea
+      ? 'Auto: ยังไม่มีมอนให้ตีในระยะฟาร์ม — รอมอนเกิด หรือเพิ่มระยะที่ปุ่ม ⚙'
+      : 'Auto: ไม่มีมอนในระยะฟาร์ม — เพิ่มระยะที่ปุ่ม ⚙ หรือไปเปิด Auto ใกล้ๆ มอน';
   }
 
   reset(): void {
@@ -98,9 +131,11 @@ export class AutoPlay {
     }
     const target = this.target;
     if (!target) {
+      this.noteIdle(g);
       out.moveTo = this.roamPoint(g);
       return out;
     }
+    this.idleSince = null;
     this.roam = null;
 
     const d = dist(target);
