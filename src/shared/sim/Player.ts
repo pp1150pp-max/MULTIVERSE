@@ -16,6 +16,8 @@ import type { LootKind } from './Loot';
 
 /** Share of the HP regen stat that actually applies (owner: -60%). */
 export const HP_REGEN_MULT = 0.4;
+/** Same for MP regen (owner: -60%). */
+export const MP_REGEN_MULT = 0.4;
 
 export const BAG_SIZE = 30;
 export const POTION_CD = 1.5;
@@ -162,6 +164,7 @@ export class Player extends Unit {
     for (const it of Object.values(this.equipment)) if (it) addInto(s, effectiveStats(it));
     // Regen is cut so players lean on potions; applied last so gear is cut too.
     s.hpRegen *= HP_REGEN_MULT;
+    s.mpRegen *= MP_REGEN_MULT;
     this.stats = s;
     this.hp = Math.min(this.hp, s.maxHp);
     this.mp = Math.min(this.mp, s.maxMp);

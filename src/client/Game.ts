@@ -13,6 +13,8 @@ import { Effects } from './effects';
 import { Floating } from './floating';
 import { Hud } from './hud';
 import { AutoPlay } from '../shared/sim/autoplay';
+import { AutoRing } from './autoRing';
+import { AUTO_PX_PER_UNIT } from '../shared/sim/Player';
 import { SpriteActor } from './SpriteActor';
 import { sheets } from './assets';
 import { LootView, MonsterView, PlayerView, ProjectileView, ViewSet } from './views';
@@ -52,6 +54,9 @@ export class Game {
   npcs: Npc[] = [];
   metSeeker: boolean;
   autoPlay = false;
+  /** Where Auto was switched on: the centre of its farming circle (the server keeps its own copy online). */
+  private autoAnchor: { x: number; z: number } | null = null;
+  private autoRing!: AutoRing;
   hovered: Monster | null = null;
   mouseWorld: Vec2 = { x: 0, z: 0 };
 
@@ -86,6 +91,7 @@ export class Game {
     this.world = new World(this.scene, backend.terrain);
     this.input = new Input(this.renderer.domElement);
     this.fx = new Effects(this.scene);
+    this.autoRing = new AutoRing(this.scene);
     this.floating = new Floating(document.getElementById('float-layer')!);
 
     // Online, the Seeker's intro is only shown when you talk to him.
@@ -149,7 +155,10 @@ export class Game {
       return;
     }
     this.autoPlay = force ?? !this.autoPlay;
-    if (this.autoPlay) this.auto.start(this.player.x, this.player.z);
+    if (this.autoPlay) {
+      this.auto.start(this.player.x, this.player.z);
+      this.autoAnchor = { x: this.player.x, z: this.player.z };
+    }
     else this.auto.reset();
     this.backend.setAuto(this.autoPlay);
     this.hud.log(this.autoPlay ? 'เปิด Auto Play — โจมตีเองได้ตลอด · เดินเองเมื่อไหร่ Auto จะปิด' : offMsg, '#9fd8ff');
@@ -343,6 +352,7 @@ export class Game {
     if (i.pressed('KeyF')) this.toggleAuto();
     if (i.pressed('KeyI') || i.pressed('KeyB')) this.hud.toggleBag();
     if (i.pressed('KeyH')) this.hud.toggleHelp();
+    if (i.pressed('KeyM')) this.hud.toggleMap();
     if (i.pressed('Escape')) this.hud.closePanels();
     if (i.pressed('Enter') && this.backend.online) this.hud.openChat();
     if (i.wheel) {
@@ -385,6 +395,14 @@ export class Game {
     this.floating.npcBadges(this, this.npcs);
     this.floating.npcPrompt(this, near?.x ?? 0, 3.7, near?.z ?? 0, prompt);
     if (near && i.pressed('KeyT')) this.hud.talkTo(near.id);
+
+    // Farming circle: while Auto runs (around where it started) and while the settings window is open
+    // (around the player if Auto is off), following the number as it is typed.
+    const preview = this.hud.autoRangePreview();
+    if (this.autoPlay || preview !== null) {
+      const c = this.autoPlay && this.autoAnchor ? this.autoAnchor : p;
+      this.autoRing.show(c.x, c.z, (preview ?? p.autoSettings.range) / AUTO_PX_PER_UNIT);
+    } else this.autoRing.hide();
 
     this.fx.update(dt);
     this.world.update(dt, p.x, p.z);

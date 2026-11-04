@@ -127,7 +127,21 @@
           <div class="aset-title">ให้ Auto ใช้สกิล</div>
           <div id="aset-skills"></div>
           <label class="aset-check"><input id="aset-loot" type="checkbox" /> เก็บของอัตโนมัติ</label>
-          <div class="hint">เปลี่ยนแล้วมีผลทันที และจำไว้กับตัวละคร</div>
+          <div class="hint">เปลี่ยนแล้วมีผลทันที และจำไว้กับตัวละคร · วงสีฟ้าบนพื้นคือระยะฟาร์ม</div>
+        </div>
+
+        <div id="fullmap" class="panel hidden">
+          <div class="panel-head"><span id="fullmap-title">แผนที่</span><button id="fullmap-close">✕</button></div>
+          <canvas id="fullmap-canvas"></canvas>
+          <div class="fullmap-legend">
+            <span><i style="background:#fff"></i>คุณ</span>
+            <span><i style="background:#6ac8ff"></i>ผู้เล่นอื่น</span>
+            <span><i style="background:#f2a640"></i>มอนสเตอร์</span>
+            <span><i style="background:#ff5a4a"></i>มอนที่กำลังสู้</span>
+            <span><i style="background:#ff3a2a"></i>บอส</span>
+            <span><i style="background:#b07aff"></i>จุดวาป</span>
+          </div>
+          <div class="hint" id="fullmap-hint">กด M หรือ Esc เพื่อปิด</div>
         </div>
 
         <div id="help" class="panel hidden">
@@ -142,6 +156,7 @@
             <tr><td>F</td><td>เปิด/ปิด Auto Play (เฉพาะ Open World · เดินเองแล้ว Auto จะปิด)</td></tr>
             <tr><td>I หรือ B</td><td>กระเป๋า &amp; ตัวละคร</td></tr>
             <tr><td>T</td><td>คุยกับ NPC เมื่ออยู่ใกล้ (The Seeker · พ่อค้า · ช่างตีเหล็ก ที่แคมป์)</td></tr>
+            <tr><td>M</td><td>แผนที่ทั้งโซน (หรือคลิกแผนที่ย่อ)</td></tr>
             <tr><td>ล้อเมาส์</td><td>ซูมกล้อง</td></tr>
             <tr><td>Esc</td><td>ปิดหน้าต่าง</td></tr>
           </table>
