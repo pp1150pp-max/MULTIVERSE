@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import type { Player } from '../shared/sim/Player';
 import type { Monster } from '../shared/sim/Monster';
-import { DROPPED_LIFE, LOOT_POP_TIME, type Loot } from '../shared/sim/Loot';
+import { LOOT_POP_TIME, type Loot } from '../shared/sim/Loot';
 import type { SimEvent } from '../shared/sim/types';
 import { SpriteActor } from './SpriteActor';
 import { AnimatedActor, type Actor } from './AnimatedActor';
@@ -155,12 +155,10 @@ export class LootView {
     const y = k < 1 ? 0.3 + Math.sin(k * Math.PI) * 1.2 : 0.3 + Math.sin(l.t * 3) * 0.06;
     this.sprite.position.set(px, y, pz);
     this.glow?.position.set(px, 0.3, pz);
-    if (l.dropped) {
-      // Blink during the last 5 seconds.
-      const blink = l.t > DROPPED_LIFE - 5 && Math.floor(l.t * 6) % 2 === 0;
-      this.sprite.visible = !blink;
-      if (this.glow) this.glow.visible = !blink;
-    }
+    // Blink during the last 5 seconds.
+    const blink = l.t > l.life - 5 && Math.floor(l.t * 6) % 2 === 0;
+    this.sprite.visible = !blink;
+    if (this.glow) this.glow.visible = !blink;
   }
 
   dispose(): void {
