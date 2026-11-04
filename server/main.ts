@@ -14,7 +14,7 @@ import {
 } from '../src/shared/api';
 import { newCharacterData } from '../src/shared/sim/Player';
 import { GameWorld } from './world';
-import { startTunnel } from './tunnel';
+import { announceShared, runningTunnel, startTunnel } from './tunnel';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const PORT = Number(process.env.PORT ?? 2567);
@@ -226,7 +226,10 @@ server.listen(PORT, '0.0.0.0', () => {
     }
   }
   console.log(`  ฐานข้อมูล:  ${DB_FILE}\n`);
-  if (PUBLIC) void startTunnel(PORT).then((t) => (tunnel = t));
+  // A tunnel window (npm run tunnel) that is already up keeps its link across server restarts.
+  const shared = PUBLIC ? runningTunnel(PORT) : null;
+  if (shared) announceShared(shared);
+  else if (PUBLIC) void startTunnel(PORT).then((t) => (tunnel = t));
   else console.log('  (อยากได้ลิงก์ให้เพื่อนนอกบ้าน: ปิดหน้าต่างนี้ แล้วใช้ npm run online แทน)\n');
 });
 
