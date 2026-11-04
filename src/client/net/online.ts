@@ -23,6 +23,11 @@ const NO_AREA: SpawnArea = { monster: '', x: 0, z: 0, radius: 1, count: 1, respa
 const SNAP_DIST = 5;
 /** Our own character is pulled back to the server's position if it drifts this far (a rejected move). */
 const CORRECT_DIST = 3;
+/**
+ * Events still applied while the tab is hidden (the server keeps playing Auto). Everything else is a
+ * notification nobody saw — dropped so it doesn't all pop at once when the player comes back.
+ */
+const HIDDEN_KEEP = new Set<SimEvent['t']>(['inventory', 'died', 'revived', 'save', 'travel']);
 
 interface MirrorProjectile extends ProjectileLike {
   x: number;
@@ -204,7 +209,14 @@ export class OnlineBackend implements Backend {
     this.serverTime = s.time;
     this.serverTimeAt = performance.now();
     this.onlineCount = s.online;
-    this.events.push(...s.events);
+    if (!document.hidden) this.events.push(...s.events);
+    else {
+      for (const ev of s.events) {
+        // A new item still has to refresh the bag, just without its pop-up line.
+        if (ev.t === 'item') this.events.push({ t: 'inventory', to: ev.to });
+        else if (HIDDEN_KEEP.has(ev.t)) this.events.push(ev);
+      }
+    }
 
     // ---- players
     const seenP = new Set<number>();
