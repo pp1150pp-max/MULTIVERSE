@@ -45,10 +45,12 @@
 ```
 sprites/player/sword/
   sprite.json      ← ไฟล์ตั้งค่า บอกขนาดเฟรมและลำดับแถว
-  idle.png  walk.png  run.png  dash.png  hit.png  death.png  revive.png
+  idle.png  walk.png  run.png  run_attack.png  dash.png  hit.png  death.png  revive.png
   attack.png  attack_2.png  attack_3.png      ← คอมโบโจมตีปกติ (มีแค่ attack อย่างเดียวก็ได้)
   skill_q.png  skill_e.png  skill_r.png       ← ท่าใช้สกิล (ไม่มีจะใช้ท่า attack แทน)
 ```
+
+`run_attack.png` เป็นท่าวิ่งไปโจมตีไป เกมจะใช้แทนท่า `attack` ตอนโจมตีระหว่างเดิน ควรมีจำนวนเฟรมและ fps เท่ากับ `run` เพื่อให้ขาวิ่งต่อเนื่อง
 
 **1 ไฟล์ = 1 ท่า** · แนวนอนเรียงเฟรมจากซ้ายไปขวา · แนวตั้งเรียงทิศทาง ทุกเฟรมต้องขนาดเท่ากัน (เช่น 128×128)
 และตัวละครต้องยืนตำแหน่งเดิมในทุกเฟรม ไม่อย่างนั้นตัวจะสั่นตอนเล่นแอนิเมชัน
