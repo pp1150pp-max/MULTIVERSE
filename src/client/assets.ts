@@ -31,20 +31,9 @@ const sheet = (path: string, placeholder: () => HTMLCanvasElement): SheetSpec =>
   ({ path: BASE + path, cols: 3, rows: 3, fileSideFaces: 'left', placeholder });
 const single = (path: string, placeholder: () => HTMLCanvasElement): SheetSpec =>
   ({ path: BASE + path, cols: 1, rows: 1, fileSideFaces: 'left', placeholder });
-/** Map props and ground tiles come from the CraftPix summer tileset (see tools/import_craftpix.py). */
+/** Forest and camp props, smooth-filtered because they are drawn smaller than their source. */
 const prop = (key: string, placeholder: () => HTMLCanvasElement): SheetSpec =>
   ({ ...single(`props/${key}.png`, placeholder), smooth: true });
-const ground = (key: string, color: string): SheetSpec =>
-  ({ ...single(`ground/${key}.png`, () => flatTile(color)), smooth: true });
-
-function flatTile(color: string): HTMLCanvasElement {
-  const c = document.createElement('canvas');
-  c.width = c.height = 64;
-  const ctx = c.getContext('2d')!;
-  ctx.fillStyle = color;
-  ctx.fillRect(0, 0, 64, 64);
-  return c;
-}
 
 export const SHEET_SPECS: Record<string, SheetSpec> = {
   sword: sheet('player/sword.png', () => makeSheet(32, drawHuman('sword'))),
@@ -119,8 +108,6 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   cart: prop('cart', drawFence),
   chest: prop('chest', drawStump),
   watchtower: prop('watchtower', drawFence),
-  ground_grass: ground('grass', '#6ea843'),
-  ground_sand: ground('sand', '#e8b973'),
 
   icon_coin: single('icons/coin.png', () => drawIcon('coin')),
   icon_potion_hp: single('icons/potion_hp.png', () => drawIcon('potion_hp')),

@@ -20,7 +20,7 @@ interface ThemeProps {
   extra: string[];
   /** Rock between the runestones around the boss clearing, and its height. */
   ringRock: [string, number];
-  /** CraftPix camp decor (well, barrels, cart, …) and pebbles along the paths. */
+  /** Camp decor (well, barrels, cart, …) and pebbles along the paths. */
   campDecor: boolean;
 }
 
