@@ -1,0 +1,14 @@
+{
+  "frameWidth": 256,
+  "frameHeight": 256,
+  "height": 2.6,
+  "feet": 0.0625,
+  "sideFaces": "left",
+  "directions": ["down", "down_side", "side", "up_side", "up"],
+  "animations": {
+    "idle": { "file": "idle.png", "frames": 4, "fps": 5, "loop": true },
+    "run": { "file": "run.png", "frames": 4, "fps": 10, "loop": true },
+    "run_attack": { "file": "run_attack.png", "frames": 4, "fps": 10, "loop": true },
+    "attack": { "file": "attack.png", "frames": 3, "fps": 14 }
+  }
+}
