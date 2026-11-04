@@ -73,7 +73,7 @@ const S = Math.SQRT1_2;
 /** Optional looping animation shown instead of `run` while firing on the move. */
 const RUN_ATTACK = 'run_attack';
 /** Keeps the gun raised between shots so the arm doesn't flicker during continuous fire. */
-const AIM_HOLD = 0.2;
+const AIM_HOLD = 0.3;
 const isAttack = (name: string) => name.startsWith('attack');
 
 export class AnimatedActor implements Actor {

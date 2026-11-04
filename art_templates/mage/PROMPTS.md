@@ -1,0 +1,93 @@
+# Mage: prompt ที่ใช้สร้างภาพใน ChatGPT
+
+สไตล์ 16-bit SNES ระดับความละเอียดเดียวกับ Gunslinger ดีไซน์อ้างอิงช่อง "16-bit (SNES Style)" ของภาพ Mage Style Variations
+สร้างในแชทเดียวกับ Gunslinger เพื่อให้สไตล์ตรงกัน ถ้าเริ่มแชทใหม่ ให้แนบภาพ Gunslinger และแบบตัวละครนี้ไปเป็นตัวอย่างด้วย
+
+ไฟล์อยู่ที่ `public/assets/sprites/player/mage/` ช่องละ 256×256 เรียงแถวเป็น
+`down` `down_side` `side` `up_side` `up` ส่วนฝั่งขวาเกมกลับด้านให้เอง จึงหันได้ 8 ทิศ
+
+| ไฟล์ | เฟรม | ที่มา |
+|---|---|---|
+| `idle.png` | 4 | ภาพแบบตัวละคร บีบและยืดเล็กน้อยให้ดูเหมือนหายใจ |
+| `run.png` | 4 | prompt ข้อ 2 |
+| `attack.png` | 3 | prompt ข้อ 3 |
+| `run_attack.png` | 4 | prompt ข้อ 4 ใช้แทนท่าวิ่งตอนร่ายเวทระหว่างเดิน |
+
+พื้นหลังใช้สีเขียว #00FF00 แทน #FF00FF เพราะชุดสีม่วงจะถูกตัดออกไปพร้อมพื้นหลังสีม่วงแดง
+หลังได้ภาพ ให้ตัดพื้นหลังออก แล้วจัดให้ทุกเฟรมเท้าอยู่สูงจากขอบล่าง 16px หัวอยู่กลางช่อง
+ความสูงรวมหมวกประมาณ 230px เพราะหมวกสูงกว่าหัว ตัวละครจึงดูขนาดเท่า Gunslinger
+
+ยังไม่มีท่า `dash` `hit` `death` `revive` `attack_2` `attack_3` และ `skill_q/e/r`
+เกมจะใช้ท่าที่มีแทน และตอนตายจะทำตัวละครให้จางลง
+
+## 1. แบบตัวละคร
+
+```
+Redraw her so she looks like she comes from the SAME game and the same artist as the gunslinger made earlier in this
+chat: the same polished 16-bit SNES-era JRPG sprite rendering with finer detail, each figure as if about 110 pixels
+tall, the same chibi head and face construction with big expressive eyes, the same dark outline weight, the same rich
+shading with 3 to 4 tones per material, the same small crisp pixels and the same ornate gold metal rendering. Do NOT
+use large chunky pixels. Design: young witch mage girl with long mostly straight pale silver hair with a soft lavender
+tint falling past the waist, not curly and not puffy. Deep purple pointed witch hat with wide brim, bent tip, gold band
+and a few gold stars. Outfit mainly deep purple: robe and short cape with gold trim and buckles, gold chest clasp with
+a small blue gem, only a small touch of cream at the collar and hem, brown leather boots. A tall gold staff in her
+right hand, topped by a large gold ring holding one big glowing blue orb. Generate an image: one single horizontal row
+of the SAME character standing in exactly 5 views, from left to right: (1) front facing the viewer, (2) three-quarter
+front turned toward the LEFT, (3) side profile facing LEFT, (4) three-quarter back turned toward the LEFT, (5) back
+view. Identical size, colors and height in every view, boots on the same baseline, generous empty space, nothing
+overlapping. Background ONE perfectly flat solid pure bright green (#00FF00), no shadows, no ground, no text, no
+labels, no grid lines. Do not use bright green on the character.
+```
+
+## 2. ท่าวิ่ง
+
+```
+Keep this EXACT character, outfit, colors, size and the same fine-detail pixel style matching the gunslinger, no chunky
+pixels. Generate an image: a running animation sprite sheet as a strict grid of 5 rows x 4 columns, 20 figures total.
+Each row is one facing direction, top to bottom: row 1 front facing the viewer, row 2 three-quarter front turned toward
+the LEFT, row 3 side profile running toward the LEFT, row 4 three-quarter back turned toward the LEFT, row 5 back view.
+Each column is one frame of a smooth 4-frame run cycle with clearly different leg poses, left to right: frame 1 right
+foot forward and left foot back, frame 2 legs passing under the body, frame 3 left foot forward and right foot back,
+frame 4 legs passing under the body. The robe hem swings so the legs and boots are visibly running, the long hair and
+cape trail behind, she carries the staff in the right hand. Head, hat and body keep the same size and height in every
+frame. Every figure fully inside its own cell with clear empty space around it, nothing touching or overlapping.
+Background ONE perfectly flat solid pure bright green (#00FF00), no shadows, no ground, no text, no labels, no numbers,
+no grid lines. Do not use bright green on the character.
+```
+
+## 3. ท่าร่ายเวท
+
+```
+Keep this EXACT character, outfit, colors, size and fine-detail pixel style. Generate an image: a spell-casting
+animation sprite sheet as a strict grid of 5 rows x 3 columns, 15 figures total. Each row is one facing direction and
+she thrusts the staff forward in that same direction, top to bottom: row 1 front, thrusting the staff toward the viewer
+so the big orb is in front of her chest; row 2 three-quarter front turned toward the LEFT, staff pointing down-left;
+row 3 side profile, staff thrust straight LEFT with the arm extended; row 4 three-quarter back turned toward the LEFT,
+staff pointing up-left; row 5 back view, staff raised forward and up, the orb visible above and beside the hat. Each
+column is one frame, left to right: frame 1 raising the staff to aim, orb normal; frame 2 staff fully thrust forward
+with a small bright blue-white glow attached around the orb only; frame 3 slight recoil, the staff tipped a little
+back, orb normal. No projectiles, no magic circles, no beams, no sparkles away from the orb. Feet stay planted in the
+same place, head and hat keep the same size and height in every frame. Every figure fully inside its own cell with
+clear empty space around it, nothing touching or overlapping. Background ONE perfectly flat solid pure bright green
+(#00FF00), no shadows, no ground, no text, no labels, no numbers, no grid lines. Do not use bright green on the
+character.
+```
+
+## 4. ท่าวิ่งไปร่ายไป
+
+```
+Keep this EXACT character, outfit, colors, size and fine-detail pixel style. Generate an image: a RUN-AND-CAST animation
+sprite sheet as a strict grid of 5 rows x 4 columns, 20 figures total: she is running at full speed while holding the
+staff thrust steadily forward in the running direction. Each row is one facing direction, top to bottom: row 1 front,
+running toward the viewer, staff thrust toward the viewer with the big orb in front of her chest; row 2 three-quarter
+front turned toward the LEFT, staff pointing down-left; row 3 side profile running toward the LEFT, staff thrust
+straight LEFT; row 4 three-quarter back turned toward the LEFT, staff pointing up-left; row 5 back view, running away,
+staff raised forward and up with the orb visible above and beside the hat. Each column is one frame of a smooth 4-frame
+run cycle with clearly different leg poses, left to right: frame 1 right foot forward and left foot back, frame 2 legs
+passing under the body, frame 3 left foot forward and right foot back, frame 4 legs passing under the body. The legs
+must really run in every row, robe hem swings, long hair and cape trail behind, the staff arm stays steady in all 4
+frames. The orb stays normal with no extra glow; no projectiles, no sparkles, no motion lines. Head and hat keep the
+same size and height in every frame. Every figure fully inside its own cell with clear empty space around it, nothing
+touching or overlapping. Background ONE perfectly flat solid pure bright green (#00FF00), no shadows, no ground, no
+text, no labels, no numbers, no grid lines. Do not use bright green on the character.
+```

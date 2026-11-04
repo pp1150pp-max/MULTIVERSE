@@ -64,9 +64,7 @@ export class Projectile {
     const sim = this.sim;
     if (this.o.explode) {
       const r = this.o.explode;
-      sim.fx('disc', this.x, this.z, r, this.o.color, 0.3);
-      sim.fx('ring', this.x, this.z, r, '#ffd28a', 0.35);
-      sim.fx('burst', this.x, 0.8, this.z, this.o.color, 12, 5);
+      sim.fx('effect', 'explosion', this.x, this.z, 0, r);
       for (const t of sim.monsters) {
         if (t.alive && Math.hypot(t.x - this.x, t.z - this.z) <= r + t.radius) {
           sim.hitMonster(this.owner, t, this.o.mult, { kb: 4, fromX: this.x, fromZ: this.z });

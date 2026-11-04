@@ -8,7 +8,7 @@ import type { SimEvent } from '../shared/sim/types';
 import { SpriteActor } from './SpriteActor';
 import { AnimatedActor, type Actor } from './AnimatedActor';
 import { animSets, sheets } from './assets';
-import type { Effects } from './effects';
+import type { Effects, ShotSprite } from './effects';
 import type { ProjectileLike } from './backend';
 
 type AnimEvent = Extract<SimEvent, { t: 'anim' }>;
@@ -109,9 +109,15 @@ export class MonsterView {
 
 export class ProjectileView {
   private readonly sprite: THREE.Sprite;
+  private readonly shot: ShotSprite | null;
+  private lastX: number;
+  private lastZ: number;
 
   constructor(readonly pr: ProjectileLike, private readonly scene: THREE.Scene, private readonly fx: Effects) {
-    this.sprite = fx.glowSprite(pr.o.color, pr.o.size);
+    this.shot = fx.shotSprite(pr.o.color, pr.o.size);
+    this.sprite = this.shot?.sprite ?? fx.glowSprite(pr.o.color, pr.o.size);
+    this.lastX = pr.x;
+    this.lastZ = pr.z;
     scene.add(this.sprite);
     this.update();
   }
@@ -119,12 +125,20 @@ export class ProjectileView {
   update(): void {
     const pr = this.pr;
     this.sprite.position.set(pr.x, 0.85, pr.z);
-    if (Math.random() < 0.5) this.fx.puff(pr.x, 0.85, pr.z, pr.o.color, 0.18, pr.o.size * 0.6);
+    if (this.shot) {
+      // Works out its heading from how it moved, so local and online shots behave the same.
+      this.shot.update(1 / 60, pr.x - this.lastX, pr.z - this.lastZ);
+      this.lastX = pr.x;
+      this.lastZ = pr.z;
+    } else if (Math.random() < 0.5) {
+      this.fx.puff(pr.x, 0.85, pr.z, pr.o.color, 0.18, pr.o.size * 0.6);
+    }
   }
 
   dispose(): void {
     this.scene.remove(this.sprite);
-    this.sprite.material.dispose();
+    if (this.shot) this.shot.dispose();
+    else this.sprite.material.dispose();
   }
 }
 

@@ -6,6 +6,8 @@ const S = Math.SQRT1_2;
 const ROW_FRONT = 0;
 const ROW_SIDE = 1;
 const ROW_BACK = 2;
+/** Sheets with this many rows also have diagonal views, so with mirroring they face 8 directions. */
+const DIAGONAL_ROWS = 5;
 const WALK = [0, 1, 2, 1];
 
 let shadowGeo: THREE.PlaneGeometry | null = null;
@@ -45,7 +47,12 @@ export class SpriteActor implements Actor {
     if (dx * dx + dz * dz < 1e-6) return;
     const sx = (dx - dz) * S;
     const sy = (-dx - dz) * S; // + = up the screen (away from camera)
-    if (Math.abs(sy) > Math.abs(sx) * 1.2) {
+    if (this.sheet.rows === DIAGONAL_ROWS) {
+      // Rows run front, front diagonal, side, back diagonal, back: 45 degrees apart on screen.
+      const angle = Math.atan2(Math.abs(sx), -sy);
+      this.row = Math.round(angle / (Math.PI / 4));
+      this.flip = this.row !== 0 && this.row !== 4 && (this.sheet.sideFaces === 'right') !== sx > 0;
+    } else if (Math.abs(sy) > Math.abs(sx) * 1.2) {
       this.row = sy > 0 ? ROW_BACK : ROW_FRONT;
       this.flip = false;
     } else {

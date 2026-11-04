@@ -31,7 +31,7 @@ export function basicAttack(sim: Sim, p: Player, aim: Vec2): void {
     case 'sword': {
       const range = 2.3;
       const arc = Math.PI * 0.75;
-      sim.fx('slash', p.x, p.z, ang, arc, range, '#ffe6a0');
+      sim.fx('effect', 'slash', p.x + Math.cos(ang) * range * 0.55, p.z + Math.sin(ang) * range * 0.55, ang, range * 0.8);
       forCone(sim, p.x, p.z, ang, arc, range, (m) => sim.hitMonster(p, m, 1, { kb: 3 }));
       break;
     }
@@ -41,7 +41,7 @@ export function basicAttack(sim: Sim, p: Player, aim: Vec2): void {
     case 'gunslinger': {
       const spread = (Math.random() - 0.5) * 0.06;
       sim.addProjectile(p, { x: p.x, z: p.z, angle: ang + spread, speed: 26, range: 12, radius: 0.3, mult: 1, color: '#ffe08a', size: 0.45, kb: 1 });
-      sim.fx('puff', p.x + Math.cos(ang) * 0.6, 0.9, p.z + Math.sin(ang) * 0.6, '#fff2b0', 0.08, 0.7);
+      sim.fx('effect', 'muzzle', p.x + Math.cos(ang) * 0.9, p.z + Math.sin(ang) * 0.9, ang, 0.55);
       break;
     }
   }
@@ -53,18 +53,15 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2): boolean
   switch (sk.id) {
     // ---------------- Sword
     case 'whirlwind':
-      sim.fx('slash', p.x, p.z, ang, Math.PI * 2, 3.2, '#ffd27a');
-      sim.fx('ring', p.x, p.z, 3.2, '#ffd27a', 0.3);
-      sim.schedule(0.12, () => sim.fx('slash', p.x, p.z, ang + Math.PI, Math.PI * 2, 3.2, '#fff0c0'));
+      sim.fx('effect', 'whirlwind', p.x, p.z, ang, 3.4);
       forCircle(sim, p.x, p.z, 3.2, (m) => sim.hitMonster(p, m, 1.8, { kb: 5 }));
       return true;
     case 'charge':
       p.startDash(Math.cos(ang), Math.sin(ang), 7, 0.3, 'charge');
+      sim.fx('effect', 'charge', p.x + Math.cos(ang), p.z + Math.sin(ang), ang, 1.6);
       return true;
     case 'earthquake':
-      sim.fx('disc', p.x, p.z, 4.5, '#ffb050', 0.4);
-      sim.fx('ring', p.x, p.z, 4.5, '#ffd27a', 0.5);
-      sim.fx('burst', p.x, 0.3, p.z, '#c9a27a', 20, 7);
+      sim.fx('effect', 'quake', p.x, p.z, 0, 4.8);
       sim.shake(0.5);
       forCircle(sim, p.x, p.z, 4.5, (m) => sim.hitMonster(p, m, 3, { stun: 1.5, kb: 3 }));
       return true;
@@ -74,9 +71,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2): boolean
       sim.addProjectile(p, { x: p.x, z: p.z, angle: ang, speed: 13, range: 12, radius: 0.45, mult: 2.2, color: '#ff7a2a', size: 1.1, explode: 2.6 });
       return true;
     case 'frostnova':
-      sim.fx('disc', p.x, p.z, 4.5, '#7fd8ff', 0.5);
-      sim.fx('ring', p.x, p.z, 4.5, '#c8f0ff', 0.5);
-      sim.fx('burst', p.x, 0.5, p.z, '#c8f0ff', 18, 6);
+      sim.fx('effect', 'frost', p.x, p.z, 0, 4.8);
       forCircle(sim, p.x, p.z, 4.5, (m) => sim.hitMonster(p, m, 1.4, { slow: 0.5, slowT: 3 }));
       return true;
     case 'meteor': {
@@ -91,9 +86,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2): boolean
       sim.fx('telegraph', tx, tz, 3.5, delay, '#ff8a2a');
       sim.fx('meteor', tx, tz, delay);
       sim.schedule(delay, () => {
-        sim.fx('disc', tx, tz, 3.5, '#ff6a1a', 0.5);
-        sim.fx('ring', tx, tz, 3.8, '#ffd27a', 0.5);
-        sim.fx('burst', tx, 0.5, tz, '#ff8a2a', 22, 7);
+        sim.fx('effect', 'crater', tx, tz, 0, 4);
         sim.shake(0.5);
         forCircle(sim, tx, tz, 3.5, (m) => sim.hitMonster(p, m, 4.5, { stun: 0.8, kb: 4, fromX: tx, fromZ: tz }));
       });
@@ -105,7 +98,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2): boolean
       for (let i = -2; i <= 2; i++) {
         sim.addProjectile(p, { x: p.x, z: p.z, angle: ang + i * 0.16, speed: 22, range: 9, radius: 0.32, mult: 0.9, color: '#ffc85a', size: 0.5, kb: 3 });
       }
-      sim.fx('puff', p.x + Math.cos(ang) * 0.7, 0.9, p.z + Math.sin(ang) * 0.7, '#fff2b0', 0.12, 1.4);
+      sim.fx('effect', 'muzzle', p.x + Math.cos(ang) * 1.1, p.z + Math.sin(ang) * 1.1, ang, 0.95);
       return true;
     case 'pierce':
       sim.addProjectile(p, { x: p.x, z: p.z, angle: ang, speed: 34, range: 16, radius: 0.45, mult: 2.6, color: '#7affe0', size: 0.9, pierce: true, kb: 5 });
@@ -125,7 +118,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2): boolean
           for (let j = 0; j < 5; j++) {
             const a = Math.random() * Math.PI * 2;
             const r = Math.random() * 3.3;
-            sim.fx('puff', tx + Math.cos(a) * r, 0.3, tz + Math.sin(a) * r, '#ffe08a', 0.2, 0.8);
+            sim.fx('effect', 'impact', tx + Math.cos(a) * r, tz + Math.sin(a) * r, 0, 0.6);
           }
           forCircle(sim, tx, tz, 3.5, (m) => sim.hitMonster(p, m, 0.9, {}));
         });

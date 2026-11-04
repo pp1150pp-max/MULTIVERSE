@@ -40,7 +40,11 @@ export interface FxApi {
   burst(x: number, y: number, z: number, color: string, n?: number, speed?: number): void;
   levelUp(x: number, z: number): void;
   meteor(x: number, z: number, duration: number): void;
+  /** Hand-drawn skill animation. `size` is its half-width in world units. */
+  effect(name: SkillEffect, x: number, z: number, angle: number, size: number): void;
 }
+
+export type SkillEffect = 'slash' | 'whirlwind' | 'charge' | 'quake' | 'explosion' | 'frost' | 'crater' | 'muzzle' | 'impact';
 export type FxName = keyof FxApi;
 export type FxEvent = { [K in FxName]: { t: 'fx'; name: K; args: Parameters<FxApi[K]> } }[FxName];
 

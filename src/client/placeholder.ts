@@ -553,15 +553,27 @@ export function drawIcon(kind: 'coin' | 'potion_hp' | 'potion_mp' | 'bag', color
   return c;
 }
 
-export function radialCanvas(size: number, inner: string, outer: string): HTMLCanvasElement {
+/**
+ * Round pixel-art shape with hard bands instead of a smooth gradient. `alphaAt` gets the distance
+ * from the centre (0 to 1 at the edge) and the pixel position, and returns its opacity.
+ */
+export function pixelCircle(size: number, rgb: string, alphaAt: (d: number, x: number, y: number) => number): HTMLCanvasElement {
   const c = newCanvas(size, size);
   const ctx = c.getContext('2d')!;
-  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  g.addColorStop(0, inner);
-  g.addColorStop(1, outer);
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, size, size);
+  const mid = (size - 1) / 2;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const a = alphaAt(Math.hypot(x - mid, y - mid) / (size / 2), x, y);
+      if (a <= 0) continue;
+      ctx.fillStyle = `rgba(${rgb},${a})`;
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
   return c;
 }
+
+/** Ordered 4x4 dither threshold, the classic way 16-bit consoles faked soft edges. */
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+export const ditherAt = (x: number, y: number) => (BAYER[(y & 3) * 4 + (x & 3)] + 0.5) / 16;
 
 export type { Rng };

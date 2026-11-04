@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {
   makeSheet, drawHuman, drawSlime, drawQuad, drawSeeker, drawMerchant, drawBlacksmith, drawTree, drawBush, drawRock, drawStump,
-  drawTent, drawCampfire, drawSign, drawFence, drawRunestone, drawIcon, radialCanvas,
+  drawTent, drawCampfire, drawSign, drawFence, drawRunestone, drawIcon, pixelCircle, ditherAt,
 } from './placeholder';
 import { RARITIES, RARITY_COLOR } from '../shared/types';
 import type { AnimSet, CharManifest } from './AnimatedActor';
@@ -19,21 +19,22 @@ interface SheetSpec {
   path: string;
   cols: number;
   rows: number;
+  /** Rows in the real PNG when it differs from the placeholder (monsters have diagonal views). */
+  fileRows?: number;
   /** Side-row direction for real PNG files (concept sheet faces left). Placeholders face right. */
   fileSideFaces: 'left' | 'right';
   placeholder: () => HTMLCanvasElement;
-  /** Painted (non-pixel) art: filter smoothly instead of keeping hard pixel edges. */
-  smooth?: boolean;
 }
 
 const BASE = 'assets/sprites/';
 const sheet = (path: string, placeholder: () => HTMLCanvasElement): SheetSpec =>
   ({ path: BASE + path, cols: 3, rows: 3, fileSideFaces: 'left', placeholder });
+/** Monster files: 3 frames across, and front, front diagonal, side, back diagonal, back down. */
+const monster = (path: string, placeholder: () => HTMLCanvasElement): SheetSpec =>
+  ({ ...sheet(path, placeholder), fileRows: 5 });
 const single = (path: string, placeholder: () => HTMLCanvasElement): SheetSpec =>
   ({ path: BASE + path, cols: 1, rows: 1, fileSideFaces: 'left', placeholder });
-/** Forest and camp props, smooth-filtered because they are drawn smaller than their source. */
-const prop = (key: string, placeholder: () => HTMLCanvasElement): SheetSpec =>
-  ({ ...single(`props/${key}.png`, placeholder), smooth: true });
+const prop = (key: string, placeholder: () => HTMLCanvasElement): SheetSpec => single(`props/${key}.png`, placeholder);
 
 export const SHEET_SPECS: Record<string, SheetSpec> = {
   sword: sheet('player/sword.png', () => makeSheet(32, drawHuman('sword'))),
@@ -43,32 +44,32 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   merchant: sheet('npc/merchant.png', () => makeSheet(32, drawMerchant())),
   blacksmith: sheet('npc/blacksmith.png', () => makeSheet(32, drawBlacksmith())),
 
-  green_slime: sheet('monsters/green_slime.png', () => makeSheet(32, drawSlime(['#6cc25a', '#4a9a3e', '#c8f0b0']))),
-  wild_rabbit: sheet('monsters/wild_rabbit.png', () => makeSheet(32, drawQuad(['#e8d3bf', '#d89a9a', '#fbeee2', '#d88a8a'], {
+  green_slime: monster('monsters/green_slime.png', () => makeSheet(32, drawSlime(['#6cc25a', '#4a9a3e', '#c8f0b0']))),
+  wild_rabbit: monster('monsters/wild_rabbit.png', () => makeSheet(32, drawQuad(['#e8d3bf', '#d89a9a', '#fbeee2', '#d88a8a'], {
     bodyRx: 0.2, bodyRy: 0.15, head: 0.13, ears: 'long', earSize: 0.13, tail: 'puff', legLen: 0.06, legW: 0.06, snout: 0.05, belly: true,
   }))),
-  forest_fox: sheet('monsters/forest_fox.png', () => makeSheet(36, drawQuad(['#e07a2a', '#5a2a10', '#fbf1e4', '#2a1c12'], {
+  forest_fox: monster('monsters/forest_fox.png', () => makeSheet(36, drawQuad(['#e07a2a', '#5a2a10', '#fbf1e4', '#2a1c12'], {
     bodyRx: 0.24, bodyRy: 0.12, head: 0.13, ears: 'pointy', earSize: 0.1, tail: 'bushy', tailTip: '#fbf1e4', legLen: 0.12, legW: 0.05, snout: 0.06, belly: true,
   }))),
-  wild_boar: sheet('monsters/wild_boar.png', () => makeSheet(40, drawQuad(['#6b4530', '#3e281c', '#a07a5c', '#d9a0a0'], {
+  wild_boar: monster('monsters/wild_boar.png', () => makeSheet(40, drawQuad(['#6b4530', '#3e281c', '#a07a5c', '#d9a0a0'], {
     bodyRx: 0.3, bodyRy: 0.17, head: 0.14, ears: 'small', earSize: 0.07, tail: 'short', legLen: 0.1, legW: 0.07, snout: 0.07, tusks: true, mane: true,
   }))),
-  forest_wolf: sheet('monsters/forest_wolf.png', () => makeSheet(40, drawQuad(['#6e6e74', '#3d3d44', '#d9d6cf', '#1a1a1a'], {
+  forest_wolf: monster('monsters/forest_wolf.png', () => makeSheet(40, drawQuad(['#6e6e74', '#3d3d44', '#d9d6cf', '#1a1a1a'], {
     bodyRx: 0.28, bodyRy: 0.13, head: 0.13, ears: 'pointy', earSize: 0.09, tail: 'bushy', tailTip: '#d9d6cf', legLen: 0.15, legW: 0.055, snout: 0.07, belly: true,
   }))),
-  forest_bear: sheet('monsters/forest_bear.png', () => makeSheet(56, drawQuad(['#7a4a2a', '#4a2c18', '#b88a64', '#1a1410'], {
+  forest_bear: monster('monsters/forest_bear.png', () => makeSheet(56, drawQuad(['#7a4a2a', '#4a2c18', '#b88a64', '#1a1410'], {
     bodyRx: 0.36, bodyRy: 0.22, head: 0.16, ears: 'round', earSize: 0.08, tail: 'none', legLen: 0.13, legW: 0.1, snout: 0.08, belly: true,
   }))),
 
   // Zone 2 — Misty Marsh. Placeholders only show if the PNGs are missing.
-  bog_toad: sheet('monsters/bog_toad.png', () => makeSheet(40, drawQuad(['#6f6a34', '#4a4622', '#c9b98a', '#2a2412'], {
+  bog_toad: monster('monsters/bog_toad.png', () => makeSheet(40, drawQuad(['#6f6a34', '#4a4622', '#c9b98a', '#2a2412'], {
     bodyRx: 0.3, bodyRy: 0.2, head: 0.14, ears: 'small', earSize: 0.04, tail: 'none', legLen: 0.06, legW: 0.08, snout: 0.04, belly: true,
   }))),
-  marsh_leech: sheet('monsters/marsh_leech.png', () => makeSheet(36, drawSlime(['#4a3450', '#2e1e34', '#9a7aa8']))),
-  swamp_serpent: sheet('monsters/swamp_serpent.png', () => makeSheet(36, drawSlime(['#3e8a78', '#2a5e52', '#e0d070']))),
-  mire_ghoul: sheet('monsters/mire_ghoul.png', () => makeSheet(40, drawSlime(['#3a3228', '#221c16', '#a8e08a']))),
-  will_o_wisp: sheet('monsters/will_o_wisp.png', () => makeSheet(36, drawSlime(['#6ad8d0', '#3a9aa8', '#e8fffa']))),
-  bog_witch: sheet('monsters/bog_witch.png', () => makeSheet(56, drawSeeker())),
+  marsh_leech: monster('monsters/marsh_leech.png', () => makeSheet(36, drawSlime(['#4a3450', '#2e1e34', '#9a7aa8']))),
+  swamp_serpent: monster('monsters/swamp_serpent.png', () => makeSheet(36, drawSlime(['#3e8a78', '#2a5e52', '#e0d070']))),
+  mire_ghoul: monster('monsters/mire_ghoul.png', () => makeSheet(40, drawSlime(['#3a3228', '#221c16', '#a8e08a']))),
+  will_o_wisp: monster('monsters/will_o_wisp.png', () => makeSheet(36, drawSlime(['#6ad8d0', '#3a9aa8', '#e8fffa']))),
+  bog_witch: monster('monsters/bog_witch.png', () => makeSheet(56, drawSeeker())),
 
   swamp_tree_0: single('props/swamp_tree_0.png', () => drawTree(0)),
   swamp_tree_1: single('props/swamp_tree_1.png', () => drawTree(1)),
@@ -128,13 +129,22 @@ const ANIM_SET_DIRS: Record<string, string> = {
 export const sheets: Record<string, SheetInfo> = {};
 export const animSets: Record<string, AnimSet> = {};
 export const assetSources: Record<string, 'file' | 'placeholder'> = {};
-export const fxTex = {} as { glow: THREE.Texture; shadow: THREE.Texture };
+export const fxTex = {} as Record<'glow' | 'shadow' | 'mist' | 'ring' | 'edge' | 'disc', THREE.Texture>;
 
-function prep(tex: THREE.Texture, smooth = false): void {
+/** Hard pixels up close. Big files add mipmaps in loadAssets so they don't shimmer when shrunk. */
+function prep(tex: THREE.Texture): void {
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.magFilter = smooth ? THREE.LinearFilter : THREE.NearestFilter;
-  tex.minFilter = smooth ? THREE.LinearMipmapLinearFilter : THREE.NearestFilter;
-  tex.generateMipmaps = smooth;
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+}
+
+function fxTexture(canvas: HTMLCanvasElement): THREE.CanvasTexture {
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  return tex;
 }
 
 async function loadAnimSet(loader: THREE.TextureLoader, key: string, dir: string): Promise<void> {
@@ -152,10 +162,10 @@ async function loadAnimSet(loader: THREE.TextureLoader, key: string, dir: string
       try {
         const tex = await loader.loadAsync(`${dir}/${def.file}`);
         // High-res painted art is drawn smaller than its source size, so it needs mipmaps
-        // and smooth filtering (the pixel-art `prep` settings would shimmer).
+        // when shrunk, or they shimmer. Up close they keep hard pixels like everything else.
         tex.colorSpace = THREE.SRGBColorSpace;
         tex.minFilter = THREE.LinearMipmapLinearFilter;
-        tex.magFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.NearestFilter;
         tex.anisotropy = 4;
         textures[name] = tex;
       } catch {
@@ -172,40 +182,82 @@ async function loadAnimSet(loader: THREE.TextureLoader, key: string, dir: string
   assetSources[`${key} (animations)`] = 'file';
 }
 
+/** Repeating ground textures. A zone falls back to its code-painted ground if one is missing. */
+export type GroundTile = 'grass' | 'dirt' | 'water' | 'marsh' | 'mud' | 'planks';
+export const groundTiles: Partial<Record<GroundTile, THREE.Texture>> = {};
+
+async function loadGroundTile(loader: THREE.TextureLoader, name: GroundTile): Promise<void> {
+  try {
+    const tex = await loader.loadAsync(`${BASE}ground/${name}.png`);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.anisotropy = 4;
+    groundTiles[name] = tex;
+  } catch {
+    console.warn(`[assets] missing ground tile "${name}"`);
+  }
+}
+
+/** Skill animation sheets, one per class: 6 frames across, one effect per row. */
+export type FxSheet = 'sword' | 'mage' | 'gun';
+export const fxSheets: Partial<Record<FxSheet, THREE.Texture>> = {};
+
+async function loadFxSheet(loader: THREE.TextureLoader, name: FxSheet): Promise<void> {
+  try {
+    const tex = await loader.loadAsync(`${BASE}fx/${name}.png`);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.LinearFilter;
+    tex.generateMipmaps = false;
+    fxSheets[name] = tex;
+  } catch {
+    console.warn(`[assets] missing effect sheet "${name}"`);
+  }
+}
+
 export async function loadAssets(): Promise<void> {
   const loader = new THREE.TextureLoader();
+  await Promise.all((['sword', 'mage', 'gun'] as const).map((n) => loadFxSheet(loader, n)));
+  await Promise.all((['grass', 'dirt', 'water', 'marsh', 'mud', 'planks'] as const).map((n) => loadGroundTile(loader, n)));
   await Promise.all(
     Object.entries(SHEET_SPECS).map(async ([key, spec]) => {
       let tex: THREE.Texture;
       let sideFaces = spec.fileSideFaces;
-      let smooth = false;
+      let rows = spec.rows;
       try {
         tex = await loader.loadAsync(spec.path);
         assetSources[key] = 'file';
-        smooth = !!spec.smooth;
+        rows = spec.fileRows ?? spec.rows;
       } catch {
         tex = new THREE.CanvasTexture(spec.placeholder());
         sideFaces = 'right';
         assetSources[key] = 'placeholder';
       }
-      prep(tex, smooth);
+      prep(tex);
       const img = tex.image as { width: number; height: number };
       // Big painted files (e.g. the marsh art) are drawn smaller than their source, so they need
       // mipmaps or they shimmer. Small pixel-art keeps the crisp nearest-pixel look.
-      if (assetSources[key] === 'file' && img.height / spec.rows > 72) {
+      if (assetSources[key] === 'file' && img.height / rows > 72) {
         tex.minFilter = THREE.LinearMipmapLinearFilter;
         tex.generateMipmaps = true;
       }
       sheets[key] = {
         texture: tex,
         cols: spec.cols,
-        rows: spec.rows,
+        rows,
         sideFaces,
-        cellAspect: img.width / spec.cols / (img.height / spec.rows),
+        cellAspect: img.width / spec.cols / (img.height / rows),
       };
     }),
   );
   await Promise.all(Object.entries(ANIM_SET_DIRS).map(([key, dir]) => loadAnimSet(loader, key, BASE + dir)));
-  fxTex.glow = new THREE.CanvasTexture(radialCanvas(64, 'rgba(255,255,255,1)', 'rgba(255,255,255,0)'));
-  fxTex.shadow = new THREE.CanvasTexture(radialCanvas(64, 'rgba(0,0,0,0.85)', 'rgba(0,0,0,0)'));
+  const band = (d: number, steps: [number, number][]) => steps.find(([edge]) => d <= edge)?.[1] ?? 0;
+  fxTex.glow = fxTexture(pixelCircle(32, '255,255,255', (d) => band(d, [[0.3, 1], [0.55, 0.6], [0.78, 0.28], [1, 0.1]])));
+  fxTex.shadow = fxTexture(pixelCircle(32, '0,0,0', (d) => band(d, [[0.72, 0.85], [1, 0.42]])));
+  fxTex.mist = fxTexture(pixelCircle(64, '255,255,255', (d, x, y) => (ditherAt(x, y) < 1 - d ? 1 : 0)));
+  fxTex.ring = fxTexture(pixelCircle(128, '255,255,255', (d) => (d >= 0.82 && d <= 1 ? 1 : 0)));
+  fxTex.edge = fxTexture(pixelCircle(128, '255,255,255', (d) => (d >= 0.94 && d <= 1 ? 1 : 0)));
+  fxTex.disc = fxTexture(pixelCircle(128, '255,255,255', (d) => (d <= 1 ? 1 : 0)));
 }
