@@ -8,6 +8,7 @@ import {
 import {
   entryName, POTION_ICON, POTION_SIZES, POTION_SIZE_LABEL, POTION_STACK, POTIONS, potionName, potionSellPrice,
 } from '../shared/data/potions';
+import { FullMap } from './fullmap';
 import { AUTO_PX_PER_UNIT, AUTO_RANGE_MAX, AUTO_RANGE_MIN, cleanAutoSettings, type SortKey } from '../shared/sim/Player';
 import { isBulkSellable } from '../shared/sim/Sim';
 import { MONSTERS } from '../shared/data/monsters';
@@ -35,6 +36,8 @@ const SEEKER_LINES = [
 
 export class Hud {
   dialogOpen = false;
+  private fullMap: FullMap;
+  private mapOpen = false;
   private slotEls: { kind: SkillSlot | PotionKind; el: HTMLElement; cd: HTMLElement; extra: HTMLElement }[] = [];
   private invDirty = true;
   private bagOpen = false;
@@ -50,6 +53,9 @@ export class Hud {
   constructor(private readonly g: Game) {
     $('hud').classList.remove('hidden');
     this.mm = $<HTMLCanvasElement>('minimap').getContext('2d')!;
+    this.fullMap = new FullMap($<HTMLCanvasElement>('fullmap-canvas'));
+    $('minimap').onclick = () => this.toggleMap(true);
+    $('fullmap-close').onclick = () => this.toggleMap(false);
     $('hud-name').textContent = g.player.name;
     this.showZoneName();
     $('hud-online').classList.toggle('hidden', !g.backend.online);
@@ -303,6 +309,7 @@ export class Hud {
     if (this.mmT <= 0) {
       this.mmT = 0.1;
       this.drawMinimap();
+      if (this.mapOpen) this.fullMap.draw(this.g);
     }
     if (this.bagOpen && this.invDirty) this.renderInventory();
   }
@@ -386,6 +393,20 @@ export class Hud {
     $('help').classList.toggle('hidden', !(force ?? $('help').classList.contains('hidden')));
   }
 
+  // ------------------------------------------------------------ full map
+
+  toggleMap(force?: boolean): void {
+    this.mapOpen = force ?? !this.mapOpen;
+    $('fullmap').classList.toggle('hidden', !this.mapOpen);
+    if (!this.mapOpen) return;
+    const z = this.g.backend.zone;
+    $('fullmap-title').textContent = `แผนที่ — ${z.nameTh} (Lv.${z.levels[0]}-${z.levels[1]})`;
+    $('fullmap-hint').textContent = this.g.backend.online
+      ? 'กด M หรือ Esc เพื่อปิด · ออนไลน์จะเห็นจุดมอน/ผู้เล่นเฉพาะที่อยู่ใกล้ตัว'
+      : 'กด M หรือ Esc เพื่อปิด';
+    this.fullMap.draw(this.g);
+  }
+
   // ------------------------------------------------------------ auto settings
 
   toggleAutoSettings(force?: boolean): void {
@@ -393,6 +414,14 @@ export class Hud {
     const open = force ?? el.classList.contains('hidden');
     el.classList.toggle('hidden', !open);
     if (open) this.fillAutoSettings();
+  }
+
+  /** The range being typed while the settings window is open (clamped), else null. */
+  autoRangePreview(): number | null {
+    if ($('auto-settings').classList.contains('hidden')) return null;
+    const v = Number($<HTMLInputElement>('aset-range').value);
+    if (!Number.isFinite(v) || v <= 0) return this.g.player.autoSettings.range;
+    return Math.max(AUTO_RANGE_MIN, Math.min(AUTO_RANGE_MAX, v));
   }
 
   /** Put the player's current settings into the form. */
@@ -440,6 +469,7 @@ export class Hud {
     if (this.confirmYes) return this.closeConfirm();
     this.closeChat();
     this.toggleAutoSettings(false);
+    this.toggleMap(false);
     this.toggleBag(false);
     this.toggleHelp(false);
     this.closeShop();
