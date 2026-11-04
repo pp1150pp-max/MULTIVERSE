@@ -53,6 +53,8 @@ export type SimEvent =
   | { t: 'text'; x: number; y: number; z: number; text: string; cls: string; life?: number; to?: number }
   | { t: 'shake'; amount: number }
   | { t: 'log'; msg: string; color?: string; to?: number }
+  /** Big text across the middle of the screen, for players near x/z (boss phase change). */
+  | { t: 'banner'; text: string; sub?: string; color?: string; x: number; z: number }
   | { t: 'flash'; id: number }
   /** One-shot animation. `fallback` = play the attack animation if the actor lacks `name`. */
   | { t: 'anim'; id: number; name: string; duration?: number; fallback?: 'attack' }

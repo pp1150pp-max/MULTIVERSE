@@ -11,13 +11,16 @@ import { NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { rand, randInt } from '../rng';
 import { isPotion, RARITY_LABEL, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
 import { PORTAL_RANGE, Terrain } from './terrain';
-import { Player, type CharacterData, type LootFilter, type SortKey } from './Player';
+import { cleanAutoSettings, Player, type AutoSettings, type CharacterData, type LootFilter, type SortKey } from './Player';
 import { Monster } from './Monster';
 import { Projectile, type ProjOpts } from './Projectile';
 import { Loot, LOOT_PRIORITY_TIME, type LootKind } from './Loot';
 import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type SimEvent } from './types';
 
 /** Gear of this rarity that "sell all" may take: never potions or enhanced items. */
+/** Seconds of warning before a freshly summoned minion pounces. */
+const MINION_POUNCE_WINDUP = 0.35;
+
 export function isBulkSellable(e: BagEntry | null, rarity: Rarity): e is Item {
   return !!e && !isPotion(e) && e.rarity === rarity && !plusOf(e);
 }
@@ -164,6 +167,7 @@ export class Sim {
     const dmg = Math.round(mitigate(m.atk * mult * (0.9 + Math.random() * 0.2), p.stats.def));
     p.hp -= dmg;
     p.lastHurt = this.time;
+    if (m.isBoss) m.rampT = 0;
     this.events.push({ t: 'flash', id: p.id });
     this.anim(p.id, 'hit');
     this.text(p.x, p.topY, p.z, `-${dmg}`, 'hurt');
@@ -180,6 +184,15 @@ export class Sim {
         : `${m.def.name} คลั่ง! ความเร็วและการโจมตีเพิ่มขึ้น`,
       '#ff6a5a',
     );
+    this.events.push({
+      t: 'banner',
+      text: `${m.def.nameTh.replace(/\s*\(.*\)/, '')} คลั่ง!`,
+      sub: m.def.summon
+        ? `เรียก${MONSTERS[m.def.summon.monster]?.nameTh ?? 'ลูกน้อง'}มาช่วย!`
+        : m.def.frenzy ? 'เคลื่อนที่เร็วมากและออกท่าไวขึ้น' : 'ความเร็วและการโจมตีเพิ่มขึ้น',
+      x: m.x,
+      z: m.z,
+    });
     this.shake(0.3);
     if (m.def.summon) this.summonMinions(m, m.def.summon.monster, m.def.summon.count);
   }
@@ -204,6 +217,8 @@ export class Sim {
       m.target = boss.target;
       m.aggroT = 12;
       m.state = 'chase';
+      // They pounce at once, with only a short warning line.
+      if (m.target?.alive) m.startCharge(this, m.target.x, m.target.z, MINION_POUNCE_WINDUP);
       this.monsters.push(m);
       this.fx('burst', x, 0.3, z, '#9fd98a', 10, 4);
     }
@@ -379,6 +394,11 @@ export class Sim {
   /** The bag changed in a small way (a potion drunk or picked up): refresh it, no save needed. */
   inventoryChanged(p: Player): void {
     this.events.push({ t: 'inventory', to: p.id });
+  }
+
+  setAutoSettings(p: Player, s: AutoSettings): void {
+    p.autoSettings = cleanAutoSettings(s);
+    this.events.push({ t: 'save', to: p.id });
   }
 
   setLootFilter(p: Player, f: LootFilter): void {

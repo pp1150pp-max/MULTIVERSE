@@ -3,7 +3,7 @@
 // only talk to this interface, so both modes look and play the same.
 import { Sim } from '../shared/sim/Sim';
 import type { Terrain } from '../shared/sim/terrain';
-import type { Player, CharacterData, LootFilter, SortKey } from '../shared/sim/Player';
+import type { Player, AutoSettings, CharacterData, LootFilter, SortKey } from '../shared/sim/Player';
 import type { Monster } from '../shared/sim/Monster';
 import type { Loot } from '../shared/sim/Loot';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../shared/sim/types';
@@ -49,6 +49,7 @@ export interface Backend {
   /** Online the server runs Auto Play; singleplayer runs it in Game, so this does nothing there. */
   setAuto(on: boolean): void;
   setLootFilter(f: LootFilter): void;
+  setAutoSettings(s: AutoSettings): void;
   sell(bagIndex: number): void;
   sellAllOfRarity(rarity: Rarity): void;
   enhance(uid: string): Promise<EnhanceOutcome>;
@@ -103,6 +104,7 @@ export class LocalBackend implements Backend {
   sortBag(key: SortKey, desc: boolean): void { this.sim.sortBag(this.me, key, desc); }
   setAuto(): void { /* Game runs Auto Play itself */ }
   setLootFilter(f: LootFilter): void { this.sim.setLootFilter(this.me, f); }
+  setAutoSettings(s: AutoSettings): void { this.sim.setAutoSettings(this.me, s); }
   sell(i: number): void { this.sim.sellItem(this.me, i); }
   sellAllOfRarity(rarity: Rarity): void { this.sim.sellAllOfRarity(this.me, rarity); }
   enhance(uid: string): Promise<EnhanceOutcome> { return Promise.resolve(this.sim.enhance(this.me, uid)); }

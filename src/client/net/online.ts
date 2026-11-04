@@ -3,7 +3,7 @@
 // and Auto Play work unchanged), smooths their movement between snapshots, and walks your own
 // character immediately so controls feel instant. The server checks every reported position.
 import { Terrain } from '../../shared/sim/terrain';
-import { Player, type CharacterData, type LootFilter, type SortKey } from '../../shared/sim/Player';
+import { Player, type AutoSettings, type CharacterData, type LootFilter, type SortKey } from '../../shared/sim/Player';
 import { Monster } from '../../shared/sim/Monster';
 import { Loot } from '../../shared/sim/Loot';
 import type { Sim } from '../../shared/sim/Sim';
@@ -104,6 +104,7 @@ export class OnlineBackend implements Backend {
   private sendT = 0;
   private pendingDash = false;
   private filterPending = false;
+  private autoSetPending = false;
   private pendingPotion: 'hp' | 'mp' | null = null;
   private enhanceReq = 0;
   private readonly enhanceWait = new Map<number, (o: EnhanceOutcome) => void>();
@@ -115,7 +116,7 @@ export class OnlineBackend implements Backend {
     const mine = first.players.find((p) => p.id === myId)!;
     const data: CharacterData = {
       name: mine.name, classId: mine.cls, level: first.me.level, exp: first.me.exp, gold: first.me.gold,
-      potSel: first.me.potSel, lootFilter: first.me.lootFilter,
+      potSel: first.me.potSel, lootFilter: first.me.lootFilter, autoSettings: first.me.autoSettings,
       equipment: first.me.inv?.equipment ?? {}, bag: first.me.inv?.bag ?? [], zone: this.zone.id,
     };
     this.me = new Player(myId, NO_SIM, data);
@@ -333,6 +334,7 @@ export class OnlineBackend implements Backend {
     me.gold = pv.gold;
     me.potSel = { ...pv.potSel };
     if (!this.filterPending) me.lootFilter = pv.lootFilter;
+    if (!this.autoSetPending && pv.autoSettings) me.autoSettings = pv.autoSettings;
     me.stats = pv.stats;
     me.cd = { ...pv.cd };
     me.potCd = pv.potCd;
@@ -458,6 +460,12 @@ export class OnlineBackend implements Backend {
     this.filterPending = true;
     setTimeout(() => (this.filterPending = false), 800);
     this.send({ t: 'act', a: 'lootFilter', filter });
+  }
+  setAutoSettings(settings: AutoSettings): void {
+    this.me.autoSettings = settings;
+    this.autoSetPending = true;
+    setTimeout(() => (this.autoSetPending = false), 800);
+    this.send({ t: 'act', a: 'autoSettings', settings });
   }
   sell(i: number): void { this.send({ t: 'act', a: 'sell', i }); }
   sellAllOfRarity(rarity: Rarity): void { this.send({ t: 'act', a: 'sellRarity', rarity }); }

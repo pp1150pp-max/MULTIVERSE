@@ -67,6 +67,32 @@ button.primary { background: linear-gradient(#a8812f, #6b4f1a); border-color: va
 
 .loot-label { font-size: 12px; text-shadow: 0 0 3px #000, 1px 1px 0 #000; }
 
+.banner {
+  position: absolute; left: 50%; top: 26%; transform: translateX(-50%); text-align: center;
+  pointer-events: none; white-space: nowrap; animation: banner 2.6s ease-out forwards;
+  text-shadow: 0 0 8px #000, 2px 2px 0 #000;
+}
+.banner-text { font-size: 46px; font-weight: 800; letter-spacing: 1px; }
+.banner-sub { font-size: 18px; color: #f2e6c8; margin-top: 4px; }
+@keyframes banner {
+  0% { opacity: 0; transform: translateX(-50%) scale(1.6); }
+  12% { opacity: 1; transform: translateX(-50%) scale(1); }
+  75% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.npc-badge { text-align: center; white-space: nowrap; }
+.npc-bob { animation: npc-bob 1.6s ease-in-out infinite; }
+.npc-role {
+  display: inline-block; font-size: 13px; padding: 2px 8px; border-radius: 10px;
+  background: rgba(20, 16, 10, 0.82); border: 1px solid var(--npc-c, var(--gold)); color: var(--npc-c, var(--gold-hi));
+}
+.npc-name { font-size: 11px; color: #f2e6c8; margin-top: 2px; text-shadow: 0 0 3px #000, 1px 1px 0 #000; }
+.npc-seeker { --npc-c: #fff3c0; }
+.npc-merchant { --npc-c: #7fe07a; }
+.npc-blacksmith { --npc-c: #ff9a4a; }
+@keyframes npc-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+
 .npc-prompt {
   font-size: 12px; padding: 3px 8px; border-radius: 3px;
   background: rgba(20, 16, 10, 0.8); border: 1px solid var(--gold); color: var(--gold-hi);
@@ -91,6 +117,17 @@ button.primary { background: linear-gradient(#a8812f, #6b4f1a); border-color: va
 #hud-topright { position: absolute; top: 12px; right: 12px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 #minimap { display: block; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.7)); }
 .hud-buttons { display: flex; flex-direction: column; gap: 4px; width: 140px; }
+.auto-row { display: flex; gap: 4px; }
+.auto-row #btn-auto { flex: 1; }
+#btn-auto-set { padding-left: 8px; padding-right: 8px; }
+#auto-settings { right: 168px; top: 12px; width: min(300px, 92vw); font-size: 13px; }
+#auto-settings .aset-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; }
+#auto-settings input[type='number'] {
+  width: 64px; font-family: inherit; font-size: 13px; padding: 2px 4px; text-align: right;
+  color: var(--ink); background: rgba(12, 10, 8, 0.9); border: 1px solid var(--panel-edge); border-radius: 3px;
+}
+#auto-settings .aset-title { margin-top: 12px; color: var(--gold-hi); }
+#auto-settings .aset-check { display: flex; align-items: center; gap: 6px; margin-top: 6px; cursor: pointer; }
 #btn-auto.active { background: linear-gradient(#2f7a3a, #1c4a22); border-color: #8cff8c; color: #d8ffd8; }
 
 #boss-bar {
