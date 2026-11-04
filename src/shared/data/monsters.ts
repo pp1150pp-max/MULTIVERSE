@@ -21,6 +21,11 @@ export interface MonsterDef {
   behavior: Behavior;
   /** Wolves alert each other when one is hit. */
   pack?: boolean;
+  /** Bosses only: calls these minions once per fight when it drops below half HP. */
+  summon?: { monster: string; count: number };
+  /** Bosses only: below half HP, chase speed is multiplied by `speed` and every attack's
+   *  cooldown and wind-up by `skill` — replaces the usual enrage boost. */
+  frenzy?: { speed: number; skill: number };
   itemChance: number;
   potionChance: number;
 }
@@ -59,9 +64,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   forest_bear: {
     id: 'forest_bear', name: 'Forest Bear', nameTh: 'หมี (Mini Boss)', levels: [10, 10],
-    hp: 1400, atk: 32, def: 14, speed: 2.9, exp: 600, gold: [80, 140],
+    hp: 1820, atk: 42, def: 14, speed: 2.9, exp: 600, gold: [80, 140],
     aggroRange: 9, attackRange: 1.9, attackCooldown: 1.8, height: 3.3, radius: 1.2,
-    behavior: 'boss', itemChance: 1, potionChance: 1,
+    behavior: 'boss', summon: { monster: 'forest_wolf', count: 4 }, itemChance: 1, potionChance: 1,
   },
 
   // Zone 2 — Misty Marsh
@@ -97,8 +102,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   bog_witch: {
     id: 'bog_witch', name: 'Bog Witch', nameTh: 'แม่มดหนอง (Boss)', levels: [20, 20],
-    hp: 4400, atk: 64, def: 24, speed: 3.0, exp: 3000, gold: [220, 360],
+    hp: 5720, atk: 83, def: 24, speed: 3.0, exp: 3000, gold: [220, 360],
     aggroRange: 9, attackRange: 2.0, attackCooldown: 1.7, height: 3.6, radius: 1.1,
-    behavior: 'boss', itemChance: 1, potionChance: 1,
+    behavior: 'boss', frenzy: { speed: 3, skill: 0.5 }, itemChance: 1, potionChance: 1,
   },
 };

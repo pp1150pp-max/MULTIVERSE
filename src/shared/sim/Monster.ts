@@ -19,6 +19,8 @@ export class Monster extends Unit {
   windupT = 0;
   enraged = false;
   deadT = 0;
+  /** Called in by a boss: gives no EXP, gold or items, and never respawns. */
+  summoned = false;
   /** Who it is fighting. Picked from all players, so it works the same alone or online. */
   target: Player | null = null;
   /** Damage dealt by each player id — EXP is split by these shares. */
@@ -195,6 +197,7 @@ export class Monster extends Unit {
             sim.onBossEnrage(this);
           }
           const reach = this.def.attackRange + p.radius;
+          const frenzy = this.enraged ? this.def.frenzy : undefined;
           if (b === 'charger' && this.chargeCd <= 0 && d > 2.5 && d < 8) {
             this.chargeDx = dx / d;
             this.chargeDz = dz / d;
@@ -205,19 +208,19 @@ export class Monster extends Unit {
             this.face(dx, dz);
           } else if (this.isBoss && this.slamCd <= 0 && d < 5) {
             this.windKind = 'slam';
-            this.windupT = 1.1;
-            this.slamCd = this.enraged ? 5 : 7;
-            sim.fx('telegraph', this.x, this.z, 4.2, 1.1);
+            this.windupT = 1.1 * this.skillMult();
+            this.slamCd = frenzy ? 7 * frenzy.skill : this.enraged ? 5 : 7;
+            sim.fx('telegraph', this.x, this.z, 4.2, this.windupT);
           } else if (d <= reach) {
             if (this.atkCd <= 0) {
               this.windKind = 'melee';
-              this.windupT = this.isBoss ? 0.5 : 0.35;
-              this.atkCd = this.def.attackCooldown * (this.enraged ? 0.75 : 1);
+              this.windupT = (this.isBoss ? 0.5 : 0.35) * this.skillMult();
+              this.atkCd = this.def.attackCooldown * (frenzy ? frenzy.skill : this.enraged ? 0.75 : 1);
             }
           } else {
             mx = dx / d;
             mz = dz / d;
-            if (this.enraged) spd *= 1.3;
+            if (this.enraged) spd *= frenzy ? frenzy.speed : 1.3;
           }
         } else {
           this.state = 'idle';
@@ -254,6 +257,11 @@ export class Monster extends Unit {
     } else if (this.state === 'chase' && p) {
       this.face(dx, dz);
     }
+  }
+
+  /** Wind-ups shrink while a frenzy boss is enraged. */
+  private skillMult(): number {
+    return this.enraged && this.def.frenzy ? this.def.frenzy.skill : 1;
   }
 
   private resolveWindup(sim: Sim, d: number): void {
