@@ -174,16 +174,50 @@ export class Sim {
 
   onBossEnrage(m: Monster): void {
     this.text(m.x, m.topY + 0.6, m.z, 'ENRAGED!', 'crit', 1.6);
-    this.log(`${m.def.name} คลั่ง! ความเร็วและการโจมตีเพิ่มขึ้น`, '#ff6a5a');
+    this.log(
+      m.def.frenzy
+        ? `${m.def.name} คลั่งสุดขีด! เคลื่อนที่เร็วมากและออกท่าไวขึ้น`
+        : `${m.def.name} คลั่ง! ความเร็วและการโจมตีเพิ่มขึ้น`,
+      '#ff6a5a',
+    );
     this.shake(0.3);
+    if (m.def.summon) this.summonMinions(m, m.def.summon.monster, m.def.summon.count);
+  }
+
+  /** Minions appear in a ring around the boss and go straight for its target. */
+  private summonMinions(boss: Monster, monsterId: string, count: number): void {
+    const def = MONSTERS[monsterId];
+    if (!def) return;
+    // Their own home spot (no spawner owns it), so they wander here after the fight and never respawn.
+    const area: SpawnArea = { monster: monsterId, x: boss.x, z: boss.z, radius: 4, count: 0, respawn: [0, 0] };
+    const r = Math.random;
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2 + r() * 0.5;
+      let x = boss.x + Math.cos(a) * (boss.radius + 1.6);
+      let z = boss.z + Math.sin(a) * (boss.radius + 1.6);
+      if (this.terrain.isBlocked(x, z, def.radius)) {
+        x = boss.x;
+        z = boss.z;
+      }
+      const m = new Monster(this.newId(), def, randInt(r, def.levels[0], def.levels[1]), area, x, z);
+      m.summoned = true;
+      m.target = boss.target;
+      m.aggroT = 12;
+      m.state = 'chase';
+      this.monsters.push(m);
+      this.fx('burst', x, 0.3, z, '#9fd98a', 10, 4);
+    }
+    this.log(`${boss.def.name} เรียก${def.nameTh} ${count} ตัวมาช่วย!`, '#ff9a6a');
   }
 
   private killMonster(m: Monster): void {
     m.alive = false;
     m.deadT = 0;
     m.hp = 0;
-    this.shareExp(m);
-    this.dropLoot(m);
+    if (!m.summoned) {
+      this.shareExp(m);
+      this.dropLoot(m);
+    }
     const sp = this.spawners.find((s) => s.area === m.area);
     if (sp) {
       sp.alive--;
