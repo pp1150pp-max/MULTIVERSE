@@ -126,4 +126,5 @@ Zone 2 (Misty Marsh): `swamp_tree_0.png` `swamp_tree_1.png` `swamp_tree_2.png` `
 
 ภาพในโฟลเดอร์ `sprites/props/` และ `sprites/monsters/` ของทั้ง 2 โซนสร้างด้วย ChatGPT
 prompt ที่ใช้อยู่ใน `art_templates/zone1/PROMPTS.md` และ `art_templates/zone2/PROMPTS.md`
+คลาส Gunslinger (`sprites/player/gunslinger/`) ก็สร้างด้วย ChatGPT เช่นกัน prompt อยู่ใน `art_templates/gunslinger/PROMPTS.md`
 ส่วนพื้นวาดด้วยโค้ดตามชุดสีของแต่ละโซน (`PALETTES` ใน `src/client/world.ts`)
