@@ -14,6 +14,9 @@ import {
 } from '../types';
 import type { LootKind } from './Loot';
 
+/** Share of the HP regen stat that actually applies (owner: -60%). */
+export const HP_REGEN_MULT = 0.4;
+
 export const BAG_SIZE = 30;
 export const POTION_CD = 1.5;
 
@@ -24,6 +27,38 @@ export type PotionSelect = Record<PotionKind, PotionSize>;
 /** What the player picks up from monster drops. Gold is always picked up. */
 export interface LootFilter { rarities: Rarity[]; potions: boolean }
 export const DEFAULT_LOOT_FILTER: LootFilter = { rarities: [...RARITIES], potions: true };
+
+/** The player's Auto Play options. `range` is in fixed pixels (AUTO_PX_PER_UNIT per world unit). */
+export interface AutoSettings {
+  range: number;
+  /** Drink an HP / MP potion below this percent. */
+  hpPct: number;
+  mpPct: number;
+  skills: Record<'q' | 'e' | 'r', boolean>;
+  loot: boolean;
+}
+export const AUTO_PX_PER_UNIT = 50;
+export const AUTO_RANGE_MIN = 100;
+export const AUTO_RANGE_MAX = 2000;
+export const DEFAULT_AUTO_SETTINGS: AutoSettings = {
+  range: 300, hpPct: 45, mpPct: 15, skills: { q: true, e: true, r: true }, loot: true,
+};
+
+/** Fill in and clamp settings from a save or from a client (never trust either). */
+export function cleanAutoSettings(raw: unknown): AutoSettings {
+  const r = (raw ?? {}) as Partial<AutoSettings>;
+  const d = DEFAULT_AUTO_SETTINGS;
+  const num = (v: unknown, def: number, lo: number, hi: number) =>
+    typeof v === 'number' && Number.isFinite(v) ? Math.round(Math.max(lo, Math.min(hi, v))) : def;
+  const sk = (r.skills ?? {}) as Partial<AutoSettings['skills']>;
+  return {
+    range: num(r.range, d.range, AUTO_RANGE_MIN, AUTO_RANGE_MAX),
+    hpPct: num(r.hpPct, d.hpPct, 0, 100),
+    mpPct: num(r.mpPct, d.mpPct, 0, 100),
+    skills: { q: sk.q !== false, e: sk.e !== false, r: sk.r !== false },
+    loot: r.loot !== false,
+  };
+}
 
 /** Everything about a character that gets saved (browser storage now, the server database later). */
 export interface CharacterData {
@@ -38,6 +73,8 @@ export interface CharacterData {
   potSel?: PotionSelect;
   /** Missing in older saves = pick up everything. */
   lootFilter?: LootFilter;
+  /** Missing in older saves = the defaults. */
+  autoSettings?: AutoSettings;
   /** Zone id the character is in. Missing on saves from before there were zones (= the forest). */
   zone?: string;
 }
@@ -66,6 +103,7 @@ export class Player extends Unit {
   bag: (BagEntry | null)[];
   potSel: PotionSelect;
   lootFilter: LootFilter;
+  autoSettings: AutoSettings;
   stats: Stats = emptyStats();
   cd: Partial<Record<SkillSlot, number>> = {};
   potCd = 0;
@@ -100,6 +138,7 @@ export class Player extends Unit {
     this.zone = data.zone;
     this.potSel = { hp: 's', mp: 's', ...data.potSel };
     this.lootFilter = data.lootFilter ? { ...data.lootFilter, rarities: [...data.lootFilter.rarities] } : { ...DEFAULT_LOOT_FILTER, rarities: [...RARITIES] };
+    this.autoSettings = cleanAutoSettings(data.autoSettings);
     this.radius = 0.4;
     this.recompute();
     this.hp = this.maxHp;
@@ -121,6 +160,8 @@ export class Player extends Unit {
     addInto(s, this.cls.base);
     addInto(s, this.cls.growth, this.level - 1);
     for (const it of Object.values(this.equipment)) if (it) addInto(s, effectiveStats(it));
+    // Regen is cut so players lean on potions; applied last so gear is cut too.
+    s.hpRegen *= HP_REGEN_MULT;
     this.stats = s;
     this.hp = Math.min(this.hp, s.maxHp);
     this.mp = Math.min(this.mp, s.maxMp);
@@ -138,6 +179,7 @@ export class Player extends Unit {
       zone: this.zone,
       potSel: this.potSel,
       lootFilter: this.lootFilter,
+      autoSettings: this.autoSettings,
     };
   }
 

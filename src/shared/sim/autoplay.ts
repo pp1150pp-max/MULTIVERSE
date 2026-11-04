@@ -1,6 +1,6 @@
 import type { Intent } from './types';
 import type { Monster } from './Monster';
-import type { Player } from './Player';
+import { AUTO_PX_PER_UNIT, type Player } from './Player';
 import type { Loot } from './Loot';
 import { MONSTERS } from '../data/monsters';
 import type { SkillSlot } from '../data/classes';
@@ -25,15 +25,33 @@ const LOOT_FAR = 9;
  * keeps farming while the tab is hidden. Walking by hand turns it off (Game.update); manual attacks
  * and skills just win for that frame while Auto stays on.
  * Bosses are skipped on purpose — those are meant to be fought by hand.
+ * It stays inside a circle (the player's Auto range setting) around where Auto was switched on.
  */
 export class AutoPlay {
   private target: Monster | null = null;
   private retargetAt = 0;
   private roam: { x: number; z: number } | null = null;
+  /** Centre of the farming circle: where Auto was switched on. */
+  private anchor: { x: number; z: number } | null = null;
+
+  /** Auto was just switched on here. */
+  start(x: number, z: number): void {
+    this.anchor = { x, z };
+    this.reset();
+  }
 
   reset(): void {
     this.target = null;
     this.roam = null;
+  }
+
+  /** The farming circle's radius in world units. */
+  private radius(p: Player): number {
+    return p.autoSettings.range / AUTO_PX_PER_UNIT;
+  }
+
+  private fromAnchor(a: { x: number; z: number }): number {
+    return this.anchor ? Math.hypot(a.x - this.anchor.x, a.z - this.anchor.z) : 0;
   }
 
   intent(g: AutoWorld, manual: Intent): Intent {
@@ -44,10 +62,13 @@ export class AutoPlay {
     }
     const out: Intent = { ...manual, skills: [...manual.skills] };
     const dist = (a: { x: number; z: number }) => Math.hypot(a.x - p.x, a.z - p.z);
+    const set = p.autoSettings;
+    this.anchor ??= { x: p.x, z: p.z };
+    const R = this.radius(p);
 
     if (!out.potion && p.potCd <= 0) {
-      if (p.hp < p.maxHp * 0.45 && p.potionCount('hp') > 0) out.potion = 'hp';
-      else if (p.mp < p.stats.maxMp * 0.15 && p.potionCount('mp') > 0) out.potion = 'mp';
+      if (p.hp < p.maxHp * (set.hpPct / 100) && p.potionCount('hp') > 0) out.potion = 'hp';
+      else if (p.mp < p.stats.maxMp * (set.mpPct / 100) && p.potionCount('mp') > 0) out.potion = 'mp';
     }
 
     // Loot close by is picked up even mid-fight; farther loot only when nothing is attacking.
@@ -55,7 +76,8 @@ export class AutoPlay {
     const threatened = g.monsters.some((m) => m.isHostile && dist(m) < 3.5);
     let best = null as { x: number; z: number } | null;
     let bd = threatened ? LOOT_NEAR : LOOT_FAR;
-    for (const l of g.loots) {
+    for (const l of set.loot ? g.loots : []) {
+      if (this.fromAnchor(l) > R + 0.5) continue;
       if (l.dead || l.dropped || !l.canTake(p.id, g.time) || !p.wantsLoot(l.kind, false) || !p.canFit(l.kind)) continue;
       const d = dist(l);
       if (d < bd) {
@@ -69,7 +91,8 @@ export class AutoPlay {
     }
 
     const t = this.target;
-    if (!t || !t.alive || dist(t) > 22 || t.state === 'return' || g.time > this.retargetAt) {
+    const strayed = !!t && !t.isHostile && this.fromAnchor(t) > R + 3;
+    if (!t || !t.alive || dist(t) > 22 || t.state === 'return' || strayed || g.time > this.retargetAt) {
       this.target = this.pickTarget(g);
       this.retargetAt = g.time + 4;
     }
@@ -113,6 +136,7 @@ export class AutoPlay {
   private tryCast(g: AutoWorld, out: Intent, slot: SkillSlot): void {
     const p = g.player;
     const sk = p.skill(slot);
+    if ((slot === 'q' || slot === 'e' || slot === 'r') && !p.autoSettings.skills[slot]) return;
     if (sk && (p.cd[slot] ?? 0) <= 0 && p.mp >= sk.mp + 5 && !out.skills.includes(slot)) out.skills.push(slot);
   }
 
@@ -124,6 +148,8 @@ export class AutoPlay {
       if (!m.alive || m.isBoss || m.state === 'return') continue;
       const d = Math.hypot(m.x - p.x, m.z - p.z);
       if (d > 24) continue;
+      // Only inside the circle, except monsters already attacking the player.
+      if (this.fromAnchor(m) > this.radius(p) && !(m.isHostile && d < 4.5)) continue;
       if (m.level > p.level + 3 && !m.isHostile) continue;
       const score = d - (m.isHostile ? 10 : 0);
       if (score < bs) {
@@ -134,18 +160,39 @@ export class AutoPlay {
     return best;
   }
 
-  /** Walk toward the best farming spot for the current level. */
+  /** Nothing to fight: walk somewhere else inside the circle, preferring spawn spots for this level. */
   private roamPoint(g: AutoWorld): { x: number; z: number } {
     const p = g.player;
+    const anchor = this.anchor ?? { x: p.x, z: p.z };
+    const R = this.radius(p);
     if (this.roam && Math.hypot(this.roam.x - p.x, this.roam.z - p.z) > 1) return this.roam;
-    const areas = g.zone.spawns.filter((s) => MONSTERS[s.monster].levels[0] <= p.level + 1);
-    const pool = areas.length ? areas : g.zone.spawns;
-    const top = Math.max(...pool.map((s) => MONSTERS[s.monster].levels[0]));
-    const choices = pool.filter((s) => MONSTERS[s.monster].levels[0] === top);
-    const a = choices[Math.floor(Math.random() * choices.length)];
+    const inCircle = g.zone.spawns.filter((s) => Math.hypot(s.x - anchor.x, s.z - anchor.z) < R + s.radius);
+    const fit = inCircle.filter((s) => MONSTERS[s.monster].levels[0] <= p.level + 1);
+    const pool = fit.length ? fit : inCircle;
+    let x: number;
+    let z: number;
     const ang = Math.random() * Math.PI * 2;
-    const r = Math.random() * a.radius * 0.6;
-    this.roam = { x: a.x + Math.cos(ang) * r, z: a.z + Math.sin(ang) * r };
+    if (pool.length) {
+      const top = Math.max(...pool.map((s) => MONSTERS[s.monster].levels[0]));
+      const choices = pool.filter((s) => MONSTERS[s.monster].levels[0] === top);
+      const a = choices[Math.floor(Math.random() * choices.length)];
+      const r = Math.random() * a.radius * 0.6;
+      x = a.x + Math.cos(ang) * r;
+      z = a.z + Math.sin(ang) * r;
+    } else {
+      const r = Math.sqrt(Math.random()) * R * 0.7;
+      x = anchor.x + Math.cos(ang) * r;
+      z = anchor.z + Math.sin(ang) * r;
+    }
+    // Pull the point back inside the circle.
+    const dx = x - anchor.x;
+    const dz = z - anchor.z;
+    const d = Math.hypot(dx, dz);
+    if (d > R * 0.9) {
+      x = anchor.x + (dx / d) * R * 0.9;
+      z = anchor.z + (dz / d) * R * 0.9;
+    }
+    this.roam = { x, z };
     return this.roam;
   }
 }
