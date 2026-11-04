@@ -1,7 +1,7 @@
 # Gunslinger: prompt ที่ใช้สร้างภาพใน ChatGPT
 
 สไตล์อ้างอิงช่อง "16-bit (SNES Style)" ของภาพ Gunner / Gunslinger Style Variations
-ทั้ง 3 ภาพสร้างในแชทเดียวกัน โดยใช้ภาพก่อนหน้าเป็นต้นแบบของตัวละคร
+ทั้ง 4 ภาพสร้างในแชทเดียวกัน โดยใช้ภาพก่อนหน้าเป็นต้นแบบของตัวละคร
 
 ไฟล์อยู่ที่ `public/assets/sprites/player/gunslinger/` ช่องละ 256×256 เรียงแถวเป็น
 `down` `down_side` `side` `up_side` `up` ส่วนฝั่งขวาเกมกลับด้านให้เอง จึงหันได้ 8 ทิศ
@@ -10,15 +10,13 @@
 |---|---|---|
 | `idle.png` | 4 | ภาพแบบตัวละคร บีบและยืดเล็กน้อยให้ดูเหมือนหายใจ |
 | `run.png` | 4 | prompt ข้อ 2 |
-| `attack.png` | 3 | prompt ข้อ 3 |
+| `attack.png` | 3 | prompt ข้อ 3 แล้วแทนแถวหันหน้าและแถวหันหลังด้วย prompt ข้อ 4 |
 
 หลังได้ภาพ ให้ตัดพื้นหลังสี #FF00FF ออก แล้วจัดให้ทุกเฟรมเท้าอยู่สูงจากขอบล่าง 16px หัวอยู่กลางช่อง
 และตัวสูงประมาณ 200px
 
 ยังไม่มีท่า `dash` `hit` `death` `revive` `attack_2` `attack_3` และ `skill_q/e/r`
 เกมจะใช้ท่าที่มีแทน และตอนตายจะทำตัวละครให้จางลง
-
-ข้อที่ยังไม่เนียน: `attack.png` แถวหันหน้าและแถวหันหลังเล็งไปด้านข้าง ไม่ได้เล็งเข้าหรือออกจากกล้อง
 
 ## 1. แบบตัวละคร
 
@@ -69,4 +67,22 @@ flash. Feet stay planted in the same place, the head keeps the same size and hei
 figure fully inside its own cell with clear empty space around it, nothing touching or overlapping. Background
 ONE perfectly flat solid magenta (#FF00FF), no shadows, no ground, no text, no labels, no numbers, no grid
 lines.
+```
+
+## 4. แก้ท่ายิงตอนหันหน้าและหันหลัง
+
+```
+Fix the front and back rows of that shooting sheet: the gun must NOT point sideways in any frame of these rows.
+Keep this EXACT character, outfit, colors, size, stance and pixel style. Generate an image: a strict grid of
+2 rows x 3 columns, 6 figures total. Row 1, front view: the character faces the viewer and points the pistol
+straight at the viewer with the arm extended forward, heavily foreshortened, the round gun muzzle centered in
+front of the chest and pointing out of the picture. Row 2, back view: we see the character's back, the arm
+raised and extended straight forward away from the viewer, the pistol pointing straight up the picture and away
+from us, with the gun visible above the right shoulder beside the head and the muzzle at the top. Columns, left
+to right: frame 1 aiming, no flash; frame 2 firing, with a small bright yellow-orange muzzle flash attached right
+at the muzzle, in row 1 a round star burst centered on the muzzle in front of the chest, in row 2 a small burst
+at the top end of the barrel; frame 3 slight recoil, the gun tipped a little upward, no flash. Feet stay planted,
+the head keeps the same size and height in every frame. Every figure fully inside its own cell with clear empty
+space around it, nothing touching or overlapping. Background ONE perfectly flat solid magenta (#FF00FF), no
+shadows, no ground, no text, no labels, no numbers, no grid lines.
 ```
