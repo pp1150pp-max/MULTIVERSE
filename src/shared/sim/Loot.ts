@@ -12,6 +12,8 @@ export type LootKind =
 export const LOOT_POP_TIME = 0.35;
 /** Items the player throws on the ground vanish after this many seconds. */
 export const DROPPED_LIFE = 60;
+/** Monster drops nobody picks up vanish after this many seconds, so they don't pile up on the server. */
+export const DROP_LIFE = 30;
 /** The player who did the most damage may pick up a monster's drops alone for this long. */
 export const LOOT_PRIORITY_TIME = 10;
 
@@ -42,6 +44,11 @@ export class Loot {
     this.ownerUntil = opts.ownerUntil ?? 0;
   }
 
+  /** Seconds it stays on the ground before vanishing. */
+  get life(): number {
+    return this.dropped ? DROPPED_LIFE : DROP_LIFE;
+  }
+
   /** Whether this player may pick it up right now. */
   canTake(playerId: number, time: number): boolean {
     return this.owner === null || this.owner === playerId || time >= this.ownerUntil;
@@ -50,7 +57,7 @@ export class Loot {
   update(dt: number, sim: Sim): void {
     this.t += dt;
     this.blockedMsgT -= dt;
-    if (this.dropped && this.t > DROPPED_LIFE) {
+    if (this.t > this.life) {
       this.dead = true;
       return;
     }
