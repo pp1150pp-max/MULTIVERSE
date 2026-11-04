@@ -4,10 +4,11 @@ export type NpcId = 'seeker' | 'merchant' | 'blacksmith';
 
 export const NPC_IDS: NpcId[] = ['seeker', 'merchant', 'blacksmith'];
 
-export const NPC_INFO: Record<NpcId, { name: string; action: string }> = {
-  seeker: { name: 'The Seeker', action: 'คุย' },
-  merchant: { name: 'พ่อค้า', action: 'ซื้อ/ขายของ' },
-  blacksmith: { name: 'ช่างตีเหล็ก', action: 'ตีบวกอาวุธ' },
+/** icon + role are the badge floating over each NPC's head, so players can tell them apart. */
+export const NPC_INFO: Record<NpcId, { name: string; action: string; icon: string; role: string }> = {
+  seeker: { name: 'The Seeker', action: 'คุย', icon: '💬', role: 'คุย / เนื้อเรื่อง' },
+  merchant: { name: 'พ่อค้า', action: 'ซื้อ/ขายของ', icon: '💰', role: 'ร้านค้า' },
+  blacksmith: { name: 'ช่างตีเหล็ก', action: 'ตีบวกอาวุธ', icon: '🔨', role: 'ตีบวก' },
 };
 
 /** How close the player must stand to talk to an NPC. */

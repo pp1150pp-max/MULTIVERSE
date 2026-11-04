@@ -1,4 +1,4 @@
-import type { Game } from './Game';
+import type { Game, Npc } from './Game';
 import type { Monster } from '../shared/sim/Monster';
 import type { Loot } from '../shared/sim/Loot';
 import type { Player } from '../shared/sim/Player';
@@ -16,6 +16,7 @@ export class Floating {
   private labels = new Map<Loot, HTMLDivElement>();
   private names = new Map<Player, Plate>();
   private prompt: HTMLDivElement;
+  private badges = new Map<Npc, HTMLDivElement>();
 
   constructor(private readonly root: HTMLElement) {
     this.prompt = document.createElement('div');
@@ -41,6 +42,40 @@ export class Floating {
     this.prompt.textContent = text;
     this.prompt.classList.remove('hidden');
     this.prompt.style.transform = `translate(${s.sx}px, ${s.sy}px) translate(-50%, -100%)`;
+  }
+
+  /** Always-on badge over each camp NPC: an icon and what it does, then its name. */
+  npcBadges(g: Game, npcs: readonly Npc[]): void {
+    const seen = new Set<Npc>();
+    for (const n of npcs) {
+      seen.add(n);
+      let el = this.badges.get(n);
+      if (!el) {
+        el = document.createElement('div');
+        el.className = `npc-badge npc-${n.id}`;
+        const bob = document.createElement('div');
+        bob.className = 'npc-bob';
+        const role = document.createElement('div');
+        role.className = 'npc-role';
+        role.textContent = `${n.icon} ${n.role}`;
+        const name = document.createElement('div');
+        name.className = 'npc-name';
+        name.textContent = n.name;
+        bob.append(role, name);
+        el.append(bob);
+        this.root.append(el);
+        this.badges.set(n, el);
+      }
+      const s = g.toScreen(n.x, 2.45, n.z);
+      el.classList.toggle('hidden', !s.on);
+      el.style.transform = `translate(${s.sx}px, ${s.sy}px) translate(-50%, -100%)`;
+    }
+    for (const [n, el] of this.badges) {
+      if (!seen.has(n)) {
+        el.remove();
+        this.badges.delete(n);
+      }
+    }
   }
 
   update(dt: number, g: Game): void {

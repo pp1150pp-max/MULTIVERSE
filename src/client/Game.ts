@@ -26,7 +26,7 @@ const UP = { x: -S, z: -S };
 
 export type { Intent };
 
-export interface Npc { id: NpcId; name: string; action: string; x: number; z: number; actor: SpriteActor }
+export interface Npc { id: NpcId; name: string; action: string; icon: string; role: string; x: number; z: number; actor: SpriteActor }
 
 /** Saving for singleplayer; online characters are saved by the server. */
 export interface LocalPersist {
@@ -149,7 +149,8 @@ export class Game {
       return;
     }
     this.autoPlay = force ?? !this.autoPlay;
-    this.auto.reset();
+    if (this.autoPlay) this.auto.start(this.player.x, this.player.z);
+    else this.auto.reset();
     this.backend.setAuto(this.autoPlay);
     this.hud.log(this.autoPlay ? 'เปิด Auto Play — โจมตีเองได้ตลอด · เดินเองเมื่อไหร่ Auto จะปิด' : offMsg, '#9fd8ff');
   }
@@ -241,6 +242,9 @@ export class Game {
         break;
       case 'log':
         this.hud.log(ev.msg, ev.color);
+        break;
+      case 'banner':
+        this.hud.banner(ev.text, ev.sub, ev.color);
         break;
       case 'flash':
         this.viewById(ev.id)?.actor.flash();
@@ -378,7 +382,8 @@ export class Game {
       }
     }
     const prompt = near && !this.hud.dialogOpen ? `${near.name} — กด T เพื่อ${near.action}` : null;
-    this.floating.npcPrompt(this, near?.x ?? 0, 2.3, near?.z ?? 0, prompt);
+    this.floating.npcBadges(this, this.npcs);
+    this.floating.npcPrompt(this, near?.x ?? 0, 3.7, near?.z ?? 0, prompt);
     if (near && i.pressed('KeyT')) this.hud.talkTo(near.id);
 
     this.fx.update(dt);

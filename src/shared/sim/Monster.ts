@@ -4,6 +4,9 @@ import type { Player } from './Player';
 import type { MonsterDef } from '../data/monsters';
 import type { SpawnArea } from '../data/zones';
 
+const BOSS_RAMP_PER_SEC = 0.2;
+const BOSS_RAMP_MAX = 3;
+
 type State = 'idle' | 'chase' | 'return' | 'charge';
 type Windup = 'melee' | 'slam' | 'charge';
 
@@ -21,6 +24,8 @@ export class Monster extends Unit {
   deadT = 0;
   /** Called in by a boss: gives no EXP, gold or items, and never respawns. */
   summoned = false;
+  /** Bosses: seconds of fighting since they last landed a hit. They speed up the longer it gets. */
+  rampT = 0;
   /** Who it is fighting. Picked from all players, so it works the same alone or online. */
   target: Player | null = null;
   /** Damage dealt by each player id — EXP is split by these shares. */
@@ -105,9 +110,12 @@ export class Monster extends Unit {
     }
     this.moving = false;
     this.tickStatus(dt, sim.terrain);
-    this.atkCd -= dt;
-    this.chargeCd -= dt;
-    this.slamCd -= dt;
+    // Bosses that keep missing get faster at everything until they land a hit (Sim.hitPlayer resets it).
+    if (this.isBoss) this.rampT = this.isHostile && this.state !== 'return' ? this.rampT + dt : 0;
+    const ramp = this.ramp;
+    this.atkCd -= dt * ramp;
+    this.chargeCd -= dt * ramp;
+    this.slamCd -= dt * ramp;
     this.aggroT -= dt;
     this.fleeT -= dt;
 
@@ -138,7 +146,18 @@ export class Monster extends Unit {
     if (this.windupT > 0) {
       this.windupT -= dt;
       if (this.windKind !== 'charge' && p) this.face(dx, dz);
-      if (this.windupT <= 0) this.resolveWindup(sim, d);
+      // Bosses keep walking in while winding up a normal hit, so stepping back no longer dodges it.
+      // The slam stays put: its warning circle is drawn where the boss stands.
+      let dNow = d;
+      if (this.isBoss && this.windKind === 'melee' && p && d > this.def.attackRange * 0.6) {
+        const s = this.chaseSpeed() * this.speedMult() * dt;
+        this.x += (dx / d) * s;
+        this.z += (dz / d) * s;
+        sim.terrain.resolve(this);
+        this.moving = true;
+        dNow = Math.hypot(p.x - this.x, p.z - this.z);
+      }
+      if (this.windupT <= 0) this.resolveWindup(sim, dNow);
       return;
     }
 
@@ -199,13 +218,7 @@ export class Monster extends Unit {
           const reach = this.def.attackRange + p.radius;
           const frenzy = this.enraged ? this.def.frenzy : undefined;
           if (b === 'charger' && this.chargeCd <= 0 && d > 2.5 && d < 8) {
-            this.chargeDx = dx / d;
-            this.chargeDz = dz / d;
-            this.windKind = 'charge';
-            this.windupT = 0.65;
-            this.chargeCd = 6;
-            sim.fx('lineTelegraph', this.x, this.z, Math.atan2(dz, dx), 8, this.radius * 2, 0.65);
-            this.face(dx, dz);
+            this.startCharge(sim, p.x, p.z, 0.65);
           } else if (this.isBoss && this.slamCd <= 0 && d < 5) {
             this.windKind = 'slam';
             this.windupT = 1.1 * this.skillMult();
@@ -220,7 +233,7 @@ export class Monster extends Unit {
           } else {
             mx = dx / d;
             mz = dz / d;
-            if (this.enraged) spd *= frenzy ? frenzy.speed : 1.3;
+            spd = this.chaseSpeed();
           }
         } else {
           this.state = 'idle';
@@ -259,9 +272,34 @@ export class Monster extends Unit {
     }
   }
 
-  /** Wind-ups shrink while a frenzy boss is enraged. */
+  /** 1 normally; bosses climb 20% per second of not landing a hit, up to 3x. */
+  get ramp(): number {
+    return this.isBoss ? Math.min(BOSS_RAMP_MAX, 1 + BOSS_RAMP_PER_SEC * this.rampT) : 1;
+  }
+
+  /** Wind-ups shrink while a frenzy boss is enraged, and as a boss's ramp climbs. */
   private skillMult(): number {
-    return this.enraged && this.def.frenzy ? this.def.frenzy.skill : 1;
+    return (this.enraged && this.def.frenzy ? this.def.frenzy.skill : 1) / this.ramp;
+  }
+
+  /** Speed while running at its target (before slows). */
+  private chaseSpeed(): number {
+    const frenzy = this.enraged ? this.def.frenzy : undefined;
+    return this.def.speed * (this.enraged ? (frenzy ? frenzy.speed : 1.3) : 1) * this.ramp;
+  }
+
+  /** Wind up a straight-line charge at (tx, tz), with a warning line on the ground. */
+  startCharge(sim: Sim, tx: number, tz: number, windup: number): void {
+    const dx = tx - this.x;
+    const dz = tz - this.z;
+    const d = Math.hypot(dx, dz) || 0.001;
+    this.chargeDx = dx / d;
+    this.chargeDz = dz / d;
+    this.windKind = 'charge';
+    this.windupT = windup;
+    this.chargeCd = 6;
+    sim.fx('lineTelegraph', this.x, this.z, Math.atan2(dz, dx), 8, this.radius * 2, windup);
+    this.face(dx, dz);
   }
 
   private resolveWindup(sim: Sim, d: number): void {

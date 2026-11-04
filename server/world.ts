@@ -60,7 +60,7 @@ const vec = (v: unknown): Vec2 | null => {
 
 /** Where an event happens, so far-away effects aren't sent to everyone. */
 function eventPos(ev: SimEvent): Vec2 | null {
-  if (ev.t === 'text') return { x: ev.x, z: ev.z };
+  if (ev.t === 'text' || ev.t === 'banner') return { x: ev.x, z: ev.z };
   if (ev.t === 'fx') {
     const a = ev.args as unknown[];
     return ev.name === 'puff' || ev.name === 'burst' ? { x: a[0] as number, z: a[2] as number } : { x: a[0] as number, z: a[1] as number };
@@ -228,7 +228,12 @@ export class GameWorld {
         break;
       case 'auto':
         s.auto = m.on === true && s.sim.zone.allowAutoPlay ? (s.auto ?? new AutoPlay()) : null;
+        s.auto?.start(p.x, p.z);
         s.pendingPos = null;
+        break;
+      case 'autoSettings':
+        // cleanAutoSettings clamps every field, so whatever the client sent is safe.
+        sim.setAutoSettings(p, m.settings);
         break;
       case 'lootFilter': {
         const f = m.filter as Partial<LootFilter> | undefined;
@@ -375,7 +380,7 @@ export class GameWorld {
     const inv = JSON.stringify([p.equipment, p.bag]);
     const me: PrivateSnap = {
       hp: r2(p.hp), mp: r2(p.mp), exp: p.exp, level: p.level, gold: p.gold,
-      potSel: p.potSel, lootFilter: p.lootFilter, stats: p.stats, cd: p.cd, potCd: r2(p.potCd),
+      potSel: p.potSel, lootFilter: p.lootFilter, autoSettings: p.autoSettings, stats: p.stats, cd: p.cd, potCd: r2(p.potCd),
       serverMoves: serverMoves(p) || !!s.auto, epoch: s.epoch,
     };
     if (inv !== s.lastInv) {

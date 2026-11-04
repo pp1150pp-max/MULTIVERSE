@@ -8,7 +8,7 @@ import {
 import {
   entryName, POTION_ICON, POTION_SIZES, POTION_SIZE_LABEL, POTION_STACK, POTIONS, potionName, potionSellPrice,
 } from '../shared/data/potions';
-import type { SortKey } from '../shared/sim/Player';
+import { AUTO_PX_PER_UNIT, AUTO_RANGE_MAX, AUTO_RANGE_MIN, cleanAutoSettings, type SortKey } from '../shared/sim/Player';
 import { isBulkSellable } from '../shared/sim/Sim';
 import { MONSTERS } from '../shared/data/monsters';
 import { expToNext } from '../shared/formulas';
@@ -58,6 +58,9 @@ export class Hud {
     $('btn-auto').onclick = () => g.toggleAuto();
     $('btn-bag').onclick = () => this.toggleBag();
     $('btn-help').onclick = () => this.toggleHelp();
+    $('btn-auto-set').onclick = () => this.toggleAutoSettings();
+    $('auto-set-close').onclick = () => this.toggleAutoSettings(false);
+    for (const id of ['aset-range', 'aset-hp', 'aset-mp', 'aset-loot']) $(id).addEventListener('change', () => this.applyAutoSettings());
     $('btn-respawn').onclick = () => g.respawn();
     $('inv-close').onclick = () => this.toggleBag(false);
     $('help-close').onclick = () => this.toggleHelp(false);
@@ -383,9 +386,60 @@ export class Hud {
     $('help').classList.toggle('hidden', !(force ?? $('help').classList.contains('hidden')));
   }
 
+  // ------------------------------------------------------------ auto settings
+
+  toggleAutoSettings(force?: boolean): void {
+    const el = $('auto-settings');
+    const open = force ?? el.classList.contains('hidden');
+    el.classList.toggle('hidden', !open);
+    if (open) this.fillAutoSettings();
+  }
+
+  /** Put the player's current settings into the form. */
+  private fillAutoSettings(): void {
+    const p = this.g.player;
+    const s = p.autoSettings;
+    $<HTMLInputElement>('aset-range').min = String(AUTO_RANGE_MIN);
+    $<HTMLInputElement>('aset-range').max = String(AUTO_RANGE_MAX);
+    $<HTMLInputElement>('aset-range').value = String(s.range);
+    $('aset-range-hint').textContent = `${AUTO_RANGE_MIN}–${AUTO_RANGE_MAX} px · ${AUTO_PX_PER_UNIT} px = 1 ช่องในแมพ`;
+    $<HTMLInputElement>('aset-hp').value = String(s.hpPct);
+    $<HTMLInputElement>('aset-mp').value = String(s.mpPct);
+    $<HTMLInputElement>('aset-loot').checked = s.loot;
+    const box = $('aset-skills');
+    box.innerHTML = '';
+    for (const slot of ['q', 'e', 'r'] as const) {
+      const sk = p.skill(slot);
+      const label = document.createElement('label');
+      label.className = 'aset-check';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.dataset.slot = slot;
+      cb.checked = s.skills[slot];
+      cb.addEventListener('change', () => this.applyAutoSettings());
+      label.append(cb, ` ${slot.toUpperCase()} — ${sk?.nameTh ?? sk?.name ?? '-'}`);
+      box.append(label);
+    }
+  }
+
+  /** Read the form, clamp it, send it, then show the clamped values. */
+  private applyAutoSettings(): void {
+    const num = (id: string) => Number($<HTMLInputElement>(id).value);
+    const skills = { ...this.g.player.autoSettings.skills };
+    for (const cb of $('aset-skills').querySelectorAll<HTMLInputElement>('input[data-slot]')) {
+      skills[cb.dataset.slot as 'q' | 'e' | 'r'] = cb.checked;
+    }
+    const s = cleanAutoSettings({
+      range: num('aset-range'), hpPct: num('aset-hp'), mpPct: num('aset-mp'), skills, loot: $<HTMLInputElement>('aset-loot').checked,
+    });
+    this.g.backend.setAutoSettings(s);
+    this.fillAutoSettings();
+  }
+
   closePanels(): void {
     if (this.confirmYes) return this.closeConfirm();
     this.closeChat();
+    this.toggleAutoSettings(false);
     this.toggleBag(false);
     this.toggleHelp(false);
     this.closeShop();
@@ -693,6 +747,25 @@ export class Hud {
   showDisconnect(msg: string): void {
     $('disconnect-msg').textContent = msg;
     $('disconnect').classList.remove('hidden');
+  }
+
+  /** Big centred text that fades out by itself. */
+  banner(text: string, sub?: string, color = '#ff6a5a'): void {
+    const el = document.createElement('div');
+    el.className = 'banner';
+    el.style.color = color;
+    const big = document.createElement('div');
+    big.className = 'banner-text';
+    big.textContent = text;
+    el.append(big);
+    if (sub) {
+      const small = document.createElement('div');
+      small.className = 'banner-sub';
+      small.textContent = sub;
+      el.append(small);
+    }
+    $('hud').append(el);
+    setTimeout(() => el.remove(), 2600);
   }
 
   log(msg: string, color = '#e8e2d0'): void {

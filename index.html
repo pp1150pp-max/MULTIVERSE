@@ -35,7 +35,10 @@
         <div id="hud-topright">
           <canvas id="minimap" width="176" height="176"></canvas>
           <div class="hud-buttons">
-            <button id="btn-auto">AUTO: OFF (F)</button>
+            <div class="auto-row">
+              <button id="btn-auto">AUTO: OFF (F)</button>
+              <button id="btn-auto-set" title="ตั้งค่า Auto">⚙</button>
+            </div>
             <button id="btn-bag">กระเป๋า (I)</button>
             <button id="btn-help">ช่วยเหลือ (H)</button>
           </div>
@@ -110,6 +113,21 @@
         <div id="confirm" class="panel hidden">
           <div id="confirm-text"></div>
           <div class="confirm-btns"><button id="confirm-yes" class="primary"></button><button id="confirm-no">ยกเลิก</button></div>
+        </div>
+
+        <div id="auto-settings" class="panel hidden">
+          <div class="panel-head"><span>ตั้งค่า Auto</span><button id="auto-set-close">✕</button></div>
+          <label class="aset-row">ระยะเดินจากจุดที่เปิด Auto
+            <span><input id="aset-range" type="number" step="50" /> px</span></label>
+          <div class="hint" id="aset-range-hint"></div>
+          <label class="aset-row">กินยา HP เมื่อเลือดต่ำกว่า
+            <span><input id="aset-hp" type="number" min="0" max="100" step="5" /> %</span></label>
+          <label class="aset-row">กินยา MP เมื่อมานาต่ำกว่า
+            <span><input id="aset-mp" type="number" min="0" max="100" step="5" /> %</span></label>
+          <div class="aset-title">ให้ Auto ใช้สกิล</div>
+          <div id="aset-skills"></div>
+          <label class="aset-check"><input id="aset-loot" type="checkbox" /> เก็บของอัตโนมัติ</label>
+          <div class="hint">เปลี่ยนแล้วมีผลทันที และจำไว้กับตัวละคร</div>
         </div>
 
         <div id="help" class="panel hidden">

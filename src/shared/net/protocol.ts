@@ -4,7 +4,7 @@ import type { SkillSlot } from '../data/classes';
 import type { BagEntry, ClassId, Item, PotionKind, PotionSize, Rarity, SlotId, Stats, Vec2 } from '../types';
 import type { LootKind } from '../sim/Loot';
 import type { SimEvent } from '../sim/types';
-import type { LootFilter, PotionSelect, SortKey } from '../sim/Player';
+import type { AutoSettings, LootFilter, PotionSelect, SortKey } from '../sim/Player';
 import type { EnhanceResult } from '../data/enhance';
 
 export const WS_PATH = '/ws';
@@ -42,6 +42,7 @@ export type ActionMsg =
   /** Auto Play on/off. The server plays it, so it keeps farming while the browser tab is hidden. */
   | { t: 'act'; a: 'auto'; on: boolean }
   | { t: 'act'; a: 'lootFilter'; filter: LootFilter }
+  | { t: 'act'; a: 'autoSettings'; settings: AutoSettings }
   | { t: 'act'; a: 'sell'; i: number }
   | { t: 'act'; a: 'sellRarity'; rarity: Rarity }
   | { t: 'act'; a: 'enhance'; uid: string; req: number };
@@ -80,7 +81,7 @@ export interface LootSnap {
 /** Only sent to the player it belongs to. */
 export interface PrivateSnap {
   hp: number; mp: number; exp: number; level: number; gold: number;
-  potSel: PotionSelect; lootFilter: LootFilter; stats: Stats;
+  potSel: PotionSelect; lootFilter: LootFilter; autoSettings: AutoSettings; stats: Stats;
   cd: Partial<Record<SkillSlot, number>>; potCd: number;
   /** True while the server moves the character (dash, knockback, stun, dead, Auto Play) — follow its position. */
   serverMoves: boolean;
