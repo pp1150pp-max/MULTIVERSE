@@ -9,7 +9,7 @@ import { ZONES, zoneById } from '../src/shared/data/zones';
 import { SORT_KEYS, type LootFilter, type Player } from '../src/shared/sim/Player';
 import { POTION_SIZES } from '../src/shared/data/potions';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../src/shared/sim/types';
-import { AutoPlay, type AutoWorld } from '../src/shared/sim/autoplay';
+import { AUTO_HINT_COLOR, AutoPlay, type AutoWorld } from '../src/shared/sim/autoplay';
 import {
   CHAT_MAX, INTEREST_RADIUS, SNAPSHOT_HZ, TICK_HZ, WS_PATH, r2,
   type ClientMsg, type InputMsg, type ActionMsg, type PrivateSnap, type ServerMsg, type SnapshotMsg,
@@ -289,6 +289,8 @@ export class GameWorld {
       const sim = s.sim;
       const world: AutoWorld = { player: p, monsters: sim.monsters, loots: sim.loots, time: sim.time, zone: sim.zone };
       it = s.auto.intent(world, { ...it, move: null, pos: null });
+      const hint = s.auto.takeHint();
+      if (hint) s.outbox.push({ t: 'log', msg: hint, color: AUTO_HINT_COLOR, to: p.id });
     }
     s.dash = false;
     s.potion = null;
