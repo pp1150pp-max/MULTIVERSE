@@ -23,7 +23,8 @@ npm run dev        # Singleplayer อย่างเดียว ที่ http:
 npm run build      # typecheck (เบราว์เซอร์ + server) แล้ว build ลง dist/
 npm run typecheck  # ตรวจ type อย่างเดียว
 npm run server     # server สำหรับ Multiplayer ที่ http://localhost:2567 (เสิร์ฟ dist/)
-npm run online     # build + server + ลิงก์ Cloudflare ให้เพื่อนเข้า
+npm run online     # build + server + ลิงก์ Cloudflare ให้เพื่อนเข้า (ถ้า npm run tunnel เปิดอยู่ จะใช้ลิงก์ของมัน)
+npm run tunnel     # ลิงก์ให้เพื่อนอย่างเดียว เปิดค้างไว้ → รีสตาร์ท server แล้วลิงก์ไม่เปลี่ยน
 ```
 
 - ยังไม่มีชุดเทสต์อัตโนมัติ ตรวจด้วย `npm run build` และเปิดเกมลองเล่นจริง
