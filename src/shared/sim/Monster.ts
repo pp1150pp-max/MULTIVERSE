@@ -235,6 +235,12 @@ export class Monster extends Unit {
             mz = dz / d;
             spd = this.chaseSpeed();
           }
+        } else if (this.hp < this.maxHp || this.enraged) {
+          // The fight is over (everyone died, left or stopped hitting it) but it is still hurt:
+          // walk home like a leashed monster, healing on the way, then reset fully (HP, enrage, damage shares).
+          this.state = 'return';
+          this.target = null;
+          this.aggroT = 0;
         } else {
           this.state = 'idle';
           this.target = null;
