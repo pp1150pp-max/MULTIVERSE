@@ -1,0 +1,43 @@
+name: รายงานบั๊ก
+description: เจอ error หรือเกมทำงานไม่ถูกต้อง
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: เกิดอะไรขึ้น
+      description: เล่าสั้น ๆ ว่าเจออะไร แล้วควรจะเป็นแบบไหน
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: โหมด
+      options:
+        - Singleplayer
+        - Multiplayer
+        - ทั้งสองโหมด
+        - ไม่แน่ใจ
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: ทำยังไงถึงเจอ
+      description: ขั้นตอนที่ทำซ้ำได้ เช่น คลาสอะไร เลเวลเท่าไร อยู่โซนไหน กดอะไร
+      placeholder: |
+        1. เข้า Zone 2 ด้วย Knight Lv.12
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: console
+    attributes:
+      label: Error ใน Console
+      description: กด F12 → แท็บ Console แล้วคัดลอกข้อความสีแดงมาวาง (ถ้ามี)
+      render: text
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: ภาพหน้าจอ
+      description: ลากรูปหรือคลิปมาวางได้เลย

@@ -1,0 +1,34 @@
+name: งานใหม่
+description: ระบบ เนื้อหา ภาพ หรือการปรับตัวเลขที่อยากให้มีในเกม
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: ประเภทงาน
+      description: ตรงกับชื่อ branch ที่จะใช้ (feature/ art/ balance/)
+      options:
+        - feature — ระบบหรือเนื้อหาใหม่
+        - art — ภาพ สไปรต์ แผนที่
+        - balance — ปรับตัวเลข
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: อยากได้อะไร
+      description: อธิบายงาน และเหตุผลที่อยากทำ
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: เสร็จแล้วต้องเป็นแบบไหน
+      description: เช็คลิสต์ที่บอกว่างานนี้เสร็จ
+      placeholder: |
+        - [ ] ...
+        - [ ] ทำงานได้ทั้ง SP และ MP
+  - type: textarea
+    id: notes
+    attributes:
+      label: หมายเหตุ
+      description: ไฟล์ที่เกี่ยวข้อง งานที่ต้องรอก่อน หรือรูปตัวอย่าง
