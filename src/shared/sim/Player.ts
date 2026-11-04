@@ -38,6 +38,8 @@ export interface CharacterData {
   potSel?: PotionSelect;
   /** Missing in older saves = pick up everything. */
   lootFilter?: LootFilter;
+  /** Zone id the character is in. Missing on saves from before there were zones (= the forest). */
+  zone?: string;
 }
 
 /** A fresh level 1 character with the class starter weapon and a few potions. */
@@ -71,6 +73,10 @@ export class Player extends Unit {
   moveTarget: Vec2 | null = null;
   /** Shown once per session when low-level monsters start giving less EXP. */
   lowExpHinted = false;
+  zone: string | undefined;
+  /** False right after arriving through a portal, until the player steps away from it. */
+  portalReady = true;
+  portalMsgAt = -99;
   dashKind: 'dash' | 'charge' = 'dash';
   private atkT = 0;
   private faceLockT = 0;
@@ -91,6 +97,7 @@ export class Player extends Unit {
     this.gold = data.gold;
     this.equipment = { ...data.equipment };
     this.bag = Array.from({ length: BAG_SIZE }, (_, i) => data.bag[i] ?? null);
+    this.zone = data.zone;
     this.potSel = { hp: 's', mp: 's', ...data.potSel };
     this.lootFilter = data.lootFilter ? { ...data.lootFilter, rarities: [...data.lootFilter.rarities] } : { ...DEFAULT_LOOT_FILTER, rarities: [...RARITIES] };
     this.radius = 0.4;
@@ -128,6 +135,7 @@ export class Player extends Unit {
       gold: this.gold,
       equipment: this.equipment,
       bag: this.bag,
+      zone: this.zone,
       potSel: this.potSel,
       lootFilter: this.lootFilter,
     };

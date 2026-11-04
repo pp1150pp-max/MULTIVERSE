@@ -71,6 +71,29 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
     bodyRx: 0.36, bodyRy: 0.22, head: 0.16, ears: 'round', earSize: 0.08, tail: 'none', legLen: 0.13, legW: 0.1, snout: 0.08, belly: true,
   }))),
 
+  // Zone 2 — Misty Marsh. Placeholders only show if the PNGs are missing.
+  bog_toad: sheet('monsters/bog_toad.png', () => makeSheet(40, drawQuad(['#6f6a34', '#4a4622', '#c9b98a', '#2a2412'], {
+    bodyRx: 0.3, bodyRy: 0.2, head: 0.14, ears: 'small', earSize: 0.04, tail: 'none', legLen: 0.06, legW: 0.08, snout: 0.04, belly: true,
+  }))),
+  marsh_leech: sheet('monsters/marsh_leech.png', () => makeSheet(36, drawSlime(['#4a3450', '#2e1e34', '#9a7aa8']))),
+  swamp_serpent: sheet('monsters/swamp_serpent.png', () => makeSheet(36, drawSlime(['#3e8a78', '#2a5e52', '#e0d070']))),
+  mire_ghoul: sheet('monsters/mire_ghoul.png', () => makeSheet(40, drawSlime(['#3a3228', '#221c16', '#a8e08a']))),
+  will_o_wisp: sheet('monsters/will_o_wisp.png', () => makeSheet(36, drawSlime(['#6ad8d0', '#3a9aa8', '#e8fffa']))),
+  bog_witch: sheet('monsters/bog_witch.png', () => makeSheet(56, drawSeeker())),
+
+  swamp_tree_0: single('props/swamp_tree_0.png', () => drawTree(0)),
+  swamp_tree_1: single('props/swamp_tree_1.png', () => drawTree(1)),
+  swamp_tree_2: single('props/swamp_tree_2.png', () => drawTree(2)),
+  willow: single('props/willow.png', () => drawTree(1)),
+  reeds_0: single('props/reeds_0.png', () => drawBush(0)),
+  reeds_1: single('props/reeds_1.png', () => drawBush(1)),
+  fern: single('props/fern.png', () => drawBush(0)),
+  mushrooms: single('props/mushrooms.png', () => drawBush(1)),
+  mossrock_0: single('props/mossrock_0.png', () => drawRock(0)),
+  mossrock_1: single('props/mossrock_1.png', () => drawRock(1)),
+  swamp_stump: single('props/swamp_stump.png', drawStump),
+  portal: single('props/portal.png', drawRunestone),
+
   tree_0: prop('tree_0', () => drawTree(0)),
   tree_1: prop('tree_1', () => drawTree(1)),
   tree_2: prop('tree_2', () => drawTree(2)),
@@ -180,6 +203,12 @@ export async function loadAssets(): Promise<void> {
       }
       prep(tex, smooth);
       const img = tex.image as { width: number; height: number };
+      // Big painted files (e.g. the marsh art) are drawn smaller than their source, so they need
+      // mipmaps or they shimmer. Small pixel-art keeps the crisp nearest-pixel look.
+      if (assetSources[key] === 'file' && img.height / spec.rows > 72) {
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.generateMipmaps = true;
+      }
       sheets[key] = {
         texture: tex,
         cols: spec.cols,

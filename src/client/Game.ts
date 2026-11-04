@@ -42,14 +42,14 @@ export class Game {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
   readonly camera: THREE.OrthographicCamera;
-  readonly zone: ZoneDef;
-  readonly world: World;
+  /** The zone currently drawn. Rebuilt when the backend moves us through a portal. */
+  zone: ZoneDef;
+  world: World;
   readonly input: Input;
   readonly fx: Effects;
   readonly floating: Floating;
   readonly hud: Hud;
-  readonly player: Player;
-  readonly npcs: Npc[] = [];
+  npcs: Npc[] = [];
   metSeeker: boolean;
   autoPlay = false;
   hovered: Monster | null = null;
@@ -78,7 +78,6 @@ export class Game {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.prepend(this.renderer.domElement);
-    this.scene.background = new THREE.Color('#16301a');
 
     const aspect = window.innerWidth / window.innerHeight;
     this.camera = new THREE.OrthographicCamera(-aspect, aspect, 1, -1, 0.1, 400);
@@ -89,7 +88,6 @@ export class Game {
     this.fx = new Effects(this.scene);
     this.floating = new Floating(document.getElementById('float-layer')!);
 
-    this.player = backend.me;
     // Online, the Seeker's intro is only shown when you talk to him.
     this.metSeeker = persist?.metSeeker ?? true;
     this.camTarget.set(this.player.x, 0, this.player.z);
@@ -99,15 +97,7 @@ export class Game {
     this.projectileViews = new ViewSet((pr) => new ProjectileView(pr, this.scene, this.fx));
     this.lootViews = new ViewSet((l) => new LootView(l, this.scene, this.fx));
     this.syncViews();
-
-    for (const id of NPC_IDS) {
-      const pos = backend.terrain.npcPos[id];
-      const actor = new SpriteActor(sheets[id], 1.95, 0.4);
-      actor.group.position.set(pos.x, 0, pos.z);
-      actor.face(-1, -1);
-      this.scene.add(actor.group);
-      this.npcs.push({ id, ...NPC_INFO[id], x: pos.x, z: pos.z, actor });
-    }
+    this.placeNpcs();
 
     this.hud = new Hud(this);
     window.addEventListener('resize', () => {
@@ -117,6 +107,8 @@ export class Game {
     window.addEventListener('beforeunload', () => this.save());
   }
 
+  /** Our character. A new object after changing zones in singleplayer, so always read it from here. */
+  get player(): Player { return this.backend.me; }
   get monsters(): readonly Monster[] { return this.backend.monsters; }
   get loots(): readonly Loot[] { return this.backend.loots; }
   get time(): number { return this.backend.time; }
@@ -176,6 +168,37 @@ export class Game {
 
   dropFromBag(i: number): void {
     this.backend.drop(i);
+  }
+
+  private placeNpcs(): void {
+    for (const n of this.npcs) {
+      this.scene.remove(n.actor.group);
+      n.actor.dispose();
+    }
+    this.npcs = [];
+    for (const id of NPC_IDS) {
+      const pos = this.backend.terrain.npcPos[id];
+      const actor = new SpriteActor(sheets[id], 1.95, 0.4);
+      actor.group.position.set(pos.x, 0, pos.z);
+      actor.face(-1, -1);
+      this.scene.add(actor.group);
+      this.npcs.push({ id, ...NPC_INFO[id], x: pos.x, z: pos.z, actor });
+    }
+  }
+
+  /** The backend moved us to another zone: redraw the map, camp and everything in it. */
+  private changeZone(): void {
+    this.world.dispose();
+    this.zone = this.backend.zone;
+    this.world = new World(this.scene, this.backend.terrain);
+    this.placeNpcs();
+    this.syncViews();
+    this.camTarget.set(this.player.x, 0, this.player.z);
+    this.autoPlay = false;
+    this.auto.reset();
+    this.hovered = null;
+    this.hud.onZoneChanged();
+    this.save();
   }
 
   private updateProjection(): void {
@@ -333,6 +356,7 @@ export class Game {
       else if (this.autoPlay && !this.backend.online) intent = this.auto.intent(this, intent);
     }
     const events = this.backend.frame(dt, intent);
+    if (this.backend.zone !== this.zone) this.changeZone();
 
     this.syncViews();
     for (const ev of events) this.handleEvent(ev);

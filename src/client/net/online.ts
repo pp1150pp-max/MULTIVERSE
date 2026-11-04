@@ -9,7 +9,7 @@ import { Loot } from '../../shared/sim/Loot';
 import type { Sim } from '../../shared/sim/Sim';
 import type { Intent, SimEvent } from '../../shared/sim/types';
 import { MONSTERS } from '../../shared/data/monsters';
-import { ZONE_1, type SpawnArea } from '../../shared/data/zones';
+import { zoneById, type SpawnArea, type ZoneDef } from '../../shared/data/zones';
 import type { NpcId } from '../../shared/data/npcs';
 import type { PotionKind, PotionSize, Rarity, SlotId, Vec2 } from '../../shared/types';
 import type { SkillSlot } from '../../shared/data/classes';
@@ -41,6 +41,7 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(wsUrl());
     let you = -1;
+    let zone = '';
     let settled = false;
     const fail = (msg: string) => {
       if (settled) return;
@@ -54,11 +55,14 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
     ws.onmessage = (e) => {
       const m = JSON.parse(e.data as string) as ServerMsg;
       if (m.t === 'kick') return fail(m.msg);
-      if (m.t === 'welcome') you = m.you;
+      if (m.t === 'welcome') {
+        you = m.you;
+        zone = m.zone;
+      }
       if (m.t === 'snap' && you >= 0 && !settled) {
         settled = true;
         clearTimeout(timer);
-        resolve(new OnlineBackend(ws, you, m));
+        resolve(new OnlineBackend(ws, you, zone, m));
       }
     };
     ws.onerror = () => fail('เชื่อมต่อ server ไม่ได้');
@@ -68,9 +72,9 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
 
 export class OnlineBackend implements Backend {
   readonly online = true;
-  readonly zone = ZONE_1;
-  readonly terrain = new Terrain(ZONE_1);
-  readonly me: Player;
+  zone: ZoneDef;
+  terrain: Terrain;
+  me: Player;
   players: Player[] = [];
   monsters: Monster[] = [];
   projectiles: MirrorProjectile[] = [];
@@ -100,12 +104,14 @@ export class OnlineBackend implements Backend {
   private readonly enhanceWait = new Map<number, (o: EnhanceOutcome) => void>();
   private kickMsg = '';
 
-  constructor(private readonly ws: WebSocket, private readonly myId: number, first: SnapshotMsg) {
+  constructor(private readonly ws: WebSocket, private myId: number, zoneId: string, first: SnapshotMsg) {
+    this.zone = zoneById(zoneId);
+    this.terrain = new Terrain(this.zone);
     const mine = first.players.find((p) => p.id === myId)!;
     const data: CharacterData = {
       name: mine.name, classId: mine.cls, level: first.me.level, exp: first.me.exp, gold: first.me.gold,
       potSel: first.me.potSel, lootFilter: first.me.lootFilter,
-      equipment: first.me.inv?.equipment ?? {}, bag: first.me.inv?.bag ?? [],
+      equipment: first.me.inv?.equipment ?? {}, bag: first.me.inv?.bag ?? [], zone: this.zone.id,
     };
     this.me = new Player(myId, NO_SIM, data);
     this.me.x = mine.x;
@@ -149,7 +155,41 @@ export class OnlineBackend implements Backend {
       case 'kick':
         this.kickMsg = m.msg;
         break;
+      case 'zone':
+        this.changeZone(m.zone, m.you, m.x, m.z);
+        break;
     }
+  }
+
+  /** The server moved us through a portal. Everything we mirrored belongs to the old zone. */
+  private changeZone(zoneId: string, you: number, x: number, z: number): void {
+    const old = this.me;
+    this.zone = zoneById(zoneId);
+    this.terrain = new Terrain(this.zone);
+    this.playerMap.clear();
+    this.monsterMap.clear();
+    this.projMap.clear();
+    this.lootMap.clear();
+    this.targets.clear();
+    this.players = [];
+    this.monsters = [];
+    this.projectiles = [];
+    this.loots = [];
+    // The server gave us a new id in the new zone, so the mirror is a new Player too.
+    const me = new Player(you, NO_SIM, { ...old.toData(), zone: this.zone.id });
+    me.hp = old.hp;
+    me.mp = old.mp;
+    me.stats = old.stats;
+    me.cd = old.cd;
+    me.potCd = old.potCd;
+    me.x = x;
+    me.z = z;
+    me.face(-x, -z);
+    this.me = me;
+    this.myId = you;
+    this.playerMap.set(you, me);
+    this.players = [me];
+    this.faceLockT = 0;
   }
 
   private glide(o: object, x: number, z: number, cur: { x: number; z: number }): void {

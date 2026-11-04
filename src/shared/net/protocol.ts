@@ -103,7 +103,9 @@ export interface SnapshotMsg {
 }
 
 export type ServerMsg =
-  | { t: 'welcome'; you: number; time: number }
+  | { t: 'welcome'; you: number; time: number; zone: string }
+  /** You walked through a portal: you are now `you` in zone `zone`, standing at x/z. Snapshots from that zone follow. */
+  | { t: 'zone'; zone: string; you: number; x: number; z: number }
   | SnapshotMsg
   | { t: 'chat'; name: string; text: string }
   | { t: 'enhanced'; req: number; result: EnhanceResult | null; item: Item | null }

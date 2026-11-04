@@ -1,7 +1,7 @@
 // The game rules, with no rendering. Singleplayer runs one of these in the browser; the online
 // server will run one per zone. Whoever drives it calls step() every frame and reads drainEvents()
 // to show effects, damage numbers and messages.
-import type { ZoneDef, SpawnArea } from '../data/zones';
+import { ZONES, type ZoneDef, type SpawnArea } from '../data/zones';
 import { MONSTERS } from '../data/monsters';
 import { expGapMult, expToNext, mitigate, MAX_LEVEL } from '../formulas';
 import { rollItem } from '../data/items';
@@ -10,7 +10,7 @@ import { entryName, potionName, POTIONS } from '../data/potions';
 import { NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { rand, randInt } from '../rng';
 import { isPotion, RARITY_LABEL, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
-import { Terrain } from './terrain';
+import { PORTAL_RANGE, Terrain } from './terrain';
 import { Player, type CharacterData, type LootFilter, type SortKey } from './Player';
 import { Monster } from './Monster';
 import { Projectile, type ProjOpts } from './Projectile';
@@ -49,11 +49,25 @@ export class Sim {
 
   // ------------------------------------------------------------ players
 
-  /** Puts a character into the world at the camp. */
-  addPlayer(data: CharacterData): Player {
+  /**
+   * Puts a character into the world: at the camp, or next to the portal back to `fromZone` when
+   * they arrive through one.
+   */
+  addPlayer(data: CharacterData, fromZone?: string): Player {
     const p = new Player(this.newId(), this, data);
-    p.x = this.zone.start.x - 2;
-    p.z = this.zone.start.z - 2;
+    p.zone = this.zone.id;
+    const back = fromZone ? this.zone.portals.find((pt) => pt.to === fromZone) : undefined;
+    if (back) {
+      // A few steps from the portal toward the middle of the map.
+      const d = Math.hypot(back.x, back.z) || 1;
+      p.x = back.x - (back.x / d) * 3.5;
+      p.z = back.z - (back.z / d) * 3.5;
+      p.face(-back.x, -back.z);
+      p.portalReady = false;
+    } else {
+      p.x = this.zone.start.x - 2;
+      p.z = this.zone.start.z - 2;
+    }
     this.players.push(p);
     return p;
   }
@@ -116,7 +130,7 @@ export class Sim {
     }
     this.monsters.push(new Monster(this.newId(), def, randInt(r, def.levels[0], def.levels[1]), sp.area, x, z));
     sp.alive++;
-    if (sp.boss && this.time > 1) this.log(`⚠ ${def.name} ปรากฏตัวที่ส่วนลึกของป่า!`, '#ff9a6a');
+    if (sp.boss && this.time > 1) this.log(`⚠ ${def.name} ปรากฏตัวที่ส่วนลึกของ${this.zone.nameTh}!`, '#ff9a6a');
   }
 
   // ------------------------------------------------------------ combat
@@ -428,6 +442,7 @@ export class Sim {
     }
 
     for (const p of this.players) if (p.alive) p.update(dt, intentOf(p));
+    for (const p of this.players) if (p.alive) this.checkPortals(p);
 
     for (const m of this.monsters) m.update(dt, this);
     this.separateMonsters();
@@ -444,6 +459,31 @@ export class Sim {
         sp.queue.shift();
         this.spawnMonster(sp);
       }
+    }
+  }
+
+  private checkPortals(p: Player): void {
+    for (const pt of this.zone.portals) {
+      const d = Math.hypot(p.x - pt.x, p.z - pt.z);
+      if (d > PORTAL_RANGE) {
+        if (d > PORTAL_RANGE + 1.5) p.portalReady = true;
+        continue;
+      }
+      if (!p.portalReady) continue;
+      const dest = ZONES[pt.to];
+      if (!dest) continue;
+      if (p.level < pt.minLevel) {
+        if (this.time - p.portalMsgAt > 3) {
+          p.portalMsgAt = this.time;
+          this.log(`ประตูสู่ ${dest.name} ยังไม่เปิดให้คุณ — ต้อง Lv.${pt.minLevel} ขึ้นไป`, '#ff9a6a', p.id);
+          this.text(p.x, p.topY, p.z, `ต้อง Lv.${pt.minLevel}`, 'info', 1);
+        }
+        continue;
+      }
+      p.portalReady = false;
+      this.fx('burst', pt.x, 1.4, pt.z, '#6affd0', 18, 3);
+      this.events.push({ t: 'travel', to: p.id, zone: dest.id });
+      return;
     }
   }
 
