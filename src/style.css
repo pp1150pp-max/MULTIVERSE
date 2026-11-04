@@ -212,6 +212,8 @@ button.primary { background: linear-gradient(#a8812f, #6b4f1a); border-color: va
 .bag-filter { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: -2px 0 8px; font-size: 12px; color: var(--ink-dim); }
 .bag-filter label { display: flex; align-items: center; gap: 2px; cursor: pointer; }
 .bag-filter input { margin: 0; accent-color: var(--gold-hi); }
+.bag-filter .pot-group { display: inline-flex; align-items: center; gap: 6px; }
+#aset-pots { flex-direction: column; align-items: flex-start; gap: 4px; margin: 6px 0 0; font-size: 13px; color: var(--ink); }
 .cell .psize { position: absolute; left: 2px; top: 0; font-size: 9px; color: #fff; text-shadow: 0 0 2px #000; }
 .cell.pot .ilv { color: #fff; font-size: 10px; font-weight: 600; text-shadow: 0 0 2px #000; }
 .cell.quick { outline: 2px solid var(--gold-hi); outline-offset: 1px; }
