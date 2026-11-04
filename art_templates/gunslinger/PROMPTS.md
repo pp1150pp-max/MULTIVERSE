@@ -11,6 +11,7 @@
 | `idle.png` | 4 | ภาพแบบตัวละคร บีบและยืดเล็กน้อยให้ดูเหมือนหายใจ |
 | `run.png` | 4 | prompt ข้อ 2 |
 | `attack.png` | 3 | prompt ข้อ 3 แล้วแทนแถวหันหน้าและแถวหันหลังด้วย prompt ข้อ 4 |
+| `run_attack.png` | 4 | prompt ข้อ 5 ใช้แทนท่าวิ่งตอนยิงระหว่างเดิน ไม่มีแสงปากกระบอกปืน เพราะจังหวะเฟรมไม่ตรงกับจังหวะยิง |
 
 หลังได้ภาพ ให้ตัดพื้นหลังสี #FF00FF ออก แล้วจัดให้ทุกเฟรมเท้าอยู่สูงจากขอบล่าง 16px หัวอยู่กลางช่อง
 และตัวสูงประมาณ 200px
@@ -85,4 +86,24 @@ at the top end of the barrel; frame 3 slight recoil, the gun tipped a little upw
 the head keeps the same size and height in every frame. Every figure fully inside its own cell with clear empty
 space around it, nothing touching or overlapping. Background ONE perfectly flat solid magenta (#FF00FF), no
 shadows, no ground, no text, no labels, no numbers, no grid lines.
+```
+
+## 5. ท่าวิ่งไปยิงไป
+
+```
+Excellent. Keep this EXACT character, outfit, colors, size and pixel style. Generate an image: a RUN-AND-SHOOT
+animation sprite sheet as a strict grid of 5 rows x 4 columns, 20 figures total: the character is running at full
+speed while aiming the pistol forward with the arm extended. Each row is one facing direction, and both the running
+and the aiming go in that same direction, top to bottom: row 1 front, running toward the viewer, the pistol pointing
+straight at the viewer with the arm extended forward, heavily foreshortened, the round muzzle in front of the chest;
+row 2 three-quarter front turned toward the LEFT, aiming down-left; row 3 side profile running toward the LEFT, arm
+fully extended straight LEFT; row 4 three-quarter back turned toward the LEFT, aiming up-left; row 5 back view,
+running away from the viewer, the arm extended forward and the pistol pointing up the picture, visible above the
+right shoulder beside the head. Each column is one frame of a smooth 4-frame run cycle with clearly different leg
+poses, left to right: frame 1 right foot forward and left foot back, frame 2 legs passing under the body, frame 3
+left foot forward and right foot back, frame 4 legs passing under the body. The legs must really run in every row;
+the gun arm stays steady and aimed in all 4 frames; coat tails and scarf trail behind. No muzzle flash, no bullets,
+no smoke, no motion lines. Head and body keep the same size and height in every frame. Every figure fully inside its
+own cell with clear empty space around it, nothing touching or overlapping. Background ONE perfectly flat solid
+magenta (#FF00FF), no shadows, no ground, no text, no labels, no numbers, no grid lines.
 ```

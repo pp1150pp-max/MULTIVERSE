@@ -70,6 +70,12 @@ const priorityOf = (name: string) => PRIORITY[name] ?? PRIORITY[name.split('_')[
 
 const S = Math.SQRT1_2;
 
+/** Optional looping animation shown instead of `run` while firing on the move. */
+const RUN_ATTACK = 'run_attack';
+/** Keeps the gun raised between shots so the arm doesn't flicker during continuous fire. */
+const AIM_HOLD = 0.2;
+const isAttack = (name: string) => name.startsWith('attack');
+
 export class AnimatedActor implements Actor {
   readonly group = new THREE.Group();
   readonly height: number;
@@ -85,6 +91,8 @@ export class AnimatedActor implements Actor {
   private sx = 0;
   private sy = -1;
   private flashT = 0;
+  private moving = false;
+  private aimT = 0;
 
   constructor(set: AnimSet, shadowRadius: number) {
     this.m = set.manifest;
@@ -122,11 +130,23 @@ export class AnimatedActor implements Actor {
     if (!def || !this.tex[name]) return false;
     if (this.oneShot && priorityOf(this.oneShot.name) > priorityOf(name)) return false;
     const fps = opts.duration ? def.frames / opts.duration : def.fps;
+    // A standing attack has planted feet, so playing it on the move would look like sliding.
+    if (this.moving && isAttack(name) && this.has(RUN_ATTACK)) {
+      this.aimT = def.frames / fps + AIM_HOLD;
+      return true;
+    }
     this.oneShot = { name, t: 0, fps, hold: !!opts.hold };
     return true;
   }
 
   update(dt: number, moving: boolean): void {
+    this.moving = moving;
+    this.aimT = Math.max(0, this.aimT - dt);
+    if (moving && this.oneShot && isAttack(this.oneShot.name) && this.has(RUN_ATTACK)) {
+      const frames = this.m.animations[this.oneShot.name].frames;
+      this.aimT = Math.max(0, frames / this.oneShot.fps - this.oneShot.t) + AIM_HOLD;
+      this.oneShot = null;
+    }
     let name: string;
     let frame: number;
     if (this.oneShot) {
@@ -143,10 +163,13 @@ export class AnimatedActor implements Actor {
       name = this.oneShot.name;
       frame = Math.min(Math.floor(this.oneShot.t * this.oneShot.fps), this.m.animations[name].frames - 1);
     } else {
-      const want = moving ? (this.has('run') ? 'run' : this.has('walk') ? 'walk' : 'idle') : 'idle';
+      const legs = this.has('run') ? 'run' : this.has('walk') ? 'walk' : 'idle';
+      const want = !moving ? 'idle' : this.aimT > 0 && this.has(RUN_ATTACK) ? RUN_ATTACK : legs;
       if (want !== this.base) {
+        // Raising or lowering the gun keeps the stride going instead of restarting the legs.
+        const sameStride = (want === RUN_ATTACK && this.base === 'run') || (want === 'run' && this.base === RUN_ATTACK);
         this.base = want;
-        this.baseT = 0;
+        if (!sameStride) this.baseT = 0;
       }
       this.baseT += dt;
       const def = this.m.animations[this.base] ?? Object.values(this.m.animations)[0];
@@ -217,6 +240,7 @@ export class AnimatedActor implements Actor {
 
   reset(): void {
     this.oneShot = null;
+    this.aimT = 0;
   }
 
   dispose(): void {
