@@ -56,21 +56,33 @@ export class Loot {
     }
     if (this.t <= LOOT_POP_TIME + 0.15) return;
 
+    // Goes to the nearest player with room for it; a full bag neither pulls it in nor blocks others.
     let p: Player | null = null;
     let d = Infinity;
+    let full: Player | null = null;
+    let fd = Infinity;
     for (const pl of sim.players) {
       if (!pl.alive || !this.canTake(pl.id, sim.time) || !pl.wantsLoot(this.kind, this.dropped)) continue;
       const pd = Math.hypot(pl.x - this.x, pl.z - this.z);
-      if (pd < d) {
+      if (!pl.canFit(this.kind)) {
+        if (pd < fd) {
+          fd = pd;
+          full = pl;
+        }
+      } else if (pd < d) {
         d = pd;
         p = pl;
       }
     }
-    if (!p) return;
     if (!this.armed) {
-      if (d > 1.6) this.armed = true;
+      if (Math.min(d, fd) > 1.6) this.armed = true;
       return;
     }
+    if (full && fd < 0.8 && fd < d && this.blockedMsgT <= 0) {
+      sim.text(full.x, full.topY, full.z, 'กระเป๋าเต็ม', 'info', undefined, full.id);
+      this.blockedMsgT = 2;
+    }
+    if (!p) return;
     const magnet = this.kind.type === 'item' ? 0 : 2.5;
     if (d < magnet && d > 0.01) {
       const step = Math.min(d, 10 * dt);
