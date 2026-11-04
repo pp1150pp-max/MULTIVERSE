@@ -26,13 +26,27 @@ export type SortKey = 'rarity' | 'level' | 'slot' | 'value';
 export const SORT_KEYS: SortKey[] = ['rarity', 'level', 'slot', 'value'];
 /** Which potion size the quick keys (1 / 2) use. */
 export type PotionSelect = Record<PotionKind, PotionSize>;
-/** What the player picks up from monster drops. Gold is always picked up. */
-export interface LootFilter { rarities: Rarity[]; potions: boolean }
-export const DEFAULT_LOOT_FILTER: LootFilter = { rarities: [...RARITIES], potions: true };
+/**
+ * What the player picks up from monster drops. Gold is always picked up.
+ * `pots` = which potion sizes to take, per kind. Saves from before it existed only have `potions`
+ * (take all or none); `potions` is kept true while any size is picked so they still read sensibly.
+ */
+export interface LootFilter { rarities: Rarity[]; potions: boolean; pots?: Record<PotionKind, PotionSize[]> }
+export const DEFAULT_LOOT_FILTER: LootFilter = { rarities: [...RARITIES], potions: true, pots: { hp: [...POTION_SIZES], mp: [...POTION_SIZES] } };
+
+/** Potion sizes to pick up, filling in old saves (and anything a client sends) safely. */
+export function lootPots(f: Partial<LootFilter> | undefined): Record<PotionKind, PotionSize[]> {
+  const clean = (v: unknown) => POTION_SIZES.filter((s) => Array.isArray(v) && v.includes(s));
+  if (f?.pots && typeof f.pots === 'object') return { hp: clean(f.pots.hp), mp: clean(f.pots.mp) };
+  const all = f?.potions !== false;
+  return { hp: all ? [...POTION_SIZES] : [], mp: all ? [...POTION_SIZES] : [] };
+}
 
 /** The player's Auto Play options. `range` is in fixed pixels (AUTO_PX_PER_UNIT per world unit). */
 export interface AutoSettings {
   range: number;
+  /** True once the player has changed the range themselves. Without it, the default applies. */
+  rangeSet?: boolean;
   /** Drink an HP / MP potion below this percent. */
   hpPct: number;
   mpPct: number;
@@ -42,8 +56,10 @@ export interface AutoSettings {
 export const AUTO_PX_PER_UNIT = 50;
 export const AUTO_RANGE_MIN = 100;
 export const AUTO_RANGE_MAX = 2000;
+/** The default before it became the maximum. */
+const OLD_DEFAULT_RANGE = 300;
 export const DEFAULT_AUTO_SETTINGS: AutoSettings = {
-  range: 300, hpPct: 45, mpPct: 15, skills: { q: true, e: true, r: true }, loot: true,
+  range: 2000, hpPct: 45, mpPct: 15, skills: { q: true, e: true, r: true }, loot: true,
 };
 
 /** Fill in and clamp settings from a save or from a client (never trust either). */
@@ -54,7 +70,12 @@ export function cleanAutoSettings(raw: unknown): AutoSettings {
     typeof v === 'number' && Number.isFinite(v) ? Math.round(Math.max(lo, Math.min(hi, v))) : def;
   const sk = (r.skills ?? {}) as Partial<AutoSettings['skills']>;
   return {
-    range: num(r.range, d.range, AUTO_RANGE_MIN, AUTO_RANGE_MAX),
+    // Saves from before `rangeSet` hold 300, the old default, which the player never chose: use today's default.
+    // Any other number there was typed by the player, so it stays.
+    range: r.rangeSet || (typeof r.range === 'number' && r.range !== OLD_DEFAULT_RANGE)
+      ? num(r.range, d.range, AUTO_RANGE_MIN, AUTO_RANGE_MAX)
+      : d.range,
+    rangeSet: r.rangeSet === true || (typeof r.range === 'number' && r.range !== OLD_DEFAULT_RANGE),
     hpPct: num(r.hpPct, d.hpPct, 0, 100),
     mpPct: num(r.mpPct, d.mpPct, 0, 100),
     skills: { q: sk.q !== false, e: sk.e !== false, r: sk.r !== false },
@@ -139,7 +160,9 @@ export class Player extends Unit {
     this.bag = Array.from({ length: BAG_SIZE }, (_, i) => data.bag[i] ?? null);
     this.zone = data.zone;
     this.potSel = { hp: 's', mp: 's', ...data.potSel };
-    this.lootFilter = data.lootFilter ? { ...data.lootFilter, rarities: [...data.lootFilter.rarities] } : { ...DEFAULT_LOOT_FILTER, rarities: [...RARITIES] };
+    this.lootFilter = data.lootFilter
+      ? { ...data.lootFilter, rarities: [...data.lootFilter.rarities], pots: lootPots(data.lootFilter) }
+      : { ...DEFAULT_LOOT_FILTER, rarities: [...RARITIES], pots: lootPots(DEFAULT_LOOT_FILTER) };
     this.autoSettings = cleanAutoSettings(data.autoSettings);
     this.radius = 0.4;
     this.recompute();
@@ -202,7 +225,7 @@ export class Player extends Unit {
   /** Whether the loot filter lets this player pick it up (gold always; a thrown-away item always). */
   wantsLoot(kind: LootKind, dropped: boolean): boolean {
     if (kind.type === 'gold' || dropped) return true;
-    if (kind.type === 'potion') return this.lootFilter.potions;
+    if (kind.type === 'potion') return lootPots(this.lootFilter)[kind.pot].includes(kind.size);
     return this.lootFilter.rarities.includes(kind.item.rarity);
   }
 

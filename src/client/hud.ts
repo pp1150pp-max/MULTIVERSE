@@ -9,7 +9,7 @@ import {
   entryName, POTION_ICON, POTION_SIZES, POTION_SIZE_LABEL, POTION_STACK, POTIONS, potionName, potionSellPrice,
 } from '../shared/data/potions';
 import { FullMap } from './fullmap';
-import { AUTO_PX_PER_UNIT, AUTO_RANGE_MAX, AUTO_RANGE_MIN, cleanAutoSettings, type SortKey } from '../shared/sim/Player';
+import { AUTO_PX_PER_UNIT, AUTO_RANGE_MAX, AUTO_RANGE_MIN, cleanAutoSettings, lootPots, type LootFilter, type SortKey } from '../shared/sim/Player';
 import { isBulkSellable } from '../shared/sim/Sim';
 import { MONSTERS } from '../shared/data/monsters';
 import { expToNext } from '../shared/formulas';
@@ -33,6 +33,28 @@ const SEEKER_LINES = [
   'ป่ามรกตแห่งนี้คือเศษเสี้ยวของมิติที่ยังรอด แต่สัตว์ป่าเริ่มคลุ้มคลั่งจากพลังที่รั่วไหล จงฝึกฝนตัวเองที่นี่ก่อน',
   'ลึกเข้าไปทางตะวันตกเฉียงเหนือ มีหมีใหญ่ที่ถูกพลังนั้นครอบงำ หากเจ้าปราบมันได้ เราจะได้เบาะแสแรกของ The Origin',
 ];
+
+/** Six checkboxes: HP small/medium/large, MP small/medium/large. */
+function potToggles(): string {
+  return (['hp', 'mp'] as const).map((k) =>
+    `<span class="pot-group">ยา ${k.toUpperCase()}` +
+    POTION_SIZES.map((sz) => `<label><input type="checkbox" data-pot="${k}" data-size="${sz}">${POTION_SIZE_LABEL[sz]}</label>`).join('') +
+    '</span>',
+  ).join('');
+}
+
+function readPots(box: HTMLElement): LootFilter['pots'] {
+  const pick = (k: 'hp' | 'mp') =>
+    POTION_SIZES.filter((sz) => box.querySelector<HTMLInputElement>(`[data-pot="${k}"][data-size="${sz}"]`)?.checked);
+  return { hp: pick('hp'), mp: pick('mp') };
+}
+
+function syncPots(box: HTMLElement, f: LootFilter): void {
+  const pots = lootPots(f);
+  for (const cb of box.querySelectorAll<HTMLInputElement>('[data-pot]')) {
+    cb.checked = pots[cb.dataset.pot as 'hp' | 'mp'].includes(cb.dataset.size as 's' | 'm' | 'l');
+  }
+}
 
 export class Hud {
   dialogOpen = false;
@@ -143,13 +165,16 @@ export class Hud {
     const lf = $('loot-filter');
     lf.innerHTML = '<span>เก็บ</span>' +
       RARITIES.map((r) => `<label style="color:${RARITY_COLOR[r]}"><input type="checkbox" data-rarity="${r}">${RARITY_LABEL[r]}</label>`).join('') +
-      '<label><input type="checkbox" data-potions>ยา</label>';
+      potToggles();
     lf.addEventListener('change', () => {
       const rarities = RARITIES.filter((r) => lf.querySelector<HTMLInputElement>(`[data-rarity="${r}"]`)!.checked);
-      const potions = lf.querySelector<HTMLInputElement>('[data-potions]')!.checked;
-      g.backend.setLootFilter({ rarities, potions });
+      this.sendLootFilter({ rarities, pots: readPots(lf) });
     });
-    lf.title = 'ของระดับที่ไม่ได้ติ๊กจะไม่ถูกเก็บ (ทั้งตอน Auto และเดินเอง) · ทองเก็บเสมอ';
+    lf.title = 'ของ/ยาที่ไม่ได้ติ๊กจะไม่ถูกเก็บ (ทั้งตอน Auto และเดินเอง) · ทองเก็บเสมอ';
+    // The same potion toggles in the Auto settings window.
+    const ap = $('aset-pots');
+    ap.innerHTML = potToggles();
+    ap.addEventListener('change', () => this.sendLootFilter({ pots: readPots(ap) }));
     $('sort-go').onclick = () => {
       g.backend.sortBag($<HTMLSelectElement>('sort-key').value as SortKey, $('sort-dir').dataset.desc === '1');
       this.hideTip();
@@ -393,6 +418,19 @@ export class Hud {
     $('help').classList.toggle('hidden', !(force ?? $('help').classList.contains('hidden')));
   }
 
+  /** Change part of the loot filter, keeping the rest. */
+  private sendLootFilter(change: Partial<LootFilter>): void {
+    const cur = this.g.player.lootFilter;
+    const pots = change.pots ?? lootPots(cur);
+    this.g.backend.setLootFilter({
+      rarities: change.rarities ?? [...cur.rarities],
+      potions: pots.hp.length + pots.mp.length > 0,
+      pots,
+    });
+    syncPots($('loot-filter'), this.g.player.lootFilter);
+    syncPots($('aset-pots'), this.g.player.lootFilter);
+  }
+
   // ------------------------------------------------------------ full map
 
   toggleMap(force?: boolean): void {
@@ -435,6 +473,7 @@ export class Hud {
     $<HTMLInputElement>('aset-hp').value = String(s.hpPct);
     $<HTMLInputElement>('aset-mp').value = String(s.mpPct);
     $<HTMLInputElement>('aset-loot').checked = s.loot;
+    syncPots($('aset-pots'), p.lootFilter);
     const box = $('aset-skills');
     box.innerHTML = '';
     for (const slot of ['q', 'e', 'r'] as const) {
@@ -460,6 +499,7 @@ export class Hud {
     }
     const s = cleanAutoSettings({
       range: num('aset-range'), hpPct: num('aset-hp'), mpPct: num('aset-mp'), skills, loot: $<HTMLInputElement>('aset-loot').checked,
+      rangeSet: this.g.player.autoSettings.rangeSet || num('aset-range') !== this.g.player.autoSettings.range,
     });
     this.g.backend.setAutoSettings(s);
     this.fillAutoSettings();
@@ -688,7 +728,7 @@ export class Hud {
     $('inv-pots').textContent = this.potionTotals();
     const lf = $('loot-filter');
     for (const r of RARITIES) lf.querySelector<HTMLInputElement>(`[data-rarity="${r}"]`)!.checked = p.lootFilter.rarities.includes(r);
-    lf.querySelector<HTMLInputElement>('[data-potions]')!.checked = p.lootFilter.potions;
+    syncPots(lf, p.lootFilter);
     $('bag-hint').textContent = this.shopOpen
       ? 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = ขายให้พ่อค้า · คลิกช่องสวมใส่ = ถอด'
       : 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = วางลงพื้น · คลิกช่องสวมใส่ = ถอด · ขายของได้ที่พ่อค้าเท่านั้น';

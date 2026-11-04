@@ -11,7 +11,7 @@ import { NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { rand, randInt } from '../rng';
 import { isPotion, RARITY_LABEL, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
 import { PORTAL_RANGE, Terrain } from './terrain';
-import { cleanAutoSettings, Player, type AutoSettings, type CharacterData, type LootFilter, type SortKey } from './Player';
+import { cleanAutoSettings, lootPots, Player, type AutoSettings, type CharacterData, type LootFilter, type SortKey } from './Player';
 import { Monster } from './Monster';
 import { Projectile, type ProjOpts } from './Projectile';
 import { Loot, LOOT_PRIORITY_TIME, type LootKind } from './Loot';
@@ -402,7 +402,8 @@ export class Sim {
   }
 
   setLootFilter(p: Player, f: LootFilter): void {
-    p.lootFilter = { rarities: [...f.rarities], potions: f.potions };
+    const pots = lootPots(f);
+    p.lootFilter = { rarities: [...f.rarities], potions: pots.hp.length + pots.mp.length > 0, pots };
     this.events.push({ t: 'save', to: p.id });
   }
 
