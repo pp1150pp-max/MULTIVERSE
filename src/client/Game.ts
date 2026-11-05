@@ -95,6 +95,7 @@ export class Game {
     this.updateProjection();
 
     this.world = new World(this.scene, backend.terrain);
+    this.world.bakeMap(this.renderer);
     this.input = new Input(this.renderer.domElement);
     this.fx = new Effects(this.scene);
     this.autoRing = new AutoRing(this.scene);
@@ -255,6 +256,7 @@ export class Game {
     this.world.dispose();
     this.zone = this.backend.zone;
     this.world = new World(this.scene, this.backend.terrain);
+    this.world.bakeMap(this.renderer);
     this.placeNpcs();
     this.syncViews();
     this.camTarget.set(this.player.x, 0, this.player.z);

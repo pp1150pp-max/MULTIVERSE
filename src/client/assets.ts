@@ -4,6 +4,7 @@ import {
   drawTent, drawCampfire, drawSign, drawFence, drawRunestone, drawIcon, pixelCircle,
 } from './placeholder';
 import { ITEM_ART } from '../shared/data/items';
+import { MAP_ICONS } from './mapIconNames';
 import type { AnimSet, CharManifest } from './AnimatedActor';
 
 export interface SheetInfo {
@@ -113,6 +114,7 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   chest: prop('chest', drawStump),
   watchtower: prop('watchtower', drawFence),
 
+  ...Object.fromEntries(MAP_ICONS.map((name) => [`map_${name}`, single(`icons/map_${name}.png`, () => drawIcon('coin'))])),
   icon_coin: single('icons/coin.png', () => drawIcon('coin')),
   icon_potion_hp: single('icons/potion_hp.png', () => drawIcon('potion_hp')),
   icon_potion_mp: single('icons/potion_mp.png', () => drawIcon('potion_mp')),

@@ -17,9 +17,16 @@ import {
   isPotion, RARITIES, RARITY_COLOR, RARITY_LABEL, SLOTS, SLOT_LABEL, STAT_KEYS, STAT_LABEL,
   type BagEntry, type Item, type PotionKind, type PotionSize, type PotionStack, type Rarity, type SlotId, type StatKey,
 } from '../shared/types';
+import { drawMapIcon, facingAngle } from './mapIcons';
+import type { MapIcon } from './mapIconNames';
+import { NPC_MAP_ICON } from './fullmap';
 import { COIN_ICON, emptySlotIcon, FORGE_ICON, itemIcon, potionIcon, skillIcon } from './icons';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+
+/** The minimap's size on screen, and pixels per world unit. Its canvas holds twice that, to stay sharp. */
+const MINIMAP_SIZE = 176;
+const MINIMAP_SCALE = 2.6;
 
 const KEY_LABEL: Record<SkillSlot, string> = { basic: 'LMB', q: 'Q', e: 'E', r: 'R', dash: 'SPACE' };
 const POTION_CD = 1.5;
@@ -431,28 +438,28 @@ export class Hud {
 
   private drawMinimap(): void {
     const ctx = this.mm;
-    const W = ctx.canvas.width;
+    const W = MINIMAP_SIZE;
     const c = W / 2;
     const g = this.g;
     const p = g.player;
-    const sc = 2.6;
+    const sc = MINIMAP_SCALE;
     const S = Math.SQRT1_2;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const zoom = ctx.canvas.width / W;
+    ctx.setTransform(zoom, 0, 0, zoom, 0, 0);
     ctx.clearRect(0, 0, W, W);
     ctx.save();
     ctx.beginPath();
-    ctx.arc(c, c, c - 2, 0, Math.PI * 2);
+    ctx.arc(c, c, c - 3, 0, Math.PI * 2);
     ctx.clip();
-    ctx.fillStyle = '#10200f';
+    ctx.fillStyle = '#05080a';
     ctx.fillRect(0, 0, W, W);
-    // Draw the ground texture rotated to match the iso camera.
-    const H = g.world.half;
-    const k = (2 * H) / g.world.groundCanvas.width;
-    const a = k * sc * S;
-    ctx.setTransform(a, a, -a, a, (p.z - p.x) * sc * S + c, (-2 * H - p.x - p.z) * sc * S + c);
+    // The zone's map picture, slid so the player sits in the middle.
+    const world = g.world;
+    const f = sc / world.mapScale;
+    const [ix, iy] = world.mapAt(p.x, p.z);
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(g.world.groundCanvas, 0, 0);
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(world.mapImage, c - ix * f, c - iy * f, world.mapImage.width * f, world.mapImage.height * f);
     const toMM = (x: number, z: number): [number, number] => {
       const dx = x - p.x;
       const dz = z - p.z;
@@ -460,34 +467,39 @@ export class Hud {
     };
     const dot = (x: number, z: number, r: number, col: string) => {
       const [mx, my] = toMM(x, z);
-      ctx.fillStyle = col;
       ctx.beginPath();
       ctx.arc(mx, my, r, 0, Math.PI * 2);
+      ctx.fillStyle = col;
       ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+      ctx.stroke();
     };
-    for (const l of g.loots) if (l.kind.type === 'item') dot(l.x, l.z, 2, RARITY_COLOR[l.kind.item.rarity]);
+    const icon = (name: MapIcon, x: number, z: number, size: number) => drawMapIcon(ctx, name, ...toMM(x, z), size);
+    for (const l of g.loots) if (l.kind.type === 'item') dot(l.x, l.z, 2.4, RARITY_COLOR[l.kind.item.rarity]);
+    let boss: { x: number; z: number } | null = null;
     for (const m of g.monsters) {
       if (!m.alive) continue;
-      if (m.isBoss) {
-        dot(m.x, m.z, 5, '#ff3a2a');
-        dot(m.x, m.z, 2.5, '#ffd34a');
-      } else dot(m.x, m.z, 2.2, m.isHostile ? '#ff5a4a' : '#f2a640');
+      if (m.isBoss) boss = m;
+      else if (m.isHostile) icon('fight', m.x, m.z, 12);
+      else dot(m.x, m.z, 2.4, '#f2a640');
     }
-    const npcColor: Record<NpcId, string> = { seeker: '#fff3c0', merchant: '#7fe07a', blacksmith: '#ff9a4a' };
-    for (const n of g.npcs) dot(n.x, n.z, 3.5, npcColor[n.id]);
-    ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(c, c, 4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
+    if (boss) icon('boss', boss.x, boss.z, 20);
+    for (const pt of g.backend.zone.portals) icon('portal', pt.x, pt.z, 18);
+    for (const n of g.npcs) icon(NPC_MAP_ICON[n.id], n.x, n.z, 15);
+    for (const o of g.backend.players) {
+      if (o !== p) drawMapIcon(ctx, 'ally', ...toMM(o.x, o.z), 16, facingAngle(o.faceX, o.faceZ));
+    }
+    drawMapIcon(ctx, 'player', c, c, 22, facingAngle(p.faceX, p.faceZ));
     ctx.restore();
-    ctx.strokeStyle = '#c9a85a';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(c, c, c - 2, 0, Math.PI * 2);
-    ctx.stroke();
+    // A two-tone gold rim.
+    for (const [width, colour] of [[6, '#2a1d0c'], [4, '#c9a85a'], [1, '#f6e3a1']] as const) {
+      ctx.lineWidth = width;
+      ctx.strokeStyle = colour;
+      ctx.beginPath();
+      ctx.arc(c, c, c - 3, 0, Math.PI * 2);
+      ctx.stroke();
+    }
   }
 
   // ------------------------------------------------------------ inventory
