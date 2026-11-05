@@ -18,6 +18,7 @@ import { SpriteActor } from './SpriteActor';
 import { sheets } from './assets';
 import { GameAudio } from './audio/gameAudio';
 import { findPath } from './pathfind';
+import { SystemMenu } from './sysmenu';
 import { LootView, MonsterView, PlayerView, ProjectileView, ViewSet } from './views';
 
 const S = Math.SQRT1_2;
@@ -44,6 +45,7 @@ export class Game {
   readonly fx: Effects;
   readonly floating: Floating;
   readonly hud: Hud;
+  readonly sysMenu: SystemMenu;
   npcs: Npc[] = [];
   /** The Seeker's intro is shown only when you talk to him. */
   metSeeker = true;
@@ -103,6 +105,7 @@ export class Game {
     this.placeNpcs();
 
     this.hud = new Hud(this);
+    this.sysMenu = new SystemMenu(this);
     window.addEventListener('resize', () => {
       this.renderer.setSize(window.innerWidth, window.innerHeight);
       this.updateProjection();
@@ -392,7 +395,7 @@ export class Game {
     if (i.pressed('KeyI') || i.pressed('KeyB')) this.hud.toggleBag();
     if (i.pressed('KeyH')) this.hud.toggleHelp();
     if (i.pressed('KeyM')) this.hud.toggleMap();
-    if (i.pressed('Escape')) this.hud.closePanels();
+    if (i.pressed('Escape')) this.sysMenu.onEscape();
     if (i.pressed('Enter')) this.hud.openChat();
     if (i.wheel) {
       this.viewSize = Math.max(10, Math.min(28, this.viewSize + i.wheel * 1.2));
@@ -409,6 +412,7 @@ export class Game {
       // The server plays Auto (so it keeps going in a hidden tab); here it only gets our manual input.
       else if (this.autoPlay && !this.mapRoute.length && (intent.move || intent.moveTo)) this.toggleAuto(false, 'ปิด Auto Play — เดินเอง');
     }
+    this.sysMenu.update(dt, intent.basic || intent.skills.length > 0, !!(intent.move || intent.moveTo || intent.dash));
     const events = this.backend.frame(dt, intent);
     if (this.backend.zone !== this.zone) this.changeZone();
     this.sound.update(dt, this.backend);

@@ -6,6 +6,7 @@ import type { ClassId } from '../shared/types';
 import * as api from './net/api';
 import { connectOnline, type OnlineBackend } from './net/online';
 import { skillIcon } from './icons';
+import { AFTER_EXIT_KEY } from './sysmenu';
 
 export type Launcher = (backend: OnlineBackend) => void;
 
@@ -374,4 +375,14 @@ export function buildMenu(launch: Launcher): void {
   document.querySelectorAll<HTMLElement>('.btn-back').forEach((b) => (b.onclick = () => show('mode')));
   show('mode');
   $('menu').classList.remove('hidden');
+  // Back from the in-game menu: open the character list (or the guest screen) instead of the title.
+  let after: string | null = null;
+  try {
+    after = sessionStorage.getItem(AFTER_EXIT_KEY);
+    sessionStorage.removeItem(AFTER_EXIT_KEY);
+  } catch {
+    // Storage blocked: stay on the title screen.
+  }
+  if (after === 'characters') $('btn-mode-online').click();
+  else if (after === 'guest') $('btn-mode-guest').click();
 }

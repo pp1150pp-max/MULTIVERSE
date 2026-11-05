@@ -39,6 +39,8 @@ export interface Backend {
 
   /** Advances one frame with this player's input and returns what should be shown. */
   frame(dt: number, intent: Intent): SimEvent[];
+  /** Leave the world on purpose (no "disconnected" message). */
+  close(): void;
 
   respawn(): void;
   equip(bagIndex: number): void;

@@ -831,6 +831,12 @@ export class Hud {
     this.fillAutoSettings();
   }
 
+  /** Anything Esc would close: a window, the chat box or an NPC conversation (the system menu aside). */
+  anyPanelOpen(): boolean {
+    if (this.dialogOpen || !$('chat').classList.contains('hidden')) return true;
+    return !!document.querySelector('#hud .panel:not(.hidden):not(#sys-menu)');
+  }
+
   closePanels(): void {
     if (this.confirmYes) return this.closeConfirm();
     this.closeChat();
