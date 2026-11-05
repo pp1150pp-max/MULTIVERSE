@@ -1,7 +1,7 @@
 // Title menu: play as a guest, or log in / sign up. Either way the game runs on the server.
 import { gameAssetsReady, loadGameAssets, loadMenuAssets, onAssetProgress, portraitSource } from './assets';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
-import { MAX_CHARACTERS, checkCharacterName, checkPassword, checkUsername, type CharacterSummary } from '../shared/api';
+import { MAX_CHARACTERS, PASSWORD_MIN, checkCharacterName, checkPassword, checkUsername, type CharacterSummary } from '../shared/api';
 import type { ClassId } from '../shared/types';
 import * as api from './net/api';
 import { connectOnline, type OnlineBackend } from './net/online';
@@ -186,9 +186,17 @@ class OnlineMenu {
     this.chosenClass = buildClassCards($('online-class-cards'));
     $('login-box').addEventListener('submit', (e) => {
       e.preventDefault();
-      void this.auth('login');
+      void this.login();
     });
-    $('btn-register').onclick = () => void this.auth('register');
+    $('btn-register').onclick = () => this.showRegister();
+    $('btn-register-back').onclick = () => this.showLogin();
+    $('register-box').addEventListener('submit', (e) => {
+      e.preventDefault();
+      void this.register();
+    });
+    for (const id of ['reg-user', 'reg-pass', 'reg-pass2', 'reg-agree']) $(id).addEventListener('input', () => this.checkRegister());
+    document.querySelector('#register-box [data-rule="pass-len"]')!.textContent = `อย่างน้อย ${PASSWORD_MIN} ตัว`;
+    document.querySelectorAll<HTMLButtonElement>('.pass-eye').forEach((b) => (b.onclick = () => togglePassword(b)));
     $('btn-logout').onclick = () => void this.logout();
     $('btn-create-char').onclick = () => void this.onCreateClick();
     $('char-list').addEventListener('click', (e) => this.onListClick(e));
@@ -250,27 +258,76 @@ class OnlineMenu {
 
   private showLogin(error = ''): void {
     $('login-box').classList.remove('hidden');
+    $('register-box').classList.add('hidden');
     $('char-box').classList.add('hidden');
     $('login-error').textContent = error;
     $<HTMLInputElement>('login-user').focus();
   }
 
-  private async auth(kind: 'login' | 'register'): Promise<void> {
+  private async login(): Promise<void> {
     if (this.busy) return;
     const username = $<HTMLInputElement>('login-user').value.trim();
     const password = $<HTMLInputElement>('login-pass').value;
     const err = $('login-error');
-    if (kind === 'register') {
-      const bad = checkUsername(username) ?? checkPassword(password);
-      if (bad) return void (err.textContent = bad);
-    } else if (!username || !password) {
-      return void (err.textContent = 'กรุณาใส่ชื่อผู้ใช้และรหัสผ่าน');
-    }
+    if (!username || !password) return void (err.textContent = 'กรุณาใส่ชื่อผู้ใช้และรหัสผ่าน');
     this.busy = true;
-    err.textContent = kind === 'login' ? 'กำลังเข้าสู่ระบบ…' : 'กำลังสมัคร…';
+    err.textContent = 'กำลังเข้าสู่ระบบ…';
     try {
-      const r = kind === 'login' ? await api.login(username, password) : await api.register(username, password);
+      const r = await api.login(username, password);
       $<HTMLInputElement>('login-pass').value = '';
+      err.textContent = '';
+      await this.showCharacters(r.username);
+    } catch (e) {
+      err.textContent = (e as Error).message;
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  private showRegister(): void {
+    $('login-box').classList.add('hidden');
+    $('register-box').classList.remove('hidden');
+    $('register-error').textContent = '';
+    // Carry over a username typed into the Login form by mistake.
+    const typed = $<HTMLInputElement>('login-user').value.trim();
+    if (typed && !$<HTMLInputElement>('reg-user').value) $<HTMLInputElement>('reg-user').value = typed;
+    this.checkRegister();
+    $<HTMLInputElement>('reg-user').focus();
+  }
+
+  /**
+   * Ticks each rule under the Register fields while typing, and returns the first problem
+   * (null when the form is good). The server checks everything again.
+   */
+  private checkRegister(): string | null {
+    const user = $<HTMLInputElement>('reg-user').value.trim();
+    const pass = $<HTMLInputElement>('reg-pass').value;
+    const pass2 = $<HTMLInputElement>('reg-pass2').value;
+    const mark = (rule: string, typed: boolean, ok: boolean): void => {
+      const li = document.querySelector(`#register-box [data-rule="${rule}"]`)!;
+      li.classList.toggle('ok', typed && ok);
+      li.classList.toggle('bad', typed && !ok);
+    };
+    mark('user-len', user.length > 0, user.length >= 3 && user.length <= 16);
+    mark('user-chars', user.length > 0, /^[A-Za-z0-9_]*$/.test(user));
+    mark('pass-len', pass.length > 0, pass.length >= PASSWORD_MIN);
+    mark('pass-match', pass2.length > 0, pass2 === pass);
+    $<HTMLButtonElement>('btn-register-submit').disabled = !$<HTMLInputElement>('reg-agree').checked;
+    return checkUsername(user) ?? checkPassword(pass) ?? (pass2 === pass ? null : 'รหัสผ่านกับยืนยันรหัสผ่านไม่ตรงกัน');
+  }
+
+  private async register(): Promise<void> {
+    if (this.busy || !$<HTMLInputElement>('reg-agree').checked) return;
+    const err = $('register-error');
+    const bad = this.checkRegister();
+    if (bad) return void (err.textContent = bad);
+    this.busy = true;
+    err.textContent = 'กำลังสมัคร…';
+    try {
+      // A guest token on this browser makes the server turn that guest into the new account.
+      const r = await api.register($<HTMLInputElement>('reg-user').value.trim(), $<HTMLInputElement>('reg-pass').value);
+      for (const id of ['reg-user', 'reg-pass', 'reg-pass2']) $<HTMLInputElement>(id).value = '';
+      $<HTMLInputElement>('reg-agree').checked = false;
       err.textContent = '';
       await this.showCharacters(r.username);
     } catch (e) {
@@ -290,6 +347,7 @@ class OnlineMenu {
   private async showCharacters(username: string): Promise<void> {
     $('account-name').textContent = username;
     $('login-box').classList.add('hidden');
+    $('register-box').classList.add('hidden');
     $('char-box').classList.remove('hidden');
     $('char-error').textContent = '';
     this.chars = await api.listCharacters();
@@ -396,6 +454,16 @@ class OnlineMenu {
       $('char-error').textContent = (e as Error).message;
     }
   }
+}
+
+/** The 👁 button next to a password field: shows or hides what was typed. */
+function togglePassword(btn: HTMLButtonElement): void {
+  const input = $<HTMLInputElement>(btn.dataset.for!);
+  const show = input.type === 'password';
+  input.type = show ? 'text' : 'password';
+  btn.classList.toggle('on', show);
+  btn.title = show ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน';
+  btn.setAttribute('aria-label', btn.title);
 }
 
 function escapeHtml(s: string): string {

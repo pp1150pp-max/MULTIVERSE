@@ -282,26 +282,56 @@
           </div>
 
           <div id="online-panel" class="hidden">
-            <form id="login-box" class="online-box" autocomplete="on">
+            <form id="login-box" class="online-box logon-box" autocomplete="on">
               <div class="logon-head"><span>✦</span> Login <span>✦</span></div>
               <div class="logon-body">
                 <h2>ยินดีต้อนรับ นักผจญภัย</h2>
                 <p class="logon-sub">เริ่มการผจญภัยครั้งใหม่ได้ทันที</p>
                 <button id="btn-account-continue" type="button" class="logon-wide hidden"></button>
                 <div class="form-row"><label for="login-user">ชื่อผู้ใช้</label><input id="login-user" name="username" maxlength="16" autocomplete="username" /></div>
-                <div class="form-row"><label for="login-pass">รหัสผ่าน</label><input id="login-pass" name="password" type="password" maxlength="72" autocomplete="current-password" /></div>
+                <div class="form-row"><label for="login-pass">รหัสผ่าน</label><span class="pass-wrap"><input id="login-pass" name="password" type="password" maxlength="72" autocomplete="current-password" /><button type="button" class="pass-eye" data-for="login-pass" aria-label="แสดงรหัสผ่าน" title="แสดงรหัสผ่าน">👁</button></span></div>
                 <div id="login-error" class="form-error"></div>
                 <div class="menu-buttons logon-actions">
                   <button id="btn-login" type="submit" class="primary">เข้าสู่ระบบ</button>
                   <button id="btn-register" type="button">สมัครสมาชิกใหม่</button>
                 </div>
-                <p class="hint">สมัครใหม่: ใส่ชื่อผู้ใช้ (A–Z, 0–9, _ ยาว 3–16 ตัว) และรหัสผ่านอย่างน้อย 6 ตัว แล้วกด “สมัครสมาชิกใหม่”</p>
-                <p id="guest-move-hint" class="hint guest-move hidden"></p>
                 <div class="logon-or"><span>หรือ</span></div>
                 <button id="btn-mode-guest" type="button" class="logon-wide logon-guest" aria-disabled="true">
                   <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><circle cx="8" cy="4.5" r="3.5" fill="currentColor"/><path d="M1 15c0-4 3-6 7-6s7 2 7 6z" fill="currentColor"/></svg>
                   Guest Login
                 </button>
+              </div>
+            </form>
+
+            <form id="register-box" class="online-box logon-box hidden" autocomplete="on" novalidate>
+              <div class="logon-head"><span>✦</span> Register <span>✦</span></div>
+              <div class="logon-body">
+                <button id="btn-register-back" type="button" class="logon-back">‹ กลับไปหน้า Login</button>
+                <h2>สมัครสมาชิก</h2>
+                <p class="logon-sub">สร้างบัญชีใหม่ เพื่อเก็บตัวละครไว้เล่นต่อได้ทุกเครื่อง</p>
+                <div class="form-field">
+                  <div class="form-row"><label for="reg-user">ชื่อผู้ใช้</label><input id="reg-user" name="username" maxlength="16" autocomplete="username" /></div>
+                  <ul class="rules">
+                    <li data-rule="user-len">ยาว 3–16 ตัว</li>
+                    <li data-rule="user-chars">ใช้ได้เฉพาะ A–Z, a–z, 0–9 และ _</li>
+                  </ul>
+                </div>
+                <div class="form-field">
+                  <div class="form-row"><label for="reg-pass">รหัสผ่าน</label><span class="pass-wrap"><input id="reg-pass" name="new-password" type="password" maxlength="72" autocomplete="new-password" /><button type="button" class="pass-eye" data-for="reg-pass" aria-label="แสดงรหัสผ่าน" title="แสดงรหัสผ่าน">👁</button></span></div>
+                  <ul class="rules">
+                    <li data-rule="pass-len">อย่างน้อย 6 ตัว</li>
+                  </ul>
+                </div>
+                <div class="form-field">
+                  <div class="form-row"><label for="reg-pass2">ยืนยันรหัสผ่าน</label><span class="pass-wrap"><input id="reg-pass2" name="confirm-password" type="password" maxlength="72" autocomplete="new-password" /><button type="button" class="pass-eye" data-for="reg-pass2" aria-label="แสดงรหัสผ่าน" title="แสดงรหัสผ่าน">👁</button></span></div>
+                  <ul class="rules">
+                    <li data-rule="pass-match">ตรงกับรหัสผ่านด้านบน</li>
+                  </ul>
+                </div>
+                <label class="logon-check"><input id="reg-agree" type="checkbox" /> ฉันเข้าใจว่าต้องจำรหัสผ่านไว้เอง เพราะตอนนี้ยังกู้คืนรหัสผ่านไม่ได้</label>
+                <p id="guest-move-hint" class="hint guest-move hidden"></p>
+                <div id="register-error" class="form-error"></div>
+                <button id="btn-register-submit" type="submit" class="primary logon-wide" disabled>สมัครสมาชิก</button>
               </div>
             </form>
 
