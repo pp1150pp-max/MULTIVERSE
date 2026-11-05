@@ -118,6 +118,29 @@
           <div class="shop-foot"><span id="shop-gold"></span><span id="shop-pots"></span></div>
         </div>
 
+        <div id="stash" class="panel hidden">
+          <div class="panel-head"><span>ผู้ดูแลคลัง — Warehouse</span><button id="stash-close">✕</button></div>
+          <p class="npc-line">“ฝากอะไรไว้กับข้าได้เลย ทุกคนในบัญชีเดียวกันมาเบิกได้ ข้าดูแลให้ไม่มีหาย”</p>
+          <div class="stash-gold">
+            <span>ทองในคลัง <b id="stash-gold-in"></b></span>
+            <input id="stash-gold-amt" type="number" min="1" step="1" placeholder="จำนวน">
+            <button id="stash-deposit">ฝาก</button>
+            <button id="stash-withdraw">ถอน</button>
+            <div class="stash-sort">
+              <select id="stash-sort-key">
+                <option value="rarity">ความหายาก</option>
+                <option value="level">เลเวลของ</option>
+                <option value="slot">ประเภทช่อง</option>
+                <option value="value">ราคาขาย</option>
+              </select>
+              <button id="stash-sort-go">เรียง</button>
+            </div>
+          </div>
+          <div id="stash-grid" class="shop-grid"></div>
+          <p class="hint">ลากของระหว่างกระเป๋ากับคลังได้ · คลิกขวา = ย้ายไปอีกฝั่งทันที · ยาช่องละไม่เกิน 10 ขวด</p>
+          <div class="shop-foot"><span id="stash-size"></span><span id="stash-gold-carry"></span></div>
+        </div>
+
         <div id="forge" class="panel hidden">
           <div class="panel-head"><span>ช่างตีเหล็ก — Blacksmith</span><button id="forge-close">✕</button></div>
           <p class="npc-line">“เอาอาวุธมาให้ข้า จะตีให้คมกว่าเดิม… แต่ยิ่งบวกสูง ยิ่งเสี่ยงนะ”</p>
@@ -166,6 +189,7 @@
             <span><img src="assets/sprites/icons/map_portal.png" alt="">จุดวาป</span>
             <span><img src="assets/sprites/icons/map_merchant.png" alt="">พ่อค้า</span>
             <span><img src="assets/sprites/icons/map_blacksmith.png" alt="">ช่างตีเหล็ก</span>
+            <span><img src="assets/sprites/icons/map_keeper.png" alt="">ผู้ดูแลคลัง</span>
             <span><img src="assets/sprites/icons/map_seeker.png" alt="">The Seeker</span>
             <span><img src="assets/sprites/icons/map_flag.png" alt="">จุดที่จะเดินไป</span>
           </div>
@@ -183,7 +207,7 @@
             <tr><td>1 / 2</td><td>ยา HP / ยา MP (คลิกยาในกระเป๋าเพื่อเลือกขนาดที่จะใช้)</td></tr>
             <tr><td>F</td><td>เปิด/ปิด Auto Play (เฉพาะ Open World · เดินเองแล้ว Auto จะปิด)</td></tr>
             <tr><td>I หรือ B</td><td>กระเป๋า &amp; ตัวละคร</td></tr>
-            <tr><td>T</td><td>คุยกับ NPC เมื่ออยู่ใกล้ (The Seeker · พ่อค้า · ช่างตีเหล็ก ที่แคมป์)</td></tr>
+            <tr><td>T</td><td>คุยกับ NPC เมื่ออยู่ใกล้ (The Seeker · พ่อค้า · ช่างตีเหล็ก · ผู้ดูแลคลัง ที่แคมป์)</td></tr>
             <tr><td>M</td><td>แผนที่ทั้งโซน (หรือคลิกแผนที่ย่อ)</td></tr>
             <tr><td>ล้อเมาส์</td><td>ซูมกล้อง</td></tr>
             <tr><td>Esc</td><td>ปิดหน้าต่าง</td></tr>

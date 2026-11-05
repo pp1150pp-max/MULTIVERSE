@@ -85,3 +85,26 @@ ONE perfectly flat solid magenta (#FF00FF), no text, no grid lines. Do not use p
 ```
 
 เรียงตามแถว: ลูกศรทอง, ลูกศรฟ้า, เต็นท์, ถุงเงิน / ค้อน, ฟองคำพูด, วงวาร์ปม่วง, หัวกะโหลกมงกุฎ / ธงแดง, รอยเท้า (ไม่ได้ใช้), ดาบไขว้, หีบ (ไม่ได้ใช้)
+
+## ผู้ดูแลคลัง (ยังใช้ภาพชั่วคราว)
+
+ตอนนี้ตัว NPC วาดด้วยโค้ด (`drawKeeper` ใน `src/client/placeholder.ts`) ส่วน `npc_stash.png` กับ `map_keeper.png` เป็นรูปหีบชั่วคราว
+เมื่อได้ภาพจริงแล้ว ให้วางทับที่ `public/assets/sprites/npc/keeper.png` (ชีต 3×3 เหมือน NPC อื่น), `icons/npc_stash.png` (128×128) และ `icons/map_keeper.png` (96×96) เกมจะใช้ภาพจริงเอง
+
+```
+Now one more NPC for the same game, in the EXACT same fine-detail 16-bit SNES-era JRPG sprite style as the gunslinger
+and the other NPCs: same chibi proportions about 3 heads tall, same face construction, dark outline, rich shading with
+3 to 4 tones per material, small crisp pixels, no chunky pixels. Generate an image: a sheet as a strict grid of 3 rows x
+3 columns, the SAME character in every cell; each row shows 3 views from left to right: (1) front view facing the viewer,
+(2) side view facing LEFT, (3) back view. Identical size, colors and design in every cell, boots on the same baseline,
+generous empty space, nothing touching or overlapping. The Warehouse Keeper: a calm elderly man with a short white
+beard and white hair, small round spectacles, a long dark-blue coat with brass buttons and a brown leather belt, a big
+iron ring of keys hanging from the belt, holding a thin ledger book under one arm, brown boots. Background ONE perfectly
+flat solid magenta (#FF00FF), no shadows, no ground, no text, no labels, no grid lines. Do not use pink, magenta or
+purple on the character.
+```
+
+→ `keeper` (ใช้แถวบนแถวเดียวก็พอ ถ้าทั้ง 3 แถวเหมือนกัน)
+
+ไอคอน: ใช้ prompt ไอคอนสกิล/NPC ด้านบน เปลี่ยนเป็น 1 ช่อง สัญลักษณ์ "หีบไม้ขอบเหล็กมีกุญแจทอง" → `npc_stash`
+และ prompt ไอคอนแผนที่ด้านบน 1 ช่อง "หีบไม้ขอบเหล็ก" → `map_keeper`

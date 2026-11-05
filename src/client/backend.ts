@@ -11,6 +11,7 @@ import { zoneById, type ZoneDef } from '../shared/data/zones';
 import type { NpcId } from '../shared/data/npcs';
 import type { EnhanceResult } from '../shared/data/enhance';
 import type { Item, PotionKind, PotionSize, Rarity, SlotId } from '../shared/types';
+import { loadStash, writeStash } from './save';
 
 /** What a projectile view needs; the local simulation's Projectile fits this too. */
 export interface ProjectileLike {
@@ -59,6 +60,15 @@ export interface Backend {
   enhance(uid: string): Promise<EnhanceOutcome>;
   chat(text: string): void;
   npcDistance(id: NpcId): number;
+
+  // Stash (warehouse keeper). The stash itself is `me.stash`. `to` = target slot, or -1 for wherever it fits.
+  stashPut(bagIndex: number, to: number): void;
+  stashTake(stashIndex: number, to: number): void;
+  stashMove(from: number, to: number): void;
+  stashSort(key: SortKey, desc: boolean): void;
+  stashBuyRow(): void;
+  /** amount > 0 deposits gold, < 0 withdraws it. */
+  stashGold(amount: number): void;
 }
 
 export class LocalBackend implements Backend {
@@ -70,6 +80,8 @@ export class LocalBackend implements Backend {
   constructor(zone: ZoneDef, data: CharacterData) {
     this.sim = new Sim(zone);
     this.me = this.sim.addPlayer(data);
+    // Singleplayer keeps one stash per browser, apart from the character save.
+    this.me.stash = loadStash();
   }
 
   get zone(): ZoneDef { return this.sim.zone; }
@@ -98,6 +110,7 @@ export class LocalBackend implements Backend {
     this.me.mp = Math.min(old.mp, this.me.stats.maxMp);
     this.me.cd = { ...old.cd };
     this.me.potCd = old.potCd;
+    this.me.stash = old.stash;
   }
 
   respawn(): void { this.sim.respawn(this.me); }
@@ -116,4 +129,16 @@ export class LocalBackend implements Backend {
   enhance(uid: string): Promise<EnhanceOutcome> { return Promise.resolve(this.sim.enhance(this.me, uid)); }
   chat(): void { /* nobody to talk to */ }
   npcDistance(id: NpcId): number { return this.sim.npcDistance(this.me, id); }
+
+  stashPut(i: number, to: number): void { this.stashed(this.sim.stashPut(this.me, i, to)); }
+  stashTake(i: number, to: number): void { this.stashed(this.sim.stashTake(this.me, i, to)); }
+  stashMove(from: number, to: number): void { this.stashed(this.sim.stashMove(this.me, from, to)); }
+  stashSort(key: SortKey, desc: boolean): void { this.stashed(this.sim.stashSort(this.me, key, desc)); }
+  stashBuyRow(): void { this.stashed(this.sim.stashBuyRow(this.me)); }
+  stashGold(amount: number): void { this.stashed(this.sim.stashGold(this.me, amount)); }
+
+  /** Saves the stash straight away (the character follows on the Sim's save event this frame). */
+  private stashed(changed: boolean): void {
+    if (changed) writeStash(this.me.stash);
+  }
 }

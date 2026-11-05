@@ -13,6 +13,7 @@ import {
   type BagEntry, type ClassId, type Item, type PotionKind, type PotionSize, type Rarity, type SlotId, type Stats, type Vec2,
 } from '../types';
 import type { LootKind } from './Loot';
+import { newStash, type StashData } from './stash';
 
 /** Share of the HP regen stat that actually applies (owner: -60%). */
 export const HP_REGEN_MULT = 0.4;
@@ -104,6 +105,46 @@ export function buybackPrice(e: BuybackEntry): number {
   return Math.ceil(e.paid * BUYBACK_MARKUP);
 }
 
+/**
+ * Bag or stash slots rearranged by `key`, same length back. Gear is ordered by that key (ties: slot,
+ * rarity, level); potions always come after the gear, merged into full stacks. Empty slots go last.
+ */
+export function sortEntries(list: readonly (BagEntry | null)[], key: SortKey, desc: boolean): (BagEntry | null)[] {
+  const items: Item[] = [];
+  const pots = new Map<string, number>();
+  for (const e of list) {
+    if (!e) continue;
+    if (isPotion(e)) pots.set(`${e.potion}:${e.size}`, (pots.get(`${e.potion}:${e.size}`) ?? 0) + e.count);
+    else items.push(e);
+  }
+  const rank = (it: Item): number => {
+    switch (key) {
+      case 'rarity': return RARITIES.indexOf(it.rarity);
+      case 'level': return it.level;
+      case 'slot': return SLOTS.indexOf(it.slot);
+      case 'value': return sellValue(it);
+    }
+  };
+  const dir = desc ? -1 : 1;
+  items.sort((a, b) =>
+    dir * (rank(a) - rank(b)) ||
+    SLOTS.indexOf(a.slot) - SLOTS.indexOf(b.slot) ||
+    RARITIES.indexOf(b.rarity) - RARITIES.indexOf(a.rarity) ||
+    b.level - a.level,
+  );
+  // Potions: HP before MP, then by size (by price when sorting by sell value).
+  const potOrder = (['hp', 'mp'] as const).flatMap((k) => POTION_SIZES.map((s) => [k, s] as const));
+  if (key === 'value') potOrder.sort((a, b) => dir * (POTIONS[a[0]][a[1]].price - POTIONS[b[0]][b[1]].price));
+  const stacks: BagEntry[] = [];
+  for (const [k, s] of potOrder) {
+    for (let n = pots.get(`${k}:${s}`) ?? 0; n > 0; n -= POTION_STACK) {
+      stacks.push({ potion: k, size: s, count: Math.min(n, POTION_STACK) });
+    }
+  }
+  const all = [...items, ...stacks];
+  return Array.from({ length: list.length }, (_, i) => all[i] ?? null);
+}
+
 /** Everything about a character that gets saved (browser storage now, the server database later). */
 export interface CharacterData {
   name: string;
@@ -156,6 +197,11 @@ export class Player extends Unit {
   buyback: BuybackEntry[];
   /** Seconds of play until the buyback list clears. */
   buybackLeft: number;
+  /**
+   * The account's storage box. Not part of CharacterData: it is saved on its own and shared by every
+   * character of the account, so whoever runs the Sim hands the same object to each of them.
+   */
+  stash: StashData = newStash();
   stats: Stats = emptyStats();
   cd: Partial<Record<SkillSlot, number>> = {};
   potCd = 0;
@@ -434,44 +480,9 @@ export class Player extends Unit {
 
   // ------------------------------------------------------------ sorting
 
-  /**
-   * Rearranges the bag by `key`. Gear is ordered by that key (ties: slot, rarity, level);
-   * potions always come after the gear, merged into full stacks. Empty slots go last.
-   */
+  /** Rearranges the bag by `key` (see sortEntries). */
   sortBag(key: SortKey, desc: boolean): void {
-    const items: Item[] = [];
-    const pots = new Map<string, number>();
-    for (const e of this.bag) {
-      if (!e) continue;
-      if (isPotion(e)) pots.set(`${e.potion}:${e.size}`, (pots.get(`${e.potion}:${e.size}`) ?? 0) + e.count);
-      else items.push(e);
-    }
-    const rank = (it: Item): number => {
-      switch (key) {
-        case 'rarity': return RARITIES.indexOf(it.rarity);
-        case 'level': return it.level;
-        case 'slot': return SLOTS.indexOf(it.slot);
-        case 'value': return sellValue(it);
-      }
-    };
-    const dir = desc ? -1 : 1;
-    items.sort((a, b) =>
-      dir * (rank(a) - rank(b)) ||
-      SLOTS.indexOf(a.slot) - SLOTS.indexOf(b.slot) ||
-      RARITIES.indexOf(b.rarity) - RARITIES.indexOf(a.rarity) ||
-      b.level - a.level,
-    );
-    // Potions: HP before MP, then by size (by price when sorting by sell value).
-    const potOrder = (['hp', 'mp'] as const).flatMap((k) => POTION_SIZES.map((s) => [k, s] as const));
-    if (key === 'value') potOrder.sort((a, b) => dir * (POTIONS[a[0]][a[1]].price - POTIONS[b[0]][b[1]].price));
-    const stacks: BagEntry[] = [];
-    for (const [k, s] of potOrder) {
-      for (let n = pots.get(`${k}:${s}`) ?? 0; n > 0; n -= POTION_STACK) {
-        stacks.push({ potion: k, size: s, count: Math.min(n, POTION_STACK) });
-      }
-    }
-    const all = [...items, ...stacks];
-    this.bag = Array.from({ length: BAG_SIZE }, (_, i) => all[i] ?? null);
+    this.bag = sortEntries(this.bag, key, desc);
   }
 
   // ------------------------------------------------------------ actions

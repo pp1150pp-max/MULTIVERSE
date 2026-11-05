@@ -155,6 +155,8 @@ export class Terrain {
     this.npcPos.seeker = { x: s.x + 3.5, z: s.z + 1.5 };
     this.npcPos.merchant = { x: s.x - 1.5, z: s.z + 5 };
     this.npcPos.blacksmith = { x: s.x + 5, z: s.z - 1.5 };
+    // A few steps from the merchant, on the other side of the barrels.
+    this.npcPos.keeper = { x: s.x - 5, z: s.z + 5.5 };
     for (let a = 0; a < Math.PI * 2; a += Math.PI / 9) {
       const fx = s.x + Math.cos(a) * 9;
       const fz = s.z + Math.sin(a) * 9;
