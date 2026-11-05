@@ -196,7 +196,7 @@ function fxTexture(canvas: HTMLCanvasElement): THREE.CanvasTexture {
   return tex;
 }
 
-async function loadAnimSet(loader: THREE.TextureLoader, key: string, dir: string): Promise<void> {
+async function loadAnimSet(key: string, dir: string): Promise<void> {
   let manifest: CharManifest;
   try {
     const res = await fetch(`${dir}/sprite.json`);
@@ -209,7 +209,7 @@ async function loadAnimSet(loader: THREE.TextureLoader, key: string, dir: string
   await Promise.all(
     Object.entries(manifest.animations).map(async ([name, def]) => {
       try {
-        const tex = await loader.loadAsync(`${dir}/${def.file}`);
+        const tex = await loadTexture(`${dir}/${def.file}`);
         // High-res painted art is drawn smaller than its source size, so it needs mipmaps
         // when shrunk, or they shimmer. Up close they keep hard pixels like everything else.
         tex.colorSpace = THREE.SRGBColorSpace;
@@ -235,9 +235,9 @@ async function loadAnimSet(loader: THREE.TextureLoader, key: string, dir: string
 export type GroundTile = 'grass' | 'dirt' | 'water' | 'marsh' | 'mud' | 'pave' | 'snow' | 'snow_path' | 'ice';
 export const groundTiles: Partial<Record<GroundTile, THREE.Texture>> = {};
 
-async function loadGroundTile(loader: THREE.TextureLoader, name: GroundTile): Promise<void> {
+async function loadGroundTile(name: GroundTile): Promise<void> {
   try {
-    const tex = await loader.loadAsync(`${BASE}ground/${name}.png`);
+    const tex = await loadTexture(`${BASE}ground/${name}.png`);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
     tex.magFilter = THREE.NearestFilter;
@@ -253,9 +253,9 @@ async function loadGroundTile(loader: THREE.TextureLoader, name: GroundTile): Pr
 export type FxSheet = 'sword' | 'mage' | 'gun';
 export const fxSheets: Partial<Record<FxSheet, THREE.Texture>> = {};
 
-async function loadFxSheet(loader: THREE.TextureLoader, name: FxSheet): Promise<void> {
+async function loadFxSheet(name: FxSheet): Promise<void> {
   try {
-    const tex = await loader.loadAsync(`${BASE}fx/${name}.png`);
+    const tex = await loadTexture(`${BASE}fx/${name}.png`);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.magFilter = THREE.NearestFilter;
     tex.minFilter = THREE.LinearFilter;
@@ -266,17 +266,157 @@ async function loadFxSheet(loader: THREE.TextureLoader, name: FxSheet): Promise<
   }
 }
 
-export async function loadAssets(): Promise<void> {
-  const loader = new THREE.TextureLoader();
-  await Promise.all((['sword', 'mage', 'gun'] as const).map((n) => loadFxSheet(loader, n)));
-  await Promise.all((['grass', 'dirt', 'water', 'marsh', 'mud', 'pave', 'snow', 'snow_path', 'ice'] as const).map((n) => loadGroundTile(loader, n)));
-  await Promise.all(
-    Object.entries(SHEET_SPECS).map(async ([key, spec]) => {
+// ------------------------------------------------------------ loading
+
+/** One game file for the loading bar. `size` is null until its response headers arrive. */
+interface Download {
+  loaded: number;
+  size: number | null;
+}
+const downloads: Download[] = [];
+let bestProgress = 0;
+const progressListeners = new Set<(fraction: number) => void>();
+
+/**
+ * Bytes received over bytes expected. Files whose size isn't known yet (still queued in the
+ * browser) count as the average known size. A few big files dominate the download, so counting
+ * files instead would leave the bar standing still for most of it.
+ */
+function reportProgress(): void {
+  let loaded = 0;
+  let known = 0;
+  let knownCount = 0;
+  for (const d of downloads) {
+    loaded += d.loaded;
+    if (d.size !== null) {
+      known += d.size;
+      knownCount++;
+    }
+  }
+  const avg = knownCount ? known / knownCount : 1;
+  const total = known + (downloads.length - knownCount) * avg;
+  // Animation files join once their sprite.json arrives, so never let the bar go back.
+  bestProgress = Math.max(bestProgress, total ? Math.min(1, loaded / total) : 0);
+  for (const fn of progressListeners) fn(bestProgress);
+}
+
+/** Like THREE.TextureLoader.loadAsync, but counts the bytes as they arrive for the loading bar. */
+async function loadTexture(url: string): Promise<THREE.Texture> {
+  const d: Download = { loaded: 0, size: null };
+  downloads.push(d);
+  try {
+    const res = await fetch(url);
+    if (!res.ok || !res.body) throw new Error(`missing ${url}`);
+    d.size = Number(res.headers.get('content-length')) || null;
+    const chunks: Uint8Array[] = [];
+    const reader = res.body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      d.loaded += value.length;
+      reportProgress();
+    }
+    const blobUrl = URL.createObjectURL(new Blob(chunks, { type: res.headers.get('content-type') ?? 'image/png' }));
+    try {
+      // Decode errors (e.g. the dev server's index.html for a missing file) reject here.
+      const tex = new THREE.Texture(await loadImage(blobUrl));
+      tex.needsUpdate = true;
+      return tex;
+    } finally {
+      URL.revokeObjectURL(blobUrl);
+    }
+  } finally {
+    d.size = d.loaded;
+    reportProgress();
+  }
+}
+
+/** Calls `fn` with the game assets' progress (0..1) now and as bytes arrive; returns an unsubscribe. */
+export function onAssetProgress(fn: (fraction: number) => void): () => void {
+  progressListeners.add(fn);
+  fn(bestProgress);
+  return () => progressListeners.delete(fn);
+}
+
+let gameLoad: Promise<void> | null = null;
+let gameLoaded = false;
+
+/** Starts loading every game texture (once) and resolves when they are all ready. */
+export function loadGameAssets(): Promise<void> {
+  gameLoad ??= loadAssets().then(() => {
+    gameLoaded = true;
+  });
+  return gameLoad;
+}
+
+export const gameAssetsReady = (): boolean => gameLoaded;
+
+/** First frame of a class's front view, for menu portraits. Ready before the game assets are. */
+export interface PortraitSource {
+  img: CanvasImageSource;
+  cw: number;
+  ch: number;
+}
+const portraitSources: Record<string, PortraitSource> = {};
+let menuLoad: Promise<void> | null = null;
+
+function loadImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((ok, fail) => {
+    const img = new Image();
+    img.onload = () => ok(img);
+    img.onerror = () => fail(new Error(`missing ${url}`));
+    img.src = url;
+  });
+}
+
+async function loadPortrait(key: string): Promise<void> {
+  const dir = ANIM_SET_DIRS[key];
+  if (dir) {
+    try {
+      const res = await fetch(`${BASE}${dir}/sprite.json`);
+      const m = (await res.json()) as CharManifest;
+      const img = await loadImage(`${BASE}${dir}/${m.animations.idle.file}`);
+      portraitSources[key] = { img, cw: m.frameWidth, ch: m.frameHeight };
+      return;
+    } catch {
+      // No full set: same fallback as the game, the simple sheet below.
+    }
+  }
+  const spec = SHEET_SPECS[key];
+  let img: HTMLImageElement | HTMLCanvasElement;
+  let rows = spec.rows;
+  try {
+    img = await loadImage(spec.path);
+    rows = spec.fileRows ?? spec.rows;
+  } catch {
+    img = spec.placeholder();
+  }
+  portraitSources[key] = { img, cw: img.width / spec.cols, ch: img.height / rows };
+}
+
+/** Loads only what the title menu draws itself: the class portraits (a few MB instead of the whole game). */
+export function loadMenuAssets(classKeys: readonly string[]): Promise<void> {
+  menuLoad ??= Promise.all(classKeys.map(loadPortrait)).then(() => undefined);
+  return menuLoad;
+}
+
+export function portraitSource(key: string): PortraitSource | undefined {
+  return portraitSources[key];
+}
+
+async function loadAssets(): Promise<void> {
+  // Everything at once: the files don't depend on each other.
+  await Promise.all([
+    ...(['sword', 'mage', 'gun'] as const).map((n) => loadFxSheet(n)),
+    ...(['grass', 'dirt', 'water', 'marsh', 'mud', 'pave', 'snow', 'snow_path', 'ice'] as const).map((n) => loadGroundTile(n)),
+    ...Object.entries(ANIM_SET_DIRS).map(([key, dir]) => loadAnimSet(key, BASE + dir)),
+    ...Object.entries(SHEET_SPECS).map(async ([key, spec]) => {
       let tex: THREE.Texture;
       let sideFaces = spec.fileSideFaces;
       let rows = spec.rows;
       try {
-        tex = await loader.loadAsync(spec.path);
+        tex = await loadTexture(spec.path);
         assetSources[key] = 'file';
         rows = spec.fileRows ?? spec.rows;
       } catch {
@@ -300,8 +440,7 @@ export async function loadAssets(): Promise<void> {
         cellAspect: img.width / spec.cols / (img.height / rows),
       };
     }),
-  );
-  await Promise.all(Object.entries(ANIM_SET_DIRS).map(([key, dir]) => loadAnimSet(loader, key, BASE + dir)));
+  ]);
   const band = (d: number, steps: [number, number][]) => steps.find(([edge]) => d <= edge)?.[1] ?? 0;
   fxTex.glow = fxTexture(pixelCircle(32, '255,255,255', (d) => band(d, [[0.3, 1], [0.55, 0.6], [0.78, 0.28], [1, 0.1]])));
   fxTex.shadow = fxTexture(pixelCircle(32, '0,0,0', (d) => band(d, [[0.72, 0.85], [1, 0.42]])));

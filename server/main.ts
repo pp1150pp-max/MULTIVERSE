@@ -237,17 +237,54 @@ const TYPES: Record<string, string> = {
   '.woff2': 'font/woff2',
 };
 
-async function serveStatic(res: ServerResponse, path: string): Promise<void> {
+/** Vite's build output: `assets/<name>-<hash>.<ext>`. A new build gets new names, so these never change. */
+const HASHED = /^\/assets\/[^/]+-[A-Za-z0-9_-]{8,}\.(?:js|css|woff2?|png|jpg|svg)$/;
+
+/**
+ * Browser caching. Hashed build files are cached for a year: new code ships under new names.
+ * Everything else (index.html, the sprites copied from public/ under fixed names) is `no-cache`:
+ * the browser keeps its copy but checks every time, and gets a body-less 304 when the file is
+ * unchanged. So art and code changed before a restart reach players right away.
+ */
+function cacheControl(path: string): string {
+  return HASHED.test(path) ? 'public, max-age=31536000, immutable' : 'no-cache';
+}
+
+/** True when the browser's copy (If-None-Match, else If-Modified-Since) is still current. */
+function notModified(req: IncomingMessage, etag: string, mtime: Date): boolean {
+  const inm = req.headers['if-none-match'];
+  if (inm) return inm.split(',').some((t) => t.trim() === etag || t.trim() === '*');
+  const ims = req.headers['if-modified-since'];
+  // HTTP dates carry whole seconds only.
+  return !!ims && Math.floor(mtime.getTime() / 1000) <= Math.floor(Date.parse(ims) / 1000);
+}
+
+async function serveStatic(req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
   let file = resolve(DIST, '.' + decodeURIComponent(path));
   if (file !== DIST && !file.startsWith(DIST + sep)) throw new HttpError(403, 'Forbidden');
   try {
-    if ((await stat(file)).isDirectory()) file = join(file, 'index.html');
+    let info = await stat(file);
+    if (info.isDirectory()) {
+      file = join(file, 'index.html');
+      info = await stat(file);
+    }
+    const etag = `W/"${info.size.toString(16)}-${Math.floor(info.mtimeMs).toString(16)}"`;
+    const headers = { 'Cache-Control': cacheControl(path), ETag: etag, 'Last-Modified': info.mtime.toUTCString() };
+    if (notModified(req, etag, info.mtime)) {
+      res.writeHead(304, headers);
+      res.end();
+      return;
+    }
     const data = await readFile(file);
-    res.writeHead(200, { 'Content-Type': TYPES[extname(file).toLowerCase()] ?? 'application/octet-stream' });
-    res.end(data);
+    res.writeHead(200, {
+      ...headers,
+      'Content-Type': TYPES[extname(file).toLowerCase()] ?? 'application/octet-stream',
+      'Content-Length': data.length,
+    });
+    res.end(req.method === 'HEAD' ? undefined : data);
   } catch {
     if (path === '/' || path === '/index.html') {
-      res.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end('ยังไม่ได้ build ตัวเกม — ปิด server แล้วรัน npm run online แทน npm run server');
       return;
     }
@@ -261,7 +298,7 @@ const server = createServer(async (req, res) => {
   const path = new URL(req.url ?? '/', 'http://localhost').pathname;
   try {
     if (path.startsWith('/api/')) await api(req, res, path);
-    else if (req.method === 'GET' || req.method === 'HEAD') await serveStatic(res, path);
+    else if (req.method === 'GET' || req.method === 'HEAD') await serveStatic(req, res, path);
     else throw new HttpError(405, 'Method not allowed');
   } catch (e) {
     if (e instanceof HttpError) return send(res, e.status, { error: e.message });

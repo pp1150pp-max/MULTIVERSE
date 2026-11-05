@@ -1,5 +1,6 @@
 import './style.css';
-import { loadAssets, assetSources } from './client/assets';
+import { assetSources, loadGameAssets, loadMenuAssets } from './client/assets';
+import { CLASS_IDS } from './shared/data/classes';
 import { Game } from './client/Game';
 import { buildMenu, portrait } from './client/menu';
 import type { OnlineBackend } from './client/net/online';
@@ -21,13 +22,38 @@ function launch(backend: OnlineBackend): void {
   start(game, backend.me.cls.id);
 }
 
+/** Keeps the logo hidden until all its letters have loaded (or failed), then fades it in whole. */
+function revealLogoWhenLoaded(): void {
+  const logo = document.querySelector<HTMLElement>('.logo');
+  if (!logo) return;
+  const imgs = [...logo.querySelectorAll('img')];
+  const pending = imgs.filter((img) => !img.complete);
+  if (!pending.length) return;
+  logo.classList.add('logo-wait');
+  let left = pending.length;
+  const one = (): void => {
+    if (--left === 0) logo.classList.remove('logo-wait');
+  };
+  for (const img of pending) {
+    img.addEventListener('load', one, { once: true });
+    img.addEventListener('error', one, { once: true });
+  }
+}
+
 async function boot(): Promise<void> {
   audioEngine.init();
-  await loadAssets();
-  const fromFile = Object.entries(assetSources).filter(([, v]) => v === 'file').map(([k]) => k);
-  console.info(`[assets] ${fromFile.length} loaded from files:`, fromFile.join(', ') || '(none — using placeholders)');
+  // The Login form needs no images, so it shows as soon as this code runs. The logo letters and
+  // background (index.html / CSS) are already downloading; the class portraits (a few MB) come
+  // next, and only then the rest of the game (~40 MB), in the background. A slow link isn't
+  // split with files the menu doesn't need yet. Entering the world waits for the game files
+  // (menu.ts enterWorld).
+  revealLogoWhenLoaded();
   $('loading').classList.add('hidden');
   buildMenu(launch);
+  await loadMenuAssets(CLASS_IDS);
+  await loadGameAssets();
+  const fromFile = Object.entries(assetSources).filter(([, v]) => v === 'file').map(([k]) => k);
+  console.info(`[assets] ${fromFile.length} loaded from files:`, fromFile.join(', ') || '(none — using placeholders)');
 }
 
 boot();
