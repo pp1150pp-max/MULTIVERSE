@@ -23,6 +23,10 @@
               <div id="hud-gold"></div>
             </div>
           </div>
+          <div class="bars">
+            <div class="bar hp"><div class="bar-channel"><div id="hp-fill" class="fill"></div></div><span id="hp-text"></span></div>
+            <div class="bar mp"><div class="bar-channel"><div id="mp-fill" class="fill"></div></div><span id="mp-text"></span></div>
+          </div>
           <div id="hud-zone"></div>
           <div id="hud-online" class="hidden"></div>
         </div>
@@ -41,6 +45,7 @@
             </div>
             <button id="btn-bag">กระเป๋า (I)</button>
             <button id="btn-help">ช่วยเหลือ (H)</button>
+            <button id="btn-hud-style"></button>
           </div>
         </div>
 
@@ -48,38 +53,44 @@
         <div id="chat" class="hidden"><input id="chat-input" maxlength="120" placeholder="พิมพ์ข้อความ แล้วกด Enter (Esc = ยกเลิก)" autocomplete="off" /></div>
 
         <div id="hud-bottom">
-          <div class="bars">
-            <div class="bar hp"><div id="hp-fill" class="fill"></div><span id="hp-text"></span></div>
-            <div class="bar mp"><div id="mp-fill" class="fill"></div><span id="mp-text"></span></div>
-          </div>
           <div id="skillbar"></div>
-          <div id="expbar"><div id="exp-fill" class="fill"></div><span id="exp-text"></span></div>
+          <div id="expbar"><div class="bar-channel"><div id="exp-fill" class="fill"></div></div><span id="exp-text"></span></div>
+        </div>
+
+        <div id="orb-hp" class="orb">
+          <div class="orb-art"><div class="orb-well"><div id="orb-hp-fill" class="orb-fill"><div class="orb-wave"></div></div><div class="orb-glass"></div></div></div>
+          <span id="orb-hp-text" class="orb-text"></span>
+        </div>
+        <div id="orb-mp" class="orb">
+          <div class="orb-art"><div class="orb-well"><div id="orb-mp-fill" class="orb-fill"><div class="orb-wave"></div></div><div class="orb-glass"></div></div></div>
+          <span id="orb-mp-text" class="orb-text"></span>
         </div>
 
         <div id="inventory" class="panel hidden">
-          <div class="panel-head"><span>ตัวละคร &amp; กระเป๋า</span><button id="inv-close">✕</button></div>
-          <div class="inv-body">
-            <div class="inv-left">
-              <div id="equip-slots"></div>
-              <div id="stat-list"></div>
+          <div class="inv-side">
+            <div class="inv-side-title">ค่าสถานะ</div>
+            <div id="stat-list"></div>
+            <div class="inv-side-title">เรียงของ</div>
+            <div class="bag-sort">
+              <select id="sort-key">
+                <option value="rarity">ความหายาก</option>
+                <option value="level">เลเวลของ</option>
+                <option value="slot">ประเภทช่อง</option>
+                <option value="value">ราคาขาย</option>
+              </select>
+              <button id="sort-dir" data-desc="1">มาก → น้อย</button>
+              <button id="sort-go">เรียง</button>
             </div>
-            <div class="inv-right">
-              <div class="bag-sort">
-                <span>เรียงตาม</span>
-                <select id="sort-key">
-                  <option value="rarity">ความหายาก</option>
-                  <option value="level">เลเวลของ</option>
-                  <option value="slot">ประเภทช่อง</option>
-                  <option value="value">ราคาขาย</option>
-                </select>
-                <button id="sort-dir" data-desc="1">มาก → น้อย</button>
-                <button id="sort-go">เรียง</button>
-              </div>
-              <div class="bag-filter" id="loot-filter"></div>
-              <div id="bag-grid"></div>
-              <div class="inv-foot"><span id="inv-gold"></span><span id="inv-pots"></span></div>
-              <div class="hint" id="bag-hint"></div>
-            </div>
+            <div class="inv-side-title">เก็บของ</div>
+            <div class="bag-filter" id="loot-filter"></div>
+            <div class="hint" id="bag-hint"></div>
+          </div>
+          <div class="inv-window">
+            <div class="inv-title">ตัวละคร &amp; กระเป๋า</div>
+            <button id="inv-close" title="ปิด"></button>
+            <div id="equip-slots"></div>
+            <div id="bag-grid"></div>
+            <div class="inv-foot"><span id="inv-gold"></span><span id="inv-pots"></span></div>
           </div>
         </div>
 
