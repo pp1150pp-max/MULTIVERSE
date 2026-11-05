@@ -50,10 +50,12 @@ function buildClassCards(container: HTMLElement): () => ClassId {
   return () => chosen;
 }
 
-type Panel = 'mode' | 'guest' | 'online';
+/** Owner's decision: the Guest Login button is picture-only for now. Set to true to connect it again. */
+const GUEST_LOGIN_ENABLED: boolean = false;
+
+type Panel = 'guest' | 'online';
 
 function show(panel: Panel): void {
-  $('mode-select').classList.toggle('hidden', panel !== 'mode');
   $('guest-panel').classList.toggle('hidden', panel !== 'guest');
   $('online-panel').classList.toggle('hidden', panel !== 'online');
 }
@@ -184,16 +186,26 @@ class OnlineMenu {
     }
   }
 
-  /** Called when the player picks "log in / sign up": skip the login form if a saved token still works. */
-  async open(): Promise<void> {
-    $('login-error').textContent = '';
+  /**
+   * Shows the Login form. If a saved token still works, it also offers a one-click way back in,
+   * or goes straight to the character list when `goToCharacters` is set.
+   */
+  async open(goToCharacters = false): Promise<void> {
+    const resume = $('btn-account-continue');
+    resume.classList.add('hidden');
+    this.showLogin();
     void this.showGuestMoveHint();
-    if (!api.savedToken()) return this.showLogin();
+    if (!api.savedToken()) return;
     try {
       const me = await api.me();
-      await this.showCharacters(me.username);
+      resume.textContent = `เข้าต่อในชื่อ ${me.username}`;
+      resume.onclick = () => {
+        this.showCharacters(me.username).catch((e: Error) => this.showLogin(e.message));
+      };
+      resume.classList.remove('hidden');
+      if (goToCharacters) resume.click();
     } catch (e) {
-      this.showLogin(e instanceof api.ApiFailure && e.status !== 401 ? e.message : '');
+      if (e instanceof api.ApiFailure && e.status !== 401) $('login-error').textContent = e.message;
     }
   }
 
@@ -243,7 +255,7 @@ class OnlineMenu {
     await api.logout();
     this.chars = [];
     this.selected = null;
-    this.showLogin();
+    await this.open();
   }
 
   private async showCharacters(username: string): Promise<void> {
@@ -362,27 +374,28 @@ function escapeHtml(s: string): string {
 }
 
 export function buildMenu(launch: Launcher): void {
-  const guest = new GuestMenu(launch);
   const online = new OnlineMenu(launch);
-  $('btn-mode-guest').onclick = () => {
-    show('guest');
-    void guest.open();
-  };
-  $('btn-mode-online').onclick = () => {
+  if (GUEST_LOGIN_ENABLED) {
+    const guest = new GuestMenu(launch);
+    $('btn-mode-guest').onclick = () => {
+      show('guest');
+      void guest.open();
+    };
+  }
+  const toLogin = (resume = false): void => {
     show('online');
-    void online.open();
+    void online.open(resume);
   };
-  document.querySelectorAll<HTMLElement>('.btn-back').forEach((b) => (b.onclick = () => show('mode')));
-  show('mode');
+  document.querySelectorAll<HTMLElement>('.btn-back').forEach((b) => (b.onclick = () => toLogin()));
   $('menu').classList.remove('hidden');
-  // Back from the in-game menu: open the character list (or the guest screen) instead of the title.
+  // Back from the in-game menu: open the character list (or the guest screen) instead of the Login form.
   let after: string | null = null;
   try {
     after = sessionStorage.getItem(AFTER_EXIT_KEY);
     sessionStorage.removeItem(AFTER_EXIT_KEY);
   } catch {
-    // Storage blocked: stay on the title screen.
+    // Storage blocked: stay on the Login form.
   }
-  if (after === 'characters') $('btn-mode-online').click();
-  else if (after === 'guest') $('btn-mode-guest').click();
+  toLogin(after === 'characters');
+  if (after === 'guest') $('btn-mode-guest').click();
 }

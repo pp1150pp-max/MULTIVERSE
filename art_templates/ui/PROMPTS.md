@@ -71,3 +71,25 @@ Using the attached inventory window as the exact style and colour reference, gen
 ```
 Using the attached inventory window as the exact style and colour reference, generate a WIDE image (3:2): game HUD parts of black forged iron with restrained, tarnished aged-bronze accents, in fine-detail 16-bit SNES-era pixel art with crisp pixels and no blur. The dark iron must dominate. Any star details must be small, dull and tarnished, in muted dark bronze with almost no highlights, never bright yellow, shiny or glowing. Each element is separate with wide empty space around it, nothing touching. From top to bottom: 1) a long empty horizontal status bar frame with a dark inner channel and small ornate ends; 2) a perfectly straight glowing red bar fill, a plain rectangle with no frame; 3) a perfectly straight glowing blue bar fill, a plain rectangle with no frame; 4) a long centred skill bar base with exactly 7 empty square sockets of equal size, grouped as 4, then 1, then 2, with no ornament overlapping any socket; 5) a thin long dark iron experience bar frame with tarnished bronze edges and an empty channel. Background ONE perfectly flat solid magenta (#FF00FF), no shadows on it. No numbers, no readable words, no logos. Do not use pink, magenta or purple in the elements.
 ```
+
+## โลโก้ `logo/*.png`
+
+เจนทีละตัวในแชทเดียวกัน M U L T I V E R S (ตัว E ใช้ภาพเดียวกันทั้ง 2 ตำแหน่ง) แล้วเรียงเป็นคำใน `index.html` ตอนตัดภาพให้ไล่สีม่วงแดงออกและใช้สเกลเดียวกันทุกตัว ปลาย V ยื่นต่ำกว่าเส้นฐาน จึงจัดตัวอักษรชิดขอบบน
+
+ตัวแรก:
+
+```
+Generate a SQUARE image of one single capital letter M for the title logo of an original dark-fantasy action RPG, in fine-detail 16-bit SNES-era pixel art with crisp pixels and no blur. The letter is a bold, wide, chiselled serif capital made of black forged iron with a bevelled rim of aged, worn gold around its whole outline. The dark iron must dominate the face of the letter. Add a few thin shattered-star cracks across the iron, with a very faint old-gold glow inside the cracks. The letter stands perfectly upright and front-on, with no perspective and no tilt. Its top and bottom are flat and level. It is centred, fills about 70% of the image height, and has wide empty space on all sides. Only this one letter appears. The background is ONE perfectly flat solid magenta (#FF00FF), with no shadow, glow or gradient on it. No other letters, no words, no ornaments outside the letter. Do not use pink, magenta or purple in the letter.
+```
+
+ตัวถัดไป เปลี่ยนตัวอักษรใน prompt นี้ (U, L, T, I, V, E, R, S):
+
+```
+Using the letter M generated above as the exact style, colour, material, rim thickness, stroke weight, pixel size and height reference, generate a SQUARE image of one single capital letter U in fine-detail 16-bit SNES-era pixel art with crisp pixels and no blur. It is a bold, chiselled serif capital made of black forged iron with the same thin bevelled rim of aged, worn gold as the M. The dark iron must dominate. Add a few thin shattered-star cracks with a very faint old-gold glow, placed differently from the reference letter. The letter stands perfectly upright and front-on, with no perspective and no tilt. Its top and bottom are flat and level, on the same baseline as the reference letter. It is centred, fills about 70% of the image height, and has wide empty space on all sides. Only this one letter appears. The background is ONE perfectly flat solid magenta (#FF00FF), with no shadow, glow or gradient on it. No other letters, no words, no ornaments outside the letter. Do not use pink, magenta or purple in the letter.
+```
+
+## `login_bg.png`
+
+```
+Generate a WIDE image (16:9): the background for a game title screen, in fine-detail 16-bit SNES-era pixel art with crisp pixels and no blur. A shattered floating island breaking apart in deep space, with drifting rock fragments and stardust, set against a dim blue and purple nebula. Far behind it, a large cracked star in old gold. The lower corners carry subtle ornaments of dark forged iron with tarnished old-gold trim. Keep the centre of the image dark and low in contrast, because a title logo and a login form will be placed on top of it. No letters, no words, no logos, no characters, no buttons, no UI panels.
+```
