@@ -1,4 +1,4 @@
-// Turns what happens in the game into sound. Singleplayer and multiplayer both deliver their events
+// Turns what happens in the game into sound. Events arrive
 // through Game.handleEvent, so everything is decided here, from SimEvents and the Backend's state.
 import type { SimEvent } from '../../shared/sim/types';
 import type { Player } from '../../shared/sim/Player';

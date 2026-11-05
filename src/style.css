@@ -607,6 +607,8 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 .log-line.chat b { color: #9fe0ff; font-weight: 600; }
 .log-line.system { color: #b9b09a; font-style: italic; }
 #hud-online { margin-top: 2px; font-size: 12px; color: #9fe0ff; text-shadow: 0 0 3px #000; }
+#hud-guest { margin-top: 2px; font-size: 12px; color: #ffcf6a; text-shadow: 0 0 3px #000; }
+.hint.guest-move { color: #ffcf6a; }
 #disconnect { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(0, 0, 0, 0.75); pointer-events: auto; z-index: 7; }
 #disconnect h2 { font-family: 'Cinzel', 'Kanit', serif; color: #ffcf9a; margin: 0; font-size: 30px; }
 #disconnect p { color: var(--ink-dim); margin: 0; }

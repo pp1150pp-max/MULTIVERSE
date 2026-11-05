@@ -36,7 +36,17 @@ export function isClassId(v: unknown): v is ClassId {
 
 export interface AuthRequest { username: string; password: string }
 export interface AuthResponse { token: string; username: string }
-export interface MeResponse { username: string }
+/** `guest`: the token belongs to a guest (a temporary account with one character), not a real account. */
+export interface MeResponse { username: string; guest: boolean }
+/** Register: `guestToken` (optional) moves that guest's character into the new account. */
+export interface RegisterRequest extends AuthRequest { guestToken?: string }
+export interface GuestRequest { name: string; classId: ClassId }
+export interface GuestResponse { token: string; character: CharacterSummary }
+
+/** Hours a guest survives without being online (the server deletes it after that). */
+export const GUEST_TTL_HOURS = 24;
+/** New guests one address may make per hour. */
+export const GUEST_PER_IP_HOUR = 5;
 
 /** One row on the character select screen. */
 export interface CharacterSummary { id: number; name: string; classId: ClassId; level: number }

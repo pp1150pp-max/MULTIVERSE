@@ -1,5 +1,4 @@
-// The game rules, with no rendering. Singleplayer runs one of these in the browser; the online
-// server will run one per zone. Whoever drives it calls step() every frame and reads drainEvents()
+// The game rules, with no rendering. The game server runs one of these per zone. Whoever drives it calls step() every frame and reads drainEvents()
 // to show effects, damage numbers and messages.
 import { ZONES, type ZoneDef, type SpawnArea } from '../data/zones';
 import { MONSTERS } from '../data/monsters';

@@ -146,6 +146,7 @@ export class Hud {
     $('hud-name').textContent = g.player.name;
     this.showZoneName();
     $('hud-online').classList.toggle('hidden', !g.backend.online);
+    $('hud-guest').classList.toggle('hidden', !g.backend.guest);
     this.buildSkillbar();
 
     $('btn-auto').onclick = () => g.toggleAuto();
@@ -846,7 +847,11 @@ export class Hud {
   talkTo(id: NpcId): void {
     if (id === 'seeker') this.openDialog();
     else if (id === 'merchant') this.openShop();
-    else if (id === 'keeper') this.openStash();
+    else if (id === 'keeper') {
+      // The server refuses guests' stash actions too; this just says why up front.
+      if (this.g.backend.guest) this.log('Guest ใช้คลังเก็บของไม่ได้ — สมัครสมาชิกเพื่อใช้คลัง (ตัวละครนี้จะย้ายไปอยู่ในบัญชีใหม่)', '#ffcf6a');
+      else this.openStash();
+    }
     else this.openForge();
   }
 
@@ -1437,7 +1442,6 @@ export class Hud {
     $('dialog').classList.add('hidden');
     if (!this.g.metSeeker) {
       this.g.metSeeker = true;
-      this.g.save();
       const boss = MONSTERS[this.g.zone.boss.monster];
       this.log(`ภารกิจ: ฝึกฝนในป่ามรกต แล้วปราบ ${boss.name}`, '#ffd34a');
     }

@@ -29,6 +29,7 @@
           </div>
           <div id="hud-zone"></div>
           <div id="hud-online" class="hidden"></div>
+          <div id="hud-guest" class="hidden" title="สมัครสมาชิกเพื่อเก็บตัวละครนี้ไว้ถาวร (กลับไปหน้าแรก → เข้าสู่ระบบ / สมัคร)">Guest · ถูกลบถ้าไม่เข้าเกม 24 ชม.</div>
         </div>
 
         <div id="boss-bar" class="hidden">
@@ -251,25 +252,35 @@
             <p>คุณตื่นขึ้นอีกครั้ง พร้อมกับ <b>The Seeker</b> ผู้ตามหาความจริงเบื้องหลังพลังโบราณที่ชื่อว่า <b>The Origin</b></p>
           </div>
           <div id="mode-select" class="menu-buttons mode-buttons">
-            <button id="btn-mode-single" class="mode-btn primary">
-              <b>Singleplayer</b><small>เล่นคนเดียว · เซฟในเครื่องนี้ ไม่ต้องสมัคร</small>
+            <button id="btn-mode-guest" class="mode-btn primary">
+              <b>เล่นแบบ Guest</b><small>เล่นได้ทันที ไม่ต้องสมัคร · ลบอัตโนมัติถ้าไม่เข้าเกม 24 ชม.</small>
             </button>
             <button id="btn-mode-online" class="mode-btn">
-              <b>Multiplayer</b><small>เล่นกับเพื่อน · ต้องเข้าสู่ระบบ</small>
+              <b>เข้าสู่ระบบ / สมัคร</b><small>เก็บตัวละครไว้ถาวร · ได้ 3 ตัวต่อบัญชี · ใช้คลังเก็บของได้</small>
             </button>
           </div>
 
-          <div id="single-panel" class="hidden">
-            <div class="name-row">
-              <label for="name-input">ชื่อตัวละคร</label>
-              <input id="name-input" maxlength="16" placeholder="Wanderer" />
+          <div id="guest-panel" class="hidden">
+            <div id="guest-continue" class="menu-buttons hidden">
+              <button id="btn-guest-continue" class="primary"></button>
+              <button id="btn-guest-new">เริ่ม Guest ใหม่</button>
             </div>
-            <div id="class-cards" class="class-grid"></div>
+            <div id="guest-create" class="hidden">
+              <div class="name-row">
+                <label for="guest-name">ชื่อตัวละคร</label>
+                <input id="guest-name" maxlength="16" placeholder="ชื่อในเกม (ห้ามซ้ำกับคนอื่น)" />
+              </div>
+              <div id="guest-class-cards" class="class-grid"></div>
+              <div class="menu-buttons">
+                <button id="btn-guest-start" class="primary">เริ่มเล่นแบบ Guest</button>
+              </div>
+            </div>
+            <div id="guest-error" class="form-error"></div>
             <div class="menu-buttons">
-              <button id="btn-continue" class="hidden"></button>
-              <button id="btn-start" class="primary">เริ่มการเดินทางใหม่</button>
               <button class="btn-back">← กลับ</button>
             </div>
+            <p class="hint">ตัวละคร Guest เก็บไว้ที่ server และจำไว้ในเบราว์เซอร์นี้เท่านั้น · ถูกลบเมื่อไม่ได้เข้าเกมเกิน 24 ชั่วโมง · ใช้คลังเก็บของไม่ได้<br />
+              อยากเก็บไว้ถาวร: กด “เข้าสู่ระบบ / สมัคร” แล้วสมัครสมาชิกใหม่ ตัวละคร Guest จะย้ายเข้าบัญชีใหม่ทันที</p>
           </div>
 
           <div id="online-panel" class="hidden">
@@ -284,6 +295,7 @@
                 <button class="btn-back" type="button">← กลับ</button>
               </div>
               <p class="hint">สมัครใหม่: ใส่ชื่อผู้ใช้ (A–Z, 0–9, _ ยาว 3–16 ตัว) และรหัสผ่านอย่างน้อย 6 ตัว แล้วกด “สมัครสมาชิกใหม่”</p>
+              <p id="guest-move-hint" class="hint guest-move hidden"></p>
             </form>
 
             <div id="char-box" class="online-box hidden">
