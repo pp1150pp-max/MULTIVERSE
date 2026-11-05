@@ -227,6 +227,9 @@ button.primary { background: linear-gradient(#a8812f, #6b4f1a); border-color: va
 .cell:not(.empty) { border-color: var(--rc); box-shadow: inset 0 0 10px color-mix(in srgb, var(--rc) 35%, transparent); }
 .cell:not(.empty):hover { filter: brightness(1.3); }
 .cell .ilv { position: absolute; right: 2px; bottom: 0; font-size: 9px; color: var(--ink-dim); }
+/* Gear the character's level is too low for: level number in red. */
+.cell.locked .ilv { color: #ff6a5a; font-weight: 600; }
+.tt-req { color: #ff6a5a; font-size: 12px; margin-top: 4px; }
 .cell.empty { cursor: default; }
 .cell.dragging { opacity: 0.35; }
 .drag-ghost {
