@@ -7,7 +7,7 @@ import type { Monster } from '../shared/sim/Monster';
 import type { Loot } from '../shared/sim/Loot';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../shared/sim/types';
 import type { Backend, ProjectileLike } from './backend';
-import { World } from './world';
+import { ISO_DIR, World } from './world';
 import { Input } from './input';
 import { Effects } from './effects';
 import { Floating } from './floating';
@@ -19,8 +19,6 @@ import { SpriteActor } from './SpriteActor';
 import { sheets } from './assets';
 import { LootView, MonsterView, PlayerView, ProjectileView, ViewSet } from './views';
 
-/** Camera sits along this direction from its target: 45° yaw, ~47° pitch. */
-const ISO_DIR = new THREE.Vector3(1, 1.45, 1).normalize();
 const S = Math.SQRT1_2;
 // Screen-space right / up projected onto the ground plane.
 const RIGHT = { x: S, z: -S };

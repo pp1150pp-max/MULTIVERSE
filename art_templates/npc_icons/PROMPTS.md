@@ -42,4 +42,33 @@ magenta (#FF00FF), no shadows, no ground, no text, no labels, no grid lines. Do 
 object.
 ```
 
-→ `coin` `potion_hp` `potion_mp` `bag_common` `bag_uncommon` `bag_rare` `bag_epic` `bag_legendary`
+→ `coin` `potion_hp` `potion_mp` (ถุงเลิกใช้แล้ว ของที่ตกแสดงเป็นรูปไอเทมชิ้นนั้น)
+
+## ไอคอนสกิลและ NPC
+
+ตัดจากแผ่นเดียวเป็น `public/assets/sprites/icons/skill_<skill id>.png` และ `npc_talk` `npc_shop` `npc_forge` ขนาด 128×128 เกมแสดงผ่าน `src/client/icons.ts`
+
+```
+A set of 16 RPG skill icons in the EXACT same fine-detail 16-bit SNES-era pixel-art style as the game art above: crisp
+pixels, rich shading, no blur. Strict grid of 4 columns x 4 rows. Every icon is a perfect square of the same size, with a
+dark painted background in a muted colour that suits it, a thin bronze-gold bevelled border, and one big bold clear symbol
+that reads instantly at very small size. Gaps between icons are ONE perfectly flat solid magenta (#FF00FF). No text.
+```
+
+เรียงตามแถว: Slash, Whirlwind, Charge, Earthquake / Arcane Bolt, Fireball, Frost Nova, Meteor / Quick Shot, Spread Shot, Piercing Round, Bullet Rain / Dash, คุย, ร้านค้า, ตีบวก
+
+## ไอคอนไอเทม
+
+ไฟล์ `public/assets/sprites/icons/item_<baseId>.png` ขนาด 96×96 พื้นหลังโปร่งใส อาวุธและเกราะมีคลาสต่อท้าย เช่น `item_weapon_1_mage`
+เมื่อเพิ่มไอเทมใหม่ใน `BASES` (`src/shared/data/items.ts`) ต้องเพิ่มรูปให้ครบทุกคลาสด้วย
+
+```
+A set of RPG inventory item icons in the EXACT same fine-detail 16-bit SNES-era pixel-art style as the game art above:
+crisp pixels, rich shading, soft dark outline, no blur. Strict invisible grid, one item centred in each cell, filling most
+of the cell but nothing touching cell borders. Big and clear so each reads at very small size. No frame, no icon
+background, no ground, no shadow. Background ONE perfectly flat solid magenta (#FF00FF), no text, no labels, no grid
+lines. Do not use pink, magenta or purple in the items.
+```
+
+- อาวุธ (5×3): แถวดาบ คทา ปืน เรียงคอลัมน์ตาม `weapon_1` ถึง `weapon_5`
+- ชุดและอื่น ๆ (6×3): `tunic` `leather` `scale` ของ sword และ mage / ของ gunslinger กับ `cap` `helm` `hood` / `sandals` `boots` `waders` `ring_copper` `ring_jade` `ring_wisp`

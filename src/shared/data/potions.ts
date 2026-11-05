@@ -8,7 +8,6 @@ export const POTION_SIZES: PotionSize[] = ['s', 'm', 'l'];
 export const POTION_STACK = 10;
 
 export const POTION_SIZE_LABEL: Record<PotionSize, string> = { s: 'เล็ก', m: 'กลาง', l: 'ใหญ่' };
-export const POTION_ICON: Record<PotionKind, string> = { hp: '❤️', mp: '💧' };
 
 /** How much one bottle restores, and the merchant's price. */
 export const POTIONS: Record<PotionKind, Record<PotionSize, { amount: number; price: number }>> = {

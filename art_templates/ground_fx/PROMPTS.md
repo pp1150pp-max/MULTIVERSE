@@ -4,28 +4,66 @@
 
 ## ลายพื้น
 
-ไฟล์อยู่ที่ `public/assets/sprites/ground/` ขนาด 1024×1024 ปูซ้ำบนพื้น ทุก 10.4 หน่วย (ทางไม้ทุก 5.2 หน่วย)
+ไฟล์อยู่ที่ `public/assets/sprites/ground/` ขนาด 1024×1024 ปูซ้ำบนพื้นทุก 10.4 หน่วย
 หลังได้ภาพ ให้ย่อเป็น 1088 แล้วผสมขอบ 64px ด้วย dither ให้ซ้ายต่อขวาและบนต่อล่างได้สนิท
-ตำแหน่งถนน บ่อน้ำ และลานเกมวาดเป็นแผนที่ใน `paintMask` (`src/client/world.ts`) แล้วให้ shader เลือกลาย
+`paintMask` (`src/client/world.ts`) เก็บตำแหน่งน้ำแบบขอบชัด ส่วน `paintCover` เก็บถนน ลาน และตลิ่งแบบขอบนุ่ม
+shader จะผสมลายตาม noise และความสว่างของลาย หญ้าจึงค่อย ๆ แตกเป็นหย่อมเข้าไปในดิน
 
 ทุกภาพใช้กฎเดียวกัน:
 
 ```
 Generate a SQUARE image (1:1): one seamless repeating ground tile texture that fills the whole image edge to edge. EXACT
-same fine-detail 16-bit SNES-era pixel-art style and palette as the props above: small crisp pixels, no blur, no
-gradients. Viewed straight down with no perspective. Even, uniform brightness and evenly distributed detail, no large
-shapes, no focal point, no vignette, no borders. The left edge must match the right edge and the top edge must match the
-bottom edge so it tiles with no visible seams. No text, no labels, no grid lines.
+same fine-detail 16-bit SNES-era pixel-art style as the props above: small crisp pixels, no blur. Viewed from above with
+no perspective. No focal point, no vignette, no borders, left edge matches right edge and top edge matches bottom edge,
+no text, no grid lines.
 ```
+
+พื้นต้องมีรายละเอียดแต่ไม่แย่งความเด่นจากตัวละคร ลายต้องบอกเสมอว่า `rich surface detail but LOW contrast`, ใช้ `4 to 5 close shades only` และ `nothing bright, nothing near black`
 
 | ไฟล์ | เนื้อหาที่ใส่ต่อท้าย |
 |---|---|
-| `grass` | lush green grass made of many small grass blade clusters, a few tiny scattered white and yellow flowers and tiny pebbles |
-| `dirt` | packed warm-brown dirt road with small cracks, tiny scattered pebbles and small grey-tan stones, no grass |
+| `grass` | lush grass with many small overlapping clumps and tufts, each softly shaded, small mossy mottled patches, medium olive-green, no flowers, no stones |
+| `dirt` | worn earth trail with small shallow cracks, faint footprint dents, tiny embedded pebbles the same colour as the earth, a few dry grass fibres, olive-tinted tan and warm grey-brown, no orange |
+| `pave` | old irregular cobblestone: rounded uneven flagstones of varied sizes, about 12 stones across, soft earth-coloured gaps with tiny bits of moss, muted warm grey-beige, no regular brick grid |
+| `marsh` | damp swamp turf with clumps of coarse wet grass and moss cushions, small darker damp hollows, muted dark grey-olive green, no flowers, no stones, no water |
+| `mud` | trampled swamp mud trail with shallow boot prints, small cracks, tiny pebbles the same colour as the mud, flecks of moss, olive-tinted grey-brown, no orange, no standing water |
 | `water` | dark still swamp water, muted deep blue-green teal, small short horizontal ripple highlights and a few tiny pale glints, no plants, no shore |
-| `marsh` | damp short muted olive-green moss and grass with small dark soil gaps, a few tiny pale-teal flowers and tiny dark pebbles |
-| `mud` | dark wet swamp mud, muted dark brown with small damp highlights, tiny roots and tiny stones, no grass, no water |
-| `planks` | old wooden boardwalk: weathered brown planks, each exactly horizontal from left edge to right edge with no end joints, dark gaps, a few nails, knots and a little moss, about 8 planks stacked top to bottom |
+
+## ของตกแต่งบนพื้น
+
+ไฟล์ `public/assets/sprites/props/decor_forest.png` และ `decor_marsh.png` ของชิ้นเล็กไม่มีการชน ช่องละ 128×128 ตารางละ 4×3 วางบนพื้นหลังโปร่งใสโดยชิดด้านล่างกลางช่อง
+ตั้งที่เกิดของแต่ละช่องใน `DECOR` (`src/client/world.ts`) เกมรวมทุกชิ้นเป็น mesh เดียว จึงใช้ draw call เดียวต่อแมพ
+
+```
+EXACT same fine-detail 16-bit SNES-era pixel-art style as the tree, rock and prop sprites above: 2D isometric view angle,
+crisp pixels, soft dark outline. Generate a SQUARE image: a strict invisible grid of 4 columns x 3 rows, one small
+separate ground detail centred in each cell, with wide empty space around each, nothing touching or crossing cell
+borders. Background ONE perfectly flat solid magenta (#FF00FF), no shadows on the ground, no text, no labels, no grid
+lines. Do not use pink or magenta in the objects.
+```
+
+**`decor_forest`**
+1. กอหญ้าเล็ก, กอหญ้าสูง, กลุ่มใบโคลเวอร์, ดอกไม้ป่าสีครีมเหลือง
+2. ดอกไม้ป่าสีม่วงอ่อนฟ้าอ่อน, พุ่มใบเตี้ย, เฟิร์นเล็ก, กองหินเทา
+3. หินแบนจมดินมีมอส, ขอนไม้ล้มมีมอส, ใบไม้แห้งกับกิ่งไม้, เห็ดเล็กสีน้ำตาล
+
+**`decor_marsh`**
+1. กอหญ้าแห้งสีเหลือง, กอกกสูง, เฟิร์นหนองน้ำ, รากไม้บิดโผล่จากดิน
+2. กิ่งไม้หักมีมอส, เห็ดสีเทาเขียว, ใบบัว, ใบบัวมีดอกสีครีม
+3. แอ่งโคลนตื้น, หินมีมอสจมดิน, กอกกเตี้ย, กิ่งไม้แห้ง
+
+## แผ่นไม้ผุบนทางแมพ 2
+
+ไฟล์ `public/assets/sprites/props/marsh_planks.png` เรียง 3 ชิ้น ช่องละ 256×384 เกมวางราบกับพื้นเป็นช่วง ๆ และหมุนตามทิศทางเดิน (`PLANK_SHEET` และ `addPlanks` ใน `src/client/world.ts`)
+
+```
+Same fine-detail 16-bit SNES-era pixel-art style, but viewed STRAIGHT DOWN from above with no perspective. Generate a
+SQUARE image: exactly 3 separate pieces side by side in 3 equal columns, each piece standing tall and filling most of its
+column's height. Each piece is a short rotted swamp footpath: about 6 to 8 old weathered dark-brown wooden boards, each
+board running exactly left-to-right, stacked from top to bottom with small muddy gaps. Very natural and uneven: different
+lengths, jagged broken ends, a few crooked, one or two missing or snapped, patches of moss and mud. Muted low-contrast
+colours. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no text, no grid lines.
+```
 
 ## เอฟเฟกต์สกิล
 

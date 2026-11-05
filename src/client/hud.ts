@@ -6,7 +6,7 @@ import {
   DROP_ON_FAIL_FROM,
 } from '../shared/data/enhance';
 import {
-  entryName, POTION_ICON, POTION_SIZES, POTION_SIZE_LABEL, POTION_STACK, POTIONS, potionName, potionSellPrice,
+  entryName, POTION_SIZES, POTION_SIZE_LABEL, POTION_STACK, POTIONS, potionName, potionSellPrice,
 } from '../shared/data/potions';
 import { FullMap } from './fullmap';
 import { AUTO_PX_PER_UNIT, AUTO_RANGE_MAX, AUTO_RANGE_MIN, cleanAutoSettings, lootPots, type LootFilter, type SortKey } from '../shared/sim/Player';
@@ -17,11 +17,11 @@ import {
   isPotion, RARITIES, RARITY_COLOR, RARITY_LABEL, SLOTS, SLOT_LABEL, STAT_KEYS, STAT_LABEL,
   type BagEntry, type Item, type PotionKind, type PotionSize, type PotionStack, type Rarity, type SlotId, type StatKey,
 } from '../shared/types';
+import { COIN_ICON, emptySlotIcon, FORGE_ICON, itemIcon, potionIcon, skillIcon } from './icons';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
 const KEY_LABEL: Record<SkillSlot, string> = { basic: 'LMB', q: 'Q', e: 'E', r: 'R', dash: 'SPACE' };
-const SLOT_ICON: Record<SlotId, string> = { weapon: '🗡️', helmet: '⛑️', armor: '🥋', boots: '👢', ring: '💍' };
 const POTION_CD = 1.5;
 const fmtNum = (v: number) => String(Math.round(v * 10) / 10);
 const POTION_COLOR: Record<PotionKind, string> = { hp: '#e8323c', mp: '#3a7bff' };
@@ -200,7 +200,7 @@ export class Hud {
     // Merchant
     $('shop-close').onclick = () => this.closeShop();
     $('shop-buy').innerHTML = (['hp', 'mp'] as const).flatMap((k) => POTION_SIZES.map((s) =>
-      `<div class="shop-row"><span class="shop-item">${POTION_ICON[k]} ${potionName(k, s)} <small>ฟื้น ${POTIONS[k][s].amount} ${k.toUpperCase()}</small></span>` +
+      `<div class="shop-row"><span class="shop-item">${potionIcon(k)} ${potionName(k, s)} <small>ฟื้น ${POTIONS[k][s].amount} ${k.toUpperCase()}</small></span>` +
       `<span class="shop-price">${POTIONS[k][s].price} G</span>` +
       `<button data-buy="${k}:${s}:1">ซื้อ 1</button><button data-buy="${k}:${s}:${POTION_STACK}">ซื้อ ${POTION_STACK}</button></div>`,
     )).join('');
@@ -273,10 +273,10 @@ export class Hud {
       this.slotEls.push({ kind, el, cd: el.querySelector('.cd')!, extra: el.querySelector('.extra')! });
     };
     for (const s of this.g.player.cls.skills) {
-      add(s.slot, s.icon, KEY_LABEL[s.slot], `${s.name} (${s.nameTh})\n${s.desc}${s.mp ? `\nMP ${s.mp}` : ''}${s.cooldown ? ` · คูลดาวน์ ${s.cooldown} วิ` : ''}`);
+      add(s.slot, skillIcon(s.id), KEY_LABEL[s.slot], `${s.name} (${s.nameTh})\n${s.desc}${s.mp ? `\nMP ${s.mp}` : ''}${s.cooldown ? ` · คูลดาวน์ ${s.cooldown} วิ` : ''}`);
     }
-    add('hp', '❤️', '1', '');
-    add('mp', '💧', '2', '');
+    add('hp', potionIcon('hp'), '1', '');
+    add('mp', potionIcon('mp'), '2', '');
   }
 
   // ------------------------------------------------------------ per-frame
@@ -557,8 +557,8 @@ export class Hud {
 
   private renderShopMoney(): void {
     const p = this.g.player;
-    $('shop-gold').textContent = `💰 ${p.gold.toLocaleString()} G`;
-    $('shop-pots').textContent = this.potionTotals();
+    $('shop-gold').innerHTML = `${COIN_ICON} ${p.gold.toLocaleString()} G`;
+    $('shop-pots').innerHTML = this.potionTotals();
     $('shop').querySelectorAll<HTMLButtonElement>('[data-buy]').forEach((b) => {
       const [kind, size, n] = b.dataset.buy!.split(':') as [PotionKind, PotionSize, string];
       b.disabled = p.gold < POTIONS[kind][size].price * Number(n) || p.potionRoom(kind, size) < Number(n);
@@ -567,7 +567,7 @@ export class Hud {
 
   private potionTotals(): string {
     const p = this.g.player;
-    return `❤️ ${p.potionCount('hp')}  💧 ${p.potionCount('mp')}`;
+    return `${potionIcon('hp')} ${p.potionCount('hp')} &nbsp; ${potionIcon('mp')} ${p.potionCount('mp')}`;
   }
 
   private buyPotion(kind: PotionKind, size: PotionSize, n: number): void {
@@ -662,7 +662,7 @@ export class Hud {
         ? `<div class="warn">⚠ ถ้าล้มเหลว จะเสียทองและระดับลดลงเหลือ +${cur - 1}</div>`
         : `<div class="safe">ถ้าล้มเหลว เสียแค่ทอง ระดับเท่าเดิม</div>`);
     go.disabled = p.gold < cost;
-    go.textContent = p.gold < cost ? `ทองไม่พอ (มี ${p.gold.toLocaleString()} G)` : `🔨 ตีบวก (${cost.toLocaleString()} G)`;
+    go.innerHTML = p.gold < cost ? `ทองไม่พอ (มี ${p.gold.toLocaleString()} G)` : `${FORGE_ICON} ตีบวก (${cost.toLocaleString()} G)`;
   }
 
   private async enhance(): Promise<void> {
@@ -702,12 +702,10 @@ export class Hud {
     if (isPotion(item)) {
       // The outline marks the size the quick key uses.
       const quick = this.g.player.potSel[item.potion] === item.size;
-      return `<div class="cell pot${quick ? ' quick' : ''}" ${attrs} style="--rc:${POTION_COLOR[item.potion]}">${POTION_ICON[item.potion]}` +
+      return `<div class="cell pot${quick ? ' quick' : ''}" ${attrs} style="--rc:${POTION_COLOR[item.potion]}">${potionIcon(item.potion)}` +
         `<span class="psize">${POTION_SIZE_LABEL[item.size]}</span><span class="ilv">×${item.count}</span></div>`;
     }
-    const icon = item.slot === 'weapon'
-      ? { sword: '🗡️', mage: '🪄', gunslinger: '🔫' }[this.g.player.cls.id]
-      : SLOT_ICON[item.slot];
+    const icon = itemIcon(item);
     const plus = plusOf(item) ? `<span class="iplus">+${plusOf(item)}</span>` : '';
     return `<div class="cell r-${item.rarity}${selected ? ' sel' : ''}" ${attrs} style="--rc:${RARITY_COLOR[item.rarity]}">${icon}${plus}<span class="ilv">${item.level}</span></div>`;
   }
@@ -716,7 +714,7 @@ export class Hud {
     this.invDirty = false;
     const p = this.g.player;
     $('equip-slots').innerHTML = SLOTS.map((s) =>
-      `<div class="eq-row"><span class="eq-label">${SLOT_LABEL[s]}</span>${this.itemCell(p.equipment[s], `data-slot="${s}"`, `<span class="ph">${SLOT_ICON[s]}</span>`)}</div>`,
+      `<div class="eq-row"><span class="eq-label">${SLOT_LABEL[s]}</span>${this.itemCell(p.equipment[s], `data-slot="${s}"`, `<span class="ph">${emptySlotIcon(s, p.cls.id)}</span>`)}</div>`,
     ).join('');
     $('bag-grid').innerHTML = p.bag.map((it, i) => this.itemCell(it, `data-i="${i}"`)).join('');
     const fmt = (k: StatKey, v: number) =>
@@ -724,8 +722,8 @@ export class Hud {
     $('stat-list').innerHTML = STAT_KEYS.map((k) =>
       `<div class="stat"><span>${STAT_LABEL[k]}</span><b>${fmt(k, p.stats[k])}</b></div>`,
     ).join('');
-    $('inv-gold').textContent = `💰 ${p.gold.toLocaleString()} G`;
-    $('inv-pots').textContent = this.potionTotals();
+    $('inv-gold').innerHTML = `${COIN_ICON} ${p.gold.toLocaleString()} G`;
+    $('inv-pots').innerHTML = this.potionTotals();
     const lf = $('loot-filter');
     for (const r of RARITIES) lf.querySelector<HTMLInputElement>(`[data-rarity="${r}"]`)!.checked = p.lootFilter.rarities.includes(r);
     syncPots(lf, p.lootFilter);

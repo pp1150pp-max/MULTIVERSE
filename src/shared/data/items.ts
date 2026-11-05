@@ -30,6 +30,29 @@ const BASES: BaseItem[] = [
   { id: 'ring_wisp', slot: 'ring', names: { any: 'Wisp Ring' }, main: { maxHp: 18 }, minLevel: 16 },
 ];
 
+/** Names of every item's picture. Items named per class have one picture per class. */
+export const ITEM_ART: string[] = BASES.flatMap((b) =>
+  b.names.any ? [`item_${b.id}`] : Object.keys(b.names).map((cls) => `item_${b.id}_${cls}`),
+);
+
+/**
+ * The picture for an item. An item doesn't record which class it dropped for, but its name does, so
+ * everyone sees the same picture for it. An unknown base falls back to the first item of that slot.
+ */
+export function itemArt(item: Item): string {
+  const base = BASES.find((b) => b.id === item.baseId) ?? BASES.find((b) => b.slot === item.slot)!;
+  if (base.names.any) return `item_${base.id}`;
+  const entries = Object.entries(base.names);
+  const cls = entries.find(([, name]) => item.name.endsWith(name!)) ?? entries[0];
+  return `item_${base.id}_${cls[0]}`;
+}
+
+/** The picture of a slot's first item, as this class sees it. */
+export function starterArt(slot: SlotId, cls: ClassId): string {
+  const base = BASES.find((b) => b.slot === slot)!;
+  return base.names.any ? `item_${base.id}` : `item_${base.id}_${cls}`;
+}
+
 const AFFIXES: { stat: StatKey; min: number; max: number; per: number }[] = [
   { stat: 'atk', min: 1, max: 3, per: 0.5 },
   { stat: 'def', min: 1, max: 3, per: 0.4 },
