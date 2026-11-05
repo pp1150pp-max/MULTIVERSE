@@ -6,6 +6,12 @@ import { assetSources, fxTex, groundTiles, sheets, type GroundTile } from './ass
 
 /** World units covered by one repeat of a ground tile: about the same pixel size as the sprites. */
 const TILE_UNITS = 10.4;
+/** Size of the picture the maps are cut from, and of the ground rendered for it. */
+const MAP_SIZE = 1400;
+const MAP_GROUND_SIZE = 1024;
+/** Trees and buildings are drawn smaller than life on the map; anything shorter is left out as clutter. */
+const MAP_PROP_SCALE = 0.7;
+const MAP_MIN_PROP = 2;
 /** Bare ground around the camp at a zone's start. */
 const CAMP_RADIUS = 7;
 /** How wide each theme's roads are worn into the grass. */
@@ -63,7 +69,7 @@ const GROUND_VERT = /* glsl */ `
 
 const GROUND_FRAG = /* glsl */ `
   uniform sampler2D uMask, uCover, uBase, uDirt, uPave, uWater;
-  uniform float uHalf, uBound, uTileUnits, uTime;
+  uniform float uHalf, uBound, uTileUnits, uTime, uBake;
   varying vec2 vWorld;
 
   /**
@@ -137,6 +143,8 @@ const GROUND_FRAG = /* glsl */ `
     if (abs(vWorld.x) > uBound || abs(vWorld.y) > uBound) col *= 0.5;
     gl_FragColor = vec4(col, 1.0);
     #include <colorspace_fragment>
+    // A render target stays linear, but the map picture read back from it is used as sRGB.
+    if (uBake > 0.5) gl_FragColor.rgb = pow(gl_FragColor.rgb, vec3(1.0 / 2.2));
   }
 `;
 
@@ -150,6 +158,10 @@ interface GroundPalette {
   /** Repeating textures for the real ground. `dirt` also covers clearings and pond banks. */
   tiles: { base: GroundTile; dirt: GroundTile };
   background: string;
+  /** Border of the maps. */
+  mapEdge: string;
+  /** Road on the maps: its full width, then a thin line down the middle. */
+  mapRoad: [string, string];
   base: string;
   patchDark: string[];
   patchLight: string[];
@@ -175,6 +187,8 @@ const PALETTES: Record<ZoneTheme, GroundPalette> = {
   forest: {
     tiles: { base: 'grass', dirt: 'dirt' },
     background: '#16301a',
+    mapEdge: '#a8c070',
+    mapRoad: ['rgba(206, 170, 112, 0.6)', 'rgba(240, 214, 160, 0.55)'],
     base: '#4e8a39',
     patchDark: ['#467f35', '#427a33', '#4a8337'],
     patchLight: ['#56933f', '#5b9842', '#528e3c'],
@@ -199,6 +213,8 @@ const PALETTES: Record<ZoneTheme, GroundPalette> = {
   marsh: {
     tiles: { base: 'marsh', dirt: 'mud' },
     background: '#121c19',
+    mapEdge: '#8a9460',
+    mapRoad: ['rgba(150, 122, 84, 0.65)', 'rgba(214, 186, 138, 0.5)'],
     base: '#46573b',
     patchDark: ['#3e4f37', '#3a4b34', '#425239'],
     patchLight: ['#4e5e40', '#546343', '#4a5a3d'],
@@ -240,6 +256,9 @@ export class World {
   private readonly shadowGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
   private readonly shadowMat: THREE.MeshBasicMaterial;
   private readonly groundTex: THREE.CanvasTexture;
+  private readonly groundMesh: THREE.Mesh;
+  /** The whole zone drawn for the maps, turned 45 degrees to match the camera. See bakeMap. */
+  readonly mapImage = document.createElement('canvas');
   private groundCover: THREE.CanvasTexture | null = null;
   private groundUniforms: Record<string, THREE.IUniform> | null = null;
   /** Scratch canvas for paintBand; released once the ground is painted. */
@@ -277,6 +296,7 @@ export class World {
         uBound: { value: this.bound },
         uTileUnits: { value: TILE_UNITS },
         uTime: { value: 0 },
+        uBake: { value: 0 },
       };
     } else {
       const tex = new THREE.CanvasTexture(this.groundCanvas);
@@ -287,7 +307,7 @@ export class World {
       this.groundTex = tex;
     }
     this.maskCtx = null;
-    this.add(new THREE.Mesh(
+    this.groundMesh = this.add(new THREE.Mesh(
       new THREE.PlaneGeometry(this.half * 2, this.half * 2).rotateX(-Math.PI / 2),
       this.own(this.groundUniforms
         ? new THREE.ShaderMaterial({ uniforms: this.groundUniforms, vertexShader: GROUND_VERT, fragmentShader: GROUND_FRAG })
@@ -340,6 +360,145 @@ export class World {
     }))));
     s.position.set(x, y, z);
     return s;
+  }
+
+  /** Where a world point lands on mapImage. */
+  mapAt(x: number, z: number): [number, number] {
+    const c = MAP_SIZE / 2;
+    const s = this.mapScale;
+    return [c + (x - z) * S * s, c + (x + z) * S * s];
+  }
+
+  /** Pixels of mapImage per world unit. */
+  get mapScale(): number {
+    return (MAP_SIZE * 0.96) / (2 * this.half * Math.SQRT2);
+  }
+
+  /** Border colour for the full map, to suit this zone. */
+  get mapEdge(): string {
+    return this.pal.mapEdge;
+  }
+
+  /**
+   * Draws mapImage once: the real ground seen from above, then the zone's trees, rocks and camp on
+   * it, so the maps always look like the place itself.
+   */
+  bakeMap(renderer: THREE.WebGLRenderer): void {
+    const ground = this.groundUniforms ? this.readGround(renderer) : this.groundCanvas;
+    const cv = this.mapImage;
+    cv.width = cv.height = MAP_SIZE;
+    const ctx = cv.getContext('2d')!;
+    const c = MAP_SIZE / 2;
+    const H = this.half;
+    const s = this.mapScale;
+
+    const glow = ctx.createRadialGradient(c, c, c * 0.3, c, c, c * 1.4);
+    glow.addColorStop(0, this.pal.background);
+    glow.addColorStop(1, '#040605');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, MAP_SIZE, MAP_SIZE);
+
+    const diamond = () => {
+      ctx.beginPath();
+      ctx.moveTo(...this.mapAt(-H, -H));
+      ctx.lineTo(...this.mapAt(H, -H));
+      ctx.lineTo(...this.mapAt(H, H));
+      ctx.lineTo(...this.mapAt(-H, H));
+      ctx.closePath();
+    };
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+    ctx.shadowBlur = 40;
+    ctx.fillStyle = '#000';
+    diamond();
+    ctx.fill();
+    ctx.restore();
+
+    const a = ((2 * H) / ground.width) * s * S;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.setTransform(a, a, -a, a, c, c - 2 * H * S * s);
+    ctx.drawImage(ground, 0, 0);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    // Roads are too soft on the real ground to follow at this size, so they're marked over it.
+    ctx.lineCap = ctx.lineJoin = 'round';
+    for (const [width, colour] of [[TRAIL_WIDTH[this.zone.theme] * s, this.pal.mapRoad[0]], [1.4 * s, this.pal.mapRoad[1]]] as const) {
+      ctx.lineWidth = width;
+      ctx.strokeStyle = colour;
+      ctx.beginPath();
+      for (const [ax, az, bx, bz] of this.segs) {
+        ctx.moveTo(...this.mapAt(ax, az));
+        ctx.lineTo(...this.mapAt(bx, bz));
+      }
+      ctx.stroke();
+    }
+
+    // Back to front, so nearer trees overlap the ones behind them.
+    const props = this.terrain.props
+      .filter((p) => p.height >= MAP_MIN_PROP && p.key !== 'portal')
+      .sort((p, q) => p.x + p.z - (q.x + q.z));
+    for (const p of props) {
+      const sh = sheets[p.key];
+      const h = p.height * s * MAP_PROP_SCALE;
+      const w = h * sh.cellAspect;
+      const [x, y] = this.mapAt(p.x, p.z);
+      ctx.drawImage(sh.texture.image as CanvasImageSource, x - w / 2, y - h, w, h);
+    }
+
+    // Everything past the walkable area sinks into shadow, so the playable shape stands out.
+    const B = this.bound;
+    ctx.beginPath();
+    ctx.moveTo(...this.mapAt(-H, -H));
+    ctx.lineTo(...this.mapAt(H, -H));
+    ctx.lineTo(...this.mapAt(H, H));
+    ctx.lineTo(...this.mapAt(-H, H));
+    ctx.closePath();
+    ctx.moveTo(...this.mapAt(-B, -B));
+    ctx.lineTo(...this.mapAt(B, -B));
+    ctx.lineTo(...this.mapAt(B, B));
+    ctx.lineTo(...this.mapAt(-B, B));
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(4, 8, 6, 0.55)';
+    ctx.fill('evenodd');
+
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = this.pal.mapEdge;
+    diamond();
+    ctx.stroke();
+  }
+
+  /** Renders the ground straight down into a canvas whose x and y run along world x and z. */
+  private readGround(renderer: THREE.WebGLRenderer): HTMLCanvasElement {
+    const H = this.half;
+    const target = new THREE.WebGLRenderTarget(MAP_GROUND_SIZE, MAP_GROUND_SIZE);
+    const cam = new THREE.OrthographicCamera(-H, H, H, -H, 0.1, 100);
+    cam.position.set(0, 50, 0);
+    cam.up.set(0, 0, -1);
+    cam.lookAt(0, 0, 0);
+    cam.updateMatrixWorld();
+    const uniforms = this.groundUniforms!;
+    const before = renderer.getRenderTarget();
+    uniforms.uBake.value = 1;
+    renderer.setRenderTarget(target);
+    renderer.render(this.groundMesh, cam);
+    const pixels = new Uint8Array(MAP_GROUND_SIZE * MAP_GROUND_SIZE * 4);
+    renderer.readRenderTargetPixels(target, 0, 0, MAP_GROUND_SIZE, MAP_GROUND_SIZE, pixels);
+    renderer.setRenderTarget(before);
+    uniforms.uBake.value = 0;
+    target.dispose();
+
+    const out = document.createElement('canvas');
+    out.width = out.height = MAP_GROUND_SIZE;
+    const ctx = out.getContext('2d')!;
+    const image = ctx.createImageData(MAP_GROUND_SIZE, MAP_GROUND_SIZE);
+    // WebGL's first row is the bottom one.
+    const row = MAP_GROUND_SIZE * 4;
+    for (let y = 0; y < MAP_GROUND_SIZE; y++) {
+      image.data.set(pixels.subarray(y * row, (y + 1) * row), (MAP_GROUND_SIZE - 1 - y) * row);
+    }
+    ctx.putImageData(image, 0, 0);
+    return out;
   }
 
   /** Adds many quads from one atlas as a single mesh, so hundreds of details cost one draw call. */

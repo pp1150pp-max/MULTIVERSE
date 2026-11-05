@@ -72,3 +72,16 @@ lines. Do not use pink, magenta or purple in the items.
 
 - อาวุธ (5×3): แถวดาบ คทา ปืน เรียงคอลัมน์ตาม `weapon_1` ถึง `weapon_5`
 - ชุดและอื่น ๆ (6×3): `tunic` `leather` `scale` ของ sword และ mage / ของ gunslinger กับ `cap` `helm` `hood` / `sandals` `boots` `waders` `ring_copper` `ring_jade` `ring_wisp`
+
+## ไอคอนแผนที่
+
+ตัดเป็น `public/assets/sprites/icons/map_<ชื่อ>.png` ขนาด 96×96 รายชื่ออยู่ใน `src/client/mapIconNames.ts` ภาพพื้นของแผนที่สร้างจากพื้นจริงตอนเข้าแมพ ดู `bakeMap` ใน `src/client/world.ts`
+
+```
+12 small game MAP MARKER icons in the EXACT same 16-bit SNES-era pixel-art style as the game art above: crisp pixels,
+bright saturated colours, a thick solid dark outline, very simple bold silhouettes that read instantly at only 20 pixels
+wide. Strict invisible grid of 4 columns x 3 rows, one icon centred in each cell. No frame, no icon background. Background
+ONE perfectly flat solid magenta (#FF00FF), no text, no grid lines. Do not use pink or magenta in the icons.
+```
+
+เรียงตามแถว: ลูกศรทอง, ลูกศรฟ้า, เต็นท์, ถุงเงิน / ค้อน, ฟองคำพูด, วงวาร์ปม่วง, หัวกะโหลกมงกุฎ / ธงแดง, รอยเท้า (ไม่ได้ใช้), ดาบไขว้, หีบ (ไม่ได้ใช้)

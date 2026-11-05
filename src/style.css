@@ -130,11 +130,13 @@ button.primary { background: linear-gradient(#a8812f, #6b4f1a); border-color: va
 #hud-zone { margin-top: 6px; font-size: 12px; color: var(--ink-dim); text-shadow: 0 0 3px #000; }
 
 #hud-topright { position: absolute; top: 12px; right: 12px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
-#minimap { display: block; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.7)); pointer-events: auto; cursor: pointer; }
+#minimap { display: block; width: 176px; height: 176px; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.7)); pointer-events: auto; cursor: pointer; }
 #fullmap { left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(680px, 94vw, 82vh); }
-#fullmap-canvas { display: block; width: 100%; aspect-ratio: 1; border-radius: 6px; background: #0b140a; }
+#fullmap-canvas { display: block; width: 100%; aspect-ratio: 1; border: 2px solid #c9a85a; border-radius: 6px; background: #040605; box-shadow: 0 0 0 1px #2a1d0c, inset 0 0 40px rgba(0, 0, 0, 0.6); }
 .fullmap-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; font-size: 12px; }
-.fullmap-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; border: 1px solid #000; }
+.fullmap-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.fullmap-legend img { width: 18px; height: 18px; object-fit: contain; }
+.fullmap-legend i { display: inline-block; width: 9px; height: 9px; margin: 0 4px; border-radius: 50%; border: 1px solid #000; }
 .hud-buttons { display: flex; flex-direction: column; gap: 4px; width: 140px; }
 .auto-row { display: flex; gap: 4px; }
 .auto-row #btn-auto { flex: 1; }

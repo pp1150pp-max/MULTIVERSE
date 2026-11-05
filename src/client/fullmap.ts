@@ -1,13 +1,26 @@
 import type { Game } from './Game';
+import type { NpcId } from '../shared/data/npcs';
 import { MONSTERS } from '../shared/data/monsters';
 import { ZONES } from '../shared/data/zones';
+import { sheets } from './assets';
+import { drawMapIcon, facingAngle } from './mapIcons';
+import type { MapIcon } from './mapIconNames';
 
 const S = Math.SQRT1_2;
-const NPC_COLOR = { seeker: '#fff3c0', merchant: '#7fe07a', blacksmith: '#ff9a4a' } as const;
+export const NPC_MAP_ICON: Record<NpcId, MapIcon> = { seeker: 'seeker', merchant: 'merchant', blacksmith: 'blacksmith' };
+
+/** How a monster's level compares with the player's, as a colour for its spawn area and label. */
+function dangerColour(monsterLevel: number, playerLevel: number): string {
+  if (monsterLevel > playerLevel + 2) return '#ff8a7a';
+  if (monsterLevel < playerLevel - 2) return '#a9d98a';
+  return '#ffd98a';
+}
+
+interface Box { x0: number; y0: number; x1: number; y1: number }
 
 /**
  * Whole-zone map (M or click the minimap). Drawn turned 45 degrees like the minimap so it matches the camera.
- * Spawn areas are labelled from zone data; dots are what this client can see right now
+ * Spawn areas are labelled from zone data; markers are what this client can see right now
  * (online that is only what is near the player).
  */
 export class FullMap {
@@ -27,105 +40,137 @@ export class FullMap {
     const want = Math.round(cv.clientWidth * (window.devicePixelRatio || 1));
     if (want > 0 && cv.width !== want) cv.width = cv.height = want;
     const W = cv.width;
-    const px = W / 640; // text and dot sizes are designed for a 640px map
+    const px = W / 640; // text and marker sizes are designed for a 640px map
     const c = W / 2;
     const H = g.world.half;
     const sc = (W * 0.96) / (2 * H * Math.SQRT2);
     const zone = g.backend.zone;
+    const me = g.player;
     const at = (x: number, z: number): [number, number] => [c + (x - z) * S * sc, c + (x + z) * S * sc];
     this.c = c;
     this.sc = sc;
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, W, W);
-    const k = (2 * H) / g.world.groundCanvas.width;
-    const a = k * sc * S;
-    ctx.setTransform(a, a, -a, a, c, c - 2 * H * S * sc);
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(g.world.groundCanvas, 0, 0);
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(g.world.mapImage, 0, 0, W, W);
+    cv.style.borderColor = g.world.mapEdge;
 
-    const label = (x: number, y: number, text: string, color: string, size = 12) => {
-      ctx.font = `600 ${size * px}px Kanit, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.lineWidth = 3 * px;
-      ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-      ctx.strokeText(text, x, y);
-      ctx.fillStyle = color;
-      ctx.fillText(text, x, y);
-    };
-    const dot = (x: number, z: number, r: number, color: string, outline = false) => {
+    const icon = (name: MapIcon, x: number, z: number, size: number, angle = 0) => drawMapIcon(ctx, name, ...at(x, z), size * px, angle);
+    const dot = (x: number, z: number, r: number, color: string) => {
       const [sx, sy] = at(x, z);
       ctx.beginPath();
       ctx.arc(sx, sy, r * px, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
-      if (outline) {
-        ctx.lineWidth = 1.5 * px;
-        ctx.strokeStyle = '#000';
-        ctx.stroke();
-      }
+      ctx.lineWidth = 1.2 * px;
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+      ctx.stroke();
     };
-    const area = (x: number, z: number, r: number, fill: string, edge: string) => {
+    const area = (x: number, z: number, r: number, colour: string) => {
       const [sx, sy] = at(x, z);
       ctx.beginPath();
       ctx.arc(sx, sy, r * sc, 0, Math.PI * 2);
-      ctx.fillStyle = fill;
+      ctx.globalAlpha = 0.1;
+      ctx.fillStyle = colour;
       ctx.fill();
-      ctx.lineWidth = 1.5 * px;
-      ctx.strokeStyle = edge;
+      ctx.globalAlpha = 0.7;
+      ctx.lineWidth = 1.2 * px;
+      ctx.setLineDash([5 * px, 4 * px]);
+      ctx.strokeStyle = colour;
       ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
     };
 
     // Spawn areas and the boss lair.
-    for (const sp of zone.spawns) area(sp.x, sp.z, sp.radius, 'rgba(242,166,64,0.12)', 'rgba(242,166,64,0.55)');
+    for (const sp of zone.spawns) {
+      const d = MONSTERS[sp.monster];
+      area(sp.x, sp.z, sp.radius, dangerColour(d.levels[1], me.level));
+    }
     const b = zone.boss;
-    area(b.x, b.z, 4, 'rgba(255,58,42,0.18)', 'rgba(255,90,70,0.8)');
+    area(b.x, b.z, 5, '#ff5a46');
 
-    // Live dots.
+    // Live markers.
     for (const m of g.monsters) {
-      if (!m.alive) continue;
-      if (m.isBoss) dot(m.x, m.z, 6, '#ff3a2a', true);
-      else dot(m.x, m.z, 2.6, m.isHostile ? '#ff5a4a' : '#f2a640');
+      if (!m.alive || m.isBoss) continue;
+      if (m.isHostile) icon('fight', m.x, m.z, 15);
+      else dot(m.x, m.z, 2.8, '#f2a640');
     }
-    for (const n of g.npcs) dot(n.x, n.z, 4, NPC_COLOR[n.id], true);
-    const me = g.player;
-    for (const p of g.backend.players) {
-      if (p === me) continue;
-      dot(p.x, p.z, 4.5, '#6ac8ff', true);
-      const [sx, sy] = at(p.x, p.z);
-      label(sx, sy - 11 * px, p.name, '#bfe6ff', 11);
+    for (const n of g.npcs) icon(NPC_MAP_ICON[n.id], n.x, n.z, 22);
+    for (const p of g.backend.players) if (p !== me) icon('ally', p.x, p.z, 24, facingAngle(p.faceX, p.faceZ));
+
+    // Labels go on top of every marker, each nudged clear of the ones already placed.
+    const placed: Box[] = [];
+    /** A dark pill with optional picture and text, centred on x. `step` is which way to dodge. */
+    const label = (x: number, y: number, text: string, colour: string, opts: { size?: number; step?: number; art?: (ax: number, ay: number, s: number) => void } = {}) => {
+      const size = (opts.size ?? 12) * px;
+      ctx.font = `600 ${size}px Kanit, sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      const art = opts.art ? size * 1.5 : 0;
+      const w = ctx.measureText(text).width + art + 12 * px;
+      const h = size + 8 * px;
+      let top = y - h / 2;
+      const hits = (t: number) => placed.some((q) => x - w / 2 < q.x1 && x + w / 2 > q.x0 && t < q.y1 && t + h > q.y0);
+      for (let i = 0; i < 12 && hits(top); i++) top += (h + 2 * px) * (opts.step ?? -1);
+      placed.push({ x0: x - w / 2, y0: top, x1: x + w / 2, y1: top + h });
+      ctx.beginPath();
+      ctx.roundRect(x - w / 2, top, w, h, h / 2);
+      ctx.fillStyle = 'rgba(14, 10, 6, 0.82)';
+      ctx.fill();
+      ctx.lineWidth = 1 * px;
+      ctx.strokeStyle = 'rgba(201, 168, 90, 0.55)';
+      ctx.stroke();
+      if (opts.art) opts.art(x - w / 2 + 5 * px + art / 2, top + h / 2, art);
+      ctx.fillStyle = colour;
+      ctx.fillText(text, x - w / 2 + art + 7 * px, top + h / 2 + 1 * px);
+    };
+
+    // The fixed places first, so the rest move out of their way.
+    const bd = MONSTERS[b.monster];
+    const [bx, by] = at(b.x, b.z);
+    icon('boss', b.x, b.z, 34);
+    label(bx, by - 30 * px, `${bd.nameTh} Lv.${bd.levels[0]}`, '#ff9a8a', { size: 13 });
+    const [cx, cy] = at(zone.start.x, zone.start.z);
+    // Beside the camp rather than over it: the NPCs and often the player are standing there.
+    label(cx - 72 * px, cy, 'แคมป์', '#fff0c0', {
+      step: 1,
+      art: (ax, ay, s) => drawMapIcon(ctx, 'camp', ax, ay, s),
+    });
+    for (const pt of zone.portals) {
+      const to = ZONES[pt.to];
+      const [sx, sy] = at(pt.x, pt.z);
+      icon('portal', pt.x, pt.z, 26);
+      const lv = pt.minLevel > 0 ? ` (Lv.${pt.minLevel}+)` : '';
+      label(sx + 92 * px, sy, `วาปไป ${to?.nameTh ?? pt.to}${lv}`, '#e0c8ff', { step: 1 });
     }
 
-    // Labels go on top of every dot.
-    // Two areas of the same monster close together get one label, so the text doesn't overlap.
+    // Two areas of the same monster close together get one label, so the text doesn't pile up.
     const labelled: { monster: string; x: number; z: number }[] = [];
     for (const sp of zone.spawns) {
       if (labelled.some((l) => l.monster === sp.monster && Math.hypot(l.x - sp.x, l.z - sp.z) < 24)) continue;
       labelled.push({ monster: sp.monster, x: sp.x, z: sp.z });
       const d = MONSTERS[sp.monster];
       const [sx, sy] = at(sp.x, sp.z);
-      label(sx, sy, `${d.nameTh} Lv.${d.levels[0]}-${d.levels[1]}`, '#ffe2a8');
+      const sheet = sheets[sp.monster];
+      label(sx, sy, `${d.nameTh} Lv.${d.levels[0]}-${d.levels[1]}`, dangerColour(d.levels[1], me.level), {
+        art: (ax, ay, s) => {
+          // The first frame of the sheet: the monster facing the camera.
+          const image = sheet.texture.image as HTMLImageElement;
+          const fw = image.width / sheet.cols;
+          const fh = image.height / sheet.rows;
+          const dh = s * 1.15;
+          const dw = dh * (fw / fh);
+          ctx.drawImage(image, 0, 0, fw, fh, ax - dw / 2, ay - dh / 2, dw, dh);
+        },
+      });
     }
-    const bd = MONSTERS[b.monster];
-    const [bx, by] = at(b.x, b.z);
-    label(bx, by - 16 * px, `👑 บอส: ${bd.nameTh} Lv.${bd.levels[0]}`, '#ff8a7a', 13);
-    const [cx, cy] = at(zone.start.x, zone.start.z);
-    // Below the camp: "คุณ" sits above the player, who is often standing in it.
-    label(cx, cy + 34 * px, '🏕 แคมป์ (พ่อค้า · ช่างตีเหล็ก · The Seeker)', '#fff3c0', 12);
-    for (const pt of zone.portals) {
-      const to = ZONES[pt.to];
-      const [sx, sy] = at(pt.x, pt.z);
-      ctx.beginPath();
-      ctx.arc(sx, sy, 7 * px, 0, Math.PI * 2);
-      ctx.fillStyle = '#b07aff';
-      ctx.fill();
-      ctx.lineWidth = 2 * px;
-      ctx.strokeStyle = '#fff';
-      ctx.stroke();
-      const lv = pt.minLevel > 0 ? ` (Lv.${pt.minLevel}+)` : '';
-      label(sx, sy - 16 * px, `🌀 วาปไป ${to?.nameTh ?? pt.to}${lv}`, '#e0c8ff', 12);
+    for (const p of g.backend.players) {
+      if (p === me) continue;
+      const [sx, sy] = at(p.x, p.z);
+      label(sx, sy - 20 * px, p.name, '#bfe6ff', { size: 11 });
     }
 
     // Where the player is walking to from a map click.
@@ -140,13 +185,11 @@ export class FullMap {
       ctx.stroke();
       ctx.setLineDash([]);
       const end = route[route.length - 1];
-      dot(end.x, end.z, 5, '#ffe08a', true);
+      icon('flag', end.x, end.z, 26);
     }
 
     // The player on top of everything.
-    dot(me.x, me.z, 6, '#ffffff', true);
-    const [mx, my] = at(me.x, me.z);
-    label(mx, my - 14 * px, 'คุณ', '#ffffff', 12);
+    icon('player', me.x, me.z, 32, facingAngle(me.faceX, me.faceZ));
   }
 
   /** The world point under a mouse position on the map canvas (uses the last draw). */
