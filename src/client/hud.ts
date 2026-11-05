@@ -254,12 +254,17 @@ export class Hud {
     });
     bag.addEventListener('mouseleave', () => this.hideTip());
 
-    $('sort-dir').onclick = () => {
-      const b = $('sort-dir');
-      const desc = b.dataset.desc !== '1';
-      b.dataset.desc = desc ? '1' : '0';
-      b.textContent = desc ? 'มาก → น้อย' : 'น้อย → มาก';
+    // The bag's sort controls and the stash window's copy of them always show the same choice.
+    const sortDir = (desc: boolean) => {
+      for (const b of [$('sort-dir'), $('stash-sort-dir')]) {
+        b.dataset.desc = desc ? '1' : '0';
+        b.textContent = desc ? 'มาก → น้อย' : 'น้อย → มาก';
+      }
     };
+    $('sort-dir').onclick = () => sortDir($('sort-dir').dataset.desc !== '1');
+    $('stash-sort-dir').onclick = () => sortDir($('sort-dir').dataset.desc !== '1');
+    $('sort-key').addEventListener('change', () => ($<HTMLSelectElement>('stash-sort-key').value = $<HTMLSelectElement>('sort-key').value));
+    $('stash-sort-key').addEventListener('change', () => ($<HTMLSelectElement>('sort-key').value = $<HTMLSelectElement>('stash-sort-key').value));
     const lf = $('loot-filter');
     lf.innerHTML = '<span>เก็บ</span>' +
       RARITIES.map((r) => `<label style="color:${RARITY_COLOR[r]}"><input type="checkbox" data-rarity="${r}">${RARITY_LABEL[r]}</label>`).join('') +
@@ -364,9 +369,19 @@ export class Hud {
     sg.addEventListener('mouseleave', () => this.hideTip());
     $('stash-deposit').onclick = () => this.stashGold(1);
     $('stash-withdraw').onclick = () => this.stashGold(-1);
+    $('stash-deposit-all').onclick = () => this.stashGold(1, true);
+    $('stash-withdraw-all').onclick = () => this.stashGold(-1, true);
     $('stash-gold-amt').addEventListener('keydown', (e) => e.stopPropagation());
+    const sortChoice = (): [SortKey, boolean] =>
+      [$<HTMLSelectElement>('sort-key').value as SortKey, $('sort-dir').dataset.desc === '1'];
     $('stash-sort-go').onclick = () => {
-      g.backend.stashSort($<HTMLSelectElement>('stash-sort-key').value as SortKey, true);
+      g.backend.stashSort(...sortChoice());
+      this.hideTip();
+      this.markInventory();
+    };
+    // The bag's own sort panel is hidden beside the stash, so the bag can be sorted from here too.
+    $('stash-sort-bag').onclick = () => {
+      g.backend.sortBag(...sortChoice());
       this.hideTip();
       this.markInventory();
     };
@@ -1081,11 +1096,15 @@ export class Hud {
     );
   }
 
-  /** dir 1 = deposit the typed amount, -1 = withdraw it. */
-  private stashGold(dir: 1 | -1): void {
+  /** dir 1 = deposit the typed amount, -1 = withdraw it. `all` = every coin carried / stored instead. */
+  private stashGold(dir: 1 | -1, all = false): void {
     const input = $<HTMLInputElement>('stash-gold-amt');
-    const amount = Math.floor(Number(input.value));
     const p = this.g.player;
+    const amount = all ? (dir > 0 ? p.gold : p.stash.gold) : Math.floor(Number(input.value));
+    if (all && amount <= 0) {
+      this.log(dir > 0 ? 'ไม่มีทองติดตัว' : 'ไม่มีทองในคลัง', '#b9b09a');
+      return;
+    }
     if (!(amount > 0)) {
       this.log('ใส่จำนวนทองก่อน', '#b9b09a');
       return;

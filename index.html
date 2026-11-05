@@ -127,15 +127,20 @@
             <input id="stash-gold-amt" type="number" min="1" step="1" placeholder="จำนวน">
             <button id="stash-deposit">ฝาก</button>
             <button id="stash-withdraw">ถอน</button>
-            <div class="stash-sort">
-              <select id="stash-sort-key">
-                <option value="rarity">ความหายาก</option>
-                <option value="level">เลเวลของ</option>
-                <option value="slot">ประเภทช่อง</option>
-                <option value="value">ราคาขาย</option>
-              </select>
-              <button id="stash-sort-go">เรียง</button>
-            </div>
+            <button id="stash-deposit-all">ฝากทั้งหมด</button>
+            <button id="stash-withdraw-all">ถอนทั้งหมด</button>
+          </div>
+          <div class="stash-sort">
+            <span>เรียงของ</span>
+            <select id="stash-sort-key">
+              <option value="rarity">ความหายาก</option>
+              <option value="level">เลเวลของ</option>
+              <option value="slot">ประเภทช่อง</option>
+              <option value="value">ราคาขาย</option>
+            </select>
+            <button id="stash-sort-dir" data-desc="1">มาก → น้อย</button>
+            <button id="stash-sort-go">เรียงคลัง</button>
+            <button id="stash-sort-bag">เรียงกระเป๋า</button>
           </div>
           <div id="stash-grid" class="shop-grid"></div>
           <p class="hint">ลากของระหว่างกระเป๋ากับคลังได้ · คลิกขวา = ย้ายไปอีกฝั่งทันที · ยาช่องละไม่เกิน 10 ขวด</p>
