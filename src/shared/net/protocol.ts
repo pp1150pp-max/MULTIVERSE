@@ -39,6 +39,7 @@ export type ActionMsg =
   | { t: 'act'; a: 'drop'; i: number }
   | { t: 'act'; a: 'buy'; kind: PotionKind; size: PotionSize; n: number }
   | { t: 'act'; a: 'sort'; key: SortKey; desc: boolean }
+  | { t: 'act'; a: 'move'; from: number; to: number }
   /** Auto Play on/off. The server plays it, so it keeps farming while the browser tab is hidden. */
   | { t: 'act'; a: 'auto'; on: boolean }
   | { t: 'act'; a: 'lootFilter'; filter: LootFilter }

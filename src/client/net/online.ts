@@ -453,6 +453,7 @@ export class OnlineBackend implements Backend {
   drop(i: number): void { this.send({ t: 'act', a: 'drop', i }); }
   buyPotion(kind: PotionKind, size: PotionSize, n: number): void { this.send({ t: 'act', a: 'buy', kind, size, n }); }
   sortBag(key: SortKey, desc: boolean): void { this.send({ t: 'act', a: 'sort', key, desc }); }
+  moveInBag(from: number, to: number): void { this.send({ t: 'act', a: 'move', from, to }); }
   setAuto(on: boolean): void { this.send({ t: 'act', a: 'auto', on }); }
   setLootFilter(filter: LootFilter): void {
     // Show the change right away; snapshots sent before the server saw it would otherwise flip it back.

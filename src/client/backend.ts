@@ -46,6 +46,8 @@ export interface Backend {
   drop(bagIndex: number): void;
   buyPotion(kind: PotionKind, size: PotionSize, n: number): void;
   sortBag(key: SortKey, desc: boolean): void;
+  /** Drag & drop between two bag slots (swap, or merge the same potion). */
+  moveInBag(from: number, to: number): void;
   /** Online the server runs Auto Play; singleplayer runs it in Game, so this does nothing there. */
   setAuto(on: boolean): void;
   setLootFilter(f: LootFilter): void;
@@ -102,6 +104,7 @@ export class LocalBackend implements Backend {
   drop(i: number): void { this.sim.dropFromBag(this.me, i); }
   buyPotion(kind: PotionKind, size: PotionSize, n: number): void { this.sim.buyPotion(this.me, kind, size, n); }
   sortBag(key: SortKey, desc: boolean): void { this.sim.sortBag(this.me, key, desc); }
+  moveInBag(from: number, to: number): void { this.sim.moveInBag(this.me, from, to); }
   setAuto(): void { /* Game runs Auto Play itself */ }
   setLootFilter(f: LootFilter): void { this.sim.setLootFilter(this.me, f); }
   setAutoSettings(s: AutoSettings): void { this.sim.setAutoSettings(this.me, s); }

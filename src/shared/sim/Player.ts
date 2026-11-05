@@ -59,7 +59,7 @@ export const AUTO_RANGE_MAX = 2000;
 /** The default before it became the maximum. */
 const OLD_DEFAULT_RANGE = 300;
 export const DEFAULT_AUTO_SETTINGS: AutoSettings = {
-  range: 2000, hpPct: 45, mpPct: 15, skills: { q: true, e: true, r: true }, loot: true,
+  range: 750, hpPct: 45, mpPct: 15, skills: { q: true, e: true, r: true }, loot: true,
 };
 
 /** Fill in and clamp settings from a save or from a client (never trust either). */
@@ -247,6 +247,26 @@ export class Player extends Unit {
     this.bag[i] = this.equipment[item.slot] ?? null;
     this.equipment[item.slot] = item;
     this.recompute();
+  }
+
+  /**
+   * Drag & drop inside the bag: moves slot `from` onto slot `to`.
+   * The same potion (kind and size) merges up to a full stack; anything else swaps places.
+   */
+  moveInBag(from: number, to: number): void {
+    if (from === to) return;
+    const a = this.bag[from];
+    const b = this.bag[to];
+    if (!a) return;
+    if (isPotion(a) && isPotion(b) && a.potion === b.potion && a.size === b.size && b.count < POTION_STACK) {
+      const n = Math.min(a.count, POTION_STACK - b.count);
+      b.count += n;
+      a.count -= n;
+      if (a.count <= 0) this.bag[from] = null;
+      return;
+    }
+    this.bag[from] = b ?? null;
+    this.bag[to] = a;
   }
 
   unequip(slot: SlotId): void {

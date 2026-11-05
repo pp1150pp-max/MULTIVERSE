@@ -242,6 +242,14 @@ export class GameWorld {
         sim.setLootFilter(p, { rarities: RARITIES.filter((r) => f.rarities!.includes(r)), potions: f.potions !== false, pots: f.pots });
         break;
       }
+      case 'move': {
+        const from = num(m.from, -1);
+        const to = num(m.to, -1);
+        if (Number.isInteger(from) && Number.isInteger(to) && from >= 0 && to >= 0 && from < p.bag.length && to < p.bag.length) {
+          sim.moveInBag(p, from, to);
+        }
+        break;
+      }
       case 'sort':
         if (SORT_KEYS.includes(m.key)) sim.sortBag(p, m.key, m.desc === true);
         break;
