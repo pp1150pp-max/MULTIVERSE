@@ -19,6 +19,13 @@ export const INTEREST_RADIUS = 34;
 export const CHAT_MAX = 120;
 /** Clients measure their round trip with a ping this often; the server ignores pings arriving faster than a quarter of it. */
 export const PING_MS = 2000;
+/** Longest GPU name a client may report (longer ones are cut). */
+export const GPU_NAME_MAX = 200;
+
+/** True for WebGL renderers that draw on the CPU: hardware acceleration is off or the GPU is blocklisted. */
+export function isSoftwareRenderer(name: string): boolean {
+  return /swiftshader|llvmpipe|softpipe|microsoft basic render|software/i.test(name);
+}
 
 // ------------------------------------------------------------ client → server
 
@@ -67,8 +74,15 @@ export type ClientMsg =
   | InputMsg
   | ActionMsg
   | { t: 'chat'; text: string }
-  /** Answered at once with a pong of the same id. `rtt`: the round trip the client measured last time (ms), for the server's lag log. */
-  | { t: 'ping'; id: number; rtt?: number };
+  /**
+   * Answered at once with a pong of the same id. The rest is for the server's lag log, about the time
+   * since the previous ping: `rtt` the round trip measured then (ms, each one reported once),
+   * `wait` how long the oldest still unanswered ping has waited (ms), `fps` frames drawn per second,
+   * `maxFrame` the longest frame (ms) and `hidden` whether the tab was in the background (no frames).
+   */
+  | { t: 'ping'; id: number; rtt?: number; wait?: number; fps?: number; maxFrame?: number; hidden?: boolean }
+  /** Sent once after joining: the WebGL renderer (GPU) name, for the server log. */
+  | { t: 'client'; gpu: string };
 
 // ------------------------------------------------------------ server → client
 

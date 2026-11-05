@@ -38,6 +38,10 @@ export interface Backend {
   readonly onlineCount: number;
   /** Round trip to the server in ms, or null when disconnected or not measured yet. */
   readonly ping: number | null;
+  /** Online only: the game loop drew a frame (frame rate and stalls go to the server's lag log). */
+  drewFrame?(now: number): void;
+  /** Online only: the WebGL renderer (GPU) name, sent once for the server log. */
+  reportGpu?(name: string): void;
 
   /** Advances one frame with this player's input and returns what should be shown. */
   frame(dt: number, intent: Intent): SimEvent[];

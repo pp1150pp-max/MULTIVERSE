@@ -34,8 +34,10 @@ const SENT_KEEP = 90;
 /** After the server stops moving us, we glide onto its position until this close, or for at most SETTLE_MAX seconds. */
 const SETTLE_DIST = 0.15;
 const SETTLE_MAX = 0.5;
-/** A ping with no pong after this long is forgotten and a new one is sent. */
+/** A ping with no pong after this long no longer holds back the next one (its pong still counts if it comes). */
 const PING_GIVE_UP_MS = 10_000;
+/** Unanswered pings remembered at most (the oldest is dropped). */
+const PING_KEEP = 8;
 /**
  * Events still applied while the tab is hidden (the server keeps playing Auto). Everything else is a
  * notification nobody saw — dropped so it doesn't all pop at once when the player comes back.
@@ -134,11 +136,26 @@ export class OnlineBackend implements Backend {
   private enhanceReq = 0;
   private readonly enhanceWait = new Map<number, (o: EnhanceOutcome) => void>();
   private kickMsg = '';
-  /** Last measured round trip (ms), the ping still waiting for its pong, and the timer sending them. */
+  /** Last measured round trip (ms), shown on the HUD. */
   private rtt: number | null = null;
-  private pingWait: { id: number; at: number } | null = null;
+  /** The worst round trip measured since the last ping, reported with the next one (each only once). */
+  private freshRtt: number | null = null;
+  /** Pings still waiting for their pong: id → when it was sent. */
+  private readonly pingsOut = new Map<number, number>();
   private pingId = 0;
+  private lastPingAt = -Infinity;
   private readonly pingTimer: ReturnType<typeof setInterval>;
+  /** Frames drawn since the last ping, the longest one (ms), and whether the tab was hidden meanwhile. */
+  private frames = 0;
+  private maxFrame = 0;
+  private lastFrameAt = 0;
+  private statsFrom = performance.now();
+  private wasHidden = document.hidden;
+  private readonly onVisibility = () => {
+    // The game loop stops in a background tab; that gap isn't a frame.
+    this.lastFrameAt = 0;
+    if (document.hidden) this.wasHidden = true;
+  };
 
   constructor(private readonly ws: WebSocket, private myId: number, zoneId: string, first: SnapshotMsg, guest: boolean) {
     this.guest = guest;
@@ -160,11 +177,13 @@ export class OnlineBackend implements Backend {
     ws.onmessage = (e) => this.onMessage(JSON.parse(e.data as string) as ServerMsg);
     ws.onclose = () => {
       clearInterval(this.pingTimer);
+      document.removeEventListener('visibilitychange', this.onVisibility);
       this.onDisconnect?.(this.kickMsg || 'หลุดการเชื่อมต่อจาก server');
     };
     // A timer rather than the frame loop, so it keeps measuring (for the server's lag log) in a hidden tab.
     // The first one waits PING_MS: right now the game is still being built, which would delay the pong.
     this.pingTimer = setInterval(() => this.sendPing(), PING_MS);
+    document.addEventListener('visibilitychange', this.onVisibility);
   }
 
   get time(): number {
@@ -179,20 +198,61 @@ export class OnlineBackend implements Backend {
   get ping(): number | null {
     if (this.ws.readyState !== WebSocket.OPEN) return null;
     // A pong that is overdue already says the connection is at least this slow.
-    const waiting = this.pingWait ? performance.now() - this.pingWait.at : 0;
-    return this.rtt === null ? null : Math.round(Math.max(this.rtt, waiting));
+    return this.rtt === null ? null : Math.round(Math.max(this.rtt, this.pingWaiting()));
+  }
+
+  /** How long the oldest unanswered ping has waited (ms), 0 if none. */
+  private pingWaiting(): number {
+    const oldest = this.pingsOut.values().next();
+    return oldest.done ? 0 : performance.now() - oldest.value;
+  }
+
+  /** Called by the game loop once per drawn frame, for the frame rate and stalls sent with each ping. */
+  drewFrame(now: number): void {
+    if (this.lastFrameAt) this.maxFrame = Math.max(this.maxFrame, now - this.lastFrameAt);
+    this.lastFrameAt = now;
+    this.frames++;
+  }
+
+  /** The WebGL renderer name, sent once for the server log. */
+  reportGpu(name: string): void {
+    this.send({ t: 'client', gpu: name });
   }
 
   private sendPing(): void {
-    // Only one ping in flight: a late pong still answers it, so a stall shows up as a long round trip.
-    // One that was never answered (dropped by the server's rate limit) is given up after a while.
-    if (this.pingWait && performance.now() - this.pingWait.at < PING_GIVE_UP_MS) return;
-    this.pingWait = { id: ++this.pingId, at: performance.now() };
-    this.send({ t: 'ping', id: this.pingWait.id, rtt: this.rtt ?? undefined });
+    // Only one ping in flight, so a stall shows up as one long round trip rather than a pile of pings.
+    // After PING_GIVE_UP_MS (e.g. the server dropped it as too fast) another goes out, but the old
+    // one stays remembered: its late pong still counts, and the wait is reported meanwhile.
+    const wait = this.pingWaiting();
+    if (wait > 0 && wait < PING_GIVE_UP_MS) return;
+    const now = performance.now();
+    // After the browser froze, timer calls it missed can come in a burst; the server would drop a
+    // ping right behind the last one (rate limit) and we'd wait PING_GIVE_UP_MS for nothing.
+    if (now - this.lastPingAt < PING_MS / 2) return;
+    this.lastPingAt = now;
+    const secs = (now - this.statsFrom) / 1000;
+    const hidden = this.wasHidden || document.hidden;
+    const id = ++this.pingId;
+    this.pingsOut.set(id, now);
+    if (this.pingsOut.size > PING_KEEP) this.pingsOut.delete(this.pingsOut.keys().next().value!);
+    this.send({
+      t: 'ping', id,
+      rtt: this.freshRtt ?? undefined,
+      wait: wait > 0 ? Math.round(wait) : undefined,
+      fps: hidden || secs <= 0 ? undefined : Math.round((this.frames / secs) * 10) / 10,
+      maxFrame: hidden ? undefined : Math.round(this.maxFrame),
+      hidden: hidden || undefined,
+    });
+    this.freshRtt = null;
+    this.frames = 0;
+    this.maxFrame = 0;
+    this.statsFrom = now;
+    this.wasHidden = document.hidden;
   }
 
   close(): void {
     clearInterval(this.pingTimer);
+    document.removeEventListener('visibilitychange', this.onVisibility);
     this.onDisconnect = null;
     this.ws.close();
   }
@@ -216,12 +276,15 @@ export class OnlineBackend implements Backend {
       case 'kick':
         this.kickMsg = m.msg;
         break;
-      case 'pong':
-        if (this.pingWait?.id === m.id) {
-          this.rtt = Math.round(performance.now() - this.pingWait.at);
-          this.pingWait = null;
-        }
+      case 'pong': {
+        const at = this.pingsOut.get(m.id);
+        if (at === undefined) break;
+        this.rtt = Math.round(performance.now() - at);
+        this.freshRtt = Math.max(this.freshRtt ?? 0, this.rtt);
+        // Pongs come back in order: any older ping still out was dropped by the server.
+        for (const id of [...this.pingsOut.keys()]) if (id <= m.id) this.pingsOut.delete(id);
         break;
+      }
       case 'zone':
         this.changeZone(m.zone, m.you, m.x, m.z);
         break;

@@ -20,6 +20,7 @@ import { GameAudio } from './audio/gameAudio';
 import { findPath } from './pathfind';
 import { SystemMenu } from './sysmenu';
 import { LootView, MonsterView, PlayerView, ProjectileView, ViewSet } from './views';
+import { isSoftwareRenderer } from '../shared/net/protocol';
 
 const S = Math.SQRT1_2;
 // Screen-space right / up projected onto the ground plane.
@@ -106,6 +107,7 @@ export class Game {
 
     this.hud = new Hud(this);
     this.sysMenu = new SystemMenu(this);
+    this.checkGpu();
     window.addEventListener('resize', () => {
       this.renderer.setSize(window.innerWidth, window.innerHeight);
       this.updateProjection();
@@ -129,8 +131,20 @@ export class Game {
     this.update(dt);
     this.renderer.render(this.scene, this.camera);
     this.input.endFrame();
+    this.backend.drewFrame?.(now);
     requestAnimationFrame(this.loop);
   };
+
+  /** Tells the server which GPU draws the game, and the player when it's drawn on the CPU (very slow). */
+  private checkGpu(): void {
+    const gl = this.renderer.getContext();
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    const name = String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER) ?? '');
+    this.backend.reportGpu?.(name);
+    if (isSoftwareRenderer(name)) {
+      this.hud.chatLine('', '⚠ เบราว์เซอร์กำลังวาดเกมด้วย CPU ไม่ได้ใช้การ์ดจอ เกมจึงกระตุก — เปิด "ใช้การเร่งกราฟิกเมื่อพร้อมใช้งาน" (Use graphics acceleration when available) ในการตั้งค่าเบราว์เซอร์ › ระบบ แล้วปิด-เปิดเบราว์เซอร์ใหม่', 60_000);
+    }
+  }
 
   // ------------------------------------------------------------ helpers
 

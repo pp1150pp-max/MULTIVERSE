@@ -2,6 +2,7 @@
 // Serves the account API under /api and, when `dist/` exists, the game itself — so friends only
 // need a browser and this computer's address.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { clientIp } from './clientIp';
 import { readFile, stat } from 'node:fs/promises';
 import { networkInterfaces } from 'node:os';
 import { extname, join, resolve, sep } from 'node:path';
@@ -63,18 +64,6 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
-
-const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
-
-/**
- * Who sent the request, for the failed-login brake. Everyone arriving through the Cloudflare tunnel
- * shows up as this computer, so trust Cloudflare's header — but only on connections from the tunnel.
- */
-function clientIp(req: IncomingMessage): string {
-  const remote = req.socket.remoteAddress ?? 'unknown';
-  const cf = req.headers['cf-connecting-ip'];
-  return LOOPBACK.has(remote) && typeof cf === 'string' && cf ? cf : remote;
-}
 
 function bearer(req: IncomingMessage): string {
   const h = req.headers.authorization ?? '';
