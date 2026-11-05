@@ -566,7 +566,7 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 .class-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-bottom: 18px; text-align: left; }
 
 .online-box { max-width: 760px; margin: 0 auto; text-align: left; background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 10px; padding: 18px 22px; }
-#login-box { max-width: 460px; padding: 0; overflow: hidden; border-width: 2px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7); }
+.logon-box { max-width: 460px; padding: 0; overflow: hidden; border-width: 2px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7); }
 .online-box h2 { font-family: 'Cinzel', 'Kanit', serif; color: var(--gold-hi); margin: 0 0 12px; font-size: 20px; }
 .online-box h3 { color: var(--gold); font-weight: 400; margin: 14px 0 8px; font-size: 15px; }
 .online-box .menu-buttons { justify-content: flex-start; margin-top: 12px; }
@@ -579,6 +579,29 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 }
 .form-row input:focus, .name-row input:focus { outline: none; border-color: var(--gold-hi); }
 .form-error { min-height: 20px; color: #ff8a7a; font-size: 13px; }
+/* Register: rule hints under each field, ticked live while typing. */
+#register-box .form-row label { width: 104px; }
+.form-field { margin-bottom: 10px; }
+.form-field .form-row { margin-bottom: 4px; }
+.rules { list-style: none; margin: 0 0 0 114px; padding: 0; font-size: 12px; color: var(--ink-dim); }
+.rules li::before { content: '•'; display: inline-block; width: 16px; text-align: center; }
+.rules li.ok { color: #8fd98a; }
+.rules li.ok::before { content: '✔'; }
+.rules li.bad { color: #ff8a7a; }
+.rules li.bad::before { content: '✖'; }
+.pass-wrap { flex: 1; display: flex; position: relative; }
+.pass-wrap input { padding-right: 38px; min-width: 0; }
+.pass-eye {
+  position: absolute; right: 3px; top: 50%; transform: translateY(-50%); padding: 2px 6px; font-size: 15px; line-height: 1;
+  background: none; border: none; box-shadow: none; opacity: 0.55; cursor: pointer;
+}
+.pass-eye:hover, .pass-eye.on { opacity: 1; background: none; }
+.logon-check { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0 4px; font-size: 13px; color: var(--ink); cursor: pointer; }
+.logon-check input { margin-top: 3px; accent-color: var(--gold); }
+.logon-back { background: none; border: none; box-shadow: none; padding: 0; margin-bottom: 6px; font-size: 13px; color: var(--gold); cursor: pointer; }
+.logon-back:hover { background: none; color: var(--gold-hi); text-decoration: underline; }
+#btn-register-submit { margin-top: 4px; }
+#btn-register-submit:disabled { opacity: 0.45; cursor: not-allowed; }
 .char-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .char-head span { font-size: 13px; color: var(--ink-dim); }
 .char-head b { color: var(--ink); font-weight: 600; }
