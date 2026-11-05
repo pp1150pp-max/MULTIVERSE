@@ -2,7 +2,7 @@ import type { Game } from './Game';
 import { NPC_USE_RANGE, type NpcId } from '../shared/data/npcs';
 import type { SkillSlot } from '../shared/data/classes';
 import {
-  dropsOnFail, effectiveStats, enhanceCost, itemName, MAX_PLUS, plusOf, sellValue, successRate,
+  dropsOnFail, effectiveStats, enhanceBonus, enhanceCost, itemName, MAX_PLUS, plusOf, sellValue, successRate,
   DROP_ON_FAIL_FROM,
 } from '../shared/data/enhance';
 import {
@@ -1058,15 +1058,33 @@ export class Hud {
     const eq = p.equipment[item.slot];
     const stats = effectiveStats(item);
     const eqStats = eq ? effectiveStats(eq) : {};
-    const lines = (Object.keys(stats) as StatKey[]).map((k) => {
-      const v = Math.round((stats[k] ?? 0) * 10) / 10;
-      let diff = '';
+    const r1 = (v: number) => Math.round(v * 10) / 10;
+    const diffOf = (k: StatKey) => {
+      if (!eq || eq === item) return '';
+      const d = r1((stats[k] ?? 0) - (eqStats[k] ?? 0));
+      return Math.abs(d) > 0.05 ? `<span class="${d > 0 ? 'up' : 'down'}">${d > 0 ? '+' : ''}${d}</span>` : '';
+    };
+    let lines: string;
+    if (item.lines?.length) {
+      // Each rolled line with its tier (1 = best 20% of the range) and the range at this item level.
+      lines = item.lines.map((l) =>
+        `<div class="tt-line">+${r1(l.value)} ${STAT_LABEL[l.stat]} <span class="tier t${l.tier}">T${l.tier}</span>` +
+        ` <span class="tt-range">(${l.min}–${l.max})</span></div>`).join('');
+      const bonus = enhanceBonus(item);
+      const bonusText = (Object.keys(bonus) as StatKey[]).filter((k) => bonus[k]).map((k) => `+${r1(bonus[k] ?? 0)} ${STAT_LABEL[k]}`).join(' · ');
+      if (bonusText) lines += `<div class="tt-enh">ตีบวก: ${bonusText}</div>`;
       if (eq && eq !== item) {
-        const d = v - (eqStats[k] ?? 0);
-        if (Math.abs(d) > 0.05) diff = ` <span class="${d > 0 ? 'up' : 'down'}">(${d > 0 ? '+' : ''}${Math.round(d * 10) / 10})</span>`;
+        const keys = [...new Set([...Object.keys(stats), ...Object.keys(eqStats)])] as StatKey[];
+        const diffs = keys.map((k) => (diffOf(k) ? `${STAT_LABEL[k]} ${diffOf(k)}` : '')).filter(Boolean).join(' · ');
+        if (diffs) lines += `<div class="tt-cmp">เทียบกับที่ใส่อยู่: ${diffs}</div>`;
       }
-      return `<div>+${v} ${STAT_LABEL[k]}${diff}</div>`;
-    }).join('');
+    } else {
+      // Items from before tiers: totals only.
+      lines = (Object.keys(stats) as StatKey[]).map((k) => {
+        const d = diffOf(k);
+        return `<div>+${r1(stats[k] ?? 0)} ${STAT_LABEL[k]}${d ? ` (${d})` : ''}</div>`;
+      }).join('');
+    }
     tip.innerHTML =
       `<div class="tt-name" style="color:${RARITY_COLOR[item.rarity]}">${itemName(item)}</div>` +
       `<div class="tt-sub">${RARITY_LABEL[item.rarity]} · ${SLOT_LABEL[item.slot]} · iLv.${item.level}${plusOf(item) ? ` · ตีบวก +${plusOf(item)}` : ''}</div>` +

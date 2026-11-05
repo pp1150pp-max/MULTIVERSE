@@ -62,6 +62,23 @@ export interface Item {
   plus?: number;
   /** Class that can wear it (weapons and armor). Missing = any class, or an older item (see itemClass). */
   cls?: ClassId;
+  /**
+   * Each rolled stat line with its tier (main stat and extras listed separately). `stats` is still the
+   * total of these. Missing on items from before tiers existed — those show no tier.
+   */
+  lines?: StatLine[];
+}
+
+/** Stat tiers: 1 is the best 20% of the line's range, 5 the lowest 20%. */
+export type StatTier = 1 | 2 | 3 | 4 | 5;
+
+/** One rolled stat on an item: its value, tier and the range possible at this item level and rarity. */
+export interface StatLine {
+  stat: StatKey;
+  value: number;
+  tier: StatTier;
+  min: number;
+  max: number;
 }
 
 export type PotionKind = 'hp' | 'mp';

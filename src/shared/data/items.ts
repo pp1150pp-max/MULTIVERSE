@@ -1,5 +1,7 @@
-import { RARITIES, type ClassId, type Item, type Rarity, type SlotId, type StatKey, type Stats } from '../types';
-import { pick, rand, type Rng } from '../rng';
+import {
+  RARITIES, type ClassId, type Item, type Rarity, type SlotId, type StatKey, type StatLine, type Stats, type StatTier,
+} from '../types';
+import { pick, type Rng } from '../rng';
 
 interface BaseItem {
   id: string;
@@ -78,6 +80,43 @@ const AFFIXES: { stat: StatKey; min: number; max: number; per: number }[] = [
   { stat: 'mpRegen', min: 0.5, max: 1.5, per: 0.1 },
 ];
 
+/** Main stats (a weapon's ATK, armor's DEF…) roll over a range this wide (±20% of their level value). */
+const MAIN_SPREAD = 0.2;
+/** Chance of tier 1 (best) … tier 5. */
+const TIER_WEIGHT = [3, 9, 18, 30, 40];
+/**
+ * Where an average roll lands in its range (0 = min, 1 = max) with TIER_WEIGHT: about 0.31, because low tiers
+ * are common. Ranges are placed so that this point is the stat's old average, so items are as strong as
+ * before tiers on average (owner's choice) and tier 1 rolls go above the old values.
+ */
+const MEAN_POS = TIER_WEIGHT.reduce((s, w, i) => s + w * (TIER_WEIGHT.length - 0.5 - i), 0)
+  / TIER_WEIGHT.length / TIER_WEIGHT.reduce((a, b) => a + b, 0);
+
+/** A range `span` wide whose average roll (MEAN_POS) is `mean`. */
+function rangeAround(mean: number, span: number): [number, number] {
+  const lo = mean - MEAN_POS * span;
+  return [lo, lo + span];
+}
+
+/** boost > 0 makes the better tiers likelier (bosses use ~1.5). */
+export function rollTier(r: Rng, boost = 0): StatTier {
+  const w = TIER_WEIGHT.map((x, i) => x * (1 + boost * (TIER_WEIGHT.length - 1 - i)));
+  let roll = r() * w.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < w.length; i++) {
+    roll -= w[i];
+    if (roll <= 0) return (i + 1) as StatTier;
+  }
+  return 5;
+}
+
+/** Rolls one stat between lo and hi: the tier picks a 20% band (tier 1 = top), the value lands inside it. */
+function rollLine(stat: StatKey, lo: number, hi: number, r: Rng, boost = 0): StatLine {
+  const tier = rollTier(r, boost);
+  const band = (hi - lo) / 5;
+  const from = lo + band * (5 - tier);
+  return { stat, value: fmt(stat, from + r() * band), tier, min: fmt(stat, lo), max: fmt(stat, hi) };
+}
+
 const RARITY_WEIGHT = [62, 24, 10, 3.4, 0.6];
 const RARITY_MULT: Record<Rarity, number> = { common: 1, uncommon: 1.15, rare: 1.3, epic: 1.5, legendary: 1.8 };
 const AFFIX_COUNT: Record<Rarity, number> = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4 };
@@ -107,30 +146,37 @@ export function rollRarity(r: Rng, boost = 0): Rarity {
   return 'common';
 }
 
-function build(base: BaseItem, rarity: Rarity, level: number, cls: ClassId, r: Rng): Item {
+function build(base: BaseItem, rarity: Rarity, level: number, cls: ClassId, r: Rng, boost = 0): Item {
   const rm = RARITY_MULT[rarity];
   const lvMult = 1 + (level - 1) * 0.12;
-  const stats: Partial<Stats> = {};
-  for (const k of Object.keys(base.main) as StatKey[]) stats[k] = fmt(k, (base.main[k] ?? 0) * lvMult * rm);
+  const lines: StatLine[] = [];
+  // Main stats: a range 2 × MAIN_SPREAD wide, averaging the level value.
+  for (const k of Object.keys(base.main) as StatKey[]) {
+    const mid = (base.main[k] ?? 0) * lvMult * rm;
+    lines.push(rollLine(k, ...rangeAround(mid, 2 * MAIN_SPREAD * mid), r, boost));
+  }
+  // Extra stats: as wide as their min–max, averaging its middle; raised with item level.
   let n = AFFIX_COUNT[rarity] + (base.slot === 'ring' ? 1 : 0);
   const pool = [...AFFIXES];
   while (n-- > 0 && pool.length) {
     const a = pool.splice(Math.floor(r() * pool.length), 1)[0];
-    const v = rand(r, a.min, a.max) + a.per * (level - 1);
-    stats[a.stat] = fmt(a.stat, (stats[a.stat] ?? 0) + v * rm);
+    const mid = ((a.min + a.max) / 2 + a.per * (level - 1)) * rm;
+    lines.push(rollLine(a.stat, ...rangeAround(mid, (a.max - a.min) * rm), r, boost));
   }
+  const stats: Partial<Stats> = {};
+  for (const l of lines) stats[l.stat] = fmt(l.stat, (stats[l.stat] ?? 0) + l.value);
   let name = base.names[cls] ?? base.names.any ?? base.id;
   const pre = PREFIX[rarity];
   if (pre) name = `${pick(r, pre)} ${name}`;
   const value = Math.round((5 + level * 3) * (1 + RARITIES.indexOf(rarity) * 1.5));
-  const item: Item = { uid: newUid(), baseId: base.id, name, slot: base.slot, rarity, level, stats, value };
+  const item: Item = { uid: newUid(), baseId: base.id, name, slot: base.slot, rarity, level, stats, value, lines };
   if (!base.names.any) item.cls = cls;
   return item;
 }
 
 export function rollItem(r: Rng, level: number, cls: ClassId, boost = 0): Item {
   const candidates = BASES.filter((b) => b.minLevel <= level + 1);
-  return build(pick(r, candidates), rollRarity(r, boost), level, cls, r);
+  return build(pick(r, candidates), rollRarity(r, boost), level, cls, r, boost);
 }
 
 export function starterWeapon(cls: ClassId): Item {
