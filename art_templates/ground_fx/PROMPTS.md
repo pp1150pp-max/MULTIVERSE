@@ -99,3 +99,16 @@ shadows, no ground, no text, no labels, no numbers, no grid lines. Do not use pi
 2. BULLET วนซ้ำ มองจากด้านข้าง พุ่งไปทางขวา: กระสุนทองเล็กมีเส้นความร้อนเหลือง
 3. PIERCING ROUND วนซ้ำ มองจากด้านข้าง พุ่งไปทางขวา: พลังงานแหลมยาวสีฟ้าขาวมีหาง
 4. BULLET IMPACT มองจากด้านข้าง: ฝุ่นสีแทน ประกายไฟเหลือง และเศษกระเด็นจากพื้น
+
+## เลขดาเมจ
+
+ไฟล์ `public/assets/sprites/icons/digits.png` เรียง 4 แถว (ปกติ คริติคอล โดนตี ฟื้นเลือด) แถวละ 13 ตัว ช่องละ 58×64 และ `crit_burst.png` เป็นแสงหลังเลขคริติคอล
+ตั้งค่าใน `GLYPH_ROW`, `GLYPH_WIDTH` (`src/client/floating.ts`) ถ้าวาดใหม่ต้องอัปเดตความกว้างของแต่ละตัวด้วย
+
+```
+A damage number font sheet in the EXACT same 16-bit SNES-era pixel-art style as the game art above: chunky bold rounded
+arcade digits, crisp pixels, a thick solid dark outline, hard-edged colour bands with a bright top and a darker bottom, no
+blur. Exactly 4 rows, each with these 13 characters in order: 0 1 2 3 4 5 6 7 8 9 + - ! with clear empty space between
+them. Row 1 cream white, row 2 bright gold fading to orange, row 3 bright red, row 4 bright fresh green. Identical shapes
+in all rows. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no labels, no grid lines.
+```
