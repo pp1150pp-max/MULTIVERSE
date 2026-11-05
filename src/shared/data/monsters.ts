@@ -34,6 +34,8 @@ export interface MonsterDef {
   behavior: Behavior;
   /** Wolves alert each other when one is hit. */
   pack?: boolean;
+  /** Different monsters with the same packId alert each other too. */
+  packId?: string;
   /**
    * Bosses only: calls these minions once per fight when it drops below half HP. With `vanish` it
    * jumps off the map at the same time, and comes back only when they are all dead.
@@ -41,12 +43,19 @@ export interface MonsterDef {
   summon?: { monster: string; count: number; vanish?: boolean };
   /** Ranged monsters: every attack fires this instead of hitting up close. attackRange is how far away it shoots from. */
   shot?: ShotDef;
-  /** Bosses only: thrown at a target standing out of its slam's reach. */
+  /** Thrown at a target standing farther off than minRange. */
   thrown?: ShotDef & { minRange: number; cooldown: number };
   /** Bosses only: radius of the ground slam (default 4.2). */
   slamRadius?: number;
   /** Jumps onto a spot marked on the ground, hurting everyone on it when it lands. */
   leap?: { cooldown: number; windup: number; radius: number; mult: number; minRange: number; maxRange: number };
+  /** Bosses only: share of HP at which it enrages (default 0.5). */
+  enrageAt?: number;
+  /**
+   * Bosses only: its speed-up for not landing a hit starts only once enraged, and replaces the
+   * usual enrage run speed. It drops back to normal at each hit, then climbs again.
+   */
+  enrageRamp?: boolean;
   /** Bosses only: below half HP, chase speed is multiplied by `speed` and every attack's
    *  cooldown and wind-up by `skill` — replaces the usual enrage boost. */
   frenzy?: { speed: number; skill: number };
@@ -154,8 +163,15 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'snow_sprite', name: 'Snow Sprite', nameTh: 'ภูตหิมะ', levels: [27, 28],
     hp: 640, atk: 90, def: 22, speed: 2.1, exp: 680, gold: [34, 52],
     aggroRange: 9, attackRange: 7, attackCooldown: 2, height: 1.7, radius: 0.5,
-    behavior: 'aggressive', itemChance: 0.14, potionChance: 0.11,
+    behavior: 'aggressive', pack: true, packId: 'snow_sprite', itemChance: 0.14, potionChance: 0.11,
     shot: { art: 'ice_shard', speed: 8, range: 11, mult: 1, radius: 0.35, size: 0.55, color: '#bfeaff' },
+  },
+  // Same strength as the sprite that shoots; they come in groups of 1 sprite and 2 of these.
+  snow_brawler: {
+    id: 'snow_brawler', name: 'Snow Brawler', nameTh: 'ภูตหิมะหมัดน้ำแข็ง', levels: [27, 28],
+    hp: 640, atk: 90, def: 22, speed: 2.1, exp: 680, gold: [34, 52],
+    aggroRange: 9, attackRange: 1.2, attackCooldown: 1.4, height: 1.8, radius: 0.55,
+    behavior: 'aggressive', pack: true, packId: 'snow_sprite', itemChance: 0.14, potionChance: 0.11,
   },
   polar_bear: {
     id: 'polar_bear', name: 'Polar Bear', nameTh: 'หมีขั้วโลก', levels: [29, 29],
@@ -167,16 +183,17 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'yeti', name: 'Yeti', nameTh: 'เยติ (Boss)', levels: [30, 30],
     hp: 17000, atk: 160, def: 34, speed: 2.2, exp: 7000, gold: [550, 900],
     aggroRange: 9, attackRange: 2.1, attackCooldown: 1.8, height: 3.9, radius: 1.25,
-    behavior: 'boss', summon: { monster: 'yeti_minion', count: 3, vanish: true }, slamRadius: 5.5,
+    behavior: 'boss', summon: { monster: 'yeti_minion', count: 3, vanish: true }, enrageAt: 0.3, enrageRamp: true, slamRadius: 5.5,
     thrown: { art: 'snowball', speed: 9, range: 10, mult: 1.3, radius: 0.6, size: 1.5, color: '#e6f2fb', minRange: 5, cooldown: 5 },
     itemChance: 1, potionChance: 1,
   },
   // Only comes when the yeti calls it, so no EXP, gold or drops (see Sim.killMonster).
   yeti_minion: {
     id: 'yeti_minion', name: 'Yeti Minion', nameTh: 'เยติลูกน้อง', levels: [28, 28],
-    hp: 900, atk: 85, def: 22, speed: 2.5, exp: 0, gold: [0, 0],
+    hp: 1800, atk: 85, def: 22, speed: 2.5, exp: 0, gold: [0, 0],
     aggroRange: 9, attackRange: 1.4, attackCooldown: 1.4, height: 2.3, radius: 0.8,
     behavior: 'aggressive', itemChance: 0, potionChance: 0,
     leap: { cooldown: 8, windup: 1, radius: 1.8, mult: 1.5, minRange: 2.5, maxRange: 8 },
+    thrown: { art: 'snowball', speed: 8, range: 8, mult: 1, radius: 0.45, size: 1, color: '#e6f2fb', minRange: 3, cooldown: 6 },
   },
 };
