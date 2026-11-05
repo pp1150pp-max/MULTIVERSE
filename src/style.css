@@ -349,10 +349,34 @@ button.primary { background: linear-gradient(#a8812f, #6b4f1a); border-color: va
 .shop-foot { display: flex; justify-content: space-between; margin-top: 10px; font-size: 13px; }
 #shop-gold { color: #f2c230; }
 .shop-timer { float: right; color: var(--ink-dim); font-size: 11px; }
-#buyback-grid { display: grid; grid-template-columns: repeat(6, 46px); gap: 4px; max-height: 150px; overflow-y: auto; }
-#buyback-grid .empty-note { grid-column: 1 / -1; font-size: 11px; color: var(--ink-dim); }
-#buyback-grid .bb-price { position: absolute; left: 0; right: 0; bottom: -1px; font-size: 9px; text-align: center; color: #f2c230; background: rgba(10, 7, 4, 0.75); }
-#buyback-grid .cell.poor { filter: grayscale(0.8) brightness(0.7); }
+
+/*
+ * Tabs, shared by any panel. The look lives in these variables so the coming UI art can replace them
+ * (e.g. set --tab-bg / --tab-bg-active to url(...) images) without touching the markup.
+ */
+:root {
+  --tab-bg: #1d1710;
+  --tab-bg-active: #3a2c18;
+  --tab-edge: #3a2f20;
+  --tab-edge-active: var(--panel-edge);
+  --tab-ink: var(--ink-dim);
+  --tab-ink-active: var(--gold-hi);
+}
+.ui-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--tab-edge-active); margin: 4px 0 8px; }
+.ui-tab {
+  padding: 4px 14px; font-size: 13px; border-radius: 5px 5px 0 0; margin-bottom: -1px;
+  background: var(--tab-bg); color: var(--tab-ink); border: 1px solid var(--tab-edge); border-bottom-color: var(--tab-edge-active);
+}
+.ui-tab.active { background: var(--tab-bg-active); color: var(--tab-ink-active); border-color: var(--tab-edge-active); border-bottom-color: var(--tab-bg-active); }
+.ui-tab-count { font-size: 11px; color: var(--ink-dim); }
+.ui-tab-body.hidden { display: none; }
+
+/* Item grids in the shop (buy and buy back). */
+.shop-grid { display: grid; grid-template-columns: repeat(6, 46px); gap: 4px; }
+#buyback-grid { max-height: 150px; overflow-y: auto; }
+.shop-grid .empty-note { grid-column: 1 / -1; font-size: 11px; color: var(--ink-dim); padding: 8px 0; }
+.shop-grid .cell-price { position: absolute; left: 0; right: 0; bottom: -1px; font-size: 9px; text-align: center; color: #f2c230; background: rgba(10, 7, 4, 0.75); }
+.shop-grid .cell.poor { filter: grayscale(0.8) brightness(0.7); }
 #shop.drop-target { outline: 2px solid var(--gold-hi); outline-offset: 1px; }
 button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge); color: var(--ink-dim); }
 
