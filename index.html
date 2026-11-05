@@ -244,21 +244,19 @@
 
       <div id="menu" class="hidden">
         <div class="menu-inner">
-          <h1>MULTIVERSE</h1>
+          <h1 class="logo" aria-label="MULTIVERSE">
+            <img src="assets/sprites/ui/logo/M.png" alt="" />
+            <img src="assets/sprites/ui/logo/U.png" alt="" />
+            <img src="assets/sprites/ui/logo/L.png" alt="" />
+            <img src="assets/sprites/ui/logo/T.png" alt="" />
+            <img src="assets/sprites/ui/logo/I.png" alt="" />
+            <img src="assets/sprites/ui/logo/V.png" alt="" />
+            <img src="assets/sprites/ui/logo/E.png" alt="" />
+            <img src="assets/sprites/ui/logo/R.png" alt="" />
+            <img src="assets/sprites/ui/logo/S.png" alt="" />
+            <img src="assets/sprites/ui/logo/E.png" alt="" />
+          </h1>
           <div class="subtitle">— The Shattering —</div>
-          <div class="lore">
-            <p>ในอดีต จักรวาลเคยเป็นหนึ่งเดียว เรียกว่า <b>The First Cosmos</b> ก่อนจะเกิดการระเบิดครั้งใหญ่ <b>The Shattering</b> ทำให้จักรวาลแตกออกเป็นมิติต่าง ๆ</p>
-            <p>กาลเวลาผ่านไป ความมืดที่เรียกว่า <b>The Devourer</b> เริ่มกลืนกินดวงดาวและมิติ ในวันที่โลกของคุณกำลังล่มสลาย แสงสีทองขาวปริศนาได้ปรากฏขึ้น…</p>
-            <p>คุณตื่นขึ้นอีกครั้ง พร้อมกับ <b>The Seeker</b> ผู้ตามหาความจริงเบื้องหลังพลังโบราณที่ชื่อว่า <b>The Origin</b></p>
-          </div>
-          <div id="mode-select" class="menu-buttons mode-buttons">
-            <button id="btn-mode-guest" class="mode-btn primary">
-              <b>เล่นแบบ Guest</b><small>เล่นได้ทันที ไม่ต้องสมัคร · ลบอัตโนมัติถ้าไม่เข้าเกม 24 ชม.</small>
-            </button>
-            <button id="btn-mode-online" class="mode-btn">
-              <b>เข้าสู่ระบบ / สมัคร</b><small>เก็บตัวละครไว้ถาวร · ได้ 3 ตัวต่อบัญชี · ใช้คลังเก็บของได้</small>
-            </button>
-          </div>
 
           <div id="guest-panel" class="hidden">
             <div id="guest-continue" class="menu-buttons hidden">
@@ -285,17 +283,26 @@
 
           <div id="online-panel" class="hidden">
             <form id="login-box" class="online-box" autocomplete="on">
-              <h2>เข้าสู่ระบบ</h2>
-              <div class="form-row"><label for="login-user">ชื่อผู้ใช้</label><input id="login-user" name="username" maxlength="16" autocomplete="username" /></div>
-              <div class="form-row"><label for="login-pass">รหัสผ่าน</label><input id="login-pass" name="password" type="password" maxlength="72" autocomplete="current-password" /></div>
-              <div id="login-error" class="form-error"></div>
-              <div class="menu-buttons">
-                <button id="btn-login" type="submit" class="primary">เข้าสู่ระบบ</button>
-                <button id="btn-register" type="button">สมัครสมาชิกใหม่</button>
-                <button class="btn-back" type="button">← กลับ</button>
+              <div class="logon-head"><span>✦</span> Login <span>✦</span></div>
+              <div class="logon-body">
+                <h2>ยินดีต้อนรับ นักผจญภัย</h2>
+                <p class="logon-sub">เริ่มการผจญภัยครั้งใหม่ได้ทันที</p>
+                <button id="btn-account-continue" type="button" class="logon-wide hidden"></button>
+                <div class="form-row"><label for="login-user">ชื่อผู้ใช้</label><input id="login-user" name="username" maxlength="16" autocomplete="username" /></div>
+                <div class="form-row"><label for="login-pass">รหัสผ่าน</label><input id="login-pass" name="password" type="password" maxlength="72" autocomplete="current-password" /></div>
+                <div id="login-error" class="form-error"></div>
+                <div class="menu-buttons logon-actions">
+                  <button id="btn-login" type="submit" class="primary">เข้าสู่ระบบ</button>
+                  <button id="btn-register" type="button">สมัครสมาชิกใหม่</button>
+                </div>
+                <p class="hint">สมัครใหม่: ใส่ชื่อผู้ใช้ (A–Z, 0–9, _ ยาว 3–16 ตัว) และรหัสผ่านอย่างน้อย 6 ตัว แล้วกด “สมัครสมาชิกใหม่”</p>
+                <p id="guest-move-hint" class="hint guest-move hidden"></p>
+                <div class="logon-or"><span>หรือ</span></div>
+                <button id="btn-mode-guest" type="button" class="logon-wide logon-guest" aria-disabled="true">
+                  <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><circle cx="8" cy="4.5" r="3.5" fill="currentColor"/><path d="M1 15c0-4 3-6 7-6s7 2 7 6z" fill="currentColor"/></svg>
+                  Guest Login
+                </button>
               </div>
-              <p class="hint">สมัครใหม่: ใส่ชื่อผู้ใช้ (A–Z, 0–9, _ ยาว 3–16 ตัว) และรหัสผ่านอย่างน้อย 6 ตัว แล้วกด “สมัครสมาชิกใหม่”</p>
-              <p id="guest-move-hint" class="hint guest-move hidden"></p>
             </form>
 
             <div id="char-box" class="online-box hidden">

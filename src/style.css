@@ -411,20 +411,31 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 
 #menu, #loading {
   position: absolute; inset: 0; z-index: 5; overflow-y: auto;
-  background:
-    radial-gradient(ellipse at 50% 30%, rgba(255, 230, 160, 0.12), transparent 60%),
-    radial-gradient(ellipse at 50% 100%, #1d3a1f, #0a0f0a 70%);
+  background: #07061a url(/assets/sprites/ui/login_bg.png) center bottom / cover no-repeat;
+  image-rendering: pixelated;
 }
 #loading { display: grid; place-items: center; font-size: 18px; color: var(--ink-dim); }
-.menu-inner { max-width: 980px; margin: 0 auto; padding: 36px 16px 30px; text-align: center; }
-#menu h1 {
-  font-family: 'Cinzel', serif; font-weight: 800; font-size: clamp(40px, 8vw, 72px); margin: 0; letter-spacing: 0.08em;
-  background: linear-gradient(#fff3c0, #c9a85a); -webkit-background-clip: text; background-clip: text; color: transparent;
-  filter: drop-shadow(0 0 18px rgba(255, 220, 140, 0.35));
+.menu-inner { max-width: 980px; margin: 0 auto; padding: 28px 16px 30px; text-align: center; image-rendering: auto; }
+/* Each letter is its own image; V's point overshoots the baseline, so letters line up by their tops. */
+.logo { display: flex; justify-content: center; align-items: flex-start; gap: 1px; margin: 0; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.9)); }
+.logo img { height: min(9.4vw, 92px); width: auto; display: block; image-rendering: pixelated; }
+.subtitle { font-family: 'Cinzel', serif; color: var(--gold-hi); letter-spacing: 0.3em; margin: 2px 0 18px; text-shadow: 0 2px 6px #000; }
+#guest-panel { max-width: 860px; margin: 0 auto; padding: 18px 22px; background: var(--panel); border: 2px solid var(--panel-edge); border-radius: 10px; }
+.logon-head {
+  padding: 12px 16px; text-align: center; font-family: 'Cinzel', serif; font-weight: 800; font-size: 26px; color: var(--gold-hi);
+  background: linear-gradient(#2a2622, #15120f); border-bottom: 2px solid var(--panel-edge); text-shadow: 0 2px 0 #000;
 }
-.subtitle { font-family: 'Cinzel', serif; color: var(--gold); letter-spacing: 0.3em; margin-bottom: 18px; }
-.lore { max-width: 720px; margin: 0 auto 18px; font-size: 14px; line-height: 1.7; color: var(--ink-dim); font-weight: 300; }
-.lore b { color: var(--gold-hi); font-weight: 400; }
+.logon-head span { font-size: 16px; color: var(--gold); vertical-align: 3px; margin: 0 6px; }
+.logon-body { padding: 16px 22px 18px; }
+.logon-body h2 { text-align: center; font-family: 'Kanit', sans-serif; font-weight: 600; font-size: 22px; margin: 0; color: var(--ink); }
+.logon-sub { text-align: center; margin: 2px 0 14px; font-size: 14px; color: var(--ink-dim); font-weight: 300; }
+.online-box .logon-actions { display: grid; grid-template-columns: 1fr 1fr; margin-top: 2px; }
+.logon-actions button { padding: 10px 6px; }
+.logon-wide { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 11px 16px; font-size: 16px; }
+#btn-account-continue { margin-bottom: 12px; }
+.logon-or { display: flex; align-items: center; gap: 12px; margin: 14px 0 12px; color: var(--ink-dim); font-size: 13px; }
+.logon-or::before, .logon-or::after { content: ''; flex: 1; border-top: 1px dashed var(--panel-edge); }
+.logon-guest, .logon-guest:hover { font-weight: 600; background: linear-gradient(#3b4048, #1c1f25); border-color: #8c93a0; color: var(--ink); cursor: default; }
 .name-row { display: flex; gap: 10px; justify-content: center; align-items: center; margin-bottom: 16px; }
 .name-row input {
   font-family: inherit; font-size: 15px; padding: 6px 10px; width: 220px; color: var(--ink);
@@ -550,17 +561,12 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 
 /* ---------------------------------------------------------------- menu: modes / online */
 
-.mode-buttons { margin: 6px 0 4px; }
-.mode-btn { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 240px; padding: 14px 22px !important; }
-.mode-btn b { font-family: 'Cinzel', serif; font-size: 20px; letter-spacing: 0.04em; }
-.mode-btn small { font-size: 12px; color: var(--ink-dim); font-weight: 300; }
-.mode-btn.primary small { color: #f4e6c4; }
 .btn-back { background: transparent !important; border-color: transparent !important; color: var(--ink-dim) !important; }
 .btn-back:hover { color: #fff !important; }
 .class-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-bottom: 18px; text-align: left; }
 
 .online-box { max-width: 760px; margin: 0 auto; text-align: left; background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 10px; padding: 18px 22px; }
-#login-box { max-width: 460px; }
+#login-box { max-width: 460px; padding: 0; overflow: hidden; border-width: 2px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7); }
 .online-box h2 { font-family: 'Cinzel', 'Kanit', serif; color: var(--gold-hi); margin: 0 0 12px; font-size: 20px; }
 .online-box h3 { color: var(--gold); font-weight: 400; margin: 14px 0 8px; font-size: 15px; }
 .online-box .menu-buttons { justify-content: flex-start; margin-top: 12px; }
