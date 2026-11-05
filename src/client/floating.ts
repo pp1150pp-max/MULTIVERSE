@@ -47,11 +47,24 @@ export class Floating {
   private names = new Map<Player, Plate>();
   private prompt: HTMLDivElement;
   private badges = new Map<Npc, HTMLDivElement>();
+  private vitals: { el: HTMLDivElement; hp: HTMLDivElement; mp: HTMLDivElement };
 
   constructor(private readonly root: HTMLElement) {
     this.prompt = document.createElement('div');
     this.prompt.className = 'npc-prompt hidden';
     root.append(this.prompt);
+    const vitals = document.createElement('div');
+    vitals.className = 'vitals hidden';
+    const bar = (cls: string): HTMLDivElement => {
+      const track = document.createElement('div');
+      track.className = `vbar ${cls}`;
+      const fill = document.createElement('div');
+      track.append(fill);
+      vitals.append(track);
+      return fill;
+    };
+    this.vitals = { el: vitals, hp: bar('hp'), mp: bar('mp') };
+    root.append(vitals);
     // Fetched up front, so the first hit doesn't show an empty number.
     for (const src of [GLYPH_SHEET, CRIT_BURST]) new Image().src = src;
   }
@@ -183,6 +196,17 @@ export class Floating {
         pl.el.remove();
         this.plates.delete(m);
       }
+    }
+
+    // Our own HP and MP, under the feet.
+    const me = g.player;
+    const feet = g.toScreen(me.x, 0, me.z);
+    const showVitals = me.alive && feet.on;
+    this.vitals.el.classList.toggle('hidden', !showVitals);
+    if (showVitals) {
+      this.vitals.el.style.transform = `translate(${feet.sx}px, ${feet.sy}px) translate(-50%, 6px)`;
+      this.vitals.hp.style.width = `${(Math.max(0, me.hp) / Math.max(1, me.maxHp)) * 100}%`;
+      this.vitals.mp.style.width = `${(Math.max(0, me.mp) / Math.max(1, me.stats.maxMp)) * 100}%`;
     }
 
     // Other players: name, level and HP above their heads.
