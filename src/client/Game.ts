@@ -18,6 +18,7 @@ import { AUTO_PX_PER_UNIT } from '../shared/sim/Player';
 import { SpriteActor } from './SpriteActor';
 import { sheets } from './assets';
 import { GameAudio } from './audio/gameAudio';
+import { findPath } from './pathfind';
 import { LootView, MonsterView, PlayerView, ProjectileView, ViewSet } from './views';
 
 const S = Math.SQRT1_2;
@@ -53,6 +54,11 @@ export class Game {
   npcs: Npc[] = [];
   metSeeker: boolean;
   autoPlay = false;
+  /** Waypoints left from a click on the full map (empty = not walking anywhere). */
+  mapRoute: Vec2[] = [];
+  /** Stuck check for the map walk: closest distance to the next waypoint and when it last got closer. */
+  private routeBest = Infinity;
+  private routeBestAt = 0;
   /** Where Auto was switched on: the centre of its farming circle (the server keeps its own copy online). */
   private autoAnchor: { x: number; z: number } | null = null;
   private autoRing!: AutoRing;
@@ -176,6 +182,53 @@ export class Game {
     return this.backend.npcDistance(id);
   }
 
+  /** Walk to a point picked on the full map, around trees and rocks. False if there is no way there. */
+  walkTo(x: number, z: number): boolean {
+    const p = this.player;
+    if (!p.alive) return false;
+    const route = findPath(this.backend.terrain, { x: p.x, z: p.z }, { x, z });
+    if (!route) {
+      this.hud.log('ไปจุดนั้นไม่ได้', '#ff8a6a');
+      return false;
+    }
+    if (this.autoPlay) this.toggleAuto(false, 'ปิด Auto Play — เดินตามแผนที่');
+    this.mapRoute = route;
+    this.routeBest = Infinity;
+    this.routeBestAt = performance.now();
+    const end = route[route.length - 1];
+    this.fx.marker(end.x, end.z);
+    return true;
+  }
+
+  /** Feeds the next map-walk waypoint into the intent, and drops the route when done or stuck. */
+  private followRoute(intent: Intent): Intent {
+    const p = this.player;
+    if (intent.move || intent.moveTo) {
+      this.mapRoute = []; // walking by hand takes over
+      return intent;
+    }
+    while (this.mapRoute.length) {
+      const next = this.mapRoute[0];
+      const d = Math.hypot(next.x - p.x, next.z - p.z);
+      if (d > (this.mapRoute.length > 1 ? 0.6 : 0.2)) {
+        const now = performance.now();
+        if (d < this.routeBest - 0.2) {
+          this.routeBest = d;
+          this.routeBestAt = now;
+        } else if (now - this.routeBestAt > 2000) {
+          this.mapRoute = [];
+          this.hud.log('ทางถูกขวาง — หยุดเดิน', '#ff8a6a');
+          return intent;
+        }
+        return { ...intent, moveTo: { x: next.x, z: next.z } };
+      }
+      this.mapRoute.shift();
+      this.routeBest = Infinity;
+      this.routeBestAt = performance.now();
+    }
+    return intent;
+  }
+
   dropFromBag(i: number): void {
     this.backend.drop(i);
   }
@@ -198,6 +251,7 @@ export class Game {
 
   /** The backend moved us to another zone: redraw the map, camp and everything in it. */
   private changeZone(): void {
+    this.mapRoute = [];
     this.world.dispose();
     this.zone = this.backend.zone;
     this.world = new World(this.scene, this.backend.terrain);
@@ -363,10 +417,12 @@ export class Game {
 
     const p = this.player;
     let intent = IDLE_INTENT;
+    if (!p.alive) this.mapRoute = [];
     if (p.alive) {
       intent = this.manualIntent();
+      if (this.mapRoute.length) intent = this.followRoute(intent);
       if (this.hud.dialogOpen) intent = { ...intent, move: null, moveTo: null, basic: false, skills: [], dash: false };
-      else if (this.autoPlay && (intent.move || intent.moveTo)) this.toggleAuto(false, 'ปิด Auto Play — เดินเอง');
+      else if (this.autoPlay && !this.mapRoute.length && (intent.move || intent.moveTo)) this.toggleAuto(false, 'ปิด Auto Play — เดินเอง');
       // Online the server plays Auto (so it keeps going in a hidden tab); here it only gets our manual input.
       else if (this.autoPlay && !this.backend.online) {
         intent = this.auto.intent(this, intent);

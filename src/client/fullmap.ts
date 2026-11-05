@@ -12,6 +12,9 @@ const NPC_COLOR = { seeker: '#fff3c0', merchant: '#7fe07a', blacksmith: '#ff9a4a
  */
 export class FullMap {
   private readonly ctx: CanvasRenderingContext2D;
+  /** Centre and scale of the last draw, for turning a click back into world coordinates. */
+  private c = 0;
+  private sc = 1;
 
   constructor(canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -30,6 +33,8 @@ export class FullMap {
     const sc = (W * 0.96) / (2 * H * Math.SQRT2);
     const zone = g.backend.zone;
     const at = (x: number, z: number): [number, number] => [c + (x - z) * S * sc, c + (x + z) * S * sc];
+    this.c = c;
+    this.sc = sc;
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, W, W);
@@ -123,9 +128,35 @@ export class FullMap {
       label(sx, sy - 16 * px, `🌀 วาปไป ${to?.nameTh ?? pt.to}${lv}`, '#e0c8ff', 12);
     }
 
+    // Where the player is walking to from a map click.
+    const route = g.mapRoute;
+    if (route.length) {
+      ctx.beginPath();
+      ctx.moveTo(...at(me.x, me.z));
+      for (const pt of route) ctx.lineTo(...at(pt.x, pt.z));
+      ctx.setLineDash([6 * px, 5 * px]);
+      ctx.lineWidth = 2.5 * px;
+      ctx.strokeStyle = 'rgba(255,243,192,0.9)';
+      ctx.stroke();
+      ctx.setLineDash([]);
+      const end = route[route.length - 1];
+      dot(end.x, end.z, 5, '#ffe08a', true);
+    }
+
     // The player on top of everything.
     dot(me.x, me.z, 6, '#ffffff', true);
     const [mx, my] = at(me.x, me.z);
     label(mx, my - 14 * px, 'คุณ', '#ffffff', 12);
+  }
+
+  /** The world point under a mouse position on the map canvas (uses the last draw). */
+  toWorld(clientX: number, clientY: number): { x: number; z: number } {
+    const cv = this.ctx.canvas;
+    const rect = cv.getBoundingClientRect();
+    const sx = ((clientX - rect.left) / rect.width) * cv.width;
+    const sy = ((clientY - rect.top) / rect.height) * cv.height;
+    const u = (sx - this.c) / (S * this.sc);
+    const v = (sy - this.c) / (S * this.sc);
+    return { x: (u + v) / 2, z: (v - u) / 2 };
   }
 }
