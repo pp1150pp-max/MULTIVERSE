@@ -603,9 +603,7 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 .pass-eye:hover, .pass-eye.on { opacity: 1; background: none; }
 .logon-check { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0 4px; font-size: 13px; color: var(--ink); cursor: pointer; }
 .logon-check input { margin-top: 3px; accent-color: var(--gold); }
-.logon-back { background: none; border: none; box-shadow: none; padding: 0; margin-bottom: 6px; font-size: 13px; color: var(--gold); cursor: pointer; }
-.logon-back:hover { background: none; color: var(--gold-hi); text-decoration: underline; }
-#btn-register-submit { margin-top: 4px; }
+#register-box .logon-actions { margin-top: 4px; }
 #btn-register-submit:disabled { opacity: 0.45; cursor: not-allowed; }
 .char-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .char-head span { font-size: 13px; color: var(--ink-dim); }
