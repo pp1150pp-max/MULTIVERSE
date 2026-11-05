@@ -42,6 +42,24 @@ function loadHudStyle(): HudStyle {
 const KEY_LABEL: Record<SkillSlot, string> = { basic: 'LMB', q: 'Q', e: 'E', r: 'R', dash: 'SPACE' };
 const POTION_CD = 1.5;
 const fmtNum = (v: number) => String(Math.round(v * 10) / 10);
+const SELL_RARITY_KEY = 'multiverse-sell-rarities';
+/** Which rarities the merchant's "sell ticked" boxes had ticked last time (this browser only). */
+function loadSellRarities(): Rarity[] {
+  try {
+    const v: unknown = JSON.parse(localStorage.getItem(SELL_RARITY_KEY) ?? '[]');
+    return Array.isArray(v) ? RARITIES.filter((r) => v.includes(r)) : [];
+  } catch {
+    return [];
+  }
+}
+function saveSellRarities(rs: Rarity[]): void {
+  try {
+    localStorage.setItem(SELL_RARITY_KEY, JSON.stringify(rs));
+  } catch {
+    // Storage blocked: the ticks just won't be remembered.
+  }
+}
+
 const POTION_COLOR: Record<PotionKind, string> = { hp: '#e8323c', mp: '#3a7bff' };
 
 const SEEKER_LINES = [
@@ -81,6 +99,8 @@ export class Hud {
   private slotEls: { kind: SkillSlot | PotionKind; el: HTMLElement; cd: HTMLElement; extra: HTMLElement }[] = [];
   private invDirty = true;
   private bagOpen = false;
+  /** Level the bag was last drawn for (gear above it is marked as locked). */
+  private drawnLevel = 0;
   /** A bag item being dragged with the mouse (ghost appears once the mouse moves a few pixels). */
   private drag: { i: number; x: number; y: number; ghost: HTMLElement | null } | null = null;
   /** True right after a drag ends, so the click that follows mouseup does nothing. */
@@ -171,6 +191,11 @@ export class Hud {
       const i = this.cellIndex(e);
       if (i < 0) return;
       const entry = g.player.bag[i];
+      const block = entry && !isPotion(entry) ? g.player.equipBlock(entry) : null;
+      if (block && entry && !isPotion(entry)) {
+        this.log(`ใส่ ${itemName(entry)} ไม่ได้ — ${block}`, '#ff8a6a');
+        return;
+      }
       g.backend.equip(i);
       if (isPotion(entry)) this.log(`ปุ่ม ${entry.potion === 'hp' ? 1 : 2} จะใช้${potionName(entry.potion, entry.size)}`, '#9fd8ff');
       this.hideTip();
@@ -280,12 +305,16 @@ export class Hud {
       else this.hideTip();
     });
     buyGrid.addEventListener('mouseleave', () => this.hideTip());
+    // Sell by rarity: tick the rarities, then one button sells them all. The ticks are remembered in this browser.
+    const ticked = loadSellRarities();
     $('sell-rarity').innerHTML = RARITIES.map((r) =>
-      `<button data-sell="${r}" style="--rc:${RARITY_COLOR[r]}">${RARITY_LABEL[r]}</button>`).join('');
-    $('sell-rarity').addEventListener('click', (e) => {
-      const r = (e.target as HTMLElement).closest<HTMLElement>('[data-sell]')?.dataset.sell as Rarity | undefined;
-      if (r) this.sellAllOfRarity(r);
+      `<label style="color:${RARITY_COLOR[r]}"><input type="checkbox" data-sell="${r}"${ticked.includes(r) ? ' checked' : ''}>` +
+      `${RARITY_LABEL[r]} <span class="n" data-sell-n="${r}"></span></label>`).join('');
+    $('sell-rarity').addEventListener('change', () => {
+      saveSellRarities(this.checkedSellRarities());
+      this.renderShopMoney();
     });
+    $('sell-checked').onclick = () => this.sellChecked();
 
     // Blacksmith
     $('forge-close').onclick = () => this.closeForge();
@@ -435,6 +464,10 @@ export class Hud {
 
   update(dt: number): void {
     const p = this.g.player;
+    if (p.level !== this.drawnLevel) {
+      this.drawnLevel = p.level;
+      this.markInventory();
+    }
     const need = expToNext(p.level);
     const hpShare = `${(Math.max(0, p.hp) / p.maxHp) * 100}%`;
     const mpShare = `${(p.mp / p.stats.maxMp) * 100}%`;
@@ -738,6 +771,7 @@ export class Hud {
     $('shop-gold').innerHTML = `${COIN_ICON} ${p.gold.toLocaleString()} G`;
     $('shop-pots').innerHTML = this.potionTotals();
     this.renderBuyback();
+    this.renderSellRarity();
     $('shop-buy').querySelectorAll<HTMLElement>('[data-buy]').forEach((el) => {
       const [kind, size] = el.dataset.buy!.split(':') as [PotionKind, PotionSize];
       el.classList.toggle('poor', p.gold < POTIONS[kind][size].price || p.potionRoom(kind, size) < 1);
@@ -827,16 +861,49 @@ export class Hud {
     this.afterTrade();
   }
 
-  private sellAllOfRarity(r: Rarity): void {
-    const items = this.g.player.bag.filter((e) => isBulkSellable(e, r));
-    const label = `<b style="color:${RARITY_COLOR[r]}">${RARITY_LABEL[r]}</b>`;
+  private checkedSellRarities(): Rarity[] {
+    return [...$('sell-rarity').querySelectorAll<HTMLInputElement>('input[data-sell]')]
+      .filter((c) => c.checked)
+      .map((c) => c.dataset.sell as Rarity);
+  }
+
+  /** Bag items the "sell ticked" button would sell (enhanced items never). */
+  private checkedSellItems(): Item[] {
+    const rs = this.checkedSellRarities();
+    return this.g.player.bag.filter((e): e is Item => rs.some((r) => isBulkSellable(e, r)));
+  }
+
+  /** Item counts next to each tick box, and what the sell button would do. */
+  private renderSellRarity(): void {
+    const bag = this.g.player.bag;
+    for (const r of RARITIES) {
+      const n = bag.filter((e) => isBulkSellable(e, r)).length;
+      const el = $('sell-rarity').querySelector<HTMLElement>(`[data-sell-n="${r}"]`);
+      if (el) el.textContent = `(${n})`;
+    }
+    const items = this.checkedSellItems();
+    const total = items.reduce((s, it) => s + sellValue(it), 0);
+    const btn = $<HTMLButtonElement>('sell-checked');
+    btn.disabled = !items.length;
+    btn.textContent = items.length ? `ขายที่เลือก ${items.length} ชิ้น · ${total.toLocaleString()} G` : 'ขายที่เลือก';
+  }
+
+  private sellChecked(): void {
+    const rs = this.checkedSellRarities();
+    const items = this.checkedSellItems();
+    if (!rs.length) {
+      this.log('ติ๊กเลือกระดับที่จะขายก่อน', '#b9b09a');
+      return;
+    }
     if (!items.length) {
-      this.log(`ไม่มีของระดับ${RARITY_LABEL[r]}ในกระเป๋า (ของที่ตีบวกแล้วจะไม่ถูกขาย)`, '#b9b09a');
+      this.log('ไม่มีของระดับที่เลือกในกระเป๋า (ของที่ตีบวกแล้วจะไม่ถูกขาย)', '#b9b09a');
       return;
     }
     const total = items.reduce((s, it) => s + sellValue(it), 0);
-    this.confirm(`ขายของระดับ ${label} ทั้งหมด ${items.length} ชิ้น?<br><small>ได้ ${total.toLocaleString()} G · ของที่ตีบวกแล้วจะไม่ถูกขาย</small>`, 'ขายทั้งหมด', () => {
-      this.g.backend.sellAllOfRarity(r);
+    const labels = rs.map((r) => `<b style="color:${RARITY_COLOR[r]}">${RARITY_LABEL[r]}</b>`).join(', ');
+    this.confirm(`ขายของระดับ ${labels} ทั้งหมด ${items.length} ชิ้น?<br><small>ได้ ${total.toLocaleString()} G · ของที่ตีบวกแล้วจะไม่ถูกขาย · ซื้อคืนได้ภายใน 30 นาที</small>`, 'ขายทั้งหมด', () => {
+      const bag = this.g.player.bag;
+      for (const r of rs) if (bag.some((e) => isBulkSellable(e, r))) this.g.backend.sellAllOfRarity(r);
       this.afterTrade();
     });
   }
@@ -959,7 +1026,8 @@ export class Hud {
     }
     const icon = itemIcon(item);
     const plus = plusOf(item) ? `<span class="iplus">+${plusOf(item)}</span>` : '';
-    return `<div class="cell r-${item.rarity}${selected ? ' sel' : ''}" ${attrs} style="--rc:${RARITY_COLOR[item.rarity]}">${icon}${plus}<span class="ilv">${item.level}</span></div>`;
+    const locked = this.g.player.canEquip(item) ? '' : ' locked';
+    return `<div class="cell r-${item.rarity}${selected ? ' sel' : ''}${locked}" ${attrs} style="--rc:${RARITY_COLOR[item.rarity]}">${icon}${plus}<span class="ilv">${item.level}</span></div>`;
   }
 
   private renderInventory(): void {
@@ -1003,6 +1071,7 @@ export class Hud {
       `<div class="tt-name" style="color:${RARITY_COLOR[item.rarity]}">${itemName(item)}</div>` +
       `<div class="tt-sub">${RARITY_LABEL[item.rarity]} · ${SLOT_LABEL[item.slot]} · iLv.${item.level}${plusOf(item) ? ` · ตีบวก +${plusOf(item)}` : ''}</div>` +
       `<div class="tt-stats">${lines || '<div>—</div>'}</div>` +
+      (p.equipBlock(item) ? `<div class="tt-req">${p.equipBlock(item)}</div>` : '') +
       `<div class="tt-hint">${hint}</div><div class="tt-val">ขายให้พ่อค้าได้ ${sellValue(item)} G</div>`;
     this.placeTip(tip, e);
   }

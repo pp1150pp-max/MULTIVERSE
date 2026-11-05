@@ -60,6 +60,8 @@ export interface Item {
   value: number;
   /** Weapon enhancement level from the blacksmith (+0 when missing). */
   plus?: number;
+  /** Class that can wear it (weapons and armor). Missing = any class, or an older item (see itemClass). */
+  cls?: ClassId;
 }
 
 export type PotionKind = 'hp' | 'mp';
