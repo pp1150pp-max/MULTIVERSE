@@ -632,3 +632,11 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
   color: #ffcf6a; font-size: 14px; pointer-events: none; white-space: nowrap;
 }
 #exit-countdown.hidden { display: none; }
+
+/* Help, HP/MP style and sound live in the system menu (Esc / ☰); their HUD buttons stay in the DOM
+   (the menu and the H key drive them) but are hidden so the column clears the MP orb on short screens. */
+#btn-help, #btn-hud-style, #btn-audio { display: none; }
+@media (max-height: 560px) {
+  #minimap { width: 128px; height: 128px; }
+  #hud { --orb: min(190px, 20vw, 32vh); }
+}
