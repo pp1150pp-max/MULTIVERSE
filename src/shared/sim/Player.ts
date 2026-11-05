@@ -16,8 +16,12 @@ import type { LootKind } from './Loot';
 
 /** Share of the HP regen stat that actually applies (owner: -60%). */
 export const HP_REGEN_MULT = 0.4;
-/** Same for MP regen (owner: -60%). */
-export const MP_REGEN_MULT = 0.4;
+/** Same for MP regen (owner: -75%, so skills lean on MP potions). */
+export const MP_REGEN_MULT = 0.25;
+/** Seconds after the last hit taken, attack or skill before out-of-combat regen kicks in. */
+export const COMBAT_LINGER = 5;
+/** Regen multiplier while out of combat. */
+export const OUT_OF_COMBAT_REGEN = 2.5;
 
 export const BAG_SIZE = 30;
 export const POTION_CD = 1.5;
@@ -151,6 +155,8 @@ export class Player extends Unit {
   cd: Partial<Record<SkillSlot, number>> = {};
   potCd = 0;
   lastHurt = -99;
+  /** Sim time of the last basic attack or skill (ranged players rarely get hurt, so this counts as combat too). */
+  lastAttack = -99;
   moveTarget: Vec2 | null = null;
   /** Shown once per session when low-level monsters start giving less EXP. */
   lowExpHinted = false;
@@ -493,7 +499,8 @@ export class Player extends Unit {
     this.potCd -= dt;
     this.faceLockT -= dt;
 
-    const ooc = sim.time - this.lastHurt > 5 ? 2.5 : 1;
+    const inCombat = sim.time - Math.max(this.lastHurt, this.lastAttack) <= COMBAT_LINGER;
+    const ooc = inCombat ? 1 : OUT_OF_COMBAT_REGEN;
     this.hp = Math.min(this.maxHp, this.hp + this.stats.hpRegen * ooc * dt);
     this.mp = Math.min(this.stats.maxMp, this.mp + this.stats.mpRegen * ooc * dt);
 
@@ -568,6 +575,7 @@ export class Player extends Unit {
         sim.anim(this.id, `skill_${slot}`, { duration: this.attackAnimDuration(), fallback: 'attack' });
         this.mp -= sk.mp;
         this.cd[slot] = sk.cooldown;
+        this.lastAttack = sim.time;
         this.faceLockT = 0.3;
       }
       if (this.dashT > 0) return;
@@ -575,6 +583,7 @@ export class Player extends Unit {
 
     if (it.basic && this.atkT <= 0) {
       this.atkT = 1 / this.attackRate;
+      this.lastAttack = sim.time;
       basicAttack(sim, this, aim);
       this.face(this.aimX, this.aimZ);
       sim.anim(this.id, 'attack', { duration: this.attackAnimDuration() });
