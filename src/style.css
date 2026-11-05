@@ -242,9 +242,10 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
   position: relative; width: var(--bar-w); aspect-ratio: 1263 / 79; margin-top: -8px;
   background: url(/assets/sprites/ui/expbar.png) center / 100% 100% no-repeat;
 }
-#expbar .bar-channel { left: 2.2%; width: 95.6%; top: 24%; height: 53%; }
+/* Pointed at both ends, measured from the frame's inner edge. */
+#expbar .bar-channel { left: 1.4%; width: 97.2%; top: 20%; height: 54.5%; clip-path: polygon(1.6% 0, 98.4% 0, 100% 50%, 98.4% 100%, 1.6% 100%, 0 50%); }
 #expbar .fill { height: 100%; background: linear-gradient(#d6b468, #8f7228); }
-#expbar span { position: absolute; right: 8%; top: -1px; font-size: 9px; line-height: 16px; text-shadow: 0 0 2px #000, 0 0 2px #000; }
+#expbar span { position: absolute; left: 0; right: 0; top: 20%; height: 54.5%; display: grid; place-items: center; font-size: 10px; line-height: 1; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; }
 
 /* ---------------------------------------------------------------- panels */
 
