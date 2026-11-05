@@ -1,5 +1,5 @@
 // Title menu: play as a guest, or log in / sign up. Either way the game runs on the server.
-import { animSets, sheets } from './assets';
+import { gameAssetsReady, loadGameAssets, loadMenuAssets, onAssetProgress, portraitSource } from './assets';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { MAX_CHARACTERS, checkCharacterName, checkPassword, checkUsername, type CharacterSummary } from '../shared/api';
 import type { ClassId } from '../shared/types';
@@ -13,18 +13,45 @@ export type Launcher = (backend: OnlineBackend) => void;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
 export function portrait(key: string, size: number): HTMLCanvasElement {
-  // First cell = front view, frame 0 — of the idle animation when there is a full set.
-  const set = animSets[key];
-  const sh = sheets[key];
-  const img = (set ? set.textures.idle.image : sh.texture.image) as CanvasImageSource & { width: number; height: number };
-  const cw = set ? set.manifest.frameWidth : img.width / sh.cols;
-  const ch = set ? set.manifest.frameHeight : img.height / sh.rows;
   const c = document.createElement('canvas');
   c.width = c.height = size;
-  const ctx = c.getContext('2d')!;
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(img, 0, 0, cw, ch, 0, 0, size, size);
+  const draw = (): void => {
+    // First cell = front view, frame 0 (of the idle animation when there is a full set).
+    const src = portraitSource(key);
+    if (!src) return;
+    const ctx = c.getContext('2d')!;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(src.img, 0, 0, src.cw, src.ch, 0, 0, size, size);
+  };
+  // The menu shows before the portraits arrive on a slow link; they fill in when loaded.
+  if (portraitSource(key)) draw();
+  else void loadMenuAssets(CLASS_IDS).then(draw);
   return c;
+}
+
+/**
+ * Waits, with a progress bar, until every game texture has loaded (they keep loading in the
+ * background while the menu is up). Runs before connecting, so the character doesn't stand
+ * in the world unseen while a slow link finishes the download.
+ */
+async function waitForGameAssets(): Promise<void> {
+  if (gameAssetsReady()) return;
+  const el = $('loading');
+  el.innerHTML =
+    '<div class="load-box"><div>กำลังโหลดภาพในเกม… <span id="load-pct">0%</span></div>' +
+    '<div class="load-bar"><i id="load-fill"></i></div></div>';
+  el.classList.remove('hidden');
+  const stop = onAssetProgress((f) => {
+    const pct = `${Math.floor(f * 100)}%`;
+    $('load-pct').textContent = pct;
+    $('load-fill').style.width = pct;
+  });
+  try {
+    await loadGameAssets();
+  } finally {
+    stop();
+    el.classList.add('hidden');
+  }
 }
 
 /** Fills a container with clickable class cards; returns a getter for the chosen class. */
@@ -133,6 +160,7 @@ class GuestMenu {
     this.busy = true;
     $('guest-error').textContent = 'กำลังเข้าสู่โลก…';
     try {
+      await waitForGameAssets();
       const backend = await connectOnline(token, charId);
       $('guest-error').textContent = '';
       this.launch(backend);
@@ -175,6 +203,7 @@ class OnlineMenu {
     btn.disabled = true;
     $('char-error').textContent = 'กำลังเข้าสู่โลก…';
     try {
+      await waitForGameAssets();
       const backend = await connectOnline(token, this.selected);
       $('char-error').textContent = '';
       this.launch(backend);

@@ -415,9 +415,14 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
   image-rendering: pixelated;
 }
 #loading { display: grid; place-items: center; font-size: 18px; color: var(--ink-dim); }
+.load-box { width: min(360px, 80vw); text-align: center; text-shadow: 0 2px 4px #000; }
+.load-bar { height: 10px; margin-top: 10px; background: rgba(0, 0, 0, 0.6); border: 2px solid var(--panel-edge); border-radius: 6px; overflow: hidden; }
+.load-bar i { display: block; height: 100%; width: 0; background: linear-gradient(var(--gold-hi), var(--gold)); transition: width 0.2s; }
 .menu-inner { max-width: 980px; margin: 0 auto; padding: 28px 16px 30px; text-align: center; image-rendering: auto; }
 /* Each letter is its own image; V's point overshoots the baseline, so letters line up by their tops. */
 .logo { display: flex; justify-content: center; align-items: flex-start; gap: 1px; margin: 0; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.9)); }
+.logo { transition: opacity 0.4s; }
+.logo.logo-wait { opacity: 0; }
 .logo img { height: min(9.4vw, 92px); width: auto; display: block; image-rendering: pixelated; }
 .subtitle { font-family: 'Cinzel', serif; color: var(--gold-hi); letter-spacing: 0.3em; margin: 2px 0 18px; text-shadow: 0 2px 6px #000; }
 #guest-panel { max-width: 860px; margin: 0 auto; padding: 18px 22px; background: var(--panel); border: 2px solid var(--panel-edge); border-radius: 10px; }
