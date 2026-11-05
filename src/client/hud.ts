@@ -254,17 +254,18 @@ export class Hud {
     });
     bag.addEventListener('mouseleave', () => this.hideTip());
 
-    // The bag's sort controls and the stash window's copy of them always show the same choice.
+    // The bag's sort controls and their copies in the stash and shop windows always show the same choice.
     const sortDir = (desc: boolean) => {
-      for (const b of [$('sort-dir'), $('stash-sort-dir')]) {
+      for (const b of [$('sort-dir'), $('stash-sort-dir'), $('shop-sort-dir')]) {
         b.dataset.desc = desc ? '1' : '0';
         b.textContent = desc ? 'มาก → น้อย' : 'น้อย → มาก';
       }
     };
     $('sort-dir').onclick = () => sortDir($('sort-dir').dataset.desc !== '1');
     $('stash-sort-dir').onclick = () => sortDir($('sort-dir').dataset.desc !== '1');
-    $('sort-key').addEventListener('change', () => ($<HTMLSelectElement>('stash-sort-key').value = $<HTMLSelectElement>('sort-key').value));
-    $('stash-sort-key').addEventListener('change', () => ($<HTMLSelectElement>('sort-key').value = $<HTMLSelectElement>('stash-sort-key').value));
+    $('shop-sort-dir').onclick = () => sortDir($('sort-dir').dataset.desc !== '1');
+    const sortKeys = ['sort-key', 'stash-sort-key', 'shop-sort-key'].map((id) => $<HTMLSelectElement>(id));
+    for (const sel of sortKeys) sel.addEventListener('change', () => sortKeys.forEach((o) => (o.value = sel.value)));
     const lf = $('loot-filter');
     lf.innerHTML = '<span>เก็บ</span>' +
       RARITIES.map((r) => `<label style="color:${RARITY_COLOR[r]}"><input type="checkbox" data-rarity="${r}">${RARITY_LABEL[r]}</label>`).join('') +
@@ -379,8 +380,8 @@ export class Hud {
       this.hideTip();
       this.markInventory();
     };
-    // The bag's own sort panel is hidden beside the stash, so the bag can be sorted from here too.
-    $('stash-sort-bag').onclick = () => {
+    // The bag's own sort panel is hidden beside the stash and the shop, so the bag can be sorted from there too.
+    $('stash-sort-bag').onclick = $('shop-sort-bag').onclick = () => {
       g.backend.sortBag(...sortChoice());
       this.hideTip();
       this.markInventory();
