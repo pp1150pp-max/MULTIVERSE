@@ -82,6 +82,10 @@ export class Hud {
     this.fullMap = new FullMap($<HTMLCanvasElement>('fullmap-canvas'));
     $('minimap').onclick = () => this.toggleMap(true);
     $('fullmap-close').onclick = () => this.toggleMap(false);
+    $('fullmap-canvas').addEventListener('click', (e) => {
+      const to = this.fullMap.toWorld(e.clientX, e.clientY);
+      if (this.g.walkTo(to.x, to.z)) this.toggleMap(false);
+    });
     $('hud-name').textContent = g.player.name;
     this.showZoneName();
     $('hud-online').classList.toggle('hidden', !g.backend.online);
@@ -526,8 +530,8 @@ export class Hud {
     const z = this.g.backend.zone;
     $('fullmap-title').textContent = `แผนที่ — ${z.nameTh} (Lv.${z.levels[0]}-${z.levels[1]})`;
     $('fullmap-hint').textContent = this.g.backend.online
-      ? 'กด M หรือ Esc เพื่อปิด · ออนไลน์จะเห็นจุดมอน/ผู้เล่นเฉพาะที่อยู่ใกล้ตัว'
-      : 'กด M หรือ Esc เพื่อปิด';
+      ? 'คลิกบนแผนที่เพื่อเดินไป · กด M หรือ Esc เพื่อปิด · ออนไลน์จะเห็นจุดมอน/ผู้เล่นเฉพาะที่อยู่ใกล้ตัว'
+      : 'คลิกบนแผนที่เพื่อเดินไป · กด M หรือ Esc เพื่อปิด';
     this.fullMap.draw(this.g);
   }
 
