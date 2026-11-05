@@ -236,17 +236,35 @@ export class Hud {
 
     // Merchant
     $('shop-close').onclick = () => this.closeShop();
-    $('shop-buy').innerHTML = (['hp', 'mp'] as const).flatMap((k) => POTION_SIZES.map((s) =>
-      `<div class="shop-row"><span class="shop-item">${potionIcon(k)} ${potionName(k, s)} <small>ฟื้น ${POTIONS[k][s].amount} ${k.toUpperCase()}</small></span>` +
-      `<span class="shop-price">${POTIONS[k][s].price} G</span>` +
-      `<button data-buy="${k}:${s}:1">ซื้อ 1</button><button data-buy="${k}:${s}:${POTION_STACK}">ซื้อ ${POTION_STACK}</button></div>`,
-    )).join('');
-    $('shop').addEventListener('click', (e) => {
-      const b = (e.target as HTMLElement).closest<HTMLElement>('[data-buy]');
-      if (!b) return;
-      const [kind, size, n] = b.dataset.buy!.split(':') as [PotionKind, PotionSize, string];
-      this.buyPotion(kind, size, Number(n));
+    $('shop-tabs').addEventListener('click', (e) => {
+      const t = (e.target as HTMLElement).closest<HTMLElement>('[data-tab]');
+      if (t) this.setShopTab(t.dataset.tab as 'buy' | 'buyback');
     });
+    // Buy tab: a grid of potion icons. Click buys one, right click (or shift click) buys a stack.
+    const buyGrid = $('shop-buy');
+    buyGrid.innerHTML = (['hp', 'mp'] as const).flatMap((k) => POTION_SIZES.map((s) =>
+      `<div class="cell pot" data-buy="${k}:${s}" style="--rc:${POTION_COLOR[k]}">${potionIcon(k)}` +
+      `<span class="psize">${POTION_SIZE_LABEL[s]}</span><span class="cell-price">${POTIONS[k][s].price}</span></div>`,
+    )).join('');
+    const buyCell = (e: Event): [PotionKind, PotionSize] | null => {
+      const el = (e.target as HTMLElement).closest<HTMLElement>('[data-buy]');
+      return el ? (el.dataset.buy!.split(':') as [PotionKind, PotionSize]) : null;
+    };
+    buyGrid.addEventListener('click', (e) => {
+      const c = buyCell(e);
+      if (c) this.buyPotion(c[0], c[1], e.shiftKey ? POTION_STACK : 1);
+    });
+    buyGrid.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const c = buyCell(e);
+      if (c) this.buyPotion(c[0], c[1], POTION_STACK);
+    });
+    buyGrid.addEventListener('mousemove', (e) => {
+      const c = buyCell(e);
+      if (c) this.showShopPotionTip(c[0], c[1], e);
+      else this.hideTip();
+    });
+    buyGrid.addEventListener('mouseleave', () => this.hideTip());
     $('sell-rarity').innerHTML = RARITIES.map((r) =>
       `<button data-sell="${r}" style="--rc:${RARITY_COLOR[r]}">${RARITY_LABEL[r]}</button>`).join('');
     $('sell-rarity').addEventListener('click', (e) => {
@@ -684,15 +702,34 @@ export class Hud {
     $('shop-gold').innerHTML = `${COIN_ICON} ${p.gold.toLocaleString()} G`;
     $('shop-pots').innerHTML = this.potionTotals();
     this.renderBuyback();
-    $('shop').querySelectorAll<HTMLButtonElement>('[data-buy]').forEach((b) => {
-      const [kind, size, n] = b.dataset.buy!.split(':') as [PotionKind, PotionSize, string];
-      b.disabled = p.gold < POTIONS[kind][size].price * Number(n) || p.potionRoom(kind, size) < Number(n);
+    $('shop-buy').querySelectorAll<HTMLElement>('[data-buy]').forEach((el) => {
+      const [kind, size] = el.dataset.buy!.split(':') as [PotionKind, PotionSize];
+      el.classList.toggle('poor', p.gold < POTIONS[kind][size].price || p.potionRoom(kind, size) < 1);
     });
   }
 
   private potionTotals(): string {
     const p = this.g.player;
     return `${potionIcon('hp')} ${p.potionCount('hp')} &nbsp; ${potionIcon('mp')} ${p.potionCount('mp')}`;
+  }
+
+  /** Switches the merchant window between buying potions and buying back sold items. */
+  private setShopTab(tab: 'buy' | 'buyback'): void {
+    $('shop-tabs').querySelectorAll<HTMLElement>('[data-tab]').forEach((t) => t.classList.toggle('active', t.dataset.tab === tab));
+    $('shop').querySelectorAll<HTMLElement>('[data-pane]').forEach((b) => b.classList.toggle('hidden', b.dataset.pane !== tab));
+    this.hideTip();
+  }
+
+  /** Tooltip for a potion on sale: what it does and what one or a stack costs. */
+  private showShopPotionTip(kind: PotionKind, size: PotionSize, e: MouseEvent): void {
+    const tip = $('tooltip');
+    const price = POTIONS[kind][size].price;
+    tip.innerHTML =
+      `<div class="tt-name" style="color:${POTION_COLOR[kind]}">${potionName(kind, size)}</div>` +
+      `<div class="tt-stats"><div>ฟื้น ${POTIONS[kind][size].amount} ${kind.toUpperCase()} ต่อขวด</div></div>` +
+      `<div class="tt-hint">คลิก: ซื้อ 1 (${price} G) · คลิกขวา: ซื้อ ${POTION_STACK} (${price * POTION_STACK} G)</div>` +
+      `<div class="tt-val">มีอยู่ ${this.g.player.potionCount(kind, size)} ขวด</div>`;
+    this.placeTip(tip, e);
   }
 
   /** Sells bag slot `i` to the merchant, asking first for a potion stack or an enhanced (+N) item. */
@@ -737,13 +774,14 @@ export class Hud {
         : '<div class="empty-note">ยังไม่มีของที่ขายไป</div>';
       grid.querySelectorAll<HTMLElement>('[data-bb]').forEach((el) => {
         const e = p.buyback[Number(el.dataset.bb)];
-        el.insertAdjacentHTML('beforeend', `<span class="bb-price">${buybackPrice(e).toLocaleString()}</span>`);
+        el.insertAdjacentHTML('beforeend', `<span class="cell-price">${buybackPrice(e).toLocaleString()}</span>`);
       });
     }
     grid.querySelectorAll<HTMLElement>('[data-bb]').forEach((el) => {
       const e = p.buyback[Number(el.dataset.bb)];
       el.classList.toggle('poor', !e || p.gold < buybackPrice(e));
     });
+    $('buyback-count').textContent = p.buyback.length ? `(${p.buyback.length})` : '';
     const s = Math.max(0, Math.ceil(p.buybackLeft));
     $('buyback-timer').textContent = `รีเซตใน ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   }

@@ -86,16 +86,23 @@
         <div id="shop" class="panel hidden">
           <div class="panel-head"><span>พ่อค้า — Merchant</span><button id="shop-close">✕</button></div>
           <p class="npc-line">“ของดีราคาถูก! มีอะไรจะขายก็เอามาได้เลย ข้ารับซื้อทุกอย่าง”</p>
-          <div class="shop-section">ซื้อ</div>
-          <div id="shop-buy"></div>
-          <p class="hint" style="margin-top:0">ยาเก็บในกระเป๋า ช่องละไม่เกิน 10 ขวด</p>
+          <div class="ui-tabs" id="shop-tabs">
+            <button class="ui-tab active" data-tab="buy">ซื้อ</button>
+            <button class="ui-tab" data-tab="buyback">ซื้อคืน <span id="buyback-count" class="ui-tab-count"></span></button>
+          </div>
+          <div class="ui-tab-body" data-pane="buy">
+            <div id="shop-buy" class="shop-grid"></div>
+            <p class="hint">คลิก: ซื้อ 1 · คลิกขวา: ซื้อ 10 · ยาเก็บในกระเป๋า ช่องละไม่เกิน 10 ขวด</p>
+          </div>
+          <div class="ui-tab-body hidden" data-pane="buyback">
+            <div class="shop-sub">ของที่ขายไป ซื้อคืนได้ราคา +20% · เก็บ 30 ชิ้นล่าสุด <span id="buyback-timer" class="shop-timer"></span></div>
+            <div id="buyback-grid" class="shop-grid"></div>
+            <p class="hint">คลิก: ซื้อคืน</p>
+          </div>
           <div class="shop-section">ขาย</div>
           <p class="hint" style="margin-top:0">คลิกขวาหรือลากของจากกระเป๋ามาที่ร้านเพื่อขาย (ยาขายทั้งช่อง ได้ครึ่งราคา) · ขายได้ที่พ่อค้าเท่านั้น</p>
           <div class="shop-sub">ขายทั้งหมดตามระดับ (ไม่ขายของที่ตีบวกแล้ว)</div>
           <div id="sell-rarity"></div>
-          <div class="shop-section">ซื้อคืน <span id="buyback-timer" class="shop-timer"></span></div>
-          <p class="hint" style="margin-top:0">ของที่ขายไป ซื้อคืนได้ในราคา +20% · เก็บไว้ 30 ชิ้นล่าสุด</p>
-          <div id="buyback-grid"></div>
           <div class="shop-foot"><span id="shop-gold"></span><span id="shop-pots"></span></div>
         </div>
 
