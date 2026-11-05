@@ -4,10 +4,16 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { CharacterData } from '../src/shared/sim/Player';
-import type { CharacterSummary } from '../src/shared/api';
+import { GUEST_TTL_HOURS, type CharacterSummary } from '../src/shared/api';
 import type { ClassId } from '../src/shared/types';
+import { cleanStash, type StashData } from '../src/shared/sim/stash';
 
 export interface AccountRow { id: number; username: string; pass_hash: string }
+/** The account behind a login token. Guests are temporary accounts that can't log in with a password. */
+export interface SessionAccount { id: number; username: string; guest: boolean }
+
+/** Guests nobody has played for this long are deleted, character and all. */
+export const GUEST_TTL_MS = GUEST_TTL_HOURS * 60 * 60 * 1000;
 interface CharacterRow { id: number; account_id: number; name: string; class_id: string; data: string }
 
 export class Db {
@@ -40,7 +46,16 @@ export class Db {
         updated_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS characters_by_account ON characters(account_id);
+      CREATE TABLE IF NOT EXISTS stashes (
+        account_id INTEGER PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
+        data TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
     `);
+    // Columns added after the first release: add them to databases made before that.
+    const cols = (this.db.prepare('PRAGMA table_info(accounts)').all() as { name: string }[]).map((c) => c.name);
+    if (!cols.includes('is_guest')) this.db.exec('ALTER TABLE accounts ADD COLUMN is_guest INTEGER NOT NULL DEFAULT 0');
+    if (!cols.includes('last_online')) this.db.exec('ALTER TABLE accounts ADD COLUMN last_online INTEGER');
   }
 
   close(): void {
@@ -49,15 +64,85 @@ export class Db {
 
   // ------------------------------------------------------------ accounts
 
+  /** A real (non-guest) account by name. */
   findAccount(username: string): AccountRow | undefined {
-    return this.db.prepare('SELECT id, username, pass_hash FROM accounts WHERE username = ?').get(username) as AccountRow | undefined;
+    return this.db.prepare('SELECT id, username, pass_hash FROM accounts WHERE username = ? AND is_guest = 0').get(username) as AccountRow | undefined;
+  }
+
+  private usernameTaken(username: string): boolean {
+    return !!this.db.prepare('SELECT 1 FROM accounts WHERE username = ?').get(username);
   }
 
   /** Returns the new account id, or null if the username is taken. */
   createAccount(username: string, passHash: string): number | null {
-    if (this.findAccount(username)) return null;
+    if (this.usernameTaken(username)) return null;
     const r = this.db.prepare('INSERT INTO accounts (username, pass_hash, created_at) VALUES (?, ?, ?)').run(username, passHash, Date.now());
     return Number(r.lastInsertRowid);
+  }
+
+  // ------------------------------------------------------------ guests
+
+  /**
+   * Makes a guest: a temporary account (with a name nobody can type at the login form, and no
+   * password) holding one new character.
+   */
+  createGuest(guestKey: string, data: CharacterData): { accountId: number; character: CharacterSummary } {
+    this.db.exec('BEGIN');
+    try {
+      const now = Date.now();
+      const r = this.db.prepare('INSERT INTO accounts (username, pass_hash, created_at, is_guest, last_online) VALUES (?, ?, ?, 1, ?)')
+        .run(`guest:${guestKey}`, '', now, now);
+      const accountId = Number(r.lastInsertRowid);
+      const character = this.createCharacter(accountId, data);
+      this.db.exec('COMMIT');
+      return { accountId, character };
+    } catch (e) {
+      this.db.exec('ROLLBACK');
+      throw e;
+    }
+  }
+
+  /**
+   * Turns a guest into a real account — same account id, so its character comes along — and ends
+   * the guest's login tokens. Returns false if it isn't a guest (any more) or the username is taken.
+   */
+  upgradeGuest(accountId: number, username: string, passHash: string): boolean {
+    if (this.usernameTaken(username)) return false;
+    this.db.exec('BEGIN');
+    try {
+      const n = this.db.prepare('UPDATE accounts SET username = ?, pass_hash = ?, is_guest = 0, last_online = NULL WHERE id = ? AND is_guest = 1')
+        .run(username, passHash, accountId).changes;
+      if (n) this.db.prepare('DELETE FROM sessions WHERE account_id = ?').run(accountId);
+      this.db.exec('COMMIT');
+      return n > 0;
+    } catch (e) {
+      this.db.exec('ROLLBACK');
+      throw e;
+    }
+  }
+
+  /** Deletes a guest with its character and login tokens (does nothing to a real account). */
+  deleteGuest(accountId: number): void {
+    this.db.prepare('DELETE FROM accounts WHERE id = ? AND is_guest = 1').run(accountId);
+  }
+
+  /** Remembers that a guest is playing right now (expiry counts from the last time this was set). */
+  touchOnline(accountId: number, now = Date.now()): void {
+    this.db.prepare('UPDATE accounts SET last_online = ? WHERE id = ? AND is_guest = 1').run(now, accountId);
+  }
+
+  /** Deletes guests not online for GUEST_TTL_MS, never one listed in `online`. Returns how many went. */
+  deleteStaleGuests(online: Iterable<number>, now = Date.now()): number {
+    const keep = new Set(online);
+    const rows = this.db.prepare('SELECT id FROM accounts WHERE is_guest = 1 AND COALESCE(last_online, created_at) < ?')
+      .all(now - GUEST_TTL_MS) as { id: number }[];
+    let n = 0;
+    for (const r of rows) {
+      if (keep.has(r.id)) continue;
+      this.deleteGuest(r.id);
+      n++;
+    }
+    return n;
   }
 
   // ------------------------------------------------------------ sessions
@@ -67,10 +152,11 @@ export class Db {
   }
 
   /** The account behind a login token, if the token exists and hasn't expired. */
-  sessionAccount(token: string): { id: number; username: string } | undefined {
-    return this.db.prepare(`
-      SELECT a.id, a.username FROM sessions s JOIN accounts a ON a.id = s.account_id
-      WHERE s.token = ? AND s.expires_at > ?`).get(token, Date.now()) as { id: number; username: string } | undefined;
+  sessionAccount(token: string): SessionAccount | undefined {
+    const r = this.db.prepare(`
+      SELECT a.id, a.username, a.is_guest FROM sessions s JOIN accounts a ON a.id = s.account_id
+      WHERE s.token = ? AND s.expires_at > ?`).get(token, Date.now()) as { id: number; username: string; is_guest: number } | undefined;
+    return r && { id: r.id, username: r.username, guest: r.is_guest === 1 };
   }
 
   deleteSession(token: string): void {
@@ -97,8 +183,8 @@ export class Db {
     return (this.db.prepare('SELECT COUNT(*) AS n FROM characters WHERE account_id = ?').get(accountId) as { n: number }).n;
   }
 
-  characterNameTaken(name: string): boolean {
-    return !!this.db.prepare('SELECT 1 FROM characters WHERE name = ?').get(name);
+  characterNameTaken(name: string, exceptAccount = -1): boolean {
+    return !!this.db.prepare('SELECT 1 FROM characters WHERE name = ? AND account_id != ?').get(name, exceptAccount);
   }
 
   createCharacter(accountId: number, data: CharacterData): CharacterSummary {
@@ -112,6 +198,32 @@ export class Db {
   loadCharacter(accountId: number, id: number): CharacterData | undefined {
     const r = this.db.prepare('SELECT data FROM characters WHERE id = ? AND account_id = ?').get(id, accountId) as { data: string } | undefined;
     return r ? (JSON.parse(r.data) as CharacterData) : undefined;
+  }
+
+  // ------------------------------------------------------------ stash (one per account)
+
+  /** The account's stash; accounts without one yet get a new empty stash. */
+  loadStash(accountId: number): StashData {
+    const r = this.db.prepare('SELECT data FROM stashes WHERE account_id = ?').get(accountId) as { data: string } | undefined;
+    return cleanStash(r ? JSON.parse(r.data) : null);
+  }
+
+  /**
+   * Saves a character and its account's stash together, in one transaction, so an item moved between
+   * the two can never end up in both (or neither) after a crash.
+   */
+  saveCharacterAndStash(charId: number, data: CharacterData, accountId: number, stash: StashData): void {
+    this.db.exec('BEGIN');
+    try {
+      this.saveCharacter(charId, data);
+      this.db.prepare(`INSERT INTO stashes (account_id, data, updated_at) VALUES (?, ?, ?)
+        ON CONFLICT(account_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`)
+        .run(accountId, JSON.stringify(stash), Date.now());
+      this.db.exec('COMMIT');
+    } catch (e) {
+      this.db.exec('ROLLBACK');
+      throw e;
+    }
   }
 
   saveCharacter(id: number, data: CharacterData): void {

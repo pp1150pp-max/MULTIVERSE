@@ -113,6 +113,7 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 .npc-seeker { --npc-c: #fff3c0; }
 .npc-merchant { --npc-c: #7fe07a; }
 .npc-blacksmith { --npc-c: #ff9a4a; }
+.npc-keeper { --npc-c: #8ab8ff; }
 @keyframes npc-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 
 .npc-prompt {
@@ -279,8 +280,8 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 }
 #inventory::before, #inventory::after { content: none; }
 /* Beside an open shop there's only room for the window itself. */
-#hud:has(#shop:not(.hidden)) #inventory { left: auto; right: 4px; transform: none; }
-#hud:has(#shop:not(.hidden)) .inv-side { display: none; }
+#hud:has(#shop:not(.hidden)) #inventory, #hud:has(#stash:not(.hidden)) #inventory { left: auto; right: 4px; transform: none; }
+#hud:has(#shop:not(.hidden)) .inv-side, #hud:has(#stash:not(.hidden)) .inv-side { display: none; }
 .inv-side {
   width: 220px; flex: none; max-height: calc(100vh - 8px); overflow-y: auto; padding: 12px;
   background: var(--panel); border: 3px solid #4a4640; outline: 1px solid var(--panel-edge); outline-offset: -6px; border-radius: 4px;
@@ -491,19 +492,39 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 .ui-tab-body.hidden { display: none; }
 
 /* Item grids in the shop (buy and buy back). */
-.shop-grid { display: grid; grid-template-columns: repeat(6, 46px); gap: 4px; }
-#buyback-grid { max-height: 150px; overflow-y: auto; }
+/* Ten across in the wide shop, so a full buyback list (30) is three rows and the panel needs no scrolling (owner).
+   auto-fill fits as many as the panel is wide. */
+.shop-grid { display: grid; grid-template-columns: repeat(auto-fill, 46px); gap: 4px; }
 .shop-grid .empty-note { grid-column: 1 / -1; font-size: 11px; color: var(--ink-dim); padding: 8px 0; }
 .shop-grid .cell-price { position: absolute; left: 0; right: 0; bottom: -1px; font-size: 9px; text-align: center; color: #f2c230; background: rgba(10, 7, 4, 0.75); }
 .shop-grid .cell.poor { filter: grayscale(0.8) brightness(0.7); }
 #shop.drop-target { outline: 2px solid var(--gold-hi); outline-offset: 1px; }
 button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge); color: var(--ink-dim); }
 
-#shop { left: 12px; top: 120px; width: 330px; max-height: calc(100vh - 200px); overflow-y: auto; }
+/* No max-height or scrolling (owner): it is wide enough to fit, and a scroll box would also catch the frame's corner pieces. */
+#shop { left: 12px; top: 120px; width: 534px; }
 /* Clear of the HP and MP display, wherever the player has put it. */
-.hud-bars #shop, .hud-bars #forge { top: 216px; max-height: calc(100vh - 226px); overflow-y: auto; }
-.hud-orbs #shop, .hud-orbs #forge { max-height: calc(100vh - 128px - var(--orb)); overflow-y: auto; }
+.hud-bars #shop, .hud-bars #forge { top: 216px; }
+.hud-bars #forge { max-height: calc(100vh - 226px); overflow-y: auto; }
+.hud-orbs #forge { max-height: calc(100vh - 128px - var(--orb)); overflow-y: auto; }
 #forge { left: 12px; top: 120px; width: 360px; }
+
+/* Stash (warehouse keeper): ten slots a row like the shop, rows not bought yet as one locked bar each. No scrolling (owner). */
+#stash { left: 12px; top: 120px; width: 534px; }
+.hud-bars #stash { top: 216px; }
+#stash .npc-line { margin-bottom: 6px; }
+.stash-gold { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; margin-bottom: 6px; }
+.stash-gold b { color: #f2c230; font-weight: 400; }
+.stash-gold input { width: 96px; padding: 3px 6px; background: #12100d; color: var(--ink); border: 1px solid #8f7238; border-radius: 3px; font: inherit; }
+.stash-gold button, .stash-sort button, .stash-sort select { padding: 3px 10px; font-size: 12px; }
+.stash-sort { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; font-size: 12px; color: var(--ink-dim); }
+.stash-row-lock {
+  grid-column: 1 / -1; height: 26px; display: flex; align-items: center; justify-content: center; gap: 10px;
+  border: 1px dashed #5a4a30; border-radius: 3px; background: rgba(8, 6, 4, 0.5); color: var(--ink-dim); font-size: 12px;
+}
+.stash-row-lock button { padding: 1px 12px; font-size: 12px; }
+#stash.drop-target { outline: 2px solid var(--gold-hi); outline-offset: 1px; }
+#inventory .inv-window.drop-target { outline: 2px solid var(--gold-hi); outline-offset: -4px; }
 #forge-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 #forge-detail { background: #15110c; border: 1px solid #3a2f20; border-radius: 6px; padding: 8px 10px; font-size: 13px; margin-bottom: 8px; }
 #forge-detail .fd-name { font-weight: 600; font-size: 14px; }
@@ -586,6 +607,22 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 .log-line.chat b { color: #9fe0ff; font-weight: 600; }
 .log-line.system { color: #b9b09a; font-style: italic; }
 #hud-online { margin-top: 2px; font-size: 12px; color: #9fe0ff; text-shadow: 0 0 3px #000; }
+#hud-guest { margin-top: 2px; font-size: 12px; color: #ffcf6a; text-shadow: 0 0 3px #000; }
+.hint.guest-move { color: #ffcf6a; }
 #disconnect { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(0, 0, 0, 0.75); pointer-events: auto; z-index: 7; }
 #disconnect h2 { font-family: 'Cinzel', 'Kanit', serif; color: #ffcf9a; margin: 0; font-size: 30px; }
 #disconnect p { color: var(--ink-dim); margin: 0; }
+
+/* In-game system menu (Esc / ☰) and the leave countdown. */
+#sys-menu { left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(280px, 92vw); }
+#sys-menu .sys-view { display: flex; flex-direction: column; gap: 6px; }
+#sys-menu .sys-view.hidden { display: none; }
+#sys-menu .sys-view button { width: 100%; padding: 7px 10px; font-size: 14px; }
+#sys-menu .sys-sep { height: 1px; background: var(--panel-edge); margin: 4px 0; }
+#sys-menu .sys-note { font-size: 11px; color: var(--ink-dim); text-align: center; white-space: normal; line-height: 1.4; }
+#exit-countdown {
+  position: absolute; left: 50%; top: 28%; transform: translateX(-50%); padding: 8px 16px;
+  background: rgba(10, 7, 4, 0.85); border: 1px solid var(--panel-edge); border-radius: 6px;
+  color: #ffcf6a; font-size: 14px; pointer-events: none; white-space: nowrap;
+}
+#exit-countdown.hidden { display: none; }

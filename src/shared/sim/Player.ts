@@ -14,6 +14,7 @@ import {
   type BagEntry, type ClassId, type Item, type PotionKind, type PotionSize, type Rarity, type SlotId, type Stats, type Vec2,
 } from '../types';
 import type { LootKind } from './Loot';
+import { newStash, type StashData } from './stash';
 
 /** Share of the HP regen stat that actually applies (owner: -60%). */
 export const HP_REGEN_MULT = 0.4;
@@ -31,6 +32,11 @@ const ICE_STOP_SPEED = 0.25;
 
 export const BAG_SIZE = 30;
 export const POTION_CD = 1.5;
+/** A potion restores its amount evenly over this many seconds (owner: not all at once). */
+export const POTION_TIME = 3;
+
+/** A potion still being drunk: restores `perSec` until `left` runs out. */
+interface PotionHeal { kind: PotionKind; perSec: number; left: number }
 
 export type SortKey = 'rarity' | 'level' | 'slot' | 'value';
 export const SORT_KEYS: SortKey[] = ['rarity', 'level', 'slot', 'value'];
@@ -105,6 +111,46 @@ export function buybackPrice(e: BuybackEntry): number {
   return Math.ceil(e.paid * BUYBACK_MARKUP);
 }
 
+/**
+ * Bag or stash slots rearranged by `key`, same length back. Gear is ordered by that key (ties: slot,
+ * rarity, level); potions always come after the gear, merged into full stacks. Empty slots go last.
+ */
+export function sortEntries(list: readonly (BagEntry | null)[], key: SortKey, desc: boolean): (BagEntry | null)[] {
+  const items: Item[] = [];
+  const pots = new Map<string, number>();
+  for (const e of list) {
+    if (!e) continue;
+    if (isPotion(e)) pots.set(`${e.potion}:${e.size}`, (pots.get(`${e.potion}:${e.size}`) ?? 0) + e.count);
+    else items.push(e);
+  }
+  const rank = (it: Item): number => {
+    switch (key) {
+      case 'rarity': return RARITIES.indexOf(it.rarity);
+      case 'level': return it.level;
+      case 'slot': return SLOTS.indexOf(it.slot);
+      case 'value': return sellValue(it);
+    }
+  };
+  const dir = desc ? -1 : 1;
+  items.sort((a, b) =>
+    dir * (rank(a) - rank(b)) ||
+    SLOTS.indexOf(a.slot) - SLOTS.indexOf(b.slot) ||
+    RARITIES.indexOf(b.rarity) - RARITIES.indexOf(a.rarity) ||
+    b.level - a.level,
+  );
+  // Potions: HP before MP, then by size (by price when sorting by sell value).
+  const potOrder = (['hp', 'mp'] as const).flatMap((k) => POTION_SIZES.map((s) => [k, s] as const));
+  if (key === 'value') potOrder.sort((a, b) => dir * (POTIONS[a[0]][a[1]].price - POTIONS[b[0]][b[1]].price));
+  const stacks: BagEntry[] = [];
+  for (const [k, s] of potOrder) {
+    for (let n = pots.get(`${k}:${s}`) ?? 0; n > 0; n -= POTION_STACK) {
+      stacks.push({ potion: k, size: s, count: Math.min(n, POTION_STACK) });
+    }
+  }
+  const all = [...items, ...stacks];
+  return Array.from({ length: list.length }, (_, i) => all[i] ?? null);
+}
+
 /** Everything about a character that gets saved (browser storage now, the server database later). */
 export interface CharacterData {
   name: string;
@@ -157,9 +203,16 @@ export class Player extends Unit {
   buyback: BuybackEntry[];
   /** Seconds of play until the buyback list clears. */
   buybackLeft: number;
+  /**
+   * The account's storage box. Not part of CharacterData: it is saved on its own and shared by every
+   * character of the account, so whoever runs the Sim hands the same object to each of them.
+   */
+  stash: StashData = newStash();
   stats: Stats = emptyStats();
   cd: Partial<Record<SkillSlot, number>> = {};
   potCd = 0;
+  /** Potions still restoring. Several can run at once; a monster hit stops them all. */
+  potHeals: PotionHeal[] = [];
   lastHurt = -99;
   /** Sim time of the last basic attack or skill (ranged players rarely get hurt, so this counts as combat too). */
   lastAttack = -99;
@@ -466,44 +519,9 @@ export class Player extends Unit {
 
   // ------------------------------------------------------------ sorting
 
-  /**
-   * Rearranges the bag by `key`. Gear is ordered by that key (ties: slot, rarity, level);
-   * potions always come after the gear, merged into full stacks. Empty slots go last.
-   */
+  /** Rearranges the bag by `key` (see sortEntries). */
   sortBag(key: SortKey, desc: boolean): void {
-    const items: Item[] = [];
-    const pots = new Map<string, number>();
-    for (const e of this.bag) {
-      if (!e) continue;
-      if (isPotion(e)) pots.set(`${e.potion}:${e.size}`, (pots.get(`${e.potion}:${e.size}`) ?? 0) + e.count);
-      else items.push(e);
-    }
-    const rank = (it: Item): number => {
-      switch (key) {
-        case 'rarity': return RARITIES.indexOf(it.rarity);
-        case 'level': return it.level;
-        case 'slot': return SLOTS.indexOf(it.slot);
-        case 'value': return sellValue(it);
-      }
-    };
-    const dir = desc ? -1 : 1;
-    items.sort((a, b) =>
-      dir * (rank(a) - rank(b)) ||
-      SLOTS.indexOf(a.slot) - SLOTS.indexOf(b.slot) ||
-      RARITIES.indexOf(b.rarity) - RARITIES.indexOf(a.rarity) ||
-      b.level - a.level,
-    );
-    // Potions: HP before MP, then by size (by price when sorting by sell value).
-    const potOrder = (['hp', 'mp'] as const).flatMap((k) => POTION_SIZES.map((s) => [k, s] as const));
-    if (key === 'value') potOrder.sort((a, b) => dir * (POTIONS[a[0]][a[1]].price - POTIONS[b[0]][b[1]].price));
-    const stacks: BagEntry[] = [];
-    for (const [k, s] of potOrder) {
-      for (let n = pots.get(`${k}:${s}`) ?? 0; n > 0; n -= POTION_STACK) {
-        stacks.push({ potion: k, size: s, count: Math.min(n, POTION_STACK) });
-      }
-    }
-    const all = [...items, ...stacks];
-    this.bag = Array.from({ length: BAG_SIZE }, (_, i) => all[i] ?? null);
+    this.bag = sortEntries(this.bag, key, desc);
   }
 
   // ------------------------------------------------------------ actions
@@ -535,22 +553,48 @@ export class Player extends Unit {
     sim.inventoryChanged(this);
     sim.sfx('drink', this.x, this.z, this.id);
     const amount = POTIONS[kind][size].amount;
+    this.potHeals.push({ kind, perSec: amount / POTION_TIME, left: POTION_TIME });
     if (kind === 'hp') {
-      this.hp = Math.min(this.maxHp, this.hp + amount);
       sim.text(this.x, this.topY, this.z, `+${amount}`, 'heal');
       sim.fx('burst', this.x, 1, this.z, '#ff6a6a', 8, 2);
     } else {
-      this.mp = Math.min(this.stats.maxMp, this.mp + amount);
       sim.text(this.x, this.topY, this.z, `+${amount} MP`, 'mana');
       sim.fx('burst', this.x, 1, this.z, '#6aa0ff', 8, 2);
     }
     this.potCd = POTION_CD;
   }
 
+  /** HP or MP the potions being drunk will still restore. */
+  potionPending(kind: PotionKind): number {
+    let n = 0;
+    for (const h of this.potHeals) if (h.kind === kind) n += h.perSec * h.left;
+    return n;
+  }
+
+  /** A monster hit spills the potions still being drunk. */
+  interruptPotions(): void {
+    if (!this.potHeals.length) return;
+    this.potHeals = [];
+    this.sim.text(this.x, this.topY + 0.4, this.z, 'ยาหยุดเติม', 'info', 0.8, this.id);
+  }
+
+  private tickPotions(dt: number): void {
+    for (const h of this.potHeals) {
+      const step = h.perSec * Math.min(dt, h.left);
+      h.left -= dt;
+      if (h.kind === 'hp') this.hp = Math.min(this.maxHp, this.hp + step);
+      else this.mp = Math.min(this.stats.maxMp, this.mp + step);
+    }
+    this.potHeals = this.potHeals.filter((h) => h.left > 0);
+  }
+
   update(dt: number, it: Intent): void {
     const sim = this.sim;
     this.moving = false;
-    if (!this.alive) return;
+    if (!this.alive) {
+      this.potHeals = [];
+      return;
+    }
     this.tickStatus(dt, sim.terrain);
     for (const k of Object.keys(this.cd) as SkillSlot[]) this.cd[k] = Math.max(0, (this.cd[k] ?? 0) - dt);
     this.atkT -= dt;
@@ -561,6 +605,7 @@ export class Player extends Unit {
     const ooc = inCombat ? 1 : OUT_OF_COMBAT_REGEN;
     this.hp = Math.min(this.maxHp, this.hp + this.stats.hpRegen * ooc * dt);
     this.mp = Math.min(this.stats.maxMp, this.mp + this.stats.mpRegen * ooc * dt);
+    this.tickPotions(dt);
 
     if (it.potion) this.usePotion(it.potion);
 

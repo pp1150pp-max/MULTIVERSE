@@ -27,7 +27,7 @@ const CORRECT_DIST = 3;
  * Events still applied while the tab is hidden (the server keeps playing Auto). Everything else is a
  * notification nobody saw — dropped so it doesn't all pop at once when the player comes back.
  */
-const HIDDEN_KEEP = new Set<SimEvent['t']>(['inventory', 'died', 'revived', 'save', 'travel']);
+const HIDDEN_KEEP = new Set<SimEvent['t']>(['inventory', 'stash', 'died', 'revived', 'save', 'travel']);
 
 interface MirrorProjectile extends ProjectileLike {
   x: number;
@@ -47,6 +47,7 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
     const ws = new WebSocket(wsUrl());
     let you = -1;
     let zone = '';
+    let guest = false;
     let settled = false;
     const fail = (msg: string) => {
       if (settled) return;
@@ -63,11 +64,12 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
       if (m.t === 'welcome') {
         you = m.you;
         zone = m.zone;
+        guest = m.guest === true;
       }
       if (m.t === 'snap' && you >= 0 && !settled) {
         settled = true;
         clearTimeout(timer);
-        resolve(new OnlineBackend(ws, you, zone, m));
+        resolve(new OnlineBackend(ws, you, zone, m, guest));
       }
     };
     ws.onerror = () => fail('เชื่อมต่อ server ไม่ได้');
@@ -77,6 +79,7 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
 
 export class OnlineBackend implements Backend {
   readonly online = true;
+  readonly guest: boolean;
   zone: ZoneDef;
   terrain: Terrain;
   me: Player;
@@ -110,7 +113,8 @@ export class OnlineBackend implements Backend {
   private readonly enhanceWait = new Map<number, (o: EnhanceOutcome) => void>();
   private kickMsg = '';
 
-  constructor(private readonly ws: WebSocket, private myId: number, zoneId: string, first: SnapshotMsg) {
+  constructor(private readonly ws: WebSocket, private myId: number, zoneId: string, first: SnapshotMsg, guest: boolean) {
+    this.guest = guest;
     this.zone = zoneById(zoneId);
     this.terrain = new Terrain(this.zone);
     const mine = first.players.find((p) => p.id === myId)!;
@@ -347,6 +351,10 @@ export class OnlineBackend implements Backend {
       me.buyback = pv.inv.buyback ?? [];
       this.events.push({ t: 'inventory', to: me.id });
     }
+    if (pv.stash) {
+      me.stash = pv.stash;
+      this.events.push({ t: 'stash', to: me.id });
+    }
     this.serverMoves = pv.serverMoves;
     if (pv.epoch !== this.epoch) {
       // Respawned (or otherwise teleported) by the server: jump there.
@@ -470,6 +478,12 @@ export class OnlineBackend implements Backend {
   sell(i: number): void { this.send({ t: 'act', a: 'sell', i }); }
   buyBack(i: number, uid: string): void { this.send({ t: 'act', a: 'buyBack', i, uid }); }
   sellAllOfRarity(rarity: Rarity): void { this.send({ t: 'act', a: 'sellRarity', rarity }); }
+  stashPut(i: number, to: number): void { this.send({ t: 'act', a: 'stashPut', i, to }); }
+  stashTake(i: number, to: number): void { this.send({ t: 'act', a: 'stashTake', i, to }); }
+  stashMove(from: number, to: number): void { this.send({ t: 'act', a: 'stashMove', from, to }); }
+  stashSort(key: SortKey, desc: boolean): void { this.send({ t: 'act', a: 'stashSort', key, desc }); }
+  stashBuyRow(): void { this.send({ t: 'act', a: 'stashBuy' }); }
+  stashGold(amount: number): void { this.send({ t: 'act', a: 'stashGold', amount }); }
 
   enhance(uid: string): Promise<EnhanceOutcome> {
     const req = ++this.enhanceReq;

@@ -14,9 +14,9 @@ body:
     attributes:
       label: โหมด
       options:
-        - Singleplayer
-        - Multiplayer
-        - ทั้งสองโหมด
+        - Guest
+        - บัญชี (เข้าสู่ระบบ)
+        - ทั้งสองแบบ
         - ไม่แน่ใจ
     validations:
       required: true

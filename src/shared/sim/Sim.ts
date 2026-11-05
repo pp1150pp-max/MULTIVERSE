@@ -1,24 +1,24 @@
-// The game rules, with no rendering. Singleplayer runs one of these in the browser; the online
-// server will run one per zone. Whoever drives it calls step() every frame and reads drainEvents()
+// The game rules, with no rendering. The game server runs one of these per zone. Whoever drives it calls step() every frame and reads drainEvents()
 // to show effects, damage numbers and messages.
 import { ZONES, type ZoneDef, type SpawnArea } from '../data/zones';
 import { MONSTERS } from '../data/monsters';
 import { expGapMult, expToNext, mitigate, MAX_LEVEL } from '../formulas';
 import { rollItem } from '../data/items';
 import { enhanceCost, itemName, MAX_PLUS, plusOf, rollEnhance, type EnhanceResult } from '../data/enhance';
-import { entryName, potionName, POTIONS } from '../data/potions';
+import { entryName, potionName, POTION_STACK, POTIONS } from '../data/potions';
 import { NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { pick, rand, randInt } from '../rng';
 import { CLASS_IDS } from '../data/classes';
 import { isPotion, RARITY_LABEL, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
 import { PORTAL_RANGE, Terrain } from './terrain';
 import {
-  BUYBACK_RESET, buybackPrice, cleanAutoSettings, lootPots, Player,
+  BUYBACK_RESET, buybackPrice, cleanAutoSettings, lootPots, Player, sortEntries,
   type AutoSettings, type CharacterData, type LootFilter, type SortKey,
 } from './Player';
 import { Monster } from './Monster';
 import { EnemyShot, Projectile, type ProjOpts } from './Projectile';
 import { Loot, LOOT_PRIORITY_TIME, type LootKind } from './Loot';
+import { nextRowPrice, STASH_GOLD_MAX, STASH_ROW } from './stash';
 import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type SfxName, type SimEvent } from './types';
 
 /** Gear of this rarity that "sell all" may take: never potions or enhanced items. */
@@ -30,6 +30,70 @@ const VANISH_GIVE_UP = 20;
 
 export function isBulkSellable(e: BagEntry | null, rarity: Rarity): e is Item {
   return !!e && !isPotion(e) && e.rarity === rarity && !plusOf(e);
+}
+
+function validSlot(i: number, len: number): boolean {
+  return Number.isInteger(i) && i >= 0 && i < len;
+}
+
+function samePotion(a: BagEntry | null, b: BagEntry | null): boolean {
+  return isPotion(a) && isPotion(b) && a.potion === b.potion && a.size === b.size;
+}
+
+/**
+ * Moves src[i] onto dst[j] (src and dst may be the same list): empty → moves, the same potion → merges
+ * up to a full stack (the rest stays behind), anything else → the two swap places.
+ */
+function dropOnto(src: (BagEntry | null)[], i: number, dst: (BagEntry | null)[], j: number): boolean {
+  if (src === dst && i === j) return false;
+  const a = src[i];
+  const b = dst[j];
+  if (!a) return false;
+  if (isPotion(a) && isPotion(b) && samePotion(a, b)) {
+    const n = Math.min(a.count, POTION_STACK - b.count);
+    if (n <= 0) return false;
+    b.count += n;
+    a.count -= n;
+    if (a.count <= 0) src[i] = null;
+    return true;
+  }
+  src[i] = b ?? null;
+  dst[j] = a;
+  return true;
+}
+
+/**
+ * Moves src[i] into dst wherever it fits. Potions top up matching stacks first, then fill an empty slot;
+ * if only part fits, that part moves. Returns false when nothing moved.
+ */
+function fillInto(src: (BagEntry | null)[], i: number, dst: (BagEntry | null)[]): boolean {
+  const a = src[i];
+  if (!a) return false;
+  if (isPotion(a)) {
+    const before = a.count;
+    for (const e of dst) {
+      if (a.count <= 0) break;
+      if (e !== a && isPotion(e) && samePotion(a, e) && e.count < POTION_STACK) {
+        const n = Math.min(a.count, POTION_STACK - e.count);
+        e.count += n;
+        a.count -= n;
+      }
+    }
+    if (a.count > 0) {
+      const k = dst.indexOf(null);
+      if (k >= 0) {
+        dst[k] = { ...a };
+        a.count = 0;
+      }
+    }
+    if (a.count <= 0) src[i] = null;
+    return a.count < before;
+  }
+  const k = dst.indexOf(null);
+  if (k < 0) return false;
+  dst[k] = a;
+  src[i] = null;
+  return true;
 }
 
 interface Spawner { area: SpawnArea; alive: number; queue: number[]; boss: boolean }
@@ -185,6 +249,7 @@ export class Sim {
     const dmg = Math.round(mitigate(m.atk * mult * (0.9 + Math.random() * 0.2), p.stats.def));
     p.hp -= dmg;
     p.lastHurt = this.time;
+    p.interruptPotions();
     if (m.isBoss) m.rampT = 0;
     this.events.push({ t: 'flash', id: p.id });
     this.anim(p.id, 'hit');
@@ -561,6 +626,109 @@ export class Sim {
     this.sfx('trade', p.x, p.z, p.id);
     this.afterChange(p);
     return total;
+  }
+
+  // ------------------------------------------------------------ stash (warehouse keeper)
+
+  /**
+   * Bag slot `bagI` into the stash. `to` = a stash slot (drag & drop: empty → put, same potion → merge,
+   * anything else → swap places), or -1 to put it wherever it fits (potions top up stacks first; what
+   * doesn't fit stays in the bag).
+   */
+  stashPut(p: Player, bagI: number, to = -1): boolean {
+    const st = p.stash;
+    if (!this.near(p, 'keeper') || !validSlot(bagI, p.bag.length) || (to !== -1 && !validSlot(to, st.size))) return false;
+    if (!p.bag[bagI]) return false;
+    const ok = to === -1 ? fillInto(p.bag, bagI, st.items) : dropOnto(p.bag, bagI, st.items, to);
+    if (!ok) {
+      this.log('คลังเต็ม', '#ff8a6a', p.id);
+      return false;
+    }
+    this.afterStash(p);
+    return true;
+  }
+
+  /** Stash slot `i` into the bag: onto bag slot `to`, or -1 for wherever it fits. */
+  stashTake(p: Player, i: number, to = -1): boolean {
+    const st = p.stash;
+    if (!this.near(p, 'keeper') || !validSlot(i, st.size) || (to !== -1 && !validSlot(to, p.bag.length))) return false;
+    if (!st.items[i]) return false;
+    const ok = to === -1 ? fillInto(st.items, i, p.bag) : dropOnto(st.items, i, p.bag, to);
+    if (!ok) {
+      this.log('กระเป๋าเต็ม', '#ff8a6a', p.id);
+      return false;
+    }
+    this.afterStash(p);
+    return true;
+  }
+
+  /** Drag & drop inside the stash (swap, or merge the same potion). */
+  stashMove(p: Player, from: number, to: number): boolean {
+    const st = p.stash;
+    if (!this.near(p, 'keeper') || !validSlot(from, st.size) || !validSlot(to, st.size) || from === to) return false;
+    if (!st.items[from] || !dropOnto(st.items, from, st.items, to)) return false;
+    this.afterStash(p);
+    return true;
+  }
+
+  stashSort(p: Player, key: SortKey, desc: boolean): boolean {
+    if (!this.near(p, 'keeper')) return false;
+    p.stash.items = sortEntries(p.stash.items, key, desc);
+    this.afterStash(p);
+    return true;
+  }
+
+  /** Buys the next row of STASH_ROW slots. */
+  stashBuyRow(p: Player): boolean {
+    const st = p.stash;
+    if (!this.near(p, 'keeper')) return false;
+    const price = nextRowPrice(st);
+    if (price === null) return false;
+    if (p.gold < price) {
+      this.log(`ทองไม่พอ — ต้องใช้ ${price.toLocaleString()} G`, '#ff8a6a', p.id);
+      return false;
+    }
+    p.gold -= price;
+    st.size += STASH_ROW;
+    while (st.items.length < st.size) st.items.push(null);
+    this.log(`ขยายคลังเป็น ${st.size} ช่อง (−${price.toLocaleString()} G)`, '#f2c230', p.id);
+    this.sfx('trade', p.x, p.z, p.id);
+    this.afterStash(p);
+    return true;
+  }
+
+  /** Gold into the stash (amount > 0) or back out of it (amount < 0). */
+  stashGold(p: Player, amount: number): boolean {
+    const st = p.stash;
+    if (!this.near(p, 'keeper') || !Number.isInteger(amount) || amount === 0) return false;
+    if (amount > 0) {
+      if (amount > p.gold) {
+        this.log('ทองที่ถืออยู่ไม่พอ', '#ff8a6a', p.id);
+        return false;
+      }
+      if (st.gold + amount > STASH_GOLD_MAX) return false;
+      p.gold -= amount;
+      st.gold += amount;
+      this.log(`ฝากทอง ${amount.toLocaleString()} G`, '#f2c230', p.id);
+    } else {
+      const n = -amount;
+      if (n > st.gold) {
+        this.log('ทองในคลังไม่พอ', '#ff8a6a', p.id);
+        return false;
+      }
+      st.gold -= n;
+      p.gold += n;
+      this.log(`ถอนทอง ${n.toLocaleString()} G`, '#f2c230', p.id);
+    }
+    this.sfx('pickup_gold', p.x, p.z, p.id);
+    this.afterStash(p);
+    return true;
+  }
+
+  /** The stash changed: refresh the bag and save the character (the stash is saved by whoever runs the Sim). */
+  private afterStash(p: Player): void {
+    this.events.push({ t: 'stash', to: p.id });
+    this.afterChange(p);
   }
 
   /** One enhancement attempt on a weapon the player owns (equipped or in the bag). */

@@ -1,17 +1,14 @@
-// Title menu: pick Singleplayer or Multiplayer, then the matching panel.
+// Title menu: play as a guest, or log in / sign up. Either way the game runs on the server.
 import { animSets, sheets } from './assets';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { MAX_CHARACTERS, checkCharacterName, checkPassword, checkUsername, type CharacterSummary } from '../shared/api';
 import type { ClassId } from '../shared/types';
-import { loadSave, newSave, writeSave, type SaveData } from './save';
 import * as api from './net/api';
 import { connectOnline, type OnlineBackend } from './net/online';
 import { skillIcon } from './icons';
+import { AFTER_EXIT_KEY } from './sysmenu';
 
-export interface Launchers {
-  single(data: SaveData): void;
-  online(backend: OnlineBackend): void;
-}
+export type Launcher = (backend: OnlineBackend) => void;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -53,35 +50,99 @@ function buildClassCards(container: HTMLElement): () => ClassId {
   return () => chosen;
 }
 
-type Panel = 'mode' | 'single' | 'online';
+type Panel = 'mode' | 'guest' | 'online';
 
 function show(panel: Panel): void {
   $('mode-select').classList.toggle('hidden', panel !== 'mode');
-  $('single-panel').classList.toggle('hidden', panel !== 'single');
+  $('guest-panel').classList.toggle('hidden', panel !== 'guest');
   $('online-panel').classList.toggle('hidden', panel !== 'online');
 }
 
-// ------------------------------------------------------------ singleplayer
+const describe = (c: CharacterSummary) => `${c.name} · Lv.${c.level} ${CLASSES[c.classId].name}`;
 
-function setupSingle(launch: (d: SaveData) => void): void {
-  const save = loadSave();
-  const chosen = buildClassCards($('class-cards'));
-  if (save) {
-    const btn = $('btn-continue');
-    btn.classList.remove('hidden');
-    btn.textContent = `เล่นต่อ: ${save.name} · Lv.${save.level} ${CLASSES[save.classId].name}`;
-    btn.onclick = () => launch(save);
+// ------------------------------------------------------------ guest
+
+/** Guest: one character kept on the server; this browser only remembers its token. */
+class GuestMenu {
+  private char: CharacterSummary | null = null;
+  private busy = false;
+  private readonly chosenClass: () => ClassId;
+
+  constructor(private readonly launch: Launcher) {
+    this.chosenClass = buildClassCards($('guest-class-cards'));
+    $('btn-guest-continue').onclick = () => this.char && void this.enter(this.char.id);
+    $('btn-guest-new').onclick = () => {
+      if (!this.char) return;
+      if (!confirm(`เริ่ม Guest ใหม่จะลบตัวละคร Guest เดิม (${this.char.name}) ทิ้งเมื่อสร้างตัวใหม่เสร็จ ต้องการดำเนินการต่อหรือไม่?`)) return;
+      this.showCreate();
+    };
+    $('btn-guest-start').onclick = () => void this.create();
+    $('guest-name').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') void this.create();
+    });
   }
-  $('btn-start').onclick = () => {
-    if (save && !confirm('การเริ่มเกมใหม่จะลบตัวละครเดิม ต้องการดำเนินการต่อหรือไม่?')) return;
-    const name = $<HTMLInputElement>('name-input').value.trim().slice(0, 16) || 'Wanderer';
-    const data = newSave(name, chosen());
-    writeSave(data);
-    launch(data);
-  };
+
+  async open(): Promise<void> {
+    $('guest-continue').classList.add('hidden');
+    $('guest-create').classList.add('hidden');
+    $('guest-error').textContent = 'กำลังโหลด…';
+    try {
+      this.char = await api.guestCharacter();
+    } catch (e) {
+      $('guest-error').textContent = (e as Error).message;
+      return;
+    }
+    $('guest-error').textContent = '';
+    if (!this.char) return this.showCreate();
+    $('guest-continue').classList.remove('hidden');
+    $('btn-guest-continue').textContent = `เล่นต่อ: ${describe(this.char)}`;
+  }
+
+  private showCreate(): void {
+    $('guest-continue').classList.add('hidden');
+    $('guest-create').classList.remove('hidden');
+    $<HTMLInputElement>('guest-name').focus();
+  }
+
+  private async create(): Promise<void> {
+    if (this.busy) return;
+    const name = $<HTMLInputElement>('guest-name').value.trim();
+    const bad = checkCharacterName(name);
+    if (bad) return void ($('guest-error').textContent = bad);
+    this.busy = true;
+    $('guest-error').textContent = 'กำลังสร้างตัวละคร…';
+    let created: CharacterSummary;
+    try {
+      created = (await api.createGuest(name, this.chosenClass())).character;
+    } catch (e) {
+      $('guest-error').textContent = (e as Error).message;
+      return;
+    } finally {
+      this.busy = false;
+    }
+    this.char = created;
+    $<HTMLInputElement>('guest-name').value = '';
+    await this.enter(created.id);
+  }
+
+  private async enter(charId: number): Promise<void> {
+    const token = api.guestToken();
+    if (this.busy || !token) return;
+    this.busy = true;
+    $('guest-error').textContent = 'กำลังเข้าสู่โลก…';
+    try {
+      const backend = await connectOnline(token, charId);
+      $('guest-error').textContent = '';
+      this.launch(backend);
+    } catch (e) {
+      $('guest-error').textContent = (e as Error).message;
+    } finally {
+      this.busy = false;
+    }
+  }
 }
 
-// ------------------------------------------------------------ multiplayer
+// ------------------------------------------------------------ account
 
 class OnlineMenu {
   private chars: CharacterSummary[] = [];
@@ -91,7 +152,7 @@ class OnlineMenu {
   private readonly chosenClass: () => ClassId;
   private armedDelete: { id: number; t: number } | null = null;
 
-  constructor(private readonly launch: (b: OnlineBackend) => void) {
+  constructor(private readonly launch: Launcher) {
     this.chosenClass = buildClassCards($('online-class-cards'));
     $('login-box').addEventListener('submit', (e) => {
       e.preventDefault();
@@ -123,9 +184,10 @@ class OnlineMenu {
     }
   }
 
-  /** Called when the player picks Multiplayer: skip the login form if a saved token still works. */
+  /** Called when the player picks "log in / sign up": skip the login form if a saved token still works. */
   async open(): Promise<void> {
     $('login-error').textContent = '';
+    void this.showGuestMoveHint();
     if (!api.savedToken()) return this.showLogin();
     try {
       const me = await api.me();
@@ -133,6 +195,16 @@ class OnlineMenu {
     } catch (e) {
       this.showLogin(e instanceof api.ApiFailure && e.status !== 401 ? e.message : '');
     }
+  }
+
+  /** Under the sign-up form: which guest character will move into the new account. */
+  private async showGuestMoveHint(): Promise<void> {
+    const hint = $('guest-move-hint');
+    hint.classList.add('hidden');
+    const c = await api.guestCharacter().catch(() => null);
+    if (!c) return;
+    hint.textContent = `สมัครสมาชิกใหม่จากเครื่องนี้ ตัวละคร Guest “${describe(c)}” จะย้ายเข้าบัญชีใหม่ทันที`;
+    hint.classList.remove('hidden');
   }
 
   private showLogin(error = ''): void {
@@ -289,10 +361,13 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);
 }
 
-export function buildMenu(launch: Launchers): void {
-  setupSingle(launch.single);
-  const online = new OnlineMenu(launch.online);
-  $('btn-mode-single').onclick = () => show('single');
+export function buildMenu(launch: Launcher): void {
+  const guest = new GuestMenu(launch);
+  const online = new OnlineMenu(launch);
+  $('btn-mode-guest').onclick = () => {
+    show('guest');
+    void guest.open();
+  };
   $('btn-mode-online').onclick = () => {
     show('online');
     void online.open();
@@ -300,4 +375,14 @@ export function buildMenu(launch: Launchers): void {
   document.querySelectorAll<HTMLElement>('.btn-back').forEach((b) => (b.onclick = () => show('mode')));
   show('mode');
   $('menu').classList.remove('hidden');
+  // Back from the in-game menu: open the character list (or the guest screen) instead of the title.
+  let after: string | null = null;
+  try {
+    after = sessionStorage.getItem(AFTER_EXIT_KEY);
+    sessionStorage.removeItem(AFTER_EXIT_KEY);
+  } catch {
+    // Storage blocked: stay on the title screen.
+  }
+  if (after === 'characters') $('btn-mode-online').click();
+  else if (after === 'guest') $('btn-mode-guest').click();
 }

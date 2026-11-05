@@ -26,7 +26,7 @@ body:
       description: เช็คลิสต์ที่บอกว่างานนี้เสร็จ
       placeholder: |
         - [ ] ...
-        - [ ] ทำงานได้ทั้ง SP และ MP
+        - [ ] ทำงานได้ทั้ง Guest และบัญชีที่เข้าสู่ระบบ
   - type: textarea
     id: notes
     attributes:

@@ -29,6 +29,7 @@
           </div>
           <div id="hud-zone"></div>
           <div id="hud-online" class="hidden"></div>
+          <div id="hud-guest" class="hidden" title="สมัครสมาชิกเพื่อเก็บตัวละครนี้ไว้ถาวร (กลับไปหน้าแรก → เข้าสู่ระบบ / สมัคร)">Guest · ถูกลบถ้าไม่เข้าเกม 24 ชม.</div>
         </div>
 
         <div id="boss-bar" class="hidden">
@@ -118,6 +119,34 @@
           <div class="shop-foot"><span id="shop-gold"></span><span id="shop-pots"></span></div>
         </div>
 
+        <div id="stash" class="panel hidden">
+          <div class="panel-head"><span>ผู้ดูแลคลัง — Warehouse</span><button id="stash-close">✕</button></div>
+          <p class="npc-line">“ฝากอะไรไว้กับข้าได้เลย ทุกคนในบัญชีเดียวกันมาเบิกได้ ข้าดูแลให้ไม่มีหาย”</p>
+          <div class="stash-gold">
+            <span>ทองในคลัง <b id="stash-gold-in"></b></span>
+            <input id="stash-gold-amt" type="number" min="1" step="1" placeholder="จำนวน">
+            <button id="stash-deposit">ฝาก</button>
+            <button id="stash-withdraw">ถอน</button>
+            <button id="stash-deposit-all">ฝากทั้งหมด</button>
+            <button id="stash-withdraw-all">ถอนทั้งหมด</button>
+          </div>
+          <div class="stash-sort">
+            <span>เรียงของ</span>
+            <select id="stash-sort-key">
+              <option value="rarity">ความหายาก</option>
+              <option value="level">เลเวลของ</option>
+              <option value="slot">ประเภทช่อง</option>
+              <option value="value">ราคาขาย</option>
+            </select>
+            <button id="stash-sort-dir" data-desc="1">มาก → น้อย</button>
+            <button id="stash-sort-go">เรียงคลัง</button>
+            <button id="stash-sort-bag">เรียงกระเป๋า</button>
+          </div>
+          <div id="stash-grid" class="shop-grid"></div>
+          <p class="hint">ลากของระหว่างกระเป๋ากับคลังได้ · คลิกขวา = ย้ายไปอีกฝั่งทันที · ยาช่องละไม่เกิน 10 ขวด</p>
+          <div class="shop-foot"><span id="stash-size"></span><span id="stash-gold-carry"></span></div>
+        </div>
+
         <div id="forge" class="panel hidden">
           <div class="panel-head"><span>ช่างตีเหล็ก — Blacksmith</span><button id="forge-close">✕</button></div>
           <p class="npc-line">“เอาอาวุธมาให้ข้า จะตีให้คมกว่าเดิม… แต่ยิ่งบวกสูง ยิ่งเสี่ยงนะ”</p>
@@ -166,6 +195,7 @@
             <span><img src="assets/sprites/icons/map_portal.png" alt="">จุดวาป</span>
             <span><img src="assets/sprites/icons/map_merchant.png" alt="">พ่อค้า</span>
             <span><img src="assets/sprites/icons/map_blacksmith.png" alt="">ช่างตีเหล็ก</span>
+            <span><img src="assets/sprites/icons/map_keeper.png" alt="">ผู้ดูแลคลัง</span>
             <span><img src="assets/sprites/icons/map_seeker.png" alt="">The Seeker</span>
             <span><img src="assets/sprites/icons/map_flag.png" alt="">จุดที่จะเดินไป</span>
           </div>
@@ -183,7 +213,7 @@
             <tr><td>1 / 2</td><td>ยา HP / ยา MP (คลิกยาในกระเป๋าเพื่อเลือกขนาดที่จะใช้)</td></tr>
             <tr><td>F</td><td>เปิด/ปิด Auto Play (เฉพาะ Open World · เดินเองแล้ว Auto จะปิด)</td></tr>
             <tr><td>I หรือ B</td><td>กระเป๋า &amp; ตัวละคร</td></tr>
-            <tr><td>T</td><td>คุยกับ NPC เมื่ออยู่ใกล้ (The Seeker · พ่อค้า · ช่างตีเหล็ก ที่แคมป์)</td></tr>
+            <tr><td>T</td><td>คุยกับ NPC เมื่ออยู่ใกล้ (The Seeker · พ่อค้า · ช่างตีเหล็ก · ผู้ดูแลคลัง ที่แคมป์)</td></tr>
             <tr><td>M</td><td>แผนที่ทั้งโซน (หรือคลิกแผนที่ย่อ)</td></tr>
             <tr><td>ล้อเมาส์</td><td>ซูมกล้อง</td></tr>
             <tr><td>Esc</td><td>ปิดหน้าต่าง</td></tr>
@@ -222,25 +252,35 @@
             <p>คุณตื่นขึ้นอีกครั้ง พร้อมกับ <b>The Seeker</b> ผู้ตามหาความจริงเบื้องหลังพลังโบราณที่ชื่อว่า <b>The Origin</b></p>
           </div>
           <div id="mode-select" class="menu-buttons mode-buttons">
-            <button id="btn-mode-single" class="mode-btn primary">
-              <b>Singleplayer</b><small>เล่นคนเดียว · เซฟในเครื่องนี้ ไม่ต้องสมัคร</small>
+            <button id="btn-mode-guest" class="mode-btn primary">
+              <b>เล่นแบบ Guest</b><small>เล่นได้ทันที ไม่ต้องสมัคร · ลบอัตโนมัติถ้าไม่เข้าเกม 24 ชม.</small>
             </button>
             <button id="btn-mode-online" class="mode-btn">
-              <b>Multiplayer</b><small>เล่นกับเพื่อน · ต้องเข้าสู่ระบบ</small>
+              <b>เข้าสู่ระบบ / สมัคร</b><small>เก็บตัวละครไว้ถาวร · ได้ 3 ตัวต่อบัญชี · ใช้คลังเก็บของได้</small>
             </button>
           </div>
 
-          <div id="single-panel" class="hidden">
-            <div class="name-row">
-              <label for="name-input">ชื่อตัวละคร</label>
-              <input id="name-input" maxlength="16" placeholder="Wanderer" />
+          <div id="guest-panel" class="hidden">
+            <div id="guest-continue" class="menu-buttons hidden">
+              <button id="btn-guest-continue" class="primary"></button>
+              <button id="btn-guest-new">เริ่ม Guest ใหม่</button>
             </div>
-            <div id="class-cards" class="class-grid"></div>
+            <div id="guest-create" class="hidden">
+              <div class="name-row">
+                <label for="guest-name">ชื่อตัวละคร</label>
+                <input id="guest-name" maxlength="16" placeholder="ชื่อในเกม (ห้ามซ้ำกับคนอื่น)" />
+              </div>
+              <div id="guest-class-cards" class="class-grid"></div>
+              <div class="menu-buttons">
+                <button id="btn-guest-start" class="primary">เริ่มเล่นแบบ Guest</button>
+              </div>
+            </div>
+            <div id="guest-error" class="form-error"></div>
             <div class="menu-buttons">
-              <button id="btn-continue" class="hidden"></button>
-              <button id="btn-start" class="primary">เริ่มการเดินทางใหม่</button>
               <button class="btn-back">← กลับ</button>
             </div>
+            <p class="hint">ตัวละคร Guest เก็บไว้ที่ server และจำไว้ในเบราว์เซอร์นี้เท่านั้น · ถูกลบเมื่อไม่ได้เข้าเกมเกิน 24 ชั่วโมง · ใช้คลังเก็บของไม่ได้<br />
+              อยากเก็บไว้ถาวร: กด “เข้าสู่ระบบ / สมัคร” แล้วสมัครสมาชิกใหม่ ตัวละคร Guest จะย้ายเข้าบัญชีใหม่ทันที</p>
           </div>
 
           <div id="online-panel" class="hidden">
@@ -255,6 +295,7 @@
                 <button class="btn-back" type="button">← กลับ</button>
               </div>
               <p class="hint">สมัครใหม่: ใส่ชื่อผู้ใช้ (A–Z, 0–9, _ ยาว 3–16 ตัว) และรหัสผ่านอย่างน้อย 6 ตัว แล้วกด “สมัครสมาชิกใหม่”</p>
+              <p id="guest-move-hint" class="hint guest-move hidden"></p>
             </form>
 
             <div id="char-box" class="online-box hidden">
