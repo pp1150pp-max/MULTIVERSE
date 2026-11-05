@@ -6,6 +6,7 @@ import type { ClassId } from '../shared/types';
 import * as api from './net/api';
 import { connectOnline, type OnlineBackend } from './net/online';
 import { skillIcon } from './icons';
+import { AFTER_EXIT_KEY } from './sysmenu';
 
 export type Launcher = (backend: OnlineBackend) => void;
 
@@ -185,8 +186,11 @@ class OnlineMenu {
     }
   }
 
-  /** Shows the Login form. If a saved token still works, it also offers a one-click way back in. */
-  async open(): Promise<void> {
+  /**
+   * Shows the Login form. If a saved token still works, it also offers a one-click way back in,
+   * or goes straight to the character list when `goToCharacters` is set.
+   */
+  async open(goToCharacters = false): Promise<void> {
     const resume = $('btn-account-continue');
     resume.classList.add('hidden');
     this.showLogin();
@@ -199,6 +203,7 @@ class OnlineMenu {
         this.showCharacters(me.username).catch((e: Error) => this.showLogin(e.message));
       };
       resume.classList.remove('hidden');
+      if (goToCharacters) resume.click();
     } catch (e) {
       if (e instanceof api.ApiFailure && e.status !== 401) $('login-error').textContent = e.message;
     }
@@ -377,11 +382,20 @@ export function buildMenu(launch: Launcher): void {
       void guest.open();
     };
   }
-  const toLogOn = (): void => {
+  const toLogin = (resume = false): void => {
     show('online');
-    void online.open();
+    void online.open(resume);
   };
-  document.querySelectorAll<HTMLElement>('.btn-back').forEach((b) => (b.onclick = toLogOn));
+  document.querySelectorAll<HTMLElement>('.btn-back').forEach((b) => (b.onclick = () => toLogin()));
   $('menu').classList.remove('hidden');
-  toLogOn();
+  // Back from the in-game menu: open the character list (or the guest screen) instead of the Login form.
+  let after: string | null = null;
+  try {
+    after = sessionStorage.getItem(AFTER_EXIT_KEY);
+    sessionStorage.removeItem(AFTER_EXIT_KEY);
+  } catch {
+    // Storage blocked: stay on the Login form.
+  }
+  toLogin(after === 'characters');
+  if (after === 'guest') $('btn-mode-guest').click();
 }

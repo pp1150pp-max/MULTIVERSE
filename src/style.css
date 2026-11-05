@@ -618,3 +618,17 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #disconnect { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(0, 0, 0, 0.75); pointer-events: auto; z-index: 7; }
 #disconnect h2 { font-family: 'Cinzel', 'Kanit', serif; color: #ffcf9a; margin: 0; font-size: 30px; }
 #disconnect p { color: var(--ink-dim); margin: 0; }
+
+/* In-game system menu (Esc / ☰) and the leave countdown. */
+#sys-menu { left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(280px, 92vw); }
+#sys-menu .sys-view { display: flex; flex-direction: column; gap: 6px; }
+#sys-menu .sys-view.hidden { display: none; }
+#sys-menu .sys-view button { width: 100%; padding: 7px 10px; font-size: 14px; }
+#sys-menu .sys-sep { height: 1px; background: var(--panel-edge); margin: 4px 0; }
+#sys-menu .sys-note { font-size: 11px; color: var(--ink-dim); text-align: center; white-space: normal; line-height: 1.4; }
+#exit-countdown {
+  position: absolute; left: 50%; top: 28%; transform: translateX(-50%); padding: 8px 16px;
+  background: rgba(10, 7, 4, 0.85); border: 1px solid var(--panel-edge); border-radius: 6px;
+  color: #ffcf6a; font-size: 14px; pointer-events: none; white-space: nowrap;
+}
+#exit-countdown.hidden { display: none; }
