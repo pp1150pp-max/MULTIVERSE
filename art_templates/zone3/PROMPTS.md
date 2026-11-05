@@ -17,6 +17,12 @@ Monsters for the same game, in the EXACT same fine-detail 16-bit SNES-era JRPG s
 Same exact style, same cute proportions and same layout rules: a strict grid of 3 rows x 5 columns, each row the SAME creature in the same 5 views, front, three-quarter front LEFT, side LEFT, three-quarter back LEFT, back. Row 1: Snow Sprite, a small floating spirit made of packed snow and pale cyan ice, with a round face, small icy crystal crown and two tiny floating hands, no legs. Row 2: Polar Bear, a big sturdy polar bear with thick white fur, a few old healed scars across its muzzle and shoulder, and jagged chunks of blue ice stuck to its back and forelegs, clearly white and icy, tougher but still cute. Row 3: Yeti Minion, a stocky young yeti with shaggy BLUE-GREY fur, a darker grey face, short rounded arms, no horns and no ice armour, smaller and plainer than a boss. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no ground, no text, no labels, no grid lines. Do not use pink, magenta or purple on any creature.
 ```
 
+## 2.1 ภูตหิมะหมัดน้ำแข็ง (ตัวประชิด) → `monster_snow_brawler.png`
+
+```
+Same exact style, same cute proportions and same 5 views as the Snow Sprite: front, three-quarter front LEFT, side LEFT, three-quarter back LEFT, back. Generate an image: 1 row x 5 columns of one creature, Snow Brawler, a sturdier melee cousin of the Snow Sprite. The same family: a floating round spirit of packed snow with a soft swirl and big round shiny eyes, no legs, a wispy tail, but with a slightly stockier body, a small determined frown, a short jagged crown of darker blue ice instead of the tall crystal crown, and two BIG floating fists encased in chunky blue ice, raised ready to punch. Must read clearly different from the Snow Sprite at a glance because of the big ice fists. Cute, no gore. Identical size and design across the 5 views, on the same baseline, generous empty space, nothing touching or overlapping. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no ground, no text, no labels, no grid lines. Do not use pink, magenta or purple on the creature.
+```
+
 ## 3. บอสเยติ → `monster_yeti.png`
 
 ```

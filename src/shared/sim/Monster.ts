@@ -6,6 +6,11 @@ import type { SpawnArea } from '../data/zones';
 
 const BOSS_RAMP_PER_SEC = 0.2;
 const BOSS_RAMP_MAX = 3;
+/** Enrage-ramp bosses wait this many seconds after landing a hit before speeding up again. */
+const RAGE_RAMP_COOLDOWN = 3;
+/** Their climb is steeper and goes higher than other bosses'. Only running uses the part above BOSS_RAMP_MAX. */
+const RAGE_RAMP_PER_SEC = 0.5;
+const RAGE_RAMP_MAX = 4;
 
 /** A vanishing boss's jump off the map and its fall back, in seconds, and how high it goes. */
 const JUMP_OUT_TIME = 0.9;
@@ -56,6 +61,8 @@ export class Monster extends Unit {
   private chargeHit = false;
   private slamCd = 5;
   private thrownCd = 2;
+  private rampWait = 0;
+  private shotAngle = 0;
   private leapCd = 0;
   private leapT = 0;
   private leapFromX = 0;
@@ -63,6 +70,8 @@ export class Monster extends Unit {
   private leapToX = 0;
   private leapToZ = 0;
   private jumpOutT = 0;
+  /** Has used its once-per-fight vanish. */
+  private vanished = false;
   private fallT = 0;
 
   constructor(id: number, def: MonsterDef, level: number, area: SpawnArea, x: number, z: number) {
@@ -99,7 +108,7 @@ export class Monster extends Unit {
     if (this.def.behavior === 'skittish' && Math.random() < 0.4) this.fleeT = 1.2;
     if (this.def.pack) {
       for (const m of sim.monsters) {
-        if (m !== this && m.alive && m.def.id === this.def.id && Math.hypot(m.x - this.x, m.z - this.z) < 9) {
+        if (m !== this && m.alive && (m.def.packId ?? m.def.id) === (this.def.packId ?? this.def.id) && Math.hypot(m.x - this.x, m.z - this.z) < 9) {
           m.aggroT = 12;
           m.state = 'chase';
           if (!m.target?.alive) m.target = attacker;
@@ -164,8 +173,11 @@ export class Monster extends Unit {
     }
     this.tickStatus(dt, sim.terrain);
     // Bosses that keep missing get faster at everything until they land a hit (Sim.hitPlayer resets it).
-    if (this.isBoss) this.rampT = this.isHostile && this.state !== 'return' ? this.rampT + dt : 0;
-    const ramp = this.ramp;
+    if (this.isBoss) {
+      this.rampWait -= dt;
+      this.rampT = this.ramping && this.rampWait <= 0 && this.isHostile && this.state !== 'return' ? this.rampT + dt : 0;
+    }
+    const ramp = this.skillRamp;
     this.atkCd -= dt * ramp;
     this.chargeCd -= dt * ramp;
     this.slamCd -= dt * ramp;
@@ -250,6 +262,7 @@ export class Monster extends Unit {
           this.state = 'idle';
           this.hp = this.maxHp;
           this.enraged = false;
+          this.vanished = false;
           this.damageBy.clear();
         } else {
           mx = hx / hd;
@@ -266,10 +279,15 @@ export class Monster extends Unit {
           this.state = 'chase';
         } else if (hostile) {
           this.state = 'chase';
-          if (this.isBoss && !this.enraged && this.hp < this.maxHp * 0.5) {
+          // A vanish comes first, so a hit past both marks still sends the minions before the rage.
+          if (this.def.summon?.vanish && !this.vanished && this.hp < this.maxHp * 0.5) {
+            this.vanished = true;
+            sim.onBossVanish(this);
+            return;
+          }
+          if (this.isBoss && !this.enraged && this.hp < this.maxHp * (this.def.enrageAt ?? 0.5)) {
             this.enraged = true;
             sim.onBossEnrage(this);
-            if (this.untargetable) return;
           }
           const reach = this.def.attackRange + p.radius;
           const frenzy = this.enraged ? this.def.frenzy : undefined;
@@ -288,11 +306,13 @@ export class Monster extends Unit {
             this.windKind = 'throw';
             this.windupT = 0.8 * this.skillMult();
             this.thrownCd = thrown.cooldown;
+            this.warnShot(sim, p, thrown);
           } else if (d <= reach) {
             if (this.atkCd <= 0) {
               this.windKind = 'melee';
               this.windupT = (this.isBoss ? 0.5 : this.def.shot ? 0.5 : 0.35) * this.skillMult();
               this.atkCd = this.def.attackCooldown * (frenzy ? frenzy.skill : this.enraged ? 0.75 : 1);
+              if (this.def.shot) this.warnShot(sim, p, this.def.shot);
             }
           } else {
             mx = dx / d;
@@ -342,20 +362,39 @@ export class Monster extends Unit {
     }
   }
 
+  /** It landed a hit: back to normal speed. */
+  resetRamp(): void {
+    this.rampT = 0;
+    if (this.def.enrageRamp) this.rampWait = RAGE_RAMP_COOLDOWN;
+  }
+
+  /** The ramp as it applies to attacks: wind-ups stay readable however fast it runs. */
+  private get skillRamp(): number {
+    return Math.min(BOSS_RAMP_MAX, this.ramp);
+  }
+
+  private get ramping(): boolean {
+    return this.isBoss && (!this.def.enrageRamp || this.enraged);
+  }
+
   /** 1 normally; bosses climb 20% per second of not landing a hit, up to 3x. */
   get ramp(): number {
-    return this.isBoss ? Math.min(BOSS_RAMP_MAX, 1 + BOSS_RAMP_PER_SEC * this.rampT) : 1;
+    if (!this.ramping) return 1;
+    return this.def.enrageRamp
+      ? Math.min(RAGE_RAMP_MAX, 1 + RAGE_RAMP_PER_SEC * this.rampT)
+      : Math.min(BOSS_RAMP_MAX, 1 + BOSS_RAMP_PER_SEC * this.rampT);
   }
 
   /** Wind-ups shrink while a frenzy boss is enraged, and as a boss's ramp climbs. */
   private skillMult(): number {
-    return (this.enraged && this.def.frenzy ? this.def.frenzy.skill : 1) / this.ramp;
+    return (this.enraged && this.def.frenzy ? this.def.frenzy.skill : 1) / this.skillRamp;
   }
 
   /** Speed while running at its target (before slows). */
   private chaseSpeed(): number {
     const frenzy = this.enraged ? this.def.frenzy : undefined;
-    return this.def.speed * (this.enraged ? (frenzy ? frenzy.speed : 1.3) : 1) * this.ramp;
+    const rage = frenzy ? frenzy.speed : this.def.enrageRamp ? 1 : 1.3;
+    return this.def.speed * (this.enraged ? rage : 1) * this.ramp;
   }
 
   /** Wind up a straight-line charge at (tx, tz), with a warning line on the ground. */
@@ -421,11 +460,15 @@ export class Monster extends Unit {
     sim.fx('telegraph', this.x, this.z, this.slamRadius, FALL_TIME);
   }
 
+  /** Locks the aim for the coming shot and marks its path on the ground, so it can be stepped out of. */
+  private warnShot(sim: Sim, p: Player, shot: ShotDef): void {
+    this.shotAngle = Math.atan2(p.z - this.z, p.x - this.x);
+    sim.fx('lineTelegraph', this.x, this.z, this.shotAngle, shot.range, shot.radius * 2, this.windupT);
+  }
+
   private fire(sim: Sim, shot: ShotDef): void {
-    const p = this.target;
-    if (!p?.alive) return;
     sim.addEnemyShot(this, {
-      x: this.x, z: this.z, angle: Math.atan2(p.z - this.z, p.x - this.x),
+      x: this.x, z: this.z, angle: this.shotAngle,
       speed: shot.speed, range: shot.range, radius: shot.radius, mult: shot.mult,
       color: shot.color, size: shot.size, art: shot.art,
     });

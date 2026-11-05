@@ -178,6 +178,9 @@ monsterSheet(b, gb[2], 165, 'monsters/yeti_minion.png');
 const y = key(read('monster_yeti.png'));
 monsterSheet(y, grid(y, 1, 5, 'yeti', 5)[0], 220, 'monsters/yeti.png');
 
+const br = key(read('monster_snow_brawler.png'));
+monsterSheet(br, grid(br, 1, 5, 'snow_brawler', 5)[0], 130, 'monsters/snow_brawler.png');
+
 // ---- props
 const p = key(read('props.png'));
 const NAMES = [

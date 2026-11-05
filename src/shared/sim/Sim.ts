@@ -250,7 +250,7 @@ export class Sim {
     p.hp -= dmg;
     p.lastHurt = this.time;
     p.interruptPotions();
-    if (m.isBoss) m.rampT = 0;
+    if (m.isBoss) m.resetRamp();
     this.events.push({ t: 'flash', id: p.id });
     this.anim(p.id, 'hit');
     this.text(p.x, p.topY, p.z, `-${dmg}`, 'hurt');
@@ -262,27 +262,39 @@ export class Sim {
   onBossEnrage(m: Monster): void {
     this.text(m.x, m.topY + 0.6, m.z, 'ENRAGED!', 'crit', 1.6);
     this.log(
-      m.def.summon?.vanish
-        ? `${m.def.name} คลั่งแล้วกระโดดหนีไป! กำจัด${MONSTERS[m.def.summon.monster]?.nameTh ?? 'ลูกน้อง'}ให้หมดก่อน`
-        : m.def.frenzy
+      m.def.frenzy
         ? `${m.def.name} คลั่งสุดขีด! เคลื่อนที่เร็วมากและออกท่าไวขึ้น`
+        : m.def.enrageRamp
+        ? `${m.def.name} คลั่ง! ยิ่งโจมตีไม่โดนยิ่งเร็วขึ้น`
         : `${m.def.name} คลั่ง! ความเร็วและการโจมตีเพิ่มขึ้น`,
       '#ff6a5a',
     );
     this.events.push({
       t: 'banner',
       text: `${m.def.nameTh.replace(/\s*\(.*\)/, '')} คลั่ง!`,
-      sub: m.def.summon?.vanish
-        ? `กระโดดหนีไป! กำจัด${MONSTERS[m.def.summon.monster]?.nameTh ?? 'ลูกน้อง'}ให้หมดเพื่อเรียกกลับมา`
-        : m.def.summon
+      sub: m.def.summon && !m.def.summon.vanish
         ? `เรียก${MONSTERS[m.def.summon.monster]?.nameTh ?? 'ลูกน้อง'}มาช่วย!`
-        : m.def.frenzy ? 'เคลื่อนที่เร็วมากและออกท่าไวขึ้น' : 'ความเร็วและการโจมตีเพิ่มขึ้น',
+        : m.def.frenzy ? 'เคลื่อนที่เร็วมากและออกท่าไวขึ้น'
+        : m.def.enrageRamp ? 'ยิ่งโจมตีไม่โดนยิ่งเร็วขึ้น จนกว่าจะโดนตัว' : 'ความเร็วและการโจมตีเพิ่มขึ้น',
       x: m.x,
       z: m.z,
     });
     this.shake(0.3);
-    if (m.def.summon?.vanish) m.jumpOut(this);
-    else if (m.def.summon) this.summonMinions(m, m.def.summon.monster, m.def.summon.count);
+    if (m.def.summon && !m.def.summon.vanish) this.summonMinions(m, m.def.summon.monster, m.def.summon.count);
+  }
+
+  /** Below half HP: the boss jumps off the map until its minions are dead. */
+  onBossVanish(m: Monster): void {
+    const minion = MONSTERS[m.def.summon!.monster]?.nameTh ?? 'ลูกน้อง';
+    this.log(`${m.def.name} กระโดดหนีไป! กำจัด${minion}ให้หมดก่อน`, '#ff6a5a');
+    this.events.push({
+      t: 'banner',
+      text: `${m.def.nameTh.replace(/\\s*\\(.*\\)/, '')} กระโดดหนีไป!`,
+      sub: `กำจัด${minion}ให้หมดเพื่อเรียกกลับมา`,
+      x: m.x,
+      z: m.z,
+    });
+    m.jumpOut(this);
   }
 
   /** The boss has jumped out of sight: take it off the field (it keeps its spawner slot) and send its minions in. */

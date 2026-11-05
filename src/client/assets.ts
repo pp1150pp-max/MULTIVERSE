@@ -82,6 +82,7 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   }))),
   snow_owl: monster('monsters/snow_owl.png', () => makeSheet(36, drawSlime(['#dce6ee', '#94a6b6', '#f7c844']))),
   snow_sprite: monster('monsters/snow_sprite.png', () => makeSheet(36, drawSlime(['#9fdcf2', '#5aa6c8', '#f2fbff']))),
+  snow_brawler: monster('monsters/snow_brawler.png', () => makeSheet(36, drawSlime(['#b8d8ec', '#5aa6c8', '#f2fbff']))),
   polar_bear: monster('monsters/polar_bear.png', () => makeSheet(48, drawQuad(['#e6ecf0', '#9fb0bc', '#fbfdfe', '#1d242b'], {
     bodyRx: 0.36, bodyRy: 0.2, head: 0.15, ears: 'round', earSize: 0.07, tail: 'none', legLen: 0.13, legW: 0.1, snout: 0.08, belly: true,
   }))),
