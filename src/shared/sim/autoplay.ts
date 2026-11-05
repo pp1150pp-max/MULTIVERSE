@@ -100,8 +100,9 @@ export class AutoPlay {
     const R = this.radius(p);
 
     if (!out.potion && p.potCd <= 0) {
-      if (p.hp < p.maxHp * (set.hpPct / 100) && p.potionCount('hp') > 0) out.potion = 'hp';
-      else if (p.mp < p.stats.maxMp * (set.mpPct / 100) && p.potionCount('mp') > 0) out.potion = 'mp';
+      // Count what the potions being drunk will still restore, so Auto doesn't chug while they work.
+      if (p.hp + p.potionPending('hp') < p.maxHp * (set.hpPct / 100) && p.potionCount('hp') > 0) out.potion = 'hp';
+      else if (p.mp + p.potionPending('mp') < p.stats.maxMp * (set.mpPct / 100) && p.potionCount('mp') > 0) out.potion = 'mp';
     }
 
     // Loot close by is picked up even mid-fight; farther loot only when nothing is attacking.
