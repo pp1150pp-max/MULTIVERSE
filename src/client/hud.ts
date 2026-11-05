@@ -660,7 +660,8 @@ export class Hud {
   private showPing(ms: number | null): void {
     if (ms === this.shownPing) return;
     this.shownPing = ms;
-    $('hud-ping-ms').textContent = ms === null ? '—' : `${ms} ms`;
+    // A pong overdue for 10 s or more: the connection has stalled, shown in whole seconds.
+    $('hud-ping-ms').textContent = ms === null ? '—' : ms >= 10_000 ? `${Math.floor(ms / 1000)} s` : `${ms} ms`;
     const cls = ms === null ? 'ping-none' : ms < PING_GOOD_MS ? 'ping-good' : ms < PING_OK_MS ? 'ping-ok' : 'ping-bad';
     $('hud-ping').className = cls;
   }
@@ -1386,7 +1387,7 @@ export class Hud {
   }
 
   /** A chat line; an empty name means a server notice (someone joined or left). */
-  chatLine(name: string, text: string): void {
+  chatLine(name: string, text: string, fadeMs = 15000): void {
     const el = document.createElement('div');
     if (name) {
       el.className = 'log-line chat';
@@ -1397,7 +1398,7 @@ export class Hud {
       el.className = 'log-line system';
       el.textContent = text;
     }
-    this.pushLog(el, 15000);
+    this.pushLog(el, fadeMs);
   }
 
   showDisconnect(msg: string): void {

@@ -2,7 +2,8 @@
 // through a portal moves a player's session to the other zone's Sim. The server decides all combat,
 // loot and EXP; clients only move their own character, and the server checks those moves are possible.
 import { WebSocketServer, WebSocket } from 'ws';
-import type { Server as HttpServer } from 'node:http';
+import type { IncomingMessage, Server as HttpServer } from 'node:http';
+import { clientIp } from './clientIp';
 import type { Db } from './db';
 import { Sim } from '../src/shared/sim/Sim';
 import { ZONES, zoneById } from '../src/shared/data/zones';
@@ -11,7 +12,7 @@ import { POTION_SIZES } from '../src/shared/data/potions';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../src/shared/sim/types';
 import { AUTO_HINT_COLOR, AutoPlay, type AutoWorld } from '../src/shared/sim/autoplay';
 import {
-  CHAT_MAX, INTEREST_RADIUS, PING_MS, SNAPSHOT_HZ, TICK_HZ, WS_PATH, r2,
+  CHAT_MAX, GPU_NAME_MAX, INTEREST_RADIUS, PING_MS, isSoftwareRenderer, SNAPSHOT_HZ, TICK_HZ, WS_PATH, r2,
   type ClientMsg, type InputMsg, type ActionMsg, type PrivateSnap, type ServerMsg, type SnapshotMsg,
 } from '../src/shared/net/protocol';
 import { RARITIES, SLOTS, type SlotId, type Vec2 } from '../src/shared/types';
@@ -55,11 +56,20 @@ interface Session {
   outbox: SimEvent[];
   lastChatAt: number;
   saveDue: number | null;
-  /** Round trips the client reported (ping), summed since the last per-minute log line. */
+  /** Where the connection came from, for the owner's log only (never sent to anyone). */
+  ip: string;
+  /** What the client reported with its pings since the last per-minute log line (see onPing). */
   lastPingAt: number;
   rttSum: number;
   rttCount: number;
-  rttWarnAt: number;
+  fpsSum: number;
+  fpsCount: number;
+  maxFrame: number;
+  maxWait: number;
+  hidden: boolean;
+  /** Last immediate lag/stall warning, for its throttle. */
+  warnAt: number;
+  gpuLogged: boolean;
 }
 
 const num = (v: unknown, fallback = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
@@ -94,6 +104,16 @@ const PING_WARN_MS = 300;
 const PING_WARN_EVERY_MS = 30_000;
 /** Reported round trips outside 0..this are junk and ignored. */
 const PING_MAX_MS = 60_000;
+/** A frame longer than this (the browser froze) is logged right away, throttled with the ping warning. */
+const FRAME_STALL_MS = 1000;
+/** Reported frame times and pong waits are cut to this; frame rates to FPS_MAX. */
+const STALL_MAX_MS = 10 * 60_000;
+const FPS_MAX = 1000;
+/** "12.5 s" for long waits, "450 ms" for short ones. */
+const fmtMs = (ms: number): string => (ms >= 10_000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms)} ms`);
+/** A number the client sent, or undefined when it's missing or junk; cut to 0..max. */
+const clamp = (v: unknown, max: number): number | undefined =>
+  typeof v === 'number' && Number.isFinite(v) ? Math.min(Math.max(v, 0), max) : undefined;
 
 export class GameWorld {
   readonly sims = new Map(Object.values(ZONES).map((z) => [z.id, new Sim(z)]));
@@ -109,7 +129,7 @@ export class GameWorld {
 
   constructor(private readonly db: Db, http: HttpServer) {
     const wss = new WebSocketServer({ server: http, path: WS_PATH, maxPayload: 16 * 1024 });
-    wss.on('connection', (ws) => this.onConnection(ws));
+    wss.on('connection', (ws, req) => this.onConnection(ws, req));
     setInterval(() => this.tick(), 1000 / TICK_HZ);
     setInterval(() => this.saveAll(), AUTOSAVE_MS);
     setInterval(() => this.logPings(), PING_LOG_MS);
@@ -125,7 +145,8 @@ export class GameWorld {
     if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
   }
 
-  private onConnection(ws: WebSocket): void {
+  private onConnection(ws: WebSocket, req: IncomingMessage): void {
+    const ip = clientIp(req);
     let session: Session | null = null;
     const timeout = setTimeout(() => {
       if (!session) ws.close();
@@ -141,7 +162,7 @@ export class GameWorld {
       if (!msg || typeof msg !== 'object') return;
       if (!session) {
         if (msg.t !== 'join') return;
-        session = this.join(ws, msg.token, msg.characterId);
+        session = this.join(ws, msg.token, msg.characterId, ip);
         clearTimeout(timeout);
         return;
       }
@@ -150,6 +171,7 @@ export class GameWorld {
         else if (msg.t === 'act') this.onAction(session, msg);
         else if (msg.t === 'chat') this.onChat(session, msg.text);
         else if (msg.t === 'ping') this.onPing(session, msg);
+        else if (msg.t === 'client') this.onClientInfo(session, msg);
       } catch (e) {
         console.error('[world] bad message from', session.username, e);
       }
@@ -161,7 +183,7 @@ export class GameWorld {
     ws.on('error', () => ws.close());
   }
 
-  private join(ws: WebSocket, token: unknown, characterId: unknown): Session | null {
+  private join(ws: WebSocket, token: unknown, characterId: unknown, ip: string): Session | null {
     const acc = typeof token === 'string' ? this.db.sessionAccount(token) : undefined;
     const charId = num(characterId, -1);
     const data = acc ? this.db.loadCharacter(acc.id, charId) : undefined;
@@ -196,13 +218,14 @@ export class GameWorld {
       ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId, sim, player,
       move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null,
       auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', outbox: [], lastChatAt: 0, saveDue: null,
-      lastPingAt: -Infinity, rttSum: 0, rttCount: 0, rttWarnAt: -Infinity,
+      ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0,
+      hidden: false, warnAt: -Infinity, gpuLogged: false,
     };
     this.sessions.add(s);
     this.byPlayer.set(player, s);
     this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, guest: acc.guest });
     this.broadcastSystem(`${player.name} เข้าสู่โลก`);
-    console.log(`[world] ${acc.username} joined as ${player.name}${acc.guest ? ' (guest)' : ''} (${this.sessions.size} online)`);
+    console.log(`[world] ${acc.username} joined as ${player.name}${acc.guest ? ' (guest)' : ''} from ${ip} (${this.sessions.size} online)`);
     return s;
   }
 
@@ -262,32 +285,79 @@ export class GameWorld {
     }
   }
 
-  /** Answers a ping so the client can time the round trip, and keeps the round trip it reports for the log. */
-  private onPing(s: Session, m: { id?: unknown; rtt?: unknown }): void {
+  /**
+   * Answers a ping so the client can time the round trip, and keeps what it reports for the log:
+   * the round trip, how long a pong has been overdue, the frame rate and the longest frame. A slow
+   * network shows a long round trip with smooth frames; a frozen browser shows long frames too.
+   */
+  private onPing(
+    s: Session,
+    m: { id?: unknown; rtt?: unknown; wait?: unknown; fps?: unknown; maxFrame?: unknown; hidden?: unknown },
+  ): void {
+    if (!this.sessions.has(s)) return; // A connection already taken over by a new login.
     const now = performance.now();
     const id = m.id;
     if (typeof id !== 'number' || !Number.isSafeInteger(id) || id < 0) return;
     if (now - s.lastPingAt < PING_MS / 4) return; // Faster than any real client pings.
     s.lastPingAt = now;
     this.send(s.ws, { t: 'pong', id });
-    const rtt = m.rtt;
-    if (typeof rtt !== 'number' || !Number.isFinite(rtt) || rtt < 0 || rtt > PING_MAX_MS) return;
-    s.rttSum += rtt;
-    s.rttCount++;
-    if (rtt > PING_WARN_MS && now - s.rttWarnAt >= PING_WARN_EVERY_MS) {
-      s.rttWarnAt = now;
-      console.log(`[ping] ${s.username} (${s.player.name}): ${Math.round(rtt)} ms — lagging`);
+
+    const rtt = typeof m.rtt === 'number' && m.rtt >= 0 && m.rtt <= PING_MAX_MS ? m.rtt : undefined;
+    const wait = clamp(m.wait, STALL_MAX_MS);
+    const hidden = m.hidden === true;
+    const fps = hidden ? undefined : clamp(m.fps, FPS_MAX);
+    const maxFrame = hidden ? undefined : clamp(m.maxFrame, STALL_MAX_MS);
+    if (rtt !== undefined) {
+      s.rttSum += rtt;
+      s.rttCount++;
     }
+    if (fps !== undefined) {
+      s.fpsSum += fps;
+      s.fpsCount++;
+    }
+    s.maxFrame = Math.max(s.maxFrame, maxFrame ?? 0);
+    s.maxWait = Math.max(s.maxWait, wait ?? 0);
+    if (hidden) s.hidden = true;
+
+    const lagging = rtt !== undefined && rtt > PING_WARN_MS;
+    const stalled = (wait ?? 0) > PING_WARN_MS;
+    const froze = (maxFrame ?? 0) >= FRAME_STALL_MS;
+    if (!(lagging || stalled || froze) || now - s.warnAt < PING_WARN_EVERY_MS) return;
+    s.warnAt = now;
+    const parts = [rtt !== undefined ? `ping ${fmtMs(rtt)}` : 'ping —'];
+    if (wait) parts.push(`no pong for ${fmtMs(wait)}`);
+    if (hidden) parts.push('tab hidden');
+    else parts.push(`${fps !== undefined ? Math.round(fps) : '—'} fps`, `max frame ${fmtMs(maxFrame ?? 0)}`);
+    const why = froze
+      ? 'browser froze (device, not network)'
+      : hidden
+        ? 'lagging (tab hidden, no frame info)'
+        : stalled
+          ? 'connection stalled (frames OK: network)'
+          : 'lagging (frames OK: network)';
+    console.log(`[ping] ${s.username} (${s.player.name}): ${parts.join(' · ')} — ${why}`);
   }
 
-  /** One log line a minute with each online player's average ping since the last one. */
+  /** The client's GPU name, logged once per session; a software renderer makes the game stutter. */
+  private onClientInfo(s: Session, m: { gpu?: unknown }): void {
+    if (s.gpuLogged || typeof m.gpu !== 'string') return;
+    s.gpuLogged = true;
+    const gpu = m.gpu.replace(/[\p{Cc}\p{Cf}]/gu, '').trim().slice(0, GPU_NAME_MAX) || 'unknown';
+    const note = isSoftwareRenderer(gpu) ? ' ⚠ SOFTWARE RENDERING: hardware acceleration is off, expect stutter' : '';
+    console.log(`[client] ${s.username} (${s.player.name}) GPU: ${gpu}${note}`);
+  }
+
+  /** One log line a minute with each online player's average ping, frame rate and worst stall since the last one. */
   private logPings(): void {
     if (!this.sessions.size) return;
     const parts = [...this.sessions].map((s) => {
-      const avg = s.rttCount ? `${Math.round(s.rttSum / s.rttCount)} ms` : '—';
-      s.rttSum = 0;
-      s.rttCount = 0;
-      return `${s.username} (${s.player.name}) ${avg}`;
+      const bits = [s.rttCount ? fmtMs(s.rttSum / s.rttCount) : '—'];
+      if (s.fpsCount) bits.push(`${Math.round(s.fpsSum / s.fpsCount)} fps`, `max frame ${fmtMs(s.maxFrame)}`);
+      if (s.maxWait) bits.push(`no pong up to ${fmtMs(s.maxWait)}`);
+      if (s.hidden) bits.push(s.fpsCount ? 'tab hidden part of the time' : 'tab hidden');
+      s.rttSum = s.rttCount = s.fpsSum = s.fpsCount = s.maxFrame = s.maxWait = 0;
+      s.hidden = false;
+      return `${s.username} (${s.player.name}) ${bits.join(' · ')}`;
     });
     console.log(`[ping] average over the last minute: ${parts.join(', ')}`);
   }
