@@ -6,7 +6,7 @@ import { castSkill, basicAttack } from './skills';
 import { CLASSES, type ClassDef, type SkillDef, type SkillSlot } from '../data/classes';
 import { addInto, BASE_MOVE_SPEED, emptyStats } from '../formulas';
 import { effectiveStats, sellValue } from '../data/enhance';
-import { starterWeapon } from '../data/items';
+import { itemClass, starterWeapon } from '../data/items';
 import { POTIONS, POTION_SIZES, POTION_STACK, stackSellValue } from '../data/potions';
 import {
   isPotion, RARITIES, SLOTS,
@@ -269,14 +269,24 @@ export class Player extends Unit {
     return this.hasBagSpace();
   }
 
-  /** Gear can be worn once the character's level reaches the item's level. */
+  /**
+   * Why this character can't wear an item (another class's weapon/armor, or level too low), or null if it can.
+   * Shown as is in the UI.
+   */
+  equipBlock(item: Item): string | null {
+    const c = itemClass(item);
+    if (c && c !== this.cls.id) return `ใส่ได้เฉพาะสาย ${CLASSES[c].name}`;
+    if (item.level > this.level) return `ต้อง Lv.${item.level} ถึงจะใส่ได้ (ตอนนี้ Lv.${this.level})`;
+    return null;
+  }
+
   canEquip(item: Item): boolean {
-    return item.level <= this.level;
+    return !this.equipBlock(item);
   }
 
   /**
    * Clicking gear wears it; clicking a potion makes its quick key use that size.
-   * Gear above the character's level stays in the bag (gear already worn from older saves is left on).
+   * Gear of another class or above the character's level stays in the bag (gear already worn from older saves is left on).
    */
   equipFromBag(i: number): void {
     const item = this.bag[i];

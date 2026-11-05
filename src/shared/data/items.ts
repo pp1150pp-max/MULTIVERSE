@@ -47,6 +47,18 @@ export function itemArt(item: Item): string {
   return `item_${base.id}_${cls[0]}`;
 }
 
+/**
+ * The class an item is made for, or null when every class can wear it (helmets, boots, rings).
+ * Items from before `cls` existed are matched by their name, like itemArt does.
+ */
+export function itemClass(item: Item): ClassId | null {
+  if (item.cls) return item.cls;
+  const base = BASES.find((b) => b.id === item.baseId);
+  if (!base || base.names.any) return null;
+  const hit = (Object.entries(base.names) as [ClassId, string][]).find(([, name]) => item.name.endsWith(name));
+  return hit ? hit[0] : null;
+}
+
 /** The picture of a slot's first item, as this class sees it. */
 export function starterArt(slot: SlotId, cls: ClassId): string {
   const base = BASES.find((b) => b.slot === slot)!;
@@ -111,7 +123,9 @@ function build(base: BaseItem, rarity: Rarity, level: number, cls: ClassId, r: R
   const pre = PREFIX[rarity];
   if (pre) name = `${pick(r, pre)} ${name}`;
   const value = Math.round((5 + level * 3) * (1 + RARITIES.indexOf(rarity) * 1.5));
-  return { uid: newUid(), baseId: base.id, name, slot: base.slot, rarity, level, stats, value };
+  const item: Item = { uid: newUid(), baseId: base.id, name, slot: base.slot, rarity, level, stats, value };
+  if (!base.names.any) item.cls = cls;
+  return item;
 }
 
 export function rollItem(r: Rng, level: number, cls: ClassId, boost = 0): Item {
