@@ -181,7 +181,10 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 /* HP and MP: long bars at the top, or orbs in the bottom corners. */
 #hud { --orb: min(190px, 20vw); }
 .hud-orbs .bars, .hud-bars .orb { display: none; }
-.hud-orbs #log { bottom: calc(var(--orb) + 8px); }
+/* An orb is slightly taller than it is wide; chat and the log sit clear above it. */
+.hud-orbs #log { bottom: calc(var(--orb) * 1.05 + 8px); }
+.hud-orbs #chat { bottom: calc(var(--orb) * 1.05 + 8px); }
+#hud:has(#chat:not(.hidden)) #log { translate: 0 -44px; }
 .bars { display: flex; flex-direction: column; gap: 0; margin-top: 2px; }
 .bar {
   position: relative; width: min(300px, 40vw); aspect-ratio: 1352 / 152;
