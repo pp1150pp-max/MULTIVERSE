@@ -28,6 +28,17 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const MINIMAP_SIZE = 176;
 const MINIMAP_SCALE = 2.6;
 
+type HudStyle = 'orbs' | 'bars';
+const HUD_STYLE_KEY = 'multiverse-hud-style';
+
+function loadHudStyle(): HudStyle {
+  try {
+    return localStorage.getItem(HUD_STYLE_KEY) === 'bars' ? 'bars' : 'orbs';
+  } catch {
+    return 'orbs';
+  }
+}
+
 const KEY_LABEL: Record<SkillSlot, string> = { basic: 'LMB', q: 'Q', e: 'E', r: 'R', dash: 'SPACE' };
 const POTION_CD = 1.5;
 const fmtNum = (v: number) => String(Math.round(v * 10) / 10);
@@ -108,6 +119,10 @@ export class Hud {
   constructor(private readonly g: Game) {
     $('hud').classList.remove('hidden');
     this.mm = $<HTMLCanvasElement>('minimap').getContext('2d')!;
+    this.setHudStyle(loadHudStyle());
+    // Big enough to show up late on first opening the bag, so it's fetched now.
+    new Image().src = 'assets/sprites/ui/inventory.png';
+    $('btn-hud-style').onclick = () => this.setHudStyle($('hud').classList.contains('hud-orbs') ? 'bars' : 'orbs');
     this.fullMap = new FullMap($<HTMLCanvasElement>('fullmap-canvas'));
     $('minimap').onclick = () => this.toggleMap(true);
     $('fullmap-close').onclick = () => this.toggleMap(false);
@@ -454,10 +469,18 @@ export class Hud {
       this.markInventory();
     }
     const need = expToNext(p.level);
-    $('hp-fill').style.width = `${(Math.max(0, p.hp) / p.maxHp) * 100}%`;
-    $('hp-text').textContent = `${Math.ceil(Math.max(0, p.hp))} / ${Math.round(p.maxHp)}`;
-    $('mp-fill').style.width = `${(p.mp / p.stats.maxMp) * 100}%`;
-    $('mp-text').textContent = `${Math.floor(p.mp)} / ${Math.round(p.stats.maxMp)}`;
+    const hpShare = `${(Math.max(0, p.hp) / p.maxHp) * 100}%`;
+    const mpShare = `${(p.mp / p.stats.maxMp) * 100}%`;
+    const hpText = `${Math.ceil(Math.max(0, p.hp))} / ${Math.round(p.maxHp)}`;
+    const mpText = `${Math.floor(p.mp)} / ${Math.round(p.stats.maxMp)}`;
+    $('hp-fill').style.width = hpShare;
+    $('hp-text').textContent = hpText;
+    $('mp-fill').style.width = mpShare;
+    $('mp-text').textContent = mpText;
+    $('orb-hp-fill').style.height = hpShare;
+    $('orb-hp-text').textContent = hpText;
+    $('orb-mp-fill').style.height = mpShare;
+    $('orb-mp-text').textContent = mpText;
     $('exp-fill').style.width = `${(p.exp / need) * 100}%`;
     $('exp-text').textContent = `EXP ${((p.exp / need) * 100).toFixed(1)}%`;
     $('hud-level').textContent = `Lv.${p.level} ${p.cls.name}`;
@@ -507,6 +530,19 @@ export class Hud {
       if (this.mapOpen) this.fullMap.draw(this.g);
     }
     if (this.bagOpen && this.invDirty) this.renderInventory();
+  }
+
+  /** HP and MP as orbs in the bottom corners, or long bars at the top. The player picks; each browser remembers it. */
+  private setHudStyle(style: HudStyle): void {
+    const hud = $('hud');
+    hud.classList.toggle('hud-orbs', style === 'orbs');
+    hud.classList.toggle('hud-bars', style === 'bars');
+    $('btn-hud-style').textContent = style === 'orbs' ? 'HP/MP: ลูกแก้ว' : 'HP/MP: แถบ';
+    try {
+      localStorage.setItem(HUD_STYLE_KEY, style);
+    } catch {
+      // Blocked storage only means the choice isn't remembered.
+    }
   }
 
   private drawMinimap(): void {
@@ -998,7 +1034,7 @@ export class Hud {
     this.invDirty = false;
     const p = this.g.player;
     $('equip-slots').innerHTML = SLOTS.map((s) =>
-      `<div class="eq-row"><span class="eq-label">${SLOT_LABEL[s]}</span>${this.itemCell(p.equipment[s], `data-slot="${s}"`, `<span class="ph">${emptySlotIcon(s, p.cls.id)}</span>`)}</div>`,
+      `<div class="eq-row eq-${s}" title="${SLOT_LABEL[s]}">${this.itemCell(p.equipment[s], `data-slot="${s}"`, `<span class="ph">${emptySlotIcon(s, p.cls.id)}</span>`)}</div>`,
     ).join('');
     $('bag-grid').innerHTML = p.bag.map((it, i) => this.itemCell(it, `data-i="${i}"`)).join('');
     const fmt = (k: StatKey, v: number) =>
