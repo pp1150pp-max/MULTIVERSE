@@ -25,6 +25,16 @@ import { COIN_ICON, emptySlotIcon, FORGE_ICON, itemIcon, potionIcon, skillIcon }
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
+interface PreviewSlot { id: string; label: string; like?: SlotId }
+/** Sockets shown in the window but not wired to the game yet: no data-slot, so they take no clicks or drops. */
+const PREVIEW_SLOTS: PreviewSlot[] = [
+  { id: 'offhand', label: 'อาวุธรอง', like: 'weapon' },
+  { id: 'necklace', label: 'สร้อย' },
+  { id: 'gloves', label: 'ถุงมือ' },
+  { id: 'belt', label: 'เข็มขัด' },
+  { id: 'ring2', label: 'แหวน 2', like: 'ring' },
+];
+
 /** The minimap's size on screen, and pixels per world unit. Its canvas holds twice that, to stay sharp. */
 const MINIMAP_SIZE = 176;
 const MINIMAP_SCALE = 2.6;
@@ -1034,8 +1044,13 @@ export class Hud {
   private renderInventory(): void {
     this.invDirty = false;
     const p = this.g.player;
+    const previewIcon = (s: PreviewSlot): string => s.like
+      ? `<span class="ph">${emptySlotIcon(s.like, p.cls.id)}</span>`
+      : `<span class="ph-label">${s.label}</span>`;
     $('equip-slots').innerHTML = SLOTS.map((s) =>
       `<div class="eq-row eq-${s}" title="${SLOT_LABEL[s]}">${this.itemCell(p.equipment[s], `data-slot="${s}"`, `<span class="ph">${emptySlotIcon(s, p.cls.id)}</span>`)}</div>`,
+    ).join('') + PREVIEW_SLOTS.map((s) =>
+      `<div class="eq-row eq-${s.id}" title="${s.label} (ยังไม่เปิดใช้)"><div class="cell empty">${previewIcon(s)}</div></div>`,
     ).join('');
     $('bag-grid').innerHTML = p.bag.map((it, i) => this.itemCell(it, `data-i="${i}"`)).join('');
     const fmt = (k: StatKey, v: number) =>
