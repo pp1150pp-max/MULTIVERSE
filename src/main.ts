@@ -6,6 +6,7 @@ import { LocalBackend } from './client/backend';
 import type { OnlineBackend } from './client/net/online';
 import { writeSave, type SaveData } from './client/save';
 import { zoneById } from './shared/data/zones';
+import { audioEngine } from './client/audio/engine';
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -32,6 +33,7 @@ function launchOnline(backend: OnlineBackend): void {
 }
 
 async function boot(): Promise<void> {
+  audioEngine.init();
   await loadAssets();
   const fromFile = Object.entries(assetSources).filter(([, v]) => v === 'file').map(([k]) => k);
   console.info(`[assets] ${fromFile.length} loaded from files:`, fromFile.join(', ') || '(none — using placeholders)');

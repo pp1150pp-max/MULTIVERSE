@@ -17,6 +17,7 @@ import { AutoRing } from './autoRing';
 import { AUTO_PX_PER_UNIT } from '../shared/sim/Player';
 import { SpriteActor } from './SpriteActor';
 import { sheets } from './assets';
+import { GameAudio } from './audio/gameAudio';
 import { LootView, MonsterView, PlayerView, ProjectileView, ViewSet } from './views';
 
 /** Camera sits along this direction from its target: 45° yaw, ~47° pitch. */
@@ -65,6 +66,7 @@ export class Game {
   private shakeT = 0;
   private shakeAmt = 0;
   private readonly auto = new AutoPlay();
+  private readonly sound = new GameAudio();
   private readonly raycaster = new THREE.Raycaster();
   private readonly ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private readonly tmp = new THREE.Vector3();
@@ -239,6 +241,7 @@ export class Game {
   private handleEvent(ev: SimEvent): void {
     const me = this.player.id;
     if ('to' in ev && ev.to !== undefined && ev.to !== me) return;
+    this.sound.onEvent(ev, this.backend);
     switch (ev.t) {
       case 'fx':
         (this.fx[ev.name] as (...a: unknown[]) => void).apply(this.fx, ev.args as unknown[]);
@@ -375,6 +378,7 @@ export class Game {
     }
     const events = this.backend.frame(dt, intent);
     if (this.backend.zone !== this.zone) this.changeZone();
+    this.sound.update(dt, this.backend);
 
     this.syncViews();
     for (const ev of events) this.handleEvent(ev);

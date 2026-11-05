@@ -15,7 +15,7 @@ import { cleanAutoSettings, lootPots, Player, type AutoSettings, type CharacterD
 import { Monster } from './Monster';
 import { Projectile, type ProjOpts } from './Projectile';
 import { Loot, LOOT_PRIORITY_TIME, type LootKind } from './Loot';
-import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type SimEvent } from './types';
+import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type SfxName, type SimEvent } from './types';
 
 /** Gear of this rarity that "sell all" may take: never potions or enhanced items. */
 /** Seconds of warning before a freshly summoned minion pounces. */
@@ -101,6 +101,10 @@ export class Sim {
     this.events.push({ t: 'shake', amount });
   }
 
+  sfx(name: SfxName, x: number, z: number, to?: number): void {
+    this.events.push({ t: 'sfx', name, x, z, to });
+  }
+
   log(msg: string, color?: string, to?: number): void {
     this.events.push({ t: 'log', msg, color, to });
   }
@@ -148,6 +152,7 @@ export class Sim {
     m.hp -= dmg;
     this.events.push({ t: 'flash', id: m.id });
     this.text(m.x, m.topY, m.z, crit ? `${dmg}!` : String(dmg), crit ? 'crit' : 'dmg');
+    if (crit) this.sfx('crit', m.x, m.z);
     if (opts.kb && !m.isBoss) m.knockback(opts.fromX ?? p.x, opts.fromZ ?? p.z, opts.kb);
     if (opts.stun) m.stunT = Math.max(m.stunT, m.isBoss ? opts.stun * 0.3 : opts.stun);
     if (opts.slow) {
@@ -229,6 +234,7 @@ export class Sim {
     m.alive = false;
     m.deadT = 0;
     m.hp = 0;
+    this.sfx(m.isBoss ? 'boss_die' : 'monster_die', m.x, m.z);
     if (!m.summoned) {
       this.shareExp(m);
       this.dropLoot(m);
@@ -349,13 +355,16 @@ export class Sim {
     if (k.type === 'gold') {
       p.gold += k.amount;
       this.text(p.x, p.topY, p.z, `+${k.amount} G`, 'gold', 0.7, p.id);
+      this.sfx('pickup_gold', p.x, p.z, p.id);
     } else if (k.type === 'potion') {
       if (!p.addPotions(k.pot, k.size, k.count)) return false;
       this.text(p.x, p.topY, p.z, `+${potionName(k.pot, k.size)}${k.count > 1 ? ` ×${k.count}` : ''}`, k.pot === 'hp' ? 'heal' : 'mana', 0.7, p.id);
+      this.sfx('pickup_potion', p.x, p.z, p.id);
       this.inventoryChanged(p);
     } else {
       if (!p.addToBag(k.item)) return false;
       this.events.push({ t: 'item', to: p.id, item: k.item });
+      this.sfx('pickup_item', p.x, p.z, p.id);
     }
     return true;
   }
@@ -425,6 +434,7 @@ export class Sim {
     }
     p.gold -= cost;
     this.log(`ซื้อ${potionName(kind, size)} × ${n} (−${cost} G)`, '#f2c230', p.id);
+    this.sfx('trade', p.x, p.z, p.id);
     this.afterChange(p);
     return true;
   }
@@ -435,6 +445,7 @@ export class Sim {
     const name = entryName(item);
     const v = p.sell(i);
     this.log(`ขาย ${name} ได้ ${v} G`, '#f2c230', p.id);
+    this.sfx('trade', p.x, p.z, p.id);
     this.afterChange(p);
     return v;
   }
@@ -455,6 +466,7 @@ export class Sim {
       return 0;
     }
     this.log(`ขายของระดับ${RARITY_LABEL[rarity]} ${n} ชิ้น ได้ ${total} G`, '#f2c230', p.id);
+    this.sfx('trade', p.x, p.z, p.id);
     this.afterChange(p);
     return total;
   }
@@ -478,6 +490,7 @@ export class Sim {
       this.fx('burst', p.x, 1.2, p.z, '#8a8f96', 10, 2);
       this.text(p.x, p.topY + 0.3, p.z, 'ล้มเหลว', 'hurt', 1.2);
     }
+    this.sfx(result === 'success' ? 'enhance_ok' : 'enhance_fail', p.x, p.z, p.id);
     this.afterChange(p);
     return { result, item };
   }

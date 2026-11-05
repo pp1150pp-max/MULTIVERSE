@@ -46,6 +46,12 @@ export interface FxApi {
 
 export type SkillEffect = 'slash' | 'whirlwind' | 'charge' | 'quake' | 'explosion' | 'frost' | 'crater' | 'muzzle' | 'impact';
 export type FxName = keyof FxApi;
+/** One-shot sounds with no matching visual event. The client's audio code decides how each one sounds. */
+export type SfxName =
+  | 'crit' | 'monster_die' | 'boss_die' | 'boss_slam'
+  | 'pickup_gold' | 'pickup_item' | 'pickup_potion' | 'drink'
+  | 'trade' | 'enhance_ok' | 'enhance_fail';
+
 export type FxEvent = { [K in FxName]: { t: 'fx'; name: K; args: Parameters<FxApi[K]> } }[FxName];
 
 /**
@@ -56,6 +62,7 @@ export type SimEvent =
   | FxEvent
   | { t: 'text'; x: number; y: number; z: number; text: string; cls: string; life?: number; to?: number }
   | { t: 'shake'; amount: number }
+  | { t: 'sfx'; name: SfxName; x: number; z: number; to?: number }
   | { t: 'log'; msg: string; color?: string; to?: number }
   /** Big text across the middle of the screen, for players near x/z (boss phase change). */
   | { t: 'banner'; text: string; sub?: string; color?: string; x: number; z: number }

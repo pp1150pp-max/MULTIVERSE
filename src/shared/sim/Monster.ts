@@ -318,6 +318,7 @@ export class Monster extends Unit {
       sim.fx('ring', this.x, this.z, 4.2, '#ffb070', 0.45);
       sim.fx('burst', this.x, 0.3, this.z, '#c9a27a', 14, 6);
       sim.shake(0.45);
+      sim.sfx('boss_slam', this.x, this.z);
       for (const pl of sim.players) {
         if (pl.alive && Math.hypot(pl.x - this.x, pl.z - this.z) <= 4.2 + pl.radius) {
           sim.hitPlayer(this, pl, 2, { stun: 0.7, kb: 7, fromX: this.x, fromZ: this.z });

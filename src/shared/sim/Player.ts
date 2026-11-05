@@ -403,6 +403,7 @@ export class Player extends Unit {
       return sim.text(this.x, this.topY, this.z, `ไม่มียา ${kind.toUpperCase()}`, 'info', undefined, this.id);
     }
     sim.inventoryChanged(this);
+    sim.sfx('drink', this.x, this.z, this.id);
     const amount = POTIONS[kind][size].amount;
     if (kind === 'hp') {
       this.hp = Math.min(this.maxHp, this.hp + amount);
