@@ -47,6 +47,8 @@ interface Session {
   /** Position the client reported and the server accepted, applied on the next tick. */
   pendingPos: Vec2 | null;
   lastPosAt: number;
+  /** `seq` of the latest input message, echoed back in snapshots. */
+  lastSeq: number;
   epoch: number;
   lastInv: string;
   lastStash: string;
@@ -179,7 +181,7 @@ export class GameWorld {
     const s: Session = {
       ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId, sim, player,
       move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null,
-      auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), epoch: 0, lastInv: '', lastStash: '', outbox: [], lastChatAt: 0, saveDue: null,
+      auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', outbox: [], lastChatAt: 0, saveDue: null,
     };
     this.sessions.add(s);
     this.byPlayer.set(player, s);
@@ -227,6 +229,8 @@ export class GameWorld {
     s.skills = Array.isArray(m.skills) ? SKILL_KEYS.filter((k) => m.skills.includes(k)) : [];
     if (m.dash === true) s.dash = true;
     if (m.potion === 'hp' || m.potion === 'mp') s.potion = m.potion;
+
+    if (typeof m.seq === 'number' && Number.isSafeInteger(m.seq)) s.lastSeq = m.seq;
 
     const pos = vec(m.pos);
     const now = performance.now();
@@ -475,7 +479,7 @@ export class GameWorld {
     const me: PrivateSnap = {
       hp: r2(p.hp), mp: r2(p.mp), exp: p.exp, level: p.level, gold: p.gold,
       potSel: p.potSel, lootFilter: p.lootFilter, autoSettings: p.autoSettings, stats: p.stats, cd: p.cd, potCd: r2(p.potCd),
-      serverMoves: serverMoves(p) || !!s.auto, epoch: s.epoch, buybackLeft: Math.round(p.buybackLeft),
+      serverMoves: serverMoves(p) || !!s.auto, epoch: s.epoch, ack: s.lastSeq, buybackLeft: Math.round(p.buybackLeft),
     };
     if (inv !== s.lastInv) {
       s.lastInv = inv;

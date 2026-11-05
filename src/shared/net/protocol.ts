@@ -24,6 +24,8 @@ export interface InputMsg {
   t: 'input';
   /** Where the client walked its character (ignored while the server is moving it — dash, knockback). */
   pos: Vec2;
+  /** Counts up with every input message, so the server can say which one its position answers (PrivateSnap.ack). */
+  seq?: number;
   move: Vec2 | null;
   aim: Vec2;
   basic: boolean;
@@ -100,6 +102,8 @@ export interface PrivateSnap {
   serverMoves: boolean;
   /** Changes when the server teleports the character (respawn) — jump straight there. */
   epoch: number;
+  /** The `seq` of the last input the server had applied when it took this snapshot. */
+  ack?: number;
   /** Bag and equipment, only when they changed since the last snapshot. */
   inv?: { equipment: Partial<Record<SlotId, Item>>; bag: (BagEntry | null)[]; buyback?: BuybackEntry[] };
   /** Seconds of play until the buyback list clears. */

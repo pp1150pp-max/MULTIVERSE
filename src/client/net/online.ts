@@ -21,8 +21,16 @@ const NO_SIM = null as unknown as Sim;
 const NO_AREA: SpawnArea = { monster: '', x: 0, z: 0, radius: 1, count: 1, respawn: [0, 0] };
 /** Remote things jump instead of gliding when they are this far off (teleports, respawns). */
 const SNAP_DIST = 5;
-/** Our own character is pulled back to the server's position if it drifts this far (a rejected move). */
-const CORRECT_DIST = 3;
+/**
+ * Our own character is moved onto the server's position when they disagree by this much. Compared with
+ * where we were when we sent the input the server answered (PrivateSnap.ack), not where we are now,
+ * so lag alone never triggers it. A little slack: the server may walk on for a few ticks between inputs.
+ */
+const CORRECT_DIST = 2.5;
+/** Without an ack (older server), the gap to our current position also includes a round trip of walking. */
+const CORRECT_DIST_NO_ACK = 3;
+/** Positions we sent and the server hasn't answered yet; older ones are dropped (about 3 s). */
+const SENT_KEEP = 90;
 /**
  * Events still applied while the tab is hidden (the server keeps playing Auto). Everything else is a
  * notification nobody saw — dropped so it doesn't all pop at once when the player comes back.
@@ -105,6 +113,9 @@ export class OnlineBackend implements Backend {
   private epoch = 0;
   private faceLockT = 0;
   private sendT = 0;
+  private seq = 0;
+  /** Where we said we were in each input message still waiting for its snapshot. */
+  private sent: { seq: number; x: number; z: number }[] = [];
   private pendingDash = false;
   private filterPending = false;
   private autoSetPending = false;
@@ -198,6 +209,7 @@ export class OnlineBackend implements Backend {
     me.face(-x, -z);
     this.me = me;
     this.myId = you;
+    this.sent = [];
     this.playerMap.set(you, me);
     this.players = [me];
     this.faceLockT = 0;
@@ -363,18 +375,47 @@ export class OnlineBackend implements Backend {
       me.z = z;
       me.moveTarget = null;
       this.targets.delete(me);
+      this.sent = [];
     } else if (this.serverMoves) {
       this.glide(me, x, z, me);
       me.faceX = fx;
       me.faceZ = fz;
       me.moving = mv;
+      this.sent = [];
     } else {
       this.targets.delete(me);
-      if (Math.hypot(me.x - x, me.z - z) > CORRECT_DIST) {
+      this.reconcile(pv.ack, x, z);
+    }
+  }
+
+  /**
+   * Checks the server's position against where we were when we sent the input it answers. The
+   * server is a round trip behind us, so comparing with our current position would pull us back
+   * whenever the connection lags (and the reports sent from there were then refused as too far).
+   */
+  private reconcile(ack: number | undefined, x: number, z: number): void {
+    const me = this.me;
+    if (ack === undefined) {
+      if (Math.hypot(me.x - x, me.z - z) > CORRECT_DIST_NO_ACK) {
         me.x = x;
         me.z = z;
         me.moveTarget = null;
       }
+      return;
+    }
+    while (this.sent.length && this.sent[0].seq < ack) this.sent.shift();
+    const at = this.sent[0];
+    if (!at || at.seq !== ack) return; // Nothing to compare with (just sent nothing, or it's too old).
+    const dx = x - at.x;
+    const dz = z - at.z;
+    if (Math.hypot(dx, dz) <= CORRECT_DIST) return;
+    // The server refused part of our walk: shift us by what it refused, keeping the walking done since.
+    me.x += dx;
+    me.z += dz;
+    this.terrain.resolve(me);
+    for (const s of this.sent) {
+      s.x += dx;
+      s.z += dz;
     }
   }
 
@@ -405,8 +446,11 @@ export class OnlineBackend implements Backend {
     this.sendT -= dt;
     if (this.sendT <= 0) {
       this.sendT = 1 / INPUT_HZ;
+      const seq = ++this.seq;
+      this.sent.push({ seq, x: me.x, z: me.z });
+      if (this.sent.length > SENT_KEEP) this.sent.shift();
       this.send({
-        t: 'input', pos: { x: me.x, z: me.z }, move: moveDir, aim: it.aim, basic: it.basic, skills: it.skills,
+        t: 'input', pos: { x: me.x, z: me.z }, seq, move: moveDir, aim: it.aim, basic: it.basic, skills: it.skills,
         dash: this.pendingDash, potion: this.pendingPotion,
       });
       this.pendingDash = false;
