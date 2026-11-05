@@ -176,8 +176,9 @@ export class Hud {
       const i = this.cellIndex(e);
       if (i < 0) return;
       const entry = g.player.bag[i];
-      if (entry && !isPotion(entry) && !g.player.canEquip(entry)) {
-        this.log(`ต้อง Lv.${entry.level} ถึงจะใส่ ${itemName(entry)} ได้ (ตอนนี้ Lv.${g.player.level})`, '#ff8a6a');
+      const block = entry && !isPotion(entry) ? g.player.equipBlock(entry) : null;
+      if (block && entry && !isPotion(entry)) {
+        this.log(`ใส่ ${itemName(entry)} ไม่ได้ — ${block}`, '#ff8a6a');
         return;
       }
       g.backend.equip(i);
@@ -1034,7 +1035,7 @@ export class Hud {
       `<div class="tt-name" style="color:${RARITY_COLOR[item.rarity]}">${itemName(item)}</div>` +
       `<div class="tt-sub">${RARITY_LABEL[item.rarity]} · ${SLOT_LABEL[item.slot]} · iLv.${item.level}${plusOf(item) ? ` · ตีบวก +${plusOf(item)}` : ''}</div>` +
       `<div class="tt-stats">${lines || '<div>—</div>'}</div>` +
-      (p.canEquip(item) ? '' : `<div class="tt-req">ต้อง Lv.${item.level} ถึงจะใส่ได้ (ตอนนี้ Lv.${p.level})</div>`) +
+      (p.equipBlock(item) ? `<div class="tt-req">${p.equipBlock(item)}</div>` : '') +
       `<div class="tt-hint">${hint}</div><div class="tt-val">ขายให้พ่อค้าได้ ${sellValue(item)} G</div>`;
     this.placeTip(tip, e);
   }
