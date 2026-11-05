@@ -21,13 +21,16 @@
 ```bash
 npm run dev        # เกม http://localhost:5173 + game server สำหรับทดสอบ (port 2568, DB server/data/dev.db) แก้โค้ด server แล้วรีสตาร์ทเอง
 npm run build      # typecheck (เบราว์เซอร์ + server) แล้ว build ลง dist/
-npm run typecheck  # ตรวจ type อย่างเดียว
+npm run typecheck  # ตรวจ type อย่างเดียว (เบราว์เซอร์ + server + tests)
+npm run test       # เทสต์อัตโนมัติใน tests/ (เปิด server ทดสอบเองบน port ว่าง + DB ชั่วคราว แล้วปิดเอง)
 npm run server     # server ตัวจริงที่ http://localhost:2567 (เสิร์ฟ dist/, DB server/data/multiverse.db)
 npm run online     # build + server + ลิงก์ Cloudflare ให้เพื่อนเข้า (ถ้า npm run tunnel เปิดอยู่ จะใช้ลิงก์ของมัน)
 npm run tunnel     # ลิงก์ให้เพื่อนอย่างเดียว เปิดค้างไว้ → รีสตาร์ท server แล้วลิงก์ไม่เปลี่ยน
 ```
 
-- ยังไม่มีชุดเทสต์อัตโนมัติ ตรวจด้วย `npm run build` และเปิดเกมลองเล่นจริง
+- เทสต์อัตโนมัติมีเฉพาะระบบ Guest/บัญชี (`tests/`) ที่เหลือตรวจด้วย `npm run build` และเปิดเกมลองเล่นจริง
+  - เพิ่มเทสต์ใหม่: ไฟล์ `tests/*.test.ts` ใช้ `ok()`/`finish()` จาก `tests/check.ts` แล้วเพิ่มเข้าสคริปต์ `test` ใน `package.json`
+  - เทสต์ห้ามแตะ `server/data/` หรือ server จริง ให้ใช้ DB ชั่วคราวแบบ `tests/guest-server.test.ts`
 - `npm run online` ใช้ port 2567 ถ้าขึ้น `EADDRINUSE` แปลว่ามี server ตัวเก่ารันค้างอยู่
 - `npm run dev` ใช้ port 2568 และ DB แยก (`server/data/dev.db`) จึงรันพร้อม server ตัวจริงในเครื่องเดียวกันได้ · Vite ส่งต่อทั้ง `/api` และ WebSocket `/ws` ไปให้ (`vite.config.ts`)
 - ทดสอบสร้างบัญชี/Guest ให้ทำกับ server ของ `npm run dev` เท่านั้น อย่าสร้างบน server ตัวจริง (port 2567)

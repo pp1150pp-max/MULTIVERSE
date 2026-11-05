@@ -18,6 +18,7 @@ git clone https://github.com/pp1150pp-max/MULTIVERSE.git
 cd MULTIVERSE
 npm install
 npm run dev        # เปิดเกมที่ http://localhost:5173 พร้อม game server ของเครื่องตัวเอง (DB ทดสอบ server/data/dev.db)
+npm run test       # เทสต์อัตโนมัติ ควรรันก่อนเปิด PR ถ้าแก้ server หรือระบบบัญชี
 ```
 
 ## รายการงานและบั๊ก (GitHub Issues)

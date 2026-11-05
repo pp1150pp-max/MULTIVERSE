@@ -10,6 +10,7 @@ Isometric 2.5D Action MMORPG บนเว็บ · Three.js + TypeScript + Vite
 npm install
 npm run dev        # เปิดเกมที่ http://localhost:5173 พร้อม game server สำหรับทดสอบในเครื่อง
 npm run build      # สร้างไฟล์สำหรับขึ้นเว็บไว้ใน dist/
+npm run test       # เทสต์อัตโนมัติ (ระบบ Guest/บัญชี) ไม่แตะฐานข้อมูลจริง
 ```
 
 ต้องใช้ Node.js 22.5 ขึ้นไป (server ใช้ฐานข้อมูล `node:sqlite` ที่มากับ Node)
@@ -100,6 +101,7 @@ server/          ← game server (Node.js): API บัญชี/ตัวละ�
   auth.ts            เข้ารหัสรหัสผ่าน, token, กันการเดารหัส
   world.ts           โลกออนไลน์: รัน Sim, รับ input, ตรวจตำแหน่ง, ส่ง snapshot, แชท, เซฟ
   tunnel.ts          สร้างลิงก์ Cloudflare ให้เพื่อน (npm run online)
+tests/           ← npm run test: เทสต์ฐานข้อมูลและ server (Guest, หมดอายุ, ย้ายเข้าบัญชี, คลัง) ใช้ DB ชั่วคราว
 tools/dev.mjs    ← npm run dev: เปิด Vite + game server สำหรับทดสอบ (tsx watch, port 2568, DB server/data/dev.db)
 src/shared/api.ts  ← รูปแบบข้อมูล API และกติกาตรวจชื่อ/รหัสผ่าน (ใช้ร่วมกันทั้งเบราว์เซอร์และ server)
 src/shared/net/protocol.ts ← ข้อความ WebSocket ระหว่างเบราว์เซอร์กับ server
