@@ -12,6 +12,7 @@ import {
 import { FullMap } from './fullmap';
 import { AUTO_PX_PER_UNIT, AUTO_RANGE_MAX, AUTO_RANGE_MIN, buybackPrice, cleanAutoSettings, lootPots, type LootFilter, type SortKey } from '../shared/sim/Player';
 import { isBulkSellable } from '../shared/sim/Sim';
+import { nextRowPrice, STASH_MAX, STASH_ROW, STASH_ROW_PRICES, STASH_START } from '../shared/sim/stash';
 import { MONSTERS } from '../shared/data/monsters';
 import { expToNext } from '../shared/formulas';
 import {
@@ -112,8 +113,8 @@ export class Hud {
   private bagOpen = false;
   /** Level the bag was last drawn for (gear above it is marked as locked). */
   private drawnLevel = 0;
-  /** A bag item being dragged with the mouse (ghost appears once the mouse moves a few pixels). */
-  private drag: { i: number; x: number; y: number; ghost: HTMLElement | null } | null = null;
+  /** A bag or stash item being dragged with the mouse (ghost appears once the mouse moves a few pixels). */
+  private drag: { src: 'bag' | 'stash'; i: number; x: number; y: number; ghost: HTMLElement | null } | null = null;
   /** True right after a drag ends, so the click that follows mouseup does nothing. */
   private justDragged = false;
   /** Item uids last drawn in the buyback grid, so it is only rebuilt when the list changes. */
@@ -122,6 +123,7 @@ export class Hud {
   private readonly mm: CanvasRenderingContext2D;
   private dialogIdx = 0;
   private shopOpen = false;
+  private stashOpen = false;
   private forgeOpen = false;
   private forgeSel: string | null = null;
   private confirmYes: (() => void) | null = null;
@@ -196,7 +198,8 @@ export class Hud {
     bb.addEventListener('mouseleave', () => this.hideTip());
 
     const bag = $('bag-grid');
-    this.setupBagDrag(bag);
+    this.setupDrag(bag, 'bag');
+    this.setupDragEnd();
     bag.addEventListener('click', (e) => {
       if (this.justDragged) return;
       const i = this.cellIndex(e);
@@ -218,6 +221,11 @@ export class Hud {
       const item = i >= 0 ? g.player.bag[i] : null;
       if (!item) return;
       this.hideTip();
+      if (this.stashOpen) {
+        g.backend.stashPut(i, -1);
+        this.markInventory();
+        return;
+      }
       const name = `<b style="color:${this.entryColor(item)}">${entryName(item)}</b>`;
       if (this.shopOpen) {
         this.sellFromBag(i);
@@ -238,8 +246,9 @@ export class Hud {
       if (this.drag?.ghost) return;
       const i = this.cellIndex(e);
       const item = i >= 0 ? g.player.bag[i] : null;
-      if (isPotion(item)) this.showPotionTip(item, e, this.shopOpen ? 'คลิกซ้าย: ใช้กับปุ่มด่วน · คลิกขวา: ขายทั้งช่อง' : 'คลิกซ้าย: ใช้กับปุ่มด่วน · คลิกขวา: วางลงพื้น');
-      else if (item) this.showTip(item, e, this.shopOpen ? 'คลิกซ้าย: สวมใส่ · คลิกขวา: ขาย' : 'คลิกซ้าย: สวมใส่ · คลิกขวา: วางลงพื้น');
+      const right = this.stashOpen ? 'ฝากเข้าคลัง' : this.shopOpen ? (isPotion(item) ? 'ขายทั้งช่อง' : 'ขาย') : 'วางลงพื้น';
+      if (isPotion(item)) this.showPotionTip(item, e, `คลิกซ้าย: ใช้กับปุ่มด่วน · คลิกขวา: ${right}`);
+      else if (item) this.showTip(item, e, `คลิกซ้าย: สวมใส่ · คลิกขวา: ${right}`);
       else this.hideTip();
     });
     bag.addEventListener('mouseleave', () => this.hideTip());
@@ -327,6 +336,40 @@ export class Hud {
     });
     $('sell-checked').onclick = () => this.sellChecked();
 
+    // Warehouse keeper (stash)
+    $('stash-close').onclick = () => this.closeStash();
+    const sg = $('stash-grid');
+    this.setupDrag(sg, 'stash');
+    sg.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const i = this.stashIndex(e);
+      if (i < 0 || !g.player.stash.items[i]) return;
+      this.hideTip();
+      g.backend.stashTake(i, -1);
+      this.markInventory();
+    });
+    sg.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('[data-buyrow]')) this.buyStashRow();
+    });
+    sg.addEventListener('mousemove', (e) => {
+      if (this.drag?.ghost) return;
+      const i = this.stashIndex(e);
+      const item = i >= 0 ? g.player.stash.items[i] : null;
+      const hint = 'คลิกขวา: ย้ายเข้ากระเป๋า · ลากเพื่อย้าย';
+      if (isPotion(item)) this.showPotionTip(item, e, hint);
+      else if (item) this.showTip(item, e, hint);
+      else this.hideTip();
+    });
+    sg.addEventListener('mouseleave', () => this.hideTip());
+    $('stash-deposit').onclick = () => this.stashGold(1);
+    $('stash-withdraw').onclick = () => this.stashGold(-1);
+    $('stash-gold-amt').addEventListener('keydown', (e) => e.stopPropagation());
+    $('stash-sort-go').onclick = () => {
+      g.backend.stashSort($<HTMLSelectElement>('stash-sort-key').value as SortKey, true);
+      this.hideTip();
+      this.markInventory();
+    };
+
     // Blacksmith
     $('forge-close').onclick = () => this.closeForge();
     $('forge-list').addEventListener('click', (e) => {
@@ -364,33 +407,47 @@ export class Hud {
     this.log(z.subtitle, '#b9c9c0');
   }
 
-  /**
-   * Drag & drop from the bag:
-   * - onto another bag slot: swap places (the same potion merges up to a full stack)
-   * - onto the potion quick key (1 / 2): that key uses the dragged potion's size
-   * - onto the game world: drop it on the ground right away (no confirm)
-   */
-  private setupBagDrag(bag: HTMLElement): void {
-    const g = this.g;
-    bag.addEventListener('mousedown', (e) => {
+  /** The bag or stash slot list a drag started from. */
+  private dragList(src: 'bag' | 'stash'): readonly (BagEntry | null)[] {
+    return src === 'bag' ? this.g.player.bag : this.g.player.stash.items;
+  }
+
+  /** Starts dragging items out of the bag grid or the stash grid (bag cells carry data-i, stash cells data-s). */
+  private setupDrag(grid: HTMLElement, src: 'bag' | 'stash'): void {
+    grid.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;
-      const i = this.cellIndex(e);
-      if (i < 0 || !g.player.bag[i]) return;
+      const i = src === 'bag' ? this.cellIndex(e) : this.stashIndex(e);
+      if (i < 0 || !this.dragList(src)[i]) return;
       e.preventDefault();
-      this.drag = { i, x: e.clientX, y: e.clientY, ghost: null };
+      this.drag = { src, i, x: e.clientX, y: e.clientY, ghost: null };
     });
+  }
+
+  /**
+   * Drag & drop, for both grids:
+   * - bag → another bag slot: swap places (the same potion merges up to a full stack)
+   * - bag → the potion quick key (1 / 2): that key uses the dragged potion's size
+   * - bag → the game world: drop it on the ground right away (no confirm)
+   * - bag → the shop: sell · bag → a stash slot or the stash window: store it
+   * - stash → another stash slot: swap / merge · stash → a bag slot or the bag window: take it out
+   */
+  private setupDragEnd(): void {
+    const g = this.g;
     window.addEventListener('mousemove', (e) => {
       const d = this.drag;
       if (!d) return;
       if (!d.ghost) {
         if (Math.hypot(e.clientX - d.x, e.clientY - d.y) < 5) return;
-        const src = bag.querySelector<HTMLElement>(`[data-i="${d.i}"]`);
-        if (!src || !g.player.bag[d.i]) {
+        const src = d.src === 'bag'
+          ? $('bag-grid').querySelector<HTMLElement>(`[data-i="${d.i}"]`)
+          : $('stash-grid').querySelector<HTMLElement>(`[data-s="${d.i}"]`);
+        if (!src || !this.dragList(d.src)[d.i]) {
           this.drag = null;
           return;
         }
         const ghost = src.cloneNode(true) as HTMLElement;
         ghost.removeAttribute('data-i');
+        ghost.removeAttribute('data-s');
         ghost.classList.add('drag-ghost');
         document.body.append(ghost);
         d.ghost = ghost;
@@ -407,16 +464,34 @@ export class Hud {
       if (!d?.ghost) return;
       d.ghost.remove();
       this.markDropTarget(-1, -1);
-      bag.querySelector('.dragging')?.classList.remove('dragging');
+      document.querySelector('.cell.dragging')?.classList.remove('dragging');
       this.justDragged = true;
       setTimeout(() => (this.justDragged = false), 0);
-      const item = g.player.bag[d.i];
-      if (!item) return;
       const target = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
       const cell = target?.closest<HTMLElement>('#bag-grid [data-i]');
+      const stashCell = this.stashOpen ? target?.closest<HTMLElement>('#stash-grid [data-s]') : null;
+      if (d.src === 'stash') {
+        if (!g.player.stash.items[d.i]) return;
+        if (stashCell) {
+          const to = Number(stashCell.dataset.s);
+          if (to !== d.i) g.backend.stashMove(d.i, to);
+        } else if (cell) {
+          g.backend.stashTake(d.i, Number(cell.dataset.i));
+        } else if (target?.closest('#inventory .inv-window')) {
+          g.backend.stashTake(d.i, -1);
+        }
+        this.markInventory();
+        return;
+      }
+      const item = g.player.bag[d.i];
+      if (!item) return;
       const quick = target?.closest<HTMLElement>('.skill-hp, .skill-mp');
       const shop = this.shopOpen ? target?.closest<HTMLElement>('#shop') : null;
-      if (shop) {
+      if (stashCell) {
+        g.backend.stashPut(d.i, Number(stashCell.dataset.s));
+      } else if (this.stashOpen && target?.closest('#stash')) {
+        g.backend.stashPut(d.i, -1);
+      } else if (shop) {
         this.sellFromBag(d.i);
       } else if (cell) {
         const to = Number(cell.dataset.i);
@@ -442,13 +517,22 @@ export class Hud {
     document.querySelector('.drop-target')?.classList.remove('drop-target');
     if (x < 0) return;
     const t = document.elementFromPoint(x, y) as HTMLElement | null;
-    const el = t?.closest<HTMLElement>(this.shopOpen ? '#bag-grid [data-i], .skill-hp, .skill-mp, #shop' : '#bag-grid [data-i], .skill-hp, .skill-mp');
+    let sel = '#bag-grid [data-i], .skill-hp, .skill-mp';
+    if (this.drag?.src === 'stash') sel = '#stash-grid [data-s], #bag-grid [data-i], #inventory .inv-window';
+    else if (this.stashOpen) sel += ', #stash-grid [data-s], #stash';
+    else if (this.shopOpen) sel += ', #shop';
+    const el = t?.closest<HTMLElement>(sel);
     el?.classList.add('drop-target');
   }
 
   private cellIndex(e: Event): number {
     const el = (e.target as HTMLElement).closest<HTMLElement>('[data-i]');
     return el ? Number(el.dataset.i) : -1;
+  }
+
+  private stashIndex(e: Event): number {
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-s]');
+    return el ? Number(el.dataset.s) : -1;
   }
 
   // ------------------------------------------------------------ build
@@ -533,6 +617,10 @@ export class Hud {
       else this.renderShopMoney();
     }
     if (this.forgeOpen && (this.g.npcDistance('blacksmith') > NPC_USE_RANGE || !p.alive)) this.closeForge();
+    if (this.stashOpen) {
+      if (this.g.npcDistance('keeper') > NPC_USE_RANGE || !p.alive) this.closeStash();
+      else this.renderStashMoney();
+    }
 
     this.mmT -= dt;
     if (this.mmT <= 0) {
@@ -540,7 +628,7 @@ export class Hud {
       this.drawMinimap();
       if (this.mapOpen) this.fullMap.draw(this.g);
     }
-    if (this.bagOpen && this.invDirty) this.renderInventory();
+    if ((this.bagOpen || this.stashOpen) && this.invDirty) this.renderInventory();
   }
 
   /** HP and MP as orbs in the bottom corners, or long bars at the top. The player picks; each browser remembers it. */
@@ -735,6 +823,7 @@ export class Hud {
     this.toggleBag(false);
     this.toggleHelp(false);
     this.closeShop();
+    this.closeStash();
     this.closeForge();
     if (this.dialogOpen) this.closeDialog();
   }
@@ -742,6 +831,7 @@ export class Hud {
   talkTo(id: NpcId): void {
     if (id === 'seeker') this.openDialog();
     else if (id === 'merchant') this.openShop();
+    else if (id === 'keeper') this.openStash();
     else this.openForge();
   }
 
@@ -763,6 +853,7 @@ export class Hud {
 
   private openShop(): void {
     this.closeForge();
+    this.closeStash();
     this.shopOpen = true;
     $('shop').classList.remove('hidden');
     this.toggleBag(true);
@@ -925,10 +1016,93 @@ export class Hud {
     this.renderShopMoney();
   }
 
+  // ------------------------------------------------------------ warehouse keeper (stash)
+
+  private openStash(): void {
+    this.closeShop();
+    this.closeForge();
+    this.stashOpen = true;
+    $('stash').classList.remove('hidden');
+    this.toggleBag(true);
+    this.markInventory();
+    this.renderStash();
+  }
+
+  private closeStash(): void {
+    if (!this.stashOpen) return;
+    this.stashOpen = false;
+    $('stash').classList.add('hidden');
+    this.closeConfirm();
+    this.hideTip();
+    this.markInventory();
+  }
+
+  /** Bought slots, then one locked bar per row not bought yet (only the next one can be bought). */
+  private renderStash(): void {
+    const st = this.g.player.stash;
+    let html = st.items.map((it, i) => this.itemCell(it, `data-s="${i}"`)).join('');
+    for (let size = st.size; size < STASH_MAX; size += STASH_ROW) {
+      const price = STASH_ROW_PRICES[(size - STASH_START) / STASH_ROW];
+      const next = size === st.size;
+      html += `<div class="stash-row-lock">🔒 แถวที่ ${size / STASH_ROW + 1} (+${STASH_ROW} ช่อง)` +
+        `<button ${next ? 'data-buyrow' : 'disabled title="ซื้อแถวก่อนหน้าก่อน"'}>ซื้อ ${price.toLocaleString()} G</button></div>`;
+    }
+    $('stash-grid').innerHTML = html;
+    $('stash-size').textContent = `ใช้ไป ${st.items.filter(Boolean).length} / ${st.size} ช่อง`;
+    this.renderStashMoney();
+  }
+
+  private renderStashMoney(): void {
+    const p = this.g.player;
+    $('stash-gold-in').textContent = `${p.stash.gold.toLocaleString()} G`;
+    $('stash-gold-carry').innerHTML = `ถืออยู่ ${COIN_ICON} ${p.gold.toLocaleString()} G`;
+  }
+
+  private buyStashRow(): void {
+    const p = this.g.player;
+    const price = nextRowPrice(p.stash);
+    if (price === null) return;
+    if (p.gold < price) {
+      this.log(`ทองไม่พอ — ต้องใช้ ${price.toLocaleString()} G`, '#ff8a6a');
+      return;
+    }
+    this.confirm(
+      `ขยายคลังอีก ${STASH_ROW} ช่อง (${p.stash.size} → ${p.stash.size + STASH_ROW})?<br><small>จ่าย ${price.toLocaleString()} G · ใช้ได้ทุกตัวละครในบัญชี</small>`,
+      `จ่าย ${price.toLocaleString()} G`,
+      () => {
+        this.g.backend.stashBuyRow();
+        this.markInventory();
+      },
+    );
+  }
+
+  /** dir 1 = deposit the typed amount, -1 = withdraw it. */
+  private stashGold(dir: 1 | -1): void {
+    const input = $<HTMLInputElement>('stash-gold-amt');
+    const amount = Math.floor(Number(input.value));
+    const p = this.g.player;
+    if (!(amount > 0)) {
+      this.log('ใส่จำนวนทองก่อน', '#b9b09a');
+      return;
+    }
+    if (dir > 0 && amount > p.gold) {
+      this.log(`ทองที่ถืออยู่ไม่พอ (มี ${p.gold.toLocaleString()} G)`, '#ff8a6a');
+      return;
+    }
+    if (dir < 0 && amount > p.stash.gold) {
+      this.log(`ทองในคลังไม่พอ (มี ${p.stash.gold.toLocaleString()} G)`, '#ff8a6a');
+      return;
+    }
+    this.g.backend.stashGold(dir * amount);
+    input.value = '';
+    this.markInventory();
+  }
+
   // ------------------------------------------------------------ blacksmith
 
   private openForge(): void {
     this.closeShop();
+    this.closeStash();
     this.forgeOpen = true;
     this.forgeSel = this.g.player.equipment.weapon?.uid ?? null;
     $('forge-result').textContent = '';
@@ -1063,7 +1237,10 @@ export class Hud {
     const lf = $('loot-filter');
     for (const r of RARITIES) lf.querySelector<HTMLInputElement>(`[data-rarity="${r}"]`)!.checked = p.lootFilter.rarities.includes(r);
     syncPots(lf, p.lootFilter);
-    $('bag-hint').textContent = this.shopOpen
+    if (this.stashOpen) this.renderStash();
+    $('bag-hint').textContent = this.stashOpen
+      ? 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = ฝากเข้าคลัง · ลากไปวางในคลังได้'
+      : this.shopOpen
       ? 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = ขายให้พ่อค้า · คลิกช่องสวมใส่ = ถอด'
       : 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = วางลงพื้น · คลิกช่องสวมใส่ = ถอด · ขายของได้ที่พ่อค้าเท่านั้น';
   }

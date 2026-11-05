@@ -369,6 +369,33 @@ export function drawMerchant(): DrawFn {
   };
 }
 
+export function drawKeeper(): DrawFn {
+  // Placeholder until the real sprite: an old warehouse keeper in a blue coat with a big ring of keys.
+  const skin = '#e8bf98';
+  return (ctx, view, f, s) => {
+    const bob = f === 0 ? 0 : 0.01;
+    rect(ctx, s, 0.4, 0.78, 0.08, 0.17, '#3a3028');
+    rect(ctx, s, 0.52, 0.78, 0.08, 0.17, '#3a3028');
+    rect(ctx, s, 0.33, 0.48 - bob, 0.34, 0.34, '#2f4f7a');
+    rect(ctx, s, 0.33, 0.62 - bob, 0.34, 0.04, '#6b4a2a', null);
+    if (view !== 'back') {
+      ell(ctx, s, view === 'side' ? 0.6 : 0.62, 0.7 - bob, 0.05, 0.05, '#c9a227');
+      rect(ctx, s, view === 'side' ? 0.6 : 0.62, 0.72 - bob, 0.015, 0.06, '#c9a227', null);
+    }
+    const hy = 0.36 - bob;
+    ell(ctx, s, 0.5, hy, 0.13, 0.13, skin);
+    if (view === 'front') {
+      rect(ctx, s, 0.44, hy - 0.01, 0.03, 0.03, '#2a1c12', null);
+      rect(ctx, s, 0.53, hy - 0.01, 0.03, 0.03, '#2a1c12', null);
+      ell(ctx, s, 0.5, hy + 0.08, 0.09, 0.05, '#e8e4dc', null);
+    } else if (view === 'side') {
+      rect(ctx, s, 0.57, hy - 0.01, 0.03, 0.03, '#2a1c12', null);
+      ell(ctx, s, 0.55, hy + 0.08, 0.06, 0.05, '#e8e4dc', null);
+    }
+    ell(ctx, s, 0.5, hy - 0.08, 0.14, 0.06, '#d8d4cc');
+  };
+}
+
 export function drawBlacksmith(): DrawFn {
   // Broad smith with a leather apron, beard and a hammer.
   const skin = '#d9a77f';

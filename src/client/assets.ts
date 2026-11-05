@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {
-  makeSheet, drawHuman, drawSlime, drawQuad, drawSeeker, drawMerchant, drawBlacksmith, drawTree, drawBush, drawRock, drawStump,
+  makeSheet, drawHuman, drawSlime, drawQuad, drawSeeker, drawMerchant, drawBlacksmith, drawKeeper, drawTree, drawBush, drawRock, drawStump,
   drawTent, drawCampfire, drawSign, drawFence, drawRunestone, drawIcon, pixelCircle,
 } from './placeholder';
 import { ITEM_ART } from '../shared/data/items';
@@ -44,6 +44,8 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   seeker: sheet('npc/seeker.png', () => makeSheet(32, drawSeeker())),
   merchant: sheet('npc/merchant.png', () => makeSheet(32, drawMerchant())),
   blacksmith: sheet('npc/blacksmith.png', () => makeSheet(32, drawBlacksmith())),
+  // No painted sheet yet: until npc/keeper.png exists the placeholder drawing is used.
+  keeper: sheet('npc/keeper.png', () => makeSheet(32, drawKeeper())),
 
   green_slime: monster('monsters/green_slime.png', () => makeSheet(32, drawSlime(['#6cc25a', '#4a9a3e', '#c8f0b0']))),
   wild_rabbit: monster('monsters/wild_rabbit.png', () => makeSheet(32, drawQuad(['#e8d3bf', '#d89a9a', '#fbeee2', '#d88a8a'], {

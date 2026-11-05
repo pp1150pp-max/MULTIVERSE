@@ -327,6 +327,7 @@ export class Game {
         this.hud.markInventory();
         break;
       case 'inventory':
+      case 'stash':
         this.hud.markInventory();
         break;
       case 'died': {

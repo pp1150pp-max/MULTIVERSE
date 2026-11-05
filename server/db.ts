@@ -6,6 +6,7 @@ import { dirname } from 'node:path';
 import type { CharacterData } from '../src/shared/sim/Player';
 import type { CharacterSummary } from '../src/shared/api';
 import type { ClassId } from '../src/shared/types';
+import { cleanStash, type StashData } from '../src/shared/sim/stash';
 
 export interface AccountRow { id: number; username: string; pass_hash: string }
 interface CharacterRow { id: number; account_id: number; name: string; class_id: string; data: string }
@@ -40,6 +41,11 @@ export class Db {
         updated_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS characters_by_account ON characters(account_id);
+      CREATE TABLE IF NOT EXISTS stashes (
+        account_id INTEGER PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
+        data TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
     `);
   }
 
@@ -112,6 +118,32 @@ export class Db {
   loadCharacter(accountId: number, id: number): CharacterData | undefined {
     const r = this.db.prepare('SELECT data FROM characters WHERE id = ? AND account_id = ?').get(id, accountId) as { data: string } | undefined;
     return r ? (JSON.parse(r.data) as CharacterData) : undefined;
+  }
+
+  // ------------------------------------------------------------ stash (one per account)
+
+  /** The account's stash; accounts without one yet get a new empty stash. */
+  loadStash(accountId: number): StashData {
+    const r = this.db.prepare('SELECT data FROM stashes WHERE account_id = ?').get(accountId) as { data: string } | undefined;
+    return cleanStash(r ? JSON.parse(r.data) : null);
+  }
+
+  /**
+   * Saves a character and its account's stash together, in one transaction, so an item moved between
+   * the two can never end up in both (or neither) after a crash.
+   */
+  saveCharacterAndStash(charId: number, data: CharacterData, accountId: number, stash: StashData): void {
+    this.db.exec('BEGIN');
+    try {
+      this.saveCharacter(charId, data);
+      this.db.prepare(`INSERT INTO stashes (account_id, data, updated_at) VALUES (?, ?, ?)
+        ON CONFLICT(account_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`)
+        .run(accountId, JSON.stringify(stash), Date.now());
+      this.db.exec('COMMIT');
+    } catch (e) {
+      this.db.exec('ROLLBACK');
+      throw e;
+    }
   }
 
   saveCharacter(id: number, data: CharacterData): void {

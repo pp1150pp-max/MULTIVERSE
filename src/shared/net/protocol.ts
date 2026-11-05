@@ -6,6 +6,7 @@ import type { LootKind } from '../sim/Loot';
 import type { SimEvent } from '../sim/types';
 import type { AutoSettings, BuybackEntry, LootFilter, PotionSelect, SortKey } from '../sim/Player';
 import type { EnhanceResult } from '../data/enhance';
+import type { StashData } from '../sim/stash';
 
 export const WS_PATH = '/ws';
 /** Server simulation rate and how often it sends snapshots. */
@@ -47,7 +48,15 @@ export type ActionMsg =
   | { t: 'act'; a: 'sell'; i: number }
   | { t: 'act'; a: 'buyBack'; i: number; uid: string }
   | { t: 'act'; a: 'sellRarity'; rarity: Rarity }
-  | { t: 'act'; a: 'enhance'; uid: string; req: number };
+  | { t: 'act'; a: 'enhance'; uid: string; req: number }
+  /** Stash (warehouse keeper). `to` = target slot, or -1 for wherever it fits. */
+  | { t: 'act'; a: 'stashPut'; i: number; to: number }
+  | { t: 'act'; a: 'stashTake'; i: number; to: number }
+  | { t: 'act'; a: 'stashMove'; from: number; to: number }
+  | { t: 'act'; a: 'stashSort'; key: SortKey; desc: boolean }
+  | { t: 'act'; a: 'stashBuy' }
+  /** amount > 0 deposits gold, < 0 withdraws it. */
+  | { t: 'act'; a: 'stashGold'; amount: number };
 
 export type ClientMsg =
   | { t: 'join'; token: string; characterId: number }
@@ -93,6 +102,8 @@ export interface PrivateSnap {
   inv?: { equipment: Partial<Record<SlotId, Item>>; bag: (BagEntry | null)[]; buyback?: BuybackEntry[] };
   /** Seconds of play until the buyback list clears. */
   buybackLeft?: number;
+  /** The account's stash, only when it changed since the last snapshot. */
+  stash?: StashData;
 }
 
 export interface SnapshotMsg {
