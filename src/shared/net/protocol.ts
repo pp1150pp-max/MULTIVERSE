@@ -22,8 +22,8 @@ export const CHAT_MAX = 120;
 
 export interface InputMsg {
   t: 'input';
-  /** Where the client walked its character (ignored while the server is moving it — dash, knockback). */
-  pos: Vec2;
+  /** Where the client walked its character. Left out while the client follows the server (dash, knockback). */
+  pos?: Vec2;
   /** Counts up with every input message, so the server can say which one its position answers (PrivateSnap.ack). */
   seq?: number;
   move: Vec2 | null;
