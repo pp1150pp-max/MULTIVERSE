@@ -501,12 +501,12 @@ export class GameWorld {
         id: m.id, def: m.def.id, lv: m.level,
         x: r2(m.x), z: r2(m.z), fx: r2(m.faceX), fz: r2(m.faceZ), mv: m.moving,
         alive: m.alive, deadT: r2(m.deadT), hp: Math.round(m.hp),
-        st: m.state, wind: m.windupT > 0, enr: m.enraged,
+        st: m.state, wind: m.windupT > 0, enr: m.enraged, y: r2(m.lift),
       })),
       projectiles: sim.projectiles.filter(near).map((pr) => ({
         id: pr.id, x: r2(pr.x), z: r2(pr.z),
         vx: r2(Math.cos(pr.o.angle) * pr.o.speed), vz: r2(Math.sin(pr.o.angle) * pr.o.speed),
-        color: pr.o.color, size: pr.o.size,
+        color: pr.o.color, size: pr.o.size, art: pr.o.art,
       })),
       loots: sim.loots.filter(near).map((l) => ({
         id: l.id, x: r2(l.x), z: r2(l.z), fromX: r2(l.fromX), fromZ: r2(l.fromZ), t: r2(l.t),

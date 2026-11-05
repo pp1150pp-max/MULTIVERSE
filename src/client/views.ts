@@ -93,6 +93,7 @@ export class MonsterView {
     const g = this.actor.group;
     g.position.x = m.x;
     g.position.z = m.z;
+    this.actor.setLift(m.lift);
     if (!m.alive) {
       this.actor.setOpacity(Math.max(0, 1 - m.deadT / 0.8));
       g.position.y = -m.deadT * 0.25;
@@ -108,15 +109,25 @@ export class MonsterView {
   }
 }
 
+/** A monster's shot, drawn from its own picture and pointing the way it flies (the picture points right). */
+function enemyShotSprite(art: string, size: number): THREE.Sprite {
+  const sheet = sheets[`fx_${art}`];
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: sheet.texture, alphaTest: 0.5, transparent: false }));
+  s.scale.set(size * sheet.cellAspect, size, 1);
+  return s;
+}
+
 export class ProjectileView {
   private readonly sprite: THREE.Sprite;
   private readonly shot: ShotSprite | null;
+  private readonly art: boolean;
   private lastX: number;
   private lastZ: number;
 
   constructor(readonly pr: ProjectileLike, private readonly scene: THREE.Scene, private readonly fx: Effects) {
-    this.shot = fx.shotSprite(pr.o.color, pr.o.size);
-    this.sprite = this.shot?.sprite ?? fx.glowSprite(pr.o.color, pr.o.size);
+    this.art = !!pr.o.art;
+    this.shot = pr.o.art ? null : fx.shotSprite(pr.o.color, pr.o.size);
+    this.sprite = pr.o.art ? enemyShotSprite(pr.o.art, pr.o.size) : this.shot?.sprite ?? fx.glowSprite(pr.o.color, pr.o.size);
     this.lastX = pr.x;
     this.lastZ = pr.z;
     scene.add(this.sprite);
@@ -126,7 +137,14 @@ export class ProjectileView {
   update(): void {
     const pr = this.pr;
     this.sprite.position.set(pr.x, 0.85, pr.z);
-    if (this.shot) {
+    if (this.art) {
+      const dx = pr.x - this.lastX;
+      const dz = pr.z - this.lastZ;
+      // Screen right is +x −z with this camera, and screen up is −x −z.
+      if (dx || dz) this.sprite.material.rotation = Math.atan2(-(dx + dz) * 0.7, dx - dz);
+      this.lastX = pr.x;
+      this.lastZ = pr.z;
+    } else if (this.shot) {
       // Works out its heading from how it moved, so local and online shots behave the same.
       this.shot.update(1 / 60, pr.x - this.lastX, pr.z - this.lastZ);
       this.lastX = pr.x;

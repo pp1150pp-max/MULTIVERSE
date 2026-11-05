@@ -44,6 +44,15 @@ const THEME_PROPS: Record<ZoneTheme, ThemeProps> = {
     ringRock: ['mossrock_1', 2.2],
     campDecor: false,
   },
+  snow: {
+    trees: ['snow_pine_0', 'snow_pine_1', 'snow_pine_2', 'frost_tree'],
+    bushes: ['snow_shrub_0', 'snow_shrub_1', 'frost_fern'],
+    rocks: ['snow_rock_0', 'snow_rock_1'],
+    stump: 'snow_stump',
+    extra: ['ice_crystal_0', 'ice_crystal_1'],
+    ringRock: ['snow_rock_1', 2.2],
+    campDecor: false,
+  },
 };
 
 /** How close a player has to walk to a portal to use it. */
@@ -86,6 +95,11 @@ export class Terrain {
   isBlocked(x: number, z: number, r: number): boolean {
     if (Math.abs(x) > this.bound || Math.abs(z) > this.bound) return true;
     return this.colliders.some((c) => Math.hypot(c.x - x, c.z - z) < c.r + r);
+  }
+
+  /** Frozen lake underfoot? Players slide here (see Player.walkStep). */
+  onIce(x: number, z: number): boolean {
+    return !!this.zone.iceLakes?.some((l) => Math.hypot((x - l.x) / l.rx, (z - l.z) / l.rz) < 1);
   }
 
   /** Push a circle out of static colliders and keep it inside the zone. */
@@ -199,6 +213,7 @@ export class Terrain {
       if (this.distToPath(x, z) < 3.2) continue;
       if (near(x, z, s, 11) || near(x, z, b, 13) || zone.portals.some((p) => near(x, z, p, 5))) continue;
       if (zone.spawns.some((sp) => near(x, z, sp, sp.radius * 0.55))) continue;
+      if (zone.iceLakes?.some((l) => Math.hypot((x - l.x) / (l.rx + 2), (z - l.z) / (l.rz + 2)) < 1)) continue;
       if (this.colliders.some((c) => Math.hypot(c.x - x, c.z - z) < 2.2)) continue;
       const roll = r();
       if (roll < 0.55) this.addTree(r, x, z);

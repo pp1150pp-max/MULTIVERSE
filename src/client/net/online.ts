@@ -281,6 +281,7 @@ export class OnlineBackend implements Backend {
       m.state = ms.st;
       m.windupT = ms.wind ? 1 : 0;
       m.enraged = ms.enr;
+      m.lift = ms.y;
     }
     for (const [id, m] of this.monsterMap) {
       if (!seenM.has(id)) {
@@ -299,7 +300,7 @@ export class OnlineBackend implements Backend {
         pr.x = ps.x;
         pr.z = ps.z;
       } else {
-        this.projMap.set(ps.id, { id: ps.id, x: ps.x, z: ps.z, vx: ps.vx, vz: ps.vz, o: { color: ps.color, size: ps.size } });
+        this.projMap.set(ps.id, { id: ps.id, x: ps.x, z: ps.z, vx: ps.vx, vz: ps.vz, o: { color: ps.color, size: ps.size, art: ps.art } });
       }
     }
     for (const id of this.projMap.keys()) if (!seenPr.has(id)) this.projMap.delete(id);
@@ -440,20 +441,15 @@ export class OnlineBackend implements Backend {
         mz = dz / remaining;
       }
     }
-    const moving = mx !== 0 || mz !== 0;
-    if (moving) {
-      const step = Math.min(me.moveSpeed * dt, remaining);
-      me.x += mx * step;
-      me.z += mz * step;
-      this.terrain.resolve(me);
-    }
+    const walking = mx !== 0 || mz !== 0;
+    const moving = me.walkStep(mx, mz, remaining, dt, this.terrain);
     if (it.basic || it.skills.length) {
       this.faceLockT = 0.25;
     }
     if (this.faceLockT > 0) me.face(it.aim.x - me.x, it.aim.z - me.z);
-    else if (moving) me.face(mx, mz);
+    else if (walking) me.face(mx, mz);
     me.moving = moving;
-    return moving ? { x: mx, z: mz } : null;
+    return walking ? { x: mx, z: mz } : null;
   }
 
   // ------------------------------------------------------------ actions (the server decides)

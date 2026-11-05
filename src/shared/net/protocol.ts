@@ -79,10 +79,12 @@ export interface MonsterSnap {
   id: number; def: string; lv: number;
   x: number; z: number; fx: number; fz: number; mv: boolean;
   alive: boolean; deadT: number; hp: number;
-  st: 'idle' | 'chase' | 'return' | 'charge'; wind: boolean; enr: boolean;
+  st: 'idle' | 'chase' | 'return' | 'charge' | 'leap'; wind: boolean; enr: boolean;
+  /** Height above the ground while jumping. */
+  y: number;
 }
 
-export interface ProjectileSnap { id: number; x: number; z: number; vx: number; vz: number; color: string; size: number }
+export interface ProjectileSnap { id: number; x: number; z: number; vx: number; vz: number; color: string; size: number; art?: 'ice_shard' | 'snowball' }
 
 export interface LootSnap {
   id: number; x: number; z: number; fromX: number; fromZ: number; t: number;
