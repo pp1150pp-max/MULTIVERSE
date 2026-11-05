@@ -210,6 +210,9 @@ export class GameWorld {
     const i = num((m as { i?: unknown }).i, -1);
     switch (m.a) {
       case 'respawn':
+        // Death turns Auto off (the browser does too), so the player doesn't run back to the farm spot.
+        // Done here because dead players get no input, and the tab may have been hidden when they died.
+        if (!p.alive) s.auto = null;
         sim.respawn(p);
         break;
       case 'equip':

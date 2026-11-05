@@ -176,6 +176,8 @@ export class Game {
   }
 
   respawn(): void {
+    // Also checked here in case the death event arrived while the tab was hidden.
+    if (this.autoPlay) this.toggleAuto(false, 'ปิด Auto Play — ตัวละครตาย');
     this.backend.respawn();
   }
 
@@ -330,7 +332,11 @@ export class Game {
       case 'died': {
         const v = this.viewById(ev.id);
         if (v instanceof PlayerView) v.onDied();
-        if (ev.id === me) this.hud.showDeath();
+        if (ev.id === me) {
+          this.hud.showDeath();
+          // Otherwise Auto walks straight back to the farm spot after respawning.
+          if (this.autoPlay) this.toggleAuto(false, 'ปิด Auto Play — ตัวละครตาย');
+        }
         break;
       }
       case 'revived': {

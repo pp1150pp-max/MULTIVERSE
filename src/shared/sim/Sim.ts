@@ -176,6 +176,7 @@ export class Sim {
     const dmg = Math.round(mitigate(m.atk * mult * (0.9 + Math.random() * 0.2), p.stats.def));
     p.hp -= dmg;
     p.lastHurt = this.time;
+    p.interruptPotions();
     if (m.isBoss) m.rampT = 0;
     this.events.push({ t: 'flash', id: p.id });
     this.anim(p.id, 'hit');

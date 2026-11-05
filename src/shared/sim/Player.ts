@@ -25,6 +25,11 @@ export const OUT_OF_COMBAT_REGEN = 2.5;
 
 export const BAG_SIZE = 30;
 export const POTION_CD = 1.5;
+/** A potion restores its amount evenly over this many seconds (owner: not all at once). */
+export const POTION_TIME = 3;
+
+/** A potion still being drunk: restores `perSec` until `left` runs out. */
+interface PotionHeal { kind: PotionKind; perSec: number; left: number }
 
 export type SortKey = 'rarity' | 'level' | 'slot' | 'value';
 export const SORT_KEYS: SortKey[] = ['rarity', 'level', 'slot', 'value'];
@@ -154,6 +159,8 @@ export class Player extends Unit {
   stats: Stats = emptyStats();
   cd: Partial<Record<SkillSlot, number>> = {};
   potCd = 0;
+  /** Potions still restoring. Several can run at once; a monster hit stops them all. */
+  potHeals: PotionHeal[] = [];
   lastHurt = -99;
   /** Sim time of the last basic attack or skill (ranged players rarely get hurt, so this counts as combat too). */
   lastAttack = -99;
@@ -496,22 +503,48 @@ export class Player extends Unit {
     sim.inventoryChanged(this);
     sim.sfx('drink', this.x, this.z, this.id);
     const amount = POTIONS[kind][size].amount;
+    this.potHeals.push({ kind, perSec: amount / POTION_TIME, left: POTION_TIME });
     if (kind === 'hp') {
-      this.hp = Math.min(this.maxHp, this.hp + amount);
       sim.text(this.x, this.topY, this.z, `+${amount}`, 'heal');
       sim.fx('burst', this.x, 1, this.z, '#ff6a6a', 8, 2);
     } else {
-      this.mp = Math.min(this.stats.maxMp, this.mp + amount);
       sim.text(this.x, this.topY, this.z, `+${amount} MP`, 'mana');
       sim.fx('burst', this.x, 1, this.z, '#6aa0ff', 8, 2);
     }
     this.potCd = POTION_CD;
   }
 
+  /** HP or MP the potions being drunk will still restore. */
+  potionPending(kind: PotionKind): number {
+    let n = 0;
+    for (const h of this.potHeals) if (h.kind === kind) n += h.perSec * h.left;
+    return n;
+  }
+
+  /** A monster hit spills the potions still being drunk. */
+  interruptPotions(): void {
+    if (!this.potHeals.length) return;
+    this.potHeals = [];
+    this.sim.text(this.x, this.topY + 0.4, this.z, 'ยาหยุดเติม', 'info', 0.8, this.id);
+  }
+
+  private tickPotions(dt: number): void {
+    for (const h of this.potHeals) {
+      const step = h.perSec * Math.min(dt, h.left);
+      h.left -= dt;
+      if (h.kind === 'hp') this.hp = Math.min(this.maxHp, this.hp + step);
+      else this.mp = Math.min(this.stats.maxMp, this.mp + step);
+    }
+    this.potHeals = this.potHeals.filter((h) => h.left > 0);
+  }
+
   update(dt: number, it: Intent): void {
     const sim = this.sim;
     this.moving = false;
-    if (!this.alive) return;
+    if (!this.alive) {
+      this.potHeals = [];
+      return;
+    }
     this.tickStatus(dt, sim.terrain);
     for (const k of Object.keys(this.cd) as SkillSlot[]) this.cd[k] = Math.max(0, (this.cd[k] ?? 0) - dt);
     this.atkT -= dt;
@@ -522,6 +555,7 @@ export class Player extends Unit {
     const ooc = inCombat ? 1 : OUT_OF_COMBAT_REGEN;
     this.hp = Math.min(this.maxHp, this.hp + this.stats.hpRegen * ooc * dt);
     this.mp = Math.min(this.stats.maxMp, this.mp + this.stats.mpRegen * ooc * dt);
+    this.tickPotions(dt);
 
     if (it.potion) this.usePotion(it.potion);
 
