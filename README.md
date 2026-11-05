@@ -101,6 +101,7 @@ src/client/      ← ฝั่งแสดงผล: Three.js, HUD และ inp
   net/api.ts         เรียก API ของ server
   views.ts           สไปรต์ของผู้เล่น/มอน/กระสุน/ของดรอป ที่อ่านค่าจาก Sim ทุกเฟรม
   world.ts           วาดพื้นและพร็อพตามตำแหน่งจาก terrain
+  audio/             เสียงสังเคราะห์ด้วย Web Audio: engine (มิกเซอร์ + ค่าตั้งเสียง), sfx, music, panel, gameAudio (จับคู่ SimEvent กับเสียง)
   placeholder.ts     ภาพตัวแทนที่วาดด้วยโค้ด
 public/assets/   ← ใส่ไฟล์ภาพจริงที่นี่ (ดู public/assets/README.md)
 ```
