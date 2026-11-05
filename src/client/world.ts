@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import type { Terrain } from '../shared/sim/terrain';
+import type { PropSpec, Terrain } from '../shared/sim/terrain';
 import type { ZoneTheme } from '../shared/data/zones';
 import { mulberry32, pick, rand, type Rng } from '../shared/rng';
 import { assetSources, fxTex, groundTiles, sheets, type GroundTile } from './assets';
+import { closeBias, IslandOutline, paintSpace, PieceBatch } from './island';
 
 /** World units covered by one repeat of a ground tile: about the same pixel size as the sprites. */
 const TILE_UNITS = 10.4;
@@ -19,6 +20,24 @@ const TRAIL_WIDTH: Record<ZoneTheme, number> = { forest: 4.2, marsh: 3.6 };
 
 /** Camera sits along this direction from its target: 45° yaw, ~47° pitch. */
 export const ISO_DIR = new THREE.Vector3(1, 1.45, 1).normalize();
+
+/** The camera's right and up, for quads drawn facing it. */
+const CAM_RIGHT = new THREE.Vector3(Math.SQRT1_2, 0, -Math.SQRT1_2);
+const CAM_UP = new THREE.Vector3().crossVectors(CAM_RIGHT, ISO_DIR.clone().negate()).normalize();
+
+/** Screen pixels per pixel of the space picture, and how many of them it slides per world unit walked. */
+const SPACE_PIXEL = 2;
+const SPACE_DRIFT = 8;
+
+/**
+ * Rock columns under the near shores: huge ones behind and low, smaller ones in front. Each starts far
+ * enough inside the shore that the land hides its top, so the real ground runs to the edge above it.
+ */
+const CLIFF_LAYERS = [
+  { width: [20, 27], inset: 9, y: -2.5, step: [4, 6] },
+  { width: [12, 16], inset: 5, y: -1, step: [2.6, 4] },
+  { width: [7.5, 10], inset: 2.2, y: -0.05, step: [1.6, 2.4] },
+];
 
 /** Where a small ground detail belongs. */
 type DecorSpot = 'verge' | 'field' | 'road' | 'shore' | 'water';
@@ -60,9 +79,12 @@ const PLANK_SHEET = { key: 'marsh_planks', cols: 3, width: 2.9, length: 5 };
 const enum GroundId { Base, WaterEdge, Water }
 
 const GROUND_VERT = /* glsl */ `
+  attribute float aEdge;
   varying vec2 vWorld;
+  varying float vEdge;
   void main() {
     vWorld = position.xz;
+    vEdge = aEdge;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
 `;
@@ -71,6 +93,7 @@ const GROUND_FRAG = /* glsl */ `
   uniform sampler2D uMask, uCover, uBase, uDirt, uPave, uWater;
   uniform float uHalf, uBound, uTileUnits, uTime, uBake;
   varying vec2 vWorld;
+  varying float vEdge;
 
   /**
    * Quietens a ground tile so characters stand out from it: pulls each pixel toward the tile's
@@ -140,7 +163,15 @@ const GROUND_FRAG = /* glsl */ `
     } else if (id == 2) {
       col = calm(texture2D(uWater, tile + vec2(uTime * 0.012, sin(uTime * 0.25) * 0.006)).rgb, uWater, 0.7, 0.8, 1.0);
     }
-    if (abs(vWorld.x) > uBound || abs(vWorld.y) > uBound) col *= 0.5;
+    // Past the walkable square the land darkens, without showing the square's straight lines.
+    float past = max(abs(vWorld.x), abs(vWorld.y)) - uBound;
+    col *= 1.0 - 0.32 * smoothstep(0.0, 2.5, past + lobes * 3.0);
+    // The shore breaks up in chunky pixels: the grass gives way to bare soil, darkening to the very edge.
+    float rough = noise(snapped * 1.7) * 0.55 + noise(snapped * 5.3) * 0.45;
+    float shore = vEdge - rough * 0.5;
+    if (shore < 0.0) discard;
+    col = mix(dirt * 0.62, col, step(0.2, shore + (noise(snapped * 3.1) - 0.5) * 0.14));
+    if (shore < 0.07) col = dirt * 0.3;
     gl_FragColor = vec4(col, 1.0);
     #include <colorspace_fragment>
     // A render target stays linear, but the map picture read back from it is used as sRGB.
@@ -266,12 +297,31 @@ export class World {
   /** Water shapes, so flowers don't grow on the pools. */
   private poolBlobs: { x: number; z: number; rx: number; rz: number }[] = [];
   private t = 0;
+  /** The land's broken shoreline. */
+  private readonly outline: IslandOutline;
+  /** The props actually drawn: the rim forest has gaps in it, and nothing stands out over space. */
+  private readonly props: PropSpec[];
+  private readonly spaceTex: THREE.CanvasTexture;
+  private readonly pieceUniforms: Record<string, THREE.IUniform>;
 
   constructor(private readonly scene: THREE.Scene, private readonly terrain: Terrain) {
     this.half = terrain.half;
     this.bound = terrain.bound;
     this.pal = PALETTES[terrain.zone.theme];
-    scene.background = new THREE.Color(this.pal.background);
+    this.outline = new IslandOutline(this.half, this.bound, terrain.zone.seed + 21);
+    this.props = this.visibleProps(mulberry32(terrain.zone.seed + 23));
+    this.spaceTex = new THREE.CanvasTexture(paintSpace());
+    this.spaceTex.colorSpace = THREE.SRGBColorSpace;
+    this.spaceTex.wrapS = this.spaceTex.wrapT = THREE.RepeatWrapping;
+    this.spaceTex.magFilter = this.spaceTex.minFilter = THREE.NearestFilter;
+    this.spaceTex.generateMipmaps = false;
+    scene.background = this.spaceTex;
+    this.pieceUniforms = {
+      uTime: { value: 0 },
+      uHalf: { value: this.half },
+      uRight: { value: CAM_RIGHT },
+      uUp: { value: CAM_UP },
+    };
     this.shadowMat = new THREE.MeshBasicMaterial({ map: fxTex.shadow, transparent: true, depthWrite: false, opacity: 0.4 });
 
     this.groundCanvas = this.paintGround(mulberry32(terrain.zone.seed));
@@ -308,19 +358,18 @@ export class World {
     }
     this.maskCtx = null;
     this.groundMesh = this.add(new THREE.Mesh(
-      new THREE.PlaneGeometry(this.half * 2, this.half * 2).rotateX(-Math.PI / 2),
+      this.ownGeo(this.outline.groundGeometry()),
       this.own(this.groundUniforms
-        ? new THREE.ShaderMaterial({ uniforms: this.groundUniforms, vertexShader: GROUND_VERT, fragmentShader: GROUND_FRAG })
-        : new THREE.MeshBasicMaterial({ map: this.groundTex })),
+        ? new THREE.ShaderMaterial({ uniforms: this.groundUniforms, vertexShader: GROUND_VERT, fragmentShader: GROUND_FRAG, side: THREE.DoubleSide })
+        : new THREE.MeshBasicMaterial({ map: this.groundTex, side: THREE.DoubleSide })),
     ));
-    const outer = new THREE.Mesh(
-      new THREE.PlaneGeometry(800, 800).rotateX(-Math.PI / 2),
-      this.own(new THREE.MeshBasicMaterial({ color: this.pal.background })),
-    );
-    outer.position.y = -0.05;
-    this.add(outer);
 
-    for (const p of terrain.props) this.addProp(p.key, p.x, p.z, p.height, p.fade);
+    this.addCliffs(mulberry32(terrain.zone.seed + 27));
+    this.addShoreTufts(mulberry32(terrain.zone.seed + 28));
+    this.addCracks(mulberry32(terrain.zone.seed + 29));
+    this.addPieces(mulberry32(terrain.zone.seed + 31));
+
+    for (const p of this.props) this.addProp(p.key, p.x, p.z, p.height, p.fade);
     const fire = terrain.props.find((p) => p.key === 'campfire');
     if (fire) this.flames.push(this.glow(fire.x, 0.5, fire.z, '#ffa040', 0.55));
     for (const p of terrain.zone.portals) this.portals.push(this.glow(p.x, 1.5, p.z, this.pal.portalGlow, 0.5));
@@ -347,6 +396,11 @@ export class World {
     this.scene.add(o);
     this.objects.push(o);
     return o;
+  }
+
+  private ownGeo<T extends THREE.BufferGeometry>(g: T): T {
+    this.ownGeos.push(g);
+    return g;
   }
 
   private own<T extends THREE.Material>(m: T): T {
@@ -392,34 +446,36 @@ export class World {
     const H = this.half;
     const s = this.mapScale;
 
-    const glow = ctx.createRadialGradient(c, c, c * 0.3, c, c, c * 1.4);
-    glow.addColorStop(0, this.pal.background);
-    glow.addColorStop(1, '#040605');
-    ctx.fillStyle = glow;
+    ctx.fillStyle = ctx.createPattern(paintSpace(), 'repeat')!;
     ctx.fillRect(0, 0, MAP_SIZE, MAP_SIZE);
+    this.bakeMapPieces(ctx);
 
-    const diamond = () => {
+    const shore = this.outline.points();
+    const shorePath = (dy = 0) => {
       ctx.beginPath();
-      ctx.moveTo(...this.mapAt(-H, -H));
-      ctx.lineTo(...this.mapAt(H, -H));
-      ctx.lineTo(...this.mapAt(H, H));
-      ctx.lineTo(...this.mapAt(-H, H));
+      for (const [x, z] of shore) {
+        const [mx, my] = this.mapAt(x, z);
+        ctx.lineTo(mx, my + dy);
+      }
       ctx.closePath();
     };
-    ctx.save();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-    ctx.shadowBlur = 40;
-    ctx.fillStyle = '#000';
-    diamond();
-    ctx.fill();
-    ctx.restore();
+    // The land's underside shows below its near shores.
+    for (const [dy, colour] of [[MAP_SIZE * 0.022, '#241c2e'], [MAP_SIZE * 0.012, '#4a3a38']] as const) {
+      shorePath(dy);
+      ctx.fillStyle = colour;
+      ctx.fill();
+    }
 
+    ctx.save();
+    shorePath();
+    ctx.clip();
     const a = ((2 * H) / ground.width) * s * S;
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     ctx.setTransform(a, a, -a, a, c, c - 2 * H * S * s);
     ctx.drawImage(ground, 0, 0);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.restore();
 
     // Roads are too soft on the real ground to follow at this size, so they're marked over it.
     ctx.lineCap = ctx.lineJoin = 'round';
@@ -435,7 +491,7 @@ export class World {
     }
 
     // Back to front, so nearer trees overlap the ones behind them.
-    const props = this.terrain.props
+    const props = this.props
       .filter((p) => p.height >= MAP_MIN_PROP && p.key !== 'portal')
       .sort((p, q) => p.x + p.z - (q.x + q.z));
     for (const p of props) {
@@ -448,12 +504,7 @@ export class World {
 
     // Everything past the walkable area sinks into shadow, so the playable shape stands out.
     const B = this.bound;
-    ctx.beginPath();
-    ctx.moveTo(...this.mapAt(-H, -H));
-    ctx.lineTo(...this.mapAt(H, -H));
-    ctx.lineTo(...this.mapAt(H, H));
-    ctx.lineTo(...this.mapAt(-H, H));
-    ctx.closePath();
+    shorePath();
     ctx.moveTo(...this.mapAt(-B, -B));
     ctx.lineTo(...this.mapAt(B, -B));
     ctx.lineTo(...this.mapAt(B, B));
@@ -462,10 +513,213 @@ export class World {
     ctx.fillStyle = 'rgba(4, 8, 6, 0.55)';
     ctx.fill('evenodd');
 
-    ctx.lineWidth = 5;
+    ctx.lineWidth = 3;
     ctx.strokeStyle = this.pal.mapEdge;
-    diamond();
+    shorePath();
     ctx.stroke();
+  }
+
+  /** Rocks and star shards drifting around the island on the map picture. */
+  private bakeMapPieces(ctx: CanvasRenderingContext2D): void {
+    if (assetSources.island_debris !== 'file') return;
+    const image = sheets.island_debris.texture.image as HTMLImageElement;
+    const cw = image.width / 4;
+    const ch = image.height / 3;
+    const r = mulberry32(this.zone.seed + 33);
+    for (let i = 0; i < 120; i++) {
+      const [x, z] = this.outline.at(r() * 8, closeBias(r, 0.5, 34));
+      const [mx, my] = this.mapAt(x, z);
+      const shard = r() < 0.2;
+      const cell = shard ? 8 + ((r() * 4) | 0) : (r() * 4) | 0;
+      const size = shard ? rand(r, 10, 16) : rand(r, 6, 20);
+      ctx.drawImage(image, (cell % 4) * cw, Math.floor(cell / 4) * ch, cw, ch, mx - size / 2, my - size / 2, size, size);
+    }
+  }
+
+  /** The rim forest with gaps in it. Only trees whose colliders can't reach the walkable square are left out. */
+  private visibleProps(r: Rng): PropSpec[] {
+    return this.terrain.props.filter((p) => {
+      if (Math.max(Math.abs(p.x), Math.abs(p.z)) - this.bound <= 1.5) return true;
+      if (!this.outline.contains(p.x, p.z, 0.7)) return false;
+      return r() > (this.outline.sparseness(p.x, p.z) > 0.56 ? 0.92 : 0.3);
+    });
+  }
+
+  /** Broken rock under the two shores that face the camera. One mesh, as with the decor. */
+  private addCliffs(r: Rng): void {
+    const key = this.zone.theme === 'marsh' ? 'island_cliff_marsh' : 'island_cliff_forest';
+    if (assetSources[key] !== 'file') return;
+    const positions: number[] = [];
+    const uvs: number[] = [];
+    const H = this.half;
+    const span = 4 / H; // Past each end of the near shores by 4 world units.
+    for (const layer of CLIFF_LAYERS) {
+      for (let s = -span; s < 4 + span; s += rand(r, layer.step[0], layer.step[1]) / H) {
+        const [sx, sz] = this.outline.at(s);
+        const k = 1 - layer.inset / Math.max(Math.abs(sx), Math.abs(sz));
+        const width = rand(r, layer.width[0], layer.width[1]);
+        const height = width;
+        const ax = sx * k;
+        const ay = layer.y;
+        const az = sz * k;
+        const hx = (CAM_RIGHT.x * width) / 2;
+        const hz = (CAM_RIGHT.z * width) / 2;
+        const dx = CAM_UP.x * height;
+        const dy = CAM_UP.y * height;
+        const dz = CAM_UP.z * height;
+        positions.push(
+          ax - hx - dx, ay - dy, az - hz - dz,
+          ax + hx - dx, ay - dy, az + hz - dz,
+          ax + hx, ay, az + hz,
+          ax - hx, ay, az - hz,
+        );
+        const cell = (r() * 8) | 0;
+        const u0 = (cell % 4) / 4;
+        const u1 = u0 + 1 / 4;
+        const v1 = 1 - Math.floor(cell / 4) / 2;
+        const v0 = v1 - 1 / 2;
+        const [ul, ur] = r() < 0.5 ? [u0, u1] : [u1, u0];
+        uvs.push(ul, v0, ur, v0, ur, v1, ul, v1);
+      }
+    }
+    this.addQuads(key, positions, uvs);
+  }
+
+  /** Grass and weeds along the shore, all rooted on solid land just inside its crumbled edge. */
+  private addShoreTufts(r: Rng): void {
+    const set = DECOR[this.zone.theme];
+    if (assetSources[set.key] !== 'file') return;
+    const positions: number[] = [];
+    const uvs: number[] = [];
+    const step = 8 / (8 * this.half);
+    for (let s = 0; s < 8; s += rand(r, 0.45, 1) * step) {
+      const [x, z] = this.outline.at(s, -rand(r, 0.85, 1.7));
+      const cell = pick(r, set.spots.verge);
+      const size = DECOR_CELL_UNITS * rand(r, 0.85, 1.3);
+      const hx = (CAM_RIGHT.x * size) / 2;
+      const hz = (CAM_RIGHT.z * size) / 2;
+      const dx = CAM_UP.x * size;
+      const dy = CAM_UP.y * size;
+      const dz = CAM_UP.z * size;
+      positions.push(x - hx, 0.02, z - hz, x + hx, 0.02, z + hz, x + hx + dx, 0.02 + dy, z + hz + dz, x - hx + dx, 0.02 + dy, z - hz + dz);
+      const u0 = (cell % set.cols) / set.cols;
+      const u1 = u0 + 1 / set.cols;
+      const v1 = 1 - Math.floor(cell / set.cols) / set.rows;
+      const v0 = v1 - 1 / set.rows;
+      const [ul, ur] = r() < 0.5 ? [u1, u0] : [u0, u1];
+      uvs.push(ul, v0, ur, v0, ur, v1, ul, v1);
+    }
+    this.addQuads(set.key, positions, uvs);
+  }
+
+  /** Fissures in the land around the rim, where it's coming apart. */
+  private addCracks(r: Rng): void {
+    if (assetSources.island_cracks !== 'file') return;
+    const positions: number[] = [];
+    const uvs: number[] = [];
+    let placed = 0;
+    for (let i = 0; i < 600 && placed < 70; i++) {
+      const size = rand(r, 3.6, 7.5);
+      const [x, z] = this.outline.at(r() * 8, -rand(r, 0.8, 7));
+      if (!this.outline.contains(x, z, size * 0.34)) continue;
+      const a = r() * Math.PI * 2;
+      const cx = Math.cos(a) * size * 0.5;
+      const cz = Math.sin(a) * size * 0.5;
+      positions.push(
+        x - cx - cz, 0.015, z - cz + cx,
+        x + cx - cz, 0.015, z + cz + cx,
+        x + cx + cz, 0.015, z + cz - cx,
+        x - cx + cz, 0.015, z - cz - cx,
+      );
+      const cell = (r() * 8) | 0;
+      const u0 = (cell % 4) / 4;
+      const v1 = 1 - Math.floor(cell / 4) / 2;
+      uvs.push(u0, v1 - 0.5, u0 + 0.25, v1 - 0.5, u0 + 0.25, v1, u0, v1);
+      placed++;
+    }
+    if (positions.length) this.addQuads('island_cracks', positions, uvs);
+  }
+
+  /** Rocks, star shards and slabs of land coming away from the island, and crumbs falling off it. */
+  private addPieces(r: Rng): void {
+    const slabsKey = this.zone.theme === 'marsh' ? 'island_slabs_marsh' : 'island_slabs_forest';
+    if (assetSources.island_debris !== 'file' || assetSources[slabsKey] !== 'file') return;
+    const H = this.half;
+    const cell = (cols: number, rows: number, i: number) => {
+      const u0 = (i % cols) / cols;
+      const v1 = 1 - Math.floor(i / cols) / rows;
+      return { u0, u1: u0 + 1 / cols, v0: v1 - 1 / rows, v1 };
+    };
+    /** Distance past the zone's square of the shore at this point, which is never positive. */
+    const shoreAt = (s: number) => {
+      const [x, z] = this.outline.at(s);
+      return Math.max(Math.abs(x), Math.abs(z)) - H;
+    };
+    const rocks = new PieceBatch(r);
+    const halos = new PieceBatch(r);
+    const slabs = new PieceBatch(r);
+
+    const rock = (s: number, past: number, y: number, speed: number) => {
+      const small = r() < 0.3;
+      const large = !small && r() < 0.07;
+      const half = small ? rand(r, 0.25, 0.55) : large ? rand(r, 2, 3.2) : rand(r, 0.55, 1.6);
+      rocks.add({
+        s, past, y, speed, w: half, h: half, spin: r() * 6.3, turn: rand(r, -0.3, 0.3), bob: rand(r, 0, 0.4),
+        ...cell(4, 3, small ? 6 + ((r() * 2) | 0) : (r() * 4) | 0),
+      });
+    };
+    const shard = (s: number, past: number, y: number, speed: number) => {
+      const half = rand(r, 0.45, 1.15);
+      const spin = r() * 6.3;
+      const turn = rand(r, -0.5, 0.5);
+      rocks.add({ s, past, y, speed, w: half, h: half, spin, turn, ...cell(4, 3, 8 + ((r() * 4) | 0)) });
+      halos.add({ s, past, y, speed, w: half * 1.7, h: half * 1.7, u0: 0, u1: 1, v0: 0, v1: 1 });
+    };
+
+    // Circling the island, slow enough to read as drifting. Those low enough slide behind the land.
+    for (let i = 0; i < 340; i++) rock(r() * 8, closeBias(r, -2, 46), -closeBias(r, 0.6, 30), rand(r, 0.25, 0.9));
+    for (let i = 0; i < 70; i++) shard(r() * 8, closeBias(r, -1, 42), -closeBias(r, 0.6, 26), rand(r, 0.3, 1));
+    // Hanging just off each shore. Behind the land they float high enough to be seen past its edge.
+    for (let i = 0; i < 70; i++) rock(rand(r, 4, 8), closeBias(r, -3, 22), rand(r, -2, 3), 0);
+    for (let i = 0; i < 18; i++) shard(rand(r, 4, 8), closeBias(r, -3, 20), rand(r, -1, 4), 0);
+    for (let i = 0; i < 40; i++) rock(rand(r, -0.1, 4.1), closeBias(r, -1, 12), -rand(r, 1, 16), 0);
+    // Rubble just coming loose along the far shores, which have no cliff to show.
+    for (let i = 0; i < 70; i++) {
+      const s = rand(r, 3.95, 8.05);
+      rock(s, shoreAt(s) + rand(r, 0.1, 1.6), rand(r, -0.6, 0.6), 0);
+    }
+    // Crumbs of soil and stone dropping from the near cliffs.
+    for (let i = 0; i < 100; i++) {
+      const s = rand(r, -0.05, 4.05);
+      const half = rand(r, 0.16, 0.48);
+      rocks.add({
+        s, past: shoreAt(s) + rand(r, 0.2, 1.8), y: -rand(r, 0, 2.5), speed: 0, w: half, h: half,
+        spin: r() * 6.3, turn: rand(r, -1.4, 1.4), fall: [rand(r, 0.9, 2.4), rand(r, 10, 26)],
+        ...cell(4, 3, 4 + ((r() * 4) | 0)),
+      });
+    }
+    // Whole slabs of land, adrift. They hang low enough not to cover the walkable ground.
+    for (let i = 0; i < 28; i++) {
+      const near = i < 16;
+      const s = near ? rand(r, -0.05, 4.05) : rand(r, 4, 8);
+      const half = rand(r, 1.7, 3.8);
+      const past = shoreAt(s) + (near ? closeBias(r, 1.5, 15) : closeBias(r, half * 0.6, 18));
+      slabs.add({
+        s, past, y: near ? -half * 0.9 - rand(r, 0, 7) : rand(r, -0.5, 3.5), speed: 0, w: half, h: half,
+        bob: rand(r, 0.15, 0.5), ...cell(4, 2, (r() * 8) | 0),
+      });
+    }
+
+    for (const [batch, map, glow] of [
+      [rocks, sheets.island_debris.texture, false],
+      [slabs, sheets[slabsKey].texture, false],
+      [halos, fxTex.glow, true],
+    ] as const) {
+      const { mesh, geo, mat } = batch.build(map, this.pieceUniforms, glow);
+      this.ownGeo(geo);
+      this.own(mat);
+      this.add(mesh);
+    }
   }
 
   /** Renders the ground straight down into a canvas whose x and y run along world x and z. */
@@ -657,12 +911,18 @@ export class World {
     this.shadowMat.dispose();
     this.groundTex.dispose();
     this.groundCover?.dispose();
+    this.spaceTex.dispose();
   }
 
   /** Fade trees that stand between the camera and the player. */
   update(dt: number, px: number, pz: number): void {
     this.t += dt;
     if (this.groundUniforms) this.groundUniforms.uTime.value = this.t;
+    this.pieceUniforms.uTime.value = this.t;
+    // Space slides past far slower than the land, as if very far behind it.
+    const tile = paintSpace().width * SPACE_PIXEL;
+    this.spaceTex.repeat.set(window.innerWidth / tile, window.innerHeight / tile);
+    this.spaceTex.offset.set(((px - pz) * S * SPACE_DRIFT) / tile, (-(px + pz) * S * SPACE_DRIFT) / tile);
     for (const f of this.fadeables) {
       const depth = f.x + f.z - (px + pz);
       let target = 1;
