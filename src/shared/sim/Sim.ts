@@ -416,6 +416,11 @@ export class Sim {
     this.events.push({ t: 'save', to: p.id });
   }
 
+  moveInBag(p: Player, from: number, to: number): void {
+    p.moveInBag(from, to);
+    this.afterChange(p);
+  }
+
   sortBag(p: Player, key: SortKey, desc: boolean): void {
     p.sortBag(key, desc);
     this.afterChange(p);

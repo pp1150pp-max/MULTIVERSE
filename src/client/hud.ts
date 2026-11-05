@@ -63,6 +63,10 @@ export class Hud {
   private slotEls: { kind: SkillSlot | PotionKind; el: HTMLElement; cd: HTMLElement; extra: HTMLElement }[] = [];
   private invDirty = true;
   private bagOpen = false;
+  /** A bag item being dragged with the mouse (ghost appears once the mouse moves a few pixels). */
+  private drag: { i: number; x: number; y: number; ghost: HTMLElement | null } | null = null;
+  /** True right after a drag ends, so the click that follows mouseup does nothing. */
+  private justDragged = false;
   private mmT = 0;
   private readonly mm: CanvasRenderingContext2D;
   private dialogIdx = 0;
@@ -106,7 +110,9 @@ export class Hud {
     chat.addEventListener('blur', () => this.closeChat());
 
     const bag = $('bag-grid');
+    this.setupBagDrag(bag);
     bag.addEventListener('click', (e) => {
+      if (this.justDragged) return;
       const i = this.cellIndex(e);
       if (i < 0) return;
       const entry = g.player.bag[i];
@@ -148,6 +154,7 @@ export class Hud {
       );
     });
     bag.addEventListener('mousemove', (e) => {
+      if (this.drag?.ghost) return;
       const i = this.cellIndex(e);
       const item = i >= 0 ? g.player.bag[i] : null;
       if (isPotion(item)) this.showPotionTip(item, e, this.shopOpen ? 'คลิกซ้าย: ใช้กับปุ่มด่วน · คลิกขวา: ขายทั้งช่อง' : 'คลิกซ้าย: ใช้กับปุ่มด่วน · คลิกขวา: วางลงพื้น');
@@ -252,6 +259,85 @@ export class Hud {
     this.markInventory();
     this.log(`เดินทางสู่ ${z.name} · ${z.nameTh} (Lv.${z.levels[0]}–${z.levels[1]})`, '#9fffd8');
     this.log(z.subtitle, '#b9c9c0');
+  }
+
+  /**
+   * Drag & drop from the bag:
+   * - onto another bag slot: swap places (the same potion merges up to a full stack)
+   * - onto the potion quick key (1 / 2): that key uses the dragged potion's size
+   * - onto the game world: drop it on the ground right away (no confirm)
+   */
+  private setupBagDrag(bag: HTMLElement): void {
+    const g = this.g;
+    bag.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      const i = this.cellIndex(e);
+      if (i < 0 || !g.player.bag[i]) return;
+      e.preventDefault();
+      this.drag = { i, x: e.clientX, y: e.clientY, ghost: null };
+    });
+    window.addEventListener('mousemove', (e) => {
+      const d = this.drag;
+      if (!d) return;
+      if (!d.ghost) {
+        if (Math.hypot(e.clientX - d.x, e.clientY - d.y) < 5) return;
+        const src = bag.querySelector<HTMLElement>(`[data-i="${d.i}"]`);
+        if (!src || !g.player.bag[d.i]) {
+          this.drag = null;
+          return;
+        }
+        const ghost = src.cloneNode(true) as HTMLElement;
+        ghost.removeAttribute('data-i');
+        ghost.classList.add('drag-ghost');
+        document.body.append(ghost);
+        d.ghost = ghost;
+        src.classList.add('dragging');
+        this.hideTip();
+      }
+      d.ghost.style.left = `${e.clientX}px`;
+      d.ghost.style.top = `${e.clientY}px`;
+      this.markDropTarget(e.clientX, e.clientY);
+    });
+    window.addEventListener('mouseup', (e) => {
+      const d = this.drag;
+      this.drag = null;
+      if (!d?.ghost) return;
+      d.ghost.remove();
+      this.markDropTarget(-1, -1);
+      bag.querySelector('.dragging')?.classList.remove('dragging');
+      this.justDragged = true;
+      setTimeout(() => (this.justDragged = false), 0);
+      const item = g.player.bag[d.i];
+      if (!item) return;
+      const target = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+      const cell = target?.closest<HTMLElement>('#bag-grid [data-i]');
+      const quick = target?.closest<HTMLElement>('.skill-hp, .skill-mp');
+      if (cell) {
+        const to = Number(cell.dataset.i);
+        if (to !== d.i) g.backend.moveInBag(d.i, to);
+      } else if (quick) {
+        const kind: PotionKind = quick.classList.contains('skill-hp') ? 'hp' : 'mp';
+        if (isPotion(item) && item.potion === kind) {
+          g.backend.equip(d.i);
+          this.log(`ปุ่ม ${kind === 'hp' ? 1 : 2} จะใช้${potionName(item.potion, item.size)}`, '#9fd8ff');
+        } else {
+          this.log('ลากยา HP ไปที่ปุ่ม 1 · ยา MP ไปที่ปุ่ม 2', '#ff8a6a');
+        }
+      } else if (target === g.renderer.domElement) {
+        g.dropFromBag(d.i);
+        if (this.forgeOpen) this.renderForge();
+      }
+      this.markInventory();
+    });
+  }
+
+  /** Highlights whatever the dragged item would land on. Pass (-1, -1) to clear. */
+  private markDropTarget(x: number, y: number): void {
+    document.querySelector('.drop-target')?.classList.remove('drop-target');
+    if (x < 0) return;
+    const t = document.elementFromPoint(x, y) as HTMLElement | null;
+    const el = t?.closest<HTMLElement>('#bag-grid [data-i], .skill-hp, .skill-mp');
+    el?.classList.add('drop-target');
   }
 
   private cellIndex(e: Event): number {
