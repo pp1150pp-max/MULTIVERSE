@@ -7,10 +7,39 @@ import { itemName } from '../shared/data/enhance';
 import { expGapMult } from '../shared/formulas';
 import { iconImg } from './icons';
 
-interface Num { el: HTMLDivElement; x: number; y: number; z: number; t: number; life: number; dx: number }
+interface Num { el: HTMLDivElement; x: number; y: number; z: number; t: number; life: number; height: number; dx: number; dy: number; pop: number }
 interface Plate { el: HTMLDivElement; fill: HTMLDivElement }
 
 /** DOM overlay for damage numbers, monster nameplates and loot labels. */
+/** Which row of the number sheet each kind of number uses. */
+const GLYPH_ROW: Record<string, number> = { dmg: 0, crit: 1, hurt: 2, heal: 3 };
+const NUMBER = /^[-+]?\d+!?$/;
+const GLYPH_SHEET = 'assets/sprites/icons/digits.png';
+const CRIT_BURST = 'assets/sprites/icons/crit_burst.png';
+const GLYPH_ORDER = '0123456789+-!';
+/** Width of each cell in the sheet, and of each character in it, as a share of its height. */
+const GLYPH_CELL = 58 / 64;
+const GLYPH_WIDTH: Record<string, number> = {
+  0: 0.734, 1: 0.609, 2: 0.734, 3: 0.703, 4: 0.781, 5: 0.734, 6: 0.734, 7: 0.719, 8: 0.75, 9: 0.703, '+': 0.672, '-': 0.594, '!': 0.375,
+};
+/** Hits this close together in time are treated as one burst and spread out. */
+const STACK_TIME = 0.35;
+const POP_TIME = 0.14;
+const MAX_NUMS = 120;
+/** Highest a stack of numbers climbs, in pixels. */
+const MAX_STACK = 110;
+
+/** A number as pieces of the sheet, sized in em so the font size scales it. */
+function glyphs(text: string, row: number, burst: boolean): string {
+  const size = `${GLYPH_ORDER.length * GLYPH_CELL}em 4em`;
+  const parts = [...text].map((ch) => {
+    const w = GLYPH_WIDTH[ch];
+    const x = GLYPH_ORDER.indexOf(ch) * GLYPH_CELL + (GLYPH_CELL - w) / 2;
+    return `<span class="dg" style="width:${w}em;background:url(${GLYPH_SHEET}) -${x}em -${row}em / ${size} no-repeat"></span>`;
+  });
+  return (burst ? `<span class="dburst" style="background-image:url(${CRIT_BURST})"></span>` : '') + parts.join('');
+}
+
 export class Floating {
   private nums: Num[] = [];
   private plates = new Map<Monster, Plate>();
@@ -23,14 +52,38 @@ export class Floating {
     this.prompt = document.createElement('div');
     this.prompt.className = 'npc-prompt hidden';
     root.append(this.prompt);
+    // Fetched up front, so the first hit doesn't show an empty number.
+    for (const src of [GLYPH_SHEET, CRIT_BURST]) new Image().src = src;
   }
 
   text(x: number, y: number, z: number, text: string, cls: string, life = 0.9): void {
     const el = document.createElement('div');
     el.className = `fnum ${cls}`;
-    el.textContent = text;
+    const row = GLYPH_ROW[cls];
+    const drawn = row !== undefined && NUMBER.test(text);
+    if (drawn) el.innerHTML = glyphs(text, row, cls === 'crit');
+    else el.textContent = text;
     this.root.append(el);
-    this.nums.push({ el, x, y, z, t: 0, life, dx: (Math.random() - 0.5) * 24 });
+    // Numbers landing on the same spot stack up and fan out, so a burst of hits stays readable.
+    let below = 0;
+    let count = 0;
+    if (drawn) {
+      for (const n of this.nums) {
+        if (n.height && n.t < STACK_TIME && Math.abs(n.x - x) < 1 && Math.abs(n.z - z) < 1) {
+          below += n.height;
+          count++;
+        }
+      }
+    }
+    const side = count % 2 ? 1 : -1;
+    this.nums.push({
+      el, x, y, z, t: 0, life,
+      height: !drawn ? 0 : cls === 'crit' ? 38 : 26,
+      dx: drawn ? side * (8 + Math.random() * 14) : 0,
+      dy: drawn ? Math.min(below, MAX_STACK) : cls === 'exp' ? -30 : 0,
+      pop: !drawn ? 0 : cls === 'crit' ? 0.8 : 0.3,
+    });
+    if (this.nums.length > MAX_NUMS) this.nums.shift()!.el.remove();
   }
 
   /** Small label above an NPC, or hidden when text is null. */
@@ -85,7 +138,10 @@ export class Floating {
       n.t += dt;
       const s = g.toScreen(n.x, n.y, n.z);
       const k = n.t / n.life;
-      n.el.style.transform = `translate(${s.sx + n.dx * k}px, ${s.sy - 50 * k}px) translate(-50%, -50%)`;
+      // Jumps up fast then hangs in the air; a hit starts oversized and snaps down to size.
+      const rise = 46 * (1 - (1 - k) * (1 - k));
+      const pop = 1 + n.pop * Math.max(0, 1 - n.t / POP_TIME);
+      n.el.style.transform = `translate(${s.sx + n.dx * k}px, ${s.sy - n.dy - rise}px) translate(-50%, -50%) scale(${pop})`;
       n.el.style.opacity = String(1 - Math.max(0, (k - 0.6) / 0.4));
       if (n.t >= n.life) {
         n.el.remove();

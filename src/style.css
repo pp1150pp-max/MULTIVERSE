@@ -47,13 +47,28 @@ button.primary { background: linear-gradient(#a8812f, #6b4f1a); border-color: va
 #float-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 2; }
 #float-layer > * { position: absolute; left: 0; top: 0; white-space: nowrap; will-change: transform; }
 
-.fnum { font-weight: 600; font-size: 15px; text-shadow: 0 0 3px #000, 1px 1px 0 #000; }
-.fnum.dmg { color: #fff; }
-.fnum.crit { color: #ffd34a; font-size: 21px; }
-.fnum.hurt { color: #ff5a5a; font-size: 17px; }
-.fnum.heal { color: #6cff7a; }
+.fnum {
+  display: flex; align-items: center; font-weight: 700; font-size: 15px;
+  text-shadow: -1px -1px 0 #1a0f08, 1px -1px 0 #1a0f08, -1px 1px 0 #1a0f08, 1px 1px 0 #1a0f08, 0 2px 0 #1a0f08;
+}
+/* Numbers drawn from the sheet are sized by font size; each piece is one em tall. */
+.fnum .dg { position: relative; display: block; height: 1em; }
+.fnum.dmg { color: #fff; font-size: 24px; }
+.fnum.crit { color: #ffd34a; font-size: 36px; }
+.fnum.hurt { color: #ff5a5a; font-size: 27px; }
+.fnum.heal { color: #6cff7a; font-size: 25px; }
+.fnum .dburst {
+  /* Sized from the number, however many digits it has. */
+  position: absolute; inset: -0.75em -0.55em;
+  background: center / 100% 100% no-repeat; animation: crit-burst 0.55s ease-out forwards;
+}
+@keyframes crit-burst {
+  from { transform: scale(0.6) rotate(-10deg); opacity: 1; }
+  55% { transform: scale(1) rotate(0deg); opacity: 1; }
+  to { transform: scale(1.12) rotate(3deg); opacity: 0; }
+}
 .fnum.mana { color: #7fb0ff; }
-.fnum.gold { color: #f2c230; font-size: 13px; }
+.fnum.gold { color: #f2c230; font-size: 14px; }
 .fnum.info { color: #e0e0e0; font-size: 13px; }
 .fnum.lvl { color: #ffe27a; font-family: 'Cinzel', serif; font-size: 26px; font-weight: 800; }
 
