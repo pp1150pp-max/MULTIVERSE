@@ -253,6 +253,9 @@ export class GameWorld {
       case 'sort':
         if (SORT_KEYS.includes(m.key)) sim.sortBag(p, m.key, m.desc === true);
         break;
+      case 'buyBack':
+        if (Number.isInteger(i) && i >= 0 && i < p.buyback.length && typeof m.uid === 'string') sim.buyBack(p, i, m.uid);
+        break;
       case 'sell':
         if (i >= 0 && i < p.bag.length) sim.sellItem(p, i);
         break;
@@ -388,15 +391,15 @@ export class GameWorld {
   private sendSnapshot(s: Session): void {
     const p = s.player;
     const near = (o: { x: number; z: number }) => Math.hypot(o.x - p.x, o.z - p.z) <= INTEREST_RADIUS;
-    const inv = JSON.stringify([p.equipment, p.bag]);
+    const inv = JSON.stringify([p.equipment, p.bag, p.buyback]);
     const me: PrivateSnap = {
       hp: r2(p.hp), mp: r2(p.mp), exp: p.exp, level: p.level, gold: p.gold,
       potSel: p.potSel, lootFilter: p.lootFilter, autoSettings: p.autoSettings, stats: p.stats, cd: p.cd, potCd: r2(p.potCd),
-      serverMoves: serverMoves(p) || !!s.auto, epoch: s.epoch,
+      serverMoves: serverMoves(p) || !!s.auto, epoch: s.epoch, buybackLeft: Math.round(p.buybackLeft),
     };
     if (inv !== s.lastInv) {
       s.lastInv = inv;
-      me.inv = { equipment: p.equipment, bag: p.bag };
+      me.inv = { equipment: p.equipment, bag: p.bag, buyback: p.buyback };
     }
     const sim = s.sim;
     const msg: SnapshotMsg = {

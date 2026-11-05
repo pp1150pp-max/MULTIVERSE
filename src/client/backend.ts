@@ -53,6 +53,8 @@ export interface Backend {
   setLootFilter(f: LootFilter): void;
   setAutoSettings(s: AutoSettings): void;
   sell(bagIndex: number): void;
+  /** Buy back entry `i` of the merchant's buyback list (`uid` guards against a list that just changed). */
+  buyBack(i: number, uid: string): void;
   sellAllOfRarity(rarity: Rarity): void;
   enhance(uid: string): Promise<EnhanceOutcome>;
   chat(text: string): void;
@@ -109,6 +111,7 @@ export class LocalBackend implements Backend {
   setLootFilter(f: LootFilter): void { this.sim.setLootFilter(this.me, f); }
   setAutoSettings(s: AutoSettings): void { this.sim.setAutoSettings(this.me, s); }
   sell(i: number): void { this.sim.sellItem(this.me, i); }
+  buyBack(i: number, uid: string): void { this.sim.buyBack(this.me, i, uid); }
   sellAllOfRarity(rarity: Rarity): void { this.sim.sellAllOfRarity(this.me, rarity); }
   enhance(uid: string): Promise<EnhanceOutcome> { return Promise.resolve(this.sim.enhance(this.me, uid)); }
   chat(): void { /* nobody to talk to */ }

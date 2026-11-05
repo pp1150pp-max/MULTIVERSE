@@ -83,6 +83,18 @@ export function cleanAutoSettings(raw: unknown): AutoSettings {
   };
 }
 
+/** One item the player sold to the merchant, which they can buy back. `paid` = what the merchant gave. */
+export interface BuybackEntry { item: Item; paid: number }
+/** The merchant keeps this many sold items per player (newest first). */
+export const BUYBACK_MAX = 30;
+/** Seconds of play between clears of the buyback list. */
+export const BUYBACK_RESET = 30 * 60;
+/** Buying back costs this much more than the item sold for. */
+export const BUYBACK_MARKUP = 1.2;
+export function buybackPrice(e: BuybackEntry): number {
+  return Math.ceil(e.paid * BUYBACK_MARKUP);
+}
+
 /** Everything about a character that gets saved (browser storage now, the server database later). */
 export interface CharacterData {
   name: string;
@@ -100,6 +112,10 @@ export interface CharacterData {
   autoSettings?: AutoSettings;
   /** Zone id the character is in. Missing on saves from before there were zones (= the forest). */
   zone?: string;
+  /** Items sold to the merchant that can be bought back. Missing in older saves = none. */
+  buyback?: BuybackEntry[];
+  /** Seconds of play left before the buyback list clears. Missing = a full BUYBACK_RESET. */
+  buybackLeft?: number;
 }
 
 /** A fresh level 1 character with the class starter weapon and a few potions. */
@@ -127,6 +143,10 @@ export class Player extends Unit {
   potSel: PotionSelect;
   lootFilter: LootFilter;
   autoSettings: AutoSettings;
+  /** Sold items the merchant still has for this player, newest first. */
+  buyback: BuybackEntry[];
+  /** Seconds of play until the buyback list clears. */
+  buybackLeft: number;
   stats: Stats = emptyStats();
   cd: Partial<Record<SkillSlot, number>> = {};
   potCd = 0;
@@ -164,6 +184,11 @@ export class Player extends Unit {
       ? { ...data.lootFilter, rarities: [...data.lootFilter.rarities], pots: lootPots(data.lootFilter) }
       : { ...DEFAULT_LOOT_FILTER, rarities: [...RARITIES], pots: lootPots(DEFAULT_LOOT_FILTER) };
     this.autoSettings = cleanAutoSettings(data.autoSettings);
+    this.buyback = Array.isArray(data.buyback)
+      ? data.buyback.filter((e) => e?.item && typeof e.paid === 'number' && e.paid >= 0).slice(0, BUYBACK_MAX)
+      : [];
+    const left = data.buybackLeft;
+    this.buybackLeft = typeof left === 'number' && left > 0 && left <= BUYBACK_RESET ? left : BUYBACK_RESET;
     this.radius = 0.4;
     this.recompute();
     this.hp = this.maxHp;
@@ -206,6 +231,8 @@ export class Player extends Unit {
       potSel: this.potSel,
       lootFilter: this.lootFilter,
       autoSettings: this.autoSettings,
+      buyback: this.buyback,
+      buybackLeft: Math.round(this.buybackLeft),
     };
   }
 
@@ -283,7 +310,26 @@ export class Player extends Unit {
     const v = isPotion(item) ? stackSellValue(item) : sellValue(item);
     this.bag[i] = null;
     this.gold += v;
+    if (!isPotion(item)) this.rememberSold(item, v);
     return v;
+  }
+
+  /**
+   * Puts a sold item at the top of the buyback list. Past BUYBACK_MAX the oldest one goes,
+   * but enhanced (+N) items are kept as long as there is a plain item to drop instead.
+   */
+  private rememberSold(item: Item, paid: number): void {
+    this.buyback.unshift({ item, paid });
+    while (this.buyback.length > BUYBACK_MAX) {
+      let drop = -1;
+      for (let k = this.buyback.length - 1; k >= 0; k--) {
+        if (!(this.buyback[k].item.plus ?? 0)) {
+          drop = k;
+          break;
+        }
+      }
+      this.buyback.splice(drop >= 0 ? drop : this.buyback.length - 1, 1);
+    }
   }
 
   /** Takes an item out of the bag so it can be thrown on the ground. */
