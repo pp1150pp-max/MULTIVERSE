@@ -1,7 +1,7 @@
 import { STAT_KEYS, type StatKey, type Stats } from './types';
 
 export const MAX_LEVEL = 50;
-export const BASE_MOVE_SPEED = 5;
+export const BASE_MOVE_SPEED = 3.5;
 
 /** EXP needed to go from `level` to `level + 1`. Steep on purpose so players move on to higher zones. */
 export function expToNext(level: number): number {
