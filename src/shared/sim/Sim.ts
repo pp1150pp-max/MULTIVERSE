@@ -11,7 +11,10 @@ import { NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { rand, randInt } from '../rng';
 import { isPotion, RARITY_LABEL, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
 import { PORTAL_RANGE, Terrain } from './terrain';
-import { cleanAutoSettings, lootPots, Player, type AutoSettings, type CharacterData, type LootFilter, type SortKey } from './Player';
+import {
+  BUYBACK_RESET, buybackPrice, cleanAutoSettings, lootPots, Player,
+  type AutoSettings, type CharacterData, type LootFilter, type SortKey,
+} from './Player';
 import { Monster } from './Monster';
 import { Projectile, type ProjOpts } from './Projectile';
 import { Loot, LOOT_PRIORITY_TIME, type LootKind } from './Loot';
@@ -444,6 +447,39 @@ export class Sim {
     return true;
   }
 
+  /** Buys back item `i` of the buyback list. `uid` must match, so a stale click can't buy the wrong item. */
+  buyBack(p: Player, i: number, uid: string): boolean {
+    const e = p.buyback[i];
+    if (!e || e.item.uid !== uid || !this.near(p, 'merchant')) return false;
+    const price = buybackPrice(e);
+    if (p.gold < price) {
+      this.log('ทองไม่พอ', '#ff8a6a', p.id);
+      return false;
+    }
+    if (!p.hasBagSpace()) {
+      this.log('กระเป๋าเต็ม', '#ff8a6a', p.id);
+      return false;
+    }
+    p.gold -= price;
+    p.buyback.splice(i, 1);
+    p.addToBag(e.item);
+    this.log(`ซื้อคืน ${entryName(e.item)} ${price} G`, '#f2c230', p.id);
+    this.sfx('trade', p.x, p.z, p.id);
+    this.afterChange(p);
+    return true;
+  }
+
+  /** Counts down each player's buyback list and clears it every BUYBACK_RESET seconds of play. */
+  private tickBuyback(p: Player, dt: number): void {
+    p.buybackLeft -= dt;
+    if (p.buybackLeft > 0) return;
+    p.buybackLeft = BUYBACK_RESET;
+    if (!p.buyback.length) return;
+    p.buyback = [];
+    this.log('พ่อค้าเคลียร์ของที่รับซื้อไว้แล้ว — ซื้อคืนไม่ได้อีก', '#b9b09a', p.id);
+    this.afterChange(p);
+  }
+
   sellItem(p: Player, i: number): number {
     const item = p.bag[i];
     if (!item || !this.near(p, 'merchant')) return 0;
@@ -515,6 +551,7 @@ export class Sim {
     }
 
     for (const p of this.players) if (p.alive) p.update(dt, intentOf(p));
+    for (const p of this.players) this.tickBuyback(p, dt);
     for (const p of this.players) if (p.alive) this.checkPortals(p);
 
     for (const m of this.monsters) m.update(dt, this);

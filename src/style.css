@@ -346,9 +346,15 @@ button.primary { background: linear-gradient(#a8812f, #6b4f1a); border-color: va
 #sell-rarity button { flex: 1; padding: 4px 6px; font-size: 12px; color: var(--rc); border-color: color-mix(in srgb, var(--rc) 55%, #000); }
 .shop-foot { display: flex; justify-content: space-between; margin-top: 10px; font-size: 13px; }
 #shop-gold { color: #f2c230; }
+.shop-timer { float: right; color: var(--ink-dim); font-size: 11px; }
+#buyback-grid { display: grid; grid-template-columns: repeat(6, 46px); gap: 4px; max-height: 150px; overflow-y: auto; }
+#buyback-grid .empty-note { grid-column: 1 / -1; font-size: 11px; color: var(--ink-dim); }
+#buyback-grid .bb-price { position: absolute; left: 0; right: 0; bottom: -1px; font-size: 9px; text-align: center; color: #f2c230; background: rgba(10, 7, 4, 0.75); }
+#buyback-grid .cell.poor { filter: grayscale(0.8) brightness(0.7); }
+#shop.drop-target { outline: 2px solid var(--gold-hi); outline-offset: 1px; }
 button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge); color: var(--ink-dim); }
 
-#shop { left: 12px; top: 120px; width: 330px; }
+#shop { left: 12px; top: 120px; width: 330px; max-height: calc(100vh - 200px); overflow-y: auto; }
 #forge { left: 12px; top: 120px; width: 360px; }
 #forge-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 #forge-detail { background: #15110c; border: 1px solid #3a2f20; border-radius: 6px; padding: 8px 10px; font-size: 13px; margin-bottom: 8px; }

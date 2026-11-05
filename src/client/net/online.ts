@@ -118,6 +118,7 @@ export class OnlineBackend implements Backend {
       name: mine.name, classId: mine.cls, level: first.me.level, exp: first.me.exp, gold: first.me.gold,
       potSel: first.me.potSel, lootFilter: first.me.lootFilter, autoSettings: first.me.autoSettings,
       equipment: first.me.inv?.equipment ?? {}, bag: first.me.inv?.bag ?? [], zone: this.zone.id,
+      buyback: first.me.inv?.buyback, buybackLeft: first.me.buybackLeft,
     };
     this.me = new Player(myId, NO_SIM, data);
     this.me.x = mine.x;
@@ -338,9 +339,11 @@ export class OnlineBackend implements Backend {
     me.stats = pv.stats;
     me.cd = { ...pv.cd };
     me.potCd = pv.potCd;
+    if (typeof pv.buybackLeft === 'number') me.buybackLeft = pv.buybackLeft;
     if (pv.inv) {
       me.equipment = pv.inv.equipment;
       me.bag = pv.inv.bag;
+      me.buyback = pv.inv.buyback ?? [];
       this.events.push({ t: 'inventory', to: me.id });
     }
     this.serverMoves = pv.serverMoves;
@@ -469,6 +472,7 @@ export class OnlineBackend implements Backend {
     this.send({ t: 'act', a: 'autoSettings', settings });
   }
   sell(i: number): void { this.send({ t: 'act', a: 'sell', i }); }
+  buyBack(i: number, uid: string): void { this.send({ t: 'act', a: 'buyBack', i, uid }); }
   sellAllOfRarity(rarity: Rarity): void { this.send({ t: 'act', a: 'sellRarity', rarity }); }
 
   enhance(uid: string): Promise<EnhanceOutcome> {

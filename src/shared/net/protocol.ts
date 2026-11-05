@@ -4,7 +4,7 @@ import type { SkillSlot } from '../data/classes';
 import type { BagEntry, ClassId, Item, PotionKind, PotionSize, Rarity, SlotId, Stats, Vec2 } from '../types';
 import type { LootKind } from '../sim/Loot';
 import type { SimEvent } from '../sim/types';
-import type { AutoSettings, LootFilter, PotionSelect, SortKey } from '../sim/Player';
+import type { AutoSettings, BuybackEntry, LootFilter, PotionSelect, SortKey } from '../sim/Player';
 import type { EnhanceResult } from '../data/enhance';
 
 export const WS_PATH = '/ws';
@@ -45,6 +45,7 @@ export type ActionMsg =
   | { t: 'act'; a: 'lootFilter'; filter: LootFilter }
   | { t: 'act'; a: 'autoSettings'; settings: AutoSettings }
   | { t: 'act'; a: 'sell'; i: number }
+  | { t: 'act'; a: 'buyBack'; i: number; uid: string }
   | { t: 'act'; a: 'sellRarity'; rarity: Rarity }
   | { t: 'act'; a: 'enhance'; uid: string; req: number };
 
@@ -89,7 +90,9 @@ export interface PrivateSnap {
   /** Changes when the server teleports the character (respawn) — jump straight there. */
   epoch: number;
   /** Bag and equipment, only when they changed since the last snapshot. */
-  inv?: { equipment: Partial<Record<SlotId, Item>>; bag: (BagEntry | null)[] };
+  inv?: { equipment: Partial<Record<SlotId, Item>>; bag: (BagEntry | null)[]; buyback?: BuybackEntry[] };
+  /** Seconds of play until the buyback list clears. */
+  buybackLeft?: number;
 }
 
 export interface SnapshotMsg {

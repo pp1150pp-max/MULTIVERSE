@@ -9,7 +9,7 @@ import {
   entryName, POTION_SIZES, POTION_SIZE_LABEL, POTION_STACK, POTIONS, potionName, potionSellPrice,
 } from '../shared/data/potions';
 import { FullMap } from './fullmap';
-import { AUTO_PX_PER_UNIT, AUTO_RANGE_MAX, AUTO_RANGE_MIN, cleanAutoSettings, lootPots, type LootFilter, type SortKey } from '../shared/sim/Player';
+import { AUTO_PX_PER_UNIT, AUTO_RANGE_MAX, AUTO_RANGE_MIN, buybackPrice, cleanAutoSettings, lootPots, type LootFilter, type SortKey } from '../shared/sim/Player';
 import { isBulkSellable } from '../shared/sim/Sim';
 import { MONSTERS } from '../shared/data/monsters';
 import { expToNext } from '../shared/formulas';
@@ -67,6 +67,8 @@ export class Hud {
   private drag: { i: number; x: number; y: number; ghost: HTMLElement | null } | null = null;
   /** True right after a drag ends, so the click that follows mouseup does nothing. */
   private justDragged = false;
+  /** Item uids last drawn in the buyback grid, so it is only rebuilt when the list changes. */
+  private buybackKey = '';
   private mmT = 0;
   private readonly mm: CanvasRenderingContext2D;
   private dialogIdx = 0;
@@ -113,6 +115,33 @@ export class Hud {
     });
     chat.addEventListener('blur', () => this.closeChat());
 
+    const bb = $('buyback-grid');
+    bb.addEventListener('click', (e) => {
+      const el = (e.target as HTMLElement).closest<HTMLElement>('[data-bb]');
+      const i = el ? Number(el.dataset.bb) : -1;
+      const entry = g.player.buyback[i];
+      if (!entry) return;
+      const price = buybackPrice(entry);
+      if (g.player.gold < price) {
+        this.log(`ทองไม่พอ — ต้องใช้ ${price.toLocaleString()} G`, '#ff8a6a');
+        return;
+      }
+      if (!g.player.hasBagSpace()) {
+        this.log('กระเป๋าเต็ม', '#ff8a6a');
+        return;
+      }
+      g.backend.buyBack(i, entry.item.uid);
+      this.hideTip();
+      this.afterTrade();
+    });
+    bb.addEventListener('mousemove', (e) => {
+      const el = (e.target as HTMLElement).closest<HTMLElement>('[data-bb]');
+      const entry = el ? g.player.buyback[Number(el.dataset.bb)] : undefined;
+      if (entry) this.showTip(entry.item, e, `คลิก: ซื้อคืน ${buybackPrice(entry).toLocaleString()} G`);
+      else this.hideTip();
+    });
+    bb.addEventListener('mouseleave', () => this.hideTip());
+
     const bag = $('bag-grid');
     this.setupBagDrag(bag);
     bag.addEventListener('click', (e) => {
@@ -133,17 +162,7 @@ export class Hud {
       this.hideTip();
       const name = `<b style="color:${this.entryColor(item)}">${entryName(item)}</b>`;
       if (this.shopOpen) {
-        // Selling only works while talking to the merchant.
-        const sell = () => {
-          if (g.player.bag[i] !== item) return;
-          g.backend.sell(i);
-          this.afterTrade();
-        };
-        // A whole stack of potions is worth asking about first.
-        if (isPotion(item) && item.count > 1) {
-          const each = potionSellPrice(item.potion, item.size);
-          this.confirm(`ขาย ${name} ทั้งช่อง?<br><small>ได้ ${each * item.count} G (ขวดละ ${each} G)</small>`, 'ขาย', sell);
-        } else sell();
+        this.sellFromBag(i);
         return;
       }
       this.confirm(
@@ -316,7 +335,10 @@ export class Hud {
       const target = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
       const cell = target?.closest<HTMLElement>('#bag-grid [data-i]');
       const quick = target?.closest<HTMLElement>('.skill-hp, .skill-mp');
-      if (cell) {
+      const shop = this.shopOpen ? target?.closest<HTMLElement>('#shop') : null;
+      if (shop) {
+        this.sellFromBag(d.i);
+      } else if (cell) {
         const to = Number(cell.dataset.i);
         if (to !== d.i) g.backend.moveInBag(d.i, to);
       } else if (quick) {
@@ -340,7 +362,7 @@ export class Hud {
     document.querySelector('.drop-target')?.classList.remove('drop-target');
     if (x < 0) return;
     const t = document.elementFromPoint(x, y) as HTMLElement | null;
-    const el = t?.closest<HTMLElement>('#bag-grid [data-i], .skill-hp, .skill-mp');
+    const el = t?.closest<HTMLElement>(this.shopOpen ? '#bag-grid [data-i], .skill-hp, .skill-mp, #shop' : '#bag-grid [data-i], .skill-hp, .skill-mp');
     el?.classList.add('drop-target');
   }
 
@@ -649,6 +671,7 @@ export class Hud {
     const p = this.g.player;
     $('shop-gold').innerHTML = `${COIN_ICON} ${p.gold.toLocaleString()} G`;
     $('shop-pots').innerHTML = this.potionTotals();
+    this.renderBuyback();
     $('shop').querySelectorAll<HTMLButtonElement>('[data-buy]').forEach((b) => {
       const [kind, size, n] = b.dataset.buy!.split(':') as [PotionKind, PotionSize, string];
       b.disabled = p.gold < POTIONS[kind][size].price * Number(n) || p.potionRoom(kind, size) < Number(n);
@@ -658,6 +681,59 @@ export class Hud {
   private potionTotals(): string {
     const p = this.g.player;
     return `${potionIcon('hp')} ${p.potionCount('hp')} &nbsp; ${potionIcon('mp')} ${p.potionCount('mp')}`;
+  }
+
+  /** Sells bag slot `i` to the merchant, asking first for a potion stack or an enhanced (+N) item. */
+  private sellFromBag(i: number): void {
+    const g = this.g;
+    const item = g.player.bag[i];
+    if (!item || !this.shopOpen) return;
+    const name = `<b style="color:${this.entryColor(item)}">${entryName(item)}</b>`;
+    const sell = () => {
+      if (g.player.bag[i] !== item) return;
+      g.backend.sell(i);
+      this.afterTrade();
+    };
+    if (isPotion(item)) {
+      // A whole stack of potions is worth asking about first.
+      if (item.count > 1) {
+        const each = potionSellPrice(item.potion, item.size);
+        this.confirm(`ขาย ${name} ทั้งช่อง?<br><small>ได้ ${each * item.count} G (ขวดละ ${each} G)</small>`, 'ขาย', sell);
+      } else sell();
+      return;
+    }
+    if ((item.plus ?? 0) > 0) {
+      const v = sellValue(item);
+      this.confirm(
+        `ขาย ${name}?<br><small>ของชิ้นนี้ตีบวกแล้ว · ได้ ${v.toLocaleString()} G · ซื้อคืนได้ ${buybackPrice({ item, paid: v }).toLocaleString()} G ภายใน 30 นาที</small>`,
+        'ขาย', sell,
+      );
+      return;
+    }
+    sell();
+  }
+
+  /** Redraws the buyback grid when the list changes; the timer and affordability every frame. */
+  private renderBuyback(): void {
+    const p = this.g.player;
+    const key = p.buyback.map((e) => e.item.uid).join(',');
+    const grid = $('buyback-grid');
+    if (key !== this.buybackKey) {
+      this.buybackKey = key;
+      grid.innerHTML = p.buyback.length
+        ? p.buyback.map((e, i) => this.itemCell(e.item, `data-bb="${i}"`)).join('')
+        : '<div class="empty-note">ยังไม่มีของที่ขายไป</div>';
+      grid.querySelectorAll<HTMLElement>('[data-bb]').forEach((el) => {
+        const e = p.buyback[Number(el.dataset.bb)];
+        el.insertAdjacentHTML('beforeend', `<span class="bb-price">${buybackPrice(e).toLocaleString()}</span>`);
+      });
+    }
+    grid.querySelectorAll<HTMLElement>('[data-bb]').forEach((el) => {
+      const e = p.buyback[Number(el.dataset.bb)];
+      el.classList.toggle('poor', !e || p.gold < buybackPrice(e));
+    });
+    const s = Math.max(0, Math.ceil(p.buybackLeft));
+    $('buyback-timer').textContent = `รีเซตใน ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   }
 
   private buyPotion(kind: PotionKind, size: PotionSize, n: number): void {
