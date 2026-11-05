@@ -17,6 +17,8 @@ export const INPUT_HZ = 30;
 /** Only things this close to a player are sent to them. */
 export const INTEREST_RADIUS = 34;
 export const CHAT_MAX = 120;
+/** Clients measure their round trip with a ping this often; the server ignores pings arriving faster than a quarter of it. */
+export const PING_MS = 2000;
 
 // ------------------------------------------------------------ client → server
 
@@ -64,7 +66,9 @@ export type ClientMsg =
   | { t: 'join'; token: string; characterId: number }
   | InputMsg
   | ActionMsg
-  | { t: 'chat'; text: string };
+  | { t: 'chat'; text: string }
+  /** Answered at once with a pong of the same id. `rtt`: the round trip the client measured last time (ms), for the server's lag log. */
+  | { t: 'ping'; id: number; rtt?: number };
 
 // ------------------------------------------------------------ server → client
 
@@ -133,6 +137,7 @@ export type ServerMsg =
   | { t: 'chat'; name: string; text: string }
   | { t: 'enhanced'; req: number; result: EnhanceResult | null; item: Item | null }
   | { t: 'error'; msg: string }
+  | { t: 'pong'; id: number }
   /** The connection is about to close; `msg` explains why. */
   | { t: 'kick'; msg: string };
 

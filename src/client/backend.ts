@@ -36,6 +36,8 @@ export interface Backend {
   readonly time: number;
   /** Players in the world right now. */
   readonly onlineCount: number;
+  /** Round trip to the server in ms, or null when disconnected or not measured yet. */
+  readonly ping: number | null;
 
   /** Advances one frame with this player's input and returns what should be shown. */
   frame(dt: number, intent: Intent): SimEvent[];
