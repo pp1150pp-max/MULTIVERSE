@@ -5,6 +5,7 @@ import type { Player } from '../shared/sim/Player';
 import { RARITY_COLOR } from '../shared/types';
 import { itemName } from '../shared/data/enhance';
 import { expGapMult } from '../shared/formulas';
+import { iconImg } from './icons';
 
 interface Num { el: HTMLDivElement; x: number; y: number; z: number; t: number; life: number; dx: number }
 interface Plate { el: HTMLDivElement; fill: HTMLDivElement }
@@ -57,7 +58,7 @@ export class Floating {
         bob.className = 'npc-bob';
         const role = document.createElement('div');
         role.className = 'npc-role';
-        role.textContent = `${n.icon} ${n.role}`;
+        role.innerHTML = `${iconImg(n.icon)} ${n.role}`;
         const name = document.createElement('div');
         name.className = 'npc-name';
         name.textContent = n.name;

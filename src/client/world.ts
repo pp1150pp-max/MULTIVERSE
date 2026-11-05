@@ -2,17 +2,56 @@ import * as THREE from 'three';
 import type { Terrain } from '../shared/sim/terrain';
 import type { ZoneTheme } from '../shared/data/zones';
 import { mulberry32, pick, rand, type Rng } from '../shared/rng';
-import { fxTex, groundTiles, sheets, type GroundTile } from './assets';
+import { assetSources, fxTex, groundTiles, sheets, type GroundTile } from './assets';
 
 /** World units covered by one repeat of a ground tile: about the same pixel size as the sprites. */
 const TILE_UNITS = 10.4;
-/** Planks are drawn narrower than a full tile so they suit the width of the walkway. */
-const PLANK_UNITS = 5.2;
-/** How many directions a boardwalk's planks can run in. */
-const PLANK_ANGLES = 12;
+/** Bare ground around the camp at a zone's start. */
+const CAMP_RADIUS = 7;
+/** How wide each theme's roads are worn into the grass. */
+const TRAIL_WIDTH: Record<ZoneTheme, number> = { forest: 4.2, marsh: 3.6 };
 
-/** What each pixel of the ground mask stands for (stored as id * 16 in its red channel). */
-const enum GroundId { Base, PathRim, Path, Bank, WaterEdge, Water, ClearingRim, Clearing }
+/** Camera sits along this direction from its target: 45° yaw, ~47° pitch. */
+export const ISO_DIR = new THREE.Vector3(1, 1.45, 1).normalize();
+
+/** Where a small ground detail belongs. */
+type DecorSpot = 'verge' | 'field' | 'road' | 'shore' | 'water';
+
+/**
+ * Small details with no collision, one atlas per theme (a grid read left to right, top to bottom).
+ * Each spot lists the cells that grow there, repeated to make some more common.
+ */
+const DECOR: Record<ZoneTheme, { key: string; cols: number; rows: number; spots: Record<DecorSpot, number[]> }> = {
+  forest: {
+    key: 'decor_forest',
+    cols: 4,
+    rows: 3,
+    spots: {
+      verge: [0, 0, 0, 1, 1, 6, 7],
+      field: [0, 0, 1, 2, 2, 3, 4, 5, 6, 9, 10, 11],
+      road: [8, 8, 10],
+      shore: [],
+      water: [],
+    },
+  },
+  marsh: {
+    key: 'decor_marsh',
+    cols: 4,
+    rows: 3,
+    spots: {
+      verge: [0, 0, 0, 1, 10, 11],
+      field: [0, 0, 1, 2, 3, 4, 5, 9, 10, 11],
+      road: [8, 8, 11],
+      shore: [1, 1, 10, 10, 2, 9],
+      water: [6, 6, 7],
+    },
+  },
+};
+/** World size of one decor atlas cell: 128 pixels at about the same density as the ground tiles. */
+const DECOR_CELL_UNITS = 1.33;
+/** Rotted boards laid over the wet stretches of a marsh trail: a row of separate pieces, seen from above. */
+const PLANK_SHEET = { key: 'marsh_planks', cols: 3, width: 2.9, length: 5 };
+const enum GroundId { Base, WaterEdge, Water }
 
 const GROUND_VERT = /* glsl */ `
   varying vec2 vWorld;
@@ -23,40 +62,77 @@ const GROUND_VERT = /* glsl */ `
 `;
 
 const GROUND_FRAG = /* glsl */ `
-  uniform sampler2D uMask, uBase, uPath, uDirt, uWater;
-  uniform float uHalf, uBound, uTileUnits, uPathUnits, uTurnPath, uTime;
+  uniform sampler2D uMask, uCover, uBase, uDirt, uPave, uWater;
+  uniform float uHalf, uBound, uTileUnits, uTime;
   varying vec2 vWorld;
 
+  /**
+   * Quietens a ground tile so characters stand out from it: pulls each pixel toward the tile's
+   * average colour (its smallest mipmap), then takes out some saturation.
+   */
+  vec3 calm(vec3 c, sampler2D tile, float contrast, float saturation, float brightness) {
+    vec3 mean = textureLod(tile, vec2(0.5), 20.0).rgb;
+    vec3 flat_ = mean + (c - mean) * contrast;
+    float grey = dot(flat_, vec3(0.3, 0.59, 0.11));
+    return mix(vec3(grey), flat_, saturation) * brightness;
+  }
+
+  float luma(vec3 c) {
+    return dot(c, vec3(0.3, 0.59, 0.11));
+  }
+
+  /** How far this pixel of a tile stands above the tile's average, so tall bits win a blend. */
+  float relief(vec3 c, sampler2D tile) {
+    return luma(c) - luma(textureLod(tile, vec2(0.5), 20.0).rgb);
+  }
+
+  float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+  }
+
+  float noise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
+      mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x),
+      f.y
+    );
+  }
+
   void main() {
-    vec4 mask = texture2D(uMask, (vWorld + uHalf) / (2.0 * uHalf));
-    int id = int(floor(mask.r * 255.0 / 16.0 + 0.5));
+    vec2 uv = (vWorld + uHalf) / (2.0 * uHalf);
     vec2 tile = vWorld / uTileUnits;
-    vec3 col;
-    if (id == 0) {
-      // Patches of the same tile turned a quarter turn hide the repeat.
-      float patchy = sin(vWorld.x * 0.17 + sin(vWorld.y * 0.13) * 1.3) + sin(vWorld.y * 0.19 + sin(vWorld.x * 0.11) * 1.7);
-      col = texture2D(uBase, patchy > 0.0 ? tile : vec2(tile.y, -tile.x) + 0.37).rgb;
-    } else if (id == 1) {
-      col = texture2D(uDirt, tile).rgb * 0.62;
+    // Grass breaks into a covered patch in chunky pixels rather than along a smooth line.
+    vec2 snapped = floor(vWorld * 14.0) / 14.0;
+    float lobes = noise(snapped * 0.7) * 0.45 + noise(snapped * 2.3) * 0.33 + noise(snapped * 6.1) * 0.22 - 0.5;
+    // Broad light and dark patches hide the repeat of the tiles.
+    float macro = noise(vWorld * 0.09) * 0.6 + noise(vWorld * 0.23) * 0.4 - 0.5;
+    // Roads and clearings are laid out from straight lines and circles; this makes them meander.
+    vec2 meander = (vec2(noise(vWorld * 0.14 + 3.0), noise(vWorld * 0.14 + 41.0)) - 0.5) * 3.2 / (2.0 * uHalf);
+    vec4 cover = texture2D(uCover, uv + meander);
+
+    // Patches of the same tile turned a quarter turn hide the repeat too.
+    float patchy = sin(vWorld.x * 0.17 + sin(vWorld.y * 0.13) * 1.3) + sin(vWorld.y * 0.19 + sin(vWorld.x * 0.11) * 1.7);
+    vec3 baseTex = texture2D(uBase, patchy > 0.0 ? tile : vec2(tile.y, -tile.x) + 0.37).rgb;
+    vec3 base = calm(baseTex, uBase, 0.95, 1.1, 1.0) * (1.0 + macro * 0.2);
+    vec3 dirt = calm(texture2D(uDirt, tile).rgb, uDirt, 0.9, 1.0, 1.0) * (1.0 + macro * 0.14);
+    // Grass blades reach over the dirt, and grass thins out and darkens just before it gives way.
+    float bare = cover.r + lobes * 0.85 - relief(baseTex, uBase) * 1.4;
+    vec3 col = mix(base * (1.0 - 0.12 * smoothstep(0.18, 0.46, bare)), dirt, smoothstep(0.46, 0.54, bare));
+    // Paving: raised stones show first, so grass and dirt fill the gaps at its edge.
+    vec3 paveTex = texture2D(uPave, tile).rgb;
+    float laid = cover.g + lobes * 0.6 + relief(paveTex, uPave) * 1.0;
+    col = mix(col, calm(paveTex, uPave, 0.9, 1.0, 1.0) * (1.0 + macro * 0.1), smoothstep(0.46, 0.54, laid));
+
+    // Pool shores wander instead of following the smooth shapes drawn in the mask.
+    vec2 wander = (vec2(noise(vWorld * 1.3), noise(vWorld * 1.3 + 17.0)) - 0.5) * 0.5 / (2.0 * uHalf);
+    int id = int(floor(texture2D(uMask, uv + wander).r * 255.0 / 16.0 + 0.5));
+    if (id == 1) {
+      col = dirt * 0.4;
     } else if (id == 2) {
-      vec2 p = vWorld;
-      if (uTurnPath > 0.5) {
-        // Planks lie across the walkway, whichever way this stretch of it runs.
-        float a = mask.g * 3.14159265;
-        vec2 along = vec2(cos(a), sin(a));
-        p = vec2(dot(vWorld, vec2(-along.y, along.x)), dot(vWorld, along));
-      }
-      col = texture2D(uPath, p / uPathUnits).rgb;
-    } else if (id == 3) {
-      col = texture2D(uDirt, tile).rgb * 0.85;
-    } else if (id == 4) {
-      col = texture2D(uDirt, tile).rgb * 0.35;
-    } else if (id == 5) {
-      col = texture2D(uWater, tile + vec2(uTime * 0.012, sin(uTime * 0.25) * 0.006)).rgb;
-    } else if (id == 6) {
-      col = texture2D(uDirt, tile).rgb * 0.8;
-    } else {
-      col = texture2D(uDirt, tile).rgb;
+      col = calm(texture2D(uWater, tile + vec2(uTime * 0.012, sin(uTime * 0.25) * 0.006)).rgb, uWater, 0.7, 0.8, 1.0);
     }
     if (abs(vWorld.x) > uBound || abs(vWorld.y) > uBound) col *= 0.5;
     gl_FragColor = vec4(col, 1.0);
@@ -72,7 +148,7 @@ const S = Math.SQRT1_2;
 /** Colours for painting a zone's ground (the minimap, and the fallback if a tile is missing). */
 interface GroundPalette {
   /** Repeating textures for the real ground. `dirt` also covers clearings and pond banks. */
-  tiles: { base: GroundTile; path: GroundTile; dirt: GroundTile };
+  tiles: { base: GroundTile; dirt: GroundTile };
   background: string;
   base: string;
   patchDark: string[];
@@ -97,7 +173,7 @@ interface GroundPalette {
 
 const PALETTES: Record<ZoneTheme, GroundPalette> = {
   forest: {
-    tiles: { base: 'grass', path: 'dirt', dirt: 'dirt' },
+    tiles: { base: 'grass', dirt: 'dirt' },
     background: '#16301a',
     base: '#4e8a39',
     patchDark: ['#467f35', '#427a33', '#4a8337'],
@@ -121,7 +197,7 @@ const PALETTES: Record<ZoneTheme, GroundPalette> = {
     portalGlow: '#6affd0',
   },
   marsh: {
-    tiles: { base: 'marsh', path: 'planks', dirt: 'mud' },
+    tiles: { base: 'marsh', dirt: 'mud' },
     background: '#121c19',
     base: '#46573b',
     patchDark: ['#3e4f37', '#3a4b34', '#425239'],
@@ -159,10 +235,12 @@ export class World {
   /** Everything added to the scene, so a zone change can take it all down again. */
   private readonly objects: THREE.Object3D[] = [];
   private readonly ownMats: THREE.Material[] = [];
+  private readonly ownGeos: THREE.BufferGeometry[] = [];
   private readonly sharedMats = new Map<string, THREE.SpriteMaterial>();
   private readonly shadowGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
   private readonly shadowMat: THREE.MeshBasicMaterial;
   private readonly groundTex: THREE.CanvasTexture;
+  private groundCover: THREE.CanvasTexture | null = null;
   private groundUniforms: Record<string, THREE.IUniform> | null = null;
   /** Scratch canvas for paintBand; released once the ground is painted. */
   private maskCtx: CanvasRenderingContext2D | null = null;
@@ -179,7 +257,7 @@ export class World {
 
     this.groundCanvas = this.paintGround(mulberry32(terrain.zone.seed));
     const t = this.pal.tiles;
-    const tiles = [groundTiles[t.base], groundTiles[t.path], groundTiles[t.dirt], groundTiles.water];
+    const tiles = [groundTiles[t.base], groundTiles[t.dirt], groundTiles.water, groundTiles.pave];
     if (tiles.every(Boolean)) {
       const mask = new THREE.CanvasTexture(this.paintMask());
       mask.colorSpace = THREE.NoColorSpace;
@@ -190,15 +268,14 @@ export class World {
       this.groundTex = mask;
       this.groundUniforms = {
         uMask: { value: mask },
+        uCover: { value: (this.groundCover = this.paintCover()) },
         uBase: { value: tiles[0] },
-        uPath: { value: tiles[1] },
-        uDirt: { value: tiles[2] },
-        uWater: { value: tiles[3] },
+        uDirt: { value: tiles[1] },
+        uWater: { value: tiles[2] },
+        uPave: { value: tiles[3] },
         uHalf: { value: this.half },
         uBound: { value: this.bound },
         uTileUnits: { value: TILE_UNITS },
-        uPathUnits: { value: this.pal.pathDetail.kind === 'planks' ? PLANK_UNITS : TILE_UNITS },
-        uTurnPath: { value: this.pal.pathDetail.kind === 'planks' ? 1 : 0 },
         uTime: { value: 0 },
       };
     } else {
@@ -228,6 +305,10 @@ export class World {
     if (fire) this.flames.push(this.glow(fire.x, 0.5, fire.z, '#ffa040', 0.55));
     for (const p of terrain.zone.portals) this.portals.push(this.glow(p.x, 1.5, p.z, this.pal.portalGlow, 0.5));
     this.addFog(mulberry32(terrain.zone.seed + 7));
+    if (this.groundUniforms) {
+      this.addDecor(mulberry32(terrain.zone.seed + 11));
+      if (terrain.zone.theme === 'marsh') this.addPlanks(mulberry32(terrain.zone.seed + 13));
+    }
   }
 
   private get zone() {
@@ -261,13 +342,143 @@ export class World {
     return s;
   }
 
+  /** Adds many quads from one atlas as a single mesh, so hundreds of details cost one draw call. */
+  private addQuads(key: string, positions: number[], uvs: number[]): void {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    const index: number[] = [];
+    for (let i = 0; i < positions.length / 12; i++) {
+      const v = i * 4;
+      index.push(v, v + 1, v + 2, v, v + 2, v + 3);
+    }
+    geo.setIndex(index);
+    const mesh = new THREE.Mesh(geo, this.own(new THREE.MeshBasicMaterial({ map: sheets[key].texture, alphaTest: 0.5 })));
+    mesh.frustumCulled = false;
+    this.ownGeos.push(geo);
+    this.add(mesh);
+  }
+
+  /** Grass tufts, flowers, stones and the like, in clumps along roads, clearings and pool shores. */
+  private addDecor(r: Rng): void {
+    const set = DECOR[this.zone.theme];
+    if (assetSources[set.key] !== 'file') return;
+    const B = this.bound;
+    const { start, boss, portals, spawns } = this.zone;
+    const trail = TRAIL_WIDTH[this.zone.theme] / 2;
+    const near = (x: number, z: number, p: { x: number; z: number }, d: number) => Math.hypot(x - p.x, z - p.z) < d;
+    const inPool = (x: number, z: number, grow: number) =>
+      this.poolBlobs.some((b) => Math.hypot((x - b.x) / (b.rx + grow), (z - b.z) / (b.rz + grow)) < 1);
+
+    const right = new THREE.Vector3(S, 0, -S);
+    const up = new THREE.Vector3().crossVectors(right, ISO_DIR.clone().negate()).normalize();
+    const positions: number[] = [];
+    const uvs: number[] = [];
+    const place = (cell: number, x: number, z: number) => {
+      const size = DECOR_CELL_UNITS * rand(r, 0.85, 1.15);
+      const flip = r() < 0.5;
+      const u0 = (cell % set.cols) / set.cols;
+      const u1 = u0 + 1 / set.cols;
+      const v1 = 1 - Math.floor(cell / set.cols) / set.rows;
+      const v0 = v1 - 1 / set.rows;
+      const rx = (right.x * size) / 2;
+      const rz = (right.z * size) / 2;
+      const ux = up.x * size;
+      const uy = up.y * size;
+      const uz = up.z * size;
+      positions.push(x - rx, 0, z - rz, x + rx, 0, z + rz, x + rx + ux, uy, z + rz + uz, x - rx + ux, uy, z - rz + uz);
+      const [ul, ur] = flip ? [u1, u0] : [u0, u1];
+      uvs.push(ul, v0, ur, v0, ur, v1, ul, v1);
+    };
+    /** A clump of details around a point, skipping anything that would land somewhere odd. */
+    const clump = (spot: DecorSpot, x: number, z: number, count: number, spread: number) => {
+      const cells = set.spots[spot];
+      if (!cells.length) return;
+      for (let i = 0; i < count; i++) {
+        const px = x + rand(r, -spread, spread);
+        const pz = z + rand(r, -spread, spread);
+        if (Math.abs(px) > B || Math.abs(pz) > B) continue;
+        if (spot === 'water' ? !inPool(px, pz, -0.3) : inPool(px, pz, 0.5)) continue;
+        if (spot !== 'road' && this.distToPath(px, pz) < trail + 0.2) continue;
+        if (near(px, pz, start, CAMP_RADIUS * 0.8) || portals.some((g) => near(px, pz, g, 2.5))) continue;
+        if (this.terrain.colliders.some((c) => near(px, pz, c, c.r + 0.3))) continue;
+        place(pick(r, cells), px, pz);
+      }
+    };
+
+    for (const [ax, az, bx, bz] of this.segs) {
+      const len = Math.hypot(bx - ax, bz - az);
+      const nx = -(bz - az) / len;
+      const nz = (bx - ax) / len;
+      for (let t = rand(r, 0, 2); t < len; t += rand(r, 1.8, 4)) {
+        const f = t / len;
+        const off = (r() < 0.5 ? -1 : 1) * (trail + rand(r, 0.5, 2.4));
+        clump('verge', ax + (bx - ax) * f + nx * off, az + (bz - az) * f + nz * off, 1 + ((r() * 3) | 0), 0.7);
+        if (r() < 0.12) {
+          const across = rand(r, -trail * 0.6, trail * 0.6);
+          clump('road', ax + (bx - ax) * f + nx * across, az + (bz - az) * f + nz * across, 1, 0.3);
+        }
+      }
+    }
+    for (const [c, rad, count] of [[start, CAMP_RADIUS + 1.2, 26], [boss, 13.4, 34]] as const) {
+      for (let i = 0; i < count; i++) {
+        const a = r() * Math.PI * 2;
+        clump('verge', c.x + Math.cos(a) * rad, c.z + Math.sin(a) * rad, 2, 0.8);
+      }
+    }
+    for (const b of this.poolBlobs) {
+      for (let i = 0; i < 2; i++) {
+        const a = r() * Math.PI * 2;
+        clump('shore', b.x + Math.cos(a) * (b.rx + 0.8), b.z + Math.sin(a) * (b.rz + 0.8), 1 + ((r() * 2) | 0), 0.4);
+      }
+      if (r() < 0.45) clump('water', b.x, b.z, 2, Math.min(b.rx, b.rz) * 0.6);
+    }
+    for (let i = 0; i < 520; i++) {
+      const x = rand(r, -B, B);
+      const z = rand(r, -B, B);
+      // Thin in the hunting grounds, so monsters stay easy to see.
+      if (spawns.some((sp) => near(x, z, sp, sp.radius * 0.6)) && r() < 0.7) continue;
+      clump('field', x, z, 2 + ((r() * 4) | 0), 1.3);
+    }
+    this.addQuads(set.key, positions, uvs);
+  }
+
+  /** Short runs of old boards lying flat across the trail, instead of a boardwalk all the way. */
+  private addPlanks(r: Rng): void {
+    const { key, cols, width, length } = PLANK_SHEET;
+    if (assetSources[key] !== 'file') return;
+    const { start, boss } = this.zone;
+    const positions: number[] = [];
+    const uvs: number[] = [];
+    for (const [ax, az, bx, bz] of this.segs) {
+      const dist = Math.hypot(bx - ax, bz - az);
+      for (let t = rand(r, 3, 8); t < dist - 3; t += rand(r, 11, 20)) {
+        const f = t / dist;
+        const x = ax + (bx - ax) * f;
+        const z = az + (bz - az) * f;
+        if (Math.hypot(x - start.x, z - start.z) < CAMP_RADIUS + 3 || Math.hypot(x - boss.x, z - boss.z) < 14) continue;
+        const a = Math.atan2(bz - az, bx - ax) + rand(r, -0.12, 0.12);
+        const along = [Math.cos(a), Math.sin(a)];
+        const across = [-along[1], along[0]];
+        const hw = (width / 2) * rand(r, 0.9, 1.05);
+        const hl = (length / 2) * rand(r, 0.8, 1.2);
+        for (const [sa, sb] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+          positions.push(x + across[0] * hw * sa + along[0] * hl * sb, 0.01, z + across[1] * hw * sa + along[1] * hl * sb);
+        }
+        const cell = (r() * cols) | 0;
+        uvs.push(cell / cols, 1, (cell + 1) / cols, 1, (cell + 1) / cols, 0, cell / cols, 0);
+      }
+    }
+    if (positions.length) this.addQuads(key, positions, uvs);
+  }
+
   /** Big soft mist blobs drifting slowly over the zone. */
   private addFog(r: Rng): void {
     const B = this.bound;
     for (let i = 0; i < this.pal.fog; i++) {
       const base = rand(r, 0.09, 0.17);
       const spr = this.add(new THREE.Sprite(this.own(new THREE.SpriteMaterial({
-        map: fxTex.mist, color: '#d8e6e0', transparent: true, depthWrite: false, opacity: base,
+        map: fxTex.mist, color: '#d8e6e0', transparent: true, depthWrite: false, depthTest: false, opacity: base,
       }))));
       const size = rand(r, 12, 22);
       spr.scale.set(size, size * 0.55, 1);
@@ -281,10 +492,12 @@ export class World {
   dispose(): void {
     for (const o of this.objects) this.scene.remove(o);
     for (const m of this.ownMats) m.dispose();
+    for (const g of this.ownGeos) g.dispose();
     for (const m of this.sharedMats.values()) m.dispose();
     this.shadowGeo.dispose();
     this.shadowMat.dispose();
     this.groundTex.dispose();
+    this.groundCover?.dispose();
   }
 
   /** Fade trees that stand between the camera and the player. */
@@ -405,7 +618,7 @@ export class World {
 
     // Bare ground around the camp and the boss: a rough outer rim, then packed dirt with stones.
     const clearings: [number, number, number][] = [
-      [this.zone.start.x, this.zone.start.z, 9],
+      [this.zone.start.x, this.zone.start.z, 7],
       [this.zone.boss.x, this.zone.boss.z, 12],
     ];
     const clearing = (scale: number) => (m: CanvasRenderingContext2D) => {
@@ -587,10 +800,7 @@ export class World {
     ctx.putImageData(image, 0, 0);
   }
 
-  /**
-   * Map of what covers each patch of ground, read by the ground shader: red holds a GroundId, green
-   * holds the direction of a boardwalk. Uses the pools laid out by paintGround, so call that first.
-   */
+  /** Map of the pools for the ground shader: red holds a GroundId. Call paintGround first, which lays them out. */
   private paintMask(): HTMLCanvasElement {
     const N = 2048;
     const H = this.half;
@@ -600,74 +810,78 @@ export class World {
     const ctx = c.getContext('2d')!;
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, N, N);
-    const P = (x: number, z: number): [number, number] => [(x + H) * k, (z + H) * k];
     const hex = (v: number) => v.toString(16).padStart(2, '0');
-    const tone = (id: GroundId, angle = 0) => [`#${hex(id * 16)}${hex(angle)}00`];
-
-    if (this.poolBlobs.length) {
-      const pool = (grow: number) => (m: CanvasRenderingContext2D) => {
+    const pool = (id: GroundId, grow: number) => {
+      this.paintBand(ctx, [`#${hex(id * 16)}0000`], 2, (m) => {
         m.beginPath();
         for (const b of this.poolBlobs) {
-          const [px, py] = P(b.x, b.z);
+          const px = (b.x + H) * k;
           const rx = Math.max(0.1, b.rx + grow) * k;
-          m.moveTo(px + rx, py);
-          m.ellipse(px, py, rx, Math.max(0.1, b.rz + grow) * k, 0, 0, Math.PI * 2);
+          m.moveTo(px + rx, (b.z + H) * k);
+          m.ellipse(px, (b.z + H) * k, rx, Math.max(0.1, b.rz + grow) * k, 0, 0, Math.PI * 2);
         }
         m.fill();
-      };
-      this.paintBand(ctx, tone(GroundId.Bank), 2, pool(0.55));
-      this.paintBand(ctx, tone(GroundId.WaterEdge), 2, pool(0.25));
-      this.paintBand(ctx, tone(GroundId.Water), 2, pool(0.1));
-    }
-
-    const clearings: [number, number, number][] = [
-      [this.zone.start.x, this.zone.start.z, 9],
-      [this.zone.boss.x, this.zone.boss.z, 12],
-    ];
-    const clearing = (scale: number) => (m: CanvasRenderingContext2D) => {
-      m.beginPath();
-      for (const [x, z, rad] of clearings) {
-        const [px, py] = P(x, z);
-        m.moveTo(px + rad * scale * k, py);
-        m.arc(px, py, rad * scale * k, 0, Math.PI * 2);
-      }
-      m.fill();
+      });
     };
-    this.paintBand(ctx, tone(GroundId.ClearingRim), 3, clearing(1));
-    this.paintBand(ctx, tone(GroundId.Clearing), 3, clearing(0.9));
-
-    const planks = this.pal.pathDetail.kind === 'planks';
-    const wobble = planks ? 0 : 2;
-    const stroke = (width: number, segs: readonly (readonly number[])[]) => (m: CanvasRenderingContext2D) => {
-      m.lineCap = 'round';
-      m.lineWidth = width * k;
-      m.beginPath();
-      for (const [ax, az, bx, bz] of segs) {
-        const [x0, y0] = P(ax, az);
-        const [x1, y1] = P(bx, bz);
-        m.moveTo(x0, y0);
-        m.lineTo(x1, y1);
-      }
-      m.stroke();
-    };
-    const widths = this.pal.path.map(([w]) => w);
-    this.paintBand(ctx, tone(GroundId.PathRim), wobble, stroke(widths[0], this.segs));
-    if (planks) {
-      // One pass per plank direction, since each stores its own angle in the mask.
-      const byAngle = new Map<number, (readonly number[])[]>();
-      for (const seg of this.segs) {
-        const [ax, az, bx, bz] = seg;
-        const turn = ((Math.atan2(bz - az, bx - ax) % Math.PI) + Math.PI) % Math.PI;
-        const bucket = Math.round((turn / Math.PI) * PLANK_ANGLES) % PLANK_ANGLES;
-        byAngle.set(bucket, [...(byAngle.get(bucket) ?? []), seg]);
-      }
-      for (const [bucket, segs] of byAngle) {
-        this.paintBand(ctx, tone(GroundId.Path, Math.round((bucket / PLANK_ANGLES) * 255)), 0, stroke(widths[1], segs));
-      }
-    } else {
-      this.paintBand(ctx, tone(GroundId.Path), wobble, stroke(widths[1], this.segs));
+    if (this.poolBlobs.length) {
+      pool(GroundId.WaterEdge, 0.25);
+      pool(GroundId.Water, 0.1);
     }
     return c;
+  }
+
+  /**
+   * Soft map of what the ground is worn down to, which the ground shader breaks up into irregular
+   * patches: red is bare ground (roads, clearings, pond banks), green is paving. Its low resolution
+   * and smooth filtering give the gradual falloff the shader needs.
+   */
+  private paintCover(): THREE.CanvasTexture {
+    const N = 256;
+    const H = this.half;
+    const k = N / (2 * H);
+    const c = document.createElement('canvas');
+    c.width = c.height = N;
+    const ctx = c.getContext('2d')!;
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, N, N);
+    ctx.globalCompositeOperation = 'lighter';
+    const P = (x: number, z: number): [number, number] => [(x + H) * k, (z + H) * k];
+    const circle = (x: number, z: number, rad: number) => {
+      const [px, py] = P(x, z);
+      ctx.beginPath();
+      ctx.arc(px, py, rad * k, 0, Math.PI * 2);
+      ctx.fill();
+    };
+    const { start, boss } = this.zone;
+
+    ctx.fillStyle = ctx.strokeStyle = '#ff0000';
+    circle(start.x, start.z, CAMP_RADIUS);
+    circle(boss.x, boss.z, 12);
+    for (const b of this.poolBlobs) {
+      const [px, py] = P(b.x, b.z);
+      ctx.beginPath();
+      ctx.ellipse(px, py, (b.rx + 1) * k, (b.rz + 1) * k, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.lineCap = ctx.lineJoin = 'round';
+    ctx.lineWidth = TRAIL_WIDTH[this.terrain.zone.theme] * k;
+    ctx.beginPath();
+    for (const [ax, az, bx, bz] of this.segs) {
+      ctx.moveTo(...P(ax, az));
+      ctx.lineTo(...P(bx, bz));
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = '#00ff00';
+    circle(start.x, start.z, CAMP_RADIUS * 0.72);
+
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.NoColorSpace;
+    tex.flipY = false;
+    tex.magFilter = THREE.LinearFilter;
+    tex.minFilter = THREE.LinearFilter;
+    tex.generateMipmaps = false;
+    return tex;
   }
 
   /** Dark, still water pools with a muddy rim, a few lily pads and light glints. */

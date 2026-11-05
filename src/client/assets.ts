@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import {
   makeSheet, drawHuman, drawSlime, drawQuad, drawSeeker, drawMerchant, drawBlacksmith, drawTree, drawBush, drawRock, drawStump,
-  drawTent, drawCampfire, drawSign, drawFence, drawRunestone, drawIcon, pixelCircle, ditherAt,
+  drawTent, drawCampfire, drawSign, drawFence, drawRunestone, drawIcon, pixelCircle,
 } from './placeholder';
-import { RARITIES, RARITY_COLOR } from '../shared/types';
+import { ITEM_ART } from '../shared/data/items';
 import type { AnimSet, CharManifest } from './AnimatedActor';
 
 export interface SheetInfo {
@@ -79,6 +79,9 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   reeds_1: single('props/reeds_1.png', () => drawBush(1)),
   fern: single('props/fern.png', () => drawBush(0)),
   mushrooms: single('props/mushrooms.png', () => drawBush(1)),
+  decor_forest: single('props/decor_forest.png', () => drawBush(0)),
+  decor_marsh: single('props/decor_marsh.png', () => drawBush(0)),
+  marsh_planks: single('props/marsh_planks.png', () => drawBush(0)),
   mossrock_0: single('props/mossrock_0.png', () => drawRock(0)),
   mossrock_1: single('props/mossrock_1.png', () => drawRock(1)),
   swamp_stump: single('props/swamp_stump.png', drawStump),
@@ -113,7 +116,7 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   icon_coin: single('icons/coin.png', () => drawIcon('coin')),
   icon_potion_hp: single('icons/potion_hp.png', () => drawIcon('potion_hp')),
   icon_potion_mp: single('icons/potion_mp.png', () => drawIcon('potion_mp')),
-  ...Object.fromEntries(RARITIES.map((r) => [`icon_bag_${r}`, single(`icons/bag_${r}.png`, () => drawIcon('bag', RARITY_COLOR[r]))])),
+  ...Object.fromEntries(ITEM_ART.map((name) => [name, single(`icons/${name}.png`, () => drawIcon('bag'))])),
 };
 
 /**
@@ -183,7 +186,7 @@ async function loadAnimSet(loader: THREE.TextureLoader, key: string, dir: string
 }
 
 /** Repeating ground textures. A zone falls back to its code-painted ground if one is missing. */
-export type GroundTile = 'grass' | 'dirt' | 'water' | 'marsh' | 'mud' | 'planks';
+export type GroundTile = 'grass' | 'dirt' | 'water' | 'marsh' | 'mud' | 'pave';
 export const groundTiles: Partial<Record<GroundTile, THREE.Texture>> = {};
 
 async function loadGroundTile(loader: THREE.TextureLoader, name: GroundTile): Promise<void> {
@@ -220,7 +223,7 @@ async function loadFxSheet(loader: THREE.TextureLoader, name: FxSheet): Promise<
 export async function loadAssets(): Promise<void> {
   const loader = new THREE.TextureLoader();
   await Promise.all((['sword', 'mage', 'gun'] as const).map((n) => loadFxSheet(loader, n)));
-  await Promise.all((['grass', 'dirt', 'water', 'marsh', 'mud', 'planks'] as const).map((n) => loadGroundTile(loader, n)));
+  await Promise.all((['grass', 'dirt', 'water', 'marsh', 'mud', 'pave'] as const).map((n) => loadGroundTile(loader, n)));
   await Promise.all(
     Object.entries(SHEET_SPECS).map(async ([key, spec]) => {
       let tex: THREE.Texture;
@@ -256,7 +259,10 @@ export async function loadAssets(): Promise<void> {
   const band = (d: number, steps: [number, number][]) => steps.find(([edge]) => d <= edge)?.[1] ?? 0;
   fxTex.glow = fxTexture(pixelCircle(32, '255,255,255', (d) => band(d, [[0.3, 1], [0.55, 0.6], [0.78, 0.28], [1, 0.1]])));
   fxTex.shadow = fxTexture(pixelCircle(32, '0,0,0', (d) => band(d, [[0.72, 0.85], [1, 0.42]])));
-  fxTex.mist = fxTexture(pixelCircle(64, '255,255,255', (d, x, y) => (ditherAt(x, y) < 1 - d ? 1 : 0)));
+  // Smooth rather than dithered: mist sprites are far bigger than their texture, so a dither
+  // shows up as a screen-door grid over the ground.
+  fxTex.mist = fxTexture(pixelCircle(128, '255,255,255', (d) => (1 - d) * (1 - d)));
+  fxTex.mist.magFilter = fxTex.mist.minFilter = THREE.LinearFilter;
   fxTex.ring = fxTexture(pixelCircle(128, '255,255,255', (d) => (d >= 0.82 && d <= 1 ? 1 : 0)));
   fxTex.edge = fxTexture(pixelCircle(128, '255,255,255', (d) => (d >= 0.94 && d <= 1 ? 1 : 0)));
   fxTex.disc = fxTexture(pixelCircle(128, '255,255,255', (d) => (d <= 1 ? 1 : 0)));

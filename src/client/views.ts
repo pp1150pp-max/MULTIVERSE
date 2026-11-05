@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import type { Player } from '../shared/sim/Player';
 import type { Monster } from '../shared/sim/Monster';
+import { itemArt } from '../shared/data/items';
 import { LOOT_POP_TIME, type Loot } from '../shared/sim/Loot';
 import type { SimEvent } from '../shared/sim/types';
 import { SpriteActor } from './SpriteActor';
@@ -150,12 +151,15 @@ export class LootView {
 
   constructor(readonly l: Loot, private readonly scene: THREE.Scene, fx: Effects) {
     const k = l.kind;
-    const key = k.type === 'gold' ? 'icon_coin' : k.type === 'potion' ? `icon_potion_${k.pot}` : `icon_bag_${k.item.rarity}`;
-    this.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: sheets[key].texture, alphaTest: 0.5, transparent: false }));
-    this.sprite.scale.set(0.55, 0.55, 1);
+    const key = k.type === 'gold' ? 'icon_coin' : k.type === 'potion' ? `icon_potion_${k.pot}` : itemArt(k.item);
+    this.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: sheets[key].texture, alphaTest: 0.5, transparent: true }));
+    const size = k.type === 'item' ? 0.85 : 0.55;
+    this.sprite.scale.set(size, size, 1);
+    // Drawn after the glow, so the rarity light sits behind the picture instead of washing it out.
+    this.sprite.renderOrder = 2;
     scene.add(this.sprite);
     if (k.type === 'item' && k.item.rarity !== 'common') {
-      this.glow = fx.glowSprite(GLOW[k.item.rarity], 1.4, 0.7);
+      this.glow = fx.glowSprite(GLOW[k.item.rarity], 1.5, 0.55);
       scene.add(this.glow);
     }
     this.update();
