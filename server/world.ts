@@ -16,9 +16,10 @@ import {
 } from '../src/shared/net/protocol';
 import { RARITIES, SLOTS, type SlotId, type Vec2 } from '../src/shared/types';
 import type { SkillSlot } from '../src/shared/data/classes';
-import type { StashData } from '../src/shared/sim/stash';
+import { cleanStash, type StashData } from '../src/shared/sim/stash';
 
 const AUTOSAVE_MS = 30_000;
+const GUEST_STASH_MSG = 'Guest ใช้คลังเก็บของไม่ได้ — สมัครสมาชิกเพื่อใช้คลัง (ตัวละครนี้จะย้ายไปอยู่ในบัญชีใหม่)';
 const JOIN_TIMEOUT_MS = 10_000;
 const SKILL_KEYS: SkillSlot[] = ['q', 'e', 'r'];
 
@@ -26,6 +27,8 @@ interface Session {
   ws: WebSocket;
   accountId: number;
   username: string;
+  /** A guest character: no stash, and the account is deleted after a day offline. */
+  guest: boolean;
   charId: number;
   /** The zone this session is playing in. */
   sim: Sim;
@@ -161,22 +164,28 @@ export class GameWorld {
     }
     const sim = this.sims.get(zoneById(data.zone).id)!;
     const player = sim.addPlayer(data);
-    let stash = this.stashes.get(acc.id);
-    if (!stash) {
-      stash = this.db.loadStash(acc.id);
-      this.stashes.set(acc.id, stash);
+    if (acc.guest) {
+      // Guests can't use the stash (onAction refuses it); this empty one is never saved.
+      player.stash = cleanStash(null);
+      this.db.touchOnline(acc.id);
+    } else {
+      let stash = this.stashes.get(acc.id);
+      if (!stash) {
+        stash = this.db.loadStash(acc.id);
+        this.stashes.set(acc.id, stash);
+      }
+      player.stash = stash;
     }
-    player.stash = stash;
     const s: Session = {
-      ws, accountId: acc.id, username: acc.username, charId, sim, player,
+      ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId, sim, player,
       move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null,
       auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), epoch: 0, lastInv: '', lastStash: '', outbox: [], lastChatAt: 0, saveDue: null,
     };
     this.sessions.add(s);
     this.byPlayer.set(player, s);
-    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id });
+    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, guest: acc.guest });
     this.broadcastSystem(`${player.name} เข้าสู่โลก`);
-    console.log(`[world] ${acc.username} joined as ${player.name} (${this.sessions.size} online)`);
+    console.log(`[world] ${acc.username} joined as ${player.name}${acc.guest ? ' (guest)' : ''} (${this.sessions.size} online)`);
     return s;
   }
 
@@ -190,6 +199,21 @@ export class GameWorld {
     if (![...this.sessions].some((o) => o.accountId === s.accountId)) this.stashes.delete(s.accountId);
     this.broadcastSystem(`${s.player.name} ออกจากเกม`);
     console.log(`[world] ${s.username} left (${this.sessions.size} online)`);
+  }
+
+  /** Ends the game of whoever plays on this account (saving it first), e.g. before the account changes. */
+  kickAccount(accountId: number, msg: string): void {
+    for (const s of [...this.sessions]) {
+      if (s.accountId !== accountId) continue;
+      this.send(s.ws, { t: 'kick', msg });
+      this.leave(s);
+      s.ws.close();
+    }
+  }
+
+  /** Accounts with a character in the world right now. */
+  onlineAccounts(): number[] {
+    return [...this.sessions].map((s) => s.accountId);
   }
 
   // ------------------------------------------------------------ messages
@@ -223,6 +247,10 @@ export class GameWorld {
     const p = s.player;
     const sim = s.sim;
     const i = num((m as { i?: unknown }).i, -1);
+    if (s.guest && typeof m.a === 'string' && m.a.startsWith('stash')) {
+      this.send(s.ws, { t: 'chat', name: '', text: GUEST_STASH_MSG });
+      return;
+    }
     switch (m.a) {
       case 'respawn':
         // Death turns Auto off (the browser does too), so the player doesn't run back to the farm spot.
@@ -495,8 +523,13 @@ export class GameWorld {
   private save(s: Session): void {
     s.saveDue = null;
     try {
-      // Together with the stash, so an item never ends up in both or neither.
-      this.db.saveCharacterAndStash(s.charId, s.player.toData(), s.accountId, s.player.stash);
+      if (s.guest) {
+        this.db.saveCharacter(s.charId, s.player.toData());
+        this.db.touchOnline(s.accountId);
+      } else {
+        // Together with the stash, so an item never ends up in both or neither.
+        this.db.saveCharacterAndStash(s.charId, s.player.toData(), s.accountId, s.player.stash);
+      }
     } catch (e) {
       console.error(`[world] saving ${s.player.name} failed`, e);
     }

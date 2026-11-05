@@ -12,7 +12,6 @@ import { Input } from './input';
 import { Effects } from './effects';
 import { Floating } from './floating';
 import { Hud } from './hud';
-import { AUTO_HINT_COLOR, AutoPlay } from '../shared/sim/autoplay';
 import { AutoRing } from './autoRing';
 import { AUTO_PX_PER_UNIT } from '../shared/sim/Player';
 import { SpriteActor } from './SpriteActor';
@@ -30,15 +29,9 @@ export type { Intent };
 
 export interface Npc { id: NpcId; name: string; action: string; icon: string; role: string; x: number; z: number; actor: SpriteActor }
 
-/** Saving for singleplayer; online characters are saved by the server. */
-export interface LocalPersist {
-  metSeeker: boolean;
-  save(game: Game): void;
-}
-
 /**
- * Draws the world and handles input, camera and HUD. The world itself comes from a Backend:
- * a local simulation (singleplayer) or the server (multiplayer). All game rules live in src/shared.
+ * Draws the world and handles input, camera and HUD. The world itself comes from the server
+ * through a Backend; all game rules live in src/shared and run there.
  */
 export class Game {
   readonly renderer: THREE.WebGLRenderer;
@@ -52,14 +45,15 @@ export class Game {
   readonly floating: Floating;
   readonly hud: Hud;
   npcs: Npc[] = [];
-  metSeeker: boolean;
+  /** The Seeker's intro is shown only when you talk to him. */
+  metSeeker = true;
   autoPlay = false;
   /** Waypoints left from a click on the full map (empty = not walking anywhere). */
   mapRoute: Vec2[] = [];
   /** Stuck check for the map walk: closest distance to the next waypoint and when it last got closer. */
   private routeBest = Infinity;
   private routeBestAt = 0;
-  /** Where Auto was switched on: the centre of its farming circle (the server keeps its own copy online). */
+  /** Where Auto was switched on: the centre of its farming circle (the server keeps its own copy). */
   private autoAnchor: { x: number; z: number } | null = null;
   private autoRing!: AutoRing;
   hovered: Monster | null = null;
@@ -69,7 +63,6 @@ export class Game {
   private readonly camTarget = new THREE.Vector3();
   private shakeT = 0;
   private shakeAmt = 0;
-  private readonly auto = new AutoPlay();
   private readonly sound = new GameAudio();
   private readonly raycaster = new THREE.Raycaster();
   private readonly ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -79,10 +72,9 @@ export class Game {
   private readonly monsterViews: ViewSet<Monster, MonsterView>;
   private readonly projectileViews: ViewSet<ProjectileLike, ProjectileView>;
   private readonly lootViews: ViewSet<Loot, LootView>;
-  private saveT = 0;
   private last = 0;
 
-  constructor(container: HTMLElement, readonly backend: Backend, private readonly persist: LocalPersist | null) {
+  constructor(container: HTMLElement, readonly backend: Backend) {
     this.zone = backend.zone;
     this.renderer = new THREE.WebGLRenderer({ antialias: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -101,8 +93,6 @@ export class Game {
     this.autoRing = new AutoRing(this.scene);
     this.floating = new Floating(document.getElementById('float-layer')!);
 
-    // Online, the Seeker's intro is only shown when you talk to him.
-    this.metSeeker = persist?.metSeeker ?? true;
     this.camTarget.set(this.player.x, 0, this.player.z);
 
     this.playerViews = new ViewSet((p) => new PlayerView(p, this.scene));
@@ -117,10 +107,9 @@ export class Game {
       this.renderer.setSize(window.innerWidth, window.innerHeight);
       this.updateProjection();
     });
-    window.addEventListener('beforeunload', () => this.save());
   }
 
-  /** Our character. A new object after changing zones in singleplayer, so always read it from here. */
+  /** Our character. Always read it from here (the backend owns it). */
   get player(): Player { return this.backend.me; }
   get monsters(): readonly Monster[] { return this.backend.monsters; }
   get loots(): readonly Loot[] { return this.backend.loots; }
@@ -129,7 +118,6 @@ export class Game {
   start(): void {
     this.last = performance.now();
     requestAnimationFrame(this.loop);
-    if (!this.metSeeker) setTimeout(() => this.hud.openDialog(), 600);
   }
 
   private loop = (now: number) => {
@@ -162,17 +150,9 @@ export class Game {
       return;
     }
     this.autoPlay = force ?? !this.autoPlay;
-    if (this.autoPlay) {
-      this.auto.start(this.player.x, this.player.z);
-      this.autoAnchor = { x: this.player.x, z: this.player.z };
-    }
-    else this.auto.reset();
+    if (this.autoPlay) this.autoAnchor = { x: this.player.x, z: this.player.z };
     this.backend.setAuto(this.autoPlay);
     this.hud.log(this.autoPlay ? 'เปิด Auto Play — โจมตีเองได้ตลอด · เดินเองเมื่อไหร่ Auto จะปิด' : offMsg, '#9fd8ff');
-  }
-
-  save(): void {
-    this.persist?.save(this);
   }
 
   respawn(): void {
@@ -263,10 +243,8 @@ export class Game {
     this.syncViews();
     this.camTarget.set(this.player.x, 0, this.player.z);
     this.autoPlay = false;
-    this.auto.reset();
     this.hovered = null;
     this.hud.onZoneChanged();
-    this.save();
   }
 
   private updateProjection(): void {
@@ -346,9 +324,6 @@ export class Game {
         if (ev.id === me) this.hud.hideDeath();
         break;
       }
-      case 'save':
-        this.save();
-        break;
     }
   }
 
@@ -418,7 +393,7 @@ export class Game {
     if (i.pressed('KeyH')) this.hud.toggleHelp();
     if (i.pressed('KeyM')) this.hud.toggleMap();
     if (i.pressed('Escape')) this.hud.closePanels();
-    if (i.pressed('Enter') && this.backend.online) this.hud.openChat();
+    if (i.pressed('Enter')) this.hud.openChat();
     if (i.wheel) {
       this.viewSize = Math.max(10, Math.min(28, this.viewSize + i.wheel * 1.2));
       this.updateProjection();
@@ -431,13 +406,8 @@ export class Game {
       intent = this.manualIntent();
       if (this.mapRoute.length) intent = this.followRoute(intent);
       if (this.hud.dialogOpen) intent = { ...intent, move: null, moveTo: null, basic: false, skills: [], dash: false };
+      // The server plays Auto (so it keeps going in a hidden tab); here it only gets our manual input.
       else if (this.autoPlay && !this.mapRoute.length && (intent.move || intent.moveTo)) this.toggleAuto(false, 'ปิด Auto Play — เดินเอง');
-      // Online the server plays Auto (so it keeps going in a hidden tab); here it only gets our manual input.
-      else if (this.autoPlay && !this.backend.online) {
-        intent = this.auto.intent(this, intent);
-        const hint = this.auto.takeHint();
-        if (hint) this.hud.log(hint, AUTO_HINT_COLOR);
-      }
     }
     const events = this.backend.frame(dt, intent);
     if (this.backend.zone !== this.zone) this.changeZone();
@@ -480,12 +450,6 @@ export class Game {
     this.updateCamera(dt);
     this.floating.update(dt, this);
     this.hud.update(dt);
-
-    this.saveT += dt;
-    if (this.saveT > 15) {
-      this.saveT = 0;
-      this.save();
-    }
   }
 
   private updateCamera(dt: number): void {

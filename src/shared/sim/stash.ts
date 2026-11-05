@@ -1,6 +1,5 @@
 // The account-wide storage box kept by the warehouse keeper in town. Every character on the same
-// account (online) or in the same browser (singleplayer) opens the same stash, so gear and gold can
-// be passed between characters. Saved apart from the characters themselves.
+// account opens the same stash, so gear and gold can be passed between characters (guests have none). Saved apart from the characters themselves.
 import { POTION_SIZES, POTION_STACK } from '../data/potions';
 import { RARITIES, SLOTS, type BagEntry, type PotionSize } from '../types';
 

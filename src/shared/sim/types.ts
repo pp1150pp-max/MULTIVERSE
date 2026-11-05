@@ -1,4 +1,4 @@
-// Types shared by the simulation and whoever drives it (the browser in singleplayer, the server online).
+// Types shared by the simulation (run by the server) and the browser that shows it.
 import type { SkillSlot } from '../data/classes';
 import type { Item, Vec2 } from '../types';
 

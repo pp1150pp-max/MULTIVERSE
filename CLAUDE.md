@@ -1,6 +1,6 @@
 # CLAUDE.md — คู่มือสำหรับ Claude ในโปรเจกต์ MULTIVERSE
 
-เกม Action RPG มุมมองไอโซเมตริกบนเว็บ (TypeScript + Three.js + Vite) มีทั้ง Singleplayer และ Multiplayer
+เกม Action RPG มุมมองไอโซเมตริกบนเว็บ (TypeScript + Three.js + Vite) ทุกคนเล่นบน server เดียวกัน (เล่นแบบ Guest หรือเข้าสู่ระบบ)
 ภาพรวมระบบและโครงสร้างโฟลเดอร์อยู่ใน [README.md](README.md) · ขั้นตอน Git อยู่ใน [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## กฎการทำงานกับเจ้าของโปรเจกต์
@@ -19,16 +19,18 @@
 ## คำสั่ง
 
 ```bash
-npm run dev        # Singleplayer อย่างเดียว ที่ http://localhost:5173
+npm run dev        # เกม http://localhost:5173 + game server สำหรับทดสอบ (port 2568, DB server/data/dev.db) แก้โค้ด server แล้วรีสตาร์ทเอง
 npm run build      # typecheck (เบราว์เซอร์ + server) แล้ว build ลง dist/
 npm run typecheck  # ตรวจ type อย่างเดียว
-npm run server     # server สำหรับ Multiplayer ที่ http://localhost:2567 (เสิร์ฟ dist/)
+npm run server     # server ตัวจริงที่ http://localhost:2567 (เสิร์ฟ dist/, DB server/data/multiverse.db)
 npm run online     # build + server + ลิงก์ Cloudflare ให้เพื่อนเข้า (ถ้า npm run tunnel เปิดอยู่ จะใช้ลิงก์ของมัน)
 npm run tunnel     # ลิงก์ให้เพื่อนอย่างเดียว เปิดค้างไว้ → รีสตาร์ท server แล้วลิงก์ไม่เปลี่ยน
 ```
 
 - ยังไม่มีชุดเทสต์อัตโนมัติ ตรวจด้วย `npm run build` และเปิดเกมลองเล่นจริง
 - `npm run online` ใช้ port 2567 ถ้าขึ้น `EADDRINUSE` แปลว่ามี server ตัวเก่ารันค้างอยู่
+- `npm run dev` ใช้ port 2568 และ DB แยก (`server/data/dev.db`) จึงรันพร้อม server ตัวจริงในเครื่องเดียวกันได้ · Vite ส่งต่อทั้ง `/api` และ WebSocket `/ws` ไปให้ (`vite.config.ts`)
+- ทดสอบสร้างบัญชี/Guest ให้ทำกับ server ของ `npm run dev` เท่านั้น อย่าสร้างบน server ตัวจริง (port 2567)
 - **ขณะที่ server ของเจ้าของเปิดให้เพื่อนเล่นอยู่ อย่า build ทับ `dist/`** (เพื่อนจะได้โค้ดใหม่ที่ไม่ตรงกับ server)
   `npm run build` ก็เขียนลง `dist/` ด้วย ให้ใช้ `npm run typecheck` และ `npx vite build --outDir <โฟลเดอร์อื่น>` แทน
   เช็คก่อนว่ามี server รันอยู่ไหม: ดูว่ามีโปรแกรมใช้ port 2567 อยู่หรือไม่
@@ -38,15 +40,14 @@ npm run tunnel     # ลิงก์ให้เพื่อนอย่าง�
 - `src/shared/` คือกติกาเกมล้วน ใช้ร่วมกันทั้งเบราว์เซอร์และ server **ห้าม import `three` หรือใช้ `document`/`window`**
   ถ้า Sim อยากให้แสดงอะไร ให้ส่ง `SimEvent` (ดู `src/shared/sim/types.ts`)
 - `Sim` (`src/shared/sim/Sim.ts`) คือตัวตัดสินทุกอย่าง: ต่อสู้, ดรอป, EXP, ร้านค้า, ตีบวก
-  - Singleplayer: `LocalBackend` รัน Sim ในเบราว์เซอร์
-  - Multiplayer: server รัน Sim (`server/world.ts`) ส่วนเบราว์เซอร์ใช้ `OnlineBackend` (`src/client/net/online.ts`) ซึ่งแค่สะท้อน snapshot
+  - server รัน Sim (`server/world.ts`) ส่วนเบราว์เซอร์ใช้ `OnlineBackend` (`src/client/net/online.ts`) ซึ่งแค่สะท้อน snapshot (ไม่มีโหมด Singleplayer แล้ว)
 - เพิ่ม action ใหม่ของผู้เล่น (ซื้อ, ขาย, เรียงของ ฯลฯ) ต้องแก้ครบ 5 ที่:
   1. เมธอดใน `Sim` หรือ `Player`
-  2. `Backend` interface + `LocalBackend` ใน `src/client/backend.ts`
+  2. `Backend` interface ใน `src/client/backend.ts`
   3. `ActionMsg` ใน `src/shared/net/protocol.ts`
   4. `OnlineBackend` ใน `src/client/net/online.ts`
   5. `onAction` ใน `server/world.ts` — **ตรวจค่าที่ส่งมาจาก client ทุกครั้ง** (อย่าเชื่อ client)
-- ข้อมูลตัวละครที่เซฟคือ `CharacterData` (`src/shared/sim/Player.ts`) เก็บใน localStorage (SP) และ SQLite (MP)
+- ข้อมูลตัวละครที่เซฟคือ `CharacterData` (`src/shared/sim/Player.ts`) เก็บใน SQLite บน server (`server/db.ts`)
   ถ้าเปลี่ยนรูปแบบ ต้องคิดถึงเซฟเก่าเสมอ (ฟิลด์ใหม่ให้เป็น optional หรือมีค่าเริ่มต้น)
 - ตัวเลขเกมอยู่ใน `src/shared/data/` เช่น `monsters.ts` (อัตราดรอป), `items.ts`, `enhance.ts`, `potions.ts`
 
@@ -56,9 +57,15 @@ npm run tunnel     # ลิงก์ให้เพื่อนอย่าง�
 - ยามี 3 ขนาดต่อชนิด เติมเป็นตัวเลขคงที่ (ไม่ใช่ %) — ดู `src/shared/data/potions.ts`
 - ปุ่มยาด่วน (1/2) ใช้ขนาดที่ผู้เล่นเลือก (คลิกยาในกระเป๋า) ถ้าหมดจะใช้ขนาดเล็กสุดที่เหลือ
 - Auto Play ปิดเองเมื่อผู้เล่นเดินเอง แต่กดโจมตีหรือสกิลเองได้โดย Auto ยังเปิดอยู่
-  - โหมดออนไลน์ server เป็นคนเล่น Auto (`src/shared/sim/autoplay.ts`) จึงฟาร์มต่อได้แม้สลับแท็บ · Singleplayer เกมหยุดเมื่อสลับแท็บ
+  - server เป็นคนเล่น Auto (`src/shared/sim/autoplay.ts`) จึงฟาร์มต่อได้แม้สลับแท็บ
 - พ่อค้ามีปุ่มขายของทั้งหมดตามระดับความหายาก (ไม่ขายของที่ตีบวกแล้ว และถามยืนยันก่อน)
 - ภาพในเกมเป็นสไตล์ 16-bit SNES มุม 2D isometric ระดับความละเอียดเดียวกับ Gunslinger สร้างด้วย ChatGPT (prompt อยู่ใน `art_templates/`) พื้นเป็นลายปูซ้ำที่ผสมกันด้วย shader ส่วนตำแหน่งถนน บ่อน้ำ และของตกแต่งคำนวณใน `src/client/world.ts`
-- Multiplayer: แบ่ง EXP ตามสัดส่วนดาเมจ, คนที่ทำดาเมจมากสุดมีสิทธิ์เก็บของก่อน 10 วินาที
+- แบ่ง EXP ตามสัดส่วนดาเมจ, คนที่ทำดาเมจมากสุดมีสิทธิ์เก็บของก่อน 10 วินาที
 - คลังเก็บของ (ผู้ดูแลคลังในเมือง, `src/shared/sim/stash.ts`) ใช้ร่วมกันทุกตัวละครในบัญชีเดียวกัน เริ่ม 30 ช่อง ซื้อเพิ่มทีละ 10 สูงสุด 90 (500/1,000/2,000/4,000/8,000/16,000 G) เก็บของ ยา และทอง
-  - SP เก็บใน localStorage key แยก (`multiverse-stash-v1`) · MP เก็บในตาราง `stashes` และเซฟพร้อมตัวละครใน transaction เดียว
+  - เก็บในตาราง `stashes` และเซฟพร้อมตัวละครใน transaction เดียว · Guest ใช้คลังไม่ได้ (server ปฏิเสธ และขึ้นข้อความให้สมัคร)
+- หน้าแรกมี 2 ปุ่ม: **เล่นแบบ Guest** และ **เข้าสู่ระบบ / สมัคร** (ไม่มี Singleplayer แล้ว เซฟ SP เก่าในเบราว์เซอร์ถูกทิ้ง ไม่ import)
+- Guest = บัญชีชั่วคราวบน server (`accounts.is_guest = 1`) มีตัวละคร 1 ตัว เบราว์เซอร์เก็บแค่ token (`multiverse-guest-token`) ห้ามเชื่อข้อมูลตัวละครจากเบราว์เซอร์
+  - ถูกลบ (ตัวละครด้วย) เมื่อไม่ได้ออนไลน์เกิน 24 ชม. นับจาก `last_online` · server ไล่ลบตอนเปิดและทุก 1 ชม. คนที่ออนไลน์อยู่ไม่ถูกลบ
+  - สมัครสมาชิกจากเบราว์เซอร์ที่มี Guest → บัญชี Guest กลายเป็นบัญชีจริง ตัวละครย้ายมาด้วย (นับใน 3 ช่อง) · เข้าสู่ระบบบัญชีเดิมไม่ย้าย
+  - "เริ่ม Guest ใหม่" ลบ Guest เดิมเมื่อสร้างตัวใหม่สำเร็จ · สร้าง Guest ได้ไม่เกิน 5 ตัวต่อ IP ต่อชั่วโมง (`GUEST_PER_IP_HOUR` ใน `src/shared/api.ts`)
+  - ระหว่างเล่นมีป้าย Guest บน HUD · ไม่มีบทนำ The Seeker ตอนเริ่ม (คุยเองได้)

@@ -6,11 +6,12 @@ import { readFile, stat } from 'node:fs/promises';
 import { networkInterfaces } from 'node:os';
 import { extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Db } from './db';
+import { randomBytes } from 'node:crypto';
+import { Db, type SessionAccount } from './db';
 import { AttemptLimiter, hashPassword, newToken, SESSION_MS, verifyPassword } from './auth';
 import {
-  checkCharacterName, checkPassword, checkUsername, isClassId, MAX_CHARACTERS,
-  type AuthResponse, type CharacterSummary, type MeResponse,
+  checkCharacterName, checkPassword, checkUsername, GUEST_PER_IP_HOUR, isClassId, MAX_CHARACTERS,
+  type AuthResponse, type CharacterSummary, type GuestResponse, type MeResponse,
 } from '../src/shared/api';
 import { newCharacterData } from '../src/shared/sim/Player';
 import { GameWorld } from './world';
@@ -26,6 +27,9 @@ const PUBLIC = process.argv.includes('--public');
 
 const db = new Db(DB_FILE);
 const limiter = new AttemptLimiter();
+/** Brake on making guests: each new guest counts as one "attempt" for its address. */
+const guestLimiter = new AttemptLimiter(GUEST_PER_IP_HOUR, 60 * 60 * 1000);
+const CLEANUP_MS = 60 * 60 * 1000;
 db.deleteExpiredSessions();
 
 class HttpError extends Error {
@@ -77,12 +81,26 @@ function bearer(req: IncomingMessage): string {
   return h.startsWith('Bearer ') ? h.slice(7) : '';
 }
 
-/** The logged-in account for this request, or a 401. */
-function requireAccount(req: IncomingMessage): { id: number; username: string } {
+/** The logged-in account (or guest) for this request, or a 401. */
+function requireAccount(req: IncomingMessage): SessionAccount {
   const token = bearer(req);
   const acc = token ? db.sessionAccount(token) : undefined;
   if (!acc) throw new HttpError(401, 'กรุณาเข้าสู่ระบบใหม่');
   return acc;
+}
+
+/** Like requireAccount, but guests (who have exactly one character) are turned away. */
+function requireRealAccount(req: IncomingMessage): SessionAccount {
+  const acc = requireAccount(req);
+  if (acc.guest) throw new HttpError(403, 'Guest ทำแบบนี้ไม่ได้ — สมัครสมาชิกก่อน');
+  return acc;
+}
+
+/** Deletes guests nobody has played for a day (never one that is in the world right now). */
+function cleanupGuests(): void {
+  const n = db.deleteStaleGuests(world.onlineAccounts());
+  if (n) console.log(`[guest] deleted ${n} guest(s) not online for a day`);
+  db.deleteExpiredSessions();
 }
 
 function startSession(accountId: number, username: string): AuthResponse {
@@ -104,13 +122,51 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string): Pro
     const password = str(body.password);
     const bad = checkUsername(username) ?? checkPassword(password);
     if (bad) throw new HttpError(400, bad);
-    const id = db.createAccount(username, await hashPassword(password));
+    if (db.findAccount(username)) {
+      limiter.fail(ip);
+      throw new HttpError(409, 'ชื่อผู้ใช้นี้มีคนใช้แล้ว');
+    }
+    const passHash = await hashPassword(password);
+    // Signing up from a browser that plays a guest: that guest becomes the new account, character and all.
+    const guestToken = str(body.guestToken);
+    const guest = guestToken ? db.sessionAccount(guestToken) : undefined;
+    if (guest?.guest) {
+      world.kickAccount(guest.id, 'ตัวละคร Guest ย้ายเข้าบัญชีใหม่แล้ว — เข้าสู่ระบบเพื่อเล่นต่อ');
+      if (!db.upgradeGuest(guest.id, username, passHash)) throw new HttpError(409, 'ชื่อผู้ใช้นี้มีคนใช้แล้ว');
+      console.log(`[account] registered ${username} (from guest #${guest.id})`);
+      return send(res, 201, startSession(guest.id, username));
+    }
+    const id = db.createAccount(username, passHash);
     if (id === null) {
       limiter.fail(ip);
       throw new HttpError(409, 'ชื่อผู้ใช้นี้มีคนใช้แล้ว');
     }
     console.log(`[account] registered ${username}`);
     return send(res, 201, startSession(id, username));
+  }
+
+  // New guest (name + class). Sent with a guest's token, it replaces that guest ("start a new guest").
+  if (method === 'POST' && path === '/api/guest') {
+    const ip = clientIp(req);
+    if (guestLimiter.blocked(ip)) throw new HttpError(429, `สร้าง Guest ได้ไม่เกิน ${GUEST_PER_IP_HOUR} ตัวต่อชั่วโมง รอสักครู่แล้วลองใหม่`);
+    const body = await readJson(req);
+    const name = str(body.name).trim();
+    const bad = checkCharacterName(name);
+    if (bad) throw new HttpError(400, bad);
+    if (!isClassId(body.classId)) throw new HttpError(400, 'กรุณาเลือกคลาส');
+    const token = bearer(req);
+    const old = token ? db.sessionAccount(token) : undefined;
+    const replacing = old?.guest ? old.id : -1;
+    if (db.characterNameTaken(name, replacing)) throw new HttpError(409, 'ชื่อตัวละครนี้มีคนใช้แล้ว');
+    if (replacing >= 0) {
+      world.kickAccount(replacing, 'เริ่ม Guest ใหม่แล้ว');
+      db.deleteGuest(replacing);
+    }
+    guestLimiter.fail(ip);
+    const { accountId, character } = db.createGuest(randomBytes(8).toString('hex'), newCharacterData(name, body.classId));
+    const session = startSession(accountId, '');
+    console.log(`[guest] #${accountId} created ${name} (${body.classId})${replacing >= 0 ? ` replacing guest #${replacing}` : ''}`);
+    return send(res, 201, { token: session.token, character } satisfies GuestResponse);
   }
 
   if (method === 'POST' && path === '/api/login') {
@@ -134,7 +190,7 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string): Pro
 
   if (method === 'GET' && path === '/api/me') {
     const acc = requireAccount(req);
-    return send(res, 200, { username: acc.username } satisfies MeResponse);
+    return send(res, 200, { username: acc.guest ? 'Guest' : acc.username, guest: acc.guest } satisfies MeResponse);
   }
 
   if (path === '/api/characters' && method === 'GET') {
@@ -143,7 +199,7 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string): Pro
   }
 
   if (path === '/api/characters' && method === 'POST') {
-    const acc = requireAccount(req);
+    const acc = requireRealAccount(req);
     const body = await readJson(req);
     const name = str(body.name).trim();
     const bad = checkCharacterName(name);
@@ -158,7 +214,7 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string): Pro
 
   const del = method === 'DELETE' && /^\/api\/characters\/(\d+)$/.exec(path);
   if (del) {
-    const acc = requireAccount(req);
+    const acc = requireRealAccount(req);
     if (!db.deleteCharacter(acc.id, Number(del[1]))) throw new HttpError(404, 'ไม่พบตัวละครนี้');
     console.log(`[character] ${acc.username} deleted character #${del[1]}`);
     return send(res, 200, {});
@@ -215,6 +271,8 @@ const server = createServer(async (req, res) => {
 });
 
 const world = new GameWorld(db, server);
+cleanupGuests();
+setInterval(cleanupGuests, CLEANUP_MS);
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\nMULTIVERSE server พร้อมแล้ว — port ${PORT}`);

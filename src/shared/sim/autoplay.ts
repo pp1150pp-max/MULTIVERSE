@@ -6,7 +6,7 @@ import { MONSTERS } from '../data/monsters';
 import type { SkillSlot } from '../data/classes';
 import type { ZoneDef } from '../data/zones';
 
-/** What the bot needs to see. The browser's Game fits this (singleplayer); the server builds one per player online. */
+/** What the bot needs to see. The server builds one per player. */
 export interface AutoWorld {
   readonly player: Player;
   readonly monsters: readonly Monster[];
@@ -27,8 +27,7 @@ const IDLE_HINT_EVERY = 30;
 export const AUTO_HINT_COLOR = '#ffb36a';
 
 /**
- * Open-world farming bot. Singleplayer runs it in the browser; online the server runs it, so it
- * keeps farming while the tab is hidden. Walking by hand turns it off (Game.update); manual attacks
+ * Open-world farming bot. The server runs it, so it keeps farming while the tab is hidden. Walking by hand turns it off (Game.update); manual attacks
  * and skills just win for that frame while Auto stays on.
  * Bosses are skipped on purpose — those are meant to be fought by hand.
  * It stays inside a circle (the player's Auto range setting) around where Auto was switched on.

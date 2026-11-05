@@ -119,7 +119,8 @@ export interface SnapshotMsg {
 }
 
 export type ServerMsg =
-  | { t: 'welcome'; you: number; time: number; zone: string }
+  /** `guest`: playing a guest character (no stash, deleted after a day offline). */
+  | { t: 'welcome'; you: number; time: number; zone: string; guest?: boolean }
   /** You walked through a portal: you are now `you` in zone `zone`, standing at x/z. Snapshots from that zone follow. */
   | { t: 'zone'; zone: string; you: number; x: number; z: number }
   | SnapshotMsg

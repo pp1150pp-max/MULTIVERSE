@@ -11,19 +11,19 @@ GitHub ล็อก `main` ไว้แล้ว และจะรวม PR ไ
 
 ## เริ่มต้นครั้งแรก
 
-ต้องมี [Git](https://git-scm.com/) และ [Node.js](https://nodejs.org/) เวอร์ชัน 20 ขึ้นไป
+ต้องมี [Git](https://git-scm.com/) และ [Node.js](https://nodejs.org/) เวอร์ชัน 22.5 ขึ้นไป
 
 ```bash
 git clone https://github.com/pp1150pp-max/MULTIVERSE.git
 cd MULTIVERSE
 npm install
-npm run dev        # เปิดเกมที่ http://localhost:5173
+npm run dev        # เปิดเกมที่ http://localhost:5173 พร้อม game server ของเครื่องตัวเอง (DB ทดสอบ server/data/dev.db)
 ```
 
 ## รายการงานและบั๊ก (GitHub Issues)
 
 งานที่จะทำและบั๊กที่เจอทั้งหมดอยู่ในแท็บ **Issues** ของ repo
-- เจอบั๊ก → **New issue** → เลือก **รายงานบั๊ก** (บอกโหมด SP/MP ขั้นตอนที่เจอ และ error ใน Console)
+- เจอบั๊ก → **New issue** → เลือก **รายงานบั๊ก** (บอกว่าเล่นแบบ Guest หรือบัญชี ขั้นตอนที่เจอ และ error ใน Console)
 - อยากเพิ่มอะไร → **New issue** → เลือก **งานใหม่**
 - จะเริ่มทำ issue ไหน ให้กด **Assignees** ใส่ชื่อตัวเองก่อน คนอื่นจะได้รู้ว่ามีคนทำอยู่
 - ตอนเปิด PR ใส่ `Fixes #เลข issue` ในคำอธิบาย พอ merge แล้ว issue จะปิดเอง
