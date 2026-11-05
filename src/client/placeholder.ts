@@ -466,6 +466,54 @@ export function drawRock(variant: number): HTMLCanvasElement {
   return c;
 }
 
+/** Layers of dark pine with snow lying on each. */
+export function drawSnowPine(variant: number): HTMLCanvasElement {
+  const c = newCanvas(64, 96);
+  const ctx = c.getContext('2d')!;
+  rect(ctx, 1, 28, 76, 8, 18, '#5a4230');
+  const layers = 4 + variant;
+  for (let i = 0; i < layers; i++) {
+    const y = 80 - ((i + 1) * 70) / layers;
+    const w = 28 - (i * 20) / layers;
+    const h = 92 / layers;
+    poly(ctx, 1, [32 - w, y + h, 32 + w, y + h, 32, y], '#2f4a4a');
+    poly(ctx, 1, [32 - w * 0.55, y + h * 0.55, 32 + w * 0.55, y + h * 0.55, 32, y], '#d6e4ee', null);
+  }
+  return c;
+}
+
+export function drawSnowRock(variant: number): HTMLCanvasElement {
+  const c = newCanvas(36, 26);
+  const ctx = c.getContext('2d')!;
+  poly(ctx, 1, [3, 24, 33, 24, 30, 10, 20, 3, 8, 8], variant ? '#6f8192' : '#5f7284');
+  poly(ctx, 1, [8, 10, 29, 11, 20, 4, 9, 8], '#dce8f0', null);
+  return c;
+}
+
+export function drawIceCrystal(variant: number): HTMLCanvasElement {
+  const c = newCanvas(36, 44);
+  const ctx = c.getContext('2d')!;
+  const shard = (x: number, w: number, top: number, fill: string) =>
+    poly(ctx, 1, [x - w, 42, x + w, 42, x + w * 0.7, top + 8, x, top, x - w * 0.7, top + 8], fill);
+  shard(10, 6, 16, '#7fc4e4');
+  shard(26, 6, variant ? 8 : 18, '#6ab6da');
+  shard(18, 8, variant ? 14 : 3, '#a8e2f6');
+  return c;
+}
+
+/** Points right: ProjectileView turns it the way it flies. */
+export function drawIceShard(): HTMLCanvasElement {
+  const c = newCanvas(32, 16);
+  const ctx = c.getContext('2d')!;
+  poly(ctx, 1, [1, 8, 10, 2, 31, 8, 10, 14], '#8fd8f4');
+  poly(ctx, 1, [6, 7, 11, 4, 28, 8], '#eaf9ff', null);
+  return c;
+}
+
+export function drawSnowball(): HTMLCanvasElement {
+  return pixelCircle(24, '232,242,250', (d) => (d <= 1 ? 1 : 0));
+}
+
 export function drawStump(): HTMLCanvasElement {
   const c = newCanvas(28, 24);
   const ctx = c.getContext('2d')!;

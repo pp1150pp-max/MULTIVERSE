@@ -17,13 +17,16 @@ import {
   type AutoSettings, type CharacterData, type LootFilter, type SortKey,
 } from './Player';
 import { Monster } from './Monster';
-import { Projectile, type ProjOpts } from './Projectile';
+import { EnemyShot, Projectile, type ProjOpts } from './Projectile';
 import { Loot, LOOT_PRIORITY_TIME, type LootKind } from './Loot';
 import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type SfxName, type SimEvent } from './types';
 
 /** Gear of this rarity that "sell all" may take: never potions or enhanced items. */
 /** Seconds of warning before a freshly summoned minion pounces. */
 const MINION_POUNCE_WINDUP = 0.35;
+/** A vanished boss gives up on its fight when no living player has been this close for VANISH_GIVE_UP seconds. */
+const VANISH_LEASH = 30;
+const VANISH_GIVE_UP = 20;
 
 export function isBulkSellable(e: BagEntry | null, rarity: Rarity): e is Item {
   return !!e && !isPotion(e) && e.rarity === rarity && !plusOf(e);
@@ -35,13 +38,15 @@ export class Sim {
   readonly terrain: Terrain;
   players: Player[] = [];
   monsters: Monster[] = [];
-  projectiles: Projectile[] = [];
+  projectiles: (Projectile | EnemyShot)[] = [];
   loots: Loot[] = [];
   time = 0;
   private events: SimEvent[] = [];
   private nextId = 1;
   private readonly spawners: Spawner[] = [];
   private timers: { at: number; fn: () => void }[] = [];
+  /** A boss that jumped off the map, waiting for its minions to die. */
+  private vanished: { boss: Monster; minions: Monster[]; awayT: number } | null = null;
 
   constructor(readonly zone: ZoneDef) {
     this.terrain = new Terrain(zone);
@@ -125,6 +130,10 @@ export class Sim {
     this.projectiles.push(new Projectile(this.newId(), this, owner, o));
   }
 
+  addEnemyShot(owner: Monster, o: ProjOpts): void {
+    this.projectiles.push(new EnemyShot(this.newId(), this, owner, o));
+  }
+
   // ------------------------------------------------------------ spawning
 
   private spawnMonster(sp: Spawner): void {
@@ -147,7 +156,7 @@ export class Sim {
   // ------------------------------------------------------------ combat
 
   hitMonster(p: Player, m: Monster, mult: number, opts: HitOpts = {}): void {
-    if (!m.alive) return;
+    if (!m.alive || m.untargetable) return;
     let raw = p.stats.atk * mult * (0.9 + Math.random() * 0.2);
     const crit = Math.random() * 100 < p.stats.crit;
     if (crit) raw *= 1 + p.stats.critDmg / 100;
@@ -188,7 +197,9 @@ export class Sim {
   onBossEnrage(m: Monster): void {
     this.text(m.x, m.topY + 0.6, m.z, 'ENRAGED!', 'crit', 1.6);
     this.log(
-      m.def.frenzy
+      m.def.summon?.vanish
+        ? `${m.def.name} คลั่งแล้วกระโดดหนีไป! กำจัด${MONSTERS[m.def.summon.monster]?.nameTh ?? 'ลูกน้อง'}ให้หมดก่อน`
+        : m.def.frenzy
         ? `${m.def.name} คลั่งสุดขีด! เคลื่อนที่เร็วมากและออกท่าไวขึ้น`
         : `${m.def.name} คลั่ง! ความเร็วและการโจมตีเพิ่มขึ้น`,
       '#ff6a5a',
@@ -196,20 +207,53 @@ export class Sim {
     this.events.push({
       t: 'banner',
       text: `${m.def.nameTh.replace(/\s*\(.*\)/, '')} คลั่ง!`,
-      sub: m.def.summon
+      sub: m.def.summon?.vanish
+        ? `กระโดดหนีไป! กำจัด${MONSTERS[m.def.summon.monster]?.nameTh ?? 'ลูกน้อง'}ให้หมดเพื่อเรียกกลับมา`
+        : m.def.summon
         ? `เรียก${MONSTERS[m.def.summon.monster]?.nameTh ?? 'ลูกน้อง'}มาช่วย!`
         : m.def.frenzy ? 'เคลื่อนที่เร็วมากและออกท่าไวขึ้น' : 'ความเร็วและการโจมตีเพิ่มขึ้น',
       x: m.x,
       z: m.z,
     });
     this.shake(0.3);
-    if (m.def.summon) this.summonMinions(m, m.def.summon.monster, m.def.summon.count);
+    if (m.def.summon?.vanish) m.jumpOut(this);
+    else if (m.def.summon) this.summonMinions(m, m.def.summon.monster, m.def.summon.count);
+  }
+
+  /** The boss has jumped out of sight: take it off the field (it keeps its spawner slot) and send its minions in. */
+  onBossGone(boss: Monster): void {
+    boss.gone = true;
+    const s = boss.def.summon!;
+    this.vanished = { boss, minions: this.summonMinions(boss, s.monster, s.count), awayT: 0 };
+  }
+
+  /** Brings a vanished boss back once its minions are dead, or if everyone has left it for a while. */
+  private tickVanished(dt: number): void {
+    const v = this.vanished;
+    if (!v) return;
+    const near = this.players.filter((p) => p.alive && Math.hypot(p.x - v.boss.x, p.z - v.boss.z) < VANISH_LEASH);
+    v.awayT = near.length ? 0 : v.awayT + dt;
+    if (v.awayT > VANISH_GIVE_UP) {
+      for (const m of v.minions) {
+        m.alive = false;
+        m.deadT = 1;
+      }
+    } else if (v.minions.some((m) => m.alive)) return;
+    this.vanished = null;
+    let target: Player | null = null;
+    for (const p of near) {
+      if (!target || Math.hypot(p.x - v.boss.x, p.z - v.boss.z) < Math.hypot(target.x - v.boss.x, target.z - v.boss.z)) target = p;
+    }
+    v.boss.fallBack(this, target);
+    this.monsters.push(v.boss);
+    this.log(`${v.boss.def.name} กลับมาแล้ว!`, '#ff9a6a');
   }
 
   /** Minions appear in a ring around the boss and go straight for its target. */
-  private summonMinions(boss: Monster, monsterId: string, count: number): void {
+  private summonMinions(boss: Monster, monsterId: string, count: number): Monster[] {
     const def = MONSTERS[monsterId];
-    if (!def) return;
+    if (!def) return [];
+    const minions: Monster[] = [];
     // Their own home spot (no spawner owns it), so they wander here after the fight and never respawn.
     const area: SpawnArea = { monster: monsterId, x: boss.x, z: boss.z, radius: 4, count: 0, respawn: [0, 0] };
     const r = Math.random;
@@ -226,12 +270,17 @@ export class Sim {
       m.target = boss.target;
       m.aggroT = 12;
       m.state = 'chase';
-      // They pounce at once, with only a short warning line.
-      if (m.target?.alive) m.startCharge(this, m.target.x, m.target.z, MINION_POUNCE_WINDUP);
+      // They pounce at once, with only a short warning line. Leapers mark their landing spot instead.
+      if (m.target?.alive) {
+        if (def.leap) m.startLeap(this, m.target.x, m.target.z);
+        else m.startCharge(this, m.target.x, m.target.z, MINION_POUNCE_WINDUP);
+      }
       this.monsters.push(m);
+      minions.push(m);
       this.fx('burst', x, 0.3, z, '#9fd98a', 10, 4);
     }
     this.log(`${boss.def.name} เรียก${def.nameTh} ${count} ตัวมาช่วย!`, '#ff9a6a');
+    return minions;
   }
 
   private killMonster(m: Monster): void {
@@ -558,7 +607,8 @@ export class Sim {
 
     for (const m of this.monsters) m.update(dt, this);
     this.separateMonsters();
-    this.monsters = this.monsters.filter((m) => m.alive || m.deadT <= 0.9);
+    this.monsters = this.monsters.filter((m) => !m.gone && (m.alive || m.deadT <= 0.9));
+    this.tickVanished(dt);
 
     for (const pr of this.projectiles) pr.update(dt);
     this.projectiles = this.projectiles.filter((pr) => !pr.dead);

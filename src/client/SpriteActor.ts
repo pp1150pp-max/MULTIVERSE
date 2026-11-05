@@ -24,6 +24,7 @@ export class SpriteActor implements Actor {
   private flip = false;
   private animT = 0;
   private flashT = 0;
+  private readonly shadow: THREE.Mesh;
 
   constructor(private readonly sheet: SheetInfo, readonly height: number, shadowRadius: number) {
     this.tex = sheet.texture.clone();
@@ -36,10 +37,17 @@ export class SpriteActor implements Actor {
     shadowGeo ??= new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
     this.shadowMat = new THREE.MeshBasicMaterial({ map: fxTex.shadow, transparent: true, depthWrite: false, opacity: 0.5 });
     const shadow = new THREE.Mesh(shadowGeo, this.shadowMat);
+    this.shadow = shadow;
     shadow.scale.set(shadowRadius * 2.2, 1, shadowRadius * 1.4);
     shadow.position.y = 0.02;
     this.group.add(shadow, this.sprite);
     this.applyUV();
+  }
+
+  /** Raises the sprite off the ground, leaving its shadow behind. */
+  setLift(y: number): void {
+    this.sprite.position.y = y;
+    this.shadow.visible = y < 6;
   }
 
   /** Pick the sheet row from a world-space direction, relative to the iso camera. */

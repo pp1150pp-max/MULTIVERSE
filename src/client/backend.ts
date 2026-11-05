@@ -17,7 +17,7 @@ export interface ProjectileLike {
   readonly id: number;
   readonly x: number;
   readonly z: number;
-  readonly o: { readonly color: string; readonly size: number };
+  readonly o: { readonly color: string; readonly size: number; readonly art?: 'ice_shard' | 'snowball' };
 }
 
 export type EnhanceOutcome = { result: EnhanceResult; item: Item } | null;

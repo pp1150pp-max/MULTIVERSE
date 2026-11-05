@@ -16,6 +16,46 @@ export interface ProjOpts {
   explode?: number;
   pierce?: boolean;
   kb?: number;
+  /** Monster shots: the picture to draw. Player shots leave this out. */
+  art?: 'ice_shard' | 'snowball';
+}
+
+/** A monster's shot: flies straight until it hits a player or runs out of range, so it can be dodged. */
+export class EnemyShot {
+  dead = false;
+  x: number;
+  z: number;
+  private readonly dx: number;
+  private readonly dz: number;
+  private traveled = 0;
+
+  constructor(readonly id: number, private readonly sim: Sim, private readonly owner: Monster, readonly o: ProjOpts) {
+    this.x = o.x;
+    this.z = o.z;
+    this.dx = Math.cos(o.angle);
+    this.dz = Math.sin(o.angle);
+  }
+
+  update(dt: number): void {
+    if (this.dead) return;
+    const sim = this.sim;
+    const step = this.o.speed * dt;
+    this.x += this.dx * step;
+    this.z += this.dz * step;
+    this.traveled += step;
+    for (const p of sim.players) {
+      if (p.alive && Math.hypot(p.x - this.x, p.z - this.z) < this.o.radius + p.radius) {
+        sim.hitPlayer(this.owner, p, this.o.mult, { kb: this.o.kb ?? 2, fromX: this.x - this.dx, fromZ: this.z - this.dz });
+        sim.fx('burst', this.x, 0.85, this.z, this.o.color, 7, 3);
+        this.dead = true;
+        return;
+      }
+    }
+    if (this.traveled >= this.o.range) {
+      sim.fx('burst', this.x, 0.4, this.z, this.o.color, 4, 2);
+      this.dead = true;
+    }
+  }
 }
 
 export class Projectile {
