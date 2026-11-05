@@ -31,6 +31,9 @@ const CORRECT_DIST = 2.5;
 const CORRECT_DIST_NO_ACK = 3;
 /** Positions we sent and the server hasn't answered yet; older ones are dropped (about 3 s). */
 const SENT_KEEP = 90;
+/** After the server stops moving us, we glide onto its position until this close, or for at most SETTLE_MAX seconds. */
+const SETTLE_DIST = 0.15;
+const SETTLE_MAX = 0.5;
 /**
  * Events still applied while the tab is hidden (the server keeps playing Auto). Everything else is a
  * notification nobody saw — dropped so it doesn't all pop at once when the player comes back.
@@ -110,6 +113,12 @@ export class OnlineBackend implements Backend {
   private serverTime = 0;
   private serverTimeAt = performance.now();
   private serverMoves = false;
+  /**
+   * The server just stopped moving us (end of a dash, knockback, Auto): we glide the rest of the way
+   * to where it put us before walking again, so we start from exactly its position.
+   */
+  private settling = false;
+  private settleT = 0;
   private epoch = 0;
   private faceLockT = 0;
   private sendT = 0;
@@ -210,6 +219,7 @@ export class OnlineBackend implements Backend {
     this.me = me;
     this.myId = you;
     this.sent = [];
+    this.settling = false;
     this.playerMap.set(you, me);
     this.players = [me];
     this.faceLockT = 0;
@@ -376,16 +386,36 @@ export class OnlineBackend implements Backend {
       me.moveTarget = null;
       this.targets.delete(me);
       this.sent = [];
-    } else if (this.serverMoves) {
+      this.settling = false;
+    } else if (this.serverMoves || this.settling) {
+      // The positions we sent meanwhile weren't ours to report, so they can't be compared with.
       this.glide(me, x, z, me);
       me.faceX = fx;
       me.faceZ = fz;
       me.moving = mv;
       this.sent = [];
+      if (this.serverMoves) {
+        this.settling = true;
+        this.settleT = SETTLE_MAX;
+      }
     } else {
       this.targets.delete(me);
       this.reconcile(pv.ack, x, z);
     }
+  }
+
+  /** Finishes the glide onto the position the server left us at, then hands walking back to us. */
+  private settle(dt: number): void {
+    const me = this.me;
+    const t = this.targets.get(me);
+    this.settleT -= dt;
+    if (t && Math.hypot(t.x - me.x, t.z - me.z) > SETTLE_DIST && this.settleT > 0) return;
+    if (t) {
+      me.x = t.x;
+      me.z = t.z;
+    }
+    this.targets.delete(me);
+    this.settling = false;
   }
 
   /**
@@ -439,6 +469,7 @@ export class OnlineBackend implements Backend {
     for (const key of Object.keys(me.cd) as SkillSlot[]) me.cd[key] = Math.max(0, (me.cd[key] ?? 0) - dt);
     me.potCd -= dt;
 
+    if (this.settling && !this.serverMoves) this.settle(dt);
     const moveDir = this.walk(dt, it);
 
     if (it.dash) this.pendingDash = true;
@@ -447,10 +478,14 @@ export class OnlineBackend implements Backend {
     if (this.sendT <= 0) {
       this.sendT = 1 / INPUT_HZ;
       const seq = ++this.seq;
-      this.sent.push({ seq, x: me.x, z: me.z });
-      if (this.sent.length > SENT_KEEP) this.sent.shift();
+      // While the server moves us we only follow it, so there's no position of ours to report.
+      const ours = !this.serverMoves && !this.settling;
+      if (ours) {
+        this.sent.push({ seq, x: me.x, z: me.z });
+        if (this.sent.length > SENT_KEEP) this.sent.shift();
+      }
       this.send({
-        t: 'input', pos: { x: me.x, z: me.z }, seq, move: moveDir, aim: it.aim, basic: it.basic, skills: it.skills,
+        t: 'input', pos: ours ? { x: me.x, z: me.z } : undefined, seq, move: moveDir, aim: it.aim, basic: it.basic, skills: it.skills,
         dash: this.pendingDash, potion: this.pendingPotion,
       });
       this.pendingDash = false;
@@ -466,7 +501,7 @@ export class OnlineBackend implements Backend {
   private walk(dt: number, it: Intent): Vec2 | null {
     const me = this.me;
     this.faceLockT -= dt;
-    if (!me.alive || this.serverMoves) return null;
+    if (!me.alive || this.serverMoves || this.settling) return null;
     if (it.move) me.moveTarget = null;
     if (it.moveTo) me.moveTarget = { ...it.moveTo };
     let mx = 0;
