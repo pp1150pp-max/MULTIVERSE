@@ -1,3 +1,4 @@
+import { SPACE_COLOUR } from './island';
 import type { Game } from './Game';
 import { NPC_USE_RANGE, type NpcId } from '../shared/data/npcs';
 import type { SkillSlot } from '../shared/data/classes';
@@ -560,7 +561,7 @@ export class Hud {
     ctx.beginPath();
     ctx.arc(c, c, c - 3, 0, Math.PI * 2);
     ctx.clip();
-    ctx.fillStyle = '#05080a';
+    ctx.fillStyle = SPACE_COLOUR;
     ctx.fillRect(0, 0, W, W);
     // The zone's map picture, slid so the player sits in the middle.
     const world = g.world;
