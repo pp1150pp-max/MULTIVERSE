@@ -16,7 +16,17 @@ const MAP_MIN_PROP = 2;
 /** Bare ground around the camp at a zone's start. */
 const CAMP_RADIUS = 7;
 /** How wide each theme's roads are worn into the grass. */
-const TRAIL_WIDTH: Record<ZoneTheme, number> = { forest: 4.2, marsh: 3.6 };
+const TRAIL_WIDTH: Record<ZoneTheme, number> = { forest: 4.2, marsh: 3.6, snow: 3.8 };
+/** Pictures of the broken land around each theme's island. */
+const ISLAND_ART: Record<ZoneTheme, { cliff: string; slabs: string }> = {
+  forest: { cliff: 'island_cliff_forest', slabs: 'island_slabs_forest' },
+  marsh: { cliff: 'island_cliff_marsh', slabs: 'island_slabs_marsh' },
+  snow: { cliff: 'island_cliff_snow', slabs: 'island_slabs_snow' },
+};
+/** Light snowfall: how many flakes hang around the player, inside a box this many units across. */
+const SNOW_FLAKES = 240;
+const SNOW_BOX = 46;
+const SNOW_HEIGHT = 16;
 
 /** Camera sits along this direction from its target: 45° yaw, ~47° pitch. */
 export const ISO_DIR = new THREE.Vector3(1, 1.45, 1).normalize();
@@ -71,6 +81,18 @@ const DECOR: Record<ZoneTheme, { key: string; cols: number; rows: number; spots:
       water: [6, 6, 7],
     },
   },
+  snow: {
+    key: 'decor_snow',
+    cols: 4,
+    rows: 3,
+    spots: {
+      verge: [0, 0, 0, 1, 10, 11],
+      field: [0, 0, 1, 2, 3, 4, 5, 9, 10, 11],
+      road: [8, 8, 11],
+      shore: [1, 1, 10, 10, 2, 9],
+      water: [6, 6, 7],
+    },
+  },
 };
 /** World size of one decor atlas cell: 128 pixels at about the same density as the ground tiles. */
 const DECOR_CELL_UNITS = 1.33;
@@ -91,7 +113,7 @@ const GROUND_VERT = /* glsl */ `
 
 const GROUND_FRAG = /* glsl */ `
   uniform sampler2D uMask, uCover, uBase, uDirt, uPave, uWater;
-  uniform float uHalf, uBound, uTileUnits, uTime, uBake;
+  uniform float uHalf, uBound, uTileUnits, uTime, uBake, uFlow;
   varying vec2 vWorld;
   varying float vEdge;
 
@@ -161,7 +183,7 @@ const GROUND_FRAG = /* glsl */ `
     if (id == 1) {
       col = dirt * 0.4;
     } else if (id == 2) {
-      col = calm(texture2D(uWater, tile + vec2(uTime * 0.012, sin(uTime * 0.25) * 0.006)).rgb, uWater, 0.7, 0.8, 1.0);
+      col = calm(texture2D(uWater, tile + vec2(uTime * 0.012, sin(uTime * 0.25) * 0.006) * uFlow).rgb, uWater, 0.7, 0.8, 1.0);
     }
     // Past the walkable square the land darkens, without showing the square's straight lines.
     float past = max(abs(vWorld.x), abs(vWorld.y)) - uBound;
@@ -187,7 +209,7 @@ const S = Math.SQRT1_2;
 /** Colours for painting a zone's ground (the minimap, and the fallback if a tile is missing). */
 interface GroundPalette {
   /** Repeating textures for the real ground. `dirt` also covers clearings and pond banks. */
-  tiles: { base: GroundTile; dirt: GroundTile };
+  tiles: { base: GroundTile; dirt: GroundTile; water?: GroundTile; pave?: GroundTile };
   background: string;
   /** Border of the maps. */
   mapEdge: string;
@@ -267,6 +289,33 @@ const PALETTES: Record<ZoneTheme, GroundPalette> = {
     fog: 34,
     portalGlow: '#6affd0',
   },
+  // A muted blue-grey rather than white, so characters and damage numbers stay readable.
+  snow: {
+    tiles: { base: 'snow', dirt: 'snow_path', water: 'ice', pave: 'snow_path' },
+    background: '#101824',
+    mapEdge: '#a9c4d8',
+    mapRoad: ['rgba(92, 112, 132, 0.65)', 'rgba(196, 214, 228, 0.5)'],
+    base: '#8296a8',
+    patchDark: ['#7a8ea1', '#76899c', '#7e92a4'],
+    patchLight: ['#8a9daf', '#8fa2b3', '#869aab'],
+    specks: ['#7588a0', '#92a5b6', '#6d8097', '#9aacbc', '#7f92a5', '#a4b5c4'],
+    tuft: ['#6a7d92', '#a8b9c8'],
+    clearing: ['#6f8295', '#76899b', '#6a7d90'],
+    clearingRim: ['#62758a', '#687b8f'],
+    clearingStone: '#93a6b7',
+    path: [
+      [4.6, ['#5b6c7f', '#5f7083']],
+      [3.9, ['#6d7e91', '#708194', '#69798c']],
+      [2.8, ['#7a8b9d', '#7f90a1', '#758699', '#7a8b9d']],
+    ],
+    pathDetail: { kind: 'pebbles', colors: ['#66778a', '#93a4b4', '#596a7c', '#a4b4c2'] },
+    flowers: ['#c8dcea', '#b4cfe0', '#dbe8f0'],
+    flowerCore: '#a0bed2',
+    edge: 'rgba(8,14,24,0.5)',
+    pools: 0,
+    fog: 8,
+    portalGlow: '#8fdcff',
+  },
 };
 
 /** Draws a zone: painted ground plus the props laid out by the shared Terrain. */
@@ -279,6 +328,7 @@ export class World {
   private readonly flames: THREE.Sprite[] = [];
   private readonly portals: THREE.Sprite[] = [];
   private readonly fog: Fog[] = [];
+  private snow: { geo: THREE.BufferGeometry; speeds: Float32Array } | null = null;
   /** Everything added to the scene, so a zone change can take it all down again. */
   private readonly objects: THREE.Object3D[] = [];
   private readonly ownMats: THREE.Material[] = [];
@@ -326,7 +376,7 @@ export class World {
 
     this.groundCanvas = this.paintGround(mulberry32(terrain.zone.seed));
     const t = this.pal.tiles;
-    const tiles = [groundTiles[t.base], groundTiles[t.dirt], groundTiles.water, groundTiles.pave];
+    const tiles = [groundTiles[t.base], groundTiles[t.dirt], groundTiles[t.water ?? 'water'], groundTiles[t.pave ?? 'pave']];
     if (tiles.every(Boolean)) {
       const mask = new THREE.CanvasTexture(this.paintMask());
       mask.colorSpace = THREE.NoColorSpace;
@@ -347,6 +397,8 @@ export class World {
         uTileUnits: { value: TILE_UNITS },
         uTime: { value: 0 },
         uBake: { value: 0 },
+        // Ice doesn't flow.
+        uFlow: { value: terrain.zone.iceLakes ? 0 : 1 },
       };
     } else {
       const tex = new THREE.CanvasTexture(this.groundCanvas);
@@ -374,6 +426,7 @@ export class World {
     if (fire) this.flames.push(this.glow(fire.x, 0.5, fire.z, '#ffa040', 0.55));
     for (const p of terrain.zone.portals) this.portals.push(this.glow(p.x, 1.5, p.z, this.pal.portalGlow, 0.5));
     this.addFog(mulberry32(terrain.zone.seed + 7));
+    if (terrain.zone.theme === 'snow') this.addSnow(mulberry32(terrain.zone.seed + 41));
     if (this.groundUniforms) {
       this.addDecor(mulberry32(terrain.zone.seed + 11));
       if (terrain.zone.theme === 'marsh') this.addPlanks(mulberry32(terrain.zone.seed + 13));
@@ -547,7 +600,7 @@ export class World {
 
   /** Broken rock under the two shores that face the camera. One mesh, as with the decor. */
   private addCliffs(r: Rng): void {
-    const key = this.zone.theme === 'marsh' ? 'island_cliff_marsh' : 'island_cliff_forest';
+    const key = ISLAND_ART[this.zone.theme].cliff;
     if (assetSources[key] !== 'file') return;
     const positions: number[] = [];
     const uvs: number[] = [];
@@ -642,7 +695,7 @@ export class World {
 
   /** Rocks, star shards and slabs of land coming away from the island, and crumbs falling off it. */
   private addPieces(r: Rng): void {
-    const slabsKey = this.zone.theme === 'marsh' ? 'island_slabs_marsh' : 'island_slabs_forest';
+    const slabsKey = ISLAND_ART[this.zone.theme].slabs;
     if (assetSources.island_debris !== 'file' || assetSources[slabsKey] !== 'file') return;
     const H = this.half;
     const cell = (cols: number, rows: number, i: number) => {
@@ -901,6 +954,44 @@ export class World {
     }
   }
 
+  /** Flakes falling in a box that follows the player, so there is no need for many of them. */
+  private addSnow(r: Rng): void {
+    const positions = new Float32Array(SNOW_FLAKES * 3);
+    const speeds = new Float32Array(SNOW_FLAKES);
+    for (let i = 0; i < SNOW_FLAKES; i++) {
+      positions[i * 3] = rand(r, 0, SNOW_BOX);
+      positions[i * 3 + 1] = rand(r, 0, SNOW_HEIGHT);
+      positions[i * 3 + 2] = rand(r, 0, SNOW_BOX);
+      speeds[i] = rand(r, 0.9, 1.9);
+    }
+    const geo = this.ownGeo(new THREE.BufferGeometry());
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const points = this.add(new THREE.Points(geo, this.own(new THREE.PointsMaterial({
+      color: '#eef5fb', size: 3, sizeAttenuation: false, transparent: true, opacity: 0.8, depthWrite: false,
+    }))));
+    points.frustumCulled = false;
+    points.renderOrder = 6;
+    this.snow = { geo, speeds };
+  }
+
+  /** Drops the flakes, wrapping each one around so it stays within the box around the player. */
+  private updateSnow(dt: number, px: number, pz: number): void {
+    if (!this.snow) return;
+    const { geo, speeds } = this.snow;
+    const pos = geo.getAttribute('position') as THREE.BufferAttribute;
+    const wrap = (v: number, around: number) => around - SNOW_BOX / 2 + ((((v - around + SNOW_BOX / 2) % SNOW_BOX) + SNOW_BOX) % SNOW_BOX);
+    for (let i = 0; i < speeds.length; i++) {
+      const y = pos.getY(i) - speeds[i] * dt;
+      pos.setXYZ(
+        i,
+        wrap(pos.getX(i) + Math.sin(this.t * 0.5 + i) * 0.4 * dt, px),
+        y < 0 ? SNOW_HEIGHT : y,
+        wrap(pos.getZ(i) + 0.25 * dt, pz),
+      );
+    }
+    pos.needsUpdate = true;
+  }
+
   /** Takes everything this zone added back out of the scene. */
   dispose(): void {
     for (const o of this.objects) this.scene.remove(o);
@@ -919,6 +1010,7 @@ export class World {
     this.t += dt;
     if (this.groundUniforms) this.groundUniforms.uTime.value = this.t;
     this.pieceUniforms.uTime.value = this.t;
+    this.updateSnow(dt, px, pz);
     // Space slides past far slower than the land, as if very far behind it.
     const tile = paintSpace().width * SPACE_PIXEL;
     this.spaceTex.repeat.set(window.innerWidth / tile, window.innerHeight / tile);
@@ -1034,6 +1126,7 @@ export class World {
     }
 
     if (pal.pools) this.paintPools(ctx, r, P, k);
+    if (this.zone.iceLakes) this.paintIce(ctx, r, P, k);
 
     // Bare ground around the camp and the boss: a rough outer rim, then packed dirt with stones.
     const clearings: [number, number, number][] = [
@@ -1301,6 +1394,40 @@ export class World {
     tex.minFilter = THREE.LinearFilter;
     tex.generateMipmaps = false;
     return tex;
+  }
+
+  /** Frozen lakes where the zone says they are (they matter to the rules, unlike the marsh's pools). */
+  private paintIce(ctx: CanvasRenderingContext2D, r: Rng, P: (x: number, z: number) => [number, number], k: number): void {
+    const lakes = this.zone.iceLakes!;
+    this.poolBlobs = lakes.map((l) => ({ ...l }));
+    const fill = (grow: number) => (m: CanvasRenderingContext2D) => {
+      m.beginPath();
+      for (const l of lakes) {
+        const [px, py] = P(l.x, l.z);
+        m.moveTo(px + (l.rx + grow) * k, py);
+        m.ellipse(px, py, (l.rx + grow) * k, (l.rz + grow) * k, 0, 0, Math.PI * 2);
+      }
+      m.fill();
+    };
+    this.paintBand(ctx, ['#566a7e', '#5c7084'], 2, fill(0.4));
+    this.paintBand(ctx, ['#7fb0cc', '#86b6d0', '#7aabc8'], 2, fill(0), true);
+    this.paintBand(ctx, ['#93c2da', '#9ac8df', '#8ebed7'], 2, fill(-1.2), true);
+    // Pale cracks and glints, so it reads as ice and not water.
+    for (const l of lakes) {
+      for (let i = 0; i < (l.rx + l.rz) * 2; i++) {
+        const a = r() * Math.PI * 2;
+        const d = Math.sqrt(r()) * 0.85;
+        const [x, y] = P(l.x + Math.cos(a) * l.rx * d, l.z + Math.sin(a) * l.rz * d);
+        let cx = x | 0;
+        let cy = y | 0;
+        ctx.fillStyle = '#d8eef8';
+        for (let s = 0; s < 8; s++) {
+          ctx.fillRect(cx, cy, 3, 1);
+          cx += 2 + ((r() * 3) | 0);
+          cy += ((r() * 3) | 0) - 1;
+        }
+      }
+    }
   }
 
   /** Dark, still water pools with a muddy rim, a few lily pads and light glints. */

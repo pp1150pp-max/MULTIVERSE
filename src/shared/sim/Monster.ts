@@ -1,14 +1,22 @@
 import { Unit } from './Unit';
 import type { Sim } from './Sim';
 import type { Player } from './Player';
-import type { MonsterDef } from '../data/monsters';
+import type { MonsterDef, ShotDef } from '../data/monsters';
 import type { SpawnArea } from '../data/zones';
 
 const BOSS_RAMP_PER_SEC = 0.2;
 const BOSS_RAMP_MAX = 3;
 
-type State = 'idle' | 'chase' | 'return' | 'charge';
-type Windup = 'melee' | 'slam' | 'charge';
+/** A vanishing boss's jump off the map and its fall back, in seconds, and how high it goes. */
+const JUMP_OUT_TIME = 0.9;
+const FALL_TIME = 1.1;
+const JUMP_HEIGHT = 16;
+const LEAP_TIME = 0.45;
+const LEAP_HEIGHT = 3;
+const DEFAULT_SLAM_RADIUS = 4.2;
+
+type State = 'idle' | 'chase' | 'return' | 'charge' | 'leap';
+type Windup = 'melee' | 'slam' | 'charge' | 'throw' | 'leap';
 
 export class Monster extends Unit {
   readonly def: MonsterDef;
@@ -26,6 +34,10 @@ export class Monster extends Unit {
   summoned = false;
   /** Bosses: seconds of fighting since they last landed a hit. They speed up the longer it gets. */
   rampT = 0;
+  /** Height above the ground while jumping, for drawing. */
+  lift = 0;
+  /** A vanished boss is out of sim.monsters; Sim brings it back. Set here so Sim can drop it after the update loop. */
+  gone = false;
   /** Who it is fighting. Picked from all players, so it works the same alone or online. */
   target: Player | null = null;
   /** Damage dealt by each player id — EXP is split by these shares. */
@@ -43,6 +55,15 @@ export class Monster extends Unit {
   private chargeDz = 0;
   private chargeHit = false;
   private slamCd = 5;
+  private thrownCd = 2;
+  private leapCd = 0;
+  private leapT = 0;
+  private leapFromX = 0;
+  private leapFromZ = 0;
+  private leapToX = 0;
+  private leapToZ = 0;
+  private jumpOutT = 0;
+  private fallT = 0;
 
   constructor(id: number, def: MonsterDef, level: number, area: SpawnArea, x: number, z: number) {
     super(id);
@@ -65,13 +86,16 @@ export class Monster extends Unit {
   get topY(): number { return this.def.height * 0.75; }
   get isBoss(): boolean { return this.def.behavior === 'boss'; }
   get isHostile(): boolean {
-    return this.alive && (this.state === 'chase' || this.state === 'charge' || this.windupT > 0);
+    return this.alive && (this.state === 'chase' || this.state === 'charge' || this.state === 'leap' || this.windupT > 0);
   }
+  /** In the air after vanishing or on its way back: can't be hit. */
+  get untargetable(): boolean { return this.jumpOutT > 0 || this.fallT > 0; }
+  private get slamRadius(): number { return this.def.slamRadius ?? DEFAULT_SLAM_RADIUS; }
 
   onHit(sim: Sim, attacker: Player): void {
     this.aggroT = 12;
     if (!this.target?.alive) this.target = attacker;
-    if (this.state !== 'charge') this.state = 'chase';
+    if (this.state !== 'charge' && this.state !== 'leap') this.state = 'chase';
     if (this.def.behavior === 'skittish' && Math.random() < 0.4) this.fleeT = 1.2;
     if (this.def.pack) {
       for (const m of sim.monsters) {
@@ -88,6 +112,7 @@ export class Monster extends Unit {
     this.aggroT = 0;
     this.windupT = 0;
     this.target = null;
+    this.lift = 0;
     if (this.state !== 'return') this.state = 'idle';
   }
 
@@ -109,6 +134,34 @@ export class Monster extends Unit {
       return;
     }
     this.moving = false;
+    if (this.jumpOutT > 0) {
+      this.jumpOutT -= dt;
+      const up = Math.max(0, 1 - this.jumpOutT / JUMP_OUT_TIME - 0.3) / 0.7;
+      this.lift = up * up * JUMP_HEIGHT;
+      if (this.jumpOutT <= 0) sim.onBossGone(this);
+      return;
+    }
+    if (this.fallT > 0) {
+      this.fallT -= dt;
+      const up = Math.max(0, this.fallT / FALL_TIME);
+      this.lift = up * up * JUMP_HEIGHT;
+      if (this.fallT <= 0) {
+        this.lift = 0;
+        this.windKind = 'slam';
+        this.resolveWindup(sim, 0);
+      }
+      return;
+    }
+    if (this.state === 'leap') {
+      this.leapT -= dt;
+      const k = Math.min(1, 1 - this.leapT / LEAP_TIME);
+      this.x = this.leapFromX + (this.leapToX - this.leapFromX) * k;
+      this.z = this.leapFromZ + (this.leapToZ - this.leapFromZ) * k;
+      this.lift = Math.sin(Math.PI * k) * LEAP_HEIGHT;
+      this.moving = true;
+      if (this.leapT <= 0) this.landLeap(sim);
+      return;
+    }
     this.tickStatus(dt, sim.terrain);
     // Bosses that keep missing get faster at everything until they land a hit (Sim.hitPlayer resets it).
     if (this.isBoss) this.rampT = this.isHostile && this.state !== 'return' ? this.rampT + dt : 0;
@@ -116,13 +169,15 @@ export class Monster extends Unit {
     this.atkCd -= dt * ramp;
     this.chargeCd -= dt * ramp;
     this.slamCd -= dt * ramp;
+    this.thrownCd -= dt * ramp;
+    this.leapCd -= dt;
     this.aggroT -= dt;
     this.fleeT -= dt;
 
     // Lose a dead target; aggressive monsters pick up whoever walks into range.
     if (this.target && !this.target.alive) this.target = null;
     const b = this.def.behavior;
-    if ((b === 'aggressive' || b === 'boss') && this.state !== 'return') {
+    if ((b === 'aggressive' || b === 'boss' || b === 'charger') && this.state !== 'return') {
       const n = this.nearestPlayer(sim);
       if (n && n.d < this.def.aggroRange) {
         this.aggroT = Math.max(this.aggroT, 4);
@@ -214,20 +269,29 @@ export class Monster extends Unit {
           if (this.isBoss && !this.enraged && this.hp < this.maxHp * 0.5) {
             this.enraged = true;
             sim.onBossEnrage(this);
+            if (this.untargetable) return;
           }
           const reach = this.def.attackRange + p.radius;
           const frenzy = this.enraged ? this.def.frenzy : undefined;
+          const leap = this.def.leap;
+          const thrown = this.def.thrown;
           if (b === 'charger' && this.chargeCd <= 0 && d > 2.5 && d < 8) {
             this.startCharge(sim, p.x, p.z, 0.65);
-          } else if (this.isBoss && this.slamCd <= 0 && d < 5) {
+          } else if (leap && this.leapCd <= 0 && d >= leap.minRange && d <= leap.maxRange) {
+            this.startLeap(sim, p.x, p.z);
+          } else if (this.isBoss && this.slamCd <= 0 && d < Math.max(5, this.slamRadius)) {
             this.windKind = 'slam';
             this.windupT = 1.1 * this.skillMult();
             this.slamCd = frenzy ? 7 * frenzy.skill : this.enraged ? 5 : 7;
-            sim.fx('telegraph', this.x, this.z, 4.2, this.windupT);
+            sim.fx('telegraph', this.x, this.z, this.slamRadius, this.windupT);
+          } else if (thrown && this.thrownCd <= 0 && d > thrown.minRange && d <= thrown.range) {
+            this.windKind = 'throw';
+            this.windupT = 0.8 * this.skillMult();
+            this.thrownCd = thrown.cooldown;
           } else if (d <= reach) {
             if (this.atkCd <= 0) {
               this.windKind = 'melee';
-              this.windupT = (this.isBoss ? 0.5 : 0.35) * this.skillMult();
+              this.windupT = (this.isBoss ? 0.5 : this.def.shot ? 0.5 : 0.35) * this.skillMult();
               this.atkCd = this.def.attackCooldown * (frenzy ? frenzy.skill : this.enraged ? 0.75 : 1);
             }
           } else {
@@ -308,19 +372,88 @@ export class Monster extends Unit {
     this.face(dx, dz);
   }
 
+  /** Mark a spot on the ground, wait, then jump onto it. The mark stays until it lands. */
+  startLeap(sim: Sim, tx: number, tz: number): void {
+    const leap = this.def.leap!;
+    this.leapToX = tx;
+    this.leapToZ = tz;
+    this.windKind = 'leap';
+    this.windupT = leap.windup;
+    this.leapCd = leap.cooldown;
+    sim.fx('telegraph', tx, tz, leap.radius, leap.windup + LEAP_TIME);
+    this.face(tx - this.x, tz - this.z);
+  }
+
+  private landLeap(sim: Sim): void {
+    const leap = this.def.leap!;
+    this.lift = 0;
+    this.state = 'chase';
+    this.atkCd = 0.8;
+    sim.terrain.resolve(this);
+    sim.fx('ring', this.x, this.z, leap.radius, '#cfe8f7', 0.35);
+    sim.fx('burst', this.x, 0.3, this.z, '#dcecf7', 10, 4);
+    sim.sfx('boss_slam', this.x, this.z);
+    for (const pl of sim.players) {
+      if (pl.alive && Math.hypot(pl.x - this.x, pl.z - this.z) <= leap.radius + pl.radius) {
+        sim.hitPlayer(this, pl, leap.mult, { kb: 5, fromX: this.x, fromZ: this.z });
+      }
+    }
+  }
+
+  /** Below half HP with a `vanish` summon: crouch, then jump off the map. */
+  jumpOut(sim: Sim): void {
+    this.windupT = 0;
+    this.jumpOutT = JUMP_OUT_TIME;
+    sim.fx('burst', this.x, 0.3, this.z, '#dcecf7', 16, 5);
+    sim.shake(0.3);
+  }
+
+  /** Back from vanishing: falls where it left, slamming the ground on the marked spot. */
+  fallBack(sim: Sim, target: Player | null): void {
+    this.gone = false;
+    this.fallT = FALL_TIME;
+    this.lift = JUMP_HEIGHT;
+    this.target = target;
+    this.aggroT = target ? 12 : 0;
+    this.state = target ? 'chase' : 'idle';
+    this.rampT = 0;
+    this.slamCd = 7;
+    sim.fx('telegraph', this.x, this.z, this.slamRadius, FALL_TIME);
+  }
+
+  private fire(sim: Sim, shot: ShotDef): void {
+    const p = this.target;
+    if (!p?.alive) return;
+    sim.addEnemyShot(this, {
+      x: this.x, z: this.z, angle: Math.atan2(p.z - this.z, p.x - this.x),
+      speed: shot.speed, range: shot.range, radius: shot.radius, mult: shot.mult,
+      color: shot.color, size: shot.size, art: shot.art,
+    });
+  }
+
   private resolveWindup(sim: Sim, d: number): void {
     const p = this.target;
-    if (this.windKind === 'melee') {
+    if (this.windKind === 'throw') {
+      this.fire(sim, this.def.thrown!);
+    } else if (this.windKind === 'leap') {
+      this.state = 'leap';
+      this.leapT = LEAP_TIME;
+      this.leapFromX = this.x;
+      this.leapFromZ = this.z;
+    } else if (this.windKind === 'melee' && this.def.shot) {
+      this.fire(sim, this.def.shot);
+    } else if (this.windKind === 'melee') {
       const ang = Math.atan2(this.faceZ, this.faceX);
       sim.fx('slash', this.x, this.z, ang, Math.PI * 0.6, this.def.attackRange + 0.6, '#ff8a6a');
       if (p?.alive && d <= this.def.attackRange + p.radius + 0.5) sim.hitPlayer(this, p, 1, {});
     } else if (this.windKind === 'slam') {
-      sim.fx('ring', this.x, this.z, 4.2, '#ffb070', 0.45);
+      const radius = this.slamRadius;
+      sim.fx('ring', this.x, this.z, radius, '#ffb070', 0.45);
       sim.fx('burst', this.x, 0.3, this.z, '#c9a27a', 14, 6);
       sim.shake(0.45);
       sim.sfx('boss_slam', this.x, this.z);
       for (const pl of sim.players) {
-        if (pl.alive && Math.hypot(pl.x - this.x, pl.z - this.z) <= 4.2 + pl.radius) {
+        if (pl.alive && Math.hypot(pl.x - this.x, pl.z - this.z) <= radius + pl.radius) {
           sim.hitPlayer(this, pl, 2, { stun: 0.7, kb: 7, fromX: this.x, fromZ: this.z });
         }
       }

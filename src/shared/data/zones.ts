@@ -17,8 +17,16 @@ export interface PortalDef {
   minLevel: number;
 }
 
+/** An ellipse of slippery ice. */
+export interface IceLake {
+  x: number;
+  z: number;
+  rx: number;
+  rz: number;
+}
+
 /** Which prop set and ground palette a zone is drawn with. */
-export type ZoneTheme = 'forest' | 'marsh';
+export type ZoneTheme = 'forest' | 'marsh' | 'snow';
 
 export interface ZoneDef {
   id: string;
@@ -37,6 +45,8 @@ export interface ZoneDef {
   spawns: SpawnArea[];
   boss: SpawnArea;
   portals: PortalDef[];
+  /** Frozen lakes: walkable, but players slide on them. */
+  iceLakes?: IceLake[];
 }
 
 export const ZONE_1: ZoneDef = {
@@ -89,6 +99,7 @@ export const ZONE_2: ZoneDef = {
     [[10, 20], [-6, 24]],
     [[-10, -6], [-24, 0]],
     [[-22, -14], [-12, -26]],
+    [[-22, -14], [-34, -16], [-46, -18]],
   ],
   spawns: [
     { monster: 'bog_toad', x: 32, z: 32, radius: 7, count: 7, respawn: [7, 11] },
@@ -99,13 +110,54 @@ export const ZONE_2: ZoneDef = {
     { monster: 'will_o_wisp', x: -12, z: -26, radius: 9, count: 8, respawn: [10, 15] },
   ],
   boss: { monster: 'bog_witch', x: -42, z: -42, radius: 1, count: 1, respawn: [120, 120] },
-  // Back to the forest, just outside the camp.
-  portals: [{ to: 'emerald_forest', x: 49.5, z: 49.5, minLevel: 0 }],
+  // Back to the forest, just outside the camp. The way on is at the end of a side path before
+  // the witch's clearing, like the forest's.
+  portals: [
+    { to: 'emerald_forest', x: 49.5, z: 49.5, minLevel: 0 },
+    { to: 'frost_reach', x: -46, z: -18, minLevel: 20 },
+  ],
+};
+
+export const ZONE_3: ZoneDef = {
+  id: 'frost_reach',
+  name: 'Frost Reach',
+  nameTh: 'ดินแดนหิมะ',
+  subtitle: 'เกาะลอยที่ปกคลุมด้วยน้ำแข็ง สนสูงมีหิมะเกาะ และทะเลสาบเยือกแข็งที่ลื่นจนคุมทิศทางยาก',
+  levels: [21, 30],
+  theme: 'snow',
+  allowAutoPlay: true,
+  half: 64,
+  seed: 20261105,
+  start: { x: 44, z: 44 },
+  path: [[52, 52], [44, 44], [34, 30], [22, 26], [12, 12], [-2, 8], [-14, -6], [-26, -18], [-32, -32], [-42, -42]],
+  branches: [
+    [[34, 30], [40, 12]],
+    [[22, 26], [6, 34]],
+    [[12, 12], [20, -6]],
+    [[-2, 8], [-20, 18]],
+    [[-14, -6], [-4, -24]],
+  ],
+  spawns: [
+    { monster: 'frost_penguin', x: 32, z: 32, radius: 7, count: 7, respawn: [8, 12] },
+    { monster: 'frost_penguin', x: 40, z: 12, radius: 6, count: 5, respawn: [8, 12] },
+    { monster: 'tusk_seal', x: 6, z: 34, radius: 8, count: 8, respawn: [10, 14] },
+    { monster: 'snow_owl', x: 20, z: -6, radius: 9, count: 8, respawn: [10, 14] },
+    { monster: 'snow_sprite', x: -20, z: 18, radius: 8, count: 8, respawn: [10, 15] },
+    { monster: 'polar_bear', x: -4, z: -24, radius: 9, count: 4, respawn: [16, 22] },
+  ],
+  boss: { monster: 'yeti', x: -42, z: -42, radius: 1, count: 1, respawn: [150, 150] },
+  portals: [{ to: 'misty_marsh', x: 49.5, z: 49.5, minLevel: 0 }],
+  iceLakes: [
+    { x: -32, z: 34, rx: 12, rz: 9 },
+    { x: 34, z: -32, rx: 11, rz: 8 },
+    { x: 3, z: -7, rx: 5.5, rz: 4 },
+  ],
 };
 
 export const ZONES: Record<string, ZoneDef> = {
   [ZONE_1.id]: ZONE_1,
   [ZONE_2.id]: ZONE_2,
+  [ZONE_3.id]: ZONE_3,
 };
 
 /** Saved characters from before zones existed have no zone id; they start in the forest. */

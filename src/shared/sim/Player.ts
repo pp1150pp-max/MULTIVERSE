@@ -1,6 +1,7 @@
 import { Unit } from './Unit';
 import type { Sim } from './Sim';
 import type { Monster } from './Monster';
+import type { Terrain } from './terrain';
 import type { Intent } from './types';
 import { castSkill, basicAttack } from './skills';
 import { CLASSES, type ClassDef, type SkillDef, type SkillSlot } from '../data/classes';
@@ -23,6 +24,11 @@ export const MP_REGEN_MULT = 0.25;
 export const COMBAT_LINGER = 5;
 /** Regen multiplier while out of combat. */
 export const OUT_OF_COMBAT_REGEN = 2.5;
+
+/** How quickly a character on ice gets to the speed it wants, per second. Lower is slipperier. */
+const ICE_GRIP = 1.5;
+/** A slide slower than this stops. */
+const ICE_STOP_SPEED = 0.25;
 
 export const BAG_SIZE = 30;
 export const POTION_CD = 1.5;
@@ -217,6 +223,9 @@ export class Player extends Unit {
   /** False right after arriving through a portal, until the player steps away from it. */
   portalReady = true;
   portalMsgAt = -99;
+  /** Current velocity, kept for sliding on ice. */
+  private slideX = 0;
+  private slideZ = 0;
   dashKind: 'dash' | 'charge' = 'dash';
   private atkT = 0;
   private faceLockT = 0;
@@ -252,6 +261,36 @@ export class Player extends Unit {
     this.recompute();
     this.hp = this.maxHp;
     this.mp = this.stats.maxMp;
+  }
+
+  /**
+   * One frame of walking toward (mx, mz), or none if both are 0. On ice the character keeps its
+   * momentum: it takes a moment to turn and slides on after letting go. Returns whether it moved.
+   */
+  walkStep(mx: number, mz: number, remaining: number, dt: number, terrain: Terrain): boolean {
+    const speed = this.moveSpeed;
+    if (terrain.onIce(this.x, this.z)) {
+      const grip = Math.min(1, ICE_GRIP * dt);
+      this.slideX += (mx * speed - this.slideX) * grip;
+      this.slideZ += (mz * speed - this.slideZ) * grip;
+      if (!mx && !mz && Math.hypot(this.slideX, this.slideZ) < ICE_STOP_SPEED) {
+        this.slideX = this.slideZ = 0;
+        return false;
+      }
+      this.x += this.slideX * dt;
+      this.z += this.slideZ * dt;
+      terrain.resolve(this);
+      return true;
+    }
+    // Walking onto the ice carries this speed with it.
+    this.slideX = mx * speed;
+    this.slideZ = mz * speed;
+    if (!mx && !mz) return false;
+    const step = Math.min(speed * dt, remaining);
+    this.x += mx * step;
+    this.z += mz * step;
+    terrain.resolve(this);
+    return true;
   }
 
   get maxHp(): number { return this.stats.maxHp; }
@@ -668,11 +707,8 @@ export class Player extends Unit {
         mx = dx / d;
         mz = dz / d;
       }
-    } else if (moving) {
-      const step = Math.min(this.moveSpeed * dt, remaining);
-      this.x += mx * step;
-      this.z += mz * step;
-      sim.terrain.resolve(this);
+    } else {
+      moving = this.walkStep(mx, mz, remaining, dt, sim.terrain);
     }
     if (this.faceLockT > 0) this.face(this.aimX, this.aimZ);
     else if (moving) this.face(mx, mz);

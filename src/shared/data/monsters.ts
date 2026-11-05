@@ -1,5 +1,18 @@
 export type Behavior = 'passive' | 'skittish' | 'aggressive' | 'charger' | 'boss';
 
+/** A straight shot at the player. */
+export interface ShotDef {
+  /** Which picture it flies as. */
+  art: 'ice_shard' | 'snowball';
+  speed: number;
+  range: number;
+  mult: number;
+  /** Hit radius and drawn size, in world units. */
+  radius: number;
+  size: number;
+  color: string;
+}
+
 export interface MonsterDef {
   id: string;
   name: string;
@@ -21,8 +34,19 @@ export interface MonsterDef {
   behavior: Behavior;
   /** Wolves alert each other when one is hit. */
   pack?: boolean;
-  /** Bosses only: calls these minions once per fight when it drops below half HP. */
-  summon?: { monster: string; count: number };
+  /**
+   * Bosses only: calls these minions once per fight when it drops below half HP. With `vanish` it
+   * jumps off the map at the same time, and comes back only when they are all dead.
+   */
+  summon?: { monster: string; count: number; vanish?: boolean };
+  /** Ranged monsters: every attack fires this instead of hitting up close. attackRange is how far away it shoots from. */
+  shot?: ShotDef;
+  /** Bosses only: thrown at a target standing out of its slam's reach. */
+  thrown?: ShotDef & { minRange: number; cooldown: number };
+  /** Bosses only: radius of the ground slam (default 4.2). */
+  slamRadius?: number;
+  /** Jumps onto a spot marked on the ground, hurting everyone on it when it lands. */
+  leap?: { cooldown: number; windup: number; radius: number; mult: number; minRange: number; maxRange: number };
   /** Bosses only: below half HP, chase speed is multiplied by `speed` and every attack's
    *  cooldown and wind-up by `skill` — replaces the usual enrage boost. */
   frenzy?: { speed: number; skill: number };
@@ -105,5 +129,54 @@ export const MONSTERS: Record<string, MonsterDef> = {
     hp: 7436, atk: 83, def: 24, speed: 2.1, exp: 3000, gold: [220, 360],
     aggroRange: 9, attackRange: 2.0, attackCooldown: 1.7, height: 3.6, radius: 1.1,
     behavior: 'boss', frenzy: { speed: 3, skill: 0.5 }, itemChance: 1, potionChance: 1,
+  },
+
+  // Zone 3 — Frost Reach
+  frost_penguin: {
+    id: 'frost_penguin', name: 'Frost Penguin', nameTh: 'เพนกวินหิมะ', levels: [21, 22],
+    hp: 480, atk: 56, def: 18, speed: 2.0, exp: 400, gold: [22, 34],
+    aggroRange: 0, attackRange: 1.1, attackCooldown: 1.5, height: 1.5, radius: 0.5,
+    behavior: 'charger', itemChance: 0.13, potionChance: 0.1,
+  },
+  tusk_seal: {
+    id: 'tusk_seal', name: 'Tusk Seal', nameTh: 'แมวน้ำเขี้ยวยาว', levels: [23, 24],
+    hp: 680, atk: 66, def: 24, speed: 1.75, exp: 490, gold: [26, 40],
+    aggroRange: 6, attackRange: 1.3, attackCooldown: 1.6, height: 1.6, radius: 0.7,
+    behavior: 'aggressive', pack: true, itemChance: 0.13, potionChance: 0.1,
+  },
+  snow_owl: {
+    id: 'snow_owl', name: 'Snow Owl', nameTh: 'นกฮูกหิมะ', levels: [25, 26],
+    hp: 560, atk: 80, def: 18, speed: 3.1, exp: 580, gold: [30, 46],
+    aggroRange: 7, attackRange: 1.15, attackCooldown: 1.15, height: 1.7, radius: 0.5,
+    behavior: 'aggressive', itemChance: 0.14, potionChance: 0.1,
+  },
+  snow_sprite: {
+    id: 'snow_sprite', name: 'Snow Sprite', nameTh: 'ภูตหิมะ', levels: [27, 28],
+    hp: 640, atk: 90, def: 22, speed: 2.1, exp: 680, gold: [34, 52],
+    aggroRange: 9, attackRange: 7, attackCooldown: 2, height: 1.7, radius: 0.5,
+    behavior: 'aggressive', itemChance: 0.14, potionChance: 0.11,
+    shot: { art: 'ice_shard', speed: 8, range: 11, mult: 1, radius: 0.35, size: 0.55, color: '#bfeaff' },
+  },
+  polar_bear: {
+    id: 'polar_bear', name: 'Polar Bear', nameTh: 'หมีขั้วโลก', levels: [29, 29],
+    hp: 1500, atk: 105, def: 30, speed: 2.2, exp: 1100, gold: [55, 85],
+    aggroRange: 6, attackRange: 1.5, attackCooldown: 1.7, height: 2.5, radius: 0.95,
+    behavior: 'charger', itemChance: 0.2, potionChance: 0.12,
+  },
+  yeti: {
+    id: 'yeti', name: 'Yeti', nameTh: 'เยติ (Boss)', levels: [30, 30],
+    hp: 17000, atk: 160, def: 34, speed: 2.2, exp: 7000, gold: [550, 900],
+    aggroRange: 9, attackRange: 2.1, attackCooldown: 1.8, height: 3.9, radius: 1.25,
+    behavior: 'boss', summon: { monster: 'yeti_minion', count: 3, vanish: true }, slamRadius: 5.5,
+    thrown: { art: 'snowball', speed: 9, range: 10, mult: 1.3, radius: 0.6, size: 1.5, color: '#e6f2fb', minRange: 5, cooldown: 5 },
+    itemChance: 1, potionChance: 1,
+  },
+  // Only comes when the yeti calls it, so no EXP, gold or drops (see Sim.killMonster).
+  yeti_minion: {
+    id: 'yeti_minion', name: 'Yeti Minion', nameTh: 'เยติลูกน้อง', levels: [28, 28],
+    hp: 900, atk: 85, def: 22, speed: 2.5, exp: 0, gold: [0, 0],
+    aggroRange: 9, attackRange: 1.4, attackCooldown: 1.4, height: 2.3, radius: 0.8,
+    behavior: 'aggressive', itemChance: 0, potionChance: 0,
+    leap: { cooldown: 8, windup: 1, radius: 1.8, mult: 1.5, minRange: 2.5, maxRange: 8 },
   },
 };

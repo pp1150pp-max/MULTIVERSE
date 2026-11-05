@@ -30,6 +30,13 @@ const BASES: BaseItem[] = [
   { id: 'scale', slot: 'armor', names: { sword: 'Serpent Scale Mail', mage: 'Fen Robe', gunslinger: 'Oilskin Coat' }, main: { def: 10, maxHp: 30 }, minLevel: 14 },
   { id: 'waders', slot: 'boots', names: { any: 'Marsh Waders' }, main: { def: 5, moveSpeed: 6 }, minLevel: 12 },
   { id: 'ring_wisp', slot: 'ring', names: { any: 'Wisp Ring' }, main: { maxHp: 18 }, minLevel: 16 },
+  // Frost Reach tier
+  { id: 'weapon_6', slot: 'weapon', names: { sword: 'Frostbite Saber', mage: 'Icicle Wand', gunslinger: 'Glacier Repeater' }, main: { atk: 22 }, minLevel: 23 },
+  { id: 'weapon_7', slot: 'weapon', names: { sword: 'Yeti Cleaver', mage: 'Aurora Staff', gunslinger: 'Permafrost Pistol' }, main: { atk: 26 }, minLevel: 28 },
+  { id: 'frost_hood', slot: 'helmet', names: { any: 'Frostfur Hood' }, main: { def: 8, maxHp: 20 }, minLevel: 22 },
+  { id: 'glacier', slot: 'armor', names: { sword: 'Glacier Plate', mage: 'Snowweave Robe', gunslinger: 'Fur-lined Coat' }, main: { def: 14, maxHp: 44 }, minLevel: 24 },
+  { id: 'snowtreads', slot: 'boots', names: { any: 'Snowtread Boots' }, main: { def: 7, moveSpeed: 7 }, minLevel: 22 },
+  { id: 'ring_frost', slot: 'ring', names: { any: 'Frost Ring' }, main: { maxHp: 26 }, minLevel: 26 },
 ];
 
 /** Names of every item's picture. Items named per class have one picture per class. */

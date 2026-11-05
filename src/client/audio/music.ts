@@ -2,7 +2,7 @@
 // and noise drums. Each line below is one bar of eight steps: a note, `-` to hold it, `.` for silence.
 import { audioEngine } from './engine';
 
-export type TrackId = 'forest' | 'marsh' | 'boss';
+export type TrackId = 'forest' | 'marsh' | 'snow' | 'boss';
 
 /** Chord symbol → bass root, bass fifth, then three arpeggio notes. */
 const CHORDS: Record<string, [string, string, string, string, string]> = {
@@ -65,6 +65,21 @@ const TRACKS: Record<TrackId, TrackDef> = {
     arp: '1 . 3 . 2 . 3 .',
     drums: 'k . . . . . h .',
     leadVol: 0.11, bassVol: 0.22, arpVol: 0.04, drumVol: 0.06,
+  },
+  // Quiet and glassy, in A minor: sparse notes over a soft ringing arpeggio.
+  snow: {
+    bpm: 80,
+    lead: [
+      'E5 - - D5 C5 - B4 -', 'A4 - - - E4 - . .', 'F4 - A4 - C5 - B4 A4', 'G4 - - - . . . .',
+      'C5 - E5 - G5 - E5 D5', 'C5 - G4 - - - . .', 'D5 - E5 F5 - E5 D5 -', 'B4 - - - G#4 - B4 -',
+      'A4 - C5 - E5 - A5 -', 'G5 - E5 - C5 - . .', 'F5 - E5 D5 - C5 D5 -', 'E5 - - - . . . .',
+      'A5 - G5 - E5 - D5 -', 'C5 - D5 - E5 - C5 -', 'B4 - A4 - G#4 - B4 -', 'A4 - - - . . . .',
+    ],
+    chords: ['Am', 'Am', 'F', 'G', 'C', 'C', 'Dm', 'E', 'Am', 'C', 'F', 'C', 'F', 'C', 'E', 'Am'],
+    bass: '1 - - - 5 - - -',
+    arp: '3 . 2 . 3 1 2 .',
+    drums: '. . h . . . h .',
+    leadVol: 0.11, bassVol: 0.18, arpVol: 0.045, drumVol: 0.04,
   },
   // Fast and driving, in A minor.
   boss: {

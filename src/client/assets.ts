@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {
   makeSheet, drawHuman, drawSlime, drawQuad, drawSeeker, drawMerchant, drawBlacksmith, drawKeeper, drawTree, drawBush, drawRock, drawStump,
+  drawSnowPine, drawSnowRock, drawIceCrystal, drawIceShard, drawSnowball,
   drawTent, drawCampfire, drawSign, drawFence, drawRunestone, drawIcon, pixelCircle,
 } from './placeholder';
 import { ITEM_ART } from '../shared/data/items';
@@ -73,6 +74,41 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   mire_ghoul: monster('monsters/mire_ghoul.png', () => makeSheet(40, drawSlime(['#3a3228', '#221c16', '#a8e08a']))),
   will_o_wisp: monster('monsters/will_o_wisp.png', () => makeSheet(36, drawSlime(['#6ad8d0', '#3a9aa8', '#e8fffa']))),
   bog_witch: monster('monsters/bog_witch.png', () => makeSheet(56, drawSeeker())),
+
+  // Zone 3 — Frost Reach. Placeholders only show if the PNGs are missing.
+  frost_penguin: monster('monsters/frost_penguin.png', () => makeSheet(36, drawSlime(['#2c3a4e', '#172130', '#eef4f8']))),
+  tusk_seal: monster('monsters/tusk_seal.png', () => makeSheet(40, drawQuad(['#7f8c98', '#4e5a66', '#c3ccd4', '#1d242b'], {
+    bodyRx: 0.34, bodyRy: 0.18, head: 0.14, ears: 'small', earSize: 0.03, tail: 'none', legLen: 0.04, legW: 0.1, snout: 0.06, tusks: true, belly: true,
+  }))),
+  snow_owl: monster('monsters/snow_owl.png', () => makeSheet(36, drawSlime(['#dce6ee', '#94a6b6', '#f7c844']))),
+  snow_sprite: monster('monsters/snow_sprite.png', () => makeSheet(36, drawSlime(['#9fdcf2', '#5aa6c8', '#f2fbff']))),
+  polar_bear: monster('monsters/polar_bear.png', () => makeSheet(48, drawQuad(['#e6ecf0', '#9fb0bc', '#fbfdfe', '#1d242b'], {
+    bodyRx: 0.36, bodyRy: 0.2, head: 0.15, ears: 'round', earSize: 0.07, tail: 'none', legLen: 0.13, legW: 0.1, snout: 0.08, belly: true,
+  }))),
+  yeti: monster('monsters/yeti.png', () => makeSheet(56, drawQuad(['#c9d8e4', '#7f96aa', '#eaf2f8', '#3a4a5a'], {
+    bodyRx: 0.34, bodyRy: 0.27, head: 0.17, ears: 'small', earSize: 0.06, tail: 'none', legLen: 0.15, legW: 0.12, snout: 0.05, tusks: true, mane: true, belly: true,
+  }))),
+  yeti_minion: monster('monsters/yeti_minion.png', () => makeSheet(44, drawQuad(['#7f9cb4', '#4f6b82', '#b4c8d8', '#2a3644'], {
+    bodyRx: 0.3, bodyRy: 0.24, head: 0.17, ears: 'small', earSize: 0.06, tail: 'none', legLen: 0.14, legW: 0.1, snout: 0.05, mane: true, belly: true,
+  }))),
+  fx_ice_shard: single('fx/ice_shard.png', drawIceShard),
+  fx_snowball: single('fx/snowball.png', drawSnowball),
+
+  snow_pine_0: single('props/snow_pine_0.png', () => drawSnowPine(0)),
+  snow_pine_1: single('props/snow_pine_1.png', () => drawSnowPine(1)),
+  snow_pine_2: single('props/snow_pine_2.png', () => drawSnowPine(2)),
+  frost_tree: single('props/frost_tree.png', () => drawSnowPine(1)),
+  snow_shrub_0: single('props/snow_shrub_0.png', () => drawSnowRock(0)),
+  snow_shrub_1: single('props/snow_shrub_1.png', () => drawSnowRock(1)),
+  frost_fern: single('props/frost_fern.png', () => drawIceCrystal(0)),
+  snow_rock_0: single('props/snow_rock_0.png', () => drawSnowRock(0)),
+  snow_rock_1: single('props/snow_rock_1.png', () => drawSnowRock(1)),
+  snow_stump: single('props/snow_stump.png', drawStump),
+  ice_crystal_0: single('props/ice_crystal_0.png', () => drawIceCrystal(0)),
+  ice_crystal_1: single('props/ice_crystal_1.png', () => drawIceCrystal(1)),
+  decor_snow: single('props/decor_snow.png', () => drawBush(0)),
+  island_cliff_snow: single('props/island_cliff_snow.png', () => drawRock(0)),
+  island_slabs_snow: single('props/island_slabs_snow.png', () => drawRock(0)),
 
   swamp_tree_0: single('props/swamp_tree_0.png', () => drawTree(0)),
   swamp_tree_1: single('props/swamp_tree_1.png', () => drawTree(1)),
@@ -196,7 +232,7 @@ async function loadAnimSet(loader: THREE.TextureLoader, key: string, dir: string
 }
 
 /** Repeating ground textures. A zone falls back to its code-painted ground if one is missing. */
-export type GroundTile = 'grass' | 'dirt' | 'water' | 'marsh' | 'mud' | 'pave';
+export type GroundTile = 'grass' | 'dirt' | 'water' | 'marsh' | 'mud' | 'pave' | 'snow' | 'snow_path' | 'ice';
 export const groundTiles: Partial<Record<GroundTile, THREE.Texture>> = {};
 
 async function loadGroundTile(loader: THREE.TextureLoader, name: GroundTile): Promise<void> {
@@ -233,7 +269,7 @@ async function loadFxSheet(loader: THREE.TextureLoader, name: FxSheet): Promise<
 export async function loadAssets(): Promise<void> {
   const loader = new THREE.TextureLoader();
   await Promise.all((['sword', 'mage', 'gun'] as const).map((n) => loadFxSheet(loader, n)));
-  await Promise.all((['grass', 'dirt', 'water', 'marsh', 'mud', 'pave'] as const).map((n) => loadGroundTile(loader, n)));
+  await Promise.all((['grass', 'dirt', 'water', 'marsh', 'mud', 'pave', 'snow', 'snow_path', 'ice'] as const).map((n) => loadGroundTile(loader, n)));
   await Promise.all(
     Object.entries(SHEET_SPECS).map(async ([key, spec]) => {
       let tex: THREE.Texture;
