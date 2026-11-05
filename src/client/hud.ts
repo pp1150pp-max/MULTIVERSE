@@ -1297,9 +1297,18 @@ export class Hud {
       const bonusText = (Object.keys(bonus) as StatKey[]).filter((k) => bonus[k]).map((k) => `+${r1(bonus[k] ?? 0)} ${STAT_LABEL[k]}`).join(' · ');
       if (bonusText) lines += `<div class="tt-enh">ตีบวก: ${bonusText}</div>`;
       if (eq && eq !== item) {
+        // One row per stat that changes: equipped value, this item's value, then ▲/▼ by how much.
         const keys = [...new Set([...Object.keys(stats), ...Object.keys(eqStats)])] as StatKey[];
-        const diffs = keys.map((k) => (diffOf(k) ? `${STAT_LABEL[k]} ${diffOf(k)}` : '')).filter(Boolean).join(' · ');
-        if (diffs) lines += `<div class="tt-cmp">เทียบกับที่ใส่อยู่: ${diffs}</div>`;
+        const rows = keys.map((k) => {
+          const was = r1(eqStats[k] ?? 0), now = r1(stats[k] ?? 0), d = r1(now - was);
+          if (Math.abs(d) <= 0.05) return '';
+          const change = `<span class="${d > 0 ? 'up' : 'down'}">${d > 0 ? '▲' : '▼'} ${Math.abs(d)}</span>`;
+          return `<tr><td>${STAT_LABEL[k]}</td><td class="was">${was}</td><td>${now}</td><td>${change}</td></tr>`;
+        }).join('');
+        if (rows) {
+          lines += `<div class="tt-cmp"><div class="tt-cmp-title">เทียบกับที่ใส่อยู่</div><table>` +
+            `<tr><th></th><th>ใส่อยู่</th><th>ชิ้นนี้</th><th></th></tr>${rows}</table></div>`;
+        }
       }
     } else {
       // Items from before tiers: totals only.
