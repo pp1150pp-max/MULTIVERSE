@@ -317,7 +317,6 @@
             <form id="register-box" class="online-box logon-box hidden" autocomplete="on" novalidate>
               <div class="logon-head"><span>✦</span> Register <span>✦</span></div>
               <div class="logon-body">
-                <button id="btn-register-back" type="button" class="logon-back">‹ กลับไปหน้า Login</button>
                 <h2>สมัครสมาชิก</h2>
                 <p class="logon-sub">สร้างบัญชีใหม่ เพื่อเก็บตัวละครไว้เล่นต่อได้ทุกเครื่อง</p>
                 <div class="form-field">
@@ -342,7 +341,10 @@
                 <label class="logon-check"><input id="reg-agree" type="checkbox" /> ฉันเข้าใจว่าต้องจำรหัสผ่านไว้เอง เพราะตอนนี้ยังกู้คืนรหัสผ่านไม่ได้</label>
                 <p id="guest-move-hint" class="hint guest-move hidden"></p>
                 <div id="register-error" class="form-error"></div>
-                <button id="btn-register-submit" type="submit" class="primary logon-wide" disabled>สมัครสมาชิก</button>
+                <div class="menu-buttons logon-actions">
+                  <button id="btn-register-back" type="button" title="กลับไปหน้า Login">‹ กลับ</button>
+                  <button id="btn-register-submit" type="submit" class="primary" disabled>สมัครสมาชิก</button>
+                </div>
               </div>
             </form>
 
