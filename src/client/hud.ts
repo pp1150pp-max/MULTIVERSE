@@ -88,6 +88,8 @@ export class Hud {
   private slotEls: { kind: SkillSlot | PotionKind; el: HTMLElement; cd: HTMLElement; extra: HTMLElement }[] = [];
   private invDirty = true;
   private bagOpen = false;
+  /** Level the bag was last drawn for (gear above it is marked as locked). */
+  private drawnLevel = 0;
   /** A bag item being dragged with the mouse (ghost appears once the mouse moves a few pixels). */
   private drag: { i: number; x: number; y: number; ghost: HTMLElement | null } | null = null;
   /** True right after a drag ends, so the click that follows mouseup does nothing. */
@@ -174,6 +176,10 @@ export class Hud {
       const i = this.cellIndex(e);
       if (i < 0) return;
       const entry = g.player.bag[i];
+      if (entry && !isPotion(entry) && !g.player.canEquip(entry)) {
+        this.log(`ต้อง Lv.${entry.level} ถึงจะใส่ ${itemName(entry)} ได้ (ตอนนี้ Lv.${g.player.level})`, '#ff8a6a');
+        return;
+      }
       g.backend.equip(i);
       if (isPotion(entry)) this.log(`ปุ่ม ${entry.potion === 'hp' ? 1 : 2} จะใช้${potionName(entry.potion, entry.size)}`, '#9fd8ff');
       this.hideTip();
@@ -442,6 +448,10 @@ export class Hud {
 
   update(dt: number): void {
     const p = this.g.player;
+    if (p.level !== this.drawnLevel) {
+      this.drawnLevel = p.level;
+      this.markInventory();
+    }
     const need = expToNext(p.level);
     $('hp-fill').style.width = `${(Math.max(0, p.hp) / p.maxHp) * 100}%`;
     $('hp-text').textContent = `${Math.ceil(Math.max(0, p.hp))} / ${Math.round(p.maxHp)}`;
@@ -979,7 +989,8 @@ export class Hud {
     }
     const icon = itemIcon(item);
     const plus = plusOf(item) ? `<span class="iplus">+${plusOf(item)}</span>` : '';
-    return `<div class="cell r-${item.rarity}${selected ? ' sel' : ''}" ${attrs} style="--rc:${RARITY_COLOR[item.rarity]}">${icon}${plus}<span class="ilv">${item.level}</span></div>`;
+    const locked = this.g.player.canEquip(item) ? '' : ' locked';
+    return `<div class="cell r-${item.rarity}${selected ? ' sel' : ''}${locked}" ${attrs} style="--rc:${RARITY_COLOR[item.rarity]}">${icon}${plus}<span class="ilv">${item.level}</span></div>`;
   }
 
   private renderInventory(): void {
@@ -1023,6 +1034,7 @@ export class Hud {
       `<div class="tt-name" style="color:${RARITY_COLOR[item.rarity]}">${itemName(item)}</div>` +
       `<div class="tt-sub">${RARITY_LABEL[item.rarity]} · ${SLOT_LABEL[item.slot]} · iLv.${item.level}${plusOf(item) ? ` · ตีบวก +${plusOf(item)}` : ''}</div>` +
       `<div class="tt-stats">${lines || '<div>—</div>'}</div>` +
+      (p.canEquip(item) ? '' : `<div class="tt-req">ต้อง Lv.${item.level} ถึงจะใส่ได้ (ตอนนี้ Lv.${p.level})</div>`) +
       `<div class="tt-hint">${hint}</div><div class="tt-val">ขายให้พ่อค้าได้ ${sellValue(item)} G</div>`;
     this.placeTip(tip, e);
   }

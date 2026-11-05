@@ -269,7 +269,15 @@ export class Player extends Unit {
     return this.hasBagSpace();
   }
 
-  /** Clicking gear wears it; clicking a potion makes its quick key use that size. */
+  /** Gear can be worn once the character's level reaches the item's level. */
+  canEquip(item: Item): boolean {
+    return item.level <= this.level;
+  }
+
+  /**
+   * Clicking gear wears it; clicking a potion makes its quick key use that size.
+   * Gear above the character's level stays in the bag (gear already worn from older saves is left on).
+   */
   equipFromBag(i: number): void {
     const item = this.bag[i];
     if (!item) return;
@@ -277,6 +285,7 @@ export class Player extends Unit {
       this.potSel[item.potion] = item.size;
       return;
     }
+    if (!this.canEquip(item)) return;
     this.bag[i] = this.equipment[item.slot] ?? null;
     this.equipment[item.slot] = item;
     this.recompute();
