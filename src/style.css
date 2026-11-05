@@ -7,7 +7,6 @@
   --panel-edge: #8f7238;
   --hp: #d8323c;
   --mp: #3a7bff;
-  --exp: #c9a227;
 }
 
 * { box-sizing: border-box; }
@@ -184,26 +183,26 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 .hud-orbs #log { bottom: calc(var(--orb) + 8px); }
 .bars { display: flex; flex-direction: column; gap: 0; margin-top: 2px; }
 .bar {
-  position: relative; width: min(300px, 40vw); aspect-ratio: 1415 / 245;
+  position: relative; width: min(300px, 40vw); aspect-ratio: 1352 / 152;
   background: url(/assets/sprites/ui/bar_frame.png) center / 100% 100% no-repeat;
 }
 .bar-channel { position: absolute; overflow: hidden; }
-.bar .bar-channel { left: 11.9%; width: 76.3%; top: 38.8%; height: 28.6%; }
+.bar .bar-channel { left: 8.4%; width: 83.2%; top: 27.6%; height: 44.7%; }
 .bar .fill { height: 100%; background-size: 100% 100%; }
 .bar.hp .fill { background-image: url(/assets/sprites/ui/bar_hp.png); }
 .bar.mp .fill { background-image: url(/assets/sprites/ui/bar_mp.png); }
 .bar span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 11px; font-weight: 600; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; }
 
-.orb { position: absolute; bottom: 2px; width: var(--orb); aspect-ratio: 457 / 441; pointer-events: none; }
+.orb { position: absolute; bottom: 2px; width: var(--orb); aspect-ratio: 414 / 433; pointer-events: none; }
 #orb-hp { left: 2px; }
 #orb-mp { right: 2px; }
 #orb-mp .orb-art { transform: scaleX(-1); }
 .orb-art { position: absolute; inset: 0; background: url(/assets/sprites/ui/orb_cradle.png) center / 100% 100% no-repeat; }
-.orb-well { position: absolute; left: 26%; top: 23.3%; width: 55.2%; height: 57.2%; border-radius: 50%; overflow: hidden; }
-.orb-fill { position: absolute; left: 0; right: 0; bottom: 0; overflow: hidden; background-position: bottom; background-size: 100% calc(var(--orb) * 0.552); background-repeat: no-repeat; }
+.orb-well { position: absolute; left: 14.3%; top: 17.1%; width: 72%; height: 68.8%; border-radius: 50%; overflow: hidden; }
+.orb-fill { position: absolute; left: 0; right: 0; bottom: 0; overflow: hidden; background-position: bottom; background-size: 100% calc(var(--orb) * 0.72); background-repeat: no-repeat; }
 #orb-hp .orb-fill { background-image: url(/assets/sprites/ui/orb_hp_liquid.png); }
 #orb-mp .orb-fill { background-image: url(/assets/sprites/ui/orb_mp_liquid.png); }
-.orb-wave { position: absolute; left: 0; right: 0; top: 0; height: calc(var(--orb) * 0.12); background-size: 100% 100%; mix-blend-mode: screen; }
+.orb-wave { position: absolute; left: 0; right: 0; top: 0; height: calc(var(--orb) * 0.157); background-size: 100% 100%; mix-blend-mode: screen; }
 #orb-hp .orb-wave { background-image: url(/assets/sprites/ui/orb_hp_wave.png); }
 #orb-mp .orb-wave { background-image: url(/assets/sprites/ui/orb_mp_wave.png); }
 .orb-glass { position: absolute; inset: -3%; background: url(/assets/sprites/ui/orb_glass.png) center / 100% 100% no-repeat; }
@@ -211,24 +210,22 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
   position: absolute; left: 0; right: 0; top: 46%; text-align: center; font-size: 13px; font-weight: 600; white-space: nowrap;
   text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 2px 2px #000;
 }
-#orb-hp .orb-text { left: 4%; }
-#orb-mp .orb-text { right: 4%; }
 
 /* A painted icon sitting in a line of text. Places with their own layout size it themselves. */
 .gi { width: 1.35em; height: 1.35em; vertical-align: -0.32em; object-fit: contain; }
 
 #skillbar {
-  position: relative; width: var(--bar-w); aspect-ratio: 1461 / 344;
+  position: relative; width: var(--bar-w); aspect-ratio: 1380 / 286;
   background: url(/assets/sprites/ui/skillbar.png) center / 100% 100% no-repeat;
 }
-.skill { position: absolute; top: 34.2%; width: 8.5%; height: 36.2%; overflow: hidden; border-radius: 3px; }
-#skillbar .skill:nth-child(1) { left: 12.2%; }
-#skillbar .skill:nth-child(2) { left: 22.7%; }
-#skillbar .skill:nth-child(3) { left: 33.4%; }
-#skillbar .skill:nth-child(4) { left: 43.6%; }
-#skillbar .skill:nth-child(5) { left: 57.2%; }
-#skillbar .skill:nth-child(6) { left: 70.2%; }
-#skillbar .skill:nth-child(7) { left: 80.3%; }
+.skill { position: absolute; top: 23.4%; width: 9.8%; height: 50.2%; overflow: hidden; border-radius: 3px; }
+#skillbar .skill:nth-child(1) { left: 6.9%; }
+#skillbar .skill:nth-child(2) { left: 18.8%; }
+#skillbar .skill:nth-child(3) { left: 30.6%; }
+#skillbar .skill:nth-child(4) { left: 42.5%; }
+#skillbar .skill:nth-child(5) { left: 57.7%; }
+#skillbar .skill:nth-child(6) { left: 72.2%; }
+#skillbar .skill:nth-child(7) { left: 84%; }
 .skill .icon { position: absolute; inset: 0; display: grid; place-items: center; }
 .skill .icon .gi { display: block; width: 100%; height: 100%; vertical-align: baseline; }
 .skill-hp .icon, .skill-mp .icon { inset: 2px 7px 13px; }
@@ -242,11 +239,11 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 .skill.empty .icon { filter: grayscale(1) brightness(0.5); }
 
 #expbar {
-  position: relative; width: var(--bar-w); aspect-ratio: 1378 / 75; margin-top: -8px;
+  position: relative; width: var(--bar-w); aspect-ratio: 1263 / 79; margin-top: -8px;
   background: url(/assets/sprites/ui/expbar.png) center / 100% 100% no-repeat;
 }
-#expbar .bar-channel { left: 4%; width: 92%; top: 34%; height: 32%; }
-#expbar .fill { height: 100%; background: linear-gradient(#ffe27a, var(--exp)); }
+#expbar .bar-channel { left: 2.2%; width: 95.6%; top: 24%; height: 53%; }
+#expbar .fill { height: 100%; background: linear-gradient(#d6b468, #8f7228); }
 #expbar span { position: absolute; right: 8%; top: -1px; font-size: 9px; line-height: 16px; text-shadow: 0 0 2px #000, 0 0 2px #000; }
 
 /* ---------------------------------------------------------------- panels */
@@ -265,8 +262,8 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 .panel-head {
   position: relative; display: flex; justify-content: center; align-items: center; min-height: 32px; margin: -4px 8px 12px; padding: 2px 32px;
   font-family: 'Cinzel', 'Kanit', serif; font-weight: 800; font-size: 14px; color: #2a1a08; text-align: center;
-  background: linear-gradient(#e6bb57, #a97f2c 55%, #8a6420); border: 1px solid #f2d58a; border-radius: 2px;
-  box-shadow: 0 0 0 2px #2c2822, 0 0 0 3px #8f7238, inset 0 1px 0 rgba(255, 240, 190, 0.6);
+  background: linear-gradient(#b08a4e, #8a6a38 55%, #6e5228); border: 1px solid #b89a62; border-radius: 2px;
+  box-shadow: 0 0 0 2px #2c2822, 0 0 0 3px #6f5a32, inset 0 1px 0 rgba(255, 235, 190, 0.3);
 }
 .panel-head button {
   position: absolute; right: -20px; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; padding: 0;
@@ -291,34 +288,40 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 .inv-side-title:first-child { margin-top: 0; }
 .inv-window {
   position: relative; flex: none; width: var(--inv-w); aspect-ratio: 1086 / 1448;
-  background: url(/assets/sprites/ui/inventory.png) center / 100% 100% no-repeat; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7);
+  background: url(/assets/sprites/ui/inventory.png) center / 100% 100% no-repeat; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.7));
 }
 /* Positions below are measured from the painted window, so they scale with it. */
 .inv-title {
-  position: absolute; left: 26.2%; top: 4.5%; width: 47.9%; height: 5.2%; display: grid; place-items: center;
-  font-family: 'Cinzel', 'Kanit', serif; font-weight: 800; font-size: 15px; color: #2a1a08;
+  position: absolute; left: 26%; top: 4.3%; width: 48%; height: 4.2%; display: grid; place-items: center;
+  font-family: 'Cinzel', 'Kanit', serif; font-weight: 800; font-size: clamp(11px, calc(var(--inv-w) * 0.03), 17px); line-height: 1; color: #2a1a08;
 }
 #inv-close {
-  position: absolute; left: 88.9%; top: 3.45%; width: 8.3%; height: 6.2%; padding: 0;
+  position: absolute; left: 87.5%; top: 3.45%; width: 9.5%; height: 6.6%; padding: 0;
   border: 0; box-shadow: none; background: none; border-radius: 6px;
 }
 #inv-close:hover { background: rgba(255, 220, 130, 0.22); }
 #equip-slots { position: absolute; inset: 0; pointer-events: none; }
 .eq-row { position: absolute; pointer-events: auto; }
-.eq-helmet { left: 43.6%; top: 13.7%; width: 12.7%; height: 9.2%; }
-.eq-weapon { left: 18.1%; top: 28.1%; width: 15%; height: 11.9%; }
-.eq-armor { left: 40.9%; top: 26.5%; width: 18.1%; height: 14.2%; }
-.eq-ring { left: 69.5%; top: 29.3%; width: 12.4%; height: 8.7%; }
-.eq-boots { left: 67.7%; top: 42.9%; width: 12.9%; height: 9.1%; }
+.eq-weapon { left: 13.6%; top: 16.2%; width: 14.4%; height: 22.7%; }
+.eq-gloves { left: 13.6%; top: 41.5%; width: 14.4%; height: 10.7%; }
+.eq-offhand { left: 72.1%; top: 16.2%; width: 14.4%; height: 22.7%; }
+.eq-boots { left: 72.1%; top: 41.5%; width: 14.4%; height: 10.7%; }
+.eq-helmet { left: 42.8%; top: 12.5%; width: 13.9%; height: 10.6%; }
+.eq-armor { left: 42.7%; top: 25.7%; width: 14%; height: 19.2%; }
+.eq-belt { left: 40.8%; top: 47.5%; width: 18.2%; height: 6.1%; }
+.eq-necklace { left: 60.8%; top: 20.6%; width: 6.7%; height: 5%; }
+.eq-ring { left: 32%; top: 36.3%; width: 6.6%; height: 4.9%; }
+.eq-ring2 { left: 60.9%; top: 36.3%; width: 6.6%; height: 4.9%; }
+.ph-label { display: grid; place-items: center; width: 100%; height: 100%; font-size: 10px; color: #8a7a5c; }
 #equip-slots .cell, #bag-grid .cell { width: 100%; height: 100%; background: rgba(8, 6, 4, 0.35); border-color: transparent; }
 #equip-slots .cell.empty, #bag-grid .cell.empty { background: none; }
 #equip-slots .cell:not(.empty), #bag-grid .cell:not(.empty) { border-color: var(--rc); }
 #equip-slots .cell .gi { width: 88%; height: 88%; }
 #bag-grid {
-  position: absolute; left: 7.5%; top: 63.8%; width: 85%; height: 20.8%;
-  display: grid; grid-template-columns: repeat(10, 1fr); grid-template-rows: repeat(3, 1fr); column-gap: 0.75%; row-gap: 4.2%;
+  position: absolute; left: 8.6%; top: 66.6%; width: 83.1%; height: 19.7%;
+  display: grid; grid-template-columns: repeat(10, 1fr); grid-template-rows: repeat(3, 1fr); column-gap: 0.89%; row-gap: 4.6%;
 }
-.inv-foot { position: absolute; left: 31.3%; top: 88.4%; width: 40%; height: 4.7%; display: flex; justify-content: space-around; align-items: center; font-size: 13px; }
+.inv-foot { position: absolute; left: 30%; top: 89.6%; width: 40%; height: 4.4%; display: flex; justify-content: space-around; align-items: center; font-size: 13px; }
 .stat { display: flex; justify-content: space-between; font-size: 12px; padding: 1px 0; }
 .stat b { color: var(--gold-hi); font-weight: 400; }
 .cell {
