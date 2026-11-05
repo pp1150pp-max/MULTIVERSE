@@ -11,7 +11,7 @@ import { POTION_SIZES } from '../src/shared/data/potions';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../src/shared/sim/types';
 import { AUTO_HINT_COLOR, AutoPlay, type AutoWorld } from '../src/shared/sim/autoplay';
 import {
-  CHAT_MAX, INTEREST_RADIUS, SNAPSHOT_HZ, TICK_HZ, WS_PATH, r2,
+  CHAT_MAX, INTEREST_RADIUS, PING_MS, SNAPSHOT_HZ, TICK_HZ, WS_PATH, r2,
   type ClientMsg, type InputMsg, type ActionMsg, type PrivateSnap, type ServerMsg, type SnapshotMsg,
 } from '../src/shared/net/protocol';
 import { RARITIES, SLOTS, type SlotId, type Vec2 } from '../src/shared/types';
@@ -55,6 +55,11 @@ interface Session {
   outbox: SimEvent[];
   lastChatAt: number;
   saveDue: number | null;
+  /** Round trips the client reported (ping), summed since the last per-minute log line. */
+  lastPingAt: number;
+  rttSum: number;
+  rttCount: number;
+  rttWarnAt: number;
 }
 
 const num = (v: unknown, fallback = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
@@ -82,6 +87,13 @@ function serverMoves(p: Player): boolean {
 
 /** Input older than this is treated as "let go of everything" so a stalled client doesn't keep walking. */
 const INPUT_STALE_MS = 500;
+/** The server log lists every online player's average ping this often. */
+const PING_LOG_MS = 60_000;
+/** A reported ping above this is logged right away, at most once per PING_WARN_EVERY_MS per player. */
+const PING_WARN_MS = 300;
+const PING_WARN_EVERY_MS = 30_000;
+/** Reported round trips outside 0..this are junk and ignored. */
+const PING_MAX_MS = 60_000;
 
 export class GameWorld {
   readonly sims = new Map(Object.values(ZONES).map((z) => [z.id, new Sim(z)]));
@@ -100,6 +112,7 @@ export class GameWorld {
     wss.on('connection', (ws) => this.onConnection(ws));
     setInterval(() => this.tick(), 1000 / TICK_HZ);
     setInterval(() => this.saveAll(), AUTOSAVE_MS);
+    setInterval(() => this.logPings(), PING_LOG_MS);
   }
 
   get onlineCount(): number {
@@ -136,6 +149,7 @@ export class GameWorld {
         if (msg.t === 'input') this.onInput(session, msg);
         else if (msg.t === 'act') this.onAction(session, msg);
         else if (msg.t === 'chat') this.onChat(session, msg.text);
+        else if (msg.t === 'ping') this.onPing(session, msg);
       } catch (e) {
         console.error('[world] bad message from', session.username, e);
       }
@@ -182,6 +196,7 @@ export class GameWorld {
       ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId, sim, player,
       move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null,
       auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', outbox: [], lastChatAt: 0, saveDue: null,
+      lastPingAt: -Infinity, rttSum: 0, rttCount: 0, rttWarnAt: -Infinity,
     };
     this.sessions.add(s);
     this.byPlayer.set(player, s);
@@ -245,6 +260,36 @@ export class GameWorld {
       s.pendingPos = pos;
       s.lastPosAt = now;
     }
+  }
+
+  /** Answers a ping so the client can time the round trip, and keeps the round trip it reports for the log. */
+  private onPing(s: Session, m: { id?: unknown; rtt?: unknown }): void {
+    const now = performance.now();
+    const id = m.id;
+    if (typeof id !== 'number' || !Number.isSafeInteger(id) || id < 0) return;
+    if (now - s.lastPingAt < PING_MS / 4) return; // Faster than any real client pings.
+    s.lastPingAt = now;
+    this.send(s.ws, { t: 'pong', id });
+    const rtt = m.rtt;
+    if (typeof rtt !== 'number' || !Number.isFinite(rtt) || rtt < 0 || rtt > PING_MAX_MS) return;
+    s.rttSum += rtt;
+    s.rttCount++;
+    if (rtt > PING_WARN_MS && now - s.rttWarnAt >= PING_WARN_EVERY_MS) {
+      s.rttWarnAt = now;
+      console.log(`[ping] ${s.username} (${s.player.name}): ${Math.round(rtt)} ms — lagging`);
+    }
+  }
+
+  /** One log line a minute with each online player's average ping since the last one. */
+  private logPings(): void {
+    if (!this.sessions.size) return;
+    const parts = [...this.sessions].map((s) => {
+      const avg = s.rttCount ? `${Math.round(s.rttSum / s.rttCount)} ms` : '—';
+      s.rttSum = 0;
+      s.rttCount = 0;
+      return `${s.username} (${s.player.name}) ${avg}`;
+    });
+    console.log(`[ping] average over the last minute: ${parts.join(', ')}`);
   }
 
   private onAction(s: Session, m: ActionMsg): void {

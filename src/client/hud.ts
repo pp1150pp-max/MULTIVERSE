@@ -104,6 +104,10 @@ function syncPots(box: HTMLElement, f: LootFilter): void {
   }
 }
 
+/** Ping colours: green below PING_GOOD_MS, yellow below PING_OK_MS, red from there on. */
+const PING_GOOD_MS = 100;
+const PING_OK_MS = 250;
+
 export class Hud {
   dialogOpen = false;
   private fullMap: FullMap;
@@ -597,6 +601,7 @@ export class Hud {
     $('hud-level').textContent = `Lv.${p.level} ${p.cls.name}`;
     $('hud-gold').textContent = `${p.gold.toLocaleString()} G`;
     if (this.g.backend.online) $('hud-online').textContent = `🌐 ออนไลน์ ${this.g.backend.onlineCount} คน · กด Enter เพื่อแชท`;
+    this.showPing(this.g.backend.ping);
 
     for (const s of this.slotEls) {
       if (s.kind === 'hp' || s.kind === 'mp') {
@@ -648,6 +653,17 @@ export class Hud {
   }
 
   /** HP and MP as orbs in the bottom corners, or long bars at the top. The player picks; each browser remembers it. */
+  private shownPing: number | null | undefined;
+
+  /** "● 85 ms" under the minimap, coloured by how slow the connection is; "—" when disconnected. */
+  private showPing(ms: number | null): void {
+    if (ms === this.shownPing) return;
+    this.shownPing = ms;
+    $('hud-ping-ms').textContent = ms === null ? '—' : `${ms} ms`;
+    const cls = ms === null ? 'ping-none' : ms < PING_GOOD_MS ? 'ping-good' : ms < PING_OK_MS ? 'ping-ok' : 'ping-bad';
+    $('hud-ping').className = cls;
+  }
+
   private setHudStyle(style: HudStyle): void {
     const hud = $('hud');
     hud.classList.toggle('hud-orbs', style === 'orbs');

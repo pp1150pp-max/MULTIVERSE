@@ -13,7 +13,7 @@ import { zoneById, type SpawnArea, type ZoneDef } from '../../shared/data/zones'
 import type { NpcId } from '../../shared/data/npcs';
 import type { PotionKind, PotionSize, Rarity, SlotId, Vec2 } from '../../shared/types';
 import type { SkillSlot } from '../../shared/data/classes';
-import { INPUT_HZ, WS_PATH, type ClientMsg, type ServerMsg, type SnapshotMsg } from '../../shared/net/protocol';
+import { INPUT_HZ, PING_MS, WS_PATH, type ClientMsg, type ServerMsg, type SnapshotMsg } from '../../shared/net/protocol';
 import type { Backend, EnhanceOutcome, ProjectileLike } from '../backend';
 
 /** Mirrors never run game logic, so they don't need a simulation behind them. */
@@ -34,6 +34,8 @@ const SENT_KEEP = 90;
 /** After the server stops moving us, we glide onto its position until this close, or for at most SETTLE_MAX seconds. */
 const SETTLE_DIST = 0.15;
 const SETTLE_MAX = 0.5;
+/** A ping with no pong after this long is forgotten and a new one is sent. */
+const PING_GIVE_UP_MS = 10_000;
 /**
  * Events still applied while the tab is hidden (the server keeps playing Auto). Everything else is a
  * notification nobody saw — dropped so it doesn't all pop at once when the player comes back.
@@ -132,6 +134,11 @@ export class OnlineBackend implements Backend {
   private enhanceReq = 0;
   private readonly enhanceWait = new Map<number, (o: EnhanceOutcome) => void>();
   private kickMsg = '';
+  /** Last measured round trip (ms), the ping still waiting for its pong, and the timer sending them. */
+  private rtt: number | null = null;
+  private pingWait: { id: number; at: number } | null = null;
+  private pingId = 0;
+  private readonly pingTimer: ReturnType<typeof setInterval>;
 
   constructor(private readonly ws: WebSocket, private myId: number, zoneId: string, first: SnapshotMsg, guest: boolean) {
     this.guest = guest;
@@ -151,7 +158,13 @@ export class OnlineBackend implements Backend {
     this.epoch = first.me.epoch;
     this.applySnapshot(first);
     ws.onmessage = (e) => this.onMessage(JSON.parse(e.data as string) as ServerMsg);
-    ws.onclose = () => this.onDisconnect?.(this.kickMsg || 'หลุดการเชื่อมต่อจาก server');
+    ws.onclose = () => {
+      clearInterval(this.pingTimer);
+      this.onDisconnect?.(this.kickMsg || 'หลุดการเชื่อมต่อจาก server');
+    };
+    // A timer rather than the frame loop, so it keeps measuring (for the server's lag log) in a hidden tab.
+    // The first one waits PING_MS: right now the game is still being built, which would delay the pong.
+    this.pingTimer = setInterval(() => this.sendPing(), PING_MS);
   }
 
   get time(): number {
@@ -162,7 +175,24 @@ export class OnlineBackend implements Backend {
     if (this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(msg));
   }
 
+  /** Round trip to the server in ms, or null when disconnected or not measured yet. */
+  get ping(): number | null {
+    if (this.ws.readyState !== WebSocket.OPEN) return null;
+    // A pong that is overdue already says the connection is at least this slow.
+    const waiting = this.pingWait ? performance.now() - this.pingWait.at : 0;
+    return this.rtt === null ? null : Math.round(Math.max(this.rtt, waiting));
+  }
+
+  private sendPing(): void {
+    // Only one ping in flight: a late pong still answers it, so a stall shows up as a long round trip.
+    // One that was never answered (dropped by the server's rate limit) is given up after a while.
+    if (this.pingWait && performance.now() - this.pingWait.at < PING_GIVE_UP_MS) return;
+    this.pingWait = { id: ++this.pingId, at: performance.now() };
+    this.send({ t: 'ping', id: this.pingWait.id, rtt: this.rtt ?? undefined });
+  }
+
   close(): void {
+    clearInterval(this.pingTimer);
     this.onDisconnect = null;
     this.ws.close();
   }
@@ -185,6 +215,12 @@ export class OnlineBackend implements Backend {
       }
       case 'kick':
         this.kickMsg = m.msg;
+        break;
+      case 'pong':
+        if (this.pingWait?.id === m.id) {
+          this.rtt = Math.round(performance.now() - this.pingWait.at);
+          this.pingWait = null;
+        }
         break;
       case 'zone':
         this.changeZone(m.zone, m.you, m.x, m.z);
