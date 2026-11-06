@@ -68,6 +68,12 @@ interface Session {
   fpsCount: number;
   maxFrame: number;
   maxWait: number;
+  /** Snapshots skipped because the connection had not taken the earlier ones yet (see sendSnapshot). */
+  skipped: number;
+  /** When the last pong went out (null before the first ping). The client's next ping says it got it. */
+  pongAt: number | null;
+  /** When the last snapshot went out while the client was behind (sent at most once per SLOW_SNAP_MS). */
+  slowSnapAt: number;
   hidden: boolean;
   /** Last immediate lag/stall warning, for its throttle. */
   warnAt: number;
@@ -117,6 +123,18 @@ const PING_LOG_MS = 60_000;
 /** A reported ping above this is logged right away, at most once per PING_WARN_EVERY_MS per player. */
 const PING_WARN_MS = 300;
 const PING_WARN_EVERY_MS = 30_000;
+/**
+ * Data still waiting to go out to a player beyond which their next snapshot is skipped: a few
+ * snapshots' worth, so a slow connection lags a moment instead of falling ever further behind.
+ */
+const SNAP_BACKLOG_BYTES = 64 * 1024;
+/**
+ * A client answers each pong with its next ping about PING_MS later. No ping this long after a pong
+ * means it has not got the pong yet: the data we send is piling up on the way, so slow down.
+ */
+const PONG_LATE_MS = PING_MS + 1500;
+/** While a client is behind, it gets one snapshot this often instead of SNAPSHOT_HZ a second. */
+const SLOW_SNAP_MS = 1000;
 /** Reported round trips outside 0..this are junk and ignored. */
 const PING_MAX_MS = 60_000;
 /** A frame longer than this (the browser froze) is logged right away, throttled with the ping warning. */
@@ -246,7 +264,7 @@ export class GameWorld {
       ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId, sim, player,
       move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null,
       auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', outbox: [], lastChatAt: 0, saveDue: null,
-      ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0,
+      ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1,
     };
@@ -388,6 +406,7 @@ export class GameWorld {
     if (now - s.lastPingAt < PING_MS / 4) return; // Faster than any real client pings.
     s.lastPingAt = now;
     this.send(s.ws, { t: 'pong', id });
+    s.pongAt = now;
 
     const rtt = typeof m.rtt === 'number' && m.rtt >= 0 && m.rtt <= PING_MAX_MS ? m.rtt : undefined;
     const wait = clamp(m.wait, STALL_MAX_MS);
@@ -452,8 +471,9 @@ export class GameWorld {
       const bits = [s.rttCount ? fmtMs(s.rttSum / s.rttCount) : '—'];
       if (s.fpsCount) bits.push(`${Math.round(s.fpsSum / s.fpsCount)} fps`, `max frame ${fmtMs(s.maxFrame)}`);
       if (s.maxWait) bits.push(`no pong up to ${fmtMs(s.maxWait)}`);
+      if (s.skipped) bits.push(`${s.skipped} snapshots skipped (slow download)`);
       if (s.hidden) bits.push(s.fpsCount ? 'tab hidden part of the time' : 'tab hidden');
-      s.rttSum = s.rttCount = s.fpsSum = s.fpsCount = s.maxFrame = s.maxWait = 0;
+      s.rttSum = s.rttCount = s.fpsSum = s.fpsCount = s.maxFrame = s.maxWait = s.skipped = 0;
       s.hidden = false;
       return `${s.username} (${s.player.name}) ${bits.join(' · ')}`;
     });
@@ -691,6 +711,19 @@ export class GameWorld {
   }
 
   private sendSnapshot(s: Session): void {
+    // A player whose download is slower than our snapshots would otherwise get an ever longer queue:
+    // everything (pongs, chat) waits behind old positions and the delay only grows. Skip snapshots
+    // instead; nothing is lost, since the next one carries the full state and keeps the events,
+    // inventory and stash changes that were not sent (they are only marked sent below).
+    // Behind = our own send buffer is full, or (through the tunnel, which buffers on its own) the
+    // client has not answered our last pong in time; then send one snapshot a second until it does.
+    const now = performance.now();
+    const late = s.pongAt !== null && now - s.pongAt > PONG_LATE_MS;
+    if (s.ws.bufferedAmount > SNAP_BACKLOG_BYTES || (late && now - s.slowSnapAt < SLOW_SNAP_MS)) {
+      s.skipped++;
+      return;
+    }
+    if (late) s.slowSnapAt = now;
     const p = s.player;
     const near = (o: { x: number; z: number }) => Math.hypot(o.x - p.x, o.z - p.z) <= INTEREST_RADIUS;
     const inv = JSON.stringify([p.equipment, p.bag, p.buyback]);
