@@ -854,6 +854,9 @@ function itemList(entries: (BagEntry | null)[], empty: string): HTMLElement {
   return h('ul', { class: 'items' }, ...items.map((e) => h('li', {}, itemLabel(e))));
 }
 
+/** The account sheet's open tab, kept while it redraws after an action. */
+let acctTab = { id: -1, key: '' };
+
 async function openAccount(id: number, note?: { text: string; ok: boolean; password?: string }): Promise<void> {
   let d: AdminAccountDetail;
   try {
@@ -947,6 +950,9 @@ async function openAccount(id: number, note?: { text: string; ok: boolean; passw
       h('div', { class: 'row', style: 'margin-top:6px' }, h('label', {}, 'พิมพ์ชื่อเพื่อยืนยัน', input), btn)));
   }
 
+  /** More tabs (added by other features), shown before "จัดการ". */
+  const extraPanes: [string, string, () => Node][] = [];
+
   // Characters
   const chars = d.characters.map((c) => {
     const eq = Object.values(c.equipment).filter((x): x is Item => !!x);
@@ -980,12 +986,37 @@ async function openAccount(id: number, note?: { text: string; ok: boolean; passw
   let sessionsBox: HTMLElement | null = null;
   if (can('sessions')) {
     const holder = h('div', { class: 'muted' }, 'กำลังโหลด…');
-    sessionsBox = h('section', {}, h('h3', {}, 'การเข้าเล่นล่าสุด'), holder);
+    sessionsBox = h('section', {}, h('h3', {}, 'การเข้าเล่นล่าสุด (10 ครั้ง)'), holder);
     void api<PlaySessionRow[]>('GET', `/admin/sessions?account=${id}`).then(
       (rows) => holder.replaceWith(sessionTable(rows.slice(0, 10), false)),
       (e) => (holder.textContent = (e as Error).message),
     );
   }
+  if (sessionsBox) {
+    const box = sessionsBox;
+    extraPanes.push(['sessions', 'การเข้าเล่น', () => box]);
+  }
+  // One tab per character, then the stash, play history and the account tools (owner's choice).
+  const panes: [string, string, () => Node][] = d.characters.map((c, i) => [`c${c.charId}`, c.name, () => chars[i]]);
+  if (!chars.length) panes.push(['none', 'ตัวละคร', () => h('div', { class: 'muted' }, 'ไม่มีตัวละคร')]);
+  if (!a.guest) {
+    panes.push(['stash', 'คลัง', () => h('div', { class: 'char-card' },
+      h('div', { class: 'sub', style: 'margin-top:0' }, d.stash ? `คลัง ${d.stash.size} ช่อง · ทอง ${fmt(d.stash.gold)} G` : 'คลัง'),
+      d.stash ? itemList(d.stash.items, 'คลังว่าง') : h('div', { class: 'muted' }, 'ยังไม่เคยใช้คลัง'))]);
+  }
+  for (const [key, label, make] of extraPanes) panes.push([key, label, make]);
+  if (tools.length) panes.push(['manage', 'จัดการ', () => h('div', {}, ...tools)]);
+  if (acctTab.id !== id || !panes.some(([k]) => k === acctTab.key)) acctTab = { id, key: panes[0][0] };
+  const pane = h('div', { class: 'subpane' });
+  const tabBar = h('div', { class: 'subtabs' });
+  const show = (key: string) => {
+    acctTab = { id, key };
+    tabBar.querySelectorAll<HTMLElement>('button').forEach((b) => b.classList.toggle('on', b.dataset.key === key));
+    pane.replaceChildren(panes.find(([k]) => k === key)![2]());
+  };
+  tabBar.append(...panes.map(([key, label]) => h('button', { class: 'small', 'data-key': key, onclick: () => show(key) }, label)));
+  show(acctTab.key);
+
   const bg = h('div', { class: 'sheet-bg', onclick: (ev: Event) => ev.target === bg && closeSheet() });
   bg.append(h('div', { class: 'sheet' },
     h('div', { class: 'sheet-head' },
@@ -998,13 +1029,9 @@ async function openAccount(id: number, note?: { text: string; ok: boolean; passw
     ),
     h('div', { class: 'result' }, result),
     ...sections,
-    h('section', {}, h('h3', {}, `ตัวละคร ${d.characters.length}/${MAX_CHARACTERS} · ทองรวม ${fmt(a.totalGold)} G`),
-      ...(chars.length ? chars : [h('div', { class: 'muted' }, 'ไม่มีตัวละคร')])),
-    sessionsBox,
-    a.guest ? null : h('section', {},
-      h('h3', {}, d.stash ? `คลัง ${d.stash.size} ช่อง · ทอง ${fmt(d.stash.gold)} G` : 'คลัง'),
-      d.stash ? itemList(d.stash.items, 'คลังว่าง') : h('div', { class: 'muted' }, 'ยังไม่เคยใช้คลัง')),
-    ...tools,
+    h('div', { class: 'muted', style: 'margin-top:8px' }, `ตัวละคร ${d.characters.length}/${MAX_CHARACTERS} · ทองรวม ${fmt(a.totalGold)} G`),
+    tabBar,
+    pane,
   ));
   sheet = bg;
   document.body.append(bg);

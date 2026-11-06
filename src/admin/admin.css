@@ -137,7 +137,7 @@ td.gpu { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-spac
 .sheet section { border-top: 1px solid var(--edge-dim); padding: 12px 0 4px; }
 .sheet section h3 { margin: 0 0 8px; font-size: 14px; color: var(--gold); font-weight: 400; }
 .result { position: sticky; bottom: 0; background: var(--panel); padding-top: 4px; }
-.result:has(.msg:empty) { position: static; }
+.result:has(.msg:empty) { display: none; }
 
 .list-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #2a241b; }
 .list-item .grow { flex: 1; min-width: 0; }
@@ -173,3 +173,10 @@ details summary { cursor: pointer; margin-top: 8px; }
 .chart .hidden { display: none; }
 .chart .tip { position: absolute; top: 0; transform: translateX(-50%); background: #0c0a08; border: 1px solid var(--edge); border-radius: 4px; padding: 2px 8px; font-size: 13px; white-space: nowrap; pointer-events: none; }
 .chat-row .chat-name { color: #9fe0ff; font-weight: 400; }
+
+/* Account sheet: one tab per character, stash, history, tools. Wraps on a phone. */
+.subtabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 10px; }
+.subtabs button { border-radius: 14px; }
+.subtabs button.on { background: var(--panel-2); border-color: var(--gold); color: var(--gold-hi); }
+.subpane > .char-card:first-child { margin-top: 0; }
+.subpane section:first-child { border-top: none; padding-top: 0; }
