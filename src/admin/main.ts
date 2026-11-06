@@ -2,7 +2,7 @@
 // role and every value, so nothing here is a safeguard. Names, GPU strings and the like come from
 // players: they are only ever put on the page as text (never as HTML).
 import './admin.css';
-import { ADMIN_AUDIT_PAGE, BAN_DURATIONS, BAN_FOREVER, BAN_REASON_MAX, BROADCAST_MAX } from '../shared/admin';
+import { ADMIN_AUDIT_PAGE, BAN_DURATIONS, BAN_FOREVER, BAN_REASON_MAX, BROADCAST_EVERY_MS, BROADCAST_MAX } from '../shared/admin';
 import { MAX_CHARACTERS } from '../shared/api';
 import { potionName } from '../shared/data/potions';
 import type {
@@ -251,7 +251,8 @@ function renderOnline(): void {
       h('h2', {}, 'ผู้เล่นออนไลน์ ', total),
       h('div', { class: 'muted', style: 'margin:-6px 0 8px' }, 'อัปเดตทุก 3 วินาที · กดที่แถวเพื่อแก้ไขตัวละคร'),
       h('table', { class: 'cards' },
-        h('thead', {}, h('tr', {}, ...['ตัวละคร', 'บัญชี', 'คลาส', 'Lv', 'โซน', 'เล่นมาแล้ว', 'Ping', 'FPS', 'เฟรมนานสุด', 'GPU', 'IP'].map((t) => h('th', {}, t)))),
+        h('thead', {}, h('tr', {}, ...['ตัวละคร', 'บัญชี', 'คลาส', 'Lv', 'โซน', 'เล่นมาแล้ว', 'Ping', 'FPS', 'เฟรมนานสุด', 'GPU', 'IP',
+          ...(can('broadcast') ? [''] : [])].map((t) => h('th', {}, t)))),
         body,
       ),
       err,
@@ -283,7 +284,7 @@ function renderOnline(): void {
         return tr;
       });
       if (rows.length !== body.children.length || rows.some((tr, i) => body.children[i] !== tr)) body.replaceChildren(...rows);
-      if (!online.players.length) body.append(h('tr', {}, h('td', { colSpan: 11, class: 'muted' }, 'ยังไม่มีใครออนไลน์')));
+      if (!online.players.length) body.append(h('tr', {}, h('td', { colSpan: 12, class: 'muted' }, 'ยังไม่มีใครออนไลน์')));
     }
     if (!document.hidden) timer = window.setTimeout(refresh, REFRESH_MS);
   };
@@ -311,7 +312,27 @@ function onlineRow(p: AdminOnlineRow): HTMLTableRowElement {
     numCell('เฟรมนานสุด', p.maxFrame, ' ms', (p.maxFrame ?? 0) >= FRAME_BAD),
     h('td', { 'data-label': 'GPU', class: 'gpu', title: p.gpu ?? '' }, p.gpu ?? '—'),
     cell('IP', p.ip),
+    can('broadcast')
+      ? h('td', { 'data-label': 'ข้อความ' }, h('button', {
+        class: 'small',
+        onclick: (ev: Event) => {
+          ev.stopPropagation();
+          void announceTo(p.charId, p.name);
+        },
+      }, '📢 ประกาศ'))
+      : null,
   );
+}
+
+/** Asks for a message and sends it to one online player. */
+async function announceTo(charId: number, name: string): Promise<void> {
+  const text = prompt(`ข้อความถึง ${name} (ไม่เกิน ${BROADCAST_MAX} ตัว)`)?.trim();
+  if (!text) return;
+  try {
+    alert((await api<{ msg: string }>('POST', '/admin/broadcast', { text, to: charId })).msg);
+  } catch (e) {
+    alert((e as Error).message);
+  }
 }
 
 // ------------------------------------------------------------ search
@@ -978,14 +999,31 @@ function broadcastCard(): HTMLElement {
   const text = h('textarea', { rows: 3, maxLength: BROADCAST_MAX, placeholder: 'เช่น อีก 30 นาทีจะปิดปรับปรุง' }) as HTMLTextAreaElement;
   const count = h('span', { class: 'muted' }, `0/${BROADCAST_MAX}`);
   const msg = h('div', { class: 'msg' });
-  const btn = h('button', { class: 'primary' }, 'ส่งประกาศ');
+  const btn = h('button', { class: 'primary' }, 'ส่ง');
+  // Everyone, or one online player (the list is filled from the online table).
+  const target = h('select', {}, h('option', { value: '' }, 'ทุกคน'));
+  const fillTargets = async () => {
+    try {
+      const o = await api<AdminOnline>('GET', '/admin/online');
+      const keep = target.value;
+      target.replaceChildren(h('option', { value: '' }, 'ทุกคน'),
+        ...o.players.slice().sort((a, b) => a.name.localeCompare(b.name))
+          .map((p) => h('option', { value: String(p.charId) }, `${p.name} (${p.username})`)));
+      target.value = [...target.options].some((op) => op.value === keep) ? keep : '';
+    } catch {
+      // keep "everyone"
+    }
+  };
+  target.addEventListener('focus', () => void fillTargets());
+  void fillTargets();
   text.oninput = () => (count.textContent = `${text.value.length}/${BROADCAST_MAX}`);
   btn.onclick = async () => {
     if (!text.value.trim()) return;
-    if (!confirm(`ส่งประกาศถึงผู้เล่นทุกคนที่ออนไลน์?\n\n${text.value.trim()}`)) return;
+    const who = target.value ? target.selectedOptions[0].text : 'ผู้เล่นทุกคนที่ออนไลน์';
+    if (!confirm(`ส่งถึง ${who}?\n\n${text.value.trim()}`)) return;
     btn.disabled = true;
     try {
-      const r = await api<{ msg: string }>('POST', '/admin/broadcast', { text: text.value });
+      const r = await api<{ msg: string }>('POST', '/admin/broadcast', { text: text.value, to: target.value ? Number(target.value) : undefined });
       msg.className = 'msg ok';
       msg.textContent = r.msg;
       text.value = '';
@@ -997,7 +1035,9 @@ function broadcastCard(): HTMLElement {
     btn.disabled = false;
   };
   return h('div', { class: 'card' }, h('h2', {}, 'ประกาศถึงผู้เล่น'),
-    h('div', { class: 'muted', style: 'margin:-6px 0 8px' }, 'ผู้เล่นที่ออนไลน์เห็นป้ายประกาศกลางจอ 10 วินาที และข้อความในแชท'),
+    h('div', { class: 'muted', style: 'margin:-6px 0 8px' },
+      `ผู้เล่นเห็นป้ายกลางจอ 10 วินาที และข้อความในแชท พร้อมชื่อผู้ส่ง · ส่งได้ทุก ${BROADCAST_EVERY_MS / 1000} วินาที · ส่งถึงคนเดียวได้จากปุ่ม 📢 ในตารางออนไลน์ด้วย`),
+    h('div', { class: 'row', style: 'margin-bottom:8px' }, h('label', {}, 'ส่งถึง', target)),
     text, h('div', { class: 'row', style: 'margin-top:8px;align-items:center' }, count, h('span', { style: 'flex:1' }), btn), msg);
 }
 

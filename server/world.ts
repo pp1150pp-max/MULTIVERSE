@@ -278,10 +278,14 @@ export class GameWorld {
     return this.stashes.get(accountId);
   }
 
-  /** An announcement from the admin page: a banner and a chat line for everyone in the world. */
-  broadcast(text: string): number {
-    for (const s of this.sessions) this.send(s.ws, { t: 'announce', text });
-    return this.sessions.size;
+  /**
+   * An announcement from the admin page (a banner and a chat line): to everyone in the world, or with
+   * `toCharId` to that one character. Returns how many got it (0 = that character isn't online).
+   */
+  broadcast(text: string, from: string, toCharId?: number): number {
+    const to = toCharId === undefined ? [...this.sessions] : [...this.sessions].filter((s) => s.charId === toCharId);
+    for (const s of to) this.send(s.ws, { t: 'announce', text, from, direct: toCharId !== undefined });
+    return to.length;
   }
 
   /** Accounts with a character in the world right now. */
