@@ -9,9 +9,11 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Db, AdminCharacterRow, SessionAccount } from './db';
 import type { GameWorld } from './world';
 import { bearer, HttpError, readJson, send, str } from './http';
+import { ownerToolsApi } from './admin-tools';
+import type { Backups } from './backup';
 import {
   ADMIN_AUDIT_PAGE, ADMIN_GOLD_MAX, ADMIN_ITEMS_MAX, ADMIN_SEARCH_MAX,
-  type AdminCharRow, type AdminEditResult, type AdminMe, type AdminMeta, type AdminRole, type AdminServerState,
+  canUse, FEATURE_ROLES, type AdminFeature, type AdminCharRow, type AdminEditResult, type AdminMe, type AdminMeta, type AdminRole, type AdminServerState,
 } from '../src/shared/admin';
 import { shutdownCancelled, type ShutdownMode } from '../src/shared/net/protocol';
 import { BAG_SIZE, type CharacterData, type Player } from '../src/shared/sim/Player';
@@ -24,10 +26,10 @@ import { checkUsername } from '../src/shared/api';
 
 const NO_RIGHTS = 'ไม่มีสิทธิ์';
 
-interface Admin { acc: SessionAccount; role: AdminRole }
+export interface Admin { acc: SessionAccount; role: AdminRole }
 
 /** The caller, if their login is valid and their account has an admin role; otherwise 401 / 403. */
-function requireAdmin(req: IncomingMessage, db: Db, need: AdminRole = 'gm'): Admin {
+export function requireAdmin(req: IncomingMessage, db: Db, need: AdminRole = 'gm'): Admin {
   const token = bearer(req);
   const acc = token ? db.sessionAccount(token) : undefined;
   if (!acc) throw new HttpError(401, 'กรุณาเข้าสู่ระบบใหม่');
@@ -37,14 +39,14 @@ function requireAdmin(req: IncomingMessage, db: Db, need: AdminRole = 'gm'): Adm
 }
 
 /** A whole number in [min, max] from the request, or a 400. */
-function int(v: unknown, min: number, max: number, what: string): number {
+export function int(v: unknown, min: number, max: number, what: string): number {
   if (typeof v !== 'number' || !Number.isInteger(v) || v < min || v > max) {
     throw new HttpError(400, `${what}ต้องเป็นจำนวนเต็ม ${min.toLocaleString()}–${max.toLocaleString()}`);
   }
   return v;
 }
 
-function log(db: Db, a: Admin, action: string, target: string, details: string): void {
+export function log(db: Db, a: Admin, action: string, target: string, details: string): void {
   db.audit(a.acc.id, a.acc.username, action, target, details);
   console.log(`[admin] ${a.acc.username} (${a.role}) ${action} ${target}: ${details}`);
 }
@@ -58,7 +60,7 @@ const freeSlots = (bag: (BagEntry | null)[]): number => {
   return n;
 };
 
-function charRow(c: AdminCharacterRow, live: Player | undefined): AdminCharRow {
+export function charRow(c: AdminCharacterRow, live: Player | undefined): AdminCharRow {
   const d: Editable & { classId: CharacterData['classId']; zone?: string } = live
     ? { level: live.level, exp: live.exp, gold: live.gold, bag: live.bag, classId: live.cls.id, zone: live.zone }
     : c.data;
@@ -81,14 +83,16 @@ export interface ServerControl {
 }
 
 export async function adminApi(
-  req: IncomingMessage, res: ServerResponse, path: string, db: Db, world: GameWorld, control: ServerControl,
+  req: IncomingMessage, res: ServerResponse, path: string, db: Db, world: GameWorld, control: ServerControl, backups: Backups,
 ): Promise<void> {
   const method = req.method ?? 'GET';
   const url = new URL(req.url ?? '/', 'http://localhost');
+  if (await ownerToolsApi(req, res, path, method, url, db, world, backups)) return;
 
   if (method === 'GET' && path === '/api/admin/me') {
     const a = requireAdmin(req, db);
-    return send(res, 200, { username: a.acc.username, role: a.role } satisfies AdminMe);
+    const features = (Object.keys(FEATURE_ROLES) as AdminFeature[]).filter((f) => canUse(a.role, f));
+    return send(res, 200, { username: a.acc.username, role: a.role, features } satisfies AdminMe);
   }
 
   if (method === 'GET' && path === '/api/admin/meta') {

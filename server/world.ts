@@ -19,6 +19,7 @@ import { RARITIES, SLOTS, type SlotId, type Vec2 } from '../src/shared/types';
 import type { SkillSlot } from '../src/shared/data/classes';
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
 import type { AdminOnline, AdminOnlineRow } from '../src/shared/admin';
+import { banMessage } from '../src/shared/api';
 
 const AUTOSAVE_MS = 30_000;
 const GUEST_STASH_MSG = 'Guest ใช้คลังเก็บของไม่ได้ — สมัครสมาชิกเพื่อใช้คลัง (ตัวละครนี้จะย้ายไปอยู่ในบัญชีใหม่)';
@@ -76,6 +77,8 @@ interface Session {
   lastFps: number | null;
   /** The client's GPU name once it sent it. */
   gpu: string | null;
+  /** When this connection joined (Date.now()); zone changes keep it, only a new join resets it. */
+  joinedAt: number;
 }
 
 const num = (v: unknown, fallback = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
@@ -200,6 +203,12 @@ export class GameWorld {
       ws.close();
       return null;
     }
+    const ban = acc && this.db.activeBan(acc.id);
+    if (ban) {
+      this.send(ws, { t: 'kick', msg: banMessage(ban.until, ban.reason) });
+      ws.close();
+      return null;
+    }
     if (!acc || !data) {
       this.send(ws, { t: 'kick', msg: acc ? 'ไม่พบตัวละครนี้' : 'กรุณาเข้าสู่ระบบใหม่' });
       ws.close();
@@ -215,10 +224,10 @@ export class GameWorld {
     }
     const sim = this.sims.get(zoneById(data.zone).id)!;
     const player = sim.addPlayer(data);
+    this.db.touchOnline(acc.id);
     if (acc.guest) {
       // Guests can't use the stash (onAction refuses it); this empty one is never saved.
       player.stash = cleanStash(null);
-      this.db.touchOnline(acc.id);
     } else {
       let stash = this.stashes.get(acc.id);
       if (!stash) {
@@ -232,7 +241,7 @@ export class GameWorld {
       move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null,
       auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', outbox: [], lastChatAt: 0, saveDue: null,
       ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0,
-      hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null,
+      hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
     };
     this.sessions.add(s);
     this.byPlayer.set(player, s);
@@ -262,6 +271,21 @@ export class GameWorld {
       this.leave(s);
       s.ws.close();
     }
+  }
+
+  /** The live stash of an account with someone online (the saved one may be up to 30 s old). */
+  liveStash(accountId: number): StashData | undefined {
+    return this.stashes.get(accountId);
+  }
+
+  /**
+   * An announcement from the admin page (a banner and a chat line): to everyone in the world, or with
+   * `toCharId` to that one character. Returns how many got it (0 = that character isn't online).
+   */
+  broadcast(text: string, from: string, toCharId?: number): number {
+    const to = toCharId === undefined ? [...this.sessions] : [...this.sessions].filter((s) => s.charId === toCharId);
+    for (const s of to) this.send(s.ws, { t: 'announce', text, from, direct: toCharId !== undefined });
+    return to.length;
   }
 
   /** Accounts with a character in the world right now. */
@@ -700,7 +724,7 @@ export class GameWorld {
       rtt: s.lastRtt === null ? null : Math.round(s.lastRtt),
       fps: s.lastFps === null ? null : Math.round(s.lastFps),
       maxFrame: s.fpsCount ? Math.round(s.maxFrame) : null,
-      hidden: s.hidden, gpu: s.gpu, ip: s.ip,
+      hidden: s.hidden, gpu: s.gpu, ip: s.ip, playedMs: Date.now() - s.joinedAt,
     }));
     return { zones, players };
   }
@@ -748,11 +772,11 @@ export class GameWorld {
     try {
       if (s.guest) {
         this.db.saveCharacter(s.charId, s.player.toData());
-        this.db.touchOnline(s.accountId);
       } else {
         // Together with the stash, so an item never ends up in both or neither.
         this.db.saveCharacterAndStash(s.charId, s.player.toData(), s.accountId, s.player.stash);
       }
+      this.db.touchOnline(s.accountId);
     } catch (e) {
       console.error(`[world] saving ${s.player.name} failed`, e);
     }

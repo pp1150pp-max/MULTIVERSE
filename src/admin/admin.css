@@ -142,3 +142,18 @@ td.gpu { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-spac
 .list-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #2a241b; }
 .list-item .grow { flex: 1; min-width: 0; }
 @media (max-width: 420px) { .tabs { padding: 10px 8px 0; gap: 2px; } .tabs button { padding: 8px 9px; font-size: 14px; } }
+
+/* ---------------------------------------------------------------- users + owner tools */
+
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--gold-hi); }
+.tag.ban { border-color: #a0453a; color: #ffb3a8; }
+textarea { font-family: inherit; font-size: 15px; color: var(--ink); background: #0c0a08; border: 1px solid var(--edge-dim); border-radius: 4px; padding: 8px 10px; width: 100%; resize: vertical; }
+textarea:focus { outline: none; border-color: var(--gold); }
+.char-card { border: 1px solid var(--edge-dim); border-radius: 6px; padding: 10px; margin-bottom: 10px; background: var(--panel-2); }
+.char-card .sub { margin-top: 8px; font-size: 13px; color: var(--gold); }
+ul.items { margin: 4px 0 0; padding-left: 18px; font-size: 14px; }
+ul.items li { margin: 2px 0; }
+details summary { cursor: pointer; margin-top: 8px; }
+.temp-pw { border: 1px solid var(--gold); background: #2a2210; border-radius: 6px; padding: 10px; margin: 8px 0; }
+.temp-pw code { display: block; font-size: 24px; letter-spacing: 2px; color: var(--gold-hi); margin-top: 4px; user-select: all; }

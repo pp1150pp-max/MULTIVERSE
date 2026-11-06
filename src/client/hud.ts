@@ -27,6 +27,8 @@ import { shutdownCancelled, shutdownWarning, type ShutdownMode } from '../shared
 
 /** Yellow, like the game's level-up lines. */
 const SHUTDOWN_COLOR = '#ffd34a';
+/** How long an owner's announcement banner stays up. */
+const ANNOUNCE_MS = 10_000;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -1426,6 +1428,30 @@ export class Hud {
     }
     el.textContent = text;
     this.log(text, SHUTDOWN_COLOR);
+  }
+
+  /** An announcement from the server's owner: a banner for a while (like the restart warning) and a chat line. */
+  announce(text: string, from: string, direct: boolean): void {
+    document.getElementById('announce-banner')?.remove();
+    const el = document.createElement('div');
+    el.id = 'announce-banner';
+    // Text only (textContent), so nothing the sender types can become HTML on anyone's screen.
+    const head = document.createElement('div');
+    head.className = 'announce-head';
+    head.textContent = direct ? '📢 ข้อความจาก GM ถึงคุณ' : '📢 ประกาศ';
+    const body = document.createElement('div');
+    body.textContent = text;
+    const sign = document.createElement('div');
+    sign.className = 'announce-from';
+    sign.textContent = `— ${from}`;
+    el.append(head, body, sign);
+    $('hud').append(el);
+    setTimeout(() => el.remove(), ANNOUNCE_MS);
+    const line = document.createElement('div');
+    line.className = 'log-line';
+    line.style.color = SHUTDOWN_COLOR;
+    line.textContent = direct ? `📢 ข้อความจาก ${from} ถึงคุณ: ${text}` : `📢 ประกาศ: ${text} — ${from}`;
+    this.pushLog(line, ANNOUNCE_MS * 3);
   }
 
   showDisconnect(msg: string): void {

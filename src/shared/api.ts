@@ -52,5 +52,13 @@ export const GUEST_PER_IP_HOUR = 5;
 export interface CharacterSummary { id: number; name: string; classId: ClassId; level: number }
 export interface CreateCharacterRequest { name: string; classId: ClassId }
 
+/** Why a banned account can't play: shown at login and when joining. `until` = BAN_FOREVER is permanent. */
+export function banMessage(until: number, reason: string): string {
+  const when = until >= 8_000_000_000_000_000
+    ? 'ถาวร'
+    : `ถึง ${new Date(until).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })}`;
+  return `บัญชีนี้ถูกระงับ${when}${reason ? ` — เหตุผล: ${reason}` : ''}`;
+}
+
 /** Every failed request answers with this body and a 4xx/5xx status. */
 export interface ApiError { error: string }

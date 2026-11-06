@@ -89,3 +89,7 @@ npm run stop-server -- --restart # เหมือนกัน แต่ npm run
   - ตั้ง owner ได้จาก command line เท่านั้น: `npm run admin-role -- <ชื่อผู้ใช้> owner|gm|none` (DB ตาม `DB_FILE` ค่าเริ่มต้นคือ DB จริง)
   - server ตรวจ role ทุก request · แก้ตัวละครออนไลน์ผ่าน Player ตัวจริงใน `server/world.ts` แล้วเซฟทันที · ทุกการกระทำลงตาราง `admin_audit`
   - เพดานต่อครั้ง (ทอง 1,000,000 / ไอเทม 10 ชิ้น) อยู่ใน `src/shared/admin.ts`
+  - เครื่องมือ owner (ผู้ใช้ทั้งหมด, ตั้งรหัสผ่านชั่วคราว, แบน, ประกาศ, สำรองข้อมูล) เปิดให้ GM ได้ทีละอย่างที่ `FEATURE_ROLES` ใน `src/shared/admin.ts` (เพิ่ม `'gm'`) · การลบบัญชี/ตัวละครเป็นของ owner เสมอ (ไม่มีสวิตช์)
+  - แบน: คอลัมน์ `accounts.ban_until` / `ban_reason` · login และการเข้าโลกถูกปฏิเสธพร้อมเหตุผล
+  - สำรอง DB: `server/data/backups/` (`VACUUM INTO`) อัตโนมัติวันละครั้งเก็บ 7 ไฟล์, กดเองเก็บ 10, ก่อนลบเก็บ 20 (`BACKUP_KEEP` ใน `server/backup.ts`)
+  - กู้คืน: `npm run stop-server` → ลบ `multiverse.db-wal` / `multiverse.db-shm` → คัดลอกไฟล์สำรองทับ `server/data/multiverse.db` → `npm run online`
