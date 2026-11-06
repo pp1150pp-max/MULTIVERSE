@@ -361,7 +361,7 @@ function stats(db: Db, world: GameWorld, range: StatsRange): AdminStats {
     signups: days,
     avgLevel: avg(lv),
     avgPing: avg(ping),
-    now: { online: world.onlineAccounts().length, avgLevelAll: db.averageLevel() },
+    now: { online: world.onlineCount, avgLevelAll: db.averageLevel() },
     since: db.samples(0)[0]?.at ?? null,
   };
 }
