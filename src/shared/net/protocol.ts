@@ -153,7 +153,24 @@ export type ServerMsg =
   | { t: 'error'; msg: string }
   | { t: 'pong'; id: number }
   /** The connection is about to close; `msg` explains why. */
-  | { t: 'kick'; msg: string };
+  | { t: 'kick'; msg: string }
+  /** The server stops (or restarts) in `seconds`; sent once a second during the countdown. */
+  | { t: 'shutdown'; mode: ShutdownMode; seconds: number };
+
+/** How the server is going away: `restart` comes back by itself (under npm run online), `shutdown` doesn't. */
+export type ShutdownMode = 'restart' | 'shutdown';
+/** Seconds players are warned before the server stops. */
+export const SHUTDOWN_SECONDS = 10;
+/** Exit code that asks npm run online (server/online-main.ts) to start the server again. */
+export const RESTART_EXIT_CODE = 75;
+
+export function shutdownWarning(mode: ShutdownMode, seconds: number): string {
+  return `⚠ Server จะ${mode === 'restart' ? 'รีสตาร์ท' : 'ปิด'}ใน ${seconds} วินาที`;
+}
+/** Shown when the connection closes because of it. */
+export function shutdownKick(mode: ShutdownMode): string {
+  return mode === 'restart' ? 'Server กำลังรีสตาร์ท — รอสักครู่แล้วรีเฟรชหน้า' : 'Server ปิดแล้ว';
+}
 
 /** Rounds coordinates so snapshots stay small. */
 export const r2 = (v: number) => Math.round(v * 100) / 100;

@@ -4,9 +4,10 @@
 import './admin.css';
 import { ADMIN_AUDIT_PAGE } from '../shared/admin';
 import type {
-  AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AuditRow, RoleRow,
+  AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AuditRow, RoleRow,
 } from '../shared/admin';
 import { CLASSES } from '../shared/data/classes';
+import { SHUTDOWN_SECONDS, type ShutdownMode } from '../shared/net/protocol';
 import { RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, type ClassId } from '../shared/types';
 
 const ADMIN_TOKEN = 'multiverse-admin-token';
@@ -93,7 +94,7 @@ const root = document.getElementById('admin')!;
 let me: AdminMe | null = null;
 let meta: AdminMeta | null = null;
 let online: AdminOnline | null = null;
-type Tab = 'online' | 'search' | 'roles' | 'audit';
+type Tab = 'online' | 'search' | 'roles' | 'audit' | 'server';
 let tab: Tab = 'online';
 let timer = 0;
 
@@ -195,9 +196,9 @@ async function start(): Promise<void> {
 function renderShell(): void {
   if (!me) return;
   const tabs: [Tab, string][] = [['online', 'ออนไลน์'], ['search', 'ค้นหาตัวละคร']];
-  if (me.role === 'owner') tabs.push(['roles', 'สิทธิ์ GM'], ['audit', 'ประวัติ']);
+  if (me.role === 'owner') tabs.push(['roles', 'สิทธิ์ GM'], ['audit', 'ประวัติ'], ['server', 'Server']);
   const bar = h('nav', { class: 'tabs' }, ...tabs.map(([id, label]) =>
-    h('button', { class: id === tab ? 'on' : '', onclick: () => setTab(id) }, label)));
+    h('button', { class: id === tab ? 'on' : '', 'data-tab': id, onclick: () => setTab(id) }, label)));
   root.replaceChildren(
     h('header', { class: 'top' },
       h('div', { class: 'brand' }, 'MULTIVERSE', h('small', {}, 'ผู้ดูแล')),
@@ -213,12 +214,13 @@ function renderShell(): void {
 function setTab(t: Tab): void {
   tab = t;
   stopRefresh();
-  document.querySelectorAll('.tabs button').forEach((b, i) => b.classList.toggle('on', ['online', 'search', 'roles', 'audit'][i] === t));
+  document.querySelectorAll<HTMLElement>('.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
   view.replaceChildren();
   if (t === 'online') renderOnline();
   else if (t === 'search') renderSearch();
   else if (t === 'roles') void renderRoles();
-  else void renderAudit();
+  else if (t === 'audit') void renderAudit();
+  else void renderServer();
 }
 
 function stopRefresh(): void {
@@ -569,6 +571,7 @@ async function renderRoles(): Promise<void> {
 
 const ACTION_TH: Record<string, string> = {
   level: 'ตั้งเลเวล', gold: 'ทอง', items: 'เสกไอเทม', kick: 'เตะ', teleport: 'ย้ายโซน', grant: 'ให้สิทธิ์', revoke: 'ถอนสิทธิ์',
+  server: 'Server',
 };
 
 async function renderAudit(): Promise<void> {
@@ -604,6 +607,56 @@ async function renderAudit(): Promise<void> {
       body,
     ), more, msg));
   await load();
+}
+
+// ------------------------------------------------------------ server (owner)
+
+async function renderServer(): Promise<void> {
+  const status = h('div', { class: 'msg' });
+  const restart = h('button', { class: 'primary' }, 'รีสตาร์ท');
+  const stop = h('button', { class: 'danger' }, 'ปิด server');
+  const draw = (st: AdminServerState) => {
+    restart.disabled = stop.disabled = !!st.stopping;
+    restart.title = st.supervised ? '' : 'server นี้ไม่ได้เปิดด้วย npm run online';
+    if (!st.supervised) restart.disabled = true;
+    if (st.stopping) {
+      status.className = 'msg bad';
+      status.textContent = st.stopping === 'restart'
+        ? `กำลังนับถอยหลังรีสตาร์ท (${SHUTDOWN_SECONDS} วินาที) — หน้านี้จะต่อไม่ได้ชั่วครู่ แล้วรีเฟรชใหม่`
+        : `กำลังนับถอยหลังปิด server (${SHUTDOWN_SECONDS} วินาที)`;
+    }
+  };
+  const go = async (mode: ShutdownMode, btn: HTMLButtonElement) => {
+    const what = mode === 'restart' ? 'รีสตาร์ท server' : 'ปิด server';
+    if (!confirm(`${what}?
+
+ผู้เล่นทุกคนจะเห็นคำเตือน ${SHUTDOWN_SECONDS} วินาที แล้วถูกเซฟและตัดการเชื่อมต่อ`)) return;
+    btn.disabled = true;
+    try {
+      draw(await api<AdminServerState>('POST', '/admin/server', { mode }));
+    } catch (e) {
+      status.className = 'msg bad';
+      status.textContent = (e as Error).message;
+      btn.disabled = false;
+    }
+  };
+  restart.onclick = () => void go('restart', restart);
+  stop.onclick = () => void go('shutdown', stop);
+  const note = h('div', { class: 'muted', style: 'margin:-6px 0 10px' },
+    `ทั้งสองแบบ: ผู้เล่นเห็นคำเตือนนับถอยหลัง ${SHUTDOWN_SECONDS} วินาที และเข้าเกมใหม่ไม่ได้ระหว่างนั้น แล้ว server เซฟทุกคนก่อนตัดการเชื่อมต่อ · `
+    + 'รีสตาร์ท = เปิดใหม่ด้วยโค้ดที่ build ไว้แล้ว (ไม่ build ใหม่) ลิงก์เพื่อนไม่เปลี่ยน · ปิด server = ปิดเลย ต้องเปิดใหม่เองที่เครื่อง');
+  view.append(h('div', { class: 'card' }, h('h2', {}, 'รีสตาร์ท / ปิด server'), note, h('div', { class: 'row' }, restart, stop), status));
+  try {
+    const st = await api<AdminServerState>('GET', '/admin/server');
+    draw(st);
+    if (!st.supervised && !st.stopping) {
+      status.className = 'msg';
+      status.textContent = 'server นี้ไม่ได้เปิดด้วย npm run online จึงรีสตาร์ทเองไม่ได้ (ปิดได้อย่างเดียว)';
+    }
+  } catch (e) {
+    status.className = 'msg bad';
+    status.textContent = (e as Error).message;
+  }
 }
 
 void start();

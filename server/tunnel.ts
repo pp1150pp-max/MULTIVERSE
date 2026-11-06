@@ -81,7 +81,7 @@ export function announceShared(link: string): void {
   announce(link, true);
 }
 
-function announce(link: string, stays = false): void {
+function announce(link: string, stays = false, keptBy = 'npm run tunnel'): void {
   const copied = copyToClipboard(link);
   const line = '='.repeat(64);
   console.log(`\n${line}`);
@@ -89,13 +89,13 @@ function announce(link: string, stays = false): void {
   console.log(`\n     ${link}\n`);
   console.log(`  ${copied ? '📋 คัดลอกลิงก์ไว้แล้ว — กด Ctrl+V วางส่งเพื่อนได้เลย' : 'คัดลอกลิงก์ด้านบนส่งให้เพื่อน'}`);
   console.log(stays
-    ? '  ลิงก์นี้อยู่ตราบที่หน้าต่าง npm run tunnel ยังเปิดอยู่ — ปิด/เปิด server ใหม่ ลิงก์ไม่เปลี่ยน'
+    ? `  ลิงก์นี้อยู่ตราบที่หน้าต่าง ${keptBy} ยังเปิดอยู่ — ${keptBy === 'npm run tunnel' ? 'ปิด/เปิด server ใหม่' : 'รีสตาร์ท server'} ลิงก์ไม่เปลี่ยน`
     : '  ลิงก์นี้ใช้ได้จนกว่าจะปิด server — เปิดใหม่จะได้ลิงก์ใหม่\n  (อยากให้ลิงก์ไม่เปลี่ยนตอนอัปเดตเกม: เปิด npm run tunnel ค้างไว้อีกหน้าต่างหนึ่ง)');
   console.log(`${line}\n`);
 }
 
 /** Starts the tunnel (downloading cloudflared on first use); resolves to the child process (kill it on shutdown) or null when it can't start. */
-export async function startTunnel(port: number, opts: { shared?: boolean } = {}): Promise<ChildProcess | null> {
+export async function startTunnel(port: number, opts: { shared?: boolean; keptBy?: string } = {}): Promise<ChildProcess | null> {
   const exe = findCloudflared() ?? (await download());
   const help = () => {
     console.log('\n  ⚠ เปิดลิงก์สำหรับเพื่อนไม่ได้ เพราะหาโปรแกรม cloudflared ไม่เจอ และดาวน์โหลดไม่สำเร็จ');
@@ -108,7 +108,11 @@ export async function startTunnel(port: number, opts: { shared?: boolean } = {})
   let found = false;
   let child: ChildProcess;
   try {
-    child = spawn(exe, ['tunnel', '--no-autoupdate', '--url', `http://localhost:${port}`], { stdio: ['ignore', 'pipe', 'pipe'] });
+    // Its own process group on Windows (hidden), so Ctrl+C in the server window doesn't cut the link while
+    // the server is still counting down; whoever started it kills it when done.
+    child = spawn(exe, ['tunnel', '--no-autoupdate', '--url', `http://localhost:${port}`], {
+      stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform === 'win32', windowsHide: true,
+    });
   } catch {
     help();
     return null;
@@ -118,7 +122,7 @@ export async function startTunnel(port: number, opts: { shared?: boolean } = {})
     const m = LINK_RE.exec(chunk.toString());
     if (m) {
       found = true;
-      announce(m[0], opts.shared);
+      announce(m[0], opts.shared, opts.keptBy);
       if (opts.shared && child.pid) saveState(child.pid, m[0], port);
     }
   };

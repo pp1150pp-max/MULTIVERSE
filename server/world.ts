@@ -12,7 +12,7 @@ import { POTION_SIZES } from '../src/shared/data/potions';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../src/shared/sim/types';
 import { AUTO_HINT_COLOR, AutoPlay, type AutoWorld } from '../src/shared/sim/autoplay';
 import {
-  CHAT_MAX, GPU_NAME_MAX, INTEREST_RADIUS, PING_MS, isSoftwareRenderer, SNAPSHOT_HZ, TICK_HZ, WS_PATH, r2,
+  CHAT_MAX, GPU_NAME_MAX, shutdownKick, type ShutdownMode, INTEREST_RADIUS, PING_MS, isSoftwareRenderer, SNAPSHOT_HZ, TICK_HZ, WS_PATH, r2,
   type ClientMsg, type InputMsg, type ActionMsg, type PrivateSnap, type ServerMsg, type SnapshotMsg,
 } from '../src/shared/net/protocol';
 import { RARITIES, SLOTS, type SlotId, type Vec2 } from '../src/shared/types';
@@ -130,6 +130,8 @@ export class GameWorld {
    * so nothing can be copied by having two characters open it.
    */
   private readonly stashes = new Map<number, StashData>();
+  /** Set while the server counts down to stopping: no new players may join. */
+  private closing: ShutdownMode | null = null;
   private last = performance.now();
   private tickN = 0;
 
@@ -193,6 +195,11 @@ export class GameWorld {
     const acc = typeof token === 'string' ? this.db.sessionAccount(token) : undefined;
     const charId = num(characterId, -1);
     const data = acc ? this.db.loadCharacter(acc.id, charId) : undefined;
+    if (this.closing) {
+      this.send(ws, { t: 'kick', msg: `Server กำลัง${this.closing === 'restart' ? 'รีสตาร์ท' : 'ปิด'} — รอสักครู่แล้วเข้าใหม่` });
+      ws.close();
+      return null;
+    }
     if (!acc || !data) {
       this.send(ws, { t: 'kick', msg: acc ? 'ไม่พบตัวละครนี้' : 'กรุณาเข้าสู่ระบบใหม่' });
       ws.close();
@@ -644,6 +651,34 @@ export class GameWorld {
     };
     s.outbox = [];
     this.send(s.ws, msg);
+  }
+
+  // ------------------------------------------------------------ stopping the server (server/main.ts)
+
+  get closingMode(): ShutdownMode | null {
+    return this.closing;
+  }
+
+  /** From now on joins are refused; tells everyone the server stops in `seconds`. */
+  announceShutdown(mode: ShutdownMode, seconds: number): void {
+    this.closing = mode;
+    for (const s of this.sessions) this.send(s.ws, { t: 'shutdown', mode, seconds });
+  }
+
+  /**
+   * Saves every character (with its stash, like a normal logout) and closes every connection with a
+   * message saying why. Returns how many were online.
+   */
+  closeAll(mode: ShutdownMode): number {
+    this.closing = mode;
+    const all = [...this.sessions];
+    for (const s of all) {
+      this.send(s.ws, { t: 'kick', msg: shutdownKick(mode) });
+      this.leave(s);
+      // 1012 = service restart, 1001 = going away.
+      s.ws.close(mode === 'restart' ? 1012 : 1001, mode);
+    }
+    return all.length;
   }
 
   // ------------------------------------------------------------ admin page (server/admin.ts)

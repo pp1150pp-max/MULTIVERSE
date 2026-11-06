@@ -683,3 +683,14 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
   #hud-ping { position: absolute; top: 112px; right: 2px; margin: 0; padding: 0 4px; border-radius: 3px; background: rgba(0, 0, 0, 0.6); }
   #hud { --orb: min(190px, 20vw, 32vh); }
 }
+
+/* Server stopping/restarting: stays up and ticks down until the connection closes. */
+#shutdown-banner {
+  position: absolute; left: 50%; top: 14%; transform: translateX(-50%); z-index: 6;
+  max-width: calc(100% - 32px); text-align: center; pointer-events: none;
+  padding: 10px 22px; border: 2px solid #ffd34a; border-radius: 8px;
+  background: rgba(30, 20, 4, 0.88); color: #ffd34a;
+  font-size: 30px; font-weight: 600; text-shadow: 0 0 6px #000, 2px 2px 0 #000;
+  box-shadow: 0 0 24px rgba(255, 211, 74, 0.35);
+}
+@media (max-width: 700px) { #shutdown-banner { font-size: 20px; top: 18%; } }

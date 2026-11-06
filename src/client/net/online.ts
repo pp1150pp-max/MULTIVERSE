@@ -13,7 +13,7 @@ import { zoneById, type SpawnArea, type ZoneDef } from '../../shared/data/zones'
 import type { NpcId } from '../../shared/data/npcs';
 import type { PotionKind, PotionSize, Rarity, SlotId, Vec2 } from '../../shared/types';
 import type { SkillSlot } from '../../shared/data/classes';
-import { INPUT_HZ, PING_MS, WS_PATH, type ClientMsg, type ServerMsg, type SnapshotMsg } from '../../shared/net/protocol';
+import { INPUT_HZ, PING_MS, WS_PATH, type ClientMsg, type ServerMsg, type ShutdownMode, type SnapshotMsg } from '../../shared/net/protocol';
 import type { Backend, EnhanceOutcome, ProjectileLike } from '../backend';
 
 /** Mirrors never run game logic, so they don't need a simulation behind them. */
@@ -106,6 +106,8 @@ export class OnlineBackend implements Backend {
   /** Hooks for the game screen. */
   onChat: ((name: string, text: string) => void) | null = null;
   onDisconnect: ((msg: string) => void) | null = null;
+  /** The server stops or restarts in `seconds` (sent once a second). */
+  onShutdown: ((mode: ShutdownMode, seconds: number) => void) | null = null;
 
   private readonly playerMap = new Map<number, Player>();
   private readonly monsterMap = new Map<number, Monster>();
@@ -275,6 +277,9 @@ export class OnlineBackend implements Backend {
       }
       case 'kick':
         this.kickMsg = m.msg;
+        break;
+      case 'shutdown':
+        this.onShutdown?.(m.mode, m.seconds);
         break;
       case 'pong': {
         const at = this.pingsOut.get(m.id);

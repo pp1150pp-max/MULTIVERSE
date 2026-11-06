@@ -141,3 +141,4 @@ td.gpu { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-spac
 
 .list-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #2a241b; }
 .list-item .grow { flex: 1; min-width: 0; }
+@media (max-width: 420px) { .tabs { padding: 10px 8px 0; gap: 2px; } .tabs button { padding: 8px 9px; font-size: 14px; } }

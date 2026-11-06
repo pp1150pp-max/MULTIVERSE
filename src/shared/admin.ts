@@ -1,6 +1,7 @@
 // Admin page (/admin): roles, limits and the shapes of the /api/admin requests, shared by the page
 // and the server. The server checks the role and every value on each call; the page is only a view.
 import type { ClassId, Rarity, SlotId } from './types';
+import type { ShutdownMode } from './net/protocol';
 
 /** owner: everything, plus granting/revoking GM. gm: view and edit players. */
 export type AdminRole = 'owner' | 'gm';
@@ -77,3 +78,6 @@ export interface AuditRow { id: number; at: number; admin: string; action: strin
 
 /** Every admin edit answers with a Thai line for the page and the character as it is now. */
 export interface AdminEditResult { msg: string; char: AdminCharRow | null }
+
+/** Owner's server panel: whether a restart comes back by itself, and a countdown already running. */
+export interface AdminServerState { supervised: boolean; stopping: ShutdownMode | null }

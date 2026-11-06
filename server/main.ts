@@ -18,6 +18,9 @@ import { newCharacterData } from '../src/shared/sim/Player';
 import { GameWorld } from './world';
 import { bearer, HttpError, readJson, send, str } from './http';
 import { adminApi } from './admin';
+import { controlFilePath, isLocalControl, STOP_PATH, type ControlFile } from './control';
+import { RESTART_EXIT_CODE, SHUTDOWN_SECONDS, type ShutdownMode } from '../src/shared/net/protocol';
+import { rmSync, writeFileSync } from 'node:fs';
 import { announceShared, runningTunnel, startTunnel } from './tunnel';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -26,6 +29,13 @@ const DB_FILE = process.env.DB_FILE ?? join(ROOT, 'server', 'data', 'multiverse.
 const DIST = join(ROOT, 'dist');
 /** `--public`: also open a Cloudflare link so friends can join from anywhere (npm run online). */
 const PUBLIC = process.argv.includes('--public');
+
+/** Set by npm run online (server/online-main.ts), which starts the server again after a restart. */
+const SUPERVISED = process.env.MULTIVERSE_SUPERVISED === '1';
+/** Countdown before stopping; SHUTDOWN_SECONDS env only shortens it for tests. */
+const SHUTDOWN_S = Math.min(SHUTDOWN_SECONDS, Math.max(1, Math.floor(Number(process.env.SHUTDOWN_SECONDS) || SHUTDOWN_SECONDS)));
+const CONTROL_FILE = controlFilePath(DB_FILE, PORT);
+const CONTROL_TOKEN = randomBytes(32).toString('hex');
 
 const db = new Db(DB_FILE);
 const limiter = new AttemptLimiter();
@@ -67,7 +77,18 @@ function startSession(accountId: number, username: string): AuthResponse {
 async function api(req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
   const method = req.method ?? 'GET';
 
-  if (path.startsWith('/api/admin/')) return adminApi(req, res, path, db, world);
+  if (path.startsWith('/api/admin/')) {
+    return adminApi(req, res, path, db, world, { supervised: SUPERVISED, stopping: () => stopMode, stop: beginStop });
+  }
+
+  // npm run stop-server (server/stop-main.ts): only from this computer, with the token in CONTROL_FILE.
+  if (method === 'POST' && path === STOP_PATH) {
+    if (!isLocalControl(req, CONTROL_TOKEN)) throw new HttpError(403, 'Forbidden');
+    const body = await readJson(req);
+    const err = beginStop(body.mode === 'restart' ? 'restart' : 'shutdown', 'npm run stop-server');
+    if (err && !stopMode) throw new HttpError(400, err);
+    return send(res, 202, { seconds: SHUTDOWN_S, mode: stopMode, note: err });
+  }
 
   if (method === 'POST' && path === '/api/register') {
     const ip = clientIp(req);
@@ -274,6 +295,7 @@ cleanupGuests();
 setInterval(cleanupGuests, CLEANUP_MS);
 
 server.listen(PORT, '0.0.0.0', () => {
+  writeFileSync(CONTROL_FILE, JSON.stringify({ pid: process.pid, port: PORT, token: CONTROL_TOKEN } satisfies ControlFile));
   console.log(`\nMULTIVERSE server พร้อมแล้ว — port ${PORT}`);
   console.log(`  เครื่องนี้:   http://localhost:${PORT}`);
   for (const list of Object.values(networkInterfaces())) {
@@ -287,17 +309,69 @@ server.listen(PORT, '0.0.0.0', () => {
   const shared = PUBLIC ? runningTunnel(PORT) : null;
   if (shared) announceShared(shared);
   else if (PUBLIC) void startTunnel(PORT).then((t) => (tunnel = t));
-  else console.log('  (อยากได้ลิงก์ให้เพื่อนนอกบ้าน: ปิดหน้าต่างนี้ แล้วใช้ npm run online แทน)\n');
+  else if (!SUPERVISED) console.log('  (อยากได้ลิงก์ให้เพื่อนนอกบ้าน: ปิดหน้าต่างนี้ แล้วใช้ npm run online แทน)\n');
 });
 
 let tunnel: Awaited<ReturnType<typeof startTunnel>> = null;
 
-const shutdown = () => {
-  world.saveAll();
+// ------------------------------------------------------------ stopping
+
+/**
+ * Every way of stopping (Ctrl+C, npm run stop-server, the admin page) warns the players for
+ * SHUTDOWN_SECONDS, then saves everyone and exits. A restart exits with RESTART_EXIT_CODE, and
+ * npm run online (server/online-main.ts) starts the server again.
+ */
+let stopMode: ShutdownMode | null = null;
+let stopTimer: ReturnType<typeof setTimeout> | undefined;
+let finished = false;
+
+function beginStop(mode: ShutdownMode, by: string): string | null {
+  if (stopMode) return `กำลัง${stopMode === 'restart' ? 'รีสตาร์ท' : 'ปิด'}อยู่แล้ว`;
+  if (mode === 'restart' && !SUPERVISED) return 'server นี้ไม่ได้เปิดด้วย npm run online จึงเปิดใหม่เองไม่ได้ — ใช้ "ปิด server" แล้วเปิดใหม่เอง';
+  stopMode = mode;
+  console.log(`
+[server] ${by}: ${mode === 'restart' ? 'restarting' : 'shutting down'} in ${SHUTDOWN_S} s (players warned)`);
+  let left = SHUTDOWN_S;
+  const tick = () => {
+    if (left <= 0) return finishStop(mode);
+    world.announceShutdown(mode, left);
+    left--;
+    stopTimer = setTimeout(tick, 1000);
+  };
+  tick();
+  return null;
+}
+
+function finishStop(mode: ShutdownMode): void {
+  if (finished) return;
+  finished = true;
+  clearTimeout(stopTimer);
+  let n = 0;
+  try {
+    n = world.closeAll(mode);
+  } catch (e) {
+    console.error('[server] saving players failed', e);
+  }
+  console.log(`[server] saved and disconnected ${n} player(s); ${mode === 'restart' ? 'restarting' : 'stopped'}`);
+  rmSync(CONTROL_FILE, { force: true });
   tunnel?.kill();
   server.close();
-  db.close();
-  process.exit(0);
+  // A moment for the goodbye messages to go out before the process ends.
+  setTimeout(() => {
+    db.close();
+    process.exit(mode === 'restart' ? RESTART_EXIT_CODE : 0);
+  }, 300);
+}
+
+// Ctrl+C / kill: count down; a second Ctrl+C during the countdown stops right away (still saving everyone).
+const onSignal = () => {
+  if (stopMode) {
+    console.log('[server] stopping now');
+    finishStop(stopMode);
+  } else {
+    beginStop('shutdown', 'Ctrl+C');
+    console.log('  (กด Ctrl+C อีกครั้งเพื่อปิดทันที — ยังเซฟทุกคนก่อนปิด)');
+  }
 };
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+process.on('SIGINT', onSignal);
+process.on('SIGTERM', onSignal);

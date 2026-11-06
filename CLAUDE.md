@@ -26,7 +26,17 @@ npm run test       # เทสต์อัตโนมัติใน tests/ (�
 npm run server     # server ตัวจริงที่ http://localhost:2567 (เสิร์ฟ dist/, DB server/data/multiverse.db)
 npm run online     # build + server + ลิงก์ Cloudflare ให้เพื่อนเข้า (ถ้า npm run tunnel เปิดอยู่ จะใช้ลิงก์ของมัน)
 npm run tunnel     # ลิงก์ให้เพื่อนอย่างเดียว เปิดค้างไว้ → รีสตาร์ท server แล้วลิงก์ไม่เปลี่ยน
+npm run stop-server              # ปิด server (port 2567) แบบเตือนผู้เล่น 10 วิ + เซฟทุกคน แล้วรอจนปิดเสร็จ
+npm run stop-server -- --restart # เหมือนกัน แต่ npm run online เปิด server ใหม่เอง (โค้ดที่ build ไว้แล้ว ไม่ build ใหม่)
 ```
+
+- **ปิด/รีสตาร์ท server จริงต้องผ่าน countdown เสมอ** (ผู้เล่นเห็นป้ายเตือน 10 วินาที, เข้าเกมใหม่ไม่ได้ระหว่างนั้น, เซฟทุกคนพร้อมคลังก่อนปิด)
+  - อัปเดตเกม: `npm run stop-server` → รอจนขึ้น "server ปิดแล้ว" → `npm run online` (build ใหม่แล้วเปิด)
+  - **อย่า kill task/หน้าต่างของ `npm run online` ตรง ๆ** บน Windows node จะตายทันทีโดยไม่เตือนและไม่เซฟ (เสียของที่ยังไม่เซฟ ~30 วิ)
+  - Ctrl+C ในหน้าต่าง server = นับถอยหลังแบบเดียวกัน · กด Ctrl+C ซ้ำ = ปิดทันที (ยังเซฟทุกคน)
+  - owner กดได้จากหน้า `/admin` แท็บ Server (รีสตาร์ท / ปิด server)
+  - `npm run online` (`server/online-main.ts`) เปิด server ใหม่เองเมื่อ server ออกด้วย exit code 75 (รีสตาร์ท) และถือลิงก์ Cloudflare ไว้เอง รีสตาร์ทแล้วลิงก์ไม่เปลี่ยน
+  - `npm run stop-server` คุยกับ server ผ่าน token ในไฟล์ `server/data/control-<port>.json` (สร้างตอน server เปิด) รับเฉพาะจากเครื่องนี้
 
 - เทสต์อัตโนมัติมีเฉพาะระบบ Guest/บัญชี (`tests/`) ที่เหลือตรวจด้วย `npm run build` และเปิดเกมลองเล่นจริง
   - เพิ่มเทสต์ใหม่: ไฟล์ `tests/*.test.ts` ใช้ `ok()`/`finish()` จาก `tests/check.ts` แล้วเพิ่มเข้าสคริปต์ `test` ใน `package.json`

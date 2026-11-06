@@ -19,6 +19,7 @@ function launch(backend: OnlineBackend): void {
   const game = new Game($('app'), backend);
   backend.onChat = (name, text) => game.hud.chatLine(name, text);
   backend.onDisconnect = (msg) => game.hud.showDisconnect(msg);
+  backend.onShutdown = (mode, seconds) => game.hud.shutdownCountdown(mode, seconds);
   start(game, backend.me.cls.id);
 }
 

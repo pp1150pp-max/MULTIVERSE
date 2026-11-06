@@ -23,6 +23,10 @@ import { drawMapIcon, facingAngle } from './mapIcons';
 import type { MapIcon } from './mapIconNames';
 import { NPC_MAP_ICON } from './fullmap';
 import { COIN_ICON, emptySlotIcon, FORGE_ICON, itemIcon, potionIcon, skillIcon } from './icons';
+import { shutdownWarning, type ShutdownMode } from '../shared/net/protocol';
+
+/** Yellow, like the game's level-up lines. */
+const SHUTDOWN_COLOR = '#ffd34a';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -1401,7 +1405,24 @@ export class Hud {
     this.pushLog(el, fadeMs);
   }
 
+  /**
+   * The server is about to stop or restart: a banner that stays up and ticks down (until the
+   * connection closes), and the same count as yellow lines in the chat.
+   */
+  shutdownCountdown(mode: ShutdownMode, seconds: number): void {
+    const text = shutdownWarning(mode, seconds);
+    let el = document.getElementById('shutdown-banner');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'shutdown-banner';
+      $('hud').append(el);
+    }
+    el.textContent = text;
+    this.log(text, SHUTDOWN_COLOR);
+  }
+
   showDisconnect(msg: string): void {
+    document.getElementById('shutdown-banner')?.remove();
     $('disconnect-msg').textContent = msg;
     $('disconnect').classList.remove('hidden');
   }

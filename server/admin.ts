@@ -11,8 +11,9 @@ import type { GameWorld } from './world';
 import { bearer, HttpError, readJson, send, str } from './http';
 import {
   ADMIN_AUDIT_PAGE, ADMIN_GOLD_MAX, ADMIN_ITEMS_MAX, ADMIN_SEARCH_MAX,
-  type AdminCharRow, type AdminEditResult, type AdminMe, type AdminMeta, type AdminRole,
+  type AdminCharRow, type AdminEditResult, type AdminMe, type AdminMeta, type AdminRole, type AdminServerState,
 } from '../src/shared/admin';
+import type { ShutdownMode } from '../src/shared/net/protocol';
 import { BAG_SIZE, type CharacterData, type Player } from '../src/shared/sim/Player';
 import { expToNext, MAX_LEVEL } from '../src/shared/formulas';
 import { ZONES, zoneById } from '../src/shared/data/zones';
@@ -68,7 +69,18 @@ function charRow(c: AdminCharacterRow, live: Player | undefined): AdminCharRow {
   };
 }
 
-export async function adminApi(req: IncomingMessage, res: ServerResponse, path: string, db: Db, world: GameWorld): Promise<void> {
+/** Stopping the server, from main.ts (the same countdown as Ctrl+C and npm run stop-server). */
+export interface ServerControl {
+  /** Started by npm run online, which can start the server again after a restart. */
+  supervised: boolean;
+  stopping(): ShutdownMode | null;
+  /** Starts the countdown; returns why it can't, or null. */
+  stop(mode: ShutdownMode, by: string): string | null;
+}
+
+export async function adminApi(
+  req: IncomingMessage, res: ServerResponse, path: string, db: Db, world: GameWorld, control: ServerControl,
+): Promise<void> {
   const method = req.method ?? 'GET';
   const url = new URL(req.url ?? '/', 'http://localhost');
 
@@ -143,6 +155,22 @@ export async function adminApi(req: IncomingMessage, res: ServerResponse, path: 
     requireAdmin(req, db, 'owner');
     const before = Number(url.searchParams.get('before'));
     return send(res, 200, db.auditLog(ADMIN_AUDIT_PAGE, Number.isSafeInteger(before) && before > 0 ? before : undefined));
+  }
+
+  if (method === 'GET' && path === '/api/admin/server') {
+    requireAdmin(req, db, 'owner');
+    return send(res, 200, { supervised: control.supervised, stopping: control.stopping() } satisfies AdminServerState);
+  }
+
+  if (method === 'POST' && path === '/api/admin/server') {
+    const a = requireAdmin(req, db, 'owner');
+    const body = await readJson(req);
+    const mode: ShutdownMode | null = body.mode === 'restart' ? 'restart' : body.mode === 'shutdown' ? 'shutdown' : null;
+    if (!mode) throw new HttpError(400, 'เลือก รีสตาร์ท หรือ ปิด server');
+    const err = control.stop(mode, `admin page (${a.acc.username})`);
+    if (err) throw new HttpError(409, err);
+    log(db, a, 'server', 'server', mode === 'restart' ? 'รีสตาร์ท' : 'ปิด server');
+    return send(res, 200, { supervised: control.supervised, stopping: control.stopping() } satisfies AdminServerState);
   }
 
   throw new HttpError(404, 'ไม่พบ API นี้');
