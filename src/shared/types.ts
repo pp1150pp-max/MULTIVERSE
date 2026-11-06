@@ -58,8 +58,10 @@ export interface Item {
   level: number;
   stats: Partial<Stats>;
   value: number;
-  /** Weapon enhancement level from the blacksmith (+0 when missing). */
+  /** Enhancement level from the blacksmith (+0 when missing). */
   plus?: number;
+  /** Failed enhancement attempts since the last success; each one raises the next chance a little. */
+  pity?: number;
   /** Class that can wear it (weapons and armor). Missing = any class, or an older item (see itemClass). */
   cls?: ClassId;
   /**
@@ -91,9 +93,41 @@ export interface PotionStack {
   count: number;
 }
 
+/** Boss-only blacksmith materials: protection keeps the + level on a fail, enhance is needed from +11. */
+export type StoneKind = 'protect' | 'enhance';
+export const STONE_KINDS: StoneKind[] = ['protect', 'enhance'];
+
+/** Stones of one kind sharing a bag slot (up to STONE_STACK). */
+export interface StoneStack {
+  stone: StoneKind;
+  count: number;
+}
+
 /** Anything a bag slot can hold. */
-export type BagEntry = Item | PotionStack;
+export type BagEntry = Item | PotionStack | StoneStack;
+/** Bag entries that stack: potions and stones. */
+export type Stack = PotionStack | StoneStack;
 
 export function isPotion(e: BagEntry | null | undefined): e is PotionStack {
   return !!e && 'potion' in e;
+}
+
+export function isStone(e: BagEntry | null | undefined): e is StoneStack {
+  return !!e && 'stone' in e;
+}
+
+export function isStack(e: BagEntry | null | undefined): e is Stack {
+  return isPotion(e) || isStone(e);
+}
+
+/** Gear (anything that isn't a stack). */
+export function isItem(e: BagEntry | null | undefined): e is Item {
+  return !!e && !isStack(e);
+}
+
+/** Two stacks that may merge: the same potion kind and size, or the same stone. */
+export function sameStack(a: BagEntry | null | undefined, b: BagEntry | null | undefined): boolean {
+  if (isPotion(a) && isPotion(b)) return a.potion === b.potion && a.size === b.size;
+  if (isStone(a) && isStone(b)) return a.stone === b.stone;
+  return false;
 }

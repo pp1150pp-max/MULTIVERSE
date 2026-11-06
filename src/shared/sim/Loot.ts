@@ -1,12 +1,14 @@
 import type { Sim } from './Sim';
 import type { Player } from './Player';
-import type { Item, PotionKind, PotionSize } from '../types';
+import type { Item, PotionKind, PotionSize, StoneKind } from '../types';
 
 export type LootKind =
   | { type: 'gold'; amount: number }
   | { type: 'item'; item: Item }
   /** `count` > 1 when a player throws a whole stack on the ground. */
-  | { type: 'potion'; pot: PotionKind; size: PotionSize; count: number };
+  | { type: 'potion'; pot: PotionKind; size: PotionSize; count: number }
+  /** Blacksmith stones (boss drops, or a stack a player threw away). */
+  | { type: 'stone'; stone: StoneKind; count: number };
 
 /** Seconds of the pop-out arc when loot drops; it can't be picked up before it lands. */
 export const LOOT_POP_TIME = 0.35;

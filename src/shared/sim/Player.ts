@@ -6,12 +6,13 @@ import type { Intent } from './types';
 import { castSkill, basicAttack } from './skills';
 import { CLASSES, type ClassDef, type SkillDef, type SkillSlot } from '../data/classes';
 import { addInto, BASE_MOVE_SPEED, emptyStats } from '../formulas';
-import { effectiveStats, sellValue } from '../data/enhance';
+import { auraTier, effectiveStats, plusOf, sellValue } from '../data/enhance';
 import { itemClass, starterWeapon } from '../data/items';
-import { POTIONS, POTION_SIZES, POTION_STACK, stackSellValue } from '../data/potions';
+import { anyStackValue, POTIONS, POTION_SIZES, POTION_STACK, stackLimit } from '../data/potions';
+import { STONE_STACK } from '../data/stones';
 import {
-  isPotion, RARITIES, SLOTS,
-  type BagEntry, type ClassId, type Item, type PotionKind, type PotionSize, type Rarity, type SlotId, type Stats, type Vec2,
+  isPotion, isStack, isStone, RARITIES, sameStack, SLOTS, STONE_KINDS,
+  type BagEntry, type StoneKind, type ClassId, type Item, type PotionKind, type PotionSize, type Rarity, type SlotId, type Stats, type Vec2,
 } from '../types';
 import type { LootKind } from './Loot';
 import { newStash, type StashData } from './stash';
@@ -113,14 +114,16 @@ export function buybackPrice(e: BuybackEntry): number {
 
 /**
  * Bag or stash slots rearranged by `key`, same length back. Gear is ordered by that key (ties: slot,
- * rarity, level); potions always come after the gear, merged into full stacks. Empty slots go last.
+ * rarity, level); potions then stones always come after the gear, merged into full stacks. Empty slots go last.
  */
 export function sortEntries(list: readonly (BagEntry | null)[], key: SortKey, desc: boolean): (BagEntry | null)[] {
   const items: Item[] = [];
   const pots = new Map<string, number>();
+  const stones = new Map<StoneKind, number>();
   for (const e of list) {
     if (!e) continue;
     if (isPotion(e)) pots.set(`${e.potion}:${e.size}`, (pots.get(`${e.potion}:${e.size}`) ?? 0) + e.count);
+    else if (isStone(e)) stones.set(e.stone, (stones.get(e.stone) ?? 0) + e.count);
     else items.push(e);
   }
   const rank = (it: Item): number => {
@@ -146,6 +149,10 @@ export function sortEntries(list: readonly (BagEntry | null)[], key: SortKey, de
     for (let n = pots.get(`${k}:${s}`) ?? 0; n > 0; n -= POTION_STACK) {
       stacks.push({ potion: k, size: s, count: Math.min(n, POTION_STACK) });
     }
+  }
+  // Stones last, merged into full stacks too.
+  for (const k of STONE_KINDS) {
+    for (let n = stones.get(k) ?? 0; n > 0; n -= STONE_STACK) stacks.push({ stone: k, count: Math.min(n, STONE_STACK) });
   }
   const all = [...items, ...stacks];
   return Array.from({ length: list.length }, (_, i) => all[i] ?? null);
@@ -208,6 +215,11 @@ export class Player extends Unit {
    * character of the account, so whoever runs the Sim hands the same object to each of them.
    */
   stash: StashData = newStash();
+  /**
+   * Enhancement aura tier (see auraTier): from the highest + item worn. The server works it out;
+   * other players' mirrors in the browser have no equipment, so theirs comes from the snapshot.
+   */
+  aura = 0;
   stats: Stats = emptyStats();
   cd: Partial<Record<SkillSlot, number>> = {};
   potCd = 0;
@@ -307,7 +319,13 @@ export class Player extends Unit {
     const s = emptyStats();
     addInto(s, this.cls.base);
     addInto(s, this.cls.growth, this.level - 1);
-    for (const it of Object.values(this.equipment)) if (it) addInto(s, effectiveStats(it));
+    let best = 0;
+    for (const it of Object.values(this.equipment)) {
+      if (!it) continue;
+      addInto(s, effectiveStats(it));
+      best = Math.max(best, plusOf(it));
+    }
+    this.aura = auraTier(best);
     // Regen is cut so players lean on potions; applied last so gear is cut too.
     s.hpRegen *= HP_REGEN_MULT;
     s.mpRegen *= MP_REGEN_MULT;
@@ -351,6 +369,7 @@ export class Player extends Unit {
   wantsLoot(kind: LootKind, dropped: boolean): boolean {
     if (kind.type === 'gold' || dropped) return true;
     if (kind.type === 'potion') return lootPots(this.lootFilter)[kind.pot].includes(kind.size);
+    if (kind.type === 'stone') return true;
     return this.lootFilter.rarities.includes(kind.item.rarity);
   }
 
@@ -358,6 +377,7 @@ export class Player extends Unit {
   canFit(kind: LootKind): boolean {
     if (kind.type === 'gold') return true;
     if (kind.type === 'potion') return this.potionRoom(kind.pot, kind.size) >= kind.count;
+    if (kind.type === 'stone') return this.stoneRoom(kind.stone) >= kind.count;
     return this.hasBagSpace();
   }
 
@@ -387,7 +407,7 @@ export class Player extends Unit {
       this.potSel[item.potion] = item.size;
       return;
     }
-    if (!this.canEquip(item)) return;
+    if (isStone(item) || !this.canEquip(item)) return;
     this.bag[i] = this.equipment[item.slot] ?? null;
     this.equipment[item.slot] = item;
     this.recompute();
@@ -395,15 +415,15 @@ export class Player extends Unit {
 
   /**
    * Drag & drop inside the bag: moves slot `from` onto slot `to`.
-   * The same potion (kind and size) merges up to a full stack; anything else swaps places.
+   * The same potion (kind and size) or stone merges up to a full stack; anything else swaps places.
    */
   moveInBag(from: number, to: number): void {
     if (from === to) return;
     const a = this.bag[from];
     const b = this.bag[to];
     if (!a) return;
-    if (isPotion(a) && isPotion(b) && a.potion === b.potion && a.size === b.size && b.count < POTION_STACK) {
-      const n = Math.min(a.count, POTION_STACK - b.count);
+    if (isStack(a) && isStack(b) && sameStack(a, b) && b.count < stackLimit(b)) {
+      const n = Math.min(a.count, stackLimit(b) - b.count);
       b.count += n;
       a.count -= n;
       if (a.count <= 0) this.bag[from] = null;
@@ -424,10 +444,10 @@ export class Player extends Unit {
   sell(i: number): number {
     const item = this.bag[i];
     if (!item) return 0;
-    const v = isPotion(item) ? stackSellValue(item) : sellValue(item);
+    const v = isStack(item) ? anyStackValue(item) : sellValue(item);
     this.bag[i] = null;
     this.gold += v;
-    if (!isPotion(item)) this.rememberSold(item, v);
+    if (!isStack(item)) this.rememberSold(item, v);
     return v;
   }
 
@@ -508,6 +528,68 @@ export class Player extends Unit {
     const e = this.bag[at];
     if (!isPotion(e)) return false;
     if (--e.count <= 0) this.bag[at] = null;
+    return true;
+  }
+
+  // ------------------------------------------------------------ stones
+
+  /** Stones of this kind in the bag. */
+  stoneCount(kind: StoneKind): number {
+    let n = 0;
+    for (const e of this.bag) if (isStone(e) && e.stone === kind) n += e.count;
+    return n;
+  }
+
+  /** How many more of these stones fit: room left in matching stacks plus empty slots. */
+  stoneRoom(kind: StoneKind): number {
+    let n = 0;
+    for (const e of this.bag) {
+      if (!e) n += STONE_STACK;
+      else if (isStone(e) && e.stone === kind) n += STONE_STACK - e.count;
+    }
+    return n;
+  }
+
+  /** Adds all `n` stones (topping up stacks first), or nothing if they don't all fit. */
+  addStones(kind: StoneKind, n: number): boolean {
+    if (n <= 0 || this.stoneRoom(kind) < n) return false;
+    for (const e of this.bag) {
+      if (n <= 0) break;
+      if (isStone(e) && e.stone === kind && e.count < STONE_STACK) {
+        const add = Math.min(n, STONE_STACK - e.count);
+        e.count += add;
+        n -= add;
+      }
+    }
+    for (let i = 0; i < this.bag.length && n > 0; i++) {
+      if (this.bag[i]) continue;
+      const add = Math.min(n, STONE_STACK);
+      this.bag[i] = { stone: kind, count: add };
+      n -= add;
+    }
+    return true;
+  }
+
+  /** Removes `n` stones (emptiest stacks first), or nothing if there aren't enough. */
+  takeStones(kind: StoneKind, n: number): boolean {
+    if (n <= 0) return true;
+    if (this.stoneCount(kind) < n) return false;
+    while (n > 0) {
+      let at = -1;
+      let least = Infinity;
+      this.bag.forEach((e, i) => {
+        if (isStone(e) && e.stone === kind && e.count < least) {
+          least = e.count;
+          at = i;
+        }
+      });
+      const e = this.bag[at];
+      if (!isStone(e)) return false;
+      const take = Math.min(n, e.count);
+      e.count -= take;
+      n -= take;
+      if (e.count <= 0) this.bag[at] = null;
+    }
     return true;
   }
 

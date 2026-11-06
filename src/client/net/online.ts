@@ -373,6 +373,7 @@ export class OnlineBackend implements Backend {
       }
       p.alive = ps.alive;
       p.dashT = ps.dash ? 1 : 0;
+      p.aura = ps.aura ?? 0;
       if (ps.dash) p.dashKind = ps.dash;
       if (p === this.me) {
         this.applyMine(s, ps.x, ps.z, ps.fx, ps.fz, ps.mv);
@@ -676,9 +677,9 @@ export class OnlineBackend implements Backend {
   stashBuyRow(): void { this.send({ t: 'act', a: 'stashBuy' }); }
   stashGold(amount: number): void { this.send({ t: 'act', a: 'stashGold', amount }); }
 
-  enhance(uid: string): Promise<EnhanceOutcome> {
+  enhance(uid: string, protect: boolean): Promise<EnhanceOutcome> {
     const req = ++this.enhanceReq;
-    this.send({ t: 'act', a: 'enhance', uid, req });
+    this.send({ t: 'act', a: 'enhance', uid, protect, req });
     return new Promise((resolve) => {
       this.enhanceWait.set(req, resolve);
       setTimeout(() => {

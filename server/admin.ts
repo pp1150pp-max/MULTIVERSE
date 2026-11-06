@@ -245,7 +245,6 @@ function editCharacter(db: Db, world: GameWorld, a: Admin, charId: number, what:
       const rarity = RARITIES.find((r) => r === body.rarity);
       if (!rarity) throw new HttpError(400, 'ระดับความหายากไม่ถูกต้อง');
       const plus = int(body.plus ?? 0, 0, MAX_PLUS, 'ระดับตีบวก');
-      if (plus > 0 && base.slot !== 'weapon') throw new HttpError(400, 'ตีบวกได้เฉพาะอาวุธ');
       const count = int(body.count ?? 1, 1, ADMIN_ITEMS_MAX, 'จำนวนชิ้น');
       const asked = int(body.level ?? d.level, 1, MAX_LEVEL, 'เลเวลไอเทม');
       // An item type never drops below its own minimum level, so a spawned one doesn't either.

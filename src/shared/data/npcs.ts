@@ -8,7 +8,7 @@ export const NPC_IDS: NpcId[] = ['seeker', 'merchant', 'blacksmith', 'keeper'];
 export const NPC_INFO: Record<NpcId, { name: string; action: string; icon: string; role: string }> = {
   seeker: { name: 'The Seeker', action: 'คุย', icon: 'npc_talk', role: 'คุย / เนื้อเรื่อง' },
   merchant: { name: 'พ่อค้า', action: 'ซื้อ/ขายของ', icon: 'npc_shop', role: 'ร้านค้า' },
-  blacksmith: { name: 'ช่างตีเหล็ก', action: 'ตีบวกอาวุธ', icon: 'npc_forge', role: 'ตีบวก' },
+  blacksmith: { name: 'ช่างตีเหล็ก', action: 'ตีบวกอุปกรณ์', icon: 'npc_forge', role: 'ตีบวก' },
   keeper: { name: 'ผู้ดูแลคลัง', action: 'เปิดคลังเก็บของ', icon: 'npc_stash', role: 'คลังเก็บของ' },
 };
 

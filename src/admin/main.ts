@@ -4,13 +4,13 @@
 import './admin.css';
 import { ADMIN_AUDIT_PAGE, ADMIN_NO_RIGHTS as NO_RIGHTS, HISTORY_DAYS, HISTORY_PAGE, BAN_DURATIONS, BAN_FOREVER, BAN_REASON_MAX, BROADCAST_EVERY_MS, BROADCAST_MAX } from '../shared/admin';
 import { MAX_CHARACTERS } from '../shared/api';
-import { potionName } from '../shared/data/potions';
+import { entryName } from '../shared/data/potions';
 import type {
   AdminAccountDetail, AdminAccountsResponse, AdminFeature, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AuditRow, RoleRow,
 } from '../shared/admin';
 import { CLASSES } from '../shared/data/classes';
 import { SHUTDOWN_SECONDS, type ShutdownMode } from '../shared/net/protocol';
-import { isPotion, RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, type BagEntry, type ClassId, type Item } from '../shared/types';
+import { isStack, RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, type BagEntry, type ClassId, type Item } from '../shared/types';
 
 const ADMIN_TOKEN = 'multiverse-admin-token';
 /** The game's own login: used when the owner is already logged in to the game in this browser. */
@@ -469,21 +469,12 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
   const rarity = h('select', {}, ...m.rarities.map((r) => h('option', { value: r, style: `color:${RARITY_COLOR[r]}` }, RARITY_LABEL[r])));
   const plus = h('select', {}, ...Array.from({ length: m.maxPlus + 1 }, (_, i) => h('option', { value: String(i) }, `+${i}`)));
   const plusWrap = h('label', {}, 'ตีบวก', plus);
-  const syncPlus = () => {
-    const weapon = m.bases.find((b) => b.id === base.value)?.slot === 'weapon';
-    plusWrap.classList.toggle('hidden', !weapon);
-    if (!weapon) plus.value = '0';
-  };
   if (m.bases.some((b) => b.id === form.baseId)) base.value = form.baseId;
   rarity.value = form.rarity;
   plus.value = form.plus;
-  base.onchange = () => {
-    form.baseId = base.value;
-    syncPlus();
-  };
+  base.onchange = () => (form.baseId = base.value);
   rarity.onchange = () => (form.rarity = rarity.value);
   plus.onchange = () => (form.plus = plus.value);
-  syncPlus();
   const itemLv = numInput(c.level, 1, m.maxLevel);
   const count = numInput(Number(form.count) || 1, 1, m.itemsMax);
   count.oninput = () => (form.count = count.value);
@@ -856,7 +847,7 @@ async function renderUsers(): Promise<void> {
 let reloadUsers: () => void = () => {};
 
 function itemLabel(e: BagEntry): Node {
-  if (isPotion(e)) return h('span', {}, `${potionName(e.potion, e.size)} ×${e.count}`);
+  if (isStack(e)) return h('span', {}, entryName(e));
   return h('span', { style: `color:${RARITY_COLOR[e.rarity]}` },
     `${e.plus ? `+${e.plus} ` : ''}${e.name}`, h('span', { class: 'muted' }, ` Lv.${e.level} · ${RARITY_LABEL[e.rarity]}`));
 }

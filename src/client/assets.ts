@@ -163,6 +163,9 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   icon_coin: single('icons/coin.png', () => drawIcon('coin')),
   icon_potion_hp: single('icons/potion_hp.png', () => drawIcon('potion_hp')),
   icon_potion_mp: single('icons/potion_mp.png', () => drawIcon('potion_mp')),
+  // No painted icons yet: until icons/stone_*.png exist the placeholder gems are used.
+  icon_stone_protect: single('icons/stone_protect.png', () => drawIcon('stone_protect')),
+  icon_stone_enhance: single('icons/stone_enhance.png', () => drawIcon('stone_enhance')),
   ...Object.fromEntries(ITEM_ART.map((name) => [name, single(`icons/${name}.png`, () => drawIcon('bag'))])),
 };
 

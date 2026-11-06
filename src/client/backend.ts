@@ -64,7 +64,8 @@ export interface Backend {
   /** Buy back entry `i` of the merchant's buyback list (`uid` guards against a list that just changed). */
   buyBack(i: number, uid: string): void;
   sellAllOfRarity(rarity: Rarity): void;
-  enhance(uid: string): Promise<EnhanceOutcome>;
+  /** `protect` = use a protection stone if a fail would drop the level. */
+  enhance(uid: string, protect: boolean): Promise<EnhanceOutcome>;
   chat(text: string): void;
   npcDistance(id: NpcId): number;
 
