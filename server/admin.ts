@@ -12,7 +12,7 @@ import { bearer, HttpError, readJson, send, str } from './http';
 import { ownerToolsApi } from './admin-tools';
 import type { Backups } from './backup';
 import {
-  ADMIN_AUDIT_PAGE, ADMIN_GOLD_MAX, ADMIN_ITEMS_MAX, ADMIN_SEARCH_MAX,
+  ADMIN_AUDIT_PAGE, ADMIN_GOLD_MAX, ADMIN_NO_RIGHTS, ADMIN_ITEMS_MAX, ADMIN_SEARCH_MAX,
   canUse, FEATURE_ROLES, type AdminFeature, type AdminCharRow, type AdminEditResult, type AdminMe, type AdminMeta, type AdminRole, type AdminServerState,
 } from '../src/shared/admin';
 import { shutdownCancelled, type ShutdownMode } from '../src/shared/net/protocol';
@@ -24,7 +24,8 @@ import { MAX_PLUS } from '../src/shared/data/enhance';
 import { RARITIES, RARITY_LABEL, type BagEntry } from '../src/shared/types';
 import { checkUsername } from '../src/shared/api';
 
-const NO_RIGHTS = 'ไม่มีสิทธิ์';
+const NO_RIGHTS = ADMIN_NO_RIGHTS;
+const GM_SCOPE = 'GM แก้ไขตัวละครของ owner หรือ GM คนอื่นไม่ได้';
 
 export interface Admin { acc: SessionAccount; role: AdminRole }
 
@@ -193,6 +194,10 @@ function editCharacter(db: Db, world: GameWorld, a: Admin, charId: number, what:
   const c = db.adminCharacter(charId);
   if (!c) throw new HttpError(404, 'ไม่พบตัวละครนี้');
   const target = `${c.name} (${c.guest ? 'Guest' : c.username}, #${c.id})`;
+  // GMs edit normal players and their own characters only; the owner's and other GMs' are off limits.
+  if (a.role !== 'owner' && c.accountId !== a.acc.id && !c.guest && db.adminRole(c.accountId)) {
+    throw new HttpError(403, GM_SCOPE);
+  }
   // Online: change the live character (a DB edit would be overwritten by its next save).
   // Everything below runs synchronously, so the character can't log in or out half way.
   const live = world.livePlayer(charId);
@@ -225,6 +230,7 @@ function editCharacter(db: Db, world: GameWorld, a: Admin, charId: number, what:
     case 'gold': {
       const delta = int(body.delta, -ADMIN_GOLD_MAX, ADMIN_GOLD_MAX, 'จำนวนทอง');
       if (delta === 0) throw new HttpError(400, 'จำนวนทองต้องไม่เป็น 0');
+      if (delta < 0 && d.gold < -delta) throw new HttpError(400, `ทองไม่พอ (มี ${d.gold.toLocaleString()} G)`);
       const before = d.gold;
       d.gold = Math.max(0, before + delta);
       const change = d.gold - before;
@@ -241,7 +247,10 @@ function editCharacter(db: Db, world: GameWorld, a: Admin, charId: number, what:
       const plus = int(body.plus ?? 0, 0, MAX_PLUS, 'ระดับตีบวก');
       if (plus > 0 && base.slot !== 'weapon') throw new HttpError(400, 'ตีบวกได้เฉพาะอาวุธ');
       const count = int(body.count ?? 1, 1, ADMIN_ITEMS_MAX, 'จำนวนชิ้น');
-      const level = int(body.level ?? d.level, 1, MAX_LEVEL, 'เลเวลไอเทม');
+      const asked = int(body.level ?? d.level, 1, MAX_LEVEL, 'เลเวลไอเทม');
+      // An item type never drops below its own minimum level, so a spawned one doesn't either.
+      const level = Math.max(asked, base.minLevel);
+      const adjusted = level !== asked ? `ปรับเลเวลไอเทมเป็น Lv.${level} (ขั้นต่ำของชนิดนี้)` : '';
       const free = freeSlots(d.bag);
       if (free === 0) throw new HttpError(400, 'กระเป๋าเต็ม');
       const n = Math.min(count, free);
@@ -255,9 +264,9 @@ function editCharacter(db: Db, world: GameWorld, a: Admin, charId: number, what:
         d.bag[i] = item;
       }
       const label = `${plus ? `+${plus} ` : ''}${name} [${RARITY_LABEL[rarity]}] Lv.${level}`;
-      msg = n < count ? `ใส่ได้ ${n}/${count} ชิ้น — กระเป๋าเต็ม (${label})` : `เสกให้ ${n} ชิ้น: ${label}`;
+      msg = (n < count ? `ใส่ได้ ${n}/${count} ชิ้น — กระเป๋าเต็ม (${label})` : `เสกให้ ${n} ชิ้น: ${label}`) + (adjusted ? ` · ${adjusted}` : '');
       tell = `GM มอบไอเทม ${label} × ${n}`;
-      log(db, a, 'items', target, `${label} × ${n}${n < count ? ` (ขอ ${count}, กระเป๋าเต็ม)` : ''}`);
+      log(db, a, 'items', target, `${label} × ${n}${n < count ? ` (ขอ ${count}, กระเป๋าเต็ม)` : ''}${adjusted ? ` · ${adjusted}` : ''}`);
       break;
     }
     case 'kick': {

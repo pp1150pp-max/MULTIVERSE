@@ -6,6 +6,9 @@ import type { ShutdownMode } from './net/protocol';
 /** owner: everything, plus granting/revoking GM. gm: view and edit players. */
 export type AdminRole = 'owner' | 'gm';
 export const ADMIN_ROLES: AdminRole[] = ['owner', 'gm'];
+/** The 403 text when a login has no admin role (or not this one); the page treats it as "signed out of admin". */
+export const ADMIN_NO_RIGHTS = 'ไม่มีสิทธิ์';
+
 export const isAdminRole = (v: unknown): v is AdminRole => v === 'owner' || v === 'gm';
 
 // Limits per admin action (change them here).
