@@ -49,6 +49,8 @@ export interface AdminOnlineRow {
   hidden: boolean;
   gpu: string | null;
   ip: string;
+  /** How long this session has been in the game (since the join; zone changes don't reset it). */
+  playedMs: number;
 }
 
 export interface AdminOnline {

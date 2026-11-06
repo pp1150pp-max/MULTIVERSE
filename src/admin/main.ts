@@ -86,6 +86,11 @@ async function api<T>(method: string, path: string, body?: unknown): Promise<T> 
 }
 
 const fmt = (n: number): string => n.toLocaleString('th-TH');
+/** "12 นาที", or "1 ชม. 5 นาที" from an hour on. */
+const playedFor = (ms: number): string => {
+  const m = Math.floor(ms / 60000);
+  return m < 60 ? `${m} นาที` : `${Math.floor(m / 60)} ชม. ${m % 60} นาที`;
+};
 const className = (id: ClassId): string => CLASSES[id]?.nameTh ?? id;
 const time = (ms: number): string =>
   new Date(ms).toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -246,7 +251,7 @@ function renderOnline(): void {
       h('h2', {}, 'ผู้เล่นออนไลน์ ', total),
       h('div', { class: 'muted', style: 'margin:-6px 0 8px' }, 'อัปเดตทุก 3 วินาที · กดที่แถวเพื่อแก้ไขตัวละคร'),
       h('table', { class: 'cards' },
-        h('thead', {}, h('tr', {}, ...['ตัวละคร', 'บัญชี', 'คลาส', 'Lv', 'โซน', 'Ping', 'FPS', 'เฟรมนานสุด', 'GPU', 'IP'].map((t) => h('th', {}, t)))),
+        h('thead', {}, h('tr', {}, ...['ตัวละคร', 'บัญชี', 'คลาส', 'Lv', 'โซน', 'เล่นมาแล้ว', 'Ping', 'FPS', 'เฟรมนานสุด', 'GPU', 'IP'].map((t) => h('th', {}, t)))),
         body,
       ),
       err,
@@ -278,7 +283,7 @@ function renderOnline(): void {
         return tr;
       });
       if (rows.length !== body.children.length || rows.some((tr, i) => body.children[i] !== tr)) body.replaceChildren(...rows);
-      if (!online.players.length) body.append(h('tr', {}, h('td', { colSpan: 10, class: 'muted' }, 'ยังไม่มีใครออนไลน์')));
+      if (!online.players.length) body.append(h('tr', {}, h('td', { colSpan: 11, class: 'muted' }, 'ยังไม่มีใครออนไลน์')));
     }
     if (!document.hidden) timer = window.setTimeout(refresh, REFRESH_MS);
   };
@@ -300,6 +305,7 @@ function onlineRow(p: AdminOnlineRow): HTMLTableRowElement {
     cell('คลาส', className(p.classId)),
     cell('Lv', String(p.level), 'num'),
     cell('โซน', zoneName(p.zone)),
+    cell('เล่นมาแล้ว', playedFor(p.playedMs), 'num'),
     numCell('Ping', p.rtt, ' ms', (p.rtt ?? 0) > PING_BAD),
     p.hidden && p.fps === null ? cell('FPS', 'แท็บซ่อน', 'num muted') : numCell('FPS', p.fps, '', p.fps !== null && p.fps < FPS_BAD),
     numCell('เฟรมนานสุด', p.maxFrame, ' ms', (p.maxFrame ?? 0) >= FRAME_BAD),
