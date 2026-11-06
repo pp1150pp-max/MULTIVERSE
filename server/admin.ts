@@ -13,7 +13,7 @@ import { ownerToolsApi } from './admin-tools';
 import type { Backups } from './backup';
 import {
   ADMIN_AUDIT_PAGE, ADMIN_GOLD_MAX, ADMIN_NO_RIGHTS, ADMIN_ITEMS_MAX, ADMIN_SEARCH_MAX,
-  canUse, FEATURE_ROLES, type AdminFeature, type AdminCharRow, type AdminEditResult, type AdminMe, type AdminMeta, type AdminRole, type AdminServerState,
+  canUse, customItem, FEATURE_ROLES, type AdminFeature, type AdminCharRow, type AdminEditResult, type AdminMe, type AdminMeta, type AdminRole, type AdminServerState,
 } from '../src/shared/admin';
 import { shutdownCancelled, type ShutdownMode } from '../src/shared/net/protocol';
 import { BAG_SIZE, type CharacterData, type Player } from '../src/shared/sim/Player';
@@ -21,7 +21,7 @@ import { expToNext, MAX_LEVEL } from '../src/shared/formulas';
 import { ZONES, zoneById } from '../src/shared/data/zones';
 import { ITEM_BASES, makeItem } from '../src/shared/data/items';
 import { MAX_PLUS } from '../src/shared/data/enhance';
-import { RARITIES, RARITY_LABEL, type BagEntry } from '../src/shared/types';
+import { RARITIES, RARITY_LABEL, STAT_LABEL, type BagEntry, type Item } from '../src/shared/types';
 import { checkUsername } from '../src/shared/api';
 
 const NO_RIGHTS = ADMIN_NO_RIGHTS;
@@ -254,18 +254,24 @@ function editCharacter(db: Db, world: GameWorld, a: Admin, charId: number, what:
       if (free === 0) throw new HttpError(400, 'กระเป๋าเต็ม');
       const n = Math.min(count, free);
       const classId = live ? live.cls.id : c.data.classId;
-      let name = '';
+      // Chosen stats (owner by default): every copy gets exactly the rows the page showed.
+      const custom = body.lines !== undefined;
+      if (custom && !canUse(a.role, 'customItem')) throw new HttpError(403, 'ไม่มีสิทธิ์กำหนดสเตตัสไอเทม');
+      if (custom && adjusted) throw new HttpError(400, `ชนิดนี้เลเวลขั้นต่ำ Lv.${level} สุ่มตัวอย่างใหม่ที่เลเวลนั้นก่อน`);
+      const made: Item[] = [];
       for (let k = 0; k < n; k++) {
-        const item = makeItem(base.id, rarity, level, classId)!;
+        const item = custom ? customItem(base.id, rarity, level, classId, body.name, body.lines) : makeItem(base.id, rarity, level, classId)!;
+        if (typeof item === 'string') throw new HttpError(400, item);
         if (plus > 0) item.plus = plus;
-        name = item.name;
-        const i = d.bag.indexOf(null);
-        d.bag[i] = item;
+        made.push(item);
       }
+      for (const item of made) d.bag[d.bag.indexOf(null)] = item;
+      const name = made[0].name;
+      const rows = custom ? ` · ${(made[0].lines ?? []).map((l) => `${STAT_LABEL[l.stat]} ${l.value}`).join(', ') || 'ไม่มีสเตตัส'}` : '';
       const label = `${plus ? `+${plus} ` : ''}${name} [${RARITY_LABEL[rarity]}] Lv.${level}`;
       msg = (n < count ? `ใส่ได้ ${n}/${count} ชิ้น — กระเป๋าเต็ม (${label})` : `เสกให้ ${n} ชิ้น: ${label}`) + (adjusted ? ` · ${adjusted}` : '');
       tell = `GM มอบไอเทม ${label} × ${n}`;
-      log(db, a, 'items', target, `${label} × ${n}${n < count ? ` (ขอ ${count}, กระเป๋าเต็ม)` : ''}${adjusted ? ` · ${adjusted}` : ''}`);
+      log(db, a, 'items', target, `${label} × ${n}${n < count ? ` (ขอ ${count}, กระเป๋าเต็ม)` : ''}${adjusted ? ` · ${adjusted}` : ''}${custom ? ' · กำหนดสเตตัส' : ''}${rows}`);
       break;
     }
     case 'kick': {

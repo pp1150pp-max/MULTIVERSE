@@ -201,3 +201,60 @@ export function makeItem(baseId: string, rarity: Rarity, level: number, cls: Cla
   const base = BASES.find((b) => b.id === baseId);
   return base ? build(base, rarity, level, cls, r) : null;
 }
+
+// ------------------------------------------------------------ admin: items with chosen stats
+
+/**
+ * The normal range of one stat row on an item of this kind, rarity and level, as a drop would roll it
+ * (before rounding). `main`: the row is the item kind's own stat (a weapon's ATK…), else an extra stat.
+ */
+function rowRange(base: BaseItem, rarity: Rarity, level: number, stat: StatKey, main: boolean): [number, number] {
+  const rm = RARITY_MULT[rarity];
+  if (main) {
+    const mid = (base.main[stat] ?? 0) * (1 + (level - 1) * 0.12) * rm;
+    return rangeAround(mid, 2 * MAIN_SPREAD * mid);
+  }
+  const a = AFFIXES.find((x) => x.stat === stat)!;
+  const mid = ((a.min + a.max) / 2 + a.per * (level - 1)) * rm;
+  return rangeAround(mid, (a.max - a.min) * rm);
+}
+
+/** One row of a chosen-stats item with the range it is measured against (shown as the item's min–max). */
+export interface RowRange { stat: StatKey; main: boolean; lo: number; hi: number; min: number; max: number }
+
+/**
+ * The normal ranges of a list of rows, in order. The first row of each of the kind's own stats is its
+ * main row; every other row (a second ATK row, a crit row…) is measured as an extra stat. Null for an
+ * unknown kind.
+ */
+export function rowRanges(baseId: string, rarity: Rarity, level: number, stats: StatKey[]): RowRange[] | null {
+  const base = BASES.find((b) => b.id === baseId);
+  if (!base) return null;
+  const seen = new Set<StatKey>();
+  return stats.map((stat) => {
+    const main = stat in base.main && !seen.has(stat);
+    if (main) seen.add(stat);
+    const [lo, hi] = rowRange(base, rarity, level, stat, main);
+    return { stat, main, lo, hi, min: fmt(stat, lo), max: fmt(stat, hi) };
+  });
+}
+
+/** The tier a value would have in a range: above it is tier 1, below it tier 5. */
+export function tierOf(value: number, lo: number, hi: number): StatTier {
+  const band = (hi - lo) / 5;
+  if (!(band > 0)) return 1;
+  const k = Math.floor((value - lo) / band);
+  return Math.max(1, Math.min(5, 5 - k)) as StatTier;
+}
+
+/** A stat value as items store it (one decimal for regen, whole numbers of at least 1 for the rest). */
+export const roundStat = fmt;
+
+/** The names an item of this kind and rarity can get (the rarity's prefixes, if any). */
+export function itemNames(baseId: string, rarity: Rarity, cls: ClassId): string[] {
+  const base = BASES.find((b) => b.id === baseId);
+  if (!base) return [];
+  const name = base.names[cls] ?? base.names.any ?? base.id;
+  const pre = PREFIX[rarity];
+  return pre ? pre.map((p) => `${p} ${name}`) : [name];
+}

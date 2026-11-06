@@ -1,7 +1,8 @@
 // Admin page (/admin): roles, limits and the shapes of the /api/admin requests, shared by the page
 // and the server. The server checks the role and every value on each call; the page is only a view.
-import type { BagEntry, ClassId, Item, Rarity, SlotId } from './types';
+import { STAT_KEYS, STAT_LABEL, type BagEntry, type ClassId, type Item, type Rarity, type SlotId, type StatKey, type StatLine } from './types';
 import type { ShutdownMode } from './net/protocol';
+import { itemNames, makeItem, roundStat, rowRanges, tierOf } from './data/items';
 
 /** owner: everything, plus granting/revoking GM. gm: view and edit players. */
 export type AdminRole = 'owner' | 'gm';
@@ -16,6 +17,10 @@ export const isAdminRole = (v: unknown): v is AdminRole => v === 'owner' || v ==
 export const ADMIN_GOLD_MAX = 1_000_000;
 /** Most items one action may spawn. */
 export const ADMIN_ITEMS_MAX = 10;
+/** Most stat rows an item with chosen stats may have (one per stat in the game; repeats allowed). */
+export const ADMIN_ITEM_ROWS_MAX = 10;
+/** A chosen stat may be at most this many times the top of its normal range. */
+export const ADMIN_STAT_MULT = 2;
 /** Rows the character search returns. */
 export const ADMIN_SEARCH_MAX = 30;
 /** Rows one page of the audit log returns. */
@@ -91,13 +96,15 @@ export interface AdminServerState { supervised: boolean; stopping: ShutdownMode 
 // ------------------------------------------------------------ owner tools (users, bans, broadcast, backups…)
 
 /** The newer admin tools. Each is its own switch so some can be opened to GMs later. */
-export type AdminFeature = 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete';
+export type AdminFeature = 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete';
 
 /**
  * Who may use each tool. To open one to GMs, add 'gm', e.g. `ban: ['owner', 'gm']`. The server
  * checks this on every call. Deleting accounts/characters is not here: it is always owner only.
  */
 export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
+  // Spawning an item with chosen stats (without it, spawned items roll like drops).
+  customItem: ['owner'],
   users: ['owner'],
   resetPassword: ['owner'],
   ban: ['owner'],
@@ -211,3 +218,45 @@ export interface AdminStats {
   /** When the minute samples start (null = none yet). */
   since: number | null;
 }
+
+// ------------------------------------------------------------ items with chosen stats
+
+/** One stat row the admin asks for. */
+export interface AdminItemRow { stat: StatKey; value: number }
+
+/**
+ * An item of this kind, rarity and level with exactly these stat rows (admin spawn with chosen stats).
+ * Checks every value, so the server can pass what the page sent; answers a Thai error instead of an item.
+ * Each row's tier and min–max come from the normal range for that row (see rowRanges).
+ */
+export function customItem(baseId: string, rarity: Rarity, level: number, cls: ClassId, name: unknown, rows: unknown): Item | string {
+  if (!Array.isArray(rows)) return 'แถวสเตตัสไม่ถูกต้อง';
+  if (rows.length > ADMIN_ITEM_ROWS_MAX) return `สเตตัสได้ไม่เกิน ${ADMIN_ITEM_ROWS_MAX} แถว`;
+  const asked: AdminItemRow[] = [];
+  for (const r of rows as unknown[]) {
+    const row = r as Partial<AdminItemRow> | null;
+    if (!row || typeof row !== 'object' || !STAT_KEYS.includes(row.stat as StatKey)) return 'ชนิดสเตตัสไม่ถูกต้อง';
+    if (typeof row.value !== 'number' || !Number.isFinite(row.value)) return 'ค่าสเตตัสต้องเป็นตัวเลข';
+    asked.push({ stat: row.stat as StatKey, value: row.value });
+  }
+  const ranges = rowRanges(baseId, rarity, level, asked.map((r) => r.stat));
+  const item = makeItem(baseId, rarity, level, cls);
+  if (!ranges || !item) return 'ไม่มีไอเทมชนิดนี้';
+  if (typeof name !== 'string' || !itemNames(baseId, rarity, cls).includes(name)) return 'ชื่อไอเทมไม่ถูกต้อง';
+  const lines: StatLine[] = [];
+  for (let i = 0; i < asked.length; i++) {
+    const { stat, value } = asked[i];
+    const r = ranges[i];
+    const top = roundStat(stat, r.hi * ADMIN_STAT_MULT);
+    if (value < statStep(stat) || roundStat(stat, value) !== value || value > top) return `${STAT_LABEL[stat]} ต้องอยู่ระหว่าง ${statStep(stat)}–${top}`;
+    lines.push({ stat, value, tier: tierOf(value, r.lo, r.hi), min: r.min, max: r.max });
+  }
+  item.name = name;
+  item.lines = lines;
+  item.stats = {};
+  for (const l of lines) item.stats[l.stat] = roundStat(l.stat, (item.stats[l.stat] ?? 0) + l.value);
+  return item;
+}
+
+/** The smallest value a chosen stat row may have. */
+export const statStep = (k: StatKey): number => (roundStat(k, 0.1) === 0.1 ? 0.1 : 1);

@@ -2,15 +2,16 @@
 // role and every value, so nothing here is a safeguard. Names, GPU strings and the like come from
 // players: they are only ever put on the page as text (never as HTML).
 import './admin.css';
-import { ADMIN_AUDIT_PAGE, ADMIN_NO_RIGHTS as NO_RIGHTS, HISTORY_DAYS, HISTORY_PAGE, BAN_DURATIONS, BAN_FOREVER, BAN_REASON_MAX, BROADCAST_EVERY_MS, BROADCAST_MAX } from '../shared/admin';
+import { ADMIN_AUDIT_PAGE, ADMIN_ITEM_ROWS_MAX, ADMIN_STAT_MULT, statStep, type AdminItemRow, ADMIN_NO_RIGHTS as NO_RIGHTS, HISTORY_DAYS, HISTORY_PAGE, BAN_DURATIONS, BAN_FOREVER, BAN_REASON_MAX, BROADCAST_EVERY_MS, BROADCAST_MAX } from '../shared/admin';
 import { MAX_CHARACTERS } from '../shared/api';
 import { entryName } from '../shared/data/potions';
 import type {
   AdminAccountDetail, AdminAccountsResponse, AdminFeature, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AuditRow, RoleRow,
 } from '../shared/admin';
 import { CLASSES } from '../shared/data/classes';
+import { itemNames, makeItem, roundStat, rowRanges, tierOf } from '../shared/data/items';
 import { SHUTDOWN_SECONDS, type ShutdownMode } from '../shared/net/protocol';
-import { isStack, RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, type BagEntry, type ClassId, type Item } from '../shared/types';
+import { isStack, RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, type BagEntry, type ClassId, type Item, type Rarity } from '../shared/types';
 
 const ADMIN_TOKEN = 'multiverse-admin-token';
 /** The game's own login: used when the owner is already logged in to the game in this browser. */
@@ -395,7 +396,12 @@ function renderSearch(): void {
 
 let sheet: HTMLElement | null = null;
 /** The spawn/gold choices, kept while the sheet redraws after each edit (and between characters). */
-const form = { baseId: '', rarity: 'common', plus: '0', count: '1', gold: '10000' };
+const form = { baseId: '', rarity: 'common', plus: '0', count: '1', gold: '10000', level: '' };
+/**
+ * The example item of the chosen-stats spawn (owner): rolled like a drop, then edited. Kept while the
+ * sheet redraws; `key` is what it was rolled for (kind, rarity, level, class), a change rolls a new one.
+ */
+let example: { key: string; name: string; rows: AdminItemRow[] } | null = null;
 
 function closeSheet(): void {
   sheet?.remove();
@@ -475,12 +481,90 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
   base.onchange = () => (form.baseId = base.value);
   rarity.onchange = () => (form.rarity = rarity.value);
   plus.onchange = () => (form.plus = plus.value);
-  const itemLv = numInput(c.level, 1, m.maxLevel);
+  const itemLv = numInput(Number(form.level) || c.level, 1, m.maxLevel);
+  itemLv.oninput = () => (form.level = itemLv.value);
   const count = numInput(Number(form.count) || 1, 1, m.itemsMax);
   count.oninput = () => (form.count = count.value);
   const itemBtn = h('button', { class: 'primary' }, 'เสกไอเทม');
+  const custom = can('customItem');
+  /** The item level actually used: a kind never comes below its own minimum level. */
+  const effLevel = (): number => {
+    const b = m.bases.find((x) => x.id === base.value);
+    return Math.max(b?.minLevel ?? 1, Math.min(m.maxLevel, Math.max(1, intOf(itemLv) || 1)));
+  };
+  const exampleBox = h('div', { class: 'example' });
+  /** Rolls a new example for the current choices (or keeps the one already made for them). */
+  const ensureExample = (reroll = false) => {
+    const key = `${base.value}|${rarity.value}|${effLevel()}|${c.classId}`;
+    if (!reroll && example?.key === key) return;
+    const item = makeItem(base.value, rarity.value as Rarity, effLevel(), c.classId);
+    example = item ? { key, name: item.name, rows: (item.lines ?? []).map((l) => ({ stat: l.stat, value: l.value })) } : null;
+  };
+  const drawExample = () => {
+    exampleBox.replaceChildren();
+    if (!example) return;
+    const ex = example;
+    const rar = rarity.value as Rarity;
+    const ranges = rowRanges(base.value, rar, effLevel(), ex.rows.map((r) => r.stat)) ?? [];
+    const names = itemNames(base.value, rar, c.classId);
+    const nameEl = names.length > 1
+      ? h('select', { onchange: (e: Event) => (ex.name = (e.target as HTMLSelectElement).value) }, ...names.map((n) => h('option', { value: n, selected: n === ex.name }, n)))
+      : h('b', {}, ex.name);
+    const rerollBtn = h('button', { class: 'small', type: 'button' }, 'สุ่มใหม่');
+    rerollBtn.onclick = () => { ensureExample(true); drawExample(); };
+    const addBtn = h('button', { class: 'small', type: 'button', disabled: ex.rows.length >= ADMIN_ITEM_ROWS_MAX }, '+ เพิ่มแถว');
+    addBtn.onclick = () => {
+      const used = new Set(ex.rows.map((r) => r.stat));
+      const stat = STAT_KEYS.find((k) => !used.has(k)) ?? 'atk';
+      const r = rowRanges(base.value, rar, effLevel(), [...ex.rows.map((x) => x.stat), stat])!.at(-1)!;
+      ex.rows.push({ stat, value: roundStat(stat, (r.lo + r.hi) / 2) });
+      drawExample();
+    };
+    const rows = ex.rows.map((row, i) => {
+      const r = ranges[i];
+      const top = roundStat(row.stat, r.hi * ADMIN_STAT_MULT);
+      const step = statStep(row.stat);
+      const info = h('span', { class: 'muted' });
+      const showInfo = () => {
+        const bad = !(row.value >= step && row.value <= top);
+        info.textContent = `ปกติ ${r.min}–${r.max} · T${tierOf(row.value, r.lo, r.hi)}${r.main ? ' · สเตตัสหลัก' : ''}${bad ? ` · ต้องอยู่ระหว่าง ${step}–${top}` : ''}`;
+        info.style.color = bad ? 'var(--bad)' : '';
+      };
+      const stat = h('select', {}, ...STAT_KEYS.map((k) => h('option', { value: k, selected: k === row.stat }, STAT_LABEL[k])));
+      stat.onchange = () => {
+        row.stat = stat.value as AdminItemRow['stat'];
+        const nr = rowRanges(base.value, rar, effLevel(), ex.rows.map((x) => x.stat))![i];
+        row.value = roundStat(row.stat, (nr.lo + nr.hi) / 2);
+        drawExample();
+      };
+      const val = h('input', { type: 'number', value: String(row.value), min: String(step), max: String(top), step: String(step) });
+      val.oninput = () => { row.value = Number(val.value); showInfo(); };
+      const del = h('button', { class: 'small', type: 'button', title: 'ลบแถว' }, '✕');
+      del.onclick = () => { ex.rows.splice(i, 1); drawExample(); };
+      showInfo();
+      return h('div', { class: 'row example-row' }, stat, val, info, del);
+    });
+    exampleBox.append(
+      h('div', { class: 'row example-head' }, h('span', {}, 'ตัวอย่าง: ', nameEl, ` [${RARITY_LABEL[rar]}] Lv.${effLevel()}`), rerollBtn),
+      ...rows,
+      ...(ex.rows.length ? [] : [h('div', { class: 'muted' }, 'ไม่มีสเตตัส')]),
+      h('div', { class: 'row' }, addBtn, h('span', { class: 'muted' }, `สูงสุด ${ADMIN_ITEM_ROWS_MAX} แถว · ค่าได้ถึง ${ADMIN_STAT_MULT} เท่าของค่าสูงสุดปกติ · ทุกชิ้นได้ตามตัวอย่างนี้`)),
+    );
+  };
+  const refreshExample = () => {
+    if (!custom) return;
+    // Show the level the example is really made at (a kind's minimum level can raise it).
+    if (intOf(itemLv) !== effLevel()) form.level = itemLv.value = String(effLevel());
+    ensureExample();
+    drawExample();
+  };
+  base.addEventListener('change', refreshExample);
+  rarity.addEventListener('change', refreshExample);
+  itemLv.addEventListener('change', refreshExample);
+  refreshExample();
   itemBtn.onclick = () => void run('items', {
-    baseId: base.value, rarity: rarity.value, plus: Number(plus.value), level: intOf(itemLv), count: intOf(count),
+    baseId: base.value, rarity: rarity.value, plus: Number(plus.value), level: custom ? effLevel() : intOf(itemLv), count: intOf(count),
+    ...(custom && example ? { name: example.name, lines: example.rows } : {}),
   }, itemBtn);
 
   // Zone
@@ -516,7 +600,8 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
     h('section', {}, h('h3', {}, `เสกไอเทมใส่กระเป๋า (ครั้งละไม่เกิน ${m.itemsMax} ชิ้น)`),
       h('div', { class: 'row' }, h('label', { style: 'flex-basis:100%' }, 'ชนิด', base)),
       h('div', { class: 'row', style: 'margin-top:8px' },
-        h('label', {}, 'ความหายาก', rarity), plusWrap, h('label', {}, 'เลเวลไอเทม', itemLv), h('label', {}, 'จำนวน', count), itemBtn)),
+        h('label', {}, 'ความหายาก', rarity), plusWrap, h('label', {}, 'เลเวลไอเทม', itemLv), h('label', {}, 'จำนวน', count), itemBtn),
+      custom ? exampleBox : null),
     h('section', {}, h('h3', {}, 'ย้ายโซน (ไปที่แคมป์)'),
       h('div', { class: 'row' }, h('label', {}, 'โซน', zone), tpBtn)),
     c.online ? h('section', {}, h('div', { class: 'row' }, kickBtn)) : null,
