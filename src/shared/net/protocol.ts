@@ -157,7 +157,7 @@ export type ServerMsg =
   /** The server stops (or restarts) in `seconds`; sent once a second during the countdown. */
   | { t: 'shutdown'; mode: ShutdownMode; seconds: number }
   /** An announcement from the server's owner (admin page): shown as a banner and a chat line. */
-  | { t: 'announce'; text: string }
+  | { t: 'announce'; text: string; from: string; direct: boolean }
   /** The countdown was cancelled: the server stays up. */
   | { t: 'shutdownCancel'; mode: ShutdownMode };
 

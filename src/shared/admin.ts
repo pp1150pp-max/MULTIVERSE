@@ -98,7 +98,8 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   users: ['owner'],
   resetPassword: ['owner'],
   ban: ['owner'],
-  broadcast: ['owner'],
+  // GMs too (owner's choice): to everyone or to one online player.
+  broadcast: ['owner', 'gm'],
   backup: ['owner'],
   sessions: ['owner'],
   stats: ['owner'],
@@ -110,6 +111,8 @@ export const canUse = (role: AdminRole, f: AdminFeature): boolean => FEATURE_ROL
 
 /** Longest announcement a broadcast may send. */
 export const BROADCAST_MAX = 200;
+/** One announcement per sender this often at most. */
+export const BROADCAST_EVERY_MS = 3000;
 /** Longest ban reason. */
 export const BAN_REASON_MAX = 200;
 /** Ban lengths the page offers; null = permanent. */

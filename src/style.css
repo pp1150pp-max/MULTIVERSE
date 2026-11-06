@@ -697,4 +697,5 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 /* Owner's announcement: same frame as the restart warning, smaller text that may wrap, a bit lower. */
 #announce-banner { top: 24%; font-size: 22px; white-space: normal; width: max-content; max-width: min(720px, calc(100% - 32px)); }
 #announce-banner .announce-head { font-size: 14px; opacity: 0.85; margin-bottom: 2px; }
+#announce-banner .announce-from { font-size: 14px; opacity: 0.85; margin-top: 4px; text-align: right; }
 @media (max-width: 700px) { #announce-banner { font-size: 17px; top: 26%; } }

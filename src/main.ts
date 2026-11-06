@@ -20,7 +20,7 @@ function launch(backend: OnlineBackend): void {
   backend.onChat = (name, text) => game.hud.chatLine(name, text);
   backend.onDisconnect = (msg) => game.hud.showDisconnect(msg);
   backend.onShutdown = (mode, seconds) => game.hud.shutdownCountdown(mode, seconds);
-  backend.onAnnounce = (text) => game.hud.announce(text);
+  backend.onAnnounce = (text, from, direct) => game.hud.announce(text, from, direct);
   start(game, backend.me.cls.id);
 }
 

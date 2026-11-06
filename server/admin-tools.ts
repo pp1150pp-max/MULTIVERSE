@@ -10,7 +10,7 @@ import { HttpError, readJson, send, str } from './http';
 import { charRow, log, requireAdmin, type Admin } from './admin';
 import { hashPassword } from './auth';
 import {
-  BAN_DURATIONS, BAN_FOREVER, BAN_REASON_MAX, BROADCAST_MAX, canUse, isAdminRole,
+  BAN_DURATIONS, BAN_FOREVER, BAN_REASON_MAX, BROADCAST_EVERY_MS, BROADCAST_MAX, canUse, isAdminRole,
   type AdminAccountDetail, type AdminAccountRow, type AdminAccountsResponse, type AdminCharDetail, type AdminFeature,
 } from '../src/shared/admin';
 import { banMessage } from '../src/shared/api';
@@ -18,6 +18,8 @@ import { HISTORY_PAGE, type AdminStats, type StatsPoint, type StatsRange } from 
 import { BAG_SIZE } from '../src/shared/sim/Player';
 
 const NO_RIGHTS = 'ไม่มีสิทธิ์';
+/** When each admin last sent an announcement (rate limit). */
+const lastBroadcast = new Map<number, number>();
 /** Letters that can't be mixed up when read aloud or typed from a phone. */
 const TEMP_PW_CHARS = 'abcdefghjkmnpqrstuvwxyz23456789';
 const TEMP_PW_LEN = 10;
@@ -205,12 +207,27 @@ export async function ownerToolsApi(
   if (method === 'POST' && path === '/api/admin/broadcast') {
     const a = requireFeature(req, db, 'broadcast');
     const body = await readJson(req);
+    // Shown with textContent in the game (never as HTML); control characters are stripped here.
     const text = clean(body.text, BROADCAST_MAX);
     if (!text) throw new HttpError(400, 'พิมพ์ข้อความก่อน');
     if (text.length > BROADCAST_MAX) throw new HttpError(400, `ข้อความยาวได้ไม่เกิน ${BROADCAST_MAX} ตัว`);
-    const n = world.broadcast(text);
-    log(db, a, 'broadcast', 'ทุกคน', text);
-    send(res, 200, { msg: `ส่งประกาศถึงผู้เล่น ${n} คนแล้ว` });
+    let to: { charId: number; name: string } | undefined;
+    if (body.to !== undefined && body.to !== null) {
+      const charId = Number(body.to);
+      const live = Number.isSafeInteger(charId) ? world.livePlayer(charId) : undefined;
+      if (!live) throw new HttpError(400, 'ผู้เล่นคนนี้ไม่ได้ออนไลน์แล้ว');
+      to = { charId, name: live.name };
+    }
+    const now = Date.now();
+    const last = lastBroadcast.get(a.acc.id) ?? 0;
+    if (now - last < BROADCAST_EVERY_MS) {
+      throw new HttpError(429, `ส่งได้ทุก ${BROADCAST_EVERY_MS / 1000} วินาที — รออีก ${Math.ceil((BROADCAST_EVERY_MS - (now - last)) / 1000)} วินาที`);
+    }
+    lastBroadcast.set(a.acc.id, now);
+    const from = `${a.role === 'owner' ? 'Owner' : 'GM'} ${a.acc.username}`;
+    const n = world.broadcast(text, from, to?.charId);
+    log(db, a, 'broadcast', to ? `${to.name} (#${to.charId})` : 'ทุกคน', text);
+    send(res, 200, { msg: to ? `ส่งข้อความถึง ${to.name} แล้ว` : `ส่งประกาศถึงผู้เล่น ${n} คนแล้ว` });
     return true;
   }
 

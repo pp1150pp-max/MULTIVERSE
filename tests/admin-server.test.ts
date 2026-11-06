@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
-import { ADMIN_GOLD_MAX, ADMIN_ITEMS_MAX, FEATURE_ROLES, HISTORY_DAYS } from '../src/shared/admin';
+import { ADMIN_GOLD_MAX, ADMIN_ITEMS_MAX, BROADCAST_EVERY_MS, FEATURE_ROLES, HISTORY_DAYS } from '../src/shared/admin';
 import { Db } from '../server/db';
 import { MAX_LEVEL } from '../src/shared/formulas';
 import { finish, ok } from './check';
@@ -249,11 +249,11 @@ async function run(): Promise<void> {
   const plainId = (await api('GET', '/admin/accounts', undefined, ownerTok)).data.rows.find((r: any) => r.username === 'plain1').accountId;
   const ownerId = (await api('GET', '/admin/accounts', undefined, ownerTok)).data.rows.find((r: any) => r.username === 'owner1').accountId;
   ok((await api('GET', '/admin/me', undefined, ownerTok)).data.features.length === Object.keys(FEATURE_ROLES).length, 'owner has every owner tool');
-  ok((await api('GET', '/admin/me', undefined, gmTok)).data.features.length === 0, 'GM has no owner tools (FEATURE_ROLES)');
+  ok(JSON.stringify((await api('GET', '/admin/me', undefined, gmTok)).data.features) === '["broadcast"]', 'GM has only the broadcast tool (FEATURE_ROLES)');
   const gmDenied: [string, string, unknown?][] = [
     ['GET', '/admin/accounts'], ['GET', `/admin/accounts/${plainId}`], ['POST', `/admin/accounts/${plainId}/password`],
     ['POST', `/admin/accounts/${plainId}/ban`, { duration: '1h', reason: 'x' }], ['POST', `/admin/accounts/${plainId}/unban`],
-    ['POST', '/admin/broadcast', { text: 'hi' }], ['GET', '/admin/backups'], ['POST', '/admin/backups'],
+    ['GET', '/admin/backups'], ['POST', '/admin/backups'],
     ['DELETE', `/admin/accounts/${plainId}`, { confirm: 'plain1' }], ['DELETE', `/admin/characters/${charId}`, { confirm: 'Tester' }],
     ['GET', '/admin/sessions'], ['GET', `/admin/sessions?account=${plainId}`], ['GET', '/admin/stats'], ['GET', '/admin/chat'], ['DELETE', '/admin/chat/1'],
   ];
@@ -279,6 +279,31 @@ async function run(): Promise<void> {
   ok(bc.status === 200 && b1.msgs.some((m) => m.t === 'announce' && m.text === 'ทดสอบประกาศ'), 'broadcast delivered to players');
   ok((await api('POST', '/admin/broadcast', { text: 'x'.repeat(201) }, ownerTok)).status === 400, 'broadcast over the length cap refused');
   ok((await api('POST', '/admin/broadcast', { text: '   ' }, ownerTok)).status === 400, 'empty broadcast refused');
+  ok((await api('POST', '/admin/broadcast', { text: 'hi' }, plainTok)).status === 403, 'player cannot broadcast');
+
+  // GM: to one player (only they get it), rate limit, then to everyone.
+  const g1 = joinWorld(gmTok, own.data.id);
+  await g1.ready;
+  const toOne = await api('POST', '/admin/broadcast', { text: '<b>ถึงคุณคนเดียว</b>', to: charId }, gmTok);
+  await sleep(300);
+  const got = b1.msgs.find((m) => m.t === 'announce' && m.direct);
+  ok(toOne.status === 200 && got && got.text === '<b>ถึงคุณคนเดียว</b>' && got.from === 'GM gm1', `GM sends to one player, with the sender's name (${JSON.stringify(got)})`);
+  ok(!g1.msgs.some((m) => m.t === 'announce'), 'nobody else gets a message to one player');
+  const tooSoon = await api('POST', '/admin/broadcast', { text: 'ทุกคน' }, gmTok);
+  ok(tooSoon.status === 429, `second announcement within 3 s refused (${tooSoon.data.error})`);
+  await sleep(BROADCAST_EVERY_MS + 100);
+  ok((await api('POST', '/admin/broadcast', { text: 'x', to: 999999 }, gmTok)).status === 400, 'player not online → 400');
+  await sleep(BROADCAST_EVERY_MS + 100);
+  const toAll = await api('POST', '/admin/broadcast', { text: 'ทุกคนฟังทางนี้' }, gmTok);
+  await sleep(300);
+  ok(toAll.status === 200 && [b1, g1].every((c) => c.msgs.some((m) => m.t === 'announce' && !m.direct && m.text === 'ทุกคนฟังทางนี้' && m.from === 'GM gm1')),
+    'GM sends to everyone');
+  g1.ws.close();
+  const bcLog = new DatabaseSync(DB_FILE, { readOnly: true });
+  const bcRows = bcLog.prepare("SELECT admin_name, target, details FROM admin_audit WHERE action = 'broadcast'").all() as any[];
+  bcLog.close();
+  ok(bcRows.some((r) => r.admin_name === 'gm1' && r.target.startsWith('Tester') && r.details === '<b>ถึงคุณคนเดียว</b>')
+    && bcRows.some((r) => r.admin_name === 'gm1' && r.target === 'ทุกคน'), 'announcements logged with sender, target and text');
 
   // ---------------------------------------------------------- history: this play session and its chat are recorded
   b1.send({ t: 'client', gpu: 'Test GPU 9000' });
