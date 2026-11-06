@@ -12,12 +12,13 @@ import { POTION_SIZES } from '../src/shared/data/potions';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../src/shared/sim/types';
 import { AUTO_HINT_COLOR, AutoPlay, type AutoWorld } from '../src/shared/sim/autoplay';
 import {
-  CHAT_MAX, GPU_NAME_MAX, INTEREST_RADIUS, PING_MS, isSoftwareRenderer, SNAPSHOT_HZ, TICK_HZ, WS_PATH, r2,
+  CHAT_MAX, GPU_NAME_MAX, shutdownKick, type ShutdownMode, INTEREST_RADIUS, PING_MS, isSoftwareRenderer, SNAPSHOT_HZ, TICK_HZ, WS_PATH, r2,
   type ClientMsg, type InputMsg, type ActionMsg, type PrivateSnap, type ServerMsg, type SnapshotMsg,
 } from '../src/shared/net/protocol';
 import { RARITIES, SLOTS, type SlotId, type Vec2 } from '../src/shared/types';
 import type { SkillSlot } from '../src/shared/data/classes';
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
+import type { AdminOnline, AdminOnlineRow } from '../src/shared/admin';
 
 const AUTOSAVE_MS = 30_000;
 const GUEST_STASH_MSG = 'Guest ใช้คลังเก็บของไม่ได้ — สมัครสมาชิกเพื่อใช้คลัง (ตัวละครนี้จะย้ายไปอยู่ในบัญชีใหม่)';
@@ -70,6 +71,11 @@ interface Session {
   /** Last immediate lag/stall warning, for its throttle. */
   warnAt: number;
   gpuLogged: boolean;
+  /** The latest report, for the admin page (the sums above reset every minute). */
+  lastRtt: number | null;
+  lastFps: number | null;
+  /** The client's GPU name once it sent it. */
+  gpu: string | null;
 }
 
 const num = (v: unknown, fallback = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
@@ -124,6 +130,8 @@ export class GameWorld {
    * so nothing can be copied by having two characters open it.
    */
   private readonly stashes = new Map<number, StashData>();
+  /** Set while the server counts down to stopping: no new players may join. */
+  private closing: ShutdownMode | null = null;
   private last = performance.now();
   private tickN = 0;
 
@@ -187,6 +195,11 @@ export class GameWorld {
     const acc = typeof token === 'string' ? this.db.sessionAccount(token) : undefined;
     const charId = num(characterId, -1);
     const data = acc ? this.db.loadCharacter(acc.id, charId) : undefined;
+    if (this.closing) {
+      this.send(ws, { t: 'kick', msg: `Server กำลัง${this.closing === 'restart' ? 'รีสตาร์ท' : 'ปิด'} — รอสักครู่แล้วเข้าใหม่` });
+      ws.close();
+      return null;
+    }
     if (!acc || !data) {
       this.send(ws, { t: 'kick', msg: acc ? 'ไม่พบตัวละครนี้' : 'กรุณาเข้าสู่ระบบใหม่' });
       ws.close();
@@ -219,7 +232,7 @@ export class GameWorld {
       move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null,
       auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', outbox: [], lastChatAt: 0, saveDue: null,
       ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0,
-      hidden: false, warnAt: -Infinity, gpuLogged: false,
+      hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null,
     };
     this.sessions.add(s);
     this.byPlayer.set(player, s);
@@ -307,6 +320,8 @@ export class GameWorld {
     const hidden = m.hidden === true;
     const fps = hidden ? undefined : clamp(m.fps, FPS_MAX);
     const maxFrame = hidden ? undefined : clamp(m.maxFrame, STALL_MAX_MS);
+    s.lastRtt = rtt ?? s.lastRtt;
+    s.lastFps = hidden ? null : (fps ?? s.lastFps);
     if (rtt !== undefined) {
       s.rttSum += rtt;
       s.rttCount++;
@@ -343,6 +358,7 @@ export class GameWorld {
     if (s.gpuLogged || typeof m.gpu !== 'string') return;
     s.gpuLogged = true;
     const gpu = m.gpu.replace(/[\p{Cc}\p{Cf}]/gu, '').trim().slice(0, GPU_NAME_MAX) || 'unknown';
+    s.gpu = gpu;
     const note = isSoftwareRenderer(gpu) ? ' ⚠ SOFTWARE RENDERING: hardware acceleration is off, expect stutter' : '';
     console.log(`[client] ${s.username} (${s.player.name}) GPU: ${gpu}${note}`);
   }
@@ -555,14 +571,14 @@ export class GameWorld {
   }
 
   /** Moves a session's character into another zone's Sim, keeping HP/MP. */
-  private travel(s: Session, zoneId: string): void {
+  private travel(s: Session, zoneId: string, atCamp = false): void {
     const dest = this.sims.get(zoneId);
     if (!dest || dest === s.sim || !this.sessions.has(s)) return;
     const old = s.player;
     const from = s.sim;
     from.removePlayer(old);
     this.byPlayer.delete(old);
-    const p = dest.addPlayer(old.toData(), from.zone.id);
+    const p = dest.addPlayer(old.toData(), atCamp ? undefined : from.zone.id);
     p.hp = Math.min(old.hp, p.maxHp);
     p.mp = Math.min(old.mp, p.stats.maxMp);
     p.cd = { ...old.cd };
@@ -635,6 +651,94 @@ export class GameWorld {
     };
     s.outbox = [];
     this.send(s.ws, msg);
+  }
+
+  // ------------------------------------------------------------ stopping the server (server/main.ts)
+
+  get closingMode(): ShutdownMode | null {
+    return this.closing;
+  }
+
+  /** From now on joins are refused; tells everyone the server stops in `seconds`. */
+  announceShutdown(mode: ShutdownMode, seconds: number): void {
+    this.closing = mode;
+    for (const s of this.sessions) this.send(s.ws, { t: 'shutdown', mode, seconds });
+  }
+
+  /** The countdown was cancelled: joins are allowed again and everyone is told. */
+  cancelShutdown(mode: ShutdownMode): void {
+    this.closing = null;
+    for (const s of this.sessions) this.send(s.ws, { t: 'shutdownCancel', mode });
+  }
+
+  /**
+   * Saves every character (with its stash, like a normal logout) and closes every connection with a
+   * message saying why. Returns how many were online.
+   */
+  closeAll(mode: ShutdownMode): number {
+    this.closing = mode;
+    const all = [...this.sessions];
+    for (const s of all) {
+      this.send(s.ws, { t: 'kick', msg: shutdownKick(mode) });
+      this.leave(s);
+      // 1012 = service restart, 1001 = going away.
+      s.ws.close(mode === 'restart' ? 1012 : 1001, mode);
+    }
+    return all.length;
+  }
+
+  // ------------------------------------------------------------ admin page (server/admin.ts)
+
+  /** Everyone in the world, with the connection numbers the admin page shows (IP included). */
+  adminOnline(): AdminOnline {
+    const zones = [...this.sims.values()].map((sim) => ({
+      id: sim.zone.id, nameTh: sim.zone.nameTh, count: [...this.sessions].filter((s) => s.sim === sim).length,
+    }));
+    const players: AdminOnlineRow[] = [...this.sessions].map((s) => ({
+      charId: s.charId, accountId: s.accountId, username: s.guest ? 'Guest' : s.username, guest: s.guest,
+      name: s.player.name, classId: s.player.cls.id, level: s.player.level, zone: s.sim.zone.id,
+      rtt: s.lastRtt === null ? null : Math.round(s.lastRtt),
+      fps: s.lastFps === null ? null : Math.round(s.lastFps),
+      maxFrame: s.fpsCount ? Math.round(s.maxFrame) : null,
+      hidden: s.hidden, gpu: s.gpu, ip: s.ip,
+    }));
+    return { zones, players };
+  }
+
+  private sessionOfChar(charId: number): Session | undefined {
+    for (const s of this.sessions) if (s.charId === charId) return s;
+    return undefined;
+  }
+
+  /** The live character, if it is in the world: edit this one (the next save would undo a DB edit). */
+  livePlayer(charId: number): Player | undefined {
+    return this.sessionOfChar(charId)?.player;
+  }
+
+  /** Saves an online character right away (after an admin edit) and tells its player in chat. */
+  adminChanged(charId: number, msg: string): void {
+    const s = this.sessionOfChar(charId);
+    if (!s) return;
+    this.save(s);
+    this.send(s.ws, { t: 'chat', name: '', text: msg });
+  }
+
+  /** Ends one character's game (saving it first). Returns false when it isn't online. */
+  kickCharacter(charId: number, msg: string): boolean {
+    const s = this.sessionOfChar(charId);
+    if (!s) return false;
+    this.send(s.ws, { t: 'kick', msg });
+    this.leave(s);
+    s.ws.close();
+    return true;
+  }
+
+  /** Moves an online character to another zone's camp. Returns false when it isn't online or is there already. */
+  teleportCharacter(charId: number, zoneId: string): boolean {
+    const s = this.sessionOfChar(charId);
+    if (!s || !this.sims.has(zoneId) || s.sim.zone.id === zoneId) return false;
+    this.travel(s, zoneId, true);
+    return true;
   }
 
   // ------------------------------------------------------------ saving

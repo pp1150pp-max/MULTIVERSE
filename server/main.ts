@@ -16,15 +16,27 @@ import {
 } from '../src/shared/api';
 import { newCharacterData } from '../src/shared/sim/Player';
 import { GameWorld } from './world';
+import { bearer, HttpError, readJson, send, str } from './http';
+import { adminApi } from './admin';
+import { controlFilePath, CTRL_C_WINDOW_MS, DoublePress, isLocalControl, STOP_PATH, type ControlFile } from './control';
+import { createInterface } from 'node:readline';
+import { RESTART_EXIT_CODE, SHUTDOWN_SECONDS, type ShutdownMode } from '../src/shared/net/protocol';
+import { rmSync, writeFileSync } from 'node:fs';
 import { announceShared, runningTunnel, startTunnel } from './tunnel';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const PORT = Number(process.env.PORT ?? 2567);
 const DB_FILE = process.env.DB_FILE ?? join(ROOT, 'server', 'data', 'multiverse.db');
 const DIST = join(ROOT, 'dist');
-const MAX_BODY = 16 * 1024;
 /** `--public`: also open a Cloudflare link so friends can join from anywhere (npm run online). */
 const PUBLIC = process.argv.includes('--public');
+
+/** Set by npm run online (server/online-main.ts), which starts the server again after a restart. */
+const SUPERVISED = process.env.MULTIVERSE_SUPERVISED === '1';
+/** Countdown before stopping; SHUTDOWN_SECONDS env only shortens it for tests. */
+const SHUTDOWN_S = Math.min(SHUTDOWN_SECONDS, Math.max(1, Math.floor(Number(process.env.SHUTDOWN_SECONDS) || SHUTDOWN_SECONDS)));
+const CONTROL_FILE = controlFilePath(DB_FILE, PORT);
+const CONTROL_TOKEN = randomBytes(32).toString('hex');
 
 const db = new Db(DB_FILE);
 const limiter = new AttemptLimiter();
@@ -32,43 +44,6 @@ const limiter = new AttemptLimiter();
 const guestLimiter = new AttemptLimiter(GUEST_PER_IP_HOUR, 60 * 60 * 1000);
 const CLEANUP_MS = 60 * 60 * 1000;
 db.deleteExpiredSessions();
-
-class HttpError extends Error {
-  constructor(readonly status: number, message: string) {
-    super(message);
-  }
-}
-
-// ------------------------------------------------------------ helpers
-
-function send(res: ServerResponse, status: number, body: unknown): void {
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-  res.end(JSON.stringify(body));
-}
-
-async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
-  let size = 0;
-  const chunks: Buffer[] = [];
-  for await (const c of req) {
-    size += (c as Buffer).length;
-    if (size > MAX_BODY) throw new HttpError(413, 'ข้อมูลที่ส่งมาใหญ่เกินไป');
-    chunks.push(c as Buffer);
-  }
-  try {
-    const v = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
-    if (v && typeof v === 'object' && !Array.isArray(v)) return v as Record<string, unknown>;
-  } catch {
-    // fall through
-  }
-  throw new HttpError(400, 'รูปแบบข้อมูลไม่ถูกต้อง');
-}
-
-const str = (v: unknown): string => (typeof v === 'string' ? v : '');
-
-function bearer(req: IncomingMessage): string {
-  const h = req.headers.authorization ?? '';
-  return h.startsWith('Bearer ') ? h.slice(7) : '';
-}
 
 /** The logged-in account (or guest) for this request, or a 401. */
 function requireAccount(req: IncomingMessage): SessionAccount {
@@ -102,6 +77,24 @@ function startSession(accountId: number, username: string): AuthResponse {
 
 async function api(req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
   const method = req.method ?? 'GET';
+
+  if (path.startsWith('/api/admin/')) {
+    return adminApi(req, res, path, db, world, { supervised: SUPERVISED, stopping: () => stopMode, stop: beginStop, cancel: cancelStop });
+  }
+
+  // npm run stop-server (server/stop-main.ts): only from this computer, with the token in CONTROL_FILE.
+  if (method === 'POST' && path === STOP_PATH) {
+    if (!isLocalControl(req, CONTROL_TOKEN)) throw new HttpError(403, 'Forbidden');
+    const body = await readJson(req);
+    const err = beginStop(body.mode === 'restart' ? 'restart' : 'shutdown', 'npm run stop-server');
+    if (err && !stopMode) throw new HttpError(400, err);
+    return send(res, 202, { seconds: SHUTDOWN_S, mode: stopMode, note: err });
+  }
+  // stop-server asks while it waits, to notice a cancelled countdown.
+  if (method === 'GET' && path === STOP_PATH) {
+    if (!isLocalControl(req, CONTROL_TOKEN)) throw new HttpError(403, 'Forbidden');
+    return send(res, 200, { mode: stopMode });
+  }
 
   if (method === 'POST' && path === '/api/register') {
     const ip = clientIp(req);
@@ -287,6 +280,13 @@ const server = createServer(async (req, res) => {
   const path = new URL(req.url ?? '/', 'http://localhost').pathname;
   try {
     if (path.startsWith('/api/')) await api(req, res, path);
+    // The admin page is public HTML; everything it shows comes from /api/admin, which checks the role.
+    else if ((req.method === 'GET' || req.method === 'HEAD') && path === '/admin') await serveStatic(req, res, '/admin.html');
+    else if (path === '/admin/') {
+      // The page loads its files by relative paths (Vite base './'), which only work from /admin.
+      res.writeHead(301, { Location: '/admin' });
+      res.end();
+    }
     else if (req.method === 'GET' || req.method === 'HEAD') await serveStatic(req, res, path);
     else throw new HttpError(405, 'Method not allowed');
   } catch (e) {
@@ -301,6 +301,7 @@ cleanupGuests();
 setInterval(cleanupGuests, CLEANUP_MS);
 
 server.listen(PORT, '0.0.0.0', () => {
+  writeFileSync(CONTROL_FILE, JSON.stringify({ pid: process.pid, port: PORT, token: CONTROL_TOKEN } satisfies ControlFile));
   console.log(`\nMULTIVERSE server พร้อมแล้ว — port ${PORT}`);
   console.log(`  เครื่องนี้:   http://localhost:${PORT}`);
   for (const list of Object.values(networkInterfaces())) {
@@ -314,17 +315,103 @@ server.listen(PORT, '0.0.0.0', () => {
   const shared = PUBLIC ? runningTunnel(PORT) : null;
   if (shared) announceShared(shared);
   else if (PUBLIC) void startTunnel(PORT).then((t) => (tunnel = t));
-  else console.log('  (อยากได้ลิงก์ให้เพื่อนนอกบ้าน: ปิดหน้าต่างนี้ แล้วใช้ npm run online แทน)\n');
+  else if (!SUPERVISED) console.log('  (อยากได้ลิงก์ให้เพื่อนนอกบ้าน: ปิดหน้าต่างนี้ แล้วใช้ npm run online แทน)\n');
 });
 
 let tunnel: Awaited<ReturnType<typeof startTunnel>> = null;
 
-const shutdown = () => {
-  world.saveAll();
+// ------------------------------------------------------------ stopping
+
+/**
+ * Every way of stopping (Ctrl+C twice, npm run stop-server, the admin page) warns the players for
+ * SHUTDOWN_SECONDS, then saves everyone and exits. A restart exits with RESTART_EXIT_CODE, and
+ * npm run online (server/online-main.ts) starts the server again. While counting down, typing
+ * `c` + Enter in this window (or the admin page's button) cancels; `f` + Enter stops at once.
+ */
+let stopMode: ShutdownMode | null = null;
+let stopTimer: ReturnType<typeof setTimeout> | undefined;
+let finished = false;
+const STOP_HINT = '  พิมพ์ c แล้ว Enter เพื่อยกเลิก · พิมพ์ f แล้ว Enter เพื่อปิดทันที (ยังเซฟทุกคน)';
+
+function beginStop(mode: ShutdownMode, by: string): string | null {
+  if (stopMode) return `กำลัง${stopMode === 'restart' ? 'รีสตาร์ท' : 'ปิด'}อยู่แล้ว`;
+  if (mode === 'restart' && !SUPERVISED) return 'server นี้ไม่ได้เปิดด้วย npm run online จึงเปิดใหม่เองไม่ได้ — ใช้ "ปิด server" แล้วเปิดใหม่เอง';
+  stopMode = mode;
+  console.log(`\n[server] ${by}: ${mode === 'restart' ? 'restarting' : 'shutting down'} in ${SHUTDOWN_S} s (players warned)`);
+  console.log(STOP_HINT);
+  let left = SHUTDOWN_S;
+  const tick = () => {
+    if (left <= 0) return finishStop(mode);
+    world.announceShutdown(mode, left);
+    left--;
+    stopTimer = setTimeout(tick, 1000);
+  };
+  tick();
+  return null;
+}
+
+/** Stops a countdown: players are told, joins are allowed again. Returns why it can't, or null. */
+function cancelStop(by: string): string | null {
+  if (!stopMode || finished) return 'ไม่ได้นับถอยหลังอยู่';
+  clearTimeout(stopTimer);
+  const mode = stopMode;
+  stopMode = null;
+  world.cancelShutdown(mode);
+  console.log(`[server] ${by}: ${mode === 'restart' ? 'restart' : 'shutdown'} cancelled`);
+  return null;
+}
+
+function finishStop(mode: ShutdownMode): void {
+  if (finished) return;
+  finished = true;
+  clearTimeout(stopTimer);
+  let n = 0;
+  try {
+    n = world.closeAll(mode);
+  } catch (e) {
+    console.error('[server] saving players failed', e);
+  }
+  console.log(`[server] saved and disconnected ${n} player(s); ${mode === 'restart' ? 'restarting' : 'stopped'}`);
+  rmSync(CONTROL_FILE, { force: true });
   tunnel?.kill();
   server.close();
-  db.close();
-  process.exit(0);
-};
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+  // A moment for the goodbye messages to go out before the process ends.
+  setTimeout(() => {
+    db.close();
+    process.exit(mode === 'restart' ? RESTART_EXIT_CODE : 0);
+  }, 300);
+}
+
+// Ctrl+C: one press only prints a hint; a second within CTRL_C_WINDOW_MS starts the countdown. During the
+// countdown Ctrl+C does nothing more (c / f + Enter instead). SIGTERM starts the countdown right away.
+const ctrlC = new DoublePress(CTRL_C_WINDOW_MS);
+process.on('SIGINT', () => {
+  if (stopMode) return console.log(`\n[server] กำลังนับถอยหลังอยู่\n${STOP_HINT}`);
+  if (ctrlC.press(Date.now())) beginStop('shutdown', 'Ctrl+C');
+  else console.log(`\n  กด Ctrl+C อีกครั้งภายใน ${CTRL_C_WINDOW_MS / 1000} วินาทีเพื่อปิด server`);
+});
+process.on('SIGTERM', () => {
+  if (!stopMode) beginStop('shutdown', 'SIGTERM');
+});
+
+// Typed commands in the server window. stdin may be a pipe or already closed (npm, a background
+// task, tests): then there is simply nothing to read.
+try {
+  const rl = createInterface({ input: process.stdin, terminal: false });
+  rl.on('line', (line) => {
+    const cmd = line.trim().toLowerCase();
+    if (cmd === 'c') {
+      const err = cancelStop('typed c');
+      if (err) console.log(`  ${err}`);
+    } else if (cmd === 'f') {
+      if (stopMode) {
+        console.log('[server] stopping now');
+        finishStop(stopMode);
+      } else console.log('  ไม่ได้นับถอยหลังอยู่ (f ใช้ระหว่างนับถอยหลังเท่านั้น)');
+    }
+  });
+  rl.on('error', () => {});
+  process.stdin.on('error', () => {});
+} catch {
+  // no stdin at all
+}

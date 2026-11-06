@@ -26,7 +26,18 @@ npm run test       # เทสต์อัตโนมัติใน tests/ (�
 npm run server     # server ตัวจริงที่ http://localhost:2567 (เสิร์ฟ dist/, DB server/data/multiverse.db)
 npm run online     # build + server + ลิงก์ Cloudflare ให้เพื่อนเข้า (ถ้า npm run tunnel เปิดอยู่ จะใช้ลิงก์ของมัน)
 npm run tunnel     # ลิงก์ให้เพื่อนอย่างเดียว เปิดค้างไว้ → รีสตาร์ท server แล้วลิงก์ไม่เปลี่ยน
+npm run stop-server              # ปิด server (port 2567) แบบเตือนผู้เล่น 10 วิ + เซฟทุกคน แล้วรอจนปิดเสร็จ
+npm run stop-server -- --restart # เหมือนกัน แต่ npm run online เปิด server ใหม่เอง (โค้ดที่ build ไว้แล้ว ไม่ build ใหม่)
 ```
+
+- **ปิด/รีสตาร์ท server จริงต้องผ่าน countdown เสมอ** (ผู้เล่นเห็นป้ายเตือน 10 วินาที, เข้าเกมใหม่ไม่ได้ระหว่างนั้น, เซฟทุกคนพร้อมคลังก่อนปิด)
+  - อัปเดตเกม: `npm run stop-server` → รอจนขึ้น "server ปิดแล้ว" → `npm run online` (build ใหม่แล้วเปิด)
+  - **อย่า kill task/หน้าต่างของ `npm run online` ตรง ๆ** บน Windows node จะตายทันทีโดยไม่เตือนและไม่เซฟ (เสียของที่ยังไม่เซฟ ~30 วิ)
+  - Ctrl+C ในหน้าต่าง server: กดครั้งเดียวแค่ขึ้นคำเตือนใน console · กดอีกครั้งภายใน 3 วินาที = เริ่มนับถอยหลังปิด server
+  - ระหว่างนับถอยหลัง: พิมพ์ `c` + Enter = ยกเลิก (ผู้เล่นเห็น "ยกเลิกการรีสตาร์ท/ยกเลิกการปิด server" และเข้าเกมได้ตามเดิม) · `f` + Enter = ปิดทันที (ยังเซฟทุกคน) · Ctrl+C ระหว่างนับไม่มีผล
+  - owner กดได้จากหน้า `/admin` แท็บ Server (รีสตาร์ท / ปิด server / ยกเลิกการนับถอยหลัง) ทุกครั้งลงประวัติ
+  - `npm run online` (`server/online-main.ts`) เปิด server ใหม่เองเมื่อ server ออกด้วย exit code 75 (รีสตาร์ท) และถือลิงก์ Cloudflare ไว้เอง รีสตาร์ทแล้วลิงก์ไม่เปลี่ยน
+  - `npm run stop-server` คุยกับ server ผ่าน token ในไฟล์ `server/data/control-<port>.json` (สร้างตอน server เปิด) รับเฉพาะจากเครื่องนี้
 
 - เทสต์อัตโนมัติมีเฉพาะระบบ Guest/บัญชี (`tests/`) ที่เหลือตรวจด้วย `npm run build` และเปิดเกมลองเล่นจริง
   - เพิ่มเทสต์ใหม่: ไฟล์ `tests/*.test.ts` ใช้ `ok()`/`finish()` จาก `tests/check.ts` แล้วเพิ่มเข้าสคริปต์ `test` ใน `package.json`
@@ -74,3 +85,7 @@ npm run tunnel     # ลิงก์ให้เพื่อนอย่าง�
   - สมัครสมาชิกจากเบราว์เซอร์ที่มี Guest → บัญชี Guest กลายเป็นบัญชีจริง ตัวละครย้ายมาด้วย (นับใน 3 ช่อง) · เข้าสู่ระบบบัญชีเดิมไม่ย้าย
   - "เริ่ม Guest ใหม่" ลบ Guest เดิมเมื่อสร้างตัวใหม่สำเร็จ · สร้าง Guest ได้ไม่เกิน 5 ตัวต่อ IP ต่อชั่วโมง (`GUEST_PER_IP_HOUR` ใน `src/shared/api.ts`)
   - ระหว่างเล่นมีป้าย Guest บน HUD · ไม่มีบทนำ The Seeker ตอนเริ่ม (คุยเองได้)
+- หน้าผู้ดูแล `/admin` (`admin.html`, `src/admin/`, API ใน `server/admin.ts`) ใช้บัญชีเกมเดิม · role ใน `accounts.admin_role`: `owner` (ทุกอย่าง + ให้/ถอน GM + ดูประวัติ) และ `gm` (ดู + แก้ตัวละคร)
+  - ตั้ง owner ได้จาก command line เท่านั้น: `npm run admin-role -- <ชื่อผู้ใช้> owner|gm|none` (DB ตาม `DB_FILE` ค่าเริ่มต้นคือ DB จริง)
+  - server ตรวจ role ทุก request · แก้ตัวละครออนไลน์ผ่าน Player ตัวจริงใน `server/world.ts` แล้วเซฟทันที · ทุกการกระทำลงตาราง `admin_audit`
+  - เพดานต่อครั้ง (ทอง 1,000,000 / ไอเทม 10 ชิ้น) อยู่ใน `src/shared/admin.ts`
