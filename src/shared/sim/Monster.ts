@@ -2,7 +2,7 @@ import { Unit } from './Unit';
 import type { Sim } from './Sim';
 import type { Player } from './Player';
 import type { MonsterDef, ShotDef } from '../data/monsters';
-import type { SpawnArea } from '../data/zones';
+import { NO_BOOST, type MonsterBoost, type SpawnArea } from '../data/zones';
 
 const BOSS_RAMP_PER_SEC = 0.2;
 const BOSS_RAMP_MAX = 3;
@@ -74,16 +74,20 @@ export class Monster extends Unit {
   private vanished = false;
   private fallT = 0;
 
-  constructor(id: number, def: MonsterDef, level: number, area: SpawnArea, x: number, z: number) {
+  /** The zone's monster boost: multiplies HP, attack and defense, and speed (moving and attacking). */
+  private readonly zoneSpeed: number;
+
+  constructor(id: number, def: MonsterDef, level: number, area: SpawnArea, x: number, z: number, boost: MonsterBoost = NO_BOOST) {
     super(id);
     this.def = def;
     this.area = area;
     this.level = level;
     const sc = 1 + 0.18 * (level - def.levels[0]);
-    this.maxHpV = Math.round(def.hp * sc);
+    this.maxHpV = Math.round(def.hp * sc * boost.stats);
     this.hp = this.maxHpV;
-    this.atk = def.atk * sc;
-    this.defense = def.def * sc;
+    this.atk = def.atk * sc * boost.stats;
+    this.defense = def.def * sc * boost.stats;
+    this.zoneSpeed = boost.speed;
     this.expReward = Math.round(def.exp * sc);
     this.radius = def.radius;
     this.x = x;
@@ -92,6 +96,8 @@ export class Monster extends Unit {
   }
 
   get maxHp(): number { return this.maxHpV; }
+  /** Walking speed before enrage, ramps and slows: the def's, times the zone's boost. */
+  private get baseSpeed(): number { return this.def.speed * this.zoneSpeed; }
   get topY(): number { return this.def.height * 0.75; }
   get isBoss(): boolean { return this.def.behavior === 'boss'; }
   get isHostile(): boolean {
@@ -202,7 +208,7 @@ export class Monster extends Unit {
     const d = Math.hypot(dx, dz) || 0.001;
     let mx = 0;
     let mz = 0;
-    let spd = this.def.speed;
+    let spd = this.baseSpeed;
 
     if (this.stunT > 0) {
       this.windupT = 0;
@@ -311,7 +317,7 @@ export class Monster extends Unit {
             if (this.atkCd <= 0) {
               this.windKind = 'melee';
               this.windupT = (this.isBoss ? 0.5 : this.def.shot ? 0.5 : 0.35) * this.skillMult();
-              this.atkCd = this.def.attackCooldown * (frenzy ? frenzy.skill : this.enraged ? 0.75 : 1);
+              this.atkCd = (this.def.attackCooldown / this.zoneSpeed) * (frenzy ? frenzy.skill : this.enraged ? 0.75 : 1);
               if (this.def.shot) this.warnShot(sim, p, this.def.shot);
             }
           } else {
@@ -394,7 +400,7 @@ export class Monster extends Unit {
   private chaseSpeed(): number {
     const frenzy = this.enraged ? this.def.frenzy : undefined;
     const rage = frenzy ? frenzy.speed : this.def.enrageRamp ? 1 : 1.3;
-    return this.def.speed * (this.enraged ? rage : 1) * this.ramp;
+    return this.baseSpeed * (this.enraged ? rage : 1) * this.ramp;
   }
 
   /** Wind up a straight-line charge at (tx, tz), with a warning line on the ground. */
@@ -502,7 +508,7 @@ export class Monster extends Unit {
       }
     } else {
       this.state = 'charge';
-      this.chargeT = 8 / (this.def.speed * 3.6);
+      this.chargeT = 8 / (this.baseSpeed * 3.6);
       this.chargeHit = false;
     }
   }

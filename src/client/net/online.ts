@@ -403,7 +403,8 @@ export class OnlineBackend implements Backend {
       if (!m) {
         const def = MONSTERS[ms.def];
         if (!def) continue;
-        m = new Monster(ms.id, def, ms.lv, NO_AREA, ms.x, ms.z);
+        // The zone's boost too, so the HP bar's maximum matches the server's.
+        m = new Monster(ms.id, def, ms.lv, NO_AREA, ms.x, ms.z, this.zone.monsterBoost);
         this.monsterMap.set(ms.id, m);
       }
       this.glide(m, ms.x, ms.z, m);
