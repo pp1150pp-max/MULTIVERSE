@@ -14,6 +14,7 @@ import {
   type AdminAccountDetail, type AdminAccountRow, type AdminAccountsResponse, type AdminCharDetail, type AdminFeature,
 } from '../src/shared/admin';
 import { banMessage } from '../src/shared/api';
+import { HISTORY_PAGE, type AdminStats, type StatsPoint, type StatsRange } from '../src/shared/admin';
 import { BAG_SIZE } from '../src/shared/sim/Player';
 
 const NO_RIGHTS = 'ไม่มีสิทธิ์';
@@ -213,6 +214,48 @@ export async function ownerToolsApi(
     return true;
   }
 
+  // ---------------------------------------------------------- history: play sessions, chat log, graphs
+  if (method === 'GET' && path === '/api/admin/sessions') {
+    requireFeature(req, db, 'sessions');
+    const account = Number(url.searchParams.get('account'));
+    const before = Number(url.searchParams.get('before'));
+    const open = world.openPlayRows();
+    const rows = db.playSessions(HISTORY_PAGE, Number.isSafeInteger(account) && account > 0 ? account : undefined,
+      Number.isSafeInteger(before) && before > 0 ? before : undefined).map((r) => {
+      const live = open.get(r.id);
+      return live ? { ...r, ...live, online: true } : r;
+    });
+    send(res, 200, rows);
+    return true;
+  }
+
+  if (method === 'GET' && path === '/api/admin/chat') {
+    requireFeature(req, db, 'chatLog');
+    const q = (url.searchParams.get('q') ?? '').trim().slice(0, 50);
+    const before = Number(url.searchParams.get('before'));
+    send(res, 200, db.chatLog(HISTORY_PAGE, q, Number.isSafeInteger(before) && before > 0 ? before : undefined));
+    return true;
+  }
+
+  const chat = /^\/api\/admin\/chat\/(\d{1,12})$/.exec(path);
+  if (method === 'DELETE' && chat) {
+    const a = requireFeature(req, db, 'chatDelete');
+    const m = db.chatMessage(Number(chat[1]));
+    if (!m) throw new HttpError(404, 'ไม่พบข้อความนี้');
+    db.deleteChat(m.id);
+    log(db, a, 'chat-delete', `${m.charName} (${m.username})`, `${new Date(m.at).toISOString()}: ${m.text}`);
+    send(res, 200, { msg: 'ลบข้อความแล้ว' });
+    return true;
+  }
+
+  if (method === 'GET' && path === '/api/admin/stats') {
+    requireFeature(req, db, 'stats');
+    const r = url.searchParams.get('range');
+    const range: StatsRange = r === '7d' || r === '30d' ? r : '24h';
+    send(res, 200, stats(db, world, range));
+    return true;
+  }
+
   // ---------------------------------------------------------- backups
   if (path === '/api/admin/backups' && method === 'GET') {
     requireFeature(req, db, 'backup');
@@ -228,4 +271,80 @@ export async function ownerToolsApi(
   }
 
   return false;
+}
+
+// ------------------------------------------------------------ graphs
+
+const HOUR = 60 * 60 * 1000;
+const DAY = 24 * HOUR;
+/** Range → its length and the bucket the online graph uses. */
+const RANGES: Record<StatsRange, { ms: number; bucket: number }> = {
+  '24h': { ms: DAY, bucket: 10 * 60 * 1000 },
+  '7d': { ms: 7 * DAY, bucket: HOUR },
+  '30d': { ms: 30 * DAY, bucket: 4 * HOUR },
+};
+
+/** Local midnight of the day `t` is in. */
+function dayStart(t: number): number {
+  const d = new Date(t);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+function stats(db: Db, world: GameWorld, range: StatsRange): AdminStats {
+  const now = Date.now();
+  const { ms, bucket } = RANGES[range];
+  const from = now - ms;
+  const samples = db.samples(from);
+
+  // Most players online per bucket (buckets without samples are left out: the server was off).
+  const online = new Map<number, number>();
+  for (const s of samples) {
+    const b = Math.floor(s.at / bucket) * bucket;
+    online.set(b, Math.max(online.get(b) ?? 0, s.total));
+  }
+
+  // Average level / ping of the players online: per hour over 24 h, per day otherwise.
+  const step = range === '24h' ? HOUR : DAY;
+  const keyOf = (t: number) => (step === DAY ? dayStart(t) : Math.floor(t / HOUR) * HOUR);
+  const lv = new Map<number, { sum: number; n: number }>();
+  const ping = new Map<number, { sum: number; n: number }>();
+  for (const s of samples) {
+    if (!s.total) continue;
+    const k = keyOf(s.at);
+    if (s.avgLevel !== null) {
+      const e = lv.get(k) ?? { sum: 0, n: 0 };
+      e.sum += s.avgLevel;
+      e.n++;
+      lv.set(k, e);
+    }
+    if (s.avgRtt !== null) {
+      const e = ping.get(k) ?? { sum: 0, n: 0 };
+      e.sum += s.avgRtt;
+      e.n++;
+      ping.set(k, e);
+    }
+  }
+  const avg = (m: Map<number, { sum: number; n: number }>): StatsPoint[] =>
+    [...m].sort((a, b) => a[0] - b[0]).map(([at, e]) => ({ at, v: Math.round((e.sum / e.n) * 10) / 10 }));
+
+  // Sign-ups per local day for the last 30 days, zeros included.
+  const first = dayStart(now - 29 * DAY);
+  const days: StatsPoint[] = [];
+  for (let d = first; d <= now; d = dayStart(d + DAY + HOUR)) days.push({ at: d, v: 0 });
+  for (const t of db.signupTimes(first)) {
+    const k = dayStart(t);
+    const p = days.find((x) => x.at === k);
+    if (p) p.v++;
+  }
+
+  return {
+    range,
+    online: [...online].sort((a, b) => a[0] - b[0]).map(([at, v]) => ({ at, v })),
+    signups: days,
+    avgLevel: avg(lv),
+    avgPing: avg(ping),
+    now: { online: world.onlineAccounts().length, avgLevelAll: db.averageLevel() },
+    since: db.samples(0)[0]?.at ?? null,
+  };
 }

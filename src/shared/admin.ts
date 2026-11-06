@@ -86,7 +86,7 @@ export interface AdminServerState { supervised: boolean; stopping: ShutdownMode 
 // ------------------------------------------------------------ owner tools (users, bans, broadcast, backups…)
 
 /** The newer admin tools. Each is its own switch so some can be opened to GMs later. */
-export type AdminFeature = 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup';
+export type AdminFeature = 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete';
 
 /**
  * Who may use each tool. To open one to GMs, add 'gm', e.g. `ban: ['owner', 'gm']`. The server
@@ -98,6 +98,10 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   ban: ['owner'],
   broadcast: ['owner'],
   backup: ['owner'],
+  sessions: ['owner'],
+  stats: ['owner'],
+  chatLog: ['owner'],
+  chatDelete: ['owner'],
 };
 
 export const canUse = (role: AdminRole, f: AdminFeature): boolean => FEATURE_ROLES[f].includes(role);
@@ -155,3 +159,47 @@ export interface AdminAccountDetail {
 }
 
 export interface BackupRow { name: string; size: number; at: number; kind: string }
+
+// ------------------------------------------------------------ history (play sessions, chat, graphs)
+
+/** Days each kind of history is kept (older rows are deleted every hour). */
+export const HISTORY_DAYS = { sessions: 90, chat: 30, samples: 90 };
+/** Rows per page of the session and chat lists. */
+export const HISTORY_PAGE = 100;
+
+export interface PlaySessionRow {
+  id: number;
+  accountId: number;
+  username: string;
+  guest: boolean;
+  charId: number;
+  charName: string;
+  joinedAt: number;
+  /** null while playing, or when the server stopped without saying goodbye. */
+  leftAt: number | null;
+  ip: string;
+  gpu: string | null;
+  avgRtt: number | null;
+  avgFps: number | null;
+  /** Still in the world right now. */
+  online: boolean;
+}
+
+export interface ChatLogRow { id: number; at: number; accountId: number; username: string; charName: string; zone: string; text: string }
+
+export type StatsRange = '24h' | '7d' | '30d';
+export interface StatsPoint { at: number; v: number }
+export interface AdminStats {
+  range: StatsRange;
+  /** Most players online in each time bucket. */
+  online: StatsPoint[];
+  /** Real-account sign-ups per day (last 30 days, local days). */
+  signups: StatsPoint[];
+  /** Daily average level and ping of the players online (from the minute samples). */
+  avgLevel: StatsPoint[];
+  avgPing: StatsPoint[];
+  /** Right now: players online, average level of every character. */
+  now: { online: number; avgLevelAll: number | null };
+  /** When the minute samples start (null = none yet). */
+  since: number | null;
+}

@@ -7,7 +7,7 @@ import type { CharacterData } from '../src/shared/sim/Player';
 import { GUEST_TTL_HOURS, type CharacterSummary } from '../src/shared/api';
 import type { ClassId } from '../src/shared/types';
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
-import { isAdminRole, type AdminRole, type AuditRow, type RoleRow } from '../src/shared/admin';
+import { isAdminRole, type AdminRole, type AuditRow, type ChatLogRow, type PlaySessionRow, type RoleRow } from '../src/shared/admin';
 
 export interface AccountRow { id: number; username: string; pass_hash: string }
 /** The account behind a login token. Guests are temporary accounts that can't log in with a password. */
@@ -53,6 +53,42 @@ export class Db {
         account_id INTEGER PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
         data TEXT NOT NULL,
         updated_at INTEGER NOT NULL
+      );
+      -- One row per play session (join → leave), for the admin page. Kept PLAY_SESSION_DAYS.
+      CREATE TABLE IF NOT EXISTS play_sessions (
+        id INTEGER PRIMARY KEY,
+        account_id INTEGER NOT NULL,
+        username TEXT NOT NULL,
+        guest INTEGER NOT NULL DEFAULT 0,
+        char_id INTEGER NOT NULL,
+        char_name TEXT NOT NULL,
+        joined_at INTEGER NOT NULL,
+        left_at INTEGER,
+        ip TEXT NOT NULL,
+        gpu TEXT,
+        avg_rtt REAL,
+        avg_fps REAL
+      );
+      CREATE INDEX IF NOT EXISTS play_sessions_by_account ON play_sessions(account_id, joined_at);
+      CREATE INDEX IF NOT EXISTS play_sessions_by_time ON play_sessions(joined_at);
+      -- Chat messages, searchable on the admin page. Kept CHAT_LOG_DAYS.
+      CREATE TABLE IF NOT EXISTS chat_log (
+        id INTEGER PRIMARY KEY,
+        at INTEGER NOT NULL,
+        account_id INTEGER NOT NULL,
+        username TEXT NOT NULL,
+        char_name TEXT NOT NULL,
+        zone TEXT NOT NULL,
+        text TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS chat_log_by_time ON chat_log(at);
+      -- Who was online, once a minute, for the admin page's graphs. Kept SAMPLE_DAYS.
+      CREATE TABLE IF NOT EXISTS online_samples (
+        at INTEGER PRIMARY KEY,
+        total INTEGER NOT NULL,
+        zones TEXT NOT NULL,
+        avg_level REAL,
+        avg_rtt REAL
       );
       CREATE TABLE IF NOT EXISTS admin_audit (
         id INTEGER PRIMARY KEY,
@@ -377,6 +413,86 @@ export class Db {
   /** A consistent copy of the whole database, made while the server runs (SQLite VACUUM INTO). */
   backupTo(file: string): void {
     this.db.prepare('VACUUM INTO ?').run(file);
+  }
+
+  // ------------------------------------------------------------ play sessions, chat log, samples
+
+  /** A new play session; returns its row id (closed by endPlaySession). */
+  startPlaySession(r: { accountId: number; username: string; guest: boolean; charId: number; charName: string; ip: string }, at = Date.now()): number {
+    return Number(this.db.prepare(`INSERT INTO play_sessions (account_id, username, guest, char_id, char_name, joined_at, ip)
+      VALUES (?, ?, ?, ?, ?, ?, ?)`).run(r.accountId, r.username, r.guest ? 1 : 0, r.charId, r.charName, at, r.ip).lastInsertRowid);
+  }
+
+  endPlaySession(id: number, r: { gpu: string | null; avgRtt: number | null; avgFps: number | null }, at = Date.now()): void {
+    this.db.prepare('UPDATE play_sessions SET left_at = ?, gpu = ?, avg_rtt = ?, avg_fps = ? WHERE id = ?').run(at, r.gpu, r.avgRtt, r.avgFps, id);
+  }
+
+  /** Newest first; optionally one account's, or only those before row `before`. */
+  playSessions(limit: number, accountId?: number, before?: number): PlaySessionRow[] {
+    const rows = this.db.prepare(`SELECT * FROM play_sessions WHERE id < ? AND (? IS NULL OR account_id = ?) ORDER BY id DESC LIMIT ?`)
+      .all(before ?? Number.MAX_SAFE_INTEGER, accountId ?? null, accountId ?? null, limit) as {
+      id: number; account_id: number; username: string; guest: number; char_id: number; char_name: string; joined_at: number;
+      left_at: number | null; ip: string; gpu: string | null; avg_rtt: number | null; avg_fps: number | null;
+    }[];
+    return rows.map((r) => ({
+      id: r.id, accountId: r.account_id, username: r.guest ? 'Guest' : r.username, guest: r.guest === 1, charId: r.char_id, charName: r.char_name,
+      joinedAt: r.joined_at, leftAt: r.left_at, ip: r.ip, gpu: r.gpu, avgRtt: r.avg_rtt, avgFps: r.avg_fps, online: false,
+    }));
+  }
+
+  logChat(r: { accountId: number; username: string; charName: string; zone: string; text: string }, at = Date.now()): void {
+    this.db.prepare('INSERT INTO chat_log (at, account_id, username, char_name, zone, text) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(at, r.accountId, r.username, r.charName, r.zone, r.text);
+  }
+
+  /** Newest first; `q` matches the text, the username or the character name. */
+  chatLog(limit: number, q: string, before?: number): ChatLogRow[] {
+    const like = `%${q.replace(/[!%_]/g, (c) => '!' + c)}%`;
+    const rows = this.db.prepare(`SELECT * FROM chat_log WHERE id < ?
+      AND (? = '' OR text LIKE ? ESCAPE '!' OR username LIKE ? ESCAPE '!' OR char_name LIKE ? ESCAPE '!')
+      ORDER BY id DESC LIMIT ?`).all(before ?? Number.MAX_SAFE_INTEGER, q, like, like, like, limit) as {
+      id: number; at: number; account_id: number; username: string; char_name: string; zone: string; text: string;
+    }[];
+    return rows.map((r) => ({ id: r.id, at: r.at, accountId: r.account_id, username: r.username, charName: r.char_name, zone: r.zone, text: r.text }));
+  }
+
+  chatMessage(id: number): ChatLogRow | undefined {
+    return this.chatLog(1, '', id + 1).find((r) => r.id === id);
+  }
+
+  deleteChat(id: number): boolean {
+    return this.db.prepare('DELETE FROM chat_log WHERE id = ?').run(id).changes > 0;
+  }
+
+  addSample(r: { total: number; zones: Record<string, number>; avgLevel: number | null; avgRtt: number | null }, at = Date.now()): void {
+    this.db.prepare('INSERT OR REPLACE INTO online_samples (at, total, zones, avg_level, avg_rtt) VALUES (?, ?, ?, ?, ?)')
+      .run(at, r.total, JSON.stringify(r.zones), r.avgLevel, r.avgRtt);
+  }
+
+  samples(from: number): { at: number; total: number; avgLevel: number | null; avgRtt: number | null }[] {
+    return (this.db.prepare('SELECT at, total, avg_level, avg_rtt FROM online_samples WHERE at >= ? ORDER BY at').all(from) as {
+      at: number; total: number; avg_level: number | null; avg_rtt: number | null;
+    }[]).map((r) => ({ at: r.at, total: r.total, avgLevel: r.avg_level, avgRtt: r.avg_rtt }));
+  }
+
+  /** Real accounts' sign-up times since `from` (for the sign-ups per day graph). */
+  signupTimes(from: number): number[] {
+    return (this.db.prepare('SELECT created_at FROM accounts WHERE is_guest = 0 AND created_at >= ?').all(from) as { created_at: number }[])
+      .map((r) => r.created_at);
+  }
+
+  /** Average level of every saved character right now. */
+  averageLevel(): number | null {
+    const r = this.db.prepare("SELECT AVG(json_extract(data, '$.level')) AS v FROM characters").get() as { v: number | null };
+    return r.v;
+  }
+
+  /** Deletes history older than the given ages; returns how many rows went. */
+  pruneHistory(now: number, days: { sessions: number; chat: number; samples: number }): number {
+    const day = 24 * 60 * 60 * 1000;
+    return Number(this.db.prepare('DELETE FROM play_sessions WHERE joined_at < ?').run(now - days.sessions * day).changes)
+      + Number(this.db.prepare('DELETE FROM chat_log WHERE at < ?').run(now - days.chat * day).changes)
+      + Number(this.db.prepare('DELETE FROM online_samples WHERE at < ?').run(now - days.samples * day).changes);
   }
 
   /** Records one admin action. */

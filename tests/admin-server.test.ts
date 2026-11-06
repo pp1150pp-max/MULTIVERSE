@@ -8,7 +8,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
-import { ADMIN_GOLD_MAX, ADMIN_ITEMS_MAX } from '../src/shared/admin';
+import { ADMIN_GOLD_MAX, ADMIN_ITEMS_MAX, FEATURE_ROLES, HISTORY_DAYS } from '../src/shared/admin';
+import { Db } from '../server/db';
 import { MAX_LEVEL } from '../src/shared/formulas';
 import { finish, ok } from './check';
 
@@ -32,7 +33,7 @@ const PORT = await freePort();
 const BASE = `http://localhost:${PORT}`;
 const server: ChildProcess = spawn(process.execPath, ['--import', 'tsx', 'server/main.ts'], {
   cwd: ROOT,
-  env: { ...process.env, PORT: String(PORT), DB_FILE },
+  env: { ...process.env, PORT: String(PORT), DB_FILE, STATS_SAMPLE_MS: '1000' },
   stdio: ['ignore', 'ignore', 'inherit'],
 });
 
@@ -242,13 +243,14 @@ async function run(): Promise<void> {
   // ---------------------------------------------------------- owner tools: who may use them
   const plainId = (await api('GET', '/admin/accounts', undefined, ownerTok)).data.rows.find((r: any) => r.username === 'plain1').accountId;
   const ownerId = (await api('GET', '/admin/accounts', undefined, ownerTok)).data.rows.find((r: any) => r.username === 'owner1').accountId;
-  ok((await api('GET', '/admin/me', undefined, ownerTok)).data.features.length === 5, 'owner has every owner tool');
+  ok((await api('GET', '/admin/me', undefined, ownerTok)).data.features.length === Object.keys(FEATURE_ROLES).length, 'owner has every owner tool');
   ok((await api('GET', '/admin/me', undefined, gmTok)).data.features.length === 0, 'GM has no owner tools (FEATURE_ROLES)');
   const gmDenied: [string, string, unknown?][] = [
     ['GET', '/admin/accounts'], ['GET', `/admin/accounts/${plainId}`], ['POST', `/admin/accounts/${plainId}/password`],
     ['POST', `/admin/accounts/${plainId}/ban`, { duration: '1h', reason: 'x' }], ['POST', `/admin/accounts/${plainId}/unban`],
     ['POST', '/admin/broadcast', { text: 'hi' }], ['GET', '/admin/backups'], ['POST', '/admin/backups'],
     ['DELETE', `/admin/accounts/${plainId}`, { confirm: 'plain1' }], ['DELETE', `/admin/characters/${charId}`, { confirm: 'Tester' }],
+    ['GET', '/admin/sessions'], ['GET', `/admin/sessions?account=${plainId}`], ['GET', '/admin/stats'], ['GET', '/admin/chat'], ['DELETE', '/admin/chat/1'],
   ];
   for (const [m, path, body] of gmDenied) ok((await api(m, path, body, gmTok)).status === 403, `GM denied: ${m} ${path}`);
   ok((await api('GET', '/admin/accounts', undefined, plainTok)).status === 403, 'player denied: account list');
@@ -273,6 +275,19 @@ async function run(): Promise<void> {
   ok((await api('POST', '/admin/broadcast', { text: 'x'.repeat(201) }, ownerTok)).status === 400, 'broadcast over the length cap refused');
   ok((await api('POST', '/admin/broadcast', { text: '   ' }, ownerTok)).status === 400, 'empty broadcast refused');
 
+  // ---------------------------------------------------------- history: this play session and its chat are recorded
+  b1.send({ t: 'client', gpu: 'Test GPU 9000' });
+  for (let k = 0; k < 3; k++) {
+    b1.send({ t: 'ping', id: 1000 + k, rtt: 50 + k * 10, fps: 60, maxFrame: 20, wait: 0 });
+    await sleep(800);
+  }
+  b1.send({ t: 'chat', text: 'สวัสดีทุกคน hello' });
+  await sleep(700);
+  b1.send({ t: 'chat', text: 'ข้อความที่สอง' });
+  await sleep(300);
+  const live = await api('GET', `/admin/sessions?account=${plainId}`, undefined, ownerTok);
+  ok(live.status === 200 && live.data[0]?.online === true && live.data[0].charName === 'Tester' && live.data[0].leftAt === null, 'play session recorded while playing');
+
   // ---------------------------------------------------------- reset password
   const rp = await api('POST', `/admin/accounts/${plainId}/password`, undefined, ownerTok);
   await sleep(300);
@@ -282,6 +297,23 @@ async function run(): Promise<void> {
   const relog = await api('POST', '/login', { username: 'plain1', password: rp.data.password });
   ok(relog.status === 200, 'temporary password logs in');
   const plainTok2: string = relog.data.token;
+  const done = (await api('GET', `/admin/sessions?account=${plainId}`, undefined, ownerTok)).data[0];
+  ok(done && !done.online && done.leftAt >= done.joinedAt && done.gpu === 'Test GPU 9000' && done.avgRtt === 60 && done.avgFps === 60 && typeof done.ip === 'string',
+    `play session closed with GPU, average ping and FPS (${JSON.stringify(done)})`);
+  const allSessions = await api('GET', '/admin/sessions', undefined, ownerTok);
+  ok(allSessions.status === 200 && allSessions.data.length >= 3, `recent sessions list (${allSessions.data.length})`);
+  const chats = await api('GET', '/admin/chat?q=hello', undefined, ownerTok);
+  ok(chats.status === 200 && chats.data.length === 1 && chats.data[0].charName === 'Tester' && chats.data[0].username === 'plain1' && chats.data[0].zone,
+    'chat recorded and searchable by text');
+  ok((await api('GET', '/admin/chat?q=Tester', undefined, ownerTok)).data.length === 2, 'chat searchable by character name');
+  ok((await api('GET', '/admin/chat?q=%25', undefined, ownerTok)).data.length === 0, 'a typed % is not a wildcard in chat search');
+  const delChat = await api('DELETE', `/admin/chat/${chats.data[0].id}`, undefined, ownerTok);
+  ok(delChat.status === 200 && (await api('GET', '/admin/chat?q=hello', undefined, ownerTok)).data.length === 0, 'owner deletes a chat message');
+  ok((await api('DELETE', `/admin/chat/${chats.data[0].id}`, undefined, ownerTok)).status === 404, 'deleting it again → 404');
+  const st = await api('GET', '/admin/stats?range=24h', undefined, ownerTok);
+  ok(st.status === 200 && st.data.online.length >= 1 && st.data.since > 0 && st.data.signups.length >= 30 && st.data.signups.some((p: any) => p.v === 3),
+    `stats: minute samples and sign-ups per day (${st.data.online.length} points)`);
+  ok(st.data.avgPing.length >= 1 && st.data.avgLevel.length >= 1, 'stats: average ping and level from the samples');
   const guestAcc = accs.data.rows.find((r: any) => r.guest);
   ok((await api('POST', `/admin/accounts/${guestAcc.accountId}/password`, undefined, ownerTok)).status === 400, 'guest has no password to reset');
   ok((await api('POST', `/admin/accounts/${ownerId}/password`, undefined, ownerTok)).status === 200, 'owner may reset their own password');
@@ -349,8 +381,11 @@ async function run(): Promise<void> {
   ok((await api('DELETE', `/admin/characters/${charId}`, { confirm: 'nope' }, ot)).status === 400, 'character delete needs its name');
   ok((await api('DELETE', `/admin/characters/${charId}`, { confirm: 'tester' }, ot)).status === 200 && !tdb.prepare('SELECT 1 FROM characters WHERE id = ?').get(charId),
     'owner deletes a character');
-  const tools = tdb.prepare("SELECT action, details FROM admin_audit WHERE action IN ('broadcast','password','ban','unban','backup','delete-account','delete-character')").all() as any[];
-  ok(['broadcast', 'password', 'ban', 'unban', 'backup', 'delete-account', 'delete-character'].every((a) => tools.some((t) => t.action === a)), 'every owner tool is in the audit log');
+  const tools = tdb.prepare("SELECT action, details FROM admin_audit WHERE action IN ('broadcast','password','ban','unban','backup','delete-account','delete-character','chat-delete')").all() as any[];
+  ok(['broadcast', 'password', 'ban', 'unban', 'backup', 'delete-account', 'delete-character', 'chat-delete'].every((a) => tools.some((t) => t.action === a)), 'every owner tool is in the audit log');
+  // Old history is deleted by its age.
+  tdb.prepare('INSERT INTO chat_log (at, account_id, username, char_name, zone, text) VALUES (?, 1, ?, ?, ?, ?)').run(Date.now() - 31 * 864e5, 'old', 'Old', 'emerald_forest', 'old message');
+  tdb.prepare('INSERT INTO play_sessions (account_id, username, char_id, char_name, joined_at, ip) VALUES (1, ?, 1, ?, ?, ?)').run('old', 'Old', Date.now() - 91 * 864e5, '1.2.3.4');
   ok(!tools.some((t) => t.details.includes(rp.data.password)), 'the temporary password is never logged');
   tdb.close();
 
@@ -364,6 +399,16 @@ try {
 } catch (e) {
   ok(false, `crashed: ${(e as Error).stack}`);
 } finally {
+  // Retention, on the same database (server stopped): only the rows planted above are old enough.
+  try {
+    const dbx = new Db(DB_FILE);
+    const gone = dbx.pruneHistory(Date.now(), HISTORY_DAYS);
+    ok(gone === 2 && dbx.chatLog(10, 'old message').length === 0, `old chat (> ${HISTORY_DAYS.chat} d) and sessions (> ${HISTORY_DAYS.sessions} d) deleted (${gone})`);
+    ok(dbx.chatLog(10, 'ข้อความที่สอง').length === 1, 'recent chat kept');
+    dbx.close();
+  } catch (e) {
+    ok(false, `retention check crashed: ${(e as Error).message}`);
+  }
   await stopServer();
 }
 finish('admin-server');

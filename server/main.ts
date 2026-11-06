@@ -19,6 +19,7 @@ import { GameWorld } from './world';
 import { bearer, HttpError, readJson, send, str } from './http';
 import { adminApi } from './admin';
 import { Backups } from './backup';
+import { HISTORY_DAYS } from '../src/shared/admin';
 import { controlFilePath, CTRL_C_WINDOW_MS, DoublePress, isLocalControl, STOP_PATH, type ControlFile } from './control';
 import { createInterface } from 'node:readline';
 import { RESTART_EXIT_CODE, SHUTDOWN_SECONDS, type ShutdownMode } from '../src/shared/net/protocol';
@@ -305,6 +306,27 @@ const world = new GameWorld(db, server);
 cleanupGuests();
 setInterval(cleanupGuests, CLEANUP_MS);
 backups.startDaily();
+
+// History for the admin page's graphs: who is online, once a minute (STATS_SAMPLE_MS only for tests),
+// and old sessions/chat/samples deleted every hour (HISTORY_DAYS).
+const SAMPLE_MS = Math.max(1000, Number(process.env.STATS_SAMPLE_MS) || 60_000);
+setInterval(() => {
+  try {
+    db.addSample(world.sample());
+  } catch (e) {
+    console.error('[stats] sample failed', e);
+  }
+}, SAMPLE_MS).unref();
+const prune = () => {
+  try {
+    const n = db.pruneHistory(Date.now(), HISTORY_DAYS);
+    if (n) console.log(`[history] deleted ${n} old row(s)`);
+  } catch (e) {
+    console.error('[history] cleanup failed', e);
+  }
+};
+prune();
+setInterval(prune, CLEANUP_MS).unref();
 
 server.listen(PORT, '0.0.0.0', () => {
   writeFileSync(CONTROL_FILE, JSON.stringify({ pid: process.pid, port: PORT, token: CONTROL_TOKEN } satisfies ControlFile));
