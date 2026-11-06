@@ -106,8 +106,8 @@ export class OnlineBackend implements Backend {
   /** Hooks for the game screen. */
   onChat: ((name: string, text: string) => void) | null = null;
   onDisconnect: ((msg: string) => void) | null = null;
-  /** The server stops or restarts in `seconds` (sent once a second). */
-  onShutdown: ((mode: ShutdownMode, seconds: number) => void) | null = null;
+  /** The server stops or restarts in `seconds` (sent once a second); null = cancelled. */
+  onShutdown: ((mode: ShutdownMode, seconds: number | null) => void) | null = null;
 
   private readonly playerMap = new Map<number, Player>();
   private readonly monsterMap = new Map<number, Monster>();
@@ -280,6 +280,9 @@ export class OnlineBackend implements Backend {
         break;
       case 'shutdown':
         this.onShutdown?.(m.mode, m.seconds);
+        break;
+      case 'shutdownCancel':
+        this.onShutdown?.(m.mode, null);
         break;
       case 'pong': {
         const at = this.pingsOut.get(m.id);

@@ -18,7 +18,8 @@ import { newCharacterData } from '../src/shared/sim/Player';
 import { GameWorld } from './world';
 import { bearer, HttpError, readJson, send, str } from './http';
 import { adminApi } from './admin';
-import { controlFilePath, isLocalControl, STOP_PATH, type ControlFile } from './control';
+import { controlFilePath, CTRL_C_WINDOW_MS, DoublePress, isLocalControl, STOP_PATH, type ControlFile } from './control';
+import { createInterface } from 'node:readline';
 import { RESTART_EXIT_CODE, SHUTDOWN_SECONDS, type ShutdownMode } from '../src/shared/net/protocol';
 import { rmSync, writeFileSync } from 'node:fs';
 import { announceShared, runningTunnel, startTunnel } from './tunnel';
@@ -78,7 +79,7 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string): Pro
   const method = req.method ?? 'GET';
 
   if (path.startsWith('/api/admin/')) {
-    return adminApi(req, res, path, db, world, { supervised: SUPERVISED, stopping: () => stopMode, stop: beginStop });
+    return adminApi(req, res, path, db, world, { supervised: SUPERVISED, stopping: () => stopMode, stop: beginStop, cancel: cancelStop });
   }
 
   // npm run stop-server (server/stop-main.ts): only from this computer, with the token in CONTROL_FILE.
@@ -88,6 +89,11 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string): Pro
     const err = beginStop(body.mode === 'restart' ? 'restart' : 'shutdown', 'npm run stop-server');
     if (err && !stopMode) throw new HttpError(400, err);
     return send(res, 202, { seconds: SHUTDOWN_S, mode: stopMode, note: err });
+  }
+  // stop-server asks while it waits, to notice a cancelled countdown.
+  if (method === 'GET' && path === STOP_PATH) {
+    if (!isLocalControl(req, CONTROL_TOKEN)) throw new HttpError(403, 'Forbidden');
+    return send(res, 200, { mode: stopMode });
   }
 
   if (method === 'POST' && path === '/api/register') {
@@ -317,20 +323,22 @@ let tunnel: Awaited<ReturnType<typeof startTunnel>> = null;
 // ------------------------------------------------------------ stopping
 
 /**
- * Every way of stopping (Ctrl+C, npm run stop-server, the admin page) warns the players for
+ * Every way of stopping (Ctrl+C twice, npm run stop-server, the admin page) warns the players for
  * SHUTDOWN_SECONDS, then saves everyone and exits. A restart exits with RESTART_EXIT_CODE, and
- * npm run online (server/online-main.ts) starts the server again.
+ * npm run online (server/online-main.ts) starts the server again. While counting down, typing
+ * `c` + Enter in this window (or the admin page's button) cancels; `f` + Enter stops at once.
  */
 let stopMode: ShutdownMode | null = null;
 let stopTimer: ReturnType<typeof setTimeout> | undefined;
 let finished = false;
+const STOP_HINT = '  พิมพ์ c แล้ว Enter เพื่อยกเลิก · พิมพ์ f แล้ว Enter เพื่อปิดทันที (ยังเซฟทุกคน)';
 
 function beginStop(mode: ShutdownMode, by: string): string | null {
   if (stopMode) return `กำลัง${stopMode === 'restart' ? 'รีสตาร์ท' : 'ปิด'}อยู่แล้ว`;
   if (mode === 'restart' && !SUPERVISED) return 'server นี้ไม่ได้เปิดด้วย npm run online จึงเปิดใหม่เองไม่ได้ — ใช้ "ปิด server" แล้วเปิดใหม่เอง';
   stopMode = mode;
-  console.log(`
-[server] ${by}: ${mode === 'restart' ? 'restarting' : 'shutting down'} in ${SHUTDOWN_S} s (players warned)`);
+  console.log(`\n[server] ${by}: ${mode === 'restart' ? 'restarting' : 'shutting down'} in ${SHUTDOWN_S} s (players warned)`);
+  console.log(STOP_HINT);
   let left = SHUTDOWN_S;
   const tick = () => {
     if (left <= 0) return finishStop(mode);
@@ -339,6 +347,17 @@ function beginStop(mode: ShutdownMode, by: string): string | null {
     stopTimer = setTimeout(tick, 1000);
   };
   tick();
+  return null;
+}
+
+/** Stops a countdown: players are told, joins are allowed again. Returns why it can't, or null. */
+function cancelStop(by: string): string | null {
+  if (!stopMode || finished) return 'ไม่ได้นับถอยหลังอยู่';
+  clearTimeout(stopTimer);
+  const mode = stopMode;
+  stopMode = null;
+  world.cancelShutdown(mode);
+  console.log(`[server] ${by}: ${mode === 'restart' ? 'restart' : 'shutdown'} cancelled`);
   return null;
 }
 
@@ -363,15 +382,36 @@ function finishStop(mode: ShutdownMode): void {
   }, 300);
 }
 
-// Ctrl+C / kill: count down; a second Ctrl+C during the countdown stops right away (still saving everyone).
-const onSignal = () => {
-  if (stopMode) {
-    console.log('[server] stopping now');
-    finishStop(stopMode);
-  } else {
-    beginStop('shutdown', 'Ctrl+C');
-    console.log('  (กด Ctrl+C อีกครั้งเพื่อปิดทันที — ยังเซฟทุกคนก่อนปิด)');
-  }
-};
-process.on('SIGINT', onSignal);
-process.on('SIGTERM', onSignal);
+// Ctrl+C: one press only prints a hint; a second within CTRL_C_WINDOW_MS starts the countdown. During the
+// countdown Ctrl+C does nothing more (c / f + Enter instead). SIGTERM starts the countdown right away.
+const ctrlC = new DoublePress(CTRL_C_WINDOW_MS);
+process.on('SIGINT', () => {
+  if (stopMode) return console.log(`\n[server] กำลังนับถอยหลังอยู่\n${STOP_HINT}`);
+  if (ctrlC.press(Date.now())) beginStop('shutdown', 'Ctrl+C');
+  else console.log(`\n  กด Ctrl+C อีกครั้งภายใน ${CTRL_C_WINDOW_MS / 1000} วินาทีเพื่อปิด server`);
+});
+process.on('SIGTERM', () => {
+  if (!stopMode) beginStop('shutdown', 'SIGTERM');
+});
+
+// Typed commands in the server window. stdin may be a pipe or already closed (npm, a background
+// task, tests): then there is simply nothing to read.
+try {
+  const rl = createInterface({ input: process.stdin, terminal: false });
+  rl.on('line', (line) => {
+    const cmd = line.trim().toLowerCase();
+    if (cmd === 'c') {
+      const err = cancelStop('typed c');
+      if (err) console.log(`  ${err}`);
+    } else if (cmd === 'f') {
+      if (stopMode) {
+        console.log('[server] stopping now');
+        finishStop(stopMode);
+      } else console.log('  ไม่ได้นับถอยหลังอยู่ (f ใช้ระหว่างนับถอยหลังเท่านั้น)');
+    }
+  });
+  rl.on('error', () => {});
+  process.stdin.on('error', () => {});
+} catch {
+  // no stdin at all
+}

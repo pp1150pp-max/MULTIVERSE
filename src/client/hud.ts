@@ -23,7 +23,7 @@ import { drawMapIcon, facingAngle } from './mapIcons';
 import type { MapIcon } from './mapIconNames';
 import { NPC_MAP_ICON } from './fullmap';
 import { COIN_ICON, emptySlotIcon, FORGE_ICON, itemIcon, potionIcon, skillIcon } from './icons';
-import { shutdownWarning, type ShutdownMode } from '../shared/net/protocol';
+import { shutdownCancelled, shutdownWarning, type ShutdownMode } from '../shared/net/protocol';
 
 /** Yellow, like the game's level-up lines. */
 const SHUTDOWN_COLOR = '#ffd34a';
@@ -1409,7 +1409,14 @@ export class Hud {
    * The server is about to stop or restart: a banner that stays up and ticks down (until the
    * connection closes), and the same count as yellow lines in the chat.
    */
-  shutdownCountdown(mode: ShutdownMode, seconds: number): void {
+  shutdownCountdown(mode: ShutdownMode, seconds: number | null): void {
+    if (seconds === null) {
+      document.getElementById('shutdown-banner')?.remove();
+      const text = shutdownCancelled(mode);
+      this.banner(text, undefined, SHUTDOWN_COLOR);
+      this.log(text, SHUTDOWN_COLOR);
+      return;
+    }
     const text = shutdownWarning(mode, seconds);
     let el = document.getElementById('shutdown-banner');
     if (!el) {

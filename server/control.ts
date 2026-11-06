@@ -6,6 +6,24 @@ import type { IncomingMessage } from 'node:http';
 import { dirname, join } from 'node:path';
 
 export const STOP_PATH = '/api/server/stop';
+/** Ctrl+C must be pressed twice within this to start stopping the server. */
+export const CTRL_C_WINDOW_MS = 3000;
+
+/** True on the second press within `windowMs` of the first (then it starts over). */
+export class DoublePress {
+  private last = -Infinity;
+
+  constructor(private readonly windowMs: number) {}
+
+  press(now: number): boolean {
+    if (now - this.last <= this.windowMs) {
+      this.last = -Infinity;
+      return true;
+    }
+    this.last = now;
+    return false;
+  }
+}
 export const TOKEN_HEADER = 'x-control-token';
 
 export interface ControlFile { pid: number; port: number; token: string }

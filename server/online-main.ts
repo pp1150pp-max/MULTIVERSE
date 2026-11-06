@@ -30,13 +30,13 @@ function runServer(): Promise<number> {
   });
 }
 
-// On Windows, Ctrl+C reaches every process in the window, the server included, so there is nothing to
-// forward (and child.kill() there would end it at once, without the warning). Elsewhere, pass it on.
-const forward = (sig: NodeJS.Signals) => () => {
-  if (process.platform !== 'win32') child?.kill(sig);
-};
-process.on('SIGINT', forward('SIGINT'));
-process.on('SIGTERM', forward('SIGTERM'));
+// Ctrl+C reaches every process in the window (the server included), so it isn't forwarded: passing it
+// on would make one press count as two. The server decides (press twice to stop). SIGTERM is passed on,
+// except on Windows, where child.kill() would end the server at once without the warning.
+process.on('SIGINT', () => {});
+process.on('SIGTERM', () => {
+  if (process.platform !== 'win32') child?.kill('SIGTERM');
+});
 
 let tunnel: ChildProcess | null = null;
 const shared = runningTunnel(PORT);

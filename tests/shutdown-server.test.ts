@@ -9,8 +9,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
-import { RESTART_EXIT_CODE, shutdownKick } from '../src/shared/net/protocol';
-import { controlFilePath, STOP_PATH, TOKEN_HEADER } from '../server/control';
+import { RESTART_EXIT_CODE, shutdownCancelled, shutdownKick } from '../src/shared/net/protocol';
+import { controlFilePath, CTRL_C_WINDOW_MS, DoublePress, STOP_PATH, TOKEN_HEADER } from '../server/control';
 import { finish, ok } from './check';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -37,7 +37,7 @@ async function startServer(supervised: boolean) {
   const proc = spawn(process.execPath, ['--import', 'tsx', 'server/main.ts'], {
     cwd: ROOT,
     env: { ...process.env, PORT: String(port), DB_FILE, SHUTDOWN_SECONDS: String(COUNTDOWN), MULTIVERSE_SUPERVISED: supervised ? '1' : '' },
-    stdio: ['ignore', 'ignore', 'inherit'],
+    stdio: ['pipe', 'ignore', 'inherit'],
   });
   running.push(proc);
   const exited = new Promise<number | null>((r) => proc.once('exit', (code) => r(code)));
@@ -178,6 +178,66 @@ async function run(): Promise<void> {
     cwd: ROOT, env: { ...process.env, PORT: String(B.port), DB_FILE }, encoding: 'utf8',
   });
   ok(again.status === 0 && again.stdout.includes('ไม่พบ server'), 'stop-server with no server running says so');
+
+  // ---------------------------------------------------------- Ctrl+C needs two presses
+  const cc = new DoublePress(CTRL_C_WINDOW_MS);
+  ok(cc.press(0) === false, 'first Ctrl+C only warns');
+  ok(cc.press(CTRL_C_WINDOW_MS - 1) === true, 'second Ctrl+C within the window starts stopping');
+  ok(cc.press(CTRL_C_WINDOW_MS + 100) === false, 'the count starts over after a stop');
+  ok(cc.press(CTRL_C_WINDOW_MS * 3) === false, 'a press long after the last one only warns again');
+
+  // ---------------------------------------------------------- server C: cancel (admin page and typed c), force (typed f)
+  const C = await startServer(true);
+  const ownerC = (await C.api('POST', '/login', { username: 'owner1', password: 'secret123' })).data.token;
+  const gmC = (await C.api('POST', '/login', { username: 'gm1', password: 'secret123' })).data.token;
+  const w = C.joinWorld(tok.plain1, chars.plain1);
+  await w.ready;
+  if (process.platform !== 'win32') {
+    // A real single SIGINT (Windows can't send one to another process): nothing happens.
+    C.proc.kill('SIGINT');
+    await sleep(1200);
+    ok(C.proc.exitCode === null && !w.msgs.some((m) => m.t === 'shutdown'), 'one SIGINT does nothing');
+  } else {
+    console.log('(skip) real single-SIGINT check: Windows cannot send SIGINT to another process');
+  }
+  ok((await C.api('POST', '/admin/server', { mode: 'cancel' }, ownerC)).status === 409, 'cancel with no countdown → 409');
+  ok((await C.api('POST', '/admin/server', { mode: 'restart' }, ownerC)).status === 200, 'owner starts a restart');
+  await sleep(500);
+  ok((await C.api('POST', '/admin/server', { mode: 'cancel' }, gmC)).status === 403, 'GM cannot cancel');
+  const blocked = C.joinWorld(tok.plain2, chars.plain2);
+  await blocked.ready;
+  ok(blocked.msgs.some((m) => m.t === 'kick'), 'join refused before the cancel');
+  const cancel = await C.api('POST', '/admin/server', { mode: 'cancel' }, ownerC);
+  ok(cancel.status === 200 && cancel.data.stopping === null, 'owner cancels from the admin page');
+  await sleep(300);
+  ok(w.msgs.some((m) => m.t === 'shutdownCancel' && m.mode === 'restart'), `player told "${shutdownCancelled('restart')}"`);
+  const after = C.joinWorld(tok.plain2, chars.plain2);
+  await after.ready;
+  ok(after.msgs.some((m) => m.t === 'snap'), 'joins allowed again after the cancel');
+  await sleep(COUNTDOWN * 1000 + 500);
+  ok(C.proc.exitCode === null && !w.isClosed(), 'server keeps running after the cancel');
+  const dbc = new DatabaseSync(DB_FILE, { readOnly: true });
+  ok(!!dbc.prepare("SELECT 1 FROM admin_audit WHERE action = 'server' AND details = ?").get(shutdownCancelled('restart')), 'cancel written to the audit log');
+  dbc.close();
+
+  // Typed c + Enter in the server window cancels too.
+  ok((await C.api('POST', '/admin/server', { mode: 'shutdown' }, ownerC)).status === 200, 'owner starts a shutdown');
+  await sleep(400);
+  C.proc.stdin!.write('c\n');
+  await sleep(400);
+  ok(w.msgs.some((m) => m.t === 'shutdownCancel' && m.mode === 'shutdown'), `typed c cancels: "${shutdownCancelled('shutdown')}"`);
+  ok(C.proc.exitCode === null, 'still running after typed c');
+
+  // Typed f + Enter during a countdown: save everyone and stop now.
+  w.send({ t: 'act', a: 'lootFilter', filter: { rarities: ['rare'], potions: true } });
+  ok((await C.api('POST', '/admin/server', { mode: 'restart' }, ownerC)).status === 200, 'owner starts another restart');
+  await sleep(300);
+  const tf = Date.now();
+  C.proc.stdin!.write('f\n');
+  const fcode = await C.exited;
+  ok(fcode === RESTART_EXIT_CODE && Date.now() - tf < 1500, `typed f stops right away (${Date.now() - tf} ms, code ${fcode})`);
+  ok(w.msgs.find((m) => m.t === 'kick')?.msg === shutdownKick('restart'), 'players told why on force stop');
+  ok(JSON.stringify(saved(chars.plain1).lootFilter?.rarities) === '["rare"]', 'everyone saved on force stop');
 }
 
 try {

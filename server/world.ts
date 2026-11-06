@@ -665,6 +665,12 @@ export class GameWorld {
     for (const s of this.sessions) this.send(s.ws, { t: 'shutdown', mode, seconds });
   }
 
+  /** The countdown was cancelled: joins are allowed again and everyone is told. */
+  cancelShutdown(mode: ShutdownMode): void {
+    this.closing = null;
+    for (const s of this.sessions) this.send(s.ws, { t: 'shutdownCancel', mode });
+  }
+
   /**
    * Saves every character (with its stash, like a normal logout) and closes every connection with a
    * message saying why. Returns how many were online.

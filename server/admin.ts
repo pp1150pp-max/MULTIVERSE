@@ -13,7 +13,7 @@ import {
   ADMIN_AUDIT_PAGE, ADMIN_GOLD_MAX, ADMIN_ITEMS_MAX, ADMIN_SEARCH_MAX,
   type AdminCharRow, type AdminEditResult, type AdminMe, type AdminMeta, type AdminRole, type AdminServerState,
 } from '../src/shared/admin';
-import type { ShutdownMode } from '../src/shared/net/protocol';
+import { shutdownCancelled, type ShutdownMode } from '../src/shared/net/protocol';
 import { BAG_SIZE, type CharacterData, type Player } from '../src/shared/sim/Player';
 import { expToNext, MAX_LEVEL } from '../src/shared/formulas';
 import { ZONES, zoneById } from '../src/shared/data/zones';
@@ -76,6 +76,8 @@ export interface ServerControl {
   stopping(): ShutdownMode | null;
   /** Starts the countdown; returns why it can't, or null. */
   stop(mode: ShutdownMode, by: string): string | null;
+  /** Cancels a running countdown; returns why it can't, or null. */
+  cancel(by: string): string | null;
 }
 
 export async function adminApi(
@@ -165,6 +167,13 @@ export async function adminApi(
   if (method === 'POST' && path === '/api/admin/server') {
     const a = requireAdmin(req, db, 'owner');
     const body = await readJson(req);
+    if (body.mode === 'cancel') {
+      const was = control.stopping();
+      const err = control.cancel(`admin page (${a.acc.username})`);
+      if (err || !was) throw new HttpError(409, err ?? 'ไม่ได้นับถอยหลังอยู่');
+      log(db, a, 'server', 'server', shutdownCancelled(was));
+      return send(res, 200, { supervised: control.supervised, stopping: control.stopping() } satisfies AdminServerState);
+    }
     const mode: ShutdownMode | null = body.mode === 'restart' ? 'restart' : body.mode === 'shutdown' ? 'shutdown' : null;
     if (!mode) throw new HttpError(400, 'เลือก รีสตาร์ท หรือ ปิด server');
     const err = control.stop(mode, `admin page (${a.acc.username})`);

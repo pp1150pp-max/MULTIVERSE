@@ -615,8 +615,15 @@ async function renderServer(): Promise<void> {
   const status = h('div', { class: 'msg' });
   const restart = h('button', { class: 'primary' }, 'รีสตาร์ท');
   const stop = h('button', { class: 'danger' }, 'ปิด server');
+  const cancel = h('button', { class: 'primary hidden' }, 'ยกเลิกการนับถอยหลัง');
   const draw = (st: AdminServerState) => {
     restart.disabled = stop.disabled = !!st.stopping;
+    cancel.classList.toggle('hidden', !st.stopping);
+    cancel.disabled = false;
+    if (!st.stopping) {
+      status.className = 'msg';
+      status.textContent = '';
+    }
     restart.title = st.supervised ? '' : 'server นี้ไม่ได้เปิดด้วย npm run online';
     if (!st.supervised) restart.disabled = true;
     if (st.stopping) {
@@ -640,12 +647,24 @@ async function renderServer(): Promise<void> {
       btn.disabled = false;
     }
   };
+  cancel.onclick = async () => {
+    cancel.disabled = true;
+    try {
+      draw(await api<AdminServerState>('POST', '/admin/server', { mode: 'cancel' }));
+      status.className = 'msg ok';
+      status.textContent = 'ยกเลิกแล้ว — ผู้เล่นได้รับแจ้ง และเข้าเกมได้ตามปกติ';
+    } catch (e) {
+      status.className = 'msg bad';
+      status.textContent = (e as Error).message;
+      cancel.disabled = false;
+    }
+  };
   restart.onclick = () => void go('restart', restart);
   stop.onclick = () => void go('shutdown', stop);
   const note = h('div', { class: 'muted', style: 'margin:-6px 0 10px' },
     `ทั้งสองแบบ: ผู้เล่นเห็นคำเตือนนับถอยหลัง ${SHUTDOWN_SECONDS} วินาที และเข้าเกมใหม่ไม่ได้ระหว่างนั้น แล้ว server เซฟทุกคนก่อนตัดการเชื่อมต่อ · `
     + 'รีสตาร์ท = เปิดใหม่ด้วยโค้ดที่ build ไว้แล้ว (ไม่ build ใหม่) ลิงก์เพื่อนไม่เปลี่ยน · ปิด server = ปิดเลย ต้องเปิดใหม่เองที่เครื่อง');
-  view.append(h('div', { class: 'card' }, h('h2', {}, 'รีสตาร์ท / ปิด server'), note, h('div', { class: 'row' }, restart, stop), status));
+  view.append(h('div', { class: 'card' }, h('h2', {}, 'รีสตาร์ท / ปิด server'), note, h('div', { class: 'row' }, restart, stop, cancel), status));
   try {
     const st = await api<AdminServerState>('GET', '/admin/server');
     draw(st);

@@ -57,7 +57,18 @@ console.log(data.note ?? `แจ้งผู้เล่นแล้ว — serv
 
 // Wait for that process to end (a restart starts a new one with another pid).
 const until = Date.now() + (secs + 30) * 1000;
+let polls = 0;
 while (alive(ctl.pid)) {
+  // Every second: still counting down? (it can be cancelled from the server window or the admin page)
+  if (++polls % 4 === 0) {
+    const st = await fetch(`http://127.0.0.1:${PORT}${STOP_PATH}`, { headers: { [TOKEN_HEADER]: ctl.token } })
+      .then((r) => (r.ok ? (r.json() as Promise<{ mode: string | null }>) : null))
+      .catch(() => null);
+    if (st && st.mode === null) {
+      console.log('ยกเลิกการปิดแล้ว — server ยังเปิดอยู่');
+      process.exit(1);
+    }
+  }
   if (Date.now() > until) {
     console.error(`server (pid ${ctl.pid}) ยังไม่ปิดหลังรอ ${secs + 30} วินาที`);
     process.exit(1);

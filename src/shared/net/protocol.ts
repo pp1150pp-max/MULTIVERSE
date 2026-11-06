@@ -155,7 +155,9 @@ export type ServerMsg =
   /** The connection is about to close; `msg` explains why. */
   | { t: 'kick'; msg: string }
   /** The server stops (or restarts) in `seconds`; sent once a second during the countdown. */
-  | { t: 'shutdown'; mode: ShutdownMode; seconds: number };
+  | { t: 'shutdown'; mode: ShutdownMode; seconds: number }
+  /** The countdown was cancelled: the server stays up. */
+  | { t: 'shutdownCancel'; mode: ShutdownMode };
 
 /** How the server is going away: `restart` comes back by itself (under npm run online), `shutdown` doesn't. */
 export type ShutdownMode = 'restart' | 'shutdown';
@@ -166,6 +168,9 @@ export const RESTART_EXIT_CODE = 75;
 
 export function shutdownWarning(mode: ShutdownMode, seconds: number): string {
   return `⚠ Server จะ${mode === 'restart' ? 'รีสตาร์ท' : 'ปิด'}ใน ${seconds} วินาที`;
+}
+export function shutdownCancelled(mode: ShutdownMode): string {
+  return mode === 'restart' ? 'ยกเลิกการรีสตาร์ท' : 'ยกเลิกการปิด server';
 }
 /** Shown when the connection closes because of it. */
 export function shutdownKick(mode: ShutdownMode): string {
