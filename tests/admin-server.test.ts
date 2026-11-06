@@ -173,14 +173,14 @@ async function run(): Promise<void> {
   ok(lv.status === 200 && lv.data.char.level === 20, `set level 20 online (${lv.status} ${lv.data.error ?? ''})`);
   const gold = await edit('gold', { delta: ADMIN_GOLD_MAX });
   ok(gold.status === 200 && gold.data.char.gold === ADMIN_GOLD_MAX, 'give gold at the cap');
-  const items = await edit('items', { baseId: 'weapon_7', rarity: 'legendary', plus: 7, count: 2 });
+  const items = await edit('items', { baseId: 'weapon_5', rarity: 'legendary', plus: 7, count: 2 });
   ok(items.status === 200 && items.data.char.bagFree === 30 - 2 - 2, `spawn 2 items (${items.data.msg})`);
   await sleep(400);
   const m = c.lastMe();
   ok(m.level === 20 && m.exp === 100 && m.gold === ADMIN_GOLD_MAX, 'the player sees the new level and gold');
   ok(m.stats.maxHp > 100, `stats recomputed for the new level (maxHp ${m.stats.maxHp})`);
   const bagNow = c.msgs.filter((x) => x.t === 'snap' && x.me.inv).at(-1)?.me.inv.bag ?? [];
-  const spawned = bagNow.filter((e: any) => e?.baseId === 'weapon_7');
+  const spawned = bagNow.filter((e: any) => e?.baseId === 'weapon_5');
   ok(spawned.length === 2 && spawned.every((e: any) => e.plus === 7 && e.rarity === 'legendary' && e.level === 20 && e.cls === 'sword' && e.lines?.length),
     'spawned items are real items (+7, legendary, Lv.20, class, stat lines)');
   ok(c.msgs.some((x) => x.t === 'chat' && x.name === '' && x.text === 'GM ปรับเลเวลเป็น 20'), 'the player gets the Thai GM message');
@@ -188,7 +188,7 @@ async function run(): Promise<void> {
   c.send({ t: 'act', a: 'sort', key: 'rarity', desc: true });
   await sleep(2600);
   let d = saved(charId);
-  ok(d.level === 20 && d.gold === ADMIN_GOLD_MAX && d.bag.filter((e: any) => e?.baseId === 'weapon_7').length === 2,
+  ok(d.level === 20 && d.gold === ADMIN_GOLD_MAX && d.bag.filter((e: any) => e?.baseId === 'weapon_5').length === 2,
     'online edit survives the next save');
 
   // ---------------------------------------------------------- kick, then offline edits
@@ -201,14 +201,21 @@ async function run(): Promise<void> {
 
   const take = await edit('gold', { delta: -ADMIN_GOLD_MAX });
   ok(take.status === 200 && saved(charId).gold === 0, 'take gold offline');
+  const short = await edit('gold', { delta: -5 });
+  ok(short.status === 400 && short.data.error === 'ทองไม่พอ (มี 0 G)', `taking more gold than there is refused (${short.data.error})`);
+  // Item level below the item type's own minimum (weapon_2 starts at Lv.5) is raised to it.
+  const low = await edit('items', { baseId: 'weapon_2', rarity: 'common', count: 1, level: 1 });
+  const lowItem = saved(charId).bag.find((e: any) => e?.baseId === 'weapon_2');
+  ok(low.status === 200 && low.data.msg.includes('ปรับเลเวลไอเทมเป็น Lv.5 (ขั้นต่ำของชนิดนี้)') && lowItem?.level === 5,
+    `item level raised to the type's minimum (${low.data.msg}, Lv.${lowItem?.level})`);
   ok((await edit('level', { level: MAX_LEVEL, exp: 5 })).status === 200 && saved(charId).level === MAX_LEVEL && saved(charId).exp === 0,
     'offline level to max (EXP 0 at max)');
   ok((await edit('teleport', { zone: 'frost_reach' })).status === 200 && saved(charId).zone === 'frost_reach', 'teleport offline');
   ok((await edit('teleport', { zone: 'frost_reach' })).status === 400, 'teleport to the same zone refused');
-  // 30 slots: 2 potion stacks + 2 items used, 26 free.
+  // 30 slots: 2 potion stacks + 3 items used, 25 free.
   for (let k = 0; k < 2; k++) await edit('items', { baseId: 'cap', rarity: 'common', count: ADMIN_ITEMS_MAX });
   const part = await edit('items', { baseId: 'cap', rarity: 'common', count: ADMIN_ITEMS_MAX });
-  ok(part.status === 200 && part.data.msg.includes('6/10') && part.data.msg.includes('กระเป๋าเต็ม'), `partly fits: ${part.data.msg}`);
+  ok(part.status === 200 && part.data.msg.includes('5/10') && part.data.msg.includes('กระเป๋าเต็ม'), `partly fits: ${part.data.msg}`);
   const full = await edit('items', { baseId: 'cap', rarity: 'common', count: 1 });
   ok(full.status === 400 && full.data.error === 'กระเป๋าเต็ม', 'full bag → "กระเป๋าเต็ม"');
   ok(saved(charId).bag.filter(Boolean).length === 30, 'bag has exactly 30 entries');
@@ -231,6 +238,26 @@ async function run(): Promise<void> {
   const own = await api('POST', '/characters', { name: 'GmChar', classId: 'mage' }, gmTok);
   ok((await edit('level', { level: 25 }, gmTok, own.data.id)).status === 200, 'GM can edit their own character');
 
+  // ---------------------------------------------------------- GM scope: not the owner's, not another GM's
+  const SCOPE = 'GM แก้ไขตัวละครของ owner หรือ GM คนอื่นไม่ได้';
+  const ownerChar: number = (await api('POST', '/characters', { name: 'OwnerChar', classId: 'sword' }, ownerTok)).data.id;
+  const gm2Tok = await account('gm2');
+  await api('POST', '/admin/roles', { username: 'gm2', role: 'gm' }, ownerTok);
+  const gm2Char: number = (await api('POST', '/characters', { name: 'GmTwo', classId: 'gunslinger' }, gm2Tok)).data.id;
+  const tries: [string, unknown][] = [
+    ['level', { level: 10 }], ['gold', { delta: 100 }], ['items', { baseId: 'cap', rarity: 'common', count: 1 }],
+    ['teleport', { zone: 'misty_marsh' }], ['kick', {}],
+  ];
+  for (const [what, body] of tries) {
+    const o = await edit(what, body, gmTok, ownerChar);
+    ok(o.status === 403 && o.data.error === SCOPE, `GM ${what} on the owner's character → 403 (${o.status} ${o.data.error})`);
+    const g2 = await edit(what, body, gmTok, gm2Char);
+    ok(g2.status === 403 && g2.data.error === SCOPE, `GM ${what} on another GM's character → 403 (${g2.status})`);
+  }
+  ok(saved(ownerChar).level === 1 && saved(ownerChar).gold === 0 && saved(gm2Char).level === 1, 'refused GM edits changed nothing');
+  ok((await edit('level', { level: 10 }, ownerTok, gm2Char)).status === 200 && saved(gm2Char).level === 10, "owner can still edit a GM's character");
+  ok((await edit('gold', { delta: 100 }, ownerTok, ownerChar)).status === 200, 'owner can edit their own character');
+
   // ---------------------------------------------------------- audit log
   const db = new DatabaseSync(DB_FILE, { readOnly: true });
   const rows = db.prepare('SELECT * FROM admin_audit ORDER BY id').all() as any[];
@@ -242,6 +269,9 @@ async function run(): Promise<void> {
   ok(rows.some((r) => r.action === 'kick') && rows.some((r) => r.action === 'items') && rows.some((r) => r.action === 'teleport'), 'audit: kick, items, teleport');
   ok(rows.every((r) => r.at > 0), 'audit rows have a time');
   ok(!rows.some((r) => r.details.includes('999999')), 'refused edits are not logged');
+  ok(!rows.some((r) => r.action === 'gold' && r.details.startsWith('0 → 0')), 'no "0 → 0" gold row for a refused take');
+  ok(rows.some((r) => r.action === 'items' && r.details.includes('ขั้นต่ำของชนิดนี้')), 'audit: item level raise is noted');
+  ok(!rows.some((r) => r.target.includes('OwnerChar') && r.admin_name === 'gm1'), "refused GM edits on the owner's character are not logged");
   const log = await api('GET', '/admin/audit', undefined, ownerTok);
   ok(log.status === 200 && log.data.length === rows.length && log.data[0].id === rows.at(-1).id, 'owner reads the audit log, newest first');
 
@@ -263,7 +293,7 @@ async function run(): Promise<void> {
   // ---------------------------------------------------------- every account + details
   const accs = await api('GET', '/admin/accounts', undefined, ownerTok);
   const prow = accs.data.rows.find((r: any) => r.accountId === plainId);
-  ok(accs.status === 200 && accs.data.summary.accounts === 3 && accs.data.summary.characters === 3 && accs.data.summary.guests === 1 && accs.data.summary.signupsToday === 3,
+  ok(accs.status === 200 && accs.data.summary.accounts === 4 && accs.data.summary.characters === 5 && accs.data.summary.guests === 1 && accs.data.summary.signupsToday === 4,
     `summary numbers (${JSON.stringify(accs.data.summary)})`);
   ok(prow && prow.characters === 1 && prow.names[0] === 'Tester' && prow.maxLevel === MAX_LEVEL && !prow.guest && prow.role === null && prow.lastOnline > 0,
     'account row: characters, max level, last online');
@@ -341,7 +371,7 @@ async function run(): Promise<void> {
   ok(delChat.status === 200 && (await api('GET', '/admin/chat?q=hello', undefined, ownerTok)).data.length === 0, 'owner deletes a chat message');
   ok((await api('DELETE', `/admin/chat/${chats.data[0].id}`, undefined, ownerTok)).status === 404, 'deleting it again → 404');
   const st = await api('GET', '/admin/stats?range=24h', undefined, ownerTok);
-  ok(st.status === 200 && st.data.online.length >= 1 && st.data.since > 0 && st.data.signups.length >= 30 && st.data.signups.some((p: any) => p.v === 3),
+  ok(st.status === 200 && st.data.online.length >= 1 && st.data.since > 0 && st.data.signups.length >= 30 && st.data.signups.some((p: any) => p.v === 4),
     `stats: minute samples and sign-ups per day (${st.data.online.length} points)`);
   ok(st.data.avgPing.length >= 1 && st.data.avgLevel.length >= 1, 'stats: average ping and level from the samples');
   const guestAcc = accs.data.rows.find((r: any) => r.guest);

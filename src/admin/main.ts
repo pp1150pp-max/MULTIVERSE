@@ -2,7 +2,7 @@
 // role and every value, so nothing here is a safeguard. Names, GPU strings and the like come from
 // players: they are only ever put on the page as text (never as HTML).
 import './admin.css';
-import { ADMIN_AUDIT_PAGE, HISTORY_DAYS, HISTORY_PAGE, BAN_DURATIONS, BAN_FOREVER, BAN_REASON_MAX, BROADCAST_EVERY_MS, BROADCAST_MAX } from '../shared/admin';
+import { ADMIN_AUDIT_PAGE, ADMIN_NO_RIGHTS as NO_RIGHTS, HISTORY_DAYS, HISTORY_PAGE, BAN_DURATIONS, BAN_FOREVER, BAN_REASON_MAX, BROADCAST_EVERY_MS, BROADCAST_MAX } from '../shared/admin';
 import { MAX_CHARACTERS } from '../shared/api';
 import { potionName } from '../shared/data/potions';
 import type {
@@ -79,7 +79,9 @@ async function api<T>(method: string, path: string, body?: unknown): Promise<T> 
   const data = (await res.json().catch(() => ({}))) as T & { error?: string };
   if (!res.ok) {
     const err = new ApiError(res.status, data.error ?? `server ตอบกลับผิดพลาด (${res.status})`);
-    if (res.status === 401 || res.status === 403) onAuthLost(err);
+    // A 403 with its own reason (e.g. a GM editing the owner's character) is shown where it happened;
+    // only the plain "no rights" one means this login lost its role.
+    if (res.status === 401 || (res.status === 403 && data.error === NO_RIGHTS)) onAuthLost(err);
     throw err;
   }
   return data;
@@ -546,7 +548,9 @@ async function renderRoles(): Promise<void> {
   const user = h('input', { placeholder: 'ชื่อผู้ใช้ หรือชื่อตัวละครที่ออนไลน์', autocapitalize: 'off' });
   const matches = h('div');
 
+  let admins: RoleRow[] = [];
   const drawList = (rows: RoleRow[]) => {
+    admins = rows;
     list.replaceChildren(...rows.map((r) => h('div', { class: 'list-item' },
       h('div', { class: 'grow' }, r.username, h('span', { class: 'role', style: 'margin-left:8px' }, r.role === 'owner' ? 'Owner' : 'GM')),
       r.role === 'gm' ? h('button', { class: 'small danger', onclick: () => void setRole(r.username, null) }, 'ถอนสิทธิ์') : null,
@@ -561,6 +565,7 @@ async function renderRoles(): Promise<void> {
       drawList(await api<RoleRow[]>('POST', '/admin/roles', { username, role }));
       msg.className = 'msg ok';
       msg.textContent = role ? `ให้สิทธิ์ GM กับ ${username} แล้ว` : `ถอนสิทธิ์ GM ของ ${username} แล้ว`;
+      void drawMatches();
     } catch (e) {
       msg.className = 'msg bad';
       msg.textContent = (e as Error).message;
@@ -576,10 +581,16 @@ async function renderRoles(): Promise<void> {
       return;
     }
     const hits = online.players.filter((p) => !p.guest && (p.username.toLowerCase().includes(q) || p.name.toLowerCase().includes(q))).slice(0, 8);
-    matches.replaceChildren(...hits.map((p) => h('div', { class: 'list-item' },
-      h('div', { class: 'grow' }, p.username, h('span', { class: 'muted' }, ` · ${p.name} Lv.${p.level} (ออนไลน์)`)),
-      h('button', { class: 'small', onclick: () => void setRole(p.username, 'gm') }, 'ให้ GM'),
-    )));
+    matches.replaceChildren(...hits.map((p) => {
+      // Already an admin: say so (and offer the revoke for a GM) instead of another "ให้ GM".
+      const role = admins.find((r) => r.username === p.username)?.role;
+      return h('div', { class: 'list-item' },
+        h('div', { class: 'grow' }, p.username, h('span', { class: 'muted' }, ` · ${p.name} Lv.${p.level} (ออนไลน์)`)),
+        role ? h('span', { class: 'role' }, role === 'owner' ? 'Owner' : 'GM แล้ว') : null,
+        role === 'gm' ? h('button', { class: 'small danger', onclick: () => void setRole(p.username, null) }, 'ถอนสิทธิ์') : null,
+        role ? null : h('button', { class: 'small', onclick: () => void setRole(p.username, 'gm') }, 'ให้ GM'),
+      );
+    }));
   };
   let debounce = 0;
   user.addEventListener('input', () => {
@@ -653,9 +664,11 @@ async function renderAudit(): Promise<void> {
 // ------------------------------------------------------------ server (owner)
 
 async function renderServer(): Promise<void> {
+  // Restart / shut down first: it is what the owner comes here for in a hurry (the backup list is long).
+  const restart = me?.role === 'owner' ? renderRestart() : null;
   if (can('broadcast')) view.append(broadcastCard());
   if (can('backup')) view.append(backupCard());
-  if (me?.role === 'owner') await renderRestart();
+  await restart;
 }
 
 async function renderRestart(): Promise<void> {
@@ -1040,6 +1053,9 @@ async function openAccount(id: number, note?: { text: string; ok: boolean; passw
 
 // ------------------------------------------------------------ broadcast + backups (Server tab)
 
+/** Backups listed before "แสดงเพิ่ม". */
+const BACKUP_LIST_SHORT = 5;
+
 function broadcastCard(): HTMLElement {
   const text = h('textarea', { rows: 3, maxLength: BROADCAST_MAX, placeholder: 'เช่น อีก 30 นาทีจะปิดปรับปรุง' }) as HTMLTextAreaElement;
   const count = h('span', { class: 'muted' }, `0/${BROADCAST_MAX}`);
@@ -1091,12 +1107,20 @@ function backupCard(): HTMLElement {
   const msg = h('div', { class: 'msg' });
   const btn = h('button', { class: 'primary' }, 'สำรองตอนนี้');
   const KIND: Record<string, string> = { daily: 'อัตโนมัติรายวัน', manual: 'กดเอง', 'before-delete': 'ก่อนลบ' };
+  let showAll = false;
+  let last: BackupRow[] = [];
   const draw = (rows: BackupRow[]) => {
-    list.replaceChildren(...rows.map((b) => h('div', { class: 'list-item' },
+    last = rows;
+    const shown = showAll ? rows : rows.slice(0, BACKUP_LIST_SHORT);
+    list.replaceChildren(...shown.map((b) => h('div', { class: 'list-item' },
       h('div', { class: 'grow' }, h('div', {}, time(b.at)), h('div', { class: 'muted', style: 'word-break:break-all' }, b.name)),
       h('div', { style: 'text-align:right' }, h('div', {}, `${(b.size / 1024).toFixed(0)} KB`), h('div', { class: 'muted' }, KIND[b.kind] ?? b.kind)),
     )));
     if (!rows.length) list.append(h('div', { class: 'muted' }, 'ยังไม่มีไฟล์สำรอง'));
+    if (rows.length > shown.length) {
+      list.append(h('button', { class: 'small', style: 'margin-top:8px', onclick: () => { showAll = true; draw(last); } },
+        `แสดงเพิ่ม (อีก ${rows.length - shown.length} ไฟล์)`));
+    }
   };
   btn.onclick = async () => {
     btn.disabled = true;

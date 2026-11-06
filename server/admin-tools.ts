@@ -10,14 +10,14 @@ import { HttpError, readJson, send, str } from './http';
 import { charRow, log, requireAdmin, type Admin } from './admin';
 import { hashPassword } from './auth';
 import {
-  BAN_DURATIONS, BAN_FOREVER, BAN_REASON_MAX, BROADCAST_EVERY_MS, BROADCAST_MAX, canUse, isAdminRole,
+  ADMIN_NO_RIGHTS, BAN_DURATIONS, BAN_FOREVER, BAN_REASON_MAX, BROADCAST_EVERY_MS, BROADCAST_MAX, canUse, isAdminRole,
   type AdminAccountDetail, type AdminAccountRow, type AdminAccountsResponse, type AdminCharDetail, type AdminFeature,
 } from '../src/shared/admin';
 import { banMessage } from '../src/shared/api';
 import { HISTORY_PAGE, type AdminStats, type StatsPoint, type StatsRange } from '../src/shared/admin';
 import { BAG_SIZE } from '../src/shared/sim/Player';
 
-const NO_RIGHTS = 'ไม่มีสิทธิ์';
+const NO_RIGHTS = ADMIN_NO_RIGHTS;
 /** When each admin last sent an announcement (rate limit). */
 const lastBroadcast = new Map<number, number>();
 /** Letters that can't be mixed up when read aloud or typed from a phone. */
