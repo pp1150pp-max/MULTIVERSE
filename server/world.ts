@@ -18,6 +18,7 @@ import {
 import { RARITIES, SLOTS, type SlotId, type Vec2 } from '../src/shared/types';
 import type { SkillSlot } from '../src/shared/data/classes';
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
+import type { AdminOnline, AdminOnlineRow } from '../src/shared/admin';
 
 const AUTOSAVE_MS = 30_000;
 const GUEST_STASH_MSG = 'Guest ใช้คลังเก็บของไม่ได้ — สมัครสมาชิกเพื่อใช้คลัง (ตัวละครนี้จะย้ายไปอยู่ในบัญชีใหม่)';
@@ -70,6 +71,11 @@ interface Session {
   /** Last immediate lag/stall warning, for its throttle. */
   warnAt: number;
   gpuLogged: boolean;
+  /** The latest report, for the admin page (the sums above reset every minute). */
+  lastRtt: number | null;
+  lastFps: number | null;
+  /** The client's GPU name once it sent it. */
+  gpu: string | null;
 }
 
 const num = (v: unknown, fallback = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
@@ -219,7 +225,7 @@ export class GameWorld {
       move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null,
       auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', outbox: [], lastChatAt: 0, saveDue: null,
       ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0,
-      hidden: false, warnAt: -Infinity, gpuLogged: false,
+      hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null,
     };
     this.sessions.add(s);
     this.byPlayer.set(player, s);
@@ -307,6 +313,8 @@ export class GameWorld {
     const hidden = m.hidden === true;
     const fps = hidden ? undefined : clamp(m.fps, FPS_MAX);
     const maxFrame = hidden ? undefined : clamp(m.maxFrame, STALL_MAX_MS);
+    s.lastRtt = rtt ?? s.lastRtt;
+    s.lastFps = hidden ? null : (fps ?? s.lastFps);
     if (rtt !== undefined) {
       s.rttSum += rtt;
       s.rttCount++;
@@ -343,6 +351,7 @@ export class GameWorld {
     if (s.gpuLogged || typeof m.gpu !== 'string') return;
     s.gpuLogged = true;
     const gpu = m.gpu.replace(/[\p{Cc}\p{Cf}]/gu, '').trim().slice(0, GPU_NAME_MAX) || 'unknown';
+    s.gpu = gpu;
     const note = isSoftwareRenderer(gpu) ? ' ⚠ SOFTWARE RENDERING: hardware acceleration is off, expect stutter' : '';
     console.log(`[client] ${s.username} (${s.player.name}) GPU: ${gpu}${note}`);
   }
@@ -555,14 +564,14 @@ export class GameWorld {
   }
 
   /** Moves a session's character into another zone's Sim, keeping HP/MP. */
-  private travel(s: Session, zoneId: string): void {
+  private travel(s: Session, zoneId: string, atCamp = false): void {
     const dest = this.sims.get(zoneId);
     if (!dest || dest === s.sim || !this.sessions.has(s)) return;
     const old = s.player;
     const from = s.sim;
     from.removePlayer(old);
     this.byPlayer.delete(old);
-    const p = dest.addPlayer(old.toData(), from.zone.id);
+    const p = dest.addPlayer(old.toData(), atCamp ? undefined : from.zone.id);
     p.hp = Math.min(old.hp, p.maxHp);
     p.mp = Math.min(old.mp, p.stats.maxMp);
     p.cd = { ...old.cd };
@@ -635,6 +644,60 @@ export class GameWorld {
     };
     s.outbox = [];
     this.send(s.ws, msg);
+  }
+
+  // ------------------------------------------------------------ admin page (server/admin.ts)
+
+  /** Everyone in the world, with the connection numbers the admin page shows (IP included). */
+  adminOnline(): AdminOnline {
+    const zones = [...this.sims.values()].map((sim) => ({
+      id: sim.zone.id, nameTh: sim.zone.nameTh, count: [...this.sessions].filter((s) => s.sim === sim).length,
+    }));
+    const players: AdminOnlineRow[] = [...this.sessions].map((s) => ({
+      charId: s.charId, accountId: s.accountId, username: s.guest ? 'Guest' : s.username, guest: s.guest,
+      name: s.player.name, classId: s.player.cls.id, level: s.player.level, zone: s.sim.zone.id,
+      rtt: s.lastRtt === null ? null : Math.round(s.lastRtt),
+      fps: s.lastFps === null ? null : Math.round(s.lastFps),
+      maxFrame: s.fpsCount ? Math.round(s.maxFrame) : null,
+      hidden: s.hidden, gpu: s.gpu, ip: s.ip,
+    }));
+    return { zones, players };
+  }
+
+  private sessionOfChar(charId: number): Session | undefined {
+    for (const s of this.sessions) if (s.charId === charId) return s;
+    return undefined;
+  }
+
+  /** The live character, if it is in the world: edit this one (the next save would undo a DB edit). */
+  livePlayer(charId: number): Player | undefined {
+    return this.sessionOfChar(charId)?.player;
+  }
+
+  /** Saves an online character right away (after an admin edit) and tells its player in chat. */
+  adminChanged(charId: number, msg: string): void {
+    const s = this.sessionOfChar(charId);
+    if (!s) return;
+    this.save(s);
+    this.send(s.ws, { t: 'chat', name: '', text: msg });
+  }
+
+  /** Ends one character's game (saving it first). Returns false when it isn't online. */
+  kickCharacter(charId: number, msg: string): boolean {
+    const s = this.sessionOfChar(charId);
+    if (!s) return false;
+    this.send(s.ws, { t: 'kick', msg });
+    this.leave(s);
+    s.ws.close();
+    return true;
+  }
+
+  /** Moves an online character to another zone's camp. Returns false when it isn't online or is there already. */
+  teleportCharacter(charId: number, zoneId: string): boolean {
+    const s = this.sessionOfChar(charId);
+    if (!s || !this.sims.has(zoneId) || s.sim.zone.id === zoneId) return false;
+    this.travel(s, zoneId, true);
+    return true;
   }
 
   // ------------------------------------------------------------ saving

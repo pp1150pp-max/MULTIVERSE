@@ -7,6 +7,7 @@ import type { CharacterData } from '../src/shared/sim/Player';
 import { GUEST_TTL_HOURS, type CharacterSummary } from '../src/shared/api';
 import type { ClassId } from '../src/shared/types';
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
+import { isAdminRole, type AdminRole, type AuditRow, type RoleRow } from '../src/shared/admin';
 
 export interface AccountRow { id: number; username: string; pass_hash: string }
 /** The account behind a login token. Guests are temporary accounts that can't log in with a password. */
@@ -14,6 +15,8 @@ export interface SessionAccount { id: number; username: string; guest: boolean }
 
 /** Guests nobody has played for this long are deleted, character and all. */
 export const GUEST_TTL_MS = GUEST_TTL_HOURS * 60 * 60 * 1000;
+/** A character found by the admin search, with its account. */
+export interface AdminCharacterRow { id: number; accountId: number; username: string; guest: boolean; name: string; data: CharacterData }
 interface CharacterRow { id: number; account_id: number; name: string; class_id: string; data: string }
 
 export class Db {
@@ -51,11 +54,22 @@ export class Db {
         data TEXT NOT NULL,
         updated_at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS admin_audit (
+        id INTEGER PRIMARY KEY,
+        at INTEGER NOT NULL,
+        admin_id INTEGER,
+        admin_name TEXT NOT NULL,
+        action TEXT NOT NULL,
+        target TEXT NOT NULL,
+        details TEXT NOT NULL
+      );
     `);
     // Columns added after the first release: add them to databases made before that.
     const cols = (this.db.prepare('PRAGMA table_info(accounts)').all() as { name: string }[]).map((c) => c.name);
     if (!cols.includes('is_guest')) this.db.exec('ALTER TABLE accounts ADD COLUMN is_guest INTEGER NOT NULL DEFAULT 0');
     if (!cols.includes('last_online')) this.db.exec('ALTER TABLE accounts ADD COLUMN last_online INTEGER');
+    // NULL = a normal player; 'owner' / 'gm' may use the admin page (see server/admin.ts).
+    if (!cols.includes('admin_role')) this.db.exec('ALTER TABLE accounts ADD COLUMN admin_role TEXT');
   }
 
   close(): void {
@@ -233,5 +247,70 @@ export class Db {
   /** Returns false when there is no such character on this account. */
   deleteCharacter(accountId: number, id: number): boolean {
     return this.db.prepare('DELETE FROM characters WHERE id = ? AND account_id = ?').run(id, accountId).changes > 0;
+  }
+
+  // ------------------------------------------------------------ admin
+
+  /** The account's admin role, or null for normal players (and guests, who never get one). */
+  adminRole(accountId: number): AdminRole | null {
+    const r = this.db.prepare('SELECT admin_role FROM accounts WHERE id = ? AND is_guest = 0').get(accountId) as { admin_role: string | null } | undefined;
+    return r && isAdminRole(r.admin_role) ? r.admin_role : null;
+  }
+
+  /** Sets (or with null, removes) a real account's admin role. Returns false when there is no such account. */
+  setAdminRole(accountId: number, role: AdminRole | null): boolean {
+    return this.db.prepare('UPDATE accounts SET admin_role = ? WHERE id = ? AND is_guest = 0').run(role, accountId).changes > 0;
+  }
+
+  /** Every account with an admin role. */
+  listAdmins(): RoleRow[] {
+    const rows = this.db.prepare("SELECT id, username, admin_role FROM accounts WHERE admin_role IS NOT NULL AND is_guest = 0 ORDER BY admin_role DESC, username")
+      .all() as { id: number; username: string; admin_role: string }[];
+    return rows.filter((r) => isAdminRole(r.admin_role)).map((r) => ({ accountId: r.id, username: r.username, role: r.admin_role as AdminRole }));
+  }
+
+  /** Real accounts or guests by id, for showing names. */
+  accountName(accountId: number): { username: string; guest: boolean } | undefined {
+    const r = this.db.prepare('SELECT username, is_guest FROM accounts WHERE id = ?').get(accountId) as { username: string; is_guest: number } | undefined;
+    return r && { username: r.username, guest: r.is_guest === 1 };
+  }
+
+  /** Characters whose name contains `q` (case-insensitive), with their account. */
+  searchCharacters(q: string, limit: number): AdminCharacterRow[] {
+    // `!` escapes LIKE's wildcards, so a typed % or _ matches itself.
+    const like = `%${q.replace(/[!%_]/g, (c) => '!' + c)}%`;
+    const rows = this.db.prepare(`
+      SELECT c.id, c.account_id, c.name, c.data, a.username, a.is_guest FROM characters c JOIN accounts a ON a.id = c.account_id
+      WHERE c.name LIKE ? ESCAPE '!' ORDER BY c.name LIMIT ?`).all(like, limit) as {
+      id: number; account_id: number; name: string; data: string; username: string; is_guest: number;
+    }[];
+    return rows.map((r) => this.adminRow(r));
+  }
+
+  /** One character by id, with its account. */
+  adminCharacter(id: number): AdminCharacterRow | undefined {
+    const r = this.db.prepare(`
+      SELECT c.id, c.account_id, c.name, c.data, a.username, a.is_guest FROM characters c JOIN accounts a ON a.id = c.account_id
+      WHERE c.id = ?`).get(id) as { id: number; account_id: number; name: string; data: string; username: string; is_guest: number } | undefined;
+    return r && this.adminRow(r);
+  }
+
+  private adminRow(r: { id: number; account_id: number; name: string; data: string; username: string; is_guest: number }): AdminCharacterRow {
+    return { id: r.id, accountId: r.account_id, username: r.username, guest: r.is_guest === 1, name: r.name, data: JSON.parse(r.data) as CharacterData };
+  }
+
+  /** Records one admin action. */
+  audit(adminId: number | null, adminName: string, action: string, target: string, details: string, at = Date.now()): void {
+    this.db.prepare('INSERT INTO admin_audit (at, admin_id, admin_name, action, target, details) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(at, adminId, adminName, action, target, details);
+  }
+
+  /** The newest audit rows first. */
+  auditLog(limit: number, before?: number): AuditRow[] {
+    const rows = this.db.prepare(`SELECT id, at, admin_name, action, target, details FROM admin_audit
+      WHERE id < ? ORDER BY id DESC LIMIT ?`).all(before ?? Number.MAX_SAFE_INTEGER, limit) as {
+      id: number; at: number; admin_name: string; action: string; target: string; details: string;
+    }[];
+    return rows.map((r) => ({ id: r.id, at: r.at, admin: r.admin_name, action: r.action, target: r.target, details: r.details }));
   }
 }

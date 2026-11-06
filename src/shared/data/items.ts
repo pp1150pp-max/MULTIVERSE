@@ -189,3 +189,15 @@ export function rollItem(r: Rng, level: number, cls: ClassId, boost = 0): Item {
 export function starterWeapon(cls: ClassId): Item {
   return build(BASES[0], 'common', 1, cls, Math.random);
 }
+
+/** Every item kind, for the admin page's spawn form. */
+export const ITEM_BASES: readonly Readonly<BaseItem>[] = BASES;
+
+/**
+ * A new item of one kind and rarity, rolled the same way as a drop (admin spawn). Null for an unknown
+ * kind. The caller checks rarity and level.
+ */
+export function makeItem(baseId: string, rarity: Rarity, level: number, cls: ClassId, r: Rng = Math.random): Item | null {
+  const base = BASES.find((b) => b.id === baseId);
+  return base ? build(base, rarity, level, cls, r) : null;
+}

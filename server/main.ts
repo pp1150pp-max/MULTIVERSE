@@ -16,13 +16,14 @@ import {
 } from '../src/shared/api';
 import { newCharacterData } from '../src/shared/sim/Player';
 import { GameWorld } from './world';
+import { bearer, HttpError, readJson, send, str } from './http';
+import { adminApi } from './admin';
 import { announceShared, runningTunnel, startTunnel } from './tunnel';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const PORT = Number(process.env.PORT ?? 2567);
 const DB_FILE = process.env.DB_FILE ?? join(ROOT, 'server', 'data', 'multiverse.db');
 const DIST = join(ROOT, 'dist');
-const MAX_BODY = 16 * 1024;
 /** `--public`: also open a Cloudflare link so friends can join from anywhere (npm run online). */
 const PUBLIC = process.argv.includes('--public');
 
@@ -32,43 +33,6 @@ const limiter = new AttemptLimiter();
 const guestLimiter = new AttemptLimiter(GUEST_PER_IP_HOUR, 60 * 60 * 1000);
 const CLEANUP_MS = 60 * 60 * 1000;
 db.deleteExpiredSessions();
-
-class HttpError extends Error {
-  constructor(readonly status: number, message: string) {
-    super(message);
-  }
-}
-
-// ------------------------------------------------------------ helpers
-
-function send(res: ServerResponse, status: number, body: unknown): void {
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-  res.end(JSON.stringify(body));
-}
-
-async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
-  let size = 0;
-  const chunks: Buffer[] = [];
-  for await (const c of req) {
-    size += (c as Buffer).length;
-    if (size > MAX_BODY) throw new HttpError(413, 'ข้อมูลที่ส่งมาใหญ่เกินไป');
-    chunks.push(c as Buffer);
-  }
-  try {
-    const v = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
-    if (v && typeof v === 'object' && !Array.isArray(v)) return v as Record<string, unknown>;
-  } catch {
-    // fall through
-  }
-  throw new HttpError(400, 'รูปแบบข้อมูลไม่ถูกต้อง');
-}
-
-const str = (v: unknown): string => (typeof v === 'string' ? v : '');
-
-function bearer(req: IncomingMessage): string {
-  const h = req.headers.authorization ?? '';
-  return h.startsWith('Bearer ') ? h.slice(7) : '';
-}
 
 /** The logged-in account (or guest) for this request, or a 401. */
 function requireAccount(req: IncomingMessage): SessionAccount {
@@ -102,6 +66,8 @@ function startSession(accountId: number, username: string): AuthResponse {
 
 async function api(req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
   const method = req.method ?? 'GET';
+
+  if (path.startsWith('/api/admin/')) return adminApi(req, res, path, db, world);
 
   if (method === 'POST' && path === '/api/register') {
     const ip = clientIp(req);
@@ -287,6 +253,13 @@ const server = createServer(async (req, res) => {
   const path = new URL(req.url ?? '/', 'http://localhost').pathname;
   try {
     if (path.startsWith('/api/')) await api(req, res, path);
+    // The admin page is public HTML; everything it shows comes from /api/admin, which checks the role.
+    else if ((req.method === 'GET' || req.method === 'HEAD') && path === '/admin') await serveStatic(req, res, '/admin.html');
+    else if (path === '/admin/') {
+      // The page loads its files by relative paths (Vite base './'), which only work from /admin.
+      res.writeHead(301, { Location: '/admin' });
+      res.end();
+    }
     else if (req.method === 'GET' || req.method === 'HEAD') await serveStatic(req, res, path);
     else throw new HttpError(405, 'Method not allowed');
   } catch (e) {

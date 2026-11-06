@@ -74,3 +74,7 @@ npm run tunnel     # ลิงก์ให้เพื่อนอย่าง�
   - สมัครสมาชิกจากเบราว์เซอร์ที่มี Guest → บัญชี Guest กลายเป็นบัญชีจริง ตัวละครย้ายมาด้วย (นับใน 3 ช่อง) · เข้าสู่ระบบบัญชีเดิมไม่ย้าย
   - "เริ่ม Guest ใหม่" ลบ Guest เดิมเมื่อสร้างตัวใหม่สำเร็จ · สร้าง Guest ได้ไม่เกิน 5 ตัวต่อ IP ต่อชั่วโมง (`GUEST_PER_IP_HOUR` ใน `src/shared/api.ts`)
   - ระหว่างเล่นมีป้าย Guest บน HUD · ไม่มีบทนำ The Seeker ตอนเริ่ม (คุยเองได้)
+- หน้าผู้ดูแล `/admin` (`admin.html`, `src/admin/`, API ใน `server/admin.ts`) ใช้บัญชีเกมเดิม · role ใน `accounts.admin_role`: `owner` (ทุกอย่าง + ให้/ถอน GM + ดูประวัติ) และ `gm` (ดู + แก้ตัวละคร)
+  - ตั้ง owner ได้จาก command line เท่านั้น: `npm run admin-role -- <ชื่อผู้ใช้> owner|gm|none` (DB ตาม `DB_FILE` ค่าเริ่มต้นคือ DB จริง)
+  - server ตรวจ role ทุก request · แก้ตัวละครออนไลน์ผ่าน Player ตัวจริงใน `server/world.ts` แล้วเซฟทันที · ทุกการกระทำลงตาราง `admin_audit`
+  - เพดานต่อครั้ง (ทอง 1,000,000 / ไอเทม 10 ชิ้น) อยู่ใน `src/shared/admin.ts`

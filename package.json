@@ -8,10 +8,11 @@
     "build": "npm run typecheck && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc --noEmit -p server && tsc --noEmit -p tests",
-    "test": "node --import tsx tests/guest-db.test.ts && node --import tsx tests/guest-server.test.ts && node --import tsx tests/ping-server.test.ts",
+    "test": "node --import tsx tests/guest-db.test.ts && node --import tsx tests/guest-server.test.ts && node --import tsx tests/ping-server.test.ts && node --import tsx tests/admin-server.test.ts",
     "server": "tsx server/main.ts",
     "online": "vite build && tsx server/main.ts --public",
     "tunnel": "tsx server/tunnel-main.ts",
+    "admin-role": "tsx server/admin-role.ts",
     "firewall": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/allow-firewall.ps1"
   },
   "dependencies": {
