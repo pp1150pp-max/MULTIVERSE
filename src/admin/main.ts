@@ -322,7 +322,7 @@ function onlineRow(p: AdminOnlineRow): HTMLTableRowElement {
     p.hidden && p.fps === null ? cell('FPS', 'แท็บซ่อน', 'num muted') : numCell('FPS', p.fps, '', p.fps !== null && p.fps < FPS_BAD),
     numCell('เฟรมนานสุด', p.maxFrame, ' ms', (p.maxFrame ?? 0) >= FRAME_BAD),
     h('td', { 'data-label': 'GPU', class: 'gpu', title: p.gpu ?? '' }, p.gpu ?? '—'),
-    cell('IP', p.ip),
+    h('td', { 'data-label': 'IP', class: 'ip', title: p.ip }, p.ip),
     can('broadcast')
       ? h('td', { 'data-label': 'ข้อความ' }, h('button', {
         class: 'small',
@@ -1383,7 +1383,7 @@ function sessionTable(rows: PlaySessionRow[], showAccount: boolean): HTMLElement
     showAccount ? cell('บัญชี', r.username) : null,
     cell('ตัวละคร', r.charName),
     cell('นานเท่าไร', dur(r)),
-    cell('IP', r.ip),
+    h('td', { 'data-label': 'IP', class: 'ip', title: r.ip }, r.ip),
     h('td', { 'data-label': 'GPU', class: 'gpu', title: r.gpu ?? '' }, r.gpu ?? '–'),
     cell('Ping เฉลี่ย', r.avgRtt === null ? '–' : `${fmt(r.avgRtt)} ms`, 'num'),
     cell('FPS เฉลี่ย', r.avgFps === null ? '–' : fmt(r.avgFps), 'num'),

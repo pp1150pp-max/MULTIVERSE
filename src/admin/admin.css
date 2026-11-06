@@ -108,6 +108,8 @@ tbody tr.click { cursor: pointer; }
 tbody tr.click:hover td { background: #241f17; }
 td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 td.gpu { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* IPv6 addresses are long: one line cut with …, the whole address on hover (title). */
+td.ip { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .warn { color: var(--bad); }
 .good { color: var(--ok); }
 .tag { display: inline-block; border: 1px solid var(--edge-dim); border-radius: 8px; padding: 0 6px; font-size: 11px; color: var(--ink-dim); margin-left: 4px; }
@@ -120,7 +122,7 @@ td.gpu { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-spac
   table.cards tr { background: var(--panel); border: 1px solid var(--edge-dim); border-radius: 6px; margin-bottom: 10px; padding: 6px 10px; }
   table.cards td { border: none; padding: 3px 0; display: flex; justify-content: space-between; gap: 12px; text-align: right; }
   table.cards td::before { content: attr(data-label); color: var(--ink-dim); font-size: 13px; text-align: left; flex: 0 0 auto; }
-  table.cards td.gpu { max-width: none; white-space: normal; }
+  table.cards td.gpu, table.cards td.ip { max-width: none; white-space: normal; }
   table.cards td.head { font-size: 16px; color: var(--gold-hi); justify-content: flex-start; }
   table.cards td.head::before { display: none; }
 }
