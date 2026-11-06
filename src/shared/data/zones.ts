@@ -47,7 +47,16 @@ export interface ZoneDef {
   portals: PortalDef[];
   /** Frozen lakes: walkable, but players slide on them. */
   iceLakes?: IceLake[];
+  /** Makes every monster here (bosses and summons too) stronger than its MonsterDef; none = as defined. */
+  monsterBoost?: MonsterBoost;
 }
+
+/** Multipliers on a zone's monsters: `stats` for HP, attack and defense; `speed` for moving and attacking. */
+export interface MonsterBoost {
+  stats: number;
+  speed: number;
+}
+export const NO_BOOST: MonsterBoost = { stats: 1, speed: 1 };
 
 export const ZONE_1: ZoneDef = {
   id: 'emerald_forest',
@@ -88,6 +97,7 @@ export const ZONE_2: ZoneDef = {
   subtitle: 'หนองน้ำที่ปกคลุมด้วยหมอกหนา ต้นไม้ตายยืนเรียงราย และสิ่งมีชีวิตที่ไม่เป็นมิตร',
   levels: [11, 20],
   theme: 'marsh',
+  monsterBoost: { stats: 1.3, speed: 1.1 },
   allowAutoPlay: true,
   half: 64,
   seed: 20261103,
@@ -125,6 +135,7 @@ export const ZONE_3: ZoneDef = {
   subtitle: 'เกาะลอยที่ปกคลุมด้วยน้ำแข็ง สนสูงมีหิมะเกาะ และทะเลสาบเยือกแข็งที่ลื่นจนคุมทิศทางยาก',
   levels: [21, 30],
   theme: 'snow',
+  monsterBoost: { stats: 1.5, speed: 1.1 },
   allowAutoPlay: true,
   half: 64,
   seed: 20261105,

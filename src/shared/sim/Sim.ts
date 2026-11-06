@@ -212,7 +212,7 @@ export class Sim {
       z = sp.area.z + Math.sin(a) * d;
       if (!this.terrain.isBlocked(x, z, def.radius)) break;
     }
-    this.monsters.push(new Monster(this.newId(), def, randInt(r, def.levels[0], def.levels[1]), sp.area, x, z));
+    this.monsters.push(new Monster(this.newId(), def, randInt(r, def.levels[0], def.levels[1]), sp.area, x, z, this.zone.monsterBoost));
     sp.alive++;
     if (sp.boss && this.time > 1) this.log(`⚠ ${def.name} ปรากฏตัวที่ส่วนลึกของ${this.zone.nameTh}!`, '#ff9a6a');
   }
@@ -342,7 +342,7 @@ export class Sim {
         x = boss.x;
         z = boss.z;
       }
-      const m = new Monster(this.newId(), def, randInt(r, def.levels[0], def.levels[1]), area, x, z);
+      const m = new Monster(this.newId(), def, randInt(r, def.levels[0], def.levels[1]), area, x, z, this.zone.monsterBoost);
       m.summoned = true;
       m.target = boss.target;
       m.aggroT = 12;
