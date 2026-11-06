@@ -1,0 +1,231 @@
+// Owner tools on the admin page: every account, account details, temporary passwords, bans, broadcasts,
+// deleting accounts/characters, and database backups. Each tool is allowed by FEATURE_ROLES
+// (src/shared/admin.ts), checked here on every call; deleting is always owner only.
+import { randomInt } from 'node:crypto';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { Db } from './db';
+import type { GameWorld } from './world';
+import type { Backups } from './backup';
+import { HttpError, readJson, send, str } from './http';
+import { charRow, log, requireAdmin, type Admin } from './admin';
+import { hashPassword } from './auth';
+import {
+  BAN_DURATIONS, BAN_FOREVER, BAN_REASON_MAX, BROADCAST_MAX, canUse, isAdminRole,
+  type AdminAccountDetail, type AdminAccountRow, type AdminAccountsResponse, type AdminCharDetail, type AdminFeature,
+} from '../src/shared/admin';
+import { banMessage } from '../src/shared/api';
+import { BAG_SIZE } from '../src/shared/sim/Player';
+
+const NO_RIGHTS = 'ไม่มีสิทธิ์';
+/** Letters that can't be mixed up when read aloud or typed from a phone. */
+const TEMP_PW_CHARS = 'abcdefghjkmnpqrstuvwxyz23456789';
+const TEMP_PW_LEN = 10;
+
+function requireFeature(req: IncomingMessage, db: Db, f: AdminFeature): Admin {
+  const a = requireAdmin(req, db);
+  if (!canUse(a.role, f)) throw new HttpError(403, NO_RIGHTS);
+  return a;
+}
+
+/** Strips control characters and trims. */
+const clean = (v: unknown, max: number): string => str(v).replace(/[\p{Cc}\p{Cf}]/gu, ' ').trim().slice(0, max + 1);
+
+function accountRows(db: Db, world: GameWorld): AdminAccountRow[] {
+  const online = new Set(world.onlineAccounts());
+  const now = Date.now();
+  return db.adminAccounts().map((a) => {
+    const chars = a.chars.map((c) => {
+      const live = world.livePlayer(c.id);
+      return live ? { ...c, level: live.level, gold: live.gold } : c;
+    });
+    const stash = world.liveStash(a.id);
+    const stashGold = stash ? stash.gold : a.stashGold;
+    const banned = a.banUntil !== null && a.banUntil > now;
+    return {
+      accountId: a.id,
+      username: a.guest ? 'Guest' : a.username,
+      guest: a.guest,
+      role: isAdminRole(a.role) ? a.role : null,
+      createdAt: a.createdAt,
+      lastOnline: a.lastOnline,
+      online: online.has(a.id),
+      characters: chars.length,
+      names: chars.map((c) => c.name),
+      maxLevel: chars.reduce((m, c) => Math.max(m, c.level), 0),
+      totalGold: chars.reduce((s, c) => s + c.gold, 0) + stashGold,
+      stashSize: stash ? stash.size : a.stashSize,
+      bannedUntil: banned ? a.banUntil : null,
+      banReason: banned ? a.banReason : null,
+    };
+  });
+}
+
+function accountRow(db: Db, world: GameWorld, id: number): AdminAccountRow {
+  const row = accountRows(db, world).find((r) => r.accountId === id);
+  if (!row) throw new HttpError(404, 'ไม่พบบัญชีนี้');
+  return row;
+}
+
+/** What has to be typed to confirm deleting: the username, or for a guest its character's name. */
+const confirmName = (row: AdminAccountRow): string => (row.guest ? (row.names[0] ?? 'Guest') : row.username);
+
+/** Who an account-level action names in the log. */
+const who = (row: AdminAccountRow): string => `${row.guest ? `Guest ${row.names[0] ?? ''}`.trim() : row.username} (#${row.accountId})`;
+
+/** Admins can't be banned or reset by GMs, and owners not by anyone but themselves. */
+function guardTarget(a: Admin, row: AdminAccountRow, what: string): void {
+  if (row.role === 'owner' && row.accountId !== a.acc.id) throw new HttpError(400, `${what} owner ไม่ได้`);
+  if (row.role && a.role !== 'owner') throw new HttpError(403, NO_RIGHTS);
+}
+
+/** Handles the owner-tool routes; returns false for any other path. */
+export async function ownerToolsApi(
+  req: IncomingMessage, res: ServerResponse, path: string, method: string, url: URL, db: Db, world: GameWorld, backups: Backups,
+): Promise<boolean> {
+  // ---------------------------------------------------------- every account
+  if (method === 'GET' && path === '/api/admin/accounts') {
+    requireFeature(req, db, 'users');
+    const rows = accountRows(db, world);
+    const midnight = new Date();
+    midnight.setHours(0, 0, 0, 0);
+    const body: AdminAccountsResponse = {
+      summary: {
+        accounts: rows.filter((r) => !r.guest).length,
+        guests: rows.filter((r) => r.guest).length,
+        characters: rows.reduce((s, r) => s + r.characters, 0),
+        signupsToday: rows.filter((r) => !r.guest && r.createdAt >= midnight.getTime()).length,
+      },
+      rows,
+    };
+    send(res, 200, body);
+    return true;
+  }
+
+  const acc = /^\/api\/admin\/accounts\/(\d{1,12})(?:\/(password|ban|unban))?$/.exec(path);
+  if (acc) {
+    const id = Number(acc[1]);
+    const action = acc[2];
+
+    if (method === 'GET' && !action) {
+      requireFeature(req, db, 'users');
+      const row = accountRow(db, world, id);
+      const name = db.accountName(id);
+      const characters: AdminCharDetail[] = db.characterSaves(id).map((c) => {
+        const live = world.livePlayer(c.id);
+        const data = live ? live.toData() : c.data;
+        const base = charRow({ id: c.id, accountId: id, username: name?.username ?? '', guest: row.guest, name: data.name, data }, live);
+        return { ...base, equipment: data.equipment, bag: Array.from({ length: BAG_SIZE }, (_, i) => data.bag[i] ?? null) };
+      });
+      const stash = world.liveStash(id) ?? db.savedStash(id);
+      const body: AdminAccountDetail = { account: row, characters, stash: row.guest || !stash ? null : stash };
+      send(res, 200, body);
+      return true;
+    }
+
+    if (method === 'POST' && action === 'password') {
+      const a = requireFeature(req, db, 'resetPassword');
+      const row = accountRow(db, world, id);
+      if (row.guest) throw new HttpError(400, 'Guest ไม่มีรหัสผ่าน');
+      guardTarget(a, row, 'ตั้งรหัสผ่านให้');
+      let pw = '';
+      for (let i = 0; i < TEMP_PW_LEN; i++) pw += TEMP_PW_CHARS[randomInt(TEMP_PW_CHARS.length)];
+      db.setPassword(id, await hashPassword(pw));
+      world.kickAccount(id, 'รหัสผ่านถูกเปลี่ยนโดยผู้ดูแล — เข้าสู่ระบบใหม่ด้วยรหัสชั่วคราว');
+      // The password itself is never logged.
+      log(db, a, 'password', who(row), 'ตั้งรหัสผ่านชั่วคราว');
+      send(res, 200, { password: pw, msg: `ตั้งรหัสชั่วคราวให้ ${row.username} แล้ว — แสดงครั้งเดียว` });
+      return true;
+    }
+
+    if (method === 'POST' && action === 'ban') {
+      const a = requireFeature(req, db, 'ban');
+      const row = accountRow(db, world, id);
+      if (id === a.acc.id) throw new HttpError(400, 'แบนตัวเองไม่ได้');
+      guardTarget(a, row, 'แบน');
+      const body = await readJson(req);
+      const dur = BAN_DURATIONS.find((d) => d.id === body.duration);
+      if (!dur) throw new HttpError(400, 'เลือกระยะเวลาแบน');
+      const reason = clean(body.reason, BAN_REASON_MAX);
+      if (!reason) throw new HttpError(400, 'ใส่เหตุผลด้วย');
+      if (reason.length > BAN_REASON_MAX) throw new HttpError(400, `เหตุผลยาวได้ไม่เกิน ${BAN_REASON_MAX} ตัว`);
+      const until = dur.ms === null ? BAN_FOREVER : Date.now() + dur.ms;
+      db.setBan(id, until, reason);
+      world.kickAccount(id, banMessage(until, reason));
+      log(db, a, 'ban', who(row), `${dur.label}: ${reason}`);
+      send(res, 200, { msg: `แบน ${row.username} ${dur.label} แล้ว`, account: accountRow(db, world, id) });
+      return true;
+    }
+
+    if (method === 'POST' && action === 'unban') {
+      const a = requireFeature(req, db, 'ban');
+      const row = accountRow(db, world, id);
+      guardTarget(a, row, 'ปลดแบน');
+      if (!row.bannedUntil) throw new HttpError(400, 'บัญชีนี้ไม่ได้ถูกแบน');
+      db.setBan(id, null, null);
+      log(db, a, 'unban', who(row), `ปลดแบน (เดิม: ${row.banReason ?? ''})`);
+      send(res, 200, { msg: `ปลดแบน ${row.username} แล้ว`, account: accountRow(db, world, id) });
+      return true;
+    }
+
+    if (method === 'DELETE' && !action) {
+      // Never a GM, whatever FEATURE_ROLES says.
+      const a = requireAdmin(req, db, 'owner');
+      const row = accountRow(db, world, id);
+      if (row.role === 'owner') throw new HttpError(400, 'ลบบัญชี owner ไม่ได้');
+      const body = await readJson(req);
+      if (str(body.confirm).trim().toLowerCase() !== confirmName(row).toLowerCase()) {
+        throw new HttpError(400, `พิมพ์ "${confirmName(row)}" ให้ตรงเพื่อยืนยัน`);
+      }
+      world.kickAccount(id, 'บัญชีนี้ถูกลบโดยผู้ดูแล');
+      const backup = backups.make('before-delete');
+      db.deleteAccount(id);
+      log(db, a, 'delete-account', who(row), `ตัวละคร ${row.names.join(', ') || '-'} · สำรองไว้ที่ ${backup.name}`);
+      send(res, 200, { msg: `ลบบัญชี ${row.username} แล้ว (สำรองไว้ก่อนลบ: ${backup.name})`, backup });
+      return true;
+    }
+  }
+
+  const ch = /^\/api\/admin\/characters\/(\d{1,12})$/.exec(path);
+  if (method === 'DELETE' && ch) {
+    const a = requireAdmin(req, db, 'owner');
+    const c = db.adminCharacter(Number(ch[1]));
+    if (!c) throw new HttpError(404, 'ไม่พบตัวละครนี้');
+    const body = await readJson(req);
+    if (str(body.confirm).trim().toLowerCase() !== c.name.toLowerCase()) throw new HttpError(400, `พิมพ์ "${c.name}" ให้ตรงเพื่อยืนยัน`);
+    world.kickCharacter(c.id, 'ตัวละครนี้ถูกลบโดยผู้ดูแล');
+    const backup = backups.make('before-delete');
+    db.deleteCharacterById(c.id);
+    log(db, a, 'delete-character', `${c.name} (${c.guest ? 'Guest' : c.username}, #${c.id})`, `Lv.${c.data.level} · สำรองไว้ที่ ${backup.name}`);
+    send(res, 200, { msg: `ลบตัวละคร ${c.name} แล้ว (สำรองไว้ก่อนลบ: ${backup.name})`, backup });
+    return true;
+  }
+
+  // ---------------------------------------------------------- broadcast
+  if (method === 'POST' && path === '/api/admin/broadcast') {
+    const a = requireFeature(req, db, 'broadcast');
+    const body = await readJson(req);
+    const text = clean(body.text, BROADCAST_MAX);
+    if (!text) throw new HttpError(400, 'พิมพ์ข้อความก่อน');
+    if (text.length > BROADCAST_MAX) throw new HttpError(400, `ข้อความยาวได้ไม่เกิน ${BROADCAST_MAX} ตัว`);
+    const n = world.broadcast(text);
+    log(db, a, 'broadcast', 'ทุกคน', text);
+    send(res, 200, { msg: `ส่งประกาศถึงผู้เล่น ${n} คนแล้ว` });
+    return true;
+  }
+
+  // ---------------------------------------------------------- backups
+  if (path === '/api/admin/backups' && method === 'GET') {
+    requireFeature(req, db, 'backup');
+    send(res, 200, backups.list());
+    return true;
+  }
+  if (path === '/api/admin/backups' && method === 'POST') {
+    const a = requireFeature(req, db, 'backup');
+    const b = backups.make('manual');
+    log(db, a, 'backup', 'ฐานข้อมูล', `${b.name} (${(b.size / 1024).toFixed(0)} KB)`);
+    send(res, 200, { msg: `สำรองแล้ว: ${b.name}`, rows: backups.list() });
+    return true;
+  }
+
+  return false;
+}

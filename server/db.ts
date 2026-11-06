@@ -70,6 +70,9 @@ export class Db {
     if (!cols.includes('last_online')) this.db.exec('ALTER TABLE accounts ADD COLUMN last_online INTEGER');
     // NULL = a normal player; 'owner' / 'gm' may use the admin page (see server/admin.ts).
     if (!cols.includes('admin_role')) this.db.exec('ALTER TABLE accounts ADD COLUMN admin_role TEXT');
+    // Ban end time (BAN_FOREVER = permanent) and why; NULL = not banned.
+    if (!cols.includes('ban_until')) this.db.exec('ALTER TABLE accounts ADD COLUMN ban_until INTEGER');
+    if (!cols.includes('ban_reason')) this.db.exec('ALTER TABLE accounts ADD COLUMN ban_reason TEXT');
   }
 
   close(): void {
@@ -140,9 +143,12 @@ export class Db {
     this.db.prepare('DELETE FROM accounts WHERE id = ? AND is_guest = 1').run(accountId);
   }
 
-  /** Remembers that a guest is playing right now (expiry counts from the last time this was set). */
+  /**
+   * Remembers that the account is playing right now: a guest's expiry counts from the last time this
+   * was set, and the admin page shows it as "last online".
+   */
   touchOnline(accountId: number, now = Date.now()): void {
-    this.db.prepare('UPDATE accounts SET last_online = ? WHERE id = ? AND is_guest = 1').run(now, accountId);
+    this.db.prepare('UPDATE accounts SET last_online = ? WHERE id = ?').run(now, accountId);
   }
 
   /** Deletes guests not online for GUEST_TTL_MS, never one listed in `online`. Returns how many went. */
@@ -297,6 +303,80 @@ export class Db {
 
   private adminRow(r: { id: number; account_id: number; name: string; data: string; username: string; is_guest: number }): AdminCharacterRow {
     return { id: r.id, accountId: r.account_id, username: r.username, guest: r.is_guest === 1, name: r.name, data: JSON.parse(r.data) as CharacterData };
+  }
+
+  /** Every account with what the "ผู้ใช้ทั้งหมด" table needs (gold and levels read from the saves). */
+  adminAccounts(): {
+    id: number; username: string; guest: boolean; role: string | null; createdAt: number; lastOnline: number | null;
+    banUntil: number | null; banReason: string | null; stashSize: number | null; stashGold: number;
+    chars: { id: number; name: string; level: number; gold: number }[];
+  }[] {
+    const accs = this.db.prepare(`SELECT a.id, a.username, a.is_guest, a.admin_role, a.created_at, a.last_online, a.ban_until, a.ban_reason,
+        json_extract(s.data, '$.size') AS stash_size, json_extract(s.data, '$.gold') AS stash_gold
+      FROM accounts a LEFT JOIN stashes s ON s.account_id = a.id ORDER BY a.id`).all() as {
+      id: number; username: string; is_guest: number; admin_role: string | null; created_at: number; last_online: number | null;
+      ban_until: number | null; ban_reason: string | null; stash_size: number | null; stash_gold: number | null;
+    }[];
+    const chars = this.db.prepare(`SELECT id, account_id, name, json_extract(data, '$.level') AS level, json_extract(data, '$.gold') AS gold
+      FROM characters ORDER BY id`).all() as { id: number; account_id: number; name: string; level: number; gold: number }[];
+    const by = new Map<number, { id: number; name: string; level: number; gold: number }[]>();
+    for (const c of chars) {
+      const list = by.get(c.account_id) ?? [];
+      list.push({ id: c.id, name: c.name, level: Number(c.level) || 1, gold: Number(c.gold) || 0 });
+      by.set(c.account_id, list);
+    }
+    return accs.map((a) => ({
+      id: a.id, username: a.username, guest: a.is_guest === 1, role: a.admin_role, createdAt: a.created_at, lastOnline: a.last_online,
+      banUntil: a.ban_until, banReason: a.ban_reason, stashSize: a.stash_size, stashGold: Number(a.stash_gold) || 0,
+      chars: by.get(a.id) ?? [],
+    }));
+  }
+
+  /** The account's characters with their full saves. */
+  characterSaves(accountId: number): { id: number; data: CharacterData }[] {
+    const rows = this.db.prepare('SELECT id, data FROM characters WHERE account_id = ? ORDER BY id').all(accountId) as { id: number; data: string }[];
+    return rows.map((r) => ({ id: r.id, data: JSON.parse(r.data) as CharacterData }));
+  }
+
+  /** The account's stash if it has one saved (null for guests and accounts that never opened it). */
+  savedStash(accountId: number): StashData | null {
+    const r = this.db.prepare('SELECT data FROM stashes WHERE account_id = ?').get(accountId) as { data: string } | undefined;
+    return r ? cleanStash(JSON.parse(r.data)) : null;
+  }
+
+  /** An active ban (end time in the future), or undefined. */
+  activeBan(accountId: number, now = Date.now()): { until: number; reason: string } | undefined {
+    const r = this.db.prepare('SELECT ban_until, ban_reason FROM accounts WHERE id = ? AND ban_until > ?').get(accountId, now) as
+      { ban_until: number; ban_reason: string | null } | undefined;
+    return r && { until: r.ban_until, reason: r.ban_reason ?? '' };
+  }
+
+  /** Bans (or with until = null, unbans) an account; a ban also ends its logins. */
+  setBan(accountId: number, until: number | null, reason: string | null): void {
+    this.db.prepare('UPDATE accounts SET ban_until = ?, ban_reason = ? WHERE id = ?').run(until, reason, accountId);
+    if (until !== null) this.db.prepare('DELETE FROM sessions WHERE account_id = ?').run(accountId);
+  }
+
+  /** New password hash for a real account; its logins end (everyone must log in again). */
+  setPassword(accountId: number, passHash: string): boolean {
+    const n = this.db.prepare('UPDATE accounts SET pass_hash = ? WHERE id = ? AND is_guest = 0').run(passHash, accountId).changes;
+    if (n) this.db.prepare('DELETE FROM sessions WHERE account_id = ?').run(accountId);
+    return n > 0;
+  }
+
+  /** Deletes an account with its characters, stash and logins. */
+  deleteAccount(accountId: number): boolean {
+    return this.db.prepare('DELETE FROM accounts WHERE id = ?').run(accountId).changes > 0;
+  }
+
+  /** Deletes one character by id (admin). */
+  deleteCharacterById(id: number): boolean {
+    return this.db.prepare('DELETE FROM characters WHERE id = ?').run(id).changes > 0;
+  }
+
+  /** A consistent copy of the whole database, made while the server runs (SQLite VACUUM INTO). */
+  backupTo(file: string): void {
+    this.db.prepare('VACUUM INTO ?').run(file);
   }
 
   /** Records one admin action. */

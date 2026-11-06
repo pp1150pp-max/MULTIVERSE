@@ -11,13 +11,14 @@ import { randomBytes } from 'node:crypto';
 import { Db, type SessionAccount } from './db';
 import { AttemptLimiter, hashPassword, newToken, SESSION_MS, verifyPassword } from './auth';
 import {
-  checkCharacterName, checkPassword, checkUsername, GUEST_PER_IP_HOUR, isClassId, MAX_CHARACTERS,
+  banMessage, checkCharacterName, checkPassword, checkUsername, GUEST_PER_IP_HOUR, isClassId, MAX_CHARACTERS,
   type AuthResponse, type CharacterSummary, type GuestResponse, type MeResponse,
 } from '../src/shared/api';
 import { newCharacterData } from '../src/shared/sim/Player';
 import { GameWorld } from './world';
 import { bearer, HttpError, readJson, send, str } from './http';
 import { adminApi } from './admin';
+import { Backups } from './backup';
 import { controlFilePath, CTRL_C_WINDOW_MS, DoublePress, isLocalControl, STOP_PATH, type ControlFile } from './control';
 import { createInterface } from 'node:readline';
 import { RESTART_EXIT_CODE, SHUTDOWN_SECONDS, type ShutdownMode } from '../src/shared/net/protocol';
@@ -39,6 +40,7 @@ const CONTROL_FILE = controlFilePath(DB_FILE, PORT);
 const CONTROL_TOKEN = randomBytes(32).toString('hex');
 
 const db = new Db(DB_FILE);
+const backups = new Backups(db, DB_FILE);
 const limiter = new AttemptLimiter();
 /** Brake on making guests: each new guest counts as one "attempt" for its address. */
 const guestLimiter = new AttemptLimiter(GUEST_PER_IP_HOUR, 60 * 60 * 1000);
@@ -79,7 +81,7 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string): Pro
   const method = req.method ?? 'GET';
 
   if (path.startsWith('/api/admin/')) {
-    return adminApi(req, res, path, db, world, { supervised: SUPERVISED, stopping: () => stopMode, stop: beginStop, cancel: cancelStop });
+    return adminApi(req, res, path, db, world, { supervised: SUPERVISED, stopping: () => stopMode, stop: beginStop, cancel: cancelStop }, backups);
   }
 
   // npm run stop-server (server/stop-main.ts): only from this computer, with the token in CONTROL_FILE.
@@ -161,6 +163,9 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string): Pro
       throw new HttpError(401, 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
     }
     limiter.clear(ip);
+    // Checked after the password, so a ban (and its reason) is only shown to the account's owner.
+    const ban = db.activeBan(acc.id);
+    if (ban) throw new HttpError(403, banMessage(ban.until, ban.reason));
     return send(res, 200, startSession(acc.id, acc.username));
   }
 
@@ -299,6 +304,7 @@ const server = createServer(async (req, res) => {
 const world = new GameWorld(db, server);
 cleanupGuests();
 setInterval(cleanupGuests, CLEANUP_MS);
+backups.startDaily();
 
 server.listen(PORT, '0.0.0.0', () => {
   writeFileSync(CONTROL_FILE, JSON.stringify({ pid: process.pid, port: PORT, token: CONTROL_TOKEN } satisfies ControlFile));

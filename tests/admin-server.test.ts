@@ -2,7 +2,7 @@
 // throwaway database (never the real server or server/data), then stops: roles and 403s, GM can't
 // grant roles, caps, online edits surviving the next save, offline edits, kick/teleport, audit log.
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -63,7 +63,7 @@ function joinWorld(token: string, characterId: number) {
     ws.onmessage = (e) => {
       const m = JSON.parse(String(e.data));
       msgs.push(m);
-      if (m.t === 'snap') {
+      if (m.t === 'snap' || m.t === 'kick') {
         clearTimeout(t);
         res();
       }
@@ -239,8 +239,123 @@ async function run(): Promise<void> {
   const log = await api('GET', '/admin/audit', undefined, ownerTok);
   ok(log.status === 200 && log.data.length === rows.length && log.data[0].id === rows.at(-1).id, 'owner reads the audit log, newest first');
 
+  // ---------------------------------------------------------- owner tools: who may use them
+  const plainId = (await api('GET', '/admin/accounts', undefined, ownerTok)).data.rows.find((r: any) => r.username === 'plain1').accountId;
+  const ownerId = (await api('GET', '/admin/accounts', undefined, ownerTok)).data.rows.find((r: any) => r.username === 'owner1').accountId;
+  ok((await api('GET', '/admin/me', undefined, ownerTok)).data.features.length === 5, 'owner has every owner tool');
+  ok((await api('GET', '/admin/me', undefined, gmTok)).data.features.length === 0, 'GM has no owner tools (FEATURE_ROLES)');
+  const gmDenied: [string, string, unknown?][] = [
+    ['GET', '/admin/accounts'], ['GET', `/admin/accounts/${plainId}`], ['POST', `/admin/accounts/${plainId}/password`],
+    ['POST', `/admin/accounts/${plainId}/ban`, { duration: '1h', reason: 'x' }], ['POST', `/admin/accounts/${plainId}/unban`],
+    ['POST', '/admin/broadcast', { text: 'hi' }], ['GET', '/admin/backups'], ['POST', '/admin/backups'],
+    ['DELETE', `/admin/accounts/${plainId}`, { confirm: 'plain1' }], ['DELETE', `/admin/characters/${charId}`, { confirm: 'Tester' }],
+  ];
+  for (const [m, path, body] of gmDenied) ok((await api(m, path, body, gmTok)).status === 403, `GM denied: ${m} ${path}`);
+  ok((await api('GET', '/admin/accounts', undefined, plainTok)).status === 403, 'player denied: account list');
+
+  // ---------------------------------------------------------- every account + details
+  const accs = await api('GET', '/admin/accounts', undefined, ownerTok);
+  const prow = accs.data.rows.find((r: any) => r.accountId === plainId);
+  ok(accs.status === 200 && accs.data.summary.accounts === 3 && accs.data.summary.characters === 3 && accs.data.summary.guests === 1 && accs.data.summary.signupsToday === 3,
+    `summary numbers (${JSON.stringify(accs.data.summary)})`);
+  ok(prow && prow.characters === 1 && prow.names[0] === 'Tester' && prow.maxLevel === MAX_LEVEL && !prow.guest && prow.role === null && prow.lastOnline > 0,
+    'account row: characters, max level, last online');
+  const det = await api('GET', `/admin/accounts/${plainId}`, undefined, ownerTok);
+  ok(det.status === 200 && det.data.characters[0].bag.length === 30 && det.data.characters[0].bag.filter(Boolean).length === 30 && det.data.characters[0].equipment.weapon,
+    'account details: bag and equipment');
+
+  // ---------------------------------------------------------- broadcast
+  const b1 = joinWorld(plainTok, charId);
+  await b1.ready;
+  const bc = await api('POST', '/admin/broadcast', { text: 'ทดสอบประกาศ' }, ownerTok);
+  await sleep(300);
+  ok(bc.status === 200 && b1.msgs.some((m) => m.t === 'announce' && m.text === 'ทดสอบประกาศ'), 'broadcast delivered to players');
+  ok((await api('POST', '/admin/broadcast', { text: 'x'.repeat(201) }, ownerTok)).status === 400, 'broadcast over the length cap refused');
+  ok((await api('POST', '/admin/broadcast', { text: '   ' }, ownerTok)).status === 400, 'empty broadcast refused');
+
+  // ---------------------------------------------------------- reset password
+  const rp = await api('POST', `/admin/accounts/${plainId}/password`, undefined, ownerTok);
+  await sleep(300);
+  ok(rp.status === 200 && typeof rp.data.password === 'string' && rp.data.password.length >= 6, 'temporary password returned once');
+  ok(b1.isClosed(), 'player kicked after a password reset');
+  ok((await api('POST', '/login', { username: 'plain1', password: 'secret123' })).status === 401, 'old password no longer works');
+  const relog = await api('POST', '/login', { username: 'plain1', password: rp.data.password });
+  ok(relog.status === 200, 'temporary password logs in');
+  const plainTok2: string = relog.data.token;
+  const guestAcc = accs.data.rows.find((r: any) => r.guest);
+  ok((await api('POST', `/admin/accounts/${guestAcc.accountId}/password`, undefined, ownerTok)).status === 400, 'guest has no password to reset');
+  ok((await api('POST', `/admin/accounts/${ownerId}/password`, undefined, ownerTok)).status === 200, 'owner may reset their own password');
+
+  // ---------------------------------------------------------- ban / unban
+  const ownerLogin = await api('GET', '/admin/me', undefined, ownerTok);
+  ok(ownerLogin.status === 401, 'own password reset ended the owner\'s login too');
+  // Log the owner back in through the DB (the temp password went to the page).
+  const tdb = new DatabaseSync(DB_FILE);
+  tdb.prepare('INSERT INTO sessions (token, account_id, expires_at) VALUES (?, ?, ?)').run('owner-test-token', ownerId, Date.now() + 3600e3);
+  const ot = 'owner-test-token';
+  const b2 = joinWorld(plainTok2, charId);
+  await b2.ready;
+  ok((await api('POST', `/admin/accounts/${ownerId}/ban`, { duration: '1h', reason: 'x' }, ot)).status === 400, 'cannot ban yourself');
+  ok((await api('POST', `/admin/accounts/${plainId}/ban`, { duration: '2h', reason: 'x' }, ot)).status === 400, 'unknown ban length refused');
+  ok((await api('POST', `/admin/accounts/${plainId}/ban`, { duration: '1h', reason: '' }, ot)).status === 400, 'ban without a reason refused');
+  const ban = await api('POST', `/admin/accounts/${plainId}/ban`, { duration: '1d', reason: 'สแปมแชท' }, ot);
+  await sleep(300);
+  ok(ban.status === 200 && ban.data.account.bannedUntil > Date.now(), 'owner bans for a day');
+  const bk = b2.msgs.find((m) => m.t === 'kick');
+  ok(b2.isClosed() && bk && bk.msg.includes('ถูกระงับ') && bk.msg.includes('สแปมแชท'), `online player kicked with the reason (${bk?.msg})`);
+  const banLogin = await api('POST', '/login', { username: 'plain1', password: rp.data.password });
+  ok(banLogin.status === 403 && banLogin.data.error.includes('สแปมแชท') && banLogin.data.error.includes('ถึง'), `banned login refused (${banLogin.data.error})`);
+  ok((await api('POST', '/login', { username: 'plain1', password: 'wrong-one' })).status === 401, 'wrong password still says wrong password (ban not revealed)');
+  tdb.prepare('INSERT INTO sessions (token, account_id, expires_at) VALUES (?, ?, ?)').run('banned-token', plainId, Date.now() + 3600e3);
+  const b3 = joinWorld('banned-token', charId);
+  await b3.ready;
+  ok(b3.msgs.some((m) => m.t === 'kick' && m.msg.includes('ถูกระงับ')) && !b3.msgs.some((m) => m.t === 'snap'), 'banned account cannot join the world');
+  const unban = await api('POST', `/admin/accounts/${plainId}/unban`, undefined, ot);
+  ok(unban.status === 200 && unban.data.account.bannedUntil === null, 'unban');
+  ok((await api('POST', '/login', { username: 'plain1', password: rp.data.password })).status === 200, 'login works again after unban');
+  ok((await api('POST', `/admin/accounts/${plainId}/ban`, { duration: 'perm', reason: 'ถาวร' }, ot)).status === 200, 'permanent ban');
+  const permLogin = await api('POST', '/login', { username: 'plain1', password: rp.data.password });
+  ok(permLogin.status === 403 && permLogin.data.error.includes('ถาวร'), 'permanent ban message');
+  await api('POST', `/admin/accounts/${plainId}/unban`, undefined, ot);
+
+  // ---------------------------------------------------------- backups
+  const bdir = join(dir, 'backups');
+  const list0 = await api('GET', '/admin/backups', undefined, ot);
+  ok(list0.status === 200 && list0.data.some((b: any) => b.kind === 'daily' && b.size > 0), 'daily backup made at start');
+  for (let k = 0; k < 11; k++) await api('POST', '/admin/backups', undefined, ot);
+  const files = readdirSync(bdir);
+  ok(files.filter((f) => f.endsWith('-manual.db')).length === 10, `manual backups rotated to 10 (${files.length} files)`);
+  const copy = new DatabaseSync(join(bdir, files.find((f) => f.endsWith('-manual.db'))!), { readOnly: true });
+  ok((copy.prepare('SELECT COUNT(*) AS n FROM accounts').get() as { n: number }).n >= 3, 'a backup is a working database');
+  copy.close();
+
+  // ---------------------------------------------------------- delete
+  ok((await api('DELETE', `/admin/accounts/${ownerId}`, { confirm: 'owner1' }, ot)).status === 400, 'cannot delete the owner account');
+  const vTok = (await api('POST', '/register', { username: 'victim1', password: 'secret123' })).data.token;
+  const vChar = (await api('POST', '/characters', { name: 'Victim', classId: 'mage' }, vTok)).data.id;
+  const vId = (await api('GET', '/admin/accounts', undefined, ot)).data.rows.find((r: any) => r.username === 'victim1').accountId;
+  const v = joinWorld(vTok, vChar);
+  await v.ready;
+  ok((await api('DELETE', `/admin/accounts/${vId}`, { confirm: 'victim' }, ot)).status === 400, 'delete needs the exact name typed');
+  const before = readdirSync(bdir).filter((f) => f.endsWith('-before-delete.db')).length;
+  const del = await api('DELETE', `/admin/accounts/${vId}`, { confirm: 'Victim1' }, ot);
+  await sleep(300);
+  ok(del.status === 200 && v.isClosed(), 'owner deletes an account; the online player is kicked first');
+  ok(readdirSync(bdir).filter((f) => f.endsWith('-before-delete.db')).length === before + 1, 'backup made before the delete');
+  ok(!tdb.prepare('SELECT 1 FROM accounts WHERE id = ?').get(vId) && !tdb.prepare('SELECT 1 FROM characters WHERE id = ?').get(vChar), 'account and characters gone');
+  const backupHasVictim = new DatabaseSync(join(bdir, readdirSync(bdir).filter((f) => f.endsWith('-before-delete.db')).sort().at(-1)!), { readOnly: true });
+  ok(!!backupHasVictim.prepare("SELECT 1 FROM accounts WHERE username = 'victim1'").get(), 'the backup still has the deleted account');
+  backupHasVictim.close();
+  ok((await api('DELETE', `/admin/characters/${charId}`, { confirm: 'nope' }, ot)).status === 400, 'character delete needs its name');
+  ok((await api('DELETE', `/admin/characters/${charId}`, { confirm: 'tester' }, ot)).status === 200 && !tdb.prepare('SELECT 1 FROM characters WHERE id = ?').get(charId),
+    'owner deletes a character');
+  const tools = tdb.prepare("SELECT action, details FROM admin_audit WHERE action IN ('broadcast','password','ban','unban','backup','delete-account','delete-character')").all() as any[];
+  ok(['broadcast', 'password', 'ban', 'unban', 'backup', 'delete-account', 'delete-character'].every((a) => tools.some((t) => t.action === a)), 'every owner tool is in the audit log');
+  ok(!tools.some((t) => t.details.includes(rp.data.password)), 'the temporary password is never logged');
+  tdb.close();
+
   // ---------------------------------------------------------- revoke
-  ok((await api('POST', '/admin/roles', { username: 'gm1', role: null }, ownerTok)).status === 200, 'owner revokes GM');
+  ok((await api('POST', '/admin/roles', { username: 'gm1', role: null }, 'owner-test-token')).status === 200, 'owner revokes GM');
   ok((await api('GET', '/admin/online', undefined, gmTok)).status === 403, 'revoked GM → 403 right away');
 }
 

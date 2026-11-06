@@ -27,6 +27,8 @@ import { shutdownCancelled, shutdownWarning, type ShutdownMode } from '../shared
 
 /** Yellow, like the game's level-up lines. */
 const SHUTDOWN_COLOR = '#ffd34a';
+/** How long an owner's announcement banner stays up. */
+const ANNOUNCE_MS = 10_000;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -1426,6 +1428,26 @@ export class Hud {
     }
     el.textContent = text;
     this.log(text, SHUTDOWN_COLOR);
+  }
+
+  /** An announcement from the server's owner: a banner for a while (like the restart warning) and a chat line. */
+  announce(text: string): void {
+    document.getElementById('announce-banner')?.remove();
+    const el = document.createElement('div');
+    el.id = 'announce-banner';
+    const head = document.createElement('div');
+    head.className = 'announce-head';
+    head.textContent = '📢 ประกาศจากผู้ดูแล';
+    const body = document.createElement('div');
+    body.textContent = text;
+    el.append(head, body);
+    $('hud').append(el);
+    setTimeout(() => el.remove(), ANNOUNCE_MS);
+    const line = document.createElement('div');
+    line.className = 'log-line';
+    line.style.color = SHUTDOWN_COLOR;
+    line.textContent = `📢 ประกาศ: ${text}`;
+    this.pushLog(line, ANNOUNCE_MS * 3);
   }
 
   showDisconnect(msg: string): void {

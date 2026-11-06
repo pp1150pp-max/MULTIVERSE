@@ -685,7 +685,7 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 }
 
 /* Server stopping/restarting: stays up and ticks down until the connection closes. */
-#shutdown-banner {
+#shutdown-banner, #announce-banner {
   position: absolute; left: 50%; top: 14%; transform: translateX(-50%); z-index: 6;
   max-width: calc(100% - 32px); text-align: center; pointer-events: none;
   padding: 10px 22px; border: 2px solid #ffd34a; border-radius: 8px;
@@ -694,3 +694,7 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
   box-shadow: 0 0 24px rgba(255, 211, 74, 0.35);
 }
 @media (max-width: 700px) { #shutdown-banner { font-size: 20px; top: 18%; } }
+/* Owner's announcement: same frame as the restart warning, smaller text that may wrap, a bit lower. */
+#announce-banner { top: 24%; font-size: 22px; white-space: normal; width: max-content; max-width: min(720px, calc(100% - 32px)); }
+#announce-banner .announce-head { font-size: 14px; opacity: 0.85; margin-bottom: 2px; }
+@media (max-width: 700px) { #announce-banner { font-size: 17px; top: 26%; } }

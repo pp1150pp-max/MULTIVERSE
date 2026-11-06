@@ -2,13 +2,15 @@
 // role and every value, so nothing here is a safeguard. Names, GPU strings and the like come from
 // players: they are only ever put on the page as text (never as HTML).
 import './admin.css';
-import { ADMIN_AUDIT_PAGE } from '../shared/admin';
+import { ADMIN_AUDIT_PAGE, BAN_DURATIONS, BAN_FOREVER, BAN_REASON_MAX, BROADCAST_MAX } from '../shared/admin';
+import { MAX_CHARACTERS } from '../shared/api';
+import { potionName } from '../shared/data/potions';
 import type {
-  AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AuditRow, RoleRow,
+  AdminAccountDetail, AdminAccountsResponse, AdminFeature, BackupRow, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AuditRow, RoleRow,
 } from '../shared/admin';
 import { CLASSES } from '../shared/data/classes';
 import { SHUTDOWN_SECONDS, type ShutdownMode } from '../shared/net/protocol';
-import { RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, type ClassId } from '../shared/types';
+import { isPotion, RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, type BagEntry, type ClassId, type Item } from '../shared/types';
 
 const ADMIN_TOKEN = 'multiverse-admin-token';
 /** The game's own login: used when the owner is already logged in to the game in this browser. */
@@ -94,7 +96,7 @@ const root = document.getElementById('admin')!;
 let me: AdminMe | null = null;
 let meta: AdminMeta | null = null;
 let online: AdminOnline | null = null;
-type Tab = 'online' | 'search' | 'roles' | 'audit' | 'server';
+type Tab = 'online' | 'search' | 'users' | 'roles' | 'audit' | 'server';
 let tab: Tab = 'online';
 let timer = 0;
 
@@ -196,7 +198,9 @@ async function start(): Promise<void> {
 function renderShell(): void {
   if (!me) return;
   const tabs: [Tab, string][] = [['online', 'ออนไลน์'], ['search', 'ค้นหาตัวละคร']];
-  if (me.role === 'owner') tabs.push(['roles', 'สิทธิ์ GM'], ['audit', 'ประวัติ'], ['server', 'Server']);
+  if (me.features.includes('users')) tabs.push(['users', 'ผู้ใช้ทั้งหมด']);
+  if (me.role === 'owner') tabs.push(['roles', 'สิทธิ์ GM'], ['audit', 'ประวัติ']);
+  if (me.role === 'owner' || me.features.includes('broadcast') || me.features.includes('backup')) tabs.push(['server', 'Server']);
   const bar = h('nav', { class: 'tabs' }, ...tabs.map(([id, label]) =>
     h('button', { class: id === tab ? 'on' : '', 'data-tab': id, onclick: () => setTab(id) }, label)));
   root.replaceChildren(
@@ -218,6 +222,7 @@ function setTab(t: Tab): void {
   view.replaceChildren();
   if (t === 'online') renderOnline();
   else if (t === 'search') renderSearch();
+  else if (t === 'users') void renderUsers();
   else if (t === 'roles') void renderRoles();
   else if (t === 'audit') void renderAudit();
   else void renderServer();
@@ -571,7 +576,8 @@ async function renderRoles(): Promise<void> {
 
 const ACTION_TH: Record<string, string> = {
   level: 'ตั้งเลเวล', gold: 'ทอง', items: 'เสกไอเทม', kick: 'เตะ', teleport: 'ย้ายโซน', grant: 'ให้สิทธิ์', revoke: 'ถอนสิทธิ์',
-  server: 'Server',
+  server: 'Server', password: 'ตั้งรหัสผ่าน', ban: 'แบน', unban: 'ปลดแบน', broadcast: 'ประกาศ', backup: 'สำรองข้อมูล',
+  'delete-account': 'ลบบัญชี', 'delete-character': 'ลบตัวละคร',
 };
 
 async function renderAudit(): Promise<void> {
@@ -612,6 +618,12 @@ async function renderAudit(): Promise<void> {
 // ------------------------------------------------------------ server (owner)
 
 async function renderServer(): Promise<void> {
+  if (can('broadcast')) view.append(broadcastCard());
+  if (can('backup')) view.append(backupCard());
+  if (me?.role === 'owner') await renderRestart();
+}
+
+async function renderRestart(): Promise<void> {
   const status = h('div', { class: 'msg' });
   const restart = h('button', { class: 'primary' }, 'รีสตาร์ท');
   const stop = h('button', { class: 'danger' }, 'ปิด server');
@@ -676,6 +688,347 @@ async function renderServer(): Promise<void> {
     status.className = 'msg bad';
     status.textContent = (e as Error).message;
   }
+}
+
+
+// ------------------------------------------------------------ every account (owner tools)
+
+const can = (f: AdminFeature): boolean => !!me?.features.includes(f);
+const dateOnly = (ms: number): string => new Date(ms).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
+const ago = (ms: number): string => {
+  const s = Math.max(0, (Date.now() - ms) / 1000);
+  if (s < 60) return 'เมื่อสักครู่';
+  if (s < 3600) return `${Math.floor(s / 60)} นาทีก่อน`;
+  if (s < 86400) return `${Math.floor(s / 3600)} ชม.ก่อน`;
+  return `${Math.floor(s / 86400)} วันก่อน`;
+};
+const banText = (until: number): string => (until >= BAN_FOREVER ? 'ถาวร' : `ถึง ${time(until)}`);
+
+type UserSort = 'username' | 'createdAt' | 'lastOnline' | 'characters' | 'maxLevel' | 'totalGold' | 'stashSize';
+const users = { q: '', filter: 'all', sort: 'createdAt' as UserSort, desc: true };
+
+async function renderUsers(): Promise<void> {
+  const chips = h('div', { class: 'zones' });
+  const body = h('tbody');
+  const msg = h('div', { class: 'msg' });
+  const q = h('input', { placeholder: 'ชื่อผู้ใช้ หรือชื่อตัวละคร', value: users.q, autocapitalize: 'off' });
+  const filter = h('select', {},
+    ...[['all', 'ทั้งหมด'], ['real', 'บัญชีจริง'], ['guest', 'Guest'], ['admin', 'GM / Owner'], ['banned', 'ถูกแบน'], ['online', 'ออนไลน์']]
+      .map(([v, l]) => h('option', { value: v, selected: v === users.filter }, l)));
+  const cols: [UserSort | null, string][] = [
+    ['username', 'ชื่อผู้ใช้'], [null, 'ประเภท'], [null, 'สิทธิ์'], ['createdAt', 'สมัครเมื่อ'], ['lastOnline', 'ออนไลน์ล่าสุด'],
+    ['characters', 'ตัวละคร'], ['maxLevel', 'Lv สูงสุด'], ['totalGold', 'ทองรวม'], ['stashSize', 'คลัง'],
+  ];
+  const sort = h('select', {}, ...cols.filter(([k]) => k).map(([k, l]) => h('option', { value: k!, selected: k === users.sort }, `เรียงตาม${l}`)));
+  const head = h('tr');
+  let data: AdminAccountsResponse | null = null;
+
+  const draw = () => {
+    if (!data) return;
+    const s = data.summary;
+    chips.replaceChildren(...([['บัญชี', s.accounts], ['Guest', s.guests], ['ตัวละคร', s.characters], ['สมัครวันนี้', s.signupsToday]] as const)
+      .map(([l, n]) => h('div', { class: 'zone-chip' }, h('b', {}, fmt(n)), h('span', {}, l))));
+    head.replaceChildren(...cols.map(([k, l]) => h('th', {
+      class: k ? 'sortable' : '',
+      onclick: k ? () => {
+        users.desc = users.sort === k ? !users.desc : k !== 'username';
+        users.sort = k;
+        sort.value = k;
+        draw();
+      } : undefined,
+    }, l + (k && k === users.sort ? (users.desc ? ' ▼' : ' ▲') : ''))));
+    const needle = users.q.trim().toLowerCase();
+    const rows = data.rows.filter((r) => {
+      if (users.filter === 'real' && r.guest) return false;
+      if (users.filter === 'guest' && !r.guest) return false;
+      if (users.filter === 'admin' && !r.role) return false;
+      if (users.filter === 'banned' && !r.bannedUntil) return false;
+      if (users.filter === 'online' && !r.online) return false;
+      return !needle || r.username.toLowerCase().includes(needle) || r.names.some((n) => n.toLowerCase().includes(needle));
+    });
+    const key = users.sort;
+    rows.sort((a, b) => {
+      const va = key === 'lastOnline' ? (a.online ? Infinity : a.lastOnline ?? 0) : key === 'stashSize' ? a.stashSize ?? 0 : a[key];
+      const vb = key === 'lastOnline' ? (b.online ? Infinity : b.lastOnline ?? 0) : key === 'stashSize' ? b.stashSize ?? 0 : b[key];
+      const c = typeof va === 'string' ? va.localeCompare(String(vb)) : (va as number) - (vb as number);
+      return users.desc ? -c : c;
+    });
+    msg.textContent = `แสดง ${rows.length} จาก ${data.rows.length} บัญชี`;
+    body.replaceChildren(...rows.map((r) => {
+      const cell = (label: string, content: Node | string, cls = '') => h('td', { 'data-label': label, class: cls }, content);
+      return h('tr', { class: 'click', onclick: () => void openAccount(r.accountId) },
+        cell('ชื่อผู้ใช้', h('span', {}, r.guest ? `Guest · ${r.names[0] ?? ''}` : r.username,
+          r.bannedUntil ? h('span', { class: 'tag ban' }, 'แบน') : null), 'head'),
+        cell('ประเภท', r.guest ? 'Guest' : 'บัญชีจริง'),
+        cell('สิทธิ์', r.role ? h('span', { class: 'role' }, r.role === 'owner' ? 'Owner' : 'GM') : '–'),
+        cell('สมัครเมื่อ', dateOnly(r.createdAt)),
+        cell('ออนไลน์ล่าสุด', r.online ? h('span', { class: 'good' }, '🟢 ออนไลน์') : r.lastOnline ? ago(r.lastOnline) : '–'),
+        cell('ตัวละคร', `${r.characters}/${MAX_CHARACTERS}`, 'num'),
+        cell('Lv สูงสุด', r.maxLevel ? String(r.maxLevel) : '–', 'num'),
+        cell('ทองรวม', fmt(r.totalGold), 'num'),
+        cell('คลัง', r.stashSize === null ? '–' : `${r.stashSize} ช่อง`, 'num'),
+      );
+    }));
+    if (!rows.length) body.append(h('tr', {}, h('td', { colSpan: cols.length, class: 'muted' }, 'ไม่พบบัญชี')));
+  };
+  const load = async () => {
+    try {
+      data = await api<AdminAccountsResponse>('GET', '/admin/accounts');
+      draw();
+    } catch (e) {
+      msg.className = 'msg bad';
+      msg.textContent = (e as Error).message;
+    }
+  };
+  reloadUsers = () => void load();
+  q.addEventListener('input', () => {
+    users.q = q.value;
+    draw();
+  });
+  filter.onchange = () => {
+    users.filter = filter.value;
+    draw();
+  };
+  sort.onchange = () => {
+    users.sort = sort.value as UserSort;
+    users.desc = users.sort !== 'username';
+    draw();
+  };
+  view.append(chips, h('div', { class: 'card' },
+    h('h2', {}, 'ผู้ใช้ทั้งหมด'),
+    h('div', { class: 'muted', style: 'margin:-6px 0 8px' }, 'กดที่บัญชีเพื่อดูตัวละคร กระเป๋า และคลัง · "ออนไลน์ล่าสุด" ของบัญชีจริงเริ่มบันทึกตั้งแต่อัปเดตนี้'),
+    h('div', { class: 'row' }, h('label', { style: 'flex-basis:200px' }, 'ค้นหา', q), h('label', {}, 'แสดง', filter), h('label', {}, 'เรียง', sort)),
+    msg,
+    h('table', { class: 'cards', style: 'margin-top:8px' }, h('thead', {}, head), body),
+  ));
+  await load();
+}
+
+/** Redraws the users table after an action in the account sheet. */
+let reloadUsers: () => void = () => {};
+
+function itemLabel(e: BagEntry): Node {
+  if (isPotion(e)) return h('span', {}, `${potionName(e.potion, e.size)} ×${e.count}`);
+  return h('span', { style: `color:${RARITY_COLOR[e.rarity]}` },
+    `${e.plus ? `+${e.plus} ` : ''}${e.name}`, h('span', { class: 'muted' }, ` Lv.${e.level} · ${RARITY_LABEL[e.rarity]}`));
+}
+
+function itemList(entries: (BagEntry | null)[], empty: string): HTMLElement {
+  const items = entries.filter((e): e is BagEntry => !!e);
+  if (!items.length) return h('div', { class: 'muted' }, empty);
+  return h('ul', { class: 'items' }, ...items.map((e) => h('li', {}, itemLabel(e))));
+}
+
+async function openAccount(id: number, note?: { text: string; ok: boolean; password?: string }): Promise<void> {
+  let d: AdminAccountDetail;
+  try {
+    d = await api<AdminAccountDetail>('GET', `/admin/accounts/${id}`);
+  } catch (e) {
+    alert((e as Error).message);
+    return;
+  }
+  const a = d.account;
+  const scroll = sheet?.scrollTop ?? 0;
+  closeSheet();
+  const result = h('div', { class: `msg ${note ? (note.ok ? 'ok' : 'bad') : ''}` }, note?.text ?? '');
+  const fail = (e: unknown) => {
+    result.className = 'msg bad';
+    result.textContent = (e as Error).message;
+  };
+  const after = (text: string, password?: string) => {
+    reloadUsers();
+    void openAccount(id, { text, ok: true, password });
+  };
+  const display = a.guest ? `Guest · ${a.names[0] ?? ''}` : a.username;
+  const confirmText = a.guest ? (a.names[0] ?? 'Guest') : a.username;
+
+  const sections: (Node | null)[] = [];
+  if (note?.password) {
+    sections.push(h('div', { class: 'temp-pw' },
+      h('div', {}, 'รหัสผ่านชั่วคราว (แสดงครั้งเดียว — จดไว้ส่งให้ผู้เล่น):'),
+      h('code', {}, note.password)));
+  }
+  // Tools
+  const tools: Node[] = [];
+  if (can('resetPassword') && !a.guest) {
+    const btn = h('button', {}, 'ตั้งรหัสผ่านชั่วคราว');
+    btn.onclick = async () => {
+      if (!confirm(`ตั้งรหัสผ่านใหม่ให้ ${a.username}?\nรหัสเดิมใช้ไม่ได้อีก และเขาจะถูกออกจากระบบทุกเครื่อง`)) return;
+      try {
+        const r = await api<{ password: string; msg: string }>('POST', `/admin/accounts/${id}/password`);
+        after(r.msg, r.password);
+      } catch (e) {
+        fail(e);
+      }
+    };
+    tools.push(h('section', {}, h('h3', {}, 'รหัสผ่าน'), btn));
+  }
+  if (can('ban')) {
+    if (a.bannedUntil) {
+      const btn = h('button', { class: 'primary' }, 'ปลดแบน');
+      btn.onclick = async () => {
+        try {
+          after((await api<{ msg: string }>('POST', `/admin/accounts/${id}/unban`)).msg);
+        } catch (e) {
+          fail(e);
+        }
+      };
+      tools.push(h('section', {}, h('h3', {}, 'แบนอยู่'),
+        h('div', { class: 'msg bad' }, `ถูกระงับ${banText(a.bannedUntil)} — ${a.banReason ?? ''}`), btn));
+    } else {
+      const dur = h('select', {}, ...BAN_DURATIONS.map((d) => h('option', { value: d.id }, d.label)));
+      const reason = h('input', { placeholder: 'เหตุผล (ผู้เล่นจะเห็น)', maxLength: BAN_REASON_MAX });
+      const btn = h('button', { class: 'danger' }, 'แบน');
+      btn.onclick = async () => {
+        const label = BAN_DURATIONS.find((d) => d.id === dur.value)?.label;
+        if (!confirm(`แบน ${display} ${label}?${a.online ? '\n(ออนไลน์อยู่ จะถูกเตะออกทันที)' : ''}`)) return;
+        try {
+          after((await api<{ msg: string }>('POST', `/admin/accounts/${id}/ban`, { duration: dur.value, reason: reason.value })).msg);
+        } catch (e) {
+          fail(e);
+        }
+      };
+      tools.push(h('section', {}, h('h3', {}, 'แบน / ระงับบัญชี'),
+        h('div', { class: 'row' }, h('label', {}, 'นานเท่าไร', dur), h('label', { style: 'flex-basis:200px' }, 'เหตุผล', reason), btn)));
+    }
+  }
+  if (me?.role === 'owner' && a.role !== 'owner') {
+    const input = h('input', { placeholder: confirmText, autocapitalize: 'off' });
+    const btn = h('button', { class: 'danger' }, 'ลบบัญชีถาวร');
+    btn.onclick = async () => {
+      if (input.value.trim().toLowerCase() !== confirmText.toLowerCase()) return fail(new Error(`พิมพ์ "${confirmText}" ให้ตรงก่อน`));
+      if (!confirm(`ลบบัญชี ${display} พร้อมตัวละครทั้งหมดและคลัง?\nสำรองฐานข้อมูลอัตโนมัติก่อนลบ`)) return;
+      try {
+        const r = await api<{ msg: string }>('DELETE', `/admin/accounts/${id}`, { confirm: input.value });
+        closeSheet();
+        reloadUsers();
+        alert(r.msg);
+      } catch (e) {
+        fail(e);
+      }
+    };
+    tools.push(h('section', {}, h('h3', {}, 'ลบบัญชี'),
+      h('div', { class: 'muted' }, `ขั้นที่ 1: พิมพ์ "${confirmText}" · ขั้นที่ 2: กดยืนยัน (สำรองฐานข้อมูลให้ก่อนลบ)`),
+      h('div', { class: 'row', style: 'margin-top:6px' }, h('label', {}, 'พิมพ์ชื่อเพื่อยืนยัน', input), btn)));
+  }
+
+  // Characters
+  const chars = d.characters.map((c) => {
+    const eq = Object.values(c.equipment).filter((x): x is Item => !!x);
+    let del: Node | null = null;
+    if (me?.role === 'owner') {
+      const input = h('input', { placeholder: c.name, autocapitalize: 'off' });
+      const btn = h('button', { class: 'danger small' }, 'ลบตัวละคร');
+      btn.onclick = async () => {
+        if (input.value.trim().toLowerCase() !== c.name.toLowerCase()) return fail(new Error(`พิมพ์ "${c.name}" ให้ตรงก่อน`));
+        if (!confirm(`ลบตัวละคร ${c.name} ถาวร?\nสำรองฐานข้อมูลอัตโนมัติก่อนลบ`)) return;
+        try {
+          after((await api<{ msg: string }>('DELETE', `/admin/characters/${c.charId}`, { confirm: input.value })).msg);
+        } catch (e) {
+          fail(e);
+        }
+      };
+      del = h('details', {}, h('summary', { class: 'muted' }, 'ลบตัวละครนี้…'),
+        h('div', { class: 'row', style: 'margin-top:6px' }, h('label', {}, `พิมพ์ "${c.name}"`, input), btn));
+    }
+    return h('div', { class: 'char-card' },
+      h('div', { class: 'row', style: 'align-items:center' },
+        h('div', { style: 'flex:1' }, h('b', {}, c.name), h('span', { class: c.online ? 'tag on' : 'tag' }, c.online ? 'ออนไลน์' : 'ออฟไลน์'),
+          h('div', { class: 'muted' }, `${className(c.classId)} · Lv.${c.level} · ${zoneName(c.zone)} · ${fmt(c.gold)} G`)),
+        h('button', { class: 'small', onclick: () => void openChar(c.charId) }, 'แก้ไข')),
+      h('div', { class: 'sub' }, 'สวมใส่'), itemList(eq, 'ไม่ได้สวมอะไร'),
+      h('div', { class: 'sub' }, `กระเป๋า (ว่าง ${c.bagFree} ช่อง)`), itemList(c.bag, 'กระเป๋าว่าง'),
+      del,
+    );
+  });
+
+  const bg = h('div', { class: 'sheet-bg', onclick: (ev: Event) => ev.target === bg && closeSheet() });
+  bg.append(h('div', { class: 'sheet' },
+    h('div', { class: 'sheet-head' },
+      h('div', {},
+        h('h2', {}, display, a.role ? h('span', { class: 'role', style: 'margin-left:6px' }, a.role === 'owner' ? 'Owner' : 'GM') : null,
+          a.online ? h('span', { class: 'tag on' }, 'ออนไลน์') : null, a.bannedUntil ? h('span', { class: 'tag ban' }, 'แบน') : null),
+        h('div', { class: 'muted' }, `${a.guest ? 'Guest' : 'บัญชีจริง'} · สมัคร ${dateOnly(a.createdAt)} · ${a.online ? 'ออนไลน์อยู่' : a.lastOnline ? `ออนไลน์ล่าสุด ${ago(a.lastOnline)}` : 'ยังไม่มีข้อมูลออนไลน์ล่าสุด'}`),
+      ),
+      h('button', { class: 'x small', onclick: closeSheet }, '✕'),
+    ),
+    h('div', { class: 'result' }, result),
+    ...sections,
+    h('section', {}, h('h3', {}, `ตัวละคร ${d.characters.length}/${MAX_CHARACTERS} · ทองรวม ${fmt(a.totalGold)} G`),
+      ...(chars.length ? chars : [h('div', { class: 'muted' }, 'ไม่มีตัวละคร')])),
+    a.guest ? null : h('section', {},
+      h('h3', {}, d.stash ? `คลัง ${d.stash.size} ช่อง · ทอง ${fmt(d.stash.gold)} G` : 'คลัง'),
+      d.stash ? itemList(d.stash.items, 'คลังว่าง') : h('div', { class: 'muted' }, 'ยังไม่เคยใช้คลัง')),
+    ...tools,
+  ));
+  sheet = bg;
+  document.body.append(bg);
+  bg.scrollTop = scroll;
+}
+
+// ------------------------------------------------------------ broadcast + backups (Server tab)
+
+function broadcastCard(): HTMLElement {
+  const text = h('textarea', { rows: 3, maxLength: BROADCAST_MAX, placeholder: 'เช่น อีก 30 นาทีจะปิดปรับปรุง' }) as HTMLTextAreaElement;
+  const count = h('span', { class: 'muted' }, `0/${BROADCAST_MAX}`);
+  const msg = h('div', { class: 'msg' });
+  const btn = h('button', { class: 'primary' }, 'ส่งประกาศ');
+  text.oninput = () => (count.textContent = `${text.value.length}/${BROADCAST_MAX}`);
+  btn.onclick = async () => {
+    if (!text.value.trim()) return;
+    if (!confirm(`ส่งประกาศถึงผู้เล่นทุกคนที่ออนไลน์?\n\n${text.value.trim()}`)) return;
+    btn.disabled = true;
+    try {
+      const r = await api<{ msg: string }>('POST', '/admin/broadcast', { text: text.value });
+      msg.className = 'msg ok';
+      msg.textContent = r.msg;
+      text.value = '';
+      count.textContent = `0/${BROADCAST_MAX}`;
+    } catch (e) {
+      msg.className = 'msg bad';
+      msg.textContent = (e as Error).message;
+    }
+    btn.disabled = false;
+  };
+  return h('div', { class: 'card' }, h('h2', {}, 'ประกาศถึงผู้เล่น'),
+    h('div', { class: 'muted', style: 'margin:-6px 0 8px' }, 'ผู้เล่นที่ออนไลน์เห็นป้ายประกาศกลางจอ 10 วินาที และข้อความในแชท'),
+    text, h('div', { class: 'row', style: 'margin-top:8px;align-items:center' }, count, h('span', { style: 'flex:1' }), btn), msg);
+}
+
+function backupCard(): HTMLElement {
+  const list = h('div');
+  const msg = h('div', { class: 'msg' });
+  const btn = h('button', { class: 'primary' }, 'สำรองตอนนี้');
+  const KIND: Record<string, string> = { daily: 'อัตโนมัติรายวัน', manual: 'กดเอง', 'before-delete': 'ก่อนลบ' };
+  const draw = (rows: BackupRow[]) => {
+    list.replaceChildren(...rows.map((b) => h('div', { class: 'list-item' },
+      h('div', { class: 'grow' }, h('div', {}, time(b.at)), h('div', { class: 'muted', style: 'word-break:break-all' }, b.name)),
+      h('div', { style: 'text-align:right' }, h('div', {}, `${(b.size / 1024).toFixed(0)} KB`), h('div', { class: 'muted' }, KIND[b.kind] ?? b.kind)),
+    )));
+    if (!rows.length) list.append(h('div', { class: 'muted' }, 'ยังไม่มีไฟล์สำรอง'));
+  };
+  btn.onclick = async () => {
+    btn.disabled = true;
+    try {
+      const r = await api<{ msg: string; rows: BackupRow[] }>('POST', '/admin/backups');
+      msg.className = 'msg ok';
+      msg.textContent = r.msg;
+      draw(r.rows);
+    } catch (e) {
+      msg.className = 'msg bad';
+      msg.textContent = (e as Error).message;
+    }
+    btn.disabled = false;
+  };
+  void api<BackupRow[]>('GET', '/admin/backups').then(draw, (e) => {
+    msg.className = 'msg bad';
+    msg.textContent = (e as Error).message;
+  });
+  return h('div', { class: 'card' }, h('h2', {}, 'สำรองฐานข้อมูล'),
+    h('div', { class: 'muted', style: 'margin:-6px 0 8px' },
+      'เก็บใน server/data/backups/ · สำรองอัตโนมัติวันละครั้ง (เก็บ 7 ไฟล์ล่าสุด) และก่อนลบบัญชี/ตัวละครทุกครั้ง · ' +
+      'กู้คืน: ปิด server (npm run stop-server) แล้วคัดลอกไฟล์สำรองทับ server/data/multiverse.db (ลบไฟล์ -wal และ -shm ข้าง ๆ ก่อน) แล้วเปิด server ใหม่'),
+    h('div', { class: 'row' }, btn), msg, list);
 }
 
 void start();
