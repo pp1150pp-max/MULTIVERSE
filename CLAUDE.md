@@ -93,3 +93,4 @@ npm run stop-server -- --restart # เหมือนกัน แต่ npm run
   - แบน: คอลัมน์ `accounts.ban_until` / `ban_reason` · login และการเข้าโลกถูกปฏิเสธพร้อมเหตุผล
   - สำรอง DB: `server/data/backups/` (`VACUUM INTO`) อัตโนมัติวันละครั้งเก็บ 7 ไฟล์, กดเองเก็บ 10, ก่อนลบเก็บ 20 (`BACKUP_KEEP` ใน `server/backup.ts`)
   - กู้คืน: `npm run stop-server` → ลบ `multiverse.db-wal` / `multiverse.db-shm` → คัดลอกไฟล์สำรองทับ `server/data/multiverse.db` → `npm run online`
+  - ประวัติ (เริ่มบันทึกตั้งแต่อัปเดตนี้): `play_sessions` (เข้า-ออก, IP, GPU, ping/FPS เฉลี่ย) เก็บ 90 วัน, `chat_log` เก็บ 30 วัน, `online_samples` (จำนวนคนออนไลน์ทุก 1 นาที) เก็บ 90 วัน · ตัวเลขอยู่ที่ `HISTORY_DAYS` ใน `src/shared/admin.ts` · ลบของเก่าทุกชั่วโมง

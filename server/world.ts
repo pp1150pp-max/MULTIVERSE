@@ -79,6 +79,12 @@ interface Session {
   gpu: string | null;
   /** When this connection joined (Date.now()); zone changes keep it, only a new join resets it. */
   joinedAt: number;
+  /** Whole-session ping/FPS sums (the ones above reset every minute), and its play_sessions row. */
+  totRtt: number;
+  totRttN: number;
+  totFps: number;
+  totFpsN: number;
+  playRow: number;
 }
 
 const num = (v: unknown, fallback = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
@@ -242,7 +248,13 @@ export class GameWorld {
       auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', outbox: [], lastChatAt: 0, saveDue: null,
       ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
+      totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1,
     };
+    try {
+      s.playRow = this.db.startPlaySession({ accountId: acc.id, username: acc.username, guest: acc.guest, charId, charName: player.name, ip });
+    } catch (e) {
+      console.error('[world] recording the play session failed', e);
+    }
     this.sessions.add(s);
     this.byPlayer.set(player, s);
     this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, guest: acc.guest });
@@ -254,6 +266,17 @@ export class GameWorld {
   private leave(s: Session): void {
     if (!this.sessions.has(s)) return;
     this.save(s);
+    if (s.playRow >= 0) {
+      try {
+        this.db.endPlaySession(s.playRow, {
+          gpu: s.gpu,
+          avgRtt: s.totRttN ? Math.round(s.totRtt / s.totRttN) : null,
+          avgFps: s.totFpsN ? Math.round(s.totFps / s.totFpsN) : null,
+        });
+      } catch (e) {
+        console.error('[world] closing the play session failed', e);
+      }
+    }
     this.sessions.delete(s);
     this.byPlayer.delete(s.player);
     s.sim.removePlayer(s.player);
@@ -286,6 +309,33 @@ export class GameWorld {
     const to = toCharId === undefined ? [...this.sessions] : [...this.sessions].filter((s) => s.charId === toCharId);
     for (const s of to) this.send(s.ws, { t: 'announce', text, from, direct: toCharId !== undefined });
     return to.length;
+  }
+
+  /** play_sessions rows of everyone in the world now, with their GPU and averages so far. */
+  openPlayRows(): Map<number, { gpu: string | null; avgRtt: number | null; avgFps: number | null }> {
+    return new Map([...this.sessions].map((s) => [s.playRow, {
+      gpu: s.gpu,
+      avgRtt: s.totRttN ? Math.round(s.totRtt / s.totRttN) : null,
+      avgFps: s.totFpsN ? Math.round(s.totFps / s.totFpsN) : null,
+    }]));
+  }
+
+  /** Who is online right now, for the minute samples behind the admin graphs. */
+  sample(): { total: number; zones: Record<string, number>; avgLevel: number | null; avgRtt: number | null } {
+    const zones: Record<string, number> = {};
+    let lv = 0;
+    let rtt = 0;
+    let rttN = 0;
+    for (const s of this.sessions) {
+      zones[s.sim.zone.id] = (zones[s.sim.zone.id] ?? 0) + 1;
+      lv += s.player.level;
+      if (s.lastRtt !== null) {
+        rtt += s.lastRtt;
+        rttN++;
+      }
+    }
+    const n = this.sessions.size;
+    return { total: n, zones, avgLevel: n ? lv / n : null, avgRtt: rttN ? rtt / rttN : null };
   }
 
   /** Accounts with a character in the world right now. */
@@ -346,6 +396,14 @@ export class GameWorld {
     const maxFrame = hidden ? undefined : clamp(m.maxFrame, STALL_MAX_MS);
     s.lastRtt = rtt ?? s.lastRtt;
     s.lastFps = hidden ? null : (fps ?? s.lastFps);
+    if (rtt !== undefined) {
+      s.totRtt += rtt;
+      s.totRttN++;
+    }
+    if (fps !== undefined) {
+      s.totFps += fps;
+      s.totFpsN++;
+    }
     if (rtt !== undefined) {
       s.rttSum += rtt;
       s.rttCount++;
@@ -515,6 +573,11 @@ export class GameWorld {
     if (!clean) return;
     s.lastChatAt = now;
     for (const o of this.sessions) this.send(o.ws, { t: 'chat', name: s.player.name, text: clean });
+    try {
+      this.db.logChat({ accountId: s.accountId, username: s.guest ? 'Guest' : s.username, charName: s.player.name, zone: s.sim.zone.id, text: clean });
+    } catch (e) {
+      console.error('[world] logging chat failed', e);
+    }
   }
 
   private broadcastSystem(text: string): void {

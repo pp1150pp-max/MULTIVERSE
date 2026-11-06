@@ -157,3 +157,19 @@ ul.items li { margin: 2px 0; }
 details summary { cursor: pointer; margin-top: 8px; }
 .temp-pw { border: 1px solid var(--gold); background: #2a2210; border-radius: 6px; padding: 10px; margin: 8px 0; }
 .temp-pw code { display: block; font-size: 24px; letter-spacing: 2px; color: var(--gold-hi); margin-top: 4px; user-select: all; }
+
+/* ---------------------------------------------------------------- graphs + history */
+
+.chart { position: relative; }
+.chart-svg { display: block; width: 100%; height: auto; touch-action: pan-y; }
+.chart-note { margin: -6px 0 6px; }
+.chart-empty { padding: 30px 0; text-align: center; }
+.chart .grid { stroke: #2e2820; stroke-width: 1; }
+.chart .axis { fill: var(--ink-dim); font-size: 11px; font-family: 'Kanit', sans-serif; }
+.chart .line { fill: none; stroke: var(--gold-hi); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .bar { fill: var(--gold); }
+.chart .dot { fill: var(--gold-hi); stroke: var(--panel); stroke-width: 2; }
+.chart .cross { stroke: var(--ink-dim); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart .hidden { display: none; }
+.chart .tip { position: absolute; top: 0; transform: translateX(-50%); background: #0c0a08; border: 1px solid var(--edge); border-radius: 4px; padding: 2px 8px; font-size: 13px; white-space: nowrap; pointer-events: none; }
+.chat-row .chat-name { color: #9fe0ff; font-weight: 400; }

@@ -2,11 +2,11 @@
 // role and every value, so nothing here is a safeguard. Names, GPU strings and the like come from
 // players: they are only ever put on the page as text (never as HTML).
 import './admin.css';
-import { ADMIN_AUDIT_PAGE, BAN_DURATIONS, BAN_FOREVER, BAN_REASON_MAX, BROADCAST_EVERY_MS, BROADCAST_MAX } from '../shared/admin';
+import { ADMIN_AUDIT_PAGE, HISTORY_DAYS, HISTORY_PAGE, BAN_DURATIONS, BAN_FOREVER, BAN_REASON_MAX, BROADCAST_EVERY_MS, BROADCAST_MAX } from '../shared/admin';
 import { MAX_CHARACTERS } from '../shared/api';
 import { potionName } from '../shared/data/potions';
 import type {
-  AdminAccountDetail, AdminAccountsResponse, AdminFeature, BackupRow, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AuditRow, RoleRow,
+  AdminAccountDetail, AdminAccountsResponse, AdminFeature, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AuditRow, RoleRow,
 } from '../shared/admin';
 import { CLASSES } from '../shared/data/classes';
 import { SHUTDOWN_SECONDS, type ShutdownMode } from '../shared/net/protocol';
@@ -101,7 +101,7 @@ const root = document.getElementById('admin')!;
 let me: AdminMe | null = null;
 let meta: AdminMeta | null = null;
 let online: AdminOnline | null = null;
-type Tab = 'online' | 'search' | 'users' | 'roles' | 'audit' | 'server';
+type Tab = 'online' | 'search' | 'users' | 'stats' | 'sessions' | 'chat' | 'roles' | 'audit' | 'server';
 let tab: Tab = 'online';
 let timer = 0;
 
@@ -204,6 +204,9 @@ function renderShell(): void {
   if (!me) return;
   const tabs: [Tab, string][] = [['online', 'ออนไลน์'], ['search', 'ค้นหาตัวละคร']];
   if (me.features.includes('users')) tabs.push(['users', 'ผู้ใช้ทั้งหมด']);
+  if (me.features.includes('stats')) tabs.push(['stats', 'สถิติ']);
+  if (me.features.includes('sessions')) tabs.push(['sessions', 'การเข้าเล่น']);
+  if (me.features.includes('chatLog')) tabs.push(['chat', 'แชท']);
   if (me.role === 'owner') tabs.push(['roles', 'สิทธิ์ GM'], ['audit', 'ประวัติ']);
   if (me.role === 'owner' || me.features.includes('broadcast') || me.features.includes('backup')) tabs.push(['server', 'Server']);
   const bar = h('nav', { class: 'tabs' }, ...tabs.map(([id, label]) =>
@@ -224,10 +227,15 @@ function setTab(t: Tab): void {
   tab = t;
   stopRefresh();
   document.querySelectorAll<HTMLElement>('.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
+  // On a phone the tab row scrolls: keep the chosen tab in view.
+  document.querySelector<HTMLElement>('.tabs button.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   view.replaceChildren();
   if (t === 'online') renderOnline();
   else if (t === 'search') renderSearch();
   else if (t === 'users') void renderUsers();
+  else if (t === 'stats') void renderStats();
+  else if (t === 'sessions') void renderSessions();
+  else if (t === 'chat') void renderChat();
   else if (t === 'roles') void renderRoles();
   else if (t === 'audit') void renderAudit();
   else void renderServer();
@@ -604,7 +612,7 @@ async function renderRoles(): Promise<void> {
 const ACTION_TH: Record<string, string> = {
   level: 'ตั้งเลเวล', gold: 'ทอง', items: 'เสกไอเทม', kick: 'เตะ', teleport: 'ย้ายโซน', grant: 'ให้สิทธิ์', revoke: 'ถอนสิทธิ์',
   server: 'Server', password: 'ตั้งรหัสผ่าน', ban: 'แบน', unban: 'ปลดแบน', broadcast: 'ประกาศ', backup: 'สำรองข้อมูล',
-  'delete-account': 'ลบบัญชี', 'delete-character': 'ลบตัวละคร',
+  'delete-account': 'ลบบัญชี', 'delete-character': 'ลบตัวละคร', 'chat-delete': 'ลบแชท',
 };
 
 async function renderAudit(): Promise<void> {
@@ -969,6 +977,15 @@ async function openAccount(id: number, note?: { text: string; ok: boolean; passw
     );
   });
 
+  let sessionsBox: HTMLElement | null = null;
+  if (can('sessions')) {
+    const holder = h('div', { class: 'muted' }, 'กำลังโหลด…');
+    sessionsBox = h('section', {}, h('h3', {}, 'การเข้าเล่นล่าสุด'), holder);
+    void api<PlaySessionRow[]>('GET', `/admin/sessions?account=${id}`).then(
+      (rows) => holder.replaceWith(sessionTable(rows.slice(0, 10), false)),
+      (e) => (holder.textContent = (e as Error).message),
+    );
+  }
   const bg = h('div', { class: 'sheet-bg', onclick: (ev: Event) => ev.target === bg && closeSheet() });
   bg.append(h('div', { class: 'sheet' },
     h('div', { class: 'sheet-head' },
@@ -983,6 +1000,7 @@ async function openAccount(id: number, note?: { text: string; ok: boolean; passw
     ...sections,
     h('section', {}, h('h3', {}, `ตัวละคร ${d.characters.length}/${MAX_CHARACTERS} · ทองรวม ${fmt(a.totalGold)} G`),
       ...(chars.length ? chars : [h('div', { class: 'muted' }, 'ไม่มีตัวละคร')])),
+    sessionsBox,
     a.guest ? null : h('section', {},
       h('h3', {}, d.stash ? `คลัง ${d.stash.size} ช่อง · ทอง ${fmt(d.stash.gold)} G` : 'คลัง'),
       d.stash ? itemList(d.stash.items, 'คลังว่าง') : h('div', { class: 'muted' }, 'ยังไม่เคยใช้คลัง')),
@@ -1075,6 +1093,261 @@ function backupCard(): HTMLElement {
       'เก็บใน server/data/backups/ · สำรองอัตโนมัติวันละครั้ง (เก็บ 7 ไฟล์ล่าสุด) และก่อนลบบัญชี/ตัวละครทุกครั้ง · ' +
       'กู้คืน: ปิด server (npm run stop-server) แล้วคัดลอกไฟล์สำรองทับ server/data/multiverse.db (ลบไฟล์ -wal และ -shm ข้าง ๆ ก่อน) แล้วเปิด server ใหม่'),
     h('div', { class: 'row' }, btn), msg, list);
+}
+
+
+// ------------------------------------------------------------ history: graphs, play sessions, chat log
+
+const NO_HISTORY = 'เริ่มบันทึกตั้งแต่อัปเดตนี้ — ก่อนหน้านั้นไม่มีข้อมูล';
+const SVG = 'http://www.w3.org/2000/svg';
+function s<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number> = {}): SVGElementTagNameMap[K] {
+  const el = document.createElementNS(SVG, tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
+  return el;
+}
+
+/**
+ * One series as a line (or bars), inline SVG, with a hover/tap tooltip. One chart per measure (never two
+ * y-axes). `fmtX` labels the time, `unit` follows each value.
+ */
+function chart(points: StatsPoint[], opts: { bars?: boolean; fmtX: (t: number) => string; fmtTip?: (t: number) => string; unit?: string; empty?: string; xFrom?: number; xTo?: number }): HTMLElement {
+  // Narrower drawing on phones, so the axis text isn't shrunk to nothing.
+  const W = window.innerWidth < 600 ? 360 : 640;
+  const H = window.innerWidth < 600 ? 200 : 180;
+  const L = 36;
+  const R = 10;
+  const T = 10;
+  const B = 24;
+  const wrap = h('div', { class: 'chart' });
+  if (!points.length) {
+    wrap.append(h('div', { class: 'muted chart-empty' }, opts.empty ?? 'ยังไม่มีข้อมูล'));
+    return wrap;
+  }
+  const x0 = opts.xFrom ?? points[0].at;
+  const x1 = Math.max(opts.xTo ?? points[points.length - 1].at, x0 + 1);
+  const maxV = Math.max(1, ...points.map((p) => p.v));
+  const niceMax = (() => {
+    const m = Math.pow(10, Math.floor(Math.log10(maxV)));
+    const n = [1, 2, 2.5, 5, 10].find((k) => k * m >= maxV)! * m;
+    return n;
+  })();
+  const px = (t: number) => L + ((t - x0) / (x1 - x0)) * (W - L - R);
+  const py = (v: number) => T + (1 - v / niceMax) * (H - T - B);
+  const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', class: 'chart-svg' });
+  for (const f of [0, 0.5, 1]) {
+    const y = py(niceMax * f);
+    svg.append(s('line', { x1: L, x2: W - R, y1: y, y2: y, class: 'grid' }));
+    const lab = s('text', { x: L - 6, y: y + 4, class: 'axis', 'text-anchor': 'end' });
+    lab.textContent = fmt(Math.round(niceMax * f * 10) / 10);
+    svg.append(lab);
+  }
+  for (const t of [x0, (x0 + x1) / 2, x1]) {
+    const lab = s('text', { x: px(t), y: H - 6, class: 'axis', 'text-anchor': t === x0 ? 'start' : t === x1 ? 'end' : 'middle' });
+    lab.textContent = opts.fmtX(t);
+    svg.append(lab);
+  }
+  if (opts.bars) {
+    const bw = Math.max(2, ((W - L - R) / points.length) - 2);
+    for (const p of points) {
+      const y = py(p.v);
+      const x = px(p.at) - bw / 2 + ((W - L - R) / points.length) / 2;
+      if (p.v > 0) svg.append(s('rect', { x, y, width: bw, height: Math.max(1, py(0) - y), rx: Math.min(3, bw / 2), class: 'bar' }));
+    }
+  } else {
+    // Breaks where the server was off (a gap of more than 3 points' spacing).
+    const gap = 3 * Math.min(...points.slice(1).map((p, i) => p.at - points[i].at).concat([x1 - x0]));
+    let d = '';
+    points.forEach((p, i) => {
+      d += `${i === 0 || p.at - points[i - 1].at > gap ? 'M' : 'L'}${px(p.at).toFixed(1)},${py(p.v).toFixed(1)}`;
+    });
+    svg.append(s('path', { d, class: 'line' }));
+    if (points.length === 1) svg.append(s('circle', { cx: px(points[0].at), cy: py(points[0].v), r: 4, class: 'dot' }));
+  }
+  const cross = s('line', { y1: T, y2: H - B, class: 'cross hidden' });
+  const mark = s('circle', { r: 4, class: 'dot hidden' });
+  svg.append(cross, mark);
+  const tip = h('div', { class: 'tip hidden' });
+  const move = (ev: PointerEvent) => {
+    const rect = svg.getBoundingClientRect();
+    const x = ((ev.clientX - rect.left) / rect.width) * W;
+    let best = points[0];
+    for (const p of points) if (Math.abs(px(p.at) - x) < Math.abs(px(best.at) - x)) best = p;
+    const bx = opts.bars ? px(best.at) + ((W - L - R) / points.length) / 2 : px(best.at);
+    cross.setAttribute('x1', String(bx));
+    cross.setAttribute('x2', String(bx));
+    mark.setAttribute('cx', String(bx));
+    mark.setAttribute('cy', String(py(best.v)));
+    cross.classList.remove('hidden');
+    mark.classList.remove('hidden');
+    tip.textContent = `${(opts.fmtTip ?? opts.fmtX)(best.at)} · ${fmt(best.v)}${opts.unit ?? ''}`;
+    tip.classList.remove('hidden');
+    tip.style.left = `${Math.min(Math.max((bx / W) * rect.width, 60), rect.width - 60)}px`;
+  };
+  svg.addEventListener('pointermove', move);
+  svg.addEventListener('pointerdown', move);
+  svg.addEventListener('pointerleave', () => {
+    cross.classList.add('hidden');
+    mark.classList.add('hidden');
+    tip.classList.add('hidden');
+  });
+  wrap.append(svg, tip);
+  return wrap;
+}
+
+const hhmm = (t: number) => new Date(t).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+const dayLabel = (t: number) => new Date(t).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+let statsRange: StatsRange = '24h';
+
+async function renderStats(): Promise<void> {
+  const range = h('select', {}, ...([['24h', '24 ชั่วโมง'], ['7d', '7 วัน'], ['30d', '30 วัน']] as const)
+    .map(([v, l]) => h('option', { value: v, selected: v === statsRange }, l)));
+  const tiles = h('div', { class: 'zones' });
+  const body = h('div');
+  const msg = h('div', { class: 'msg' });
+  const load = async () => {
+    try {
+      const st = await api<AdminStats>('GET', `/admin/stats?range=${statsRange}`);
+      const short = st.range === '24h';
+      const fx = short ? hhmm : dayLabel;
+      const now = Date.now();
+      const span = { '24h': 864e5, '7d': 7 * 864e5, '30d': 30 * 864e5 }[st.range];
+      const peak = st.online.reduce((m, p) => Math.max(m, p.v), 0);
+      tiles.replaceChildren(
+        ...([['ออนไลน์ตอนนี้', fmt(st.now.online)], [`สูงสุดใน ${range.selectedOptions[0].text}`, fmt(peak)],
+          ['Lv เฉลี่ยทุกตัวละคร', st.now.avgLevelAll === null ? '–' : (Math.round(st.now.avgLevelAll * 10) / 10).toString()],
+          ['สมัคร 30 วัน', fmt(st.signups.reduce((a, p) => a + p.v, 0))]] as const)
+          .map(([l, v]) => h('div', { class: 'zone-chip' }, h('b', {}, v), h('span', {}, l))));
+      const note = st.since ? `ข้อมูลกราฟผู้เล่นเริ่มบันทึก ${time(st.since)} — ก่อนหน้านั้นไม่มีข้อมูล` : NO_HISTORY;
+      body.replaceChildren(
+        h('div', { class: 'card' }, h('h2', {}, 'ผู้เล่นออนไลน์'), h('div', { class: 'muted chart-note' }, `จำนวนสูงสุดในแต่ละช่วง · ${note}`),
+          chart(st.online, { fmtX: fx, fmtTip: short ? hhmm : time, unit: ' คน', xFrom: now - span, xTo: now, empty: NO_HISTORY })),
+        h('div', { class: 'card' }, h('h2', {}, 'สมัครสมาชิกต่อวัน'), h('div', { class: 'muted chart-note' }, 'บัญชีจริง 30 วันล่าสุด (บัญชีที่ถูกลบไปแล้วไม่นับ)'),
+          chart(st.signups, { bars: true, fmtX: dayLabel, unit: ' บัญชี' })),
+        h('div', { class: 'card' }, h('h2', {}, 'เลเวลเฉลี่ยของผู้เล่นที่ออนไลน์'), h('div', { class: 'muted chart-note' }, short ? 'เฉลี่ยรายชั่วโมง' : 'เฉลี่ยรายวัน'),
+          chart(st.avgLevel, { fmtX: fx, xFrom: now - span, xTo: now, empty: NO_HISTORY })),
+        h('div', { class: 'card' }, h('h2', {}, 'Ping เฉลี่ย'), h('div', { class: 'muted chart-note' }, short ? 'เฉลี่ยรายชั่วโมง' : 'เฉลี่ยรายวัน'),
+          chart(st.avgPing, { fmtX: fx, unit: ' ms', xFrom: now - span, xTo: now, empty: NO_HISTORY })),
+      );
+      msg.textContent = '';
+    } catch (e) {
+      msg.className = 'msg bad';
+      msg.textContent = (e as Error).message;
+    }
+  };
+  range.onchange = () => {
+    statsRange = range.value as StatsRange;
+    void load();
+  };
+  view.append(h('div', { class: 'row', style: 'margin-bottom:12px' }, h('label', { style: 'max-width:200px' }, 'ช่วงเวลา', range)), tiles, msg, body);
+  await load();
+}
+
+function sessionTable(rows: PlaySessionRow[], showAccount: boolean): HTMLElement {
+  const body = h('tbody');
+  const cell = (label: string, content: Node | string, cls = '') => h('td', { 'data-label': label, class: cls }, content);
+  const dur = (r: PlaySessionRow) => {
+    if (r.online) return h('span', { class: 'good' }, '🟢 กำลังเล่น');
+    if (r.leftAt === null) return h('span', { class: 'muted' }, 'ไม่ทราบ');
+    const m = Math.round((r.leftAt - r.joinedAt) / 60000);
+    return m < 60 ? `${m} นาที` : `${Math.floor(m / 60)} ชม. ${m % 60} นาที`;
+  };
+  body.append(...rows.map((r) => h('tr', showAccount ? { class: 'click', onclick: () => void openAccount(r.accountId) } : {},
+    cell('เข้าเล่น', time(r.joinedAt), 'head'),
+    showAccount ? cell('บัญชี', r.username) : null,
+    cell('ตัวละคร', r.charName),
+    cell('นานเท่าไร', dur(r)),
+    cell('IP', r.ip),
+    h('td', { 'data-label': 'GPU', class: 'gpu', title: r.gpu ?? '' }, r.gpu ?? '–'),
+    cell('Ping เฉลี่ย', r.avgRtt === null ? '–' : `${fmt(r.avgRtt)} ms`, 'num'),
+    cell('FPS เฉลี่ย', r.avgFps === null ? '–' : fmt(r.avgFps), 'num'),
+  )));
+  if (!rows.length) body.append(h('tr', {}, h('td', { colSpan: 8, class: 'muted' }, `ยังไม่มีประวัติ — ${NO_HISTORY}`)));
+  const heads = ['เข้าเล่น', ...(showAccount ? ['บัญชี'] : []), 'ตัวละคร', 'นานเท่าไร', 'IP', 'GPU', 'Ping เฉลี่ย', 'FPS เฉลี่ย'];
+  return h('table', { class: 'cards' }, h('thead', {}, h('tr', {}, ...heads.map((t) => h('th', {}, t)))), body);
+}
+
+async function renderSessions(): Promise<void> {
+  const holder = h('div');
+  const more = h('button', {}, 'โหลดเพิ่ม');
+  const msg = h('div', { class: 'msg bad' });
+  let rows: PlaySessionRow[] = [];
+  const load = async () => {
+    more.disabled = true;
+    try {
+      const next = await api<PlaySessionRow[]>('GET', `/admin/sessions${rows.length ? `?before=${rows.at(-1)!.id}` : ''}`);
+      rows = rows.concat(next);
+      holder.replaceChildren(sessionTable(rows, true));
+      more.classList.toggle('hidden', next.length < HISTORY_PAGE);
+    } catch (e) {
+      msg.textContent = (e as Error).message;
+    }
+    more.disabled = false;
+  };
+  more.onclick = () => void load();
+  view.append(h('div', { class: 'card' }, h('h2', {}, 'การเข้าเล่นล่าสุด'),
+    h('div', { class: 'muted', style: 'margin:-6px 0 8px' }, `${NO_HISTORY} · เก็บไว้ ${HISTORY_DAYS.sessions} วัน · กดแถวเพื่อดูบัญชี`),
+    holder, more, msg));
+  await load();
+}
+
+async function renderChat(): Promise<void> {
+  const q = h('input', { placeholder: 'ข้อความ ชื่อผู้ใช้ หรือชื่อตัวละคร', autocapitalize: 'off' });
+  const list = h('div');
+  const more = h('button', {}, 'โหลดเพิ่ม');
+  const msg = h('div', { class: 'msg' });
+  let rows: ChatLogRow[] = [];
+  const draw = () => {
+    list.replaceChildren(...rows.map((r) => {
+      const del = can('chatDelete') ? h('button', { class: 'small danger' }, 'ลบ') : null;
+      if (del) {
+        del.onclick = async () => {
+          if (!confirm(`ลบข้อความนี้ออกจากบันทึก?\n\n${r.charName}: ${r.text}`)) return;
+          try {
+            await api('DELETE', `/admin/chat/${r.id}`);
+            rows = rows.filter((x) => x.id !== r.id);
+            draw();
+          } catch (e) {
+            msg.className = 'msg bad';
+            msg.textContent = (e as Error).message;
+          }
+        };
+      }
+      return h('div', { class: 'list-item chat-row' },
+        h('div', { class: 'grow' },
+          h('div', { class: 'muted' }, `${time(r.at)} · ${zoneName(r.zone)} · ${r.username}`),
+          h('div', {}, h('b', { class: 'chat-name' }, `${r.charName}: `), r.text)),
+        del);
+    }));
+    if (!rows.length) list.append(h('div', { class: 'muted' }, q.value.trim() ? 'ไม่พบข้อความ' : `ยังไม่มีข้อความ — ${NO_HISTORY}`));
+  };
+  const load = async (reset: boolean) => {
+    more.disabled = true;
+    try {
+      if (reset) rows = [];
+      const qs = new URLSearchParams();
+      if (q.value.trim()) qs.set('q', q.value.trim());
+      if (rows.length) qs.set('before', String(rows.at(-1)!.id));
+      const next = await api<ChatLogRow[]>('GET', `/admin/chat?${qs}`);
+      rows = rows.concat(next);
+      draw();
+      more.classList.toggle('hidden', next.length < HISTORY_PAGE);
+      msg.textContent = '';
+    } catch (e) {
+      msg.className = 'msg bad';
+      msg.textContent = (e as Error).message;
+    }
+    more.disabled = false;
+  };
+  const form = h('form', { class: 'row' }, h('label', {}, 'ค้นหา', q), h('button', { class: 'primary', type: 'submit' }, 'ค้นหา'));
+  form.addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    void load(true);
+  });
+  more.onclick = () => void load(false);
+  view.append(h('div', { class: 'card' }, h('h2', {}, 'บันทึกแชท'),
+    h('div', { class: 'muted', style: 'margin:-6px 0 8px' }, `${NO_HISTORY} · เก็บไว้ ${HISTORY_DAYS.chat} วัน`),
+    form, msg, list, more));
+  await load(true);
 }
 
 void start();
