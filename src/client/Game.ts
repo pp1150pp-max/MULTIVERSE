@@ -12,6 +12,7 @@ import { Input } from './input';
 import { Effects } from './effects';
 import { Floating } from './floating';
 import { Hud } from './hud';
+import { initDraggableWindows } from './dragwindow';
 import { AutoRing } from './autoRing';
 import { AUTO_PX_PER_UNIT } from '../shared/sim/Player';
 import { SpriteActor } from './SpriteActor';
@@ -107,6 +108,7 @@ export class Game {
 
     this.hud = new Hud(this);
     this.sysMenu = new SystemMenu(this);
+    initDraggableWindows(document.getElementById('hud')!);
     this.checkGpu();
     window.addEventListener('resize', () => {
       this.renderer.setSize(window.innerWidth, window.innerHeight);

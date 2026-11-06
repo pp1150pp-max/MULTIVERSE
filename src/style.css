@@ -699,3 +699,7 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #announce-banner .announce-head { font-size: 14px; opacity: 0.85; margin-bottom: 2px; }
 #announce-banner .announce-from { font-size: 14px; opacity: 0.85; margin-top: 4px; text-align: right; }
 @media (max-width: 700px) { #announce-banner { font-size: 17px; top: 26%; } }
+
+/* Window title bars: drag to move, double-click to put back (src/client/dragwindow.ts). */
+.drag-handle { cursor: move; touch-action: none; user-select: none; }
+.drag-handle button { cursor: pointer; }
