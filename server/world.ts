@@ -77,6 +77,8 @@ interface Session {
   lastFps: number | null;
   /** The client's GPU name once it sent it. */
   gpu: string | null;
+  /** When this connection joined (Date.now()); zone changes keep it, only a new join resets it. */
+  joinedAt: number;
   /** Whole-session ping/FPS sums (the ones above reset every minute), and its play_sessions row. */
   totRtt: number;
   totRttN: number;
@@ -245,7 +247,7 @@ export class GameWorld {
       move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null,
       auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', outbox: [], lastChatAt: 0, saveDue: null,
       ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0,
-      hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null,
+      hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1,
     };
     try {
@@ -781,7 +783,7 @@ export class GameWorld {
       rtt: s.lastRtt === null ? null : Math.round(s.lastRtt),
       fps: s.lastFps === null ? null : Math.round(s.lastFps),
       maxFrame: s.fpsCount ? Math.round(s.maxFrame) : null,
-      hidden: s.hidden, gpu: s.gpu, ip: s.ip,
+      hidden: s.hidden, gpu: s.gpu, ip: s.ip, playedMs: Date.now() - s.joinedAt,
     }));
     return { zones, players };
   }

@@ -217,9 +217,14 @@ async function run(): Promise<void> {
   const c2 = joinWorld(plainTok, charId);
   await c2.ready;
   ok(c2.msgs.find((x) => x.t === 'welcome')?.zone === 'frost_reach', 'joins in the teleported zone');
+  await sleep(1100);
+  const played = async () => (await api('GET', '/admin/online', undefined, gmTok)).data.players.find((p: any) => p.charId === charId)?.playedMs as number;
+  const beforeTp = await played();
+  ok(beforeTp >= 1000 && beforeTp < 60_000, `online list shows time played this session (${beforeTp} ms)`);
   const tp = await edit('teleport', { zone: 'misty_marsh' });
   await sleep(300);
   ok(tp.status === 200 && c2.msgs.some((x) => x.t === 'zone' && x.zone === 'misty_marsh'), 'teleport online moves the player');
+  ok((await played()) >= beforeTp, 'a zone change keeps counting the time played');
   c2.ws.close();
 
   // ---------------------------------------------------------- GM editing their own character
