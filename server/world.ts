@@ -221,7 +221,7 @@ export class GameWorld {
   private join(ws: WebSocket, token: unknown, characterId: unknown, ip: string): Session | null {
     const acc = typeof token === 'string' ? this.db.sessionAccount(token) : undefined;
     const charId = num(characterId, -1);
-    const data = acc ? this.db.loadCharacter(acc.id, charId) : undefined;
+    let data = acc ? this.db.loadCharacter(acc.id, charId) : undefined;
     if (this.closing) {
       this.send(ws, { t: 'kick', msg: `Server กำลัง${this.closing === 'restart' ? 'รีสตาร์ท' : 'ปิด'} — รอสักครู่แล้วเข้าใหม่` });
       ws.close();
@@ -238,12 +238,15 @@ export class GameWorld {
       ws.close();
       return null;
     }
-    // One character per account at a time: a new login takes over from the old one.
-    for (const s of this.sessions) {
-      if (s.accountId === acc.id) {
-        this.send(s.ws, { t: 'kick', msg: 'บัญชีนี้เข้าเกมจากที่อื่น' });
+    // An account may play several of its characters at once (they share one live stash), but each
+    // character only once: a new login with it takes over from the old one.
+    for (const s of [...this.sessions]) {
+      if (s.accountId === acc.id && s.charId === charId) {
+        this.send(s.ws, { t: 'kick', msg: 'ตัวละครนี้เข้าเกมจากที่อื่น' });
         this.leave(s);
         s.ws.close();
+        // leave() saved it just now: load that, not what was read above (up to 30 s older).
+        data = this.db.loadCharacter(acc.id, charId) ?? data;
       }
     }
     const sim = this.sims.get(zoneById(data.zone).id)!;
@@ -356,9 +359,14 @@ export class GameWorld {
     return { total: n, zones, avgLevel: n ? lv / n : null, avgRtt: rttN ? rtt / rttN : null };
   }
 
-  /** Accounts with a character in the world right now. */
+  /** Accounts with a character in the world right now (each once, however many characters play). */
   onlineAccounts(): number[] {
-    return [...this.sessions].map((s) => s.accountId);
+    return [...new Set([...this.sessions].map((s) => s.accountId))];
+  }
+
+  /** Whether this character is in the world right now. */
+  isCharacterOnline(charId: number): boolean {
+    return [...this.sessions].some((s) => s.charId === charId);
   }
 
   // ------------------------------------------------------------ messages

@@ -203,6 +203,8 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string): Pro
   const del = method === 'DELETE' && /^\/api\/characters\/(\d+)$/.exec(path);
   if (del) {
     const acc = requireRealAccount(req);
+    // Another device of the account may be playing it: its next save would bring it back.
+    if (world.isCharacterOnline(Number(del[1]))) throw new HttpError(409, 'ตัวละครนี้กำลังเล่นอยู่ — ออกจากเกมก่อนแล้วค่อยลบ');
     if (!db.deleteCharacter(acc.id, Number(del[1]))) throw new HttpError(404, 'ไม่พบตัวละครนี้');
     console.log(`[character] ${acc.username} deleted character #${del[1]}`);
     return send(res, 200, {});
