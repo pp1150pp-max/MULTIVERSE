@@ -609,10 +609,24 @@ export function drawRunestone(): HTMLCanvasElement {
 
 // ---------------------------------------------------------------- icons & fx
 
-export function drawIcon(kind: 'coin' | 'potion_hp' | 'potion_mp' | 'bag', color = '#d8d8d8'): HTMLCanvasElement {
+export function drawIcon(
+  kind: 'coin' | 'potion_hp' | 'potion_mp' | 'bag' | 'stone_protect' | 'stone_enhance', color = '#d8d8d8',
+): HTMLCanvasElement {
   const c = newCanvas(16, 16);
   const ctx = c.getContext('2d')!;
-  if (kind === 'coin') {
+  if (kind === 'stone_protect' || kind === 'stone_enhance') {
+    // A cut gem: blue for protection, orange for enhancement.
+    const [dark, mid, light] = kind === 'stone_protect' ? ['#1f5f8a', '#4fb4e8', '#c8f2ff'] : ['#8a3a10', '#ff9a2e', '#ffe0a0'];
+    ctx.fillStyle = dark;
+    ctx.beginPath();
+    ctx.moveTo(8, 1); ctx.lineTo(14, 6); ctx.lineTo(8, 15); ctx.lineTo(2, 6); ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = mid;
+    ctx.beginPath();
+    ctx.moveTo(8, 2.5); ctx.lineTo(12.5, 6); ctx.lineTo(8, 13); ctx.lineTo(3.5, 6); ctx.closePath();
+    ctx.fill();
+    rect(ctx, 1, 6, 4, 2, 2, light, null);
+  } else if (kind === 'coin') {
     ell(ctx, 1, 8, 9, 5.5, 5, '#f2c230');
     ell(ctx, 1, 8, 9, 3, 2.8, '#ffe27a', null);
   } else if (kind === 'bag') {

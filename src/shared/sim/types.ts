@@ -77,5 +77,7 @@ export type SimEvent =
   | { t: 'save'; to: number }
   /** The player's stash changed (save it, and refresh the stash window). */
   | { t: 'stash'; to: number }
+  /** A system line for every player on the server, in every zone (a +10 or higher enhancement). */
+  | { t: 'announce'; text: string }
   /** This player walked into a portal. Whoever drives the Sim moves them to that zone. */
   | { t: 'travel'; to: number; zone: string };

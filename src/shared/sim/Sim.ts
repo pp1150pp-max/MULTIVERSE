@@ -4,12 +4,16 @@ import { ZONES, type ZoneDef, type SpawnArea } from '../data/zones';
 import { MONSTERS } from '../data/monsters';
 import { expGapMult, expToNext, mitigate, MAX_LEVEL } from '../formulas';
 import { rollItem } from '../data/items';
-import { enhanceCost, itemName, MAX_PLUS, plusOf, rollEnhance, type EnhanceResult } from '../data/enhance';
-import { entryName, potionName, POTION_STACK, POTIONS } from '../data/potions';
+import {
+  ANNOUNCE_FROM, dropsOnFail, enhanceCost, itemName, MAX_PLUS, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
+} from '../data/enhance';
+import { entryName, potionName, POTION_STACK, POTIONS, stackLimit } from '../data/potions';
+import { BOSS_STONE_CHANCE, STONE_COLOR, STONE_NAME } from '../data/stones';
 import { NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { pick, rand, randInt } from '../rng';
 import { CLASS_IDS } from '../data/classes';
-import { isPotion, RARITY_LABEL, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
+import {
+  isItem, isPotion, isStack, isStone, RARITY_LABEL, sameStack, SLOT_LABEL, STONE_KINDS, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
 import { PORTAL_RANGE, Terrain } from './terrain';
 import {
   BUYBACK_RESET, buybackPrice, cleanAutoSettings, lootPots, Player, sortEntries,
@@ -29,19 +33,15 @@ const VANISH_LEASH = 30;
 const VANISH_GIVE_UP = 20;
 
 export function isBulkSellable(e: BagEntry | null, rarity: Rarity): e is Item {
-  return !!e && !isPotion(e) && e.rarity === rarity && !plusOf(e);
+  return isItem(e) && e.rarity === rarity && !plusOf(e);
 }
 
 function validSlot(i: number, len: number): boolean {
   return Number.isInteger(i) && i >= 0 && i < len;
 }
 
-function samePotion(a: BagEntry | null, b: BagEntry | null): boolean {
-  return isPotion(a) && isPotion(b) && a.potion === b.potion && a.size === b.size;
-}
-
 /**
- * Moves src[i] onto dst[j] (src and dst may be the same list): empty → moves, the same potion → merges
+ * Moves src[i] onto dst[j] (src and dst may be the same list): empty → moves, the same potion/stone → merges
  * up to a full stack (the rest stays behind), anything else → the two swap places.
  */
 function dropOnto(src: (BagEntry | null)[], i: number, dst: (BagEntry | null)[], j: number): boolean {
@@ -49,8 +49,8 @@ function dropOnto(src: (BagEntry | null)[], i: number, dst: (BagEntry | null)[],
   const a = src[i];
   const b = dst[j];
   if (!a) return false;
-  if (isPotion(a) && isPotion(b) && samePotion(a, b)) {
-    const n = Math.min(a.count, POTION_STACK - b.count);
+  if (isStack(a) && isStack(b) && sameStack(a, b)) {
+    const n = Math.min(a.count, stackLimit(b) - b.count);
     if (n <= 0) return false;
     b.count += n;
     a.count -= n;
@@ -63,18 +63,18 @@ function dropOnto(src: (BagEntry | null)[], i: number, dst: (BagEntry | null)[],
 }
 
 /**
- * Moves src[i] into dst wherever it fits. Potions top up matching stacks first, then fill an empty slot;
+ * Moves src[i] into dst wherever it fits. Potions and stones top up matching stacks first, then fill an empty slot;
  * if only part fits, that part moves. Returns false when nothing moved.
  */
 function fillInto(src: (BagEntry | null)[], i: number, dst: (BagEntry | null)[]): boolean {
   const a = src[i];
   if (!a) return false;
-  if (isPotion(a)) {
+  if (isStack(a)) {
     const before = a.count;
     for (const e of dst) {
       if (a.count <= 0) break;
-      if (e !== a && isPotion(e) && samePotion(a, e) && e.count < POTION_STACK) {
-        const n = Math.min(a.count, POTION_STACK - e.count);
+      if (e !== a && isStack(e) && sameStack(a, e) && e.count < stackLimit(e)) {
+        const n = Math.min(a.count, stackLimit(e) - e.count);
         e.count += n;
         a.count -= n;
       }
@@ -466,6 +466,10 @@ export class Sim {
       for (let i = 0; i < n; i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 1.5) }, owner);
       this.spawnLoot(m, { type: 'potion', pot: 'hp', size: 's', count: 1 }, owner);
       this.spawnLoot(m, { type: 'potion', pot: 'mp', size: 's', count: 1 }, owner);
+      // Blacksmith stones drop only from bosses, each kind rolled on its own.
+      for (const stone of STONE_KINDS) {
+        if (r() < BOSS_STONE_CHANCE) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner);
+      }
       return;
     }
     if (r() < d.itemChance) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass()) }, owner);
@@ -492,6 +496,12 @@ export class Sim {
       this.text(p.x, p.topY, p.z, `+${potionName(k.pot, k.size)}${k.count > 1 ? ` ×${k.count}` : ''}`, k.pot === 'hp' ? 'heal' : 'mana', 0.7, p.id);
       this.sfx('pickup_potion', p.x, p.z, p.id);
       this.inventoryChanged(p);
+    } else if (k.type === 'stone') {
+      if (!p.addStones(k.stone, k.count)) return false;
+      this.text(p.x, p.topY, p.z, `+${STONE_NAME[k.stone]}${k.count > 1 ? ` ×${k.count}` : ''}`, 'lvl', 0.9, p.id);
+      this.log(`ได้รับ ${STONE_NAME[k.stone]}${k.count > 1 ? ` ×${k.count}` : ''}`, STONE_COLOR[k.stone], p.id);
+      this.sfx('pickup_item', p.x, p.z, p.id);
+      this.afterChange(p);
     } else {
       if (!p.addToBag(k.item)) return false;
       this.events.push({ t: 'item', to: p.id, item: k.item });
@@ -507,6 +517,8 @@ export class Sim {
     const a = Math.random() * Math.PI * 2;
     const kind: LootKind = isPotion(item)
       ? { type: 'potion', pot: item.potion, size: item.size, count: item.count }
+      : isStone(item)
+      ? { type: 'stone', stone: item.stone, count: item.count }
       : { type: 'item', item };
     this.loots.push(new Loot(this.newId(), p.x + Math.cos(a), p.z + Math.sin(a), p.x, p.z, kind, { dropped: true }));
     this.log(`วาง ${entryName(item)} ลงบนพื้น (เก็บคืนได้ภายใน 60 วินาที)`, '#b9b09a', p.id);
@@ -743,22 +755,34 @@ export class Sim {
     this.afterChange(p);
   }
 
-  /** One enhancement attempt on a weapon the player owns (equipped or in the bag). */
-  enhance(p: Player, uid: string): { result: EnhanceResult; item: Item } | null {
+  /**
+   * One enhancement attempt on gear the player owns (worn or in the bag). `protect` = use a protection
+   * stone (only taken when a fail would drop the level). Gold, stones and the level are all checked here.
+   */
+  enhance(p: Player, uid: string, protect: boolean): { result: EnhanceResult; item: Item } | null {
     if (!this.near(p, 'blacksmith')) return null;
-    const item = [p.equipment.weapon, ...p.bag].find((w): w is Item => !!w && !isPotion(w) && w.uid === uid && w.slot === 'weapon');
+    const worn = Object.values(p.equipment).find((w) => w?.uid === uid);
+    const item = worn ?? p.bag.find((w): w is Item => isItem(w) && w.uid === uid);
     if (!item || plusOf(item) >= MAX_PLUS) return null;
     const cost = enhanceCost(item);
-    if (p.gold < cost) return null;
+    const stones = stonesNeeded(item);
+    const useProtect = protect && dropsOnFail(item);
+    if (p.gold < cost || p.stoneCount('enhance') < stones || (useProtect && p.stoneCount('protect') < 1)) return null;
     p.gold -= cost;
-    const result = rollEnhance(item, Math.random);
-    if (item === p.equipment.weapon) p.recompute();
+    p.takeStones('enhance', stones);
+    if (useProtect) p.takeStones('protect', 1);
+    const result = rollEnhance(item, Math.random, useProtect);
+    if (worn) p.recompute();
     if (result === 'success') {
       this.log(`🔨 ตีบวกสำเร็จ → ${itemName(item)}`, '#ffd34a', p.id);
       this.fx('burst', p.x, 1.2, p.z, '#ffd34a', 14, 3);
       this.text(p.x, p.topY + 0.3, p.z, `+${plusOf(item)} สำเร็จ!`, 'lvl', 1.4);
+      if (plusOf(item) >= ANNOUNCE_FROM) {
+        this.events.push({ t: 'announce', text: `🔨 ${p.name} ตี${SLOT_LABEL[item.slot]} ${item.name} เป็น +${plusOf(item)} สำเร็จ!` });
+      }
     } else {
-      this.log(`🔨 ตีบวก ${item.name} ล้มเหลว${result === 'drop' ? ` ระดับลดเหลือ +${plusOf(item)}` : ''}`, '#ff8a6a', p.id);
+      const why = result === 'drop' ? ` ระดับลดเหลือ +${plusOf(item)}` : result === 'saved' ? ' (หินกันระดับลดทำงาน ระดับเท่าเดิม)' : '';
+      this.log(`🔨 ตีบวก ${itemName(item)} ล้มเหลว${why}`, '#ff8a6a', p.id);
       this.fx('burst', p.x, 1.2, p.z, '#8a8f96', 10, 2);
       this.text(p.x, p.topY + 0.3, p.z, 'ล้มเหลว', 'hurt', 1.2);
     }

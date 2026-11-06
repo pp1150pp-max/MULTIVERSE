@@ -3,12 +3,13 @@ import type { Game } from './Game';
 import { NPC_USE_RANGE, type NpcId } from '../shared/data/npcs';
 import type { SkillSlot } from '../shared/data/classes';
 import {
-  dropsOnFail, effectiveStats, enhanceBonus, enhanceCost, itemName, MAX_PLUS, plusOf, sellValue, successRate,
-  DROP_ON_FAIL_FROM,
+  bonusPct, DROP_ON_FAIL_FROM, dropsOnFail, effectiveStats, enhanceBonus, enhanceCost, ENHANCE_STONES_PER_TRY, itemName,
+  MAX_PLUS, PITY_STEP, pityBonus, plusOf, rateFor, sellValue, STONE_FROM, stonesNeeded, successRate,
 } from '../shared/data/enhance';
 import {
   entryName, POTION_SIZES, POTION_SIZE_LABEL, POTION_STACK, POTIONS, potionName, potionSellPrice,
 } from '../shared/data/potions';
+import { STONE_COLOR, STONE_DESC, STONE_NAME, STONE_SELL, STONE_STACK, stoneStackValue } from '../shared/data/stones';
 import { FullMap } from './fullmap';
 import { AUTO_PX_PER_UNIT, AUTO_RANGE_MAX, AUTO_RANGE_MIN, buybackPrice, cleanAutoSettings, lootPots, type LootFilter, type SortKey } from '../shared/sim/Player';
 import { isBulkSellable } from '../shared/sim/Sim';
@@ -16,13 +17,13 @@ import { nextRowPrice, STASH_MAX, STASH_ROW, STASH_ROW_PRICES, STASH_START } fro
 import { MONSTERS } from '../shared/data/monsters';
 import { expToNext } from '../shared/formulas';
 import {
-  isPotion, RARITIES, RARITY_COLOR, RARITY_LABEL, SLOTS, SLOT_LABEL, STAT_KEYS, STAT_LABEL,
-  type BagEntry, type Item, type PotionKind, type PotionSize, type PotionStack, type Rarity, type SlotId, type StatKey,
+  isItem, isPotion, isStack, isStone, RARITIES, RARITY_COLOR, RARITY_LABEL, SLOTS, SLOT_LABEL, STAT_KEYS, STAT_LABEL,
+  type BagEntry, type Item, type PotionKind, type PotionSize, type PotionStack, type Rarity, type StoneStack, type SlotId, type StatKey,
 } from '../shared/types';
 import { drawMapIcon, facingAngle } from './mapIcons';
 import type { MapIcon } from './mapIconNames';
 import { NPC_MAP_ICON } from './fullmap';
-import { COIN_ICON, emptySlotIcon, FORGE_ICON, itemIcon, potionIcon, skillIcon } from './icons';
+import { COIN_ICON, emptySlotIcon, FORGE_ICON, itemIcon, potionIcon, skillIcon, stoneIcon } from './icons';
 import { shutdownCancelled, shutdownWarning, type ShutdownMode } from '../shared/net/protocol';
 
 /** Yellow, like the game's level-up lines. */
@@ -138,6 +139,8 @@ export class Hud {
   private forgeSel: string | null = null;
   private confirmYes: (() => void) | null = null;
   private enhancing = false;
+  /** Use a protection stone on attempts that can drop the level (the forge's tick box; off until ticked). */
+  private forgeProtect = false;
 
   constructor(private readonly g: Game) {
     $('hud').classList.remove('hidden');
@@ -216,8 +219,9 @@ export class Hud {
       const i = this.cellIndex(e);
       if (i < 0) return;
       const entry = g.player.bag[i];
-      const block = entry && !isPotion(entry) ? g.player.equipBlock(entry) : null;
-      if (block && entry && !isPotion(entry)) {
+      if (isStone(entry)) return;
+      const block = isItem(entry) ? g.player.equipBlock(entry) : null;
+      if (block && isItem(entry)) {
         this.log(`ใส่ ${itemName(entry)} ไม่ได้ — ${block}`, '#ff8a6a');
         return;
       }
@@ -257,8 +261,9 @@ export class Hud {
       if (this.drag?.ghost) return;
       const i = this.cellIndex(e);
       const item = i >= 0 ? g.player.bag[i] : null;
-      const right = this.stashOpen ? 'ฝากเข้าคลัง' : this.shopOpen ? (isPotion(item) ? 'ขายทั้งช่อง' : 'ขาย') : 'วางลงพื้น';
+      const right = this.stashOpen ? 'ฝากเข้าคลัง' : this.shopOpen ? (isStack(item) ? 'ขายทั้งช่อง' : 'ขาย') : 'วางลงพื้น';
       if (isPotion(item)) this.showPotionTip(item, e, `คลิกซ้าย: ใช้กับปุ่มด่วน · คลิกขวา: ${right}`);
+      else if (isStone(item)) this.showStoneTip(item, e, `คลิกขวา: ${right}`);
       else if (item) this.showTip(item, e, `คลิกซ้าย: สวมใส่ · คลิกขวา: ${right}`);
       else this.hideTip();
     });
@@ -374,6 +379,7 @@ export class Hud {
       const item = i >= 0 ? g.player.stash.items[i] : null;
       const hint = 'คลิกขวา: ย้ายเข้ากระเป๋า · ลากเพื่อย้าย';
       if (isPotion(item)) this.showPotionTip(item, e, hint);
+      else if (isStone(item)) this.showStoneTip(item, e, hint);
       else if (item) this.showTip(item, e, hint);
       else this.hideTip();
     });
@@ -973,6 +979,11 @@ export class Hud {
       } else sell();
       return;
     }
+    if (isStone(item)) {
+      // Boss-only stones: always ask, they are hard to get back.
+      this.confirm(`ขาย ${name}?<br><small>ได้ ${stoneStackValue(item).toLocaleString()} G (ก้อนละ ${STONE_SELL.toLocaleString()} G) · ซื้อคืนไม่ได้</small>`, 'ขาย', sell);
+      return;
+    }
     if ((item.plus ?? 0) > 0) {
       const v = sellValue(item);
       this.confirm(
@@ -1170,36 +1181,41 @@ export class Hud {
     $('forge').classList.add('hidden');
   }
 
-  private forgeWeapons(): Item[] {
+  /** Everything the blacksmith can work on: worn gear (weapon first), then gear in the bag. */
+  private forgeItems(): Item[] {
     const p = this.g.player;
     const list: Item[] = [];
-    if (p.equipment.weapon) list.push(p.equipment.weapon);
-    for (const it of p.bag) if (it && !isPotion(it) && it.slot === 'weapon') list.push(it);
+    for (const slot of SLOTS) {
+      const it = p.equipment[slot];
+      if (it) list.push(it);
+    }
+    for (const it of p.bag) if (isItem(it)) list.push(it);
     return list;
   }
 
   private renderForge(): void {
     const p = this.g.player;
-    const list = this.forgeWeapons();
+    const list = this.forgeItems();
+    const worn = (it: Item) => p.equipment[it.slot] === it;
     let item = list.find((w) => w.uid === this.forgeSel);
     if (!item) {
       item = list[0];
       this.forgeSel = item?.uid ?? null;
     }
     $('forge-list').innerHTML = list.length
-      ? list.map((w) => this.itemCell(w, `data-uid="${w.uid}" title="${itemName(w)}${w === p.equipment.weapon ? ' (สวมใส่อยู่)' : ''}"`, '', w === item)).join('')
-      : '<span class="hint">ไม่มีอาวุธ</span>';
+      ? list.map((w) => this.itemCell(w, `data-uid="${w.uid}" title="${itemName(w)}${worn(w) ? ' (สวมใส่อยู่)' : ''}"`, '', w === item)).join('')
+      : '<span class="hint">ไม่มีอุปกรณ์</span>';
     const go = $<HTMLButtonElement>('forge-go');
     if (!item) {
-      $('forge-detail').innerHTML = '<span class="hint">เก็บอาวุธไว้ในกระเป๋าหรือสวมใส่ไว้ แล้วกลับมาใหม่</span>';
+      $('forge-detail').innerHTML = '<span class="hint">เก็บอุปกรณ์ไว้ในกระเป๋าหรือสวมใส่ไว้ แล้วกลับมาใหม่</span>';
       go.disabled = true;
       return;
     }
     const cur = plusOf(item);
     const head = `<div class="fd-name" style="color:${RARITY_COLOR[item.rarity]}">${itemName(item)}</div>` +
-      `<div class="hint" style="margin:0 0 4px">${item === p.equipment.weapon ? 'สวมใส่อยู่' : 'อยู่ในกระเป๋า'} · iLv.${item.level}</div>`;
+      `<div class="hint" style="margin:0 0 4px">${SLOT_LABEL[item.slot]} · ${worn(item) ? 'สวมใส่อยู่' : 'อยู่ในกระเป๋า'} · iLv.${item.level}</div>`;
     if (cur >= MAX_PLUS) {
-      $('forge-detail').innerHTML = `${head}<div class="up">ตีบวกถึงระดับสูงสุด +${MAX_PLUS} แล้ว</div>`;
+      $('forge-detail').innerHTML = `${head}<div class="up">ตีบวกถึงระดับสูงสุด +${MAX_PLUS} แล้ว (โบนัส +${bonusPct(cur)}%)</div>`;
       go.disabled = true;
       go.textContent = 'ระดับสูงสุดแล้ว';
       return;
@@ -1207,26 +1223,50 @@ export class Hud {
     const now = effectiveStats(item);
     const next = effectiveStats(item, cur + 1);
     const cost = enhanceCost(item);
-    const rate = Math.round(successRate(item) * 100);
-    const row = (label: string, a: number, b: number, unit = '') =>
-      `<div class="fd-row"><span>${label}</span><span>${fmtNum(a)}${unit} → <span class="up">${fmtNum(b)}${unit}</span></span></div>`;
+    const rate = successRate(item);
+    const pity = pityBonus(item);
+    const pct = (v: number) => `${Math.round(v * 1000) / 10}%`;
+    const r1 = (v: number) => fmtNum(Math.round(v * 10) / 10);
+    const row = (label: string, a: string, b: string) =>
+      `<div class="fd-row"><span>${label}</span><span>${a} → <span class="up">${b}</span></span></div>`;
+    const statRows = (Object.keys(next) as StatKey[]).map((k) => row(STAT_LABEL[k], r1(now[k] ?? 0), r1(next[k] ?? 0))).join('');
+    const need = stonesNeeded(item);
+    const haveEnh = p.stoneCount('enhance');
+    const canProtect = dropsOnFail(item);
+    const haveProt = p.stoneCount('protect');
+    if (haveProt < 1) this.forgeProtect = false;
+    const protect = canProtect && this.forgeProtect;
+    const short = p.gold < cost ? `ทองไม่พอ (มี ${p.gold.toLocaleString()} G)` : haveEnh < need ? `หินตีบวกไม่พอ (มี ${haveEnh})` : '';
     $('forge-detail').innerHTML = head +
       `<div class="fd-row"><span>ระดับ</span><b>+${cur} → +${cur + 1}</b></div>` +
-      row('พลังโจมตี', now.atk ?? 0, next.atk ?? 0) +
-      row('โอกาสคริติคอล', now.crit ?? 0, next.crit ?? 0, '%') +
-      `<div class="fd-row"><span>โอกาสสำเร็จ</span><b class="${rate < 100 ? 'bad' : ''}">${rate}%</b></div>` +
+      row('โบนัสตีบวก (ทุกค่าของชิ้นนี้)', `+${bonusPct(cur)}%`, `+${bonusPct(cur + 1)}%`) +
+      statRows +
+      `<div class="fd-row"><span>โอกาสสำเร็จ</span><b class="${rate < 1 ? 'bad' : ''}">${pct(rate)}` +
+      `${pity > 0 ? ` <span class="pity">(+${pct(pity)} จากล้ม ${item.pity} ครั้ง)</span>` : ''}</b></div>` +
       `<div class="fd-row"><span>ค่าตีบวก</span><b class="${p.gold < cost ? 'bad' : ''}">${cost.toLocaleString()} G</b></div>` +
-      (dropsOnFail(item)
-        ? `<div class="warn">⚠ ถ้าล้มเหลว จะเสียทองและระดับลดลงเหลือ +${cur - 1}</div>`
-        : `<div class="safe">ถ้าล้มเหลว เสียแค่ทอง ระดับเท่าเดิม</div>`);
-    go.disabled = p.gold < cost;
-    go.innerHTML = p.gold < cost ? `ทองไม่พอ (มี ${p.gold.toLocaleString()} G)` : `${FORGE_ICON} ตีบวก (${cost.toLocaleString()} G)`;
+      (need ? `<div class="fd-row"><span>${stoneIcon('enhance')} ${STONE_NAME.enhance}</span><b class="${haveEnh < need ? 'bad' : ''}">ใช้ ${need} / มี ${haveEnh}</b></div>` : '') +
+      (canProtect
+        ? `<label class="fd-protect${haveProt < 1 ? ' off' : ''}"><input type="checkbox" id="forge-protect"${protect ? ' checked' : ''}${haveProt < 1 ? ' disabled' : ''}>` +
+          `${stoneIcon('protect')} ใช้${STONE_NAME.protect} 1 ก้อน (มี ${haveProt})</label>` +
+          (protect
+            ? `<div class="safe">ถ้าล้มเหลว เสียทองและหิน แต่ระดับเท่าเดิม</div>`
+            : `<div class="warn">⚠ ถ้าล้มเหลว จะเสียทองและระดับลดลงเหลือ +${cur - 1}</div>`)
+        : `<div class="safe">${rate >= 1 ? 'สำเร็จแน่นอน' : 'ถ้าล้มเหลว เสียแค่ทอง ระดับเท่าเดิม'}</div>`) +
+      (rate < 1 ? `<div class="hint">ล้มเหลวแต่ละครั้งเพิ่มโอกาสครั้งถัดไป +${pct(PITY_STEP)} (รีเซ็ตเมื่อสำเร็จ)</div>` : '');
+    (document.getElementById('forge-protect') as HTMLInputElement | null)?.addEventListener('change', (e) => {
+      this.forgeProtect = (e.target as HTMLInputElement).checked;
+      this.renderForge();
+    });
+    go.disabled = !!short;
+    go.innerHTML = short || `${FORGE_ICON} ตีบวก (${cost.toLocaleString()} G)`;
   }
 
   private async enhance(): Promise<void> {
     if (!this.forgeSel || this.enhancing) return;
+    const sel = this.forgeItems().find((w) => w.uid === this.forgeSel);
+    const protect = !!sel && dropsOnFail(sel) && this.forgeProtect;
     this.enhancing = true;
-    const out = await this.g.backend.enhance(this.forgeSel).finally(() => (this.enhancing = false));
+    const out = await this.g.backend.enhance(this.forgeSel, protect).finally(() => (this.enhancing = false));
     if (!out) return;
     const { result, item } = out;
     const res = $('forge-result');
@@ -1235,24 +1275,28 @@ export class Hud {
       res.textContent = `สำเร็จ! ${itemName(item)}`;
     } else {
       res.className = 'fail';
-      res.textContent = result === 'drop' ? `ล้มเหลว! ระดับลดลงเหลือ +${plusOf(item)}` : 'ล้มเหลว… ระดับเท่าเดิม';
+      res.textContent = result === 'drop' ? `ล้มเหลว! ระดับลดลงเหลือ +${plusOf(item)}`
+        : result === 'saved' ? `ล้มเหลว… หินกันระดับลดทำงาน ระดับยังเป็น +${plusOf(item)}`
+        : 'ล้มเหลว… ระดับเท่าเดิม';
     }
     this.markInventory();
     this.renderForge();
   }
 
   private rateTable(): string {
-    let html = '<table><tr><th>บวก</th><th>สำเร็จ</th><th>ถ้าล้ม</th></tr>';
-    const probe: Item = { uid: '', baseId: '', name: '', slot: 'weapon', rarity: 'common', level: 1, stats: { atk: 10 }, value: 0 };
+    let html = '<table><tr><th>บวก</th><th>สำเร็จ</th><th>ถ้าล้ม</th><th>หินตีบวก</th><th>โบนัสรวม</th></tr>';
     for (let t = 1; t <= MAX_PLUS; t++) {
-      probe.plus = t - 1;
-      html += `<tr><td>+${t}</td><td>${Math.round(successRate(probe) * 100)}%</td><td>${t >= DROP_ON_FAIL_FROM ? 'ระดับ −1' : 'เสียแค่ทอง'}</td></tr>`;
+      const fail = rateFor(t) >= 1 ? '—' : t >= DROP_ON_FAIL_FROM ? 'ระดับ −1' : 'เสียแค่ทอง';
+      html += `<tr><td>+${t}</td><td>${Math.round(rateFor(t) * 1000) / 10}%</td><td>${fail}</td>` +
+        `<td>${t >= STONE_FROM ? ENHANCE_STONES_PER_TRY : '—'}</td><td>+${bonusPct(t)}%</td></tr>`;
     }
-    return html + '</table><div class="hint">ทุกระดับเพิ่มพลังโจมตีและโอกาสคริติคอลของอาวุธ</div>';
+    return html + '</table><div class="hint">ตีบวกได้ทุกช่อง (อาวุธ หมวก เกราะ รองเท้า แหวน) · โบนัสเป็น % ของทุกค่าบนชิ้นนั้น' +
+      ` · ล้มแต่ละครั้งเพิ่มโอกาส +${Math.round(PITY_STEP * 100)}% จนกว่าจะสำเร็จ` +
+      ` · ${STONE_NAME.protect}กันระดับลด, ${STONE_NAME.enhance}ใช้ตั้งแต่ +${STONE_FROM} — ดรอปจากบอสเท่านั้น</div>`;
   }
 
   private entryColor(e: BagEntry): string {
-    return isPotion(e) ? POTION_COLOR[e.potion] : RARITY_COLOR[e.rarity];
+    return isPotion(e) ? POTION_COLOR[e.potion] : isStone(e) ? STONE_COLOR[e.stone] : RARITY_COLOR[e.rarity];
   }
 
   private itemCell(item: BagEntry | null | undefined, attrs: string, placeholder = '', selected = false): string {
@@ -1262,6 +1306,10 @@ export class Hud {
       const quick = this.g.player.potSel[item.potion] === item.size;
       return `<div class="cell pot${quick ? ' quick' : ''}" ${attrs} style="--rc:${POTION_COLOR[item.potion]}">${potionIcon(item.potion)}` +
         `<span class="psize">${POTION_SIZE_LABEL[item.size]}</span><span class="ilv">×${item.count}</span></div>`;
+    }
+    if (isStone(item)) {
+      return `<div class="cell pot stone" ${attrs} style="--rc:${STONE_COLOR[item.stone]}">${stoneIcon(item.stone)}` +
+        `<span class="ilv">×${item.count}</span></div>`;
     }
     const icon = itemIcon(item);
     const plus = plusOf(item) ? `<span class="iplus">+${plusOf(item)}</span>` : '';
@@ -1358,6 +1406,16 @@ export class Hud {
       `<div class="tt-sub">ยา · ${s.count} / ${POTION_STACK} ขวด${quick ? ` · ใช้กับปุ่ม ${s.potion === 'hp' ? 1 : 2} อยู่` : ''}</div>` +
       `<div class="tt-stats"><div>ฟื้น ${POTIONS[s.potion][s.size].amount} ${s.potion.toUpperCase()} ต่อขวด</div></div>` +
       `<div class="tt-hint">${hint}</div><div class="tt-val">ขายให้พ่อค้าได้ขวดละ ${potionSellPrice(s.potion, s.size)} G</div>`;
+    this.placeTip(tip, e);
+  }
+
+  private showStoneTip(s: StoneStack, e: MouseEvent, hint: string): void {
+    const tip = $('tooltip');
+    tip.innerHTML =
+      `<div class="tt-name" style="color:${STONE_COLOR[s.stone]}">${STONE_NAME[s.stone]}</div>` +
+      `<div class="tt-sub">วัตถุดิบตีบวก · ${s.count} / ${STONE_STACK} ก้อน · ดรอปจากบอสเท่านั้น</div>` +
+      `<div class="tt-stats"><div>${STONE_DESC[s.stone]}</div></div>` +
+      `<div class="tt-hint">${hint}</div><div class="tt-val">ขายให้พ่อค้าได้ก้อนละ ${STONE_SELL.toLocaleString()} G</div>`;
     this.placeTip(tip, e);
   }
 

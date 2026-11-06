@@ -1,7 +1,8 @@
 // The account-wide storage box kept by the warehouse keeper in town. Every character on the same
 // account opens the same stash, so gear and gold can be passed between characters (guests have none). Saved apart from the characters themselves.
 import { POTION_SIZES, POTION_STACK } from '../data/potions';
-import { RARITIES, SLOTS, type BagEntry, type PotionSize } from '../types';
+import { RARITIES, SLOTS, STONE_KINDS, type BagEntry, type PotionSize } from '../types';
+import { STONE_STACK } from '../data/stones';
 
 /** Slots a new stash starts with. */
 export const STASH_START = 30;
@@ -40,6 +41,12 @@ function cleanEntry(e: unknown): BagEntry | null {
     if ((o.potion !== 'hp' && o.potion !== 'mp') || !POTION_SIZES.includes(o.size as never)) return null;
     if (typeof count !== 'number' || !Number.isInteger(count) || count < 1) return null;
     return { potion: o.potion, size: o.size as PotionSize, count: Math.min(count, POTION_STACK) };
+  }
+  if ('stone' in o) {
+    const count = o.count;
+    if (!STONE_KINDS.includes(o.stone as never)) return null;
+    if (typeof count !== 'number' || !Number.isInteger(count) || count < 1) return null;
+    return { stone: o.stone as (typeof STONE_KINDS)[number], count: Math.min(count, STONE_STACK) };
   }
   if (typeof o.uid !== 'string' || !SLOTS.includes(o.slot as never) || !RARITIES.includes(o.rarity as never)) return null;
   return e as BagEntry;

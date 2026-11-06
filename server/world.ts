@@ -577,7 +577,8 @@ export class GameWorld {
         break;
       }
       case 'enhance': {
-        const out = typeof m.uid === 'string' ? sim.enhance(p, m.uid) : null;
+        // Sim.enhance checks the NPC distance, ownership, level cap, gold and stones itself.
+        const out = typeof m.uid === 'string' ? sim.enhance(p, m.uid, m.protect === true) : null;
         this.send(s.ws, { t: 'enhanced', req: num(m.req), result: out?.result ?? null, item: out?.item ?? null });
         break;
       }
@@ -639,6 +640,10 @@ export class GameWorld {
         if (ev.t === 'save') {
           const s = this.sessionById(sim, ev.to);
           if (s) s.saveDue ??= now + 2000;
+          continue;
+        }
+        if (ev.t === 'announce') {
+          this.broadcastSystem(ev.text);
           continue;
         }
         if (ev.t === 'stash') continue; // saved by onAction; the snapshot carries the new stash
@@ -751,6 +756,7 @@ export class GameWorld {
         id: o.id, name: o.name, cls: o.cls.id, lv: o.level,
         x: r2(o.x), z: r2(o.z), fx: r2(o.faceX), fz: r2(o.faceZ), mv: o.moving,
         alive: o.alive, hp: Math.round(o.hp), maxHp: Math.round(o.maxHp), dash: o.isDashing ? o.dashKind : 0,
+        ...(o.aura ? { aura: o.aura } : {}),
       })),
       monsters: sim.monsters.filter(near).map((m) => ({
         id: m.id, def: m.def.id, lv: m.level,

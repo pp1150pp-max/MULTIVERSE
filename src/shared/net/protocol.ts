@@ -59,7 +59,8 @@ export type ActionMsg =
   | { t: 'act'; a: 'sell'; i: number }
   | { t: 'act'; a: 'buyBack'; i: number; uid: string }
   | { t: 'act'; a: 'sellRarity'; rarity: Rarity }
-  | { t: 'act'; a: 'enhance'; uid: string; req: number }
+  /** `protect` = use a protection stone if a fail would drop the level. */
+  | { t: 'act'; a: 'enhance'; uid: string; protect?: boolean; req: number }
   /** Stash (warehouse keeper). `to` = target slot, or -1 for wherever it fits. */
   | { t: 'act'; a: 'stashPut'; i: number; to: number }
   | { t: 'act'; a: 'stashTake'; i: number; to: number }
@@ -93,6 +94,8 @@ export interface PlayerSnap {
   alive: boolean; hp: number; maxHp: number;
   /** Dashing: 'dash' | 'charge', or 0 when not. */
   dash: 'dash' | 'charge' | 0;
+  /** Enhancement aura tier 1–4 (missing = none). */
+  aura?: number;
 }
 
 export interface MonsterSnap {

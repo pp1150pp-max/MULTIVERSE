@@ -4,18 +4,33 @@ import * as THREE from 'three';
 import type { Player } from '../shared/sim/Player';
 import type { Monster } from '../shared/sim/Monster';
 import { itemArt } from '../shared/data/items';
+import { STONE_COLOR } from '../shared/data/stones';
 import { LOOT_POP_TIME, type Loot } from '../shared/sim/Loot';
 import type { SimEvent } from '../shared/sim/types';
 import { SpriteActor } from './SpriteActor';
 import { AnimatedActor, type Actor } from './AnimatedActor';
-import { animSets, sheets } from './assets';
+import { animSets, fxTex, sheets } from './assets';
 import type { Effects, ShotSprite } from './effects';
 import type { ProjectileLike } from './backend';
 
 type AnimEvent = Extract<SimEvent, { t: 'anim' }>;
 
+/**
+ * Enhancement aura by tier (+7 / +10 / +13 / +15 on the best worn item). Placeholder look until the
+ * real art exists: a glow on the ground, and sparks rising from the higher tiers.
+ */
+const AURA: { color: string; size: number; sparks: number }[] = [
+  { color: '', size: 0, sparks: 0 },
+  { color: '#6fb8ff', size: 1.5, sparks: 0 },
+  { color: '#c56dff', size: 1.9, sparks: 3 },
+  { color: '#ff9a2e', size: 2.3, sparks: 6 },
+  { color: '#ffd34a', size: 2.7, sparks: 12 },
+];
+
 export class PlayerView {
   readonly actor: Actor;
+  private aura: THREE.Mesh | null = null;
+  private auraTier = 0;
   private clock = 0;
   private combo = 0;
   private lastAttackAt = -99;
@@ -33,7 +48,44 @@ export class PlayerView {
     this.actor.face(p.faceX, p.faceZ);
     if (p.isDashing && Math.random() < 0.7) fx.puff(p.x, 0.9, p.z, p.dashKind === 'charge' ? '#ffcf7a' : '#cfe8ff', 0.25, 1.1);
     this.actor.update(dt, p.moving, p.isDashing ? 14 : undefined);
+    this.updateAura(dt, fx);
     this.sync();
+  }
+
+  private updateAura(dt: number, fx: Effects): void {
+    const p = this.p;
+    const tier = p.alive ? Math.max(0, Math.min(AURA.length - 1, p.aura)) : 0;
+    if (tier !== this.auraTier) {
+      this.auraTier = tier;
+      this.disposeAura();
+      if (tier > 0) {
+        const mat = new THREE.MeshBasicMaterial({
+          map: fxTex.glow, color: AURA[tier].color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.7,
+        });
+        this.aura = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+        this.aura.rotation.x = -Math.PI / 2;
+        this.aura.renderOrder = -1;
+        this.scene.add(this.aura);
+      }
+    }
+    if (!this.aura) return;
+    const a = AURA[tier];
+    const pulse = 1 + Math.sin(this.clock * 3) * 0.08;
+    this.aura.position.set(p.x, 0.06, p.z);
+    this.aura.scale.set(a.size * pulse, a.size * pulse, 1);
+    if (a.sparks && Math.random() < a.sparks * dt) {
+      const ang = Math.random() * Math.PI * 2;
+      const r = Math.random() * a.size * 0.35;
+      fx.puff(p.x + Math.cos(ang) * r, 0.2, p.z + Math.sin(ang) * r, a.color, 0.9, 0.35);
+    }
+  }
+
+  private disposeAura(): void {
+    if (!this.aura) return;
+    this.scene.remove(this.aura);
+    this.aura.geometry.dispose();
+    (this.aura.material as THREE.Material).dispose();
+    this.aura = null;
   }
 
   private sync(): void {
@@ -73,6 +125,7 @@ export class PlayerView {
   }
 
   dispose(): void {
+    this.disposeAura();
     this.scene.remove(this.actor.group);
     this.actor.dispose();
   }
@@ -169,14 +222,20 @@ export class LootView {
 
   constructor(readonly l: Loot, private readonly scene: THREE.Scene, fx: Effects) {
     const k = l.kind;
-    const key = k.type === 'gold' ? 'icon_coin' : k.type === 'potion' ? `icon_potion_${k.pot}` : itemArt(k.item);
+    const key = k.type === 'gold' ? 'icon_coin'
+      : k.type === 'potion' ? `icon_potion_${k.pot}`
+      : k.type === 'stone' ? `icon_stone_${k.stone}`
+      : itemArt(k.item);
     this.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: sheets[key].texture, alphaTest: 0.5, transparent: true }));
     const size = k.type === 'item' ? 0.85 : 0.55;
     this.sprite.scale.set(size, size, 1);
     // Drawn after the glow, so the rarity light sits behind the picture instead of washing it out.
     this.sprite.renderOrder = 2;
     scene.add(this.sprite);
-    if (k.type === 'item' && k.item.rarity !== 'common') {
+    if (k.type === 'stone') {
+      this.glow = fx.glowSprite(STONE_COLOR[k.stone], 1.5, 0.55);
+      scene.add(this.glow);
+    } else if (k.type === 'item' && k.item.rarity !== 'common') {
       this.glow = fx.glowSprite(GLOW[k.item.rarity], 1.5, 0.55);
       scene.add(this.glow);
     }

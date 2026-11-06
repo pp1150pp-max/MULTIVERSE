@@ -565,6 +565,11 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #forge-detail .bad { color: #ff6a6a; }
 #forge-detail .warn { color: #ffb070; font-size: 12px; margin-top: 4px; }
 #forge-detail .safe { color: var(--ink-dim); font-size: 12px; margin-top: 4px; }
+#forge-detail .pity { color: #9fd8ff; font-size: 11px; }
+#forge-detail .fd-protect { display: flex; align-items: center; gap: 4px; margin-top: 6px; cursor: pointer; color: #9fe6ff; }
+#forge-detail .fd-protect.off { color: var(--ink-dim); cursor: default; }
+#forge-detail .gi { width: 16px; height: 16px; vertical-align: middle; image-rendering: pixelated; }
+#forge-detail .hint { font-size: 11px; margin-top: 4px; }
 #forge-go { width: 100%; font-size: 15px; padding: 8px; }
 #forge-result { min-height: 22px; text-align: center; margin-top: 6px; font-weight: 600; }
 #forge-result.ok { color: #6cff7a; }
