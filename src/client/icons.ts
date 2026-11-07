@@ -1,6 +1,6 @@
 // Painted icons for the HUD, as HTML to drop into markup. Files live in assets/sprites/icons/.
 import { itemArt, starterArt } from '../shared/data/items';
-import type { ClassId, Item, PotionKind, SlotId, StoneKind } from '../shared/types';
+import type { ClassId, EquipSlot, Item, PotionKind, StoneKind } from '../shared/types';
 import { drawIcon } from './placeholder';
 
 export const iconImg = (name: string): string =>
@@ -18,7 +18,12 @@ export const stoneIcon = (kind: StoneKind): string => {
 };
 export const FORGE_ICON = iconImg('npc_forge');
 
-export const itemIcon = (item: Item): string => iconImg(itemArt(item));
+let itemFallback: string | undefined;
+/** Item icon. Falls back to the placeholder bag while a new item has no painted file yet. */
+export const itemIcon = (item: Item): string => {
+  itemFallback ??= drawIcon('bag').toDataURL();
+  return iconImg(itemArt(item)).replace('>', ` onerror="this.onerror=null;this.src='${itemFallback}'">`);
+};
 
 /** The first item of a slot stands in for an empty equipment slot. */
-export const emptySlotIcon = (slot: SlotId, cls: ClassId): string => iconImg(starterArt(slot, cls));
+export const emptySlotIcon = (slot: EquipSlot, cls: ClassId): string => iconImg(starterArt(slot, cls));
