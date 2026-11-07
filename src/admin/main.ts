@@ -4,14 +4,15 @@
 import './admin.css';
 import { ADMIN_AUDIT_PAGE, ADMIN_ITEM_ROWS_MAX, ADMIN_STAT_MULT, statStep, type AdminItemRow, ADMIN_NO_RIGHTS as NO_RIGHTS, HISTORY_DAYS, HISTORY_PAGE, BAN_DURATIONS, BAN_FOREVER, BAN_REASON_MAX, BROADCAST_EVERY_MS, BROADCAST_MAX } from '../shared/admin';
 import { MAX_CHARACTERS } from '../shared/api';
-import { entryName } from '../shared/data/potions';
+import { entryName, POTION_SIZES, potionName } from '../shared/data/potions';
+import { STONE_NAME } from '../shared/data/stones';
 import type {
   AdminAccountDetail, AdminAccountsResponse, AdminFeature, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AdminShutdownText, AuditRow, RoleRow,
 } from '../shared/admin';
 import { CLASSES } from '../shared/data/classes';
 import { itemNames, makeItem, roundStat, rowRanges, tierOf } from '../shared/data/items';
 import { checkShutdownText, SHUTDOWN_SECONDS, SHUTDOWN_TEXT_MAX, SHUTDOWN_TIME_TOKEN, shutdownWarning, type ShutdownMode } from '../shared/net/protocol';
-import { isStack, RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, SLOTS, STAT_KEYS, STAT_LABEL, type BagEntry, type ClassId, type Item, type Rarity } from '../shared/types';
+import { isStack, RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, SLOTS, STAT_KEYS, STAT_LABEL, STONE_KINDS, type BagEntry, type ClassId, type Item, type Rarity } from '../shared/types';
 
 const ADMIN_TOKEN = 'multiverse-admin-token';
 /** The game's own login: used when the owner is already logged in to the game in this browser. */
@@ -473,10 +474,22 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
     }
     base.append(group);
   }
+  // Potions and blacksmith stones share the list; their value is "potion:hp:l" / "stone:protect".
+  base.append(
+    h('optgroup', { label: 'ยา' }, ...(['hp', 'mp'] as const).flatMap((k) => POTION_SIZES.map((sz) => h('option', { value: `potion:${k}:${sz}` }, potionName(k, sz))))),
+    h('optgroup', { label: 'หินช่างตีเหล็ก' }, ...STONE_KINDS.map((k) => h('option', { value: `stone:${k}` }, STONE_NAME[k]))),
+  );
+  /** The potion/stone picked, as the request fields; null while gear is picked. */
+  const stackPick = (): Record<string, string> | null => {
+    const [kind, a, b] = base.value.split(':');
+    if (kind === 'potion') return { kind, potion: a, size: b };
+    if (kind === 'stone') return { kind, stone: a };
+    return null;
+  };
   const rarity = h('select', {}, ...m.rarities.map((r) => h('option', { value: r, style: `color:${RARITY_COLOR[r]}` }, RARITY_LABEL[r])));
   const plus = h('select', {}, ...Array.from({ length: m.maxPlus + 1 }, (_, i) => h('option', { value: String(i) }, `+${i}`)));
   const plusWrap = h('label', {}, 'ตีบวก', plus);
-  if (m.bases.some((b) => b.id === form.baseId)) base.value = form.baseId;
+  if ([...base.options].some((o) => o.value === form.baseId)) base.value = form.baseId;
   rarity.value = form.rarity;
   plus.value = form.plus;
   base.onchange = () => (form.baseId = base.value);
@@ -553,8 +566,16 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
       h('div', { class: 'row' }, addBtn, h('span', { class: 'muted' }, `สูงสุด ${ADMIN_ITEM_ROWS_MAX} แถว · ค่าได้ถึง ${ADMIN_STAT_MULT} เท่าของค่าสูงสุดปกติ · ทุกชิ้นได้ตามตัวอย่างนี้`)),
     );
   };
+  const rarityWrap = h('label', {}, 'ความหายาก', rarity);
+  const itemLvWrap = h('label', {}, 'เลเวลไอเทม', itemLv);
+  /** Potions and stones have no rarity, +N, level or stats: only the count shows. */
+  const showGearFields = () => {
+    const gear = !stackPick();
+    for (const el of [rarityWrap, plusWrap, itemLvWrap, exampleBox]) el.style.display = gear ? '' : 'none';
+  };
   const refreshExample = () => {
-    if (!custom) return;
+    showGearFields();
+    if (!custom || stackPick()) return;
     // Show the level the example is really made at (a kind's minimum level can raise it).
     if (intOf(itemLv) !== effLevel()) form.level = itemLv.value = String(effLevel());
     ensureExample();
@@ -564,10 +585,14 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
   rarity.addEventListener('change', refreshExample);
   itemLv.addEventListener('change', refreshExample);
   refreshExample();
-  itemBtn.onclick = () => void run('items', {
+  itemBtn.onclick = () => {
+    const stack = stackPick();
+    if (stack) return void run('items', { ...stack, count: intOf(count) }, itemBtn);
+    void run('items', {
     baseId: base.value, rarity: rarity.value, plus: Number(plus.value), level: custom ? effLevel() : intOf(itemLv), count: intOf(count),
     ...(custom && example ? { name: example.name, lines: example.rows } : {}),
-  }, itemBtn);
+    }, itemBtn);
+  };
 
   // Zone
   const zone = h('select', {}, ...m.zones.map((z) => h('option', { value: z.id, selected: z.id === c.zone }, `${z.nameTh} (Lv.${z.levels[0]}–${z.levels[1]})`)));
@@ -599,10 +624,10 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
       h('div', { class: 'row' }, h('label', {}, 'เลเวล', lv), h('label', {}, 'EXP', exp), lvBtn)),
     h('section', {}, h('h3', {}, `ทอง (ครั้งละไม่เกิน ${fmt(m.goldMax)} G)`),
       h('div', { class: 'row' }, h('label', {}, 'จำนวน', gold), giveBtn, takeBtn)),
-    h('section', {}, h('h3', {}, `เสกไอเทมใส่กระเป๋า (ครั้งละไม่เกิน ${m.itemsMax} ชิ้น)`),
+    h('section', {}, h('h3', {}, `เสกไอเทมใส่กระเป๋า (ครั้งละไม่เกิน ${m.itemsMax} ชิ้น · ยา/หินนับทีละขวด/ก้อน)`),
       h('div', { class: 'row' }, h('label', { style: 'flex-basis:100%' }, 'ชนิด', base)),
       h('div', { class: 'row', style: 'margin-top:8px' },
-        h('label', {}, 'ความหายาก', rarity), plusWrap, h('label', {}, 'เลเวลไอเทม', itemLv), h('label', {}, 'จำนวน', count), itemBtn),
+        rarityWrap, plusWrap, itemLvWrap, h('label', {}, 'จำนวน', count), itemBtn),
       custom ? exampleBox : null),
     h('section', {}, h('h3', {}, 'ย้ายโซน (ไปที่แคมป์)'),
       h('div', { class: 'row' }, h('label', {}, 'โซน', zone), tpBtn)),

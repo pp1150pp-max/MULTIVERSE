@@ -107,6 +107,7 @@ npm run stop-server -- --restart # เหมือนกัน แต่ npm run
   - ตั้ง owner ได้จาก command line เท่านั้น: `npm run admin-role -- <ชื่อผู้ใช้> owner|gm|none` (DB ตาม `DB_FILE` ค่าเริ่มต้นคือ DB จริง)
   - server ตรวจ role ทุก request · แก้ตัวละครออนไลน์ผ่าน Player ตัวจริงใน `server/world.ts` แล้วเซฟทันที · ทุกการกระทำลงตาราง `admin_audit`
   - เพดานต่อครั้ง (ทอง 1,000,000 / ไอเทม 10 ชิ้น) อยู่ใน `src/shared/admin.ts`
+  - เสกไอเทมได้ทุกชนิดจากฟอร์มเดียว: ช่อง "ชนิด" มีอุปกรณ์ + กลุ่ม "ยา" (HP/MP × เล็ก/กลาง/ใหญ่) + "หินช่างตีเหล็ก" (หินกันระดับลด/หินตีบวก) · เลือกยา/หินแล้วซ่อนความหายาก/ตีบวก/เลเวล/สเตตัส · owner และ GM เสกยา/หินได้ · นับทีละขวด/ก้อน ครั้งละ 1–10 · เข้ากระเป๋าแบบเก็บของ (เติมกองเดิมก่อน แล้วใช้ช่องว่าง) ใส่ไม่หมด = ใส่เท่าที่ได้แล้วบอก "ใส่ได้ n/m" · API `items` ส่ง `{ kind: 'potion', potion, size, count }` / `{ kind: 'stone', stone, count }` (`adminStack`, `addStackToBag` ใน `src/shared/admin.ts`)
   - เครื่องมือ owner (ผู้ใช้ทั้งหมด, ตั้งรหัสผ่านชั่วคราว, แบน, ประกาศ, สำรองข้อมูล) เปิดให้ GM ได้ทีละอย่างที่ `FEATURE_ROLES` ใน `src/shared/admin.ts` (เพิ่ม `'gm'`) · การลบบัญชี/ตัวละครเป็นของ owner เสมอ (ไม่มีสวิตช์)
   - แบน: คอลัมน์ `accounts.ban_until` / `ban_reason` · login และการเข้าโลกถูกปฏิเสธพร้อมเหตุผล
   - สำรอง DB: `server/data/backups/` (`VACUUM INTO`) อัตโนมัติวันละครั้งเก็บ 7 ไฟล์, กดเองเก็บ 10, ก่อนลบเก็บ 20 (`BACKUP_KEEP` ใน `server/backup.ts`)

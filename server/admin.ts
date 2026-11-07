@@ -13,7 +13,7 @@ import { ownerToolsApi } from './admin-tools';
 import type { Backups } from './backup';
 import {
   ADMIN_AUDIT_PAGE, ADMIN_GOLD_MAX, ADMIN_NO_RIGHTS, ADMIN_ITEMS_MAX, ADMIN_SEARCH_MAX,
-  canUse, customItem, FEATURE_ROLES, type AdminFeature, type AdminCharRow, type AdminEditResult, type AdminMe, type AdminMeta, type AdminRole, type AdminServerState,
+  addStackToBag, adminStack, adminStackName, canUse, customItem, FEATURE_ROLES, type AdminFeature, type AdminCharRow, type AdminEditResult, type AdminMe, type AdminMeta, type AdminRole, type AdminServerState,
 } from '../src/shared/admin';
 import { shutdownCancelled, type ShutdownMode } from '../src/shared/net/protocol';
 import { BAG_SIZE, type CharacterData, type Player } from '../src/shared/sim/Player';
@@ -240,6 +240,19 @@ function editCharacter(db: Db, world: GameWorld, a: Admin, charId: number, what:
       break;
     }
     case 'items': {
+      // Potions and blacksmith stones: count is pieces (bottles/stones), stacked into the bag like a pickup.
+      if (body.kind !== undefined && body.kind !== 'equip') {
+        const kind = adminStack(body);
+        if (typeof kind === 'string') throw new HttpError(400, kind);
+        const count = int(body.count ?? 1, 1, ADMIN_ITEMS_MAX, 'จำนวนชิ้น');
+        const n = addStackToBag(d.bag, BAG_SIZE, kind, count);
+        if (n === 0) throw new HttpError(400, 'กระเป๋าเต็ม');
+        const label = adminStackName(kind);
+        msg = n < count ? `ใส่ได้ ${n}/${count} ชิ้น — กระเป๋าเต็ม (${label})` : `เสกให้ ${n} ชิ้น: ${label}`;
+        tell = `GM มอบ ${label} × ${n}`;
+        log(db, a, 'items', target, `${label} × ${n}${n < count ? ` (ขอ ${count}, กระเป๋าเต็ม)` : ''}`);
+        break;
+      }
       const base = ITEM_BASES.find((b) => b.id === body.baseId);
       if (!base) throw new HttpError(400, 'ไม่มีไอเทมชนิดนี้');
       const rarity = RARITIES.find((r) => r === body.rarity);

@@ -1,8 +1,10 @@
 // Admin page (/admin): roles, limits and the shapes of the /api/admin requests, shared by the page
 // and the server. The server checks the role and every value on each call; the page is only a view.
-import { STAT_KEYS, STAT_LABEL, type BagEntry, type ClassId, type EquipSlot, type Item, type Rarity, type SlotId, type StatKey, type StatLine } from './types';
+import { isPotion, isStack, sameStack, STAT_KEYS, STAT_LABEL, STONE_KINDS, type BagEntry, type PotionKind, type PotionStack, type StoneStack, type ClassId, type EquipSlot, type Item, type Rarity, type SlotId, type StatKey, type StatLine } from './types';
 import type { ShutdownMode } from './net/protocol';
 import { itemNames, makeItem, roundStat, rowRanges, statStep, tierOf, TIER_VERSION } from './data/items';
+import { POTION_SIZES, potionName, stackLimit } from './data/potions';
+import { STONE_NAME } from './data/stones';
 
 /** owner: everything, plus granting/revoking GM. gm: view and edit players. */
 export type AdminRole = 'owner' | 'gm';
@@ -270,3 +272,55 @@ export function customItem(baseId: string, rarity: Rarity, level: number, cls: C
 
 /** The smallest value a chosen stat row may have. */
 export { statStep };
+
+// ------------------------------------------------------------ potions and stones
+
+/** What the spawn form may give besides gear: one kind of potion or stone, stacked like a pickup. */
+export type AdminStack = PotionStack | StoneStack;
+
+/**
+ * The potion or stone the page asked for (`kind` 'potion' with `potion` + `size`, or 'stone' with
+ * `stone`), with count 0; a Thai error if any value is wrong.
+ */
+export function adminStack(body: Record<string, unknown>): AdminStack | string {
+  if (body.kind === 'potion') {
+    const potion = (['hp', 'mp'] as PotionKind[]).find((k) => k === body.potion);
+    if (!potion) return 'ชนิดยาไม่ถูกต้อง';
+    const size = POTION_SIZES.find((s) => s === body.size);
+    if (!size) return 'ขนาดยาไม่ถูกต้อง';
+    return { potion, size, count: 0 };
+  }
+  if (body.kind === 'stone') {
+    const stone = STONE_KINDS.find((k) => k === body.stone);
+    if (!stone) return 'ชนิดหินไม่ถูกต้อง';
+    return { stone, count: 0 };
+  }
+  return 'ประเภทไอเทมไม่ถูกต้อง';
+}
+
+/** Display name of a potion or stone kind ("ยา HP ใหญ่", "หินตีบวก"). */
+export const adminStackName = (s: AdminStack): string => (isPotion(s) ? potionName(s.potion, s.size) : STONE_NAME[s.stone]);
+
+/**
+ * Puts up to `n` of this potion/stone into the first `slots` bag slots like a pickup: tops up stacks of the
+ * same kind first, then fills empty slots (each slot holds at most a stack's limit). Returns how many went in.
+ */
+export function addStackToBag(bag: (BagEntry | null)[], slots: number, kind: AdminStack, n: number): number {
+  const limit = stackLimit(kind);
+  let left = n;
+  for (let i = 0; i < slots && left > 0; i++) {
+    const e = bag[i];
+    if (e && sameStack(e, kind) && isStack(e) && e.count < limit) {
+      const add = Math.min(left, limit - e.count);
+      e.count += add;
+      left -= add;
+    }
+  }
+  for (let i = 0; i < slots && left > 0; i++) {
+    if (bag[i]) continue;
+    const add = Math.min(left, limit);
+    bag[i] = { ...kind, count: add };
+    left -= add;
+  }
+  return n - left;
+}
