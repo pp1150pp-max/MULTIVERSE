@@ -15,6 +15,7 @@ import type { PotionKind, PotionSize, Rarity, SlotId, Vec2 } from '../../shared/
 import type { SkillSlot } from '../../shared/data/classes';
 import { INPUT_HZ, PING_MS, WS_PATH, type ClientMsg, type ServerMsg, type ShutdownMode, type SnapshotMsg } from '../../shared/net/protocol';
 import type { Backend, EnhanceOutcome, ProjectileLike } from '../backend';
+import type { Hazard } from '../../shared/sim/volcanoHeart';
 
 /** Mirrors never run game logic, so they don't need a simulation behind them. */
 const NO_SIM = null as unknown as Sim;
@@ -42,7 +43,7 @@ const PING_KEEP = 8;
  * Events still applied while the tab is hidden (the server keeps playing Auto). Everything else is a
  * notification nobody saw — dropped so it doesn't all pop at once when the player comes back.
  */
-const HIDDEN_KEEP = new Set<SimEvent['t']>(['inventory', 'stash', 'died', 'revived', 'save', 'travel']);
+const HIDDEN_KEEP = new Set<SimEvent['t']>(['inventory', 'stash', 'died', 'revived', 'save', 'travel', 'autoOff']);
 
 interface MirrorProjectile extends ProjectileLike {
   x: number;
@@ -118,6 +119,7 @@ export class OnlineBackend implements Backend {
   /** Latest server position of each remote entity; mirrors glide toward it. */
   private readonly targets = new Map<object, Vec2>();
   private events: SimEvent[] = [];
+  hazards: readonly Hazard[] = [];
   private serverTime = 0;
   private serverTimeAt = performance.now();
   private serverMoves = false;
@@ -349,6 +351,7 @@ export class OnlineBackend implements Backend {
     this.serverTime = s.time;
     this.serverTimeAt = performance.now();
     this.onlineCount = s.online;
+    this.hazards = s.hazards ?? [];
     if (!document.hidden) this.events.push(...s.events);
     else {
       for (const ev of s.events) {

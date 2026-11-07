@@ -4,7 +4,7 @@ import { AUTO_PX_PER_UNIT, type Player } from './Player';
 import type { Loot } from './Loot';
 import { MONSTERS } from '../data/monsters';
 import type { SkillSlot } from '../data/classes';
-import type { ZoneDef } from '../data/zones';
+import { inBossArena, lavaAt, type ZoneDef } from '../data/zones';
 
 /** What the bot needs to see. The server builds one per player. */
 export interface AutoWorld {
@@ -14,6 +14,17 @@ export interface AutoWorld {
   readonly time: number;
   readonly zone: ZoneDef;
 }
+
+/**
+ * Bosses are fought by hand, on every map: Auto can't run inside a boss's arena, nor while a boss is
+ * after this player. Whoever runs the bot switches it off when this says so.
+ */
+export function autoBlocked(zone: ZoneDef, monsters: readonly Monster[], p: { x: number; z: number; id: number }): boolean {
+  return inBossArena(zone, p.x, p.z) || monsters.some((m) => m.isBoss && m.alive && m.isHostile && m.target?.id === p.id);
+}
+
+/** Message shown when Auto is refused or stopped because of a boss. */
+export const AUTO_BOSS_MSG = 'ปิด Auto Play — บอสต้องสู้เอง ใช้ Auto ในลานบอสไม่ได้';
 
 const RANGE: Record<string, number> = { sword: 1.9, mage: 8.5, gunslinger: 9 };
 /** Loot within this distance is fetched even while monsters attack; up to LOOT_FAR when it's calm. */
@@ -104,13 +115,24 @@ export class AutoPlay {
       else if (p.mp + p.potionPending('mp') < p.stats.maxMp * (set.mpPct / 100) && p.potionCount('mp') > 0) out.potion = 'mp';
     }
 
+    // Standing in lava comes before everything else: walk straight out of the pool.
+    const pool = lavaAt(g.zone, p.x, p.z);
+    if (pool) {
+      const dx = p.x - pool.x;
+      const dz = p.z - pool.z;
+      const d = Math.hypot(dx, dz) || 1;
+      const out2 = Math.max(pool.rx, pool.rz) + 1.5;
+      out.moveTo = { x: pool.x + (dx / d) * out2, z: pool.z + (dz / d) * out2 };
+      return out;
+    }
+
     // Loot close by is picked up even mid-fight; farther loot only when nothing is attacking.
     // Loot that doesn't fit in the bag (or the loot filter skips) is ignored, so a full bag just keeps fighting.
     const threatened = g.monsters.some((m) => m.isHostile && dist(m) < 3.5);
     let best = null as { x: number; z: number } | null;
     let bd = threatened ? LOOT_NEAR : LOOT_FAR;
     for (const l of set.loot ? g.loots : []) {
-      if (this.fromAnchor(l) > R + 0.5) continue;
+      if (this.fromAnchor(l) > R + 0.5 || inBossArena(g.zone, l.x, l.z) || lavaAt(g.zone, l.x, l.z)) continue;
       if (l.dead || l.dropped || !l.canTake(p.id, g.time) || !p.wantsLoot(l.kind, false) || !p.canFit(l.kind)) continue;
       const d = dist(l);
       if (d < bd) {
@@ -180,7 +202,7 @@ export class AutoPlay {
     let best: Monster | null = null;
     let bs = Infinity;
     for (const m of g.monsters) {
-      if (!m.alive || m.isBoss || m.state === 'return') continue;
+      if (!m.alive || m.isBoss || m.state === 'return' || inBossArena(g.zone, m.x, m.z)) continue;
       const d = Math.hypot(m.x - p.x, m.z - p.z);
       if (d > 24) continue;
       // Only inside the circle, except monsters already attacking the player.
@@ -227,6 +249,8 @@ export class AutoPlay {
       x = anchor.x + (dx / d) * R * 0.9;
       z = anchor.z + (dz / d) * R * 0.9;
     }
+    // Never wander into a boss's arena or a pool: wait where it is instead.
+    if (inBossArena(g.zone, x, z) || lavaAt(g.zone, x, z)) return { x: p.x, z: p.z };
     this.roam = { x, z };
     return this.roam;
   }

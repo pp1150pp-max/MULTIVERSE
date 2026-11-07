@@ -4,6 +4,8 @@ import { ZONES, type ZoneDef, type SpawnArea } from '../data/zones';
 import { MONSTERS } from '../data/monsters';
 import { expGapMult, expToNext, mitigate, MAX_LEVEL } from '../formulas';
 import { rollItem } from '../data/items';
+import { inBossArena, LAVA_BURN, LAVA_TICK } from '../data/zones';
+import type { Hazard } from './volcanoHeart';
 import {
   ANNOUNCE_FROM, dropsOnFail, enhanceCost, itemName, MAX_PLUS, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
 } from '../data/enhance';
@@ -105,6 +107,8 @@ export class Sim {
   projectiles: (Projectile | EnemyShot)[] = [];
   loots: Loot[] = [];
   time = 0;
+  /** Boss ground attacks going on right now. Sent as they are in snapshots. */
+  hazards: Hazard[] = [];
   private events: SimEvent[] = [];
   private nextId = 1;
   private readonly spawners: Spawner[] = [];
@@ -121,6 +125,10 @@ export class Sim {
 
   private newId(): number {
     return this.nextId++;
+  }
+
+  nextHazardId(): number {
+    return this.newId();
   }
 
   // ------------------------------------------------------------ players
@@ -221,6 +229,10 @@ export class Sim {
 
   hitMonster(p: Player, m: Monster, mult: number, opts: HitOpts = {}): void {
     if (!m.alive || m.untargetable) return;
+    if (m.def.pattern && !inBossArena(this.zone, p.x, p.z)) {
+      this.text(m.x, m.topY, m.z, 'ต้องเข้าลาน', 'info', 0.5, p.id);
+      return;
+    }
     let raw = p.stats.atk * mult * (0.9 + Math.random() * 0.2);
     const crit = Math.random() * 100 < p.stats.crit;
     if (crit) raw *= 1 + p.stats.critDmg / 100;
@@ -231,7 +243,7 @@ export class Sim {
     this.text(m.x, m.topY, m.z, crit ? `${dmg}!` : String(dmg), crit ? 'crit' : 'dmg');
     if (crit) this.sfx('crit', m.x, m.z);
     if (opts.kb && !m.isBoss) m.knockback(opts.fromX ?? p.x, opts.fromZ ?? p.z, opts.kb);
-    if (opts.stun) m.stunT = Math.max(m.stunT, m.isBoss ? opts.stun * 0.3 : opts.stun);
+    if (opts.stun && !m.def.pattern) m.stunT = Math.max(m.stunT, m.isBoss ? opts.stun * 0.3 : opts.stun);
     if (opts.slow) {
       m.slowAmt = opts.slow;
       m.slowT = opts.slowT ?? 2;
@@ -256,6 +268,34 @@ export class Sim {
     this.text(p.x, p.topY, p.z, `-${dmg}`, 'hurt');
     if (opts.stun) p.stunT = Math.max(p.stunT, opts.stun);
     if (opts.kb) p.knockback(opts.fromX ?? m.x, opts.fromZ ?? m.z, opts.kb);
+    if (p.hp <= 0) this.killPlayer(p);
+  }
+
+  /** The Volcano Heart reached a faster phase (1 = below half HP, 2 = below 30%). */
+  onHeartPhase(m: Monster, phase: number): void {
+    const text = phase >= 2 ? 'หัวใจภูเขาไฟใกล้ระเบิด!' : 'หัวใจภูเขาไฟเดือดพล่าน!';
+    const sub = phase >= 2 ? 'ท่าเร็วขึ้นอีกขั้น เตือนสั้นลง' : 'ท่าเร็วขึ้น และซ้อนกันได้ 2 ชุด';
+    this.log(`${text} ${sub}`, '#ff6a5a');
+    this.events.push({ t: 'banner', text, sub, x: m.x, z: m.z });
+    this.shake(0.4);
+  }
+
+  /** Standing in lava: a share of max HP every so often, whatever the defense. */
+  private tickLava(p: Player, dt: number): void {
+    if (!this.terrain.onLava(p.x, p.z)) {
+      p.lavaT = 0;
+      return;
+    }
+    p.lavaT -= dt;
+    if (p.lavaT > 0) return;
+    p.lavaT = LAVA_TICK;
+    if (p.invulnT > 0) return;
+    const dmg = Math.max(1, Math.round(p.maxHp * LAVA_BURN));
+    p.hp -= dmg;
+    p.lastHurt = this.time;
+    this.events.push({ t: 'flash', id: p.id });
+    this.text(p.x, p.topY, p.z, `-${dmg}`, 'hurt');
+    this.fx('burst', p.x, 0.2, p.z, '#ff8a3a', 4, 2);
     if (p.hp <= 0) this.killPlayer(p);
   }
 
@@ -365,6 +405,7 @@ export class Sim {
     m.deadT = 0;
     m.hp = 0;
     this.sfx(m.isBoss ? 'boss_die' : 'monster_die', m.x, m.z);
+    if (m.def.pattern) this.hazards = [];
     if (!m.summoned) {
       this.shareExp(m);
       this.dropLoot(m);
@@ -808,6 +849,7 @@ export class Sim {
     for (const p of this.players) if (p.alive) p.update(dt, intentOf(p));
     for (const p of this.players) this.tickBuyback(p, dt);
     for (const p of this.players) if (p.alive) this.checkPortals(p);
+    if (this.zone.lavaPools) for (const p of this.players) if (p.alive) this.tickLava(p, dt);
 
     for (const m of this.monsters) m.update(dt, this);
     this.separateMonsters();

@@ -1,6 +1,6 @@
 // Zone layout and collision, without any rendering. Built from the zone seed, so the browser and
 // the server get exactly the same trees, rocks and camp.
-import type { ZoneDef, ZoneTheme } from '../data/zones';
+import { arenaRadius, clearingRadius, lavaAt, type ZoneDef, type ZoneTheme } from '../data/zones';
 import { NPC_IDS, type NpcId } from '../data/npcs';
 import { mulberry32, pick, rand, type Rng } from '../rng';
 import type { Vec2 } from '../types';
@@ -53,6 +53,15 @@ const THEME_PROPS: Record<ZoneTheme, ThemeProps> = {
     ringRock: ['snow_rock_1', 2.2],
     campDecor: false,
   },
+  volcano: {
+    trees: ['burnt_pillar_0', 'burnt_pillar_1', 'burnt_pillar_2', 'charred_tree'],
+    bushes: ['ash_shrub_0', 'ash_shrub_1', 'ember_fern'],
+    rocks: ['basalt_0', 'basalt_1'],
+    stump: 'charred_stump',
+    extra: ['magma_crystal_0', 'magma_crystal_1'],
+    ringRock: ['basalt_1', 2.2],
+    campDecor: false,
+  },
 };
 
 /** How close a player has to walk to a portal to use it. */
@@ -100,6 +109,11 @@ export class Terrain {
   /** Frozen lake underfoot? Players slide here (see Player.walkStep). */
   onIce(x: number, z: number): boolean {
     return !!this.zone.iceLakes?.some((l) => Math.hypot((x - l.x) / l.rx, (z - l.z) / l.rz) < 1);
+  }
+
+  /** Lava underfoot? It burns (see Sim.tickLava). */
+  onLava(x: number, z: number): boolean {
+    return !!lavaAt(this.zone, x, z);
   }
 
   /** Push a circle out of static colliders and keep it inside the zone. */
@@ -196,9 +210,11 @@ export class Terrain {
 
     // Boss clearing ring of runestones.
     const b = zone.boss;
+    const ring = arenaRadius(zone);
+    if (zone.bossSolid) this.colliders.push({ x: b.x, z: b.z, r: zone.bossSolid });
     for (let a = 0.3; a < Math.PI * 2; a += Math.PI / 4) {
       const [ringRock, ringH] = this.set.ringRock;
-      this.addProp(a % 2 > 1 ? ringRock : 'runestone', b.x + Math.cos(a) * 11, b.z + Math.sin(a) * 11, a % 2 > 1 ? ringH : 2.6, 0.6);
+      this.addProp(a % 2 > 1 ? ringRock : 'runestone', b.x + Math.cos(a) * ring, b.z + Math.sin(a) * ring, a % 2 > 1 ? ringH : 2.6, 0.6);
     }
 
     // Portals: walk-through, so no collider.
@@ -211,9 +227,9 @@ export class Terrain {
       const x = rand(r, -B + 2, B - 2);
       const z = rand(r, -B + 2, B - 2);
       if (this.distToPath(x, z) < 3.2) continue;
-      if (near(x, z, s, 11) || near(x, z, b, 13) || zone.portals.some((p) => near(x, z, p, 5))) continue;
+      if (near(x, z, s, 11) || near(x, z, b, clearingRadius(zone)) || zone.portals.some((p) => near(x, z, p, 5))) continue;
       if (zone.spawns.some((sp) => near(x, z, sp, sp.radius * 0.55))) continue;
-      if (zone.iceLakes?.some((l) => Math.hypot((x - l.x) / (l.rx + 2), (z - l.z) / (l.rz + 2)) < 1)) continue;
+      if ([...(zone.iceLakes ?? []), ...(zone.lavaPools ?? [])].some((l) => Math.hypot((x - l.x) / (l.rx + 2), (z - l.z) / (l.rz + 2)) < 1)) continue;
       if (this.colliders.some((c) => Math.hypot(c.x - x, c.z - z) < 2.2)) continue;
       const roll = r();
       if (roll < 0.55) this.addTree(r, x, z);

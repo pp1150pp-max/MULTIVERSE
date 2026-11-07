@@ -3,7 +3,7 @@ export type Behavior = 'passive' | 'skittish' | 'aggressive' | 'charger' | 'boss
 /** A straight shot at the player. */
 export interface ShotDef {
   /** Which picture it flies as. */
-  art: 'ice_shard' | 'snowball';
+  art: 'ice_shard' | 'snowball' | 'ember_bolt';
   speed: number;
   range: number;
   mult: number;
@@ -59,6 +59,8 @@ export interface MonsterDef {
   /** Bosses only: below half HP, chase speed is multiplied by `speed` and every attack's
    *  cooldown and wind-up by `skill` — replaces the usual enrage boost. */
   frenzy?: { speed: number; skill: number };
+  /** Fights by a scripted attack pattern and never moves (see sim/volcanoHeart.ts). */
+  pattern?: 'volcano_heart';
   itemChance: number;
   potionChance: number;
 }
@@ -195,5 +197,50 @@ export const MONSTERS: Record<string, MonsterDef> = {
     behavior: 'aggressive', itemChance: 0, potionChance: 0,
     leap: { cooldown: 8, windup: 1, radius: 1.8, mult: 1.5, minRange: 2.5, maxRange: 8 },
     thrown: { art: 'snowball', speed: 8, range: 8, mult: 1, radius: 0.45, size: 1, color: '#e6f2fb', minRange: 3, cooldown: 6 },
+  },
+
+  // Zone 4 — Ashen Isle. Final numbers: this zone sets no monsterBoost.
+  ember_wisp: {
+    id: 'ember_wisp', name: 'Ember Wisp', nameTh: 'ลูกไฟจิ๋ว', levels: [31, 32],
+    hp: 1350, atk: 170, def: 36, speed: 2.4, exp: 1000, gold: [60, 90],
+    aggroRange: 0, attackRange: 1.1, attackCooldown: 1.4, height: 1.4, radius: 0.45,
+    behavior: 'passive', itemChance: 0.15, potionChance: 0.11,
+  },
+  salamander: {
+    id: 'salamander', name: 'Salamander', nameTh: 'ซาลาแมนเดอร์', levels: [33, 34],
+    hp: 1900, atk: 195, def: 46, speed: 2.1, exp: 1200, gold: [70, 105],
+    aggroRange: 0, attackRange: 1.3, attackCooldown: 1.6, height: 1.6, radius: 0.65,
+    behavior: 'charger', itemChance: 0.15, potionChance: 0.11,
+  },
+  lava_bat: {
+    id: 'lava_bat', name: 'Lava Bat', nameTh: 'ค้างคาวลาวา', levels: [35, 36],
+    hp: 1600, atk: 230, def: 34, speed: 3.5, exp: 1400, gold: [82, 125],
+    aggroRange: 7, attackRange: 1.15, attackCooldown: 1.15, height: 1.7, radius: 0.5,
+    behavior: 'aggressive', itemChance: 0.16, potionChance: 0.11,
+  },
+  magma_golem: {
+    id: 'magma_golem', name: 'Magma Golem', nameTh: 'โกเลมแมกมา', levels: [37, 38],
+    hp: 3200, atk: 255, def: 62, speed: 1.7, exp: 1700, gold: [98, 150],
+    aggroRange: 6, attackRange: 1.5, attackCooldown: 1.9, height: 2.5, radius: 0.95,
+    behavior: 'aggressive', itemChance: 0.17, potionChance: 0.12,
+  },
+  ash_mage: {
+    id: 'ash_mage', name: 'Ash Mage', nameTh: 'จอมเวทเถ้าถ่าน', levels: [39, 39],
+    hp: 2300, atk: 285, def: 44, speed: 2.3, exp: 1900, gold: [115, 175],
+    aggroRange: 9, attackRange: 7, attackCooldown: 2, height: 1.9, radius: 0.5,
+    behavior: 'aggressive', pack: true, packId: 'ash', itemChance: 0.18, potionChance: 0.12,
+    shot: { art: 'ember_bolt', speed: 8, range: 11, mult: 1, radius: 0.35, size: 0.6, color: '#ffa95a' },
+  },
+  ash_knight: {
+    id: 'ash_knight', name: 'Ash Knight', nameTh: 'อัศวินเถ้าถ่าน', levels: [39, 39],
+    hp: 2800, atk: 285, def: 56, speed: 2.3, exp: 1900, gold: [115, 175],
+    aggroRange: 9, attackRange: 1.3, attackCooldown: 1.4, height: 2, radius: 0.6,
+    behavior: 'aggressive', pack: true, packId: 'ash', itemChance: 0.18, potionChance: 0.12,
+  },
+  volcano_heart: {
+    id: 'volcano_heart', name: 'Volcano Heart', nameTh: 'หัวใจภูเขาไฟ (Boss)', levels: [40, 40],
+    hp: 45000, atk: 380, def: 65, speed: 0, exp: 16000, gold: [1300, 2100],
+    aggroRange: 0, attackRange: 0, attackCooldown: 99, height: 4.4, radius: 1.5,
+    behavior: 'boss', pattern: 'volcano_heart', itemChance: 1, potionChance: 1,
   },
 };

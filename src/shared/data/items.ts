@@ -37,6 +37,13 @@ const BASES: BaseItem[] = [
   { id: 'glacier', slot: 'armor', names: { sword: 'Glacier Plate', mage: 'Snowweave Robe', gunslinger: 'Fur-lined Coat' }, main: { def: 14, maxHp: 44 }, minLevel: 24 },
   { id: 'snowtreads', slot: 'boots', names: { any: 'Snowtread Boots' }, main: { def: 7, moveSpeed: 7 }, minLevel: 22 },
   { id: 'ring_frost', slot: 'ring', names: { any: 'Frost Ring' }, main: { maxHp: 26 }, minLevel: 26 },
+  // Ashen Isle tier
+  { id: 'weapon_8', slot: 'weapon', names: { sword: 'Cinder Saber', mage: 'Ember Wand', gunslinger: 'Magma Repeater' }, main: { atk: 30 }, minLevel: 33 },
+  { id: 'weapon_9', slot: 'weapon', names: { sword: 'Volcanic Greatblade', mage: 'Heartflame Staff', gunslinger: 'Eruption Pistol' }, main: { atk: 34 }, minLevel: 38 },
+  { id: 'ash_hood', slot: 'helmet', names: { any: 'Ashweave Hood' }, main: { def: 10, maxHp: 26 }, minLevel: 32 },
+  { id: 'magma_plate', slot: 'armor', names: { sword: 'Magma Plate', mage: 'Cinderweave Robe', gunslinger: 'Soot-black Coat' }, main: { def: 18, maxHp: 58 }, minLevel: 34 },
+  { id: 'cinder_boots', slot: 'boots', names: { any: 'Cinderstep Boots' }, main: { def: 9, moveSpeed: 8 }, minLevel: 32 },
+  { id: 'ring_ember', slot: 'ring', names: { any: 'Ember Ring' }, main: { maxHp: 34 }, minLevel: 36 },
 ];
 
 /** Names of every item's picture. Items named per class have one picture per class. */

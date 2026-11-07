@@ -26,7 +26,15 @@ export interface IceLake {
 }
 
 /** Which prop set and ground palette a zone is drawn with. */
-export type ZoneTheme = 'forest' | 'marsh' | 'snow';
+export type ZoneTheme = 'forest' | 'marsh' | 'snow' | 'volcano';
+
+/** An ellipse of lava: walkable, but it burns whoever stands in it. */
+export interface LavaPool {
+  x: number;
+  z: number;
+  rx: number;
+  rz: number;
+}
 
 export interface ZoneDef {
   id: string;
@@ -47,6 +55,12 @@ export interface ZoneDef {
   portals: PortalDef[];
   /** Frozen lakes: walkable, but players slide on them. */
   iceLakes?: IceLake[];
+  /** Burning pools. See LAVA_BURN. */
+  lavaPools?: LavaPool[];
+  /** Size of the boss's arena, marked by the ring of stones (default DEFAULT_ARENA). Auto Play stays out of it. */
+  arenaRadius?: number;
+  /** The boss can't be walked through (for one that never moves). */
+  bossSolid?: number;
   /** Makes every monster here (bosses and summons too) stronger than its MonsterDef; none = as defined. */
   monsterBoost?: MonsterBoost;
 }
@@ -147,6 +161,7 @@ export const ZONE_3: ZoneDef = {
     [[12, 12], [20, -6]],
     [[-2, 8], [-20, 18]],
     [[-14, -6], [-4, -24]],
+    [[-26, -18], [-36, -16], [-46, -18]],
   ],
   spawns: [
     { monster: 'frost_penguin', x: 32, z: 32, radius: 7, count: 7, respawn: [8, 12] },
@@ -163,7 +178,11 @@ export const ZONE_3: ZoneDef = {
     { monster: 'polar_bear', x: -4, z: -24, radius: 9, count: 4, respawn: [16, 22] },
   ],
   boss: { monster: 'yeti', x: -42, z: -42, radius: 1, count: 1, respawn: [150, 150] },
-  portals: [{ to: 'misty_marsh', x: 49.5, z: 49.5, minLevel: 0 }],
+  // The way on is at the end of a side path before the yeti's clearing, like the other zones'.
+  portals: [
+    { to: 'misty_marsh', x: 49.5, z: 49.5, minLevel: 0 },
+    { to: 'ashen_isle', x: -46, z: -18, minLevel: 30 },
+  ],
   iceLakes: [
     { x: -32, z: 34, rx: 12, rz: 9 },
     { x: 34, z: -32, rx: 11, rz: 8 },
@@ -171,13 +190,72 @@ export const ZONE_3: ZoneDef = {
   ],
 };
 
+export const ZONE_4: ZoneDef = {
+  id: 'ashen_isle',
+  name: 'Ashen Isle',
+  nameTh: 'เกาะภูเขาไฟ',
+  subtitle: 'เกาะหินดำลอยกลางอวกาศ ลาวาเดือดเป็นบ่อ รอยแยกเรืองแสง ขี้เถ้าลอยไม่หยุด และหัวใจของภูเขาไฟที่ยังเต้นอยู่',
+  levels: [31, 40],
+  theme: 'volcano',
+  allowAutoPlay: true,
+  half: 64,
+  seed: 20261107,
+  start: { x: 44, z: 44 },
+  path: [[52, 52], [44, 44], [34, 28], [22, 22], [10, 10], [-2, 6], [-12, -6], [-20, -14], [-26, -26], [-36, -36]],
+  branches: [
+    [[34, 28], [42, 10]],
+    [[22, 22], [6, 36]],
+    [[10, 10], [22, -8]],
+    [[-2, 6], [-22, 16]],
+    [[-12, -6], [0, -26]],
+  ],
+  spawns: [
+    { monster: 'ember_wisp', x: 32, z: 32, radius: 7, count: 7, respawn: [8, 12] },
+    { monster: 'ember_wisp', x: 42, z: 10, radius: 6, count: 5, respawn: [8, 12] },
+    { monster: 'salamander', x: 6, z: 36, radius: 8, count: 8, respawn: [10, 14] },
+    { monster: 'lava_bat', x: 22, z: -8, radius: 9, count: 8, respawn: [10, 14] },
+    { monster: 'magma_golem', x: 0, z: -26, radius: 9, count: 6, respawn: [14, 20] },
+    { monster: 'ash_mage', x: -22, z: 16, radius: 8, count: 4, respawn: [10, 15] },
+    { monster: 'ash_knight', x: -22, z: 16, radius: 8, count: 4, respawn: [10, 15] },
+  ],
+  // Lots of room: the fight is all about walking out of the way.
+  boss: { monster: 'volcano_heart', x: -36, z: -36, radius: 0, count: 1, respawn: [180, 180] },
+  arenaRadius: 16,
+  bossSolid: 1.5,
+  portals: [{ to: 'frost_reach', x: 49.5, z: 49.5, minLevel: 0 }],
+  lavaPools: [
+    { x: 20, z: 8, rx: 4.5, rz: 3 },
+    { x: -8, z: 22, rx: 5, rz: 3.5 },
+    { x: -34, z: -4, rx: 6, rz: 4 },
+  ],
+};
+
 export const ZONES: Record<string, ZoneDef> = {
   [ZONE_1.id]: ZONE_1,
   [ZONE_2.id]: ZONE_2,
   [ZONE_3.id]: ZONE_3,
+  [ZONE_4.id]: ZONE_4,
 };
 
 /** Saved characters from before zones existed have no zone id; they start in the forest. */
 export function zoneById(id: string | undefined): ZoneDef {
   return (id && ZONES[id]) || ZONE_1;
 }
+
+/** Boss arena when a zone doesn't set its own: the ring of stones around the clearing. */
+export const DEFAULT_ARENA = 11;
+export const arenaRadius = (zone: ZoneDef): number => zone.arenaRadius ?? DEFAULT_ARENA;
+/** The bare ground around the boss reaches a little past its arena. */
+export const clearingRadius = (zone: ZoneDef): number => arenaRadius(zone) + 2;
+
+export function inBossArena(zone: ZoneDef, x: number, z: number): boolean {
+  return Math.hypot(x - zone.boss.x, z - zone.boss.z) <= arenaRadius(zone);
+}
+
+export function lavaAt(zone: ZoneDef, x: number, z: number): LavaPool | null {
+  return zone.lavaPools?.find((l) => Math.hypot((x - l.x) / l.rx, (z - l.z) / l.rz) < 1) ?? null;
+}
+
+/** Lava: this share of max HP, every LAVA_TICK seconds while standing in it. Ignores defense. */
+export const LAVA_BURN = 0.03;
+export const LAVA_TICK = 0.5;

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { clearingRadius } from '../shared/data/zones';
 import type { PropSpec, Terrain } from '../shared/sim/terrain';
 import type { ZoneTheme } from '../shared/data/zones';
 import { mulberry32, pick, rand, type Rng } from '../shared/rng';
@@ -16,12 +17,13 @@ const MAP_MIN_PROP = 2;
 /** Bare ground around the camp at a zone's start. */
 const CAMP_RADIUS = 7;
 /** How wide each theme's roads are worn into the grass. */
-const TRAIL_WIDTH: Record<ZoneTheme, number> = { forest: 4.2, marsh: 3.6, snow: 3.8 };
+const TRAIL_WIDTH: Record<ZoneTheme, number> = { forest: 4.2, marsh: 3.6, snow: 3.8, volcano: 3.8 };
 /** Pictures of the broken land around each theme's island. */
 const ISLAND_ART: Record<ZoneTheme, { cliff: string; slabs: string }> = {
   forest: { cliff: 'island_cliff_forest', slabs: 'island_slabs_forest' },
   marsh: { cliff: 'island_cliff_marsh', slabs: 'island_slabs_marsh' },
   snow: { cliff: 'island_cliff_snow', slabs: 'island_slabs_snow' },
+  volcano: { cliff: 'island_cliff_volcano', slabs: 'island_slabs_volcano' },
 };
 /** Light snowfall: how many flakes hang around the player, inside a box this many units across. */
 const SNOW_FLAKES = 240;
@@ -91,6 +93,18 @@ const DECOR: Record<ZoneTheme, { key: string; cols: number; rows: number; spots:
       road: [8, 8, 11],
       shore: [1, 1, 10, 10, 2, 9],
       water: [6, 6, 7],
+    },
+  },
+  volcano: {
+    key: 'decor_volcano',
+    cols: 4,
+    rows: 3,
+    spots: {
+      verge: [0, 0, 0, 1, 10, 11],
+      field: [0, 0, 1, 2, 3, 4, 5, 9, 10, 11],
+      road: [8, 8, 11],
+      shore: [6, 7, 2, 9],
+      water: [],
     },
   },
 };
@@ -316,6 +330,33 @@ const PALETTES: Record<ZoneTheme, GroundPalette> = {
     fog: 8,
     portalGlow: '#8fdcff',
   },
+  // Dark, but lifted well off black, so characters stay the brightest thing on screen.
+  volcano: {
+    tiles: { base: 'ash_rock', dirt: 'ash_path', water: 'lava', pave: 'ash_path' },
+    background: '#140d0e',
+    mapEdge: '#c0764a',
+    mapRoad: ['rgba(70, 58, 54, 0.7)', 'rgba(190, 160, 140, 0.5)'],
+    base: '#4a4342',
+    patchDark: ['#443d3d', '#403a3a', '#474040'],
+    patchLight: ['#524a48', '#574e4b', '#4f4745'],
+    specks: ['#3e3838', '#5a514e', '#363031', '#625854', '#4b4443', '#6a5f5a'],
+    tuft: ['#332d2d', '#6a4e3e'],
+    clearing: ['#5a4a42', '#615047', '#54453e'],
+    clearingRim: ['#463b37', '#4d413c'],
+    clearingStone: '#6e5e54',
+    path: [
+      [4.6, ['#332c2b', '#37302e']],
+      [3.9, ['#5c5250', '#5f5553', '#584e4c']],
+      [2.8, ['#6b605c', '#70645f', '#675c58', '#6b605c']],
+    ],
+    pathDetail: { kind: 'pebbles', colors: ['#524846', '#7c6f69', '#463d3b', '#8a7c75'] },
+    flowers: ['#ff9a4a', '#e87a3a', '#ffc070'],
+    flowerCore: '#c8501a',
+    edge: 'rgba(14,8,8,0.55)',
+    pools: 0,
+    fog: 10,
+    portalGlow: '#ffb06a',
+  },
 };
 
 /** Draws a zone: painted ground plus the props laid out by the shared Terrain. */
@@ -329,6 +370,8 @@ export class World {
   private readonly portals: THREE.Sprite[] = [];
   private readonly fog: Fog[] = [];
   private snow: { geo: THREE.BufferGeometry; speeds: Float32Array } | null = null;
+  /** Glow over the lava pools and along the cracks, pulsing slowly. */
+  private readonly lavaGlows: THREE.Material[] = [];
   /** Everything added to the scene, so a zone change can take it all down again. */
   private readonly objects: THREE.Object3D[] = [];
   private readonly ownMats: THREE.Material[] = [];
@@ -402,6 +445,7 @@ export class World {
       };
     } else {
       const tex = new THREE.CanvasTexture(this.groundCanvas);
+      tex.flipY = false;
       tex.colorSpace = THREE.SRGBColorSpace;
       tex.magFilter = THREE.NearestFilter;
       tex.minFilter = THREE.LinearFilter;
@@ -427,6 +471,19 @@ export class World {
     for (const p of terrain.zone.portals) this.portals.push(this.glow(p.x, 1.5, p.z, this.pal.portalGlow, 0.5));
     this.addFog(mulberry32(terrain.zone.seed + 7));
     if (terrain.zone.theme === 'snow') this.addSnow(mulberry32(terrain.zone.seed + 41));
+    if (terrain.zone.theme === 'volcano') {
+      this.addSnow(mulberry32(terrain.zone.seed + 41), { color: '#b8aca2', size: 2, opacity: 0.55, speed: [0.25, 0.7] });
+      this.addEmberCracks(mulberry32(terrain.zone.seed + 43));
+      for (const l of terrain.zone.lavaPools ?? []) {
+        const mat = this.own(new THREE.MeshBasicMaterial({
+          map: fxTex.glow, color: '#ff7a2a', transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending,
+        }));
+        const halo = this.add(new THREE.Mesh(this.ownGeo(new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2)), mat));
+        halo.position.set(l.x, 0.04, l.z);
+        halo.scale.set(l.rx * 1.5, 1, l.rz * 1.5);
+        this.lavaGlows.push(mat);
+      }
+    }
     if (this.groundUniforms) {
       this.addDecor(mulberry32(terrain.zone.seed + 11));
       if (terrain.zone.theme === 'marsh') this.addPlanks(mulberry32(terrain.zone.seed + 13));
@@ -886,7 +943,7 @@ export class World {
         }
       }
     }
-    for (const [c, rad, count] of [[start, CAMP_RADIUS + 1.2, 26], [boss, 13.4, 34]] as const) {
+    for (const [c, rad, count] of [[start, CAMP_RADIUS + 1.2, 26], [boss, clearingRadius(this.zone) + 0.4, 34]] as const) {
       for (let i = 0; i < count; i++) {
         const a = r() * Math.PI * 2;
         clump('verge', c.x + Math.cos(a) * rad, c.z + Math.sin(a) * rad, 2, 0.8);
@@ -922,7 +979,7 @@ export class World {
         const f = t / dist;
         const x = ax + (bx - ax) * f;
         const z = az + (bz - az) * f;
-        if (Math.hypot(x - start.x, z - start.z) < CAMP_RADIUS + 3 || Math.hypot(x - boss.x, z - boss.z) < 14) continue;
+        if (Math.hypot(x - start.x, z - start.z) < CAMP_RADIUS + 3 || Math.hypot(x - boss.x, z - boss.z) < clearingRadius(this.zone) + 1) continue;
         const a = Math.atan2(bz - az, bx - ax) + rand(r, -0.12, 0.12);
         const along = [Math.cos(a), Math.sin(a)];
         const across = [-along[1], along[0]];
@@ -955,19 +1012,19 @@ export class World {
   }
 
   /** Flakes falling in a box that follows the player, so there is no need for many of them. */
-  private addSnow(r: Rng): void {
+  private addSnow(r: Rng, look: { color: string; size: number; opacity: number; speed: [number, number] } = { color: '#eef5fb', size: 3, opacity: 0.8, speed: [0.9, 1.9] }): void {
     const positions = new Float32Array(SNOW_FLAKES * 3);
     const speeds = new Float32Array(SNOW_FLAKES);
     for (let i = 0; i < SNOW_FLAKES; i++) {
       positions[i * 3] = rand(r, 0, SNOW_BOX);
       positions[i * 3 + 1] = rand(r, 0, SNOW_HEIGHT);
       positions[i * 3 + 2] = rand(r, 0, SNOW_BOX);
-      speeds[i] = rand(r, 0.9, 1.9);
+      speeds[i] = rand(r, look.speed[0], look.speed[1]);
     }
     const geo = this.ownGeo(new THREE.BufferGeometry());
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     const points = this.add(new THREE.Points(geo, this.own(new THREE.PointsMaterial({
-      color: '#eef5fb', size: 3, sizeAttenuation: false, transparent: true, opacity: 0.8, depthWrite: false,
+      color: look.color, size: look.size, sizeAttenuation: false, transparent: true, opacity: look.opacity, depthWrite: false,
     }))));
     points.frustumCulled = false;
     points.renderOrder = 6;
@@ -990,6 +1047,38 @@ export class World {
       );
     }
     pos.needsUpdate = true;
+  }
+
+  /** Thin glowing cracks across the rock. Only decoration: walking on them is safe, unlike the pools. */
+  private addEmberCracks(r: Rng): void {
+    const B = this.bound - 4;
+    const { start, boss } = this.zone;
+    const pos: number[] = [];
+    for (let made = 0, tries = 0; made < 26 && tries < 400; tries++) {
+      let x = rand(r, -B, B);
+      let z = rand(r, -B, B);
+      if (Math.hypot(x - start.x, z - start.z) < CAMP_RADIUS + 5 || Math.hypot(x - boss.x, z - boss.z) < clearingRadius(this.zone) + 1) continue;
+      if (this.terrain.onLava(x, z) || this.terrain.distToPath(x, z) < 3) continue;
+      made++;
+      let a = r() * Math.PI * 2;
+      for (let s = 0, n = 3 + ((r() * 4) | 0); s < n; s++) {
+        a += rand(r, -0.8, 0.8);
+        const len = rand(r, 0.8, 1.8);
+        const nx = x + Math.cos(a) * len;
+        const nz = z + Math.sin(a) * len;
+        const w = rand(r, 0.05, 0.11);
+        const px = -Math.sin(a) * w;
+        const pz = Math.cos(a) * w;
+        pos.push(x + px, 0.03, z + pz, x - px, 0.03, z - pz, nx + px, 0.03, nz + pz, nx + px, 0.03, nz + pz, x - px, 0.03, z - pz, nx - px, 0.03, nz - pz);
+        x = nx;
+        z = nz;
+      }
+    }
+    const geo = this.ownGeo(new THREE.BufferGeometry());
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    const mat = this.own(new THREE.MeshBasicMaterial({ color: '#ff8a3a', transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
+    this.add(new THREE.Mesh(geo, mat));
+    this.lavaGlows.push(mat);
   }
 
   /** Takes everything this zone added back out of the scene. */
@@ -1031,6 +1120,7 @@ export class World {
       f.mat.alphaTest = faded ? 0.05 : 0.5;
       f.mat.opacity = f.o;
     }
+    for (const g of this.lavaGlows) g.opacity = 0.55 + Math.sin(this.t * 1.7) * 0.2;
     for (const fl of this.flames) {
       const k = 1 + Math.sin(this.t * 13) * 0.08 + Math.sin(this.t * 7.3) * 0.06;
       fl.scale.set(3.2 * k, 3.2 * k, 1);
@@ -1127,11 +1217,12 @@ export class World {
 
     if (pal.pools) this.paintPools(ctx, r, P, k);
     if (this.zone.iceLakes) this.paintIce(ctx, r, P, k);
+    if (this.zone.lavaPools) this.paintLava(ctx, r, P, k);
 
     // Bare ground around the camp and the boss: a rough outer rim, then packed dirt with stones.
     const clearings: [number, number, number][] = [
       [this.zone.start.x, this.zone.start.z, 7],
-      [this.zone.boss.x, this.zone.boss.z, 12],
+      [this.zone.boss.x, this.zone.boss.z, clearingRadius(this.zone) - 1],
     ];
     const clearing = (scale: number) => (m: CanvasRenderingContext2D) => {
       m.beginPath();
@@ -1368,7 +1459,7 @@ export class World {
 
     ctx.fillStyle = ctx.strokeStyle = '#ff0000';
     circle(start.x, start.z, CAMP_RADIUS);
-    circle(boss.x, boss.z, 12);
+    circle(boss.x, boss.z, clearingRadius(this.zone) - 1);
     for (const b of this.poolBlobs) {
       const [px, py] = P(b.x, b.z);
       ctx.beginPath();
@@ -1394,6 +1485,33 @@ export class World {
     tex.minFilter = THREE.LinearFilter;
     tex.generateMipmaps = false;
     return tex;
+  }
+
+  /** Lava pools where the zone says they are: a dark burnt rim, then bright molten rock. */
+  private paintLava(ctx: CanvasRenderingContext2D, r: Rng, P: (x: number, z: number) => [number, number], k: number): void {
+    const pools = this.zone.lavaPools!;
+    this.poolBlobs = pools.map((l) => ({ ...l }));
+    const fill = (grow: number) => (m: CanvasRenderingContext2D) => {
+      m.beginPath();
+      for (const l of pools) {
+        const [px, py] = P(l.x, l.z);
+        m.moveTo(px + (l.rx + grow) * k, py);
+        m.ellipse(px, py, (l.rx + grow) * k, (l.rz + grow) * k, 0, 0, Math.PI * 2);
+      }
+      m.fill();
+    };
+    this.paintBand(ctx, ['#251a18', '#2e201c'], 2, fill(0.5));
+    this.paintBand(ctx, ['#d8501a', '#e05a1e', '#c84a18'], 2, fill(0), true);
+    this.paintBand(ctx, ['#ff8a2a', '#ff9a34', '#f57e24'], 2, fill(-1), true);
+    for (const l of pools) {
+      for (let i = 0; i < (l.rx + l.rz) * 3; i++) {
+        const a = r() * Math.PI * 2;
+        const d = Math.sqrt(r()) * 0.7;
+        const [x, y] = P(l.x + Math.cos(a) * l.rx * d, l.z + Math.sin(a) * l.rz * d);
+        ctx.fillStyle = '#ffd97a';
+        ctx.fillRect(x | 0, y | 0, 3, 2);
+      }
+    }
   }
 
   /** Frozen lakes where the zone says they are (they matter to the rules, unlike the marsh's pools). */
@@ -1441,7 +1559,7 @@ export class World {
       const z = rand(r, -B, B);
       const rad = rand(r, 1.4, 4.2);
       if (this.distToPath(x, z) < rad + 2.2) continue;
-      if (!away(x, z, zone.start, 12 + rad) || !away(x, z, zone.boss, 13 + rad)) continue;
+      if (!away(x, z, zone.start, 12 + rad) || !away(x, z, zone.boss, clearingRadius(zone) + rad)) continue;
       made++;
       allBlobs.push(Array.from({ length: 3 + ((r() * 3) | 0) }, () => ({
         x: x + rand(r, -rad * 0.6, rad * 0.6),
