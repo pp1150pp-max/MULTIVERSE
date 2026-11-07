@@ -22,7 +22,7 @@ import { Backups } from './backup';
 import { HISTORY_DAYS } from '../src/shared/admin';
 import { controlFilePath, CTRL_C_WINDOW_MS, DoublePress, isLocalControl, STOP_PATH, type ControlFile } from './control';
 import { createInterface } from 'node:readline';
-import { RESTART_EXIT_CODE, SHUTDOWN_SECONDS, type ShutdownMode } from '../src/shared/net/protocol';
+import { RESTART_EXIT_CODE, SHUTDOWN_SECONDS, shutdownWarning, type ShutdownMode } from '../src/shared/net/protocol';
 import { rmSync, writeFileSync } from 'node:fs';
 import { announceShared, runningTunnel, startTunnel } from './tunnel';
 
@@ -370,9 +370,11 @@ function beginStop(mode: ShutdownMode, by: string): string | null {
   console.log(`\n[server] ${by}: ${mode === 'restart' ? 'restarting' : 'shutting down'} in ${SHUTDOWN_S} s (players warned)`);
   console.log(STOP_HINT);
   let left = SHUTDOWN_S;
+  // The owner's wording from the admin page (or the default), read once when the countdown starts.
+  const template = db.shutdownTexts()[mode];
   const tick = () => {
     if (left <= 0) return finishStop(mode);
-    world.announceShutdown(mode, left);
+    world.announceShutdown(mode, left, shutdownWarning(mode, left, template));
     left--;
     stopTimer = setTimeout(tick, 1000);
   };

@@ -110,8 +110,11 @@ export class OnlineBackend implements Backend {
   onDisconnect: ((msg: string) => void) | null = null;
   /** An announcement from the server's owner. */
   onAnnounce: ((text: string, from: string, direct: boolean) => void) | null = null;
-  /** The server stops or restarts in `seconds` (sent once a second); null = cancelled. */
-  onShutdown: ((mode: ShutdownMode, seconds: number | null) => void) | null = null;
+  /**
+   * The server stops or restarts in `seconds` (sent once a second); null = cancelled. `text` is the
+   * line to show, with the time filled in by the server (the owner's wording); absent = the default.
+   */
+  onShutdown: ((mode: ShutdownMode, seconds: number | null, text?: string) => void) | null = null;
 
   private readonly playerMap = new Map<number, Player>();
   private readonly monsterMap = new Map<number, Monster>();
@@ -302,7 +305,7 @@ export class OnlineBackend implements Backend {
         this.kickMsg = m.msg;
         break;
       case 'shutdown':
-        this.onShutdown?.(m.mode, m.seconds);
+        this.onShutdown?.(m.mode, m.seconds, m.text);
         break;
       case 'announce':
         this.onAnnounce?.(m.text, m.from, m.direct);

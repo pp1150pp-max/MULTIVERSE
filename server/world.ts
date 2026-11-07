@@ -905,10 +905,10 @@ export class GameWorld {
     return this.closing;
   }
 
-  /** From now on joins are refused; tells everyone the server stops in `seconds`. */
-  announceShutdown(mode: ShutdownMode, seconds: number): void {
+  /** From now on joins are refused; tells everyone the server stops in `seconds`, with the line to show. */
+  announceShutdown(mode: ShutdownMode, seconds: number, text: string): void {
     this.closing = mode;
-    for (const s of this.sessions) this.send(s.ws, { t: 'shutdown', mode, seconds });
+    for (const s of this.sessions) this.send(s.ws, { t: 'shutdown', mode, seconds, text });
   }
 
   /** The countdown was cancelled: joins are allowed again and everyone is told. */

@@ -16,6 +16,12 @@ import {
 import { banMessage } from '../src/shared/api';
 import { HISTORY_PAGE, type AdminStats, type StatsPoint, type StatsRange } from '../src/shared/admin';
 import { BAG_SIZE } from '../src/shared/sim/Player';
+import type { AdminShutdownText } from '../src/shared/admin';
+import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../src/shared/net/protocol';
+import { SHUTDOWN_TEXT_KEY } from './db';
+
+const MODE_NAME: Record<ShutdownMode, string> = { restart: 'ข้อความรีสตาร์ท', shutdown: 'ข้อความปิด server' };
+const shutdownTextState = (db: Db): AdminShutdownText => ({ texts: db.shutdownTexts(), defaults: { ...DEFAULT_SHUTDOWN_TEXT } });
 
 const NO_RIGHTS = ADMIN_NO_RIGHTS;
 /** When each admin last sent an announcement (rate limit). */
@@ -228,6 +234,35 @@ export async function ownerToolsApi(
     const n = world.broadcast(text, from, to?.charId);
     log(db, a, 'broadcast', to ? `${to.name} (#${to.charId})` : 'ทุกคน', text);
     send(res, 200, { msg: to ? `ส่งข้อความถึง ${to.name} แล้ว` : `ส่งประกาศถึงผู้เล่น ${n} คนแล้ว` });
+    return true;
+  }
+
+  // ---------------------------------------------------------- countdown texts (every way of stopping uses them)
+  if (method === 'GET' && path === '/api/admin/shutdown-text') {
+    requireFeature(req, db, 'shutdownText');
+    send(res, 200, shutdownTextState(db));
+    return true;
+  }
+
+  if (method === 'POST' && path === '/api/admin/shutdown-text') {
+    const a = requireFeature(req, db, 'shutdownText');
+    const body = await readJson(req);
+    const modes = (['restart', 'shutdown'] as const).filter((m) => body[m] !== undefined);
+    if (!modes.length) throw new HttpError(400, 'ไม่มีข้อความให้บันทึก');
+    // Check both first so a bad one saves neither. null or the default text = back to the default.
+    const next = modes.map((mode) => {
+      if (body[mode] === null) return { mode, text: null };
+      const c = checkShutdownText(body[mode]);
+      if (c.error) throw new HttpError(400, `${MODE_NAME[mode]}: ${c.error}`);
+      return { mode, text: c.text === DEFAULT_SHUTDOWN_TEXT[mode] ? null : c.text };
+    });
+    const before = db.shutdownTexts();
+    for (const { mode, text } of next) {
+      db.setSetting(SHUTDOWN_TEXT_KEY[mode], text);
+      const now = text ?? DEFAULT_SHUTDOWN_TEXT[mode];
+      if (now !== before[mode]) log(db, a, 'shutdown-text', MODE_NAME[mode], text === null ? `คืนค่าเริ่มต้น: ${now}` : now);
+    }
+    send(res, 200, shutdownTextState(db));
     return true;
   }
 

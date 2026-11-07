@@ -6,9 +6,13 @@ import { dirname } from 'node:path';
 import type { CharacterData } from '../src/shared/sim/Player';
 import { GUEST_TTL_HOURS, type CharacterSummary } from '../src/shared/api';
 import type { ClassId } from '../src/shared/types';
+import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../src/shared/net/protocol';
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
 import { MARKET_HISTORY_DAYS, type MarketQuery } from '../src/shared/sim/market';
 import { isAdminRole, type AdminRole, type AuditRow, type ChatLogRow, type PlaySessionRow, type RoleRow } from '../src/shared/admin';
+
+/** Settings rows holding the countdown texts. */
+export const SHUTDOWN_TEXT_KEY: Record<ShutdownMode, string> = { restart: 'shutdown_text_restart', shutdown: 'shutdown_text_shutdown' };
 
 export interface AccountRow { id: number; username: string; pass_hash: string }
 
@@ -109,6 +113,12 @@ export class Db {
         avg_level REAL,
         avg_rtt REAL
       );
+      -- Server-wide settings the owner changes on the admin page (key → value). No row = the default.
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
       -- Consignment market (market broker), see server/market.ts: one row per listing, kept as history
       -- after it is collected. status: 'active' | 'sold' | 'expired' | 'cancelled'. A finished listing
       -- whose claimed_at is NULL waits in the seller's claim box (the gold if sold, else the item).
@@ -174,6 +184,29 @@ export class Db {
 
   close(): void {
     this.db.close();
+  }
+
+  // ------------------------------------------------------------ settings
+
+  getSetting(key: string): string | null {
+    const r = this.db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
+    return r ? r.value : null;
+  }
+
+  /** null deletes the row (back to the default). */
+  setSetting(key: string, value: string | null): void {
+    if (value === null) this.db.prepare('DELETE FROM settings WHERE key = ?').run(key);
+    else this.db.prepare('INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at').run(key, value, Date.now());
+  }
+
+  /** The countdown texts players see before a restart / shutdown (owner's wording, else the default). */
+  shutdownTexts(): Record<ShutdownMode, string> {
+    const get = (mode: ShutdownMode): string => {
+      const v = this.getSetting(SHUTDOWN_TEXT_KEY[mode]);
+      // Checked again so a hand-edited row can never break the countdown.
+      return v !== null && !checkShutdownText(v).error ? v : DEFAULT_SHUTDOWN_TEXT[mode];
+    };
+    return { restart: get('restart'), shutdown: get('shutdown') };
   }
 
   // ------------------------------------------------------------ accounts

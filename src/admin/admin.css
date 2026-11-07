@@ -190,3 +190,7 @@ details summary { cursor: pointer; margin-top: 8px; }
 .example-row select { flex: 0 1 190px; }
 .example-row input { flex: 0 0 90px; width: 90px; }
 .example-row .muted { flex: 1 1 160px; }
+
+/* Server tab: what the countdown banner will look like in the game. */
+.shutdown-preview { margin-top: 6px; padding: 6px 10px; border-radius: 4px; background: #0c0a08; border: 1px dashed var(--edge-dim); color: #ffd34a; font-size: 14px; overflow-wrap: anywhere; }
+.shutdown-preview.bad { color: var(--bad); border-color: var(--bad); }

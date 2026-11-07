@@ -6,11 +6,11 @@ import { ADMIN_AUDIT_PAGE, ADMIN_ITEM_ROWS_MAX, ADMIN_STAT_MULT, statStep, type 
 import { MAX_CHARACTERS } from '../shared/api';
 import { entryName } from '../shared/data/potions';
 import type {
-  AdminAccountDetail, AdminAccountsResponse, AdminFeature, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AuditRow, RoleRow,
+  AdminAccountDetail, AdminAccountsResponse, AdminFeature, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AdminShutdownText, AuditRow, RoleRow,
 } from '../shared/admin';
 import { CLASSES } from '../shared/data/classes';
 import { itemNames, makeItem, roundStat, rowRanges, tierOf } from '../shared/data/items';
-import { SHUTDOWN_SECONDS, type ShutdownMode } from '../shared/net/protocol';
+import { checkShutdownText, SHUTDOWN_SECONDS, SHUTDOWN_TEXT_MAX, SHUTDOWN_TIME_TOKEN, shutdownWarning, type ShutdownMode } from '../shared/net/protocol';
 import { isStack, RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, SLOTS, STAT_KEYS, STAT_LABEL, type BagEntry, type ClassId, type Item, type Rarity } from '../shared/types';
 
 const ADMIN_TOKEN = 'multiverse-admin-token';
@@ -211,7 +211,7 @@ function renderShell(): void {
   if (me.features.includes('sessions')) tabs.push(['sessions', 'การเข้าเล่น']);
   if (me.features.includes('chatLog')) tabs.push(['chat', 'แชท']);
   if (me.role === 'owner') tabs.push(['roles', 'สิทธิ์ GM'], ['audit', 'ประวัติ']);
-  if (me.role === 'owner' || me.features.includes('broadcast') || me.features.includes('backup')) tabs.push(['server', 'Server']);
+  if (me.role === 'owner' || me.features.includes('broadcast') || me.features.includes('backup') || me.features.includes('shutdownText')) tabs.push(['server', 'Server']);
   const bar = h('nav', { class: 'tabs' }, ...tabs.map(([id, label]) =>
     h('button', { class: id === tab ? 'on' : '', 'data-tab': id, onclick: () => setTab(id) }, label)));
   root.replaceChildren(
@@ -701,6 +701,7 @@ const ACTION_TH: Record<string, string> = {
   level: 'ตั้งเลเวล', gold: 'ทอง', items: 'เสกไอเทม', kick: 'เตะ', teleport: 'ย้ายโซน', grant: 'ให้สิทธิ์', revoke: 'ถอนสิทธิ์',
   server: 'Server', password: 'ตั้งรหัสผ่าน', ban: 'แบน', unban: 'ปลดแบน', broadcast: 'ประกาศ', backup: 'สำรองข้อมูล',
   'delete-account': 'ลบบัญชี', 'delete-character': 'ลบตัวละคร', 'chat-delete': 'ลบแชท',
+  'shutdown-text': 'ข้อความเตือนปิด server',
 };
 
 async function renderAudit(): Promise<void> {
@@ -743,6 +744,7 @@ async function renderAudit(): Promise<void> {
 async function renderServer(): Promise<void> {
   // Restart / shut down first: it is what the owner comes here for in a hurry (the backup list is long).
   const restart = me?.role === 'owner' ? renderRestart() : null;
+  if (can('shutdownText')) view.append(shutdownTextCard());
   if (can('broadcast')) view.append(broadcastCard());
   if (can('backup')) view.append(backupCard());
   await restart;
@@ -1132,6 +1134,69 @@ async function openAccount(id: number, note?: { text: string; ok: boolean; passw
 
 /** Backups listed before "แสดงเพิ่ม". */
 const BACKUP_LIST_SHORT = 5;
+
+/** The countdown banner wording for a restart and a shutdown (used by every way of stopping). */
+function shutdownTextCard(): HTMLElement {
+  const msg = h('div', { class: 'msg' });
+  const save = h('button', { class: 'primary' }, 'บันทึก');
+  let state: AdminShutdownText | null = null;
+  const rows = (['restart', 'shutdown'] as const).map((mode) => {
+    const box = h('textarea', { rows: 2, maxLength: SHUTDOWN_TEXT_MAX + 20 }) as HTMLTextAreaElement;
+    const count = h('span', { class: 'muted' });
+    const preview = h('div', { class: 'shutdown-preview' });
+    const reset = h('button', { class: 'small', title: 'ใส่ข้อความเริ่มต้นกลับในช่อง แล้วกดบันทึก' }, 'คืนค่าเริ่มต้น');
+    reset.onclick = () => {
+      if (!state) return;
+      box.value = state.defaults[mode];
+      update();
+    };
+    box.oninput = () => update();
+    const el = h('div', { style: 'margin-bottom:12px' },
+      h('div', { style: 'margin-bottom:4px' }, mode === 'restart' ? 'รีสตาร์ท' : 'ปิด server'),
+      box, h('div', { class: 'row', style: 'margin-top:4px;align-items:center' }, count, h('span', { style: 'flex:1' }), reset), preview);
+    return { mode, box, count, preview, el };
+  });
+  const update = () => {
+    let bad = false;
+    let changed = false;
+    for (const r of rows) {
+      const c = checkShutdownText(r.box.value);
+      r.count.textContent = `${c.text.length}/${SHUTDOWN_TEXT_MAX}`;
+      // textContent: the preview shows exactly what players get, never HTML.
+      r.preview.className = c.error ? 'shutdown-preview bad' : 'shutdown-preview';
+      r.preview.textContent = c.error ?? `ตัวอย่าง: ${shutdownWarning(r.mode, SHUTDOWN_SECONDS, c.text)}`;
+      bad ||= !!c.error;
+      changed ||= !!state && c.text !== state.texts[r.mode];
+    }
+    save.disabled = bad || !changed;
+  };
+  const load = (st: AdminShutdownText) => {
+    state = st;
+    for (const r of rows) r.box.value = st.texts[r.mode];
+    update();
+  };
+  save.onclick = async () => {
+    save.disabled = true;
+    try {
+      load(await api<AdminShutdownText>('POST', '/admin/shutdown-text', { restart: rows[0].box.value, shutdown: rows[1].box.value }));
+      msg.className = 'msg ok';
+      msg.textContent = 'บันทึกแล้ว — ใช้กับการนับถอยหลังครั้งต่อไป';
+    } catch (e) {
+      msg.className = 'msg bad';
+      msg.textContent = (e as Error).message;
+      update();
+    }
+  };
+  save.disabled = true;
+  void api<AdminShutdownText>('GET', '/admin/shutdown-text').then(load, (e: Error) => {
+    msg.className = 'msg bad';
+    msg.textContent = e.message;
+  });
+  return h('div', { class: 'card' }, h('h2', {}, 'ข้อความเตือนก่อนรีสตาร์ท / ปิด server'),
+    h('div', { class: 'muted', style: 'margin:-6px 0 10px' },
+      `ป้ายนับถอยหลังที่ผู้เล่นเห็น ใช้กับทุกวิธี (ปุ่มด้านบน, npm run stop-server, Ctrl+C) · ใส่ ${SHUTDOWN_TIME_TOKEN} ตรงที่ให้เกมแทนด้วยเวลาที่เหลือ เช่น "${SHUTDOWN_SECONDS} วินาที" (ต้องมี) · เกมใส่ ⚠ ข้างหน้าให้เอง`),
+    ...rows.map((r) => r.el), h('div', { class: 'row', style: 'align-items:center' }, h('span', { style: 'flex:1' }), save), msg);
+}
 
 function broadcastCard(): HTMLElement {
   const text = h('textarea', { rows: 3, maxLength: BROADCAST_MAX, placeholder: 'เช่น อีก 30 นาทีจะปิดปรับปรุง' }) as HTMLTextAreaElement;
