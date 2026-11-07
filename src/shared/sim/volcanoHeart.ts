@@ -29,7 +29,9 @@ export type Hazard = MeteorHazard | RingHazard | BeamsHazard | BlastHazard;
 export const METEOR = { radius: 2, count: 5, every: 0.6, mult: 1.4 };
 export const RING = { count: 3, speed: 5, width: 1.2, gaps: 3, gapArc: (50 * Math.PI) / 180, mult: 1 };
 export const BEAMS = { count: 4, width: 1.2, duration: 6, hitEvery: 1, mult: 1.2 };
-export const BLAST = { spots: 6, spotAt: 9, safeR: 2, mult: 3.5 };
+export const BLAST = { spots: 6, spotAt: 9, safeR: 2, mult: 35 };
+/** Every attack also takes this share of the player's max HP, whatever their defense. */
+export const HEART_HP_SHARE = 0.1;
 
 export interface HeartPhase {
   meteorWarn: number;
@@ -243,7 +245,7 @@ export class VolcanoHeartBrain {
     sim.fx('burst', h.x, 0.3, h.z, '#ff8a3a', 10, 4);
     sim.sfx('boss_slam', h.x, h.z);
     for (const p of sim.players) {
-      if (p.alive && Math.hypot(p.x - h.x, p.z - h.z) <= h.r + p.radius) sim.hitPlayer(m, p, METEOR.mult, {});
+      if (p.alive && Math.hypot(p.x - h.x, p.z - h.z) <= h.r + p.radius) sim.hitPlayer(m, p, METEOR.mult, { maxHpShare: HEART_HP_SHARE });
     }
     return false;
   }
@@ -257,7 +259,7 @@ export class VolcanoHeartBrain {
       if (Math.abs(Math.hypot(dx, dz) - rr) > h.width / 2 + p.radius) continue;
       if (inRingGap(h, Math.atan2(dz, dx))) continue;
       a.hitIds.add(p.id);
-      sim.hitPlayer(m, p, RING.mult, {});
+      sim.hitPlayer(m, p, RING.mult, { maxHpShare: HEART_HP_SHARE });
     }
     return rr < h.maxR;
   }
@@ -273,7 +275,7 @@ export class VolcanoHeartBrain {
         const across = Math.abs(-dx * Math.sin(ang) + dz * Math.cos(ang));
         if (along < 0 || along > h.len || across > h.width / 2 + p.radius) continue;
         a.nextHit.set(p.id, t + BEAMS.hitEvery);
-        sim.hitPlayer(m, p, BEAMS.mult, {});
+        sim.hitPlayer(m, p, BEAMS.mult, { maxHpShare: HEART_HP_SHARE });
         break;
       }
     }
@@ -289,7 +291,7 @@ export class VolcanoHeartBrain {
     for (const p of sim.players) {
       if (!p.alive || Math.hypot(p.x - h.x, p.z - h.z) > h.r) continue;
       if (h.safe.some((s) => Math.hypot(p.x - s.x, p.z - s.z) <= h.safeR)) continue;
-      sim.hitPlayer(m, p, BLAST.mult, {});
+      sim.hitPlayer(m, p, BLAST.mult, { maxHpShare: HEART_HP_SHARE });
     }
     return false;
   }

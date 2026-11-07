@@ -315,12 +315,12 @@ export class Monster extends Unit {
           } else if (this.isBoss && this.slamCd <= 0 && d < Math.max(5, this.slamRadius)) {
             this.windKind = 'slam';
             this.windupT = 1.1 * this.skillMult();
-            this.slamCd = frenzy ? 7 * frenzy.skill : this.enraged ? 5 : 7;
+            this.slamCd = (frenzy ? 7 * frenzy.skill : this.enraged ? 5 : 7) * (this.def.skillCd ?? 1);
             sim.fx('telegraph', this.x, this.z, this.slamRadius, this.windupT);
           } else if (thrown && this.thrownCd <= 0 && d > thrown.minRange && d <= thrown.range) {
             this.windKind = 'throw';
             this.windupT = 0.8 * this.skillMult();
-            this.thrownCd = thrown.cooldown;
+            this.thrownCd = thrown.cooldown * (this.def.skillCd ?? 1);
             this.warnShot(sim, p, thrown);
           } else if (d <= reach) {
             if (this.atkCd <= 0) {
@@ -471,7 +471,7 @@ export class Monster extends Unit {
     this.aggroT = target ? 12 : 0;
     this.state = target ? 'chase' : 'idle';
     this.rampT = 0;
-    this.slamCd = 7;
+    this.slamCd = 7 * (this.def.skillCd ?? 1);
     sim.fx('telegraph', this.x, this.z, this.slamRadius, FALL_TIME);
   }
 
