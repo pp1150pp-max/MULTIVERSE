@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
-import { RESTART_EXIT_CODE, shutdownCancelled, shutdownKick } from '../src/shared/net/protocol';
+import { countdownTime, DEFAULT_SHUTDOWN_TEXT, RESTART_EXIT_CODE, SHUTDOWN_TEXT_MAX, shutdownCancelled, shutdownKick, shutdownWarning } from '../src/shared/net/protocol';
 import { controlFilePath, CTRL_C_WINDOW_MS, DoublePress, STOP_PATH, TOKEN_HEADER } from '../server/control';
 import { finish, ok } from './check';
 
@@ -112,6 +112,32 @@ async function run(): Promise<void> {
   const st = await A.api('GET', '/admin/server', undefined, tok.owner1);
   ok(st.status === 200 && st.data.supervised === true && st.data.stopping === null, 'owner sees the server panel');
 
+  // ---------------------------------------------------------- countdown texts (admin page, owner only)
+  ok(countdownTime(10) === '10 วินาที' && countdownTime(90) === '1 นาที 30 วินาที' && countdownTime(120) === '2 นาที', 'time shown as seconds / minutes');
+  ok((await A.api('GET', '/admin/shutdown-text', undefined, tok.gm1)).status === 403, 'GM cannot see the countdown texts');
+  ok((await A.api('POST', '/admin/shutdown-text', { restart: 'x {เวลา}' }, tok.gm1)).status === 403, 'GM cannot change the countdown texts');
+  ok((await A.api('POST', '/admin/shutdown-text', { restart: 'x {เวลา}' }, tok.plain1)).status === 403, 'player cannot change the countdown texts');
+  const st0 = await A.api('GET', '/admin/shutdown-text', undefined, tok.owner1);
+  ok(st0.status === 200 && st0.data.texts.restart === DEFAULT_SHUTDOWN_TEXT.restart && st0.data.texts.restart === 'มีการอัปเดตเซิร์ฟเวอร์ กำลังจะรีสตาร์ทใน {เวลา}'
+    && st0.data.texts.shutdown === DEFAULT_SHUTDOWN_TEXT.shutdown, 'defaults until the owner sets a text');
+  const noToken = await A.api('POST', '/admin/shutdown-text', { restart: 'อัปเดตเร็ว ๆ นี้', shutdown: 'ปิดใน {เวลา}' }, tok.owner1);
+  ok(noToken.status === 400 && String(noToken.data.error).includes('{เวลา}'), `text without {เวลา} refused (${noToken.data.error})`);
+  ok((await A.api('POST', '/admin/shutdown-text', { restart: `${'ก'.repeat(SHUTDOWN_TEXT_MAX)} {เวลา}` }, tok.owner1)).status === 400, 'too long refused');
+  ok((await A.api('POST', '/admin/shutdown-text', { restart: '   ' }, tok.owner1)).status === 400, 'empty refused');
+  ok((await A.api('POST', '/admin/shutdown-text', { restart: 5 }, tok.owner1)).status === 400, 'non-text refused');
+  ok((await A.api('GET', '/admin/shutdown-text', undefined, tok.owner1)).data.texts.shutdown === DEFAULT_SHUTDOWN_TEXT.shutdown, 'a refused save changes neither text');
+  const RESTART_TEXT = '<b>อัปเดตใหญ่</b>\n รีสตาร์ทใน {เวลา} นะ';
+  const SHUTDOWN_TEXT = 'ปิดซ่อม {เวลา}';
+  const set = await A.api('POST', '/admin/shutdown-text', { restart: RESTART_TEXT, shutdown: SHUTDOWN_TEXT }, tok.owner1);
+  ok(set.status === 200 && set.data.texts.restart === '<b>อัปเดตใหญ่</b> รีสตาร์ทใน {เวลา} นะ' && set.data.texts.shutdown === SHUTDOWN_TEXT,
+    `owner saves both texts, line breaks become spaces (${JSON.stringify(set.data.texts)})`);
+  {
+    const dbt = new DatabaseSync(DB_FILE, { readOnly: true });
+    const n = (dbt.prepare("SELECT COUNT(*) AS n FROM admin_audit WHERE action = 'shutdown-text' AND admin_name = 'owner1'").get() as { n: number }).n;
+    dbt.close();
+    ok(n === 2, `each changed text written to the audit log (${n})`);
+  }
+
   const p1 = A.joinWorld(tok.plain1, chars.plain1);
   const p2 = A.joinWorld(tok.plain2, chars.plain2);
   await Promise.all([p1.ready, p2.ready]);
@@ -137,6 +163,9 @@ async function run(): Promise<void> {
   for (const [name, p] of [['plain1', p1], ['plain2', p2]] as const) {
     const counts = p.msgs.filter((m) => m.t === 'shutdown').map((m) => `${m.mode}:${m.seconds}`);
     ok(counts.join(',') === ['restart:3', 'restart:2', 'restart:1'].join(','), `${name} got the countdown every second (${counts.join(',')})`);
+    const texts = p.msgs.filter((m) => m.t === 'shutdown').map((m) => m.text);
+    ok(texts[0] === '⚠ <b>อัปเดตใหญ่</b> รีสตาร์ทใน 3 วินาที นะ' && texts[2] === '⚠ <b>อัปเดตใหญ่</b> รีสตาร์ทใน 1 วินาที นะ',
+      `${name} sees the owner's restart text with the time filled in (${texts[0]})`);
     const kick = p.msgs.find((m) => m.t === 'kick');
     ok(kick?.msg === shutdownKick('restart') && p.isClosed(), `${name} disconnected with "${kick?.msg}"`);
   }
@@ -173,6 +202,9 @@ async function run(): Promise<void> {
   ok(q.msgs.filter((m) => m.t === 'shutdown' && m.mode === 'shutdown').length === COUNTDOWN,
     `players got the shutdown countdown (${q.msgs.map((m) => m.t).filter((t) => t !== 'snap').join(',')})`);
   ok(q.msgs.find((m) => m.t === 'kick')?.msg === shutdownKick('shutdown'), `disconnect says "${shutdownKick('shutdown')}"`);
+  // Saved on server A, still used after it restarted, and by npm run stop-server too.
+  const qText = q.msgs.find((m) => m.t === 'shutdown')?.text;
+  ok(qText === `⚠ ปิดซ่อม ${countdownTime(3)}`, `stop-server countdown uses the saved shutdown text (${qText})`);
   ok(JSON.stringify(saved(chars.plain1).lootFilter?.rarities) === '["epic","legendary"]', 'player saved by the script shutdown');
   const again = spawnSync(process.execPath, ['--import', 'tsx', 'server/stop-main.ts'], {
     cwd: ROOT, env: { ...process.env, PORT: String(B.port), DB_FILE }, encoding: 'utf8',
@@ -201,6 +233,14 @@ async function run(): Promise<void> {
     console.log('(skip) real single-SIGINT check: Windows cannot send SIGINT to another process');
   }
   ok((await C.api('POST', '/admin/server', { mode: 'cancel' }, ownerC)).status === 409, 'cancel with no countdown → 409');
+  // Back to the default (null, or the default text itself); the next countdown uses it.
+  const back = await C.api('POST', '/admin/shutdown-text', { restart: null, shutdown: DEFAULT_SHUTDOWN_TEXT.shutdown }, ownerC);
+  ok(back.status === 200 && back.data.texts.restart === DEFAULT_SHUTDOWN_TEXT.restart && back.data.texts.shutdown === DEFAULT_SHUTDOWN_TEXT.shutdown, 'reset to the defaults');
+  {
+    const dbt = new DatabaseSync(DB_FILE, { readOnly: true });
+    ok(!dbt.prepare("SELECT 1 FROM settings WHERE key LIKE 'shutdown_text_%'").get(), 'defaults are not stored (no settings rows)');
+    dbt.close();
+  }
   ok((await C.api('POST', '/admin/server', { mode: 'restart' }, ownerC)).status === 200, 'owner starts a restart');
   await sleep(500);
   ok((await C.api('POST', '/admin/server', { mode: 'cancel' }, gmC)).status === 403, 'GM cannot cancel');
@@ -209,6 +249,8 @@ async function run(): Promise<void> {
   ok(blocked.msgs.some((m) => m.t === 'kick'), 'join refused before the cancel');
   const cancel = await C.api('POST', '/admin/server', { mode: 'cancel' }, ownerC);
   ok(cancel.status === 200 && cancel.data.stopping === null, 'owner cancels from the admin page');
+  const wText = w.msgs.find((m) => m.t === 'shutdown')?.text;
+  ok(wText === shutdownWarning('restart', 3) && wText === '⚠ มีการอัปเดตเซิร์ฟเวอร์ กำลังจะรีสตาร์ทใน 3 วินาที', `default restart text after the reset (${wText})`);
   await sleep(300);
   ok(w.msgs.some((m) => m.t === 'shutdownCancel' && m.mode === 'restart'), `player told "${shutdownCancelled('restart')}"`);
   const after = C.joinWorld(tok.plain2, chars.plain2);

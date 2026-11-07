@@ -161,7 +161,7 @@ export type ServerMsg =
   /** The connection is about to close; `msg` explains why. */
   | { t: 'kick'; msg: string }
   /** The server stops (or restarts) in `seconds`; sent once a second during the countdown. */
-  | { t: 'shutdown'; mode: ShutdownMode; seconds: number }
+  | { t: 'shutdown'; mode: ShutdownMode; seconds: number; text?: string }
   /** An announcement from the server's owner (admin page): shown as a banner and a chat line. */
   | { t: 'announce'; text: string; from: string; direct: boolean }
   /** The countdown was cancelled: the server stays up. */
@@ -174,8 +174,41 @@ export const SHUTDOWN_SECONDS = 10;
 /** Exit code that asks npm run online (server/online-main.ts) to start the server again. */
 export const RESTART_EXIT_CODE = 75;
 
-export function shutdownWarning(mode: ShutdownMode, seconds: number): string {
-  return `⚠ Server จะ${mode === 'restart' ? 'รีสตาร์ท' : 'ปิด'}ใน ${seconds} วินาที`;
+/** Stands for the time left in the countdown text the owner sets on the admin page. */
+export const SHUTDOWN_TIME_TOKEN = '{เวลา}';
+/** Longest countdown text the owner may set (characters, before the time is filled in). */
+export const SHUTDOWN_TEXT_MAX = 100;
+/** Countdown texts until the owner sets their own (admin page, Server tab). */
+export const DEFAULT_SHUTDOWN_TEXT: Record<ShutdownMode, string> = {
+  restart: `มีการอัปเดตเซิร์ฟเวอร์ กำลังจะรีสตาร์ทใน ${SHUTDOWN_TIME_TOKEN}`,
+  shutdown: `เซิร์ฟเวอร์กำลังจะปิดใน ${SHUTDOWN_TIME_TOKEN}`,
+};
+
+/** "10 วินาที", "1 นาที 30 วินาที", "2 นาที". */
+export function countdownTime(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  if (!m) return `${r} วินาที`;
+  return r ? `${m} นาที ${r} วินาที` : `${m} นาที`;
+}
+
+/**
+ * Checks a countdown text the owner typed: control characters and line breaks become spaces, it is
+ * trimmed, and it must hold SHUTDOWN_TIME_TOKEN and be at most SHUTDOWN_TEXT_MAX long. The same check
+ * runs on the admin page (preview) and on the server (which decides). Shown with textContent only.
+ */
+export function checkShutdownText(raw: unknown): { text: string; error: null } | { text: string; error: string } {
+  const text = (typeof raw === 'string' ? raw : '').replace(/[\p{Cc}\p{Cf}]/gu, ' ').replace(/ {2,}/g, ' ').trim();
+  if (!text) return { text, error: 'พิมพ์ข้อความก่อน' };
+  if (text.length > SHUTDOWN_TEXT_MAX) return { text, error: `ข้อความยาวได้ไม่เกิน ${SHUTDOWN_TEXT_MAX} ตัว` };
+  if (!text.includes(SHUTDOWN_TIME_TOKEN)) return { text, error: `ต้องมี ${SHUTDOWN_TIME_TOKEN} ในข้อความ (เกมจะแทนด้วยเวลาที่เหลือ)` };
+  return { text, error: null };
+}
+
+/** The countdown line players see: ⚠ + the text (`template`, else the default) with the time filled in. */
+export function shutdownWarning(mode: ShutdownMode, seconds: number, template?: string): string {
+  return `⚠ ${(template ?? DEFAULT_SHUTDOWN_TEXT[mode]).split(SHUTDOWN_TIME_TOKEN).join(countdownTime(seconds))}`;
 }
 export function shutdownCancelled(mode: ShutdownMode): string {
   return mode === 'restart' ? 'ยกเลิกการรีสตาร์ท' : 'ยกเลิกการปิด server';

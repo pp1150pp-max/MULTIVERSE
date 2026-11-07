@@ -1478,7 +1478,7 @@ export class Hud {
    * The server is about to stop or restart: a banner that stays up and ticks down (until the
    * connection closes), and the same count as yellow lines in the chat.
    */
-  shutdownCountdown(mode: ShutdownMode, seconds: number | null): void {
+  shutdownCountdown(mode: ShutdownMode, seconds: number | null, serverText?: string): void {
     if (seconds === null) {
       document.getElementById('shutdown-banner')?.remove();
       const text = shutdownCancelled(mode);
@@ -1486,7 +1486,8 @@ export class Hud {
       this.log(text, SHUTDOWN_COLOR);
       return;
     }
-    const text = shutdownWarning(mode, seconds);
+    // The server's line (the owner's wording, set on the admin page); textContent only, never HTML.
+    const text = typeof serverText === 'string' && serverText ? serverText : shutdownWarning(mode, seconds);
     let el = document.getElementById('shutdown-banner');
     if (!el) {
       el = document.createElement('div');

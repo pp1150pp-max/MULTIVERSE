@@ -93,10 +93,16 @@ export interface AdminEditResult { msg: string; char: AdminCharRow | null }
 /** Owner's server panel: whether a restart comes back by itself, and a countdown already running. */
 export interface AdminServerState { supervised: boolean; stopping: ShutdownMode | null }
 
+/**
+ * The countdown texts (Server tab): what is in use now and the defaults. Saving sends
+ * `{ restart?, shutdown? }`, each a text holding SHUTDOWN_TIME_TOKEN, or null = back to the default.
+ */
+export interface AdminShutdownText { texts: Record<ShutdownMode, string>; defaults: Record<ShutdownMode, string> }
+
 // ------------------------------------------------------------ owner tools (users, bans, broadcast, backups…)
 
 /** The newer admin tools. Each is its own switch so some can be opened to GMs later. */
-export type AdminFeature = 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete';
+export type AdminFeature = 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText';
 
 /**
  * Who may use each tool. To open one to GMs, add 'gm', e.g. `ban: ['owner', 'gm']`. The server
@@ -115,6 +121,8 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   stats: ['owner'],
   chatLog: ['owner'],
   chatDelete: ['owner'],
+  // The countdown banner text before a restart / shutdown (Server tab).
+  shutdownText: ['owner'],
 };
 
 export const canUse = (role: AdminRole, f: AdminFeature): boolean => FEATURE_ROLES[f].includes(role);
