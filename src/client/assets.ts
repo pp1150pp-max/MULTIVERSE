@@ -50,9 +50,7 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   seeker: sheet('npc/seeker.png', () => makeSheet(32, drawSeeker())),
   merchant: sheet('npc/merchant.png', () => makeSheet(32, drawMerchant())),
   blacksmith: sheet('npc/blacksmith.png', () => makeSheet(32, drawBlacksmith())),
-  // No painted sheet yet: until npc/keeper.png exists the placeholder drawing is used.
   keeper: sheet('npc/keeper.png', () => makeSheet(32, drawKeeper())),
-  // Placeholder drawing until npc/broker.png is painted.
   broker: sheet('npc/broker.png', () => makeSheet(32, drawBroker())),
 
   green_slime: monster('monsters/green_slime.png', () => makeSheet(32, drawSlime(['#6cc25a', '#4a9a3e', '#c8f0b0']))),

@@ -10,8 +10,7 @@ export const NPC_INFO: Record<NpcId, { name: string; action: string; icon: strin
   merchant: { name: 'พ่อค้า', action: 'ซื้อ/ขายของ', icon: 'npc_shop', role: 'ร้านค้า' },
   blacksmith: { name: 'ช่างตีเหล็ก', action: 'ตีบวกอุปกรณ์', icon: 'npc_forge', role: 'ตีบวก' },
   keeper: { name: 'ผู้ดูแลคลัง', action: 'เปิดคลังเก็บของ', icon: 'npc_stash', role: 'คลังเก็บของ' },
-  // Badge icon borrows the merchant's until icons/npc_market.png is painted.
-  broker: { name: 'นายหน้าตลาด', action: 'เปิดตลาดฝากขาย', icon: 'npc_shop', role: 'ตลาดฝากขาย' },
+  broker: { name: 'นายหน้าตลาด', action: 'เปิดตลาดฝากขาย', icon: 'npc_market', role: 'ตลาดฝากขาย' },
 };
 
 /** How close the player must stand to talk to an NPC. */
