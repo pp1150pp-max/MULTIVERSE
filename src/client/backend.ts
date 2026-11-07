@@ -10,6 +10,7 @@ import type { Hazard } from '../shared/sim/volcanoHeart';
 import type { NpcId } from '../shared/data/npcs';
 import type { EnhanceResult } from '../shared/data/enhance';
 import type { EquipSlot, Item, PotionKind, PotionSize, Rarity } from '../shared/types';
+import type { MarketCall, MarketReply } from '../shared/sim/market';
 
 /** What a projectile view needs; the local simulation's Projectile fits this too. */
 export interface ProjectileLike {
@@ -80,4 +81,9 @@ export interface Backend {
   stashBuyRow(): void;
   /** amount > 0 deposits gold, < 0 withdraws it. */
   stashGold(amount: number): void;
+
+  /** Market broker: one request and the server's answer (ok false with no msg = too fast, try again). */
+  market(call: MarketCall): Promise<MarketReply>;
+  /** Listings waiting in this account's claim box at the market broker. */
+  readonly marketBox: number;
 }

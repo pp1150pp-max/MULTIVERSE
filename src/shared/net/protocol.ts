@@ -8,6 +8,7 @@ import type { AutoSettings, BuybackEntry, LootFilter, PotionSelect, SortKey } fr
 import type { EnhanceResult } from '../data/enhance';
 import type { StashData } from '../sim/stash';
 import type { Hazard } from '../sim/volcanoHeart';
+import type { MarketCall, MarketReply } from '../sim/market';
 
 export const WS_PATH = '/ws';
 /** Server simulation rate and how often it sends snapshots. */
@@ -69,7 +70,9 @@ export type ActionMsg =
   | { t: 'act'; a: 'stashSort'; key: SortKey; desc: boolean }
   | { t: 'act'; a: 'stashBuy' }
   /** amount > 0 deposits gold, < 0 withdraws it. */
-  | { t: 'act'; a: 'stashGold'; amount: number };
+  | { t: 'act'; a: 'stashGold'; amount: number }
+  /** Market broker (consignment market). The server answers each with a `market` message of the same `req`. */
+  | ({ t: 'act'; req: number } & MarketCall);
 
 export type ClientMsg =
   | { t: 'join'; token: string; characterId: number }
@@ -156,6 +159,12 @@ export type ServerMsg =
   | SnapshotMsg
   | { t: 'chat'; name: string; text: string }
   | { t: 'enhanced'; req: number; result: EnhanceResult | null; item: Item | null }
+  /** The answer to a market action with this `req`. */
+  | ({ t: 'market'; req: number } & MarketReply)
+  /** Something of yours sold or expired at the market (a banner and a chat line). */
+  | { t: 'marketNote'; text: string; sub?: string }
+  /** How many listings wait in your claim box at the market broker (sent on joining and when it changes). */
+  | { t: 'marketBox'; n: number }
   | { t: 'error'; msg: string }
   | { t: 'pong'; id: number }
   /** The connection is about to close; `msg` explains why. */

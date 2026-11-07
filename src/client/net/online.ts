@@ -16,6 +16,7 @@ import type { SkillSlot } from '../../shared/data/classes';
 import { INPUT_HZ, PING_MS, WS_PATH, type ClientMsg, type ServerMsg, type ShutdownMode, type SnapshotMsg } from '../../shared/net/protocol';
 import type { Backend, EnhanceOutcome, ProjectileLike } from '../backend';
 import type { Hazard } from '../../shared/sim/volcanoHeart';
+import type { MarketCall, MarketReply } from '../../shared/sim/market';
 
 /** Mirrors never run game logic, so they don't need a simulation behind them. */
 const NO_SIM = null as unknown as Sim;
@@ -140,6 +141,11 @@ export class OnlineBackend implements Backend {
   private autoSetPending = false;
   private pendingPotion: 'hp' | 'mp' | null = null;
   private enhanceReq = 0;
+  private marketReq = 0;
+  private readonly marketWait = new Map<number, (r: MarketReply) => void>();
+  marketBox = 0;
+  /** Something of yours sold or expired at the market. */
+  onMarketNote: ((text: string, sub?: string) => void) | null = null;
   private readonly enhanceWait = new Map<number, (o: EnhanceOutcome) => void>();
   private kickMsg = '';
   /** Last measured round trip (ms), shown on the HUD. */
@@ -279,6 +285,19 @@ export class OnlineBackend implements Backend {
         done?.(m.result && m.item ? { result: m.result, item: m.item } : null);
         break;
       }
+      case 'market': {
+        const done = this.marketWait.get(m.req);
+        this.marketWait.delete(m.req);
+        const { t: _t, req: _r, ...reply } = m;
+        done?.(reply);
+        break;
+      }
+      case 'marketNote':
+        this.onMarketNote?.(m.text, m.sub);
+        break;
+      case 'marketBox':
+        this.marketBox = m.n;
+        break;
       case 'kick':
         this.kickMsg = m.msg;
         break;
@@ -689,6 +708,17 @@ export class OnlineBackend implements Backend {
       setTimeout(() => {
         if (this.enhanceWait.delete(req)) resolve(null);
       }, 5000);
+    });
+  }
+
+  market(call: MarketCall): Promise<MarketReply> {
+    const req = ++this.marketReq;
+    this.send({ t: 'act', req, ...call });
+    return new Promise((resolve) => {
+      this.marketWait.set(req, resolve);
+      setTimeout(() => {
+        if (this.marketWait.delete(req)) resolve({ ok: false, msg: 'ตลาดไม่ตอบ ลองใหม่อีกครั้ง' });
+      }, 8000);
     });
   }
 

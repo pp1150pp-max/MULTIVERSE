@@ -7,9 +7,28 @@ import type { CharacterData } from '../src/shared/sim/Player';
 import { GUEST_TTL_HOURS, type CharacterSummary } from '../src/shared/api';
 import type { ClassId } from '../src/shared/types';
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
+import { MARKET_HISTORY_DAYS, type MarketQuery } from '../src/shared/sim/market';
 import { isAdminRole, type AdminRole, type AuditRow, type ChatLogRow, type PlaySessionRow, type RoleRow } from '../src/shared/admin';
 
 export interface AccountRow { id: number; username: string; pass_hash: string }
+
+/** A market_listings row as stored. */
+export interface MarketDbRow {
+  id: number; seller_account: number; seller_char: number; seller_name: string; entry: string; uid: string | null;
+  name: string; kind: string; rarity: string | null; level: number; plus: number; cls: string | null; count: number;
+  price: number; fee: number; created_at: number; expires_at: number; status: 'active' | 'sold' | 'expired' | 'cancelled';
+  buyer_account: number | null; buyer_name: string | null; sold_at: number | null; tax: number | null;
+  claimed_at: number | null; notified_at: number | null;
+}
+
+/** A new listing for Db.marketInsert. */
+export interface MarketInsert {
+  sellerAccount: number; sellerChar: number; sellerName: string;
+  /** The bag entry as JSON. */
+  entry: string; uid: string | null; name: string; kind: string; rarity: string | null; level: number; plus: number;
+  cls: string | null; count: number; price: number; fee: number; createdAt: number; expiresAt: number;
+  stats: Partial<Record<string, number>>;
+}
 /** The account behind a login token. Guests are temporary accounts that can't log in with a password. */
 export interface SessionAccount { id: number; username: string; guest: boolean }
 
@@ -90,6 +109,48 @@ export class Db {
         avg_level REAL,
         avg_rtt REAL
       );
+      -- Consignment market (market broker), see server/market.ts: one row per listing, kept as history
+      -- after it is collected. status: 'active' | 'sold' | 'expired' | 'cancelled'. A finished listing
+      -- whose claimed_at is NULL waits in the seller's claim box (the gold if sold, else the item).
+      CREATE TABLE IF NOT EXISTS market_listings (
+        id INTEGER PRIMARY KEY,
+        seller_account INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        seller_char INTEGER NOT NULL,
+        seller_name TEXT NOT NULL,
+        entry TEXT NOT NULL,
+        uid TEXT,
+        name TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        rarity TEXT,
+        level INTEGER NOT NULL DEFAULT 0,
+        plus INTEGER NOT NULL DEFAULT 0,
+        cls TEXT,
+        count INTEGER NOT NULL DEFAULT 1,
+        price INTEGER NOT NULL,
+        fee INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        buyer_account INTEGER,
+        buyer_name TEXT,
+        sold_at INTEGER,
+        tax INTEGER,
+        claimed_at INTEGER,
+        notified_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS market_active ON market_listings(status, kind, price);
+      CREATE INDEX IF NOT EXISTS market_expiry ON market_listings(status, expires_at);
+      CREATE INDEX IF NOT EXISTS market_seller ON market_listings(seller_account, status);
+      -- The same item can't be up twice.
+      CREATE UNIQUE INDEX IF NOT EXISTS market_uid_active ON market_listings(uid) WHERE status = 'active';
+      -- Each listed item's stat totals (enhancement included), for searching by stat.
+      CREATE TABLE IF NOT EXISTS market_listing_stats (
+        listing_id INTEGER NOT NULL REFERENCES market_listings(id) ON DELETE CASCADE,
+        stat TEXT NOT NULL,
+        value REAL NOT NULL,
+        PRIMARY KEY (listing_id, stat)
+      );
+      CREATE INDEX IF NOT EXISTS market_stat_value ON market_listing_stats(stat, value);
       CREATE TABLE IF NOT EXISTS admin_audit (
         id INTEGER PRIMARY KEY,
         at INTEGER NOT NULL,
@@ -269,13 +330,24 @@ export class Db {
    * the two can never end up in both (or neither) after a crash.
    */
   saveCharacterAndStash(charId: number, data: CharacterData, accountId: number, stash: StashData): void {
+    this.transaction(() => this.writeCharacterAndStash(charId, data, accountId, stash));
+  }
+
+  /** The two writes of saveCharacterAndStash, for a transaction that does more (the market). */
+  writeCharacterAndStash(charId: number, data: CharacterData, accountId: number, stash: StashData): void {
+    this.saveCharacter(charId, data);
+    this.db.prepare(`INSERT INTO stashes (account_id, data, updated_at) VALUES (?, ?, ?)
+      ON CONFLICT(account_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`)
+      .run(accountId, JSON.stringify(stash), Date.now());
+  }
+
+  /** Runs `fn` in one transaction: everything it wrote is kept, or (if it throws) none of it. */
+  transaction<T>(fn: () => T): T {
     this.db.exec('BEGIN');
     try {
-      this.saveCharacter(charId, data);
-      this.db.prepare(`INSERT INTO stashes (account_id, data, updated_at) VALUES (?, ?, ?)
-        ON CONFLICT(account_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`)
-        .run(accountId, JSON.stringify(stash), Date.now());
+      const out = fn();
       this.db.exec('COMMIT');
+      return out;
     } catch (e) {
       this.db.exec('ROLLBACK');
       throw e;
@@ -410,6 +482,132 @@ export class Db {
     return this.db.prepare('DELETE FROM characters WHERE id = ?').run(id).changes > 0;
   }
 
+  // ------------------------------------------------------------ consignment market (see server/market.ts)
+
+  /** Adds a listing (and its searchable stats); returns its id. Call inside the transaction that also saves the seller. */
+  marketInsert(l: MarketInsert): number {
+    const id = Number(this.db.prepare(`INSERT INTO market_listings (seller_account, seller_char, seller_name, entry, uid, name, kind,
+      rarity, level, plus, cls, count, price, fee, created_at, expires_at, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`).run(
+      l.sellerAccount, l.sellerChar, l.sellerName, l.entry, l.uid, l.name, l.kind,
+      l.rarity, l.level, l.plus, l.cls, l.count, l.price, l.fee, l.createdAt, l.expiresAt,
+    ).lastInsertRowid);
+    const put = this.db.prepare('INSERT INTO market_listing_stats (listing_id, stat, value) VALUES (?, ?, ?)');
+    for (const [stat, value] of Object.entries(l.stats)) if (value) put.run(id, stat, value);
+    return id;
+  }
+
+  /** Listings this account has up right now (they count against its slots until sold, cancelled or expired). */
+  marketActiveCount(accountId: number): number {
+    const r = this.db.prepare("SELECT COUNT(*) AS n FROM market_listings WHERE seller_account = ? AND status = 'active'").get(accountId) as { n: number };
+    return Number(r.n);
+  }
+
+  /** Whether this item (uid) is up for sale already. */
+  marketUidListed(uid: string): boolean {
+    return !!this.db.prepare("SELECT 1 FROM market_listings WHERE uid = ? AND status = 'active'").get(uid);
+  }
+
+  marketGet(id: number): MarketDbRow | undefined {
+    return this.db.prepare('SELECT * FROM market_listings WHERE id = ?').get(id) as MarketDbRow | undefined;
+  }
+
+  /** One page of listings for sale that match the search (cleaned by cleanQuery first). */
+  marketSearch(q: MarketQuery, now: number, pageSize: number): { rows: MarketDbRow[]; total: number } {
+    const where = ["l.status = 'active'", 'l.expires_at > ?'];
+    const args: (string | number)[] = [now];
+    if (q.kind) where.push('l.kind = ?'), args.push(q.kind);
+    if (q.cls) where.push('(l.cls IS NULL OR l.cls = ?)'), args.push(q.cls);
+    if (q.rarities?.length) where.push(`l.rarity IN (${q.rarities.map(() => '?').join(', ')})`), args.push(...q.rarities);
+    if (q.name) where.push("l.name LIKE ? ESCAPE '\\'"), args.push(`%${q.name.replace(/[\\%_]/g, (c) => '\\' + c)}%`);
+    // Stones have no level: the level range only narrows gear.
+    if (q.lvMin) where.push("(l.kind = 'stone' OR l.level >= ?)"), args.push(q.lvMin);
+    if (q.lvMax) where.push("(l.kind = 'stone' OR l.level <= ?)"), args.push(q.lvMax);
+    if (q.plusMin) where.push('l.plus >= ?'), args.push(q.plusMin);
+    if (q.priceMax) where.push('l.price <= ?'), args.push(q.priceMax);
+    for (const f of q.stats ?? []) {
+      where.push('EXISTS (SELECT 1 FROM market_listing_stats s WHERE s.listing_id = l.id AND s.stat = ? AND s.value >= ?)');
+      args.push(f.stat, f.min);
+    }
+    const sql = where.join(' AND ');
+    const total = Number((this.db.prepare(`SELECT COUNT(*) AS n FROM market_listings l WHERE ${sql}`).get(...args) as { n: number }).n);
+    const orderArgs: string[] = [];
+    let order: string;
+    switch (q.sort) {
+      case 'priceDesc': order = 'l.price DESC, l.id DESC'; break;
+      case 'newest': order = 'l.created_at DESC, l.id DESC'; break;
+      case 'level': order = 'l.level DESC, l.price ASC, l.id ASC'; break;
+      case 'ending': order = 'l.expires_at ASC, l.id ASC'; break;
+      case 'stat':
+        order = '(SELECT s.value FROM market_listing_stats s WHERE s.listing_id = l.id AND s.stat = ?) DESC, l.price ASC, l.id ASC';
+        orderArgs.push(q.stats![0].stat);
+        break;
+      default: order = 'l.price ASC, l.id ASC';
+    }
+    const rows = this.db.prepare(`SELECT l.* FROM market_listings l WHERE ${sql} ORDER BY ${order} LIMIT ? OFFSET ?`)
+      .all(...args, ...orderArgs, pageSize, (q.page ?? 0) * pageSize) as unknown as MarketDbRow[];
+    return { rows, total };
+  }
+
+  /**
+   * Marks a listing sold, only if it is still for sale (not sold to someone a moment ago, cancelled or
+   * expired). False = it wasn't, and nothing changed.
+   */
+  marketMarkSold(id: number, buyerAccount: number, buyerName: string, now: number, tax: number): boolean {
+    return this.db.prepare(`UPDATE market_listings SET status = 'sold', buyer_account = ?, buyer_name = ?, sold_at = ?, tax = ?
+      WHERE id = ? AND status = 'active' AND expires_at > ?`).run(buyerAccount, buyerName, now, tax, id, now).changes === 1;
+  }
+
+  /** Takes the account's own listing off sale (it goes to the claim box). False = not its listing, or no longer up. */
+  marketCancel(id: number, accountId: number): boolean {
+    return this.db.prepare("UPDATE market_listings SET status = 'cancelled' WHERE id = ? AND seller_account = ? AND status = 'active'")
+      .run(id, accountId).changes === 1;
+  }
+
+  /** Ends every listing whose time is up; returns them (to tell their sellers). */
+  marketExpire(now: number): MarketDbRow[] {
+    return this.transaction(() => {
+      const rows = this.db.prepare("SELECT * FROM market_listings WHERE status = 'active' AND expires_at <= ?").all(now) as unknown as MarketDbRow[];
+      if (rows.length) this.db.prepare("UPDATE market_listings SET status = 'expired' WHERE status = 'active' AND expires_at <= ?").run(now);
+      return rows.map((r) => ({ ...r, status: 'expired' }));
+    });
+  }
+
+  /** The account's listings still up, and the finished ones waiting in its claim box (oldest first). */
+  marketMine(accountId: number): { active: MarketDbRow[]; box: MarketDbRow[] } {
+    const active = this.db.prepare("SELECT * FROM market_listings WHERE seller_account = ? AND status = 'active' ORDER BY created_at")
+      .all(accountId) as unknown as MarketDbRow[];
+    return { active, box: this.marketBox(accountId) };
+  }
+
+  marketBox(accountId: number): MarketDbRow[] {
+    return this.db.prepare(`SELECT * FROM market_listings WHERE seller_account = ? AND status <> 'active' AND claimed_at IS NULL
+      ORDER BY COALESCE(sold_at, expires_at), id`).all(accountId) as unknown as MarketDbRow[];
+  }
+
+  marketBoxCount(accountId: number): number {
+    const r = this.db.prepare("SELECT COUNT(*) AS n FROM market_listings WHERE seller_account = ? AND status <> 'active' AND claimed_at IS NULL")
+      .get(accountId) as { n: number };
+    return Number(r.n);
+  }
+
+  /** Marks a claim box row collected, only once. False = already collected (or not this account's). */
+  marketMarkClaimed(id: number, accountId: number, now: number): boolean {
+    return this.db.prepare(`UPDATE market_listings SET claimed_at = ?
+      WHERE id = ? AND seller_account = ? AND status <> 'active' AND claimed_at IS NULL`).run(now, id, accountId).changes === 1;
+  }
+
+  /** Sold or expired listings the seller hasn't been told about yet. */
+  marketUnnotified(accountId: number): MarketDbRow[] {
+    return this.db.prepare(`SELECT * FROM market_listings WHERE seller_account = ? AND status IN ('sold', 'expired') AND notified_at IS NULL`)
+      .all(accountId) as unknown as MarketDbRow[];
+  }
+
+  marketSetNotified(ids: readonly number[], now: number): void {
+    const upd = this.db.prepare('UPDATE market_listings SET notified_at = ? WHERE id = ?');
+    for (const id of ids) upd.run(now, id);
+  }
+
   /** A consistent copy of the whole database, made while the server runs (SQLite VACUUM INTO). */
   backupTo(file: string): void {
     this.db.prepare('VACUUM INTO ?').run(file);
@@ -492,7 +690,10 @@ export class Db {
     const day = 24 * 60 * 60 * 1000;
     return Number(this.db.prepare('DELETE FROM play_sessions WHERE joined_at < ?').run(now - days.sessions * day).changes)
       + Number(this.db.prepare('DELETE FROM chat_log WHERE at < ?').run(now - days.chat * day).changes)
-      + Number(this.db.prepare('DELETE FROM online_samples WHERE at < ?').run(now - days.samples * day).changes);
+      + Number(this.db.prepare('DELETE FROM online_samples WHERE at < ?').run(now - days.samples * day).changes)
+      // Market history: listings collected long enough ago (never one still up or waiting in a claim box).
+      + Number(this.db.prepare('DELETE FROM market_listings WHERE claimed_at IS NOT NULL AND claimed_at < ?')
+        .run(now - MARKET_HISTORY_DAYS * day).changes);
   }
 
   /** Records one admin action. */
