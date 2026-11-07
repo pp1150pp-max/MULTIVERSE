@@ -3,7 +3,8 @@
 import { HUB_ID, ZONES, inSafeArea, type SafeArea, type ZoneDef, type SpawnArea } from '../data/zones';
 import { MONSTERS } from '../data/monsters';
 import { expGapMult, expToNext, mitigate, MAX_LEVEL } from '../formulas';
-import { rollItem } from '../data/items';
+import { lineRanges, rerollStat, rerollValues, rollItem } from '../data/items';
+import { REROLL_NAME, rerollCost, type RerollKind } from '../data/reroll';
 import { inBossArena, LAVA_BURN, LAVA_TICK } from '../data/zones';
 import type { Hazard } from './volcanoHeart';
 import {
@@ -843,6 +844,29 @@ export class Sim {
     this.sfx(result === 'success' ? 'enhance_ok' : 'enhance_fail', p.x, p.z, p.id);
     this.afterChange(p);
     return { result, item };
+  }
+
+  /**
+   * A blacksmith reroll on gear the player owns (worn or in the bag, never the stash): `values` rerolls
+   * every line inside its tier, `stat` turns one extra line into a new stat (see rerollStat). Gold is
+   * checked and taken here. Returns the changed item, or null if nothing happened.
+   */
+  reroll(p: Player, uid: string, kind: RerollKind): Item | null {
+    if (!this.near(p, 'blacksmith')) return null;
+    const worn = Object.values(p.equipment).find((w) => w?.uid === uid);
+    const item = worn ?? p.bag.find((w): w is Item => isItem(w) && w.uid === uid);
+    if (!item || !lineRanges(item)) return null;
+    const cost = rerollCost(item, kind);
+    if (p.gold < cost) return null;
+    p.gold -= cost;
+    if (kind === 'values') rerollValues(item);
+    else rerollStat(item);
+    if (worn) p.recompute();
+    this.log(`🔨 ${REROLL_NAME[kind]} ${itemName(item)} (−${cost.toLocaleString()} G)`, '#c9a8ff', p.id);
+    this.fx('burst', p.x, 1.2, p.z, '#c9a8ff', 12, 2.5);
+    this.sfx('enhance_ok', p.x, p.z, p.id);
+    this.afterChange(p);
+    return item;
   }
 
   // ------------------------------------------------------------ frame

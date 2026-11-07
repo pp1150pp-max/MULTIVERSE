@@ -2,7 +2,7 @@
 // and the server. The server checks the role and every value on each call; the page is only a view.
 import { STAT_KEYS, STAT_LABEL, type BagEntry, type ClassId, type EquipSlot, type Item, type Rarity, type SlotId, type StatKey, type StatLine } from './types';
 import type { ShutdownMode } from './net/protocol';
-import { itemNames, makeItem, roundStat, rowRanges, tierOf } from './data/items';
+import { itemNames, makeItem, roundStat, rowRanges, statStep, tierOf, TIER_VERSION } from './data/items';
 
 /** owner: everything, plus granting/revoking GM. gm: view and edit players. */
 export type AdminRole = 'owner' | 'gm';
@@ -235,7 +235,7 @@ export interface AdminItemRow { stat: StatKey; value: number }
 /**
  * An item of this kind, rarity and level with exactly these stat rows (admin spawn with chosen stats).
  * Checks every value, so the server can pass what the page sent; answers a Thai error instead of an item.
- * Each row's tier and min–max come from the normal range for that row (see rowRanges).
+ * Each row's tier is where its value falls in the normal range for that row (see rowRanges); above it is T1.
  */
 export function customItem(baseId: string, rarity: Rarity, level: number, cls: ClassId, name: unknown, rows: unknown): Item | string {
   if (!Array.isArray(rows)) return 'แถวสเตตัสไม่ถูกต้อง';
@@ -257,14 +257,16 @@ export function customItem(baseId: string, rarity: Rarity, level: number, cls: C
     const r = ranges[i];
     const top = roundStat(stat, r.hi * ADMIN_STAT_MULT);
     if (value < statStep(stat) || roundStat(stat, value) !== value || value > top) return `${STAT_LABEL[stat]} ต้องอยู่ระหว่าง ${statStep(stat)}–${top}`;
-    lines.push({ stat, value, tier: tierOf(value, r.lo, r.hi), min: r.min, max: r.max });
+    const t = tierOf(stat, value, r.lo, r.hi);
+    lines.push({ stat, value, tier: t.tier, min: t.min, max: t.max });
   }
   item.name = name;
   item.lines = lines;
+  item.tierV = TIER_VERSION;
   item.stats = {};
   for (const l of lines) item.stats[l.stat] = roundStat(l.stat, (item.stats[l.stat] ?? 0) + l.value);
   return item;
 }
 
 /** The smallest value a chosen stat row may have. */
-export const statStep = (k: StatKey): number => (roundStat(k, 0.1) === 0.1 ? 0.1 : 1);
+export { statStep };

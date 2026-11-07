@@ -11,10 +11,11 @@ import type { Intent, SimEvent } from '../../shared/sim/types';
 import { MONSTERS } from '../../shared/data/monsters';
 import { zoneById, type SpawnArea, type ZoneDef } from '../../shared/data/zones';
 import type { NpcId } from '../../shared/data/npcs';
-import type { EquipSlot, PotionKind, PotionSize, Rarity, Vec2 } from '../../shared/types';
+import type { EquipSlot, Item, PotionKind, PotionSize, Rarity, Vec2 } from '../../shared/types';
 import type { SkillSlot } from '../../shared/data/classes';
 import { INPUT_HZ, PING_MS, WS_PATH, type ClientMsg, type ServerMsg, type ShutdownMode, type SnapshotMsg } from '../../shared/net/protocol';
 import type { Backend, EnhanceOutcome, ProjectileLike } from '../backend';
+import type { RerollKind } from '../../shared/data/reroll';
 import type { Hazard } from '../../shared/sim/volcanoHeart';
 import type { MarketCall, MarketReply } from '../../shared/sim/market';
 
@@ -150,6 +151,7 @@ export class OnlineBackend implements Backend {
   /** Something of yours sold or expired at the market. */
   onMarketNote: ((text: string, sub?: string) => void) | null = null;
   private readonly enhanceWait = new Map<number, (o: EnhanceOutcome) => void>();
+  private readonly rerollWait = new Map<number, (item: Item | null) => void>();
   private kickMsg = '';
   /** Last measured round trip (ms), shown on the HUD. */
   private rtt: number | null = null;
@@ -286,6 +288,12 @@ export class OnlineBackend implements Backend {
         const done = this.enhanceWait.get(m.req);
         this.enhanceWait.delete(m.req);
         done?.(m.result && m.item ? { result: m.result, item: m.item } : null);
+        break;
+      }
+      case 'rerolled': {
+        const done = this.rerollWait.get(m.req);
+        this.rerollWait.delete(m.req);
+        done?.(m.item);
         break;
       }
       case 'market': {
@@ -710,6 +718,17 @@ export class OnlineBackend implements Backend {
       this.enhanceWait.set(req, resolve);
       setTimeout(() => {
         if (this.enhanceWait.delete(req)) resolve(null);
+      }, 5000);
+    });
+  }
+
+  reroll(uid: string, kind: RerollKind): Promise<Item | null> {
+    const req = ++this.enhanceReq;
+    this.send({ t: 'act', a: 'reroll', uid, kind, req });
+    return new Promise((resolve) => {
+      this.rerollWait.set(req, resolve);
+      setTimeout(() => {
+        if (this.rerollWait.delete(req)) resolve(null);
       }, 5000);
     });
   }

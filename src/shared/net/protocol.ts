@@ -6,6 +6,7 @@ import type { LootKind } from '../sim/Loot';
 import type { SimEvent } from '../sim/types';
 import type { AutoSettings, BuybackEntry, LootFilter, PotionSelect, SortKey } from '../sim/Player';
 import type { EnhanceResult } from '../data/enhance';
+import type { RerollKind } from '../data/reroll';
 import type { StashData } from '../sim/stash';
 import type { Hazard } from '../sim/volcanoHeart';
 import type { MarketCall, MarketReply } from '../sim/market';
@@ -63,6 +64,8 @@ export type ActionMsg =
   | { t: 'act'; a: 'sellRarity'; rarity: Rarity }
   /** `protect` = use a protection stone if a fail would drop the level. */
   | { t: 'act'; a: 'enhance'; uid: string; protect?: boolean; req: number }
+  /** Blacksmith reroll (see Sim.reroll); answered with `rerolled`. */
+  | { t: 'act'; a: 'reroll'; uid: string; kind: RerollKind; req: number }
   /** Stash (warehouse keeper). `to` = target slot, or -1 for wherever it fits. */
   | { t: 'act'; a: 'stashPut'; i: number; to: number }
   | { t: 'act'; a: 'stashTake'; i: number; to: number }
@@ -159,6 +162,8 @@ export type ServerMsg =
   | SnapshotMsg
   | { t: 'chat'; name: string; text: string }
   | { t: 'enhanced'; req: number; result: EnhanceResult | null; item: Item | null }
+  /** The rerolled item, or null when the server refused. */
+  | { t: 'rerolled'; req: number; item: Item | null }
   /** The answer to a market action with this `req`. */
   | ({ t: 'market'; req: number } & MarketReply)
   /** Something of yours sold or expired at the market (a banner and a chat line). */

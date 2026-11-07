@@ -3,7 +3,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { CharacterData } from '../src/shared/sim/Player';
+import { upgradeCharacter, type CharacterData } from '../src/shared/sim/Player';
 import { GUEST_TTL_HOURS, type CharacterSummary } from '../src/shared/api';
 import type { ClassId } from '../src/shared/types';
 import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../src/shared/net/protocol';
@@ -347,7 +347,7 @@ export class Db {
   /** Full saved state of a character, only if it belongs to this account. */
   loadCharacter(accountId: number, id: number): CharacterData | undefined {
     const r = this.db.prepare('SELECT data FROM characters WHERE id = ? AND account_id = ?').get(id, accountId) as { data: string } | undefined;
-    return r ? (JSON.parse(r.data) as CharacterData) : undefined;
+    return r ? upgradeCharacter(JSON.parse(r.data) as CharacterData) : undefined;
   }
 
   // ------------------------------------------------------------ stash (one per account)
@@ -443,7 +443,7 @@ export class Db {
   }
 
   private adminRow(r: { id: number; account_id: number; name: string; data: string; username: string; is_guest: number }): AdminCharacterRow {
-    return { id: r.id, accountId: r.account_id, username: r.username, guest: r.is_guest === 1, name: r.name, data: JSON.parse(r.data) as CharacterData };
+    return { id: r.id, accountId: r.account_id, username: r.username, guest: r.is_guest === 1, name: r.name, data: upgradeCharacter(JSON.parse(r.data) as CharacterData) };
   }
 
   /** Every account with what the "ผู้ใช้ทั้งหมด" table needs (gold and levels read from the saves). */
@@ -476,7 +476,7 @@ export class Db {
   /** The account's characters with their full saves. */
   characterSaves(accountId: number): { id: number; data: CharacterData }[] {
     const rows = this.db.prepare('SELECT id, data FROM characters WHERE account_id = ? ORDER BY id').all(accountId) as { id: number; data: string }[];
-    return rows.map((r) => ({ id: r.id, data: JSON.parse(r.data) as CharacterData }));
+    return rows.map((r) => ({ id: r.id, data: upgradeCharacter(JSON.parse(r.data) as CharacterData) }));
   }
 
   /** The account's stash if it has one saved (null for guests and accounts that never opened it). */

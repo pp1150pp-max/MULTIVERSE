@@ -212,12 +212,13 @@
         <div id="forge" class="panel hidden">
           <div class="panel-head"><span>ช่างตีเหล็ก — Blacksmith</span><button id="forge-close">✕</button></div>
           <p class="npc-line">“เอาอุปกรณ์มาให้ข้า จะตีให้แกร่งกว่าเดิม… แต่ยิ่งบวกสูง ยิ่งเสี่ยงนะ”</p>
+          <div id="forge-tabs"><button data-mode="enhance">ตีบวก</button><button data-mode="values">สุ่มค่าตัวเลข</button><button data-mode="stat">สุ่มสเตตัส</button></div>
           <div class="shop-section">เลือกอุปกรณ์</div>
           <div id="forge-list"></div>
           <div id="forge-detail"></div>
           <button id="forge-go" class="primary">ตีบวก</button>
           <div id="forge-result"></div>
-          <details class="forge-rates">
+          <details id="forge-rates" class="forge-rates">
             <summary>ตารางโอกาสสำเร็จ / โบนัส</summary>
             <div id="forge-table"></div>
           </details>
