@@ -175,7 +175,7 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 #boss-bar .bar { height: 14px; background: #2a0808; border: 2px solid #6b2a1a; border-radius: 3px; overflow: hidden; }
 #boss-bar .fill { height: 100%; background: linear-gradient(#ff5a3a, #a01a10); transition: width 0.15s; }
 
-#log { position: absolute; left: 12px; bottom: 120px; width: min(420px, 45vw); font-size: 13px; }
+#log { position: absolute; left: 12px; bottom: 190px; width: min(420px, 45vw); font-size: 13px; }
 .log-line { text-shadow: 0 0 3px #000, 1px 1px 0 #000; padding: 1px 0; overflow-wrap: anywhere; transition: opacity 1.5s; }
 .log-line.fade { opacity: 0; }
 
@@ -189,7 +189,10 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 /* HP and MP: long bars at the top, or orbs in the bottom corners. */
 #hud { --orb: min(190px, 20vw); }
 .hud-orbs .bars, .hud-bars .orb { display: none; }
-.hud-orbs #log { bottom: calc(var(--orb) + 8px); }
+/* Orb mode: the HP orb fills the bottom-left corner (its height is --orb × 433/414), so the chat box
+   and the message log sit above it at every screen size instead of at fixed heights. */
+.hud-orbs #chat { bottom: calc(var(--orb) * 433 / 414 + 6px); }
+.hud-orbs #log { bottom: calc(var(--orb) * 433 / 414 + 42px); }
 .bars { display: flex; flex-direction: column; gap: 0; margin-top: 2px; }
 .bar {
   position: relative; width: min(300px, 40vw); aspect-ratio: 1352 / 152;
@@ -651,7 +654,7 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 .plate.ally .pname { color: #9fe0ff; }
 .plate.ally .pfill { background: #3ec05a; }
 .loot-label.locked { opacity: 0.55; }
-#chat { position: absolute; left: 12px; bottom: 92px; width: min(420px, 45vw); pointer-events: auto; }
+#chat { position: absolute; left: 12px; bottom: 152px; width: min(420px, 45vw); pointer-events: auto; }
 #chat input {
   width: 100%; font-family: inherit; font-size: 14px; padding: 6px 10px; color: var(--ink);
   background: rgba(12, 10, 8, 0.9); border: 1px solid var(--gold); border-radius: 4px; outline: none;
