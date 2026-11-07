@@ -6,7 +6,9 @@ import { beamAngleAt, ringRadiusAt, type BeamsHazard, type BlastHazard, type Haz
 
 const WARN = '#ff3a2a';
 const SAFE = '#6affa0';
+// Red is where it hurts, green is where it doesn't. FIRE is only the falling rock itself.
 const FIRE = '#ffb03a';
+const HURT = '#ff2a1a';
 const Y = 0.08;
 
 const flat = (geo: THREE.BufferGeometry) => geo.rotateX(-Math.PI / 2);
@@ -57,7 +59,7 @@ function ringView(h: RingHazard): View {
   // Green wedges show the gaps, only over the ground this wave reaches next: from its own front out
   // to the front of the wave ahead. So at any spot, green means safe from the next wave to arrive.
   const safe = new THREE.Mesh(new THREE.BufferGeometry(), mat(SAFE, 0.2));
-  const wave = new THREE.Mesh(new THREE.BufferGeometry(), mat(FIRE, 0.9, null, true));
+  const wave = new THREE.Mesh(new THREE.BufferGeometry(), mat(HURT, 0.85));
   group.add(safe, wave);
   const walls = (Math.PI * 2) / h.gaps.length - h.gapArc;
   const rebuild = (mesh: THREE.Mesh, geos: THREE.BufferGeometry[]) => {
@@ -98,7 +100,7 @@ function beamsView(h: BeamsHazard): View {
   const group = new THREE.Group();
   group.position.set(h.x, Y + 0.01, h.z);
   const warn = mat(WARN, 0.35);
-  const live = mat(FIRE, 0.9, null, true);
+  const live = mat(HURT, 0.8);
   const meshes: THREE.Mesh[] = [];
   for (let i = 0; i < h.n; i++) {
     const geo = new THREE.PlaneGeometry(h.len, h.width);
