@@ -1,8 +1,8 @@
 // Camp NPCs. Shared so the server can check that a player is standing next to the merchant
 // or blacksmith before it lets them trade.
-export type NpcId = 'seeker' | 'merchant' | 'blacksmith' | 'keeper';
+export type NpcId = 'seeker' | 'merchant' | 'blacksmith' | 'keeper' | 'broker';
 
-export const NPC_IDS: NpcId[] = ['seeker', 'merchant', 'blacksmith', 'keeper'];
+export const NPC_IDS: NpcId[] = ['seeker', 'merchant', 'blacksmith', 'keeper', 'broker'];
 
 /** icon + role are the badge floating over each NPC's head, so players can tell them apart. */
 export const NPC_INFO: Record<NpcId, { name: string; action: string; icon: string; role: string }> = {
@@ -10,6 +10,8 @@ export const NPC_INFO: Record<NpcId, { name: string; action: string; icon: strin
   merchant: { name: 'พ่อค้า', action: 'ซื้อ/ขายของ', icon: 'npc_shop', role: 'ร้านค้า' },
   blacksmith: { name: 'ช่างตีเหล็ก', action: 'ตีบวกอุปกรณ์', icon: 'npc_forge', role: 'ตีบวก' },
   keeper: { name: 'ผู้ดูแลคลัง', action: 'เปิดคลังเก็บของ', icon: 'npc_stash', role: 'คลังเก็บของ' },
+  // Badge icon borrows the merchant's until icons/npc_market.png is painted.
+  broker: { name: 'นายหน้าตลาด', action: 'เปิดตลาดฝากขาย', icon: 'npc_shop', role: 'ตลาดฝากขาย' },
 };
 
 /** How close the player must stand to talk to an NPC. */

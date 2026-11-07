@@ -182,18 +182,21 @@ export class Terrain {
     this.npcPos.merchant = { x: s.x + 5.8, z: s.z };
     at('town_stall', 8.6, 0, 3.4, 1.2);
     at('barrel', 8, -2.6, 0.9, 0.35);
-    at('barrel', 8.2, 2.7, 0.9, 0.35);
+    // The market broker stands beside the merchant; the market booth stands where that side's first pillar would be.
+    this.npcPos.broker = { x: s.x + Math.cos(Math.PI / 8) * 7.6, z: s.z + Math.sin(Math.PI / 8) * 7.6 };
+    polar('town_market', 22.5, 10.6, 3.4, 1.2);
     this.npcPos.blacksmith = { x: s.x, z: s.z + 5.8 };
     at('town_forge', 0, 8.8, 3.6, 1.3);
     this.npcPos.keeper = { x: s.x - 5.8, z: s.z };
     at('town_vault', -8.8, 0, 3.2, 1.3);
 
-    // Broken pillars either side of the roads, fallen houses and towers further out, two old trees.
-    for (let a = 22.5; a < 360; a += 45) polar('ruin_pillar', a, 10.6, 3.4, 0.5, true);
+    // Broken pillars either side of the roads (the market booth takes the one at 22.5°), fallen houses and towers further out, two old trees.
+    for (let a = 67.5; a < 360; a += 45) polar('ruin_pillar', a, 10.6, 3.4, 0.5, true);
     for (const a of [0, 180]) polar('ruin_house', a, 13.6, 5.8, 2.1, true);
     for (const a of [90, 270]) polar('ruin_tower', a, 13.6, 6.4, 1.8, true);
-    polar('tree_2', 22.5, 14.6, 6.2, 0.55, true);
-    polar('tree_2', 202.5, 14.6, 6.2, 0.55, true);
+    // Clear of the market booth (22.5°), so the tree doesn't hide it.
+    polar('tree_2', 337.5, 14.6, 6.2, 0.55, true);
+    polar('tree_2', 157.5, 14.6, 6.2, 0.55, true);
 
     // Rubble where it fell: off the roads, clear of everything else.
     let piles = 0;
