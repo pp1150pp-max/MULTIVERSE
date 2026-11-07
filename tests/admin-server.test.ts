@@ -165,6 +165,22 @@ async function run(): Promise<void> {
   ok((await edit('items', { baseId: 'weapon_1', rarity: 'mythic' })).status === 400, 'unknown rarity refused');
   ok((await edit('items', { baseId: 'weapon_1', rarity: 'rare', plus: MAX_PLUS + 1 })).status === 400, 'plus over the max refused');
   ok((await edit('teleport', { zone: 'nowhere' })).status === 400, 'unknown zone refused');
+  // Potions and stones: every field checked.
+  const badStacks: [unknown, string][] = [
+    [{ kind: 'gem', count: 1 }, 'ประเภทไอเทมไม่ถูกต้อง'],
+    [{ kind: 'potion', potion: 'sp', size: 's', count: 1 }, 'ชนิดยาไม่ถูกต้อง'],
+    [{ kind: 'potion', potion: 'hp', size: 'xl', count: 1 }, 'ขนาดยาไม่ถูกต้อง'],
+    [{ kind: 'potion', potion: 'hp', count: 1 }, 'ขนาดยาไม่ถูกต้อง'],
+    [{ kind: 'stone', stone: 'gold', count: 1 }, 'ชนิดหินไม่ถูกต้อง'],
+    [{ kind: 'stone', stone: 'enhance', count: 0 }, 'จำนวนชิ้น'],
+    [{ kind: 'stone', stone: 'enhance', count: ADMIN_ITEMS_MAX + 1 }, 'จำนวนชิ้น'],
+    [{ kind: 'potion', potion: 'mp', size: 'l', count: 2.5 }, 'จำนวนชิ้น'],
+    [{ kind: 'potion', potion: 'mp', size: 'l', count: '3' }, 'จำนวนชิ้น'],
+  ];
+  for (const [body, err] of badStacks) {
+    const r = await edit('items', body);
+    ok(r.status === 400 && String(r.data.error).startsWith(err), `bad potion/stone refused: ${JSON.stringify(body)} (${r.status} ${r.data.error})`);
+  }
   ok((await edit('gold', { delta: 5 }, gmTok, 999999)).status === 404, 'unknown character → 404');
   ok(c.lastMe().gold === 0, 'nothing changed by refused edits');
 
@@ -218,6 +234,16 @@ async function run(): Promise<void> {
   const full = await edit('items', { baseId: 'cap', rarity: 'common', count: 1 });
   ok(full.status === 400 && full.data.error === 'กระเป๋าเต็ม', 'full bag → "กระเป๋าเต็ม"');
   ok(saved(charId).bag.filter(Boolean).length === 30, 'bag has exactly 30 entries');
+  // Full bag, but the starting stack of 5 small HP potions has room for 5 more (owner, offline).
+  const potPart = await edit('items', { kind: 'potion', potion: 'hp', size: 's', count: ADMIN_ITEMS_MAX }, ownerTok);
+  const hpStack = saved(charId).bag.filter((e: any) => e?.potion === 'hp' && e.size === 's');
+  ok(potPart.status === 200 && potPart.data.msg === 'ใส่ได้ 5/10 ชิ้น — กระเป๋าเต็ม (ยา HP เล็ก)' && hpStack.length === 1 && hpStack[0].count === 10,
+    `potions top up the stack, the rest refused (${potPart.data.msg})`);
+  const potFull = await edit('items', { kind: 'potion', potion: 'hp', size: 's', count: 1 }, ownerTok);
+  ok(potFull.status === 400 && potFull.data.error === 'กระเป๋าเต็ม', 'potion into a full bag (stack full too) → "กระเป๋าเต็ม"');
+  const stoneFull = await edit('items', { kind: 'stone', stone: 'protect', count: 1 }, ownerTok);
+  ok(stoneFull.status === 400 && stoneFull.data.error === 'กระเป๋าเต็ม', 'stone into a full bag → "กระเป๋าเต็ม"');
+  ok(saved(charId).bag.filter(Boolean).length === 30 && !saved(charId).bag.some((e: any) => e?.stone), 'refused stacks changed nothing');
 
   // ---------------------------------------------------------- back online: always in the hub
   const c2 = joinWorld(plainTok, charId);
@@ -236,6 +262,30 @@ async function run(): Promise<void> {
   // ---------------------------------------------------------- GM editing their own character
   const own = await api('POST', '/characters', { name: 'GmChar', classId: 'mage' }, gmTok);
   ok((await edit('level', { level: 25 }, gmTok, own.data.id)).status === 200, 'GM can edit their own character');
+  // Potions and stones online (GM and owner), stacked like a pickup and kept by the game's next save.
+  const gc = joinWorld(gmTok, own.data.id);
+  await gc.ready;
+  await sleep(300);
+  const gmPot = await edit('items', { kind: 'potion', potion: 'mp', size: 'm', count: ADMIN_ITEMS_MAX }, gmTok, own.data.id);
+  ok(gmPot.status === 200 && gmPot.data.msg === 'เสกให้ 10 ชิ้น: ยา MP กลาง', `GM spawns 10 potions online (${gmPot.data.msg ?? gmPot.data.error})`);
+  const gmStone = await edit('items', { kind: 'stone', stone: 'protect', count: 3 }, gmTok, own.data.id);
+  ok(gmStone.status === 200 && gmStone.data.msg === 'เสกให้ 3 ชิ้น: หินกันระดับลด', `GM spawns 3 stones online (${gmStone.data.msg ?? gmStone.data.error})`);
+  const ownStone = await edit('items', { kind: 'stone', stone: 'protect', count: ADMIN_ITEMS_MAX }, ownerTok, own.data.id);
+  ok(ownStone.status === 200 && ownStone.data.char.bagFree === 30 - 2 - 1 - 2, `owner spawns 10 stones: 3+10 = a full stack + 3 (${ownStone.data.char.bagFree} free)`);
+  ok((await edit('items', { kind: 'stone', stone: 'enhance', count: 2 }, ownerTok, own.data.id)).status === 200, 'owner spawns enhance stones');
+  await sleep(400);
+  const gBag = gc.msgs.filter((x) => x.t === 'snap' && x.me.inv).at(-1)?.me.inv.bag ?? [];
+  const counts = (pred: (e: any) => boolean) => gBag.filter((e: any) => e && pred(e)).map((e: any) => e.count).sort((a: number, b: number) => b - a).join(',');
+  ok(counts((e) => e.potion === 'mp' && e.size === 'm') === '10' && counts((e) => e.stone === 'protect') === '10,3' && counts((e) => e.stone === 'enhance') === '2',
+    `the player sees the stacks (mp m ${counts((e) => e.potion === 'mp' && e.size === 'm')}, protect ${counts((e) => e.stone === 'protect')})`);
+  ok(gc.msgs.some((x) => x.t === 'chat' && x.name === '' && x.text === 'GM มอบ หินกันระดับลด × 3'), 'the player gets the Thai GM message for stones');
+  gc.send({ t: 'act', a: 'sort', key: 'rarity', desc: true });
+  await sleep(2600);
+  const gSaved = saved(own.data.id).bag.filter(Boolean);
+  ok(gSaved.filter((e: any) => e.stone === 'protect').reduce((n: number, e: any) => n + e.count, 0) === 13
+    && gSaved.some((e: any) => e.potion === 'mp' && e.size === 'm' && e.count === 10), 'spawned potions/stones survive the next save');
+  gc.ws.close();
+  await sleep(300);
 
   // ---------------------------------------------------------- GM scope: not the owner's, not another GM's
   const SCOPE = 'GM แก้ไขตัวละครของ owner หรือ GM คนอื่นไม่ได้';
@@ -245,6 +295,7 @@ async function run(): Promise<void> {
   const gm2Char: number = (await api('POST', '/characters', { name: 'GmTwo', classId: 'gunslinger' }, gm2Tok)).data.id;
   const tries: [string, unknown][] = [
     ['level', { level: 10 }], ['gold', { delta: 100 }], ['items', { baseId: 'cap', rarity: 'common', count: 1 }],
+    ['items', { kind: 'potion', potion: 'hp', size: 'l', count: 1 }], ['items', { kind: 'stone', stone: 'enhance', count: 1 }],
     ['teleport', { zone: 'misty_marsh' }], ['kick', {}],
   ];
   for (const [what, body] of tries) {
@@ -270,6 +321,8 @@ async function run(): Promise<void> {
   ok(!rows.some((r) => r.details.includes('999999')), 'refused edits are not logged');
   ok(!rows.some((r) => r.action === 'gold' && r.details.startsWith('0 → 0')), 'no "0 → 0" gold row for a refused take');
   ok(rows.some((r) => r.action === 'items' && r.details.includes('ขั้นต่ำของชนิดนี้')), 'audit: item level raise is noted');
+  ok(rows.some((r) => r.admin_name === 'owner1' && r.action === 'items' && r.details === 'ยา HP เล็ก × 5 (ขอ 10, กระเป๋าเต็ม)'), 'audit: potion spawn, partly fitting');
+  ok(rows.some((r) => r.admin_name === 'gm1' && r.action === 'items' && r.target.includes('GmChar') && r.details === 'หินกันระดับลด × 3'), 'audit: GM stone spawn');
   ok(!rows.some((r) => r.target.includes('OwnerChar') && r.admin_name === 'gm1'), "refused GM edits on the owner's character are not logged");
   const log = await api('GET', '/admin/audit', undefined, ownerTok);
   ok(log.status === 200 && log.data.length === rows.length && log.data[0].id === rows.at(-1).id, 'owner reads the audit log, newest first');
