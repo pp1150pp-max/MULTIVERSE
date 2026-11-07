@@ -82,4 +82,4 @@ export type SimEvent =
   /** The server switched this player's Auto Play off. */
   | { t: 'autoOff'; to: number; msg: string }
   /** This player walked into a portal. Whoever drives the Sim moves them to that zone. */
-  | { t: 'travel'; to: number; zone: string };
+  | { t: 'travel'; to: number; zone: string; atCamp?: boolean };

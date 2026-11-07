@@ -696,6 +696,6 @@ export class OnlineBackend implements Backend {
 
   npcDistance(id: NpcId): number {
     const n = this.terrain.npcPos[id];
-    return Math.hypot(this.me.x - n.x, this.me.z - n.z);
+    return n ? Math.hypot(this.me.x - n.x, this.me.z - n.z) : Infinity;
   }
 }

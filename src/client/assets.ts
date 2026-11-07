@@ -26,6 +26,8 @@ interface SheetSpec {
   /** Side-row direction for real PNG files (concept sheet faces left). Placeholders face right. */
   fileSideFaces: 'left' | 'right';
   placeholder: () => HTMLCanvasElement;
+  /** An existing picture to borrow while this one hasn't been made yet (before the placeholder drawing). */
+  standIn?: string;
 }
 
 const BASE = 'assets/sprites/';
@@ -37,6 +39,9 @@ const monster = (path: string, placeholder: () => HTMLCanvasElement): SheetSpec 
 const single = (path: string, placeholder: () => HTMLCanvasElement): SheetSpec =>
   ({ path: BASE + path, cols: 1, rows: 1, fileSideFaces: 'left', placeholder });
 const prop = (key: string, placeholder: () => HTMLCanvasElement): SheetSpec => single(`props/${key}.png`, placeholder);
+/** The hub's ruined-city props: their own picture once it exists, until then an older prop's. */
+const ruin = (key: string, standIn: string | null): SheetSpec =>
+  standIn ? { ...prop(key, () => drawRock(0)), standIn: `${BASE}props/${standIn}.png` } : prop(key, () => document.createElement('canvas'));
 
 export const SHEET_SPECS: Record<string, SheetSpec> = {
   sword: sheet('player/sword.png', () => makeSheet(32, drawHuman('sword'))),
@@ -188,6 +193,18 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   cart: prop('cart', drawFence),
   chest: prop('chest', drawStump),
   watchtower: prop('watchtower', drawFence),
+  ruin_fountain: ruin('ruin_fountain', 'well'),
+  // The town wall kit: pieces that line up end to end (see tools/cut_hub.cjs and Terrain.placeTown).
+  ...Object.fromEntries(['town_wall_a', 'town_wall_a_broken', 'town_wall_b', 'town_wall_b_broken', 'town_wall_end']
+    .map((k) => [k, ruin(k, null)])),
+  ruin_pillar: ruin('ruin_pillar', 'runestone'),
+  ruin_house: ruin('ruin_house', 'tent'),
+  ruin_tower: ruin('ruin_tower', 'watchtower'),
+  ruin_statue: ruin('ruin_statue', 'runestone'),
+  ruin_rubble: ruin('ruin_rubble', 'rock_2'),
+  town_stall: ruin('town_stall', 'cart'),
+  town_forge: ruin('town_forge', 'cart'),
+  town_vault: ruin('town_vault', 'chest'),
 
   ...Object.fromEntries(MAP_ICONS.map((name) => [`map_${name}`, single(`icons/map_${name}.png`, () => drawIcon('coin'))])),
   icon_coin: single('icons/coin.png', () => drawIcon('coin')),
@@ -266,7 +283,7 @@ async function loadAnimSet(key: string, dir: string): Promise<void> {
 }
 
 /** Repeating ground textures. A zone falls back to its code-painted ground if one is missing. */
-export type GroundTile = 'grass' | 'dirt' | 'water' | 'marsh' | 'mud' | 'pave' | 'snow' | 'snow_path' | 'ice' | 'ash_rock' | 'ash_path' | 'lava';
+export type GroundTile = 'grass' | 'dirt' | 'water' | 'marsh' | 'mud' | 'pave' | 'brick' | 'snow' | 'snow_path' | 'ice' | 'ash_rock' | 'ash_path' | 'lava';
 export const groundTiles: Partial<Record<GroundTile, THREE.Texture>> = {};
 
 async function loadGroundTile(name: GroundTile): Promise<void> {
@@ -443,14 +460,14 @@ async function loadAssets(): Promise<void> {
   // Everything at once: the files don't depend on each other.
   await Promise.all([
     ...(['sword', 'mage', 'gun'] as const).map((n) => loadFxSheet(n)),
-    ...(['grass', 'dirt', 'water', 'marsh', 'mud', 'pave', 'snow', 'snow_path', 'ice', 'ash_rock', 'ash_path', 'lava'] as const).map((n) => loadGroundTile(n)),
+    ...(['grass', 'dirt', 'water', 'marsh', 'mud', 'pave', 'brick', 'snow', 'snow_path', 'ice', 'ash_rock', 'ash_path', 'lava'] as const).map((n) => loadGroundTile(n)),
     ...Object.entries(ANIM_SET_DIRS).map(([key, dir]) => loadAnimSet(key, BASE + dir)),
     ...Object.entries(SHEET_SPECS).map(async ([key, spec]) => {
       let tex: THREE.Texture;
       let sideFaces = spec.fileSideFaces;
       let rows = spec.rows;
       try {
-        tex = await loadTexture(spec.path);
+        tex = await loadTexture(spec.path).catch((e) => (spec.standIn ? loadTexture(spec.standIn) : Promise.reject(e)));
         assetSources[key] = 'file';
         rows = spec.fileRows ?? spec.rows;
       } catch {

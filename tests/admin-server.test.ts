@@ -146,7 +146,7 @@ async function run(): Promise<void> {
   const online = await api('GET', '/admin/online', undefined, gmTok);
   const row = online.data.players?.find((p: any) => p.charId === charId);
   ok(online.status === 200 && row && row.username === 'plain1' && typeof row.ip === 'string', 'online list shows the player with IP');
-  ok(online.data.zones.find((z: any) => z.id === 'emerald_forest')?.count === 1, 'online count per zone');
+  ok(online.data.zones.find((z: any) => z.id === 'nexus_city')?.count === 1, 'online count per zone (everyone starts in the hub)');
   const found = await api('GET', '/admin/characters?q=test', undefined, gmTok);
   ok(found.data.length === 1 && found.data[0].online === true, 'search finds the character (online)');
   ok((await api('GET', '/admin/characters?q=%25', undefined, gmTok)).data.length === 0, 'a typed % is not a wildcard');
@@ -210,8 +210,7 @@ async function run(): Promise<void> {
     `item level raised to the type's minimum (${low.data.msg}, Lv.${lowItem?.level})`);
   ok((await edit('level', { level: MAX_LEVEL, exp: 5 })).status === 200 && saved(charId).level === MAX_LEVEL && saved(charId).exp === 0,
     'offline level to max (EXP 0 at max)');
-  ok((await edit('teleport', { zone: 'frost_reach' })).status === 200 && saved(charId).zone === 'frost_reach', 'teleport offline');
-  ok((await edit('teleport', { zone: 'frost_reach' })).status === 400, 'teleport to the same zone refused');
+  ok((await edit('teleport', { zone: 'frost_reach' })).status === 400, 'teleport offline refused (they log in to the hub anyway)');
   // 30 slots: 2 potion stacks + 3 items used, 25 free.
   for (let k = 0; k < 2; k++) await edit('items', { baseId: 'cap', rarity: 'common', count: ADMIN_ITEMS_MAX });
   const part = await edit('items', { baseId: 'cap', rarity: 'common', count: ADMIN_ITEMS_MAX });
@@ -220,10 +219,10 @@ async function run(): Promise<void> {
   ok(full.status === 400 && full.data.error === 'กระเป๋าเต็ม', 'full bag → "กระเป๋าเต็ม"');
   ok(saved(charId).bag.filter(Boolean).length === 30, 'bag has exactly 30 entries');
 
-  // ---------------------------------------------------------- back online: lands in the new zone
+  // ---------------------------------------------------------- back online: always in the hub
   const c2 = joinWorld(plainTok, charId);
   await c2.ready;
-  ok(c2.msgs.find((x) => x.t === 'welcome')?.zone === 'frost_reach', 'joins in the teleported zone');
+  ok(c2.msgs.find((x) => x.t === 'welcome')?.zone === 'nexus_city', 'joins in the hub');
   await sleep(1100);
   const played = async () => (await api('GET', '/admin/online', undefined, gmTok)).data.players.find((p: any) => p.charId === charId)?.playedMs as number;
   const beforeTp = await played();

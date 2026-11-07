@@ -1,6 +1,6 @@
 // The game rules, with no rendering. The game server runs one of these per zone. Whoever drives it calls step() every frame and reads drainEvents()
 // to show effects, damage numbers and messages.
-import { ZONES, type ZoneDef, type SpawnArea } from '../data/zones';
+import { HUB_ID, ZONES, inSafeArea, type SafeArea, type ZoneDef, type SpawnArea } from '../data/zones';
 import { MONSTERS } from '../data/monsters';
 import { expGapMult, expToNext, mitigate, MAX_LEVEL } from '../formulas';
 import { rollItem } from '../data/items';
@@ -119,7 +119,7 @@ export class Sim {
   constructor(readonly zone: ZoneDef) {
     this.terrain = new Terrain(zone);
     for (const area of zone.spawns) this.spawners.push({ area, alive: 0, queue: [], boss: false });
-    this.spawners.push({ area: zone.boss, alive: 0, queue: [], boss: true });
+    if (zone.boss) this.spawners.push({ area: zone.boss, alive: 0, queue: [], boss: true });
     for (const sp of this.spawners) for (let i = 0; i < sp.area.count; i++) this.spawnMonster(sp);
   }
 
@@ -149,8 +149,8 @@ export class Sim {
       p.face(-back.x, -back.z);
       p.portalReady = false;
     } else {
-      p.x = this.zone.start.x - 2;
-      p.z = this.zone.start.z - 2;
+      p.x = this.spawnAt.x;
+      p.z = this.spawnAt.z;
     }
     this.players.push(p);
     return p;
@@ -220,15 +220,26 @@ export class Sim {
       z = sp.area.z + Math.sin(a) * d;
       if (!this.terrain.isBlocked(x, z, def.radius)) break;
     }
-    this.monsters.push(new Monster(this.newId(), def, randInt(r, def.levels[0], def.levels[1]), sp.area, x, z, this.zone.monsterBoost));
+    this.monsters.push(new Monster(this.newId(), def, randInt(r, def.levels[0], def.levels[1]), sp.area, x, z, sp.area.boost ?? this.zone.monsterBoost));
     sp.alive++;
     if (sp.boss && this.time > 1) this.log(`⚠ ${def.name} ปรากฏตัวที่ส่วนลึกของ${this.zone.nameTh}!`, '#ff9a6a');
   }
 
   // ------------------------------------------------------------ combat
 
+  /** Where players appear and wake up: by the campfire, or in the hub on the camera's side of the fountain. */
+  get spawnAt(): { x: number; z: number } {
+    const s = this.zone.start;
+    return this.zone.npcs ? { x: s.x + 3, z: s.z + 3 } : { x: s.x - 2, z: s.z - 2 };
+  }
+
+  /** Inside the zone's safe area (the hub's town): nobody fights there. */
+  inSafe(u: { x: number; z: number }): boolean {
+    return inSafeArea(this.zone, u.x, u.z);
+  }
+
   hitMonster(p: Player, m: Monster, mult: number, opts: HitOpts = {}): void {
-    if (!m.alive || m.untargetable) return;
+    if (!m.alive || m.untargetable || this.inSafe(p)) return;
     if (m.def.pattern && !inBossArena(this.zone, p.x, p.z)) {
       this.text(m.x, m.topY, m.z, 'ต้องเข้าลาน', 'info', 0.5, p.id);
       return;
@@ -253,7 +264,7 @@ export class Sim {
   }
 
   hitPlayer(m: Monster, p: Player, mult: number, opts: HitOpts): void {
-    if (!p.alive) return;
+    if (!p.alive || this.inSafe(p)) return;
     if (p.invulnT > 0) {
       this.text(p.x, p.topY, p.z, 'MISS', 'info', 0.6);
       return;
@@ -456,13 +467,15 @@ export class Sim {
     p.mp = p.stats.maxMp;
     p.stunT = 0;
     p.kbx = p.kbz = 0;
-    p.x = this.zone.start.x - 2;
-    p.z = this.zone.start.z - 2;
+    p.x = this.spawnAt.x;
+    p.z = this.spawnAt.z;
     p.moveTarget = null;
     for (const m of this.monsters) if (m.target === p) m.calm();
     this.events.push({ t: 'revived', id: p.id });
-    this.log(`ฟื้นคืนชีพที่แคมป์ (เสีย EXP ${penalty})`, '#ff9a6a', p.id);
+    this.log(`ฟื้นคืนชีพที่เมือง (เสีย EXP ${penalty})`, '#ff9a6a', p.id);
     this.events.push({ t: 'save', to: p.id });
+    // Out in a zone, the town is in the hub. Queued after `revived`, so the browser gets both in order.
+    if (this.zone.id !== HUB_ID) this.events.push({ t: 'travel', to: p.id, zone: HUB_ID, atCamp: true });
   }
 
   private addExp(p: Player, n: number): void {
@@ -571,7 +584,7 @@ export class Sim {
 
   npcDistance(p: Player, id: NpcId): number {
     const n = this.terrain.npcPos[id];
-    return Math.hypot(p.x - n.x, p.z - n.z);
+    return n ? Math.hypot(p.x - n.x, p.z - n.z) : Infinity;
   }
 
   /** Trades only work while standing next to that NPC. */
@@ -853,6 +866,7 @@ export class Sim {
 
     for (const m of this.monsters) m.update(dt, this);
     this.separateMonsters();
+    if (this.zone.safe) this.keepOutOfSafe(this.zone.safe);
     this.monsters = this.monsters.filter((m) => !m.gone && (m.alive || m.deadT <= 0.9));
     this.tickVanished(dt);
 
@@ -892,6 +906,21 @@ export class Sim {
       this.fx('burst', pt.x, 1.4, pt.z, '#6affd0', 18, 3);
       this.events.push({ t: 'travel', to: p.id, zone: dest.id });
       return;
+    }
+  }
+
+  /** Monsters can't walk (or be pushed) into the safe area, and stop chasing whoever is inside it. */
+  private keepOutOfSafe(safe: SafeArea): void {
+    for (const m of this.monsters) {
+      if (!m.alive) continue;
+      if (m.target && this.inSafe(m.target)) m.calm();
+      const dx = m.x - safe.x;
+      const dz = m.z - safe.z;
+      const min = safe.half + m.radius;
+      if (Math.abs(dx) >= min || Math.abs(dz) >= min) continue;
+      // Out through the nearest side.
+      if (Math.abs(dx) > Math.abs(dz)) m.x = safe.x + Math.sign(dx || 1) * min;
+      else m.z = safe.z + Math.sign(dz || 1) * min;
     }
   }
 

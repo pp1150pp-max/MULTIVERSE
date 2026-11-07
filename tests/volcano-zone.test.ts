@@ -22,9 +22,9 @@ const heart = (sim: Sim) => sim.monsters.find((m) => m.def.id === 'volcano_heart
 // ---- layout
 {
   const sim = new Sim(ZONE_4);
-  const b = ZONE_4.boss;
-  ok(ZONES.frost_reach.portals.some((p) => p.to === 'ashen_isle' && p.minLevel === 30), 'snow map opens map 4 at Lv.30');
-  ok(ZONE_4.portals.some((p) => p.to === 'frost_reach'), 'map 4 leads back');
+  const b = ZONE_4.boss!;
+  ok(ZONES.nexus_city.portals.some((p) => p.to === 'ashen_isle' && p.minLevel === 0), 'the hub opens map 4 to everyone');
+  ok(ZONE_4.portals.some((p) => p.to === 'nexus_city'), 'map 4 leads back to the hub');
   ok(Math.abs(b.x) + clearingRadius(ZONE_4) <= sim.terrain.bound && Math.abs(b.z) + clearingRadius(ZONE_4) <= sim.terrain.bound, 'clearing fits on the island');
   for (const a of ZONE_4.spawns) ok(!!MONSTERS[a.monster], `monster ${a.monster} exists`);
   for (const l of ZONE_4.lavaPools!) {
@@ -37,10 +37,10 @@ const heart = (sim: Sim) => sim.monsters.find((m) => m.def.id === 'volcano_heart
   ok(blockers.length === 0, 'nothing blocks walking inside the arena');
 }
 
-// ---- the way in, from the snow map
+// ---- the way in, from the hub
 {
-  const snow = new Sim(ZONES.frost_reach);
-  const gate = ZONES.frost_reach.portals.find((pt) => pt.to === 'ashen_isle')!;
+  const snow = new Sim(ZONES.nexus_city);
+  const gate = ZONES.nexus_city.portals.find((pt) => pt.to === 'ashen_isle')!;
   ok(!snow.terrain.isBlocked(gate.x, gate.z, 0.4) && snow.terrain.distToPath(gate.x, gate.z) < 1, 'the gate stands free at the end of a path');
   const travels = (level: number) => {
     const p = snow.addPlayer(hero(level));
@@ -55,10 +55,9 @@ const heart = (sim: Sim) => sim.monsters.find((m) => m.def.id === 'volcano_heart
     snow.removePlayer(p);
     return went;
   };
-  ok(!travels(29), 'Lv.29 is turned away');
-  ok(travels(30), 'Lv.30 walks through');
+  ok(travels(1), 'Lv.1 walks through (no level gates)');
   const isle = new Sim(ZONE_4);
-  const arrived = isle.addPlayer(hero(30), 'frost_reach');
+  const arrived = isle.addPlayer(hero(30), 'nexus_city');
   const back = ZONE_4.portals[0];
   ok(Math.hypot(arrived.x - back.x, arrived.z - back.z) < 5 && !isle.terrain.isBlocked(arrived.x, arrived.z, 0.3), 'arrives beside the portal back');
 }
@@ -166,6 +165,7 @@ ok(HEART_SETS[0].every((set) => set.length === 1), 'above half HP only one set a
 
 // ---- Auto Play stays away from bosses, on every map
 for (const zone of Object.values(ZONES)) {
+  if (!zone.boss) continue;
   const sim = new Sim(zone);
   const p: Player = sim.addPlayer(hero());
   p.x = zone.boss.x + 3;

@@ -288,8 +288,8 @@ function editCharacter(db: Db, world: GameWorld, a: Admin, charId: number, what:
         world.teleportCharacter(charId, zone.id);
         world.adminChanged(charId, `GM ย้ายคุณไปที่${zone.nameTh}`);
       } else {
-        c.data.zone = zone.id;
-        db.saveCharacter(charId, c.data);
+        // Offline characters always come back into the game in the hub, so moving them would do nothing.
+        throw new HttpError(400, 'ตัวละครออฟไลน์อยู่ — เข้าเกมครั้งหน้าจะเริ่มที่เมืองเสมอ ย้ายได้เฉพาะตอนออนไลน์');
       }
       log(db, a, 'teleport', target, `${from.nameTh} → ${zone.nameTh}`);
       return { msg: `ย้ายไป${zone.nameTh}แล้ว`, char: charRow(db.adminCharacter(charId)!, world.livePlayer(charId)) };

@@ -754,7 +754,9 @@ export class Player extends Unit {
       return;
     }
 
-    for (const slot of it.skills) {
+    // No fighting in town; the dash above still works there.
+    const peaceful = sim.inSafe(this);
+    for (const slot of peaceful ? [] : it.skills) {
       const sk = this.skill(slot);
       if (!sk || (this.cd[slot] ?? 0) > 0) continue;
       if (this.mp < sk.mp) {
@@ -777,7 +779,7 @@ export class Player extends Unit {
       if (this.dashT > 0) return;
     }
 
-    if (it.basic && this.atkT <= 0) {
+    if (it.basic && this.atkT <= 0 && !peaceful) {
       this.atkT = 1 / this.attackRate;
       this.lastAttack = sim.time;
       basicAttack(sim, this, aim);
