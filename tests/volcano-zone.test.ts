@@ -5,7 +5,7 @@ import { MONSTERS } from '../src/shared/data/monsters';
 import { Sim } from '../src/shared/sim/Sim';
 import type { Player } from '../src/shared/sim/Player';
 import { AutoPlay, autoBlocked } from '../src/shared/sim/autoplay';
-import { BLAST, DODGE_SPEED, HEART_PHASES, HEART_SETS, METEOR, RING, inRingGap, type Hazard, type RingHazard } from '../src/shared/sim/volcanoHeart';
+import { BLAST, DODGE_SPEED, HEART_HP_SHARE, HEART_PHASES, HEART_SETS, METEOR, RING, inRingGap, type Hazard, type RingHazard } from '../src/shared/sim/volcanoHeart';
 import { IDLE_INTENT } from '../src/shared/sim/types';
 
 const hero = (level = 40) => ({ name: 'T', classId: 'sword' as const, level, exp: 0, gold: 0, equipment: {}, bag: [] });
@@ -129,12 +129,17 @@ ok(HEART_SETS[0].every((set) => set.length === 1), 'above half HP only one set a
   // Inside: it attacks in the set order and never moves.
   p.x = bx + 8;
   const seen = new Set<Hazard['k']>();
+  // Every hit takes a share of max HP, so top the player up to watch the whole pattern.
+  let lowest = p.hp;
   run(sim, 40, () => {
     for (const h of sim.hazards) seen.add(h.k);
+    lowest = Math.min(lowest, p.hp);
+    p.hp = p.maxHp;
   });
   ok(['meteor', 'ring', 'beams', 'blast'].every((k) => seen.has(k as Hazard['k'])), `plays all four attacks (${[...seen]})`);
   ok(m.x === bx && m.z === bz, 'never moves');
-  ok(p.hp < 1e7, 'attacks land on someone who stands still');
+  ok(lowest < 1e7, 'attacks land on someone who stands still');
+  ok(1e7 - lowest >= 1e7 * HEART_HP_SHARE, 'every hit takes at least its share of max HP');
 
   sim.hitMonster(p, m, 1, { stun: 5 });
   ok(m.stunT === 0, 'cannot be stunned');

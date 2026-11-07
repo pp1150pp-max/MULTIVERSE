@@ -27,6 +27,8 @@ export interface HitOpts {
   slowT?: number;
   fromX?: number;
   fromZ?: number;
+  /** Extra damage: this share of the player's max HP, added after defense (defense does not lower it). */
+  maxHpShare?: number;
 }
 
 /** Visual effects the renderer knows how to draw. The client's Effects class implements this. */

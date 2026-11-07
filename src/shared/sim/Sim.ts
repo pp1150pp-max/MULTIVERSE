@@ -272,7 +272,7 @@ export class Sim {
       this.text(p.x, p.topY, p.z, 'MISS', 'info', 0.6);
       return;
     }
-    const dmg = Math.round(mitigate(m.atk * mult * (0.9 + Math.random() * 0.2), p.stats.def));
+    const dmg = Math.round(mitigate(m.atk * mult * (0.9 + Math.random() * 0.2), p.stats.def) + p.maxHp * (opts.maxHpShare ?? 0));
     p.hp -= dmg;
     p.lastHurt = this.time;
     p.interruptPotions();

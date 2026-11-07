@@ -59,6 +59,8 @@ export interface MonsterDef {
   /** Bosses only: below half HP, chase speed is multiplied by `speed` and every attack's
    *  cooldown and wind-up by `skill` — replaces the usual enrage boost. */
   frenzy?: { speed: number; skill: number };
+  /** Bosses only: multiplies the cooldowns of its slam and throw (0.5 = twice as often). */
+  skillCd?: number;
   /** Fights by a scripted attack pattern and never moves (see sim/volcanoHeart.ts). */
   pattern?: 'volcano_heart';
   itemChance: number;
@@ -137,7 +139,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   bog_witch: {
     id: 'bog_witch', name: 'Bog Witch', nameTh: 'แม่มดหนอง (Boss)', levels: [20, 20],
-    hp: 7436, atk: 83, def: 24, speed: 2.1, exp: 3000, gold: [220, 360],
+    hp: 14872, atk: 124.5, def: 24, speed: 2.1, exp: 3000, gold: [220, 360],
     aggroRange: 9, attackRange: 2.0, attackCooldown: 1.7, height: 3.6, radius: 1.1,
     behavior: 'boss', frenzy: { speed: 3, skill: 0.5 }, itemChance: 1, potionChance: 1,
   },
@@ -183,9 +185,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   yeti: {
     id: 'yeti', name: 'Yeti', nameTh: 'เยติ (Boss)', levels: [30, 30],
-    hp: 17000, atk: 160, def: 34, speed: 2.2, exp: 7000, gold: [550, 900],
+    hp: 42500, atk: 320, def: 34, speed: 2.2, exp: 7000, gold: [550, 900],
     aggroRange: 9, attackRange: 2.1, attackCooldown: 1.8, height: 3.9, radius: 1.25,
-    behavior: 'boss', summon: { monster: 'yeti_minion', count: 3, vanish: true }, enrageAt: 0.3, enrageRamp: true, slamRadius: 5.5,
+    behavior: 'boss', summon: { monster: 'yeti_minion', count: 3, vanish: true }, enrageAt: 0.3, enrageRamp: true, slamRadius: 5.5, skillCd: 0.5,
     thrown: { art: 'snowball', speed: 9, range: 10, mult: 1.3, radius: 0.6, size: 1.5, color: '#e6f2fb', minRange: 5, cooldown: 5 },
     itemChance: 1, potionChance: 1,
   },
@@ -239,7 +241,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   volcano_heart: {
     id: 'volcano_heart', name: 'Volcano Heart', nameTh: 'หัวใจภูเขาไฟ (Boss)', levels: [40, 40],
-    hp: 45000, atk: 380, def: 65, speed: 0, exp: 16000, gold: [1300, 2100],
+    hp: 225000, atk: 380, def: 65, speed: 0, exp: 16000, gold: [1300, 2100],
     aggroRange: 0, attackRange: 0, attackCooldown: 99, height: 4.4, radius: 1.5,
     behavior: 'boss', pattern: 'volcano_heart', itemChance: 1, potionChance: 1,
   },
