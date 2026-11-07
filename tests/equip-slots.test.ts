@@ -24,9 +24,9 @@ const ids = ITEM_BASES.map((b) => b.id);
 ok(new Set(ids).size === ids.length, 'item kinds have unique ids');
 const newSlots: SlotId[] = ['necklace', 'gloves', 'belt', 'offhand'];
 for (const s of ['necklace', 'gloves', 'belt']) {
-  ok(ITEM_BASES.filter((b) => b.slot === s).length === 3, `${s} has 3 kinds`);
+  ok(ITEM_BASES.filter((b) => b.slot === s).length === 4, `${s} has 4 kinds`);
 }
-ok(ITEM_BASES.filter((b) => b.slot === 'offhand').length === 9, 'off-hands: 3 kinds per class');
+ok(ITEM_BASES.filter((b) => b.slot === 'offhand').length === 12, 'off-hands: 4 kinds per class');
 ok(ITEM_ART.length === new Set(ITEM_ART).size, 'item pictures have unique names');
 
 // Off-hands belong to one class

@@ -2,7 +2,7 @@
 
 สร้างในแชทเดียวกับชุดมอนสเตอร์ และแนบภาพ Gunslinger เป็นตัวอย่างในภาพแรก
 เซฟไฟล์ดิบตามชื่อในแต่ละหัวข้อไว้ที่ `art_templates/zone4/raw/` แล้วผมจะตัดพื้นหลังและวางเข้าเกมเอง
-ชุดมอนสเตอร์ (`monsters_a.png`, `monsters_b.png`, `monster_volcano_heart.png`) ไม่อยู่ในไฟล์นี้ เพราะคุณกำลังเจนอยู่แล้ว
+ชุดมอนสเตอร์อยู่ข้อ 9–11 ท้ายไฟล์
 
 มีทั้งหมด 8 รายการ (พื้น 3 ภาพ รวมเป็น 10 ไฟล์) ถ้าอยากเห็นผลเร็ว ให้เริ่มจากข้อ 1–2 ก่อน
 
@@ -66,4 +66,22 @@ Same style, same layout rules. Generate a SQUARE image: a strict invisible grid 
 
 ```
 Same style. Generate an image: one small fiery ember magic bolt seen from the side, pointing to the RIGHT, a glowing orange core with a short tail of sparks, wider than it is tall, centred and filling most of the image. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no text, no labels. Do not use pink or magenta in the bolt.
+```
+
+## 9. มอนสเตอร์ ชุด A → `monsters_a.png`
+
+```
+Monsters for the same game, in the EXACT same fine-detail 16-bit SNES-era JRPG sprite style as the gunslinger: dark outline, rich shading with 3 to 4 tones per material, small crisp pixels, no chunky pixels, cute slightly chibi proportions with a big head and big round shiny eyes, soft rounded shapes, friendly rather than scary, no gore. Same camera angle. Generate an image: a strict grid of 3 rows x 5 columns, one creature per row, each row the SAME creature in exactly 5 views, from left to right: (1) front facing the viewer, (2) three-quarter front turned toward the LEFT, (3) side view facing LEFT, (4) three-quarter back turned toward the LEFT, (5) back view. Identical size, colors and design across its 5 views, on the same baseline, generous empty space, nothing touching or overlapping. Row 1: Ember Wisp, a tiny round floating ball of fire with a warm orange body, a yellow glowing core, a small flame on top and a cute face, no arms or legs, hovering just above the ground. Row 2: Salamander, a chubby low lizard with dark red-orange skin, a pale yellow belly, glowing ember spots along its back and a short thick tail, longer than it is tall. Row 3: Lava Bat, a round little bat with charcoal fur, big ears, wide leathery wings with glowing orange veins and two tiny fangs, hovering just above the ground. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no ground, no text, no labels, no grid lines. Do not use pink, magenta or purple on any creature.
+```
+
+## 10. มอนสเตอร์ ชุด B → `monsters_b.png`
+
+```
+Same exact style, same cute proportions and same layout rules: a strict grid of 3 rows x 5 columns, each row the SAME creature in the same 5 views, front, three-quarter front LEFT, side LEFT, three-quarter back LEFT, back. Row 1: Magma Golem, a big stocky golem built from dark basalt blocks with glowing orange magma in the cracks, thick round arms, short legs and small kind glowing eyes, tough but still cute. Row 2: Ash Mage, a small hooded mage in a long soot-grey robe with ember-coloured trim, a round shadowed face with two bright eyes, holding a short charred staff tipped with a burning coal. Row 3: Ash Knight, a small round knight in dark soot-black armour with ember-coloured seams, a rounded helmet with two bright eyes showing through the visor, holding a short black sword and a small round shield. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no ground, no text, no labels, no grid lines. Do not use pink, magenta or purple on any creature.
+```
+
+## 11. บอสหัวใจภูเขาไฟ → `monster_volcano_heart.png`
+
+```
+Same exact style and same 5 views. Generate an image: 1 row x 5 columns of one large boss creature, Volcano Heart, filling most of each cell, identical size and design in all views, on the same baseline. A huge living heart of molten rock that stands still on a mound of black basalt: a big rounded dark rock heart shape with bright glowing orange and yellow magma showing through wide cracks, thick stone veins wrapping around it, small flames and embers rising from its top. It has two big round glowing eyes and a small mouth on the front so it stays charming rather than horrifying, no anatomy, no blood, no gore. Imposing boss silhouette, clearly bigger and brighter than the other monsters. Because it stands still, the mound keeps the same footprint in all views. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no text, no labels, no grid lines. Do not use pink, magenta or purple on the creature.
 ```

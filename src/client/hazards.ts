@@ -28,7 +28,8 @@ function arc(inner: number, outer: number, from: number, length: number): THREE.
 
 interface View {
   group: THREE.Group;
-  update(t: number): void;
+  /** `outer`: for a wave, how far out its gaps still matter. */
+  update(t: number, outer?: number): void;
 }
 
 function meteorView(h: MeteorHazard): View {
@@ -53,24 +54,27 @@ function meteorView(h: MeteorHazard): View {
 function ringView(h: RingHazard): View {
   const group = new THREE.Group();
   group.position.set(h.x, Y, h.z);
-  // Green wedges show where the gaps are from the moment the warning starts.
-  for (const g of h.gaps) {
-    group.add(new THREE.Mesh(arc(0.2, h.maxR, g - h.gapArc / 2, h.gapArc), mat(SAFE, 0.16)));
-  }
+  // Green wedges show the gaps, only over the ground this wave reaches next: from its own front out
+  // to the front of the wave ahead. So at any spot, green means safe from the next wave to arrive.
+  const safe = new THREE.Mesh(new THREE.BufferGeometry(), mat(SAFE, 0.2));
   const wave = new THREE.Mesh(new THREE.BufferGeometry(), mat(FIRE, 0.9, null, true));
-  group.add(wave);
+  group.add(safe, wave);
   const walls = (Math.PI * 2) / h.gaps.length - h.gapArc;
+  const rebuild = (mesh: THREE.Mesh, geos: THREE.BufferGeometry[]) => {
+    mesh.geometry.dispose();
+    mesh.geometry = merge(geos);
+    for (const geo of geos) geo.dispose();
+  };
   return {
     group,
-    update(t) {
+    update(t, outer = h.maxR) {
       const rr = ringRadiusAt(h, t);
+      const inner = Math.max(0.2, rr);
+      safe.visible = outer > inner;
+      if (safe.visible) rebuild(safe, h.gaps.map((g) => arc(inner, outer, g - h.gapArc / 2, h.gapArc)));
       wave.visible = t >= h.hit && rr > 0;
-      if (!wave.visible) return;
       // The band keeps its width as it grows, so its shape is rebuilt.
-      const geos = h.gaps.map((g) => arc(rr - h.width / 2, rr + h.width / 2, g + h.gapArc / 2, walls));
-      wave.geometry.dispose();
-      wave.geometry = merge(geos);
-      for (const geo of geos) geo.dispose();
+      if (wave.visible) rebuild(wave, h.gaps.map((g) => arc(rr - h.width / 2, rr + h.width / 2, g + h.gapArc / 2, walls)));
     },
   };
 }
@@ -167,6 +171,14 @@ export class HazardViews {
 
   update(list: readonly Hazard[], time: number): void {
     const seen = new Set<number>();
+    // Oldest wave first: each one's gaps stop where the wave ahead of it has got to.
+    const outer = new Map<number, number>();
+    let ahead: RingHazard | null = null;
+    for (const h of list) {
+      if (h.k !== 'ring') continue;
+      if (ahead) outer.set(h.id, ringRadiusAt(ahead, time));
+      ahead = h;
+    }
     for (const h of list) {
       seen.add(h.id);
       let v = this.views.get(h.id);
@@ -175,7 +187,7 @@ export class HazardViews {
         this.views.set(h.id, v);
         this.scene.add(v.group);
       }
-      v.update(time);
+      v.update(time, outer.get(h.id));
     }
     for (const [id, v] of this.views) {
       if (seen.has(id)) continue;

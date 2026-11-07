@@ -476,7 +476,8 @@ export class World {
       this.addEmberCracks(mulberry32(terrain.zone.seed + 43));
       for (const l of terrain.zone.lavaPools ?? []) {
         const mat = this.own(new THREE.MeshBasicMaterial({
-          map: fxTex.glow, color: '#ff7a2a', transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending,
+          // Faint: the lava tile is bright already, and this only lifts the rock around it.
+          map: fxTex.glow, color: '#5a2408', transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending,
         }));
         const halo = this.add(new THREE.Mesh(this.ownGeo(new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2)), mat));
         halo.position.set(l.x, 0.04, l.z);
@@ -1076,7 +1077,7 @@ export class World {
     }
     const geo = this.ownGeo(new THREE.BufferGeometry());
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    const mat = this.own(new THREE.MeshBasicMaterial({ color: '#ff8a3a', transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
+    const mat = this.own(new THREE.MeshBasicMaterial({ color: '#f0641e', transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide }));
     this.add(new THREE.Mesh(geo, mat));
     this.lavaGlows.push(mat);
   }
