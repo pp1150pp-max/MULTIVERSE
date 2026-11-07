@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { clearingRadius } from '../shared/data/zones';
+import { clearingRadius, themeAt, ZONES } from '../shared/data/zones';
+import { QUADRANT_JITTER } from '../shared/sim/terrain';
 import type { PropSpec, Terrain } from '../shared/sim/terrain';
 import type { ZoneTheme } from '../shared/data/zones';
 import { mulberry32, pick, rand, type Rng } from '../shared/rng';
@@ -128,6 +129,12 @@ const GROUND_VERT = /* glsl */ `
 const GROUND_FRAG = /* glsl */ `
   uniform sampler2D uMask, uCover, uBase, uDirt, uPave, uWater;
   uniform float uHalf, uBound, uTileUnits, uTime, uBake, uFlow;
+  // The hub's walled town (x, z, half): bricked up to a straight edge under its wall, not a wandering one.
+  uniform vec3 uTown;
+  #ifdef QUADS
+  // The hub: uBase/uDirt are the top quarter's (x<0, z<0); 1 = right (x≥0, z<0), 2 = left (x<0, z≥0), 3 = bottom.
+  uniform sampler2D uBase1, uBase2, uBase3, uDirt1, uDirt2, uDirt3;
+  #endif
   varying vec2 vWorld;
   varying float vEdge;
 
@@ -180,15 +187,39 @@ const GROUND_FRAG = /* glsl */ `
 
     // Patches of the same tile turned a quarter turn hide the repeat too.
     float patchy = sin(vWorld.x * 0.17 + sin(vWorld.y * 0.13) * 1.3) + sin(vWorld.y * 0.19 + sin(vWorld.x * 0.11) * 1.7);
-    vec3 baseTex = texture2D(uBase, patchy > 0.0 ? tile : vec2(tile.y, -tile.x) + 0.37).rgb;
-    vec3 base = calm(baseTex, uBase, 0.95, 1.1, 1.0) * (1.0 + macro * 0.2);
-    vec3 dirt = calm(texture2D(uDirt, tile).rgb, uDirt, 0.9, 1.0, 1.0) * (1.0 + macro * 0.14);
+    vec2 btile = patchy > 0.0 ? tile : vec2(tile.y, -tile.x) + 0.37;
+    vec3 baseTex = texture2D(uBase, btile).rgb;
+    vec3 base = calm(baseTex, uBase, 0.95, 1.1, 1.0);
+    vec3 dirt = calm(texture2D(uDirt, tile).rgb, uDirt, 0.9, 1.0, 1.0);
+    float rel = relief(baseTex, uBase);
+    #ifdef QUADS
+    // Which quarter: the borders wander a long way and break up in chunky pixels, so the lands
+    // run into each other in ragged tongues and islands instead of meeting along a line.
+    vec2 wob = (vec2(noise(snapped * 0.045 + 7.0), noise(snapped * 0.045 + 29.0)) - 0.5) * 26.0
+      + (vec2(noise(snapped * 0.31), noise(snapped * 0.31 + 13.0)) - 0.5) * 7.0 + lobes * 3.0;
+    float wx = smoothstep(-0.5, 0.5, vWorld.x + wob.x);
+    float wz = smoothstep(-0.5, 0.5, vWorld.y + wob.y);
+    float w0 = (1.0 - wx) * (1.0 - wz);
+    float w1 = wx * (1.0 - wz);
+    float w2 = (1.0 - wx) * wz;
+    float w3 = wx * wz;
+    vec3 b1 = texture2D(uBase1, btile).rgb;
+    vec3 b2 = texture2D(uBase2, btile).rgb;
+    vec3 b3 = texture2D(uBase3, btile).rgb;
+    base = base * w0 + calm(b1, uBase1, 0.95, 1.1, 1.0) * w1 + calm(b2, uBase2, 0.95, 1.1, 1.0) * w2 + calm(b3, uBase3, 0.95, 1.1, 1.0) * w3;
+    dirt = dirt * w0 + calm(texture2D(uDirt1, tile).rgb, uDirt1, 0.9, 1.0, 1.0) * w1
+      + calm(texture2D(uDirt2, tile).rgb, uDirt2, 0.9, 1.0, 1.0) * w2 + calm(texture2D(uDirt3, tile).rgb, uDirt3, 0.9, 1.0, 1.0) * w3;
+    rel = rel * w0 + relief(b1, uBase1) * w1 + relief(b2, uBase2) * w2 + relief(b3, uBase3) * w3;
+    #endif
+    base *= 1.0 + macro * 0.2;
+    dirt *= 1.0 + macro * 0.14;
     // Grass blades reach over the dirt, and grass thins out and darkens just before it gives way.
-    float bare = cover.r + lobes * 0.85 - relief(baseTex, uBase) * 1.4;
+    float bare = cover.r + lobes * 0.85 - rel * 1.4;
     vec3 col = mix(base * (1.0 - 0.12 * smoothstep(0.18, 0.46, bare)), dirt, smoothstep(0.46, 0.54, bare));
     // Paving: raised stones show first, so grass and dirt fill the gaps at its edge.
     vec3 paveTex = texture2D(uPave, tile).rgb;
     float laid = cover.g + lobes * 0.6 + relief(paveTex, uPave) * 1.0;
+    if (uTown.z > 0.0) laid = max(abs(vWorld.x - uTown.x), abs(vWorld.y - uTown.y)) < uTown.z ? 1.0 : 0.0;
     col = mix(col, calm(paveTex, uPave, 0.9, 1.0, 1.0) * (1.0 + macro * 0.1), smoothstep(0.46, 0.54, laid));
 
     // Pool shores wander instead of following the smooth shapes drawn in the mask.
@@ -214,6 +245,19 @@ const GROUND_FRAG = /* glsl */ `
     if (uBake > 0.5) gl_FragColor.rgb = pow(gl_FragColor.rgb, vec3(1.0 / 2.2));
   }
 `;
+
+/** Quads gathered per sheet, for drawing a mix of themes (the hub) one mesh per sheet. */
+class QuadGroups {
+  private readonly map = new Map<string, { positions: number[]; uvs: number[] }>();
+  get(key: string): { positions: number[]; uvs: number[] } {
+    let g = this.map.get(key);
+    if (!g) this.map.set(key, (g = { positions: [], uvs: [] }));
+    return g;
+  }
+  all(): IterableIterator<[string, { positions: number[]; uvs: number[] }]> {
+    return this.map.entries();
+  }
+}
 
 interface Fadeable { mat: THREE.SpriteMaterial; x: number; z: number; w: number; h: number; o: number }
 interface Fog { spr: THREE.Sprite; vx: number; vz: number; base: number; phase: number }
@@ -420,7 +464,14 @@ export class World {
     this.groundCanvas = this.paintGround(mulberry32(terrain.zone.seed));
     const t = this.pal.tiles;
     const tiles = [groundTiles[t.base], groundTiles[t.dirt], groundTiles[t.water ?? 'water'], groundTiles[t.pave ?? 'pave']];
-    if (tiles.every(Boolean)) {
+    // The hub's other three quarters: base and dirt of each.
+    const quads = (terrain.zone.quadrants ?? []).slice(1).map((q) => [groundTiles[PALETTES[q].tiles.base], groundTiles[PALETTES[q].tiles.dirt]]);
+    const firstQuad = terrain.zone.quadrants ? PALETTES[terrain.zone.quadrants[0]].tiles : t;
+    tiles[0] = groundTiles[firstQuad.base];
+    tiles[1] = groundTiles[firstQuad.dirt];
+    // The hub's town is bricked; stone paving until the brick tile exists.
+    if (terrain.zone.npcs) tiles[3] = groundTiles.brick ?? groundTiles.pave;
+    if (tiles.every(Boolean) && quads.flat().every(Boolean)) {
       const mask = new THREE.CanvasTexture(this.paintMask());
       mask.colorSpace = THREE.NoColorSpace;
       mask.flipY = false;
@@ -442,7 +493,13 @@ export class World {
         uBake: { value: 0 },
         // Ice doesn't flow.
         uFlow: { value: terrain.zone.iceLakes ? 0 : 1 },
+        // Right up to the foot of the town wall.
+        uTown: { value: new THREE.Vector3(terrain.zone.safe?.x ?? 0, terrain.zone.safe?.z ?? 0, terrain.zone.safe ? terrain.zone.safe.half - 0.2 : 0) },
       };
+      quads.forEach(([base, dirt], i) => {
+        this.groundUniforms![`uBase${i + 1}`] = { value: base };
+        this.groundUniforms![`uDirt${i + 1}`] = { value: dirt };
+      });
     } else {
       const tex = new THREE.CanvasTexture(this.groundCanvas);
       tex.flipY = false;
@@ -456,7 +513,10 @@ export class World {
     this.groundMesh = this.add(new THREE.Mesh(
       this.ownGeo(this.outline.groundGeometry()),
       this.own(this.groundUniforms
-        ? new THREE.ShaderMaterial({ uniforms: this.groundUniforms, vertexShader: GROUND_VERT, fragmentShader: GROUND_FRAG, side: THREE.DoubleSide })
+        ? new THREE.ShaderMaterial({
+          uniforms: this.groundUniforms, vertexShader: GROUND_VERT, fragmentShader: GROUND_FRAG, side: THREE.DoubleSide,
+          defines: quads.length ? { QUADS: '' } : {},
+        })
         : new THREE.MeshBasicMaterial({ map: this.groundTex, side: THREE.DoubleSide })),
     ));
 
@@ -468,7 +528,11 @@ export class World {
     for (const p of this.props) this.addProp(p.key, p.x, p.z, p.height, p.fade);
     const fire = terrain.props.find((p) => p.key === 'campfire');
     if (fire) this.flames.push(this.glow(fire.x, 0.5, fire.z, '#ffa040', 0.55));
-    for (const p of terrain.zone.portals) this.portals.push(this.glow(p.x, 1.5, p.z, this.pal.portalGlow, 0.5));
+    // Each portal glows like the land it leads to; the way back to town glows gold.
+    for (const p of terrain.zone.portals) {
+      const to = ZONES[p.to];
+      this.portals.push(this.glow(p.x, 1.5, p.z, to?.npcs ? '#ffd98a' : PALETTES[to?.theme ?? terrain.zone.theme].portalGlow, 0.5));
+    }
     this.addFog(mulberry32(terrain.zone.seed + 7));
     if (terrain.zone.theme === 'snow') this.addSnow(mulberry32(terrain.zone.seed + 41));
     if (terrain.zone.theme === 'volcano') {
@@ -493,6 +557,16 @@ export class World {
 
   private get zone() {
     return this.terrain.zone;
+  }
+
+  /** Bare ground around the camp, or the hub's whole town. */
+  private get campRadius(): number {
+    return this.zone.safe ? this.zone.safe.half - 2 : CAMP_RADIUS;
+  }
+
+  /** The theme the ground is drawn with here (in the hub, which quarter). */
+  private themeAt(x: number, z: number): ZoneTheme {
+    return themeAt(this.zone, x, z, QUADRANT_JITTER);
   }
 
   private get segs() {
@@ -658,10 +732,7 @@ export class World {
 
   /** Broken rock under the two shores that face the camera. One mesh, as with the decor. */
   private addCliffs(r: Rng): void {
-    const key = ISLAND_ART[this.zone.theme].cliff;
-    if (assetSources[key] !== 'file') return;
-    const positions: number[] = [];
-    const uvs: number[] = [];
+    const groups = new QuadGroups();
     const H = this.half;
     const span = 4 / H; // Past each end of the near shores by 4 world units.
     for (const layer of CLIFF_LAYERS) {
@@ -673,6 +744,9 @@ export class World {
         const ax = sx * k;
         const ay = layer.y;
         const az = sz * k;
+        const key = ISLAND_ART[this.themeAt(ax, az)].cliff;
+        if (assetSources[key] !== 'file') continue;
+        const { positions, uvs } = groups.get(key);
         const hx = (CAM_RIGHT.x * width) / 2;
         const hz = (CAM_RIGHT.z * width) / 2;
         const dx = CAM_UP.x * height;
@@ -693,19 +767,19 @@ export class World {
         uvs.push(ul, v0, ur, v0, ur, v1, ul, v1);
       }
     }
-    this.addQuads(key, positions, uvs);
+    for (const [key, g] of groups.all()) this.addQuads(key, g.positions, g.uvs);
   }
 
   /** Grass and weeds along the shore, all rooted on solid land just inside its crumbled edge. */
   private addShoreTufts(r: Rng): void {
-    const set = DECOR[this.zone.theme];
-    if (assetSources[set.key] !== 'file') return;
-    const positions: number[] = [];
-    const uvs: number[] = [];
+    const groups = new QuadGroups();
     const step = 8 / (8 * this.half);
     for (let s = 0; s < 8; s += rand(r, 0.45, 1) * step) {
       const [x, z] = this.outline.at(s, -rand(r, 0.85, 1.7));
+      const set = DECOR[this.themeAt(x, z)];
       const cell = pick(r, set.spots.verge);
+      if (assetSources[set.key] !== 'file') continue;
+      const { positions, uvs } = groups.get(set.key);
       const size = DECOR_CELL_UNITS * rand(r, 0.85, 1.3);
       const hx = (CAM_RIGHT.x * size) / 2;
       const hz = (CAM_RIGHT.z * size) / 2;
@@ -720,7 +794,7 @@ export class World {
       const [ul, ur] = r() < 0.5 ? [u1, u0] : [u0, u1];
       uvs.push(ul, v0, ur, v0, ur, v1, ul, v1);
     }
-    this.addQuads(set.key, positions, uvs);
+    for (const [key, g] of groups.all()) this.addQuads(key, g.positions, g.uvs);
   }
 
   /** Fissures in the land around the rim, where it's coming apart. */
@@ -753,8 +827,8 @@ export class World {
 
   /** Rocks, star shards and slabs of land coming away from the island, and crumbs falling off it. */
   private addPieces(r: Rng): void {
-    const slabsKey = ISLAND_ART[this.zone.theme].slabs;
-    if (assetSources.island_debris !== 'file' || assetSources[slabsKey] !== 'file') return;
+    const slabKeys = [...new Set((this.zone.quadrants ?? [this.zone.theme]).map((q) => ISLAND_ART[q].slabs))];
+    if (assetSources.island_debris !== 'file' || slabKeys.some((k) => assetSources[k] !== 'file')) return;
     const H = this.half;
     const cell = (cols: number, rows: number, i: number) => {
       const u0 = (i % cols) / cols;
@@ -768,7 +842,7 @@ export class World {
     };
     const rocks = new PieceBatch(r);
     const halos = new PieceBatch(r);
-    const slabs = new PieceBatch(r);
+    const slabs = new Map(slabKeys.map((k) => [k, new PieceBatch(r)]));
 
     const rock = (s: number, past: number, y: number, speed: number) => {
       const small = r() < 0.3;
@@ -815,7 +889,8 @@ export class World {
       const s = near ? rand(r, -0.05, 4.05) : rand(r, 4, 8);
       const half = rand(r, 1.7, 3.8);
       const past = shoreAt(s) + (near ? closeBias(r, 1.5, 15) : closeBias(r, half * 0.6, 18));
-      slabs.add({
+      const [lx, lz] = this.outline.at(s);
+      slabs.get(ISLAND_ART[this.themeAt(lx, lz)].slabs)!.add({
         s, past, y: near ? -half * 0.9 - rand(r, 0, 7) : rand(r, -0.5, 3.5), speed: 0, w: half, h: half,
         bob: rand(r, 0.15, 0.5), ...cell(4, 2, (r() * 8) | 0),
       });
@@ -823,7 +898,7 @@ export class World {
 
     for (const [batch, map, glow] of [
       [rocks, sheets.island_debris.texture, false],
-      [slabs, sheets[slabsKey].texture, false],
+      ...[...slabs].map(([k, batch]) => [batch, sheets[k].texture, false] as const),
       [halos, fxTex.glow, true],
     ] as const) {
       const { mesh, geo, mat } = batch.build(map, this.pieceUniforms, glow);
@@ -885,10 +960,12 @@ export class World {
 
   /** Grass tufts, flowers, stones and the like, in clumps along roads, clearings and pool shores. */
   private addDecor(r: Rng): void {
-    const set = DECOR[this.zone.theme];
-    if (assetSources[set.key] !== 'file') return;
+    if ((this.zone.quadrants ?? [this.zone.theme]).some((q) => assetSources[DECOR[q].key] !== 'file')) return;
     const B = this.bound;
-    const { start, boss, portals, spawns } = this.zone;
+    const { start, boss, portals, spawns, safe } = this.zone;
+    // In the hub: nothing inside the walled town (a square; this circle reaches its corners).
+    const campRadius = safe ? safe.half * 1.45 : CAMP_RADIUS;
+    const groups = new QuadGroups();
     const trail = TRAIL_WIDTH[this.zone.theme] / 2;
     const near = (x: number, z: number, p: { x: number; z: number }, d: number) => Math.hypot(x - p.x, z - p.z) < d;
     const inPool = (x: number, z: number, grow: number) =>
@@ -896,9 +973,8 @@ export class World {
 
     const right = new THREE.Vector3(S, 0, -S);
     const up = new THREE.Vector3().crossVectors(right, ISO_DIR.clone().negate()).normalize();
-    const positions: number[] = [];
-    const uvs: number[] = [];
-    const place = (cell: number, x: number, z: number) => {
+    const place = (set: (typeof DECOR)[ZoneTheme], cell: number, x: number, z: number) => {
+      const { positions, uvs } = groups.get(set.key);
       const size = DECOR_CELL_UNITS * rand(r, 0.85, 1.15);
       const flip = r() < 0.5;
       const u0 = (cell % set.cols) / set.cols;
@@ -916,6 +992,7 @@ export class World {
     };
     /** A clump of details around a point, skipping anything that would land somewhere odd. */
     const clump = (spot: DecorSpot, x: number, z: number, count: number, spread: number) => {
+      const set = DECOR[this.themeAt(x, z)];
       const cells = set.spots[spot];
       if (!cells.length) return;
       for (let i = 0; i < count; i++) {
@@ -924,9 +1001,9 @@ export class World {
         if (Math.abs(px) > B || Math.abs(pz) > B) continue;
         if (spot === 'water' ? !inPool(px, pz, -0.3) : inPool(px, pz, 0.5)) continue;
         if (spot !== 'road' && this.distToPath(px, pz) < trail + 0.2) continue;
-        if (near(px, pz, start, CAMP_RADIUS * 0.8) || portals.some((g) => near(px, pz, g, 2.5))) continue;
+        if (near(px, pz, start, campRadius * 0.8) || portals.some((g) => near(px, pz, g, 2.5))) continue;
         if (this.terrain.colliders.some((c) => near(px, pz, c, c.r + 0.3))) continue;
-        place(pick(r, cells), px, pz);
+        place(set, pick(r, cells), px, pz);
       }
     };
 
@@ -944,7 +1021,9 @@ export class World {
         }
       }
     }
-    for (const [c, rad, count] of [[start, CAMP_RADIUS + 1.2, 26], [boss, clearingRadius(this.zone) + 0.4, 34]] as const) {
+    const rings: [{ x: number; z: number }, number, number][] = safe ? [] : [[start, campRadius + 1.2, 26]];
+    if (boss) rings.push([boss, clearingRadius(this.zone) + 0.4, 34]);
+    for (const [c, rad, count] of rings) {
       for (let i = 0; i < count; i++) {
         const a = r() * Math.PI * 2;
         clump('verge', c.x + Math.cos(a) * rad, c.z + Math.sin(a) * rad, 2, 0.8);
@@ -957,14 +1036,14 @@ export class World {
       }
       if (r() < 0.45) clump('water', b.x, b.z, 2, Math.min(b.rx, b.rz) * 0.6);
     }
-    for (let i = 0; i < 520; i++) {
+    for (let i = 0; i < 520 * (B / 56) ** 2; i++) {
       const x = rand(r, -B, B);
       const z = rand(r, -B, B);
       // Thin in the hunting grounds, so monsters stay easy to see.
       if (spawns.some((sp) => near(x, z, sp, sp.radius * 0.6)) && r() < 0.7) continue;
       clump('field', x, z, 2 + ((r() * 4) | 0), 1.3);
     }
-    this.addQuads(set.key, positions, uvs);
+    for (const [key, g] of groups.all()) this.addQuads(key, g.positions, g.uvs);
   }
 
   /** Short runs of old boards lying flat across the trail, instead of a boardwalk all the way. */
@@ -980,7 +1059,7 @@ export class World {
         const f = t / dist;
         const x = ax + (bx - ax) * f;
         const z = az + (bz - az) * f;
-        if (Math.hypot(x - start.x, z - start.z) < CAMP_RADIUS + 3 || Math.hypot(x - boss.x, z - boss.z) < clearingRadius(this.zone) + 1) continue;
+        if (Math.hypot(x - start.x, z - start.z) < CAMP_RADIUS + 3 || (boss && Math.hypot(x - boss.x, z - boss.z) < clearingRadius(this.zone) + 1)) continue;
         const a = Math.atan2(bz - az, bx - ax) + rand(r, -0.12, 0.12);
         const along = [Math.cos(a), Math.sin(a)];
         const across = [-along[1], along[0]];
@@ -1058,7 +1137,7 @@ export class World {
     for (let made = 0, tries = 0; made < 26 && tries < 400; tries++) {
       let x = rand(r, -B, B);
       let z = rand(r, -B, B);
-      if (Math.hypot(x - start.x, z - start.z) < CAMP_RADIUS + 5 || Math.hypot(x - boss.x, z - boss.z) < clearingRadius(this.zone) + 1) continue;
+      if (Math.hypot(x - start.x, z - start.z) < CAMP_RADIUS + 5 || (boss && Math.hypot(x - boss.x, z - boss.z) < clearingRadius(this.zone) + 1)) continue;
       if (this.terrain.onLava(x, z) || this.terrain.distToPath(x, z) < 3) continue;
       made++;
       let a = r() * Math.PI * 2;
@@ -1157,9 +1236,12 @@ export class World {
     spr.center.set(0.5, 0.03);
     spr.scale.set(w, height, 1);
     spr.position.set(x, 0, z);
-    const sd = this.add(new THREE.Mesh(this.shadowGeo, this.shadowMat));
-    sd.scale.set(w * 0.8, 1, w * 0.45);
-    sd.position.set(x, 0.015, z);
+    // Long town-wall pieces stand on a line, not a spot: a round shadow under each would only blot the ground.
+    if (!key.startsWith('town_wall')) {
+      const sd = this.add(new THREE.Mesh(this.shadowGeo, this.shadowMat));
+      sd.scale.set(w * 0.8, 1, w * 0.45);
+      sd.position.set(x, 0.015, z);
+    }
     if (fade) this.fadeables.push({ mat, x, z, w, h: height, o: 1 });
   }
 
@@ -1222,8 +1304,8 @@ export class World {
 
     // Bare ground around the camp and the boss: a rough outer rim, then packed dirt with stones.
     const clearings: [number, number, number][] = [
-      [this.zone.start.x, this.zone.start.z, 7],
-      [this.zone.boss.x, this.zone.boss.z, clearingRadius(this.zone) - 1],
+      [this.zone.start.x, this.zone.start.z, this.campRadius],
+      ...(this.zone.boss ? [[this.zone.boss.x, this.zone.boss.z, clearingRadius(this.zone) - 1] as [number, number, number]] : []),
     ];
     const clearing = (scale: number) => (m: CanvasRenderingContext2D) => {
       m.beginPath();
@@ -1458,9 +1540,16 @@ export class World {
     };
     const { start, boss } = this.zone;
 
+    // A square (on the map, a diamond) of ground, for the hub's walled town.
+    const square = (x: number, z: number, half: number) => {
+      const [x0, y0] = P(x - half, z - half);
+      ctx.fillRect(x0, y0, 2 * half * k, 2 * half * k);
+    };
+    const safe = this.zone.safe;
     ctx.fillStyle = ctx.strokeStyle = '#ff0000';
-    circle(start.x, start.z, CAMP_RADIUS);
-    circle(boss.x, boss.z, clearingRadius(this.zone) - 1);
+    if (safe) square(safe.x, safe.z, safe.half - 0.4);
+    else circle(start.x, start.z, this.campRadius);
+    if (boss) circle(boss.x, boss.z, clearingRadius(this.zone) - 1);
     for (const b of this.poolBlobs) {
       const [px, py] = P(b.x, b.z);
       ctx.beginPath();
@@ -1477,7 +1566,10 @@ export class World {
     ctx.stroke();
 
     ctx.fillStyle = '#00ff00';
-    circle(start.x, start.z, CAMP_RADIUS * 0.72);
+    // The hub's town is bricked right out to its wall.
+    // Up to the foot of the town wall.
+    if (safe) square(safe.x, safe.z, safe.half - 0.2);
+    else circle(start.x, start.z, CAMP_RADIUS * 0.72);
 
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.NoColorSpace;
@@ -1560,7 +1652,7 @@ export class World {
       const z = rand(r, -B, B);
       const rad = rand(r, 1.4, 4.2);
       if (this.distToPath(x, z) < rad + 2.2) continue;
-      if (!away(x, z, zone.start, 12 + rad) || !away(x, z, zone.boss, clearingRadius(zone) + rad)) continue;
+      if (!away(x, z, zone.start, 12 + rad) || (zone.boss && !away(x, z, zone.boss, clearingRadius(zone) + rad))) continue;
       made++;
       allBlobs.push(Array.from({ length: 3 + ((r() * 3) | 0) }, () => ({
         x: x + rand(r, -rad * 0.6, rad * 0.6),

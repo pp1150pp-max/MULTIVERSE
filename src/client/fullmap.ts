@@ -7,7 +7,8 @@ import { drawMapIcon, facingAngle } from './mapIcons';
 import type { MapIcon } from './mapIconNames';
 
 const S = Math.SQRT1_2;
-export const NPC_MAP_ICON: Record<NpcId, MapIcon> = { seeker: 'seeker', merchant: 'merchant', blacksmith: 'blacksmith', keeper: 'keeper' };
+// The market broker borrows the merchant's marker until icons/map_market.png is painted.
+export const NPC_MAP_ICON: Record<NpcId, MapIcon> = { seeker: 'seeker', merchant: 'merchant', blacksmith: 'blacksmith', keeper: 'keeper', broker: 'merchant' };
 
 /** How a monster's level compares with the player's, as a colour for its spawn area and label. */
 function dangerColour(monsterLevel: number, playerLevel: number): string {
@@ -87,10 +88,25 @@ export class FullMap {
     // Spawn areas and the boss lair.
     for (const sp of zone.spawns) {
       const d = MONSTERS[sp.monster];
-      area(sp.x, sp.z, sp.radius, dangerColour(d.levels[1], me.level));
+      area(sp.x, sp.z, Math.max(sp.radius, 2.5), dangerColour(d.levels[1], me.level));
     }
     const b = zone.boss;
-    area(b.x, b.z, 5, '#ff5a46');
+    if (b) area(b.x, b.z, 5, '#ff5a46');
+    if (zone.safe) {
+      // The walled town: a square in the world, a diamond on the map.
+      const { x, z, half } = zone.safe;
+      ctx.beginPath();
+      for (const [cx, cz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) ctx.lineTo(...at(x + cx * half, z + cz * half));
+      ctx.closePath();
+      ctx.globalAlpha = 0.1;
+      ctx.fillStyle = '#9fe0ff';
+      ctx.fill();
+      ctx.globalAlpha = 0.7;
+      ctx.lineWidth = 1.2 * px;
+      ctx.strokeStyle = '#9fe0ff';
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
 
     // Live markers.
     for (const m of g.monsters) {
@@ -129,31 +145,43 @@ export class FullMap {
     };
 
     // The fixed places first, so the rest move out of their way.
-    const bd = MONSTERS[b.monster];
-    const [bx, by] = at(b.x, b.z);
-    icon('boss', b.x, b.z, 34);
-    label(bx, by - 30 * px, `${bd.nameTh} Lv.${bd.levels[0]}`, '#ff9a8a', { size: 13 });
-    const [cx, cy] = at(zone.start.x, zone.start.z);
-    // Beside the camp rather than over it: the NPCs and often the player are standing there.
-    label(cx - 72 * px, cy, 'แคมป์', '#fff0c0', {
-      step: 1,
-      art: (ax, ay, s) => drawMapIcon(ctx, 'camp', ax, ay, s),
-    });
+    if (b) {
+      const bd = MONSTERS[b.monster];
+      const [bx, by] = at(b.x, b.z);
+      icon('boss', b.x, b.z, 34);
+      label(bx, by - 30 * px, `${bd.nameTh} Lv.${bd.levels[0]}`, '#ff9a8a', { size: 13 });
+    }
+    if (zone.npcs) {
+      const [cx, cy] = at(zone.start.x, zone.start.z);
+      // Above the town rather than over it: the NPCs and often the player are standing there.
+      label(cx, cy - 46 * px, zone.nameTh, '#fff0c0', {
+        size: 13,
+        art: (ax, ay, s) => drawMapIcon(ctx, 'camp', ax, ay, s),
+      });
+    }
     for (const pt of zone.portals) {
       const to = ZONES[pt.to];
       const [sx, sy] = at(pt.x, pt.z);
       icon('portal', pt.x, pt.z, 26);
       const lv = pt.minLevel > 0 ? ` (Lv.${pt.minLevel}+)` : '';
-      label(sx + 92 * px, sy, `วาปไป ${to?.nameTh ?? pt.to}${lv}`, '#e0c8ff', { step: 1 });
+      // Toward the middle of the map, so a portal near the left or right edge keeps its label on screen.
+      const side = sx > c + 40 * px ? -1 : sx < c - 40 * px ? 1 : 0;
+      label(sx + side * 92 * px, sy + (side ? 0 : (sy < c ? 30 : -30) * px), `วาปไป ${to?.nameTh ?? pt.to}${lv}`, '#e0c8ff', { step: sy < c ? 1 : -1 });
     }
 
     // Two areas of the same monster close together get one label, so the text doesn't pile up.
     const labelled: { monster: string; x: number; z: number }[] = [];
     for (const sp of zone.spawns) {
-      if (labelled.some((l) => l.monster === sp.monster && Math.hypot(l.x - sp.x, l.z - sp.z) < 24)) continue;
+      // The hub's single monsters stand in a long line in front of each portal: one label per kind per corner.
+      const together = zone.quadrants ? 60 : 24;
+      if (labelled.some((l) => l.monster === sp.monster && Math.hypot(l.x - sp.x, l.z - sp.z) < together)) continue;
       labelled.push({ monster: sp.monster, x: sp.x, z: sp.z });
+      // In the middle of its group, not at its first spot (which in the hub is the one nearest town).
+      const group = zone.spawns.filter((o) => o.monster === sp.monster && Math.hypot(o.x - sp.x, o.z - sp.z) < together);
+      const gx = group.reduce((t, o) => t + o.x, 0) / group.length;
+      const gz = group.reduce((t, o) => t + o.z, 0) / group.length;
       const d = MONSTERS[sp.monster];
-      const [sx, sy] = at(sp.x, sp.z);
+      const [sx, sy] = at(gx, gz);
       const sheet = sheets[sp.monster];
       label(sx, sy, `${d.nameTh} Lv.${d.levels[0]}-${d.levels[1]}`, dangerColour(d.levels[1], me.level), {
         art: (ax, ay, s) => {

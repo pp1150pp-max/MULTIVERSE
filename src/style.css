@@ -110,6 +110,9 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
   background: rgba(20, 16, 10, 0.82); border: 1px solid var(--npc-c, var(--gold)); color: var(--npc-c, var(--gold-hi));
 }
 .npc-name { font-size: 11px; color: #f2e6c8; margin-top: 2px; text-shadow: 0 0 3px #000, 1px 1px 0 #000; }
+/* Gold or items wait in the claim box at the market broker. */
+.npc-badge.alert .npc-name::after { content: ' !'; color: #ffd34a; font-weight: 600; }
+.npc-badge.alert .npc-role { box-shadow: 0 0 8px #f2c230; }
 .npc-seeker { --npc-c: #fff3c0; }
 .npc-merchant { --npc-c: #7fe07a; }
 .npc-blacksmith { --npc-c: #ff9a4a; }
@@ -288,8 +291,8 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 }
 #inventory::before, #inventory::after { content: none; }
 /* Beside an open shop there's only room for the window itself. */
-#hud:has(#shop:not(.hidden)) #inventory, #hud:has(#stash:not(.hidden)) #inventory { left: auto; right: 4px; transform: none; }
-#hud:has(#shop:not(.hidden)) .inv-side, #hud:has(#stash:not(.hidden)) .inv-side { display: none; }
+#hud:has(#shop:not(.hidden)) #inventory, #hud:has(#stash:not(.hidden)) #inventory, #hud:has(#market:not(.hidden)) #inventory { left: auto; right: 4px; transform: none; }
+#hud:has(#shop:not(.hidden)) .inv-side, #hud:has(#stash:not(.hidden)) .inv-side, #hud:has(#market:not(.hidden)) .inv-side { display: none; }
 .inv-side {
   width: 220px; flex: none; max-height: calc(100vh - 8px); overflow-y: auto; padding: 12px;
   background: var(--panel); border: 3px solid #4a4640; outline: 1px solid var(--panel-edge); outline-offset: -6px; border-radius: 4px;
@@ -709,3 +712,56 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 /* Window title bars: drag to move, double-click to put back (src/client/dragwindow.ts). */
 .drag-handle { cursor: move; touch-action: none; user-select: none; }
 .drag-handle button { cursor: pointer; }
+
+/* ---------------------------------------------------------------- market broker (src/client/market.ts) */
+
+#market { left: 12px; top: 96px; width: 640px; max-height: calc(100vh - 106px); display: flex; flex-direction: column; }
+.hud-bars #market { top: 196px; max-height: calc(100vh - 206px); }
+#market .npc-line { margin-bottom: 4px; }
+#market .ui-tab-body { min-height: 0; overflow-y: auto; flex: 1 1 auto; }
+#market input[type=text], #market input[type=number], #market select {
+  padding: 3px 6px; background: #12100d; color: var(--ink); border: 1px solid #8f7238; border-radius: 3px; font: inherit; font-size: 12px;
+}
+#market input[type=number] { width: 64px; }
+#market input.wide { width: 110px; }
+#market button { padding: 3px 10px; font-size: 12px; }
+.mkt-buy { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 10px; }
+.mkt-cats { display: flex; flex-direction: column; gap: 2px; }
+#market .mkt-cat {
+  display: flex; align-items: center; gap: 6px; padding: 2px 6px; text-align: left; background: #1d1710; border-color: #3a2f20; color: var(--ink-dim);
+}
+#market .mkt-cat.on { background: #3a2c18; border-color: var(--panel-edge); color: var(--gold-hi); }
+.mkt-cat-ic { width: 24px; height: 24px; display: grid; place-items: center; flex: none; }
+.mkt-cat-ic .gi { width: 24px; height: 24px; vertical-align: baseline; }
+.mkt-main { min-width: 0; }
+.mkt-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.mkt-line #mkt-name { flex: 1; min-width: 140px; }
+.mkt-small { font-size: 12px; color: var(--ink-dim); }
+.mkt-small span, .mkt-small label { display: inline-flex; align-items: center; gap: 4px; }
+.mkt-filter { display: flex; gap: 6px; align-items: flex-start; margin-bottom: 5px; }
+.mkt-lbl { flex: none; width: 72px; font-size: 12px; color: var(--gold); padding-top: 3px; }
+.mkt-chips { display: flex; gap: 4px; flex-wrap: wrap; }
+#market .mkt-chip { padding: 1px 10px; border-radius: 999px; background: #1d1710; border-color: #3a2f20; color: var(--rc, var(--ink-dim)); }
+#market .mkt-chip.on { background: #3a2c18; border-color: var(--rc, var(--gold-hi)); color: var(--rc, var(--gold-hi)); box-shadow: inset 0 0 6px color-mix(in srgb, var(--rc, #f2d58a) 40%, transparent); }
+.mkt-stats { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink-dim); }
+.mkt-srow { display: flex; align-items: center; gap: 6px; }
+#market .mkt-srow button { padding: 1px 7px; }
+.mkt-list { display: flex; flex-direction: column; }
+.mkt-row { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 5px 2px; border-top: 1px solid #3a2f20; font-size: 13px; }
+.mkt-row:first-child { border-top: 0; }
+.mkt-info { min-width: 0; }
+.mkt-lines { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 11px; color: var(--ink-dim); margin-top: 2px; }
+.mkt-stat.hit { color: #7ee07e; }
+.mkt-stat .tier { display: inline-block; min-width: 18px; padding: 0 2px; border-radius: 3px; font-size: 9px; font-style: normal; font-weight: 600; text-align: center; color: #120e09; }
+.mkt-enh { color: #ffd34a; }
+.mkt-dim { color: var(--ink-dim); font-size: 11px; }
+.mkt-price { text-align: right; color: #f2c230; white-space: nowrap; }
+.mkt-price small { display: block; color: var(--ink-dim); font-size: 10px; }
+#market button.poor { opacity: 0.55; }
+.mkt-empty { padding: 18px 0; text-align: center; color: var(--ink-dim); font-size: 12px; }
+.mkt-pager { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; font-size: 12px; color: var(--ink-dim); }
+.mkt-sellform { margin-bottom: 4px; }
+.mkt-sellform .mkt-row { border-top: 0; }
+.mkt-help { font-size: 13px; color: var(--ink-dim); padding: 6px 0; }
+.mkt-help small { font-size: 11px; }
+.mkt-msg { font-size: 12px; max-width: 70%; }

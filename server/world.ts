@@ -6,11 +6,11 @@ import type { IncomingMessage, Server as HttpServer } from 'node:http';
 import { clientIp } from './clientIp';
 import type { Db } from './db';
 import { Sim } from '../src/shared/sim/Sim';
-import { ZONES, zoneById } from '../src/shared/data/zones';
+import { HUB_ID, ZONES } from '../src/shared/data/zones';
 import { SORT_KEYS, type LootFilter, type Player } from '../src/shared/sim/Player';
 import { POTION_SIZES } from '../src/shared/data/potions';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../src/shared/sim/types';
-import { AUTO_BOSS_MSG, AUTO_HINT_COLOR, autoBlocked, AutoPlay, type AutoWorld } from '../src/shared/sim/autoplay';
+import { AUTO_HINT_COLOR, autoBlocked, AutoPlay, type AutoWorld } from '../src/shared/sim/autoplay';
 import {
   CHAT_MAX, GPU_NAME_MAX, shutdownKick, type ShutdownMode, INTEREST_RADIUS, PING_MS, isSoftwareRenderer, SNAPSHOT_HZ, TICK_HZ, WS_PATH, r2,
   type ClientMsg, type InputMsg, type ActionMsg, type PrivateSnap, type ServerMsg, type SnapshotMsg,
@@ -20,10 +20,19 @@ import type { SkillSlot } from '../src/shared/data/classes';
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
 import type { AdminOnline, AdminOnlineRow } from '../src/shared/admin';
 import { banMessage } from '../src/shared/api';
+import { Market, type MarketNote } from './market';
+import type { MarketCall } from '../src/shared/sim/market';
 
 const AUTOSAVE_MS = 30_000;
 const GUEST_STASH_MSG = 'Guest ใช้คลังเก็บของไม่ได้ — สมัครสมาชิกเพื่อใช้คลัง (ตัวละครนี้จะย้ายไปอยู่ในบัญชีใหม่)';
 const JOIN_TIMEOUT_MS = 10_000;
+/** How often listings whose time is up are ended (their sellers are told if online). */
+const MARKET_EXPIRE_MS = 60_000;
+/** Fastest a client may search the market / do anything else there. */
+const MARKET_SEARCH_MS = 250;
+const MARKET_ACT_MS = 100;
+/** Delay before telling a player who just joined what sold or expired while away. */
+const MARKET_JOIN_NOTE_MS = 3000;
 const SKILL_KEYS: SkillSlot[] = ['q', 'e', 'r'];
 
 interface Session {
@@ -57,6 +66,8 @@ interface Session {
   lastStash: string;
   outbox: SimEvent[];
   lastChatAt: number;
+  /** When this session last used the market (performance.now()), to keep searches from flooding the server. */
+  lastMarketAt: number;
   saveDue: number | null;
   /** Where the connection came from, for the owner's log only (never sent to anyone). */
   ip: string;
@@ -157,6 +168,7 @@ export class GameWorld {
    * so nothing can be copied by having two characters open it.
    */
   private readonly stashes = new Map<number, StashData>();
+  private readonly market: Market;
   /** Set while the server counts down to stopping: no new players may join. */
   private closing: ShutdownMode | null = null;
   private last = performance.now();
@@ -168,6 +180,9 @@ export class GameWorld {
     setInterval(() => this.tick(), 1000 / TICK_HZ);
     setInterval(() => this.saveAll(), AUTOSAVE_MS);
     setInterval(() => this.logPings(), PING_LOG_MS);
+    this.market = new Market(db);
+    this.expireMarket();
+    setInterval(() => this.expireMarket(), MARKET_EXPIRE_MS);
   }
 
   get onlineCount(): number {
@@ -249,7 +264,8 @@ export class GameWorld {
         data = this.db.loadCharacter(acc.id, charId) ?? data;
       }
     }
-    const sim = this.sims.get(zoneById(data.zone).id)!;
+    // Everyone comes into the game in the hub's town, whichever zone they logged out in.
+    const sim = this.sims.get(HUB_ID)!;
     const player = sim.addPlayer(data);
     this.db.touchOnline(acc.id);
     if (acc.guest) {
@@ -266,7 +282,7 @@ export class GameWorld {
     const s: Session = {
       ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId, sim, player,
       move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null,
-      auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', outbox: [], lastChatAt: 0, saveDue: null,
+      auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, saveDue: null,
       ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1,
@@ -280,6 +296,8 @@ export class GameWorld {
     this.byPlayer.set(player, s);
     this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, guest: acc.guest });
     this.broadcastSystem(`${player.name} เข้าสู่โลก`);
+    // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
+    if (!acc.guest) setTimeout(() => this.sessions.has(s) && this.marketOnJoin(s), MARKET_JOIN_NOTE_MS);
     console.log(`[world] ${acc.username} joined as ${player.name}${acc.guest ? ' (guest)' : ''} from ${ip} (${this.sessions.size} online)`);
     return s;
   }
@@ -518,9 +536,10 @@ export class GameWorld {
         }
         break;
       case 'auto':
-        if (m.on === true && autoBlocked(s.sim.zone, s.sim.monsters, p)) {
+        const blocked = m.on === true ? autoBlocked(s.sim.zone, s.sim.monsters, p) : null;
+        if (blocked) {
           s.auto = null;
-          s.outbox.push({ t: 'autoOff', to: p.id, msg: AUTO_BOSS_MSG });
+          s.outbox.push({ t: 'autoOff', to: p.id, msg: blocked });
           break;
         }
         s.auto = m.on === true && s.sim.zone.allowAutoPlay ? (s.auto ?? new AutoPlay()) : null;
@@ -589,6 +608,14 @@ export class GameWorld {
         if (Number.isInteger(amount) && amount !== 0 && Math.abs(amount) <= 1e9 && sim.stashGold(p, amount)) this.save(s);
         break;
       }
+      case 'mktSearch':
+      case 'mktMine':
+      case 'mktList':
+      case 'mktCancel':
+      case 'mktBuy':
+      case 'mktClaim':
+        this.onMarket(s, m);
+        return;
       case 'enhance': {
         // Sim.enhance checks the NPC distance, ownership, level cap, gold and stones itself.
         const out = typeof m.uid === 'string' ? sim.enhance(p, m.uid, m.protect === true) : null;
@@ -597,6 +624,74 @@ export class GameWorld {
       }
     }
     s.saveDue ??= performance.now() + 2000;
+  }
+
+  // ------------------------------------------------------------ market broker (server/market.ts)
+
+  private onMarket(s: Session, m: { req: number } & MarketCall): void {
+    const req = num(m.req);
+    const now = performance.now();
+    if (now - s.lastMarketAt < (m.a === 'mktSearch' ? MARKET_SEARCH_MS : MARKET_ACT_MS)) {
+      this.send(s.ws, { t: 'market', req, ok: false });
+      return;
+    }
+    s.lastMarketAt = now;
+    let out;
+    try {
+      out = this.market.handle(s, m);
+    } catch (e) {
+      console.error('[market]', m.a, 'failed for', s.username, e);
+      this.send(s.ws, { t: 'market', req, ok: false, msg: 'ตลาดขัดข้อง ลองใหม่อีกครั้ง' });
+      return;
+    }
+    this.send(s.ws, { t: 'market', req, ...out.reply, now: Date.now() });
+    if (out.sold) this.tellSeller(out.sold.seller_account, [out.sold]);
+    for (const acc of out.boxChanged ?? []) this.sendMarketBox(acc);
+  }
+
+  /** On joining: what sold or expired while away, and how much waits in the claim box. */
+  private marketOnJoin(s: Session): void {
+    try {
+      const note = this.market.awayNote(s.accountId);
+      if (note) this.send(s.ws, { t: 'marketNote', ...note });
+      const n = this.market.boxCount(s.accountId);
+      if (n) this.send(s.ws, { t: 'marketBox', n });
+    } catch (e) {
+      console.error('[market] join notes failed', e);
+    }
+  }
+
+  /** Tells every online character of the seller's account about these listings (marked as told); offline sellers hear on joining. */
+  private tellSeller(accountId: number, list: Parameters<Market['note']>[0][]): void {
+    const online = [...this.sessions].filter((o) => o.accountId === accountId);
+    if (!online.length) return;
+    for (const r of list) {
+      const note: MarketNote = this.market.note(r);
+      for (const o of online) this.send(o.ws, { t: 'marketNote', ...note });
+    }
+    this.market.markNotified(list.map((r) => r.id));
+  }
+
+  private sendMarketBox(accountId: number): void {
+    const online = [...this.sessions].filter((o) => o.accountId === accountId);
+    if (!online.length) return;
+    const n = this.market.boxCount(accountId);
+    for (const o of online) this.send(o.ws, { t: 'marketBox', n });
+  }
+
+  private expireMarket(): void {
+    try {
+      const ended = this.market.expire();
+      const byAccount = new Map<number, typeof ended>();
+      for (const r of ended) byAccount.set(r.seller_account, [...(byAccount.get(r.seller_account) ?? []), r]);
+      for (const [acc, list] of byAccount) {
+        this.tellSeller(acc, list);
+        this.sendMarketBox(acc);
+      }
+      if (ended.length) console.log(`[market] ${ended.length} listing(s) expired`);
+    } catch (e) {
+      console.error('[market] expiring listings failed', e);
+    }
   }
 
   private onChat(s: Session, text: unknown): void {
@@ -629,9 +724,10 @@ export class GameWorld {
       basic: fresh && s.basic, skills: fresh ? s.skills : [],
       dash: s.dash, potion: s.potion, pos: s.pendingPos,
     };
-    if (s.auto && autoBlocked(s.sim.zone, s.sim.monsters, p)) {
+    const blocked = s.auto ? autoBlocked(s.sim.zone, s.sim.monsters, p) : null;
+    if (blocked) {
       s.auto = null;
-      s.outbox.push({ t: 'autoOff', to: p.id, msg: AUTO_BOSS_MSG });
+      s.outbox.push({ t: 'autoOff', to: p.id, msg: blocked });
     }
     if (s.auto) {
       const sim = s.sim;
@@ -650,7 +746,7 @@ export class GameWorld {
     const now = performance.now();
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
-    const travels: { s: Session; zone: string }[] = [];
+    const travels: { s: Session; zone: string; atCamp?: boolean }[] = [];
     for (const sim of this.sims.values()) {
       sim.step(dt, this.intentOf);
       for (const ev of sim.drainEvents()) {
@@ -666,7 +762,7 @@ export class GameWorld {
         if (ev.t === 'stash') continue; // saved by onAction; the snapshot carries the new stash
         if (ev.t === 'travel') {
           const s = this.sessionById(sim, ev.to);
-          if (s) travels.push({ s, zone: ev.zone });
+          if (s) travels.push({ s, zone: ev.zone, atCamp: ev.atCamp });
           continue;
         }
         if (ev.t === 'revived') {
@@ -683,7 +779,7 @@ export class GameWorld {
         }
       }
     }
-    for (const t of travels) this.travel(t.s, t.zone);
+    for (const t of travels) this.travel(t.s, t.zone, t.atCamp);
 
     if (++this.tickN % Math.round(TICK_HZ / SNAPSHOT_HZ) === 0) {
       for (const s of this.sessions) this.sendSnapshot(s);
@@ -726,7 +822,13 @@ export class GameWorld {
     s.epoch++;
     s.lastInv = '';
     s.lastStash = '';
-    s.outbox = [];
+    // Waking up in town after dying in a zone: the old zone's `revived` and its EXP-loss line must
+    // still reach the browser (it closes the death screen), so they move along under the new id.
+    s.outbox = s.outbox.flatMap((ev): SimEvent[] => {
+      if (ev.t === 'revived' && ev.id === old.id) return [{ ...ev, id: p.id }];
+      if (ev.t === 'log' && ev.to === old.id) return [{ ...ev, to: p.id }];
+      return [];
+    });
     this.send(s.ws, { t: 'zone', zone: dest.zone.id, you: p.id, x: r2(p.x), z: r2(p.z) });
     this.save(s);
     console.log(`[world] ${s.username} → ${dest.zone.name}`);
@@ -786,7 +888,7 @@ export class GameWorld {
         vx: r2(Math.cos(pr.o.angle) * pr.o.speed), vz: r2(Math.sin(pr.o.angle) * pr.o.speed),
         color: pr.o.color, size: pr.o.size, art: pr.o.art,
       })),
-      ...(sim.hazards.length && near(sim.zone.boss) ? { hazards: sim.hazards } : {}),
+      ...(sim.hazards.length && sim.zone.boss && near(sim.zone.boss) ? { hazards: sim.hazards } : {}),
       loots: sim.loots.filter(near).map((l) => ({
         id: l.id, x: r2(l.x), z: r2(l.z), fromX: r2(l.fromX), fromZ: r2(l.fromZ), t: r2(l.t),
         kind: l.kind, dropped: l.dropped, owner: l.owner, ownerUntil: r2(l.ownerUntil),

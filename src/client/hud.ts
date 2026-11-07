@@ -15,6 +15,7 @@ import { AUTO_PX_PER_UNIT, AUTO_RANGE_MAX, AUTO_RANGE_MIN, buybackPrice, cleanAu
 import { isBulkSellable } from '../shared/sim/Sim';
 import { nextRowPrice, STASH_MAX, STASH_ROW, STASH_ROW_PRICES, STASH_START } from '../shared/sim/stash';
 import { MONSTERS } from '../shared/data/monsters';
+import { ZONE_1 } from '../shared/data/zones';
 import { expToNext } from '../shared/formulas';
 import {
   isItem, isPotion, isStack, isStone, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
@@ -23,6 +24,8 @@ import {
 import { drawMapIcon, facingAngle } from './mapIcons';
 import type { MapIcon } from './mapIconNames';
 import { NPC_MAP_ICON } from './fullmap';
+import { MarketWindow } from './market';
+import { playSound } from './audio/sfx';
 import { COIN_ICON, emptySlotIcon, FORGE_ICON, itemIcon, potionIcon, skillIcon, stoneIcon } from './icons';
 import { shutdownCancelled, shutdownWarning, type ShutdownMode } from '../shared/net/protocol';
 
@@ -78,8 +81,8 @@ const SEEKER_LINES = [
   'ในที่สุดเจ้าก็ตื่นแล้ว… เจ้าคือผู้รอดชีวิตจากโลกที่ถูก The Devourer กลืนกิน',
   'ข้าคือ The Seeker ผู้ตามหาความจริงเบื้องหลังการล่มสลายของมิติทั้งหลาย ตั้งแต่ The Shattering แยก The First Cosmos ออกเป็นเสี่ยง ๆ',
   'แสงสีทองขาวที่พาเจ้ามาที่นี่… ข้าเคยเห็นมันในบันทึกโบราณที่เรียกว่า The Origin',
-  'ป่ามรกตแห่งนี้คือเศษเสี้ยวของมิติที่ยังรอด แต่สัตว์ป่าเริ่มคลุ้มคลั่งจากพลังที่รั่วไหล จงฝึกฝนตัวเองที่นี่ก่อน',
-  'ลึกเข้าไปทางตะวันตกเฉียงเหนือ มีหมีใหญ่ที่ถูกพลังนั้นครอบงำ หากเจ้าปราบมันได้ เราจะได้เบาะแสแรกของ The Origin',
+  'ที่นี่คือเมืองศูนย์กลางมิติ จุดเชื่อมของเศษเสี้ยวมิติที่ยังรอด สี่มุมของเกาะมีประตูสู่ดินแดนต่าง ๆ แต่สัตว์ในนั้นเริ่มคลุ้มคลั่งจากพลังที่รั่วไหล',
+  'จงเริ่มฝึกฝนที่ป่ามรกต ผ่านประตูมุมบนของเมือง ลึกเข้าไปในป่ามีหมีใหญ่ที่ถูกพลังนั้นครอบงำ หากเจ้าปราบมันได้ เราจะได้เบาะแสแรกของ The Origin',
 ];
 
 /** Six checkboxes: HP small/medium/large, MP small/medium/large. */
@@ -135,7 +138,10 @@ export class Hud {
   /** Use a protection stone on attempts that can drop the level (the forge's tick box; off until ticked). */
   private forgeProtect = false;
 
+  private readonly market: MarketWindow;
+
   constructor(private readonly g: Game) {
+    this.market = new MarketWindow(g, this);
     $('hud').classList.remove('hidden');
     this.mm = $<HTMLCanvasElement>('minimap').getContext('2d')!;
     this.setHudStyle(loadHudStyle());
@@ -234,13 +240,17 @@ export class Hud {
         this.markInventory();
         return;
       }
+      if (this.market.isOpen) {
+        this.market.bagRightClick(i);
+        return;
+      }
       const name = `<b style="color:${this.entryColor(item)}">${entryName(item)}</b>`;
       if (this.shopOpen) {
         this.sellFromBag(i);
         return;
       }
       this.confirm(
-        `วาง ${name} ลงบนพื้น?<br><small>เก็บคืนได้ภายใน 60 วินาที · ถ้าจะขาย ให้ไปหาพ่อค้าที่แคมป์</small>`,
+        `วาง ${name} ลงบนพื้น?<br><small>เก็บคืนได้ภายใน 60 วินาที · ถ้าจะขาย ให้ไปหาพ่อค้าที่เมือง</small>`,
         'วางลงพื้น',
         () => {
           if (g.player.bag[i] !== item) return;
@@ -254,7 +264,7 @@ export class Hud {
       if (this.drag?.ghost) return;
       const i = this.cellIndex(e);
       const item = i >= 0 ? g.player.bag[i] : null;
-      const right = this.stashOpen ? 'ฝากเข้าคลัง' : this.shopOpen ? (isStack(item) ? 'ขายทั้งช่อง' : 'ขาย') : 'วางลงพื้น';
+      const right = this.stashOpen ? 'ฝากเข้าคลัง' : this.market.isOpen ? 'เลือกมาลงขายในตลาด' : this.shopOpen ? (isStack(item) ? 'ขายทั้งช่อง' : 'ขาย') : 'วางลงพื้น';
       if (isPotion(item)) this.showPotionTip(item, e, `คลิกซ้าย: ใช้กับปุ่มด่วน · คลิกขวา: ${right}`);
       else if (isStone(item)) this.showStoneTip(item, e, `คลิกขวา: ${right}`);
       else if (item) {
@@ -650,6 +660,7 @@ export class Hud {
       else this.renderShopMoney();
     }
     if (this.forgeOpen && (this.g.npcDistance('blacksmith') > NPC_USE_RANGE || !p.alive)) this.closeForge();
+    this.market.update();
     if (this.stashOpen) {
       if (this.g.npcDistance('keeper') > NPC_USE_RANGE || !p.alive) this.closeStash();
       else this.renderStashMoney();
@@ -876,6 +887,7 @@ export class Hud {
     this.closeShop();
     this.closeStash();
     this.closeForge();
+    this.market.close();
     if (this.dialogOpen) this.closeDialog();
   }
 
@@ -887,12 +899,13 @@ export class Hud {
       if (this.g.backend.guest) this.log('Guest ใช้คลังเก็บของไม่ได้ — สมัครสมาชิกเพื่อใช้คลัง (ตัวละครนี้จะย้ายไปอยู่ในบัญชีใหม่)', '#ffcf6a');
       else this.openStash();
     }
+    else if (id === 'broker') this.openMarket();
     else this.openForge();
   }
 
   // ------------------------------------------------------------ confirm
 
-  private confirm(html: string, yesLabel: string, onYes: () => void): void {
+  confirm(html: string, yesLabel: string, onYes: () => void): void {
     $('confirm-text').innerHTML = html;
     $('confirm-yes').textContent = yesLabel;
     this.confirmYes = onYes;
@@ -906,7 +919,23 @@ export class Hud {
 
   // ------------------------------------------------------------ merchant
 
+  /** Market broker: the window lives in market.ts. Guests may look but not trade (the server refuses it too). */
+  private openMarket(): void {
+    this.closeShop();
+    this.closeForge();
+    this.closeStash();
+    this.market.open();
+  }
+
+  /** Something of yours sold or expired at the market: a banner, a chat line and the trade sound. */
+  marketNote(text: string, sub?: string): void {
+    this.banner(text, sub, '#f2c230');
+    this.log(sub ? `${text} — ${sub}` : text, '#f2c230');
+    playSound('trade');
+  }
+
   private openShop(): void {
+    this.market.close();
     this.closeForge();
     this.closeStash();
     this.shopOpen = true;
@@ -1081,6 +1110,7 @@ export class Hud {
   private openStash(): void {
     this.closeShop();
     this.closeForge();
+    this.market.close();
     this.stashOpen = true;
     $('stash').classList.remove('hidden');
     this.toggleBag(true);
@@ -1167,6 +1197,7 @@ export class Hud {
   private openForge(): void {
     this.closeShop();
     this.closeStash();
+    this.market.close();
     this.forgeOpen = true;
     this.forgeSel = this.g.player.equipment.weapon?.uid ?? null;
     $('forge-result').textContent = '';
@@ -1325,7 +1356,8 @@ export class Hud {
     $('equip-slots').innerHTML = EQUIP_SLOTS.map((s) =>
       `<div class="eq-row eq-${s}" title="${EQUIP_SLOT_LABEL[s]}">${this.itemCell(p.equipment[s], `data-slot="${s}"`, emptyLook(s))}</div>`,
     ).join('');
-    $('bag-grid').innerHTML = p.bag.map((it, i) => this.itemCell(it, `data-i="${i}"`)).join('');
+    const picked = this.market.picked;
+    $('bag-grid').innerHTML = p.bag.map((it, i) => this.itemCell(it, `data-i="${i}"`, '', i === picked)).join('');
     const fmt = (k: StatKey, v: number) =>
       k === 'hpRegen' || k === 'mpRegen' ? v.toFixed(1) : String(Math.round(v));
     $('stat-list').innerHTML = STAT_KEYS.map((k) =>
@@ -1337,7 +1369,9 @@ export class Hud {
     for (const r of RARITIES) lf.querySelector<HTMLInputElement>(`[data-rarity="${r}"]`)!.checked = p.lootFilter.rarities.includes(r);
     syncPots(lf, p.lootFilter);
     if (this.stashOpen) this.renderStash();
-    $('bag-hint').textContent = this.stashOpen
+    $('bag-hint').textContent = this.market.isOpen
+      ? this.market.bagHint
+      : this.stashOpen
       ? 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = ฝากเข้าคลัง · ลากไปวางในคลังได้'
       : this.shopOpen
       ? 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = ขายให้พ่อค้า · คลิกช่องสวมใส่ = ถอด'
@@ -1355,7 +1389,7 @@ export class Hud {
     else g.backend.equip(i, slot);
   }
 
-  private showTip(item: Item, e: MouseEvent, hint: string): void {
+  showTip(item: Item, e: MouseEvent, hint: string): void {
     const tip = $('tooltip');
     const p = this.g.player;
     // A worn item compares with nothing; one in the bag with what a click would replace.
@@ -1418,7 +1452,7 @@ export class Hud {
     this.placeTip(tip, e);
   }
 
-  private showStoneTip(s: StoneStack, e: MouseEvent, hint: string): void {
+  showStoneTip(s: StoneStack, e: MouseEvent, hint: string): void {
     const tip = $('tooltip');
     tip.innerHTML =
       `<div class="tt-name" style="color:${STONE_COLOR[s.stone]}">${STONE_NAME[s.stone]}</div>` +
@@ -1436,7 +1470,7 @@ export class Hud {
     tip.style.top = `${y}px`;
   }
 
-  private hideTip(): void {
+  hideTip(): void {
     $('tooltip').classList.add('hidden');
   }
 
@@ -1597,7 +1631,7 @@ export class Hud {
     $('dialog').classList.add('hidden');
     if (!this.g.metSeeker) {
       this.g.metSeeker = true;
-      const boss = MONSTERS[this.g.zone.boss.monster];
+      const boss = MONSTERS[ZONE_1.boss!.monster];
       this.log(`ภารกิจ: ฝึกฝนในป่ามรกต แล้วปราบ ${boss.name}`, '#ffd34a');
     }
   }

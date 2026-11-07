@@ -21,6 +21,7 @@ function launch(backend: OnlineBackend): void {
   backend.onDisconnect = (msg) => game.hud.showDisconnect(msg);
   backend.onShutdown = (mode, seconds, text) => game.hud.shutdownCountdown(mode, seconds, text);
   backend.onAnnounce = (text, from, direct) => game.hud.announce(text, from, direct);
+  backend.onMarketNote = (text, sub) => game.hud.marketNote(text, sub);
   start(game, backend.me.cls.id);
 }
 

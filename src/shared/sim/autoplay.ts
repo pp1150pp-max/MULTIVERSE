@@ -4,7 +4,7 @@ import { AUTO_PX_PER_UNIT, type Player } from './Player';
 import type { Loot } from './Loot';
 import { MONSTERS } from '../data/monsters';
 import type { SkillSlot } from '../data/classes';
-import { inBossArena, lavaAt, type ZoneDef } from '../data/zones';
+import { inBossArena, inSafeArea, lavaAt, type ZoneDef } from '../data/zones';
 
 /** What the bot needs to see. The server builds one per player. */
 export interface AutoWorld {
@@ -19,12 +19,17 @@ export interface AutoWorld {
  * Bosses are fought by hand, on every map: Auto can't run inside a boss's arena, nor while a boss is
  * after this player. Whoever runs the bot switches it off when this says so.
  */
-export function autoBlocked(zone: ZoneDef, monsters: readonly Monster[], p: { x: number; z: number; id: number }): boolean {
-  return inBossArena(zone, p.x, p.z) || monsters.some((m) => m.isBoss && m.alive && m.isHostile && m.target?.id === p.id);
+/** Why Auto can't run where the player stands (a boss fight or the town), or null when it can. */
+export function autoBlocked(zone: ZoneDef, monsters: readonly Monster[], p: { x: number; z: number; id: number }): string | null {
+  if (inSafeArea(zone, p.x, p.z)) return AUTO_TOWN_MSG;
+  if (inBossArena(zone, p.x, p.z) || monsters.some((m) => m.isBoss && m.alive && m.isHostile && m.target?.id === p.id)) return AUTO_BOSS_MSG;
+  return null;
 }
 
 /** Message shown when Auto is refused or stopped because of a boss. */
 export const AUTO_BOSS_MSG = 'ปิด Auto Play — บอสต้องสู้เอง ใช้ Auto ในลานบอสไม่ได้';
+/** Message shown when Auto is refused or stopped in the town. */
+export const AUTO_TOWN_MSG = 'ใช้ Auto Play ในเมืองไม่ได้ — ออกไปนอกเมืองก่อน';
 
 const RANGE: Record<string, number> = { sword: 1.9, mage: 8.5, gunslinger: 9 };
 /** Loot within this distance is fetched even while monsters attack; up to LOOT_FAR when it's calm. */

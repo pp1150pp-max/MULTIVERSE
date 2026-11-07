@@ -135,6 +135,8 @@ export class Floating {
       }
       const s = g.toScreen(n.x, 2.45, n.z);
       el.classList.toggle('hidden', !s.on);
+      // Gold or items wait in your claim box at the market broker.
+      el.classList.toggle('alert', n.id === 'broker' && g.backend.marketBox > 0);
       el.style.transform = `translate(${s.sx}px, ${s.sy}px) translate(-50%, -100%)`;
     }
     for (const [n, el] of this.badges) {
