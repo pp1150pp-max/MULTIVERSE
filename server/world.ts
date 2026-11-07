@@ -20,10 +20,19 @@ import type { SkillSlot } from '../src/shared/data/classes';
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
 import type { AdminOnline, AdminOnlineRow } from '../src/shared/admin';
 import { banMessage } from '../src/shared/api';
+import { Market, type MarketNote } from './market';
+import type { MarketCall } from '../src/shared/sim/market';
 
 const AUTOSAVE_MS = 30_000;
 const GUEST_STASH_MSG = 'Guest ใช้คลังเก็บของไม่ได้ — สมัครสมาชิกเพื่อใช้คลัง (ตัวละครนี้จะย้ายไปอยู่ในบัญชีใหม่)';
 const JOIN_TIMEOUT_MS = 10_000;
+/** How often listings whose time is up are ended (their sellers are told if online). */
+const MARKET_EXPIRE_MS = 60_000;
+/** Fastest a client may search the market / do anything else there. */
+const MARKET_SEARCH_MS = 250;
+const MARKET_ACT_MS = 100;
+/** Delay before telling a player who just joined what sold or expired while away. */
+const MARKET_JOIN_NOTE_MS = 3000;
 const SKILL_KEYS: SkillSlot[] = ['q', 'e', 'r'];
 
 interface Session {
@@ -57,6 +66,8 @@ interface Session {
   lastStash: string;
   outbox: SimEvent[];
   lastChatAt: number;
+  /** When this session last used the market (performance.now()), to keep searches from flooding the server. */
+  lastMarketAt: number;
   saveDue: number | null;
   /** Where the connection came from, for the owner's log only (never sent to anyone). */
   ip: string;
@@ -157,6 +168,7 @@ export class GameWorld {
    * so nothing can be copied by having two characters open it.
    */
   private readonly stashes = new Map<number, StashData>();
+  private readonly market: Market;
   /** Set while the server counts down to stopping: no new players may join. */
   private closing: ShutdownMode | null = null;
   private last = performance.now();
@@ -168,6 +180,9 @@ export class GameWorld {
     setInterval(() => this.tick(), 1000 / TICK_HZ);
     setInterval(() => this.saveAll(), AUTOSAVE_MS);
     setInterval(() => this.logPings(), PING_LOG_MS);
+    this.market = new Market(db);
+    this.expireMarket();
+    setInterval(() => this.expireMarket(), MARKET_EXPIRE_MS);
   }
 
   get onlineCount(): number {
@@ -267,7 +282,7 @@ export class GameWorld {
     const s: Session = {
       ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId, sim, player,
       move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null,
-      auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', outbox: [], lastChatAt: 0, saveDue: null,
+      auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, saveDue: null,
       ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1,
@@ -281,6 +296,8 @@ export class GameWorld {
     this.byPlayer.set(player, s);
     this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, guest: acc.guest });
     this.broadcastSystem(`${player.name} เข้าสู่โลก`);
+    // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
+    if (!acc.guest) setTimeout(() => this.sessions.has(s) && this.marketOnJoin(s), MARKET_JOIN_NOTE_MS);
     console.log(`[world] ${acc.username} joined as ${player.name}${acc.guest ? ' (guest)' : ''} from ${ip} (${this.sessions.size} online)`);
     return s;
   }
@@ -591,6 +608,14 @@ export class GameWorld {
         if (Number.isInteger(amount) && amount !== 0 && Math.abs(amount) <= 1e9 && sim.stashGold(p, amount)) this.save(s);
         break;
       }
+      case 'mktSearch':
+      case 'mktMine':
+      case 'mktList':
+      case 'mktCancel':
+      case 'mktBuy':
+      case 'mktClaim':
+        this.onMarket(s, m);
+        return;
       case 'enhance': {
         // Sim.enhance checks the NPC distance, ownership, level cap, gold and stones itself.
         const out = typeof m.uid === 'string' ? sim.enhance(p, m.uid, m.protect === true) : null;
@@ -599,6 +624,74 @@ export class GameWorld {
       }
     }
     s.saveDue ??= performance.now() + 2000;
+  }
+
+  // ------------------------------------------------------------ market broker (server/market.ts)
+
+  private onMarket(s: Session, m: { req: number } & MarketCall): void {
+    const req = num(m.req);
+    const now = performance.now();
+    if (now - s.lastMarketAt < (m.a === 'mktSearch' ? MARKET_SEARCH_MS : MARKET_ACT_MS)) {
+      this.send(s.ws, { t: 'market', req, ok: false });
+      return;
+    }
+    s.lastMarketAt = now;
+    let out;
+    try {
+      out = this.market.handle(s, m);
+    } catch (e) {
+      console.error('[market]', m.a, 'failed for', s.username, e);
+      this.send(s.ws, { t: 'market', req, ok: false, msg: 'ตลาดขัดข้อง ลองใหม่อีกครั้ง' });
+      return;
+    }
+    this.send(s.ws, { t: 'market', req, ...out.reply, now: Date.now() });
+    if (out.sold) this.tellSeller(out.sold.seller_account, [out.sold]);
+    for (const acc of out.boxChanged ?? []) this.sendMarketBox(acc);
+  }
+
+  /** On joining: what sold or expired while away, and how much waits in the claim box. */
+  private marketOnJoin(s: Session): void {
+    try {
+      const note = this.market.awayNote(s.accountId);
+      if (note) this.send(s.ws, { t: 'marketNote', ...note });
+      const n = this.market.boxCount(s.accountId);
+      if (n) this.send(s.ws, { t: 'marketBox', n });
+    } catch (e) {
+      console.error('[market] join notes failed', e);
+    }
+  }
+
+  /** Tells every online character of the seller's account about these listings (marked as told); offline sellers hear on joining. */
+  private tellSeller(accountId: number, list: Parameters<Market['note']>[0][]): void {
+    const online = [...this.sessions].filter((o) => o.accountId === accountId);
+    if (!online.length) return;
+    for (const r of list) {
+      const note: MarketNote = this.market.note(r);
+      for (const o of online) this.send(o.ws, { t: 'marketNote', ...note });
+    }
+    this.market.markNotified(list.map((r) => r.id));
+  }
+
+  private sendMarketBox(accountId: number): void {
+    const online = [...this.sessions].filter((o) => o.accountId === accountId);
+    if (!online.length) return;
+    const n = this.market.boxCount(accountId);
+    for (const o of online) this.send(o.ws, { t: 'marketBox', n });
+  }
+
+  private expireMarket(): void {
+    try {
+      const ended = this.market.expire();
+      const byAccount = new Map<number, typeof ended>();
+      for (const r of ended) byAccount.set(r.seller_account, [...(byAccount.get(r.seller_account) ?? []), r]);
+      for (const [acc, list] of byAccount) {
+        this.tellSeller(acc, list);
+        this.sendMarketBox(acc);
+      }
+      if (ended.length) console.log(`[market] ${ended.length} listing(s) expired`);
+    } catch (e) {
+      console.error('[market] expiring listings failed', e);
+    }
   }
 
   private onChat(s: Session, text: unknown): void {

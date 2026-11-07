@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {
-  makeSheet, drawHuman, drawSlime, drawQuad, drawSeeker, drawMerchant, drawBlacksmith, drawKeeper, drawTree, drawBush, drawRock, drawStump,
+  makeSheet, drawHuman, drawSlime, drawQuad, drawSeeker, drawMerchant, drawBlacksmith, drawKeeper, drawBroker, drawTree, drawBush, drawRock, drawStump,
   drawSnowPine, drawSnowRock, drawIceCrystal, drawIceShard, drawEmberBolt, drawBurntPillar, drawBasalt, drawMagmaCrystal, drawSnowball,
   drawTent, drawCampfire, drawSign, drawFence, drawRunestone, drawIcon, pixelCircle,
 } from './placeholder';
@@ -52,6 +52,8 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   blacksmith: sheet('npc/blacksmith.png', () => makeSheet(32, drawBlacksmith())),
   // No painted sheet yet: until npc/keeper.png exists the placeholder drawing is used.
   keeper: sheet('npc/keeper.png', () => makeSheet(32, drawKeeper())),
+  // Placeholder drawing until npc/broker.png is painted.
+  broker: sheet('npc/broker.png', () => makeSheet(32, drawBroker())),
 
   green_slime: monster('monsters/green_slime.png', () => makeSheet(32, drawSlime(['#6cc25a', '#4a9a3e', '#c8f0b0']))),
   wild_rabbit: monster('monsters/wild_rabbit.png', () => makeSheet(32, drawQuad(['#e8d3bf', '#d89a9a', '#fbeee2', '#d88a8a'], {
@@ -205,6 +207,7 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   town_stall: ruin('town_stall', 'cart'),
   town_forge: ruin('town_forge', 'cart'),
   town_vault: ruin('town_vault', 'chest'),
+  town_market: ruin('town_market', 'town_stall'),
 
   ...Object.fromEntries(MAP_ICONS.map((name) => [`map_${name}`, single(`icons/map_${name}.png`, () => drawIcon('coin'))])),
   icon_coin: single('icons/coin.png', () => drawIcon('coin')),

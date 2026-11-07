@@ -588,7 +588,7 @@ export class Sim {
   }
 
   /** Trades only work while standing next to that NPC. */
-  private near(p: Player, id: NpcId): boolean {
+  near(p: Player, id: NpcId): boolean {
     return p.alive && this.npcDistance(p, id) <= NPC_USE_RANGE;
   }
 
