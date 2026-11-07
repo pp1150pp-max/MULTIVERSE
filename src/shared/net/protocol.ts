@@ -1,7 +1,7 @@
 // WebSocket messages between the browser and the game server (JSON). The server runs the
 // simulation; clients send their input and get snapshots of what is near them plus SimEvents.
 import type { SkillSlot } from '../data/classes';
-import type { BagEntry, ClassId, Item, PotionKind, PotionSize, Rarity, SlotId, Stats, Vec2 } from '../types';
+import type { BagEntry, ClassId, EquipSlot, Item, PotionKind, PotionSize, Rarity, Stats, Vec2 } from '../types';
 import type { LootKind } from '../sim/Loot';
 import type { SimEvent } from '../sim/types';
 import type { AutoSettings, BuybackEntry, LootFilter, PotionSelect, SortKey } from '../sim/Player';
@@ -47,8 +47,8 @@ export interface InputMsg {
 
 export type ActionMsg =
   | { t: 'act'; a: 'respawn' }
-  | { t: 'act'; a: 'equip'; i: number }
-  | { t: 'act'; a: 'unequip'; slot: SlotId }
+  | { t: 'act'; a: 'equip'; i: number; slot?: EquipSlot }
+  | { t: 'act'; a: 'unequip'; slot: EquipSlot }
   | { t: 'act'; a: 'drop'; i: number }
   | { t: 'act'; a: 'buy'; kind: PotionKind; size: PotionSize; n: number }
   | { t: 'act'; a: 'sort'; key: SortKey; desc: boolean }
@@ -127,7 +127,7 @@ export interface PrivateSnap {
   /** The `seq` of the last input the server had applied when it took this snapshot. */
   ack?: number;
   /** Bag and equipment, only when they changed since the last snapshot. */
-  inv?: { equipment: Partial<Record<SlotId, Item>>; bag: (BagEntry | null)[]; buyback?: BuybackEntry[] };
+  inv?: { equipment: Partial<Record<EquipSlot, Item>>; bag: (BagEntry | null)[]; buyback?: BuybackEntry[] };
   /** Seconds of play until the buyback list clears. */
   buybackLeft?: number;
   /** The account's stash, only when it changed since the last snapshot. */

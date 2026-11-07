@@ -9,7 +9,7 @@ import type { ZoneDef } from '../shared/data/zones';
 import type { Hazard } from '../shared/sim/volcanoHeart';
 import type { NpcId } from '../shared/data/npcs';
 import type { EnhanceResult } from '../shared/data/enhance';
-import type { Item, PotionKind, PotionSize, Rarity, SlotId } from '../shared/types';
+import type { EquipSlot, Item, PotionKind, PotionSize, Rarity } from '../shared/types';
 
 /** What a projectile view needs; the local simulation's Projectile fits this too. */
 export interface ProjectileLike {
@@ -52,8 +52,8 @@ export interface Backend {
   close(): void;
 
   respawn(): void;
-  equip(bagIndex: number): void;
-  unequip(slot: SlotId): void;
+  equip(bagIndex: number, slot?: EquipSlot): void;
+  unequip(slot: EquipSlot): void;
   drop(bagIndex: number): void;
   buyPotion(kind: PotionKind, size: PotionSize, n: number): void;
   sortBag(key: SortKey, desc: boolean): void;

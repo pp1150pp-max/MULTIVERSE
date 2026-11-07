@@ -17,8 +17,8 @@ import { nextRowPrice, STASH_MAX, STASH_ROW, STASH_ROW_PRICES, STASH_START } fro
 import { MONSTERS } from '../shared/data/monsters';
 import { expToNext } from '../shared/formulas';
 import {
-  isItem, isPotion, isStack, isStone, RARITIES, RARITY_COLOR, RARITY_LABEL, SLOTS, SLOT_LABEL, STAT_KEYS, STAT_LABEL,
-  type BagEntry, type Item, type PotionKind, type PotionSize, type PotionStack, type Rarity, type StoneStack, type SlotId, type StatKey,
+  isItem, isPotion, isStack, isStone, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
+  type BagEntry, type Item, type PotionKind, type PotionSize, type PotionStack, type Rarity, type StoneStack, type EquipSlot, type StatKey,
 } from '../shared/types';
 import { drawMapIcon, facingAngle } from './mapIcons';
 import type { MapIcon } from './mapIconNames';
@@ -33,15 +33,8 @@ const ANNOUNCE_MS = 10_000;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
-interface PreviewSlot { id: string; label: string; like?: SlotId }
-/** Sockets shown in the window but not wired to the game yet: no data-slot, so they take no clicks or drops. */
-const PREVIEW_SLOTS: PreviewSlot[] = [
-  { id: 'offhand', label: 'อาวุธรอง', like: 'weapon' },
-  { id: 'necklace', label: 'สร้อย' },
-  { id: 'gloves', label: 'ถุงมือ' },
-  { id: 'belt', label: 'เข็มขัด' },
-  { id: 'ring2', label: 'แหวน 2', like: 'ring' },
-];
+/** Sockets whose empty look is their name, not a faded item picture. */
+const TEXT_SOCKETS: EquipSlot[] = ['offhand', 'necklace', 'gloves', 'belt'];
 
 /** The minimap's size on screen, and pixels per world unit. Its canvas holds twice that, to stay sharp. */
 const MINIMAP_SIZE = 176;
@@ -264,7 +257,10 @@ export class Hud {
       const right = this.stashOpen ? 'ฝากเข้าคลัง' : this.shopOpen ? (isStack(item) ? 'ขายทั้งช่อง' : 'ขาย') : 'วางลงพื้น';
       if (isPotion(item)) this.showPotionTip(item, e, `คลิกซ้าย: ใช้กับปุ่มด่วน · คลิกขวา: ${right}`);
       else if (isStone(item)) this.showStoneTip(item, e, `คลิกขวา: ${right}`);
-      else if (item) this.showTip(item, e, `คลิกซ้าย: สวมใส่ · คลิกขวา: ${right}`);
+      else if (item) {
+        const both = item.slot === 'ring' && g.player.equipment.ring && g.player.equipment.ring2;
+        this.showTip(item, e, `คลิกซ้าย: สวมใส่${both ? ' (แทนแหวน 1 · ลากไปช่องแหวน 2 เพื่อแทนวงนั้น)' : ''} · คลิกขวา: ${right}`);
+      }
       else this.hideTip();
     });
     bag.addEventListener('mouseleave', () => this.hideTip());
@@ -302,14 +298,14 @@ export class Hud {
 
     const eq = $('equip-slots');
     eq.addEventListener('click', (e) => {
-      const slot = (e.target as HTMLElement).closest<HTMLElement>('[data-slot]')?.dataset.slot as SlotId | undefined;
+      const slot = (e.target as HTMLElement).closest<HTMLElement>('[data-slot]')?.dataset.slot as EquipSlot | undefined;
       if (!slot) return;
       g.backend.unequip(slot);
       this.hideTip();
       this.markInventory();
     });
     eq.addEventListener('mousemove', (e) => {
-      const slot = (e.target as HTMLElement).closest<HTMLElement>('[data-slot]')?.dataset.slot as SlotId | undefined;
+      const slot = (e.target as HTMLElement).closest<HTMLElement>('[data-slot]')?.dataset.slot as EquipSlot | undefined;
       const item = slot ? g.player.equipment[slot] : undefined;
       if (item) this.showTip(item, e, 'คลิก: ถอดเก็บเข้ากระเป๋า');
       else this.hideTip();
@@ -518,9 +514,12 @@ export class Hud {
       }
       const item = g.player.bag[d.i];
       if (!item) return;
+      const socket = target?.closest<HTMLElement>('#equip-slots [data-slot]');
       const quick = target?.closest<HTMLElement>('.skill-hp, .skill-mp');
       const shop = this.shopOpen ? target?.closest<HTMLElement>('#shop') : null;
-      if (stashCell) {
+      if (socket) {
+        this.equipByDrag(d.i, socket.dataset.slot as EquipSlot);
+      } else if (stashCell) {
         g.backend.stashPut(d.i, Number(stashCell.dataset.s));
       } else if (this.stashOpen && target?.closest('#stash')) {
         g.backend.stashPut(d.i, -1);
@@ -1185,7 +1184,7 @@ export class Hud {
   private forgeItems(): Item[] {
     const p = this.g.player;
     const list: Item[] = [];
-    for (const slot of SLOTS) {
+    for (const slot of EQUIP_SLOTS) {
       const it = p.equipment[slot];
       if (it) list.push(it);
     }
@@ -1196,7 +1195,7 @@ export class Hud {
   private renderForge(): void {
     const p = this.g.player;
     const list = this.forgeItems();
-    const worn = (it: Item) => p.equipment[it.slot] === it;
+    const worn = (it: Item) => Object.values(p.equipment).includes(it);
     let item = list.find((w) => w.uid === this.forgeSel);
     if (!item) {
       item = list[0];
@@ -1320,13 +1319,11 @@ export class Hud {
   private renderInventory(): void {
     this.invDirty = false;
     const p = this.g.player;
-    const previewIcon = (s: PreviewSlot): string => s.like
-      ? `<span class="ph">${emptySlotIcon(s.like, p.cls.id)}</span>`
-      : `<span class="ph-label">${s.label}</span>`;
-    $('equip-slots').innerHTML = SLOTS.map((s) =>
-      `<div class="eq-row eq-${s}" title="${SLOT_LABEL[s]}">${this.itemCell(p.equipment[s], `data-slot="${s}"`, `<span class="ph">${emptySlotIcon(s, p.cls.id)}</span>`)}</div>`,
-    ).join('') + PREVIEW_SLOTS.map((s) =>
-      `<div class="eq-row eq-${s.id}" title="${s.label} (ยังไม่เปิดใช้)"><div class="cell empty">${previewIcon(s)}</div></div>`,
+    const emptyLook = (s: EquipSlot): string => TEXT_SOCKETS.includes(s)
+      ? `<span class="ph-label">${EQUIP_SLOT_LABEL[s]}</span>`
+      : `<span class="ph">${emptySlotIcon(s, p.cls.id)}</span>`;
+    $('equip-slots').innerHTML = EQUIP_SLOTS.map((s) =>
+      `<div class="eq-row eq-${s}" title="${EQUIP_SLOT_LABEL[s]}">${this.itemCell(p.equipment[s], `data-slot="${s}"`, emptyLook(s))}</div>`,
     ).join('');
     $('bag-grid').innerHTML = p.bag.map((it, i) => this.itemCell(it, `data-i="${i}"`)).join('');
     const fmt = (k: StatKey, v: number) =>
@@ -1347,10 +1344,22 @@ export class Hud {
       : 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = วางลงพื้น · คลิกช่องสวมใส่ = ถอด · ขายของได้ที่พ่อค้าเท่านั้น';
   }
 
+  /** Dropping a bag item on a socket wears it there; a ring replaces the ring of that socket. */
+  private equipByDrag(i: number, slot: EquipSlot): void {
+    const g = this.g;
+    const item = g.player.bag[i];
+    if (!isItem(item)) return;
+    const block = g.player.equipBlock(item);
+    if (block) this.log(`ใส่ ${itemName(item)} ไม่ได้ — ${block}`, '#ff8a6a');
+    else if (!wornPlaces(item.slot).includes(slot)) this.log(`${itemName(item)} ใส่ช่อง${EQUIP_SLOT_LABEL[slot]}ไม่ได้`, '#ff8a6a');
+    else g.backend.equip(i, slot);
+  }
+
   private showTip(item: Item, e: MouseEvent, hint: string): void {
     const tip = $('tooltip');
     const p = this.g.player;
-    const eq = p.equipment[item.slot];
+    // A worn item compares with nothing; one in the bag with what a click would replace.
+    const eq = Object.values(p.equipment).includes(item) ? item : p.equipment[p.equipPlace(item)];
     const stats = effectiveStats(item);
     const eqStats = eq ? effectiveStats(eq) : {};
     const r1 = (v: number) => Math.round(v * 10) / 10;

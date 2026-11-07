@@ -15,7 +15,7 @@ import {
   CHAT_MAX, GPU_NAME_MAX, shutdownKick, type ShutdownMode, INTEREST_RADIUS, PING_MS, isSoftwareRenderer, SNAPSHOT_HZ, TICK_HZ, WS_PATH, r2,
   type ClientMsg, type InputMsg, type ActionMsg, type PrivateSnap, type ServerMsg, type SnapshotMsg,
 } from '../src/shared/net/protocol';
-import { RARITIES, SLOTS, type SlotId, type Vec2 } from '../src/shared/types';
+import { EQUIP_SLOTS, RARITIES, type Vec2 } from '../src/shared/types';
 import type { SkillSlot } from '../src/shared/data/classes';
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
 import type { AdminOnline, AdminOnlineRow } from '../src/shared/admin';
@@ -504,10 +504,10 @@ export class GameWorld {
         sim.respawn(p);
         break;
       case 'equip':
-        if (i >= 0 && i < p.bag.length) p.equipFromBag(i);
+        if (i >= 0 && i < p.bag.length) p.equipFromBag(i, m.slot);
         break;
       case 'unequip':
-        if (SLOTS.includes(m.slot as SlotId)) p.unequip(m.slot);
+        if (EQUIP_SLOTS.includes(m.slot)) p.unequip(m.slot);
         break;
       case 'drop':
         if (i >= 0 && i < p.bag.length) sim.dropFromBag(p, i);
