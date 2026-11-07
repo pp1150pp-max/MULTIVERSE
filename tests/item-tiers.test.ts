@@ -64,6 +64,14 @@ function linesValid(it: Item, label: string): boolean {
     n++;
   }
   ok(good, `rolled items: ${n} items, every line inside its tier range, % stats with one decimal`);
+  // Every item kind (incl. necklaces, gloves, belts, off-hands, Ashen Isle gear) at every rarity.
+  let kinds = true;
+  for (const b of ITEM_BASES) for (const rar of RARITIES) for (const lv of [b.minLevel, 40]) {
+    const cls = (Object.keys(b.names).find((k) => k !== 'any') ?? 'sword') as 'sword' | 'mage' | 'gunslinger';
+    const it = makeItem(b.id, rar, lv, cls)!;
+    if (!linesValid(it, b.id) || !it.lines!.length) kinds = false;
+  }
+  ok(kinds, `every item kind (${ITEM_BASES.length}) at every rarity gets valid tier lines`);
   // Owner: items stay as strong on average as before. Old average of a main stat = base × level × rarity.
   const base = ITEM_BASES.find((b) => b.id === 'weapon_5')!;
   let sum = 0;

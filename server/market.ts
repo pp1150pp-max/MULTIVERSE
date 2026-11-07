@@ -14,6 +14,7 @@ import { entryName } from '../src/shared/data/potions';
 import { STONE_NAME } from '../src/shared/data/stones';
 import { plusOf } from '../src/shared/data/enhance';
 import { isItem, isStone, type Item, type StoneStack } from '../src/shared/types';
+import { upgradeItem } from '../src/shared/data/items';
 import {
   cleanQuery, listingClass, listingFee, marketKind, marketSellable, saleTax, searchStats, sellerGets,
   MARKET_MS, MARKET_PAGE, MARKET_PRICE_MAX, MARKET_PRICE_MIN, MARKET_SLOTS,
@@ -48,7 +49,8 @@ const fail = (msg: string): MarketOutcome => ({ reply: { ok: false, msg } });
 function parseEntry(json: string): Item | StoneStack | null {
   try {
     const e = JSON.parse(json) as Item | StoneStack;
-    return marketSellable(e) ? e : null;
+    // Listings made before the current tier tables show and come back with today's tiers (values kept).
+    return marketSellable(e) ? upgradeItem(e) : null;
   } catch {
     return null;
   }
