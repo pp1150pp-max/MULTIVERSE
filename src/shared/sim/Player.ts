@@ -226,6 +226,8 @@ export class Player extends Unit {
   /** Potions still restoring. Several can run at once; a monster hit stops them all. */
   potHeals: PotionHeal[] = [];
   lastHurt = -99;
+  /** Seconds until lava burns again. */
+  lavaT = 0;
   /** Sim time of the last basic attack or skill (ranged players rarely get hurt, so this counts as combat too). */
   lastAttack = -99;
   moveTarget: Vec2 | null = null;

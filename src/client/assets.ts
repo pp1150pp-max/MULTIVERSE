@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {
   makeSheet, drawHuman, drawSlime, drawQuad, drawSeeker, drawMerchant, drawBlacksmith, drawKeeper, drawTree, drawBush, drawRock, drawStump,
-  drawSnowPine, drawSnowRock, drawIceCrystal, drawIceShard, drawSnowball,
+  drawSnowPine, drawSnowRock, drawIceCrystal, drawIceShard, drawEmberBolt, drawBurntPillar, drawBasalt, drawMagmaCrystal, drawSnowball,
   drawTent, drawCampfire, drawSign, drawFence, drawRunestone, drawIcon, pixelCircle,
 } from './placeholder';
 import { ITEM_ART } from '../shared/data/items';
@@ -92,6 +92,36 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   yeti_minion: monster('monsters/yeti_minion.png', () => makeSheet(44, drawQuad(['#7f9cb4', '#4f6b82', '#b4c8d8', '#2a3644'], {
     bodyRx: 0.3, bodyRy: 0.24, head: 0.17, ears: 'small', earSize: 0.06, tail: 'none', legLen: 0.14, legW: 0.1, snout: 0.05, mane: true, belly: true,
   }))),
+  // Zone 4 — Ashen Isle. Placeholders only show if the PNGs are missing.
+  ember_wisp: monster('monsters/ember_wisp.png', () => makeSheet(36, drawSlime(['#ff9a3a', '#c8501a', '#ffe58a']))),
+  salamander: monster('monsters/salamander.png', () => makeSheet(40, drawQuad(['#d8562a', '#7a2a14', '#f2c070', '#2a1410'], {
+    bodyRx: 0.32, bodyRy: 0.13, head: 0.13, ears: 'small', earSize: 0.03, tail: 'short', legLen: 0.06, legW: 0.07, snout: 0.06, belly: true,
+  }))),
+  lava_bat: monster('monsters/lava_bat.png', () => makeSheet(36, drawSlime(['#4a3038', '#2a1a20', '#ff9a4a']))),
+  magma_golem: monster('monsters/magma_golem.png', () => makeSheet(48, drawQuad(['#4a4044', '#2a2428', '#ff8a3a', '#1a1416'], {
+    bodyRx: 0.36, bodyRy: 0.24, head: 0.14, ears: 'small', earSize: 0.03, tail: 'none', legLen: 0.14, legW: 0.11, snout: 0.03, belly: true,
+  }))),
+  ash_mage: monster('monsters/ash_mage.png', () => makeSheet(36, drawSlime(['#6e6668', '#3e383a', '#ffb06a']))),
+  ash_knight: monster('monsters/ash_knight.png', () => makeSheet(36, drawSlime(['#55504e', '#2e2a2a', '#e8783a']))),
+  volcano_heart: monster('monsters/volcano_heart.png', () => makeSheet(56, drawSlime(['#c8341a', '#6a1a10', '#ffc04a']))),
+  fx_ember_bolt: single('fx/ember_bolt.png', drawEmberBolt),
+
+  burnt_pillar_0: single('props/burnt_pillar_0.png', () => drawBurntPillar(0)),
+  burnt_pillar_1: single('props/burnt_pillar_1.png', () => drawBurntPillar(1)),
+  burnt_pillar_2: single('props/burnt_pillar_2.png', () => drawBurntPillar(2)),
+  charred_tree: single('props/charred_tree.png', () => drawBurntPillar(1)),
+  ash_shrub_0: single('props/ash_shrub_0.png', () => drawBasalt(0)),
+  ash_shrub_1: single('props/ash_shrub_1.png', () => drawBasalt(1)),
+  ember_fern: single('props/ember_fern.png', () => drawMagmaCrystal(0)),
+  basalt_0: single('props/basalt_0.png', () => drawBasalt(0)),
+  basalt_1: single('props/basalt_1.png', () => drawBasalt(1)),
+  charred_stump: single('props/charred_stump.png', drawStump),
+  magma_crystal_0: single('props/magma_crystal_0.png', () => drawMagmaCrystal(0)),
+  magma_crystal_1: single('props/magma_crystal_1.png', () => drawMagmaCrystal(1)),
+  decor_volcano: single('props/decor_volcano.png', () => drawBasalt(0)),
+  island_cliff_volcano: single('props/island_cliff_volcano.png', () => drawBasalt(0)),
+  island_slabs_volcano: single('props/island_slabs_volcano.png', () => drawBasalt(0)),
+
   fx_ice_shard: single('fx/ice_shard.png', drawIceShard),
   fx_snowball: single('fx/snowball.png', drawSnowball),
 
@@ -236,7 +266,7 @@ async function loadAnimSet(key: string, dir: string): Promise<void> {
 }
 
 /** Repeating ground textures. A zone falls back to its code-painted ground if one is missing. */
-export type GroundTile = 'grass' | 'dirt' | 'water' | 'marsh' | 'mud' | 'pave' | 'snow' | 'snow_path' | 'ice';
+export type GroundTile = 'grass' | 'dirt' | 'water' | 'marsh' | 'mud' | 'pave' | 'snow' | 'snow_path' | 'ice' | 'ash_rock' | 'ash_path' | 'lava';
 export const groundTiles: Partial<Record<GroundTile, THREE.Texture>> = {};
 
 async function loadGroundTile(name: GroundTile): Promise<void> {
@@ -413,7 +443,7 @@ async function loadAssets(): Promise<void> {
   // Everything at once: the files don't depend on each other.
   await Promise.all([
     ...(['sword', 'mage', 'gun'] as const).map((n) => loadFxSheet(n)),
-    ...(['grass', 'dirt', 'water', 'marsh', 'mud', 'pave', 'snow', 'snow_path', 'ice'] as const).map((n) => loadGroundTile(n)),
+    ...(['grass', 'dirt', 'water', 'marsh', 'mud', 'pave', 'snow', 'snow_path', 'ice', 'ash_rock', 'ash_path', 'lava'] as const).map((n) => loadGroundTile(n)),
     ...Object.entries(ANIM_SET_DIRS).map(([key, dir]) => loadAnimSet(key, BASE + dir)),
     ...Object.entries(SHEET_SPECS).map(async ([key, spec]) => {
       let tex: THREE.Texture;

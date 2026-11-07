@@ -17,7 +17,7 @@ export interface ProjOpts {
   pierce?: boolean;
   kb?: number;
   /** Monster shots: the picture to draw. Player shots leave this out. */
-  art?: 'ice_shard' | 'snowball';
+  art?: 'ice_shard' | 'snowball' | 'ember_bolt';
 }
 
 /** A monster's shot: flies straight until it hits a player or runs out of range, so it can be dodged. */

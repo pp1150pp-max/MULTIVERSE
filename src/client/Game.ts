@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { HazardViews } from './hazards';
+import { inBossArena } from '../shared/data/zones';
+import { AUTO_BOSS_MSG } from '../shared/sim/autoplay';
 import type { Vec2 } from '../shared/types';
 import type { ZoneDef } from '../shared/data/zones';
 import { NPC_IDS, NPC_INFO, NPC_TALK_RANGE, type NpcId } from '../shared/data/npcs';
@@ -52,6 +55,7 @@ export class Game {
   /** The Seeker's intro is shown only when you talk to him. */
   metSeeker = true;
   autoPlay = false;
+  private readonly hazardViews: HazardViews;
   /** Waypoints left from a click on the full map (empty = not walking anywhere). */
   mapRoute: Vec2[] = [];
   /** Stuck check for the map walk: closest distance to the next waypoint and when it last got closer. */
@@ -95,6 +99,7 @@ export class Game {
     this.input = new Input(this.renderer.domElement);
     this.fx = new Effects(this.scene);
     this.autoRing = new AutoRing(this.scene);
+    this.hazardViews = new HazardViews(this.scene);
     this.floating = new Floating(document.getElementById('float-layer')!);
 
     this.camTarget.set(this.player.x, 0, this.player.z);
@@ -166,6 +171,10 @@ export class Game {
   toggleAuto(force?: boolean, offMsg = 'ปิด Auto Play'): void {
     if (!this.zone.allowAutoPlay) {
       this.hud.log('พื้นที่นี้ไม่รองรับ Auto Play', '#ff8a6a');
+      return;
+    }
+    if ((force ?? !this.autoPlay) && inBossArena(this.zone, this.player.x, this.player.z)) {
+      this.hud.log(AUTO_BOSS_MSG, '#ff8a6a');
       return;
     }
     this.autoPlay = force ?? !this.autoPlay;
@@ -307,6 +316,10 @@ export class Game {
         break;
       case 'log':
         this.hud.log(ev.msg, ev.color);
+        break;
+      case 'autoOff':
+        this.autoPlay = false;
+        this.hud.log(ev.msg, '#ff8a6a');
         break;
       case 'banner':
         this.hud.banner(ev.text, ev.sub, ev.color);
@@ -466,6 +479,7 @@ export class Game {
     } else this.autoRing.hide();
 
     this.fx.update(dt);
+    this.hazardViews.update(this.backend.hazards, this.backend.time);
     this.world.update(dt, p.x, p.z);
     this.updateCamera(dt);
     this.floating.update(dt, this);

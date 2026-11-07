@@ -7,6 +7,7 @@ import type { SimEvent } from '../sim/types';
 import type { AutoSettings, BuybackEntry, LootFilter, PotionSelect, SortKey } from '../sim/Player';
 import type { EnhanceResult } from '../data/enhance';
 import type { StashData } from '../sim/stash';
+import type { Hazard } from '../sim/volcanoHeart';
 
 export const WS_PATH = '/ws';
 /** Server simulation rate and how often it sends snapshots. */
@@ -107,7 +108,7 @@ export interface MonsterSnap {
   y: number;
 }
 
-export interface ProjectileSnap { id: number; x: number; z: number; vx: number; vz: number; color: string; size: number; art?: 'ice_shard' | 'snowball' }
+export interface ProjectileSnap { id: number; x: number; z: number; vx: number; vz: number; color: string; size: number; art?: 'ice_shard' | 'snowball' | 'ember_bolt' }
 
 export interface LootSnap {
   id: number; x: number; z: number; fromX: number; fromZ: number; t: number;
@@ -142,6 +143,8 @@ export interface SnapshotMsg {
   monsters: MonsterSnap[];
   projectiles: ProjectileSnap[];
   loots: LootSnap[];
+  /** Boss ground attacks in progress (left out when there are none). */
+  hazards?: Hazard[];
   events: SimEvent[];
 }
 

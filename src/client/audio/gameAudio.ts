@@ -20,7 +20,7 @@ const BOSS_MUSIC_RADIUS = 22;
 /** Stops the music flipping back and forth when a boss is at the edge of its leash. */
 const BOSS_MUSIC_HOLD = 4;
 
-const ZONE_MUSIC: Record<string, TrackId> = { emerald_forest: 'forest', misty_marsh: 'marsh', frost_reach: 'snow' };
+const ZONE_MUSIC: Record<string, TrackId> = { emerald_forest: 'forest', misty_marsh: 'marsh', frost_reach: 'snow', ashen_isle: 'volcano' };
 const ANIM_SLOT: Record<string, SkillSlot> = { attack: 'basic', skill_q: 'q', skill_e: 'e', skill_r: 'r', dash: 'dash' };
 const IMPACT_SOUND: Record<string, SoundName> = { explosion: 'explosion', crater: 'crater', impact: 'impact' };
 

@@ -3,6 +3,7 @@ import type { Sim } from './Sim';
 import type { Player } from './Player';
 import type { MonsterDef, ShotDef } from '../data/monsters';
 import { NO_BOOST, type MonsterBoost, type SpawnArea } from '../data/zones';
+import { VolcanoHeartBrain } from './volcanoHeart';
 
 const BOSS_RAMP_PER_SEC = 0.2;
 const BOSS_RAMP_MAX = 3;
@@ -73,6 +74,8 @@ export class Monster extends Unit {
   /** Has used its once-per-fight vanish. */
   private vanished = false;
   private fallT = 0;
+  /** Bosses with a scripted pattern. Made on first use, so only the server has one. */
+  private brain: VolcanoHeartBrain | null = null;
 
   /** The zone's monster boost: multiplies HP, attack and defense, and speed (moving and attacking). */
   private readonly zoneSpeed: number;
@@ -149,6 +152,12 @@ export class Monster extends Unit {
       return;
     }
     this.moving = false;
+    if (this.def.pattern) {
+      this.brain ??= new VolcanoHeartBrain();
+      this.face(1, 1);
+      this.brain.update(dt, sim, this);
+      return;
+    }
     if (this.jumpOutT > 0) {
       this.jumpOutT -= dt;
       const up = Math.max(0, 1 - this.jumpOutT / JUMP_OUT_TIME - 0.3) / 0.7;

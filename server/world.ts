@@ -10,7 +10,7 @@ import { ZONES, zoneById } from '../src/shared/data/zones';
 import { SORT_KEYS, type LootFilter, type Player } from '../src/shared/sim/Player';
 import { POTION_SIZES } from '../src/shared/data/potions';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../src/shared/sim/types';
-import { AUTO_HINT_COLOR, AutoPlay, type AutoWorld } from '../src/shared/sim/autoplay';
+import { AUTO_BOSS_MSG, AUTO_HINT_COLOR, autoBlocked, AutoPlay, type AutoWorld } from '../src/shared/sim/autoplay';
 import {
   CHAT_MAX, GPU_NAME_MAX, shutdownKick, type ShutdownMode, INTEREST_RADIUS, PING_MS, isSoftwareRenderer, SNAPSHOT_HZ, TICK_HZ, WS_PATH, r2,
   type ClientMsg, type InputMsg, type ActionMsg, type PrivateSnap, type ServerMsg, type SnapshotMsg,
@@ -518,6 +518,11 @@ export class GameWorld {
         }
         break;
       case 'auto':
+        if (m.on === true && autoBlocked(s.sim.zone, s.sim.monsters, p)) {
+          s.auto = null;
+          s.outbox.push({ t: 'autoOff', to: p.id, msg: AUTO_BOSS_MSG });
+          break;
+        }
         s.auto = m.on === true && s.sim.zone.allowAutoPlay ? (s.auto ?? new AutoPlay()) : null;
         s.auto?.start(p.x, p.z);
         s.pendingPos = null;
@@ -624,6 +629,10 @@ export class GameWorld {
       basic: fresh && s.basic, skills: fresh ? s.skills : [],
       dash: s.dash, potion: s.potion, pos: s.pendingPos,
     };
+    if (s.auto && autoBlocked(s.sim.zone, s.sim.monsters, p)) {
+      s.auto = null;
+      s.outbox.push({ t: 'autoOff', to: p.id, msg: AUTO_BOSS_MSG });
+    }
     if (s.auto) {
       const sim = s.sim;
       const world: AutoWorld = { player: p, monsters: sim.monsters, loots: sim.loots, time: sim.time, zone: sim.zone };
@@ -777,6 +786,7 @@ export class GameWorld {
         vx: r2(Math.cos(pr.o.angle) * pr.o.speed), vz: r2(Math.sin(pr.o.angle) * pr.o.speed),
         color: pr.o.color, size: pr.o.size, art: pr.o.art,
       })),
+      ...(sim.hazards.length && near(sim.zone.boss) ? { hazards: sim.hazards } : {}),
       loots: sim.loots.filter(near).map((l) => ({
         id: l.id, x: r2(l.x), z: r2(l.z), fromX: r2(l.fromX), fromZ: r2(l.fromZ), t: r2(l.t),
         kind: l.kind, dropped: l.dropped, owner: l.owner, ownerUntil: r2(l.ownerUntil),

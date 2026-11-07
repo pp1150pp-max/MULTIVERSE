@@ -666,3 +666,42 @@ const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 export const ditherAt = (x: number, y: number) => (BAYER[(y & 3) * 4 + (x & 3)] + 0.5) / 16;
 
 export type { Rng };
+
+/** Burnt stone column with a glowing crack. */
+export function drawBurntPillar(variant: number): HTMLCanvasElement {
+  const c = newCanvas(32, 72);
+  const ctx = c.getContext('2d')!;
+  const w = 8 + variant * 2;
+  const top = 6 + (2 - variant) * 8;
+  poly(ctx, 1, [16 - w, 70, 16 - w + 2, top + 4, 16, top, 16 + w - 2, top + 4, 16 + w, 70], '#2e282a');
+  poly(ctx, 1, [16 + 1, 70, 16 + 1, top + 2, 16 + w - 2, top + 4, 16 + w, 70], '#3e3638');
+  poly(ctx, 1, [15, 62, 18, 48, 14, 36, 17, top + 10, 18, 36, 15, 48, 18, 62], '#ff8a3a');
+  return c;
+}
+
+export function drawBasalt(variant: number): HTMLCanvasElement {
+  const c = newCanvas(40, 30);
+  const ctx = c.getContext('2d')!;
+  const h = variant ? 4 : 10;
+  poly(ctx, 1, [3, 28, 8, h + 4, 20, h, 33, h + 5, 37, 28], '#37302f');
+  poly(ctx, 1, [8, h + 4, 20, h, 33, h + 5, 22, h + 8], '#4d4644');
+  return c;
+}
+
+export function drawMagmaCrystal(variant: number): HTMLCanvasElement {
+  const c = newCanvas(36, 44);
+  const ctx = c.getContext('2d')!;
+  const shard = (x: number, w: number, top: number, fill: string) => poly(ctx, 1, [x - w, 42, x, top, x + w, 42], fill);
+  shard(18, 8, variant ? 3 : 12, '#ff7a2a');
+  shard(9, 5, 22, '#d8501a');
+  shard(27, 5, variant ? 14 : 24, '#ffa84a');
+  return c;
+}
+
+export function drawEmberBolt(): HTMLCanvasElement {
+  const c = newCanvas(32, 16);
+  const ctx = c.getContext('2d')!;
+  poly(ctx, 1, [1, 8, 10, 2, 31, 8, 10, 14], '#ff8a3a');
+  poly(ctx, 1, [10, 8, 14, 5, 27, 8, 14, 11], '#ffe08a');
+  return c;
+}
