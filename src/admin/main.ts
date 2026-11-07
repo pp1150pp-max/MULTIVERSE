@@ -11,7 +11,7 @@ import type {
 import { CLASSES } from '../shared/data/classes';
 import { itemNames, makeItem, roundStat, rowRanges, tierOf } from '../shared/data/items';
 import { SHUTDOWN_SECONDS, type ShutdownMode } from '../shared/net/protocol';
-import { isStack, RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, type BagEntry, type ClassId, type Item, type Rarity } from '../shared/types';
+import { isStack, RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, SLOTS, STAT_KEYS, STAT_LABEL, type BagEntry, type ClassId, type Item, type Rarity } from '../shared/types';
 
 const ADMIN_TOKEN = 'multiverse-admin-token';
 /** The game's own login: used when the owner is already logged in to the game in this browser. */
@@ -465,9 +465,10 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
 
   // Items
   const base = h('select');
-  for (const slot of Object.keys(SLOT_LABEL) as (keyof typeof SLOT_LABEL)[]) {
+  for (const slot of SLOTS) {
     const group = h('optgroup', { label: SLOT_LABEL[slot] });
-    for (const b of m.bases.filter((x) => x.slot === slot)) {
+    // Off-hands exist per class: only this character's are offered.
+    for (const b of m.bases.filter((x) => x.slot === slot && (x.names.any || x.names[c.classId]))) {
       group.append(h('option', { value: b.id }, `${b.names[c.classId] ?? b.names.any ?? b.id} (Lv.${b.minLevel}+)`));
     }
     base.append(group);

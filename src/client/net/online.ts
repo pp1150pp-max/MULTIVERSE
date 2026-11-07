@@ -11,7 +11,7 @@ import type { Intent, SimEvent } from '../../shared/sim/types';
 import { MONSTERS } from '../../shared/data/monsters';
 import { zoneById, type SpawnArea, type ZoneDef } from '../../shared/data/zones';
 import type { NpcId } from '../../shared/data/npcs';
-import type { PotionKind, PotionSize, Rarity, SlotId, Vec2 } from '../../shared/types';
+import type { EquipSlot, PotionKind, PotionSize, Rarity, Vec2 } from '../../shared/types';
 import type { SkillSlot } from '../../shared/data/classes';
 import { INPUT_HZ, PING_MS, WS_PATH, type ClientMsg, type ServerMsg, type ShutdownMode, type SnapshotMsg } from '../../shared/net/protocol';
 import type { Backend, EnhanceOutcome, ProjectileLike } from '../backend';
@@ -648,8 +648,8 @@ export class OnlineBackend implements Backend {
   // ------------------------------------------------------------ actions (the server decides)
 
   respawn(): void { this.send({ t: 'act', a: 'respawn' }); }
-  equip(i: number): void { this.send({ t: 'act', a: 'equip', i }); }
-  unequip(slot: SlotId): void { this.send({ t: 'act', a: 'unequip', slot }); }
+  equip(i: number, slot?: EquipSlot): void { this.send({ t: 'act', a: 'equip', i, slot }); }
+  unequip(slot: EquipSlot): void { this.send({ t: 'act', a: 'unequip', slot }); }
   drop(i: number): void { this.send({ t: 'act', a: 'drop', i }); }
   buyPotion(kind: PotionKind, size: PotionSize, n: number): void { this.send({ t: 'act', a: 'buy', kind, size, n }); }
   sortBag(key: SortKey, desc: boolean): void { this.send({ t: 'act', a: 'sort', key, desc }); }

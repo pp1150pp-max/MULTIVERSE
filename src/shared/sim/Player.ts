@@ -11,8 +11,8 @@ import { itemClass, starterWeapon } from '../data/items';
 import { anyStackValue, POTIONS, POTION_SIZES, POTION_STACK, stackLimit } from '../data/potions';
 import { STONE_STACK } from '../data/stones';
 import {
-  isPotion, isStack, isStone, RARITIES, sameStack, SLOTS, STONE_KINDS,
-  type BagEntry, type StoneKind, type ClassId, type Item, type PotionKind, type PotionSize, type Rarity, type SlotId, type Stats, type Vec2,
+  isPotion, isStack, isStone, RARITIES, sameStack, SLOTS, STONE_KINDS, wornPlaces,
+  type BagEntry, type EquipSlot, type StoneKind, type ClassId, type Item, type PotionKind, type PotionSize, type Rarity, type SlotId, type Stats, type Vec2,
 } from '../types';
 import type { LootKind } from './Loot';
 import { newStash, type StashData } from './stash';
@@ -165,7 +165,7 @@ export interface CharacterData {
   level: number;
   exp: number;
   gold: number;
-  equipment: Partial<Record<SlotId, Item>>;
+  equipment: Partial<Record<EquipSlot, Item>>;
   bag: (BagEntry | null)[];
   /** Missing in saves from before potion sizes existed. */
   potSel?: PotionSelect;
@@ -201,7 +201,7 @@ export class Player extends Unit {
   exp: number;
   gold: number;
   mp = 0;
-  equipment: Partial<Record<SlotId, Item>>;
+  equipment: Partial<Record<EquipSlot, Item>>;
   bag: (BagEntry | null)[];
   potSel: PotionSelect;
   lootFilter: LootFilter;
@@ -396,11 +396,17 @@ export class Player extends Unit {
     return !this.equipBlock(item);
   }
 
+  /** Where clicking this item wears it: the first free place, or the first place when all are taken. */
+  equipPlace(item: Item): EquipSlot {
+    const places = wornPlaces(item.slot);
+    return places.find((s) => !this.equipment[s]) ?? places[0];
+  }
+
   /**
    * Clicking gear wears it; clicking a potion makes its quick key use that size.
    * Gear of another class or above the character's level stays in the bag (gear already worn from older saves is left on).
    */
-  equipFromBag(i: number): void {
+  equipFromBag(i: number, place?: unknown): void {
     const item = this.bag[i];
     if (!item) return;
     if (isPotion(item)) {
@@ -408,8 +414,11 @@ export class Player extends Unit {
       return;
     }
     if (isStone(item) || !this.canEquip(item)) return;
-    this.bag[i] = this.equipment[item.slot] ?? null;
-    this.equipment[item.slot] = item;
+    // `place` comes from the client: only a place this kind of item can go is taken.
+    if (place !== undefined && !wornPlaces(item.slot).includes(place as EquipSlot)) return;
+    const to = (place as EquipSlot | undefined) ?? this.equipPlace(item);
+    this.bag[i] = this.equipment[to] ?? null;
+    this.equipment[to] = item;
     this.recompute();
   }
 
@@ -433,7 +442,7 @@ export class Player extends Unit {
     this.bag[to] = a;
   }
 
-  unequip(slot: SlotId): void {
+  unequip(slot: EquipSlot): void {
     const item = this.equipment[slot];
     if (!item || !this.addToBag(item)) return;
     delete this.equipment[slot];

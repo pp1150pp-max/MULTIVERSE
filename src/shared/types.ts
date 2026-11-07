@@ -4,15 +4,26 @@ export type Vec2 = { x: number; z: number };
 
 export type ClassId = 'sword' | 'mage' | 'gunslinger';
 
-export type SlotId = 'weapon' | 'helmet' | 'armor' | 'boots' | 'ring';
-export const SLOTS: SlotId[] = ['weapon', 'helmet', 'armor', 'boots', 'ring'];
+/** The kinds of gear an item can be. */
+export type SlotId = 'weapon' | 'offhand' | 'helmet' | 'necklace' | 'armor' | 'gloves' | 'belt' | 'boots' | 'ring';
+export const SLOTS: SlotId[] = ['weapon', 'offhand', 'helmet', 'necklace', 'armor', 'gloves', 'belt', 'boots', 'ring'];
+/** Where gear is worn: one place per kind, plus a second place for rings. A ring's own `slot` is always 'ring'. */
+export type EquipSlot = SlotId | 'ring2';
+export const EQUIP_SLOTS: EquipSlot[] = [...SLOTS, 'ring2'];
 export const SLOT_LABEL: Record<SlotId, string> = {
   weapon: 'อาวุธ',
+  offhand: 'อาวุธรอง',
   helmet: 'หมวก',
+  necklace: 'สร้อย',
   armor: 'เกราะ',
+  gloves: 'ถุงมือ',
+  belt: 'เข็มขัด',
   boots: 'รองเท้า',
   ring: 'แหวน',
 };
+export const EQUIP_SLOT_LABEL: Record<EquipSlot, string> = { ...SLOT_LABEL, ring: 'แหวน 1', ring2: 'แหวน 2' };
+/** The places an item of this kind can be worn. */
+export const wornPlaces = (slot: SlotId): EquipSlot[] => (slot === 'ring' ? ['ring', 'ring2'] : [slot]);
 
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 export const RARITIES: Rarity[] = ['common', 'uncommon', 'rare', 'epic', 'legendary'];

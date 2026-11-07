@@ -1,6 +1,6 @@
 // Admin page (/admin): roles, limits and the shapes of the /api/admin requests, shared by the page
 // and the server. The server checks the role and every value on each call; the page is only a view.
-import { STAT_KEYS, STAT_LABEL, type BagEntry, type ClassId, type Item, type Rarity, type SlotId, type StatKey, type StatLine } from './types';
+import { STAT_KEYS, STAT_LABEL, type BagEntry, type ClassId, type EquipSlot, type Item, type Rarity, type SlotId, type StatKey, type StatLine } from './types';
 import type { ShutdownMode } from './net/protocol';
 import { itemNames, makeItem, roundStat, rowRanges, tierOf } from './data/items';
 
@@ -163,7 +163,7 @@ export interface AdminAccountsResponse {
 
 /** A character with everything it carries, for the account details. */
 export interface AdminCharDetail extends AdminCharRow {
-  equipment: Partial<Record<SlotId, Item>>;
+  equipment: Partial<Record<EquipSlot, Item>>;
   bag: (BagEntry | null)[];
 }
 

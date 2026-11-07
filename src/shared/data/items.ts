@@ -1,5 +1,5 @@
 import {
-  RARITIES, type ClassId, type Item, type Rarity, type SlotId, type StatKey, type StatLine, type Stats, type StatTier,
+  RARITIES, type ClassId, type EquipSlot, type Item, type Rarity, type SlotId, type StatKey, type StatLine, type Stats, type StatTier,
 } from '../types';
 import { pick, type Rng } from '../rng';
 
@@ -37,7 +37,32 @@ const BASES: BaseItem[] = [
   { id: 'glacier', slot: 'armor', names: { sword: 'Glacier Plate', mage: 'Snowweave Robe', gunslinger: 'Fur-lined Coat' }, main: { def: 14, maxHp: 44 }, minLevel: 24 },
   { id: 'snowtreads', slot: 'boots', names: { any: 'Snowtread Boots' }, main: { def: 7, moveSpeed: 7 }, minLevel: 22 },
   { id: 'ring_frost', slot: 'ring', names: { any: 'Frost Ring' }, main: { maxHp: 26 }, minLevel: 26 },
+  // Necklaces, gloves and belts: one per map.
+  { id: 'necklace_1', slot: 'necklace', names: { any: 'Bead Necklace' }, main: { maxMp: 6, crit: 0.5 }, minLevel: 4 },
+  { id: 'necklace_2', slot: 'necklace', names: { any: 'Wisp Pendant' }, main: { maxMp: 9, crit: 1 }, minLevel: 15 },
+  { id: 'necklace_3', slot: 'necklace', names: { any: 'Frost Amulet' }, main: { maxMp: 12, crit: 1.5 }, minLevel: 25 },
+  { id: 'gloves_1', slot: 'gloves', names: { any: 'Leather Gloves' }, main: { atk: 1, atkSpeed: 0.5 }, minLevel: 2 },
+  { id: 'gloves_2', slot: 'gloves', names: { any: 'Mossweave Gloves' }, main: { atk: 2.5, atkSpeed: 1 }, minLevel: 12 },
+  { id: 'gloves_3', slot: 'gloves', names: { any: 'Frostfur Gauntlets' }, main: { atk: 4, atkSpeed: 1.5 }, minLevel: 22 },
+  { id: 'belt_1', slot: 'belt', names: { any: 'Rope Belt' }, main: { maxHp: 6, def: 1 }, minLevel: 2 },
+  { id: 'belt_2', slot: 'belt', names: { any: 'Serpent Belt' }, main: { maxHp: 11, def: 2 }, minLevel: 12 },
+  { id: 'belt_3', slot: 'belt', names: { any: 'Glacier Girdle' }, main: { maxHp: 16, def: 3 }, minLevel: 22 },
+  // Off-hands differ per class in stats too, so each is its own kind that only its class rolls.
+  { id: 'scabbard_1', slot: 'offhand', names: { sword: 'Worn Scabbard' }, main: { def: 2, hpRegen: 0.3 }, minLevel: 3 },
+  { id: 'scabbard_2', slot: 'offhand', names: { sword: 'Bogsteel Scabbard' }, main: { def: 3.5, hpRegen: 0.5 }, minLevel: 14 },
+  { id: 'scabbard_3', slot: 'offhand', names: { sword: 'Frostbound Scabbard' }, main: { def: 5, hpRegen: 0.7 }, minLevel: 24 },
+  { id: 'orb_1', slot: 'offhand', names: { mage: 'Glass Orb' }, main: { atk: 1, mpRegen: 0.3 }, minLevel: 3 },
+  { id: 'tome_2', slot: 'offhand', names: { mage: 'Swamp Grimoire' }, main: { atk: 2, mpRegen: 0.5 }, minLevel: 14 },
+  { id: 'orb_3', slot: 'offhand', names: { mage: 'Aurora Orb' }, main: { atk: 3, mpRegen: 0.7 }, minLevel: 24 },
+  { id: 'pouch_1', slot: 'offhand', names: { gunslinger: 'Bullet Pouch' }, main: { atk: 0.5, critDmg: 2 }, minLevel: 3 },
+  { id: 'pouch_2', slot: 'offhand', names: { gunslinger: 'Oilskin Ammo Pouch' }, main: { atk: 1, critDmg: 3 }, minLevel: 14 },
+  { id: 'pouch_3', slot: 'offhand', names: { gunslinger: 'Glacier Ammo Case' }, main: { atk: 2, critDmg: 4 }, minLevel: 24 },
 ];
+
+/** The class an item of this kind belongs to: `cls` if the kind has a version for it, else its only class. */
+function ownerClass(base: BaseItem, cls: ClassId): ClassId {
+  return base.names[cls] ? cls : (Object.keys(base.names)[0] as ClassId);
+}
 
 /** Names of every item's picture. Items named per class have one picture per class. */
 export const ITEM_ART: string[] = BASES.flatMap((b) =>
@@ -69,8 +94,9 @@ export function itemClass(item: Item): ClassId | null {
 }
 
 /** The picture of a slot's first item, as this class sees it. */
-export function starterArt(slot: SlotId, cls: ClassId): string {
-  const base = BASES.find((b) => b.slot === slot)!;
+export function starterArt(worn: EquipSlot, cls: ClassId): string {
+  const slot = worn === 'ring2' ? 'ring' : worn;
+  const base = BASES.find((b) => b.slot === slot && (b.names.any || b.names[cls]))!;
   return base.names.any ? `item_${base.id}` : `item_${base.id}_${cls}`;
 }
 
@@ -172,17 +198,18 @@ function build(base: BaseItem, rarity: Rarity, level: number, cls: ClassId, r: R
   }
   const stats: Partial<Stats> = {};
   for (const l of lines) stats[l.stat] = fmt(l.stat, (stats[l.stat] ?? 0) + l.value);
-  let name = base.names[cls] ?? base.names.any ?? base.id;
+  const owner = ownerClass(base, cls);
+  let name = base.names.any ?? base.names[owner] ?? base.id;
   const pre = PREFIX[rarity];
   if (pre) name = `${pick(r, pre)} ${name}`;
   const value = Math.round((5 + level * 3) * (1 + RARITIES.indexOf(rarity) * 1.5));
   const item: Item = { uid: newUid(), baseId: base.id, name, slot: base.slot, rarity, level, stats, value, lines };
-  if (!base.names.any) item.cls = cls;
+  if (!base.names.any) item.cls = owner;
   return item;
 }
 
 export function rollItem(r: Rng, level: number, cls: ClassId, boost = 0): Item {
-  const candidates = BASES.filter((b) => b.minLevel <= level + 1);
+  const candidates = BASES.filter((b) => b.minLevel <= level + 1 && (b.names.any || b.names[cls]));
   return build(pick(r, candidates), rollRarity(r, boost), level, cls, r, boost);
 }
 
@@ -254,7 +281,7 @@ export const roundStat = fmt;
 export function itemNames(baseId: string, rarity: Rarity, cls: ClassId): string[] {
   const base = BASES.find((b) => b.id === baseId);
   if (!base) return [];
-  const name = base.names[cls] ?? base.names.any ?? base.id;
+  const name = base.names.any ?? base.names[ownerClass(base, cls)] ?? base.id;
   const pre = PREFIX[rarity];
   return pre ? pre.map((p) => `${p} ${name}`) : [name];
 }
