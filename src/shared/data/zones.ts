@@ -1,3 +1,5 @@
+import { mulberry32 } from '../rng';
+
 export interface SpawnArea {
   monster: string;
   x: number;
@@ -124,7 +126,82 @@ function rotateZone(turns: 0 | 1 | 2 | 3, z: ZoneDef): ZoneDef {
   };
 }
 
-export const ZONE_1: ZoneDef = {
+/** Boss arena when a zone doesn't set its own: the ring of stones around the clearing. */
+export const DEFAULT_ARENA = 11;
+
+/** One kind of monster to scatter over a zone, or a squad (`group` of several) that stands together. */
+interface Scatter {
+  group: [monster: string, count: number][];
+  /** How many singles (or squads). */
+  count: number;
+  respawn: [number, number];
+}
+
+/**
+ * Spreads a zone's monsters one by one over the whole map instead of in herds, the kinds in order
+ * from the camp to the boss: each gets the next band of the way across, in proportion to its count.
+ * Off the roads, clear of the camp, the boss's arena, the lakes and pools, and of each other.
+ * Seeded by the zone, so every server and browser gets the same layout.
+ */
+function scatterZone(z: ZoneDef, list: Scatter[]): ZoneDef {
+  const r = mulberry32(z.seed + 7);
+  const segs: [number, number, number, number][] = [];
+  for (const line of [z.path, ...z.branches]) {
+    for (let i = 1; i < line.length; i++) segs.push([...line[i - 1], ...line[i]]);
+  }
+  const toRoad = (x: number, y: number) => {
+    let best = Infinity;
+    for (const [ax, az, bx, bz] of segs) {
+      const vx = bx - ax;
+      const vz = bz - az;
+      const t = Math.max(0, Math.min(1, ((x - ax) * vx + (y - az) * vz) / (vx * vx + vz * vz)));
+      best = Math.min(best, Math.hypot(x - ax - vx * t, y - az - vz * t));
+    }
+    return best;
+  };
+  const boss = z.boss!;
+  const arena = z.arenaRadius ?? DEFAULT_ARENA;
+  const pools = [...(z.iceLakes ?? []), ...(z.lavaPools ?? [])];
+  // 0 at the camp, 1 at the boss, measured along the diagonal between them.
+  const from = z.start.x + z.start.z;
+  const progress = (x: number, y: number) => (from - (x + y)) / (from - (boss.x + boss.z));
+  const FIRST = 0.08;
+  const LAST = 0.87;
+  const B = z.half - 11;
+  const total = list.reduce((n, s) => n + s.count, 0);
+  const placed: { x: number; z: number }[] = [];
+  const spawns: SpawnArea[] = [];
+  let done = 0;
+  for (const s of list) {
+    const lo = FIRST + ((LAST - FIRST) * done) / total;
+    done += s.count;
+    const hi = FIRST + ((LAST - FIRST) * done) / total;
+    const squad = s.group.length > 1 || s.group[0][1] > 1;
+    const apart = squad ? 9 : 6.5;
+    let n = 0;
+    for (let tries = 0; tries < 5000 && n < s.count; tries++) {
+      const x = -B + r() * 2 * B;
+      const y = -B + r() * 2 * B;
+      const p = progress(x, y);
+      if (p < lo - 0.03 || p > hi + 0.03) continue;
+      if (toRoad(x, y) < 3.5) continue;
+      if (Math.hypot(x - z.start.x, y - z.start.z) < 14) continue;
+      if (Math.hypot(x - boss.x, y - boss.z) < arena + 5) continue;
+      if (pools.some((l) => Math.hypot((x - l.x) / (l.rx + 2.5), (y - l.z) / (l.rz + 2.5)) < 1)) continue;
+      if (placed.some((o) => Math.hypot(o.x - x, o.z - y) < apart)) continue;
+      const at = { x: Math.round(x), z: Math.round(y) };
+      placed.push(at);
+      for (const [monster, count] of s.group) {
+        spawns.push({ monster, ...at, radius: squad ? 3 : 2.5, count, respawn: s.respawn });
+      }
+      n++;
+    }
+    if (n < s.count) throw new Error(`${z.id}: room for only ${n} of ${s.count} ${s.group[0][0]}`);
+  }
+  return { ...z, spawns };
+}
+
+export const ZONE_1: ZoneDef = scatterZone({
   id: 'emerald_forest',
   name: 'Emerald Forest',
   nameTh: 'ป่ามรกต',
@@ -142,20 +219,19 @@ export const ZONE_1: ZoneDef = {
     [[-8, 0], [-24, 8]],
     [[-16, -14], [-8, -24]],
   ],
-  spawns: [
-    { monster: 'green_slime', x: 34, z: 22, radius: 8, count: 9, respawn: [6, 10] },
-    { monster: 'green_slime', x: 20, z: 38, radius: 6, count: 5, respawn: [6, 10] },
-    { monster: 'wild_rabbit', x: 10, z: 28, radius: 8, count: 8, respawn: [7, 11] },
-    { monster: 'forest_fox', x: -2, z: 10, radius: 9, count: 9, respawn: [8, 12] },
-    { monster: 'wild_boar', x: -24, z: 8, radius: 9, count: 8, respawn: [9, 14] },
-    { monster: 'forest_wolf', x: -10, z: -24, radius: 9, count: 8, respawn: [10, 15] },
-  ],
+  spawns: [],
   boss: { monster: 'forest_bear', x: -42, z: -42, radius: 1, count: 1, respawn: [90, 90] },
   portals: [{ to: HUB_ID, x: 49.5, z: 49.5, minLevel: 0 }],
-};
+}, [
+  { group: [['green_slime', 1]], count: 14, respawn: [6, 10] },
+  { group: [['wild_rabbit', 1]], count: 8, respawn: [7, 11] },
+  { group: [['forest_fox', 1]], count: 9, respawn: [8, 12] },
+  { group: [['wild_boar', 1]], count: 8, respawn: [9, 14] },
+  { group: [['forest_wolf', 1]], count: 8, respawn: [10, 15] },
+]);
 
 // Reached from the hub's right portal, so the camp is on the left.
-export const ZONE_2: ZoneDef = rotateZone(1, {
+export const ZONE_2: ZoneDef = rotateZone(1, scatterZone({
   id: 'misty_marsh',
   name: 'Misty Marsh',
   nameTh: 'หนองน้ำหมอก',
@@ -175,20 +251,19 @@ export const ZONE_2: ZoneDef = rotateZone(1, {
     [[-10, -6], [-24, 0]],
     [[-22, -14], [-12, -26]],
   ],
-  spawns: [
-    { monster: 'bog_toad', x: 32, z: 32, radius: 7, count: 7, respawn: [7, 11] },
-    { monster: 'bog_toad', x: 20, z: 6, radius: 6, count: 5, respawn: [7, 11] },
-    { monster: 'marsh_leech', x: 12, z: 32, radius: 8, count: 8, respawn: [8, 12] },
-    { monster: 'swamp_serpent', x: -6, z: 24, radius: 8, count: 8, respawn: [9, 13] },
-    { monster: 'mire_ghoul', x: -24, z: 0, radius: 9, count: 8, respawn: [10, 14] },
-    { monster: 'will_o_wisp', x: -12, z: -26, radius: 9, count: 8, respawn: [10, 15] },
-  ],
+  spawns: [],
   boss: { monster: 'bog_witch', x: -42, z: -42, radius: 1, count: 1, respawn: [120, 120] },
   portals: [{ to: HUB_ID, x: 49.5, z: 49.5, minLevel: 0 }],
-});
+}, [
+  { group: [['bog_toad', 1]], count: 12, respawn: [7, 11] },
+  { group: [['marsh_leech', 1]], count: 8, respawn: [8, 12] },
+  { group: [['swamp_serpent', 1]], count: 8, respawn: [9, 13] },
+  { group: [['mire_ghoul', 1]], count: 8, respawn: [10, 14] },
+  { group: [['will_o_wisp', 1]], count: 8, respawn: [10, 15] },
+]));
 
 // Reached from the hub's bottom portal, so the camp is at the top.
-export const ZONE_3: ZoneDef = rotateZone(2, {
+export const ZONE_3: ZoneDef = rotateZone(2, scatterZone({
   id: 'frost_reach',
   name: 'Frost Reach',
   nameTh: 'ดินแดนหิมะ',
@@ -208,20 +283,7 @@ export const ZONE_3: ZoneDef = rotateZone(2, {
     [[-2, 8], [-20, 18]],
     [[-14, -6], [-4, -24]],
   ],
-  spawns: [
-    { monster: 'frost_penguin', x: 32, z: 32, radius: 7, count: 7, respawn: [8, 12] },
-    { monster: 'frost_penguin', x: 40, z: 12, radius: 6, count: 5, respawn: [8, 12] },
-    { monster: 'tusk_seal', x: 6, z: 34, radius: 8, count: 8, respawn: [10, 14] },
-    { monster: 'snow_owl', x: 20, z: -6, radius: 9, count: 8, respawn: [10, 14] },
-    // Three groups, each 1 sprite shooting from behind 2 brawlers.
-    { monster: 'snow_sprite', x: -20, z: 18, radius: 3, count: 1, respawn: [10, 15] },
-    { monster: 'snow_brawler', x: -20, z: 18, radius: 3, count: 2, respawn: [10, 15] },
-    { monster: 'snow_sprite', x: -11, z: 23, radius: 3, count: 1, respawn: [10, 15] },
-    { monster: 'snow_brawler', x: -11, z: 23, radius: 3, count: 2, respawn: [10, 15] },
-    { monster: 'snow_sprite', x: -27, z: 10, radius: 3, count: 1, respawn: [10, 15] },
-    { monster: 'snow_brawler', x: -27, z: 10, radius: 3, count: 2, respawn: [10, 15] },
-    { monster: 'polar_bear', x: -4, z: -24, radius: 9, count: 4, respawn: [16, 22] },
-  ],
+  spawns: [],
   boss: { monster: 'yeti', x: -42, z: -42, radius: 1, count: 1, respawn: [150, 150] },
   portals: [{ to: HUB_ID, x: 49.5, z: 49.5, minLevel: 0 }],
   iceLakes: [
@@ -229,10 +291,17 @@ export const ZONE_3: ZoneDef = rotateZone(2, {
     { x: 34, z: -32, rx: 11, rz: 8 },
     { x: 3, z: -7, rx: 5.5, rz: 4 },
   ],
-});
+}, [
+  { group: [['frost_penguin', 1]], count: 12, respawn: [8, 12] },
+  { group: [['tusk_seal', 1]], count: 8, respawn: [10, 14] },
+  { group: [['snow_owl', 1]], count: 8, respawn: [10, 14] },
+  // Squads of 1 sprite shooting from behind 2 brawlers.
+  { group: [['snow_sprite', 1], ['snow_brawler', 2]], count: 3, respawn: [10, 15] },
+  { group: [['polar_bear', 1]], count: 4, respawn: [16, 22] },
+]));
 
 // Reached from the hub's left portal, so the camp is on the right.
-export const ZONE_4: ZoneDef = rotateZone(3, {
+export const ZONE_4: ZoneDef = rotateZone(3, scatterZone({
   id: 'ashen_isle',
   name: 'Ashen Isle',
   nameTh: 'เกาะภูเขาไฟ',
@@ -251,15 +320,7 @@ export const ZONE_4: ZoneDef = rotateZone(3, {
     [[-2, 6], [-22, 16]],
     [[-12, -6], [0, -26]],
   ],
-  spawns: [
-    { monster: 'ember_wisp', x: 32, z: 32, radius: 7, count: 7, respawn: [8, 12] },
-    { monster: 'ember_wisp', x: 42, z: 10, radius: 6, count: 5, respawn: [8, 12] },
-    { monster: 'salamander', x: 6, z: 36, radius: 8, count: 8, respawn: [10, 14] },
-    { monster: 'lava_bat', x: 22, z: -8, radius: 9, count: 8, respawn: [10, 14] },
-    { monster: 'magma_golem', x: 0, z: -26, radius: 9, count: 6, respawn: [14, 20] },
-    { monster: 'ash_mage', x: -22, z: 16, radius: 8, count: 4, respawn: [10, 15] },
-    { monster: 'ash_knight', x: -22, z: 16, radius: 8, count: 4, respawn: [10, 15] },
-  ],
+  spawns: [],
   // Lots of room: the fight is all about walking out of the way.
   boss: { monster: 'volcano_heart', x: -36, z: -36, radius: 0, count: 1, respawn: [180, 180] },
   arenaRadius: 16,
@@ -270,7 +331,14 @@ export const ZONE_4: ZoneDef = rotateZone(3, {
     { x: -8, z: 22, rx: 5, rz: 3.5 },
     { x: -34, z: -4, rx: 6, rz: 4 },
   ],
-});
+}, [
+  { group: [['ember_wisp', 1]], count: 12, respawn: [8, 12] },
+  { group: [['salamander', 1]], count: 8, respawn: [10, 14] },
+  { group: [['lava_bat', 1]], count: 8, respawn: [10, 14] },
+  // A mage casting from behind a knight.
+  { group: [['ash_mage', 1], ['ash_knight', 1]], count: 4, respawn: [10, 15] },
+  { group: [['magma_golem', 1]], count: 6, respawn: [14, 20] },
+]));
 
 /** Where the hub's portals sit: one per corner, this far out on each axis. */
 const HUB_PORTAL = 54.5;
@@ -367,8 +435,6 @@ export function themeAt(zone: ZoneDef, x: number, z: number, jitter = 0): ZoneTh
   return q[(wx >= 0 ? 1 : 0) + (wz >= 0 ? 2 : 0)];
 }
 
-/** Boss arena when a zone doesn't set its own: the ring of stones around the clearing. */
-export const DEFAULT_ARENA = 11;
 export const arenaRadius = (zone: ZoneDef): number => zone.arenaRadius ?? DEFAULT_ARENA;
 /** The bare ground around the boss reaches a little past its arena. */
 export const clearingRadius = (zone: ZoneDef): number => arenaRadius(zone) + 2;
