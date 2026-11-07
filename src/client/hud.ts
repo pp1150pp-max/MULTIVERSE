@@ -10,6 +10,8 @@ import {
   entryName, POTION_SIZES, POTION_SIZE_LABEL, POTION_STACK, POTIONS, potionName, potionSellPrice,
 } from '../shared/data/potions';
 import { STONE_COLOR, STONE_DESC, STONE_NAME, STONE_SELL, STONE_STACK, stoneStackValue } from '../shared/data/stones';
+import { lineRanges, rerollBlock } from '../shared/data/items';
+import { REROLL_NAME, rerollCost, type RerollKind } from '../shared/data/reroll';
 import { FullMap } from './fullmap';
 import { AUTO_PX_PER_UNIT, AUTO_RANGE_MAX, AUTO_RANGE_MIN, buybackPrice, cleanAutoSettings, lootPots, type LootFilter, type SortKey } from '../shared/sim/Player';
 import { isBulkSellable } from '../shared/sim/Sim';
@@ -19,7 +21,7 @@ import { ZONE_1 } from '../shared/data/zones';
 import { expToNext } from '../shared/formulas';
 import {
   isItem, isPotion, isStack, isStone, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
-  type BagEntry, type Item, type PotionKind, type PotionSize, type PotionStack, type Rarity, type StoneStack, type EquipSlot, type StatKey,
+  type BagEntry, type Item, type StatLine, type PotionKind, type PotionSize, type PotionStack, type Rarity, type StoneStack, type EquipSlot, type StatKey,
 } from '../shared/types';
 import { drawMapIcon, facingAngle } from './mapIcons';
 import type { MapIcon } from './mapIconNames';
@@ -135,6 +137,10 @@ export class Hud {
   private enhancing = false;
   /** Use a protection stone on attempts that can drop the level (the forge's tick box; off until ticked). */
   private forgeProtect = false;
+  /** The blacksmith's menu: enhance, or one of the rerolls. */
+  private forgeMode: 'enhance' | RerollKind = 'enhance';
+  /** Lines of the item before its last reroll, shown next to the new ones until another item is picked. */
+  private rerollPrev: { uid: string; lines: StatLine[] } | null = null;
 
   constructor(private readonly g: Game) {
     $('hud').classList.remove('hidden');
@@ -406,10 +412,19 @@ export class Hud {
       const uid = (e.target as HTMLElement).closest<HTMLElement>('[data-uid]')?.dataset.uid;
       if (!uid) return;
       this.forgeSel = uid;
+      this.rerollPrev = null;
       $('forge-result').textContent = '';
       this.renderForge();
     });
-    $('forge-go').onclick = () => this.enhance();
+    $('forge-go').onclick = () => (this.forgeMode === 'enhance' ? this.enhance() : this.askReroll(this.forgeMode));
+    $('forge-tabs').addEventListener('click', (e) => {
+      const mode = (e.target as HTMLElement).closest<HTMLElement>('[data-mode]')?.dataset.mode as typeof this.forgeMode | undefined;
+      if (!mode || mode === this.forgeMode) return;
+      this.forgeMode = mode;
+      this.rerollPrev = null;
+      $('forge-result').textContent = '';
+      this.renderForge();
+    });
     $('forge-table').innerHTML = this.rateTable();
 
     $('confirm-yes').onclick = () => {
@@ -1170,6 +1185,7 @@ export class Hud {
     this.closeStash();
     this.forgeOpen = true;
     this.forgeSel = this.g.player.equipment.weapon?.uid ?? null;
+    this.rerollPrev = null;
     $('forge-result').textContent = '';
     $('forge').classList.remove('hidden');
     this.renderForge();
@@ -1214,6 +1230,9 @@ export class Hud {
     const cur = plusOf(item);
     const head = `<div class="fd-name" style="color:${RARITY_COLOR[item.rarity]}">${itemName(item)}</div>` +
       `<div class="hint" style="margin:0 0 4px">${SLOT_LABEL[item.slot]} · ${worn(item) ? 'สวมใส่อยู่' : 'อยู่ในกระเป๋า'} · iLv.${item.level}</div>`;
+    for (const b of $('forge-tabs').querySelectorAll<HTMLElement>('[data-mode]')) b.classList.toggle('active', b.dataset.mode === this.forgeMode);
+    $('forge-rates').classList.toggle('hidden', this.forgeMode !== 'enhance');
+    if (this.forgeMode !== 'enhance') return this.renderReroll(item, head, this.forgeMode);
     if (cur >= MAX_PLUS) {
       $('forge-detail').innerHTML = `${head}<div class="up">ตีบวกถึงระดับสูงสุด +${MAX_PLUS} แล้ว (โบนัส +${bonusPct(cur)}%)</div>`;
       go.disabled = true;
@@ -1259,6 +1278,79 @@ export class Hud {
     });
     go.disabled = !!short;
     go.innerHTML = short || `${FORGE_ICON} ตีบวก (${cost.toLocaleString()} G)`;
+  }
+
+  /** One line as the blacksmith shows it: value, stat, tier and the tier's range. */
+  private lineHtml(l: StatLine): string {
+    return `+${fmtNum(l.value)} ${STAT_LABEL[l.stat]} <span class="tier t${l.tier}">T${l.tier}: ${fmtNum(l.min)}–${fmtNum(l.max)}</span>`;
+  }
+
+  /** The reroll menus: every line (with what it was before the last reroll), the cost and the button. */
+  private renderReroll(item: Item, head: string, kind: RerollKind): void {
+    const p = this.g.player;
+    const go = $<HTMLButtonElement>('forge-go');
+    const block = rerollBlock(item);
+    const ranges = lineRanges(item);
+    if (block || !ranges || !item.lines) {
+      $('forge-detail').innerHTML = `${head}<div class="bad">${block ?? ''}</div>`;
+      go.disabled = true;
+      go.textContent = REROLL_NAME[kind];
+      return;
+    }
+    const hasExtra = ranges.some((r) => !r.main);
+    const prev = this.rerollPrev?.uid === item.uid ? this.rerollPrev.lines : null;
+    const rows = item.lines.map((l, i) => {
+      const fixed = kind === 'stat' && hasExtra && ranges[i].main;
+      const was = prev?.[i];
+      const changed = was && (was.stat !== l.stat || was.value !== l.value || was.tier !== l.tier);
+      const note = fixed ? '<span class="was">สเตตัสหลัก ไม่เปลี่ยน</span>'
+        : changed ? `<span class="was">เดิม +${fmtNum(was.value)}${was.stat !== l.stat ? ` ${STAT_LABEL[was.stat]}` : ''} T${was.tier}</span>`
+        : prev ? '<span class="was">เท่าเดิม</span>' : '';
+      return `<div class="fd-line${fixed ? ' fixed' : ''}"><span>${this.lineHtml(l)}</span>${note}</div>`;
+    }).join('');
+    const what = kind === 'values'
+      ? 'สุ่มค่าตัวเลขใหม่ทุกบรรทัด tier เท่าเดิม (ค่าอยู่ในช่วงของ tier นั้น)'
+      : hasExtra
+        ? 'สุ่ม 1 บรรทัดจากสเตตัสเสริม เปลี่ยนเป็นสเตตัสชนิดใหม่ พร้อม tier และค่าใหม่ · สเตตัสหลักไม่เปลี่ยน'
+        : 'ไอเทมนี้ไม่มีสเตตัสเสริม: สุ่ม tier และค่าใหม่ให้สเตตัสหลัก 1 บรรทัด (ชนิดเดิม)';
+    const cost = rerollCost(item, kind);
+    $('forge-detail').innerHTML = head + rows +
+      `<div class="safe">${what}${plusOf(item) ? ` · ระดับ +${plusOf(item)} ยังอยู่` : ''}</div>` +
+      `<div class="fd-row"><span>ค่าบริการ</span><b class="${p.gold < cost ? 'bad' : ''}">${cost.toLocaleString()} G</b></div>`;
+    go.disabled = p.gold < cost;
+    go.innerHTML = p.gold < cost ? `ทองไม่พอ (มี ${p.gold.toLocaleString()} G)` : `${FORGE_ICON} ${REROLL_NAME[kind]} (${cost.toLocaleString()} G)`;
+  }
+
+  /** Asks first (the old values are gone for good), then rerolls the selected item. */
+  private askReroll(kind: RerollKind): void {
+    const item = this.forgeItems().find((w) => w.uid === this.forgeSel);
+    const ranges = item && lineRanges(item);
+    if (!item || !ranges || !item.lines || this.enhancing) return;
+    const over = item.lines.some((l) => l.value > l.max);
+    this.confirm(
+      `${REROLL_NAME[kind]} ${itemName(item)}?<br><small>ค่าบริการ ${rerollCost(item, kind).toLocaleString()} G · ค่าเดิมจะหายไป ย้อนคืนไม่ได้` +
+      `${over ? '<br>⚠ มีสเตตัสที่เกินช่วงปกติ จะกลับเข้าช่วงปกติ' : ''}</small>`,
+      REROLL_NAME[kind],
+      () => void this.reroll(item, kind),
+    );
+  }
+
+  private async reroll(item: Item, kind: RerollKind): Promise<void> {
+    if (this.enhancing) return;
+    const before = (item.lines ?? []).map((l) => ({ ...l }));
+    this.enhancing = true;
+    const out = await this.g.backend.reroll(item.uid, kind).finally(() => (this.enhancing = false));
+    const res = $('forge-result');
+    if (!out) {
+      res.className = 'fail';
+      res.textContent = 'สุ่มไม่สำเร็จ';
+      return;
+    }
+    this.rerollPrev = { uid: item.uid, lines: before };
+    res.className = 'ok';
+    res.textContent = `${REROLL_NAME[kind]}แล้ว`;
+    this.markInventory();
+    this.renderForge();
   }
 
   private async enhance(): Promise<void> {
@@ -1371,10 +1463,8 @@ export class Hud {
     };
     let lines: string;
     if (item.lines?.length) {
-      // Each rolled line with its tier (1 = best 20% of the range) and the range at this item level.
-      lines = item.lines.map((l) =>
-        `<div class="tt-line">+${r1(l.value)} ${STAT_LABEL[l.stat]} <span class="tier t${l.tier}">T${l.tier}</span>` +
-        ` <span class="tt-range">(${l.min}–${l.max})</span></div>`).join('');
+      // Each rolled line with its tier (T1 best) and that tier's range at this item level.
+      lines = item.lines.map((l) => `<div class="tt-line">${this.lineHtml(l)}</div>`).join('');
       const bonus = enhanceBonus(item);
       const bonusText = (Object.keys(bonus) as StatKey[]).filter((k) => bonus[k]).map((k) => `+${r1(bonus[k] ?? 0)} ${STAT_LABEL[k]}`).join(' · ');
       if (bonusText) lines += `<div class="tt-enh">ตีบวก: ${bonusText}</div>`;

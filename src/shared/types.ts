@@ -80,12 +80,17 @@ export interface Item {
    * total of these. Missing on items from before tiers existed — those show no tier.
    */
   lines?: StatLine[];
+  /** Tier tables the lines follow (see TIER_VERSION in data/items). Missing = older lines, upgraded on load. */
+  tierV?: number;
 }
 
-/** Stat tiers: 1 is the best 20% of the line's range, 5 the lowest 20%. */
+/** Stat tiers: 1 is the best, 5 the lowest. Each has its own range (see tierRanges in data/items). */
 export type StatTier = 1 | 2 | 3 | 4 | 5;
 
-/** One rolled stat on an item: its value, tier and the range possible at this item level and rarity. */
+/**
+ * One rolled stat on an item: its value, tier and that tier's range at this item level and rarity
+ * (shown as "+34 ATK (T1: 30–40)"). Before TIER_VERSION 2, min–max was the line's whole range.
+ */
 export interface StatLine {
   stat: StatKey;
   value: number;

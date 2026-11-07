@@ -7,7 +7,7 @@ import { castSkill, basicAttack } from './skills';
 import { CLASSES, type ClassDef, type SkillDef, type SkillSlot } from '../data/classes';
 import { addInto, BASE_MOVE_SPEED, emptyStats } from '../formulas';
 import { auraTier, effectiveStats, plusOf, sellValue } from '../data/enhance';
-import { itemClass, starterWeapon } from '../data/items';
+import { itemClass, starterWeapon, upgradeItem } from '../data/items';
 import { anyStackValue, POTIONS, POTION_SIZES, POTION_STACK, stackLimit } from '../data/potions';
 import { STONE_STACK } from '../data/stones';
 import {
@@ -181,6 +181,18 @@ export interface CharacterData {
   buybackLeft?: number;
 }
 
+/**
+ * Brings every item in a save to the current tier tables (see upgradeItem), in place: worn, bag and
+ * buyback. Values never change. Returns the same data.
+ */
+export function upgradeCharacter(data: CharacterData): CharacterData {
+  if (!data || typeof data !== 'object') return data;
+  for (const it of Object.values(data.equipment ?? {})) upgradeItem(it);
+  for (const e of data.bag ?? []) upgradeItem(e);
+  for (const b of data.buyback ?? []) upgradeItem(b?.item);
+  return data;
+}
+
 /** A fresh level 1 character with the class starter weapon and a few potions. */
 export function newCharacterData(name: string, classId: ClassId): CharacterData {
   return {
@@ -253,6 +265,7 @@ export class Player extends Unit {
 
   constructor(id: number, private readonly sim: Sim, data: CharacterData) {
     super(id);
+    upgradeCharacter(data);
     this.cls = CLASSES[data.classId];
     this.name = data.name;
     this.level = data.level;

@@ -9,6 +9,7 @@ import { Sim } from '../src/shared/sim/Sim';
 import { HUB_ID, ZONES } from '../src/shared/data/zones';
 import { SORT_KEYS, type LootFilter, type Player } from '../src/shared/sim/Player';
 import { POTION_SIZES } from '../src/shared/data/potions';
+import { REROLL_KINDS } from '../src/shared/data/reroll';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../src/shared/sim/types';
 import { AUTO_HINT_COLOR, autoBlocked, AutoPlay, type AutoWorld } from '../src/shared/sim/autoplay';
 import {
@@ -595,6 +596,13 @@ export class GameWorld {
         // Sim.enhance checks the NPC distance, ownership, level cap, gold and stones itself.
         const out = typeof m.uid === 'string' ? sim.enhance(p, m.uid, m.protect === true) : null;
         this.send(s.ws, { t: 'enhanced', req: num(m.req), result: out?.result ?? null, item: out?.item ?? null });
+        break;
+      }
+      case 'reroll': {
+        // Sim.reroll checks the NPC distance, ownership, the item's lines and gold itself.
+        const kind = REROLL_KINDS.includes(m.kind) ? m.kind : null;
+        const item = typeof m.uid === 'string' && kind ? sim.reroll(p, m.uid, kind) : null;
+        this.send(s.ws, { t: 'rerolled', req: num(m.req), item });
         break;
       }
     }

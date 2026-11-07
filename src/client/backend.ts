@@ -9,6 +9,7 @@ import type { ZoneDef } from '../shared/data/zones';
 import type { Hazard } from '../shared/sim/volcanoHeart';
 import type { NpcId } from '../shared/data/npcs';
 import type { EnhanceResult } from '../shared/data/enhance';
+import type { RerollKind } from '../shared/data/reroll';
 import type { EquipSlot, Item, PotionKind, PotionSize, Rarity } from '../shared/types';
 
 /** What a projectile view needs; the local simulation's Projectile fits this too. */
@@ -69,6 +70,8 @@ export interface Backend {
   sellAllOfRarity(rarity: Rarity): void;
   /** `protect` = use a protection stone if a fail would drop the level. */
   enhance(uid: string, protect: boolean): Promise<EnhanceOutcome>;
+  /** Blacksmith reroll of worn or bag gear; resolves with the changed item, or null if refused. */
+  reroll(uid: string, kind: RerollKind): Promise<Item | null>;
   chat(text: string): void;
   npcDistance(id: NpcId): number;
 

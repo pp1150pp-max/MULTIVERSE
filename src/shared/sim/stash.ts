@@ -3,6 +3,7 @@
 import { POTION_SIZES, POTION_STACK } from '../data/potions';
 import { RARITIES, SLOTS, STONE_KINDS, type BagEntry, type PotionSize } from '../types';
 import { STONE_STACK } from '../data/stones';
+import { upgradeItem } from '../data/items';
 
 /** Slots a new stash starts with. */
 export const STASH_START = 30;
@@ -49,7 +50,7 @@ function cleanEntry(e: unknown): BagEntry | null {
     return { stone: o.stone as (typeof STONE_KINDS)[number], count: Math.min(count, STONE_STACK) };
   }
   if (typeof o.uid !== 'string' || !SLOTS.includes(o.slot as never) || !RARITIES.includes(o.rarity as never)) return null;
-  return e as BagEntry;
+  return upgradeItem(e as BagEntry);
 }
 
 /** Fills in a stash from storage (missing = a new empty one), so old saves keep working. */

@@ -380,9 +380,9 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 .tt-stats div { padding: 1px 0; }
 .tt-stats .up { color: #6cff7a; }
 .tt-stats .down { color: #ff6a6a; }
-/* Stat tiers: T1 = best 20% of the range … T5 = lowest 20%. */
+/* Stat tiers: T1 = best … T5 = lowest, each with its own range. */
 :root { --tier1: #ff9a3c; --tier2: #c77dff; --tier3: #4aa8ff; --tier4: #6cd47a; --tier5: #9a937f; }
-.tt-line .tier { display: inline-block; min-width: 20px; padding: 0 3px; border-radius: 3px; font-size: 10px; font-weight: 600; text-align: center; color: #120e09; }
+.tier { display: inline-block; min-width: 20px; padding: 0 3px; border-radius: 3px; font-size: 10px; font-weight: 600; text-align: center; color: #120e09; }
 .tier.t1 { background: var(--tier1); }
 .tier.t2 { background: var(--tier2); }
 .tier.t3 { background: var(--tier3); }
@@ -557,6 +557,13 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 .stash-row-lock button { padding: 1px 12px; font-size: 12px; }
 #stash.drop-target { outline: 2px solid var(--gold-hi); outline-offset: 1px; }
 #inventory .inv-window.drop-target { outline: 2px solid var(--gold-hi); outline-offset: -4px; }
+#forge-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+#forge-tabs button { flex: 1; padding: 5px 4px; font-size: 13px; }
+#forge-tabs button.active { border-color: var(--gold-hi); color: var(--gold-hi); background: #2a2014; }
+#forge-detail .fd-line { display: flex; justify-content: space-between; gap: 8px; padding: 1px 0; }
+#forge-detail .fd-line .was { color: var(--ink-dim); font-size: 11px; }
+#forge-detail .fd-line.fixed { opacity: 0.6; }
+#forge-detail .fd-line .new { color: #6cff7a; font-size: 11px; }
 #forge-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 #forge-detail { background: #15110c; border: 1px solid #3a2f20; border-radius: 6px; padding: 8px 10px; font-size: 13px; margin-bottom: 8px; }
 #forge-detail .fd-name { font-weight: 600; font-size: 14px; }

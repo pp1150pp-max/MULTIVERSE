@@ -126,22 +126,32 @@ const AFFIXES: { stat: StatKey; min: number; max: number; per: number }[] = [
   { stat: 'mpRegen', min: 0.5, max: 1.5, per: 0.1 },
 ];
 
-/** Main stats (a weapon's ATK, armor's DEF…) roll over a range this wide (±20% of their level value). */
-const MAIN_SPREAD = 0.2;
+/**
+ * Tier ranges as parts of a line's whole range (0 = its lowest roll, 1 = its highest), T1 first.
+ * Owner 2026-11-07: T1–T3 a quarter each, T4 15%, T5 the bottom 10%.
+ */
+const TIER_BAND: readonly (readonly [number, number])[] = [[0.75, 1], [0.5, 0.75], [0.25, 0.5], [0.1, 0.25], [0, 0.1]];
+/** A line's lowest roll is this part of its highest (owner: medium spread, T5 starts at 40% of T1's top). */
+const RANGE_FLOOR = 0.4;
 /** Chance of tier 1 (best) … tier 5. */
 const TIER_WEIGHT = [3, 9, 18, 30, 40];
 /**
- * Where an average roll lands in its range (0 = min, 1 = max) with TIER_WEIGHT: about 0.31, because low tiers
- * are common. Ranges are placed so that this point is the stat's old average, so items are as strong as
- * before tiers on average (owner's choice) and tier 1 rolls go above the old values.
+ * Where an average roll lands in its range (0 = lowest, 1 = highest) with TIER_WEIGHT and TIER_BAND.
+ * Ranges are placed so that this point is the stat's old average, so items stay as strong as before on
+ * average (owner's choice).
  */
-const MEAN_POS = TIER_WEIGHT.reduce((s, w, i) => s + w * (TIER_WEIGHT.length - 0.5 - i), 0)
-  / TIER_WEIGHT.length / TIER_WEIGHT.reduce((a, b) => a + b, 0);
+const MEAN_POS = TIER_BAND.reduce((s, [a, b], i) => s + TIER_WEIGHT[i] * (a + b) / 2, 0)
+  / TIER_WEIGHT.reduce((a, b) => a + b, 0);
+/** Edges between tiers as parts of the range, lowest first (T5 starts at 0, T1 ends at 1). */
+const TIER_EDGES = [0, ...TIER_BAND.map(([, b]) => b).reverse()];
 
-/** A range `span` wide whose average roll (MEAN_POS) is `mean`. */
-function rangeAround(mean: number, span: number): [number, number] {
-  const lo = mean - MEAN_POS * span;
-  return [lo, lo + span];
+/** Lines' min–max follow the current tier tables (TIER_BAND, RANGE_FLOOR). Older items are upgraded on load. */
+export const TIER_VERSION = 2;
+
+/** A line's whole range (lo = lowest roll, hi = highest) whose average roll (MEAN_POS) is `mean`. */
+function rangeAround(mean: number): [number, number] {
+  const hi = mean / (RANGE_FLOOR + MEAN_POS * (1 - RANGE_FLOOR));
+  return [RANGE_FLOOR * hi, hi];
 }
 
 /** boost > 0 makes the better tiers likelier (bosses use ~1.5). */
@@ -155,12 +165,55 @@ export function rollTier(r: Rng, boost = 0): StatTier {
   return 5;
 }
 
-/** Rolls one stat between lo and hi: the tier picks a 20% band (tier 1 = top), the value lands inside it. */
+/** Stats stored with one decimal (regen and the % stats); the rest are whole numbers. */
+const DECIMAL: ReadonlySet<StatKey> = new Set<StatKey>(['hpRegen', 'mpRegen', 'crit', 'critDmg', 'atkSpeed', 'moveSpeed']);
+
+/** The smallest step a stat's value moves in (0.1 for decimal stats, else 1). */
+export const statStep = (k: StatKey): number => (DECIMAL.has(k) ? 0.1 : 1);
+
+/** One tier's range in stored values (both ends included). */
+export interface TierRange { tier: StatTier; min: number; max: number }
+
+/**
+ * The five tier ranges of a line whose whole range is lo–hi, T1 first, as stored values: next to each
+ * other with no gap or overlap, each at least one step wide (small numbers push the higher tiers up).
+ */
+export function tierRanges(stat: StatKey, lo: number, hi: number): TierRange[] {
+  const step = statStep(stat);
+  const units = (v: number) => Math.round(v / step);
+  const value = (u: number) => (step === 1 ? u : u / 10);
+  const out: TierRange[] = [];
+  let from = Math.max(1, units(lo));
+  for (let i = 0; i < 5; i++) {
+    const to = Math.max(from, units(lo + TIER_EDGES[i + 1] * (hi - lo)));
+    out.unshift({ tier: (5 - i) as StatTier, min: value(from), max: value(to) });
+    from = to + 1;
+  }
+  return out;
+}
+
+/** The tier range a value falls in: above T1 counts as T1, below T5 as T5. */
+export function tierOf(stat: StatKey, value: number, lo: number, hi: number): TierRange {
+  const t = tierRanges(stat, lo, hi);
+  return t.find((x) => value >= x.min - 1e-9) ?? t[4];
+}
+
+/** A value inside a tier range, any step equally likely. */
+function rollIn(stat: StatKey, t: TierRange, r: Rng): number {
+  const step = statStep(stat);
+  const n = Math.round((t.max - t.min) / step);
+  return fmt(stat, t.min + Math.min(n, Math.floor(r() * (n + 1))) * step);
+}
+
+/** A line of this tier: its value inside the tier's range, which the line keeps as min–max. */
+function lineOfTier(stat: StatKey, tier: StatTier, lo: number, hi: number, r: Rng): StatLine {
+  const t = tierRanges(stat, lo, hi)[tier - 1];
+  return { stat, value: rollIn(stat, t, r), tier, min: t.min, max: t.max };
+}
+
+/** Rolls one stat in lo–hi: first its tier, then a value inside that tier's range. */
 function rollLine(stat: StatKey, lo: number, hi: number, r: Rng, boost = 0): StatLine {
-  const tier = rollTier(r, boost);
-  const band = (hi - lo) / 5;
-  const from = lo + band * (5 - tier);
-  return { stat, value: fmt(stat, from + r() * band), tier, min: fmt(stat, lo), max: fmt(stat, hi) };
+  return lineOfTier(stat, rollTier(r, boost), lo, hi, r);
 }
 
 const RARITY_WEIGHT = [62, 24, 10, 3.4, 0.6];
@@ -177,7 +230,7 @@ export function newUid(): string {
 }
 
 function fmt(stat: StatKey, v: number): number {
-  if (stat === 'hpRegen' || stat === 'mpRegen') return Math.round(v * 10) / 10;
+  if (DECIMAL.has(stat)) return Math.round(v * 10) / 10;
   return Math.max(1, Math.round(v));
 }
 
@@ -193,30 +246,22 @@ export function rollRarity(r: Rng, boost = 0): Rarity {
 }
 
 function build(base: BaseItem, rarity: Rarity, level: number, cls: ClassId, r: Rng, boost = 0): Item {
-  const rm = RARITY_MULT[rarity];
-  const lvMult = 1 + (level - 1) * 0.12;
   const lines: StatLine[] = [];
-  // Main stats: a range 2 × MAIN_SPREAD wide, averaging the level value.
-  for (const k of Object.keys(base.main) as StatKey[]) {
-    const mid = (base.main[k] ?? 0) * lvMult * rm;
-    lines.push(rollLine(k, ...rangeAround(mid, 2 * MAIN_SPREAD * mid), r, boost));
-  }
-  // Extra stats: as wide as their min–max, averaging its middle; raised with item level.
+  // Main stats first (the kind's own stats), then the extras, each picked once.
+  for (const k of Object.keys(base.main) as StatKey[]) lines.push(rollLine(k, ...rowRange(base, rarity, level, k, true), r, boost));
   let n = AFFIX_COUNT[rarity] + (base.slot === 'ring' ? 1 : 0);
   const pool = [...AFFIXES];
   while (n-- > 0 && pool.length) {
     const a = pool.splice(Math.floor(r() * pool.length), 1)[0];
-    const mid = ((a.min + a.max) / 2 + a.per * (level - 1)) * rm;
-    lines.push(rollLine(a.stat, ...rangeAround(mid, (a.max - a.min) * rm), r, boost));
+    lines.push(rollLine(a.stat, ...rowRange(base, rarity, level, a.stat, false), r, boost));
   }
-  const stats: Partial<Stats> = {};
-  for (const l of lines) stats[l.stat] = fmt(l.stat, (stats[l.stat] ?? 0) + l.value);
+  const stats = sumLines(lines);
   const owner = ownerClass(base, cls);
   let name = base.names.any ?? base.names[owner] ?? base.id;
   const pre = PREFIX[rarity];
   if (pre) name = `${pick(r, pre)} ${name}`;
   const value = Math.round((5 + level * 3) * (1 + RARITIES.indexOf(rarity) * 1.5));
-  const item: Item = { uid: newUid(), baseId: base.id, name, slot: base.slot, rarity, level, stats, value, lines };
+  const item: Item = { uid: newUid(), baseId: base.id, name, slot: base.slot, rarity, level, stats, value, lines, tierV: TIER_VERSION };
   if (!base.names.any) item.cls = owner;
   return item;
 }
@@ -250,16 +295,20 @@ export function makeItem(baseId: string, rarity: Rarity, level: number, cls: Cla
  */
 function rowRange(base: BaseItem, rarity: Rarity, level: number, stat: StatKey, main: boolean): [number, number] {
   const rm = RARITY_MULT[rarity];
-  if (main) {
-    const mid = (base.main[stat] ?? 0) * (1 + (level - 1) * 0.12) * rm;
-    return rangeAround(mid, 2 * MAIN_SPREAD * mid);
-  }
+  if (main) return rangeAround((base.main[stat] ?? 0) * (1 + (level - 1) * 0.12) * rm);
+  // Extras average the middle of their table min–max, raised with item level.
   const a = AFFIXES.find((x) => x.stat === stat)!;
-  const mid = ((a.min + a.max) / 2 + a.per * (level - 1)) * rm;
-  return rangeAround(mid, (a.max - a.min) * rm);
+  return rangeAround(((a.min + a.max) / 2 + a.per * (level - 1)) * rm);
 }
 
-/** One row of a chosen-stats item with the range it is measured against (shown as the item's min–max). */
+/** Item stats: the total of its lines. */
+function sumLines(lines: StatLine[]): Partial<Stats> {
+  const stats: Partial<Stats> = {};
+  for (const l of lines) stats[l.stat] = fmt(l.stat, (stats[l.stat] ?? 0) + l.value);
+  return stats;
+}
+
+/** One row of a chosen-stats item with the whole range it is measured against (lo–hi before rounding, min–max as stored). */
 export interface RowRange { stat: StatKey; main: boolean; lo: number; hi: number; min: number; max: number }
 
 /**
@@ -275,19 +324,12 @@ export function rowRanges(baseId: string, rarity: Rarity, level: number, stats: 
     const main = stat in base.main && !seen.has(stat);
     if (main) seen.add(stat);
     const [lo, hi] = rowRange(base, rarity, level, stat, main);
-    return { stat, main, lo, hi, min: fmt(stat, lo), max: fmt(stat, hi) };
+    const t = tierRanges(stat, lo, hi);
+    return { stat, main, lo, hi, min: t[4].min, max: t[0].max };
   });
 }
 
-/** The tier a value would have in a range: above it is tier 1, below it tier 5. */
-export function tierOf(value: number, lo: number, hi: number): StatTier {
-  const band = (hi - lo) / 5;
-  if (!(band > 0)) return 1;
-  const k = Math.floor((value - lo) / band);
-  return Math.max(1, Math.min(5, 5 - k)) as StatTier;
-}
-
-/** A stat value as items store it (one decimal for regen, whole numbers of at least 1 for the rest). */
+/** A stat value as items store it (one decimal for regen and % stats, whole numbers of at least 1 for the rest). */
 export const roundStat = fmt;
 
 /** The names an item of this kind and rarity can get (the rarity's prefixes, if any). */
@@ -297,4 +339,80 @@ export function itemNames(baseId: string, rarity: Rarity, cls: ClassId): string[
   const name = base.names.any ?? base.names[ownerClass(base, cls)] ?? base.id;
   const pre = PREFIX[rarity];
   return pre ? pre.map((p) => `${p} ${name}`) : [name];
+}
+
+// ------------------------------------------------------------ tiers on saved items, rerolls
+
+/** Each line's whole range on this item, in order (null: no lines, or an unknown kind). See rowRanges. */
+export function lineRanges(item: Item): RowRange[] | null {
+  if (!item.lines?.length) return null;
+  return rowRanges(item.baseId, item.rarity, item.level, item.lines.map((l) => l.stat));
+}
+
+/**
+ * Brings an item's lines to the current tier tables (TIER_VERSION), in place. Values never change:
+ * each line gets the tier its value falls in now and that tier's range. Items from before tiers (no
+ * lines) and unknown kinds are left alone. Returns the same item.
+ */
+export function upgradeItem<T>(item: T): T {
+  const it = item as unknown as Item;
+  if (!it || typeof it !== 'object' || !('baseId' in it) || it.tierV === TIER_VERSION) return item;
+  const ranges = lineRanges(it);
+  if (!ranges || !it.lines) return item;
+  it.lines = it.lines.map((l, i) => {
+    const t = tierOf(l.stat, l.value, ranges[i].lo, ranges[i].hi);
+    return { stat: l.stat, value: l.value, tier: t.tier, min: t.min, max: t.max };
+  });
+  it.tierV = TIER_VERSION;
+  return item;
+}
+
+/** Why an item can't be rerolled at the blacksmith, or null when it can. */
+export function rerollBlock(item: Item): string | null {
+  return lineRanges(item) ? null : 'ไอเทมรุ่นเก่า (ไม่มีข้อมูล tier) สุ่มค่าไม่ได้';
+}
+
+/** New stats total after the lines changed. */
+function relines(item: Item, lines: StatLine[]): void {
+  item.lines = lines;
+  item.stats = sumLines(lines);
+  item.tierV = TIER_VERSION;
+}
+
+/**
+ * Rerolls the value of every line, each staying in its tier (the blacksmith's "สุ่มค่าตัวเลข"). Lines above
+ * the normal range (admin-made) count as T1 and come back inside it. False if the item can't be rerolled.
+ */
+export function rerollValues(item: Item, r: Rng = Math.random): boolean {
+  const ranges = lineRanges(item);
+  if (!ranges || !item.lines) return false;
+  relines(item, item.lines.map((l, i) => lineOfTier(l.stat, l.tier, ranges[i].lo, ranges[i].hi, r)));
+  return true;
+}
+
+/**
+ * The blacksmith's "สุ่มสเตตัส" (like Path of Exile's Chaos Orb): one random extra line becomes a new stat
+ * (not one of the item's other extras) with a new tier and value. The kind's own stats are never touched,
+ * unless the item has no extras (commons): then one of them gets a new tier and value instead.
+ * Returns the index of the changed line, or -1 if the item can't be rerolled.
+ */
+export function rerollStat(item: Item, r: Rng = Math.random): number {
+  const ranges = lineRanges(item);
+  const base = BASES.find((b) => b.id === item.baseId);
+  if (!ranges || !item.lines || !base) return -1;
+  const lines = [...item.lines];
+  const extras = ranges.map((x, i) => (x.main ? -1 : i)).filter((i) => i >= 0);
+  let at: number;
+  if (extras.length) {
+    at = extras[Math.floor(r() * extras.length)];
+    const taken = new Set(extras.filter((i) => i !== at).map((i) => lines[i].stat));
+    const pool = AFFIXES.filter((a) => !taken.has(a.stat));
+    const stat = pool[Math.floor(r() * pool.length)].stat;
+    lines[at] = rollLine(stat, ...rowRange(base, item.rarity, item.level, stat, false), r);
+  } else {
+    at = Math.floor(r() * lines.length);
+    lines[at] = rollLine(lines[at].stat, ranges[at].lo, ranges[at].hi, r);
+  }
+  relines(item, lines);
+  return at;
 }

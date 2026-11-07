@@ -528,7 +528,8 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
       const info = h('span', { class: 'muted' });
       const showInfo = () => {
         const bad = !(row.value >= step && row.value <= top);
-        info.textContent = `ปกติ ${r.min}–${r.max} · T${tierOf(row.value, r.lo, r.hi)}${r.main ? ' · สเตตัสหลัก' : ''}${bad ? ` · ต้องอยู่ระหว่าง ${step}–${top}` : ''}`;
+        const t = tierOf(row.stat, row.value, r.lo, r.hi);
+        info.textContent = `ปกติ ${r.min}–${r.max} · T${t.tier} (${t.min}–${t.max})${r.main ? ' · สเตตัสหลัก' : ''}${bad ? ` · ต้องอยู่ระหว่าง ${step}–${top}` : ''}`;
         info.style.color = bad ? 'var(--bad)' : '';
       };
       const stat = h('select', {}, ...STAT_KEYS.map((k) => h('option', { value: k, selected: k === row.stat }, STAT_LABEL[k])));
