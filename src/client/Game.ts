@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { HazardViews } from './hazards';
 import { inBossArena } from '../shared/data/zones';
-import { AUTO_BOSS_MSG } from '../shared/sim/autoplay';
+import { autoBlocked } from '../shared/sim/autoplay';
 import type { Vec2 } from '../shared/types';
 import type { ZoneDef } from '../shared/data/zones';
 import { NPC_IDS, NPC_INFO, NPC_TALK_RANGE, type NpcId } from '../shared/data/npcs';
@@ -173,8 +173,9 @@ export class Game {
       this.hud.log('พื้นที่นี้ไม่รองรับ Auto Play', '#ff8a6a');
       return;
     }
-    if ((force ?? !this.autoPlay) && inBossArena(this.zone, this.player.x, this.player.z)) {
-      this.hud.log(AUTO_BOSS_MSG, '#ff8a6a');
+    const blocked = (force ?? !this.autoPlay) ? autoBlocked(this.zone, [], this.player) : null;
+    if (blocked) {
+      this.hud.log(blocked, '#ff8a6a');
       return;
     }
     this.autoPlay = force ?? !this.autoPlay;
@@ -252,6 +253,7 @@ export class Game {
     this.npcs = [];
     for (const id of NPC_IDS) {
       const pos = this.backend.terrain.npcPos[id];
+      if (!pos) continue;
       const actor = new SpriteActor(sheets[id], 1.95, 0.4);
       actor.group.position.set(pos.x, 0, pos.z);
       actor.face(-1, -1);

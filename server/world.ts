@@ -6,11 +6,11 @@ import type { IncomingMessage, Server as HttpServer } from 'node:http';
 import { clientIp } from './clientIp';
 import type { Db } from './db';
 import { Sim } from '../src/shared/sim/Sim';
-import { ZONES, zoneById } from '../src/shared/data/zones';
+import { HUB_ID, ZONES } from '../src/shared/data/zones';
 import { SORT_KEYS, type LootFilter, type Player } from '../src/shared/sim/Player';
 import { POTION_SIZES } from '../src/shared/data/potions';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../src/shared/sim/types';
-import { AUTO_BOSS_MSG, AUTO_HINT_COLOR, autoBlocked, AutoPlay, type AutoWorld } from '../src/shared/sim/autoplay';
+import { AUTO_HINT_COLOR, autoBlocked, AutoPlay, type AutoWorld } from '../src/shared/sim/autoplay';
 import {
   CHAT_MAX, GPU_NAME_MAX, shutdownKick, type ShutdownMode, INTEREST_RADIUS, PING_MS, isSoftwareRenderer, SNAPSHOT_HZ, TICK_HZ, WS_PATH, r2,
   type ClientMsg, type InputMsg, type ActionMsg, type PrivateSnap, type ServerMsg, type SnapshotMsg,
@@ -249,7 +249,8 @@ export class GameWorld {
         data = this.db.loadCharacter(acc.id, charId) ?? data;
       }
     }
-    const sim = this.sims.get(zoneById(data.zone).id)!;
+    // Everyone comes into the game in the hub's town, whichever zone they logged out in.
+    const sim = this.sims.get(HUB_ID)!;
     const player = sim.addPlayer(data);
     this.db.touchOnline(acc.id);
     if (acc.guest) {
@@ -518,9 +519,10 @@ export class GameWorld {
         }
         break;
       case 'auto':
-        if (m.on === true && autoBlocked(s.sim.zone, s.sim.monsters, p)) {
+        const blocked = m.on === true ? autoBlocked(s.sim.zone, s.sim.monsters, p) : null;
+        if (blocked) {
           s.auto = null;
-          s.outbox.push({ t: 'autoOff', to: p.id, msg: AUTO_BOSS_MSG });
+          s.outbox.push({ t: 'autoOff', to: p.id, msg: blocked });
           break;
         }
         s.auto = m.on === true && s.sim.zone.allowAutoPlay ? (s.auto ?? new AutoPlay()) : null;
@@ -629,9 +631,10 @@ export class GameWorld {
       basic: fresh && s.basic, skills: fresh ? s.skills : [],
       dash: s.dash, potion: s.potion, pos: s.pendingPos,
     };
-    if (s.auto && autoBlocked(s.sim.zone, s.sim.monsters, p)) {
+    const blocked = s.auto ? autoBlocked(s.sim.zone, s.sim.monsters, p) : null;
+    if (blocked) {
       s.auto = null;
-      s.outbox.push({ t: 'autoOff', to: p.id, msg: AUTO_BOSS_MSG });
+      s.outbox.push({ t: 'autoOff', to: p.id, msg: blocked });
     }
     if (s.auto) {
       const sim = s.sim;
@@ -650,7 +653,7 @@ export class GameWorld {
     const now = performance.now();
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
-    const travels: { s: Session; zone: string }[] = [];
+    const travels: { s: Session; zone: string; atCamp?: boolean }[] = [];
     for (const sim of this.sims.values()) {
       sim.step(dt, this.intentOf);
       for (const ev of sim.drainEvents()) {
@@ -666,7 +669,7 @@ export class GameWorld {
         if (ev.t === 'stash') continue; // saved by onAction; the snapshot carries the new stash
         if (ev.t === 'travel') {
           const s = this.sessionById(sim, ev.to);
-          if (s) travels.push({ s, zone: ev.zone });
+          if (s) travels.push({ s, zone: ev.zone, atCamp: ev.atCamp });
           continue;
         }
         if (ev.t === 'revived') {
@@ -683,7 +686,7 @@ export class GameWorld {
         }
       }
     }
-    for (const t of travels) this.travel(t.s, t.zone);
+    for (const t of travels) this.travel(t.s, t.zone, t.atCamp);
 
     if (++this.tickN % Math.round(TICK_HZ / SNAPSHOT_HZ) === 0) {
       for (const s of this.sessions) this.sendSnapshot(s);
@@ -726,7 +729,13 @@ export class GameWorld {
     s.epoch++;
     s.lastInv = '';
     s.lastStash = '';
-    s.outbox = [];
+    // Waking up in town after dying in a zone: the old zone's `revived` and its EXP-loss line must
+    // still reach the browser (it closes the death screen), so they move along under the new id.
+    s.outbox = s.outbox.flatMap((ev): SimEvent[] => {
+      if (ev.t === 'revived' && ev.id === old.id) return [{ ...ev, id: p.id }];
+      if (ev.t === 'log' && ev.to === old.id) return [{ ...ev, to: p.id }];
+      return [];
+    });
     this.send(s.ws, { t: 'zone', zone: dest.zone.id, you: p.id, x: r2(p.x), z: r2(p.z) });
     this.save(s);
     console.log(`[world] ${s.username} → ${dest.zone.name}`);
@@ -786,7 +795,7 @@ export class GameWorld {
         vx: r2(Math.cos(pr.o.angle) * pr.o.speed), vz: r2(Math.sin(pr.o.angle) * pr.o.speed),
         color: pr.o.color, size: pr.o.size, art: pr.o.art,
       })),
-      ...(sim.hazards.length && near(sim.zone.boss) ? { hazards: sim.hazards } : {}),
+      ...(sim.hazards.length && sim.zone.boss && near(sim.zone.boss) ? { hazards: sim.hazards } : {}),
       loots: sim.loots.filter(near).map((l) => ({
         id: l.id, x: r2(l.x), z: r2(l.z), fromX: r2(l.fromX), fromZ: r2(l.fromZ), t: r2(l.t),
         kind: l.kind, dropped: l.dropped, owner: l.owner, ownerUntil: r2(l.ownerUntil),

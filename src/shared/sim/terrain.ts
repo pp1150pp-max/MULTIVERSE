@@ -1,6 +1,6 @@
 // Zone layout and collision, without any rendering. Built from the zone seed, so the browser and
 // the server get exactly the same trees, rocks and camp.
-import { arenaRadius, clearingRadius, lavaAt, type ZoneDef, type ZoneTheme } from '../data/zones';
+import { arenaRadius, clearingRadius, lavaAt, themeAt, type ZoneDef, type ZoneTheme } from '../data/zones';
 import { NPC_IDS, type NpcId } from '../data/npcs';
 import { mulberry32, pick, rand, type Rng } from '../rng';
 import type { Vec2 } from '../types';
@@ -67,12 +67,16 @@ const THEME_PROPS: Record<ZoneTheme, ThemeProps> = {
 /** How close a player has to walk to a portal to use it. */
 export const PORTAL_RANGE = 1.4;
 
+/** How far the hub's quarters wobble into each other (see themeAt). The props add their own scatter on top. */
+export const QUADRANT_JITTER = 6;
+
 export class Terrain {
   readonly half: number;
   readonly bound: number;
   readonly colliders: Collider[] = [];
   readonly props: PropSpec[] = [];
-  readonly npcPos = {} as Record<NpcId, Vec2>;
+  /** Only zones with `npcs` (the hub) have any. */
+  readonly npcPos: Partial<Record<NpcId, Vec2>> = {};
   private readonly segs: Seg[] = [];
 
   constructor(readonly zone: ZoneDef) {
@@ -82,7 +86,10 @@ export class Terrain {
       for (let i = 1; i < line.length; i++) this.segs.push([line[i - 1][0], line[i - 1][1], line[i][0], line[i][1]]);
     }
     this.placeProps(mulberry32(zone.seed + 1));
-    for (const id of NPC_IDS) this.colliders.push({ ...this.npcPos[id], r: 0.45 });
+    for (const id of NPC_IDS) {
+      const n = this.npcPos[id];
+      if (n) this.colliders.push({ ...n, r: 0.45 });
+    }
   }
 
   get pathSegments(): readonly Seg[] {
@@ -140,12 +147,101 @@ export class Terrain {
     if (collideR > 0) this.colliders.push({ x, z, r: collideR });
   }
 
-  private get set() {
-    return THEME_PROPS[this.zone.theme];
+  /**
+   * The prop set at (x, z). In the hub the quarters' sets are scattered into each other near the
+   * borders, so the land changes gradually instead of along a line.
+   */
+  private setAt(r: Rng, x: number, z: number): ThemeProps {
+    if (!this.zone.quadrants) return THEME_PROPS[this.zone.theme];
+    return THEME_PROPS[themeAt(this.zone, x + rand(r, -7, 7), z + rand(r, -7, 7), QUADRANT_JITTER)];
   }
 
   private addTree(r: Rng, x: number, z: number): void {
-    this.addProp(pick(r, this.set.trees), x, z, rand(r, 4.6, 6.4), 0.55, true);
+    this.addProp(pick(r, this.setAt(r, x, z).trees), x, z, rand(r, 4.6, 6.4), 0.55, true);
+  }
+
+  /**
+   * The hub's town: the ruins of an old city inside a square wall. The wall pictures run along the
+   * world's two axes (on screen the town is a diamond), so the walls do too, one long straight run
+   * per side. The four roads leave along the diagonals, through an opening between two stone pillars
+   * on each corner (on screen the top, right, bottom and left of the diamond), straight on to the portals. The NPCs, their
+   * stalls and the fallen houses stand on the axes between the roads. Brick underfoot (World paints it).
+   * Until a ruin picture exists it borrows an older prop's (see assets.ts).
+   */
+  private placeTown(r: Rng): void {
+    const s = this.zone.start;
+    const R = this.zone.safe?.half ?? 17.6;
+    const at = (key: string, dx: number, dz: number, height: number, collideR: number, fade = false) =>
+      this.addProp(key, s.x + dx, s.z + dz, height, collideR, fade);
+    const polar = (key: string, deg: number, rad: number, height: number, collideR: number, fade = false) =>
+      at(key, Math.cos((deg * Math.PI) / 180) * rad, Math.sin((deg * Math.PI) / 180) * rad, height, collideR, fade);
+
+    at('ruin_fountain', 0, 0, 4.2, 1.7);
+    this.npcPos.seeker = { x: s.x, z: s.z - 5.8 };
+    at('ruin_statue', 0, -8.6, 3.8, 0.8);
+    this.npcPos.merchant = { x: s.x + 5.8, z: s.z };
+    at('town_stall', 8.6, 0, 3.4, 1.2);
+    at('barrel', 8, -2.6, 0.9, 0.35);
+    at('barrel', 8.2, 2.7, 0.9, 0.35);
+    this.npcPos.blacksmith = { x: s.x, z: s.z + 5.8 };
+    at('town_forge', 0, 8.8, 3.6, 1.3);
+    this.npcPos.keeper = { x: s.x - 5.8, z: s.z };
+    at('town_vault', -8.8, 0, 3.2, 1.3);
+
+    // Broken pillars either side of the roads, fallen houses and towers further out, two old trees.
+    for (let a = 22.5; a < 360; a += 45) polar('ruin_pillar', a, 10.6, 3.4, 0.5, true);
+    for (const a of [0, 180]) polar('ruin_house', a, 13.6, 5.8, 2.1, true);
+    for (const a of [90, 270]) polar('ruin_tower', a, 13.6, 6.4, 1.8, true);
+    polar('tree_2', 22.5, 14.6, 6.2, 0.55, true);
+    polar('tree_2', 202.5, 14.6, 6.2, 0.55, true);
+
+    // Rubble where it fell: off the roads, clear of everything else.
+    let piles = 0;
+    for (let i = 0; i < 300 && piles < 10; i++) {
+      const x = s.x + rand(r, -R + 3, R - 3);
+      const z = s.z + rand(r, -R + 3, R - 3);
+      if (Math.hypot(x - s.x, z - s.z) < 5 || this.distToPath(x, z) < 3) continue;
+      if (this.colliders.some((c) => Math.hypot(c.x - x, c.z - z) < c.r + 2.2)) continue;
+      if (Object.values(this.npcPos).some((n) => n && Math.hypot(n.x - x, n.z - z) < 3)) continue;
+      this.addProp('ruin_rubble', x, z, rand(r, 1, 1.4), 0.6);
+      piles++;
+    }
+
+    // The wall kit (tools/cut_hub.cjs): one scale for all pieces, U world units per pixel. Each wall
+    // picture's foot runs at the camera's slope for a world axis, so copies line up end to end, one end
+    // pillar over the next. They're anchored at their lowest pixel (the near end), and the wall's middle
+    // stands higher on screen than that, so each anchor goes half the picture's width nearer the camera
+    // (+x +z) than the line the wall stands on.
+    const U = 3.6 / 249;
+    const along = (px: number) => (px * U) / Math.SQRT1_2;
+    const WALL_LEN = along(226);
+    const STEP = WALL_LEN * 0.86;
+    const back = (px: number) => (px * U) / (2 * Math.SQRT2);
+    // How far each side's wall stops short of a corner, leaving the gateway there.
+    const GAP = 3;
+    for (const [cx, cz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      // An open way through on each corner, a stone pillar either side where the two walls stop.
+      at('town_wall_end', cx * (R - GAP), cz * R, 167 * U * 1.25, 0.8, true);
+      at('town_wall_end', cx * R, cz * (R - GAP), 167 * U * 1.25, 0.8, true);
+    }
+    for (const [ax, wallKey] of [[true, 'town_wall_b'], [false, 'town_wall_a']] as const) {
+      // ax: the side runs along x (z = ±R), else along z (x = ±R).
+      for (const edge of [-R, R]) {
+        const pos = (t: number): [number, number] => [s.x + (ax ? t : edge), s.z + (ax ? edge : t)];
+        const len = 2 * (R - GAP - 0.4);
+        const n = Math.ceil((len - WALL_LEN) / STEP) + 1;
+        const step = (len - WALL_LEN) / (n - 1);
+        for (let i = 0; i < n; i++) {
+          const [x, z] = pos(-len / 2 + WALL_LEN / 2 + i * step);
+          this.addProp(r() < 0.3 ? `${wallKey}_broken` : wallKey, x + back(226), z + back(226), 250 * U, 0, true);
+        }
+        // The wall's own line is solid from one gateway to the next.
+        for (let t = -(R - GAP); t <= R - GAP; t += 0.9) {
+          const [x, z] = pos(t);
+          this.colliders.push({ x, z, r: 0.6 });
+        }
+      }
+    }
   }
 
   private placeProps(r: Rng): void {
@@ -162,38 +258,12 @@ export class Terrain {
       }
     }
 
-    // Camp at the start point, with the NPCs.
     const s = zone.start;
-    this.addProp('tent', s.x + 3, s.z - 4, 3, 1.4);
-    this.addProp('tent', s.x - 4, s.z + 3, 3, 1.4);
-    this.addProp('campfire', s.x, s.z, 1, 0.5);
-    this.addProp('sign', s.x - 5, s.z - 6.5, 2, 0.2);
-    this.addProp('runestone', s.x + 5, s.z + 3.5, 2.6, 0.5);
-    if (this.set.campDecor) {
-      // Camp life: the merchant's stock, the blacksmith's cart, a well and a lookout tower.
-      this.addProp('well', s.x - 6, s.z - 1.5, 2, 0.9);
-      this.addProp('barrel', s.x - 3.2, s.z + 6.2, 0.9, 0.35);
-      this.addProp('barrel', s.x - 0.3, s.z + 6.7, 0.9, 0.35);
-      this.addProp('chest', s.x + 0.9, s.z + 6.2, 0.8, 0.45);
-      this.addProp('cart', s.x + 6.8, s.z - 3.6, 1.2, 0.8);
-      this.addProp('banner_red', s.x + 6.6, s.z + 0.3, 2, 0.2);
-      this.addProp('flag', s.x - 2, s.z - 7, 1.8, 0.15);
-      this.addProp('watchtower', s.x + 9, s.z - 10, 4.2, 1.1);
-    }
-    this.npcPos.seeker = { x: s.x + 3.5, z: s.z + 1.5 };
-    this.npcPos.merchant = { x: s.x - 1.5, z: s.z + 5 };
-    this.npcPos.blacksmith = { x: s.x + 5, z: s.z - 1.5 };
-    // A few steps from the merchant, on the other side of the barrels.
-    this.npcPos.keeper = { x: s.x - 5, z: s.z + 5.5 };
-    for (let a = 0; a < Math.PI * 2; a += Math.PI / 9) {
-      const fx = s.x + Math.cos(a) * 9;
-      const fz = s.z + Math.sin(a) * 9;
-      if (this.distToPath(fx, fz) < 3 || Math.abs(fx) > B || Math.abs(fz) > B) continue;
-      this.addProp('fence', fx, fz, 1.1, 0.6);
-    }
+    if (zone.npcs) this.placeTown(r);
+    else this.placeCamp();
 
     // Pebbles along the paths (no collision).
-    for (const [ax, az, bx, bz] of this.set.campDecor ? this.segs : []) {
+    for (const [ax, az, bx, bz] of this.segs) {
       const len = Math.hypot(bx - ax, bz - az);
       for (let t = rand(r, 2, 6); t < len; t += rand(r, 5, 11)) {
         const f = t / len;
@@ -203,34 +273,42 @@ export class Terrain {
         const nz = (bx - ax) / len;
         const x = ax + (bx - ax) * f + nx * off;
         const z = az + (bz - az) * f + nz * off;
-        if (near(x, z, s, 10) || Math.abs(x) > B || Math.abs(z) > B) continue;
+        if (!this.setAt(r, x, z).campDecor) continue;
+        if (near(x, z, s, zone.safe ? zone.safe.half * 1.45 + 2 : 10) || Math.abs(x) > B || Math.abs(z) > B) continue;
         this.addProp(pick(r, ['pebble_0', 'pebble_1']), x, z, rand(r, 0.3, 0.45), 0);
       }
     }
 
     // Boss clearing ring of runestones.
     const b = zone.boss;
-    const ring = arenaRadius(zone);
-    if (zone.bossSolid) this.colliders.push({ x: b.x, z: b.z, r: zone.bossSolid });
-    for (let a = 0.3; a < Math.PI * 2; a += Math.PI / 4) {
-      const [ringRock, ringH] = this.set.ringRock;
-      this.addProp(a % 2 > 1 ? ringRock : 'runestone', b.x + Math.cos(a) * ring, b.z + Math.sin(a) * ring, a % 2 > 1 ? ringH : 2.6, 0.6);
+    if (b) {
+      const ring = arenaRadius(zone);
+      const set = this.setAt(r, b.x, b.z);
+      if (zone.bossSolid) this.colliders.push({ x: b.x, z: b.z, r: zone.bossSolid });
+      for (let a = 0.3; a < Math.PI * 2; a += Math.PI / 4) {
+        const [ringRock, ringH] = set.ringRock;
+        this.addProp(a % 2 > 1 ? ringRock : 'runestone', b.x + Math.cos(a) * ring, b.z + Math.sin(a) * ring, a % 2 > 1 ? ringH : 2.6, 0.6);
+      }
     }
 
     // Portals: walk-through, so no collider.
     for (const p of zone.portals) this.addProp('portal', p.x, p.z, 3.4, 0);
 
-    // Scattered forest inside.
-    const set = this.set;
+    // Scattered forest inside, as thick in a big map as in a small one.
+    const fill = (B / 56) ** 2;
+    const safe = zone.safe;
     let placed = 0;
-    for (let i = 0; i < 1600 && placed < 280; i++) {
+    for (let i = 0; i < 1600 * fill && placed < 280 * fill; i++) {
       const x = rand(r, -B + 2, B - 2);
       const z = rand(r, -B + 2, B - 2);
       if (this.distToPath(x, z) < 3.2) continue;
-      if (near(x, z, s, 11) || near(x, z, b, clearingRadius(zone)) || zone.portals.some((p) => near(x, z, p, 5))) continue;
-      if (zone.spawns.some((sp) => near(x, z, sp, sp.radius * 0.55))) continue;
+      if (near(x, z, s, 11) || (b && near(x, z, b, clearingRadius(zone))) || zone.portals.some((p) => near(x, z, p, 5))) continue;
+      if (safe && Math.max(Math.abs(x - safe.x), Math.abs(z - safe.z)) < safe.half + 4) continue;
+      // Single monsters (the hub's) still get a little room to stand in.
+      if (zone.spawns.some((sp) => near(x, z, sp, sp.radius <= 1 ? 3 : sp.radius * 0.55))) continue;
       if ([...(zone.iceLakes ?? []), ...(zone.lavaPools ?? [])].some((l) => Math.hypot((x - l.x) / (l.rx + 2), (z - l.z) / (l.rz + 2)) < 1)) continue;
       if (this.colliders.some((c) => Math.hypot(c.x - x, c.z - z) < 2.2)) continue;
+      const set = this.setAt(r, x, z);
       const roll = r();
       if (roll < 0.55) this.addTree(r, x, z);
       else if (roll < 0.8) this.addProp(pick(r, set.bushes), x, z, rand(r, 0.9, 1.3), 0);
@@ -239,6 +317,41 @@ export class Terrain {
       else if (set.tallStump && roll >= 0.97) this.addProp(set.tallStump, x, z, 1.3, 0.5);
       else this.addProp(set.stump, x, z, 0.8, 0.4);
       placed++;
+    }
+  }
+
+  /** The camp each zone's hub portal opens next to. The NPCs moved to the hub; the camp stays as scenery. */
+  private placeCamp(): void {
+    const s = this.zone.start;
+    const B = this.bound;
+    const set = THEME_PROPS[this.zone.theme];
+    // The camp was laid out for the bottom corner; zones turned to face the hub turn it with them.
+    const turns = s.x >= 0 ? (s.z >= 0 ? 0 : 3) : s.z >= 0 ? 1 : 2;
+    const at = (key: string, dx: number, dz: number, height: number, collideR: number) => {
+      for (let i = 0; i < turns; i++) [dx, dz] = [-dz, dx];
+      this.addProp(key, s.x + dx, s.z + dz, height, collideR);
+    };
+    at('tent', 3, -4, 3, 1.4);
+    at('tent', -4, 3, 3, 1.4);
+    at('campfire', 0, 0, 1, 0.5);
+    at('sign', -5, -6.5, 2, 0.2);
+    at('runestone', 5, 3.5, 2.6, 0.5);
+    if (set.campDecor) {
+      // Camp life: the merchant's stock, the blacksmith's cart, a well and a lookout tower.
+      at('well', -6, -1.5, 2, 0.9);
+      at('barrel', -3.2, 6.2, 0.9, 0.35);
+      at('barrel', -0.3, 6.7, 0.9, 0.35);
+      at('chest', 0.9, 6.2, 0.8, 0.45);
+      at('cart', 6.8, -3.6, 1.2, 0.8);
+      at('banner_red', 6.6, 0.3, 2, 0.2);
+      at('flag', -2, -7, 1.8, 0.15);
+      at('watchtower', 9, -10, 4.2, 1.1);
+    }
+    for (let a = 0; a < Math.PI * 2; a += Math.PI / 9) {
+      const fx = s.x + Math.cos(a) * 9;
+      const fz = s.z + Math.sin(a) * 9;
+      if (this.distToPath(fx, fz) < 3 || Math.abs(fx) > B || Math.abs(fz) > B) continue;
+      this.addProp('fence', fx, fz, 1.1, 0.6);
     }
   }
 }
