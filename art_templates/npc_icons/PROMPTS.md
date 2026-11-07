@@ -86,25 +86,56 @@ ONE perfectly flat solid magenta (#FF00FF), no text, no grid lines. Do not use p
 
 เรียงตามแถว: ลูกศรทอง, ลูกศรฟ้า, เต็นท์, ถุงเงิน / ค้อน, ฟองคำพูด, วงวาร์ปม่วง, หัวกะโหลกมงกุฎ / ธงแดง, รอยเท้า (ไม่ได้ใช้), ดาบไขว้, หีบ (ไม่ได้ใช้)
 
-## ผู้ดูแลคลัง (ยังใช้ภาพชั่วคราว)
+## ผู้ดูแลคลังและนายหน้าตลาด
 
-ตอนนี้ตัว NPC วาดด้วยโค้ด (`drawKeeper` ใน `src/client/placeholder.ts`) ส่วน `npc_stash.png` กับ `map_keeper.png` เป็นรูปหีบชั่วคราว
-เมื่อได้ภาพจริงแล้ว ให้วางทับที่ `public/assets/sprites/npc/keeper.png` (ชีต 3×3 เหมือน NPC อื่น), `icons/npc_stash.png` (128×128) และ `icons/map_keeper.png` (96×96) เกมจะใช้ภาพจริงเอง
+สร้างในแชทเดิมที่มีภาพ Gunslinger หรือแนบภาพ Gunslinger และ `npc/merchant.png` ไปเป็นตัวอย่าง เจนทีละภาพ
+เซฟไฟล์ดิบไว้ที่ `art_templates/market/raw/` ตามชื่อไฟล์ในแต่ละข้อ แล้วตัดด้วย `tools/cut_npc.cjs`
+(ภาพแผงตลาดอยู่ใน `art_templates/market/PROMPTS.md`) ถ้าไม่มีไฟล์ภาพ เกมจะใช้ภาพที่วาดด้วยโค้ด (`drawKeeper` `drawBroker` ใน `src/client/placeholder.ts`)
+
+### 1. ผู้ดูแลคลัง → `raw/keeper.png` → `npc/keeper.png`
 
 ```
 Now one more NPC for the same game, in the EXACT same fine-detail 16-bit SNES-era JRPG sprite style as the gunslinger
-and the other NPCs: same chibi proportions about 3 heads tall, same face construction, dark outline, rich shading with
-3 to 4 tones per material, small crisp pixels, no chunky pixels. Generate an image: a sheet as a strict grid of 3 rows x
-3 columns, the SAME character in every cell; each row shows 3 views from left to right: (1) front view facing the viewer,
-(2) side view facing LEFT, (3) back view. Identical size, colors and design in every cell, boots on the same baseline,
-generous empty space, nothing touching or overlapping. The Warehouse Keeper: a calm elderly man with a short white
-beard and white hair, small round spectacles, a long dark-blue coat with brass buttons and a brown leather belt, a big
-iron ring of keys hanging from the belt, holding a thin ledger book under one arm, brown boots. Background ONE perfectly
-flat solid magenta (#FF00FF), no shadows, no ground, no text, no labels, no grid lines. Do not use pink, magenta or
-purple on the character.
+and the merchant: same chibi proportions about 3 heads tall, same face construction, dark outline, rich shading with
+3 to 4 tones per material, small crisp pixels, no chunky pixels. Generate an image: ONE row of 3 views of the SAME
+character from left to right: (1) front view facing the viewer, (2) side view facing LEFT, (3) back view. Identical
+size, colors and design across the 3 views, boots on the same baseline, generous empty space, nothing touching or
+overlapping. The Warehouse Keeper: a calm kind elderly man with short white hair and a short white beard, small round
+spectacles, a long dark navy-blue coat with brass buttons, a brown leather belt with a big iron ring of keys hanging
+from it, brown boots, standing calmly and holding one large old iron key in one hand at his side. Background ONE
+perfectly flat solid magenta (#FF00FF), no shadows, no ground, no text, no labels, no grid lines. Do not use pink,
+magenta or purple on the character.
 ```
 
-→ `keeper` (ใช้แถวบนแถวเดียวก็พอ ถ้าทั้ง 3 แถวเหมือนกัน)
+### 2. นายหน้าตลาด → `raw/broker.png` → `npc/broker.png`
 
-ไอคอน: ใช้ prompt ไอคอนสกิล/NPC ด้านบน เปลี่ยนเป็น 1 ช่อง สัญลักษณ์ "หีบไม้ขอบเหล็กมีกุญแจทอง" → `npc_stash`
-และ prompt ไอคอนแผนที่ด้านบน 1 ช่อง "หีบไม้ขอบเหล็ก" → `map_keeper`
+```
+Now one more NPC for the same game, in the EXACT same fine-detail 16-bit SNES-era JRPG sprite style as the gunslinger
+and the merchant: same chibi proportions about 3 heads tall, same face construction, dark outline, rich shading with
+3 to 4 tones per material, small crisp pixels, no chunky pixels. Generate an image: ONE row of 3 views of the SAME
+character from left to right: (1) front view facing the viewer, (2) side view facing LEFT, (3) back view. Identical
+size, colors and design across the 3 views, boots on the same baseline, generous empty space, nothing touching or
+overlapping. The Market Broker who sells other adventurers' goods: a slim sharp-eyed slightly sly middle-aged trader
+with neat black hair slicked back and tied at the nape, a thin curled mustache, a small round monocle on one eye, a long
+charcoal-black coat with gold trim and gold buttons over a mustard-yellow waistcoat, a cream scarf, dark trousers and
+brown boots, holding an open ledger book in one hand and a white quill pen in the other, a bunch of small brass price
+tags hanging from the belt. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no ground, no text, no
+labels, no grid lines. Do not use pink, magenta or purple on the character.
+```
+
+### 3. ไอคอน 4 ช่อง → `raw/icons.png` → `icons/npc_stash.png` `icons/npc_market.png` `icons/map_keeper.png` `icons/map_market.png`
+
+```
+Now 4 small icons for the same game, in the EXACT same 16-bit SNES-era pixel-art style as the game art above: crisp
+pixels, rich shading, no blur. Generate an image: a strict grid of 2 columns x 2 rows, one icon centred in each cell,
+generous empty space, nothing touching or overlapping. Top row are two NPC BADGE icons matching the skill icons: each a
+perfect square of the same size with a dark painted background in a muted colour, a thin bronze-gold bevelled border,
+and one big bold clear symbol: (1) a wooden chest bound with iron bands, locked with a gold padlock; (2) an open ledger
+book with a gold coin and a small brass price tag lying on it. Bottom row are two MAP MARKER icons: bright saturated
+colours, a thick solid dark outline, very simple bold silhouettes that read at only 20 pixels wide, NO frame and NO
+background: (3) a wooden chest bound with iron bands; (4) a gold coin in front of a hanging brass price tag. Background
+ONE perfectly flat solid magenta (#FF00FF), no text, no letters, no labels, no grid lines. Do not use pink, magenta or
+purple in the icons.
+```
+
+ลำดับช่อง: `npc_stash` `npc_market` / `map_keeper` `map_market`
