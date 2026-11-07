@@ -189,4 +189,21 @@ for (const zone of Object.values(ZONES)) {
   ok(!!it.moveTo && !lavaAt(ZONE_4, it.moveTo.x, it.moveTo.z), 'Auto walks out of lava');
 }
 
+// ---- the Heart's drops land where players can walk (not inside its rock, zone.bossSolid)
+{
+  let drops = 0;
+  let stuck = 0;
+  for (let i = 0; i < 40; i++) {
+    const sim = new Sim(ZONE_4);
+    const h = heart(sim);
+    (sim as unknown as { killMonster(m: unknown): void }).killMonster(h);
+    for (const l of sim.loots) {
+      drops++;
+      if (sim.terrain.isBlocked(l.x, l.z, 0.4)) stuck++;
+    }
+  }
+  ok(drops > 40, `the Heart drops loot (${drops} drops in 40 kills)`);
+  ok(stuck === 0, `every drop is on open ground a player can stand on (${stuck} inside a solid)`);
+}
+
 finish('volcano zone');

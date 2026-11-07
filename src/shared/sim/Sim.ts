@@ -31,6 +31,8 @@ import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type S
 /** Gear of this rarity that "sell all" may take: never potions or enhanced items. */
 /** Seconds of warning before a freshly summoned minion pounces. */
 const MINION_POUNCE_WINDUP = 0.35;
+/** Drops land where a player of this radius could stand (Player.radius), so they can always be picked up. */
+const LOOT_STAND_R = 0.4;
 /** A vanished boss gives up on its fight when no living player has been this close for VANISH_GIVE_UP seconds. */
 const VANISH_LEASH = 30;
 const VANISH_GIVE_UP = 20;
@@ -532,11 +534,29 @@ export class Sim {
   }
 
   private spawnLoot(m: Monster, kind: LootKind, owner?: number): void {
-    const a = Math.random() * Math.PI * 2;
-    const dist = 0.5 + Math.random() * (m.isBoss ? 2 : 1);
-    this.loots.push(new Loot(this.newId(), m.x + Math.cos(a) * dist, m.z + Math.sin(a) * dist, m.x, m.z, kind, {
+    const [x, z] = this.lootSpot(m.x, m.z, 0.5 + Math.random() * (m.isBoss ? 2 : 1));
+    this.loots.push(new Loot(this.newId(), x, z, m.x, m.z, kind, {
       owner, ownerUntil: this.time + LOOT_PRIORITY_TIME,
     }));
+  }
+
+  /**
+   * Where a drop lands: `dist` from (x, z) in a random direction, moved further out until a player
+   * could stand on it. Gear has no magnet (it is picked up within 0.8), so a drop inside a solid —
+   * e.g. the Volcano Heart's rock (zone.bossSolid) or a tree a monster died against — could never
+   * be picked up.
+   */
+  private lootSpot(x: number, z: number, dist: number): [number, number] {
+    const a0 = Math.random() * Math.PI * 2;
+    for (let turn = 0; turn < 8; turn++) {
+      const a = a0 + (turn * Math.PI) / 4;
+      for (let d = dist; d <= dist + 10; d += 0.3) {
+        const lx = x + Math.cos(a) * d;
+        const lz = z + Math.sin(a) * d;
+        if (!this.terrain.isBlocked(lx, lz, LOOT_STAND_R)) return [lx, lz];
+      }
+    }
+    return [x + Math.cos(a0) * dist, z + Math.sin(a0) * dist];
   }
 
   /** Called by Loot when a player touches it. Returns false if it can't be picked up. */
