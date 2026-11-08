@@ -159,7 +159,16 @@ function measure(img, mask, box) {
     return n ? sx / n : (l + r) / 2;
   };
   const bh = bb - bt;
+  // Width of the hair at the top of the head: the same whatever the pose, so crouching sheets scale by it.
+  let hl = x1, hr = x0;
+  for (let y = bt; y < bt + bh * 0.15; y++) {
+    for (let x = x0; x < x1; x++) {
+      const k = y * w + x;
+      if (mask[k] && !glow(d, k * 4)) { if (x < hl) hl = x; if (x >= hr) hr = x + 1; }
+    }
+  }
   return {
+    hairW: hr - hl,
     mask, box: [l, t, r, b], bodyTop: bt, feet: bb, bodyH: bh,
     headX: band(bt, bt + bh * 0.4), legX: band(bb - bh * 0.22, bb),
   };
@@ -249,13 +258,13 @@ function fillHoles(img, x0, y0, maxSize = 40) {
  * draws one view a little bigger, and a single scale per file would make him grow when he turns.
  * `anchor` is 'head' (idle, run) or 'legs' (planted attacks).
  */
-function sheet(file, figs, { calib, anchor, keepHop = false, frames = null }) {
+function sheet(file, figs, { calib, scaleOf = null, anchor, keepHop = false, frames = null }) {
   const cols = frames ? frames.length : figs[0].length;
   const out = blank(CELL * cols, CELL * ROWS);
   let clipped = 0, holes = 0;
   const scales = [];
   figs.forEach((row, r) => {
-    const k = BODY_H / median(calib(row).map((f) => f.bodyH));
+    const k = scaleOf ? scaleOf(row, r) : BODY_H / median(calib(row).map((f) => f.bodyH));
     scales.push(k.toFixed(3));
     const base = Math.max(...row.map((f) => f.feet));
     for (let c = 0; c < cols; c++) {
@@ -304,4 +313,36 @@ sheet('run.png', run, { calib: (row) => row, anchor: 'head' });
 for (const name of ['attack', 'attack_2', 'attack_3']) {
   const figs = load(`${name}.png`, 5, 4);
   sheet(`${name}.png`, figs, { calib: (row) => [row[3]], anchor: 'legs', keepHop: name === 'attack_3' });
+}
+
+// ---- parry (skill_e): a crouched guard, so it is scaled to match the idle hair width instead of height
+const hairOut = median(design.map(([f]) => f.hairW * (BODY_H / f.bodyH)));
+const parry = load('skill_parry.png', 5, 2);
+// One scale for the whole sheet: the back view's hair reads narrower and would blow that row up.
+const kParry = median(parry.map((row) => hairOut / median(row.map((f) => f.hairW))));
+sheet('skill_e.png', parry, { scaleOf: () => kParry, anchor: 'legs' });
+
+// ---- Parry skill icon: the whole square, area-averaged down to the 128px of the other skill icons
+{
+  const src = read('skill_parry_icon.png');
+  const size = 128;
+  const out = blank(size, size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const u0 = Math.floor((x * src.w) / size), u1 = Math.floor(((x + 1) * src.w) / size);
+      const v0 = Math.floor((y * src.h) / size), v1 = Math.floor(((y + 1) * src.h) / size);
+      let r = 0, g = 0, b = 0, n = 0;
+      for (let v = v0; v < v1; v++) for (let u = u0; u < u1; u++) {
+        const i = (v * src.w + u) * 4;
+        r += src.d[i]; g += src.d[i + 1]; b += src.d[i + 2]; n++;
+      }
+      const o = (y * size + x) * 4;
+      out.d[o] = r / n; out.d[o + 1] = g / n; out.d[o + 2] = b / n; out.d[o + 3] = 255;
+    }
+  }
+  const p = new PNG({ width: size, height: size });
+  out.d.copy(p.data);
+  const file = path.join(ROOT, 'public/assets/sprites/icons/skill_parry.png');
+  fs.writeFileSync(file, PNG.sync.write(p, { colorType: 6 }));
+  console.log('icons/skill_parry.png', size, size);
 }

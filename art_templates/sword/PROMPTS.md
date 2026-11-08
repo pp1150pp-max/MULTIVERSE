@@ -15,6 +15,7 @@
 | `attack.png` | 4 | prompt ข้อ 4 คอมโบ 1 ฟันแนวนอน |
 | `attack_2.png` | 4 | prompt ข้อ 5 คอมโบ 2 ฟันย้อนเฉียงขึ้น |
 | `attack_3.png` | 4 | prompt ข้อ 6 คอมโบ 3 กระโดดฟาดลงปิดท้าย |
+| `skill_e.png` | 2 | prompt ข้อ 8 ท่าตั้งการ์ดของสกิล E ปัดป้อง (ย่อตัว จึงปรับขนาดตามความกว้างผมแทนความสูง) |
 
 เกมเล่นท่าฟัน `attack` → `attack_2` → `attack_3` วนไปเองเมื่อตีต่อเนื่องภายใน 1 วินาที
 รอยฟันสีทองมาจาก `fx/sword.png` ที่เกมวาดทับ จึงไม่ต้องวาดรอยฟันในตัวละคร
@@ -23,7 +24,9 @@
 `PNGJS=<path ของ pngjs> node tools/cut_sword.cjs` สคริปต์จะตัดพื้นหลัง #FF00FF ออก อุดรูเล็ก ๆ บนผ้าคลุม
 ปรับขนาดทีละแถวให้ตัวสูง 200px เท่า Gunslinger (ไม่นับดาบที่ยกขึ้น) และวางเท้าสูงจากขอบล่าง 16px
 
-ยังไม่มีท่า `run_attack` `dash` `hit` `death` `revive` และ `skill_q/e/r`
+ไอคอนสกิลปัดป้อง (`icons/skill_parry.png` 128×128) มาจาก prompt ข้อ 7 สคริปต์เดียวกันย่อให้
+
+ยังไม่มีท่า `run_attack` `dash` `hit` `death` `revive` `skill_q` และ `skill_r`
 เกมจะใช้ท่าที่มีแทน (ตีระหว่างเดินจะเล่นท่าฟันยืนกับที่) และตอนตายจะทำตัวละครให้จางลง
 
 ## 1. แบบตัวละคร
@@ -135,4 +138,37 @@ body keep the same size in every frame, the feet return to the same baseline. Ev
 with clear empty space around it, the katana must not reach into the next cell. Background ONE perfectly flat solid
 magenta (#FF00FF), no shadows, no ground, no text, no labels, no numbers, no grid lines. Do not use pink, magenta or
 purple on the character.
+```
+
+## 7. ไอคอนสกิลปัดป้อง
+
+แนบ `icons/skill_charge.png` ไปเป็นตัวอย่างสไตล์ เซฟเป็น `raw/skill_parry_icon.png`
+
+```
+One single RPG skill icon in the EXACT same fine-detail 16-bit SNES-era pixel-art style as the attached skill icon:
+crisp pixels, rich shading, no blur. A perfect square icon with a dark painted background in a muted deep blue-grey,
+a thin bronze-gold bevelled border, and one big bold clear symbol that reads instantly at very small size: a curved
+glowing amber katana held horizontally, blocking, with a bright golden spark burst where an incoming blade strikes it,
+and a faint translucent golden shield shape behind the katana. The icon fills the whole image. No text, no letters.
+```
+
+## 8. ท่าตั้งการ์ด (สกิล E ปัดป้อง)
+
+ครั้งแรกเจนในแชทใหม่แล้วได้ตัวละครคนอื่น จึงต้องแนบ `raw/design.png` และ `raw/attack.png` ไปด้วย เซฟเป็น `raw/skill_parry.png`
+
+```
+Use the attached sprite sheets as the EXACT character and style reference: the same young knight, same outfit,
+same colors, same size and the same fine-detail 16-bit SNES-era chibi pixel style. Do NOT draw a different
+character. He has messy spiky ash-blond hair, golden amber eyes, no helmet, no beard, no glasses; dark gunmetal
+plate armour with gold trim, white shoulder plates, a small glowing amber diamond gem on the chest, a long charcoal
+cape with gold trim, and ONE curved katana with a glowing amber-orange blade and a round brass guard.
+Generate an image: a parry / guard pose sprite sheet as a strict grid of 5 rows x 2 columns, 10 figures total. Rows
+top to bottom: row 1 front facing the viewer, row 2 three-quarter front turned toward the LEFT, row 3 side profile
+facing LEFT, row 4 three-quarter back turned toward the LEFT (we mostly see his back and cape), row 5 back view. In
+every figure he stands firmly in a low defensive stance, knees bent, holding the glowing katana horizontally in front
+of his body with both hands, ready to block in the direction he faces. Column 1: raising the katana into the guard.
+Column 2: the full guard, braced, cape flaring slightly. No sparks, no shields, no effects, no motion lines. Feet on
+the same baseline, same size as the reference. Every figure fully inside its own cell with clear empty space around
+it, the katana must not reach into the next cell. Background ONE perfectly flat solid magenta (#FF00FF), no shadows,
+no ground, no text, no labels, no numbers, no grid lines. Do not use pink, magenta or purple on the character.
 ```

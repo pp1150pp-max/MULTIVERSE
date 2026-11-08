@@ -10,6 +10,11 @@ export interface SkillDef {
   desc: string;
   mp: number;
   cooldown: number;
+  /**
+   * Can be cast a second time within this many seconds. The first cast pays the MP; the cooldown
+   * starts after the second cast, or once the window runs out.
+   */
+  recast?: number;
 }
 
 export interface ClassDef {
@@ -42,8 +47,8 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     skills: [
       { id: 'slash', slot: 'basic', name: 'Slash', nameTh: 'ฟัน', desc: 'ฟันเป็นวงโค้งด้านหน้า 100% ATK', mp: 0, cooldown: 0 },
       { id: 'whirlwind', slot: 'q', name: 'Whirlwind', nameTh: 'พายุดาบ', desc: 'หมุนตัวฟันรอบทิศ 180% ATK', mp: 12, cooldown: 4 },
-      { id: 'charge', slot: 'e', name: 'Charge', nameTh: 'พุ่งชน', desc: 'พุ่งไปตามทิศเมาส์ ชนศัตรูตลอดทาง 150% ATK และกระเด็น', mp: 15, cooldown: 6 },
-      { id: 'earthquake', slot: 'r', name: 'Earthquake', nameTh: 'ปฐพีแยก', desc: 'กระแทกพื้นรอบตัว 300% ATK และสตัน 1.5 วิ', mp: 30, cooldown: 12 },
+      { id: 'parry', slot: 'e', name: 'Parry', nameTh: 'ปัดป้อง', desc: 'ยืนตั้งการ์ด 1 วิ ลดดาเมจที่ได้รับ 80% ไม่โดนสตันหรือกระเด็น', mp: 10, cooldown: 8 },
+      { id: 'charge', slot: 'r', name: 'Charge', nameTh: 'พุ่งชน', desc: 'พุ่งไปตามทิศเมาส์ ชนศัตรูตลอดทาง 150% ATK และกระเด็น กดซ้ำภายใน 4 วิเพื่อพุ่งอีกครั้ง', mp: 25, cooldown: 15, recast: 4 },
       dash('Dash', 'แดช'),
     ],
   },

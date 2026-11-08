@@ -653,9 +653,12 @@ export class Hud {
       const sk = p.skill(s.kind);
       if (!sk) continue;
       const remain = p.cd[s.kind] ?? 0;
+      const again = p.recast[s.kind] ?? 0;
       s.cd.style.height = sk.cooldown ? `${(remain / sk.cooldown) * 100}%` : '0%';
-      s.extra.textContent = remain > 0 ? remain.toFixed(1) : '';
-      s.el.classList.toggle('nomp', p.mp < sk.mp);
+      // A recast skill waiting for its second cast glows and counts down the time left to use it.
+      s.extra.textContent = again > 0 ? again.toFixed(1) : remain > 0 ? remain.toFixed(1) : '';
+      s.el.classList.toggle('recast', again > 0);
+      s.el.classList.toggle('nomp', again <= 0 && p.mp < sk.mp);
     }
 
     const auto = $('btn-auto');
