@@ -369,6 +369,10 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
   font: inherit; color: var(--ink, #e8e2d0); background: #15110c; border: 1px solid var(--panel-edge); border-radius: 4px; padding: 3px 4px;
 }
 .bag-sort button { padding: 3px 8px; font-size: 12px; }
+/* Bag sort sits on the bag window itself, right above the slots (owner: players didn't see it in the side panel,
+   which is also hidden while a shop or stash is open). Measured from the painted window like the slots. */
+.inv-sort { position: absolute; right: 8.4%; top: 61%; height: 4.4%; flex-wrap: nowrap; gap: 3px; z-index: 1; }
+.inv-sort select, .inv-sort button { height: 100%; padding: 0 6px; font-size: clamp(10px, calc(var(--inv-w) * 0.022), 12px); }
 .bag-filter { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: -2px 0 8px; font-size: 12px; color: var(--ink-dim); }
 .bag-filter label { display: flex; align-items: center; gap: 2px; cursor: pointer; }
 .bag-filter input { margin: 0; accent-color: var(--gold-hi); }
