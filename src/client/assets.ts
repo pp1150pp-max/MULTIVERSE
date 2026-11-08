@@ -318,6 +318,22 @@ async function loadFxSheet(name: FxSheet): Promise<void> {
   }
 }
 
+/** Ground decals laid flat under things. `death_crater` is colourless shade, so the map's ground shows through. */
+export const decalTex: { deathCrater?: THREE.Texture } = {};
+
+async function loadDecals(): Promise<void> {
+  try {
+    const tex = await loadTexture(`${BASE}fx/death_crater.png`);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.LinearFilter;
+    tex.generateMipmaps = false;
+    decalTex.deathCrater = tex;
+  } catch {
+    console.warn('[assets] missing death crater');
+  }
+}
+
 // ------------------------------------------------------------ loading
 
 /** One game file for the loading bar. `size` is null until its response headers arrive. */
@@ -461,6 +477,7 @@ async function loadAssets(): Promise<void> {
   // Everything at once: the files don't depend on each other.
   await Promise.all([
     ...(['sword', 'mage', 'gun', 'gun_ult'] as const).map((n) => loadFxSheet(n)),
+    loadDecals(),
     ...(['grass', 'dirt', 'water', 'marsh', 'mud', 'pave', 'brick', 'snow', 'snow_path', 'ice', 'ash_rock', 'ash_path', 'lava'] as const).map((n) => loadGroundTile(n)),
     ...Object.entries(ANIM_SET_DIRS).map(([key, dir]) => loadAnimSet(key, BASE + dir)),
     ...Object.entries(SHEET_SPECS).map(async ([key, spec]) => {

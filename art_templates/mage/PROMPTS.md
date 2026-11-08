@@ -91,3 +91,35 @@ same size and height in every frame. Every figure fully inside its own cell with
 touching or overlapping. Background ONE perfectly flat solid pure bright green (#00FF00), no shadows, no ground, no
 text, no labels, no numbers, no grid lines. Do not use bright green on the character.
 ```
+
+## 5. ท่าตาย
+
+ท่าตายแบบมีม "นอนคุดคู้หน้าคว่ำ" ใช้ท่าเดียวกันทุกคลาส แถวเดียว 5 เฟรม มุมข้างหันซ้าย (เกมกลับภาพให้ตอนหันขวา)
+เกมเล่นครั้งเดียวแล้วค้างเฟรมสุดท้ายไว้จนกดฟื้นคืนชีพ และวาดหลุมใต้ตัวเอง (`death_crater` ใน [ground_fx](../ground_fx/PROMPTS.md))
+
+เปิดแชทใหม่ (แชทเดิมยาวเกินไปแล้ว) แนบ `public/assets/sprites/player/mage/idle.png` กับ `run.png` ไปเป็นต้นแบบ
+เซฟเป็น `art_templates/mage/raw/death.png` แล้วตัดเป็น `player/mage/death.png` ด้วยสเกลเดียวกับท่ายืน
+
+```
+Use the attached sprite sheets as the EXACT character and style reference: the same young witch girl with long
+straight pale silver-lavender hair, a deep purple pointed witch hat with a gold band and gold stars, a deep purple robe
+and short cape with gold trim, brown boots, and a tall gold staff topped by a gold ring holding a big blue orb. Same
+outfit, same colors, same size and the same fine-detail 16-bit SNES-era chibi pixel style, each figure as if about 110
+pixels tall, dark outline, crisp pixels, no blur. Do NOT draw a different character.
+Generate an image: a comical knock-out death animation as ONE single horizontal row of exactly 5 frames, seen in side
+profile facing LEFT, left to right: frame 1 struck hard, recoiling, knees buckling; frame 2 flung off her feet, falling
+forward face-first, the staff slipping out of her hand; frame 3 slamming into the ground on her side, a small bounce;
+frame 4 rolling from her belly onto her right side and starting to curl up; frame 5 the final pose, completely knocked
+out: she lies on her RIGHT side in a tight fetal curl with her BACK turned toward the viewer, so we see her back, the
+back of her head and hat and the soles of her boots, not her face. Her head is at the left end, face hidden, pressed
+into the ground and tucked into her arms; both arms are bent with the forearms crossed in front of the face and the
+fists near the head; her back is strongly rounded; both knees are bent and pulled up toward the chest, the legs stacked
+one on top of the other, the boots at the right end with the soles toward the viewer. She is NOT kneeling, NOT on all
+fours and NOT lying flat on her belly: she is curled on her side like a sleeping shrimp, limp and motionless. The hat stays on her head but is knocked crooked; the staff
+lies on the ground just in front of her, the blue orb dull and unlit; her long hair spills over the ground. The body
+keeps the same size as the standing reference in every frame (if she stood up she would be exactly as tall), and the
+lowest point of the body rests on the same baseline in every frame except the airborne one. Every figure fully inside
+its own equal-width cell with clear empty space around it, nothing touching or overlapping. Background ONE perfectly
+flat solid pure bright green (#00FF00), no ground, no crater, no shadows, no dust, no impact lines, no stars, no text,
+no labels, no numbers, no grid lines. Do not use bright green on the character.
+```
