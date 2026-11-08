@@ -75,9 +75,9 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     growth: { maxHp: 15, maxMp: 6, atk: 2, def: 0.9, hpRegen: 0.12, mpRegen: 0.12 },
     skills: [
       { id: 'shot', slot: 'basic', name: 'Quick Shot', nameTh: 'ยิงเร็ว', desc: 'ยิงกระสุนความเร็วสูง 100% ATK', mp: 0, cooldown: 0 },
-      { id: 'rapidfire', slot: 'q', name: 'Rapid Fire', nameTh: 'ยิงรัว', desc: 'ยิงรัว 6 นัดติดกันไปทางเมาส์ นัดละ 60% ATK', mp: 10, cooldown: 3 },
+      { id: 'rapidfire', slot: 'q', name: 'Rapid Fire', nameTh: 'ยิงรัว', desc: 'ยิงรัว 3 นัดติดกันไปทางเมาส์ นัดละ 40% ATK', mp: 10, cooldown: 3 },
       { id: 'pierce', slot: 'e', name: 'Armor-Piercing Round', nameTh: 'กระสุนเจาะเกราะ', desc: 'กระสุนนัดหนัก 150% ATK ลดพลังป้องกันของเป้าหมาย 20% นาน 3 วิ', mp: 14, cooldown: 5 },
-      { id: 'headshot', slot: 'r', name: 'Headshot', nameTh: 'ยิงหัว', desc: 'ยืนนิ่งเล็ง 0.8 วิ แล้วยิงนัดเดียว คริติคอลแน่นอน 310% ATK (รวมคริแล้วไม่เกิน 500%)', mp: 30, cooldown: 12 },
+      { id: 'headshot', slot: 'r', name: 'Headshot', nameTh: 'ยิงหัว', desc: 'ยืนนิ่งเล็ง 0.8 วิ แล้วยิงนัดเดียว คริติคอลแน่นอน 250% ATK (รวมคริแล้วไม่เกิน 400%)', mp: 30, cooldown: 12 },
       dash('Tumble', 'กลิ้งหลบ'),
     ],
   },

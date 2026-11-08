@@ -138,9 +138,9 @@ const SOUNDS: Record<SoundName, Sound> = {
   },
   rapidfire: {
     gap: 120,
-    // One crack per shot, in step with the 0.08 s gap between the six shots.
+    // One crack per shot, in step with the 0.08 s gap between the three shots.
     make: (s) => {
-      for (let i = 0; i < 6; i++) {
+      for (let i = 0; i < 3; i++) {
         s.noise(3000, 780, 0.08, 0.4, i * 0.08, 0.8);
         s.tone('square', 460, 110, 0.06, 0.09, i * 0.08);
       }
