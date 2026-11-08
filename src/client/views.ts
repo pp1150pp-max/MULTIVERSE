@@ -21,6 +21,11 @@ type AnimEvent = Extract<SimEvent, { t: 'anim' }>;
  */
 /** World size of the crater a dead player lies in (the player is about 1.9 units tall). */
 const CRATER_SIZE = 3.2;
+/**
+ * The lying body in the last death frame stands about 1 unit above the feet line on its billboard, which the
+ * camera shows over the ground about this far behind the player, so the crater moves back to sit under it.
+ */
+const CRATER_BACK = 1.4;
 
 const AURA: { color: string; size: number; sparks: number }[] = [
   { color: '', size: 0, sparks: 0 },
@@ -134,7 +139,8 @@ export class PlayerView {
     if (!tex || this.crater) return;
     const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
     this.crater = new THREE.Mesh(new THREE.PlaneGeometry(CRATER_SIZE, CRATER_SIZE).rotateX(-Math.PI / 2), mat);
-    this.crater.position.set(this.p.x, 0.03, this.p.z);
+    // Away from the camera (it looks from +x +z, see ISO_DIR).
+    this.crater.position.set(this.p.x - CRATER_BACK * Math.SQRT1_2, 0.03, this.p.z - CRATER_BACK * Math.SQRT1_2);
     this.crater.renderOrder = -1;
     this.scene.add(this.crater);
   }

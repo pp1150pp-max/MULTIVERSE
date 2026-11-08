@@ -15,6 +15,7 @@
 | `attack.png` | 4 | prompt ข้อ 4 คอมโบ 1 ฟันแนวนอน |
 | `attack_2.png` | 4 | prompt ข้อ 5 คอมโบ 2 ฟันย้อนเฉียงขึ้น |
 | `attack_3.png` | 4 | prompt ข้อ 6 คอมโบ 3 กระโดดฟาดลงปิดท้าย |
+| `death.png` | 4 | เฟรม 1–3 จาก prompt ข้อ 9 ต่อด้วยท่านอนจาก prompt ข้อ 12 ช่องละ 320×320 แถวเดียว (มุมข้าง) |
 
 เกมเล่นท่าฟัน `attack` → `attack_2` → `attack_3` วนไปเองเมื่อตีต่อเนื่องภายใน 1 วินาที
 รอยฟันสีทองมาจาก `fx/sword.png` ที่เกมวาดทับ จึงไม่ต้องวาดรอยฟันในตัวละคร
@@ -23,8 +24,10 @@
 `PNGJS=<path ของ pngjs> node tools/cut_sword.cjs` สคริปต์จะตัดพื้นหลัง #FF00FF ออก อุดรูเล็ก ๆ บนผ้าคลุม
 ปรับขนาดทีละแถวให้ตัวสูง 200px เท่า Gunslinger (ไม่นับดาบที่ยกขึ้น) และวางเท้าสูงจากขอบล่าง 16px
 
-ยังไม่มีท่า `run_attack` `dash` `hit` `death` `revive` และ `skill_q/e/r`
-เกมจะใช้ท่าที่มีแทน (ตีระหว่างเดินจะเล่นท่าฟันยืนกับที่) และตอนตายจะทำตัวละครให้จางลง
+ท่าตายตัดด้วย `PNGJS=<path ของ pngjs> RAW=art_templates/sword/raw node tools/cut_death.cjs sword magenta 0.56 0.21`
+
+ยังไม่มีท่า `run_attack` `dash` `hit` `revive` และ `skill_q/e/r`
+เกมจะใช้ท่าที่มีแทน (ตีระหว่างเดินจะเล่นท่าฟันยืนกับที่)
 
 ## 1. แบบตัวละคร
 
@@ -251,4 +254,18 @@ The knight is the same size as in the sprite sheet. Both figures fully inside th
 empty space around them, nothing touching. Background ONE perfectly flat solid magenta (#FF00FF): NO ground, NO
 crater, NO cracks, NO stones, NO dust, NO shadow under the body. No text, no labels, no numbers, no grid lines. Do not
 use pink, magenta or purple on the character.
+```
+
+## 12. ลบพื้นออกจากฉากในหลุม (ใช้แทนข้อ 11)
+
+ให้ ChatGPT แก้ภาพฉากในหลุมที่ท่าถูกแล้ว (`raw/death_scene.png`) แทนการวาดใหม่ ท่าจะได้ไม่เพี้ยน
+แนบ `raw/death_scene.png` ภาพเดียว เซฟเป็น `raw/death_end.png` แล้วเกมใช้เฟรม 1–3 จาก `raw/death.png` ต่อด้วยภาพนี้เป็นเฟรมสุดท้าย
+
+```
+Edit the attached image. Keep the knight and his katana EXACTLY as they are: the same pose, the same position, the
+same size, the same pixels and colors. Do not redraw, move, rotate or restyle them. Remove EVERYTHING else: the
+crater, the cracked ground, the stones, the debris and the dark shading on the ground around and under his body.
+Replace all of it with ONE perfectly flat solid magenta (#FF00FF) background, so only the knight and the katana remain,
+with crisp dark outlines against the magenta. No shadow under the body, no ground, no text. Do not use pink, magenta or
+purple on the knight or the katana.
 ```
