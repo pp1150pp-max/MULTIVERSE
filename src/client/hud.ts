@@ -281,17 +281,16 @@ export class Hud {
     });
     bag.addEventListener('mouseleave', () => this.hideTip());
 
-    // The bag's sort controls and their copies in the stash and shop windows always show the same choice.
+    // The bag's sort controls and the stash's always show the same choice.
     const sortDir = (desc: boolean) => {
-      for (const b of [$('sort-dir'), $('stash-sort-dir'), $('shop-sort-dir')]) {
+      for (const b of [$('sort-dir'), $('stash-sort-dir')]) {
         b.dataset.desc = desc ? '1' : '0';
         b.textContent = desc ? 'มาก → น้อย' : 'น้อย → มาก';
       }
     };
     $('sort-dir').onclick = () => sortDir($('sort-dir').dataset.desc !== '1');
     $('stash-sort-dir').onclick = () => sortDir($('sort-dir').dataset.desc !== '1');
-    $('shop-sort-dir').onclick = () => sortDir($('sort-dir').dataset.desc !== '1');
-    const sortKeys = ['sort-key', 'stash-sort-key', 'shop-sort-key'].map((id) => $<HTMLSelectElement>(id));
+    const sortKeys = ['sort-key', 'stash-sort-key'].map((id) => $<HTMLSelectElement>(id));
     for (const sel of sortKeys) sel.addEventListener('change', () => sortKeys.forEach((o) => (o.value = sel.value)));
     const lf = $('loot-filter');
     lf.innerHTML = '<span>เก็บ</span>' +
@@ -405,12 +404,6 @@ export class Hud {
       [$<HTMLSelectElement>('sort-key').value as SortKey, $('sort-dir').dataset.desc === '1'];
     $('stash-sort-go').onclick = () => {
       g.backend.stashSort(...sortChoice());
-      this.hideTip();
-      this.markInventory();
-    };
-    // The bag's own sort panel is hidden beside the stash and the shop, so the bag can be sorted from there too.
-    $('stash-sort-bag').onclick = $('shop-sort-bag').onclick = () => {
-      g.backend.sortBag(...sortChoice());
       this.hideTip();
       this.markInventory();
     };
