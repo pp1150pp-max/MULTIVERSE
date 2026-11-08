@@ -23,7 +23,7 @@ function forCone(sim: Sim, x: number, z: number, angle: number, arc: number, r: 
   }
 }
 
-const RAPID_SHOTS = 6;
+const RAPID_SHOTS = 3;
 const RAPID_GAP = 0.08;
 const HEADSHOT_AIM = 0.8;
 const HEADSHOT_RANGE = 18;
@@ -105,13 +105,13 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2): boolean
 
     // ---------------- Gunslinger
     case 'rapidfire':
-      // Six shots in a quick burst. Each follows the current aim, so the burst can be swept.
+      // Three shots in a quick burst. Each follows the current aim, so the burst can be swept.
       for (let i = 0; i < RAPID_SHOTS; i++) {
         sim.schedule(i * RAPID_GAP, () => {
           if (!p.alive) return;
           const a = i === 0 ? ang : p.aimAngle();
           const jitter = (Math.random() - 0.5) * 0.08;
-          sim.addProjectile(p, { x: p.x, z: p.z, angle: a + jitter, speed: 28, range: 12, radius: 0.3, mult: 0.6, color: '#ffc85a', size: 0.45, kb: 1 });
+          sim.addProjectile(p, { x: p.x, z: p.z, angle: a + jitter, speed: 28, range: 12, radius: 0.3, mult: 0.4, color: '#ffc85a', size: 0.45, kb: 1 });
           sim.fx('effect', 'muzzle', p.x + Math.cos(a) * 0.9, p.z + Math.sin(a) * 0.9, a, 0.6);
         });
       }
@@ -134,8 +134,8 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2): boolean
       sim.schedule(HEADSHOT_AIM, () => {
         if (!p.alive) return;
         sim.addProjectile(p, {
-          x: p.x, z: p.z, angle: ang, speed: 45, range: HEADSHOT_RANGE, radius: 0.5, mult: 3.1, color: '#ff6a5a', size: 1, kb: 6,
-          hit: { forceCrit: true, maxMult: 5 },
+          x: p.x, z: p.z, angle: ang, speed: 45, range: HEADSHOT_RANGE, radius: 0.5, mult: 2.5, color: '#ff6a5a', size: 1, kb: 6,
+          hit: { forceCrit: true, maxMult: 4 },
           hitFx: { name: 'headshot_hit', size: 1.3 },
         });
         sim.fx('effect', 'muzzle', p.x + Math.cos(ang) * 1.1, p.z + Math.sin(ang) * 1.1, ang, 1.1);
