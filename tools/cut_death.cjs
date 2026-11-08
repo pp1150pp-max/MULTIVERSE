@@ -1,7 +1,10 @@
 // Cuts a class's death animation from two raw ChatGPT images into player/<class>/death.png (one row, side view):
 //   raw/death.png      one row of side-view frames; the first `rowFrames` figures are used (hit, airborne, crash)
 //   raw/death_end.png  the final knocked-out pose seen from above (edited out of the crater scene), used last
-// Usage: PNGJS=<path to pngjs> RAW=<raw folder> node tools/cut_death.cjs <class> <magenta|green> <rowScale> <endScale> [rowFrames]
+// Usage: PNGJS=<path to pngjs> RAW=<raw folder> [DROP_WEAPON=1] node tools/cut_death.cjs <class> <magenta|green> <rowScale> <endScale> [rowFrames]
+// DROP_WEAPON=1: the weapon already lies on the ground under the first two frames (mage, gunslinger). It is left out of
+// them, so their feet can stand on the feet line; the lying frames keep it and rest on its lowest point instead.
+// The game hides anything below the feet line (the ground covers it), so nothing may hang below it.
 // rowScale matches the class's other animations (figure about 200px tall standing); endScale matches the final pose
 // to the same body size (compare head widths). One scale per image, never per frame.
 const path = require('path');
@@ -90,14 +93,52 @@ function blit(dst, src, x0, x1, k, ax, ay, frame) {
     }
 }
 
+/** Keeps only the biggest connected blob of solid pixels in [x0..x1] (drops a separate weapon). */
+function keepLargest(img, x0, x1) {
+  const seen = new Int32Array(img.w * img.h).fill(-1);
+  const sizes = [];
+  for (let y = 0; y < img.h; y++)
+    for (let x = x0; x <= x1; x++) {
+      const start = y * img.w + x;
+      if (!img.solid[start] || seen[start] >= 0) continue;
+      const id = sizes.length;
+      let n = 0;
+      const stack = [start];
+      seen[start] = id;
+      while (stack.length) {
+        const i = stack.pop();
+        n++;
+        const px = i % img.w, py = (i - px) / img.w;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = px + dx, ny = py + dy;
+          if (nx < x0 || nx > x1 || ny < 0 || ny >= img.h) continue;
+          const j = ny * img.w + nx;
+          if (img.solid[j] && seen[j] < 0) {
+            seen[j] = id;
+            stack.push(j);
+          }
+        }
+      }
+      sizes.push(n);
+    }
+  const big = sizes.indexOf(Math.max(...sizes));
+  for (let y = 0; y < img.h; y++) for (let x = x0; x <= x1; x++) if (seen[y * img.w + x] !== big) img.solid[y * img.w + x] = 0;
+}
+
 const row = read('death.png');
 const end = read('death_end.png');
 const groups = columnGroups(row).slice(0, rowFrames);
 if (groups.length < rowFrames) throw new Error(`found only ${groups.length} figures in death.png`);
 const out = new PNG({ width: CELL * (rowFrames + 1), height: CELL });
-// Every row frame shares the row's ground line, so the airborne frame really floats.
-const rowGround = Math.max(...groups.map(([a, b]) => bounds(row, a, b).bottom));
-groups.forEach(([a, b], f) => blit(out, row, a, b, rowScale, bounds(row, a, b).cx, rowGround, f));
+const drop = process.env.DROP_WEAPON === '1';
+if (drop) for (const [a, b] of groups.slice(0, 2)) keepLargest(row, a, b);
+// Row frames share one ground line (the first frame's feet), so the airborne frame really floats. With the weapon on
+// the ground, a lying frame rests on its own lowest point (the weapon) instead.
+const rowGround = drop ? bounds(row, ...groups[0]).bottom : Math.max(...groups.map(([a, b]) => bounds(row, a, b).bottom));
+groups.forEach(([a, b], f) => {
+  const g = bounds(row, a, b);
+  blit(out, row, a, b, rowScale, g.cx, drop && f >= 2 ? g.bottom : rowGround, f);
+});
 const [ea, eb] = columnGroups(end).reduce(([a, b], [c, d]) => [Math.min(a, c), Math.max(b, d)], [Infinity, -1]);
 const e = bounds(end, ea, eb);
 blit(out, end, ea, eb, endScale, e.cx, e.bottom, rowFrames);

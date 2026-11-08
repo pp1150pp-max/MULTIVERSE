@@ -16,8 +16,10 @@
 หลังได้ภาพ ให้ตัดพื้นหลังสี #FF00FF ออก แล้วจัดให้ทุกเฟรมเท้าอยู่สูงจากขอบล่าง 16px หัวอยู่กลางช่อง
 และตัวสูงประมาณ 200px
 
-ยังไม่มีท่า `dash` `hit` `death` `revive` `attack_2` `attack_3` และ `skill_q/e/r`
-เกมจะใช้ท่าที่มีแทน และตอนตายจะทำตัวละครให้จางลง
+`death.png` (4 เฟรม ช่องละ 320×320 แถวเดียว) ตัดจาก prompt ข้อ 6 ด้วย
+`PNGJS=<path ของ pngjs> RAW=art_templates/gunslinger/raw DROP_WEAPON=1 node tools/cut_death.cjs gunslinger magenta 0.5 0.215`
+
+ยังไม่มีท่า `dash` `hit` `revive` `attack_2` `attack_3` และ `skill_q/e/r` เกมจะใช้ท่าที่มีแทน
 
 ## 1. แบบตัวละคร
 

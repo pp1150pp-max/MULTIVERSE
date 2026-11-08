@@ -9,6 +9,7 @@
     "idle": { "file": "idle.png", "frames": 4, "fps": 5, "loop": true },
     "run": { "file": "run.png", "frames": 4, "fps": 10, "loop": true },
     "run_attack": { "file": "run_attack.png", "frames": 4, "fps": 10, "loop": true },
-    "attack": { "file": "attack.png", "frames": 3, "fps": 14 }
+    "attack": { "file": "attack.png", "frames": 3, "fps": 14 },
+    "death": { "file": "death.png", "frames": 4, "fps": 7, "directions": ["side"], "frameWidth": 320, "frameHeight": 320, "feet": 0.05 }
   }
 }

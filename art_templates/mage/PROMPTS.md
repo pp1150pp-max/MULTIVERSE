@@ -17,8 +17,10 @@
 หลังได้ภาพ ให้ตัดพื้นหลังออก แล้วจัดให้ทุกเฟรมเท้าอยู่สูงจากขอบล่าง 16px หัวอยู่กลางช่อง
 ความสูงรวมหมวกประมาณ 230px เพราะหมวกสูงกว่าหัว ตัวละครจึงดูขนาดเท่า Gunslinger
 
-ยังไม่มีท่า `dash` `hit` `death` `revive` `attack_2` `attack_3` และ `skill_q/e/r`
-เกมจะใช้ท่าที่มีแทน และตอนตายจะทำตัวละครให้จางลง
+`death.png` (4 เฟรม ช่องละ 320×320 แถวเดียว) ตัดจาก prompt ข้อ 5 ด้วย
+`PNGJS=<path ของ pngjs> RAW=art_templates/mage/raw DROP_WEAPON=1 node tools/cut_death.cjs mage green 0.52 0.23`
+
+ยังไม่มีท่า `dash` `hit` `revive` `attack_2` `attack_3` และ `skill_q/e/r` เกมจะใช้ท่าที่มีแทน
 
 ## 1. แบบตัวละคร
 
