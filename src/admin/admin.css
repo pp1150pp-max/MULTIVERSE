@@ -218,3 +218,21 @@ details summary { cursor: pointer; margin-top: 8px; }
   .sessions table.cards td.head { font-size: 16px; color: var(--gold-hi); justify-content: flex-start; }
   .sessions table.cards td.head::before { display: none; }
 }
+
+/* "A newer admin page is on the server": shown on a tab left open across an update. */
+.stale-bar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 12px;
+  padding: 8px 16px;
+  background: #4a2a12;
+  border-bottom: 1px solid var(--gold);
+  color: var(--gold-hi);
+  font-size: 14px;
+  text-align: center;
+}
