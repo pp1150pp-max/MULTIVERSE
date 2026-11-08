@@ -35,6 +35,8 @@ import { shutdownCancelled, shutdownWarning, type ShutdownMode } from '../shared
 const SHUTDOWN_COLOR = '#ffd34a';
 /** How long an owner's announcement banner stays up. */
 const ANNOUNCE_MS = 10_000;
+/** Enhance tries whose target level is this or higher show "??" instead of the success chance (display only). */
+const HIDDEN_RATE_FROM = 11;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -1398,6 +1400,10 @@ export class Hud {
     const rate = successRate(item);
     const pity = pityBonus(item);
     const pct = (v: number) => `${Math.round(v * 1000) / 10}%`;
+    const hidden = cur + 1 >= HIDDEN_RATE_FROM;
+    const pityNote = pity <= 0 ? ''
+      : hidden ? `<small class="pity">ล้มมาแล้ว ${item.pity} ครั้ง (โอกาสเพิ่มขึ้น)</small>`
+      : `<small class="pity">รวม +${pct(pity)} จากล้ม ${item.pity} ครั้ง</small>`;
     const need = stonesNeeded(item);
     const haveEnh = p.stoneCount('enhance');
     const canProtect = dropsOnFail(item);
@@ -1405,8 +1411,8 @@ export class Hud {
     if (haveProt < 1) this.forgeProtect = false;
     const protect = canProtect && this.forgeProtect;
     $('forge-cost').innerHTML =
-      `<div class="fc-rate"${rate < 1 ? ` title="ล้มแต่ละครั้ง โอกาสครั้งถัดไป +${pct(PITY_STEP)} จนกว่าจะสำเร็จ"` : ''}><span>โอกาสสำเร็จ +${cur} → +${cur + 1}</span><b class="${rate < 1 ? 'risky' : ''}">${pct(rate)}</b>` +
-      `${pity > 0 ? `<small class="pity">รวม +${pct(pity)} จากล้ม ${item.pity} ครั้ง</small>` : ''}</div>` +
+      `<div class="fc-rate"${rate < 1 ? ` title="ล้มแต่ละครั้ง โอกาสครั้งถัดไป +${pct(PITY_STEP)} จนกว่าจะสำเร็จ"` : ''}><span>โอกาสสำเร็จ +${cur} → +${cur + 1}</span><b class="${rate < 1 ? 'risky' : ''}">${hidden ? '??' : pct(rate)}</b>` +
+      `${pityNote}</div>` +
       `<div class="fd-row"><span>ค่าตีบวก</span><b class="${p.gold < cost ? 'bad' : ''}">${cost.toLocaleString()} G</b></div>` +
       (need ? `<div class="fd-row"><span>${stoneIcon('enhance')} ${STONE_NAME.enhance}</span><b class="${haveEnh < need ? 'bad' : ''}">ใช้ ${need} / มี ${haveEnh}</b></div>` : '') +
       (canProtect
@@ -1505,7 +1511,7 @@ export class Hud {
     let html = '<table><tr><th>บวก</th><th>สำเร็จ</th><th>ถ้าล้ม</th><th>หินตีบวก</th><th>โบนัสรวม</th></tr>';
     for (let t = 1; t <= MAX_PLUS; t++) {
       const fail = rateFor(t) >= 1 ? '—' : t >= DROP_ON_FAIL_FROM ? 'ระดับ −1' : 'เสียแค่ทอง';
-      html += `<tr><td>+${t}</td><td>${Math.round(rateFor(t) * 1000) / 10}%</td><td>${fail}</td>` +
+      html += `<tr><td>+${t}</td><td>${t >= HIDDEN_RATE_FROM ? '??' : `${Math.round(rateFor(t) * 1000) / 10}%`}</td><td>${fail}</td>` +
         `<td>${t >= STONE_FROM ? ENHANCE_STONES_PER_TRY : '—'}</td><td>+${bonusPct(t)}%</td></tr>`;
     }
     return html + '</table><div class="hint">ตีบวกได้ทุกช่อง (อาวุธ หมวก เกราะ รองเท้า แหวน) · โบนัสเป็น % ของทุกค่าบนชิ้นนั้น' +
