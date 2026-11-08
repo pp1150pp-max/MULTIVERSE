@@ -9,7 +9,7 @@ import {
 import {
   entryName, POTION_SIZES, POTION_SIZE_LABEL, POTION_STACK, POTIONS, potionName, potionSellPrice,
 } from '../shared/data/potions';
-import { STONE_COLOR, STONE_DESC, STONE_NAME, STONE_SELL, STONE_STACK, stoneStackValue } from '../shared/data/stones';
+import { REROLL_STONE, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_SELL, STONE_STACK, stoneStackValue } from '../shared/data/stones';
 import { lineRanges, rerollBlock } from '../shared/data/items';
 import { REROLL_NAME, rerollCost, type RerollKind } from '../shared/data/reroll';
 import { FullMap } from './fullmap';
@@ -1344,11 +1344,15 @@ export class Hud {
         ? 'สุ่ม 1 บรรทัดจากสเตตัสเสริม เปลี่ยนเป็นสเตตัสชนิดใหม่ พร้อม tier และค่าใหม่ · สเตตัสหลักไม่เปลี่ยน'
         : 'ไอเทมนี้ไม่มีสเตตัสเสริม: สุ่ม tier และค่าใหม่ให้สเตตัสหลัก 1 บรรทัด (ชนิดเดิม)';
     const cost = rerollCost(item, kind);
+    const stone = REROLL_STONE[kind];
+    const have = p.stoneCount(stone);
     $('forge-detail').innerHTML = head + rows +
       `<div class="safe">${what}${plusOf(item) ? ` · ระดับ +${plusOf(item)} ยังอยู่` : ''}</div>` +
+      `<div class="fd-row"><span>${stoneIcon(stone)} ${STONE_NAME[stone]}</span><b class="${have < 1 ? 'bad' : ''}">ใช้ 1 (มี ${have})</b></div>` +
       `<div class="fd-row"><span>ค่าบริการ</span><b class="${p.gold < cost ? 'bad' : ''}">${cost.toLocaleString()} G</b></div>`;
-    go.disabled = p.gold < cost;
-    go.innerHTML = p.gold < cost ? `ทองไม่พอ (มี ${p.gold.toLocaleString()} G)` : `${FORGE_ICON} ${REROLL_NAME[kind]} (${cost.toLocaleString()} G)`;
+    go.disabled = p.gold < cost || have < 1;
+    go.innerHTML = have < 1 ? `ไม่มี${STONE_NAME[stone]}`
+      : p.gold < cost ? `ทองไม่พอ (มี ${p.gold.toLocaleString()} G)` : `${FORGE_ICON} ${REROLL_NAME[kind]} (${cost.toLocaleString()} G)`;
   }
 
   /** Asks first (the old values are gone for good), then rerolls the selected item. */
@@ -1358,7 +1362,7 @@ export class Hud {
     if (!item || !ranges || !item.lines || this.enhancing) return;
     const over = item.lines.some((l) => l.value > l.max);
     this.confirm(
-      `${REROLL_NAME[kind]} ${itemName(item)}?<br><small>ค่าบริการ ${rerollCost(item, kind).toLocaleString()} G · ค่าเดิมจะหายไป ย้อนคืนไม่ได้` +
+      `${REROLL_NAME[kind]} ${itemName(item)}?<br><small>ค่าบริการ ${rerollCost(item, kind).toLocaleString()} G + ${STONE_NAME[REROLL_STONE[kind]]} 1 ก้อน · ค่าเดิมจะหายไป ย้อนคืนไม่ได้` +
       `${over ? '<br>⚠ มีสเตตัสที่เกินช่วงปกติ จะกลับเข้าช่วงปกติ' : ''}</small>`,
       REROLL_NAME[kind],
       () => void this.reroll(item, kind),

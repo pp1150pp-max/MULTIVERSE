@@ -191,6 +191,9 @@ function oldItem(): Item {
   ok(sim.reroll(p, item.uid, 'values') === null, 'reroll: refused away from the blacksmith');
   p.x = smith.x + 1;
   p.z = smith.z;
+  // Each reroll also uses one stone of its kind (owner 2026-11-08).
+  p.addStones('reroll_values', 1);
+  p.addStones('reroll_stat', 1);
   const gold = p.gold;
   ok(sim.reroll(p, item.uid, 'values') === item && p.gold === gold - rerollCost(item, 'values'), 'reroll values: done next to the blacksmith, gold taken');
   ok(sim.reroll(p, item.uid, 'stat') === item && linesValid(item, 'sim'), 'reroll stat on a bag item');
