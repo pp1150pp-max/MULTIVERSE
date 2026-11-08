@@ -72,8 +72,15 @@
           <div class="inv-side">
             <div class="inv-side-title">ค่าสถานะ</div>
             <div id="stat-list"></div>
-            <div class="inv-side-title">เรียงของ</div>
-            <div class="bag-sort">
+            <div class="inv-side-title">เก็บของ</div>
+            <div class="bag-filter" id="loot-filter"></div>
+            <div class="hint" id="bag-hint"></div>
+          </div>
+          <div class="inv-window">
+            <div class="inv-title">ตัวละคร &amp; กระเป๋า</div>
+            <button id="inv-close" title="ปิด"></button>
+            <div id="equip-slots"></div>
+            <div class="bag-sort inv-sort" title="เรียงของในกระเป๋า">
               <select id="sort-key">
                 <option value="rarity">ความหายาก</option>
                 <option value="level">เลเวลของ</option>
@@ -83,14 +90,6 @@
               <button id="sort-dir" data-desc="1">มาก → น้อย</button>
               <button id="sort-go">เรียง</button>
             </div>
-            <div class="inv-side-title">เก็บของ</div>
-            <div class="bag-filter" id="loot-filter"></div>
-            <div class="hint" id="bag-hint"></div>
-          </div>
-          <div class="inv-window">
-            <div class="inv-title">ตัวละคร &amp; กระเป๋า</div>
-            <button id="inv-close" title="ปิด"></button>
-            <div id="equip-slots"></div>
             <div id="bag-grid"></div>
             <div class="inv-foot"><span id="inv-gold"></span><span id="inv-pots"></span></div>
           </div>
