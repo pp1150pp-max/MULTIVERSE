@@ -9,7 +9,29 @@ import type { ClassId } from '../src/shared/types';
 import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../src/shared/net/protocol';
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
 import { MARKET_HISTORY_DAYS, type MarketQuery } from '../src/shared/sim/market';
-import { isAdminRole, type AdminRole, type AuditRow, type ChatLogRow, type PlaySessionRow, type RoleRow } from '../src/shared/admin';
+import { isAdminRole, type AdminRole, type AuditRow, type ChatLogRow, type PlaySessionRow, type RoleRow, type SessionQuery, type SessionSort } from '../src/shared/admin';
+
+/** A play session's username as the admin page shows it. */
+const GUEST_AS_GUEST = "(CASE WHEN guest = 1 THEN 'Guest' ELSE username END)";
+
+/**
+ * The SQL each play-session sort key orders by. Only these fixed strings (plus server-made integers) ever
+ * reach the query; nothing typed by the client does. A session still playing counts up to `now`.
+ */
+function sessionSortSql(sort: SessionSort, openIds: number[], now: number): string {
+  const open = openIds.filter(Number.isSafeInteger).join(',');
+  switch (sort) {
+    case 'joined': return 'joined_at';
+    case 'username': return `${GUEST_AS_GUEST} COLLATE NOCASE`;
+    case 'char': return 'char_name COLLATE NOCASE';
+    case 'duration':
+      return `CASE WHEN left_at IS NOT NULL THEN left_at - joined_at${open ? ` WHEN id IN (${open}) THEN ${Math.floor(now)} - joined_at` : ''} END`;
+    case 'ip': return 'ip';
+    case 'gpu': return 'gpu COLLATE NOCASE';
+    case 'ping': return 'avg_rtt';
+    case 'fps': return 'avg_fps';
+  }
+}
 
 /** Settings rows holding the countdown texts. */
 export const SHUTDOWN_TEXT_KEY: Record<ShutdownMode, string> = { restart: 'shutdown_text_restart', shutdown: 'shutdown_text_shutdown' };
@@ -658,17 +680,38 @@ export class Db {
     this.db.prepare('UPDATE play_sessions SET left_at = ?, gpu = ?, avg_rtt = ?, avg_fps = ? WHERE id = ?').run(at, r.gpu, r.avgRtt, r.avgFps, id);
   }
 
-  /** Newest first; optionally one account's, or only those before row `before`. */
-  playSessions(limit: number, accountId?: number, before?: number): PlaySessionRow[] {
-    const rows = this.db.prepare(`SELECT * FROM play_sessions WHERE id < ? AND (? IS NULL OR account_id = ?) ORDER BY id DESC LIMIT ?`)
-      .all(before ?? Number.MAX_SAFE_INTEGER, accountId ?? null, accountId ?? null, limit) as {
+  /**
+   * One page of play sessions plus how many match. `q` is checked by the caller; `openIds` are the rows
+   * still playing (their length counts up to `now`). Sort columns come only from SESSION_SORT_SQL.
+   */
+  playSessions(q: SessionQuery, openIds: number[], now = Date.now()): { rows: PlaySessionRow[]; total: number; page: number } {
+    const where: string[] = [];
+    const args: (string | number)[] = [];
+    if (q.accountId !== undefined) where.push('account_id = ?'), args.push(q.accountId);
+    if (q.from !== undefined) where.push('joined_at >= ?'), args.push(q.from);
+    if (q.to !== undefined) where.push('joined_at < ?'), args.push(q.to);
+    if (q.q) {
+      const like = `%${q.q.replace(/[!%_]/g, (c) => '!' + c)}%`;
+      // Guests are shown (and found) as "Guest", not by their hidden username.
+      where.push(`(${GUEST_AS_GUEST} LIKE ? ESCAPE '!' OR char_name LIKE ? ESCAPE '!' OR ip LIKE ? ESCAPE '!')`);
+      args.push(like, like, like);
+    }
+    const w = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const total = Number((this.db.prepare(`SELECT COUNT(*) AS n FROM play_sessions ${w}`).get(...args) as { n: number }).n);
+    const page = Math.max(1, Math.min(q.page, Math.ceil(total / q.size)));
+    const key = sessionSortSql(q.sort, openIds, now);
+    const dir = q.desc ? 'DESC' : 'ASC';
+    // Empty values last in both directions; ties keep the newest first.
+    const rows = this.db.prepare(`SELECT *, (${key}) AS sort_key FROM play_sessions ${w}
+      ORDER BY sort_key IS NULL, sort_key ${dir}, id DESC LIMIT ? OFFSET ?`)
+      .all(...args, q.size, (page - 1) * q.size) as {
       id: number; account_id: number; username: string; guest: number; char_id: number; char_name: string; joined_at: number;
       left_at: number | null; ip: string; gpu: string | null; avg_rtt: number | null; avg_fps: number | null;
     }[];
-    return rows.map((r) => ({
+    return { total, page, rows: rows.map((r) => ({
       id: r.id, accountId: r.account_id, username: r.guest ? 'Guest' : r.username, guest: r.guest === 1, charId: r.char_id, charName: r.char_name,
       joinedAt: r.joined_at, leftAt: r.left_at, ip: r.ip, gpu: r.gpu, avgRtt: r.avg_rtt, avgFps: r.avg_fps, online: false,
-    }));
+    })) };
   }
 
   logChat(r: { accountId: number; username: string; charName: string; zone: string; text: string }, at = Date.now()): void {

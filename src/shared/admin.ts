@@ -189,7 +189,7 @@ export interface BackupRow { name: string; size: number; at: number; kind: strin
 
 /** Days each kind of history is kept (older rows are deleted every hour). */
 export const HISTORY_DAYS = { sessions: 90, chat: 30, samples: 90 };
-/** Rows per page of the session and chat lists. */
+/** Rows per page of the chat list. */
 export const HISTORY_PAGE = 100;
 
 export interface PlaySessionRow {
@@ -208,6 +208,37 @@ export interface PlaySessionRow {
   avgFps: number | null;
   /** Still in the world right now. */
   online: boolean;
+}
+
+/**
+ * The play-session table: sorted on the server over every stored row, one numbered page at a time.
+ * `duration` counts a session still playing up to now; rows with no value (unknown length, no ping yet…)
+ * always go last, whichever way the table is sorted.
+ */
+export const SESSION_SORTS = ['joined', 'username', 'char', 'duration', 'ip', 'gpu', 'ping', 'fps'] as const;
+export type SessionSort = (typeof SESSION_SORTS)[number];
+export const SESSION_PAGE_SIZES = [25, 50, 100] as const;
+/** Longest search text (username, character name or IP). */
+export const SESSION_SEARCH_MAX = 50;
+export interface SessionQuery {
+  sort: SessionSort;
+  desc: boolean;
+  /** 1-based. */
+  page: number;
+  size: number;
+  /** Matches the username, character name or IP (part of it, any case). */
+  q: string;
+  /** Joined at or after `from` and before `to` (ms); either may be absent. */
+  from?: number;
+  to?: number;
+  accountId?: number;
+}
+export interface SessionPage {
+  rows: PlaySessionRow[];
+  total: number;
+  /** The page actually returned (past the end → the last page). */
+  page: number;
+  size: number;
 }
 
 export interface ChatLogRow { id: number; at: number; accountId: number; username: string; charName: string; zone: string; text: string }
