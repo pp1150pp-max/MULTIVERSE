@@ -125,6 +125,13 @@ export class OnlineBackend implements Backend {
   private readonly targets = new Map<object, Vec2>();
   private events: SimEvent[] = [];
   hazards: readonly Hazard[] = [];
+  /** From the last snapshot, counted down locally in between (see bossRespawnIn). */
+  private bossIn: number | null = null;
+  private bossInAt = 0;
+
+  get bossRespawnIn(): number | null {
+    return this.bossIn === null ? null : Math.max(0, this.bossIn - (performance.now() - this.bossInAt) / 1000);
+  }
   private serverTime = 0;
   private serverTimeAt = performance.now();
   private serverMoves = false;
@@ -382,6 +389,8 @@ export class OnlineBackend implements Backend {
     this.serverTimeAt = performance.now();
     this.onlineCount = s.online;
     this.hazards = s.hazards ?? [];
+    this.bossIn = s.bossIn ?? null;
+    this.bossInAt = performance.now();
     if (!document.hidden) this.events.push(...s.events);
     else {
       for (const ev of s.events) {

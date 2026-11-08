@@ -40,12 +40,19 @@ function glyphs(text: string, row: number, burst: boolean): string {
   return (burst ? `<span class="dburst" style="background-image:url(${CRIT_BURST})"></span>` : '') + parts.join('');
 }
 
+/** Seconds as m:ss, rounded up so it never shows 0:00 before the boss is back. */
+export function countdown(seconds: number): string {
+  const s = Math.ceil(seconds);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
 export class Floating {
   private nums: Num[] = [];
   private plates = new Map<Monster, Plate>();
   private labels = new Map<Loot, HTMLDivElement>();
   private names = new Map<Player, Plate>();
   private prompt: HTMLDivElement;
+  private bossTimerEl: HTMLDivElement;
   private badges = new Map<Npc, HTMLDivElement>();
   private vitals: { el: HTMLDivElement; hp: HTMLDivElement; mp: HTMLDivElement };
 
@@ -53,6 +60,9 @@ export class Floating {
     this.prompt = document.createElement('div');
     this.prompt.className = 'npc-prompt hidden';
     root.append(this.prompt);
+    this.bossTimerEl = document.createElement('div');
+    this.bossTimerEl.className = 'boss-timer hidden';
+    root.append(this.bossTimerEl);
     const vitals = document.createElement('div');
     vitals.className = 'vitals hidden';
     const bar = (cls: string): HTMLDivElement => {
@@ -97,6 +107,18 @@ export class Floating {
       pop: !drawn ? 0 : cls === 'crit' ? 0.8 : 0.3,
     });
     if (this.nums.length > MAX_NUMS) this.nums.shift()!.el.remove();
+  }
+
+  /** Countdown over the boss's empty lair, or hidden when text is null. */
+  bossTimer(g: Game, x: number, z: number, text: string | null): void {
+    if (!text) {
+      this.bossTimerEl.classList.add('hidden');
+      return;
+    }
+    const s = g.toScreen(x, 1.5, z);
+    if (this.bossTimerEl.textContent !== text) this.bossTimerEl.textContent = text;
+    this.bossTimerEl.classList.remove('hidden');
+    this.bossTimerEl.style.transform = `translate(${s.sx}px, ${s.sy}px) translate(-50%, -100%)`;
   }
 
   /** Small label above an NPC, or hidden when text is null. */

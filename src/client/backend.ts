@@ -37,6 +37,8 @@ export interface Backend {
   readonly loots: readonly Loot[];
   /** Boss ground attacks going on right now. */
   readonly hazards: readonly Hazard[];
+  /** Seconds until the zone's boss comes back, or null while it is alive. */
+  readonly bossRespawnIn: number | null;
   /** Simulation clock (seconds). */
   readonly time: number;
   /** Players in the world right now. */

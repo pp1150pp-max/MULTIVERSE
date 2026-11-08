@@ -153,6 +153,8 @@ export interface SnapshotMsg {
   loots: LootSnap[];
   /** Boss ground attacks in progress (left out when there are none). */
   hazards?: Hazard[];
+  /** Seconds until the zone's boss comes back (left out while it is alive). */
+  bossIn?: number;
   events: SimEvent[];
 }
 
