@@ -88,7 +88,7 @@ export class GameAudio {
     if (!slot) return;
     const p = b.players.find((x) => x.id === id);
     if (!p) return;
-    // Charge is a dash too: its own sound plays from skill_e.
+    // Charge is a dash too: its own sound plays from skill_r.
     if (slot === 'dash' && p.dashKind === 'charge') return;
     const sound = p.skill(slot)?.id;
     if (!sound || !isSoundName(sound)) return;
