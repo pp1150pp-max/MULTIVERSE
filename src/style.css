@@ -549,8 +549,7 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #shop { left: 12px; top: 120px; width: 534px; }
 /* Clear of the HP and MP display, wherever the player has put it. */
 .hud-bars #shop, .hud-bars #forge { top: 216px; }
-.hud-bars #forge { max-height: calc(100vh - 226px); overflow-y: auto; }
-.hud-orbs #forge { max-height: calc(100vh - 128px - var(--orb)); overflow-y: auto; }
+/* No max-height or scrolling, like the shop and stash (owner): on a very short screen drag it up by its title bar. */
 #forge { left: 12px; top: 120px; width: 360px; }
 
 /* Stash (warehouse keeper): ten slots a row like the shop, rows not bought yet as one locked bar each. No scrolling (owner). */
@@ -735,6 +734,12 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 .hud-bars #market { top: 196px; max-height: calc(100vh - 206px); }
 #market .npc-line { margin-bottom: 4px; }
 #market .ui-tab-body { min-height: 0; overflow-y: auto; flex: 1 1 auto; }
+/* The market list must scroll (it can be long): a thin gold bar that matches the frame instead of the default grey one (owner). */
+#market .ui-tab-body { scrollbar-width: thin; scrollbar-color: #8f7238 transparent; }
+#market .ui-tab-body::-webkit-scrollbar { width: 6px; }
+#market .ui-tab-body::-webkit-scrollbar-track { background: transparent; }
+#market .ui-tab-body::-webkit-scrollbar-thumb { background: #8f7238; border-radius: 3px; }
+#market .ui-tab-body::-webkit-scrollbar-thumb:hover { background: var(--gold-hi); }
 #market input[type=text], #market input[type=number], #market select {
   padding: 3px 6px; background: #12100d; color: var(--ink); border: 1px solid #8f7238; border-radius: 3px; font: inherit; font-size: 12px;
 }
