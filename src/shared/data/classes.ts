@@ -10,11 +10,8 @@ export interface SkillDef {
   desc: string;
   mp: number;
   cooldown: number;
-  /**
-   * Can be cast a second time within this many seconds. The first cast pays the MP; the cooldown
-   * starts after the second cast, or once the window runs out.
-   */
-  recast?: number;
+  /** Each kill by this player cuts the skill's remaining cooldown by this share (0.5 = halves it). */
+  killCdCut?: number;
 }
 
 export interface ClassDef {
@@ -46,9 +43,9 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     growth: { maxHp: 20, maxMp: 4, atk: 2.6, def: 1.3, hpRegen: 0.15, mpRegen: 0.05 },
     skills: [
       { id: 'slash', slot: 'basic', name: 'Slash', nameTh: 'ฟัน', desc: 'ฟันเป็นวงโค้งด้านหน้า 100% ATK', mp: 0, cooldown: 0 },
-      { id: 'whirlwind', slot: 'q', name: 'Whirlwind', nameTh: 'พายุดาบ', desc: 'หมุนตัวฟันรอบทิศ 180% ATK', mp: 12, cooldown: 4 },
-      { id: 'parry', slot: 'e', name: 'Parry', nameTh: 'ปัดป้อง', desc: 'ยืนตั้งการ์ด 1 วิ ลดดาเมจที่ได้รับ 80% ไม่โดนสตันหรือกระเด็น', mp: 10, cooldown: 8 },
-      { id: 'charge', slot: 'r', name: 'Charge', nameTh: 'พุ่งชน', desc: 'พุ่งไปตามทิศเมาส์ ชนศัตรูตลอดทาง 150% ATK และกระเด็น กดซ้ำภายใน 4 วิเพื่อพุ่งอีกครั้ง', mp: 25, cooldown: 15, recast: 4 },
+      { id: 'whirlwind', slot: 'q', name: 'Whirlwind', nameTh: 'พายุดาบ', desc: 'หมุนตัวฟันรอบทิศ 180% ATK ไม่รับดาเมจ 0.6 วิ', mp: 15, cooldown: 6 },
+      { id: 'earthquake', slot: 'e', name: 'Earthquake', nameTh: 'ปฐพีแยก', desc: 'กระแทกพื้นรอบตัว 200% ATK และสตัน 1 วิ', mp: 20, cooldown: 7 },
+      { id: 'charge', slot: 'r', name: 'Charge', nameTh: 'พุ่งชน', desc: 'พุ่งไปตามทิศเมาส์ ชนศัตรูตลอดทาง 150% ATK และกระเด็น ทุกครั้งที่ฆ่ามอนได้ คูลดาวน์ที่เหลือลดลงครึ่งหนึ่ง', mp: 25, cooldown: 15, killCdCut: 0.5 },
       dash('Dash', 'แดช'),
     ],
   },
@@ -78,9 +75,9 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     growth: { maxHp: 15, maxMp: 6, atk: 2, def: 0.9, hpRegen: 0.12, mpRegen: 0.12 },
     skills: [
       { id: 'shot', slot: 'basic', name: 'Quick Shot', nameTh: 'ยิงเร็ว', desc: 'ยิงกระสุนความเร็วสูง 100% ATK', mp: 0, cooldown: 0 },
-      { id: 'spread', slot: 'q', name: 'Spread Shot', nameTh: 'กระสุนกระจาย', desc: 'ยิงกระสุน 5 นัดเป็นรูปพัด นัดละ 90% ATK', mp: 10, cooldown: 3 },
-      { id: 'pierce', slot: 'e', name: 'Piercing Round', nameTh: 'กระสุนเจาะเกราะ', desc: 'กระสุนทะลุทุกเป้าหมายในแนวยาว 260% ATK', mp: 14, cooldown: 5 },
-      { id: 'bulletrain', slot: 'r', name: 'Bullet Rain', nameTh: 'ห่ากระสุน', desc: 'สาดกระสุนลงพื้นที่ตำแหน่งเมาส์ 6 ครั้ง ครั้งละ 90% ATK', mp: 30, cooldown: 12 },
+      { id: 'rapidfire', slot: 'q', name: 'Rapid Fire', nameTh: 'ยิงรัว', desc: 'ยิงรัว 6 นัดติดกันไปทางเมาส์ นัดละ 60% ATK', mp: 10, cooldown: 3 },
+      { id: 'pierce', slot: 'e', name: 'Armor-Piercing Round', nameTh: 'กระสุนเจาะเกราะ', desc: 'กระสุนนัดหนัก 150% ATK ลดพลังป้องกันของเป้าหมาย 20% นาน 3 วิ', mp: 14, cooldown: 5 },
+      { id: 'headshot', slot: 'r', name: 'Headshot', nameTh: 'ยิงหัว', desc: 'ยืนนิ่งเล็ง 0.8 วิ แล้วยิงนัดเดียว คริติคอลแน่นอน 310% ATK (รวมคริแล้วไม่เกิน 500%)', mp: 30, cooldown: 12 },
       dash('Tumble', 'กลิ้งหลบ'),
     ],
   },

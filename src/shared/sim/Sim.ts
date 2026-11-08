@@ -23,7 +23,6 @@ import {
   type AutoSettings, type CharacterData, type LootFilter, type SortKey,
 } from './Player';
 import { Monster } from './Monster';
-import { PARRY } from './skills';
 import { EnemyShot, Projectile, type ProjOpts } from './Projectile';
 import { Loot, LOOT_PRIORITY_TIME, type LootKind } from './Loot';
 import { nextRowPrice, STASH_GOLD_MAX, STASH_ROW } from './stash';
@@ -249,9 +248,11 @@ export class Sim {
       return;
     }
     let raw = p.stats.atk * mult * (0.9 + Math.random() * 0.2);
-    const crit = Math.random() * 100 < p.stats.crit;
+    const crit = opts.forceCrit || Math.random() * 100 < p.stats.crit;
     if (crit) raw *= 1 + p.stats.critDmg / 100;
-    const dmg = Math.round(mitigate(raw, m.defense));
+    if (opts.maxMult) raw = Math.min(raw, p.stats.atk * opts.maxMult);
+    const def = this.time < m.armorBreakUntil ? m.defense * (1 - m.armorBreak) : m.defense;
+    const dmg = Math.round(mitigate(raw, def));
     if (!m.damageBy.has(p.id)) {
       m.damageBy.set(p.id, 0);
       m.addFighter(m.damageBy.size);
@@ -267,8 +268,18 @@ export class Sim {
       m.slowAmt = opts.slow;
       m.slowT = opts.slowT ?? 2;
     }
+    if (opts.armorBreak) {
+      // Recasting refreshes the timer; it never stacks past the strongest break.
+      if (this.time >= m.armorBreakUntil) m.armorBreak = 0;
+      m.armorBreak = Math.max(m.armorBreak, opts.armorBreak);
+      m.armorBreakUntil = this.time + (opts.armorBreakT ?? 3);
+      this.text(m.x, m.topY + 0.4, m.z, 'เกราะแตก', 'info', 0.8);
+    }
     m.onHit(this, p);
-    if (m.hp <= 0) this.killMonster(m);
+    if (m.hp <= 0) {
+      this.killMonster(m);
+      p.onKill();
+    }
   }
 
   hitPlayer(m: Monster, p: Player, mult: number, opts: HitOpts): void {
@@ -277,13 +288,7 @@ export class Sim {
       this.text(p.x, p.topY, p.z, 'MISS', 'info', 0.6);
       return;
     }
-    let dmg = Math.round(mitigate(m.atk * mult * (0.9 + Math.random() * 0.2), p.stats.def) + p.maxHp * (opts.maxHpShare ?? 0));
-    if (p.guardT > 0) {
-      // Parry: most of the hit is blocked and it can't stun or knock the player back.
-      dmg = Math.round(dmg * (1 - PARRY.reduce));
-      opts = { ...opts, stun: 0, kb: 0 };
-      this.fx('burst', p.x, 1.1, p.z, '#ffe08a', 10, 4);
-    }
+    const dmg = Math.round(mitigate(m.atk * mult * (0.9 + Math.random() * 0.2), p.stats.def) + p.maxHp * (opts.maxHpShare ?? 0));
     p.hp -= dmg;
     p.lastHurt = this.time;
     p.interruptPotions();

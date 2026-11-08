@@ -3,7 +3,7 @@ import { fxSheets, fxTex, type FxSheet } from './assets';
 import type { FxApi, SkillEffect } from '../shared/sim/types';
 
 const FRAMES = 6;
-const SHEET_ROWS: Record<FxSheet, number> = { sword: 4, mage: 5, gun: 4 };
+const SHEET_ROWS: Record<FxSheet, number> = { sword: 4, mage: 5, gun: 4, gun_ult: 3 };
 
 interface EffectDef {
   sheet: FxSheet;
@@ -23,6 +23,9 @@ const EFFECTS: Record<SkillEffect, EffectDef> = {
   crater: { sheet: 'mage', row: 4, life: 0.7, height: 'ground' },
   muzzle: { sheet: 'gun', row: 0, life: 0.14, height: 0.95 },
   impact: { sheet: 'gun', row: 3, life: 0.32, height: 0.3 },
+  // Headshot (Gunslinger R): the reticle locks on over the whole aim, then a big hit on the target.
+  reticle: { sheet: 'gun_ult', row: 0, life: 0.8, height: 'ground' },
+  headshot_hit: { sheet: 'gun_ult', row: 2, life: 0.42, height: 0.95 },
 };
 
 /** Flying shots, looked up by the colour the simulation gives each projectile. */
@@ -32,6 +35,7 @@ const SHOT_ART: Record<string, { sheet: FxSheet; row: number; scale: number }> =
   '#ffe08a': { sheet: 'gun', row: 1, scale: 2.4 },
   '#ffc85a': { sheet: 'gun', row: 1, scale: 2.4 },
   '#7affe0': { sheet: 'gun', row: 2, scale: 3 },
+  '#ff6a5a': { sheet: 'gun_ult', row: 1, scale: 3 },
 };
 
 /** The on-screen angle of a world direction under the isometric camera. */

@@ -1,6 +1,7 @@
 import type { Sim } from './Sim';
 import type { Player } from './Player';
 import type { Monster } from './Monster';
+import type { HitOpts, SkillEffect } from './types';
 
 export interface ProjOpts {
   x: number;
@@ -16,6 +17,10 @@ export interface ProjOpts {
   explode?: number;
   pierce?: boolean;
   kb?: number;
+  /** Extra hit options for a single-target shot (crit, armor break, ...). */
+  hit?: HitOpts;
+  /** Drawn on the target when this single-target shot lands, instead of the small burst. */
+  hitFx?: { name: SkillEffect; size: number };
   /** Monster shots: the picture to draw. Player shots leave this out. */
   art?: 'ice_shard' | 'snowball' | 'ember_bolt';
 }
@@ -111,8 +116,9 @@ export class Projectile {
         }
       }
     } else if (m) {
-      sim.hitMonster(this.owner, m, this.o.mult, { kb: this.o.kb ?? 2, fromX: this.x - this.dx, fromZ: this.z - this.dz });
-      sim.fx('burst', this.x, 0.85, this.z, this.o.color, 5, 3);
+      sim.hitMonster(this.owner, m, this.o.mult, { kb: this.o.kb ?? 2, fromX: this.x - this.dx, fromZ: this.z - this.dz, ...this.o.hit });
+      if (this.o.hitFx) sim.fx('effect', this.o.hitFx.name, m.x, m.z, this.o.angle, this.o.hitFx.size);
+      else sim.fx('burst', this.x, 0.85, this.z, this.o.color, 5, 3);
     }
     this.dead = true;
   }

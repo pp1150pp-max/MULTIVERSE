@@ -123,9 +123,9 @@ function eventPos(ev: SimEvent): Vec2 | null {
   return null;
 }
 
-/** While the server itself is moving a character, the client's reported position is ignored. */
+/** While the server itself is moving (or holding) a character, the client's reported position is ignored. */
 function serverMoves(p: Player): boolean {
-  return !p.alive || p.isDashing || p.stunT > 0 || p.guardT > 0 || Math.abs(p.kbx) + Math.abs(p.kbz) > 0.05;
+  return !p.alive || p.isDashing || p.stunT > 0 || p.rootT > 0 || Math.abs(p.kbx) + Math.abs(p.kbz) > 0.05;
 }
 
 /** Input older than this is treated as "let go of everything" so a stalled client doesn't keep walking. */
@@ -861,7 +861,7 @@ export class GameWorld {
     const inv = JSON.stringify([p.equipment, p.bag, p.buyback]);
     const me: PrivateSnap = {
       hp: r2(p.hp), mp: r2(p.mp), exp: p.exp, level: p.level, gold: p.gold,
-      potSel: p.potSel, lootFilter: p.lootFilter, autoSettings: p.autoSettings, stats: p.stats, cd: p.cd, recast: p.recast, potCd: r2(p.potCd),
+      potSel: p.potSel, lootFilter: p.lootFilter, autoSettings: p.autoSettings, stats: p.stats, cd: p.cd, potCd: r2(p.potCd),
       serverMoves: serverMoves(p) || !!s.auto, epoch: s.epoch, ack: s.lastSeq, buybackLeft: Math.round(p.buybackLeft),
     };
     if (inv !== s.lastInv) {

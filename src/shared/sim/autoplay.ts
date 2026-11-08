@@ -41,6 +41,8 @@ const IDLE_HINT_EMPTY = 3;
 const IDLE_HINT_WAITING = 15;
 const IDLE_HINT_EVERY = 30;
 export const AUTO_HINT_COLOR = '#ffb36a';
+/** Auto fights monsters of any level; one this many levels above the player gets a warning. */
+export const AUTO_LEVEL_WARN = 10;
 
 /**
  * Open-world farming bot. The server runs it, so it keeps farming while the tab is hidden. Walking by hand turns it off (Game.update); manual attacks
@@ -58,12 +60,14 @@ export class AutoPlay {
   private idleSince: number | null = null;
   private hintAt = -Infinity;
   private hint: string | null = null;
+  private levelHintAt = -Infinity;
 
   /** Auto was just switched on here. */
   start(x: number, z: number): void {
     this.anchor = { x, z };
     this.idleSince = null;
     this.hintAt = -Infinity;
+    this.levelHintAt = -Infinity;
     this.reset();
   }
 
@@ -86,6 +90,13 @@ export class AutoPlay {
     this.hint = hasArea
       ? 'Auto: ยังไม่มีมอนให้ตีในระยะฟาร์ม — รอมอนเกิด หรือเพิ่มระยะที่ปุ่ม ⚙'
       : 'Auto: ไม่มีมอนในระยะฟาร์ม — เพิ่มระยะที่ปุ่ม ⚙ หรือไปเปิด Auto ใกล้ๆ มอน';
+  }
+
+  /** Auto fights monsters of any level, but warns (now and then) when one is far above the player. */
+  private noteLevelGap(g: AutoWorld, m: Monster): void {
+    if (m.level - g.player.level < AUTO_LEVEL_WARN || g.time - this.levelHintAt < IDLE_HINT_EVERY) return;
+    this.levelHintAt = g.time;
+    this.hint = `Auto: ระวัง! ${m.def.nameTh} Lv.${m.level} สูงกว่าคุณ ${m.level - g.player.level} เลเวล — อาจตายได้`;
   }
 
   reset(): void {
@@ -164,6 +175,7 @@ export class AutoPlay {
     }
     this.idleSince = null;
     this.roam = null;
+    this.noteLevelGap(g, target);
 
     const d = dist(target);
     const range = RANGE[p.cls.id] ?? 2;
@@ -179,8 +191,7 @@ export class AutoPlay {
     switch (p.cls.id) {
       case 'sword':
         if (near >= 2) this.tryCast(g, out, 'q');
-        // Parry only when several monsters are already swinging at us.
-        if (g.monsters.filter((m) => m.isHostile && Math.hypot(m.x - p.x, m.z - p.z) < 3).length >= 2) this.tryCast(g, out, 'e');
+        if (near >= 3 || target.hp > 250) this.tryCast(g, out, 'e');
         break;
       case 'mage':
         this.tryCast(g, out, 'q');
@@ -200,8 +211,6 @@ export class AutoPlay {
     const p = g.player;
     const sk = p.skill(slot);
     if ((slot === 'q' || slot === 'e' || slot === 'r') && !p.autoSettings.skills[slot]) return;
-    // Auto never takes the second cast (sword Charge): it could carry the player out of the fight.
-    if ((p.recast[slot] ?? 0) > 0) return;
     if (sk && (p.cd[slot] ?? 0) <= 0 && p.mp >= sk.mp + 5 && !out.skills.includes(slot)) out.skills.push(slot);
   }
 
@@ -215,7 +224,6 @@ export class AutoPlay {
       if (d > 24) continue;
       // Only inside the circle, except monsters already attacking the player.
       if (this.fromAnchor(m) > this.radius(p) && !(m.isHostile && d < 4.5)) continue;
-      if (m.level > p.level + 3 && !m.isHostile) continue;
       const score = d - (m.isHostile ? 10 : 0);
       if (score < bs) {
         bs = score;

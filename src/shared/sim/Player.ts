@@ -3,7 +3,7 @@ import type { Sim } from './Sim';
 import type { Monster } from './Monster';
 import type { Terrain } from './terrain';
 import type { Intent } from './types';
-import { castSkill, basicAttack, PARRY } from './skills';
+import { castSkill, basicAttack } from './skills';
 import { CLASSES, type ClassDef, type SkillDef, type SkillSlot } from '../data/classes';
 import { addInto, BASE_MOVE_SPEED, emptyStats } from '../formulas';
 import { auraTier, effectiveStats, plusOf, sellValue } from '../data/enhance';
@@ -234,10 +234,6 @@ export class Player extends Unit {
   aura = 0;
   stats: Stats = emptyStats();
   cd: Partial<Record<SkillSlot, number>> = {};
-  /** Seconds left to cast a recast skill (SkillDef.recast) a second time; its cooldown waits until then. */
-  recast: Partial<Record<SkillSlot, number>> = {};
-  /** Seconds left standing in Parry's guard: rooted, less damage, no stun or knockback. */
-  guardT = 0;
   potCd = 0;
   /** Potions still restoring. Several can run at once; a monster hit stops them all. */
   potHeals: PotionHeal[] = [];
@@ -262,6 +258,8 @@ export class Player extends Unit {
   private aimX = 0;
   private aimZ = 0;
   dashT = 0;
+  /** Standing still to aim (Headshot): no walking, attacking or dashing until it runs out. */
+  rootT = 0;
   private dashVx = 0;
   private dashVz = 0;
   private chargeHit = new Set<Monster>();
@@ -329,6 +327,11 @@ export class Player extends Unit {
   get moveSpeed(): number { return BASE_MOVE_SPEED * (1 + this.stats.moveSpeed / 100) * this.speedMult(); }
   get attackRate(): number { return this.cls.attackRate * (1 + this.stats.atkSpeed / 100); }
   get isDashing(): boolean { return this.dashT > 0; }
+
+  /** Angle (radians, world x/z) the player is aiming at right now. */
+  aimAngle(): number {
+    return Math.atan2(this.aimZ, this.aimX);
+  }
 
   skill(slot: SkillSlot): SkillDef | undefined {
     return this.cls.skills.find((s) => s.slot === slot);
@@ -649,6 +652,14 @@ export class Player extends Unit {
     this.sim.anim(this.id, 'dash', { duration: time + 0.12 });
   }
 
+  /** This player landed a killing blow: skills with killCdCut (sword Charge) come back sooner. */
+  onKill(): void {
+    for (const sk of this.cls.skills) {
+      const left = this.cd[sk.slot] ?? 0;
+      if (sk.killCdCut && left > 0) this.cd[sk.slot] = left * (1 - sk.killCdCut);
+    }
+  }
+
   private attackAnimDuration(): number {
     return Math.min(0.5, 0.95 / this.attackRate);
   }
@@ -707,19 +718,10 @@ export class Player extends Unit {
     }
     this.tickStatus(dt, sim.terrain);
     for (const k of Object.keys(this.cd) as SkillSlot[]) this.cd[k] = Math.max(0, (this.cd[k] ?? 0) - dt);
-    for (const k of Object.keys(this.recast) as SkillSlot[]) {
-      const left = (this.recast[k] ?? 0) - dt;
-      if (left > 0) this.recast[k] = left;
-      else {
-        // The second cast never came: the cooldown starts now.
-        delete this.recast[k];
-        this.cd[k] = this.skill(k)?.cooldown ?? 0;
-      }
-    }
     this.atkT -= dt;
     this.potCd -= dt;
-    this.guardT = Math.max(0, this.guardT - dt);
     this.faceLockT -= dt;
+    this.rootT = Math.max(0, this.rootT - dt);
 
     const inCombat = sim.time - Math.max(this.lastHurt, this.lastAttack) <= COMBAT_LINGER;
     const ooc = inCombat ? 1 : OUT_OF_COMBAT_REGEN;
@@ -730,6 +732,12 @@ export class Player extends Unit {
     if (it.potion) this.usePotion(it.potion);
 
     if (this.stunT > 0) return;
+
+    if (this.rootT > 0) {
+      this.moving = false;
+      this.moveTarget = null;
+      return;
+    }
 
     if (this.dashT > 0) {
       this.dashT -= dt;
@@ -748,14 +756,6 @@ export class Player extends Unit {
         }
       }
       this.moving = true;
-      return;
-    }
-
-    // Parry: planted in the guard, no walking, attacking or other skills until it ends.
-    if (this.guardT > 0) {
-      this.moveTarget = null;
-      this.slideX = 0;
-      this.slideZ = 0;
       return;
     }
 
@@ -796,9 +796,7 @@ export class Player extends Unit {
     for (const slot of peaceful ? [] : it.skills) {
       const sk = this.skill(slot);
       if (!sk || (this.cd[slot] ?? 0) > 0) continue;
-      // The second cast of a recast skill is already paid for.
-      const second = (this.recast[slot] ?? 0) > 0;
-      if (!second && this.mp < sk.mp) {
+      if (this.mp < sk.mp) {
         if (sim.time > this.noMpMsgT) {
           sim.text(this.x, this.topY, this.z, 'MP ไม่พอ', 'mana', undefined, this.id);
           this.noMpMsgT = sim.time + 1;
@@ -809,20 +807,14 @@ export class Player extends Unit {
       if (castSkill(sim, this, sk, aim)) {
         // A dedicated skill animation wins over the dash animation a movement skill just started;
         // without one the attack animation plays (unless the skill is a dash).
-        const duration = sk.id === 'parry' ? PARRY.time : this.attackAnimDuration();
-        sim.anim(this.id, `skill_${slot}`, { duration, fallback: 'attack' });
-        if (second) {
-          delete this.recast[slot];
-          this.cd[slot] = sk.cooldown;
-        } else {
-          this.mp -= sk.mp;
-          if (sk.recast) this.recast[slot] = sk.recast;
-          else this.cd[slot] = sk.cooldown;
-        }
+        // A skill that starts by aiming (Headshot) gets no attack fallback: its shot animates when it fires.
+        sim.anim(this.id, `skill_${slot}`, this.rootT > 0 ? {} : { duration: this.attackAnimDuration(), fallback: 'attack' });
+        this.mp -= sk.mp;
+        this.cd[slot] = sk.cooldown;
         this.lastAttack = sim.time;
         this.faceLockT = 0.3;
       }
-      if (this.dashT > 0 || this.guardT > 0) return;
+      if (this.dashT > 0 || this.rootT > 0) return;
     }
 
     if (it.basic && this.atkT <= 0 && !peaceful) {

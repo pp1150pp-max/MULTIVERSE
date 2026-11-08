@@ -59,7 +59,7 @@ type DecorSpot = 'verge' | 'field' | 'road' | 'shore' | 'water';
  * Small details with no collision, one atlas per theme (a grid read left to right, top to bottom).
  * Each spot lists the cells that grow there, repeated to make some more common.
  */
-const DECOR: Record<ZoneTheme, { key: string; cols: number; rows: number; spots: Record<DecorSpot, number[]> }> = {
+const DECOR: Record<ZoneTheme, { key: string; cols: number; rows: number; spots: Record<DecorSpot, number[]>; flat?: number[] }> = {
   forest: {
     key: 'decor_forest',
     cols: 4,
@@ -83,6 +83,7 @@ const DECOR: Record<ZoneTheme, { key: string; cols: number; rows: number; spots:
       shore: [1, 1, 10, 10, 2, 9],
       water: [6, 6, 7],
     },
+    flat: [8],
   },
   snow: {
     key: 'decor_snow',
@@ -95,6 +96,7 @@ const DECOR: Record<ZoneTheme, { key: string; cols: number; rows: number; spots:
       shore: [1, 1, 10, 10, 2, 9],
       water: [6, 6, 7],
     },
+    flat: [6, 7, 8],
   },
   volcano: {
     key: 'decor_volcano',
@@ -107,6 +109,7 @@ const DECOR: Record<ZoneTheme, { key: string; cols: number; rows: number; spots:
       shore: [6, 7, 2, 9],
       water: [],
     },
+    flat: [6, 7, 8],
   },
 };
 /** World size of one decor atlas cell: 128 pixels at about the same density as the ground tiles. */
@@ -983,10 +986,19 @@ export class World {
       const v0 = v1 - 1 / set.rows;
       const rx = (right.x * size) / 2;
       const rz = (right.z * size) / 2;
-      const ux = up.x * size;
-      const uy = up.y * size;
-      const uz = up.z * size;
-      positions.push(x - rx, 0, z - rz, x + rx, 0, z + rz, x + rx + ux, uy, z + rz + uz, x - rx + ux, uy, z - rz + uz);
+      if (set.flat?.includes(cell)) {
+        // Painted lying on the ground (footprints, cracks, puddles): laid flat, centred on the spot and
+        // stretched away from the camera so it looks as tall on screen as a standing one. Players walk over it.
+        const k = size / (up.x * up.x + up.z * up.z);
+        const gx = (up.x * k) / 2;
+        const gz = (up.z * k) / 2;
+        positions.push(x - rx - gx, 0.01, z - rz - gz, x + rx - gx, 0.01, z + rz - gz, x + rx + gx, 0.01, z + rz + gz, x - rx + gx, 0.01, z - rz + gz);
+      } else {
+        const ux = up.x * size;
+        const uy = up.y * size;
+        const uz = up.z * size;
+        positions.push(x - rx, 0, z - rz, x + rx, 0, z + rz, x + rx + ux, uy, z + rz + uz, x - rx + ux, uy, z - rz + uz);
+      }
       const [ul, ur] = flip ? [u1, u0] : [u0, u1];
       uvs.push(ul, v0, ur, v0, ur, v1, ul, v1);
     };

@@ -57,6 +57,28 @@ that reads instantly at very small size. Gaps between icons are ONE perfectly fl
 
 เรียงตามแถว: Slash, Whirlwind, Charge, Earthquake / Arcane Bolt, Fireball, Frost Nova, Meteor / Quick Shot, Spread Shot, Piercing Round, Bullet Rain / Dash, คุย, ร้านค้า, ตีบวก
 
+### สกิลใหม่ของ Gunslinger (Rapid Fire และ Headshot)
+
+Q เปลี่ยนจาก Spread Shot เป็น Rapid Fire และ R เปลี่ยนจาก Bullet Rain เป็น Headshot ส่วน E ยังใช้ `skill_pierce` เดิม
+(ภาพกระสุนเจาะแผ่นเกราะตรงกับ Armor-Piercing Round อยู่แล้ว) ถ้าเริ่มแชทใหม่ ให้แนบ `skill_pierce.png` กับ `skill_shot.png` เป็นตัวอย่าง
+
+```
+Two more RPG skill icons for the same set, in the EXACT same fine-detail 16-bit SNES-era pixel-art style as the attached
+icons: crisp pixels, rich shading, no blur. One row of 2 icons side by side. Each icon is a perfect square of the same
+size, with a dark painted background in a muted colour that suits it, a thin bronze-gold bevelled border, and one big
+bold clear symbol that reads instantly at very small size. Icon 1, Rapid Fire: a chunky steampunk pistol of dark metal
+with brass, seen from the side and pointing right, with a burst of bright yellow-orange muzzle flash and a straight line
+of several golden bullets streaming out of the barrel one after another, small brass shell casings flying out above the
+gun, warm dark-brown background. Icon 2, Headshot: a bold red sniper crosshair (circle with four ticks and a center dot)
+over the dark silhouette of a monster head seen from the front, a single bright bullet impact spark exactly in the center
+of the crosshair, deep dark-red background. Gaps between and around the icons are ONE perfectly flat solid magenta
+(#FF00FF). No text.
+```
+
+เซฟภาพที่ได้ไว้ที่ `art_templates/npc_icons/skill_gunslinger_v2.png`
+
+→ `skill_rapidfire` `skill_headshot`
+
 ## ไอคอนไอเทม
 
 ไฟล์ `public/assets/sprites/icons/item_<baseId>.png` ขนาด 96×96 พื้นหลังโปร่งใส อาวุธและเกราะมีคลาสต่อท้าย เช่น `item_weapon_1_mage`
