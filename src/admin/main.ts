@@ -89,6 +89,39 @@ async function api<T>(method: string, path: string, body?: unknown): Promise<T> 
   return data;
 }
 
+// ------------------------------------------------------------ stale page notice
+// A tab left open across a server update keeps running the old script, which may not understand the
+// new API. The built page names its script by content hash (assets/admin-<hash>.js): when the page the
+// server serves now names a different one, show a bar asking to reload. Dev builds have no hash: skip.
+
+const MY_SCRIPT = /\/assets\/(admin-[\w-]+\.js)$/.exec(new URL(import.meta.url).pathname)?.[1] ?? null;
+const STALE_CHECK_MS = 2 * 60_000;
+let staleShown = false;
+let lastStaleCheck = 0;
+
+async function checkStale(): Promise<void> {
+  if (!MY_SCRIPT || staleShown || Date.now() - lastStaleCheck < 10_000) return;
+  lastStaleCheck = Date.now();
+  try {
+    const res = await fetch(location.pathname, { cache: 'no-cache' });
+    if (!res.ok) return;
+    const now = /assets\/(admin-[\w-]+\.js)/.exec(await res.text())?.[1];
+    if (!now || now === MY_SCRIPT || staleShown) return;
+    staleShown = true;
+    document.body.prepend(h('div', { class: 'stale-bar', role: 'alert' },
+      h('span', {}, 'หน้า admin มีเวอร์ชันใหม่ (server อัปเดตแล้ว) — โหลดหน้าใหม่ก่อนใช้งานต่อ'),
+      h('button', { class: 'small', onclick: () => location.reload() }, 'โหลดหน้าใหม่')));
+  } catch {
+    // server restarting or offline: try again later
+  }
+}
+if (MY_SCRIPT) {
+  window.setInterval(() => void checkStale(), STALE_CHECK_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void checkStale();
+  });
+}
+
 const fmt = (n: number): string => n.toLocaleString('th-TH');
 /** "12 นาที", or "1 ชม. 5 นาที" from an hour on. */
 const playedFor = (ms: number): string => {
@@ -230,6 +263,7 @@ function renderShell(): void {
 function setTab(t: Tab): void {
   tab = t;
   stopRefresh();
+  void checkStale();
   document.querySelectorAll<HTMLElement>('.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
   // On a phone the tab row scrolls: keep the chosen tab in view.
   document.querySelector<HTMLElement>('.tabs button.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
