@@ -58,6 +58,8 @@ export interface Backend {
   respawn(): void;
   /** Rest at the fountain or a campfire the player is next to (the server checks). */
   rest(): void;
+  /** Pick up a drop the player clicked and walked to, even one the loot filter skips (the server checks). */
+  pickup(lootId: number): void;
   equip(bagIndex: number, slot?: EquipSlot): void;
   unequip(slot: EquipSlot): void;
   drop(bagIndex: number): void;

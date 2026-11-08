@@ -695,6 +695,7 @@ export class OnlineBackend implements Backend {
 
   respawn(): void { this.send({ t: 'act', a: 'respawn' }); }
   rest(): void { this.send({ t: 'act', a: 'rest' }); }
+  pickup(lootId: number): void { this.send({ t: 'act', a: 'pickup', id: lootId }); }
   equip(i: number, slot?: EquipSlot): void { this.send({ t: 'act', a: 'equip', i, slot }); }
   unequip(slot: EquipSlot): void { this.send({ t: 'act', a: 'unequip', slot }); }
   drop(i: number): void { this.send({ t: 'act', a: 'drop', i }); }

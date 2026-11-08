@@ -106,6 +106,9 @@ function fillInto(src: (BagEntry | null)[], i: number, dst: (BagEntry | null)[])
 
 interface Spawner { area: SpawnArea; alive: number; queue: number[]; boss: boolean }
 
+/** How close a player must be to a drop they clicked to pick it up (walking over others takes them at 0.8). */
+export const LOOT_CLICK_RANGE = 1.5;
+
 export class Sim {
   readonly terrain: Terrain;
   players: Player[] = [];
@@ -645,6 +648,22 @@ export class Sim {
       this.events.push({ t: 'item', to: p.id, item: k.item });
       this.sfx('pickup_item', p.x, p.z, p.id);
     }
+    return true;
+  }
+
+  /**
+   * The player clicked a drop and walked up to it: picks it up even when the loot filter skips its kind
+   * (walking over such a drop never takes it). Only drops this player may take, within reach.
+   */
+  pickupLoot(p: Player, lootId: number): boolean {
+    const l = this.loots.find((x) => x.id === lootId);
+    if (!p.alive || !l || l.dead || !l.canTake(p.id, this.time)) return false;
+    if (Math.hypot(l.x - p.x, l.z - p.z) > LOOT_CLICK_RANGE) return false;
+    if (!this.pickup(p, l)) {
+      this.text(p.x, p.topY, p.z, 'กระเป๋าเต็ม', 'info', undefined, p.id);
+      return false;
+    }
+    l.dead = true;
     return true;
   }
 

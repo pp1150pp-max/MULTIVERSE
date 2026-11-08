@@ -50,6 +50,7 @@ export interface InputMsg {
 export type ActionMsg =
   | { t: 'act'; a: 'respawn' }
   | { t: 'act'; a: 'rest' }
+  | { t: 'act'; a: 'pickup'; id: number }
   | { t: 'act'; a: 'equip'; i: number; slot?: EquipSlot }
   | { t: 'act'; a: 'unequip'; slot: EquipSlot }
   | { t: 'act'; a: 'drop'; i: number }
