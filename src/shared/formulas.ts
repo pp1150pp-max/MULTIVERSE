@@ -3,9 +3,21 @@ import { STAT_KEYS, type StatKey, type Stats } from './types';
 export const MAX_LEVEL = 50;
 export const BASE_MOVE_SPEED = 3.5;
 
+/**
+ * Owner-set EXP multipliers on top of the base curve (2026-11-08):
+ * Lv 10–19 ×2, Lv 20–29 ×2.5, Lv 30+ ×3. Lv 1–9 unchanged.
+ */
+function expBandMult(level: number): number {
+  if (level >= 30) return 3;
+  if (level >= 20) return 2.5;
+  if (level >= 10) return 2;
+  return 1;
+}
+
 /** EXP needed to go from `level` to `level + 1`. Steep on purpose so players move on to higher zones. */
 export function expToNext(level: number): number {
-  return Math.floor(30 * Math.pow(level, 2.1)) + 40;
+  const base = Math.floor(30 * Math.pow(level, 2.1)) + 40;
+  return Math.floor(base * expBandMult(level));
 }
 
 /** Monsters up to this many levels below the player still give full EXP. */
