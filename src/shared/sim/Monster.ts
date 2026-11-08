@@ -126,6 +126,14 @@ export class Monster extends Unit {
     }
   }
 
+  /** Turn on `p` whoever it was after (the sword's charge). It keeps that target like any other. */
+  taunt(p: Player): void {
+    if (!this.alive || this.state === 'return' || this.untargetable) return;
+    this.target = p;
+    this.aggroT = 12;
+    if (this.state !== 'charge' && this.state !== 'leap') this.state = 'chase';
+  }
+
   calm(): void {
     this.aggroT = 0;
     this.windupT = 0;

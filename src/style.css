@@ -251,6 +251,7 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 }
 .skill .extra { position: absolute; left: 0; right: 0; bottom: 1px; text-align: center; font-size: 10px; line-height: 12px; font-weight: 600; text-shadow: 0 0 3px #000; }
 .skill.nomp .icon { filter: grayscale(1) brightness(0.6); }
+.skill.recast { box-shadow: 0 0 0 2px #ffcf5a, 0 0 10px #ffb43a; }
 .skill.empty .icon { filter: grayscale(1) brightness(0.5); }
 
 #expbar {

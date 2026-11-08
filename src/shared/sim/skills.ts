@@ -23,6 +23,9 @@ function forCone(sim: Sim, x: number, z: number, angle: number, arc: number, r: 
   }
 }
 
+/** Sword E: stand still for `time` seconds taking `reduce` less damage, with no stun or knockback. */
+export const PARRY = { time: 1, reduce: 0.8 };
+
 const aimAngle = (p: Player, aim: Vec2) => Math.atan2(aim.z - p.z, aim.x - p.x);
 
 export function basicAttack(sim: Sim, p: Player, aim: Vec2): void {
@@ -56,14 +59,14 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2): boolean
       sim.fx('effect', 'whirlwind', p.x, p.z, ang, 3.4);
       forCircle(sim, p.x, p.z, 3.2, (m) => sim.hitMonster(p, m, 1.8, { kb: 5 }));
       return true;
+    case 'parry':
+      p.guardT = PARRY.time;
+      sim.fx('ring', p.x, p.z, 1.3, '#ffcf5a', PARRY.time);
+      sim.fx('burst', p.x, 1, p.z, '#ffd27a', 8, 2);
+      return true;
     case 'charge':
       p.startDash(Math.cos(ang), Math.sin(ang), 7, 0.3, 'charge');
       sim.fx('effect', 'charge', p.x + Math.cos(ang), p.z + Math.sin(ang), ang, 1.6);
-      return true;
-    case 'earthquake':
-      sim.fx('effect', 'quake', p.x, p.z, 0, 4.8);
-      sim.shake(0.5);
-      forCircle(sim, p.x, p.z, 4.5, (m) => sim.hitMonster(p, m, 3, { stun: 1.5, kb: 3 }));
       return true;
 
     // ---------------- Mage
