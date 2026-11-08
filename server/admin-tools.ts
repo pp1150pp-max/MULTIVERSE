@@ -15,6 +15,7 @@ import {
 } from '../src/shared/admin';
 import { banMessage } from '../src/shared/api';
 import { HISTORY_PAGE, type AdminStats, type StatsPoint, type StatsRange } from '../src/shared/admin';
+import { SESSION_PAGE_SIZES, SESSION_SEARCH_MAX, SESSION_SORTS, type SessionPage, type SessionQuery, type SessionSort } from '../src/shared/admin';
 import { BAG_SIZE } from '../src/shared/sim/Player';
 import type { AdminShutdownText } from '../src/shared/admin';
 import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../src/shared/net/protocol';
@@ -24,6 +25,38 @@ const MODE_NAME: Record<ShutdownMode, string> = { restart: 'ข้อควา�
 const shutdownTextState = (db: Db): AdminShutdownText => ({ texts: db.shutdownTexts(), defaults: { ...DEFAULT_SHUTDOWN_TEXT } });
 
 const NO_RIGHTS = ADMIN_NO_RIGHTS;
+
+/** The play-session table's query string, every value checked (400 on anything odd). */
+function sessionQuery(p: URLSearchParams): SessionQuery {
+  const bad = (what: string): never => {
+    throw new HttpError(400, `ค่า ${what} ไม่ถูกต้อง`);
+  };
+  /** A whole number written plainly (no signs, decimals or exponents), or undefined when absent/empty. */
+  const int = (name: string, max: number): number | undefined => {
+    const v = p.get(name);
+    if (v === null || v === '') return undefined;
+    if (!/^\d{1,16}$/.test(v)) return bad(name);
+    const n = Number(v);
+    return Number.isSafeInteger(n) && n <= max ? n : bad(name);
+  };
+  const sort = p.get('sort') ?? 'joined';
+  if (!(SESSION_SORTS as readonly string[]).includes(sort)) bad('sort');
+  const dir = p.get('dir') ?? 'desc';
+  if (dir !== 'asc' && dir !== 'desc') bad('dir');
+  const page = int('page', 1e7) ?? 1;
+  if (page < 1) bad('page');
+  const size = int('size', 1000) ?? SESSION_PAGE_SIZES[0];
+  if (!(SESSION_PAGE_SIZES as readonly number[]).includes(size)) bad('size');
+  const q = (p.get('q') ?? '').trim();
+  if (q.length > SESSION_SEARCH_MAX) throw new HttpError(400, `คำค้นหายาวเกิน ${SESSION_SEARCH_MAX} ตัวอักษร`);
+  const maxTime = Date.now() + 2 * 864e5;
+  const from = int('from', maxTime);
+  const to = int('to', maxTime);
+  if (from !== undefined && to !== undefined && from >= to) throw new HttpError(400, 'วันที่เริ่มต้องอยู่ก่อนวันที่สิ้นสุด');
+  const accountId = int('account', 1e12);
+  if (accountId === 0) bad('account');
+  return { sort: sort as SessionSort, desc: dir === 'desc', page, size, q, from, to, accountId };
+}
 /** When each admin last sent an announcement (rate limit). */
 const lastBroadcast = new Map<number, number>();
 /** Letters that can't be mixed up when read aloud or typed from a phone. */
@@ -269,15 +302,14 @@ export async function ownerToolsApi(
   // ---------------------------------------------------------- history: play sessions, chat log, graphs
   if (method === 'GET' && path === '/api/admin/sessions') {
     requireFeature(req, db, 'sessions');
-    const account = Number(url.searchParams.get('account'));
-    const before = Number(url.searchParams.get('before'));
+    const q = sessionQuery(url.searchParams);
     const open = world.openPlayRows();
-    const rows = db.playSessions(HISTORY_PAGE, Number.isSafeInteger(account) && account > 0 ? account : undefined,
-      Number.isSafeInteger(before) && before > 0 ? before : undefined).map((r) => {
+    const found = db.playSessions(q, [...open.keys()]);
+    const rows = found.rows.map((r) => {
       const live = open.get(r.id);
       return live ? { ...r, ...live, online: true } : r;
     });
-    send(res, 200, rows);
+    send(res, 200, { rows, total: found.total, page: found.page, size: q.size } satisfies SessionPage);
     return true;
   }
 

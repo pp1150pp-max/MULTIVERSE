@@ -398,7 +398,68 @@ async function run(): Promise<void> {
   b1.send({ t: 'chat', text: 'ข้อความที่สอง' });
   await sleep(300);
   const live = await api('GET', `/admin/sessions?account=${plainId}`, undefined, ownerTok);
-  ok(live.status === 200 && live.data[0]?.online === true && live.data[0].charName === 'Tester' && live.data[0].leftAt === null, 'play session recorded while playing');
+  ok(live.status === 200 && live.data.rows[0]?.online === true && live.data.rows[0].charName === 'Tester' && live.data.rows[0].leftAt === null, 'play session recorded while playing');
+
+  // ---------------------------------------------------------- play-session data table: sort, pages, search, dates
+  const now0 = Date.now();
+  const fakeAt = (i: number) => now0 - 5 * 864e5 + i * 60000;
+  {
+    const fdb = new DatabaseSync(DB_FILE);
+    const ins = fdb.prepare(`INSERT INTO play_sessions (account_id, username, guest, char_id, char_name, joined_at, left_at, ip, gpu, avg_rtt, avg_fps)
+      VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    // 60 rows: newer ones played shorter; the newest has no end (server stopped), some lack GPU / ping.
+    for (let i = 0; i < 60; i++) {
+      ins.run(900000 + (i % 3), `fk-user${i}`, 900000 + i, `FkChar${i}`, fakeAt(i), i === 59 ? null : fakeAt(i) + (60 - i) * 60000,
+        `10.9.0.${i}`, i % 10 === 0 ? null : `GPU ${i % 5}`, i % 7 === 0 ? null : i, 30 + i);
+    }
+    // plain1: one unknown-length session long ago and one that lasted half a second.
+    ins.run(plainId, 'plain1', 1, 'Tester', now0 - 30 * 864e5, null, '127.0.0.9', null, null, null);
+    ins.run(plainId, 'plain1', 1, 'Tester', now0 - 864e5, now0 - 864e5 + 500, '127.0.0.8', null, null, null);
+    fdb.close();
+  }
+  const sp = async (qs: string, tok = ownerTok) => api('GET', `/admin/sessions?${qs}`, undefined, tok);
+  const chars = (r: any) => r.data.rows.map((x: any) => x.charName);
+  const p1 = await sp('q=fk-');
+  ok(p1.status === 200 && p1.data.total === 60 && p1.data.rows.length === 25 && p1.data.page === 1 && chars(p1)[0] === 'FkChar59' && chars(p1)[24] === 'FkChar35',
+    `default: newest first, 25 a page (${p1.data.total}, ${chars(p1)[0]})`);
+  const p3 = await sp('q=fk-&page=3');
+  ok(p3.data.rows.length === 10 && chars(p3)[9] === 'FkChar0', 'page 3 holds the last 10');
+  ok((await sp('q=fk-&page=99')).data.page === 3, 'a page past the end → the last page');
+  const big = await sp('q=fk-&size=50&dir=asc&sort=joined');
+  ok(big.data.rows.length === 50 && chars(big)[0] === 'FkChar0' && big.data.size === 50, 'size 50, oldest first');
+  ok((await sp('q=fk-&size=100')).data.rows.length === 60, 'size 100');
+  const durAsc = await sp('q=fk-&sort=duration&dir=asc&size=100');
+  const durDesc = await sp('q=fk-&sort=duration&dir=desc&size=100');
+  ok(chars(durAsc)[0] === 'FkChar58' && chars(durAsc)[59] === 'FkChar59' && chars(durDesc)[0] === 'FkChar0' && chars(durDesc)[59] === 'FkChar59',
+    'sort by length both ways; unknown length always last');
+  const pingDesc = await sp('q=fk-&sort=ping&dir=desc&size=100');
+  ok(pingDesc.data.rows[0].avgRtt === 59 && pingDesc.data.rows.slice(-9).every((r: any) => r.avgRtt === null) && pingDesc.data.rows[50].avgRtt !== null,
+    'sort by ping; no ping last');
+  const gpuAsc = await sp('q=fk-&sort=gpu&dir=asc&size=100');
+  ok(gpuAsc.data.rows[0].gpu === 'GPU 0' && gpuAsc.data.rows.at(-1).gpu === null, 'sort by GPU; no GPU last');
+  ok((await sp('q=fk-&sort=username&dir=asc')).data.rows[0].username === 'fk-user0' && (await sp('q=fk-&sort=fps&dir=desc')).data.rows[0].avgFps === 89
+    && (await sp('q=fk-&sort=ip&dir=desc')).data.rows[0].ip === '10.9.0.9' && chars(await sp('q=fk-&sort=char&dir=desc'))[0] === 'FkChar9',
+    'sort by username, FPS, IP, character');
+  const mine = await sp(`account=${plainId}&sort=duration&dir=asc&size=100`);
+  const mineDesc = await sp(`account=${plainId}&sort=duration&dir=desc&size=100`);
+  const at = (r: any, pred: (x: any) => boolean) => r.data.rows.findIndex(pred);
+  ok(mine.data.rows.every((r: any) => r.accountId === plainId) && mine.data.rows.at(-1).ip === '127.0.0.9' && mineDesc.data.rows.at(-1).ip === '127.0.0.9'
+    && at(mine, (r) => r.ip === '127.0.0.8') < at(mine, (r) => r.online) && at(mineDesc, (r) => r.online) < at(mineDesc, (r) => r.ip === '127.0.0.8'),
+    'one account; a session still playing counts up to now');
+  ok((await sp('q=FkChar5&size=100')).data.total === 11 && (await sp('q=fkchar5')).data.total === 11, 'search by character name, any case');
+  ok((await sp('q=10.9.0.4')).data.total === 11 && (await sp('q=fk-user1')).data.total === 11, 'search by IP and by username');
+  ok((await sp('q=%25')).data.total === 0 && (await sp('q=fk_user')).data.total === 0 && (await sp('q=fk-%25')).data.total === 0, 'typed % and _ are not wildcards');
+  ok((await sp(`q=fk-&from=${fakeAt(10)}&to=${fakeAt(20)}`)).data.total === 10 && (await sp(`q=fk-&from=${fakeAt(50)}`)).data.total === 10
+    && (await sp(`q=fk-&to=${fakeAt(5)}`)).data.total === 5, 'date range: from (inclusive) and to (exclusive)');
+  ok((await sp('account=900000&q=fk-')).data.total === 20, 'account filter plus search');
+  const badSession = [
+    'sort=id', 'sort=joined_at', 'sort=duration;DROP TABLE play_sessions', 'dir=up', 'page=0', 'page=-1', 'page=1.5', 'page=abc', 'page=1e3',
+    'size=10', 'size=1000', 'size=25.0', 'sort=', `q=${'x'.repeat(51)}`, 'from=abc', 'from=-5', `from=${Date.now() + 10 * 864e5}`,
+    `from=${fakeAt(20)}&to=${fakeAt(10)}`, `from=${fakeAt(10)}&to=${fakeAt(10)}`, 'account=0', 'account=-3', 'account=x',
+  ];
+  for (const qs of badSession) ok((await sp(qs)).status === 400, `bad session query refused: ${qs}`);
+  ok((await sp('q=fk-')).data.total === 60, 'table still there after the odd queries');
+  ok((await sp('q=fk-&sort=ip', gmTok)).status === 403 && (await sp('q=fk-', plainTok)).status === 403, 'GM (no sessions right) and players refused');
 
   // ---------------------------------------------------------- reset password
   const rp = await api('POST', `/admin/accounts/${plainId}/password`, undefined, ownerTok);
@@ -409,11 +470,12 @@ async function run(): Promise<void> {
   const relog = await api('POST', '/login', { username: 'plain1', password: rp.data.password });
   ok(relog.status === 200, 'temporary password logs in');
   const plainTok2: string = relog.data.token;
-  const done = (await api('GET', `/admin/sessions?account=${plainId}`, undefined, ownerTok)).data[0];
+  const done = (await api('GET', `/admin/sessions?account=${plainId}`, undefined, ownerTok)).data.rows[0];
   ok(done && !done.online && done.leftAt >= done.joinedAt && done.gpu === 'Test GPU 9000' && done.avgRtt === 60 && done.avgFps === 60 && typeof done.ip === 'string',
     `play session closed with GPU, average ping and FPS (${JSON.stringify(done)})`);
   const allSessions = await api('GET', '/admin/sessions', undefined, ownerTok);
-  ok(allSessions.status === 200 && allSessions.data.length >= 3, `recent sessions list (${allSessions.data.length})`);
+  ok(allSessions.status === 200 && allSessions.data.total >= 3 && allSessions.data.rows.length === Math.min(25, allSessions.data.total) && allSessions.data.size === 25,
+    `recent sessions list (${allSessions.data.total})`);
   const chats = await api('GET', '/admin/chat?q=hello', undefined, ownerTok);
   ok(chats.status === 200 && chats.data.length === 1 && chats.data[0].charName === 'Tester' && chats.data[0].username === 'plain1' && chats.data[0].zone,
     'chat recorded and searchable by text');

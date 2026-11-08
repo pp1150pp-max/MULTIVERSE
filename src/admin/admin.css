@@ -194,3 +194,27 @@ details summary { cursor: pointer; margin-top: 8px; }
 /* Server tab: what the countdown banner will look like in the game. */
 .shutdown-preview { margin-top: 6px; padding: 6px 10px; border-radius: 4px; background: #0c0a08; border: 1px dashed var(--edge-dim); color: #ffd34a; font-size: 14px; overflow-wrap: anywhere; }
 .shutdown-preview.bad { color: var(--bad); border-color: var(--bad); }
+
+/* ---------------------------------------------------------------- play-session data table */
+
+.sessions .row > label.grow2 { flex: 2 1 200px; }
+.sessions .row > label.narrow { flex: 0 1 110px; }
+.sessions .sort-row { margin-top: 8px; }
+.sessions .sort-row > label { flex: 0 1 220px; }
+.sessions tbody.loading { opacity: 0.55; }
+.pager-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+.pager { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.pager button { min-width: 34px; }
+.pager button.current { border-color: var(--gold-hi); color: var(--gold-hi); opacity: 1; font-weight: 600; }
+/* The account sheet is narrower than a desktop page: the table turns into cards there too (as on phones). */
+.sessions { container-type: inline-size; }
+@container (max-width: 699px) {
+  .sessions table.cards thead { display: none; }
+  .sessions table.cards, .sessions table.cards tbody, .sessions table.cards tr, .sessions table.cards td { display: block; width: 100%; }
+  .sessions table.cards tr { background: var(--panel-2); border: 1px solid var(--edge-dim); border-radius: 6px; margin-bottom: 10px; padding: 6px 10px; }
+  .sessions table.cards td { border: none; padding: 3px 0; display: flex; justify-content: space-between; gap: 12px; text-align: right; }
+  .sessions table.cards td::before { content: attr(data-label); color: var(--ink-dim); font-size: 13px; text-align: left; flex: 0 0 auto; }
+  .sessions table.cards td.gpu, .sessions table.cards td.ip { max-width: none; white-space: normal; }
+  .sessions table.cards td.head { font-size: 16px; color: var(--gold-hi); justify-content: flex-start; }
+  .sessions table.cards td.head::before { display: none; }
+}
