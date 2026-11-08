@@ -73,9 +73,9 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     growth: { maxHp: 15, maxMp: 6, atk: 2, def: 0.9, hpRegen: 0.12, mpRegen: 0.12 },
     skills: [
       { id: 'shot', slot: 'basic', name: 'Quick Shot', nameTh: 'ยิงเร็ว', desc: 'ยิงกระสุนความเร็วสูง 100% ATK', mp: 0, cooldown: 0 },
-      { id: 'spread', slot: 'q', name: 'Spread Shot', nameTh: 'กระสุนกระจาย', desc: 'ยิงกระสุน 5 นัดเป็นรูปพัด นัดละ 90% ATK', mp: 10, cooldown: 3 },
-      { id: 'pierce', slot: 'e', name: 'Piercing Round', nameTh: 'กระสุนเจาะเกราะ', desc: 'กระสุนทะลุทุกเป้าหมายในแนวยาว 260% ATK', mp: 14, cooldown: 5 },
-      { id: 'bulletrain', slot: 'r', name: 'Bullet Rain', nameTh: 'ห่ากระสุน', desc: 'สาดกระสุนลงพื้นที่ตำแหน่งเมาส์ 6 ครั้ง ครั้งละ 90% ATK', mp: 30, cooldown: 12 },
+      { id: 'rapidfire', slot: 'q', name: 'Rapid Fire', nameTh: 'ยิงรัว', desc: 'ยิงรัว 6 นัดติดกันไปทางเมาส์ นัดละ 60% ATK', mp: 10, cooldown: 3 },
+      { id: 'pierce', slot: 'e', name: 'Armor-Piercing Round', nameTh: 'กระสุนเจาะเกราะ', desc: 'กระสุนนัดหนัก 150% ATK ลดพลังป้องกันของเป้าหมาย 20% นาน 3 วิ', mp: 14, cooldown: 5 },
+      { id: 'headshot', slot: 'r', name: 'Headshot', nameTh: 'ยิงหัว', desc: 'ยืนนิ่งเล็ง 0.8 วิ แล้วยิงนัดเดียว คริติคอลแน่นอน 310% ATK (รวมคริแล้วไม่เกิน 500%)', mp: 30, cooldown: 12 },
       dash('Tumble', 'กลิ้งหลบ'),
     ],
   },

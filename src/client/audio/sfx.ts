@@ -5,7 +5,7 @@ import { audioEngine } from './engine';
 type SkillSound =
   | 'slash' | 'whirlwind' | 'charge' | 'earthquake'
   | 'bolt' | 'fireball' | 'frostnova' | 'meteor'
-  | 'shot' | 'spread' | 'pierce' | 'bulletrain'
+  | 'shot' | 'rapidfire' | 'pierce' | 'headshot'
   | 'dash';
 type WorldSound = 'explosion' | 'crater' | 'impact' | 'hit' | 'hurt' | 'enrage' | 'level_up' | 'death' | 'revive' | 'portal' | 'ui_click';
 export type SoundName = SfxName | SkillSound | WorldSound;
@@ -136,11 +136,14 @@ const SOUNDS: Record<SoundName, Sound> = {
       s.tone('square', 480, 110, 0.07, 0.11);
     },
   },
-  spread: {
+  rapidfire: {
     gap: 120,
+    // One crack per shot, in step with the 0.08 s gap between the six shots.
     make: (s) => {
-      s.noise(2200, 420, 0.19, 0.6, 0, 0.6);
-      s.tone('square', 310, 62, 0.14, 0.18);
+      for (let i = 0; i < 6; i++) {
+        s.noise(3000, 780, 0.08, 0.4, i * 0.08, 0.8);
+        s.tone('square', 460, 110, 0.06, 0.09, i * 0.08);
+      }
     },
   },
   pierce: {
@@ -150,12 +153,13 @@ const SOUNDS: Record<SoundName, Sound> = {
       s.noise(4200, 1100, 0.14, 0.44, 0, 0.8);
     },
   },
-  bulletrain: {
+  headshot: {
     gap: 200,
+    // Taking aim: the hammer cocks, then a thin rising whine while the line shows.
     make: (s) => {
-      s.tone('square', 900, 1200, 0.06, 0.11);
-      s.tone('square', 1200, 1600, 0.06, 0.11, 0.08);
-      s.noise(1600, 3200, 0.2, 0.12, 0.08);
+      s.noise(4200, 2600, 0.04, 0.3, 0, 2);
+      s.noise(3600, 2200, 0.04, 0.26, 0.09, 2);
+      s.tone('sine', 700, 1500, 0.7, 0.05, 0.1);
     },
   },
   dash: { gap: 120, make: (s) => s.noise(700, 2700, 0.2, 0.26, 0, 0.9) },
@@ -191,6 +195,15 @@ const SOUNDS: Record<SoundName, Sound> = {
     make: (s) => {
       s.noise(1700, 480, 0.06, 0.24, 0, 0.9);
       s.tone('square', 230, 110, 0.05, 0.09);
+    },
+  },
+  headshot_fire: {
+    gap: 200,
+    // The Headshot going off: a deep heavy boom with a sharp crack on top.
+    make: (s) => {
+      s.noise(2600, 300, 0.35, 0.7, 0, 0.6);
+      s.tone('sawtooth', 220, 45, 0.3, 0.2);
+      s.noise(5200, 2000, 0.06, 0.4, 0, 1.5);
     },
   },
   crit: {
