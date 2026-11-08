@@ -36,6 +36,9 @@ const LOOT_STAND_R = 0.4;
 /** A vanished boss gives up on its fight when no living player has been this close for VANISH_GIVE_UP seconds. */
 const VANISH_LEASH = 30;
 const VANISH_GIVE_UP = 20;
+/** Players more than BOSS_LEVEL_GAP levels below a boss deal only this share of their damage to it, without telling them (owner). */
+const BOSS_LEVEL_GAP = 5;
+const BOSS_UNDERLEVEL_MULT = 0.1;
 
 export function isBulkSellable(e: BagEntry | null, rarity: Rarity): e is Item {
   return isItem(e) && e.rarity === rarity && !plusOf(e);
@@ -262,7 +265,8 @@ export class Sim {
     if (crit) raw *= 1 + p.stats.critDmg / 100;
     if (opts.maxMult) raw = Math.min(raw, p.stats.atk * opts.maxMult);
     const def = this.time < m.armorBreakUntil ? m.defense * (1 - m.armorBreak) : m.defense;
-    const dmg = Math.round(mitigate(raw, def));
+    const under = m.isBoss && m.level - p.level > BOSS_LEVEL_GAP;
+    const dmg = Math.max(1, Math.round(mitigate(raw, def) * (under ? BOSS_UNDERLEVEL_MULT : 1)));
     if (!m.damageBy.has(p.id)) {
       m.damageBy.set(p.id, 0);
       m.addFighter(m.damageBy.size);
