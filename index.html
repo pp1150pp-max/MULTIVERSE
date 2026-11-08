@@ -209,19 +209,38 @@
           <div class="shop-foot"><span id="mkt-msg" class="mkt-msg"></span><span id="mkt-gold"></span></div>
         </div>
 
+        <!-- Blacksmith: menu on the left, the item slot in the middle, the placed item's current info on the right.
+             Every part has its own id so painted art can replace the CSS look later. -->
         <div id="forge" class="panel hidden">
           <div class="panel-head"><span>ช่างตีเหล็ก — Blacksmith</span><button id="forge-close">✕</button></div>
-          <p class="npc-line">“เอาอุปกรณ์มาให้ข้า จะตีให้แกร่งกว่าเดิม… แต่ยิ่งบวกสูง ยิ่งเสี่ยงนะ”</p>
-          <div id="forge-tabs"><button data-mode="enhance">ตีบวก</button><button data-mode="values">สุ่มค่าตัวเลข</button><button data-mode="stat">สุ่มสเตตัส</button></div>
-          <div class="shop-section">เลือกอุปกรณ์</div>
-          <div id="forge-list"></div>
-          <div id="forge-detail"></div>
-          <button id="forge-go" class="primary">ตีบวก</button>
-          <div id="forge-result"></div>
-          <details id="forge-rates" class="forge-rates">
-            <summary>ตารางโอกาสสำเร็จ / โบนัส</summary>
+          <div id="forge-body">
+            <div id="forge-menu">
+              <button data-mode="enhance">ตีบวก</button>
+              <button data-mode="values">สุ่มค่าตัวเลข</button>
+              <button data-mode="stat">สุ่มสเตตัส</button>
+              <div id="forge-desc"></div>
+              <button id="forge-rates-btn" class="forge-link">ตารางโอกาสสำเร็จ</button>
+            </div>
+            <div id="forge-stage">
+              <div id="forge-circle"></div>
+              <div id="forge-slot"></div>
+              <div id="forge-drop-hint"></div>
+              <div id="forge-result"></div>
+            </div>
+            <div id="forge-info">
+              <div id="forge-item"></div>
+              <div id="forge-cost"></div>
+            </div>
+          </div>
+          <div id="forge-actions">
+            <button id="forge-go"></button>
+            <button id="forge-cancel">นำออก</button>
+          </div>
+          <div id="forge-foot"></div>
+          <div id="forge-rates" class="hidden">
+            <div class="forge-rates-head"><span>ตารางโอกาสสำเร็จ / โบนัส</span><button id="forge-rates-close">✕</button></div>
             <div id="forge-table"></div>
-          </details>
+          </div>
         </div>
 
         <div id="confirm" class="panel hidden">

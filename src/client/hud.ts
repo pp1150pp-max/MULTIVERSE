@@ -21,7 +21,7 @@ import { ZONE_1 } from '../shared/data/zones';
 import { expToNext } from '../shared/formulas';
 import {
   isItem, isPotion, isStack, isStone, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
-  type BagEntry, type Item, type StatLine, type PotionKind, type PotionSize, type PotionStack, type Rarity, type StoneStack, type EquipSlot, type StatKey,
+  type BagEntry, type Item, type StatLine, type PotionKind, type PotionSize, type PotionStack, type Rarity, type StoneStack, type StoneKind, type EquipSlot, type StatKey,
 } from '../shared/types';
 import { drawMapIcon, facingAngle } from './mapIcons';
 import type { MapIcon } from './mapIconNames';
@@ -58,6 +58,12 @@ function loadHudStyle(): HudStyle {
 
 const KEY_LABEL: Record<SkillSlot, string> = { basic: 'LMB', q: 'Q', e: 'E', r: 'R', dash: 'SPACE' };
 const POTION_CD = 1.5;
+/** The blacksmith menu's one-line description of each system (left column, under the menu). */
+const FORGE_DESC: Record<'enhance' | RerollKind, string> = {
+  enhance: 'เพิ่มระดับ +N ทุกค่าบนชิ้นนั้นแรงขึ้นเป็น % · ยิ่งบวกสูง ยิ่งเสี่ยง',
+  values: 'สุ่มค่าตัวเลขใหม่ทุกบรรทัด tier เท่าเดิม',
+  stat: 'สุ่มสเตตัสเสริม 1 บรรทัด เป็นชนิดใหม่ พร้อม tier และค่าใหม่',
+};
 const fmtNum = (v: number) => String(Math.round(v * 10) / 10);
 const SELL_RARITY_KEY = 'multiverse-sell-rarities';
 /** Which rarities the merchant's "sell ticked" boxes had ticked last time (this browser only). */
@@ -123,7 +129,7 @@ export class Hud {
   /** Level the bag was last drawn for (gear above it is marked as locked). */
   private drawnLevel = 0;
   /** A bag or stash item being dragged with the mouse (ghost appears once the mouse moves a few pixels). */
-  private drag: { src: 'bag' | 'stash'; i: number; x: number; y: number; ghost: HTMLElement | null } | null = null;
+  private drag: { src: 'bag' | 'stash' | 'equip'; i: number; x: number; y: number; ghost: HTMLElement | null } | null = null;
   /** True right after a drag ends, so the click that follows mouseup does nothing. */
   private justDragged = false;
   /** Item uids last drawn in the buyback grid, so it is only rebuilt when the list changes. */
@@ -225,6 +231,12 @@ export class Hud {
       if (i < 0) return;
       const entry = g.player.bag[i];
       if (isStone(entry)) return;
+      // At the blacksmith a click on gear puts it in the forge's slot instead of wearing it.
+      if (this.forgeOpen && isItem(entry)) {
+        this.hideTip();
+        this.forgePlace(entry);
+        return;
+      }
       const block = isItem(entry) ? g.player.equipBlock(entry) : null;
       if (block && isItem(entry)) {
         this.log(`ใส่ ${itemName(entry)} ไม่ได้ — ${block}`, '#ff8a6a');
@@ -275,7 +287,8 @@ export class Hud {
       else if (isStone(item)) this.showStoneTip(item, e, `คลิกขวา: ${right}`);
       else if (item) {
         const both = item.slot === 'ring' && g.player.equipment.ring && g.player.equipment.ring2;
-        this.showTip(item, e, `คลิกซ้าย: สวมใส่${both ? ' (แทนแหวน 1 · ลากไปช่องแหวน 2 เพื่อแทนวงนั้น)' : ''} · คลิกขวา: ${right}`);
+        if (this.forgeOpen) this.showTip(item, e, `คลิกซ้าย / ลาก: วางที่ช่างตีเหล็ก · คลิกขวา: ${right}`);
+        else this.showTip(item, e, `คลิกซ้าย: สวมใส่${both ? ' (แทนแหวน 1 · ลากไปช่องแหวน 2 เพื่อแทนวงนั้น)' : ''} · คลิกขวา: ${right}`);
       }
       else this.hideTip();
     });
@@ -313,17 +326,32 @@ export class Hud {
     };
 
     const eq = $('equip-slots');
+    const eqSlot = (e: Event) => (e.target as HTMLElement).closest<HTMLElement>('[data-slot]')?.dataset.slot as EquipSlot | undefined;
+    // Worn gear can only be dragged to the blacksmith's slot, so dragging starts only while it is open.
+    eq.addEventListener('mousedown', (e) => {
+      const slot = eqSlot(e);
+      if (e.button !== 0 || !this.forgeOpen || !slot || !g.player.equipment[slot]) return;
+      e.preventDefault();
+      this.drag = { src: 'equip', i: EQUIP_SLOTS.indexOf(slot), x: e.clientX, y: e.clientY, ghost: null };
+    });
     eq.addEventListener('click', (e) => {
-      const slot = (e.target as HTMLElement).closest<HTMLElement>('[data-slot]')?.dataset.slot as EquipSlot | undefined;
+      if (this.justDragged) return;
+      const slot = eqSlot(e);
       if (!slot) return;
-      g.backend.unequip(slot);
       this.hideTip();
+      if (this.forgeOpen) {
+        const item = g.player.equipment[slot];
+        if (item) this.forgePlace(item);
+        return;
+      }
+      g.backend.unequip(slot);
       this.markInventory();
     });
     eq.addEventListener('mousemove', (e) => {
-      const slot = (e.target as HTMLElement).closest<HTMLElement>('[data-slot]')?.dataset.slot as EquipSlot | undefined;
+      if (this.drag?.ghost) return;
+      const slot = eqSlot(e);
       const item = slot ? g.player.equipment[slot] : undefined;
-      if (item) this.showTip(item, e, 'คลิก: ถอดเก็บเข้ากระเป๋า');
+      if (item) this.showTip(item, e, this.forgeOpen ? 'คลิก / ลาก: วางที่ช่างตีเหล็ก' : 'คลิก: ถอดเก็บเข้ากระเป๋า');
       else this.hideTip();
     });
     eq.addEventListener('mouseleave', () => this.hideTip());
@@ -417,24 +445,27 @@ export class Hud {
 
     // Blacksmith
     $('forge-close').onclick = () => this.closeForge();
-    $('forge-list').addEventListener('click', (e) => {
-      const uid = (e.target as HTMLElement).closest<HTMLElement>('[data-uid]')?.dataset.uid;
-      if (!uid) return;
-      this.forgeSel = uid;
-      this.rerollPrev = null;
-      $('forge-result').textContent = '';
-      this.renderForge();
-    });
     $('forge-go').onclick = () => (this.forgeMode === 'enhance' ? this.enhance() : this.askReroll(this.forgeMode));
-    $('forge-tabs').addEventListener('click', (e) => {
+    $('forge-cancel').onclick = () => this.forgePlace(null);
+    $('forge-menu').addEventListener('click', (e) => {
       const mode = (e.target as HTMLElement).closest<HTMLElement>('[data-mode]')?.dataset.mode as typeof this.forgeMode | undefined;
       if (!mode || mode === this.forgeMode) return;
       this.forgeMode = mode;
       this.rerollPrev = null;
-      $('forge-result').textContent = '';
+      this.forgeResult('', '');
+      $('forge-rates').classList.add('hidden');
       this.renderForge();
     });
+    $('forge-rates-btn').onclick = () => $('forge-rates').classList.toggle('hidden');
+    $('forge-rates-close').onclick = () => $('forge-rates').classList.add('hidden');
     $('forge-table').innerHTML = this.rateTable();
+    const fslot = $('forge-slot');
+    fslot.addEventListener('mousemove', (e) => {
+      const item = this.forgeItem();
+      if (item) this.showTip(item, e, 'ลากชิ้นอื่นมาวางเพื่อเปลี่ยน · ปุ่ม "นำออก" เพื่อเอาออก');
+      else this.hideTip();
+    });
+    fslot.addEventListener('mouseleave', () => this.hideTip());
 
     $('confirm-yes').onclick = () => {
       const fn = this.confirmYes;
@@ -462,8 +493,9 @@ export class Hud {
   }
 
   /** The bag or stash slot list a drag started from. */
-  private dragList(src: 'bag' | 'stash'): readonly (BagEntry | null)[] {
-    return src === 'bag' ? this.g.player.bag : this.g.player.stash.items;
+  private dragList(src: 'bag' | 'stash' | 'equip'): readonly (BagEntry | null)[] {
+    const p = this.g.player;
+    return src === 'bag' ? p.bag : src === 'stash' ? p.stash.items : EQUIP_SLOTS.map((s) => p.equipment[s] ?? null);
   }
 
   /** Starts dragging items out of the bag grid or the stash grid (bag cells carry data-i, stash cells data-s). */
@@ -494,7 +526,9 @@ export class Hud {
         if (Math.hypot(e.clientX - d.x, e.clientY - d.y) < 5) return;
         const src = d.src === 'bag'
           ? $('bag-grid').querySelector<HTMLElement>(`[data-i="${d.i}"]`)
-          : $('stash-grid').querySelector<HTMLElement>(`[data-s="${d.i}"]`);
+          : d.src === 'stash'
+            ? $('stash-grid').querySelector<HTMLElement>(`[data-s="${d.i}"]`)
+            : $('equip-slots').querySelector<HTMLElement>(`[data-slot="${EQUIP_SLOTS[d.i]}"]`);
         if (!src || !this.dragList(d.src)[d.i]) {
           this.drag = null;
           return;
@@ -502,6 +536,7 @@ export class Hud {
         const ghost = src.cloneNode(true) as HTMLElement;
         ghost.removeAttribute('data-i');
         ghost.removeAttribute('data-s');
+        ghost.removeAttribute('data-slot');
         ghost.classList.add('drag-ghost');
         document.body.append(ghost);
         d.ghost = ghost;
@@ -524,6 +559,18 @@ export class Hud {
       const target = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
       const cell = target?.closest<HTMLElement>('#bag-grid [data-i]');
       const stashCell = this.stashOpen ? target?.closest<HTMLElement>('#stash-grid [data-s]') : null;
+      // Gear dropped anywhere on the blacksmith's window goes into its slot (worn gear stays worn).
+      const forge = this.forgeOpen && d.src !== 'stash' ? target?.closest('#forge') : null;
+      if (d.src === 'equip') {
+        const worn = this.dragList('equip')[d.i];
+        if (forge && worn) this.forgePlace(worn);
+        return;
+      }
+      if (forge) {
+        const entry = g.player.bag[d.i];
+        if (entry) this.forgePlace(entry);
+        return;
+      }
       if (d.src === 'stash') {
         if (!g.player.stash.items[d.i]) return;
         if (stashCell) {
@@ -574,6 +621,11 @@ export class Hud {
     document.querySelector('.drop-target')?.classList.remove('drop-target');
     if (x < 0) return;
     const t = document.elementFromPoint(x, y) as HTMLElement | null;
+    if (this.forgeOpen && this.drag?.src !== 'stash' && t?.closest('#forge')) {
+      $('forge-slot').classList.add('drop-target');
+      return;
+    }
+    if (this.drag?.src === 'equip') return;
     let sel = '#bag-grid [data-i], .skill-hp, .skill-mp';
     if (this.drag?.src === 'stash') sel = '#stash-grid [data-s], #bag-grid [data-i], #inventory .inv-window';
     else if (this.stashOpen) sel += ', #stash-grid [data-s], #stash';
@@ -1214,17 +1266,23 @@ export class Hud {
     this.closeStash();
     this.market.close();
     this.forgeOpen = true;
-    this.forgeSel = this.g.player.equipment.weapon?.uid ?? null;
+    // Owner: the slot starts empty and the bag opens beside it, ready to drag from.
+    this.forgeSel = null;
     this.rerollPrev = null;
-    $('forge-result').textContent = '';
+    this.forgeResult('', '');
+    $('forge-rates').classList.add('hidden');
     $('forge').classList.remove('hidden');
+    this.toggleBag(true);
     this.renderForge();
   }
 
   private closeForge(): void {
     if (!this.forgeOpen) return;
     this.forgeOpen = false;
+    this.forgeSel = null;
     $('forge').classList.add('hidden');
+    this.closeConfirm();
+    this.markInventory();
   }
 
   /** Everything the blacksmith can work on: worn gear (weapon first), then gear in the bag. */
@@ -1239,120 +1297,167 @@ export class Hud {
     return list;
   }
 
+  /** The item in the forge's slot, if it is still worn or in the bag. */
+  private forgeItem(): Item | undefined {
+    return this.forgeSel ? this.forgeItems().find((w) => w.uid === this.forgeSel) : undefined;
+  }
+
+  /** Puts gear in the forge's slot (null empties it). Potions and stones are turned away. */
+  private forgePlace(entry: BagEntry | null): void {
+    if (entry && !isItem(entry)) {
+      this.log('ช่างตีเหล็กรับเฉพาะอุปกรณ์สวมใส่ (ไม่รับยาและหิน)', '#ff8a6a');
+      return;
+    }
+    if (entry?.uid !== this.forgeSel) this.rerollPrev = null;
+    this.forgeSel = entry?.uid ?? null;
+    this.forgeResult('', '');
+    this.renderForge();
+  }
+
+  /** The result that shows over the slot after an attempt (cls: ok / fail, '' clears it). */
+  private forgeResult(cls: '' | 'ok' | 'fail', text: string): void {
+    const res = $('forge-result');
+    res.className = cls;
+    res.textContent = text;
+    const stage = $('forge-stage');
+    stage.classList.remove('flash-ok', 'flash-fail');
+    if (cls) {
+      void stage.offsetWidth; // restart the flash
+      stage.classList.add(`flash-${cls}`);
+    }
+  }
+
   private renderForge(): void {
     const p = this.g.player;
-    const list = this.forgeItems();
-    const worn = (it: Item) => Object.values(p.equipment).includes(it);
-    let item = list.find((w) => w.uid === this.forgeSel);
-    if (!item) {
-      item = list[0];
-      this.forgeSel = item?.uid ?? null;
-    }
-    $('forge-list').innerHTML = list.length
-      ? list.map((w) => this.itemCell(w, `data-uid="${w.uid}" title="${itemName(w)}${worn(w) ? ' (สวมใส่อยู่)' : ''}"`, '', w === item)).join('')
-      : '<span class="hint">ไม่มีอุปกรณ์</span>';
+    const mode = this.forgeMode;
+    for (const b of $('forge-menu').querySelectorAll<HTMLElement>('[data-mode]')) b.classList.toggle('active', b.dataset.mode === mode);
+    $('forge-desc').textContent = FORGE_DESC[mode];
+    $('forge-rates-btn').classList.toggle('hidden', mode !== 'enhance');
+    if (mode !== 'enhance') $('forge-rates').classList.add('hidden');
+
+    const item = this.forgeItem();
+    if (!item) this.forgeSel = null; // sold, dropped or stored since
+    const stones: StoneKind[] = mode === 'enhance' ? ['enhance', 'protect'] : [REROLL_STONE[mode]];
+    $('forge-foot').innerHTML = `<span class="ff-gold">${COIN_ICON} ${p.gold.toLocaleString()} G</span>` +
+      stones.map((s) => `<span class="ff-stone" title="${STONE_NAME[s]}">${stoneIcon(s)} ${STONE_NAME[s]} ${p.stoneCount(s)}</span>`).join('');
+
+    const slot = $('forge-slot');
     const go = $<HTMLButtonElement>('forge-go');
+    $<HTMLButtonElement>('forge-cancel').disabled = !item;
+    slot.className = item ? 'filled' : '';
+    if (item) slot.style.setProperty('--rc', RARITY_COLOR[item.rarity]);
+    else slot.style.removeProperty('--rc');
+    const label = `${FORGE_ICON} ${mode === 'enhance' ? 'ตีบวก' : REROLL_NAME[mode]}`;
     if (!item) {
-      $('forge-detail').innerHTML = '<span class="hint">เก็บอุปกรณ์ไว้ในกระเป๋าหรือสวมใส่ไว้ แล้วกลับมาใหม่</span>';
+      slot.innerHTML = '';
+      $('forge-drop-hint').innerHTML = 'ลากอุปกรณ์มาวางที่นี่<small>หรือคลิกอุปกรณ์ในกระเป๋า / ที่สวมอยู่</small>';
+      $('forge-item').innerHTML = '<div class="fi-empty">ยังไม่ได้วางอุปกรณ์</div>';
+      $('forge-cost').innerHTML = '';
       go.disabled = true;
+      go.innerHTML = label;
       return;
     }
     const cur = plusOf(item);
-    const head = `<div class="fd-name" style="color:${RARITY_COLOR[item.rarity]}">${itemName(item)}</div>` +
-      `<div class="hint" style="margin:0 0 4px">${SLOT_LABEL[item.slot]} · ${worn(item) ? 'สวมใส่อยู่' : 'อยู่ในกระเป๋า'} · iLv.${item.level}</div>`;
-    for (const b of $('forge-tabs').querySelectorAll<HTMLElement>('[data-mode]')) b.classList.toggle('active', b.dataset.mode === this.forgeMode);
-    $('forge-rates').classList.toggle('hidden', this.forgeMode !== 'enhance');
-    if (this.forgeMode !== 'enhance') return this.renderReroll(item, head, this.forgeMode);
-    if (cur >= MAX_PLUS) {
-      $('forge-detail').innerHTML = `${head}<div class="up">ตีบวกถึงระดับสูงสุด +${MAX_PLUS} แล้ว (โบนัส +${bonusPct(cur)}%)</div>`;
-      go.disabled = true;
-      go.textContent = 'ระดับสูงสุดแล้ว';
-      return;
+    slot.innerHTML = itemIcon(item) + (cur ? `<span class="iplus">+${cur}</span>` : '');
+    $('forge-drop-hint').innerHTML = `<span style="color:${RARITY_COLOR[item.rarity]}">${itemName(item)}</span>`;
+    const worn = Object.values(p.equipment).includes(item);
+    $('forge-item').innerHTML =
+      `<div class="fi-name" style="color:${RARITY_COLOR[item.rarity]}">${itemName(item)}</div>` +
+      `<div class="fi-meta">${SLOT_LABEL[item.slot]} · ${worn ? 'สวมใส่อยู่' : 'ในกระเป๋า'} · iLv.${item.level}` +
+      ` · ${cur ? `+${cur} (โบนัส +${bonusPct(cur)}%)` : 'ยังไม่ตีบวก'}</div>` +
+      `<div class="fi-lines">${this.forgeLines(item, mode)}</div>`;
+    const why = mode === 'enhance' ? this.renderEnhanceCost(item) : this.renderRerollCost(item, mode);
+    go.disabled = !!why;
+    go.innerHTML = why || label;
+  }
+
+  /** The item's stat lines as they are now; after a reroll, what each line was before it. */
+  private forgeLines(item: Item, mode: 'enhance' | RerollKind): string {
+    const r1 = (v: number) => fmtNum(Math.round(v * 10) / 10);
+    if (!item.lines?.length) {
+      // Items from before tiers: totals only.
+      const stats = effectiveStats(item);
+      return (Object.keys(stats) as StatKey[]).map((k) => `<div class="fd-line">+${r1(stats[k] ?? 0)} ${STAT_LABEL[k]}</div>`).join('');
     }
-    const now = effectiveStats(item);
-    const next = effectiveStats(item, cur + 1);
+    const ranges = lineRanges(item);
+    const hasExtra = !!ranges?.some((r) => !r.main);
+    const prev = mode !== 'enhance' && this.rerollPrev?.uid === item.uid ? this.rerollPrev.lines : null;
+    return item.lines.map((l, i) => {
+      const fixed = mode === 'stat' && hasExtra && !!ranges?.[i]?.main;
+      const was = prev?.[i];
+      const changed = was && (was.stat !== l.stat || was.value !== l.value || was.tier !== l.tier);
+      const note = fixed ? '<span class="was">หลัก ไม่เปลี่ยน</span>'
+        : changed ? `<span class="was">เดิม +${fmtNum(was.value)}${was.stat !== l.stat ? ` ${STAT_LABEL[was.stat]}` : ''} T${was.tier}</span>`
+        : prev ? '<span class="was">เท่าเดิม</span>' : '';
+      return `<div class="fd-line${fixed ? ' fixed' : ''}"><span>${this.lineHtml(l)}</span>${note}</div>`;
+    }).join('');
+  }
+
+  /** Enhance: success chance, cost, stones and the protection tick box. Returns why it can't be done ('' = it can). */
+  private renderEnhanceCost(item: Item): string {
+    const p = this.g.player;
+    const cur = plusOf(item);
+    if (cur >= MAX_PLUS) {
+      $('forge-cost').innerHTML = `<div class="fc-max">ตีบวกถึงระดับสูงสุด +${MAX_PLUS} แล้ว</div>`;
+      return 'ระดับสูงสุดแล้ว';
+    }
     const cost = enhanceCost(item);
     const rate = successRate(item);
     const pity = pityBonus(item);
     const pct = (v: number) => `${Math.round(v * 1000) / 10}%`;
-    const r1 = (v: number) => fmtNum(Math.round(v * 10) / 10);
-    const row = (label: string, a: string, b: string) =>
-      `<div class="fd-row"><span>${label}</span><span>${a} → <span class="up">${b}</span></span></div>`;
-    const statRows = (Object.keys(next) as StatKey[]).map((k) => row(STAT_LABEL[k], r1(now[k] ?? 0), r1(next[k] ?? 0))).join('');
     const need = stonesNeeded(item);
     const haveEnh = p.stoneCount('enhance');
     const canProtect = dropsOnFail(item);
     const haveProt = p.stoneCount('protect');
     if (haveProt < 1) this.forgeProtect = false;
     const protect = canProtect && this.forgeProtect;
-    const short = p.gold < cost ? `ทองไม่พอ (มี ${p.gold.toLocaleString()} G)` : haveEnh < need ? `หินตีบวกไม่พอ (มี ${haveEnh})` : '';
-    $('forge-detail').innerHTML = head +
-      `<div class="fd-row"><span>ระดับ</span><b>+${cur} → +${cur + 1}</b></div>` +
-      row('โบนัสตีบวก (ทุกค่าของชิ้นนี้)', `+${bonusPct(cur)}%`, `+${bonusPct(cur + 1)}%`) +
-      statRows +
-      `<div class="fd-row"><span>โอกาสสำเร็จ</span><b class="${rate < 1 ? 'bad' : ''}">${pct(rate)}` +
-      `${pity > 0 ? ` <span class="pity">(+${pct(pity)} จากล้ม ${item.pity} ครั้ง)</span>` : ''}</b></div>` +
+    $('forge-cost').innerHTML =
+      `<div class="fc-rate"${rate < 1 ? ` title="ล้มแต่ละครั้ง โอกาสครั้งถัดไป +${pct(PITY_STEP)} จนกว่าจะสำเร็จ"` : ''}><span>โอกาสสำเร็จ +${cur} → +${cur + 1}</span><b class="${rate < 1 ? 'risky' : ''}">${pct(rate)}</b>` +
+      `${pity > 0 ? `<small class="pity">รวม +${pct(pity)} จากล้ม ${item.pity} ครั้ง</small>` : ''}</div>` +
       `<div class="fd-row"><span>ค่าตีบวก</span><b class="${p.gold < cost ? 'bad' : ''}">${cost.toLocaleString()} G</b></div>` +
       (need ? `<div class="fd-row"><span>${stoneIcon('enhance')} ${STONE_NAME.enhance}</span><b class="${haveEnh < need ? 'bad' : ''}">ใช้ ${need} / มี ${haveEnh}</b></div>` : '') +
       (canProtect
         ? `<label class="fd-protect${haveProt < 1 ? ' off' : ''}"><input type="checkbox" id="forge-protect"${protect ? ' checked' : ''}${haveProt < 1 ? ' disabled' : ''}>` +
-          `${stoneIcon('protect')} ใช้${STONE_NAME.protect} 1 ก้อน (มี ${haveProt})</label>` +
+          `${stoneIcon('protect')} ใช้${STONE_NAME.protect} (มี ${haveProt})</label>` +
           (protect
-            ? `<div class="safe">ถ้าล้มเหลว เสียทองและหิน แต่ระดับเท่าเดิม</div>`
-            : `<div class="warn">⚠ ถ้าล้มเหลว จะเสียทองและระดับลดลงเหลือ +${cur - 1}</div>`)
-        : `<div class="safe">${rate >= 1 ? 'สำเร็จแน่นอน' : 'ถ้าล้มเหลว เสียแค่ทอง ระดับเท่าเดิม'}</div>`) +
-      (rate < 1 ? `<div class="hint">ล้มเหลวแต่ละครั้งเพิ่มโอกาสครั้งถัดไป +${pct(PITY_STEP)} (รีเซ็ตเมื่อสำเร็จ)</div>` : '');
+            ? '<div class="safe">ถ้าล้มเหลว เสียทองและหิน แต่ระดับเท่าเดิม</div>'
+            : `<div class="warn">⚠ ถ้าล้มเหลว ระดับลดเหลือ +${cur - 1}</div>`)
+        : `<div class="safe">${rate >= 1 ? 'สำเร็จแน่นอน' : 'ถ้าล้มเหลว เสียแค่ทอง ระดับเท่าเดิม'}</div>`);
     (document.getElementById('forge-protect') as HTMLInputElement | null)?.addEventListener('change', (e) => {
       this.forgeProtect = (e.target as HTMLInputElement).checked;
       this.renderForge();
     });
-    go.disabled = !!short;
-    go.innerHTML = short || `${FORGE_ICON} ตีบวก (${cost.toLocaleString()} G)`;
+    return p.gold < cost ? 'ทองไม่พอ' : haveEnh < need ? `${STONE_NAME.enhance}ไม่พอ` : '';
+  }
+
+  /** The reroll menus: what gets rerolled, the stone and the cost. Returns why it can't be done ('' = it can). */
+  private renderRerollCost(item: Item, kind: RerollKind): string {
+    const p = this.g.player;
+    const block = rerollBlock(item);
+    const ranges = lineRanges(item);
+    if (block || !ranges || !item.lines) {
+      $('forge-cost').innerHTML = `<div class="bad">${block ?? ''}</div>`;
+      return 'สุ่มไม่ได้';
+    }
+    const hasExtra = ranges.some((r) => !r.main);
+    const what = kind === 'values'
+      ? 'ทุกบรรทัดได้ค่าใหม่ในช่วงของ tier เดิม'
+      : hasExtra
+        ? 'สุ่ม 1 บรรทัดจากสเตตัสเสริม · สเตตัสหลักไม่เปลี่ยน'
+        : 'ไม่มีสเตตัสเสริม: สุ่ม tier และค่าใหม่ให้สเตตัสหลัก 1 บรรทัด (ชนิดเดิม)';
+    const cost = rerollCost(item, kind);
+    const stone = REROLL_STONE[kind];
+    const have = p.stoneCount(stone);
+    $('forge-cost').innerHTML =
+      `<div class="safe">${what}${plusOf(item) ? ` · ระดับ +${plusOf(item)} ยังอยู่` : ''}</div>` +
+      `<div class="fd-row"><span>${stoneIcon(stone)} ${STONE_NAME[stone]}</span><b class="${have < 1 ? 'bad' : ''}">ใช้ 1 / มี ${have}</b></div>` +
+      `<div class="fd-row"><span>ค่าบริการ</span><b class="${p.gold < cost ? 'bad' : ''}">${cost.toLocaleString()} G</b></div>`;
+    return have < 1 ? `ไม่มี${STONE_NAME[stone]}` : p.gold < cost ? 'ทองไม่พอ' : '';
   }
 
   /** One line as the blacksmith shows it: value, stat, tier and the tier's range. */
   private lineHtml(l: StatLine): string {
     return `+${fmtNum(l.value)} ${STAT_LABEL[l.stat]} <span class="tier t${l.tier}">T${l.tier}: ${fmtNum(l.min)}–${fmtNum(l.max)}</span>`;
-  }
-
-  /** The reroll menus: every line (with what it was before the last reroll), the cost and the button. */
-  private renderReroll(item: Item, head: string, kind: RerollKind): void {
-    const p = this.g.player;
-    const go = $<HTMLButtonElement>('forge-go');
-    const block = rerollBlock(item);
-    const ranges = lineRanges(item);
-    if (block || !ranges || !item.lines) {
-      $('forge-detail').innerHTML = `${head}<div class="bad">${block ?? ''}</div>`;
-      go.disabled = true;
-      go.textContent = REROLL_NAME[kind];
-      return;
-    }
-    const hasExtra = ranges.some((r) => !r.main);
-    const prev = this.rerollPrev?.uid === item.uid ? this.rerollPrev.lines : null;
-    const rows = item.lines.map((l, i) => {
-      const fixed = kind === 'stat' && hasExtra && ranges[i].main;
-      const was = prev?.[i];
-      const changed = was && (was.stat !== l.stat || was.value !== l.value || was.tier !== l.tier);
-      const note = fixed ? '<span class="was">สเตตัสหลัก ไม่เปลี่ยน</span>'
-        : changed ? `<span class="was">เดิม +${fmtNum(was.value)}${was.stat !== l.stat ? ` ${STAT_LABEL[was.stat]}` : ''} T${was.tier}</span>`
-        : prev ? '<span class="was">เท่าเดิม</span>' : '';
-      return `<div class="fd-line${fixed ? ' fixed' : ''}"><span>${this.lineHtml(l)}</span>${note}</div>`;
-    }).join('');
-    const what = kind === 'values'
-      ? 'สุ่มค่าตัวเลขใหม่ทุกบรรทัด tier เท่าเดิม (ค่าอยู่ในช่วงของ tier นั้น)'
-      : hasExtra
-        ? 'สุ่ม 1 บรรทัดจากสเตตัสเสริม เปลี่ยนเป็นสเตตัสชนิดใหม่ พร้อม tier และค่าใหม่ · สเตตัสหลักไม่เปลี่ยน'
-        : 'ไอเทมนี้ไม่มีสเตตัสเสริม: สุ่ม tier และค่าใหม่ให้สเตตัสหลัก 1 บรรทัด (ชนิดเดิม)';
-    const cost = rerollCost(item, kind);
-    const stone = REROLL_STONE[kind];
-    const have = p.stoneCount(stone);
-    $('forge-detail').innerHTML = head + rows +
-      `<div class="safe">${what}${plusOf(item) ? ` · ระดับ +${plusOf(item)} ยังอยู่` : ''}</div>` +
-      `<div class="fd-row"><span>${stoneIcon(stone)} ${STONE_NAME[stone]}</span><b class="${have < 1 ? 'bad' : ''}">ใช้ 1 (มี ${have})</b></div>` +
-      `<div class="fd-row"><span>ค่าบริการ</span><b class="${p.gold < cost ? 'bad' : ''}">${cost.toLocaleString()} G</b></div>`;
-    go.disabled = p.gold < cost || have < 1;
-    go.innerHTML = have < 1 ? `ไม่มี${STONE_NAME[stone]}`
-      : p.gold < cost ? `ทองไม่พอ (มี ${p.gold.toLocaleString()} G)` : `${FORGE_ICON} ${REROLL_NAME[kind]} (${cost.toLocaleString()} G)`;
   }
 
   /** Asks first (the old values are gone for good), then rerolls the selected item. */
@@ -1374,15 +1479,12 @@ export class Hud {
     const before = (item.lines ?? []).map((l) => ({ ...l }));
     this.enhancing = true;
     const out = await this.g.backend.reroll(item.uid, kind).finally(() => (this.enhancing = false));
-    const res = $('forge-result');
     if (!out) {
-      res.className = 'fail';
-      res.textContent = 'สุ่มไม่สำเร็จ';
+      this.forgeResult('fail', 'สุ่มไม่สำเร็จ');
       return;
     }
     this.rerollPrev = { uid: item.uid, lines: before };
-    res.className = 'ok';
-    res.textContent = `${REROLL_NAME[kind]}แล้ว`;
+    this.forgeResult('ok', `${REROLL_NAME[kind]}แล้ว`);
     this.markInventory();
     this.renderForge();
   }
@@ -1395,15 +1497,12 @@ export class Hud {
     const out = await this.g.backend.enhance(this.forgeSel, protect).finally(() => (this.enhancing = false));
     if (!out) return;
     const { result, item } = out;
-    const res = $('forge-result');
     if (result === 'success') {
-      res.className = 'ok';
-      res.textContent = `สำเร็จ! ${itemName(item)}`;
+      this.forgeResult('ok', `สำเร็จ! ${itemName(item)}`);
     } else {
-      res.className = 'fail';
-      res.textContent = result === 'drop' ? `ล้มเหลว! ระดับลดลงเหลือ +${plusOf(item)}`
+      this.forgeResult('fail', result === 'drop' ? `ล้มเหลว! ระดับลดลงเหลือ +${plusOf(item)}`
         : result === 'saved' ? `ล้มเหลว… หินกันระดับลดทำงาน ระดับยังเป็น +${plusOf(item)}`
-        : 'ล้มเหลว… ระดับเท่าเดิม';
+        : 'ล้มเหลว… ระดับเท่าเดิม');
     }
     this.markInventory();
     this.renderForge();
