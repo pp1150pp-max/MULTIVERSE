@@ -212,6 +212,13 @@ export class Sim {
 
   // ------------------------------------------------------------ spawning
 
+  /** Seconds until the zone's boss comes back, or null while it is alive (or the zone has none). */
+  bossRespawnIn(): number | null {
+    const sp = this.spawners.find((s) => s.boss);
+    if (!sp || sp.alive > 0 || !sp.queue.length) return null;
+    return Math.max(0, Math.min(...sp.queue) - this.time);
+  }
+
   private spawnMonster(sp: Spawner): void {
     const def = MONSTERS[sp.area.monster];
     const r = Math.random;
@@ -226,7 +233,10 @@ export class Sim {
     }
     this.monsters.push(new Monster(this.newId(), def, randInt(r, def.levels[0], def.levels[1]), sp.area, x, z, sp.area.boost ?? this.zone.monsterBoost));
     sp.alive++;
-    if (sp.boss && this.time > 1) this.log(`⚠ ${def.name} ปรากฏตัวที่ส่วนลึกของ${this.zone.nameTh}!`, '#ff9a6a');
+    if (sp.boss && this.time > 1) {
+      this.log(`⚠ ${def.nameTh} ปรากฏตัวที่ส่วนลึกของ${this.zone.nameTh}!`, '#ff9a6a');
+      this.events.push({ t: 'bossSpawn', name: def.nameTh });
+    }
   }
 
   // ------------------------------------------------------------ combat
