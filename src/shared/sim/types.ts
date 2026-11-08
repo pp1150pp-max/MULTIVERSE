@@ -29,6 +29,13 @@ export interface HitOpts {
   fromZ?: number;
   /** Extra damage: this share of the player's max HP, added after defense (defense does not lower it). */
   maxHpShare?: number;
+  /** Always a critical hit. */
+  forceCrit?: boolean;
+  /** Cap on the final multiplier after the crit bonus (e.g. 5 = never more than 500% ATK). */
+  maxMult?: number;
+  /** Lowers the target's defense by this share (0–1) for `armorBreakT` seconds, for every attacker. */
+  armorBreak?: number;
+  armorBreakT?: number;
 }
 
 /** Visual effects the renderer knows how to draw. The client's Effects class implements this. */
@@ -46,13 +53,15 @@ export interface FxApi {
   effect(name: SkillEffect, x: number, z: number, angle: number, size: number): void;
 }
 
-export type SkillEffect = 'slash' | 'whirlwind' | 'charge' | 'quake' | 'explosion' | 'frost' | 'crater' | 'muzzle' | 'impact';
+export type SkillEffect = 'slash' | 'whirlwind' | 'charge' | 'quake' | 'explosion' | 'frost' | 'crater' | 'muzzle' | 'impact'
+  | 'reticle' | 'headshot_hit';
 export type FxName = keyof FxApi;
 /** One-shot sounds with no matching visual event. The client's audio code decides how each one sounds. */
 export type SfxName =
   | 'crit' | 'monster_die' | 'boss_die' | 'boss_slam'
   | 'pickup_gold' | 'pickup_item' | 'pickup_potion' | 'drink'
-  | 'trade' | 'enhance_ok' | 'enhance_fail';
+  | 'trade' | 'enhance_ok' | 'enhance_fail'
+  | 'headshot_fire';
 
 export type FxEvent = { [K in FxName]: { t: 'fx'; name: K; args: Parameters<FxApi[K]> } }[FxName];
 

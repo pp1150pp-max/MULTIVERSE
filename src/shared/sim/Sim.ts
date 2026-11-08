@@ -249,9 +249,11 @@ export class Sim {
       return;
     }
     let raw = p.stats.atk * mult * (0.9 + Math.random() * 0.2);
-    const crit = Math.random() * 100 < p.stats.crit;
+    const crit = opts.forceCrit || Math.random() * 100 < p.stats.crit;
     if (crit) raw *= 1 + p.stats.critDmg / 100;
-    const dmg = Math.round(mitigate(raw, m.defense));
+    if (opts.maxMult) raw = Math.min(raw, p.stats.atk * opts.maxMult);
+    const def = this.time < m.armorBreakUntil ? m.defense * (1 - m.armorBreak) : m.defense;
+    const dmg = Math.round(mitigate(raw, def));
     m.damageBy.set(p.id, (m.damageBy.get(p.id) ?? 0) + Math.min(dmg, Math.max(0, m.hp)));
     m.hp -= dmg;
     this.events.push({ t: 'flash', id: m.id });
@@ -262,6 +264,13 @@ export class Sim {
     if (opts.slow) {
       m.slowAmt = opts.slow;
       m.slowT = opts.slowT ?? 2;
+    }
+    if (opts.armorBreak) {
+      // Recasting refreshes the timer; it never stacks past the strongest break.
+      if (this.time >= m.armorBreakUntil) m.armorBreak = 0;
+      m.armorBreak = Math.max(m.armorBreak, opts.armorBreak);
+      m.armorBreakUntil = this.time + (opts.armorBreakT ?? 3);
+      this.text(m.x, m.topY + 0.4, m.z, 'เกราะแตก', 'info', 0.8);
     }
     m.onHit(this, p);
     if (m.hp <= 0) this.killMonster(m);

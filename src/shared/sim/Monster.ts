@@ -30,6 +30,9 @@ export class Monster extends Unit {
   private readonly maxHpV: number;
   readonly atk: number;
   readonly defense: number;
+  /** Armor break (Gunslinger's Armor-Piercing Round): defense is lowered by this share until `armorBreakUntil` (sim time). */
+  armorBreak = 0;
+  armorBreakUntil = 0;
   readonly expReward: number;
   state: State = 'idle';
   aggroT = 0;

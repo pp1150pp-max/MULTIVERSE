@@ -100,6 +100,23 @@ shadows, no ground, no text, no labels, no numbers, no grid lines. Do not use pi
 3. PIERCING ROUND วนซ้ำ มองจากด้านข้าง พุ่งไปทางขวา: พลังงานแหลมยาวสีฟ้าขาวมีหาง
 4. BULLET IMPACT มองจากด้านข้าง: ฝุ่นสีแทน ประกายไฟเหลือง และเศษกระเด็นจากพื้น
 
+**`gun_ult.png` (3 แถว) — อัลติ Headshot ของ Gunslinger**
+
+ใช้กฎด้านบนกับ R = 3 แล้วต่อท้ายด้วยข้อความนี้ ถ้าเริ่มแชทใหม่ ให้แนบ `gun.png` เป็นตัวอย่าง:
+
+```
+Row 1, SNIPER RETICLE, seen from directly above and lying flat on the ground: a bold red crosshair (a ring with four
+inward ticks and a center dot) locking on; frame 1 a large faint thin ring, then each frame the ring shrinks and gets
+brighter and thicker, frame 5 small and bright red-white with the four ticks touching the ring, frame 6 the same locked
+reticle with a short white flash at the center. Row 2, HEADSHOT ROUND, looping, seen from the side and flying to the
+RIGHT: a large heavy crimson-and-gold bullet, about twice the size of a normal pistol bullet, with a long sharp red-white
+streak trailing behind it and a few hot sparks. Row 3, HEADSHOT IMPACT, seen from the side: a big sharp crimson-and-white
+starburst with long pointed spikes, a thin white shock ring around it, and red-gold sparks and small fragments flying
+out, then breaking up into embers.
+```
+
+เซฟภาพที่ได้ไว้ที่ `art_templates/ground_fx/raw/gun_ult.png` จะตัดเป็น `public/assets/sprites/fx/gun_ult.png`
+
 ## เลขดาเมจ
 
 ไฟล์ `public/assets/sprites/icons/digits.png` เรียง 4 แถว (ปกติ คริติคอล โดนตี ฟื้นเลือด) แถวละ 13 ตัว ช่องละ 58×64 และ `crit_burst.png` เป็นแสงหลังเลขคริติคอล

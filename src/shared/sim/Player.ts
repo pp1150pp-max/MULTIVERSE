@@ -262,6 +262,8 @@ export class Player extends Unit {
   private aimX = 0;
   private aimZ = 0;
   dashT = 0;
+  /** Standing still to aim (Headshot): no walking, attacking or dashing until it runs out. */
+  rootT = 0;
   private dashVx = 0;
   private dashVz = 0;
   private chargeHit = new Set<Monster>();
@@ -329,6 +331,11 @@ export class Player extends Unit {
   get moveSpeed(): number { return BASE_MOVE_SPEED * (1 + this.stats.moveSpeed / 100) * this.speedMult(); }
   get attackRate(): number { return this.cls.attackRate * (1 + this.stats.atkSpeed / 100); }
   get isDashing(): boolean { return this.dashT > 0; }
+
+  /** Angle (radians, world x/z) the player is aiming at right now. */
+  aimAngle(): number {
+    return Math.atan2(this.aimZ, this.aimX);
+  }
 
   skill(slot: SkillSlot): SkillDef | undefined {
     return this.cls.skills.find((s) => s.slot === slot);
@@ -720,6 +727,7 @@ export class Player extends Unit {
     this.potCd -= dt;
     this.guardT = Math.max(0, this.guardT - dt);
     this.faceLockT -= dt;
+    this.rootT = Math.max(0, this.rootT - dt);
 
     const inCombat = sim.time - Math.max(this.lastHurt, this.lastAttack) <= COMBAT_LINGER;
     const ooc = inCombat ? 1 : OUT_OF_COMBAT_REGEN;
@@ -730,6 +738,12 @@ export class Player extends Unit {
     if (it.potion) this.usePotion(it.potion);
 
     if (this.stunT > 0) return;
+
+    if (this.rootT > 0) {
+      this.moving = false;
+      this.moveTarget = null;
+      return;
+    }
 
     if (this.dashT > 0) {
       this.dashT -= dt;
@@ -809,8 +823,9 @@ export class Player extends Unit {
       if (castSkill(sim, this, sk, aim)) {
         // A dedicated skill animation wins over the dash animation a movement skill just started;
         // without one the attack animation plays (unless the skill is a dash).
+        // A skill that starts by aiming (Headshot) gets no attack fallback: its shot animates when it fires.
         const duration = sk.id === 'parry' ? PARRY.time : this.attackAnimDuration();
-        sim.anim(this.id, `skill_${slot}`, { duration, fallback: 'attack' });
+        sim.anim(this.id, `skill_${slot}`, this.rootT > 0 ? {} : { duration, fallback: 'attack' });
         if (second) {
           delete this.recast[slot];
           this.cd[slot] = sk.cooldown;
@@ -822,7 +837,7 @@ export class Player extends Unit {
         this.lastAttack = sim.time;
         this.faceLockT = 0.3;
       }
-      if (this.dashT > 0 || this.guardT > 0) return;
+      if (this.dashT > 0 || this.guardT > 0 || this.rootT > 0) return;
     }
 
     if (it.basic && this.atkT <= 0 && !peaceful) {

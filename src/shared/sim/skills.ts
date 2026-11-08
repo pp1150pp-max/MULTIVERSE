@@ -23,6 +23,11 @@ function forCone(sim: Sim, x: number, z: number, angle: number, arc: number, r: 
   }
 }
 
+const RAPID_SHOTS = 6;
+const RAPID_GAP = 0.08;
+const HEADSHOT_AIM = 0.8;
+const HEADSHOT_RANGE = 18;
+
 /** Sword E: stand still for `time` seconds taking `reduce` less damage, with no stun or knockback. */
 export const PARRY = { time: 1, reduce: 0.8 };
 
@@ -97,35 +102,44 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2): boolean
     }
 
     // ---------------- Gunslinger
-    case 'spread':
-      for (let i = -2; i <= 2; i++) {
-        sim.addProjectile(p, { x: p.x, z: p.z, angle: ang + i * 0.16, speed: 22, range: 9, radius: 0.32, mult: 0.9, color: '#ffc85a', size: 0.5, kb: 3 });
-      }
-      sim.fx('effect', 'muzzle', p.x + Math.cos(ang) * 1.1, p.z + Math.sin(ang) * 1.1, ang, 0.95);
-      return true;
-    case 'pierce':
-      sim.addProjectile(p, { x: p.x, z: p.z, angle: ang, speed: 34, range: 16, radius: 0.45, mult: 2.6, color: '#7affe0', size: 0.9, pierce: true, kb: 5 });
-      sim.fx('lineTelegraph', p.x, p.z, ang, 16, 0.25, 0.15);
-      return true;
-    case 'bulletrain': {
-      let tx = aim.x;
-      let tz = aim.z;
-      const d = Math.hypot(tx - p.x, tz - p.z);
-      if (d > 11) {
-        tx = p.x + ((tx - p.x) / d) * 11;
-        tz = p.z + ((tz - p.z) / d) * 11;
-      }
-      sim.fx('telegraph', tx, tz, 3.5, 1.5, '#ffd27a');
-      for (let i = 0; i < 6; i++) {
-        sim.schedule(0.1 + i * 0.25, () => {
-          for (let j = 0; j < 5; j++) {
-            const a = Math.random() * Math.PI * 2;
-            const r = Math.random() * 3.3;
-            sim.fx('effect', 'impact', tx + Math.cos(a) * r, tz + Math.sin(a) * r, 0, 0.6);
-          }
-          forCircle(sim, tx, tz, 3.5, (m) => sim.hitMonster(p, m, 0.9, {}));
+    case 'rapidfire':
+      // Six shots in a quick burst. Each follows the current aim, so the burst can be swept.
+      for (let i = 0; i < RAPID_SHOTS; i++) {
+        sim.schedule(i * RAPID_GAP, () => {
+          if (!p.alive) return;
+          const a = i === 0 ? ang : p.aimAngle();
+          const jitter = (Math.random() - 0.5) * 0.08;
+          sim.addProjectile(p, { x: p.x, z: p.z, angle: a + jitter, speed: 28, range: 12, radius: 0.3, mult: 0.6, color: '#ffc85a', size: 0.45, kb: 1 });
+          sim.fx('effect', 'muzzle', p.x + Math.cos(a) * 0.9, p.z + Math.sin(a) * 0.9, a, 0.6);
         });
       }
+      return true;
+    case 'pierce':
+      // Armor-Piercing Round: stops at the first target and breaks its armor for everyone.
+      sim.addProjectile(p, {
+        x: p.x, z: p.z, angle: ang, speed: 34, range: 16, radius: 0.45, mult: 1.5, color: '#7affe0', size: 0.9, kb: 5,
+        hit: { armorBreak: 0.2, armorBreakT: 3 },
+      });
+      sim.fx('effect', 'muzzle', p.x + Math.cos(ang) * 1.1, p.z + Math.sin(ang) * 1.1, ang, 0.9);
+      return true;
+    case 'headshot': {
+      // Stand still and aim, then one sure critical shot along the line that was shown.
+      p.rootT = HEADSHOT_AIM;
+      sim.fx('lineTelegraph', p.x, p.z, ang, HEADSHOT_RANGE, 0.3, HEADSHOT_AIM);
+      // The reticle locks on where the mouse is, kept on the line and within range.
+      const reach = Math.min(HEADSHOT_RANGE, Math.max(1.5, Math.hypot(aim.x - p.x, aim.z - p.z)));
+      sim.fx('effect', 'reticle', p.x + Math.cos(ang) * reach, p.z + Math.sin(ang) * reach, 0, 1.6);
+      sim.schedule(HEADSHOT_AIM, () => {
+        if (!p.alive) return;
+        sim.addProjectile(p, {
+          x: p.x, z: p.z, angle: ang, speed: 45, range: HEADSHOT_RANGE, radius: 0.5, mult: 3.1, color: '#ff6a5a', size: 1, kb: 6,
+          hit: { forceCrit: true, maxMult: 5 },
+          hitFx: { name: 'headshot_hit', size: 1.3 },
+        });
+        sim.fx('effect', 'muzzle', p.x + Math.cos(ang) * 1.1, p.z + Math.sin(ang) * 1.1, ang, 1.1);
+        sim.sfx('headshot_fire', p.x, p.z);
+        sim.anim(p.id, 'attack', { duration: 0.3 });
+      });
       return true;
     }
   }
