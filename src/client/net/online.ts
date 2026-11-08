@@ -363,7 +363,6 @@ export class OnlineBackend implements Backend {
     me.mp = old.mp;
     me.stats = old.stats;
     me.cd = old.cd;
-    me.recast = old.recast;
     me.potCd = old.potCd;
     me.x = x;
     me.z = z;
@@ -522,7 +521,6 @@ export class OnlineBackend implements Backend {
     if (!this.autoSetPending && pv.autoSettings) me.autoSettings = pv.autoSettings;
     me.stats = pv.stats;
     me.cd = { ...pv.cd };
-    me.recast = { ...pv.recast };
     me.potCd = pv.potCd;
     if (typeof pv.buybackLeft === 'number') me.buybackLeft = pv.buybackLeft;
     if (pv.inv) {
@@ -625,7 +623,6 @@ export class OnlineBackend implements Backend {
     for (const l of this.loots) l.t += dt;
     const me = this.me;
     for (const key of Object.keys(me.cd) as SkillSlot[]) me.cd[key] = Math.max(0, (me.cd[key] ?? 0) - dt);
-    for (const key of Object.keys(me.recast) as SkillSlot[]) me.recast[key] = Math.max(0, (me.recast[key] ?? 0) - dt);
     me.potCd -= dt;
 
     if (this.settling && !this.serverMoves) this.settle(dt);
