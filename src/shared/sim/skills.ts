@@ -28,8 +28,8 @@ const RAPID_GAP = 0.08;
 const HEADSHOT_AIM = 0.8;
 const HEADSHOT_RANGE = 18;
 
-/** Sword E: stand still for `time` seconds taking `reduce` less damage, with no stun or knockback. */
-export const PARRY = { time: 1, reduce: 0.8 };
+/** Sword Q: seconds the spin keeps the player from taking any damage. */
+const WHIRLWIND_GUARD = 0.6;
 
 const aimAngle = (p: Player, aim: Vec2) => Math.atan2(aim.z - p.z, aim.x - p.x);
 
@@ -63,11 +63,13 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2): boolean
     case 'whirlwind':
       sim.fx('effect', 'whirlwind', p.x, p.z, ang, 3.4);
       forCircle(sim, p.x, p.z, 3.2, (m) => sim.hitMonster(p, m, 1.8, { kb: 5 }));
+      p.invulnT = Math.max(p.invulnT, WHIRLWIND_GUARD);
+      sim.fx('ring', p.x, p.z, 1.3, '#ffcf5a', WHIRLWIND_GUARD);
       return true;
-    case 'parry':
-      p.guardT = PARRY.time;
-      sim.fx('ring', p.x, p.z, 1.3, '#ffcf5a', PARRY.time);
-      sim.fx('burst', p.x, 1, p.z, '#ffd27a', 8, 2);
+    case 'earthquake':
+      sim.fx('effect', 'quake', p.x, p.z, 0, 4.8);
+      sim.shake(0.5);
+      forCircle(sim, p.x, p.z, 4.5, (m) => sim.hitMonster(p, m, 2, { stun: 1, kb: 3 }));
       return true;
     case 'charge':
       p.startDash(Math.cos(ang), Math.sin(ang), 7, 0.3, 'charge');
