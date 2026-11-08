@@ -43,6 +43,7 @@ npm run stop-server -- --restart # เหมือนกัน แต่ npm run
 
 - **ตรวจงานด้วย `npm run typecheck` เป็นหลัก** (+ `npm run test` เมื่อแก้ server/บัญชี, สคริปต์ Sim แบบไม่เปิดเกมสำหรับ logic เกม) งาน UI ที่ typecheck ตรวจไม่ได้ให้อ่านหน้าเป็นข้อความ (`read_page`, console) ก่อน
 - **จะแคปหน้าจอต้องถามเจ้าของก่อนทุกครั้ง** (ใช้ token มาก) · ตอนจบงานบอกว่าตรวจอะไรด้วยวิธีไหน
+- agent ประจำโปรเจกต์ (`.claude/agents/`): `explorer` (Haiku, ค้นโค้ดแบบอ่านอย่างเดียว) · `ui-fixer` (Sonnet, แก้ UI เล็ก ๆ ที่ชัดเจนแล้ว ไม่ commit)
 - เทสต์อัตโนมัติมีเฉพาะระบบ Guest/บัญชี (`tests/`) ที่เหลือตรวจด้วย `npm run build` และเปิดเกมลองเล่นจริง
 - เพิ่มเทสต์ใหม่: ไฟล์ `tests/*.test.ts` ใช้ `ok()`/`finish()` จาก `tests/check.ts` แล้วเพิ่มเข้าสคริปต์ `test` ใน `package.json`
 - เทสต์ห้ามแตะ `server/data/` หรือ server จริง ให้ใช้ DB ชั่วคราวแบบ `tests/guest-server.test.ts`
