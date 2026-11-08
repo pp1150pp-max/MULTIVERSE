@@ -1,7 +1,7 @@
 import {
   RARITIES, type ClassId, type EquipSlot, type Item, type Rarity, type SlotId, type StatKey, type StatLine, type Stats, type StatTier,
 } from '../types';
-import { pick, type Rng } from '../rng';
+import { mulberry32, pick, type Rng } from '../rng';
 
 interface BaseItem {
   id: string;
@@ -126,6 +126,16 @@ const AFFIXES: { stat: StatKey; min: number; max: number; per: number }[] = [
   { stat: 'mpRegen', min: 0.5, max: 1.5, per: 0.1 },
 ];
 
+/** Extra stats rolled from rarity are this part of the AFFIXES table (owner 2026-11-08: damage stats halved). */
+const EXTRA_SCALE: Partial<Record<StatKey, number>> = { atk: 0.5, atkSpeed: 0.5, crit: 0.5, critDmg: 0.5 };
+
+/**
+ * A locked line some kinds of item always have, right after their own stats (owner 2026-11-08: weapons get
+ * crit, so a legendary weapon has 6 lines like the other slots). It counts as a main line (the stat stone
+ * never changes it) but rolls in the AFFIXES range without EXTRA_SCALE.
+ */
+const LOCKED_LINE: Partial<Record<SlotId, StatKey>> = { weapon: 'crit' };
+
 /**
  * Tier ranges as parts of a line's whole range (0 = its lowest roll, 1 = its highest), T1 first.
  * Owner 2026-11-07: T1–T3 a quarter each, T4 15%, T5 the bottom 10%.
@@ -146,7 +156,7 @@ const MEAN_POS = TIER_BAND.reduce((s, [a, b], i) => s + TIER_WEIGHT[i] * (a + b)
 const TIER_EDGES = [0, ...TIER_BAND.map(([, b]) => b).reverse()];
 
 /** Lines' min–max follow the current tier tables (TIER_BAND, RANGE_FLOOR). Older items are upgraded on load. */
-export const TIER_VERSION = 2;
+export const TIER_VERSION = 3;
 
 /** A line's whole range (lo = lowest roll, hi = highest) whose average roll (MEAN_POS) is `mean`. */
 function rangeAround(mean: number): [number, number] {
@@ -248,12 +258,14 @@ export function rollRarity(r: Rng, boost = 0): Rarity {
 function build(base: BaseItem, rarity: Rarity, level: number, cls: ClassId, r: Rng, boost = 0): Item {
   const lines: StatLine[] = [];
   // Main stats first (the kind's own stats), then the extras, each picked once.
-  for (const k of Object.keys(base.main) as StatKey[]) lines.push(rollLine(k, ...rowRange(base, rarity, level, k, true), r, boost));
+  for (const k of Object.keys(base.main) as StatKey[]) lines.push(rollLine(k, ...rowRange(base, rarity, level, k, 'main'), r, boost));
+  const locked = LOCKED_LINE[base.slot];
+  if (locked) lines.push(rollLine(locked, ...rowRange(base, rarity, level, locked, 'locked'), r, boost));
   let n = AFFIX_COUNT[rarity] + (base.slot === 'ring' ? 1 : 0);
   const pool = [...AFFIXES];
   while (n-- > 0 && pool.length) {
     const a = pool.splice(Math.floor(r() * pool.length), 1)[0];
-    lines.push(rollLine(a.stat, ...rowRange(base, rarity, level, a.stat, false), r, boost));
+    lines.push(rollLine(a.stat, ...rowRange(base, rarity, level, a.stat, 'extra'), r, boost));
   }
   const stats = sumLines(lines);
   const owner = ownerClass(base, cls);
@@ -299,14 +311,38 @@ export function makeItem(baseId: string, rarity: Rarity, level: number, cls: Cla
 
 /**
  * The normal range of one stat row on an item of this kind, rarity and level, as a drop would roll it
- * (before rounding). `main`: the row is the item kind's own stat (a weapon's ATK…), else an extra stat.
+ * (before rounding). `main`: the item kind's own stat (a weapon's ATK…); `locked`: its LOCKED_LINE;
+ * `extra`: a stat from rarity.
  */
-function rowRange(base: BaseItem, rarity: Rarity, level: number, stat: StatKey, main: boolean): [number, number] {
+type RowKind = 'main' | 'locked' | 'extra';
+function rowRange(base: BaseItem, rarity: Rarity, level: number, stat: StatKey, kind: RowKind): [number, number] {
   const rm = RARITY_MULT[rarity];
-  if (main) return rangeAround((base.main[stat] ?? 0) * (1 + (level - 1) * 0.12) * rm);
+  if (kind === 'main') return rangeAround((base.main[stat] ?? 0) * (1 + (level - 1) * 0.12) * rm);
   // Extras average the middle of their table min–max, raised with item level.
   const a = AFFIXES.find((x) => x.stat === stat)!;
-  return rangeAround(((a.min + a.max) / 2 + a.per * (level - 1)) * rm);
+  const scale = kind === 'extra' ? EXTRA_SCALE[stat] ?? 1 : 1;
+  return rangeAround(((a.min + a.max) / 2 + a.per * (level - 1)) * rm * scale);
+}
+
+/**
+ * Each row's kind, in order: the first row of each of the kind's own stats is main, then the first row of
+ * its LOCKED_LINE stat is locked, every other row is extra. `withLocked = false` gives the rules from
+ * before locked lines (TIER_VERSION < 3).
+ */
+function rowKinds(base: BaseItem, stats: StatKey[], withLocked = true): RowKind[] {
+  const seen = new Set<StatKey>();
+  let lockedSeen = !withLocked || !LOCKED_LINE[base.slot];
+  return stats.map((stat) => {
+    if (stat in base.main && !seen.has(stat)) {
+      seen.add(stat);
+      return 'main';
+    }
+    if (!lockedSeen && stat === LOCKED_LINE[base.slot]) {
+      lockedSeen = true;
+      return 'locked';
+    }
+    return 'extra';
+  });
 }
 
 /** Item stats: the total of its lines. */
@@ -320,18 +356,16 @@ function sumLines(lines: StatLine[]): Partial<Stats> {
 export interface RowRange { stat: StatKey; main: boolean; lo: number; hi: number; min: number; max: number }
 
 /**
- * The normal ranges of a list of rows, in order. The first row of each of the kind's own stats is its
- * main row; every other row (a second ATK row, a crit row…) is measured as an extra stat. Null for an
- * unknown kind.
+ * The normal ranges of a list of rows, in order (see rowKinds). Locked lines count as main: the stat
+ * stone never changes them. Null for an unknown kind.
  */
 export function rowRanges(baseId: string, rarity: Rarity, level: number, stats: StatKey[]): RowRange[] | null {
   const base = BASES.find((b) => b.id === baseId);
   if (!base) return null;
-  const seen = new Set<StatKey>();
-  return stats.map((stat) => {
-    const main = stat in base.main && !seen.has(stat);
-    if (main) seen.add(stat);
-    const [lo, hi] = rowRange(base, rarity, level, stat, main);
+  const kinds = rowKinds(base, stats);
+  return stats.map((stat, i) => {
+    const main = kinds[i] !== 'extra';
+    const [lo, hi] = rowRange(base, rarity, level, stat, kinds[i]);
     const t = tierRanges(stat, lo, hi);
     return { stat, main, lo, hi, min: t[4].min, max: t[0].max };
   });
@@ -357,16 +391,41 @@ export function lineRanges(item: Item): RowRange[] | null {
   return rowRanges(item.baseId, item.rarity, item.level, item.lines.map((l) => l.stat));
 }
 
+/** A string's 32-bit hash, to seed rolls that must come out the same every time (FNV-1a). */
+function hash(s: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
+  return h >>> 0;
+}
+
 /**
- * Brings an item's lines to the current tier tables (TIER_VERSION), in place. Values never change:
- * each line gets the tier its value falls in now and that tier's range. Items from before tiers (no
- * lines) and unknown kinds are left alone. Returns the same item.
+ * Brings an item's lines to the current tier tables (TIER_VERSION), in place: each line gets the tier its
+ * value falls in now and that tier's range. Items saved before TIER_VERSION 3 also get the 2026-11-08
+ * balance: extra lines of the EXTRA_SCALE stats are scaled down, and weapons get their locked crit line,
+ * rolled from the item's uid so every load (and every market read) gives the same value. Items from before
+ * tiers (no lines) and unknown kinds are left alone. Returns the same item.
  */
 export function upgradeItem<T>(item: T): T {
   const it = item as unknown as Item;
   if (!it || typeof it !== 'object' || !('baseId' in it) || it.tierV === TIER_VERSION) return item;
-  const ranges = lineRanges(it);
-  if (!ranges || !it.lines) return item;
+  const base = BASES.find((b) => b.id === it.baseId);
+  if (!base || !it.lines?.length) return item;
+  if ((it.tierV ?? 0) < 3) {
+    const old = rowKinds(base, it.lines.map((l) => l.stat), false);
+    const lines = it.lines.map((l, i) => {
+      const scale = old[i] === 'extra' ? EXTRA_SCALE[l.stat] : undefined;
+      return scale ? { ...l, value: fmt(l.stat, l.value * scale) } : l;
+    });
+    const locked = LOCKED_LINE[base.slot];
+    if (locked) {
+      const at = old.filter((k) => k === 'main').length;
+      const r = mulberry32(hash(String(it.uid)));
+      lines.splice(at, 0, rollLine(locked, ...rowRange(base, it.rarity, it.level, locked, 'locked'), r));
+    }
+    it.lines = lines;
+    it.stats = sumLines(lines);
+  }
+  const ranges = lineRanges(it)!;
   it.lines = it.lines.map((l, i) => {
     const t = tierOf(l.stat, l.value, ranges[i].lo, ranges[i].hi);
     return { stat: l.stat, value: l.value, tier: t.tier, min: t.min, max: t.max };
@@ -416,7 +475,7 @@ export function rerollStat(item: Item, r: Rng = Math.random): number {
     const taken = new Set(extras.filter((i) => i !== at).map((i) => lines[i].stat));
     const pool = AFFIXES.filter((a) => !taken.has(a.stat));
     const stat = pool[Math.floor(r() * pool.length)].stat;
-    lines[at] = rollLine(stat, ...rowRange(base, item.rarity, item.level, stat, false), r);
+    lines[at] = rollLine(stat, ...rowRange(base, item.rarity, item.level, stat, 'extra'), r);
   } else {
     at = Math.floor(r() * lines.length);
     lines[at] = rollLine(lines[at].stat, ranges[at].lo, ranges[at].hi, r);
