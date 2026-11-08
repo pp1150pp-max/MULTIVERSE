@@ -129,3 +129,21 @@ blur. Exactly 4 rows, each with these 13 characters in order: 0 1 2 3 4 5 6 7 8 
 them. Row 1 cream white, row 2 bright gold fading to orange, row 3 bright red, row 4 bright fresh green. Identical shapes
 in all rows. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no labels, no grid lines.
 ```
+
+## หลุมใต้ศพ
+
+ไฟล์ `public/assets/sprites/fx/death_crater.png` เกมวางราบกับพื้นใต้ตัวละครที่ตาย และค้างไว้จนเกิดใหม่ ใช้ร่วมกันทุกคลาส
+เจนในแชทเดียวกับท่าตายของอัศวิน ต่อจากภาพฉากในหลุม (`art_templates/sword/raw/death_scene.png`) เซฟภาพดิบเป็น `art_templates/ground_fx/raw/death_crater.png`
+มองตรงลงมาจากด้านบน เพราะเกมวางภาพราบกับพื้นแล้วกล้องเอียงให้เอง
+
+```
+Now draw ONLY the crater from that knockout scene, empty, in the EXACT same fine-detail 16-bit SNES-era pixel-art
+style and the same colors: crisp pixels, hard-edged colour bands, dark brown shading, no blur. Viewed STRAIGHT DOWN from
+directly above with no perspective, so it is a round shape, not an oval. Generate a SQUARE image: one single shallow
+round impact crater, centred, filling about 85 percent of the image: a slightly sunken bowl of dry cracked
+orange-brown earth with cracks radiating outward from the centre, a jagged broken rim with small fractured rock layers
+lit on the upper-left and shaded on the lower-right, a few small stones and chunks of debris around it. The outer edge
+breaks up into small ragged cracks and chunks, not a hard circle. NOTHING inside the crater: no character, no sword.
+Background ONE perfectly flat solid magenta (#FF00FF) outside the crater, no shadows, no text, no labels, no grid lines.
+Do not use pink or magenta in the crater.
+```

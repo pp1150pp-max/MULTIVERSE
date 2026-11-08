@@ -62,6 +62,8 @@ export interface PlayOpts {
   duration?: number;
   /** Keep showing the last frame until something else plays (death). */
   hold?: boolean;
+  /** Start on the last frame, e.g. someone who was already lying dead when they came into view. */
+  atEnd?: boolean;
 }
 
 // A higher priority one-shot may interrupt a lower one, never the reverse.
@@ -135,7 +137,7 @@ export class AnimatedActor implements Actor {
       this.aimT = def.frames / fps + AIM_HOLD;
       return true;
     }
-    this.oneShot = { name, t: 0, fps, hold: !!opts.hold };
+    this.oneShot = { name, t: opts.atEnd ? def.frames / fps : 0, fps, hold: !!opts.hold };
     return true;
   }
 

@@ -9,7 +9,7 @@ import { LOOT_POP_TIME, type Loot } from '../shared/sim/Loot';
 import type { SimEvent } from '../shared/sim/types';
 import { SpriteActor } from './SpriteActor';
 import { AnimatedActor, type Actor } from './AnimatedActor';
-import { animSets, fxTex, sheets } from './assets';
+import { animSets, decalTex, fxTex, sheets } from './assets';
 import type { Effects, ShotSprite } from './effects';
 import type { ProjectileLike } from './backend';
 
@@ -19,6 +19,14 @@ type AnimEvent = Extract<SimEvent, { t: 'anim' }>;
  * Enhancement aura by tier (+7 / +10 / +13 / +15 on the best worn item). Placeholder look until the
  * real art exists: a glow on the ground, and sparks rising from the higher tiers.
  */
+/** World size of the crater a dead player lies in (the player is about 1.9 units tall). */
+const CRATER_SIZE = 3.2;
+/**
+ * The lying body in the last death frame stands about 1 unit above the feet line on its billboard, which the
+ * camera shows over the ground about this far behind the player, so the crater moves back to sit under it.
+ */
+const CRATER_BACK = 1.4;
+
 const AURA: { color: string; size: number; sparks: number }[] = [
   { color: '', size: 0, sparks: 0 },
   { color: '#6fb8ff', size: 1.5, sparks: 0 },
@@ -34,12 +42,15 @@ export class PlayerView {
   private clock = 0;
   private combo = 0;
   private lastAttackAt = -99;
+  private crater: THREE.Mesh | null = null;
 
   constructor(readonly p: Player, private readonly scene: THREE.Scene) {
     const anim = animSets[p.cls.id];
     this.actor = anim ? new AnimatedActor(anim, 0.4) : new SpriteActor(sheets[p.cls.id], 1.9, 0.4);
     scene.add(this.actor.group);
     this.sync();
+    // Came into view (or logged in) while already lying dead: no fall, just the body in its crater.
+    if (!p.alive) this.showDead(true);
   }
 
   update(dt: number, fx: Effects): void {
@@ -114,10 +125,36 @@ export class PlayerView {
   }
 
   onDied(): void {
-    if (!this.actor.play('death', { hold: true })) this.actor.setOpacity(0.4);
+    this.showDead(false);
+  }
+
+  private showDead(atEnd: boolean): void {
+    this.actor.reset();
+    if (!this.actor.play('death', { hold: true, atEnd })) {
+      this.actor.setOpacity(0.4);
+      return;
+    }
+    // Only with the death animation: a fading stand-in standing in a crater would look odd.
+    const tex = decalTex.deathCrater;
+    if (!tex || this.crater) return;
+    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
+    this.crater = new THREE.Mesh(new THREE.PlaneGeometry(CRATER_SIZE, CRATER_SIZE).rotateX(-Math.PI / 2), mat);
+    // Away from the camera (it looks from +x +z, see ISO_DIR).
+    this.crater.position.set(this.p.x - CRATER_BACK * Math.SQRT1_2, 0.03, this.p.z - CRATER_BACK * Math.SQRT1_2);
+    this.crater.renderOrder = -1;
+    this.scene.add(this.crater);
+  }
+
+  private disposeCrater(): void {
+    if (!this.crater) return;
+    this.scene.remove(this.crater);
+    this.crater.geometry.dispose();
+    (this.crater.material as THREE.Material).dispose();
+    this.crater = null;
   }
 
   onRevived(): void {
+    this.disposeCrater();
     this.actor.reset();
     this.actor.setOpacity(1);
     this.actor.play('revive');
@@ -126,6 +163,7 @@ export class PlayerView {
 
   dispose(): void {
     this.disposeAura();
+    this.disposeCrater();
     this.scene.remove(this.actor.group);
     this.actor.dispose();
   }

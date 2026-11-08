@@ -15,6 +15,7 @@
 | `attack.png` | 4 | prompt ข้อ 4 คอมโบ 1 ฟันแนวนอน |
 | `attack_2.png` | 4 | prompt ข้อ 5 คอมโบ 2 ฟันย้อนเฉียงขึ้น |
 | `attack_3.png` | 4 | prompt ข้อ 6 คอมโบ 3 กระโดดฟาดลงปิดท้าย |
+| `death.png` | 4 | เฟรม 1–3 จาก prompt ข้อ 9 ต่อด้วยท่านอนจาก prompt ข้อ 12 ช่องละ 320×320 แถวเดียว (มุมข้าง) |
 
 เกมเล่นท่าฟัน `attack` → `attack_2` → `attack_3` วนไปเองเมื่อตีต่อเนื่องภายใน 1 วินาที
 รอยฟันสีทองมาจาก `fx/sword.png` ที่เกมวาดทับ จึงไม่ต้องวาดรอยฟันในตัวละคร
@@ -23,8 +24,10 @@
 `PNGJS=<path ของ pngjs> node tools/cut_sword.cjs` สคริปต์จะตัดพื้นหลัง #FF00FF ออก อุดรูเล็ก ๆ บนผ้าคลุม
 ปรับขนาดทีละแถวให้ตัวสูง 200px เท่า Gunslinger (ไม่นับดาบที่ยกขึ้น) และวางเท้าสูงจากขอบล่าง 16px
 
-ยังไม่มีท่า `run_attack` `dash` `hit` `death` `revive` และ `skill_q/e/r`
-เกมจะใช้ท่าที่มีแทน (ตีระหว่างเดินจะเล่นท่าฟันยืนกับที่) และตอนตายจะทำตัวละครให้จางลง
+ท่าตายตัดด้วย `PNGJS=<path ของ pngjs> RAW=art_templates/sword/raw node tools/cut_death.cjs sword magenta 0.56 0.21`
+
+ยังไม่มีท่า `run_attack` `dash` `hit` `revive` และ `skill_q/e/r`
+เกมจะใช้ท่าที่มีแทน (ตีระหว่างเดินจะเล่นท่าฟันยืนกับที่)
 
 ## 1. แบบตัวละคร
 
@@ -170,4 +173,99 @@ Column 2: the full guard, braced, cape flaring slightly. No sparks, no shields, 
 the same baseline, same size as the reference. Every figure fully inside its own cell with clear empty space around
 it, the katana must not reach into the next cell. Background ONE perfectly flat solid magenta (#FF00FF), no shadows,
 no ground, no text, no labels, no numbers, no grid lines. Do not use pink, magenta or purple on the character.
+```
+
+## 9. ท่าตาย
+
+ท่าตายแบบมีม "นอนคุดคู้หน้าคว่ำ" ใช้ท่าเดียวกันทุกคลาส แถวเดียว 5 เฟรม มุมข้างหันซ้าย (เกมกลับภาพให้ตอนหันขวา)
+เกมเล่นครั้งเดียวแล้วค้างเฟรมสุดท้ายไว้จนกดฟื้นคืนชีพ และวาดหลุมใต้ตัวเอง (`death_crater` ใน [ground_fx](../ground_fx/PROMPTS.md))
+
+เปิดแชทใหม่ (แชทเดิมยาวเกินไปแล้ว) แนบ `raw/design.png` กับ `public/assets/sprites/player/sword/idle.png` ไปเป็นต้นแบบ
+เซฟเป็น `raw/death.png` แล้วตัดเป็น `player/sword/death.png` ด้วยสเกลเดียวกับท่ายืน
+
+```
+Use the attached sprite sheets as the EXACT character and style reference: the same young knight with messy spiky
+ash-blond hair, golden amber eyes, no helmet; dark gunmetal plate armour with gold trim, white shoulder plates, a small
+amber diamond gem on the chest, a long charcoal cape with gold trim, and ONE curved katana with an amber-orange blade
+and a round brass guard. Same outfit, same colors, same size and the same fine-detail 16-bit SNES-era chibi pixel
+style, each figure as if about 110 pixels tall, dark outline, crisp pixels, no blur. Do NOT draw a different character.
+Generate an image: a comical knock-out death animation as ONE single horizontal row of exactly 5 frames, seen in side
+profile facing LEFT, left to right: frame 1 struck hard, recoiling, knees buckling; frame 2 flung off his feet, falling
+forward face-first, the katana slipping out of his hand; frame 3 slamming into the ground on his side, a small bounce;
+frame 4 rolling from his belly onto his right side and starting to curl up; frame 5 the final pose, completely knocked
+out: he lies on his RIGHT side in a tight fetal curl with his BACK turned toward the viewer, so we see his back, the
+back of his head and the soles of his boots, not his face. His head is at the left end, face hidden, pressed into the
+ground and tucked into his arms; both arms are bent with the forearms crossed in front of the face and the fists near
+the head; his back is strongly rounded; both knees are bent and pulled up toward the chest, the legs stacked one on top
+of the other, the boots at the right end with the soles toward the viewer. He is NOT kneeling, NOT on all fours and NOT
+lying flat on his belly: he is curled on his side like a sleeping shrimp, limp and motionless. The katana lies on the ground just in front of him, its
+glow almost gone; the charcoal cape drapes over his back. The body keeps the same size as the standing reference in
+every frame (if he stood up he would be exactly as tall), and the lowest point of the body rests on the same baseline
+in every frame except the airborne one. Every figure fully inside its own equal-width cell with clear empty space
+around it, nothing touching or overlapping. Background ONE perfectly flat solid magenta (#FF00FF), no ground, no
+crater, no shadows, no dust, no impact lines, no stars, no text, no labels, no numbers, no grid lines. Do not use pink,
+magenta or purple on the character.
+```
+
+## 10. แก้ 2 เฟรมท้ายของท่าตาย
+
+ครั้งแรก (ก่อนแก้ข้อ 9 ให้ละเอียดขึ้น) เฟรม 1–3 ดี แต่เฟรม 4–5 ออกมาเป็นคุกเข่าก้มหน้าแทนท่านอนตะแคงขดตัว
+จึงเจนเฉพาะ 2 เฟรมท้ายใหม่ในแชทเดียวกัน เซฟเป็น `raw/death_end.png` แล้วใช้เฟรม 1–3 จาก `raw/death.png` ต่อด้วย 2 เฟรมนี้
+
+```
+Frames 1 to 3 are great, but frames 4 and 5 are wrong: he must not kneel or lie face-down on his belly. Keep this EXACT
+character, outfit, colors, size and pixel style. Generate an image: ONE single horizontal row of just 2 frames, side
+view with his head toward the LEFT: frame 1 rolling from his belly onto his right side and starting to curl up;
+frame 2 the final knocked-out pose: he lies on his RIGHT side in a tight fetal curl with his BACK turned toward the
+viewer, so we see his back, the back of his head and the soles of his boots, not his face. His head is at the left
+end, face hidden, pressed into the ground and tucked into his arms; both arms are bent with the forearms crossed in
+front of the face and the fists near the head; his back is strongly rounded; both knees are bent and pulled up toward
+the chest, the legs stacked one on top of the other, the boots at the right end with the soles toward the viewer. He
+is NOT kneeling, NOT on all fours and NOT lying flat on his belly: he is curled on his side like a sleeping shrimp,
+limp and motionless. The katana lies on the ground just in front of him, its glow gone; the cape is crumpled over his
+legs. Same size as in frame 3, the body resting on the same baseline. Both figures fully inside their own cell with
+clear empty space around them. Background ONE perfectly flat solid magenta (#FF00FF), no ground, no crater, no
+shadows, no dust, no text, no labels, no numbers, no grid lines. Do not use pink, magenta or purple on the character.
+```
+
+## 11. ท่านอนสุดท้าย แบบมองจากมุมสูง
+
+ข้อ 10 ยังไม่เหมือนมีม เจ้าของจึงเจนฉากเต็มในหลุมด้วย prompt ของตัวเอง (`raw/death_scene.png`) ท่าออกมาถูก
+แต่มีพื้นและหลุมติดมาด้วย จึงเจนใหม่ในแชทเดียวกันให้เหลือแค่ตัวละครบนพื้นหลังสีเดียว
+แนบภาพมีมต้นฉบับ (ใช้แค่ท่า) กับ `raw/death_scene.png` และ `raw/death.png` ไปด้วย เซฟเป็น `raw/death_end.png`
+เกมใช้เฟรม 1–3 จาก `raw/death.png` ต่อด้วย 2 เฟรมนี้ ส่วนหลุมวาดแยกเป็น `death_crater` ใน ground_fx
+
+```
+Use the attached pictures like this: the first picture is a POSE REFERENCE ONLY (copy only how the body lies, never
+the person, clothes or colors); the knockout scene in the crater is the exact pose and camera angle I want; the sprite
+sheet is the EXACT character and style. Keep MY knight exactly as in the sprite sheet and the crater scene: messy spiky
+ash-blond hair, dark gunmetal plate armour with gold trim, white shoulder plates, long charcoal cape with gold trim,
+dark gloves and boots, one curved katana with a round brass guard. Same fine-detail 16-bit SNES-era chibi pixel style,
+crisp pixels, 3 to 4 tones per material, dark outline, no blur.
+Generate an image: ONE single horizontal row of exactly 2 frames of the knight ALONE, seen from the same slightly
+elevated three-quarter top-down angle as the crater scene, head toward the upper LEFT and boots toward the lower RIGHT:
+frame 1 he has just crashed down and is rolling onto his right side, starting to curl up, cape flapping down onto him;
+frame 2 the final knocked-out pose, exactly like the crater scene: lying curled up on his RIGHT side with his BACK
+toward the viewer, face completely hidden and pressed into his bent arms, fists near the head, back strongly rounded,
+knees pulled up to the chest, legs stacked, the soles of both boots clearly visible, the cape crumpled over his back
+and legs, limp like a sleeping shrimp. NOT kneeling, NOT on all fours, NOT flat on his belly, NOT facing the viewer.
+In both frames the katana lies on its own on the ground just below and to the left of him, its glow faded.
+The knight is the same size as in the sprite sheet. Both figures fully inside their own equal-width cell with wide
+empty space around them, nothing touching. Background ONE perfectly flat solid magenta (#FF00FF): NO ground, NO
+crater, NO cracks, NO stones, NO dust, NO shadow under the body. No text, no labels, no numbers, no grid lines. Do not
+use pink, magenta or purple on the character.
+```
+
+## 12. ลบพื้นออกจากฉากในหลุม (ใช้แทนข้อ 11)
+
+ให้ ChatGPT แก้ภาพฉากในหลุมที่ท่าถูกแล้ว (`raw/death_scene.png`) แทนการวาดใหม่ ท่าจะได้ไม่เพี้ยน
+แนบ `raw/death_scene.png` ภาพเดียว เซฟเป็น `raw/death_end.png` แล้วเกมใช้เฟรม 1–3 จาก `raw/death.png` ต่อด้วยภาพนี้เป็นเฟรมสุดท้าย
+
+```
+Edit the attached image. Keep the knight and his katana EXACTLY as they are: the same pose, the same position, the
+same size, the same pixels and colors. Do not redraw, move, rotate or restyle them. Remove EVERYTHING else: the
+crater, the cracked ground, the stones, the debris and the dark shading on the ground around and under his body.
+Replace all of it with ONE perfectly flat solid magenta (#FF00FF) background, so only the knight and the katana remain,
+with crisp dark outlines against the magenta. No shadow under the body, no ground, no text. Do not use pink, magenta or
+purple on the knight or the katana.
 ```

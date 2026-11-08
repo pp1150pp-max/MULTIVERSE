@@ -10,6 +10,7 @@
     "run": { "file": "run.png", "frames": 4, "fps": 10, "loop": true },
     "attack": { "file": "attack.png", "frames": 4, "fps": 12 },
     "attack_2": { "file": "attack_2.png", "frames": 4, "fps": 12 },
-    "attack_3": { "file": "attack_3.png", "frames": 4, "fps": 12 }
+    "attack_3": { "file": "attack_3.png", "frames": 4, "fps": 12 },
+    "death": { "file": "death.png", "frames": 4, "fps": 7, "directions": ["side"], "frameWidth": 320, "frameHeight": 320, "feet": 0.05 }
   }
 }

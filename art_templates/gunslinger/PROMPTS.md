@@ -16,8 +16,10 @@
 หลังได้ภาพ ให้ตัดพื้นหลังสี #FF00FF ออก แล้วจัดให้ทุกเฟรมเท้าอยู่สูงจากขอบล่าง 16px หัวอยู่กลางช่อง
 และตัวสูงประมาณ 200px
 
-ยังไม่มีท่า `dash` `hit` `death` `revive` `attack_2` `attack_3` และ `skill_q/e/r`
-เกมจะใช้ท่าที่มีแทน และตอนตายจะทำตัวละครให้จางลง
+`death.png` (4 เฟรม ช่องละ 320×320 แถวเดียว) ตัดจาก prompt ข้อ 6 ด้วย
+`PNGJS=<path ของ pngjs> RAW=art_templates/gunslinger/raw DROP_WEAPON=1 node tools/cut_death.cjs gunslinger magenta 0.5 0.215`
+
+ยังไม่มีท่า `dash` `hit` `revive` `attack_2` `attack_3` และ `skill_q/e/r` เกมจะใช้ท่าที่มีแทน
 
 ## 1. แบบตัวละคร
 
@@ -106,4 +108,73 @@ the gun arm stays steady and aimed in all 4 frames; coat tails and scarf trail b
 no smoke, no motion lines. Head and body keep the same size and height in every frame. Every figure fully inside its
 own cell with clear empty space around it, nothing touching or overlapping. Background ONE perfectly flat solid
 magenta (#FF00FF), no shadows, no ground, no text, no labels, no numbers, no grid lines.
+```
+
+## 6. ท่าตาย
+
+ท่าตายแบบมีม "นอนคุดคู้หน้าคว่ำ" ใช้ท่าเดียวกันทุกคลาส แถวเดียว 5 เฟรม มุมข้างหันซ้าย (เกมกลับภาพให้ตอนหันขวา)
+เกมเล่นครั้งเดียวแล้วค้างเฟรมสุดท้ายไว้จนกดฟื้นคืนชีพ และวาดหลุมใต้ตัวเอง (`death_crater` ใน [ground_fx](../ground_fx/PROMPTS.md))
+
+ทำ 3 ภาพในแชทใหม่แชทเดียวกัน (แบบเดียวกับอัศวิน ข้อ 9 และ 12 ใน [sword](../sword/PROMPTS.md)):
+1. prompt ด้านล่าง แนบ `public/assets/sprites/player/gunslinger/idle.png` กับ `run.png` เซฟเป็น `raw/death.png` (เกมใช้เฟรม 1–3)
+2. prompt ข้อ 6.1 ฉากนอนในหลุม แนบภาพมีมต้นฉบับ (ใช้แค่ท่า) เซฟเป็น `raw/death_scene.png`
+3. prompt ข้อ 6.2 ลบพื้นออกจากฉากนั้น เซฟเป็น `raw/death_end.png` (เฟรมสุดท้าย)
+
+แล้วตัดด้วย `tools/cut_death.cjs` (ดูวิธีใช้ในไฟล์) ให้ขนาดตัวเท่าท่ายืน
+
+```
+Use the attached sprite sheets as the EXACT character and style reference: the same young gunslinger with messy spiky
+silver-white hair, aviator goggles with round blue lenses and brass frames on the forehead, a long red scarf, a long
+black leather coat with gold trim and a tattered hem, dark gloves, brown boots, and one large chunky steampunk pistol
+of dark metal and brass. Same outfit, same colors, same size and the same fine-detail 16-bit SNES-era chibi pixel
+style, each figure as if about 110 pixels tall, dark outline, crisp pixels, no blur. Do NOT draw a different character.
+Generate an image: a comical knock-out death animation as ONE single horizontal row of exactly 5 frames, seen in side
+profile facing LEFT, left to right: frame 1 struck hard, recoiling, knees buckling; frame 2 flung off his feet, falling
+forward face-first, the pistol slipping out of his hand; frame 3 slamming into the ground on his side, a small bounce;
+frame 4 rolling from his belly onto his right side and starting to curl up; frame 5 the final pose, completely knocked
+out: he lies on his RIGHT side in a tight fetal curl with his BACK turned toward the viewer, so we see his back, the
+back of his head and the soles of his boots, not his face. His head is at the left end, face hidden, pressed into the
+ground and tucked into his arms; both arms are bent with the forearms crossed in front of the face and the fists near
+the head; his back is strongly rounded; both knees are bent and pulled up toward the chest, the legs stacked one on top
+of the other, the boots at the right end with the soles toward the viewer. He is NOT kneeling, NOT on all fours and NOT
+lying flat on his belly: he is curled on his side like a sleeping shrimp, limp and motionless. The pistol lies on the ground just in front of him; the red
+scarf and the coat tails lie spread on the ground. The body keeps the same size as the standing reference in every
+frame (if he stood up he would be exactly as tall), and the lowest point of the body rests on the same baseline in
+every frame except the airborne one. Every figure fully inside its own equal-width cell with clear empty space around
+it, nothing touching or overlapping. Background ONE perfectly flat solid magenta (#FF00FF), no ground, no crater, no
+shadows, no dust, no impact lines, no stars, no text, no labels, no numbers, no grid lines. Do not use pink, magenta or
+purple on the character.
+```
+
+### 6.1 ฉากนอนในหลุม
+
+```
+Generate a SQUARE image in the EXACT same fine-detail 16-bit SNES-era JRPG pixel-art style as the sprites above: crisp
+pixels, rich shading with 3 to 4 tones per material, dark outlines, no blur, no painterly rendering. The attached
+picture is a POSE REFERENCE ONLY: copy only how the body lies, never the person, clothes or colors.
+CHARACTER, exactly as in the sprites above: the same young gunslinger with messy spiky silver-white hair, aviator goggles with round blue lenses and brass frames on the forehead, a long red scarf, a long black leather coat with gold trim and a tattered hem, dark gloves, brown boots, and one large chunky steampunk pistol of dark metal and brass. Do not redesign his outfit, colors, proportions or
+equipment.
+SCENE AND POSE: a comical knockout aftermath. He has been slammed into the ground and lies curled up on his
+RIGHT SIDE inside a large shallow impact crater in dry, cracked orange-brown earth. His head is toward the upper
+LEFT and his BACK is turned toward the viewer. His face is completely hidden, pressed down into his bent
+arms, both arms folded close to the head with the fists near the face. His back is strongly rounded, both knees are
+pulled tightly toward the chest, the legs stacked, the boots toward the lower RIGHT with their soles clearly visible.
+He looks completely unconscious and limp, like a sleeping shrimp: NOT kneeling, NOT on all fours, NOT lying flat on
+his belly, NOT facing the viewer. His red scarf and coat tails lie spread on the ground, and the pistol has fallen onto the ground nearby, separated from his hands.
+ENVIRONMENT: a large shallow round impact crater with a jagged rim, cracked earth radiating outward, small stones and
+debris, warm light from the upper left.
+COMPOSITION: one single character seen from a slightly elevated three-quarter top-down angle, in the centre of the
+crater, the whole body visible. Humorous JRPG knockout, no blood, no extra characters, no text, no labels.
+```
+
+### 6.2 ลบพื้นออก
+
+แนบ `raw/death_scene.png` ภาพเดียว
+
+```
+Edit the attached image. Keep the gunslinger and his pistol EXACTLY as they are: the same pose, the same position, the same size, the
+same pixels and colors. Do not redraw, move, rotate or restyle them. Remove EVERYTHING else: the crater, the cracked
+ground, the stones, the debris and the dark shading on the ground around and under the body. Replace all of it with
+ONE perfectly flat solid magenta (#FF00FF) background, so only the gunslinger and his pistol remain, with crisp dark outlines against
+the background. No shadow under the body, no ground, no text. Do not use pink, magenta or purple on the character.
 ```
