@@ -19,8 +19,8 @@ export const ANNOUNCE_FROM = 10;
 const STEP_PCT = [0, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 10, 10, 10, 10, 10];
 /** Total bonus % at each + level. */
 const TOTAL_PCT = STEP_PCT.map((_, i) => STEP_PCT.slice(0, i + 1).reduce((a, b) => a + b, 0));
-/** Chance to succeed when trying to reach this + level. */
-const SUCCESS = [1, 1, 1, 1, 1, 1, 0.9, 0.75, 0.6, 0.45, 0.2, 0.15, 0.1, 0.05, 0.025, 0.01];
+/** Chance to succeed when trying to reach this + level. Owner 2026-11-08: +1..+4 100%, +5..+7 40%, +8..+9 20%, +10 10%; +11..+15 unchanged. */
+const SUCCESS = [1, 1, 1, 1, 1, 0.4, 0.4, 0.4, 0.2, 0.2, 0.1, 0.15, 0.1, 0.05, 0.025, 0.01];
 /** Cost multiplier for reaching this + level (times the item's base cost). */
 const COST_MULT = [0, 1, 2, 3, 4, 5, 7, 9, 12, 15, 20, 30, 40, 55, 75, 100];
 /** Stats shown as whole numbers; the rest (%, regen) keep one decimal. */
