@@ -32,9 +32,8 @@ export const AUTO_BOSS_MSG = 'ปิด Auto Play — บอสต้องส�
 export const AUTO_TOWN_MSG = 'ใช้ Auto Play ในเมืองไม่ได้ — ออกไปนอกเมืองก่อน';
 
 const RANGE: Record<string, number> = { sword: 1.9, mage: 8.5, gunslinger: 9 };
-/** Loot within this distance is fetched even while monsters attack; up to LOOT_FAR when it's calm. */
+/** Loot within this distance is fetched even while monsters attack; anywhere in the farming circle when it's calm. */
 const LOOT_NEAR = 5;
-const LOOT_FAR = 9;
 /** Seconds with nothing to fight before Auto tells the player: quickly when no monster lives in the circle at all,
  *  later when it is only waiting for respawns. Then at most one message per IDLE_HINT_EVERY. */
 const IDLE_HINT_EMPTY = 3;
@@ -142,11 +141,11 @@ export class AutoPlay {
       return out;
     }
 
-    // Loot close by is picked up even mid-fight; farther loot only when nothing is attacking.
+    // Loot close by is picked up even mid-fight; anything else in the circle once nothing is attacking.
     // Loot that doesn't fit in the bag (or the loot filter skips) is ignored, so a full bag just keeps fighting.
     const threatened = g.monsters.some((m) => m.isHostile && dist(m) < 3.5);
     let best = null as { x: number; z: number } | null;
-    let bd = threatened ? LOOT_NEAR : LOOT_FAR;
+    let bd = threatened ? LOOT_NEAR : Infinity;
     for (const l of set.loot ? g.loots : []) {
       if (this.fromAnchor(l) > R + 0.5 || inBossArena(g.zone, l.x, l.z) || lavaAt(g.zone, l.x, l.z)) continue;
       if (l.dead || l.dropped || !l.canTake(p.id, g.time) || !p.wantsLoot(l.kind, false) || !p.canFit(l.kind)) continue;

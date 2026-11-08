@@ -112,6 +112,10 @@ const DECOR: Record<ZoneTheme, { key: string; cols: number; rows: number; spots:
     flat: [6, 7, 8],
   },
 };
+/** Props at least this tall turn see-through when the player walks behind them. */
+const FADE_MIN_HEIGHT = 1.6;
+/** About half a player's width on screen, in world units, for the see-through test. */
+const PLAYER_HALF_WIDTH = 0.35;
 /** World size of one decor atlas cell: 128 pixels at about the same density as the ground tiles. */
 const DECOR_CELL_UNITS = 1.33;
 /** Rotted boards laid over the wet stretches of a marsh trail: a row of separate pieces, seen from above. */
@@ -528,7 +532,8 @@ export class World {
     this.addCracks(mulberry32(terrain.zone.seed + 29));
     this.addPieces(mulberry32(terrain.zone.seed + 31));
 
-    for (const p of this.props) this.addProp(p.key, p.x, p.z, p.height, p.fade);
+    // Anything taller than a player can hide one, so it turns see-through too (not only trees and the town).
+    for (const p of this.props) this.addProp(p.key, p.x, p.z, p.height, p.fade || p.height >= FADE_MIN_HEIGHT);
     const fire = terrain.props.find((p) => p.key === 'campfire');
     if (fire) this.flames.push(this.glow(fire.x, 0.5, fire.z, '#ffa040', 0.55));
     // Each portal glows like the land it leads to; the way back to town glows gold.
@@ -1203,7 +1208,8 @@ export class World {
       let target = 1;
       if (depth > 0 && depth < f.h * 1.9) {
         const sdx = (f.x - f.z - (px - pz)) * S;
-        if (Math.abs(sdx) < f.w * 0.42) target = 0.35;
+        // Counts the player's own width, so a canopy or branch covering only part of them fades too.
+        if (Math.abs(sdx) < f.w * 0.42 + PLAYER_HALF_WIDTH) target = 0.35;
       }
       if (target === f.o) continue;
       f.o += (target - f.o) * Math.min(1, dt * 10);

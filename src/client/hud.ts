@@ -40,6 +40,8 @@ const HIDDEN_RATE_FROM = 11;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
+/** Lines of chat and messages kept for scrolling back (with the chat open); while playing only the newest 9 show (style.css). */
+const LOG_KEEP = 50;
 /** Sockets whose empty look is their name, not a faded item picture. */
 const TEXT_SOCKETS: EquipSlot[] = ['offhand', 'necklace', 'gloves', 'belt'];
 
@@ -1384,7 +1386,10 @@ export class Hud {
       const was = prev?.[i];
       const changed = was && (was.stat !== l.stat || was.value !== l.value || was.tier !== l.tier);
       const note = fixed ? '<span class="was">หลัก ไม่เปลี่ยน</span>'
-        : changed ? `<span class="was">เดิม +${fmtNum(was.value)}${was.stat !== l.stat ? ` ${STAT_LABEL[was.stat]}` : ''} T${was.tier}</span>`
+        : changed && was.stat !== l.stat ? `<span class="was">เดิม +${fmtNum(was.value)} ${STAT_LABEL[was.stat]}</span>`
+        // Same stat: how much it moved, green up or red down.
+        : changed && was.value !== l.value ? `<span class="${l.value > was.value ? 'up' : 'down'}">${l.value > was.value ? '+' : '−'}${fmtNum(Math.abs(l.value - was.value))}</span>`
+        : changed ? '<span class="was">เท่าเดิม</span>'
         : prev ? '<span class="was">เท่าเดิม</span>' : '';
       return `<div class="fd-line${fixed ? ' fixed' : ''}"><span>${this.lineHtml(l)}</span>${note}</div>`;
     }).join('');
@@ -1676,6 +1681,10 @@ export class Hud {
     const box = $('chat');
     if (!box.classList.contains('hidden')) return;
     box.classList.remove('hidden');
+    // The log turns into a scrollable history (every kept line, faded or not) while the chat is open.
+    const log = $('log');
+    log.classList.add('open');
+    log.scrollTop = log.scrollHeight;
     // Focus after this frame so the Enter that opened it doesn't also send it.
     setTimeout(() => $<HTMLInputElement>('chat-input').focus(), 0);
   }
@@ -1684,6 +1693,7 @@ export class Hud {
     const input = $<HTMLInputElement>('chat-input');
     input.value = '';
     $('chat').classList.add('hidden');
+    $('log').classList.remove('open');
     input.blur();
   }
 
@@ -1785,8 +1795,11 @@ export class Hud {
 
   private pushLog(el: HTMLElement, fadeMs: number): void {
     const box = $('log');
+    // Pinned to the newest line unless the player scrolled up to read older ones.
+    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 8;
     box.append(el);
-    while (box.children.length > 9) box.firstChild?.remove();
+    while (box.children.length > LOG_KEEP) box.firstChild?.remove();
+    if (atBottom) box.scrollTop = box.scrollHeight;
     setTimeout(() => el.classList.add('fade'), fadeMs);
   }
 

@@ -11,6 +11,8 @@ export class Input {
   lmb = false;
   rmb = false;
   rmbPressed = false;
+  /** Left button went down this frame (a click), not just held. */
+  lmbPressed = false;
   wheel = 0;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -26,7 +28,10 @@ export class Input {
       this.lmb = this.rmb = false;
     });
     canvas.addEventListener('mousedown', (e) => {
-      if (e.button === 0) this.lmb = true;
+      if (e.button === 0) {
+        this.lmb = true;
+        this.lmbPressed = true;
+      }
       if (e.button === 2) {
         this.rmb = true;
         this.rmbPressed = true;
@@ -58,6 +63,7 @@ export class Input {
   endFrame(): void {
     this.pressedSet.clear();
     this.rmbPressed = false;
+    this.lmbPressed = false;
     this.wheel = 0;
   }
 }

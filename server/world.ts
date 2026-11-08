@@ -523,6 +523,10 @@ export class GameWorld {
         if (!p.alive) s.auto = null;
         sim.respawn(p);
         break;
+      case 'pickup':
+        // Sim.pickupLoot checks the drop exists, the player may take it, is next to it and has room.
+        if (Number.isInteger(m.id)) sim.pickupLoot(p, m.id);
+        break;
       case 'rest':
         // Sim.rest checks the distance, that the player is alive and the cooldown.
         if (sim.rest(p)) this.save(s);

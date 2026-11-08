@@ -22,6 +22,7 @@ html, body {
 }
 
 body.cursor-attack canvas { cursor: crosshair; }
+body.cursor-use canvas { cursor: pointer; }
 
 #app { position: fixed; inset: 0; }
 #app > canvas { display: block; position: absolute; inset: 0; }
@@ -190,6 +191,13 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 #log { position: absolute; left: 12px; bottom: 190px; width: min(420px, 45vw); font-size: 13px; }
 .log-line { text-shadow: 0 0 3px #000, 1px 1px 0 #000; padding: 1px 0; overflow-wrap: anywhere; transition: opacity 1.5s; }
 .log-line.fade { opacity: 0; }
+/* While playing only the newest 9 lines show; with the chat open (Enter) every kept line shows and scrolls. */
+#log:not(.open) .log-line:nth-last-child(n+10) { display: none; }
+#log.open {
+  max-height: min(40vh, 360px); overflow-y: auto; pointer-events: auto; padding: 4px 6px;
+  background: rgba(10, 8, 6, 0.6); border-radius: 6px; scrollbar-width: thin;
+}
+#log.open .log-line.fade { opacity: 1; }
 
 #hud-bottom {
   position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%);
@@ -579,14 +587,14 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
    No max-height or scrolling (owner). Its width leaves room for the bag beside it (the bag's own width formula). */
 #forge {
   left: 12px; top: 120px; padding: 14px 14px 10px;
-  width: clamp(420px, calc(100vw - min(560px, 96vw, calc((100vh - 8px) * 0.75)) - 28px), 620px);
+  width: clamp(420px, calc(100vw - min(560px, 96vw, calc((100vh - 8px) * 0.75)) - 28px), 720px);
   --fg-violet: #8a5cff; --fg-violet-hi: #c9a8ff;
 }
 /* Below the HP and MP bars when there is room; on a short screen it moves up over them rather than off the bottom. */
 .hud-bars #forge { top: clamp(4px, calc(100vh - 440px), 216px); }
 #forge .panel-head { margin-bottom: 10px; }
 #forge .tier { white-space: nowrap; }
-#forge-body { display: grid; grid-template-columns: minmax(88px, 0.7fr) minmax(124px, 0.95fr) minmax(200px, 1.75fr); gap: 8px; min-height: var(--forge-body-h, 268px); }
+#forge-body { display: grid; grid-template-columns: minmax(88px, 0.7fr) minmax(124px, 0.95fr) minmax(220px, 2.1fr); gap: 8px; min-height: var(--forge-body-h, 268px); }
 
 #forge-menu { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 #forge-menu [data-mode] { padding: 8px 6px; font-size: 13px; line-height: 1.2; text-align: center; background: linear-gradient(#2b241b, #17130e); }
@@ -656,7 +664,10 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #forge-item .fi-name { font-weight: 600; font-size: 14px; line-height: 1.25; }
 #forge-item .fi-meta { color: var(--ink-dim); font-size: 11px; margin-bottom: 4px; }
 #forge-info .fd-line { display: flex; justify-content: space-between; flex-wrap: wrap; column-gap: 6px; padding: 1px 0; }
-#forge-info .fd-line .was { color: var(--ink-dim); font-size: 10px; }
+#forge-info .fd-line .was { color: var(--ink-dim); font-size: 10px; white-space: nowrap; }
+#forge-info .fd-line .up, #forge-info .fd-line .down { font-weight: 600; white-space: nowrap; }
+#forge-info .fd-line .up { color: #6cff7a; }
+#forge-info .fd-line .down { color: #ff6a6a; }
 #forge-info .fd-line.fixed { opacity: 0.6; }
 #forge-cost { border-top: 1px solid #4a3a20; padding-top: 6px; }
 #forge-cost:empty { display: none; }

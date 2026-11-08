@@ -35,6 +35,12 @@ const UP = { x: -S, z: -S };
 
 export type { Intent };
 
+/** Something the player clicked to walk to and use. */
+type ClickGoal =
+  | { kind: 'loot'; id: number; x: number; z: number }
+  | { kind: 'npc'; id: NpcId; x: number; z: number }
+  | { kind: 'rest'; x: number; z: number };
+
 export interface Npc { id: NpcId; name: string; action: string; icon: string; role: string; x: number; z: number; actor: SpriteActor }
 
 /**
@@ -67,6 +73,10 @@ export class Game {
   private autoAnchor: { x: number; z: number } | null = null;
   private autoRing!: AutoRing;
   hovered: Monster | null = null;
+  /** A drop, NPC or rest spot under the mouse (only when no monster is): a left click walks there and uses it. */
+  private hoverUse: ClickGoal | null = null;
+  /** Where a left click sent the player: walk there, then pick up / talk / rest on arrival. */
+  private goal: ClickGoal | null = null;
   mouseWorld: Vec2 = { x: 0, z: 0 };
 
   private viewSize = 17;
@@ -267,6 +277,7 @@ export class Game {
   /** The backend moved us to another zone: redraw the map, camp and everything in it. */
   private changeZone(): void {
     this.mapRoute = [];
+    this.goal = null;
     this.world.dispose();
     this.zone = this.backend.zone;
     this.world = new World(this.scene, this.backend.terrain);
@@ -384,6 +395,9 @@ export class Game {
       move = { x: x / l, z: z / l };
     }
     let moveTo: Vec2 | null = null;
+    // Walking by hand or right-clicking forgets a clicked goal; otherwise keep walking to it.
+    if (move || i.rmb) this.goal = null;
+    if (this.goal) moveTo = { x: this.goal.x, z: this.goal.z };
     if (i.rmb) {
       moveTo = { ...this.mouseWorld };
       if (i.rmbPressed) this.fx.marker(moveTo.x, moveTo.z);
@@ -394,7 +408,7 @@ export class Game {
       move,
       moveTo,
       aim: h ? { x: h.x, z: h.z } : { ...this.mouseWorld },
-      basic: i.lmb,
+      basic: i.lmb && !this.goal,
       skills,
       dash: i.pressed('Space'),
       potion: i.pressed('Digit1') ? 'hp' : i.pressed('Digit2') ? 'mp' : null,
@@ -420,12 +434,73 @@ export class Game {
       }
     }
     this.hovered = best;
+    this.hoverUse = best ? null : this.findUsable(pxPerUnit);
     document.body.classList.toggle('cursor-attack', !!best);
+    document.body.classList.toggle('cursor-use', !!this.hoverUse);
+  }
+
+  /** The drop, NPC or rest spot nearest the mouse, if it is close enough on screen. */
+  private findUsable(pxPerUnit: number): ClickGoal | null {
+    const mx = this.input.mouseX;
+    const my = this.input.mouseY;
+    let best: ClickGoal | null = null;
+    let bd = Infinity;
+    const consider = (g: ClickGoal, y: number, r: number) => {
+      const s = this.toScreen(g.x, y, g.z);
+      const d = Math.hypot(s.sx - mx, s.sy - my);
+      if (s.on && d < r && d < bd) {
+        bd = d;
+        best = g;
+      }
+    };
+    const me = this.player.id;
+    for (const l of this.backend.loots) {
+      if (!l.dead && l.canTake(me, this.backend.time)) consider({ kind: 'loot', id: l.id, x: l.x, z: l.z }, 0.2, Math.max(16, 0.5 * pxPerUnit));
+    }
+    for (const n of this.npcs) consider({ kind: 'npc', id: n.id, x: n.x, z: n.z }, 1, Math.max(22, 0.9 * pxPerUnit));
+    for (const s of this.backend.terrain.restSpots) consider({ kind: 'rest', x: s.x, z: s.z }, 0.6, Math.max(22, (s.kind === 'fountain' ? 2.2 : 0.9) * pxPerUnit));
+    return best;
+  }
+
+  /** Walking to a clicked goal: once there, pick it up / talk / rest, then forget it. */
+  private reachGoal(): void {
+    const g = this.goal;
+    const p = this.player;
+    if (!g) return;
+    if (!p.alive || this.hud.dialogOpen) {
+      this.goal = null;
+      return;
+    }
+    const d = Math.hypot(p.x - g.x, p.z - g.z);
+    if (g.kind === 'loot') {
+      const l = this.backend.loots.find((x) => x.id === g.id);
+      if (!l || l.dead) this.goal = null;
+      else if (d < 1) {
+        this.backend.pickup(g.id);
+        this.goal = null;
+      }
+    } else if (g.kind === 'npc') {
+      if (d < NPC_TALK_RANGE - 0.4) {
+        this.hud.talkTo(g.id);
+        this.goal = null;
+      }
+    } else {
+      const spot = restSpotNear(this.backend.terrain.restSpots, p);
+      if (spot && spot.x === g.x && spot.z === g.z) {
+        this.backend.rest();
+        this.goal = null;
+      }
+    }
   }
 
   private update(dt: number): void {
     const i = this.input;
     this.updateMouse();
+    if (i.lmbPressed && this.hoverUse && this.player.alive) {
+      this.goal = this.hoverUse;
+      this.fx.marker(this.goal.x, this.goal.z);
+    }
+    this.reachGoal();
 
     if (i.pressed('KeyF')) this.toggleAuto();
     if (i.pressed('KeyI') || i.pressed('KeyB')) this.hud.toggleBag();
