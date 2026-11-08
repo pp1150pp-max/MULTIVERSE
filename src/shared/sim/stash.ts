@@ -10,8 +10,8 @@ export const STASH_START = 30;
 /** Slots per row, and per purchase. */
 export const STASH_ROW = 10;
 export const STASH_MAX = 90;
-/** Price of each extra row, in order (owner: 500 / 1,000 / 2,000 / 4,000 / 8,000 / 16,000 G). */
-export const STASH_ROW_PRICES = [500, 1000, 2000, 4000, 8000, 16000];
+/** Price of each extra row, in order (owner 2026-11-08: ×10 of the first prices, 5,000 … 160,000 G). */
+export const STASH_ROW_PRICES = [5000, 10000, 20000, 40000, 80000, 160000];
 /** Most gold the stash will hold (keeps numbers sane; far above anything earned in play). */
 export const STASH_GOLD_MAX = 1_000_000_000;
 
