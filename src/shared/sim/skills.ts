@@ -68,7 +68,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2): boolean
       return true;
     case 'earthquake':
       sim.fx('effect', 'quake', p.x, p.z, 0, 4.8);
-      sim.shake(0.5);
+      sim.shake(0.5, { to: p.id });
       forCircle(sim, p.x, p.z, 4.5, (m) => sim.hitMonster(p, m, 2, { stun: 1, kb: 3 }));
       return true;
     case 'charge':
@@ -97,7 +97,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2): boolean
       sim.fx('meteor', tx, tz, delay);
       sim.schedule(delay, () => {
         sim.fx('effect', 'crater', tx, tz, 0, 4);
-        sim.shake(0.5);
+        sim.shake(0.5, { to: p.id });
         forCircle(sim, tx, tz, 3.5, (m) => sim.hitMonster(p, m, 4.5, { stun: 0.8, kb: 4, fromX: tx, fromZ: tz }));
       });
       return true;

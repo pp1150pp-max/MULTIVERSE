@@ -72,7 +72,8 @@ export type FxEvent = { [K in FxName]: { t: 'fx'; name: K; args: Parameters<FxAp
 export type SimEvent =
   | FxEvent
   | { t: 'text'; x: number; y: number; z: number; text: string; cls: string; life?: number; to?: number }
-  | { t: 'shake'; amount: number }
+  /** Screen shake: for one player (`to`), or for players near (x, z). Never the whole zone. */
+  | { t: 'shake'; amount: number; to?: number; x?: number; z?: number }
   | { t: 'sfx'; name: SfxName; x: number; z: number; to?: number }
   | { t: 'log'; msg: string; color?: string; to?: number }
   /** Big text across the middle of the screen, for players near x/z (boss phase change). */

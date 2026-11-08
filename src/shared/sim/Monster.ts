@@ -498,7 +498,7 @@ export class Monster extends Unit {
     this.windupT = 0;
     this.jumpOutT = JUMP_OUT_TIME;
     sim.fx('burst', this.x, 0.3, this.z, '#dcecf7', 16, 5);
-    sim.shake(0.3);
+    sim.shake(0.3, this);
   }
 
   /** Back from vanishing: falls where it left, slamming the ground on the marked spot. */
@@ -547,7 +547,7 @@ export class Monster extends Unit {
       const radius = this.slamRadius;
       sim.fx('ring', this.x, this.z, radius, '#ffb070', 0.45);
       sim.fx('burst', this.x, 0.3, this.z, '#c9a27a', 14, 6);
-      sim.shake(0.45);
+      sim.shake(0.45, this);
       sim.sfx('boss_slam', this.x, this.z);
       for (const pl of sim.players) {
         if (pl.alive && Math.hypot(pl.x - this.x, pl.z - this.z) <= radius + pl.radius) {

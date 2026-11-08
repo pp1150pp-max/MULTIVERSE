@@ -184,8 +184,9 @@ export class Sim {
     this.events.push({ t: 'text', x, y, z, text, cls, life, to });
   }
 
-  shake(amount: number): void {
-    this.events.push({ t: 'shake', amount });
+  /** Shakes the screen of one player (a skill's caster) or of the players near a spot (a boss). */
+  shake(amount: number, who: { to: number } | { x: number; z: number }): void {
+    this.events.push('to' in who ? { t: 'shake', amount, to: who.to } : { t: 'shake', amount, x: who.x, z: who.z });
   }
 
   sfx(name: SfxName, x: number, z: number, to?: number): void {
@@ -321,7 +322,7 @@ export class Sim {
     const sub = phase >= 2 ? 'ท่าเร็วขึ้นอีกขั้น เตือนสั้นลง' : 'ท่าเร็วขึ้น และซ้อนกันได้ 2 ชุด';
     this.log(`${text} ${sub}`, '#ff6a5a');
     this.events.push({ t: 'banner', text, sub, x: m.x, z: m.z });
-    this.shake(0.4);
+    this.shake(0.4, m);
   }
 
   /** Standing in lava: a share of max HP every so often, whatever the defense. */
@@ -363,7 +364,7 @@ export class Sim {
       x: m.x,
       z: m.z,
     });
-    this.shake(0.3);
+    this.shake(0.3, m);
     if (m.def.summon && !m.def.summon.vanish) this.summonMinions(m, m.def.summon.monster, m.def.summon.count);
   }
 
@@ -461,7 +462,7 @@ export class Sim {
     }
     if (m.isBoss) {
       this.log(`🏆 ปราบ ${m.def.name} สำเร็จ!`, '#ffcf5a');
-      this.shake(0.4);
+      this.shake(0.4, m);
     }
   }
 

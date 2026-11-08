@@ -116,6 +116,7 @@ const vec = (v: unknown): Vec2 | null => {
 /** Where an event happens, so far-away effects aren't sent to everyone. */
 function eventPos(ev: SimEvent): Vec2 | null {
   if (ev.t === 'text' || ev.t === 'banner' || ev.t === 'sfx') return { x: ev.x, z: ev.z };
+  if (ev.t === 'shake' && ev.x !== undefined && ev.z !== undefined) return { x: ev.x, z: ev.z };
   if (ev.t === 'fx') {
     const a = ev.args as unknown[];
     return ev.name === 'puff' || ev.name === 'burst' ? { x: a[0] as number, z: a[2] as number } : { x: a[0] as number, z: a[1] as number };
