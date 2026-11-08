@@ -72,6 +72,23 @@ function linesValid(it: Item, label: string): boolean {
     if (!linesValid(it, b.id) || !it.lines!.length) kinds = false;
   }
   ok(kinds, `every item kind (${ITEM_BASES.length}) at every rarity gets valid tier lines`);
+  // Owner 2026-11-08: weapons always have a locked crit line right after ATK, so a legendary has 6 lines.
+  let weapons = true;
+  for (const b of ITEM_BASES.filter((x) => x.slot === 'weapon')) for (const rar of RARITIES) {
+    const it = makeItem(b.id, rar, 40, 'gunslinger')!;
+    const r = lineRanges(it)!;
+    if (it.lines![1]?.stat !== 'crit' || !r[1].main || it.lines!.length !== 2 + ['common', 'uncommon', 'rare', 'epic', 'legendary'].indexOf(rar)) weapons = false;
+    // Commons have no extras, so the stone rerolls a main line in place (same stat); otherwise it never picks line 1.
+    for (let i = 0; i < 20; i++) if ((rerollStat(it) === 1 && rar !== 'common') || it.lines![1].stat !== 'crit') weapons = false;
+  }
+  ok(weapons, 'weapons: locked crit line at every rarity, legendary has 6 lines, the stat stone never changes it');
+  // The locked crit uses the full crit range; a crit extra on the same weapon gets half.
+  const wr = rowRanges('weapon_9', 'legendary', 45, ['atk', 'crit', 'crit', 'critDmg', 'def'])!;
+  ok(near(wr[2].hi * 2, wr[1].hi) && wr[4].hi > 0, 'extras: crit extra is half the locked crit line');
+  const off = rowRanges('pouch_4', 'legendary', 45, ['atk', 'critDmg', 'critDmg', 'atk', 'atkSpeed', 'maxHp'])!;
+  const full = rowRanges('ring_copper', 'legendary', 45, ['critDmg', 'atk', 'atkSpeed', 'maxHp'])!;
+  ok(near(off[2].hi, full[0].hi) && near(off[3].hi, full[1].hi) && near(off[5].hi, full[3].hi), 'extras: same range on every kind');
+  ok(off[1].main && !off[2].main && off[1].hi > off[2].hi, 'extras: the kind\'s own crit damage is not halved');
   // Owner: items stay as strong on average as before. Old average of a main stat = base × level × rarity.
   const base = ITEM_BASES.find((b) => b.id === 'weapon_5')!;
   let sum = 0;
@@ -155,14 +172,32 @@ function oldItem(): Item {
 }
 {
   const it = upgradeItem(oldItem());
-  const r = rowRanges('weapon_5', 'rare', 20, ['atk', 'crit'])!;
-  ok(it.tierV === TIER_VERSION && it.lines![0].value === 80 && it.lines![1].value === 5 && it.stats.atk === 80, 'old item: values kept');
+  const stats = it.lines!.map((l) => l.stat);
+  ok(it.tierV === TIER_VERSION && stats.join() === 'atk,crit,crit' && it.lines![0].value === 80 && it.lines![2].value === 2.5,
+    'old weapon: main ATK kept, crit extra halved, locked crit line added after the main stats');
+  const r = rowRanges('weapon_5', 'rare', 20, stats)!;
+  ok(r[1].main && !r[2].main, 'old weapon: the added crit line is locked, the old crit stays an extra');
+  ok(linesValid(it, 'old weapon'), 'old weapon: every line in its tier, stats are the lines\' total');
   ok(it.lines!.every((l, i) => {
     const t = tierOf(l.stat, l.value, r[i].lo, r[i].hi);
     return l.tier === t.tier && l.min === t.min && l.max === t.max;
   }), 'old item: tier and range taken from where the value falls now');
   const again = JSON.stringify(it);
   ok(JSON.stringify(upgradeItem(it)) === again, 'upgrading twice changes nothing');
+  ok(JSON.stringify(upgradeItem(oldItem())) === again, 'the added crit line is the same on every load (seeded by uid)');
+  // A TIER_VERSION 2 save: extras of ATK / attack speed / crit / crit damage halved, others and main stats kept.
+  const v2: Item = {
+    uid: 'v2', baseId: 'pouch_4', name: 'Cinder Ammo Case', slot: 'offhand', rarity: 'legendary', level: 45, cls: 'gunslinger',
+    stats: {}, value: 100, tierV: 2,
+    lines: [
+      { stat: 'atk', value: 38, tier: 3, min: 36, max: 44 }, { stat: 'critDmg', value: 60.8, tier: 3, min: 58.4, max: 74.2 },
+      { stat: 'maxHp', value: 220, tier: 5, min: 192, max: 220 }, { stat: 'critDmg', value: 58.2, tier: 4, min: 49.8, max: 59.4 },
+      { stat: 'atkSpeed', value: 22, tier: 4, min: 20, max: 24 }, { stat: 'atk', value: 43, tier: 4, min: 38, max: 45 },
+    ],
+  };
+  upgradeItem(v2);
+  ok(v2.lines!.map((l) => l.value).join() === '38,60.8,220,29.1,11,22' && linesValid(v2, 'v2'),
+    `v2 off-hand: only the extra damage lines halved (${v2.lines!.map((l) => l.value).join()})`);
   const preTier: Item = { uid: 'pre', baseId: 'weapon_1', name: 'Short Sword', slot: 'weapon', rarity: 'common', level: 1, stats: { atk: 4 }, value: 5 };
   ok(JSON.stringify(upgradeItem({ ...preTier })) === JSON.stringify(preTier) && !!rerollBlock(preTier), 'item from before tiers: left alone, cannot be rerolled');
 
@@ -198,9 +233,12 @@ function oldItem(): Item {
   ok(sim.reroll(p, item.uid, 'values') === item && p.gold === gold - rerollCost(item, 'values'), 'reroll values: done next to the blacksmith, gold taken');
   ok(sim.reroll(p, item.uid, 'stat') === item && linesValid(item, 'sim'), 'reroll stat on a bag item');
   const worn = p.equipment.weapon!;
-  const atkBefore = p.stats.atk;
-  for (let i = 0; i < 20 && p.stats.atk === atkBefore; i++) sim.reroll(p, worn.uid, 'values');
-  ok(p.stats.atk !== atkBefore || worn.lines!.every((l) => l.min === l.max), 'reroll on worn gear updates the character stats');
+  // The starter weapon's ATK tier may be one value wide; its locked crit line is not.
+  const statsOf = () => `${p.stats.atk}/${p.stats.crit}`;
+  const before = statsOf();
+  p.addStones('reroll_values', 20);
+  for (let i = 0; i < 20 && statsOf() === before; i++) sim.reroll(p, worn.uid, 'values');
+  ok(statsOf() !== before || worn.lines!.every((l) => l.min === l.max), 'reroll on worn gear updates the character stats');
   ok(sim.reroll(p, 'nope', 'values') === null, 'reroll: unknown item refused');
   p.stash.items[0] = makeItem('weapon_5', 'rare', 20, 'sword');
   ok(sim.reroll(p, (p.stash.items[0] as Item).uid, 'values') === null, 'reroll: stash items refused');
