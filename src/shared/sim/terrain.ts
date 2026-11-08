@@ -338,7 +338,8 @@ export class Terrain {
     at('tent', -4, 3, 3, 1.4);
     at('campfire', 0, 0, 1, 0.5);
     at('sign', -5, -6.5, 2, 0.2);
-    at('runestone', 5, 3.5, 2.6, 0.5);
+    // On the far side of the camp from the hub portal (5.5, 5.5), clear of the path and the other props.
+    at('runestone', -7.5, 1, 2.6, 0.5);
     if (set.campDecor) {
       // Camp life: the merchant's stock, the blacksmith's cart, a well and a lookout tower.
       at('well', -6, -1.5, 2, 0.9);
