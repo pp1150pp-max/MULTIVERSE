@@ -17,7 +17,7 @@ import { pick, rand, randInt } from '../rng';
 import { CLASS_IDS } from '../data/classes';
 import {
   isItem, isPotion, isStack, isStone, RARITY_LABEL, sameStack, SLOT_LABEL, STONE_KINDS, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
-import { PORTAL_RANGE, Terrain } from './terrain';
+import { PORTAL_RANGE, REST_CD, restSpotNear, Terrain, type RestSpot } from './terrain';
 import {
   BUYBACK_RESET, buybackPrice, cleanAutoSettings, lootPots, Player, sortEntries,
   type AutoSettings, type CharacterData, type LootFilter, type SortKey,
@@ -490,6 +490,29 @@ export class Sim {
     p.hp = 0;
     p.moving = false;
     this.events.push({ t: 'died', id: p.id });
+  }
+
+  /** The fountain or campfire this player is standing next to, if any. */
+  restSpotNear(p: { x: number; z: number }): RestSpot | null {
+    return restSpotNear(this.terrain.restSpots, p);
+  }
+
+  /** Rest at the fountain or a campfire: HP and MP full, then REST_CD seconds before any of them works again. */
+  rest(p: Player): boolean {
+    const spot = this.restSpotNear(p);
+    if (!p.alive || !spot) return false;
+    if (p.restCd > 0) {
+      this.text(p.x, p.topY, p.z, `พักได้อีกใน ${Math.ceil(p.restCd)} วิ`, 'info', 1, p.id);
+      return false;
+    }
+    p.hp = p.maxHp;
+    p.mp = p.stats.maxMp;
+    p.restCd = REST_CD;
+    this.fx('burst', spot.x, 1, spot.z, spot.kind === 'fountain' ? '#8fdcff' : '#ffb060', 22, 4);
+    this.fx('burst', p.x, 1, p.z, '#9fffb0', 16, 3);
+    this.text(p.x, p.topY, p.z, 'HP / MP เต็ม', 'heal', 1.2, p.id);
+    this.log(`${spot.kind === 'fountain' ? 'ดื่มน้ำจากน้ำพุ' : 'นั่งพักข้างกองไฟ'} — HP และ MP เต็ม (พักได้อีกใน ${REST_CD} วิ)`, '#9fffb0', p.id);
+    return true;
   }
 
   respawn(p: Player): void {

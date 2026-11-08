@@ -92,6 +92,7 @@ const SEEKER_LINES = [
   'ข้าคือ The Seeker ผู้ตามหาความจริงเบื้องหลังการล่มสลายของมิติทั้งหลาย ตั้งแต่ The Shattering แยก The First Cosmos ออกเป็นเสี่ยง ๆ',
   'แสงสีทองขาวที่พาเจ้ามาที่นี่… ข้าเคยเห็นมันในบันทึกโบราณที่เรียกว่า The Origin',
   'ที่นี่คือเมืองศูนย์กลางมิติ จุดเชื่อมของเศษเสี้ยวมิติที่ยังรอด สี่มุมของเกาะมีประตูสู่ดินแดนต่าง ๆ แต่สัตว์ในนั้นเริ่มคลุ้มคลั่งจากพลังที่รั่วไหล',
+  'เหนื่อยเมื่อไหร่ ให้มาดื่มน้ำจากน้ำพุกลางเมือง หรือนั่งพักข้างกองไฟในแคมป์ของแต่ละดินแดน กด T เมื่ออยู่ใกล้ เลือดและมานาจะกลับมาเต็ม',
   'จงเริ่มฝึกฝนที่ป่ามรกต ผ่านประตูมุมบนของเมือง ลึกเข้าไปในป่ามีหมีใหญ่ที่ถูกพลังนั้นครอบงำ หากเจ้าปราบมันได้ เราจะได้เบาะแสแรกของ The Origin',
 ];
 
@@ -812,6 +813,7 @@ export class Hud {
     }
     if (boss) icon('boss', boss.x, boss.z, 20);
     for (const pt of g.backend.zone.portals) icon('portal', pt.x, pt.z, 18);
+    for (const r of g.backend.terrain.restSpots) icon('camp', r.x, r.z, 14);
     for (const n of g.npcs) icon(NPC_MAP_ICON[n.id], n.x, n.z, 15);
     for (const o of g.backend.players) {
       if (o !== p) drawMapIcon(ctx, 'ally', ...toMM(o.x, o.z), 16, facingAngle(o.faceX, o.faceZ));

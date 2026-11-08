@@ -523,6 +523,10 @@ export class GameWorld {
         if (!p.alive) s.auto = null;
         sim.respawn(p);
         break;
+      case 'rest':
+        // Sim.rest checks the distance, that the player is alive and the cooldown.
+        if (sim.rest(p)) this.save(s);
+        break;
       case 'equip':
         if (i >= 0 && i < p.bag.length) p.equipFromBag(i, m.slot);
         break;
@@ -817,6 +821,7 @@ export class GameWorld {
     p.mp = Math.min(old.mp, p.stats.maxMp);
     p.cd = { ...old.cd };
     p.potCd = old.potCd;
+    p.restCd = old.restCd;
     p.stash = old.stash;
     s.sim = dest;
     s.player = p;
@@ -862,7 +867,7 @@ export class GameWorld {
     const inv = JSON.stringify([p.equipment, p.bag, p.buyback]);
     const me: PrivateSnap = {
       hp: r2(p.hp), mp: r2(p.mp), exp: p.exp, level: p.level, gold: p.gold,
-      potSel: p.potSel, lootFilter: p.lootFilter, autoSettings: p.autoSettings, stats: p.stats, cd: p.cd, potCd: r2(p.potCd),
+      potSel: p.potSel, lootFilter: p.lootFilter, autoSettings: p.autoSettings, stats: p.stats, cd: p.cd, potCd: r2(p.potCd), restCd: r2(Math.max(0, p.restCd)),
       serverMoves: serverMoves(p) || !!s.auto, epoch: s.epoch, ack: s.lastSeq, buybackLeft: Math.round(p.buybackLeft),
     };
     if (inv !== s.lastInv) {

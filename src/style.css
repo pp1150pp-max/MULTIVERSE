@@ -113,6 +113,9 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 /* Gold or items wait in the claim box at the market broker. */
 .npc-badge.alert .npc-name::after { content: ' !'; color: #ffd34a; font-weight: 600; }
 .npc-badge.alert .npc-role { box-shadow: 0 0 8px #f2c230; }
+.rest-badge .npc-role { box-shadow: 0 0 8px #6cff9a; }
+.rest-badge.waiting { opacity: 0.6; }
+.rest-badge.waiting .npc-role { box-shadow: none; }
 .npc-seeker { --npc-c: #fff3c0; }
 .npc-merchant { --npc-c: #7fe07a; }
 .npc-blacksmith { --npc-c: #ff9a4a; }

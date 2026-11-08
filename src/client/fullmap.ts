@@ -115,6 +115,7 @@ export class FullMap {
       if (m.isHostile) icon('fight', m.x, m.z, 15);
       else dot(m.x, m.z, 2.8, '#f2a640');
     }
+    for (const r of g.backend.terrain.restSpots) icon('camp', r.x, r.z, 20);
     for (const n of g.npcs) icon(NPC_MAP_ICON[n.id], n.x, n.z, 22);
     for (const p of g.backend.players) if (p !== me) icon('ally', p.x, p.z, 24, facingAngle(p.faceX, p.faceZ));
 

@@ -235,6 +235,8 @@ export class Player extends Unit {
   stats: Stats = emptyStats();
   cd: Partial<Record<SkillSlot, number>> = {};
   potCd = 0;
+  /** Seconds until the fountain or a campfire can restore this player again (Sim.rest). */
+  restCd = 0;
   /** Potions still restoring. Several can run at once; a monster hit stops them all. */
   potHeals: PotionHeal[] = [];
   lastHurt = -99;
@@ -720,6 +722,7 @@ export class Player extends Unit {
     for (const k of Object.keys(this.cd) as SkillSlot[]) this.cd[k] = Math.max(0, (this.cd[k] ?? 0) - dt);
     this.atkT -= dt;
     this.potCd -= dt;
+    this.restCd -= dt;
     this.faceLockT -= dt;
     this.rootT = Math.max(0, this.rootT - dt);
 

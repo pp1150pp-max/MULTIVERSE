@@ -49,6 +49,7 @@ export interface InputMsg {
 
 export type ActionMsg =
   | { t: 'act'; a: 'respawn' }
+  | { t: 'act'; a: 'rest' }
   | { t: 'act'; a: 'equip'; i: number; slot?: EquipSlot }
   | { t: 'act'; a: 'unequip'; slot: EquipSlot }
   | { t: 'act'; a: 'drop'; i: number }
@@ -127,7 +128,7 @@ export interface LootSnap {
 export interface PrivateSnap {
   hp: number; mp: number; exp: number; level: number; gold: number;
   potSel: PotionSelect; lootFilter: LootFilter; autoSettings: AutoSettings; stats: Stats;
-  cd: Partial<Record<SkillSlot, number>>; potCd: number;
+  cd: Partial<Record<SkillSlot, number>>; potCd: number; restCd: number;
   /** True while the server moves the character (dash, knockback, stun, dead, Auto Play) — follow its position. */
   serverMoves: boolean;
   /** Changes when the server teleports the character (respawn) — jump straight there. */

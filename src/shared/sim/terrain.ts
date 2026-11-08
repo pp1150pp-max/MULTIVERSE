@@ -67,6 +67,26 @@ const THEME_PROPS: Record<ZoneTheme, ThemeProps> = {
 /** How close a player has to walk to a portal to use it. */
 export const PORTAL_RANGE = 1.4;
 
+/** Where players can rest: the hub's fountain and each zone camp's campfire. See Sim.rest. */
+export interface RestSpot { x: number; z: number; kind: 'fountain' | 'campfire' }
+/** How close a player must stand to rest (the fountain is wide; a campfire as close as to an NPC), and how long until they can again. */
+export const REST_RANGE: Record<RestSpot['kind'], number> = { fountain: 4.5, campfire: 3 };
+export const REST_CD = 30;
+
+/** The rest spot a player at (x, z) can use, if any (the nearest in range). */
+export function restSpotNear(spots: readonly RestSpot[], p: { x: number; z: number }): RestSpot | null {
+  let best: RestSpot | null = null;
+  let bestD = Infinity;
+  for (const r of spots) {
+    const d = Math.hypot(p.x - r.x, p.z - r.z);
+    if (d <= REST_RANGE[r.kind] && d < bestD) {
+      bestD = d;
+      best = r;
+    }
+  }
+  return best;
+}
+
 /** How far the hub's quarters wobble into each other (see themeAt). The props add their own scatter on top. */
 export const QUADRANT_JITTER = 6;
 
@@ -77,6 +97,7 @@ export class Terrain {
   readonly props: PropSpec[] = [];
   /** Only zones with `npcs` (the hub) have any. */
   readonly npcPos: Partial<Record<NpcId, Vec2>> = {};
+  readonly restSpots: RestSpot[] = [];
   private readonly segs: Seg[] = [];
 
   constructor(readonly zone: ZoneDef) {
@@ -177,6 +198,7 @@ export class Terrain {
       at(key, Math.cos((deg * Math.PI) / 180) * rad, Math.sin((deg * Math.PI) / 180) * rad, height, collideR, fade);
 
     at('ruin_fountain', 0, 0, 4.2, 1.7);
+    this.restSpots.push({ x: s.x, z: s.z, kind: 'fountain' });
     this.npcPos.seeker = { x: s.x, z: s.z - 5.8 };
     at('ruin_statue', 0, -8.6, 3.8, 0.8);
     this.npcPos.merchant = { x: s.x + 5.8, z: s.z };
@@ -333,10 +355,12 @@ export class Terrain {
     const at = (key: string, dx: number, dz: number, height: number, collideR: number) => {
       for (let i = 0; i < turns; i++) [dx, dz] = [-dz, dx];
       this.addProp(key, s.x + dx, s.z + dz, height, collideR);
+      if (key === 'campfire') this.restSpots.push({ x: s.x + dx, z: s.z + dz, kind: 'campfire' });
     };
     at('tent', 3, -4, 3, 1.4);
     at('tent', -4, 3, 3, 1.4);
-    at('campfire', 0, 0, 1, 0.5);
+    // Beside the way in from the portal (which runs through the middle of the camp), not on it.
+    at('campfire', 4.5, -1, 1, 0.5);
     at('sign', -5, -6.5, 2, 0.2);
     // On the far side of the camp from the hub portal (5.5, 5.5), clear of the path and the other props.
     at('runestone', -7.5, 1, 2.6, 0.5);
