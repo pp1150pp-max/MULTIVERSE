@@ -105,8 +105,10 @@ export class VolcanoHeartBrain {
 
     if (!players.length) {
       this.idleT += dt;
-      if (this.fighting && this.idleT >= RESET_AFTER) this.reset(sim, m);
-      else if (this.fighting) m.state = 'idle';
+      // Hit at all counts as a fight, so its HP (raised per player) always comes back down.
+      const engaged = this.fighting || m.damageBy.size > 0;
+      if (engaged && this.idleT >= RESET_AFTER) this.reset(sim, m);
+      else if (engaged) m.state = 'idle';
       return;
     }
     this.idleT = 0;
@@ -144,8 +146,7 @@ export class VolcanoHeartBrain {
     this.idleT = 0;
     m.state = 'idle';
     m.enraged = false;
-    m.hp = m.maxHp;
-    m.damageBy.clear();
+    m.resetFight();
   }
 
   private add(sim: Sim, h: Hazard): void {

@@ -455,6 +455,7 @@ export class OnlineBackend implements Backend {
       m.moving = ms.mv;
       m.alive = ms.alive;
       m.deadT = ms.deadT;
+      if (ms.mhp) m.syncMaxHp(ms.mhp);
       m.hp = ms.hp;
       m.state = ms.st;
       m.windupT = ms.wind ? 1 : 0;

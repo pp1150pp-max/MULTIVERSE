@@ -263,7 +263,11 @@ export class Sim {
     if (opts.maxMult) raw = Math.min(raw, p.stats.atk * opts.maxMult);
     const def = this.time < m.armorBreakUntil ? m.defense * (1 - m.armorBreak) : m.defense;
     const dmg = Math.round(mitigate(raw, def));
-    m.damageBy.set(p.id, (m.damageBy.get(p.id) ?? 0) + Math.min(dmg, Math.max(0, m.hp)));
+    if (!m.damageBy.has(p.id)) {
+      m.damageBy.set(p.id, 0);
+      m.addFighter(m.damageBy.size);
+    }
+    m.damageBy.set(p.id, m.damageBy.get(p.id)! + Math.min(dmg, Math.max(0, m.hp)));
     m.hp -= dmg;
     this.events.push({ t: 'flash', id: m.id });
     this.text(m.x, m.topY, m.z, crit ? `${dmg}!` : String(dmg), crit ? 'crit' : 'dmg');
