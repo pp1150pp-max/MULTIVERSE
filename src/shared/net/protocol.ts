@@ -126,8 +126,6 @@ export interface PrivateSnap {
   hp: number; mp: number; exp: number; level: number; gold: number;
   potSel: PotionSelect; lootFilter: LootFilter; autoSettings: AutoSettings; stats: Stats;
   cd: Partial<Record<SkillSlot, number>>; potCd: number;
-  /** Seconds left to cast a recast skill again (sword Charge). Missing on older servers. */
-  recast?: Partial<Record<SkillSlot, number>>;
   /** True while the server moves the character (dash, knockback, stun, dead, Auto Play) — follow its position. */
   serverMoves: boolean;
   /** Changes when the server teleports the character (respawn) — jump straight there. */

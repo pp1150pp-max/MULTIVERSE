@@ -15,7 +15,6 @@
 | `attack.png` | 4 | prompt ข้อ 4 คอมโบ 1 ฟันแนวนอน |
 | `attack_2.png` | 4 | prompt ข้อ 5 คอมโบ 2 ฟันย้อนเฉียงขึ้น |
 | `attack_3.png` | 4 | prompt ข้อ 6 คอมโบ 3 กระโดดฟาดลงปิดท้าย |
-| `skill_e.png` | 2 | prompt ข้อ 8 ท่าตั้งการ์ดของสกิล E ปัดป้อง (ย่อตัว จึงปรับขนาดตามความกว้างผมแทนความสูง) |
 
 เกมเล่นท่าฟัน `attack` → `attack_2` → `attack_3` วนไปเองเมื่อตีต่อเนื่องภายใน 1 วินาที
 รอยฟันสีทองมาจาก `fx/sword.png` ที่เกมวาดทับ จึงไม่ต้องวาดรอยฟันในตัวละคร
@@ -24,9 +23,7 @@
 `PNGJS=<path ของ pngjs> node tools/cut_sword.cjs` สคริปต์จะตัดพื้นหลัง #FF00FF ออก อุดรูเล็ก ๆ บนผ้าคลุม
 ปรับขนาดทีละแถวให้ตัวสูง 200px เท่า Gunslinger (ไม่นับดาบที่ยกขึ้น) และวางเท้าสูงจากขอบล่าง 16px
 
-ไอคอนสกิลปัดป้อง (`icons/skill_parry.png` 128×128) มาจาก prompt ข้อ 7 สคริปต์เดียวกันย่อให้
-
-ยังไม่มีท่า `run_attack` `dash` `hit` `death` `revive` `skill_q` และ `skill_r`
+ยังไม่มีท่า `run_attack` `dash` `hit` `death` `revive` และ `skill_q/e/r`
 เกมจะใช้ท่าที่มีแทน (ตีระหว่างเดินจะเล่นท่าฟันยืนกับที่) และตอนตายจะทำตัวละครให้จางลง
 
 ## 1. แบบตัวละคร
@@ -140,7 +137,9 @@ magenta (#FF00FF), no shadows, no ground, no text, no labels, no numbers, no gri
 purple on the character.
 ```
 
-## 7. ไอคอนสกิลปัดป้อง
+## 7. ไอคอนสกิลปัดป้อง (เลิกใช้แล้ว)
+
+สกิลปัดป้องถูกรวมเข้ากับพายุดาบ (Q หมุนแล้วไม่รับดาเมจ) ไฟล์ภาพจึงถูกเอาออกจากเกม prompt ข้อ 7 และ 8 เก็บไว้เผื่อใช้ทีหลัง
 
 แนบ `icons/skill_charge.png` ไปเป็นตัวอย่างสไตล์ เซฟเป็น `raw/skill_parry_icon.png`
 
@@ -152,7 +151,7 @@ glowing amber katana held horizontally, blocking, with a bright golden spark bur
 and a faint translucent golden shield shape behind the katana. The icon fills the whole image. No text, no letters.
 ```
 
-## 8. ท่าตั้งการ์ด (สกิล E ปัดป้อง)
+## 8. ท่าตั้งการ์ด (เลิกใช้แล้ว)
 
 ครั้งแรกเจนในแชทใหม่แล้วได้ตัวละครคนอื่น จึงต้องแนบ `raw/design.png` และ `raw/attack.png` ไปด้วย เซฟเป็น `raw/skill_parry.png`
 

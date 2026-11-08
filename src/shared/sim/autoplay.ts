@@ -191,8 +191,7 @@ export class AutoPlay {
     switch (p.cls.id) {
       case 'sword':
         if (near >= 2) this.tryCast(g, out, 'q');
-        // Parry only when several monsters are already swinging at us.
-        if (g.monsters.filter((m) => m.isHostile && Math.hypot(m.x - p.x, m.z - p.z) < 3).length >= 2) this.tryCast(g, out, 'e');
+        if (near >= 3 || target.hp > 250) this.tryCast(g, out, 'e');
         break;
       case 'mage':
         this.tryCast(g, out, 'q');
@@ -212,8 +211,6 @@ export class AutoPlay {
     const p = g.player;
     const sk = p.skill(slot);
     if ((slot === 'q' || slot === 'e' || slot === 'r') && !p.autoSettings.skills[slot]) return;
-    // Auto never takes the second cast (sword Charge): it could carry the player out of the fight.
-    if ((p.recast[slot] ?? 0) > 0) return;
     if (sk && (p.cd[slot] ?? 0) <= 0 && p.mp >= sk.mp + 5 && !out.skills.includes(slot)) out.skills.push(slot);
   }
 
