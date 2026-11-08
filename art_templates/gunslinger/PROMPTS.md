@@ -113,8 +113,12 @@ magenta (#FF00FF), no shadows, no ground, no text, no labels, no numbers, no gri
 ท่าตายแบบมีม "นอนคุดคู้หน้าคว่ำ" ใช้ท่าเดียวกันทุกคลาส แถวเดียว 5 เฟรม มุมข้างหันซ้าย (เกมกลับภาพให้ตอนหันขวา)
 เกมเล่นครั้งเดียวแล้วค้างเฟรมสุดท้ายไว้จนกดฟื้นคืนชีพ และวาดหลุมใต้ตัวเอง (`death_crater` ใน [ground_fx](../ground_fx/PROMPTS.md))
 
-เปิดแชทใหม่ (แชทเดิมยาวเกินไปแล้ว) แนบ `public/assets/sprites/player/gunslinger/idle.png` กับ `run.png` ไปเป็นต้นแบบ
-เซฟเป็น `art_templates/gunslinger/raw/death.png` แล้วตัดเป็น `player/gunslinger/death.png` ด้วยสเกลเดียวกับท่ายืน
+ทำ 3 ภาพในแชทใหม่แชทเดียวกัน (แบบเดียวกับอัศวิน ข้อ 9 และ 12 ใน [sword](../sword/PROMPTS.md)):
+1. prompt ด้านล่าง แนบ `public/assets/sprites/player/gunslinger/idle.png` กับ `run.png` เซฟเป็น `raw/death.png` (เกมใช้เฟรม 1–3)
+2. prompt ข้อ 6.1 ฉากนอนในหลุม แนบภาพมีมต้นฉบับ (ใช้แค่ท่า) เซฟเป็น `raw/death_scene.png`
+3. prompt ข้อ 6.2 ลบพื้นออกจากฉากนั้น เซฟเป็น `raw/death_end.png` (เฟรมสุดท้าย)
+
+แล้วตัดด้วย `tools/cut_death.cjs` (ดูวิธีใช้ในไฟล์) ให้ขนาดตัวเท่าท่ายืน
 
 ```
 Use the attached sprite sheets as the EXACT character and style reference: the same young gunslinger with messy spiky
@@ -138,4 +142,37 @@ every frame except the airborne one. Every figure fully inside its own equal-wid
 it, nothing touching or overlapping. Background ONE perfectly flat solid magenta (#FF00FF), no ground, no crater, no
 shadows, no dust, no impact lines, no stars, no text, no labels, no numbers, no grid lines. Do not use pink, magenta or
 purple on the character.
+```
+
+### 6.1 ฉากนอนในหลุม
+
+```
+Generate a SQUARE image in the EXACT same fine-detail 16-bit SNES-era JRPG pixel-art style as the sprites above: crisp
+pixels, rich shading with 3 to 4 tones per material, dark outlines, no blur, no painterly rendering. The attached
+picture is a POSE REFERENCE ONLY: copy only how the body lies, never the person, clothes or colors.
+CHARACTER, exactly as in the sprites above: the same young gunslinger with messy spiky silver-white hair, aviator goggles with round blue lenses and brass frames on the forehead, a long red scarf, a long black leather coat with gold trim and a tattered hem, dark gloves, brown boots, and one large chunky steampunk pistol of dark metal and brass. Do not redesign his outfit, colors, proportions or
+equipment.
+SCENE AND POSE: a comical knockout aftermath. He has been slammed into the ground and lies curled up on his
+RIGHT SIDE inside a large shallow impact crater in dry, cracked orange-brown earth. His head is toward the upper
+LEFT and his BACK is turned toward the viewer. His face is completely hidden, pressed down into his bent
+arms, both arms folded close to the head with the fists near the face. His back is strongly rounded, both knees are
+pulled tightly toward the chest, the legs stacked, the boots toward the lower RIGHT with their soles clearly visible.
+He looks completely unconscious and limp, like a sleeping shrimp: NOT kneeling, NOT on all fours, NOT lying flat on
+his belly, NOT facing the viewer. His red scarf and coat tails lie spread on the ground, and the pistol has fallen onto the ground nearby, separated from his hands.
+ENVIRONMENT: a large shallow round impact crater with a jagged rim, cracked earth radiating outward, small stones and
+debris, warm light from the upper left.
+COMPOSITION: one single character seen from a slightly elevated three-quarter top-down angle, in the centre of the
+crater, the whole body visible. Humorous JRPG knockout, no blood, no extra characters, no text, no labels.
+```
+
+### 6.2 ลบพื้นออก
+
+แนบ `raw/death_scene.png` ภาพเดียว
+
+```
+Edit the attached image. Keep the gunslinger and his pistol EXACTLY as they are: the same pose, the same position, the same size, the
+same pixels and colors. Do not redraw, move, rotate or restyle them. Remove EVERYTHING else: the crater, the cracked
+ground, the stones, the debris and the dark shading on the ground around and under the body. Replace all of it with
+ONE perfectly flat solid magenta (#FF00FF) background, so only the gunslinger and his pistol remain, with crisp dark outlines against
+the background. No shadow under the body, no ground, no text. Do not use pink, magenta or purple on the character.
 ```

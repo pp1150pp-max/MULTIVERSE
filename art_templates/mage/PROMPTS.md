@@ -97,8 +97,12 @@ text, no labels, no numbers, no grid lines. Do not use bright green on the chara
 ท่าตายแบบมีม "นอนคุดคู้หน้าคว่ำ" ใช้ท่าเดียวกันทุกคลาส แถวเดียว 5 เฟรม มุมข้างหันซ้าย (เกมกลับภาพให้ตอนหันขวา)
 เกมเล่นครั้งเดียวแล้วค้างเฟรมสุดท้ายไว้จนกดฟื้นคืนชีพ และวาดหลุมใต้ตัวเอง (`death_crater` ใน [ground_fx](../ground_fx/PROMPTS.md))
 
-เปิดแชทใหม่ (แชทเดิมยาวเกินไปแล้ว) แนบ `public/assets/sprites/player/mage/idle.png` กับ `run.png` ไปเป็นต้นแบบ
-เซฟเป็น `art_templates/mage/raw/death.png` แล้วตัดเป็น `player/mage/death.png` ด้วยสเกลเดียวกับท่ายืน
+ทำ 3 ภาพในแชทใหม่แชทเดียวกัน (แบบเดียวกับอัศวิน ข้อ 9 และ 12 ใน [sword](../sword/PROMPTS.md)):
+1. prompt ด้านล่าง แนบ `public/assets/sprites/player/mage/idle.png` กับ `run.png` เซฟเป็น `raw/death.png` (เกมใช้เฟรม 1–3)
+2. prompt ข้อ 5.1 ฉากนอนในหลุม แนบภาพมีมต้นฉบับ (ใช้แค่ท่า) เซฟเป็น `raw/death_scene.png`
+3. prompt ข้อ 5.2 ลบพื้นออกจากฉากนั้น เซฟเป็น `raw/death_end.png` (เฟรมสุดท้าย)
+
+แล้วตัดด้วย `tools/cut_death.cjs` (ดูวิธีใช้ในไฟล์) ให้ขนาดตัวเท่าท่ายืน
 
 ```
 Use the attached sprite sheets as the EXACT character and style reference: the same young witch girl with long
@@ -122,4 +126,37 @@ lowest point of the body rests on the same baseline in every frame except the ai
 its own equal-width cell with clear empty space around it, nothing touching or overlapping. Background ONE perfectly
 flat solid pure bright green (#00FF00), no ground, no crater, no shadows, no dust, no impact lines, no stars, no text,
 no labels, no numbers, no grid lines. Do not use bright green on the character.
+```
+
+### 5.1 ฉากนอนในหลุม
+
+```
+Generate a SQUARE image in the EXACT same fine-detail 16-bit SNES-era JRPG pixel-art style as the sprites above: crisp
+pixels, rich shading with 3 to 4 tones per material, dark outlines, no blur, no painterly rendering. The attached
+picture is a POSE REFERENCE ONLY: copy only how the body lies, never the person, clothes or colors.
+CHARACTER, exactly as in the sprites above: the same young witch girl with long straight pale silver-lavender hair, a deep purple pointed witch hat with a gold band and gold stars, a deep purple robe and short cape with gold trim, brown boots, and a tall gold staff topped by a gold ring holding a big blue orb. Do not redesign her outfit, colors, proportions or
+equipment.
+SCENE AND POSE: a comical knockout aftermath. She has been slammed into the ground and lies curled up on her
+RIGHT SIDE inside a large shallow impact crater in dry, cracked orange-brown earth. Her head is toward the upper
+LEFT and her BACK is turned toward the viewer. Her face is completely hidden, pressed down into her bent
+arms, both arms folded close to the head with the fists near the face. Her back is strongly rounded, both knees are
+pulled tightly toward the chest, the legs stacked, the boots toward the lower RIGHT with their soles clearly visible.
+She looks completely unconscious and limp, like a sleeping shrimp: NOT kneeling, NOT on all fours, NOT lying flat on
+her belly, NOT facing the viewer. Her witch hat is knocked crooked but still on her head, her long hair spills over the ground, and the staff has fallen onto the ground nearby, the blue orb dull and unlit.
+ENVIRONMENT: a large shallow round impact crater with a jagged rim, cracked earth radiating outward, small stones and
+debris, warm light from the upper left.
+COMPOSITION: one single character seen from a slightly elevated three-quarter top-down angle, in the centre of the
+crater, the whole body visible. Humorous JRPG knockout, no blood, no extra characters, no text, no labels.
+```
+
+### 5.2 ลบพื้นออก
+
+แนบ `raw/death_scene.png` ภาพเดียว
+
+```
+Edit the attached image. Keep the witch and her staff EXACTLY as they are: the same pose, the same position, the same size, the
+same pixels and colors. Do not redraw, move, rotate or restyle them. Remove EVERYTHING else: the crater, the cracked
+ground, the stones, the debris and the dark shading on the ground around and under the body. Replace all of it with
+ONE perfectly flat solid pure bright green (#00FF00) background, so only the witch and her staff remain, with crisp dark outlines against
+the background. No shadow under the body, no ground, no text. Do not use bright green on the character.
 ```
