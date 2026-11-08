@@ -2,7 +2,7 @@
 // 3 rows (front, side, back) × 3 walk frames. Drop a PNG with that layout into
 // public/assets/... and it replaces the placeholder automatically (see assets.ts).
 import { mulberry32, type Rng } from '../shared/rng';
-import type { ClassId } from '../shared/types';
+import type { ClassId, StoneKind } from '../shared/types';
 
 export type View = 'front' | 'side' | 'back';
 type Ctx = CanvasRenderingContext2D;
@@ -639,14 +639,22 @@ export function drawRunestone(): HTMLCanvasElement {
 
 // ---------------------------------------------------------------- icons & fx
 
+/** Placeholder gem colours per stone (dark, mid, light). */
+const GEM: Record<`stone_${StoneKind}`, [string, string, string]> = {
+  stone_protect: ['#1f5f8a', '#4fb4e8', '#c8f2ff'],
+  stone_enhance: ['#8a3a10', '#ff9a2e', '#ffe0a0'],
+  stone_reroll_values: ['#8a6a10', '#ffd34a', '#fff3b0'],
+  stone_reroll_stat: ['#4a2a8a', '#b67cff', '#e8d4ff'],
+};
+
 export function drawIcon(
-  kind: 'coin' | 'potion_hp' | 'potion_mp' | 'bag' | 'stone_protect' | 'stone_enhance', color = '#d8d8d8',
+  kind: 'coin' | 'potion_hp' | 'potion_mp' | 'bag' | `stone_${StoneKind}`, color = '#d8d8d8',
 ): HTMLCanvasElement {
   const c = newCanvas(16, 16);
   const ctx = c.getContext('2d')!;
-  if (kind === 'stone_protect' || kind === 'stone_enhance') {
-    // A cut gem: blue for protection, orange for enhancement.
-    const [dark, mid, light] = kind === 'stone_protect' ? ['#1f5f8a', '#4fb4e8', '#c8f2ff'] : ['#8a3a10', '#ff9a2e', '#ffe0a0'];
+  if (kind.startsWith('stone_')) {
+    // A cut gem in the stone's colour.
+    const [dark, mid, light] = GEM[kind as `stone_${StoneKind}`];
     ctx.fillStyle = dark;
     ctx.beginPath();
     ctx.moveTo(8, 1); ctx.lineTo(14, 6); ctx.lineTo(8, 15); ctx.lineTo(2, 6); ctx.closePath();

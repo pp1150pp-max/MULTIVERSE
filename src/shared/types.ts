@@ -110,8 +110,8 @@ export interface PotionStack {
 }
 
 /** Boss-only blacksmith materials: protection keeps the + level on a fail, enhance is needed from +11. */
-export type StoneKind = 'protect' | 'enhance';
-export const STONE_KINDS: StoneKind[] = ['protect', 'enhance'];
+export type StoneKind = 'protect' | 'enhance' | 'reroll_values' | 'reroll_stat';
+export const STONE_KINDS: StoneKind[] = ['protect', 'enhance', 'reroll_values', 'reroll_stat'];
 
 /** Stones of one kind sharing a bag slot (up to STONE_STACK). */
 export interface StoneStack {

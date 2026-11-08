@@ -11,7 +11,7 @@ import {
   ANNOUNCE_FROM, dropsOnFail, enhanceCost, itemName, MAX_PLUS, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
 } from '../data/enhance';
 import { entryName, potionName, POTION_STACK, POTIONS, stackLimit } from '../data/potions';
-import { BOSS_STONE_CHANCE, STONE_COLOR, STONE_NAME } from '../data/stones';
+import { BOSS_STONE_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, STONE_COLOR, STONE_NAME } from '../data/stones';
 import { NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { pick, rand, randInt } from '../rng';
 import { CLASS_IDS } from '../data/classes';
@@ -538,7 +538,7 @@ export class Sim {
       for (let i = 0; i < n; i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 1.5, band) }, owner);
       this.spawnLoot(m, { type: 'potion', pot: 'hp', size: 's', count: 1 }, owner);
       this.spawnLoot(m, { type: 'potion', pot: 'mp', size: 's', count: 1 }, owner);
-      // Blacksmith stones drop only from bosses, each kind rolled on its own.
+      // Every blacksmith stone kind can drop from a boss, each rolled on its own.
       for (const stone of STONE_KINDS) {
         if (r() < BOSS_STONE_CHANCE) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner);
       }
@@ -546,6 +546,12 @@ export class Sim {
     }
     if (r() < d.itemChance) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 0, band) }, owner);
     if (r() < d.potionChance) this.spawnLoot(m, { type: 'potion', pot: r() < 0.6 ? 'hp' : 'mp', size: 's', count: 1 }, owner);
+    // Reroll stones, rarely, from monsters that drop items at all (not summoned minions).
+    if (d.itemChance > 0) {
+      for (const stone of MONSTER_STONES) {
+        if (r() < MONSTER_STONE_CHANCE) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner);
+      }
+    }
   }
 
   private spawnLoot(m: Monster, kind: LootKind, owner?: number): void {
@@ -884,7 +890,7 @@ export class Sim {
   /**
    * A blacksmith reroll on gear the player owns (worn or in the bag, never the stash): `values` rerolls
    * every line inside its tier, `stat` turns one extra line into a new stat (see rerollStat). Gold is
-   * checked and taken here. Returns the changed item, or null if nothing happened.
+   * checked and taken here, with one stone of the reroll's kind. Returns the changed item, or null if nothing happened.
    */
   reroll(p: Player, uid: string, kind: RerollKind): Item | null {
     if (!this.near(p, 'blacksmith')) return null;
@@ -892,8 +898,10 @@ export class Sim {
     const item = worn ?? p.bag.find((w): w is Item => isItem(w) && w.uid === uid);
     if (!item || !lineRanges(item)) return null;
     const cost = rerollCost(item, kind);
-    if (p.gold < cost) return null;
+    const stone = REROLL_STONE[kind];
+    if (p.gold < cost || p.stoneCount(stone) < 1) return null;
     p.gold -= cost;
+    p.takeStones(stone, 1);
     if (kind === 'values') rerollValues(item);
     else rerollStat(item);
     if (worn) p.recompute();

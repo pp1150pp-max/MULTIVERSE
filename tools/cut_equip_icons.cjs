@@ -5,7 +5,8 @@ const fs = require('fs');
 const { PNG } = require(process.env.PNGJS || 'pngjs');
 
 const ROOT = path.resolve(__dirname, '..');
-const RAW = path.join(ROOT, 'art_templates/equip_icons/raw');
+// RAW_DIR picks another folder of raw pictures (e.g. art_templates/stones/raw).
+const RAW = path.resolve(ROOT, process.env.RAW_DIR || 'art_templates/equip_icons/raw');
 const OUT = path.join(ROOT, 'public/assets/sprites/icons');
 const SIZE = 96;
 const FIT = 90; // the item's longest side, leaving a small margin like the other icons

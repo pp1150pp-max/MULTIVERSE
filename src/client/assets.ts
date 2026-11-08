@@ -5,6 +5,7 @@ import {
   drawTent, drawCampfire, drawSign, drawFence, drawRunestone, drawIcon, pixelCircle,
 } from './placeholder';
 import { ITEM_ART } from '../shared/data/items';
+import { STONE_KINDS } from '../shared/types';
 import { MAP_ICONS } from './mapIconNames';
 import type { AnimSet, CharManifest } from './AnimatedActor';
 
@@ -211,9 +212,8 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   icon_coin: single('icons/coin.png', () => drawIcon('coin')),
   icon_potion_hp: single('icons/potion_hp.png', () => drawIcon('potion_hp')),
   icon_potion_mp: single('icons/potion_mp.png', () => drawIcon('potion_mp')),
-  // No painted icons yet: until icons/stone_*.png exist the placeholder gems are used.
-  icon_stone_protect: single('icons/stone_protect.png', () => drawIcon('stone_protect')),
-  icon_stone_enhance: single('icons/stone_enhance.png', () => drawIcon('stone_enhance')),
+  // Painted stones; the placeholder gem is only used if a picture is missing.
+  ...Object.fromEntries(STONE_KINDS.map((k) => [`icon_stone_${k}`, single(`icons/stone_${k}.png`, () => drawIcon(`stone_${k}`))])),
   ...Object.fromEntries(ITEM_ART.map((name) => [name, single(`icons/${name}.png`, () => drawIcon('bag'))])),
 };
 
