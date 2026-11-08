@@ -109,6 +109,8 @@ export interface MonsterSnap {
   id: number; def: string; lv: number;
   x: number; z: number; fx: number; fz: number; mv: boolean;
   alive: boolean; deadT: number; hp: number;
+  /** Bosses only: max HP, which grows with the number of players fighting it. */
+  mhp?: number;
   st: 'idle' | 'chase' | 'return' | 'charge' | 'leap'; wind: boolean; enr: boolean;
   /** Height above the ground while jumping. */
   y: number;
