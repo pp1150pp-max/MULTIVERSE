@@ -266,8 +266,16 @@ function build(base: BaseItem, rarity: Rarity, level: number, cls: ClassId, r: R
   return item;
 }
 
-export function rollItem(r: Rng, level: number, cls: ClassId, boost = 0): Item {
-  const candidates = BASES.filter((b) => b.minLevel <= level + 1 && (b.names.any || b.names[cls]));
+/**
+ * A drop. `band` is the map's level range (its `levels`): only the kinds made for that map drop there
+ * (frost weapons in the snow, fire weapons on the volcano), whatever their minLevel inside it, so a
+ * level-40 monster never drops a level-1 Flintlock. Without a band, or when no kind fits it, any kind
+ * up to the level can drop.
+ */
+export function rollItem(r: Rng, level: number, cls: ClassId, boost = 0, band?: readonly [number, number]): Item {
+  const forClass = BASES.filter((b) => b.names.any || b.names[cls]);
+  const ofMap = band ? forClass.filter((b) => b.minLevel >= band[0] && b.minLevel <= band[1]) : [];
+  const candidates = ofMap.length ? ofMap : forClass.filter((b) => b.minLevel <= level + 1);
   return build(pick(r, candidates), rollRarity(r, boost), level, cls, r, boost);
 }
 

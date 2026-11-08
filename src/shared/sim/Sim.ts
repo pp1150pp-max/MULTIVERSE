@@ -514,13 +514,16 @@ export class Sim {
     }
     // Drops are for any class: weapons and armor of other classes can be sold or given to a friend.
     const anyClass = () => pick(r, CLASS_IDS);
+    // Gear comes from the monster's own map (by its level), also when it stands in the hub.
+    const home = Object.values(ZONES).find((z) => z.id !== HUB_ID && d.levels[0] >= z.levels[0] && d.levels[0] <= z.levels[1]);
+    const band = home?.levels;
     // The top damage dealer gets first pick for a while, then anyone can take it.
     const owner = top?.id;
     const gold = Math.round(randInt(r, d.gold[0], d.gold[1]) * (1 + 0.1 * (m.level - d.levels[0])));
     this.spawnLoot(m, { type: 'gold', amount: gold }, owner);
     if (m.isBoss) {
       const n = randInt(r, 2, 3);
-      for (let i = 0; i < n; i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 1.5) }, owner);
+      for (let i = 0; i < n; i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 1.5, band) }, owner);
       this.spawnLoot(m, { type: 'potion', pot: 'hp', size: 's', count: 1 }, owner);
       this.spawnLoot(m, { type: 'potion', pot: 'mp', size: 's', count: 1 }, owner);
       // Blacksmith stones drop only from bosses, each kind rolled on its own.
@@ -529,7 +532,7 @@ export class Sim {
       }
       return;
     }
-    if (r() < d.itemChance) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass()) }, owner);
+    if (r() < d.itemChance) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 0, band) }, owner);
     if (r() < d.potionChance) this.spawnLoot(m, { type: 'potion', pot: r() < 0.6 ? 'hp' : 'mp', size: 's', count: 1 }, owner);
   }
 
