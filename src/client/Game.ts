@@ -13,7 +13,8 @@ import type { Backend, ProjectileLike } from './backend';
 import { ISO_DIR, World } from './world';
 import { Input } from './input';
 import { Effects } from './effects';
-import { Floating } from './floating';
+import { Floating, countdown } from './floating';
+import { MONSTERS } from '../shared/data/monsters';
 import { Hud } from './hud';
 import { initDraggableWindows } from './dragwindow';
 import { AutoRing } from './autoRing';
@@ -326,6 +327,9 @@ export class Game {
       case 'banner':
         this.hud.banner(ev.text, ev.sub, ev.color);
         break;
+      case 'bossSpawn':
+        this.hud.banner(`${ev.name} ปรากฏตัวแล้ว!`, `ที่ส่วนลึกของ${this.backend.zone.nameTh}`, '#ff9a6a');
+        break;
       case 'flash':
         this.viewById(ev.id)?.actor.flash();
         break;
@@ -470,6 +474,9 @@ export class Game {
     const prompt = near && !this.hud.dialogOpen ? `${near.name} — กด T เพื่อ${near.action}` : null;
     this.floating.npcBadges(this, this.npcs);
     this.floating.npcPrompt(this, near?.x ?? 0, 3.7, near?.z ?? 0, prompt);
+    const lair = this.backend.zone.boss;
+    const bossIn = this.backend.bossRespawnIn;
+    this.floating.bossTimer(this, lair?.x ?? 0, lair?.z ?? 0, lair && bossIn !== null ? `${MONSTERS[lair.monster].nameTh} เกิดใน ${countdown(bossIn)}` : null);
     if (near && i.pressed('KeyT')) this.hud.talkTo(near.id);
 
     // Farming circle: while Auto runs (around where it started) and while the settings window is open

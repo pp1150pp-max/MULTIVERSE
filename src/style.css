@@ -119,6 +119,12 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 .npc-keeper { --npc-c: #8ab8ff; }
 @keyframes npc-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 
+/* Countdown over an empty boss lair. */
+.boss-timer {
+  font-size: 14px; font-weight: bold; padding: 4px 10px; border-radius: 3px;
+  background: rgba(30, 10, 8, 0.82); border: 1px solid #ff7a5a; color: #ffd0b8; text-shadow: 0 0 3px #000;
+}
+
 .npc-prompt {
   font-size: 12px; padding: 3px 8px; border-radius: 3px;
   background: rgba(20, 16, 10, 0.8); border: 1px solid var(--gold); color: var(--gold-hi);

@@ -874,6 +874,7 @@ export class GameWorld {
       me.stash = p.stash;
     }
     const sim = s.sim;
+    const bossIn = sim.bossRespawnIn();
     const msg: SnapshotMsg = {
       t: 'snap',
       time: r2(sim.time),
@@ -897,6 +898,7 @@ export class GameWorld {
         color: pr.o.color, size: pr.o.size, art: pr.o.art,
       })),
       ...(sim.hazards.length && sim.zone.boss && near(sim.zone.boss) ? { hazards: sim.hazards } : {}),
+      ...(bossIn !== null ? { bossIn: Math.round(bossIn * 10) / 10 } : {}),
       loots: sim.loots.filter(near).map((l) => ({
         id: l.id, x: r2(l.x), z: r2(l.z), fromX: r2(l.fromX), fromZ: r2(l.fromZ), t: r2(l.t),
         kind: l.kind, dropped: l.dropped, owner: l.owner, ownerUntil: r2(l.ownerUntil),

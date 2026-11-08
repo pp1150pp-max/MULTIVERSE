@@ -77,6 +77,8 @@ export type SimEvent =
   | { t: 'log'; msg: string; color?: string; to?: number }
   /** Big text across the middle of the screen, for players near x/z (boss phase change). */
   | { t: 'banner'; text: string; sub?: string; color?: string; x: number; z: number }
+  /** The zone's boss came back: told to everyone in the zone, wherever they are. */
+  | { t: 'bossSpawn'; name: string }
   | { t: 'flash'; id: number }
   /** One-shot animation. `fallback` = play the attack animation if the actor lacks `name`. */
   | { t: 'anim'; id: number; name: string; duration?: number; fallback?: 'attack' }

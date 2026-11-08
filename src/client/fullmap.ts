@@ -4,6 +4,7 @@ import { MONSTERS } from '../shared/data/monsters';
 import { ZONES } from '../shared/data/zones';
 import { sheets } from './assets';
 import { drawMapIcon, facingAngle } from './mapIcons';
+import { countdown } from './floating';
 import type { MapIcon } from './mapIconNames';
 
 const S = Math.SQRT1_2;
@@ -149,7 +150,8 @@ export class FullMap {
       const bd = MONSTERS[b.monster];
       const [bx, by] = at(b.x, b.z);
       icon('boss', b.x, b.z, 34);
-      label(bx, by - 30 * px, `${bd.nameTh} Lv.${bd.levels[0]}`, '#ff9a8a', { size: 13 });
+      const bossIn = g.backend.bossRespawnIn;
+      label(bx, by - 30 * px, `${bd.nameTh} Lv.${bd.levels[0]}${bossIn !== null ? ` · เกิดใน ${countdown(bossIn)}` : ''}`, '#ff9a8a', { size: 13 });
     }
     if (zone.npcs) {
       const [cx, cy] = at(zone.start.x, zone.start.z);
