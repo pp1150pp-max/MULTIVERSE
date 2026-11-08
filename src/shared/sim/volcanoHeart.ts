@@ -287,7 +287,7 @@ export class VolcanoHeartBrain {
     sim.fx('ring', h.x, h.z, h.r, '#ff7a3a', 0.6);
     sim.fx('disc', h.x, h.z, h.r, '#ff5a2a', 0.5);
     sim.fx('burst', h.x, 0.5, h.z, '#ffb070', 30, 9);
-    sim.shake(0.6);
+    sim.shake(0.6, h);
     sim.sfx('boss_slam', h.x, h.z);
     for (const p of sim.players) {
       if (!p.alive || Math.hypot(p.x - h.x, p.z - h.z) > h.r) continue;
