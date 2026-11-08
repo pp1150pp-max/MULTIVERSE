@@ -7,6 +7,8 @@ import { VolcanoHeartBrain } from './volcanoHeart';
 
 const BOSS_RAMP_PER_SEC = 0.2;
 const BOSS_RAMP_MAX = 3;
+/** Boss max HP added for each player past the first who hits it: 1 player x1, 2 x1.5, 3 x2… */
+export const BOSS_HP_PER_PLAYER = 0.5;
 /** Enrage-ramp bosses wait this many seconds after landing a hit before speeding up again. */
 const RAGE_RAMP_COOLDOWN = 3;
 /** Their climb is steeper and goes higher than other bosses'. Only running uses the part above BOSS_RAMP_MAX. */
@@ -27,7 +29,9 @@ type Windup = 'melee' | 'slam' | 'charge' | 'throw' | 'leap';
 export class Monster extends Unit {
   readonly def: MonsterDef;
   readonly area: SpawnArea;
-  private readonly maxHpV: number;
+  /** Max HP for one player; bosses get more for each extra player who hits them (see addFighter). */
+  private readonly baseHp: number;
+  private hpMult = 1;
   readonly atk: number;
   readonly defense: number;
   readonly expReward: number;
@@ -86,8 +90,8 @@ export class Monster extends Unit {
     this.area = area;
     this.level = level;
     const sc = 1 + 0.18 * (level - def.levels[0]);
-    this.maxHpV = Math.round(def.hp * sc * boost.stats);
-    this.hp = this.maxHpV;
+    this.baseHp = Math.round(def.hp * sc * boost.stats);
+    this.hp = this.baseHp;
     this.atk = def.atk * sc * boost.stats;
     this.defense = def.def * sc * boost.stats;
     this.zoneSpeed = boost.speed;
@@ -98,7 +102,32 @@ export class Monster extends Unit {
     this.face(Math.random() - 0.5, Math.random() - 0.5);
   }
 
-  get maxHp(): number { return this.maxHpV; }
+  get maxHp(): number { return Math.round(this.baseHp * this.hpMult); }
+
+  /**
+   * Bosses: called when a player hits it for the first time this fight (`fighters` counts them,
+   * that player included). Max HP becomes BOSS_HP_PER_PLAYER times as many players past the first,
+   * and current HP grows with it, so the share of HP left stays the same.
+   */
+  addFighter(fighters: number): void {
+    if (!this.isBoss) return;
+    const mult = 1 + BOSS_HP_PER_PLAYER * Math.max(0, fighters - 1);
+    if (mult <= this.hpMult) return;
+    this.hp *= mult / this.hpMult;
+    this.hpMult = mult;
+  }
+
+  /** Fight over: back to one player's HP, full, with no damage shares. */
+  resetFight(): void {
+    this.hpMult = 1;
+    this.hp = this.maxHp;
+    this.damageBy.clear();
+  }
+
+  /** The client mirror: takes the server's max HP so the HP bar matches. */
+  syncMaxHp(maxHp: number): void {
+    this.hpMult = maxHp / this.baseHp;
+  }
   /** Walking speed before enrage, ramps and slows: the def's, times the zone's boost. */
   private get baseSpeed(): number { return this.def.speed * this.zoneSpeed; }
   get topY(): number { return this.def.height * 0.75; }
@@ -283,10 +312,9 @@ export class Monster extends Unit {
         this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.25 * dt);
         if (hd < 1) {
           this.state = 'idle';
-          this.hp = this.maxHp;
           this.enraged = false;
           this.vanished = false;
-          this.damageBy.clear();
+          this.resetFight();
         } else {
           mx = hx / hd;
           mz = hz / hd;
