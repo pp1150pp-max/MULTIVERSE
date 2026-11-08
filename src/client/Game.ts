@@ -11,6 +11,7 @@ import type { Loot } from '../shared/sim/Loot';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../shared/sim/types';
 import type { Backend, ProjectileLike } from './backend';
 import { ISO_DIR, World } from './world';
+import { restSpotNear } from '../shared/sim/terrain';
 import { Input } from './input';
 import { Effects } from './effects';
 import { Floating, countdown } from './floating';
@@ -471,13 +472,24 @@ export class Game {
         near = n;
       }
     }
-    const prompt = near && !this.hud.dialogOpen ? `${near.name} — กด T เพื่อ${near.action}` : null;
+    // The fountain and campfires: rest there (HP and MP full) when no NPC is closer.
+    const spots = this.backend.terrain.restSpots;
+    const rest = !near && p.alive ? restSpotNear(spots, p) : null;
+    const restIn = Math.max(0, Math.ceil(p.restCd));
+    const restName = rest?.kind === 'fountain' ? 'น้ำพุ' : 'กองไฟ';
+    const prompt = this.hud.dialogOpen ? null
+      : near ? `${near.name} — กด T เพื่อ${near.action}`
+      : rest ? (restIn > 0 ? `${restName} — พักได้อีกใน ${restIn} วิ` : `${restName} — กด T เพื่อฟื้น HP/MP ให้เต็ม`)
+      : null;
     this.floating.npcBadges(this, this.npcs);
-    this.floating.npcPrompt(this, near?.x ?? 0, 3.7, near?.z ?? 0, prompt);
+    this.floating.restBadges(this, spots, restIn);
+    const at = near ?? (rest ? { x: rest.x, z: rest.z } : null);
+    this.floating.npcPrompt(this, at?.x ?? 0, near ? 3.7 : rest?.kind === 'fountain' ? 5.2 : 2.4, at?.z ?? 0, prompt);
     const lair = this.backend.zone.boss;
     const bossIn = this.backend.bossRespawnIn;
     this.floating.bossTimer(this, lair?.x ?? 0, lair?.z ?? 0, lair && bossIn !== null ? `${MONSTERS[lair.monster].nameTh} เกิดใน ${countdown(bossIn)}` : null);
     if (near && i.pressed('KeyT')) this.hud.talkTo(near.id);
+    else if (rest && i.pressed('KeyT')) this.backend.rest();
 
     // Farming circle: while Auto runs (around where it started) and while the settings window is open
     // (around the player if Auto is off), following the number as it is typed.

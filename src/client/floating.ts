@@ -6,6 +6,7 @@ import { RARITY_COLOR } from '../shared/types';
 import { itemName } from '../shared/data/enhance';
 import { expGapMult } from '../shared/formulas';
 import { iconImg } from './icons';
+import type { RestSpot } from '../shared/sim/terrain';
 
 interface Num { el: HTMLDivElement; x: number; y: number; z: number; t: number; life: number; height: number; dx: number; dy: number; pop: number }
 interface Plate { el: HTMLDivElement; fill: HTMLDivElement }
@@ -54,6 +55,7 @@ export class Floating {
   private prompt: HTMLDivElement;
   private bossTimerEl: HTMLDivElement;
   private badges = new Map<Npc, HTMLDivElement>();
+  private readonly restEls: HTMLDivElement[] = [];
   private vitals: { el: HTMLDivElement; hp: HTMLDivElement; mp: HTMLDivElement };
 
   constructor(private readonly root: HTMLElement) {
@@ -131,6 +133,31 @@ export class Floating {
     this.prompt.textContent = text;
     this.prompt.classList.remove('hidden');
     this.prompt.style.transform = `translate(${s.sx}px, ${s.sy}px) translate(-50%, -100%)`;
+  }
+
+  /** Badge over the fountain and each campfire: that resting there restores HP/MP, and when it can be used again. */
+  restBadges(g: Game, spots: readonly RestSpot[], readyIn: number): void {
+    while (this.restEls.length < spots.length) {
+      const el = document.createElement('div');
+      el.className = 'npc-badge rest-badge';
+      el.innerHTML = '<div class="npc-bob"><div class="npc-role"></div><div class="npc-name"></div></div>';
+      this.root.append(el);
+      this.restEls.push(el);
+    }
+    while (this.restEls.length > spots.length) this.restEls.pop()!.remove();
+    spots.forEach((r, i) => {
+      const el = this.restEls[i];
+      const role = r.kind === 'fountain' ? '💧 ฟื้นพลัง' : '🔥 พักฟื้น';
+      const name = readyIn > 0 ? `พักได้อีก ${readyIn} วิ` : 'HP/MP เต็ม · กด T';
+      const roleEl = el.querySelector('.npc-role')!;
+      const nameEl = el.querySelector('.npc-name')!;
+      if (roleEl.textContent !== role) roleEl.textContent = role;
+      if (nameEl.textContent !== name) nameEl.textContent = name;
+      el.classList.toggle('waiting', readyIn > 0);
+      const s = g.toScreen(r.x, r.kind === 'fountain' ? 4.4 : 1.9, r.z);
+      el.classList.toggle('hidden', !s.on);
+      el.style.transform = `translate(${s.sx}px, ${s.sy}px) translate(-50%, -100%)`;
+    });
   }
 
   /** Always-on badge over each camp NPC: an icon and what it does, then its name. */

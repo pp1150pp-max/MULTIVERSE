@@ -364,6 +364,7 @@ export class OnlineBackend implements Backend {
     me.stats = old.stats;
     me.cd = old.cd;
     me.potCd = old.potCd;
+    me.restCd = old.restCd;
     me.x = x;
     me.z = z;
     me.face(-x, -z);
@@ -523,6 +524,7 @@ export class OnlineBackend implements Backend {
     me.stats = pv.stats;
     me.cd = { ...pv.cd };
     me.potCd = pv.potCd;
+    me.restCd = pv.restCd ?? 0;
     if (typeof pv.buybackLeft === 'number') me.buybackLeft = pv.buybackLeft;
     if (pv.inv) {
       me.equipment = pv.inv.equipment;
@@ -625,6 +627,7 @@ export class OnlineBackend implements Backend {
     const me = this.me;
     for (const key of Object.keys(me.cd) as SkillSlot[]) me.cd[key] = Math.max(0, (me.cd[key] ?? 0) - dt);
     me.potCd -= dt;
+    me.restCd -= dt;
 
     if (this.settling && !this.serverMoves) this.settle(dt);
     const moveDir = this.walk(dt, it);
@@ -691,6 +694,7 @@ export class OnlineBackend implements Backend {
   // ------------------------------------------------------------ actions (the server decides)
 
   respawn(): void { this.send({ t: 'act', a: 'respawn' }); }
+  rest(): void { this.send({ t: 'act', a: 'rest' }); }
   equip(i: number, slot?: EquipSlot): void { this.send({ t: 'act', a: 'equip', i, slot }); }
   unequip(slot: EquipSlot): void { this.send({ t: 'act', a: 'unequip', slot }); }
   drop(i: number): void { this.send({ t: 'act', a: 'drop', i }); }

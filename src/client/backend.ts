@@ -56,6 +56,8 @@ export interface Backend {
   close(): void;
 
   respawn(): void;
+  /** Rest at the fountain or a campfire the player is next to (the server checks). */
+  rest(): void;
   equip(bagIndex: number, slot?: EquipSlot): void;
   unequip(slot: EquipSlot): void;
   drop(bagIndex: number): void;

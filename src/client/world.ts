@@ -536,6 +536,8 @@ export class World {
       const to = ZONES[p.to];
       this.portals.push(this.glow(p.x, 1.5, p.z, to?.npcs ? '#ffd98a' : PALETTES[to?.theme ?? terrain.zone.theme].portalGlow, 0.5));
     }
+    // The fountain glows like a portal, so it reads as something to use (campfires have their flame).
+    for (const r of terrain.restSpots) if (r.kind === 'fountain') this.portals.push(this.glow(r.x, 2, r.z, '#8fdcff', 0.45));
     this.addFog(mulberry32(terrain.zone.seed + 7));
     if (terrain.zone.theme === 'snow') this.addSnow(mulberry32(terrain.zone.seed + 41));
     if (terrain.zone.theme === 'volcano') {
