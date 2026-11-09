@@ -26,6 +26,9 @@ levels.weapon = 7;
 levels.armor = 7;
 levels.ring = 15;
 
+/** The tuning the game starts with, for the reset button. */
+const TUNING_DEFAULT = { ...orbTuning };
+
 /** Walk speed (units/s): the game's base move speed. */
 const WALK_SPEED = BASE_MOVE_SPEED;
 
@@ -333,6 +336,36 @@ async function main(): Promise<void> {
     row('รัศมีวง', slider(0.6, 1.6, 0.05, orbTuning.radius, (v) => { orbTuning.radius = v; }));
     row('รอบ/วินาที', slider(0.05, 0.6, 0.01, orbTuning.speed, (v) => { orbTuning.speed = v; }));
     row('ซูมกล้อง (เกมจริง 17)', slider(4, 17, 1, state.zoom, (v) => { state.zoom = v; resize(); }));
+
+    h('h2', 'ลอยขึ้นลง');
+    row('ความสูงวง (+ขึ้น −ลง)', slider(-0.6, 0.8, 0.05, orbTuning.height, (v) => { orbTuning.height = v; }));
+    row('ระยะลอยขึ้นลง', slider(0, 0.4, 0.01, orbTuning.bob, (v) => { orbTuning.bob = v; }));
+    row('ความเร็วลอย ×', slider(0.2, 3, 0.1, orbTuning.bobSpeed, (v) => { orbTuning.bobSpeed = v; }));
+    row('ส่ายหน้า-หลัง ×', slider(0, 2, 0.1, orbTuning.sway, (v) => { orbTuning.sway = v; }));
+
+    h('h2', 'แสง ประกาย หาง');
+    row('แสงนุ่มกลม (ปิด = แสงพิกเซล)', check(orbTuning.softGlow, (v) => { orbTuning.softGlow = v; }));
+    row('ขนาดแสง ×', slider(0.3, 2.5, 0.1, orbTuning.glow, (v) => { orbTuning.glow = v; }));
+    row('ความสว่างแสง ×', slider(0.2, 2, 0.1, orbTuning.glowAlpha, (v) => { orbTuning.glowAlpha = v; }));
+    row('จำนวนประกาย ×', slider(0, 2, 0.1, orbTuning.particles, (v) => { orbTuning.particles = v; }));
+    row('ความยาวหาง ×', slider(0, 2, 0.1, orbTuning.trail, (v) => { orbTuning.trail = v; }));
+
+    h('h2', 'บันทึกค่า');
+    button('คัดลอกค่าที่ตั้งไว้', () => {
+      const text = JSON.stringify({ palette: orbPalette().id, shape: orbShape(), ...orbTuning });
+      out.value = text;
+      navigator.clipboard?.writeText(text).catch(() => {});
+    });
+    button('คืนค่าเริ่มต้น', () => {
+      Object.assign(orbTuning, TUNING_DEFAULT);
+      buildPanel();
+    });
+    const out = document.createElement('textarea');
+    out.readOnly = true;
+    out.rows = 3;
+    out.style.width = '100%';
+    out.placeholder = 'กด "คัดลอกค่าที่ตั้งไว้" แล้ววางข้อความนี้ให้ Claude';
+    panel.append(out);
 
     h('h2', 'ทดสอบความลื่น');
     const n = document.createElement('input');

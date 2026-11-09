@@ -47,6 +47,21 @@ export const orbTuning = {
   radius: 0.95,
   /** Turns per second of the whole ring. */
   speed: 0.17,
+  /** Moves the whole ring up (+) or down (−). */
+  height: 0,
+  /** How far each orb floats up and down, and how fast (× its own rate). */
+  bob: 0.09,
+  bobSpeed: 1,
+  /** How much each orb sways ahead/behind its place (× the default; 0 = a rigid wheel). */
+  sway: 1,
+  /** Halo size and brightness (×). */
+  glow: 1,
+  glowAlpha: 1,
+  /** Sparks and trail dots (× the level table; capped at twice the table's most). */
+  particles: 1,
+  trail: 1,
+  /** true = soft round halo; false = the stepped pixel halo. */
+  softGlow: true,
 };
 
 // ------------------------------------------------------------ palettes
@@ -275,29 +290,43 @@ function orbAtlas(): THREE.CanvasTexture {
   return pixelTex(c);
 }
 
-/** Two 16×16 cells: a banded halo (like the game's glow) and a small plus-shaped spark. Alpha only. */
+const GLOW_PX = 64;
+
+/**
+ * Three 64×64 cells (alpha only): a soft round halo, a small plus-shaped spark, and the stepped pixel
+ * halo (drawn in 4×4 blocks). Smooth filtering, so the soft halo stays round however big it is drawn.
+ */
 function glowAtlas(): THREE.CanvasTexture {
   const c = document.createElement('canvas');
-  c.width = 32;
-  c.height = 16;
+  c.width = GLOW_PX * 3;
+  c.height = GLOW_PX;
   const g = c.getContext('2d')!;
-  const img = g.createImageData(32, 16);
-  for (let y = 0; y < 16; y++) {
-    for (let x = 0; x < 16; x++) {
-      const dx = x + 0.5 - 8;
-      const dy = y + 0.5 - 8;
-      const d = Math.hypot(dx, dy) / 8;
-      const halo = d <= 0.3 ? 1 : d <= 0.55 ? 0.6 : d <= 0.78 ? 0.28 : d <= 1 ? 0.1 : 0;
-      const spark = (Math.abs(dx) < 2 && Math.abs(dy) < 6) || (Math.abs(dy) < 2 && Math.abs(dx) < 6) ? (Math.abs(dx) < 2 && Math.abs(dy) < 2 ? 1 : 0.6) : 0;
-      for (const [cell, v] of [[0, halo], [1, spark]] as const) {
-        const o = (y * 32 + cell * 16 + x) * 4;
+  const img = g.createImageData(c.width, c.height);
+  const half = GLOW_PX / 2;
+  for (let y = 0; y < GLOW_PX; y++) {
+    for (let x = 0; x < GLOW_PX; x++) {
+      const d = Math.hypot(x + 0.5 - half, y + 0.5 - half) / (half - 1);
+      const soft = d >= 1 ? 0 : Math.min(1, (1 - d) * (1 - d) * 1.6 + (d < 0.22 ? 0.35 * (1 - d / 0.22) : 0));
+      // Spark and pixel halo work on a 16×16 grid, scaled up.
+      const bx = Math.floor(x / 4) + 0.5 - 8;
+      const by = Math.floor(y / 4) + 0.5 - 8;
+      const bd = Math.hypot(bx, by) / 8;
+      const pixel = bd <= 0.3 ? 1 : bd <= 0.55 ? 0.6 : bd <= 0.78 ? 0.28 : bd <= 1 ? 0.1 : 0;
+      const spark = (Math.abs(bx) < 2 && Math.abs(by) < 6) || (Math.abs(by) < 2 && Math.abs(bx) < 6) ? (Math.abs(bx) < 2 && Math.abs(by) < 2 ? 1 : 0.6) : 0;
+      const cells = [soft, spark, pixel];
+      for (let cell = 0; cell < 3; cell++) {
+        const o = (y * c.width + cell * GLOW_PX + x) * 4;
         img.data[o] = img.data[o + 1] = img.data[o + 2] = 255;
-        img.data[o + 3] = v * 255;
+        img.data[o + 3] = cells[cell] * 255;
       }
     }
   }
   g.putImageData(img, 0, 0);
-  return pixelTex(c);
+  const t = new THREE.CanvasTexture(c);
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearFilter;
+  t.generateMipmaps = false;
+  return t;
 }
 
 function pixelTex(c: HTMLCanvasElement): THREE.CanvasTexture {
@@ -357,7 +386,7 @@ function materials(): [THREE.ShaderMaterial, THREE.ShaderMaterial] {
       uniform sampler2D map;
       varying vec3 vColor; varying float vAlpha; varying float vKind;
       void main() {
-        float a = texture2D(map, vec2((gl_PointCoord.x + vKind) / 2.0, 1.0 - gl_PointCoord.y)).a * vAlpha;
+        float a = texture2D(map, vec2((gl_PointCoord.x + vKind) / 3.0, 1.0 - gl_PointCoord.y)).a * vAlpha;
         if (a < 0.01) discard;
         gl_FragColor = vec4(vColor, a);
       }`,
@@ -390,7 +419,7 @@ function points(cap: number, mat: THREE.ShaderMaterial, attrs: Record<string, nu
 const TAU = Math.PI * 2;
 /** Each orb's base height above the feet, by its place in the ring (neighbours differ so they never stack). */
 const HEIGHTS = [1.05, 1.4, 0.75];
-const GLOW_PER_ORB = 1 + MAX_TRAIL + MAX_PARTICLES;
+const GLOW_PER_ORB = 1 + 2 * MAX_TRAIL + 2 * MAX_PARTICLES;
 
 /** Base height of orb `i` of `n`: neighbours (including last → first around the ring) never share one. */
 function heightIndex(i: number, n: number): number {
@@ -407,10 +436,10 @@ export function orbOffset(i: number, n: number, t: number, phase: number, out: T
   // One shared turn keeps the ring evenly spaced; each orb sways a little ahead and behind its place at
   // its own rate, so they don't move as one rigid wheel. The sway shrinks as the ring fills up, so
   // neighbours never touch (checked for 2–10 orbs at +15).
-  const sway = n > 1 ? Math.sin(t * (0.9 + 0.23 * i) + ph) * spacing * SWAY[Math.min(n, 10)] : 0;
+  const sway = n > 1 ? Math.sin(t * (0.9 + 0.23 * i) + ph) * spacing * SWAY[Math.min(n, 10)] * orbTuning.sway : 0;
   const a = t * orbTuning.speed * TAU + i * spacing + sway;
   const r = orbTuning.radius * (1 + 0.06 * Math.sin(t * 0.7 + ph));
-  const y = HEIGHTS[heightIndex(i, n)] + Math.sin(t * (1.6 + 0.19 * i) + ph) * 0.09;
+  const y = HEIGHTS[heightIndex(i, n)] + orbTuning.height + Math.sin(t * (1.6 + 0.19 * i) * orbTuning.bobSpeed + ph) * orbTuning.bob;
   return out.set(Math.cos(a) * r, y, Math.sin(a) * r);
 }
 /** Sway (share of the gap between orbs) by orb count. */
@@ -488,6 +517,7 @@ export class OrbRing {
     this.glow.position.set(x, 0, z);
 
     const sc = orbTuning.scale;
+    const haloKind = orbTuning.softGlow ? 0 : 2;
     const { cPos, cCol, cAcc, cSize, cDet } = this.cBuf;
     const v = this.v;
     this.g = 0;
@@ -506,18 +536,20 @@ export class OrbRing {
 
       // Halo, breathing slowly.
       const pulse = 1 + 0.1 * Math.sin(t * 3 + this.phase + i);
-      this.glowPoint(v.x, v.y, v.z, o + 6, L.glow * sc * pulse, L.glowAlpha, 0);
+      this.glowPoint(v.x, v.y, v.z, o + 6, L.glow * sc * orbTuning.glow * pulse, Math.min(1, L.glowAlpha * orbTuning.glowAlpha), haloKind);
 
       // Trail: where the orb was a moment ago, smaller and fainter.
-      for (let j = 1; j <= L.trail; j++) {
+      const trail = Math.min(2 * MAX_TRAIL, Math.round(L.trail * orbTuning.trail));
+      for (let j = 1; j <= trail; j++) {
         this.orbAt(i, t - j * 0.045, v);
-        const k = 1 - j / (L.trail + 1);
-        this.glowPoint(v.x, v.y, v.z, o + 6, L.size * sc * (0.5 + 0.9 * k), 0.75 * k, 0);
+        const k = 1 - j / (trail + 1);
+        this.glowPoint(v.x, v.y, v.z, o + 6, L.size * sc * (0.5 + 0.9 * k), 0.75 * k, haloKind);
       }
 
       // Sparks: each one lives SPARK_LIFE seconds, starts where the orb was, then drifts up and fades.
-      for (let j = 0; j < L.particles; j++) {
-        const cyc = t / SPARK_LIFE + j / L.particles + hash(i * 13 + j);
+      const sparks = Math.min(2 * MAX_PARTICLES, Math.round(L.particles * orbTuning.particles));
+      for (let j = 0; j < sparks; j++) {
+        const cyc = t / SPARK_LIFE + j / sparks + hash(i * 13 + j);
         const age = cyc - Math.floor(cyc);
         const seed = Math.floor(cyc) * 31 + i * 7 + j;
         this.orbAt(i, t - age * SPARK_LIFE, v);
