@@ -142,7 +142,7 @@ export class Floating {
       }
       b.el.style.display = '';
       // Above the nameplate (own character has no plate, so it sits a little lower).
-      const lift = p === g.player ? 8 : 26;
+      const lift = p === g.player ? 20 : 40;
       b.el.style.transform = `translate(${s.sx}px, ${s.sy - lift}px) translate(-50%, -100%)`;
     }
   }
