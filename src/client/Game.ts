@@ -25,6 +25,7 @@ import { sheets } from './assets';
 import { GameAudio } from './audio/gameAudio';
 import { findPath } from './pathfind';
 import { PartyUI } from './party';
+import { MailUI } from './mail';
 import { SystemMenu } from './sysmenu';
 import { LootView, MonsterView, PlayerView, ProjectileView, ViewSet } from './views';
 import { isSoftwareRenderer } from '../shared/net/protocol';
@@ -61,6 +62,7 @@ export class Game {
   readonly hud: Hud;
   readonly sysMenu: SystemMenu;
   readonly party: PartyUI;
+  readonly mailUI: MailUI;
   /** Another player under the mouse (when no monster or usable thing is): a left click offers a party invite. */
   private hoveredPlayer: Player | null = null;
   /** The left button went down on a player: no basic attack until it is let go. */
@@ -132,6 +134,7 @@ export class Game {
     this.hud = new Hud(this);
     this.sysMenu = new SystemMenu(this);
     this.party = new PartyUI(this);
+    this.mailUI = new MailUI(this);
     initDraggableWindows(document.getElementById('hud')!);
     this.checkGpu();
     window.addEventListener('resize', () => {

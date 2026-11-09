@@ -19,6 +19,7 @@ import type { Backend, EnhanceOutcome, ProjectileLike } from '../backend';
 import type { RerollKind } from '../../shared/data/reroll';
 import type { Hazard } from '../../shared/sim/volcanoHeart';
 import type { MarketCall, MarketReply } from '../../shared/sim/market';
+import type { MailCall, MailReply } from '../../shared/mail';
 
 /** Mirrors never run game logic, so they don't need a simulation behind them. */
 const NO_SIM = null as unknown as Sim;
@@ -164,6 +165,11 @@ export class OnlineBackend implements Backend {
   marketBox = 0;
   /** Something of yours sold or expired at the market. */
   onMarketNote: ((text: string, sub?: string) => void) | null = null;
+  private mailReq = 0;
+  private readonly mailWait = new Map<number, (r: MailReply) => void>();
+  mailUnread = 0;
+  /** New mail arrived (or you joined with some): `fresh` is how many you haven't been told about. */
+  onMailNote: ((unread: number, fresh: number) => void) | null = null;
   private readonly enhanceWait = new Map<number, (o: EnhanceOutcome) => void>();
   private readonly rerollWait = new Map<number, (item: Item | null) => void>();
   private kickMsg = '';
@@ -335,6 +341,18 @@ export class OnlineBackend implements Backend {
         break;
       case 'marketBox':
         this.marketBox = m.n;
+        break;
+      case 'mail': {
+        const done = this.mailWait.get(m.req);
+        this.mailWait.delete(m.req);
+        const { t: _t, req: _r, ...reply } = m;
+        if (reply.unread !== undefined) this.mailUnread = reply.unread;
+        done?.(reply);
+        break;
+      }
+      case 'mailNote':
+        this.mailUnread = m.unread;
+        this.onMailNote?.(m.unread, m.fresh);
         break;
       case 'kick':
         this.kickMsg = m.msg;
@@ -779,6 +797,17 @@ export class OnlineBackend implements Backend {
       this.marketWait.set(req, resolve);
       setTimeout(() => {
         if (this.marketWait.delete(req)) resolve({ ok: false, msg: 'ตลาดไม่ตอบ ลองใหม่อีกครั้ง' });
+      }, 8000);
+    });
+  }
+
+  mail(call: MailCall): Promise<MailReply> {
+    const req = ++this.mailReq;
+    this.send({ t: 'act', req, ...call });
+    return new Promise((resolve) => {
+      this.mailWait.set(req, resolve);
+      setTimeout(() => {
+        if (this.mailWait.delete(req)) resolve({ ok: false, msg: 'กล่องจดหมายไม่ตอบ ลองใหม่อีกครั้ง' });
       }, 8000);
     });
   }

@@ -9,6 +9,7 @@ import type { ClassId } from '../src/shared/types';
 import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../src/shared/net/protocol';
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
 import { MARKET_HISTORY_DAYS, type MarketQuery } from '../src/shared/sim/market';
+import { MAIL_HISTORY_DAYS } from '../src/shared/mail';
 import { isAdminRole, type AdminRole, type AuditRow, type ChatLogRow, type PlaySessionRow, type RoleRow, type SessionQuery, type SessionSort } from '../src/shared/admin';
 
 /** A play session's username as the admin page shows it. */
@@ -37,6 +38,21 @@ function sessionSortSql(sort: SessionSort, openIds: number[], now: number): stri
 export const SHUTDOWN_TEXT_KEY: Record<ShutdownMode, string> = { restart: 'shutdown_text_restart', shutdown: 'shutdown_text_shutdown' };
 
 export interface AccountRow { id: number; username: string; pass_hash: string }
+
+const MAIL_SELECT = `SELECT b.id, b.send_id, b.read_at, b.claimed_at, s.sender_name, s.title, s.body, s.attach, s.has_attach, s.created_at, s.expires_at
+  FROM mail_box b JOIN mail_sends s ON s.id = b.send_id`;
+
+/** One mail as a character sees it (a box row joined to its send). */
+export interface MailDbRow {
+  id: number; send_id: number; read_at: number | null; claimed_at: number | null; sender_name: string; title: string; body: string;
+  attach: string; has_attach: number; created_at: number; expires_at: number;
+}
+
+/** A mail_sends row with its copy counts. */
+export interface MailSendDbRow {
+  id: number; created_at: number; sender_name: string; target: string; title: string; body: string; attach: string;
+  recipients: number; read: number; claimed: number; recalled: number;
+}
 
 /** A market_listings row as stored. */
 export interface MarketDbRow {
@@ -183,6 +199,34 @@ export class Db {
         PRIMARY KEY (listing_id, stat)
       );
       CREATE INDEX IF NOT EXISTS market_stat_value ON market_listing_stats(stat, value);
+      -- Mailbox (see server/mail.ts): one row per send, and one box row per recipient copy.
+      -- char_id NULL = the copy belongs to the account (any of its characters may read it; claimed once).
+      CREATE TABLE IF NOT EXISTS mail_sends (
+        id INTEGER PRIMARY KEY,
+        sender_id INTEGER,
+        sender_name TEXT NOT NULL,
+        target TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        attach TEXT NOT NULL,
+        has_attach INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS mail_box (
+        id INTEGER PRIMARY KEY,
+        send_id INTEGER NOT NULL REFERENCES mail_sends(id) ON DELETE CASCADE,
+        account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        char_id INTEGER REFERENCES characters(id) ON DELETE CASCADE,
+        read_at INTEGER,
+        claimed_at INTEGER,
+        claimed_char INTEGER,
+        deleted_at INTEGER,
+        recalled_at INTEGER,
+        notified_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS mail_box_account ON mail_box(account_id, deleted_at);
+      CREATE INDEX IF NOT EXISTS mail_box_send ON mail_box(send_id);
       CREATE TABLE IF NOT EXISTS admin_audit (
         id INTEGER PRIMARY KEY,
         at INTEGER NOT NULL,
@@ -663,6 +707,115 @@ export class Db {
     for (const id of ids) upd.run(now, id);
   }
 
+  // ------------------------------------------------------------ mailbox (server/mail.ts)
+
+  /** Adds a send (its box rows come from mailBoxAdd / mailBoxFanout in the same transaction); returns its id. */
+  mailSendInsert(s: { senderId: number | null; senderName: string; target: string; title: string; body: string; attach: string; hasAttach: boolean; at: number; expiresAt: number }): number {
+    const r = this.db.prepare(`INSERT INTO mail_sends (sender_id, sender_name, target, title, body, attach, has_attach, created_at, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(s.senderId, s.senderName, s.target, s.title, s.body, s.attach, s.hasAttach ? 1 : 0, s.at, s.expiresAt);
+    return Number(r.lastInsertRowid);
+  }
+
+  mailBoxAdd(sendId: number, accountId: number, charId: number | null): void {
+    this.db.prepare('INSERT INTO mail_box (send_id, account_id, char_id) VALUES (?, ?, ?)').run(sendId, accountId, charId);
+  }
+
+  /** One copy per existing character ('chars') or per existing account ('accounts'), guests never; returns the count. */
+  mailBoxFanout(sendId: number, kind: 'chars' | 'accounts'): number {
+    const r = kind === 'chars'
+      ? this.db.prepare(`INSERT INTO mail_box (send_id, account_id, char_id) SELECT ?, c.account_id, c.id FROM characters c
+          JOIN accounts a ON a.id = c.account_id WHERE a.is_guest = 0`).run(sendId)
+      : this.db.prepare('INSERT INTO mail_box (send_id, account_id, char_id) SELECT ?, id, NULL FROM accounts WHERE is_guest = 0').run(sendId);
+    return Number(r.changes);
+  }
+
+  /** A character by exact name (any case), with its account. */
+  characterByName(name: string): { id: number; accountId: number; name: string; guest: boolean } | undefined {
+    const r = this.db.prepare(`SELECT c.id, c.account_id, c.name, a.is_guest FROM characters c JOIN accounts a ON a.id = c.account_id
+      WHERE c.name = ? COLLATE NOCASE LIMIT 1`).get(name) as { id: number; account_id: number; name: string; is_guest: number } | undefined;
+    return r && { id: r.id, accountId: r.account_id, name: r.name, guest: r.is_guest === 1 };
+  }
+
+  /** Mail one character can see: its own copies and its account's, not deleted, recalled or expired. Newest first. */
+  mailInbox(accountId: number, charId: number, now: number): MailDbRow[] {
+    return this.db.prepare(`${MAIL_SELECT} WHERE b.account_id = ? AND (b.char_id IS NULL OR b.char_id = ?) AND b.deleted_at IS NULL
+      AND b.recalled_at IS NULL AND s.expires_at > ? ORDER BY s.created_at DESC, b.id DESC`).all(accountId, charId, now) as unknown as MailDbRow[];
+  }
+
+  mailGet(id: number, accountId: number, charId: number, now: number): MailDbRow | undefined {
+    return this.db.prepare(`${MAIL_SELECT} WHERE b.id = ? AND b.account_id = ? AND (b.char_id IS NULL OR b.char_id = ?) AND b.deleted_at IS NULL
+      AND b.recalled_at IS NULL AND s.expires_at > ?`).get(id, accountId, charId, now) as unknown as MailDbRow | undefined;
+  }
+
+  mailMarkRead(id: number, now: number): void {
+    this.db.prepare('UPDATE mail_box SET read_at = ? WHERE id = ? AND read_at IS NULL').run(now, id);
+  }
+
+  /**
+   * Marks the copy claimed, only if it still can be (not claimed, deleted, recalled or expired).
+   * False = it can't: the caller must not give anything. Call inside the transaction that saves the character.
+   */
+  mailMarkClaimed(id: number, charId: number, now: number): boolean {
+    return Number(this.db.prepare(`UPDATE mail_box SET claimed_at = ?, claimed_char = ?, read_at = COALESCE(read_at, ?)
+      WHERE id = ? AND claimed_at IS NULL AND deleted_at IS NULL AND recalled_at IS NULL
+      AND (SELECT expires_at FROM mail_sends WHERE id = send_id) > ?`).run(now, charId, now, id, now).changes) === 1;
+  }
+
+  /** Deletes a copy once it is read, unless it still has unclaimed attachments. */
+  mailDelete(id: number, accountId: number, charId: number, now: number): boolean {
+    return Number(this.db.prepare(`UPDATE mail_box SET deleted_at = ? WHERE id = ? AND account_id = ? AND (char_id IS NULL OR char_id = ?)
+      AND deleted_at IS NULL AND read_at IS NOT NULL AND (claimed_at IS NOT NULL OR (SELECT has_attach FROM mail_sends WHERE id = send_id) = 0)`)
+      .run(now, id, accountId, charId).changes) === 1;
+  }
+
+  /** Deletes every read copy with nothing left to claim; returns how many. */
+  mailDeleteRead(accountId: number, charId: number, now: number): number {
+    return Number(this.db.prepare(`UPDATE mail_box SET deleted_at = ? WHERE account_id = ? AND (char_id IS NULL OR char_id = ?)
+      AND deleted_at IS NULL AND recalled_at IS NULL AND read_at IS NOT NULL
+      AND (claimed_at IS NOT NULL OR (SELECT has_attach FROM mail_sends WHERE id = send_id) = 0)`).run(now, accountId, charId).changes);
+  }
+
+  mailUnread(accountId: number, charId: number, now: number): number {
+    return (this.db.prepare(`SELECT COUNT(*) AS n FROM mail_box b JOIN mail_sends s ON s.id = b.send_id WHERE b.account_id = ?
+      AND (b.char_id IS NULL OR b.char_id = ?) AND b.deleted_at IS NULL AND b.recalled_at IS NULL AND b.read_at IS NULL AND s.expires_at > ?`)
+      .get(accountId, charId, now) as { n: number }).n;
+  }
+
+  /** Marks this character's new mail as announced; returns how many were new. */
+  mailTakeFresh(accountId: number, charId: number, now: number): number {
+    return Number(this.db.prepare(`UPDATE mail_box SET notified_at = ? WHERE account_id = ? AND (char_id IS NULL OR char_id = ?) AND notified_at IS NULL
+      AND deleted_at IS NULL AND recalled_at IS NULL AND (SELECT expires_at FROM mail_sends WHERE id = send_id) > ?`).run(now, accountId, charId, now).changes);
+  }
+
+  /** Pulls back every copy of a send that nobody has claimed; returns how many. */
+  mailRecall(sendId: number, now: number): number {
+    return Number(this.db.prepare('UPDATE mail_box SET recalled_at = ? WHERE send_id = ? AND claimed_at IS NULL AND recalled_at IS NULL')
+      .run(now, sendId).changes);
+  }
+
+  /** Sends, newest first, with how many copies there are and how many were read / claimed / pulled back. */
+  mailHistory(limit: number, before?: number): MailSendDbRow[] {
+    return this.db.prepare(`SELECT s.id, s.created_at, s.sender_name, s.target, s.title, s.body, s.attach,
+        (SELECT COUNT(*) FROM mail_box WHERE send_id = s.id) AS recipients,
+        (SELECT COUNT(*) FROM mail_box WHERE send_id = s.id AND read_at IS NOT NULL) AS read,
+        (SELECT COUNT(*) FROM mail_box WHERE send_id = s.id AND claimed_at IS NOT NULL) AS claimed,
+        (SELECT COUNT(*) FROM mail_box WHERE send_id = s.id AND recalled_at IS NOT NULL) AS recalled
+      FROM mail_sends s WHERE s.id < ? ORDER BY s.id DESC LIMIT ?`).all(before ?? Number.MAX_SAFE_INTEGER, limit) as unknown as MailSendDbRow[];
+  }
+
+  mailSend(id: number): MailSendDbRow | undefined {
+    const r = this.mailHistory(1, id + 1)[0];
+    return r?.id === id ? r : undefined;
+  }
+
+  /** Who got a send and what they did with it (the first `limit` copies). */
+  mailRecipients(sendId: number, limit: number): { account: string; char: string | null; read: boolean; claimed: boolean; recalled: boolean }[] {
+    const rows = this.db.prepare(`SELECT a.username, c.name, b.read_at, b.claimed_at, b.recalled_at FROM mail_box b
+      JOIN accounts a ON a.id = b.account_id LEFT JOIN characters c ON c.id = b.char_id WHERE b.send_id = ? ORDER BY b.id LIMIT ?`)
+      .all(sendId, limit) as { username: string; name: string | null; read_at: number | null; claimed_at: number | null; recalled_at: number | null }[];
+    return rows.map((r) => ({ account: r.username, char: r.name, read: r.read_at !== null, claimed: r.claimed_at !== null, recalled: r.recalled_at !== null }));
+  }
+
   /** A consistent copy of the whole database, made while the server runs (SQLite VACUUM INTO). */
   backupTo(file: string): void {
     this.db.prepare('VACUUM INTO ?').run(file);
@@ -769,7 +922,9 @@ export class Db {
       + Number(this.db.prepare('DELETE FROM online_samples WHERE at < ?').run(now - days.samples * day).changes)
       // Market history: listings collected long enough ago (never one still up or waiting in a claim box).
       + Number(this.db.prepare('DELETE FROM market_listings WHERE claimed_at IS NOT NULL AND claimed_at < ?')
-        .run(now - MARKET_HISTORY_DAYS * day).changes);
+        .run(now - MARKET_HISTORY_DAYS * day).changes)
+      // Mail sent long ago (it expired 30 days after sending); the history keeps 60 days, copies go with it.
+      + Number(this.db.prepare('DELETE FROM mail_sends WHERE created_at < ?').run(now - MAIL_HISTORY_DAYS * day).changes);
   }
 
   /** Records one admin action. */
