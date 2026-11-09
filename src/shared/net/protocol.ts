@@ -141,6 +141,8 @@ export interface PlayerSnap {
   dash: 'dash' | 'charge' | 0;
   /** Enhancement aura tier 1–4 (missing = none). */
   aura?: number;
+  /** Enhancement orbs, one per worn item at +7 or higher: `slot index * 16 + plus` (see orbCodes). Missing = none. */
+  orbs?: number[];
 }
 
 export interface MonsterSnap {

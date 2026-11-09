@@ -1203,6 +1203,8 @@ export class GameWorld {
         x: r2(o.x), z: r2(o.z), fx: r2(o.faceX), fz: r2(o.faceZ), mv: o.moving,
         alive: o.alive, hp: Math.round(o.hp), maxHp: Math.round(o.maxHp), dash: o.isDashing ? o.dashKind : 0,
         ...(o.aura ? { aura: o.aura } : {}),
+        // Worked out by Player.recompute from the server's own copy of the gear (orbCodes clamps the levels).
+        ...(o.orbs.length ? { orbs: o.orbs as number[] } : {}),
       })),
       monsters: sim.monsters.filter(near).map((m) => ({
         id: m.id, def: m.def.id, lv: m.level,
