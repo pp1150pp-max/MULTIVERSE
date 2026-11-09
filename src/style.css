@@ -168,8 +168,8 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 .fullmap-legend i { display: inline-block; width: 9px; height: 9px; margin: 0 4px; border-radius: 50%; border: 1px solid #000; }
 /* Old button column is hidden; the icon row (sysmenu.ts) replaces it. Its buttons still exist so code can click them. */
 .hud-buttons { display: none; }
-#hud-iconrow { display: flex; gap: 6px; pointer-events: auto; }
-.top-icon { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 0; background: none; border: none; font-size: 11px; color: var(--ink); text-shadow: 0 0 3px #000, 0 1px 2px #000; }
+#hud-iconrow { position: absolute; width: max-content; top: 0; right: 100%; margin-right: 8px; display: flex; gap: 6px; pointer-events: auto; }
+.top-icon { white-space: nowrap; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 0; background: none; border: none; font-size: 11px; color: var(--ink); text-shadow: 0 0 3px #000, 0 1px 2px #000; }
 .top-icon:disabled { opacity: 0.4; cursor: default; }
 .top-icon .sys-ico { width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; font-size: 22px; border-radius: 50%; border: 1px solid var(--panel-edge); background: rgba(12, 10, 8, 0.85); }
 .top-icon .sys-ico img { width: 100%; height: 100%; object-fit: contain; }
