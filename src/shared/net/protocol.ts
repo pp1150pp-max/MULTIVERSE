@@ -167,6 +167,8 @@ export interface LootSnap {
 export interface PrivateSnap {
   hp: number; mp: number; exp: number; level: number; gold: number;
   potSel: PotionSelect; lootFilter: LootFilter; autoSettings: AutoSettings; stats: Stats;
+  /** Gate bosses this character has killed (BOSS_GATES). */
+  bossKills?: string[];
   cd: Partial<Record<SkillSlot, number>>; potCd: number; restCd: number;
   /** True while the server moves the character (dash, knockback, stun, dead, Auto Play) — follow its position. */
   serverMoves: boolean;

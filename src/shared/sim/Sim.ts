@@ -2,7 +2,8 @@
 // to show effects, damage numbers and messages.
 import { HUB_ID, ZONES, inSafeArea, type SafeArea, type ZoneDef, type SpawnArea } from '../data/zones';
 import { MONSTERS } from '../data/monsters';
-import { expGapMult, expToNext, mitigate, MAX_LEVEL, MISS_GAP, outLevelled } from '../formulas';
+import { AUTO_EXP_MULT, expGapMult, expToNext, mitigate, MAX_LEVEL, MISS_GAP, outLevelled } from '../formulas';
+import { blockingGate, BOSS_GATE_IDS } from '../data/bossGates';
 import { lineRanges, rerollStat, rerollValues, rollItem } from '../data/items';
 import { REROLL_NAME, rerollCost, type RerollKind } from '../data/reroll';
 import { inBossArena, LAVA_BURN, LAVA_TICK } from '../data/zones';
@@ -516,12 +517,28 @@ export class Sim {
       const mates = p.partyId === null ? [] : this.players.filter((o) => o !== p && o.alive && o.partyId === p.partyId);
       const { keep, shares } = splitExp(exp, p.level, mates.map((o) => o.level));
       const shared = keep < exp;
+      const mine = this.autoExp(p, keep);
       this.text(m.x, m.topY + 0.4, m.z,
-        mult < 1 ? `+${keep} EXP (−${Math.round((1 - mult) * 100)}%)` : `+${keep} EXP${shared ? ' (แบ่งปาร์ตี้)' : ''}`, 'exp', 1.1, p.id);
-      gained.set(p, (gained.get(p) ?? 0) + keep);
+        mult < 1 ? `+${mine} EXP (−${Math.round((1 - mult) * 100)}%)` : `+${mine} EXP${shared ? ' (แบ่งปาร์ตี้)' : ''}`, 'exp', 1.1, p.id);
+      gained.set(p, (gained.get(p) ?? 0) + mine);
       mates.forEach((o, i) => {
-        if (shares[i] > 0) gained.set(o, (gained.get(o) ?? 0) + shares[i]);
+        if (shares[i] > 0) gained.set(o, (gained.get(o) ?? 0) + this.autoExp(o, shares[i]));
       });
+    }
+    // Killing a gate boss unlocks the gate for everyone who hit it and everyone sharing its EXP.
+    if (BOSS_GATE_IDS.has(m.def.id)) {
+      const killers = new Set<Player>(gained.keys());
+      for (const id of m.damageBy.keys()) {
+        const p = this.players.find((x) => x.id === id);
+        if (p) killers.add(p);
+      }
+      for (const p of killers) {
+        if (!p.bossKills.includes(m.def.id)) {
+          p.bossKills.push(m.def.id);
+          this.events.push({ t: 'save', to: p.id });
+        }
+        if (!gained.has(p)) gained.set(p, 0);
+      }
     }
     // Levels go up after every share is worked out, so a level-up mid-kill can't change who is eligible.
     for (const [p, exp] of gained) {
@@ -580,10 +597,25 @@ export class Sim {
     if (this.zone.id !== HUB_ID) this.events.push({ t: 'travel', to: p.id, zone: HUB_ID, atCamp: true });
   }
 
+  /** EXP this player really gets from `n`: half while Auto Play is on. */
+  private autoExp(p: Player, n: number): number {
+    return p.autoOn ? Math.floor(n * AUTO_EXP_MULT) : n;
+  }
+
   private addExp(p: Player, n: number): void {
     if (p.level >= MAX_LEVEL) return;
     p.exp += n;
     while (p.level < MAX_LEVEL && p.exp >= expToNext(p.level)) {
+      const gate = blockingGate(p.level, p.bossKills);
+      if (gate) {
+        // Full bar, the rest is lost, until the boss is killed.
+        p.exp = expToNext(p.level);
+        if (p.gateHintedAt !== p.level) {
+          p.gateHintedAt = p.level;
+          this.log(`ต้องลงบอส ${gate.nameTh} ก่อนถึงจะเลเวลเกิน ${gate.level} ได้ — EXP เต็มหลอดแล้ว ส่วนที่เกินจะหายไป`, '#ffb060', p.id);
+        }
+        break;
+      }
       p.exp -= expToNext(p.level);
       p.level++;
       p.recompute();

@@ -19,6 +19,7 @@ import { nextRowPrice, STASH_MAX, STASH_ROW, STASH_ROW_PRICES, STASH_START } fro
 import { MONSTERS } from '../shared/data/monsters';
 import { ZONE_1 } from '../shared/data/zones';
 import { expToNext } from '../shared/formulas';
+import { blockingGate } from '../shared/data/bossGates';
 import {
   isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
   type BagEntry, type Item, type StatLine, type PotionKind, type PotionSize, type PotionStack, type Rarity, type StoneStack, type StoneKind, type EquipSlot, type StatKey,
@@ -786,7 +787,9 @@ export class Hud {
     $('orb-mp-fill').style.height = mpShare;
     $('orb-mp-text').textContent = mpText;
     $('exp-fill').style.width = `${(p.exp / need) * 100}%`;
-    $('exp-text').textContent = `EXP ${((p.exp / need) * 100).toFixed(1)}%`;
+    const gate = blockingGate(p.level, p.bossKills);
+    $('exp-text').textContent = gate ? `EXP เต็ม — ต้องลงบอส ${gate.nameTh}` : `EXP ${((p.exp / need) * 100).toFixed(1)}%`;
+    $('expbar').title = gate ? `ต้องลงบอส ${gate.nameTh} ก่อนถึงจะเลเวลเกิน ${gate.level} ได้ (EXP ที่เกินจะหายไป)` : '';
     $('hud-level').textContent = `Lv.${p.level} ${p.cls.name}`;
     $('hud-gold').textContent = `${p.gold.toLocaleString()} G`;
     if (this.g.backend.online) $('hud-online').textContent = `🌐 ออนไลน์ ${this.g.backend.onlineCount} คน · กด Enter เพื่อแชท`;

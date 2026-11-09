@@ -69,7 +69,7 @@ npm run stop-server -- --restart # เหมือนกัน แต่ npm run
 | ระบบ | สรุป | รายละเอียด |
 |---|---|---|
 | กระเป๋า ยา ไอเทม ช่างตีเหล็ก | กระเป๋า 30 ช่อง ยาช่องละ 10 · tier T1–T5 แบบ PoE2 · ช่างตีเหล็ก 3 เมนู (ตีบวก/สุ่มค่า/สุ่มสเตตัส) จ่ายทอง | [items-and-forge.md](docs/systems/items-and-forge.md) |
-| เมือง แมพ ภาพ หน้าต่าง | เมืองศูนย์กลาง `nexus_city` เป็น safe zone + ประตู 4 มุม · Auto Play รันบน server · ภาพ 16-bit isometric · หน้าต่างลากได้ไม่จำตำแหน่ง · EXP แบ่งตามดาเมจ | [world-and-ui.md](docs/systems/world-and-ui.md) |
+| เมือง แมพ ภาพ หน้าต่าง EXP | EXP โค้งชันขึ้น Lv20+ · Auto ได้ EXP 50% · ประตูบอสที่ Lv 10/20/30/40 · เมืองศูนย์กลาง `nexus_city` เป็น safe zone + ประตู 4 มุม · Auto Play รันบน server · ภาพ 16-bit isometric · หน้าต่างลากได้ไม่จำตำแหน่ง · EXP แบ่งตามดาเมจ | [world-and-ui.md](docs/systems/world-and-ui.md) |
 | คลัง และตลาดฝากขาย | คลังร่วมทั้งบัญชี 30–90 ช่อง · ตลาด 5%+5% 48 ชม. กล่องรับของที่ NPC · Guest ใช้ไม่ได้ | [stash-and-market.md](docs/systems/stash-and-market.md) |
 | Login, Guest, /admin | ปุ่ม Guest Login ปิดอยู่ · Guest ลบเมื่อไม่ออนไลน์ 24 ชม. · admin role owner/gm, `FEATURE_ROLES`, `admin_audit` | [accounts-and-admin.md](docs/systems/accounts-and-admin.md) |
 | ปาร์ตี้ | สูงสุด 3 ตัว (บัญชีละ 1) ไม่ใช่ Guest · หัวหน้าชวน/เตะ · หลุดได้ 60 วิ · ไม่เซฟ · ของดรอปแชร์ทั้งปาร์ตี้ · EXP เก็บ 50% แบ่ง 50% ให้คนแมพเดียวกันที่ไม่ต่ำกว่า 5 เลเวล | [party.md](docs/systems/party.md) |
