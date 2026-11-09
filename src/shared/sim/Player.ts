@@ -7,7 +7,7 @@ import { castSkill, basicAttack } from './skills';
 import { CLASSES, type ClassDef, type SkillDef, type SkillSlot } from '../data/classes';
 import { addInto, BASE_MOVE_SPEED, emptyStats } from '../formulas';
 import { gatesPassedBy } from '../data/bossGates';
-import { auraTier, effectiveStats, plusOf, sellValue } from '../data/enhance';
+import { auraTier, effectiveStats, orbCodes, plusOf, sellValue } from '../data/enhance';
 import { itemClass, starterWeapon, upgradeItem } from '../data/items';
 import { anyStackValue, potionHeal, POTIONS, POTION_SIZES, POTION_STACK, stackLimit } from '../data/potions';
 import { STONE_STACK } from '../data/stones';
@@ -238,6 +238,11 @@ export class Player extends Unit {
    * other players' mirrors in the browser have no equipment, so theirs comes from the snapshot.
    */
   aura = 0;
+  /**
+   * Enhancement orbs (see orbCodes): one per worn item at +7 or higher. Not saved; the server works it
+   * out from the gear, and the browser's mirrors take it from the snapshot like `aura`.
+   */
+  orbs: readonly number[] = [];
   stats: Stats = emptyStats();
   cd: Partial<Record<SkillSlot, number>> = {};
   potCd = 0;
@@ -370,6 +375,7 @@ export class Player extends Unit {
       best = Math.max(best, plusOf(it));
     }
     this.aura = auraTier(best);
+    this.orbs = orbCodes(this.equipment);
     for (const [k, mult] of Object.entries(this.cls.statMult ?? {}) as [keyof Stats, number][]) s[k] *= mult;
     // Regen is cut so players lean on potions; applied last so gear is cut too.
     s.hpRegen *= HP_REGEN_MULT;

@@ -1,6 +1,6 @@
 // Gear enhancement (ตีบวก) at the blacksmith. Pure rules, no rendering — the server runs it.
 // Owner decisions 2026-11-06: every slot, max +15, bonus = % of every stat line on the item.
-import type { Item, StatKey, Stats } from '../types';
+import { EQUIP_SLOTS, type EquipSlot, type Item, type StatKey, type Stats } from '../types';
 import type { Rng } from '../rng';
 
 export const MAX_PLUS = 15;
@@ -119,6 +119,33 @@ export function rollEnhance(item: Item, r: Rng, protect: boolean): EnhanceResult
 /** Aura tier shown around a character for this + level: 0 none, 1 = +7, 2 = +10, 3 = +13, 4 = +15. */
 export function auraTier(plus: number): number {
   return plus >= 15 ? 4 : plus >= 13 ? 3 : plus >= 10 ? 2 : plus >= 7 ? 1 : 0;
+}
+
+/** Each worn item at this + level or higher gets an orb circling its wearer (owner 2026-11-10). */
+export const ORB_MIN_PLUS = 7;
+
+/**
+ * The enhancement orbs a character shows: one per worn item at ORB_MIN_PLUS or higher, in EQUIP_SLOTS
+ * order, each packed as `slot index * 16 + plus` (so the browser knows the slot as well as the level).
+ */
+export function orbCodes(equipment: Partial<Record<EquipSlot, Item>>): number[] {
+  const out: number[] = [];
+  EQUIP_SLOTS.forEach((slot, i) => {
+    const it = equipment[slot];
+    const p = it ? Math.min(MAX_PLUS, plusOf(it)) : 0;
+    if (p >= ORB_MIN_PLUS) out.push(i * 16 + p);
+  });
+  return out;
+}
+
+/** Unpacks an orb code from orbCodes: the EQUIP_SLOTS index and the + level. */
+export const orbSlot = (code: number): number => code >> 4;
+export const orbPlus = (code: number): number => code & 15;
+
+/** True when `code` is a well-formed orb code (a real slot, a level from ORB_MIN_PLUS to MAX_PLUS). */
+export function validOrbCode(code: unknown): code is number {
+  return typeof code === 'number' && Number.isInteger(code) && orbSlot(code) < EQUIP_SLOTS.length
+    && orbPlus(code) >= ORB_MIN_PLUS && orbPlus(code) <= MAX_PLUS && code >= 0;
 }
 
 /** What the merchant pays. Enhanced gear is worth more. */

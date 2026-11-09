@@ -20,8 +20,14 @@ import { BAG_SIZE } from '../src/shared/sim/Player';
 import type { AdminShutdownText } from '../src/shared/admin';
 import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../src/shared/net/protocol';
 import { SHUTDOWN_TEXT_KEY } from './db';
+import { checkOrbLook, DEFAULT_ORB_LOOK, orbLookChanges, ORB_LOOK_RANGES, ORB_PALETTE_IDS, ORB_SHAPE_IDS, sameOrbLook } from '../src/shared/orbLook';
+import type { AdminOrbLook } from '../src/shared/admin';
 
 const MODE_NAME: Record<ShutdownMode, string> = { restart: 'ข้อความรีสตาร์ท', shutdown: 'ข้อความปิด server' };
+const orbLookState = (db: Db, canEdit: boolean): AdminOrbLook => ({
+  look: db.orbLook(), defaults: { ...DEFAULT_ORB_LOOK }, canEdit,
+  palettes: [...ORB_PALETTE_IDS], shapes: [...ORB_SHAPE_IDS], ranges: ORB_LOOK_RANGES,
+});
 const shutdownTextState = (db: Db): AdminShutdownText => ({ texts: db.shutdownTexts(), defaults: { ...DEFAULT_SHUTDOWN_TEXT } });
 
 const NO_RIGHTS = ADMIN_NO_RIGHTS;
@@ -267,6 +273,29 @@ export async function ownerToolsApi(
     const n = world.broadcast(text, from, to?.charId);
     log(db, a, 'broadcast', to ? `${to.name} (#${to.charId})` : 'ทุกคน', text);
     send(res, 200, { msg: to ? `ส่งข้อความถึง ${to.name} แล้ว` : `ส่งประกาศถึงผู้เล่น ${n} คนแล้ว` });
+    return true;
+  }
+
+  // ---------------------------------------------------------- enhancement orb look (server-wide)
+  if (method === 'GET' && path === '/api/admin/orb-look') {
+    const a = requireFeature(req, db, 'orbPreview');
+    send(res, 200, orbLookState(db, canUse(a.role, 'orbLook')));
+    return true;
+  }
+
+  if (method === 'POST' && path === '/api/admin/orb-look') {
+    const a = requireFeature(req, db, 'orbLook');
+    const body = await readJson(req);
+    // `reset: true` = back to the default look; otherwise `look` is the whole new look.
+    const c = body.reset === true ? { look: { ...DEFAULT_ORB_LOOK } } : checkOrbLook(body.look);
+    if (!c.look) throw new HttpError(400, c.error);
+    const before = db.orbLook();
+    if (!sameOrbLook(before, c.look)) {
+      db.setOrbLook(c.look);
+      log(db, a, 'orb-look', 'ลูกแก้วตีบวก ค่าเริ่มต้นทั้งเซิร์ฟ', (body.reset === true ? 'คืนค่าเริ่มต้น: ' : '') + orbLookChanges(before, c.look));
+      world.orbLookChanged(c.look);
+    }
+    send(res, 200, orbLookState(db, true));
     return true;
   }
 

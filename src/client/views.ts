@@ -8,6 +8,7 @@ import { STONE_COLOR } from '../shared/data/stones';
 import { LOOT_POP_TIME, type Loot } from '../shared/sim/Loot';
 import type { SimEvent } from '../shared/sim/types';
 import { SpriteActor } from './SpriteActor';
+import { OrbRing } from './orbs';
 import { AnimatedActor, type Actor } from './AnimatedActor';
 import { animSets, decalTex, fxTex, sheets } from './assets';
 import type { Effects, ShotSprite } from './effects';
@@ -43,6 +44,8 @@ const STRIDE_MAX = 1.6;
 export class PlayerView {
   readonly actor: Actor;
   private aura: THREE.Mesh | null = null;
+  /** One orb per worn item at +7 or higher (on top of the aura). */
+  private readonly orbs: OrbRing;
   private auraTier = 0;
   private clock = 0;
   private combo = 0;
@@ -57,6 +60,7 @@ export class PlayerView {
     const anim = animSets[p.cls.id];
     this.actor = anim ? new AnimatedActor(anim, 0.4) : new SpriteActor(sheets[p.cls.id], 1.9, 0.4);
     scene.add(this.actor.group);
+    this.orbs = new OrbRing(scene, p.id * 3.7);
     this.sync();
     // Came into view (or logged in) while already lying dead: no fall, just the body in its crater.
     if (!p.alive) this.showDead(true);
@@ -70,6 +74,8 @@ export class PlayerView {
     this.matchStride(dt);
     this.actor.update(dt, p.moving, p.isDashing ? 14 : undefined);
     this.updateAura(dt, fx);
+    // Owner 2026-11-10: the orbs stay while dead (only the aura goes).
+    this.orbs.update(this.clock, p.x, p.z, p.orbs, true);
     this.sync();
   }
 
@@ -191,6 +197,7 @@ export class PlayerView {
 
   dispose(): void {
     this.disposeAura();
+    this.orbs.dispose();
     this.disposeCrater();
     this.scene.remove(this.actor.group);
     this.actor.dispose();

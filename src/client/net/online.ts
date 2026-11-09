@@ -9,6 +9,10 @@ import { Loot } from '../../shared/sim/Loot';
 import type { Sim } from '../../shared/sim/Sim';
 import type { Intent, SimEvent } from '../../shared/sim/types';
 import { MONSTERS } from '../../shared/data/monsters';
+import { validOrbCode } from '../../shared/data/enhance';
+import { checkOrbLook } from '../../shared/orbLook';
+import { applyOrbLook } from '../orbs';
+import { EQUIP_SLOTS } from '../../shared/types';
 import { zoneById, type SpawnArea, type ZoneDef } from '../../shared/data/zones';
 import type { NpcId } from '../../shared/data/npcs';
 import type { EquipSlot, Item, PotionKind, PotionSize, Rarity, Vec2 } from '../../shared/types';
@@ -86,6 +90,7 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
         you = m.you;
         zone = m.zone;
         guest = m.guest === true;
+        useOrbLook(m.orbLook);
       }
       if (m.t === 'snap' && you >= 0 && !settled) {
         settled = true;
@@ -378,6 +383,9 @@ export class OnlineBackend implements Backend {
       case 'shutdown':
         this.onShutdown?.(m.mode, m.seconds, m.text);
         break;
+      case 'orbLook':
+        useOrbLook(m.look);
+        break;
       case 'announce':
         this.onAnnounce?.(m.text, m.from, m.direct);
         break;
@@ -476,6 +484,7 @@ export class OnlineBackend implements Backend {
       p.alive = ps.alive;
       p.dashT = ps.dash ? 1 : 0;
       p.aura = ps.aura ?? 0;
+      setOrbs(p, ps.orbs);
       if (ps.dash) p.dashKind = ps.dash;
       if (p === this.me) {
         this.applyMine(s, ps.x, ps.z, ps.fx, ps.fz, ps.mv);
@@ -866,4 +875,26 @@ export class OnlineBackend implements Backend {
     const n = this.terrain.npcPos[id];
     return n ? Math.hypot(this.me.x - n.x, this.me.z - n.z) : Infinity;
   }
+}
+
+/** Draws every orb with the server-wide look (ignored if it doesn't check out, keeping the current one). */
+function useOrbLook(v: unknown): void {
+  const look = v === undefined ? undefined : checkOrbLook(v).look;
+  if (look) applyOrbLook(look);
+}
+
+const NO_ORBS: readonly number[] = [];
+
+/**
+ * Takes a player's enhancement orbs from the snapshot. Keeps the old array while nothing changed, so
+ * the orb view (which rebuilds when the array changes) only rebuilds when the gear really changed.
+ */
+function setOrbs(p: Player, codes: unknown): void {
+  if (!Array.isArray(codes) || !codes.length) {
+    if (p.orbs.length) p.orbs = NO_ORBS;
+    return;
+  }
+  const cur = p.orbs;
+  if (cur.length === codes.length && codes.every((c, i) => c === cur[i])) return;
+  p.orbs = codes.filter(validOrbCode).slice(0, EQUIP_SLOTS.length);
 }

@@ -76,6 +76,7 @@ input:focus, select:focus { outline: none; border-color: var(--gold); }
 .tabs button.on { background: var(--panel-2); border-color: var(--gold); color: var(--gold-hi); }
 
 main { padding: 16px; max-width: 1200px; margin: 0 auto; }
+.orb-bench { height: calc(100vh - 140px); min-height: 480px; border: 1px solid var(--edge-dim); border-radius: 6px; }
 
 .card { background: var(--panel); border: 1px solid var(--edge-dim); border-radius: 6px; padding: 14px; margin-bottom: 14px; }
 .card h2 { margin: 0 0 10px; font-size: 16px; font-weight: 600; color: var(--gold-hi); }

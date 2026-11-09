@@ -9,7 +9,7 @@ import { MAIL_BODY_MAX, MAIL_DAYS, MAIL_TITLE_MAX, type MailRecipientRow, type M
 import { entryName, POTION_SIZES, potionName } from '../shared/data/potions';
 import { STONE_NAME } from '../shared/data/stones';
 import type {
-  AdminAccountDetail, AdminAccountsResponse, AdminFeature, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, SessionPage, SessionSort, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AdminShutdownText, AuditRow, RoleRow,
+  AdminAccountDetail, AdminAccountsResponse, AdminFeature, AdminOrbLook, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, SessionPage, SessionSort, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AdminShutdownText, AuditRow, RoleRow,
 } from '../shared/admin';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { itemNames, makeItem, roundStat, rowRanges, tierOf } from '../shared/data/items';
@@ -140,7 +140,7 @@ const root = document.getElementById('admin')!;
 let me: AdminMe | null = null;
 let meta: AdminMeta | null = null;
 let online: AdminOnline | null = null;
-type Tab = 'online' | 'search' | 'users' | 'stats' | 'sessions' | 'chat' | 'mail' | 'trades' | 'roles' | 'audit' | 'server';
+type Tab = 'online' | 'search' | 'users' | 'stats' | 'sessions' | 'chat' | 'mail' | 'trades' | 'orbs' | 'roles' | 'audit' | 'server';
 let tab: Tab = 'online';
 let timer = 0;
 
@@ -248,6 +248,7 @@ function renderShell(): void {
   if (me.features.includes('chatLog')) tabs.push(['chat', 'แชท']);
   if (me.features.includes('mail')) tabs.push(['mail', 'จดหมาย']);
   if (me.features.includes('tradeLog')) tabs.push(['trades', 'เทรด']);
+  if (me.features.includes('orbPreview')) tabs.push(['orbs', 'ลูกแก้วตีบวก']);
   if (me.role === 'owner') tabs.push(['roles', 'สิทธิ์ GM'], ['audit', 'ประวัติ']);
   if (me.role === 'owner' || me.features.includes('broadcast') || me.features.includes('backup') || me.features.includes('shutdownText')) tabs.push(['server', 'Server']);
   const bar = h('nav', { class: 'tabs' }, ...tabs.map(([id, label]) =>
@@ -267,6 +268,8 @@ function renderShell(): void {
 function setTab(t: Tab): void {
   tab = t;
   stopRefresh();
+  stopOrbs?.();
+  stopOrbs = null;
   void checkStale();
   document.querySelectorAll<HTMLElement>('.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
   // On a phone the tab row scrolls: keep the chosen tab in view.
@@ -280,9 +283,33 @@ function setTab(t: Tab): void {
   else if (t === 'chat') void renderChat();
   else if (t === 'mail') void renderMail();
   else if (t === 'trades') void renderTrades();
+  else if (t === 'orbs') void renderOrbs();
   else if (t === 'roles') void renderRoles();
   else if (t === 'audit') void renderAudit();
   else void renderServer();
+}
+
+// ------------------------------------------------------------ orb test bench
+
+/** Stops the orb test bench (its renderer and frame loop) when another tab opens. */
+let stopOrbs: (() => void) | null = null;
+
+/** The enhancement orb test bench (src/client/orbPreview.ts), loaded only when this tab opens. */
+async function renderOrbs(): Promise<void> {
+  const box = h('div', { class: 'orb-bench' }, 'กำลังโหลด…');
+  view.append(box);
+  try {
+    const { mountOrbPreview } = await import('../client/orbPreview');
+    if (tab !== 'orbs' || !box.isConnected) return;
+    const stop = await mountOrbPreview(box, 'ทดลองที่นี่ไม่เปลี่ยนอะไรในเกม จนกว่าเจ้าของกด "บันทึกเป็นค่าเริ่มต้นทั้งเซิร์ฟ" · เดิน: WASD / ลูกศร หรือคลิกพื้น', {
+      load: () => api<AdminOrbLook>('GET', '/admin/orb-look'),
+      save: (look) => api<AdminOrbLook>('POST', '/admin/orb-look', look === 'reset' ? { reset: true } : { look }),
+    });
+    if (tab !== 'orbs' || !box.isConnected) stop();
+    else stopOrbs = stop;
+  } catch (e) {
+    box.textContent = `โหลดไม่สำเร็จ: ${(e as Error).message}`;
+  }
 }
 
 function stopRefresh(): void {
@@ -1006,7 +1033,7 @@ const ACTION_TH: Record<string, string> = {
   level: 'ตั้งเลเวล', gold: 'ทอง', items: 'เสกไอเทม', kick: 'เตะ', teleport: 'ย้ายโซน', grant: 'ให้สิทธิ์', revoke: 'ถอนสิทธิ์',
   server: 'Server', password: 'ตั้งรหัสผ่าน', ban: 'แบน', unban: 'ปลดแบน', broadcast: 'ประกาศ', backup: 'สำรองข้อมูล',
   'delete-account': 'ลบบัญชี', 'delete-character': 'ลบตัวละคร', 'chat-delete': 'ลบแชท',
-  'shutdown-text': 'ข้อความเตือนปิด server', mail: 'ส่งจดหมาย', mailRecall: 'ดึงจดหมายกลับ',
+  'shutdown-text': 'ข้อความเตือนปิด server', 'orb-look': 'หน้าตาลูกแก้วตีบวก', mail: 'ส่งจดหมาย', mailRecall: 'ดึงจดหมายกลับ',
 };
 
 async function renderAudit(): Promise<void> {
