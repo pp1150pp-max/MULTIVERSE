@@ -266,6 +266,9 @@ export class Player extends Unit {
   dashT = 0;
   /** Standing still to aim (Headshot): no walking, attacking or dashing until it runs out. */
   rootT = 0;
+  /** Share of damage dealt that heals the player, until sim time `lifestealUntil` (sword Q). */
+  lifesteal = 0;
+  lifestealUntil = -1;
   private dashVx = 0;
   private dashVz = 0;
   private chargeHit = new Set<Monster>();

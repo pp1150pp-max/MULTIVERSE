@@ -30,6 +30,8 @@ const HEADSHOT_RANGE = 18;
 
 /** Sword Q: seconds the spin keeps the player from taking any damage. */
 const WHIRLWIND_GUARD = 0.6;
+/** Sword Q also heals for a share of all damage dealt for a few seconds (recasting restarts the timer). */
+const WHIRLWIND_LIFESTEAL = { share: 0.15, time: 3 };
 
 const aimAngle = (p: Player, aim: Vec2) => Math.atan2(aim.z - p.z, aim.x - p.x);
 
@@ -62,6 +64,9 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2): boolean
     // ---------------- Sword
     case 'whirlwind':
       sim.fx('effect', 'whirlwind', p.x, p.z, ang, 3.4);
+      // Set first so the spin's own hits heal too.
+      p.lifesteal = WHIRLWIND_LIFESTEAL.share;
+      p.lifestealUntil = sim.time + WHIRLWIND_LIFESTEAL.time;
       forCircle(sim, p.x, p.z, 3.2, (m) => sim.hitMonster(p, m, 1.8, { kb: 5 }));
       p.invulnT = Math.max(p.invulnT, WHIRLWIND_GUARD);
       sim.fx('ring', p.x, p.z, 1.3, '#ffcf5a', WHIRLWIND_GUARD);
