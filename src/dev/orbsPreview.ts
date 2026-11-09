@@ -29,6 +29,34 @@ levels.ring = 15;
 /** The tuning the game starts with, for the reset button. */
 const TUNING_DEFAULT = { ...orbTuning };
 
+/** Ranges the dice button picks from (kept inside what still looks sensible, narrower than the sliders). */
+const RANDOM_RANGE: Partial<Record<keyof typeof orbTuning, [number, number, number]>> = {
+  scale: [0.7, 1.6, 0.1],
+  radius: [0.75, 1.3, 0.05],
+  speed: [0.08, 0.4, 0.01],
+  height: [-0.3, 0.4, 0.05],
+  bob: [0, 0.2, 0.01],
+  bobSpeed: [0.5, 2, 0.1],
+  sway: [0, 1.5, 0.1],
+  glow: [0.6, 1.8, 0.1],
+  glowAlpha: [0.6, 1.6, 0.1],
+  particles: [0, 2, 0.1],
+  trail: [0, 2, 0.1],
+};
+
+/** Picks a random palette, shape and tuning (not the gear). */
+function randomLook(): void {
+  const pick = <T>(a: readonly T[]): T => a[Math.floor(Math.random() * a.length)];
+  setOrbPalette(pick(ORB_PALETTES).id);
+  setOrbShape(pick(ORB_SHAPES).id);
+  const t = orbTuning as unknown as Record<string, number | boolean>;
+  for (const [key, [lo, hi, step]] of Object.entries(RANDOM_RANGE)) {
+    const v = lo + Math.round((Math.random() * (hi - lo)) / step) * step;
+    t[key] = Math.round(v * 100) / 100;
+  }
+  orbTuning.softGlow = Math.random() < 0.75;
+}
+
 /** Walk speed (units/s): the game's base move speed. */
 const WALK_SPEED = BASE_MOVE_SPEED;
 
@@ -287,6 +315,10 @@ async function main(): Promise<void> {
     h('h2', 'ชุดสี');
     row('ชุดสี', select(ORB_PALETTES.map((p) => [p.id, p.name]), orbPalette().id, (v) => setOrbPalette(v)));
     row('รูปทรง', select(ORB_SHAPES.map((p) => [p.id, p.name]), orbShape(), (v) => setOrbShape(v)));
+    button('🎲 สุ่มค่าทั้งหมด', () => {
+      randomLook();
+      buildPanel();
+    });
     button('◀ ชุดสีก่อนหน้า', () => stepPalette(-1));
     button('ชุดสีถัดไป ▶', () => stepPalette(1));
     h('div', 'เดิน: WASD / ลูกศร หรือคลิกที่พื้น (คลิกพื้นที่ว่างก่อนกดปุ่ม ถ้าเพิ่งเลือกเมนู)').className = 'note';
