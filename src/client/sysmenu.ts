@@ -13,6 +13,14 @@ const EXIT_COUNTDOWN = 5;
 /** "In combat" = hurt or attacked within this many seconds, or Auto Play running. */
 const COMBAT_WINDOW = 5;
 
+/** Icon grid, 3 columns: [action ('' = not built yet, greyed out), icon, label]. */
+const MENU_ITEMS: [string, string, string][] = [
+  ['bag', '🎒', 'กระเป๋า'], ['', '🧑', 'ตัวละคร'], ['', '⚔️', 'สกิล'],
+  ['', '📜', 'ภารกิจ'], ['', '📖', 'สมุดการ์ด'], ['', '🏰', 'ดันเจี้ยน'],
+  ['', '👥', 'ปาร์ตี้'], ['', '🛡️', 'กิลด์'], ['', '👕', 'แฟชั่น'],
+  ['', '⚖️', 'ตลาด'], ['', '✉️', 'จดหมาย'], ['settings', '⚙️', 'ตั้งค่า'],
+];
+
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
 export class SystemMenu {
@@ -36,20 +44,25 @@ export class SystemMenu {
     this.panel.className = 'panel hidden';
     this.panel.innerHTML = `
       <div class="panel-head"><span>เมนู</span><button data-act="close">✕</button></div>
-      <div class="sys-view" data-view="main">
-        <button data-act="resume" class="primary">กลับเข้าเกม</button>
-        <button data-act="settings">ตั้งค่า</button>
-        <button data-act="help">ปุ่มลัด / วิธีเล่น</button>
-        <div class="sys-sep"></div>
-        <button data-act="chars">${guest ? 'กลับไปหน้า Guest' : 'กลับไปเลือกตัวละคร'}</button>
-        <button data-act="logout">${guest ? 'กลับหน้าแรก' : 'ออกจากระบบ'}</button>
-        ${guest ? '<div class="sys-note">สมัครสมาชิกที่หน้าแรก<br>เพื่อเก็บตัวละคร Guest นี้ไว้ถาวร</div>' : ''}
+      <div class="sys-view sys-grid" data-view="main">
+        ${MENU_ITEMS.map(
+          ([act, icon, label]) =>
+            `<button class="sys-tile" ${act ? `data-act="${act}"` : 'disabled'}>` +
+            // Swap the emoji span for <img src="..."> to use a real icon image.
+            `<span class="sys-ico">${icon}</span><span class="sys-label">${label}</span></button>`,
+        ).join('')}
       </div>
       <div class="sys-view hidden" data-view="settings">
         <button data-act="audio">เสียง</button>
         <button data-act="hudstyle" id="sys-hudstyle"></button>
         <button data-act="auto">ตั้งค่า Auto</button>
+        <button data-act="help">ปุ่มลัด / วิธีเล่น</button>
         <div class="sys-sep"></div>
+        <button data-act="chars">${guest ? 'กลับไปหน้า Guest' : 'กลับไปเลือกตัวละคร'}</button>
+        <button data-act="logout">${guest ? 'กลับหน้าแรก' : 'ออกจากระบบ'}</button>
+        ${guest ? '<div class="sys-note">สมัครสมาชิกที่หน้าแรก<br>เพื่อเก็บตัวละคร Guest นี้ไว้ถาวร</div>' : ''}
+        <div class="sys-sep"></div>
+        <button data-act="resume" class="primary">กลับเข้าเกม</button>
         <button data-act="back">‹ กลับ</button>
       </div>`;
     this.panel.addEventListener('click', (e) => {
@@ -116,6 +129,9 @@ export class SystemMenu {
       case 'close':
       case 'resume':
         return this.toggle(false);
+      case 'bag':
+        this.toggle(false);
+        return this.g.hud.toggleBag(true);
       case 'settings':
         return this.showView('settings');
       case 'back':
