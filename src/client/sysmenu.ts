@@ -21,6 +21,12 @@ const MENU_ITEMS: [string, string, string][] = [
   ['', '⚖️', 'ตลาด'], ['', '✉️', 'จดหมาย'], ['settings', '⚙️', 'ตั้งค่า'],
 ];
 
+/** Top-right icon row: [button id ('' = not built yet, greyed out), icon, label]. Swap the emoji for <img> later. */
+const TOP_ICONS: [string, string, string][] = [
+  ['top-auto', '🤖', 'AUTO: OFF'], ['top-bag', '🎒', 'กระเป๋า'], ['', '⚔️', 'สกิล'], ['', '⚖️', 'ตลาด'],
+  ['', '🏰', 'ดันเจี้ยน'], ['top-settings', '⚙️', 'ตั้งค่า'], ['top-menu', '☰', 'เมนู'],
+];
+
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
 export class SystemMenu {
@@ -30,14 +36,26 @@ export class SystemMenu {
   private lastCombat = -99;
   private lastHp = -1;
   private clock = 0;
+  private readonly autoBtn: HTMLElement;
 
   constructor(private readonly g: Game) {
     const guest = g.backend.guest;
-    const btn = document.createElement('button');
-    btn.id = 'btn-menu';
-    btn.textContent = '☰ เมนู (Esc)';
-    btn.onclick = () => this.toggle();
-    document.querySelector('#hud-topright .hud-buttons')!.prepend(btn);
+    // Top-right icon row (the old button column under the minimap is hidden by CSS, its buttons are still clicked from here).
+    const row = document.createElement('div');
+    row.id = 'hud-iconrow';
+    row.innerHTML = TOP_ICONS.map(
+      ([id, icon, label]) =>
+        `<button id="${id}" class="top-icon"${id ? '' : ' disabled'}><span class="sys-ico">${icon}</span><span class="sys-label">${label}</span></button>`,
+    ).join('');
+    $('hud-topright').prepend(row);
+    this.autoBtn = $('top-auto');
+    $('top-auto').onclick = () => g.toggleAuto();
+    $('top-bag').onclick = () => g.hud.toggleBag();
+    $('top-settings').onclick = () => {
+      this.toggle(true);
+      this.showView('settings');
+    };
+    $('top-menu').onclick = () => this.toggle();
 
     this.panel = document.createElement('div');
     this.panel.id = 'sys-menu';
@@ -101,6 +119,8 @@ export class SystemMenu {
   /** Called every frame with what the player is doing, to track combat and run the exit countdown. */
   update(dt: number, acting: boolean, moving: boolean): void {
     this.clock += dt;
+    this.autoBtn.classList.toggle('active', this.g.autoPlay);
+    this.autoBtn.querySelector('.sys-label')!.textContent = this.g.autoPlay ? 'AUTO: ON' : 'AUTO: OFF';
     const p = this.g.player;
     if (this.lastHp >= 0 && p.hp < this.lastHp - 0.5) {
       this.lastCombat = this.clock;
