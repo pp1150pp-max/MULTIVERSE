@@ -1060,9 +1060,11 @@ export class Hud {
       if (e.button !== 0) return;
       e.preventDefault();
       const start = [...box.children].indexOf(row);
-      grab.setPointerCapture(e.pointerId);
+      const id = e.pointerId;
       row.classList.add('dragging');
+      // Listen on window, not with pointer capture: moving the row in the DOM drops capture in Chromium.
       const move = (ev: PointerEvent) => {
+        if (ev.pointerId !== id) return;
         // The row goes before the first other row whose middle is below the pointer.
         const rest = [...box.children].filter((c) => c !== row) as HTMLElement[];
         const before = rest.find((c) => { const r = c.getBoundingClientRect(); return ev.clientY < r.top + r.height / 2; }) ?? null;
@@ -1070,16 +1072,17 @@ export class Hud {
         box.insertBefore(row, before);
         box.querySelectorAll('.aset-rank').forEach((r, i) => { r.textContent = String(i + 1); });
       };
-      const end = () => {
-        grab.removeEventListener('pointermove', move);
-        grab.removeEventListener('pointerup', end);
-        grab.removeEventListener('pointercancel', end);
+      const end = (ev: PointerEvent) => {
+        if (ev.pointerId !== id) return;
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', end);
+        window.removeEventListener('pointercancel', end);
         row.classList.remove('dragging');
         if ([...box.children].indexOf(row) !== start) this.applyAutoSettings();
       };
-      grab.addEventListener('pointermove', move);
-      grab.addEventListener('pointerup', end);
-      grab.addEventListener('pointercancel', end);
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', end);
+      window.addEventListener('pointercancel', end);
     });
   }
 
