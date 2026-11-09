@@ -11,7 +11,7 @@ import { STONE_NAME } from '../shared/data/stones';
 import type {
   AdminAccountDetail, AdminAccountsResponse, AdminFeature, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, SessionPage, SessionSort, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AdminShutdownText, AuditRow, RoleRow,
 } from '../shared/admin';
-import { CLASSES } from '../shared/data/classes';
+import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { itemNames, makeItem, roundStat, rowRanges, tierOf } from '../shared/data/items';
 import { checkShutdownText, SHUTDOWN_SECONDS, SHUTDOWN_TEXT_MAX, SHUTDOWN_TIME_TOKEN, shutdownWarning, type ShutdownMode } from '../shared/net/protocol';
 import { isStack, RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, SLOTS, STAT_KEYS, STAT_LABEL, STONE_KINDS, type BagEntry, type ClassId, type Item, type Rarity } from '../shared/types';
@@ -504,21 +504,29 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
   giveBtn.onclick = () => void run('gold', { delta: intOf(gold) }, giveBtn);
   takeBtn.onclick = () => void run('gold', { delta: -intOf(gold) }, takeBtn);
 
-  // Items
+  // Items: gear is made for the class picked here (default: this character's), so a GM can hand over gear for another class to pass on.
+  const forCls = h('select', {}, ...CLASS_IDS.map((k) => h('option', { value: k, selected: k === c.classId }, k === c.classId ? `${className(k)} (อาชีพตัวนี้)` : className(k))));
+  const cls = (): ClassId => forCls.value as ClassId;
   const base = h('select');
-  for (const slot of SLOTS) {
-    const group = h('optgroup', { label: SLOT_LABEL[slot] });
-    // Off-hands exist per class: only this character's are offered.
-    for (const b of m.bases.filter((x) => x.slot === slot && (x.names.any || x.names[c.classId]))) {
-      group.append(h('option', { value: b.id }, `${b.names[c.classId] ?? b.names.any ?? b.id} (Lv.${b.minLevel}+)`));
+  const fillBases = () => {
+    const keep = base.value;
+    base.replaceChildren();
+    for (const slot of SLOTS) {
+      const group = h('optgroup', { label: SLOT_LABEL[slot] });
+      // Off-hands exist per class: only the picked class's are offered.
+      for (const b of m.bases.filter((x) => x.slot === slot && (x.names.any || x.names[cls()]))) {
+        group.append(h('option', { value: b.id }, `${b.names[cls()] ?? b.names.any ?? b.id} [${b.names.any ? 'ทุกอาชีพ' : className(cls())}] (Lv.${b.minLevel}+)`));
+      }
+      base.append(group);
     }
-    base.append(group);
-  }
-  // Potions and blacksmith stones share the list; their value is "potion:hp:l" / "stone:protect".
-  base.append(
-    h('optgroup', { label: 'ยา' }, ...(['hp', 'mp'] as const).flatMap((k) => POTION_SIZES.map((sz) => h('option', { value: `potion:${k}:${sz}` }, potionName(k, sz))))),
-    h('optgroup', { label: 'หินช่างตีเหล็ก' }, ...STONE_KINDS.map((k) => h('option', { value: `stone:${k}` }, STONE_NAME[k]))),
-  );
+    // Potions and blacksmith stones share the list; their value is "potion:hp:l" / "stone:protect".
+    base.append(
+      h('optgroup', { label: 'ยา' }, ...(['hp', 'mp'] as const).flatMap((k) => POTION_SIZES.map((sz) => h('option', { value: `potion:${k}:${sz}` }, potionName(k, sz))))),
+      h('optgroup', { label: 'หินช่างตีเหล็ก' }, ...STONE_KINDS.map((k) => h('option', { value: `stone:${k}` }, STONE_NAME[k]))),
+    );
+    if ([...base.options].some((o) => o.value === keep)) base.value = keep;
+  };
+  fillBases();
   /** The potion/stone picked, as the request fields; null while gear is picked. */
   const stackPick = (): Record<string, string> | null => {
     const [kind, a, b] = base.value.split(':');
@@ -549,9 +557,9 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
   const exampleBox = h('div', { class: 'example' });
   /** Rolls a new example for the current choices (or keeps the one already made for them). */
   const ensureExample = (reroll = false) => {
-    const key = `${base.value}|${rarity.value}|${effLevel()}|${c.classId}`;
+    const key = `${base.value}|${rarity.value}|${effLevel()}|${cls()}`;
     if (!reroll && example?.key === key) return;
-    const item = makeItem(base.value, rarity.value as Rarity, effLevel(), c.classId);
+    const item = makeItem(base.value, rarity.value as Rarity, effLevel(), cls());
     example = item ? { key, name: item.name, rows: (item.lines ?? []).map((l) => ({ stat: l.stat, value: l.value })) } : null;
   };
   const drawExample = () => {
@@ -560,7 +568,7 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
     const ex = example;
     const rar = rarity.value as Rarity;
     const ranges = rowRanges(base.value, rar, effLevel(), ex.rows.map((r) => r.stat)) ?? [];
-    const names = itemNames(base.value, rar, c.classId);
+    const names = itemNames(base.value, rar, cls());
     const nameEl = names.length > 1
       ? h('select', { onchange: (e: Event) => (ex.name = (e.target as HTMLSelectElement).value) }, ...names.map((n) => h('option', { value: n, selected: n === ex.name }, n)))
       : h('b', {}, ex.name);
@@ -622,6 +630,11 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
     drawExample();
   };
   base.addEventListener('change', refreshExample);
+  forCls.onchange = () => {
+    fillBases();
+    form.baseId = base.value;
+    refreshExample();
+  };
   rarity.addEventListener('change', refreshExample);
   itemLv.addEventListener('change', refreshExample);
   refreshExample();
@@ -629,7 +642,7 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
     const stack = stackPick();
     if (stack) return void run('items', { ...stack, count: intOf(count) }, itemBtn);
     void run('items', {
-    baseId: base.value, rarity: rarity.value, plus: Number(plus.value), level: custom ? effLevel() : intOf(itemLv), count: intOf(count),
+    baseId: base.value, classId: cls(), rarity: rarity.value, plus: Number(plus.value), level: custom ? effLevel() : intOf(itemLv), count: intOf(count),
     ...(custom && example ? { name: example.name, lines: example.rows } : {}),
     }, itemBtn);
   };
@@ -665,7 +678,7 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
     h('section', {}, h('h3', {}, `ทอง (ครั้งละไม่เกิน ${fmt(m.goldMax)} G)`),
       h('div', { class: 'row' }, h('label', {}, 'จำนวน', gold), giveBtn, takeBtn)),
     h('section', {}, h('h3', {}, `เสกไอเทมใส่กระเป๋า (ครั้งละไม่เกิน ${m.itemsMax} ชิ้น · ยา/หินนับทีละขวด/ก้อน)`),
-      h('div', { class: 'row' }, h('label', { style: 'flex-basis:100%' }, 'ชนิด', base)),
+      h('div', { class: 'row' }, h('label', {}, 'ของอาชีพ', forCls), h('label', { style: 'flex:1' }, 'ชนิด', base)),
       h('div', { class: 'row', style: 'margin-top:8px' },
         rarityWrap, plusWrap, itemLvWrap, h('label', {}, 'จำนวน', count), itemBtn),
       custom ? exampleBox : null),
@@ -812,7 +825,7 @@ async function renderMail(): Promise<void> {
     for (const slot of SLOTS) {
       const group = h('optgroup', { label: SLOT_LABEL[slot] });
       for (const b of m.bases.filter((x) => x.slot === slot)) {
-        group.append(h('option', { value: b.id }, `${b.names.any ?? Object.values(b.names).join(' / ')} (Lv.${b.minLevel}+)`));
+        group.append(h('option', { value: b.id }, `${b.names.any ? `${b.names.any} [ทุกอาชีพ]` : Object.entries(b.names).map(([k, n]) => `${n} [${className(k as ClassId)}]`).join(' / ')} (Lv.${b.minLevel}+)`));
       }
       pick.append(group);
     }

@@ -22,6 +22,7 @@ import { BAG_SIZE, type CharacterData, type Player } from '../src/shared/sim/Pla
 import { expToNext, MAX_LEVEL } from '../src/shared/formulas';
 import { ZONES, zoneById } from '../src/shared/data/zones';
 import { ITEM_BASES, makeItem } from '../src/shared/data/items';
+import { CLASS_IDS } from '../src/shared/data/classes';
 import { MAX_PLUS } from '../src/shared/data/enhance';
 import { RARITIES, RARITY_LABEL, STAT_LABEL, type BagEntry, type Item } from '../src/shared/types';
 import { checkUsername } from '../src/shared/api';
@@ -270,7 +271,10 @@ function editCharacter(db: Db, world: GameWorld, a: Admin, charId: number, what:
       const free = freeSlots(d.bag);
       if (free === 0) throw new HttpError(400, 'กระเป๋าเต็ม');
       const n = Math.min(count, free);
-      const classId = live ? live.cls.id : c.data.classId;
+      // Gear for another class may be asked for (to hand on to someone else); default is the character's own.
+      const own = live ? live.cls.id : c.data.classId;
+      const classId = body.classId === undefined ? own : CLASS_IDS.find((k) => k === body.classId);
+      if (!classId) throw new HttpError(400, 'อาชีพไม่ถูกต้อง');
       // Chosen stats (owner by default): every copy gets exactly the rows the page showed.
       const custom = body.lines !== undefined;
       if (custom && !canUse(a.role, 'customItem')) throw new HttpError(403, 'ไม่มีสิทธิ์กำหนดสเตตัสไอเทม');
