@@ -74,7 +74,8 @@ export class PlayerView {
     this.matchStride(dt);
     this.actor.update(dt, p.moving, p.isDashing ? 14 : undefined);
     this.updateAura(dt, fx);
-    this.orbs.update(this.clock, p.x, p.z, p.orbs, p.alive);
+    // Owner 2026-11-10: the orbs stay while dead (only the aura goes).
+    this.orbs.update(this.clock, p.x, p.z, p.orbs, true);
     this.sync();
   }
 

@@ -91,6 +91,9 @@ function graded(id: string, name: string, lo: OrbColors, hi: OrbColors): OrbPale
 /** One color per worn place, in EQUIP_SLOTS order (weapon, offhand, helmet, necklace, armor, gloves, belt, boots, ring, ring2). */
 const SLOT_COLORS = ['#ff5a4a', '#ff9a2e', '#ffd34a', '#7ee05a', '#3fc8b0', '#4fa0ff', '#6a6cff', '#c56dff', '#ff6fc8', '#e8e8f8'];
 
+/** +7 to +15 across the rainbow. */
+const PRISM = ['#ff4a4a', '#ff9a2e', '#ffe04a', '#7ee05a', '#3fd0c0', '#4f9cff', '#7a6cff', '#c56dff', '#ff7ad8'];
+
 /** Matches the aura's tiers: blue at +7, violet at +10, orange at +13, gold at +15. */
 const AURA_STEPS: [number, string][] = [[7, '#6fb8ff'], [10, '#c56dff'], [13, '#ff9a2e'], [15, '#ffd34a']];
 function auraColor(plus: number): string {
@@ -114,6 +117,34 @@ export const ORB_PALETTES: OrbPalette[] = [
   graded('fire', 'Fire แดง/ส้ม',
     { core: '#b8261e', accent: '#ffc070', glow: '#ff3a1a' },
     { core: '#ff7a1a', accent: '#fff0a0', glow: '#ffa030' }),
+  graded('ice', 'Ice ฟ้าน้ำแข็ง/ขาว',
+    { core: '#3aa6d8', accent: '#e8fbff', glow: '#5ad0ff' },
+    { core: '#bdf2ff', accent: '#ffffff', glow: '#d8f8ff' }),
+  graded('nature', 'Nature เขียวมรกต',
+    { core: '#2f9e44', accent: '#d8ffb0', glow: '#4ad060' },
+    { core: '#5ee08a', accent: '#f4ffd0', glow: '#9cff7a' }),
+  graded('void', 'Void ม่วงดำ/ชมพู',
+    { core: '#3a1f5c', accent: '#ff7ae0', glow: '#8a2cff' },
+    { core: '#5a1f7c', accent: '#ffd0f8', glow: '#ff4ad8' }),
+  graded('blood', 'Blood Moon แดงเข้ม',
+    { core: '#6a0f1a', accent: '#ff8a8a', glow: '#c01830' },
+    { core: '#c8102e', accent: '#ffe0e0', glow: '#ff3050' }),
+  graded('ocean', 'Ocean ฟ้าเขียวทะเล',
+    { core: '#167a8a', accent: '#c8fff4', glow: '#20c0b0' },
+    { core: '#2ad0c8', accent: '#ffffff', glow: '#6affe8' }),
+  graded('moon', 'Moonlight เงิน/ขาว',
+    { core: '#8a93a8', accent: '#ffffff', glow: '#b8c4e0' },
+    { core: '#e4e8f4', accent: '#ffffff', glow: '#ffffff' }),
+  graded('toxic', 'Toxic เขียวมะนาว/ม่วง',
+    { core: '#6ad01a', accent: '#e8ff9a', glow: '#9cff2a' },
+    { core: '#a0ff3a', accent: '#f0c0ff', glow: '#c070ff' }),
+  {
+    id: 'prism', name: 'Prism สีรุ้งตามระดับ',
+    colors: (_slot, plus) => {
+      const c = PRISM[Math.max(0, Math.min(PRISM.length - 1, plus - 7))];
+      return { core: c, accent: mix(c, '#ffffff', 0.7), glow: c };
+    },
+  },
   {
     id: 'slot', name: 'สีตามช่องที่สวม',
     colors: (slot, plus) => {
@@ -129,6 +160,25 @@ export const ORB_PALETTES: OrbPalette[] = [
     },
   },
 ];
+
+/** Orb outlines to try (rows of the orb atlas). */
+export const ORB_SHAPES: { id: string; name: string }[] = [
+  { id: 'sphere', name: 'ลูกกลม' },
+  { id: 'crystal', name: 'คริสตัล (ข้าวหลามตัด)' },
+  { id: 'flame', name: 'เปลวไฟ/วิญญาณ' },
+  { id: 'star', name: 'ดาว 4 แฉก' },
+];
+/** The shape every orb is drawn with (a shader uniform shared by all rings). */
+const shapeU = { value: 0 };
+
+export function orbShape(): string {
+  return ORB_SHAPES[shapeU.value].id;
+}
+
+export function setOrbShape(id: string): void {
+  const i = ORB_SHAPES.findIndex((x) => x.id === id);
+  if (i >= 0) shapeU.value = i;
+}
 
 let palette = ORB_PALETTES[0];
 /** Bumped when the palette changes, so every ring repaints. */
@@ -157,28 +207,50 @@ function putRgb(arr: Float32Array, i: number, hex: string): void {
 
 const ORB_PX = 16;
 
+/** How far (dx, dy) is from the centre of a shape of size r: below 1 inside, 1 at the edge. */
+function shapeDist(shape: number, dx: number, dy: number, r: number): number {
+  switch (shape) {
+    case 1: // crystal: a tall diamond
+      return (Math.abs(dx) * 1.3 + Math.abs(dy) * 0.85) / r;
+    case 2: { // flame: round bottom, pointed top
+      const cy = dy - r * 0.3;
+      const base = r * 0.75;
+      if (cy >= 0) return Math.hypot(dx, cy) / base;
+      const w = base * (1 + cy / (r * 1.45));
+      return w <= 0 ? 9 : Math.max(Math.abs(dx) / w, -cy / (r * 1.45));
+    }
+    case 3: { // four-pointed star
+      const q = Math.sqrt(Math.abs(dx)) + Math.sqrt(Math.abs(dy));
+      return (q * q) / (r * 1.15);
+    }
+    default:
+      return Math.hypot(dx, dy) / r;
+  }
+}
+
 /**
- * Four 16×16 pixel-art orbs side by side, one per `detail`. Channels are masks the shader colors in:
- * R = shading (0 = dark outline), G = white highlight, B = accent color, A = solid.
+ * 16×16 pixel-art orbs: one column per `detail`, one row per shape (ORB_SHAPES). Channels are masks the
+ * shader colors in: R = shading (0 = dark outline), G = white highlight, B = accent color, A = solid.
  */
 function orbAtlas(): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = ORB_PX * 4;
-  c.height = ORB_PX;
+  c.height = ORB_PX * ORB_SHAPES.length;
   const g = c.getContext('2d')!;
   const img = g.createImageData(c.width, c.height);
-  for (let d = 0; d < 4; d++) {
+  for (let shape = 0; shape < ORB_SHAPES.length; shape++) for (let d = 0; d < 4; d++) {
     // The +15 orb is a little smaller in its cell so its rays fit.
     const r = d === 3 ? 5.5 : 6.5;
     for (let y = 0; y < ORB_PX; y++) {
       for (let x = 0; x < ORB_PX; x++) {
         const dx = x + 0.5 - ORB_PX / 2;
         const dy = y + 0.5 - ORB_PX / 2;
-        const dist = Math.hypot(dx, dy);
+        const sd = shapeDist(shape, dx, dy, r);
+        const dist = sd * r;
         let a = 0, sh = 0, hi = 0, ac = 0;
-        if (dist <= r + 1) {
+        if (sd <= 1 + 1.1 / r) {
           a = 255;
-          if (dist > r) sh = 0; // outline
+          if (sd > 1) sh = 0; // outline
           else {
             // Light from the top left, in three flat bands (16-bit style, no smooth gradient).
             const l = (-dx - dy) / (r * 2) + 0.5 - dist / (r * 3);
@@ -188,10 +260,10 @@ function orbAtlas(): THREE.CanvasTexture {
             if (d >= 2 && ((Math.abs(dx) < 0.6 && Math.abs(dy) < 2.6) || (Math.abs(dy) < 0.6 && Math.abs(dx) < 2.6))) ac = 1; // star core
             if (d >= 2 && dist < 1.2) hi = 1;
           }
-        } else if (d === 3 && ((Math.abs(dx) < 0.6 && dist < 8) || (Math.abs(dy) < 0.6 && dist < 8))) {
+        } else if (d === 3 && ((Math.abs(dx) < 0.6 && Math.abs(dy) < 8) || (Math.abs(dy) < 0.6 && Math.abs(dx) < 8))) {
           a = 255; ac = 1; hi = 0.5; // rays
         }
-        const o = (y * c.width + d * ORB_PX + x) * 4;
+        const o = ((shape * ORB_PX + y) * c.width + d * ORB_PX + x) * 4;
         img.data[o] = sh * 255;
         img.data[o + 1] = hi * 255;
         img.data[o + 2] = ac * 255;
@@ -248,7 +320,7 @@ let glowMat: THREE.ShaderMaterial | null = null;
 
 function materials(): [THREE.ShaderMaterial, THREE.ShaderMaterial] {
   coreMat ??= new THREE.ShaderMaterial({
-    uniforms: { map: { value: orbAtlas() }, uScreenH: screenH },
+    uniforms: { map: { value: orbAtlas() }, uScreenH: screenH, uShape: shapeU },
     vertexShader: `
       attribute vec3 color; attribute vec3 accent; attribute float size; attribute float detail;
       uniform float uScreenH;
@@ -259,10 +331,10 @@ function materials(): [THREE.ShaderMaterial, THREE.ShaderMaterial] {
         ${POINT_SIZE}
       }`,
     fragmentShader: `
-      uniform sampler2D map;
+      uniform sampler2D map; uniform float uShape;
       varying vec3 vColor; varying vec3 vAccent; varying float vDetail;
       void main() {
-        vec4 t = texture2D(map, vec2((gl_PointCoord.x + vDetail) / 4.0, 1.0 - gl_PointCoord.y));
+        vec4 t = texture2D(map, vec2((gl_PointCoord.x + vDetail) / 4.0, 1.0 - (gl_PointCoord.y + uShape) / ${ORB_SHAPES.length}.0));
         if (t.a < 0.5) discard;
         vec3 c = vColor * (0.3 + 0.9 * t.r);
         c = mix(c, vAccent, t.b);

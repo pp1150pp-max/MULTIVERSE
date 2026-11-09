@@ -7,11 +7,12 @@ import { loadGameAssets, groundTiles } from '../client/assets';
 import { Effects } from '../client/effects';
 import { PlayerView } from '../client/views';
 import { ISO_DIR } from '../client/world';
-import { ORB_LEVELS, ORB_PALETTES, orbPalette, orbTuning, setOrbPalette } from '../client/orbs';
+import { ORB_LEVELS, ORB_PALETTES, ORB_SHAPES, orbPalette, orbShape, orbTuning, setOrbPalette, setOrbShape } from '../client/orbs';
 import { Player } from '../shared/sim/Player';
 import type { Sim } from '../shared/sim/Sim';
 import { auraTier, orbCodes, ORB_MIN_PLUS } from '../shared/data/enhance';
 import { CLASS_IDS } from '../shared/data/classes';
+import { BASE_MOVE_SPEED } from '../shared/formulas';
 import { EQUIP_SLOTS, EQUIP_SLOT_LABEL, type ClassId, type EquipSlot, type Item } from '../shared/types';
 
 if (!import.meta.env.DEV) throw new Error('orb preview is for npm run dev only');
@@ -24,6 +25,9 @@ const levels: Record<EquipSlot, number> = Object.fromEntries(EQUIP_SLOTS.map((s)
 levels.weapon = 7;
 levels.armor = 7;
 levels.ring = 15;
+
+/** Walk speed (units/s): the game's base move speed. */
+const WALK_SPEED = BASE_MOVE_SPEED;
 
 const state = { cls: 'sword' as ClassId, aura: true, walk: false, extra: 0, zoom: 17 };
 
@@ -62,8 +66,32 @@ async function main(): Promise<void> {
   };
   window.addEventListener('resize', resize);
   resize();
-  camera.position.copy(ISO_DIR).multiplyScalar(80);
-  camera.lookAt(0, 0, 0);
+  const camTarget = new THREE.Vector3();
+  const placeCamera = () => {
+    camera.position.copy(camTarget).addScaledVector(ISO_DIR, 80);
+    camera.lookAt(camTarget);
+  };
+  placeCamera();
+
+  // Walking like in the game: WASD / arrow keys, or click the ground to walk there.
+  const keys = new Set<string>();
+  const typing = () => document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLSelectElement;
+  window.addEventListener('keydown', (e) => {
+    if (!typing()) keys.add(e.code);
+  });
+  window.addEventListener('keyup', (e) => keys.delete(e.code));
+  window.addEventListener('blur', () => keys.clear());
+  let walkTo: THREE.Vector3 | null = null;
+  const ray = new THREE.Raycaster();
+  renderer.domElement.addEventListener('pointerdown', (e) => {
+    ray.setFromCamera(new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1), camera);
+    const hit = ray.intersectObject(ground)[0];
+    if (hit) {
+      walkTo = hit.point.clone();
+      state.walk = false;
+      buildPanel();
+    }
+  });
 
   // Ground: the game's grass tile when it's there.
   const tile = groundTiles.grass;
@@ -137,7 +165,32 @@ async function main(): Promise<void> {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     t += dt;
-    if (state.walk) {
+    // Screen up is −x −z and screen right is +x −z with this camera.
+    let mx = 0;
+    let mz = 0;
+    if (keys.has('KeyW') || keys.has('ArrowUp')) { mx -= 1; mz -= 1; }
+    if (keys.has('KeyS') || keys.has('ArrowDown')) { mx += 1; mz += 1; }
+    if (keys.has('KeyD') || keys.has('ArrowRight')) { mx += 1; mz -= 1; }
+    if (keys.has('KeyA') || keys.has('ArrowLeft')) { mx -= 1; mz += 1; }
+    if (mx || mz) walkTo = null;
+    else if (walkTo) {
+      mx = walkTo.x - hero.x;
+      mz = walkTo.z - hero.z;
+      if (Math.hypot(mx, mz) < 0.1) {
+        walkTo = null;
+        mx = mz = 0;
+      }
+    }
+    if ((mx || mz) && hero.alive) {
+      const len = Math.hypot(mx, mz);
+      const step = Math.min(WALK_SPEED * dt, walkTo ? len : Infinity);
+      hero.x += (mx / len) * step;
+      hero.z += (mz / len) * step;
+      hero.faceX = mx / len;
+      hero.faceZ = mz / len;
+      hero.moving = true;
+      state.walk = false;
+    } else if (state.walk) {
       const a = t * 0.6;
       hero.x = Math.cos(a) * 3;
       hero.z = Math.sin(a) * 3;
@@ -148,6 +201,10 @@ async function main(): Promise<void> {
       hero.moving = false;
     }
     heroView.update(dt, fx);
+    const k = 1 - Math.exp(-dt * 8);
+    camTarget.x += (hero.x - camTarget.x) * k;
+    camTarget.z += (hero.z - camTarget.z) * k;
+    placeCamera();
     for (const c of crowd) c.v.update(dt, fx);
     fx.update(dt);
     renderer.render(scene, camera);
@@ -215,11 +272,21 @@ async function main(): Promise<void> {
       panel.append(b);
     };
 
+    const stepPalette = (d: number) => {
+      const i = ORB_PALETTES.indexOf(orbPalette());
+      setOrbPalette(ORB_PALETTES[(i + d + ORB_PALETTES.length) % ORB_PALETTES.length].id);
+      buildPanel();
+    };
+
     h('h1', 'ทดลองลูกแก้วตีบวก');
     h('div', 'หน้านี้มีเฉพาะตอน npm run dev (ผู้เล่นไม่เห็น)').className = 'note';
 
     h('h2', 'ชุดสี');
     row('ชุดสี', select(ORB_PALETTES.map((p) => [p.id, p.name]), orbPalette().id, (v) => setOrbPalette(v)));
+    row('รูปทรง', select(ORB_SHAPES.map((p) => [p.id, p.name]), orbShape(), (v) => setOrbShape(v)));
+    button('◀ ชุดสีก่อนหน้า', () => stepPalette(-1));
+    button('ชุดสีถัดไป ▶', () => stepPalette(1));
+    h('div', 'เดิน: WASD / ลูกศร หรือคลิกที่พื้น (คลิกพื้นที่ว่างก่อนกดปุ่ม ถ้าเพิ่งเลือกเมนู)').className = 'note';
 
     h('h2', 'ตัวละคร');
     row('อาชีพ', select(CLASS_IDS.map((c) => [c, c]), state.cls, (v) => {
@@ -234,8 +301,10 @@ async function main(): Promise<void> {
       state.walk = v;
       if (!v) hero.x = hero.z = 0;
     }));
-    row('ตาย (ซ่อนลูกแก้ว)', check(!hero.alive, (v) => {
+    row('ตาย (ออร่าหาย ลูกแก้วยังอยู่)', check(!hero.alive, (v) => {
       hero.alive = !v;
+      if (v) heroView.onDied();
+      else heroView.onRevived();
     }));
 
     h('h2', 'ระดับตีบวกของแต่ละช่อง');
