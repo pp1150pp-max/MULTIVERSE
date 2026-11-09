@@ -8,7 +8,7 @@ import { CLASSES, type ClassDef, type SkillDef, type SkillSlot } from '../data/c
 import { addInto, BASE_MOVE_SPEED, emptyStats } from '../formulas';
 import { auraTier, effectiveStats, plusOf, sellValue } from '../data/enhance';
 import { itemClass, starterWeapon, upgradeItem } from '../data/items';
-import { anyStackValue, POTIONS, POTION_SIZES, POTION_STACK, stackLimit } from '../data/potions';
+import { anyStackValue, potionHeal, POTIONS, POTION_SIZES, POTION_STACK, stackLimit } from '../data/potions';
 import { STONE_STACK } from '../data/stones';
 import {
   isPotion, isStack, isStone, RARITIES, sameStack, SLOTS, STONE_KINDS, wornPlaces,
@@ -677,7 +677,7 @@ export class Player extends Unit {
     }
     sim.inventoryChanged(this);
     sim.sfx('drink', this.x, this.z, this.id);
-    const amount = POTIONS[kind][size].amount;
+    const amount = potionHeal(kind, size, this.cls.id);
     this.potHeals.push({ kind, perSec: amount / POTION_TIME, left: POTION_TIME });
     if (kind === 'hp') {
       sim.text(this.x, this.topY, this.z, `+${amount}`, 'heal');
