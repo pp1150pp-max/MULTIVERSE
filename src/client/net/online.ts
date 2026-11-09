@@ -207,7 +207,7 @@ export class OnlineBackend implements Backend {
     const mine = first.players.find((p) => p.id === myId)!;
     const data: CharacterData = {
       name: mine.name, classId: mine.cls, level: first.me.level, exp: first.me.exp, gold: first.me.gold,
-      potSel: first.me.potSel, lootFilter: first.me.lootFilter, autoSettings: first.me.autoSettings,
+      potSel: first.me.potSel, lootFilter: first.me.lootFilter, autoSettings: first.me.autoSettings, bossKills: first.me.bossKills,
       equipment: first.me.inv?.equipment ?? {}, bag: first.me.inv?.bag ?? [], zone: this.zone.id,
       buyback: first.me.inv?.buyback, buybackLeft: first.me.buybackLeft,
     };
@@ -576,6 +576,7 @@ export class OnlineBackend implements Backend {
     me.hp = pv.hp;
     me.mp = pv.mp;
     me.exp = pv.exp;
+    if (pv.bossKills) me.bossKills = pv.bossKills;
     me.level = pv.level;
     me.gold = pv.gold;
     me.potSel = { ...pv.potSel };
