@@ -34,7 +34,7 @@ ok(near(expGapMult(20, 16), 0.8), 'monsters below the player work as before');
 }
 
 // ---- maps 3 and 4: stronger, faster, and every monster attacks on sight
-for (const [id, stats, tough] of [['frost_reach', 4.5, 0.7], ['ashen_isle', 7, 0.5]] as const) {
+for (const [id, stats, tough, mob] of [['frost_reach', 4.5, 0.7, 0.75], ['ashen_isle', 7, 0.5, 0.7]] as const) {
   const zone = ZONES[id];
   ok(zone.monsterBoost?.stats === stats && zone.monsterBoost?.tough === tough, `${id}: attack x${stats}, HP and defense x${stats * tough}`);
   const sim = new Sim(zone);
@@ -42,7 +42,7 @@ for (const [id, stats, tough] of [['frost_reach', 4.5, 0.7], ['ashen_isle', 7, 0
   ok(!!passive, `${id}: has a monster that is passive by nature (${passive?.def.id})`);
   const base = MONSTERS[passive.def.id];
   const sc = 1 + 0.18 * (passive.level - base.levels[0]);
-  ok(passive.maxHp === Math.round(base.hp * sc * stats * tough), `${id}: its HP is x${stats * tough}`);
+  ok(passive.maxHp === Math.round(base.hp * sc * stats * (tough * mob)), `${id}: ordinary monsters' HP is x${(stats * tough * mob).toFixed(3)}`);
   const p = sim.addPlayer(hero(40));
   p.stats.maxHp = p.hp = 1e9;
   p.x = passive.x + 4;

@@ -87,6 +87,8 @@ export interface MonsterBoost {
   stats: number;
   /** HP and defense only, on top of `stats` (attack keeps `stats`). Default 1. */
   tough?: number;
+  /** HP and defense once more, for ordinary monsters only (not bosses or their minions). Default 1. */
+  mobTough?: number;
   speed: number;
   /** How much faster skill cooldowns run (slam, throw, charge, leap, the Volcano Heart's rests). Default 1. */
   skill?: number;
@@ -279,7 +281,7 @@ export const ZONE_3: ZoneDef = rotateZone(2, scatterZone({
   subtitle: 'เกาะลอยที่ปกคลุมด้วยน้ำแข็ง สนสูงมีหิมะเกาะ และทะเลสาบเยือกแข็งที่ลื่นจนคุมทิศทางยาก',
   levels: [21, 30],
   theme: 'snow',
-  monsterBoost: { stats: 4.5, tough: 0.7, speed: 1.375, skill: 1.25, aggro: 7 },
+  monsterBoost: { stats: 4.5, tough: 0.7, mobTough: 0.75, speed: 1.375, skill: 1.25, aggro: 7 },
   allowAutoPlay: true,
   half: 64,
   seed: 20261105,
@@ -317,7 +319,7 @@ export const ZONE_4: ZoneDef = rotateZone(3, scatterZone({
   subtitle: 'เกาะหินดำลอยกลางอวกาศ ลาวาเดือดเป็นบ่อ รอยแยกเรืองแสง ขี้เถ้าลอยไม่หยุด และหัวใจของภูเขาไฟที่ยังเต้นอยู่',
   levels: [31, 40],
   theme: 'volcano',
-  monsterBoost: { stats: 7, tough: 0.5, speed: 1.25, skill: 1.25, aggro: 7 },
+  monsterBoost: { stats: 7, tough: 0.5, mobTough: 0.7, speed: 1.25, skill: 1.25, aggro: 7 },
   allowAutoPlay: true,
   half: 64,
   seed: 20261107,
