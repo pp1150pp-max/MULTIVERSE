@@ -114,10 +114,18 @@ async function run(): Promise<void> {
   B.ws.close(4000);
   await sleep(400);
   ok(A.view()?.friends[0]?.online === false && A.view().friends[0].char.name === 'Bodo', 'Bodo left: shown offline');
+  const B1 = joinWorld(b.tok, b.id('Bodo'));
+  await B1.ready;
+  await sleep(300);
+  ok(A.view()?.friends[0]?.online === true && A.lines().some((t) => t.includes('เพื่อนของคุณ Bodo เข้าเกมแล้ว')), 'Bodo is back: online again, and Aria is told');
+  // A dropped connection that comes straight back is not announced again.
+  const told = () => A.lines().filter((t) => t.includes('เพื่อนของคุณ Bodo เข้าเกมแล้ว')).length;
+  B1.ws.close();
+  await sleep(400);
   const B2 = joinWorld(b.tok, b.id('Bodo'));
   await B2.ready;
   await sleep(300);
-  ok(A.view()?.friends[0]?.online === true && A.lines().some((t) => t.includes('เพื่อนของคุณ Bodo เข้าเกมแล้ว')), 'Bodo is back: online again, and Aria is told');
+  ok(told() === 1 && A.view()?.friends[0]?.online === true, 'a quick reconnect after a drop: online, but no second line');
 
   // Whispers: to anyone online (not only friends), guests too.
   A.say('hello cleo', 'cleo');

@@ -46,6 +46,8 @@ const SKILL_KEYS: SkillSlot[] = ['q', 'e', 'r'];
 const PARTY_SEARCH_MS = 250;
 /** Fastest a client may send a friend request, block or list read (each looks things up in the database). */
 const FRIEND_ACTION_MS = 250;
+/** Back this soon after a dropped connection (or a login elsewhere): friends aren't told "online" again. */
+const FRIEND_QUIET_MS = 60_000;
 /**
  * Actions that move bag items, gold or gear: refused while the player has a trade window open, so what
  * was offered stays put (the swap checks it all again anyway). Picking things up, resting, Auto, chat and
@@ -206,6 +208,8 @@ export class GameWorld {
   readonly sims = new Map(Object.values(ZONES).map((z) => [z.id, new Sim(z)]));
   private readonly sessions = new Set<Session>();
   private readonly byPlayer = new Map<Player, Session>();
+  /** Account → when (Date.now()) its connection dropped or was taken over, for FRIEND_QUIET_MS. */
+  private readonly friendDroppedAt = new Map<number, number>();
   /**
    * One live stash per account with a character online, shared by all of them (the same object),
    * so nothing can be copied by having two characters open it.
@@ -444,6 +448,9 @@ export class GameWorld {
     if (![...this.sessions].some((o) => o.accountId === s.accountId)) this.stashes.delete(s.accountId);
     // Offline now (or shown as another character of the account).
     if (!s.guest) this.friendsMoved(s.accountId);
+    // A lost connection or a login elsewhere comes straight back: don't tell the friends "online" again then.
+    if (how === 'quit') this.friendDroppedAt.delete(s.accountId);
+    else this.friendDroppedAt.set(s.accountId, Date.now());
     this.broadcastSystem(`${s.player.name} ออกจากเกม`);
     console.log(`[world] ${s.username} left (${this.sessions.size} online)`);
   }
@@ -968,7 +975,11 @@ export class GameWorld {
 
   /** A member's character entered the world. */
   private friendsJoined(s: Session, accountWasOnline: boolean): void {
-    if (!accountWasOnline) {
+    const dropped = this.friendDroppedAt.get(s.accountId);
+    this.friendDroppedAt.delete(s.accountId);
+    const t = Date.now();
+    for (const [acc, at] of this.friendDroppedAt) if (t - at >= FRIEND_QUIET_MS) this.friendDroppedAt.delete(acc);
+    if (!accountWasOnline && (dropped === undefined || t - dropped >= FRIEND_QUIET_MS)) {
       for (const f of this.friends.friendsOf(s.accountId)) {
         for (const o of this.sessions) if (o.accountId === f) this.send(o.ws, { t: 'chat', name: '', text: `เพื่อนของคุณ ${s.player.name} เข้าเกมแล้ว` });
       }
