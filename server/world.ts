@@ -899,7 +899,7 @@ export class GameWorld {
       monsters: sim.monsters.filter(near).map((m) => ({
         id: m.id, def: m.def.id, lv: m.level,
         x: r2(m.x), z: r2(m.z), fx: r2(m.faceX), fz: r2(m.faceZ), mv: m.moving,
-        alive: m.alive, deadT: r2(m.deadT), hp: Math.round(m.hp), ...(m.isBoss ? { mhp: m.maxHp } : {}),
+        alive: m.alive, deadT: r2(m.deadT), hp: Math.round(m.hp), mhp: m.maxHp,
         st: m.state, wind: m.windupT > 0, enr: m.enraged, y: r2(m.lift),
       })),
       projectiles: sim.projectiles.filter(near).map((pr) => ({

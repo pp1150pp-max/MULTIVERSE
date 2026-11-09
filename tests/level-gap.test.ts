@@ -34,15 +34,15 @@ ok(near(expGapMult(20, 16), 0.8), 'monsters below the player work as before');
 }
 
 // ---- maps 3 and 4: stronger, faster, and every monster attacks on sight
-for (const [id, stats] of [['frost_reach', 4.5], ['ashen_isle', 7]] as const) {
+for (const [id, stats, tough] of [['frost_reach', 4.5, 0.7], ['ashen_isle', 7, 0.5]] as const) {
   const zone = ZONES[id];
-  ok(zone.monsterBoost?.stats === stats, `${id}: monsters x${stats}`);
+  ok(zone.monsterBoost?.stats === stats && zone.monsterBoost?.tough === tough, `${id}: attack x${stats}, HP and defense x${stats * tough}`);
   const sim = new Sim(zone);
   const passive = sim.monsters.find((m) => m.def.aggroRange === 0 && !m.isBoss)!;
   ok(!!passive, `${id}: has a monster that is passive by nature (${passive?.def.id})`);
   const base = MONSTERS[passive.def.id];
   const sc = 1 + 0.18 * (passive.level - base.levels[0]);
-  ok(passive.maxHp === Math.round(base.hp * sc * stats), `${id}: its HP is x${stats}`);
+  ok(passive.maxHp === Math.round(base.hp * sc * stats * tough), `${id}: its HP is x${stats * tough}`);
   const p = sim.addPlayer(hero(40));
   p.stats.maxHp = p.hp = 1e9;
   p.x = passive.x + 4;
@@ -63,6 +63,28 @@ for (const [id, stats] of [['frost_reach', 4.5], ['ashen_isle', 7]] as const) {
     ok(passive.target !== p, `hub: ${passive.def.id} stays passive`);
   }
   ok(ZONES[HUB_ID].spawns.every((s) => !s.boost?.aggro), 'hub: no spawn area forces aggro');
+}
+
+// ---- the yeti's minions keep the full x4.5 HP and are 30% faster
+{
+  const sim = new Sim(ZONES.frost_reach);
+  const yeti = sim.monsters.find((m) => m.def.id === 'yeti')!;
+  ok(yeti.maxHp === Math.round(MONSTERS.yeti.hp * 4.5 * 0.7), `yeti: HP x3.15 (${yeti.maxHp})`);
+  ok(MONSTERS.yeti_minion.ignoreTough === true && MONSTERS.yeti_minion.speedMult === 1.3, 'yeti minions: full HP and defense, 30% faster');
+}
+
+// ---- boss drops: 6 pieces of gear plus guaranteed epics
+for (const [zoneId, epics] of [['frost_reach', 1], ['ashen_isle', 2]] as const) {
+  const sim = new Sim(ZONES[zoneId]);
+  const boss = sim.monsters.find((m) => m.isBoss)!;
+  const p = sim.addPlayer(hero(50));
+  p.x = boss.x + 3;
+  p.z = boss.z;
+  p.stats.atk = 1e12;
+  sim.hitMonster(p, boss, 1);
+  const items = sim.loots.filter((l) => l.kind.type === 'item').map((l) => (l.kind as { item: { rarity: string } }).item);
+  ok(!boss.alive && items.length === 6 + epics, `${boss.def.id}: drops ${6 + epics} pieces of gear (${items.length})`);
+  ok(items.filter((i) => i.rarity === 'epic').length >= epics, `${boss.def.id}: at least ${epics} of them epic`);
 }
 
 finish('level gap');
