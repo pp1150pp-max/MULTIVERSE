@@ -110,6 +110,10 @@ interface Spawner { area: SpawnArea; alive: number; queue: number[]; boss: boole
 /** How close a player must be to a drop they clicked to pick it up (walking over others takes them at 0.8). */
 export const LOOT_CLICK_RANGE = 1.5;
 
+/** Owner's balance (2026-11-09): gold drops x2, potion drop chance x2, boss potions x2. */
+const DROP_GOLD_MULT = 2;
+const DROP_POTION_MULT = 2;
+
 export class Sim {
   readonly terrain: Terrain;
   players: Player[] = [];
@@ -613,15 +617,15 @@ export class Sim {
     const owner = top?.id;
     // Everyone in the top damage dealer's party (on this map) shares that first pick, gold included.
     const party = top?.partyId ?? null;
-    const gold = Math.round(randInt(r, d.gold[0], d.gold[1]) * (1 + 0.1 * (m.level - d.levels[0])));
+    const gold = Math.round(randInt(r, d.gold[0], d.gold[1]) * (1 + 0.1 * (m.level - d.levels[0])) * DROP_GOLD_MULT);
     this.spawnLoot(m, { type: 'gold', amount: gold }, owner, party);
     if (m.isBoss) {
       const loot = d.bossLoot;
       const n = loot?.items ?? randInt(r, 2, 3);
       for (let i = 0; i < n; i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 1.5, band) }, owner, party);
       for (let i = 0; i < (loot?.epics ?? 0); i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 1.5, band, 'epic') }, owner, party);
-      this.spawnLoot(m, { type: 'potion', pot: 'hp', size: 's', count: 1 }, owner, party);
-      this.spawnLoot(m, { type: 'potion', pot: 'mp', size: 's', count: 1 }, owner, party);
+      this.spawnLoot(m, { type: 'potion', pot: 'hp', size: 's', count: DROP_POTION_MULT }, owner, party);
+      this.spawnLoot(m, { type: 'potion', pot: 'mp', size: 's', count: DROP_POTION_MULT }, owner, party);
       // Every blacksmith stone kind can drop from a boss, each rolled on its own.
       for (const stone of STONE_KINDS) {
         if (r() < (loot?.stoneChance ?? BOSS_STONE_CHANCE)) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner, party);
@@ -629,7 +633,7 @@ export class Sim {
       return;
     }
     if (r() < d.itemChance) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 0, band) }, owner, party);
-    if (r() < d.potionChance) this.spawnLoot(m, { type: 'potion', pot: r() < 0.6 ? 'hp' : 'mp', size: 's', count: 1 }, owner, party);
+    if (r() < d.potionChance * DROP_POTION_MULT) this.spawnLoot(m, { type: 'potion', pot: r() < 0.6 ? 'hp' : 'mp', size: 's', count: 1 }, owner, party);
     // Reroll stones, rarely, from monsters that drop items at all (not summoned minions).
     if (d.itemChance > 0) {
       for (const stone of MONSTER_STONES) {
