@@ -16,6 +16,12 @@ export const POTIONS: Record<PotionKind, Record<PotionSize, { amount: number; pr
   mp: { s: { amount: 25, price: 10 }, m: { amount: 60, price: 25 }, l: { amount: 150, price: 55 } },
 };
 
+/** HP restored by one bottle for this class: swordsmen fight up close, so their HP potions heal 75% more. */
+export function potionHeal(kind: PotionKind, size: PotionSize, cls: string): number {
+  const base = POTIONS[kind][size].amount;
+  return kind === 'hp' && cls === 'sword' ? Math.round(base * 1.75) : base;
+}
+
 /** The merchant buys potions back at half price. */
 export function potionSellPrice(kind: PotionKind, size: PotionSize): number {
   return Math.floor(POTIONS[kind][size].price / 2);

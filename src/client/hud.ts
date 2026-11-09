@@ -7,7 +7,7 @@ import {
   MAX_PLUS, PITY_STEP, pityBonus, plusOf, rateFor, sellValue, STONE_FROM, stonesNeeded, successRate,
 } from '../shared/data/enhance';
 import {
-  entryName, POTION_SIZES, POTION_SIZE_LABEL, POTION_STACK, POTIONS, potionName, potionSellPrice,
+  entryName, POTION_SIZES, POTION_SIZE_LABEL, POTION_STACK, POTIONS, potionHeal, potionName, potionSellPrice,
 } from '../shared/data/potions';
 import { REROLL_STONE, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_SELL, STONE_STACK, stoneStackValue } from '../shared/data/stones';
 import { lineRanges, rerollBlock } from '../shared/data/items';
@@ -692,7 +692,7 @@ export class Hud {
         const size = p.potionToUse(s.kind) ?? p.potSel[s.kind];
         const count = p.potionCount(s.kind, size);
         s.extra.textContent = `${POTION_SIZE_LABEL[size]} ${count}`;
-        s.el.title = `${potionName(s.kind, size)} — ฟื้น ${POTIONS[s.kind][size].amount} ${s.kind.toUpperCase()}\nคลิกยาในกระเป๋าเพื่อเลือกขนาด`;
+        s.el.title = `${potionName(s.kind, size)} — ฟื้น ${potionHeal(s.kind, size, p.cls.id)} ${s.kind.toUpperCase()}\nคลิกยาในกระเป๋าเพื่อเลือกขนาด`;
         s.cd.style.height = `${(Math.max(0, p.potCd) / POTION_CD) * 100}%`;
         s.el.classList.toggle('empty', count <= 0);
         continue;
@@ -1044,7 +1044,7 @@ export class Hud {
     const price = POTIONS[kind][size].price;
     tip.innerHTML =
       `<div class="tt-name" style="color:${POTION_COLOR[kind]}">${potionName(kind, size)}</div>` +
-      `<div class="tt-stats"><div>ฟื้น ${POTIONS[kind][size].amount} ${kind.toUpperCase()} ต่อขวด</div></div>` +
+      `<div class="tt-stats"><div>ฟื้น ${potionHeal(kind, size, this.g.player.cls.id)} ${kind.toUpperCase()} ต่อขวด</div></div>` +
       `<div class="tt-hint">คลิก: ซื้อ 1 (${price} G) · คลิกขวา: ซื้อ ${POTION_STACK} (${price * POTION_STACK} G)</div>` +
       `<div class="tt-val">มีอยู่ ${this.g.player.potionCount(kind, size)} ขวด</div>`;
     this.placeTip(tip, e);
@@ -1639,7 +1639,7 @@ export class Hud {
     tip.innerHTML =
       `<div class="tt-name" style="color:${POTION_COLOR[s.potion]}">${potionName(s.potion, s.size)}</div>` +
       `<div class="tt-sub">ยา · ${s.count} / ${POTION_STACK} ขวด${quick ? ` · ใช้กับปุ่ม ${s.potion === 'hp' ? 1 : 2} อยู่` : ''}</div>` +
-      `<div class="tt-stats"><div>ฟื้น ${POTIONS[s.potion][s.size].amount} ${s.potion.toUpperCase()} ต่อขวด</div></div>` +
+      `<div class="tt-stats"><div>ฟื้น ${potionHeal(s.potion, s.size, this.g.player.cls.id)} ${s.potion.toUpperCase()} ต่อขวด</div></div>` +
       `<div class="tt-hint">${hint}</div><div class="tt-val">ขายให้พ่อค้าได้ขวดละ ${potionSellPrice(s.potion, s.size)} G</div>`;
     this.placeTip(tip, e);
   }
