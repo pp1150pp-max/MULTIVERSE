@@ -66,7 +66,20 @@ function randomMix(colors: boolean, shapes: boolean): void {
 /** Walk speed (units/s): the game's base move speed. */
 const WALK_SPEED = BASE_MOVE_SPEED;
 
-const state = { cls: 'sword' as ClassId, aura: true, walk: false, extra: 0, zoom: 17 };
+const state = {
+  cls: 'sword' as ClassId, aura: true, walk: false, extra: 0, zoom: 17,
+  /** "Set N orbs" tool: how many, and at which + level (0 = a random level within lvMin–lvMax). */
+  count: 5, countLv: 0,
+  /** Ranges the orb dice picks from. */
+  countMin: 1, countMax: 10, lvMin: 7, lvMax: 15,
+};
+
+const randInt = (lo: number, hi: number): number => lo + Math.floor(Math.random() * (hi - lo + 1));
+
+/** Fills the first `n` worn places (EQUIP_SLOTS order) with orbs, the rest empty. */
+function setOrbCount(n: number, level: (i: number) => number): void {
+  EQUIP_SLOTS.forEach((s, i) => { levels[s] = i < n ? level(i) : 0; });
+}
 
 /** Gear with just the + levels set: enough for orbCodes (the same code the server uses). */
 function fakeGear(lv: Record<EquipSlot, number>): Partial<Record<EquipSlot, Item>> {
@@ -302,6 +315,20 @@ async function main(): Promise<void> {
       wrap.append(s, out);
       return wrap;
     };
+    const numberBox = (min: number, max: number, value: number, on: (v: number) => void) => {
+      const n = document.createElement('input');
+      n.type = 'number';
+      n.min = String(min);
+      n.max = String(max);
+      n.value = String(value);
+      n.style.width = '56px';
+      n.onchange = () => {
+        const v = Math.max(min, Math.min(max, Math.round(Number(n.value) || 0)));
+        n.value = String(v);
+        on(v);
+      };
+      return n;
+    };
     const button = (text: string, on: () => void) => {
       const b = document.createElement('button');
       b.textContent = text;
@@ -372,6 +399,33 @@ async function main(): Promise<void> {
     preset('+7 ถึง +15', Object.fromEntries(EQUIP_SLOTS.slice(0, 9).map((s, i) => [s, 7 + i])));
     preset('ครบ 10 ชิ้น +15', Object.fromEntries(EQUIP_SLOTS.map((s) => [s, 15])));
     preset('ล้าง', {});
+
+    h('h2', 'กำหนดจำนวนลูกแก้ว');
+    const lvPick: [string, string][] = [['0', 'สุ่ม (ตามช่วงด้านล่าง)']];
+    for (let p = ORB_MIN_PLUS; p <= 15; p++) lvPick.push([String(p), `+${p} ทุกลูก`]);
+    row('จำนวนลูก', numberBox(0, EQUIP_SLOTS.length, state.count, (v) => { state.count = v; }));
+    row('ระดับ', select(lvPick, String(state.countLv), (v) => { state.countLv = Number(v); }));
+    button('ใส่ตามนี้', () => {
+      const lo = Math.min(state.lvMin, state.lvMax);
+      const hi = Math.max(state.lvMin, state.lvMax);
+      setOrbCount(state.count, () => state.countLv || randInt(lo, hi));
+      applyGear(hero, levels);
+      buildPanel();
+    });
+
+    h('h2', 'สุ่มจำนวนและระดับ (ต่ำสุด–สูงสุด)');
+    row('จำนวนลูก ต่ำสุด', numberBox(0, EQUIP_SLOTS.length, state.countMin, (v) => { state.countMin = v; }));
+    row('จำนวนลูก สูงสุด', numberBox(0, EQUIP_SLOTS.length, state.countMax, (v) => { state.countMax = v; }));
+    row('ระดับ ต่ำสุด (+)', numberBox(ORB_MIN_PLUS, 15, state.lvMin, (v) => { state.lvMin = v; }));
+    row('ระดับ สูงสุด (+)', numberBox(ORB_MIN_PLUS, 15, state.lvMax, (v) => { state.lvMax = v; }));
+    button('🎲 สุ่มจำนวน+ระดับ', () => {
+      const n = randInt(Math.min(state.countMin, state.countMax), Math.max(state.countMin, state.countMax));
+      const lo = Math.min(state.lvMin, state.lvMax);
+      const hi = Math.max(state.lvMin, state.lvMax);
+      setOrbCount(n, () => randInt(lo, hi));
+      applyGear(hero, levels);
+      buildPanel();
+    });
 
     h('h2', 'ปรับขนาด/การหมุน (ทุกระดับพร้อมกัน)');
     row('ขนาด ×', slider(0.5, 2.5, 0.1, orbTuning.scale, (v) => { orbTuning.scale = v; }));
