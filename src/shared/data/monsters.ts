@@ -59,6 +59,12 @@ export interface MonsterDef {
   /** Bosses only: below half HP, chase speed is multiplied by `speed` and every attack's
    *  cooldown and wind-up by `skill` — replaces the usual enrage boost. */
   frenzy?: { speed: number; skill: number };
+  /** Not weakened by the zone's `tough` (keeps the full `stats` HP and defense). */
+  ignoreTough?: boolean;
+  /** Extra speed on top of the zone's: moving, attacking and skill cooldowns. */
+  speedMult?: number;
+  /** Bosses: gear dropped (default 2-3), extra epics on top, and the chance of each stone kind. */
+  bossLoot?: { items: number; epics: number; stoneChance?: number };
   /** Bosses only: multiplies the cooldowns of its slam and throw (0.5 = twice as often). */
   skillCd?: number;
   /** Fights by a scripted attack pattern and never moves (see sim/volcanoHeart.ts). */
@@ -188,6 +194,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     hp: 42500, atk: 320, def: 34, speed: 2.2, exp: 7000, gold: [550, 900],
     aggroRange: 9, attackRange: 2.1, attackCooldown: 1.8, height: 3.9, radius: 1.25,
     behavior: 'boss', summon: { monster: 'yeti_minion', count: 3, vanish: true }, enrageAt: 0.3, enrageRamp: true, slamRadius: 5.5, skillCd: 0.5,
+    bossLoot: { items: 6, epics: 1 },
     thrown: { art: 'snowball', speed: 9, range: 10, mult: 1.3, radius: 0.6, size: 1.5, color: '#e6f2fb', minRange: 5, cooldown: 5 },
     itemChance: 1, potionChance: 1,
   },
@@ -196,6 +203,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'yeti_minion', name: 'Yeti Minion', nameTh: 'เยติลูกน้อง', levels: [28, 28],
     hp: 1800, atk: 85, def: 22, speed: 2.5, exp: 0, gold: [0, 0],
     aggroRange: 9, attackRange: 1.4, attackCooldown: 1.4, height: 2.3, radius: 0.8,
+    ignoreTough: true, speedMult: 1.3,
     behavior: 'aggressive', itemChance: 0, potionChance: 0,
     leap: { cooldown: 8, windup: 1, radius: 1.8, mult: 1.5, minRange: 2.5, maxRange: 8 },
     thrown: { art: 'snowball', speed: 8, range: 8, mult: 1, radius: 0.45, size: 1, color: '#e6f2fb', minRange: 3, cooldown: 6 },
@@ -244,5 +252,6 @@ export const MONSTERS: Record<string, MonsterDef> = {
     hp: 225000, atk: 380, def: 65, speed: 0, exp: 16000, gold: [1300, 2100],
     aggroRange: 0, attackRange: 0, attackCooldown: 99, height: 4.4, radius: 1.5,
     behavior: 'boss', pattern: 'volcano_heart', itemChance: 1, potionChance: 1,
+    bossLoot: { items: 6, epics: 2, stoneChance: 0.2 },
   },
 };

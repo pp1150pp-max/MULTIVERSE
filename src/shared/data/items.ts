@@ -284,11 +284,11 @@ function build(base: BaseItem, rarity: Rarity, level: number, cls: ClassId, r: R
  * level-40 monster never drops a level-1 Flintlock. Without a band, or when no kind fits it, any kind
  * up to the level can drop.
  */
-export function rollItem(r: Rng, level: number, cls: ClassId, boost = 0, band?: readonly [number, number]): Item {
+export function rollItem(r: Rng, level: number, cls: ClassId, boost = 0, band?: readonly [number, number], rarity?: Rarity): Item {
   const forClass = BASES.filter((b) => b.names.any || b.names[cls]);
   const ofMap = band ? forClass.filter((b) => b.minLevel >= band[0] && b.minLevel <= band[1]) : [];
   const candidates = ofMap.length ? ofMap : forClass.filter((b) => b.minLevel <= level + 1);
-  return build(pick(r, candidates), rollRarity(r, boost), level, cls, r, boost);
+  return build(pick(r, candidates), rarity ?? rollRarity(r, boost), level, cls, r, boost);
 }
 
 export function starterWeapon(cls: ClassId): Item {

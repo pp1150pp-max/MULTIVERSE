@@ -99,12 +99,13 @@ export class Monster extends Unit {
     this.area = area;
     this.level = level;
     const sc = 1 + 0.18 * (level - def.levels[0]);
-    this.baseHp = Math.round(def.hp * sc * boost.stats);
+    const tough = def.ignoreTough ? 1 : boost.tough ?? 1;
+    this.baseHp = Math.round(def.hp * sc * boost.stats * tough);
     this.hp = this.baseHp;
     this.atk = def.atk * sc * boost.stats;
-    this.defense = def.def * sc * boost.stats;
-    this.zoneSpeed = boost.speed;
-    this.skillSpeed = boost.skill ?? 1;
+    this.defense = def.def * sc * boost.stats * tough;
+    this.zoneSpeed = boost.speed * (def.speedMult ?? 1);
+    this.skillSpeed = (boost.skill ?? 1) * (def.speedMult ?? 1);
     this.aggroRange = Math.max(def.aggroRange, boost.aggro ?? 0);
     this.forceAggro = (boost.aggro ?? 0) > 0;
     this.expReward = Math.round(def.exp * sc);

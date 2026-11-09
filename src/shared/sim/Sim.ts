@@ -587,13 +587,15 @@ export class Sim {
     const gold = Math.round(randInt(r, d.gold[0], d.gold[1]) * (1 + 0.1 * (m.level - d.levels[0])));
     this.spawnLoot(m, { type: 'gold', amount: gold }, owner);
     if (m.isBoss) {
-      const n = randInt(r, 2, 3);
+      const loot = d.bossLoot;
+      const n = loot?.items ?? randInt(r, 2, 3);
       for (let i = 0; i < n; i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 1.5, band) }, owner);
+      for (let i = 0; i < (loot?.epics ?? 0); i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 1.5, band, 'epic') }, owner);
       this.spawnLoot(m, { type: 'potion', pot: 'hp', size: 's', count: 1 }, owner);
       this.spawnLoot(m, { type: 'potion', pot: 'mp', size: 's', count: 1 }, owner);
       // Every blacksmith stone kind can drop from a boss, each rolled on its own.
       for (const stone of STONE_KINDS) {
-        if (r() < BOSS_STONE_CHANCE) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner);
+        if (r() < (loot?.stoneChance ?? BOSS_STONE_CHANCE)) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner);
       }
       return;
     }
