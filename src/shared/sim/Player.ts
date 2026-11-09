@@ -482,9 +482,16 @@ export class Player extends Unit {
   }
 
   /** Only the merchant (Sim.sellItem) calls this — items can't be sold from the bag anywhere else. */
-  sell(i: number): number {
+  sell(i: number, n?: number): number {
     const item = this.bag[i];
     if (!item) return 0;
+    if (n !== undefined && isStack(item) && n >= 1 && n < item.count) {
+      // Only part of a stack: the rest stays in the slot.
+      const v = anyStackValue({ ...item, count: n });
+      item.count -= n;
+      this.gold += v;
+      return v;
+    }
     const v = isStack(item) ? anyStackValue(item) : sellValue(item);
     this.bag[i] = null;
     this.gold += v;

@@ -111,7 +111,8 @@ export interface MarketMine {
 export type MarketCall =
   | { a: 'mktSearch'; q: MarketQuery }
   | { a: 'mktMine' }
-  | { a: 'mktList'; i: number; price: number }
+  /** `n` = list only that many stones of a stack (omitted = the whole slot); the rest stays in the bag. */
+  | { a: 'mktList'; i: number; price: number; n?: number }
   | { a: 'mktCancel'; id: number }
   | { a: 'mktBuy'; id: number; price: number }
   /** id -1 = collect everything that fits. */

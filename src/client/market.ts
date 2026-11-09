@@ -22,6 +22,7 @@ import { playSound } from './audio/sfx';
 export interface MarketHost {
   log(msg: string, color?: string): void;
   confirm(html: string, yesLabel: string, onYes: () => void): void;
+  askAmount(html: string, max: number, initial: number, onOk: (n: number) => void): void;
   showTip(item: Item, e: MouseEvent, hint: string): void;
   showStoneTip(s: StoneStack, e: MouseEvent, hint: string): void;
   hideTip(): void;
@@ -319,7 +320,15 @@ export class MarketWindow {
       this.say(`ทองไม่พอจ่ายค่าลงขาย ${fee.toLocaleString()} G`, ERR);
       return;
     }
-    if (await this.act({ a: 'mktList', i, price })) this.pick(-1);
+    const send = async (n?: number) => {
+      if (await this.act({ a: 'mktList', i, price, n })) this.pick(-1);
+    };
+    // A stone stack of 2+: ask how many to list (the whole stack is the default).
+    if (isStone(e) && e.count > 1) {
+      this.host.askAmount(`ลงขาย ${this.nameHtml(e)} กี่ก้อน?`, e.count, e.count, (n) => void send(n >= e.count ? undefined : n));
+      return;
+    }
+    await send();
   }
 
   // ------------------------------------------------------------ filters

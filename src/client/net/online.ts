@@ -758,7 +758,11 @@ export class OnlineBackend implements Backend {
     setTimeout(() => (this.autoSetPending = false), 800);
     this.send({ t: 'act', a: 'autoSettings', settings });
   }
-  sell(i: number): void { this.send({ t: 'act', a: 'sell', i }); }
+  sell(i: number, n?: number): void { this.send({ t: 'act', a: 'sell', i, n }); }
+  splitInBag(from: number, to: number, n: number): void { this.send({ t: 'act', a: 'split', from, to, n }); }
+  stashSplit(from: 'bag' | 'stash', i: number, to: 'bag' | 'stash', j: number, n: number): void {
+    this.send({ t: 'act', a: 'stashSplit', from, i, to, j, n });
+  }
   buyBack(i: number, uid: string): void { this.send({ t: 'act', a: 'buyBack', i, uid }); }
   sellAllOfRarity(rarity: Rarity): void { this.send({ t: 'act', a: 'sellRarity', rarity }); }
   stashPut(i: number, to: number): void { this.send({ t: 'act', a: 'stashPut', i, to }); }

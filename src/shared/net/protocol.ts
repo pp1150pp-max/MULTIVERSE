@@ -63,7 +63,12 @@ export type ActionMsg =
   | { t: 'act'; a: 'auto'; on: boolean }
   | { t: 'act'; a: 'lootFilter'; filter: LootFilter }
   | { t: 'act'; a: 'autoSettings'; settings: AutoSettings }
-  | { t: 'act'; a: 'sell'; i: number }
+  /** `n` = sell only that many from a potion/stone stack (omitted = the whole slot). */
+  | { t: 'act'; a: 'sell'; i: number; n?: number }
+  /** Shift+drag in the bag: move `n` of the stack in `from` onto slot `to` (empty or the same stack). */
+  | { t: 'act'; a: 'split'; from: number; to: number; n: number }
+  /** Shift+drag touching the stash: `from`/`to` name the list ('bag' or 'stash'), `i`/`j` the slots. */
+  | { t: 'act'; a: 'stashSplit'; from: 'bag' | 'stash'; i: number; to: 'bag' | 'stash'; j: number; n: number }
   | { t: 'act'; a: 'buyBack'; i: number; uid: string }
   | { t: 'act'; a: 'sellRarity'; rarity: Rarity }
   /** `protect` = use a protection stone if a fail would drop the level. */

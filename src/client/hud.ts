@@ -7,7 +7,7 @@ import {
   MAX_PLUS, PITY_STEP, pityBonus, plusOf, rateFor, sellValue, STONE_FROM, stonesNeeded, successRate,
 } from '../shared/data/enhance';
 import {
-  entryName, POTION_SIZES, POTION_SIZE_LABEL, POTION_STACK, POTIONS, potionHeal, potionName, potionSellPrice,
+  entryName, POTION_SIZES, POTION_SIZE_LABEL, POTION_STACK, POTIONS, potionHeal, potionName, potionSellPrice, stackLimit,
 } from '../shared/data/potions';
 import { REROLL_STONE, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_SELL, STONE_STACK, stoneStackValue } from '../shared/data/stones';
 import { lineRanges, rerollBlock } from '../shared/data/items';
@@ -20,7 +20,7 @@ import { MONSTERS } from '../shared/data/monsters';
 import { ZONE_1 } from '../shared/data/zones';
 import { expToNext } from '../shared/formulas';
 import {
-  isItem, isPotion, isStack, isStone, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
+  isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
   type BagEntry, type Item, type StatLine, type PotionKind, type PotionSize, type PotionStack, type Rarity, type StoneStack, type StoneKind, type EquipSlot, type StatKey,
 } from '../shared/types';
 import { drawMapIcon, facingAngle, partyDot } from './mapIcons';
@@ -147,6 +147,8 @@ export class Hud {
   private forgeOpen = false;
   private forgeSel: string | null = null;
   private confirmYes: (() => void) | null = null;
+  /** Set while the amount dialog (stack split / partial sell) is open. */
+  private amountDone: ((n: number) => void) | null = null;
   private enhancing = false;
   /** Use a protection stone on attempts that can drop the level (the forge's tick box; off until ticked). */
   private forgeProtect = false;
@@ -489,6 +491,36 @@ export class Hud {
     };
     $('confirm-no').onclick = () => this.closeConfirm();
 
+    // Amount dialog: the slider and the number box follow each other.
+    const range = $<HTMLInputElement>('amount-range');
+    const num = $<HTMLInputElement>('amount-num');
+    range.oninput = () => (num.value = range.value);
+    num.oninput = () => {
+      const v = Math.floor(Number(num.value));
+      if (Number.isFinite(v)) range.value = String(Math.max(1, Math.min(Number(range.max), v)));
+    };
+    const amountOk = () => {
+      const fn = this.amountDone;
+      const n = Number(num.value);
+      if (!fn) return;
+      // Out of range or not a whole number: keep the dialog open.
+      if (!Number.isInteger(n) || n < 1 || n > Number(range.max)) {
+        num.value = range.value;
+        return;
+      }
+      this.closeAmount();
+      fn(n);
+    };
+    $('amount-ok').onclick = amountOk;
+    $('amount-cancel').onclick = () => this.closeAmount();
+    for (const el of [range, num]) {
+      el.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') amountOk();
+        else if (e.key === 'Escape') this.closeAmount();
+      });
+    }
+
     this.log(`ยินดีต้อนรับสู่ ${g.zone.name} — กด H เพื่อดูวิธีควบคุม`, '#cfe8ff');
   }
 
@@ -586,6 +618,8 @@ export class Hud {
         if (entry) this.forgePlace(entry);
         return;
       }
+      // Shift+drag a stack onto an empty slot (or the same stack): ask how many to move.
+      if (e.shiftKey && this.splitDrag(d.src, d.i, cell, stashCell)) return;
       if (d.src === 'stash') {
         if (!g.player.stash.items[d.i]) return;
         if (stashCell) {
@@ -629,6 +663,32 @@ export class Hud {
       }
       this.markInventory();
     });
+  }
+
+  /**
+   * Shift+drag of a stack (2 or more) onto a bag/stash slot that is empty or holds the same stack with room:
+   * opens the amount dialog and moves that many. Returns false (normal drag rules apply) when it doesn't fit that.
+   */
+  private splitDrag(from: 'bag' | 'stash', i: number, cell: HTMLElement | null | undefined, stashCell: HTMLElement | null | undefined): boolean {
+    const to: 'bag' | 'stash' | null = stashCell ? 'stash' : cell ? 'bag' : null;
+    const j = stashCell ? Number(stashCell.dataset.s) : cell ? Number(cell.dataset.i) : -1;
+    if (!to || (from === to && i === j)) return false;
+    const a = this.dragList(from)[i];
+    if (!isStack(a) || a.count < 2) return false;
+    const b = this.dragList(to)[j];
+    let max = a.count - 1;
+    if (b) {
+      if (!isStack(b) || !sameStack(a, b)) return false;
+      max =Math.min(max, stackLimit(b) - b.count);
+    }
+    if (max < 1) return false;
+    const name = `<b style="color:${this.entryColor(a)}">${entryName(a)}</b>`;
+    this.askAmount(`ย้าย ${name} กี่${isPotion(a) ? 'ขวด' : 'ก้อน'}?`, max, Math.min(max, Math.ceil(a.count / 2)), (n) => {
+      if (from === 'bag' && to === 'bag') this.g.backend.splitInBag(i, j, n);
+      else this.g.backend.stashSplit(from, i, to, j, n);
+      this.markInventory();
+    });
+    return true;
   }
 
   /** Highlights whatever the dragged item would land on. Pass (-1, -1) to clear. */
@@ -972,6 +1032,7 @@ export class Hud {
   }
 
   closePanels(): void {
+    if (this.amountDone) return this.closeAmount();
     if (this.confirmYes) return this.closeConfirm();
     this.closeChat();
     this.toggleAutoSettings(false);
@@ -1011,6 +1072,24 @@ export class Hud {
   private closeConfirm(): void {
     this.confirmYes = null;
     $('confirm').classList.add('hidden');
+  }
+
+  /** Asks "how many?" (1 to `max`, starting at `initial`) with a slider and a number box; `onOk` gets the whole number. */
+  askAmount(html: string, max: number, initial: number, onOk: (n: number) => void): void {
+    $('amount-text').innerHTML = html;
+    for (const id of ['amount-range', 'amount-num']) {
+      const el = $<HTMLInputElement>(id);
+      el.max = String(max);
+      el.value = String(Math.max(1, Math.min(max, initial)));
+    }
+    this.amountDone = onOk;
+    $('amount').classList.remove('hidden');
+    $<HTMLInputElement>('amount-num').focus();
+  }
+
+  private closeAmount(): void {
+    this.amountDone = null;
+    $('amount').classList.add('hidden');
   }
 
   // ------------------------------------------------------------ merchant
@@ -1095,12 +1174,23 @@ export class Hud {
       g.backend.sell(i);
       this.afterTrade();
     };
+    // A stack of 2+: ask how many to sell (the whole stack is the default).
+    if (isStack(item) && item.count > 1) {
+      const each = isPotion(item) ? potionSellPrice(item.potion, item.size) : STONE_SELL;
+      const unit = isPotion(item) ? 'ขวด' : 'ก้อน';
+      this.askAmount(
+        `ขาย ${name} กี่${unit}?<br><small>${unit}ละ ${each.toLocaleString()} G${isStone(item) ? ' · ซื้อคืนไม่ได้' : ''}</small>`,
+        item.count, item.count,
+        (n) => {
+          if (g.player.bag[i] !== item || item.count < n) return;
+          g.backend.sell(i, n >= item.count ? undefined : n);
+          this.afterTrade();
+        },
+      );
+      return;
+    }
     if (isPotion(item)) {
-      // A whole stack of potions is worth asking about first.
-      if (item.count > 1) {
-        const each = potionSellPrice(item.potion, item.size);
-        this.confirm(`ขาย ${name} ทั้งช่อง?<br><small>ได้ ${each * item.count} G (ขวดละ ${each} G)</small>`, 'ขาย', sell);
-      } else sell();
+      sell();
       return;
     }
     if (isStone(item)) {

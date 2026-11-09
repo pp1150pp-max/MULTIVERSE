@@ -746,6 +746,11 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #confirm { left: 50%; top: 40%; transform: translate(-50%, -50%); width: min(340px, 90vw); z-index: 6; text-align: center; }
 #confirm-text { font-size: 14px; margin-bottom: 12px; line-height: 1.5; }
 .confirm-btns { display: flex; gap: 8px; justify-content: center; }
+#amount { left: 50%; top: 40%; transform: translate(-50%, -50%); width: min(340px, 90vw); z-index: 7; text-align: center; }
+#amount-text { font-size: 14px; margin-bottom: 12px; line-height: 1.5; }
+.amount-row { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+.amount-row input[type=range] { flex: 1; }
+.amount-row input[type=number] { width: 64px; }
 
 /* ---------------------------------------------------------------- menu: modes / online */
 

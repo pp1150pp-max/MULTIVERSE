@@ -630,9 +630,23 @@ export class GameWorld {
       case 'buyBack':
         if (Number.isInteger(i) && i >= 0 && i < p.buyback.length && typeof m.uid === 'string') sim.buyBack(p, i, m.uid);
         break;
-      case 'sell':
-        if (i >= 0 && i < p.bag.length) sim.sellItem(p, i);
+      case 'sell': {
+        // n (a part of a stack) is optional; Sim.sellItem refuses a bad one, so it is not clamped here.
+        const n = m.n === undefined ? undefined : num(m.n, 0);
+        if (Number.isInteger(i) && i >= 0 && i < p.bag.length) sim.sellItem(p, i, n);
         break;
+      }
+      case 'split':
+        // splitInto checks both slots, that the source is a stack and 1 <= n < count.
+        sim.splitInBag(p, num(m.from, -1), num(m.to, -1), num(m.n, 0));
+        break;
+      case 'stashSplit': {
+        const lists = ['bag', 'stash'];
+        if (lists.includes(m.from) && lists.includes(m.to) && sim.stashSplit(p, m.from, num(m.i, -1), m.to, num(m.j, -1), num(m.n, 0))) {
+          this.save(s);
+        }
+        break;
+      }
       case 'sellRarity':
         if (RARITIES.includes(m.rarity)) sim.sellAllOfRarity(p, m.rarity);
         break;

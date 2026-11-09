@@ -27,6 +27,7 @@ import { Monster } from './Monster';
 import { EnemyShot, Projectile, type ProjOpts } from './Projectile';
 import { Loot, LOOT_PRIORITY_TIME, type LootKind } from './Loot';
 import { nextRowPrice, STASH_GOLD_MAX, STASH_ROW } from './stash';
+import { splitInto } from './split';
 import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type SfxName, type SimEvent } from './types';
 
 /** Gear of this rarity that "sell all" may take: never potions or enhanced items. */
@@ -766,6 +767,13 @@ export class Sim {
     this.afterChange(p);
   }
 
+  /** Shift+drag in the bag: moves `n` of the stack in slot `from` onto slot `to` (empty, or the same stack with room). */
+  splitInBag(p: Player, from: number, to: number, n: number): boolean {
+    if (!p.alive || !splitInto(p.bag, from, p.bag, to, n)) return false;
+    this.afterChange(p);
+    return true;
+  }
+
   sortBag(p: Player, key: SortKey, desc: boolean): void {
     p.sortBag(key, desc);
     this.afterChange(p);
@@ -822,11 +830,14 @@ export class Sim {
     this.afterChange(p);
   }
 
-  sellItem(p: Player, i: number): number {
+  /** Sells bag slot `i`. For a potion/stone stack, `n` (1 to count) sells only that many; omitted = the whole slot. */
+  sellItem(p: Player, i: number, n?: number): number {
     const item = p.bag[i];
     if (!item || !this.near(p, 'merchant')) return 0;
-    const name = entryName(item);
-    const v = p.sell(i);
+    if (n !== undefined && (!isStack(item) || !Number.isInteger(n) || n < 1 || n > item.count)) return 0;
+    const part = n !== undefined && isStack(item) && n < item.count ? n : undefined;
+    const name = entryName(part ? { ...item, count: part } : item);
+    const v = p.sell(i, part);
     this.log(`ขาย ${name} ได้ ${v} G`, '#f2c230', p.id);
     this.sfx('trade', p.x, p.z, p.id);
     this.afterChange(p);
@@ -893,6 +904,17 @@ export class Sim {
     const st = p.stash;
     if (!this.near(p, 'keeper') || !validSlot(from, st.size) || !validSlot(to, st.size) || from === to) return false;
     if (!st.items[from] || !dropOnto(st.items, from, st.items, to)) return false;
+    this.afterStash(p);
+    return true;
+  }
+
+  /** Shift+drag between bag and stash (either way) or inside the stash: moves `n` of a stack onto an empty or mergeable slot. */
+  stashSplit(p: Player, from: 'bag' | 'stash', i: number, to: 'bag' | 'stash', j: number, n: number): boolean {
+    if (!this.near(p, 'keeper')) return false;
+    const list = (w: 'bag' | 'stash') => (w === 'bag' ? p.bag : w === 'stash' ? p.stash.items : null);
+    const a = list(from);
+    const b = list(to);
+    if (!a || !b || !splitInto(a, i, b, j, n)) return false;
     this.afterStash(p);
     return true;
   }
