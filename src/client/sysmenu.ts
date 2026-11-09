@@ -23,7 +23,7 @@ const MENU_ITEMS: [string, string, string][] = [
 
 /** Top-right icon row: [button id ('' = not built yet, greyed out), icon, label]. Swap the emoji for <img> later. */
 const TOP_ICONS: [string, string, string][] = [
-  ['top-auto', '🤖', 'AUTO: OFF'], ['top-bag', '🎒', 'กระเป๋า'], ['', '⚔️', 'สกิล'], ['', '⚖️', 'ตลาด'],
+  ['top-auto', '🤖', 'AUTO: OFF'], ['top-autoset', '⚙️', 'ตั้งค่า Auto'], ['top-bag', '🎒', 'กระเป๋า'], ['', '⚔️', 'สกิล'], ['', '⚖️', 'ตลาด'],
   ['', '🏰', 'ดันเจี้ยน'], ['top-settings', '⚙️', 'ตั้งค่า'], ['top-menu', '☰', 'เมนู'],
 ];
 
@@ -45,11 +45,12 @@ export class SystemMenu {
     row.id = 'hud-iconrow';
     row.innerHTML = TOP_ICONS.map(
       ([id, icon, label]) =>
-        `<button id="${id}" class="top-icon"${id ? '' : ' disabled'}><span class="sys-ico">${icon}</span><span class="sys-label">${label}</span></button>`,
+        `<button id="${id}" class="top-icon"${id ? '' : ' disabled'}><span class="sys-ico">${icon}</span><span class="sys-label">${label}</span><i class="badge hidden" data-badge="${label}"></i></button>`,
     ).join('');
     $('hud-topright').prepend(row);
     this.autoBtn = $('top-auto');
     $('top-auto').onclick = () => g.toggleAuto();
+    $('top-autoset').onclick = () => $('btn-auto-set').click();
     $('top-bag').onclick = () => g.hud.toggleBag();
     $('top-settings').onclick = () => {
       this.toggle(true);
@@ -67,13 +68,12 @@ export class SystemMenu {
           ([act, icon, label]) =>
             `<button class="sys-tile" ${act ? `data-act="${act}"` : 'disabled'}>` +
             // Swap the emoji span for <img src="..."> to use a real icon image.
-            `<span class="sys-ico">${icon}</span><span class="sys-label">${label}</span></button>`,
+            `<span class="sys-ico">${icon}</span><span class="sys-label">${label}</span><i class="badge hidden" data-badge="${label}"></i></button>`,
         ).join('')}
       </div>
       <div class="sys-view hidden" data-view="settings">
         <button data-act="audio">เสียง</button>
         <button data-act="hudstyle" id="sys-hudstyle"></button>
-        <button data-act="auto">ตั้งค่า Auto</button>
         <button data-act="help">ปุ่มลัด / วิธีเล่น</button>
         <div class="sys-sep"></div>
         <button data-act="chars">${guest ? 'กลับไปหน้า Guest' : 'กลับไปเลือกตัวละคร'}</button>
@@ -93,6 +93,21 @@ export class SystemMenu {
     this.countdownEl.id = 'exit-countdown';
     this.countdownEl.className = 'hidden';
     $('hud').append(this.countdownEl);
+  }
+
+  private readonly badges = new Map<string, number>();
+
+  /** Player notification on an icon (key = the icon's Thai label, e.g. 'จดหมาย'): 0 hides it, 1 = red dot, 2+ = number.
+   *  The top-right เมนู icon shows the total of all the others. Nothing calls this yet: no feature sends notifications. */
+  setBadge(key: string, count: number): void {
+    this.badges.set(key, count);
+    const total = [...this.badges].reduce((a, [k, n]) => a + (k === 'เมนู' ? 0 : n), 0);
+    for (const el of document.querySelectorAll<HTMLElement>('i.badge')) {
+      const n = el.dataset.badge === 'เมนู' ? total : (this.badges.get(el.dataset.badge!) ?? 0);
+      el.classList.toggle('hidden', n <= 0);
+      el.classList.toggle('dot', n === 1);
+      el.textContent = n > 1 ? String(n) : '';
+    }
   }
 
   get open(): boolean {
@@ -165,9 +180,6 @@ export class SystemMenu {
       case 'hudstyle':
         $('btn-hud-style').click();
         return void ($('sys-hudstyle').textContent = $('btn-hud-style').textContent);
-      case 'auto':
-        this.toggle(false);
-        return $('btn-auto-set').click();
       case 'chars':
         return this.requestExit('characters');
       case 'logout':

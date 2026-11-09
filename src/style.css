@@ -912,3 +912,9 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 .mkt-help { font-size: 13px; color: var(--ink-dim); padding: 6px 0; }
 .mkt-help small { font-size: 11px; }
 .mkt-msg { font-size: 12px; max-width: 70%; }
+
+/* Notification badge on an icon: red dot for 1, number for 2+ (SystemMenu.setBadge). */
+.top-icon, #sys-menu .sys-tile { position: relative; }
+.badge { position: absolute; top: 0; right: 0; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 8px; background: #e0362c; color: #fff; font-size: 10px; font-style: normal; line-height: 16px; text-align: center; }
+.badge.hidden { display: none; }
+.badge.dot { min-width: 10px; width: 10px; height: 10px; padding: 0; }
