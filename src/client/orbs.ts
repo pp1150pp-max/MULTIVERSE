@@ -417,28 +417,36 @@ function materials(): [THREE.ShaderMaterial, THREE.ShaderMaterial] {
       attribute vec3 color; attribute float size; attribute float alpha; attribute float kind;
       uniform float uScreenH;
       varying vec3 vColor; varying float vAlpha; varying float vKind;
+      varying float vWorldY; varying float vViewZ; varying float vSize; varying float vUpY; varying float vCamY; varying vec2 vDepthK;
       void main() {
-        vColor = color; vKind = kind;
-        // Light behind the character (farther than its middle, on the ground plan) shows dimmer through it.
-        vec3 cam = vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2]);
-        float front = position.x * cam.x + position.z * cam.z;
-        vAlpha = alpha * mix(0.4, 1.0, smoothstep(-0.25, 0.25, front));
+        vColor = color; vKind = kind; vAlpha = alpha;
         ${PLACE}
         ${POINT_SIZE}
+        vWorldY = wp.y;
+        vViewZ = (viewMatrix * wp).z;
+        vSize = size;
+        vUpY = viewMatrix[1][1];
+        vCamY = toCam.y;
+        vDepthK = vec2(projectionMatrix[2][2], projectionMatrix[3][2]);
       }`,
     fragmentShader: `
       uniform sampler2D map;
       varying vec3 vColor; varying float vAlpha; varying float vKind;
+      varying float vWorldY; varying float vViewZ; varying float vSize; varying float vUpY; varying float vCamY; varying vec2 vDepthK;
       void main() {
         float a = texture2D(map, vec2((gl_PointCoord.x + vKind) / 3.0, 1.0 - gl_PointCoord.y)).a * vAlpha;
         if (a < 0.01) discard;
+        // A halo is a flat square at one depth, so its lower part can sit under the ground and get cut
+        // along a straight line. Where this pixel would be under the ground, it is brought towards the
+        // camera just onto the ground; everywhere else it keeps its depth, so the character still hides
+        // the light of orbs behind it.
+        float y = vWorldY + vUpY * (0.5 - gl_PointCoord.y) * vSize;
+        float z = vViewZ + (y < 0.0 ? (0.02 - y) / vCamY : 0.0);
+        gl_FragDepth = (vDepthK.x * z + vDepthK.y) * 0.5 + 0.5;
         gl_FragColor = vec4(vColor, a);
       }`,
     transparent: true,
     depthWrite: false,
-    // Halos are big squares at one depth: tested against the ground they get cut along a straight
-    // line (the "square light"). They are soft additive light, so they skip the depth test instead.
-    depthTest: false,
     blending: THREE.AdditiveBlending,
   });
   return [coreMat, glowMat];
