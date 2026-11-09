@@ -3,7 +3,6 @@
 // which is simpler and safer than tearing the 3D scene down by hand.
 import type { Game } from './Game';
 import { logout } from './net/api';
-import { audioEngine } from './audio/engine';
 
 /** Read once by the title menu after the reload. */
 export const AFTER_EXIT_KEY = 'multiverse-after-exit';
@@ -33,8 +32,8 @@ const MENU_ITEMS: [string, string, string][] = [
 
 /** Top-right icon row: [button id, icon, label]. */
 const TOP_ICONS: [string, string, string][] = [
-  ['top-auto', badge('auto'), 'AUTO: OFF'], ['top-autoset', badge('autoset'), 'ตั้งค่า Auto'], ['top-bag', badge('bag'), 'กระเป๋า'],
-  ['top-party', PARTY_ICON, 'ปาร์ตี้'], ['top-mail', MAIL_ICON, 'จดหมาย'], ['top-map', badge('map'), 'แผนที่'], ['top-mute', badge('blank', '🔊'), 'เสียง'], ['top-settings', badge('settings'), 'ตั้งค่า'], ['top-menu', badge('menu'), 'เมนู'],
+  ['top-auto', badge('auto'), 'AUTO: OFF'], ['top-bag', badge('bag'), 'กระเป๋า'],
+  ['top-party', PARTY_ICON, 'ปาร์ตี้'], ['top-mail', MAIL_ICON, 'จดหมาย'], ['top-map', badge('map'), 'แผนที่'], ['top-menu', badge('menu'), 'เมนู'],
 ];
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -47,7 +46,6 @@ export class SystemMenu {
   private lastHp = -1;
   private clock = 0;
   private readonly autoBtn: HTMLElement;
-  private readonly muteBtn: HTMLElement;
 
   constructor(private readonly g: Game) {
     const guest = g.backend.guest;
@@ -62,19 +60,11 @@ export class SystemMenu {
     ).join('');
     $('hud-topright').prepend(row);
     this.autoBtn = $('top-auto');
-    this.muteBtn = $('top-mute');
     $('top-auto').onclick = () => g.toggleAuto();
-    $('top-autoset').onclick = () => $('btn-auto-set').click();
-    // Reuses the sound window's own mute button, so its text stays in sync.
-    $('top-mute').onclick = () => $('audio-mute')?.click();
     $('top-bag').onclick = () => g.hud.toggleBag();
     $('top-party').onclick = () => g.party.toggle();
     if (!guest) $('top-mail').onclick = () => g.mailUI.toggle();
     $('top-map').onclick = () => g.hud.toggleMap();
-    $('top-settings').onclick = () => {
-      this.toggle(true);
-      this.showView('settings');
-    };
     $('top-menu').onclick = () => this.toggle();
 
     this.panel = document.createElement('div');
@@ -90,9 +80,7 @@ export class SystemMenu {
         ).join('')}
       </div>
       <div class="sys-view hidden" data-view="settings">
-        <button data-act="audio">เสียง</button>
         <button data-act="hudstyle" id="sys-hudstyle"></button>
-        <button data-act="help">ปุ่มลัด / วิธีเล่น</button>
         <button data-act="partyblock" id="sys-partyblock"></button>
         <div class="sys-sep"></div>
         <button data-act="chars">${guest ? 'กลับไปหน้า Guest' : 'กลับไปเลือกตัวละคร'}</button>
@@ -155,9 +143,6 @@ export class SystemMenu {
     this.clock += dt;
     this.autoBtn.classList.toggle('active', this.g.autoPlay);
     this.autoBtn.querySelector('.sys-label')!.textContent = this.g.autoPlay ? 'AUTO: ON' : 'AUTO: OFF';
-    const muted = audioEngine.settings.muted;
-    this.muteBtn.querySelector('.ico-glyph')!.textContent = muted ? '🔇' : '🔊';
-    this.muteBtn.querySelector('.sys-label')!.textContent = muted ? 'ปิดเสียง' : 'เสียง';
     const p = this.g.player;
     if (this.lastHp >= 0 && p.hp < this.lastHp - 0.5) {
       this.lastCombat = this.clock;
