@@ -42,8 +42,8 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 
 /** Lines of chat and messages kept for scrolling back (with the chat open); while playing only the newest 9 show (style.css). */
 const LOG_KEEP = 50;
-/** Sockets whose empty look is their name, not a faded item picture. */
-const TEXT_SOCKETS: EquipSlot[] = ['offhand', 'necklace', 'gloves', 'belt'];
+/** Sockets whose empty look is their name, not a faded item picture (none: every slot has its picture now). */
+const TEXT_SOCKETS: EquipSlot[] = [];
 
 /** The minimap's size on screen, and pixels per world unit. Its canvas holds twice that, to stay sharp. */
 const MINIMAP_SIZE = 176;
@@ -190,6 +190,17 @@ export class Hud {
     $('dialog').onclick = () => this.advanceDialog();
     $('btn-reconnect').onclick = () => location.reload();
     const chat = $<HTMLInputElement>('chat-input');
+    // History tabs (shown while the chat is open): everything, players' chat only, or the game's own lines.
+    for (const b of $('log-tabs').querySelectorAll<HTMLButtonElement>('[data-tab]')) {
+      b.addEventListener('mousedown', (e) => e.preventDefault()); // keep typing in the chat box
+      b.onclick = () => {
+        const log = $('log');
+        log.classList.remove('tab-chat', 'tab-system');
+        if (b.dataset.tab !== 'all') log.classList.add(`tab-${b.dataset.tab}`);
+        for (const o of $('log-tabs').querySelectorAll('[data-tab]')) o.classList.toggle('active', o === b);
+        log.scrollTop = log.scrollHeight;
+      };
+    }
     chat.addEventListener('keydown', (e) => {
       e.stopPropagation();
       if (e.key === 'Enter') {
@@ -1798,7 +1809,8 @@ export class Hud {
     // Pinned to the newest line unless the player scrolled up to read older ones.
     const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 8;
     box.append(el);
-    while (box.children.length > LOG_KEEP) box.firstChild?.remove();
+    const lines = box.getElementsByClassName('log-line');
+    while (lines.length > LOG_KEEP) lines[0].remove();
     if (atBottom) box.scrollTop = box.scrollHeight;
     setTimeout(() => el.classList.add('fade'), fadeMs);
   }

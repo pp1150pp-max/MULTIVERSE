@@ -35,6 +35,11 @@ const AURA: { color: string; size: number; sparks: number }[] = [
   { color: '#ffd34a', size: 2.7, sparks: 12 },
 ];
 
+/** Move speed (units/s) at which the run cycle plays as drawn; slower or faster scales it, within MIN–MAX. */
+const STRIDE_SPEED = 5;
+const STRIDE_MIN = 0.6;
+const STRIDE_MAX = 1.6;
+
 export class PlayerView {
   readonly actor: Actor;
   private aura: THREE.Mesh | null = null;
@@ -43,6 +48,10 @@ export class PlayerView {
   private combo = 0;
   private lastAttackAt = -99;
   private crater: THREE.Mesh | null = null;
+  /** Ground speed actually seen on screen (smoothed), and where the player was last frame. */
+  private seenSpeed = 0;
+  private lastX = NaN;
+  private lastZ = NaN;
 
   constructor(readonly p: Player, private readonly scene: THREE.Scene) {
     const anim = animSets[p.cls.id];
@@ -58,9 +67,28 @@ export class PlayerView {
     this.clock += dt;
     this.actor.face(p.faceX, p.faceZ);
     if (p.isDashing && Math.random() < 0.7) fx.puff(p.x, 0.9, p.z, p.dashKind === 'charge' ? '#ffcf7a' : '#cfe8ff', 0.25, 1.1);
+    this.matchStride(dt);
     this.actor.update(dt, p.moving, p.isDashing ? 14 : undefined);
     this.updateAura(dt, fx);
     this.sync();
+  }
+
+  /**
+   * Plays the run cycle as fast as the player really moves, so each step covers the same ground: slow at
+   * the start (few long steps instead of many short ones), quicker with move speed, slowed or iced alike.
+   */
+  private matchStride(dt: number): void {
+    const p = this.p;
+    if (dt > 0 && Number.isFinite(this.lastX)) {
+      const v = Math.hypot(p.x - this.lastX, p.z - this.lastZ) / dt;
+      // Snapshots arrive in steps: smooth over ~0.25 s, and ignore teleports (zone change, respawn).
+      if (v < 40) this.seenSpeed += (v - this.seenSpeed) * Math.min(1, dt * 4);
+    }
+    this.lastX = p.x;
+    this.lastZ = p.z;
+    if (this.actor instanceof AnimatedActor) {
+      this.actor.setStride(Math.min(STRIDE_MAX, Math.max(STRIDE_MIN, this.seenSpeed / STRIDE_SPEED)));
+    }
   }
 
   private updateAura(dt: number, fx: Effects): void {
