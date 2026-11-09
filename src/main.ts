@@ -17,7 +17,9 @@ function start(game: Game, classId: string): void {
 
 function launch(backend: OnlineBackend): void {
   const game = new Game($('app'), backend);
-  backend.onChat = (name, text) => game.hud.chatLine(name, text);
+  backend.onChat = (name, text, party) => game.hud.chatLine(name, text, undefined, party);
+  backend.onPartyInvite = (party, from, seconds) => game.party.invited(party, from, seconds);
+  backend.onPartyInviteGone = (party) => game.party.removeInvite(party);
   backend.onDisconnect = (msg) => game.hud.showDisconnect(msg);
   backend.onShutdown = (mode, seconds, text) => game.hud.shutdownCountdown(mode, seconds, text);
   backend.onAnnounce = (text, from, direct) => game.hud.announce(text, from, direct);

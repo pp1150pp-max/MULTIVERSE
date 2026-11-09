@@ -14,6 +14,7 @@ import { entryName, potionName, POTION_STACK, POTIONS, stackLimit } from '../dat
 import { BOSS_STONE_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, STONE_COLOR, STONE_NAME } from '../data/stones';
 import { NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { pick, rand, randInt } from '../rng';
+import { splitExp } from '../party';
 import { CLASS_IDS } from '../data/classes';
 import {
   isItem, isPotion, isStack, isStone, RARITY_LABEL, sameStack, SLOT_LABEL, STONE_KINDS, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
@@ -477,21 +478,38 @@ export class Sim {
     }
   }
 
-  /** EXP is split by each player's share of the damage, then reduced for monsters far below their level. */
+  /**
+   * EXP is split by each player's share of the damage, then reduced for monsters far below their level.
+   * A player in a party then keeps half and shares the rest with party members on this map (see splitExp).
+   */
   private shareExp(m: Monster): void {
     let total = 0;
     for (const v of m.damageBy.values()) total += v;
     if (total <= 0) return;
+    const gained = new Map<Player, number>();
     for (const [id, dealt] of m.damageBy) {
       const p = this.players.find((x) => x.id === id);
       if (!p || dealt <= 0) continue;
       const mult = expGapMult(p.level, m.level);
       const exp = Math.max(1, Math.round(m.expReward * (dealt / total) * mult));
-      this.text(m.x, m.topY + 0.4, m.z, mult < 1 ? `+${exp} EXP (−${Math.round((1 - mult) * 100)}%)` : `+${exp} EXP`, 'exp', 1.1, p.id);
       if (mult < 1 && m.level < p.level && !p.lowExpHinted) {
         p.lowExpHinted = true;
         this.log('มอนสเตอร์ที่ชื่อเป็นสีเทาเลเวลต่ำกว่าคุณมาก ได้ EXP น้อยลง — ไปล่าตัวที่เลเวลสูงกว่านี้', '#b9b09a', p.id);
       }
+      // Members on this map who are alive; offline members are in no Sim, so never here.
+      const mates = p.partyId === null ? [] : this.players.filter((o) => o !== p && o.alive && o.partyId === p.partyId);
+      const { keep, shares } = splitExp(exp, p.level, mates.map((o) => o.level));
+      const shared = keep < exp;
+      this.text(m.x, m.topY + 0.4, m.z,
+        mult < 1 ? `+${keep} EXP (−${Math.round((1 - mult) * 100)}%)` : `+${keep} EXP${shared ? ' (แบ่งปาร์ตี้)' : ''}`, 'exp', 1.1, p.id);
+      gained.set(p, (gained.get(p) ?? 0) + keep);
+      mates.forEach((o, i) => {
+        if (shares[i] > 0) gained.set(o, (gained.get(o) ?? 0) + shares[i]);
+      });
+    }
+    // Levels go up after every share is worked out, so a level-up mid-kill can't change who is eligible.
+    for (const [p, exp] of gained) {
+      if (!m.damageBy.has(p.id) && exp > 0) this.text(p.x, p.topY + 0.4, p.z, `+${exp} EXP (ปาร์ตี้)`, 'exp', 1.1, p.id);
       this.addExp(p, exp);
     }
   }
@@ -584,35 +602,37 @@ export class Sim {
     const band = home?.levels;
     // The top damage dealer gets first pick for a while, then anyone can take it.
     const owner = top?.id;
+    // Everyone in the top damage dealer's party (on this map) shares that first pick, gold included.
+    const party = top?.partyId ?? null;
     const gold = Math.round(randInt(r, d.gold[0], d.gold[1]) * (1 + 0.1 * (m.level - d.levels[0])));
-    this.spawnLoot(m, { type: 'gold', amount: gold }, owner);
+    this.spawnLoot(m, { type: 'gold', amount: gold }, owner, party);
     if (m.isBoss) {
       const loot = d.bossLoot;
       const n = loot?.items ?? randInt(r, 2, 3);
-      for (let i = 0; i < n; i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 1.5, band) }, owner);
-      for (let i = 0; i < (loot?.epics ?? 0); i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 1.5, band, 'epic') }, owner);
-      this.spawnLoot(m, { type: 'potion', pot: 'hp', size: 's', count: 1 }, owner);
-      this.spawnLoot(m, { type: 'potion', pot: 'mp', size: 's', count: 1 }, owner);
+      for (let i = 0; i < n; i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 1.5, band) }, owner, party);
+      for (let i = 0; i < (loot?.epics ?? 0); i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 1.5, band, 'epic') }, owner, party);
+      this.spawnLoot(m, { type: 'potion', pot: 'hp', size: 's', count: 1 }, owner, party);
+      this.spawnLoot(m, { type: 'potion', pot: 'mp', size: 's', count: 1 }, owner, party);
       // Every blacksmith stone kind can drop from a boss, each rolled on its own.
       for (const stone of STONE_KINDS) {
-        if (r() < (loot?.stoneChance ?? BOSS_STONE_CHANCE)) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner);
+        if (r() < (loot?.stoneChance ?? BOSS_STONE_CHANCE)) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner, party);
       }
       return;
     }
-    if (r() < d.itemChance) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 0, band) }, owner);
-    if (r() < d.potionChance) this.spawnLoot(m, { type: 'potion', pot: r() < 0.6 ? 'hp' : 'mp', size: 's', count: 1 }, owner);
+    if (r() < d.itemChance) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 0, band) }, owner, party);
+    if (r() < d.potionChance) this.spawnLoot(m, { type: 'potion', pot: r() < 0.6 ? 'hp' : 'mp', size: 's', count: 1 }, owner, party);
     // Reroll stones, rarely, from monsters that drop items at all (not summoned minions).
     if (d.itemChance > 0) {
       for (const stone of MONSTER_STONES) {
-        if (r() < MONSTER_STONE_CHANCE) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner);
+        if (r() < MONSTER_STONE_CHANCE) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner, party);
       }
     }
   }
 
-  private spawnLoot(m: Monster, kind: LootKind, owner?: number): void {
+  private spawnLoot(m: Monster, kind: LootKind, owner?: number, ownerParty: number | null = null): void {
     const [x, z] = this.lootSpot(m.x, m.z, 0.5 + Math.random() * (m.isBoss ? 2 : 1));
     this.loots.push(new Loot(this.newId(), x, z, m.x, m.z, kind, {
-      owner, ownerUntil: this.time + LOOT_PRIORITY_TIME,
+      owner, ownerParty, ownerUntil: this.time + LOOT_PRIORITY_TIME,
     }));
   }
 
@@ -667,7 +687,7 @@ export class Sim {
    */
   pickupLoot(p: Player, lootId: number): boolean {
     const l = this.loots.find((x) => x.id === lootId);
-    if (!p.alive || !l || l.dead || !l.canTake(p.id, this.time)) return false;
+    if (!p.alive || !l || l.dead || !l.canTake(p, this.time)) return false;
     if (Math.hypot(l.x - p.x, l.z - p.z) > LOOT_CLICK_RANGE) return false;
     if (!this.pickup(p, l)) {
       this.text(p.x, p.topY, p.z, 'กระเป๋าเต็ม', 'info', undefined, p.id);

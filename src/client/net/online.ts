@@ -13,7 +13,8 @@ import { zoneById, type SpawnArea, type ZoneDef } from '../../shared/data/zones'
 import type { NpcId } from '../../shared/data/npcs';
 import type { EquipSlot, Item, PotionKind, PotionSize, Rarity, Vec2 } from '../../shared/types';
 import type { SkillSlot } from '../../shared/data/classes';
-import { INPUT_HZ, PING_MS, WS_PATH, type ClientMsg, type ServerMsg, type ShutdownMode, type SnapshotMsg } from '../../shared/net/protocol';
+import { INPUT_HZ, PING_MS, WS_CLOSE_QUIT, WS_PATH, type ClientMsg, type ServerMsg, type ShutdownMode, type SnapshotMsg } from '../../shared/net/protocol';
+import type { PartyFound, PartySnap } from '../../shared/party';
 import type { Backend, EnhanceOutcome, ProjectileLike } from '../backend';
 import type { RerollKind } from '../../shared/data/reroll';
 import type { Hazard } from '../../shared/sim/volcanoHeart';
@@ -106,8 +107,14 @@ export class OnlineBackend implements Backend {
   projectiles: MirrorProjectile[] = [];
   loots: Loot[] = [];
   onlineCount = 1;
-  /** Hooks for the game screen. */
-  onChat: ((name: string, text: string) => void) | null = null;
+  /** Hooks for the game screen. `party` = party chat or a party notice. */
+  onChat: ((name: string, text: string, party: boolean) => void) | null = null;
+  /** Someone invites you to their party (answer within `seconds`), and an invite that went away. */
+  onPartyInvite: ((party: number, from: string, seconds: number) => void) | null = null;
+  onPartyInviteGone: ((party: number) => void) | null = null;
+  party: PartySnap | null = null;
+  private partyReq = 0;
+  private readonly partyWait = new Map<number, (list: PartyFound[]) => void>();
   onDisconnect: ((msg: string) => void) | null = null;
   /** An announcement from the server's owner. */
   onAnnounce: ((text: string, from: string, direct: boolean) => void) | null = null;
@@ -278,7 +285,8 @@ export class OnlineBackend implements Backend {
     clearInterval(this.pingTimer);
     document.removeEventListener('visibilitychange', this.onVisibility);
     this.onDisconnect = null;
-    this.ws.close();
+    // Leaving on purpose: the server takes us out of the party at once (a lost connection keeps the place a while).
+    this.ws.close(WS_CLOSE_QUIT, 'quit');
   }
 
   // ------------------------------------------------------------ incoming
@@ -289,8 +297,20 @@ export class OnlineBackend implements Backend {
         this.applySnapshot(m);
         break;
       case 'chat':
-        this.onChat?.(m.name, m.text);
+        this.onChat?.(m.name, m.text, m.ch === 'party');
         break;
+      case 'partyInvite':
+        this.onPartyInvite?.(m.party, m.from, m.seconds);
+        break;
+      case 'partyInviteGone':
+        this.onPartyInviteGone?.(m.party);
+        break;
+      case 'partyFound': {
+        const done = this.partyWait.get(m.req);
+        this.partyWait.delete(m.req);
+        done?.(m.list);
+        break;
+      }
       case 'enhanced': {
         const done = this.enhanceWait.get(m.req);
         this.enhanceWait.delete(m.req);
@@ -368,6 +388,7 @@ export class OnlineBackend implements Backend {
     me.x = x;
     me.z = z;
     me.face(-x, -z);
+    me.partyId = old.partyId;
     this.me = me;
     this.myId = you;
     this.sent = [];
@@ -392,6 +413,8 @@ export class OnlineBackend implements Backend {
     this.hazards = s.hazards ?? [];
     this.bossIn = s.bossIn ?? null;
     this.bossInAt = performance.now();
+    this.party = s.party ?? null;
+    this.me.partyId = this.party?.id ?? null;
     if (!document.hidden) this.events.push(...s.events);
     else {
       for (const ev of s.events) {
@@ -492,12 +515,13 @@ export class OnlineBackend implements Backend {
       seenL.add(ls.id);
       let l = this.lootMap.get(ls.id);
       if (!l) {
-        l = new Loot(ls.id, ls.x, ls.z, ls.fromX, ls.fromZ, ls.kind, { dropped: ls.dropped, owner: ls.owner ?? undefined, ownerUntil: ls.ownerUntil });
+        l = new Loot(ls.id, ls.x, ls.z, ls.fromX, ls.fromZ, ls.kind, { dropped: ls.dropped, owner: ls.owner ?? undefined, ownerParty: ls.party ?? null, ownerUntil: ls.ownerUntil });
         this.lootMap.set(ls.id, l);
       }
       this.glide(l, ls.x, ls.z, l);
       l.t = ls.t;
       l.owner = ls.owner;
+      l.ownerParty = ls.party ?? null;
       l.ownerUntil = ls.ownerUntil;
     }
     for (const [id, l] of this.lootMap) {
@@ -759,7 +783,24 @@ export class OnlineBackend implements Backend {
     });
   }
 
-  chat(text: string): void { this.send({ t: 'chat', text }); }
+  chat(text: string, party = false): void { this.send(party ? { t: 'chat', text, ch: 'party' } : { t: 'chat', text }); }
+
+  partyCreate(): void { this.send({ t: 'act', a: 'partyCreate' }); }
+  partyInvite(name: string): void { this.send({ t: 'act', a: 'partyInvite', name }); }
+  partyAnswer(party: number, yes: boolean): void { this.send({ t: 'act', a: 'partyAnswer', party, yes }); }
+  partyLeave(): void { this.send({ t: 'act', a: 'partyLeave' }); }
+  partyKick(charId: number): void { this.send({ t: 'act', a: 'partyKick', charId }); }
+  setPartyBlock(on: boolean): void { this.send({ t: 'act', a: 'partyBlock', on }); }
+  partySearch(q: string): Promise<PartyFound[]> {
+    const req = ++this.partyReq;
+    this.send({ t: 'act', a: 'partySearch', q, req });
+    return new Promise((resolve) => {
+      this.partyWait.set(req, resolve);
+      setTimeout(() => {
+        if (this.partyWait.delete(req)) resolve([]);
+      }, 5000);
+    });
+  }
 
   npcDistance(id: NpcId): number {
     const n = this.terrain.npcPos[id];

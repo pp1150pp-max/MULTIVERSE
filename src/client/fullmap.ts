@@ -3,7 +3,7 @@ import type { NpcId } from '../shared/data/npcs';
 import { MONSTERS } from '../shared/data/monsters';
 import { ZONES } from '../shared/data/zones';
 import { sheets } from './assets';
-import { drawMapIcon, facingAngle } from './mapIcons';
+import { drawMapIcon, facingAngle, partyDot } from './mapIcons';
 import { countdown } from './floating';
 import type { MapIcon } from './mapIconNames';
 
@@ -117,7 +117,9 @@ export class FullMap {
     }
     for (const r of g.backend.terrain.restSpots) icon('camp', r.x, r.z, 20);
     for (const n of g.npcs) icon(NPC_MAP_ICON[n.id], n.x, n.z, 22);
-    for (const p of g.backend.players) if (p !== me) icon('ally', p.x, p.z, 24, facingAngle(p.faceX, p.faceZ));
+    for (const p of g.backend.players) if (p !== me && !g.party.memberOf(p)) icon('ally', p.x, p.z, 24, facingAngle(p.faceX, p.faceZ));
+    // Party members on this map, wherever they are.
+    for (const m of g.party.mapMates()) partyDot(ctx, ...at(m.x, m.z), 7 * px);
 
     // Labels go on top of every marker, each nudged clear of the ones already placed.
     const placed: Box[] = [];
@@ -199,9 +201,13 @@ export class FullMap {
       });
     }
     for (const p of g.backend.players) {
-      if (p === me) continue;
+      if (p === me || g.party.memberOf(p)) continue;
       const [sx, sy] = at(p.x, p.z);
       label(sx, sy - 20 * px, p.name, '#bfe6ff', { size: 11 });
+    }
+    for (const m of g.party.mapMates()) {
+      const [sx, sy] = at(m.x, m.z);
+      label(sx, sy - 20 * px, m.name, '#5dff8a', { size: 11 });
     }
 
     // Where the player is walking to from a map click.

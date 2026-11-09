@@ -217,7 +217,7 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 #log.open .log-line.fade { opacity: 1; }
 #log.open .log-line { text-shadow: 1px 1px 0 #000; line-height: 1.5; }
 #log.open .log-line.chat { background: rgba(159, 224, 255, 0.07); border-left: 2px solid #9fe0ff; padding-left: 6px; margin: 1px 0; }
-#log.open.tab-chat .log-line:not(.chat), #log.open.tab-system .log-line.chat { display: none; }
+#log.open.tab-chat .log-line:not(.chat), #log.open.tab-system .log-line.chat, #log.open.tab-party .log-line:not(.party) { display: none; }
 #log-tabs { display: none; }
 #log.open #log-tabs {
   display: flex; align-items: center; gap: 6px; position: sticky; top: 0; z-index: 1; margin: 0 -2px 4px; padding: 8px 2px 6px;
@@ -940,3 +940,46 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 .badge { position: absolute; top: 0; right: 0; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 8px; background: #e0362c; color: #fff; font-size: 10px; font-style: normal; line-height: 16px; text-align: center; }
 .badge.hidden { display: none; }
 .badge.dot { min-width: 10px; width: 10px; height: 10px; padding: 0; }
+
+/* ---------------------------------------------------------------- party (src/client/party.ts)
+   Plain on purpose: a friend paints the art later. Swap .party-ico for pictures and the frames here. */
+.log-line.chat.party b { color: #5dff8a; }
+.log-line.system.party { color: #9fe8b0; }
+#log.open .log-line.chat.party { background: rgba(93, 255, 138, 0.07); border-left-color: #5dff8a; }
+.plate.ally.party .pname { color: #5dff8a; font-weight: 600; }
+
+#party-win { left: 50%; top: 80px; transform: translateX(-50%); width: min(340px, 92vw); font-size: 13px; }
+#party-win .party-body { display: flex; flex-direction: column; gap: 8px; }
+#party-win .party-empty { color: var(--ink-dim); text-align: center; }
+#party-win .party-list { display: flex; flex-direction: column; gap: 6px; }
+#party-win .party-member { padding: 6px 8px; background: rgba(0, 0, 0, 0.3); border: 1px solid #4a4030; border-radius: 3px; }
+#party-win .party-member.me { border-color: #8a7444; }
+#party-win .party-leave { color: #ff9a8a; }
+.party-search input { width: 100%; box-sizing: border-box; padding: 4px 6px; }
+.party-results { max-height: 200px; overflow-y: auto; margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+.party-found { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.party-found button { padding: 2px 10px; }
+
+.party-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.party-lv { font-size: 11px; color: var(--gold-hi); }
+.party-off { font-size: 11px; color: #ff8a6a; }
+.party-ico.leader { color: #ffd34a; margin-right: 3px; }
+.party-member.offline { opacity: 0.55; }
+.party-bars { display: flex; flex-direction: column; gap: 2px; margin-top: 3px; }
+.party-bar { position: relative; height: 10px; background: #1a1410; border: 1px solid #000; }
+.party-bar .party-fill { height: 100%; }
+.party-bar.hp .party-fill { background: #d8343c; }
+.party-bar.mp .party-fill { background: #3a7bff; }
+.party-bar span { position: absolute; inset: 0; font-size: 9px; line-height: 10px; text-align: center; color: #fff; text-shadow: 0 0 2px #000; }
+
+#party-hud { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; width: 190px; }
+#party-hud .party-member { padding: 4px 8px; font-size: 12px; background: var(--panel); border: 1px solid #4a4640; border-radius: 3px; }
+
+#party-invites { position: absolute; left: 50%; top: 120px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; pointer-events: auto; z-index: 20; }
+.party-invite { padding: 10px 14px; font-size: 13px; background: var(--panel); border: 2px solid #5dff8a; border-radius: 4px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7); }
+.party-invite-btns { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.party-count { margin-left: auto; font-size: 12px; color: var(--ink-dim); }
+
+#party-menu { position: fixed; z-index: 30; display: flex; flex-direction: column; min-width: 160px; background: var(--panel); border: 1px solid var(--gold); border-radius: 3px; pointer-events: auto; }
+#party-menu.hidden { display: none; }
+#party-menu button { text-align: left; padding: 6px 10px; border: 0; border-radius: 0; }

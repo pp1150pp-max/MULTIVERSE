@@ -24,6 +24,7 @@ import { SpriteActor } from './SpriteActor';
 import { sheets } from './assets';
 import { GameAudio } from './audio/gameAudio';
 import { findPath } from './pathfind';
+import { PartyUI } from './party';
 import { SystemMenu } from './sysmenu';
 import { LootView, MonsterView, PlayerView, ProjectileView, ViewSet } from './views';
 import { isSoftwareRenderer } from '../shared/net/protocol';
@@ -59,6 +60,11 @@ export class Game {
   readonly floating: Floating;
   readonly hud: Hud;
   readonly sysMenu: SystemMenu;
+  readonly party: PartyUI;
+  /** Another player under the mouse (when no monster or usable thing is): a left click offers a party invite. */
+  private hoveredPlayer: Player | null = null;
+  /** The left button went down on a player: no basic attack until it is let go. */
+  private playerClick = false;
   npcs: Npc[] = [];
   /** The Seeker's intro is shown only when you talk to him. */
   metSeeker = true;
@@ -125,6 +131,7 @@ export class Game {
 
     this.hud = new Hud(this);
     this.sysMenu = new SystemMenu(this);
+    this.party = new PartyUI(this);
     initDraggableWindows(document.getElementById('hud')!);
     this.checkGpu();
     window.addEventListener('resize', () => {
@@ -408,7 +415,7 @@ export class Game {
       move,
       moveTo,
       aim: h ? { x: h.x, z: h.z } : { ...this.mouseWorld },
-      basic: i.lmb && !this.goal,
+      basic: i.lmb && !this.goal && !this.playerClick,
       skills,
       dash: i.pressed('Space'),
       potion: i.pressed('Digit1') ? 'hp' : i.pressed('Digit2') ? 'mp' : null,
@@ -435,8 +442,25 @@ export class Game {
     }
     this.hovered = best;
     this.hoverUse = best ? null : this.findUsable(pxPerUnit);
+    this.hoveredPlayer = best || this.hoverUse ? null : this.findPlayer(pxPerUnit);
     document.body.classList.toggle('cursor-attack', !!best);
     document.body.classList.toggle('cursor-use', !!this.hoverUse);
+  }
+
+  /** Another player under the mouse, if any. */
+  private findPlayer(pxPerUnit: number): Player | null {
+    let best: Player | null = null;
+    let bd = Infinity;
+    for (const o of this.backend.players) {
+      if (o === this.player) continue;
+      const s = this.toScreen(o.x, 0.9, o.z);
+      const d = Math.hypot(s.sx - this.input.mouseX, s.sy - this.input.mouseY);
+      if (s.on && d < Math.max(20, 0.6 * pxPerUnit) && d < bd) {
+        bd = d;
+        best = o;
+      }
+    }
+    return best;
   }
 
   /** The drop, NPC or rest spot nearest the mouse, if it is close enough on screen. */
@@ -453,9 +477,8 @@ export class Game {
         best = g;
       }
     };
-    const me = this.player.id;
     for (const l of this.backend.loots) {
-      if (!l.dead && l.canTake(me, this.backend.time)) consider({ kind: 'loot', id: l.id, x: l.x, z: l.z }, 0.2, Math.max(16, 0.5 * pxPerUnit));
+      if (!l.dead && l.canTake(this.player, this.backend.time)) consider({ kind: 'loot', id: l.id, x: l.x, z: l.z }, 0.2, Math.max(16, 0.5 * pxPerUnit));
     }
     for (const n of this.npcs) consider({ kind: 'npc', id: n.id, x: n.x, z: n.z }, 1, Math.max(22, 0.9 * pxPerUnit));
     for (const s of this.backend.terrain.restSpots) consider({ kind: 'rest', x: s.x, z: s.z }, 0.6, Math.max(22, (s.kind === 'fountain' ? 2.2 : 0.9) * pxPerUnit));
@@ -499,6 +522,11 @@ export class Game {
     if (i.lmbPressed && this.hoverUse && this.player.alive) {
       this.goal = this.hoverUse;
       this.fx.marker(this.goal.x, this.goal.z);
+    }
+    if (!i.lmb) this.playerClick = false;
+    if (i.lmbPressed && this.hoveredPlayer && !this.hoverUse) {
+      this.playerClick = true;
+      this.party.playerMenu(this.hoveredPlayer, i.mouseX, i.mouseY);
     }
     this.reachGoal();
 
@@ -580,6 +608,7 @@ export class Game {
     this.updateCamera(dt);
     this.floating.update(dt, this);
     this.hud.update(dt);
+    this.party.update();
   }
 
   private updateCamera(dt: number): void {

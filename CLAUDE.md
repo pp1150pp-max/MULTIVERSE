@@ -72,4 +72,5 @@ npm run stop-server -- --restart # เหมือนกัน แต่ npm run
 | เมือง แมพ ภาพ หน้าต่าง | เมืองศูนย์กลาง `nexus_city` เป็น safe zone + ประตู 4 มุม · Auto Play รันบน server · ภาพ 16-bit isometric · หน้าต่างลากได้ไม่จำตำแหน่ง · EXP แบ่งตามดาเมจ | [world-and-ui.md](docs/systems/world-and-ui.md) |
 | คลัง และตลาดฝากขาย | คลังร่วมทั้งบัญชี 30–90 ช่อง · ตลาด 5%+5% 48 ชม. กล่องรับของที่ NPC · Guest ใช้ไม่ได้ | [stash-and-market.md](docs/systems/stash-and-market.md) |
 | Login, Guest, /admin | ปุ่ม Guest Login ปิดอยู่ · Guest ลบเมื่อไม่ออนไลน์ 24 ชม. · admin role owner/gm, `FEATURE_ROLES`, `admin_audit` | [accounts-and-admin.md](docs/systems/accounts-and-admin.md) |
+| ปาร์ตี้ | สูงสุด 3 ตัว (บัญชีละ 1) ไม่ใช่ Guest · หัวหน้าชวน/เตะ · หลุดได้ 60 วิ · ไม่เซฟ · ของดรอปแชร์ทั้งปาร์ตี้ · EXP เก็บ 50% แบ่ง 50% ให้คนแมพเดียวกันที่ไม่ต่ำกว่า 5 เลเวล | [party.md](docs/systems/party.md) |
 | ปิด/รีสตาร์ท server, สำรอง DB | countdown เสมอ · exit code 75 = รีสตาร์ท · backup `VACUUM INTO` | [server-ops.md](docs/systems/server-ops.md) |

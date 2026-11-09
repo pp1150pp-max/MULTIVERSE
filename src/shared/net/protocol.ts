@@ -10,6 +10,7 @@ import type { RerollKind } from '../data/reroll';
 import type { StashData } from '../sim/stash';
 import type { Hazard } from '../sim/volcanoHeart';
 import type { MarketCall, MarketReply } from '../sim/market';
+import type { PartyFound, PartySnap } from '../party';
 
 export const WS_PATH = '/ws';
 /** Server simulation rate and how often it sends snapshots. */
@@ -77,13 +78,27 @@ export type ActionMsg =
   /** amount > 0 deposits gold, < 0 withdraws it. */
   | { t: 'act'; a: 'stashGold'; amount: number }
   /** Market broker (consignment market). The server answers each with a `market` message of the same `req`. */
-  | ({ t: 'act'; req: number } & MarketCall);
+  | ({ t: 'act'; req: number } & MarketCall)
+  // Party (server/party.ts). Members are named by character id, the target of an invite by character name.
+  | { t: 'act'; a: 'partyCreate' }
+  | { t: 'act'; a: 'partyInvite'; name: string }
+  | { t: 'act'; a: 'partyAnswer'; party: number; yes: boolean }
+  | { t: 'act'; a: 'partyLeave' }
+  | { t: 'act'; a: 'partyKick'; charId: number }
+  /** Online, non-guest characters whose name holds `q`; answered with `partyFound` of the same `req`. */
+  | { t: 'act'; a: 'partySearch'; q: string; req: number }
+  /** The "don't accept party invites" setting (kept by the browser, sent on joining and when changed). */
+  | { t: 'act'; a: 'partyBlock'; on: boolean };
+
+/** Close code the browser uses when the player leaves on purpose (leaves the party at once, no grace time). */
+export const WS_CLOSE_QUIT = 4000;
 
 export type ClientMsg =
   | { t: 'join'; token: string; characterId: number }
   | InputMsg
   | ActionMsg
-  | { t: 'chat'; text: string }
+  /** `ch: 'party'` = to the party only. */
+  | { t: 'chat'; text: string; ch?: 'party' }
   /**
    * Answered at once with a pong of the same id. The rest is for the server's lag log, about the time
    * since the previous ping: `rtt` the round trip measured then (ms, each one reported once),
@@ -123,6 +138,8 @@ export interface ProjectileSnap { id: number; x: number; z: number; vx: number; 
 export interface LootSnap {
   id: number; x: number; z: number; fromX: number; fromZ: number; t: number;
   kind: LootKind; dropped: boolean; owner: number | null; ownerUntil: number;
+  /** The owner's party, whose members share the first pick (left out when none). */
+  party?: number;
 }
 
 /** Only sent to the player it belongs to. */
@@ -157,6 +174,8 @@ export interface SnapshotMsg {
   hazards?: Hazard[];
   /** Seconds until the zone's boss comes back (left out while it is alive). */
   bossIn?: number;
+  /** Your party, every member wherever they are (left out when you are in none). */
+  party?: PartySnap;
   events: SimEvent[];
 }
 
@@ -166,7 +185,13 @@ export type ServerMsg =
   /** You walked through a portal: you are now `you` in zone `zone`, standing at x/z. Snapshots from that zone follow. */
   | { t: 'zone'; zone: string; you: number; x: number; z: number }
   | SnapshotMsg
-  | { t: 'chat'; name: string; text: string }
+  /** `ch: 'party'` = party chat, or (empty name) a party notice. */
+  | { t: 'chat'; name: string; text: string; ch?: 'party' }
+  /** Someone invites you to their party; answer within `seconds`. */
+  | { t: 'partyInvite'; party: number; from: string; seconds: number }
+  /** That invite can't be answered any more (answered, expired, or the party ended). */
+  | { t: 'partyInviteGone'; party: number }
+  | { t: 'partyFound'; req: number; list: PartyFound[] }
   | { t: 'enhanced'; req: number; result: EnhanceResult | null; item: Item | null }
   /** The rerolled item, or null when the server refused. */
   | { t: 'rerolled'; req: number; item: Item | null }

@@ -18,16 +18,20 @@ const COMBAT_WINDOW = 5;
 const badge = (name: string, glyph = ''): string =>
   `<img src="assets/sprites/ui/ico_${name}.png" alt="">${glyph ? `<span class="ico-glyph">${glyph}</span>` : ''}`;
 
+/** Party has no painted badge yet: the blank one with a glyph. Swap for badge('party') once ico_party.png exists. */
+const PARTY_ICON = badge('blank', '👥');
+
 /** Icon grid, 3 columns: [action, icon, label]. Only systems that exist; add a tile when a new one is built. */
 const MENU_ITEMS: [string, string, string][] = [
-  ['bag', badge('bag'), 'กระเป๋า'], ['map', badge('map'), 'แผนที่'], ['autoset', badge('autoset'), 'ตั้งค่า Auto'],
-  ['audio', badge('blank', '🔊'), 'เสียง'], ['help', badge('help'), 'วิธีเล่น'], ['settings', badge('settings'), 'ตั้งค่า'],
+  ['bag', badge('bag'), 'กระเป๋า'], ['party', PARTY_ICON, 'ปาร์ตี้'], ['map', badge('map'), 'แผนที่'],
+  ['autoset', badge('autoset'), 'ตั้งค่า Auto'], ['audio', badge('blank', '🔊'), 'เสียง'], ['help', badge('help'), 'วิธีเล่น'],
+  ['settings', badge('settings'), 'ตั้งค่า'],
 ];
 
 /** Top-right icon row: [button id, icon, label]. */
 const TOP_ICONS: [string, string, string][] = [
   ['top-auto', badge('auto'), 'AUTO: OFF'], ['top-autoset', badge('autoset'), 'ตั้งค่า Auto'], ['top-bag', badge('bag'), 'กระเป๋า'],
-  ['top-map', badge('map'), 'แผนที่'], ['top-mute', badge('blank', '🔊'), 'เสียง'], ['top-settings', badge('settings'), 'ตั้งค่า'], ['top-menu', badge('menu'), 'เมนู'],
+  ['top-party', PARTY_ICON, 'ปาร์ตี้'], ['top-map', badge('map'), 'แผนที่'], ['top-mute', badge('blank', '🔊'), 'เสียง'], ['top-settings', badge('settings'), 'ตั้งค่า'], ['top-menu', badge('menu'), 'เมนู'],
 ];
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -59,6 +63,7 @@ export class SystemMenu {
     // Reuses the sound window's own mute button, so its text stays in sync.
     $('top-mute').onclick = () => $('audio-mute')?.click();
     $('top-bag').onclick = () => g.hud.toggleBag();
+    $('top-party').onclick = () => g.party.toggle();
     $('top-map').onclick = () => g.hud.toggleMap();
     $('top-settings').onclick = () => {
       this.toggle(true);
@@ -82,6 +87,7 @@ export class SystemMenu {
         <button data-act="audio">เสียง</button>
         <button data-act="hudstyle" id="sys-hudstyle"></button>
         <button data-act="help">ปุ่มลัด / วิธีเล่น</button>
+        <button data-act="partyblock" id="sys-partyblock"></button>
         <div class="sys-sep"></div>
         <button data-act="chars">${guest ? 'กลับไปหน้า Guest' : 'กลับไปเลือกตัวละคร'}</button>
         <button data-act="logout">${guest ? 'กลับหน้าแรก' : 'ออกจากระบบ'}</button>
@@ -167,6 +173,7 @@ export class SystemMenu {
   private showView(v: string): void {
     this.panel.querySelectorAll<HTMLElement>('.sys-view').forEach((el) => el.classList.toggle('hidden', el.dataset.view !== v));
     $('sys-hudstyle').textContent = $('btn-hud-style').textContent;
+    $('sys-partyblock').textContent = `${this.g.party.block ? '☑' : '☐'} ไม่รับคำชวนปาร์ตี้`;
   }
 
   private onAct(act: string): void {
@@ -180,6 +187,12 @@ export class SystemMenu {
       case 'map':
         this.toggle(false);
         return this.g.hud.toggleMap(true);
+      case 'party':
+        this.toggle(false);
+        return this.g.party.toggle(true);
+      case 'partyblock':
+        this.g.party.setBlock(!this.g.party.block);
+        return this.showView('settings');
       case 'autoset':
         this.toggle(false);
         return $('btn-auto-set').click();

@@ -29,6 +29,8 @@ export class Loot {
   private blockedMsgT = 0;
   /** Player id with pickup priority until `ownerUntil` (simulation time), or null for anyone. */
   owner: number | null;
+  /** The owner's party when it dropped: its members on this map share the priority (null = none). */
+  ownerParty: number | null;
   ownerUntil: number;
 
   constructor(
@@ -38,11 +40,12 @@ export class Loot {
     readonly fromX: number,
     readonly fromZ: number,
     readonly kind: LootKind,
-    opts: { dropped?: boolean; owner?: number; ownerUntil?: number } = {},
+    opts: { dropped?: boolean; owner?: number; ownerParty?: number | null; ownerUntil?: number } = {},
   ) {
     this.dropped = !!opts.dropped;
     this.armed = !this.dropped;
     this.owner = opts.owner ?? null;
+    this.ownerParty = opts.ownerParty ?? null;
     this.ownerUntil = opts.ownerUntil ?? 0;
   }
 
@@ -51,9 +54,9 @@ export class Loot {
     return this.dropped ? DROPPED_LIFE : DROP_LIFE;
   }
 
-  /** Whether this player may pick it up right now. */
-  canTake(playerId: number, time: number): boolean {
-    return this.owner === null || this.owner === playerId || time >= this.ownerUntil;
+  /** Whether this player may pick it up right now: the owner, anyone in the owner's party, or anyone once priority ends. */
+  canTake(p: { id: number; partyId: number | null }, time: number): boolean {
+    return this.owner === null || this.owner === p.id || (p.partyId !== null && p.partyId === this.ownerParty) || time >= this.ownerUntil;
   }
 
   update(dt: number, sim: Sim): void {
@@ -71,7 +74,7 @@ export class Loot {
     let full: Player | null = null;
     let fd = Infinity;
     for (const pl of sim.players) {
-      if (!pl.alive || !this.canTake(pl.id, sim.time) || !pl.wantsLoot(this.kind, this.dropped)) continue;
+      if (!pl.alive || !this.canTake(pl, sim.time) || !pl.wantsLoot(this.kind, this.dropped)) continue;
       const pd = Math.hypot(pl.x - this.x, pl.z - this.z);
       if (!pl.canFit(this.kind)) {
         if (pd < fd) {
