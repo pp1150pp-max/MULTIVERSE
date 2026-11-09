@@ -3,6 +3,7 @@
 // which is simpler and safer than tearing the 3D scene down by hand.
 import type { Game } from './Game';
 import { logout } from './net/api';
+import { audioEngine } from './audio/engine';
 
 /** Read once by the title menu after the reload. */
 export const AFTER_EXIT_KEY = 'multiverse-after-exit';
@@ -23,7 +24,7 @@ const MENU_ITEMS: [string, string, string][] = [
 
 /** Top-right icon row: [button id ('' = not built yet, greyed out), icon, label]. Swap the emoji for <img> later. */
 const TOP_ICONS: [string, string, string][] = [
-  ['top-auto', '🤖', 'AUTO: OFF'], ['top-autoset', '⚙️', 'ตั้งค่า Auto'], ['top-bag', '🎒', 'กระเป๋า'], ['', '⚔️', 'สกิล'], ['', '⚖️', 'ตลาด'],
+  ['top-auto', '🤖', 'AUTO: OFF'], ['top-autoset', '⚙️', 'ตั้งค่า Auto'], ['top-bag', '🎒', 'กระเป๋า'], ['top-mute', '🔊', 'เสียง'], ['', '⚔️', 'สกิล'], ['', '⚖️', 'ตลาด'],
   ['', '🏰', 'ดันเจี้ยน'], ['top-settings', '⚙️', 'ตั้งค่า'], ['top-menu', '☰', 'เมนู'],
 ];
 
@@ -37,6 +38,7 @@ export class SystemMenu {
   private lastHp = -1;
   private clock = 0;
   private readonly autoBtn: HTMLElement;
+  private readonly muteBtn: HTMLElement;
 
   constructor(private readonly g: Game) {
     const guest = g.backend.guest;
@@ -49,8 +51,11 @@ export class SystemMenu {
     ).join('');
     $('hud-topright').prepend(row);
     this.autoBtn = $('top-auto');
+    this.muteBtn = $('top-mute');
     $('top-auto').onclick = () => g.toggleAuto();
     $('top-autoset').onclick = () => $('btn-auto-set').click();
+    // Reuses the sound window's own mute button, so its text stays in sync.
+    $('top-mute').onclick = () => $('audio-mute')?.click();
     $('top-bag').onclick = () => g.hud.toggleBag();
     $('top-settings').onclick = () => {
       this.toggle(true);
@@ -136,6 +141,9 @@ export class SystemMenu {
     this.clock += dt;
     this.autoBtn.classList.toggle('active', this.g.autoPlay);
     this.autoBtn.querySelector('.sys-label')!.textContent = this.g.autoPlay ? 'AUTO: ON' : 'AUTO: OFF';
+    const muted = audioEngine.settings.muted;
+    this.muteBtn.querySelector('.sys-ico')!.textContent = muted ? '🔇' : '🔊';
+    this.muteBtn.querySelector('.sys-label')!.textContent = muted ? 'ปิดเสียง' : 'เสียง';
     const p = this.g.player;
     if (this.lastHp >= 0 && p.hp < this.lastHp - 0.5) {
       this.lastCombat = this.clock;
