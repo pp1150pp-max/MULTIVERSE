@@ -89,7 +89,7 @@ export class Market {
     switch (call.a) {
       case 'mktSearch': return this.search(a, call.q);
       case 'mktMine': return { reply: { ok: true, mine: this.mine(a.accountId) } };
-      case 'mktList': return this.list(a, call.i, call.price);
+      case 'mktList': return this.list(a, call.i, call.price, call.n);
       case 'mktCancel': return this.cancel(a, call.id);
       case 'mktBuy': return this.buy(a, call.id, call.price);
       case 'mktClaim': return this.claim(a, call.id);
@@ -115,20 +115,27 @@ export class Market {
     else this.db.writeCharacterAndStash(a.charId, data, a.accountId, a.player.stash);
   }
 
-  private list(a: MarketActor, i: unknown, price: unknown): MarketOutcome {
+  private list(a: MarketActor, i: unknown, price: unknown, n?: unknown): MarketOutcome {
     const p = a.player;
     if (typeof i !== 'number' || !Number.isInteger(i) || i < 0 || i >= p.bag.length) return fail('ช่องกระเป๋าไม่ถูกต้อง');
     if (typeof price !== 'number' || !Number.isInteger(price) || price < MARKET_PRICE_MIN || price > MARKET_PRICE_MAX) {
       return fail(`ราคาต้องอยู่ระหว่าง ${MARKET_PRICE_MIN.toLocaleString()} – ${MARKET_PRICE_MAX.toLocaleString()} G`);
     }
-    const entry = p.bag[i];
-    if (!marketSellable(entry)) return fail(entry ? 'ยาลงขายในตลาดไม่ได้ (ขายให้พ่อค้าแทน)' : 'ช่องนี้ว่าง');
+    const slotEntry = p.bag[i];
+    if (!marketSellable(slotEntry)) return fail(slotEntry ? 'ยาลงขายในตลาดไม่ได้ (ขายให้พ่อค้าแทน)' : 'ช่องนี้ว่าง');
+    // Part of a stone stack: n must be 1..count (n = count is the whole stack). The listing holds a copy of n stones.
+    if (n !== undefined && (!isStone(slotEntry) || typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > slotEntry.count)) {
+      return fail('จำนวนไม่ถูกต้อง');
+    }
+    const part = n !== undefined && isStone(slotEntry) && n < slotEntry.count ? n : 0;
+    const entry = part && isStone(slotEntry) ? { ...slotEntry, count: part } : slotEntry;
     if (isItem(entry) && this.db.marketUidListed(entry.uid)) return fail('ของชิ้นนี้ลงขายอยู่แล้ว');
     if (this.db.marketActiveCount(a.accountId) >= MARKET_SLOTS) return fail(`ลงขายได้พร้อมกันสูงสุด ${MARKET_SLOTS} ชิ้นต่อบัญชี`);
     const fee = listingFee(price);
     if (p.gold < fee) return fail(`ทองไม่พอจ่ายค่าลงขาย ${fee.toLocaleString()} G`);
     const now = this.now();
-    p.bag[i] = null;
+    if (part && isStone(slotEntry)) slotEntry.count -= part;
+    else p.bag[i] = null;
     p.gold -= fee;
     try {
       this.db.transaction(() => {
@@ -142,7 +149,8 @@ export class Market {
         this.write(a);
       });
     } catch (e) {
-      p.bag[i] = entry;
+      if (part && isStone(slotEntry)) slotEntry.count += part;
+      else p.bag[i] = entry;
       p.gold += fee;
       console.error('[market] listing failed', e);
       return fail('ลงขายไม่สำเร็จ ลองใหม่อีกครั้ง');

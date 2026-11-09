@@ -73,7 +73,12 @@ export interface Backend {
   setAuto(on: boolean): void;
   setLootFilter(f: LootFilter): void;
   setAutoSettings(s: AutoSettings): void;
-  sell(bagIndex: number): void;
+  /** `n` = sell only that many from a potion/stone stack (omitted = the whole slot). */
+  sell(bagIndex: number, n?: number): void;
+  /** Shift+drag: move `n` of a stack in bag slot `from` onto bag slot `to`. */
+  splitInBag(from: number, to: number, n: number): void;
+  /** Shift+drag touching the stash: move `n` of a stack from slot `i` of one list onto slot `j` of the other (or the same). */
+  stashSplit(from: 'bag' | 'stash', i: number, to: 'bag' | 'stash', j: number, n: number): void;
   /** Buy back entry `i` of the merchant's buyback list (`uid` guards against a list that just changed). */
   buyBack(i: number, uid: string): void;
   sellAllOfRarity(rarity: Rarity): void;

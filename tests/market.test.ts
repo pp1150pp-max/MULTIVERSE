@@ -152,6 +152,20 @@ const id = call(buyer, { a: 'mktSearch', q: {} }).page!.rows[0].id;
   ok(call(seller, { a: 'mktList', i: 6, price: 4000 }).ok, 'a stack of stones can be listed');
   const sid = call(buyer, { a: 'mktSearch', q: { kind: 'stone' } }).page!.rows[0].id;
   ok(call(buyer, { a: 'mktBuy', id: sid, price: 4000 }).ok && buyer.player.stoneCount('enhance') === 4, 'bought the whole stack');
+  // Listing only part of a stack: the rest stays in the bag, bad amounts change nothing
+  seller.player.bag[7] = { stone: 'protect', count: 5 };
+  const gold0 = seller.player.gold;
+  for (const bad of [0, -1, 6, 2.5, NaN, '2' as unknown as number, null as unknown as number]) {
+    ok(!call(seller, { a: 'mktList', i: 7, price: 100, n: bad }).ok, `listing ${String(bad)} of 5 stones is refused`);
+  }
+  ok(seller.player.gold === gold0 && (seller.player.bag[7] as { count: number }).count === 5, 'bad amounts cost nothing and keep the stack');
+  seller.player.bag[8] = item('ring_jade', 'common', 1);
+  ok(!call(seller, { a: 'mktList', i: 8, price: 100, n: 1 }).ok && isItem(seller.player.bag[8]), 'an amount on gear is refused');
+  seller.player.bag[8] = null;
+  ok(call(seller, { a: 'mktList', i: 7, price: 100, n: 2 }).ok && (seller.player.bag[7] as { count: number }).count === 3, 'part of the stack is listed, 3 stay');
+  const part = market.mine(seller.accountId).active.find((r) => 'stone' in r.entry && r.entry.stone === 'protect');
+  ok((part?.entry as { count: number } | undefined)?.count === 2, 'the listing holds exactly 2');
+  ok(call(seller, { a: 'mktList', i: 7, price: 100, n: 3 }).ok && !seller.player.bag[7], 'n = the whole count lists everything and clears the slot');
   let listed = market.mine(seller.accountId).active.length;
   for (let k = 0; listed < MARKET_SLOTS; k++) {
     seller.player.bag[10] = item('ring_jade', 'common', 1);
