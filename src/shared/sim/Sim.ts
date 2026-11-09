@@ -34,6 +34,8 @@ import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type S
 /** Gear of this rarity that "sell all" may take: never potions or enhanced items. */
 /** Seconds of warning before a freshly summoned minion pounces. */
 const MINION_POUNCE_WINDUP = 0.35;
+/** Hub spawn: random distance from the fountain centre, between these (fountain blocks ~1.7, rest range 4.5). */
+const HUB_SPAWN_RING: [number, number] = [2.8, 4.3];
 /** Drops land where a player of this radius could stand (Player.radius), so they can always be picked up. */
 const LOOT_STAND_R = 0.4;
 /** A vanished boss gives up on its fight when no living player has been this close for VANISH_GIVE_UP seconds. */
@@ -165,8 +167,7 @@ export class Sim {
       p.face(-back.x, -back.z);
       p.portalReady = false;
     } else {
-      p.x = this.spawnAt.x;
-      p.z = this.spawnAt.z;
+      ({ x: p.x, z: p.z } = this.spawnPoint());
     }
     this.players.push(p);
     return p;
@@ -254,10 +255,21 @@ export class Sim {
 
   // ------------------------------------------------------------ combat
 
-  /** Where players appear and wake up: by the campfire, or in the hub on the camera's side of the fountain. */
-  get spawnAt(): { x: number; z: number } {
+  /**
+   * Where players appear and wake up: by the campfire, or in the hub at a random spot on a ring around
+   * the fountain (owner: after a restart everyone landed on one point), within its rest range.
+   */
+  spawnPoint(): { x: number; z: number } {
     const s = this.zone.start;
-    return this.zone.npcs ? { x: s.x + 3, z: s.z + 3 } : { x: s.x - 2, z: s.z - 2 };
+    if (!this.zone.npcs) return { x: s.x - 2, z: s.z - 2 };
+    for (let i = 0; i < 20; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const d = HUB_SPAWN_RING[0] + Math.random() * (HUB_SPAWN_RING[1] - HUB_SPAWN_RING[0]);
+      const x = s.x + Math.cos(a) * d;
+      const z = s.z + Math.sin(a) * d;
+      if (!this.terrain.isBlocked(x, z, 0.5)) return { x, z };
+    }
+    return { x: s.x + 3, z: s.z + 3 };
   }
 
   /** Inside the zone's safe area (the hub's town): nobody fights there. */
@@ -586,8 +598,7 @@ export class Sim {
     p.mp = p.stats.maxMp;
     p.stunT = 0;
     p.kbx = p.kbz = 0;
-    p.x = this.spawnAt.x;
-    p.z = this.spawnAt.z;
+    ({ x: p.x, z: p.z } = this.spawnPoint());
     p.moveTarget = null;
     for (const m of this.monsters) if (m.target === p) m.calm();
     this.events.push({ t: 'revived', id: p.id });
