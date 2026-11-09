@@ -7,7 +7,7 @@ import { loadGameAssets, groundTiles } from '../client/assets';
 import { Effects } from '../client/effects';
 import { PlayerView } from '../client/views';
 import { ISO_DIR } from '../client/world';
-import { ORB_LEVELS, ORB_PALETTES, ORB_SHAPES, orbPalette, orbShape, orbTuning, setOrbPalette, setOrbShape } from '../client/orbs';
+import { ORB_LEVELS, ORB_PALETTES, ORB_SHAPES, orbMixState, orbPalette, orbShape, orbTuning, setOrbMix, setOrbPalette, setOrbShape } from '../client/orbs';
 import { Player } from '../shared/sim/Player';
 import type { Sim } from '../shared/sim/Sim';
 import { auraTier, orbCodes, ORB_MIN_PLUS } from '../shared/data/enhance';
@@ -54,7 +54,13 @@ function randomLook(): void {
     const v = lo + Math.round((Math.random() * (hi - lo)) / step) * step;
     t[key] = Math.round(v * 100) / 100;
   }
-  orbTuning.softGlow = Math.random() < 0.75;
+  orbTuning.softGlow = true;
+}
+
+/** Gives every worn place its own random palette and/or shape (or clears them with `on` false). */
+function randomMix(colors: boolean, shapes: boolean): void {
+  const pick = <T>(a: readonly T[]): T => a[Math.floor(Math.random() * a.length)];
+  EQUIP_SLOTS.forEach((_, i) => setOrbMix(i, colors ? pick(ORB_PALETTES).id : null, shapes ? pick(ORB_SHAPES).id : null));
 }
 
 /** Walk speed (units/s): the game's base move speed. */
@@ -319,6 +325,10 @@ async function main(): Promise<void> {
       randomLook();
       buildPanel();
     });
+    button('🎲 แต่ละลูกต่างสี+ต่างทรง', () => randomMix(true, true));
+    button('🎲 ต่างสีอย่างเดียว', () => randomMix(true, false));
+    button('🎲 ต่างทรงอย่างเดียว', () => randomMix(false, true));
+    button('ทุกลูกแบบเดียวกัน', () => randomMix(false, false));
     button('◀ ชุดสีก่อนหน้า', () => stepPalette(-1));
     button('ชุดสีถัดไป ▶', () => stepPalette(1));
     h('div', 'เดิน: WASD / ลูกศร หรือคลิกที่พื้น (คลิกพื้นที่ว่างก่อนกดปุ่ม ถ้าเพิ่งเลือกเมนู)').className = 'note';
@@ -384,7 +394,9 @@ async function main(): Promise<void> {
 
     h('h2', 'บันทึกค่า');
     button('คัดลอกค่าที่ตั้งไว้', () => {
-      const text = JSON.stringify({ palette: orbPalette().id, shape: orbShape(), ...orbTuning });
+      const mix = orbMixState();
+      const perSlot = Object.fromEntries(EQUIP_SLOTS.map((s, i) => [s, [mix.palettes[i], mix.shapes[i]]]).filter(([, v]) => (v as unknown[]).some((x) => x)));
+      const text = JSON.stringify({ palette: orbPalette().id, shape: orbShape(), ...orbTuning, ...(Object.keys(perSlot).length ? { perSlot } : {}) });
       out.value = text;
       navigator.clipboard?.writeText(text).catch(() => {});
     });

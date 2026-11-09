@@ -183,20 +183,44 @@ export const ORB_SHAPES: { id: string; name: string }[] = [
   { id: 'flame', name: 'เปลวไฟ/วิญญาณ' },
   { id: 'star', name: 'ดาว 4 แฉก' },
 ];
-/** The shape every orb is drawn with (a shader uniform shared by all rings). */
-const shapeU = { value: 0 };
+/** The shape (ORB_SHAPES index) every orb is drawn with, unless orbMix says otherwise for its slot. */
+let shape = 0;
 
 export function orbShape(): string {
-  return ORB_SHAPES[shapeU.value].id;
+  return ORB_SHAPES[shape].id;
 }
 
 export function setOrbShape(id: string): void {
   const i = ORB_SHAPES.findIndex((x) => x.id === id);
-  if (i >= 0) shapeU.value = i;
+  if (i < 0 || i === shape) return;
+  shape = i;
+  paletteVer++;
+}
+
+/**
+ * Per worn place (EQUIP_SLOTS index): a palette id / shape index of its own, or null = the common one.
+ * Lets each orb look different (the preview's "mix" dice).
+ */
+const orbMix = {
+  palettes: Array<string | null>(MAX_ORBS).fill(null),
+  shapes: Array<number | null>(MAX_ORBS).fill(null),
+};
+
+export function orbMixState(): { palettes: readonly (string | null)[]; shapes: readonly (string | null)[] } {
+  return { palettes: orbMix.palettes, shapes: orbMix.shapes.map((i) => (i === null ? null : ORB_SHAPES[i].id)) };
+}
+
+/** Sets one slot's own palette / shape (null = back to the common one). */
+export function setOrbMix(slot: number, paletteId: string | null, shapeId: string | null): void {
+  if (slot < 0 || slot >= MAX_ORBS) return;
+  orbMix.palettes[slot] = paletteId && ORB_PALETTES.some((p) => p.id === paletteId) ? paletteId : null;
+  const si = shapeId ? ORB_SHAPES.findIndex((x) => x.id === shapeId) : -1;
+  orbMix.shapes[slot] = si >= 0 ? si : null;
+  paletteVer++;
 }
 
 let palette = ORB_PALETTES[0];
-/** Bumped when the palette changes, so every ring repaints. */
+/** Bumped when the palette, shape or mix changes, so every ring repaints. */
 let paletteVer = 0;
 
 export function orbPalette(): OrbPalette {
@@ -362,7 +386,7 @@ let glowMat: THREE.ShaderMaterial | null = null;
 
 function materials(): [THREE.ShaderMaterial, THREE.ShaderMaterial] {
   coreMat ??= new THREE.ShaderMaterial({
-    uniforms: { map: { value: orbAtlas() }, uScreenH: screenH, uShape: shapeU },
+    uniforms: { map: { value: orbAtlas() }, uScreenH: screenH },
     vertexShader: `
       attribute vec3 color; attribute vec3 accent; attribute float size; attribute float detail;
       uniform float uScreenH;
@@ -373,10 +397,13 @@ function materials(): [THREE.ShaderMaterial, THREE.ShaderMaterial] {
         ${POINT_SIZE}
       }`,
     fragmentShader: `
-      uniform sampler2D map; uniform float uShape;
+      uniform sampler2D map;
       varying vec3 vColor; varying vec3 vAccent; varying float vDetail;
       void main() {
-        vec4 t = texture2D(map, vec2((gl_PointCoord.x + vDetail) / 4.0, 1.0 - (gl_PointCoord.y + uShape) / ${ORB_SHAPES.length}.0));
+        // vDetail = atlas cell: detail (column) + 4 × shape (row).
+        float col = mod(vDetail + 0.5, 4.0) - 0.5;
+        float row = floor((vDetail + 0.5) / 4.0);
+        vec4 t = texture2D(map, vec2((gl_PointCoord.x + col) / 4.0, 1.0 - (gl_PointCoord.y + row) / ${ORB_SHAPES.length}.0));
         if (t.a < 0.5) discard;
         vec3 c = vColor * (0.3 + 0.9 * t.r);
         c = mix(c, vAccent, t.b);
@@ -391,7 +418,11 @@ function materials(): [THREE.ShaderMaterial, THREE.ShaderMaterial] {
       uniform float uScreenH;
       varying vec3 vColor; varying float vAlpha; varying float vKind;
       void main() {
-        vColor = color; vAlpha = alpha; vKind = kind;
+        vColor = color; vKind = kind;
+        // Light behind the character (farther than its middle, on the ground plan) shows dimmer through it.
+        vec3 cam = vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2]);
+        float front = position.x * cam.x + position.z * cam.z;
+        vAlpha = alpha * mix(0.4, 1.0, smoothstep(-0.25, 0.25, front));
         ${PLACE}
         ${POINT_SIZE}
       }`,
@@ -405,6 +436,9 @@ function materials(): [THREE.ShaderMaterial, THREE.ShaderMaterial] {
       }`,
     transparent: true,
     depthWrite: false,
+    // Halos are big squares at one depth: tested against the ground they get cut along a straight
+    // line (the "square light"). They are soft additive light, so they skip the depth test instead.
+    depthTest: false,
     blending: THREE.AdditiveBlending,
   });
   return [coreMat, glowMat];
@@ -472,6 +506,8 @@ export class OrbRing {
   private paletteVer = -1;
   private n = 0;
   private readonly levels: OrbLevel[] = [];
+  /** Orb atlas cell per orb: detail + 4 × shape. */
+  private readonly cells: number[] = [];
   /** Per orb: core, accent and glow colors (9 floats). */
   private readonly cols = new Float32Array(MAX_ORBS * 9);
   private readonly phase: number;
@@ -501,7 +537,11 @@ export class OrbRing {
     for (let i = 0; i < this.n; i++) {
       const plus = Math.max(7, Math.min(15, orbPlus(codes[i])));
       this.levels[i] = ORB_LEVELS[plus];
-      const c = palette.colors(orbSlot(codes[i]), plus);
+      const slot = orbSlot(codes[i]);
+      const own = orbMix.palettes[slot];
+      const pal = own ? ORB_PALETTES.find((p) => p.id === own) ?? palette : palette;
+      const c = pal.colors(slot, plus);
+      this.cells[i] = this.levels[i].detail + 4 * (orbMix.shapes[slot] ?? shape);
       putRgb(this.cols, i * 9, c.core);
       putRgb(this.cols, i * 9 + 3, c.accent);
       putRgb(this.cols, i * 9 + 6, c.glow);
@@ -545,7 +585,7 @@ export class OrbRing {
         cAcc[i * 3 + k] = this.cols[o + 3 + k];
       }
       cSize[i] = L.size * sc;
-      cDet[i] = L.detail;
+      cDet[i] = this.cells[i];
 
       // Halo, breathing slowly.
       const pulse = 1 + 0.1 * Math.sin(t * 3 + this.phase + i);
