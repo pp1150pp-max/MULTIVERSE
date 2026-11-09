@@ -5,7 +5,7 @@ import { MONSTERS } from '../src/shared/data/monsters';
 import { Sim } from '../src/shared/sim/Sim';
 import type { Player } from '../src/shared/sim/Player';
 import { AutoPlay, autoBlocked } from '../src/shared/sim/autoplay';
-import { BLAST, DODGE_SPEED, HEART_HP_SHARE, HEART_PHASES, HEART_SETS, METEOR, RING, inRingGap, type Hazard, type RingHazard } from '../src/shared/sim/volcanoHeart';
+import { BLAST, DODGE_SPEED, GROW, HEART_HP_SHARE, HEART_PHASES, HEART_SETS, METEOR, RING, inRingGap, type Hazard, type RingHazard } from '../src/shared/sim/volcanoHeart';
 import { IDLE_INTENT } from '../src/shared/sim/types';
 
 const hero = (level = 40) => ({ name: 'T', classId: 'sword' as const, level, exp: 0, gold: 0, equipment: {}, bag: [] });
@@ -65,6 +65,8 @@ const heart = (sim: Sim) => sim.monsters.find((m) => m.def.id === 'volcano_heart
 // ---- lava
 {
   const sim = new Sim(ZONE_4);
+  // Map 4's monsters attack anyone near, so take them away: this only measures the lava.
+  sim.monsters.splice(0);
   const p = sim.addPlayer(hero());
   const l = ZONE_4.lavaPools![0];
   p.x = l.x;
@@ -209,6 +211,33 @@ for (const zone of Object.values(ZONES)) {
   }
   ok(drops > 40, `the Heart drops loot (${drops} drops in 40 kills)`);
   ok(stuck === 0, `every drop is on open ground a player can stand on (${stuck} inside a solid)`);
+}
+
+// ---- a long fight: attacks grow 5% bigger and stronger 30s after the first hit, then every 10s
+{
+  const sim = new Sim(ZONE_4);
+  const m = heart(sim);
+  const p = sim.addPlayer(hero());
+  p.x = m.x + 8;
+  p.z = m.z;
+  const outside = sim.addPlayer(hero());
+  outside.x = m.x + arenaRadius(ZONE_4) + 3;
+  outside.z = m.z;
+  outside.stats.maxHp = outside.hp = 1e7;
+  const keepUp = () => { p.stats.maxHp = p.hp = 1e7; };
+  keepUp();
+  sim.step(TICK);
+  sim.hitMonster(p, m, 1);
+  const meteorR = (from: number, to: number) => {
+    let r = 0;
+    run(sim, to - from, () => { keepUp(); for (const h of sim.hazards) if (h.k === 'meteor') r = Math.max(r, h.r); });
+    return r;
+  };
+  const early = meteorR(0, 29);
+  ok(early === 0 || Math.abs(early - METEOR.radius) < 1e-9, `no growth before ${GROW.after}s (${early})`);
+  const later = meteorR(29, 75);
+  ok(later >= METEOR.radius * (1 + GROW.step * 2) - 1e-9, `meteors grow 5% per step (${later.toFixed(3)} vs ${METEOR.radius})`);
+  ok(outside.hp === 1e7, 'nobody outside the arena is hit, however big the attacks get');
 }
 
 finish('volcano zone');
