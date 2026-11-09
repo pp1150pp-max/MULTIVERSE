@@ -284,8 +284,17 @@ export class Sim {
       m.damageBy.set(p.id, 0);
       m.addFighter(m.damageBy.size);
     }
-    m.damageBy.set(p.id, m.damageBy.get(p.id)! + Math.min(dmg, Math.max(0, m.hp)));
+    // Overkill doesn't count: shares and lifesteal use the HP actually taken.
+    const dealt = Math.min(dmg, Math.max(0, m.hp));
+    m.damageBy.set(p.id, m.damageBy.get(p.id)! + dealt);
     m.hp -= dmg;
+    if (this.time < p.lifestealUntil && p.hp < p.maxHp) {
+      const heal = Math.min(p.maxHp - p.hp, Math.round(dealt * p.lifesteal));
+      if (heal > 0) {
+        p.hp += heal;
+        this.text(p.x, p.topY, p.z, `+${heal}`, 'heal', 0.6);
+      }
+    }
     this.events.push({ t: 'flash', id: m.id });
     this.text(m.x, m.topY, m.z, crit ? `${dmg}!` : String(dmg), crit ? 'crit' : 'dmg');
     if (crit) this.sfx('crit', m.x, m.z);
