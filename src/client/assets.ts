@@ -230,7 +230,7 @@ const ANIM_SET_DIRS: Record<string, string> = {
 export const sheets: Record<string, SheetInfo> = {};
 export const animSets: Record<string, AnimSet> = {};
 export const assetSources: Record<string, 'file' | 'placeholder'> = {};
-export const fxTex = {} as Record<'glow' | 'shadow' | 'mist' | 'ring' | 'edge' | 'disc', THREE.Texture>;
+export const fxTex = {} as Record<'glow' | 'shadow' | 'propShadow' | 'mist' | 'ring' | 'edge' | 'disc', THREE.Texture>;
 
 /** Hard pixels up close. Big files add mipmaps in loadAssets so they don't shimmer when shrunk. */
 function prep(tex: THREE.Texture): void {
@@ -513,6 +513,10 @@ async function loadAssets(): Promise<void> {
   const band = (d: number, steps: [number, number][]) => steps.find(([edge]) => d <= edge)?.[1] ?? 0;
   fxTex.glow = fxTexture(pixelCircle(32, '255,255,255', (d) => band(d, [[0.3, 1], [0.55, 0.6], [0.78, 0.28], [1, 0.1]])));
   fxTex.shadow = fxTexture(pixelCircle(32, '0,0,0', (d) => band(d, [[0.72, 0.85], [1, 0.42]])));
+  // Props are many times wider than an actor, so the 32px banded shadow turned into big stair steps
+  // under them. Theirs fades smoothly instead: solid in the middle, soft at the rim.
+  fxTex.propShadow = fxTexture(pixelCircle(64, '0,0,0', (d) => (d >= 1 ? 0 : Math.min(1, (1 - d) / 0.45))));
+  fxTex.propShadow.magFilter = fxTex.propShadow.minFilter = THREE.LinearFilter;
   // Smooth rather than dithered: mist sprites are far bigger than their texture, so a dither
   // shows up as a screen-door grid over the ground.
   fxTex.mist = fxTexture(pixelCircle(128, '255,255,255', (d) => (1 - d) * (1 - d)));
