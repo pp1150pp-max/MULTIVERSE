@@ -9,11 +9,15 @@ import type { Db, MailDbRow } from './db';
 import type { Player } from '../src/shared/sim/Player';
 import type { Sim } from '../src/shared/sim/Sim';
 import type { BagEntry } from '../src/shared/types';
+import { ITEM_BASES } from '../src/shared/data/items';
+import { CLASSES } from '../src/shared/data/classes';
 import {
   cleanAttach, describeAttach, hasAttach, putAll, rollAttach, slotsNeeded,
   MAIL_BODY_MAX, MAIL_MS, MAIL_TITLE_MAX,
   type MailAttach, type MailCall, type MailFull, type MailHead, type MailReply, type MailSendRow, type MailTargetReq,
 } from '../src/shared/mail';
+
+const CLASS_COUNT = Object.keys(CLASSES).length;
 
 /** Who is using their mailbox: an online character (the world's session). */
 export interface MailActor {
@@ -27,10 +31,11 @@ export interface MailActor {
 export const GUEST_MAIL_MSG = 'Guest ไม่มีกล่องจดหมาย — สมัครสมาชิกเพื่อรับจดหมาย';
 const fail = (msg: string): MailReply => ({ ok: false, msg });
 
+/** A stored attachment. Not re-checked against today's caps (the admin may lower them later); lines of a kind that no longer exists are skipped when rolled. */
 const parseAttach = (json: string): MailAttach => {
   try {
-    const a = cleanAttach(JSON.parse(json));
-    return typeof a === 'string' ? { gold: 0, items: [] } : a;
+    const a = JSON.parse(json) as Partial<MailAttach>;
+    return { gold: typeof a.gold === 'number' && a.gold > 0 ? Math.floor(a.gold) : 0, items: Array.isArray(a.items) ? a.items.filter((x) => x && typeof x === 'object') : [] };
   } catch {
     return { gold: 0, items: [] };
   }
@@ -59,6 +64,16 @@ export class Mail {
     if (body.length > MAIL_BODY_MAX) return `เนื้อหายาวได้ไม่เกิน ${MAIL_BODY_MAX} ตัวอักษร`;
     const attach = cleanAttach(req.attach);
     if (typeof attach === 'string') return attach;
+    // Gear made for one class only: sent to one character of that class, nobody else could wear it.
+    const one = req.target as { kind?: unknown; name?: unknown };
+    const oneChar = one.kind === 'char' ? this.db.characterByName(clean(one.name, 32)) : undefined;
+    const oneClass = oneChar ? this.db.adminCharacter(oneChar.id)?.data.classId : undefined;
+    for (const x of attach.items) {
+      const base = x.kind === 'equip' ? ITEM_BASES.find((b) => b.id === x.baseId) : undefined;
+      if (base && !base.names.any && Object.keys(base.names).length < CLASS_COUNT && !(oneClass && base.names[oneClass])) {
+        return `${Object.values(base.names).join(' / ')} เป็นของอาชีพเดียว — แนบได้เฉพาะจดหมายถึงตัวละครเดียวที่เป็นอาชีพนั้น`;
+      }
+    }
     const t = req.target as { kind?: unknown; name?: unknown; username?: unknown };
     let label: string;
     let char: { id: number; accountId: number } | undefined;
@@ -183,8 +198,7 @@ export class Mail {
     if (r.claimed_at !== null) return 'รับของจากจดหมายฉบับนี้ไปแล้ว';
     const att = parseAttach(r.attach);
     if (!hasAttach(att)) return 'จดหมายฉบับนี้ไม่มีของแนบ';
-    const entries: BagEntry[] | null = rollAttach(att, p.cls.id, p.level);
-    if (!entries) return 'ของแนบเสียหาย — แจ้งผู้ดูแล';
+    const entries: BagEntry[] = rollAttach(att, p.cls.id, p.level);
     if (!putAll(structuredClone(p.bag), entries)) {
       const need = slotsNeeded(p.bag, entries);
       return `กระเป๋าไม่พอ — ต้องมีช่องว่างอย่างน้อย ${need} ช่อง (ตอนนี้ว่าง ${p.bag.filter((e) => !e).length} ช่อง)`;

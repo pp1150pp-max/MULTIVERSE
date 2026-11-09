@@ -69,6 +69,20 @@ const guest = actor('Guesty', undefined, true);
   ok(db.mailHistory(10).length === 0, 'a refused send leaves nothing behind');
 }
 
+// ------------------------------------------------------------ gear made for one class
+{
+  const orb = { items: [{ kind: 'equip', baseId: 'orb_1', rarity: 'rare', plus: 0, count: 1 }] };
+  ok(typeof send({ kind: 'account', username: 'acc-Alice' }, orb) === 'string', 'one-class gear cannot go to an account');
+  ok(typeof send({ kind: 'allChars' }, orb) === 'string' && typeof send({ kind: 'allAccounts' }, orb) === 'string', 'nor to everyone');
+  ok(typeof send({ kind: 'char', name: 'Bob' }, { items: [{ kind: 'equip', baseId: 'scabbard_1', rarity: 'rare', plus: 0, count: 1 }] }) === 'string', 'nor to a character of another class (Bob is a mage)');
+  const okSend = send({ kind: 'char', name: 'Bob' }, orb);
+  ok(typeof okSend !== 'string', 'one-class gear can go to one character of that class');
+  ok(typeof send({ kind: 'allChars' }, { items: [{ kind: 'equip', baseId: 'weapon_1', rarity: 'rare', plus: 0, count: 1 }] }) !== 'string', 'gear that exists for every class can go to everyone');
+  if (typeof okSend !== 'string') mail.recall(okSend.id);
+  mail.recall(1);
+  for (const r of db.mailHistory(50)) mail.recall(r.id);
+}
+
 // ------------------------------------------------------------ guests
 {
   ok(!call(guest, { a: 'mailList' }).ok, 'a guest has no mailbox');
@@ -151,6 +165,15 @@ const guest = actor('Guesty', undefined, true);
   ok(call(a, { a: 'mailClaim', id: -1 }).ok && (a.player.bag[5] as { count: number }).count === 10, 'potions top up an existing stack when it has room');
 }
 
+// ------------------------------------------------------------ a stored mail is not re-checked against today's caps
+{
+  const a = actor('OldCaps');
+  const sendId = db.mailSendInsert({ senderId: null, senderName: 'Owner', target: 't', title: 'เก่า', body: '', attach: JSON.stringify({ gold: 5_000_000, items: [{ kind: 'equip', baseId: 'gone_kind', rarity: 'rare', plus: 0, count: 1 }] }), hasAttach: true, at: clock, expiresAt: clock + MAIL_MS });
+  db.mailBoxAdd(sendId, a.accountId, a.charId);
+  const g = a.player.gold;
+  ok(call(a, { a: 'mailClaim', id: list(a)[0].id }).ok && a.player.gold === g + 5_000_000, 'gold above the old cap still arrives; a removed item kind is skipped');
+}
+
 // ------------------------------------------------------------ per account: claimed once, by whichever character
 {
   const r = send({ kind: 'account', username: 'acc-Alice' }, { gold: 1000 }, 'ทั้งบัญชี');
@@ -170,8 +193,8 @@ const guest = actor('Guesty', undefined, true);
   const before = db.mailHistory(100).length;
   const chars = send({ kind: 'allChars' }, { gold: 10 }, 'ทุกตัวละคร');
   const accs = send({ kind: 'allAccounts' }, { gold: 20 }, 'ทุกบัญชี');
-  const realAccounts = 4; // Alice, Bob, Packer, Stacker (the guest is excluded)
-  ok(typeof chars !== 'string' && chars.copies === 5, `every character gets a copy (Alice's account has 2): ${typeof chars !== 'string' ? chars.copies : chars}`);
+  const realAccounts = 5; // Alice, Bob, Packer, Stacker, OldCaps (the guest is excluded)
+  ok(typeof chars !== 'string' && chars.copies === 6, `every character gets a copy (Alice's account has 2): ${typeof chars !== 'string' ? chars.copies : chars}`);
   ok(typeof accs !== 'string' && accs.copies === realAccounts, `every account gets one copy, guests excluded: ${typeof accs !== 'string' ? accs.copies : accs}`);
   ok(db.mailHistory(100).length === before + 2, 'two sends were recorded');
   ok(list(alice).some((m) => m.title === 'ทุกตัวละคร') && list(aliceAlt).some((m) => m.title === 'ทุกตัวละคร'), 'both of Alice\'s characters have their own "every character" copy');

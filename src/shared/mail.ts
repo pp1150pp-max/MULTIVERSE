@@ -84,24 +84,24 @@ export function describeAttach(a: MailAttach): string[] {
 
 /**
  * The bag entries an attachment gives to this character: gear is rolled now for its class (item level =
- * the attachment's, else the character's, never below the kind's minimum). Null if a kind no longer exists.
+ * the attachment's, else the character's, never below the kind's minimum). Lines of a kind that no longer exists are skipped.
  */
-export function rollAttach(a: MailAttach, cls: ClassId, charLevel: number): BagEntry[] | null {
+export function rollAttach(a: MailAttach, cls: ClassId, charLevel: number): BagEntry[] {
   const out: BagEntry[] = [];
   for (const x of a.items) {
     if (x.kind === 'equip') {
       const base = ITEM_BASES.find((b) => b.id === x.baseId);
-      if (!base) return null;
+      if (!base) continue; // a kind removed since it was sent
       const level = Math.min(MAX_LEVEL, Math.max(base.minLevel, x.level ?? charLevel));
       for (let k = 0; k < x.count; k++) {
         const item: Item | null = makeItem(base.id, x.rarity, level, cls);
-        if (!item) return null;
+        if (!item) continue;
         if (x.plus > 0) item.plus = x.plus;
         out.push(item);
       }
     } else {
-      const s = (x.kind === 'potion' ? adminStack({ kind: 'potion', potion: x.potion, size: x.size }) : adminStack({ kind: 'stone', stone: x.stone })) as AdminStack;
-      out.push({ ...s, count: x.count } as BagEntry);
+      const s = x.kind === 'potion' ? adminStack({ kind: 'potion', potion: x.potion, size: x.size }) : adminStack({ kind: 'stone', stone: x.stone });
+      if (typeof s !== 'string') out.push({ ...s, count: x.count } as BagEntry);
     }
   }
   return out;

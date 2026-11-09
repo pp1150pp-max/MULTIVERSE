@@ -117,7 +117,7 @@ export class SystemMenu {
   private readonly badges = new Map<string, number>();
 
   /** Player notification on an icon (key = the icon's Thai label, e.g. 'จดหมาย'): 0 hides it, 1 = red dot, 2+ = number.
-   *  The top-right เมนู icon shows the total of all the others. Nothing calls this yet: no feature sends notifications. */
+   *  The top-right เมนู icon shows the total of all the others. The mailbox sets 'จดหมาย' (src/client/mail.ts). */
   setBadge(key: string, count: number): void {
     this.badges.set(key, count);
     const total = [...this.badges].reduce((a, [k, n]) => a + (k === 'เมนู' ? 0 : n), 0);
