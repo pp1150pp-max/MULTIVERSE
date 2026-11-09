@@ -12,13 +12,13 @@ import {
   ANNOUNCE_FROM, dropsOnFail, enhanceCost, itemName, MAX_PLUS, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
 } from '../data/enhance';
 import { entryName, potionName, POTION_STACK, POTIONS, stackLimit } from '../data/potions';
-import { BOSS_STONE_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, STONE_COLOR, STONE_NAME } from '../data/stones';
+import { BOSS_KEY, BOSS_STONE_CHANCE, KEY_DROP_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, STONE_COLOR, STONE_NAME } from '../data/stones';
 import { NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { pick, rand, randInt } from '../rng';
 import { splitExp } from '../party';
 import { CLASS_IDS } from '../data/classes';
 import {
-  isItem, isPotion, isStack, isStone, RARITY_LABEL, sameStack, SLOT_LABEL, STONE_KINDS, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
+  isItem, isPotion, isStack, isStone, RARITY_LABEL, sameStack, SLOT_LABEL, BLACKSMITH_STONES, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
 import { PORTAL_RANGE, REST_CD, restSpotNear, Terrain, type RestSpot } from './terrain';
 import {
   BUYBACK_RESET, buybackPrice, cleanAutoSettings, lootPots, Player, sortEntries,
@@ -673,7 +673,7 @@ export class Sim {
       this.spawnLoot(m, { type: 'potion', pot: 'hp', size: 's', count: DROP_POTION_MULT }, owner, party);
       this.spawnLoot(m, { type: 'potion', pot: 'mp', size: 's', count: DROP_POTION_MULT }, owner, party);
       // Every blacksmith stone kind can drop from a boss, each rolled on its own.
-      for (const stone of STONE_KINDS) {
+      for (const stone of BLACKSMITH_STONES) {
         if (r() < (loot?.stoneChance ?? BOSS_STONE_CHANCE)) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner, party);
       }
       return;
@@ -685,6 +685,9 @@ export class Sim {
       for (const stone of MONSTER_STONES) {
         if (r() < MONSTER_STONE_CHANCE) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner, party);
       }
+      // The key of its home map's boss, wherever it stands (its map or the hub).
+      const key = home?.boss && BOSS_KEY[home.boss.monster];
+      if (key && r() < KEY_DROP_CHANCE) this.spawnLoot(m, { type: 'stone', stone: key, count: 1 }, owner, party);
     }
   }
 

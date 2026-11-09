@@ -110,8 +110,18 @@ export interface PotionStack {
 }
 
 /** Boss-only blacksmith materials: protection keeps the + level on a fail, enhance is needed from +11. */
-export type StoneKind = 'protect' | 'enhance' | 'reroll_values' | 'reroll_stat';
-export const STONE_KINDS: StoneKind[] = ['protect', 'enhance', 'reroll_values', 'reroll_stat'];
+export type BlacksmithStone = 'protect' | 'enhance' | 'reroll_values' | 'reroll_stat';
+export const BLACKSMITH_STONES: BlacksmithStone[] = ['protect', 'enhance', 'reroll_values', 'reroll_stat'];
+/**
+ * Boss keys (Artifacts): one per boss, put into its summoner to open the boss room. They stack, sell,
+ * trade and go on the market exactly like stones, so they share the stone stack (see BOSS_KEY in data/stones).
+ */
+export type BossKey = 'key_bear' | 'key_witch' | 'key_yeti' | 'key_heart';
+export const BOSS_KEYS: BossKey[] = ['key_bear', 'key_witch', 'key_yeti', 'key_heart'];
+/** Everything a stone stack can hold: blacksmith stones and boss keys. */
+export type StoneKind = BlacksmithStone | BossKey;
+export const STONE_KINDS: StoneKind[] = [...BLACKSMITH_STONES, ...BOSS_KEYS];
+export const isBossKey = (k: StoneKind): k is BossKey => (BOSS_KEYS as StoneKind[]).includes(k);
 
 /** Stones of one kind sharing a bag slot (up to STONE_STACK). */
 export interface StoneStack {

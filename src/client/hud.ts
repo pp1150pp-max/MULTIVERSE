@@ -9,7 +9,7 @@ import {
 import {
   entryName, POTION_SIZES, POTION_SIZE_LABEL, POTION_STACK, POTIONS, potionHeal, potionName, potionSellPrice, stackLimit,
 } from '../shared/data/potions';
-import { REROLL_STONE, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_SELL, STONE_STACK, stoneStackValue } from '../shared/data/stones';
+import { REROLL_STONE, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_SELL, STONE_STACK, stoneStackValue, stoneUnit } from '../shared/data/stones';
 import { lineRanges, rerollBlock } from '../shared/data/items';
 import { REROLL_NAME, rerollCost, type RerollKind } from '../shared/data/reroll';
 import { FullMap } from './fullmap';
@@ -21,7 +21,7 @@ import { ZONE_1 } from '../shared/data/zones';
 import { expToNext } from '../shared/formulas';
 import { blockingGate } from '../shared/data/bossGates';
 import {
-  isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
+  isBossKey, isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
   type BagEntry, type Item, type StatLine, type PotionKind, type PotionSize, type PotionStack, type Rarity, type StoneStack, type StoneKind, type EquipSlot, type StatKey,
 } from '../shared/types';
 import { drawMapIcon, facingAngle, partyDot } from './mapIcons';
@@ -1211,7 +1211,7 @@ export class Hud {
     // A stack of 2+: ask how many to sell (the whole stack is the default).
     if (isStack(item) && item.count > 1) {
       const each = isPotion(item) ? potionSellPrice(item.potion, item.size) : STONE_SELL;
-      const unit = isPotion(item) ? 'ขวด' : 'ก้อน';
+      const unit = isPotion(item) ? 'ขวด' : stoneUnit(item.stone);
       this.askAmount(
         `ขาย ${name} กี่${unit}?<br><small>${unit}ละ ${each.toLocaleString()} G${isStone(item) ? ' · ซื้อคืนไม่ได้' : ''}</small>`,
         item.count, item.count,
@@ -1229,7 +1229,7 @@ export class Hud {
     }
     if (isStone(item)) {
       // Boss-only stones: always ask, they are hard to get back.
-      this.confirm(`ขาย ${name}?<br><small>ได้ ${stoneStackValue(item).toLocaleString()} G (ก้อนละ ${STONE_SELL.toLocaleString()} G) · ซื้อคืนไม่ได้</small>`, 'ขาย', sell);
+      this.confirm(`ขาย ${name}?<br><small>ได้ ${stoneStackValue(item).toLocaleString()} G (${stoneUnit(item.stone)}ละ ${STONE_SELL.toLocaleString()} G) · ซื้อคืนไม่ได้</small>`, 'ขาย', sell);
       return;
     }
     if ((item.plus ?? 0) > 0) {
@@ -1823,9 +1823,11 @@ export class Hud {
     const tip = $('tooltip');
     tip.innerHTML =
       `<div class="tt-name" style="color:${STONE_COLOR[s.stone]}">${STONE_NAME[s.stone]}</div>` +
-      `<div class="tt-sub">วัตถุดิบตีบวก · ${s.count} / ${STONE_STACK} ก้อน · ดรอปจากบอสเท่านั้น</div>` +
+      (isBossKey(s.stone)
+        ? `<div class="tt-sub">Artifact · ${s.count} / ${STONE_STACK} อัน · ดรอปจากมอนสเตอร์ในแมพของบอส</div>`
+        : `<div class="tt-sub">วัตถุดิบตีบวก · ${s.count} / ${STONE_STACK} ก้อน · ดรอปจากบอสเท่านั้น</div>`) +
       `<div class="tt-stats"><div>${STONE_DESC[s.stone]}</div></div>` +
-      `<div class="tt-hint">${hint}</div><div class="tt-val">ขายให้พ่อค้าได้ก้อนละ ${STONE_SELL.toLocaleString()} G</div>`;
+      `<div class="tt-hint">${hint}</div><div class="tt-val">ขายให้พ่อค้าได้${stoneUnit(s.stone)}ละ ${STONE_SELL.toLocaleString()} G</div>`;
     this.placeTip(tip, e);
   }
 
