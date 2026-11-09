@@ -307,8 +307,9 @@ export class Hud {
       const i = this.cellIndex(e);
       const item = i >= 0 ? g.player.bag[i] : null;
       const right = this.stashOpen ? 'ฝากเข้าคลัง' : this.market.isOpen ? 'เลือกมาลงขายในตลาด' : this.shopOpen ? (isStack(item) ? 'ขายทั้งช่อง' : 'ขาย') : 'วางลงพื้น';
-      if (isPotion(item)) this.showPotionTip(item, e, `คลิกซ้าย: ใช้กับปุ่มด่วน · คลิกขวา: ${right}`);
-      else if (isStone(item)) this.showStoneTip(item, e, `คลิกขวา: ${right}`);
+      const split = item && isStack(item) && item.count > 1 ? ' · Shift+ลาก: แบ่งกอง' : '';
+      if (isPotion(item)) this.showPotionTip(item, e, `คลิกซ้าย: ใช้กับปุ่มด่วน · คลิกขวา: ${right}${split}`);
+      else if (isStone(item)) this.showStoneTip(item, e, `คลิกขวา: ${right}${split}`);
       else if (item) {
         const both = item.slot === 'ring' && g.player.equipment.ring && g.player.equipment.ring2;
         if (this.forgeOpen) this.showTip(item, e, `คลิกซ้าย / ลาก: วางที่ช่างตีเหล็ก · คลิกขวา: ${right}`);
@@ -440,7 +441,7 @@ export class Hud {
       if (this.drag?.ghost) return;
       const i = this.stashIndex(e);
       const item = i >= 0 ? g.player.stash.items[i] : null;
-      const hint = 'คลิกขวา: ย้ายเข้ากระเป๋า · ลากเพื่อย้าย';
+      const hint = 'คลิกขวา: ย้ายเข้ากระเป๋า · ลากเพื่อย้าย' + (item && isStack(item) && item.count > 1 ? ' · Shift+ลาก: แบ่งกอง' : '');
       if (isPotion(item)) this.showPotionTip(item, e, hint);
       else if (isStone(item)) this.showStoneTip(item, e, hint);
       else if (item) this.showTip(item, e, hint);
