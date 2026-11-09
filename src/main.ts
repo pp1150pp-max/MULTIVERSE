@@ -17,7 +17,10 @@ function start(game: Game, classId: string): void {
 
 function launch(backend: OnlineBackend): void {
   const game = new Game($('app'), backend);
-  backend.onChat = (name, text, party) => game.hud.chatLine(name, text, undefined, party);
+  backend.onChat = (name, text, party) => {
+    game.hud.chatLine(name, text, undefined, party);
+    if (name) game.floating.bubble(name, text, party);
+  };
   backend.onPartyInvite = (party, from, seconds) => game.party.invited(party, from, seconds);
   backend.onPartyInviteGone = (party) => game.party.removeInvite(party);
   backend.onDisconnect = (msg) => game.hud.showDisconnect(msg);
