@@ -4,29 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Orb preview (dev only)</title>
-    <!-- Dev-only page (npm run dev → /orbs.html). Not in vite.config.ts build inputs, so it never ships. -->
+    <!-- Dev-only page (npm run dev → /orbs.html). Not a build input; the same bench is in /admin. -->
     <style>
-      html, body { margin: 0; height: 100%; background: #10131a; color: #e8e4d8; font: 13px/1.4 system-ui, sans-serif; overflow: hidden; }
-      #view { position: fixed; inset: 0; }
-      #panel { position: fixed; top: 8px; left: 8px; width: 360px; max-height: calc(100% - 16px); overflow: auto;
-        background: rgba(16, 19, 26, 0.88); border: 1px solid #3a4152; border-radius: 6px; padding: 10px; box-sizing: border-box; }
-      #panel h1 { font-size: 15px; margin: 0 0 6px; }
-      #panel h2 { font-size: 12px; margin: 10px 0 4px; color: #f2d58a; }
-      .row { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 3px 0; }
-      .row label { flex: 1; white-space: nowrap; }
-      .row > span, .row > select, .row > input { flex-shrink: 0; }
-      select, input[type=number] { background: #1d2230; color: inherit; border: 1px solid #3a4152; border-radius: 3px; padding: 2px 4px; }
-      input[type=range] { width: 120px; }
-      button { background: #2a3245; color: inherit; border: 1px solid #4a5570; border-radius: 3px; padding: 3px 6px; margin: 2px 2px 2px 0; cursor: pointer; }
-      button:hover { background: #36405a; }
-      #stats { position: fixed; right: 8px; top: 8px; background: rgba(16, 19, 26, 0.8); padding: 4px 8px; border-radius: 4px; }
-      .note { color: #9aa3b8; font-size: 11px; }
+      html, body { margin: 0; height: 100%; background: #10131a; overflow: hidden; }
+      #orbp { position: fixed; inset: 0; }
     </style>
   </head>
   <body>
-    <div id="view"></div>
-    <div id="panel"><h1>ทดลองลูกแก้วตีบวก</h1><div class="note">กำลังโหลด…</div></div>
-    <div id="stats"></div>
+    <div id="orbp"></div>
     <script type="module" src="/src/dev/orbsPreview.ts"></script>
   </body>
 </html>

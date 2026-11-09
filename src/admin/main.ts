@@ -140,7 +140,7 @@ const root = document.getElementById('admin')!;
 let me: AdminMe | null = null;
 let meta: AdminMeta | null = null;
 let online: AdminOnline | null = null;
-type Tab = 'online' | 'search' | 'users' | 'stats' | 'sessions' | 'chat' | 'mail' | 'trades' | 'roles' | 'audit' | 'server';
+type Tab = 'online' | 'search' | 'users' | 'stats' | 'sessions' | 'chat' | 'mail' | 'trades' | 'orbs' | 'roles' | 'audit' | 'server';
 let tab: Tab = 'online';
 let timer = 0;
 
@@ -248,6 +248,7 @@ function renderShell(): void {
   if (me.features.includes('chatLog')) tabs.push(['chat', 'แชท']);
   if (me.features.includes('mail')) tabs.push(['mail', 'จดหมาย']);
   if (me.features.includes('tradeLog')) tabs.push(['trades', 'เทรด']);
+  if (me.features.includes('orbPreview')) tabs.push(['orbs', 'ลูกแก้วตีบวก']);
   if (me.role === 'owner') tabs.push(['roles', 'สิทธิ์ GM'], ['audit', 'ประวัติ']);
   if (me.role === 'owner' || me.features.includes('broadcast') || me.features.includes('backup') || me.features.includes('shutdownText')) tabs.push(['server', 'Server']);
   const bar = h('nav', { class: 'tabs' }, ...tabs.map(([id, label]) =>
@@ -267,6 +268,8 @@ function renderShell(): void {
 function setTab(t: Tab): void {
   tab = t;
   stopRefresh();
+  stopOrbs?.();
+  stopOrbs = null;
   void checkStale();
   document.querySelectorAll<HTMLElement>('.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
   // On a phone the tab row scrolls: keep the chosen tab in view.
@@ -280,9 +283,30 @@ function setTab(t: Tab): void {
   else if (t === 'chat') void renderChat();
   else if (t === 'mail') void renderMail();
   else if (t === 'trades') void renderTrades();
+  else if (t === 'orbs') void renderOrbs();
   else if (t === 'roles') void renderRoles();
   else if (t === 'audit') void renderAudit();
   else void renderServer();
+}
+
+// ------------------------------------------------------------ orb test bench
+
+/** Stops the orb test bench (its renderer and frame loop) when another tab opens. */
+let stopOrbs: (() => void) | null = null;
+
+/** The enhancement orb test bench (src/client/orbPreview.ts), loaded only when this tab opens. */
+async function renderOrbs(): Promise<void> {
+  const box = h('div', { class: 'orb-bench' }, 'กำลังโหลด…');
+  view.append(box);
+  try {
+    const { mountOrbPreview } = await import('../client/orbPreview');
+    if (tab !== 'orbs' || !box.isConnected) return;
+    const stop = await mountOrbPreview(box, 'ทดลองหน้าตาลูกแก้วเท่านั้น ไม่เปลี่ยนอะไรในเกม · เดิน: WASD / ลูกศร หรือคลิกพื้น');
+    if (tab !== 'orbs' || !box.isConnected) stop();
+    else stopOrbs = stop;
+  } catch (e) {
+    box.textContent = `โหลดไม่สำเร็จ: ${(e as Error).message}`;
+  }
 }
 
 function stopRefresh(): void {
