@@ -20,6 +20,7 @@ import {
 import { shutdownCancelled, type ShutdownMode } from '../src/shared/net/protocol';
 import { BAG_SIZE, type CharacterData, type Player } from '../src/shared/sim/Player';
 import { expToNext, MAX_LEVEL } from '../src/shared/formulas';
+import { gatesPassedBy } from '../src/shared/data/bossGates';
 import { ZONES, zoneById } from '../src/shared/data/zones';
 import { ITEM_BASES, makeItem } from '../src/shared/data/items';
 import { CLASS_IDS } from '../src/shared/data/classes';
@@ -56,7 +57,7 @@ export function log(db: Db, a: Admin, action: string, target: string, details: s
 }
 
 /** The fields an edit touches; a live Player and a saved CharacterData both have them. */
-interface Editable { level: number; exp: number; gold: number; bag: (BagEntry | null)[] }
+interface Editable { level: number; exp: number; gold: number; bag: (BagEntry | null)[]; bossKills?: string[] }
 
 const freeSlots = (bag: (BagEntry | null)[]): number => {
   let n = 0;
@@ -220,6 +221,8 @@ function editCharacter(db: Db, world: GameWorld, a: Admin, charId: number, what:
       const before = `Lv.${d.level} EXP ${d.exp}`;
       d.level = level;
       d.exp = exp;
+      // Raising the level also passes the gates below it (a lower level keeps what was already killed).
+      d.bossKills = [...new Set([...(d.bossKills ?? []), ...gatesPassedBy(level)])];
       if (live) {
         live.recompute();
         if (live.alive) {

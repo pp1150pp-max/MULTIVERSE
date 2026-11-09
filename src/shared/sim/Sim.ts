@@ -2,7 +2,8 @@
 // to show effects, damage numbers and messages.
 import { HUB_ID, ZONES, inSafeArea, type SafeArea, type ZoneDef, type SpawnArea } from '../data/zones';
 import { MONSTERS } from '../data/monsters';
-import { expGapMult, expToNext, mitigate, MAX_LEVEL, MISS_GAP, outLevelled } from '../formulas';
+import { AUTO_EXP_MULT, expGapMult, expToNext, mitigate, MAX_LEVEL, MISS_GAP, outLevelled } from '../formulas';
+import { blockingGate, BOSS_GATE_IDS } from '../data/bossGates';
 import { lineRanges, rerollStat, rerollValues, rollItem } from '../data/items';
 import { REROLL_NAME, rerollCost, type RerollKind } from '../data/reroll';
 import { inBossArena, LAVA_BURN, LAVA_TICK } from '../data/zones';
@@ -11,13 +12,13 @@ import {
   ANNOUNCE_FROM, dropsOnFail, enhanceCost, itemName, MAX_PLUS, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
 } from '../data/enhance';
 import { entryName, potionName, POTION_STACK, POTIONS, stackLimit } from '../data/potions';
-import { BOSS_STONE_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, STONE_COLOR, STONE_NAME } from '../data/stones';
+import { BOSS_KEY, BOSS_STONE_CHANCE, KEY_DROP_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, STONE_COLOR, STONE_NAME } from '../data/stones';
 import { NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { pick, rand, randInt } from '../rng';
 import { splitExp } from '../party';
 import { CLASS_IDS } from '../data/classes';
 import {
-  isItem, isPotion, isStack, isStone, RARITY_LABEL, sameStack, SLOT_LABEL, STONE_KINDS, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
+  isItem, isPotion, isStack, isStone, RARITY_LABEL, sameStack, SLOT_LABEL, BLACKSMITH_STONES, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
 import { PORTAL_RANGE, REST_CD, restSpotNear, Terrain, type RestSpot } from './terrain';
 import {
   BUYBACK_RESET, buybackPrice, cleanAutoSettings, lootPots, Player, sortEntries,
@@ -33,6 +34,8 @@ import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type S
 /** Gear of this rarity that "sell all" may take: never potions or enhanced items. */
 /** Seconds of warning before a freshly summoned minion pounces. */
 const MINION_POUNCE_WINDUP = 0.35;
+/** Hub spawn: random distance from the fountain centre, between these (fountain blocks ~1.7, rest range 4.5). */
+const HUB_SPAWN_RING: [number, number] = [2.8, 4.3];
 /** Drops land where a player of this radius could stand (Player.radius), so they can always be picked up. */
 const LOOT_STAND_R = 0.4;
 /** A vanished boss gives up on its fight when no living player has been this close for VANISH_GIVE_UP seconds. */
@@ -164,8 +167,7 @@ export class Sim {
       p.face(-back.x, -back.z);
       p.portalReady = false;
     } else {
-      p.x = this.spawnAt.x;
-      p.z = this.spawnAt.z;
+      ({ x: p.x, z: p.z } = this.spawnPoint());
     }
     this.players.push(p);
     return p;
@@ -253,10 +255,21 @@ export class Sim {
 
   // ------------------------------------------------------------ combat
 
-  /** Where players appear and wake up: by the campfire, or in the hub on the camera's side of the fountain. */
-  get spawnAt(): { x: number; z: number } {
+  /**
+   * Where players appear and wake up: by the campfire, or in the hub at a random spot on a ring around
+   * the fountain (owner: after a restart everyone landed on one point), within its rest range.
+   */
+  spawnPoint(): { x: number; z: number } {
     const s = this.zone.start;
-    return this.zone.npcs ? { x: s.x + 3, z: s.z + 3 } : { x: s.x - 2, z: s.z - 2 };
+    if (!this.zone.npcs) return { x: s.x - 2, z: s.z - 2 };
+    for (let i = 0; i < 20; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const d = HUB_SPAWN_RING[0] + Math.random() * (HUB_SPAWN_RING[1] - HUB_SPAWN_RING[0]);
+      const x = s.x + Math.cos(a) * d;
+      const z = s.z + Math.sin(a) * d;
+      if (!this.terrain.isBlocked(x, z, 0.5)) return { x, z };
+    }
+    return { x: s.x + 3, z: s.z + 3 };
   }
 
   /** Inside the zone's safe area (the hub's town): nobody fights there. */
@@ -516,12 +529,28 @@ export class Sim {
       const mates = p.partyId === null ? [] : this.players.filter((o) => o !== p && o.alive && o.partyId === p.partyId);
       const { keep, shares } = splitExp(exp, p.level, mates.map((o) => o.level));
       const shared = keep < exp;
+      const mine = this.autoExp(p, keep);
       this.text(m.x, m.topY + 0.4, m.z,
-        mult < 1 ? `+${keep} EXP (−${Math.round((1 - mult) * 100)}%)` : `+${keep} EXP${shared ? ' (แบ่งปาร์ตี้)' : ''}`, 'exp', 1.1, p.id);
-      gained.set(p, (gained.get(p) ?? 0) + keep);
+        mult < 1 ? `+${mine} EXP (−${Math.round((1 - mult) * 100)}%)` : `+${mine} EXP${shared ? ' (แบ่งปาร์ตี้)' : ''}`, 'exp', 1.1, p.id);
+      gained.set(p, (gained.get(p) ?? 0) + mine);
       mates.forEach((o, i) => {
-        if (shares[i] > 0) gained.set(o, (gained.get(o) ?? 0) + shares[i]);
+        if (shares[i] > 0) gained.set(o, (gained.get(o) ?? 0) + this.autoExp(o, shares[i]));
       });
+    }
+    // Killing a gate boss unlocks the gate for everyone who hit it and everyone sharing its EXP.
+    if (BOSS_GATE_IDS.has(m.def.id)) {
+      const killers = new Set<Player>(gained.keys());
+      for (const id of m.damageBy.keys()) {
+        const p = this.players.find((x) => x.id === id);
+        if (p) killers.add(p);
+      }
+      for (const p of killers) {
+        if (!p.bossKills.includes(m.def.id)) {
+          p.bossKills.push(m.def.id);
+          this.events.push({ t: 'save', to: p.id });
+        }
+        if (!gained.has(p)) gained.set(p, 0);
+      }
     }
     // Levels go up after every share is worked out, so a level-up mid-kill can't change who is eligible.
     for (const [p, exp] of gained) {
@@ -569,8 +598,7 @@ export class Sim {
     p.mp = p.stats.maxMp;
     p.stunT = 0;
     p.kbx = p.kbz = 0;
-    p.x = this.spawnAt.x;
-    p.z = this.spawnAt.z;
+    ({ x: p.x, z: p.z } = this.spawnPoint());
     p.moveTarget = null;
     for (const m of this.monsters) if (m.target === p) m.calm();
     this.events.push({ t: 'revived', id: p.id });
@@ -580,10 +608,25 @@ export class Sim {
     if (this.zone.id !== HUB_ID) this.events.push({ t: 'travel', to: p.id, zone: HUB_ID, atCamp: true });
   }
 
+  /** EXP this player really gets from `n`: half while Auto Play is on. */
+  private autoExp(p: Player, n: number): number {
+    return p.autoOn ? Math.floor(n * AUTO_EXP_MULT) : n;
+  }
+
   private addExp(p: Player, n: number): void {
     if (p.level >= MAX_LEVEL) return;
     p.exp += n;
     while (p.level < MAX_LEVEL && p.exp >= expToNext(p.level)) {
+      const gate = blockingGate(p.level, p.bossKills);
+      if (gate) {
+        // Full bar, the rest is lost, until the boss is killed.
+        p.exp = expToNext(p.level);
+        if (p.gateHintedAt !== p.level) {
+          p.gateHintedAt = p.level;
+          this.log(`ต้องลงบอส ${gate.nameTh} ก่อนถึงจะเลเวลเกิน ${gate.level} ได้ — EXP เต็มหลอดแล้ว ส่วนที่เกินจะหายไป`, '#ffb060', p.id);
+        }
+        break;
+      }
       p.exp -= expToNext(p.level);
       p.level++;
       p.recompute();
@@ -630,7 +673,7 @@ export class Sim {
       this.spawnLoot(m, { type: 'potion', pot: 'hp', size: 's', count: DROP_POTION_MULT }, owner, party);
       this.spawnLoot(m, { type: 'potion', pot: 'mp', size: 's', count: DROP_POTION_MULT }, owner, party);
       // Every blacksmith stone kind can drop from a boss, each rolled on its own.
-      for (const stone of STONE_KINDS) {
+      for (const stone of BLACKSMITH_STONES) {
         if (r() < (loot?.stoneChance ?? BOSS_STONE_CHANCE)) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner, party);
       }
       return;
@@ -642,6 +685,9 @@ export class Sim {
       for (const stone of MONSTER_STONES) {
         if (r() < MONSTER_STONE_CHANCE) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner, party);
       }
+      // The key of its home map's boss, wherever it stands (its map or the hub).
+      const key = home?.boss && BOSS_KEY[home.boss.monster];
+      if (key && r() < KEY_DROP_CHANCE) this.spawnLoot(m, { type: 'stone', stone: key, count: 1 }, owner, party);
     }
   }
 

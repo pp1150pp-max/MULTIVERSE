@@ -468,7 +468,7 @@ export class World {
       uRight: { value: CAM_RIGHT },
       uUp: { value: CAM_UP },
     };
-    this.shadowMat = new THREE.MeshBasicMaterial({ map: fxTex.shadow, transparent: true, depthWrite: false, opacity: 0.4 });
+    this.shadowMat = new THREE.MeshBasicMaterial({ map: fxTex.propShadow, transparent: true, depthWrite: false, opacity: 0.4 });
 
     this.groundCanvas = this.paintGround(mulberry32(terrain.zone.seed));
     const t = this.pal.tiles;
@@ -1262,8 +1262,12 @@ export class World {
     // Long town-wall pieces stand on a line, not a spot: a round shadow under each would only blot the ground.
     if (!key.startsWith('town_wall')) {
       const sd = this.add(new THREE.Mesh(this.shadowGeo, this.shadowMat));
+      // Turn the oval to the camera's 45 degrees so it lies flat across the screen (its long side
+      // along CAM_RIGHT), and nudge it away from the camera so it sits under the base, not in front.
+      sd.rotation.y = Math.PI / 4;
       sd.scale.set(w * 0.8, 1, w * 0.45);
-      sd.position.set(x, 0.015, z);
+      const back = w * 0.1 * Math.SQRT1_2;
+      sd.position.set(x - back, 0.015, z - back);
     }
     if (fade) this.fadeables.push({ mat, x, z, w, h: height, o: 1 });
   }

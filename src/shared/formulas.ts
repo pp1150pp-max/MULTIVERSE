@@ -14,11 +14,24 @@ function expBandMult(level: number): number {
   return 1;
 }
 
+/**
+ * Extra owner-set ramp on top of expBandMult (2026-11-09): ×1 up to Lv 19, rising linearly to ×2 at Lv 30,
+ * then linearly to ×3 at Lv 49.
+ */
+function expRampMult(level: number): number {
+  if (level < 20) return 1;
+  if (level <= 30) return 1 + (level - 20) / 10;
+  return 2 + (level - 30) / 19;
+}
+
 /** EXP needed to go from `level` to `level + 1`. Steep on purpose so players move on to higher zones. */
 export function expToNext(level: number): number {
   const base = Math.floor(30 * Math.pow(level, 2.1)) + 40;
-  return Math.floor(base * expBandMult(level));
+  return Math.floor(base * expBandMult(level) * expRampMult(level));
 }
+
+/** Auto Play earns this share of every EXP gain (own kills and party shares alike). */
+export const AUTO_EXP_MULT = 0.5;
 
 /** Monsters up to this many levels below the player still give full EXP. */
 export const EXP_GAP_FREE = 3;

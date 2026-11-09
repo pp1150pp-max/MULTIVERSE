@@ -142,7 +142,7 @@ export class Floating {
       }
       b.el.style.display = '';
       // Above the nameplate (own character has no plate, so it sits a little lower).
-      const lift = p === g.player ? 20 : 40;
+      const lift = p === g.player ? 14 : 32;
       b.el.style.transform = `translate(${s.sx}px, ${s.sy - lift}px) translate(-50%, -100%)`;
     }
   }
@@ -159,8 +159,8 @@ export class Floating {
     this.bossTimerEl.style.transform = `translate(${s.sx}px, ${s.sy}px) translate(-50%, -100%)`;
   }
 
-  /** Small label above an NPC, or hidden when text is null. */
-  npcPrompt(g: Game, x: number, y: number, z: number, text: string | null): void {
+  /** Small label above an NPC, or hidden when text is null. liftPx raises it further, in screen pixels. */
+  npcPrompt(g: Game, x: number, y: number, z: number, text: string | null, liftPx = 0): void {
     if (!text) {
       this.prompt.classList.add('hidden');
       return;
@@ -168,7 +168,17 @@ export class Floating {
     const s = g.toScreen(x, y, z);
     this.prompt.textContent = text;
     this.prompt.classList.remove('hidden');
-    this.prompt.style.transform = `translate(${s.sx}px, ${s.sy}px) translate(-50%, -100%)`;
+    this.prompt.style.transform = `translate(${s.sx}px, ${s.sy - liftPx}px) translate(-50%, -100%)`;
+  }
+
+  /** Height in pixels of the badge over this rest spot, so the press-T label can sit above it. */
+  restBadgeHeight(i: number): number {
+    return this.restEls[i]?.offsetHeight ?? 0;
+  }
+
+  /** World height the badge over a rest spot is pinned to: above the fountain's statue, or the campfire's flames. */
+  static restBadgeY(kind: RestSpot['kind']): number {
+    return kind === 'fountain' ? 4.4 : 1.9;
   }
 
   /** Badge over the fountain and each campfire: that resting there restores HP/MP, and when it can be used again. */
@@ -190,7 +200,7 @@ export class Floating {
       if (roleEl.textContent !== role) roleEl.textContent = role;
       if (nameEl.textContent !== name) nameEl.textContent = name;
       el.classList.toggle('waiting', readyIn > 0);
-      const s = g.toScreen(r.x, r.kind === 'fountain' ? 4.4 : 1.9, r.z);
+      const s = g.toScreen(r.x, Floating.restBadgeY(r.kind), r.z);
       el.classList.toggle('hidden', !s.on);
       el.style.transform = `translate(${s.sx}px, ${s.sy}px) translate(-50%, -100%)`;
     });

@@ -7,6 +7,7 @@ import * as api from './net/api';
 import { connectOnline, type OnlineBackend } from './net/online';
 import { skillIcon } from './icons';
 import { AFTER_EXIT_KEY } from './sysmenu';
+import { showLoading } from './loadingScreen';
 
 export type Launcher = (backend: OnlineBackend) => void;
 
@@ -34,23 +35,15 @@ export function portrait(key: string, size: number): HTMLCanvasElement {
  * background while the menu is up). Runs before connecting, so the character doesn't stand
  * in the world unseen while a slow link finishes the download.
  */
-async function waitForGameAssets(): Promise<void> {
+async function waitForGameAssets(classId: ClassId | null): Promise<void> {
   if (gameAssetsReady()) return;
-  const el = $('loading');
-  el.innerHTML =
-    '<div class="load-box"><div>กำลังโหลดภาพในเกม… <span id="load-pct">0%</span></div>' +
-    '<div class="load-bar"><i id="load-fill"></i></div></div>';
-  el.classList.remove('hidden');
-  const stop = onAssetProgress((f) => {
-    const pct = `${Math.floor(f * 100)}%`;
-    $('load-pct').textContent = pct;
-    $('load-fill').style.width = pct;
-  });
+  const screen = showLoading(classId);
+  const stop = onAssetProgress((f) => screen.progress(f));
   try {
     await loadGameAssets();
   } finally {
     stop();
-    el.classList.add('hidden');
+    screen.hide();
   }
 }
 
@@ -160,7 +153,7 @@ class GuestMenu {
     this.busy = true;
     $('guest-error').textContent = 'กำลังเข้าสู่โลก…';
     try {
-      await waitForGameAssets();
+      await waitForGameAssets(this.char?.classId ?? null);
       const backend = await connectOnline(token, charId);
       $('guest-error').textContent = '';
       this.launch(backend);
@@ -211,7 +204,7 @@ class OnlineMenu {
     btn.disabled = true;
     $('char-error').textContent = 'กำลังเข้าสู่โลก…';
     try {
-      await waitForGameAssets();
+      await waitForGameAssets(this.chars.find((c) => c.id === this.selected)?.classId ?? null);
       const backend = await connectOnline(token, this.selected);
       $('char-error').textContent = '';
       this.launch(backend);

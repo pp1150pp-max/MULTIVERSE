@@ -14,7 +14,7 @@ import type {
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { itemNames, makeItem, roundStat, rowRanges, tierOf } from '../shared/data/items';
 import { checkShutdownText, SHUTDOWN_SECONDS, SHUTDOWN_TEXT_MAX, SHUTDOWN_TIME_TOKEN, shutdownWarning, type ShutdownMode } from '../shared/net/protocol';
-import { isStack, RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, SLOTS, STAT_KEYS, STAT_LABEL, STONE_KINDS, type BagEntry, type ClassId, type Item, type Rarity } from '../shared/types';
+import { isStack, RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, SLOTS, STAT_KEYS, STAT_LABEL, BLACKSMITH_STONES, BOSS_KEYS, type BagEntry, type ClassId, type Item, type Rarity } from '../shared/types';
 
 const ADMIN_TOKEN = 'multiverse-admin-token';
 /** The game's own login: used when the owner is already logged in to the game in this browser. */
@@ -549,7 +549,8 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
     // Potions and blacksmith stones share the list; their value is "potion:hp:l" / "stone:protect".
     base.append(
       h('optgroup', { label: 'ยา' }, ...(['hp', 'mp'] as const).flatMap((k) => POTION_SIZES.map((sz) => h('option', { value: `potion:${k}:${sz}` }, potionName(k, sz))))),
-      h('optgroup', { label: 'หินช่างตีเหล็ก' }, ...STONE_KINDS.map((k) => h('option', { value: `stone:${k}` }, STONE_NAME[k]))),
+      h('optgroup', { label: 'หินช่างตีเหล็ก' }, ...BLACKSMITH_STONES.map((k) => h('option', { value: `stone:${k}` }, STONE_NAME[k]))),
+      h('optgroup', { label: 'กุญแจห้องบอส (Artifact)' }, ...BOSS_KEYS.map((k) => h('option', { value: `stone:${k}` }, STONE_NAME[k]))),
     );
     if ([...base.options].some((o) => o.value === keep)) base.value = keep;
   };
@@ -858,7 +859,8 @@ async function renderMail(): Promise<void> {
     }
     pick.append(
       h('optgroup', { label: 'ยา' }, ...(['hp', 'mp'] as const).flatMap((k) => POTION_SIZES.map((sz) => h('option', { value: `potion:${k}:${sz}` }, potionName(k, sz))))),
-      h('optgroup', { label: 'หินช่างตีเหล็ก' }, ...STONE_KINDS.map((k) => h('option', { value: `stone:${k}` }, STONE_NAME[k]))),
+      h('optgroup', { label: 'หินช่างตีเหล็ก' }, ...BLACKSMITH_STONES.map((k) => h('option', { value: `stone:${k}` }, STONE_NAME[k]))),
+      h('optgroup', { label: 'กุญแจห้องบอส (Artifact)' }, ...BOSS_KEYS.map((k) => h('option', { value: `stone:${k}` }, STONE_NAME[k]))),
     );
     const rarity = h('select', {}, ...m.rarities.map((r) => h('option', { value: r, style: `color:${RARITY_COLOR[r]}` }, RARITY_LABEL[r])));
     const plus = h('select', {}, ...Array.from({ length: m.maxPlus + 1 }, (_, i) => h('option', { value: String(i) }, `+${i}`)));

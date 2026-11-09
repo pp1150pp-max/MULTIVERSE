@@ -6,6 +6,7 @@ import type { Intent } from './types';
 import { castSkill, basicAttack } from './skills';
 import { CLASSES, type ClassDef, type SkillDef, type SkillSlot } from '../data/classes';
 import { addInto, BASE_MOVE_SPEED, emptyStats } from '../formulas';
+import { gatesPassedBy } from '../data/bossGates';
 import { auraTier, effectiveStats, orbCodes, plusOf, sellValue } from '../data/enhance';
 import { itemClass, starterWeapon, upgradeItem } from '../data/items';
 import { anyStackValue, potionHeal, POTIONS, POTION_SIZES, POTION_STACK, stackLimit } from '../data/potions';
@@ -179,6 +180,11 @@ export interface CharacterData {
   buyback?: BuybackEntry[];
   /** Seconds of play left before the buyback list clears. Missing = a full BUYBACK_RESET. */
   buybackLeft?: number;
+  /**
+   * Gate bosses (BOSS_GATES) this character has killed. Missing in older saves: every gate below the
+   * level counts as passed.
+   */
+  bossKills?: string[];
 }
 
 /**
@@ -250,6 +256,12 @@ export class Player extends Unit {
   /** Sim time of the last basic attack or skill (ranged players rarely get hurt, so this counts as combat too). */
   lastAttack = -99;
   moveTarget: Vec2 | null = null;
+  /** Gate bosses killed (see BOSS_GATES). Saved. */
+  bossKills: string[];
+  /** True while Auto Play runs for this player (set by the server each tick); Sim halves their EXP. Never saved. */
+  autoOn = false;
+  /** Told once per stuck level that a boss gate is holding the EXP bar. Never saved. */
+  gateHintedAt = 0;
   /** Shown once per session when low-level monsters start giving less EXP. */
   lowExpHinted = false;
   /** Told once that monsters far above them can't be hit. */
@@ -290,6 +302,7 @@ export class Player extends Unit {
     this.equipment = { ...data.equipment };
     this.bag = Array.from({ length: BAG_SIZE }, (_, i) => data.bag[i] ?? null);
     this.zone = data.zone;
+    this.bossKills = [...new Set([...gatesPassedBy(data.level), ...(Array.isArray(data.bossKills) ? data.bossKills.filter((x) => typeof x === 'string') : [])])];
     this.potSel = { hp: 's', mp: 's', ...data.potSel };
     this.lootFilter = data.lootFilter
       ? { ...data.lootFilter, rarities: [...data.lootFilter.rarities], pots: lootPots(data.lootFilter) }
@@ -387,6 +400,7 @@ export class Player extends Unit {
       autoSettings: this.autoSettings,
       buyback: this.buyback,
       buybackLeft: Math.round(this.buybackLeft),
+      bossKills: this.bossKills,
     };
   }
 
