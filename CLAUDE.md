@@ -73,5 +73,6 @@ npm run stop-server -- --restart # เหมือนกัน แต่ npm run
 | คลัง และตลาดฝากขาย | คลังร่วมทั้งบัญชี 30–90 ช่อง · ตลาด 5%+5% 48 ชม. กล่องรับของที่ NPC · Guest ใช้ไม่ได้ | [stash-and-market.md](docs/systems/stash-and-market.md) |
 | Login, Guest, /admin | ปุ่ม Guest Login ปิดอยู่ · Guest ลบเมื่อไม่ออนไลน์ 24 ชม. · admin role owner/gm, `FEATURE_ROLES`, `admin_audit` | [accounts-and-admin.md](docs/systems/accounts-and-admin.md) |
 | ปาร์ตี้ | สูงสุด 3 ตัว (บัญชีละ 1) ไม่ใช่ Guest · หัวหน้าชวน/เตะ · หลุดได้ 60 วิ · ไม่เซฟ · ของดรอปแชร์ทั้งปาร์ตี้ · EXP เก็บ 50% แบ่ง 50% ให้คนแมพเดียวกันที่ไม่ต่ำกว่า 5 เลเวล | [party.md](docs/systems/party.md) |
+| เทรดระหว่างผู้เล่น | ไม่ใช่ Guest แมพเดียวกัน บัญชีเดียวกันเทรดกันเองไม่ได้ · 8 ช่อง+ทอง · ยืนยันทั้งคู่แล้วนับ 3 วิ แก้ข้อเสนอ = ยืนยันถูกรีเซ็ตทั้งคู่ · ภาษีทองผู้ส่ง 3% (ผู้รับได้ 97%) · แลกใน transaction เดียว · ตาย/หลุด/เปลี่ยนแมพ = ยกเลิก · ประวัติใน /admin | [trade.md](docs/systems/trade.md) |
 | กล่องจดหมาย | owner ส่งถึงตัวละคร/บัญชี/ทุกตัวละคร/ทุกบัญชี (Guest ไม่ได้) พร้อมของแนบ ≤ 10 ชิ้น · รับ all-or-nothing ครั้งเดียว · ลบไม่ได้ถ้ายังมีของแนบ · หมดอายุ 30 วัน · ดึงกลับได้เฉพาะสำเนาที่ยังไม่รับ | [mail.md](docs/systems/mail.md) |
 | ปิด/รีสตาร์ท server, สำรอง DB | countdown เสมอ · exit code 75 = รีสตาร์ท · backup `VACUUM INTO` | [server-ops.md](docs/systems/server-ops.md) |

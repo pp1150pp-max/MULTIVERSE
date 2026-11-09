@@ -104,7 +104,7 @@ export interface AdminShutdownText { texts: Record<ShutdownMode, string>; defaul
 // ------------------------------------------------------------ owner tools (users, bans, broadcast, backups…)
 
 /** The newer admin tools. Each is its own switch so some can be opened to GMs later. */
-export type AdminFeature = 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail';
+export type AdminFeature = 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog';
 
 /**
  * Who may use each tool. To open one to GMs, add 'gm', e.g. `ban: ['owner', 'gm']`. The server
@@ -127,6 +127,8 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   shutdownText: ['owner'],
   // The Mail tab: send mail (with gold / items attached) to players, see who read it, pull it back.
   mail: ['owner'],
+  // The Trades tab: every completed player-to-player trade (who, items, gold, tax).
+  tradeLog: ['owner'],
 };
 
 export const canUse = (role: AdminRole, f: AdminFeature): boolean => FEATURE_ROLES[f].includes(role);

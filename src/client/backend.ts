@@ -120,4 +120,17 @@ export interface Backend {
   partySearch(q: string): Promise<PartyFound[]>;
   /** The "don't accept party invites" setting. */
   setPartyBlock(on: boolean): void;
+
+  // Trade (the server checks every rule; see server/trade.ts). Answers come back as hooks on the backend.
+  tradeRequest(name: string): void;
+  tradeAnswer(from: number, yes: boolean): void;
+  /** Offer bag slot `slot` (a part `n` of a potion/stone stack, or all of it). */
+  tradeAdd(slot: number, n?: number): void;
+  tradeRemove(slot: number): void;
+  tradeGold(amount: number): void;
+  /** Confirm the offer as shown (`ver` from the TradeView). */
+  tradeConfirm(ver: number): void;
+  tradeCancel(): void;
+  /** The "don't accept trade requests" setting. */
+  setTradeBlock(on: boolean): void;
 }

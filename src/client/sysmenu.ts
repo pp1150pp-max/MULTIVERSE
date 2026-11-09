@@ -24,9 +24,12 @@ const PARTY_ICON = badge('blank', '👥');
 /** Mail has no painted badge yet (a friend adds ico_mail.png later): the blank one with a glyph. Swap for badge('mail'). */
 const MAIL_ICON = badge('blank', '✉');
 
+/** Trade has no painted badge yet: the blank one with a glyph. Swap for badge('trade') once ico_trade.png exists. */
+const TRADE_ICON = badge('blank', '🤝');
+
 /** Icon grid, 3 columns: [action, icon, label]. Only systems that exist; add a tile when a new one is built. */
 const MENU_ITEMS: [string, string, string][] = [
-  ['bag', badge('bag'), 'กระเป๋า'], ['party', PARTY_ICON, 'ปาร์ตี้'], ['mail', MAIL_ICON, 'จดหมาย'], ['map', badge('map'), 'แผนที่'],
+  ['bag', badge('bag'), 'กระเป๋า'], ['party', PARTY_ICON, 'ปาร์ตี้'], ['trade', TRADE_ICON, 'เทรด'], ['mail', MAIL_ICON, 'จดหมาย'], ['map', badge('map'), 'แผนที่'],
   ['autoset', badge('autoset'), 'ตั้งค่า Auto'], ['audio', badge('blank', '🔊'), 'เสียง'], ['help', badge('help'), 'วิธีเล่น'],
   ['settings', badge('settings'), 'ตั้งค่า'],
 ];
@@ -55,7 +58,7 @@ export class SystemMenu {
     const row = document.createElement('div');
     row.id = 'hud-iconrow';
     // Guests get no mail, so they have no mail icon.
-    const noMail = ([id]: string[]) => !(guest && (id === 'mail' || id === 'top-mail'));
+    const noMail = ([id]: string[]) => !(guest && (id === 'mail' || id === 'top-mail' || id === 'trade'));
     row.innerHTML = TOP_ICONS.filter(noMail).map(
       ([id, icon, label]) =>
         `<button id="${id}" class="top-icon"${id ? '' : ' disabled'}><span class="sys-ico">${icon}</span><span class="sys-label">${label}</span><i class="badge hidden" data-badge="${label}"></i></button>`,
@@ -94,6 +97,7 @@ export class SystemMenu {
         <button data-act="hudstyle" id="sys-hudstyle"></button>
         <button data-act="help">ปุ่มลัด / วิธีเล่น</button>
         <button data-act="partyblock" id="sys-partyblock"></button>
+        ${guest ? '' : '<button data-act="tradeblock" id="sys-tradeblock"></button>'}
         <div class="sys-sep"></div>
         <button data-act="chars">${guest ? 'กลับไปหน้า Guest' : 'กลับไปเลือกตัวละคร'}</button>
         <button data-act="logout">${guest ? 'กลับหน้าแรก' : 'ออกจากระบบ'}</button>
@@ -146,6 +150,8 @@ export class SystemMenu {
   onEscape(): void {
     if (this.exit) return this.cancelExit('ยกเลิกการออก');
     if (this.open) return this.toggle(false);
+    // Esc closes the trade window = cancels the trade (nothing left the bags, so nothing to return).
+    if (this.g.trade.open && !this.g.hud.hasOverlay()) return this.g.trade.cancel();
     if (this.g.hud.anyPanelOpen()) return this.g.hud.closePanels();
     this.toggle(true);
   }
@@ -180,6 +186,8 @@ export class SystemMenu {
     this.panel.querySelectorAll<HTMLElement>('.sys-view').forEach((el) => el.classList.toggle('hidden', el.dataset.view !== v));
     $('sys-hudstyle').textContent = $('btn-hud-style').textContent;
     $('sys-partyblock').textContent = `${this.g.party.block ? '☑' : '☐'} ไม่รับคำชวนปาร์ตี้`;
+    const tb = document.getElementById('sys-tradeblock');
+    if (tb) tb.textContent = `${this.g.trade.block ? '☑' : '☐'} ไม่รับคำขอเทรด`;
   }
 
   private onAct(act: string): void {
@@ -196,6 +204,12 @@ export class SystemMenu {
       case 'party':
         this.toggle(false);
         return this.g.party.toggle(true);
+      case 'trade':
+        this.toggle(false);
+        return this.g.trade.toggleFind(true);
+      case 'tradeblock':
+        this.g.trade.setBlock(!this.g.trade.block);
+        return this.showView('settings');
       case 'mail':
         this.toggle(false);
         return this.g.mailUI.toggle(true);

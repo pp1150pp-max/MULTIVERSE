@@ -26,6 +26,7 @@ import { Mail } from './mail';
 import type { MailCall } from '../src/shared/mail';
 import type { MarketCall } from '../src/shared/sim/market';
 import { Parties, type PartyChar } from './party';
+import { Trades, type TradeActor } from './trade';
 import { PARTY_SEARCH_LIMIT, PARTY_SEARCH_MAX, type PartyFound, type PartySnap } from '../src/shared/party';
 
 const AUTOSAVE_MS = 30_000;
@@ -41,6 +42,18 @@ const MARKET_JOIN_NOTE_MS = 3000;
 const SKILL_KEYS: SkillSlot[] = ['q', 'e', 'r'];
 /** Fastest a client may search for players to invite. */
 const PARTY_SEARCH_MS = 250;
+/**
+ * Actions that move bag items, gold or gear: refused while the player has a trade window open, so what
+ * was offered stays put (the swap checks it all again anyway). Picking things up, resting, Auto, chat and
+ * party actions are fine.
+ */
+const TRADE_LOCKED = new Set([
+  'equip', 'unequip', 'drop', 'buy', 'move', 'sort', 'buyBack', 'sell', 'split', 'sellRarity', 'enhance', 'reroll',
+  'stashPut', 'stashTake', 'stashMove', 'stashSort', 'stashBuy', 'stashGold', 'stashSplit',
+  'mktSearch', 'mktMine', 'mktList', 'mktCancel', 'mktBuy', 'mktClaim',
+  'mailList', 'mailRead', 'mailClaim', 'mailDelete', 'mailDeleteRead',
+]);
+const TRADE_LOCKED_MSG = 'กำลังเทรดอยู่ — ปิดหน้าต่างเทรดก่อนถึงจะจัดการของได้';
 const PARTY_GUEST_MSG = 'Guest ใช้ระบบปาร์ตี้ไม่ได้ — สมัครสมาชิกเพื่อใช้งาน';
 /**
  * How a session ends: `quit` (left on purpose, kicked, server stopping) leaves the party at once,
@@ -121,6 +134,8 @@ interface Session {
   blockInvites: boolean;
   /** When this session last searched for players to invite (performance.now()). */
   lastPartySearchAt: number;
+  /** The player turned trade requests off (a browser setting, sent after joining). */
+  blockTrades: boolean;
 }
 
 const num = (v: unknown, fallback = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
@@ -192,6 +207,8 @@ export class GameWorld {
   readonly mail: Mail;
   /** Parties, keyed on character ids (in memory only: a restart ends them). */
   readonly parties: Parties;
+  /** Player-to-player trades (in memory only). */
+  readonly trades: Trades;
   /** Set while the server counts down to stopping: no new players may join. */
   private closing: ShutdownMode | null = null;
   private last = performance.now();
@@ -224,6 +241,33 @@ export class GameWorld {
       tell: (charId, text) => this.partyLine(charId, text),
     });
     setInterval(() => this.parties.tick(), 1000);
+    this.trades = new Trades(db, {
+      actor: (charId) => {
+        const s = this.sessionOfChar(charId);
+        return s ? this.tradeActor(s) : undefined;
+      },
+      requested: (to, from, name, seconds) => {
+        const s = this.sessionOfChar(to);
+        if (s) this.send(s.ws, { t: 'tradeRequest', from, name, seconds });
+      },
+      requestGone: (to, from) => {
+        const s = this.sessionOfChar(to);
+        if (s) this.send(s.ws, { t: 'tradeRequestGone', from });
+      },
+      tell: (charId, text) => {
+        const s = this.sessionOfChar(charId);
+        if (s) this.send(s.ws, { t: 'chat', name: '', text });
+      },
+      view: (charId, view) => {
+        const s = this.sessionOfChar(charId);
+        if (s) this.send(s.ws, { t: 'trade', view });
+      },
+      ended: (charId, ok, msg) => {
+        const s = this.sessionOfChar(charId);
+        if (s) this.send(s.ws, { t: 'tradeEnd', ok, msg });
+      },
+    });
+    setInterval(() => this.trades.tick(), 250);
     this.expireMarket();
     setInterval(() => this.expireMarket(), MARKET_EXPIRE_MS);
   }
@@ -328,7 +372,7 @@ export class GameWorld {
       auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, saveDue: null,
       ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
-      totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity,
+      totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity, blockTrades: false,
     };
     try {
       s.playRow = this.db.startPlaySession({ accountId: acc.id, username: acc.username, guest: acc.guest, charId, charName: player.name, ip });
@@ -349,6 +393,8 @@ export class GameWorld {
 
   private leave(s: Session, how: LeaveHow = 'quit'): void {
     if (!this.sessions.has(s)) return;
+    // Whatever the reason (quit, lost connection, a login from elsewhere): the trade ends, nothing moves.
+    this.trades.cancelChar(s.charId, `${s.player.name} ออกจากเกม`);
     this.save(s);
     if (how === 'quit') this.parties.leave(s.charId);
     else if (how === 'drop') {
@@ -565,6 +611,17 @@ export class GameWorld {
       return;
     }
     if (typeof m.a === 'string' && m.a.startsWith('party')) return this.onParty(s, m);
+    if (typeof m.a === 'string' && m.a.startsWith('trade')) return this.onTrade(s, m);
+    if (TRADE_LOCKED.has(m.a) && this.trades.busy(s.charId)) {
+      this.send(s.ws, { t: 'chat', name: '', text: TRADE_LOCKED_MSG });
+      // The market and the mailbox wait for an answer: tell them "no" so their windows don't hang.
+      const req = num((m as { req?: unknown }).req, -1);
+      if (req >= 0 && m.a.startsWith('mkt')) this.send(s.ws, { t: 'market', req, ok: false, msg: TRADE_LOCKED_MSG });
+      else if (req >= 0 && m.a.startsWith('mail')) this.send(s.ws, { t: 'mail', req, ok: false, msg: TRADE_LOCKED_MSG });
+      else if (m.a === 'enhance') this.send(s.ws, { t: 'enhanced', req: num((m as { req?: unknown }).req), result: null, item: null });
+      else if (m.a === 'reroll') this.send(s.ws, { t: 'rerolled', req: num((m as { req?: unknown }).req), item: null });
+      return;
+    }
     switch (m.a) {
       case 'respawn':
         // Death turns Auto off (the browser does too), so the player doesn't run back to the farm spot.
@@ -778,6 +835,54 @@ export class GameWorld {
       }
     }
     if (err) this.partyLine(s.charId, err);
+  }
+
+  // ------------------------------------------------------------ trade (server/trade.ts)
+
+  private tradeActor(s: Session): TradeActor {
+    return {
+      charId: s.charId, accountId: s.accountId, name: s.player.name, guest: s.guest,
+      zone: s.sim.zone.id, alive: s.player.alive, player: s.player, sim: s.sim,
+    };
+  }
+
+  /** Trade actions. Every value from the client is checked here or in Trades; the rules themselves are in Trades. */
+  private onTrade(s: Session, m: ActionMsg): void {
+    if (m.a === 'tradeBlock') {
+      s.blockTrades = m.on === true;
+      return;
+    }
+    const me = this.tradeActor(s);
+    let err: string | null = null;
+    switch (m.a) {
+      case 'tradeRequest': {
+        if (typeof m.name !== 'string' || !m.name.trim() || m.name.length > 40) return;
+        const name = m.name.trim().toLowerCase();
+        const to = [...this.sessions].find((o) => o.player.name.toLowerCase() === name);
+        err = this.trades.request(me, to && this.tradeActor(to), to?.blockTrades === true);
+        break;
+      }
+      case 'tradeAnswer':
+        if (!Number.isSafeInteger(m.from) || typeof m.yes !== 'boolean') return;
+        err = this.trades.answer(me, m.from, m.yes);
+        break;
+      case 'tradeAdd':
+        err = this.trades.add(me, m.slot, m.n);
+        break;
+      case 'tradeRemove':
+        err = this.trades.remove(me, m.slot);
+        break;
+      case 'tradeGold':
+        err = this.trades.setGold(me, m.amount);
+        break;
+      case 'tradeConfirm':
+        err = this.trades.confirm(me, m.ver);
+        break;
+      case 'tradeCancel':
+        err = this.trades.cancel(me);
+        break;
+    }
+    if (err) this.send(s.ws, { t: 'chat', name: '', text: err });
   }
 
   /** Your party for your snapshot: every member, with live numbers for those online. */
@@ -1017,6 +1122,7 @@ export class GameWorld {
   private travel(s: Session, zoneId: string, atCamp = false): void {
     const dest = this.sims.get(zoneId);
     if (!dest || dest === s.sim || !this.sessions.has(s)) return;
+    this.trades.cancelChar(s.charId, `${s.player.name} เปลี่ยนแมพ`);
     const old = s.player;
     const from = s.sim;
     from.removePlayer(old);

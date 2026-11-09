@@ -15,6 +15,7 @@ import type { EquipSlot, Item, PotionKind, PotionSize, Rarity, Vec2 } from '../.
 import type { SkillSlot } from '../../shared/data/classes';
 import { INPUT_HZ, PING_MS, WS_CLOSE_QUIT, WS_PATH, type ClientMsg, type ServerMsg, type ShutdownMode, type SnapshotMsg } from '../../shared/net/protocol';
 import type { PartyFound, PartySnap } from '../../shared/party';
+import type { TradeView } from '../../shared/trade';
 import type { Backend, EnhanceOutcome, ProjectileLike } from '../backend';
 import type { RerollKind } from '../../shared/data/reroll';
 import type { Hazard } from '../../shared/sim/volcanoHeart';
@@ -113,6 +114,11 @@ export class OnlineBackend implements Backend {
   /** Someone invites you to their party (answer within `seconds`), and an invite that went away. */
   onPartyInvite: ((party: number, from: string, seconds: number) => void) | null = null;
   onPartyInviteGone: ((party: number) => void) | null = null;
+  /** Trade: a request for you (answer within `seconds`), one that went away, the open trade's state, and its end. */
+  onTradeRequest: ((from: number, name: string, seconds: number) => void) | null = null;
+  onTradeRequestGone: ((from: number) => void) | null = null;
+  onTrade: ((view: TradeView) => void) | null = null;
+  onTradeEnd: ((ok: boolean, msg: string) => void) | null = null;
   party: PartySnap | null = null;
   private partyReq = 0;
   private readonly partyWait = new Map<number, (list: PartyFound[]) => void>();
@@ -310,6 +316,18 @@ export class OnlineBackend implements Backend {
         break;
       case 'partyInviteGone':
         this.onPartyInviteGone?.(m.party);
+        break;
+      case 'tradeRequest':
+        this.onTradeRequest?.(m.from, m.name, m.seconds);
+        break;
+      case 'tradeRequestGone':
+        this.onTradeRequestGone?.(m.from);
+        break;
+      case 'trade':
+        this.onTrade?.(m.view);
+        break;
+      case 'tradeEnd':
+        this.onTradeEnd?.(m.ok, m.msg);
         break;
       case 'partyFound': {
         const done = this.partyWait.get(m.req);
@@ -824,6 +842,14 @@ export class OnlineBackend implements Backend {
   partyLeave(): void { this.send({ t: 'act', a: 'partyLeave' }); }
   partyKick(charId: number): void { this.send({ t: 'act', a: 'partyKick', charId }); }
   setPartyBlock(on: boolean): void { this.send({ t: 'act', a: 'partyBlock', on }); }
+  tradeRequest(name: string): void { this.send({ t: 'act', a: 'tradeRequest', name }); }
+  tradeAnswer(from: number, yes: boolean): void { this.send({ t: 'act', a: 'tradeAnswer', from, yes }); }
+  tradeAdd(slot: number, n?: number): void { this.send(n === undefined ? { t: 'act', a: 'tradeAdd', slot } : { t: 'act', a: 'tradeAdd', slot, n }); }
+  tradeRemove(slot: number): void { this.send({ t: 'act', a: 'tradeRemove', slot }); }
+  tradeGold(amount: number): void { this.send({ t: 'act', a: 'tradeGold', amount }); }
+  tradeConfirm(ver: number): void { this.send({ t: 'act', a: 'tradeConfirm', ver }); }
+  tradeCancel(): void { this.send({ t: 'act', a: 'tradeCancel' }); }
+  setTradeBlock(on: boolean): void { this.send({ t: 'act', a: 'tradeBlock', on }); }
   partySearch(q: string): Promise<PartyFound[]> {
     const req = ++this.partyReq;
     this.send({ t: 'act', a: 'partySearch', q, req });

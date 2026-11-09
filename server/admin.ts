@@ -11,6 +11,7 @@ import type { GameWorld } from './world';
 import { bearer, HttpError, readJson, send, str } from './http';
 import { ownerToolsApi } from './admin-tools';
 import { mailAdminApi } from './admin-mail';
+import { tradeAdminApi } from './admin-trade';
 import type { Backups } from './backup';
 import {
   ADMIN_AUDIT_PAGE, ADMIN_GOLD_MAX, ADMIN_NO_RIGHTS, ADMIN_ITEMS_MAX, ADMIN_SEARCH_MAX,
@@ -91,6 +92,7 @@ export async function adminApi(
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (await ownerToolsApi(req, res, path, method, url, db, world, backups)) return;
   if (await mailAdminApi(req, res, path, method, db, world)) return;
+  if (tradeAdminApi(req, res, path, method, db)) return;
 
   if (method === 'GET' && path === '/api/admin/me') {
     const a = requireAdmin(req, db);
