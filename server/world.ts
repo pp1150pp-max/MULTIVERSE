@@ -27,6 +27,8 @@ import type { MailCall } from '../src/shared/mail';
 import type { MarketCall } from '../src/shared/sim/market';
 import { Parties, type PartyChar } from './party';
 import { Trades, type TradeActor } from './trade';
+import { Friends, type FriendActor } from './friends';
+import { FRIEND_NAME_MAX, type FriendChar } from '../src/shared/friends';
 import { PARTY_SEARCH_LIMIT, PARTY_SEARCH_MAX, type PartyFound, type PartySnap } from '../src/shared/party';
 
 const AUTOSAVE_MS = 30_000;
@@ -42,6 +44,8 @@ const MARKET_JOIN_NOTE_MS = 3000;
 const SKILL_KEYS: SkillSlot[] = ['q', 'e', 'r'];
 /** Fastest a client may search for players to invite. */
 const PARTY_SEARCH_MS = 250;
+/** Fastest a client may send a friend request, block or list read (each looks things up in the database). */
+const FRIEND_ACTION_MS = 250;
 /**
  * Actions that move bag items, gold or gear: refused while the player has a trade window open, so what
  * was offered stays put (the swap checks it all again anyway). Picking things up, resting, Auto, chat and
@@ -136,6 +140,10 @@ interface Session {
   lastPartySearchAt: number;
   /** The player turned trade requests off (a browser setting, sent after joining). */
   blockTrades: boolean;
+  /** When this session last used a friend action (performance.now()), to keep name lookups from flooding the database. */
+  lastFriendAt: number;
+  /** Level and zone its friends last saw (see friendsTick); a change updates their lists. */
+  friendKey: string;
 }
 
 const num = (v: unknown, fallback = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
@@ -209,6 +217,8 @@ export class GameWorld {
   readonly parties: Parties;
   /** Player-to-player trades (in memory only). */
   readonly trades: Trades;
+  /** Friends, friend requests and blocks (saved, per account). */
+  readonly friends: Friends;
   /** Set while the server counts down to stopping: no new players may join. */
   private closing: ShutdownMode | null = null;
   private last = performance.now();
@@ -268,6 +278,17 @@ export class GameWorld {
       },
     });
     setInterval(() => this.trades.tick(), 250);
+    this.friends = new Friends(db, {
+      playing: (accountId) => {
+        const s = this.playingSession(accountId);
+        return s ? this.friendChar(s) : null;
+      },
+      tell: (accountId, text) => {
+        for (const s of this.sessions) if (s.accountId === accountId) this.send(s.ws, { t: 'chat', name: '', text });
+      },
+      changed: (accountId) => this.sendFriends(accountId),
+    });
+    setInterval(() => this.friendsTick(), 1000);
     this.expireMarket();
     setInterval(() => this.expireMarket(), MARKET_EXPIRE_MS);
   }
@@ -306,7 +327,7 @@ export class GameWorld {
       try {
         if (msg.t === 'input') this.onInput(session, msg);
         else if (msg.t === 'act') this.onAction(session, msg);
-        else if (msg.t === 'chat') this.onChat(session, msg.text, msg.ch);
+        else if (msg.t === 'chat') this.onChat(session, msg.text, msg.ch, msg.to);
         else if (msg.t === 'ping') this.onPing(session, msg);
         else if (msg.t === 'client') this.onClientInfo(session, msg);
       } catch (e) {
@@ -373,14 +394,18 @@ export class GameWorld {
       ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity, blockTrades: false,
+      lastFriendAt: -Infinity, friendKey: '',
     };
     try {
       s.playRow = this.db.startPlaySession({ accountId: acc.id, username: acc.username, guest: acc.guest, charId, charName: player.name, ip });
     } catch (e) {
       console.error('[world] recording the play session failed', e);
     }
+    const accountWasOnline = [...this.sessions].some((o) => o.accountId === acc.id);
     this.sessions.add(s);
     this.byPlayer.set(player, s);
+    s.friendKey = this.friendKeyOf(s);
+    if (!acc.guest) this.friendsJoined(s, accountWasOnline);
     // Back within the grace time (or a takeover): still in the party.
     player.partyId = this.parties.online(charId);
     this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, guest: acc.guest });
@@ -417,6 +442,8 @@ export class GameWorld {
     s.sim.removePlayer(s.player);
     // Saved above; drop it from memory once nobody on the account is online.
     if (![...this.sessions].some((o) => o.accountId === s.accountId)) this.stashes.delete(s.accountId);
+    // Offline now (or shown as another character of the account).
+    if (!s.guest) this.friendsMoved(s.accountId);
     this.broadcastSystem(`${s.player.name} ออกจากเกม`);
     console.log(`[world] ${s.username} left (${this.sessions.size} online)`);
   }
@@ -612,6 +639,7 @@ export class GameWorld {
     }
     if (typeof m.a === 'string' && m.a.startsWith('party')) return this.onParty(s, m);
     if (typeof m.a === 'string' && m.a.startsWith('trade')) return this.onTrade(s, m);
+    if (typeof m.a === 'string' && m.a.startsWith('friend')) return this.onFriend(s, m);
     if (TRADE_LOCKED.has(m.a) && this.trades.busy(s.charId)) {
       this.send(s.ws, { t: 'chat', name: '', text: TRADE_LOCKED_MSG });
       // The market and the mailbox wait for an answer: tell them "no" so their windows don't hang.
@@ -802,7 +830,9 @@ export class GameWorld {
         if (typeof m.name !== 'string' || !m.name.trim() || m.name.length > 40) return;
         const name = m.name.trim().toLowerCase();
         const to = [...this.sessions].find((o) => o.player.name.toLowerCase() === name);
-        err = this.parties.invite(this.partyChar(s), to && this.partyChar(to), to?.blockInvites === true);
+        // Someone who blocked the inviter reads like one who turned invites off (they aren't told why).
+        const refuses = !!to && (to.blockInvites || this.friends.blocks(to.accountId, s.accountId));
+        err = this.parties.invite(this.partyChar(s), to && this.partyChar(to), refuses);
         break;
       }
       case 'partyAnswer': {
@@ -859,7 +889,8 @@ export class GameWorld {
         if (typeof m.name !== 'string' || !m.name.trim() || m.name.length > 40) return;
         const name = m.name.trim().toLowerCase();
         const to = [...this.sessions].find((o) => o.player.name.toLowerCase() === name);
-        err = this.trades.request(me, to && this.tradeActor(to), to?.blockTrades === true);
+        const refuses = !!to && (to.blockTrades || this.friends.blocks(to.accountId, s.accountId));
+        err = this.trades.request(me, to && this.tradeActor(to), refuses);
         break;
       }
       case 'tradeAnswer':
@@ -903,6 +934,123 @@ export class GameWorld {
         };
       }),
     };
+  }
+
+  // ------------------------------------------------------------ friends (server/friends.ts)
+
+  /** The session that stands for this account in its friends' lists: the newest login (several characters may be on). */
+  private playingSession(accountId: number): Session | undefined {
+    let best: Session | undefined;
+    for (const s of this.sessions) if (s.accountId === accountId && (!best || s.joinedAt >= best.joinedAt)) best = s;
+    return best;
+  }
+
+  private friendChar(s: Session): FriendChar {
+    return { name: s.player.name, cls: s.player.cls.id, lv: s.player.level, zone: s.sim.zone.id };
+  }
+
+  private friendKeyOf(s: Session): string {
+    return `${s.player.level}|${s.sim.zone.id}`;
+  }
+
+  /** Sends this account's friends window to each of its online characters. */
+  private sendFriends(accountId: number): void {
+    const to = [...this.sessions].filter((s) => s.accountId === accountId && !s.guest);
+    if (!to.length) return;
+    const view = this.friends.view(accountId);
+    for (const s of to) this.send(s.ws, { t: 'friends', view });
+  }
+
+  /** This account came online, went offline, or what it shows changed: update its friends' lists. */
+  private friendsMoved(accountId: number): void {
+    for (const f of this.friends.friendsOf(accountId)) this.sendFriends(f);
+  }
+
+  /** A member's character entered the world. */
+  private friendsJoined(s: Session, accountWasOnline: boolean): void {
+    if (!accountWasOnline) {
+      for (const f of this.friends.friendsOf(s.accountId)) {
+        for (const o of this.sessions) if (o.accountId === f) this.send(o.ws, { t: 'chat', name: '', text: `เพื่อนของคุณ ${s.player.name} เข้าเกมแล้ว` });
+      }
+    }
+    this.friendsMoved(s.accountId);
+    // Its own list and waiting requests a moment later (messages before the first snapshot are dropped).
+    setTimeout(() => {
+      if (!this.sessions.has(s)) return;
+      this.send(s.ws, { t: 'friends', view: this.friends.view(s.accountId) });
+      const n = this.friends.incomingCount(s.accountId);
+      if (n) this.send(s.ws, { t: 'chat', name: '', text: `มีคำขอเป็นเพื่อนรอคำตอบอยู่ ${n} คำขอ — เปิดหน้าต่างเพื่อนเพื่อตอบ` });
+    }, MARKET_JOIN_NOTE_MS);
+  }
+
+  /** About once a second: a level-up or a map change updates the lists of that account's friends. */
+  private friendsTick(): void {
+    const moved = new Set<number>();
+    for (const s of this.sessions) {
+      const key = this.friendKeyOf(s);
+      if (key === s.friendKey) continue;
+      s.friendKey = key;
+      if (!s.guest && this.playingSession(s.accountId) === s) moved.add(s.accountId);
+    }
+    for (const acc of moved) this.friendsMoved(acc);
+  }
+
+  /** Friend actions. Values from the client are checked in Friends; name lookups are throttled here. */
+  private onFriend(s: Session, m: ActionMsg): void {
+    const me: FriendActor = { accountId: s.accountId, guest: s.guest };
+    // Lookups by name and whole-list reads are throttled; answering a row is not (a fast player may click several).
+    if (m.a === 'friendRequest' || m.a === 'friendBlock' || m.a === 'friendList') {
+      const now = performance.now();
+      if (now - s.lastFriendAt < FRIEND_ACTION_MS) return;
+      s.lastFriendAt = now;
+    }
+    let err: string | null = null;
+    switch (m.a) {
+      case 'friendList':
+        if (!s.guest) this.send(s.ws, { t: 'friends', view: this.friends.view(s.accountId) });
+        return;
+      case 'friendRequest':
+        err = this.friends.request(me, m.name);
+        break;
+      case 'friendAnswer':
+        err = this.friends.answer(me, m.acc, m.yes);
+        break;
+      case 'friendCancel':
+        err = this.friends.cancel(me, m.acc);
+        break;
+      case 'friendRemove':
+        err = this.friends.remove(me, m.acc);
+        break;
+      case 'friendBlock':
+        err = this.friends.block(me, m.name);
+        break;
+      case 'friendUnblock':
+        err = this.friends.unblock(me, m.acc);
+        break;
+    }
+    if (err) this.send(s.ws, { t: 'chat', name: '', text: err });
+  }
+
+  /** A whisper: only the online character named `to` (and the sender, as an echo) sees it. */
+  private whisper(s: Session, to: unknown, text: string): void {
+    if (typeof to !== 'string' || !to.trim() || to.length > FRIEND_NAME_MAX) return;
+    const name = to.trim().toLowerCase();
+    const o = [...this.sessions].find((x) => x.player.name.toLowerCase() === name);
+    const tell = (t: string) => this.send(s.ws, { t: 'chat', name: '', text: t });
+    if (!o) return tell(`ไม่พบผู้เล่น ${to.trim()} (ต้องออนไลน์อยู่)`);
+    if (o === s) return tell('กระซิบหาตัวเองไม่ได้');
+    // Neutral on purpose: a blocked player isn't told they are blocked.
+    if (this.friends.blocks(o.accountId, s.accountId)) return tell(`ส่งกระซิบถึง ${o.player.name} ไม่ได้`);
+    this.send(o.ws, { t: 'chat', name: s.player.name, text, ch: 'whisper' });
+    this.send(s.ws, { t: 'chat', name: s.player.name, text, ch: 'whisper', to: o.player.name });
+    try {
+      this.db.logChat({
+        accountId: s.accountId, username: s.guest ? 'Guest' : s.username, charName: s.player.name, zone: s.sim.zone.id,
+        text: `[กระซิบ→${o.player.name}] ${text}`,
+      });
+    } catch (e) {
+      console.error('[world] logging chat failed', e);
+    }
   }
 
   // ------------------------------------------------------------ market broker (server/market.ts)
@@ -1007,12 +1155,16 @@ export class GameWorld {
     for (const s of this.sessions) this.mailNote(s, always);
   }
 
-  private onChat(s: Session, text: unknown, ch?: unknown): void {
+  private onChat(s: Session, text: unknown, ch?: unknown, to?: unknown): void {
     if (typeof text !== 'string') return;
     const now = performance.now();
     if (now - s.lastChatAt < 600) return;
     const clean = text.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, CHAT_MAX);
     if (!clean) return;
+    if (ch === 'whisper') {
+      s.lastChatAt = now;
+      return this.whisper(s, to, clean);
+    }
     const party = ch === 'party' ? this.parties.of(s.charId) : undefined;
     if (ch === 'party' && !party) return this.partyLine(s.charId, 'คุณไม่ได้อยู่ในปาร์ตี้ — แชทปาร์ตี้ไม่ได้');
     s.lastChatAt = now;

@@ -13,6 +13,7 @@ import type { MarketCall, MarketReply } from '../sim/market';
 import type { MailCall, MailReply } from '../mail';
 import type { PartyFound, PartySnap } from '../party';
 import type { TradeView } from '../trade';
+import type { FriendsView } from '../friends';
 
 export const WS_PATH = '/ws';
 /** Server simulation rate and how often it sends snapshots. */
@@ -109,7 +110,16 @@ export type ActionMsg =
   | { t: 'act'; a: 'tradeConfirm'; ver: number }
   | { t: 'act'; a: 'tradeCancel' }
   /** The "don't accept trade requests" setting (kept by the browser, sent on joining and when changed). */
-  | { t: 'act'; a: 'tradeBlock'; on: boolean };
+  | { t: 'act'; a: 'tradeBlock'; on: boolean }
+  // Friends (server/friends.ts), saved per account. A request or a block names a character, everything else the account id.
+  | { t: 'act'; a: 'friendRequest'; name: string }
+  | { t: 'act'; a: 'friendAnswer'; acc: number; yes: boolean }
+  | { t: 'act'; a: 'friendCancel'; acc: number }
+  | { t: 'act'; a: 'friendRemove'; acc: number }
+  | { t: 'act'; a: 'friendBlock'; name: string }
+  | { t: 'act'; a: 'friendUnblock'; acc: number }
+  /** Asks for a fresh `friends` view (opening the window). */
+  | { t: 'act'; a: 'friendList' };
 
 /** Close code the browser uses when the player leaves on purpose (leaves the party at once, no grace time). */
 export const WS_CLOSE_QUIT = 4000;
@@ -118,8 +128,8 @@ export type ClientMsg =
   | { t: 'join'; token: string; characterId: number }
   | InputMsg
   | ActionMsg
-  /** `ch: 'party'` = to the party only. */
-  | { t: 'chat'; text: string; ch?: 'party' }
+  /** `ch: 'party'` = to the party only; `ch: 'whisper'` = only to the online character named `to`. */
+  | { t: 'chat'; text: string; ch?: 'party' | 'whisper'; to?: string }
   /**
    * Answered at once with a pong of the same id. The rest is for the server's lag log, about the time
    * since the previous ping: `rtt` the round trip measured then (ms, each one reported once),
@@ -208,8 +218,13 @@ export type ServerMsg =
   /** You walked through a portal: you are now `you` in zone `zone`, standing at x/z. Snapshots from that zone follow. */
   | { t: 'zone'; zone: string; you: number; x: number; z: number }
   | SnapshotMsg
-  /** `ch: 'party'` = party chat, or (empty name) a party notice. */
-  | { t: 'chat'; name: string; text: string; ch?: 'party' }
+  /**
+   * `ch: 'party'` = party chat, or (empty name) a party notice. `ch: 'whisper'` = a whisper from `name`;
+   * with `to`, it is your own whisper to `to`, echoed back.
+   */
+  | { t: 'chat'; name: string; text: string; ch?: 'party' | 'whisper'; to?: string }
+  /** Your friends window (sent on joining, on `friendList`, and whenever any of it changes). */
+  | { t: 'friends'; view: FriendsView }
   /** Someone invites you to their party; answer within `seconds`. */
   | { t: 'partyInvite'; party: number; from: string; seconds: number }
   /** That invite can't be answered any more (answered, expired, or the party ended). */
