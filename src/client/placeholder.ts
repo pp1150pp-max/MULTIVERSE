@@ -645,6 +645,11 @@ const GEM: Record<`stone_${StoneKind}`, [string, string, string]> = {
   stone_enhance: ['#8a3a10', '#ff9a2e', '#ffe0a0'],
   stone_reroll_values: ['#8a6a10', '#ffd34a', '#fff3b0'],
   stone_reroll_stat: ['#4a2a8a', '#b67cff', '#e8d4ff'],
+  // Boss keys: drawn as an old key in the boss's colours until their painted icons exist.
+  stone_key_bear: ['#3a5a1f', '#9ad86a', '#e0ffc0'],
+  stone_key_witch: ['#1f5a4a', '#6fd8b0', '#d0fff0'],
+  stone_key_yeti: ['#4a6a8a', '#cfeeff', '#ffffff'],
+  stone_key_heart: ['#7a1f10', '#ff6a3a', '#ffd0a0'],
 };
 
 export function drawIcon(
@@ -652,7 +657,17 @@ export function drawIcon(
 ): HTMLCanvasElement {
   const c = newCanvas(16, 16);
   const ctx = c.getContext('2d')!;
-  if (kind.startsWith('stone_')) {
+  if (kind.startsWith('stone_key_')) {
+    // A key: round bow at the top left, shaft down to the right, two teeth.
+    const [dark, mid, light] = GEM[kind as `stone_${StoneKind}`];
+    ell(ctx, 1, 5, 5, 4, 4, mid);
+    ell(ctx, 1, 5, 5, 1.6, 1.6, dark, null);
+    ctx.fillStyle = mid;
+    for (let i = 0; i < 7; i++) ctx.fillRect(7 + i, 7 + i, 2, 2);
+    rect(ctx, 1, 11, 12, 3, 2, mid);
+    rect(ctx, 1, 9, 10, 2, 2, mid);
+    rect(ctx, 1, 3, 3, 2, 1, light, null);
+  } else if (kind.startsWith('stone_')) {
     // A cut gem in the stone's colour.
     const [dark, mid, light] = GEM[kind as `stone_${StoneKind}`];
     ctx.fillStyle = dark;

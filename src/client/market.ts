@@ -5,9 +5,9 @@ import type { Game } from './Game';
 import { NPC_USE_RANGE } from '../shared/data/npcs';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { effectiveStats, enhanceBonus, plusOf, itemName } from '../shared/data/enhance';
-import { STONE_COLOR, STONE_NAME } from '../shared/data/stones';
+import { STONE_COLOR, STONE_NAME, stoneUnit } from '../shared/data/stones';
 import {
-  isItem, isStone, RARITIES, RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL,
+  isBossKey, isItem, isStone, RARITIES, RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL,
   type ClassId, type Item, type Rarity, type StatKey, type StoneStack,
 } from '../shared/types';
 import {
@@ -325,7 +325,7 @@ export class MarketWindow {
     };
     // A stone stack of 2+: ask how many to list (the whole stack is the default).
     if (isStone(e) && e.count > 1) {
-      this.host.askAmount(`ลงขาย ${this.nameHtml(e)} กี่ก้อน?`, e.count, e.count, (n) => void send(n >= e.count ? undefined : n));
+      this.host.askAmount(`ลงขาย ${this.nameHtml(e)} กี่${stoneUnit(e.stone)}?`, e.count, e.count, (n) => void send(n >= e.count ? undefined : n));
       return;
     }
     await send();
@@ -407,8 +407,8 @@ export class MarketWindow {
 
   private renderFilters(): void {
     const myCls = this.g.player.cls.id;
-    const kindIcon = (k: MarketKind) => (k === 'stone' ? stoneIcon('enhance') : emptySlotIcon(k, myCls));
-    const kindLabel = (k: MarketKind) => (k === 'stone' ? 'หินตีบวก' : SLOT_LABEL[k]);
+    const kindIcon = (k: MarketKind) => (k === 'stone' ? stoneIcon('enhance') : k === 'artifact' ? stoneIcon('key_bear') : emptySlotIcon(k, myCls));
+    const kindLabel = (k: MarketKind) => (k === 'stone' ? 'หินตีบวก' : k === 'artifact' ? 'Artifact' : SLOT_LABEL[k]);
     $('mkt-cats').innerHTML =
       `<button class="mkt-cat${this.kind ? '' : ' on'}" data-kind=""><span class="mkt-cat-ic">${COIN_ICON}</span>ทั้งหมด</button>` +
       MARKET_KINDS.map((k) =>
@@ -443,7 +443,7 @@ export class MarketWindow {
 
   /** Every stat line of the item (main and extras, with tiers), the filtered ones highlighted. */
   private statLine(e: Item | StoneStack): string {
-    if (isStone(e)) return '<span class="mkt-dim">วัตถุดิบตีบวก · ดรอปจากบอส</span>';
+    if (isStone(e)) return `<span class="mkt-dim">${isBossKey(e.stone) ? 'Artifact · กุญแจห้องบอส' : 'วัตถุดิบตีบวก · ดรอปจากบอส'}</span>`;
     const want = new Set(this.stats.map((f) => f.stat));
     const pct = (k: StatKey) => (STAT_LABEL[k].endsWith('%') ? '%' : '');
     const label = (k: StatKey) => STAT_LABEL[k].replace(/ %$/, '');
