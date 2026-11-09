@@ -595,8 +595,11 @@ export class Game {
       : null;
     this.floating.npcBadges(this, this.npcs);
     this.floating.restBadges(this, spots, restIn);
-    const at = near ?? (rest ? { x: rest.x, z: rest.z } : null);
-    this.floating.npcPrompt(this, at?.x ?? 0, near ? 3.7 : rest?.kind === 'fountain' ? 5.2 : 2.4, at?.z ?? 0, prompt);
+    if (near) this.floating.npcPrompt(this, near.x, 3.7, near.z, prompt);
+    // Rest spots: stack the label just above the spot's own badge (same anchor, lifted by the badge's
+    // height plus room for its 4px bob) so the two never overlap whatever the zoom.
+    else if (rest) this.floating.npcPrompt(this, rest.x, Floating.restBadgeY(rest.kind), rest.z, prompt, this.floating.restBadgeHeight(spots.indexOf(rest)) + 8);
+    else this.floating.npcPrompt(this, 0, 0, 0, prompt);
     const lair = this.backend.zone.boss;
     const bossIn = this.backend.bossRespawnIn;
     this.floating.bossTimer(this, lair?.x ?? 0, lair?.z ?? 0, lair && bossIn !== null ? `${MONSTERS[lair.monster].nameTh} เกิดใน ${countdown(bossIn)}` : null);
