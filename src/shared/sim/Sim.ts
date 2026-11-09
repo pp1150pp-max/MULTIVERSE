@@ -283,7 +283,8 @@ export class Sim {
     if (opts.maxMult) raw = Math.min(raw, p.stats.atk * opts.maxMult);
     const def = this.time < m.armorBreakUntil ? m.defense * (1 - m.armorBreak) : m.defense;
     const under = m.isBoss && m.level - p.level > BOSS_LEVEL_GAP;
-    const dmg = Math.max(1, Math.round(mitigate(raw, def) * (under ? BOSS_UNDERLEVEL_MULT : 1)));
+    const bossMult = m.isBoss ? p.cls.bossDmgMult ?? 1 : 1;
+    const dmg = Math.max(1, Math.round(mitigate(raw, def) * bossMult * (under ? BOSS_UNDERLEVEL_MULT : 1)));
     if (!m.damageBy.has(p.id)) {
       m.damageBy.set(p.id, 0);
       m.addFighter(m.damageBy.size);

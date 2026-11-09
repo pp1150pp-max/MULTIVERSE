@@ -31,7 +31,7 @@ const HEADSHOT_RANGE = 18;
 /** Sword Q: seconds the spin keeps the player from taking any damage. */
 const WHIRLWIND_GUARD = 0.6;
 /** Sword Q also heals for a share of all damage dealt for a few seconds (recasting restarts the timer). */
-const WHIRLWIND_LIFESTEAL = { share: 0.15, time: 3 };
+const WHIRLWIND_LIFESTEAL = { share: 0.3, time: 3 };
 
 const aimAngle = (p: Player, aim: Vec2) => Math.atan2(aim.z - p.z, aim.x - p.x);
 
