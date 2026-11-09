@@ -1448,6 +1448,7 @@ export class GameWorld {
         id: l.id, x: r2(l.x), z: r2(l.z), fromX: r2(l.fromX), fromZ: r2(l.fromZ), t: r2(l.t),
         kind: l.kind, dropped: l.dropped, owner: l.owner, ownerUntil: r2(l.ownerUntil),
         ...(l.ownerParty !== null ? { party: l.ownerParty } : {}),
+        ...(l.forever ? { forever: true } : {}),
       })),
       party: this.partySnap(s),
       events: s.outbox,

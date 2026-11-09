@@ -33,7 +33,7 @@ export class Loot {
   ownerParty: number | null;
   ownerUntil: number;
   /** Stays on the ground until the boss room closes (boss drops there). */
-  private readonly forever: boolean;
+  readonly forever: boolean;
 
   constructor(
     readonly id: number,

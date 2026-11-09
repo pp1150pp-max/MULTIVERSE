@@ -180,6 +180,8 @@ export interface LootSnap {
   kind: LootKind; dropped: boolean; owner: number | null; ownerUntil: number;
   /** The owner's party, whose members share the first pick (left out when none). */
   party?: number;
+  /** A boss room's drop: stays until the room closes, so it never blinks out. */
+  forever?: boolean;
 }
 
 /** Only sent to the player it belongs to. */

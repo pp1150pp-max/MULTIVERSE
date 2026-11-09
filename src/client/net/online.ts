@@ -587,7 +587,7 @@ export class OnlineBackend implements Backend {
       seenL.add(ls.id);
       let l = this.lootMap.get(ls.id);
       if (!l) {
-        l = new Loot(ls.id, ls.x, ls.z, ls.fromX, ls.fromZ, ls.kind, { dropped: ls.dropped, owner: ls.owner ?? undefined, ownerParty: ls.party ?? null, ownerUntil: ls.ownerUntil });
+        l = new Loot(ls.id, ls.x, ls.z, ls.fromX, ls.fromZ, ls.kind, { dropped: ls.dropped, owner: ls.owner ?? undefined, ownerParty: ls.party ?? null, ownerUntil: ls.ownerUntil, forever: ls.forever });
         this.lootMap.set(ls.id, l);
       }
       this.glide(l, ls.x, ls.z, l);
