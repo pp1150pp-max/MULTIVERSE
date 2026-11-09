@@ -21,9 +21,12 @@ const badge = (name: string, glyph = ''): string =>
 /** Party has no painted badge yet: the blank one with a glyph. Swap for badge('party') once ico_party.png exists. */
 const PARTY_ICON = badge('blank', '👥');
 
+/** Mail has no painted badge yet (a friend adds ico_mail.png later): the blank one with a glyph. Swap for badge('mail'). */
+const MAIL_ICON = badge('blank', '✉');
+
 /** Icon grid, 3 columns: [action, icon, label]. Only systems that exist; add a tile when a new one is built. */
 const MENU_ITEMS: [string, string, string][] = [
-  ['bag', badge('bag'), 'กระเป๋า'], ['party', PARTY_ICON, 'ปาร์ตี้'], ['map', badge('map'), 'แผนที่'],
+  ['bag', badge('bag'), 'กระเป๋า'], ['party', PARTY_ICON, 'ปาร์ตี้'], ['mail', MAIL_ICON, 'จดหมาย'], ['map', badge('map'), 'แผนที่'],
   ['autoset', badge('autoset'), 'ตั้งค่า Auto'], ['audio', badge('blank', '🔊'), 'เสียง'], ['help', badge('help'), 'วิธีเล่น'],
   ['settings', badge('settings'), 'ตั้งค่า'],
 ];
@@ -31,7 +34,7 @@ const MENU_ITEMS: [string, string, string][] = [
 /** Top-right icon row: [button id, icon, label]. */
 const TOP_ICONS: [string, string, string][] = [
   ['top-auto', badge('auto'), 'AUTO: OFF'], ['top-autoset', badge('autoset'), 'ตั้งค่า Auto'], ['top-bag', badge('bag'), 'กระเป๋า'],
-  ['top-party', PARTY_ICON, 'ปาร์ตี้'], ['top-map', badge('map'), 'แผนที่'], ['top-mute', badge('blank', '🔊'), 'เสียง'], ['top-settings', badge('settings'), 'ตั้งค่า'], ['top-menu', badge('menu'), 'เมนู'],
+  ['top-party', PARTY_ICON, 'ปาร์ตี้'], ['top-mail', MAIL_ICON, 'จดหมาย'], ['top-map', badge('map'), 'แผนที่'], ['top-mute', badge('blank', '🔊'), 'เสียง'], ['top-settings', badge('settings'), 'ตั้งค่า'], ['top-menu', badge('menu'), 'เมนู'],
 ];
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -51,7 +54,9 @@ export class SystemMenu {
     // Top-right icon row (the old button column under the minimap is hidden by CSS, its buttons are still clicked from here).
     const row = document.createElement('div');
     row.id = 'hud-iconrow';
-    row.innerHTML = TOP_ICONS.map(
+    // Guests get no mail, so they have no mail icon.
+    const noMail = ([id]: string[]) => !(guest && (id === 'mail' || id === 'top-mail'));
+    row.innerHTML = TOP_ICONS.filter(noMail).map(
       ([id, icon, label]) =>
         `<button id="${id}" class="top-icon"${id ? '' : ' disabled'}><span class="sys-ico">${icon}</span><span class="sys-label">${label}</span><i class="badge hidden" data-badge="${label}"></i></button>`,
     ).join('');
@@ -64,6 +69,7 @@ export class SystemMenu {
     $('top-mute').onclick = () => $('audio-mute')?.click();
     $('top-bag').onclick = () => g.hud.toggleBag();
     $('top-party').onclick = () => g.party.toggle();
+    if (!guest) $('top-mail').onclick = () => g.mailUI.toggle();
     $('top-map').onclick = () => g.hud.toggleMap();
     $('top-settings').onclick = () => {
       this.toggle(true);
@@ -77,7 +83,7 @@ export class SystemMenu {
     this.panel.innerHTML = `
       <div class="panel-head"><span>เมนู</span><button data-act="close">✕</button></div>
       <div class="sys-view sys-grid" data-view="main">
-        ${MENU_ITEMS.map(
+        ${MENU_ITEMS.filter(noMail).map(
           ([act, icon, label]) =>
             `<button class="sys-tile" ${act ? `data-act="${act}"` : 'disabled'}>` +
             `<span class="sys-ico">${icon}</span><span class="sys-label">${label}</span><i class="badge hidden" data-badge="${label}"></i></button>`,
@@ -111,7 +117,7 @@ export class SystemMenu {
   private readonly badges = new Map<string, number>();
 
   /** Player notification on an icon (key = the icon's Thai label, e.g. 'จดหมาย'): 0 hides it, 1 = red dot, 2+ = number.
-   *  The top-right เมนู icon shows the total of all the others. Nothing calls this yet: no feature sends notifications. */
+   *  The top-right เมนู icon shows the total of all the others. The mailbox sets 'จดหมาย' (src/client/mail.ts). */
   setBadge(key: string, count: number): void {
     this.badges.set(key, count);
     const total = [...this.badges].reduce((a, [k, n]) => a + (k === 'เมนู' ? 0 : n), 0);
@@ -190,6 +196,9 @@ export class SystemMenu {
       case 'party':
         this.toggle(false);
         return this.g.party.toggle(true);
+      case 'mail':
+        this.toggle(false);
+        return this.g.mailUI.toggle(true);
       case 'partyblock':
         this.g.party.setBlock(!this.g.party.block);
         return this.showView('settings');

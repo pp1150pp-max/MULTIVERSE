@@ -983,6 +983,7 @@ export class Hud {
     this.closeForge();
     this.market.close();
     this.g.party.toggle(false);
+    this.g.mailUI.toggle(false);
     if (this.dialogOpen) this.closeDialog();
   }
 

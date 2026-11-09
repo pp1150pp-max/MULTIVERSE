@@ -12,6 +12,7 @@ import type { EnhanceResult } from '../shared/data/enhance';
 import type { RerollKind } from '../shared/data/reroll';
 import type { EquipSlot, Item, PotionKind, PotionSize, Rarity } from '../shared/types';
 import type { MarketCall, MarketReply } from '../shared/sim/market';
+import type { MailCall, MailReply } from '../shared/mail';
 import type { PartyFound, PartySnap } from '../shared/party';
 
 /** What a projectile view needs; the local simulation's Projectile fits this too. */
@@ -97,6 +98,10 @@ export interface Backend {
   market(call: MarketCall): Promise<MarketReply>;
   /** Listings waiting in this account's claim box at the market broker. */
   readonly marketBox: number;
+  /** Mailbox: one request and the server's answer. */
+  mail(call: MailCall): Promise<MailReply>;
+  /** Unread mail (the icon's badge). */
+  readonly mailUnread: number;
 
   // Party (the server checks every rule; see server/party.ts).
   /** Your party as of the last snapshot, or null when you are in none. */

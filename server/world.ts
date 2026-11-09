@@ -22,6 +22,8 @@ import { cleanStash, type StashData } from '../src/shared/sim/stash';
 import type { AdminOnline, AdminOnlineRow } from '../src/shared/admin';
 import { banMessage } from '../src/shared/api';
 import { Market, type MarketNote } from './market';
+import { Mail } from './mail';
+import type { MailCall } from '../src/shared/mail';
 import type { MarketCall } from '../src/shared/sim/market';
 import { Parties, type PartyChar } from './party';
 import { PARTY_SEARCH_LIMIT, PARTY_SEARCH_MAX, type PartyFound, type PartySnap } from '../src/shared/party';
@@ -79,6 +81,8 @@ interface Session {
   lastChatAt: number;
   /** When this session last used the market (performance.now()), to keep searches from flooding the server. */
   lastMarketAt: number;
+  /** The same for the mailbox. */
+  lastMailAt: number;
   saveDue: number | null;
   /** Where the connection came from, for the owner's log only (never sent to anyone). */
   ip: string;
@@ -185,6 +189,7 @@ export class GameWorld {
    */
   private readonly stashes = new Map<number, StashData>();
   private readonly market: Market;
+  readonly mail: Mail;
   /** Parties, keyed on character ids (in memory only: a restart ends them). */
   readonly parties: Parties;
   /** Set while the server counts down to stopping: no new players may join. */
@@ -199,6 +204,7 @@ export class GameWorld {
     setInterval(() => this.saveAll(), AUTOSAVE_MS);
     setInterval(() => this.logPings(), PING_LOG_MS);
     this.market = new Market(db);
+    this.mail = new Mail(db);
     this.parties = new Parties({
       notice: (ids, text) => {
         for (const id of ids) this.partyLine(id, text);
@@ -319,7 +325,7 @@ export class GameWorld {
     const s: Session = {
       ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId, sim, player,
       move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null,
-      auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, saveDue: null,
+      auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, saveDue: null,
       ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity,
@@ -336,7 +342,7 @@ export class GameWorld {
     this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, guest: acc.guest });
     this.broadcastSystem(`${player.name} เข้าสู่โลก`);
     // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
-    if (!acc.guest) setTimeout(() => this.sessions.has(s) && this.marketOnJoin(s), MARKET_JOIN_NOTE_MS);
+    if (!acc.guest) setTimeout(() => this.sessions.has(s) && (this.marketOnJoin(s), this.mailNote(s, true)), MARKET_JOIN_NOTE_MS);
     console.log(`[world] ${acc.username} joined as ${player.name}${acc.guest ? ' (guest)' : ''} from ${ip} (${this.sessions.size} online)`);
     return s;
   }
@@ -669,6 +675,13 @@ export class GameWorld {
       case 'mktClaim':
         this.onMarket(s, m);
         return;
+      case 'mailList':
+      case 'mailRead':
+      case 'mailClaim':
+      case 'mailDelete':
+      case 'mailDeleteRead':
+        this.onMail(s, m);
+        return;
       case 'enhance': {
         // Sim.enhance checks the NPC distance, ownership, level cap, gold and stones itself.
         const out = typeof m.uid === 'string' ? sim.enhance(p, m.uid, m.protect === true) : null;
@@ -839,6 +852,40 @@ export class GameWorld {
     } catch (e) {
       console.error('[market] expiring listings failed', e);
     }
+  }
+
+  // ------------------------------------------------------------ mailbox (server/mail.ts)
+
+  private onMail(s: Session, m: { req: number } & MailCall): void {
+    const req = num(m.req);
+    const now = performance.now();
+    if (now - s.lastMailAt < MARKET_ACT_MS) {
+      this.send(s.ws, { t: 'mail', req, ok: false });
+      return;
+    }
+    s.lastMailAt = now;
+    try {
+      this.send(s.ws, { t: 'mail', req, ...this.mail.handle(s, m) });
+    } catch (e) {
+      console.error('[mail]', m.a, 'failed for', s.username, e);
+      this.send(s.ws, { t: 'mail', req, ok: false, msg: 'กล่องจดหมายขัดข้อง ลองใหม่อีกครั้ง' });
+    }
+  }
+
+  /** Tells one character its unread count, and how much of it is new (a chat line and a sound). Guests have no mail. */
+  private mailNote(s: Session, always = false): void {
+    if (s.guest) return;
+    try {
+      const fresh = this.mail.takeFresh(s);
+      if (always || fresh > 0) this.send(s.ws, { t: 'mailNote', unread: this.mail.unread(s), fresh });
+    } catch (e) {
+      console.error('[mail] notice failed', e);
+    }
+  }
+
+  /** Mail was sent or pulled back: every character online hears about new mail, and with `always` gets its badge refreshed. */
+  mailArrived(always = false): void {
+    for (const s of this.sessions) this.mailNote(s, always);
   }
 
   private onChat(s: Session, text: unknown, ch?: unknown): void {
