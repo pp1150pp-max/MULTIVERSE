@@ -3,6 +3,7 @@
 // which is simpler and safer than tearing the 3D scene down by hand.
 import type { Game } from './Game';
 import { logout } from './net/api';
+import { audioEngine } from './audio/engine';
 
 /** Read once by the title menu after the reload. */
 export const AFTER_EXIT_KEY = 'multiverse-after-exit';
@@ -13,6 +14,20 @@ const EXIT_COUNTDOWN = 5;
 /** "In combat" = hurt or attacked within this many seconds, or Auto Play running. */
 const COMBAT_WINDOW = 5;
 
+/** Icon grid, 3 columns: [action ('' = not built yet, greyed out), icon, label]. */
+const MENU_ITEMS: [string, string, string][] = [
+  ['bag', '🎒', 'กระเป๋า'], ['', '🧑', 'ตัวละคร'], ['', '⚔️', 'สกิล'],
+  ['', '📜', 'ภารกิจ'], ['', '📖', 'สมุดการ์ด'], ['', '🏰', 'ดันเจี้ยน'],
+  ['', '👥', 'ปาร์ตี้'], ['', '🛡️', 'กิลด์'], ['', '👕', 'แฟชั่น'],
+  ['', '⚖️', 'ตลาด'], ['', '✉️', 'จดหมาย'], ['settings', '⚙️', 'ตั้งค่า'],
+];
+
+/** Top-right icon row: [button id ('' = not built yet, greyed out), icon, label]. Swap the emoji for <img> later. */
+const TOP_ICONS: [string, string, string][] = [
+  ['top-auto', '🤖', 'AUTO: OFF'], ['top-autoset', '⚙️', 'ตั้งค่า Auto'], ['top-bag', '🎒', 'กระเป๋า'], ['top-mute', '🔊', 'เสียง'], ['', '⚔️', 'สกิล'], ['', '⚖️', 'ตลาด'],
+  ['', '🏰', 'ดันเจี้ยน'], ['top-settings', '⚙️', 'ตั้งค่า'], ['top-menu', '☰', 'เมนู'],
+];
+
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
 export class SystemMenu {
@@ -22,34 +37,55 @@ export class SystemMenu {
   private lastCombat = -99;
   private lastHp = -1;
   private clock = 0;
+  private readonly autoBtn: HTMLElement;
+  private readonly muteBtn: HTMLElement;
 
   constructor(private readonly g: Game) {
     const guest = g.backend.guest;
-    const btn = document.createElement('button');
-    btn.id = 'btn-menu';
-    btn.textContent = '☰ เมนู (Esc)';
-    btn.onclick = () => this.toggle();
-    document.querySelector('#hud-topright .hud-buttons')!.prepend(btn);
+    // Top-right icon row (the old button column under the minimap is hidden by CSS, its buttons are still clicked from here).
+    const row = document.createElement('div');
+    row.id = 'hud-iconrow';
+    row.innerHTML = TOP_ICONS.map(
+      ([id, icon, label]) =>
+        `<button id="${id}" class="top-icon"${id ? '' : ' disabled'}><span class="sys-ico">${icon}</span><span class="sys-label">${label}</span><i class="badge hidden" data-badge="${label}"></i></button>`,
+    ).join('');
+    $('hud-topright').prepend(row);
+    this.autoBtn = $('top-auto');
+    this.muteBtn = $('top-mute');
+    $('top-auto').onclick = () => g.toggleAuto();
+    $('top-autoset').onclick = () => $('btn-auto-set').click();
+    // Reuses the sound window's own mute button, so its text stays in sync.
+    $('top-mute').onclick = () => $('audio-mute')?.click();
+    $('top-bag').onclick = () => g.hud.toggleBag();
+    $('top-settings').onclick = () => {
+      this.toggle(true);
+      this.showView('settings');
+    };
+    $('top-menu').onclick = () => this.toggle();
 
     this.panel = document.createElement('div');
     this.panel.id = 'sys-menu';
     this.panel.className = 'panel hidden';
     this.panel.innerHTML = `
       <div class="panel-head"><span>เมนู</span><button data-act="close">✕</button></div>
-      <div class="sys-view" data-view="main">
-        <button data-act="resume" class="primary">กลับเข้าเกม</button>
-        <button data-act="settings">ตั้งค่า</button>
+      <div class="sys-view sys-grid" data-view="main">
+        ${MENU_ITEMS.map(
+          ([act, icon, label]) =>
+            `<button class="sys-tile" ${act ? `data-act="${act}"` : 'disabled'}>` +
+            // Swap the emoji span for <img src="..."> to use a real icon image.
+            `<span class="sys-ico">${icon}</span><span class="sys-label">${label}</span><i class="badge hidden" data-badge="${label}"></i></button>`,
+        ).join('')}
+      </div>
+      <div class="sys-view hidden" data-view="settings">
+        <button data-act="audio">เสียง</button>
+        <button data-act="hudstyle" id="sys-hudstyle"></button>
         <button data-act="help">ปุ่มลัด / วิธีเล่น</button>
         <div class="sys-sep"></div>
         <button data-act="chars">${guest ? 'กลับไปหน้า Guest' : 'กลับไปเลือกตัวละคร'}</button>
         <button data-act="logout">${guest ? 'กลับหน้าแรก' : 'ออกจากระบบ'}</button>
         ${guest ? '<div class="sys-note">สมัครสมาชิกที่หน้าแรก<br>เพื่อเก็บตัวละคร Guest นี้ไว้ถาวร</div>' : ''}
-      </div>
-      <div class="sys-view hidden" data-view="settings">
-        <button data-act="audio">เสียง</button>
-        <button data-act="hudstyle" id="sys-hudstyle"></button>
-        <button data-act="auto">ตั้งค่า Auto</button>
         <div class="sys-sep"></div>
+        <button data-act="resume" class="primary">กลับเข้าเกม</button>
         <button data-act="back">‹ กลับ</button>
       </div>`;
     this.panel.addEventListener('click', (e) => {
@@ -62,6 +98,21 @@ export class SystemMenu {
     this.countdownEl.id = 'exit-countdown';
     this.countdownEl.className = 'hidden';
     $('hud').append(this.countdownEl);
+  }
+
+  private readonly badges = new Map<string, number>();
+
+  /** Player notification on an icon (key = the icon's Thai label, e.g. 'จดหมาย'): 0 hides it, 1 = red dot, 2+ = number.
+   *  The top-right เมนู icon shows the total of all the others. Nothing calls this yet: no feature sends notifications. */
+  setBadge(key: string, count: number): void {
+    this.badges.set(key, count);
+    const total = [...this.badges].reduce((a, [k, n]) => a + (k === 'เมนู' ? 0 : n), 0);
+    for (const el of document.querySelectorAll<HTMLElement>('i.badge')) {
+      const n = el.dataset.badge === 'เมนู' ? total : (this.badges.get(el.dataset.badge!) ?? 0);
+      el.classList.toggle('hidden', n <= 0);
+      el.classList.toggle('dot', n === 1);
+      el.textContent = n > 1 ? String(n) : '';
+    }
   }
 
   get open(): boolean {
@@ -88,6 +139,11 @@ export class SystemMenu {
   /** Called every frame with what the player is doing, to track combat and run the exit countdown. */
   update(dt: number, acting: boolean, moving: boolean): void {
     this.clock += dt;
+    this.autoBtn.classList.toggle('active', this.g.autoPlay);
+    this.autoBtn.querySelector('.sys-label')!.textContent = this.g.autoPlay ? 'AUTO: ON' : 'AUTO: OFF';
+    const muted = audioEngine.settings.muted;
+    this.muteBtn.querySelector('.sys-ico')!.textContent = muted ? '🔇' : '🔊';
+    this.muteBtn.querySelector('.sys-label')!.textContent = muted ? 'ปิดเสียง' : 'เสียง';
     const p = this.g.player;
     if (this.lastHp >= 0 && p.hp < this.lastHp - 0.5) {
       this.lastCombat = this.clock;
@@ -116,6 +172,9 @@ export class SystemMenu {
       case 'close':
       case 'resume':
         return this.toggle(false);
+      case 'bag':
+        this.toggle(false);
+        return this.g.hud.toggleBag(true);
       case 'settings':
         return this.showView('settings');
       case 'back':
@@ -129,9 +188,6 @@ export class SystemMenu {
       case 'hudstyle':
         $('btn-hud-style').click();
         return void ($('sys-hudstyle').textContent = $('btn-hud-style').textContent);
-      case 'auto':
-        this.toggle(false);
-        return $('btn-auto-set').click();
       case 'chars':
         return this.requestExit('characters');
       case 'logout':
