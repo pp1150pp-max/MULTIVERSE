@@ -357,6 +357,7 @@ export class Player extends Unit {
       best = Math.max(best, plusOf(it));
     }
     this.aura = auraTier(best);
+    for (const [k, mult] of Object.entries(this.cls.statMult ?? {}) as [keyof Stats, number][]) s[k] *= mult;
     // Regen is cut so players lean on potions; applied last so gear is cut too.
     s.hpRegen *= HP_REGEN_MULT;
     s.mpRegen *= MP_REGEN_MULT;
