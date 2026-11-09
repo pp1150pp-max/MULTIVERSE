@@ -25,6 +25,7 @@ import type { Backend, EnhanceOutcome, ProjectileLike } from '../backend';
 import type { RerollKind } from '../../shared/data/reroll';
 import type { Hazard } from '../../shared/sim/volcanoHeart';
 import type { MarketCall, MarketReply } from '../../shared/sim/market';
+import type { RoomLobbyView, RoomSnap } from '../../shared/bossRoom';
 import type { MailCall, MailReply } from '../../shared/mail';
 
 /** Mirrors never run game logic, so they don't need a simulation behind them. */
@@ -131,6 +132,10 @@ export class OnlineBackend implements Backend {
   onTradeRequestGone: ((from: number) => void) | null = null;
   onTrade: ((view: TradeView) => void) | null = null;
   onTradeEnd: ((ok: boolean, msg: string) => void) | null = null;
+  /** Boss rooms: an invite from your leader (answer within `seconds`), one that went away, and your lobby (leader). */
+  onRoomInvite: ((id: number, from: string, boss: string, keys: number, seconds: number) => void) | null = null;
+  onRoomInviteGone: ((id: number) => void) | null = null;
+  onRoomLobby: ((view: RoomLobbyView | null) => void) | null = null;
   party: PartySnap | null = null;
   private partyReq = 0;
   private readonly partyWait = new Map<number, (list: PartyFound[]) => void>();
@@ -151,12 +156,14 @@ export class OnlineBackend implements Backend {
   private readonly targets = new Map<object, Vec2>();
   private events: SimEvent[] = [];
   hazards: readonly Hazard[] = [];
-  /** From the last snapshot, counted down locally in between (see bossRespawnIn). */
-  private bossIn: number | null = null;
-  private bossInAt = 0;
+  /** From the last snapshot; `leaveIn` is counted down locally in between (see room). */
+  private roomSnap: RoomSnap | null = null;
+  private roomAt = 0;
 
-  get bossRespawnIn(): number | null {
-    return this.bossIn === null ? null : Math.max(0, this.bossIn - (performance.now() - this.bossInAt) / 1000);
+  get room(): RoomSnap | null {
+    const r = this.roomSnap;
+    if (!r || r.leaveIn === undefined) return r;
+    return { ...r, leaveIn: Math.max(0, r.leaveIn - (performance.now() - this.roomAt) / 1000) };
   }
   private serverTime = 0;
   private serverTimeAt = performance.now();
@@ -333,6 +340,15 @@ export class OnlineBackend implements Backend {
       case 'partyInviteGone':
         this.onPartyInviteGone?.(m.party);
         break;
+      case 'roomInvite':
+        this.onRoomInvite?.(m.id, m.from, m.boss, m.keys, m.seconds);
+        break;
+      case 'roomInviteGone':
+        this.onRoomInviteGone?.(m.id);
+        break;
+      case 'roomLobby':
+        this.onRoomLobby?.(m.view);
+        break;
       case 'tradeRequest':
         this.onTradeRequest?.(m.from, m.name, m.seconds);
         break;
@@ -466,8 +482,8 @@ export class OnlineBackend implements Backend {
     this.serverTimeAt = performance.now();
     this.onlineCount = s.online;
     this.hazards = s.hazards ?? [];
-    this.bossIn = s.bossIn ?? null;
-    this.bossInAt = performance.now();
+    this.roomSnap = s.room ?? null;
+    this.roomAt = performance.now();
     this.party = s.party ?? null;
     this.me.partyId = this.party?.id ?? null;
     if (!document.hidden) this.events.push(...s.events);
@@ -864,6 +880,10 @@ export class OnlineBackend implements Backend {
   partyKick(charId: number): void { this.send({ t: 'act', a: 'partyKick', charId }); }
   setPartyBlock(on: boolean): void { this.send({ t: 'act', a: 'partyBlock', on }); }
   tradeRequest(name: string): void { this.send({ t: 'act', a: 'tradeRequest', name }); }
+  roomOpen(keys: number): void { this.send({ t: 'act', a: 'roomOpen', keys }); }
+  roomAnswer(id: number, yes: boolean): void { this.send({ t: 'act', a: 'roomAnswer', id, yes }); }
+  roomStart(): void { this.send({ t: 'act', a: 'roomStart' }); }
+  roomCancel(): void { this.send({ t: 'act', a: 'roomCancel' }); }
   tradeAnswer(from: number, yes: boolean): void { this.send({ t: 'act', a: 'tradeAnswer', from, yes }); }
   tradeAdd(slot: number, n?: number): void { this.send(n === undefined ? { t: 'act', a: 'tradeAdd', slot } : { t: 'act', a: 'tradeAdd', slot, n }); }
   tradeRemove(slot: number): void { this.send({ t: 'act', a: 'tradeRemove', slot }); }

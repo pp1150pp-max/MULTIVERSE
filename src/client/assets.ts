@@ -202,6 +202,11 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   ruin_house: ruin('ruin_house', 'tent'),
   ruin_tower: ruin('ruin_tower', 'watchtower'),
   ruin_statue: ruin('ruin_statue', 'runestone'),
+  // Boss summoners: the statue stands in until their own pictures exist (art_templates/boss_rooms).
+  summoner_forest: ruin('summoner_forest', 'ruin_statue'),
+  summoner_marsh: ruin('summoner_marsh', 'ruin_statue'),
+  summoner_snow: ruin('summoner_snow', 'ruin_statue'),
+  summoner_volcano: ruin('summoner_volcano', 'ruin_statue'),
   ruin_rubble: ruin('ruin_rubble', 'rock_2'),
   town_stall: ruin('town_stall', 'cart'),
   town_forge: ruin('town_forge', 'cart'),

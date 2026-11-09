@@ -31,6 +31,8 @@ import { Trades, type TradeActor } from './trade';
 import { Friends, type FriendActor } from './friends';
 import { FRIEND_NAME_MAX, type FriendChar } from '../src/shared/friends';
 import { PARTY_SEARCH_LIMIT, PARTY_SEARCH_MAX, type PartyFound, type PartySnap } from '../src/shared/party';
+import { BossRooms } from './bossRooms';
+import { STONE_NAME, STONE_STACK } from '../src/shared/data/stones';
 
 const AUTOSAVE_MS = 30_000;
 const GUEST_STASH_MSG = 'Guest ใช้คลังเก็บของไม่ได้ — สมัครสมาชิกเพื่อใช้คลัง (ตัวละครนี้จะย้ายไปอยู่ในบัญชีใหม่)';
@@ -58,7 +60,7 @@ const TRADE_LOCKED = new Set([
   'equip', 'unequip', 'drop', 'buy', 'move', 'sort', 'buyBack', 'sell', 'split', 'sellRarity', 'enhance', 'reroll',
   'stashPut', 'stashTake', 'stashMove', 'stashSort', 'stashBuy', 'stashGold', 'stashSplit',
   'mktSearch', 'mktMine', 'mktList', 'mktCancel', 'mktBuy', 'mktClaim',
-  'mailList', 'mailRead', 'mailClaim', 'mailDelete', 'mailDeleteRead',
+  'mailList', 'mailRead', 'mailClaim', 'mailDelete', 'mailDeleteRead', 'roomOpen',
 ]);
 const TRADE_LOCKED_MSG = 'กำลังเทรดอยู่ — ปิดหน้าต่างเทรดก่อนถึงจะจัดการของได้';
 const PARTY_GUEST_MSG = 'Guest ใช้ระบบปาร์ตี้ไม่ได้ — สมัครสมาชิกเพื่อใช้งาน';
@@ -224,6 +226,8 @@ export class GameWorld {
   readonly trades: Trades;
   /** Friends, friend requests and blocks (saved, per account). */
   readonly friends: Friends;
+  /** Boss summoning lobbies and the boss rooms' Sims (in memory only). */
+  readonly rooms: BossRooms;
   /** Set while the server counts down to stopping: no new players may join. */
   private closing: ShutdownMode | null = null;
   private last = performance.now();
@@ -244,6 +248,8 @@ export class GameWorld {
       moved: (charId, partyId) => {
         const s = this.sessionOfChar(charId);
         if (s) s.player.partyId = partyId;
+        // Left (or was kicked from) the party: a summoning it led is called off, an invite to it is a "no".
+        if (partyId === null) this.rooms?.gone(charId);
       },
       invited: (to, party, from, seconds) => {
         const s = this.sessionOfChar(to);
@@ -294,6 +300,51 @@ export class GameWorld {
       changed: (accountId) => this.sendFriends(accountId),
     });
     setInterval(() => this.friendsTick(), 1000);
+    this.rooms = new BossRooms({
+      actor: (charId) => {
+        const s = this.sessionOfChar(charId);
+        return s && { charId, name: s.player.name, player: s.player, sim: s.sim };
+      },
+      party: (charId) => {
+        const party = this.parties.of(charId);
+        return party && { leader: party.members[0].charId, members: party.members.map((m) => ({ charId: m.charId, name: m.name })) };
+      },
+      tell: (charId, text) => {
+        const s = this.sessionOfChar(charId);
+        if (s) this.send(s.ws, { t: 'chat', name: '', text });
+      },
+      invite: (charId, id, from, boss, keys, seconds) => {
+        const s = this.sessionOfChar(charId);
+        if (s) this.send(s.ws, { t: 'roomInvite', id, from, boss, keys, seconds });
+      },
+      inviteGone: (charId, id) => {
+        const s = this.sessionOfChar(charId);
+        if (s) this.send(s.ws, { t: 'roomInviteGone', id });
+      },
+      lobby: (charId, view) => {
+        const s = this.sessionOfChar(charId);
+        if (s) this.send(s.ws, { t: 'roomLobby', view });
+      },
+      enter: (charIds, sim) => {
+        for (const id of charIds) {
+          const s = this.sessionOfChar(id);
+          if (s) this.travel(s, sim, true);
+        }
+      },
+      toTown: (sim, p) => {
+        const s = this.byPlayer.get(p);
+        if (!s || s.sim !== sim) return;
+        // The dead wake up in town (EXP loss, the death screen closes); the living just walk out.
+        if (!p.alive) sim.respawn(p);
+        else this.travel(s, HUB_ID, true);
+      },
+      refund: (charId, key, n) => this.refundKeys(charId, key, n),
+      save: (charId) => {
+        const s = this.sessionOfChar(charId);
+        if (s) this.save(s);
+      },
+    });
+    setInterval(() => this.rooms.tick(), 250);
     this.expireMarket();
     setInterval(() => this.expireMarket(), MARKET_EXPIRE_MS);
   }
@@ -425,6 +476,8 @@ export class GameWorld {
     if (!this.sessions.has(s)) return;
     // Whatever the reason (quit, lost connection, a login from elsewhere): the trade ends, nothing moves.
     this.trades.cancelChar(s.charId, `${s.player.name} ออกจากเกม`);
+    // Before saving: a summoning this character led gives its keys back now.
+    this.rooms.gone(s.charId);
     this.save(s);
     if (how === 'quit') this.parties.leave(s.charId);
     else if (how === 'drop') {
@@ -648,6 +701,9 @@ export class GameWorld {
     if (typeof m.a === 'string' && m.a.startsWith('party')) return this.onParty(s, m);
     if (typeof m.a === 'string' && m.a.startsWith('trade')) return this.onTrade(s, m);
     if (typeof m.a === 'string' && m.a.startsWith('friend')) return this.onFriend(s, m);
+    if (m.a === 'roomOpen' || m.a === 'roomAnswer' || m.a === 'roomStart' || m.a === 'roomCancel') {
+      if (m.a !== 'roomOpen' || !this.trades.busy(s.charId)) return this.onRoom(s, m);
+    }
     if (TRADE_LOCKED.has(m.a) && this.trades.busy(s.charId)) {
       this.send(s.ws, { t: 'chat', name: '', text: TRADE_LOCKED_MSG });
       // The market and the mailbox wait for an answer: tell them "no" so their windows don't hang.
@@ -1240,7 +1296,7 @@ export class GameWorld {
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
     const travels: { s: Session; zone: string; atCamp?: boolean }[] = [];
-    for (const sim of this.sims.values()) {
+    for (const sim of [...this.sims.values(), ...this.rooms.sims()]) {
       sim.step(dt, this.intentOf);
       for (const ev of sim.drainEvents()) {
         if (ev.t === 'save') {
@@ -1289,8 +1345,8 @@ export class GameWorld {
   }
 
   /** Moves a session's character into another zone's Sim, keeping HP/MP. */
-  private travel(s: Session, zoneId: string, atCamp = false): void {
-    const dest = this.sims.get(zoneId);
+  private travel(s: Session, to: string | Sim, atCamp = false): void {
+    const dest = typeof to === 'string' ? this.sims.get(to) : to;
     if (!dest || dest === s.sim || !this.sessions.has(s)) return;
     this.trades.cancelChar(s.charId, `${s.player.name} เปลี่ยนแมพ`);
     const old = s.player;
@@ -1362,7 +1418,6 @@ export class GameWorld {
       me.stash = p.stash;
     }
     const sim = s.sim;
-    const bossIn = sim.bossRespawnIn();
     const msg: SnapshotMsg = {
       t: 'snap',
       time: r2(sim.time),
@@ -1388,7 +1443,7 @@ export class GameWorld {
         color: pr.o.color, size: pr.o.size, art: pr.o.art,
       })),
       ...(sim.hazards.length && sim.zone.boss && near(sim.zone.boss) ? { hazards: sim.hazards } : {}),
-      ...(bossIn !== null ? { bossIn: Math.round(bossIn * 10) / 10 } : {}),
+      room: this.rooms.snap(sim),
       loots: sim.loots.filter(near).map((l) => ({
         id: l.id, x: r2(l.x), z: r2(l.z), fromX: r2(l.fromX), fromZ: r2(l.fromZ), t: r2(l.t),
         kind: l.kind, dropped: l.dropped, owner: l.owner, ownerUntil: r2(l.ownerUntil),
@@ -1425,6 +1480,7 @@ export class GameWorld {
    */
   closeAll(mode: ShutdownMode): number {
     this.closing = mode;
+    this.rooms.closeAll();
     const all = [...this.sessions];
     for (const s of all) {
       this.send(s.ws, { t: 'kick', msg: shutdownKick(mode) });
@@ -1442,6 +1498,10 @@ export class GameWorld {
     const zones = [...this.sims.values()].map((sim) => ({
       id: sim.zone.id, nameTh: sim.zone.nameTh, count: [...this.sessions].filter((s) => s.sim === sim).length,
     }));
+    // Boss rooms: one line per room (all its channels together), only while someone is in one.
+    for (const room of new Set(this.rooms.sims().map((sim) => sim.zone))) {
+      zones.push({ id: room.id, nameTh: room.nameTh, count: [...this.sessions].filter((s) => s.sim.zone === room).length });
+    }
     const players: AdminOnlineRow[] = [...this.sessions].map((s) => ({
       charId: s.charId, accountId: s.accountId, username: s.guest ? 'Guest' : s.username, guest: s.guest,
       name: s.player.name, classId: s.player.cls.id, level: s.player.level, zone: s.sim.zone.id,
@@ -1451,6 +1511,39 @@ export class GameWorld {
       hidden: s.hidden, gpu: s.gpu, ip: s.ip, playedMs: Date.now() - s.joinedAt,
     }));
     return { zones, players };
+  }
+
+  // ------------------------------------------------------------ boss rooms (server/bossRooms.ts)
+
+  private onRoom(s: Session, m: ActionMsg): void {
+    if (!this.sessions.has(s)) return;
+    let err: string | null = null;
+    if (m.a === 'roomOpen') err = this.rooms.open(s.charId, m.keys);
+    else if (m.a === 'roomAnswer') err = this.rooms.answer(s.charId, m.id, m.yes);
+    else if (m.a === 'roomStart') err = this.rooms.start(s.charId);
+    else if (m.a === 'roomCancel') err = this.rooms.cancel(s.charId);
+    if (err) this.send(s.ws, { t: 'chat', name: '', text: err });
+  }
+
+  /** Keys of a summoning that was called off go back: into the bag (online, with room), else by mail. */
+  private refundKeys(charId: number, key: Parameters<Player['addStones']>[0], n: number): void {
+    const s = this.sessionOfChar(charId);
+    if (s && s.player.addStones(key, n)) {
+      this.save(s);
+      return;
+    }
+    const name = s?.player.name ?? this.db.adminCharacter(charId)?.name;
+    const sent = name && this.mail.send({ id: null, name: 'ระบบ' }, {
+      target: { kind: 'char', name },
+      title: 'คืนกุญแจห้องบอส',
+      body: `การตีบอสถูกยกเลิก กระเป๋าเต็มจึงส่ง${STONE_NAME[key]} ×${n} คืนทางจดหมาย`,
+      attach: { gold: 0, items: Array.from({ length: Math.ceil(n / STONE_STACK) }, (_, i) => ({ kind: 'stone', stone: key, count: Math.min(STONE_STACK, n - i * STONE_STACK) })) },
+    });
+    if (!name || typeof sent === 'string') console.error(`[rooms] could not give back ${n} ${key} to character ${charId}: ${sent ?? 'no such character'}`);
+    else {
+      if (s) this.send(s.ws, { t: 'chat', name: '', text: `กระเป๋าเต็ม — ส่ง${STONE_NAME[key]} ×${n} คืนทางจดหมาย` });
+      this.mailArrived();
+    }
   }
 
   private sessionOfChar(charId: number): Session | undefined {

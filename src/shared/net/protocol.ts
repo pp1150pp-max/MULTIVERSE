@@ -15,6 +15,7 @@ import type { MailCall, MailReply } from '../mail';
 import type { PartyFound, PartySnap } from '../party';
 import type { TradeView } from '../trade';
 import type { FriendsView } from '../friends';
+import type { RoomLobbyView, RoomSnap } from '../bossRoom';
 
 export const WS_PATH = '/ws';
 /** Server simulation rate and how often it sends snapshots. */
@@ -120,7 +121,12 @@ export type ActionMsg =
   | { t: 'act'; a: 'friendBlock'; name: string }
   | { t: 'act'; a: 'friendUnblock'; acc: number }
   /** Asks for a fresh `friends` view (opening the window). */
-  | { t: 'act'; a: 'friendList' };
+  | { t: 'act'; a: 'friendList' }
+  // Boss rooms (server/bossRooms.ts): put `keys` keys into the summoner you stand next to, answer an invite, start or call off.
+  | { t: 'act'; a: 'roomOpen'; keys: number }
+  | { t: 'act'; a: 'roomAnswer'; id: number; yes: boolean }
+  | { t: 'act'; a: 'roomStart' }
+  | { t: 'act'; a: 'roomCancel' };
 
 /** Close code the browser uses when the player leaves on purpose (leaves the party at once, no grace time). */
 export const WS_CLOSE_QUIT = 4000;
@@ -208,8 +214,8 @@ export interface SnapshotMsg {
   loots: LootSnap[];
   /** Boss ground attacks in progress (left out when there are none). */
   hazards?: Hazard[];
-  /** Seconds until the zone's boss comes back (left out while it is alive). */
-  bossIn?: number;
+  /** The boss room you are in (left out elsewhere). */
+  room?: RoomSnap;
   /** Your party, every member wherever they are (left out when you are in none). */
   party?: PartySnap;
   events: SimEvent[];
@@ -238,6 +244,12 @@ export type ServerMsg =
   /** Someone asks you to trade; answer within `seconds`. `from` is their character id. */
   | { t: 'tradeRequest'; from: number; name: string; seconds: number }
   | { t: 'tradeRequestGone'; from: number }
+  /** Your party leader opened a boss room; answer within `seconds`. */
+  | { t: 'roomInvite'; id: number; from: string; boss: string; keys: number; seconds: number }
+  /** That invite can't be answered any more (started, called off, or timed out). */
+  | { t: 'roomInviteGone'; id: number }
+  /** The leader's lobby window: its state, or null when it closes. */
+  | { t: 'roomLobby'; view: RoomLobbyView | null }
   /** The trade window's state (sent on every change). */
   | { t: 'trade'; view: TradeView }
   /** The trade ended: `ok` = it went through. Closes the window. */

@@ -1,6 +1,6 @@
 // Zone layout and collision, without any rendering. Built from the zone seed, so the browser and
 // the server get exactly the same trees, rocks and camp.
-import { arenaRadius, clearingRadius, lavaAt, themeAt, type ZoneDef, type ZoneTheme } from '../data/zones';
+import { arenaRadius, clearingRadius, lairOf, lavaAt, themeAt, type Lair, type ZoneDef, type ZoneTheme } from '../data/zones';
 import { NPC_IDS, type NpcId } from '../data/npcs';
 import { mulberry32, pick, rand, type Rng } from '../rng';
 import type { Vec2 } from '../types';
@@ -66,6 +66,17 @@ const THEME_PROPS: Record<ZoneTheme, ThemeProps> = {
 
 /** How close a player has to walk to a portal to use it. */
 export const PORTAL_RANGE = 1.4;
+/** The boss summoner on each map: its picture, height and how much of it is solid. */
+export const SUMMONER_PROP: Record<ZoneTheme, string> = {
+  forest: 'summoner_forest',
+  marsh: 'summoner_marsh',
+  snow: 'summoner_snow',
+  volcano: 'summoner_volcano',
+};
+export const SUMMONER_HEIGHT = 3.2;
+export const SUMMONER_SOLID = 0.9;
+/** How close a player must stand to the summoner to put keys in (the server checks it). */
+export const SUMMONER_RANGE = 3.5;
 
 /** Where players can rest: the hub's fountain and each zone camp's campfire. See Sim.rest. */
 export interface RestSpot { x: number; z: number; kind: 'fountain' | 'campfire' }
@@ -98,11 +109,14 @@ export class Terrain {
   /** Only zones with `npcs` (the hub) have any. */
   readonly npcPos: Partial<Record<NpcId, Vec2>> = {};
   readonly restSpots: RestSpot[] = [];
+  /** The map's boss summoner, if it has one (see ZoneDef.lair). */
+  readonly summoner: Lair | null;
   private readonly segs: Seg[] = [];
 
   constructor(readonly zone: ZoneDef) {
     this.half = zone.half;
     this.bound = zone.half - 8;
+    this.summoner = zone.lair ?? null;
     for (const line of [zone.path, ...zone.branches]) {
       for (let i = 1; i < line.length; i++) this.segs.push([line[i - 1][0], line[i - 1][1], line[i][0], line[i][1]]);
     }
@@ -285,7 +299,7 @@ export class Terrain {
 
     const s = zone.start;
     if (zone.npcs) this.placeTown(r);
-    else this.placeCamp();
+    else if (!zone.roomOf) this.placeCamp();
 
     // Pebbles along the paths (no collision).
     for (const [ax, az, bx, bz] of this.segs) {
@@ -304,12 +318,13 @@ export class Terrain {
       }
     }
 
-    // Boss clearing ring of runestones.
-    const b = zone.boss;
+    // Boss clearing ring of runestones: around the boss in its room, around the summoner on its map.
+    const b = lairOf(zone);
     if (b) {
       const ring = arenaRadius(zone);
       const set = this.setAt(r, b.x, b.z);
-      if (zone.bossSolid) this.colliders.push({ x: b.x, z: b.z, r: zone.bossSolid });
+      if (zone.boss && zone.bossSolid) this.colliders.push({ x: b.x, z: b.z, r: zone.bossSolid });
+      if (zone.lair) this.addProp(SUMMONER_PROP[zone.theme], b.x, b.z, SUMMONER_HEIGHT, SUMMONER_SOLID);
       for (let a = 0.3; a < Math.PI * 2; a += Math.PI / 4) {
         const [ringRock, ringH] = set.ringRock;
         this.addProp(a % 2 > 1 ? ringRock : 'runestone', b.x + Math.cos(a) * ring, b.z + Math.sin(a) * ring, a % 2 > 1 ? ringH : 2.6, 0.6);

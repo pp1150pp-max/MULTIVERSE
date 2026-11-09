@@ -2,7 +2,7 @@
 import { finish, ok } from './check';
 import { expToNext } from '../src/shared/formulas';
 import { Sim } from '../src/shared/sim/Sim';
-import { ZONES } from '../src/shared/data/zones';
+import { BOSS_ROOMS, ZONES } from '../src/shared/data/zones';
 import type { CharacterData } from '../src/shared/sim/Player';
 
 // ---------------------------------------------------------------- EXP curve (owner numbers, 2026-11-09)
@@ -19,7 +19,8 @@ const hero = (level: number, extra: Partial<CharacterData> = {}): CharacterData 
 type Priv = { shareExp(m: unknown): void; addExp(p: unknown, n: number): void };
 function fixture() {
   const sim = new Sim(ZONES.emerald_forest);
-  const bear = sim.monsters.find((m) => m.def.id === 'forest_bear')!;
+  // The bear lives in its room now; shareExp only needs who hit it, so it is scored on the map's Sim.
+  const bear = new Sim(BOSS_ROOMS.emerald_forest).monsters.find((m) => m.def.id === 'forest_bear')!;
   const mob = sim.monsters.find((m) => !m.isBoss)!;
   return { sim, bear, mob };
 }

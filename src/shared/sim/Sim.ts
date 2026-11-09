@@ -1,6 +1,6 @@
 // The game rules, with no rendering. The game server runs one of these per zone. Whoever drives it calls step() every frame and reads drainEvents()
 // to show effects, damage numbers and messages.
-import { HUB_ID, ZONES, inSafeArea, type SafeArea, type ZoneDef, type SpawnArea } from '../data/zones';
+import { HUB_ID, NO_BOOST, ZONES, inSafeArea, type MonsterBoost, type SafeArea, type ZoneDef, type SpawnArea } from '../data/zones';
 import { MONSTERS } from '../data/monsters';
 import { AUTO_EXP_MULT, expGapMult, expToNext, mitigate, MAX_LEVEL, MISS_GAP, outLevelled } from '../formulas';
 import { blockingGate, BOSS_GATE_IDS } from '../data/bossGates';
@@ -134,7 +134,16 @@ export class Sim {
   /** A boss that jumped off the map, waiting for its minions to die. */
   private vanished: { boss: Monster; minions: Monster[]; awayT: number } | null = null;
 
-  constructor(readonly zone: ZoneDef) {
+  /** Keys put into this boss room (1 elsewhere): the boss's HP, attack and rewards are multiplied by it. */
+  readonly keys: number;
+  /** What this zone's monsters (and their summons) are boosted by, keys included. */
+  private readonly boost: MonsterBoost | undefined;
+  /** A boss room whose boss is dead: its portal back to town opens and nothing comes back. */
+  cleared = false;
+
+  constructor(readonly zone: ZoneDef, opts: { keys?: number } = {}) {
+    this.keys = Math.max(1, Math.floor(opts.keys ?? 1));
+    this.boost = this.keys > 1 ? { ...(zone.monsterBoost ?? NO_BOOST), keys: this.keys } : zone.monsterBoost;
     this.terrain = new Terrain(zone);
     for (const area of zone.spawns) this.spawners.push({ area, alive: 0, queue: [], boss: false });
     if (zone.boss) this.spawners.push({ area: zone.boss, alive: 0, queue: [], boss: true });
@@ -226,13 +235,6 @@ export class Sim {
 
   // ------------------------------------------------------------ spawning
 
-  /** Seconds until the zone's boss comes back, or null while it is alive (or the zone has none). */
-  bossRespawnIn(): number | null {
-    const sp = this.spawners.find((s) => s.boss);
-    if (!sp || sp.alive > 0 || !sp.queue.length) return null;
-    return Math.max(0, Math.min(...sp.queue) - this.time);
-  }
-
   private spawnMonster(sp: Spawner): void {
     const def = MONSTERS[sp.area.monster];
     const r = Math.random;
@@ -245,12 +247,8 @@ export class Sim {
       z = sp.area.z + Math.sin(a) * d;
       if (!this.terrain.isBlocked(x, z, def.radius)) break;
     }
-    this.monsters.push(new Monster(this.newId(), def, randInt(r, def.levels[0], def.levels[1]), sp.area, x, z, sp.area.boost ?? this.zone.monsterBoost));
+    this.monsters.push(new Monster(this.newId(), def, randInt(r, def.levels[0], def.levels[1]), sp.area, x, z, sp.area.boost ?? this.boost));
     sp.alive++;
-    if (sp.boss && this.time > 1) {
-      this.log(`⚠ ${def.nameTh} ปรากฏตัวที่ส่วนลึกของ${this.zone.nameTh}!`, '#ff9a6a');
-      this.events.push({ t: 'bossSpawn', name: def.nameTh });
-    }
   }
 
   // ------------------------------------------------------------ combat
@@ -460,6 +458,8 @@ export class Sim {
     // Their own home spot (no spawner owns it), so they wander here after the fight and never respawn.
     const area: SpawnArea = { monster: monsterId, x: boss.x, z: boss.z, radius: 4, count: 0, respawn: [0, 0] };
     const r = Math.random;
+    // Spread over everyone still standing: minion 1 on the first player, 2 on the second, and round again.
+    const prey = this.players.filter((p) => p.alive && !this.inSafe(p));
     for (let i = 0; i < count; i++) {
       const a = (i / count) * Math.PI * 2 + r() * 0.5;
       let x = boss.x + Math.cos(a) * (boss.radius + 1.6);
@@ -468,9 +468,9 @@ export class Sim {
         x = boss.x;
         z = boss.z;
       }
-      const m = new Monster(this.newId(), def, randInt(r, def.levels[0], def.levels[1]), area, x, z, this.zone.monsterBoost);
+      const m = new Monster(this.newId(), def, randInt(r, def.levels[0], def.levels[1]), area, x, z, this.boost);
       m.summoned = true;
-      m.target = boss.target;
+      m.target = prey.length ? prey[i % prey.length] : boss.target;
       m.aggroT = 12;
       m.state = 'chase';
       // They pounce at once, with only a short warning line. Leapers mark their landing spot instead.
@@ -499,11 +499,13 @@ export class Sim {
     const sp = this.spawners.find((s) => s.area === m.area);
     if (sp) {
       sp.alive--;
-      sp.queue.push(this.time + rand(Math.random, sp.area.respawn[0], sp.area.respawn[1]));
+      // A boss room's boss never comes back: the room closes after it.
+      if (!this.zone.roomOf) sp.queue.push(this.time + rand(Math.random, sp.area.respawn[0], sp.area.respawn[1]));
     }
     if (m.isBoss) {
       this.log(`🏆 ปราบ ${m.def.name} สำเร็จ!`, '#ffcf5a');
       this.shake(0.4, m);
+      if (this.zone.roomOf) this.cleared = true;
     }
   }
 
@@ -520,7 +522,8 @@ export class Sim {
       const p = this.players.find((x) => x.id === id);
       if (!p || dealt <= 0) continue;
       const mult = expGapMult(p.level, m.level);
-      const exp = Math.max(1, Math.round(m.expReward * (dealt / total) * mult));
+      // A boss room gives the EXP of one kill per key put in.
+      const exp = Math.max(1, Math.round(m.expReward * (m.isBoss ? this.keys : 1) * (dealt / total) * mult));
       if (mult < 1 && m.level < p.level && !p.lowExpHinted) {
         p.lowExpHinted = true;
         this.log('มอนสเตอร์ที่ชื่อเป็นสีเทาเลเวลต่ำกว่าคุณมาก ได้ EXP น้อยลง — ไปล่าตัวที่เลเวลสูงกว่านี้', '#b9b09a', p.id);
@@ -663,18 +666,22 @@ export class Sim {
     const owner = top?.id;
     // Everyone in the top damage dealer's party (on this map) shares that first pick, gold included.
     const party = top?.partyId ?? null;
-    const gold = Math.round(randInt(r, d.gold[0], d.gold[1]) * (1 + 0.1 * (m.level - d.levels[0])) * DROP_GOLD_MULT);
+    // A boss room's boss drops everything once per key put in (owner: rewards times the keys).
+    const times = m.isBoss ? this.keys : 1;
+    const gold = Math.round(randInt(r, d.gold[0], d.gold[1]) * (1 + 0.1 * (m.level - d.levels[0])) * DROP_GOLD_MULT) * times;
     this.spawnLoot(m, { type: 'gold', amount: gold }, owner, party);
     if (m.isBoss) {
       const loot = d.bossLoot;
-      const n = loot?.items ?? randInt(r, 2, 3);
-      for (let i = 0; i < n; i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 1.5, band) }, owner, party);
-      for (let i = 0; i < (loot?.epics ?? 0); i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 1.5, band, 'epic') }, owner, party);
-      this.spawnLoot(m, { type: 'potion', pot: 'hp', size: 's', count: DROP_POTION_MULT }, owner, party);
-      this.spawnLoot(m, { type: 'potion', pot: 'mp', size: 's', count: DROP_POTION_MULT }, owner, party);
-      // Every blacksmith stone kind can drop from a boss, each rolled on its own.
-      for (const stone of BLACKSMITH_STONES) {
-        if (r() < (loot?.stoneChance ?? BOSS_STONE_CHANCE)) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner, party);
+      for (let k = 0; k < times; k++) {
+        const n = loot?.items ?? randInt(r, 2, 3);
+        for (let i = 0; i < n; i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 1.5, band) }, owner, party);
+        for (let i = 0; i < (loot?.epics ?? 0); i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 1.5, band, 'epic') }, owner, party);
+        this.spawnLoot(m, { type: 'potion', pot: 'hp', size: 's', count: DROP_POTION_MULT }, owner, party);
+        this.spawnLoot(m, { type: 'potion', pot: 'mp', size: 's', count: DROP_POTION_MULT }, owner, party);
+        // Every blacksmith stone kind can drop from a boss, each rolled on its own.
+        for (const stone of BLACKSMITH_STONES) {
+          if (r() < (loot?.stoneChance ?? BOSS_STONE_CHANCE)) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner, party);
+        }
       }
       return;
     }
@@ -686,7 +693,7 @@ export class Sim {
         if (r() < MONSTER_STONE_CHANCE) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner, party);
       }
       // The key of its home map's boss, wherever it stands (its map or the hub).
-      const key = home?.boss && BOSS_KEY[home.boss.monster];
+      const key = home?.lair && BOSS_KEY[home.lair.boss];
       if (key && r() < KEY_DROP_CHANCE) this.spawnLoot(m, { type: 'stone', stone: key, count: 1 }, owner, party);
     }
   }
@@ -694,7 +701,7 @@ export class Sim {
   private spawnLoot(m: Monster, kind: LootKind, owner?: number, ownerParty: number | null = null): void {
     const [x, z] = this.lootSpot(m.x, m.z, 0.5 + Math.random() * (m.isBoss ? 2 : 1));
     this.loots.push(new Loot(this.newId(), x, z, m.x, m.z, kind, {
-      owner, ownerParty, ownerUntil: this.time + LOOT_PRIORITY_TIME,
+      owner, ownerParty, ownerUntil: this.time + LOOT_PRIORITY_TIME, forever: !!this.zone.roomOf,
     }));
   }
 
@@ -1133,6 +1140,13 @@ export class Sim {
         continue;
       }
       if (!p.portalReady) continue;
+      if (this.zone.roomOf && !this.cleared) {
+        if (this.time - p.portalMsgAt > 3) {
+          p.portalMsgAt = this.time;
+          this.text(pt.x, 2.2, pt.z, 'ประตูจะเปิดเมื่อปราบบอสได้', 'info', 1.2, p.id);
+        }
+        continue;
+      }
       const dest = ZONES[pt.to];
       if (!dest) continue;
       if (p.level < pt.minLevel) {

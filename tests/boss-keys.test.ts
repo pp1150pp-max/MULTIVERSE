@@ -2,7 +2,7 @@
 // the hub), stacking to 10 like stones, sold for 1,000 G, listed under their own market kind.
 import { ok, finish } from './check';
 import { BOSS_KEY, KEY_DROP_CHANCE, STONE_DESC, STONE_NAME, STONE_STACK, stoneStackValue } from '../src/shared/data/stones';
-import { ZONE_1, ZONE_2, ZONE_3, ZONE_4, ZONE_HUB, type ZoneDef } from '../src/shared/data/zones';
+import { BOSS_ROOMS, ZONE_1, ZONE_2, ZONE_3, ZONE_4, ZONE_HUB, type ZoneDef } from '../src/shared/data/zones';
 import { Sim } from '../src/shared/sim/Sim';
 import { marketKind } from '../src/shared/sim/market';
 import { cleanStash } from '../src/shared/sim/stash';
@@ -11,7 +11,7 @@ import { BLACKSMITH_STONES, BOSS_KEYS, isBossKey, STONE_KINDS, type BossKey } fr
 
 const zones = [ZONE_1, ZONE_2, ZONE_3, ZONE_4];
 
-ok(new Set(zones.map((z) => BOSS_KEY[z.boss!.monster])).size === 4, 'every boss has its own key');
+ok(new Set(zones.map((z) => BOSS_KEY[z.lair!.boss])).size === 4, 'every boss has its own key');
 for (const k of BOSS_KEYS) ok(!!STONE_NAME[k] && !!STONE_DESC[k] && isBossKey(k), `${k} has a name and a description`);
 ok(BLACKSMITH_STONES.every((k) => !isBossKey(k)) && STONE_KINDS.length === BLACKSMITH_STONES.length + BOSS_KEYS.length, 'keys are not blacksmith stones');
 ok(KEY_DROP_CHANCE === 0.01, 'keys drop at 1%');
@@ -53,8 +53,9 @@ function keysFrom(zone: ZoneDef, rounds: number): { kinds: Map<BossKey, number>;
 }
 
 for (const zone of zones) {
-  const own = BOSS_KEY[zone.boss!.monster];
-  const { kinds, kills, bossKeys } = keysFrom(zone, 200);
+  const own = BOSS_KEY[zone.lair!.boss];
+  const { kinds, kills } = keysFrom(zone, 200);
+  const { bossKeys } = keysFrom(BOSS_ROOMS[zone.id], 50);
   const n = kinds.get(own) ?? 0;
   const rate = n / kills;
   ok(kinds.size === 1 && n > 0, `${zone.id}: its monsters drop only ${STONE_NAME[own]}`);

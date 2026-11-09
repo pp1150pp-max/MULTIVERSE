@@ -2105,7 +2105,7 @@ export class Hud {
     $('dialog').classList.add('hidden');
     if (!this.g.metSeeker) {
       this.g.metSeeker = true;
-      const boss = MONSTERS[ZONE_1.boss!.monster];
+      const boss = MONSTERS[ZONE_1.lair!.boss];
       this.log(`ภารกิจ: ฝึกฝนในป่ามรกต แล้วปราบ ${boss.name}`, '#ffd34a');
     }
   }
