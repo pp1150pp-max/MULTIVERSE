@@ -2,7 +2,7 @@
 // to show effects, damage numbers and messages.
 import { HUB_ID, ZONES, inSafeArea, type SafeArea, type ZoneDef, type SpawnArea } from '../data/zones';
 import { MONSTERS } from '../data/monsters';
-import { expGapMult, expToNext, mitigate, MAX_LEVEL } from '../formulas';
+import { expGapMult, expToNext, mitigate, MAX_LEVEL, MISS_GAP, outLevelled } from '../formulas';
 import { lineRanges, rerollStat, rerollValues, rollItem } from '../data/items';
 import { REROLL_NAME, rerollCost, type RerollKind } from '../data/reroll';
 import { inBossArena, LAVA_BURN, LAVA_TICK } from '../data/zones';
@@ -264,6 +264,14 @@ export class Sim {
       this.text(m.x, m.topY, m.z, 'ต้องเข้าลาน', 'info', 0.5, p.id);
       return;
     }
+    if (outLevelled(p.level, m.level)) {
+      this.text(m.x, m.topY, m.z, 'MISS', 'info', 0.6, p.id);
+      if (!p.missHinted) {
+        p.missHinted = true;
+        this.log(`${m.def.nameTh} เลเวลสูงกว่าคุณ ${MISS_GAP} เลเวลขึ้นไป — ตีไม่เข้า`, '#ff8a6a', p.id);
+      }
+      return;
+    }
     let raw = p.stats.atk * mult * (0.9 + Math.random() * 0.2);
     const crit = opts.forceCrit || Math.random() * 100 < p.stats.crit;
     if (crit) raw *= 1 + p.stats.critDmg / 100;
@@ -480,7 +488,7 @@ export class Sim {
       const mult = expGapMult(p.level, m.level);
       const exp = Math.max(1, Math.round(m.expReward * (dealt / total) * mult));
       this.text(m.x, m.topY + 0.4, m.z, mult < 1 ? `+${exp} EXP (−${Math.round((1 - mult) * 100)}%)` : `+${exp} EXP`, 'exp', 1.1, p.id);
-      if (mult < 1 && !p.lowExpHinted) {
+      if (mult < 1 && m.level < p.level && !p.lowExpHinted) {
         p.lowExpHinted = true;
         this.log('มอนสเตอร์ที่ชื่อเป็นสีเทาเลเวลต่ำกว่าคุณมาก ได้ EXP น้อยลง — ไปล่าตัวที่เลเวลสูงกว่านี้', '#b9b09a', p.id);
       }

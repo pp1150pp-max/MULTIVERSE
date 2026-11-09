@@ -86,6 +86,13 @@ export interface ZoneDef {
 export interface MonsterBoost {
   stats: number;
   speed: number;
+  /** How much faster skill cooldowns run (slam, throw, charge, leap, the Volcano Heart's rests). Default 1. */
+  skill?: number;
+  /**
+   * Every monster attacks any player who comes this close, whatever its own behaviour. Left out for
+   * the hub's monsters, which keep their own (see hubLoners).
+   */
+  aggro?: number;
 }
 export const NO_BOOST: MonsterBoost = { stats: 1, speed: 1 };
 
@@ -270,7 +277,7 @@ export const ZONE_3: ZoneDef = rotateZone(2, scatterZone({
   subtitle: 'เกาะลอยที่ปกคลุมด้วยน้ำแข็ง สนสูงมีหิมะเกาะ และทะเลสาบเยือกแข็งที่ลื่นจนคุมทิศทางยาก',
   levels: [21, 30],
   theme: 'snow',
-  monsterBoost: { stats: 1.5, speed: 1.1 },
+  monsterBoost: { stats: 4.5, speed: 1.375, skill: 1.25, aggro: 7 },
   allowAutoPlay: true,
   half: 64,
   seed: 20261105,
@@ -308,6 +315,7 @@ export const ZONE_4: ZoneDef = rotateZone(3, scatterZone({
   subtitle: 'เกาะหินดำลอยกลางอวกาศ ลาวาเดือดเป็นบ่อ รอยแยกเรืองแสง ขี้เถ้าลอยไม่หยุด และหัวใจของภูเขาไฟที่ยังเต้นอยู่',
   levels: [31, 40],
   theme: 'volcano',
+  monsterBoost: { stats: 7, speed: 1.25, skill: 1.25, aggro: 7 },
   allowAutoPlay: true,
   half: 64,
   seed: 20261107,
@@ -367,7 +375,8 @@ function hubLoners(zone: ZoneDef, sx: number, sz: number): SpawnArea[] {
       radius: 1,
       count: 1,
       respawn: kind.respawn,
-      boost: zone.monsterBoost ?? NO_BOOST,
+      // Stronger like at home, but they keep their own temper in town.
+      boost: zone.monsterBoost ? { ...zone.monsterBoost, aggro: undefined } : NO_BOOST,
     };
   });
 }

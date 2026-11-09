@@ -167,7 +167,7 @@ export class VolcanoHeartBrain {
         : this.startBlast(sim, m, t, ph);
       longest = Math.max(longest, len);
     }
-    this.nextSet = t + longest + ph.rest;
+    this.nextSet = t + longest + ph.rest / m.skillSpeed;
   }
 
   private startMeteors(sim: Sim, m: Monster, t: number, ph: HeartPhase): number {
