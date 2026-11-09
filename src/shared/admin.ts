@@ -2,6 +2,7 @@
 // and the server. The server checks the role and every value on each call; the page is only a view.
 import { isPotion, isStack, sameStack, STAT_KEYS, STAT_LABEL, STONE_KINDS, type BagEntry, type PotionKind, type PotionStack, type StoneStack, type ClassId, type EquipSlot, type Item, type Rarity, type SlotId, type StatKey, type StatLine } from './types';
 import type { ShutdownMode } from './net/protocol';
+import type { OrbLook } from './orbLook';
 import { itemNames, makeItem, roundStat, rowRanges, statStep, tierOf, TIER_VERSION } from './data/items';
 import { POTION_SIZES, potionName, stackLimit } from './data/potions';
 import { STONE_NAME } from './data/stones';
@@ -104,7 +105,7 @@ export interface AdminShutdownText { texts: Record<ShutdownMode, string>; defaul
 // ------------------------------------------------------------ owner tools (users, bans, broadcast, backups…)
 
 /** The newer admin tools. Each is its own switch so some can be opened to GMs later. */
-export type AdminFeature = 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview';
+export type AdminFeature = 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook';
 
 /**
  * Who may use each tool. To open one to GMs, add 'gm', e.g. `ban: ['owner', 'gm']`. The server
@@ -131,6 +132,8 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   tradeLog: ['owner'],
   // The orb test bench tab (owner 2026-11-10: owner and GMs). Only looks; changes nothing in the game.
   orbPreview: ['owner', 'gm'],
+  // Saving the server-wide orb look from that tab (owner 2026-11-10: owner only).
+  orbLook: ['owner'],
 };
 
 export const canUse = (role: AdminRole, f: AdminFeature): boolean => FEATURE_ROLES[f].includes(role);
@@ -360,4 +363,15 @@ export function addStackToBag(bag: (BagEntry | null)[], slots: number, kind: Adm
     left -= add;
   }
   return n - left;
+}
+
+/** GET/POST /api/admin/orb-look: the server-wide enhancement orb look and what may be chosen. */
+export interface AdminOrbLook {
+  look: OrbLook;
+  defaults: OrbLook;
+  /** May this admin save it (the `orbLook` switch). */
+  canEdit: boolean;
+  palettes: string[];
+  shapes: string[];
+  ranges: Record<string, [number, number]>;
 }

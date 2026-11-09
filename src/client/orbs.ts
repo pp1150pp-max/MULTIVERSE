@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { orbPlus, orbSlot } from '../shared/data/enhance';
 import { EQUIP_SLOTS } from '../shared/types';
+import { DEFAULT_ORB_LOOK, ORB_PALETTE_IDS, ORB_SHAPE_IDS, type OrbLook, type OrbPaletteId, type OrbShapeId } from '../shared/orbLook';
 
 /** How an orb of one + level looks. Sizes are in world units (the player is about 1.9 tall). */
 export interface OrbLevel {
@@ -39,30 +40,11 @@ const MAX_TRAIL = 7;
 const MAX_PARTICLES = 9;
 const MAX_ORBS = EQUIP_SLOTS.length;
 
-/** Tuning knobs (the preview page changes them; the game keeps the defaults). */
-export const orbTuning = {
-  /** Multiplies every orb, halo and spark size. */
-  scale: 1,
-  /** Orbit radius around the character's feet. */
-  radius: 0.95,
-  /** Turns per second of the whole ring. */
-  speed: 0.17,
-  /** Moves the whole ring up (+) or down (−). */
-  height: 0,
-  /** How far each orb floats up and down, and how fast (× its own rate). */
-  bob: 0.09,
-  bobSpeed: 1,
-  /** How much each orb sways ahead/behind its place (× the default; 0 = a rigid wheel). */
-  sway: 1,
-  /** Halo size and brightness (×). */
-  glow: 1,
-  glowAlpha: 1,
-  /** Sparks and trail dots (× the level table; capped at twice the table's most). */
-  particles: 1,
-  trail: 1,
-  /** true = soft round halo; false = the stepped pixel halo. */
-  softGlow: true,
-};
+/**
+ * Sizes and motion in use: the server-wide look (OrbLook, sent by the server) minus palette and shape,
+ * which have their own setters. Starts at the default until the server's look arrives.
+ */
+export const orbTuning: Omit<OrbLook, 'palette' | 'shape'> = (({ palette: _p, shape: _s, ...rest }) => rest)({ ...DEFAULT_ORB_LOOK });
 
 // ------------------------------------------------------------ palettes
 
@@ -70,7 +52,7 @@ export const orbTuning = {
 interface OrbColors { core: string; accent: string; glow: string }
 
 export interface OrbPalette {
-  id: string;
+  id: OrbPaletteId;
   /** Shown on the preview page. */
   name: string;
   colors(slot: number, plus: number): OrbColors;
@@ -93,9 +75,9 @@ function mix(a: string, b: string, k: number): string {
 const lvK = (plus: number): number => Math.max(0, Math.min(1, (plus - 7) / 8));
 
 /** A palette that shifts from a low-level look to a high-level look. */
-function graded(id: string, name: string, lo: OrbColors, hi: OrbColors): OrbPalette {
+function graded(name: string, lo: OrbColors, hi: OrbColors): Omit<OrbPalette, 'id'> {
   return {
-    id, name,
+    name,
     colors: (_slot, plus) => {
       const k = lvK(plus);
       return { core: mix(lo.core, hi.core, k), accent: mix(lo.accent, hi.accent, k), glow: mix(lo.glow, hi.glow, k) };
@@ -122,69 +104,76 @@ function auraColor(plus: number): string {
   return AURA_STEPS[0][1];
 }
 
-export const ORB_PALETTES: OrbPalette[] = [
-  graded('arcane', 'Arcane ฟ้า/ม่วง',
+/** Every palette in ORB_PALETTE_IDS (the Record makes a missing or unknown one a type error). */
+const PALETTE_DEFS: Record<OrbPaletteId, Omit<OrbPalette, 'id'>> = {
+  arcane: graded('Arcane ฟ้า/ม่วง',
     { core: '#4f8cff', accent: '#d8f0ff', glow: '#3f7cff' },
     { core: '#a65cff', accent: '#ffe0ff', glow: '#b060ff' }),
-  graded('holy', 'Holy ทอง',
+  holy: graded('Holy ทอง',
     { core: '#d9a02e', accent: '#fff6c8', glow: '#ffbf3a' },
     { core: '#ffe27a', accent: '#ffffff', glow: '#fff09a' }),
-  graded('fire', 'Fire แดง/ส้ม',
+  fire: graded('Fire แดง/ส้ม',
     { core: '#b8261e', accent: '#ffc070', glow: '#ff3a1a' },
     { core: '#ff7a1a', accent: '#fff0a0', glow: '#ffa030' }),
-  graded('ice', 'Ice ฟ้าน้ำแข็ง/ขาว',
+  ice: graded('Ice ฟ้าน้ำแข็ง/ขาว',
     { core: '#3aa6d8', accent: '#e8fbff', glow: '#5ad0ff' },
     { core: '#bdf2ff', accent: '#ffffff', glow: '#d8f8ff' }),
-  graded('nature', 'Nature เขียวมรกต',
+  nature: graded('Nature เขียวมรกต',
     { core: '#2f9e44', accent: '#d8ffb0', glow: '#4ad060' },
     { core: '#5ee08a', accent: '#f4ffd0', glow: '#9cff7a' }),
-  graded('void', 'Void ม่วงดำ/ชมพู',
+  void: graded('Void ม่วงดำ/ชมพู',
     { core: '#3a1f5c', accent: '#ff7ae0', glow: '#8a2cff' },
     { core: '#5a1f7c', accent: '#ffd0f8', glow: '#ff4ad8' }),
-  graded('blood', 'Blood Moon แดงเข้ม',
+  blood: graded('Blood Moon แดงเข้ม',
     { core: '#6a0f1a', accent: '#ff8a8a', glow: '#c01830' },
     { core: '#c8102e', accent: '#ffe0e0', glow: '#ff3050' }),
-  graded('ocean', 'Ocean ฟ้าเขียวทะเล',
+  ocean: graded('Ocean ฟ้าเขียวทะเล',
     { core: '#167a8a', accent: '#c8fff4', glow: '#20c0b0' },
     { core: '#2ad0c8', accent: '#ffffff', glow: '#6affe8' }),
-  graded('moon', 'Moonlight เงิน/ขาว',
+  moon: graded('Moonlight เงิน/ขาว',
     { core: '#8a93a8', accent: '#ffffff', glow: '#b8c4e0' },
     { core: '#e4e8f4', accent: '#ffffff', glow: '#ffffff' }),
-  graded('toxic', 'Toxic เขียวมะนาว/ม่วง',
+  toxic: graded('Toxic เขียวมะนาว/ม่วง',
     { core: '#6ad01a', accent: '#e8ff9a', glow: '#9cff2a' },
     { core: '#a0ff3a', accent: '#f0c0ff', glow: '#c070ff' }),
-  {
-    id: 'prism', name: 'Prism สีรุ้งตามระดับ',
+  prism: {
+    name: 'Prism สีรุ้งตามระดับ',
     colors: (_slot, plus) => {
       const c = PRISM[Math.max(0, Math.min(PRISM.length - 1, plus - 7))];
       return { core: c, accent: mix(c, '#ffffff', 0.7), glow: c };
     },
   },
-  {
-    id: 'slot', name: 'สีตามช่องที่สวม',
+  slot: {
+    name: 'สีตามช่องที่สวม',
     colors: (slot, plus) => {
       const c = SLOT_COLORS[slot] ?? '#ffffff';
       return { core: mix(c, '#000000', 0.15 * (1 - lvK(plus))), accent: mix(c, '#ffffff', 0.75), glow: c };
     },
   },
-  {
-    id: 'tier', name: 'ไล่สีตามระดับ (เข้ากับออร่า)',
+  tier: {
+    name: 'ไล่สีตามระดับ (เข้ากับออร่า)',
     colors: (_slot, plus) => {
       const c = auraColor(plus);
       return { core: c, accent: mix(c, '#ffffff', 0.75), glow: c };
     },
   },
-];
+};
+
+export const ORB_PALETTES: OrbPalette[] = ORB_PALETTE_IDS.map((id) => ({ id, ...PALETTE_DEFS[id] }));
 
 /** Orb outlines to try (rows of the orb atlas). */
-export const ORB_SHAPES: { id: string; name: string }[] = [
-  { id: 'sphere', name: 'ลูกกลม' },
-  { id: 'crystal', name: 'คริสตัล (ข้าวหลามตัด)' },
-  { id: 'flame', name: 'เปลวไฟ/วิญญาณ' },
-  { id: 'star', name: 'ดาว 4 แฉก' },
-];
+const SHAPE_NAMES: Record<OrbShapeId, string> = {
+  sphere: 'ลูกกลม',
+  crystal: 'คริสตัล (ข้าวหลามตัด)',
+  flame: 'เปลวไฟ/วิญญาณ',
+  star: 'ดาว 4 แฉก',
+};
+/** In ORB_SHAPE_IDS order (= rows of the orb picture). */
+export const ORB_SHAPES: { id: OrbShapeId; name: string }[] = ORB_SHAPE_IDS.map((id) => ({ id, name: SHAPE_NAMES[id] }));
 /** The shape (ORB_SHAPES index) every orb is drawn with, unless orbMix says otherwise for its slot. */
 let shape = 0;
+/** Bumped when the palette, shape or mix changes, so every ring repaints. */
+let paletteVer = 0;
 
 export function orbShape(): string {
   return ORB_SHAPES[shape].id;
@@ -220,8 +209,19 @@ export function setOrbMix(slot: number, paletteId: string | null, shapeId: strin
 }
 
 let palette = ORB_PALETTES[0];
-/** Bumped when the palette, shape or mix changes, so every ring repaints. */
-let paletteVer = 0;
+
+/** The look in use now (palette, shape and orbTuning). */
+export function currentOrbLook(): OrbLook {
+  return { palette: palette.id, shape: ORB_SHAPES[shape].id, ...orbTuning };
+}
+
+/** Switches every orb on screen to `look` (the server-wide look from the server, or the admin bench). */
+export function applyOrbLook(look: OrbLook): void {
+  setOrbPalette(look.palette);
+  setOrbShape(look.shape);
+  const { palette: _p, shape: _s, ...rest } = look;
+  Object.assign(orbTuning, rest);
+}
 
 export function orbPalette(): OrbPalette {
   return palette;
@@ -654,3 +654,5 @@ function markRange(geo: THREE.BufferGeometry, name: string, count: number): void
   a.addUpdateRange(0, count * a.itemSize);
   a.needsUpdate = true;
 }
+
+applyOrbLook(DEFAULT_ORB_LOOK);

@@ -10,6 +10,8 @@ import type { Sim } from '../../shared/sim/Sim';
 import type { Intent, SimEvent } from '../../shared/sim/types';
 import { MONSTERS } from '../../shared/data/monsters';
 import { validOrbCode } from '../../shared/data/enhance';
+import { checkOrbLook } from '../../shared/orbLook';
+import { applyOrbLook } from '../orbs';
 import { EQUIP_SLOTS } from '../../shared/types';
 import { zoneById, type SpawnArea, type ZoneDef } from '../../shared/data/zones';
 import type { NpcId } from '../../shared/data/npcs';
@@ -88,6 +90,7 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
         you = m.you;
         zone = m.zone;
         guest = m.guest === true;
+        useOrbLook(m.orbLook);
       }
       if (m.t === 'snap' && you >= 0 && !settled) {
         settled = true;
@@ -379,6 +382,9 @@ export class OnlineBackend implements Backend {
         break;
       case 'shutdown':
         this.onShutdown?.(m.mode, m.seconds, m.text);
+        break;
+      case 'orbLook':
+        useOrbLook(m.look);
         break;
       case 'announce':
         this.onAnnounce?.(m.text, m.from, m.direct);
@@ -868,6 +874,12 @@ export class OnlineBackend implements Backend {
     const n = this.terrain.npcPos[id];
     return n ? Math.hypot(this.me.x - n.x, this.me.z - n.z) : Infinity;
   }
+}
+
+/** Draws every orb with the server-wide look (ignored if it doesn't check out, keeping the current one). */
+function useOrbLook(v: unknown): void {
+  const look = v === undefined ? undefined : checkOrbLook(v).look;
+  if (look) applyOrbLook(look);
 }
 
 const NO_ORBS: readonly number[] = [];

@@ -8,6 +8,7 @@ import { GUEST_TTL_HOURS, type CharacterSummary } from '../src/shared/api';
 import type { ClassId } from '../src/shared/types';
 import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../src/shared/net/protocol';
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
+import { checkOrbLook, DEFAULT_ORB_LOOK, ORB_LOOK_SETTING, sameOrbLook, type OrbLook } from '../src/shared/orbLook';
 import { MARKET_HISTORY_DAYS, type MarketQuery } from '../src/shared/sim/market';
 import { MAIL_HISTORY_DAYS } from '../src/shared/mail';
 import type { TradeLogRow } from '../src/shared/trade';
@@ -288,6 +289,23 @@ export class Db {
   }
 
   /** The countdown texts players see before a restart / shutdown (owner's wording, else the default). */
+  /** The server-wide enhancement orb look (DEFAULT_ORB_LOOK until the owner saves one). */
+  orbLook(): OrbLook {
+    const v = this.getSetting(ORB_LOOK_SETTING);
+    if (v === null) return { ...DEFAULT_ORB_LOOK };
+    try {
+      // Checked again so a hand-edited row can never send a broken look.
+      return checkOrbLook(JSON.parse(v)).look ?? { ...DEFAULT_ORB_LOOK };
+    } catch {
+      return { ...DEFAULT_ORB_LOOK };
+    }
+  }
+
+  /** Saves the server-wide orb look (the default itself is stored as no row). */
+  setOrbLook(look: OrbLook): void {
+    this.setSetting(ORB_LOOK_SETTING, sameOrbLook(look, DEFAULT_ORB_LOOK) ? null : JSON.stringify(look));
+  }
+
   shutdownTexts(): Record<ShutdownMode, string> {
     const get = (mode: ShutdownMode): string => {
       const v = this.getSetting(SHUTDOWN_TEXT_KEY[mode]);

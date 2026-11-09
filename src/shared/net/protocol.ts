@@ -7,6 +7,7 @@ import type { SimEvent } from '../sim/types';
 import type { AutoSettings, BuybackEntry, LootFilter, PotionSelect, SortKey } from '../sim/Player';
 import type { EnhanceResult } from '../data/enhance';
 import type { RerollKind } from '../data/reroll';
+import type { OrbLook } from '../orbLook';
 import type { StashData } from '../sim/stash';
 import type { Hazard } from '../sim/volcanoHeart';
 import type { MarketCall, MarketReply } from '../sim/market';
@@ -204,7 +205,9 @@ export interface SnapshotMsg {
 
 export type ServerMsg =
   /** `guest`: playing a guest character (no stash, deleted after a day offline). */
-  | { t: 'welcome'; you: number; time: number; zone: string; guest?: boolean }
+  | { t: 'welcome'; you: number; time: number; zone: string; guest?: boolean; orbLook?: OrbLook }
+  /** The owner changed the server-wide enhancement orb look (src/shared/orbLook.ts). */
+  | { t: 'orbLook'; look: OrbLook }
   /** You walked through a portal: you are now `you` in zone `zone`, standing at x/z. Snapshots from that zone follow. */
   | { t: 'zone'; zone: string; you: number; x: number; z: number }
   | SnapshotMsg

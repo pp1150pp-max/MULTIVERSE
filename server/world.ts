@@ -20,6 +20,7 @@ import { EQUIP_SLOTS, RARITIES, type Vec2 } from '../src/shared/types';
 import type { SkillSlot } from '../src/shared/data/classes';
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
 import type { AdminOnline, AdminOnlineRow } from '../src/shared/admin';
+import type { OrbLook } from '../src/shared/orbLook';
 import { banMessage } from '../src/shared/api';
 import { Market, type MarketNote } from './market';
 import { Mail } from './mail';
@@ -383,7 +384,7 @@ export class GameWorld {
     this.byPlayer.set(player, s);
     // Back within the grace time (or a takeover): still in the party.
     player.partyId = this.parties.online(charId);
-    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, guest: acc.guest });
+    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, guest: acc.guest, orbLook: this.db.orbLook() });
     this.broadcastSystem(`${player.name} เข้าสู่โลก`);
     // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
     if (!acc.guest) setTimeout(() => this.sessions.has(s) && (this.marketOnJoin(s), this.mailNote(s, true)), MARKET_JOIN_NOTE_MS);
@@ -929,6 +930,11 @@ export class GameWorld {
   }
 
   /** On joining: what sold or expired while away, and how much waits in the claim box. */
+  /** Sends the new server-wide orb look to everyone online (already saved by the admin API). */
+  orbLookChanged(look: OrbLook): void {
+    for (const s of this.sessions) this.send(s.ws, { t: 'orbLook', look });
+  }
+
   private marketOnJoin(s: Session): void {
     try {
       const note = this.market.awayNote(s.accountId);

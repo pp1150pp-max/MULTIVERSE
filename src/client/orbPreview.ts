@@ -7,7 +7,8 @@ import { loadGameAssets, groundTiles } from './assets';
 import { Effects } from './effects';
 import { PlayerView } from './views';
 import { ISO_DIR } from './world';
-import { ORB_LEVELS, ORB_PALETTES, ORB_SHAPES, orbMixState, orbPalette, orbShape, orbTuning, setOrbMix, setOrbPalette, setOrbShape } from './orbs';
+import { applyOrbLook, currentOrbLook, ORB_LEVELS, ORB_PALETTES, ORB_SHAPES, orbMixState, orbPalette, orbShape, orbTuning, setOrbMix, setOrbPalette, setOrbShape } from './orbs';
+import { DEFAULT_ORB_LOOK, sameOrbLook, type OrbLook } from '../shared/orbLook';
 import { Player } from '../shared/sim/Player';
 import type { Sim } from '../shared/sim/Sim';
 import { auraTier, orbCodes, ORB_MIN_PLUS } from '../shared/data/enhance';
@@ -42,8 +43,14 @@ levels.weapon = 7;
 levels.armor = 7;
 levels.ring = 15;
 
-/** The tuning the game starts with, for the reset button. */
-const TUNING_DEFAULT = { ...orbTuning };
+/**
+ * The server-wide look on the admin page: read it, and (owner only) save it. Each call returns the
+ * server's look after it, or throws with a message.
+ */
+export interface OrbLookServer {
+  load(): Promise<{ look: OrbLook; canEdit: boolean }>;
+  save(look: OrbLook | 'reset'): Promise<{ look: OrbLook; canEdit: boolean }>;
+}
 
 /** Ranges the dice button picks from (kept inside what still looks sensible, narrower than the sliders). */
 const RANDOM_RANGE: Partial<Record<keyof typeof orbTuning, [number, number, number]>> = {
@@ -114,7 +121,7 @@ function applyGear(p: Player, lv: Record<EquipSlot, number>): void {
  * Builds the test bench inside `root` (which should have a size, e.g. the page or a tab) and starts it.
  * `note` is the line under the title. Returns a function that stops it and frees everything.
  */
-export async function mountOrbPreview(root: HTMLElement, note: string): Promise<() => void> {
+export async function mountOrbPreview(root: HTMLElement, note: string, server?: OrbLookServer): Promise<() => void> {
   if (!document.getElementById('orbp-css')) {
     const st = document.createElement('style');
     st.id = 'orbp-css';
@@ -130,6 +137,21 @@ export async function mountOrbPreview(root: HTMLElement, note: string): Promise<
   const statsEl = document.createElement('div');
   statsEl.className = 'orbp-stats';
   root.replaceChildren(viewEl, panel, statsEl);
+
+  // The server's look (admin page): the bench starts from it, and the owner can save over it.
+  let serverLook: OrbLook | null = null;
+  let canEdit = false;
+  let serverMsg = '';
+  if (server) {
+    try {
+      const r = await server.load();
+      serverLook = r.look;
+      canEdit = r.canEdit;
+      applyOrbLook(r.look);
+    } catch (e) {
+      serverMsg = `โหลดค่าของเซิร์ฟไม่สำเร็จ: ${(e as Error).message}`;
+    }
+  }
 
   await loadGameAssets();
   let stopped = false;
@@ -494,6 +516,35 @@ export async function mountOrbPreview(root: HTMLElement, note: string): Promise<
     row('จำนวนประกาย ×', slider(0, 2, 0.1, orbTuning.particles, (v) => { orbTuning.particles = v; }));
     row('ความยาวหาง ×', slider(0, 2, 0.1, orbTuning.trail, (v) => { orbTuning.trail = v; }));
 
+    if (server) {
+      h('h2', 'ค่าเริ่มต้นทั้งเซิร์ฟ (ที่ผู้เล่นทุกคนเห็น)');
+      const same = serverLook && sameOrbLook(serverLook, currentOrbLook());
+      h('div', serverMsg || (same ? '✓ ตอนนี้ตรงกับค่าของเซิร์ฟ' : '• ตอนนี้ต่างจากค่าของเซิร์ฟ (ยังไม่ได้บันทึก)')).className = 'note';
+      button('โหลดค่าของเซิร์ฟ', () => {
+        if (serverLook) applyOrbLook(serverLook);
+        buildPanel();
+      });
+      if (canEdit) {
+        const saveWith = async (what: OrbLook | 'reset', ask: string) => {
+          if (!confirm(ask)) return;
+          try {
+            const r = await server.save(what);
+            serverLook = r.look;
+            applyOrbLook(r.look);
+            serverMsg = '✓ บันทึกแล้ว ผู้เล่นที่ออนไลน์อยู่เห็นทันที';
+          } catch (e) {
+            serverMsg = `บันทึกไม่สำเร็จ: ${(e as Error).message}`;
+          }
+          buildPanel();
+          serverMsg = '';
+        };
+        button('💾 บันทึกเป็นค่าเริ่มต้นทั้งเซิร์ฟ', () => void saveWith(currentOrbLook(), 'ใช้หน้าตาลูกแก้วนี้กับผู้เล่นทุกคนเลยไหม? ' + '(ค่าต่างสี/ต่างทรงรายลูกจากปุ่มสุ่ม ไม่ถูกบันทึก)'));
+        button('คืนค่าของเซิร์ฟเป็นค่าเริ่มต้นในโค้ด', () => void saveWith('reset', 'คืนหน้าตาลูกแก้วของทุกคนเป็นค่าเริ่มต้นในโค้ดไหม?'));
+      } else {
+        h('div', 'บันทึกค่าของเซิร์ฟได้เฉพาะเจ้าของ (GM ทดลองได้อย่างเดียว)').className = 'note';
+      }
+    }
+
     h('h2', 'บันทึกค่า');
     button('คัดลอกค่าที่ตั้งไว้', () => {
       const mix = orbMixState();
@@ -502,8 +553,8 @@ export async function mountOrbPreview(root: HTMLElement, note: string): Promise<
       out.value = text;
       navigator.clipboard?.writeText(text).catch(() => {});
     });
-    button('คืนค่าเริ่มต้น', () => {
-      Object.assign(orbTuning, TUNING_DEFAULT);
+    button('คืนค่าเริ่มต้น (ในโค้ด)', () => {
+      applyOrbLook(DEFAULT_ORB_LOOK);
       buildPanel();
     });
     const out = document.createElement('textarea');
