@@ -90,6 +90,7 @@ export class AnimatedActor implements Actor {
   private shown = '';
   private baseT = 0;
   private oneShot: { name: string; t: number; fps: number; hold: boolean } | null = null;
+  private stride = 1;
   private sx = 0;
   private sy = -1;
   private flashT = 0;
@@ -173,7 +174,8 @@ export class AnimatedActor implements Actor {
         this.base = want;
         if (!sameStride) this.baseT = 0;
       }
-      this.baseT += dt;
+      // Legs keep pace with the ground actually covered (setStride); idle runs at its own speed.
+      this.baseT += this.base === 'idle' ? dt : dt * this.stride;
       const def = this.m.animations[this.base] ?? Object.values(this.m.animations)[0];
       name = this.base in this.tex ? this.base : Object.keys(this.tex)[0];
       frame = Math.floor(this.baseT * def.fps) % def.frames;
@@ -231,6 +233,11 @@ export class AnimatedActor implements Actor {
 
   flash(): void {
     this.flashT = 0.15;
+  }
+
+  /** How fast the run/walk cycle plays, 1 = as drawn (its fps). */
+  setStride(rate: number): void {
+    this.stride = rate;
   }
 
   setOpacity(o: number): void {

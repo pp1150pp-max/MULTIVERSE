@@ -193,11 +193,29 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 .log-line.fade { opacity: 0; }
 /* While playing only the newest 9 lines show; with the chat open (Enter) every kept line shows and scrolls. */
 #log:not(.open) .log-line:nth-last-child(n+10) { display: none; }
+/* Open (Enter): a stone panel like the game's other windows, gold scrollbar, tabs on top (owner 2026-11-09). */
 #log.open {
-  max-height: min(40vh, 360px); overflow-y: auto; pointer-events: auto; padding: 4px 6px;
-  background: rgba(10, 8, 6, 0.6); border-radius: 6px; scrollbar-width: thin;
+  max-height: min(40vh, 360px); overflow-y: auto; pointer-events: auto; padding: 0 8px 6px 10px;
+  background: var(--panel); border: 3px solid #4a4640; outline: 1px solid var(--panel-edge); outline-offset: -7px; border-radius: 4px;
+  box-shadow: 0 0 0 1px #000, 0 6px 20px rgba(0, 0, 0, 0.6);
+  scrollbar-width: thin; scrollbar-color: var(--gold) #0c0a08;
 }
+#log.open::-webkit-scrollbar { width: 8px; }
+#log.open::-webkit-scrollbar-track { background: #0c0a08; border-left: 1px solid #3a2f20; }
+#log.open::-webkit-scrollbar-thumb { background: var(--gold); border-radius: 3px; }
 #log.open .log-line.fade { opacity: 1; }
+#log.open .log-line { text-shadow: 1px 1px 0 #000; line-height: 1.5; }
+#log.open .log-line.chat { background: rgba(159, 224, 255, 0.07); border-left: 2px solid #9fe0ff; padding-left: 6px; margin: 1px 0; }
+#log.open.tab-chat .log-line:not(.chat), #log.open.tab-system .log-line.chat { display: none; }
+#log-tabs { display: none; }
+#log.open #log-tabs {
+  display: flex; align-items: center; gap: 6px; position: sticky; top: 0; z-index: 1; margin: 0 -2px 4px; padding: 8px 2px 6px;
+  background: var(--panel); border-bottom: 1px solid #4a3a20;
+}
+#log-tabs button { padding: 2px 10px; font-size: 12px; line-height: 1.4; color: var(--ink-dim); background: none; border: 1px solid #5a4a30; border-radius: 3px; }
+#log-tabs button:hover { color: var(--gold-hi); border-color: var(--gold); }
+#log-tabs button.active { color: var(--gold-hi); background: #2a1e0e; border-color: var(--gold-hi); }
+#log-tabs span { margin-left: auto; font-size: 11px; color: #8a7a5c; }
 
 #hud-bottom {
   position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%);
@@ -444,7 +462,8 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 #dialog-next { text-align: right; font-size: 11px; color: var(--ink-dim); margin-top: 6px; }
 
 #death {
-  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 15vh;
+  /* The camera keeps the fallen player at the centre: the text starts just below them, on the ground (owner 2026-11-09). */
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: calc(50vh + 64px);
   background: radial-gradient(rgba(60, 0, 0, 0.35), rgba(0, 0, 0, 0.8));
 }
 #death h2 { font-family: 'Cinzel', 'Kanit', serif; font-size: 42px; margin: 0; color: #ff8a7a; }
@@ -627,13 +646,13 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 }
 @keyframes forge-spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
 #forge-slot {
-  position: relative; z-index: 1; width: 92px; height: 92px; display: grid; place-items: center;
+  position: relative; z-index: 1; width: 84px; height: 150px; display: grid; place-items: center;
   border: 3px solid #7a6a9a; border-radius: 6px; background: linear-gradient(#2c1d4a, #160f26);
   box-shadow: 0 0 0 2px #0c0914, 0 0 18px rgba(138, 92, 255, 0.55), inset 0 0 14px rgba(0, 0, 0, 0.6);
 }
 #forge-slot:not(.filled)::after { content: '+'; font-size: 34px; line-height: 1; color: rgba(201, 168, 255, 0.35); }
 #forge-slot.filled { border-color: var(--rc); box-shadow: 0 0 0 2px #0c0914, 0 0 22px color-mix(in srgb, var(--rc) 60%, transparent), inset 0 0 16px color-mix(in srgb, var(--rc) 30%, transparent); }
-#forge-slot .gi { width: 78%; height: 78%; image-rendering: pixelated; }
+#forge-slot .gi { width: 92%; height: 92%; object-fit: contain; image-rendering: pixelated; }
 #forge-slot .iplus { position: absolute; left: 4px; top: 2px; font-size: 13px; font-weight: 700; color: #ffd36a; text-shadow: 0 0 3px #000; }
 #forge-slot.drop-target { outline: 2px solid var(--gold-hi); outline-offset: 3px; }
 #forge-drop-hint {

@@ -114,6 +114,8 @@ const DECOR: Record<ZoneTheme, { key: string; cols: number; rows: number; spots:
 };
 /** Props at least this tall turn see-through when the player walks behind them. */
 const FADE_MIN_HEIGHT = 1.6;
+/** How much of a prop still shows while the player stands behind it. */
+const FADE_OPACITY = 0.3;
 /** About half a player's width on screen, in world units, for the see-through test. */
 const PLAYER_HALF_WIDTH = 0.35;
 /** World size of one decor atlas cell: 128 pixels at about the same density as the ground tiles. */
@@ -1209,13 +1211,14 @@ export class World {
       if (depth > 0 && depth < f.h * 1.9) {
         const sdx = (f.x - f.z - (px - pz)) * S;
         // Counts the player's own width, so a canopy or branch covering only part of them fades too.
-        if (Math.abs(sdx) < f.w * 0.42 + PLAYER_HALF_WIDTH) target = 0.35;
+        if (Math.abs(sdx) < f.w * 0.42 + PLAYER_HALF_WIDTH) target = FADE_OPACITY;
       }
       if (target === f.o) continue;
       f.o += (target - f.o) * Math.min(1, dt * 10);
       if (Math.abs(f.o - target) < 0.01) f.o = target;
+      // The material is transparent from the start: three.js builds an opaque shader (alpha forced to 1)
+      // for one that isn't, and switching `transparent` later doesn't change it, so the prop stayed solid.
       const faded = f.o < 0.99;
-      f.mat.transparent = faded;
       f.mat.depthWrite = !faded;
       f.mat.alphaTest = faded ? 0.05 : 0.5;
       f.mat.opacity = f.o;
@@ -1246,7 +1249,7 @@ export class World {
     const sh = sheets[key];
     let mat: THREE.SpriteMaterial;
     if (fade) {
-      mat = this.own(new THREE.SpriteMaterial({ map: sh.texture, alphaTest: 0.5, transparent: false }));
+      mat = this.own(new THREE.SpriteMaterial({ map: sh.texture, alphaTest: 0.5, transparent: true }));
     } else {
       mat = this.sharedMats.get(key) ?? new THREE.SpriteMaterial({ map: sh.texture, alphaTest: 0.5, transparent: false });
       this.sharedMats.set(key, mat);
