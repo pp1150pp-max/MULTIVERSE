@@ -293,7 +293,8 @@ export class Sim {
     m.damageBy.set(p.id, m.damageBy.get(p.id)! + dealt);
     m.hp -= dmg;
     if (this.time < p.lifestealUntil && p.hp < p.maxHp) {
-      const heal = Math.min(p.maxHp - p.hp, Math.round(dealt * p.lifesteal));
+      // Whole HP only: near full the gap to max is fractional (regen), so floor the capped amount too.
+      const heal = Math.floor(Math.min(p.maxHp - p.hp, dealt * p.lifesteal));
       if (heal > 0) {
         p.hp += heal;
         this.text(p.x, p.topY, p.z, `+${heal}`, 'heal', 0.6);
