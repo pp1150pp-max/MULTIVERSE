@@ -29,6 +29,8 @@ const POP_TIME = 0.14;
 const MAX_NUMS = 120;
 /** Highest a stack of numbers climbs, in pixels. */
 const MAX_STACK = 110;
+/** How long a chat bubble stays over a head. */
+const BUBBLE_MS = 5000;
 
 /** A number as pieces of the sheet, sized in em so the font size scales it. */
 function glyphs(text: string, row: number, burst: boolean): string {
@@ -52,6 +54,7 @@ export class Floating {
   private plates = new Map<Monster, Plate>();
   private labels = new Map<Loot, HTMLDivElement>();
   private names = new Map<Player, Plate>();
+  private bubbles = new Map<string, { el: HTMLDivElement; until: number }>();
   private prompt: HTMLDivElement;
   private bossTimerEl: HTMLDivElement;
   private badges = new Map<Npc, HTMLDivElement>();
@@ -109,6 +112,39 @@ export class Floating {
       pop: !drawn ? 0 : cls === 'crit' ? 0.8 : 0.3,
     });
     if (this.nums.length > MAX_NUMS) this.nums.shift()!.el.remove();
+  }
+
+  /** A chat bubble over a character (matched by name); a new one from the same name replaces the old. Plain text only. */
+  bubble(name: string, text: string, party: boolean): void {
+    this.bubbles.get(name)?.el.remove();
+    const el = document.createElement('div');
+    el.className = `chat-bubble${party ? ' party' : ''}`;
+    el.textContent = text;
+    el.style.display = 'none';
+    this.root.append(el);
+    this.bubbles.set(name, { el, until: performance.now() + BUBBLE_MS });
+  }
+
+  /** Places the bubbles above the nameplates; drops the expired ones and those whose character isn't on screen. */
+  private updateBubbles(g: Game): void {
+    const now = performance.now();
+    for (const [name, b] of this.bubbles) {
+      if (now >= b.until) {
+        b.el.remove();
+        this.bubbles.delete(name);
+        continue;
+      }
+      const p = g.player.name === name ? g.player : g.backend.players.find((o) => o.name === name);
+      const s = p ? g.toScreen(p.x, p.topY + 0.35, p.z) : null;
+      if (!p || !s || !s.on) {
+        b.el.style.display = 'none';
+        continue;
+      }
+      b.el.style.display = '';
+      // Above the nameplate (own character has no plate, so it sits a little lower).
+      const lift = p === g.player ? 8 : 26;
+      b.el.style.transform = `translate(${s.sx}px, ${s.sy - lift}px) translate(-50%, -100%)`;
+    }
   }
 
   /** Countdown over the boss's empty lair, or hidden when text is null. */
@@ -294,6 +330,8 @@ export class Floating {
         this.names.delete(p);
       }
     }
+
+    this.updateBubbles(g);
 
     const seenLoot = new Set<Loot>();
     for (const l of g.loots) {
