@@ -510,7 +510,7 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
     const group = h('optgroup', { label: SLOT_LABEL[slot] });
     // Off-hands exist per class: only this character's are offered.
     for (const b of m.bases.filter((x) => x.slot === slot && (x.names.any || x.names[c.classId]))) {
-      group.append(h('option', { value: b.id }, `${b.names[c.classId] ?? b.names.any ?? b.id} (Lv.${b.minLevel}+)`));
+      group.append(h('option', { value: b.id }, `${b.names[c.classId] ?? b.names.any ?? b.id} [${b.names.any ? 'ทุกอาชีพ' : className(c.classId)}] (Lv.${b.minLevel}+)`));
     }
     base.append(group);
   }
@@ -812,7 +812,7 @@ async function renderMail(): Promise<void> {
     for (const slot of SLOTS) {
       const group = h('optgroup', { label: SLOT_LABEL[slot] });
       for (const b of m.bases.filter((x) => x.slot === slot)) {
-        group.append(h('option', { value: b.id }, `${b.names.any ?? Object.values(b.names).join(' / ')} (Lv.${b.minLevel}+)`));
+        group.append(h('option', { value: b.id }, `${b.names.any ? `${b.names.any} [ทุกอาชีพ]` : Object.entries(b.names).map(([k, n]) => `${n} [${className(k as ClassId)}]`).join(' / ')} (Lv.${b.minLevel}+)`));
       }
       pick.append(group);
     }
