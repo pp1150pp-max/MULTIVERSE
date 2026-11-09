@@ -249,7 +249,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   volcano_heart: {
     id: 'volcano_heart', name: 'Volcano Heart', nameTh: 'หัวใจภูเขาไฟ (Boss)', levels: [40, 40],
-    hp: 157500, atk: 380, def: 45.5, speed: 0, exp: 16000, gold: [1300, 2100],
+    hp: 157500, atk: 380, def: 31.85, speed: 0, exp: 16000, gold: [1300, 2100],
     aggroRange: 0, attackRange: 0, attackCooldown: 99, height: 4.4, radius: 1.5,
     behavior: 'boss', pattern: 'volcano_heart', itemChance: 1, potionChance: 1,
     bossLoot: { items: 6, epics: 2, stoneChance: 0.2 },
