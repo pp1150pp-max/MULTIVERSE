@@ -23,6 +23,8 @@ export interface ClassDef {
   attackRate: number;
   base: Stats;
   growth: Partial<Stats>;
+  /** Multiplies the final stats (class, level and gear together), e.g. { atk: 2 } doubles attack. */
+  statMult?: Partial<Record<keyof Stats, number>>;
   skills: SkillDef[];
 }
 
@@ -41,6 +43,8 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     attackRate: 1.7,
     base: { maxHp: 130, maxMp: 50, atk: 12, def: 6, crit: 5, critDmg: 50, atkSpeed: 0, moveSpeed: 0, hpRegen: 1.2, mpRegen: 1.5 },
     growth: { maxHp: 20, maxMp: 4, atk: 2.6, def: 1.3, hpRegen: 0.15, mpRegen: 0.05 },
+    // Attack, HP and defense doubled, gear included (owner's request).
+    statMult: { atk: 2, maxHp: 2, def: 2 },
     skills: [
       { id: 'slash', slot: 'basic', name: 'Slash', nameTh: 'ฟัน', desc: 'ฟันเป็นวงโค้งด้านหน้า 100% ATK', mp: 0, cooldown: 0 },
       { id: 'whirlwind', slot: 'q', name: 'Whirlwind', nameTh: 'พายุดาบ', desc: 'หมุนตัวฟันรอบทิศ 180% ATK ไม่รับดาเมจ 0.6 วิ และดูดเลือด 15% ของดาเมจ 3 วิ', mp: 15, cooldown: 6 },
