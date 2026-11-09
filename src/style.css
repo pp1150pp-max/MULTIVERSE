@@ -491,6 +491,15 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 .load-box { width: min(360px, 80vw); text-align: center; text-shadow: 0 2px 4px #000; }
 .load-bar { height: 10px; margin-top: 10px; background: rgba(0, 0, 0, 0.6); border: 2px solid var(--panel-edge); border-radius: 6px; overflow: hidden; }
 .load-bar i { display: block; height: 100%; width: 0; background: linear-gradient(var(--gold-hi), var(--gold)); transition: width 0.2s; }
+/* Loading art (loadingScreen.ts): the pictures keep their bottom ~25% plain for the bar and tip. */
+#loading.load-art {
+  display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 6vh;
+  background-color: #07061a; background-position: center; background-size: cover; image-rendering: auto;
+  transition: opacity 0.3s;
+}
+#loading.load-art .load-box { width: min(560px, 86vw); }
+#loading.load-out { opacity: 0; }
+.load-tip { margin: 12px 0 0; font-size: 15px; color: var(--ink); }
 .menu-inner { max-width: 980px; margin: 0 auto; padding: 28px 16px 30px; text-align: center; image-rendering: auto; }
 /* Each letter is its own image; V's point overshoots the baseline, so letters line up by their tops. */
 .logo { display: flex; justify-content: center; align-items: flex-start; gap: 1px; margin: 0; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.9)); }

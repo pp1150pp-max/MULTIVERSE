@@ -28,6 +28,7 @@ import { PartyUI } from './party';
 import { TradeUI } from './trade';
 import { MailUI } from './mail';
 import { SystemMenu } from './sysmenu';
+import { flashZoneLoading, preloadLoadingArt } from './loadingScreen';
 import { LootView, MonsterView, PlayerView, ProjectileView, ViewSet } from './views';
 import { isSoftwareRenderer } from '../shared/net/protocol';
 
@@ -106,6 +107,7 @@ export class Game {
 
   constructor(container: HTMLElement, readonly backend: Backend) {
     this.zone = backend.zone;
+    preloadLoadingArt();
     this.renderer = new THREE.WebGLRenderer({ antialias: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -289,6 +291,7 @@ export class Game {
 
   /** The backend moved us to another zone: redraw the map, camp and everything in it. */
   private changeZone(): void {
+    flashZoneLoading(this.player.cls.id);
     this.mapRoute = [];
     this.goal = null;
     this.world.dispose();
