@@ -1,9 +1,8 @@
 import type { Intent } from './types';
 import type { Monster } from './Monster';
-import { AUTO_PX_PER_UNIT, type Player } from './Player';
+import { AUTO_PX_PER_UNIT, type AutoSkill, type Player } from './Player';
 import type { Loot } from './Loot';
 import { MONSTERS } from '../data/monsters';
-import type { SkillSlot } from '../data/classes';
 import { inBossArena, inSafeArea, lavaAt, type ZoneDef } from '../data/zones';
 
 /** What the bot needs to see. The server builds one per player. */
@@ -185,32 +184,28 @@ export class AutoPlay {
       return out;
     }
     out.basic = true;
-    const near = g.monsters.filter((m) => m.alive && Math.hypot(m.x - p.x, m.z - p.z) < 4.5).length;
-    const nearTarget = g.monsters.filter((m) => m.alive && Math.hypot(m.x - target.x, m.z - target.z) < 3.5).length;
-    switch (p.cls.id) {
-      case 'sword':
-        if (near >= 2) this.tryCast(g, out, 'q');
-        if (near >= 3 || target.hp > 250) this.tryCast(g, out, 'e');
-        break;
-      case 'mage':
-        this.tryCast(g, out, 'q');
-        if (near >= 2) this.tryCast(g, out, 'e');
-        if (nearTarget >= 3 || target.hp > 250) this.tryCast(g, out, 'r');
-        break;
-      case 'gunslinger':
-        if (d < 6) this.tryCast(g, out, 'q');
-        this.tryCast(g, out, 'e');
-        if (nearTarget >= 3 || target.hp > 250) this.tryCast(g, out, 'r');
-        break;
-    }
+    this.castByOrder(p, out);
     return out;
   }
 
-  private tryCast(g: AutoWorld, out: Intent, slot: SkillSlot): void {
-    const p = g.player;
+  /** Whether Auto may cast this skill now: switched on in the settings, off cooldown, and enough MP. */
+  private ready(p: Player, slot: AutoSkill): boolean {
     const sk = p.skill(slot);
-    if ((slot === 'q' || slot === 'e' || slot === 'r') && !p.autoSettings.skills[slot]) return;
-    if (sk && (p.cd[slot] ?? 0) <= 0 && p.mp >= sk.mp + 5 && !out.skills.includes(slot)) out.skills.push(slot);
+    return !!sk && p.autoSettings.skills[slot] && (p.cd[slot] ?? 0) <= 0 && p.mp >= sk.mp + 5;
+  }
+
+  private tryCast(g: AutoWorld, out: Intent, slot: AutoSkill): void {
+    if (this.ready(g.player, slot) && !out.skills.includes(slot)) out.skills.push(slot);
+  }
+
+  /**
+   * In reach of the target: cast one skill, the highest in the player's order that is switched on and ready
+   * (so when the first is cooling down, the next one goes). Nothing extra when the player cast one by hand this frame.
+   */
+  private castByOrder(p: Player, out: Intent): void {
+    if (out.skills.length) return;
+    const slot = p.autoSettings.order.find((s) => this.ready(p, s));
+    if (slot) out.skills.push(slot);
   }
 
   private pickTarget(g: AutoWorld): Monster | null {

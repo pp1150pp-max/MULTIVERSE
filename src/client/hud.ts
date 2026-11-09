@@ -13,7 +13,7 @@ import { REROLL_STONE, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_SELL, STONE_ST
 import { lineRanges, rerollBlock } from '../shared/data/items';
 import { REROLL_NAME, rerollCost, type RerollKind } from '../shared/data/reroll';
 import { FullMap } from './fullmap';
-import { AUTO_PX_PER_UNIT, AUTO_RANGE_MAX, AUTO_RANGE_MIN, buybackPrice, cleanAutoSettings, lootPots, type LootFilter, type SortKey } from '../shared/sim/Player';
+import { AUTO_PX_PER_UNIT, AUTO_RANGE_MAX, AUTO_RANGE_MIN, buybackPrice, cleanAutoSettings, lootPots, type AutoSkill, type LootFilter, type SortKey } from '../shared/sim/Player';
 import { isBulkSellable } from '../shared/sim/Sim';
 import { nextRowPrice, STASH_MAX, STASH_ROW, STASH_ROW_PRICES, STASH_START } from '../shared/sim/stash';
 import { MONSTERS } from '../shared/data/monsters';
@@ -1024,29 +1024,77 @@ export class Hud {
     syncPots($('aset-pots'), p.lootFilter);
     const box = $('aset-skills');
     box.innerHTML = '';
-    for (const slot of ['q', 'e', 'r'] as const) {
+    s.order.forEach((slot, i) => {
       const sk = p.skill(slot);
-      const label = document.createElement('label');
-      label.className = 'aset-check';
+      const row = document.createElement('div');
+      row.className = 'aset-skill';
+      row.dataset.slot = slot;
+      row.innerHTML =
+        `<span class="aset-rank">${i + 1}</span>` +
+        `<span class="aset-grab" title="ลากเพื่อสลับลำดับ">${sk ? skillIcon(sk.id) : ''}<b class="aset-key">${slot.toUpperCase()}</b>` +
+        `<span class="aset-name">${sk?.nameTh ?? sk?.name ?? '-'}</span></span>` +
+        `<button class="aset-move" data-dir="-1" title="เลื่อนขึ้น"${i === 0 ? ' disabled' : ''}>▲</button>` +
+        `<button class="aset-move" data-dir="1" title="เลื่อนลง"${i === s.order.length - 1 ? ' disabled' : ''}>▼</button>`;
       const cb = document.createElement('input');
       cb.type = 'checkbox';
-      cb.dataset.slot = slot;
+      cb.title = 'ให้ Auto ใช้สกิลนี้';
       cb.checked = s.skills[slot];
       cb.addEventListener('change', () => this.applyAutoSettings());
-      label.append(cb, ` ${slot.toUpperCase()} — ${sk?.nameTh ?? sk?.name ?? '-'}`);
-      box.append(label);
-    }
+      row.append(cb);
+      for (const b of row.querySelectorAll<HTMLButtonElement>('.aset-move')) {
+        b.onclick = () => {
+          const sib = Number(b.dataset.dir) < 0 ? row.previousElementSibling : row.nextElementSibling?.nextElementSibling ?? null;
+          if (Number(b.dataset.dir) < 0 && !sib) return;
+          box.insertBefore(row, sib);
+          this.applyAutoSettings();
+        };
+      }
+      this.dragAutoSkill(box, row, row.querySelector<HTMLElement>('.aset-grab')!);
+      box.append(row);
+    });
+  }
+
+  /** Drag a skill row by its icon and name to a new place in the order (mouse or finger). */
+  private dragAutoSkill(box: HTMLElement, row: HTMLElement, grab: HTMLElement): void {
+    grab.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      const start = [...box.children].indexOf(row);
+      grab.setPointerCapture(e.pointerId);
+      row.classList.add('dragging');
+      const move = (ev: PointerEvent) => {
+        // The row goes before the first other row whose middle is below the pointer.
+        const rest = [...box.children].filter((c) => c !== row) as HTMLElement[];
+        const before = rest.find((c) => { const r = c.getBoundingClientRect(); return ev.clientY < r.top + r.height / 2; }) ?? null;
+        if (before === row.nextElementSibling) return;
+        box.insertBefore(row, before);
+        box.querySelectorAll('.aset-rank').forEach((r, i) => { r.textContent = String(i + 1); });
+      };
+      const end = () => {
+        grab.removeEventListener('pointermove', move);
+        grab.removeEventListener('pointerup', end);
+        grab.removeEventListener('pointercancel', end);
+        row.classList.remove('dragging');
+        if ([...box.children].indexOf(row) !== start) this.applyAutoSettings();
+      };
+      grab.addEventListener('pointermove', move);
+      grab.addEventListener('pointerup', end);
+      grab.addEventListener('pointercancel', end);
+    });
   }
 
   /** Read the form, clamp it, send it, then show the clamped values. */
   private applyAutoSettings(): void {
     const num = (id: string) => Number($<HTMLInputElement>(id).value);
     const skills = { ...this.g.player.autoSettings.skills };
-    for (const cb of $('aset-skills').querySelectorAll<HTMLInputElement>('input[data-slot]')) {
-      skills[cb.dataset.slot as 'q' | 'e' | 'r'] = cb.checked;
+    const order: AutoSkill[] = [];
+    for (const row of $('aset-skills').querySelectorAll<HTMLElement>('.aset-skill')) {
+      const slot = row.dataset.slot as AutoSkill;
+      order.push(slot);
+      skills[slot] = row.querySelector<HTMLInputElement>('input[type=checkbox]')!.checked;
     }
     const s = cleanAutoSettings({
-      range: num('aset-range'), hpPct: num('aset-hp'), mpPct: num('aset-mp'), skills, loot: $<HTMLInputElement>('aset-loot').checked,
+      range: num('aset-range'), hpPct: num('aset-hp'), mpPct: num('aset-mp'), skills, order, loot: $<HTMLInputElement>('aset-loot').checked,
       rangeSet: this.g.player.autoSettings.rangeSet || num('aset-range') !== this.g.player.autoSettings.range,
     });
     this.g.backend.setAutoSettings(s);
