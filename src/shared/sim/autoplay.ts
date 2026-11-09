@@ -148,7 +148,7 @@ export class AutoPlay {
     let bd = threatened ? LOOT_NEAR : Infinity;
     for (const l of set.loot ? g.loots : []) {
       if (this.fromAnchor(l) > R + 0.5 || inBossArena(g.zone, l.x, l.z) || lavaAt(g.zone, l.x, l.z)) continue;
-      if (l.dead || l.dropped || !l.canTake(p.id, g.time) || !p.wantsLoot(l.kind, false) || !p.canFit(l.kind)) continue;
+      if (l.dead || l.dropped || !l.canTake(p, g.time) || !p.wantsLoot(l.kind, false) || !p.canFit(l.kind)) continue;
       const d = dist(l);
       if (d < bd) {
         bd = d;

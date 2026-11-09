@@ -249,6 +249,8 @@ export class Player extends Unit {
   lowExpHinted = false;
   /** Told once that monsters far above them can't be hit. */
   missHinted = false;
+  /** The party this character is in (set by the server, never saved), or null. Shares EXP and loot (Sim). */
+  partyId: number | null = null;
   zone: string | undefined;
   /** False right after arriving through a portal, until the player steps away from it. */
   portalReady = true;

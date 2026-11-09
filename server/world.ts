@@ -14,7 +14,7 @@ import { IDLE_INTENT, type Intent, type SimEvent } from '../src/shared/sim/types
 import { AUTO_HINT_COLOR, autoBlocked, AutoPlay, type AutoWorld } from '../src/shared/sim/autoplay';
 import {
   CHAT_MAX, GPU_NAME_MAX, shutdownKick, type ShutdownMode, INTEREST_RADIUS, PING_MS, isSoftwareRenderer, SNAPSHOT_HZ, TICK_HZ, WS_PATH, r2,
-  type ClientMsg, type InputMsg, type ActionMsg, type PrivateSnap, type ServerMsg, type SnapshotMsg,
+  type ClientMsg, type InputMsg, type ActionMsg, type PrivateSnap, type ServerMsg, type SnapshotMsg, WS_CLOSE_QUIT,
 } from '../src/shared/net/protocol';
 import { EQUIP_SLOTS, RARITIES, type Vec2 } from '../src/shared/types';
 import type { SkillSlot } from '../src/shared/data/classes';
@@ -23,6 +23,8 @@ import type { AdminOnline, AdminOnlineRow } from '../src/shared/admin';
 import { banMessage } from '../src/shared/api';
 import { Market, type MarketNote } from './market';
 import type { MarketCall } from '../src/shared/sim/market';
+import { Parties, type PartyChar } from './party';
+import { PARTY_SEARCH_LIMIT, PARTY_SEARCH_MAX, type PartyFound, type PartySnap } from '../src/shared/party';
 
 const AUTOSAVE_MS = 30_000;
 const GUEST_STASH_MSG = 'Guest ใช้คลังเก็บของไม่ได้ — สมัครสมาชิกเพื่อใช้คลัง (ตัวละครนี้จะย้ายไปอยู่ในบัญชีใหม่)';
@@ -35,6 +37,14 @@ const MARKET_ACT_MS = 100;
 /** Delay before telling a player who just joined what sold or expired while away. */
 const MARKET_JOIN_NOTE_MS = 3000;
 const SKILL_KEYS: SkillSlot[] = ['q', 'e', 'r'];
+/** Fastest a client may search for players to invite. */
+const PARTY_SEARCH_MS = 250;
+const PARTY_GUEST_MSG = 'Guest ใช้ระบบปาร์ตี้ไม่ได้ — สมัครสมาชิกเพื่อใช้งาน';
+/**
+ * How a session ends: `quit` (left on purpose, kicked, server stopping) leaves the party at once,
+ * `drop` (connection lost) keeps the place for OFFLINE_GRACE, `takeover` (logged in again elsewhere) keeps it as is.
+ */
+type LeaveHow = 'quit' | 'drop' | 'takeover';
 
 interface Session {
   ws: WebSocket;
@@ -103,6 +113,10 @@ interface Session {
   totFps: number;
   totFpsN: number;
   playRow: number;
+  /** The player turned party invites off (a browser setting, sent after joining). */
+  blockInvites: boolean;
+  /** When this session last searched for players to invite (performance.now()). */
+  lastPartySearchAt: number;
 }
 
 const num = (v: unknown, fallback = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
@@ -171,6 +185,8 @@ export class GameWorld {
    */
   private readonly stashes = new Map<number, StashData>();
   private readonly market: Market;
+  /** Parties, keyed on character ids (in memory only: a restart ends them). */
+  readonly parties: Parties;
   /** Set while the server counts down to stopping: no new players may join. */
   private closing: ShutdownMode | null = null;
   private last = performance.now();
@@ -183,6 +199,25 @@ export class GameWorld {
     setInterval(() => this.saveAll(), AUTOSAVE_MS);
     setInterval(() => this.logPings(), PING_LOG_MS);
     this.market = new Market(db);
+    this.parties = new Parties({
+      notice: (ids, text) => {
+        for (const id of ids) this.partyLine(id, text);
+      },
+      moved: (charId, partyId) => {
+        const s = this.sessionOfChar(charId);
+        if (s) s.player.partyId = partyId;
+      },
+      invited: (to, party, from, seconds) => {
+        const s = this.sessionOfChar(to);
+        if (s) this.send(s.ws, { t: 'partyInvite', party, from, seconds });
+      },
+      inviteGone: (to, party) => {
+        const s = this.sessionOfChar(to);
+        if (s) this.send(s.ws, { t: 'partyInviteGone', party });
+      },
+      tell: (charId, text) => this.partyLine(charId, text),
+    });
+    setInterval(() => this.parties.tick(), 1000);
     this.expireMarket();
     setInterval(() => this.expireMarket(), MARKET_EXPIRE_MS);
   }
@@ -221,16 +256,16 @@ export class GameWorld {
       try {
         if (msg.t === 'input') this.onInput(session, msg);
         else if (msg.t === 'act') this.onAction(session, msg);
-        else if (msg.t === 'chat') this.onChat(session, msg.text);
+        else if (msg.t === 'chat') this.onChat(session, msg.text, msg.ch);
         else if (msg.t === 'ping') this.onPing(session, msg);
         else if (msg.t === 'client') this.onClientInfo(session, msg);
       } catch (e) {
         console.error('[world] bad message from', session.username, e);
       }
     });
-    ws.on('close', () => {
+    ws.on('close', (code) => {
       clearTimeout(timeout);
-      if (session) this.leave(session);
+      if (session) this.leave(session, code === WS_CLOSE_QUIT ? 'quit' : 'drop');
     });
     ws.on('error', () => ws.close());
   }
@@ -260,7 +295,7 @@ export class GameWorld {
     for (const s of [...this.sessions]) {
       if (s.accountId === acc.id && s.charId === charId) {
         this.send(s.ws, { t: 'kick', msg: 'ตัวละครนี้เข้าเกมจากที่อื่น' });
-        this.leave(s);
+        this.leave(s, 'takeover');
         s.ws.close();
         // leave() saved it just now: load that, not what was read above (up to 30 s older).
         data = this.db.loadCharacter(acc.id, charId) ?? data;
@@ -287,7 +322,7 @@ export class GameWorld {
       auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, saveDue: null,
       ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
-      totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1,
+      totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity,
     };
     try {
       s.playRow = this.db.startPlaySession({ accountId: acc.id, username: acc.username, guest: acc.guest, charId, charName: player.name, ip });
@@ -296,6 +331,8 @@ export class GameWorld {
     }
     this.sessions.add(s);
     this.byPlayer.set(player, s);
+    // Back within the grace time (or a takeover): still in the party.
+    player.partyId = this.parties.online(charId);
     this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, guest: acc.guest });
     this.broadcastSystem(`${player.name} เข้าสู่โลก`);
     // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
@@ -304,9 +341,14 @@ export class GameWorld {
     return s;
   }
 
-  private leave(s: Session): void {
+  private leave(s: Session, how: LeaveHow = 'quit'): void {
     if (!this.sessions.has(s)) return;
     this.save(s);
+    if (how === 'quit') this.parties.leave(s.charId);
+    else if (how === 'drop') {
+      const p = s.player;
+      this.parties.offline(s.charId, { level: p.level, maxHp: p.maxHp, maxMp: p.stats.maxMp, zone: s.sim.zone.id });
+    }
     if (s.playRow >= 0) {
       try {
         this.db.endPlaySession(s.playRow, {
@@ -516,6 +558,7 @@ export class GameWorld {
       this.send(s.ws, { t: 'chat', name: '', text: GUEST_STASH_MSG });
       return;
     }
+    if (typeof m.a === 'string' && m.a.startsWith('party')) return this.onParty(s, m);
     switch (m.a) {
       case 'respawn':
         // Death turns Auto off (the browser does too), so the player doesn't run back to the farm spot.
@@ -643,6 +686,93 @@ export class GameWorld {
     s.saveDue ??= performance.now() + 2000;
   }
 
+  // ------------------------------------------------------------ party (server/party.ts)
+
+  private partyChar(s: Session): PartyChar {
+    const p = s.player;
+    return { charId: s.charId, accountId: s.accountId, name: p.name, cls: p.cls.id, level: p.level, guest: s.guest };
+  }
+
+  /** A party line in this character's chat (system style, also shown in the party tab). */
+  private partyLine(charId: number, text: string): void {
+    const s = this.sessionOfChar(charId);
+    if (s) this.send(s.ws, { t: 'chat', name: '', text, ch: 'party' });
+  }
+
+  /** Party actions. Every value from the client is checked here; the rules themselves are in Parties. */
+  private onParty(s: Session, m: ActionMsg): void {
+    if (m.a === 'partyBlock') {
+      s.blockInvites = m.on === true;
+      return;
+    }
+    if (s.guest) {
+      if (m.a === 'partySearch') this.send(s.ws, { t: 'partyFound', req: num(m.req), list: [] });
+      return this.partyLine(s.charId, PARTY_GUEST_MSG);
+    }
+    let err: string | null = null;
+    switch (m.a) {
+      case 'partyCreate':
+        err = this.parties.create(this.partyChar(s));
+        break;
+      case 'partyInvite': {
+        if (typeof m.name !== 'string' || !m.name.trim() || m.name.length > 40) return;
+        const name = m.name.trim().toLowerCase();
+        const to = [...this.sessions].find((o) => o.player.name.toLowerCase() === name);
+        err = this.parties.invite(this.partyChar(s), to && this.partyChar(to), to?.blockInvites === true);
+        break;
+      }
+      case 'partyAnswer': {
+        if (!Number.isSafeInteger(m.party) || typeof m.yes !== 'boolean') return;
+        const p = s.player;
+        err = this.parties.answer(this.partyChar(s), m.party, m.yes, { maxHp: p.maxHp, maxMp: p.stats.maxMp, zone: s.sim.zone.id });
+        break;
+      }
+      case 'partyLeave':
+        if (!this.parties.of(s.charId)) err = 'คุณไม่ได้อยู่ในปาร์ตี้';
+        else this.parties.leave(s.charId);
+        break;
+      case 'partyKick':
+        if (!Number.isSafeInteger(m.charId)) return;
+        err = this.parties.kick(this.partyChar(s), m.charId);
+        break;
+      case 'partySearch': {
+        const req = num(m.req);
+        const now = performance.now();
+        if (typeof m.q !== 'string' || now - s.lastPartySearchAt < PARTY_SEARCH_MS) return;
+        s.lastPartySearchAt = now;
+        const q = m.q.replace(/[\p{Cc}\p{Cf}]/gu, '').trim().slice(0, PARTY_SEARCH_MAX).toLowerCase();
+        const list: PartyFound[] = [...this.sessions]
+          .filter((o) => o !== s && !o.guest && o.player.name.toLowerCase().includes(q))
+          .sort((a, b) => a.player.name.localeCompare(b.player.name))
+          .slice(0, PARTY_SEARCH_LIMIT)
+          .map((o) => ({ name: o.player.name, lv: o.player.level, cls: o.player.cls.id, inParty: !!this.parties.of(o.charId) }));
+        this.send(s.ws, { t: 'partyFound', req, list });
+        return;
+      }
+    }
+    if (err) this.partyLine(s.charId, err);
+  }
+
+  /** Your party for your snapshot: every member, with live numbers for those online. */
+  private partySnap(s: Session): PartySnap | undefined {
+    const party = this.parties.of(s.charId);
+    if (!party) return undefined;
+    return {
+      id: party.id,
+      members: party.members.map((m, i) => {
+        const o = m.online ? this.sessionOfChar(m.charId) : undefined;
+        const p = o?.player;
+        return {
+          charId: m.charId, name: m.name, cls: m.cls, lv: p?.level ?? m.level,
+          hp: p ? Math.round(Math.max(0, p.hp)) : 0, maxHp: Math.round(p?.maxHp ?? m.maxHp),
+          mp: p ? Math.round(Math.max(0, p.mp)) : 0, maxMp: Math.round(p?.stats.maxMp ?? m.maxMp),
+          leader: i === 0, online: !!o, zone: o?.sim.zone.id ?? m.zone, pid: p?.id ?? -1,
+          x: p ? r2(p.x) : 0, z: p ? r2(p.z) : 0,
+        };
+      }),
+    };
+  }
+
   // ------------------------------------------------------------ market broker (server/market.ts)
 
   private onMarket(s: Session, m: { req: number } & MarketCall): void {
@@ -711,16 +841,26 @@ export class GameWorld {
     }
   }
 
-  private onChat(s: Session, text: unknown): void {
+  private onChat(s: Session, text: unknown, ch?: unknown): void {
     if (typeof text !== 'string') return;
     const now = performance.now();
     if (now - s.lastChatAt < 600) return;
     const clean = text.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, CHAT_MAX);
     if (!clean) return;
+    const party = ch === 'party' ? this.parties.of(s.charId) : undefined;
+    if (ch === 'party' && !party) return this.partyLine(s.charId, 'คุณไม่ได้อยู่ในปาร์ตี้ — แชทปาร์ตี้ไม่ได้');
     s.lastChatAt = now;
-    for (const o of this.sessions) this.send(o.ws, { t: 'chat', name: s.player.name, text: clean });
+    if (party) {
+      for (const m of party.members) {
+        const o = m.online ? this.sessionOfChar(m.charId) : undefined;
+        if (o) this.send(o.ws, { t: 'chat', name: s.player.name, text: clean, ch: 'party' });
+      }
+    } else for (const o of this.sessions) this.send(o.ws, { t: 'chat', name: s.player.name, text: clean });
     try {
-      this.db.logChat({ accountId: s.accountId, username: s.guest ? 'Guest' : s.username, charName: s.player.name, zone: s.sim.zone.id, text: clean });
+      this.db.logChat({
+        accountId: s.accountId, username: s.guest ? 'Guest' : s.username, charName: s.player.name, zone: s.sim.zone.id,
+        text: party ? `[ปาร์ตี้] ${clean}` : clean,
+      });
     } catch (e) {
       console.error('[world] logging chat failed', e);
     }
@@ -827,6 +967,7 @@ export class GameWorld {
     p.potCd = old.potCd;
     p.restCd = old.restCd;
     p.stash = old.stash;
+    p.partyId = old.partyId;
     s.sim = dest;
     s.player = p;
     this.byPlayer.set(p, s);
@@ -912,7 +1053,9 @@ export class GameWorld {
       loots: sim.loots.filter(near).map((l) => ({
         id: l.id, x: r2(l.x), z: r2(l.z), fromX: r2(l.fromX), fromZ: r2(l.fromZ), t: r2(l.t),
         kind: l.kind, dropped: l.dropped, owner: l.owner, ownerUntil: r2(l.ownerUntil),
+        ...(l.ownerParty !== null ? { party: l.ownerParty } : {}),
       })),
+      party: this.partySnap(s),
       events: s.outbox,
     };
     s.outbox = [];

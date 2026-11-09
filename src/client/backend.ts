@@ -12,6 +12,7 @@ import type { EnhanceResult } from '../shared/data/enhance';
 import type { RerollKind } from '../shared/data/reroll';
 import type { EquipSlot, Item, PotionKind, PotionSize, Rarity } from '../shared/types';
 import type { MarketCall, MarketReply } from '../shared/sim/market';
+import type { PartyFound, PartySnap } from '../shared/party';
 
 /** What a projectile view needs; the local simulation's Projectile fits this too. */
 export interface ProjectileLike {
@@ -79,7 +80,8 @@ export interface Backend {
   enhance(uid: string, protect: boolean): Promise<EnhanceOutcome>;
   /** Blacksmith reroll of worn or bag gear; resolves with the changed item, or null if refused. */
   reroll(uid: string, kind: RerollKind): Promise<Item | null>;
-  chat(text: string): void;
+  /** `party` = to the party only. */
+  chat(text: string, party?: boolean): void;
   npcDistance(id: NpcId): number;
 
   // Stash (warehouse keeper). The stash itself is `me.stash`. `to` = target slot, or -1 for wherever it fits.
@@ -95,4 +97,17 @@ export interface Backend {
   market(call: MarketCall): Promise<MarketReply>;
   /** Listings waiting in this account's claim box at the market broker. */
   readonly marketBox: number;
+
+  // Party (the server checks every rule; see server/party.ts).
+  /** Your party as of the last snapshot, or null when you are in none. */
+  readonly party: PartySnap | null;
+  partyCreate(): void;
+  partyInvite(name: string): void;
+  partyAnswer(party: number, yes: boolean): void;
+  partyLeave(): void;
+  partyKick(charId: number): void;
+  /** Online, non-guest characters whose name holds `q` (empty list if the server didn't answer). */
+  partySearch(q: string): Promise<PartyFound[]>;
+  /** The "don't accept party invites" setting. */
+  setPartyBlock(on: boolean): void;
 }

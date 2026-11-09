@@ -23,7 +23,7 @@ import {
   isItem, isPotion, isStack, isStone, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
   type BagEntry, type Item, type StatLine, type PotionKind, type PotionSize, type PotionStack, type Rarity, type StoneStack, type StoneKind, type EquipSlot, type StatKey,
 } from '../shared/types';
-import { drawMapIcon, facingAngle } from './mapIcons';
+import { drawMapIcon, facingAngle, partyDot } from './mapIcons';
 import type { MapIcon } from './mapIconNames';
 import { NPC_MAP_ICON } from './fullmap';
 import { MarketWindow } from './market';
@@ -156,6 +156,8 @@ export class Hud {
   private rerollPrev: { uid: string; lines: StatLine[] } | null = null;
 
   private readonly market: MarketWindow;
+  /** The chat history tab picked last ('all', 'chat', 'system' or 'party'). */
+  private chatTab = 'all';
 
   constructor(private readonly g: Game) {
     this.market = new MarketWindow(g, this);
@@ -195,7 +197,8 @@ export class Hud {
       b.addEventListener('mousedown', (e) => e.preventDefault()); // keep typing in the chat box
       b.onclick = () => {
         const log = $('log');
-        log.classList.remove('tab-chat', 'tab-system');
+        log.classList.remove('tab-chat', 'tab-system', 'tab-party');
+        this.chatTab = b.dataset.tab ?? 'all';
         if (b.dataset.tab !== 'all') log.classList.add(`tab-${b.dataset.tab}`);
         for (const o of $('log-tabs').querySelectorAll('[data-tab]')) o.classList.toggle('active', o === b);
         log.scrollTop = log.scrollHeight;
@@ -205,7 +208,10 @@ export class Hud {
       e.stopPropagation();
       if (e.key === 'Enter') {
         const text = chat.value.trim();
-        if (text) g.backend.chat(text);
+        // The party tab sends to the party; "/p text" does from any tab.
+        const p = /^\/p\s+/i.exec(text);
+        if (p) g.backend.chat(text.slice(p[0].length), true);
+        else if (text) g.backend.chat(text, this.chatTab === 'party');
         this.closeChat();
       } else if (e.key === 'Escape') this.closeChat();
     });
@@ -829,7 +835,18 @@ export class Hud {
     for (const r of g.backend.terrain.restSpots) icon('camp', r.x, r.z, 14);
     for (const n of g.npcs) icon(NPC_MAP_ICON[n.id], n.x, n.z, 15);
     for (const o of g.backend.players) {
-      if (o !== p) drawMapIcon(ctx, 'ally', ...toMM(o.x, o.z), 16, facingAngle(o.faceX, o.faceZ));
+      if (o !== p && !g.party.memberOf(o)) drawMapIcon(ctx, 'ally', ...toMM(o.x, o.z), 16, facingAngle(o.faceX, o.faceZ));
+    }
+    // Party members on this map, even far away (the snapshot carries them all): a green ring, kept on the edge when out of range.
+    for (const m of g.party.mapMates()) {
+      let [mx, my] = toMM(m.x, m.z);
+      const d = Math.hypot(mx - c, my - c);
+      const edge = c - 9;
+      if (d > edge) {
+        mx = c + ((mx - c) / d) * edge;
+        my = c + ((my - c) / d) * edge;
+      }
+      partyDot(ctx, mx, my, 5);
     }
     drawMapIcon(ctx, 'player', c, c, 22, facingAngle(p.faceX, p.faceZ));
     ctx.restore();
@@ -965,6 +982,7 @@ export class Hud {
     this.closeStash();
     this.closeForge();
     this.market.close();
+    this.g.party.toggle(false);
     if (this.dialogOpen) this.closeDialog();
   }
 
@@ -1708,16 +1726,16 @@ export class Hud {
     input.blur();
   }
 
-  /** A chat line; an empty name means a server notice (someone joined or left). */
-  chatLine(name: string, text: string, fadeMs = 15000): void {
+  /** A chat line; an empty name means a server notice (someone joined or left). `party` = party chat or a party notice. */
+  chatLine(name: string, text: string, fadeMs = 15000, party = false): void {
     const el = document.createElement('div');
     if (name) {
-      el.className = 'log-line chat';
+      el.className = `log-line chat${party ? ' party' : ''}`;
       const b = document.createElement('b');
-      b.textContent = `${name}: `;
+      b.textContent = party ? `[ปาร์ตี้] ${name}: ` : `${name}: `;
       el.append(b, document.createTextNode(text));
     } else {
-      el.className = 'log-line system';
+      el.className = `log-line system${party ? ' party' : ''}`;
       el.textContent = text;
     }
     this.pushLog(el, fadeMs);

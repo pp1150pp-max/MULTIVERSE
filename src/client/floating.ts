@@ -284,6 +284,7 @@ export class Floating {
         this.names.set(p, pl);
       }
       (pl.el.firstChild as HTMLElement).textContent = `Lv.${p.level} ${p.name}${p.alive ? '' : ' 💀'}`;
+      pl.el.classList.toggle('party', !!g.party.memberOf(p));
       pl.el.style.transform = `translate(${s.sx}px, ${s.sy}px) translate(-50%, -100%)`;
       pl.fill.style.width = `${(Math.max(0, p.hp) / Math.max(1, p.maxHp)) * 100}%`;
     }
@@ -309,7 +310,7 @@ export class Floating {
         this.labels.set(l, el);
       }
       // 🔒 = another player did the most damage and still has first pick.
-      const locked = !l.canTake(g.player.id, g.time);
+      const locked = !l.canTake(g.player, g.time);
       el.textContent = locked ? `🔒 ${itemName(l.kind.item)}` : itemName(l.kind.item);
       el.classList.toggle('locked', locked);
       el.style.transform = `translate(${s.sx}px, ${s.sy}px) translate(-50%, -100%)`;
