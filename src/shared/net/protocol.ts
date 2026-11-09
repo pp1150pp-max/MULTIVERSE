@@ -12,6 +12,7 @@ import type { Hazard } from '../sim/volcanoHeart';
 import type { MarketCall, MarketReply } from '../sim/market';
 import type { MailCall, MailReply } from '../mail';
 import type { PartyFound, PartySnap } from '../party';
+import type { TradeView } from '../trade';
 
 export const WS_PATH = '/ws';
 /** Server simulation rate and how often it sends snapshots. */
@@ -96,7 +97,19 @@ export type ActionMsg =
   /** Online, non-guest characters whose name holds `q`; answered with `partyFound` of the same `req`. */
   | { t: 'act'; a: 'partySearch'; q: string; req: number }
   /** The "don't accept party invites" setting (kept by the browser, sent on joining and when changed). */
-  | { t: 'act'; a: 'partyBlock'; on: boolean };
+  | { t: 'act'; a: 'partyBlock'; on: boolean }
+  // Trade (server/trade.ts). A request names the target by character name, an answer the asker by character id.
+  | { t: 'act'; a: 'tradeRequest'; name: string }
+  | { t: 'act'; a: 'tradeAnswer'; from: number; yes: boolean }
+  /** Offers bag slot `slot`; `n` = only that many of a potion/stone stack (omitted = all of it). */
+  | { t: 'act'; a: 'tradeAdd'; slot: number; n?: number }
+  | { t: 'act'; a: 'tradeRemove'; slot: number }
+  | { t: 'act'; a: 'tradeGold'; amount: number }
+  /** `ver` = the `ver` of the TradeView the player was looking at. */
+  | { t: 'act'; a: 'tradeConfirm'; ver: number }
+  | { t: 'act'; a: 'tradeCancel' }
+  /** The "don't accept trade requests" setting (kept by the browser, sent on joining and when changed). */
+  | { t: 'act'; a: 'tradeBlock'; on: boolean };
 
 /** Close code the browser uses when the player leaves on purpose (leaves the party at once, no grace time). */
 export const WS_CLOSE_QUIT = 4000;
@@ -200,6 +213,13 @@ export type ServerMsg =
   /** That invite can't be answered any more (answered, expired, or the party ended). */
   | { t: 'partyInviteGone'; party: number }
   | { t: 'partyFound'; req: number; list: PartyFound[] }
+  /** Someone asks you to trade; answer within `seconds`. `from` is their character id. */
+  | { t: 'tradeRequest'; from: number; name: string; seconds: number }
+  | { t: 'tradeRequestGone'; from: number }
+  /** The trade window's state (sent on every change). */
+  | { t: 'trade'; view: TradeView }
+  /** The trade ended: `ok` = it went through. Closes the window. */
+  | { t: 'tradeEnd'; ok: boolean; msg: string }
   | { t: 'enhanced'; req: number; result: EnhanceResult | null; item: Item | null }
   /** The rerolled item, or null when the server refused. */
   | { t: 'rerolled'; req: number; item: Item | null }

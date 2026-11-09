@@ -23,6 +23,10 @@ function launch(backend: OnlineBackend): void {
   };
   backend.onPartyInvite = (party, from, seconds) => game.party.invited(party, from, seconds);
   backend.onPartyInviteGone = (party) => game.party.removeInvite(party);
+  backend.onTradeRequest = (from, name, seconds) => game.trade.requested(from, name, seconds);
+  backend.onTradeRequestGone = (from) => game.trade.removeRequest(from);
+  backend.onTrade = (view) => game.trade.show(view);
+  backend.onTradeEnd = (ok) => game.trade.ended(ok);
   backend.onDisconnect = (msg) => game.hud.showDisconnect(msg);
   backend.onShutdown = (mode, seconds, text) => game.hud.shutdownCountdown(mode, seconds, text);
   backend.onAnnounce = (text, from, direct) => game.hud.announce(text, from, direct);

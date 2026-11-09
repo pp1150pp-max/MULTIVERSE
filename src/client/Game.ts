@@ -25,6 +25,7 @@ import { sheets } from './assets';
 import { GameAudio } from './audio/gameAudio';
 import { findPath } from './pathfind';
 import { PartyUI } from './party';
+import { TradeUI } from './trade';
 import { MailUI } from './mail';
 import { SystemMenu } from './sysmenu';
 import { LootView, MonsterView, PlayerView, ProjectileView, ViewSet } from './views';
@@ -62,6 +63,7 @@ export class Game {
   readonly hud: Hud;
   readonly sysMenu: SystemMenu;
   readonly party: PartyUI;
+  readonly trade: TradeUI;
   readonly mailUI: MailUI;
   /** Another player under the mouse (when no monster or usable thing is): a left click offers a party invite. */
   private hoveredPlayer: Player | null = null;
@@ -134,6 +136,7 @@ export class Game {
     this.hud = new Hud(this);
     this.sysMenu = new SystemMenu(this);
     this.party = new PartyUI(this);
+    this.trade = new TradeUI(this);
     this.mailUI = new MailUI(this);
     initDraggableWindows(document.getElementById('hud')!);
     this.checkGpu();
@@ -612,6 +615,7 @@ export class Game {
     this.floating.update(dt, this);
     this.hud.update(dt);
     this.party.update();
+    this.trade.update();
   }
 
   private updateCamera(dt: number): void {

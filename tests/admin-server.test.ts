@@ -332,12 +332,14 @@ async function run(): Promise<void> {
   const ownerId = (await api('GET', '/admin/accounts', undefined, ownerTok)).data.rows.find((r: any) => r.username === 'owner1').accountId;
   ok((await api('GET', '/admin/me', undefined, ownerTok)).data.features.length === Object.keys(FEATURE_ROLES).length, 'owner has every owner tool');
   ok(JSON.stringify((await api('GET', '/admin/me', undefined, gmTok)).data.features) === '["broadcast"]', 'GM has only the broadcast tool (FEATURE_ROLES)');
+  const trades = await api('GET', '/admin/trades', undefined, ownerTok);
+  ok(trades.status === 200 && Array.isArray(trades.data) && (await api('GET', '/admin/trades?q=x%25', undefined, ownerTok)).status === 200, 'owner reads the trade log (and a search with odd characters is fine)');
   const gmDenied: [string, string, unknown?][] = [
     ['GET', '/admin/accounts'], ['GET', `/admin/accounts/${plainId}`], ['POST', `/admin/accounts/${plainId}/password`],
     ['POST', `/admin/accounts/${plainId}/ban`, { duration: '1h', reason: 'x' }], ['POST', `/admin/accounts/${plainId}/unban`],
     ['GET', '/admin/backups'], ['POST', '/admin/backups'],
     ['DELETE', `/admin/accounts/${plainId}`, { confirm: 'plain1' }], ['DELETE', `/admin/characters/${charId}`, { confirm: 'Tester' }],
-    ['GET', '/admin/sessions'], ['GET', `/admin/sessions?account=${plainId}`], ['GET', '/admin/stats'], ['GET', '/admin/chat'], ['DELETE', '/admin/chat/1'],
+    ['GET', '/admin/trades'], ['GET', '/admin/sessions'], ['GET', `/admin/sessions?account=${plainId}`], ['GET', '/admin/stats'], ['GET', '/admin/chat'], ['DELETE', '/admin/chat/1'],
   ];
   for (const [m, path, body] of gmDenied) ok((await api(m, path, body, gmTok)).status === 403, `GM denied: ${m} ${path}`);
   ok((await api('GET', '/admin/accounts', undefined, plainTok)).status === 403, 'player denied: account list');

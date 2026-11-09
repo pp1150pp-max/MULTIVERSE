@@ -303,8 +303,10 @@ export class PartyUI {
 
   /** Clicked another player in the world: offer an invite. */
   playerMenu(p: Player, x: number, y: number): void {
-    if (this.memberOf(p)) return;
-    this.showMenu(x, y, [[`ชวน ${p.name} เข้าปาร์ตี้`, () => this.g.backend.partyInvite(p.name)]]);
+    const items: [string, () => void][] = [];
+    if (!this.memberOf(p)) items.push([`ชวน ${p.name} เข้าปาร์ตี้`, () => this.g.backend.partyInvite(p.name)]);
+    if (!this.g.backend.guest) items.push([`ขอเทรดกับ ${p.name}`, () => this.g.trade.request(p.name)]);
+    if (items.length) this.showMenu(x, y, items);
   }
 
   private showMenu(x: number, y: number, items: [string, () => void][]): void {

@@ -10,6 +10,7 @@ import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
 import { MARKET_HISTORY_DAYS, type MarketQuery } from '../src/shared/sim/market';
 import { MAIL_HISTORY_DAYS } from '../src/shared/mail';
+import type { TradeLogRow } from '../src/shared/trade';
 import { isAdminRole, type AdminRole, type AuditRow, type ChatLogRow, type PlaySessionRow, type RoleRow, type SessionQuery, type SessionSort } from '../src/shared/admin';
 
 /** A play session's username as the admin page shows it. */
@@ -36,6 +37,9 @@ function sessionSortSql(sort: SessionSort, openIds: number[], now: number): stri
 
 /** Settings rows holding the countdown texts. */
 export const SHUTDOWN_TEXT_KEY: Record<ShutdownMode, string> = { restart: 'shutdown_text_restart', shutdown: 'shutdown_text_shutdown' };
+
+/** One side of a finished trade, as the log stores it. */
+export interface TradeLogSide { charId: number; accountId: number; name: string; items: string[]; gold: number; tax: number }
 
 export interface AccountRow { id: number; username: string; pass_hash: string }
 
@@ -227,6 +231,24 @@ export class Db {
       );
       CREATE INDEX IF NOT EXISTS mail_box_account ON mail_box(account_id, deleted_at);
       CREATE INDEX IF NOT EXISTS mail_box_send ON mail_box(send_id);
+      CREATE TABLE IF NOT EXISTS trade_log (
+        id INTEGER PRIMARY KEY,
+        at INTEGER NOT NULL,
+        zone TEXT NOT NULL,
+        a_char INTEGER NOT NULL,
+        a_account INTEGER NOT NULL,
+        a_name TEXT NOT NULL,
+        b_char INTEGER NOT NULL,
+        b_account INTEGER NOT NULL,
+        b_name TEXT NOT NULL,
+        a_items TEXT NOT NULL,
+        b_items TEXT NOT NULL,
+        a_gold INTEGER NOT NULL,
+        b_gold INTEGER NOT NULL,
+        a_tax INTEGER NOT NULL,
+        b_tax INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS trade_log_at ON trade_log(at);
       CREATE TABLE IF NOT EXISTS admin_audit (
         id INTEGER PRIMARY KEY,
         at INTEGER NOT NULL,
@@ -925,6 +947,42 @@ export class Db {
         .run(now - MARKET_HISTORY_DAYS * day).changes)
       // Mail sent long ago (it expired 30 days after sending); the history keeps 60 days, copies go with it.
       + Number(this.db.prepare('DELETE FROM mail_sends WHERE created_at < ?').run(now - MAIL_HISTORY_DAYS * day).changes);
+  }
+
+  /**
+   * Records one finished trade (call inside the transaction that saves both characters). `*_items` are JSON
+   * lists of text lines; `a_gold` is what A sent (B got it minus `a_tax`), and the same the other way.
+   */
+  tradeLogInsert(r: { at: number; zone: string; a: TradeLogSide; b: TradeLogSide }): number {
+    return Number(this.db.prepare(`INSERT INTO trade_log (at, zone, a_char, a_account, a_name, b_char, b_account, b_name,
+      a_items, b_items, a_gold, b_gold, a_tax, b_tax) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      r.at, r.zone, r.a.charId, r.a.accountId, r.a.name, r.b.charId, r.b.accountId, r.b.name,
+      JSON.stringify(r.a.items), JSON.stringify(r.b.items), r.a.gold, r.b.gold, r.a.tax, r.b.tax,
+    ).lastInsertRowid);
+  }
+
+  /** The newest trades first; `q` = part of either player's name. */
+  tradeLog(limit: number, before?: number, q?: string): TradeLogRow[] {
+    const like = q ? `%${q.replace(/[!%_]/g, (c) => `!${c}`)}%` : null;
+    const rows = this.db.prepare(`SELECT * FROM trade_log WHERE id < ?
+      ${like ? "AND (a_name LIKE ? ESCAPE '!' OR b_name LIKE ? ESCAPE '!')" : ''} ORDER BY id DESC LIMIT ?`)
+      .all(...(like ? [before ?? Number.MAX_SAFE_INTEGER, like, like, limit] : [before ?? Number.MAX_SAFE_INTEGER, limit])) as {
+      id: number; at: number; zone: string; a_char: number; a_name: string; b_char: number; b_name: string;
+      a_items: string; b_items: string; a_gold: number; b_gold: number; a_tax: number; b_tax: number;
+    }[];
+    const lines = (json: string): string[] => {
+      try {
+        const v = JSON.parse(json);
+        return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+      } catch {
+        return [];
+      }
+    };
+    return rows.map((r) => ({
+      id: r.id, at: r.at, zone: r.zone,
+      a: { charId: r.a_char, name: r.a_name, items: lines(r.a_items), gold: r.a_gold, tax: r.a_tax },
+      b: { charId: r.b_char, name: r.b_name, items: lines(r.b_items), gold: r.b_gold, tax: r.b_tax },
+    }));
   }
 
   /** Records one admin action. */

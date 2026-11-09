@@ -254,6 +254,11 @@ export class Hud {
       const i = this.cellIndex(e);
       if (i < 0) return;
       const entry = g.player.bag[i];
+      // While trading a click offers the item (all of it; Shift+drag onto the trade window offers part of a stack).
+      if (g.trade.open) {
+        if (entry) g.trade.offer(i);
+        return;
+      }
       if (isStone(entry)) return;
       // At the blacksmith a click on gear puts it in the forge's slot instead of wearing it.
       if (this.forgeOpen && isItem(entry)) {
@@ -277,6 +282,10 @@ export class Hud {
       const item = i >= 0 ? g.player.bag[i] : null;
       if (!item) return;
       this.hideTip();
+      if (g.trade.open) {
+        g.trade.offer(i);
+        return;
+      }
       if (this.stashOpen) {
         g.backend.stashPut(i, -1);
         this.markInventory();
@@ -308,6 +317,11 @@ export class Hud {
       const item = i >= 0 ? g.player.bag[i] : null;
       const right = this.stashOpen ? 'ฝากเข้าคลัง' : this.market.isOpen ? 'เลือกมาลงขายในตลาด' : this.shopOpen ? (isStack(item) ? 'ขายทั้งช่อง' : 'ขาย') : 'วางลงพื้น';
       const split = item && isStack(item) && item.count > 1 ? ' · Shift+ลาก: แบ่งกอง' : '';
+      if (g.trade.open && item) {
+        const part = isStack(item) && item.count > 1 ? ' · Shift+ลากไปที่หน้าต่างเทรด: เสนอบางส่วน' : '';
+        this.showEntryTip(item, e, g.trade.offeredSlots().has(i) ? 'เสนออยู่ — เอาออกที่หน้าต่างเทรด' : `คลิก: เสนอในการเทรด${part}`);
+        return;
+      }
       if (isPotion(item)) this.showPotionTip(item, e, `คลิกซ้าย: ใช้กับปุ่มด่วน · คลิกขวา: ${right}${split}`);
       else if (isStone(item)) this.showStoneTip(item, e, `คลิกขวา: ${right}${split}`);
       else if (item) {
@@ -617,6 +631,16 @@ export class Hud {
       if (forge) {
         const entry = g.player.bag[d.i];
         if (entry) this.forgePlace(entry);
+        return;
+      }
+      // While trading, dropping a bag item on the trade window offers it (Shift: part of a stack).
+      if (d.src === 'bag' && g.trade.isTarget(target)) {
+        const entry = g.player.bag[d.i];
+        if (!entry) return;
+        if (e.shiftKey && isStack(entry) && entry.count > 1) {
+          const name = `<b style="color:${this.entryColor(entry)}">${entryName(entry)}</b>`;
+          this.askAmount(`เสนอ ${name} กี่${isPotion(entry) ? 'ขวด' : 'ก้อน'}?`, entry.count, entry.count, (n) => g.trade.offer(d.i, n));
+        } else g.trade.offer(d.i);
         return;
       }
       // Shift+drag a stack onto an empty slot (or the same stack): ask how many to move.
@@ -1032,6 +1056,11 @@ export class Hud {
     return !!document.querySelector('#hud .panel:not(.hidden):not(#sys-menu)');
   }
 
+  /** The amount dialog or a confirm box is up (Esc closes that first). */
+  hasOverlay(): boolean {
+    return !!this.amountDone || !!this.confirmYes;
+  }
+
   closePanels(): void {
     if (this.amountDone) return this.closeAmount();
     if (this.confirmYes) return this.closeConfirm();
@@ -1045,6 +1074,7 @@ export class Hud {
     this.closeForge();
     this.market.close();
     this.g.party.toggle(false);
+    this.g.trade.toggleFind(false);
     this.g.mailUI.toggle(false);
     if (this.dialogOpen) this.closeDialog();
   }
@@ -1651,7 +1681,7 @@ export class Hud {
     return isPotion(e) ? POTION_COLOR[e.potion] : isStone(e) ? STONE_COLOR[e.stone] : RARITY_COLOR[e.rarity];
   }
 
-  private itemCell(item: BagEntry | null | undefined, attrs: string, placeholder = '', selected = false): string {
+  itemCell(item: BagEntry | null | undefined, attrs: string, placeholder = '', selected = false): string {
     if (!item) return `<div class="cell empty" ${attrs}>${placeholder}</div>`;
     if (isPotion(item)) {
       // The outline marks the size the quick key uses.
@@ -1679,7 +1709,12 @@ export class Hud {
       `<div class="eq-row eq-${s}" title="${EQUIP_SLOT_LABEL[s]}">${this.itemCell(p.equipment[s], `data-slot="${s}"`, emptyLook(s))}</div>`,
     ).join('');
     const picked = this.market.picked;
-    $('bag-grid').innerHTML = p.bag.map((it, i) => this.itemCell(it, `data-i="${i}"`, '', i === picked)).join('');
+    // Things on offer in an open trade stay in the bag but are marked (and the server refuses to move them).
+    const offered = this.g.trade.offeredSlots();
+    $('bag-grid').innerHTML = p.bag.map((it, i) => {
+      const cell = this.itemCell(it, `data-i="${i}"`, '', i === picked);
+      return offered.has(i) ? cell.replace('class="cell ', 'class="cell trade-offered ') : cell;
+    }).join('');
     const fmt = (k: StatKey, v: number) =>
       k === 'hpRegen' || k === 'mpRegen' ? v.toFixed(1) : String(Math.round(v));
     $('stat-list').innerHTML = STAT_KEYS.map((k) =>
@@ -1691,7 +1726,9 @@ export class Hud {
     for (const r of RARITIES) lf.querySelector<HTMLInputElement>(`[data-rarity="${r}"]`)!.checked = p.lootFilter.rarities.includes(r);
     syncPots(lf, p.lootFilter);
     if (this.stashOpen) this.renderStash();
-    $('bag-hint').textContent = this.market.isOpen
+    $('bag-hint').textContent = this.g.trade.open
+      ? 'กำลังเทรด: คลิกของเพื่อเสนอ · ลากไปที่หน้าต่างเทรดก็ได้ (Shift+ลาก = เสนอบางส่วนของกองยา/หิน) · ของที่เสนออยู่มีกรอบเขียว'
+      : this.market.isOpen
       ? this.market.bagHint
       : this.stashOpen
       ? 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = ฝากเข้าคลัง · ลากไปวางในคลังได้'
@@ -1709,6 +1746,13 @@ export class Hud {
     if (block) this.log(`ใส่ ${itemName(item)} ไม่ได้ — ${block}`, '#ff8a6a');
     else if (!wornPlaces(item.slot).includes(slot)) this.log(`${itemName(item)} ใส่ช่อง${EQUIP_SLOT_LABEL[slot]}ไม่ได้`, '#ff8a6a');
     else g.backend.equip(i, slot);
+  }
+
+  /** The tooltip for any bag entry (gear, potion or stone). */
+  showEntryTip(entry: BagEntry, e: MouseEvent, hint: string): void {
+    if (isPotion(entry)) this.showPotionTip(entry, e, hint);
+    else if (isStone(entry)) this.showStoneTip(entry, e, hint);
+    else this.showTip(entry, e, hint);
   }
 
   showTip(item: Item, e: MouseEvent, hint: string): void {
