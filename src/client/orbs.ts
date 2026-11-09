@@ -342,6 +342,19 @@ const screenH = { value: 1080 };
 const bufSize = new THREE.Vector2();
 
 // gl_PointSize from a world size: projectionMatrix[1][1] = 2 / (view height in world units).
+/**
+ * Characters are billboards standing at their feet and tilted back towards the camera, so at head
+ * height the picture is well behind the character's real middle: an orb circling behind the head would
+ * be drawn in front of it. Each point is slid along the view direction (which doesn't move it on screen
+ * with this orthographic camera) until its depth only depends on where it is around the character on
+ * the ground, the same way the billboard's depth works: behind the middle = hidden by the character.
+ */
+const PLACE = `
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vec3 toCam = vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2]);
+        wp.xyz -= toCam * (position.y * toCam.y);
+        gl_Position = projectionMatrix * viewMatrix * wp;`;
+
 const POINT_SIZE = 'gl_PointSize = max(1.0, floor(size * projectionMatrix[1][1] * uScreenH * 0.5));';
 
 let coreMat: THREE.ShaderMaterial | null = null;
@@ -356,7 +369,7 @@ function materials(): [THREE.ShaderMaterial, THREE.ShaderMaterial] {
       varying vec3 vColor; varying vec3 vAccent; varying float vDetail;
       void main() {
         vColor = color; vAccent = accent; vDetail = detail;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        ${PLACE}
         ${POINT_SIZE}
       }`,
     fragmentShader: `
@@ -379,7 +392,7 @@ function materials(): [THREE.ShaderMaterial, THREE.ShaderMaterial] {
       varying vec3 vColor; varying float vAlpha; varying float vKind;
       void main() {
         vColor = color; vAlpha = alpha; vKind = kind;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        ${PLACE}
         ${POINT_SIZE}
       }`,
     fragmentShader: `
