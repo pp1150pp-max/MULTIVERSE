@@ -320,6 +320,30 @@ const TAU = Math.PI * 2;
 const HEIGHTS = [1.05, 1.4, 0.75];
 const GLOW_PER_ORB = 1 + MAX_TRAIL + MAX_PARTICLES;
 
+/** Base height of orb `i` of `n`: neighbours (including last → first around the ring) never share one. */
+function heightIndex(i: number, n: number): number {
+  return n % 3 === 1 && i === n - 1 ? 1 : i % 3;
+}
+
+/**
+ * Where orb `i` of `n` is, relative to the character's feet, at time `t` (seconds). `phase` makes
+ * each character's ring start differently. Pure, so it can be checked without a browser.
+ */
+export function orbOffset(i: number, n: number, t: number, phase: number, out: THREE.Vector3): THREE.Vector3 {
+  const spacing = TAU / n;
+  const ph = phase + i * 1.7;
+  // One shared turn keeps the ring evenly spaced; each orb sways a little ahead and behind its place at
+  // its own rate, so they don't move as one rigid wheel. The sway shrinks as the ring fills up, so
+  // neighbours never touch (checked for 2–10 orbs at +15).
+  const sway = n > 1 ? Math.sin(t * (0.9 + 0.23 * i) + ph) * spacing * SWAY[Math.min(n, 10)] : 0;
+  const a = t * orbTuning.speed * TAU + i * spacing + sway;
+  const r = orbTuning.radius * (1 + 0.06 * Math.sin(t * 0.7 + ph));
+  const y = HEIGHTS[heightIndex(i, n)] + Math.sin(t * (1.6 + 0.19 * i) + ph) * 0.09;
+  return out.set(Math.cos(a) * r, y, Math.sin(a) * r);
+}
+/** Sway (share of the gap between orbs) by orb count. */
+const SWAY = [0, 0, 0.22, 0.22, 0.2, 0.18, 0.15, 0.13, 0.11, 0.09, 0.08];
+
 /** Small deterministic hash → 0..1. */
 function hash(n: number): number {
   const s = Math.sin(n * 127.1 + 311.7) * 43758.5453;
@@ -378,18 +402,8 @@ export class OrbRing {
     return true;
   }
 
-  /** Where orb `i` is (relative to the feet) at time `t`. */
   private orbAt(i: number, t: number, out: THREE.Vector3): THREE.Vector3 {
-    const n = this.n;
-    const spacing = TAU / n;
-    const ph = this.phase + i * 1.7;
-    // One shared turn keeps the ring evenly spaced; each orb sways a little ahead and behind it,
-    // at its own rate, so they don't move as one rigid wheel (sway < a quarter of the gap: no overlap).
-    const sway = n > 1 ? Math.sin(t * (0.9 + 0.23 * i) + ph) * spacing * 0.22 : 0;
-    const a = t * orbTuning.speed * TAU + i * spacing + sway;
-    const r = orbTuning.radius * (1 + 0.06 * Math.sin(t * 0.7 + ph));
-    const y = HEIGHTS[i % 3] + Math.sin(t * (1.6 + 0.19 * i) + ph) * 0.09;
-    return out.set(Math.cos(a) * r, y, Math.sin(a) * r);
+    return orbOffset(i, this.n, t, this.phase, out);
   }
 
   /** `codes` = the player's orbs (Player.orbs); `show` false hides the whole ring (e.g. dead). */

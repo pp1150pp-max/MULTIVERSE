@@ -25,7 +25,7 @@ levels.weapon = 7;
 levels.armor = 7;
 levels.ring = 15;
 
-const state = { cls: 'sword' as ClassId, aura: true, walk: false, extra: 0, zoom: 9 };
+const state = { cls: 'sword' as ClassId, aura: true, walk: false, extra: 0, zoom: 17 };
 
 /** Gear with just the + levels set: enough for orbCodes (the same code the server uses). */
 function fakeGear(lv: Record<EquipSlot, number>): Partial<Record<EquipSlot, Item>> {
@@ -121,7 +121,19 @@ async function main(): Promise<void> {
   let t = 0;
   let frames = 0;
   let fpsT = 0;
+  // For checks while the pane is hidden (no animation frames): window.orbPreview.step(n) runs n frames.
+  (window as unknown as { orbPreview: object }).orbPreview = {
+    step(n: number): number {
+      const t0 = performance.now();
+      for (let i = 0; i < n; i++) frame(last + 1000 / 60);
+      return (performance.now() - t0) / n;
+    },
+  };
   const loop = (now: number) => {
+    frame(now);
+    requestAnimationFrame(loop);
+  };
+  const frame = (now: number) => {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     t += dt;
@@ -146,7 +158,6 @@ async function main(): Promise<void> {
       frames = 0;
       fpsT = 0;
     }
-    requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
 
