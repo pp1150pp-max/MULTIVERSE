@@ -14,18 +14,20 @@ const EXIT_COUNTDOWN = 5;
 /** "In combat" = hurt or attacked within this many seconds, or Auto Play running. */
 const COMBAT_WINDOW = 5;
 
-/** Icon grid, 3 columns: [action ('' = not built yet, greyed out), icon, label]. */
+/** Painted badge from public/assets/sprites/ui/ico_<name>.png. A glyph draws on the blank badge for systems with no art yet. */
+const badge = (name: string, glyph = ''): string =>
+  `<img src="assets/sprites/ui/ico_${name}.png" alt="">${glyph ? `<span class="ico-glyph">${glyph}</span>` : ''}`;
+
+/** Icon grid, 3 columns: [action, icon, label]. Only systems that exist; add a tile when a new one is built. */
 const MENU_ITEMS: [string, string, string][] = [
-  ['bag', '🎒', 'กระเป๋า'], ['', '🧑', 'ตัวละคร'], ['', '⚔️', 'สกิล'],
-  ['', '📜', 'ภารกิจ'], ['', '📖', 'สมุดการ์ด'], ['', '🏰', 'ดันเจี้ยน'],
-  ['', '👥', 'ปาร์ตี้'], ['', '🛡️', 'กิลด์'], ['', '👕', 'แฟชั่น'],
-  ['', '⚖️', 'ตลาด'], ['', '✉️', 'จดหมาย'], ['settings', '⚙️', 'ตั้งค่า'],
+  ['bag', badge('bag'), 'กระเป๋า'], ['map', badge('map'), 'แผนที่'], ['autoset', badge('autoset'), 'ตั้งค่า Auto'],
+  ['audio', badge('blank', '🔊'), 'เสียง'], ['help', badge('help'), 'วิธีเล่น'], ['settings', badge('settings'), 'ตั้งค่า'],
 ];
 
-/** Top-right icon row: [button id ('' = not built yet, greyed out), icon, label]. Swap the emoji for <img> later. */
+/** Top-right icon row: [button id, icon, label]. */
 const TOP_ICONS: [string, string, string][] = [
-  ['top-auto', '🤖', 'AUTO: OFF'], ['top-autoset', '⚙️', 'ตั้งค่า Auto'], ['top-bag', '🎒', 'กระเป๋า'], ['top-mute', '🔊', 'เสียง'], ['', '⚔️', 'สกิล'], ['', '⚖️', 'ตลาด'],
-  ['', '🏰', 'ดันเจี้ยน'], ['top-settings', '⚙️', 'ตั้งค่า'], ['top-menu', '☰', 'เมนู'],
+  ['top-auto', badge('auto'), 'AUTO: OFF'], ['top-autoset', badge('autoset'), 'ตั้งค่า Auto'], ['top-bag', badge('bag'), 'กระเป๋า'],
+  ['top-map', badge('map'), 'แผนที่'], ['top-mute', badge('blank', '🔊'), 'เสียง'], ['top-settings', badge('settings'), 'ตั้งค่า'], ['top-menu', badge('menu'), 'เมนู'],
 ];
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -57,6 +59,7 @@ export class SystemMenu {
     // Reuses the sound window's own mute button, so its text stays in sync.
     $('top-mute').onclick = () => $('audio-mute')?.click();
     $('top-bag').onclick = () => g.hud.toggleBag();
+    $('top-map').onclick = () => g.hud.toggleMap();
     $('top-settings').onclick = () => {
       this.toggle(true);
       this.showView('settings');
@@ -72,7 +75,6 @@ export class SystemMenu {
         ${MENU_ITEMS.map(
           ([act, icon, label]) =>
             `<button class="sys-tile" ${act ? `data-act="${act}"` : 'disabled'}>` +
-            // Swap the emoji span for <img src="..."> to use a real icon image.
             `<span class="sys-ico">${icon}</span><span class="sys-label">${label}</span><i class="badge hidden" data-badge="${label}"></i></button>`,
         ).join('')}
       </div>
@@ -142,7 +144,7 @@ export class SystemMenu {
     this.autoBtn.classList.toggle('active', this.g.autoPlay);
     this.autoBtn.querySelector('.sys-label')!.textContent = this.g.autoPlay ? 'AUTO: ON' : 'AUTO: OFF';
     const muted = audioEngine.settings.muted;
-    this.muteBtn.querySelector('.sys-ico')!.textContent = muted ? '🔇' : '🔊';
+    this.muteBtn.querySelector('.ico-glyph')!.textContent = muted ? '🔇' : '🔊';
     this.muteBtn.querySelector('.sys-label')!.textContent = muted ? 'ปิดเสียง' : 'เสียง';
     const p = this.g.player;
     if (this.lastHp >= 0 && p.hp < this.lastHp - 0.5) {
@@ -175,6 +177,12 @@ export class SystemMenu {
       case 'bag':
         this.toggle(false);
         return this.g.hud.toggleBag(true);
+      case 'map':
+        this.toggle(false);
+        return this.g.hud.toggleMap(true);
+      case 'autoset':
+        this.toggle(false);
+        return $('btn-auto-set').click();
       case 'settings':
         return this.showView('settings');
       case 'back':

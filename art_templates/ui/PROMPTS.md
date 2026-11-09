@@ -93,3 +93,11 @@ Using the letter M generated above as the exact style, colour, material, rim thi
 ```
 Generate a WIDE image (16:9): the background for a game title screen, in fine-detail 16-bit SNES-era pixel art with crisp pixels and no blur. A shattered floating island breaking apart in deep space, with drifting rock fragments and stardust, set against a dim blue and purple nebula. Far behind it, a large cracked star in old gold. The lower corners carry subtle ornaments of dark forged iron with tarnished old-gold trim. Keep the centre of the image dark and low in contrast, because a title logo and a login form will be placed on top of it. No letters, no words, no logos, no characters, no buttons, no UI panels.
 ```
+
+## `ico_*.png` (แถวไอคอนมุมขวาบนและเมนู)
+
+แนบหน้าต่างกระเป๋าไปเป็นตัวอย่างสี ตัดแต่ละช่องเป็น 96x96
+
+```
+Using the attached inventory window as the exact style and colour reference, generate a WIDE image (2:1): a set of round HUD menu buttons for an isometric action RPG, in fine-detail 16-bit SNES-era pixel art with crisp pixels and no blur. Each button is a round badge with a black forged iron rim and a thin tarnished aged-bronze inner ring around a dark recessed face, with one simple, bold, readable icon in the centre. Icons use warm muted colours with clear dark outlines, and must stay readable at 40 pixels wide. Any star details must be small, dull and tarnished, never bright yellow or glowing. Strict invisible grid of 4 columns x 2 rows. Each badge is exactly the same size and centred in its cell, with wide empty space around it, nothing touching. Row 1: a sword circled by two curved arrows (auto battle); a gear with a small sword in front of it (auto battle settings); a leather adventurer's backpack (bag); a rolled-open parchment map with a red X (map). Row 2: an open book with a question mark (help); a single gear (settings); three horizontal bars (main menu); the same badge with an empty face and no icon. Background ONE perfectly flat solid magenta (#FF00FF), no shadows on it. No letters, no numbers, no readable words, no logos. Do not use pink, magenta or purple in the buttons.
+```

@@ -171,9 +171,13 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 #hud-iconrow { position: absolute; width: max-content; top: 0; right: 100%; margin-right: 8px; display: flex; gap: 6px; pointer-events: auto; }
 .top-icon { white-space: nowrap; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 0; background: none; border: none; font-size: 11px; color: var(--ink); text-shadow: 0 0 3px #000, 0 1px 2px #000; }
 .top-icon:disabled { opacity: 0.4; cursor: default; }
-.top-icon .sys-ico { width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; font-size: 22px; border-radius: 50%; border: 1px solid var(--panel-edge); background: rgba(12, 10, 8, 0.85); }
-.top-icon .sys-ico img { width: 100%; height: 100%; object-fit: contain; }
-.top-icon.active .sys-ico { border-color: #8cff8c; background: #1c4a22; }
+.top-icon .sys-ico { position: relative; width: 44px; height: 44px; display: block; }
+/* Painted badges; .ico-glyph sits on the blank badge for systems with no art yet. */
+.sys-ico img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.sys-ico .ico-glyph { position: absolute; inset: 0; display: grid; place-items: center; font-size: 0.5em; filter: sepia(0.8) saturate(0.7); }
+.top-icon .sys-ico { font-size: 44px; }
+.top-icon:hover:not(:disabled) .sys-ico img { filter: brightness(1.2); }
+.top-icon.active .sys-ico img { filter: drop-shadow(0 0 4px #8cff8c) drop-shadow(0 0 2px #8cff8c); }
 .auto-row { display: flex; gap: 4px; }
 .auto-row #btn-auto { flex: 1; }
 #btn-auto-set { padding-left: 8px; padding-right: 8px; }
@@ -829,8 +833,7 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #sys-menu .sys-view.sys-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 #sys-menu .sys-tile { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; font-size: 13px; }
 #sys-menu .sys-tile:disabled { opacity: 0.4; cursor: default; }
-#sys-menu .sys-ico { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; font-size: 28px; border-radius: 50%; border: 1px solid var(--panel-edge); }
-#sys-menu .sys-ico img { width: 100%; height: 100%; object-fit: contain; }
+#sys-menu .sys-ico { position: relative; width: 56px; height: 56px; display: block; font-size: 56px; }
 #sys-menu .sys-view { display: flex; flex-direction: column; gap: 6px; }
 #sys-menu .sys-view.hidden { display: none; }
 #sys-menu .sys-view button { width: 100%; padding: 7px 10px; font-size: 14px; }
