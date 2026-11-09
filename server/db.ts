@@ -11,6 +11,7 @@ import { cleanStash, type StashData } from '../src/shared/sim/stash';
 import { MARKET_HISTORY_DAYS, type MarketQuery } from '../src/shared/sim/market';
 import { MAIL_HISTORY_DAYS } from '../src/shared/mail';
 import type { TradeLogRow } from '../src/shared/trade';
+import type { FriendChar } from '../src/shared/friends';
 import { isAdminRole, type AdminRole, type AuditRow, type ChatLogRow, type PlaySessionRow, type RoleRow, type SessionQuery, type SessionSort } from '../src/shared/admin';
 
 /** A play session's username as the admin page shows it. */
@@ -258,6 +259,29 @@ export class Db {
         target TEXT NOT NULL,
         details TEXT NOT NULL
       );
+      -- Friends (server/friends.ts) belong to accounts. One row per pair, the smaller id first.
+      CREATE TABLE IF NOT EXISTS friends (
+        acc_lo INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        acc_hi INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        since INTEGER NOT NULL,
+        PRIMARY KEY (acc_lo, acc_hi),
+        CHECK (acc_lo < acc_hi)
+      );
+      CREATE INDEX IF NOT EXISTS friends_hi ON friends(acc_hi);
+      CREATE TABLE IF NOT EXISTS friend_requests (
+        from_acc INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        to_acc INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        at INTEGER NOT NULL,
+        PRIMARY KEY (from_acc, to_acc)
+      );
+      CREATE INDEX IF NOT EXISTS friend_requests_to ON friend_requests(to_acc);
+      CREATE TABLE IF NOT EXISTS blocks (
+        blocker INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        blocked INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        at INTEGER NOT NULL,
+        PRIMARY KEY (blocker, blocked)
+      );
+      CREATE INDEX IF NOT EXISTS blocks_blocked ON blocks(blocked);
     `);
     // Columns added after the first release: add them to databases made before that.
     const cols = (this.db.prepare('PRAGMA table_info(accounts)').all() as { name: string }[]).map((c) => c.name);
@@ -460,6 +484,82 @@ export class Db {
     this.db.prepare(`INSERT INTO stashes (account_id, data, updated_at) VALUES (?, ?, ?)
       ON CONFLICT(account_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`)
       .run(accountId, JSON.stringify(stash), Date.now());
+  }
+
+  // ------------------------------------------------------------ friends and blocks (server/friends.ts holds the rules)
+
+  /** The account's most recently saved character (the one played last), or null when it has none. */
+  lastCharacter(accountId: number): FriendChar | null {
+    const r = this.db.prepare(`SELECT name, class_id, json_extract(data, '$.level') AS lv, json_extract(data, '$.zone') AS zone
+      FROM characters WHERE account_id = ? ORDER BY updated_at DESC, id DESC LIMIT 1`).get(accountId) as
+      { name: string; class_id: string; lv: number | null; zone: string | null } | undefined;
+    return r ? { name: r.name, cls: r.class_id as ClassId, lv: Number(r.lv) || 1, zone: r.zone ?? '' } : null;
+  }
+
+  friendIds(accountId: number): number[] {
+    return (this.db.prepare('SELECT acc_hi AS id FROM friends WHERE acc_lo = ? UNION SELECT acc_lo FROM friends WHERE acc_hi = ?')
+      .all(accountId, accountId) as { id: number }[]).map((r) => r.id);
+  }
+
+  areFriends(a: number, b: number): boolean {
+    return !!this.db.prepare('SELECT 1 FROM friends WHERE acc_lo = ? AND acc_hi = ?').get(Math.min(a, b), Math.max(a, b));
+  }
+
+  addFriend(a: number, b: number): void {
+    this.db.prepare('INSERT OR IGNORE INTO friends (acc_lo, acc_hi, since) VALUES (?, ?, ?)').run(Math.min(a, b), Math.max(a, b), Date.now());
+  }
+
+  /** Returns false when they weren't friends. */
+  removeFriend(a: number, b: number): boolean {
+    return this.db.prepare('DELETE FROM friends WHERE acc_lo = ? AND acc_hi = ?').run(Math.min(a, b), Math.max(a, b)).changes > 0;
+  }
+
+  hasFriendRequest(from: number, to: number): boolean {
+    return !!this.db.prepare('SELECT 1 FROM friend_requests WHERE from_acc = ? AND to_acc = ?').get(from, to);
+  }
+
+  addFriendRequest(from: number, to: number): void {
+    this.db.prepare('INSERT OR IGNORE INTO friend_requests (from_acc, to_acc, at) VALUES (?, ?, ?)').run(from, to, Date.now());
+  }
+
+  /** Returns false when there was no such request. */
+  removeFriendRequest(from: number, to: number): boolean {
+    return this.db.prepare('DELETE FROM friend_requests WHERE from_acc = ? AND to_acc = ?').run(from, to).changes > 0;
+  }
+
+  /** Accounts that asked this one (oldest first). */
+  incomingRequests(accountId: number): number[] {
+    return (this.db.prepare('SELECT from_acc AS id FROM friend_requests WHERE to_acc = ? ORDER BY at, from_acc').all(accountId) as { id: number }[]).map((r) => r.id);
+  }
+
+  /** Accounts this one asked (oldest first). */
+  outgoingRequests(accountId: number): number[] {
+    return (this.db.prepare('SELECT to_acc AS id FROM friend_requests WHERE from_acc = ? ORDER BY at, to_acc').all(accountId) as { id: number }[]).map((r) => r.id);
+  }
+
+  /** Whether `blocker` blocked `blocked`. */
+  isBlocked(blocker: number, blocked: number): boolean {
+    return !!this.db.prepare('SELECT 1 FROM blocks WHERE blocker = ? AND blocked = ?').get(blocker, blocked);
+  }
+
+  /** Accounts this one blocked (oldest first). */
+  blockedIds(accountId: number): number[] {
+    return (this.db.prepare('SELECT blocked AS id FROM blocks WHERE blocker = ? ORDER BY at, blocked').all(accountId) as { id: number }[]).map((r) => r.id);
+  }
+
+  /** Blocks `blocked`, ending a friendship and any request between the two, in one transaction. */
+  addBlock(blocker: number, blocked: number): void {
+    this.transaction(() => {
+      this.removeFriend(blocker, blocked);
+      this.removeFriendRequest(blocker, blocked);
+      this.removeFriendRequest(blocked, blocker);
+      this.db.prepare('INSERT OR IGNORE INTO blocks (blocker, blocked, at) VALUES (?, ?, ?)').run(blocker, blocked, Date.now());
+    });
+  }
+
+  /** Returns false when it wasn't blocked. */
+  removeBlock(blocker: number, blocked: number): boolean {
+    return this.db.prepare('DELETE FROM blocks WHERE blocker = ? AND blocked = ?').run(blocker, blocked).changes > 0;
   }
 
   /** Runs `fn` in one transaction: everything it wrote is kept, or (if it throws) none of it. */
