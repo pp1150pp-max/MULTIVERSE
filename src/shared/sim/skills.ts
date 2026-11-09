@@ -139,8 +139,8 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2): boolean
       sim.schedule(HEADSHOT_AIM, () => {
         if (!p.alive) return;
         sim.addProjectile(p, {
-          x: p.x, z: p.z, angle: ang, speed: 45, range: HEADSHOT_RANGE, radius: 0.5, mult: 2.5, color: '#ff6a5a', size: 1, kb: 6,
-          hit: { forceCrit: true, maxMult: 4 },
+          x: p.x, z: p.z, angle: ang, speed: 45, range: HEADSHOT_RANGE, radius: 0.5, mult: 3, color: '#ff6a5a', size: 1, kb: 6,
+          hit: { forceCrit: true },
           hitFx: { name: 'headshot_hit', size: 1.3 },
         });
         sim.fx('effect', 'muzzle', p.x + Math.cos(ang) * 1.1, p.z + Math.sin(ang) * 1.1, ang, 1.1);
