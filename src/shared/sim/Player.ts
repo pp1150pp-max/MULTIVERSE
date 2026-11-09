@@ -247,6 +247,8 @@ export class Player extends Unit {
   moveTarget: Vec2 | null = null;
   /** Shown once per session when low-level monsters start giving less EXP. */
   lowExpHinted = false;
+  /** Told once that monsters far above them can't be hit. */
+  missHinted = false;
   zone: string | undefined;
   /** False right after arriving through a portal, until the player steps away from it. */
   portalReady = true;

@@ -54,7 +54,9 @@ const fields = Object.values(ZONES).filter((z) => z.id !== HUB_ID);
     const portal = ZONE_HUB.portals.find((p) => p.to === zone.id)!;
     ok(mine.length === 15 && mine.filter((s) => s.monster === kinds[0]).length === 8 && mine.filter((s) => s.monster === kinds[1]).length === 7, `${zone.id}: 8 ${kinds[0]} and 7 ${kinds[1]}`);
     ok(mine.every((s) => Math.sign(s.x) === Math.sign(portal.x) && Math.sign(s.z) === Math.sign(portal.z)), `${zone.id}: in front of its own portal`);
-    ok(mine.every((s) => s.boost === (zone.monsterBoost ?? s.boost)), `${zone.id}: as strong as at home`);
+    const home = zone.monsterBoost;
+    ok(mine.every((s) => !home || (s.boost?.stats === home.stats && s.boost?.speed === home.speed && s.boost?.skill === home.skill)), `${zone.id}: as strong as at home`);
+    ok(mine.every((s) => !s.boost?.aggro), `${zone.id}: keeps its own temper in town`);
   }
   let closest = Infinity;
   for (const a of ZONE_HUB.spawns) for (const b of ZONE_HUB.spawns) if (a !== b) closest = Math.min(closest, Math.hypot(a.x - b.x, a.z - b.z));

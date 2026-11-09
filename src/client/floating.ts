@@ -240,7 +240,7 @@ export class Floating {
       pl.fill.style.width = `${(Math.max(0, m.hp) / m.maxHp) * 100}%`;
       pl.el.classList.toggle('hostile', m.isHostile);
       // Grey name = too weak to give full EXP.
-      pl.el.classList.toggle('trivial', expGapMult(g.player.level, m.level) < 1);
+      pl.el.classList.toggle('trivial', m.level < g.player.level && expGapMult(g.player.level, m.level) < 1);
     }
     for (const [m, pl] of this.plates) {
       if (!seen.has(m)) {

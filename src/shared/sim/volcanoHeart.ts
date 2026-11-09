@@ -32,6 +32,12 @@ export const BEAMS = { count: 4, width: 1.2, duration: 6, hitEvery: 1, mult: 1.2
 export const BLAST = { spots: 6, spotAt: 9, safeR: 2, mult: 35 };
 /** Every attack also takes this share of the player's max HP, whatever their defense. */
 export const HEART_HP_SHARE = 0.1;
+/**
+ * A long fight makes it worse: GROW.after seconds after its first hit, attacks get GROW.step bigger
+ * (meteors, ring and beam width) and GROW.step stronger, and again every GROW.every seconds, with no cap.
+ * Everything still stays inside the arena: only players in it are hit.
+ */
+export const GROW = { after: 30, every: 10, step: 0.05 };
 
 export interface HeartPhase {
   meteorWarn: number;
@@ -93,6 +99,8 @@ export class VolcanoHeartBrain {
   private nextSet = -1;
   private idleT = 0;
   private fighting = false;
+  /** When it was first hit this fight (-1 = not yet). */
+  private hurtSince = -1;
 
   private inArena(sim: Sim, m: Monster, p: Player): boolean {
     return p.alive && Math.hypot(p.x - m.x, p.z - m.z) <= arenaRadius(sim.zone);
@@ -113,6 +121,7 @@ export class VolcanoHeartBrain {
     }
     this.idleT = 0;
     m.state = 'chase';
+    if (this.hurtSince < 0 && m.damageBy.size > 0) this.hurtSince = t;
     if (!this.fighting) {
       this.fighting = true;
       this.nextSet = t + FIRST_ATTACK;
@@ -143,6 +152,7 @@ export class VolcanoHeartBrain {
     this.setIndex = 0;
     this.nextSet = -1;
     this.fighting = false;
+    this.hurtSince = -1;
     this.idleT = 0;
     m.state = 'idle';
     m.enraged = false;
@@ -152,6 +162,13 @@ export class VolcanoHeartBrain {
   private add(sim: Sim, h: Hazard): void {
     this.active.push({ h, hitIds: new Set(), nextHit: new Map() });
     sim.hazards = this.active.map((a) => a.h);
+  }
+
+  /** 1 at first; 1 + GROW.step for each growth step reached (size and damage grow alike). */
+  growth(t: number): number {
+    if (this.hurtSince < 0) return 1;
+    const since = t - this.hurtSince;
+    return since < GROW.after ? 1 : 1 + GROW.step * (1 + Math.floor((since - GROW.after) / GROW.every));
   }
 
   private startSet(sim: Sim, m: Monster, t: number): void {
@@ -167,7 +184,7 @@ export class VolcanoHeartBrain {
         : this.startBlast(sim, m, t, ph);
       longest = Math.max(longest, len);
     }
-    this.nextSet = t + longest + ph.rest;
+    this.nextSet = t + longest + ph.rest / m.skillSpeed;
   }
 
   private startMeteors(sim: Sim, m: Monster, t: number, ph: HeartPhase): number {
@@ -177,7 +194,7 @@ export class VolcanoHeartBrain {
         fn: () => {
           const targets = sim.players.filter((p) => this.inArena(sim, m, p)).slice(0, MAX_METEOR_TARGETS);
           for (const p of targets) {
-            this.add(sim, { id: sim.nextHazardId(), k: 'meteor', x: p.x, z: p.z, start: sim.time, hit: sim.time + ph.meteorWarn, r: METEOR.radius });
+            this.add(sim, { id: sim.nextHazardId(), k: 'meteor', x: p.x, z: p.z, start: sim.time, hit: sim.time + ph.meteorWarn, r: METEOR.radius * this.growth(sim.time) });
           }
         },
       });
@@ -197,7 +214,7 @@ export class VolcanoHeartBrain {
           const gaps = Array.from({ length: RING.gaps }, (_, g) => base + g * step + (i * step) / 2);
           this.add(sim, {
             id: sim.nextHazardId(), k: 'ring', x: m.x, z: m.z, start: sim.time, hit: sim.time + ph.ringWarn,
-            speed: RING.speed, width: RING.width, maxR, gaps, gapArc: RING.gapArc,
+            speed: RING.speed, width: RING.width * this.growth(sim.time), maxR, gaps, gapArc: RING.gapArc,
           });
         },
       });
@@ -210,7 +227,7 @@ export class VolcanoHeartBrain {
     this.add(sim, {
       id: sim.nextHazardId(), k: 'beams', x: m.x, z: m.z, start: t, hit, end: hit + BEAMS.duration,
       a0: Math.random() * Math.PI * 2, spin: ph.beamSpin * (Math.random() < 0.5 ? -1 : 1),
-      n: BEAMS.count, len: arenaRadius(sim.zone), width: BEAMS.width,
+      n: BEAMS.count, len: arenaRadius(sim.zone), width: BEAMS.width * this.growth(t),
     });
     return ph.beamWarn + BEAMS.duration;
   }
@@ -246,7 +263,7 @@ export class VolcanoHeartBrain {
     sim.fx('burst', h.x, 0.3, h.z, '#ff8a3a', 10, 4);
     sim.sfx('boss_slam', h.x, h.z);
     for (const p of sim.players) {
-      if (p.alive && Math.hypot(p.x - h.x, p.z - h.z) <= h.r + p.radius) sim.hitPlayer(m, p, METEOR.mult, { maxHpShare: HEART_HP_SHARE });
+      if (this.inArena(sim, m, p) && Math.hypot(p.x - h.x, p.z - h.z) <= h.r + p.radius) sim.hitPlayer(m, p, METEOR.mult * this.growth(sim.time), { maxHpShare: HEART_HP_SHARE });
     }
     return false;
   }
@@ -254,20 +271,20 @@ export class VolcanoHeartBrain {
   private rollRing(sim: Sim, m: Monster, a: Active, h: RingHazard, t: number): boolean {
     const rr = ringRadiusAt(h, t);
     for (const p of sim.players) {
-      if (!p.alive || a.hitIds.has(p.id)) continue;
+      if (!this.inArena(sim, m, p) || a.hitIds.has(p.id)) continue;
       const dx = p.x - h.x;
       const dz = p.z - h.z;
       if (Math.abs(Math.hypot(dx, dz) - rr) > h.width / 2 + p.radius) continue;
       if (inRingGap(h, Math.atan2(dz, dx))) continue;
       a.hitIds.add(p.id);
-      sim.hitPlayer(m, p, RING.mult, { maxHpShare: HEART_HP_SHARE });
+      sim.hitPlayer(m, p, RING.mult * this.growth(sim.time), { maxHpShare: HEART_HP_SHARE });
     }
     return rr < h.maxR;
   }
 
   private turnBeams(sim: Sim, m: Monster, a: Active, h: BeamsHazard, t: number): boolean {
     for (const p of sim.players) {
-      if (!p.alive || (a.nextHit.get(p.id) ?? 0) > t) continue;
+      if (!this.inArena(sim, m, p) || (a.nextHit.get(p.id) ?? 0) > t) continue;
       const dx = p.x - h.x;
       const dz = p.z - h.z;
       for (let i = 0; i < h.n; i++) {
@@ -276,7 +293,7 @@ export class VolcanoHeartBrain {
         const across = Math.abs(-dx * Math.sin(ang) + dz * Math.cos(ang));
         if (along < 0 || along > h.len || across > h.width / 2 + p.radius) continue;
         a.nextHit.set(p.id, t + BEAMS.hitEvery);
-        sim.hitPlayer(m, p, BEAMS.mult, { maxHpShare: HEART_HP_SHARE });
+        sim.hitPlayer(m, p, BEAMS.mult * this.growth(sim.time), { maxHpShare: HEART_HP_SHARE });
         break;
       }
     }
@@ -290,9 +307,9 @@ export class VolcanoHeartBrain {
     sim.shake(0.6, h);
     sim.sfx('boss_slam', h.x, h.z);
     for (const p of sim.players) {
-      if (!p.alive || Math.hypot(p.x - h.x, p.z - h.z) > h.r) continue;
+      if (!this.inArena(sim, m, p) || Math.hypot(p.x - h.x, p.z - h.z) > h.r) continue;
       if (h.safe.some((s) => Math.hypot(p.x - s.x, p.z - s.z) <= h.safeR)) continue;
-      sim.hitPlayer(m, p, BLAST.mult, { maxHpShare: HEART_HP_SHARE });
+      sim.hitPlayer(m, p, BLAST.mult * this.growth(sim.time), { maxHpShare: HEART_HP_SHARE });
     }
     return false;
   }

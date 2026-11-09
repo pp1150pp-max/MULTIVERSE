@@ -86,6 +86,12 @@ export class Monster extends Unit {
 
   /** The zone's monster boost: multiplies HP, attack and defense, and speed (moving and attacking). */
   private readonly zoneSpeed: number;
+  /** The zone's boost: how much faster skill cooldowns run. */
+  readonly skillSpeed: number;
+  /** Range at which it attacks whoever comes near: its own, or the zone's when that is larger. */
+  private readonly aggroRange: number;
+  /** The zone makes even passive monsters attack on sight. */
+  private readonly forceAggro: boolean;
 
   constructor(id: number, def: MonsterDef, level: number, area: SpawnArea, x: number, z: number, boost: MonsterBoost = NO_BOOST) {
     super(id);
@@ -98,6 +104,9 @@ export class Monster extends Unit {
     this.atk = def.atk * sc * boost.stats;
     this.defense = def.def * sc * boost.stats;
     this.zoneSpeed = boost.speed;
+    this.skillSpeed = boost.skill ?? 1;
+    this.aggroRange = Math.max(def.aggroRange, boost.aggro ?? 0);
+    this.forceAggro = (boost.aggro ?? 0) > 0;
     this.expReward = Math.round(def.exp * sc);
     this.radius = def.radius;
     this.x = x;
@@ -234,19 +243,20 @@ export class Monster extends Unit {
     }
     const ramp = this.skillRamp;
     this.atkCd -= dt * ramp;
-    this.chargeCd -= dt * ramp;
-    this.slamCd -= dt * ramp;
-    this.thrownCd -= dt * ramp;
-    this.leapCd -= dt;
+    const skillTick = dt * ramp * this.skillSpeed;
+    this.chargeCd -= skillTick;
+    this.slamCd -= skillTick;
+    this.thrownCd -= skillTick;
+    this.leapCd -= dt * this.skillSpeed;
     this.aggroT -= dt;
     this.fleeT -= dt;
 
     // Lose a dead target; aggressive monsters pick up whoever walks into range.
     if (this.target && !this.target.alive) this.target = null;
     const b = this.def.behavior;
-    if ((b === 'aggressive' || b === 'boss' || b === 'charger') && this.state !== 'return') {
+    if ((b === 'aggressive' || b === 'boss' || b === 'charger' || this.forceAggro) && this.state !== 'return') {
       const n = this.nearestPlayer(sim);
-      if (n && n.d < this.def.aggroRange) {
+      if (n && n.d < this.aggroRange) {
         this.aggroT = Math.max(this.aggroT, 4);
         if (!this.target) this.target = n.p;
       }

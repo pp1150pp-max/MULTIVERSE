@@ -201,7 +201,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     thrown: { art: 'snowball', speed: 8, range: 8, mult: 1, radius: 0.45, size: 1, color: '#e6f2fb', minRange: 3, cooldown: 6 },
   },
 
-  // Zone 4 — Ashen Isle. Final numbers: this zone sets no monsterBoost.
+  // Zone 4 — Ashen Isle. The zone's monsterBoost multiplies these (see zones.ts).
   ember_wisp: {
     id: 'ember_wisp', name: 'Ember Wisp', nameTh: 'ลูกไฟจิ๋ว', levels: [31, 32],
     hp: 1350, atk: 170, def: 36, speed: 2.4, exp: 1000, gold: [60, 90],
