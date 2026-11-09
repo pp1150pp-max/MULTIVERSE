@@ -4,7 +4,7 @@ import { newCharacterData, Player } from '../src/shared/sim/Player';
 import { Sim } from '../src/shared/sim/Sim';
 import { ZONES } from '../src/shared/data/zones';
 import { cleanStash } from '../src/shared/sim/stash';
-import { CLASS_IDS } from '../src/shared/data/classes';
+import { CLASSES, CLASS_IDS } from '../src/shared/data/classes';
 import { EQUIP_SLOTS, SLOTS, type EquipSlot, type Item, type SlotId } from '../src/shared/types';
 import { finish, ok } from './check';
 
@@ -56,7 +56,7 @@ ok(!!player([], 'mage').equipBlock(foreign), 'a mage cannot wear a scabbard');
   const sum = (k: 'maxHp' | 'maxMp' | 'atk' | 'def' | 'crit' | 'atkSpeed') =>
     items.reduce((s, it) => s + (it.stats[k] ?? 0), 0);
   for (const k of ['maxHp', 'maxMp', 'atk', 'def', 'crit', 'atkSpeed'] as const) {
-    ok(p.stats[k] === before[k] + sum(k), `${k} includes the new gear`);
+    ok(p.stats[k] === before[k] + sum(k) * (CLASSES.sword.statMult?.[k] ?? 1), `${k} includes the new gear`);
   }
   for (const it of items) p.unequip(it.slot);
   ok(p.stats.atk === before.atk && p.stats.maxHp === before.maxHp, 'removing them restores the stats');
