@@ -15,8 +15,8 @@ interface Plate { el: HTMLDivElement; fill: HTMLDivElement }
 /** Which row of the number sheet each kind of number uses. */
 const GLYPH_ROW: Record<string, number> = { dmg: 0, crit: 1, hurt: 2, heal: 3 };
 const NUMBER = /^[-+]?\d+!?$/;
-const GLYPH_SHEET = 'assets/sprites/icons/digits.png';
-const CRIT_BURST = 'assets/sprites/icons/crit_burst.png';
+export const GLYPH_SHEET = 'assets/sprites/icons/digits.png';
+export const CRIT_BURST = 'assets/sprites/icons/crit_burst.png';
 const GLYPH_ORDER = '0123456789+-!';
 /** Width of each cell in the sheet, and of each character in it, as a share of its height. */
 const GLYPH_CELL = 58 / 64;

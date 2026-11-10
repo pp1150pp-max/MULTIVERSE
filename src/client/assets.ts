@@ -377,6 +377,14 @@ function reportProgress(): void {
   for (const fn of progressListeners) fn(bestProgress);
 }
 
+/** Every texture made from a file, so the first entry can send them all to the GPU behind the loading screen. */
+const fileTextures: THREE.Texture[] = [];
+
+/** Uploads every loaded texture to the GPU now, instead of one by one the first time each is drawn. */
+export function uploadAllTextures(renderer: THREE.WebGLRenderer): void {
+  for (const t of fileTextures) renderer.initTexture(t);
+}
+
 /** Like THREE.TextureLoader.loadAsync, but counts the bytes as they arrive for the loading bar. */
 async function loadTexture(url: string): Promise<THREE.Texture> {
   const d: Download = { loaded: 0, size: null };
@@ -399,6 +407,7 @@ async function loadTexture(url: string): Promise<THREE.Texture> {
       // Decode errors (e.g. the dev server's index.html for a missing file) reject here.
       const tex = new THREE.Texture(await loadImage(blobUrl));
       tex.needsUpdate = true;
+      fileTextures.push(tex);
       return tex;
     } finally {
       URL.revokeObjectURL(blobUrl);

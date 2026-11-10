@@ -1,13 +1,13 @@
 // Title menu: play as a guest, or log in / sign up. Either way the game runs on the server.
-import { gameAssetsReady, loadGameAssets, loadMenuAssets, onAssetProgress, portraitSource } from './assets';
+import { loadGameAssets, loadMenuAssets, onAssetProgress, portraitSource } from './assets';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { MAX_CHARACTERS, PASSWORD_MIN, checkCharacterName, checkPassword, checkUsername, type CharacterSummary } from '../shared/api';
 import type { ClassId } from '../shared/types';
 import * as api from './net/api';
 import { connectOnline, type OnlineBackend } from './net/online';
-import { skillIcon } from './icons';
+import { preloadHudImages, skillIcon } from './icons';
 import { AFTER_EXIT_KEY } from './sysmenu';
-import { showLoading } from './loadingScreen';
+import { beginEntryLoading, cancelEntryLoading } from './loadingScreen';
 
 export type Launcher = (backend: OnlineBackend) => void;
 
@@ -31,19 +31,29 @@ export function portrait(key: string, size: number): HTMLCanvasElement {
 }
 
 /**
- * Waits, with a progress bar, until every game texture has loaded (they keep loading in the
- * background while the menu is up). Runs before connecting, so the character doesn't stand
- * in the world unseen while a slow link finishes the download.
+ * Puts the loading screen up and waits, with a progress bar, until every game texture and HUD picture
+ * has loaded (the textures keep loading in the background while the menu is up). Runs before
+ * connecting, so the character doesn't stand in the world unseen while a slow link finishes the
+ * download. The screen stays up after this: the game takes it down once its first frames are drawn
+ * (endEntryLoading), or the menu does if entering fails (cancelEntryLoading).
  */
 async function waitForGameAssets(classId: ClassId | null): Promise<void> {
-  if (gameAssetsReady()) return;
-  const screen = showLoading(classId);
-  const stop = onAssetProgress((f) => screen.progress(f));
+  const screen = beginEntryLoading(classId);
+  // Game textures are most of the bytes; the HUD pictures are the last stretch of the bar.
+  let tex = 0;
+  let hud = 0;
+  const show = (): void => screen.progress(tex * 0.9 + hud * 0.1);
+  const stop = onAssetProgress((f) => {
+    tex = f;
+    show();
+  });
   try {
-    await loadGameAssets();
+    await Promise.all([loadGameAssets(), preloadHudImages((f) => {
+      hud = f;
+      show();
+    })]);
   } finally {
     stop();
-    screen.hide();
   }
 }
 
@@ -111,6 +121,7 @@ class GuestMenu {
     try {
       this.char = await api.guestCharacter();
     } catch (e) {
+      cancelEntryLoading();
       $('guest-error').textContent = (e as Error).message;
       return;
     }
@@ -209,6 +220,7 @@ class OnlineMenu {
       $('char-error').textContent = '';
       this.launch(backend);
     } catch (e) {
+      cancelEntryLoading();
       $('char-error').textContent = (e as Error).message;
       btn.disabled = false;
     } finally {
