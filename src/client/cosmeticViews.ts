@@ -10,6 +10,20 @@ import { cosSheetKey, fxTex, sheets } from './assets';
 import { SpriteActor } from './SpriteActor';
 import type { Effects } from './effects';
 import { shownCos, shownRiding } from './cosLook';
+import { ISO_DIR } from './world';
+
+/**
+ * Draw order between the character and its cosmetics. The camera is orthographic and looks down, so a
+ * picture raised off the ground counts as nearer the camera than one on the ground: a rider on a saddle
+ * would always cover the mount, and wings raised to the shoulders would cover the body. Sliding a piece
+ * along the camera's own direction changes only that, never where it shows on screen; this returns the
+ * position `(x, z)` slid so the piece sits `depth` units nearer the camera than the character's feet
+ * (negative = behind), counting its lift `raised` above them.
+ */
+function depthAt(x: number, z: number, raised: number, depth: number): [number, number, number] {
+  const k = depth - raised * ISO_DIR.y;
+  return [x + ISO_DIR.x * k, ISO_DIR.y * k, z + ISO_DIR.z * k];
+}
 
 /** How high a rider sits above the ground. */
 export const MOUNT_SEAT = 0.55;
@@ -17,12 +31,14 @@ export const MOUNT_SEAT = 0.55;
  * Per mount: the world height of its picture (the whole cell, as cut by tools/cut_cosmetics.cjs), how high
  * the rider's feet sit, and which riding pose the classes play (`ride` astride, `ride_board` standing).
  */
-export const MOUNT_LOOK: Record<string, { h: number; seat: number; pose: 'ride' | 'ride_board' }> = {
+export const MOUNT_LOOK: Record<string, { h: number; seat: number; pose: 'ride' | 'ride_board'; under?: boolean }> = {
   mount_wolf: { h: 1.5, seat: 0.5, pose: 'ride' },
   mount_warhorse: { h: 1.7, seat: 0.62, pose: 'ride' },
   mount_raptor: { h: 1.75, seat: 0.62, pose: 'ride' },
   mount_tortoise: { h: 1.8, seat: 0.7, pose: 'ride' },
-  mount_hoverboard: { h: 0.7, seat: 0.32, pose: 'ride_board' },
+  // Owner 2026-11-10: it was too small and off the feet. Its side view is ~2 units long now, the rider
+  // stands on the deck (~47% of the picture's height) and it always stays right under the feet (`under`).
+  mount_hoverboard: { h: 1.2, seat: 0.5, pose: 'ride_board', under: true },
 };
 
 /** How high a character's feet sit: on its mount's saddle while riding (or trying one on), else 0. */
@@ -31,7 +47,8 @@ export function seatOf(p: Player): number {
   if (!m) return 0;
   // Seen head-on or from behind the rider sits higher, so the mount's head (or rear) in front of them
   // doesn't hide their body.
-  return (MOUNT_LOOK[m.id]?.seat ?? MOUNT_SEAT) + (headOn(p) ? HEAD_ON_LIFT : 0);
+  const look = MOUNT_LOOK[m.id];
+  return (look?.seat ?? MOUNT_SEAT) + (!look?.under && headOn(p) ? HEAD_ON_LIFT : 0);
 }
 
 /** Extra seat height when the mount is seen head-on or from behind. */
@@ -160,14 +177,15 @@ export class CosmeticRig {
         a.setOpacity(fade);
       }
       const fl = Math.hypot(p.faceX, p.faceZ) || 1;
-      const d = -0.15;
       // Behind the back: the part of "backward" that runs across the screen (none facing the camera or away).
       const bx = -p.faceX / fl;
       const bz = -p.faceZ / fl;
       const along = bx * TO_CAM.x + bz * TO_CAM.z;
       const sx = (bx - along * TO_CAM.x) * WINGS_BACK;
       const sz = (bz - along * TO_CAM.z) * WINGS_BACK;
-      a.group.position.set(p.x + TO_CAM.x * d + sx, 0, p.z + TO_CAM.z * d + sz);
+      // Behind the body: lifted WINGS_LIFT over the rider's own base (seat), then 0.15 further back.
+      const [wx, wy, wz] = depthAt(p.x + sx, p.z + sz, WINGS_LIFT, -0.15);
+      a.group.position.set(wx, wy, wz);
       a.setLift(WINGS_LIFT + seat);
       a.face(p.faceX, p.faceZ);
       a.update(dt, true, p.moving ? 10 : 5);
@@ -180,8 +198,11 @@ export class CosmeticRig {
       const a = this.mount.actor;
       // Head-on or from behind: the mount's head (or rear) in front of the rider. Else a little behind the
       // rider, who sits astride it (or stands on the board).
-      const d = headOn(p) ? 0.12 : -0.1;
-      a.group.position.set(p.x + TO_CAM.x * d, 0, p.z + TO_CAM.z * d);
+      // A board stays right under the feet, just behind the rider.
+      // The rider's feet are `seat` up, the mount on the ground: measured from the rider's base it is `-seat` raised.
+      const d = MOUNT_LOOK[mc!.id]?.under ? -0.05 : headOn(p) ? 0.1 : -0.1;
+      const [mx, my, mz] = depthAt(p.x, p.z, -seat, d);
+      a.group.position.set(mx, my, mz);
       a.face(p.faceX, p.faceZ);
       a.update(dt, p.moving, 11);
     }
