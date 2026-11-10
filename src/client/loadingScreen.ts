@@ -8,7 +8,7 @@ const CLASS_ART: Record<ClassId, string> = { sword: 'sword', mage: 'mage', gunsl
 const ALL_ART = ['portal_1', 'portal_2', 'sword', 'mage', 'gunslinger'];
 
 /** How long the zone-change screen stays up, then how long it fades out (ms). */
-const ZONE_HOLD = 1000;
+const ZONE_HOLD = 3000;
 const ZONE_FADE = 300;
 
 const TIPS = [
