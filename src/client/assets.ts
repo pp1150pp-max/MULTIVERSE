@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {
-  makeSheet, drawHuman, drawSlime, drawQuad, drawSeeker, drawMerchant, drawBlacksmith, drawKeeper, drawBroker, drawTree, drawBush, drawRock, drawStump,
+  makeSheet, drawHuman, drawSlime, drawQuad, drawSeeker, drawMerchant, drawBlacksmith, drawKeeper, drawBroker, drawStylist, drawCosmetic, drawTree, drawBush, drawRock, drawStump,
   drawSnowPine, drawSnowRock, drawIceCrystal, drawIceShard, drawEmberBolt, drawBurntPillar, drawBasalt, drawMagmaCrystal, drawSnowball,
   drawTent, drawCampfire, drawSign, drawFence, drawRunestone, drawIcon, pixelCircle,
   drawWitchVial, drawWitchPool, drawWitchHand, drawWitchSigil, drawWitchCircle,
@@ -8,6 +8,7 @@ import {
 import { ITEM_ART } from '../shared/data/items';
 import { STONE_KINDS } from '../shared/types';
 import { MAP_ICONS } from './mapIconNames';
+import { COSMETICS } from '../shared/data/cosmetics';
 import type { AnimSet, CharManifest } from './AnimatedActor';
 
 export interface SheetInfo {
@@ -45,6 +46,9 @@ const prop = (key: string, placeholder: () => HTMLCanvasElement): SheetSpec => s
 const ruin = (key: string, standIn: string | null): SheetSpec =>
   standIn ? { ...prop(key, () => drawRock(0)), standIn: `${BASE}props/${standIn}.png` } : prop(key, () => document.createElement('canvas'));
 
+/** The sheets key of a cosmetic's walk sheet. */
+export const cosSheetKey = (id: string): string => `cos_${id}`;
+
 export const SHEET_SPECS: Record<string, SheetSpec> = {
   sword: sheet('player/sword.png', () => makeSheet(32, drawHuman('sword'))),
   mage: sheet('player/mage.png', () => makeSheet(32, drawHuman('mage'))),
@@ -54,6 +58,11 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   blacksmith: sheet('npc/blacksmith.png', () => makeSheet(32, drawBlacksmith())),
   keeper: sheet('npc/keeper.png', () => makeSheet(32, drawKeeper())),
   broker: sheet('npc/broker.png', () => makeSheet(32, drawBroker())),
+  stylist: sheet('npc/stylist.png', () => makeSheet(32, drawStylist())),
+  // Cosmetics with a body (wings, mounts, pets): 8-direction walk sheets like the monsters' (see cosmeticViews.ts).
+  ...Object.fromEntries(COSMETICS.filter((c) => c.slot !== 'aura' && c.slot !== 'title').map((c) => [
+    cosSheetKey(c.id), monster(`cosmetics/${c.id}.png`, () => makeSheet(c.slot === 'pet' ? 32 : 48, drawCosmetic(c))),
+  ])),
 
   green_slime: monster('monsters/green_slime.png', () => makeSheet(32, drawSlime(['#6cc25a', '#4a9a3e', '#c8f0b0']))),
   wild_rabbit: monster('monsters/wild_rabbit.png', () => makeSheet(32, drawQuad(['#e8d3bf', '#d89a9a', '#fbeee2', '#d88a8a'], {

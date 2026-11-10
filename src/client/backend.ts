@@ -1,6 +1,7 @@
 // Where the game world comes from: the server runs the simulation, and OnlineBackend (net/online.ts)
 // mirrors what it sends. Game, HUD and views only talk to this interface.
 import type { Terrain } from '../shared/sim/terrain';
+import type { CosSlot } from '../shared/data/cosmetics';
 import type { Player, AutoSettings, LootFilter, SortKey } from '../shared/sim/Player';
 import type { Monster } from '../shared/sim/Monster';
 import type { Loot } from '../shared/sim/Loot';
@@ -102,6 +103,14 @@ export interface Backend {
   /** A whisper: only the online character named `to` sees it (the server echoes it back). */
   whisper(to: string, text: string): void;
   npcDistance(id: NpcId): number;
+
+  // Cosmetics (src/shared/data/cosmetics.ts). What you wear is `me.cosmetics`, riding `me.mounted`.
+  /** Cosmetic ids your account owns (always none for a guest). */
+  readonly cosOwned: readonly string[];
+  /** Wear an owned cosmetic in its slot, or take the slot off (`id` null). */
+  cosWear(slot: CosSlot, id: string | null): void;
+  /** Get on the worn mount, or off it. */
+  toggleMount(): void;
 
   // Stash (warehouse keeper). The stash itself is `me.stash`. `to` = target slot, or -1 for wherever it fits.
   stashPut(bagIndex: number, to: number): void;

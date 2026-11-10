@@ -9,6 +9,7 @@ import { REPORT_ADMIN_PAGE, REPORT_STATUSES, REPORT_TOPICS, REPORT_TOPIC_LABEL, 
 import { MAIL_BODY_MAX, MAIL_DAYS, MAIL_TITLE_MAX, type MailRecipientRow, type MailSendRow } from '../shared/mail';
 import { entryName, POTION_SIZES, potionName } from '../shared/data/potions';
 import { STONE_NAME } from '../shared/data/stones';
+import { COSMETICS, COS_SLOTS, COS_SLOT_NAME } from '../shared/data/cosmetics';
 import type {
   AdminAccountDetail, AdminAccountsResponse, AdminFeature, AdminOrbLook, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, SessionPage, SessionSort, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AdminShutdownText, AuditRow, RoleRow,
 } from '../shared/admin';
@@ -1131,6 +1132,7 @@ const ACTION_TH: Record<string, string> = {
   'delete-account': 'ลบบัญชี', 'delete-character': 'ลบตัวละคร', 'chat-delete': 'ลบแชท',
   'shutdown-text': 'ข้อความเตือนปิด server', 'orb-look': 'หน้าตาลูกแก้วตีบวก', mail: 'ส่งจดหมาย', mailRecall: 'ดึงจดหมายกลับ',
   'report-status': 'สถานะรายงาน', 'report-ban': 'ห้ามรายงาน', 'report-unban': 'ปลดห้ามรายงาน',
+  'cosmetic-give': 'ให้ Cosmetics', 'cosmetic-take': 'ยึด Cosmetics คืน',
 };
 
 async function renderAudit(): Promise<void> {
@@ -1519,6 +1521,34 @@ async function openAccount(id: number, note?: { text: string; ok: boolean; passw
     panes.push(['stash', 'คลัง', () => h('div', { class: 'char-card' },
       h('div', { class: 'sub', style: 'margin-top:0' }, d.stash ? `คลัง ${d.stash.size} ช่อง · ทอง ${fmt(d.stash.gold)} G` : 'คลัง'),
       d.stash ? itemList(d.stash.items, 'คลังว่าง') : h('div', { class: 'muted' }, 'ยังไม่เคยใช้คลัง'))]);
+  }
+  if (!a.guest && d.cosmetics) {
+    const owned = new Set(d.cosmetics);
+    const canEdit = can('cosmetics');
+    panes.push(['cosmetics', `Cosmetics (${owned.size})`, () => h('div', { class: 'char-card' },
+      h('div', { class: 'muted' }, canEdit
+        ? 'ให้หรือยึดคืนได้ทันที ผูกกับบัญชี (ทุกตัวละครใช้ได้) ให้แล้วผู้เล่นได้จดหมายแจ้ง ยึดคืนแล้วถ้าสวมอยู่จะถอดออกเอง'
+        : 'ดูได้อย่างเดียว'),
+      ...COS_SLOTS.map((slot) => h('div', {},
+        h('div', { class: 'sub' }, COS_SLOT_NAME[slot]),
+        h('ul', { class: 'items' }, ...COSMETICS.filter((c) => c.slot === slot).map((c) => {
+          const has = owned.has(c.id);
+          let btn: Node | null = null;
+          if (canEdit) {
+            const b = h('button', { class: has ? 'small danger' : 'small primary' }, has ? 'ยึดคืน' : 'ให้');
+            b.onclick = async () => {
+              if (has && !confirm(`ยึด ${c.name} คืนจาก ${display}?`)) return;
+              try {
+                after((await api<{ msg: string }>('POST', `/admin/accounts/${id}/cosmetics`, { id: c.id, give: !has })).msg);
+              } catch (e) {
+                fail(e);
+              }
+            };
+            btn = b;
+          }
+          return h('li', {}, h('span', { style: `color:${c.color}` }, '■ '), c.name, ' ',
+            has ? h('span', { class: 'tag on' }, 'มีแล้ว') : null, ' ', btn);
+        }))))) ]);
   }
   for (const [key, label, make] of extraPanes) panes.push([key, label, make]);
   if (tools.length) panes.push(['manage', 'จัดการ', () => h('div', {}, ...tools)]);

@@ -9,7 +9,7 @@ import type { MapIcon } from './mapIconNames';
 
 const S = Math.SQRT1_2;
 // The market broker borrows the merchant's marker until icons/map_market.png is painted.
-export const NPC_MAP_ICON: Record<NpcId, MapIcon> = { seeker: 'seeker', merchant: 'merchant', blacksmith: 'blacksmith', keeper: 'keeper', broker: 'market' };
+export const NPC_MAP_ICON: Record<NpcId, MapIcon> = { seeker: 'seeker', merchant: 'merchant', blacksmith: 'blacksmith', keeper: 'keeper', broker: 'market', stylist: 'merchant' };
 
 /** How a monster's level compares with the player's, as a colour for its spawn area and label. */
 function dangerColour(monsterLevel: number, playerLevel: number): string {

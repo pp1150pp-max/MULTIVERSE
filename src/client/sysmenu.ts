@@ -32,7 +32,7 @@ const FRIENDS_ICON = badge('friends');
 /** Icon grid, 3 columns: [action, icon, label]. Only systems that exist; add a tile when a new one is built. */
 const MENU_ITEMS: [string, string, string][] = [
   ['bag', badge('bag'), 'กระเป๋า'], ['party', PARTY_ICON, 'ปาร์ตี้'], ['friends', FRIENDS_ICON, 'เพื่อน'], ['trade', TRADE_ICON, 'เทรด'], ['mail', MAIL_ICON, 'จดหมาย'], ['map', badge('map'), 'แผนที่'],
-  ['autoset', badge('autoset'), 'ตั้งค่า Auto'], ['audio', badge('blank', '🔊'), 'เสียง'], ['help', badge('help'), 'วิธีเล่น'],
+  ['cosmetics', badge('blank', '👑'), 'แต่งตัว'], ['autoset', badge('autoset'), 'ตั้งค่า Auto'], ['audio', badge('blank', '🔊'), 'เสียง'], ['help', badge('help'), 'วิธีเล่น'],
   ['report', badge('blank', '🐞'), 'แจ้งปัญหา'], ['settings', badge('settings'), 'ตั้งค่า'],
 ];
 
@@ -196,6 +196,9 @@ export class SystemMenu {
       case 'friends':
         this.toggle(false);
         return this.g.friends.toggle(true);
+      case 'cosmetics':
+        this.toggle(false);
+        return this.g.cosmetics.toggle(true);
       case 'trade':
         this.toggle(false);
         return this.g.trade.toggleFind(true);

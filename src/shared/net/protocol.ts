@@ -18,6 +18,7 @@ import type { TradeView } from '../trade';
 import type { FriendsView } from '../friends';
 import type { RoomLobbyView, RoomSnap } from '../bossRoom';
 import type { ChannelsView } from '../channels';
+import type { CosSlot } from '../data/cosmetics';
 
 export const WS_PATH = '/ws';
 /** Server simulation rate and how often it sends snapshots. */
@@ -147,7 +148,11 @@ export type ActionMsg =
   | { t: 'act'; a: 'roomRevive' }
   | { t: 'act'; a: 'roomAnswer'; id: number; yes: boolean }
   | { t: 'act'; a: 'roomStart' }
-  | { t: 'act'; a: 'roomCancel' };
+  | { t: 'act'; a: 'roomCancel' }
+  /** Cosmetics (src/shared/data/cosmetics.ts): wear an owned one in its slot, or take it off (`id` null). */
+  | { t: 'act'; a: 'cosWear'; slot: CosSlot; id: string | null }
+  /** Get on the worn mount, or off it. */
+  | { t: 'act'; a: 'mount' };
 
 /** Close code the browser uses when the player leaves on purpose (leaves the party at once, no grace time). */
 export const WS_CLOSE_QUIT = 4000;
@@ -181,6 +186,10 @@ export interface PlayerSnap {
   aura?: number;
   /** Enhancement orbs, one per worn item at +7 or higher: `slot index * 16 + plus` (see orbCodes). Missing = none. */
   orbs?: number[];
+  /** Cosmetics worn, as codes (see cosCodes). Missing = none. */
+  cos?: number[];
+  /** 1 while riding the worn mount. Missing = on foot. */
+  mnt?: 1;
   /** Cursed into a toad by the Bog Witch (missing = not). */
   toad?: 1;
 }
@@ -228,6 +237,8 @@ export interface PrivateSnap {
   inv?: { equipment: Partial<Record<EquipSlot, Item>>; bag: (BagEntry | null)[]; buyback?: BuybackEntry[] };
   /** Seconds of play until the buyback list clears. */
   buybackLeft?: number;
+  /** Cosmetic ids the account owns, only when it changed since the last snapshot (guests: always none). */
+  cosOwned?: string[];
   /** The account's stash, only when it changed since the last snapshot. */
   stash?: StashData;
 }

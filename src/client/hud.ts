@@ -1265,6 +1265,7 @@ export class Hud {
     this.g.mailUI.toggle(false);
     this.g.report.toggle(false);
     this.g.friends.toggle(false);
+    this.g.cosmetics.toggle(false);
     if (this.dialogOpen) this.closeDialog();
   }
 
@@ -1278,6 +1279,7 @@ export class Hud {
       else this.openStash();
     }
     else if (id === 'broker') this.openMarket();
+    else if (id === 'stylist') this.g.cosmetics.toggle(true, 'shop');
     else this.openForge();
   }
 
