@@ -189,6 +189,27 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 }
 #auto-settings .aset-title { margin-top: 12px; color: var(--gold-hi); }
 #auto-settings .aset-check { display: flex; align-items: center; gap: 6px; margin-top: 6px; cursor: pointer; }
+#aset-skills { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+#auto-settings .aset-skill {
+  display: flex; align-items: center; gap: 5px; padding: 3px 4px;
+  background: rgba(12, 10, 8, 0.6); border: 1px solid var(--panel-edge); border-radius: 3px;
+}
+#auto-settings .aset-skill.dragging { border-color: var(--gold-hi); background: rgba(60, 46, 20, 0.85); }
+#auto-settings .aset-rank { width: 14px; text-align: center; color: var(--gold-hi); font-weight: bold; }
+#auto-settings .aset-grab {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 5px;
+  cursor: grab; touch-action: none; user-select: none;
+}
+#auto-settings .aset-skill.dragging .aset-grab { cursor: grabbing; }
+#auto-settings .aset-grab .gi { width: 26px; height: 26px; flex: none; }
+#auto-settings .aset-key { color: var(--gold-hi); }
+#auto-settings .aset-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#auto-settings .aset-move {
+  width: 24px; height: 24px; padding: 0; font-size: 11px; line-height: 1; flex: none;
+  color: var(--ink); background: rgba(12, 10, 8, 0.9); border: 1px solid var(--panel-edge); border-radius: 3px; cursor: pointer;
+}
+#auto-settings .aset-move:disabled { opacity: 0.3; cursor: default; }
+#auto-settings .aset-skill input[type='checkbox'] { width: 18px; height: 18px; flex: none; margin: 0 2px; cursor: pointer; }
 #btn-auto.active { background: linear-gradient(#2f7a3a, #1c4a22); border-color: #8cff8c; color: #d8ffd8; }
 
 #boss-bar {
