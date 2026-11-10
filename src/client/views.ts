@@ -10,7 +10,7 @@ import { LOOT_POP_TIME, type Loot } from '../shared/sim/Loot';
 import type { SimEvent } from '../shared/sim/types';
 import { SpriteActor } from './SpriteActor';
 import { OrbRing } from './orbs';
-import { CosmeticRig } from './cosmeticViews';
+import { CosmeticRig, ridePose } from './cosmeticViews';
 import { AnimatedActor, type Actor } from './AnimatedActor';
 import { animSets, decalTex, fxTex, sheets } from './assets';
 import type { Effects, ShotSprite } from './effects';
@@ -70,7 +70,10 @@ export class PlayerView {
     this.cos = new CosmeticRig(scene);
     this.sync();
     // Came into view (or logged in) while already lying dead: no fall, just the body in its crater.
-    if (!p.alive) this.showDead(true);
+    if (!p.alive) {
+      this.showDead(true);
+      this.cos.skipDeathFade();
+    }
   }
 
   update(dt: number, fx: Effects): void {
@@ -79,6 +82,7 @@ export class PlayerView {
     this.actor.face(p.faceX, p.faceZ);
     if (p.isDashing && Math.random() < 0.7) fx.puff(p.x, 0.9, p.z, p.dashKind === 'charge' ? '#ffcf7a' : '#cfe8ff', 0.25, 1.1);
     this.matchStride(dt);
+    if (this.actor instanceof AnimatedActor) this.actor.setRide(ridePose(p));
     this.actor.update(dt, p.moving, p.isDashing ? 14 : undefined);
     this.updateAura(dt, fx);
     // Owner 2026-11-10: the orbs stay while dead (only the aura goes).

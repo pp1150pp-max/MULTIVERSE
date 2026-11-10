@@ -96,6 +96,8 @@ export class AnimatedActor implements Actor {
   private flashT = 0;
   private moving = false;
   private aimT = 0;
+  /** A riding pose shown instead of idle / run while on a mount (see setRide). */
+  private ride: string | null = null;
 
   constructor(set: AnimSet, shadowRadius: number) {
     this.m = set.manifest;
@@ -116,6 +118,11 @@ export class AnimatedActor implements Actor {
     shadow.scale.set(shadowRadius * 2.2, 1, shadowRadius * 1.4);
     shadow.position.y = 0.02;
     this.group.add(shadow, this.sprite);
+  }
+
+  /** Riding: loops `name` (frame 0 when standing still, bobbing while moving) instead of idle / run; null = on foot. */
+  setRide(name: string | null): void {
+    this.ride = name && this.has(name) ? name : null;
   }
 
   has(name: string): boolean {
@@ -167,7 +174,7 @@ export class AnimatedActor implements Actor {
       frame = Math.min(Math.floor(this.oneShot.t * this.oneShot.fps), this.m.animations[name].frames - 1);
     } else {
       const legs = this.has('run') ? 'run' : this.has('walk') ? 'walk' : 'idle';
-      const want = !moving ? 'idle' : this.aimT > 0 && this.has(RUN_ATTACK) ? RUN_ATTACK : legs;
+      const want = this.ride ?? (!moving ? 'idle' : this.aimT > 0 && this.has(RUN_ATTACK) ? RUN_ATTACK : legs);
       if (want !== this.base) {
         // Raising or lowering the gun keeps the stride going instead of restarting the legs.
         const sameStride = (want === RUN_ATTACK && this.base === 'run') || (want === 'run' && this.base === RUN_ATTACK);
@@ -178,7 +185,7 @@ export class AnimatedActor implements Actor {
       this.baseT += this.base === 'idle' ? dt : dt * this.stride;
       const def = this.m.animations[this.base] ?? Object.values(this.m.animations)[0];
       name = this.base in this.tex ? this.base : Object.keys(this.tex)[0];
-      frame = Math.floor(this.baseT * def.fps) % def.frames;
+      frame = this.ride && !moving ? 0 : Math.floor(this.baseT * def.fps) % def.frames;
     }
 
     if (name !== this.shown) {

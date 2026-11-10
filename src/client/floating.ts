@@ -9,8 +9,8 @@ import { iconImg } from './icons';
 import { questRows, seekerMark } from '../shared/quests';
 import type { RestSpot } from '../shared/sim/terrain';
 import type { CosmeticDef } from '../shared/data/cosmetics';
-import { shownCos, shownRiding } from './cosLook';
-import { MOUNT_SEAT } from './cosmeticViews';
+import { shownCos } from './cosLook';
+import { seatOf } from './cosmeticViews';
 
 interface Num { el: HTMLDivElement; x: number; y: number; z: number; t: number; life: number; height: number; dx: number; dy: number; pop: number }
 interface Plate { el: HTMLDivElement; fill: HTMLDivElement; title?: HTMLDivElement; cos?: string }
@@ -452,5 +452,5 @@ function paintCos(el: HTMLElement, set: CosmeticDef | undefined): void {
 
 /** World height just over a character's head, where its nameplate and chat bubble go (higher on a mount). */
 function headY(p: Player): number {
-  return p.topY + 0.35 + (shownRiding(p) ? MOUNT_SEAT : 0);
+  return p.topY + 0.35 + seatOf(p);
 }
