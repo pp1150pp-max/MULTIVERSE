@@ -35,7 +35,7 @@ npm run stop-server -- --restart # เหมือนกัน แต่ npm run
 ## Server จริง (ห้ามพลาด)
 
 - **ปิด/รีสตาร์ท server จริงต้องผ่าน countdown เสมอ** (`npm run stop-server` หรือปุ่มใน `/admin`) **อย่า kill task/หน้าต่างของ `npm run online` ตรง ๆ** (ไม่เตือน ไม่เซฟ)
-  - อัปเดต server หลัง merge: ใช้ skill `/update-server` · รายละเอียด countdown, Ctrl+C, ข้อความเตือน, สำรอง/กู้คืน DB: [docs/systems/server-ops.md](docs/systems/server-ops.md)
+  - อัปเดต server หลัง merge: ใช้ skill `/update-server` · merge ทุก PR ที่พร้อมแล้วขึ้น server ในคำสั่งเดียว: `/ship` · รายละเอียด countdown, Ctrl+C, ข้อความเตือน, สำรอง/กู้คืน DB: [docs/systems/server-ops.md](docs/systems/server-ops.md)
 - **ขณะที่ server ของเจ้าของเปิดให้เพื่อนเล่นอยู่ อย่า build ทับ `dist/`** (`npm run build` ก็เขียนลง `dist/`) ให้ใช้ `npm run typecheck` และ `npx vite build --outDir <โฟลเดอร์อื่น>` แทน · เช็คว่ามีโปรแกรมใช้ port 2567 อยู่หรือไม่
 - ทดสอบสร้างบัญชี/Guest ให้ทำกับ server ของ `npm run dev` (port 2568, DB `server/data/dev.db`) เท่านั้น อย่าสร้างบน server ตัวจริง (port 2567) · Vite ส่งต่อ `/api` และ WebSocket `/ws` ให้ (`vite.config.ts`)
 
