@@ -12,6 +12,8 @@ import { MONSTERS } from '../../shared/data/monsters';
 import { validOrbCode } from '../../shared/data/enhance';
 import { checkOrbLook } from '../../shared/orbLook';
 import { applyOrbLook } from '../orbs';
+import { checkCosTuning } from '../../shared/cosTuning';
+import { applyCosTuning } from '../cosTune';
 import { EQUIP_SLOTS } from '../../shared/types';
 import { cleanCosOwned, cosCodes, cosFromCodes, type CosSlot } from '../../shared/data/cosmetics';
 import { zoneById, type SpawnArea, type ZoneDef } from '../../shared/data/zones';
@@ -99,6 +101,7 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
         ch = m.ch ?? 1;
         guest = m.guest === true;
         useOrbLook(m.orbLook);
+        useCosTuning(m.cosTuning);
       }
       if (m.t === 'snap' && you >= 0 && !settled) {
         settled = true;
@@ -441,6 +444,9 @@ export class OnlineBackend implements Backend {
         break;
       case 'shutdown':
         this.onShutdown?.(m.mode, m.seconds, m.text);
+        break;
+      case 'cosTuning':
+        useCosTuning(m.tuning);
         break;
       case 'orbLook':
         useOrbLook(m.look);
@@ -982,6 +988,11 @@ export class OnlineBackend implements Backend {
 }
 
 /** Draws every orb with the server-wide look (ignored if it doesn't check out, keeping the current one). */
+/** The server-wide cosmetic tuning (missing from an older server = the code defaults). */
+function useCosTuning(v: unknown): void {
+  applyCosTuning(v === undefined ? {} : checkCosTuning(v, false).tuning ?? {});
+}
+
 function useOrbLook(v: unknown): void {
   const look = v === undefined ? undefined : checkOrbLook(v).look;
   if (look) applyOrbLook(look);

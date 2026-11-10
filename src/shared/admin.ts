@@ -3,6 +3,7 @@
 import { isPotion, isStack, sameStack, STAT_KEYS, STAT_LABEL, STONE_KINDS, type BagEntry, type PotionKind, type PotionStack, type StoneStack, type ClassId, type EquipSlot, type Item, type Rarity, type SlotId, type StatKey, type StatLine } from './types';
 import type { ShutdownMode } from './net/protocol';
 import type { OrbLook } from './orbLook';
+import type { CosTuning } from './cosTuning';
 import { itemNames, makeItem, roundStat, rowRanges, statStep, tierOf, TIER_VERSION } from './data/items';
 import { POTION_SIZES, potionName, stackLimit } from './data/potions';
 import { STONE_NAME } from './data/stones';
@@ -146,7 +147,7 @@ export interface AdminShutdownText { texts: Record<ShutdownMode, string>; defaul
  * switch: the Permissions tab, the audit log, restarting / stopping the server, deleting accounts or
  * characters, and making someone owner (command line).
  */
-export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics';
+export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook';
 
 /**
  * The defaults: which built-in role may use each tool (owner always has all). The owner can change
@@ -192,6 +193,10 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   reportBan: ['owner'],
   // Giving / taking back cosmetics on an account's sheet (owner only for now).
   cosmetics: ['owner'],
+  // The cosmetics test bench tab "ของแต่งตัว" (owner 2026-11-10: owner and GMs). Only looks; changes nothing in the game.
+  cosPreview: ['owner', 'gm'],
+  // Saving the server-wide cosmetic tuning from that tab (owner 2026-11-10: owner only).
+  cosLook: ['owner'],
 };
 
 export const ADMIN_FEATURES = Object.keys(FEATURE_ROLES) as AdminFeature[];
@@ -246,6 +251,8 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   shutdownText: { name: 'ข้อความนับถอยหลัง', desc: 'แก้ข้อความเตือนก่อนรีสตาร์ท/ปิด server (แท็บ Server) · ปุ่มรีสตาร์ท/ปิดเป็นของ owner', group: 'Server' },
   orbPreview: { name: 'ทดลองลูกแก้วตีบวก', desc: 'แท็บ "ลูกแก้วตีบวก": ลองหน้าตา ไม่เปลี่ยนอะไรในเกม', group: 'ทดลองหน้าตา' },
   orbLook: { name: 'บันทึกลูกแก้วทั้งเซิร์ฟ', desc: 'บันทึกหน้าตาลูกแก้วตีบวกที่ทุกคนเห็น', group: 'ทดลองหน้าตา' },
+  cosPreview: { name: 'ทดลองของแต่งตัว', desc: 'แท็บ "ของแต่งตัว": ลองตำแหน่ง/หน้าตาปีก สัตว์ขี่ สัตว์เลี้ยง ออร่า ไม่เปลี่ยนอะไรในเกม', group: 'ทดลองหน้าตา' },
+  cosLook: { name: 'บันทึกของแต่งตัวทั้งเซิร์ฟ', desc: 'บันทึกค่าตำแหน่ง/หน้าตาของแต่งตัวที่ทุกคนเห็น (ต้องมี "ทดลองของแต่งตัว" ด้วย)', group: 'ทดลองหน้าตา' },
 };
 
 /** Shown on the Permissions tab: what no role but owner can ever do. */
@@ -478,6 +485,13 @@ export function addStackToBag(bag: (BagEntry | null)[], slots: number, kind: Adm
     left -= add;
   }
   return n - left;
+}
+
+/** GET/POST /api/admin/cos-look: the server-wide cosmetic tuning (only what differs from the code defaults). */
+export interface AdminCosLook {
+  tuning: CosTuning;
+  /** May this admin save it (the `cosLook` switch). */
+  canEdit: boolean;
 }
 
 /** GET/POST /api/admin/orb-look: the server-wide enhancement orb look and what may be chosen. */

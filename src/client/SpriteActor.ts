@@ -27,7 +27,7 @@ export class SpriteActor implements Actor {
   private flashT = 0;
   private readonly shadow: THREE.Mesh;
 
-  constructor(private readonly sheet: SheetInfo, readonly height: number, shadowRadius: number, private readonly cycle: readonly number[] = WALK) {
+  constructor(private readonly sheet: SheetInfo, public height: number, shadowRadius: number, private readonly cycle: readonly number[] = WALK) {
     this.tex = sheet.texture.clone();
     this.tex.needsUpdate = true;
     this.mat = new THREE.SpriteMaterial({ map: this.tex, alphaTest: 0.5, transparent: false });
@@ -43,6 +43,12 @@ export class SpriteActor implements Actor {
     shadow.position.y = 0.02;
     this.group.add(shadow, this.sprite);
     this.applyUV();
+  }
+
+  /** Changes the picture's world height (the cosmetics bench's size sliders). */
+  setHeight(h: number): void {
+    this.height = h;
+    this.sprite.scale.set(h * this.sheet.cellAspect, h, 1);
   }
 
   /** Raises the sprite off the ground, leaving its shadow behind. */

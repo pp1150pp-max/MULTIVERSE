@@ -9,6 +9,7 @@ import type { ClassId } from '../src/shared/types';
 import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../src/shared/net/protocol';
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
 import { cleanCosOwned } from '../src/shared/data/cosmetics';
+import { checkCosTuning, COS_TUNING_SETTING, type CosTuning } from '../src/shared/cosTuning';
 import { checkOrbLook, DEFAULT_ORB_LOOK, ORB_LOOK_SETTING, sameOrbLook, type OrbLook } from '../src/shared/orbLook';
 import { MARKET_HISTORY_DAYS, type MarketQuery } from '../src/shared/sim/market';
 import { MAIL_HISTORY_DAYS } from '../src/shared/mail';
@@ -376,6 +377,23 @@ export class Db {
   /** Saves the server-wide orb look (the default itself is stored as no row). */
   setOrbLook(look: OrbLook): void {
     this.setSetting(ORB_LOOK_SETTING, sameOrbLook(look, DEFAULT_ORB_LOOK) ? null : JSON.stringify(look));
+  }
+
+  /** The server-wide cosmetic tuning: only the changes from the code defaults ({} until the owner saves some). */
+  cosTuning(): CosTuning {
+    const v = this.getSetting(COS_TUNING_SETTING);
+    if (v === null) return {};
+    try {
+      // Checked again, leniently: a cosmetic or field the code no longer knows is dropped, the rest kept.
+      return checkCosTuning(JSON.parse(v), false).tuning ?? {};
+    } catch {
+      return {};
+    }
+  }
+
+  /** Saves the server-wide cosmetic tuning (already clean; nothing changed is stored as no row). */
+  setCosTuning(t: CosTuning): void {
+    this.setSetting(COS_TUNING_SETTING, Object.keys(t).length ? JSON.stringify(t) : null);
   }
 
   shutdownTexts(): Record<ShutdownMode, string> {

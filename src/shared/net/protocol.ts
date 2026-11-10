@@ -8,6 +8,7 @@ import type { AutoSettings, BuybackEntry, LootFilter, PotionSelect, SortKey } fr
 import type { EnhanceResult } from '../data/enhance';
 import type { RerollKind } from '../data/reroll';
 import type { OrbLook } from '../orbLook';
+import type { CosTuning } from '../cosTuning';
 import type { StashData } from '../sim/stash';
 import type { Hazard } from '../sim/volcanoHeart';
 import type { MarketCall, MarketReply } from '../sim/market';
@@ -264,9 +265,11 @@ export interface SnapshotMsg {
 export type ServerMsg =
   /** `guest`: playing a guest character (no stash, deleted after a day offline). */
   /** `ch`: the channel of that zone (1 when it has none). */
-  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; guest?: boolean; orbLook?: OrbLook }
+  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; guest?: boolean; orbLook?: OrbLook; cosTuning?: CosTuning }
   /** The owner changed the server-wide enhancement orb look (src/shared/orbLook.ts). */
   | { t: 'orbLook'; look: OrbLook }
+  /** The owner changed the server-wide cosmetic tuning (src/shared/cosTuning.ts). */
+  | { t: 'cosTuning'; tuning: CosTuning }
   /**
    * You walked through a portal (or switched channel): you are now `you` in zone `zone`, channel `ch`,
    * standing at x/z. Snapshots from there follow.

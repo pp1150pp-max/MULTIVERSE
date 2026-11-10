@@ -21,7 +21,8 @@ import type { AdminShutdownText } from '../src/shared/admin';
 import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../src/shared/net/protocol';
 import { SHUTDOWN_TEXT_KEY } from './db';
 import { checkOrbLook, DEFAULT_ORB_LOOK, orbLookChanges, ORB_LOOK_RANGES, ORB_PALETTE_IDS, ORB_SHAPE_IDS, sameOrbLook } from '../src/shared/orbLook';
-import type { AdminOrbLook } from '../src/shared/admin';
+import type { AdminCosLook, AdminOrbLook } from '../src/shared/admin';
+import { checkCosTuning, cosTuningChanges, sameCosTuning } from '../src/shared/cosTuning';
 import { COS_SLOT_NAME, cosById } from '../src/shared/data/cosmetics';
 
 const MODE_NAME: Record<ShutdownMode, string> = { restart: 'ข้อความรีสตาร์ท', shutdown: 'ข้อความปิด server' };
@@ -29,6 +30,7 @@ const orbLookState = (db: Db, canEdit: boolean): AdminOrbLook => ({
   look: db.orbLook(), defaults: { ...DEFAULT_ORB_LOOK }, canEdit,
   palettes: [...ORB_PALETTE_IDS], shapes: [...ORB_SHAPE_IDS], ranges: ORB_LOOK_RANGES,
 });
+const cosLookState = (db: Db, canEdit: boolean): AdminCosLook => ({ tuning: db.cosTuning(), canEdit });
 const shutdownTextState = (db: Db): AdminShutdownText => ({ texts: db.shutdownTexts(), defaults: { ...DEFAULT_SHUTDOWN_TEXT } });
 
 const NO_RIGHTS = ADMIN_NO_RIGHTS;
@@ -321,6 +323,30 @@ export async function ownerToolsApi(
       world.orbLookChanged(c.look);
     }
     send(res, 200, orbLookState(db, true));
+    return true;
+  }
+
+  // ---------------------------------------------------------- cosmetic tuning (server-wide)
+  if (method === 'GET' && path === '/api/admin/cos-look') {
+    const a = requireFeature(req, db, 'cosPreview');
+    send(res, 200, cosLookState(db, a.features.includes('cosLook')));
+    return true;
+  }
+
+  if (method === 'POST' && path === '/api/admin/cos-look') {
+    const a = requireFeature(req, db, 'cosLook');
+    const body = await readJson(req);
+    // `reset: true` = every cosmetic back to the code defaults; otherwise `tuning` is the whole new set of changes.
+    const c = body.reset === true ? { tuning: {} } : checkCosTuning(body.tuning, true);
+    if (!c.tuning) throw new HttpError(400, c.error);
+    const before = db.cosTuning();
+    if (!sameCosTuning(before, c.tuning)) {
+      db.setCosTuning(c.tuning);
+      const changes = cosTuningChanges(before, c.tuning);
+      log(db, a, 'cos-look', 'ของแต่งตัว ค่าเริ่มต้นทั้งเซิร์ฟ', (body.reset === true ? 'คืนค่าเริ่มต้น: ' : '') + (changes.length > 1500 ? changes.slice(0, 1500) + '…' : changes));
+      world.cosTuningChanged(c.tuning);
+    }
+    send(res, 200, cosLookState(db, true));
     return true;
   }
 
