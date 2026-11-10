@@ -4,6 +4,7 @@ import { arenaRadius, clearingRadius, lairOf, lavaAt, themeAt, type Lair, type Z
 import { NPC_IDS, type NpcId } from '../data/npcs';
 import { mulberry32, pick, rand, type Rng } from '../rng';
 import type { Vec2 } from '../types';
+import { CAMP_FENCE, type FenceKit } from '../data/campFence';
 
 export interface Collider { x: number; z: number; r: number }
 /** One prop to draw. `fade` = turns see-through when the player walks behind it. */
@@ -410,7 +411,6 @@ export class Terrain {
   /** The camp each zone's hub portal opens next to. The NPCs moved to the hub; the camp stays as scenery. */
   private placeCamp(): void {
     const s = this.zone.start;
-    const B = this.bound;
     const set = THEME_PROPS[this.zone.theme];
     // The camp was laid out for the bottom corner; zones turned to face the hub turn it with them.
     const turns = s.x >= 0 ? (s.z >= 0 ? 0 : 3) : s.z >= 0 ? 1 : 2;
@@ -437,11 +437,63 @@ export class Terrain {
       at('flag', -2, -7, 1.8, 0.15);
       at('watchtower', 9, -10, 4.2, 1.1);
     }
-    for (let a = 0; a < Math.PI * 2; a += Math.PI / 9) {
-      const fx = s.x + Math.cos(a) * 9;
-      const fz = s.z + Math.sin(a) * 9;
-      if (this.distToPath(fx, fz) < 3 || Math.abs(fx) > B || Math.abs(fz) > B) continue;
-      this.addProp('fence', fx, fz, 1.1, 0.6);
+    const kit = CAMP_FENCE[this.zone.theme];
+    if (kit) this.placeCampFence(kit);
+  }
+
+  /**
+   * The camp's fence: a square around it (a diamond on screen) of pieces set end to end, post on post,
+   * like the town wall (tools/cut_camp_fence.cjs measured them). A piece is left out where a path, a portal
+   * or anything solid is in the way, and an end post closes the fence beside each gap. A map whose theme
+   * has no fence picture gets no fence.
+   */
+  private placeCampFence(kit: FenceKit): void {
+    const s = this.zone.start;
+    const B = this.bound;
+    /** About how far each side stands from the camp's middle (between its props and the map's edge); whole pieces decide exactly. */
+    const HALF = 9;
+    const na = Math.max(1, Math.round((2 * HALF) / kit.a.len));
+    const nb = Math.max(1, Math.round((2 * HALF) / kit.b.len));
+    const rz = (na * kit.a.len) / 2;
+    const rx = (nb * kit.b.len) / 2;
+    const prefix = `fence_${this.zone.theme}`;
+    const clear = (x0: number, z0: number, x1: number, z1: number): boolean => {
+      for (let t = 0; t <= 1.001; t += 0.1) {
+        const x = x0 + (x1 - x0) * t;
+        const z = z0 + (z1 - z0) * t;
+        if (Math.abs(x) > B - 1 || Math.abs(z) > B - 1 || this.distToPath(x, z) < 2.6) return false;
+        if (this.zone.portals.some((p) => Math.hypot(p.x - x, p.z - z) < 3.5)) return false;
+        if (this.colliders.some((c) => Math.hypot(c.x - x, c.z - z) < c.r + 0.5)) return false;
+      }
+      return true;
+    };
+    // [first post, step] for each side: a pieces run along -z from their first post, b pieces along +x.
+    const sides: { x: number; z: number; dx: number; dz: number; n: number; a: boolean }[] = [
+      { x: s.x - rx, z: s.z + rz, dx: 0, dz: -kit.a.len, n: na, a: true },
+      { x: s.x + rx, z: s.z + rz, dx: 0, dz: -kit.a.len, n: na, a: true },
+      { x: s.x - rx, z: s.z - rz, dx: kit.b.len, dz: 0, n: nb, a: false },
+      { x: s.x - rx, z: s.z + rz, dx: kit.b.len, dz: 0, n: nb, a: false },
+    ];
+    for (const side of sides) {
+      const post = (i: number) => ({ x: side.x + side.dx * i, z: side.z + side.dz * i });
+      const kept = Array.from({ length: side.n }, (_, i) => clear(post(i).x, post(i).z, post(i + 1).x, post(i + 1).z));
+      kept.forEach((ok, i) => {
+        if (!ok) return;
+        const p = post(i);
+        // Every third piece along an a side is the damaged one, so the run doesn't repeat exactly.
+        const part = side.a ? (i % 3 === 1 ? 'a_broken' : 'a') : 'b';
+        const run = kit[part];
+        this.addProp(`${prefix}_${part}`, p.x + run.ax, p.z + run.az, run.h, 0, true);
+        const q = post(i + 1);
+        const len = Math.hypot(q.x - p.x, q.z - p.z);
+        for (let t = 0; t <= len; t += 0.9) this.colliders.push({ x: p.x + ((q.x - p.x) * t) / len, z: p.z + ((q.z - p.z) * t) / len, r: 0.5 });
+      });
+      // An end post where the fence stops beside a gap.
+      for (let i = 1; i < side.n; i++) {
+        if (kept[i - 1] === kept[i]) continue;
+        const p = post(i);
+        this.addProp(`${prefix}_end`, p.x, p.z, kit.end.h, 0.5);
+      }
     }
   }
 }
