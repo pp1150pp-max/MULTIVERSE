@@ -13,14 +13,39 @@ import { shownCos, shownRiding } from './cosLook';
 
 /** How high a rider sits above the ground. */
 export const MOUNT_SEAT = 0.55;
+/**
+ * Per mount: the world height of its picture (the whole cell, as cut by tools/cut_cosmetics.cjs), how high
+ * the rider's feet sit, and which riding pose the classes play (`ride` astride, `ride_board` standing).
+ */
+export const MOUNT_LOOK: Record<string, { h: number; seat: number; pose: 'ride' | 'ride_board' }> = {
+  mount_wolf: { h: 1.5, seat: 0.5, pose: 'ride' },
+  mount_warhorse: { h: 1.7, seat: 0.62, pose: 'ride' },
+  mount_raptor: { h: 1.75, seat: 0.62, pose: 'ride' },
+  mount_tortoise: { h: 1.8, seat: 0.7, pose: 'ride' },
+  mount_hoverboard: { h: 0.7, seat: 0.32, pose: 'ride_board' },
+};
+
+/** How high a character's feet sit: on its mount's saddle while riding (or trying one on), else 0. */
+export function seatOf(p: Player): number {
+  const m = shownRiding(p) ? shownCos(p, 'mount') : undefined;
+  return m ? (MOUNT_LOOK[m.id]?.seat ?? MOUNT_SEAT) : 0;
+}
+
+/** The riding pose a character plays now, or null on foot. */
+export function ridePose(p: Player): 'ride' | 'ride_board' | null {
+  const m = p.alive && shownRiding(p) ? shownCos(p, 'mount') : undefined;
+  return m ? (MOUNT_LOOK[m.id]?.pose ?? 'ride') : null;
+}
 /** Toward the camera (it looks from +x +z), one unit. */
 const TO_CAM = { x: Math.SQRT1_2, z: Math.SQRT1_2 };
 const PET_FLYING = new Set(['pet_dragon', 'pet_bot', 'pet_wisp']);
 /** World height of each kind's picture, and how high wings sit on the back. */
-const WINGS_H = 1.6;
+const WINGS_H = 1.3;
 const WINGS_LIFT = 0.55;
 const MOUNT_H = 1.35;
 const PET_H = 0.8;
+/** Seconds the wings take to fade out after dying, along with the fall (owner 2026-11-10). */
+const WINGS_FADE = 1;
 
 interface Piece { id: string; actor: SpriteActor }
 
@@ -61,12 +86,20 @@ export class CosmeticRig {
   private clock = 0;
   private stepT = 0;
   private stepSide = 1;
+  /** Seconds since dying (0 while alive), for the wings' fade. */
+  private deadT = 0;
+  private wingsAlpha = 1;
 
   constructor(private readonly scene: THREE.Scene) {}
 
+  /** Came into view already dead: the wings are gone, no fade to watch. */
+  skipDeathFade(): void {
+    this.deadT = WINGS_FADE;
+  }
+
   /** Riding (or trying a mount on): how high the character's picture should sit. */
   seat(p: Player): number {
-    return shownRiding(p) ? MOUNT_SEAT : 0;
+    return seatOf(p);
   }
 
   /** Swaps a piece for the one now shown (or none), keeping it while it stays the same. */
@@ -91,9 +124,18 @@ export class CosmeticRig {
 
     // ---- wings: on the back, flapping all the time (faster while walking). Behind the body seen from
     // the front, in front of it seen from behind (nudged toward or away from the camera).
-    this.wings = this.piece(this.wings, alive ? shownCos(p, 'wings') : undefined, WINGS_H, 0);
+    // Dying: they fade out with the fall, and come back with the revive.
+    this.deadT = p.alive ? 0 : this.deadT + dt;
+    const fade = p.alive ? 1 : Math.max(0, 1 - this.deadT / WINGS_FADE);
+    const showWings = (alive || (!p.alive && fade > 0)) && p.toadT <= 0;
+    this.wings = this.piece(this.wings, showWings ? shownCos(p, 'wings') : undefined, WINGS_H, 0);
+    if (!this.wings) this.wingsAlpha = 1;
     if (this.wings) {
       const a = this.wings.actor;
+      if (fade !== this.wingsAlpha) {
+        this.wingsAlpha = fade;
+        a.setOpacity(fade);
+      }
       const d = p.faceX + p.faceZ > 0 ? -0.15 : 0.15;
       a.group.position.set(p.x + TO_CAM.x * d, 0, p.z + TO_CAM.z * d);
       a.setLift(WINGS_LIFT + seat);
@@ -101,11 +143,13 @@ export class CosmeticRig {
       a.update(dt, true, p.moving ? 10 : 5);
     }
 
-    // ---- mount: under the rider, a little toward the camera so it covers the legs
-    this.mount = this.piece(this.mount, shownRiding(p) && alive ? shownCos(p, 'mount') : undefined, MOUNT_H, 0.6);
+    // ---- mount: under the rider
+    const mc = shownRiding(p) && alive ? shownCos(p, 'mount') : undefined;
+    this.mount = this.piece(this.mount, mc, mc ? (MOUNT_LOOK[mc.id]?.h ?? MOUNT_H) : MOUNT_H, 0.6);
     if (this.mount) {
       const a = this.mount.actor;
-      a.group.position.set(p.x + TO_CAM.x * 0.1, 0, p.z + TO_CAM.z * 0.1);
+      // A little behind the rider, who sits astride it (or stands on the board) in front.
+      a.group.position.set(p.x - TO_CAM.x * 0.1, 0, p.z - TO_CAM.z * 0.1);
       a.face(p.faceX, p.faceZ);
       a.update(dt, p.moving, 11);
     }
