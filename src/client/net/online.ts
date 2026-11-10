@@ -46,6 +46,9 @@ const SENT_KEEP = 90;
 /** After the server stops moving us, we glide onto its position until this close, or for at most SETTLE_MAX seconds. */
 const SETTLE_DIST = 0.15;
 const SETTLE_MAX = 0.5;
+/** Walking to a point gives up when it hasn't got this much closer for WALK_GIVE_UP seconds (pressed into a corner). */
+const WALK_GAIN = 0.1;
+const WALK_GIVE_UP = 0.8;
 /** A ping with no pong after this long no longer holds back the next one (its pong still counts if it comes). */
 const PING_GIVE_UP_MS = 10_000;
 /** Unanswered pings remembered at most (the oldest is dropped). */
@@ -181,6 +184,9 @@ export class OnlineBackend implements Backend {
   private settleT = 0;
   private epoch = 0;
   private faceLockT = 0;
+  /** The closest the current walk-to point has been, and how long since we last got closer. */
+  private walkBest = Infinity;
+  private walkStuckT = 0;
   private sendT = 0;
   private seq = 0;
   /** Where we said we were in each input message still waiting for its snapshot. */
@@ -770,7 +776,16 @@ export class OnlineBackend implements Backend {
     this.faceLockT -= dt;
     if (!me.alive || this.serverMoves || this.settling) return null;
     if (it.move) me.moveTarget = null;
-    if (it.moveTo) me.moveTarget = { ...it.moveTo };
+    if (it.moveTo) {
+      // A click on an NPC, the forge or a tree: walk up to it, not into it.
+      const to = this.terrain.standSpot(it.moveTo.x, it.moveTo.z, me.radius, me) ?? it.moveTo;
+      const old = me.moveTarget;
+      if (!old || Math.hypot(old.x - to.x, old.z - to.z) > 0.5) {
+        this.walkBest = Infinity;
+        this.walkStuckT = 0;
+      }
+      me.moveTarget = { ...to };
+    }
     let mx = 0;
     let mz = 0;
     let remaining = Infinity;
@@ -781,7 +796,11 @@ export class OnlineBackend implements Backend {
       const dx = me.moveTarget.x - me.x;
       const dz = me.moveTarget.z - me.z;
       remaining = Math.hypot(dx, dz);
-      if (remaining < 0.15) me.moveTarget = null;
+      if (remaining < this.walkBest - WALK_GAIN) {
+        this.walkBest = remaining;
+        this.walkStuckT = 0;
+      } else this.walkStuckT += dt;
+      if (remaining < 0.15 || this.walkStuckT > WALK_GIVE_UP) me.moveTarget = null;
       else {
         mx = dx / remaining;
         mz = dz / remaining;

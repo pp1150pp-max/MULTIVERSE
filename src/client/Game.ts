@@ -541,6 +541,7 @@ export class Game {
     if (!g) return;
     if (!p.alive || this.hud.dialogOpen) {
       this.goal = null;
+      p.moveTarget = null;
       return;
     }
     const d = Math.hypot(p.x - g.x, p.z - g.z);
@@ -568,6 +569,8 @@ export class Game {
         this.goal = null;
       }
     }
+    // Done with it: stop walking toward it, or we keep pushing into the NPC or fountain we just used.
+    if (!this.goal) p.moveTarget = null;
   }
 
   private update(dt: number): void {
