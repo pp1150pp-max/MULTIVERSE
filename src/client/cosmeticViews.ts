@@ -50,6 +50,11 @@ function headOn(p: Player): boolean {
   return viewRow(p) === 0;
 }
 
+/** On the front diagonal the mount is cut in two around the rider (see CosmeticRig: mountHead). */
+function mountSplit(p: Player, id: string): boolean {
+  return tuneBool(id, 'split') && viewRow(p) === 1;
+}
+
 /**
  * Facing the camera (front and front diagonal) the mount's head is nearer the camera than the rider and is
  * drawn in front of their legs. From the side and from behind the rider sits on its back, drawn over it
@@ -66,6 +71,13 @@ export function ridePose(p: Player): 'ride' | 'ride_board' | null {
 }
 /** Toward the camera (it looks from +x +z), one unit. */
 const TO_CAM = { x: Math.SQRT1_2, z: Math.SQRT1_2 };
+/**
+ * Owner 2026-11-10: the wings belong in the middle of the back. Their roots (the binding between them) sit
+ * `root` of the way up the picture; this puts them `backStand` up standing, `backSeat` above the saddle riding.
+ */
+function wingsLift(id: string, riding: boolean): number {
+  return tuneNum(id, riding ? 'backSeat' : 'backStand') - tuneNum(id, 'h') * tuneNum(id, 'root');
+}
 /** Seconds the wings take to fade out after dying, along with the fall (owner 2026-11-10). */
 const WINGS_FADE = 1;
 
@@ -103,6 +115,9 @@ export function cosCardImage(c: CosmeticDef): string {
 export class CosmeticRig {
   private wings: Piece | null = null;
   private mount: Piece | null = null;
+  /** The mount's head half, drawn in front of the rider on the front diagonal (see mountSplit). */
+  private mountHead: SpriteActor | null = null;
+  private readonly headClip = new THREE.Plane();
   private pet: (Piece & { x: number; z: number; fx: number; fz: number }) | null = null;
   private aura: { id: string; m: THREE.Mesh } | null = null;
   private clock = 0;
@@ -150,8 +165,8 @@ export class CosmeticRig {
     const alive = p.alive && p.toadT <= 0;
     const seat = alive ? this.seat(p) : 0;
 
-    // ---- wings: on the back, flapping all the time (faster while walking). Always drawn behind the body,
-    // from every side (owner 2026-11-10).
+    // ---- wings: on the back, flapping all the time (faster while walking). Behind the body seen from the
+    // front and the side, over the back when it is turned to the camera (owner 2026-11-10).
     // Dying: they fade out with the fall, and come back with the revive.
     this.deadT = p.alive ? 0 : this.deadT + dt;
     const fade = p.alive ? 1 : Math.max(0, 1 - this.deadT / WINGS_FADE);
@@ -161,7 +176,6 @@ export class CosmeticRig {
     if (!this.wings) this.wingsAlpha = 1;
     if (this.wings) {
       const id = this.wings.id;
-      const lift = tuneNum(id, 'lift');
       const a = this.wings.actor;
       if (fade !== this.wingsAlpha) {
         this.wingsAlpha = fade;
@@ -172,11 +186,15 @@ export class CosmeticRig {
       const bx = -p.faceX / fl;
       const bz = -p.faceZ / fl;
       const along = bx * TO_CAM.x + bz * TO_CAM.z;
-      const back = tuneNum(id, 'back');
-      const sx = (bx - along * TO_CAM.x) * back;
-      const sz = (bz - along * TO_CAM.z) * back;
-      // Behind the body: lifted `lift` over the rider's own base (seat), then `depth` further back.
-      const [wx, wy, wz] = depthAt(p.x + sx, p.z + sz, lift, -tuneNum(id, 'depth'));
+      const sx = (bx - along * TO_CAM.x) * tuneNum(id, 'back');
+      const sz = (bz - along * TO_CAM.z) * tuneNum(id, 'back');
+      // Roots on the middle of the back (wingsLift over the rider's own base); 0.15 behind the body, or in front of it when
+      // the back is turned to the camera.
+      // (Tuned: `depth` from the body, `overBack` switches the in-front-from-behind part.)
+      const back = tuneBool(id, 'overBack') && (p.faceX + p.faceZ) / fl < -0.3;
+      const lift = wingsLift(id, seat > 0);
+      const depth = tuneNum(id, 'depth');
+      const [wx, wy, wz] = depthAt(p.x + sx, p.z + sz, lift, back ? depth : -depth);
       a.group.position.set(wx, wy, wz);
       a.setLift(lift + seat);
       a.face(p.faceX, p.faceZ);
@@ -185,18 +203,46 @@ export class CosmeticRig {
 
     // ---- mount: under the rider
     const mc = shownRiding(p) && alive ? shownCos(p, 'mount') : undefined;
+    const hadMount = this.mount;
     this.mount = this.piece(this.mount, mc, mc ? tuneNum(mc.id, 'h') : 0, 0.6);
+    if (this.mount !== hadMount) this.dropMountHead();
     if (this.mount) {
       const id = this.mount.id;
+      const mh = tuneNum(id, 'h');
       const a = this.mount.actor;
       // Head-on or from behind: the mount's head (or rear) in front of the rider. Else a little behind the
       // rider, who sits astride it (or stands on the board).
       // A board stays right under the feet, just behind the rider.
       // The rider's feet are `seat` up, the mount on the ground: measured from the rider's base it is `-seat` raised.
-      const d = tuneBool(id, 'under') ? -tuneNum(id, 'underBehind') : mountInFront(p, id) ? tuneNum(id, 'front') : -tuneNum(id, 'behind');
+      const under = tuneBool(id, 'under');
+      const split = !under && mountSplit(p, id);
+      const d = under ? -tuneNum(id, 'underBehind') : !split && mountInFront(p, id) ? tuneNum(id, 'front') : -tuneNum(id, 'behind');
       const [mx, my, mz] = depthAt(p.x, p.z, -seat, d);
       a.group.position.set(mx, my, mz);
       a.face(p.faceX, p.faceZ);
+      // On the front diagonal: the whole mount behind the rider, plus its head half again in front of them,
+      // cut at the rider's middle on screen. One leg shows over the body, the other goes behind the neck.
+      // Made with the mount and animated with it every frame, so the two halves always show the same frame.
+      if (!this.mountHead) {
+        this.mountHead = new SpriteActor(sheets[cosSheetKey(this.mount.id)], mh, 0, COS_CYCLE);
+        this.mountHead.setClip([this.headClip]);
+        this.scene.add(this.mountHead.group);
+      }
+      if (this.mountHead) {
+        if (this.mountHead.height !== mh) this.mountHead.setHeight(mh);
+        this.mountHead.group.visible = split;
+        this.mountHead.face(p.faceX, p.faceZ);
+        this.mountHead.update(dt, p.moving, tuneNum(id, 'anim'));
+        if (split) {
+          // Screen right in the world is +x −z. Keep the side the head is on, from the rider's middle.
+          const sx = (p.faceX - p.faceZ) * Math.SQRT1_2;
+          const sign = sx >= 0 ? 1 : -1;
+          this.headClip.normal.set(sign * Math.SQRT1_2, 0, -sign * Math.SQRT1_2);
+          this.headClip.constant = -(this.headClip.normal.x * p.x + this.headClip.normal.z * p.z);
+          const [hx, hy, hz] = depthAt(p.x, p.z, -seat, tuneNum(id, 'splitFront'));
+          this.mountHead.group.position.set(hx, hy, hz);
+        }
+      }
       a.update(dt, p.moving, tuneNum(id, 'anim'));
     }
 
@@ -279,7 +325,15 @@ export class CosmeticRig {
     }
   }
 
+  private dropMountHead(): void {
+    if (!this.mountHead) return;
+    this.scene.remove(this.mountHead.group);
+    this.mountHead.dispose();
+    this.mountHead = null;
+  }
+
   dispose(): void {
+    this.dropMountHead();
     for (const pc of [this.wings, this.mount, this.pet]) {
       if (!pc) continue;
       this.scene.remove(pc.actor.group);

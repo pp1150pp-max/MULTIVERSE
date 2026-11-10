@@ -135,6 +135,8 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
   const renderer = new THREE.WebGLRenderer({ antialias: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  // Like the game: a mount on the front diagonal is cut in two around its rider (cosmeticViews.ts).
+  renderer.localClippingEnabled = true;
   viewEl.append(renderer.domElement);
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#2b3a2a');

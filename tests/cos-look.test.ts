@@ -34,21 +34,24 @@ for (const c of COSMETICS) {
   }
 }
 ok(TUNED_SLOTS.length === 4, 'wings, mounts, pets and auras are tuned');
-ok(cosTuneDefaults('wings_angel')?.h === 1.625 && cosTuneDefaults('wings_angel')?.lift === 0.64 && cosTuneDefaults('wings_angel')?.back === 0.22, 'wings start where #195–#197 put them (size 1.625, lift 0.64, back 0.22)');
-ok(cosTuneDefaults('mount_hoverboard')?.board === true && cosTuneDefaults('mount_hoverboard')?.under === true && cosTuneDefaults('mount_hoverboard')?.h === 1.2 && cosTuneDefaults('mount_hoverboard')?.seat === 0.5 && cosTuneDefaults('mount_wolf')?.seat === 0.5, 'mount defaults kept (board, seat)');
+ok(cosTuneDefaults('wings_angel')?.h === 1.625 && cosTuneDefaults('wings_angel')?.root === 0.6 && cosTuneDefaults('wings_angel')?.backStand === 1.35 && cosTuneDefaults('wings_angel')?.backSeat === 1 && cosTuneDefaults('wings_angel')?.overBack === true && cosTuneDefaults('wings_angel')?.back === 0.22, 'wings start where #197/#200 put them (size 1.625, roots 60% up on the middle of the back, back 0.22)');
+ok(cosTuneDefaults('mount_wolf')?.seat === 0.5 && cosTuneDefaults('mount_wolf')?.split === true && cosTuneDefaults('mount_wolf')?.under === false, 'mount defaults kept (seat, cut in two on the front diagonal)');
+ok(cosTuneDefaults('mount_hoverboard') === undefined && cosTuneDefaults('mount_tortoise') === undefined, 'removed mounts (#200) have no tuning');
+ok(JSON.stringify(checkCosTuning({ mount_tortoise: { h: 2 }, mount_wolf: { seat: 0.6 } }, false).tuning) === '{"mount_wolf":{"seat":0.6}}', 'saved tuning of a removed mount is ignored on read');
+ok(!!checkCosTuning({ mount_hoverboard: { h: 1 } }, true).error, 'a removed mount cannot be saved');
 ok(cosTuneDefaults('pet_dragon')?.fly === true && cosTuneDefaults('pet_cat')?.fly === false, 'pet flying defaults kept');
-ok(JSON.stringify(checkCosTuning({ wings_angel: { lift: 0.64 } }, true).tuning) === '{}', 'a value equal to the code default is not stored');
-ok(checkCosTuning({ wings_angel: { lift: 1.23456 } }, true).tuning?.wings_angel?.lift === 1.23, 'numbers are rounded to 2 decimals');
-ok(!!checkCosTuning({ wings_angel: { lift: 9 } }, true).error, 'out of range is refused');
-ok(!!checkCosTuning({ wings_angel: { lift: '1' } }, true).error, 'a number sent as text is refused');
+ok(JSON.stringify(checkCosTuning({ wings_angel: { root: 0.6 } }, true).tuning) === '{}', 'a value equal to the code default is not stored');
+ok(checkCosTuning({ wings_angel: { backStand: 1.23456 } }, true).tuning?.wings_angel?.backStand === 1.23, 'numbers are rounded to 2 decimals');
+ok(!!checkCosTuning({ wings_angel: { backStand: 9 } }, true).error, 'out of range is refused');
+ok(!!checkCosTuning({ wings_angel: { backStand: '1' } }, true).error, 'a number sent as text is refused');
 ok(!!checkCosTuning({ pet_cat: { fly: 1 } }, true).error, 'an on/off field must be true/false');
 ok(!!checkCosTuning({ wings_angel: { seat: 1 } }, true).error, 'a field of another slot is refused');
-ok(!!checkCosTuning({ wings_nope: { lift: 1 } }, true).error, 'an unknown cosmetic is refused');
+ok(!!checkCosTuning({ wings_nope: { root: 1 } }, true).error, 'an unknown cosmetic is refused');
 ok(!!checkCosTuning({ title_gold: {} }, true).error, 'a title set cannot be tuned');
 ok(!!checkCosTuning([], true).error && !!checkCosTuning(null, true).error, 'not an object is refused');
-const lenient = checkCosTuning({ wings_nope: { lift: 1 }, wings_bat: { lift: 9, back: 0.3, gone: 1 } }, false).tuning;
+const lenient = checkCosTuning({ wings_nope: { lift: 1 }, wings_bat: { backStand: 9, back: 0.3, lift: 1 } }, false).tuning;
 ok(JSON.stringify(lenient) === '{"wings_bat":{"back":0.3}}', 'read back leniently: unknown and bad entries dropped, the rest kept');
-ok(cosTuneOf({ wings_bat: { back: 0.3 } }, 'wings_bat')?.lift === 0.64, 'changes go on top of the code defaults');
+ok(cosTuneOf({ wings_bat: { back: 0.3 } }, 'wings_bat')?.backStand === 1.35, 'changes go on top of the code defaults');
 ok(cosTuningChanges({}, { wings_bat: { back: 0.3 } }) === 'wings_bat.back 0.22 → 0.3', 'audit text lists what changed');
 
 // ---------------------------------------------------------- against a real server
@@ -130,7 +133,7 @@ async function run(): Promise<void> {
   const gmGet = await api('GET', '/admin/cos-look', undefined, tok.gm1);
   ok(gmGet.status === 200 && gmGet.data.canEdit === false && JSON.stringify(gmGet.data.tuning) === '{}', 'GM sees the tuning (bench, nothing saved yet) but may not save it');
   ok((await api('GET', '/admin/cos-look', undefined, tok.plain1)).status === 403, 'a player cannot read it from the admin API');
-  const changed = { wings_angel: { lift: 1.1, back: 0.3 }, mount_wolf: { seat: 0.6 }, pet_cat: { fly: true, float: 1 }, aura_star: { size: 3 } };
+  const changed = { wings_angel: { backStand: 1.4, back: 0.3 }, mount_wolf: { seat: 0.6 }, pet_cat: { fly: true, float: 1 }, aura_star: { size: 3 } };
   ok((await api('POST', '/admin/cos-look', { tuning: changed }, tok.gm1)).status === 403, 'GM cannot save the tuning');
   ok((await api('POST', '/admin/cos-look', { tuning: changed }, tok.plain1)).status === 403, 'a player cannot save the tuning');
   ok((await api('POST', '/admin/cos-look', { reset: true }, tok.gm1)).status === 403, 'GM cannot reset it either');
@@ -139,8 +142,8 @@ async function run(): Promise<void> {
 
   // Bad values are refused and change nothing.
   for (const [what, tuning] of [
-    ['unknown cosmetic', { wings_nope: { lift: 1 } }],
-    ['range', { wings_angel: { lift: 50 } }],
+    ['unknown cosmetic', { wings_nope: { root: 1 } }],
+    ['range', { wings_angel: { backStand: 50 } }],
     ['extra field', { wings_angel: { hack: 1 } }],
     ['title set', { title_gold: { size: 1 } }],
     ['not an object', 'x'],
@@ -155,7 +158,7 @@ async function run(): Promise<void> {
   const w1 = p1.msgs.find((m) => m.t === 'welcome');
   ok(w1 && JSON.stringify(w1.cosTuning) === '{}', 'joining sends the (empty) tuning in welcome');
   const saved = await api('POST', '/admin/cos-look', { tuning: changed }, tok.owner1);
-  ok(saved.status === 200 && saved.data.tuning.wings_angel?.lift === 1.1 && saved.data.tuning.pet_cat?.fly === true, 'the owner saves new tuning');
+  ok(saved.status === 200 && saved.data.tuning.wings_angel?.backStand === 1.4 && saved.data.tuning.pet_cat?.fly === true, 'the owner saves new tuning');
   await sleep(300);
   const pushed = p1.msgs.filter((m) => m.t === 'cosTuning');
   ok(pushed.length === 1 && pushed[0].tuning.mount_wolf?.seat === 0.6, 'a player online gets the new tuning at once');

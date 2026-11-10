@@ -15,9 +15,13 @@ const run = (sim: Sim, secs: number) => {
 };
 
 // ---- catalogue
-ok(COSMETICS.length === 25, `25 cosmetics (${COSMETICS.length})`);
-for (const slot of COS_SLOTS) ok(COSMETICS.filter((c) => c.slot === slot).length === 5, `5 × ${slot}`);
-ok(new Set(COSMETICS.map((c) => c.id)).size === 25 && new Set(COSMETICS.map((c) => c.code)).size === 25, 'ids and codes unique');
+// Owner 2026-11-10: hoverboard and tortoise out for now, so 3 mounts.
+const PER_SLOT: Record<string, number> = { wings: 5, mount: 3, pet: 5, aura: 5, title: 5 };
+ok(COSMETICS.length === 23, `23 cosmetics (${COSMETICS.length})`);
+for (const slot of COS_SLOTS) ok(COSMETICS.filter((c) => c.slot === slot).length === PER_SLOT[slot], `${PER_SLOT[slot]} × ${slot}`);
+ok(new Set(COSMETICS.map((c) => c.id)).size === 23 && new Set(COSMETICS.map((c) => c.code)).size === 23, 'ids and codes unique');
+ok(!COSMETICS.some((c) => c.id === 'mount_hoverboard' || c.id === 'mount_tortoise'), 'hoverboard and tortoise are out');
+ok(JSON.stringify(cleanCosWorn({ mount: 'mount_tortoise' })) === '{}', 'a saved tortoise comes off');
 ok(COSMETICS.filter((c) => c.slot === 'title').every((c) => !!c.title), 'every title set has its title text');
 
 // ---- worn: cleaning and snapshot codes

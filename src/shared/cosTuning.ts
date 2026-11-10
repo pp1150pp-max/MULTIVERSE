@@ -23,9 +23,12 @@ const bool = (label: string): TuneField => ({ kind: 'bool', label });
 export const COS_TUNE_FIELDS: Record<TunedSlot, Record<string, TuneField>> = {
   wings: {
     h: num(0.3, 3, 0.025, 'ขนาด (ความสูงภาพ)'),
-    lift: num(-0.5, 2.5, 0.02, 'ความสูงบนหลัง'),
+    root: num(0, 1, 0.01, 'โคนปีกอยู่ที่กี่ส่วนของความสูงภาพ (จากล่าง)'),
+    backStand: num(0, 2.5, 0.02, 'ความสูงกลางหลัง ตอนยืน'),
+    backSeat: num(0, 2.5, 0.02, 'ความสูงกลางหลัง ตอนนั่งขี่ (จากอาน)'),
     back: num(-0.6, 0.8, 0.02, 'ถอยไปข้างหลัง (มองด้านข้าง)'),
-    depth: num(0, 0.5, 0.01, 'วาดหลังตัวละคร ห่างเท่าไร (หลังตัวเสมอ)'),
+    depth: num(0, 0.5, 0.01, 'ระยะวาดหลังตัว (หรือทับหลัง) ห่างเท่าไร'),
+    overBack: bool('หันหลังให้กล้อง: ปีกวาดทับหลัง (ปิด = หลังตัวเสมอ)'),
     flap: num(0, 20, 0.5, 'ความเร็วกระพือ ตอนยืน'),
     flapWalk: num(0, 25, 0.5, 'ความเร็วกระพือ ตอนเดิน'),
   },
@@ -34,7 +37,9 @@ export const COS_TUNE_FIELDS: Record<TunedSlot, Record<string, TuneField>> = {
     seat: num(0, 1.5, 0.02, 'ความสูงที่นั่ง'),
     headOnLift: num(0, 0.8, 0.02, 'ที่นั่งยกเพิ่ม ตอนหันหน้าเข้ากล้องตรง ๆ'),
     front: num(-0.5, 0.5, 0.01, 'หัวสัตว์ขี่วาดหน้าผู้ขี่ ห่างเท่าไร (ตอนหันเข้ากล้อง)'),
-    frontDiag: bool('หัวอยู่หน้าผู้ขี่ ตอนหันเฉียงเข้ากล้องด้วย (ปิด = เฉพาะหันตรง)'),
+    split: bool('ตัด 2 ส่วนตอนหันเฉียงเข้ากล้อง (หัวหน้าผู้ขี่ ตัวหลังผู้ขี่)'),
+    splitFront: num(-0.5, 0.5, 0.01, 'ส่วนหัวที่ตัดวาดหน้าผู้ขี่ ห่างเท่าไร'),
+    frontDiag: bool('ไม่ตัด: หัวทั้งตัวอยู่หน้าผู้ขี่ตอนหันเฉียงเข้ากล้องด้วย'),
     behind: num(-0.5, 0.5, 0.01, 'สัตว์ขี่วาดหลังผู้ขี่ ห่างเท่าไร (ตอนหันข้าง/หลัง)'),
     under: bool('อยู่ใต้เท้าเสมอ (แบบบอร์ด ไม่สลับหน้า/หลัง)'),
     underBehind: num(0, 0.5, 0.01, 'ระยะวาดหลังผู้ขี่ ตอนอยู่ใต้เท้า'),
@@ -63,7 +68,11 @@ export const COS_TUNE_FIELDS: Record<TunedSlot, Record<string, TuneField>> = {
 
 export type TuneValues = Record<string, number | boolean>;
 
-/** Mounts: the values before the bench (owner-approved art fits, #192/#194). */
+/**
+ * Mounts: the values before the bench (owner-approved art fits, #192/#194/#198). The hoverboard and the
+ * tortoise are out of the catalogue for now (owner 2026-11-10, #200), so these two rows are unused (no
+ * sliders, saved values for them ignored); kept so they come back as they were if their lines return.
+ */
 const MOUNT_DEFAULTS: Record<string, { h: number; seat: number; board?: boolean; under?: boolean }> = {
   mount_wolf: { h: 1.5, seat: 0.5 },
   mount_warhorse: { h: 1.7, seat: 0.62 },
@@ -81,15 +90,17 @@ export function cosTuneDefaults(id: string): TuneValues | undefined {
   if (!c || c.slot === 'title') return undefined;
   switch (c.slot) {
     case 'wings':
-      // Owner 2026-11-10: on the shoulders (~1.35 up, #195), 25% bigger than the first 1.3 and always
-      // drawn behind the body (#197), the lift kept centred on the shoulders (0.64).
-      return { h: 1.625, lift: 0.64, back: 0.22, depth: 0.15, flap: 5, flapWalk: 10 };
+      // Owner 2026-11-10: 25% bigger than the first 1.3 (#197); roots (60% up the picture) on the middle of
+      // the back, 1.35 up standing and 1.0 above the saddle riding; behind the body, over the back when it
+      // is turned to the camera (#200).
+      return { h: 1.625, root: 0.6, backStand: 1.35, backSeat: 1, back: 0.22, depth: 0.15, overBack: true, flap: 5, flapWalk: 10 };
     case 'mount': {
       const m = MOUNT_DEFAULTS[id];
-      // Draw order by view (#198/#199): the head in front of the rider facing the camera (and its
-      // diagonals), the rider on top from the side and behind; a board always just behind the feet.
+      // Draw order by view (#198-#200): the head in front of the rider facing the camera, cut in two on the
+      // front diagonal (head half in front, the rest behind), the rider on top from the side and behind;
+      // a board always just behind the feet.
       return {
-        h: m?.h ?? 1.35, seat: m?.seat ?? 0.55, headOnLift: 0.18, front: 0.1, frontDiag: true, behind: 0.1,
+        h: m?.h ?? 1.35, seat: m?.seat ?? 0.55, headOnLift: 0.18, front: 0.1, split: true, splitFront: 0.1, frontDiag: true, behind: 0.1,
         under: m?.under ?? false, underBehind: 0.05, board: m?.board ?? false, anim: 11,
       };
     }
@@ -179,7 +190,7 @@ export function sameCosTuning(a: CosTuning, b: CosTuning): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-/** Short text of what differs from `before`, for the audit log (e.g. "wings_angel.lift 0.8 → 0.9"). */
+/** Short text of what differs from `before`, for the audit log (e.g. "wings_angel.backStand 1.35 → 1.4"). */
 export function cosTuningChanges(before: CosTuning, after: CosTuning): string {
   const out: string[] = [];
   for (const c of COSMETICS) {
