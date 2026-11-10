@@ -25,7 +25,10 @@ ok(marketKind({ stone: 'return_scroll', count: 1 }) === 'consumable', 'listed un
   const sim = new Sim(ZONE_HUB);
   const p = sim.addPlayer(hero(RETURN_SCROLL_PRICE * 12));
   const m = sim.terrain.npcPos.merchant!;
-  ok(!sim.buyReturnScroll(p, 1) || sim.near(p, 'merchant'), 'needs to stand at the merchant');
+  // Spawning is random and can land next to the merchant: step well away first.
+  p.x = m.x - 15;
+  p.z = m.z;
+  ok(!sim.buyReturnScroll(p, 1) && p.gold === RETURN_SCROLL_PRICE * 12, 'needs to stand at the merchant');
   p.x = m.x + 1;
   p.z = m.z;
   ok(sim.buyReturnScroll(p, 11), 'buys 11');

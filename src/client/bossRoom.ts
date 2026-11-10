@@ -6,7 +6,7 @@ import type { Game } from './Game';
 import { MONSTERS } from '../shared/data/monsters';
 import { BOSS_KEY, BOSS_QUEST_KEY, STONE_COLOR, STONE_NAME } from '../shared/data/stones';
 import { bossShortName, ROOM_KEYS_MAX, roomInviteText, type RoomAnswer, type RoomLobbyView } from '../shared/bossRoom';
-import { stoneIcon } from './icons';
+import { potionIcon, stoneIcon } from './icons';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -18,6 +18,21 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''):
 }
 
 const ANSWER_LABEL: Record<RoomAnswer, string> = { wait: 'รอตอบ…', yes: 'ไป', no: 'ไม่ไป' };
+
+/**
+ * Reminder shown every time before going into a boss room (owner 2026-11-10): bring phoenix feathers
+ * and potions. Lists what the player carries; anything they have none of is red.
+ */
+function packLine(g: Game): HTMLElement {
+  const p = g.player;
+  const n = (have: number, unit: string) => `<b class="${have > 0 ? '' : 'room-pack-none'}">${have} ${unit}</b>`;
+  const line = el('div', 'room-pack');
+  line.innerHTML = 'ก่อนเข้า เตรียมขนนกฟีนิกซ์และยาไปด้วย: ' +
+    `<span>${stoneIcon('phoenix')} ${n(p.stoneCount('phoenix'), 'อัน')}</span>` +
+    `<span>${potionIcon('hp')} ${n(p.potionCount('hp'), 'ขวด')}</span>` +
+    `<span>${potionIcon('mp')} ${n(p.potionCount('mp'), 'ขวด')}</span>`;
+  return line;
+}
 
 export class RoomUI {
   /** The summoner's window. */
@@ -123,7 +138,7 @@ export class RoomUI {
       this.toggle(false);
     };
     if (have < 1) note.textContent = `ยังไม่มี${STONE_NAME[s.key]} — ดรอปจากมอนสเตอร์ในแมพนี้ ซื้อในตลาด หรือรับภารกิจจาก The Seeker`;
-    this.body.append(title, keyLine, pick, note, who, go);
+    this.body.append(title, keyLine, pick, note, who, packLine(this.g), go);
     // The Seeker's key: ×1, not used up.
     const qkey = BOSS_QUEST_KEY[s.boss];
     if (qkey && this.g.player.stoneCount(qkey) > 0) {
@@ -178,7 +193,7 @@ export class RoomUI {
   invited(id: number, from: string, boss: string, keys: number, seconds: number): void {
     this.removeInvite(id);
     const box = el('div', 'party-invite room-invite');
-    box.append(el('div', '', roomInviteText(from, boss, keys)));
+    box.append(el('div', '', roomInviteText(from, boss, keys)), packLine(this.g));
     const count = el('span', 'party-count');
     const yes = el('button', 'primary', 'ไป');
     const no = el('button', '', 'ไม่ไป');
