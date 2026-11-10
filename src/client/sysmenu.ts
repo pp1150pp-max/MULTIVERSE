@@ -26,8 +26,8 @@ const MAIL_ICON = badge('blank', '✉');
 /** Trade has no painted badge yet: the blank one with a glyph. Swap for badge('trade') once ico_trade.png exists. */
 const TRADE_ICON = badge('blank', '🤝');
 
-/** Friends have no painted badge yet: the blank one with a glyph. Swap for badge('friends') once ico_friends.png exists. */
-const FRIENDS_ICON = badge('blank', '💬');
+/** Friends: painted badge (art_templates/ui/raw/ico_friends.png, magenta keyed out and cut to 96×96). */
+const FRIENDS_ICON = badge('friends');
 
 /** Icon grid, 3 columns: [action, icon, label]. Only systems that exist; add a tile when a new one is built. */
 const MENU_ITEMS: [string, string, string][] = [
