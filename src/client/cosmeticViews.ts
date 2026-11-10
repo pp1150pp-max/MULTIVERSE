@@ -11,6 +11,20 @@ import { SpriteActor } from './SpriteActor';
 import type { Effects } from './effects';
 import { shownCos, shownRiding } from './cosLook';
 import { tuneBool, tuneNum } from './cosTune';
+import { ISO_DIR } from './world';
+
+/**
+ * Draw order between the character and its cosmetics. The camera is orthographic and looks down, so a
+ * picture raised off the ground counts as nearer the camera than one on the ground: a rider on a saddle
+ * would always cover the mount, and wings raised to the shoulders would cover the body. Sliding a piece
+ * along the camera's own direction changes only that, never where it shows on screen; this returns the
+ * position `(x, z)` slid so the piece sits `depth` units nearer the camera than the character's feet
+ * (negative = behind), counting its lift `raised` above them.
+ */
+function depthAt(x: number, z: number, raised: number, depth: number): [number, number, number] {
+  const k = depth - raised * ISO_DIR.y;
+  return [x + ISO_DIR.x * k, ISO_DIR.y * k, z + ISO_DIR.z * k];
+}
 
 // Every size and distance below is the cosmetic's tuning (src/shared/cosTuning.ts: the code defaults,
 // with the owner's server-wide changes from the /admin "ของแต่งตัว" tab on top), read each frame.
@@ -21,19 +35,28 @@ export function seatOf(p: Player): number {
   if (!m) return 0;
   // Seen head-on or from behind the rider sits higher, so the mount's head (or rear) in front of them
   // doesn't hide their body.
-  return tuneNum(m.id, 'seat') + (headOn(p) ? tuneNum(m.id, 'headOnLift') : 0);
+  return tuneNum(m.id, 'seat') + (!tuneBool(m.id, 'under') && headOn(p) ? tuneNum(m.id, 'headOnLift') : 0);
+}
+
+/** The sheet row a facing shows: 0 front, 1 front diagonal, 2 side, 3 back diagonal, 4 back. */
+function viewRow(p: Player): number {
+  const sx = (p.faceX - p.faceZ) * Math.SQRT1_2;
+  const sy = (-p.faceX - p.faceZ) * Math.SQRT1_2;
+  return Math.round(Math.atan2(Math.abs(sx), -sy) / (Math.PI / 4));
+}
+
+/** Facing straight toward the camera: the rider sits a little higher to show over the mount's head. */
+function headOn(p: Player): boolean {
+  return viewRow(p) === 0;
 }
 
 /**
- * Facing (nearly) straight toward the camera or away from it: the sheets' front and back rows. Then the
- * mount's head (or its rear) is nearer the camera than the rider and is drawn in front of them; from the
- * side and the diagonals the rider is drawn in front of the mount.
+ * Facing the camera (front and front diagonal) the mount's head is nearer the camera than the rider and is
+ * drawn in front of their legs. From the side and from behind the rider sits on its back, drawn over it
+ * (owner 2026-11-10: the legs covered the wolf's head on the diagonal; from behind the wolf hid the rider).
  */
-function headOn(p: Player): boolean {
-  const sx = (p.faceX - p.faceZ) * Math.SQRT1_2;
-  const sy = (-p.faceX - p.faceZ) * Math.SQRT1_2;
-  const row = Math.round(Math.atan2(Math.abs(sx), -sy) / (Math.PI / 4));
-  return row === 0 || row === 4;
+function mountInFront(p: Player, id: string): boolean {
+  return viewRow(p) <= (tuneBool(id, 'frontDiag') ? 1 : 0);
 }
 
 /** The riding pose a character plays now, or null on foot. */
@@ -127,8 +150,8 @@ export class CosmeticRig {
     const alive = p.alive && p.toadT <= 0;
     const seat = alive ? this.seat(p) : 0;
 
-    // ---- wings: on the back, flapping all the time (faster while walking). Behind the body seen from
-    // the front, in front of it seen from behind (nudged toward or away from the camera).
+    // ---- wings: on the back, flapping all the time (faster while walking). Always drawn behind the body,
+    // from every side (owner 2026-11-10).
     // Dying: they fade out with the fall, and come back with the revive.
     this.deadT = p.alive ? 0 : this.deadT + dt;
     const fade = p.alive ? 1 : Math.max(0, 1 - this.deadT / WINGS_FADE);
@@ -138,15 +161,13 @@ export class CosmeticRig {
     if (!this.wings) this.wingsAlpha = 1;
     if (this.wings) {
       const id = this.wings.id;
+      const lift = tuneNum(id, 'lift');
       const a = this.wings.actor;
       if (fade !== this.wingsAlpha) {
         this.wingsAlpha = fade;
         a.setOpacity(fade);
       }
-      // In front of the body only when it clearly turns its back to the camera; side on they stay behind it.
       const fl = Math.hypot(p.faceX, p.faceZ) || 1;
-      const depth = tuneNum(id, 'depth');
-      const d = (p.faceX + p.faceZ) / fl < -0.3 ? depth : -depth;
       // Behind the back: the part of "backward" that runs across the screen (none facing the camera or away).
       const bx = -p.faceX / fl;
       const bz = -p.faceZ / fl;
@@ -154,8 +175,10 @@ export class CosmeticRig {
       const back = tuneNum(id, 'back');
       const sx = (bx - along * TO_CAM.x) * back;
       const sz = (bz - along * TO_CAM.z) * back;
-      a.group.position.set(p.x + TO_CAM.x * d + sx, 0, p.z + TO_CAM.z * d + sz);
-      a.setLift(tuneNum(id, 'lift') + seat);
+      // Behind the body: lifted `lift` over the rider's own base (seat), then `depth` further back.
+      const [wx, wy, wz] = depthAt(p.x + sx, p.z + sz, lift, -tuneNum(id, 'depth'));
+      a.group.position.set(wx, wy, wz);
+      a.setLift(lift + seat);
       a.face(p.faceX, p.faceZ);
       a.update(dt, true, tuneNum(id, p.moving ? 'flapWalk' : 'flap'));
     }
@@ -168,8 +191,11 @@ export class CosmeticRig {
       const a = this.mount.actor;
       // Head-on or from behind: the mount's head (or rear) in front of the rider. Else a little behind the
       // rider, who sits astride it (or stands on the board).
-      const d = headOn(p) ? tuneNum(id, 'front') : -tuneNum(id, 'behind');
-      a.group.position.set(p.x + TO_CAM.x * d, 0, p.z + TO_CAM.z * d);
+      // A board stays right under the feet, just behind the rider.
+      // The rider's feet are `seat` up, the mount on the ground: measured from the rider's base it is `-seat` raised.
+      const d = tuneBool(id, 'under') ? -tuneNum(id, 'underBehind') : mountInFront(p, id) ? tuneNum(id, 'front') : -tuneNum(id, 'behind');
+      const [mx, my, mz] = depthAt(p.x, p.z, -seat, d);
+      a.group.position.set(mx, my, mz);
       a.face(p.faceX, p.faceZ);
       a.update(dt, p.moving, tuneNum(id, 'anim'));
     }

@@ -22,19 +22,22 @@ const bool = (label: string): TuneField => ({ kind: 'bool', label });
 /** Every field of each slot (the admin sliders use the same ranges; the server checks against them). */
 export const COS_TUNE_FIELDS: Record<TunedSlot, Record<string, TuneField>> = {
   wings: {
-    h: num(0.3, 3, 0.05, 'ขนาด (ความสูงภาพ)'),
-    lift: num(-0.5, 2.5, 0.05, 'ความสูงบนหลัง'),
+    h: num(0.3, 3, 0.025, 'ขนาด (ความสูงภาพ)'),
+    lift: num(-0.5, 2.5, 0.02, 'ความสูงบนหลัง'),
     back: num(-0.6, 0.8, 0.02, 'ถอยไปข้างหลัง (มองด้านข้าง)'),
-    depth: num(0, 0.5, 0.01, 'ระยะหน้า/หลังตัว (กันทับตัว)'),
+    depth: num(0, 0.5, 0.01, 'วาดหลังตัวละคร ห่างเท่าไร (หลังตัวเสมอ)'),
     flap: num(0, 20, 0.5, 'ความเร็วกระพือ ตอนยืน'),
     flapWalk: num(0, 25, 0.5, 'ความเร็วกระพือ ตอนเดิน'),
   },
   mount: {
     h: num(0.3, 3.5, 0.05, 'ขนาด (ความสูงภาพ)'),
     seat: num(0, 1.5, 0.02, 'ความสูงที่นั่ง'),
-    headOnLift: num(0, 0.8, 0.02, 'ที่นั่งยกเพิ่ม ตอนหันหน้า/หลังเข้ากล้อง'),
-    front: num(-0.5, 0.5, 0.01, 'สัตว์ขี่อยู่หน้าผู้ขี่ ตอนหันหน้า/หลัง'),
-    behind: num(-0.5, 0.5, 0.01, 'สัตว์ขี่อยู่หลังผู้ขี่ ตอนหันข้าง/เฉียง'),
+    headOnLift: num(0, 0.8, 0.02, 'ที่นั่งยกเพิ่ม ตอนหันหน้าเข้ากล้องตรง ๆ'),
+    front: num(-0.5, 0.5, 0.01, 'หัวสัตว์ขี่วาดหน้าผู้ขี่ ห่างเท่าไร (ตอนหันเข้ากล้อง)'),
+    frontDiag: bool('หัวอยู่หน้าผู้ขี่ ตอนหันเฉียงเข้ากล้องด้วย (ปิด = เฉพาะหันตรง)'),
+    behind: num(-0.5, 0.5, 0.01, 'สัตว์ขี่วาดหลังผู้ขี่ ห่างเท่าไร (ตอนหันข้าง/หลัง)'),
+    under: bool('อยู่ใต้เท้าเสมอ (แบบบอร์ด ไม่สลับหน้า/หลัง)'),
+    underBehind: num(0, 0.5, 0.01, 'ระยะวาดหลังผู้ขี่ ตอนอยู่ใต้เท้า'),
     board: bool('ท่ายืนบนบอร์ด (ปิด = นั่งคร่อม)'),
     anim: num(0, 25, 0.5, 'ความเร็วขยับขา'),
   },
@@ -61,12 +64,14 @@ export const COS_TUNE_FIELDS: Record<TunedSlot, Record<string, TuneField>> = {
 export type TuneValues = Record<string, number | boolean>;
 
 /** Mounts: the values before the bench (owner-approved art fits, #192/#194). */
-const MOUNT_DEFAULTS: Record<string, { h: number; seat: number; board?: boolean }> = {
+const MOUNT_DEFAULTS: Record<string, { h: number; seat: number; board?: boolean; under?: boolean }> = {
   mount_wolf: { h: 1.5, seat: 0.5 },
   mount_warhorse: { h: 1.7, seat: 0.62 },
   mount_raptor: { h: 1.75, seat: 0.62 },
   mount_tortoise: { h: 1.8, seat: 0.7 },
-  mount_hoverboard: { h: 0.7, seat: 0.32, board: true },
+  // Owner 2026-11-10 (#198): it was too small and off the feet. The rider stands on the deck and it
+  // always stays right under the feet (`under`).
+  mount_hoverboard: { h: 1.2, seat: 0.5, board: true, under: true },
 };
 const PET_FLYING = new Set(['pet_dragon', 'pet_bot', 'pet_wisp']);
 
@@ -76,11 +81,17 @@ export function cosTuneDefaults(id: string): TuneValues | undefined {
   if (!c || c.slot === 'title') return undefined;
   switch (c.slot) {
     case 'wings':
-      // Measured from the art (owner 2026-11-10, #195): the wings' middle sits on the shoulders (~1.35).
-      return { h: 1.3, lift: 0.8, back: 0.22, depth: 0.15, flap: 5, flapWalk: 10 };
+      // Owner 2026-11-10: on the shoulders (~1.35 up, #195), 25% bigger than the first 1.3 and always
+      // drawn behind the body (#197), the lift kept centred on the shoulders (0.64).
+      return { h: 1.625, lift: 0.64, back: 0.22, depth: 0.15, flap: 5, flapWalk: 10 };
     case 'mount': {
       const m = MOUNT_DEFAULTS[id];
-      return { h: m?.h ?? 1.35, seat: m?.seat ?? 0.55, headOnLift: 0.18, front: 0.12, behind: 0.1, board: m?.board ?? false, anim: 11 };
+      // Draw order by view (#198/#199): the head in front of the rider facing the camera (and its
+      // diagonals), the rider on top from the side and behind; a board always just behind the feet.
+      return {
+        h: m?.h ?? 1.35, seat: m?.seat ?? 0.55, headOnLift: 0.18, front: 0.1, frontDiag: true, behind: 0.1,
+        under: m?.under ?? false, underBehind: 0.05, board: m?.board ?? false, anim: 11,
+      };
     }
     case 'pet': {
       const fly = PET_FLYING.has(id);
@@ -147,7 +158,8 @@ export function checkCosTuning(v: unknown, strict: boolean): { tuning: CosTuning
           if (strict) return { error: `${c.id}: ค่า ${k} ต้องอยู่ระหว่าง ${f.min} ถึง ${f.max}` };
           continue;
         }
-        clean = round2(x);
+        // The default itself is kept exact (e.g. the wings' 1.625), so it is never stored as a change.
+        clean = x === defs[k] ? x : round2(x);
       }
       if (clean !== defs[k]) vals[k] = clean;
     }

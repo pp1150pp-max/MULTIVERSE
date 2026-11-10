@@ -34,10 +34,10 @@ for (const c of COSMETICS) {
   }
 }
 ok(TUNED_SLOTS.length === 4, 'wings, mounts, pets and auras are tuned');
-ok(cosTuneDefaults('wings_angel')?.lift === 0.8 && cosTuneDefaults('wings_angel')?.back === 0.22, 'wings start where #195 put them (lift 0.8, back 0.22)');
-ok(cosTuneDefaults('mount_hoverboard')?.board === true && cosTuneDefaults('mount_wolf')?.seat === 0.5, 'mount defaults kept (board, seat)');
+ok(cosTuneDefaults('wings_angel')?.h === 1.625 && cosTuneDefaults('wings_angel')?.lift === 0.64 && cosTuneDefaults('wings_angel')?.back === 0.22, 'wings start where #195–#197 put them (size 1.625, lift 0.64, back 0.22)');
+ok(cosTuneDefaults('mount_hoverboard')?.board === true && cosTuneDefaults('mount_hoverboard')?.under === true && cosTuneDefaults('mount_hoverboard')?.h === 1.2 && cosTuneDefaults('mount_hoverboard')?.seat === 0.5 && cosTuneDefaults('mount_wolf')?.seat === 0.5, 'mount defaults kept (board, seat)');
 ok(cosTuneDefaults('pet_dragon')?.fly === true && cosTuneDefaults('pet_cat')?.fly === false, 'pet flying defaults kept');
-ok(JSON.stringify(checkCosTuning({ wings_angel: { lift: 0.8 } }, true).tuning) === '{}', 'a value equal to the code default is not stored');
+ok(JSON.stringify(checkCosTuning({ wings_angel: { lift: 0.64 } }, true).tuning) === '{}', 'a value equal to the code default is not stored');
 ok(checkCosTuning({ wings_angel: { lift: 1.23456 } }, true).tuning?.wings_angel?.lift === 1.23, 'numbers are rounded to 2 decimals');
 ok(!!checkCosTuning({ wings_angel: { lift: 9 } }, true).error, 'out of range is refused');
 ok(!!checkCosTuning({ wings_angel: { lift: '1' } }, true).error, 'a number sent as text is refused');
@@ -48,7 +48,7 @@ ok(!!checkCosTuning({ title_gold: {} }, true).error, 'a title set cannot be tune
 ok(!!checkCosTuning([], true).error && !!checkCosTuning(null, true).error, 'not an object is refused');
 const lenient = checkCosTuning({ wings_nope: { lift: 1 }, wings_bat: { lift: 9, back: 0.3, gone: 1 } }, false).tuning;
 ok(JSON.stringify(lenient) === '{"wings_bat":{"back":0.3}}', 'read back leniently: unknown and bad entries dropped, the rest kept');
-ok(cosTuneOf({ wings_bat: { back: 0.3 } }, 'wings_bat')?.lift === 0.8, 'changes go on top of the code defaults');
+ok(cosTuneOf({ wings_bat: { back: 0.3 } }, 'wings_bat')?.lift === 0.64, 'changes go on top of the code defaults');
 ok(cosTuningChanges({}, { wings_bat: { back: 0.3 } }) === 'wings_bat.back 0.22 → 0.3', 'audit text lists what changed');
 
 // ---------------------------------------------------------- against a real server
