@@ -45,7 +45,15 @@ export class Input {
       this.mouseX = e.clientX;
       this.mouseY = e.clientY;
     });
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    // No browser right-click menu anywhere in the game, except in text fields (copy/paste).
+    window.addEventListener('contextmenu', (e) => {
+      if (!(e.target as HTMLElement | null)?.closest?.('input, textarea')) e.preventDefault();
+    });
+    // Block the usual DevTools / view-source shortcuts. shortcut: only deters casual use; the browser menu still opens them.
+    window.addEventListener('keydown', (e) => {
+      const k = e.key.toUpperCase();
+      if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && 'IJC'.includes(k) && k.length === 1) || (e.ctrlKey && k === 'U')) e.preventDefault();
+    }, true);
     canvas.addEventListener('wheel', (e) => {
       this.wheel += Math.sign(e.deltaY);
       e.preventDefault();
