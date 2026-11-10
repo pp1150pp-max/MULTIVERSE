@@ -1152,11 +1152,9 @@ export class Hud {
   }
 
   talkTo(id: NpcId): void {
-    // The first talk is his story; after that his key quests (the story is a button there).
-    if (id === 'seeker') {
-      if (this.g.metSeeker) this.g.quests.toggle(true);
-      else this.openDialog();
-    } else if (id === 'merchant') this.openShop();
+    // His key quests; his story is a button in that window.
+    if (id === 'seeker') this.g.quests.toggle(true);
+    else if (id === 'merchant') this.openShop();
     else if (id === 'keeper') {
       // The server refuses guests' stash actions too; this just says why up front.
       if (this.g.backend.guest) this.log('Guest ใช้คลังเก็บของไม่ได้ — สมัครสมาชิกเพื่อใช้คลัง (ตัวละครนี้จะย้ายไปอยู่ในบัญชีใหม่)', '#ffcf6a');
