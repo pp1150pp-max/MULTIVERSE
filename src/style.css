@@ -217,7 +217,10 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 #log.open .log-line.fade { opacity: 1; }
 #log.open .log-line { text-shadow: 1px 1px 0 #000; line-height: 1.5; }
 #log.open .log-line.chat { background: rgba(159, 224, 255, 0.07); border-left: 2px solid #9fe0ff; padding-left: 6px; margin: 1px 0; }
-#log.open.tab-chat .log-line:not(.chat), #log.open.tab-system .log-line.chat, #log.open.tab-party .log-line:not(.party) { display: none; }
+#log.open.tab-chat .log-line:not(.chat), #log.open.tab-system .log-line.chat, #log.open.tab-party .log-line:not(.party), #log.open.tab-whisper .log-line:not(.whisper) { display: none; }
+/* Whispers: pink, and a click on the line answers that person. */
+.log-line.whisper { color: #f0b0ff; }
+#log.open .log-line.chat.whisper { background: rgba(230, 160, 255, 0.08); border-left-color: #e6a0ff; cursor: pointer; }
 #log-tabs { display: none; }
 #log.open #log-tabs {
   display: flex; align-items: center; gap: 6px; position: sticky; top: 0; z-index: 1; margin: 0 -2px 4px; padding: 8px 2px 6px;
@@ -1060,3 +1063,24 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 .trade-request { padding: 10px 14px; font-size: 13px; background: var(--panel); border: 2px solid var(--gold); border-radius: 4px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7); }
 .trade-request-btns { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .trade-count-down { margin-left: auto; font-size: 12px; color: var(--ink-dim); }
+
+/* Friends window (src/client/friends.ts). Plain on purpose like the party window: art can replace it later. */
+#friends-win { left: 50%; top: 80px; transform: translateX(-50%); width: min(420px, 92vw); font-size: 13px; }
+#friends-win .friends-body { display: flex; flex-direction: column; gap: 6px; }
+#friends-win .friends-add { display: flex; gap: 6px; }
+#friends-win .friends-add input { flex: 1; min-width: 0; padding: 4px 6px; }
+#friends-win .friends-list { display: flex; flex-direction: column; gap: 4px; max-height: min(50vh, 360px); overflow-y: auto; }
+#friends-win .friends-sub { margin-top: 4px; font-size: 12px; color: var(--gold-hi); }
+#friends-win .friends-empty { color: var(--ink-dim); text-align: center; padding: 8px 0; }
+.friend-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 8px; background: rgba(0, 0, 0, 0.3); border: 1px solid #4a4030; border-radius: 3px; }
+.friend-row.offline .friend-info { opacity: 0.6; }
+.friend-info { min-width: 0; }
+.friend-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.friend-lv { font-size: 11px; color: var(--gold-hi); }
+.friend-sub { font-size: 11px; color: var(--ink-dim); }
+.friend-dot { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; background: #6a6258; vertical-align: middle; }
+.friend-dot.on { background: #5dff8a; box-shadow: 0 0 4px #5dff8a; }
+.friend-btns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 3px; flex-shrink: 0; }
+.friend-btns button { padding: 2px 7px; font-size: 12px; }
+.friend-btns button:disabled { opacity: 0.4; cursor: default; }
+.friend-btns .friend-remove { color: #ff9a8a; }

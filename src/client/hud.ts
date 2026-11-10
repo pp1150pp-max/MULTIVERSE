@@ -70,6 +70,9 @@ const FORGE_DESC: Record<'enhance' | RerollKind, string> = {
   stat: 'สุ่มสเตตัสเสริม 1 บรรทัด เป็นชนิดใหม่ พร้อม tier และค่าใหม่',
 };
 const fmtNum = (v: number) => String(Math.round(v * 10) / 10);
+
+/** What the chat box starts with to whisper someone (quoted when the name has a space). */
+export const whisperPrefix = (name: string): string => `/w ${name.includes(' ') ? `"${name}"` : name} `;
 const SELL_RARITY_KEY = 'multiverse-sell-rarities';
 /** Which rarities the merchant's "sell ticked" boxes had ticked last time (this browser only). */
 function loadSellRarities(): Rarity[] {
@@ -159,8 +162,12 @@ export class Hud {
   private rerollPrev: { uid: string; lines: StatLine[] } | null = null;
 
   private readonly market: MarketWindow;
-  /** The chat history tab picked last ('all', 'chat', 'system' or 'party'). */
+  /** The chat history tab picked last ('all', 'chat', 'system', 'party' or 'whisper'). */
   private chatTab = 'all';
+  /** Who whispered you last ("/r" answers them). */
+  private lastWhisperFrom = '';
+  /** Who you whispered with last, either way (plain text in the whisper tab goes to them). */
+  private whisperWith = '';
 
   constructor(private readonly g: Game) {
     this.market = new MarketWindow(g, this);
@@ -200,7 +207,7 @@ export class Hud {
       b.addEventListener('mousedown', (e) => e.preventDefault()); // keep typing in the chat box
       b.onclick = () => {
         const log = $('log');
-        log.classList.remove('tab-chat', 'tab-system', 'tab-party');
+        log.classList.remove('tab-chat', 'tab-system', 'tab-party', 'tab-whisper');
         this.chatTab = b.dataset.tab ?? 'all';
         if (b.dataset.tab !== 'all') log.classList.add(`tab-${b.dataset.tab}`);
         for (const o of $('log-tabs').querySelectorAll('[data-tab]')) o.classList.toggle('active', o === b);
@@ -211,10 +218,20 @@ export class Hud {
       e.stopPropagation();
       if (e.key === 'Enter') {
         const text = chat.value.trim();
-        // The party tab sends to the party; "/p text" does from any tab.
+        // The party tab sends to the party; "/p text" does from any tab. Whispers: "/w Name text"
+        // ("/w "Two Words" text" for a name with a space), "/r text" answers the last whisper, and the
+        // whisper tab sends plain text to whoever you whispered with last.
         const p = /^\/p\s+/i.exec(text);
+        const w = /^\/w\s+(?:"([^"]+)"|(\S+))\s+([\s\S]+)$/i.exec(text);
+        const r = /^\/r\s+([\s\S]+)$/i.exec(text);
         if (p) g.backend.chat(text.slice(p[0].length), true);
-        else if (text) g.backend.chat(text, this.chatTab === 'party');
+        else if (w) g.backend.whisper((w[1] ?? w[2]).trim(), w[3]);
+        else if (/^\/w(\s|$)/i.test(text)) this.log('กระซิบ: พิมพ์ /w ชื่อ ข้อความ (ชื่อที่มีเว้นวรรคใส่ "…")', '#e6a0ff');
+        else if (r || (text && this.chatTab === 'whisper' && !text.startsWith('/'))) {
+          const to = r ? this.lastWhisperFrom : this.whisperWith;
+          if (to) g.backend.whisper(to, r ? r[1] : text);
+          else this.log(r ? 'ยังไม่มีใครกระซิบหาคุณ' : 'ยังไม่ได้เลือกคนกระซิบ — พิมพ์ /w ชื่อ ข้อความ', '#e6a0ff');
+        } else if (text) g.backend.chat(text, this.chatTab === 'party');
         this.closeChat();
       } else if (e.key === 'Escape') this.closeChat();
     });
@@ -1079,6 +1096,7 @@ export class Hud {
     this.g.party.toggle(false);
     this.g.trade.toggleFind(false);
     this.g.mailUI.toggle(false);
+    this.g.friends.toggle(false);
     if (this.dialogOpen) this.closeDialog();
   }
 
@@ -1847,16 +1865,27 @@ export class Hud {
 
   // ------------------------------------------------------------ online
 
-  openChat(): void {
+  /** Opens the chat box; `prefill` (e.g. "/w Name ") replaces what is typed, for answering a whisper. */
+  openChat(prefill?: string): void {
     const box = $('chat');
-    if (!box.classList.contains('hidden')) return;
+    const input = $<HTMLInputElement>('chat-input');
+    if (!box.classList.contains('hidden')) {
+      if (prefill !== undefined) {
+        input.value = prefill;
+        input.focus();
+      }
+      return;
+    }
     box.classList.remove('hidden');
     // The log turns into a scrollable history (every kept line, faded or not) while the chat is open.
     const log = $('log');
     log.classList.add('open');
     log.scrollTop = log.scrollHeight;
     // Focus after this frame so the Enter that opened it doesn't also send it.
-    setTimeout(() => $<HTMLInputElement>('chat-input').focus(), 0);
+    setTimeout(() => {
+      if (prefill !== undefined) input.value = prefill;
+      input.focus();
+    }, 0);
   }
 
   closeChat(): void {
@@ -1867,10 +1896,26 @@ export class Hud {
     input.blur();
   }
 
-  /** A chat line; an empty name means a server notice (someone joined or left). `party` = party chat or a party notice. */
-  chatLine(name: string, text: string, fadeMs = 15000, party = false): void {
+  /**
+   * A chat line; an empty name means a server notice (someone joined or left). `ch: 'party'` = party chat or
+   * a party notice; `ch: 'whisper'` = a whisper from `name`, or (with `to`) your own whisper to `to`.
+   */
+  chatLine(name: string, text: string, fadeMs = 15000, ch?: 'party' | 'whisper', to?: string): void {
+    const party = ch === 'party';
     const el = document.createElement('div');
-    if (name) {
+    if (name && ch === 'whisper') {
+      el.className = 'log-line chat whisper';
+      const b = document.createElement('b');
+      b.textContent = to ? `[กระซิบถึง ${to}]: ` : `[กระซิบ] ${name}: `;
+      // Click the line to answer that person.
+      const other = to ?? name;
+      el.title = `คลิกเพื่อกระซิบตอบ ${other}`;
+      el.onclick = () => this.openChat(whisperPrefix(other));
+      el.addEventListener('mousedown', (e) => e.preventDefault()); // keep typing in the chat box
+      if (!to) this.lastWhisperFrom = name;
+      this.whisperWith = other;
+      el.append(b, document.createTextNode(text));
+    } else if (name) {
       el.className = `log-line chat${party ? ' party' : ''}`;
       const b = document.createElement('b');
       b.textContent = party ? `[ปาร์ตี้] ${name}: ` : `${name}: `;

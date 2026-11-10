@@ -17,10 +17,12 @@ function start(game: Game, classId: string): void {
 
 function launch(backend: OnlineBackend): void {
   const game = new Game($('app'), backend);
-  backend.onChat = (name, text, party) => {
-    game.hud.chatLine(name, text, undefined, party);
-    if (name) game.floating.bubble(name, text, party);
+  backend.onChat = (name, text, ch, to) => {
+    game.hud.chatLine(name, text, undefined, ch, to);
+    // Whispers are private: no speech bubble over the head.
+    if (name && ch !== 'whisper') game.floating.bubble(name, text, ch === 'party');
   };
+  backend.onFriends = (view) => game.friends.show(view);
   backend.onPartyInvite = (party, from, seconds) => game.party.invited(party, from, seconds);
   backend.onPartyInviteGone = (party) => game.party.removeInvite(party);
   backend.onTradeRequest = (from, name, seconds) => game.trade.requested(from, name, seconds);
