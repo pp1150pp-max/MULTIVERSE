@@ -153,8 +153,11 @@ export interface Backend {
   friendList(): void;
 
   // Boss rooms (the server checks every rule; see server/bossRooms.ts).
-  /** Put this many keys into the summoner you stand next to. */
-  roomOpen(keys: number): void;
+  /** Put this many keys into the summoner you stand next to (`quest`: the bound quest key, ×1). */
+  roomOpen(keys: number, quest?: boolean): void;
+  /** The Seeker's key quests (the server checks you stand by him). */
+  questAccept(boss: string): void;
+  questTurnIn(boss: string): void;
   roomAnswer(id: number, yes: boolean): void;
   roomStart(): void;
   roomCancel(): void;

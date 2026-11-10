@@ -12,13 +12,13 @@ import {
   ANNOUNCE_FROM, dropsOnFail, enhanceCost, itemName, MAX_PLUS, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
 } from '../data/enhance';
 import { entryName, potionName, POTION_STACK, POTIONS, stackLimit } from '../data/potions';
-import { BOSS_KEY, BOSS_STONE_CHANCE, KEY_DROP_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, STONE_COLOR, STONE_NAME } from '../data/stones';
+import { BOSS_KEY, BOSS_QUEST_KEY, BOSS_STONE_CHANCE, BOUND_MSG, QUEST_KILLS, KEY_DROP_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, STONE_COLOR, STONE_NAME } from '../data/stones';
 import { NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { pick, rand, randInt } from '../rng';
 import { splitExp } from '../party';
 import { CLASS_IDS } from '../data/classes';
 import {
-  isItem, isPotion, isStack, isStone, RARITY_LABEL, sameStack, SLOT_LABEL, BLACKSMITH_STONES, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
+  isBound, isItem, isPotion, isStack, isStone, RARITY_LABEL, sameStack, SLOT_LABEL, BLACKSMITH_STONES, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
 import { PORTAL_RANGE, REST_CD, restSpotNear, Terrain, type RestSpot } from './terrain';
 import {
   BUYBACK_RESET, buybackPrice, cleanAutoSettings, lootPots, Player, sortEntries,
@@ -495,6 +495,7 @@ export class Sim {
     if (!m.summoned) {
       this.shareExp(m);
       this.dropLoot(m);
+      if (!m.isBoss) this.questProgress(m);
     }
     const sp = this.spawners.find((s) => s.area === m.area);
     if (sp) {
@@ -552,6 +553,14 @@ export class Sim {
           p.bossKills.push(m.def.id);
           this.events.push({ t: 'save', to: p.id });
         }
+        // The Seeker's key for this boss has done its job.
+        const qkey = BOSS_QUEST_KEY[m.def.id];
+        if (qkey && p.stoneCount(qkey) > 0) {
+          p.takeStones(qkey, p.stoneCount(qkey));
+          this.log(`${STONE_NAME[qkey]} สลายไปแล้ว — ภารกิจนี้สำเร็จ`, '#ffd34a', p.id);
+          this.events.push({ t: 'save', to: p.id });
+        }
+        delete p.quests[m.def.id];
         if (!gained.has(p)) gained.set(p, 0);
       }
     }
@@ -642,6 +651,63 @@ export class Sim {
     }
   }
 
+  // ------------------------------------------------------------ The Seeker's key quests
+
+  /** The map a monster comes from (by its level), also when it stands in the hub. */
+  private homeOf(def: { levels: [number, number] }): ZoneDef | undefined {
+    return Object.values(ZONES).find((z) => z.id !== HUB_ID && def.levels[0] >= z.levels[0] && def.levels[0] <= z.levels[1]);
+  }
+
+  /** Quests The Seeker can give this player now: a boss of a map they have reached, not yet beaten, not taken, no key held. */
+  questOffers(p: Player): string[] {
+    return Object.values(ZONES).flatMap((z) => {
+      const boss = z.lair?.boss;
+      const key = boss && BOSS_QUEST_KEY[boss];
+      if (!boss || !key || p.level < z.levels[0] || p.bossKills.includes(boss)) return [];
+      return p.quests[boss] === undefined && p.stoneCount(key) === 0 ? [boss] : [];
+    });
+  }
+
+  questAccept(p: Player, boss: string): boolean {
+    if (!this.near(p, 'seeker') || !this.questOffers(p).includes(boss)) return false;
+    p.quests[boss] = 0;
+    const map = Object.values(ZONES).find((z) => z.lair?.boss === boss)!;
+    this.log(`รับภารกิจ: ล่ามอนสเตอร์ใน${map.nameTh} ${QUEST_KILLS} ตัว แล้วกลับมาหา The Seeker`, '#ffd34a', p.id);
+    this.events.push({ t: 'save', to: p.id });
+    return true;
+  }
+
+  questTurnIn(p: Player, boss: string): boolean {
+    const key = BOSS_QUEST_KEY[boss];
+    if (!key || !this.near(p, 'seeker') || (p.quests[boss] ?? -1) < QUEST_KILLS) return false;
+    if (!p.addStones(key, 1)) {
+      this.log('กระเป๋าเต็ม — เคลียร์ช่องว่าง 1 ช่องก่อนรับกุญแจ', '#ff8a6a', p.id);
+      return false;
+    }
+    delete p.quests[boss];
+    this.log(`ได้รับ ${STONE_NAME[key]} — ใส่ที่แท่นเรียกบอสได้ (ไม่หายเมื่อใช้ จนกว่าจะปราบบอสได้)`, STONE_COLOR[key], p.id);
+    this.sfx('trade', p.x, p.z, p.id);
+    this.events.push({ t: 'save', to: p.id });
+    return true;
+  }
+
+  /** A monster of a map died: everyone who hit it and has that map's boss quest counts one. */
+  private questProgress(m: Monster): void {
+    const boss = this.homeOf(m.def)?.lair?.boss;
+    if (!boss) return;
+    for (const [id, dealt] of m.damageBy) {
+      const p = this.players.find((x) => x.id === id);
+      const n = p?.quests[boss];
+      if (!p || dealt <= 0 || n === undefined || n >= QUEST_KILLS) continue;
+      p.quests[boss] = n + 1;
+      this.text(m.x, m.topY + 0.8, m.z, `ภารกิจ ${n + 1}/${QUEST_KILLS}`, 'info', 1, p.id);
+      if (n + 1 >= QUEST_KILLS) {
+        this.log(`ล่าครบ ${QUEST_KILLS} ตัวแล้ว — กลับไปหา The Seeker ที่เมืองเพื่อรับกุญแจ`, '#ffd34a', p.id);
+        this.events.push({ t: 'save', to: p.id });
+      }
+    }
+  }
+
   // ------------------------------------------------------------ loot
 
   private dropLoot(m: Monster): void {
@@ -660,7 +726,7 @@ export class Sim {
     // Drops are for any class: weapons and armor of other classes can be sold or given to a friend.
     const anyClass = () => pick(r, CLASS_IDS);
     // Gear comes from the monster's own map (by its level), also when it stands in the hub.
-    const home = Object.values(ZONES).find((z) => z.id !== HUB_ID && d.levels[0] >= z.levels[0] && d.levels[0] <= z.levels[1]);
+    const home = this.homeOf(d);
     const band = home?.levels;
     // The top damage dealer gets first pick for a while, then anyone can take it.
     const owner = top?.id;
@@ -767,7 +833,14 @@ export class Sim {
   }
 
   /** Throws a bag item on the ground next to the player. It disappears after a while. */
+  /** A quest key would leave the bag: say why, and refuse. */
+  private refuseBound(p: Player): false {
+    this.log(BOUND_MSG, '#ff8a6a', p.id);
+    return false;
+  }
+
   dropFromBag(p: Player, i: number): boolean {
+    if (isBound(p.bag[i])) return this.refuseBound(p);
     const item = p.takeFromBag(i);
     if (!item) return false;
     const a = Math.random() * Math.PI * 2;
@@ -887,6 +960,7 @@ export class Sim {
   sellItem(p: Player, i: number, n?: number): number {
     const item = p.bag[i];
     if (!item || !this.near(p, 'merchant')) return 0;
+    if (isBound(item)) return this.refuseBound(p), 0;
     if (n !== undefined && (!isStack(item) || !Number.isInteger(n) || n < 1 || n > item.count)) return 0;
     const part = n !== undefined && isStack(item) && n < item.count ? n : undefined;
     const name = entryName(part ? { ...item, count: part } : item);
@@ -929,6 +1003,7 @@ export class Sim {
     const st = p.stash;
     if (!this.near(p, 'keeper') || !validSlot(bagI, p.bag.length) || (to !== -1 && !validSlot(to, st.size))) return false;
     if (!p.bag[bagI]) return false;
+    if (isBound(p.bag[bagI])) return this.refuseBound(p);
     const ok = to === -1 ? fillInto(p.bag, bagI, st.items) : dropOnto(p.bag, bagI, st.items, to);
     if (!ok) {
       this.log('คลังเต็ม', '#ff8a6a', p.id);
@@ -967,7 +1042,9 @@ export class Sim {
     const list = (w: 'bag' | 'stash') => (w === 'bag' ? p.bag : w === 'stash' ? p.stash.items : null);
     const a = list(from);
     const b = list(to);
-    if (!a || !b || !splitInto(a, i, b, j, n)) return false;
+    if (!a || !b) return false;
+    if (from === 'bag' && to === 'stash' && isBound(a[i])) return this.refuseBound(p);
+    if (!splitInto(a, i, b, j, n)) return false;
     this.afterStash(p);
     return true;
   }

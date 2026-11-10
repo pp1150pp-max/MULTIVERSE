@@ -4,7 +4,7 @@
 // (server/bossRooms.ts); this only shows its messages and asks. Plain CSS, ids for painted art later.
 import type { Game } from './Game';
 import { MONSTERS } from '../shared/data/monsters';
-import { BOSS_KEY, STONE_COLOR, STONE_NAME } from '../shared/data/stones';
+import { BOSS_KEY, BOSS_QUEST_KEY, STONE_COLOR, STONE_NAME } from '../shared/data/stones';
 import { bossShortName, ROOM_KEYS_MAX, roomInviteText, type RoomAnswer, type RoomLobbyView } from '../shared/bossRoom';
 import { stoneIcon } from './icons';
 
@@ -118,8 +118,20 @@ export class RoomUI {
       this.g.backend.roomOpen(this.keys);
       this.toggle(false);
     };
-    if (have < 1) note.textContent = `ยังไม่มี${STONE_NAME[s.key]} — ดรอปจากมอนสเตอร์ในแมพนี้ หรือซื้อในตลาด`;
+    if (have < 1) note.textContent = `ยังไม่มี${STONE_NAME[s.key]} — ดรอปจากมอนสเตอร์ในแมพนี้ ซื้อในตลาด หรือรับภารกิจจาก The Seeker`;
     this.body.append(title, keyLine, pick, note, who, go);
+    // The Seeker's key: ×1, not used up.
+    const qkey = BOSS_QUEST_KEY[s.boss];
+    if (qkey && this.g.player.stoneCount(qkey) > 0) {
+      const q = el('button', '', `ใช้${STONE_NAME[qkey]} (×1 ไม่หาย)`);
+      q.id = 'room-quest';
+      q.disabled = !lead;
+      q.onclick = () => {
+        this.g.backend.roomOpen(1, true);
+        this.toggle(false);
+      };
+      this.body.append(q);
+    }
   }
 
   // ------------------------------------------------------------ the leader's lobby

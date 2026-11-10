@@ -6,7 +6,7 @@ import { CLASS_IDS } from '../data/classes';
 import { effectiveStats } from '../data/enhance';
 import { itemClass } from '../data/items';
 import {
-  isBossKey, isItem, isStone, RARITIES, SLOTS, STAT_KEYS,
+  isBossKey, isBound, isItem, isStone, RARITIES, SLOTS, STAT_KEYS,
   type BagEntry, type ClassId, type Item, type Rarity, type SlotId, type StatKey, type StoneStack,
 } from '../types';
 
@@ -38,9 +38,9 @@ export const sellerGets = (price: number): number => price - saleTax(price);
 export type MarketKind = SlotId | 'stone' | 'artifact';
 export const MARKET_KINDS: MarketKind[] = [...SLOTS, 'stone', 'artifact'];
 
-/** Gear and stones can be listed; potions can't (the merchant sells them). */
+/** Gear, stones and boss keys can be listed; potions can't (the merchant sells them), nor quest keys (bound). */
 export function marketSellable(e: BagEntry | null | undefined): e is Item | StoneStack {
-  return isItem(e) || isStone(e);
+  return isItem(e) || (isStone(e) && !isBound(e));
 }
 
 export function marketKind(e: Item | StoneStack): MarketKind {

@@ -123,7 +123,11 @@ export type ActionMsg =
   /** Asks for a fresh `friends` view (opening the window). */
   | { t: 'act'; a: 'friendList' }
   // Boss rooms (server/bossRooms.ts): put `keys` keys into the summoner you stand next to, answer an invite, start or call off.
-  | { t: 'act'; a: 'roomOpen'; keys: number }
+  /** `quest`: use the bound quest key instead (×1, not used up; `keys` is ignored). */
+  | { t: 'act'; a: 'roomOpen'; keys: number; quest?: boolean }
+  // The Seeker's key quests (Sim.questAccept / questTurnIn): `boss` is the boss's monster id.
+  | { t: 'act'; a: 'questAccept'; boss: string }
+  | { t: 'act'; a: 'questTurnIn'; boss: string }
   | { t: 'act'; a: 'roomAnswer'; id: number; yes: boolean }
   | { t: 'act'; a: 'roomStart' }
   | { t: 'act'; a: 'roomCancel' };
@@ -190,6 +194,8 @@ export interface PrivateSnap {
   potSel: PotionSelect; lootFilter: LootFilter; autoSettings: AutoSettings; stats: Stats;
   /** Gate bosses this character has killed (BOSS_GATES). */
   bossKills?: string[];
+  /** The Seeker's key quests taken: boss id → kills so far. */
+  quests?: Record<string, number>;
   cd: Partial<Record<SkillSlot, number>>; potCd: number; restCd: number;
   /** True while the server moves the character (dash, knockback, stun, dead, Auto Play) — follow its position. */
   serverMoves: boolean;

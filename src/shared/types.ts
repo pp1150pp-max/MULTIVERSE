@@ -118,10 +118,20 @@ export const BLACKSMITH_STONES: BlacksmithStone[] = ['protect', 'enhance', 'rero
  */
 export type BossKey = 'key_bear' | 'key_witch' | 'key_yeti' | 'key_heart';
 export const BOSS_KEYS: BossKey[] = ['key_bear', 'key_witch', 'key_yeti', 'key_heart'];
-/** Everything a stone stack can hold: blacksmith stones and boss keys. */
-export type StoneKind = BlacksmithStone | BossKey;
-export const STONE_KINDS: StoneKind[] = [...BLACKSMITH_STONES, ...BOSS_KEYS];
+/**
+ * Quest keys from The Seeker: one per boss, bound to the character. They open the boss's room at ×1
+ * without being used up, and vanish once that boss is killed. They can't leave the bag (no selling,
+ * dropping, stash, trade or market), only move around in it. See isBound.
+ */
+export type QuestKey = 'qkey_bear' | 'qkey_witch' | 'qkey_yeti' | 'qkey_heart';
+export const QUEST_KEYS: QuestKey[] = ['qkey_bear', 'qkey_witch', 'qkey_yeti', 'qkey_heart'];
+/** Everything a stone stack can hold: blacksmith stones, boss keys and quest keys. */
+export type StoneKind = BlacksmithStone | BossKey | QuestKey;
+export const STONE_KINDS: StoneKind[] = [...BLACKSMITH_STONES, ...BOSS_KEYS, ...QUEST_KEYS];
 export const isBossKey = (k: StoneKind): k is BossKey => (BOSS_KEYS as StoneKind[]).includes(k);
+export const isQuestKey = (k: StoneKind): k is QuestKey => (QUEST_KEYS as StoneKind[]).includes(k);
+/** A quest key: stays in its owner's bag. */
+export const isBound = (e: BagEntry | null | undefined): boolean => isStone(e) && isQuestKey(e.stone);
 
 /** Stones of one kind sharing a bag slot (up to STONE_STACK). */
 export interface StoneStack {

@@ -28,6 +28,7 @@ import { PartyUI } from './party';
 import { TradeUI } from './trade';
 import { FriendsUI } from './friends';
 import { RoomUI } from './bossRoom';
+import { QuestUI } from './quests';
 import { bossShortName } from '../shared/bossRoom';
 import { MailUI } from './mail';
 import { SystemMenu } from './sysmenu';
@@ -71,6 +72,7 @@ export class Game {
   readonly trade: TradeUI;
   readonly friends: FriendsUI;
   readonly rooms: RoomUI;
+  readonly quests: QuestUI;
   readonly mailUI: MailUI;
   /** Another player under the mouse (when no monster or usable thing is): a left click offers a party invite. */
   private hoveredPlayer: Player | null = null;
@@ -147,6 +149,7 @@ export class Game {
     this.trade = new TradeUI(this);
     this.friends = new FriendsUI(this);
     this.rooms = new RoomUI(this);
+    this.quests = new QuestUI(this, () => this.hud.openDialog());
     this.mailUI = new MailUI(this);
     initDraggableWindows(document.getElementById('hud')!);
     this.checkGpu();
@@ -646,6 +649,7 @@ export class Game {
     this.trade.update();
     this.friends.update();
     this.rooms.update();
+    this.quests.update();
   }
 
   private updateCamera(dt: number): void {

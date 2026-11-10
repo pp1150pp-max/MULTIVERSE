@@ -851,6 +851,12 @@ export class GameWorld {
         this.send(s.ws, { t: 'enhanced', req: num(m.req), result: out?.result ?? null, item: out?.item ?? null });
         break;
       }
+      case 'questAccept':
+        if (typeof m.boss === 'string') sim.questAccept(p, m.boss);
+        break;
+      case 'questTurnIn':
+        if (typeof m.boss === 'string' && sim.questTurnIn(p, m.boss)) this.save(s);
+        break;
       case 'reroll': {
         // Sim.reroll checks the NPC distance, ownership, the item's lines and gold itself.
         const kind = REROLL_KINDS.includes(m.kind) ? m.kind : null;
@@ -1405,7 +1411,7 @@ export class GameWorld {
     const inv = JSON.stringify([p.equipment, p.bag, p.buyback]);
     const me: PrivateSnap = {
       hp: r2(p.hp), mp: r2(p.mp), exp: p.exp, level: p.level, gold: p.gold,
-      potSel: p.potSel, lootFilter: p.lootFilter, autoSettings: p.autoSettings, bossKills: p.bossKills, stats: p.stats, cd: p.cd, potCd: r2(p.potCd), restCd: r2(Math.max(0, p.restCd)),
+      potSel: p.potSel, lootFilter: p.lootFilter, autoSettings: p.autoSettings, bossKills: p.bossKills, quests: p.quests, stats: p.stats, cd: p.cd, potCd: r2(p.potCd), restCd: r2(Math.max(0, p.restCd)),
       serverMoves: serverMoves(p) || !!s.auto, epoch: s.epoch, ack: s.lastSeq, buybackLeft: Math.round(p.buybackLeft),
     };
     if (inv !== s.lastInv) {
@@ -1519,7 +1525,7 @@ export class GameWorld {
   private onRoom(s: Session, m: ActionMsg): void {
     if (!this.sessions.has(s)) return;
     let err: string | null = null;
-    if (m.a === 'roomOpen') err = this.rooms.open(s.charId, m.keys);
+    if (m.a === 'roomOpen') err = this.rooms.open(s.charId, m.keys, m.quest === true);
     else if (m.a === 'roomAnswer') err = this.rooms.answer(s.charId, m.id, m.yes);
     else if (m.a === 'roomStart') err = this.rooms.start(s.charId);
     else if (m.a === 'roomCancel') err = this.rooms.cancel(s.charId);

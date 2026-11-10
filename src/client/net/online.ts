@@ -613,6 +613,7 @@ export class OnlineBackend implements Backend {
     me.mp = pv.mp;
     me.exp = pv.exp;
     if (pv.bossKills) me.bossKills = pv.bossKills;
+    if (pv.quests) me.quests = pv.quests;
     me.level = pv.level;
     me.gold = pv.gold;
     me.potSel = { ...pv.potSel };
@@ -880,7 +881,9 @@ export class OnlineBackend implements Backend {
   partyKick(charId: number): void { this.send({ t: 'act', a: 'partyKick', charId }); }
   setPartyBlock(on: boolean): void { this.send({ t: 'act', a: 'partyBlock', on }); }
   tradeRequest(name: string): void { this.send({ t: 'act', a: 'tradeRequest', name }); }
-  roomOpen(keys: number): void { this.send({ t: 'act', a: 'roomOpen', keys }); }
+  roomOpen(keys: number, quest = false): void { this.send({ t: 'act', a: 'roomOpen', keys, ...(quest ? { quest } : {}) }); }
+  questAccept(boss: string): void { this.send({ t: 'act', a: 'questAccept', boss }); }
+  questTurnIn(boss: string): void { this.send({ t: 'act', a: 'questTurnIn', boss }); }
   roomAnswer(id: number, yes: boolean): void { this.send({ t: 'act', a: 'roomAnswer', id, yes }); }
   roomStart(): void { this.send({ t: 'act', a: 'roomStart' }); }
   roomCancel(): void { this.send({ t: 'act', a: 'roomCancel' }); }
