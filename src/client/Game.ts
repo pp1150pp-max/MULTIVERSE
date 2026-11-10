@@ -133,6 +133,8 @@ export class Game {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // A mount seen on the front diagonal is cut in two around its rider (cosmeticViews.ts).
+    this.renderer.localClippingEnabled = true;
     container.prepend(this.renderer.domElement);
 
     const aspect = window.innerWidth / window.innerHeight;

@@ -101,6 +101,12 @@ export class SpriteActor implements Actor {
 
   reset(): void {}
 
+  /** Cuts the picture with world-space planes (the renderer has localClippingEnabled); null = whole. */
+  setClip(planes: THREE.Plane[] | null): void {
+    this.mat.clippingPlanes = planes;
+    this.mat.needsUpdate = true;
+  }
+
   setOpacity(o: number): void {
     this.mat.transparent = true;
     this.mat.alphaTest = 0.02;
