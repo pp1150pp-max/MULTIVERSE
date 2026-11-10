@@ -480,6 +480,8 @@ export class World {
     tiles[1] = groundTiles[firstQuad.dirt];
     // The hub's town is bricked; stone paving until the brick tile exists.
     if (terrain.zone.npcs) tiles[3] = groundTiles.brick ?? groundTiles.pave;
+    // A boss room's arena is laid with its own flagstones.
+    if (terrain.zone.roomOf) tiles[3] = groundTiles[`room_${terrain.zone.theme}`] ?? tiles[3];
     if (tiles.every(Boolean) && quads.flat().every(Boolean)) {
       const mask = new THREE.CanvasTexture(this.paintMask());
       mask.colorSpace = THREE.NoColorSpace;
@@ -1600,6 +1602,7 @@ export class World {
     // The hub's town is bricked right out to its wall.
     // Up to the foot of the town wall.
     if (safe) square(safe.x, safe.z, safe.half - 0.2);
+    else if (this.zone.roomOf && boss) circle(boss.x, boss.z, clearingRadius(this.zone));
     else circle(start.x, start.z, CAMP_RADIUS * 0.72);
 
     const tex = new THREE.CanvasTexture(c);
