@@ -33,7 +33,7 @@ const FRIENDS_ICON = badge('friends');
 const MENU_ITEMS: [string, string, string][] = [
   ['bag', badge('bag'), 'กระเป๋า'], ['party', PARTY_ICON, 'ปาร์ตี้'], ['friends', FRIENDS_ICON, 'เพื่อน'], ['trade', TRADE_ICON, 'เทรด'], ['mail', MAIL_ICON, 'จดหมาย'], ['map', badge('map'), 'แผนที่'],
   ['autoset', badge('autoset'), 'ตั้งค่า Auto'], ['audio', badge('blank', '🔊'), 'เสียง'], ['help', badge('help'), 'วิธีเล่น'],
-  ['settings', badge('settings'), 'ตั้งค่า'],
+  ['report', badge('blank', '🐞'), 'แจ้งปัญหา'], ['settings', badge('settings'), 'ตั้งค่า'],
 ];
 
 /** Top-right icon row: [button id, icon, label]. */
@@ -58,8 +58,8 @@ export class SystemMenu {
     // Top-right icon row (the old button column under the minimap is hidden by CSS, its buttons are still clicked from here).
     const row = document.createElement('div');
     row.id = 'hud-iconrow';
-    // Guests get no mail, so they have no mail icon.
-    const noMail = ([id]: string[]) => !(guest && (id === 'mail' || id === 'top-mail' || id === 'trade' || id === 'friends' || id === 'top-friends'));
+    // Guests get no mail (or reports), so they have no such icon.
+    const noMail = ([id]: string[]) => !(guest && (id === 'mail' || id === 'top-mail' || id === 'trade' || id === 'friends' || id === 'top-friends' || id === 'report'));
     row.innerHTML = TOP_ICONS.filter(noMail).map(
       ([id, icon, label]) =>
         `<button id="${id}" class="top-icon"${id ? '' : ' disabled'}><span class="sys-ico">${icon}</span><span class="sys-label">${label}</span><i class="badge hidden" data-badge="${label}"></i></button>`,
@@ -205,6 +205,9 @@ export class SystemMenu {
       case 'mail':
         this.toggle(false);
         return this.g.mailUI.toggle(true);
+      case 'report':
+        this.toggle(false);
+        return this.g.report.toggle(true);
       case 'partyblock':
         this.g.party.setBlock(!this.g.party.block);
         return this.showView('settings');

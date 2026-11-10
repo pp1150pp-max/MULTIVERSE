@@ -13,6 +13,7 @@ import type { RerollKind } from '../shared/data/reroll';
 import type { EquipSlot, Item, PotionKind, PotionSize, Rarity } from '../shared/types';
 import type { MarketCall, MarketReply } from '../shared/sim/market';
 import type { MailCall, MailReply } from '../shared/mail';
+import type { ReportReply } from '../shared/reports';
 import type { RoomSnap } from '../shared/bossRoom';
 import type { PartyFound, PartySnap } from '../shared/party';
 import type { FriendsView } from '../shared/friends';
@@ -117,6 +118,8 @@ export interface Backend {
   readonly marketBox: number;
   /** Mailbox: one request and the server's answer. */
   mail(call: MailCall): Promise<MailReply>;
+  /** Bug report / feedback: the server checks everything and answers (see server/reports.ts). */
+  report(topic: string, text: string): Promise<ReportReply>;
   /** Unread mail (the icon's badge). */
   readonly mailUnread: number;
 

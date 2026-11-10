@@ -1263,6 +1263,7 @@ export class Hud {
     this.g.party.toggle(false);
     this.g.trade.toggleFind(false);
     this.g.mailUI.toggle(false);
+    this.g.report.toggle(false);
     this.g.friends.toggle(false);
     if (this.dialogOpen) this.closeDialog();
   }

@@ -25,6 +25,9 @@ import { banMessage } from '../src/shared/api';
 import { Market, type MarketNote } from './market';
 import { Mail } from './mail';
 import type { MailCall } from '../src/shared/mail';
+import { Reports } from './reports';
+import { REPORT_TOPIC_LABEL, type ReportCall } from '../src/shared/reports';
+import { canUse } from '../src/shared/admin';
 import type { MarketCall } from '../src/shared/sim/market';
 import { Parties, type PartyChar } from './party';
 import { Trades, type TradeActor } from './trade';
@@ -241,6 +244,7 @@ export class GameWorld {
   readonly friends: Friends;
   /** Boss summoning lobbies and the boss rooms' Sims (in memory only). */
   readonly rooms: BossRooms;
+  private readonly reports: Reports;
   /** Set while the server counts down to stopping: no new players may join. */
   private closing: ShutdownMode | null = null;
   private last = performance.now();
@@ -254,6 +258,7 @@ export class GameWorld {
     setInterval(() => this.logPings(), PING_LOG_MS);
     this.market = new Market(db);
     this.mail = new Mail(db);
+    this.reports = new Reports(db);
     this.parties = new Parties({
       notice: (ids, text) => {
         for (const id of ids) this.partyLine(id, text);
@@ -874,6 +879,9 @@ export class GameWorld {
       case 'mailDeleteRead':
         this.onMail(s, m);
         return;
+      case 'reportSend':
+        this.onReport(s, m);
+        return;
       case 'enhance': {
         // Sim.enhance checks the NPC distance, ownership, level cap, gold and stones itself.
         const out = typeof m.uid === 'string' ? sim.enhance(p, m.uid, m.protect === true) : null;
@@ -1233,6 +1241,33 @@ export class GameWorld {
       if (ended.length) console.log(`[market] ${ended.length} listing(s) expired`);
     } catch (e) {
       console.error('[market] expiring listings failed', e);
+    }
+  }
+
+  // ------------------------------------------------------------ bug reports (server/reports.ts)
+
+  private onReport(s: Session, m: { req: number } & ReportCall): void {
+    const req = num(m.req);
+    let out;
+    try {
+      out = this.reports.submit({
+        accountId: s.accountId, guest: s.guest, username: s.username, charName: s.player.name, ip: s.ip, zone: s.sim.zone.id,
+        channel: this.rooms.run(s.sim)?.channel ?? null, x: s.player.x, z: s.player.z, level: s.player.level, rtt: s.lastRtt, fps: s.lastFps,
+      }, m.topic, m.text);
+    } catch (e) {
+      console.error('[reports] failed for', s.username, e);
+      this.send(s.ws, { t: 'report', req, ok: false, msg: 'ระบบรายงานขัดข้อง ลองใหม่อีกครั้ง' });
+      return;
+    }
+    const { stored, ...reply } = out;
+    this.send(s.ws, { t: 'report', req, ...reply });
+    // Only "report a player" ones reach online owners / GMs at once; the rest wait in the admin page.
+    if (stored?.topic === 'player') {
+      const text = `⚠ ${REPORT_TOPIC_LABEL.player} #${stored.id} จาก ${s.player.name} — ดูที่หน้า /admin แท็บ "รายงาน"`;
+      for (const o of this.sessions) {
+        const role = o.guest ? null : this.db.adminRole(o.accountId);
+        if (role && canUse(role, 'reports')) this.send(o.ws, { t: 'chat', name: '', text });
+      }
     }
   }
 

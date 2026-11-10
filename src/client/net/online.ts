@@ -29,6 +29,7 @@ import type { MarketCall, MarketReply } from '../../shared/sim/market';
 import type { RoomLobbyView, RoomSnap } from '../../shared/bossRoom';
 import type { MailCall, MailReply } from '../../shared/mail';
 import { WalkTarget } from '../walkTo';
+import type { ReportReply } from '../../shared/reports';
 
 /** Mirrors never run game logic, so they don't need a simulation behind them. */
 const NO_SIM = null as unknown as Sim;
@@ -207,6 +208,8 @@ export class OnlineBackend implements Backend {
   onMarketNote: ((text: string, sub?: string) => void) | null = null;
   private mailReq = 0;
   private readonly mailWait = new Map<number, (r: MailReply) => void>();
+  private reportReq = 0;
+  private readonly reportWait = new Map<number, (r: ReportReply) => void>();
   mailUnread = 0;
   /** New mail arrived (or you joined with some): `fresh` is how many you haven't been told about. */
   onMailNote: ((unread: number, fresh: number) => void) | null = null;
@@ -416,6 +419,13 @@ export class OnlineBackend implements Backend {
         this.mailWait.delete(m.req);
         const { t: _t, req: _r, ...reply } = m;
         if (reply.unread !== undefined) this.mailUnread = reply.unread;
+        done?.(reply);
+        break;
+      }
+      case 'report': {
+        const done = this.reportWait.get(m.req);
+        this.reportWait.delete(m.req);
+        const { t: _t, req: _r, ...reply } = m;
         done?.(reply);
         break;
       }
@@ -895,6 +905,17 @@ export class OnlineBackend implements Backend {
       this.mailWait.set(req, resolve);
       setTimeout(() => {
         if (this.mailWait.delete(req)) resolve({ ok: false, msg: 'กล่องจดหมายไม่ตอบ ลองใหม่อีกครั้ง' });
+      }, 8000);
+    });
+  }
+
+  report(topic: string, text: string): Promise<ReportReply> {
+    const req = ++this.reportReq;
+    this.send({ t: 'act', req, a: 'reportSend', topic, text });
+    return new Promise((resolve) => {
+      this.reportWait.set(req, resolve);
+      setTimeout(() => {
+        if (this.reportWait.delete(req)) resolve({ ok: false, msg: 'server ไม่ตอบ ลองใหม่อีกครั้ง' });
       }, 8000);
     });
   }

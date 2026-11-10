@@ -108,7 +108,7 @@ export interface AdminShutdownText { texts: Record<ShutdownMode, string>; defaul
 // ------------------------------------------------------------ owner tools (users, bans, broadcast, backups…)
 
 /** The newer admin tools. Each is its own switch so some can be opened to GMs later. */
-export type AdminFeature = 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp';
+export type AdminFeature = 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan';
 
 /**
  * Who may use each tool. To open one to GMs, add 'gm', e.g. `ban: ['owner', 'gm']`. The server
@@ -139,6 +139,10 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   orbLook: ['owner'],
   // Moving an online character (yourself or anyone) into a chosen channel, however full it is (owner 2026-11-10: owner and GMs).
   channelWarp: ['owner', 'gm'],
+  // The Reports tab: read bug reports / feedback and set their status (owner 2026-11-10: owner and GMs).
+  reports: ['owner', 'gm'],
+  // Banning an account from sending reports (owner only for now).
+  reportBan: ['owner'],
 };
 
 export const canUse = (role: AdminRole, f: AdminFeature): boolean => FEATURE_ROLES[f].includes(role);
