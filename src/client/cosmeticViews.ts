@@ -58,9 +58,11 @@ export function ridePose(p: Player): 'ride' | 'ride_board' | null {
 const TO_CAM = { x: Math.SQRT1_2, z: Math.SQRT1_2 };
 const PET_FLYING = new Set(['pet_dragon', 'pet_bot', 'pet_wisp']);
 /** World height of each kind's picture, and how high wings sit on the back. */
-const WINGS_H = 1.3;
+// Owner 2026-11-10: 25% bigger than the first 1.3.
+const WINGS_H = 1.625;
 // Measured from the art (owner 2026-11-10: they hung at the hips): the wings' middle sits on the shoulders (~1.35).
-const WINGS_LIFT = 0.8;
+// Kept centred on the shoulders when they grew 25% (was 0.8 at 1.3 tall).
+const WINGS_LIFT = 0.64;
 /** How far the wings sit behind the back, seen from the side (sideways on screen only). */
 const WINGS_BACK = 0.22;
 const MOUNT_H = 1.35;
@@ -143,8 +145,8 @@ export class CosmeticRig {
     const alive = p.alive && p.toadT <= 0;
     const seat = alive ? this.seat(p) : 0;
 
-    // ---- wings: on the back, flapping all the time (faster while walking). Behind the body seen from
-    // the front, in front of it seen from behind (nudged toward or away from the camera).
+    // ---- wings: on the back, flapping all the time (faster while walking). Always drawn behind the body,
+    // from every side (owner 2026-11-10).
     // Dying: they fade out with the fall, and come back with the revive.
     this.deadT = p.alive ? 0 : this.deadT + dt;
     const fade = p.alive ? 1 : Math.max(0, 1 - this.deadT / WINGS_FADE);
@@ -157,9 +159,8 @@ export class CosmeticRig {
         this.wingsAlpha = fade;
         a.setOpacity(fade);
       }
-      // In front of the body only when it clearly turns its back to the camera; side on they stay behind it.
       const fl = Math.hypot(p.faceX, p.faceZ) || 1;
-      const d = (p.faceX + p.faceZ) / fl < -0.3 ? 0.15 : -0.15;
+      const d = -0.15;
       // Behind the back: the part of "backward" that runs across the screen (none facing the camera or away).
       const bx = -p.faceX / fl;
       const bz = -p.faceZ / fl;
