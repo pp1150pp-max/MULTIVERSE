@@ -22,6 +22,7 @@ import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../
 import { SHUTDOWN_TEXT_KEY } from './db';
 import { checkOrbLook, DEFAULT_ORB_LOOK, orbLookChanges, ORB_LOOK_RANGES, ORB_PALETTE_IDS, ORB_SHAPE_IDS, sameOrbLook } from '../src/shared/orbLook';
 import type { AdminOrbLook } from '../src/shared/admin';
+import { COS_SLOT_NAME, cosById } from '../src/shared/data/cosmetics';
 
 const MODE_NAME: Record<ShutdownMode, string> = { restart: 'ข้อความรีสตาร์ท', shutdown: 'ข้อความปิด server' };
 const orbLookState = (db: Db, canEdit: boolean): AdminOrbLook => ({
@@ -149,7 +150,7 @@ export async function ownerToolsApi(
     return true;
   }
 
-  const acc = /^\/api\/admin\/accounts\/(\d{1,12})(?:\/(password|ban|unban))?$/.exec(path);
+  const acc = /^\/api\/admin\/accounts\/(\d{1,12})(?:\/(password|ban|unban|cosmetics))?$/.exec(path);
   if (acc) {
     const id = Number(acc[1]);
     const action = acc[2];
@@ -165,8 +166,37 @@ export async function ownerToolsApi(
         return { ...base, equipment: data.equipment, bag: Array.from({ length: BAG_SIZE }, (_, i) => data.bag[i] ?? null) };
       });
       const stash = world.liveStash(id) ?? db.savedStash(id);
-      const body: AdminAccountDetail = { account: row, characters, stash: row.guest || !stash ? null : stash };
+      const body: AdminAccountDetail = {
+        account: row, characters, stash: row.guest || !stash ? null : stash, cosmetics: row.guest ? null : db.cosmeticsOwned(id),
+      };
       send(res, 200, body);
+      return true;
+    }
+
+    if (method === 'POST' && action === 'cosmetics') {
+      const a = requireFeature(req, db, 'cosmetics');
+      const row = accountRow(db, world, id);
+      if (row.guest) throw new HttpError(400, 'Guest รับ Cosmetics ไม่ได้');
+      const body = await readJson(req);
+      const c = cosById(body.id);
+      if (!c) throw new HttpError(400, 'ไม่พบ Cosmetics ชิ้นนี้');
+      const give = body.give === true;
+      const done = give ? db.grantCosmetic(id, c.id, a.acc.username) : db.revokeCosmetic(id, c.id);
+      let mailNote = '';
+      if (!done) throw new HttpError(400, give ? 'บัญชีนี้มีชิ้นนี้อยู่แล้ว' : 'บัญชีนี้ไม่มีชิ้นนี้');
+      world.cosmeticsChanged(id);
+      if (give) {
+        const r = world.mail.send({ id: a.acc.id, name: a.acc.username }, {
+          target: { kind: 'account', username: row.username },
+          title: `ได้รับ Cosmetics: ${c.name}`,
+          body: `คุณได้รับ ${COS_SLOT_NAME[c.slot]} "${c.name}" แล้ว เปิดหน้าต่าง แต่งตัว จากเมนู แล้วไปที่แท็บ ของฉัน เพื่อสวมใส่ ทุกตัวละครในบัญชีใช้ได้`,
+          attach: undefined,
+        });
+        if (typeof r === 'string') mailNote = ` (ส่งจดหมายแจ้งไม่ได้: ${r})`;
+        else world.mailArrived();
+      }
+      log(db, a, give ? 'cosmetic-give' : 'cosmetic-take', `${row.username} (#${id})`, `${COS_SLOT_NAME[c.slot]}: ${c.name}`);
+      send(res, 200, { msg: give ? `ให้ ${c.name} แก่ ${row.username} แล้ว${mailNote}` : `ยึด ${c.name} คืนจาก ${row.username} แล้ว` });
       return true;
     }
 

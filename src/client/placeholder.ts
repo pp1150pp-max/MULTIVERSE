@@ -426,6 +426,32 @@ export function drawBroker(): DrawFn {
   };
 }
 
+export function drawStylist(): DrawFn {
+  // Placeholder until the real sprite: a stylist in a violet coat with a gold sash, holding a folded cape.
+  const skin = '#f0c8a0';
+  return (ctx, view, f, s) => {
+    const bob = f === 0 ? 0 : 0.01;
+    rect(ctx, s, 0.41, 0.78, 0.07, 0.17, '#2a2030');
+    rect(ctx, s, 0.52, 0.78, 0.07, 0.17, '#2a2030');
+    rect(ctx, s, 0.34, 0.46 - bob, 0.32, 0.38, '#7a3ab0');
+    rect(ctx, s, 0.34, 0.6 - bob, 0.32, 0.04, '#ffd24a', null);
+    if (view !== 'back') {
+      const bx = view === 'side' ? 0.24 : 0.54;
+      rect(ctx, s, bx, 0.56 - bob, 0.2, 0.14, '#3ad6ff');
+      rect(ctx, s, bx, 0.56 - bob, 0.2, 0.03, '#ff4ad0', null);
+    }
+    const hy = 0.36 - bob;
+    ell(ctx, s, 0.5, hy, 0.13, 0.13, skin);
+    ell(ctx, s, 0.5, hy - 0.08, 0.15, 0.07, '#ff7ac8');
+    if (view === 'back') ell(ctx, s, 0.5, hy - 0.02, 0.14, 0.12, '#ff7ac8');
+    else if (view === 'front') {
+      rect(ctx, s, 0.44, hy - 0.01, 0.03, 0.03, '#2a1c12', null);
+      rect(ctx, s, 0.53, hy - 0.01, 0.03, 0.03, '#2a1c12', null);
+      rect(ctx, s, 0.46, hy + 0.06, 0.08, 0.015, '#a03050', null);
+    } else rect(ctx, s, 0.57, hy - 0.01, 0.03, 0.03, '#2a1c12', null);
+  };
+}
+
 export function drawBlacksmith(): DrawFn {
   // Broad smith with a leather apron, beard and a hammer.
   const skin = '#d9a77f';
@@ -772,4 +798,68 @@ export function drawEmberBolt(): HTMLCanvasElement {
   poly(ctx, 1, [1, 8, 10, 2, 31, 8, 10, 14], '#ff8a3a');
   poly(ctx, 1, [10, 8, 14, 5, 27, 8, 14, 11], '#ffe08a');
   return c;
+}
+
+/**
+ * Cosmetic placeholders (src/shared/data/cosmetics.ts): wings, mounts and pets as walk sheets in the
+ * cosmetic's two colours, until the GPT sheets (5 rows × 3 frames, like monsters) exist.
+ */
+export function drawCosmetic(c: { id: string; slot: string; color: string; color2: string }): DrawFn {
+  const { color: a, color2: b } = c;
+  if (c.slot === 'wings') {
+    return (ctx, view, f, s) => {
+      // Frame 1 up, frame 2 down: the flap.
+      const lift = f === 1 ? -0.08 : f === 2 ? 0.06 : 0;
+      if (view === 'side') {
+        poly(ctx, s, [0.55, 0.55, 0.12, 0.2 + lift, 0.18, 0.62, 0.5, 0.75], a);
+        poly(ctx, s, [0.52, 0.62, 0.2, 0.55 + lift / 2, 0.3, 0.78, 0.5, 0.8], b);
+        return;
+      }
+      const span = view === 'back' ? 0.46 : 0.4;
+      for (const side of [-1, 1]) {
+        const tip = 0.5 + side * span;
+        poly(ctx, s, [0.5 + side * 0.05, 0.5, tip, 0.18 + lift, tip - side * 0.04, 0.6, 0.5 + side * 0.05, 0.72], a);
+        poly(ctx, s, [0.5 + side * 0.05, 0.6, tip - side * 0.08, 0.58 + lift / 2, 0.5 + side * 0.2, 0.82], b);
+      }
+    };
+  }
+  if (c.slot === 'mount') {
+    if (c.id === 'mount_hoverboard') {
+      return (ctx, view, f, s) => {
+        const y = 0.72 + (f === 1 ? -0.02 : 0);
+        ell(ctx, s, 0.5, y + 0.12, 0.3, 0.04, b, null);
+        if (view === 'side') rect(ctx, s, 0.1, y, 0.8, 0.08, a);
+        else ell(ctx, s, 0.5, y + 0.03, view === 'back' ? 0.2 : 0.22, 0.12, a);
+      };
+    }
+    return (ctx, view, f, s) => {
+      const step = f === 1 ? 0.04 : f === 2 ? -0.04 : 0;
+      if (view === 'side') {
+        for (const [x, d] of [[0.26, step], [0.36, -step], [0.62, -step], [0.72, step]] as const) rect(ctx, s, x + d, 0.68, 0.06, 0.24, b);
+        ell(ctx, s, 0.5, 0.64, 0.3, 0.13, a);
+        ell(ctx, s, 0.83, 0.48, 0.1, 0.09, a);
+        rect(ctx, s, 0.86, 0.45, 0.03, 0.03, OUT, null);
+        poly(ctx, s, [0.2, 0.6, 0.06, 0.52, 0.1, 0.66], b);
+        return;
+      }
+      for (const [x, d] of [[0.36, step], [0.58, -step]] as const) rect(ctx, s, x, 0.7 + d, 0.07, 0.22 - d, b);
+      ell(ctx, s, 0.5, 0.66, 0.18, 0.16, a);
+      if (view === 'front') {
+        ell(ctx, s, 0.5, 0.5, 0.11, 0.1, a);
+        rect(ctx, s, 0.45, 0.48, 0.03, 0.03, OUT, null);
+        rect(ctx, s, 0.53, 0.48, 0.03, 0.03, OUT, null);
+      } else poly(ctx, s, [0.46, 0.7, 0.5, 0.92, 0.54, 0.7], b);
+    };
+  }
+  // Pets: a round little creature that hops.
+  return (ctx, view, f, s) => {
+    const hop = f === 1 ? -0.05 : f === 2 ? 0.02 : 0;
+    ell(ctx, s, 0.5, 0.92, 0.2, 0.04, 'rgba(0,0,0,0.25)', null);
+    ell(ctx, s, 0.5, 0.66 + hop, 0.26, 0.24, a);
+    ell(ctx, s, view === 'side' ? 0.6 : 0.5, 0.76 + hop, 0.14, 0.08, b, null);
+    if (view === 'front') {
+      rect(ctx, s, 0.4, 0.58 + hop, 0.05, 0.07, OUT, null);
+      rect(ctx, s, 0.55, 0.58 + hop, 0.05, 0.07, OUT, null);
+    } else if (view === 'side') rect(ctx, s, 0.64, 0.58 + hop, 0.05, 0.07, OUT, null);
+  };
 }

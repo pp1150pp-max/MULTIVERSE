@@ -8,9 +8,12 @@ import { expGapMult } from '../shared/formulas';
 import { iconImg } from './icons';
 import { questRows, seekerMark } from '../shared/quests';
 import type { RestSpot } from '../shared/sim/terrain';
+import type { CosmeticDef } from '../shared/data/cosmetics';
+import { shownCos, shownRiding } from './cosLook';
+import { MOUNT_SEAT } from './cosmeticViews';
 
 interface Num { el: HTMLDivElement; x: number; y: number; z: number; t: number; life: number; height: number; dx: number; dy: number; pop: number }
-interface Plate { el: HTMLDivElement; fill: HTMLDivElement }
+interface Plate { el: HTMLDivElement; fill: HTMLDivElement; title?: HTMLDivElement; cos?: string }
 
 /** DOM overlay for damage numbers, monster nameplates and loot labels. */
 /** Which row of the number sheet each kind of number uses. */
@@ -55,7 +58,9 @@ export class Floating {
   private plates = new Map<Monster, Plate>();
   private labels = new Map<Loot, HTMLDivElement>();
   private names = new Map<Player, Plate>();
-  private bubbles = new Map<string, { el: HTMLDivElement; until: number }>();
+  private bubbles = new Map<string, { el: HTMLDivElement; until: number; cos?: string }>();
+  /** The title set over your own head (you have no nameplate). */
+  private myTitle: Plate | null = null;
   private prompt: HTMLDivElement;
   private bossTimerEl: HTMLDivElement;
   private badges = new Map<Npc, HTMLDivElement>();
@@ -136,16 +141,54 @@ export class Floating {
         continue;
       }
       const p = g.player.name === name ? g.player : g.backend.players.find((o) => o.name === name);
-      const s = p ? g.toScreen(p.x, p.topY + 0.35, p.z) : null;
+      const s = p ? g.toScreen(p.x, headY(p), p.z) : null;
       if (!p || !s || !s.on) {
         b.el.style.display = 'none';
         continue;
       }
       b.el.style.display = '';
+      const set = shownCos(p, 'title');
+      if (b.cos !== set?.id) {
+        b.cos = set?.id;
+        paintCos(b.el, set);
+      }
       // Above the nameplate (own character has no plate, so it sits a little lower).
-      const lift = p === g.player ? 14 : 32;
+      const extra = shownCos(p, 'title') ? 16 : 0;
+      const lift = p === g.player ? (extra ? 44 : 14) : 32 + extra;
       b.el.style.transform = `translate(${s.sx}px, ${s.sy - lift}px) translate(-50%, -100%)`;
     }
+  }
+
+  /** Your own title set over your head (title and framed name), while you wear one or try one on. */
+  private updateMyTitle(g: Game): void {
+    const me = g.player;
+    const set = me.alive ? shownCos(me, 'title') : undefined;
+    if (!set) {
+      this.myTitle?.el.classList.add('hidden');
+      return;
+    }
+    if (!this.myTitle) {
+      const el = document.createElement('div');
+      el.className = 'plate ally self';
+      const title = document.createElement('div');
+      title.className = 'cos-title';
+      const name = document.createElement('div');
+      name.className = 'pname';
+      el.append(title, name);
+      this.root.append(el);
+      this.myTitle = { el, fill: name, title };
+    }
+    const t = this.myTitle;
+    if (t.cos !== set.id) {
+      t.cos = set.id;
+      paintTitle(t.title!, set);
+      paintCos(t.fill, set);
+    }
+    if (t.fill.textContent !== me.name) t.fill.textContent = me.name;
+    const s = g.toScreen(me.x, headY(me), me.z);
+    t.el.classList.toggle('hidden', !s.on);
+    // Lower than other players' plates: it sits where the chat bubble's own-character spot expects it.
+    t.el.style.transform = `translate(${s.sx}px, ${s.sy + 4}px) translate(-50%, -100%)`;
   }
 
   /** Countdown over the boss's empty lair, or hidden when text is null. */
@@ -317,11 +360,13 @@ export class Floating {
       this.vitals.mp.style.width = `${(Math.max(0, me.mp) / Math.max(1, me.stats.maxMp)) * 100}%`;
     }
 
+    this.updateMyTitle(g);
+
     // Other players: name, level and HP above their heads.
     const seenP = new Set<Player>();
     for (const p of g.backend.players) {
       if (p === g.player) continue;
-      const s = g.toScreen(p.x, p.topY + 0.35, p.z);
+      const s = g.toScreen(p.x, headY(p), p.z);
       if (!s.on) continue;
       seenP.add(p);
       let pl = this.names.get(p);
@@ -335,10 +380,18 @@ export class Floating {
         const fill = document.createElement('div');
         fill.className = 'pfill';
         bar.append(fill);
-        el.append(name, bar);
+        const title = document.createElement('div');
+        title.className = 'cos-title hidden';
+        el.append(title, name, bar);
         this.root.append(el);
-        pl = { el, fill };
+        pl = { el, fill, title };
         this.names.set(p, pl);
+      }
+      const set = shownCos(p, 'title');
+      if (pl.cos !== set?.id) {
+        pl.cos = set?.id;
+        paintTitle(pl.title!, set);
+        paintCos(pl.el.children[1] as HTMLElement, set);
       }
       (pl.el.firstChild as HTMLElement).textContent = `Lv.${p.level} ${p.name}${p.alive ? '' : ' 💀'}`;
       pl.el.classList.toggle('party', !!g.party.memberOf(p));
@@ -381,4 +434,23 @@ export class Floating {
       }
     }
   }
+}
+
+/** The title text of a title set over a nameplate (hidden without one). */
+function paintTitle(el: HTMLElement, set: CosmeticDef | undefined): void {
+  el.textContent = set?.title ? `《${set.title}》` : '';
+  el.classList.toggle('hidden', !set?.title);
+  el.style.setProperty('--c1', set?.color ?? '');
+}
+
+/** A title set's colours on a name frame or a chat bubble (class `cos`), or back to the plain look. */
+function paintCos(el: HTMLElement, set: CosmeticDef | undefined): void {
+  el.classList.toggle('cos', !!set);
+  el.style.setProperty('--c1', set?.color ?? '');
+  el.style.setProperty('--c2', set?.color2 ?? '');
+}
+
+/** World height just over a character's head, where its nameplate and chat bubble go (higher on a mount). */
+function headY(p: Player): number {
+  return p.topY + 0.35 + (shownRiding(p) ? MOUNT_SEAT : 0);
 }

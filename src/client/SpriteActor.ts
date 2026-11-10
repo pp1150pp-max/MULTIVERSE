@@ -8,7 +8,8 @@ const ROW_SIDE = 1;
 const ROW_BACK = 2;
 /** Sheets with this many rows also have diagonal views, so with mirroring they face 8 directions. */
 const DIAGONAL_ROWS = 5;
-const WALK = [0, 1, 2, 1];
+/** Frame order while moving. Cosmetic sheets pass COS_CYCLE (rest, up, rest, down: a flap or a step each way). */
+const WALK: readonly number[] = [0, 1, 2, 1];
 
 let shadowGeo: THREE.PlaneGeometry | null = null;
 
@@ -26,7 +27,7 @@ export class SpriteActor implements Actor {
   private flashT = 0;
   private readonly shadow: THREE.Mesh;
 
-  constructor(private readonly sheet: SheetInfo, readonly height: number, shadowRadius: number) {
+  constructor(private readonly sheet: SheetInfo, readonly height: number, shadowRadius: number, private readonly cycle: readonly number[] = WALK) {
     this.tex = sheet.texture.clone();
     this.tex.needsUpdate = true;
     this.mat = new THREE.SpriteMaterial({ map: this.tex, alphaTest: 0.5, transparent: false });
@@ -72,7 +73,7 @@ export class SpriteActor implements Actor {
   update(dt: number, moving: boolean, fps = 9): void {
     if (moving) {
       this.animT += dt * fps;
-      this.frame = WALK[Math.floor(this.animT) % WALK.length];
+      this.frame = this.cycle[Math.floor(this.animT) % this.cycle.length];
     } else {
       this.animT = 0;
       this.frame = 0;

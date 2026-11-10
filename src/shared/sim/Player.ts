@@ -7,6 +7,7 @@ import { castSkill, basicAttack } from './skills';
 import { CLASSES, type ClassDef, type SkillDef, type SkillSlot } from '../data/classes';
 import { addInto, BASE_MOVE_SPEED, emptyStats } from '../formulas';
 import { gatesPassedBy } from '../data/bossGates';
+import { cleanCosWorn, MOUNT_SPEED, type CosWorn } from '../data/cosmetics';
 import { auraTier, effectiveStats, orbCodes, plusOf, sellValue } from '../data/enhance';
 import { itemClass, starterWeapon, upgradeItem } from '../data/items';
 import { anyStackValue, potionHeal, POTIONS, POTION_SIZES, POTION_STACK, stackLimit } from '../data/potions';
@@ -209,6 +210,8 @@ export interface CharacterData {
   bossKills?: string[];
   /** The Seeker's key quests taken: boss id → monsters killed so far (see QUEST_KILLS). Missing = none. */
   quests?: Record<string, number>;
+  /** Cosmetics worn (src/shared/data/cosmetics.ts), kept by the server to what the account owns. Missing = none. */
+  cosmetics?: CosWorn;
 }
 
 /**
@@ -267,6 +270,12 @@ export class Player extends Unit {
    * out from the gear, and the browser's mirrors take it from the snapshot like `aura`.
    */
   orbs: readonly number[] = [];
+  /** Cosmetics worn. Saved; the server keeps it to what the account owns, mirrors take it from the snapshot. */
+  cosmetics: CosWorn;
+  /** Riding the worn mount (MOUNT_SPEED). Never saved. See Sim.toggleMount / Sim.tickMount. */
+  mounted = false;
+  /** Sim time of getting on: a hit dealt or taken after it throws the rider off. */
+  mountedAt = -99;
   stats: Stats = emptyStats();
   cd: Partial<Record<SkillSlot, number>> = {};
   potCd = 0;
@@ -333,6 +342,7 @@ export class Player extends Unit {
     this.bag = Array.from({ length: BAG_SIZE }, (_, i) => data.bag[i] ?? null);
     this.zone = data.zone;
     this.quests = cleanQuests(data.quests);
+    this.cosmetics = cleanCosWorn(data.cosmetics);
     this.bossKills = [...new Set([...gatesPassedBy(data.level), ...(Array.isArray(data.bossKills) ? data.bossKills.filter((x) => typeof x === 'string') : [])])];
     this.potSel = { hp: 's', mp: 's', ...data.potSel };
     this.lootFilter = data.lootFilter
@@ -403,7 +413,9 @@ export class Player extends Unit {
 
   get maxHp(): number { return this.stats.maxHp; }
   get topY(): number { return 1.9; }
-  get moveSpeed(): number { return BASE_MOVE_SPEED * (1 + this.stats.moveSpeed / 100) * this.speedMult(); }
+  get moveSpeed(): number {
+    return BASE_MOVE_SPEED * (1 + this.stats.moveSpeed / 100) * this.speedMult() * (this.mounted ? MOUNT_SPEED : 1);
+  }
   get attackRate(): number { return this.cls.attackRate * (1 + this.stats.atkSpeed / 100); }
   get isDashing(): boolean { return this.dashT > 0; }
 
@@ -454,6 +466,7 @@ export class Player extends Unit {
       buybackLeft: Math.round(this.buybackLeft),
       bossKills: this.bossKills,
       quests: { ...this.quests },
+      cosmetics: { ...this.cosmetics },
     };
   }
 

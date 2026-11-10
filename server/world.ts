@@ -38,6 +38,7 @@ import { BossRooms } from './bossRooms';
 import { Channels, FightClock, type Channel } from './channels';
 import { hasChannels, type ChannelsView } from '../src/shared/channels';
 import { STONE_NAME, STONE_STACK } from '../src/shared/data/stones';
+import { COS_SLOTS, cosById, cosCodes } from '../src/shared/data/cosmetics';
 
 const AUTOSAVE_MS = 30_000;
 const GUEST_STASH_MSG = 'Guest ใช้คลังเก็บของไม่ได้ — สมัครสมาชิกเพื่อใช้คลัง (ตัวละครนี้จะย้ายไปอยู่ในบัญชีใหม่)';
@@ -107,6 +108,9 @@ interface Session {
   epoch: number;
   lastInv: string;
   lastStash: string;
+  /** Cosmetic ids the account owns (guests: none), and what the last snapshot sent of it. */
+  cosOwned: string[];
+  lastCosOwned: string;
   outbox: SimEvent[];
   lastChatAt: number;
   /** When this session last used the market (performance.now()), to keep searches from flooding the server. */
@@ -470,12 +474,14 @@ export class GameWorld {
     const s: Session = {
       ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId, sim, player,
       move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null, recall: false,
-      auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, saveDue: null,
+      auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, saveDue: null,
       ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity, blockTrades: false,
       lastFriendAt: -Infinity, friendKey: '', lastCh: back?.channel.ch ?? 1, fight: new FightClock(Math.max(player.lastHurt, player.lastAttack)), lastChListAt: -Infinity, lastChAt: -Infinity,
     };
+    // Taken back (or never owned) while offline: off.
+    this.keepToOwned(s);
     try {
       s.playRow = this.db.startPlaySession({ accountId: acc.id, username: acc.username, guest: acc.guest, charId, charName: player.name, ip });
     } catch (e) {
@@ -754,6 +760,12 @@ export class GameWorld {
       case 'pickup':
         // Sim.pickupLoot checks the drop exists, the player may take it, is next to it and has room.
         if (Number.isInteger(m.id)) sim.pickupLoot(p, m.id);
+        break;
+      case 'cosWear':
+        this.wearCosmetic(s, m.slot, m.id);
+        break;
+      case 'mount':
+        sim.toggleMount(p);
         break;
       case 'rest':
         // Sim.rest checks the distance, that the player is alive and the cooldown.
@@ -1461,6 +1473,11 @@ export class GameWorld {
     p.restCd = old.restCd;
     p.stash = old.stash;
     p.partyId = old.partyId;
+    // Still riding after a portal or a channel switch; Sim.tickMount throws them off in a boss room.
+    if (old.mounted) {
+      p.mounted = true;
+      p.mountedAt = dest.time;
+    }
     s.sim = dest;
     s.player = p;
     this.byPlayer.set(p, s);
@@ -1517,6 +1534,11 @@ export class GameWorld {
       me.inv = { equipment: p.equipment, bag: p.bag, buyback: p.buyback };
     }
     const stash = JSON.stringify(p.stash);
+    const owned = s.cosOwned.join(',');
+    if (owned !== s.lastCosOwned) {
+      s.lastCosOwned = owned;
+      me.cosOwned = s.cosOwned;
+    }
     if (stash !== s.lastStash) {
       s.lastStash = stash;
       me.stash = p.stash;
@@ -1534,6 +1556,7 @@ export class GameWorld {
         ...(o.aura ? { aura: o.aura } : {}),
         // Worked out by Player.recompute from the server's own copy of the gear (orbCodes clamps the levels).
         ...(o.orbs.length ? { orbs: o.orbs as number[] } : {}),
+        ...cosSnap(o),
       })),
       monsters: sim.monsters.filter(near).map((m) => ({
         id: m.id, def: m.def.id, lv: m.level,
@@ -1774,6 +1797,54 @@ export class GameWorld {
 
   // ------------------------------------------------------------ saving
 
+  // ------------------------------------------------------------ cosmetics
+
+  /** Wears an owned cosmetic in its slot, or takes the slot off (`id` null). Everything checked here. */
+  private wearCosmetic(s: Session, slot: unknown, id: unknown): void {
+    if (!COS_SLOTS.includes(slot as never)) return;
+    const p = s.player;
+    const key = slot as (typeof COS_SLOTS)[number];
+    if (id === null) {
+      if (!p.cosmetics[key]) return;
+      delete p.cosmetics[key];
+    } else {
+      const c = cosById(id);
+      if (!c || c.slot !== key) return;
+      if (!s.cosOwned.includes(c.id)) {
+        this.send(s.ws, { t: 'chat', name: '', text: s.guest ? 'Guest ใช้ Cosmetics ไม่ได้ สมัครสมาชิกเพื่อรับของ' : 'ยังไม่มี Cosmetics ชิ้นนี้' });
+        return;
+      }
+      if (p.cosmetics[key] === c.id) return;
+      p.cosmetics[key] = c.id;
+    }
+    // A new mount (or none) means getting on again.
+    if (key === 'mount') p.mounted = false;
+    this.save(s);
+  }
+
+  /** Takes off whatever the session's character wears but the account doesn't own. True if anything came off. */
+  private keepToOwned(s: Session): boolean {
+    let changed = false;
+    for (const slot of COS_SLOTS) {
+      const id = s.player.cosmetics[slot];
+      if (id && !s.cosOwned.includes(id)) {
+        delete s.player.cosmetics[slot];
+        if (slot === 'mount') s.player.mounted = false;
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  /** An admin gave or took back a cosmetic: every online character of the account gets the new list (and loses what was taken). */
+  cosmeticsChanged(accountId: number): void {
+    for (const s of this.sessions) {
+      if (s.accountId !== accountId || s.guest) continue;
+      s.cosOwned = this.db.cosmeticsOwned(accountId);
+      if (this.keepToOwned(s)) this.save(s);
+    }
+  }
+
   private save(s: Session): void {
     s.saveDue = null;
     try {
@@ -1792,4 +1863,11 @@ export class GameWorld {
   saveAll(): void {
     for (const s of this.sessions) this.save(s);
   }
+}
+
+/** A player's cosmetics for the snapshot (left out when none). */
+function cosSnap(o: Player): { cos?: number[]; mnt?: 1 } {
+  const codes = cosCodes(o.cosmetics);
+  if (!codes.length) return {};
+  return o.mounted ? { cos: codes, mnt: 1 } : { cos: codes };
 }

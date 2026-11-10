@@ -8,6 +8,7 @@ import { GUEST_TTL_HOURS, type CharacterSummary } from '../src/shared/api';
 import type { ClassId } from '../src/shared/types';
 import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../src/shared/net/protocol';
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
+import { cleanCosOwned } from '../src/shared/data/cosmetics';
 import { checkOrbLook, DEFAULT_ORB_LOOK, ORB_LOOK_SETTING, sameOrbLook, type OrbLook } from '../src/shared/orbLook';
 import { MARKET_HISTORY_DAYS, type MarketQuery } from '../src/shared/sim/market';
 import { MAIL_HISTORY_DAYS } from '../src/shared/mail';
@@ -311,6 +312,15 @@ export class Db {
         at INTEGER NOT NULL,
         by_name TEXT NOT NULL
       );
+      -- Cosmetics an account owns (src/shared/data/cosmetics.ts), given by an admin. What each character
+      -- wears is in its CharacterData.cosmetics.
+      CREATE TABLE IF NOT EXISTS account_cosmetics (
+        account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        cosmetic_id TEXT NOT NULL,
+        granted_at INTEGER NOT NULL,
+        granted_by TEXT NOT NULL,
+        PRIMARY KEY (account_id, cosmetic_id)
+      );
     `);
     // Columns added after the first release: add them to databases made before that.
     const cols = (this.db.prepare('PRAGMA table_info(accounts)').all() as { name: string }[]).map((c) => c.name);
@@ -506,6 +516,27 @@ export class Db {
   loadCharacter(accountId: number, id: number): CharacterData | undefined {
     const r = this.db.prepare('SELECT data FROM characters WHERE id = ? AND account_id = ?').get(id, accountId) as { data: string } | undefined;
     return r ? upgradeCharacter(JSON.parse(r.data) as CharacterData) : undefined;
+  }
+
+  // ------------------------------------------------------------ cosmetics (owned per account)
+
+  /** Cosmetic ids the account owns (known ones only, catalogue order). */
+  cosmeticsOwned(accountId: number): string[] {
+    const rows = this.db.prepare('SELECT cosmetic_id FROM account_cosmetics WHERE account_id = ?').all(accountId) as { cosmetic_id: string }[];
+    return cleanCosOwned(rows.map((r) => r.cosmetic_id));
+  }
+
+  /** Gives a cosmetic; false when the account already has it. */
+  grantCosmetic(accountId: number, cosmeticId: string, by: string): boolean {
+    const r = this.db.prepare('INSERT OR IGNORE INTO account_cosmetics (account_id, cosmetic_id, granted_at, granted_by) VALUES (?, ?, ?, ?)')
+      .run(accountId, cosmeticId, Date.now(), by);
+    return Number(r.changes) > 0;
+  }
+
+  /** Takes a cosmetic back; false when the account didn't have it. */
+  revokeCosmetic(accountId: number, cosmeticId: string): boolean {
+    const r = this.db.prepare('DELETE FROM account_cosmetics WHERE account_id = ? AND cosmetic_id = ?').run(accountId, cosmeticId);
+    return Number(r.changes) > 0;
   }
 
   // ------------------------------------------------------------ stash (one per account)

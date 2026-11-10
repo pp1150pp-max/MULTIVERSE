@@ -108,7 +108,7 @@ export interface AdminShutdownText { texts: Record<ShutdownMode, string>; defaul
 // ------------------------------------------------------------ owner tools (users, bans, broadcast, backups…)
 
 /** The newer admin tools. Each is its own switch so some can be opened to GMs later. */
-export type AdminFeature = 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan';
+export type AdminFeature = 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics';
 
 /**
  * Who may use each tool. To open one to GMs, add 'gm', e.g. `ban: ['owner', 'gm']`. The server
@@ -143,6 +143,8 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   reports: ['owner', 'gm'],
   // Banning an account from sending reports (owner only for now).
   reportBan: ['owner'],
+  // Giving / taking back cosmetics on an account's sheet (owner only for now).
+  cosmetics: ['owner'],
 };
 
 export const canUse = (role: AdminRole, f: AdminFeature): boolean => FEATURE_ROLES[f].includes(role);
@@ -199,6 +201,8 @@ export interface AdminAccountDetail {
   account: AdminAccountRow;
   characters: AdminCharDetail[];
   stash: { size: number; gold: number; items: (BagEntry | null)[] } | null;
+  /** Cosmetic ids the account owns (src/shared/data/cosmetics.ts); null for a guest. */
+  cosmetics: string[] | null;
 }
 
 export interface BackupRow { name: string; size: number; at: number; kind: string }

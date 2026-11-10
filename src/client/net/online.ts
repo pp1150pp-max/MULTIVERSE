@@ -13,6 +13,7 @@ import { validOrbCode } from '../../shared/data/enhance';
 import { checkOrbLook } from '../../shared/orbLook';
 import { applyOrbLook } from '../orbs';
 import { EQUIP_SLOTS } from '../../shared/types';
+import { cleanCosOwned, cosCodes, cosFromCodes, type CosSlot } from '../../shared/data/cosmetics';
 import { zoneById, type SpawnArea, type ZoneDef } from '../../shared/data/zones';
 import type { NpcId } from '../../shared/data/npcs';
 import type { EquipSlot, Item, PotionKind, PotionSize, Rarity, Vec2 } from '../../shared/types';
@@ -116,6 +117,8 @@ export class OnlineBackend implements Backend {
   zone: ZoneDef;
   channel: number;
   zoneSeq = 0;
+  /** Cosmetic ids the account owns (PrivateSnap.cosOwned). */
+  cosOwned: string[] = [];
   /** The channel window's list came (answer to chList). */
   onChannels: ((view: ChannelsView) => void) | null = null;
   terrain: Terrain;
@@ -543,6 +546,8 @@ export class OnlineBackend implements Backend {
       p.dashT = ps.dash ? 1 : 0;
       p.aura = ps.aura ?? 0;
       setOrbs(p, ps.orbs);
+      setCos(p, ps.cos);
+      p.mounted = ps.mnt === 1;
       if (ps.dash) p.dashKind = ps.dash;
       if (p === this.me) {
         this.applyMine(s, ps.x, ps.z, ps.fx, ps.fz, ps.mv);
@@ -662,6 +667,7 @@ export class OnlineBackend implements Backend {
       me.buyback = pv.inv.buyback ?? [];
       this.events.push({ t: 'inventory', to: me.id });
     }
+    if (pv.cosOwned) this.cosOwned = cleanCosOwned(pv.cosOwned);
     if (pv.stash) {
       me.stash = pv.stash;
       this.events.push({ t: 'stash', to: me.id });
@@ -834,6 +840,8 @@ export class OnlineBackend implements Backend {
   drop(i: number): void { this.send({ t: 'act', a: 'drop', i }); }
   buyPotion(kind: PotionKind, size: PotionSize, n: number): void { this.send({ t: 'act', a: 'buy', kind, size, n }); }
   buyReturnScroll(n: number): void { this.send({ t: 'act', a: 'buyScroll', n }); }
+  cosWear(slot: CosSlot, id: string | null): void { this.send({ t: 'act', a: 'cosWear', slot, id }); }
+  toggleMount(): void { this.send({ t: 'act', a: 'mount' }); }
   useReturnScroll(): void { this.pendingRecall = true; }
   sortBag(key: SortKey, desc: boolean): void { this.send({ t: 'act', a: 'sort', key, desc }); }
   moveInBag(from: number, to: number): void { this.send({ t: 'act', a: 'move', from, to }); }
@@ -992,4 +1000,12 @@ function setOrbs(p: Player, codes: unknown): void {
   const cur = p.orbs;
   if (cur.length === codes.length && codes.every((c, i) => c === cur[i])) return;
   p.orbs = codes.filter(validOrbCode).slice(0, EQUIP_SLOTS.length);
+}
+
+/** Takes a player's cosmetics from the snapshot, keeping the old object while nothing changed. */
+function setCos(p: Player, codes: unknown): void {
+  const now = cosFromCodes(codes);
+  const was = cosCodes(p.cosmetics);
+  const next = cosCodes(now);
+  if (was.length !== next.length || was.some((c, i) => c !== next[i])) p.cosmetics = now;
 }

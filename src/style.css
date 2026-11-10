@@ -1241,3 +1241,33 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 @media (max-height: 560px) {
   #hud-ch { margin-top: 0; }
 }
+
+/* ---------- cosmetics: title sets (title over the name, name frame, chat bubble) ---------- */
+.plate .cos-title { font-size: 11px; font-weight: 700; color: var(--c1, #fff); margin-bottom: 1px; letter-spacing: 0.3px; }
+.plate .pname.cos { display: inline-block; padding: 0 6px; border: 1px solid var(--c1); border-radius: 4px; background: linear-gradient(var(--c2), rgba(0, 0, 0, 0.55)); color: #fff; box-shadow: 0 0 4px var(--c1); }
+.chat-bubble.cos { background: linear-gradient(var(--c2), #111); color: #fff; border: 2px solid var(--c1); box-shadow: 0 0 6px var(--c1); }
+
+/* ---------- cosmetics window (src/client/cosmetics.ts) ---------- */
+#cos-win { left: 50%; top: 70px; transform: translateX(-50%); width: min(560px, 94vw); font-size: 13px; }
+#cos-win .cos-slots { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+#cos-win .cos-slots button { font-size: 12px; padding: 3px 8px; }
+#cos-win .cos-slots button.on, #cos-win .cos-btns button.on { color: var(--gold-hi); border-color: var(--gold-hi); }
+#cos-win .cos-body { display: flex; flex-direction: column; gap: 6px; }
+#cos-win .cos-note { font-size: 12px; color: var(--ink-dim); }
+#cos-win .cos-grid { display: flex; flex-direction: column; gap: 6px; max-height: min(55vh, 420px); overflow-y: auto; }
+#cos-win .cos-card { display: flex; align-items: center; gap: 10px; padding: 6px; border: 1px solid #4a3c28; border-radius: 6px; background: rgba(0, 0, 0, 0.25); }
+#cos-win .cos-card.worn { border-color: var(--gold-hi); }
+#cos-win .cos-pic { width: 72px; height: 48px; flex: none; object-fit: contain; image-rendering: pixelated; }
+#cos-win .cos-pic-title { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-size: 9px; text-shadow: 0 0 2px #000; }
+#cos-win .cos-pic-title .cos-t { color: var(--c1); font-weight: 700; }
+#cos-win .cos-pic-title .cos-n { padding: 0 4px; border: 1px solid var(--c1); border-radius: 3px; background: linear-gradient(var(--c2), #000); color: #fff; }
+#cos-win .cos-pic-title .cos-b { padding: 0 5px; border: 1px solid var(--c1); border-radius: 6px; background: linear-gradient(var(--c2), #111); color: #fff; }
+#cos-win .cos-info { flex: 1; min-width: 0; }
+#cos-win .cos-name { color: var(--gold-hi); font-weight: 600; }
+#cos-win .cos-desc { font-size: 12px; color: var(--ink-dim); }
+#cos-win .cos-tags .tag { font-size: 10px; margin-right: 4px; padding: 0 4px; border: 1px solid #6a5a3a; border-radius: 3px; }
+#cos-win .cos-tags .tag.on { color: #5dff8a; border-color: #2a8a4a; }
+#cos-win .cos-btns { display: flex; flex-direction: column; gap: 4px; flex: none; }
+#cos-win .cos-btns button { font-size: 12px; padding: 3px 10px; }
+#mount-btn { position: absolute; left: 50%; bottom: 128px; transform: translateX(-50%); padding: 4px 12px; font-size: 13px; }
+#mount-btn.on { color: var(--gold-hi); border-color: var(--gold-hi); }

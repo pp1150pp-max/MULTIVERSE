@@ -17,6 +17,7 @@ import { NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { pick, rand, randInt } from '../rng';
 import { splitExp } from '../party';
 import { CLASS_IDS } from '../data/classes';
+import { COS_SLOT_NAME, cosById, MOUNT_CALM } from '../data/cosmetics';
 import {
   isBound, isItem, isPotion, isStack, isStone, RARITY_LABEL, sameStack, SLOT_LABEL, BLACKSMITH_STONES, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
 import { PORTAL_RANGE, REST_CD, restSpotNear, Terrain, type RestSpot } from './terrain';
@@ -579,6 +580,7 @@ export class Sim {
     p.hp = 0;
     p.moving = false;
     p.castT = 0;
+    p.mounted = false;
     this.events.push({ t: 'died', id: p.id });
   }
 
@@ -603,6 +605,38 @@ export class Sim {
     this.text(p.x, p.topY, p.z, 'HP / MP เต็ม', 'heal', 1.2, p.id);
     this.log(`${spot.kind === 'fountain' ? 'ดื่มน้ำจากน้ำพุ' : 'นั่งพักข้างกองไฟ'} — HP และ MP เต็ม (พักได้อีกใน ${REST_CD} วิ)`, '#9fffb0', p.id);
     return true;
+  }
+
+  // ------------------------------------------------------------ mount
+
+  /** Why this player can't get on the worn mount now, or null when they can. */
+  mountBlocked(p: Player): string | null {
+    if (!p.alive) return 'ขี่ไม่ได้ตอนตาย';
+    if (!cosById(p.cosmetics.mount)) return `ยังไม่ได้สวม${COS_SLOT_NAME.mount}`;
+    if (this.zone.roomOf) return 'ขี่ในห้องบอสไม่ได้';
+    const calm = MOUNT_CALM - (this.time - Math.max(p.lastHurt, p.lastAttack));
+    if (calm > 0) return `ขี่ได้อีกใน ${Math.ceil(calm)} วิ (เพิ่งต่อสู้)`;
+    return null;
+  }
+
+  /** Gets on the worn mount, or off it when riding. Says why not when it can't. */
+  toggleMount(p: Player): void {
+    if (p.mounted) {
+      p.mounted = false;
+      return;
+    }
+    const why = this.mountBlocked(p);
+    if (why) return void this.text(p.x, p.topY, p.z, why, 'info', 1.2, p.id);
+    p.mounted = true;
+    p.mountedAt = this.time;
+  }
+
+  /** Off the mount on a hit dealt or taken (owner: attack, skill or being hit), in a boss room, or with no mount worn. */
+  tickMount(p: Player): void {
+    if (!p.mounted) return;
+    if (!p.alive || this.zone.roomOf || !cosById(p.cosmetics.mount) || Math.max(p.lastHurt, p.lastAttack) >= p.mountedAt) {
+      p.mounted = false;
+    }
   }
 
   // ------------------------------------------------------------ return scroll
@@ -1324,6 +1358,7 @@ export class Sim {
       if (it.recall) this.startReturnCast(p);
       p.update(dt, it);
       this.tickReturnCast(p, dt, it);
+      this.tickMount(p);
     }
     for (const p of this.players) this.tickBuyback(p, dt);
     for (const p of this.players) if (p.alive) this.checkPortals(p);

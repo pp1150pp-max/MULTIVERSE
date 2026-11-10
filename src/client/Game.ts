@@ -27,6 +27,7 @@ import { findPath } from './pathfind';
 import { PartyUI } from './party';
 import { TradeUI } from './trade';
 import { FriendsUI } from './friends';
+import { CosmeticsUI } from './cosmetics';
 import { ChannelUI } from './channels';
 import { RoomUI } from './bossRoom';
 import { QuestUI } from './quests';
@@ -76,6 +77,7 @@ export class Game {
   readonly party: PartyUI;
   readonly trade: TradeUI;
   readonly friends: FriendsUI;
+  readonly cosmetics: CosmeticsUI;
   readonly channels: ChannelUI;
   readonly rooms: RoomUI;
   readonly quests: QuestUI;
@@ -159,6 +161,7 @@ export class Game {
     this.party = new PartyUI(this);
     this.trade = new TradeUI(this);
     this.friends = new FriendsUI(this);
+    this.cosmetics = new CosmeticsUI(this);
     this.channels = new ChannelUI(this);
     this.rooms = new RoomUI(this);
     this.quests = new QuestUI(this, () => this.hud.openDialog());
@@ -599,6 +602,7 @@ export class Game {
 
     if (i.pressed('KeyF')) this.toggleAuto();
     if (i.pressed('KeyG')) this.useReturnScroll();
+    if (i.pressed('KeyZ')) this.backend.toggleMount();
     if (i.pressed('KeyI') || i.pressed('KeyB')) this.hud.toggleBag();
     if (i.pressed('KeyH')) this.hud.toggleHelp();
     if (i.pressed('KeyM')) this.hud.toggleMap();
@@ -684,6 +688,7 @@ export class Game {
     this.hazardViews.update(this.backend.hazards, this.backend.time);
     this.world.update(dt, p.x, p.z);
     this.updateCamera(dt);
+    this.cosmetics.update();
     this.floating.update(dt, this);
     this.hud.update(dt);
     this.party.update();
