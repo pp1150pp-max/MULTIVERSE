@@ -198,6 +198,18 @@ export class Game {
     return { sx, sy, on };
   }
 
+  /** G key or a click on the scroll in the bag: Auto Play and a clicked walk would cancel the cast, so stop both first. */
+  useReturnScroll(): void {
+    if (!this.player.alive || this.player.castT > 0) return;
+    if (this.player.stoneCount('return_scroll') < 1) {
+      this.hud.log('ไม่มีม้วนคัมภีร์กลับเมือง — ซื้อได้ที่พ่อค้า', '#ff8a6a');
+      return;
+    }
+    if (this.autoPlay) this.toggleAuto(false, 'ปิด Auto Play — กำลังร่ายม้วนคัมภีร์กลับเมือง');
+    this.goal = null;
+    this.backend.useReturnScroll();
+  }
+
   toggleAuto(force?: boolean, offMsg = 'ปิด Auto Play'): void {
     if (!this.zone.allowAutoPlay) {
       this.hud.log('พื้นที่นี้ไม่รองรับ Auto Play', '#ff8a6a');
@@ -543,6 +555,7 @@ export class Game {
     this.reachGoal();
 
     if (i.pressed('KeyF')) this.toggleAuto();
+    if (i.pressed('KeyG')) this.useReturnScroll();
     if (i.pressed('KeyI') || i.pressed('KeyB')) this.hud.toggleBag();
     if (i.pressed('KeyH')) this.hud.toggleHelp();
     if (i.pressed('KeyM')) this.hud.toggleMap();

@@ -177,6 +177,7 @@ export class OnlineBackend implements Backend {
   private filterPending = false;
   private autoSetPending = false;
   private pendingPotion: 'hp' | 'mp' | null = null;
+  private pendingRecall = false;
   private enhanceReq = 0;
   private marketReq = 0;
   private readonly marketWait = new Map<number, (r: MarketReply) => void>();
@@ -606,6 +607,7 @@ export class OnlineBackend implements Backend {
     me.cd = { ...pv.cd };
     me.potCd = pv.potCd;
     me.restCd = pv.restCd ?? 0;
+    me.castT = pv.castT ?? 0;
     if (typeof pv.buybackLeft === 'number') me.buybackLeft = pv.buybackLeft;
     if (pv.inv) {
       me.equipment = pv.inv.equipment;
@@ -709,6 +711,7 @@ export class OnlineBackend implements Backend {
     for (const key of Object.keys(me.cd) as SkillSlot[]) me.cd[key] = Math.max(0, (me.cd[key] ?? 0) - dt);
     me.potCd -= dt;
     me.restCd -= dt;
+    if (me.castT > 0) me.castT = Math.max(0, me.castT - dt);
 
     if (this.settling && !this.serverMoves) this.settle(dt);
     const moveDir = this.walk(dt, it);
@@ -727,8 +730,9 @@ export class OnlineBackend implements Backend {
       }
       this.send({
         t: 'input', pos: ours ? { x: me.x, z: me.z } : undefined, seq, move: moveDir, aim: it.aim, basic: it.basic, skills: it.skills,
-        dash: this.pendingDash, potion: this.pendingPotion,
+        dash: this.pendingDash, potion: this.pendingPotion, recall: this.pendingRecall || undefined,
       });
+      this.pendingRecall = false;
       this.pendingDash = false;
       this.pendingPotion = null;
     }
@@ -781,6 +785,8 @@ export class OnlineBackend implements Backend {
   unequip(slot: EquipSlot): void { this.send({ t: 'act', a: 'unequip', slot }); }
   drop(i: number): void { this.send({ t: 'act', a: 'drop', i }); }
   buyPotion(kind: PotionKind, size: PotionSize, n: number): void { this.send({ t: 'act', a: 'buy', kind, size, n }); }
+  buyReturnScroll(n: number): void { this.send({ t: 'act', a: 'buyScroll', n }); }
+  useReturnScroll(): void { this.pendingRecall = true; }
   sortBag(key: SortKey, desc: boolean): void { this.send({ t: 'act', a: 'sort', key, desc }); }
   moveInBag(from: number, to: number): void { this.send({ t: 'act', a: 'move', from, to }); }
   setAuto(on: boolean): void { this.send({ t: 'act', a: 'auto', on }); }
