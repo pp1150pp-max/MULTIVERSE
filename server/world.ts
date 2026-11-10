@@ -27,7 +27,6 @@ import { Mail } from './mail';
 import type { MailCall } from '../src/shared/mail';
 import { Reports } from './reports';
 import { REPORT_TOPIC_LABEL, type ReportCall } from '../src/shared/reports';
-import { canUse } from '../src/shared/admin';
 import type { MarketCall } from '../src/shared/sim/market';
 import { Parties, type PartyChar } from './party';
 import { Trades, type TradeActor } from './trade';
@@ -1278,7 +1277,7 @@ export class GameWorld {
       const text = `⚠ ${REPORT_TOPIC_LABEL.player} #${stored.id} จาก ${s.player.name} — ดูที่หน้า /admin แท็บ "รายงาน"`;
       for (const o of this.sessions) {
         const role = o.guest ? null : this.db.adminRole(o.accountId);
-        if (role && canUse(role, 'reports')) this.send(o.ws, { t: 'chat', name: '', text });
+        if (role && this.db.roleFeatures(role).includes('reports')) this.send(o.ws, { t: 'chat', name: '', text });
       }
     }
   }

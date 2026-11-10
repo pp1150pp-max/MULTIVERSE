@@ -15,7 +15,7 @@ import { MAIL_HISTORY_DAYS } from '../src/shared/mail';
 import type { TradeLogRow } from '../src/shared/trade';
 import type { AdminReportRow } from '../src/shared/reports';
 import type { FriendChar } from '../src/shared/friends';
-import { isAdminRole, type AdminRole, type AuditRow, type ChatLogRow, type PlaySessionRow, type RoleRow, type SessionQuery, type SessionSort } from '../src/shared/admin';
+import { ADMIN_FEATURES, BUILTIN_ROLE_NAME, BUILTIN_ROLES, isAdminFeature, OWNER_ROLE, roleFeatures, type AdminFeature, type AdminRole, type AuditRow, type FeatureOverrides, type RoleDef, type ChatLogRow, type PlaySessionRow, type RoleRow, type SessionQuery, type SessionSort } from '../src/shared/admin';
 
 /** A play session's username as the admin page shows it. */
 const GUEST_AS_GUEST = "(CASE WHEN guest = 1 THEN 'Guest' ELSE username END)";
@@ -326,11 +326,21 @@ export class Db {
     const cols = (this.db.prepare('PRAGMA table_info(accounts)').all() as { name: string }[]).map((c) => c.name);
     if (!cols.includes('is_guest')) this.db.exec('ALTER TABLE accounts ADD COLUMN is_guest INTEGER NOT NULL DEFAULT 0');
     if (!cols.includes('last_online')) this.db.exec('ALTER TABLE accounts ADD COLUMN last_online INTEGER');
-    // NULL = a normal player; 'owner' / 'gm' may use the admin page (see server/admin.ts).
+    // NULL = a normal player; 'owner' / 'gm' / a role in admin_roles may use the admin page (see server/admin.ts).
     if (!cols.includes('admin_role')) this.db.exec('ALTER TABLE accounts ADD COLUMN admin_role TEXT');
     // Ban end time (BAN_FOREVER = permanent) and why; NULL = not banned.
     if (!cols.includes('ban_until')) this.db.exec('ALTER TABLE accounts ADD COLUMN ban_until INTEGER');
     if (!cols.includes('ban_reason')) this.db.exec('ALTER TABLE accounts ADD COLUMN ban_reason TEXT');
+    // Admin roles the owner changed or added on the Permissions tab. 'gm' gets a row only once changed;
+    // 'owner' never has one. `features` = JSON of only what differs from FEATURE_ROLES (feature → on/off).
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS admin_roles (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        features TEXT NOT NULL DEFAULT '{}',
+        created_at INTEGER NOT NULL
+      );
+    `);
   }
 
   close(): void {
@@ -663,10 +673,80 @@ export class Db {
 
   // ------------------------------------------------------------ admin
 
+  /** Whether this role exists: owner, gm, or one the owner added on the Permissions tab. */
+  isRole(role: unknown): role is AdminRole {
+    if (typeof role !== 'string' || !role) return false;
+    if (BUILTIN_ROLES.includes(role)) return true;
+    return !!this.db.prepare('SELECT 1 FROM admin_roles WHERE id = ?').get(role);
+  }
+
   /** The account's admin role, or null for normal players (and guests, who never get one). */
   adminRole(accountId: number): AdminRole | null {
     const r = this.db.prepare('SELECT admin_role FROM accounts WHERE id = ? AND is_guest = 0').get(accountId) as { admin_role: string | null } | undefined;
-    return r && isAdminRole(r.admin_role) ? r.admin_role : null;
+    return r && this.isRole(r.admin_role) ? r.admin_role : null;
+  }
+
+  private roleRow(role: AdminRole): { name: string; features: string; created_at: number } | undefined {
+    if (role === OWNER_ROLE) return undefined;
+    return this.db.prepare('SELECT name, features, created_at FROM admin_roles WHERE id = ?').get(role) as { name: string; features: string; created_at: number } | undefined;
+  }
+
+  /** What the owner changed from the defaults for this role (unknown or broken entries are skipped). */
+  roleOverrides(role: AdminRole): FeatureOverrides {
+    const row = this.roleRow(role);
+    if (!row) return {};
+    let raw: unknown;
+    try {
+      raw = JSON.parse(row.features);
+    } catch {
+      return {};
+    }
+    const out: FeatureOverrides = {};
+    if (raw && typeof raw === 'object') {
+      for (const [k, v] of Object.entries(raw)) if (isAdminFeature(k) && typeof v === 'boolean') out[k] = v;
+    }
+    return out;
+  }
+
+  /** The tools this role may use right now (read on every admin call, so changes apply at once). */
+  roleFeatures(role: AdminRole): AdminFeature[] {
+    return roleFeatures(role, this.roleOverrides(role));
+  }
+
+  /** A role's display name ("Owner", "GM", or what the owner named it). */
+  roleName(role: AdminRole): string {
+    return this.roleRow(role)?.name ?? BUILTIN_ROLE_NAME[role] ?? role;
+  }
+
+  /** How many real accounts hold this role. */
+  roleMembers(role: AdminRole): number {
+    return (this.db.prepare('SELECT COUNT(*) AS n FROM accounts WHERE admin_role = ? AND is_guest = 0').get(role) as { n: number }).n;
+  }
+
+  /** Every role: owner, gm, then the added ones in the order they were made. */
+  roleDefs(): RoleDef[] {
+    const custom = (this.db.prepare('SELECT id FROM admin_roles ORDER BY created_at, id').all() as { id: string }[])
+      .map((r) => r.id).filter((id) => !BUILTIN_ROLES.includes(id));
+    return [...BUILTIN_ROLES, ...custom].map((id) => ({
+      id,
+      name: this.roleName(id),
+      features: id === OWNER_ROLE ? [...ADMIN_FEATURES] : this.roleFeatures(id),
+      builtin: BUILTIN_ROLES.includes(id),
+      members: this.roleMembers(id),
+    }));
+  }
+
+  /** Adds a role or changes its name / tools (never 'owner'; the caller checks every value). */
+  saveRole(role: AdminRole, name: string, overrides: FeatureOverrides): void {
+    if (role === OWNER_ROLE) throw new Error('owner role is not stored');
+    this.db.prepare(`INSERT INTO admin_roles (id, name, features, created_at) VALUES (?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET name = excluded.name, features = excluded.features`).run(role, name, JSON.stringify(overrides), Date.now());
+  }
+
+  /** Removes an added role (the caller makes sure no account holds it). */
+  deleteRole(role: AdminRole): boolean {
+    if (BUILTIN_ROLES.includes(role)) return false;
+    return this.db.prepare('DELETE FROM admin_roles WHERE id = ?').run(role).changes > 0;
   }
 
   /** Sets (or with null, removes) a real account's admin role. Returns false when there is no such account. */
@@ -676,9 +756,10 @@ export class Db {
 
   /** Every account with an admin role. */
   listAdmins(): RoleRow[] {
-    const rows = this.db.prepare("SELECT id, username, admin_role FROM accounts WHERE admin_role IS NOT NULL AND is_guest = 0 ORDER BY admin_role DESC, username")
+    const rows = this.db.prepare("SELECT id, username, admin_role FROM accounts WHERE admin_role IS NOT NULL AND is_guest = 0 ORDER BY CASE admin_role WHEN 'owner' THEN 0 WHEN 'gm' THEN 1 ELSE 2 END, admin_role, username")
       .all() as { id: number; username: string; admin_role: string }[];
-    return rows.filter((r) => isAdminRole(r.admin_role)).map((r) => ({ accountId: r.id, username: r.username, role: r.admin_role as AdminRole }));
+    const known = new Set(this.roleDefs().map((r) => r.id));
+    return rows.filter((r) => known.has(r.admin_role)).map((r) => ({ accountId: r.id, username: r.username, role: r.admin_role }));
   }
 
   /** Real accounts or guests by id, for showing names. */

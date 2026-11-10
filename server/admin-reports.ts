@@ -7,7 +7,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Db } from './db';
 import { HttpError, readJson, send } from './http';
 import { log, requireAdmin } from './admin';
-import { ADMIN_NO_RIGHTS, canUse, type AdminFeature } from '../src/shared/admin';
+import { ADMIN_NO_RIGHTS, type AdminFeature } from '../src/shared/admin';
 import { isReportStatus, isReportTopic, REPORT_ADMIN_PAGE, REPORT_STATUS_LABEL } from '../src/shared/reports';
 
 /** Handles the report routes; returns false for any other path. */
@@ -15,7 +15,7 @@ export async function reportsAdminApi(req: IncomingMessage, res: ServerResponse,
   if (!path.startsWith('/api/admin/reports')) return false;
   const need = (f: AdminFeature) => {
     const a = requireAdmin(req, db);
-    if (!canUse(a.role, f)) throw new HttpError(403, ADMIN_NO_RIGHTS);
+    if (!a.features.includes(f)) throw new HttpError(403, ADMIN_NO_RIGHTS);
     return a;
   };
 

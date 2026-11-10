@@ -7,13 +7,29 @@ import { itemNames, makeItem, roundStat, rowRanges, statStep, tierOf, TIER_VERSI
 import { POTION_SIZES, potionName, stackLimit } from './data/potions';
 import { STONE_NAME } from './data/stones';
 
-/** owner: everything, plus granting/revoking GM. gm: view and edit players. */
-export type AdminRole = 'owner' | 'gm';
-export const ADMIN_ROLES: AdminRole[] = ['owner', 'gm'];
+/**
+ * A role id in `accounts.admin_role`. 'owner' has every tool and is made from the command line only;
+ * 'gm' is built in (its tools can be changed, it can't be deleted); the owner may add more (e.g. 'tester')
+ * on the Permissions tab, stored in the `admin_roles` table. Any other text there = a normal player.
+ */
+export type AdminRole = string;
+export const OWNER_ROLE = 'owner';
+export const GM_ROLE = 'gm';
+/** Built-in roles: always exist, never deleted. */
+export const BUILTIN_ROLES: readonly AdminRole[] = [OWNER_ROLE, GM_ROLE];
 /** The 403 text when a login has no admin role (or not this one); the page treats it as "signed out of admin". */
 export const ADMIN_NO_RIGHTS = 'ไม่มีสิทธิ์';
 
-export const isAdminRole = (v: unknown): v is AdminRole => v === 'owner' || v === 'gm';
+/** A new role's id: lower-case English letters, digits and _, starting with a letter (2–20 long). */
+export const ROLE_ID_RE = /^[a-z][a-z0-9_]{1,19}$/;
+/** Ids that can never be a custom role ('none' means "no role" on the command line). */
+export const RESERVED_ROLE_IDS: readonly string[] = [OWNER_ROLE, GM_ROLE, 'none', 'null', 'admin'];
+/** Longest display name of a role. */
+export const ROLE_NAME_MAX = 20;
+/** Most custom roles (besides owner and gm). */
+export const CUSTOM_ROLES_MAX = 20;
+/** The display name of a built-in role until the owner renames it ('owner' can't be renamed). */
+export const BUILTIN_ROLE_NAME: Record<string, string> = { owner: 'Owner', gm: 'GM' };
 
 // Limits per admin action (change them here).
 /** Most gold one action may give or take. */
@@ -29,8 +45,11 @@ export const ADMIN_SEARCH_MAX = 30;
 /** Rows one page of the audit log returns. */
 export const ADMIN_AUDIT_PAGE = 100;
 
-/** `features`: the owner tools this role may use (see FEATURE_ROLES). */
-export interface AdminMe { username: string; role: AdminRole; features: AdminFeature[] }
+/**
+ * `features`: the tools this role may use (FEATURE_ROLES, changed by the owner on the Permissions tab).
+ * `roleNames`: display name of every role (id → name), for the badges.
+ */
+export interface AdminMe { username: string; role: AdminRole; roleName: string; features: AdminFeature[]; roleNames: Record<AdminRole, string> }
 
 export interface AdminMeta {
   maxLevel: number;
@@ -91,6 +110,21 @@ export interface AdminCharRow {
 
 export interface RoleRow { accountId: number; username: string; role: AdminRole }
 
+/** One role on the Permissions tab. */
+export interface RoleDef {
+  id: AdminRole;
+  name: string;
+  /** What the role may use now (owner: everything). */
+  features: AdminFeature[];
+  /** owner / gm: can't be deleted (owner can't be changed at all). */
+  builtin: boolean;
+  /** Accounts that hold it. */
+  members: number;
+}
+
+/** GET /api/admin/role-defs: every role and the accounts holding one. */
+export interface RoleDefsResponse { roles: RoleDef[]; admins: RoleRow[] }
+
 export interface AuditRow { id: number; at: number; admin: string; action: string; target: string; details: string }
 
 /** Every admin edit answers with a Thai line for the page and the character as it is now. */
@@ -107,14 +141,27 @@ export interface AdminShutdownText { texts: Record<ShutdownMode, string>; defaul
 
 // ------------------------------------------------------------ owner tools (users, bans, broadcast, backups…)
 
-/** The newer admin tools. Each is its own switch so some can be opened to GMs later. */
-export type AdminFeature = 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics';
+/**
+ * Every admin tool that can be switched on per role (Permissions tab). Owner-only for good, never a
+ * switch: the Permissions tab, the audit log, restarting / stopping the server, deleting accounts or
+ * characters, and making someone owner (command line).
+ */
+export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics';
 
 /**
- * Who may use each tool. To open one to GMs, add 'gm', e.g. `ban: ['owner', 'gm']`. The server
- * checks this on every call. Deleting accounts/characters is not here: it is always owner only.
+ * The defaults: which built-in role may use each tool (owner always has all). The owner can change
+ * GM's and add roles on the Permissions tab; the DB keeps only what differs from this, so a tool added
+ * later starts as written here. A custom role starts with nothing. The server checks on every call.
  */
 export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
+  // The base tools (every admin had them before the Permissions tab; GMs still do by default).
+  online: ['owner', 'gm'],
+  charView: ['owner', 'gm'],
+  charEdit: ['owner', 'gm'],
+  kick: ['owner', 'gm'],
+  teleport: ['owner', 'gm'],
+  // Acting on other staff accounts / their characters (ban, password, edit…). Never on an owner's.
+  staffTarget: ['owner'],
   // Spawning an item with chosen stats (without it, spawned items roll like drops).
   customItem: ['owner'],
   users: ['owner'],
@@ -147,7 +194,62 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   cosmetics: ['owner'],
 };
 
-export const canUse = (role: AdminRole, f: AdminFeature): boolean => FEATURE_ROLES[f].includes(role);
+export const ADMIN_FEATURES = Object.keys(FEATURE_ROLES) as AdminFeature[];
+export const isAdminFeature = (v: unknown): v is AdminFeature => typeof v === 'string' && Object.hasOwn(FEATURE_ROLES, v);
+
+/** A role's changes to the defaults (feature → on/off), as stored in `admin_roles.features`. */
+export type FeatureOverrides = Partial<Record<AdminFeature, boolean>>;
+
+/** What a role may use: owner everything; otherwise its stored changes over FEATURE_ROLES (custom roles start empty). */
+export function roleFeatures(role: AdminRole, overrides: FeatureOverrides = {}): AdminFeature[] {
+  if (role === OWNER_ROLE) return [...ADMIN_FEATURES];
+  return ADMIN_FEATURES.filter((f) => overrides[f] ?? FEATURE_ROLES[f].includes(role));
+}
+
+/** The changes to store so `role` gets exactly `features` (only what differs from the defaults). */
+export function featureOverrides(role: AdminRole, features: readonly AdminFeature[]): FeatureOverrides {
+  const out: FeatureOverrides = {};
+  for (const f of ADMIN_FEATURES) {
+    const want = features.includes(f);
+    if (want !== FEATURE_ROLES[f].includes(role)) out[f] = want;
+  }
+  return out;
+}
+
+/** Groups of the Permissions tab, in order. */
+export const FEATURE_GROUPS = ['ผู้เล่นและตัวละคร', 'บัญชี', 'ข้อมูลและประวัติ', 'สื่อสาร', 'Server', 'ทดลองหน้าตา'] as const;
+
+/** Thai name, a line on what it unlocks, and its group, for the Permissions tab. */
+export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; group: (typeof FEATURE_GROUPS)[number] }> = {
+  online: { name: 'ดูผู้เล่นออนไลน์', desc: 'แท็บ "ออนไลน์": ใครเล่นอยู่ แมพ/CH ping FPS GPU และ IP', group: 'ผู้เล่นและตัวละคร' },
+  charView: { name: 'ค้นหา/ดูตัวละคร', desc: 'แท็บ "ค้นหาตัวละคร" และเปิดดูตัวละคร (เลเวล ทอง โซน)', group: 'ผู้เล่นและตัวละคร' },
+  charEdit: { name: 'แก้ตัวละคร', desc: 'ตั้งเลเวล/EXP ให้-หักทอง เสกไอเทม ยา หิน (ต้องมี "ค้นหา/ดูตัวละคร" ด้วย)', group: 'ผู้เล่นและตัวละคร' },
+  customItem: { name: 'เสกไอเทมกำหนดสเตตัสเอง', desc: 'เลือกสเตตัสทีละแถวตอนเสกอุปกรณ์ (ไม่มี = สุ่มแบบของดรอป)', group: 'ผู้เล่นและตัวละคร' },
+  kick: { name: 'เตะออกจากเกม', desc: 'เตะตัวละครที่ออนไลน์อยู่ออกจากเกม', group: 'ผู้เล่นและตัวละคร' },
+  teleport: { name: 'ย้ายโซน', desc: 'ย้ายตัวละครไปแคมป์ของโซนที่เลือก', group: 'ผู้เล่นและตัวละคร' },
+  channelWarp: { name: 'วาร์ปเลือก CH', desc: 'ตอนย้ายโซน เลือก CH ได้ เข้าได้แม้ห้องเต็ม', group: 'ผู้เล่นและตัวละคร' },
+  cosmetics: { name: 'ให้/ถอนของแต่งตัว', desc: 'ให้หรือถอนของแต่งตัวในหน้าบัญชี', group: 'ผู้เล่นและตัวละคร' },
+  staffTarget: { name: 'จัดการบัญชีทีมงานคนอื่น', desc: 'แบน รีเซ็ตรหัส แก้ตัวละครของบัญชีที่มีสิทธิ์ผู้ดูแล (ไม่มี = ทำได้แค่ผู้เล่นธรรมดาและตัวเอง) · บัญชี owner แตะไม่ได้เสมอ', group: 'บัญชี' },
+  users: { name: 'ผู้ใช้ทั้งหมด', desc: 'แท็บ "ผู้ใช้ทั้งหมด": ทุกบัญชี ตัวละคร ทอง คลัง', group: 'บัญชี' },
+  resetPassword: { name: 'ตั้งรหัสผ่านชั่วคราว', desc: 'ตั้งรหัสผ่านใหม่ให้บัญชีที่ลืมรหัส', group: 'บัญชี' },
+  ban: { name: 'แบนบัญชี', desc: 'แบน/ปลดแบนบัญชี (คนที่ออนไลน์ถูกเตะทันที)', group: 'บัญชี' },
+  sessions: { name: 'การเข้าเล่น', desc: 'แท็บ "การเข้าเล่น": เข้า-ออก IP GPU ping/FPS ย้อนหลัง', group: 'ข้อมูลและประวัติ' },
+  stats: { name: 'สถิติ', desc: 'แท็บ "สถิติ": กราฟคนออนไลน์ สมัครใหม่ เลเวล ping', group: 'ข้อมูลและประวัติ' },
+  chatLog: { name: 'ประวัติแชท', desc: 'แท็บ "แชท": อ่าน/ค้นหาแชทย้อนหลัง', group: 'ข้อมูลและประวัติ' },
+  chatDelete: { name: 'ลบแชท', desc: 'ลบข้อความในประวัติแชท', group: 'ข้อมูลและประวัติ' },
+  tradeLog: { name: 'ประวัติเทรด', desc: 'แท็บ "เทรด": เทรดที่สำเร็จระหว่างผู้เล่น', group: 'ข้อมูลและประวัติ' },
+  reports: { name: 'รายงานจากผู้เล่น', desc: 'แท็บ "รายงาน": อ่านและเปลี่ยนสถานะ + แจ้งเตือนในเกมเมื่อมีคนรายงานผู้เล่น', group: 'ข้อมูลและประวัติ' },
+  reportBan: { name: 'ห้ามส่งรายงาน', desc: 'ห้าม/ปลดห้ามบัญชีส่งรายงาน', group: 'ข้อมูลและประวัติ' },
+  broadcast: { name: 'ประกาศ', desc: 'ประกาศถึงทุกคนหรือผู้เล่นคนเดียว (แท็บ Server)', group: 'สื่อสาร' },
+  mail: { name: 'จดหมาย', desc: 'แท็บ "จดหมาย": ส่งจดหมายพร้อมทอง/ไอเทมถึงผู้เล่น ดึงกลับ', group: 'สื่อสาร' },
+  backup: { name: 'สำรองข้อมูล', desc: 'ดูรายการและกดสำรองฐานข้อมูล (แท็บ Server)', group: 'Server' },
+  shutdownText: { name: 'ข้อความนับถอยหลัง', desc: 'แก้ข้อความเตือนก่อนรีสตาร์ท/ปิด server (แท็บ Server) · ปุ่มรีสตาร์ท/ปิดเป็นของ owner', group: 'Server' },
+  orbPreview: { name: 'ทดลองลูกแก้วตีบวก', desc: 'แท็บ "ลูกแก้วตีบวก": ลองหน้าตา ไม่เปลี่ยนอะไรในเกม', group: 'ทดลองหน้าตา' },
+  orbLook: { name: 'บันทึกลูกแก้วทั้งเซิร์ฟ', desc: 'บันทึกหน้าตาลูกแก้วตีบวกที่ทุกคนเห็น', group: 'ทดลองหน้าตา' },
+};
+
+/** Shown on the Permissions tab: what no role but owner can ever do. */
+export const OWNER_ONLY_TOOLS = ['หน้าจัดการสิทธิ์', 'ประวัติการกระทำของผู้ดูแล', 'รีสตาร์ท/ปิด server', 'ลบบัญชี/ตัวละคร', 'ตั้ง owner (command line เท่านั้น)'];
 
 /** Longest announcement a broadcast may send. */
 export const BROADCAST_MAX = 200;
