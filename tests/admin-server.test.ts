@@ -18,6 +18,8 @@ const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const dir = mkdtempSync(join(tmpdir(), 'multiverse-admin-test-'));
 const DB_FILE = join(dir, 'test.db');
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** What gm may use when the owner changed nothing (FEATURE_ROLES). */
+const GM_DEFAULT = (Object.keys(FEATURE_ROLES) as (keyof typeof FEATURE_ROLES)[]).filter((f) => FEATURE_ROLES[f].includes('gm')) as string[];
 
 function freePort(): Promise<number> {
   return new Promise((res, rej) => {
@@ -331,7 +333,8 @@ async function run(): Promise<void> {
   const plainId = (await api('GET', '/admin/accounts', undefined, ownerTok)).data.rows.find((r: any) => r.username === 'plain1').accountId;
   const ownerId = (await api('GET', '/admin/accounts', undefined, ownerTok)).data.rows.find((r: any) => r.username === 'owner1').accountId;
   ok((await api('GET', '/admin/me', undefined, ownerTok)).data.features.length === Object.keys(FEATURE_ROLES).length, 'owner has every owner tool');
-  ok(JSON.stringify((await api('GET', '/admin/me', undefined, gmTok)).data.features) === '["broadcast","orbPreview","channelWarp","reports","cosPreview"]', 'GM has only the broadcast tool, the orb test bench, the channel warp, reports and the cosmetics bench (FEATURE_ROLES)');
+  ok(JSON.stringify((await api('GET', '/admin/me', undefined, gmTok)).data.features) === JSON.stringify(GM_DEFAULT), 'GM has only its FEATURE_ROLES tools (the base tools, broadcast, orb bench, channel warp, reports, cosmetics bench)');
+  ok(GM_DEFAULT.join() === 'online,charView,charEdit,kick,teleport,broadcast,orbPreview,channelWarp,reports,cosPreview', `GM defaults unchanged from before the Permissions tab (${GM_DEFAULT.join()})`);
   const trades = await api('GET', '/admin/trades', undefined, ownerTok);
   ok(trades.status === 200 && Array.isArray(trades.data) && (await api('GET', '/admin/trades?q=x%25', undefined, ownerTok)).status === 200, 'owner reads the trade log (and a search with odd characters is fine)');
   const gmDenied: [string, string, unknown?][] = [
@@ -563,6 +566,100 @@ async function run(): Promise<void> {
   tdb.prepare('INSERT INTO chat_log (at, account_id, username, char_name, zone, text) VALUES (?, 1, ?, ?, ?, ?)').run(Date.now() - 31 * 864e5, 'old', 'Old', 'emerald_forest', 'old message');
   tdb.prepare('INSERT INTO play_sessions (account_id, username, char_id, char_name, joined_at, ip) VALUES (1, ?, 1, ?, ?, ?)').run('old', 'Old', Date.now() - 91 * 864e5, '1.2.3.4');
   ok(!tools.some((t) => t.details.includes(rp.data.password)), 'the temporary password is never logged');
+
+  // ---------------------------------------------------------- Permissions tab: custom roles, no escalation
+  {
+    const defs = await api('GET', '/admin/role-defs', undefined, ot);
+    const gmDef = defs.data.roles?.find((r: any) => r.id === 'gm');
+    ok(defs.status === 200 && defs.data.roles[0].id === 'owner' && defs.data.roles[0].features.length === Object.keys(FEATURE_ROLES).length && gmDef?.builtin,
+      'owner lists the roles: owner (everything) and gm');
+    ok(JSON.stringify(gmDef.features) === JSON.stringify(GM_DEFAULT), 'with nothing changed, gm has exactly the FEATURE_ROLES defaults');
+    for (const [m, body] of [['GET', undefined], ['POST', { id: 'gm', name: 'GM', features: Object.keys(FEATURE_ROLES) }], ['POST', { id: 'hax', name: 'Hax', features: ['users'], create: true }]] as const) {
+      ok((await api(m, '/admin/role-defs', body, gmTok)).status === 403, `GM cannot ${m} role-defs (no self-grant)`);
+    }
+    ok((await api('DELETE', '/admin/role-defs/gm', undefined, gmTok)).status === 403, 'GM cannot delete roles');
+    const make = (body: unknown) => api('POST', '/admin/role-defs', body, ot);
+    ok((await make({ id: 'owner', name: 'x', features: [] })).status === 400, 'owner role cannot be edited');
+    ok((await make({ id: 'Tester!', name: 'x', features: [], create: true })).status === 400, 'bad role id → 400');
+    ok((await make({ id: 'gm', name: 'GM2', features: [], create: true })).status === 409, 'gm cannot be created again');
+    ok((await make({ id: 'none', name: 'None', features: [], create: true })).status === 409, 'reserved id → 409');
+    ok((await make({ id: 'tester', name: 'ผู้ทดสอบ', features: ['online', 'deleteEverything'], create: true })).status === 400, 'unknown tool → 400');
+    ok((await make({ id: 'tester', name: 'x'.repeat(21), features: [], create: true })).status === 400, 'name too long → 400');
+    ok((await make({ id: 'tester', name: 'gm', features: [], create: true })).status === 409, 'name already used by another role → 409');
+    ok((await make({ id: 'nosuch', name: 'No', features: [] })).status === 404, 'editing a role that does not exist → 404');
+    const made = await make({ id: 'tester', name: 'ผู้ทดสอบ', features: ['online', 'reports'], create: true });
+    ok(made.status === 200 && made.data.roles.some((r: any) => r.id === 'tester' && r.name === 'ผู้ทดสอบ' && !r.builtin && JSON.stringify(r.features) === '["online","reports"]'),
+      `owner creates the tester role (${made.status} ${made.data.error ?? ''})`);
+
+    const testerTok = await account('tester1');
+    const testerChar: number = (await api('POST', '/characters', { name: 'QaChar', classId: 'mage' }, testerTok)).data.id;
+    const victimTok = await account('plain9');
+    const victimId = (await api('GET', '/admin/accounts', undefined, ot)).data.rows.find((r: any) => r.username === 'plain9').accountId;
+    const testerId = (await api('GET', '/admin/accounts', undefined, ot)).data.rows.find((r: any) => r.username === 'tester1').accountId;
+    ok((await api('POST', '/admin/roles', { username: 'tester1', role: 'nosuch' }, ot)).status === 400, 'cannot give a role that does not exist');
+    const give = await api('POST', '/admin/roles', { username: 'tester1', role: 'tester' }, ot);
+    ok(give.status === 200 && give.data.some((r: any) => r.username === 'tester1' && r.role === 'tester'), 'owner gives tester1 the tester role');
+    const tme = await api('GET', '/admin/me', undefined, testerTok);
+    ok(tme.status === 200 && tme.data.role === 'tester' && tme.data.roleName === 'ผู้ทดสอบ' && JSON.stringify(tme.data.features) === '["online","reports"]' && tme.data.roleNames.tester === 'ผู้ทดสอบ',
+      `tester1 signs in to /admin with only its tools (${JSON.stringify(tme.data)})`);
+    ok((await api('GET', '/admin/online', undefined, testerTok)).status === 200, 'tester sees the online list');
+    ok((await api('GET', '/admin/reports', undefined, testerTok)).status === 200, 'tester reads reports');
+    const testerDenied: [string, string, unknown?][] = [
+      ['GET', '/admin/characters?q=a'], ['GET', `/admin/characters/${testerChar}`], ['POST', `/admin/characters/${testerChar}/gold`, { delta: 5 }],
+      ['POST', `/admin/characters/${testerChar}/level`, { level: 50 }], ['POST', `/admin/characters/${testerChar}/kick`, {}],
+      ['POST', `/admin/characters/${testerChar}/teleport`, { zone: 'nexus_city' }], ['GET', '/admin/accounts'], ['POST', '/admin/broadcast', { text: 'x' }],
+      ['GET', '/admin/role-defs'], ['POST', '/admin/role-defs', { id: 'tester', name: 'ผู้ทดสอบ', features: Object.keys(FEATURE_ROLES) }],
+      ['POST', '/admin/roles', { username: 'tester1', role: 'gm' }], ['GET', '/admin/audit'], ['GET', '/admin/server'],
+    ];
+    for (const [m, path, body] of testerDenied) ok((await api(m, path, body, testerTok)).status === 403, `tester denied: ${m} ${path}`);
+    ok(saved(testerChar).level === 1 && saved(testerChar).gold === 0, 'refused tester edits changed nothing');
+
+    // Changes apply on the next call (no re-login), and go to the audit log.
+    const edited = await make({ id: 'tester', name: 'QA', features: ['online', 'reports', 'charView', 'charEdit', 'users', 'ban'] });
+    ok(edited.status === 200 && (await api('GET', '/admin/me', undefined, testerTok)).data.roleName === 'QA', 'owner renames the role');
+    ok((await api('POST', `/admin/characters/${testerChar}/level`, { level: 5 }, testerTok)).status === 200 && saved(testerChar).level === 5, 'new tools work at once (tester edits its own character)');
+    // Staff accounts are off limits without staffTarget; the owner's always.
+    const SCOPE2 = 'GM แก้ไขตัวละครของ owner หรือ GM คนอื่นไม่ได้';
+    const gmCharId: number = own.data.id;
+    const te = await api('POST', `/admin/characters/${gmCharId}/gold`, { delta: 5 }, testerTok);
+    ok(te.status === 403 && te.data.error === SCOPE2, `tester cannot edit a GM's character without staffTarget (${te.status})`);
+    ok((await api('POST', `/admin/accounts/${testerId - 0}/ban`, { duration: '1h', reason: 'x' }, gmTok)).status === 403, 'GM cannot ban a tester');
+    ok((await api('POST', `/admin/characters/${testerChar}/gold`, { delta: 5 }, gmTok)).status === 403, "GM cannot edit a tester's character (staff, no staffTarget)");
+    const gmAcc = (await api('GET', '/admin/accounts', undefined, ot)).data.rows.find((r: any) => r.username === 'gm1').accountId;
+    ok((await api('POST', `/admin/accounts/${gmAcc}/ban`, { duration: '1h', reason: 'x' }, testerTok)).status === 403, 'tester with ban cannot ban a GM');
+    const vb = await api('POST', `/admin/accounts/${victimId}/ban`, { duration: '1h', reason: 'x' }, testerTok);
+    ok(vb.status === 200, `tester with ban bans a normal player (${vb.status} ${vb.data.error ?? ''})`);
+    void victimTok;
+    await make({ id: 'tester', name: 'QA', features: ['online', 'reports', 'charView', 'charEdit', 'users', 'ban', 'staffTarget'] });
+    ok((await api('POST', `/admin/characters/${gmCharId}/gold`, { delta: 5 }, testerTok)).status === 200, "with staffTarget the tester may edit a GM's character");
+    ok((await api('POST', `/admin/characters/${ownerChar}/gold`, { delta: 5 }, testerTok)).status === 403, "even with staffTarget never the owner's character");
+    ok((await api('POST', `/admin/accounts/${ownerId}/ban`, { duration: '1h', reason: 'x' }, testerTok)).status === 400, 'even with staffTarget never ban the owner');
+
+    // gm can be changed and put back; it can't be deleted.
+    ok((await make({ id: 'gm', name: 'GM', features: [...GM_DEFAULT, 'mail'] })).status === 200 && (await api('POST', '/admin/mail', {}, gmTok)).status !== 403, 'owner opens mail to GMs');
+    await make({ id: 'gm', name: 'GM', features: GM_DEFAULT });
+    ok(JSON.stringify((await api('GET', '/admin/me', undefined, gmTok)).data.features) === JSON.stringify(GM_DEFAULT), 'gm back to its defaults');
+    const gmRow = tdb.prepare("SELECT features FROM admin_roles WHERE id = 'gm'").get() as { features: string } | undefined;
+    ok(gmRow?.features === '{}', `only changes are stored, so later tools keep their defaults (${gmRow?.features})`);
+    ok((await api('DELETE', '/admin/role-defs/gm', undefined, ot)).status === 400, 'gm cannot be deleted');
+
+    // Deleting a role someone holds is refused (owner 2026-11-10); empty it first.
+    ok((await api('DELETE', '/admin/role-defs/tester', undefined, ot)).status === 409, 'role in use cannot be deleted');
+    ok((await api('POST', '/admin/roles', { username: 'tester1', role: null }, ot)).status === 200, 'owner takes the role back');
+    ok((await api('GET', '/admin/online', undefined, testerTok)).status === 403, 'no role → 403 at once');
+    const gone = await api('DELETE', '/admin/role-defs/tester', undefined, ot);
+    ok(gone.status === 200 && !gone.data.roles.some((r: any) => r.id === 'tester'), 'empty role deleted');
+    const cliBad = spawnSync(process.execPath, ['--import', 'tsx', 'server/admin-role.ts', 'tester1', 'tester'], { cwd: ROOT, env: { ...process.env, DB_FILE }, encoding: 'utf8' });
+    ok(cliBad.status !== 0, 'admin-role script refuses a role that does not exist');
+
+    const roleLog = tdb.prepare("SELECT action, target, details FROM admin_audit WHERE action LIKE 'role-%' OR (action IN ('grant','revoke') AND target = 'tester1')").all() as any[];
+    ok(roleLog.some((r) => r.action === 'role-create' && r.target === 'tester' && r.details.includes('ผู้ทดสอบ'))
+      && roleLog.some((r) => r.action === 'role-edit' && r.target === 'tester' && r.details.includes('"ผู้ทดสอบ" → "QA"'))
+      && roleLog.some((r) => r.action === 'role-edit' && r.target === 'gm' && r.details.includes('จดหมาย'))
+      && roleLog.some((r) => r.action === 'role-delete' && r.target === 'tester')
+      && roleLog.some((r) => r.action === 'grant' && r.details.includes('ผู้ทดสอบ'))
+      && roleLog.some((r) => r.action === 'revoke'), `every role change is in the audit log (${roleLog.length} rows)`);
+  }
   tdb.close();
 
   // ---------------------------------------------------------- revoke

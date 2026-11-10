@@ -2,7 +2,7 @@
 // role and every value, so nothing here is a safeguard. Names, GPU strings and the like come from
 // players: they are only ever put on the page as text (never as HTML).
 import './admin.css';
-import { ADMIN_AUDIT_PAGE, ADMIN_ITEM_ROWS_MAX, ADMIN_STAT_MULT, statStep, type AdminItemRow, ADMIN_NO_RIGHTS as NO_RIGHTS, HISTORY_DAYS, HISTORY_PAGE, SESSION_PAGE_SIZES, SESSION_SEARCH_MAX, BAN_DURATIONS, BAN_FOREVER, BAN_REASON_MAX, BROADCAST_EVERY_MS, BROADCAST_MAX } from '../shared/admin';
+import { ADMIN_AUDIT_PAGE, ADMIN_ITEM_ROWS_MAX, ADMIN_STAT_MULT, statStep, type AdminItemRow, ADMIN_NO_RIGHTS as NO_RIGHTS, HISTORY_DAYS, HISTORY_PAGE, SESSION_PAGE_SIZES, SESSION_SEARCH_MAX, BAN_DURATIONS, BAN_FOREVER, BAN_REASON_MAX, BROADCAST_EVERY_MS, BROADCAST_MAX, FEATURE_GROUPS, FEATURE_INFO, OWNER_ONLY_TOOLS, OWNER_ROLE, ROLE_ID_RE, ROLE_NAME_MAX, type RoleDef, type RoleDefsResponse } from '../shared/admin';
 import { MAX_CHARACTERS } from '../shared/api';
 import { TRADE_TAX_PCT, type TradeLogRow } from '../shared/trade';
 import { REPORT_ADMIN_PAGE, REPORT_STATUSES, REPORT_TOPICS, REPORT_TOPIC_LABEL, type AdminReportRow } from '../shared/reports';
@@ -11,7 +11,7 @@ import { entryName, POTION_SIZES, potionName } from '../shared/data/potions';
 import { STONE_NAME } from '../shared/data/stones';
 import { COSMETICS, COS_SLOTS, COS_SLOT_NAME } from '../shared/data/cosmetics';
 import type {
-  AdminAccountDetail, AdminAccountsResponse, AdminCosLook, AdminFeature, AdminOrbLook, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, SessionPage, SessionSort, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AdminShutdownText, AuditRow, RoleRow,
+  AdminAccountDetail, AdminAccountsResponse, AdminCosLook, AdminFeature, AdminOrbLook, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, SessionPage, SessionSort, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AdminShutdownText, AuditRow,
 } from '../shared/admin';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { itemNames, makeItem, roundStat, rowRanges, tierOf } from '../shared/data/items';
@@ -243,7 +243,9 @@ async function start(): Promise<void> {
 
 function renderShell(): void {
   if (!me) return;
-  const tabs: [Tab, string][] = [['online', 'ออนไลน์'], ['search', 'ค้นหาตัวละคร']];
+  const tabs: [Tab, string][] = [];
+  if (me.features.includes('online')) tabs.push(['online', 'ออนไลน์']);
+  if (me.features.includes('charView')) tabs.push(['search', 'ค้นหาตัวละคร']);
   if (me.features.includes('users')) tabs.push(['users', 'ผู้ใช้ทั้งหมด']);
   if (me.features.includes('stats')) tabs.push(['stats', 'สถิติ']);
   if (me.features.includes('sessions')) tabs.push(['sessions', 'การเข้าเล่น']);
@@ -253,14 +255,17 @@ function renderShell(): void {
   if (me.features.includes('reports')) tabs.push(['reports', 'รายงาน']);
   if (me.features.includes('orbPreview')) tabs.push(['orbs', 'ลูกแก้วตีบวก']);
   if (me.features.includes('cosPreview')) tabs.push(['cos', 'ของแต่งตัว']);
-  if (me.role === 'owner') tabs.push(['roles', 'สิทธิ์ GM'], ['audit', 'ประวัติ']);
+  if (me.role === OWNER_ROLE) tabs.push(['roles', 'สิทธิ์'], ['audit', 'ประวัติ']);
   if (me.role === 'owner' || me.features.includes('broadcast') || me.features.includes('backup') || me.features.includes('shutdownText')) tabs.push(['server', 'Server']);
+  // A role without the tab that was open (or with no tabs at all) starts on its first one.
+  if (!tabs.length) tabs.push(['server', 'Server']);
+  if (!tabs.some(([id]) => id === tab)) tab = tabs[0][0];
   const bar = h('nav', { class: 'tabs' }, ...tabs.map(([id, label]) =>
     h('button', { class: id === tab ? 'on' : '', 'data-tab': id, onclick: () => setTab(id) }, label)));
   root.replaceChildren(
     h('header', { class: 'top' },
       h('div', { class: 'brand' }, 'MULTIVERSE', h('small', {}, 'ผู้ดูแล')),
-      h('div', { class: 'who' }, me.username, h('span', { class: 'role' }, me.role === 'owner' ? 'Owner' : 'GM'),
+      h('div', { class: 'who' }, me.username, h('span', { class: 'role' }, me.roleName),
         h('button', { class: 'small', onclick: logout }, 'ออก')),
     ),
     bar,
@@ -403,7 +408,8 @@ function onlineRow(p: AdminOnlineRow): HTMLTableRowElement {
   const cell = (label: string, content: Node | string, cls = '') => h('td', { 'data-label': label, class: cls }, content);
   const numCell = (label: string, v: number | null, unit: string, bad: boolean) =>
     cell(label, v === null ? '—' : `${fmt(v)}${unit}`, `num${v !== null && bad ? ' warn' : ''}`);
-  return h('tr', { class: 'click', 'data-char': String(p.charId), onclick: () => void openChar(p.charId) },
+  const view = can('charView');
+  return h('tr', { class: view ? 'click' : '', 'data-char': String(p.charId), onclick: view ? () => void openChar(p.charId) : null },
     cell('ตัวละคร', p.name, 'head'),
     cell('บัญชี', h('span', {}, p.username, p.guest ? h('span', { class: 'tag' }, 'Guest') : null)),
     cell('คลาส', className(p.classId)),
@@ -727,6 +733,7 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
   kickBtn.onclick = () => void run('kick', {}, kickBtn, `เตะ ${c.name} ออกจากเกม?`);
 
   const fact = (label: string, v: string) => h('div', {}, `${label} `, h('b', {}, v));
+  const edit = can('charEdit');
   const bg = h('div', { class: 'sheet-bg', onclick: (ev: Event) => ev.target === bg && closeSheet() });
   bg.append(h('div', { class: 'sheet' },
     h('div', { class: 'sheet-head' },
@@ -744,19 +751,19 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
       fact('กระเป๋าว่าง', `${c.bagFree} ช่อง`),
     ),
     c.online ? null : h('div', { class: 'muted' }, 'ตัวละครออฟไลน์: แก้ในเซฟ มีผลเมื่อเข้าเกมครั้งถัดไป'),
-    h('section', {}, h('h3', {}, `เลเวล / EXP (สูงสุด Lv.${m.maxLevel})`),
-      h('div', { class: 'row' }, h('label', {}, 'เลเวล', lv), h('label', {}, 'EXP', exp), lvBtn)),
-    h('section', {}, h('h3', {}, `ทอง (ครั้งละไม่เกิน ${fmt(m.goldMax)} G)`),
-      h('div', { class: 'row' }, h('label', {}, 'จำนวน', gold), giveBtn, takeBtn)),
-    h('section', {}, h('h3', {}, `เสกไอเทมใส่กระเป๋า (ครั้งละไม่เกิน ${m.itemsMax} ชิ้น · ยา/หินนับทีละขวด/ก้อน)`),
+    edit ? h('section', {}, h('h3', {}, `เลเวล / EXP (สูงสุด Lv.${m.maxLevel})`),
+      h('div', { class: 'row' }, h('label', {}, 'เลเวล', lv), h('label', {}, 'EXP', exp), lvBtn)) : null,
+    edit ? h('section', {}, h('h3', {}, `ทอง (ครั้งละไม่เกิน ${fmt(m.goldMax)} G)`),
+      h('div', { class: 'row' }, h('label', {}, 'จำนวน', gold), giveBtn, takeBtn)) : null,
+    !edit ? null : h('section', {}, h('h3', {}, `เสกไอเทมใส่กระเป๋า (ครั้งละไม่เกิน ${m.itemsMax} ชิ้น · ยา/หินนับทีละขวด/ก้อน)`),
       h('div', { class: 'row' }, h('label', {}, 'ของอาชีพ', forCls), h('label', { style: 'flex:1' }, 'ชนิด', base)),
       h('div', { class: 'row', style: 'margin-top:8px' },
         rarityWrap, plusWrap, itemLvWrap, h('label', {}, 'จำนวน', count), itemBtn),
       custom ? exampleBox : null),
-    h('section', {}, h('h3', {}, 'ย้ายโซน (ไปที่แคมป์)'),
+    can('teleport') ? h('section', {}, h('h3', {}, 'ย้ายโซน (ไปที่แคมป์)'),
       h('div', { class: 'row' }, h('label', {}, 'โซน', zone), chWrap, tpBtn),
-      can('channelWarp') ? h('div', { class: 'muted' }, 'เลือก CH ได้เฉพาะแมพที่มีแชนแนล · เลือก CH แล้วเข้าได้แม้ห้องเต็ม') : null),
-    c.online ? h('section', {}, h('div', { class: 'row' }, kickBtn)) : null,
+      can('channelWarp') ? h('div', { class: 'muted' }, 'เลือก CH ได้เฉพาะแมพที่มีแชนแนล · เลือก CH แล้วเข้าได้แม้ห้องเต็ม') : null) : null,
+    c.online && can('kick') ? h('section', {}, h('div', { class: 'row' }, kickBtn)) : null,
     h('div', { class: 'result' }, result),
   ));
   sheet = bg;
@@ -768,37 +775,144 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeSheet();
 });
 
-// ------------------------------------------------------------ roles (owner)
+// ------------------------------------------------------------ permissions (owner)
 
+/**
+ * The Permissions tab: every role with the tools it may use (tick boxes with a Thai name and what it
+ * unlocks), adding / renaming / deleting roles, and who holds which role. The server checks everything.
+ */
 async function renderRoles(): Promise<void> {
-  const list = h('div');
   const msg = h('div', { class: 'msg' });
-  const user = h('input', { placeholder: 'ชื่อผู้ใช้ หรือชื่อตัวละครที่ออนไลน์', autocapitalize: 'off' });
+  const rolesBox = h('div');
+  const adminsBox = h('div');
   const matches = h('div');
+  const user = h('input', { placeholder: 'ชื่อผู้ใช้ หรือชื่อตัวละครที่ออนไลน์', autocapitalize: 'off' });
+  const giveAs = h('select');
+  let data: RoleDefsResponse = { roles: [], admins: [] };
+  /** The role whose editor is open ('' = the new-role form). */
+  let open: string | null = null;
 
-  let admins: RoleRow[] = [];
-  const drawList = (rows: RoleRow[]) => {
-    admins = rows;
-    list.replaceChildren(...rows.map((r) => h('div', { class: 'list-item' },
-      h('div', { class: 'grow' }, r.username, h('span', { class: 'role', style: 'margin-left:8px' }, r.role === 'owner' ? 'Owner' : 'GM')),
-      r.role === 'gm' ? h('button', { class: 'small danger', onclick: () => void setRole(r.username, null) }, 'ถอนสิทธิ์') : null,
-    )));
-    if (!rows.length) list.append(h('div', { class: 'muted' }, 'ยังไม่มีผู้ดูแล'));
+  const say = (text: string, good: boolean) => {
+    msg.className = `msg ${good ? 'ok' : 'bad'}`;
+    msg.textContent = text;
   };
-  const setRole = async (username: string, role: 'gm' | null) => {
-    if (!confirm(role ? `ให้สิทธิ์ GM กับบัญชี ${username}?` : `ถอนสิทธิ์ GM ของ ${username}?`)) return;
-    msg.className = 'msg';
-    msg.textContent = 'กำลังส่ง…';
+  const assignable = () => data.roles.filter((r) => r.id !== OWNER_ROLE);
+  const draw = (d: RoleDefsResponse) => {
+    data = d;
+    if (me) me.roleNames = Object.fromEntries(d.roles.map((r) => [r.id, r.name]));
+    drawRoles();
+    drawAdmins();
+    const keep = giveAs.value;
+    giveAs.replaceChildren(...assignable().map((r) => h('option', { value: r.id }, r.name)));
+    if (assignable().some((r) => r.id === keep)) giveAs.value = keep;
+    void drawMatches();
+  };
+
+  /** Tick boxes for every tool, grouped; `on` = ticked at the start. */
+  const editor = (role: RoleDef | null): HTMLElement => {
+    const boxes = new Map<AdminFeature, HTMLInputElement>();
+    const groups = FEATURE_GROUPS.map((g) => {
+      const fs = (Object.keys(FEATURE_INFO) as AdminFeature[]).filter((f) => FEATURE_INFO[f].group === g);
+      return h('div', { class: 'perm-group' }, h('div', { class: 'sub' }, g), ...fs.map((f) => {
+        const box = h('input', { type: 'checkbox', checked: !!role?.features.includes(f) });
+        boxes.set(f, box);
+        return h('label', { class: 'perm' }, box,
+          h('span', {}, FEATURE_INFO[f].name, h('div', { class: 'muted' }, FEATURE_INFO[f].desc)));
+      }));
+    });
+    const idIn = h('input', { placeholder: 'เช่น tester', autocapitalize: 'off', maxLength: 20 });
+    const nameIn = h('input', { value: role?.name ?? '', placeholder: 'เช่น ผู้ทดสอบ', maxLength: ROLE_NAME_MAX });
+    const all = (on: boolean) => boxes.forEach((b) => (b.checked = on));
+    const save = h('button', { class: 'primary' }, role ? 'บันทึก' : 'สร้าง role');
+    save.onclick = async () => {
+      const id = role ? role.id : idIn.value.trim().toLowerCase();
+      if (!role && !ROLE_ID_RE.test(id)) return say('รหัส role ใช้ a–z 0–9 _ ขึ้นต้นด้วยตัวอักษร ยาว 2–20 ตัว', false);
+      const features = [...boxes].filter(([, b]) => b.checked).map(([f]) => f);
+      save.disabled = true;
+      try {
+        const d = await api<RoleDefsResponse>('POST', '/admin/role-defs', { id, name: nameIn.value, features, create: !role });
+        open = null;
+        draw(d);
+        say(role ? `บันทึกสิทธิ์ของ ${nameIn.value.trim()} แล้ว` : `สร้าง role ${nameIn.value.trim()} (${id}) แล้ว`, true);
+      } catch (e) {
+        say((e as Error).message, false);
+        save.disabled = false;
+      }
+    };
+    let del: HTMLButtonElement | null = null;
+    if (role && !role.builtin) {
+      const d = h('button', { class: 'danger' }, 'ลบ role');
+      d.onclick = async () => {
+        if (role.members > 0) return say(`ยังมี ${role.members} บัญชีใช้ role นี้ เปลี่ยน role ของบัญชีเหล่านั้นก่อน`, false);
+        if (!confirm(`ลบ role ${role.name} (${role.id})?`)) return;
+        try {
+          const r = await api<RoleDefsResponse>('DELETE', `/admin/role-defs/${role.id}`);
+          open = null;
+          draw(r);
+          say(`ลบ role ${role.name} แล้ว`, true);
+        } catch (e) {
+          say((e as Error).message, false);
+        }
+      };
+      del = d;
+    }
+    return h('div', { class: 'role-editor' },
+      h('div', { class: 'row' },
+        role ? null : h('label', {}, 'รหัส (ภาษาอังกฤษ เปลี่ยนไม่ได้)', idIn),
+        h('label', {}, 'ชื่อที่แสดง', nameIn)),
+      h('div', { class: 'row', style: 'margin-top:8px' },
+        h('button', { class: 'small', onclick: () => all(true) }, 'เลือกทั้งหมด'),
+        h('button', { class: 'small', onclick: () => all(false) }, 'ไม่เลือกเลย')),
+      ...groups,
+      h('div', { class: 'row', style: 'margin-top:10px' }, save,
+        h('button', { onclick: () => { open = null; drawRoles(); } }, 'ยกเลิก'), del),
+    );
+  };
+
+  const total = Object.keys(FEATURE_INFO).length;
+  const drawRoles = () => {
+    rolesBox.replaceChildren(...data.roles.map((r) => {
+      const owner = r.id === OWNER_ROLE;
+      const head = h('div', { class: 'list-item' },
+        h('div', { class: 'grow' },
+          h('span', { class: 'role' }, r.name), h('span', { class: 'muted' }, ` ${r.id}`),
+          h('div', { class: 'muted' }, owner ? 'ใช้ได้ทุกอย่างเสมอ (แก้ไม่ได้)' : `ใช้ได้ ${r.features.length}/${total} อย่าง`, ` · ${r.members} บัญชี`)),
+        owner ? null : h('button', { class: 'small', onclick: () => { open = open === r.id ? null : r.id; drawRoles(); } }, open === r.id ? 'ปิด' : 'แก้ไข'));
+      return h('div', {}, head, open === r.id ? editor(r) : null);
+    }),
+    open === '' ? editor(null) : h('div', { class: 'row', style: 'margin-top:10px' },
+      h('button', { class: 'primary', onclick: () => { open = ''; drawRoles(); } }, '+ สร้าง role ใหม่')));
+  };
+
+  const setRole = async (username: string, role: string | null) => {
+    const label = role ? roleLabel(role) : '';
+    if (!confirm(role ? `ให้ role ${label} กับบัญชี ${username}?` : `ถอนสิทธิ์ผู้ดูแลของ ${username}?`)) return;
     try {
-      drawList(await api<RoleRow[]>('POST', '/admin/roles', { username, role }));
-      msg.className = 'msg ok';
-      msg.textContent = role ? `ให้สิทธิ์ GM กับ ${username} แล้ว` : `ถอนสิทธิ์ GM ของ ${username} แล้ว`;
-      void drawMatches();
+      await api('POST', '/admin/roles', { username, role });
+      draw(await api<RoleDefsResponse>('GET', '/admin/role-defs'));
+      say(role ? `ให้ role ${label} กับ ${username} แล้ว` : `ถอนสิทธิ์ของ ${username} แล้ว`, true);
     } catch (e) {
-      msg.className = 'msg bad';
-      msg.textContent = (e as Error).message;
+      say((e as Error).message, false);
     }
   };
+
+  const drawAdmins = () => {
+    adminsBox.replaceChildren(...data.admins.map((r) => {
+      if (r.role === OWNER_ROLE) {
+        return h('div', { class: 'list-item' }, h('div', { class: 'grow' }, r.username), h('span', { class: 'role' }, roleLabel(r.role)));
+      }
+      const sel = h('select', { style: 'flex:0 1 160px' }, ...assignable().map((x) => h('option', { value: x.id, selected: x.id === r.role }, x.name)));
+      sel.addEventListener('change', () => {
+        const to = sel.value;
+        sel.value = r.role;
+        void setRole(r.username, to);
+      });
+      return h('div', { class: 'list-item' }, h('div', { class: 'grow' }, r.username), sel,
+        h('button', { class: 'small danger', onclick: () => void setRole(r.username, null) }, 'ถอนสิทธิ์'));
+    }));
+    if (!data.admins.length) adminsBox.append(h('div', { class: 'muted' }, 'ยังไม่มีผู้ดูแล'));
+  };
+
   // Online players matching what is typed (account or character name), to pick from.
   const drawMatches = async () => {
     const q = user.value.trim().toLowerCase();
@@ -810,13 +924,10 @@ async function renderRoles(): Promise<void> {
     }
     const hits = online.players.filter((p) => !p.guest && (p.username.toLowerCase().includes(q) || p.name.toLowerCase().includes(q))).slice(0, 8);
     matches.replaceChildren(...hits.map((p) => {
-      // Already an admin: say so (and offer the revoke for a GM) instead of another "ให้ GM".
-      const role = admins.find((r) => r.username === p.username)?.role;
+      const role = data.admins.find((r) => r.username === p.username)?.role;
       return h('div', { class: 'list-item' },
         h('div', { class: 'grow' }, p.username, h('span', { class: 'muted' }, ` · ${p.name} Lv.${p.level} (ออนไลน์)`)),
-        role ? h('span', { class: 'role' }, role === 'owner' ? 'Owner' : 'GM แล้ว') : null,
-        role === 'gm' ? h('button', { class: 'small danger', onclick: () => void setRole(p.username, null) }, 'ถอนสิทธิ์') : null,
-        role ? null : h('button', { class: 'small', onclick: () => void setRole(p.username, 'gm') }, 'ให้ GM'),
+        role ? h('span', { class: 'role' }, roleLabel(role)) : h('button', { class: 'small', onclick: () => void setRole(p.username, giveAs.value) }, 'ให้สิทธิ์'),
       );
     }));
   };
@@ -825,24 +936,29 @@ async function renderRoles(): Promise<void> {
     clearTimeout(debounce);
     debounce = window.setTimeout(() => void drawMatches(), 250);
   });
-  const form = h('form', { class: 'row' }, h('label', {}, 'ค้นหาผู้เล่นออนไลน์ หรือพิมพ์ชื่อบัญชี', user), h('button', { class: 'primary', type: 'submit' }, 'ให้สิทธิ์ GM'));
+  const form = h('form', { class: 'row' },
+    h('label', {}, 'ค้นหาผู้เล่นออนไลน์ หรือพิมพ์ชื่อบัญชี', user),
+    h('label', { style: 'flex:0 1 160px' }, 'role', giveAs),
+    h('button', { class: 'primary', type: 'submit' }, 'ให้สิทธิ์'));
   form.addEventListener('submit', (ev) => {
     ev.preventDefault();
     const u = user.value.trim();
-    if (u) void setRole(u, 'gm');
+    if (u && giveAs.value) void setRole(u, giveAs.value);
   });
 
   view.append(
-    h('div', { class: 'card' }, h('h2', {}, 'ผู้ดูแลตอนนี้'), list),
-    h('div', { class: 'card' }, h('h2', {}, 'ให้สิทธิ์ GM'),
-      h('div', { class: 'muted', style: 'margin:-6px 0 8px' }, 'GM ดูผู้เล่นและแก้ตัวละครได้ แต่ให้สิทธิ์คนอื่นหรือดูประวัติไม่ได้'),
-      form, matches, msg),
+    h('div', { class: 'card' }, h('h2', {}, 'Role และเครื่องมือที่ใช้ได้'),
+      h('div', { class: 'muted', style: 'margin:-6px 0 8px' }, 'กด "แก้ไข" เพื่อติ๊กเครื่องมือที่ role นั้นใช้ได้ · มีผลทันทีโดยไม่ต้องออกจากระบบ'),
+      rolesBox, msg),
+    h('div', { class: 'card' }, h('h2', {}, 'ผู้ดูแลตอนนี้'), adminsBox),
+    h('div', { class: 'card' }, h('h2', {}, 'ให้สิทธิ์ผู้ดูแล'), form, matches),
+    h('div', { class: 'card' }, h('h2', {}, 'ของ owner เท่านั้น (ให้ role อื่นไม่ได้)'),
+      h('ul', { class: 'items' }, ...OWNER_ONLY_TOOLS.map((t) => h('li', {}, t)))),
   );
   try {
-    drawList(await api<RoleRow[]>('GET', '/admin/roles'));
+    draw(await api<RoleDefsResponse>('GET', '/admin/role-defs'));
   } catch (e) {
-    msg.className = 'msg bad';
-    msg.textContent = (e as Error).message;
+    say((e as Error).message, false);
   }
 }
 
@@ -1272,6 +1388,8 @@ async function renderRestart(): Promise<void> {
 // ------------------------------------------------------------ every account (owner tools)
 
 const can = (f: AdminFeature): boolean => !!me?.features.includes(f);
+/** A role's display name ("Owner", "GM", "ผู้ทดสอบ"…). */
+const roleLabel = (role: string): string => me?.roleNames[role] ?? role;
 const dateOnly = (ms: number): string => new Date(ms).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
 const ago = (ms: number): string => {
   const s = Math.max(0, (Date.now() - ms) / 1000);
@@ -1338,7 +1456,7 @@ async function renderUsers(): Promise<void> {
         cell('ชื่อผู้ใช้', h('span', {}, r.guest ? `Guest · ${r.names[0] ?? ''}` : r.username,
           r.bannedUntil ? h('span', { class: 'tag ban' }, 'แบน') : null), 'head'),
         cell('ประเภท', r.guest ? 'Guest' : 'บัญชีจริง'),
-        cell('สิทธิ์', r.role ? h('span', { class: 'role' }, r.role === 'owner' ? 'Owner' : 'GM') : '–'),
+        cell('สิทธิ์', r.role ? h('span', { class: 'role' }, roleLabel(r.role)) : '–'),
         cell('สมัครเมื่อ', dateOnly(r.createdAt)),
         cell('ออนไลน์ล่าสุด', r.online ? h('span', { class: 'good' }, '🟢 ออนไลน์') : r.lastOnline ? ago(r.lastOnline) : '–'),
         cell('ตัวละคร', `${r.characters}/${MAX_CHARACTERS}`, 'num'),
@@ -1519,7 +1637,7 @@ async function openAccount(id: number, note?: { text: string; ok: boolean; passw
       h('div', { class: 'row', style: 'align-items:center' },
         h('div', { style: 'flex:1' }, h('b', {}, c.name), h('span', { class: c.online ? 'tag on' : 'tag' }, c.online ? 'ออนไลน์' : 'ออฟไลน์'),
           h('div', { class: 'muted' }, `${className(c.classId)} · Lv.${c.level} · ${zoneName(c.zone)} · ${fmt(c.gold)} G`)),
-        h('button', { class: 'small', onclick: () => void openChar(c.charId) }, 'แก้ไข')),
+        can('charView') ? h('button', { class: 'small', onclick: () => void openChar(c.charId) }, 'แก้ไข') : null),
       h('div', { class: 'sub' }, 'สวมใส่'), itemList(eq, 'ไม่ได้สวมอะไร'),
       h('div', { class: 'sub' }, `กระเป๋า (ว่าง ${c.bagFree} ช่อง)`), itemList(c.bag, 'กระเป๋าว่าง'),
       del,
@@ -1587,7 +1705,7 @@ async function openAccount(id: number, note?: { text: string; ok: boolean; passw
   bg.append(h('div', { class: 'sheet' },
     h('div', { class: 'sheet-head' },
       h('div', {},
-        h('h2', {}, display, a.role ? h('span', { class: 'role', style: 'margin-left:6px' }, a.role === 'owner' ? 'Owner' : 'GM') : null,
+        h('h2', {}, display, a.role ? h('span', { class: 'role', style: 'margin-left:6px' }, roleLabel(a.role)) : null,
           a.online ? h('span', { class: 'tag on' }, 'ออนไลน์') : null, a.bannedUntil ? h('span', { class: 'tag ban' }, 'แบน') : null),
         h('div', { class: 'muted' }, `${a.guest ? 'Guest' : 'บัญชีจริง'} · สมัคร ${dateOnly(a.createdAt)} · ${a.online ? 'ออนไลน์อยู่' : a.lastOnline ? `ออนไลน์ล่าสุด ${ago(a.lastOnline)}` : 'ยังไม่มีข้อมูลออนไลน์ล่าสุด'}`),
       ),

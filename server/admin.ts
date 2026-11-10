@@ -13,10 +13,11 @@ import { ownerToolsApi } from './admin-tools';
 import { mailAdminApi } from './admin-mail';
 import { tradeAdminApi } from './admin-trade';
 import { reportsAdminApi } from './admin-reports';
+import { rolesAdminApi } from './admin-roles';
 import type { Backups } from './backup';
 import {
   ADMIN_AUDIT_PAGE, ADMIN_GOLD_MAX, ADMIN_NO_RIGHTS, ADMIN_ITEMS_MAX, ADMIN_SEARCH_MAX,
-  addStackToBag, adminStack, adminStackName, canUse, customItem, FEATURE_ROLES, type AdminFeature, type AdminCharRow, type AdminEditResult, type AdminMe, type AdminMeta, type AdminRole, type AdminServerState,
+  addStackToBag, adminStack, adminStackName, customItem, OWNER_ROLE, type AdminFeature, type AdminCharRow, type AdminEditResult, type AdminMe, type AdminMeta, type AdminRole, type AdminServerState,
 } from '../src/shared/admin';
 import { shutdownCancelled, type ShutdownMode } from '../src/shared/net/protocol';
 import { BAG_SIZE, type CharacterData, type Player } from '../src/shared/sim/Player';
@@ -33,16 +34,39 @@ import { checkUsername } from '../src/shared/api';
 const NO_RIGHTS = ADMIN_NO_RIGHTS;
 const GM_SCOPE = 'GM แก้ไขตัวละครของ owner หรือ GM คนอื่นไม่ได้';
 
-export interface Admin { acc: SessionAccount; role: AdminRole }
+/** The caller: their login, role, and the tools that role may use right now (read from the DB on every call). */
+export interface Admin { acc: SessionAccount; role: AdminRole; features: AdminFeature[] }
 
-/** The caller, if their login is valid and their account has an admin role; otherwise 401 / 403. */
-export function requireAdmin(req: IncomingMessage, db: Db, need: AdminRole = 'gm'): Admin {
+/**
+ * The caller, if their login is valid and their account has an admin role; otherwise 401 / 403.
+ * `need` 'owner' = the owner-only things that are never a switch (roles, audit, server stop, deleting).
+ */
+export function requireAdmin(req: IncomingMessage, db: Db, need?: 'owner'): Admin {
   const token = bearer(req);
   const acc = token ? db.sessionAccount(token) : undefined;
   if (!acc) throw new HttpError(401, 'กรุณาเข้าสู่ระบบใหม่');
   const role = acc.guest ? null : db.adminRole(acc.id);
-  if (!role || (need === 'owner' && role !== 'owner')) throw new HttpError(403, NO_RIGHTS);
-  return { acc, role };
+  if (!role || (need === OWNER_ROLE && role !== OWNER_ROLE)) throw new HttpError(403, NO_RIGHTS);
+  return { acc, role, features: db.roleFeatures(role) };
+}
+
+/** The caller, if their role may use this tool; otherwise 401 / 403. */
+export function requireFeature(req: IncomingMessage, db: Db, f: AdminFeature, deny = NO_RIGHTS): Admin {
+  const a = requireAdmin(req, db);
+  if (!a.features.includes(f)) throw new HttpError(403, deny);
+  return a;
+}
+
+/**
+ * Staff (any admin role) acting on another account: never on an owner's, and on another staff
+ * account only with the `staffTarget` tool. The owner, and anyone on their own account, always may.
+ */
+export function mayTouch(db: Db, a: Admin, accountId: number): 'ok' | 'owner' | 'staff' {
+  if (a.role === OWNER_ROLE || accountId === a.acc.id) return 'ok';
+  const r = db.adminRole(accountId);
+  if (!r) return 'ok';
+  if (r === OWNER_ROLE) return 'owner';
+  return a.features.includes('staffTarget') ? 'ok' : 'staff';
 }
 
 /** A whole number in [min, max] from the request, or a 400. */
@@ -98,11 +122,12 @@ export async function adminApi(
   if (await mailAdminApi(req, res, path, method, db, world)) return;
   if (tradeAdminApi(req, res, path, method, db)) return;
   if (await reportsAdminApi(req, res, path, method, db)) return;
+  if (await rolesAdminApi(req, res, path, method, url, db)) return;
 
   if (method === 'GET' && path === '/api/admin/me') {
     const a = requireAdmin(req, db);
-    const features = (Object.keys(FEATURE_ROLES) as AdminFeature[]).filter((f) => canUse(a.role, f));
-    return send(res, 200, { username: a.acc.username, role: a.role, features } satisfies AdminMe);
+    const roleNames = Object.fromEntries(db.roleDefs().map((r) => [r.id, r.name]));
+    return send(res, 200, { username: a.acc.username, role: a.role, roleName: db.roleName(a.role), features: a.features, roleNames } satisfies AdminMe);
   }
 
   if (method === 'GET' && path === '/api/admin/meta') {
@@ -117,12 +142,12 @@ export async function adminApi(
   }
 
   if (method === 'GET' && path === '/api/admin/online') {
-    requireAdmin(req, db);
+    requireFeature(req, db, 'online');
     return send(res, 200, world.adminOnline());
   }
 
   if (method === 'GET' && path === '/api/admin/characters') {
-    requireAdmin(req, db);
+    requireFeature(req, db, 'charView');
     const q = (url.searchParams.get('q') ?? '').trim().slice(0, 32);
     if (!q) return send(res, 200, []);
     const rows = db.searchCharacters(q, ADMIN_SEARCH_MAX).map((c) => charRow(c, world.livePlayer(c.id)));
@@ -131,7 +156,7 @@ export async function adminApi(
 
   const one = /^\/api\/admin\/characters\/(\d{1,12})$/.exec(path);
   if (method === 'GET' && one) {
-    requireAdmin(req, db);
+    requireFeature(req, db, 'charView');
     const c = db.adminCharacter(Number(one[1]));
     if (!c) throw new HttpError(404, 'ไม่พบตัวละครนี้');
     return send(res, 200, charRow(c, world.livePlayer(c.id)));
@@ -139,33 +164,13 @@ export async function adminApi(
 
   const edit = /^\/api\/admin\/characters\/(\d{1,12})\/(level|gold|items|kick|teleport)$/.exec(path);
   if (method === 'POST' && edit) {
-    const a = requireAdmin(req, db);
+    const tool: AdminFeature = edit[2] === 'kick' ? 'kick' : edit[2] === 'teleport' ? 'teleport' : 'charEdit';
+    const a = requireFeature(req, db, tool);
     const body = await readJson(req);
     return send(res, 200, editCharacter(db, world, a, Number(edit[1]), edit[2], body));
   }
 
   // ---------------------------------------------------------- roles and audit: owner only
-
-  if (method === 'GET' && path === '/api/admin/roles') {
-    requireAdmin(req, db, 'owner');
-    return send(res, 200, db.listAdmins());
-  }
-
-  if (method === 'POST' && path === '/api/admin/roles') {
-    const a = requireAdmin(req, db, 'owner');
-    const body = await readJson(req);
-    const username = str(body.username).trim();
-    if (checkUsername(username)) throw new HttpError(400, 'ชื่อผู้ใช้ไม่ถูกต้อง');
-    const role = body.role === 'gm' ? 'gm' : body.role === null ? null : undefined;
-    if (role === undefined) throw new HttpError(400, 'ให้สิทธิ์ได้เฉพาะ GM');
-    const acc = db.findAccount(username);
-    if (!acc) throw new HttpError(404, 'ไม่พบบัญชีนี้ (Guest รับสิทธิ์ไม่ได้)');
-    // Owners are made from the command line only, so the page can't lock the owner out or add one.
-    if (db.adminRole(acc.id) === 'owner') throw new HttpError(400, 'เปลี่ยนสิทธิ์ของ owner จากหน้านี้ไม่ได้');
-    db.setAdminRole(acc.id, role);
-    log(db, a, role ? 'grant' : 'revoke', acc.username, role ? 'GM' : 'ถอนสิทธิ์ GM');
-    return send(res, 200, db.listAdmins());
-  }
 
   if (method === 'GET' && path === '/api/admin/audit') {
     requireAdmin(req, db, 'owner');
@@ -203,10 +208,8 @@ function editCharacter(db: Db, world: GameWorld, a: Admin, charId: number, what:
   const c = db.adminCharacter(charId);
   if (!c) throw new HttpError(404, 'ไม่พบตัวละครนี้');
   const target = `${c.name} (${c.guest ? 'Guest' : c.username}, #${c.id})`;
-  // GMs edit normal players and their own characters only; the owner's and other GMs' are off limits.
-  if (a.role !== 'owner' && c.accountId !== a.acc.id && !c.guest && db.adminRole(c.accountId)) {
-    throw new HttpError(403, GM_SCOPE);
-  }
+  // Staff edit normal players and their own characters; other staff only with `staffTarget`, the owner's never.
+  if (!c.guest && mayTouch(db, a, c.accountId) !== 'ok') throw new HttpError(403, GM_SCOPE);
   // Online: change the live character (a DB edit would be overwritten by its next save).
   // Everything below runs synchronously, so the character can't log in or out half way.
   const live = world.livePlayer(charId);
@@ -283,7 +286,7 @@ function editCharacter(db: Db, world: GameWorld, a: Admin, charId: number, what:
       if (!classId) throw new HttpError(400, 'อาชีพไม่ถูกต้อง');
       // Chosen stats (owner by default): every copy gets exactly the rows the page showed.
       const custom = body.lines !== undefined;
-      if (custom && !canUse(a.role, 'customItem')) throw new HttpError(403, 'ไม่มีสิทธิ์กำหนดสเตตัสไอเทม');
+      if (custom && !a.features.includes('customItem')) throw new HttpError(403, 'ไม่มีสิทธิ์กำหนดสเตตัสไอเทม');
       if (custom && adjusted) throw new HttpError(400, `ชนิดนี้เลเวลขั้นต่ำ Lv.${level} สุ่มตัวอย่างใหม่ที่เลเวลนั้นก่อน`);
       const made: Item[] = [];
       for (let k = 0; k < n; k++) {
@@ -312,7 +315,7 @@ function editCharacter(db: Db, world: GameWorld, a: Admin, charId: number, what:
       // A chosen channel (a map with channels only) is the channelWarp tool: into it however full it is.
       const ch = body.ch === undefined || body.ch === null || body.ch === '' ? undefined : Number(body.ch);
       if (ch !== undefined) {
-        if (!canUse(a.role, 'channelWarp')) throw new HttpError(403, 'ไม่มีสิทธิ์วาร์ปเข้า CH');
+        if (!a.features.includes('channelWarp')) throw new HttpError(403, 'ไม่มีสิทธิ์วาร์ปเข้า CH');
         if (!Number.isSafeInteger(ch) || ch < 1) throw new HttpError(400, 'เลข CH ไม่ถูกต้อง');
         if (!hasChannels(zone)) throw new HttpError(400, `${zone.nameTh}ไม่มีแชนแนล`);
       }

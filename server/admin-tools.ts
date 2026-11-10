@@ -7,10 +7,10 @@ import type { Db } from './db';
 import type { GameWorld } from './world';
 import type { Backups } from './backup';
 import { HttpError, readJson, send, str } from './http';
-import { charRow, log, requireAdmin, type Admin } from './admin';
+import { charRow, log, mayTouch, requireAdmin, requireFeature, type Admin } from './admin';
 import { hashPassword } from './auth';
 import {
-  ADMIN_NO_RIGHTS, BAN_DURATIONS, BAN_FOREVER, BAN_REASON_MAX, BROADCAST_EVERY_MS, BROADCAST_MAX, canUse, isAdminRole,
+  ADMIN_NO_RIGHTS, BAN_DURATIONS, BAN_FOREVER, BAN_REASON_MAX, BROADCAST_EVERY_MS, BROADCAST_MAX, OWNER_ROLE,
   type AdminAccountDetail, type AdminAccountRow, type AdminAccountsResponse, type AdminCharDetail, type AdminFeature,
 } from '../src/shared/admin';
 import { banMessage } from '../src/shared/api';
@@ -72,11 +72,6 @@ const lastBroadcast = new Map<number, number>();
 const TEMP_PW_CHARS = 'abcdefghjkmnpqrstuvwxyz23456789';
 const TEMP_PW_LEN = 10;
 
-function requireFeature(req: IncomingMessage, db: Db, f: AdminFeature): Admin {
-  const a = requireAdmin(req, db);
-  if (!canUse(a.role, f)) throw new HttpError(403, NO_RIGHTS);
-  return a;
-}
 
 /** Strips control characters and trims. */
 const clean = (v: unknown, max: number): string => str(v).replace(/[\p{Cc}\p{Cf}]/gu, ' ').trim().slice(0, max + 1);
@@ -96,7 +91,7 @@ function accountRows(db: Db, world: GameWorld): AdminAccountRow[] {
       accountId: a.id,
       username: a.guest ? 'Guest' : a.username,
       guest: a.guest,
-      role: isAdminRole(a.role) ? a.role : null,
+      role: db.isRole(a.role) ? a.role : null,
       createdAt: a.createdAt,
       lastOnline: a.lastOnline,
       online: online.has(a.id),
@@ -123,10 +118,10 @@ const confirmName = (row: AdminAccountRow): string => (row.guest ? (row.names[0]
 /** Who an account-level action names in the log. */
 const who = (row: AdminAccountRow): string => `${row.guest ? `Guest ${row.names[0] ?? ''}`.trim() : row.username} (#${row.accountId})`;
 
-/** Admins can't be banned or reset by GMs, and owners not by anyone but themselves. */
-function guardTarget(a: Admin, row: AdminAccountRow, what: string): void {
-  if (row.role === 'owner' && row.accountId !== a.acc.id) throw new HttpError(400, `${what} owner ไม่ได้`);
-  if (row.role && a.role !== 'owner') throw new HttpError(403, NO_RIGHTS);
+/** Owners can't be banned or reset by anyone but themselves; other staff only with `staffTarget`. */
+function guardTarget(db: Db, a: Admin, row: AdminAccountRow, what: string): void {
+  if (row.role === OWNER_ROLE && row.accountId !== a.acc.id) throw new HttpError(400, `${what} owner ไม่ได้`);
+  if (mayTouch(db, a, row.accountId) !== 'ok') throw new HttpError(403, NO_RIGHTS);
 }
 
 /** Handles the owner-tool routes; returns false for any other path. */
@@ -206,7 +201,7 @@ export async function ownerToolsApi(
       const a = requireFeature(req, db, 'resetPassword');
       const row = accountRow(db, world, id);
       if (row.guest) throw new HttpError(400, 'Guest ไม่มีรหัสผ่าน');
-      guardTarget(a, row, 'ตั้งรหัสผ่านให้');
+      guardTarget(db, a, row, 'ตั้งรหัสผ่านให้');
       let pw = '';
       for (let i = 0; i < TEMP_PW_LEN; i++) pw += TEMP_PW_CHARS[randomInt(TEMP_PW_CHARS.length)];
       db.setPassword(id, await hashPassword(pw));
@@ -221,7 +216,7 @@ export async function ownerToolsApi(
       const a = requireFeature(req, db, 'ban');
       const row = accountRow(db, world, id);
       if (id === a.acc.id) throw new HttpError(400, 'แบนตัวเองไม่ได้');
-      guardTarget(a, row, 'แบน');
+      guardTarget(db, a, row, 'แบน');
       const body = await readJson(req);
       const dur = BAN_DURATIONS.find((d) => d.id === body.duration);
       if (!dur) throw new HttpError(400, 'เลือกระยะเวลาแบน');
@@ -239,7 +234,7 @@ export async function ownerToolsApi(
     if (method === 'POST' && action === 'unban') {
       const a = requireFeature(req, db, 'ban');
       const row = accountRow(db, world, id);
-      guardTarget(a, row, 'ปลดแบน');
+      guardTarget(db, a, row, 'ปลดแบน');
       if (!row.bannedUntil) throw new HttpError(400, 'บัญชีนี้ไม่ได้ถูกแบน');
       db.setBan(id, null, null);
       log(db, a, 'unban', who(row), `ปลดแบน (เดิม: ${row.banReason ?? ''})`);
@@ -301,7 +296,7 @@ export async function ownerToolsApi(
       throw new HttpError(429, `ส่งได้ทุก ${BROADCAST_EVERY_MS / 1000} วินาที — รออีก ${Math.ceil((BROADCAST_EVERY_MS - (now - last)) / 1000)} วินาที`);
     }
     lastBroadcast.set(a.acc.id, now);
-    const from = `${a.role === 'owner' ? 'Owner' : 'GM'} ${a.acc.username}`;
+    const from = `${db.roleName(a.role)} ${a.acc.username}`;
     const n = world.broadcast(text, from, to?.charId);
     log(db, a, 'broadcast', to ? `${to.name} (#${to.charId})` : 'ทุกคน', text);
     send(res, 200, { msg: to ? `ส่งข้อความถึง ${to.name} แล้ว` : `ส่งประกาศถึงผู้เล่น ${n} คนแล้ว` });
@@ -311,7 +306,7 @@ export async function ownerToolsApi(
   // ---------------------------------------------------------- enhancement orb look (server-wide)
   if (method === 'GET' && path === '/api/admin/orb-look') {
     const a = requireFeature(req, db, 'orbPreview');
-    send(res, 200, orbLookState(db, canUse(a.role, 'orbLook')));
+    send(res, 200, orbLookState(db, a.features.includes('orbLook')));
     return true;
   }
 
@@ -334,7 +329,7 @@ export async function ownerToolsApi(
   // ---------------------------------------------------------- cosmetic tuning (server-wide)
   if (method === 'GET' && path === '/api/admin/cos-look') {
     const a = requireFeature(req, db, 'cosPreview');
-    send(res, 200, cosLookState(db, canUse(a.role, 'cosLook')));
+    send(res, 200, cosLookState(db, a.features.includes('cosLook')));
     return true;
   }
 

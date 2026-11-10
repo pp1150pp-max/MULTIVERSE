@@ -52,7 +52,10 @@ function headOn(p: Player): boolean {
 
 /** On the front diagonal the mount is cut in two around the rider (see CosmeticRig: mountHead). */
 function mountSplit(p: Player, id: string): boolean {
-  return tuneBool(id, 'split') && viewRow(p) === 1;
+  // Owner 2026-11-10: the front diagonal (#200), the side and back diagonal too (#201: the legs showed in
+  // front of the whole animal). Each view can be switched off on the bench.
+  const row = viewRow(p);
+  return (row === 1 && tuneBool(id, 'cutFrontDiag')) || (row === 2 && tuneBool(id, 'cutSide')) || (row === 3 && tuneBool(id, 'cutBackDiag'));
 }
 
 /**
@@ -234,9 +237,10 @@ export class CosmeticRig {
         this.mountHead.face(p.faceX, p.faceZ);
         this.mountHead.update(dt, p.moving, tuneNum(id, 'anim'));
         if (split) {
-          // Screen right in the world is +x −z. Keep the side the head is on, from the rider's middle.
+          // Screen right in the world is +x −z. In front of the rider: the head half on the front diagonal and
+          // from the side, the tail half on the back diagonal (the end nearer the camera), cut at the rider's middle.
           const sx = (p.faceX - p.faceZ) * Math.SQRT1_2;
-          const sign = sx >= 0 ? 1 : -1;
+          const sign = (sx >= 0 ? 1 : -1) * (viewRow(p) === 3 ? -1 : 1);
           this.headClip.normal.set(sign * Math.SQRT1_2, 0, -sign * Math.SQRT1_2);
           this.headClip.constant = -(this.headClip.normal.x * p.x + this.headClip.normal.z * p.z);
           const [hx, hy, hz] = depthAt(p.x, p.z, -seat, tuneNum(id, 'splitFront'));

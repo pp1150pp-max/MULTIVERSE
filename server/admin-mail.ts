@@ -6,7 +6,7 @@ import type { Db } from './db';
 import type { GameWorld } from './world';
 import { HttpError, readJson, send } from './http';
 import { log, requireAdmin, type Admin } from './admin';
-import { ADMIN_NO_RIGHTS, canUse } from '../src/shared/admin';
+import { ADMIN_NO_RIGHTS } from '../src/shared/admin';
 import { describeAttach, cleanAttach, type MailTargetReq } from '../src/shared/mail';
 
 /** Sends listed per page of the history, and copies listed in one send's detail. */
@@ -15,7 +15,7 @@ const RECIPIENTS_MAX = 200;
 
 function requireMail(req: IncomingMessage, db: Db): Admin {
   const a = requireAdmin(req, db);
-  if (!canUse(a.role, 'mail')) throw new HttpError(403, ADMIN_NO_RIGHTS);
+  if (!a.features.includes('mail')) throw new HttpError(403, ADMIN_NO_RIGHTS);
   return a;
 }
 
