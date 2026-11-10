@@ -67,6 +67,8 @@ export interface MonsterDef {
   bossLoot?: { items: number; epics: number; stoneChance?: number };
   /** Bosses only: multiplies the cooldowns of its slam and throw (0.5 = twice as often). */
   skillCd?: number;
+  /** Bosses only: casts the Bog Witch's spells on top of its usual attacks (see sim/bogWitch.ts). */
+  spells?: 'witch';
   /** Fights by a scripted attack pattern and never moves (see sim/volcanoHeart.ts). */
   pattern?: 'volcano_heart';
   itemChance: number;
@@ -147,7 +149,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'bog_witch', name: 'Bog Witch', nameTh: 'แม่มดหนอง (Boss)', levels: [20, 20],
     hp: 14872, atk: 124.5, def: 24, speed: 2.1, exp: 3000, gold: [220, 360],
     aggroRange: 9, attackRange: 2.0, attackCooldown: 1.7, height: 3.6, radius: 1.1,
-    behavior: 'boss', frenzy: { speed: 3, skill: 0.5 }, itemChance: 1, potionChance: 1,
+    behavior: 'boss', frenzy: { speed: 3, skill: 0.5 }, spells: 'witch', itemChance: 1, potionChance: 1,
   },
 
   // Zone 3 — Frost Reach

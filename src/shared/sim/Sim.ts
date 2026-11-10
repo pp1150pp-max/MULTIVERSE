@@ -494,7 +494,8 @@ export class Sim {
     m.deadT = 0;
     m.hp = 0;
     this.sfx(m.isBoss ? 'boss_die' : 'monster_die', m.x, m.z);
-    if (m.def.pattern) this.hazards = [];
+    if (m.def.pattern || m.def.spells) this.hazards = [];
+    m.spells?.reset(this);
     if (!m.summoned) {
       this.shareExp(m);
       this.dropLoot(m);

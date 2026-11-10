@@ -55,6 +55,8 @@ export class PlayerView {
   private seenSpeed = 0;
   private lastX = NaN;
   private lastZ = NaN;
+  /** Shown instead of the character while the Bog Witch's curse lasts. */
+  private toad: THREE.Sprite | null = null;
 
   constructor(readonly p: Player, private readonly scene: THREE.Scene) {
     const anim = animSets[p.cls.id];
@@ -76,7 +78,29 @@ export class PlayerView {
     this.updateAura(dt, fx);
     // Owner 2026-11-10: the orbs stay while dead (only the aura goes).
     this.orbs.update(this.clock, p.x, p.z, p.orbs, true);
+    this.updateToad(fx);
     this.sync();
+  }
+
+  /** Cursed: a toad sits where the character stands, with a puff each time it appears or goes. */
+  private updateToad(fx: Effects): void {
+    const p = this.p;
+    const on = p.alive && p.toadT > 0;
+    if (on === !!this.toad?.visible) {
+      if (this.toad?.visible) this.toad.position.set(p.x, 0, p.z);
+      return;
+    }
+    fx.puff(p.x, 0.8, p.z, '#9a7aff', 0.8, 1.6);
+    this.actor.group.visible = !on;
+    if (!this.toad) {
+      const sheet = sheets.fx_witch_toad;
+      this.toad = new THREE.Sprite(new THREE.SpriteMaterial({ map: sheet.texture, alphaTest: 0.5, transparent: false }));
+      this.toad.center.set(0.5, 0);
+      this.toad.scale.set(1.3 * sheet.cellAspect, 1.3, 1);
+      this.scene.add(this.toad);
+    }
+    this.toad.visible = on;
+    this.toad.position.set(p.x, 0, p.z);
   }
 
   /**
@@ -197,6 +221,10 @@ export class PlayerView {
 
   dispose(): void {
     this.disposeAura();
+    if (this.toad) {
+      this.scene.remove(this.toad);
+      this.toad.material.dispose();
+    }
     this.orbs.dispose();
     this.disposeCrater();
     this.scene.remove(this.actor.group);
