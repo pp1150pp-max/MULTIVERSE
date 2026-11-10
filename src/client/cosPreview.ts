@@ -316,12 +316,13 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
 
 
   /** Is what the bench shows now the same as the server's? */
-  const updateStatus = () => {
+  // A function declaration (hoisted): buildPanel() above calls it before this line runs.
+  function updateStatus(): void {
     if (!statusEl) return;
     const now = checkCosTuning(currentCosTuning(), false).tuning ?? {};
     const same = serverTuning && sameCosTuning(serverTuning, now);
     statusEl.textContent = serverMsg || (same ? '✓ ตอนนี้ตรงกับค่าของเซิร์ฟ' : '• ตอนนี้ต่างจากค่าของเซิร์ฟ (ยังไม่ได้บันทึก)');
-  };
+  }
 
   function buildPanel(): void {
     panel.innerHTML = '';
