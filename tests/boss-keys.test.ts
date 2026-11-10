@@ -1,4 +1,4 @@
-// Boss keys (Artifacts): one per boss, dropped at 1% by the monsters of its map (also those standing in
+// Boss keys (Artifacts): one per boss, dropped at 0.3% by the monsters of its map (also those standing in
 // the hub), stacking to 10 like stones, sold for 1,000 G, listed under their own market kind.
 import { ok, finish } from './check';
 import { BOSS_KEY, KEY_DROP_CHANCE, STONE_DESC, STONE_NAME, STONE_STACK, stoneStackValue } from '../src/shared/data/stones';
@@ -14,7 +14,7 @@ const zones = [ZONE_1, ZONE_2, ZONE_3, ZONE_4];
 ok(new Set(zones.map((z) => BOSS_KEY[z.lair!.boss])).size === 4, 'every boss has its own key');
 for (const k of BOSS_KEYS) ok(!!STONE_NAME[k] && !!STONE_DESC[k] && isBossKey(k), `${k} has a name and a description`);
 ok(BLACKSMITH_STONES.every((k) => !isBossKey(k)) && STONE_KINDS.length === BLACKSMITH_STONES.length + BOSS_KEYS.length + QUEST_KEYS.length + 1 + CONSUMABLES.length, 'keys are not blacksmith stones (plus the phoenix feather and consumables)');
-ok(KEY_DROP_CHANCE === 0.01, 'keys drop at 1%');
+ok(KEY_DROP_CHANCE === 0.003, 'keys drop at 0.3%');
 ok(stoneStackValue({ stone: 'key_bear', count: 3 }) === 3000, 'a key sells for 1,000 G');
 ok(marketKind({ stone: 'key_yeti', count: 1 }) === 'artifact' && marketKind({ stone: 'enhance', count: 1 }) === 'stone', 'keys list as Artifacts');
 
@@ -54,16 +54,16 @@ function keysFrom(zone: ZoneDef, rounds: number): { kinds: Map<BossKey, number>;
 
 for (const zone of zones) {
   const own = BOSS_KEY[zone.lair!.boss];
-  const { kinds, kills } = keysFrom(zone, 200);
+  const { kinds, kills } = keysFrom(zone, 800);
   const { bossKeys } = keysFrom(BOSS_ROOMS[zone.id], 50);
   const n = kinds.get(own) ?? 0;
   const rate = n / kills;
   ok(kinds.size === 1 && n > 0, `${zone.id}: its monsters drop only ${STONE_NAME[own]}`);
-  ok(rate > 0.005 && rate < 0.016, `${zone.id}: about 1% (${(rate * 100).toFixed(2)}% of ${kills} kills)`);
+  ok(rate > 0.0015 && rate < 0.0045, `${zone.id}: about 0.3% (${(rate * 100).toFixed(2)}% of ${kills} kills)`);
   ok(bossKeys === 0, `${zone.id}: the boss itself drops no key`);
 }
 
 // The hub's monsters drop the key of the map they come from.
-const hub = keysFrom(ZONE_HUB, 200);
+const hub = keysFrom(ZONE_HUB, 800);
 ok(BOSS_KEYS.every((k) => (hub.kinds.get(k) ?? 0) > 0), 'hub monsters drop all four keys (each from its own corner)');
 finish('boss-keys');
