@@ -254,3 +254,15 @@ for (const cls of CLASSES) {
   }
   fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
 }
+
+// ---- the stylist NPC (art_templates/cosmetics/raw/stylist.png: 3 rows front / side / back × 3 frames), laid out
+// like npc/merchant.png (tools/cut_npc.cjs): 208px cells, feet on row 205, body 200px tall.
+{
+  const file = path.join(RAW_ROOT, 'art_templates/cosmetics/raw/stylist.png');
+  if (fs.existsSync(file)) {
+    const src = key(read(file));
+    const grid = cells(src, 3, 3, 0.02, 'stylist');
+    const front = grid[0][0];
+    save(layout(src, grid, 200 / (front.box[3] - front.box[1]), null, 208, 2), path.join(ROOT, 'public/assets/sprites/npc/stylist.png'));
+  } else console.warn(`missing ${file}`);
+}
