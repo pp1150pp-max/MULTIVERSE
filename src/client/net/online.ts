@@ -20,6 +20,7 @@ import type { SkillSlot } from '../../shared/data/classes';
 import { INPUT_HZ, PING_MS, WS_CLOSE_QUIT, WS_PATH, type ClientMsg, type ServerMsg, type ShutdownMode, type SnapshotMsg } from '../../shared/net/protocol';
 import type { PartyFound, PartySnap } from '../../shared/party';
 import type { TradeView } from '../../shared/trade';
+import type { FriendsView } from '../../shared/friends';
 import type { Backend, EnhanceOutcome, ProjectileLike } from '../backend';
 import type { RerollKind } from '../../shared/data/reroll';
 import type { Hazard } from '../../shared/sim/volcanoHeart';
@@ -114,8 +115,14 @@ export class OnlineBackend implements Backend {
   projectiles: MirrorProjectile[] = [];
   loots: Loot[] = [];
   onlineCount = 1;
-  /** Hooks for the game screen. `party` = party chat or a party notice. */
-  onChat: ((name: string, text: string, party: boolean) => void) | null = null;
+  /**
+   * Hooks for the game screen. `ch: 'party'` = party chat or a party notice; `ch: 'whisper'` = a whisper
+   * from `name`, or (with `to`) your own whisper to `to`.
+   */
+  onChat: ((name: string, text: string, ch?: 'party' | 'whisper', to?: string) => void) | null = null;
+  /** The friends window's state changed (sent on joining and on every change). */
+  onFriends: ((view: FriendsView) => void) | null = null;
+  friends: FriendsView | null = null;
   /** Someone invites you to their party (answer within `seconds`), and an invite that went away. */
   onPartyInvite: ((party: number, from: string, seconds: number) => void) | null = null;
   onPartyInviteGone: ((party: number) => void) | null = null;
@@ -314,7 +321,11 @@ export class OnlineBackend implements Backend {
         this.applySnapshot(m);
         break;
       case 'chat':
-        this.onChat?.(m.name, m.text, m.ch === 'party');
+        this.onChat?.(m.name, m.text, m.ch === 'party' || m.ch === 'whisper' ? m.ch : undefined, typeof m.to === 'string' ? m.to : undefined);
+        break;
+      case 'friends':
+        this.friends = m.view;
+        this.onFriends?.(m.view);
         break;
       case 'partyInvite':
         this.onPartyInvite?.(m.party, m.from, m.seconds);
@@ -860,6 +871,14 @@ export class OnlineBackend implements Backend {
   tradeConfirm(ver: number): void { this.send({ t: 'act', a: 'tradeConfirm', ver }); }
   tradeCancel(): void { this.send({ t: 'act', a: 'tradeCancel' }); }
   setTradeBlock(on: boolean): void { this.send({ t: 'act', a: 'tradeBlock', on }); }
+  whisper(to: string, text: string): void { this.send({ t: 'chat', text, ch: 'whisper', to }); }
+  friendRequest(name: string): void { this.send({ t: 'act', a: 'friendRequest', name }); }
+  friendAnswer(acc: number, yes: boolean): void { this.send({ t: 'act', a: 'friendAnswer', acc, yes }); }
+  friendCancel(acc: number): void { this.send({ t: 'act', a: 'friendCancel', acc }); }
+  friendRemove(acc: number): void { this.send({ t: 'act', a: 'friendRemove', acc }); }
+  friendBlock(name: string): void { this.send({ t: 'act', a: 'friendBlock', name }); }
+  friendUnblock(acc: number): void { this.send({ t: 'act', a: 'friendUnblock', acc }); }
+  friendList(): void { this.send({ t: 'act', a: 'friendList' }); }
   partySearch(q: string): Promise<PartyFound[]> {
     const req = ++this.partyReq;
     this.send({ t: 'act', a: 'partySearch', q, req });

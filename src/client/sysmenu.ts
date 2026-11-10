@@ -26,9 +26,12 @@ const MAIL_ICON = badge('blank', '✉');
 /** Trade has no painted badge yet: the blank one with a glyph. Swap for badge('trade') once ico_trade.png exists. */
 const TRADE_ICON = badge('blank', '🤝');
 
+/** Friends: painted badge (art_templates/ui/raw/ico_friends.png, magenta keyed out and cut to 96×96). */
+const FRIENDS_ICON = badge('friends');
+
 /** Icon grid, 3 columns: [action, icon, label]. Only systems that exist; add a tile when a new one is built. */
 const MENU_ITEMS: [string, string, string][] = [
-  ['bag', badge('bag'), 'กระเป๋า'], ['party', PARTY_ICON, 'ปาร์ตี้'], ['trade', TRADE_ICON, 'เทรด'], ['mail', MAIL_ICON, 'จดหมาย'], ['map', badge('map'), 'แผนที่'],
+  ['bag', badge('bag'), 'กระเป๋า'], ['party', PARTY_ICON, 'ปาร์ตี้'], ['friends', FRIENDS_ICON, 'เพื่อน'], ['trade', TRADE_ICON, 'เทรด'], ['mail', MAIL_ICON, 'จดหมาย'], ['map', badge('map'), 'แผนที่'],
   ['autoset', badge('autoset'), 'ตั้งค่า Auto'], ['audio', badge('blank', '🔊'), 'เสียง'], ['help', badge('help'), 'วิธีเล่น'],
   ['settings', badge('settings'), 'ตั้งค่า'],
 ];
@@ -36,7 +39,7 @@ const MENU_ITEMS: [string, string, string][] = [
 /** Top-right icon row: [button id, icon, label]. */
 const TOP_ICONS: [string, string, string][] = [
   ['top-auto', badge('auto'), 'AUTO: OFF'], ['top-bag', badge('bag'), 'กระเป๋า'],
-  ['top-party', PARTY_ICON, 'ปาร์ตี้'], ['top-mail', MAIL_ICON, 'จดหมาย'], ['top-map', badge('map'), 'แผนที่'], ['top-menu', badge('menu'), 'เมนู'],
+  ['top-party', PARTY_ICON, 'ปาร์ตี้'], ['top-friends', FRIENDS_ICON, 'เพื่อน'], ['top-mail', MAIL_ICON, 'จดหมาย'], ['top-map', badge('map'), 'แผนที่'], ['top-menu', badge('menu'), 'เมนู'],
 ];
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -56,7 +59,7 @@ export class SystemMenu {
     const row = document.createElement('div');
     row.id = 'hud-iconrow';
     // Guests get no mail, so they have no mail icon.
-    const noMail = ([id]: string[]) => !(guest && (id === 'mail' || id === 'top-mail' || id === 'trade'));
+    const noMail = ([id]: string[]) => !(guest && (id === 'mail' || id === 'top-mail' || id === 'trade' || id === 'friends' || id === 'top-friends'));
     row.innerHTML = TOP_ICONS.filter(noMail).map(
       ([id, icon, label]) =>
         `<button id="${id}" class="top-icon"${id ? '' : ' disabled'}><span class="sys-ico">${icon}</span><span class="sys-label">${label}</span><i class="badge hidden" data-badge="${label}"></i></button>`,
@@ -67,6 +70,7 @@ export class SystemMenu {
     $('top-bag').onclick = () => g.hud.toggleBag();
     $('top-party').onclick = () => g.party.toggle();
     if (!guest) $('top-mail').onclick = () => g.mailUI.toggle();
+    if (!guest) $('top-friends').onclick = () => g.friends.toggle();
     $('top-map').onclick = () => g.hud.toggleMap();
     $('top-menu').onclick = () => this.toggle();
 
@@ -189,6 +193,9 @@ export class SystemMenu {
       case 'party':
         this.toggle(false);
         return this.g.party.toggle(true);
+      case 'friends':
+        this.toggle(false);
+        return this.g.friends.toggle(true);
       case 'trade':
         this.toggle(false);
         return this.g.trade.toggleFind(true);

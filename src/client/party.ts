@@ -6,6 +6,7 @@ import type { Game } from './Game';
 import type { Player } from '../shared/sim/Player';
 import { PARTY_SEARCH_MAX, type PartyMemberSnap, type PartySnap } from '../shared/party';
 import { CLASSES } from '../shared/data/classes';
+import { whisperPrefix } from './hud';
 
 const BLOCK_KEY = 'multiverse-party-block';
 /** Wait this long after typing before searching (the server allows one search per 250 ms). */
@@ -301,11 +302,17 @@ export class PartyUI {
 
   // ------------------------------------------------------------ menus and popups
 
-  /** Clicked another player in the world: offer an invite. */
+  /** Clicked another player in the world: party invite, trade, whisper, add friend, block. */
   playerMenu(p: Player, x: number, y: number): void {
     const items: [string, () => void][] = [];
     if (!this.memberOf(p)) items.push([`ชวน ${p.name} เข้าปาร์ตี้`, () => this.g.backend.partyInvite(p.name)]);
     if (!this.g.backend.guest) items.push([`ขอเทรดกับ ${p.name}`, () => this.g.trade.request(p.name)]);
+    // Friends (server/friends.ts): whispering works for guests too; the rest is members only.
+    items.push([`กระซิบ ${p.name}`, () => this.g.hud.openChat(whisperPrefix(p.name))]);
+    if (!this.g.backend.guest) {
+      if (!this.g.friends.isFriend(p.name)) items.push([`เพิ่ม ${p.name} เป็นเพื่อน`, () => this.g.backend.friendRequest(p.name)]);
+      items.push([`บล็อก ${p.name}`, () => this.g.friends.askBlock(p.name)]);
+    }
     if (items.length) this.showMenu(x, y, items);
   }
 
