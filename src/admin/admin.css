@@ -237,3 +237,10 @@ details summary { cursor: pointer; margin-top: 8px; }
   font-size: 14px;
   text-align: center;
 }
+
+/* Permissions tab */
+.role-editor { margin: 4px 0 12px; padding: 10px; border: 1px solid var(--edge-dim); border-radius: 8px; }
+.perm-group .sub { margin-top: 12px; }
+.perm { display: flex; gap: 10px; align-items: flex-start; padding: 7px 0; border-bottom: 1px solid #2a241b; cursor: pointer; }
+.perm input { width: auto; flex: none; margin-top: 3px; }
+.perm .muted { font-size: 12px; }
