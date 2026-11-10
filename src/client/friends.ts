@@ -7,6 +7,7 @@ import { CLASSES } from '../shared/data/classes';
 import { ZONES } from '../shared/data/zones';
 import { FRIEND_MAX, FRIEND_NAME_MAX, type FriendEntry, type FriendsView } from '../shared/friends';
 import { whisperPrefix } from './hud';
+import { joinButton, otherChannelHere, placeText } from './channels';
 
 /** The icon badge's key (the icon's Thai label, see SystemMenu.setBadge). */
 export const FRIENDS_BADGE = 'เพื่อน';
@@ -93,7 +94,7 @@ export class FriendsUI {
   /** Called every frame: redraws only when something shown changed (your map decides the trade buttons). */
   update(): void {
     if (!this.open) return;
-    const key = JSON.stringify([this.view, this.tab, this.g.backend.zone.id]);
+    const key = JSON.stringify([this.view, this.tab, this.g.backend.zone.id, this.g.backend.channel]);
     if (key === this.drawn) return;
     this.drawn = key;
     this.render();
@@ -186,7 +187,7 @@ export class FriendsUI {
     const top = el('div', 'friend-name');
     top.append(el('i', `friend-dot${f.online ? ' on' : ''}`), el('b', '', f.char?.name ?? '(ไม่มีตัวละคร)'));
     if (f.char) top.append(el('span', 'friend-lv', ` Lv.${f.char.lv} ${CLASSES[f.char.cls]?.name ?? ''}`));
-    const sub = el('div', 'friend-sub', f.online ? mapName(f.char?.zone ?? '') : `ออฟไลน์${f.char?.zone ? ` · ล่าสุด ${mapName(f.char.zone)}` : ''}`);
+    const sub = el('div', 'friend-sub', f.online ? placeText(f.char?.zone ?? '', f.char?.ch) : `ออฟไลน์${f.char?.zone ? ` · ล่าสุด ${mapName(f.char.zone)}` : ''}`);
     info.append(top, sub);
     return info;
   }
@@ -202,7 +203,8 @@ export class FriendsUI {
   private friendRow(f: FriendEntry): HTMLElement {
     const name = f.char?.name ?? '';
     const on = f.online && !!name;
-    const sameMap = on && f.char!.zone === this.g.backend.zone.id;
+    // Trading needs the same copy of the map: same zone and same channel.
+    const sameMap = on && f.char!.zone === this.g.backend.zone.id && (f.char!.ch ?? 1) === this.g.backend.channel;
     const whisper = button('กระซิบ', () => {
       this.toggle(false);
       this.g.hud.openChat(whisperPrefix(name));
@@ -210,10 +212,12 @@ export class FriendsUI {
     whisper.disabled = !on;
     const party = button('ชวนตี้', () => this.g.backend.partyInvite(name), '', on ? 'ชวนเข้าปาร์ตี้' : 'เพื่อนต้องออนไลน์อยู่');
     party.disabled = !on;
-    const trade = button('เทรด', () => this.g.trade.request(name), '', !on ? 'เพื่อนต้องออนไลน์อยู่' : sameMap ? 'ขอเทรด' : 'ต้องอยู่แมพเดียวกันถึงจะเทรดได้');
+    const trade = button('เทรด', () => this.g.trade.request(name), '', !on ? 'เพื่อนต้องออนไลน์อยู่' : sameMap ? 'ขอเทรด' : 'ต้องอยู่แมพและ CH เดียวกันถึงจะเทรดได้');
     trade.disabled = !sameMap;
     const remove = button('ลบ', () => this.g.hud.confirm(`ลบ <b>${esc(name || 'เพื่อนคนนี้')}</b> ออกจากรายชื่อเพื่อน?`, 'ลบเพื่อน', () => this.g.backend.friendRemove(f.acc)), 'friend-remove');
-    return this.row(f, [whisper, party, trade, remove]);
+    const btns = [whisper, party, trade, remove];
+    if (on && otherChannelHere(this.g, f.char!.zone, f.char!.ch)) btns.unshift(joinButton(this.g, name));
+    return this.row(f, btns);
   }
 
   /** Blocking asks first (it also ends a friendship). */

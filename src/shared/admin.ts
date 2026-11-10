@@ -53,6 +53,8 @@ export interface AdminOnlineRow {
   classId: ClassId;
   level: number;
   zone: string;
+  /** Channel of that zone (1 when it has none or in a boss room). */
+  ch: number;
   rtt: number | null;
   fps: number | null;
   /** Longest frame since the last per-minute log line, ms. */
@@ -65,7 +67,8 @@ export interface AdminOnlineRow {
 }
 
 export interface AdminOnline {
-  zones: { id: string; nameTh: string; count: number }[];
+  /** One line per map, or per channel (`ch`) of a map with channels. */
+  zones: { id: string; nameTh: string; ch?: number; count: number }[];
   players: AdminOnlineRow[];
 }
 
@@ -105,7 +108,7 @@ export interface AdminShutdownText { texts: Record<ShutdownMode, string>; defaul
 // ------------------------------------------------------------ owner tools (users, bans, broadcast, backups…)
 
 /** The newer admin tools. Each is its own switch so some can be opened to GMs later. */
-export type AdminFeature = 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook';
+export type AdminFeature = 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp';
 
 /**
  * Who may use each tool. To open one to GMs, add 'gm', e.g. `ban: ['owner', 'gm']`. The server
@@ -134,6 +137,8 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   orbPreview: ['owner', 'gm'],
   // Saving the server-wide orb look from that tab (owner 2026-11-10: owner only).
   orbLook: ['owner'],
+  // Moving an online character (yourself or anyone) into a chosen channel, however full it is (owner 2026-11-10: owner and GMs).
+  channelWarp: ['owner', 'gm'],
 };
 
 export const canUse = (role: AdminRole, f: AdminFeature): boolean => FEATURE_ROLES[f].includes(role);
