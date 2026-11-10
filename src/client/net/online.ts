@@ -28,6 +28,7 @@ import type { Hazard } from '../../shared/sim/volcanoHeart';
 import type { MarketCall, MarketReply } from '../../shared/sim/market';
 import type { RoomLobbyView, RoomSnap } from '../../shared/bossRoom';
 import type { MailCall, MailReply } from '../../shared/mail';
+import { WalkTarget } from '../walkTo';
 
 /** Mirrors never run game logic, so they don't need a simulation behind them. */
 const NO_SIM = null as unknown as Sim;
@@ -188,6 +189,7 @@ export class OnlineBackend implements Backend {
   private settleT = 0;
   private epoch = 0;
   private faceLockT = 0;
+  private readonly walkTarget = new WalkTarget();
   private sendT = 0;
   private seq = 0;
   /** Where we said we were in each input message still waiting for its snapshot. */
@@ -783,7 +785,7 @@ export class OnlineBackend implements Backend {
     this.faceLockT -= dt;
     if (!me.alive || this.serverMoves || this.settling) return null;
     if (it.move) me.moveTarget = null;
-    if (it.moveTo) me.moveTarget = { ...it.moveTo };
+    this.walkTarget.aim(me, it.moveTo, this.terrain);
     let mx = 0;
     let mz = 0;
     let remaining = Infinity;
@@ -802,6 +804,7 @@ export class OnlineBackend implements Backend {
     }
     const walking = mx !== 0 || mz !== 0;
     const moving = me.walkStep(mx, mz, remaining, dt, this.terrain);
+    this.walkTarget.check(me, dt);
     if (it.basic || it.skills.length) {
       this.faceLockT = 0.25;
     }

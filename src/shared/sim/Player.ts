@@ -374,9 +374,30 @@ export class Player extends Unit {
     this.slideZ = mz * speed;
     if (!mx && !mz) return false;
     const step = Math.min(speed * dt, remaining);
+    const sx = this.x;
+    const sz = this.z;
     this.x += mx * step;
     this.z += mz * step;
     terrain.resolve(this);
+    // Walked (nearly) head-on into something round, like an NPC or the fountain: go round it
+    // instead of stopping dead. Pressed into a corner of two (a wall's notch), stay put.
+    if ((this.x - sx) * mx + (this.z - sz) * mz < step * 0.5) {
+      const c = terrain.soleContact(this);
+      if (c) {
+        const ox = sx - c.x;
+        const oz = sz - c.z;
+        const ol = Math.hypot(ox, oz) || 1;
+        let tx = -oz / ol;
+        let tz = ox / ol;
+        if (tx * mx + tz * mz < 0) {
+          tx = -tx;
+          tz = -tz;
+        }
+        this.x = sx + tx * step;
+        this.z = sz + tz * step;
+        terrain.resolve(this);
+      }
+    }
     return true;
   }
 
