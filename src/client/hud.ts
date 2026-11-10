@@ -424,7 +424,7 @@ export class Hud {
     // Buy tab: a grid of potion icons. Click buys one, right click (or shift click) buys a stack.
     const buyGrid = $('shop-buy');
     buyGrid.innerHTML = (['hp', 'mp'] as const).flatMap((k) => POTION_SIZES.map((s) =>
-      `<div class="cell pot" data-buy="${k}:${s}" style="--rc:${POTION_COLOR[k]}">${potionIcon(k)}` +
+      `<div class="cell pot" data-buy="${k}:${s}" style="--rc:${POTION_COLOR[k]}">${potionIcon(k, s)}` +
       `<span class="psize">${POTION_SIZE_LABEL[s]}</span><span class="cell-price">${POTIONS[k][s].price}</span></div>`,
     )).join('') +
       // Phoenix feathers, for getting up again in a boss room, then the return scroll.
@@ -835,6 +835,9 @@ export class Hud {
         const size = p.potionToUse(s.kind) ?? p.potSel[s.kind];
         const count = p.potionCount(s.kind, size);
         s.extra.textContent = `${POTION_SIZE_LABEL[size]} ${count}`;
+        const img = s.el.querySelector<HTMLImageElement>('.icon img');
+        const src = `assets/sprites/icons/potion_${s.kind}_${size}.png`;
+        if (img && img.getAttribute('src') !== src) img.setAttribute('src', src);
         s.el.title = `${potionName(s.kind, size)} — ฟื้น ${potionHeal(s.kind, size, p.cls.id)} ${s.kind.toUpperCase()}\nคลิกยาในกระเป๋าเพื่อเลือกขนาด`;
         s.cd.style.height = `${(Math.max(0, p.potCd) / POTION_CD) * 100}%`;
         s.el.classList.toggle('empty', count <= 0);
@@ -1826,7 +1829,7 @@ export class Hud {
     if (isPotion(item)) {
       // The outline marks the size the quick key uses.
       const quick = this.g.player.potSel[item.potion] === item.size;
-      return `<div class="cell pot${quick ? ' quick' : ''}" ${attrs} style="--rc:${POTION_COLOR[item.potion]}">${potionIcon(item.potion)}` +
+      return `<div class="cell pot${quick ? ' quick' : ''}" ${attrs} style="--rc:${POTION_COLOR[item.potion]}">${potionIcon(item.potion, item.size)}` +
         `<span class="psize">${POTION_SIZE_LABEL[item.size]}</span><span class="ilv">×${item.count}</span></div>`;
     }
     if (isStone(item)) {
