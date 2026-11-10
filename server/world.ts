@@ -39,8 +39,7 @@ const GUEST_STASH_MSG = 'Guest ใช้คลังเก็บของไม�
 const JOIN_TIMEOUT_MS = 10_000;
 /** How often listings whose time is up are ended (their sellers are told if online). */
 const MARKET_EXPIRE_MS = 60_000;
-/** Fastest a client may search the market / do anything else there. */
-const MARKET_SEARCH_MS = 250;
+/** Fastest a session may send anything to the market (searches also face a per-account bucket, server/market-throttle.ts). */
 const MARKET_ACT_MS = 100;
 /** Delay before telling a player who just joined what sold or expired while away. */
 const MARKET_JOIN_NOTE_MS = 3000;
@@ -838,6 +837,7 @@ export class GameWorld {
       }
       case 'mktSearch':
       case 'mktMine':
+      case 'mktPrice':
       case 'mktList':
       case 'mktCancel':
       case 'mktBuy':
@@ -1144,7 +1144,8 @@ export class GameWorld {
   private onMarket(s: Session, m: { req: number } & MarketCall): void {
     const req = num(m.req);
     const now = performance.now();
-    if (now - s.lastMarketAt < (m.a === 'mktSearch' ? MARKET_SEARCH_MS : MARKET_ACT_MS)) {
+    // Searches are limited per account inside Market (token bucket + cache, with a message); this only stops floods.
+    if (now - s.lastMarketAt < MARKET_ACT_MS) {
       this.send(s.ws, { t: 'market', req, ok: false });
       return;
     }

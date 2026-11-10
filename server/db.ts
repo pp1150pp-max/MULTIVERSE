@@ -789,6 +789,19 @@ export class Db {
   }
 
   /**
+   * Price hints for listing something: the cheapest unit price now for sale, and the average unit price of
+   * the last (up to 5) sales, for listings with this name and kind. A null = none. Unit = price / count (stones).
+   */
+  marketPriceRef(name: string, kind: string, now: number): { lowest: number | null; sold: number | null; soldN: number } {
+    const low = this.db.prepare(`SELECT MIN(CAST(price AS REAL) / count) AS u FROM market_listings
+      WHERE name = ? AND kind = ? AND status = 'active' AND expires_at > ?`).get(name, kind, now) as { u: number | null };
+    const sold = this.db.prepare(`SELECT price, count FROM market_listings WHERE name = ? AND kind = ? AND status = 'sold'
+      ORDER BY sold_at DESC LIMIT 5`).all(name, kind) as unknown as { price: number; count: number }[];
+    const avg = sold.length ? sold.reduce((n, r) => n + r.price / Math.max(1, r.count), 0) / sold.length : null;
+    return { lowest: low.u === null ? null : Math.ceil(low.u), sold: avg === null ? null : Math.round(avg), soldN: sold.length };
+  }
+
+  /**
    * Marks a listing sold, only if it is still for sale (not sold to someone a moment ago, cancelled or
    * expired). False = it wasn't, and nothing changed.
    */

@@ -18,8 +18,9 @@ import { upgradeItem } from '../src/shared/data/items';
 import {
   cleanQuery, listingClass, listingFee, marketKind, marketSellable, saleTax, searchStats, sellerGets,
   MARKET_MS, MARKET_PAGE, MARKET_PRICE_MAX, MARKET_PRICE_MIN, MARKET_SLOTS,
-  type MarketCall, type MarketMine, type MarketReply, type MarketRow,
+  type MarketCall, type MarketMine, type MarketQuery, type MarketReply, type MarketRow,
 } from '../src/shared/sim/market';
+import { SearchBuckets, SearchCache, SEARCH_THROTTLE_MSG } from './market-throttle';
 
 /** Who is using the market: an online character (the world's session). */
 export interface MarketActor {
@@ -79,7 +80,27 @@ function rowName(r: MarketDbRow): string {
 }
 
 export class Market {
-  constructor(private readonly db: Db, private readonly now: () => number = Date.now) {}
+  private readonly buckets: SearchBuckets;
+  private readonly cache: SearchCache<MarketReply>;
+
+  constructor(private readonly db: Db, private readonly now: () => number = Date.now) {
+    this.buckets = new SearchBuckets(now);
+    this.cache = new SearchCache<MarketReply>(now);
+  }
+
+  /**
+   * Answers from the cache if this account asked the same thing a moment ago (free), else takes a token
+   * from the account's bucket (none left = a polite refusal) and runs `fn`; its good answer is cached.
+   */
+  private limited(a: MarketActor, key: string, fn: () => MarketOutcome): MarketOutcome {
+    const k = `${a.accountId}|${key}`;
+    const hit = this.cache.get(k);
+    if (hit) return { reply: hit };
+    if (!this.buckets.take(a.accountId)) return fail(SEARCH_THROTTLE_MSG);
+    const out = fn();
+    if (out.reply.ok) this.cache.set(k, out.reply);
+    return out;
+  }
 
   handle(a: MarketActor, call: MarketCall): MarketOutcome {
     // Browsing is fine for guests; trading is not (a guest is deleted after a day offline, and is free
@@ -87,11 +108,15 @@ export class Market {
     if (a.guest && call.a !== 'mktSearch') return fail(GUEST_MARKET_MSG);
     if (!a.sim.near(a.player, 'broker')) return fail(FAR_MSG);
     switch (call.a) {
-      case 'mktSearch': return this.search(a, call.q);
+      case 'mktSearch': {
+        const q = cleanQuery(call.q);
+        return this.limited(a, `s${JSON.stringify(q)}`, () => this.search(a, q));
+      }
+      case 'mktPrice': return this.price(a, call.i);
       case 'mktMine': return { reply: { ok: true, mine: this.mine(a.accountId) } };
-      case 'mktList': return this.list(a, call.i, call.price, call.n);
-      case 'mktCancel': return this.cancel(a, call.id);
-      case 'mktBuy': return this.buy(a, call.id, call.price);
+      case 'mktList': return this.changed(this.list(a, call.i, call.price, call.n));
+      case 'mktCancel': return this.changed(this.cancel(a, call.id));
+      case 'mktBuy': return this.changed(this.buy(a, call.id, call.price));
       case 'mktClaim': return this.claim(a, call.id);
       default: return fail('คำสั่งไม่ถูกต้อง');
     }
@@ -102,10 +127,24 @@ export class Market {
     return { active: rows(m.active, accountId), box: rows(m.box, accountId), slotsUsed: m.active.length };
   }
 
-  private search(a: MarketActor, raw: unknown): MarketOutcome {
-    const q = cleanQuery(raw);
+  private search(a: MarketActor, q: MarketQuery): MarketOutcome {
     const { rows: found, total } = this.db.marketSearch(q, this.now(), MARKET_PAGE);
     return { reply: { ok: true, page: { rows: rows(found, a.accountId), total, page: q.page ?? 0 } } };
+  }
+
+  /** Price hints for the item in bag slot `i` (read from the real bag, never from the browser). */
+  private price(a: MarketActor, i: unknown): MarketOutcome {
+    const e = typeof i === 'number' && Number.isInteger(i) ? a.player.bag[i] : null;
+    if (!marketSellable(e)) return fail('เลือกอุปกรณ์หรือหินที่ลงขายได้ก่อน');
+    const name = isItem(e) ? e.name : STONE_NAME[e.stone];
+    const kind = marketKind(e);
+    return this.limited(a, `p${kind}|${name}`, () => ({ reply: { ok: true, priceRef: this.db.marketPriceRef(name, kind, this.now()) } }));
+  }
+
+  /** Anything on sale changed: searches cached a moment ago would be out of date. */
+  private changed(out: MarketOutcome): MarketOutcome {
+    if (out.reply.ok) this.cache.clear();
+    return out;
   }
 
   /** Saves the character (and its account's stash, as a normal save does) inside the current transaction. */
@@ -302,7 +341,9 @@ export class Market {
 
   /** Ends listings whose time is up; returns them. */
   expire(): MarketDbRow[] {
-    return this.db.marketExpire(this.now());
+    const ended = this.db.marketExpire(this.now());
+    if (ended.length) this.cache.clear();
+    return ended;
   }
 }
 
