@@ -35,7 +35,7 @@ npm run stop-server -- --restart # เหมือนกัน แต่ npm run
 ## Server จริง (ห้ามพลาด)
 
 - **ปิด/รีสตาร์ท server จริงต้องผ่าน countdown เสมอ** (`npm run stop-server` หรือปุ่มใน `/admin`) **อย่า kill task/หน้าต่างของ `npm run online` ตรง ๆ** (ไม่เตือน ไม่เซฟ)
-  - อัปเดต server หลัง merge: ใช้ skill `/update-server` · รายละเอียด countdown, Ctrl+C, ข้อความเตือน, สำรอง/กู้คืน DB: [docs/systems/server-ops.md](docs/systems/server-ops.md)
+  - อัปเดต server หลัง merge: ใช้ skill `/update-server` · merge ทุก PR ที่พร้อมแล้วขึ้น server ในคำสั่งเดียว: `/ship` · รายละเอียด countdown, Ctrl+C, ข้อความเตือน, สำรอง/กู้คืน DB: [docs/systems/server-ops.md](docs/systems/server-ops.md)
 - **ขณะที่ server ของเจ้าของเปิดให้เพื่อนเล่นอยู่ อย่า build ทับ `dist/`** (`npm run build` ก็เขียนลง `dist/`) ให้ใช้ `npm run typecheck` และ `npx vite build --outDir <โฟลเดอร์อื่น>` แทน · เช็คว่ามีโปรแกรมใช้ port 2567 อยู่หรือไม่
 - ทดสอบสร้างบัญชี/Guest ให้ทำกับ server ของ `npm run dev` (port 2568, DB `server/data/dev.db`) เท่านั้น อย่าสร้างบน server ตัวจริง (port 2567) · Vite ส่งต่อ `/api` และ WebSocket `/ws` ให้ (`vite.config.ts`)
 
@@ -77,4 +77,5 @@ npm run stop-server -- --restart # เหมือนกัน แต่ npm run
 | กล่องจดหมาย | owner ส่งถึงตัวละคร/บัญชี/ทุกตัวละคร/ทุกบัญชี (Guest ไม่ได้) พร้อมของแนบ ≤ 10 ชิ้น · รับ all-or-nothing ครั้งเดียว · ลบไม่ได้ถ้ายังมีของแนบ · หมดอายุ 30 วัน · ดึงกลับได้เฉพาะสำเนาที่ยังไม่รับ | [mail.md](docs/systems/mail.md) |
 | เพื่อน บล็อก กระซิบ | ผูกกับบัญชี เก็บใน DB · ไม่ใช่ Guest · สูงสุด 50 · คำขอค้างได้แม้ออฟไลน์ · บล็อกกันคำขอเพื่อน/กระซิบ/ชวนตี้/ขอเทรด · กระซิบหาใครก็ได้ที่ออนไลน์ (Guest ด้วย) | [friends.md](docs/systems/friends.md) |
 | ห้องบอสและกุญแจ | บอสอยู่ในห้องแยก (channel ละกลุ่ม) ใส่กุญแจ 1–10 อันที่แท่นเรียกบอส · HP/ดาเมจ/รางวัล ×จำนวนกุญแจ · หัวตี้เชิญ 30 วิ กดเริ่ม/ยกเลิก (ยกเลิก = คืนกุญแจ) · ฆ่าแล้ว 90 วิ กลับเมือง · กุญแจดรอป 0.3% · เควส The Seeker ล่า 30 ตัวได้กุญแจผูกตัว ×1 ไม่หายจนฆ่าบอส · ขนนกฟีนิกซ์ 1,000 G ชุบที่เดิม HP ครึ่ง 3×กุญแจ ครั้ง · ล้มหมดทีมมีเวลาชุบ 5 วิ | [boss-rooms.md](docs/systems/boss-rooms.md) |
+| แชนแนล (CH) | เฉพาะ 4 แมพฟาร์ม (ค่าต่อแมพ `ZoneDef.channels`) · ห้องละ 20 ลูกตี้ตามหัวตี้ได้ 22 · เข้าห้องเลขต่ำสุดที่ว่าง เต็มหมดเปิดใหม่ ห้องว่างปิด (CH 1 อยู่ตลอด) · ย้ายเองต้องพ้นการต่อสู้ 10 วิ · หลุดกลับใน 60 วิ = แมพ/CH/จุดเดิม · ปาร์ตี้/เทรด = ห้องเดียวกัน · GM วาร์ปเลือก CH ได้ | [channels.md](docs/systems/channels.md) |
 | ปิด/รีสตาร์ท server, สำรอง DB | countdown เสมอ · exit code 75 = รีสตาร์ท · backup `VACUUM INTO` | [server-ops.md](docs/systems/server-ops.md) |

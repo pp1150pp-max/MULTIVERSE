@@ -93,7 +93,7 @@ export class Trades {
     if (from.accountId === to.accountId) return 'เทรดกับตัวละครของบัญชีตัวเองไม่ได้';
     if (!from.alive) return 'ตายอยู่ — เทรดไม่ได้';
     if (!to.alive) return `${to.name} ตายอยู่ — เทรดไม่ได้`;
-    if (from.zone !== to.zone) return `${to.name} อยู่คนละแมพ — ต้องอยู่แมพเดียวกันถึงจะเทรดได้`;
+    if (from.sim !== to.sim) return `${to.name} อยู่คนละแมพหรือคนละ CH — ต้องอยู่ห้องเดียวกันถึงจะเทรดได้`;
     if (this.byChar.has(from.charId)) return 'คุณกำลังเทรดอยู่';
     if (this.byChar.has(to.charId)) return `${to.name} กำลังเทรดอยู่`;
     return null;
@@ -280,7 +280,7 @@ export class Trades {
     const b = this.host.actor(trade.b.charId);
     if (!a || !b) return this.end(trade, false, 'ยกเลิกการเทรด — อีกฝ่ายออกจากเกม');
     if (!a.alive || !b.alive) return this.end(trade, false, 'ยกเลิกการเทรด — มีผู้เล่นเสียชีวิต');
-    if (a.zone !== b.zone) return this.end(trade, false, 'ยกเลิกการเทรด — ผู้เล่นอยู่คนละแมพ');
+    if (a.sim !== b.sim) return this.end(trade, false, 'ยกเลิกการเทรด — ผู้เล่นอยู่คนละแมพ');
     const plan = planSwap(...this.sides(trade, a, b));
     if (!plan.ok) return this.end(trade, false, `ยกเลิกการเทรด — ${plan.msg}`);
 
@@ -352,7 +352,7 @@ export class Trades {
         this.end(trade, false, `ยกเลิกการเทรด — ${dead.name} เสียชีวิต`);
         continue;
       }
-      if (a.zone !== b.zone) {
+      if (a.sim !== b.sim) {
         this.end(trade, false, 'ยกเลิกการเทรด — ผู้เล่นอยู่คนละแมพ');
         continue;
       }

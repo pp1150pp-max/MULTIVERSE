@@ -349,7 +349,7 @@ function renderOnline(): void {
     if (tab !== 'online') return;
     if (online) {
       total.textContent = `(${online.players.length} คน)`;
-      zones.replaceChildren(...online.zones.map((z) => h('div', { class: 'zone-chip' }, h('b', {}, String(z.count)), h('span', {}, z.nameTh))));
+      zones.replaceChildren(...online.zones.map((z) => h('div', { class: 'zone-chip' }, h('b', {}, String(z.count)), h('span', {}, z.ch ? `${z.nameTh} · CH ${z.ch}` : z.nameTh))));
       // Rows are updated in place (by character), so a tap that lands during a refresh still opens it.
       const old = new Map([...body.querySelectorAll<HTMLTableRowElement>('tr[data-char]')].map((tr) => [tr.dataset.char!, tr]));
       const rows = online.players.map((p) => {
@@ -384,7 +384,7 @@ function onlineRow(p: AdminOnlineRow): HTMLTableRowElement {
     cell('บัญชี', h('span', {}, p.username, p.guest ? h('span', { class: 'tag' }, 'Guest') : null)),
     cell('คลาส', className(p.classId)),
     cell('Lv', String(p.level), 'num'),
-    cell('โซน', zoneName(p.zone)),
+    cell('โซน', online?.zones.some((z) => z.id === p.zone && z.ch) ? `${zoneName(p.zone)} · CH ${p.ch}` : zoneName(p.zone)),
     cell('เล่นมาแล้ว', playedFor(p.playedMs), 'num'),
     numCell('Ping', p.rtt, ' ms', (p.rtt ?? 0) > PING_BAD),
     p.hidden && p.fps === null ? cell('FPS', 'แท็บซ่อน', 'num muted') : numCell('FPS', p.fps, '', p.fps !== null && p.fps < FPS_BAD),
@@ -678,7 +678,26 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
   // Zone
   const zone = h('select', {}, ...m.zones.map((z) => h('option', { value: z.id, selected: z.id === c.zone }, `${z.nameTh} (Lv.${z.levels[0]}–${z.levels[1]})`)));
   const tpBtn = h('button', { class: 'primary' }, 'ย้ายโซน');
-  tpBtn.onclick = () => void run('teleport', { zone: zone.value }, tpBtn);
+  // Channel (channelWarp, maps with channels only): "auto" = placed like anyone, or into a chosen CH however full.
+  const chSel = h('select', {}) as HTMLSelectElement;
+  const chWrap = h('label', { class: 'hidden' }, 'CH', chSel);
+  let chList: AdminOnline | null = online;
+  const fillCh = () => {
+    const list = chList?.zones.filter((z) => z.id === zone.value && z.ch) ?? [];
+    const here = chList?.players.find((p) => p.charId === c.charId);
+    chWrap.classList.toggle('hidden', !can('channelWarp') || !list.length);
+    chSel.replaceChildren(h('option', { value: '' }, 'อัตโนมัติ'), ...list.map((z) => h('option', { value: String(z.ch) },
+      `CH ${z.ch} (${z.count} คน)${here && here.zone === z.id && here.ch === z.ch ? ' · อยู่ที่นี่' : ''}`)));
+  };
+  zone.addEventListener('change', fillCh);
+  fillCh();
+  if (can('channelWarp') && c.online) {
+    void api<AdminOnline>('GET', '/admin/online').then((o) => {
+      chList = o;
+      fillCh();
+    }).catch(() => undefined);
+  }
+  tpBtn.onclick = () => void run('teleport', { zone: zone.value, ...(chSel.value ? { ch: Number(chSel.value) } : {}) }, tpBtn);
 
   const kickBtn = h('button', { class: 'danger' }, 'เตะออกจากเกม');
   kickBtn.onclick = () => void run('kick', {}, kickBtn, `เตะ ${c.name} ออกจากเกม?`);
@@ -711,7 +730,8 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
         rarityWrap, plusWrap, itemLvWrap, h('label', {}, 'จำนวน', count), itemBtn),
       custom ? exampleBox : null),
     h('section', {}, h('h3', {}, 'ย้ายโซน (ไปที่แคมป์)'),
-      h('div', { class: 'row' }, h('label', {}, 'โซน', zone), tpBtn)),
+      h('div', { class: 'row' }, h('label', {}, 'โซน', zone), chWrap, tpBtn),
+      can('channelWarp') ? h('div', { class: 'muted' }, 'เลือก CH ได้เฉพาะแมพที่มีแชนแนล · เลือก CH แล้วเข้าได้แม้ห้องเต็ม') : null),
     c.online ? h('section', {}, h('div', { class: 'row' }, kickBtn)) : null,
     h('div', { class: 'result' }, result),
   ));

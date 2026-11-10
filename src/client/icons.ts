@@ -1,6 +1,6 @@
 // Painted icons for the HUD, as HTML to drop into markup. Files live in assets/sprites/icons/.
 import { itemArt, starterArt } from '../shared/data/items';
-import type { ClassId, EquipSlot, Item, PotionKind, StoneKind } from '../shared/types';
+import type { ClassId, EquipSlot, Item, PotionKind, PotionSize, StoneKind } from '../shared/types';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { drawIcon } from './placeholder';
 import { CRIT_BURST, GLYPH_SHEET } from './floating';
@@ -9,7 +9,8 @@ export const iconImg = (name: string): string =>
   `<img class="gi" src="assets/sprites/icons/${name}.png" alt="" draggable="false">`;
 
 export const skillIcon = (skillId: string): string => iconImg(`skill_${skillId}`);
-export const potionIcon = (kind: PotionKind): string => iconImg(`potion_${kind}`);
+/** Potion icon: with a size, that bottle shape (small vial, medium flask, large ornate flask). */
+export const potionIcon = (kind: PotionKind, size?: PotionSize): string => iconImg(size ? `potion_${kind}_${size}` : `potion_${kind}`);
 export const COIN_ICON = iconImg('coin');
 
 const missingStone = new Set<string>();
@@ -56,7 +57,7 @@ function cssImageUrls(): string[] {
  * shows, so nothing pops in blank on the first entry. Failures count as done: the HUD has fallbacks.
  */
 export function preloadHudImages(onProgress: (fraction: number) => void): Promise<void> {
-  const icons = ['coin', 'npc_forge', 'potion_hp', 'potion_mp', ...CLASS_IDS.flatMap((c) => CLASSES[c].skills.map((s) => `skill_${s.id}`))];
+  const icons = ['coin', 'npc_forge', 'potion_hp', 'potion_mp', ...(['hp', 'mp'] as const).flatMap((k) => (['s', 'm', 'l'] as const).map((s) => `potion_${k}_${s}`)), ...CLASS_IDS.flatMap((c) => CLASSES[c].skills.map((s) => `skill_${s.id}`))];
   const urls = [...cssImageUrls(), ...icons.map((n) => `assets/sprites/icons/${n}.png`), GLYPH_SHEET, CRIT_BURST];
   let done = 0;
   onProgress(0);

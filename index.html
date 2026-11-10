@@ -39,7 +39,12 @@
         </div>
 
         <div id="hud-topright">
-          <canvas id="minimap" width="352" height="352"></canvas>
+          <div id="minimap-wrap">
+            <canvas id="minimap" width="352" height="352" title="คลิกเพื่อเปิดแผนที่ใหญ่ (M)"></canvas>
+            <button id="mm-search" class="mm-btn" title="เปิดแผนที่ใหญ่ (M) — คลิกซ้ายเพื่อเดินไปจุดนั้น คลิกขวาเพื่อปักหมุด">🔍</button>
+            <button id="mm-plus" class="mm-btn" title="ซูมเข้า — ดูรอบตัวละเอียดขึ้น">+</button>
+            <button id="mm-minus" class="mm-btn" title="ซูมออก — ดูพื้นที่กว้างขึ้น">−</button>
+          </div>
           <div id="hud-ping" class="ping-none" title="Ping: เวลาไป-กลับระหว่างเครื่องคุณกับ server"><span class="dot">●</span> <span id="hud-ping-ms">—</span></div>
           <div class="hud-buttons">
             <div class="auto-row">
@@ -282,8 +287,9 @@
             <span><img src="assets/sprites/icons/map_market.png" alt="">นายหน้าตลาด</span>
             <span><img src="assets/sprites/icons/map_seeker.png" alt="">The Seeker</span>
             <span><img src="assets/sprites/icons/map_flag.png" alt="">จุดที่จะเดินไป</span>
+            <span><i class="pin-key"></i>หมุดของคุณ (คลิกขวา)</span>
           </div>
-          <div class="hint" id="fullmap-hint">กด M หรือ Esc เพื่อปิด</div>
+          <div class="fullmap-foot"><div class="hint" id="fullmap-hint">กด M หรือ Esc เพื่อปิด</div><button id="fullmap-clearpin" class="hidden" title="ลบหมุดที่ปักไว้">ลบหมุด</button></div>
         </div>
 
         <div id="help" class="panel hidden">

@@ -66,6 +66,9 @@ const dir = mkdtempSync(join(tmpdir(), 'multiverse-trade-test-'));
 const db = new Db(join(dir, 'trade.db'));
 let clock = 1_000_000;
 const sim = new Sim(ZONES[HUB_ID]);
+/** Another map, and another channel (Sim) of the same map: both count as "not together". */
+const elsewhere = new Sim(ZONES.emerald_forest);
+const otherChannel = new Sim(ZONES[HUB_ID]);
 
 interface Out {
   chat: Map<number, string[]>;
@@ -131,9 +134,11 @@ const A2 = actor('AliceAlt', { account: A.accountId });
   ok(trades.request(A, undefined, false)?.includes('ไม่พบ'), 'an offline target is refused');
   ok(trades.request(A, A, false) !== null, 'trading with yourself is refused');
   ok(trades.request(A, A2, false)?.includes('บัญชีตัวเอง'), 'two characters of one account cannot trade');
-  B.zone = 'emerald_forest';
+  B.sim = elsewhere;
   ok(trades.request(A, B, false)?.includes('แมพ'), 'different maps are refused');
-  B.zone = 'hub';
+  B.sim = otherChannel;
+  ok(trades.request(A, B, false)?.includes('CH'), 'another channel of the same map is refused');
+  B.sim = sim;
   B.alive = false;
   ok(trades.request(A, B, false)?.includes('ตาย'), 'a dead target is refused');
   B.alive = true;
@@ -363,8 +368,10 @@ const A2 = actor('AliceAlt', { account: A.accountId });
   Q.alive = true;
   run('the other player dies', () => (P.alive = false), 'เสียชีวิต');
   P.alive = true;
-  run('a player changes map', () => (Q.zone = 'emerald_forest'), 'คนละแมพ');
-  Q.zone = 'hub';
+  run('a player changes map', () => (Q.sim = elsewhere), 'คนละแมพ');
+  Q.sim = sim;
+  run('a player switches channel', () => (Q.sim = otherChannel), 'คนละแมพ');
+  Q.sim = sim;
   run('a player disconnects', () => {
     trades.cancelChar(Q.charId, 'Sam ออกจากเกม');
     actors.delete(Q.charId);
