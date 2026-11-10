@@ -16,6 +16,7 @@ import type { MailCall, MailReply } from '../shared/mail';
 import type { RoomSnap } from '../shared/bossRoom';
 import type { PartyFound, PartySnap } from '../shared/party';
 import type { FriendsView } from '../shared/friends';
+import type { ChannelsView } from '../shared/channels';
 
 /** What a projectile view needs; the local simulation's Projectile fits this too. */
 export interface ProjectileLike {
@@ -32,6 +33,10 @@ export interface Backend {
   /** Playing a guest character: no stash, deleted after a day offline. */
   readonly guest: boolean;
   readonly zone: ZoneDef;
+  /** The channel of that zone you are in (1 on a map without channels). */
+  readonly channel: number;
+  /** Goes up on every move to another map or channel (a channel switch keeps the same `zone`). */
+  readonly zoneSeq: number;
   readonly terrain: Terrain;
   /** The character this browser controls. */
   readonly me: Player;
@@ -154,6 +159,15 @@ export interface Backend {
   friendUnblock(acc: number): void;
   /** Ask for a fresh view (opening the window). */
   friendList(): void;
+
+  // Channels (the server checks every rule; see server/channels.ts). The list comes back as a hook on the backend.
+  /** Ask for the channel window's list (answered through `onChannels`). */
+  chList(): void;
+  /** Switch to channel `ch` of this map (out of combat for CH_SWITCH_CALM seconds, room in it). */
+  chSwitch(ch: number): void;
+  /** Go to the channel of this friend / party member (online, same map). */
+  chJoin(name: string): void;
+  onChannels: ((view: ChannelsView) => void) | null;
 
   // Boss rooms (the server checks every rule; see server/bossRooms.ts).
   /** Put this many keys into the summoner you stand next to (`quest`: the bound quest key, ×1). */

@@ -32,6 +32,8 @@ export interface PartyMemberSnap {
   online: boolean;
   /** Zone the member is in (offline: the last one). */
   zone: string;
+  /** The channel of that zone (1 when it has none; offline: the last one). */
+  ch: number;
   /** Their player id inside that zone's simulation (-1 when offline), so nameplates can find them. */
   pid: number;
   x: number;

@@ -52,6 +52,12 @@ export interface ZoneDef {
   theme: ZoneTheme;
   /** Open world allows Auto Play; rare-loot dungeons will set this false. */
   allowAutoPlay: boolean;
+  /**
+   * Split into channels (several copies of the map, CH 1, CH 2, …) so players don't crowd one map
+   * (see server/channels.ts, docs/systems/channels.md). The farm maps have it; the hub doesn't yet,
+   * but setting it there is all it takes.
+   */
+  channels?: boolean;
   half: number;
   seed: number;
   start: { x: number; z: number };
@@ -235,6 +241,7 @@ export const ZONE_1: ZoneDef = scatterZone({
   levels: [1, 10],
   theme: 'forest',
   allowAutoPlay: true,
+  channels: true,
   half: 64,
   seed: 20261027,
   start: { x: 44, z: 44 },
@@ -266,6 +273,7 @@ export const ZONE_2: ZoneDef = rotateZone(1, scatterZone({
   theme: 'marsh',
   monsterBoost: { stats: 1.3, speed: 1.1 },
   allowAutoPlay: true,
+  channels: true,
   half: 64,
   seed: 20261103,
   start: { x: 44, z: 44 },
@@ -298,6 +306,7 @@ export const ZONE_3: ZoneDef = rotateZone(2, scatterZone({
   theme: 'snow',
   monsterBoost: { stats: 4.5, tough: 0.7, mobTough: 0.75, speed: 1.375, skill: 1.25, aggro: 7 },
   allowAutoPlay: true,
+  channels: true,
   half: 64,
   seed: 20261105,
   start: { x: 44, z: 44 },
@@ -336,6 +345,7 @@ export const ZONE_4: ZoneDef = rotateZone(3, scatterZone({
   theme: 'volcano',
   monsterBoost: { stats: 7, tough: 0.5, mobTough: 0.7, speed: 1.25, skill: 1.25, aggro: 7 },
   allowAutoPlay: true,
+  channels: true,
   half: 64,
   seed: 20261107,
   start: { x: 44, z: 44 },

@@ -1,4 +1,5 @@
 import { SPACE_COLOUR } from './island';
+import { placeLabel } from '../shared/channels';
 import type { Game } from './Game';
 import { NPC_USE_RANGE, type NpcId } from '../shared/data/npcs';
 import type { SkillSlot } from '../shared/data/classes';
@@ -583,7 +584,7 @@ export class Hud {
     this.showZoneName();
     this.closePanels();
     this.markInventory();
-    this.log(`เดินทางสู่ ${z.name} · ${z.nameTh} (Lv.${z.levels[0]}–${z.levels[1]})`, '#9fffd8');
+    this.log(`เดินทางสู่ ${z.name} · ${placeLabel(z, this.g.backend.channel)} (Lv.${z.levels[0]}–${z.levels[1]})`, '#9fffd8');
     this.log(z.subtitle, '#b9c9c0');
   }
 
