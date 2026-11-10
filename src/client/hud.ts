@@ -10,7 +10,7 @@ import {
   entryName, POTION_SIZES, POTION_SIZE_LABEL, POTION_STACK, POTIONS, potionHeal, potionName, potionSellPrice, stackLimit,
 } from '../shared/data/potions';
 import { REROLL_STONE, RETURN_CAST, RETURN_SCROLL_PRICE, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_STACK, stoneSellPrice, stoneStackValue, stoneUnit, PHOENIX_PRICE } from '../shared/data/stones';
-import { lineRanges, rerollBlock } from '../shared/data/items';
+import { lineRanges, rerollBlock, statRerollOdds } from '../shared/data/items';
 import { REROLL_NAME, rerollCost, type RerollKind } from '../shared/data/reroll';
 import { FullMap } from './fullmap';
 import { AUTO_PX_PER_UNIT, AUTO_RANGE_MAX, AUTO_RANGE_MIN, buybackPrice, cleanAutoSettings, lootPots, type AutoSkill, type LootFilter, type SortKey } from '../shared/sim/Player';
@@ -523,7 +523,6 @@ export class Hud {
     });
     $('forge-rates-btn').onclick = () => $('forge-rates').classList.toggle('hidden');
     $('forge-rates-close').onclick = () => $('forge-rates').classList.add('hidden');
-    $('forge-table').innerHTML = this.rateTable();
     const fslot = $('forge-slot');
     fslot.addEventListener('mousemove', (e) => {
       const item = this.forgeItem();
@@ -1593,11 +1592,21 @@ export class Hud {
     const mode = this.forgeMode;
     for (const b of $('forge-menu').querySelectorAll<HTMLElement>('[data-mode]')) b.classList.toggle('active', b.dataset.mode === mode);
     $('forge-desc').textContent = FORGE_DESC[mode];
-    $('forge-rates-btn').classList.toggle('hidden', mode !== 'enhance');
-    if (mode !== 'enhance') $('forge-rates').classList.add('hidden');
+    // Odds table: enhance rates, or what "สุ่มสเตตัส" can give (for the item placed, if any).
+    const hasRates = mode === 'enhance' || mode === 'stat';
+    $('forge-rates-btn').classList.toggle('hidden', !hasRates);
+    if (!hasRates) $('forge-rates').classList.add('hidden');
 
     const item = this.forgeItem();
     if (!item) this.forgeSel = null; // sold, dropped or stored since
+    if (hasRates) {
+      const btn = mode === 'enhance' ? 'ตารางโอกาสสำเร็จ' : 'ตารางโอกาส';
+      const title = mode === 'enhance' ? 'ตารางโอกาสสำเร็จ / โบนัส' : 'ตารางโอกาส — สุ่มสเตตัส';
+      const table = mode === 'enhance' ? this.rateTable() : this.statOddsTable(item);
+      if ($('forge-rates-btn').textContent !== btn) $('forge-rates-btn').textContent = btn;
+      if ($('forge-rates-title').textContent !== title) $('forge-rates-title').textContent = title;
+      if ($('forge-table').innerHTML !== table) $('forge-table').innerHTML = table;
+    }
     const stones: StoneKind[] = mode === 'enhance' ? ['enhance', 'protect'] : [REROLL_STONE[mode]];
     $('forge-foot').innerHTML = `<span class="ff-gold">${COIN_ICON} ${p.gold.toLocaleString()} G</span>` +
       stones.map((s) => `<span class="ff-stone" title="${STONE_NAME[s]}">${stoneIcon(s)} ${STONE_NAME[s]} ${p.stoneCount(s)}</span>`).join('');
@@ -1774,6 +1783,26 @@ export class Hud {
     }
     this.markInventory();
     this.renderForge();
+  }
+
+  /** "สุ่มสเตตัส": which stats an extra line can become and the tier chances, for this item if one is placed. */
+  private statOddsTable(item: Item | undefined): string {
+    const odds = statRerollOdds(item);
+    const pct = (c: number) => `${Math.round(c * 1000) / 10}%`;
+    const forItem = !!item && !!lineRanges(item);
+    let html = `<div class="odds-sub">${odds.mainOnly ? 'สเตตัสหลักที่อาจถูกสุ่ม' : 'ชนิดสเตตัสที่อาจได้'}${forItem ? ' (ชิ้นนี้)' : ''}</div>` +
+      '<table class="odds-stats"><tr><th>สเตตัส</th><th>โอกาส</th></tr>';
+    for (const s of odds.stats) {
+      html += `<tr class="${s.chance > 0 ? '' : 'off'}"><td>${STAT_LABEL[s.stat]}</td><td>${s.chance > 0 ? pct(s.chance) : 'ซ้ำบรรทัดอื่น'}</td></tr>`;
+    }
+    html += '</table><div class="odds-sub">โอกาสได้แต่ละ tier</div><table><tr>' +
+      odds.tiers.map((_, i) => `<th><span class="tier t${i + 1}">T${i + 1}</span></th>`).join('') + '</tr><tr>' +
+      odds.tiers.map((c) => `<td>${pct(c)}</td>`).join('') + '</tr></table>';
+    const note = odds.mainOnly
+      ? 'ชิ้นนี้ไม่มีสเตตัสเสริม: สุ่มแค่ tier และค่าของสเตตัสหลัก 1 บรรทัด ชนิดไม่เปลี่ยน'
+      : 'สุ่มเปลี่ยนสเตตัสเสริม 1 บรรทัด ทุกบรรทัดมีโอกาสเท่ากัน · ไม่ซ้ำกับสเตตัสเสริมบรรทัดอื่น · สเตตัสหลักไม่เปลี่ยน' +
+        (forItem ? '' : ' · วางอุปกรณ์เพื่อดูโอกาสของชิ้นนั้น');
+    return html + `<div class="hint">${note}</div>`;
   }
 
   private rateTable(): string {
