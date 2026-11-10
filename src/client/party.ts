@@ -7,6 +7,7 @@ import type { Player } from '../shared/sim/Player';
 import { PARTY_SEARCH_MAX, type PartyMemberSnap, type PartySnap } from '../shared/party';
 import { CLASSES } from '../shared/data/classes';
 import { whisperPrefix } from './hud';
+import { joinButton, otherChannelHere, placeText } from './channels';
 
 const BLOCK_KEY = 'multiverse-party-block';
 /** Wait this long after typing before searching (the server allows one search per 250 ms). */
@@ -133,23 +134,33 @@ export class PartyUI {
     this.g.backend.setPartyBlock(on);
   }
 
-  /** The party member in this zone with this player id (for nameplates and the map), if any. */
-  memberOf(p: Player): PartyMemberSnap | undefined {
+  /**
+   * Whether a member is in the same copy of the map as you: same zone and same channel (player ids
+   * are per channel, so a member in another channel may share an id with a stranger here).
+   */
+  private get withMe(): (m: PartyMemberSnap) => boolean {
     const zone = this.g.backend.zone.id;
-    return this.party?.members.find((m) => m.online && m.pid === p.id && m.zone === zone);
+    const ch = this.g.backend.channel;
+    return (m) => m.online && m.zone === zone && m.ch === ch;
   }
 
-  /** Other members online on this map, wherever they are (for the minimap and the full map). */
+  /** The party member in this zone and channel with this player id (for nameplates and the map), if any. */
+  memberOf(p: Player): PartyMemberSnap | undefined {
+    const here = this.withMe;
+    return this.party?.members.find((m) => m.pid === p.id && here(m));
+  }
+
+  /** Other members online in this map and channel, wherever they are (for the minimap and the full map). */
   mapMates(): PartyMemberSnap[] {
-    const zone = this.g.backend.zone.id;
+    const here = this.withMe;
     const me = this.g.player.id;
-    return this.party?.members.filter((m) => m.online && m.zone === zone && m.pid !== me) ?? [];
+    return this.party?.members.filter((m) => here(m) && m.pid !== me) ?? [];
   }
 
   private get isMe(): (m: PartyMemberSnap) => boolean {
-    const zone = this.g.backend.zone.id;
+    const here = this.withMe;
     const me = this.g.player.id;
-    return (m) => m.online && m.pid === me && m.zone === zone;
+    return (m) => m.pid === me && here(m);
   }
 
   private get canInvite(): boolean {
@@ -160,7 +171,8 @@ export class PartyUI {
   // ------------------------------------------------------------ per frame
 
   update(): void {
-    const key = JSON.stringify(this.party);
+    // Your own map and channel decide the "ไปห้องเดียวกัน" buttons.
+    const key = JSON.stringify([this.party, this.g.backend.zone.id, this.g.backend.channel]);
     if (key !== this.drawnHud) {
       this.drawnHud = key;
       this.renderHud();
@@ -193,9 +205,16 @@ export class PartyUI {
     for (const m of this.party?.members ?? []) {
       if (isMe(m)) continue;
       const row = el('div', `party-member${m.online ? '' : ' offline'}`);
-      row.append(nameLine(m), bars(m));
+      row.append(nameLine(m), bars(m), this.placeLine(m));
       this.hudBox.append(row);
     }
+  }
+
+  /** "ป่ามรกต · CH 2" under a member, with "ไปห้องเดียวกัน" when they are on your map in another channel. */
+  private placeLine(m: PartyMemberSnap): HTMLElement {
+    const line = el('div', 'party-place', m.online ? placeText(m.zone, m.ch) : `ล่าสุด ${placeText(m.zone, m.ch)}`);
+    if (m.online && !this.isMe(m) && otherChannelHere(this.g, m.zone, m.ch)) line.append(joinButton(this.g, m.name));
+    return line;
   }
 
   /** The party window's layout; the member rows are filled in by renderList. */
@@ -243,7 +262,7 @@ export class PartyUI {
     const leader = this.canInvite;
     for (const m of party.members) {
       const row = el('div', `party-member${m.online ? '' : ' offline'}${isMe(m) ? ' me' : ''}`);
-      row.append(nameLine(m), bars(m));
+      row.append(nameLine(m), bars(m), this.placeLine(m));
       // Right click: the manage menu (only kick so far), for the leader on someone else.
       row.addEventListener('contextmenu', (e) => {
         e.preventDefault();

@@ -331,7 +331,7 @@ async function run(): Promise<void> {
   const plainId = (await api('GET', '/admin/accounts', undefined, ownerTok)).data.rows.find((r: any) => r.username === 'plain1').accountId;
   const ownerId = (await api('GET', '/admin/accounts', undefined, ownerTok)).data.rows.find((r: any) => r.username === 'owner1').accountId;
   ok((await api('GET', '/admin/me', undefined, ownerTok)).data.features.length === Object.keys(FEATURE_ROLES).length, 'owner has every owner tool');
-  ok(JSON.stringify((await api('GET', '/admin/me', undefined, gmTok)).data.features) === '["broadcast","orbPreview","reports"]', 'GM has only the broadcast tool, the orb test bench and reports (FEATURE_ROLES)');
+  ok(JSON.stringify((await api('GET', '/admin/me', undefined, gmTok)).data.features) === '["broadcast","orbPreview","channelWarp","reports"]', 'GM has only the broadcast tool, the orb test bench, the channel warp and reports (FEATURE_ROLES)');
   const trades = await api('GET', '/admin/trades', undefined, ownerTok);
   ok(trades.status === 200 && Array.isArray(trades.data) && (await api('GET', '/admin/trades?q=x%25', undefined, ownerTok)).status === 200, 'owner reads the trade log (and a search with odd characters is fine)');
   const gmDenied: [string, string, unknown?][] = [

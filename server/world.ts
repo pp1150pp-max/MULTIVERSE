@@ -35,6 +35,8 @@ import { Friends, type FriendActor } from './friends';
 import { FRIEND_NAME_MAX, type FriendChar } from '../src/shared/friends';
 import { PARTY_SEARCH_LIMIT, PARTY_SEARCH_MAX, type PartyFound, type PartySnap } from '../src/shared/party';
 import { BossRooms } from './bossRooms';
+import { Channels, FightClock, type Channel } from './channels';
+import { hasChannels, type ChannelsView } from '../src/shared/channels';
 import { STONE_NAME, STONE_STACK } from '../src/shared/data/stones';
 
 const AUTOSAVE_MS = 30_000;
@@ -42,8 +44,7 @@ const GUEST_STASH_MSG = 'Guest ใช้คลังเก็บของไม�
 const JOIN_TIMEOUT_MS = 10_000;
 /** How often listings whose time is up are ended (their sellers are told if online). */
 const MARKET_EXPIRE_MS = 60_000;
-/** Fastest a client may search the market / do anything else there. */
-const MARKET_SEARCH_MS = 250;
+/** Fastest a session may send anything to the market (searches also face a per-account bucket, server/market-throttle.ts). */
 const MARKET_ACT_MS = 100;
 /** Delay before telling a player who just joined what sold or expired while away. */
 const MARKET_JOIN_NOTE_MS = 3000;
@@ -52,6 +53,8 @@ const SKILL_KEYS: SkillSlot[] = ['q', 'e', 'r'];
 const PARTY_SEARCH_MS = 250;
 /** Fastest a client may send a friend request, block or list read (each looks things up in the database). */
 const FRIEND_ACTION_MS = 250;
+/** Fastest a client may use the channel window (list, switch, go to a friend's channel). */
+const CH_ACTION_MS = 250;
 /** Back this soon after a dropped connection (or a login elsewhere): friends aren't told "online" again. */
 const FRIEND_QUIET_MS = 60_000;
 /**
@@ -62,7 +65,7 @@ const FRIEND_QUIET_MS = 60_000;
 const TRADE_LOCKED = new Set([
   'equip', 'unequip', 'drop', 'buy', 'move', 'sort', 'buyBack', 'sell', 'split', 'sellRarity', 'enhance', 'reroll',
   'stashPut', 'stashTake', 'stashMove', 'stashSort', 'stashBuy', 'stashGold', 'stashSplit',
-  'mktSearch', 'mktMine', 'mktList', 'mktCancel', 'mktBuy', 'mktClaim',
+  'mktSearch', 'mktMine', 'mktPrice', 'mktList', 'mktCancel', 'mktBuy', 'mktClaim',
   'mailList', 'mailRead', 'mailClaim', 'mailDelete', 'mailDeleteRead', 'roomOpen', 'buyPhoenix',
 ]);
 const TRADE_LOCKED_MSG = 'กำลังเทรดอยู่ — ปิดหน้าต่างเทรดก่อนถึงจะจัดการของได้';
@@ -154,6 +157,13 @@ interface Session {
   lastFriendAt: number;
   /** Level and zone its friends last saw (see friendsTick); a change updates their lists. */
   friendKey: string;
+  /** The channel number it was last in on a map with channels: entering another such map tries it first. */
+  lastCh: number;
+  /** When the player last fought: a channel switch needs CH_SWITCH_CALM seconds since. Kept across maps. */
+  fight: FightClock;
+  /** When this session last asked for the channel list, and last tried a switch (performance.now()), throttled apart. */
+  lastChListAt: number;
+  lastChAt: number;
 }
 
 const num = (v: unknown, fallback = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
@@ -213,7 +223,8 @@ const clamp = (v: unknown, max: number): number | undefined =>
   typeof v === 'number' && Number.isFinite(v) ? Math.min(Math.max(v, 0), max) : undefined;
 
 export class GameWorld {
-  readonly sims = new Map(Object.values(ZONES).map((z) => [z.id, new Sim(z)]));
+  /** Every open map's Sims, one per channel (server/channels.ts). */
+  readonly channels = new Channels(Object.values(ZONES));
   private readonly sessions = new Set<Session>();
   private readonly byPlayer = new Map<Player, Session>();
   /** Account → when (Date.now()) its connection dropped or was taken over, for FRIEND_QUIET_MS. */
@@ -435,9 +446,15 @@ export class GameWorld {
         data = this.db.loadCharacter(acc.id, charId) ?? data;
       }
     }
-    // Everyone comes into the game in the hub's town, whichever zone they logged out in.
-    const sim = this.sims.get(HUB_ID)!;
+    // Everyone comes into the game in the hub's town, whichever zone they logged out in, except a
+    // dropped connection (or a login elsewhere) back within CH_RECONNECT_MS: that goes back where it was.
+    const back = this.channels.returning(charId);
+    const sim = (back?.channel ?? this.channels.place(HUB_ID)!).sim;
     const player = sim.addPlayer(data);
+    if (back) {
+      player.x = back.x;
+      player.z = back.z;
+    }
     this.db.touchOnline(acc.id);
     if (acc.guest) {
       // Guests can't use the stash (onAction refuses it); this empty one is never saved.
@@ -457,7 +474,7 @@ export class GameWorld {
       ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity, blockTrades: false,
-      lastFriendAt: -Infinity, friendKey: '',
+      lastFriendAt: -Infinity, friendKey: '', lastCh: back?.channel.ch ?? 1, fight: new FightClock(Math.max(player.lastHurt, player.lastAttack)), lastChListAt: -Infinity, lastChAt: -Infinity,
     };
     try {
       s.playRow = this.db.startPlaySession({ accountId: acc.id, username: acc.username, guest: acc.guest, charId, charName: player.name, ip });
@@ -471,7 +488,7 @@ export class GameWorld {
     if (!acc.guest) this.friendsJoined(s, accountWasOnline);
     // Back within the grace time (or a takeover): still in the party.
     player.partyId = this.parties.online(charId);
-    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, guest: acc.guest, orbLook: this.db.orbLook() });
+    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), guest: acc.guest, orbLook: this.db.orbLook() });
     this.broadcastSystem(`${player.name} เข้าสู่โลก`);
     // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
     if (!acc.guest) setTimeout(() => this.sessions.has(s) && (this.marketOnJoin(s), this.mailNote(s, true)), MARKET_JOIN_NOTE_MS);
@@ -489,8 +506,12 @@ export class GameWorld {
     if (how === 'quit') this.parties.leave(s.charId);
     else if (how === 'drop') {
       const p = s.player;
-      this.parties.offline(s.charId, { level: p.level, maxHp: p.maxHp, maxMp: p.stats.maxMp, zone: s.sim.zone.id });
+      this.parties.offline(s.charId, { level: p.level, maxHp: p.maxHp, maxMp: p.stats.maxMp, zone: s.sim.zone.id, ch: this.chOf(s) });
     }
+    // Lost connection or a login elsewhere: back within CH_RECONNECT_MS = the same map, channel and spot
+    // (the dead and those in a boss room start in the hub as usual). Leaving on purpose forgets it.
+    if (how !== 'quit' && s.player.alive) this.channels.dropped(s.charId, s.sim, s.player.x, s.player.z);
+    else this.channels.forget(s.charId);
     if (s.playRow >= 0) {
       try {
         this.db.endPlaySession(s.playRow, {
@@ -709,6 +730,7 @@ export class GameWorld {
     if (typeof m.a === 'string' && m.a.startsWith('party')) return this.onParty(s, m);
     if (typeof m.a === 'string' && m.a.startsWith('trade')) return this.onTrade(s, m);
     if (typeof m.a === 'string' && m.a.startsWith('friend')) return this.onFriend(s, m);
+    if (m.a === 'chList' || m.a === 'chSwitch' || m.a === 'chJoin') return this.onChannel(s, m);
     if (m.a === 'roomOpen' || m.a === 'roomAnswer' || m.a === 'roomStart' || m.a === 'roomCancel') {
       if (m.a !== 'roomOpen' || !this.trades.busy(s.charId)) return this.onRoom(s, m);
     }
@@ -843,6 +865,7 @@ export class GameWorld {
       }
       case 'mktSearch':
       case 'mktMine':
+      case 'mktPrice':
       case 'mktList':
       case 'mktCancel':
       case 'mktBuy':
@@ -1019,7 +1042,7 @@ export class GameWorld {
           charId: m.charId, name: m.name, cls: m.cls, lv: p?.level ?? m.level,
           hp: p ? Math.round(Math.max(0, p.hp)) : 0, maxHp: Math.round(p?.maxHp ?? m.maxHp),
           mp: p ? Math.round(Math.max(0, p.mp)) : 0, maxMp: Math.round(p?.stats.maxMp ?? m.maxMp),
-          leader: i === 0, online: !!o, zone: o?.sim.zone.id ?? m.zone, pid: p?.id ?? -1,
+          leader: i === 0, online: !!o, zone: o?.sim.zone.id ?? m.zone, ch: o ? this.chOf(o) : (m.ch ?? 1), pid: p?.id ?? -1,
           x: p ? r2(p.x) : 0, z: p ? r2(p.z) : 0,
         };
       }),
@@ -1036,11 +1059,11 @@ export class GameWorld {
   }
 
   private friendChar(s: Session): FriendChar {
-    return { name: s.player.name, cls: s.player.cls.id, lv: s.player.level, zone: s.sim.zone.id };
+    return { name: s.player.name, cls: s.player.cls.id, lv: s.player.level, zone: s.sim.zone.id, ch: this.chOf(s) };
   }
 
   private friendKeyOf(s: Session): string {
-    return `${s.player.level}|${s.sim.zone.id}`;
+    return `${s.player.level}|${s.sim.zone.id}|${this.chOf(s)}`;
   }
 
   /** Sends this account's friends window to each of its online characters. */
@@ -1152,7 +1175,8 @@ export class GameWorld {
   private onMarket(s: Session, m: { req: number } & MarketCall): void {
     const req = num(m.req);
     const now = performance.now();
-    if (now - s.lastMarketAt < (m.a === 'mktSearch' ? MARKET_SEARCH_MS : MARKET_ACT_MS)) {
+    // Searches are limited per account inside Market (token bucket + cache, with a message); this only stops floods.
+    if (now - s.lastMarketAt < MARKET_ACT_MS) {
       this.send(s.ws, { t: 'market', req, ok: false });
       return;
     }
@@ -1355,7 +1379,7 @@ export class GameWorld {
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
     const travels: { s: Session; zone: string; atCamp?: boolean }[] = [];
-    for (const sim of [...this.sims.values(), ...this.rooms.sims()]) {
+    for (const sim of [...this.channels.sims(), ...this.rooms.sims()]) {
       sim.step(dt, this.intentOf);
       for (const ev of sim.drainEvents()) {
         if (ev.t === 'save') {
@@ -1388,6 +1412,12 @@ export class GameWorld {
       }
     }
     for (const t of travels) this.travel(t.s, t.zone, t.atCamp);
+    // Fighting (a hit taken, an attack or a skill) holds off a channel switch for CH_SWITCH_CALM seconds.
+    const t = Date.now();
+    for (const s of this.sessions) s.fight.seen(Math.max(s.player.lastHurt, s.player.lastAttack), t);
+    if (this.tickN % TICK_HZ === 0) {
+      for (const c of this.channels.sweep()) console.log(`[channels] ${c.zone.name} CH ${c.ch} closed (empty)`);
+    }
 
     if (++this.tickN % Math.round(TICK_HZ / SNAPSHOT_HZ) === 0) {
       for (const s of this.sessions) this.sendSnapshot(s);
@@ -1403,16 +1433,27 @@ export class GameWorld {
     return undefined;
   }
 
-  /** Moves a session's character into another zone's Sim, keeping HP/MP. */
-  private travel(s: Session, to: string | Sim, atCamp = false): void {
-    const dest = typeof to === 'string' ? this.sims.get(to) : to;
+  /**
+   * Moves a session's character into another Sim, keeping HP/MP. A zone id picks the channel
+   * (Channels.place: the leader's, the last number, the lowest with room, or a new one); a Sim is that
+   * exact channel or boss room. `spot` puts the character there (a channel switch keeps where it stood).
+   */
+  private travel(s: Session, to: string | Sim, atCamp = false, spot?: Vec2): void {
+    const dest = typeof to === 'string' ? this.channels.place(to, { leader: this.leaderSim(s), prefer: s.lastCh })?.sim : to;
     if (!dest || dest === s.sim || !this.sessions.has(s)) return;
     this.trades.cancelChar(s.charId, `${s.player.name} เปลี่ยนแมพ`);
     const old = s.player;
     const from = s.sim;
+    // A hit taken this very tick still counts after the move.
+    s.fight.seen(Math.max(old.lastHurt, old.lastAttack), Date.now());
     from.removePlayer(old);
     this.byPlayer.delete(old);
     const p = dest.addPlayer(old.toData(), atCamp ? undefined : from.zone.id);
+    if (spot) {
+      p.x = spot.x;
+      p.z = spot.z;
+      p.face(old.faceX, old.faceZ);
+    }
     p.hp = Math.min(old.hp, p.maxHp);
     p.mp = Math.min(old.mp, p.stats.maxMp);
     p.cd = { ...old.cd };
@@ -1423,6 +1464,10 @@ export class GameWorld {
     s.sim = dest;
     s.player = p;
     this.byPlayer.set(p, s);
+    const chan = this.channels.of(dest);
+    if (chan && hasChannels(chan.zone)) s.lastCh = chan.ch;
+    // The new Player starts with no fighting on record; the wall-clock fightAt carries over.
+    s.fight.moved(Math.max(p.lastHurt, p.lastAttack));
     s.move = null;
     s.basic = false;
     s.skills = [];
@@ -1440,9 +1485,9 @@ export class GameWorld {
       if (ev.t === 'log' && ev.to === old.id) return [{ ...ev, to: p.id }];
       return [];
     });
-    this.send(s.ws, { t: 'zone', zone: dest.zone.id, you: p.id, x: r2(p.x), z: r2(p.z) });
+    this.send(s.ws, { t: 'zone', zone: dest.zone.id, ch: this.chOf(s), you: p.id, x: r2(p.x), z: r2(p.z) });
     this.save(s);
-    console.log(`[world] ${s.username} → ${dest.zone.name}`);
+    console.log(`[world] ${s.username} → ${dest.zone.name}${chan && hasChannels(chan.zone) ? ` CH ${chan.ch}` : ''}`);
   }
 
   private sendSnapshot(s: Session): void {
@@ -1555,16 +1600,17 @@ export class GameWorld {
 
   /** Everyone in the world, with the connection numbers the admin page shows (IP included). */
   adminOnline(): AdminOnline {
-    const zones = [...this.sims.values()].map((sim) => ({
-      id: sim.zone.id, nameTh: sim.zone.nameTh, count: [...this.sessions].filter((s) => s.sim === sim).length,
-    }));
+    // One line per channel of a map with channels (CH 1 always there), one per map otherwise.
+    const zones: AdminOnline['zones'] = Object.values(ZONES).flatMap((z) => this.channels.channels(z.id).map((c) => ({
+      id: z.id, nameTh: z.nameTh, ...(hasChannels(z) ? { ch: c.ch } : {}), count: this.channels.count(c),
+    })));
     // Boss rooms: one line per room (all its channels together), only while someone is in one.
     for (const room of new Set(this.rooms.sims().map((sim) => sim.zone))) {
       zones.push({ id: room.id, nameTh: room.nameTh, count: [...this.sessions].filter((s) => s.sim.zone === room).length });
     }
     const players: AdminOnlineRow[] = [...this.sessions].map((s) => ({
       charId: s.charId, accountId: s.accountId, username: s.guest ? 'Guest' : s.username, guest: s.guest,
-      name: s.player.name, classId: s.player.cls.id, level: s.player.level, zone: s.sim.zone.id,
+      name: s.player.name, classId: s.player.cls.id, level: s.player.level, zone: s.sim.zone.id, ch: this.chOf(s),
       rtt: s.lastRtt === null ? null : Math.round(s.lastRtt),
       fps: s.lastFps === null ? null : Math.round(s.lastFps),
       maxFrame: s.fpsCount ? Math.round(s.maxFrame) : null,
@@ -1634,12 +1680,96 @@ export class GameWorld {
     return true;
   }
 
-  /** Moves an online character to another zone's camp. Returns false when it isn't online or is there already. */
-  teleportCharacter(charId: number, zoneId: string): boolean {
+  /**
+   * Moves an online character to a zone's camp: into channel `ch` when given (a GM warp: however full
+   * it is), else wherever Channels.place puts it. Returns an error message, or null when it moved.
+   */
+  teleportCharacter(charId: number, zoneId: string, ch?: number): string | null {
     const s = this.sessionOfChar(charId);
-    if (!s || !this.sims.has(zoneId) || s.sim.zone.id === zoneId) return false;
-    this.travel(s, zoneId, true);
-    return true;
+    if (!s) return 'ตัวละครนี้ไม่ได้ออนไลน์';
+    if (!this.channels.has(zoneId)) return 'ไม่มีโซนนี้';
+    if (ch === undefined) {
+      if (s.sim.zone.id === zoneId) return 'อยู่ที่โซนนี้อยู่แล้ว';
+      this.travel(s, zoneId, true);
+      return null;
+    }
+    const c = this.channels.get(zoneId, ch);
+    if (!c) return `โซนนี้ไม่มี CH ${ch} (เปิดอยู่: ${this.channels.channels(zoneId).map((x) => x.ch).join(', ')})`;
+    if (c.sim === s.sim) return `อยู่ที่ CH ${ch} อยู่แล้ว`;
+    this.travel(s, c.sim, true);
+    return null;
+  }
+
+  /** The zone and channel an online character is in (for the admin page), or undefined. */
+  placeOf(charId: number): { zone: string; ch: number } | undefined {
+    const s = this.sessionOfChar(charId);
+    return s && { zone: s.sim.zone.id, ch: this.chOf(s) };
+  }
+
+  // ------------------------------------------------------------ channels (server/channels.ts)
+
+  /** The channel number a session is in (1 on a map without channels or in a boss room). */
+  private chOf(s: Session): number {
+    return this.channels.of(s.sim)?.ch ?? 1;
+  }
+
+  /** The party leader's Sim, for a member (not the leader) whose leader is online; else undefined. */
+  private leaderSim(s: Session): Sim | undefined {
+    const lead = this.parties.of(s.charId)?.members[0];
+    if (!lead || lead.charId === s.charId) return undefined;
+    return this.sessionOfChar(lead.charId)?.sim;
+  }
+
+  /** Seconds this session must still stay out of combat before it may switch channel (0 = now). */
+  private calmLeft(s: Session): number {
+    return s.fight.calmLeft(Date.now());
+  }
+
+  private channelsView(s: Session): ChannelsView {
+    return { zone: s.sim.zone.id, ch: this.chOf(s), list: this.channels.list(s.sim.zone.id), wait: Math.ceil(this.calmLeft(s)) };
+  }
+
+  /**
+   * The channel window: its list, a switch to channel `ch` of this map, or going to the channel of a
+   * friend / party member (`name`, online, on this map). Every value from the client is checked here;
+   * the rules (cap, out of combat, alive) are in Channels.switchError.
+   */
+  private onChannel(s: Session, m: ActionMsg): void {
+    // The list (refreshed every 2 s while the window is open) and a switch are throttled apart, so a
+    // click right after a refresh isn't dropped.
+    const now = performance.now();
+    const list = m.a === 'chList';
+    if (now - (list ? s.lastChListAt : s.lastChAt) < CH_ACTION_MS) return;
+    if (list) s.lastChListAt = now;
+    else s.lastChAt = now;
+    const here = this.channels.of(s.sim);
+    if (list) {
+      this.send(s.ws, { t: 'channels', view: this.channelsView(s) });
+      return;
+    }
+    const tell = (text: string) => this.send(s.ws, { t: 'chat', name: '', text });
+    let target: Channel | undefined;
+    if (m.a === 'chSwitch') {
+      if (!Number.isSafeInteger(m.ch)) return;
+      target = this.channels.get(s.sim.zone.id, m.ch);
+    } else if (m.a === 'chJoin') {
+      if (typeof m.name !== 'string' || !m.name.trim() || m.name.length > FRIEND_NAME_MAX) return;
+      const name = m.name.trim().toLowerCase();
+      const o = [...this.sessions].find((x) => x.player.name.toLowerCase() === name);
+      const party = this.parties.of(s.charId);
+      const mate = !!o && o !== s && (
+        (!!party && party.members.some((x) => x.charId === o.charId)) ||
+        (!s.guest && !o.guest && this.db.areFriends(s.accountId, o.accountId))
+      );
+      if (!o || !mate) return tell('ไปห้องเดียวกันได้เฉพาะเพื่อนหรือคนในปาร์ตี้ที่ออนไลน์อยู่');
+      if (o.sim.zone !== s.sim.zone) return tell(`${o.player.name} อยู่คนละแมพกับคุณ`);
+      target = this.channels.of(o.sim);
+    } else return;
+    const cap = target ? this.channels.capFor(target, this.leaderSim(s)) : 0;
+    const err = this.channels.switchError(s.player.alive, here, target, cap, this.calmLeft(s));
+    if (err || !target) return tell(err ?? 'ไม่มีแชนแนลนี้ในแมพนี้');
+    // The browser logs "เดินทางสู่ … · CH n" on the zone message, like any map change.
+    this.travel(s, target.sim, false, { x: s.player.x, z: s.player.z });
   }
 
   // ------------------------------------------------------------ saving

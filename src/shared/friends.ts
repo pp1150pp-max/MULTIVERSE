@@ -21,6 +21,8 @@ export interface FriendChar {
   lv: number;
   /** Zone id (offline: the one they logged out in; may be one this browser doesn't know). */
   zone: string;
+  /** The channel of that zone (1 when it has none). Missing for an offline friend. */
+  ch?: number;
 }
 
 /** A friend, or the other side of a request. `char` is null when the account has no character left. */

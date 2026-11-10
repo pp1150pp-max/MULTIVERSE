@@ -17,6 +17,7 @@ import type { PartyFound, PartySnap } from '../party';
 import type { TradeView } from '../trade';
 import type { FriendsView } from '../friends';
 import type { RoomLobbyView, RoomSnap } from '../bossRoom';
+import type { ChannelsView } from '../channels';
 
 export const WS_PATH = '/ws';
 /** Server simulation rate and how often it sends snapshots. */
@@ -129,6 +130,11 @@ export type ActionMsg =
   | { t: 'act'; a: 'friendUnblock'; acc: number }
   /** Asks for a fresh `friends` view (opening the window). */
   | { t: 'act'; a: 'friendList' }
+  // Channels (server/channels.ts): ask for the channel window's list, switch to channel `ch` of this map,
+  // or go to the channel of the friend / party member named `name` (same map only).
+  | { t: 'act'; a: 'chList' }
+  | { t: 'act'; a: 'chSwitch'; ch: number }
+  | { t: 'act'; a: 'chJoin'; name: string }
   // Boss rooms (server/bossRooms.ts): put `keys` keys into the summoner you stand next to, answer an invite, start or call off.
   /** `quest`: use the bound quest key instead (×1, not used up; `keys` is ignored). */
   | { t: 'act'; a: 'roomOpen'; keys: number; quest?: boolean }
@@ -244,11 +250,17 @@ export interface SnapshotMsg {
 
 export type ServerMsg =
   /** `guest`: playing a guest character (no stash, deleted after a day offline). */
-  | { t: 'welcome'; you: number; time: number; zone: string; guest?: boolean; orbLook?: OrbLook }
+  /** `ch`: the channel of that zone (1 when it has none). */
+  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; guest?: boolean; orbLook?: OrbLook }
   /** The owner changed the server-wide enhancement orb look (src/shared/orbLook.ts). */
   | { t: 'orbLook'; look: OrbLook }
-  /** You walked through a portal: you are now `you` in zone `zone`, standing at x/z. Snapshots from that zone follow. */
-  | { t: 'zone'; zone: string; you: number; x: number; z: number }
+  /**
+   * You walked through a portal (or switched channel): you are now `you` in zone `zone`, channel `ch`,
+   * standing at x/z. Snapshots from there follow.
+   */
+  | { t: 'zone'; zone: string; ch?: number; you: number; x: number; z: number }
+  /** The channel window's list (answer to `chList`). */
+  | { t: 'channels'; view: ChannelsView }
   | SnapshotMsg
   /**
    * `ch: 'party'` = party chat, or (empty name) a party notice. `ch: 'whisper'` = a whisper from `name`;

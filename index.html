@@ -39,7 +39,12 @@
         </div>
 
         <div id="hud-topright">
-          <canvas id="minimap" width="352" height="352"></canvas>
+          <div id="minimap-wrap">
+            <canvas id="minimap" width="352" height="352" title="คลิกเพื่อเปิดแผนที่ใหญ่ (M)"></canvas>
+            <button id="mm-search" class="mm-btn" title="เปิดแผนที่ใหญ่ (M) — คลิกซ้ายเพื่อเดินไปจุดนั้น คลิกขวาเพื่อปักหมุด">🔍</button>
+            <button id="mm-plus" class="mm-btn" title="ซูมเข้า — ดูรอบตัวละเอียดขึ้น">+</button>
+            <button id="mm-minus" class="mm-btn" title="ซูมออก — ดูพื้นที่กว้างขึ้น">−</button>
+          </div>
           <div id="hud-ping" class="ping-none" title="Ping: เวลาไป-กลับระหว่างเครื่องคุณกับ server"><span class="dot">●</span> <span id="hud-ping-ms">—</span></div>
           <div class="hud-buttons">
             <div class="auto-row">
@@ -172,13 +177,18 @@
                 </div>
                 <div class="mkt-filter"><span class="mkt-lbl">อาชีพ</span><div id="mkt-cls" class="mkt-chips"></div></div>
                 <div class="mkt-filter"><span class="mkt-lbl">ความหายาก</span><div id="mkt-rar" class="mkt-chips"></div></div>
-                <div class="mkt-filter"><span class="mkt-lbl">สเตตัส</span><div id="mkt-stats" class="mkt-stats"></div></div>
                 <div class="mkt-line mkt-small">
-                  <span>Lv <input id="mkt-lvmin" type="number" min="1" placeholder="ต่ำสุด"> – <input id="mkt-lvmax" type="number" min="1" placeholder="สูงสุด"></span>
-                  <span>+ ขั้นต่ำ <input id="mkt-plus" type="number" min="0" max="20" placeholder="0"></span>
-                  <span>ราคาไม่เกิน <input id="mkt-pmax" type="number" min="1" placeholder="ไม่จำกัด" class="wide"></span>
+                  <button id="mkt-moretoggle">ตัวกรองเพิ่มเติม ▾</button>
                   <label><input id="mkt-fit" type="checkbox">ใส่ได้เท่านั้น</label>
                   <button id="mkt-reset">ล้างตัวกรอง</button>
+                </div>
+                <div id="mkt-more" class="hidden">
+                  <div class="mkt-filter"><span class="mkt-lbl">สเตตัส</span><div id="mkt-stats" class="mkt-stats"></div></div>
+                  <div class="mkt-line mkt-small">
+                    <span>Lv <input id="mkt-lvmin" type="number" min="1" placeholder="ต่ำสุด"> – <input id="mkt-lvmax" type="number" min="1" placeholder="สูงสุด"></span>
+                    <span>+ ขั้นต่ำ <input id="mkt-plus" type="number" min="0" max="20" placeholder="0"></span>
+                    <span>ราคาไม่เกิน <input id="mkt-pmax" type="number" min="1" placeholder="ไม่จำกัด" class="wide"></span>
+                  </div>
                 </div>
                 <div id="mkt-list" class="mkt-list"></div>
                 <div class="mkt-pager"><span id="mkt-found"></span><span><button id="mkt-prev">‹</button> <span id="mkt-pageno"></span> <button id="mkt-next">›</button></span></div>
@@ -277,8 +287,9 @@
             <span><img src="assets/sprites/icons/map_market.png" alt="">นายหน้าตลาด</span>
             <span><img src="assets/sprites/icons/map_seeker.png" alt="">The Seeker</span>
             <span><img src="assets/sprites/icons/map_flag.png" alt="">จุดที่จะเดินไป</span>
+            <span><i class="pin-key"></i>หมุดของคุณ (คลิกขวา)</span>
           </div>
-          <div class="hint" id="fullmap-hint">กด M หรือ Esc เพื่อปิด</div>
+          <div class="fullmap-foot"><div class="hint" id="fullmap-hint">กด M หรือ Esc เพื่อปิด</div><button id="fullmap-clearpin" class="hidden" title="ลบหมุดที่ปักไว้">ลบหมุด</button></div>
         </div>
 
         <div id="help" class="panel hidden">

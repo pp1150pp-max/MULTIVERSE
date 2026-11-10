@@ -23,6 +23,7 @@ import { BAG_SIZE, type CharacterData, type Player } from '../src/shared/sim/Pla
 import { expToNext, MAX_LEVEL } from '../src/shared/formulas';
 import { gatesPassedBy } from '../src/shared/data/bossGates';
 import { ZONES, zoneById } from '../src/shared/data/zones';
+import { hasChannels, placeLabel } from '../src/shared/channels';
 import { ITEM_BASES, makeItem } from '../src/shared/data/items';
 import { CLASS_IDS } from '../src/shared/data/classes';
 import { MAX_PLUS } from '../src/shared/data/enhance';
@@ -308,17 +309,27 @@ function editCharacter(db: Db, world: GameWorld, a: Admin, charId: number, what:
     case 'teleport': {
       const zone = Object.values(ZONES).find((z) => z.id === body.zone);
       if (!zone) throw new HttpError(400, 'ไม่มีโซนนี้');
-      const from = zoneById(live ? live.zone : c.data.zone);
-      if (from.id === zone.id) throw new HttpError(400, `อยู่ที่${zone.nameTh}อยู่แล้ว`);
-      if (live) {
-        world.teleportCharacter(charId, zone.id);
-        world.adminChanged(charId, `GM ย้ายคุณไปที่${zone.nameTh}`);
-      } else {
+      // A chosen channel (a map with channels only) is the channelWarp tool: into it however full it is.
+      const ch = body.ch === undefined || body.ch === null || body.ch === '' ? undefined : Number(body.ch);
+      if (ch !== undefined) {
+        if (!canUse(a.role, 'channelWarp')) throw new HttpError(403, 'ไม่มีสิทธิ์วาร์ปเข้า CH');
+        if (!Number.isSafeInteger(ch) || ch < 1) throw new HttpError(400, 'เลข CH ไม่ถูกต้อง');
+        if (!hasChannels(zone)) throw new HttpError(400, `${zone.nameTh}ไม่มีแชนแนล`);
+      }
+      if (!live) {
         // Offline characters always come back into the game in the hub, so moving them would do nothing.
         throw new HttpError(400, 'ตัวละครออฟไลน์อยู่ — เข้าเกมครั้งหน้าจะเริ่มที่เมืองเสมอ ย้ายได้เฉพาะตอนออนไลน์');
       }
-      log(db, a, 'teleport', target, `${from.nameTh} → ${zone.nameTh}`);
-      return { msg: `ย้ายไป${zone.nameTh}แล้ว`, char: charRow(db.adminCharacter(charId)!, world.livePlayer(charId)) };
+      const was = world.placeOf(charId);
+      const from = zoneById(was?.zone ?? live.zone);
+      const fromLabel = was && hasChannels(from) ? placeLabel(from, was.ch) : from.nameTh;
+      const err = world.teleportCharacter(charId, zone.id, ch);
+      if (err) throw new HttpError(400, err);
+      const now = world.placeOf(charId);
+      const toLabel = now && hasChannels(zone) ? placeLabel(zone, now.ch) : zone.nameTh;
+      world.adminChanged(charId, `GM ย้ายคุณไปที่${toLabel}`);
+      log(db, a, 'teleport', target, `${fromLabel} → ${toLabel}${ch !== undefined ? ' (เลือก CH)' : ''}`);
+      return { msg: `ย้ายไป ${toLabel} แล้ว`, char: charRow(db.adminCharacter(charId)!, world.livePlayer(charId)) };
     }
     default:
       throw new HttpError(404, 'ไม่พบ API นี้');

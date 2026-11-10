@@ -3,7 +3,7 @@ import type { NpcId } from '../shared/data/npcs';
 import { MONSTERS } from '../shared/data/monsters';
 import { zoneById } from '../shared/data/zones';
 import { sheets } from './assets';
-import { drawMapIcon, facingAngle, partyDot } from './mapIcons';
+import { drawMapIcon, drawPin, facingAngle, partyDot } from './mapIcons';
 import { bossShortName } from '../shared/bossRoom';
 import type { MapIcon } from './mapIconNames';
 
@@ -30,12 +30,14 @@ export class FullMap {
   /** Centre and scale of the last draw, for turning a click back into world coordinates. */
   private c = 0;
   private sc = 1;
+  private px = 1;
 
   constructor(canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
   }
 
-  draw(g: Game): void {
+  /** `pin` is the player's own pin for this zone, if any. */
+  draw(g: Game, pin: { x: number; z: number } | null = null): void {
     const ctx = this.ctx;
     const cv = ctx.canvas;
     // Keep the backing store sharp at the size CSS gives it.
@@ -51,6 +53,7 @@ export class FullMap {
     const at = (x: number, z: number): [number, number] => [c + (x - z) * S * sc, c + (x + z) * S * sc];
     this.c = c;
     this.sc = sc;
+    this.px = px;
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, W, W);
@@ -226,8 +229,22 @@ export class FullMap {
       icon('flag', end.x, end.z, 26);
     }
 
+    if (pin) drawPin(ctx, ...at(pin.x, pin.z), 30 * px);
+
     // The player on top of everything.
     icon('player', me.x, me.z, 32, facingAngle(me.faceX, me.faceZ));
+  }
+
+  /** Whether a mouse position on the canvas is on the pin (uses the last draw). */
+  onPin(clientX: number, clientY: number, pin: { x: number; z: number }): boolean {
+    const cv = this.ctx.canvas;
+    const rect = cv.getBoundingClientRect();
+    const sx = ((clientX - rect.left) / rect.width) * cv.width;
+    const sy = ((clientY - rect.top) / rect.height) * cv.height;
+    const px = this.c + (pin.x - pin.z) * S * this.sc;
+    const py = this.c + (pin.x + pin.z) * S * this.sc;
+    // The teardrop's head sits above its tip.
+    return Math.hypot(sx - px, sy - (py - 10 * this.px)) < 14 * this.px;
   }
 
   /** The world point under a mouse position on the map canvas (uses the last draw). */

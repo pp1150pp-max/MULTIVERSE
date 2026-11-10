@@ -77,7 +77,11 @@ seller.player.gold = 1000;
 
 // ------------------------------------------------------------ searching
 {
-  const find = (q: object) => call(buyer, { a: 'mktSearch', q }).page!;
+  // Each search waits out the per-account search limit (tests/market-throttle.test.ts covers that).
+  const find = (q: object) => {
+    clock += 1000;
+    return call(buyer, { a: 'mktSearch', q }).page!;
+  };
   ok(find({}).total === 1, 'search finds the listing');
   ok(find({ kind: 'necklace' }).total === 1 && find({ kind: 'weapon' }).total === 0, 'category filter');
   ok(find({ rarities: ['epic'] }).total === 1 && find({ rarities: ['common'] }).total === 0, 'rarity filter');

@@ -11,9 +11,9 @@ import {
   type ClassId, type Item, type Rarity, type StatKey, type StoneStack,
 } from '../shared/types';
 import {
-  listingFee, marketSellable, saleTax, sellerGets, timeLeftText,
-  MARKET_FEE_PCT, MARKET_HOURS, MARKET_KINDS, MARKET_PAGE, MARKET_PRICE_MAX, MARKET_SLOTS, MARKET_STAT_FILTERS, MARKET_TAX_PCT,
-  type MarketCall, type MarketKind, type MarketMine, type MarketQuery, type MarketReply, type MarketRow, type MarketSort,
+  listingFee, marketKind, marketSellable, saleTax, sellerGets, timeLeftText,
+  MARKET_FEE_PCT, MARKET_HOURS, MARKET_KINDS, MARKET_PAGE, MARKET_PRICE_MAX, MARKET_SLOTS, MARKET_STAT_FILTERS, MARKET_TAX_PCT, MARKET_THROTTLE_MSG,
+  type MarketCall, type MarketKind, type MarketMine, type MarketPriceRef, type MarketQuery, type MarketReply, type MarketRow, type MarketSort,
 } from '../shared/sim/market';
 import { COIN_ICON, emptySlotIcon, itemIcon, stoneIcon } from './icons';
 import { playSound } from './audio/sfx';
@@ -56,11 +56,22 @@ export class MarketWindow {
   private clockSkew = 0;
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
   private busy = false;
+  /** The "more filters" block (Lv, +, price, stats) is open; kept this play session. */
+  private moreOpen = false;
+  /** Price hints for the picked bag item (null = not asked or none yet), and which item they are for. */
+  private ref: MarketPriceRef | null = null;
+  private refFor = '';
+  private menu: HTMLElement | null = null;
 
   constructor(private readonly g: Game, private readonly host: MarketHost) {
     $('market-close').onclick = () => this.close();
     for (const b of document.querySelectorAll<HTMLElement>('[data-mtab]')) b.onclick = () => this.showTab(b.dataset.mtab as Tab);
     this.buildFilters();
+    $('mkt-moretoggle').onclick = () => {
+      this.moreOpen = !this.moreOpen;
+      this.renderMore();
+    };
+    this.renderMore();
     const later = () => this.searchSoon();
     for (const id of ['mkt-name', 'mkt-lvmin', 'mkt-lvmax', 'mkt-plus', 'mkt-pmax']) {
       const el = $<HTMLInputElement>(id);
@@ -120,7 +131,9 @@ export class MarketWindow {
   close(): void {
     if (!this.isOpen) return;
     this.isOpen = false;
+    this.closeMenu();
     this.sellI = -1;
+    this.refFor = '';
     $('market').classList.add('hidden');
     this.host.hideTip();
     this.host.markInventory();
@@ -192,9 +205,9 @@ export class MarketWindow {
     el.style.color = color;
   }
 
-  private searchSoon(): void {
+  private searchSoon(delay = 500): void {
     if (this.searchTimer) clearTimeout(this.searchTimer);
-    this.searchTimer = setTimeout(() => this.search(0), 350);
+    this.searchTimer = setTimeout(() => this.search(0), delay);
   }
 
   private query(page: number): MarketQuery {
@@ -202,6 +215,7 @@ export class MarketWindow {
       const v = Number($<HTMLInputElement>(id).value);
       return $<HTMLInputElement>(id).value.trim() && Number.isFinite(v) && v > 0 ? Math.floor(v) : undefined;
     };
+    this.renderMore();
     const q: MarketQuery = { page, sort: $<HTMLSelectElement>('mkt-sort').value as MarketSort };
     if (this.kind) q.kind = this.kind;
     if (this.cls) q.cls = this.cls;
@@ -226,11 +240,15 @@ export class MarketWindow {
     if (!this.isOpen) return;
     const r = await this.call({ a: 'mktSearch', q: this.query(page) });
     if (!r.ok) {
-      // No message = asked too fast: try once more in a moment.
-      if (!r.msg) this.searchSoon();
-      else this.say(r.msg, ERR);
+      this.say(r.msg ?? '', ERR);
+      // Asked too fast (the server says so): try again once the bucket has refilled a little.
+      if (!r.msg || r.msg === MARKET_THROTTLE_MSG) {
+        if (this.searchTimer) clearTimeout(this.searchTimer);
+        this.searchTimer = setTimeout(() => this.search(page), 1500);
+      }
       return;
     }
+    if ($('mkt-msg').textContent === MARKET_THROTTLE_MSG) this.say('');
     if (!r.page) return;
     this.rows = r.page.rows;
     this.total = r.page.total;
@@ -283,7 +301,8 @@ export class MarketWindow {
       return;
     }
     this.host.confirm(
-      `ซื้อ ${this.nameHtml(row.entry)}<br>จาก ${esc(row.seller)} ราคา <b style="color:${GOLD}">${row.price.toLocaleString()} G</b>?`,
+      `ซื้อ ${this.nameHtml(row.entry)}<br>จาก ${esc(row.seller)} ราคา <b style="color:${GOLD}">${row.price.toLocaleString()} G</b>?` +
+      `<br><small>ทองคงเหลือหลังซื้อ ${(this.g.player.gold - row.price).toLocaleString()} G</small>`,
       'ซื้อ',
       async () => {
         await this.act({ a: 'mktBuy', id, price: row.price });
@@ -321,7 +340,10 @@ export class MarketWindow {
       return;
     }
     const send = async (n?: number) => {
-      if (await this.act({ a: 'mktList', i, price, n })) this.pick(-1);
+      if (await this.act({ a: 'mktList', i, price, n })) {
+        this.refFor = '';
+        this.pick(-1);
+      }
     };
     // A stone stack of 2+: ask how many to list (the whole stack is the default).
     if (isStone(e) && e.count > 1) {
@@ -402,6 +424,7 @@ export class MarketWindow {
     $<HTMLInputElement>('mkt-fit').checked = false;
     $<HTMLSelectElement>('mkt-sort').value = 'priceAsc';
     this.renderFilters();
+    this.renderMore();
     this.search(0);
   }
 
@@ -458,6 +481,17 @@ export class MarketWindow {
     return html || '<span class="mkt-dim">—</span>';
   }
 
+  /** "≈ 120 G/ก้อน · " for a stack of 2+ stones (price per unit), else nothing. */
+  private unitPrice(e: Item | StoneStack, price: number): string {
+    return isStone(e) && e.count > 1 ? `${Math.ceil(price / e.count).toLocaleString()} G/${stoneUnit(e.stone)} · ` : '';
+  }
+
+  private renderMore(): void {
+    const filled = ['mkt-lvmin', 'mkt-lvmax', 'mkt-plus', 'mkt-pmax'].filter((id) => $<HTMLInputElement>(id).value.trim()).length + this.stats.length;
+    $('mkt-more').classList.toggle('hidden', !this.moreOpen);
+    $('mkt-moretoggle').textContent = `ตัวกรองเพิ่มเติม ${this.moreOpen ? '▴' : '▾'}${filled ? ` (ใช้อยู่ ${filled})` : ''}`;
+  }
+
   private left(r: MarketRow): string {
     return timeLeftText(r.expiresAt - (Date.now() + this.clockSkew));
   }
@@ -476,7 +510,7 @@ export class MarketWindow {
         return `<div class="mkt-row" data-id="${r.id}">${this.cell(e)}` +
           `<div class="mkt-info"><div>${this.nameHtml(e)} <span class="mkt-dim">${sub} · ${esc(r.seller)}</span></div>` +
           `<div class="mkt-lines">${this.statLine(e)}</div></div>` +
-          `<div class="mkt-price">${r.price.toLocaleString()} G<small>${this.left(r)}</small></div>${buy}</div>`;
+          `<div class="mkt-price">${r.price.toLocaleString()} G<small>${this.unitPrice(e, r.price)}${this.left(r)}</small></div>${buy}</div>`;
       }).join('')
       : '<div class="mkt-empty">ไม่พบของที่ตรงกับตัวกรอง</div>';
     const pages = Math.max(1, Math.ceil(this.total / MARKET_PAGE));
@@ -518,6 +552,119 @@ export class MarketWindow {
     this.sellI = i;
     this.renderSellForm();
     this.host.markInventory();
+    void this.loadRef();
+  }
+
+  /** Asks for the lowest price now and the recent sold price of what is picked (once per kind of item). */
+  private async loadRef(): Promise<void> {
+    const e = this.sellI >= 0 ? this.g.player.bag[this.sellI] : null;
+    if (!marketSellable(e) || this.g.backend.guest) {
+      this.refFor = '';
+      this.ref = null;
+      return;
+    }
+    const key = isItem(e) ? `i${marketKind(e)}|${e.name}` : `s${e.stone}`;
+    if (key === this.refFor) return;
+    this.refFor = key;
+    this.ref = null;
+    this.renderRef();
+    // The server drops anything that follows another market call within 100 ms (silently): wait, and retry once.
+    let r: MarketReply = { ok: false };
+    for (let tries = 0; tries < 3 && this.refFor === key; tries++) {
+      await new Promise((res) => setTimeout(res, tries ? 1200 : 250));
+      if (this.refFor !== key || this.sellI < 0 || !marketSellable(this.g.player.bag[this.sellI])) return;
+      r = await this.call({ a: 'mktPrice', i: this.sellI });
+      if (r.ok || (r.msg && r.msg !== MARKET_THROTTLE_MSG)) break;
+    }
+    if (this.refFor !== key) return;
+    if (r.ok && r.priceRef) this.ref = r.priceRef;
+    else {
+      this.refFor = '';
+      const el = document.getElementById('mkt-ref');
+      if (el) el.innerHTML = '<span class="mkt-dim">ดูราคาตลาดไม่ได้ในตอนนี้</span>';
+      return;
+    }
+    this.renderRef();
+  }
+
+  private renderRef(): void {
+    const el = document.getElementById('mkt-ref');
+    if (!el) return;
+    const e = this.sellI >= 0 ? this.g.player.bag[this.sellI] : null;
+    if (!marketSellable(e)) return;
+    const unit = isStone(e) ? `/${stoneUnit(e.stone)}` : '';
+    const g = (n: number | null, none: string) => (n === null ? `<span class="mkt-dim">${none}</span>` : `<b>${n.toLocaleString()} G${unit}</b>`);
+    el.innerHTML = this.ref
+      ? `ราคาต่ำสุดที่ขายอยู่ตอนนี้: ${g(this.ref.lowest, 'ยังไม่มีใครขาย')} · ` +
+        `ขายได้ล่าสุด${this.ref.soldN ? ` (เฉลี่ย ${this.ref.soldN} ครั้ง)` : ''}: ${g(this.ref.sold, 'ยังไม่เคยขายได้')}`
+      : '<span class="mkt-dim">กำลังดูราคาตลาด…</span>';
+  }
+
+  // ------------------------------------------------------------ bag right-click menu (near the broker)
+
+  /** Right click on a bag item while standing at the broker with the window closed: list it, find its kind, or drop it. */
+  bagMenu(i: number, ev: MouseEvent, drop: () => void): void {
+    this.closeMenu();
+    const e = this.g.player.bag[i];
+    if (!marketSellable(e)) return drop();
+    const m = document.createElement('div');
+    m.className = 'mkt-ctx';
+    const add = (label: string, fn: () => void) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.onclick = () => {
+        this.closeMenu();
+        fn();
+      };
+      m.appendChild(b);
+    };
+    add('ลงขายในตลาด', () => {
+      if (this.g.backend.guest) return this.host.log('Guest ซื้อขายในตลาดไม่ได้ — สมัครสมาชิกเพื่อใช้ตลาด', ERR);
+      this.tab = 'sell';
+      this.open();
+      this.pick(i);
+    });
+    add('หาชิ้นแบบนี้ในตลาด', () => this.searchLike(i));
+    add('วางลงพื้น', drop);
+    m.style.left = `${Math.min(ev.clientX, window.innerWidth - 190)}px`;
+    m.style.top = `${Math.min(ev.clientY, window.innerHeight - 110)}px`;
+    document.body.appendChild(m);
+    this.menu = m;
+    // Any click elsewhere (or Escape) closes it; listeners are added after this very click finishes.
+    setTimeout(() => {
+      const off = (x: Event) => {
+        if (x instanceof KeyboardEvent && x.key !== 'Escape') return;
+        if (x.target instanceof Node && m.contains(x.target)) return;
+        this.closeMenu();
+        document.removeEventListener('mousedown', off, true);
+        document.removeEventListener('keydown', off, true);
+      };
+      document.addEventListener('mousedown', off, true);
+      document.addEventListener('keydown', off, true);
+    });
+  }
+
+  private closeMenu(): void {
+    this.menu?.remove();
+    this.menu = null;
+  }
+
+  /** Opens the Buy tab searching for this kind of item: same category and name, nothing else filtered. */
+  private searchLike(i: number): void {
+    const e = this.g.player.bag[i];
+    if (!marketSellable(e)) return;
+    this.kind = marketKind(e);
+    this.cls = null;
+    this.rarities.clear();
+    this.stats = [];
+    for (const id of ['mkt-lvmin', 'mkt-lvmax', 'mkt-plus', 'mkt-pmax']) $<HTMLInputElement>(id).value = '';
+    $<HTMLInputElement>('mkt-fit').checked = false;
+    $<HTMLSelectElement>('mkt-sort').value = 'priceAsc';
+    $<HTMLInputElement>('mkt-name').value = (isItem(e) ? e.name : STONE_NAME[e.stone]).slice(0, 30);
+    this.renderFilters();
+    this.tab = 'buy';
+    if (this.isOpen) this.showTab('buy');
+    else this.open();
   }
 
   /** The bag slot picked for listing (the bag outlines it). */
@@ -549,7 +696,8 @@ export class MarketWindow {
       `<div class="mkt-lines">${this.statLine(e)}</div></div></div>` +
       `<div class="mkt-line"><span>ราคา</span><input id="mkt-price" type="number" min="1" max="${MARKET_PRICE_MAX}" step="1" placeholder="ราคา (G)" value="${esc(keep)}" class="wide">` +
       `<button id="mkt-listgo" class="primary">ลงขาย</button><button id="mkt-listcancel">ไม่ขาย</button></div>` +
-      `<div id="mkt-fee" class="mkt-small"></div>`;
+      `<div id="mkt-ref" class="mkt-ref"></div><div id="mkt-fee" class="mkt-small"></div>`;
+    this.renderRef();
     this.renderFee();
     (document.getElementById('mkt-price') as HTMLInputElement).focus();
   }

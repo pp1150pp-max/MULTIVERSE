@@ -165,6 +165,29 @@ export class Terrain {
     return !!lavaAt(this.zone, x, z);
   }
 
+  /** The one collider a circle is pressed against, or null when it touches none or several (a corner). */
+  soleContact(u: { x: number; z: number; radius: number }): Collider | null {
+    let hit: Collider | null = null;
+    for (const c of this.colliders) {
+      if (Math.hypot(u.x - c.x, u.z - c.z) > c.r + u.radius + 0.01) continue;
+      if (hit) return null;
+      hit = c;
+    }
+    return hit;
+  }
+
+  /**
+   * The nearest spot a circle of radius r can stand on at or next to (x, z), for a click on an NPC,
+   * a forge or a tree: pushed out of whatever is there, toward `from` when (x, z) is its very middle.
+   * Null when there is none close by (a gap too narrow to stand in).
+   */
+  standSpot(x: number, z: number, r: number, from: { x: number; z: number }): { x: number; z: number } | null {
+    const d = Math.hypot(from.x - x, from.z - z) || 1;
+    const u = { x: x + ((from.x - x) / d) * 0.01, z: z + ((from.z - z) / d) * 0.01, radius: r };
+    for (let i = 0; i < 4 && this.isBlocked(u.x, u.z, r - 0.01); i++) this.resolve(u);
+    return this.isBlocked(u.x, u.z, r - 0.01) ? null : { x: u.x, z: u.z };
+  }
+
   /** Push a circle out of static colliders and keep it inside the zone. */
   resolve(u: { x: number; z: number; radius: number }): void {
     for (const c of this.colliders) {
