@@ -45,8 +45,10 @@ export const COSMETICS: readonly CosmeticDef[] = [
   def('mount', 1, 'mount_wolf', 'หมาป่าหิมะ', 'หมาป่าขนขาวจากดินแดนหิมะ', '#dfe9f5', '#7a9ac0'),
   def('mount', 2, 'mount_warhorse', 'ม้าศึกเพลิง', 'ม้าศึกแผงคอเป็นเปลวไฟ', '#e0552a', '#3a2020'),
   def('mount', 3, 'mount_raptor', 'ราปเตอร์ป่ามรกต', 'ไดโนเสาร์ราปเตอร์สีเขียวลายจุด', '#6aa84f', '#e8d080'),
-  def('mount', 4, 'mount_hoverboard', 'ฮอเวอร์บอร์ดนีออน', 'บอร์ดลอยฟ้าแสงนีออนจากอีกมิติ', '#3ad6ff', '#ff4ad0'),
-  def('mount', 5, 'mount_tortoise', 'เต่ายักษ์ภูเขา', 'เต่ายักษ์มีหินและต้นไม้บนกระดอง', '#8b6f4e', '#5aa04a'),
+  // Owner 2026-11-10: hoverboard (code 20) and tortoise (code 21) taken out for now. Their art, riding pose
+  // and MOUNT_LOOK stay; put the lines back to return them. Never reuse those codes.
+  // def('mount', 4, 'mount_hoverboard', 'ฮอเวอร์บอร์ดนีออน', 'บอร์ดลอยฟ้าแสงนีออนจากอีกมิติ', '#3ad6ff', '#ff4ad0'),
+  // def('mount', 5, 'mount_tortoise', 'เต่ายักษ์ภูเขา', 'เต่ายักษ์มีหินและต้นไม้บนกระดอง', '#8b6f4e', '#5aa04a'),
 
   def('pet', 1, 'pet_slime', 'ลูกสไลม์', 'สไลม์ตัวจิ๋วกระโดดดึ๋ง ๆ', '#6fdc6f', '#c8ffc8'),
   def('pet', 2, 'pet_cat', 'แมวส้ม', 'แมวส้มขี้เซา เดินตามต้อย ๆ', '#f0a040', '#fff0d8'),
