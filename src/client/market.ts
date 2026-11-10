@@ -568,10 +568,22 @@ export class MarketWindow {
     this.refFor = key;
     this.ref = null;
     this.renderRef();
-    const r = await this.call({ a: 'mktPrice', i: this.sellI });
+    // The server drops anything that follows another market call within 100 ms (silently): wait, and retry once.
+    let r: MarketReply = { ok: false };
+    for (let tries = 0; tries < 3 && this.refFor === key; tries++) {
+      await new Promise((res) => setTimeout(res, tries ? 1200 : 250));
+      if (this.refFor !== key || this.sellI < 0 || !marketSellable(this.g.player.bag[this.sellI])) return;
+      r = await this.call({ a: 'mktPrice', i: this.sellI });
+      if (r.ok || (r.msg && r.msg !== MARKET_THROTTLE_MSG)) break;
+    }
     if (this.refFor !== key) return;
     if (r.ok && r.priceRef) this.ref = r.priceRef;
-    else this.refFor = '';
+    else {
+      this.refFor = '';
+      const el = document.getElementById('mkt-ref');
+      if (el) el.innerHTML = '<span class="mkt-dim">ดูราคาตลาดไม่ได้ในตอนนี้</span>';
+      return;
+    }
     this.renderRef();
   }
 
