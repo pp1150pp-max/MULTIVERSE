@@ -3,7 +3,7 @@
 // Never items: they don't go in the bag, stash, market, trade or mail. Not on sale yet (the shop only
 // shows them and lets you try them on); an admin gives them out from /admin.
 
-/** Where a cosmetic is worn. A `title` is a set: a title over the name, a name frame and a chat bubble style. */
+/** Where a cosmetic is worn. A `title` is a set: a name frame and a chat bubble style (the title text is not shown for now). */
 export type CosSlot = 'wings' | 'mount' | 'pet' | 'aura' | 'title';
 export const COS_SLOTS: readonly CosSlot[] = ['wings', 'mount', 'pet', 'aura', 'title'];
 
@@ -12,7 +12,8 @@ export const COS_SLOT_NAME: Record<CosSlot, string> = {
   mount: 'สัตว์ขี่',
   pet: 'สัตว์เลี้ยง',
   aura: 'ออร่า / รอยเท้า',
-  title: 'ฉายา / กรอบชื่อ / ฟองแชท',
+  // Owner 2026-11-10: no titles for now; the set is a name frame and a chat bubble.
+  title: 'กรอบชื่อ / ฟองแชท',
 };
 
 export interface CosmeticDef {
@@ -25,7 +26,7 @@ export interface CosmeticDef {
   /** Main and second colour of the placeholder look (and the theme of a title set). */
   color: string;
   color2: string;
-  /** Title sets only: the text shown over the name. */
+  /** Title sets only: a title for over the name, kept for later (owner 2026-11-10: not shown for now). */
   title?: string;
 }
 
@@ -59,11 +60,11 @@ export const COSMETICS: readonly CosmeticDef[] = [
   def('aura', 4, 'aura_void', 'ออร่ามิติม่วง', 'วงแหวนมิติรอบตัว และรอยเท้าเป็นประกายม่วง', '#b07aff', '#4a2a8a'),
   def('aura', 5, 'aura_leaf', 'ออร่าใบไม้', 'ใบไม้ปลิวรอบตัว และรอยเท้าเป็นดอกไม้', '#7ddc6a', '#ffb0d0'),
 
-  def('title', 1, 'title_traveler', 'ชุดผู้เดินทางข้ามมิติ', 'ฉายา กรอบชื่อ และฟองแชทสีฟ้ามิติ', '#8fd0ff', '#2a4a7a', 'ผู้เดินทางข้ามมิติ'),
-  def('title', 2, 'title_flame', 'ชุดราชันย์เพลิง', 'ฉายา กรอบชื่อ และฟองแชทสีเพลิง', '#ff7a3a', '#5a1a0a', 'ราชันย์เพลิง'),
-  def('title', 3, 'title_shadow', 'ชุดเงาแห่งรัตติกาล', 'ฉายา กรอบชื่อ และฟองแชทสีม่วงรัตติกาล', '#b07aff', '#1a0a2a', 'เงาแห่งรัตติกาล'),
-  def('title', 4, 'title_forest', 'ชุดผู้พิทักษ์ป่า', 'ฉายา กรอบชื่อ และฟองแชทสีเขียวป่า', '#7ddc6a', '#1a3a1a', 'ผู้พิทักษ์ป่า'),
-  def('title', 5, 'title_gold', 'ชุดตำนานทองคำ', 'ฉายา กรอบชื่อ และฟองแชทสีทอง', '#ffd24a', '#5a3a0a', 'ตำนานทองคำ'),
+  def('title', 1, 'title_traveler', 'ชุดผู้เดินทางข้ามมิติ', 'กรอบชื่อ และฟองแชทสีฟ้ามิติ', '#8fd0ff', '#2a4a7a', 'ผู้เดินทางข้ามมิติ'),
+  def('title', 2, 'title_flame', 'ชุดราชันย์เพลิง', 'กรอบชื่อ และฟองแชทสีเพลิง', '#ff7a3a', '#5a1a0a', 'ราชันย์เพลิง'),
+  def('title', 3, 'title_shadow', 'ชุดเงาแห่งรัตติกาล', 'กรอบชื่อ และฟองแชทสีม่วงรัตติกาล', '#b07aff', '#1a0a2a', 'เงาแห่งรัตติกาล'),
+  def('title', 4, 'title_forest', 'ชุดผู้พิทักษ์ป่า', 'กรอบชื่อ และฟองแชทสีเขียวป่า', '#7ddc6a', '#1a3a1a', 'ผู้พิทักษ์ป่า'),
+  def('title', 5, 'title_gold', 'ชุดตำนานทองคำ', 'กรอบชื่อ และฟองแชทสีทอง', '#ffd24a', '#5a3a0a', 'ตำนานทองคำ'),
 ];
 
 const BY_ID = new Map(COSMETICS.map((c) => [c.id, c]));

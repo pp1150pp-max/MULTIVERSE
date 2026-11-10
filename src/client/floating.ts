@@ -153,8 +153,9 @@ export class Floating {
         paintCos(b.el, set);
       }
       // Above the nameplate (own character has no plate, so it sits a little lower).
-      const extra = shownCos(p, 'title') ? 16 : 0;
-      const lift = p === g.player ? (extra ? 44 : 14) : 32 + extra;
+      // Your own framed name plate (a title set worn) sits where other players' plates do.
+      const extra = p === g.player && shownCos(p, 'title') ? 30 : 0;
+      const lift = p === g.player ? 14 + extra : 32;
       b.el.style.transform = `translate(${s.sx}px, ${s.sy - lift}px) translate(-50%, -100%)`;
     }
   }
@@ -436,11 +437,13 @@ export class Floating {
   }
 }
 
-/** The title text of a title set over a nameplate (hidden without one). */
-function paintTitle(el: HTMLElement, set: CosmeticDef | undefined): void {
-  el.textContent = set?.title ? `《${set.title}》` : '';
-  el.classList.toggle('hidden', !set?.title);
-  el.style.setProperty('--c1', set?.color ?? '');
+/**
+ * The title text of a title set over a nameplate. Owner 2026-11-10: no titles for now (the set is a name frame
+ * and a chat bubble), so it stays hidden; CosmeticDef.title keeps the texts for later.
+ */
+function paintTitle(el: HTMLElement, _set: CosmeticDef | undefined): void {
+  el.textContent = '';
+  el.classList.add('hidden');
 }
 
 /** A title set's colours on a name frame or a chat bubble (class `cos`), or back to the plain look. */
