@@ -21,6 +21,17 @@ import { ISO_DIR } from './world';
  * position `(x, z)` slid so the piece sits `depth` units nearer the camera than the character's feet
  * (negative = behind), counting its lift `raised` above them.
  */
+/**
+ * A sideways nudge on screen, toward where the character looks (mirrored left/right, so one value fits both
+ * sides); none facing straight at or away from the camera. Screen right in the world is +x −z.
+ */
+function screenShift(p: Player, amount: number): [number, number] {
+  if (!amount) return [0, 0];
+  const sx = (p.faceX - p.faceZ) * Math.SQRT1_2;
+  const dir = sx > 0.05 ? 1 : sx < -0.05 ? -1 : 0;
+  return [dir * amount * Math.SQRT1_2, -dir * amount * Math.SQRT1_2];
+}
+
 function depthAt(x: number, z: number, raised: number, depth: number): [number, number, number] {
   const k = depth - raised * ISO_DIR.y;
   return [x + ISO_DIR.x * k, ISO_DIR.y * k, z + ISO_DIR.z * k];
@@ -197,7 +208,8 @@ export class CosmeticRig {
       const back = tuneBool(id, 'overBack') && (p.faceX + p.faceZ) / fl < -0.3;
       const lift = wingsLift(id, seat > 0);
       const depth = tuneNum(id, 'depth');
-      const [wx, wy, wz] = depthAt(p.x + sx, p.z + sz, lift, back ? depth : -depth);
+      const [hx, hz] = screenShift(p, tuneNum(id, 'shift'));
+      const [wx, wy, wz] = depthAt(p.x + sx + hx, p.z + sz + hz, lift, back ? depth : -depth);
       a.group.position.set(wx, wy, wz);
       a.setLift(lift + seat);
       a.face(p.faceX, p.faceZ);
@@ -220,7 +232,8 @@ export class CosmeticRig {
       const under = tuneBool(id, 'under');
       const split = !under && mountSplit(p, id);
       const d = under ? -tuneNum(id, 'underBehind') : !split && mountInFront(p, id) ? tuneNum(id, 'front') : -tuneNum(id, 'behind');
-      const [mx, my, mz] = depthAt(p.x, p.z, -seat, d);
+      const [shx, shz] = screenShift(p, tuneNum(id, 'shift'));
+      const [mx, my, mz] = depthAt(p.x + shx, p.z + shz, -seat, d);
       a.group.position.set(mx, my, mz);
       a.face(p.faceX, p.faceZ);
       // On the front diagonal: the whole mount behind the rider, plus its head half again in front of them,
@@ -243,7 +256,7 @@ export class CosmeticRig {
           const sign = (sx >= 0 ? 1 : -1) * (viewRow(p) === 3 ? -1 : 1);
           this.headClip.normal.set(sign * Math.SQRT1_2, 0, -sign * Math.SQRT1_2);
           this.headClip.constant = -(this.headClip.normal.x * p.x + this.headClip.normal.z * p.z);
-          const [hx, hy, hz] = depthAt(p.x, p.z, -seat, tuneNum(id, 'splitFront'));
+          const [hx, hy, hz] = depthAt(p.x + shx, p.z + shz, -seat, tuneNum(id, 'splitFront'));
           this.mountHead.group.position.set(hx, hy, hz);
         }
       }

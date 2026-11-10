@@ -27,6 +27,7 @@ export const COS_TUNE_FIELDS: Record<TunedSlot, Record<string, TuneField>> = {
     backStand: num(0, 2.5, 0.02, 'ความสูงกลางหลัง ตอนยืน'),
     backSeat: num(0, 2.5, 0.02, 'ความสูงกลางหลัง ตอนนั่งขี่ (จากอาน)'),
     back: num(-0.6, 0.8, 0.02, 'ถอยไปข้างหลัง (มองด้านข้าง)'),
+    shift: num(-1, 1, 0.01, 'ขยับซ้าย/ขวาบนจอ (บวก = ไปทางที่หันหน้า, หันตรงไม่ขยับ)'),
     depth: num(0, 0.5, 0.01, 'ระยะวาดหลังตัว (หรือทับหลัง) ห่างเท่าไร'),
     overBack: bool('หันหลังให้กล้อง: ปีกวาดทับหลัง (ปิด = หลังตัวเสมอ)'),
     flap: num(0, 20, 0.5, 'ความเร็วกระพือ ตอนยืน'),
@@ -35,6 +36,7 @@ export const COS_TUNE_FIELDS: Record<TunedSlot, Record<string, TuneField>> = {
   mount: {
     h: num(0.3, 3.5, 0.05, 'ขนาด (ความสูงภาพ)'),
     seat: num(0, 1.5, 0.02, 'ความสูงที่นั่ง'),
+    shift: num(-1, 1, 0.01, 'ขยับซ้าย/ขวาบนจอ (บวก = ไปทางที่หันหน้า, หันตรงไม่ขยับ)'),
     headOnLift: num(0, 0.8, 0.02, 'ที่นั่งยกเพิ่ม ตอนหันหน้าเข้ากล้องตรง ๆ'),
     front: num(-0.5, 0.5, 0.01, 'หัวสัตว์ขี่วาดหน้าผู้ขี่ ห่างเท่าไร (ตอนหันเข้ากล้อง)'),
     cutFrontDiag: bool('ตัด 2 ส่วน ตอนหันเฉียงเข้ากล้อง (ส่วนหัวหน้าผู้ขี่)'),
@@ -95,14 +97,14 @@ export function cosTuneDefaults(id: string): TuneValues | undefined {
       // Owner 2026-11-10: 25% bigger than the first 1.3 (#197); roots (60% up the picture) on the middle of
       // the back, 1.35 up standing and 1.0 above the saddle riding; behind the body, over the back when it
       // is turned to the camera (#200).
-      return { h: 1.625, root: 0.6, backStand: 1.35, backSeat: 1, back: 0.22, depth: 0.15, overBack: true, flap: 5, flapWalk: 10 };
+      return { h: 1.625, root: 0.6, backStand: 1.35, backSeat: 1, back: 0.22, shift: 0, depth: 0.15, overBack: true, flap: 5, flapWalk: 10 };
     case 'mount': {
       const m = MOUNT_DEFAULTS[id];
       // Draw order by view (#198-#201): the head in front of the rider facing the camera; cut in two around
       // the rider on the front diagonal, the side and the back diagonal (the end nearer the camera in front,
       // the rest behind); the rider on top from straight behind; a board always just behind the feet.
       return {
-        h: m?.h ?? 1.35, seat: m?.seat ?? 0.55, headOnLift: 0.18, front: 0.1, cutFrontDiag: true, cutSide: true, cutBackDiag: true, splitFront: 0.1, frontDiag: true, behind: 0.1,
+        h: m?.h ?? 1.35, seat: m?.seat ?? 0.55, shift: 0, headOnLift: 0.18, front: 0.1, cutFrontDiag: true, cutSide: true, cutBackDiag: true, splitFront: 0.1, frontDiag: true, behind: 0.1,
         under: m?.under ?? false, underBehind: 0.05, board: m?.board ?? false, anim: 11,
       };
     }
