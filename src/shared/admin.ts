@@ -3,6 +3,7 @@
 import { isPotion, isStack, sameStack, STAT_KEYS, STAT_LABEL, STONE_KINDS, type BagEntry, type PotionKind, type PotionStack, type StoneStack, type ClassId, type EquipSlot, type Item, type Rarity, type SlotId, type StatKey, type StatLine } from './types';
 import type { ShutdownMode } from './net/protocol';
 import type { OrbLook } from './orbLook';
+import type { CosTuning } from './cosTuning';
 import { itemNames, makeItem, roundStat, rowRanges, statStep, tierOf, TIER_VERSION } from './data/items';
 import { POTION_SIZES, potionName, stackLimit } from './data/potions';
 import { STONE_NAME } from './data/stones';
@@ -108,7 +109,7 @@ export interface AdminShutdownText { texts: Record<ShutdownMode, string>; defaul
 // ------------------------------------------------------------ owner tools (users, bans, broadcast, backups…)
 
 /** The newer admin tools. Each is its own switch so some can be opened to GMs later. */
-export type AdminFeature = 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics';
+export type AdminFeature = 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook';
 
 /**
  * Who may use each tool. To open one to GMs, add 'gm', e.g. `ban: ['owner', 'gm']`. The server
@@ -145,6 +146,10 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   reportBan: ['owner'],
   // Giving / taking back cosmetics on an account's sheet (owner only for now).
   cosmetics: ['owner'],
+  // The cosmetics test bench tab "ของแต่งตัว" (owner 2026-11-10: owner and GMs). Only looks; changes nothing in the game.
+  cosPreview: ['owner', 'gm'],
+  // Saving the server-wide cosmetic tuning from that tab (owner 2026-11-10: owner only).
+  cosLook: ['owner'],
 };
 
 export const canUse = (role: AdminRole, f: AdminFeature): boolean => FEATURE_ROLES[f].includes(role);
@@ -376,6 +381,13 @@ export function addStackToBag(bag: (BagEntry | null)[], slots: number, kind: Adm
     left -= add;
   }
   return n - left;
+}
+
+/** GET/POST /api/admin/cos-look: the server-wide cosmetic tuning (only what differs from the code defaults). */
+export interface AdminCosLook {
+  tuning: CosTuning;
+  /** May this admin save it (the `cosLook` switch). */
+  canEdit: boolean;
 }
 
 /** GET/POST /api/admin/orb-look: the server-wide enhancement orb look and what may be chosen. */

@@ -11,7 +11,7 @@ import { entryName, POTION_SIZES, potionName } from '../shared/data/potions';
 import { STONE_NAME } from '../shared/data/stones';
 import { COSMETICS, COS_SLOTS, COS_SLOT_NAME } from '../shared/data/cosmetics';
 import type {
-  AdminAccountDetail, AdminAccountsResponse, AdminFeature, AdminOrbLook, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, SessionPage, SessionSort, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AdminShutdownText, AuditRow, RoleRow,
+  AdminAccountDetail, AdminAccountsResponse, AdminCosLook, AdminFeature, AdminOrbLook, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, SessionPage, SessionSort, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AdminShutdownText, AuditRow, RoleRow,
 } from '../shared/admin';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { itemNames, makeItem, roundStat, rowRanges, tierOf } from '../shared/data/items';
@@ -142,7 +142,7 @@ const root = document.getElementById('admin')!;
 let me: AdminMe | null = null;
 let meta: AdminMeta | null = null;
 let online: AdminOnline | null = null;
-type Tab = 'online' | 'search' | 'users' | 'stats' | 'sessions' | 'chat' | 'mail' | 'trades' | 'reports' | 'orbs' | 'roles' | 'audit' | 'server';
+type Tab = 'online' | 'search' | 'users' | 'stats' | 'sessions' | 'chat' | 'mail' | 'trades' | 'reports' | 'orbs' | 'cos' | 'roles' | 'audit' | 'server';
 let tab: Tab = 'online';
 let timer = 0;
 
@@ -252,6 +252,7 @@ function renderShell(): void {
   if (me.features.includes('tradeLog')) tabs.push(['trades', 'เทรด']);
   if (me.features.includes('reports')) tabs.push(['reports', 'รายงาน']);
   if (me.features.includes('orbPreview')) tabs.push(['orbs', 'ลูกแก้วตีบวก']);
+  if (me.features.includes('cosPreview')) tabs.push(['cos', 'ของแต่งตัว']);
   if (me.role === 'owner') tabs.push(['roles', 'สิทธิ์ GM'], ['audit', 'ประวัติ']);
   if (me.role === 'owner' || me.features.includes('broadcast') || me.features.includes('backup') || me.features.includes('shutdownText')) tabs.push(['server', 'Server']);
   const bar = h('nav', { class: 'tabs' }, ...tabs.map(([id, label]) =>
@@ -288,6 +289,7 @@ function setTab(t: Tab): void {
   else if (t === 'trades') void renderTrades();
   else if (t === 'reports') void renderReports();
   else if (t === 'orbs') void renderOrbs();
+  else if (t === 'cos') void renderCos();
   else if (t === 'roles') void renderRoles();
   else if (t === 'audit') void renderAudit();
   else void renderServer();
@@ -310,6 +312,24 @@ async function renderOrbs(): Promise<void> {
       save: (look) => api<AdminOrbLook>('POST', '/admin/orb-look', look === 'reset' ? { reset: true } : { look }),
     });
     if (tab !== 'orbs' || !box.isConnected) stop();
+    else stopOrbs = stop;
+  } catch (e) {
+    box.textContent = `โหลดไม่สำเร็จ: ${(e as Error).message}`;
+  }
+}
+
+/** The cosmetics test bench (src/client/cosPreview.ts), loaded only when this tab opens. Stopped by setTab with the orb bench. */
+async function renderCos(): Promise<void> {
+  const box = h('div', { class: 'orb-bench' }, 'กำลังโหลด…');
+  view.append(box);
+  try {
+    const { mountCosPreview } = await import('../client/cosPreview');
+    if (tab !== 'cos' || !box.isConnected) return;
+    const stop = await mountCosPreview(box, 'ทดลองที่นี่ไม่เปลี่ยนอะไรในเกม จนกว่าเจ้าของกด "บันทึกเป็นค่าเริ่มต้นทั้งเซิร์ฟ" · เดิน: WASD / ลูกศร หรือคลิกพื้น', {
+      load: () => api<AdminCosLook>('GET', '/admin/cos-look'),
+      save: (tuning) => api<AdminCosLook>('POST', '/admin/cos-look', tuning === 'reset' ? { reset: true } : { tuning }),
+    });
+    if (tab !== 'cos' || !box.isConnected) stop();
     else stopOrbs = stop;
   } catch (e) {
     box.textContent = `โหลดไม่สำเร็จ: ${(e as Error).message}`;
@@ -1130,7 +1150,7 @@ const ACTION_TH: Record<string, string> = {
   level: 'ตั้งเลเวล', gold: 'ทอง', items: 'เสกไอเทม', kick: 'เตะ', teleport: 'ย้ายโซน', grant: 'ให้สิทธิ์', revoke: 'ถอนสิทธิ์',
   server: 'Server', password: 'ตั้งรหัสผ่าน', ban: 'แบน', unban: 'ปลดแบน', broadcast: 'ประกาศ', backup: 'สำรองข้อมูล',
   'delete-account': 'ลบบัญชี', 'delete-character': 'ลบตัวละคร', 'chat-delete': 'ลบแชท',
-  'shutdown-text': 'ข้อความเตือนปิด server', 'orb-look': 'หน้าตาลูกแก้วตีบวก', mail: 'ส่งจดหมาย', mailRecall: 'ดึงจดหมายกลับ',
+  'shutdown-text': 'ข้อความเตือนปิด server', 'orb-look': 'หน้าตาลูกแก้วตีบวก', 'cos-look': 'ค่าของแต่งตัว', mail: 'ส่งจดหมาย', mailRecall: 'ดึงจดหมายกลับ',
   'report-status': 'สถานะรายงาน', 'report-ban': 'ห้ามรายงาน', 'report-unban': 'ปลดห้ามรายงาน',
   'cosmetic-give': 'ให้ Cosmetics', 'cosmetic-take': 'ยึด Cosmetics คืน',
 };

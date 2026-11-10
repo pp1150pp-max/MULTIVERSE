@@ -10,20 +10,10 @@ import { cosSheetKey, fxTex, sheets } from './assets';
 import { SpriteActor } from './SpriteActor';
 import type { Effects } from './effects';
 import { shownCos, shownRiding } from './cosLook';
+import { tuneBool, tuneNum } from './cosTune';
 
-/** How high a rider sits above the ground. */
-export const MOUNT_SEAT = 0.55;
-/**
- * Per mount: the world height of its picture (the whole cell, as cut by tools/cut_cosmetics.cjs), how high
- * the rider's feet sit, and which riding pose the classes play (`ride` astride, `ride_board` standing).
- */
-export const MOUNT_LOOK: Record<string, { h: number; seat: number; pose: 'ride' | 'ride_board' }> = {
-  mount_wolf: { h: 1.5, seat: 0.5, pose: 'ride' },
-  mount_warhorse: { h: 1.7, seat: 0.62, pose: 'ride' },
-  mount_raptor: { h: 1.75, seat: 0.62, pose: 'ride' },
-  mount_tortoise: { h: 1.8, seat: 0.7, pose: 'ride' },
-  mount_hoverboard: { h: 0.7, seat: 0.32, pose: 'ride_board' },
-};
+// Every size and distance below is the cosmetic's tuning (src/shared/cosTuning.ts: the code defaults,
+// with the owner's server-wide changes from the /admin "ของแต่งตัว" tab on top), read each frame.
 
 /** How high a character's feet sit: on its mount's saddle while riding (or trying one on), else 0. */
 export function seatOf(p: Player): number {
@@ -31,11 +21,8 @@ export function seatOf(p: Player): number {
   if (!m) return 0;
   // Seen head-on or from behind the rider sits higher, so the mount's head (or rear) in front of them
   // doesn't hide their body.
-  return (MOUNT_LOOK[m.id]?.seat ?? MOUNT_SEAT) + (headOn(p) ? HEAD_ON_LIFT : 0);
+  return tuneNum(m.id, 'seat') + (headOn(p) ? tuneNum(m.id, 'headOnLift') : 0);
 }
-
-/** Extra seat height when the mount is seen head-on or from behind. */
-const HEAD_ON_LIFT = 0.18;
 
 /**
  * Facing (nearly) straight toward the camera or away from it: the sheets' front and back rows. Then the
@@ -52,23 +39,14 @@ function headOn(p: Player): boolean {
 /** The riding pose a character plays now, or null on foot. */
 export function ridePose(p: Player): 'ride' | 'ride_board' | null {
   const m = p.alive && shownRiding(p) ? shownCos(p, 'mount') : undefined;
-  return m ? (MOUNT_LOOK[m.id]?.pose ?? 'ride') : null;
+  return m ? (tuneBool(m.id, 'board') ? 'ride_board' : 'ride') : null;
 }
 /** Toward the camera (it looks from +x +z), one unit. */
 const TO_CAM = { x: Math.SQRT1_2, z: Math.SQRT1_2 };
-const PET_FLYING = new Set(['pet_dragon', 'pet_bot', 'pet_wisp']);
-/** World height of each kind's picture, and how high wings sit on the back. */
-const WINGS_H = 1.3;
-// Measured from the art (owner 2026-11-10: they hung at the hips): the wings' middle sits on the shoulders (~1.35).
-const WINGS_LIFT = 0.8;
-/** How far the wings sit behind the back, seen from the side (sideways on screen only). */
-const WINGS_BACK = 0.22;
-const MOUNT_H = 1.35;
-const PET_H = 0.8;
 /** Seconds the wings take to fade out after dying, along with the fall (owner 2026-11-10). */
 const WINGS_FADE = 1;
 
-interface Piece { id: string; actor: SpriteActor }
+interface Piece { id: string; actor: SpriteActor; h: number }
 
 /** Frame order of the cosmetic sheets: 1-2-1-3 (rest, flap up / step one way, rest, flap down / step the other way). */
 const COS_CYCLE = [0, 1, 0, 2];
@@ -125,7 +103,13 @@ export class CosmeticRig {
 
   /** Swaps a piece for the one now shown (or none), keeping it while it stays the same. */
   private piece(cur: Piece | null, c: CosmeticDef | undefined, height: number, shadow: number): Piece | null {
-    if (cur && cur.id === c?.id) return cur;
+    if (cur && cur.id === c?.id) {
+      if (cur.h !== height) {
+        cur.h = height;
+        cur.actor.setHeight(height);
+      }
+      return cur;
+    }
     if (cur) {
       this.scene.remove(cur.actor.group);
       cur.actor.dispose();
@@ -134,7 +118,7 @@ export class CosmeticRig {
     if (!c || !sheet) return null;
     const actor = new SpriteActor(sheet, height, shadow, COS_CYCLE);
     this.scene.add(actor.group);
-    return { id: c.id, actor };
+    return { id: c.id, actor, h: height };
   }
 
   update(dt: number, p: Player, fx: Effects): void {
@@ -149,9 +133,11 @@ export class CosmeticRig {
     this.deadT = p.alive ? 0 : this.deadT + dt;
     const fade = p.alive ? 1 : Math.max(0, 1 - this.deadT / WINGS_FADE);
     const showWings = (alive || (!p.alive && fade > 0)) && p.toadT <= 0;
-    this.wings = this.piece(this.wings, showWings ? shownCos(p, 'wings') : undefined, WINGS_H, 0);
+    const wc = showWings ? shownCos(p, 'wings') : undefined;
+    this.wings = this.piece(this.wings, wc, wc ? tuneNum(wc.id, 'h') : 0, 0);
     if (!this.wings) this.wingsAlpha = 1;
     if (this.wings) {
+      const id = this.wings.id;
       const a = this.wings.actor;
       if (fade !== this.wingsAlpha) {
         this.wingsAlpha = fade;
@@ -159,43 +145,48 @@ export class CosmeticRig {
       }
       // In front of the body only when it clearly turns its back to the camera; side on they stay behind it.
       const fl = Math.hypot(p.faceX, p.faceZ) || 1;
-      const d = (p.faceX + p.faceZ) / fl < -0.3 ? 0.15 : -0.15;
+      const depth = tuneNum(id, 'depth');
+      const d = (p.faceX + p.faceZ) / fl < -0.3 ? depth : -depth;
       // Behind the back: the part of "backward" that runs across the screen (none facing the camera or away).
       const bx = -p.faceX / fl;
       const bz = -p.faceZ / fl;
       const along = bx * TO_CAM.x + bz * TO_CAM.z;
-      const sx = (bx - along * TO_CAM.x) * WINGS_BACK;
-      const sz = (bz - along * TO_CAM.z) * WINGS_BACK;
+      const back = tuneNum(id, 'back');
+      const sx = (bx - along * TO_CAM.x) * back;
+      const sz = (bz - along * TO_CAM.z) * back;
       a.group.position.set(p.x + TO_CAM.x * d + sx, 0, p.z + TO_CAM.z * d + sz);
-      a.setLift(WINGS_LIFT + seat);
+      a.setLift(tuneNum(id, 'lift') + seat);
       a.face(p.faceX, p.faceZ);
-      a.update(dt, true, p.moving ? 10 : 5);
+      a.update(dt, true, tuneNum(id, p.moving ? 'flapWalk' : 'flap'));
     }
 
     // ---- mount: under the rider
     const mc = shownRiding(p) && alive ? shownCos(p, 'mount') : undefined;
-    this.mount = this.piece(this.mount, mc, mc ? (MOUNT_LOOK[mc.id]?.h ?? MOUNT_H) : MOUNT_H, 0.6);
+    this.mount = this.piece(this.mount, mc, mc ? tuneNum(mc.id, 'h') : 0, 0.6);
     if (this.mount) {
+      const id = this.mount.id;
       const a = this.mount.actor;
       // Head-on or from behind: the mount's head (or rear) in front of the rider. Else a little behind the
       // rider, who sits astride it (or stands on the board).
-      const d = headOn(p) ? 0.12 : -0.1;
+      const d = headOn(p) ? tuneNum(id, 'front') : -tuneNum(id, 'behind');
       a.group.position.set(p.x + TO_CAM.x * d, 0, p.z + TO_CAM.z * d);
       a.face(p.faceX, p.faceZ);
-      a.update(dt, p.moving, 11);
+      a.update(dt, p.moving, tuneNum(id, 'anim'));
     }
 
     // ---- pet: follows a step behind and beside, on the ground or floating
     const pt = shownCos(p, 'pet');
     const hadPet = this.pet;
-    const pc = this.piece(this.pet, pt, PET_H, 0.25);
+    const pc = this.piece(this.pet, pt, pt ? tuneNum(pt.id, 'h') : 0, 0.25);
     if (!pc) this.pet = null;
     else if (pc !== hadPet) this.pet = { ...pc, x: p.x - 1, z: p.z, fx: p.faceX, fz: p.faceZ };
     if (this.pet) {
       const pet = this.pet;
       const fl = Math.hypot(p.faceX, p.faceZ) || 1;
-      const tx = p.x - (p.faceX / fl) * 1.1 + (p.faceZ / fl) * 0.6;
-      const tz = p.z - (p.faceZ / fl) * 1.1 - (p.faceX / fl) * 0.6;
+      const back = tuneNum(pet.id, 'back');
+      const side = tuneNum(pet.id, 'side');
+      const tx = p.x - (p.faceX / fl) * back + (p.faceZ / fl) * side;
+      const tz = p.z - (p.faceZ / fl) * back - (p.faceX / fl) * side;
       const dx = tx - pet.x;
       const dz = tz - pet.z;
       const dist = Math.hypot(dx, dz);
@@ -214,12 +205,12 @@ export class CosmeticRig {
         pet.fx = p.faceX;
         pet.fz = p.faceZ;
       }
-      const flying = PET_FLYING.has(pet.id);
+      const flying = tuneBool(pet.id, 'fly');
       const a = pet.actor;
       a.group.position.set(pet.x, 0, pet.z);
-      a.setLift(flying ? 0.8 + Math.sin(this.clock * 3) * 0.1 : 0);
+      a.setLift(flying ? tuneNum(pet.id, 'float') + Math.sin(this.clock * 3) * tuneNum(pet.id, 'bob') : 0);
       a.face(pet.fx, pet.fz);
-      a.update(dt, walking || flying, flying ? 7 : 10);
+      a.update(dt, walking || flying, tuneNum(pet.id, 'anim'));
     }
 
     // ---- aura: a glow on the ground, sparks around, and footprints while walking
@@ -232,7 +223,7 @@ export class CosmeticRig {
     }
     if (au && !this.aura) {
       const mat = new THREE.MeshBasicMaterial({
-        map: fxTex.glow, color: au.color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.55,
+        map: fxTex.glow, color: au.color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: tuneNum(au.id, 'alpha'),
       });
       const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
       mesh.rotation.x = -Math.PI / 2;
@@ -241,21 +232,23 @@ export class CosmeticRig {
       this.aura = { id: au.id, m: mesh };
     }
     if (this.aura && au) {
-      const size = 2.1 * (1 + Math.sin(this.clock * 2.5) * 0.06);
+      const id = au.id;
+      (this.aura.m.material as THREE.MeshBasicMaterial).opacity = tuneNum(id, 'alpha');
+      const size = tuneNum(id, 'size') * (1 + Math.sin(this.clock * 2.5) * tuneNum(id, 'pulse'));
       this.aura.m.position.set(p.x, 0.05, p.z);
       this.aura.m.scale.set(size, size, 1);
-      if (Math.random() < 4 * dt) {
+      if (Math.random() < tuneNum(id, 'sparks') * dt) {
         const ang = Math.random() * Math.PI * 2;
-        fx.puff(p.x + Math.cos(ang) * 0.6, 0.3 + Math.random() * 1.2 + seat, p.z + Math.sin(ang) * 0.6, au.color, 0.8, 0.3);
+        fx.puff(p.x + Math.cos(ang) * 0.6, 0.3 + Math.random() * 1.2 + seat, p.z + Math.sin(ang) * 0.6, au.color, 0.8, tuneNum(id, 'sparkSize'));
       }
       this.stepT -= dt;
       if (p.moving && this.stepT <= 0) {
-        this.stepT = 0.28;
+        this.stepT = tuneNum(id, 'stepEvery');
         this.stepSide = -this.stepSide;
         const fl = Math.hypot(p.faceX, p.faceZ) || 1;
         const sx = (p.faceZ / fl) * 0.18 * this.stepSide;
         const sz = (-p.faceX / fl) * 0.18 * this.stepSide;
-        fx.puff(p.x + sx, 0.06, p.z + sz, au.color2, 1.1, 0.32);
+        fx.puff(p.x + sx, 0.06, p.z + sz, au.color2, 1.1, tuneNum(id, 'stepSize'));
       }
     }
   }
