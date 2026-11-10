@@ -98,3 +98,28 @@ export function flashZoneLoading(classId: ClassId): void {
     hideTimer = window.setTimeout(() => screen.hide(), ZONE_FADE);
   }, ZONE_HOLD);
 }
+
+/** The first entry's screen: up from the download until the world's first frames are drawn. */
+let entry: LoadingScreen | null = null;
+
+/** Puts up the first-entry screen; it stays until endEntryLoading (or cancelEntryLoading on a failure). */
+export function beginEntryLoading(classId: ClassId | null): LoadingScreen {
+  entry = showLoading(classId);
+  return entry;
+}
+
+/** The world is drawn: fade the first-entry screen away. */
+export function endEntryLoading(): void {
+  const screen = entry;
+  if (!screen) return;
+  entry = null;
+  screen.progress(1);
+  el().classList.add('load-out');
+  hideTimer = window.setTimeout(() => screen.hide(), ZONE_FADE);
+}
+
+/** Entering failed (back on the menu): drop the screen at once. */
+export function cancelEntryLoading(): void {
+  entry?.hide();
+  entry = null;
+}

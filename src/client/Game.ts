@@ -21,7 +21,7 @@ import { initDraggableWindows } from './dragwindow';
 import { AutoRing } from './autoRing';
 import { AUTO_PX_PER_UNIT } from '../shared/sim/Player';
 import { SpriteActor } from './SpriteActor';
-import { sheets } from './assets';
+import { sheets, uploadAllTextures } from './assets';
 import { GameAudio } from './audio/gameAudio';
 import { findPath } from './pathfind';
 import { PartyUI } from './party';
@@ -32,7 +32,7 @@ import { QuestUI } from './quests';
 import { bossShortName } from '../shared/bossRoom';
 import { MailUI } from './mail';
 import { SystemMenu } from './sysmenu';
-import { flashZoneLoading, preloadLoadingArt } from './loadingScreen';
+import { endEntryLoading, flashZoneLoading, preloadLoadingArt } from './loadingScreen';
 import { LootView, MonsterView, PlayerView, ProjectileView, ViewSet } from './views';
 import { isSoftwareRenderer } from '../shared/net/protocol';
 
@@ -112,6 +112,8 @@ export class Game {
   private readonly projectileViews: ViewSet<ProjectileLike, ProjectileView>;
   private readonly lootViews: ViewSet<Loot, LootView>;
   private last = 0;
+  /** Frames drawn so far, up to 3: the first entry's loading screen lifts after the third. */
+  private frames = 0;
 
   constructor(container: HTMLElement, readonly backend: Backend) {
     this.zone = backend.zone;
@@ -175,6 +177,16 @@ export class Game {
     this.last = now;
     this.update(dt);
     this.renderer.render(this.scene, this.camera);
+    if (this.frames < 3) {
+      this.frames++;
+      // Behind the first entry's loading screen: send every texture to the GPU and build the shaders
+      // now, so nothing appears blank (or hitches) the first time it comes on screen.
+      if (this.frames === 1) {
+        uploadAllTextures(this.renderer);
+        this.renderer.compile(this.scene, this.camera);
+      }
+      if (this.frames === 3) endEntryLoading();
+    }
     this.input.endFrame();
     this.backend.drewFrame?.(now);
     requestAnimationFrame(this.loop);
