@@ -201,3 +201,76 @@ Redraw the attached sprite sheet EXACTLY: the same creature, design, colors, siz
 ```
 Edit the attached sprite sheet of the baby dragon pet. Keep rows 1, 2, 3 and 5 EXACTLY as they are. Redraw ONLY row 4 (all 3 frames) as a three-quarter BACK view turned toward the LEFT: we see mostly its back, the back of its head and horns, its wings from behind and its tail toward the viewer; its face is turned away and NOT visible (at most a sliver of cheek). Same size, colors, flying pose and baseline as the other rows, frames (1) idle, (2) bob up, (3) bob down. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no motion lines, no text, no labels, no grid lines.
 ```
+
+
+## 9. ออร่าและรอยเท้า (5 ภาพ, `aura_*`)
+
+1 ภาพต่อ 1 ชิ้น: ซ้ายเป็นวงออร่าบนพื้น ขวาเป็นรอยเท้า 1 รอย พื้นหลัง **ดำสนิท** เพราะเกมวาดแบบเรืองแสง (สีดำจะโปร่งใสเอง)
+เกมหมุนและกะพริบวงออร่าเอง และวางรอยเท้าทุกก้าวแล้วค่อย ๆ จางหาย เซฟที่ `art_templates/cosmetics/raw/<id>.png`
+
+### ออร่าแสงดาว (`aura_star`)
+
+```
+For the same game, in the same fine-detail 16-bit SNES-era JRPG pixel art style as the characters: small crisp pixels, no chunky pixels, rich shading, seen from the same 2D isometric camera angle (slightly from above). Generate an image with exactly TWO separate glowing effects side by side with a wide empty gap between them, nothing else. LEFT: a magic aura circle lying flat on the ground under a character, seen from slightly above so it is a wide ellipse about twice as wide as tall, empty in the middle, made of pale golden-white starlight: a ring of tiny twinkling stars and soft light rays. RIGHT, much smaller: ONE single footprint lying flat on the ground, seen from the same angle, a footprint made of tiny pale gold sparkling stars. Both glowing, bright on their own. Background ONE perfectly flat solid pure BLACK (#000000), no ground, no character, no shadows, no text, no labels.
+```
+
+### ออร่าน้ำแข็ง (`aura_frost`)
+
+```
+For the same game, in the same fine-detail 16-bit SNES-era JRPG pixel art style as the characters: small crisp pixels, no chunky pixels, rich shading, seen from the same 2D isometric camera angle (slightly from above). Generate an image with exactly TWO separate glowing effects side by side with a wide empty gap between them, nothing else. LEFT: a magic aura circle lying flat on the ground under a character, seen from slightly above so it is a wide ellipse about twice as wide as tall, empty in the middle, made of icy blue frost: a ring of ice crystals, snowflake patterns and cold mist. RIGHT, much smaller: ONE single footprint lying flat on the ground, seen from the same angle, a footprint of frost with a tiny snowflake crystal in it. Both glowing, bright on their own. Background ONE perfectly flat solid pure BLACK (#000000), no ground, no character, no shadows, no text, no labels.
+```
+
+### ออร่าเปลวเพลิง (`aura_flame`)
+
+```
+For the same game, in the same fine-detail 16-bit SNES-era JRPG pixel art style as the characters: small crisp pixels, no chunky pixels, rich shading, seen from the same 2D isometric camera angle (slightly from above). Generate an image with exactly TWO separate glowing effects side by side with a wide empty gap between them, nothing else. LEFT: a magic aura circle lying flat on the ground under a character, seen from slightly above so it is a wide ellipse about twice as wide as tall, empty in the middle, made of orange and gold fire: a ring of small licking flames and embers. RIGHT, much smaller: ONE single footprint lying flat on the ground, seen from the same angle, a glowing ember-red footprint with a few sparks. Both glowing, bright on their own. Background ONE perfectly flat solid pure BLACK (#000000), no ground, no character, no shadows, no text, no labels.
+```
+
+### ออร่ามิติม่วง (`aura_void`)
+
+```
+For the same game, in the same fine-detail 16-bit SNES-era JRPG pixel art style as the characters: small crisp pixels, no chunky pixels, rich shading, seen from the same 2D isometric camera angle (slightly from above). Generate an image with exactly TWO separate glowing effects side by side with a wide empty gap between them, nothing else. LEFT: a magic aura circle lying flat on the ground under a character, seen from slightly above so it is a wide ellipse about twice as wide as tall, empty in the middle, made of violet dimensional energy: a ring of purple arcane runes and swirling void light. RIGHT, much smaller: ONE single footprint lying flat on the ground, seen from the same angle, a glowing violet rune-shaped footprint. Both glowing, bright on their own. Background ONE perfectly flat solid pure BLACK (#000000), no ground, no character, no shadows, no text, no labels.
+```
+
+### ออร่าใบไม้ (`aura_leaf`)
+
+```
+For the same game, in the same fine-detail 16-bit SNES-era JRPG pixel art style as the characters: small crisp pixels, no chunky pixels, rich shading, seen from the same 2D isometric camera angle (slightly from above). Generate an image with exactly TWO separate glowing effects side by side with a wide empty gap between them, nothing else. LEFT: a magic aura circle lying flat on the ground under a character, seen from slightly above so it is a wide ellipse about twice as wide as tall, empty in the middle, made of fresh green nature magic: a ring of floating leaves, vines and tiny pink blossoms. RIGHT, much smaller: ONE single footprint lying flat on the ground, seen from the same angle, a footprint made of tiny pink and white flowers with a small green leaf. Both glowing, bright on their own. Background ONE perfectly flat solid pure BLACK (#000000), no ground, no character, no shadows, no text, no labels.
+```
+
+## 10. กรอบชื่อและฟองแชท (5 ภาพ, `title_*`)
+
+ผู้ใช้ 2026-11-10: ยังไม่ใช้ฉายา ชุดที่ 5 เหลือกรอบป้ายชื่อกับฟองแชท
+1 ภาพต่อ 1 ชุด: บนเป็นกรอบป้ายชื่อ ล่างเป็นฟองแชท เกมยืดกรอบตามความยาวชื่อ/ข้อความ (9-slice) ลายจึงต้องอยู่ที่มุม
+เซฟที่ `art_templates/cosmetics/raw/<id>.png`
+
+### ชุดผู้เดินทางข้ามมิติ (`title_traveler`)
+
+```
+For the same game, in the same fine-detail 16-bit SNES-era JRPG pixel art style as the characters: small crisp pixels, no chunky pixels, rich shading, seen from the same 2D isometric camera angle (slightly from above). Generate an image of TWO empty UI frames for a player's name and chat, one above the other with a wide empty gap, theme: sky blue and deep navy, sleek sci-fi trim with tiny glowing portal rings. TOP: a name plate frame, a wide horizontal banner about 5 times as wide as tall, a decorated border with ornaments ONLY on the four corners (and at most one small ornament at the middle of the top edge), the straight edges between them plain and even so they can be stretched, the inside one flat solid dark color with NO pattern and NO text. BOTTOM: a chat speech bubble frame about 2 times as wide as tall, rounded, with the same themed border and corner ornaments, a small tail at the bottom center pointing down, the inside one flat solid light color with NO pattern and NO text. Front view, flat, no perspective. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no text, no letters, no labels. Do not use pink, magenta or purple on the frames.
+```
+
+### ชุดราชันย์เพลิง (`title_flame`)
+
+```
+For the same game, in the same fine-detail 16-bit SNES-era JRPG pixel art style as the characters: small crisp pixels, no chunky pixels, rich shading, seen from the same 2D isometric camera angle (slightly from above). Generate an image of TWO empty UI frames for a player's name and chat, one above the other with a wide empty gap, theme: fiery orange and dark crimson, with small flame curls. TOP: a name plate frame, a wide horizontal banner about 5 times as wide as tall, a decorated border with ornaments ONLY on the four corners (and at most one small ornament at the middle of the top edge), the straight edges between them plain and even so they can be stretched, the inside one flat solid dark color with NO pattern and NO text. BOTTOM: a chat speech bubble frame about 2 times as wide as tall, rounded, with the same themed border and corner ornaments, a small tail at the bottom center pointing down, the inside one flat solid light color with NO pattern and NO text. Front view, flat, no perspective. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no text, no letters, no labels. Do not use pink, magenta or purple on the frames.
+```
+
+### ชุดเงาแห่งรัตติกาล (`title_shadow`)
+
+```
+For the same game, in the same fine-detail 16-bit SNES-era JRPG pixel art style as the characters: small crisp pixels, no chunky pixels, rich shading, seen from the same 2D isometric camera angle (slightly from above). Generate an image of TWO empty UI frames for a player's name and chat, one above the other with a wide empty gap, theme: violet and near-black, with tiny bat wings and a crescent moon. TOP: a name plate frame, a wide horizontal banner about 5 times as wide as tall, a decorated border with ornaments ONLY on the four corners (and at most one small ornament at the middle of the top edge), the straight edges between them plain and even so they can be stretched, the inside one flat solid dark color with NO pattern and NO text. BOTTOM: a chat speech bubble frame about 2 times as wide as tall, rounded, with the same themed border and corner ornaments, a small tail at the bottom center pointing down, the inside one flat solid light color with NO pattern and NO text. Front view, flat, no perspective. Background ONE perfectly flat solid pure bright green (#00FF00), no shadows, no text, no letters, no labels. Do not use bright green on the frames.
+```
+
+### ชุดผู้พิทักษ์ป่า (`title_forest`)
+
+```
+For the same game, in the same fine-detail 16-bit SNES-era JRPG pixel art style as the characters: small crisp pixels, no chunky pixels, rich shading, seen from the same 2D isometric camera angle (slightly from above). Generate an image of TWO empty UI frames for a player's name and chat, one above the other with a wide empty gap, theme: leaf green and warm brown wood, with small vines and leaves. TOP: a name plate frame, a wide horizontal banner about 5 times as wide as tall, a decorated border with ornaments ONLY on the four corners (and at most one small ornament at the middle of the top edge), the straight edges between them plain and even so they can be stretched, the inside one flat solid dark color with NO pattern and NO text. BOTTOM: a chat speech bubble frame about 2 times as wide as tall, rounded, with the same themed border and corner ornaments, a small tail at the bottom center pointing down, the inside one flat solid light color with NO pattern and NO text. Front view, flat, no perspective. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no text, no letters, no labels. Do not use pink, magenta or purple on the frames.
+```
+
+### ชุดตำนานทองคำ (`title_gold`)
+
+```
+For the same game, in the same fine-detail 16-bit SNES-era JRPG pixel art style as the characters: small crisp pixels, no chunky pixels, rich shading, seen from the same 2D isometric camera angle (slightly from above). Generate an image of TWO empty UI frames for a player's name and chat, one above the other with a wide empty gap, theme: polished gold and deep brown, ornate royal filigree with a tiny crown. TOP: a name plate frame, a wide horizontal banner about 5 times as wide as tall, a decorated border with ornaments ONLY on the four corners (and at most one small ornament at the middle of the top edge), the straight edges between them plain and even so they can be stretched, the inside one flat solid dark color with NO pattern and NO text. BOTTOM: a chat speech bubble frame about 2 times as wide as tall, rounded, with the same themed border and corner ornaments, a small tail at the bottom center pointing down, the inside one flat solid light color with NO pattern and NO text. Front view, flat, no perspective. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no text, no letters, no labels. Do not use pink, magenta or purple on the frames.
+```
+

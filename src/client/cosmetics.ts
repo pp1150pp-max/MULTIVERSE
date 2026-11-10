@@ -32,7 +32,7 @@ function picture(c: CosmeticDef): HTMLElement {
     const box = el('div', 'cos-pic cos-pic-title');
     box.style.setProperty('--c1', c.color);
     box.style.setProperty('--c2', c.color2);
-    box.append(el('div', 'cos-t', `《${c.title ?? ''}》`), el('div', 'cos-n', 'ชื่อตัวละคร'), el('div', 'cos-b', 'สวัสดี!'));
+    box.append(el('div', 'cos-n', 'ชื่อตัวละคร'), el('div', 'cos-b', 'สวัสดี!'));
     return box;
   }
   let src = picCache.get(c.id);
