@@ -34,6 +34,10 @@ for (const field of [ZONES.emerald_forest, ZONES.misty_marsh, ZONES.frost_reach,
   const exit = room.portals[0];
   ok(Math.hypot(p.x - exit.x, p.z - exit.z) > PORTAL_RANGE + 1.5 && Math.abs(exit.x) < sim.terrain.bound, `${room.id}: the exit is behind them, not on them`);
   ok(!room.allowAutoPlay && !ZONES[room.id], `${room.id}: no Auto, and not one of the open maps`);
+  const edge = arenaRadius(room);
+  ok(!sim.terrain.isBlocked(edge - 1, 0, 0.4) && sim.terrain.isBlocked(edge + 2, 0, 0.4) && sim.terrain.isBlocked(0, edge + 2, 0.4), `${room.id}: nobody walks out of the arena`);
+  ok(Math.hypot(exit.x, exit.z) < edge && !sim.terrain.isBlocked(exit.x, exit.z, 0.4), `${room.id}: the portal home stands inside it`);
+  ok(sim.returnBlocked(p) !== null && map.returnBlocked(p) === null, `${room.id}: no return scroll in the room`);
 }
 ok(rooms === 4, 'four boss rooms');
 
@@ -232,6 +236,8 @@ const lastSaid = (id: number) => said.filter(([c]) => c === id).at(-1)?.[1] ?? '
   const id = invites.at(-1)!.id;
   rooms2.answer(11, id, true);
   rooms2.answer(12, id, false);
+  ok(rooms2.start(10)?.includes('รอสมาชิกตอบ') === true && chars.get(10)!.sim === field, 'no start while someone has not answered yet');
+  ok(lobbies.get(10)!.answerLeft > 0, 'the leader sees how long they still have');
   ok(lobbies.get(10)?.members.map((m) => m.answer).join() === 'yes,no,wait', 'the leader sees the answers');
   clock += ROOM_INVITE_SECONDS * 1000;
   rooms2.tick();

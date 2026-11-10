@@ -75,6 +75,8 @@ export const SUMMONER_PROP: Record<ZoneTheme, string> = {
 };
 export const SUMMONER_HEIGHT = 3.6;
 export const SUMMONER_SOLID = 1.2;
+/** A boss room's walkable circle reaches this far past its arena (inside the ring of pillars). */
+export const ROOM_EDGE = 1;
 /** How close a player must stand to the summoner to put keys in (the server checks it). */
 export const SUMMONER_RANGE = 3.5;
 
@@ -111,12 +113,15 @@ export class Terrain {
   readonly restSpots: RestSpot[] = [];
   /** The map's boss summoner, if it has one (see ZoneDef.lair). */
   readonly summoner: Lair | null;
+  /** In a boss room: how far from the boss (the middle) anyone may walk. Null elsewhere. */
+  readonly roomEdge: number | null;
   private readonly segs: Seg[] = [];
 
   constructor(readonly zone: ZoneDef) {
     this.half = zone.half;
     this.bound = zone.half - 8;
     this.summoner = zone.lair ?? null;
+    this.roomEdge = zone.roomOf ? arenaRadius(zone) + ROOM_EDGE : null;
     for (const line of [zone.path, ...zone.branches]) {
       for (let i = 1; i < line.length; i++) this.segs.push([line[i - 1][0], line[i - 1][1], line[i][0], line[i][1]]);
     }
@@ -145,6 +150,8 @@ export class Terrain {
 
   isBlocked(x: number, z: number, r: number): boolean {
     if (Math.abs(x) > this.bound || Math.abs(z) > this.bound) return true;
+    // A boss room: nobody walks out of the arena (owner).
+    if (this.roomEdge !== null && Math.hypot(x, z) + r > this.roomEdge) return true;
     return this.colliders.some((c) => Math.hypot(c.x - x, c.z - z) < c.r + r);
   }
 
