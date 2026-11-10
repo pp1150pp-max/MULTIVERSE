@@ -272,6 +272,10 @@ export class Player extends Unit {
   potCd = 0;
   /** Seconds until the fountain or a campfire can restore this player again (Sim.rest). */
   restCd = 0;
+  /** Seconds left on a return-scroll cast (0 = not casting), and where it started (moving away cancels it). */
+  castT = 0;
+  castX = 0;
+  castZ = 0;
   /** Potions still restoring. Several can run at once; a monster hit stops them all. */
   potHeals: PotionHeal[] = [];
   lastHurt = -99;

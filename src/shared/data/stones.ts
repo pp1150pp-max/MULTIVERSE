@@ -1,6 +1,6 @@
 // Blacksmith stones: dropped by bosses (reroll stones rarely by other monsters too), stacked in the bag like potions.
 // Boss keys (Artifacts) share the stone stack: they stack, sell, trade and list on the market the same way.
-import type { BossKey, QuestKey, StoneKind, StoneStack } from '../types';
+import { isConsumable, type BossKey, type QuestKey, type StoneKind, type StoneStack } from '../types';
 import type { RerollKind } from './reroll';
 
 /** Most stones (or keys) one bag or stash slot can hold (owner: 10). */
@@ -27,8 +27,6 @@ export const BOSS_KEY: Record<string, BossKey> = {
 export const PHOENIX_PRICE = 1000;
 /** Revives each player may use in a boss room, per key put in (owner: 3 × keys). */
 export const REVIVES_PER_KEY = 3;
-/** What the merchant pays for one stone, key or feather. */
-export const stoneSell = (k: StoneKind): number => (k === 'phoenix' ? PHOENIX_PRICE / 2 : STONE_SELL);
 
 /** Each boss's quest key from The Seeker (bound to the character, see isBound). */
 export const BOSS_QUEST_KEY: Record<string, QuestKey> = {
@@ -58,6 +56,7 @@ export const STONE_NAME: Record<StoneKind, string> = {
   qkey_yeti: 'เขี้ยวเยติ (เควส)',
   qkey_heart: 'แกนหัวใจลาวา (เควส)',
   phoenix: 'ขนนกฟีนิกซ์',
+  return_scroll: 'ม้วนคัมภีร์กลับเมือง',
 };
 
 const keyDesc = (boss: string, zone: string): string =>
@@ -80,6 +79,7 @@ export const STONE_DESC: Record<StoneKind, string> = {
   qkey_yeti: questDesc('เยติ'),
   qkey_heart: questDesc('หัวใจภูเขาไฟ'),
   phoenix: 'ใช้ตอนล้มในห้องบอส: ฟื้นตรงที่ล้มด้วย HP/MP ครึ่งหนึ่ง (1 อันต่อครั้ง ใช้ได้สูงสุด 3 ครั้งต่อกุญแจที่ใส่)',
+  return_scroll: 'ร่าย 3 วินาทีแล้ววาร์ปกลับกลางเมืองศูนย์กลางมิติ (ปุ่ม G หรือคลิก) · โดนโจมตี เดิน ตี หรือใช้สกิลระหว่างร่าย = ยกเลิก ม้วนไม่หาย',
 };
 
 export const STONE_COLOR: Record<StoneKind, string> = {
@@ -96,11 +96,22 @@ export const STONE_COLOR: Record<StoneKind, string> = {
   qkey_yeti: '#cfeeff',
   qkey_heart: '#ff6a3a',
   phoenix: '#ff9a3a',
+  return_scroll: '#5fe0d0',
 };
 
-/** "ก้อน" for stones, "อัน" for keys. */
-export const stoneUnit = (k: StoneKind): string => (k.includes('key_') || k === 'phoenix' ? 'อัน' : 'ก้อน');
+/** "ก้อน" for stones, "อัน" for keys and feathers, "ม้วน" for the return scroll. */
+export const stoneUnit = (k: StoneKind): string => (k === 'return_scroll' ? 'ม้วน' : k.includes('key_') || k === 'phoenix' ? 'อัน' : 'ก้อน');
+
+/** Return scroll: the merchant's price (owner: 500 G) and how long it takes to cast (owner: 3 s). */
+export const RETURN_SCROLL_PRICE = 500;
+export const RETURN_CAST = 3;
+
+/** What the merchant pays for one: shop items (feather, consumables) half their shop price, stones and keys STONE_SELL. */
+export function stoneSellPrice(k: StoneKind): number {
+  if (k === 'phoenix') return PHOENIX_PRICE / 2;
+  return isConsumable(k) ? Math.floor(RETURN_SCROLL_PRICE / 2) : STONE_SELL;
+}
 
 export function stoneStackValue(s: StoneStack): number {
-  return stoneSell(s.stone) * s.count;
+  return stoneSellPrice(s.stone) * s.count;
 }

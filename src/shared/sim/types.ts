@@ -11,6 +11,8 @@ export interface Intent {
   skills: SkillSlot[];
   dash: boolean;
   potion: 'hp' | 'mp' | null;
+  /** One-shot: start casting a return scroll (G key, or a click on the scroll in the bag). */
+  recall?: boolean;
   /**
    * Online only: where the client walked its character this frame. The server checks the
    * distance is possible before passing it on; the simulation then uses it instead of `move`/`moveTo`.
@@ -96,4 +98,6 @@ export type SimEvent =
   /** The server switched this player's Auto Play off. */
   | { t: 'autoOff'; to: number; msg: string }
   /** This player walked into a portal. Whoever drives the Sim moves them to that zone. */
-  | { t: 'travel'; to: number; zone: string; atCamp?: boolean };
+  | { t: 'travel'; to: number; zone: string; atCamp?: boolean }
+  /** This player was moved within the same zone (a return scroll used in the hub): the browser should jump there. */
+  | { t: 'warped'; id: number };

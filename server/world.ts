@@ -87,6 +87,8 @@ interface Session {
   skills: SkillSlot[];
   dash: boolean;
   potion: 'hp' | 'mp' | null;
+  /** One-shot: start a return-scroll cast on the next tick. */
+  recall: boolean;
   /** Server-side Auto Play, when the player turned it on. */
   auto: AutoPlay | null;
   /** When the last input message arrived (a hidden browser tab stops sending them). */
@@ -445,7 +447,7 @@ export class GameWorld {
     }
     const s: Session = {
       ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId, sim, player,
-      move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null,
+      move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null, recall: false,
       auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, saveDue: null,
       ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
@@ -582,6 +584,7 @@ export class GameWorld {
     s.skills = Array.isArray(m.skills) ? SKILL_KEYS.filter((k) => m.skills.includes(k)) : [];
     if (m.dash === true) s.dash = true;
     if (m.potion === 'hp' || m.potion === 'mp') s.potion = m.potion;
+    if (m.recall === true) s.recall = true;
 
     if (typeof m.seq === 'number' && Number.isSafeInteger(m.seq)) s.lastSeq = m.seq;
 
@@ -742,6 +745,9 @@ export class GameWorld {
         if ((m.kind === 'hp' || m.kind === 'mp') && POTION_SIZES.includes(m.size)) {
           sim.buyPotion(p, m.kind, m.size, Math.max(0, Math.min(99, Math.floor(num(m.n)))));
         }
+        break;
+      case 'buyScroll':
+        sim.buyReturnScroll(p, Math.max(0, Math.min(99, Math.floor(num(m.n)))));
         break;
       case 'auto':
         const blocked = m.on === true ? autoBlocked(s.sim.zone, s.sim.monsters, p) : null;
@@ -1282,8 +1288,13 @@ export class GameWorld {
     let it: Intent = {
       move: fresh ? s.move : null, moveTo: null, aim: s.aim,
       basic: fresh && s.basic, skills: fresh ? s.skills : [],
-      dash: s.dash, potion: s.potion, pos: s.pendingPos,
+      dash: s.dash, potion: s.potion, pos: s.pendingPos, recall: s.recall,
     };
+    // Auto Play would walk and attack, which cancels the cast at once: using a scroll turns it off (owner).
+    if (s.recall && s.auto) {
+      s.auto = null;
+      s.outbox.push({ t: 'autoOff', to: p.id, msg: 'ปิด Auto Play — กำลังร่ายม้วนคัมภีร์กลับเมือง' });
+    }
     const blocked = s.auto ? autoBlocked(s.sim.zone, s.sim.monsters, p) : null;
     if (blocked) {
       s.auto = null;
@@ -1299,6 +1310,7 @@ export class GameWorld {
     }
     s.dash = false;
     s.potion = null;
+    s.recall = false;
     s.pendingPos = null;
     return it;
   };
@@ -1326,7 +1338,7 @@ export class GameWorld {
           if (s) travels.push({ s, zone: ev.zone, atCamp: ev.atCamp });
           continue;
         }
-        if (ev.t === 'revived') {
+        if (ev.t === 'revived' || ev.t === 'warped') {
           const s = this.sessionById(sim, ev.id);
           if (s) s.epoch++;
         }
@@ -1417,7 +1429,7 @@ export class GameWorld {
     const inv = JSON.stringify([p.equipment, p.bag, p.buyback]);
     const me: PrivateSnap = {
       hp: r2(p.hp), mp: r2(p.mp), exp: p.exp, level: p.level, gold: p.gold,
-      potSel: p.potSel, lootFilter: p.lootFilter, autoSettings: p.autoSettings, bossKills: p.bossKills, quests: p.quests, stats: p.stats, cd: p.cd, potCd: r2(p.potCd), restCd: r2(Math.max(0, p.restCd)),
+      potSel: p.potSel, lootFilter: p.lootFilter, autoSettings: p.autoSettings, bossKills: p.bossKills, quests: p.quests, stats: p.stats, cd: p.cd, potCd: r2(p.potCd), restCd: r2(Math.max(0, p.restCd)), castT: p.castT > 0 ? r2(p.castT) : undefined,
       serverMoves: serverMoves(p) || !!s.auto, epoch: s.epoch, ack: s.lastSeq, buybackLeft: Math.round(p.buybackLeft),
     };
     if (inv !== s.lastInv) {

@@ -6,7 +6,7 @@ import { CLASS_IDS } from '../data/classes';
 import { effectiveStats } from '../data/enhance';
 import { itemClass } from '../data/items';
 import {
-  isBossKey, isBound, isItem, isStone, RARITIES, SLOTS, STAT_KEYS,
+  isBossKey, isBound, isConsumable, isItem, isStone, RARITIES, SLOTS, STAT_KEYS,
   type BagEntry, type ClassId, type Item, type Rarity, type SlotId, type StatKey, type StoneStack,
 } from '../types';
 
@@ -34,9 +34,9 @@ export const saleTax = (price: number): number => Math.floor((price * MARKET_TAX
 /** What the seller collects when it sells. */
 export const sellerGets = (price: number): number => price - saleTax(price);
 
-/** What a listing is, for the category filter: a gear kind, blacksmith stones, or boss keys (Artifacts). */
-export type MarketKind = SlotId | 'stone' | 'artifact';
-export const MARKET_KINDS: MarketKind[] = [...SLOTS, 'stone', 'artifact'];
+/** What a listing is, for the category filter: a gear kind, blacksmith stones, boss keys (Artifacts) or consumables. */
+export type MarketKind = SlotId | 'stone' | 'artifact' | 'consumable';
+export const MARKET_KINDS: MarketKind[] = [...SLOTS, 'stone', 'artifact', 'consumable'];
 
 /** Gear, stones and boss keys can be listed; potions can't (the merchant sells them), nor quest keys (bound). */
 export function marketSellable(e: BagEntry | null | undefined): e is Item | StoneStack {
@@ -45,7 +45,8 @@ export function marketSellable(e: BagEntry | null | undefined): e is Item | Ston
 }
 
 export function marketKind(e: Item | StoneStack): MarketKind {
-  return isStone(e) ? (isBossKey(e.stone) ? 'artifact' : 'stone') : e.slot;
+  if (!isStone(e)) return e.slot;
+  return isBossKey(e.stone) ? 'artifact' : isConsumable(e.stone) ? 'consumable' : 'stone';
 }
 
 /** The stats a listing can be searched by: the item's totals including its enhancement. */

@@ -68,6 +68,9 @@ export interface Backend {
   unequip(slot: EquipSlot): void;
   drop(bagIndex: number): void;
   buyPotion(kind: PotionKind, size: PotionSize, n: number): void;
+  buyReturnScroll(n: number): void;
+  /** Starts casting a return scroll (sent with the next input). */
+  useReturnScroll(): void;
   sortBag(key: SortKey, desc: boolean): void;
   /** Drag & drop between two bag slots (swap, or merge the same potion). */
   moveInBag(from: number, to: number): void;
