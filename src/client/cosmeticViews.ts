@@ -54,16 +54,25 @@ export function seatOf(p: Player): number {
 /** Extra seat height when the mount is seen head-on or from behind. */
 const HEAD_ON_LIFT = 0.18;
 
-/**
- * Facing (nearly) straight toward the camera or away from it: the sheets' front and back rows. Then the
- * mount's head (or its rear) is nearer the camera than the rider and is drawn in front of them; from the
- * side and the diagonals the rider is drawn in front of the mount.
- */
-function headOn(p: Player): boolean {
+/** The sheet row a facing shows: 0 front, 1 front diagonal, 2 side, 3 back diagonal, 4 back. */
+function viewRow(p: Player): number {
   const sx = (p.faceX - p.faceZ) * Math.SQRT1_2;
   const sy = (-p.faceX - p.faceZ) * Math.SQRT1_2;
-  const row = Math.round(Math.atan2(Math.abs(sx), -sy) / (Math.PI / 4));
-  return row === 0 || row === 4;
+  return Math.round(Math.atan2(Math.abs(sx), -sy) / (Math.PI / 4));
+}
+
+/** Facing straight toward the camera: the rider sits a little higher to show over the mount's head. */
+function headOn(p: Player): boolean {
+  return viewRow(p) === 0;
+}
+
+/**
+ * Facing the camera (front and front diagonal) the mount's head is nearer the camera than the rider and is
+ * drawn in front of their legs. From the side and from behind the rider sits on its back, drawn over it
+ * (owner 2026-11-10: the legs covered the wolf's head on the diagonal; from behind the wolf hid the rider).
+ */
+function mountInFront(p: Player): boolean {
+  return viewRow(p) <= 1;
 }
 
 /** The riding pose a character plays now, or null on foot. */
@@ -200,7 +209,7 @@ export class CosmeticRig {
       // rider, who sits astride it (or stands on the board).
       // A board stays right under the feet, just behind the rider.
       // The rider's feet are `seat` up, the mount on the ground: measured from the rider's base it is `-seat` raised.
-      const d = MOUNT_LOOK[mc!.id]?.under ? -0.05 : headOn(p) ? 0.1 : -0.1;
+      const d = MOUNT_LOOK[mc!.id]?.under ? -0.05 : mountInFront(p) ? 0.1 : -0.1;
       const [mx, my, mz] = depthAt(p.x, p.z, -seat, d);
       a.group.position.set(mx, my, mz);
       a.face(p.faceX, p.faceZ);
