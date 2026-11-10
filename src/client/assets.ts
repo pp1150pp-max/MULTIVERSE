@@ -187,9 +187,6 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   sign: prop('sign', drawSign),
   banner_red: prop('banner_red', drawSign),
   flag: prop('flag', drawSign),
-  // Camp fences, one kit per map theme (tools/cut_camp_fence.cjs).
-  ...Object.fromEntries(['forest', 'marsh', 'snow', 'volcano'].flatMap((t) => ['a', 'a_broken', 'b', 'end'].map((p) => `fence_${t}_${p}`))
-    .map((k) => [k, prop(k, drawFence)])),
   runestone: prop('runestone', drawRunestone),
   well: prop('well', drawRunestone),
   barrel: prop('barrel', drawStump),
