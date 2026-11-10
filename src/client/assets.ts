@@ -187,7 +187,6 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   sign: prop('sign', drawSign),
   banner_red: prop('banner_red', drawSign),
   flag: prop('flag', drawSign),
-  fence: prop('fence', drawFence),
   runestone: prop('runestone', drawRunestone),
   well: prop('well', drawRunestone),
   barrel: prop('barrel', drawStump),

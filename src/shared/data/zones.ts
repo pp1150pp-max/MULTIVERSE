@@ -469,8 +469,13 @@ function bossRoom(field: ZoneDef): ZoneDef {
   const lair = field.lair!;
   // (arenaRadius() is defined further down, after this runs at load time.)
   const arena = field.arenaRadius ?? DEFAULT_ARENA;
-  // Where players appear (Sim.spawnAt is 2 in from `start`): about on the arena's edge.
-  const s = Math.round(arena * 0.72 + 2);
+  // Players appear just inside the arena's edge, on the camera's side (Sim.spawnAt is 2 in from `start`),
+  // and nobody can walk out of the arena (Terrain.isBlocked), so the portal home stands inside it too,
+  // a little round the edge from where they come in.
+  const inner = arena - 1;
+  const s = inner * Math.SQRT1_2 + 2;
+  const door = Math.PI / 4 + 0.45;
+  const exit = { x: Math.cos(door) * inner, z: Math.sin(door) * inner };
   const [name, nameTh] = BOSS_ROOM_NAME[lair.boss];
   return {
     id: `${field.id}_room`,
@@ -484,11 +489,11 @@ function bossRoom(field: ZoneDef): ZoneDef {
     half: arena + 13,
     seed: field.seed + 500,
     start: { x: s, z: s },
-    path: [[s + 3, s + 3], [s - 2, s - 2]],
+    path: [[exit.x, exit.z], [s - 2, s - 2]],
     branches: [],
     spawns: [],
     boss: { monster: lair.boss, x: 0, z: 0, radius: BOSS_RADIUS[lair.boss] ?? 1, count: 1, respawn: [0, 0] },
-    portals: [{ to: HUB_ID, x: s + 3, z: s + 3, minLevel: 0 }],
+    portals: [{ to: HUB_ID, x: exit.x, z: exit.z, minLevel: 0 }],
     roomOf: field.id,
     arenaRadius: field.arenaRadius,
     bossSolid: lair.boss === 'volcano_heart' ? 1.5 : undefined,

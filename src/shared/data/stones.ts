@@ -39,8 +39,8 @@ export const BOSS_QUEST_KEY: Record<string, QuestKey> = {
 export const QUEST_KILLS = 30;
 /** Said whenever a quest key would leave the bag. */
 export const BOUND_MSG = 'กุญแจเควสผูกกับตัวละคร — ขาย ทิ้ง ฝากคลัง เทรด หรือลงตลาดไม่ได้';
-/** Chance that a monster from a boss's map drops that boss's key, also when it stands in the hub (owner: 1%). */
-export const KEY_DROP_CHANCE = 0.01;
+/** Chance that a monster from a boss's map drops that boss's key, also when it stands in the hub (owner: 1%, lowered to 0.3% on 2026-11-10). */
+export const KEY_DROP_CHANCE = 0.003;
 
 export const STONE_NAME: Record<StoneKind, string> = {
   protect: 'หินกันระดับลด',

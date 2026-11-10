@@ -75,6 +75,8 @@ export const SUMMONER_PROP: Record<ZoneTheme, string> = {
 };
 export const SUMMONER_HEIGHT = 3.6;
 export const SUMMONER_SOLID = 1.2;
+/** A boss room's walkable circle reaches this far past its arena (inside the ring of pillars). */
+export const ROOM_EDGE = 1;
 /** How close a player must stand to the summoner to put keys in (the server checks it). */
 export const SUMMONER_RANGE = 3.5;
 
@@ -111,12 +113,15 @@ export class Terrain {
   readonly restSpots: RestSpot[] = [];
   /** The map's boss summoner, if it has one (see ZoneDef.lair). */
   readonly summoner: Lair | null;
+  /** In a boss room: how far from the boss (the middle) anyone may walk. Null elsewhere. */
+  readonly roomEdge: number | null;
   private readonly segs: Seg[] = [];
 
   constructor(readonly zone: ZoneDef) {
     this.half = zone.half;
     this.bound = zone.half - 8;
     this.summoner = zone.lair ?? null;
+    this.roomEdge = zone.roomOf ? arenaRadius(zone) + ROOM_EDGE : null;
     for (const line of [zone.path, ...zone.branches]) {
       for (let i = 1; i < line.length; i++) this.segs.push([line[i - 1][0], line[i - 1][1], line[i][0], line[i][1]]);
     }
@@ -145,6 +150,8 @@ export class Terrain {
 
   isBlocked(x: number, z: number, r: number): boolean {
     if (Math.abs(x) > this.bound || Math.abs(z) > this.bound) return true;
+    // A boss room: nobody walks out of the arena (owner).
+    if (this.roomEdge !== null && Math.hypot(x, z) + r > this.roomEdge) return true;
     return this.colliders.some((c) => Math.hypot(c.x - x, c.z - z) < c.r + r);
   }
 
@@ -215,22 +222,25 @@ export class Terrain {
     this.restSpots.push({ x: s.x, z: s.z, kind: 'fountain' });
     this.npcPos.seeker = { x: s.x, z: s.z - 5.8 };
     at('ruin_statue', 0, -8.6, 3.8, 0.8);
-    this.npcPos.merchant = { x: s.x + 5.8, z: s.z };
-    at('town_stall', 8.6, 0, 3.4, 1.2);
-    at('barrel', 8, -2.6, 0.9, 0.35);
-    // The market broker stands beside the merchant; the market booth stands where that side's first pillar would be.
-    this.npcPos.broker = { x: s.x + Math.cos(Math.PI / 8) * 7.6, z: s.z + Math.sin(Math.PI / 8) * 7.6 };
-    polar('town_market', 22.5, 10.6, 3.4, 1.2);
+    // The merchant and the market broker share the +x side, turned apart so that on screen the
+    // merchant's stall sits up and to the right and the broker with his booth below it: neither
+    // stall covers the other's NPC and their name badges don't stack.
+    const deg = (d: number, rad: number) => ({ x: s.x + Math.cos((d * Math.PI) / 180) * rad, z: s.z + Math.sin((d * Math.PI) / 180) * rad });
+    this.npcPos.merchant = deg(-7.5, 5.8);
+    polar('town_stall', -7.5, 8.6, 3.4, 1.2);
+    polar('barrel', -15, 10.5, 0.9, 0.35);
+    this.npcPos.broker = deg(27.5, 8.8);
+    polar('town_market', 17.5, 11.6, 3.4, 1.2);
     this.npcPos.blacksmith = { x: s.x, z: s.z + 5.8 };
     at('town_forge', 0, 8.8, 3.6, 1.3);
     this.npcPos.keeper = { x: s.x - 5.8, z: s.z };
     at('town_vault', -8.8, 0, 3.2, 1.3);
 
-    // Broken pillars either side of the roads (the market booth takes the one at 22.5°), fallen houses and towers further out, two old trees.
+    // Broken pillars either side of the roads (none at 22.5°, where the market booth stands), fallen houses and towers further out, two old trees.
     for (let a = 67.5; a < 360; a += 45) polar('ruin_pillar', a, 10.6, 3.4, 0.5, true);
     for (const a of [0, 180]) polar('ruin_house', a, 13.6, 5.8, 2.1, true);
     for (const a of [90, 270]) polar('ruin_tower', a, 13.6, 6.4, 1.8, true);
-    // Clear of the market booth (22.5°), so the tree doesn't hide it.
+    // Clear of the market booth (17.5°), so the tree doesn't hide it.
     polar('tree_2', 337.5, 14.6, 6.2, 0.55, true);
     polar('tree_2', 157.5, 14.6, 6.2, 0.55, true);
 
@@ -400,7 +410,6 @@ export class Terrain {
   /** The camp each zone's hub portal opens next to. The NPCs moved to the hub; the camp stays as scenery. */
   private placeCamp(): void {
     const s = this.zone.start;
-    const B = this.bound;
     const set = THEME_PROPS[this.zone.theme];
     // The camp was laid out for the bottom corner; zones turned to face the hub turn it with them.
     const turns = s.x >= 0 ? (s.z >= 0 ? 0 : 3) : s.z >= 0 ? 1 : 2;
@@ -426,12 +435,6 @@ export class Terrain {
       at('banner_red', 6.6, 0.3, 2, 0.2);
       at('flag', -2, -7, 1.8, 0.15);
       at('watchtower', 9, -10, 4.2, 1.1);
-    }
-    for (let a = 0; a < Math.PI * 2; a += Math.PI / 9) {
-      const fx = s.x + Math.cos(a) * 9;
-      const fz = s.z + Math.sin(a) * 9;
-      if (this.distToPath(fx, fz) < 3 || Math.abs(fx) > B || Math.abs(fz) > B) continue;
-      this.addProp('fence', fx, fz, 1.1, 0.6);
     }
   }
 }

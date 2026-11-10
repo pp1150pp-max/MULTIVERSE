@@ -30,6 +30,7 @@ import { FriendsUI } from './friends';
 import { ChannelUI } from './channels';
 import { RoomUI } from './bossRoom';
 import { QuestUI } from './quests';
+import { QuestTracker } from './questTracker';
 import { bossShortName } from '../shared/bossRoom';
 import { MailUI } from './mail';
 import { SystemMenu } from './sysmenu';
@@ -77,6 +78,7 @@ export class Game {
   readonly channels: ChannelUI;
   readonly rooms: RoomUI;
   readonly quests: QuestUI;
+  readonly questTracker: QuestTracker;
   readonly mailUI: MailUI;
   /** Another player under the mouse (when no monster or usable thing is): a left click offers a party invite. */
   private hoveredPlayer: Player | null = null;
@@ -158,6 +160,7 @@ export class Game {
     this.channels = new ChannelUI(this);
     this.rooms = new RoomUI(this);
     this.quests = new QuestUI(this, () => this.hud.openDialog());
+    this.questTracker = new QuestTracker(this);
     this.mailUI = new MailUI(this);
     initDraggableWindows(document.getElementById('hud')!);
     this.checkGpu();
@@ -683,6 +686,7 @@ export class Game {
     this.channels.update();
     this.rooms.update();
     this.quests.update();
+    this.questTracker.update();
   }
 
   private updateCamera(dt: number): void {

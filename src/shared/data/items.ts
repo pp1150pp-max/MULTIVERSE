@@ -483,3 +483,40 @@ export function rerollStat(item: Item, r: Rng = Math.random): number {
   relines(item, lines);
   return at;
 }
+
+/** What "สุ่มสเตตัส" can give, for the blacksmith's odds table. Chances are 0..1. */
+export interface StatRerollOdds {
+  /** Every stat an extra line can become, in AFFIXES order (0 = can't on this item). */
+  stats: { stat: StatKey; chance: number }[];
+  /** Chance of T1 … T5. */
+  tiers: number[];
+  /** The item has no extras (commons): one of its own lines is rerolled, its kind stays. */
+  mainOnly: boolean;
+}
+
+/** The odds rerollStat rolls with, exactly: for this item, or in general (no item, or one that can't be rerolled). */
+export function statRerollOdds(item?: Item | null): StatRerollOdds {
+  const total = TIER_WEIGHT.reduce((a, b) => a + b, 0);
+  const tiers = TIER_WEIGHT.map((w) => w / total);
+  const ranges = item && lineRanges(item);
+  const chance = new Map<StatKey, number>(AFFIXES.map((a) => [a.stat, 0]));
+  const add = (s: StatKey, c: number) => chance.set(s, (chance.get(s) ?? 0) + c);
+  const lines = item?.lines;
+  if (!ranges || !lines) {
+    for (const a of AFFIXES) add(a.stat, 1 / AFFIXES.length);
+    return { stats: [...chance].map(([stat, c]) => ({ stat, chance: c })), tiers, mainOnly: false };
+  }
+  const extras = ranges.map((x, i) => (x.main ? -1 : i)).filter((i) => i >= 0);
+  if (!extras.length) {
+    // Same stat, new tier and value: each of its lines is equally likely.
+    chance.clear();
+    for (const l of lines) add(l.stat, 1 / lines.length);
+    return { stats: [...chance].map(([stat, c]) => ({ stat, chance: c })), tiers, mainOnly: true };
+  }
+  for (const at of extras) {
+    const taken = new Set(extras.filter((i) => i !== at).map((i) => lines[i].stat));
+    const pool = AFFIXES.filter((a) => !taken.has(a.stat));
+    for (const a of pool) add(a.stat, 1 / extras.length / pool.length);
+  }
+  return { stats: [...chance].map(([stat, c]) => ({ stat, chance: c })), tiers, mainOnly: false };
+}

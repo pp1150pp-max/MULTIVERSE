@@ -1,5 +1,11 @@
 import type { ClassId, Stats } from '../types';
 
+/**
+ * Starting MP regen, the same for every class (owner 2026-11-10: 5 MP a second at Lv.1).
+ * The player's stats cut all regen by MP_REGEN_MULT (0.25, Player.ts) afterwards, so this is 5 / 0.25.
+ */
+export const BASE_MP_REGEN = 20;
+
 export type SkillSlot = 'basic' | 'q' | 'e' | 'r' | 'dash';
 
 export interface SkillDef {
@@ -43,7 +49,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     nameTh: 'นักดาบ',
     desc: 'นักรบระยะประชิด ทนทาน ฟันเป็นวงกว้าง เหมาะกับการบุกเข้าหาฝูงมอนสเตอร์',
     attackRate: 1.7,
-    base: { maxHp: 130, maxMp: 50, atk: 12, def: 6, crit: 5, critDmg: 50, atkSpeed: 0, moveSpeed: 0, hpRegen: 1.2, mpRegen: 1.5 },
+    base: { maxHp: 130, maxMp: 50, atk: 12, def: 6, crit: 5, critDmg: 50, atkSpeed: 0, moveSpeed: 0, hpRegen: 1.2, mpRegen: BASE_MP_REGEN },
     growth: { maxHp: 20, maxMp: 4, atk: 2.6, def: 1.3, hpRegen: 0.15, mpRegen: 0.05 },
     // Attack, HP and defense doubled, gear included (owner's request).
     statMult: { atk: 2, maxHp: 2, def: 2 },
@@ -62,7 +68,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     nameTh: 'นักเวท',
     desc: 'จอมเวทระยะไกล พลังทำลายสูงแต่เปราะบาง ควบคุมพื้นที่ด้วยเวทธาตุ',
     attackRate: 1.4,
-    base: { maxHp: 90, maxMp: 100, atk: 14, def: 3, crit: 5, critDmg: 60, atkSpeed: 0, moveSpeed: 0, hpRegen: 0.8, mpRegen: 3 },
+    base: { maxHp: 90, maxMp: 100, atk: 14, def: 3, crit: 5, critDmg: 60, atkSpeed: 0, moveSpeed: 0, hpRegen: 0.8, mpRegen: BASE_MP_REGEN },
     growth: { maxHp: 12, maxMp: 10, atk: 3, def: 0.7, hpRegen: 0.1, mpRegen: 0.2 },
     skills: [
       { id: 'bolt', slot: 'basic', name: 'Arcane Bolt', nameTh: 'ลูกเวท', desc: 'ยิงลูกเวทไปทางเมาส์ 100% ATK', mp: 0, cooldown: 0 },
@@ -78,7 +84,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     nameTh: 'มือปืน',
     desc: 'นักแม่นปืนจากมิติเทคโนโลยี ยิงเร็ว คล่องตัว เด่นเรื่องดาเมจต่อเนื่องและคริติคอล',
     attackRate: 2.6,
-    base: { maxHp: 105, maxMp: 70, atk: 9, def: 4, crit: 12, critDmg: 60, atkSpeed: 0, moveSpeed: 5, hpRegen: 1, mpRegen: 2.2 },
+    base: { maxHp: 105, maxMp: 70, atk: 9, def: 4, crit: 12, critDmg: 60, atkSpeed: 0, moveSpeed: 5, hpRegen: 1, mpRegen: BASE_MP_REGEN },
     growth: { maxHp: 15, maxMp: 6, atk: 2, def: 0.9, hpRegen: 0.12, mpRegen: 0.12 },
     skills: [
       { id: 'shot', slot: 'basic', name: 'Quick Shot', nameTh: 'ยิงเร็ว', desc: 'ยิงกระสุนความเร็วสูง 100% ATK', mp: 0, cooldown: 0 },

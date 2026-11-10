@@ -122,6 +122,14 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 .npc-blacksmith { --npc-c: #ff9a4a; }
 .npc-keeper { --npc-c: #8ab8ff; }
 @keyframes npc-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+/* Quest giver: ! = a quest to take, ? = one ready to hand in. Drawn with type: thick yellow, hard black pixel outline. */
+.npc-mark {
+  font: 900 30px/1 'Arial Black', Impact, sans-serif; color: #ffd83a; margin-bottom: 2px;
+  text-shadow: 2px 0 0 #000, -2px 0 0 #000, 0 2px 0 #000, 0 -2px 0 #000, 2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000, 0 4px 0 #7a5a00;
+  animation: npc-mark-bounce 1s ease-in-out infinite;
+}
+.npc-mark.turn-in { color: #ffe866; }
+@keyframes npc-mark-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
 
 /* Countdown over an empty boss lair. */
 .boss-timer {
@@ -775,7 +783,7 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 
 #forge-rates {
   position: absolute; z-index: 3; left: 10px; right: 10px; top: 52px; bottom: 10px; padding: 8px 10px; font-size: 11px;
-  background: #15110c; border: 1px solid #6a5a3a; border-radius: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7);
+  background: #15110c; border: 1px solid #6a5a3a; border-radius: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7); overflow-y: auto;
 }
 #forge-rates .forge-rates-head { display: flex; justify-content: space-between; align-items: center; color: var(--gold-hi); font-size: 12px; }
 #forge-rates .forge-rates-head button { padding: 0 8px; font-size: 12px; }
@@ -783,6 +791,9 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #forge-table td, #forge-table th { padding: 0 4px; line-height: 1.3; text-align: center; border-bottom: 1px solid #2a2418; font-weight: 400; }
 #forge-table th { color: var(--gold); }
 #forge-table .hint { margin-top: 3px; font-size: 10px; }
+#forge-table .odds-sub { margin-top: 4px; color: var(--gold-hi); font-size: 11px; text-align: left; }
+#forge-table .odds-stats td:first-child { text-align: left; }
+#forge-table .odds-stats tr.off td { color: #6a6252; }
 
 #confirm { left: 50%; top: 40%; transform: translate(-50%, -50%); width: min(340px, 90vw); z-index: 6; text-align: center; }
 #confirm-text { font-size: 14px; margin-bottom: 12px; line-height: 1.5; }
@@ -868,6 +879,36 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 .log-line.chat b { color: #9fe0ff; font-weight: 600; }
 .log-line.system { color: #b9b09a; font-style: italic; }
 #hud-online { margin-top: 2px; font-size: 12px; color: #9fe0ff; text-shadow: 0 0 3px #000; }
+/* Quest tracker under the online line: dark panel, bronze edge, cream and gold text. Folds away. */
+#quest-tracker {
+  margin-top: 6px; width: 236px; pointer-events: auto;
+  background: rgba(20, 16, 10, 0.78); border: 1px solid var(--panel-edge); border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+#quest-tracker.folded { width: auto; display: inline-block; }
+#quest-tracker .qt-head {
+  display: block; width: 100%; text-align: left; padding: 4px 10px; font-size: 13px; font-weight: 600;
+  color: var(--gold-hi); background: none; border: none; box-shadow: none; border-radius: 0; cursor: pointer;
+}
+#quest-tracker:not(.folded) .qt-head { border-bottom: 1px solid rgba(160, 120, 60, 0.45); }
+#quest-tracker .qt-arrow { display: inline-block; width: 10px; color: var(--gold); }
+#quest-tracker .qt-ready-dot { color: #ffd83a; font-weight: 900; text-shadow: 1px 1px 0 #000; }
+#quest-tracker .qt-row { padding: 5px 10px 6px; cursor: pointer; }
+#quest-tracker .qt-row + .qt-row { border-top: 1px solid rgba(160, 120, 60, 0.25); }
+#quest-tracker .qt-row:hover { background: rgba(242, 194, 48, 0.08); }
+#quest-tracker .qt-name { font-size: 13px; color: #f2e6c8; }
+#quest-tracker .qt-goal { font-size: 11px; color: var(--ink-dim); margin-top: 1px; }
+#quest-tracker .qt-bar { height: 4px; margin-top: 4px; background: #2a2418; border: 1px solid #4a3e2a; border-radius: 2px; overflow: hidden; }
+#quest-tracker .qt-bar > div { height: 100%; background: linear-gradient(#e8c060, #a87a2a); }
+#quest-tracker .qt-row.ready .qt-name, #quest-tracker .qt-row.ready .qt-goal { color: #ffd34a; }
+#quest-tracker .qt-row.ready .qt-bar > div { background: linear-gradient(#fff0a0, #f2c230); box-shadow: 0 0 6px #f2c230; }
+@media (max-width: 700px) and (orientation: portrait) {
+  #quest-tracker { width: 190px; }
+  #quest-tracker .qt-head { font-size: 12px; padding: 3px 8px; }
+  #quest-tracker .qt-row { padding: 4px 8px 5px; }
+  #quest-tracker .qt-name { font-size: 12px; }
+  #quest-tracker .qt-goal { font-size: 10px; }
+}
 #hud-guest { margin-top: 2px; font-size: 12px; color: #ffcf6a; text-shadow: 0 0 3px #000; }
 .hint.guest-move { color: #ffcf6a; }
 #disconnect { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(0, 0, 0, 0.75); pointer-events: auto; z-index: 7; }
@@ -1125,6 +1166,11 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #room-win .room-pick button { width: 30px; }
 #room-win .room-num { min-width: 36px; text-align: center; font-size: 16px; color: #ffd34a; }
 .room-note { font-size: 11px; color: var(--ink-dim); }
+/* Reminder before going in: phoenix feathers and potions carried (none = red). */
+.room-pack { font-size: 11px; color: #ffd8a0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 4px 0; }
+.room-pack span { display: inline-flex; align-items: center; gap: 3px; }
+.room-pack .gi { width: 18px; height: 18px; }
+.room-pack .room-pack-none { color: #ff6a5a; }
 #room-lobby { right: 16px; top: 170px; width: min(260px, 90vw); font-size: 13px; pointer-events: auto; }
 #room-lobby .room-members { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
 #room-lobby .room-member { display: flex; justify-content: space-between; }

@@ -6,7 +6,7 @@ import type { Game } from './Game';
 import { MONSTERS } from '../shared/data/monsters';
 import { BOSS_KEY, BOSS_QUEST_KEY, STONE_COLOR, STONE_NAME } from '../shared/data/stones';
 import { bossShortName, ROOM_KEYS_MAX, roomInviteText, type RoomAnswer, type RoomLobbyView } from '../shared/bossRoom';
-import { stoneIcon } from './icons';
+import { potionIcon, stoneIcon } from './icons';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -19,6 +19,21 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''):
 
 const ANSWER_LABEL: Record<RoomAnswer, string> = { wait: 'รอตอบ…', yes: 'ไป', no: 'ไม่ไป' };
 
+/**
+ * Reminder shown every time before going into a boss room (owner 2026-11-10): bring phoenix feathers
+ * and potions. Lists what the player carries; anything they have none of is red.
+ */
+function packLine(g: Game): HTMLElement {
+  const p = g.player;
+  const n = (have: number, unit: string) => `<b class="${have > 0 ? '' : 'room-pack-none'}">${have} ${unit}</b>`;
+  const line = el('div', 'room-pack');
+  line.innerHTML = 'ก่อนเข้า เตรียมขนนกฟีนิกซ์และยาไปด้วย: ' +
+    `<span>${stoneIcon('phoenix')} ${n(p.stoneCount('phoenix'), 'อัน')}</span>` +
+    `<span>${potionIcon('hp')} ${n(p.potionCount('hp'), 'ขวด')}</span>` +
+    `<span>${potionIcon('mp')} ${n(p.potionCount('mp'), 'ขวด')}</span>`;
+  return line;
+}
+
 export class RoomUI {
   /** The summoner's window. */
   private readonly win: HTMLElement;
@@ -29,6 +44,9 @@ export class RoomUI {
   private readonly lobbyBox: HTMLElement;
   private lobbyUntil = 0;
   private lobbyCount: HTMLElement | null = null;
+  /** The start button while members are still answering, and when their time runs out (performance.now()). */
+  private lobbyStart: HTMLButtonElement | null = null;
+  private answerUntil = 0;
   private readonly invitesBox: HTMLElement;
   private readonly invites = new Map<number, { el: HTMLElement; until: number; count: HTMLElement }>();
   /** The line on the HUD while in a room. */
@@ -120,7 +138,7 @@ export class RoomUI {
       this.toggle(false);
     };
     if (have < 1) note.textContent = `ยังไม่มี${STONE_NAME[s.key]} — ดรอปจากมอนสเตอร์ในแมพนี้ ซื้อในตลาด หรือรับภารกิจจาก The Seeker`;
-    this.body.append(title, keyLine, pick, note, who, go);
+    this.body.append(title, keyLine, pick, note, who, packLine(this.g), go);
     // The Seeker's key: ×1, not used up.
     const qkey = BOSS_QUEST_KEY[s.boss];
     if (qkey && this.g.player.stoneCount(qkey) > 0) {
@@ -141,6 +159,7 @@ export class RoomUI {
     this.lobbyBox.classList.toggle('hidden', !view);
     this.lobbyBox.replaceChildren();
     this.lobbyCount = null;
+    this.lobbyStart = null;
     if (!view) return;
     this.lobbyUntil = performance.now() + view.left * 1000;
     const head = el('div', 'panel-head');
@@ -159,9 +178,13 @@ export class RoomUI {
     const cancel = el('button', '', 'ยกเลิก');
     cancel.id = 'room-cancel';
     start.onclick = () => this.g.backend.roomStart();
+    // Everyone answers first (or the answer time runs out): the server sends the lobby again then.
+    this.lobbyStart = view.members.some((m) => m.answer === 'wait') ? start : null;
+    this.answerUntil = performance.now() + view.answerLeft * 1000;
+    start.disabled = !!this.lobbyStart;
     cancel.onclick = () => this.g.hud.confirm('ยกเลิกการตีบอส?<br><small>กุญแจจะคืนเข้ากระเป๋า</small>', 'ยกเลิก', () => this.g.backend.roomCancel());
     btns.append(start, cancel);
-    this.lobbyBox.append(head, list, el('div', 'room-note', 'คนที่ตอบ "ไป" จะวาร์ปเข้าห้องพร้อมคุณเมื่อกดเริ่ม'), btns);
+    this.lobbyBox.append(head, list, el('div', 'room-note', 'กดเริ่มได้เมื่อทุกคนตอบแล้ว หรือครบ 30 วิ · คนที่ตอบ "ไป" จะวาร์ปเข้าห้องพร้อมคุณ'), btns);
     this.update();
   }
 
@@ -170,7 +193,7 @@ export class RoomUI {
   invited(id: number, from: string, boss: string, keys: number, seconds: number): void {
     this.removeInvite(id);
     const box = el('div', 'party-invite room-invite');
-    box.append(el('div', '', roomInviteText(from, boss, keys)));
+    box.append(el('div', '', roomInviteText(from, boss, keys)), packLine(this.g));
     const count = el('span', 'party-count');
     const yes = el('button', 'primary', 'ไป');
     const no = el('button', '', 'ไม่ไป');
@@ -220,6 +243,7 @@ export class RoomUI {
       else inv.count.textContent = `${left} วิ`;
     }
     if (this.lobbyCount) this.lobbyCount.textContent = `${Math.max(0, Math.ceil((this.lobbyUntil - now) / 1000))} วิ`;
+    if (this.lobbyStart) this.lobbyStart.textContent = `รอสมาชิกตอบ (${Math.max(0, Math.ceil((this.answerUntil - now) / 1000))} วิ)`;
     // Walked away from the summoner: its window closes.
     const s = this.g.backend.terrain.summoner;
     if (this.open && (!s || Math.hypot(this.g.player.x - s.x, this.g.player.z - s.z) > 6)) this.toggle(false);
