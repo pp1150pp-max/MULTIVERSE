@@ -68,17 +68,28 @@ export interface AutoSettings {
   /** Drink an HP / MP potion below this percent. */
   hpPct: number;
   mpPct: number;
-  skills: Record<'q' | 'e' | 'r', boolean>;
+  skills: Record<AutoSkill, boolean>;
+  /** Priority: Auto casts the first skill in this list that is switched on and ready. Always q, e and r once each. */
+  order: AutoSkill[];
   loot: boolean;
 }
+export type AutoSkill = 'q' | 'e' | 'r';
+export const AUTO_SKILLS: readonly AutoSkill[] = ['q', 'e', 'r'];
 export const AUTO_PX_PER_UNIT = 50;
 export const AUTO_RANGE_MIN = 100;
 export const AUTO_RANGE_MAX = 2000;
 /** The default before it became the maximum. */
 const OLD_DEFAULT_RANGE = 300;
 export const DEFAULT_AUTO_SETTINGS: AutoSettings = {
-  range: 750, hpPct: 45, mpPct: 15, skills: { q: true, e: true, r: true }, loot: true,
+  range: 750, hpPct: 45, mpPct: 15, skills: { q: true, e: true, r: true }, order: [...AUTO_SKILLS], loot: true,
 };
+
+/** A skill order from a save or a client: q, e and r once each, else the default Q, E, R. */
+function cleanAutoOrder(raw: unknown): AutoSkill[] {
+  if (!Array.isArray(raw) || raw.length !== AUTO_SKILLS.length) return [...AUTO_SKILLS];
+  const seen = new Set<unknown>(raw);
+  return seen.size === AUTO_SKILLS.length && AUTO_SKILLS.every((k) => seen.has(k)) ? (raw as AutoSkill[]).slice() : [...AUTO_SKILLS];
+}
 
 /** Fill in and clamp settings from a save or from a client (never trust either). */
 export function cleanAutoSettings(raw: unknown): AutoSettings {
@@ -97,6 +108,7 @@ export function cleanAutoSettings(raw: unknown): AutoSettings {
     hpPct: num(r.hpPct, d.hpPct, 0, 100),
     mpPct: num(r.mpPct, d.mpPct, 0, 100),
     skills: { q: sk.q !== false, e: sk.e !== false, r: sk.r !== false },
+    order: cleanAutoOrder(r.order),
     loot: r.loot !== false,
   };
 }

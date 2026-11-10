@@ -14,6 +14,7 @@ import type { EquipSlot, Item, PotionKind, PotionSize, Rarity } from '../shared/
 import type { MarketCall, MarketReply } from '../shared/sim/market';
 import type { MailCall, MailReply } from '../shared/mail';
 import type { PartyFound, PartySnap } from '../shared/party';
+import type { FriendsView } from '../shared/friends';
 
 /** What a projectile view needs; the local simulation's Projectile fits this too. */
 export interface ProjectileLike {
@@ -91,6 +92,8 @@ export interface Backend {
   reroll(uid: string, kind: RerollKind): Promise<Item | null>;
   /** `party` = to the party only. */
   chat(text: string, party?: boolean): void;
+  /** A whisper: only the online character named `to` sees it (the server echoes it back). */
+  whisper(to: string, text: string): void;
   npcDistance(id: NpcId): number;
 
   // Stash (warehouse keeper). The stash itself is `me.stash`. `to` = target slot, or -1 for wherever it fits.
@@ -136,4 +139,18 @@ export interface Backend {
   tradeCancel(): void;
   /** The "don't accept trade requests" setting. */
   setTradeBlock(on: boolean): void;
+
+  // Friends (the server checks every rule; see server/friends.ts). The view comes back as a hook on the backend.
+  /** The friends window's last state from the server (null until it came, and always for guests). */
+  readonly friends: FriendsView | null;
+  /** Ask the account playing this character to be friends. */
+  friendRequest(name: string): void;
+  friendAnswer(acc: number, yes: boolean): void;
+  friendCancel(acc: number): void;
+  friendRemove(acc: number): void;
+  /** Block the account playing this character. */
+  friendBlock(name: string): void;
+  friendUnblock(acc: number): void;
+  /** Ask for a fresh view (opening the window). */
+  friendList(): void;
 }

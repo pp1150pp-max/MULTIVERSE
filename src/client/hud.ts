@@ -13,7 +13,7 @@ import { REROLL_STONE, RETURN_CAST, RETURN_SCROLL_PRICE, STONE_COLOR, STONE_DESC
 import { lineRanges, rerollBlock } from '../shared/data/items';
 import { REROLL_NAME, rerollCost, type RerollKind } from '../shared/data/reroll';
 import { FullMap } from './fullmap';
-import { AUTO_PX_PER_UNIT, AUTO_RANGE_MAX, AUTO_RANGE_MIN, buybackPrice, cleanAutoSettings, lootPots, type LootFilter, type SortKey } from '../shared/sim/Player';
+import { AUTO_PX_PER_UNIT, AUTO_RANGE_MAX, AUTO_RANGE_MIN, buybackPrice, cleanAutoSettings, lootPots, type AutoSkill, type LootFilter, type SortKey } from '../shared/sim/Player';
 import { isBulkSellable } from '../shared/sim/Sim';
 import { nextRowPrice, STASH_MAX, STASH_ROW, STASH_ROW_PRICES, STASH_START } from '../shared/sim/stash';
 import { MONSTERS } from '../shared/data/monsters';
@@ -70,6 +70,9 @@ const FORGE_DESC: Record<'enhance' | RerollKind, string> = {
   stat: 'สุ่มสเตตัสเสริม 1 บรรทัด เป็นชนิดใหม่ พร้อม tier และค่าใหม่',
 };
 const fmtNum = (v: number) => String(Math.round(v * 10) / 10);
+
+/** What the chat box starts with to whisper someone (quoted when the name has a space). */
+export const whisperPrefix = (name: string): string => `/w ${name.includes(' ') ? `"${name}"` : name} `;
 const SELL_RARITY_KEY = 'multiverse-sell-rarities';
 /** Which rarities the merchant's "sell ticked" boxes had ticked last time (this browser only). */
 function loadSellRarities(): Rarity[] {
@@ -159,8 +162,12 @@ export class Hud {
   private rerollPrev: { uid: string; lines: StatLine[] } | null = null;
 
   private readonly market: MarketWindow;
-  /** The chat history tab picked last ('all', 'chat', 'system' or 'party'). */
+  /** The chat history tab picked last ('all', 'chat', 'system', 'party' or 'whisper'). */
   private chatTab = 'all';
+  /** Who whispered you last ("/r" answers them). */
+  private lastWhisperFrom = '';
+  /** Who you whispered with last, either way (plain text in the whisper tab goes to them). */
+  private whisperWith = '';
 
   constructor(private readonly g: Game) {
     this.market = new MarketWindow(g, this);
@@ -200,7 +207,7 @@ export class Hud {
       b.addEventListener('mousedown', (e) => e.preventDefault()); // keep typing in the chat box
       b.onclick = () => {
         const log = $('log');
-        log.classList.remove('tab-chat', 'tab-system', 'tab-party');
+        log.classList.remove('tab-chat', 'tab-system', 'tab-party', 'tab-whisper');
         this.chatTab = b.dataset.tab ?? 'all';
         if (b.dataset.tab !== 'all') log.classList.add(`tab-${b.dataset.tab}`);
         for (const o of $('log-tabs').querySelectorAll('[data-tab]')) o.classList.toggle('active', o === b);
@@ -211,10 +218,20 @@ export class Hud {
       e.stopPropagation();
       if (e.key === 'Enter') {
         const text = chat.value.trim();
-        // The party tab sends to the party; "/p text" does from any tab.
+        // The party tab sends to the party; "/p text" does from any tab. Whispers: "/w Name text"
+        // ("/w "Two Words" text" for a name with a space), "/r text" answers the last whisper, and the
+        // whisper tab sends plain text to whoever you whispered with last.
         const p = /^\/p\s+/i.exec(text);
+        const w = /^\/w\s+(?:"([^"]+)"|(\S+))\s+([\s\S]+)$/i.exec(text);
+        const r = /^\/r\s+([\s\S]+)$/i.exec(text);
         if (p) g.backend.chat(text.slice(p[0].length), true);
-        else if (text) g.backend.chat(text, this.chatTab === 'party');
+        else if (w) g.backend.whisper((w[1] ?? w[2]).trim(), w[3]);
+        else if (/^\/w(\s|$)/i.test(text)) this.log('กระซิบ: พิมพ์ /w ชื่อ ข้อความ (ชื่อที่มีเว้นวรรคใส่ "…")', '#e6a0ff');
+        else if (r || (text && this.chatTab === 'whisper' && !text.startsWith('/'))) {
+          const to = r ? this.lastWhisperFrom : this.whisperWith;
+          if (to) g.backend.whisper(to, r ? r[1] : text);
+          else this.log(r ? 'ยังไม่มีใครกระซิบหาคุณ' : 'ยังไม่ได้เลือกคนกระซิบ — พิมพ์ /w ชื่อ ข้อความ', '#e6a0ff');
+        } else if (text) g.backend.chat(text, this.chatTab === 'party');
         this.closeChat();
       } else if (e.key === 'Escape') this.closeChat();
     });
@@ -1038,29 +1055,80 @@ export class Hud {
     syncPots($('aset-pots'), p.lootFilter);
     const box = $('aset-skills');
     box.innerHTML = '';
-    for (const slot of ['q', 'e', 'r'] as const) {
+    s.order.forEach((slot, i) => {
       const sk = p.skill(slot);
-      const label = document.createElement('label');
-      label.className = 'aset-check';
+      const row = document.createElement('div');
+      row.className = 'aset-skill';
+      row.dataset.slot = slot;
+      row.innerHTML =
+        `<span class="aset-rank">${i + 1}</span>` +
+        `<span class="aset-grab" title="ลากเพื่อสลับลำดับ">${sk ? skillIcon(sk.id) : ''}<b class="aset-key">${slot.toUpperCase()}</b>` +
+        `<span class="aset-name">${sk?.nameTh ?? sk?.name ?? '-'}</span></span>` +
+        `<button class="aset-move" data-dir="-1" title="เลื่อนขึ้น"${i === 0 ? ' disabled' : ''}>▲</button>` +
+        `<button class="aset-move" data-dir="1" title="เลื่อนลง"${i === s.order.length - 1 ? ' disabled' : ''}>▼</button>`;
       const cb = document.createElement('input');
       cb.type = 'checkbox';
-      cb.dataset.slot = slot;
+      cb.title = 'ให้ Auto ใช้สกิลนี้';
       cb.checked = s.skills[slot];
       cb.addEventListener('change', () => this.applyAutoSettings());
-      label.append(cb, ` ${slot.toUpperCase()} — ${sk?.nameTh ?? sk?.name ?? '-'}`);
-      box.append(label);
-    }
+      row.append(cb);
+      for (const b of row.querySelectorAll<HTMLButtonElement>('.aset-move')) {
+        b.onclick = () => {
+          const sib = Number(b.dataset.dir) < 0 ? row.previousElementSibling : row.nextElementSibling?.nextElementSibling ?? null;
+          if (Number(b.dataset.dir) < 0 && !sib) return;
+          box.insertBefore(row, sib);
+          this.applyAutoSettings();
+        };
+      }
+      this.dragAutoSkill(box, row, row.querySelector<HTMLElement>('.aset-grab')!);
+      box.append(row);
+    });
+  }
+
+  /** Drag a skill row by its icon and name to a new place in the order (mouse or finger). */
+  private dragAutoSkill(box: HTMLElement, row: HTMLElement, grab: HTMLElement): void {
+    grab.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      const start = [...box.children].indexOf(row);
+      const id = e.pointerId;
+      row.classList.add('dragging');
+      // Listen on window, not with pointer capture: moving the row in the DOM drops capture in Chromium.
+      const move = (ev: PointerEvent) => {
+        if (ev.pointerId !== id) return;
+        // The row goes before the first other row whose middle is below the pointer.
+        const rest = [...box.children].filter((c) => c !== row) as HTMLElement[];
+        const before = rest.find((c) => { const r = c.getBoundingClientRect(); return ev.clientY < r.top + r.height / 2; }) ?? null;
+        if (before === row.nextElementSibling) return;
+        box.insertBefore(row, before);
+        box.querySelectorAll('.aset-rank').forEach((r, i) => { r.textContent = String(i + 1); });
+      };
+      const end = (ev: PointerEvent) => {
+        if (ev.pointerId !== id) return;
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', end);
+        window.removeEventListener('pointercancel', end);
+        row.classList.remove('dragging');
+        if ([...box.children].indexOf(row) !== start) this.applyAutoSettings();
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', end);
+      window.addEventListener('pointercancel', end);
+    });
   }
 
   /** Read the form, clamp it, send it, then show the clamped values. */
   private applyAutoSettings(): void {
     const num = (id: string) => Number($<HTMLInputElement>(id).value);
     const skills = { ...this.g.player.autoSettings.skills };
-    for (const cb of $('aset-skills').querySelectorAll<HTMLInputElement>('input[data-slot]')) {
-      skills[cb.dataset.slot as 'q' | 'e' | 'r'] = cb.checked;
+    const order: AutoSkill[] = [];
+    for (const row of $('aset-skills').querySelectorAll<HTMLElement>('.aset-skill')) {
+      const slot = row.dataset.slot as AutoSkill;
+      order.push(slot);
+      skills[slot] = row.querySelector<HTMLInputElement>('input[type=checkbox]')!.checked;
     }
     const s = cleanAutoSettings({
-      range: num('aset-range'), hpPct: num('aset-hp'), mpPct: num('aset-mp'), skills, loot: $<HTMLInputElement>('aset-loot').checked,
+      range: num('aset-range'), hpPct: num('aset-hp'), mpPct: num('aset-mp'), skills, order, loot: $<HTMLInputElement>('aset-loot').checked,
       rangeSet: this.g.player.autoSettings.rangeSet || num('aset-range') !== this.g.player.autoSettings.range,
     });
     this.g.backend.setAutoSettings(s);
@@ -1093,6 +1161,7 @@ export class Hud {
     this.g.party.toggle(false);
     this.g.trade.toggleFind(false);
     this.g.mailUI.toggle(false);
+    this.g.friends.toggle(false);
     if (this.dialogOpen) this.closeDialog();
   }
 
@@ -1881,16 +1950,27 @@ export class Hud {
 
   // ------------------------------------------------------------ online
 
-  openChat(): void {
+  /** Opens the chat box; `prefill` (e.g. "/w Name ") replaces what is typed, for answering a whisper. */
+  openChat(prefill?: string): void {
     const box = $('chat');
-    if (!box.classList.contains('hidden')) return;
+    const input = $<HTMLInputElement>('chat-input');
+    if (!box.classList.contains('hidden')) {
+      if (prefill !== undefined) {
+        input.value = prefill;
+        input.focus();
+      }
+      return;
+    }
     box.classList.remove('hidden');
     // The log turns into a scrollable history (every kept line, faded or not) while the chat is open.
     const log = $('log');
     log.classList.add('open');
     log.scrollTop = log.scrollHeight;
     // Focus after this frame so the Enter that opened it doesn't also send it.
-    setTimeout(() => $<HTMLInputElement>('chat-input').focus(), 0);
+    setTimeout(() => {
+      if (prefill !== undefined) input.value = prefill;
+      input.focus();
+    }, 0);
   }
 
   closeChat(): void {
@@ -1901,10 +1981,26 @@ export class Hud {
     input.blur();
   }
 
-  /** A chat line; an empty name means a server notice (someone joined or left). `party` = party chat or a party notice. */
-  chatLine(name: string, text: string, fadeMs = 15000, party = false): void {
+  /**
+   * A chat line; an empty name means a server notice (someone joined or left). `ch: 'party'` = party chat or
+   * a party notice; `ch: 'whisper'` = a whisper from `name`, or (with `to`) your own whisper to `to`.
+   */
+  chatLine(name: string, text: string, fadeMs = 15000, ch?: 'party' | 'whisper', to?: string): void {
+    const party = ch === 'party';
     const el = document.createElement('div');
-    if (name) {
+    if (name && ch === 'whisper') {
+      el.className = 'log-line chat whisper';
+      const b = document.createElement('b');
+      b.textContent = to ? `[กระซิบถึง ${to}]: ` : `[กระซิบ] ${name}: `;
+      // Click the line to answer that person.
+      const other = to ?? name;
+      el.title = `คลิกเพื่อกระซิบตอบ ${other}`;
+      el.onclick = () => this.openChat(whisperPrefix(other));
+      el.addEventListener('mousedown', (e) => e.preventDefault()); // keep typing in the chat box
+      if (!to) this.lastWhisperFrom = name;
+      this.whisperWith = other;
+      el.append(b, document.createTextNode(text));
+    } else if (name) {
       el.className = `log-line chat${party ? ' party' : ''}`;
       const b = document.createElement('b');
       b.textContent = party ? `[ปาร์ตี้] ${name}: ` : `${name}: `;
