@@ -100,9 +100,11 @@ export class Monster extends Unit {
     this.level = level;
     const sc = 1 + 0.18 * (level - def.levels[0]);
     const tough = def.ignoreTough ? 1 : (boost.tough ?? 1) * (def.behavior === 'boss' ? 1 : boost.mobTough ?? 1);
-    this.baseHp = Math.round(def.hp * sc * boost.stats * tough);
+    // Keys put into a boss room: HP and attack (not defense or speed) times the number of keys (owner).
+    const keys = boost.keys ?? 1;
+    this.baseHp = Math.round(def.hp * sc * boost.stats * tough * keys);
     this.hp = this.baseHp;
-    this.atk = def.atk * sc * boost.stats;
+    this.atk = def.atk * sc * boost.stats * keys;
     this.defense = def.def * sc * boost.stats * tough;
     this.zoneSpeed = boost.speed * (def.speedMult ?? 1);
     this.skillSpeed = (boost.skill ?? 1) * (def.speedMult ?? 1);

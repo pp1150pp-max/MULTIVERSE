@@ -1,6 +1,6 @@
 // Zone layout and collision, without any rendering. Built from the zone seed, so the browser and
 // the server get exactly the same trees, rocks and camp.
-import { arenaRadius, clearingRadius, lavaAt, themeAt, type ZoneDef, type ZoneTheme } from '../data/zones';
+import { arenaRadius, clearingRadius, lairOf, lavaAt, themeAt, type Lair, type ZoneDef, type ZoneTheme } from '../data/zones';
 import { NPC_IDS, type NpcId } from '../data/npcs';
 import { mulberry32, pick, rand, type Rng } from '../rng';
 import type { Vec2 } from '../types';
@@ -66,6 +66,17 @@ const THEME_PROPS: Record<ZoneTheme, ThemeProps> = {
 
 /** How close a player has to walk to a portal to use it. */
 export const PORTAL_RANGE = 1.4;
+/** The boss summoner on each map: its picture, height and how much of it is solid. */
+export const SUMMONER_PROP: Record<ZoneTheme, string> = {
+  forest: 'summoner_forest',
+  marsh: 'summoner_marsh',
+  snow: 'summoner_snow',
+  volcano: 'summoner_volcano',
+};
+export const SUMMONER_HEIGHT = 3.6;
+export const SUMMONER_SOLID = 1.2;
+/** How close a player must stand to the summoner to put keys in (the server checks it). */
+export const SUMMONER_RANGE = 3.5;
 
 /** Where players can rest: the hub's fountain and each zone camp's campfire. See Sim.rest. */
 export interface RestSpot { x: number; z: number; kind: 'fountain' | 'campfire' }
@@ -98,11 +109,14 @@ export class Terrain {
   /** Only zones with `npcs` (the hub) have any. */
   readonly npcPos: Partial<Record<NpcId, Vec2>> = {};
   readonly restSpots: RestSpot[] = [];
+  /** The map's boss summoner, if it has one (see ZoneDef.lair). */
+  readonly summoner: Lair | null;
   private readonly segs: Seg[] = [];
 
   constructor(readonly zone: ZoneDef) {
     this.half = zone.half;
     this.bound = zone.half - 8;
+    this.summoner = zone.lair ?? null;
     for (const line of [zone.path, ...zone.branches]) {
       for (let i = 1; i < line.length; i++) this.segs.push([line[i - 1][0], line[i - 1][1], line[i][0], line[i][1]]);
     }
@@ -285,7 +299,7 @@ export class Terrain {
 
     const s = zone.start;
     if (zone.npcs) this.placeTown(r);
-    else this.placeCamp();
+    else if (!zone.roomOf) this.placeCamp();
 
     // Pebbles along the paths (no collision).
     for (const [ax, az, bx, bz] of this.segs) {
@@ -304,15 +318,19 @@ export class Terrain {
       }
     }
 
-    // Boss clearing ring of runestones.
-    const b = zone.boss;
+    // Boss clearing ring of runestones: around the boss in its room, around the summoner on its map.
+    const b = lairOf(zone);
     if (b) {
       const ring = arenaRadius(zone);
       const set = this.setAt(r, b.x, b.z);
-      if (zone.bossSolid) this.colliders.push({ x: b.x, z: b.z, r: zone.bossSolid });
-      for (let a = 0.3; a < Math.PI * 2; a += Math.PI / 4) {
-        const [ringRock, ringH] = set.ringRock;
-        this.addProp(a % 2 > 1 ? ringRock : 'runestone', b.x + Math.cos(a) * ring, b.z + Math.sin(a) * ring, a % 2 > 1 ? ringH : 2.6, 0.6);
+      if (zone.boss && zone.bossSolid) this.colliders.push({ x: b.x, z: b.z, r: zone.bossSolid });
+      if (zone.lair) this.addProp(SUMMONER_PROP[zone.theme], b.x, b.z, SUMMONER_HEIGHT, SUMMONER_SOLID);
+      if (zone.roomOf) this.placeRoom(r, b, ring);
+      else {
+        for (let a = 0.3; a < Math.PI * 2; a += Math.PI / 4) {
+          const [ringRock, ringH] = set.ringRock;
+          this.addProp(a % 2 > 1 ? ringRock : 'runestone', b.x + Math.cos(a) * ring, b.z + Math.sin(a) * ring, a % 2 > 1 ? ringH : 2.6, 0.6);
+        }
       }
     }
 
@@ -341,6 +359,40 @@ export class Terrain {
       else if (roll < 0.95 && set.extra.length) this.addProp(pick(r, set.extra), x, z, rand(r, 0.8, 1.1), 0);
       else if (set.tallStump && roll >= 0.97) this.addProp(set.tallStump, x, z, 1.3, 0.5);
       else this.addProp(set.stump, x, z, 0.8, 0.4);
+      placed++;
+    }
+  }
+
+  /**
+   * A boss room's own ruins (art_templates/boss_rooms): pillars, braziers and carved stones in a ring
+   * around the arena, with a gap where the players come in (the +x +z corner), and walls, boulders,
+   * rubble and a tree or two between the ring and the edge of the room.
+   */
+  private placeRoom(r: Rng, b: { x: number; z: number }, ring: number): void {
+    const kit = (name: string) => `room_${this.zone.theme}_${name}`;
+    const way = Math.PI / 4;
+    const gap = (a: number) => Math.abs(Math.atan2(Math.sin(a - way), Math.cos(a - way))) < 0.42;
+    const RING: [string, number, number][] = [['pillar_0', 3.2, 0.6], ['brazier', 2.3, 0.4], ['pillar_1', 2.4, 0.6], ['rune_stone', 2.2, 0.6]];
+    const n = 14;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + Math.PI / n;
+      if (gap(a)) continue;
+      const [name, h, solid] = RING[i % RING.length];
+      this.addProp(kit(name), b.x + Math.cos(a) * (ring + 1.6), b.z + Math.sin(a) * (ring + 1.6), h, solid);
+    }
+    const OUTER: [string, number, number][] = [['wall', 2.4, 1.2], ['boulder', 2, 1.1], ['rubble', 1.2, 0.8], ['tree', 4, 0.6]];
+    const B = this.bound;
+    let placed = 0;
+    for (let tries = 0; tries < 400 && placed < 12; tries++) {
+      const a = r() * Math.PI * 2;
+      const d = ring + 4 + r() * (B - ring - 3);
+      const x = b.x + Math.cos(a) * d;
+      const z = b.z + Math.sin(a) * d;
+      if (gap(a) || Math.abs(x) > B - 1 || Math.abs(z) > B - 1) continue;
+      if (this.distToPath(x, z) < 3 || this.zone.portals.some((p) => Math.hypot(p.x - x, p.z - z) < 4)) continue;
+      if (this.colliders.some((c) => Math.hypot(c.x - x, c.z - z) < c.r + 2.4)) continue;
+      const [name, h, solid] = OUTER[placed % OUTER.length];
+      this.addProp(kit(name), x, z, h, solid);
       placed++;
     }
   }

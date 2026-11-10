@@ -1,6 +1,6 @@
 // Rules of map 4 (lava, the Volcano Heart) and Auto Play's boss rule, on a real Sim with no server.
 import { ok, finish } from './check';
-import { arenaRadius, clearingRadius, inBossArena, lavaAt, ZONES, ZONE_4 } from '../src/shared/data/zones';
+import { arenaRadius, BOSS_ROOMS, clearingRadius, inBossArena, lavaAt, ZONES, ZONE_4 } from '../src/shared/data/zones';
 import { MONSTERS } from '../src/shared/data/monsters';
 import { Sim } from '../src/shared/sim/Sim';
 import type { Player } from '../src/shared/sim/Player';
@@ -17,12 +17,14 @@ function run(sim: Sim, seconds: number, each?: () => void): void {
     sim.drainEvents();
   }
 }
+/** The Volcano Heart lives in its own room now (one copy per group); the map has its summoner. */
+const ROOM = BOSS_ROOMS.ashen_isle;
 const heart = (sim: Sim) => sim.monsters.find((m) => m.def.id === 'volcano_heart')!;
 
 // ---- layout
 {
   const sim = new Sim(ZONE_4);
-  const b = ZONE_4.boss!;
+  const b = ZONE_4.lair!;
   ok(ZONES.nexus_city.portals.some((p) => p.to === 'ashen_isle' && p.minLevel === 0), 'the hub opens map 4 to everyone');
   ok(ZONE_4.portals.some((p) => p.to === 'nexus_city'), 'map 4 leads back to the hub');
   ok(Math.abs(b.x) + clearingRadius(ZONE_4) <= sim.terrain.bound && Math.abs(b.z) + clearingRadius(ZONE_4) <= sim.terrain.bound, 'clearing fits on the island');
@@ -33,8 +35,11 @@ const heart = (sim: Sim) => sim.monsters.find((m) => m.def.id === 'volcano_heart
     ok(Math.hypot(l.x - b.x, l.z - b.z) > clearingRadius(ZONE_4) + r, 'pool stays out of the boss clearing');
     ok(ZONE_4.spawns.every((s) => Math.hypot(l.x - s.x, l.z - s.z) > s.radius * 0.8 + r), 'pool stays out of spawn areas');
   }
-  const blockers = sim.terrain.colliders.filter((c) => Math.hypot(c.x - b.x, c.z - b.z) < arenaRadius(ZONE_4) - 1 && c.r !== ZONE_4.bossSolid);
+  const room = new Sim(ROOM);
+  const rb = ROOM.boss!;
+  const blockers = room.terrain.colliders.filter((c) => Math.hypot(c.x - rb.x, c.z - rb.z) < arenaRadius(ROOM) - 1 && c.r !== ROOM.bossSolid);
   ok(blockers.length === 0, 'nothing blocks walking inside the arena');
+  ok(heart(room) && !heart(sim), 'the Heart is in its room, not on the map');
 }
 
 // ---- the way in, from the hub
@@ -85,7 +90,7 @@ const heart = (sim: Sim) => sim.monsters.find((m) => m.def.id === 'volcano_heart
 // ---- warnings leave time to walk out (plain walking speed, no dash, no boots)
 for (const [i, ph] of HEART_PHASES.entries()) {
   ok(ph.meteorWarn >= METEOR.radius / DODGE_SPEED + 0.3, `phase ${i + 1}: meteor warning is long enough`);
-  const R = arenaRadius(ZONE_4);
+  const R = arenaRadius(ROOM);
   let worst = 0;
   for (let x = -R; x <= R; x += 0.5) {
     for (let z = -R; z <= R; z += 0.5) {
@@ -113,14 +118,14 @@ ok(HEART_SETS[0].every((set) => set.length === 1), 'above half HP only one set a
 
 // ---- the fight
 {
-  const sim = new Sim(ZONE_4);
+  const sim = new Sim(ROOM);
   const m = heart(sim);
   const { x: bx, z: bz } = m;
   const p = sim.addPlayer(hero());
   p.stats.maxHp = p.hp = 1e7;
 
   // Nothing happens with nobody in the arena.
-  p.x = bx + arenaRadius(ZONE_4) + 4;
+  p.x = bx + arenaRadius(ROOM) + 4;
   p.z = bz;
   run(sim, 5);
   ok(sim.hazards.length === 0, 'waits while nobody is in the arena');
@@ -156,7 +161,7 @@ ok(HEART_SETS[0].every((set) => set.length === 1), 'above half HP only one set a
   ok(m.enraged, 'below half HP it speeds up');
 
   // Everyone leaves: it recovers.
-  p.x = bx + arenaRadius(ZONE_4) + 5;
+  p.x = bx + arenaRadius(ROOM) + 5;
   run(sim, 11);
   ok(m.hp === m.maxHp && !m.enraged, 'recovers when left alone');
   run(sim, 8);
@@ -171,12 +176,13 @@ ok(HEART_SETS[0].every((set) => set.length === 1), 'above half HP only one set a
 }
 
 // ---- Auto Play stays away from bosses, on every map
-for (const zone of Object.values(ZONES)) {
-  if (!zone.boss) continue;
+let rooms = 0;
+for (const zone of Object.values(BOSS_ROOMS)) {
+  rooms++;
   const sim = new Sim(zone);
   const p: Player = sim.addPlayer(hero());
-  p.x = zone.boss.x + 3;
-  p.z = zone.boss.z;
+  p.x = zone.boss!.x + 3;
+  p.z = zone.boss!.z;
   ok(inBossArena(zone, p.x, p.z) && autoBlocked(zone, sim.monsters, p), `${zone.id}: no Auto in the boss arena`);
   p.x = zone.start.x;
   p.z = zone.start.z;
@@ -185,6 +191,15 @@ for (const zone of Object.values(ZONES)) {
   boss.target = p;
   boss.state = 'chase';
   ok(autoBlocked(zone, sim.monsters, p), `${zone.id}: no Auto while a boss hunts you`);
+}
+ok(rooms === 4, 'every boss room checked');
+for (const zone of Object.values(ZONES)) {
+  if (!zone.lair) continue;
+  const sim = new Sim(zone);
+  const p: Player = sim.addPlayer(hero());
+  p.x = zone.lair.x + 3;
+  p.z = zone.lair.z;
+  ok(!autoBlocked(zone, sim.monsters, p) && !sim.monsters.some((m) => m.isBoss), `${zone.id}: no boss on the map, Auto fine by its summoner`);
 }
 {
   const sim = new Sim(ZONE_4);
@@ -201,7 +216,7 @@ for (const zone of Object.values(ZONES)) {
   let drops = 0;
   let stuck = 0;
   for (let i = 0; i < 40; i++) {
-    const sim = new Sim(ZONE_4);
+    const sim = new Sim(ROOM);
     const h = heart(sim);
     (sim as unknown as { killMonster(m: unknown): void }).killMonster(h);
     for (const l of sim.loots) {
@@ -215,13 +230,13 @@ for (const zone of Object.values(ZONES)) {
 
 // ---- a long fight: attacks grow 5% bigger and stronger 30s after the first hit, then every 10s
 {
-  const sim = new Sim(ZONE_4);
+  const sim = new Sim(ROOM);
   const m = heart(sim);
   const p = sim.addPlayer(hero());
   p.x = m.x + 8;
   p.z = m.z;
   const outside = sim.addPlayer(hero());
-  outside.x = m.x + arenaRadius(ZONE_4) + 3;
+  outside.x = m.x + arenaRadius(ROOM) + 3;
   outside.z = m.z;
   outside.stats.maxHp = outside.hp = 1e7;
   const keepUp = () => { p.stats.maxHp = p.hp = 1e7; };

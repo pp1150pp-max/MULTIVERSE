@@ -1,15 +1,16 @@
 // Boss HP grows with the number of players who hit it (1 player x1, 2 x1.5, 3 x2) and goes back to
 // one player's HP when the fight is over. Real Sims, no server.
 import { ok, finish } from './check';
-import { ZONES } from '../src/shared/data/zones';
+import { BOSS_ROOMS, ZONES } from '../src/shared/data/zones';
 import { Sim } from '../src/shared/sim/Sim';
 import type { Monster } from '../src/shared/sim/Monster';
 
 const hero = (name: string) => ({ name, classId: 'sword' as const, level: 40, exp: 0, gold: 0, equipment: {}, bag: [] });
 const TICK = 1 / 30;
 
-for (const zone of Object.values(ZONES)) {
-  if (!zone.boss) continue;
+let rooms = 0;
+for (const zone of Object.values(BOSS_ROOMS)) {
+  rooms++;
   const sim = new Sim(zone);
   const m = sim.monsters.find((x) => x.def.id === zone.boss!.monster) as Monster;
   const base = m.maxHp;
@@ -45,6 +46,8 @@ for (const zone of Object.values(ZONES)) {
   }
   ok(m.maxHp === base && m.hp === base && m.damageBy.size === 0, `${name}: with nobody fighting it goes back to normal, full HP`);
 }
+
+ok(rooms === 4, 'every boss room checked');
 
 // Normal monsters never scale.
 {

@@ -58,8 +58,12 @@ export interface ZoneDef {
   path: [number, number][];
   branches: [number, number][][];
   spawns: SpawnArea[];
-  /** None in the hub. */
+  /** The boss itself: only in boss rooms (see BOSS_ROOMS). */
   boss?: SpawnArea;
+  /** Where a map's boss summoner stands (the old boss clearing), and which boss it calls. None in the hub or rooms. */
+  lair?: Lair;
+  /** Set on boss rooms: the map whose summoner leads here. */
+  roomOf?: string;
   portals: PortalDef[];
   /** Square where nobody can fight and monsters can't go (server enforced): the hub's walled town. */
   safe?: SafeArea;
@@ -82,6 +86,14 @@ export interface ZoneDef {
   monsterBoost?: MonsterBoost;
 }
 
+/** A map's boss summoner: put keys in it to open the boss's room. */
+export interface Lair {
+  /** The boss's monster id. */
+  boss: string;
+  x: number;
+  z: number;
+}
+
 /** Multipliers on a zone's monsters: `stats` for HP, attack and defense; `speed` for moving and attacking. */
 export interface MonsterBoost {
   stats: number;
@@ -90,6 +102,8 @@ export interface MonsterBoost {
   /** HP and defense once more, for ordinary monsters only (not bosses or their minions). Default 1. */
   mobTough?: number;
   speed: number;
+  /** Boss rooms: HP and attack once more, for the keys put in (1 = one key). Default 1. */
+  keys?: number;
   /** How much faster skill cooldowns run (slam, throw, charge, leap, the Volcano Heart's rests). Default 1. */
   skill?: number;
   /**
@@ -131,6 +145,7 @@ function rotateZone(turns: 0 | 1 | 2 | 3, z: ZoneDef): ZoneDef {
     branches: z.branches.map((b) => b.map(([x, y]) => r(x, y))),
     spawns: z.spawns.map(pt),
     boss: z.boss && pt(z.boss),
+    lair: z.lair && pt(z.lair),
     portals: z.portals.map(pt),
     iceLakes: z.iceLakes?.map(ellipse),
     lavaPools: z.lavaPools?.map(ellipse),
@@ -170,7 +185,7 @@ function scatterZone(z: ZoneDef, list: Scatter[]): ZoneDef {
     }
     return best;
   };
-  const boss = z.boss!;
+  const boss = z.lair!;
   const arena = z.arenaRadius ?? DEFAULT_ARENA;
   const pools = [...(z.iceLakes ?? []), ...(z.lavaPools ?? [])];
   // 0 at the camp, 1 at the boss, measured along the diagonal between them.
@@ -231,7 +246,7 @@ export const ZONE_1: ZoneDef = scatterZone({
     [[-16, -14], [-8, -24]],
   ],
   spawns: [],
-  boss: { monster: 'forest_bear', x: -42, z: -42, radius: 1, count: 1, respawn: [90, 90] },
+  lair: { boss: 'forest_bear', x: -42, z: -42 },
   portals: [{ to: HUB_ID, x: 49.5, z: 49.5, minLevel: 0 }],
 }, [
   { group: [['green_slime', 1]], count: 14, respawn: [6, 10] },
@@ -263,7 +278,7 @@ export const ZONE_2: ZoneDef = rotateZone(1, scatterZone({
     [[-22, -14], [-12, -26]],
   ],
   spawns: [],
-  boss: { monster: 'bog_witch', x: -42, z: -42, radius: 1, count: 1, respawn: [120, 120] },
+  lair: { boss: 'bog_witch', x: -42, z: -42 },
   portals: [{ to: HUB_ID, x: 49.5, z: 49.5, minLevel: 0 }],
 }, [
   { group: [['bog_toad', 1]], count: 12, respawn: [7, 11] },
@@ -295,7 +310,7 @@ export const ZONE_3: ZoneDef = rotateZone(2, scatterZone({
     [[-14, -6], [-4, -24]],
   ],
   spawns: [],
-  boss: { monster: 'yeti', x: -42, z: -42, radius: 1, count: 1, respawn: [150, 150] },
+  lair: { boss: 'yeti', x: -42, z: -42 },
   portals: [{ to: HUB_ID, x: 49.5, z: 49.5, minLevel: 0 }],
   iceLakes: [
     { x: -32, z: 34, rx: 12, rz: 9 },
@@ -334,9 +349,8 @@ export const ZONE_4: ZoneDef = rotateZone(3, scatterZone({
   ],
   spawns: [],
   // Lots of room: the fight is all about walking out of the way.
-  boss: { monster: 'volcano_heart', x: -36, z: -36, radius: 0, count: 1, respawn: [180, 180] },
+  lair: { boss: 'volcano_heart', x: -36, z: -36 },
   arenaRadius: 16,
-  bossSolid: 1.5,
   portals: [{ to: HUB_ID, x: 49.5, z: 49.5, minLevel: 0 }],
   lavaPools: [
     { x: 20, z: 8, rx: 4.5, rz: 3 },
@@ -426,9 +440,66 @@ export const ZONES: Record<string, ZoneDef> = {
   [ZONE_4.id]: ZONE_4,
 };
 
-/** Unknown or missing zone ids land in the hub. */
+/** Each boss's body radius in its room (the Volcano Heart is a rock that never moves). */
+const BOSS_RADIUS: Record<string, number> = { forest_bear: 1, bog_witch: 1, yeti: 1, volcano_heart: 0 };
+const BOSS_ROOM_NAME: Record<string, [string, string]> = {
+  forest_bear: ["Bear's Den", 'รังหมีป่า'],
+  bog_witch: ["Bog Witch's Lair", 'กระท่อมแม่มดหนอง'],
+  yeti: ["Yeti's Cave", 'ถ้ำเยติ'],
+  volcano_heart: ['Heart of the Volcano', 'แกนกลางภูเขาไฟ'],
+};
+
+/**
+ * A map's boss room: a small island the size of the old boss clearing, drawn with the map's own look,
+ * with the boss in the middle. Players come in at one corner, at the edge of the arena; the portal
+ * back to town behind them only opens once the boss is dead (Sim.checkPortals). Every group gets its
+ * own copy (a channel), run by the server (server/bossRooms.ts).
+ */
+function bossRoom(field: ZoneDef): ZoneDef {
+  const lair = field.lair!;
+  // (arenaRadius() is defined further down, after this runs at load time.)
+  const arena = field.arenaRadius ?? DEFAULT_ARENA;
+  // Where players appear (Sim.spawnAt is 2 in from `start`): about on the arena's edge.
+  const s = Math.round(arena * 0.72 + 2);
+  const [name, nameTh] = BOSS_ROOM_NAME[lair.boss];
+  return {
+    id: `${field.id}_room`,
+    name,
+    nameTh,
+    subtitle: `ห้องบอสของ${field.nameTh}`,
+    levels: field.levels,
+    theme: field.theme,
+    allowAutoPlay: false,
+    // The forest wall around the playable square starts 8 in from the edge (Terrain.bound).
+    half: arena + 13,
+    seed: field.seed + 500,
+    start: { x: s, z: s },
+    path: [[s + 3, s + 3], [s - 2, s - 2]],
+    branches: [],
+    spawns: [],
+    boss: { monster: lair.boss, x: 0, z: 0, radius: BOSS_RADIUS[lair.boss] ?? 1, count: 1, respawn: [0, 0] },
+    portals: [{ to: HUB_ID, x: s + 3, z: s + 3, minLevel: 0 }],
+    roomOf: field.id,
+    arenaRadius: field.arenaRadius,
+    bossSolid: lair.boss === 'volcano_heart' ? 1.5 : undefined,
+    monsterBoost: field.monsterBoost,
+  };
+}
+
+/** Boss rooms, by the id of the map whose summoner opens them. Not in ZONES: the server makes one Sim per group. */
+export const BOSS_ROOMS: Record<string, ZoneDef> = Object.fromEntries(
+  [ZONE_1, ZONE_2, ZONE_3, ZONE_4].map((z) => [z.id, bossRoom(z)]),
+);
+const ROOMS_BY_ID: Record<string, ZoneDef> = Object.fromEntries(Object.values(BOSS_ROOMS).map((r) => [r.id, r]));
+
+/** Unknown or missing zone ids land in the hub. Boss rooms count too (the browser draws them). */
 export function zoneById(id: string | undefined): ZoneDef {
-  return (id && ZONES[id]) || ZONE_HUB;
+  return (id && (ZONES[id] ?? ROOMS_BY_ID[id])) || ZONE_HUB;
+}
+
+/** The boss clearing of a map (its summoner) or of a room (its boss): where the ring of stones stands. */
+export function lairOf(zone: ZoneDef): { x: number; z: number } | undefined {
+  return zone.boss ?? zone.lair;
 }
 
 export function inSafeArea(zone: ZoneDef, x: number, z: number): boolean {

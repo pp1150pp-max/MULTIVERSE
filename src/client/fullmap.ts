@@ -1,10 +1,10 @@
 import type { Game } from './Game';
 import type { NpcId } from '../shared/data/npcs';
 import { MONSTERS } from '../shared/data/monsters';
-import { ZONES } from '../shared/data/zones';
+import { zoneById } from '../shared/data/zones';
 import { sheets } from './assets';
 import { drawMapIcon, facingAngle, partyDot } from './mapIcons';
-import { countdown } from './floating';
+import { bossShortName } from '../shared/bossRoom';
 import type { MapIcon } from './mapIconNames';
 
 const S = Math.SQRT1_2;
@@ -91,7 +91,8 @@ export class FullMap {
       const d = MONSTERS[sp.monster];
       area(sp.x, sp.z, Math.max(sp.radius, 2.5), dangerColour(d.levels[1], me.level));
     }
-    const b = zone.boss;
+    // The boss in its room, or the summoner where it used to stand on its map.
+    const b = zone.boss ? { x: zone.boss.x, z: zone.boss.z, monster: zone.boss.monster } : zone.lair && { x: zone.lair.x, z: zone.lair.z, monster: zone.lair.boss };
     if (b) area(b.x, b.z, 5, '#ff5a46');
     if (zone.safe) {
       // The walled town: a square in the world, a diamond on the map.
@@ -153,8 +154,8 @@ export class FullMap {
       const bd = MONSTERS[b.monster];
       const [bx, by] = at(b.x, b.z);
       icon('boss', b.x, b.z, 34);
-      const bossIn = g.backend.bossRespawnIn;
-      label(bx, by - 30 * px, `${bd.nameTh} Lv.${bd.levels[0]}${bossIn !== null ? ` · เกิดใน ${countdown(bossIn)}` : ''}`, '#ff9a8a', { size: 13 });
+      const name = `${bossShortName(bd.nameTh)} Lv.${bd.levels[0]}`;
+      label(bx, by - 30 * px, zone.boss ? name : `แท่นเรียกบอส · ${name}`, '#ff9a8a', { size: 13 });
     }
     if (zone.npcs) {
       const [cx, cy] = at(zone.start.x, zone.start.z);
@@ -165,7 +166,7 @@ export class FullMap {
       });
     }
     for (const pt of zone.portals) {
-      const to = ZONES[pt.to];
+      const to = zoneById(pt.to);
       const [sx, sy] = at(pt.x, pt.z);
       icon('portal', pt.x, pt.z, 26);
       const lv = pt.minLevel > 0 ? ` (Lv.${pt.minLevel}+)` : '';

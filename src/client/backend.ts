@@ -13,6 +13,7 @@ import type { RerollKind } from '../shared/data/reroll';
 import type { EquipSlot, Item, PotionKind, PotionSize, Rarity } from '../shared/types';
 import type { MarketCall, MarketReply } from '../shared/sim/market';
 import type { MailCall, MailReply } from '../shared/mail';
+import type { RoomSnap } from '../shared/bossRoom';
 import type { PartyFound, PartySnap } from '../shared/party';
 import type { FriendsView } from '../shared/friends';
 
@@ -40,8 +41,8 @@ export interface Backend {
   readonly loots: readonly Loot[];
   /** Boss ground attacks going on right now. */
   readonly hazards: readonly Hazard[];
-  /** Seconds until the zone's boss comes back, or null while it is alive. */
-  readonly bossRespawnIn: number | null;
+  /** The boss room you are in (null elsewhere); `leaveIn` counts down locally once the boss is dead. */
+  readonly room: RoomSnap | null;
   /** Simulation clock (seconds). */
   readonly time: number;
   /** Players in the world right now. */
@@ -153,4 +154,17 @@ export interface Backend {
   friendUnblock(acc: number): void;
   /** Ask for a fresh view (opening the window). */
   friendList(): void;
+
+  // Boss rooms (the server checks every rule; see server/bossRooms.ts).
+  /** Put this many keys into the summoner you stand next to (`quest`: the bound quest key, ×1). */
+  roomOpen(keys: number, quest?: boolean): void;
+  /** The Seeker's key quests (the server checks you stand by him). */
+  questAccept(boss: string): void;
+  questTurnIn(boss: string): void;
+  buyPhoenix(n: number): void;
+  /** Dead in a boss room: get up here for one phoenix feather. */
+  roomRevive(): void;
+  roomAnswer(id: number, yes: boolean): void;
+  roomStart(): void;
+  roomCancel(): void;
 }

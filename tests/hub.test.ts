@@ -36,8 +36,8 @@ const fields = Object.values(ZONES).filter((z) => z.id !== HUB_ID);
     ok(Math.hypot(arrived.x - back.x, arrived.z - back.z) < 5 && !sim.terrain.isBlocked(arrived.x, arrived.z, 0.3), `${zone.id}: arrives beside the portal`);
     const home = hub.addPlayer(hero(), zone.id);
     ok(Math.hypot(home.x - pt.x, home.z - pt.z) < 5 && !hub.terrain.isBlocked(home.x, home.z, 0.3), `${zone.id}: comes back beside its hub portal`);
-    const b = zone.boss!;
-    ok(Math.abs(b.x) < sim.terrain.bound && Math.abs(b.z) < sim.terrain.bound, `${zone.id}: boss still on the island`);
+    const b = zone.lair!;
+    ok(Math.abs(b.x) < sim.terrain.bound && Math.abs(b.z) < sim.terrain.bound, `${zone.id}: boss summoner still on the island`);
     for (const sp of zone.spawns) ok(Math.abs(sp.x) <= sim.terrain.bound && Math.abs(sp.z) <= sim.terrain.bound, `${zone.id}: ${sp.monster} area on the island`);
   }
   const start = hub.addPlayer(hero());

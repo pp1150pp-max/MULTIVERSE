@@ -11,7 +11,7 @@ import type { Loot } from '../shared/sim/Loot';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../shared/sim/types';
 import type { Backend, ProjectileLike } from './backend';
 import { ISO_DIR, World } from './world';
-import { restSpotNear } from '../shared/sim/terrain';
+import { restSpotNear, SUMMONER_HEIGHT, SUMMONER_RANGE } from '../shared/sim/terrain';
 import { Input } from './input';
 import { Effects } from './effects';
 import { Floating, countdown } from './floating';
@@ -27,6 +27,9 @@ import { findPath } from './pathfind';
 import { PartyUI } from './party';
 import { TradeUI } from './trade';
 import { FriendsUI } from './friends';
+import { RoomUI } from './bossRoom';
+import { QuestUI } from './quests';
+import { bossShortName } from '../shared/bossRoom';
 import { MailUI } from './mail';
 import { SystemMenu } from './sysmenu';
 import { flashZoneLoading, preloadLoadingArt } from './loadingScreen';
@@ -44,7 +47,8 @@ export type { Intent };
 type ClickGoal =
   | { kind: 'loot'; id: number; x: number; z: number }
   | { kind: 'npc'; id: NpcId; x: number; z: number }
-  | { kind: 'rest'; x: number; z: number };
+  | { kind: 'rest'; x: number; z: number }
+  | { kind: 'summoner'; x: number; z: number };
 
 export interface Npc { id: NpcId; name: string; action: string; icon: string; role: string; x: number; z: number; actor: SpriteActor }
 
@@ -67,6 +71,8 @@ export class Game {
   readonly party: PartyUI;
   readonly trade: TradeUI;
   readonly friends: FriendsUI;
+  readonly rooms: RoomUI;
+  readonly quests: QuestUI;
   readonly mailUI: MailUI;
   /** Another player under the mouse (when no monster or usable thing is): a left click offers a party invite. */
   private hoveredPlayer: Player | null = null;
@@ -142,6 +148,8 @@ export class Game {
     this.party = new PartyUI(this);
     this.trade = new TradeUI(this);
     this.friends = new FriendsUI(this);
+    this.rooms = new RoomUI(this);
+    this.quests = new QuestUI(this, () => this.hud.openDialog());
     this.mailUI = new MailUI(this);
     initDraggableWindows(document.getElementById('hud')!);
     this.checkGpu();
@@ -506,6 +514,8 @@ export class Game {
     }
     for (const n of this.npcs) consider({ kind: 'npc', id: n.id, x: n.x, z: n.z }, 1, Math.max(22, 0.9 * pxPerUnit));
     for (const s of this.backend.terrain.restSpots) consider({ kind: 'rest', x: s.x, z: s.z }, 0.6, Math.max(22, (s.kind === 'fountain' ? 2.2 : 0.9) * pxPerUnit));
+    const sm = this.backend.terrain.summoner;
+    if (sm) consider({ kind: 'summoner', x: sm.x, z: sm.z }, 1.4, Math.max(22, 1.2 * pxPerUnit));
     return best;
   }
 
@@ -529,6 +539,11 @@ export class Game {
     } else if (g.kind === 'npc') {
       if (d < NPC_TALK_RANGE - 0.4) {
         this.hud.talkTo(g.id);
+        this.goal = null;
+      }
+    } else if (g.kind === 'summoner') {
+      if (d < SUMMONER_RANGE - 0.4) {
+        this.rooms.toggle(true);
         this.goal = null;
       }
     } else {
@@ -602,24 +617,31 @@ export class Game {
     }
     // The fountain and campfires: rest there (HP and MP full) when no NPC is closer.
     const spots = this.backend.terrain.restSpots;
-    const rest = !near && p.alive ? restSpotNear(spots, p) : null;
+    // The boss summoner on this map, when no NPC is closer.
+    const sm = this.backend.terrain.summoner;
+    const summ = !near && p.alive && sm && Math.hypot(p.x - sm.x, p.z - sm.z) < SUMMONER_RANGE ? sm : null;
+    const rest = !near && !summ && p.alive ? restSpotNear(spots, p) : null;
     const restIn = Math.max(0, Math.ceil(p.restCd));
     const restName = rest?.kind === 'fountain' ? 'น้ำพุ' : 'กองไฟ';
     const prompt = this.hud.dialogOpen ? null
       : near ? `${near.name} — กด T เพื่อ${near.action}`
+      : summ ? `แท่นเรียก${bossShortName(MONSTERS[summ.boss].nameTh)} — กด T เพื่อใส่กุญแจ`
       : rest ? (restIn > 0 ? `${restName} — พักได้อีกใน ${restIn} วิ` : `${restName} — กด T เพื่อฟื้น HP/MP ให้เต็ม`)
       : null;
     this.floating.npcBadges(this, this.npcs);
     this.floating.restBadges(this, spots, restIn);
     if (near) this.floating.npcPrompt(this, near.x, 3.7, near.z, prompt);
+    else if (summ) this.floating.npcPrompt(this, summ.x, SUMMONER_HEIGHT + 0.6, summ.z, prompt);
     // Rest spots: stack the label just above the spot's own badge (same anchor, lifted by the badge's
     // height plus room for its 4px bob) so the two never overlap whatever the zoom.
     else if (rest) this.floating.npcPrompt(this, rest.x, Floating.restBadgeY(rest.kind), rest.z, prompt, this.floating.restBadgeHeight(spots.indexOf(rest)) + 8);
     else this.floating.npcPrompt(this, 0, 0, 0, prompt);
-    const lair = this.backend.zone.boss;
-    const bossIn = this.backend.bossRespawnIn;
-    this.floating.bossTimer(this, lair?.x ?? 0, lair?.z ?? 0, lair && bossIn !== null ? `${MONSTERS[lair.monster].nameTh} เกิดใน ${countdown(bossIn)}` : null);
+    // In a boss room once the boss is dead: the way home and how long until everyone is sent there.
+    const room = this.backend.room;
+    const exit = room?.leaveIn !== undefined ? this.backend.zone.portals[0] : undefined;
+    this.floating.bossTimer(this, exit?.x ?? 0, exit?.z ?? 0, exit ? `ประตูกลับเมือง · วาร์ปอัตโนมัติใน ${countdown(room!.leaveIn!)}` : null);
     if (near && i.pressed('KeyT')) this.hud.talkTo(near.id);
+    else if (summ && i.pressed('KeyT')) this.rooms.toggle();
     else if (rest && i.pressed('KeyT')) this.backend.rest();
 
     // Farming circle: while Auto runs (around where it started) and while the settings window is open
@@ -639,6 +661,8 @@ export class Game {
     this.party.update();
     this.trade.update();
     this.friends.update();
+    this.rooms.update();
+    this.quests.update();
   }
 
   private updateCamera(dt: number): void {

@@ -9,7 +9,7 @@ import {
 import {
   entryName, POTION_SIZES, POTION_SIZE_LABEL, POTION_STACK, POTIONS, potionHeal, potionName, potionSellPrice, stackLimit,
 } from '../shared/data/potions';
-import { REROLL_STONE, RETURN_CAST, RETURN_SCROLL_PRICE, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_STACK, stoneSellPrice, stoneStackValue, stoneUnit } from '../shared/data/stones';
+import { REROLL_STONE, RETURN_CAST, RETURN_SCROLL_PRICE, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_STACK, stoneSellPrice, stoneStackValue, stoneUnit, PHOENIX_PRICE } from '../shared/data/stones';
 import { lineRanges, rerollBlock } from '../shared/data/items';
 import { REROLL_NAME, rerollCost, type RerollKind } from '../shared/data/reroll';
 import { FullMap } from './fullmap';
@@ -21,7 +21,7 @@ import { ZONE_1 } from '../shared/data/zones';
 import { expToNext } from '../shared/formulas';
 import { blockingGate } from '../shared/data/bossGates';
 import {
-  isBossKey, isConsumable, isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
+  isBossKey, isBound, isConsumable, isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
   type BagEntry, type Item, type StatLine, type PotionKind, type PotionSize, type PotionStack, type Rarity, type StoneStack, type StoneKind, type EquipSlot, type StatKey,
 } from '../shared/types';
 import { drawMapIcon, facingAngle, partyDot } from './mapIcons';
@@ -427,26 +427,31 @@ export class Hud {
       `<div class="cell pot" data-buy="${k}:${s}" style="--rc:${POTION_COLOR[k]}">${potionIcon(k)}` +
       `<span class="psize">${POTION_SIZE_LABEL[s]}</span><span class="cell-price">${POTIONS[k][s].price}</span></div>`,
     )).join('') +
-      // The return scroll, after the potions.
+      // Phoenix feathers, for getting up again in a boss room, then the return scroll.
+      `<div class="cell pot stone" data-phoenix style="--rc:${STONE_COLOR.phoenix}">${stoneIcon('phoenix')}<span class="cell-price">${PHOENIX_PRICE}</span></div>` +
       `<div class="cell pot stone" data-buy-scroll style="--rc:${STONE_COLOR.return_scroll}">${stoneIcon('return_scroll')}` +
       `<span class="cell-price">${RETURN_SCROLL_PRICE}</span></div>`;
+    const phoenixCell = (e: Event) => !!(e.target as HTMLElement).closest('[data-phoenix]');
     const buyCell = (e: Event): [PotionKind, PotionSize] | null => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-buy]');
       return el ? (el.dataset.buy!.split(':') as [PotionKind, PotionSize]) : null;
     };
     const scrollCell = (e: Event): boolean => !!(e.target as HTMLElement).closest('[data-buy-scroll]');
     buyGrid.addEventListener('click', (e) => {
+      if (phoenixCell(e)) return this.g.backend.buyPhoenix(e.shiftKey ? STONE_STACK : 1);
       if (scrollCell(e)) return this.buyReturnScroll(e.shiftKey ? STONE_STACK : 1);
       const c = buyCell(e);
       if (c) this.buyPotion(c[0], c[1], e.shiftKey ? POTION_STACK : 1);
     });
     buyGrid.addEventListener('contextmenu', (e) => {
       e.preventDefault();
+      if (phoenixCell(e)) return this.g.backend.buyPhoenix(STONE_STACK);
       if (scrollCell(e)) return this.buyReturnScroll(STONE_STACK);
       const c = buyCell(e);
       if (c) this.buyPotion(c[0], c[1], POTION_STACK);
     });
     buyGrid.addEventListener('mousemove', (e) => {
+      if (phoenixCell(e)) return this.showStoneTip({ stone: 'phoenix', count: 1 }, e, `คลิก: ซื้อ 1 · คลิกขวา: ซื้อ ${STONE_STACK} (อันละ ${PHOENIX_PRICE.toLocaleString()} G)`);
       if (scrollCell(e)) return this.showShopScrollTip(e);
       const c = buyCell(e);
       if (c) this.showShopPotionTip(c[0], c[1], e);
@@ -1166,7 +1171,8 @@ export class Hud {
   }
 
   talkTo(id: NpcId): void {
-    if (id === 'seeker') this.openDialog();
+    // His key quests; his story is a button in that window.
+    if (id === 'seeker') this.g.quests.toggle(true);
     else if (id === 'merchant') this.openShop();
     else if (id === 'keeper') {
       // The server refuses guests' stash actions too; this just says why up front.
@@ -1254,6 +1260,7 @@ export class Hud {
       const [kind, size] = el.dataset.buy!.split(':') as [PotionKind, PotionSize];
       el.classList.toggle('poor', p.gold < POTIONS[kind][size].price || p.potionRoom(kind, size) < 1);
     });
+    $('shop-buy').querySelector('[data-phoenix]')?.classList.toggle('poor', p.gold < PHOENIX_PRICE || p.stoneRoom('phoenix') < 1);
     $('shop-buy').querySelector('[data-buy-scroll]')?.classList.toggle('poor', p.gold < RETURN_SCROLL_PRICE || p.stoneRoom('return_scroll') < 1);
   }
 
@@ -1924,13 +1931,14 @@ export class Hud {
     const tip = $('tooltip');
     tip.innerHTML =
       `<div class="tt-name" style="color:${STONE_COLOR[s.stone]}">${STONE_NAME[s.stone]}</div>` +
-      (isConsumable(s.stone)
-        ? `<div class="tt-sub">ของใช้ · ${s.count} / ${STONE_STACK} ${stoneUnit(s.stone)} · ซื้อได้ที่พ่อค้า</div>`
-        : isBossKey(s.stone)
-        ? `<div class="tt-sub">Artifact · ${s.count} / ${STONE_STACK} อัน · ดรอปจากมอนสเตอร์ในแมพของบอส</div>`
-        : `<div class="tt-sub">วัตถุดิบตีบวก · ${s.count} / ${STONE_STACK} ก้อน · ดรอปจากบอสเท่านั้น</div>`) +
+      `<div class="tt-sub">${
+        isConsumable(s.stone) ? `ของใช้ · ${s.count} / ${STONE_STACK} ${stoneUnit(s.stone)} · ซื้อได้ที่พ่อค้า`
+        : isBossKey(s.stone) ? `Artifact · ${s.count} / ${STONE_STACK} อัน · ดรอปจากมอนสเตอร์ในแมพของบอส`
+        : isBound(s) ? 'กุญแจเควส · ผูกกับตัวละคร'
+        : s.stone === 'phoenix' ? `ไอเทมชุบชีวิต · ${s.count} / ${STONE_STACK} อัน · ซื้อจากพ่อค้า`
+        : `วัตถุดิบตีบวก · ${s.count} / ${STONE_STACK} ก้อน · ดรอปจากบอสเท่านั้น`}</div>` +
       `<div class="tt-stats"><div>${STONE_DESC[s.stone]}</div></div>` +
-      `<div class="tt-hint">${hint}</div><div class="tt-val">ขายให้พ่อค้าได้${stoneUnit(s.stone)}ละ ${stoneSellPrice(s.stone).toLocaleString()} G</div>`;
+      `<div class="tt-hint">${hint}</div><div class="tt-val">${isBound(s) ? 'ขาย ทิ้ง ฝากคลัง หรือเทรดไม่ได้' : `ขายให้พ่อค้าได้${stoneUnit(s.stone)}ละ ${stoneSellPrice(s.stone).toLocaleString()} G`}</div>`;
     this.placeTip(tip, e);
   }
 
@@ -2139,7 +2147,7 @@ export class Hud {
     $('dialog').classList.add('hidden');
     if (!this.g.metSeeker) {
       this.g.metSeeker = true;
-      const boss = MONSTERS[ZONE_1.boss!.monster];
+      const boss = MONSTERS[ZONE_1.lair!.boss];
       this.log(`ภารกิจ: ฝึกฝนในป่ามรกต แล้วปราบ ${boss.name}`, '#ffd34a');
     }
   }

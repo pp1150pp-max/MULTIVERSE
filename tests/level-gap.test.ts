@@ -1,7 +1,7 @@
 // EXP and hits against monsters far above the player, and the tougher, always-hostile monsters of maps 3 and 4.
 import { ok, finish } from './check';
 import { expGapMult } from '../src/shared/formulas';
-import { HUB_ID, ZONES } from '../src/shared/data/zones';
+import { BOSS_ROOMS, HUB_ID, ZONES } from '../src/shared/data/zones';
 import { MONSTERS } from '../src/shared/data/monsters';
 import { Sim } from '../src/shared/sim/Sim';
 
@@ -67,7 +67,7 @@ for (const [id, stats, tough, mob] of [['frost_reach', 4.5, 0.7, 0.75], ['ashen_
 
 // ---- the yeti's minions keep the full x4.5 HP and are 30% faster
 {
-  const sim = new Sim(ZONES.frost_reach);
+  const sim = new Sim(BOSS_ROOMS.frost_reach);
   const yeti = sim.monsters.find((m) => m.def.id === 'yeti')!;
   ok(yeti.maxHp === Math.round(MONSTERS.yeti.hp * 4.5 * 0.7), `yeti: HP x3.15 (${yeti.maxHp})`);
   ok(MONSTERS.yeti_minion.ignoreTough === true && MONSTERS.yeti_minion.speedMult === 1.3, 'yeti minions: full HP and defense, 30% faster');
@@ -75,7 +75,7 @@ for (const [id, stats, tough, mob] of [['frost_reach', 4.5, 0.7, 0.75], ['ashen_
 
 // ---- boss drops: 6 pieces of gear plus guaranteed epics
 for (const [zoneId, epics] of [['frost_reach', 1], ['ashen_isle', 2]] as const) {
-  const sim = new Sim(ZONES[zoneId]);
+  const sim = new Sim(BOSS_ROOMS[zoneId]);
   const boss = sim.monsters.find((m) => m.isBoss)!;
   const p = sim.addPlayer(hero(50));
   p.x = boss.x + 3;

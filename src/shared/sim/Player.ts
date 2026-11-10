@@ -10,7 +10,7 @@ import { gatesPassedBy } from '../data/bossGates';
 import { auraTier, effectiveStats, orbCodes, plusOf, sellValue } from '../data/enhance';
 import { itemClass, starterWeapon, upgradeItem } from '../data/items';
 import { anyStackValue, potionHeal, POTIONS, POTION_SIZES, POTION_STACK, stackLimit } from '../data/potions';
-import { STONE_STACK } from '../data/stones';
+import { BOSS_QUEST_KEY, QUEST_KILLS, STONE_STACK } from '../data/stones';
 import {
   isPotion, isStack, isStone, RARITIES, sameStack, SLOTS, STONE_KINDS, wornPlaces,
   type BagEntry, type EquipSlot, type StoneKind, type ClassId, type Item, type PotionKind, type PotionSize, type Rarity, type SlotId, type Stats, type Vec2,
@@ -171,6 +171,16 @@ export function sortEntries(list: readonly (BagEntry | null)[], key: SortKey, de
   return Array.from({ length: list.length }, (_, i) => all[i] ?? null);
 }
 
+/** Quests read from a save: known bosses only, counts 0..QUEST_KILLS. */
+export function cleanQuests(raw: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [boss, n] of Object.entries(raw as Record<string, unknown>)) {
+    if (BOSS_QUEST_KEY[boss] && typeof n === 'number' && Number.isFinite(n)) out[boss] = Math.max(0, Math.min(QUEST_KILLS, Math.floor(n)));
+  }
+  return out;
+}
+
 /** Everything about a character that gets saved (browser storage now, the server database later). */
 export interface CharacterData {
   name: string;
@@ -197,6 +207,8 @@ export interface CharacterData {
    * level counts as passed.
    */
   bossKills?: string[];
+  /** The Seeker's key quests taken: boss id → monsters killed so far (see QUEST_KILLS). Missing = none. */
+  quests?: Record<string, number>;
 }
 
 /**
@@ -274,6 +286,8 @@ export class Player extends Unit {
   moveTarget: Vec2 | null = null;
   /** Gate bosses killed (see BOSS_GATES). Saved. */
   bossKills: string[];
+  /** The Seeker's key quests taken: boss id → monsters killed so far. Saved. */
+  quests: Record<string, number>;
   /** True while Auto Play runs for this player (set by the server each tick); Sim halves their EXP. Never saved. */
   autoOn = false;
   /** Told once per stuck level that a boss gate is holding the EXP bar. Never saved. */
@@ -318,6 +332,7 @@ export class Player extends Unit {
     this.equipment = { ...data.equipment };
     this.bag = Array.from({ length: BAG_SIZE }, (_, i) => data.bag[i] ?? null);
     this.zone = data.zone;
+    this.quests = cleanQuests(data.quests);
     this.bossKills = [...new Set([...gatesPassedBy(data.level), ...(Array.isArray(data.bossKills) ? data.bossKills.filter((x) => typeof x === 'string') : [])])];
     this.potSel = { hp: 's', mp: 's', ...data.potSel };
     this.lootFilter = data.lootFilter
@@ -417,6 +432,7 @@ export class Player extends Unit {
       buyback: this.buyback,
       buybackLeft: Math.round(this.buybackLeft),
       bossKills: this.bossKills,
+      quests: { ...this.quests },
     };
   }
 

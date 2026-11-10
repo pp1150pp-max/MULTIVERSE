@@ -2,18 +2,18 @@
 // the hub), stacking to 10 like stones, sold for 1,000 G, listed under their own market kind.
 import { ok, finish } from './check';
 import { BOSS_KEY, KEY_DROP_CHANCE, STONE_DESC, STONE_NAME, STONE_STACK, stoneStackValue } from '../src/shared/data/stones';
-import { ZONE_1, ZONE_2, ZONE_3, ZONE_4, ZONE_HUB, type ZoneDef } from '../src/shared/data/zones';
+import { BOSS_ROOMS, ZONE_1, ZONE_2, ZONE_3, ZONE_4, ZONE_HUB, type ZoneDef } from '../src/shared/data/zones';
 import { Sim } from '../src/shared/sim/Sim';
 import { marketKind } from '../src/shared/sim/market';
 import { cleanStash } from '../src/shared/sim/stash';
 import { newCharacterData } from '../src/shared/sim/Player';
-import { BLACKSMITH_STONES, BOSS_KEYS, CONSUMABLES, isBossKey, STONE_KINDS, type BossKey } from '../src/shared/types';
+import { BLACKSMITH_STONES, BOSS_KEYS, CONSUMABLES, isBossKey, QUEST_KEYS, STONE_KINDS, type BossKey } from '../src/shared/types';
 
 const zones = [ZONE_1, ZONE_2, ZONE_3, ZONE_4];
 
-ok(new Set(zones.map((z) => BOSS_KEY[z.boss!.monster])).size === 4, 'every boss has its own key');
+ok(new Set(zones.map((z) => BOSS_KEY[z.lair!.boss])).size === 4, 'every boss has its own key');
 for (const k of BOSS_KEYS) ok(!!STONE_NAME[k] && !!STONE_DESC[k] && isBossKey(k), `${k} has a name and a description`);
-ok(BLACKSMITH_STONES.every((k) => !isBossKey(k)) && STONE_KINDS.length === BLACKSMITH_STONES.length + BOSS_KEYS.length + CONSUMABLES.length, 'keys are not blacksmith stones');
+ok(BLACKSMITH_STONES.every((k) => !isBossKey(k)) && STONE_KINDS.length === BLACKSMITH_STONES.length + BOSS_KEYS.length + QUEST_KEYS.length + 1 + CONSUMABLES.length, 'keys are not blacksmith stones (plus the phoenix feather and consumables)');
 ok(KEY_DROP_CHANCE === 0.01, 'keys drop at 1%');
 ok(stoneStackValue({ stone: 'key_bear', count: 3 }) === 3000, 'a key sells for 1,000 G');
 ok(marketKind({ stone: 'key_yeti', count: 1 }) === 'artifact' && marketKind({ stone: 'enhance', count: 1 }) === 'stone', 'keys list as Artifacts');
@@ -53,8 +53,9 @@ function keysFrom(zone: ZoneDef, rounds: number): { kinds: Map<BossKey, number>;
 }
 
 for (const zone of zones) {
-  const own = BOSS_KEY[zone.boss!.monster];
-  const { kinds, kills, bossKeys } = keysFrom(zone, 200);
+  const own = BOSS_KEY[zone.lair!.boss];
+  const { kinds, kills } = keysFrom(zone, 200);
+  const { bossKeys } = keysFrom(BOSS_ROOMS[zone.id], 50);
   const n = kinds.get(own) ?? 0;
   const rate = n / kills;
   ok(kinds.size === 1 && n > 0, `${zone.id}: its monsters drop only ${STONE_NAME[own]}`);

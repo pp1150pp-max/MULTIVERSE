@@ -27,6 +27,9 @@ function launch(backend: OnlineBackend): void {
   backend.onPartyInviteGone = (party) => game.party.removeInvite(party);
   backend.onTradeRequest = (from, name, seconds) => game.trade.requested(from, name, seconds);
   backend.onTradeRequestGone = (from) => game.trade.removeRequest(from);
+  backend.onRoomInvite = (id, from, boss, keys, seconds) => game.rooms.invited(id, from, boss, keys, seconds);
+  backend.onRoomInviteGone = (id) => game.rooms.removeInvite(id);
+  backend.onRoomLobby = (view) => game.rooms.lobby(view);
   backend.onTrade = (view) => game.trade.show(view);
   backend.onTradeEnd = (ok) => game.trade.ended(ok);
   backend.onDisconnect = (msg) => game.hud.showDisconnect(msg);

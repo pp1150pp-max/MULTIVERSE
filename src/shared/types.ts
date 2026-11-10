@@ -119,15 +119,27 @@ export const BLACKSMITH_STONES: BlacksmithStone[] = ['protect', 'enhance', 'rero
 export type BossKey = 'key_bear' | 'key_witch' | 'key_yeti' | 'key_heart';
 export const BOSS_KEYS: BossKey[] = ['key_bear', 'key_witch', 'key_yeti', 'key_heart'];
 /**
+ * Quest keys from The Seeker: one per boss, bound to the character. They open the boss's room at ×1
+ * without being used up, and vanish once that boss is killed. They can't leave the bag (no selling,
+ * dropping, stash, trade or market), only move around in it. See isBound.
+ */
+export type QuestKey = 'qkey_bear' | 'qkey_witch' | 'qkey_yeti' | 'qkey_heart';
+export const QUEST_KEYS: QuestKey[] = ['qkey_bear', 'qkey_witch', 'qkey_yeti', 'qkey_heart'];
+/** Phoenix feathers: sold by the merchant, used to get up again where you fell in a boss room. Not on the market. */
+export type ShopStone = 'phoenix';
+/**
  * Consumables bought from the merchant (owner 2026-11-10: the return scroll). They share the stone stack too,
  * so they stack, sell, trade, go in the stash and on the market (under their own "ของใช้" tab).
  */
 export type Consumable = 'return_scroll';
 export const CONSUMABLES: Consumable[] = ['return_scroll'];
-/** Everything a stone stack can hold: blacksmith stones, boss keys and consumables. */
-export type StoneKind = BlacksmithStone | BossKey | Consumable;
-export const STONE_KINDS: StoneKind[] = [...BLACKSMITH_STONES, ...BOSS_KEYS, ...CONSUMABLES];
+/** Everything a stone stack can hold: blacksmith stones, boss keys, quest keys, phoenix feathers and consumables. */
+export type StoneKind = BlacksmithStone | BossKey | QuestKey | ShopStone | Consumable;
+export const STONE_KINDS: StoneKind[] = [...BLACKSMITH_STONES, ...BOSS_KEYS, ...QUEST_KEYS, 'phoenix', ...CONSUMABLES];
 export const isBossKey = (k: StoneKind): k is BossKey => (BOSS_KEYS as StoneKind[]).includes(k);
+export const isQuestKey = (k: StoneKind): k is QuestKey => (QUEST_KEYS as StoneKind[]).includes(k);
+/** A quest key: stays in its owner's bag. */
+export const isBound = (e: BagEntry | null | undefined): boolean => isStone(e) && isQuestKey(e.stone);
 export const isConsumable = (k: StoneKind): k is Consumable => (CONSUMABLES as StoneKind[]).includes(k);
 
 /** Stones of one kind sharing a bag slot (up to STONE_STACK). */

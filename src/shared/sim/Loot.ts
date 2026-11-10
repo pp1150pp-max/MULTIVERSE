@@ -32,6 +32,8 @@ export class Loot {
   /** The owner's party when it dropped: its members on this map share the priority (null = none). */
   ownerParty: number | null;
   ownerUntil: number;
+  /** Stays on the ground until the boss room closes (boss drops there). */
+  readonly forever: boolean;
 
   constructor(
     readonly id: number,
@@ -40,8 +42,9 @@ export class Loot {
     readonly fromX: number,
     readonly fromZ: number,
     readonly kind: LootKind,
-    opts: { dropped?: boolean; owner?: number; ownerParty?: number | null; ownerUntil?: number } = {},
+    opts: { dropped?: boolean; owner?: number; ownerParty?: number | null; ownerUntil?: number; forever?: boolean } = {},
   ) {
+    this.forever = !!opts.forever;
     this.dropped = !!opts.dropped;
     this.armed = !this.dropped;
     this.owner = opts.owner ?? null;
@@ -51,7 +54,7 @@ export class Loot {
 
   /** Seconds it stays on the ground before vanishing. */
   get life(): number {
-    return this.dropped ? DROPPED_LIFE : DROP_LIFE;
+    return this.forever ? Infinity : this.dropped ? DROPPED_LIFE : DROP_LIFE;
   }
 
   /** Whether this player may pick it up right now: the owner, anyone in the owner's party, or anyone once priority ends. */

@@ -202,6 +202,14 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   ruin_house: ruin('ruin_house', 'tent'),
   ruin_tower: ruin('ruin_tower', 'watchtower'),
   ruin_statue: ruin('ruin_statue', 'runestone'),
+  // Boss summoners: the statue stands in until their own pictures exist (art_templates/boss_rooms).
+  summoner_forest: ruin('summoner_forest', 'ruin_statue'),
+  summoner_marsh: ruin('summoner_marsh', 'ruin_statue'),
+  summoner_snow: ruin('summoner_snow', 'ruin_statue'),
+  summoner_volcano: ruin('summoner_volcano', 'ruin_statue'),
+  // Boss rooms' ruins, one kit per theme (tools/cut_boss_rooms.cjs).
+  ...Object.fromEntries((['forest', 'marsh', 'snow', 'volcano'] as const).flatMap((t) =>
+    ['pillar_0', 'wall', 'brazier', 'boulder', 'pillar_1', 'rubble', 'rune_stone', 'tree'].map((n) => [`room_${t}_${n}`, ruin(`room_${t}_${n}`, 'ruin_pillar')]))),
   ruin_rubble: ruin('ruin_rubble', 'rock_2'),
   town_stall: ruin('town_stall', 'cart'),
   town_forge: ruin('town_forge', 'cart'),
@@ -284,7 +292,8 @@ async function loadAnimSet(key: string, dir: string): Promise<void> {
 }
 
 /** Repeating ground textures. A zone falls back to its code-painted ground if one is missing. */
-export type GroundTile = 'grass' | 'dirt' | 'water' | 'marsh' | 'mud' | 'pave' | 'brick' | 'snow' | 'snow_path' | 'ice' | 'ash_rock' | 'ash_path' | 'lava';
+export type GroundTile = 'grass' | 'dirt' | 'water' | 'marsh' | 'mud' | 'pave' | 'brick' | 'snow' | 'snow_path' | 'ice' | 'ash_rock' | 'ash_path' | 'lava'
+  | 'room_forest' | 'room_marsh' | 'room_snow' | 'room_volcano';
 export const groundTiles: Partial<Record<GroundTile, THREE.Texture>> = {};
 
 async function loadGroundTile(name: GroundTile): Promise<void> {
@@ -478,7 +487,8 @@ async function loadAssets(): Promise<void> {
   await Promise.all([
     ...(['sword', 'mage', 'gun', 'gun_ult'] as const).map((n) => loadFxSheet(n)),
     loadDecals(),
-    ...(['grass', 'dirt', 'water', 'marsh', 'mud', 'pave', 'brick', 'snow', 'snow_path', 'ice', 'ash_rock', 'ash_path', 'lava'] as const).map((n) => loadGroundTile(n)),
+    ...(['grass', 'dirt', 'water', 'marsh', 'mud', 'pave', 'brick', 'snow', 'snow_path', 'ice', 'ash_rock', 'ash_path', 'lava',
+      'room_forest', 'room_marsh', 'room_snow', 'room_volcano'] as const).map((n) => loadGroundTile(n)),
     ...Object.entries(ANIM_SET_DIRS).map(([key, dir]) => loadAnimSet(key, BASE + dir)),
     ...Object.entries(SHEET_SPECS).map(async ([key, spec]) => {
       let tex: THREE.Texture;

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { clearingRadius, themeAt, ZONES } from '../shared/data/zones';
+import { clearingRadius, lairOf, themeAt, zoneById } from '../shared/data/zones';
 import { QUADRANT_JITTER } from '../shared/sim/terrain';
 import type { PropSpec, Terrain } from '../shared/sim/terrain';
 import type { ZoneTheme } from '../shared/data/zones';
@@ -480,6 +480,8 @@ export class World {
     tiles[1] = groundTiles[firstQuad.dirt];
     // The hub's town is bricked; stone paving until the brick tile exists.
     if (terrain.zone.npcs) tiles[3] = groundTiles.brick ?? groundTiles.pave;
+    // A boss room's arena is laid with its own flagstones.
+    if (terrain.zone.roomOf) tiles[3] = groundTiles[`room_${terrain.zone.theme}`] ?? tiles[3];
     if (tiles.every(Boolean) && quads.flat().every(Boolean)) {
       const mask = new THREE.CanvasTexture(this.paintMask());
       mask.colorSpace = THREE.NoColorSpace;
@@ -540,7 +542,7 @@ export class World {
     if (fire) this.flames.push(this.glow(fire.x, 0.5, fire.z, '#ffa040', 0.55));
     // Each portal glows like the land it leads to; the way back to town glows gold.
     for (const p of terrain.zone.portals) {
-      const to = ZONES[p.to];
+      const to = zoneById(p.to);
       this.portals.push(this.glow(p.x, 1.5, p.z, to?.npcs ? '#ffd98a' : PALETTES[to?.theme ?? terrain.zone.theme].portalGlow, 0.5));
     }
     // The fountain glows like a portal, so it reads as something to use (campfires have their flame).
@@ -974,7 +976,8 @@ export class World {
   private addDecor(r: Rng): void {
     if ((this.zone.quadrants ?? [this.zone.theme]).some((q) => assetSources[DECOR[q].key] !== 'file')) return;
     const B = this.bound;
-    const { start, boss, portals, spawns, safe } = this.zone;
+    const { start, portals, spawns, safe } = this.zone;
+    const boss = lairOf(this.zone);
     // In the hub: nothing inside the walled town (a square; this circle reaches its corners).
     const campRadius = safe ? safe.half * 1.45 : CAMP_RADIUS;
     const groups = new QuadGroups();
@@ -1071,7 +1074,8 @@ export class World {
   private addPlanks(r: Rng): void {
     const { key, cols, width, length } = PLANK_SHEET;
     if (assetSources[key] !== 'file') return;
-    const { start, boss } = this.zone;
+    const { start } = this.zone;
+    const boss = lairOf(this.zone);
     const positions: number[] = [];
     const uvs: number[] = [];
     for (const [ax, az, bx, bz] of this.segs) {
@@ -1153,7 +1157,8 @@ export class World {
   /** Thin glowing cracks across the rock. Only decoration: walking on them is safe, unlike the pools. */
   private addEmberCracks(r: Rng): void {
     const B = this.bound - 4;
-    const { start, boss } = this.zone;
+    const { start } = this.zone;
+    const boss = lairOf(this.zone);
     const pos: number[] = [];
     for (let made = 0, tries = 0; made < 26 && tries < 400; tries++) {
       let x = rand(r, -B, B);
@@ -1332,7 +1337,7 @@ export class World {
     // Bare ground around the camp and the boss: a rough outer rim, then packed dirt with stones.
     const clearings: [number, number, number][] = [
       [this.zone.start.x, this.zone.start.z, this.campRadius],
-      ...(this.zone.boss ? [[this.zone.boss.x, this.zone.boss.z, clearingRadius(this.zone) - 1] as [number, number, number]] : []),
+      ...(lairOf(this.zone) ? [[lairOf(this.zone)!.x, lairOf(this.zone)!.z, clearingRadius(this.zone) - 1] as [number, number, number]] : []),
     ];
     const clearing = (scale: number) => (m: CanvasRenderingContext2D) => {
       m.beginPath();
@@ -1565,7 +1570,8 @@ export class World {
       ctx.arc(px, py, rad * k, 0, Math.PI * 2);
       ctx.fill();
     };
-    const { start, boss } = this.zone;
+    const { start } = this.zone;
+    const boss = lairOf(this.zone);
 
     // A square (on the map, a diamond) of ground, for the hub's walled town.
     const square = (x: number, z: number, half: number) => {
@@ -1596,6 +1602,7 @@ export class World {
     // The hub's town is bricked right out to its wall.
     // Up to the foot of the town wall.
     if (safe) square(safe.x, safe.z, safe.half - 0.2);
+    else if (this.zone.roomOf && boss) circle(boss.x, boss.z, clearingRadius(this.zone));
     else circle(start.x, start.z, CAMP_RADIUS * 0.72);
 
     const tex = new THREE.CanvasTexture(c);
@@ -1679,7 +1686,7 @@ export class World {
       const z = rand(r, -B, B);
       const rad = rand(r, 1.4, 4.2);
       if (this.distToPath(x, z) < rad + 2.2) continue;
-      if (!away(x, z, zone.start, 12 + rad) || (zone.boss && !away(x, z, zone.boss, clearingRadius(zone) + rad))) continue;
+      if (!away(x, z, zone.start, 12 + rad) || (lairOf(zone) && !away(x, z, lairOf(zone)!, clearingRadius(zone) + rad))) continue;
       made++;
       allBlobs.push(Array.from({ length: 3 + ((r() * 3) | 0) }, () => ({
         x: x + rand(r, -rad * 0.6, rad * 0.6),
