@@ -21,6 +21,7 @@ import { INPUT_HZ, PING_MS, WS_CLOSE_QUIT, WS_PATH, type ClientMsg, type ServerM
 import type { PartyFound, PartySnap } from '../../shared/party';
 import type { TradeView } from '../../shared/trade';
 import type { FriendsView } from '../../shared/friends';
+import type { ChannelsView } from '../../shared/channels';
 import type { Backend, EnhanceOutcome, ProjectileLike } from '../backend';
 import type { RerollKind } from '../../shared/data/reroll';
 import type { Hazard } from '../../shared/sim/volcanoHeart';
@@ -74,6 +75,7 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
     const ws = new WebSocket(wsUrl());
     let you = -1;
     let zone = '';
+    let ch = 1;
     let guest = false;
     let settled = false;
     const fail = (msg: string) => {
@@ -91,13 +93,14 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
       if (m.t === 'welcome') {
         you = m.you;
         zone = m.zone;
+        ch = m.ch ?? 1;
         guest = m.guest === true;
         useOrbLook(m.orbLook);
       }
       if (m.t === 'snap' && you >= 0 && !settled) {
         settled = true;
         clearTimeout(timer);
-        resolve(new OnlineBackend(ws, you, zone, m, guest));
+        resolve(new OnlineBackend(ws, you, zone, m, guest, ch));
       }
     };
     ws.onerror = () => fail('เชื่อมต่อ server ไม่ได้');
@@ -109,6 +112,10 @@ export class OnlineBackend implements Backend {
   readonly online = true;
   readonly guest: boolean;
   zone: ZoneDef;
+  channel: number;
+  zoneSeq = 0;
+  /** The channel window's list came (answer to chList). */
+  onChannels: ((view: ChannelsView) => void) | null = null;
   terrain: Terrain;
   me: Player;
   players: Player[] = [];
@@ -225,8 +232,9 @@ export class OnlineBackend implements Backend {
     if (document.hidden) this.wasHidden = true;
   };
 
-  constructor(private readonly ws: WebSocket, private myId: number, zoneId: string, first: SnapshotMsg, guest: boolean) {
+  constructor(private readonly ws: WebSocket, private myId: number, zoneId: string, first: SnapshotMsg, guest: boolean, ch = 1) {
     this.guest = guest;
+    this.channel = ch;
     this.zone = zoneById(zoneId);
     this.terrain = new Terrain(this.zone);
     const mine = first.players.find((p) => p.id === myId)!;
@@ -340,6 +348,9 @@ export class OnlineBackend implements Backend {
         this.friends = m.view;
         this.onFriends?.(m.view);
         break;
+      case 'channels':
+        this.onChannels?.(m.view);
+        break;
       case 'partyInvite':
         this.onPartyInvite?.(m.party, m.from, m.seconds);
         break;
@@ -435,15 +446,17 @@ export class OnlineBackend implements Backend {
         break;
       }
       case 'zone':
-        this.changeZone(m.zone, m.you, m.x, m.z);
+        this.changeZone(m.zone, m.ch ?? 1, m.you, m.x, m.z);
         break;
     }
   }
 
   /** The server moved us through a portal. Everything we mirrored belongs to the old zone. */
-  private changeZone(zoneId: string, you: number, x: number, z: number): void {
+  private changeZone(zoneId: string, ch: number, you: number, x: number, z: number): void {
     const old = this.me;
     this.zone = zoneById(zoneId);
+    this.channel = ch;
+    this.zoneSeq++;
     this.terrain = new Terrain(this.zone);
     this.playerMap.clear();
     this.monsterMap.clear();
@@ -915,6 +928,9 @@ export class OnlineBackend implements Backend {
   friendBlock(name: string): void { this.send({ t: 'act', a: 'friendBlock', name }); }
   friendUnblock(acc: number): void { this.send({ t: 'act', a: 'friendUnblock', acc }); }
   friendList(): void { this.send({ t: 'act', a: 'friendList' }); }
+  chList(): void { this.send({ t: 'act', a: 'chList' }); }
+  chSwitch(ch: number): void { this.send({ t: 'act', a: 'chSwitch', ch }); }
+  chJoin(name: string): void { this.send({ t: 'act', a: 'chJoin', name }); }
   partySearch(q: string): Promise<PartyFound[]> {
     const req = ++this.partyReq;
     this.send({ t: 'act', a: 'partySearch', q, req });

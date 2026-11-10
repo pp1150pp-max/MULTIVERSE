@@ -25,6 +25,8 @@ export interface PartyMember {
   maxHp: number;
   maxMp: number;
   zone: string;
+  /** Channel of that zone (1 when it has none). */
+  ch?: number;
   online: boolean;
   /** While offline: when (ms) they drop out of the party for good. */
   offlineUntil: number;
@@ -214,7 +216,7 @@ export class Parties {
   }
 
   /** The connection dropped: the member stays, shown offline, for OFFLINE_GRACE seconds. */
-  offline(charId: number, last: { level: number; maxHp: number; maxMp: number; zone: string }): void {
+  offline(charId: number, last: { level: number; maxHp: number; maxMp: number; zone: string; ch?: number }): void {
     for (const i of this.invites.filter((x) => x.to === charId)) this.ev.inviteGone(i.to, i.partyId);
     this.invites = this.invites.filter((x) => x.to !== charId);
     const m = this.member(charId);

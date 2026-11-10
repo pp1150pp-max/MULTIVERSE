@@ -27,6 +27,7 @@ import { findPath } from './pathfind';
 import { PartyUI } from './party';
 import { TradeUI } from './trade';
 import { FriendsUI } from './friends';
+import { ChannelUI } from './channels';
 import { RoomUI } from './bossRoom';
 import { QuestUI } from './quests';
 import { QuestTracker } from './questTracker';
@@ -63,6 +64,8 @@ export class Game {
   readonly camera: THREE.OrthographicCamera;
   /** The zone currently drawn. Rebuilt when the backend moves us through a portal. */
   zone: ZoneDef;
+  /** The backend's zoneSeq when this zone (or channel) was drawn. */
+  private zoneSeq = 0;
   world: World;
   readonly input: Input;
   readonly fx: Effects;
@@ -72,6 +75,7 @@ export class Game {
   readonly party: PartyUI;
   readonly trade: TradeUI;
   readonly friends: FriendsUI;
+  readonly channels: ChannelUI;
   readonly rooms: RoomUI;
   readonly quests: QuestUI;
   readonly questTracker: QuestTracker;
@@ -119,6 +123,7 @@ export class Game {
 
   constructor(container: HTMLElement, readonly backend: Backend) {
     this.zone = backend.zone;
+    this.zoneSeq = backend.zoneSeq;
     preloadLoadingArt();
     this.renderer = new THREE.WebGLRenderer({ antialias: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -152,6 +157,7 @@ export class Game {
     this.party = new PartyUI(this);
     this.trade = new TradeUI(this);
     this.friends = new FriendsUI(this);
+    this.channels = new ChannelUI(this);
     this.rooms = new RoomUI(this);
     this.quests = new QuestUI(this, () => this.hud.openDialog());
     this.questTracker = new QuestTracker(this);
@@ -334,6 +340,7 @@ export class Game {
     this.goal = null;
     this.world.dispose();
     this.zone = this.backend.zone;
+    this.zoneSeq = this.backend.zoneSeq;
     this.world = new World(this.scene, this.backend.terrain);
     this.world.bakeMap(this.renderer);
     this.placeNpcs();
@@ -608,7 +615,7 @@ export class Game {
     }
     this.sysMenu.update(dt, intent.basic || intent.skills.length > 0, !!(intent.move || intent.moveTo || intent.dash));
     const events = this.backend.frame(dt, intent);
-    if (this.backend.zone !== this.zone) this.changeZone();
+    if (this.backend.zoneSeq !== this.zoneSeq) this.changeZone();
     this.sound.update(dt, this.backend);
 
     this.syncViews();
@@ -676,6 +683,7 @@ export class Game {
     this.party.update();
     this.trade.update();
     this.friends.update();
+    this.channels.update();
     this.rooms.update();
     this.quests.update();
     this.questTracker.update();
