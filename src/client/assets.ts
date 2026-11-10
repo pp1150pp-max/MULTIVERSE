@@ -3,6 +3,7 @@ import {
   makeSheet, drawHuman, drawSlime, drawQuad, drawSeeker, drawMerchant, drawBlacksmith, drawKeeper, drawBroker, drawTree, drawBush, drawRock, drawStump,
   drawSnowPine, drawSnowRock, drawIceCrystal, drawIceShard, drawEmberBolt, drawBurntPillar, drawBasalt, drawMagmaCrystal, drawSnowball,
   drawTent, drawCampfire, drawSign, drawFence, drawRunestone, drawIcon, pixelCircle,
+  drawWitchVial, drawWitchPool, drawWitchHand, drawWitchToad, drawWitchSigil, drawWitchCircle,
 } from './placeholder';
 import { ITEM_ART } from '../shared/data/items';
 import { STONE_KINDS } from '../shared/types';
@@ -130,6 +131,13 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
 
   fx_ice_shard: single('fx/ice_shard.png', drawIceShard),
   fx_snowball: single('fx/snowball.png', drawSnowball),
+  // The Bog Witch's spells (cut from art_templates/boss_witch/raw/witch_fx.png).
+  fx_witch_vial: single('fx/witch_vial.png', drawWitchVial),
+  fx_witch_pool: single('fx/witch_pool.png', drawWitchPool),
+  fx_witch_hand: single('fx/witch_hand.png', drawWitchHand),
+  fx_witch_toad: single('fx/witch_toad.png', drawWitchToad),
+  fx_witch_sigil: single('fx/witch_sigil.png', drawWitchSigil),
+  fx_witch_circle: single('fx/witch_circle.png', drawWitchCircle),
 
   snow_pine_0: single('props/snow_pine_0.png', () => drawSnowPine(0)),
   snow_pine_1: single('props/snow_pine_1.png', () => drawSnowPine(1)),

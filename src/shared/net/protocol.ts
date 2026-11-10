@@ -181,6 +181,8 @@ export interface PlayerSnap {
   aura?: number;
   /** Enhancement orbs, one per worn item at +7 or higher: `slot index * 16 + plus` (see orbCodes). Missing = none. */
   orbs?: number[];
+  /** Cursed into a toad by the Bog Witch (missing = not). */
+  toad?: 1;
 }
 
 export interface MonsterSnap {

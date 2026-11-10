@@ -6,8 +6,9 @@ import { arenaRadius, clearingRadius } from '../data/zones';
 import type { Monster } from './Monster';
 import type { Player } from './Player';
 import type { Sim } from './Sim';
+import type { WitchHazard } from './bogWitch';
 
-interface HazardBase {
+export interface HazardBase {
   id: number;
   /** Where it is centred. */
   x: number;
@@ -23,7 +24,8 @@ export interface RingHazard extends HazardBase { k: 'ring'; speed: number; width
 export interface BeamsHazard extends HazardBase { k: 'beams'; a0: number; spin: number; n: number; len: number; width: number; end: number }
 /** Burns the whole clearing except a few small circles. */
 export interface BlastHazard extends HazardBase { k: 'blast'; r: number; safe: { x: number; z: number }[]; safeR: number }
-export type Hazard = MeteorHazard | RingHazard | BeamsHazard | BlastHazard;
+/** Every boss ground attack: the Volcano Heart's and the Bog Witch's (see bogWitch.ts). */
+export type Hazard = MeteorHazard | RingHazard | BeamsHazard | BlastHazard | WitchHazard;
 
 /** Attack sizes and damage (times the boss's ATK). */
 export const METEOR = { radius: 2, count: 5, every: 0.6, mult: 1.4 };
@@ -253,6 +255,7 @@ export class VolcanoHeartBrain {
         case 'ring': return this.rollRing(sim, m, a, a.h, t);
         case 'beams': return this.turnBeams(sim, m, a, a.h, t);
         case 'blast': return this.landBlast(sim, m, a.h);
+        default: return false;
       }
     });
     if (this.active.length !== before) sim.hazards = this.active.map((a) => a.h);
