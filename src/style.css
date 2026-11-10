@@ -1125,6 +1125,11 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #room-win .room-pick button { width: 30px; }
 #room-win .room-num { min-width: 36px; text-align: center; font-size: 16px; color: #ffd34a; }
 .room-note { font-size: 11px; color: var(--ink-dim); }
+/* Reminder before going in: phoenix feathers and potions carried (none = red). */
+.room-pack { font-size: 11px; color: #ffd8a0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 4px 0; }
+.room-pack span { display: inline-flex; align-items: center; gap: 3px; }
+.room-pack .gi { width: 18px; height: 18px; }
+.room-pack .room-pack-none { color: #ff6a5a; }
 #room-lobby { right: 16px; top: 170px; width: min(260px, 90vw); font-size: 13px; pointer-events: auto; }
 #room-lobby .room-members { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
 #room-lobby .room-member { display: flex; justify-content: space-between; }
