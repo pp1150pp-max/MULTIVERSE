@@ -22,13 +22,13 @@ import { ISO_DIR } from './world';
  * (negative = behind), counting its lift `raised` above them.
  */
 /**
- * A sideways nudge on screen, toward where the character looks (mirrored left/right, so one value fits both
- * sides); none facing straight at or away from the camera. Screen right in the world is +x −z.
+ * A sideways nudge on screen, in every view (owner 2026-11-11): + is screen right, mirrored while the
+ * character faces left (as its picture is), so one value fits both sides. Screen right in the world is +x −z.
  */
 function screenShift(p: Player, amount: number): [number, number] {
   if (!amount) return [0, 0];
   const sx = (p.faceX - p.faceZ) * Math.SQRT1_2;
-  const dir = sx > 0.05 ? 1 : sx < -0.05 ? -1 : 0;
+  const dir = sx < -0.05 ? -1 : 1;
   return [dir * amount * Math.SQRT1_2, -dir * amount * Math.SQRT1_2];
 }
 
@@ -324,7 +324,8 @@ export class CosmeticRig {
       const id = au.id;
       (this.aura.m.material as THREE.MeshBasicMaterial).opacity = tuneNum(id, 'alpha');
       const size = tuneNum(id, 'size') * (1 + Math.sin(this.clock * 2.5) * tuneNum(id, 'pulse'));
-      this.aura.m.position.set(p.x, 0.05, p.z);
+      const [ax, az] = screenShift(p, tuneNum(id, 'shift'));
+      this.aura.m.position.set(p.x + ax, 0.05, p.z + az);
       this.aura.m.scale.set(size, size, 1);
       if (Math.random() < tuneNum(id, 'sparks') * dt) {
         const ang = Math.random() * Math.PI * 2;

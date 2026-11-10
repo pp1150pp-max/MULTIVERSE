@@ -27,7 +27,7 @@ export const COS_TUNE_FIELDS: Record<TunedSlot, Record<string, TuneField>> = {
     backStand: num(0, 2.5, 0.02, 'ความสูงกลางหลัง ตอนยืน'),
     backSeat: num(0, 2.5, 0.02, 'ความสูงกลางหลัง ตอนนั่งขี่ (จากอาน)'),
     back: num(-0.6, 0.8, 0.02, 'ถอยไปข้างหลัง (มองด้านข้าง)'),
-    shift: num(-1, 1, 0.01, 'ขยับซ้าย/ขวาบนจอ (บวก = ไปทางที่หันหน้า, หันตรงไม่ขยับ)'),
+    shift: num(-1, 1, 0.01, 'ขยับซ้าย/ขวาบนจอ (บวก = ขวา, หันซ้ายกลับด้านให้เอง)'),
     depth: num(0, 0.5, 0.01, 'ระยะวาดหลังตัว (หรือทับหลัง) ห่างเท่าไร'),
     overBack: bool('หันหลังให้กล้อง: ปีกวาดทับหลัง (ปิด = หลังตัวเสมอ)'),
     flap: num(0, 20, 0.5, 'ความเร็วกระพือ ตอนยืน'),
@@ -36,7 +36,7 @@ export const COS_TUNE_FIELDS: Record<TunedSlot, Record<string, TuneField>> = {
   mount: {
     h: num(0.3, 3.5, 0.05, 'ขนาด (ความสูงภาพ)'),
     seat: num(0, 1.5, 0.02, 'ความสูงที่นั่ง'),
-    shift: num(-1, 1, 0.01, 'ขยับซ้าย/ขวาบนจอ (บวก = ไปทางที่หันหน้า, หันตรงไม่ขยับ)'),
+    shift: num(-1, 1, 0.01, 'ขยับซ้าย/ขวาบนจอ (บวก = ขวา, หันซ้ายกลับด้านให้เอง)'),
     headOnLift: num(0, 0.8, 0.02, 'ที่นั่งยกเพิ่ม ตอนหันหน้าเข้ากล้องตรง ๆ'),
     front: num(-0.5, 0.5, 0.01, 'หัวสัตว์ขี่วาดหน้าผู้ขี่ ห่างเท่าไร (ตอนหันเข้ากล้อง)'),
     cutFrontDiag: bool('ตัด 2 ส่วน ตอนหันเฉียงเข้ากล้อง (ส่วนหัวหน้าผู้ขี่)'),
@@ -61,6 +61,7 @@ export const COS_TUNE_FIELDS: Record<TunedSlot, Record<string, TuneField>> = {
   },
   aura: {
     size: num(0.5, 5, 0.05, 'ขนาดวงบนพื้น'),
+    shift: num(-1, 1, 0.01, 'ขยับซ้าย/ขวาบนจอ (บวก = ขวา, หันซ้ายกลับด้านให้เอง)'),
     alpha: num(0, 1, 0.05, 'ความสว่างวง'),
     pulse: num(0, 0.3, 0.01, 'ระยะเต้นของวง'),
     sparks: num(0, 20, 0.5, 'ประกายต่อวินาที'),
@@ -113,7 +114,7 @@ export function cosTuneDefaults(id: string): TuneValues | undefined {
       return { h: 0.8, back: 1.1, side: 0.6, fly, float: 0.8, bob: 0.1, anim: fly ? 7 : 10 };
     }
     case 'aura':
-      return { size: 2.1, alpha: 0.55, pulse: 0.06, sparks: 4, sparkSize: 0.3, stepEvery: 0.28, stepSize: 0.32 };
+      return { size: 2.1, shift: 0, alpha: 0.55, pulse: 0.06, sparks: 4, sparkSize: 0.3, stepEvery: 0.28, stepSize: 0.32 };
   }
 }
 
