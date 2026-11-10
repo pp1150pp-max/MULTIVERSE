@@ -28,7 +28,25 @@ export const MOUNT_LOOK: Record<string, { h: number; seat: number; pose: 'ride' 
 /** How high a character's feet sit: on its mount's saddle while riding (or trying one on), else 0. */
 export function seatOf(p: Player): number {
   const m = shownRiding(p) ? shownCos(p, 'mount') : undefined;
-  return m ? (MOUNT_LOOK[m.id]?.seat ?? MOUNT_SEAT) : 0;
+  if (!m) return 0;
+  // Seen head-on or from behind the rider sits higher, so the mount's head (or rear) in front of them
+  // doesn't hide their body.
+  return (MOUNT_LOOK[m.id]?.seat ?? MOUNT_SEAT) + (headOn(p) ? HEAD_ON_LIFT : 0);
+}
+
+/** Extra seat height when the mount is seen head-on or from behind. */
+const HEAD_ON_LIFT = 0.18;
+
+/**
+ * Facing (nearly) straight toward the camera or away from it: the sheets' front and back rows. Then the
+ * mount's head (or its rear) is nearer the camera than the rider and is drawn in front of them; from the
+ * side and the diagonals the rider is drawn in front of the mount.
+ */
+function headOn(p: Player): boolean {
+  const sx = (p.faceX - p.faceZ) * Math.SQRT1_2;
+  const sy = (-p.faceX - p.faceZ) * Math.SQRT1_2;
+  const row = Math.round(Math.atan2(Math.abs(sx), -sy) / (Math.PI / 4));
+  return row === 0 || row === 4;
 }
 
 /** The riding pose a character plays now, or null on foot. */
@@ -148,8 +166,10 @@ export class CosmeticRig {
     this.mount = this.piece(this.mount, mc, mc ? (MOUNT_LOOK[mc.id]?.h ?? MOUNT_H) : MOUNT_H, 0.6);
     if (this.mount) {
       const a = this.mount.actor;
-      // A little behind the rider, who sits astride it (or stands on the board) in front.
-      a.group.position.set(p.x - TO_CAM.x * 0.1, 0, p.z - TO_CAM.z * 0.1);
+      // Head-on or from behind: the mount's head (or rear) in front of the rider. Else a little behind the
+      // rider, who sits astride it (or stands on the board).
+      const d = headOn(p) ? 0.12 : -0.1;
+      a.group.position.set(p.x + TO_CAM.x * d, 0, p.z + TO_CAM.z * d);
       a.face(p.faceX, p.faceZ);
       a.update(dt, p.moving, 11);
     }
