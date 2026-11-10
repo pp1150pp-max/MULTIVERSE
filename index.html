@@ -14,6 +14,7 @@
       <div id="float-layer"></div>
 
       <div id="hud" class="hidden">
+        <div id="cast-bar" class="hidden"><div class="cast-fill"></div><span>กำลังวาร์ปกลับเมือง…</span></div>
         <div id="hud-topleft">
           <div class="char-card">
             <div id="hud-portrait"></div>
@@ -289,6 +290,7 @@
             <tr><td>Q / E / R</td><td>สกิล (เล็งด้วยเมาส์)</td></tr>
             <tr><td>Space</td><td>Dash (ไม่รับดาเมจระหว่างพุ่ง)</td></tr>
             <tr><td>1 / 2</td><td>ยา HP / ยา MP (คลิกยาในกระเป๋าเพื่อเลือกขนาดที่จะใช้)</td></tr>
+            <tr><td>G</td><td>ใช้ม้วนคัมภีร์กลับเมือง (ร่าย 3 วิ แล้ววาร์ปกลับกลางเมือง · ซื้อที่พ่อค้า)</td></tr>
             <tr><td>F</td><td>เปิด/ปิด Auto Play (เฉพาะ Open World · เดินเองแล้ว Auto จะปิด)</td></tr>
             <tr><td>I หรือ B</td><td>กระเป๋า &amp; ตัวละคร</td></tr>
             <tr><td>T</td><td>คุยกับ NPC เมื่ออยู่ใกล้ (The Seeker · พ่อค้า · ช่างตีเหล็ก · ผู้ดูแลคลัง ที่แคมป์)</td></tr>
@@ -310,6 +312,7 @@
         <div id="death" class="hidden">
           <h2>คุณพ่ายแพ้</h2>
           <p>แสงแห่ง The Origin ยังไม่ทอดทิ้งคุณ…</p>
+          <button id="btn-revive" class="primary hidden"></button>
           <button id="btn-respawn">ฟื้นคืนชีพที่เมือง</button>
         </div>
 

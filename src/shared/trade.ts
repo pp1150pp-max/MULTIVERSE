@@ -1,6 +1,7 @@
 // Trade rules shared by the server (which decides: server/trade.ts) and the browser (which shows them).
 // Docs: docs/systems/trade.md. Trades live only in the server's memory; the finished ones go to trade_log.
-import { isItem, isStack, RARITY_LABEL, sameStack, type BagEntry } from './types';
+import { isBound, isItem, isStack, RARITY_LABEL, sameStack, type BagEntry } from './types';
+import { BOUND_MSG } from './data/stones';
 import { putAll, slotsNeeded } from './mail';
 import { entryName } from './data/potions';
 
@@ -36,6 +37,7 @@ export function makeOffer(bag: (BagEntry | null)[], slot: unknown, n?: unknown):
   if (typeof slot !== 'number' || !Number.isInteger(slot) || slot < 0 || slot >= bag.length) return 'ช่องกระเป๋าไม่ถูกต้อง';
   const cur = bag[slot];
   if (!cur) return 'ช่องนี้ว่าง';
+  if (isBound(cur)) return BOUND_MSG;
   if (!isStack(cur)) return { slot, entry: structuredClone(cur) };
   if (n === undefined) n = cur.count;
   if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > cur.count) return 'จำนวนไม่ถูกต้อง';

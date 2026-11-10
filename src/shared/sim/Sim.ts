@@ -12,13 +12,13 @@ import {
   ANNOUNCE_FROM, dropsOnFail, enhanceCost, itemName, MAX_PLUS, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
 } from '../data/enhance';
 import { entryName, potionName, POTION_STACK, POTIONS, stackLimit } from '../data/potions';
-import { BOSS_KEY, BOSS_STONE_CHANCE, KEY_DROP_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, STONE_COLOR, STONE_NAME } from '../data/stones';
+import { BOSS_KEY, BOSS_QUEST_KEY, BOSS_STONE_CHANCE, BOUND_MSG, PHOENIX_PRICE, QUEST_KILLS, REVIVES_PER_KEY, STONE_STACK, KEY_DROP_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, RETURN_CAST, RETURN_SCROLL_PRICE, STONE_COLOR, STONE_NAME } from '../data/stones';
 import { NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { pick, rand, randInt } from '../rng';
 import { splitExp } from '../party';
 import { CLASS_IDS } from '../data/classes';
 import {
-  isItem, isPotion, isStack, isStone, RARITY_LABEL, sameStack, SLOT_LABEL, BLACKSMITH_STONES, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
+  isBound, isItem, isPotion, isStack, isStone, RARITY_LABEL, sameStack, SLOT_LABEL, BLACKSMITH_STONES, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
 import { PORTAL_RANGE, REST_CD, restSpotNear, Terrain, type RestSpot } from './terrain';
 import {
   BUYBACK_RESET, buybackPrice, cleanAutoSettings, lootPots, Player, sortEntries,
@@ -346,6 +346,7 @@ export class Sim {
     p.hp -= dmg;
     p.lastHurt = this.time;
     p.interruptPotions();
+    this.cancelReturnCast(p, 'โดนโจมตี');
     if (m.isBoss) m.resetRamp();
     this.events.push({ t: 'flash', id: p.id });
     this.anim(p.id, 'hit');
@@ -377,6 +378,7 @@ export class Sim {
     const dmg = Math.max(1, Math.round(p.maxHp * LAVA_BURN));
     p.hp -= dmg;
     p.lastHurt = this.time;
+    this.cancelReturnCast(p, 'โดนลาวา');
     this.events.push({ t: 'flash', id: p.id });
     this.text(p.x, p.topY, p.z, `-${dmg}`, 'hurt');
     this.fx('burst', p.x, 0.2, p.z, '#ff8a3a', 4, 2);
@@ -495,6 +497,7 @@ export class Sim {
     if (!m.summoned) {
       this.shareExp(m);
       this.dropLoot(m);
+      if (!m.isBoss) this.questProgress(m);
     }
     const sp = this.spawners.find((s) => s.area === m.area);
     if (sp) {
@@ -552,6 +555,14 @@ export class Sim {
           p.bossKills.push(m.def.id);
           this.events.push({ t: 'save', to: p.id });
         }
+        // The Seeker's key for this boss has done its job.
+        const qkey = BOSS_QUEST_KEY[m.def.id];
+        if (qkey && p.stoneCount(qkey) > 0) {
+          p.takeStones(qkey, p.stoneCount(qkey));
+          this.log(`${STONE_NAME[qkey]} สลายไปแล้ว — ภารกิจนี้สำเร็จ`, '#ffd34a', p.id);
+          this.events.push({ t: 'save', to: p.id });
+        }
+        delete p.quests[m.def.id];
         if (!gained.has(p)) gained.set(p, 0);
       }
     }
@@ -566,6 +577,7 @@ export class Sim {
     p.alive = false;
     p.hp = 0;
     p.moving = false;
+    p.castT = 0;
     this.events.push({ t: 'died', id: p.id });
   }
 
@@ -590,6 +602,70 @@ export class Sim {
     this.text(p.x, p.topY, p.z, 'HP / MP เต็ม', 'heal', 1.2, p.id);
     this.log(`${spot.kind === 'fountain' ? 'ดื่มน้ำจากน้ำพุ' : 'นั่งพักข้างกองไฟ'} — HP และ MP เต็ม (พักได้อีกใน ${REST_CD} วิ)`, '#9fffb0', p.id);
     return true;
+  }
+
+  // ------------------------------------------------------------ return scroll
+
+  /**
+   * Why this player can't use a return scroll here, or null when they can. The hook for boss rooms
+   * (owner: no return scroll inside a boss room); nothing blocks it yet.
+   */
+  returnBlocked(_p: Player): string | null {
+    return null;
+  }
+
+  /** Starts the RETURN_CAST-second cast. The scroll is only used up when the cast finishes. */
+  startReturnCast(p: Player): void {
+    if (!p.alive || p.castT > 0) return;
+    if (p.stoneCount('return_scroll') < 1) {
+      this.text(p.x, p.topY, p.z, `ไม่มี${STONE_NAME.return_scroll}`, 'info', 1, p.id);
+      return;
+    }
+    const why = this.returnBlocked(p);
+    if (why) {
+      this.text(p.x, p.topY, p.z, why, 'info', 1.2, p.id);
+      return;
+    }
+    p.castT = RETURN_CAST;
+    p.castX = p.x;
+    p.castZ = p.z;
+    p.moveTarget = null;
+    this.fx('burst', p.x, 1, p.z, STONE_COLOR.return_scroll, 10, 2);
+    this.log(`กำลังร่าย${STONE_NAME.return_scroll} (${RETURN_CAST} วิ) — เดิน ตี หรือโดนโจมตีจะยกเลิก`, STONE_COLOR.return_scroll, p.id);
+  }
+
+  /** Stops a cast in progress; the scroll is kept. */
+  cancelReturnCast(p: Player, why: string): void {
+    if (p.castT <= 0) return;
+    p.castT = 0;
+    this.text(p.x, p.topY + 0.4, p.z, `ยกเลิกการวาร์ป (${why})`, 'info', 1, p.id);
+  }
+
+  private tickReturnCast(p: Player, dt: number, it: Intent): void {
+    if (p.castT <= 0) return;
+    if (!p.alive) return this.cancelReturnCast(p, 'ตาย');
+    if (p.stunT > 0) return this.cancelReturnCast(p, 'โดนสตัน');
+    if (it.basic || it.skills.length || it.dash) return this.cancelReturnCast(p, 'โจมตี');
+    if (Math.hypot(p.x - p.castX, p.z - p.castZ) > 0.15) return this.cancelReturnCast(p, 'เดิน');
+    p.castT -= dt;
+    if (p.castT > 0) return;
+    p.castT = 0;
+    // Re-check: the scroll may have been sold, traded or stashed during the cast.
+    const why = this.returnBlocked(p);
+    if (why) return void this.text(p.x, p.topY, p.z, why, 'info', 1.2, p.id);
+    if (!p.takeStones('return_scroll', 1)) return void this.text(p.x, p.topY, p.z, `ไม่มี${STONE_NAME.return_scroll}`, 'info', 1, p.id);
+    this.inventoryChanged(p);
+    this.events.push({ t: 'save', to: p.id });
+    this.fx('burst', p.x, 1, p.z, STONE_COLOR.return_scroll, 22, 4);
+    this.log(`ใช้${STONE_NAME.return_scroll} — กลับศูนย์กลางมิติ`, STONE_COLOR.return_scroll, p.id);
+    if (this.zone.id !== HUB_ID) {
+      this.events.push({ t: 'travel', to: p.id, zone: HUB_ID, atCamp: true });
+      return;
+    }
+    ({ x: p.x, z: p.z } = this.spawnPoint());
+    p.moveTarget = null;
+    for (const m of this.monsters) if (m.target === p) m.calm();
+    this.events.push({ t: 'warped', id: p.id });
   }
 
   respawn(p: Player): void {
@@ -642,6 +718,63 @@ export class Sim {
     }
   }
 
+  // ------------------------------------------------------------ The Seeker's key quests
+
+  /** The map a monster comes from (by its level), also when it stands in the hub. */
+  private homeOf(def: { levels: [number, number] }): ZoneDef | undefined {
+    return Object.values(ZONES).find((z) => z.id !== HUB_ID && def.levels[0] >= z.levels[0] && def.levels[0] <= z.levels[1]);
+  }
+
+  /** Quests The Seeker can give this player now: a boss of a map they have reached, not yet beaten, not taken, no key held. */
+  questOffers(p: Player): string[] {
+    return Object.values(ZONES).flatMap((z) => {
+      const boss = z.lair?.boss;
+      const key = boss && BOSS_QUEST_KEY[boss];
+      if (!boss || !key || p.level < z.levels[0] || p.bossKills.includes(boss)) return [];
+      return p.quests[boss] === undefined && p.stoneCount(key) === 0 ? [boss] : [];
+    });
+  }
+
+  questAccept(p: Player, boss: string): boolean {
+    if (!this.near(p, 'seeker') || !this.questOffers(p).includes(boss)) return false;
+    p.quests[boss] = 0;
+    const map = Object.values(ZONES).find((z) => z.lair?.boss === boss)!;
+    this.log(`รับภารกิจ: ล่ามอนสเตอร์ใน${map.nameTh} ${QUEST_KILLS} ตัว แล้วกลับมาหา The Seeker`, '#ffd34a', p.id);
+    this.events.push({ t: 'save', to: p.id });
+    return true;
+  }
+
+  questTurnIn(p: Player, boss: string): boolean {
+    const key = BOSS_QUEST_KEY[boss];
+    if (!key || !this.near(p, 'seeker') || (p.quests[boss] ?? -1) < QUEST_KILLS) return false;
+    if (!p.addStones(key, 1)) {
+      this.log('กระเป๋าเต็ม — เคลียร์ช่องว่าง 1 ช่องก่อนรับกุญแจ', '#ff8a6a', p.id);
+      return false;
+    }
+    delete p.quests[boss];
+    this.log(`ได้รับ ${STONE_NAME[key]} — ใส่ที่แท่นเรียกบอสได้ (ไม่หายเมื่อใช้ จนกว่าจะปราบบอสได้)`, STONE_COLOR[key], p.id);
+    this.sfx('trade', p.x, p.z, p.id);
+    this.events.push({ t: 'save', to: p.id });
+    return true;
+  }
+
+  /** A monster of a map died: everyone who hit it and has that map's boss quest counts one. */
+  private questProgress(m: Monster): void {
+    const boss = this.homeOf(m.def)?.lair?.boss;
+    if (!boss) return;
+    for (const [id, dealt] of m.damageBy) {
+      const p = this.players.find((x) => x.id === id);
+      const n = p?.quests[boss];
+      if (!p || dealt <= 0 || n === undefined || n >= QUEST_KILLS) continue;
+      p.quests[boss] = n + 1;
+      this.text(m.x, m.topY + 0.8, m.z, `ภารกิจ ${n + 1}/${QUEST_KILLS}`, 'info', 1, p.id);
+      if (n + 1 >= QUEST_KILLS) {
+        this.log(`ล่าครบ ${QUEST_KILLS} ตัวแล้ว — กลับไปหา The Seeker ที่เมืองเพื่อรับกุญแจ`, '#ffd34a', p.id);
+        this.events.push({ t: 'save', to: p.id });
+      }
+    }
+  }
+
   // ------------------------------------------------------------ loot
 
   private dropLoot(m: Monster): void {
@@ -660,7 +793,7 @@ export class Sim {
     // Drops are for any class: weapons and armor of other classes can be sold or given to a friend.
     const anyClass = () => pick(r, CLASS_IDS);
     // Gear comes from the monster's own map (by its level), also when it stands in the hub.
-    const home = Object.values(ZONES).find((z) => z.id !== HUB_ID && d.levels[0] >= z.levels[0] && d.levels[0] <= z.levels[1]);
+    const home = this.homeOf(d);
     const band = home?.levels;
     // The top damage dealer gets first pick for a while, then anyone can take it.
     const owner = top?.id;
@@ -767,7 +900,14 @@ export class Sim {
   }
 
   /** Throws a bag item on the ground next to the player. It disappears after a while. */
+  /** A quest key would leave the bag: say why, and refuse. */
+  private refuseBound(p: Player): false {
+    this.log(BOUND_MSG, '#ff8a6a', p.id);
+    return false;
+  }
+
   dropFromBag(p: Player, i: number): boolean {
+    if (isBound(p.bag[i])) return this.refuseBound(p);
     const item = p.takeFromBag(i);
     if (!item) return false;
     const a = Math.random() * Math.PI * 2;
@@ -850,6 +990,76 @@ export class Sim {
     return true;
   }
 
+  /** Phoenix feathers from the merchant. */
+  buyPhoenix(p: Player, n: number): boolean {
+    if (!this.near(p, 'merchant') || !Number.isInteger(n) || n <= 0) return false;
+    const cost = PHOENIX_PRICE * n;
+    if (p.gold < cost) {
+      this.log('ทองไม่พอ', '#ff8a6a', p.id);
+      return false;
+    }
+    if (!p.addStones('phoenix', n)) {
+      this.log(`กระเป๋าเต็ม — ${STONE_NAME.phoenix}ช่องละไม่เกิน ${STONE_STACK} อัน`, '#ff8a6a', p.id);
+      return false;
+    }
+    p.gold -= cost;
+    this.log(`ซื้อ${STONE_NAME.phoenix} × ${n} (−${cost.toLocaleString()} G)`, '#f2c230', p.id);
+    this.sfx('trade', p.x, p.z, p.id);
+    this.afterChange(p);
+    return true;
+  }
+
+  // ------------------------------------------------------------ getting up again in a boss room
+
+  /** Revives used in this room, by character name (a name is one character). */
+  private readonly revivesUsed = new Map<string, number>();
+
+  /** How many more times this player may get up here: 3 per key put in, less those used (0 outside rooms). */
+  revivesLeft(p: Player): number {
+    if (!this.zone.roomOf) return 0;
+    return Math.max(0, REVIVES_PER_KEY * this.keys - (this.revivesUsed.get(p.name) ?? 0));
+  }
+
+  /** Gets up where they fell with half HP and MP, for one phoenix feather (owner). */
+  reviveHere(p: Player): boolean {
+    if (p.alive || !this.zone.roomOf || this.revivesLeft(p) <= 0) return false;
+    if (!p.takeStones('phoenix', 1)) {
+      this.log(`ไม่มี${STONE_NAME.phoenix} — ซื้อได้ที่พ่อค้าในเมือง`, '#ff8a6a', p.id);
+      return false;
+    }
+    this.revivesUsed.set(p.name, (this.revivesUsed.get(p.name) ?? 0) + 1);
+    p.alive = true;
+    p.hp = Math.max(1, Math.round(p.maxHp / 2));
+    p.mp = Math.round(p.stats.maxMp / 2);
+    p.stunT = 0;
+    p.kbx = p.kbz = 0;
+    this.fx('burst', p.x, 1, p.z, '#ff9a3a', 24, 4);
+    this.events.push({ t: 'revived', id: p.id });
+    this.log(`ใช้${STONE_NAME.phoenix} ฟื้นขึ้นมา (ชุบได้อีก ${this.revivesLeft(p)} ครั้ง)`, '#ff9a3a', p.id);
+    this.events.push({ t: 'save', to: p.id });
+    return true;
+  }
+
+  /** Buys `n` return scrolls from the merchant (all of them or none). */
+  buyReturnScroll(p: Player, n: number): boolean {
+    if (!this.near(p, 'merchant') || n <= 0) return false;
+    const cost = RETURN_SCROLL_PRICE * n;
+    if (p.gold < cost) {
+      this.log('ทองไม่พอ', '#ff8a6a', p.id);
+      return false;
+    }
+    if (!p.addStones('return_scroll', n)) {
+      this.log(`กระเป๋าเต็ม — ${STONE_NAME.return_scroll}ช่องละไม่เกิน ${STONE_STACK} ม้วน`, '#ff8a6a', p.id);
+      return false;
+    }
+    p.gold -= cost;
+    this.log(`ซื้อ${STONE_NAME.return_scroll} × ${n} (−${cost.toLocaleString()} G)`, '#f2c230', p.id);
+    this.sfx('trade', p.x, p.z, p.id);
+    this.afterChange(p);
+    return true;
+  }
+
+
   /** Buys back item `i` of the buyback list. `uid` must match, so a stale click can't buy the wrong item. */
   buyBack(p: Player, i: number, uid: string): boolean {
     const e = p.buyback[i];
@@ -887,6 +1097,7 @@ export class Sim {
   sellItem(p: Player, i: number, n?: number): number {
     const item = p.bag[i];
     if (!item || !this.near(p, 'merchant')) return 0;
+    if (isBound(item)) return this.refuseBound(p), 0;
     if (n !== undefined && (!isStack(item) || !Number.isInteger(n) || n < 1 || n > item.count)) return 0;
     const part = n !== undefined && isStack(item) && n < item.count ? n : undefined;
     const name = entryName(part ? { ...item, count: part } : item);
@@ -929,6 +1140,7 @@ export class Sim {
     const st = p.stash;
     if (!this.near(p, 'keeper') || !validSlot(bagI, p.bag.length) || (to !== -1 && !validSlot(to, st.size))) return false;
     if (!p.bag[bagI]) return false;
+    if (isBound(p.bag[bagI])) return this.refuseBound(p);
     const ok = to === -1 ? fillInto(p.bag, bagI, st.items) : dropOnto(p.bag, bagI, st.items, to);
     if (!ok) {
       this.log('คลังเต็ม', '#ff8a6a', p.id);
@@ -967,7 +1179,9 @@ export class Sim {
     const list = (w: 'bag' | 'stash') => (w === 'bag' ? p.bag : w === 'stash' ? p.stash.items : null);
     const a = list(from);
     const b = list(to);
-    if (!a || !b || !splitInto(a, i, b, j, n)) return false;
+    if (!a || !b) return false;
+    if (from === 'bag' && to === 'stash' && isBound(a[i])) return this.refuseBound(p);
+    if (!splitInto(a, i, b, j, n)) return false;
     this.afterStash(p);
     return true;
   }
@@ -1107,7 +1321,13 @@ export class Sim {
       }
     }
 
-    for (const p of this.players) if (p.alive) p.update(dt, intentOf(p));
+    for (const p of this.players) {
+      if (!p.alive) continue;
+      const it = intentOf(p);
+      if (it.recall) this.startReturnCast(p);
+      p.update(dt, it);
+      this.tickReturnCast(p, dt, it);
+    }
     for (const p of this.players) this.tickBuyback(p, dt);
     for (const p of this.players) if (p.alive) this.checkPortals(p);
     if (this.zone.lavaPools) for (const p of this.players) if (p.alive) this.tickLava(p, dt);

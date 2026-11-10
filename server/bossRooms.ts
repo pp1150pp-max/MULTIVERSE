@@ -12,11 +12,11 @@ import { Sim } from '../src/shared/sim/Sim';
 import type { Player } from '../src/shared/sim/Player';
 import { BOSS_ROOMS, ZONES } from '../src/shared/data/zones';
 import { MONSTERS } from '../src/shared/data/monsters';
-import { BOSS_KEY, STONE_NAME } from '../src/shared/data/stones';
+import { BOSS_KEY, BOSS_QUEST_KEY, STONE_NAME } from '../src/shared/data/stones';
 import { SUMMONER_RANGE } from '../src/shared/sim/terrain';
-import type { BossKey } from '../src/shared/types';
+import type { BossKey, StoneKind } from '../src/shared/types';
 import {
-  bossShortName, ROOM_END_SECONDS, ROOM_INVITE_SECONDS, ROOM_KEYS_MAX, ROOM_LOBBY_SECONDS,
+  bossShortName, ROOM_END_SECONDS, ROOM_INVITE_SECONDS, ROOM_KEYS_MAX, ROOM_LOBBY_SECONDS, ROOM_WIPE_SECONDS,
   type RoomAnswer, type RoomLobbyView, type RoomSnap,
 } from '../src/shared/bossRoom';
 
@@ -53,8 +53,10 @@ interface Lobby {
   /** The map whose summoner was used. */
   field: string;
   boss: string;
-  key: BossKey;
+  key: StoneKind;
   keys: number;
+  /** Opened with the quest key: nothing was taken, so nothing goes back. */
+  quest: boolean;
   answers: Map<number, { name: string; answer: RoomAnswer }>;
   /** When (ms) unanswered invites count as "no", and when the lobby is called off. */
   inviteUntil: number;
@@ -68,6 +70,8 @@ export interface Run {
   channel: number;
   /** When (ms) everyone is sent to town, once the boss is dead. */
   endAt: number | null;
+  /** Everyone is down: when (ms) the group has lost unless someone gets up. */
+  wipeAt: number | null;
 }
 
 export class BossRooms {
@@ -86,12 +90,13 @@ export class BossRooms {
     return this.runs.get(sim);
   }
 
-  /** What a player in this Sim sees of its room (undefined outside rooms). */
-  snap(sim: Sim): RoomSnap | undefined {
+  /** What this player in this Sim sees of its room (undefined outside rooms). */
+  snap(sim: Sim, p: Player): RoomSnap | undefined {
     const r = this.runs.get(sim);
     if (!r) return undefined;
-    const snap: RoomSnap = { boss: r.boss, keys: r.keys, channel: r.channel };
+    const snap: RoomSnap = { boss: r.boss, keys: r.keys, channel: r.channel, revives: sim.revivesLeft(p) };
     if (r.endAt !== null) snap.leaveIn = Math.max(0, Math.ceil((r.endAt - this.now()) / 1000));
+    if (r.wipeAt !== null) snap.wipeIn = Math.max(0, (r.wipeAt - this.now()) / 1000);
     return snap;
   }
 
@@ -114,25 +119,31 @@ export class BossRooms {
 
   // ------------------------------------------------------------ actions (checked here; the world checks the types)
 
-  /** Puts `keys` keys into the summoner the player stands next to. Returns a Thai error, or null. */
-  open(charId: number, keys: unknown): string | null {
+  /**
+   * Puts `keys` keys into the summoner the player stands next to. With `quest`, the bound quest key is
+   * shown instead: always ×1, and it stays in the bag (it goes once the boss is killed). Returns a Thai error, or null.
+   */
+  open(charId: number, keys: unknown, quest = false): string | null {
     const a = this.host.actor(charId);
     if (!a) return null;
     const p = a.player;
     const lair = a.sim.zone.lair;
     if (!p.alive) return 'ตายอยู่ ใส่กุญแจไม่ได้';
     if (!lair || Math.hypot(p.x - lair.x, p.z - lair.z) > SUMMONER_RANGE + 0.5) return 'ต้องยืนข้างแท่นเรียกบอสก่อน';
+    if (quest) keys = 1;
     if (typeof keys !== 'number' || !Number.isInteger(keys) || keys < 1 || keys > ROOM_KEYS_MAX) return `ใส่กุญแจได้ครั้งละ 1–${ROOM_KEYS_MAX} อัน`;
     if (this.lobbyOf(charId)) return 'คุณเปิดประตูห้องบอสค้างอยู่แล้ว — เริ่มหรือยกเลิกก่อน';
     const party = this.host.party(charId);
     if (party && party.leader !== charId) return 'ในปาร์ตี้ เฉพาะหัวตี้เท่านั้นที่ใส่กุญแจได้';
-    const key = BOSS_KEY[lair.boss];
+    const key = quest ? BOSS_QUEST_KEY[lair.boss] : BOSS_KEY[lair.boss];
     const bossName = bossShortName(MONSTERS[lair.boss].nameTh);
     if (!key) return null;
-    if (p.stoneCount(key) < keys) return `${STONE_NAME[key]}ไม่พอ (มี ${p.stoneCount(key)} อัน)`;
-    // Gone at once (owner); given back only if the summoning is called off.
-    p.takeStones(key, keys);
-    this.host.save(charId);
+    if (p.stoneCount(key) < keys) return quest ? `ไม่มี${STONE_NAME[key]}` : `${STONE_NAME[key]}ไม่พอ (มี ${p.stoneCount(key)} อัน)`;
+    // Gone at once (owner); given back only if the summoning is called off. A quest key is only shown.
+    if (!quest) {
+      p.takeStones(key, keys);
+      this.host.save(charId);
+    }
     const field = a.sim.zone.id;
     const others = (party?.members ?? []).filter((m) => m.charId !== charId && this.host.actor(m.charId) && !this.inRoom(m.charId));
     if (!others.length) {
@@ -141,13 +152,13 @@ export class BossRooms {
     }
     const t = this.now();
     const lobby: Lobby = {
-      id: this.nextId++, leader: charId, leaderName: a.name, field, boss: lair.boss, key, keys,
+      id: this.nextId++, leader: charId, leaderName: a.name, field, boss: lair.boss, key, keys, quest,
       answers: new Map(others.map((m) => [m.charId, { name: m.name, answer: 'wait' as RoomAnswer }])),
       inviteUntil: t + ROOM_INVITE_SECONDS * 1000, until: t + ROOM_LOBBY_SECONDS * 1000,
     };
     this.lobbies.set(lobby.id, lobby);
     for (const m of others) this.host.invite(m.charId, lobby.id, a.name, bossName, keys, ROOM_INVITE_SECONDS);
-    this.host.tell(charId, `ใส่${STONE_NAME[key]} ×${keys} แล้ว — รอสมาชิกตอบรับ แล้วกดเริ่ม`);
+    this.host.tell(charId, `${quest ? 'ใช้' : 'ใส่'}${STONE_NAME[key]} ×${keys} แล้ว — รอสมาชิกตอบรับ แล้วกดเริ่ม`);
     this.sendLobby(lobby);
     return null;
   }
@@ -243,9 +254,15 @@ export class BossRooms {
         sim.log(`ปราบบอสสำเร็จ! เก็บของได้ ${ROOM_END_SECONDS} วินาทีก่อนกลับเมือง — ประตูออกเปิดแล้ว`, '#ffcf5a', p.id);
       }
     }
-    // Everyone down at once (owner): the group has lost.
-    const lost = !sim.cleared && sim.players.every((p) => !p.alive);
-    if (lost) for (const p of sim.players) sim.log('ทีมพ่ายแพ้ — ทุกคนล้มลง กลับเมือง', '#ff6a5a', p.id);
+    // Everyone down: ROOM_WIPE_SECONDS to get someone up with a feather, else the group has lost (owner).
+    const down = !sim.cleared && sim.players.every((p) => !p.alive);
+    if (!down) r.wipeAt = null;
+    else if (r.wipeAt === null) {
+      r.wipeAt = t + ROOM_WIPE_SECONDS * 1000;
+      for (const p of sim.players) sim.log(`ทุกคนล้มหมด! ใช้ขนนกฟีนิกซ์ภายใน ${ROOM_WIPE_SECONDS} วินาที ไม่อย่างนั้นทีมจะแพ้`, '#ff6a5a', p.id);
+    }
+    const lost = down && r.wipeAt !== null && t >= r.wipeAt;
+    if (lost) for (const p of sim.players) sim.log('ทีมพ่ายแพ้ — กลับเมือง', '#ff6a5a', p.id);
     if (lost || (r.endAt !== null && t >= r.endAt)) {
       for (const p of [...sim.players]) this.host.toTown(sim, p);
     }
@@ -260,7 +277,7 @@ export class BossRooms {
     let channel = 1;
     while (used.has(channel)) channel++;
     const sim = new Sim(room, { keys });
-    this.runs.set(sim, { sim, boss, keys, channel, endAt: null });
+    this.runs.set(sim, { sim, boss, keys, channel, endAt: null, wipeAt: null });
     this.host.enter(charIds, sim);
     const bossName = bossShortName(MONSTERS[boss].nameTh);
     for (const id of charIds) this.host.tell(id, `เข้าสู่${room.nameTh} — ${bossName} ระดับ ×${keys} (ห้อง ${channel})`);
@@ -276,8 +293,8 @@ export class BossRooms {
     }
     this.host.lobby(l.leader, null);
     if (why) {
-      this.host.refund(l.leader, l.key, l.keys);
-      this.host.tell(l.leader, why);
+      if (!l.quest) this.host.refund(l.leader, l.key as BossKey, l.keys);
+      this.host.tell(l.leader, l.quest ? why.replace(/ ?—? ?คืนกุญแจ(ให้หัวตี้|แล้ว)/, '') : why);
     }
   }
 

@@ -68,6 +68,9 @@ export interface Backend {
   unequip(slot: EquipSlot): void;
   drop(bagIndex: number): void;
   buyPotion(kind: PotionKind, size: PotionSize, n: number): void;
+  buyReturnScroll(n: number): void;
+  /** Starts casting a return scroll (sent with the next input). */
+  useReturnScroll(): void;
   sortBag(key: SortKey, desc: boolean): void;
   /** Drag & drop between two bag slots (swap, or merge the same potion). */
   moveInBag(from: number, to: number): void;
@@ -153,8 +156,14 @@ export interface Backend {
   friendList(): void;
 
   // Boss rooms (the server checks every rule; see server/bossRooms.ts).
-  /** Put this many keys into the summoner you stand next to. */
-  roomOpen(keys: number): void;
+  /** Put this many keys into the summoner you stand next to (`quest`: the bound quest key, ×1). */
+  roomOpen(keys: number, quest?: boolean): void;
+  /** The Seeker's key quests (the server checks you stand by him). */
+  questAccept(boss: string): void;
+  questTurnIn(boss: string): void;
+  buyPhoenix(n: number): void;
+  /** Dead in a boss room: get up here for one phoenix feather. */
+  roomRevive(): void;
   roomAnswer(id: number, yes: boolean): void;
   roomStart(): void;
   roomCancel(): void;

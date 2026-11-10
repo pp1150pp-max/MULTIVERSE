@@ -650,6 +650,14 @@ const GEM: Record<`stone_${StoneKind}`, [string, string, string]> = {
   stone_key_witch: ['#1f5a4a', '#6fd8b0', '#d0fff0'],
   stone_key_yeti: ['#4a6a8a', '#cfeeff', '#ffffff'],
   stone_key_heart: ['#7a1f10', '#ff6a3a', '#ffd0a0'],
+  // Quest keys look like the boss keys (they use the same painted icons).
+  stone_qkey_bear: ['#3a5a1f', '#9ad86a', '#e0ffc0'],
+  stone_qkey_witch: ['#1f5a4a', '#6fd8b0', '#d0fff0'],
+  stone_qkey_yeti: ['#4a6a8a', '#cfeeff', '#ffffff'],
+  stone_qkey_heart: ['#7a1f10', '#ff6a3a', '#ffd0a0'],
+  stone_phoenix: ['#8a2a10', '#ff9a3a', '#ffe8a0'],
+  // Return scroll: parchment with a teal rune until its painted icon exists.
+  stone_return_scroll: ['#8a6a3a', '#efdcae', '#5fe0d0'],
 };
 
 export function drawIcon(
@@ -657,7 +665,14 @@ export function drawIcon(
 ): HTMLCanvasElement {
   const c = newCanvas(16, 16);
   const ctx = c.getContext('2d')!;
-  if (kind.startsWith('stone_key_')) {
+  if (kind === 'stone_return_scroll') {
+    // A rolled scroll lying across, with a rune on the open part.
+    const [dark, mid, light] = GEM[kind];
+    rect(ctx, 1, 2, 5, 12, 7, mid);
+    rect(ctx, 1, 1, 4, 3, 9, dark);
+    rect(ctx, 1, 12, 4, 3, 9, dark);
+    rect(ctx, 1, 6, 7, 4, 3, light, null);
+  } else if (kind.includes('key_')) {
     // A key: round bow at the top left, shaft down to the right, two teeth.
     const [dark, mid, light] = GEM[kind as `stone_${StoneKind}`];
     ell(ctx, 1, 5, 5, 4, 4, mid);

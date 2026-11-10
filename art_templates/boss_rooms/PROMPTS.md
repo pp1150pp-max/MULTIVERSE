@@ -53,3 +53,11 @@ Now props for the walls around a boss's arena, in the EXACT same fine-detail 16-
 | `room_props_volcano.png` | `This is the heart of Ashen Isle: burnt black basalt ruins with thin glowing cracks, an iron brazier of embers, magma crystal clusters, a charred dead tree.` |
 
 ลำดับช่องของทุกภาพ: `pillar_0` `wall` `brazier` `boulder` / `pillar_1` `rubble` `rune_stone` `tree`
+
+## 5. ไอคอนขนนกฟีนิกซ์ → `phoenix_icon.png`
+
+ไอเทมชุบชีวิตในห้องบอส ขายที่ร้านพ่อค้า
+
+```
+Generate a SQUARE image: one inventory item icon for the same game, EXACT same fine-detail 16-bit SNES-era pixel-art style as the key icons above: dark outline, 3 to 4 tones per material, crisp pixels. A single Phoenix Feather: a long elegant feather of flame colours, deep red at the quill shading to orange and a bright golden tip, a few tiny glowing embers drifting off it, drawn diagonally and filling most of the image. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no text, no labels. Do not use pink or magenta in the feather.
+```

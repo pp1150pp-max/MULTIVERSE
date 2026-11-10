@@ -7,13 +7,13 @@ import { Sim } from '../src/shared/sim/Sim';
 import { marketKind } from '../src/shared/sim/market';
 import { cleanStash } from '../src/shared/sim/stash';
 import { newCharacterData } from '../src/shared/sim/Player';
-import { BLACKSMITH_STONES, BOSS_KEYS, isBossKey, STONE_KINDS, type BossKey } from '../src/shared/types';
+import { BLACKSMITH_STONES, BOSS_KEYS, CONSUMABLES, isBossKey, QUEST_KEYS, STONE_KINDS, type BossKey } from '../src/shared/types';
 
 const zones = [ZONE_1, ZONE_2, ZONE_3, ZONE_4];
 
 ok(new Set(zones.map((z) => BOSS_KEY[z.lair!.boss])).size === 4, 'every boss has its own key');
 for (const k of BOSS_KEYS) ok(!!STONE_NAME[k] && !!STONE_DESC[k] && isBossKey(k), `${k} has a name and a description`);
-ok(BLACKSMITH_STONES.every((k) => !isBossKey(k)) && STONE_KINDS.length === BLACKSMITH_STONES.length + BOSS_KEYS.length, 'keys are not blacksmith stones');
+ok(BLACKSMITH_STONES.every((k) => !isBossKey(k)) && STONE_KINDS.length === BLACKSMITH_STONES.length + BOSS_KEYS.length + QUEST_KEYS.length + 1 + CONSUMABLES.length, 'keys are not blacksmith stones (plus the phoenix feather and consumables)');
 ok(KEY_DROP_CHANCE === 0.01, 'keys drop at 1%');
 ok(stoneStackValue({ stone: 'key_bear', count: 3 }) === 3000, 'a key sells for 1,000 G');
 ok(marketKind({ stone: 'key_yeti', count: 1 }) === 'artifact' && marketKind({ stone: 'enhance', count: 1 }) === 'stone', 'keys list as Artifacts');

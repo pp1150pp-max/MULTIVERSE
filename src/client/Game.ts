@@ -28,6 +28,7 @@ import { PartyUI } from './party';
 import { TradeUI } from './trade';
 import { FriendsUI } from './friends';
 import { RoomUI } from './bossRoom';
+import { QuestUI } from './quests';
 import { bossShortName } from '../shared/bossRoom';
 import { MailUI } from './mail';
 import { SystemMenu } from './sysmenu';
@@ -71,6 +72,7 @@ export class Game {
   readonly trade: TradeUI;
   readonly friends: FriendsUI;
   readonly rooms: RoomUI;
+  readonly quests: QuestUI;
   readonly mailUI: MailUI;
   /** Another player under the mouse (when no monster or usable thing is): a left click offers a party invite. */
   private hoveredPlayer: Player | null = null;
@@ -147,6 +149,7 @@ export class Game {
     this.trade = new TradeUI(this);
     this.friends = new FriendsUI(this);
     this.rooms = new RoomUI(this);
+    this.quests = new QuestUI(this, () => this.hud.openDialog());
     this.mailUI = new MailUI(this);
     initDraggableWindows(document.getElementById('hud')!);
     this.checkGpu();
@@ -201,6 +204,18 @@ export class Game {
     const sy = ((1 - this.tmp.y) / 2) * window.innerHeight;
     const on = sx > -80 && sx < window.innerWidth + 80 && sy > -80 && sy < window.innerHeight + 80;
     return { sx, sy, on };
+  }
+
+  /** G key or a click on the scroll in the bag: Auto Play and a clicked walk would cancel the cast, so stop both first. */
+  useReturnScroll(): void {
+    if (!this.player.alive || this.player.castT > 0) return;
+    if (this.player.stoneCount('return_scroll') < 1) {
+      this.hud.log('ไม่มีม้วนคัมภีร์กลับเมือง — ซื้อได้ที่พ่อค้า', '#ff8a6a');
+      return;
+    }
+    if (this.autoPlay) this.toggleAuto(false, 'ปิด Auto Play — กำลังร่ายม้วนคัมภีร์กลับเมือง');
+    this.goal = null;
+    this.backend.useReturnScroll();
   }
 
   toggleAuto(force?: boolean, offMsg = 'ปิด Auto Play'): void {
@@ -555,6 +570,7 @@ export class Game {
     this.reachGoal();
 
     if (i.pressed('KeyF')) this.toggleAuto();
+    if (i.pressed('KeyG')) this.useReturnScroll();
     if (i.pressed('KeyI') || i.pressed('KeyB')) this.hud.toggleBag();
     if (i.pressed('KeyH')) this.hud.toggleHelp();
     if (i.pressed('KeyM')) this.hud.toggleMap();
@@ -646,6 +662,7 @@ export class Game {
     this.trade.update();
     this.friends.update();
     this.rooms.update();
+    this.quests.update();
   }
 
   private updateCamera(dt: number): void {

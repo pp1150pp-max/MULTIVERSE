@@ -4,7 +4,7 @@
 // (server/bossRooms.ts); this only shows its messages and asks. Plain CSS, ids for painted art later.
 import type { Game } from './Game';
 import { MONSTERS } from '../shared/data/monsters';
-import { BOSS_KEY, STONE_COLOR, STONE_NAME } from '../shared/data/stones';
+import { BOSS_KEY, BOSS_QUEST_KEY, STONE_COLOR, STONE_NAME } from '../shared/data/stones';
 import { bossShortName, ROOM_KEYS_MAX, roomInviteText, type RoomAnswer, type RoomLobbyView } from '../shared/bossRoom';
 import { stoneIcon } from './icons';
 
@@ -54,6 +54,7 @@ export class RoomUI {
     this.invitesBox.id = 'room-invites';
     $('hud').append(this.invitesBox);
 
+    $('btn-revive').onclick = () => this.g.backend.roomRevive();
     this.line = el('div', 'hidden');
     this.line.id = 'room-line';
     $('hud').append(this.line);
@@ -118,8 +119,20 @@ export class RoomUI {
       this.g.backend.roomOpen(this.keys);
       this.toggle(false);
     };
-    if (have < 1) note.textContent = `ยังไม่มี${STONE_NAME[s.key]} — ดรอปจากมอนสเตอร์ในแมพนี้ หรือซื้อในตลาด`;
+    if (have < 1) note.textContent = `ยังไม่มี${STONE_NAME[s.key]} — ดรอปจากมอนสเตอร์ในแมพนี้ ซื้อในตลาด หรือรับภารกิจจาก The Seeker`;
     this.body.append(title, keyLine, pick, note, who, go);
+    // The Seeker's key: ×1, not used up.
+    const qkey = BOSS_QUEST_KEY[s.boss];
+    if (qkey && this.g.player.stoneCount(qkey) > 0) {
+      const q = el('button', '', `ใช้${STONE_NAME[qkey]} (×1 ไม่หาย)`);
+      q.id = 'room-quest';
+      q.disabled = !lead;
+      q.onclick = () => {
+        this.g.backend.roomOpen(1, true);
+        this.toggle(false);
+      };
+      this.body.append(q);
+    }
   }
 
   // ------------------------------------------------------------ the leader's lobby
@@ -182,6 +195,21 @@ export class RoomUI {
     this.invites.delete(id);
   }
 
+  /** Dead in a boss room: the death screen offers getting up here with a phoenix feather. */
+  private updateRevive(): void {
+    const btn = $<HTMLButtonElement>('btn-revive');
+    const r = this.g.backend.room;
+    const have = this.g.player.stoneCount('phoenix');
+    const show = !!r && !this.g.player.alive;
+    btn.classList.toggle('hidden', !show);
+    if (!show) return;
+    btn.disabled = r.revives <= 0 || have <= 0;
+    const label = r.revives <= 0 ? 'ชุบชีวิตในห้องนี้ครบแล้ว'
+      : have <= 0 ? `ไม่มี${STONE_NAME.phoenix}`
+      : `❤ ใช้${STONE_NAME.phoenix} ฟื้นที่นี่ (เหลือ ${r.revives} ครั้ง · มี ${have} อัน)`;
+    if (btn.textContent !== label) btn.textContent = label;
+  }
+
   // ------------------------------------------------------------ every frame
 
   update(): void {
@@ -197,9 +225,11 @@ export class RoomUI {
     if (this.open && (!s || Math.hypot(this.g.player.x - s.x, this.g.player.z - s.z) > 6)) this.toggle(false);
     const r = this.g.backend.room;
     const text = r
-      ? `${bossShortName(MONSTERS[r.boss]?.nameTh ?? r.boss)} ×${r.keys} · ห้อง ${r.channel}` +
+      ? `${bossShortName(MONSTERS[r.boss]?.nameTh ?? r.boss)} ×${r.keys} · ห้อง ${r.channel} · ❤ ${r.revives}` +
+        (r.wipeIn !== undefined ? ` · ทุกคนล้มหมด! ชุบภายใน ${Math.ceil(r.wipeIn)} วิ` : '') +
         (r.leaveIn !== undefined ? ` · กลับเมืองใน ${Math.ceil(r.leaveIn)} วิ` : '')
       : '';
+    this.updateRevive();
     if (text !== this.drawnLine) {
       this.drawnLine = text;
       this.line.textContent = text;
