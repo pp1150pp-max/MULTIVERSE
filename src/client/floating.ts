@@ -6,6 +6,7 @@ import { RARITY_COLOR } from '../shared/types';
 import { itemName } from '../shared/data/enhance';
 import { expGapMult } from '../shared/formulas';
 import { iconImg } from './icons';
+import { questRows, seekerMark } from '../shared/quests';
 import type { RestSpot } from '../shared/sim/terrain';
 
 interface Num { el: HTMLDivElement; x: number; y: number; z: number; t: number; life: number; height: number; dx: number; dy: number; pop: number }
@@ -224,7 +225,10 @@ export class Floating {
         name.className = 'npc-name';
         name.textContent = n.name;
         bob.append(role, name);
-        el.append(bob);
+        // ! (a quest to take) or ? (one to hand in) over a quest giver, bouncing on its own.
+        const mark = document.createElement('div');
+        mark.className = 'npc-mark hidden';
+        el.append(mark, bob);
         this.root.append(el);
         this.badges.set(n, el);
       }
@@ -232,6 +236,13 @@ export class Floating {
       el.classList.toggle('hidden', !s.on);
       // Gold or items wait in your claim box at the market broker.
       el.classList.toggle('alert', n.id === 'broker' && g.backend.marketBox > 0);
+      if (n.id === 'seeker') {
+        const markEl = el.querySelector<HTMLElement>('.npc-mark')!;
+        const mark = seekerMark(questRows(g.player));
+        if (markEl.textContent !== mark) markEl.textContent = mark;
+        markEl.classList.toggle('hidden', !mark);
+        markEl.classList.toggle('turn-in', mark === '?');
+      }
       el.style.transform = `translate(${s.sx}px, ${s.sy}px) translate(-50%, -100%)`;
     }
     for (const [n, el] of this.badges) {
