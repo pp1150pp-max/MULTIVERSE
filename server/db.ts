@@ -12,6 +12,7 @@ import { checkOrbLook, DEFAULT_ORB_LOOK, ORB_LOOK_SETTING, sameOrbLook, type Orb
 import { MARKET_HISTORY_DAYS, type MarketQuery } from '../src/shared/sim/market';
 import { MAIL_HISTORY_DAYS } from '../src/shared/mail';
 import type { TradeLogRow } from '../src/shared/trade';
+import type { AdminReportRow } from '../src/shared/reports';
 import type { FriendChar } from '../src/shared/friends';
 import { isAdminRole, type AdminRole, type AuditRow, type ChatLogRow, type PlaySessionRow, type RoleRow, type SessionQuery, type SessionSort } from '../src/shared/admin';
 
@@ -283,6 +284,33 @@ export class Db {
         PRIMARY KEY (blocker, blocked)
       );
       CREATE INDEX IF NOT EXISTS blocks_blocked ON blocks(blocked);
+      -- Bug reports / feedback (server/reports.ts). Only accepted reports are stored, so the anti-spam counts read this table.
+      CREATE TABLE IF NOT EXISTS reports (
+        id INTEGER PRIMARY KEY,
+        at INTEGER NOT NULL,
+        account_id INTEGER NOT NULL,
+        username TEXT NOT NULL,
+        char_name TEXT NOT NULL,
+        topic TEXT NOT NULL,
+        text TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'new',
+        zone TEXT NOT NULL,
+        channel INTEGER,
+        x REAL NOT NULL,
+        z REAL NOT NULL,
+        level INTEGER NOT NULL,
+        rtt INTEGER,
+        fps INTEGER,
+        ip TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS reports_account ON reports(account_id, at);
+      CREATE INDEX IF NOT EXISTS reports_ip ON reports(ip, at);
+      CREATE INDEX IF NOT EXISTS reports_at ON reports(at);
+      CREATE TABLE IF NOT EXISTS report_bans (
+        account_id INTEGER PRIMARY KEY,
+        at INTEGER NOT NULL,
+        by_name TEXT NOT NULL
+      );
     `);
     // Columns added after the first release: add them to databases made before that.
     const cols = (this.db.prepare('PRAGMA table_info(accounts)').all() as { name: string }[]).map((c) => c.name);
@@ -1101,6 +1129,58 @@ export class Db {
       a: { charId: r.a_char, name: r.a_name, items: lines(r.a_items), gold: r.a_gold, tax: r.a_tax },
       b: { charId: r.b_char, name: r.b_name, items: lines(r.b_items), gold: r.b_gold, tax: r.b_tax },
     }));
+  }
+
+  // ------------------------------------------------------------ bug reports (server/reports.ts)
+
+  insertReport(r: Omit<AdminReportRow, 'id' | 'status' | 'banned'>): number {
+    const res = this.db.prepare(`INSERT INTO reports (at, account_id, username, char_name, topic, text, zone, channel, x, z, level, rtt, fps, ip)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(r.at, r.accountId, r.username, r.charName, r.topic, r.text, r.zone, r.channel, r.x, r.z, r.level, r.rtt, r.fps, r.ip);
+    return Number(res.lastInsertRowid);
+  }
+
+  /** The account's reports since `since` (newest first): time and text, for the cooldown, daily cap and duplicate checks. */
+  reportsOfAccountSince(accountId: number, since: number): { at: number; text: string }[] {
+    return this.db.prepare('SELECT at, text FROM reports WHERE account_id = ? AND at > ? ORDER BY at DESC').all(accountId, since) as { at: number; text: string }[];
+  }
+
+  reportCountByIpSince(ip: string, since: number): number {
+    return Number((this.db.prepare('SELECT COUNT(*) AS n FROM reports WHERE ip = ? AND at > ?').get(ip, since) as { n: number }).n);
+  }
+
+  reportCountSince(since: number): number {
+    return Number((this.db.prepare('SELECT COUNT(*) AS n FROM reports WHERE at > ?').get(since) as { n: number }).n);
+  }
+
+  isReportBanned(accountId: number): boolean {
+    return !!this.db.prepare('SELECT 1 FROM report_bans WHERE account_id = ?').get(accountId);
+  }
+
+  setReportBan(accountId: number, banned: boolean, byName: string, at = Date.now()): void {
+    if (banned) this.db.prepare('INSERT OR REPLACE INTO report_bans (account_id, at, by_name) VALUES (?, ?, ?)').run(accountId, at, byName);
+    else this.db.prepare('DELETE FROM report_bans WHERE account_id = ?').run(accountId);
+  }
+
+  /** Reports newest first, optionally of one topic / status, starting below id `before`. */
+  listReports(limit: number, before: number | undefined, topic: string | undefined, status: string | undefined): AdminReportRow[] {
+    const rows = this.db.prepare(`SELECT r.*, EXISTS (SELECT 1 FROM report_bans b WHERE b.account_id = r.account_id) AS banned FROM reports r
+      WHERE r.id < ? AND (? IS NULL OR r.topic = ?) AND (? IS NULL OR r.status = ?) ORDER BY r.id DESC LIMIT ?`)
+      .all(before ?? Number.MAX_SAFE_INTEGER, topic ?? null, topic ?? null, status ?? null, status ?? null, limit) as Record<string, unknown>[];
+    return rows.map((r) => ({
+      id: Number(r.id), at: Number(r.at), accountId: Number(r.account_id), username: String(r.username), charName: String(r.char_name),
+      topic: r.topic as AdminReportRow['topic'], text: String(r.text), status: r.status as AdminReportRow['status'], zone: String(r.zone),
+      channel: r.channel === null ? null : Number(r.channel), x: Number(r.x), z: Number(r.z), level: Number(r.level),
+      rtt: r.rtt === null ? null : Number(r.rtt), fps: r.fps === null ? null : Number(r.fps), ip: String(r.ip), banned: !!r.banned,
+    }));
+  }
+
+  /** Returns the report's account id and old status, or undefined if there is no such report. */
+  setReportStatus(id: number, status: string): { accountId: number; old: string } | undefined {
+    const r = this.db.prepare('SELECT account_id, status FROM reports WHERE id = ?').get(id) as { account_id: number; status: string } | undefined;
+    if (!r) return undefined;
+    this.db.prepare('UPDATE reports SET status = ? WHERE id = ?').run(status, id);
+    return { accountId: r.account_id, old: r.status };
   }
 
   /** Records one admin action. */

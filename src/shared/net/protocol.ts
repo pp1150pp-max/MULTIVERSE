@@ -12,6 +12,7 @@ import type { StashData } from '../sim/stash';
 import type { Hazard } from '../sim/volcanoHeart';
 import type { MarketCall, MarketReply } from '../sim/market';
 import type { MailCall, MailReply } from '../mail';
+import type { ReportCall, ReportReply } from '../reports';
 import type { PartyFound, PartySnap } from '../party';
 import type { TradeView } from '../trade';
 import type { FriendsView } from '../friends';
@@ -95,6 +96,8 @@ export type ActionMsg =
   | ({ t: 'act'; req: number } & MarketCall)
   /** Mailbox (server/mail.ts). Answered with a `mail` message of the same `req`. */
   | ({ t: 'act'; req: number } & MailCall)
+  /** Bug report / feedback (server/reports.ts). Answered with a `report` message of the same `req`. */
+  | ({ t: 'act'; req: number } & ReportCall)
   // Party (server/party.ts). Members are named by character id, the target of an invite by character name.
   | { t: 'act'; a: 'partyCreate' }
   | { t: 'act'; a: 'partyInvite'; name: string }
@@ -284,6 +287,7 @@ export type ServerMsg =
   | ({ t: 'mail'; req: number } & MailReply)
   /** Your unread mail count (badge), sent on joining and when mail arrives; `fresh` = mail you haven't been told about (a chat line and a sound). */
   | { t: 'mailNote'; unread: number; fresh: number }
+  | ({ t: 'report'; req: number } & ReportReply)
   | { t: 'error'; msg: string }
   | { t: 'pong'; id: number }
   /** The connection is about to close; `msg` explains why. */

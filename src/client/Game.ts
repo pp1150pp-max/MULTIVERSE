@@ -32,6 +32,7 @@ import { QuestUI } from './quests';
 import { QuestTracker } from './questTracker';
 import { bossShortName } from '../shared/bossRoom';
 import { MailUI } from './mail';
+import { ReportUI } from './report';
 import { SystemMenu } from './sysmenu';
 import { endEntryLoading, flashZoneLoading, preloadLoadingArt } from './loadingScreen';
 import { LootView, MonsterView, PlayerView, ProjectileView, ViewSet } from './views';
@@ -76,6 +77,7 @@ export class Game {
   readonly quests: QuestUI;
   readonly questTracker: QuestTracker;
   readonly mailUI: MailUI;
+  readonly report: ReportUI;
   /** Another player under the mouse (when no monster or usable thing is): a left click offers a party invite. */
   private hoveredPlayer: Player | null = null;
   /** The left button went down on a player: no basic attack until it is let go. */
@@ -156,6 +158,7 @@ export class Game {
     this.quests = new QuestUI(this, () => this.hud.openDialog());
     this.questTracker = new QuestTracker(this);
     this.mailUI = new MailUI(this);
+    this.report = new ReportUI(this);
     initDraggableWindows(document.getElementById('hud')!);
     this.checkGpu();
     window.addEventListener('resize', () => {
