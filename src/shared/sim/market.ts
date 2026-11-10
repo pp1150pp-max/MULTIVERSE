@@ -29,6 +29,9 @@ export const MARKET_NAME_MAX = 30;
 /** Sold, expired and cancelled listings are kept this long after they are claimed (history). */
 export const MARKET_HISTORY_DAYS = 30;
 
+/** What the server says when an account searches (or asks price hints) faster than its bucket allows. */
+export const MARKET_THROTTLE_MSG = 'ค้นหาเร็วเกินไป รอสักครู่';
+
 export const listingFee = (price: number): number => Math.floor((price * MARKET_FEE_PCT) / 100);
 export const saleTax = (price: number): number => Math.floor((price * MARKET_TAX_PCT) / 100);
 /** What the seller collects when it sells. */
@@ -113,6 +116,8 @@ export interface MarketMine {
 export type MarketCall =
   | { a: 'mktSearch'; q: MarketQuery }
   | { a: 'mktMine' }
+  /** Price hints for the bag slot `i` (the server looks at what is really there). */
+  | { a: 'mktPrice'; i: number }
   /** `n` = list only that many stones of a stack (omitted = the whole slot); the rest stays in the bag. */
   | { a: 'mktList'; i: number; price: number; n?: number }
   | { a: 'mktCancel'; id: number }
@@ -120,8 +125,19 @@ export type MarketCall =
   /** id -1 = collect everything that fits. */
   | { a: 'mktClaim'; id: number };
 
+/** Price hints for the Sell tab. Gold per unit (a stone, or a piece of gear); null = nothing to go by. */
+export interface MarketPriceRef {
+  /** Cheapest unit price for sale now. */
+  lowest: number | null;
+  /** Average unit price of the last few sales. */
+  sold: number | null;
+  /** How many sales that average is from (up to 5). */
+  soldN: number;
+}
+
 export interface MarketReply {
   ok: boolean;
+  priceRef?: MarketPriceRef;
   /** Shown to the player (what happened, or why not). */
   msg?: string;
   page?: MarketPage;

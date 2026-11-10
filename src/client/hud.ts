@@ -359,7 +359,7 @@ export class Hud {
         this.sellFromBag(i);
         return;
       }
-      this.confirm(
+      const dropAsk = () => this.confirm(
         `วาง ${name} ลงบนพื้น?<br><small>เก็บคืนได้ภายใน 60 วินาที · ถ้าจะขาย ให้ไปหาพ่อค้าที่เมือง</small>`,
         'วางลงพื้น',
         () => {
@@ -369,6 +369,12 @@ export class Hud {
           if (this.forgeOpen) this.renderForge();
         },
       );
+      // Standing at the market broker: offer to list it or search for the same kind (the menu also has "drop").
+      if (g.backend.npcDistance('broker') <= NPC_USE_RANGE) {
+        this.market.bagMenu(i, e, dropAsk);
+        return;
+      }
+      dropAsk();
     });
     bag.addEventListener('mousemove', (e) => {
       if (this.drag?.ghost) return;
