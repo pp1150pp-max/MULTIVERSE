@@ -3,7 +3,7 @@
 // 10 s out-of-combat rule for switching. The end-to-end wiring is in channels-server.test.ts.
 import { finish, ok } from './check';
 import { Channels, FightClock, type Channel } from '../server/channels';
-import { ZONE_1, ZONE_2, ZONE_HUB, ZONES } from '../src/shared/data/zones';
+import { BOSS_ROOMS, ZONE_1, ZONE_2, ZONE_HUB, ZONES } from '../src/shared/data/zones';
 import { CH_PARTY_CAP, CH_RECONNECT_MS, CH_SOLO_CAP, CH_SWITCH_CALM, hasChannels, placeLabel } from '../src/shared/channels';
 
 let n = 0;
@@ -21,6 +21,7 @@ const empty = (c: Channel) => {
 {
   ok([ZONE_1, ZONE_2].every(hasChannels) && Object.values(ZONES).filter(hasChannels).length === 4, 'the 4 farm maps have channels');
   ok(!hasChannels(ZONE_HUB), 'the hub does not (yet)');
+  ok(Object.values(BOSS_ROOMS).every((r) => !hasChannels(r)), 'boss rooms do not (they have their own rooms)');
   ok(placeLabel(ZONE_1, 2) === 'ป่ามรกต · CH 2' && placeLabel(ZONE_HUB, 1) === ZONE_HUB.nameTh, 'label: "ป่ามรกต · CH 2", the hub just its name');
   ok(CH_SOLO_CAP === 20 && CH_PARTY_CAP === 22 && CH_SWITCH_CALM === 10 && CH_RECONNECT_MS === 60_000, 'owner numbers: 20 / 22 / 10 s / 60 s');
 }

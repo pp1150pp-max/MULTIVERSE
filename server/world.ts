@@ -159,7 +159,8 @@ interface Session {
   lastCh: number;
   /** When the player last fought: a channel switch needs CH_SWITCH_CALM seconds since. Kept across maps. */
   fight: FightClock;
-  /** When this session last used the channel window (performance.now()). */
+  /** When this session last asked for the channel list, and last tried a switch (performance.now()), throttled apart. */
+  lastChListAt: number;
   lastChAt: number;
 }
 
@@ -469,7 +470,7 @@ export class GameWorld {
       ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity, blockTrades: false,
-      lastFriendAt: -Infinity, friendKey: '', lastCh: back?.channel.ch ?? 1, fight: new FightClock(Math.max(player.lastHurt, player.lastAttack)), lastChAt: -Infinity,
+      lastFriendAt: -Infinity, friendKey: '', lastCh: back?.channel.ch ?? 1, fight: new FightClock(Math.max(player.lastHurt, player.lastAttack)), lastChListAt: -Infinity, lastChAt: -Infinity,
     };
     try {
       s.playRow = this.db.startPlaySession({ accountId: acc.id, username: acc.username, guest: acc.guest, charId, charName: player.name, ip });
@@ -1407,6 +1408,8 @@ export class GameWorld {
     this.trades.cancelChar(s.charId, `${s.player.name} เปลี่ยนแมพ`);
     const old = s.player;
     const from = s.sim;
+    // A hit taken this very tick still counts after the move.
+    s.fight.seen(Math.max(old.lastHurt, old.lastAttack), Date.now());
     from.removePlayer(old);
     this.byPlayer.delete(old);
     const p = dest.addPlayer(old.toData(), atCamp ? undefined : from.zone.id);
@@ -1696,11 +1699,15 @@ export class GameWorld {
    * the rules (cap, out of combat, alive) are in Channels.switchError.
    */
   private onChannel(s: Session, m: ActionMsg): void {
+    // The list (refreshed every 2 s while the window is open) and a switch are throttled apart, so a
+    // click right after a refresh isn't dropped.
     const now = performance.now();
-    if (now - s.lastChAt < CH_ACTION_MS) return;
-    s.lastChAt = now;
+    const list = m.a === 'chList';
+    if (now - (list ? s.lastChListAt : s.lastChAt) < CH_ACTION_MS) return;
+    if (list) s.lastChListAt = now;
+    else s.lastChAt = now;
     const here = this.channels.of(s.sim);
-    if (m.a === 'chList') {
+    if (list) {
       this.send(s.ws, { t: 'channels', view: this.channelsView(s) });
       return;
     }
