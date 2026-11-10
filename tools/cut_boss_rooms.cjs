@@ -3,6 +3,7 @@
 //   summoners.png        2×2 → props/summoner_*.png (256 px tall)
 //   room_props_<t>.png   4×2 → props/room_<t>_<name>.png (256 px tall)
 //   ground_room_<t>.png  → ground/room_<t>.png (1024×1024)
+//   ../boss_witch/raw/witch_fx.png 3×2 → fx/witch_*.png
 // Usage: PNGJS=<path to pngjs> node tools/cut_boss_rooms.cjs [RAW folder]
 const path = require('path');
 const fs = require('fs');
@@ -96,6 +97,19 @@ for (const t of ['forest', 'marsh', 'snow', 'volcano']) {
 }
 // The phoenix feather (one picture) → icons/stone_phoenix.png.
 if (has('phoenix_icon.png')) write('icons/stone_phoenix.png', icon(cell(read('phoenix_icon.png'), 1, 1, 0, 0), 96, 90));
+// The Bog Witch's spells (art_templates/boss_witch/raw/witch_fx.png, 3×2) → fx/witch_*.png.
+// The pool and the curse circle lie flat on the ground, so they are squared up; the rest keep their shape.
+const WITCH_RAW = path.join(ROOT, 'art_templates/boss_witch/raw/witch_fx.png');
+if (fs.existsSync(WITCH_RAW)) {
+  const src = PNG.sync.read(fs.readFileSync(WITCH_RAW));
+  // The toad (cell 4) is not used: a cursed player turns into the Bog Toad monster instead.
+  ['vial', 'pool', 'hand', 'toad', 'sigil', 'circle'].forEach((name, i) => {
+    if (name === 'toad') return;
+    const c = cell(src, 3, 2, i % 3, Math.floor(i / 3));
+    const flat = name === 'pool' || name === 'circle';
+    write(`fx/witch_${name}.png`, flat ? icon(c, 128, 128) : scale(c, Math.min(1, 128 / Math.max(c.width, c.height))));
+  });
+}
 // Arena floors: 1024×1024 like the other ground tiles (ground/room_<theme>.png).
 for (const t of ['forest', 'marsh', 'snow', 'volcano']) {
   if (!has(`ground_room_${t}.png`)) continue;

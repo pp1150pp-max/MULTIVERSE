@@ -5,6 +5,7 @@ import type { Player } from '../shared/sim/Player';
 import type { Monster } from '../shared/sim/Monster';
 import { itemArt } from '../shared/data/items';
 import { STONE_COLOR } from '../shared/data/stones';
+import { MONSTERS } from '../shared/data/monsters';
 import { LOOT_POP_TIME, type Loot } from '../shared/sim/Loot';
 import type { SimEvent } from '../shared/sim/types';
 import { SpriteActor } from './SpriteActor';
@@ -58,6 +59,8 @@ export class PlayerView {
   private seenSpeed = 0;
   private lastX = NaN;
   private lastZ = NaN;
+  /** Shown instead of the character while the Bog Witch's curse lasts. */
+  private toad: SpriteActor | null = null;
 
   constructor(readonly p: Player, private readonly scene: THREE.Scene) {
     const anim = animSets[p.cls.id];
@@ -81,7 +84,31 @@ export class PlayerView {
     // Owner 2026-11-10: the orbs stay while dead (only the aura goes).
     this.orbs.update(this.clock, p.x, p.z, p.orbs, true);
     this.cos.update(dt, p, fx);
+    this.updateToad(dt, fx);
     this.sync();
+  }
+
+  /**
+   * Cursed: the marsh's own Bog Toad (its sprite and idle animation, owner 2026-11-10) sits where the
+   * character stands, with a puff each time it appears or goes.
+   */
+  private updateToad(dt: number, fx: Effects): void {
+    const p = this.p;
+    const on = p.alive && p.toadT > 0;
+    if (on !== !!this.toad?.group.visible) {
+      fx.puff(p.x, 0.8, p.z, '#9a7aff', 0.8, 1.6);
+      this.actor.group.visible = !on;
+      if (!this.toad) {
+        const def = MONSTERS.bog_toad;
+        this.toad = new SpriteActor(sheets[def.id], def.height, def.radius * 1.1);
+        this.scene.add(this.toad.group);
+      }
+      this.toad.group.visible = on;
+    }
+    if (!this.toad?.group.visible) return;
+    this.toad.group.position.set(p.x, 0, p.z);
+    this.toad.face(p.faceX, p.faceZ);
+    this.toad.update(dt, false, 6);
   }
 
   /**
@@ -204,6 +231,10 @@ export class PlayerView {
 
   dispose(): void {
     this.disposeAura();
+    if (this.toad) {
+      this.scene.remove(this.toad.group);
+      this.toad.dispose();
+    }
     this.orbs.dispose();
     this.cos.dispose();
     this.disposeCrater();

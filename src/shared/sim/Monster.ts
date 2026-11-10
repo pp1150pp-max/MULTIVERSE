@@ -4,6 +4,7 @@ import type { Player } from './Player';
 import type { MonsterDef, ShotDef } from '../data/monsters';
 import { NO_BOOST, type MonsterBoost, type SpawnArea } from '../data/zones';
 import { VolcanoHeartBrain } from './volcanoHeart';
+import { SPELL_GAP, WitchSpells } from './bogWitch';
 
 const BOSS_RAMP_PER_SEC = 0.2;
 const BOSS_RAMP_MAX = 3;
@@ -83,6 +84,8 @@ export class Monster extends Unit {
   private fallT = 0;
   /** Bosses with a scripted pattern. Made on first use, so only the server has one. */
   private brain: VolcanoHeartBrain | null = null;
+  /** The Bog Witch's spells (def.spells). Made on first use, so only the server has them. */
+  spells: WitchSpells | null = null;
 
   /** The zone's monster boost: multiplies HP, attack and defense, and speed (moving and attacking). */
   private readonly zoneSpeed: number;
@@ -210,6 +213,13 @@ export class Monster extends Unit {
       this.brain.update(dt, sim, this);
       return;
     }
+    if (this.def.spells) {
+      this.spells ??= new WitchSpells();
+      // Out of the fight: her pools and curses go and the next fight starts fresh.
+      if (this.state === 'return' || (this.state === 'idle' && !this.target)) this.spells.reset(sim);
+      // Before any early return below, so a stunned witch's pools still hurt and curses still land.
+      this.spells.update(sim, this);
+    }
     if (this.jumpOutT > 0) {
       this.jumpOutT -= dt;
       const up = Math.max(0, 1 - this.jumpOutT / JUMP_OUT_TIME - 0.3) / 0.7;
@@ -250,6 +260,7 @@ export class Monster extends Unit {
     this.chargeCd -= skillTick;
     this.slamCd -= skillTick;
     this.thrownCd -= skillTick;
+    if (this.spells) this.spells.cd -= skillTick;
     this.leapCd -= dt * this.skillSpeed;
     this.aggroT -= dt;
     this.fleeT -= dt;
@@ -364,6 +375,9 @@ export class Monster extends Unit {
             this.startCharge(sim, p.x, p.z, 0.65);
           } else if (leap && this.leapCd <= 0 && d >= leap.minRange && d <= leap.maxRange) {
             this.startLeap(sim, p.x, p.z);
+          } else if (this.spells && this.spells.cd <= 0 && this.spells.cast(sim, this, p)) {
+            const [lo, hi] = SPELL_GAP;
+            this.spells.cd = (lo + Math.random() * (hi - lo)) * (frenzy ? frenzy.skill : 1) * (this.def.skillCd ?? 1);
           } else if (this.isBoss && this.slamCd <= 0 && d < Math.max(5, this.slamRadius)) {
             this.windKind = 'slam';
             this.windupT = 1.1 * this.skillMult();

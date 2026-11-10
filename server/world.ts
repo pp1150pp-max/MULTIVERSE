@@ -191,7 +191,7 @@ function eventPos(ev: SimEvent): Vec2 | null {
 
 /** While the server itself is moving (or holding) a character, the client's reported position is ignored. */
 function serverMoves(p: Player): boolean {
-  return !p.alive || p.isDashing || p.stunT > 0 || p.rootT > 0 || Math.abs(p.kbx) + Math.abs(p.kbz) > 0.05;
+  return !p.alive || p.isDashing || p.stunT > 0 || p.rootT > 0 || p.snareT > 0 || Math.abs(p.kbx) + Math.abs(p.kbz) > 0.05;
 }
 
 /** Input older than this is treated as "let go of everything" so a stalled client doesn't keep walking. */
@@ -1554,6 +1554,7 @@ export class GameWorld {
         x: r2(o.x), z: r2(o.z), fx: r2(o.faceX), fz: r2(o.faceZ), mv: o.moving,
         alive: o.alive, hp: Math.round(o.hp), maxHp: Math.round(o.maxHp), dash: o.isDashing ? o.dashKind : 0,
         ...(o.aura ? { aura: o.aura } : {}),
+        ...(o.toadT > 0 ? { toad: 1 as const } : {}),
         // Worked out by Player.recompute from the server's own copy of the gear (orbCodes clamps the levels).
         ...(o.orbs.length ? { orbs: o.orbs as number[] } : {}),
         ...cosSnap(o),

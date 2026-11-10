@@ -85,8 +85,9 @@ export class CosmeticRig {
 
   update(dt: number, p: Player, fx: Effects): void {
     this.clock += dt;
-    const alive = p.alive;
-    const seat = this.seat(p);
+    // Cursed into a toad by the Bog Witch: no wings, mount or aura on the toad (the pet still follows).
+    const alive = p.alive && p.toadT <= 0;
+    const seat = alive ? this.seat(p) : 0;
 
     // ---- wings: on the back, flapping all the time (faster while walking). Behind the body seen from
     // the front, in front of it seen from behind (nudged toward or away from the camera).

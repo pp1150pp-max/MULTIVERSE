@@ -863,3 +863,37 @@ export function drawCosmetic(c: { id: string; slot: string; color: string; color
     } else if (view === 'side') rect(ctx, s, 0.64, 0.58 + hop, 0.05, 0.07, OUT, null);
   };
 }
+
+// ---- The Bog Witch's spells: stand-ins until art_templates/boss_witch/raw/witch_fx.png is cut.
+export function drawWitchVial(): HTMLCanvasElement {
+  const c = newCanvas(20, 28);
+  const ctx = c.getContext('2d')!;
+  ell(ctx, 1, 10, 18, 8, 8, '#4fcf3a');
+  ell(ctx, 1, 8, 16, 3, 3, '#b8ff9a', null);
+  rect(ctx, 1, 7, 3, 6, 7, '#8fd8c8');
+  rect(ctx, 1, 7, 1, 6, 3, '#8a5a2a');
+  return c;
+}
+
+export function drawWitchPool(): HTMLCanvasElement {
+  return pixelCircle(64, '96,214,70', (d, x, y) => (d > 1 ? 0 : d > 0.86 ? 0.95 : (x * 7 + y * 13) % 23 === 0 ? 1 : 0.62));
+}
+
+export function drawWitchHand(): HTMLCanvasElement {
+  const c = newCanvas(32, 44);
+  const ctx = c.getContext('2d')!;
+  ell(ctx, 1, 16, 39, 14, 4, '#3a2a1a');
+  poly(ctx, 1, [10, 40, 22, 40, 23, 18, 9, 18], '#5a3e22');
+  for (const [x, top] of [[8, 4], [12, 1], [16, 0], [20, 2]] as const) rect(ctx, 1, x, top, 4, 20 - top, '#6a4a2a');
+  rect(ctx, 1, 23, 12, 5, 4, '#6a4a2a');
+  return c;
+}
+
+export function drawWitchSigil(): HTMLCanvasElement {
+  return pixelCircle(32, '170,130,255', (d, x, y) => (d > 1 ? 0 : d > 0.8 ? 1 : Math.abs(x - 15.5) < 2 || Math.abs(y - 13) < 2 ? 0.9 : 0));
+}
+
+export function drawWitchCircle(): HTMLCanvasElement {
+  return pixelCircle(96, '150,110,255', (d, x, y) =>
+    d > 1 ? 0 : d > 0.93 ? 1 : d > 0.8 && d < 0.84 ? 0.9 : d > 0.84 && d < 0.93 && (x + y) % 6 === 0 ? 0.8 : 0.12);
+}

@@ -190,6 +190,8 @@ export interface PlayerSnap {
   cos?: number[];
   /** 1 while riding the worn mount. Missing = on foot. */
   mnt?: 1;
+  /** Cursed into a toad by the Bog Witch (missing = not). */
+  toad?: 1;
 }
 
 export interface MonsterSnap {

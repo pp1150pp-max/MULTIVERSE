@@ -322,6 +322,10 @@ export class Player extends Unit {
   dashT = 0;
   /** Standing still to aim (Headshot): no walking, attacking or dashing until it runs out. */
   rootT = 0;
+  /** Held by the Bog Witch's mud hand: can still attack and cast, but not walk or dash. */
+  snareT = 0;
+  /** Cursed into a toad by the Bog Witch (also stunned for as long). The client draws a toad instead. */
+  toadT = 0;
   /** Share of damage dealt that heals the player, until sim time `lifestealUntil` (sword Q). */
   lifesteal = 0;
   lifestealUntil = -1;
@@ -826,6 +830,8 @@ export class Player extends Unit {
     this.restCd -= dt;
     this.faceLockT -= dt;
     this.rootT = Math.max(0, this.rootT - dt);
+    this.snareT = Math.max(0, this.snareT - dt);
+    this.toadT = Math.max(0, this.toadT - dt);
 
     const inCombat = sim.time - Math.max(this.lastHurt, this.lastAttack) <= COMBAT_LINGER;
     const ooc = inCombat ? 1 : OUT_OF_COMBAT_REGEN;
@@ -887,7 +893,15 @@ export class Player extends Unit {
       }
     }
 
-    if (it.dash && (this.cd.dash ?? 0) <= 0) {
+    // Held in the mud: no walking and no dash (attacks and skills still work).
+    const snared = this.snareT > 0;
+    if (snared) {
+      mx = 0;
+      mz = 0;
+      this.moveTarget = null;
+    }
+
+    if (it.dash && !snared && (this.cd.dash ?? 0) <= 0) {
       const dashSkill = this.skill('dash')!;
       const [dx, dz] = mx || mz ? [mx, mz] : [this.aimX, this.aimZ];
       this.startDash(dx, dz, 4.8, 0.18, 'dash');
@@ -931,7 +945,7 @@ export class Player extends Unit {
     }
 
     let moving = mx !== 0 || mz !== 0;
-    if (it.pos) {
+    if (it.pos && !snared) {
       // Online: the client already walked here (the server checked the distance).
       const dx = it.pos.x - this.x;
       const dz = it.pos.z - this.z;
