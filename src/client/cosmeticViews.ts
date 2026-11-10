@@ -66,6 +66,11 @@ function headOn(p: Player): boolean {
   return viewRow(p) === 0;
 }
 
+/** On the front diagonal the mount is cut in two around the rider (see CosmeticRig: mountHead). */
+function mountSplit(p: Player): boolean {
+  return viewRow(p) === 1;
+}
+
 /**
  * Facing the camera (front and front diagonal) the mount's head is nearer the camera than the rider and is
  * drawn in front of their legs. From the side and from behind the rider sits on its back, drawn over it
@@ -130,6 +135,9 @@ export function cosCardImage(c: CosmeticDef): string {
 export class CosmeticRig {
   private wings: Piece | null = null;
   private mount: Piece | null = null;
+  /** The mount's head half, drawn in front of the rider on the front diagonal (see mountSplit). */
+  private mountHead: SpriteActor | null = null;
+  private readonly headClip = new THREE.Plane();
   private pet: (Piece & { x: number; z: number; fx: number; fz: number }) | null = null;
   private aura: { id: string; m: THREE.Mesh } | null = null;
   private clock = 0;
@@ -171,8 +179,8 @@ export class CosmeticRig {
     const alive = p.alive && p.toadT <= 0;
     const seat = alive ? this.seat(p) : 0;
 
-    // ---- wings: on the back, flapping all the time (faster while walking). Always drawn behind the body,
-    // from every side (owner 2026-11-10).
+    // ---- wings: on the back, flapping all the time (faster while walking). Behind the body seen from the
+    // front and the side, over the back when it is turned to the camera (owner 2026-11-10).
     // Dying: they fade out with the fall, and come back with the revive.
     this.deadT = p.alive ? 0 : this.deadT + dt;
     const fade = p.alive ? 1 : Math.max(0, 1 - this.deadT / WINGS_FADE);
@@ -192,8 +200,10 @@ export class CosmeticRig {
       const along = bx * TO_CAM.x + bz * TO_CAM.z;
       const sx = (bx - along * TO_CAM.x) * WINGS_BACK;
       const sz = (bz - along * TO_CAM.z) * WINGS_BACK;
-      // Behind the body: lifted WINGS_LIFT over the rider's own base (seat), then 0.15 further back.
-      const [wx, wy, wz] = depthAt(p.x + sx, p.z + sz, WINGS_LIFT, -0.15);
+      // Lifted WINGS_LIFT over the rider's own base (seat); 0.15 behind the body, or in front of it when
+      // the back is turned to the camera.
+      const back = (p.faceX + p.faceZ) / fl < -0.3;
+      const [wx, wy, wz] = depthAt(p.x + sx, p.z + sz, WINGS_LIFT, back ? 0.15 : -0.15);
       a.group.position.set(wx, wy, wz);
       a.setLift(WINGS_LIFT + seat);
       a.face(p.faceX, p.faceZ);
@@ -202,17 +212,43 @@ export class CosmeticRig {
 
     // ---- mount: under the rider
     const mc = shownRiding(p) && alive ? shownCos(p, 'mount') : undefined;
+    const hadMount = this.mount;
     this.mount = this.piece(this.mount, mc, mc ? (MOUNT_LOOK[mc.id]?.h ?? MOUNT_H) : MOUNT_H, 0.6);
+    if (this.mount !== hadMount) this.dropMountHead();
     if (this.mount) {
       const a = this.mount.actor;
       // Head-on or from behind: the mount's head (or rear) in front of the rider. Else a little behind the
       // rider, who sits astride it (or stands on the board).
       // A board stays right under the feet, just behind the rider.
       // The rider's feet are `seat` up, the mount on the ground: measured from the rider's base it is `-seat` raised.
-      const d = MOUNT_LOOK[mc!.id]?.under ? -0.05 : mountInFront(p) ? 0.1 : -0.1;
+      const under = !!MOUNT_LOOK[mc!.id]?.under;
+      const split = !under && mountSplit(p);
+      const d = under ? -0.05 : !split && mountInFront(p) ? 0.1 : -0.1;
       const [mx, my, mz] = depthAt(p.x, p.z, -seat, d);
       a.group.position.set(mx, my, mz);
       a.face(p.faceX, p.faceZ);
+      // On the front diagonal: the whole mount behind the rider, plus its head half again in front of them,
+      // cut at the rider's middle on screen. One leg shows over the body, the other goes behind the neck.
+      // Made with the mount and animated with it every frame, so the two halves always show the same frame.
+      if (!this.mountHead) {
+        this.mountHead = new SpriteActor(sheets[cosSheetKey(this.mount.id)], MOUNT_LOOK[mc!.id]?.h ?? MOUNT_H, 0, COS_CYCLE);
+        this.mountHead.setClip([this.headClip]);
+        this.scene.add(this.mountHead.group);
+      }
+      if (this.mountHead) {
+        this.mountHead.group.visible = split;
+        this.mountHead.face(p.faceX, p.faceZ);
+        this.mountHead.update(dt, p.moving, 11);
+        if (split) {
+          // Screen right in the world is +x −z. Keep the side the head is on, from the rider's middle.
+          const sx = (p.faceX - p.faceZ) * Math.SQRT1_2;
+          const sign = sx >= 0 ? 1 : -1;
+          this.headClip.normal.set(sign * Math.SQRT1_2, 0, -sign * Math.SQRT1_2);
+          this.headClip.constant = -(this.headClip.normal.x * p.x + this.headClip.normal.z * p.z);
+          const [hx, hy, hz] = depthAt(p.x, p.z, -seat, 0.1);
+          this.mountHead.group.position.set(hx, hy, hz);
+        }
+      }
       a.update(dt, p.moving, 11);
     }
 
@@ -291,7 +327,15 @@ export class CosmeticRig {
     }
   }
 
+  private dropMountHead(): void {
+    if (!this.mountHead) return;
+    this.scene.remove(this.mountHead.group);
+    this.mountHead.dispose();
+    this.mountHead = null;
+  }
+
   dispose(): void {
+    this.dropMountHead();
     for (const pc of [this.wings, this.mount, this.pet]) {
       if (!pc) continue;
       this.scene.remove(pc.actor.group);
