@@ -94,6 +94,8 @@ for (const t of ['forest', 'marsh', 'snow', 'volcano']) {
     write(`props/room_${t}_${name}.png`, scale(c, Math.min(1, 256 / c.height)));
   });
 }
+// The phoenix feather (one picture) → icons/stone_phoenix.png.
+if (has('phoenix_icon.png')) write('icons/stone_phoenix.png', icon(cell(read('phoenix_icon.png'), 1, 1, 0, 0), 96, 90));
 // Arena floors: 1024×1024 like the other ground tiles (ground/room_<theme>.png).
 for (const t of ['forest', 'marsh', 'snow', 'volcano']) {
   if (!has(`ground_room_${t}.png`)) continue;

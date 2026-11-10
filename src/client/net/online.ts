@@ -162,8 +162,13 @@ export class OnlineBackend implements Backend {
 
   get room(): RoomSnap | null {
     const r = this.roomSnap;
-    if (!r || r.leaveIn === undefined) return r;
-    return { ...r, leaveIn: Math.max(0, r.leaveIn - (performance.now() - this.roomAt) / 1000) };
+    if (!r) return r;
+    const gone = (performance.now() - this.roomAt) / 1000;
+    return {
+      ...r,
+      ...(r.leaveIn !== undefined ? { leaveIn: Math.max(0, r.leaveIn - gone) } : {}),
+      ...(r.wipeIn !== undefined ? { wipeIn: Math.max(0, r.wipeIn - gone) } : {}),
+    };
   }
   private serverTime = 0;
   private serverTimeAt = performance.now();
@@ -184,6 +189,7 @@ export class OnlineBackend implements Backend {
   private filterPending = false;
   private autoSetPending = false;
   private pendingPotion: 'hp' | 'mp' | null = null;
+  private pendingRecall = false;
   private enhanceReq = 0;
   private marketReq = 0;
   private readonly marketWait = new Map<number, (r: MarketReply) => void>();
@@ -623,6 +629,7 @@ export class OnlineBackend implements Backend {
     me.cd = { ...pv.cd };
     me.potCd = pv.potCd;
     me.restCd = pv.restCd ?? 0;
+    me.castT = pv.castT ?? 0;
     if (typeof pv.buybackLeft === 'number') me.buybackLeft = pv.buybackLeft;
     if (pv.inv) {
       me.equipment = pv.inv.equipment;
@@ -726,6 +733,7 @@ export class OnlineBackend implements Backend {
     for (const key of Object.keys(me.cd) as SkillSlot[]) me.cd[key] = Math.max(0, (me.cd[key] ?? 0) - dt);
     me.potCd -= dt;
     me.restCd -= dt;
+    if (me.castT > 0) me.castT = Math.max(0, me.castT - dt);
 
     if (this.settling && !this.serverMoves) this.settle(dt);
     const moveDir = this.walk(dt, it);
@@ -744,8 +752,9 @@ export class OnlineBackend implements Backend {
       }
       this.send({
         t: 'input', pos: ours ? { x: me.x, z: me.z } : undefined, seq, move: moveDir, aim: it.aim, basic: it.basic, skills: it.skills,
-        dash: this.pendingDash, potion: this.pendingPotion,
+        dash: this.pendingDash, potion: this.pendingPotion, recall: this.pendingRecall || undefined,
       });
+      this.pendingRecall = false;
       this.pendingDash = false;
       this.pendingPotion = null;
     }
@@ -798,6 +807,8 @@ export class OnlineBackend implements Backend {
   unequip(slot: EquipSlot): void { this.send({ t: 'act', a: 'unequip', slot }); }
   drop(i: number): void { this.send({ t: 'act', a: 'drop', i }); }
   buyPotion(kind: PotionKind, size: PotionSize, n: number): void { this.send({ t: 'act', a: 'buy', kind, size, n }); }
+  buyReturnScroll(n: number): void { this.send({ t: 'act', a: 'buyScroll', n }); }
+  useReturnScroll(): void { this.pendingRecall = true; }
   sortBag(key: SortKey, desc: boolean): void { this.send({ t: 'act', a: 'sort', key, desc }); }
   moveInBag(from: number, to: number): void { this.send({ t: 'act', a: 'move', from, to }); }
   setAuto(on: boolean): void { this.send({ t: 'act', a: 'auto', on }); }
@@ -884,6 +895,8 @@ export class OnlineBackend implements Backend {
   roomOpen(keys: number, quest = false): void { this.send({ t: 'act', a: 'roomOpen', keys, ...(quest ? { quest } : {}) }); }
   questAccept(boss: string): void { this.send({ t: 'act', a: 'questAccept', boss }); }
   questTurnIn(boss: string): void { this.send({ t: 'act', a: 'questTurnIn', boss }); }
+  buyPhoenix(n: number): void { this.send({ t: 'act', a: 'buyPhoenix', n }); }
+  roomRevive(): void { this.send({ t: 'act', a: 'roomRevive' }); }
   roomAnswer(id: number, yes: boolean): void { this.send({ t: 'act', a: 'roomAnswer', id, yes }); }
   roomStart(): void { this.send({ t: 'act', a: 'roomStart' }); }
   roomCancel(): void { this.send({ t: 'act', a: 'roomCancel' }); }

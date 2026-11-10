@@ -54,6 +54,7 @@ export class RoomUI {
     this.invitesBox.id = 'room-invites';
     $('hud').append(this.invitesBox);
 
+    $('btn-revive').onclick = () => this.g.backend.roomRevive();
     this.line = el('div', 'hidden');
     this.line.id = 'room-line';
     $('hud').append(this.line);
@@ -194,6 +195,21 @@ export class RoomUI {
     this.invites.delete(id);
   }
 
+  /** Dead in a boss room: the death screen offers getting up here with a phoenix feather. */
+  private updateRevive(): void {
+    const btn = $<HTMLButtonElement>('btn-revive');
+    const r = this.g.backend.room;
+    const have = this.g.player.stoneCount('phoenix');
+    const show = !!r && !this.g.player.alive;
+    btn.classList.toggle('hidden', !show);
+    if (!show) return;
+    btn.disabled = r.revives <= 0 || have <= 0;
+    const label = r.revives <= 0 ? 'ชุบชีวิตในห้องนี้ครบแล้ว'
+      : have <= 0 ? `ไม่มี${STONE_NAME.phoenix}`
+      : `❤ ใช้${STONE_NAME.phoenix} ฟื้นที่นี่ (เหลือ ${r.revives} ครั้ง · มี ${have} อัน)`;
+    if (btn.textContent !== label) btn.textContent = label;
+  }
+
   // ------------------------------------------------------------ every frame
 
   update(): void {
@@ -209,9 +225,11 @@ export class RoomUI {
     if (this.open && (!s || Math.hypot(this.g.player.x - s.x, this.g.player.z - s.z) > 6)) this.toggle(false);
     const r = this.g.backend.room;
     const text = r
-      ? `${bossShortName(MONSTERS[r.boss]?.nameTh ?? r.boss)} ×${r.keys} · ห้อง ${r.channel}` +
+      ? `${bossShortName(MONSTERS[r.boss]?.nameTh ?? r.boss)} ×${r.keys} · ห้อง ${r.channel} · ❤ ${r.revives}` +
+        (r.wipeIn !== undefined ? ` · ทุกคนล้มหมด! ชุบภายใน ${Math.ceil(r.wipeIn)} วิ` : '') +
         (r.leaveIn !== undefined ? ` · กลับเมืองใน ${Math.ceil(r.leaveIn)} วิ` : '')
       : '';
+    this.updateRevive();
     if (text !== this.drawnLine) {
       this.drawnLine = text;
       this.line.textContent = text;

@@ -10,6 +10,8 @@ export const ROOM_INVITE_SECONDS = 30;
 export const ROOM_LOBBY_SECONDS = 60;
 /** Seconds after the boss dies before everyone is sent back to town (owner: 90). */
 export const ROOM_END_SECONDS = 90;
+/** Seconds a group that is all down has to get someone up with a phoenix feather before it has lost (owner: 5). */
+export const ROOM_WIPE_SECONDS = 5;
 
 /** How a member answered the invite. */
 export type RoomAnswer = 'wait' | 'yes' | 'no';
@@ -32,6 +34,10 @@ export interface RoomSnap {
   channel: number;
   /** Seconds until everyone is sent back to town (once the boss is dead). */
   leaveIn?: number;
+  /** How many more times you may get up here with a phoenix feather. */
+  revives: number;
+  /** Everyone is down: seconds left to get up before the group has lost. */
+  wipeIn?: number;
 }
 
 /** The invite line (owner's pick: option ง). */

@@ -407,8 +407,8 @@ export class MarketWindow {
 
   private renderFilters(): void {
     const myCls = this.g.player.cls.id;
-    const kindIcon = (k: MarketKind) => (k === 'stone' ? stoneIcon('enhance') : k === 'artifact' ? stoneIcon('key_bear') : emptySlotIcon(k, myCls));
-    const kindLabel = (k: MarketKind) => (k === 'stone' ? 'หินตีบวก' : k === 'artifact' ? 'Artifact' : SLOT_LABEL[k]);
+    const kindIcon = (k: MarketKind) => (k === 'stone' ? stoneIcon('enhance') : k === 'artifact' ? stoneIcon('key_bear') : k === 'consumable' ? stoneIcon('return_scroll') : emptySlotIcon(k, myCls));
+    const kindLabel = (k: MarketKind) => (k === 'stone' ? 'หินตีบวก' : k === 'artifact' ? 'Artifact' : k === 'consumable' ? 'ของใช้' : SLOT_LABEL[k]);
     $('mkt-cats').innerHTML =
       `<button class="mkt-cat${this.kind ? '' : ' on'}" data-kind=""><span class="mkt-cat-ic">${COIN_ICON}</span>ทั้งหมด</button>` +
       MARKET_KINDS.map((k) =>
