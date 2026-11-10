@@ -10,6 +10,8 @@ export const skillIcon = (skillId: string): string => iconImg(`skill_${skillId}`
 export const potionIcon = (kind: PotionKind): string => iconImg(`potion_${kind}`);
 export const COIN_ICON = iconImg('coin');
 
+const missingStone = new Set<string>();
+(window as unknown as { __stoneMissing: (k: string) => void }).__stoneMissing = (k) => void missingStone.add(k);
 const stoneFallback: Partial<Record<StoneKind, string>> = {};
 /** Blacksmith stone icon. No painted file yet: falls back to the placeholder gem until icons/stone_*.png exists. */
 export const stoneIcon = (kind: StoneKind): string => {
@@ -17,7 +19,9 @@ export const stoneIcon = (kind: StoneKind): string => {
   // A quest key wears its boss key's picture, with a mark that it is bound.
   const file = kind.replace(/^qkey_/, 'key_');
   if (file !== kind) return `<span class="gi-bound">${stoneIcon(file as StoneKind)}</span>`;
-  return `<img class="gi" src="assets/sprites/icons/stone_${file}.png" alt="" draggable="false" onerror="this.onerror=null;this.src='${alt}'">`;
+  // A file known to be missing goes straight to the placeholder: retrying the 404 on every bag redraw made the icon blink.
+  if (missingStone.has(file)) return `<img class="gi" src="${alt}" alt="" draggable="false">`;
+  return `<img class="gi" src="assets/sprites/icons/stone_${file}.png" alt="" draggable="false" onerror="this.onerror=null;this.src='${alt}';window.__stoneMissing('${file}')">`;
 };
 export const FORGE_ICON = iconImg('npc_forge');
 
