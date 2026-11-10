@@ -59,7 +59,10 @@ const TO_CAM = { x: Math.SQRT1_2, z: Math.SQRT1_2 };
 const PET_FLYING = new Set(['pet_dragon', 'pet_bot', 'pet_wisp']);
 /** World height of each kind's picture, and how high wings sit on the back. */
 const WINGS_H = 1.3;
-const WINGS_LIFT = 0.55;
+// Measured from the art (owner 2026-11-10: they hung at the hips): the wings' middle sits on the shoulders (~1.35).
+const WINGS_LIFT = 0.8;
+/** How far the wings sit behind the back, seen from the side (sideways on screen only). */
+const WINGS_BACK = 0.22;
 const MOUNT_H = 1.35;
 const PET_H = 0.8;
 /** Seconds the wings take to fade out after dying, along with the fall (owner 2026-11-10). */
@@ -154,8 +157,16 @@ export class CosmeticRig {
         this.wingsAlpha = fade;
         a.setOpacity(fade);
       }
-      const d = p.faceX + p.faceZ > 0 ? -0.15 : 0.15;
-      a.group.position.set(p.x + TO_CAM.x * d, 0, p.z + TO_CAM.z * d);
+      // In front of the body only when it clearly turns its back to the camera; side on they stay behind it.
+      const fl = Math.hypot(p.faceX, p.faceZ) || 1;
+      const d = (p.faceX + p.faceZ) / fl < -0.3 ? 0.15 : -0.15;
+      // Behind the back: the part of "backward" that runs across the screen (none facing the camera or away).
+      const bx = -p.faceX / fl;
+      const bz = -p.faceZ / fl;
+      const along = bx * TO_CAM.x + bz * TO_CAM.z;
+      const sx = (bx - along * TO_CAM.x) * WINGS_BACK;
+      const sz = (bz - along * TO_CAM.z) * WINGS_BACK;
+      a.group.position.set(p.x + TO_CAM.x * d + sx, 0, p.z + TO_CAM.z * d + sz);
       a.setLift(WINGS_LIFT + seat);
       a.face(p.faceX, p.faceZ);
       a.update(dt, true, p.moving ? 10 : 5);
