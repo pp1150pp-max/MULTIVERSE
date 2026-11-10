@@ -102,7 +102,9 @@ if (has('phoenix_icon.png')) write('icons/stone_phoenix.png', icon(cell(read('ph
 const WITCH_RAW = path.join(ROOT, 'art_templates/boss_witch/raw/witch_fx.png');
 if (fs.existsSync(WITCH_RAW)) {
   const src = PNG.sync.read(fs.readFileSync(WITCH_RAW));
+  // The toad (cell 4) is not used: a cursed player turns into the Bog Toad monster instead.
   ['vial', 'pool', 'hand', 'toad', 'sigil', 'circle'].forEach((name, i) => {
+    if (name === 'toad') return;
     const c = cell(src, 3, 2, i % 3, Math.floor(i / 3));
     const flat = name === 'pool' || name === 'circle';
     write(`fx/witch_${name}.png`, flat ? icon(c, 128, 128) : scale(c, Math.min(1, 128 / Math.max(c.width, c.height))));

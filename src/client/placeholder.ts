@@ -799,18 +799,6 @@ export function drawWitchHand(): HTMLCanvasElement {
   return c;
 }
 
-export function drawWitchToad(): HTMLCanvasElement {
-  const c = newCanvas(40, 32);
-  const ctx = c.getContext('2d')!;
-  ell(ctx, 1, 20, 21, 16, 10, '#6f7a2a');
-  ell(ctx, 1, 20, 25, 10, 5, '#d8d09a', null);
-  ell(ctx, 1, 12, 11, 5, 5, '#6f7a2a');
-  ell(ctx, 1, 28, 11, 5, 5, '#6f7a2a');
-  ell(ctx, 1, 12, 10, 3, 3, '#ffe04a');
-  ell(ctx, 1, 28, 10, 3, 3, '#ffe04a');
-  return c;
-}
-
 export function drawWitchSigil(): HTMLCanvasElement {
   return pixelCircle(32, '170,130,255', (d, x, y) => (d > 1 ? 0 : d > 0.8 ? 1 : Math.abs(x - 15.5) < 2 || Math.abs(y - 13) < 2 ? 0.9 : 0));
 }
