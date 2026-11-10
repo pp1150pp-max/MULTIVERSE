@@ -29,6 +29,7 @@ import { EnemyShot, Projectile, type ProjOpts } from './Projectile';
 import { Loot, LOOT_PRIORITY_TIME, type LootKind } from './Loot';
 import { nextRowPrice, STASH_GOLD_MAX, STASH_ROW } from './stash';
 import { splitInto } from './split';
+import { questRows } from '../quests';
 import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type SfxName, type SimEvent } from './types';
 
 /** Gear of this rarity that "sell all" may take: never potions or enhanced items. */
@@ -728,12 +729,7 @@ export class Sim {
 
   /** Quests The Seeker can give this player now: a boss of a map they have reached, not yet beaten, not taken, no key held. */
   questOffers(p: Player): string[] {
-    return Object.values(ZONES).flatMap((z) => {
-      const boss = z.lair?.boss;
-      const key = boss && BOSS_QUEST_KEY[boss];
-      if (!boss || !key || p.level < z.levels[0] || p.bossKills.includes(boss)) return [];
-      return p.quests[boss] === undefined && p.stoneCount(key) === 0 ? [boss] : [];
-    });
+    return questRows(p).filter((r) => r.state === 'offer').map((r) => r.boss);
   }
 
   questAccept(p: Player, boss: string): boolean {

@@ -3,8 +3,8 @@
 // way and what is ready to hand in. The server decides everything (Sim.questAccept / questTurnIn).
 import type { Game } from './Game';
 import { MONSTERS } from '../shared/data/monsters';
-import { ZONES } from '../shared/data/zones';
-import { BOSS_QUEST_KEY, QUEST_KILLS, STONE_NAME } from '../shared/data/stones';
+import { QUEST_KILLS, STONE_NAME } from '../shared/data/stones';
+import { questRows } from '../shared/quests';
 import { bossShortName } from '../shared/bossRoom';
 import { stoneIcon } from './icons';
 
@@ -45,22 +45,6 @@ export class QuestUI {
     if (show) this.update();
   }
 
-  /** Every boss's quest as this player sees it: offered, under way, ready, holding the key, or done. */
-  private rows() {
-    const p = this.g.player;
-    return Object.values(ZONES).flatMap((z) => {
-      const boss = z.lair?.boss;
-      const key = boss && BOSS_QUEST_KEY[boss];
-      if (!boss || !key) return [];
-      const kills = p.quests[boss];
-      const state = p.bossKills.includes(boss) ? 'done'
-        : p.stoneCount(key) > 0 ? 'holding'
-        : kills !== undefined ? (kills >= QUEST_KILLS ? 'ready' : 'going')
-        : p.level >= z.levels[0] ? 'offer' : 'locked';
-      return [{ boss, key, map: z, kills: kills ?? 0, state }];
-    });
-  }
-
   update(): void {
     if (!this.open) return;
     // Walked away from him: the window closes.
@@ -69,7 +53,7 @@ export class QuestUI {
       this.toggle(false);
       return;
     }
-    const rows = this.rows();
+    const rows = questRows(this.g.player);
     const sig = JSON.stringify(rows.map((r) => [r.state, r.kills]));
     if (sig === this.drawn) return;
     this.drawn = sig;

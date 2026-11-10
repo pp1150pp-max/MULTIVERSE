@@ -122,6 +122,14 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 .npc-blacksmith { --npc-c: #ff9a4a; }
 .npc-keeper { --npc-c: #8ab8ff; }
 @keyframes npc-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+/* Quest giver: ! = a quest to take, ? = one ready to hand in. Drawn with type: thick yellow, hard black pixel outline. */
+.npc-mark {
+  font: 900 30px/1 'Arial Black', Impact, sans-serif; color: #ffd83a; margin-bottom: 2px;
+  text-shadow: 2px 0 0 #000, -2px 0 0 #000, 0 2px 0 #000, 0 -2px 0 #000, 2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000, 0 4px 0 #7a5a00;
+  animation: npc-mark-bounce 1s ease-in-out infinite;
+}
+.npc-mark.turn-in { color: #ffe866; }
+@keyframes npc-mark-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
 
 /* Countdown over an empty boss lair. */
 .boss-timer {
@@ -868,6 +876,36 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 .log-line.chat b { color: #9fe0ff; font-weight: 600; }
 .log-line.system { color: #b9b09a; font-style: italic; }
 #hud-online { margin-top: 2px; font-size: 12px; color: #9fe0ff; text-shadow: 0 0 3px #000; }
+/* Quest tracker under the online line: dark panel, bronze edge, cream and gold text. Folds away. */
+#quest-tracker {
+  margin-top: 6px; width: 236px; pointer-events: auto;
+  background: rgba(20, 16, 10, 0.78); border: 1px solid var(--panel-edge); border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+#quest-tracker.folded { width: auto; display: inline-block; }
+#quest-tracker .qt-head {
+  display: block; width: 100%; text-align: left; padding: 4px 10px; font-size: 13px; font-weight: 600;
+  color: var(--gold-hi); background: none; border: none; box-shadow: none; border-radius: 0; cursor: pointer;
+}
+#quest-tracker:not(.folded) .qt-head { border-bottom: 1px solid rgba(160, 120, 60, 0.45); }
+#quest-tracker .qt-arrow { display: inline-block; width: 10px; color: var(--gold); }
+#quest-tracker .qt-ready-dot { color: #ffd83a; font-weight: 900; text-shadow: 1px 1px 0 #000; }
+#quest-tracker .qt-row { padding: 5px 10px 6px; cursor: pointer; }
+#quest-tracker .qt-row + .qt-row { border-top: 1px solid rgba(160, 120, 60, 0.25); }
+#quest-tracker .qt-row:hover { background: rgba(242, 194, 48, 0.08); }
+#quest-tracker .qt-name { font-size: 13px; color: #f2e6c8; }
+#quest-tracker .qt-goal { font-size: 11px; color: var(--ink-dim); margin-top: 1px; }
+#quest-tracker .qt-bar { height: 4px; margin-top: 4px; background: #2a2418; border: 1px solid #4a3e2a; border-radius: 2px; overflow: hidden; }
+#quest-tracker .qt-bar > div { height: 100%; background: linear-gradient(#e8c060, #a87a2a); }
+#quest-tracker .qt-row.ready .qt-name, #quest-tracker .qt-row.ready .qt-goal { color: #ffd34a; }
+#quest-tracker .qt-row.ready .qt-bar > div { background: linear-gradient(#fff0a0, #f2c230); box-shadow: 0 0 6px #f2c230; }
+@media (max-width: 700px) and (orientation: portrait) {
+  #quest-tracker { width: 190px; }
+  #quest-tracker .qt-head { font-size: 12px; padding: 3px 8px; }
+  #quest-tracker .qt-row { padding: 4px 8px 5px; }
+  #quest-tracker .qt-name { font-size: 12px; }
+  #quest-tracker .qt-goal { font-size: 10px; }
+}
 #hud-guest { margin-top: 2px; font-size: 12px; color: #ffcf6a; text-shadow: 0 0 3px #000; }
 .hint.guest-move { color: #ffcf6a; }
 #disconnect { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(0, 0, 0, 0.75); pointer-events: auto; z-index: 7; }
