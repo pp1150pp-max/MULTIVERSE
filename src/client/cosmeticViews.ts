@@ -92,8 +92,14 @@ const PET_FLYING = new Set(['pet_dragon', 'pet_bot', 'pet_wisp']);
 // Owner 2026-11-10: 25% bigger than the first 1.3.
 const WINGS_H = 1.625;
 // Measured from the art (owner 2026-11-10: they hung at the hips): the wings' middle sits on the shoulders (~1.35).
-// Kept centred on the shoulders when they grew 25% (was 0.8 at 1.3 tall).
-const WINGS_LIFT = 0.64;
+/**
+ * Owner 2026-11-10: the wings belong in the middle of the back. Their roots (the binding between them) sit
+ * about 60% up the picture; this puts them there, standing and seated (a seated rider is shorter).
+ */
+const WINGS_ROOT = 0.6;
+const BACK_STANDING = 1.35;
+const BACK_SEATED = 1.0;
+const wingsLift = (riding: boolean) => (riding ? BACK_SEATED : BACK_STANDING) - WINGS_H * WINGS_ROOT;
 /** How far the wings sit behind the back, seen from the side (sideways on screen only). */
 const WINGS_BACK = 0.22;
 const MOUNT_H = 1.35;
@@ -200,12 +206,13 @@ export class CosmeticRig {
       const along = bx * TO_CAM.x + bz * TO_CAM.z;
       const sx = (bx - along * TO_CAM.x) * WINGS_BACK;
       const sz = (bz - along * TO_CAM.z) * WINGS_BACK;
-      // Lifted WINGS_LIFT over the rider's own base (seat); 0.15 behind the body, or in front of it when
+      // Roots on the middle of the back (wingsLift over the rider's own base); 0.15 behind the body, or in front of it when
       // the back is turned to the camera.
       const back = (p.faceX + p.faceZ) / fl < -0.3;
-      const [wx, wy, wz] = depthAt(p.x + sx, p.z + sz, WINGS_LIFT, back ? 0.15 : -0.15);
+      const lift = wingsLift(seat > 0);
+      const [wx, wy, wz] = depthAt(p.x + sx, p.z + sz, lift, back ? 0.15 : -0.15);
       a.group.position.set(wx, wy, wz);
-      a.setLift(WINGS_LIFT + seat);
+      a.setLift(lift + seat);
       a.face(p.faceX, p.faceZ);
       a.update(dt, true, p.moving ? 10 : 5);
     }
