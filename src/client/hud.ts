@@ -25,7 +25,7 @@ import {
   isBossKey, isBound, isConsumable, isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
   type BagEntry, type Item, type StatLine, type PotionKind, type PotionSize, type PotionStack, type Rarity, type StoneStack, type StoneKind, type EquipSlot, type StatKey,
 } from '../shared/types';
-import { drawMapIcon, facingAngle, partyDot } from './mapIcons';
+import { drawEdgeMarker, drawMapIcon, drawPin, facingAngle, partyDot } from './mapIcons';
 import type { MapIcon } from './mapIconNames';
 import { NPC_MAP_ICON } from './fullmap';
 import { MarketWindow } from './market';
@@ -49,7 +49,9 @@ const TEXT_SOCKETS: EquipSlot[] = [];
 
 /** The minimap's size on screen, and pixels per world unit. Its canvas holds twice that, to stay sharp. */
 const MINIMAP_SIZE = 176;
-const MINIMAP_SCALE = 2.6;
+/** Zoom levels of the minimap (pixels per world unit): far, normal, near. The + and − buttons step through them. */
+const MINIMAP_ZOOMS = [1.8, 2.6, 3.8];
+const MINIMAP_ZOOM_KEY = 'multiverse-minimap-zoom';
 
 type HudStyle = 'orbs' | 'bars';
 const HUD_STYLE_KEY = 'multiverse-hud-style';
@@ -133,6 +135,10 @@ export class Hud {
   dialogOpen = false;
   private fullMap: FullMap;
   private mapOpen = false;
+  /** Index into MINIMAP_ZOOMS. */
+  private mmZoom = 1;
+  /** The player's own map pin. Only for the zone object it was placed in, so a new visit starts clean. Never saved. */
+  private pin: { zone: object; x: number; z: number } | null = null;
   private slotEls: { kind: SkillSlot | PotionKind; el: HTMLElement; cd: HTMLElement; extra: HTMLElement }[] = [];
   private invDirty = true;
   private bagOpen = false;
@@ -179,12 +185,43 @@ export class Hud {
     new Image().src = 'assets/sprites/ui/inventory.png';
     $('btn-hud-style').onclick = () => this.setHudStyle($('hud').classList.contains('hud-orbs') ? 'bars' : 'orbs');
     this.fullMap = new FullMap($<HTMLCanvasElement>('fullmap-canvas'));
+    try {
+      const saved = Number(localStorage.getItem(MINIMAP_ZOOM_KEY));
+      if (Number.isInteger(saved) && saved >= 0 && saved < MINIMAP_ZOOMS.length) this.mmZoom = saved;
+    } catch {
+      // Blocked storage only means the zoom isn't remembered.
+    }
+    this.syncMinimapZoom();
     $('minimap').onclick = () => this.toggleMap(true);
+    $('mm-search').onclick = () => this.toggleMap(true);
+    $('mm-plus').onclick = () => this.setMinimapZoom(this.mmZoom + 1);
+    $('mm-minus').onclick = () => this.setMinimapZoom(this.mmZoom - 1);
     $('fullmap-close').onclick = () => this.toggleMap(false);
     $('fullmap-canvas').addEventListener('click', (e) => {
       const to = this.fullMap.toWorld(e.clientX, e.clientY);
-      if (this.g.walkTo(to.x, to.z)) this.toggleMap(false);
+      // The map stays open so you can watch the route; M, Esc or ✕ close it.
+      this.g.walkTo(to.x, to.z);
     });
+    // Right-click: put the pin there; right-click the pin itself to take it off.
+    $('fullmap-canvas').addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const pin = this.myPin();
+      if (pin && this.fullMap.onPin(e.clientX, e.clientY, pin)) {
+        this.pin = null;
+      } else {
+        const to = this.fullMap.toWorld(e.clientX, e.clientY);
+        const h = this.g.world.half;
+        if (Math.abs(to.x) > h || Math.abs(to.z) > h) return;
+        this.pin = { zone: this.g.backend.zone, x: to.x, z: to.z };
+      }
+      this.syncPinUi();
+      this.fullMap.draw(this.g, this.myPin());
+    });
+    $('fullmap-clearpin').onclick = () => {
+      this.pin = null;
+      this.syncPinUi();
+      this.fullMap.draw(this.g, null);
+    };
     $('hud-name').textContent = g.player.name;
     this.showZoneName();
     $('hud-online').classList.toggle('hidden', !g.backend.online);
@@ -879,7 +916,7 @@ export class Hud {
     if (this.mmT <= 0) {
       this.mmT = 0.1;
       this.drawMinimap();
-      if (this.mapOpen) this.fullMap.draw(this.g);
+      if (this.mapOpen) this.fullMap.draw(this.g, this.myPin());
     }
     if ((this.bagOpen || this.stashOpen) && this.invDirty) this.renderInventory();
   }
@@ -915,7 +952,7 @@ export class Hud {
     const c = W / 2;
     const g = this.g;
     const p = g.player;
-    const sc = MINIMAP_SCALE;
+    const sc = MINIMAP_ZOOMS[this.mmZoom];
     const S = Math.SQRT1_2;
     const zoom = ctx.canvas.width / W;
     ctx.setTransform(zoom, 0, 0, zoom, 0, 0);
@@ -975,6 +1012,32 @@ export class Hud {
       }
       partyDot(ctx, mx, my, 5);
     }
+    // Where a map click is sending the player: the rest of the route and its end.
+    const route = g.mapRoute;
+    const rim = c - 3;
+    if (route.length) {
+      ctx.beginPath();
+      ctx.moveTo(c, c);
+      for (const pt of route) ctx.lineTo(...toMM(pt.x, pt.z));
+      ctx.setLineDash([4, 3]);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(255, 243, 192, 0.9)';
+      ctx.stroke();
+      ctx.setLineDash([]);
+      const end = route[route.length - 1];
+      const [ex, ey] = toMM(end.x, end.z);
+      if (Math.hypot(ex - c, ey - c) <= rim - 8) drawMapIcon(ctx, 'flag', ex, ey, 18);
+      else drawEdgeMarker(ctx, c, rim, ex, ey, (x, y, s) => drawMapIcon(ctx, 'flag', x, y, s));
+    }
+    const pin = this.myPin();
+    if (pin) {
+      const [px, py] = toMM(pin.x, pin.z);
+      if (Math.hypot(px - c, py - c) <= rim - 8) drawPin(ctx, px, py, 20);
+      else drawEdgeMarker(ctx, c, rim, px, py, (x, y, s) => drawPin(ctx, x, y + s * 0.4, s * 1.1));
+    }
+    // Town NPCs and gates beyond the minimap's reach: a small icon on the rim, pointing their way.
+    for (const pt of g.backend.zone.portals) drawEdgeMarker(ctx, c, rim, ...toMM(pt.x, pt.z), (x, y, s) => drawMapIcon(ctx, 'portal', x, y, s));
+    for (const n of g.npcs) drawEdgeMarker(ctx, c, rim, ...toMM(n.x, n.z), (x, y, s) => drawMapIcon(ctx, NPC_MAP_ICON[n.id], x, y, s));
     drawMapIcon(ctx, 'player', c, c, 22, facingAngle(p.faceX, p.faceZ));
     ctx.restore();
     // A two-tone gold rim.
@@ -1020,6 +1083,30 @@ export class Hud {
 
   // ------------------------------------------------------------ full map
 
+  /** The pin placed in the zone the player is in now, if any. */
+  private myPin(): { x: number; z: number } | null {
+    return this.pin && this.pin.zone === this.g.backend.zone ? this.pin : null;
+  }
+
+  private syncPinUi(): void {
+    $('fullmap-clearpin').classList.toggle('hidden', !this.myPin());
+  }
+
+  private setMinimapZoom(i: number): void {
+    this.mmZoom = Math.max(0, Math.min(MINIMAP_ZOOMS.length - 1, i));
+    this.syncMinimapZoom();
+    try {
+      localStorage.setItem(MINIMAP_ZOOM_KEY, String(this.mmZoom));
+    } catch {
+      // Blocked storage only means the zoom isn't remembered.
+    }
+  }
+
+  private syncMinimapZoom(): void {
+    $<HTMLButtonElement>('mm-plus').disabled = this.mmZoom >= MINIMAP_ZOOMS.length - 1;
+    $<HTMLButtonElement>('mm-minus').disabled = this.mmZoom <= 0;
+  }
+
   toggleMap(force?: boolean): void {
     this.mapOpen = force ?? !this.mapOpen;
     $('fullmap').classList.toggle('hidden', !this.mapOpen);
@@ -1027,9 +1114,10 @@ export class Hud {
     const z = this.g.backend.zone;
     $('fullmap-title').textContent = `แผนที่ — ${z.nameTh} (Lv.${z.levels[0]}-${z.levels[1]})`;
     $('fullmap-hint').textContent = this.g.backend.online
-      ? 'คลิกบนแผนที่เพื่อเดินไป · กด M หรือ Esc เพื่อปิด · ออนไลน์จะเห็นจุดมอน/ผู้เล่นเฉพาะที่อยู่ใกล้ตัว'
-      : 'คลิกบนแผนที่เพื่อเดินไป · กด M หรือ Esc เพื่อปิด';
-    this.fullMap.draw(this.g);
+      ? 'คลิกซ้ายเพื่อเดินไป · คลิกขวาเพื่อปักหมุด (คลิกขวาที่หมุดเพื่อลบ) · กด M หรือ Esc เพื่อปิด · ออนไลน์จะเห็นจุดมอน/ผู้เล่นเฉพาะที่อยู่ใกล้ตัว'
+      : 'คลิกซ้ายเพื่อเดินไป · คลิกขวาเพื่อปักหมุด (คลิกขวาที่หมุดเพื่อลบ) · กด M หรือ Esc เพื่อปิด';
+    this.syncPinUi();
+    this.fullMap.draw(this.g, this.myPin());
   }
 
   // ------------------------------------------------------------ auto settings
