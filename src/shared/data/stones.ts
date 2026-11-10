@@ -1,6 +1,6 @@
 // Blacksmith stones: dropped by bosses (reroll stones rarely by other monsters too), stacked in the bag like potions.
 // Boss keys (Artifacts) share the stone stack: they stack, sell, trade and list on the market the same way.
-import type { BossKey, StoneKind, StoneStack } from '../types';
+import { isConsumable, type BossKey, type StoneKind, type StoneStack } from '../types';
 import type { RerollKind } from './reroll';
 
 /** Most stones (or keys) one bag or stash slot can hold (owner: 10). */
@@ -35,6 +35,7 @@ export const STONE_NAME: Record<StoneKind, string> = {
   key_witch: 'ลูกแก้วแม่มดหนอง',
   key_yeti: 'เขี้ยวเยติ',
   key_heart: 'แกนหัวใจลาวา',
+  return_scroll: 'ม้วนคัมภีร์กลับเมือง',
 };
 
 const keyDesc = (boss: string, zone: string): string =>
@@ -49,6 +50,7 @@ export const STONE_DESC: Record<StoneKind, string> = {
   key_witch: keyDesc('แม่มดหนอง', 'หนองน้ำหมอก'),
   key_yeti: keyDesc('เยติ', 'ดินแดนหิมะ'),
   key_heart: keyDesc('หัวใจภูเขาไฟ', 'เกาะภูเขาไฟ'),
+  return_scroll: 'ร่าย 3 วินาทีแล้ววาร์ปกลับกลางเมืองศูนย์กลางมิติ (ปุ่ม G หรือคลิก) · โดนโจมตี เดิน ตี หรือใช้สกิลระหว่างร่าย = ยกเลิก ม้วนไม่หาย',
 };
 
 export const STONE_COLOR: Record<StoneKind, string> = {
@@ -60,11 +62,21 @@ export const STONE_COLOR: Record<StoneKind, string> = {
   key_witch: '#6fd8b0',
   key_yeti: '#cfeeff',
   key_heart: '#ff6a3a',
+  return_scroll: '#5fe0d0',
 };
 
-/** "ก้อน" for stones, "อัน" for keys. */
-export const stoneUnit = (k: StoneKind): string => (k.startsWith('key_') ? 'อัน' : 'ก้อน');
+/** "ก้อน" for stones, "อัน" for keys, "ม้วน" for the return scroll. */
+export const stoneUnit = (k: StoneKind): string => (k === 'return_scroll' ? 'ม้วน' : k.startsWith('key_') ? 'อัน' : 'ก้อน');
+
+/** Return scroll: the merchant's price (owner: 500 G) and how long it takes to cast (owner: 3 s). */
+export const RETURN_SCROLL_PRICE = 500;
+export const RETURN_CAST = 3;
+
+/** What the merchant pays for one: consumables half their shop price, stones and keys STONE_SELL. */
+export function stoneSellPrice(k: StoneKind): number {
+  return isConsumable(k) ? Math.floor(RETURN_SCROLL_PRICE / 2) : STONE_SELL;
+}
 
 export function stoneStackValue(s: StoneStack): number {
-  return STONE_SELL * s.count;
+  return stoneSellPrice(s.stone) * s.count;
 }

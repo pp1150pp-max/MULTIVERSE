@@ -136,6 +136,14 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 
 /* ---------------------------------------------------------------- HUD */
 
+/* Return-scroll cast bar, just under the middle of the screen. */
+#cast-bar {
+  position: absolute; left: 50%; top: 62%; transform: translateX(-50%); width: 220px; height: 18px;
+  background: rgba(20, 16, 10, 0.85); border: 1px solid #5fe0d0; border-radius: 3px; overflow: hidden; z-index: 4;
+}
+#cast-bar .cast-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(#7ff0e0, #2fa89a); }
+#cast-bar span { position: relative; display: block; text-align: center; font-size: 12px; line-height: 18px; color: #fff; text-shadow: 1px 1px 0 #000; }
+
 #hud { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
 #hud button, #hud .panel, #hud #skillbar, #hud #dialog, #hud #death { pointer-events: auto; }
 

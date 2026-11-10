@@ -760,8 +760,8 @@ export class Db {
     if (q.rarities?.length) where.push(`l.rarity IN (${q.rarities.map(() => '?').join(', ')})`), args.push(...q.rarities);
     if (q.name) where.push("l.name LIKE ? ESCAPE '\\'"), args.push(`%${q.name.replace(/[\\%_]/g, (c) => '\\' + c)}%`);
     // Stones have no level: the level range only narrows gear.
-    if (q.lvMin) where.push("(l.kind = 'stone' OR l.level >= ?)"), args.push(q.lvMin);
-    if (q.lvMax) where.push("(l.kind = 'stone' OR l.level <= ?)"), args.push(q.lvMax);
+    if (q.lvMin) where.push("(l.kind IN ('stone', 'consumable') OR l.level >= ?)"), args.push(q.lvMin);
+    if (q.lvMax) where.push("(l.kind IN ('stone', 'consumable') OR l.level <= ?)"), args.push(q.lvMax);
     if (q.plusMin) where.push('l.plus >= ?'), args.push(q.plusMin);
     if (q.priceMax) where.push('l.price <= ?'), args.push(q.priceMax);
     for (const f of q.stats ?? []) {

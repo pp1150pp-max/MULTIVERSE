@@ -50,6 +50,8 @@ export interface InputMsg {
   /** One-shot actions pressed since the last input message. */
   dash: boolean;
   potion: 'hp' | 'mp' | null;
+  /** Start casting a return scroll. */
+  recall?: boolean;
 }
 
 export type ActionMsg =
@@ -60,6 +62,8 @@ export type ActionMsg =
   | { t: 'act'; a: 'unequip'; slot: EquipSlot }
   | { t: 'act'; a: 'drop'; i: number }
   | { t: 'act'; a: 'buy'; kind: PotionKind; size: PotionSize; n: number }
+  /** Buy `n` return scrolls from the merchant. */
+  | { t: 'act'; a: 'buyScroll'; n: number }
   | { t: 'act'; a: 'sort'; key: SortKey; desc: boolean }
   | { t: 'act'; a: 'move'; from: number; to: number }
   /** Auto Play on/off. The server plays it, so it keeps farming while the browser tab is hidden. */
@@ -183,6 +187,8 @@ export interface PrivateSnap {
   /** Gate bosses this character has killed (BOSS_GATES). */
   bossKills?: string[];
   cd: Partial<Record<SkillSlot, number>>; potCd: number; restCd: number;
+  /** Seconds left on a return-scroll cast (left out when not casting). */
+  castT?: number;
   /** True while the server moves the character (dash, knockback, stun, dead, Auto Play) — follow its position. */
   serverMoves: boolean;
   /** Changes when the server teleports the character (respawn) — jump straight there. */

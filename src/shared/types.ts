@@ -118,10 +118,17 @@ export const BLACKSMITH_STONES: BlacksmithStone[] = ['protect', 'enhance', 'rero
  */
 export type BossKey = 'key_bear' | 'key_witch' | 'key_yeti' | 'key_heart';
 export const BOSS_KEYS: BossKey[] = ['key_bear', 'key_witch', 'key_yeti', 'key_heart'];
-/** Everything a stone stack can hold: blacksmith stones and boss keys. */
-export type StoneKind = BlacksmithStone | BossKey;
-export const STONE_KINDS: StoneKind[] = [...BLACKSMITH_STONES, ...BOSS_KEYS];
+/**
+ * Consumables bought from the merchant (owner 2026-11-10: the return scroll). They share the stone stack too,
+ * so they stack, sell, trade, go in the stash and on the market (under their own "ของใช้" tab).
+ */
+export type Consumable = 'return_scroll';
+export const CONSUMABLES: Consumable[] = ['return_scroll'];
+/** Everything a stone stack can hold: blacksmith stones, boss keys and consumables. */
+export type StoneKind = BlacksmithStone | BossKey | Consumable;
+export const STONE_KINDS: StoneKind[] = [...BLACKSMITH_STONES, ...BOSS_KEYS, ...CONSUMABLES];
 export const isBossKey = (k: StoneKind): k is BossKey => (BOSS_KEYS as StoneKind[]).includes(k);
+export const isConsumable = (k: StoneKind): k is Consumable => (CONSUMABLES as StoneKind[]).includes(k);
 
 /** Stones of one kind sharing a bag slot (up to STONE_STACK). */
 export interface StoneStack {
