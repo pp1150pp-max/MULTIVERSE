@@ -1264,8 +1264,8 @@ export class World {
     spr.center.set(0.5, 0.03);
     spr.scale.set(w, height, 1);
     spr.position.set(x, 0, z);
-    // Long town-wall and fence pieces stand on a line, not a spot: a round shadow under each would only blot the ground.
-    if (!key.startsWith('town_wall') && !(key.startsWith('fence_') && !key.endsWith('_end'))) {
+    // Long town-wall pieces stand on a line, not a spot: a round shadow under each would only blot the ground.
+    if (!key.startsWith('town_wall')) {
       const sd = this.add(new THREE.Mesh(this.shadowGeo, this.shadowMat));
       // Turn the oval to the camera's 45 degrees so it lies flat across the screen (its long side
       // along CAM_RIGHT), and nudge it away from the camera so it sits under the base, not in front.
