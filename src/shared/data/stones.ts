@@ -23,6 +23,13 @@ export const BOSS_KEY: Record<string, BossKey> = {
   yeti: 'key_yeti',
   volcano_heart: 'key_heart',
 };
+/** A phoenix feather at the merchant (owner: 1,000 G); it sells back for half, like potions. */
+export const PHOENIX_PRICE = 1000;
+/** Revives each player may use in a boss room, per key put in (owner: 3 × keys). */
+export const REVIVES_PER_KEY = 3;
+/** What the merchant pays for one stone, key or feather. */
+export const stoneSell = (k: StoneKind): number => (k === 'phoenix' ? PHOENIX_PRICE / 2 : STONE_SELL);
+
 /** Each boss's quest key from The Seeker (bound to the character, see isBound). */
 export const BOSS_QUEST_KEY: Record<string, QuestKey> = {
   forest_bear: 'qkey_bear',
@@ -50,6 +57,7 @@ export const STONE_NAME: Record<StoneKind, string> = {
   qkey_witch: 'ลูกแก้วแม่มดหนอง (เควส)',
   qkey_yeti: 'เขี้ยวเยติ (เควส)',
   qkey_heart: 'แกนหัวใจลาวา (เควส)',
+  phoenix: 'ขนนกฟีนิกซ์',
 };
 
 const keyDesc = (boss: string, zone: string): string =>
@@ -71,6 +79,7 @@ export const STONE_DESC: Record<StoneKind, string> = {
   qkey_witch: questDesc('แม่มดหนอง'),
   qkey_yeti: questDesc('เยติ'),
   qkey_heart: questDesc('หัวใจภูเขาไฟ'),
+  phoenix: 'ใช้ตอนล้มในห้องบอส: ฟื้นตรงที่ล้มด้วย HP/MP ครึ่งหนึ่ง (1 อันต่อครั้ง ใช้ได้สูงสุด 3 ครั้งต่อกุญแจที่ใส่)',
 };
 
 export const STONE_COLOR: Record<StoneKind, string> = {
@@ -86,11 +95,12 @@ export const STONE_COLOR: Record<StoneKind, string> = {
   qkey_witch: '#6fd8b0',
   qkey_yeti: '#cfeeff',
   qkey_heart: '#ff6a3a',
+  phoenix: '#ff9a3a',
 };
 
 /** "ก้อน" for stones, "อัน" for keys. */
-export const stoneUnit = (k: StoneKind): string => (k.includes('key_') ? 'อัน' : 'ก้อน');
+export const stoneUnit = (k: StoneKind): string => (k.includes('key_') || k === 'phoenix' ? 'อัน' : 'ก้อน');
 
 export function stoneStackValue(s: StoneStack): number {
-  return STONE_SELL * s.count;
+  return stoneSell(s.stone) * s.count;
 }

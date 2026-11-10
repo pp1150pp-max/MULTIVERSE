@@ -125,9 +125,11 @@ export const BOSS_KEYS: BossKey[] = ['key_bear', 'key_witch', 'key_yeti', 'key_h
  */
 export type QuestKey = 'qkey_bear' | 'qkey_witch' | 'qkey_yeti' | 'qkey_heart';
 export const QUEST_KEYS: QuestKey[] = ['qkey_bear', 'qkey_witch', 'qkey_yeti', 'qkey_heart'];
-/** Everything a stone stack can hold: blacksmith stones, boss keys and quest keys. */
-export type StoneKind = BlacksmithStone | BossKey | QuestKey;
-export const STONE_KINDS: StoneKind[] = [...BLACKSMITH_STONES, ...BOSS_KEYS, ...QUEST_KEYS];
+/** Phoenix feathers: sold by the merchant, used to get up again where you fell in a boss room. */
+export type ShopStone = 'phoenix';
+/** Everything a stone stack can hold: blacksmith stones, boss keys, quest keys and phoenix feathers. */
+export type StoneKind = BlacksmithStone | BossKey | QuestKey | ShopStone;
+export const STONE_KINDS: StoneKind[] = [...BLACKSMITH_STONES, ...BOSS_KEYS, ...QUEST_KEYS, 'phoenix'];
 export const isBossKey = (k: StoneKind): k is BossKey => (BOSS_KEYS as StoneKind[]).includes(k);
 export const isQuestKey = (k: StoneKind): k is QuestKey => (QUEST_KEYS as StoneKind[]).includes(k);
 /** A quest key: stays in its owner's bag. */

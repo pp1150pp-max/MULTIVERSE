@@ -9,7 +9,7 @@ import {
 import {
   entryName, POTION_SIZES, POTION_SIZE_LABEL, POTION_STACK, POTIONS, potionHeal, potionName, potionSellPrice, stackLimit,
 } from '../shared/data/potions';
-import { REROLL_STONE, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_SELL, STONE_STACK, stoneStackValue, stoneUnit } from '../shared/data/stones';
+import { REROLL_STONE, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_SELL, STONE_STACK, stoneSell, stoneStackValue, stoneUnit, PHOENIX_PRICE } from '../shared/data/stones';
 import { lineRanges, rerollBlock } from '../shared/data/items';
 import { REROLL_NAME, rerollCost, type RerollKind } from '../shared/data/reroll';
 import { FullMap } from './fullmap';
@@ -21,7 +21,7 @@ import { ZONE_1 } from '../shared/data/zones';
 import { expToNext } from '../shared/formulas';
 import { blockingGate } from '../shared/data/bossGates';
 import {
-  isBossKey, isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
+  isBossKey, isBound, isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
   type BagEntry, type Item, type StatLine, type PotionKind, type PotionSize, type PotionStack, type Rarity, type StoneStack, type StoneKind, type EquipSlot, type StatKey,
 } from '../shared/types';
 import { drawMapIcon, facingAngle, partyDot } from './mapIcons';
@@ -423,21 +423,27 @@ export class Hud {
     buyGrid.innerHTML = (['hp', 'mp'] as const).flatMap((k) => POTION_SIZES.map((s) =>
       `<div class="cell pot" data-buy="${k}:${s}" style="--rc:${POTION_COLOR[k]}">${potionIcon(k)}` +
       `<span class="psize">${POTION_SIZE_LABEL[s]}</span><span class="cell-price">${POTIONS[k][s].price}</span></div>`,
-    )).join('');
+    )).join('') +
+      // Phoenix feathers, for getting up again in a boss room.
+      `<div class="cell pot stone" data-phoenix style="--rc:${STONE_COLOR.phoenix}">${stoneIcon('phoenix')}<span class="cell-price">${PHOENIX_PRICE}</span></div>`;
+    const phoenixCell = (e: Event) => !!(e.target as HTMLElement).closest('[data-phoenix]');
     const buyCell = (e: Event): [PotionKind, PotionSize] | null => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-buy]');
       return el ? (el.dataset.buy!.split(':') as [PotionKind, PotionSize]) : null;
     };
     buyGrid.addEventListener('click', (e) => {
+      if (phoenixCell(e)) return this.g.backend.buyPhoenix(e.shiftKey ? STONE_STACK : 1);
       const c = buyCell(e);
       if (c) this.buyPotion(c[0], c[1], e.shiftKey ? POTION_STACK : 1);
     });
     buyGrid.addEventListener('contextmenu', (e) => {
       e.preventDefault();
+      if (phoenixCell(e)) return this.g.backend.buyPhoenix(STONE_STACK);
       const c = buyCell(e);
       if (c) this.buyPotion(c[0], c[1], POTION_STACK);
     });
     buyGrid.addEventListener('mousemove', (e) => {
+      if (phoenixCell(e)) return this.showStoneTip({ stone: 'phoenix', count: 1 }, e, `คลิก: ซื้อ 1 · คลิกขวา: ซื้อ ${STONE_STACK} (อันละ ${PHOENIX_PRICE.toLocaleString()} G)`);
       const c = buyCell(e);
       if (c) this.showShopPotionTip(c[0], c[1], e);
       else this.hideTip();
@@ -1241,6 +1247,7 @@ export class Hud {
       const [kind, size] = el.dataset.buy!.split(':') as [PotionKind, PotionSize];
       el.classList.toggle('poor', p.gold < POTIONS[kind][size].price || p.potionRoom(kind, size) < 1);
     });
+    $('shop-buy').querySelector('[data-phoenix]')?.classList.toggle('poor', p.gold < PHOENIX_PRICE || p.stoneRoom('phoenix') < 1);
   }
 
   private potionTotals(): string {
@@ -1280,7 +1287,7 @@ export class Hud {
     };
     // A stack of 2+: ask how many to sell (the whole stack is the default).
     if (isStack(item) && item.count > 1) {
-      const each = isPotion(item) ? potionSellPrice(item.potion, item.size) : STONE_SELL;
+      const each = isPotion(item) ? potionSellPrice(item.potion, item.size) : stoneSell(item.stone);
       const unit = isPotion(item) ? 'ขวด' : stoneUnit(item.stone);
       this.askAmount(
         `ขาย ${name} กี่${unit}?<br><small>${unit}ละ ${each.toLocaleString()} G${isStone(item) ? ' · ซื้อคืนไม่ได้' : ''}</small>`,
@@ -1299,7 +1306,7 @@ export class Hud {
     }
     if (isStone(item)) {
       // Boss-only stones: always ask, they are hard to get back.
-      this.confirm(`ขาย ${name}?<br><small>ได้ ${stoneStackValue(item).toLocaleString()} G (${stoneUnit(item.stone)}ละ ${STONE_SELL.toLocaleString()} G) · ซื้อคืนไม่ได้</small>`, 'ขาย', sell);
+      this.confirm(`ขาย ${name}?<br><small>ได้ ${stoneStackValue(item).toLocaleString()} G (${stoneUnit(item.stone)}ละ ${stoneSell(item.stone).toLocaleString()} G) · ซื้อคืนไม่ได้</small>`, 'ขาย', sell);
       return;
     }
     if ((item.plus ?? 0) > 0) {
@@ -1893,11 +1900,13 @@ export class Hud {
     const tip = $('tooltip');
     tip.innerHTML =
       `<div class="tt-name" style="color:${STONE_COLOR[s.stone]}">${STONE_NAME[s.stone]}</div>` +
-      (isBossKey(s.stone)
-        ? `<div class="tt-sub">Artifact · ${s.count} / ${STONE_STACK} อัน · ดรอปจากมอนสเตอร์ในแมพของบอส</div>`
-        : `<div class="tt-sub">วัตถุดิบตีบวก · ${s.count} / ${STONE_STACK} ก้อน · ดรอปจากบอสเท่านั้น</div>`) +
+      `<div class="tt-sub">${
+        isBossKey(s.stone) ? `Artifact · ${s.count} / ${STONE_STACK} อัน · ดรอปจากมอนสเตอร์ในแมพของบอส`
+        : isBound(s) ? 'กุญแจเควส · ผูกกับตัวละคร'
+        : s.stone === 'phoenix' ? `ไอเทมชุบชีวิต · ${s.count} / ${STONE_STACK} อัน · ซื้อจากพ่อค้า`
+        : `วัตถุดิบตีบวก · ${s.count} / ${STONE_STACK} ก้อน · ดรอปจากบอสเท่านั้น`}</div>` +
       `<div class="tt-stats"><div>${STONE_DESC[s.stone]}</div></div>` +
-      `<div class="tt-hint">${hint}</div><div class="tt-val">ขายให้พ่อค้าได้${stoneUnit(s.stone)}ละ ${STONE_SELL.toLocaleString()} G</div>`;
+      `<div class="tt-hint">${hint}</div><div class="tt-val">${isBound(s) ? 'ขาย ทิ้ง ฝากคลัง หรือเทรดไม่ได้' : `ขายให้พ่อค้าได้${stoneUnit(s.stone)}ละ ${stoneSell(s.stone).toLocaleString()} G`}</div>`;
     this.placeTip(tip, e);
   }
 

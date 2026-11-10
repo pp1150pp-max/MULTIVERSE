@@ -655,6 +655,7 @@ const GEM: Record<`stone_${StoneKind}`, [string, string, string]> = {
   stone_qkey_witch: ['#1f5a4a', '#6fd8b0', '#d0fff0'],
   stone_qkey_yeti: ['#4a6a8a', '#cfeeff', '#ffffff'],
   stone_qkey_heart: ['#7a1f10', '#ff6a3a', '#ffd0a0'],
+  stone_phoenix: ['#8a2a10', '#ff9a3a', '#ffe8a0'],
 };
 
 export function drawIcon(

@@ -12,7 +12,7 @@ import {
   ANNOUNCE_FROM, dropsOnFail, enhanceCost, itemName, MAX_PLUS, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
 } from '../data/enhance';
 import { entryName, potionName, POTION_STACK, POTIONS, stackLimit } from '../data/potions';
-import { BOSS_KEY, BOSS_QUEST_KEY, BOSS_STONE_CHANCE, BOUND_MSG, QUEST_KILLS, KEY_DROP_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, STONE_COLOR, STONE_NAME } from '../data/stones';
+import { BOSS_KEY, BOSS_QUEST_KEY, BOSS_STONE_CHANCE, BOUND_MSG, PHOENIX_PRICE, QUEST_KILLS, REVIVES_PER_KEY, STONE_STACK, KEY_DROP_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, STONE_COLOR, STONE_NAME } from '../data/stones';
 import { NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { pick, rand, randInt } from '../rng';
 import { splitExp } from '../party';
@@ -920,6 +920,56 @@ export class Sim {
     this.log(`ซื้อ${potionName(kind, size)} × ${n} (−${cost} G)`, '#f2c230', p.id);
     this.sfx('trade', p.x, p.z, p.id);
     this.afterChange(p);
+    return true;
+  }
+
+  /** Phoenix feathers from the merchant. */
+  buyPhoenix(p: Player, n: number): boolean {
+    if (!this.near(p, 'merchant') || !Number.isInteger(n) || n <= 0) return false;
+    const cost = PHOENIX_PRICE * n;
+    if (p.gold < cost) {
+      this.log('ทองไม่พอ', '#ff8a6a', p.id);
+      return false;
+    }
+    if (!p.addStones('phoenix', n)) {
+      this.log(`กระเป๋าเต็ม — ${STONE_NAME.phoenix}ช่องละไม่เกิน ${STONE_STACK} อัน`, '#ff8a6a', p.id);
+      return false;
+    }
+    p.gold -= cost;
+    this.log(`ซื้อ${STONE_NAME.phoenix} × ${n} (−${cost.toLocaleString()} G)`, '#f2c230', p.id);
+    this.sfx('trade', p.x, p.z, p.id);
+    this.afterChange(p);
+    return true;
+  }
+
+  // ------------------------------------------------------------ getting up again in a boss room
+
+  /** Revives used in this room, by character name (a name is one character). */
+  private readonly revivesUsed = new Map<string, number>();
+
+  /** How many more times this player may get up here: 3 per key put in, less those used (0 outside rooms). */
+  revivesLeft(p: Player): number {
+    if (!this.zone.roomOf) return 0;
+    return Math.max(0, REVIVES_PER_KEY * this.keys - (this.revivesUsed.get(p.name) ?? 0));
+  }
+
+  /** Gets up where they fell with half HP and MP, for one phoenix feather (owner). */
+  reviveHere(p: Player): boolean {
+    if (p.alive || !this.zone.roomOf || this.revivesLeft(p) <= 0) return false;
+    if (!p.takeStones('phoenix', 1)) {
+      this.log(`ไม่มี${STONE_NAME.phoenix} — ซื้อได้ที่พ่อค้าในเมือง`, '#ff8a6a', p.id);
+      return false;
+    }
+    this.revivesUsed.set(p.name, (this.revivesUsed.get(p.name) ?? 0) + 1);
+    p.alive = true;
+    p.hp = Math.max(1, Math.round(p.maxHp / 2));
+    p.mp = Math.round(p.stats.maxMp / 2);
+    p.stunT = 0;
+    p.kbx = p.kbz = 0;
+    this.fx('burst', p.x, 1, p.z, '#ff9a3a', 24, 4);
+    this.events.push({ t: 'revived', id: p.id });
+    this.log(`ใช้${STONE_NAME.phoenix} ฟื้นขึ้นมา (ชุบได้อีก ${this.revivesLeft(p)} ครั้ง)`, '#ff9a3a', p.id);
+    this.events.push({ t: 'save', to: p.id });
     return true;
   }
 

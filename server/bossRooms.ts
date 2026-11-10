@@ -16,7 +16,7 @@ import { BOSS_KEY, BOSS_QUEST_KEY, STONE_NAME } from '../src/shared/data/stones'
 import { SUMMONER_RANGE } from '../src/shared/sim/terrain';
 import type { BossKey, StoneKind } from '../src/shared/types';
 import {
-  bossShortName, ROOM_END_SECONDS, ROOM_INVITE_SECONDS, ROOM_KEYS_MAX, ROOM_LOBBY_SECONDS,
+  bossShortName, ROOM_END_SECONDS, ROOM_INVITE_SECONDS, ROOM_KEYS_MAX, ROOM_LOBBY_SECONDS, ROOM_WIPE_SECONDS,
   type RoomAnswer, type RoomLobbyView, type RoomSnap,
 } from '../src/shared/bossRoom';
 
@@ -70,6 +70,8 @@ export interface Run {
   channel: number;
   /** When (ms) everyone is sent to town, once the boss is dead. */
   endAt: number | null;
+  /** Everyone is down: when (ms) the group has lost unless someone gets up. */
+  wipeAt: number | null;
 }
 
 export class BossRooms {
@@ -88,12 +90,13 @@ export class BossRooms {
     return this.runs.get(sim);
   }
 
-  /** What a player in this Sim sees of its room (undefined outside rooms). */
-  snap(sim: Sim): RoomSnap | undefined {
+  /** What this player in this Sim sees of its room (undefined outside rooms). */
+  snap(sim: Sim, p: Player): RoomSnap | undefined {
     const r = this.runs.get(sim);
     if (!r) return undefined;
-    const snap: RoomSnap = { boss: r.boss, keys: r.keys, channel: r.channel };
+    const snap: RoomSnap = { boss: r.boss, keys: r.keys, channel: r.channel, revives: sim.revivesLeft(p) };
     if (r.endAt !== null) snap.leaveIn = Math.max(0, Math.ceil((r.endAt - this.now()) / 1000));
+    if (r.wipeAt !== null) snap.wipeIn = Math.max(0, (r.wipeAt - this.now()) / 1000);
     return snap;
   }
 
@@ -251,9 +254,15 @@ export class BossRooms {
         sim.log(`ปราบบอสสำเร็จ! เก็บของได้ ${ROOM_END_SECONDS} วินาทีก่อนกลับเมือง — ประตูออกเปิดแล้ว`, '#ffcf5a', p.id);
       }
     }
-    // Everyone down at once (owner): the group has lost.
-    const lost = !sim.cleared && sim.players.every((p) => !p.alive);
-    if (lost) for (const p of sim.players) sim.log('ทีมพ่ายแพ้ — ทุกคนล้มลง กลับเมือง', '#ff6a5a', p.id);
+    // Everyone down: ROOM_WIPE_SECONDS to get someone up with a feather, else the group has lost (owner).
+    const down = !sim.cleared && sim.players.every((p) => !p.alive);
+    if (!down) r.wipeAt = null;
+    else if (r.wipeAt === null) {
+      r.wipeAt = t + ROOM_WIPE_SECONDS * 1000;
+      for (const p of sim.players) sim.log(`ทุกคนล้มหมด! ใช้ขนนกฟีนิกซ์ภายใน ${ROOM_WIPE_SECONDS} วินาที ไม่อย่างนั้นทีมจะแพ้`, '#ff6a5a', p.id);
+    }
+    const lost = down && r.wipeAt !== null && t >= r.wipeAt;
+    if (lost) for (const p of sim.players) sim.log('ทีมพ่ายแพ้ — กลับเมือง', '#ff6a5a', p.id);
     if (lost || (r.endAt !== null && t >= r.endAt)) {
       for (const p of [...sim.players]) this.host.toTown(sim, p);
     }
@@ -268,7 +277,7 @@ export class BossRooms {
     let channel = 1;
     while (used.has(channel)) channel++;
     const sim = new Sim(room, { keys });
-    this.runs.set(sim, { sim, boss, keys, channel, endAt: null });
+    this.runs.set(sim, { sim, boss, keys, channel, endAt: null, wipeAt: null });
     this.host.enter(charIds, sim);
     const bossName = bossShortName(MONSTERS[boss].nameTh);
     for (const id of charIds) this.host.tell(id, `เข้าสู่${room.nameTh} — ${bossName} ระดับ ×${keys} (ห้อง ${channel})`);

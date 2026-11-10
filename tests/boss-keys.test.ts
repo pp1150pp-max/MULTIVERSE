@@ -13,7 +13,7 @@ const zones = [ZONE_1, ZONE_2, ZONE_3, ZONE_4];
 
 ok(new Set(zones.map((z) => BOSS_KEY[z.lair!.boss])).size === 4, 'every boss has its own key');
 for (const k of BOSS_KEYS) ok(!!STONE_NAME[k] && !!STONE_DESC[k] && isBossKey(k), `${k} has a name and a description`);
-ok(BLACKSMITH_STONES.every((k) => !isBossKey(k)) && STONE_KINDS.length === BLACKSMITH_STONES.length + BOSS_KEYS.length + QUEST_KEYS.length, 'keys are not blacksmith stones');
+ok(BLACKSMITH_STONES.every((k) => !isBossKey(k)) && STONE_KINDS.length === BLACKSMITH_STONES.length + BOSS_KEYS.length + QUEST_KEYS.length + 1, 'keys are not blacksmith stones (plus the phoenix feather)');
 ok(KEY_DROP_CHANCE === 0.01, 'keys drop at 1%');
 ok(stoneStackValue({ stone: 'key_bear', count: 3 }) === 3000, 'a key sells for 1,000 G');
 ok(marketKind({ stone: 'key_yeti', count: 1 }) === 'artifact' && marketKind({ stone: 'enhance', count: 1 }) === 'stone', 'keys list as Artifacts');

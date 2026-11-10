@@ -158,6 +158,9 @@ export interface Backend {
   /** The Seeker's key quests (the server checks you stand by him). */
   questAccept(boss: string): void;
   questTurnIn(boss: string): void;
+  buyPhoenix(n: number): void;
+  /** Dead in a boss room: get up here for one phoenix feather. */
+  roomRevive(): void;
   roomAnswer(id: number, yes: boolean): void;
   roomStart(): void;
   roomCancel(): void;

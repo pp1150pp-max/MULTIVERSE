@@ -40,7 +40,8 @@ export const MARKET_KINDS: MarketKind[] = [...SLOTS, 'stone', 'artifact'];
 
 /** Gear, stones and boss keys can be listed; potions can't (the merchant sells them), nor quest keys (bound). */
 export function marketSellable(e: BagEntry | null | undefined): e is Item | StoneStack {
-  return isItem(e) || (isStone(e) && !isBound(e));
+  // Phoenix feathers are the merchant's, like potions.
+  return isItem(e) || (isStone(e) && !isBound(e) && e.stone !== 'phoenix');
 }
 
 export function marketKind(e: Item | StoneStack): MarketKind {

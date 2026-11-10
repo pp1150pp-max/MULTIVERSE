@@ -162,8 +162,13 @@ export class OnlineBackend implements Backend {
 
   get room(): RoomSnap | null {
     const r = this.roomSnap;
-    if (!r || r.leaveIn === undefined) return r;
-    return { ...r, leaveIn: Math.max(0, r.leaveIn - (performance.now() - this.roomAt) / 1000) };
+    if (!r) return r;
+    const gone = (performance.now() - this.roomAt) / 1000;
+    return {
+      ...r,
+      ...(r.leaveIn !== undefined ? { leaveIn: Math.max(0, r.leaveIn - gone) } : {}),
+      ...(r.wipeIn !== undefined ? { wipeIn: Math.max(0, r.wipeIn - gone) } : {}),
+    };
   }
   private serverTime = 0;
   private serverTimeAt = performance.now();
@@ -884,6 +889,8 @@ export class OnlineBackend implements Backend {
   roomOpen(keys: number, quest = false): void { this.send({ t: 'act', a: 'roomOpen', keys, ...(quest ? { quest } : {}) }); }
   questAccept(boss: string): void { this.send({ t: 'act', a: 'questAccept', boss }); }
   questTurnIn(boss: string): void { this.send({ t: 'act', a: 'questTurnIn', boss }); }
+  buyPhoenix(n: number): void { this.send({ t: 'act', a: 'buyPhoenix', n }); }
+  roomRevive(): void { this.send({ t: 'act', a: 'roomRevive' }); }
   roomAnswer(id: number, yes: boolean): void { this.send({ t: 'act', a: 'roomAnswer', id, yes }); }
   roomStart(): void { this.send({ t: 'act', a: 'roomStart' }); }
   roomCancel(): void { this.send({ t: 'act', a: 'roomCancel' }); }

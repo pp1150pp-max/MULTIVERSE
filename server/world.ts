@@ -60,7 +60,7 @@ const TRADE_LOCKED = new Set([
   'equip', 'unequip', 'drop', 'buy', 'move', 'sort', 'buyBack', 'sell', 'split', 'sellRarity', 'enhance', 'reroll',
   'stashPut', 'stashTake', 'stashMove', 'stashSort', 'stashBuy', 'stashGold', 'stashSplit',
   'mktSearch', 'mktMine', 'mktList', 'mktCancel', 'mktBuy', 'mktClaim',
-  'mailList', 'mailRead', 'mailClaim', 'mailDelete', 'mailDeleteRead', 'roomOpen',
+  'mailList', 'mailRead', 'mailClaim', 'mailDelete', 'mailDeleteRead', 'roomOpen', 'buyPhoenix',
 ]);
 const TRADE_LOCKED_MSG = 'กำลังเทรดอยู่ — ปิดหน้าต่างเทรดก่อนถึงจะจัดการของได้';
 const PARTY_GUEST_MSG = 'Guest ใช้ระบบปาร์ตี้ไม่ได้ — สมัครสมาชิกเพื่อใช้งาน';
@@ -851,6 +851,12 @@ export class GameWorld {
         this.send(s.ws, { t: 'enhanced', req: num(m.req), result: out?.result ?? null, item: out?.item ?? null });
         break;
       }
+      case 'buyPhoenix':
+        sim.buyPhoenix(p, Math.max(0, Math.min(99, Math.floor(num(m.n)))));
+        break;
+      case 'roomRevive':
+        sim.reviveHere(p);
+        break;
       case 'questAccept':
         if (typeof m.boss === 'string') sim.questAccept(p, m.boss);
         break;
@@ -1449,7 +1455,7 @@ export class GameWorld {
         color: pr.o.color, size: pr.o.size, art: pr.o.art,
       })),
       ...(sim.hazards.length && sim.zone.boss && near(sim.zone.boss) ? { hazards: sim.hazards } : {}),
-      room: this.rooms.snap(sim),
+      room: this.rooms.snap(sim, p),
       loots: sim.loots.filter(near).map((l) => ({
         id: l.id, x: r2(l.x), z: r2(l.z), fromX: r2(l.fromX), fromZ: r2(l.fromZ), t: r2(l.t),
         kind: l.kind, dropped: l.dropped, owner: l.owner, ownerUntil: r2(l.ownerUntil),

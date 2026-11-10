@@ -128,6 +128,10 @@ export type ActionMsg =
   // The Seeker's key quests (Sim.questAccept / questTurnIn): `boss` is the boss's monster id.
   | { t: 'act'; a: 'questAccept'; boss: string }
   | { t: 'act'; a: 'questTurnIn'; boss: string }
+  /** Buy `n` phoenix feathers from the merchant. */
+  | { t: 'act'; a: 'buyPhoenix'; n: number }
+  /** Dead in a boss room: get up where you fell, for one phoenix feather. */
+  | { t: 'act'; a: 'roomRevive' }
   | { t: 'act'; a: 'roomAnswer'; id: number; yes: boolean }
   | { t: 'act'; a: 'roomStart' }
   | { t: 'act'; a: 'roomCancel' };

@@ -5,10 +5,12 @@ import { BOSS_ROOMS, ZONES, ZONE_1, ZONE_HUB, arenaRadius, inBossArena } from '.
 import { MONSTERS } from '../src/shared/data/monsters';
 import { Sim } from '../src/shared/sim/Sim';
 import { Monster } from '../src/shared/sim/Monster';
+import { marketSellable } from '../src/shared/sim/market';
 import { newCharacterData, type Player } from '../src/shared/sim/Player';
 import { PORTAL_RANGE, SUMMONER_RANGE } from '../src/shared/sim/terrain';
 import { BossRooms, type RoomActor } from '../server/bossRooms';
-import { ROOM_END_SECONDS, ROOM_INVITE_SECONDS, ROOM_LOBBY_SECONDS, type RoomLobbyView } from '../src/shared/bossRoom';
+import { ROOM_END_SECONDS, ROOM_INVITE_SECONDS, ROOM_LOBBY_SECONDS, ROOM_WIPE_SECONDS, type RoomLobbyView } from '../src/shared/bossRoom';
+import { REVIVES_PER_KEY } from '../src/shared/data/stones';
 import type { BossKey } from '../src/shared/types';
 
 const hero = (name: string, level = 40) => ({ ...newCharacterData(name, 'sword'), level });
@@ -162,7 +164,7 @@ const lastSaid = (id: number) => said.filter(([c]) => c === id).at(-1)?.[1] ?? '
   add(2, 'Other', 1);
   rooms2.open(2, 1);
   ok(rooms2.run(chars.get(2)!.sim)?.channel === 2 && chars.get(2)!.sim !== a.sim, 'the next group gets its own copy, channel 2');
-  ok(rooms2.snap(a.sim)?.channel === 1 && rooms2.snap(field) === undefined, 'snapshots carry the room');
+  ok(rooms2.snap(a.sim, a.player)?.channel === 1 && rooms2.snap(field, a.player) === undefined, 'snapshots carry the room');
 }
 
 // The room ends 90 s after the kill; an emptied room goes away.
@@ -175,7 +177,7 @@ const lastSaid = (id: number) => said.filter(([c]) => c === id).at(-1)?.[1] ?? '
   a.player.stats.atk = 1e12;
   sim.hitMonster(a.player, boss, 1);
   rooms2.tick();
-  ok(rooms2.snap(sim)?.leaveIn === ROOM_END_SECONDS, `${ROOM_END_SECONDS} s to pick things up`);
+  ok(rooms2.snap(sim, a.player)?.leaveIn === ROOM_END_SECONDS, `${ROOM_END_SECONDS} s to pick things up`);
   clock += (ROOM_END_SECONDS - 1) * 1000;
   rooms2.tick();
   ok(a.sim === sim, 'still there a second before');
@@ -186,13 +188,34 @@ const lastSaid = (id: number) => said.filter(([c]) => c === id).at(-1)?.[1] ?? '
   ok(!rooms2.sims().includes(sim), 'the empty room is gone');
 }
 
-// Everyone down at once: lost, back to town.
+// Everyone down: a few seconds (ROOM_WIPE_SECONDS) to get up with a phoenix feather, else lost and back to town.
 {
   const b = chars.get(2)!;
   const sim = b.sim;
-  b.player.alive = false;
+  const me = b.player;
+  ok(sim.revivesLeft(me) === REVIVES_PER_KEY * sim.keys, `${REVIVES_PER_KEY} revives per key`);
+  me.alive = false;
+  me.hp = 0;
+  ok(!sim.reviveHere(me) && !me.alive, 'no feather, no getting up');
   rooms2.tick();
-  ok(b.sim === hub, 'a wiped group goes to town');
+  ok(b.sim === sim && (rooms2.snap(sim, me)?.wipeIn ?? 0) > 0, 'everyone down: a few seconds to get up');
+  me.addStones('phoenix', 5);
+  ok(sim.reviveHere(me) && me.alive && me.hp === Math.round(me.maxHp / 2), 'a feather: up where it fell, half HP');
+  ok(me.stoneCount('phoenix') === 4 && sim.revivesLeft(me) === REVIVES_PER_KEY * sim.keys - 1, 'one feather and one revive used');
+  rooms2.tick();
+  ok(rooms2.snap(sim, me)?.wipeIn === undefined, 'standing again: not lost');
+  for (let i = 0; i < 10; i++) {
+    me.alive = false;
+    sim.reviveHere(me);
+  }
+  ok(!me.alive && sim.revivesLeft(me) === 0 && me.stoneCount('phoenix') === 5 - REVIVES_PER_KEY * sim.keys, 'no more than the room allows');
+  rooms2.tick();
+  clock += (ROOM_WIPE_SECONDS - 1) * 1000;
+  rooms2.tick();
+  ok(b.sim === sim, 'still a moment to go');
+  clock += 1000;
+  rooms2.tick();
+  ok(b.sim === hub, 'then the group has lost: back to town');
 }
 
 // A party: invites, answers, the leader starts; only those who said yes go.
@@ -241,6 +264,22 @@ const lastSaid = (id: number) => said.filter(([c]) => c === id).at(-1)?.[1] ?? '
   rooms2.open(20, 1);
   rooms2.closeAll();
   ok(L.stoneCount('key_bear') === 3, 'server stopping: keys back');
+}
+
+// Phoenix feathers at the merchant: 1,000 G, sell back for half, stack to 10, not on the market.
+{
+  const town = new Sim(ZONE_HUB);
+  const buyer = town.addPlayer({ ...hero('Buyer'), gold: 15_000 });
+  const m = town.terrain.npcPos.merchant!;
+  buyer.x = m.x + 1;
+  buyer.z = m.z + 1;
+  ok(town.buyPhoenix(buyer, 12) && buyer.stoneCount('phoenix') === 12 && buyer.gold === 3_000, '12 feathers for 12,000 G');
+  ok(buyer.bag.filter((e) => e && 'stone' in e && e.stone === 'phoenix').length === 2, 'they stack 10 to a slot');
+  ok(!town.buyPhoenix(buyer, 5) && buyer.gold === 3_000, 'not without the gold');
+  const i = buyer.bag.findIndex((e) => e && 'stone' in e && e.stone === 'phoenix');
+  ok(town.sellItem(buyer, i, 1) === 500, 'sold back for 500 G');
+  ok(!marketSellable(buyer.bag[i]), 'not on the market');
+  ok(town.revivesLeft(buyer) === 0 && !town.reviveHere(buyer), 'no reviving outside a boss room');
 }
 
 finish('boss rooms');
