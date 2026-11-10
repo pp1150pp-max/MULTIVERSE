@@ -178,6 +178,9 @@ export class BossRooms {
   start(charId: number): string | null {
     const l = this.lobbyOf(charId);
     if (!l) return null;
+    // Members answer first (owner): start opens once everyone has said yes or no, or the 30 s are up.
+    const waiting = [...l.answers.values()].some((m) => m.answer === 'wait') && this.now() < l.inviteUntil;
+    if (waiting) return `รอสมาชิกตอบก่อน (อีก ${Math.ceil((l.inviteUntil - this.now()) / 1000)} วิ)`;
     const leader = this.host.actor(charId);
     if (!leader?.player.alive) return 'ตายอยู่ เริ่มไม่ได้';
     const party = this.host.party(charId);
@@ -301,6 +304,7 @@ export class BossRooms {
   private sendLobby(l: Lobby): void {
     this.host.lobby(l.leader, {
       id: l.id, boss: l.boss, keys: l.keys, left: Math.max(0, Math.ceil((l.until - this.now()) / 1000)),
+      answerLeft: Math.max(0, Math.ceil((l.inviteUntil - this.now()) / 1000)),
       members: [...l.answers.values()].map((m) => ({ name: m.name, answer: m.answer })),
     });
   }

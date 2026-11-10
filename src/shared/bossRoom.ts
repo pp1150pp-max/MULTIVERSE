@@ -24,6 +24,8 @@ export interface RoomLobbyView {
   keys: number;
   /** Seconds left before the lobby is called off. */
   left: number;
+  /** Seconds left for members to answer; start works once everyone has answered or this runs out (owner). */
+  answerLeft: number;
   members: { name: string; answer: RoomAnswer }[];
 }
 

@@ -611,7 +611,8 @@ export class Sim {
    * (owner: no return scroll inside a boss room); nothing blocks it yet.
    */
   returnBlocked(_p: Player): string | null {
-    return null;
+    // Not in a boss room (owner): the way out is its portal once the boss is dead, or the trip home after.
+    return this.zone.roomOf ? 'ใช้ในห้องบอสไม่ได้' : null;
   }
 
   /** Starts the RETURN_CAST-second cast. The scroll is only used up when the cast finishes. */

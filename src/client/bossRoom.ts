@@ -29,6 +29,9 @@ export class RoomUI {
   private readonly lobbyBox: HTMLElement;
   private lobbyUntil = 0;
   private lobbyCount: HTMLElement | null = null;
+  /** The start button while members are still answering, and when their time runs out (performance.now()). */
+  private lobbyStart: HTMLButtonElement | null = null;
+  private answerUntil = 0;
   private readonly invitesBox: HTMLElement;
   private readonly invites = new Map<number, { el: HTMLElement; until: number; count: HTMLElement }>();
   /** The line on the HUD while in a room. */
@@ -141,6 +144,7 @@ export class RoomUI {
     this.lobbyBox.classList.toggle('hidden', !view);
     this.lobbyBox.replaceChildren();
     this.lobbyCount = null;
+    this.lobbyStart = null;
     if (!view) return;
     this.lobbyUntil = performance.now() + view.left * 1000;
     const head = el('div', 'panel-head');
@@ -159,9 +163,13 @@ export class RoomUI {
     const cancel = el('button', '', 'ยกเลิก');
     cancel.id = 'room-cancel';
     start.onclick = () => this.g.backend.roomStart();
+    // Everyone answers first (or the answer time runs out): the server sends the lobby again then.
+    this.lobbyStart = view.members.some((m) => m.answer === 'wait') ? start : null;
+    this.answerUntil = performance.now() + view.answerLeft * 1000;
+    start.disabled = !!this.lobbyStart;
     cancel.onclick = () => this.g.hud.confirm('ยกเลิกการตีบอส?<br><small>กุญแจจะคืนเข้ากระเป๋า</small>', 'ยกเลิก', () => this.g.backend.roomCancel());
     btns.append(start, cancel);
-    this.lobbyBox.append(head, list, el('div', 'room-note', 'คนที่ตอบ "ไป" จะวาร์ปเข้าห้องพร้อมคุณเมื่อกดเริ่ม'), btns);
+    this.lobbyBox.append(head, list, el('div', 'room-note', 'กดเริ่มได้เมื่อทุกคนตอบแล้ว หรือครบ 30 วิ · คนที่ตอบ "ไป" จะวาร์ปเข้าห้องพร้อมคุณ'), btns);
     this.update();
   }
 
@@ -220,6 +228,7 @@ export class RoomUI {
       else inv.count.textContent = `${left} วิ`;
     }
     if (this.lobbyCount) this.lobbyCount.textContent = `${Math.max(0, Math.ceil((this.lobbyUntil - now) / 1000))} วิ`;
+    if (this.lobbyStart) this.lobbyStart.textContent = `รอสมาชิกตอบ (${Math.max(0, Math.ceil((this.answerUntil - now) / 1000))} วิ)`;
     // Walked away from the summoner: its window closes.
     const s = this.g.backend.terrain.summoner;
     if (this.open && (!s || Math.hypot(this.g.player.x - s.x, this.g.player.z - s.z) > 6)) this.toggle(false);
