@@ -5,6 +5,7 @@ import type { Player } from '../shared/sim/Player';
 import type { Monster } from '../shared/sim/Monster';
 import { itemArt } from '../shared/data/items';
 import { STONE_COLOR } from '../shared/data/stones';
+import { MONSTERS } from '../shared/data/monsters';
 import { LOOT_POP_TIME, type Loot } from '../shared/sim/Loot';
 import type { SimEvent } from '../shared/sim/types';
 import { SpriteActor } from './SpriteActor';
@@ -56,7 +57,7 @@ export class PlayerView {
   private lastX = NaN;
   private lastZ = NaN;
   /** Shown instead of the character while the Bog Witch's curse lasts. */
-  private toad: THREE.Sprite | null = null;
+  private toad: SpriteActor | null = null;
 
   constructor(readonly p: Player, private readonly scene: THREE.Scene) {
     const anim = animSets[p.cls.id];
@@ -78,29 +79,31 @@ export class PlayerView {
     this.updateAura(dt, fx);
     // Owner 2026-11-10: the orbs stay while dead (only the aura goes).
     this.orbs.update(this.clock, p.x, p.z, p.orbs, true);
-    this.updateToad(fx);
+    this.updateToad(dt, fx);
     this.sync();
   }
 
-  /** Cursed: a toad sits where the character stands, with a puff each time it appears or goes. */
-  private updateToad(fx: Effects): void {
+  /**
+   * Cursed: the marsh's own Bog Toad (its sprite and idle animation, owner 2026-11-10) sits where the
+   * character stands, with a puff each time it appears or goes.
+   */
+  private updateToad(dt: number, fx: Effects): void {
     const p = this.p;
     const on = p.alive && p.toadT > 0;
-    if (on === !!this.toad?.visible) {
-      if (this.toad?.visible) this.toad.position.set(p.x, 0, p.z);
-      return;
+    if (on !== !!this.toad?.group.visible) {
+      fx.puff(p.x, 0.8, p.z, '#9a7aff', 0.8, 1.6);
+      this.actor.group.visible = !on;
+      if (!this.toad) {
+        const def = MONSTERS.bog_toad;
+        this.toad = new SpriteActor(sheets[def.id], def.height, def.radius * 1.1);
+        this.scene.add(this.toad.group);
+      }
+      this.toad.group.visible = on;
     }
-    fx.puff(p.x, 0.8, p.z, '#9a7aff', 0.8, 1.6);
-    this.actor.group.visible = !on;
-    if (!this.toad) {
-      const sheet = sheets.fx_witch_toad;
-      this.toad = new THREE.Sprite(new THREE.SpriteMaterial({ map: sheet.texture, alphaTest: 0.5, transparent: false }));
-      this.toad.center.set(0.5, 0);
-      this.toad.scale.set(1.3 * sheet.cellAspect, 1.3, 1);
-      this.scene.add(this.toad);
-    }
-    this.toad.visible = on;
-    this.toad.position.set(p.x, 0, p.z);
+    if (!this.toad?.group.visible) return;
+    this.toad.group.position.set(p.x, 0, p.z);
+    this.toad.face(p.faceX, p.faceZ);
+    this.toad.update(dt, false, 6);
   }
 
   /**
@@ -222,8 +225,8 @@ export class PlayerView {
   dispose(): void {
     this.disposeAura();
     if (this.toad) {
-      this.scene.remove(this.toad);
-      this.toad.material.dispose();
+      this.scene.remove(this.toad.group);
+      this.toad.dispose();
     }
     this.orbs.dispose();
     this.disposeCrater();

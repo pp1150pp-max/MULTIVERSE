@@ -3,7 +3,7 @@ import {
   makeSheet, drawHuman, drawSlime, drawQuad, drawSeeker, drawMerchant, drawBlacksmith, drawKeeper, drawBroker, drawTree, drawBush, drawRock, drawStump,
   drawSnowPine, drawSnowRock, drawIceCrystal, drawIceShard, drawEmberBolt, drawBurntPillar, drawBasalt, drawMagmaCrystal, drawSnowball,
   drawTent, drawCampfire, drawSign, drawFence, drawRunestone, drawIcon, pixelCircle,
-  drawWitchVial, drawWitchPool, drawWitchHand, drawWitchToad, drawWitchSigil, drawWitchCircle,
+  drawWitchVial, drawWitchPool, drawWitchHand, drawWitchSigil, drawWitchCircle,
 } from './placeholder';
 import { ITEM_ART } from '../shared/data/items';
 import { STONE_KINDS } from '../shared/types';
@@ -135,7 +135,6 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   fx_witch_vial: single('fx/witch_vial.png', drawWitchVial),
   fx_witch_pool: single('fx/witch_pool.png', drawWitchPool),
   fx_witch_hand: single('fx/witch_hand.png', drawWitchHand),
-  fx_witch_toad: single('fx/witch_toad.png', drawWitchToad),
   fx_witch_sigil: single('fx/witch_sigil.png', drawWitchSigil),
   fx_witch_circle: single('fx/witch_circle.png', drawWitchCircle),
 

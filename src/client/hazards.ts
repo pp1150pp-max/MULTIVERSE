@@ -238,6 +238,8 @@ function graspView(h: GraspHazard): View {
       const k = (t - h.hit) / (h.end - h.hit);
       const up = Math.min(1, k / 0.2) * Math.min(1, (1 - k) / 0.3);
       hand.position.y = -2.4 * (1 - Math.max(0, up));
+      // Sways from the wrist while it holds on.
+      hand.material.rotation = Math.sin(t * 7) * 0.14 * Math.max(0, up);
     },
   };
 }
