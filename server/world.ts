@@ -1725,6 +1725,23 @@ export class GameWorld {
     this.send(s.ws, { t: 'chat', name: '', text: msg });
   }
 
+  /** Saves an online character right away after an admin edit, without telling its player (item edits). */
+  adminSaved(charId: number): void {
+    const s = this.sessionOfChar(charId);
+    if (s) this.save(s);
+  }
+
+  /**
+   * Saves an account's live stash right away (after an admin edit), through one of its online
+   * characters (the stash is saved together with a character). False when nobody on it is online.
+   */
+  adminStashSaved(accountId: number): boolean {
+    const s = [...this.sessions].find((o) => o.accountId === accountId && !o.guest);
+    if (!s) return false;
+    this.save(s);
+    return true;
+  }
+
   /** Ends one character's game (saving it first). Returns false when it isn't online. */
   kickCharacter(charId: number, msg: string): boolean {
     const s = this.sessionOfChar(charId);
