@@ -11,7 +11,7 @@ import { MAIL_BODY_MAX, MAIL_DAYS, MAIL_TITLE_MAX, type MailRecipientRow, type M
 import { entryName, POTION_SIZES, potionName } from '../shared/data/potions';
 import { STONE_NAME } from '../shared/data/stones';
 import { COSMETICS, COS_SLOTS, COS_SLOT_NAME } from '../shared/data/cosmetics';
-import { CARD_DEFAULTS, CARD_FX, CARD_FX_MAX, CARD_FX_NAME, CARD_GROUPS, CARD_GROUP_NAME, CARD_NUM_FIELDS, CARD_RARITY_NAME, cardName, type CardFx, type CardGroup, type CardId } from '../shared/data/cards';
+import { CARD_DEFAULTS, CARD_FX, CARD_FX_MAX, CARD_FX_NAME, CARD_GROUPS, CARD_GROUP_NAME, CARD_NUM_FIELDS, CARD_RARITY_NAME, cardArt, cardName, type CardFx, type CardGroup, type CardId } from '../shared/data/cards';
 import { CARD_FX_LIMIT, type CardTuning } from '../shared/cardTuning';
 import type {
   AdminAccountDetail, AdminAccountsResponse, AdminCardTune, AdminCosLook, AdminFeature, AdminOrbLook, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, SessionPage, SessionSort, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AdminShutdownText, AuditRow,
@@ -386,6 +386,22 @@ function workTuning(w: CardWork): CardTuning {
   return { cards, nums: { ...w.nums } };
 }
 
+/** A card's picture full size over the page; a click anywhere or Esc closes it. */
+function showCardArt(id: CardId): void {
+  const close = () => {
+    over.remove();
+    window.removeEventListener('keydown', onKey);
+  };
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') close();
+  };
+  const over = h('div', { class: 'card-art-view', onclick: close },
+    h('img', { src: cardArt(id), alt: cardName(id) }),
+    h('div', {}, cardName(id)));
+  window.addEventListener('keydown', onKey);
+  document.body.append(over);
+}
+
 /** The "การ์ด" tab: every card's group and effects, and every number of the card system. */
 async function renderCards(): Promise<void> {
   const box = h('div', {}, 'กำลังโหลด…');
@@ -441,7 +457,9 @@ async function renderCards(): Promise<void> {
     }
     return h('tr', { 'data-card': id },
       h('td', { 'data-label': 'แมพ' }, `แมพ ${d.map}`),
-      h('td', { 'data-label': 'การ์ด' }, cardName(id)),
+      h('td', { 'data-label': 'การ์ด' },
+        h('img', { class: 'card-thumb', src: cardArt(id), alt: cardName(id), title: 'คลิกเพื่อดูภาพใหญ่', loading: 'lazy', onclick: () => showCardArt(id) }),
+        h('div', {}, cardName(id))),
       h('td', { 'data-label': 'ระดับ', style: `color:${RARITY_COLOR[d.rarity]}` }, CARD_RARITY_NAME[d.rarity]),
       h('td', { 'data-label': 'ใส่ได้' }, group),
       h('td', { 'data-label': 'ผล' }, fxBox),

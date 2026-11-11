@@ -84,6 +84,11 @@ export const CARD_DEFAULTS: readonly CardDef[] = [
 export const CARD_IDS: readonly CardId[] = CARD_DEFAULTS.map((d) => d.id);
 export const isCardId = (v: unknown): v is CardId => typeof v === 'string' && CARD_IDS.includes(v as CardId);
 
+/** The card's monster picture (512×768, from art_templates/cards/PROMPTS.md). */
+export function cardArt(id: CardId): string {
+  return `/assets/sprites/cards/card_art_${id.slice('card_'.length)}.webp`;
+}
+
 /** "การ์ดหมาป่า" (the monster's Thai name without "(Boss)" / "(Mini Boss)"). */
 export function cardName(id: CardId): string {
   const d = CARD_DEFAULTS.find((x) => x.id === id);
