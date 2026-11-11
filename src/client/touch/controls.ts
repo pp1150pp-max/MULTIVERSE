@@ -1,4 +1,4 @@
-// On-screen buttons for touch play (mobile plan 3.1–3.2). They only show while <body> has `touch-ui`
+// On-screen buttons for touch play (mobile plan 3.1–3.2; no talk, chat or Auto-settings buttons — owner 2026-11-11). They only show while <body> has `touch-ui`
 // (touch/device.ts), and they work by writing into the same Input the keyboard does: holding the Q button
 // holds KeyQ, the dash button taps Space, and so on, so the game reacts exactly as it does on PC.
 // Walking (the joystick), taps on the game and pinch zoom are in touch/gestures.ts.
@@ -31,7 +31,6 @@ export class TouchControls {
   private readonly skills: SkillButton[] = [];
   private readonly potions: PotionButton[] = [];
   private readonly autoBtn: HTMLElement;
-  private readonly talkBtn: HTMLElement;
   private readonly scrollBtn: HTMLElement;
   private readonly scrollNum: HTMLElement;
   private readonly mountBtn: HTMLElement;
@@ -47,7 +46,6 @@ export class TouchControls {
     this.root.innerHTML = `
       <div id="tc-stick">${art('stick_base')}<div id="tc-knob">${art('stick_knob')}</div></div>
       <button id="tc-menu" class="tc-btn tc-small" aria-label="เมนู"><span class="tc-ico">${badgeArt('menu')}</span><i class="badge hidden" data-badge="เมนู"></i></button>
-      <button id="tc-chat" class="tc-btn tc-small" aria-label="แชท"><span class="tc-ico">${art('icon_chat')}</span></button>
       <div id="tc-pad">
         <button class="tc-btn tc-attack" data-slot="basic"><span class="tc-ico">${skillArt('basic')}<div class="tc-cd"></div></span><span class="tc-num"></span></button>
         <button class="tc-btn tc-skill" data-slot="q"><span class="tc-ico">${skillArt('q')}<div class="tc-cd"></div></span><span class="tc-num"></span></button>
@@ -57,10 +55,8 @@ export class TouchControls {
         <button class="tc-btn tc-small tc-pot" data-pot="hp"><span class="tc-ico">${potionIcon('hp')}<div class="tc-cd"></div></span><span class="tc-num"></span></button>
         <button class="tc-btn tc-small tc-pot" data-pot="mp"><span class="tc-ico">${potionIcon('mp')}<div class="tc-cd"></div></span><span class="tc-num"></span></button>
         <button id="tc-auto" class="tc-btn tc-skill"><span class="tc-ico">${badgeArt('auto')}</span><span class="tc-label">AUTO</span></button>
-        <button id="tc-autoset" class="tc-btn tc-mini" aria-label="ตั้งค่า Auto"><span class="tc-ico">${badgeArt('autoset')}</span></button>
         <button id="tc-scroll" class="tc-btn tc-small" aria-label="ม้วนคัมภีร์กลับเมือง"><span class="tc-ico">${stoneIcon('return_scroll')}</span><span class="tc-num"></span></button>
         <button id="tc-mount" class="tc-btn tc-small" aria-label="สัตว์ขี่"><span class="tc-ico">${art('icon_mount')}</span></button>
-        <button id="tc-talk" class="tc-btn tc-talk hidden"><span class="tc-ico">${art('icon_talk')}</span><span class="tc-label">คุย/ใช้</span></button>
       </div>
       <div id="tc-potpick" class="hidden"></div>`;
     document.getElementById('hud')!.prepend(this.root);
@@ -69,7 +65,6 @@ export class TouchControls {
     this.knob = q('#tc-knob');
     this.picker = q('#tc-potpick');
     this.autoBtn = q('#tc-auto');
-    this.talkBtn = q('#tc-talk');
     this.scrollBtn = q('#tc-scroll');
     this.scrollNum = q('#tc-scroll .tc-num');
     this.mountBtn = q('#tc-mount');
@@ -101,11 +96,8 @@ export class TouchControls {
       });
     }
     this.hold(this.autoBtn, () => g.toggleAuto());
-    this.hold(q('#tc-autoset'), () => document.getElementById('btn-auto-set')?.click());
     this.hold(this.scrollBtn, () => input.tap('KeyG'));
     this.hold(this.mountBtn, () => input.tap('KeyZ'));
-    this.hold(this.talkBtn, () => input.tap('KeyT'));
-    this.hold(q('#tc-chat'), () => g.hud.openChat());
     this.hold(q('#tc-menu'), () => g.sysMenu.toggle());
 
     // A finger anywhere else closes the potion picker.
@@ -232,7 +224,6 @@ export class TouchControls {
       b.el.classList.toggle('empty', count <= 0);
     }
     this.autoBtn.classList.toggle('active', g.autoPlay);
-    this.talkBtn.classList.toggle('hidden', !g.talkReady);
     const scrolls = p.stoneCount('return_scroll');
     const st = String(scrolls);
     if (this.scrollNum.textContent !== st) this.scrollNum.textContent = st;

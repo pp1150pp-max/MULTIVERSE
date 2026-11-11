@@ -1321,8 +1321,11 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
    Each pad button sits by its centre: --x / --y px from the bottom-right corner of the safe area. */
 #touch-ui { display: none; }
 /* No z-index and first in #hud: every window and dialog opened later paints over the buttons. */
-body.touch-ui #touch-ui { display: block; position: absolute; inset: 0; pointer-events: none; --s: 1; }
-@media (min-width: 700px) and (min-height: 700px) { body.touch-ui #touch-ui { --s: 1.3; } }
+body.touch-ui #touch-ui { display: block; position: absolute; inset: 0; pointer-events: none; --s: 0.75; }
+/* Phones get the buttons at 75% (owner 2026-11-11: "ใหญ่ไป"); tablets at full size. */
+@media (min-width: 700px) and (min-height: 700px) { body.touch-ui #touch-ui { --s: 1; } }
+/* The character card and HP/MP bars at 70% on phones (owner 2026-11-11). */
+@media not ((min-width: 700px) and (min-height: 700px)) { body.touch-ui #hud-topleft { transform: scale(0.7); transform-origin: top left; } }
 /* The keyboard hint bar, the top icon row (all of it is in the ☰ system menu) and the PC mount button. */
 body.touch-ui #skillbar, body.touch-ui #hud-iconrow, body.touch-ui #mount-btn { display: none !important; }
 
@@ -1333,8 +1336,6 @@ body.touch-ui #skillbar, body.touch-ui #hud-iconrow, body.touch-ui #mount-btn { 
 }
 #touch-ui .tc-attack { --d: calc(84px * var(--s)); background-image: url(/assets/sprites/ui/touch/btn_attack.png); }
 #touch-ui .tc-skill { --d: calc(64px * var(--s)); }
-#touch-ui .tc-mini { --d: calc(44px * var(--s)); }
-#touch-ui .tc-talk { --d: calc(56px * var(--s)); }
 #tc-pad { position: absolute; right: max(8px, env(safe-area-inset-right)); bottom: max(8px, env(safe-area-inset-bottom)); width: 0; height: 0; }
 #tc-pad .tc-btn { right: calc(var(--x) * var(--s) * 1px - var(--d) / 2); bottom: calc(var(--y) * var(--s) * 1px - var(--d) / 2); }
 #touch-ui .tc-btn.down { transform: scale(0.92); filter: brightness(1.25); }
@@ -1352,7 +1353,7 @@ body.touch-ui #skillbar, body.touch-ui #hud-iconrow, body.touch-ui #mount-btn { 
 #tc-auto.active .tc-label { color: #9fd8ff; }
 
 /* A compact grid in the bottom-right corner (owner 2026-11-11, landscape only): attack in the corner, dash above it,
-   Q/E/R along the bottom, potions / return scroll / mount in the row above, then talk, AUTO and its settings. */
+   Q/E/R along the bottom, potions / return scroll / mount in the row above, then AUTO. */
 #tc-pad .tc-attack { --x: 50; --y: 50; }
 #tc-pad [data-slot="dash"] { --x: 50; --y: 132; }
 #tc-pad [data-slot="q"] { --x: 138; --y: 40; }
@@ -1362,15 +1363,12 @@ body.touch-ui #skillbar, body.touch-ui #hud-iconrow, body.touch-ui #mount-btn { 
 #tc-pad [data-pot="mp"] { --x: 188; --y: 110; }
 #tc-pad #tc-scroll { --x: 244; --y: 110; }
 #tc-pad #tc-mount { --x: 300; --y: 110; }
-#tc-pad #tc-talk { --x: 164; --y: 182; }
 #tc-pad #tc-auto { --x: 236; --y: 182; }
-#tc-pad #tc-autoset { --x: 298; --y: 190; }
 /* The EXP bar moves to the top middle, out of the buttons' way. */
 body.touch-ui #hud-bottom { top: max(4px, env(safe-area-inset-top)); bottom: auto; --bar-w: min(320px, 38vw); }
 
-/* Under the character card: chat, then ☰ (the system menu, with everything from the hidden icon row). */
-#touch-ui #tc-menu { top: calc(max(12px, env(safe-area-inset-top)) + 160px); left: calc(max(12px, env(safe-area-inset-left)) + 58px * var(--s)); }
-#touch-ui #tc-chat { top: calc(max(12px, env(safe-area-inset-top)) + 160px); left: max(12px, env(safe-area-inset-left)); }
+/* Under the character card: ☰ (the system menu, with everything from the hidden icon row). */
+#touch-ui #tc-menu { top: calc(max(12px, env(safe-area-inset-top)) + 150px); left: max(12px, env(safe-area-inset-left)); }
 
 /* The joystick: always in the bottom-left corner (owner 2026-11-11), the knob follows the finger. */
 #tc-stick { position: absolute; left: max(16px, env(safe-area-inset-left)); bottom: max(16px, env(safe-area-inset-bottom)); width: calc(128px * var(--s)); height: calc(128px * var(--s)); pointer-events: none; opacity: 0.85; }
@@ -1400,3 +1398,8 @@ body:not(.touch-ui) .sys-tile[data-act="fullscreen"] { display: none; }
 }
 #rotate-hint .rotate-icon { font-size: 56px; animation: rotate-hint 1.6s ease-in-out infinite; }
 @keyframes rotate-hint { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
+/* Touch: messages and the chat box at the bottom middle, between the joystick and the buttons (owner 2026-11-11). */
+body.touch-ui #log, body.touch-ui #chat {
+  left: calc(max(16px, env(safe-area-inset-left)) + 112px); bottom: max(8px, env(safe-area-inset-bottom)); width: min(380px, calc(100vw - 420px));
+}
+body.touch-ui #hud:has(#chat:not(.hidden)) #log { bottom: calc(max(8px, env(safe-area-inset-bottom)) + 40px); }
