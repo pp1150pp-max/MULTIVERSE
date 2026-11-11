@@ -63,6 +63,17 @@ function isTyping(target: EventTarget | null): boolean {
 
 apply();
 
+// Held upright in touch play: ask to turn the phone (CSS shows it only then; touch play is landscape only).
+const rotate = document.createElement('div');
+rotate.id = 'rotate-hint';
+rotate.innerHTML = '<div class="rotate-icon">📱</div><div>หมุนจอเป็นแนวนอนเพื่อเล่น</div>';
+document.body.append(rotate);
+// While typing, an on-screen keyboard can make the screen look upright: the hint waits.
+document.addEventListener('focusin', (e) => {
+  if (isTyping(e.target)) document.body.classList.add('typing');
+});
+document.addEventListener('focusout', () => document.body.classList.remove('typing'));
+
 window.addEventListener('pointerdown', (e) => {
   if (e.pointerType === 'mouse') {
     setMode('mouse');
