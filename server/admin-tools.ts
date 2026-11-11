@@ -26,7 +26,10 @@ import { applyCardTuning, cardTuningChanges, checkCardTuning, sameCardTuning } f
 import { cardName } from '../src/shared/data/cards';
 import { checkCosTuning, cosTuningChanges, sameCosTuning } from '../src/shared/cosTuning';
 import { COS_SLOT_NAME, cosById } from '../src/shared/data/cosmetics';
-import { balanceChanges, checkBalance, currentBalanceTuning, sameBalance } from '../src/shared/balance';
+import { balanceChanges, checkBalance, currentBalanceTuning, sameBalance, withItemStatMult } from '../src/shared/balance';
+import { upgradeItem } from '../src/shared/data/items';
+import { searchStats } from '../src/shared/sim/market';
+import type { Item, StoneStack } from '../src/shared/types';
 import type { AdminBalance } from '../src/shared/admin';
 
 const MODE_NAME: Record<ShutdownMode, string> = { restart: 'ข้อความรีสตาร์ท', shutdown: 'ข้อความปิด server' };
@@ -393,13 +396,58 @@ export async function ownerToolsApi(
     const c = body.reset === true ? { tuning: {} } : checkBalance(body.tuning, true);
     if (!c.tuning) throw new HttpError(400, c.error);
     const before = currentBalanceTuning();
-    if (!sameBalance(before, c.tuning)) {
-      db.setBalance(c.tuning);
-      const changes = balanceChanges(before, c.tuning);
+    // The item stat multipliers are never changed here (not even by the reset): only the owner's confirm below does.
+    const next = withItemStatMult(c.tuning, before.itemStatMult);
+    if (!sameBalance(before, next)) {
+      db.setBalance(next);
+      const changes = balanceChanges(before, next);
       log(db, a, 'balance', 'ปรับสมดุล ทั้งเซิร์ฟ', (body.reset === true ? 'คืนค่าในโค้ด: ' : '') + (changes.length > 1500 ? changes.slice(0, 1500) + '…' : changes));
-      world.balanceChanged(c.tuning);
+      world.balanceChanged(next);
     }
     send(res, 200, { tuning: currentBalanceTuning() } satisfies AdminBalance);
+    return true;
+  }
+
+  // Item stat multipliers (owner only): backs the database up, then scales every item at once, in play and saved.
+  // All of it runs without yielding, so no trade, market sale or save lands halfway; `mulK` on each item keeps
+  // anything from being scaled twice.
+  if (method === 'POST' && path === '/api/admin/balance/item-mult') {
+    const a = requireFeature(req, db, 'itemStatMult');
+    const body = await readJson(req);
+    const c = checkBalance({ itemStatMult: body.mult ?? {} }, true);
+    if (!c.tuning) throw new HttpError(400, c.error);
+    const before = currentBalanceTuning();
+    const next = withItemStatMult(before, c.tuning.itemStatMult);
+    if (sameBalance(before, next)) {
+      send(res, 200, { tuning: before } satisfies AdminBalance);
+      return true;
+    }
+    const t0 = Date.now();
+    const backup = backups.make('before-item-mult');
+    db.setBalance(next);
+    world.balanceChanged(next);
+    const scale = (json: string): string | null => {
+      try {
+        const v: unknown = JSON.parse(json);
+        const walk = (x: unknown): void => {
+          if (Array.isArray(x)) x.forEach(walk);
+          else if (x && typeof x === 'object') {
+            if ('baseId' in x) upgradeItem(x);
+            else Object.values(x).forEach(walk);
+          }
+        };
+        walk(v);
+        const out = JSON.stringify(v);
+        return out === json ? null : out;
+      } catch {
+        return null;
+      }
+    };
+    const n = db.rewriteSavedItems(scale, (entry) => searchStats(JSON.parse(entry) as Item | StoneStack) as Record<string, number>);
+    const ms = Date.now() - t0;
+    log(db, a, 'balance', 'ตัวคูณสเตตัสบนไอเทม ทั้งเซิร์ฟ',
+      `${balanceChanges(before, next)} · คูณของที่บันทึกไว้: ตัวละคร ${n.characters} คลัง ${n.stashes} ตลาด ${n.listings} · ใช้เวลา ${ms} ms · สำรองไว้ที่ ${backup.name}`);
+    send(res, 200, { tuning: currentBalanceTuning(), scaled: n, backup: backup.name, ms } satisfies AdminBalance);
     return true;
   }
 

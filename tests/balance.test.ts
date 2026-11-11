@@ -4,17 +4,17 @@
 // throwaway database (never the real server or server/data): owner and GM save (until the owner switches
 // GM off), bad values refused, audit log, players online get new stats at once, reset to the code.
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import {
-  applyBalance, BALANCE_SETTING, balanceChanges, checkBalance, classStatsAt, codeBalance, currentBalanceTuning, mergeBalance, tierLabelsChange,
+  applyBalance, BALANCE_SETTING, balanceChanges, checkBalance, classStatsAt, codeBalance, currentBalanceTuning, mergeBalance, tierLabelsChange, withItemStatMult,
 } from '../src/shared/balance';
 import { CLASSES, CLASS_IDS } from '../src/shared/data/classes';
-import { lineRanges, makeItem, rerollStat, rerollValues, rollItem, rowRanges, statRerollOdds, tierChances, tierRanges, upgradeItem } from '../src/shared/data/items';
+import { ITEM_BASES, lineRanges, makeItem, rerollStat, rerollValues, rollItem, roundStat, rowRanges, statRerollOdds, tierChances, tierRanges, upgradeItem } from '../src/shared/data/items';
 import { ZONE_HUB } from '../src/shared/data/zones';
 import { mulberry32 } from '../src/shared/rng';
 import { newCharacterData } from '../src/shared/sim/Player';
@@ -289,6 +289,63 @@ const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
   ok(JSON.stringify(copy) === orig, 'back to the code tables: the items are exactly as before');
 }
 
+// ---------------------------------------------------------- item stat multipliers (owner 2026-11-11)
+{
+  // What may be saved: ×1 is left out, keys in STAT_KEYS order, 0.1–10.
+  ok(JSON.stringify(checkBalance({ itemStatMult: { moveSpeed: 0.75, atk: 1, crit: 2 } }, true).tuning) === '{"itemStatMult":{"crit":2,"moveSpeed":0.75}}', 'multipliers kept without ×1, in order');
+  for (const [what, x] of [['0.05', { itemStatMult: { atk: 0.05 } }], ['11', { itemStatMult: { atk: 11 } }], ['unknown stat', { itemStatMult: { luck: 2 } }], ['not an object', { itemStatMult: 2 }]] as const) {
+    ok(!!checkBalance(x, true).error, `multiplier refused: ${what}`);
+  }
+  ok(balanceChanges({}, { itemStatMult: { moveSpeed: 0.75 } }).includes('×1 → ×0.75'), 'audit text names the multiplier');
+  const kept = withItemStatMult({ rangeFloor: 30, itemStatMult: { atk: 2 } }, { moveSpeed: 0.5 });
+  ok(JSON.stringify(kept) === '{"rangeFloor":30,"itemStatMult":{"moveSpeed":0.5}}' && JSON.stringify(withItemStatMult(kept, undefined)) === '{"rangeFloor":30}', 'withItemStatMult swaps only the multipliers');
+
+  // New rolls: the stat's whole range is scaled, the others stay.
+  const stats = ['atk', 'crit', 'moveSpeed'] as const;
+  const r0 = rowRanges('weapon_3', 'rare', 30, [...stats])!;
+  applyBalance({ itemStatMult: { moveSpeed: 0.5 } });
+  const r1 = rowRanges('weapon_3', 'rare', 30, [...stats])!;
+  ok(near(r1[2].hi, r0[2].hi * 0.5) && near(r1[2].lo, r0[2].lo * 0.5) && r1[0].hi === r0[0].hi && r1[1].hi === r0[1].hi, 'the multiplier scales that stat\'s range only');
+  const fresh = Array.from({ length: 50 }, (_, i) => rollItem(mulberry32(300 + i), 30, 'sword'));
+  ok(fresh.every((it) => it.mulK === 'moveSpeed=0.5'), 'new drops carry the multipliers they were rolled under');
+  ok(fresh.every((it) => JSON.stringify(upgradeItem(structuredClone(it))) === JSON.stringify(it)), 'and loading them changes nothing');
+  applyBalance({});
+
+  // Old items: every line of the stat (main ones too) is scaled once, rounded like the stat; labels redone.
+  const boots = ITEM_BASES.filter((b) => b.main.moveSpeed).map((b) => b.id);
+  const items: Item[] = [
+    ...Array.from({ length: 60 }, (_, i) => rollItem(mulberry32(600 + i), 25, 'mage')),
+    ...boots.flatMap((id, j) => Array.from({ length: 5 }, (_, i) => makeItem(id, 'epic', 25, 'mage', mulberry32(700 + j * 10 + i))!)),
+  ];
+  ok(boots.length > 0 && items.every((it) => it.mulK === undefined), 'items made at ×1 carry no multiplier key');
+  const orig = structuredClone(items);
+  applyBalance({ itemStatMult: { moveSpeed: 0.5, atk: 2 } });
+  const copy = structuredClone(items).map((it) => upgradeItem(it));
+  const scaledRight = copy.every((it, i) => it.lines!.every((l, j) => {
+    const v = orig[i].lines![j].value;
+    const want = l.stat === 'moveSpeed' ? roundStat(l.stat, v * 0.5) : l.stat === 'atk' ? roundStat(l.stat, v * 2) : v;
+    return l.value === want;
+  }));
+  ok(scaledRight, 'old items: moveSpeed lines ×0.5, ATK lines ×2 (rounded), every other line as it was');
+  ok(copy.some((it, i) => boots.includes(it.baseId) && it.lines![1].stat === 'moveSpeed' && it.lines![1].value !== orig[i].lines![1].value), 'main moveSpeed lines (boots) are scaled too');
+  ok(copy.every((it) => it.mulK === 'atk=2;moveSpeed=0.5' && Object.entries(it.stats).every(([k, v]) => near(v as number, roundStat(k as never, it.lines!.filter((l) => l.stat === k).reduce((s, l) => s + l.value, 0))))), 'scaled items carry the key and their stats are the lines\' total');
+  ok(copy.every((it) => it.lines!.every((l) => l.value >= l.min - 1e-9 || l.tier === 5)), 'tier labels redone against the scaled ranges');
+  const once = JSON.stringify(copy);
+  copy.forEach((it) => upgradeItem(it));
+  ok(JSON.stringify(copy) === once, 'loading again never scales twice');
+  // Back to ×1: values come back (within rounding), the key goes.
+  applyBalance({});
+  copy.forEach((it) => upgradeItem(it));
+  ok(copy.every((it) => it.mulK === undefined), 'back to ×1: no key');
+  ok(copy.every((it, i) => it.lines!.every((l, j) => Math.abs(l.value - orig[i].lines![j].value) <= 1)), 'back to ×1: values within one rounding step of the originals');
+  // Items from before lines: their stats are scaled.
+  const legacy = { uid: 'x1', baseId: boots[0], name: 'Old', slot: 'boots', rarity: 'common', level: 1, value: 1, stats: { moveSpeed: 4, def: 3 } } as unknown as Item;
+  applyBalance({ itemStatMult: { moveSpeed: 0.5 } });
+  upgradeItem(legacy);
+  ok(legacy.stats.moveSpeed === 2 && legacy.stats.def === 3 && legacy.mulK === 'moveSpeed=0.5', 'items without lines: their stats are scaled');
+  applyBalance({});
+}
+
 // ---------------------------------------------------------- against a real server
 function freePort(): Promise<number> {
   return new Promise((res, rej) => {
@@ -439,6 +496,56 @@ async function run(): Promise<void> {
   ok(lastInv(p1.msgs)?.equipment?.weapon?.tierK === undefined, 'and the code labels');
   ok(auditCount() === 2, 'the reset is in the audit log');
   p1.ws.close();
+
+  // Item stat multipliers: owner only, scales every item in play and saved, backs up first.
+  const gmMult = await api('POST', '/admin/balance/item-mult', { mult: { atk: 2 } }, tok.gm1);
+  ok(gmMult.status === 403, 'a GM cannot confirm item stat multipliers');
+  ok((await api('POST', '/admin/balance/item-mult', { mult: { atk: 20 } }, tok.owner1)).status === 400, 'a multiplier out of range is refused');
+  const p2 = joinWorld(tok.plain1, chars.plain1);
+  await p2.ready;
+  const w0 = lastInv(p2.msgs)?.equipment?.weapon;
+  const atk0 = lastSnap(p2.msgs).me.stats.atk;
+  const ownerChar0 = dbRead((db) => JSON.parse((db.prepare('SELECT data FROM characters WHERE id = ?').get(chars.owner1) as { data: string }).data));
+  // A market listing (written straight into the test database) with its searchable stats.
+  const listed = { ...structuredClone(ownerChar0.equipment.weapon), uid: 'test-listing-1' };
+  const listedAtk = listed.stats.atk as number;
+  const listingId = (() => {
+    const db = new DatabaseSync(DB_FILE);
+    try {
+      const id = Number(db.prepare(`INSERT INTO market_listings (seller_account, seller_char, seller_name, entry, uid, name, kind, rarity, level, plus, cls, count, price, fee, created_at, expires_at, status)
+        VALUES (1, ?, 'C_owner1', ?, ?, ?, 'equip', ?, ?, 0, 'sword', 1, 100, 5, ?, ?, 'active')`).run(
+        chars.owner1, JSON.stringify(listed), listed.uid, listed.name, listed.rarity, listed.level, Date.now(), Date.now() + 3_600_000).lastInsertRowid);
+      db.prepare("INSERT INTO market_listing_stats (listing_id, stat, value) VALUES (?, 'atk', ?)").run(id, listedAtk);
+      return id;
+    } finally {
+      db.close();
+    }
+  })();
+  const auditBefore = auditCount();
+  const m = await api('POST', '/admin/balance/item-mult', { mult: { atk: 2 } }, tok.owner1);
+  await sleep(400);
+  ok(m.status === 200 && m.data.tuning.itemStatMult?.atk === 2 && typeof m.data.backup === 'string' && m.data.scaled?.characters >= 1, `owner confirms ×2 ATK (${JSON.stringify(m.data.scaled)}, ${m.data.ms} ms)`);
+  ok(readdirSync(join(dir, 'backups')).some((f) => f.includes('before-item-mult')), 'a backup was made first');
+  ok(auditCount() === auditBefore + 1, 'the confirm is in the audit log');
+  const w1 = lastInv(p2.msgs)?.equipment?.weapon;
+  ok(w1?.mulK === 'atk=2' && w1.lines.every((l: any, i: number) => l.value === (l.stat === 'atk' ? roundStat('atk', w0.lines[i].value * 2) : w0.lines[i].value)), 'the worn weapon of a player online is scaled at once');
+  ok(lastSnap(p2.msgs).me.stats.atk > atk0, `the player's ATK went up at once (${atk0} → ${lastSnap(p2.msgs).me.stats.atk})`);
+  const ownerChar1 = dbRead((db) => JSON.parse((db.prepare('SELECT data FROM characters WHERE id = ?').get(chars.owner1) as { data: string }).data));
+  const wOff0 = ownerChar0.equipment.weapon;
+  const wOff1 = ownerChar1.equipment.weapon;
+  ok(wOff1.mulK === 'atk=2' && wOff1.lines.every((l: any, i: number) => l.value === (l.stat === 'atk' ? roundStat('atk', wOff0.lines[i].value * 2) : wOff0.lines[i].value)), 'an offline character\'s saved weapon is scaled in the database');
+  const lst = dbRead((db) => ({
+    entry: JSON.parse((db.prepare('SELECT entry FROM market_listings WHERE id = ?').get(listingId) as { entry: string }).entry),
+    atk: (db.prepare("SELECT value FROM market_listing_stats WHERE listing_id = ? AND stat = 'atk'").get(listingId) as { value: number }).value,
+  }));
+  ok(m.data.scaled?.listings === 1 && lst.entry.mulK === 'atk=2' && lst.entry.stats.atk > listedAtk && lst.atk === lst.entry.stats.atk, `a market listing is scaled and its search stats redone (ATK ${listedAtk} → ${lst.atk})`);
+  ok((await api('POST', '/admin/balance/item-mult', { mult: { atk: 2 } }, tok.owner1)).data.scaled === undefined && auditCount() === auditBefore + 1, 'confirming the same again does nothing');
+  // The normal save (and its reset) never touch the multipliers.
+  await api('POST', '/admin/balance', { tuning: { hpRegenMult: 1 } }, tok.owner1);
+  ok(JSON.parse(settingRow() ?? '{}').itemStatMult?.atk === 2, 'a normal save keeps the multipliers');
+  const rs = await api('POST', '/admin/balance', { reset: true }, tok.owner1);
+  ok(JSON.stringify(rs.data.tuning) === '{"itemStatMult":{"atk":2}}', 'the reset keeps the multipliers too');
+  p2.ws.close();
 }
 
 run()

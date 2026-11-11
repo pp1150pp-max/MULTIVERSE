@@ -341,7 +341,7 @@ function setTab(t: Tab): void {
   else if (t === 'reports') void renderReports();
   else if (t === 'orbs') void renderOrbs();
   else if (t === 'cos') void renderCos();
-  else if (t === 'balance') void renderBalance(view, h, api, (tuning) => applyBalance(tuning));
+  else if (t === 'balance') void renderBalance(view, h, api, (tuning) => applyBalance(tuning), can('itemStatMult'));
   else if (t === 'roles') void renderRoles();
   else if (t === 'audit') void renderAudit();
   else if (t === 'cards') void renderCards();
@@ -2095,7 +2095,7 @@ function backupCard(): HTMLElement {
   const list = h('div');
   const msg = h('div', { class: 'msg' });
   const btn = h('button', { class: 'primary' }, 'สำรองตอนนี้');
-  const KIND: Record<string, string> = { daily: 'อัตโนมัติรายวัน', manual: 'กดเอง', 'before-delete': 'ก่อนลบ' };
+  const KIND: Record<string, string> = { daily: 'อัตโนมัติรายวัน', manual: 'กดเอง', 'before-delete': 'ก่อนลบ', 'before-item-mult': 'ก่อนคูณสเตตัสไอเทม' };
   let showAll = false;
   let last: BackupRow[] = [];
   const draw = (rows: BackupRow[]) => {

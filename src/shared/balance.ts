@@ -6,7 +6,7 @@
 // and on every save, and sends them to every browser so tooltips and the blacksmith's odds match.
 import { CLASSES, CLASS_IDS } from './data/classes';
 import {
-  CODE_BOSS_TIER_BOOST, CODE_RANGE_FLOOR, CODE_TIER_WEIGHT, CODE_TIER_WIDTH, setTierTables, TIER_BAND_NAME, TIER_BANDS, type TierBand, type TierTableDef,
+  CODE_BOSS_TIER_BOOST, CODE_RANGE_FLOOR, CODE_TIER_WEIGHT, CODE_TIER_WIDTH, setItemStatMult, setTierTables, TIER_BAND_NAME, TIER_BANDS, type TierBand, type TierTableDef,
 } from './data/items';
 import { addInto, emptyStats } from './formulas';
 import { STAT_KEYS, STAT_LABEL, type ClassId, type StatKey, type Stats } from './types';
@@ -51,6 +51,12 @@ export interface Balance {
   statTiers: Partial<Record<StatKey, StatTierTuning>>;
   /** Level bands with a tier table of their own for every stat (none in code). */
   bandTiers: Partial<Record<TierBand, TierParts>>;
+  /**
+   * Item stat multipliers (owner 2026-11-11): every line of that stat on every item, new and old, is this many
+   * times what it was rolled at. Only the owner changes them (a separate confirm that also scales every saved
+   * item, see server/admin-tools.ts); the normal save keeps them as they are.
+   */
+  itemStatMult: Record<StatKey, number>;
 }
 
 /** What is saved: only what differs from the code. Tier arrays are saved whole when any entry differs. */
@@ -69,6 +75,8 @@ export interface BalanceTuning {
   statTiers?: Partial<Record<StatKey, StatTierTuning>>;
   /** Same for level bands (all stats on items of that level band). */
   bandTiers?: Partial<Record<TierBand, TierParts>>;
+  /** Item stat multipliers that are not ×1. */
+  itemStatMult?: Partial<Record<StatKey, number>>;
 }
 
 /** Highest Lv1 / per-level value of each stat (owner 2026-11-11); the lowest is 0. */
@@ -84,6 +92,7 @@ export const BALANCE_RANGE = {
   tierWidth: [1, 96],
   rangeFloor: [5, 95],
   bossTierBoost: [0, 10],
+  itemStatMult: [0.1, 10],
 } as const satisfies Record<string, readonly [number, number]>;
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
@@ -110,6 +119,7 @@ export function codeBalance(): Balance {
     bossTierBoost: CODE_BOSS_TIER_BOOST,
     statTiers: {},
     bandTiers: {},
+    itemStatMult: full(undefined, 1),
   };
 }
 
@@ -133,6 +143,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.bossTierBoost !== undefined) b.bossTierBoost = t.bossTierBoost;
   if (t.statTiers) b.statTiers = structuredClone(t.statTiers);
   if (t.bandTiers) b.bandTiers = structuredClone(t.bandTiers);
+  Object.assign(b.itemStatMult, t.itemStatMult);
   return b;
 }
 
@@ -145,6 +156,7 @@ export function applyBalance(t: BalanceTuning): void {
   current = mergeBalance(t);
   const b = current;
   setTierTables((stat, band) => statTierTable(b, stat, band));
+  setItemStatMult(b.itemStatMult);
 }
 
 /** The tables a stat at a band takes parts from, first first (see TierParts); null stat / band = any. */
@@ -224,7 +236,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -404,6 +416,24 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (Object.keys(res).length) out.statTiers = res;
     return null;
   };
+  // Item stat multipliers: only those not ×1 are kept, in STAT_KEYS order.
+  const itemMult = (): string | null => {
+    const x = o.itemStatMult;
+    if (x === undefined) return null;
+    if (!isObj(x)) return strict ? 'ตัวคูณสเตตัสบนไอเทมไม่ถูกต้อง' : null;
+    if (strict) {
+      const extra = Object.keys(x).find((k) => !(STAT_KEYS as readonly string[]).includes(k));
+      if (extra) return `ตัวคูณสเตตัสบนไอเทม: ไม่รู้จักสเตตัส "${extra.slice(0, 20)}"`;
+    }
+    const res: Partial<Record<StatKey, number>> = {};
+    for (const k of STAT_KEYS) {
+      const n = num(x[k], ...BALANCE_RANGE.itemStatMult, `ตัวคูณ${STAT_LABEL[k]}บนไอเทม`);
+      if (typeof n === 'string') return n;
+      if (n !== undefined && n !== 1) res[k] = n;
+    }
+    if (Object.keys(res).length) out.itemStatMult = res;
+    return null;
+  };
   // Level bands' own tier tables (all stats).
   const bandTiers = (): string | null => {
     const bands = bandTables(o.bandTiers, '');
@@ -419,7 +449,8 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     one('rangeFloor', BALANCE_RANGE.rangeFloor, 'ค่าต่ำสุดของช่วง %') ??
     one('bossTierBoost', BALANCE_RANGE.bossTierBoost, 'บอสเพิ่มโอกาส tier ดี') ??
     statTiers() ??
-    bandTiers();
+    bandTiers() ??
+    itemMult();
   if (err) return { error: err };
   // Fixed key order.
   const ordered: BalanceTuning = {};
@@ -478,5 +509,17 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
     parts(STAT_LABEL[k], a.statTiers[k], b.statTiers[k]);
     for (const id of TIER_BANDS) parts(`${STAT_LABEL[k]} ${TIER_BAND_NAME[id]}`, a.statTiers[k]?.bands?.[id], b.statTiers[k]?.bands?.[id]);
   }
+  for (const k of STAT_KEYS) {
+    if (a.itemStatMult[k] !== b.itemStatMult[k]) out.push(`ตัวคูณ${STAT_LABEL[k]}บนไอเทม ×${a.itemStatMult[k]} → ×${b.itemStatMult[k]}`);
+  }
   return out.join(', ');
+}
+
+/**
+ * The same tuning with other item stat multipliers (`mult`, already clean), in the fixed key order. The normal
+ * save keeps the multipliers in use with this, and the owner's confirm changes only them.
+ */
+export function withItemStatMult(t: BalanceTuning, mult: BalanceTuning['itemStatMult']): BalanceTuning {
+  const { itemStatMult: _, ...rest } = t;
+  return checkBalance(mult ? { ...rest, itemStatMult: mult } : rest, false).tuning ?? {};
 }
