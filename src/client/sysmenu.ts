@@ -35,6 +35,8 @@ const MENU_ITEMS: [string, string, string][] = [
   ['bag', badge('bag'), 'กระเป๋า'], ['party', PARTY_ICON, 'ปาร์ตี้'], ['friends', FRIENDS_ICON, 'เพื่อน'], ['trade', TRADE_ICON, 'เทรด'], ['mail', MAIL_ICON, 'จดหมาย'], ['map', badge('map'), 'แผนที่'],
   ['cosmetics', badge('blank', '👑'), 'แต่งตัว'], ['autoset', badge('autoset'), 'ตั้งค่า Auto'], ['audio', badge('blank', '🔊'), 'เสียง'], ['help', badge('help'), 'วิธีเล่น'],
   ['report', badge('blank', '🐞'), 'แจ้งปัญหา'], ['settings', badge('settings'), 'ตั้งค่า'],
+  // Touch play only (hidden by CSS with a mouse), and only where the browser can do it (not iPhone Safari).
+  ...(document.fullscreenEnabled ? [['fullscreen', badge('blank', '⛶'), 'เต็มจอ'] as [string, string, string]] : []),
 ];
 
 /** Top-right icon row: [button id, icon, label]. */
@@ -225,6 +227,11 @@ export class SystemMenu {
       case 'help':
         this.toggle(false);
         return this.g.hud.toggleHelp(true);
+      case 'fullscreen':
+        this.toggle(false);
+        if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+        else void document.documentElement.requestFullscreen().catch(() => {});
+        return;
       case 'audio':
         this.toggle(false);
         return $('btn-audio')?.click();

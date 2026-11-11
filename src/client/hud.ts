@@ -32,6 +32,7 @@ import { MarketWindow } from './market';
 import { playSound } from './audio/sfx';
 import { COIN_ICON, emptySlotIcon, FORGE_ICON, itemIcon, potionIcon, skillIcon, stoneIcon } from './icons';
 import { shutdownCancelled, shutdownWarning, type ShutdownMode } from '../shared/net/protocol';
+import { isTouchMode, onPointerModeChange } from './touch/device';
 import { imgUrl } from './img';
 
 /** Yellow, like the game's level-up lines. */
@@ -183,10 +184,12 @@ export class Hud {
     this.market = new MarketWindow(g, this);
     $('hud').classList.remove('hidden');
     this.mm = $<HTMLCanvasElement>('minimap').getContext('2d')!;
-    this.setHudStyle(loadHudStyle());
+    this.hudStyle = loadHudStyle();
+    this.applyHudStyle();
+    onPointerModeChange(() => this.applyHudStyle());
     // Big enough to show up late on first opening the bag, so it's fetched now.
     new Image().src = imgUrl('assets/sprites/ui/inventory.png');
-    $('btn-hud-style').onclick = () => this.setHudStyle($('hud').classList.contains('hud-orbs') ? 'bars' : 'orbs');
+    $('btn-hud-style').onclick = () => this.setHudStyle(this.hudStyle === 'orbs' ? 'bars' : 'orbs');
     this.fullMap = new FullMap($<HTMLCanvasElement>('fullmap-canvas'));
     try {
       const saved = Number(localStorage.getItem(MINIMAP_ZOOM_KEY));
@@ -874,7 +877,7 @@ export class Hud {
     $('expbar').title = gate ? `ต้องลงบอส ${gate.nameTh} ก่อนถึงจะเลเวลเกิน ${gate.level} ได้ (EXP ที่เกินจะหายไป)` : '';
     $('hud-level').textContent = `Lv.${p.level} ${p.cls.name}`;
     $('hud-gold').textContent = `${p.gold.toLocaleString()} G`;
-    if (this.g.backend.online) $('hud-online').textContent = `🌐 ออนไลน์ ${this.g.backend.onlineCount} คน · กด Enter เพื่อแชท`;
+    if (this.g.backend.online) $('hud-online').textContent = `🌐 ออนไลน์ ${this.g.backend.onlineCount} คน${isTouchMode() ? '' : ' · กด Enter เพื่อแชท'}`;
     this.showPing(this.g.backend.ping);
 
     for (const s of this.slotEls) {
@@ -943,11 +946,20 @@ export class Hud {
     $('hud-ping').className = cls;
   }
 
-  private setHudStyle(style: HudStyle): void {
+  /** The player's HP/MP choice (orbs or bars). Touch play shows the bars whatever it is (owner 2026-11-11). */
+  private hudStyle: HudStyle = 'orbs';
+
+  private applyHudStyle(): void {
+    const shown = isTouchMode() ? 'bars' : this.hudStyle;
     const hud = $('hud');
-    hud.classList.toggle('hud-orbs', style === 'orbs');
-    hud.classList.toggle('hud-bars', style === 'bars');
-    $('btn-hud-style').textContent = style === 'orbs' ? 'HP/MP: ลูกแก้ว' : 'HP/MP: แถบ';
+    hud.classList.toggle('hud-orbs', shown === 'orbs');
+    hud.classList.toggle('hud-bars', shown === 'bars');
+    $('btn-hud-style').textContent = this.hudStyle === 'orbs' ? 'HP/MP: ลูกแก้ว' : 'HP/MP: แถบ';
+  }
+
+  private setHudStyle(style: HudStyle): void {
+    this.hudStyle = style;
+    this.applyHudStyle();
     try {
       localStorage.setItem(HUD_STYLE_KEY, style);
     } catch {
