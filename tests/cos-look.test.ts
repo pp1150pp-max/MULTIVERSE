@@ -41,7 +41,7 @@ ok(JSON.stringify(checkCosTuning({ mount_tortoise: { h: 2 }, mount_wolf: { seat:
 ok(!!checkCosTuning({ mount_hoverboard: { h: 1 } }, true).error, 'a removed mount cannot be saved');
 ok(cosTuneDefaults('pet_dragon')?.fly === true && cosTuneDefaults('pet_cat')?.fly === false, 'pet flying defaults kept');
 ok(JSON.stringify(checkCosTuning({ wings_angel: { root: 0.6 } }, true).tuning) === '{}', 'a value equal to the code default is not stored');
-ok(checkCosTuning({ wings_angel: { backStand: 1.23456 } }, true).tuning?.wings_angel?.backStand === 1.23, 'numbers are rounded to 2 decimals');
+ok(checkCosTuning({ wings_angel: { backStand: 1.23456 } }, true).tuning?.wings_angel?.backStand === 1.235, 'numbers are rounded to 3 decimals');
 ok(!!checkCosTuning({ wings_angel: { backStand: 9 } }, true).error, 'out of range is refused');
 ok(!!checkCosTuning({ wings_angel: { backStand: '1' } }, true).error, 'a number sent as text is refused');
 ok(!!checkCosTuning({ pet_cat: { fly: 1 } }, true).error, 'an on/off field must be true/false');

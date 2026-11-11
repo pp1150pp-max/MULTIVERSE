@@ -34,7 +34,7 @@ const CSS = `
 .cosp .row > span, .cosp .row > select, .cosp .row > input { flex-shrink: 0; }
 .cosp select, .cosp textarea { background: #1d2230; color: inherit; border: 1px solid #3a4152; border-radius: 3px; padding: 2px 4px; font: inherit; }
 .cosp input[type=range] { width: 110px; vertical-align: middle; }
-.cosp .val { display: inline-block; width: 38px; text-align: right; }
+.cosp .val { width: 64px; text-align: right; }
 .cosp .val.changed { color: #7fd0ff; }
 .cosp button { background: #2a3245; color: inherit; border: 1px solid #4a5570; border-radius: 3px; padding: 3px 6px; margin: 2px 2px 2px 0; cursor: pointer; font: inherit; }
 .cosp button:hover { background: #36405a; }
@@ -494,7 +494,7 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
         if (state.view < 0) {
           const lo = spec.sign === 1 ? f.min : -f.max;
           const hi = spec.sign === 1 ? f.max : -f.min;
-          const r = rangeBox(lo, hi, f.step, round(spec.sign * (curNow[spec.key] as number)), (v) => {
+          const r = rangeBox(lo, hi, Math.min(f.step, 0.005), round(spec.sign * (curNow[spec.key] as number)), (v) => {
             setCosTuneValue(c.id, spec.key, spec.sign === 1 ? v : v === 0 ? 0 : -v);
             updateStatus();
           }, (v) => Math.abs(spec.sign * v - (defs[spec.key] as number)) > 1e-6);
@@ -610,16 +610,31 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
     s.max = String(max);
     s.step = String(step);
     s.value = String(value);
-    const out = document.createElement('span');
+    // The value is a box too: type an exact number (kept within the slider's range, 3 decimals).
+    const out = document.createElement('input');
+    out.type = 'number';
     out.className = 'val';
-    const show = (v: number) => {
-      out.textContent = String(v);
-      out.classList.toggle('changed', !!changed?.(v));
-    };
-    show(value);
+    out.min = String(min);
+    out.max = String(max);
+    out.step = '0.001';
+    const mark = (v: number) => out.classList.toggle('changed', !!changed?.(v));
+    out.value = String(value);
+    mark(value);
     s.oninput = () => {
       const v = Number(s.value);
-      show(v);
+      out.value = String(v);
+      mark(v);
+      on(v);
+    };
+    out.onchange = () => {
+      if (out.value.trim() === '' || !Number.isFinite(Number(out.value))) {
+        out.value = s.value;
+        return;
+      }
+      const v = round(Math.min(max, Math.max(min, Number(out.value))));
+      out.value = String(v);
+      s.value = String(v);
+      mark(v);
       on(v);
     };
     wrap.append(s, out);

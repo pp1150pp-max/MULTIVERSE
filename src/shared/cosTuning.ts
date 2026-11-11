@@ -130,7 +130,7 @@ for (const slot of TUNED_SLOTS) {
   for (const s of COS_AXES[slot]) {
     for (const g of VIEW_GROUPS) {
       const key = viewOffKey(s.axis, g);
-      if (!COS_TUNE_FIELDS[slot][key]) COS_TUNE_FIELDS[slot][key] = num(-1.5, 1.5, 0.01, `ส่วนปรับ ${s.axis.toUpperCase()} มุม${g === 'front' ? 'หน้า' : g === 'side' ? 'ข้าง' : 'หลัง'}`);
+      if (!COS_TUNE_FIELDS[slot][key]) COS_TUNE_FIELDS[slot][key] = num(-1.5, 1.5, 0.005, `ส่วนปรับ ${s.axis.toUpperCase()} มุม${g === 'front' ? 'หน้า' : g === 'side' ? 'ข้าง' : 'หลัง'}`);
     }
   }
 }
@@ -193,12 +193,12 @@ export type CosTuning = Record<string, TuneValues>;
 /** Key in the server's settings table. */
 export const COS_TUNING_SETTING = 'cos_tuning';
 
-const round2 = (n: number) => Math.round(n * 100) / 100;
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
 /**
  * Checks tuning sent by a browser (`strict`: anything unknown, mistyped or out of range is an error) or
  * read back from the database (not strict: such entries are dropped, the rest kept). Numbers are rounded
- * to 2 decimals, fields equal to the code default left out, and the result is in catalogue/field order
+ * to 3 decimals, fields equal to the code default left out, and the result is in catalogue/field order
  * (so two equal tunings give the same JSON). Returns the clean tuning or a Thai error.
  */
 export function checkCosTuning(v: unknown, strict: boolean): { tuning: CosTuning; error?: undefined } | { tuning?: undefined; error: string } {
@@ -244,7 +244,7 @@ export function checkCosTuning(v: unknown, strict: boolean): { tuning: CosTuning
           continue;
         }
         // The default itself is kept exact (e.g. the wings' 1.625), so it is never stored as a change.
-        clean = x === defs[k] ? x : round2(x);
+        clean = x === defs[k] ? x : round3(x);
       }
       if (clean !== defs[k]) vals[k] = clean;
     }
