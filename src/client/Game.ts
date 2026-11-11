@@ -51,8 +51,6 @@ const UP = { x: -S, z: -S };
 const AUTO_LOCK_RANGE = 10;
 /** Touch: things are this much easier to hit with a finger than with the mouse (owner 2026-11-11). */
 const TAP_SCALE = 1.5;
-/** Touch, phone held upright: the camera starts this far out so the narrow screen still shows enough map (owner). */
-const PORTRAIT_VIEW_SIZE = 24;
 const MIN_VIEW = 10;
 const MAX_VIEW = 28;
 
@@ -156,7 +154,6 @@ export class Game {
     container.prepend(this.renderer.domElement);
 
     const aspect = window.innerWidth / window.innerHeight;
-    if (isTouchMode() && aspect < 1) this.viewSize = PORTRAIT_VIEW_SIZE;
     this.camera = new THREE.OrthographicCamera(-aspect, aspect, 1, -1, 0.1, 400);
     this.updateProjection();
 

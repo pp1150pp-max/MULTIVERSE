@@ -45,7 +45,7 @@ export class TouchControls {
     this.root = document.createElement('div');
     this.root.id = 'touch-ui';
     this.root.innerHTML = `
-      <div id="tc-stick" class="hidden">${art('stick_base')}<div id="tc-knob">${art('stick_knob')}</div></div>
+      <div id="tc-stick">${art('stick_base')}<div id="tc-knob">${art('stick_knob')}</div></div>
       <button id="tc-menu" class="tc-btn tc-small" aria-label="เมนู"><span class="tc-ico">${badgeArt('menu')}</span><i class="badge hidden" data-badge="เมนู"></i></button>
       <button id="tc-chat" class="tc-btn tc-small" aria-label="แชท"><span class="tc-ico">${art('icon_chat')}</span></button>
       <div id="tc-pad">
@@ -142,25 +142,25 @@ export class TouchControls {
   /** Everything let go (switching apps, typing, back to the mouse). */
   private reset(): void {
     for (const el of this.root.querySelectorAll<HTMLElement>('.down')) el.classList.remove('down');
-    this.hideStick();
+    this.centreKnob();
     this.closePicker();
   }
 
   // ------------------------------------------------------------ joystick (driven by gestures.ts)
 
-  showStick(x: number, y: number): void {
-    this.stick.style.left = `${x}px`;
-    this.stick.style.top = `${y}px`;
-    this.knob.style.transform = '';
-    this.stick.classList.remove('hidden');
+  /** Centre of the joystick on screen (it stays in the bottom-left corner). */
+  stickCentre(): { x: number; y: number } {
+    const r = this.stick.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   }
 
   moveKnob(dx: number, dy: number): void {
     this.knob.style.transform = `translate(${dx}px, ${dy}px)`;
   }
 
-  hideStick(): void {
-    this.stick.classList.add('hidden');
+  /** The knob back in the middle. */
+  centreKnob(): void {
+    this.knob.style.transform = '';
   }
 
   /** How far (px) the knob can travel from the centre: the stick's own drawn radius. */

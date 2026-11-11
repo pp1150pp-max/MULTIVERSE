@@ -1336,9 +1336,6 @@ body.touch-ui #skillbar, body.touch-ui #hud-iconrow, body.touch-ui #mount-btn { 
 #touch-ui .tc-mini { --d: calc(44px * var(--s)); }
 #touch-ui .tc-talk { --d: calc(56px * var(--s)); }
 #tc-pad { position: absolute; right: max(8px, env(safe-area-inset-right)); bottom: max(8px, env(safe-area-inset-bottom)); width: 0; height: 0; }
-/* HP/MP as orbs: the MP orb fills the bottom-right corner, so the pad moves beside it (landscape) or on top of it (portrait). */
-.hud-orbs #tc-pad { right: calc(max(4px, env(safe-area-inset-right)) + var(--orb)); }
-@media (orientation: portrait) { .hud-orbs #tc-pad { right: max(8px, env(safe-area-inset-right)); bottom: calc(max(4px, env(safe-area-inset-bottom)) + var(--orb) * 433 / 414); } }
 #tc-pad .tc-btn { right: calc(var(--x) * var(--s) * 1px - var(--d) / 2); bottom: calc(var(--y) * var(--s) * 1px - var(--d) / 2); }
 #touch-ui .tc-btn.down { transform: scale(0.92); filter: brightness(1.25); }
 #touch-ui .tc-btn.hidden { display: none; }
@@ -1354,38 +1351,29 @@ body.touch-ui #skillbar, body.touch-ui #hud-iconrow, body.touch-ui #mount-btn { 
 #tc-auto.active { filter: drop-shadow(0 0 8px #9fd8ff); }
 #tc-auto.active .tc-label { color: #9fd8ff; }
 
-/* Landscape: attack in the corner, Q/E/R in a quarter circle round it, dash beside; the rest along the bottom. */
-#tc-pad .tc-attack { --x: 58; --y: 58; }
-#tc-pad [data-slot="q"] { --x: 162; --y: 58; }
-#tc-pad [data-slot="e"] { --x: 132; --y: 132; }
-#tc-pad [data-slot="r"] { --x: 58; --y: 162; }
-#tc-pad [data-slot="dash"] { --x: 244; --y: 58; }
-#tc-pad [data-pot="hp"] { --x: 236; --y: 136; }
-#tc-pad [data-pot="mp"] { --x: 300; --y: 96; }
-#tc-pad #tc-auto { --x: 372; --y: 44; }
-#tc-pad #tc-autoset { --x: 434; --y: 40; }
-#tc-pad #tc-scroll { --x: 360; --y: 112; }
-#tc-pad #tc-mount { --x: 418; --y: 112; }
-#tc-pad #tc-talk { --x: 240; --y: 212; }
-/* Portrait: the screen is narrow, so the buttons stack upward instead. */
-@media (orientation: portrait) {
-  #tc-pad [data-slot="dash"] { --x: 214; --y: 150; }
-  #tc-pad [data-pot="hp"] { --x: 150; --y: 214; }
-  #tc-pad [data-pot="mp"] { --x: 214; --y: 226; }
-  #tc-pad #tc-auto { --x: 58; --y: 256; }
-  #tc-pad #tc-autoset { --x: 122; --y: 284; }
-  #tc-pad #tc-talk { --x: 186; --y: 296; }
-  #tc-pad #tc-scroll { --x: 34; --y: 330; }
-  #tc-pad #tc-mount { --x: 34; --y: 386; }
-}
+/* A compact grid in the bottom-right corner (owner 2026-11-11, landscape only): attack in the corner, dash above it,
+   Q/E/R along the bottom, potions / return scroll / mount in the row above, then talk, AUTO and its settings. */
+#tc-pad .tc-attack { --x: 50; --y: 50; }
+#tc-pad [data-slot="dash"] { --x: 50; --y: 132; }
+#tc-pad [data-slot="q"] { --x: 138; --y: 40; }
+#tc-pad [data-slot="e"] { --x: 210; --y: 40; }
+#tc-pad [data-slot="r"] { --x: 282; --y: 40; }
+#tc-pad [data-pot="hp"] { --x: 132; --y: 110; }
+#tc-pad [data-pot="mp"] { --x: 188; --y: 110; }
+#tc-pad #tc-scroll { --x: 244; --y: 110; }
+#tc-pad #tc-mount { --x: 300; --y: 110; }
+#tc-pad #tc-talk { --x: 164; --y: 182; }
+#tc-pad #tc-auto { --x: 236; --y: 182; }
+#tc-pad #tc-autoset { --x: 298; --y: 190; }
+/* The EXP bar moves to the top middle, out of the buttons' way. */
+body.touch-ui #hud-bottom { top: max(4px, env(safe-area-inset-top)); bottom: auto; --bar-w: min(320px, 38vw); }
 
 /* Under the character card: chat, then ☰ (the system menu, with everything from the hidden icon row). */
-#touch-ui #tc-menu { top: calc(max(12px, env(safe-area-inset-top)) + 150px); left: calc(max(12px, env(safe-area-inset-left)) + 58px * var(--s)); }
-#touch-ui #tc-chat { top: calc(max(12px, env(safe-area-inset-top)) + 150px); left: max(12px, env(safe-area-inset-left)); }
+#touch-ui #tc-menu { top: calc(max(12px, env(safe-area-inset-top)) + 160px); left: calc(max(12px, env(safe-area-inset-left)) + 58px * var(--s)); }
+#touch-ui #tc-chat { top: calc(max(12px, env(safe-area-inset-top)) + 160px); left: max(12px, env(safe-area-inset-left)); }
 
-/* The floating joystick: appears where the finger lands (left side), the knob follows the finger. */
-#tc-stick { position: absolute; width: calc(128px * var(--s)); height: calc(128px * var(--s)); transform: translate(-50%, -50%); pointer-events: none; opacity: 0.85; }
-#tc-stick.hidden { display: none; }
+/* The joystick: always in the bottom-left corner (owner 2026-11-11), the knob follows the finger. */
+#tc-stick { position: absolute; left: max(16px, env(safe-area-inset-left)); bottom: max(16px, env(safe-area-inset-bottom)); width: calc(128px * var(--s)); height: calc(128px * var(--s)); pointer-events: none; opacity: 0.85; }
 #tc-stick > img, #tc-knob img { width: 100%; height: 100%; image-rendering: pixelated; display: block; }
 #tc-knob { position: absolute; left: 27%; top: 27%; width: 46%; height: 46%; }
 
@@ -1400,3 +1388,15 @@ body.touch-ui #skillbar, body.touch-ui #hud-iconrow, body.touch-ui #mount-btn { 
 #tc-potpick .tc-pick.sel { border-color: var(--gold-hi); background: #2a1e0e; }
 #tc-potpick .tc-pick.empty { opacity: 0.45; }
 body:not(.touch-ui) .sys-tile[data-act="fullscreen"] { display: none; }
+
+/* Touch play is landscape only (owner 2026-11-11): held upright, a "turn your phone" screen covers the game.
+   Not while typing: an on-screen keyboard can make the visible area taller than wide. */
+#rotate-hint { display: none; }
+@media (orientation: portrait) {
+  body.touch-ui:not(.typing) #rotate-hint {
+    display: flex; position: fixed; inset: 0; z-index: 2000; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    background: #07061a; color: var(--gold-hi); font-size: 18px; text-align: center; padding: 24px;
+  }
+}
+#rotate-hint .rotate-icon { font-size: 56px; animation: rotate-hint 1.6s ease-in-out infinite; }
+@keyframes rotate-hint { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }

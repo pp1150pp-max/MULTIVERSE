@@ -1,5 +1,5 @@
 // Fingers on the game itself (the canvas) in touch play (mobile plan 3.2):
-//   - a finger landing on the left part of the screen brings up a floating joystick there; dragging walks
+//   - a finger landing on the joystick (always in the bottom-left corner) walks the way it is dragged
 //   - a quick tap (anywhere) is Game.tapAt: lock on to a monster, walk to and use a drop / NPC / rest spot,
 //     open another player's menu, or walk to open ground
 //   - two fingers pinch to zoom the camera (the mouse wheel on PC)
@@ -28,11 +28,10 @@ export class TouchGestures {
     g.input.releaseHooks.push(() => this.reset());
   }
 
-  /** The joystick comes up for a finger landing here: the left 40% (landscape), or the lower-left (portrait). */
+  /** A finger landing this close to the joystick's centre (× its knob travel) takes the joystick. */
   private inStickZone(x: number, y: number): boolean {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    return h > w ? x < w * 0.5 && y > h * 0.4 : x < w * 0.4;
+    const c = this.g.touch.stickCentre();
+    return Math.hypot(x - c.x, y - c.y) < this.g.touch.stickRadius * 1.6;
   }
 
   private down(e: PointerEvent, canvas: HTMLCanvasElement): void {
@@ -52,9 +51,14 @@ export class TouchGestures {
       this.pinch = { a: ia, b: ib, d0: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), zoom0: this.g.zoom };
       return;
     }
-    if (this.fingers.size === 1 && this.inStickZone(f.x, f.y)) {
+    if (this.stickId === null && this.inStickZone(f.x, f.y)) {
       this.stickId = e.pointerId;
-      this.g.touch.showStick(f.x, f.y);
+      // Measured from the joystick's centre, not from where the finger landed.
+      const c = this.g.touch.stickCentre();
+      f.x0 = c.x;
+      f.y0 = c.y;
+      f.moved = true; // never a tap
+      this.steer(f);
     }
   }
 
@@ -72,7 +76,11 @@ export class TouchGestures {
       this.g.zoom = this.pinch.zoom0 * (this.pinch.d0 / d);
       return;
     }
-    if (e.pointerId !== this.stickId) return;
+    if (e.pointerId === this.stickId) this.steer(f);
+  }
+
+  /** The joystick finger at (f.x, f.y): the knob follows it, and Input.stick gets the direction. */
+  private steer(f: Finger): void {
     const r = this.g.touch.stickRadius;
     let dx = f.x - f.x0;
     let dy = f.y - f.y0;
@@ -99,7 +107,7 @@ export class TouchGestures {
     if (this.stickId === null) return;
     this.stickId = null;
     this.g.input.stick = null;
-    this.g.touch.hideStick();
+    this.g.touch.centreKnob();
   }
 
   private reset(): void {
