@@ -66,6 +66,8 @@ const THEME_PROPS: Record<ZoneTheme, ThemeProps> = {
 
 /** How close a player has to walk to a portal to use it. */
 export const PORTAL_RANGE = 1.4;
+/** How close to a boss room's portal you must stand to leave through it (Sim.leaveRoom). */
+export const ROOM_EXIT_RANGE = 3;
 /** The boss summoner on each map: its picture, height and how much of it is solid. */
 export const SUMMONER_PROP: Record<ZoneTheme, string> = {
   forest: 'summoner_forest',

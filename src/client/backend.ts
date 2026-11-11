@@ -190,6 +190,8 @@ export interface Backend {
   buyPhoenix(n: number): void;
   /** Dead in a boss room: get up here for one phoenix feather. */
   roomRevive(): void;
+  /** Leave a boss room through its portal (the boss dead, standing near it). Comes out by the summoner. */
+  roomLeave(): void;
   roomAnswer(id: number, yes: boolean): void;
   roomStart(): void;
   roomCancel(): void;
