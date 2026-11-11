@@ -109,7 +109,7 @@ Card art:
 | `socket_empty.png` | รูว่าง | `a small round empty socket hole drilled into dark metal, a dark hollow center with a thin tarnished bronze rim` |
 | `socket_filled.png` | รูมีการ์ด | `a small round socket in dark metal holding a tiny glowing card-shaped crystal, with only a faint dim glow` |
 | `forge_drill.png` | เมนูเจาะรู | `a blacksmith hand drill with a wooden handle and a steel spiral bit, with a few metal shavings` |
-| `forge_socket.png` | เมนูเสียบการ์ด | `a small trading card being slid into a glowing round socket on a piece of armour` |
+| `forge_socket.png` | เมนูเสียบการ์ด | `a small dark iron armour plate (just the plate, no body) with a round socket in its center, and a small trading card already half inserted into the socket with a faint dim glow at the slot. Only the plate and the card, nothing else: no hands, no fingers, no arms, no person, no cloth` |
 | `forge_fuse.png` | เมนูรวมการ์ด | `three small trading cards fanned out and merging into one card in the middle with a faint dim glow` |
 | `market_cards.png` | หมวดการ์ดในตลาด | `a neat stack of three trading cards with a small gold coin on top` |
 
