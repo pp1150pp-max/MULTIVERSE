@@ -88,6 +88,11 @@ export interface Item {
    * Missing = the code's own. When it differs from the tables in use, the labels are redone on load; values never change.
    */
   tierK?: string;
+  /**
+   * The item stat multipliers its values were scaled to (`stat=mult;…`, see itemStatMult in data/items).
+   * Missing = all ×1. When it differs from the multipliers in use, the values are scaled on load (once).
+   */
+  mulK?: string;
 }
 
 /** Stat tiers: 1 is the best, 5 the lowest. Each has its own range (see tierRanges in data/items). */

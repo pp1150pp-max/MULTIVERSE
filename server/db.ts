@@ -432,6 +432,40 @@ export class Db {
     this.setSetting(BALANCE_SETTING, Object.keys(t).length ? JSON.stringify(t) : null);
   }
 
+  /**
+   * Rewrites every saved item, in one transaction (the item stat multipliers): characters, stashes and market
+   * listings of every status (the claim box too), whose searchable stats are redone. `fix` gets a row's JSON
+   * and returns the new JSON, or null when nothing changed; `stats` gives a listing entry's searchable stats.
+   * Returns how many rows changed.
+   */
+  rewriteSavedItems(fix: (json: string) => string | null, stats: (entry: string) => Record<string, number>): { characters: number; stashes: number; listings: number } {
+    return this.transaction(() => {
+      const out = { characters: 0, stashes: 0, listings: 0 };
+      const setChar = this.db.prepare('UPDATE characters SET data = ? WHERE id = ?');
+      for (const r of this.db.prepare('SELECT id, data FROM characters').all() as { id: number; data: string }[]) {
+        const n = fix(r.data);
+        if (n !== null) { setChar.run(n, r.id); out.characters++; }
+      }
+      const setStash = this.db.prepare('UPDATE stashes SET data = ? WHERE account_id = ?');
+      for (const r of this.db.prepare('SELECT account_id, data FROM stashes').all() as { account_id: number; data: string }[]) {
+        const n = fix(r.data);
+        if (n !== null) { setStash.run(n, r.account_id); out.stashes++; }
+      }
+      const setEntry = this.db.prepare('UPDATE market_listings SET entry = ? WHERE id = ?');
+      const clearStats = this.db.prepare('DELETE FROM market_listing_stats WHERE listing_id = ?');
+      const putStat = this.db.prepare('INSERT INTO market_listing_stats (listing_id, stat, value) VALUES (?, ?, ?)');
+      for (const r of this.db.prepare('SELECT id, entry FROM market_listings').all() as { id: number; entry: string }[]) {
+        const n = fix(r.entry);
+        if (n === null) continue;
+        setEntry.run(n, r.id);
+        clearStats.run(r.id);
+        for (const [stat, value] of Object.entries(stats(n))) if (value) putStat.run(r.id, stat, value);
+        out.listings++;
+      }
+      return out;
+    });
+  }
+
   shutdownTexts(): Record<ShutdownMode, string> {
     const get = (mode: ShutdownMode): string => {
       const v = this.getSetting(SHUTDOWN_TEXT_KEY[mode]);

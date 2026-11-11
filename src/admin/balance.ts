@@ -5,7 +5,7 @@
 // and applies it to everyone online at once.
 import {
   applyBalance, BALANCE_RANGE, balanceChanges, checkBalance, classStatsAt, codeBalance, currentBalanceTuning, hasParts, mergeBalance, STAT_MAX,
-  STAT_PART_NAME, STAT_PARTS, STAT_TIER_PARTS, statTierTable, tierLabelsChange, tierSourceName,
+  STAT_PART_NAME, STAT_PARTS, STAT_TIER_PARTS, statTierTable, tierLabelsChange, tierSourceName, withItemStatMult,
   type Balance, type BalanceTuning, type StatPart, type TierParts,
 } from '../shared/balance';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
@@ -30,7 +30,7 @@ interface BalanceState { tuning: BalanceTuning }
  * Draws the tab into `view`. `onSaved` gets the new tuning after a save, so the page's other tools (the
  * custom-item tiers) can use it too.
  */
-export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: (t: BalanceTuning) => void): Promise<void> {
+export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: (t: BalanceTuning) => void, canConfirmMult = false): Promise<void> {
   const box = h('div', {}, h('div', { class: 'muted' }, 'กำลังโหลด…'));
   view.append(box);
   let saved: BalanceTuning;
@@ -295,9 +295,96 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   let pvBase = ITEM_BASES[0].id;
   let pvRarity: Rarity = 'rare';
   let pvLevel = 10;
+  // Item stat multipliers (owner 2026-11-11): typed here, "ทดลอง" shows them in the table (nothing saved),
+  // "คอนเฟิร์ม" (owner only) applies them server-wide and scales every item. The normal save never sends them.
+  const savedMult = (): Record<StatKey, number> => ({ ...mergeBalance(saved).itemStatMult });
+  let multDraft = savedMult();
+  let multTrial: Record<StatKey, number> | null = null;
+  const multMsg = h('div', { class: 'msg' });
+  const nonOne = (m: Record<StatKey, number>): Partial<Record<StatKey, number>> => {
+    const out: Partial<Record<StatKey, number>> = {};
+    for (const k of STAT_KEYS) if (m[k] !== 1) out[k] = m[k];
+    return out;
+  };
+  const confirmMult = async (): Promise<void> => {
+    if (!multTrial) {
+      multMsg.className = 'msg bad';
+      multMsg.textContent = 'กด "ทดลอง" ดูตัวอย่างก่อนคอนเฟิร์ม';
+      return;
+    }
+    const before = mergeBalance(saved).itemStatMult;
+    const list = STAT_KEYS.filter((k) => multTrial![k] !== before[k]).map((k) => `${STAT_LABEL[k]} ×${before[k]} → ×${multTrial![k]}`);
+    if (!list.length) {
+      multMsg.className = 'msg';
+      multMsg.textContent = 'ตัวคูณเท่าที่ใช้อยู่แล้ว ไม่มีอะไรเปลี่ยน';
+      return;
+    }
+    if (!confirm(`คูณค่าสเตตัสของไอเทมทุกชิ้นในเซิร์ฟจริงเลยไหม?\n\n${list.join('\n')}\n\n`
+      + '• ของที่ใส่อยู่ กระเป๋า คลัง ตลาด ของบนพื้น และของดรอปใหม่ทั้งหมด\n'
+      + '• สำรอง DB ให้อัตโนมัติก่อนคูณ\n'
+      + '• ตั้งกลับ ×1 ทีหลัง ค่าอาจไม่กลับมาเท่าเดิมเป๊ะ (ปัดเศษ)\n'
+      + '• ระหว่างคูณ เกมอาจกระตุกแวบเดียว')) return;
+    multMsg.className = 'msg';
+    multMsg.textContent = 'กำลังคูณ…';
+    try {
+      const r = await api<BalanceState & { scaled?: { characters: number; stashes: number; listings: number }; backup?: string; ms?: number }>(
+        'POST', '/admin/balance/item-mult', { mult: nonOne(multTrial) });
+      saved = r.tuning;
+      // Only the multipliers change in the draft: other unsaved edits stay.
+      draft.itemStatMult = { ...mergeBalance(saved).itemStatMult };
+      multDraft = savedMult();
+      multTrial = null;
+      onSaved(saved);
+      updateSummary();
+      multMsg.className = 'msg good';
+      multMsg.textContent = r.scaled
+        ? `คูณแล้วทั้งเซิร์ฟ · ของที่บันทึกไว้: ตัวละคร ${r.scaled.characters} คลัง ${r.scaled.stashes} ตลาด ${r.scaled.listings} · ใช้เวลา ${r.ms ?? 0} ms · สำรองไว้ที่ ${r.backup ?? '-'}`
+        : 'ไม่มีอะไรเปลี่ยน';
+    } catch (e) {
+      multMsg.className = 'msg bad';
+      multMsg.textContent = (e as Error).message;
+    }
+  };
   const drawPreview = (): void => {
     const c = draftTuning();
     const body = h('div');
+    const current = mergeBalance(saved).itemStatMult;
+    const multBoxes = STAT_KEYS.map((k) => {
+      const inp = h('input', { type: 'number', min: String(BALANCE_RANGE.itemStatMult[0]), max: String(BALANCE_RANGE.itemStatMult[1]), step: '0.05', value: String(multDraft[k]),
+        title: `ใช้อยู่: ×${current[k]} · ช่วง ${BALANCE_RANGE.itemStatMult[0]}–${BALANCE_RANGE.itemStatMult[1]}` });
+      inp.className = 'bal-num';
+      inp.classList.toggle('bal-changed', multDraft[k] !== current[k]);
+      inp.addEventListener('input', () => {
+        const n = Number(inp.value);
+        const ok = inp.value !== '' && Number.isFinite(n) && n >= BALANCE_RANGE.itemStatMult[0] && n <= BALANCE_RANGE.itemStatMult[1];
+        inp.classList.toggle('bal-bad', !ok);
+        if (!ok) return;
+        multDraft[k] = Math.round(n * 1000) / 1000;
+        inp.classList.toggle('bal-changed', multDraft[k] !== current[k]);
+      });
+      return h('label', {}, `${STAT_LABEL[k]} ×`, inp);
+    });
+    const multPart = h('div', {},
+      h('h3', {}, 'ตัวคูณค่าสเตตัสบนไอเทม'),
+      h('div', { class: 'muted' }, 'คูณทุกบรรทัดของสเตตัสนั้น (หลัก ล็อก เสริม) ทุกเลเวล ทุก tier เช่น 0.75 = ลด 25% · กด "ทดลอง" ดูในตารางข้างล่างก่อน (ยังไม่มีผล) · "คอนเฟิร์ม" = คูณของทุกชิ้นในเซิร์ฟจริง' + (canConfirmMult ? '' : ' (คอนเฟิร์มได้เฉพาะ owner)')),
+      h('div', { class: 'row bal-line' }, ...multBoxes),
+      h('div', { class: 'row bal-line' },
+        h('button', { onclick: () => {
+          if (multPart.querySelector('input.bal-bad')) {
+            multMsg.className = 'msg bad';
+            multMsg.textContent = 'มีช่องตัวคูณที่ใส่ค่าไม่ถูกต้อง (กรอบแดง)';
+            return;
+          }
+          multTrial = { ...multDraft };
+          multMsg.className = 'msg';
+          multMsg.textContent = 'กำลังทดลอง: ตารางข้างล่างแสดง เดิม → ใหม่ (ยังไม่มีผลในเกม)';
+          drawPreview();
+        } }, '🧪 ทดลอง'),
+        h('button', { onclick: () => { multTrial = null; multDraft = savedMult(); multMsg.textContent = ''; drawPreview(); } }, 'ยกเลิกทดลอง'),
+        canConfirmMult ? h('button', { class: 'primary', onclick: () => void confirmMult() }, '✔ คอนเฟิร์ม คูณทั้งเซิร์ฟ') : null,
+      ),
+      multMsg,
+    );
     const base = ITEM_BASES.find((b) => b.id === pvBase)!;
     const pickBase = h('select', { onchange: (e: Event) => { pvBase = (e.target as HTMLSelectElement).value; drawPreview(); } },
       ...ITEM_BASES.map((b) => h('option', { value: b.id, selected: b.id === pvBase },
@@ -313,24 +400,31 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     if (!c.tuning) {
       body.append(h('div', { class: 'msg bad' }, `แก้ค่าที่ผิดก่อนถึงจะดูตัวอย่างได้: ${c.error}`));
     } else {
-      // Work the numbers out with the draft's tables, then put the saved ones back.
+      // Work the numbers out with the draft's tables (and the multipliers in use, then the ones being tried),
+      // then put the saved ones back.
       const keep = currentBalanceTuning();
-      applyBalance(c.tuning);
-      try {
-        const rows = itemRowKinds(pvBase) ?? [];
+      const rows = itemRowKinds(pvBase) ?? [];
+      const rangesWith = (mult: Record<StatKey, number>) => {
+        applyBalance(withItemStatMult(c.tuning!, nonOne(mult)));
         const ranges = rowRanges(pvBase, pvRarity, pvLevel, rows.map((r) => r.stat)) ?? [];
+        return rows.map((row, i) => tierRanges(row.stat, pvLevel, ranges[i].lo, ranges[i].hi));
+      };
+      try {
+        const oldT = rangesWith(current);
+        const newT = multTrial ? rangesWith(multTrial) : oldT;
         const kindName = { main: 'หลัก', locked: 'ล็อก', extra: 'เสริม' } as const;
         const band = tierBandOf(pvLevel);
+        const span = (x: { min: number; max: number }) => (x.min === x.max ? String(x.min) : `${x.min}–${x.max}`);
         const tr = rows.map((row, i) => {
-          const r = ranges[i];
-          const t = tierRanges(row.stat, pvLevel, r.lo, r.hi);
           const ch = tierChances(row.stat, pvLevel);
           const bch = tierChances(row.stat, pvLevel, true);
+          const moved = !!multTrial && multTrial[row.stat] !== current[row.stat];
           return h('tr', {},
             h('td', {}, STAT_LABEL[row.stat]),
             h('td', {}, kindName[row.kind]),
-            ...t.map((x, j) => h('td', { class: 'bal-out', title: `โอกาส ${pct(ch[j])} · บอส ${pct(bch[j])}` }, x.min === x.max ? String(x.min) : `${x.min}–${x.max}`)),
-            h('td', { class: 'muted' }, tierSourceName(mergeBalance(c.tuning!), row.stat, band)),
+            ...newT[i].map((x, j) => h('td', { class: moved ? 'bal-out bal-changed' : 'bal-out', title: `โอกาส ${pct(ch[j])} · บอส ${pct(bch[j])}` },
+              moved ? `${span(oldT[i][j])} → ${span(x)}` : span(x))),
+            h('td', { class: 'muted' }, tierSourceName(mergeBalance(c.tuning!), row.stat, band) + (moved ? ` · ×${current[row.stat]} → ×${multTrial![row.stat]}` : current[row.stat] !== 1 ? ` · ×${current[row.stat]}` : '')),
           );
         });
         body.append(
@@ -347,6 +441,8 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('h2', {}, 'ตัวอย่างค่าจริงที่สุ่มได้'),
       h('div', { class: 'muted' }, 'คิดจากค่าที่กำลังแก้ (ยังไม่บันทึกก็เห็น) · ชี้ค้างที่ช่องเพื่อดูโอกาสของ tier นั้น (ปกติ/บอส) · บรรทัด "เสริม" = สเตตัสที่สุ่มจากความหายาก'),
       h('div', { class: 'row bal-line' }, h('label', {}, 'ชนิดไอเทม', pickBase), h('label', {}, 'ความหายาก', pickRarity), h('label', {}, 'เลเวลไอเทม', lv)),
+      multPart,
+      h('h3', {}, 'ตาราง'),
       h('div', { class: 'muted' }, `${base.names.any ?? base.names.sword ?? base.id} ${RARITY_LABEL[pvRarity]} Lv.${pvLevel} · ช่วงเลเวล ${TIER_BAND_NAME[TIER_BANDS[tierBandOf(pvLevel)]]}`),
       body,
     );

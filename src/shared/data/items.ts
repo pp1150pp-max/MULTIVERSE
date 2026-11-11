@@ -247,6 +247,68 @@ export function stampTier(item: Item): void {
   const key = itemTierKey(item);
   if (key) item.tierK = key;
   else delete item.tierK;
+  stampMult(item);
+}
+
+/**
+ * Item stat multipliers (owner 2026-11-11, the /admin "ปรับสมดุล" tab, owner only): one per stat, on every
+ * line of that stat (main, locked and extra), at every level and tier. New rolls use them through the line's
+ * whole range, and items rolled under other multipliers are scaled to them by upgradeItem (see `mulK`).
+ * Missing = ×1. Set by src/shared/balance.ts.
+ */
+let STAT_MULT: Partial<Record<StatKey, number>> = {};
+/** The multipliers' key (`mulK`): '' when all are ×1. */
+let MUL_KEY = '';
+export const itemStatMult = (stat: StatKey): number => STAT_MULT[stat] ?? 1;
+
+/** A multipliers key: `stat=mult` for each stat not ×1, in STAT_KEYS order, joined with ';' ('' = none). */
+export function multKey(m: Partial<Record<StatKey, number>>): string {
+  return STAT_KEYS.filter((k) => (m[k] ?? 1) !== 1).map((k) => `${k}=${m[k]}`).join(';');
+}
+
+/** The multipliers a key names (unknown or bad entries count as ×1). */
+function parseMultKey(key: string | undefined): Partial<Record<StatKey, number>> {
+  const out: Partial<Record<StatKey, number>> = {};
+  for (const part of (key ?? '').split(';')) {
+    const [k, v] = part.split('=');
+    const n = Number(v);
+    if ((STAT_KEYS as readonly string[]).includes(k) && Number.isFinite(n) && n > 0) out[k as StatKey] = n;
+  }
+  return out;
+}
+
+/** Uses these item stat multipliers from now on (already checked by src/shared/balance.ts). */
+export function setItemStatMult(m: Partial<Record<StatKey, number>>): void {
+  STAT_MULT = {};
+  for (const k of STAT_KEYS) if ((m[k] ?? 1) !== 1) STAT_MULT[k] = m[k];
+  MUL_KEY = multKey(STAT_MULT);
+}
+
+/** Marks an item's values as following the current multipliers (`mulK`, left out when all are ×1). */
+function stampMult(item: Item): void {
+  if (MUL_KEY) item.mulK = MUL_KEY;
+  else delete item.mulK;
+}
+
+/**
+ * Scales an item's values from the multipliers it was made under (its `mulK`) to the current ones, rounded
+ * like the stat is stored, then stamps it. Each stat is scaled by current ÷ applied, so doing it again
+ * changes nothing. Items with lines scale their lines (the caller sums them); older items their stats.
+ */
+function scaleToMult(it: Item): void {
+  if ((it.mulK ?? '') === MUL_KEY) return;
+  const applied = parseMultKey(it.mulK);
+  const ratio = (k: StatKey) => itemStatMult(k) / (applied[k] ?? 1);
+  if (it.lines?.length) {
+    it.lines = it.lines.map((l) => (ratio(l.stat) === 1 ? l : { ...l, value: fmt(l.stat, l.value * ratio(l.stat)) }));
+    it.stats = sumLines(it.lines);
+  } else if (it.stats) {
+    for (const k of Object.keys(it.stats) as StatKey[]) {
+      const v = it.stats[k];
+      if (typeof v === 'number' && ratio(k) !== 1) it.stats[k] = fmt(k, v * ratio(k));
+    }
+  }
+  stampMult(it);
 }
 
 /** A line's whole range (lo = lowest roll, hi = highest) whose average roll (the table's meanPos) is `mean`. */
@@ -421,7 +483,8 @@ export function makeItem(baseId: string, rarity: Rarity, level: number, cls: Cla
  */
 export type RowKind = 'main' | 'locked' | 'extra';
 function rowRange(base: BaseItem, rarity: Rarity, level: number, stat: StatKey, kind: RowKind): [number, number] {
-  const rm = RARITY_MULT[rarity];
+  // The item stat multiplier scales the whole range, so every tier moves with it.
+  const rm = RARITY_MULT[rarity] * itemStatMult(stat);
   if (kind === 'main') return rangeAround(stat, level, (base.main[stat] ?? 0) * (1 + (level - 1) * 0.12) * rm);
   // Extras average the middle of their table min–max, raised with item level.
   const a = AFFIXES.find((x) => x.stat === stat)!;
@@ -525,9 +588,14 @@ function hash(s: string): number {
  */
 export function upgradeItem<T>(item: T): T {
   const it = item as unknown as Item;
-  if (!it || typeof it !== 'object' || !('baseId' in it) || (it.tierV === TIER_VERSION && (it.tierK ?? '') === itemTierKey(it))) return item;
+  if (!it || typeof it !== 'object' || !('baseId' in it)) return item;
+  if (it.tierV === TIER_VERSION && (it.tierK ?? '') === itemTierKey(it) && (it.mulK ?? '') === MUL_KEY) return item;
   const base = BASES.find((b) => b.id === it.baseId);
-  if (!base || !it.lines?.length) return item;
+  if (!base) return item;
+  // Values first: from the multipliers the item was made under to today's (before the v3 locked line,
+  // which is rolled with today's).
+  scaleToMult(it);
+  if (!it.lines?.length) return item;
   if ((it.tierV ?? 0) < 3) {
     const old = rowKinds(base, it.lines.map((l) => l.stat), false);
     const lines = it.lines.map((l, i) => {

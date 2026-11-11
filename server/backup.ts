@@ -10,9 +10,9 @@ import { basename, dirname, extname, join } from 'node:path';
 import type { Db } from './db';
 import type { BackupRow } from '../src/shared/admin';
 
-export type BackupKind = 'daily' | 'manual' | 'before-delete';
+export type BackupKind = 'daily' | 'manual' | 'before-delete' | 'before-item-mult';
 /** How many of each kind are kept; older ones are deleted when a new one is made. */
-export const BACKUP_KEEP: Record<BackupKind, number> = { daily: 7, manual: 10, 'before-delete': 20 };
+export const BACKUP_KEEP: Record<BackupKind, number> = { daily: 7, manual: 10, 'before-delete': 20, 'before-item-mult': 10 };
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CHECK_MS = 60 * 60 * 1000;
 
