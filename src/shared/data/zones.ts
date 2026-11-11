@@ -470,12 +470,10 @@ function bossRoom(field: ZoneDef): ZoneDef {
   // (arenaRadius() is defined further down, after this runs at load time.)
   const arena = field.arenaRadius ?? DEFAULT_ARENA;
   // Players appear just inside the arena's edge, on the camera's side (Sim.spawnAt is 2 in from `start`),
-  // and nobody can walk out of the arena (Terrain.isBlocked), so the portal home stands inside it too,
-  // a little round the edge from where they come in.
+  // and nobody can walk out of the arena (Terrain.isBlocked). There is no portal (owner 2026-11-12):
+  // once the boss is dead a button takes you out (Sim.leaveRoom).
   const inner = arena - 1;
   const s = inner * Math.SQRT1_2 + 2;
-  const door = Math.PI / 4 + 0.45;
-  const exit = { x: Math.cos(door) * inner, z: Math.sin(door) * inner };
   const [name, nameTh] = BOSS_ROOM_NAME[lair.boss];
   return {
     id: `${field.id}_room`,
@@ -489,12 +487,12 @@ function bossRoom(field: ZoneDef): ZoneDef {
     half: arena + 13,
     seed: field.seed + 500,
     start: { x: s, z: s },
-    path: [[exit.x, exit.z], [s - 2, s - 2]],
+    path: [],
     branches: [],
     spawns: [],
     boss: { monster: lair.boss, x: 0, z: 0, radius: BOSS_RADIUS[lair.boss] ?? 1, count: 1, respawn: [0, 0] },
-    // Leads back to this map, next to its summoner (lairExitSpot). Clicked, never walked into (owner 2026-11-12).
-    portals: [{ to: field.id, x: exit.x, z: exit.z, minLevel: 0 }],
+    // No portal: the leave button (Sim.leaveRoom) puts you by this map's summoner (lairExitSpot).
+    portals: [],
     roomOf: field.id,
     arenaRadius: field.arenaRadius,
     bossSolid: lair.boss === 'volcano_heart' ? 1.5 : undefined,

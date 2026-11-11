@@ -7,7 +7,7 @@ import { Sim } from '../src/shared/sim/Sim';
 import { Monster } from '../src/shared/sim/Monster';
 import { marketSellable } from '../src/shared/sim/market';
 import { newCharacterData, type Player } from '../src/shared/sim/Player';
-import { PORTAL_RANGE, ROOM_EXIT_RANGE, SUMMONER_RANGE } from '../src/shared/sim/terrain';
+import { SUMMONER_RANGE } from '../src/shared/sim/terrain';
 import { BossRooms, type RoomActor } from '../server/bossRooms';
 import { ROOM_BOSS_DELAY, ROOM_END_SECONDS, ROOM_INVITE_SECONDS, ROOM_LOBBY_SECONDS, ROOM_WIPE_SECONDS, type RoomLobbyView } from '../src/shared/bossRoom';
 import { REVIVES_PER_KEY } from '../src/shared/data/stones';
@@ -31,12 +31,10 @@ for (const field of [ZONES.emerald_forest, ZONES.misty_marsh, ZONES.frost_reach,
   ok(arenaRadius(room) + 2 <= sim.terrain.bound, `${room.id}: the arena fits in the room`);
   const p = sim.addPlayer(hero('A'));
   ok(!sim.terrain.isBlocked(p.x, p.z, 0.4) && inBossArena(room, p.x * 0.9, p.z * 0.9), `${room.id}: players arrive at the arena's edge`);
-  const exit = room.portals[0];
-  ok(Math.hypot(p.x - exit.x, p.z - exit.z) > PORTAL_RANGE + 1.5 && Math.abs(exit.x) < sim.terrain.bound, `${room.id}: the exit is behind them, not on them`);
+  ok(room.portals.length === 0, `${room.id}: no portal (a button takes you out)`);
   ok(!room.allowAutoPlay && !ZONES[room.id], `${room.id}: no Auto, and not one of the open maps`);
   const edge = arenaRadius(room);
   ok(!sim.terrain.isBlocked(edge - 1, 0, 0.4) && sim.terrain.isBlocked(edge + 2, 0, 0.4) && sim.terrain.isBlocked(0, edge + 2, 0.4), `${room.id}: nobody walks out of the arena`);
-  ok(Math.hypot(exit.x, exit.z) < edge && !sim.terrain.isBlocked(exit.x, exit.z, 0.4), `${room.id}: the portal home stands inside it`);
   ok(sim.returnBlocked(p) !== null && map.returnBlocked(p) === null, `${room.id}: no return scroll in the room`);
 }
 ok(rooms === 4, 'four boss rooms');
@@ -54,23 +52,16 @@ ok(rooms === 4, 'four boss rooms');
   p.x = yeti.x + 3;
   p.z = yeti.z;
   p.stats.atk = 1e12;
-  const exit = BOSS_ROOMS.frost_reach.portals[0];
-  /** Walks onto the portal, then clicks it: whether walking took them, the refusal, and where clicking sends them. */
-  const tryExit = (at = 0) => {
-    p.x = exit.x + 3;
-    p.z = exit.z + 3;
+  /** Presses the leave button: the refusal, and where it sends them. */
+  const tryExit = () => {
     sim.step(TICK);
     sim.drainEvents();
-    p.x = exit.x + at;
-    p.z = exit.z;
-    sim.step(TICK);
-    const walked = sim.drainEvents().some((e) => e.t === 'travel' && e.to === p.id);
     const why = sim.leaveRoom(p);
     const ev = sim.drainEvents().find((e) => e.t === 'travel' && e.to === p.id);
-    return { walked, why, to: ev?.t === 'travel' ? ev : undefined };
+    return { why, to: ev?.t === 'travel' ? ev : undefined };
   };
   const shut = tryExit();
-  ok(!shut.walked && !shut.to && shut.why?.includes('ปราบบอส') === true, 'the portal stays shut while the boss lives');
+  ok(!shut.to && shut.why?.includes('ปราบบอส') === true, 'no leaving while the boss lives');
   p.x = yeti.x + 3;
   p.z = yeti.z;
   const [lv0, exp0] = [p.level, p.exp];
@@ -82,13 +73,11 @@ ok(rooms === 4, 'four boss rooms');
   ok(p.level > lv0 || p.exp > exp0, 'EXP for the kill');
   for (let i = 0; i < 30 * 5; i++) sim.step(TICK);
   ok(!sim.monsters.some((m) => m.isBoss && m.alive), 'the boss never comes back');
-  const far = tryExit(ROOM_EXIT_RANGE + 1);
-  ok(!far.to && far.why?.includes('เข้าใกล้') === true, 'clicked from too far: walk closer first');
+  // Pressed from wherever they stand (by the dead yeti here).
   const out = tryExit();
-  ok(!out.walked, 'walking into the open portal does nothing (it is clicked, owner 2026-11-12)');
   const lairF = ZONES.frost_reach.lair!;
   ok(out.why === null && out.to?.zone === 'frost_reach' && !!out.to.spot &&
-    Math.abs(Math.hypot(out.to.spot.x - lairF.x, out.to.spot.z - lairF.z) - LAIR_EXIT_RADIUS) < 1e-6, 'clicked after the kill: out by the summoner of its map');
+    Math.abs(Math.hypot(out.to.spot.x - lairF.x, out.to.spot.z - lairF.z) - LAIR_EXIT_RADIUS) < 1e-6, 'the button after the kill: out by the summoner of its map');
 }
 
 // The countdown: the boss appears ROOM_BOSS_DELAY s after the room opens (owner 2026-11-12).
