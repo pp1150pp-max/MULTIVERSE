@@ -457,7 +457,7 @@ export function adminRowInfo(baseId: string, rarity: Rarity, level: number, stat
   const r = rowRanges(baseId, rarity, level, stats)?.[i];
   if (!r) return null;
   const stat = stats[i];
-  const t = tierOf(stat, value, r.lo, r.hi);
+  const t = tierOf(stat, level, value, r.lo, r.hi);
   return { min: r.min, max: r.max, lo: r.lo, hi: r.hi, main: r.main, step: statStep(stat), top: roundStat(stat, r.hi * ADMIN_STAT_MULT), tier: t.tier, tmin: t.min, tmax: t.max };
 }
 
