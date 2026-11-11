@@ -148,6 +148,7 @@ export type ActionMsg =
   | { t: 'act'; a: 'buyPhoenix'; n: number }
   /** Dead in a boss room: get up where you fell, for one phoenix feather. */
   | { t: 'act'; a: 'roomRevive' }
+  | { t: 'act'; a: 'roomLeave' }
   | { t: 'act'; a: 'roomAnswer'; id: number; yes: boolean }
   | { t: 'act'; a: 'roomStart' }
   | { t: 'act'; a: 'roomCancel' }
@@ -229,6 +230,8 @@ export interface PrivateSnap {
   cd: Partial<Record<SkillSlot, number>>; potCd: number; restCd: number;
   /** Seconds left on a return-scroll cast (left out when not casting). */
   castT?: number;
+  /** Share of move speed taken away by a slow right now (missing = none). */
+  slow?: number;
   /** True while the server moves the character (dash, knockback, stun, dead, Auto Play) — follow its position. */
   serverMoves: boolean;
   /** Changes when the server teleports the character (respawn) — jump straight there. */

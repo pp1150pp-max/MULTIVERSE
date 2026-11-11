@@ -3,8 +3,9 @@
 // once); on their own they go straight in, a party leader's members are invited first (30 s to answer)
 // and the leader starts or calls it off (the keys come back then). Everyone who accepted goes into a
 // fresh copy of the boss's room (a channel: one Sim per group), with the boss's HP, attack and rewards
-// times the keys. After the kill there are 90 s to pick things up (the portal home opens), then everyone
-// is sent to town; a group that all lie dead at once has lost and is sent to town too.
+// times the keys; the boss appears after a 5 s countdown. After the kill there are 90 s to pick things up
+// (the portal opens, clicked to leave), then everyone is sent out next to the summoner; a group that all
+// lie dead at once has lost and goes out there too (owner 2026-11-12: win or lose, by the summoner).
 //
 // Everything is in memory (a restart sends everyone to town anyway and gives open lobbies' keys back).
 // Keyed on character ids, because a player's id inside a Sim changes whenever they change zone.
@@ -16,7 +17,7 @@ import { BOSS_KEY, BOSS_QUEST_KEY, STONE_NAME } from '../src/shared/data/stones'
 import { SUMMONER_RANGE } from '../src/shared/sim/terrain';
 import type { BossKey, StoneKind } from '../src/shared/types';
 import {
-  bossShortName, ROOM_END_SECONDS, ROOM_INVITE_SECONDS, ROOM_KEYS_MAX, ROOM_LOBBY_SECONDS, ROOM_WIPE_SECONDS,
+  bossShortName, ROOM_BOSS_DELAY, ROOM_END_SECONDS, ROOM_INVITE_SECONDS, ROOM_KEYS_MAX, ROOM_LOBBY_SECONDS, ROOM_WIPE_SECONDS,
   type RoomAnswer, type RoomLobbyView, type RoomSnap,
 } from '../src/shared/bossRoom';
 
@@ -39,8 +40,8 @@ export interface RoomHost {
   lobby(charId: number, view: RoomLobbyView | null): void;
   /** Moves these characters into the room's Sim (all of them at its entrance). */
   enter(charIds: number[], sim: Sim): void;
-  /** Sends this player from its room back to town: the living walk out, the dead wake up there. */
-  toTown(sim: Sim, player: Player): void;
+  /** Sends this player out of its room, next to the summoner of its map: the living walk out, the dead get up there. */
+  toLair(sim: Sim, player: Player): void;
   /** Gives keys back: into the bag if there is room (and the character is online), else by mail. */
   refund(charId: number, key: BossKey, n: number): void;
   save(charId: number): void;
@@ -96,6 +97,7 @@ export class BossRooms {
     if (!r) return undefined;
     const snap: RoomSnap = { boss: r.boss, keys: r.keys, channel: r.channel, revives: sim.revivesLeft(p) };
     if (r.endAt !== null) snap.leaveIn = Math.max(0, Math.ceil((r.endAt - this.now()) / 1000));
+    if (sim.bossAt !== null) snap.bossIn = Math.max(0, sim.bossAt - sim.time);
     if (r.wipeAt !== null) snap.wipeIn = Math.max(0, (r.wipeAt - this.now()) / 1000);
     return snap;
   }
@@ -254,7 +256,7 @@ export class BossRooms {
     if (sim.cleared && r.endAt === null) {
       r.endAt = t + ROOM_END_SECONDS * 1000;
       for (const p of sim.players) {
-        sim.log(`ปราบบอสสำเร็จ! เก็บของได้ ${ROOM_END_SECONDS} วินาทีก่อนกลับเมือง — ประตูออกเปิดแล้ว`, '#ffcf5a', p.id);
+        sim.log(`ปราบบอสสำเร็จ! เก็บของได้ ${ROOM_END_SECONDS} วินาทีก่อนออกไปที่แท่นเรียกบอส — คลิกที่ประตูเพื่อออกก่อนได้`, '#ffcf5a', p.id);
       }
     }
     // Everyone down: ROOM_WIPE_SECONDS to get someone up with a feather, else the group has lost (owner).
@@ -265,9 +267,9 @@ export class BossRooms {
       for (const p of sim.players) sim.log(`ทุกคนล้มหมด! ใช้ขนนกฟีนิกซ์ภายใน ${ROOM_WIPE_SECONDS} วินาที ไม่อย่างนั้นทีมจะแพ้`, '#ff6a5a', p.id);
     }
     const lost = down && r.wipeAt !== null && t >= r.wipeAt;
-    if (lost) for (const p of sim.players) sim.log('ทีมพ่ายแพ้ — กลับเมือง', '#ff6a5a', p.id);
+    if (lost) for (const p of sim.players) sim.log('ทีมพ่ายแพ้ — ออกไปที่แท่นเรียกบอส', '#ff6a5a', p.id);
     if (lost || (r.endAt !== null && t >= r.endAt)) {
-      for (const p of [...sim.players]) this.host.toTown(sim, p);
+      for (const p of [...sim.players]) this.host.toLair(sim, p);
     }
   }
 
@@ -279,7 +281,7 @@ export class BossRooms {
     const used = new Set([...this.runs.values()].filter((r) => r.sim.zone.id === room.id).map((r) => r.channel));
     let channel = 1;
     while (used.has(channel)) channel++;
-    const sim = new Sim(room, { keys });
+    const sim = new Sim(room, { keys, bossDelay: ROOM_BOSS_DELAY });
     this.runs.set(sim, { sim, boss, keys, channel, endAt: null, wipeAt: null });
     this.host.enter(charIds, sim);
     const bossName = bossShortName(MONSTERS[boss].nameTh);

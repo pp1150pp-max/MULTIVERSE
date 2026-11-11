@@ -1400,3 +1400,9 @@ body:not(.touch-ui) .sys-tile[data-act="fullscreen"] { display: none; }
 }
 #rotate-hint .rotate-icon { font-size: 56px; animation: rotate-hint 1.6s ease-in-out infinite; }
 @keyframes rotate-hint { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
+
+/* Boss room: the countdown before the boss appears, and the way out by the open portal (owner 2026-11-12). */
+#room-countdown { position: absolute; left: 50%; top: 32%; transform: translate(-50%, -50%); font-size: 120px; font-weight: bold; color: #ffcf5a; text-shadow: 0 0 18px rgba(255, 140, 40, 0.8), 0 4px 0 #3a1a08; pointer-events: none; z-index: 30; }
+#room-countdown.pop { animation: room-count-pop 1s ease-out; }
+@keyframes room-count-pop { 0% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; } 20% { transform: translate(-50%, -50%) scale(1); opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0.2; } }
+#btn-room-exit { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); padding: 8px 18px; font-size: 15px; z-index: 25; }

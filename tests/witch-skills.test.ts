@@ -57,40 +57,48 @@ function castUntil(sim: Sim, sp: WitchSpells, m: Monster, p: Player | null, k: s
   throw new Error(`no ${k}`);
 }
 
-// ---- vials and pools
+// ---- vials and pools: one at each player, landing on their head however they run
 {
   const { sim, m, sp } = bench();
   const a = tough(sim, 'Stays', m.x + 4, m.z);
-  const b = tough(sim, 'Leaves', m.x - 4, m.z);
+  const b = tough(sim, 'Runs', m.x - 4, m.z);
   castUntil(sim, sp, m, a, 'vial');
   const vials = sim.hazards.filter((h) => h.k === 'vial');
-  ok(vials.length === VIAL.count, `${VIAL.count} vials thrown`);
-  ok(vials.some((h) => h.x === a.x && h.z === a.z) && vials.some((h) => h.x === b.x && h.z === b.z), 'one lands on each player');
+  ok(vials.length === 2, 'a vial for each player (no cap)');
+  const runB = (p: Player) => (p === b ? { ...IDLE, move: { x: -1, z: 0 } } : IDLE);
+  run(sim, sp, m, VIAL.flight + 0.05, runB);
+  ok(a.hp < 1e9 && b.hp < 1e9, 'both are hit, even the one running away');
+  const pools = sim.hazards.filter((h) => h.k === 'pool');
+  ok(pools.length === 2 && pools.every((h) => h.k === 'pool' && h.r === VIAL.radius), `each leaves a pool, radius ${VIAL.radius}`);
+  ok(pools.some((h) => Math.hypot(h.x - b.x, h.z - b.z) < 0.5), "the runner's pool is where it caught them");
+  run(sim, sp, m, 0.1, runB);
+  ok(a.slowT > 0 && Math.abs(a.slowAmt - VIAL.slow) < 1e-9, `standing in the pool slows by ${VIAL.slow * 100}%`);
   const hpA = a.hp;
-  const hpB = b.hp;
-  // b runs well clear before they land; a stays put.
-  run(sim, sp, m, VIAL.flight + 0.1, (p) => (p === b ? { ...IDLE, move: { x: -1, z: 0 } } : IDLE));
-  ok(sim.hazards.filter((h) => h.k === 'pool').length === VIAL.count, 'each vial leaves a pool');
-  ok(a.hp < hpA, 'standing in the pool hurts');
-  run(sim, sp, m, 3);
+  run(sim, sp, m, 3, runB);
   const ticks = Math.round((hpA - a.hp) / (m.atk * VIAL.mult));
-  ok(ticks >= 3 && ticks <= 5, `about once a second (${ticks} ticks in ~3 s)`);
-  ok(b.hp === hpB, 'the one who walked out is untouched');
+  ok(ticks >= 2 && ticks <= 4, `poison about once a second (${ticks} ticks in 3 s)`);
+  ok(b.hp > a.hp, 'the runner took less (out of the pool)');
+  ok(b.slowT === 0, 'and is no longer slowed');
   run(sim, sp, m, VIAL.poolTime);
   ok(!sim.hazards.length, `the pools dry up after ${VIAL.poolTime} s`);
 }
 
-// ---- mud hands
+// ---- mud hands: one under each player and GRASP.extra more around them, warned GRASP.warn s
 {
   const { sim, m, sp } = bench();
-  const a = tough(sim, 'Stays', m.x + 4, m.z);
-  const b = tough(sim, 'Leaves', m.x - 4, m.z);
+  const a = tough(sim, 'Stays', m.x + 5, m.z);
+  const b = tough(sim, 'Leaves', m.x - 5, m.z);
   castUntil(sim, sp, m, a, 'grasp');
-  ok(sim.hazards.filter((h) => h.k === 'grasp').length === 2, 'a hand under every player');
-  const hpA = a.hp;
-  run(sim, sp, m, GRASP.warn + 0.1, (p) => (p === b ? { ...IDLE, move: { x: -1, z: 0 } } : IDLE));
-  ok(a.hp < hpA && a.snareT > 0, 'caught: hurt and held');
-  ok(b.snareT === 0 && b.hp === 1e9, 'dodged: nothing');
+  const hands = sim.hazards.filter((h) => h.k === 'grasp');
+  ok(hands.length === 2 * (1 + GRASP.extra), `${1 + GRASP.extra} hands per player`);
+  ok(hands.every((h) => Math.abs(h.hit - h.start - GRASP.warn) < 1e-9), `warned ${GRASP.warn} s`);
+  ok(hands.every((h) => Math.min(Math.hypot(h.x - a.x, h.z - a.z), Math.hypot(h.x - b.x, h.z - b.z)) <= GRASP.spread + 1e-9), 'all of them around the players');
+  // b gets well clear of every hand before they come up.
+  b.x = m.x - 5 - 12;
+  run(sim, sp, m, GRASP.warn + 0.05);
+  const lost = 1e9 - a.hp;
+  ok(lost > 0 && lost < m.atk * GRASP.mult * 1.15 && a.snareT > 0, 'caught: hurt once (however many hands) and held');
+  ok(b.snareT === 0 && b.hp === 1e9, 'out of reach: nothing');
   const x0 = a.x;
   run(sim, sp, m, 0.5, () => ({ ...IDLE, move: { x: 1, z: 0 }, dash: true }));
   ok(a.x === x0, 'held: no walking, no dash');
@@ -98,22 +106,29 @@ function castUntil(sim: Sim, sp: WitchSpells, m: Monster, p: Player | null, k: s
   ok(a.snareT === 0 && a.x > x0, 'free again after the hold');
 }
 
-// ---- the toad curse
+// ---- the toad curse: on everyone, follows them, then stops and flashes, then lands
 {
   const { sim, m, sp } = bench();
-  const a = tough(sim, 'Cursed', m.x + 4, m.z);
+  const a = tough(sim, 'Stays', m.x + 4, m.z);
+  const b = tough(sim, 'Dashes', m.x - 4, m.z);
   castUntil(sim, sp, m, a, 'hex');
-  const hex = sim.hazards.find((h) => h.k === 'hex') as HexHazard;
-  ok(hex.pid === a.id, 'the curse goes on her target');
-  run(sim, sp, m, HEX.warn + 0.1);
-  ok(a.toadT > 0 && a.stunT > 0, 'stayed in the circle: a toad, stunned');
+  const hexes = sim.hazards.filter((h) => h.k === 'hex') as HexHazard[];
+  ok(hexes.length === 2 && hexes.some((h) => h.pid === a.id) && hexes.some((h) => h.pid === b.id), 'a curse on every player');
+  // Both walk about while it follows.
+  run(sim, sp, m, HEX.follow - 0.1, () => ({ ...IDLE, move: { x: 0, z: 1 } }));
+  const onB = hexes.find((h) => h.pid === b.id)!;
+  ok(Math.hypot(onB.x - b.x, onB.z - b.z) < 0.01, 'the circle follows them');
+  run(sim, sp, m, 0.15);
+  const locked = { x: onB.x, z: onB.z };
+  // It has stopped: b dashes out, a stays.
+  run(sim, sp, m, HEX.flash - 0.1, (p) => (p === b ? { ...IDLE, move: { x: -1, z: 0 }, dash: true } : IDLE));
+  ok(onB.x === locked.x && onB.z === locked.z, 'then it stays where they were');
+  run(sim, sp, m, 0.15);
+  ok(a.toadT > 0 && a.stunT > 0, 'stayed in it: a toad, stunned');
   ok(a.hp === 1e9, 'the curse itself does no damage');
+  ok(b.toadT === 0, 'dashed out while it flashed: no toad');
   run(sim, sp, m, HEX.toad);
   ok(a.toadT === 0 && a.stunT === 0, `back to normal after ${HEX.toad} s`);
-
-  castUntil(sim, sp, m, a, 'hex');
-  run(sim, sp, m, HEX.warn + 0.1, () => ({ ...IDLE, move: { x: 1, z: 0 } }));
-  ok(a.toadT === 0, 'walked out of the circle: no toad');
 }
 
 // ---- keys make the poison stronger

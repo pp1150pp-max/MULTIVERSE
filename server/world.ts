@@ -6,7 +6,7 @@ import type { IncomingMessage, Server as HttpServer } from 'node:http';
 import { clientIp } from './clientIp';
 import type { Db } from './db';
 import { Sim } from '../src/shared/sim/Sim';
-import { HUB_ID, ZONES } from '../src/shared/data/zones';
+import { HUB_ID, lairExitSpot, ZONES } from '../src/shared/data/zones';
 import { SORT_KEYS, type LootFilter, type Player } from '../src/shared/sim/Player';
 import { applyBalance, currentBalanceTuning, type BalanceTuning } from '../src/shared/balance';
 import { upgradeItem } from '../src/shared/data/items';
@@ -358,11 +358,14 @@ export class GameWorld {
           if (s) this.travel(s, sim, true);
         }
       },
-      toTown: (sim, p) => {
+      toLair: (sim, p) => {
         const s = this.byPlayer.get(p);
         if (!s || s.sim !== sim) return;
-        // The dead wake up in town (EXP loss, the death screen closes); the living just walk out.
-        if (!p.alive) sim.respawn(p);
+        // The dead get up by the summoner (Sim.respawn: full HP, the usual EXP loss, the death screen
+        // closes); the living just walk out there. Win or lose (owner 2026-11-12).
+        if (!p.alive) return sim.respawn(p);
+        const spot = lairExitSpot(sim.zone);
+        if (spot) this.travel(s, spot.field, false, spot);
         else this.travel(s, HUB_ID, true);
       },
       refund: (charId, key, n) => this.refundKeys(charId, key, n),
@@ -911,6 +914,10 @@ export class GameWorld {
       case 'roomRevive':
         sim.reviveHere(p);
         break;
+      case 'roomLeave':
+        // Sim.leaveRoom checks the room, the kill and the distance to the portal.
+        sim.leaveRoom(p);
+        break;
       case 'questAccept':
         if (typeof m.boss === 'string') sim.questAccept(p, m.boss);
         break;
@@ -1421,7 +1428,7 @@ export class GameWorld {
     const now = performance.now();
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
-    const travels: { s: Session; zone: string; atCamp?: boolean }[] = [];
+    const travels: { s: Session; zone: string; atCamp?: boolean; spot?: Vec2 }[] = [];
     for (const sim of [...this.channels.sims(), ...this.rooms.sims()]) {
       sim.step(dt, this.intentOf);
       for (const ev of sim.drainEvents()) {
@@ -1437,7 +1444,7 @@ export class GameWorld {
         if (ev.t === 'stash') continue; // saved by onAction; the snapshot carries the new stash
         if (ev.t === 'travel') {
           const s = this.sessionById(sim, ev.to);
-          if (s) travels.push({ s, zone: ev.zone, atCamp: ev.atCamp });
+          if (s) travels.push({ s, zone: ev.zone, atCamp: ev.atCamp, spot: ev.spot });
           continue;
         }
         if (ev.t === 'revived' || ev.t === 'warped') {
@@ -1454,7 +1461,7 @@ export class GameWorld {
         }
       }
     }
-    for (const t of travels) this.travel(t.s, t.zone, t.atCamp);
+    for (const t of travels) this.travel(t.s, t.zone, t.atCamp, t.spot);
     // Fighting (a hit taken, an attack or a skill) holds off a channel switch for CH_SWITCH_CALM seconds.
     const t = Date.now();
     for (const s of this.sessions) s.fight.seen(Math.max(s.player.lastHurt, s.player.lastAttack), t);
@@ -1558,6 +1565,8 @@ export class GameWorld {
     const me: PrivateSnap = {
       hp: r2(p.hp), mp: r2(p.mp), exp: p.exp, level: p.level, gold: p.gold,
       potSel: p.potSel, lootFilter: p.lootFilter, autoSettings: p.autoSettings, bossKills: p.bossKills, quests: p.quests, stats: p.stats, cd: p.cd, potCd: r2(p.potCd), restCd: r2(Math.max(0, p.restCd)), castT: p.castT > 0 ? r2(p.castT) : undefined,
+      // Slowed (the Bog Witch's poison): the browser walks slower too, or its moves would be refused.
+      ...(p.slowT > 0 && p.slowAmt > 0 ? { slow: p.slowAmt } : {}),
       serverMoves: serverMoves(p) || !!s.auto, epoch: s.epoch, ack: s.lastSeq, buybackLeft: Math.round(p.buybackLeft),
     };
     if (inv !== s.lastInv) {

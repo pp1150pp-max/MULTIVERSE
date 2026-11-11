@@ -1,15 +1,15 @@
 // Boss rooms: the room maps, the key multiplier, the shut portal, and the summoning lobby (server/bossRooms.ts)
 // driven through a stand-in for the world (real Sims, a fake clock, no sockets).
 import { ok, finish } from './check';
-import { BOSS_ROOMS, ZONES, ZONE_1, ZONE_HUB, arenaRadius, inBossArena } from '../src/shared/data/zones';
+import { BOSS_ROOMS, LAIR_EXIT_RADIUS, ZONES, ZONE_1, ZONE_HUB, arenaRadius, inBossArena, lairExitSpot } from '../src/shared/data/zones';
 import { MONSTERS } from '../src/shared/data/monsters';
 import { Sim } from '../src/shared/sim/Sim';
 import { Monster } from '../src/shared/sim/Monster';
 import { marketSellable } from '../src/shared/sim/market';
 import { newCharacterData, type Player } from '../src/shared/sim/Player';
-import { PORTAL_RANGE, SUMMONER_RANGE } from '../src/shared/sim/terrain';
+import { PORTAL_RANGE, ROOM_EXIT_RANGE, SUMMONER_RANGE } from '../src/shared/sim/terrain';
 import { BossRooms, type RoomActor } from '../server/bossRooms';
-import { ROOM_END_SECONDS, ROOM_INVITE_SECONDS, ROOM_LOBBY_SECONDS, ROOM_WIPE_SECONDS, type RoomLobbyView } from '../src/shared/bossRoom';
+import { ROOM_BOSS_DELAY, ROOM_END_SECONDS, ROOM_INVITE_SECONDS, ROOM_LOBBY_SECONDS, ROOM_WIPE_SECONDS, type RoomLobbyView } from '../src/shared/bossRoom';
 import { REVIVES_PER_KEY } from '../src/shared/data/stones';
 import type { BossKey } from '../src/shared/types';
 
@@ -55,17 +55,22 @@ ok(rooms === 4, 'four boss rooms');
   p.z = yeti.z;
   p.stats.atk = 1e12;
   const exit = BOSS_ROOMS.frost_reach.portals[0];
-  const tryExit = () => {
+  /** Walks onto the portal, then clicks it: whether walking took them, the refusal, and where clicking sends them. */
+  const tryExit = (at = 0) => {
     p.x = exit.x + 3;
     p.z = exit.z + 3;
     sim.step(TICK);
     sim.drainEvents();
-    p.x = exit.x;
+    p.x = exit.x + at;
     p.z = exit.z;
     sim.step(TICK);
-    return sim.drainEvents().some((e) => e.t === 'travel' && e.to === p.id);
+    const walked = sim.drainEvents().some((e) => e.t === 'travel' && e.to === p.id);
+    const why = sim.leaveRoom(p);
+    const ev = sim.drainEvents().find((e) => e.t === 'travel' && e.to === p.id);
+    return { walked, why, to: ev?.t === 'travel' ? ev : undefined };
   };
-  ok(!tryExit(), 'the portal home stays shut while the boss lives');
+  const shut = tryExit();
+  ok(!shut.walked && !shut.to && shut.why?.includes('ปราบบอส') === true, 'the portal stays shut while the boss lives');
   p.x = yeti.x + 3;
   p.z = yeti.z;
   const [lv0, exp0] = [p.level, p.exp];
@@ -77,7 +82,43 @@ ok(rooms === 4, 'four boss rooms');
   ok(p.level > lv0 || p.exp > exp0, 'EXP for the kill');
   for (let i = 0; i < 30 * 5; i++) sim.step(TICK);
   ok(!sim.monsters.some((m) => m.isBoss && m.alive), 'the boss never comes back');
-  ok(tryExit(), 'the portal home opens after the kill');
+  const far = tryExit(ROOM_EXIT_RANGE + 1);
+  ok(!far.to && far.why?.includes('เข้าใกล้') === true, 'clicked from too far: walk closer first');
+  const out = tryExit();
+  ok(!out.walked, 'walking into the open portal does nothing (it is clicked, owner 2026-11-12)');
+  const lairF = ZONES.frost_reach.lair!;
+  ok(out.why === null && out.to?.zone === 'frost_reach' && !!out.to.spot &&
+    Math.abs(Math.hypot(out.to.spot.x - lairF.x, out.to.spot.z - lairF.z) - LAIR_EXIT_RADIUS) < 1e-6, 'clicked after the kill: out by the summoner of its map');
+}
+
+// The countdown: the boss appears ROOM_BOSS_DELAY s after the room opens (owner 2026-11-12).
+{
+  const sim = new Sim(BOSS_ROOMS.misty_marsh, { bossDelay: ROOM_BOSS_DELAY });
+  ok(!sim.monsters.some((m) => m.isBoss) && sim.bossAt === ROOM_BOSS_DELAY, `no boss yet: ${ROOM_BOSS_DELAY} s to go`);
+  for (let i = 0; i < Math.round((ROOM_BOSS_DELAY - 0.2) / TICK); i++) sim.step(TICK);
+  ok(!sim.monsters.some((m) => m.isBoss), 'still none just before');
+  sim.drainEvents();
+  for (let i = 0; i < Math.round(0.4 / TICK); i++) sim.step(TICK);
+  ok(sim.monsters.filter((m) => m.isBoss).length === 1 && sim.bossAt === null, 'then the witch appears');
+  ok(sim.drainEvents().some((e) => e.t === 'banner' && e.text.includes('แม่มดหนอง')), 'with her name across the screen');
+}
+
+// Dying in a room and getting up (no feather): out by the summoner, full HP (owner 2026-11-12).
+{
+  const sim = new Sim(BOSS_ROOMS.misty_marsh);
+  const p = sim.addPlayer(hero('Fallen'));
+  p.alive = false;
+  p.hp = 0;
+  sim.respawn(p);
+  const ev = sim.drainEvents().find((e) => e.t === 'travel');
+  const lairM = ZONES.misty_marsh.lair!;
+  ok(p.alive && p.hp === p.maxHp && ev?.t === 'travel' && ev.zone === 'misty_marsh' && !!ev.spot &&
+    Math.hypot(ev.spot.x - lairM.x, ev.spot.z - lairM.z) <= LAIR_EXIT_RADIUS + 1e-6, 'gets up by the summoner, HP full');
+  const town = new Sim(ZONE_1);
+  const q = town.addPlayer(hero('Field'));
+  q.alive = false;
+  town.respawn(q);
+  ok(town.drainEvents().some((e) => e.t === 'travel' && e.zone === ZONE_HUB.id), 'out on a map it is still town');
 }
 
 // Minions spread over every player instead of all chasing one.
@@ -139,9 +180,16 @@ const rooms2 = new BossRooms({
   inviteGone: (to, id) => gone.push({ to, id }),
   lobby: (id, v) => lobbies.set(id, v),
   enter: (ids, sim) => ids.forEach((id) => move(chars.get(id)!, sim)),
-  toTown: (sim, p) => {
+  toLair: (sim, p) => {
     const a = [...chars.values()].find((x) => x.player === p)!;
-    move(a, hub);
+    const spot = lairExitSpot(sim.zone)!;
+    move(a, ZONES[spot.field] === ZONE_1 ? field : hub);
+    a.player.x = spot.x;
+    a.player.z = spot.z;
+    if (!a.player.alive) {
+      a.player.alive = true;
+      a.player.hp = a.player.maxHp;
+    }
   },
   refund: (id, key: BossKey, n) => void chars.get(id)!.player.addStones(key, n),
   save: () => {},
@@ -175,6 +223,9 @@ const lastSaid = (id: number) => said.filter(([c]) => c === id).at(-1)?.[1] ?? '
 {
   const a = chars.get(1)!;
   const sim = a.sim;
+  ok((rooms2.snap(sim, a.player)?.bossIn ?? 0) === ROOM_BOSS_DELAY, 'the room opens with the countdown');
+  for (let i = 0; i < Math.round((ROOM_BOSS_DELAY + 0.2) / TICK); i++) sim.step(TICK);
+  ok(rooms2.snap(sim, a.player)?.bossIn === undefined, 'and it is gone once the boss is up');
   const boss = sim.monsters.find((m) => m.isBoss)!;
   a.player.x = boss.x + 3;
   a.player.z = boss.z;
@@ -187,7 +238,8 @@ const lastSaid = (id: number) => said.filter(([c]) => c === id).at(-1)?.[1] ?? '
   ok(a.sim === sim, 'still there a second before');
   clock += 1000;
   rooms2.tick();
-  ok(a.sim === hub, 'then sent to town');
+  const nearLair = (x: RoomActor) => Math.hypot(x.player.x - lair.x, x.player.z - lair.z) <= LAIR_EXIT_RADIUS + 1e-6;
+  ok(a.sim === field && nearLair(a), 'then sent out by the summoner');
   rooms2.tick();
   ok(!rooms2.sims().includes(sim), 'the empty room is gone');
 }
@@ -219,7 +271,8 @@ const lastSaid = (id: number) => said.filter(([c]) => c === id).at(-1)?.[1] ?? '
   ok(b.sim === sim, 'still a moment to go');
   clock += 1000;
   rooms2.tick();
-  ok(b.sim === hub, 'then the group has lost: back to town');
+  ok(b.sim === field && Math.hypot(b.player.x - lair.x, b.player.z - lair.z) <= LAIR_EXIT_RADIUS + 1e-6 && b.player.alive && b.player.hp === b.player.maxHp,
+    'then the group has lost: out by the summoner, up again with full HP');
 }
 
 // A party: invites, answers, the leader starts; only those who said yes go.

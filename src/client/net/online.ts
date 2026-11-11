@@ -685,6 +685,8 @@ export class OnlineBackend implements Backend {
       this.events.push({ t: 'stash', to: me.id });
     }
     this.serverMoves = pv.serverMoves;
+    me.slowAmt = pv.slow ?? 0;
+    me.slowT = pv.slow ? 1 : 0;
     if (pv.epoch !== this.epoch) {
       // Respawned (or otherwise teleported) by the server: jump there.
       this.epoch = pv.epoch;
@@ -954,6 +956,7 @@ export class OnlineBackend implements Backend {
   questTurnIn(boss: string): void { this.send({ t: 'act', a: 'questTurnIn', boss }); }
   buyPhoenix(n: number): void { this.send({ t: 'act', a: 'buyPhoenix', n }); }
   roomRevive(): void { this.send({ t: 'act', a: 'roomRevive' }); }
+  roomLeave(): void { this.send({ t: 'act', a: 'roomLeave' }); }
   roomAnswer(id: number, yes: boolean): void { this.send({ t: 'act', a: 'roomAnswer', id, yes }); }
   roomStart(): void { this.send({ t: 'act', a: 'roomStart' }); }
   roomCancel(): void { this.send({ t: 'act', a: 'roomCancel' }); }

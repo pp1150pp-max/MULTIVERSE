@@ -6,7 +6,7 @@ import { AUTO_EXP_MULT, expGapMult, expToNext, mitigate, MAX_LEVEL, MISS_GAP, ou
 import { blockingGate, BOSS_GATE_IDS } from '../data/bossGates';
 import { lineRanges, rerollStat, rerollValues, rollItem } from '../data/items';
 import { REROLL_NAME, rerollCost, type RerollKind } from '../data/reroll';
-import { inBossArena, LAVA_BURN, LAVA_TICK } from '../data/zones';
+import { inBossArena, lairExitSpot, LAVA_BURN, LAVA_TICK } from '../data/zones';
 import type { Hazard } from './volcanoHeart';
 import {
   ANNOUNCE_FROM, dropsOnFail, FORGE_CD, enhanceCost, itemName, MAX_PLUS, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
@@ -21,7 +21,7 @@ import { classBalance } from '../balance';
 import { COS_SLOT_NAME, cosById, MOUNT_CALM } from '../data/cosmetics';
 import {
   isBound, isItem, isPotion, isStack, isStone, RARITY_LABEL, sameStack, SLOT_LABEL, BLACKSMITH_STONES, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
-import { PORTAL_RANGE, REST_CD, restSpotNear, Terrain, type RestSpot } from './terrain';
+import { PORTAL_RANGE, ROOM_EXIT_RANGE, REST_CD, restSpotNear, Terrain, type RestSpot } from './terrain';
 import {
   BUYBACK_RESET, buybackPrice, cleanAutoSettings, lootPots, Player, sortEntries,
   type AutoSettings, type CharacterData, type LootFilter, type SortKey,
@@ -143,14 +143,22 @@ export class Sim {
   private readonly boost: MonsterBoost | undefined;
   /** A boss room whose boss is dead: its portal back to town opens and nothing comes back. */
   cleared = false;
+  /** A boss room with a countdown: sim time its boss appears (null once it has, or with no countdown). */
+  bossAt: number | null = null;
 
-  constructor(readonly zone: ZoneDef, opts: { keys?: number } = {}) {
+  /** `bossDelay`: seconds before the boss appears (a boss room's countdown, owner 2026-11-12). */
+  constructor(readonly zone: ZoneDef, opts: { keys?: number; bossDelay?: number } = {}) {
     this.keys = Math.max(1, Math.floor(opts.keys ?? 1));
     this.boost = this.keys > 1 ? { ...(zone.monsterBoost ?? NO_BOOST), keys: this.keys } : zone.monsterBoost;
     this.terrain = new Terrain(zone);
     for (const area of zone.spawns) this.spawners.push({ area, alive: 0, queue: [], boss: false });
     if (zone.boss) this.spawners.push({ area: zone.boss, alive: 0, queue: [], boss: true });
-    for (const sp of this.spawners) for (let i = 0; i < sp.area.count; i++) this.spawnMonster(sp);
+    const delay = zone.boss ? opts.bossDelay ?? 0 : 0;
+    if (delay > 0) this.bossAt = delay;
+    for (const sp of this.spawners) {
+      if (sp.boss && delay > 0) sp.queue.push(delay);
+      else for (let i = 0; i < sp.area.count; i++) this.spawnMonster(sp);
+    }
   }
 
   private newId(): number {
@@ -719,10 +727,13 @@ export class Sim {
     p.moveTarget = null;
     for (const m of this.monsters) if (m.target === p) m.calm();
     this.events.push({ t: 'revived', id: p.id });
-    this.log(`ฟื้นคืนชีพที่เมือง (เสีย EXP ${penalty})`, '#ff9a6a', p.id);
+    // In a boss room, getting up means coming out by the summoner of its map (owner 2026-11-12).
+    const lair = lairExitSpot(this.zone);
+    this.log(`ฟื้นคืนชีพที่${lair ? 'แท่นเรียกบอส' : 'เมือง'} (เสีย EXP ${penalty})`, '#ff9a6a', p.id);
     this.events.push({ t: 'save', to: p.id });
     // Out in a zone, the town is in the hub. Queued after `revived`, so the browser gets both in order.
-    if (this.zone.id !== HUB_ID) this.events.push({ t: 'travel', to: p.id, zone: HUB_ID, atCamp: true });
+    if (lair) this.events.push({ t: 'travel', to: p.id, zone: lair.field, spot: { x: lair.x, z: lair.z } });
+    else if (this.zone.id !== HUB_ID) this.events.push({ t: 'travel', to: p.id, zone: HUB_ID, atCamp: true });
   }
 
   /** EXP this player really gets from `n`: half while Auto Play is on. */
@@ -1387,11 +1398,47 @@ export class Sim {
       while (sp.queue.length && sp.queue[0] <= this.time && sp.alive < sp.area.count) {
         sp.queue.shift();
         this.spawnMonster(sp);
+        if (sp.boss && this.bossAt !== null) this.bossArrives(sp.area);
       }
     }
   }
 
+  /** The countdown ran out: the boss rises in the middle of the arena. */
+  private bossArrives(area: SpawnArea): void {
+    this.bossAt = null;
+    const def = MONSTERS[area.monster];
+    const name = def.nameTh.replace(/ (.*)$/, '');
+    this.events.push({ t: 'banner', text: `${name} ปรากฏตัว!`, sub: this.zone.nameTh, x: area.x, z: area.z });
+    this.fx('burst', area.x, 1.5, area.z, '#ffcf5a', 30, 6);
+    this.shake(0.4, area);
+    this.sfx('boss_slam', area.x, area.z);
+  }
+
+  /**
+   * Leaving a boss room through its portal (owner 2026-11-12: only by clicking it or its button, never
+   * by walking into it): once the boss is dead, standing near it. Comes out by the map's summoner.
+   * Returns why not, or null when on the way.
+   */
+  leaveRoom(p: Player): string | null {
+    const pt = this.zone.portals[0];
+    const spot = lairExitSpot(this.zone);
+    if (!this.zone.roomOf || !pt || !spot) return 'ไม่ได้อยู่ในห้องบอส';
+    if (!p.alive) return 'ตายอยู่';
+    const why = !this.cleared ? 'ประตูจะเปิดเมื่อปราบบอสได้'
+      : Math.hypot(p.x - pt.x, p.z - pt.z) > ROOM_EXIT_RANGE ? 'เข้าใกล้ประตูก่อน'
+      : null;
+    if (why) {
+      this.text(pt.x, 2.2, pt.z, why, 'info', 1.2, p.id);
+      return why;
+    }
+    this.fx('burst', pt.x, 1.4, pt.z, '#6affd0', 18, 3);
+    this.events.push({ t: 'travel', to: p.id, zone: spot.field, spot: { x: spot.x, z: spot.z } });
+    return null;
+  }
+
   private checkPortals(p: Player): void {
+    // A boss room's portal is clicked, not walked into (Sim.leaveRoom).
+    if (this.zone.roomOf) return;
     for (const pt of this.zone.portals) {
       const d = Math.hypot(p.x - pt.x, p.z - pt.z);
       if (d > PORTAL_RANGE) {
@@ -1399,13 +1446,6 @@ export class Sim {
         continue;
       }
       if (!p.portalReady) continue;
-      if (this.zone.roomOf && !this.cleared) {
-        if (this.time - p.portalMsgAt > 3) {
-          p.portalMsgAt = this.time;
-          this.text(pt.x, 2.2, pt.z, 'ประตูจะเปิดเมื่อปราบบอสได้', 'info', 1.2, p.id);
-        }
-        continue;
-      }
       const dest = ZONES[pt.to];
       if (!dest) continue;
       if (p.level < pt.minLevel) {
