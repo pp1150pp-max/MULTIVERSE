@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
-import { savePartOf, axisHiddenInRow, checkCosTuning, COS_AXES, COS_TUNE_FIELDS, viewGroupOfRow, viewOffKey, COS_TUNING_SETTING, cosTuneDefaults, cosTuneOf, cosTuningChanges, TUNED_SLOTS } from '../src/shared/cosTuning';
+import { savePartOf, axisHiddenInDir, checkCosTuning, COS_AXES, COS_TUNE_FIELDS, viewDirOf, viewOffKey, COS_TUNING_SETTING, cosTuneDefaults, cosTuneOf, cosTuningChanges, TUNED_SLOTS } from '../src/shared/cosTuning';
 import { COSMETICS } from '../src/shared/data/cosmetics';
 import { finish, ok } from './check';
 
@@ -59,22 +59,31 @@ for (const slot of TUNED_SLOTS) {
   for (const s of COS_AXES[slot]) ok(COS_TUNE_FIELDS[slot][s.key]?.kind === 'num', `${slot}: axis ${s.axis} reads field ${s.key}`);
 }
 ok(COS_AXES.aura.every((s) => s.axis === 'x'), 'an aura has only the X axis');
-ok(axisHiddenInRow('z', 0) && axisHiddenInRow('z', 4) && !axisHiddenInRow('z', 1) && !axisHiddenInRow('z', 3) && axisHiddenInRow('x', 2) && !axisHiddenInRow('x', 1), 'Z hidden straight front/back, X hidden from the side, diagonals show all');
-ok(viewGroupOfRow(0) === 'front' && viewGroupOfRow(1) === 'front' && viewGroupOfRow(2) === 'side' && viewGroupOfRow(3) === 'back' && viewGroupOfRow(4) === 'back', 'diagonals count as front / back');
-ok(cosTuneDefaults('wings_angel')?.[viewOffKey('y', 'back')] === 0 && cosTuneDefaults('mount_wolf')?.z === 0, 'view offsets and the mount Z start at 0');
-ok(cosTuneOf({ wings_bat: { shift: 0.2, back: 0.3 } }, 'wings_bat')?.dx_side === 0, 'an old save (old keys) reads with zero view offsets, positions unchanged');
-ok(checkCosTuning({ wings_angel: { dy_front: 0.1 } }, true).tuning?.wings_angel?.dy_front === 0.1, 'a view offset can be saved');
-ok(!!checkCosTuning({ aura_star: { dz_front: 0.1 } }, true).error, 'an aura has no Z offset');
+ok(axisHiddenInDir('z', 'front') && axisHiddenInDir('z', 'back') && !axisHiddenInDir('z', 'frontLeft') && !axisHiddenInDir('z', 'backRight') && axisHiddenInDir('x', 'left') && axisHiddenInDir('x', 'right') && !axisHiddenInDir('x', 'frontRight'), 'Z hidden straight front/back, X hidden left/right, diagonals show all');
+ok(viewDirOf(0, true) === 'front' && viewDirOf(1, false) === 'frontLeft' && viewDirOf(1, true) === 'frontRight' && viewDirOf(2, false) === 'left' && viewDirOf(2, true) === 'right' && viewDirOf(3, false) === 'backLeft' && viewDirOf(3, true) === 'backRight' && viewDirOf(4, true) === 'back', 'the 8 facings from a sheet row and a screen side');
+ok(cosTuneDefaults('wings_angel')?.[viewOffKey('y', 'backLeft')] === 0 && cosTuneDefaults('mount_wolf')?.z === 0, 'view offsets and the mount Z start at 0');
+ok(cosTuneOf({ wings_bat: { shift: 0.2, back: 0.3 } }, 'wings_bat')?.dx_at_left === 0, 'an old save (old keys) reads with zero view offsets, positions unchanged');
+ok(checkCosTuning({ wings_angel: { dy_at_front: 0.1 } }, true).tuning?.wings_angel?.dy_at_front === 0.1, 'a view offset can be saved');
+ok(!!checkCosTuning({ aura_star: { dz_at_front: 0.1 } }, true).error, 'an aura has no Z offset');
 
 // Saving one piece's part: only that piece and only the picked fields change, the rest stays as last saved.
 {
-  const saved = { wings_angel: { dy_back: 0.2 }, wings_bat: { backStand: 1.5 } };
-  const cur = { ...cosTuneDefaults('wings_angel')!, dy_front: 0.3, dy_back: 0.9, dx_side: 0.1, backStand: 1.6 };
-  const front = savePartOf(saved, 'wings_angel', cur, (k) => /^d[xyz]_front$/.test(k));
-  ok(JSON.stringify(front) === JSON.stringify({ wings_angel: { dy_front: 0.3, dy_back: 0.2 }, wings_bat: { backStand: 1.5 } }), 'saving the front view saves only the front offsets of that piece');
+  const saved = { wings_angel: { dy_at_back: 0.2 }, wings_bat: { backStand: 1.5 } };
+  const cur = { ...cosTuneDefaults('wings_angel')!, dy_at_front: 0.3, dy_back: 0.9, dx_at_left: 0.1, backStand: 1.6 };
+  const front = savePartOf(saved, 'wings_angel', cur, (k) => /^d[xyz]_at_front$/.test(k));
+  ok(JSON.stringify(front) === JSON.stringify({ wings_angel: { dy_at_front: 0.3, dy_at_back: 0.2 }, wings_bat: { backStand: 1.5 } }), 'saving the front view saves only the front offsets of that piece');
   const base = savePartOf(saved, 'wings_angel', cur, (k) => !/^d[xyz]_/.test(k));
-  ok(JSON.stringify(base) === JSON.stringify({ wings_angel: { backStand: 1.6, dy_back: 0.2 }, wings_bat: { backStand: 1.5 } }), 'saving the base values leaves every view offset as saved');
-  ok(savePartOf({ wings_angel: { dy_front: 0.3 } }, 'wings_angel', cosTuneDefaults('wings_angel')!, (k) => /^d[xyz]_front$/.test(k)).wings_angel === undefined, 'a part set back to the default is no longer stored');
+  ok(JSON.stringify(base) === JSON.stringify({ wings_angel: { backStand: 1.6, dy_at_back: 0.2 }, wings_bat: { backStand: 1.5 } }), 'saving the base values leaves every view offset as saved');
+  ok(savePartOf({ wings_angel: { dy_at_front: 0.3 } }, 'wings_angel', cosTuneDefaults('wings_angel')!, (k) => /^d[xyz]_at_front$/.test(k)).wings_angel === undefined, 'a part set back to the default is no longer stored');
+}
+
+// Old saves had offsets per group (front / side / back): copied to every facing the group covered.
+{
+  const old = checkCosTuning({ wings_angel: { dy_front: 0.3, dx_side: 0.2, dz_back: -0.1 } }, false).tuning?.wings_angel!;
+  ok(old.dy_at_front === 0.3 && old.dy_at_frontLeft === 0.3 && old.dy_at_frontRight === 0.3 && old.dy_at_back === undefined, 'old front offsets go to the front and both front diagonals');
+  ok(old.dx_at_left === 0.2 && old.dx_at_right === 0.2, 'old side offsets go to left and right');
+  ok(old.dz_at_back === -0.1 && old.dz_at_backLeft === -0.1 && old.dz_at_backRight === -0.1 && Object.keys(old).length === 8, 'old back offsets go to the back and both back diagonals');
+  ok(checkCosTuning({ wings_angel: { dy_front: 0.3, dy_at_frontLeft: 0.5 } }, true).tuning?.wings_angel?.dy_at_frontLeft === 0.5, 'a facing saved on its own wins over the old group value');
 }
 
 // ---------------------------------------------------------- against a real server

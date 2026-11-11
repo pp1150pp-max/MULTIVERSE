@@ -9,7 +9,7 @@ import { Effects } from './effects';
 import { PlayerView } from './views';
 import { ISO_DIR } from './world';
 import { applyCosTuning, cosTune, currentCosTuning, resetCosTune, setCosTuneValue } from './cosTune';
-import { axisHiddenInRow, checkCosTuning, COS_AXES, COS_TUNE_FIELDS, cosTuneOf, sameCosTuning, savePartOf, viewGroupOfRow, viewOffKey, type CosTuning, type TunedSlot } from '../shared/cosTuning';
+import { axisHiddenInDir, checkCosTuning, COS_AXES, COS_TUNE_FIELDS, cosTuneOf, sameCosTuning, savePartOf, VIEW_DIR_NAME, VIEW_DIRS, viewOffKey, type CosTuning, type TunedSlot, type ViewDir } from '../shared/cosTuning';
 import { COSMETICS, COS_SLOTS, COS_SLOT_NAME, cosById, MOUNT_SPEED, type CosSlot, type CosWorn } from '../shared/data/cosmetics';
 import { Player } from '../shared/sim/Player';
 import type { Sim } from '../shared/sim/Sim';
@@ -81,21 +81,15 @@ const worldDir = (sx: number, sy: number): [number, number] => {
   return [x / l, z / l];
 };
 
-/** The 5 views of a sheet (row 0..4), and the facing button each one turns the character to. */
-const VIEW_NAMES = ['หน้าตรง', 'เฉียงหน้า', 'ข้าง', 'เฉียงหลัง', 'หลังตรง'];
-const VIEW_DIR = [7, 8, 5, 2, 1];
-/** The view row of a facing button (DIRS index). */
-const rowOfDir = (i: number): number => {
-  const d = DIRS[i];
-  return d.sy < 0 ? (d.sx ? 1 : 0) : d.sy === 0 ? 2 : d.sx ? 3 : 4;
-};
-/** Names of the stored view groups. */
-const GROUP_NAME = { front: 'หน้า (หน้าตรง+เฉียงหน้า)', side: 'ข้าง', back: 'หลัง (เฉียงหลัง+หลังตรง)' } as const;
+/** The 8 facings, and the facing button (DIRS index) each one turns the character to. */
+const VIEW_DIR_BUTTON: Record<ViewDir, number> = { front: 7, frontRight: 8, right: 5, backRight: 2, back: 1, backLeft: 0, left: 3, frontLeft: 6 };
+/** The facing of a facing button (DIRS index). */
+const dirOfButton = (i: number): ViewDir => VIEW_DIRS.find((d) => VIEW_DIR_BUTTON[d] === i) ?? 'front';
 const round = (n: number) => Math.round(n * 1000) / 1000;
 
 const state = {
-  /** The view the position sliders edit: -1 = every view (the base value), else a view row 0..4. */
-  view: -1,
+  /** The facing the position sliders edit: '' = every facing (the base value), else one of the 8. */
+  view: '' as ViewDir | '',
   cls: 'sword' as ClassId,
   worn: { wings: 'wings_angel', mount: 'mount_wolf', pet: 'pet_slime', aura: 'aura_star' } as CosWorn,
   riding: false,
@@ -338,11 +332,10 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
     statusEl.textContent = serverMsg || (same ? '✓ ตอนนี้ตรงกับค่าของเซิร์ฟ' : '• ตอนนี้ต่างจากค่าของเซิร์ฟ (ยังไม่ได้บันทึก)');
   }
 
-  /** The fields a view picker choice covers: the base values (`view` < 0) or one view group's offsets. */
-  function partOf(view: number): (key: string) => boolean {
-    if (view < 0) return (k) => !/^d[xyz]_/.test(k);
-    const g = viewGroupOfRow(view);
-    return (k) => new RegExp(`^d[xyz]_${g}$`).test(k);
+  /** The fields a view picker choice covers: the base values (`view` empty) or one facing's offsets. */
+  function partOf(view: ViewDir | ''): (key: string) => boolean {
+    if (!view) return (k) => !/^d[xyz]_/.test(k);
+    return (k) => new RegExp(`^d[xyz]_at_${view}$`).test(k);
   }
 
   /**
@@ -457,7 +450,7 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
       }
       const b = button(d.label, () => {
         state.dir = i;
-        if (state.view >= 0) state.view = rowOfDir(i);
+        if (state.view) state.view = dirOfButton(i);
         state.spin = state.walk = false;
         walkTo = null;
         face(hero, i);
@@ -486,17 +479,17 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
     h('h2', 'ปรับค่าของแต่ละชิ้น (แยกรายชิ้น)');
     // The view the position sliders edit: every view (the base value) or one of the 5 facings (an offset added
     // in that view only; the front and front diagonal share one, the back and back diagonal too).
-    row('มุมที่ปรับตำแหน่ง', select([['-1', 'ทุกมุม (ค่าหลัก)'], ...VIEW_NAMES.map((n, i): [string, string] => [String(i), n])], String(state.view), (v) => {
-      state.view = Number(v);
-      if (state.view >= 0) {
-        state.dir = VIEW_DIR[state.view];
+    row('มุมที่ปรับตำแหน่ง', select([['', 'ทุกมุม (ค่าหลัก)'], ...VIEW_DIRS.map((d): [string, string] => [d, `ทิศ${VIEW_DIR_NAME[d]}`])], state.view, (v) => {
+      state.view = v as ViewDir | '';
+      if (state.view) {
+        state.dir = VIEW_DIR_BUTTON[state.view];
         state.spin = state.walk = false;
         walkTo = null;
         face(hero, state.dir);
       }
       buildPanel();
     }));
-    h('div', 'X = ซ้าย/ขวาของตัวละคร · Y = ขึ้น/ลง · Z = หน้า/หลัง · เลือกมุมแล้วเห็นเฉพาะแกนที่มีผลในมุมนั้น (ค่าของมุมบวกเพิ่มจากค่าหลัก)').className = 'note';
+    h('div', 'X = ซ้าย/ขวาของตัวละคร · Y = ขึ้น/ลง · Z = หน้า/หลัง · เลือกมุมแล้วเห็นเฉพาะแกนที่มีผลในมุมนั้น (ส่วนปรับของแต่ละทิศ ทั้ง 8 ทิศแยกกัน บวกเพิ่มจากค่าหลัก)').className = 'note';
     for (const slot of COS_SLOTS) {
       if (slot === 'title') continue;
       const c = cosById(state.worn[slot]);
@@ -518,7 +511,7 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
         if (spec.onlyIf && curNow[spec.onlyIf] !== true) continue;
         const f = COS_TUNE_FIELDS[slot as TunedSlot][spec.key];
         if (f.kind !== 'num') continue;
-        if (state.view < 0) {
+        if (!state.view) {
           const lo = spec.sign === 1 ? f.min : -f.max;
           const hi = spec.sign === 1 ? f.max : -f.min;
           const r = rangeBox(lo, hi, Math.min(f.step, 0.005), round(spec.sign * (curNow[spec.key] as number)), (v) => {
@@ -528,9 +521,9 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
           r.title = `ค่าที่บันทึกไว้ ${round(spec.sign * (defs[spec.key] as number))}`;
           row(spec.label, r, det);
         } else {
-          if (spec.ride || seen.has(spec.axis) || axisHiddenInRow(spec.axis, state.view)) continue;
+          if (spec.ride || seen.has(spec.axis) || axisHiddenInDir(spec.axis, state.view)) continue;
           seen.add(spec.axis);
-          const key = viewOffKey(spec.axis, viewGroupOfRow(state.view));
+          const key = viewOffKey(spec.axis, state.view);
           const g = COS_TUNE_FIELDS[slot as TunedSlot][key];
           if (g.kind !== 'num') continue;
           const r = rangeBox(g.min, g.max, g.step, curNow[key] as number, (v) => {
@@ -538,10 +531,10 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
             updateStatus();
           }, (v) => Math.abs(v - (defs[key] as number)) > 1e-6);
           r.title = `ค่าที่บันทึกไว้ ${defs[key]}`;
-          row(`${spec.label.slice(0, 1)} ส่วนปรับ${VIEW_NAMES[state.view]}`, r, det);
+          row(`${spec.label.slice(0, 1)} ส่วนปรับทิศ${VIEW_DIR_NAME[state.view]}`, r, det);
         }
       }
-      if (state.view >= 0 && !COS_AXES[slot as TunedSlot].some((s) => !axisHiddenInRow(s.axis, state.view))) h('div', 'ชิ้นนี้ไม่มีแกนที่มีผลในมุมนี้', det).className = 'note';
+      if (state.view && !COS_AXES[slot as TunedSlot].some((s) => !axisHiddenInDir(s.axis, state.view as ViewDir))) h('div', 'ชิ้นนี้ไม่มีแกนที่มีผลในมุมนี้', det).className = 'note';
       // ---- everything else
       for (const [key, f] of Object.entries(COS_TUNE_FIELDS[slot as TunedSlot])) {
         if (axisKeys.has(key) || /^d[xyz]_/.test(key)) continue;
@@ -564,7 +557,7 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
       // Save / reset just this piece, and just what the view picker shows: the base values (every view) or the
       // offsets of that view's group (front = front + front diagonal, back = back diagonal + back).
       const part = partOf(state.view);
-      const partName = state.view < 0 ? 'ค่าหลัก' : `มุม${GROUP_NAME[viewGroupOfRow(state.view)]}`;
+      const partName = !state.view ? 'ค่าหลัก' : `ทิศ${VIEW_DIR_NAME[state.view]}`;
       button(`คืนค่า${partName}ของชิ้นนี้`, () => {
         const saved = cosTuneOf(serverTuning ?? {}, c.id)!;
         for (const k of Object.keys(COS_TUNE_FIELDS[slot as TunedSlot])) if (part(k)) setCosTuneValue(c.id, k, saved[k]);
