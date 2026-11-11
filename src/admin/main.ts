@@ -147,7 +147,7 @@ const root = document.getElementById('admin')!;
 let me: AdminMe | null = null;
 let meta: AdminMeta | null = null;
 let online: AdminOnline | null = null;
-type Tab = 'online' | 'search' | 'users' | 'stats' | 'sessions' | 'chat' | 'mail' | 'trades' | 'reports' | 'orbs' | 'cos' | 'cards' | 'balance' | 'roles' | 'audit' | 'server';
+type Tab = 'online' | 'search' | 'users' | 'stats' | 'sessions' | 'chat' | 'mail' | 'trades' | 'reports' | 'orbs' | 'cos' | 'cards' | 'balance' | 'roles' | 'audit' | 'broadcast' | 'server';
 let tab: Tab = 'online';
 let timer = 0;
 
@@ -248,40 +248,74 @@ async function start(): Promise<void> {
   renderShell();
 }
 
+/** The top row: categories (names match the Permissions tab's FEATURE_GROUPS), each with its sub-tabs. */
+const CATEGORIES: { name: (typeof FEATURE_GROUPS)[number]; tabs: Tab[] }[] = [
+  { name: 'ผู้เล่น', tabs: ['online', 'search', 'users'] },
+  { name: 'ประวัติ', tabs: ['stats', 'sessions', 'chat', 'trades', 'audit'] },
+  { name: 'สื่อสาร', tabs: ['mail', 'reports', 'broadcast'] },
+  { name: 'ปรับเกม', tabs: ['balance', 'cards'] },
+  { name: 'หน้าตา', tabs: ['orbs', 'cos'] },
+  { name: 'ระบบ', tabs: ['server', 'roles'] },
+];
+const TAB_LABEL: Record<Tab, string> = {
+  online: 'ออนไลน์', search: 'ค้นหาตัวละคร', users: 'ผู้ใช้ทั้งหมด', stats: 'สถิติ', sessions: 'การเข้าเล่น', chat: 'แชท', trades: 'เทรด',
+  audit: 'ประวัติ (audit)', mail: 'จดหมาย', reports: 'รายงาน', broadcast: 'ประกาศ', balance: 'ปรับสมดุล', cards: 'การ์ด',
+  orbs: 'ลูกแก้วตีบวก', cos: 'ของแต่งตัว', server: 'Server', roles: 'สิทธิ์',
+};
+
+/** Whether the signed-in role may see a tab (the server checks again on every call). */
+function tabAllowed(t: Tab): boolean {
+  if (!me) return false;
+  const f = me.features;
+  switch (t) {
+    case 'online': return f.includes('online');
+    case 'search': return f.includes('charView');
+    case 'users': return f.includes('users');
+    case 'stats': return f.includes('stats');
+    case 'sessions': return f.includes('sessions');
+    case 'chat': return f.includes('chatLog');
+    case 'trades': return f.includes('tradeLog');
+    case 'audit': case 'roles': return me.role === OWNER_ROLE;
+    case 'mail': return f.includes('mail');
+    case 'reports': return f.includes('reports');
+    case 'broadcast': return f.includes('broadcast');
+    case 'balance': return f.includes('balance');
+    case 'cards': return f.includes('cardView');
+    case 'orbs': return f.includes('orbPreview');
+    case 'cos': return f.includes('cosPreview');
+    case 'server': return me.role === 'owner' || f.includes('backup') || f.includes('shutdownText');
+  }
+}
+
+const catOf = (t: Tab) => CATEGORIES.find((c) => c.tabs.includes(t))!;
+
 function renderShell(): void {
   if (!me) return;
-  const tabs: [Tab, string][] = [];
-  if (me.features.includes('online')) tabs.push(['online', 'ออนไลน์']);
-  if (me.features.includes('charView')) tabs.push(['search', 'ค้นหาตัวละคร']);
-  if (me.features.includes('users')) tabs.push(['users', 'ผู้ใช้ทั้งหมด']);
-  if (me.features.includes('stats')) tabs.push(['stats', 'สถิติ']);
-  if (me.features.includes('sessions')) tabs.push(['sessions', 'การเข้าเล่น']);
-  if (me.features.includes('chatLog')) tabs.push(['chat', 'แชท']);
-  if (me.features.includes('mail')) tabs.push(['mail', 'จดหมาย']);
-  if (me.features.includes('tradeLog')) tabs.push(['trades', 'เทรด']);
-  if (me.features.includes('reports')) tabs.push(['reports', 'รายงาน']);
-  if (me.features.includes('orbPreview')) tabs.push(['orbs', 'ลูกแก้วตีบวก']);
-  if (me.features.includes('cosPreview')) tabs.push(['cos', 'ของแต่งตัว']);
-  if (me.features.includes('cardView')) tabs.push(['cards', 'การ์ด']);
-  if (me.features.includes('balance')) tabs.push(['balance', 'ปรับสมดุล']);
-  if (me.role === OWNER_ROLE) tabs.push(['roles', 'สิทธิ์'], ['audit', 'ประวัติ']);
-  if (me.role === 'owner' || me.features.includes('broadcast') || me.features.includes('backup') || me.features.includes('shutdownText')) tabs.push(['server', 'Server']);
+  const cats = CATEGORIES.map((c) => ({ ...c, tabs: c.tabs.filter(tabAllowed) })).filter((c) => c.tabs.length);
   // A role without the tab that was open (or with no tabs at all) starts on its first one.
-  if (!tabs.length) tabs.push(['server', 'Server']);
-  if (!tabs.some(([id]) => id === tab)) tab = tabs[0][0];
-  const bar = h('nav', { class: 'tabs' }, ...tabs.map(([id, label]) =>
-    h('button', { class: id === tab ? 'on' : '', 'data-tab': id, onclick: () => setTab(id) }, label)));
+  if (!cats.length) cats.push({ name: 'ระบบ', tabs: ['server'] });
+  if (!cats.some((c) => c.tabs.includes(tab))) tab = cats[0].tabs[0];
+  const catBar = h('nav', { class: 'tabs cats' }, ...cats.map((c) =>
+    h('button', { 'data-cat': c.name, onclick: () => setTab(c.tabs.includes(tab) ? tab : (lastTab.get(c.name) ?? c.tabs[0])) }, c.name)));
+  subBar = h('nav', { class: 'tabs subtabs' });
+  allowedTabs = new Set(cats.flatMap((c) => c.tabs));
   root.replaceChildren(
     h('header', { class: 'top' },
       h('div', { class: 'brand' }, 'MULTIVERSE', h('small', {}, 'ผู้ดูแล')),
       h('div', { class: 'who' }, me.username, h('span', { class: 'role' }, me.roleName),
         h('button', { class: 'small', onclick: logout }, 'ออก')),
     ),
-    bar,
+    catBar,
+    subBar,
     view,
   );
   setTab(tab);
 }
+
+let subBar: HTMLElement | null = null;
+let allowedTabs = new Set<Tab>();
+/** The last sub-tab opened in each category, so coming back to a category reopens it. */
+const lastTab = new Map<string, Tab>();
 
 function setTab(t: Tab): void {
   tab = t;
@@ -289,9 +323,13 @@ function setTab(t: Tab): void {
   stopOrbs?.();
   stopOrbs = null;
   void checkStale();
-  document.querySelectorAll<HTMLElement>('.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
-  // On a phone the tab row scrolls: keep the chosen tab in view.
-  document.querySelector<HTMLElement>('.tabs button.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  const cat = catOf(t);
+  lastTab.set(cat.name, t);
+  document.querySelectorAll<HTMLElement>('.cats button').forEach((b) => b.classList.toggle('on', b.dataset.cat === cat.name));
+  subBar?.replaceChildren(...cat.tabs.filter((id) => allowedTabs.has(id)).map((id) =>
+    h('button', { class: id === t ? 'on' : '', 'data-tab': id, onclick: () => setTab(id) }, TAB_LABEL[id])));
+  // On a phone a tab row scrolls: keep the chosen tab in view.
+  document.querySelectorAll<HTMLElement>('.tabs button.on').forEach((b) => b.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
   view.replaceChildren();
   if (t === 'online') renderOnline();
   else if (t === 'search') renderSearch();
@@ -308,6 +346,7 @@ function setTab(t: Tab): void {
   else if (t === 'roles') void renderRoles();
   else if (t === 'audit') void renderAudit();
   else if (t === 'cards') void renderCards();
+  else if (t === 'broadcast') view.append(broadcastCard());
   else void renderServer();
 }
 
@@ -1516,7 +1555,6 @@ async function renderServer(): Promise<void> {
   // Restart / shut down first: it is what the owner comes here for in a hurry (the backup list is long).
   const restart = me?.role === 'owner' ? renderRestart() : null;
   if (can('shutdownText')) view.append(shutdownTextCard());
-  if (can('broadcast')) view.append(broadcastCard());
   if (can('backup')) view.append(backupCard());
   await restart;
 }
