@@ -30,6 +30,12 @@ export const COS_TUNE_FIELDS: Record<TunedSlot, Record<string, TuneField>> = {
     shift: num(-1, 1, 0.01, 'ขยับซ้าย/ขวาบนจอ (บวก = ขวา, หันซ้ายกลับด้านให้เอง)'),
     depth: num(0, 0.5, 0.01, 'ระยะวาดหลังตัว (หรือทับหลัง) ห่างเท่าไร'),
     overBack: bool('หันหลังให้กล้อง: ปีกวาดทับหลัง (ปิด = หลังตัวเสมอ)'),
+    // The near wing drawn over the body (a copy of the wings cut at the body's middle, #211).
+    nearSide: bool('หันข้าง: ปีกข้างใกล้วาดทับหน้าตัว'),
+    nearFrontDiag: bool('หันเฉียงเข้ากล้อง: ปีกข้างใกล้วาดทับหน้าตัว'),
+    nearBackDiag: bool('หันเฉียงหลัง: ปีกข้างใกล้วาดทับหน้าตัว'),
+    nearCut: num(-0.8, 0.8, 0.01, 'ปีกข้างใกล้: เส้นตัด เลื่อนจากกลางตัว (บวก = ไปทางหลัง)'),
+    nearDepth: num(0, 0.5, 0.01, 'ปีกข้างใกล้: วาดหน้าตัว ห่างเท่าไร'),
     flap: num(0, 20, 0.5, 'ความเร็วกระพือ ตอนยืน'),
     flapWalk: num(0, 25, 0.5, 'ความเร็วกระพือ ตอนเดิน'),
   },
@@ -197,7 +203,8 @@ function baseDefaults(id: string, slot: TunedSlot): TuneValues | undefined {
       // Owner 2026-11-10: 25% bigger than the first 1.3 (#197); roots (60% up the picture) on the middle of
       // the back, 1.35 up standing and 1.0 above the saddle riding; behind the body, over the back when it
       // is turned to the camera (#200).
-      return { h: 1.625, root: 0.6, backStand: 1.35, backSeat: 1, back: 0.22, shift: 0, depth: 0.15, overBack: true, flap: 5, flapWalk: 10 };
+      return { h: 1.625, root: 0.6, backStand: 1.35, backSeat: 1, back: 0.22, shift: 0, depth: 0.15, overBack: true,
+        nearSide: true, nearFrontDiag: false, nearBackDiag: false, nearCut: 0, nearDepth: 0.15, flap: 5, flapWalk: 10 };
     case 'mount': {
       const m = MOUNT_DEFAULTS[id];
       // Draw order by view (#198-#201): the head in front of the rider facing the camera; cut in two around

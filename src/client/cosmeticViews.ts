@@ -265,15 +265,19 @@ export class CosmeticRig {
       }
       n.face(p.faceX, p.faceZ);
       n.update(dt, true, tuneNum(id, p.moving ? 'flapWalk' : 'flap'));
-      const side = viewRow(p) === 2;
+      // Which views show it, where it is cut and how far in front of the body: tuned on the bench.
+      const row = viewRow(p);
+      const side = (row === 2 && tuneBool(id, 'nearSide')) || (row === 1 && tuneBool(id, 'nearFrontDiag')) || (row === 3 && tuneBool(id, 'nearBackDiag'));
       n.group.visible = side;
       if (side) {
         // Screen right in the world is +x −z: keep the side away from where the character faces.
         const fsx = (p.faceX - p.faceZ) * Math.SQRT1_2;
         const sign = fsx >= 0 ? -1 : 1;
         this.wingClip.normal.set(sign * Math.SQRT1_2, 0, -sign * Math.SQRT1_2);
-        this.wingClip.constant = -(this.wingClip.normal.x * p.x + this.wingClip.normal.z * p.z);
-        const [nx, ny, nz] = depthAt(p.x + sx + hx, p.z + sz + hz, lift, depth);
+        // Through the body's middle, moved `nearCut` toward the back (along the kept side).
+        const cut = tuneNum(id, 'nearCut');
+        this.wingClip.constant = -(this.wingClip.normal.x * p.x + this.wingClip.normal.z * p.z) - cut;
+        const [nx, ny, nz] = depthAt(p.x + sx + hx, p.z + sz + hz, lift, tuneNum(id, 'nearDepth'));
         n.group.position.set(nx, ny, nz);
         n.setLift(lift + seat);
       }
