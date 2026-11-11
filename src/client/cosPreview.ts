@@ -450,7 +450,7 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
       }
       const b = button(d.label, () => {
         state.dir = i;
-        if (state.view) state.view = dirOfButton(i);
+        state.view = dirOfButton(i); // a facing arrow also picks that facing for the position sliders (owner 2026-11-11)
         state.spin = state.walk = false;
         walkTo = null;
         face(hero, i);
