@@ -74,7 +74,7 @@
 ### 3.1 หลักการ: ชั้นสัมผัสเขียนลง `Input` เดิม
 เพิ่ม `src/client/touch/` ที่**เขียนสถานะลง `Input` ตัวเดิม** แทนการแก้ `Game.manualIntent` มาก:
 - ปุ่มบนจอกด → ใส่ code เสมือนลง `keys`/`pressedSet` เช่น ปุ่ม Q กดค้าง = `keys.add('KeyQ')` ปล่อย = ลบ (สกิลและการตีเป็นแบบ**กดค้าง**อยู่แล้ว จึงได้พฤติกรรมเดียวกับ PC)
-- จอย → เพิ่มฟิลด์ `Input.stick: {x, y} | null` แล้ว `manualIntent` ใช้แทน WASD เมื่อมีค่า (ค่าเป็นสัดส่วน 0–1 เดินตามทิศจอยจริง ไม่ใช่ 8 ทิศ)
+- จอย → เพิ่มฟิลด์ `Input.stick: {x, y} | null` แล้ว `manualIntent` ใช้แทน WASD เมื่อมีค่า (เดินตามทิศจอยจริง 360° ไม่ใช่ 8 ทิศ · เฟส 1 ใช้**ความเร็วเต็มเสมอ** โดย normalize ทิศเหมือน WASD · `Player.ts:882` ใช้ `move.x/z` ตรง ๆ จึงทำ "ดันจอยเบา = เดินช้า" ได้ภายหลัง แต่ต้องตรวจการเดาตำแหน่งฝั่ง client และการตรวจระยะใน `server/world.ts` ก่อน — **(เสนอ) ไม่ทำ**)
 - เล็ง → เพิ่ม `Input.aimOverride: Vec2 | null` ที่ `manualIntent` ใช้ก่อน `hovered`/`mouseWorld`
 - ฟัง `pointerdown/move/up/cancel` และเรียก `setPointerCapture` ทุกนิ้วแยกด้วย `pointerId` (กดจอยกับปุ่มสกิลพร้อมกันได้)
 - ปิดตอน `blur`/`visibilitychange`/`pointercancel`: ล้างปุ่มค้างทั้งหมด (กันตัวละครเดินค้างตอนสลับแอป)
@@ -283,8 +283,6 @@
 | `ui/touch/icon_chat.png` | ไอคอนแชท | 64×64 | 2 |
 | `ui/touch/icon_mount.png` | ไอคอนพาหนะ (ถ้ายังไม่มีในเกม) | 64×64 | 2 |
 | `ui/touch/icon_dash.png` | ไอคอนแดช (ใช้ได้ทุกคลาส ถ้าไอคอนแดชเดิมไม่เหมาะกับวงกลม) | 64×64 | 2 |
-| `ui/touch/aim_ring.png` | วงเล็งบนพื้น (อุกกาบาต/ลูกไฟ) มองแบบ isometric | 256×128 | 3 |
-| `ui/touch/target_ring.png` | วงล็อกเป้าใต้เท้ามอน สีแดง | 256×128 | 3 |
 | `icons/app_512.png`, `app_192.png`, `app_180.png`, `app_maskable_512.png` | ไอคอนแอปหน้าจอหลัก (โลโก้ M / ตัวละคร) | 1024×1024 ต้นฉบับ | 4 |
 
 - ไอคอนสกิล ยา ม้วนกลับเมือง **ใช้ของเดิม** และไอคอนเมนู/Auto/ตั้งค่า Auto/กระเป๋า/แผนที่/ช่วยเหลือ ใช้ `ico_menu.png` `ico_auto.png` `ico_autoset.png` `ico_bag.png` `ico_map.png` `ico_help.png` ที่มีอยู่แล้วใน `public/assets/sprites/ui/` (ไม่เจนใหม่) · ปุ่มพาหนะมี `#mount-btn` อยู่แล้วใน `cosmetics.ts` ใช้ต่อได้
@@ -316,7 +314,8 @@
 
 **PR 3 · `feature/touch-aim` — ลากปุ่มเพื่อเล็ง**
 - โหมดเล็งด้วยการลาก + เส้น/วงเล็ง + ยกเลิก · ยิงหัวล็อกทิศ · แดชตามจอย
-- ไฟล์: `src/client/touch/controls.ts`, `src/client/effects.ts`, `src/client/Game.ts`, `public/assets/sprites/ui/touch/aim_ring.png`, `target_ring.png`
+- เส้นเล็ง วงเล็งบนพื้น และวงล็อกเป้าวาดด้วย Three.js (ไม่ใช้ภาพ)
+- ไฟล์: `src/client/touch/controls.ts`, `src/client/effects.ts`, `src/client/Game.ts`
 
 **PR 4 · `fix/mobile-windows` — หน้าต่างไม่ล้นจอ + แตะแทนคลิกขวา/hover**
 - กติกา 6.1 ทั้งหมด: หน้าต่างเต็มจอบนจอเล็ก, เปิดทีละอัน, แถบการกระทำ, กดค้าง, tooltip แบบแตะ, `setupDrag` เป็น pointer events
@@ -325,8 +324,9 @@
 - ไฟล์: `src/style.css`, `src/client/hud.ts`, `src/client/bossRoom.ts`, `src/client/fullmap.ts`, `src/client/dragwindow.ts`
 - **ใหญ่ อาจแยกเป็น 4a (กระเป๋า/อุปกรณ์/HUD) และ 4b (พ่อค้า/คลัง/ช่าง/อื่น ๆ)**
 
-**PR 5 · `feature/mobile-chat` — คีย์บอร์ดจอและแชท**
+**PR 5 · `feature/mobile-chat` — คีย์บอร์ดจอ แชท และหน้า Login**
 - 5.6 ทั้งหมด: `visualViewport`, ปุ่มส่ง, ฟอนต์ 16px ทุกช่องพิมพ์, `inputmode`, `enterkeyhint`, ปิดปุ่มเกมตอนพิมพ์, แชทพับ/ขยาย
+- หน้า Login / สมัคร / เลือกคลาส / สร้างตัวละคร: เลื่อนได้ ปุ่มใหญ่ ไม่โดนคีย์บอร์ดบัง (เช็คลิสต์ 8.3 ข้อ 1)
 - ไฟล์: `src/client/hud.ts` (แชท), `src/client/friends.ts`, `src/client/market.ts`, `src/client/trade.ts`, `src/client/party.ts`, `src/client/report.ts`, `src/client/menu.ts`, `index.html`, `src/style.css`
 
 **PR 6 · `perf/mobile-graphics` — กราฟิกบนเครื่องสเปกต่ำ (ส่วนที่จำเป็น)**
@@ -336,7 +336,7 @@
 → **จบเฟส 1 = ผ่านเช็คลิสต์ 8.3**
 
 ### เฟส 2 — หน้าต่างที่เหลือและความสะดวก
-**PR 7 · `fix/mobile-windows-2`** ตลาด (ตัวกรองพับ, ลงขายในหน้าต่าง), เทรด, เพื่อน, ปาร์ตี้ (`#party-hud` ย่อ), เควส, ของแต่งตัว, จดหมาย, ช่อง, รายงาน, หน้า Login/เลือกคลาส · ไฟล์: `market.ts`, `trade.ts`, `friends.ts`, `party.ts`, `quests.ts`, `questTracker.ts`, `cosmetics.ts`, `mail.ts`, `channels.ts`, `report.ts`, `menu.ts`, `style.css`
+**PR 7 · `fix/mobile-windows-2`** ตลาด (ตัวกรองพับ, ลงขายในหน้าต่าง), เทรด, เพื่อน, ปาร์ตี้ (`#party-hud` ย่อ), เควส, ของแต่งตัว, จดหมาย, ช่อง, รายงาน · ไฟล์: `market.ts`, `trade.ts`, `friends.ts`, `party.ts`, `quests.ts`, `questTracker.ts`, `cosmetics.ts`, `mail.ts`, `channels.ts`, `report.ts`, `style.css`
 
 **PR 8 · `feature/pwa`** manifest, ไอคอนแอป, meta Apple, ปุ่มเต็มจอ, คำแนะนำ "เพิ่มลงหน้าจอโฮม" บน iPhone (5.4–5.5) · ไฟล์: `index.html`, `public/manifest.webmanifest`, `public/icons/*`, `src/client/sysmenu.ts` · **รอภาพไอคอนแอป**
 
