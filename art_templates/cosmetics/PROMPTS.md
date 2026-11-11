@@ -274,3 +274,25 @@ For the same game, in the same fine-detail 16-bit SNES-era JRPG pixel art style 
 For the same game, in the same fine-detail 16-bit SNES-era JRPG pixel art style as the characters: small crisp pixels, no chunky pixels, rich shading, seen from the same 2D isometric camera angle (slightly from above). Generate an image of TWO empty UI frames for a player's name and chat, one above the other with a wide empty gap, theme: polished gold and deep brown, ornate royal filigree with a tiny crown. TOP: a name plate frame, a wide horizontal banner about 5 times as wide as tall, a decorated border with ornaments ONLY on the four corners (and at most one small ornament at the middle of the top edge), the straight edges between them plain and even so they can be stretched, the inside one flat solid dark color with NO pattern and NO text. BOTTOM: a chat speech bubble frame about 2 times as wide as tall, rounded, with the same themed border and corner ornaments, a small tail at the bottom center pointing down, the inside one flat solid light color with NO pattern and NO text. Front view, flat, no perspective. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no text, no letters, no labels. Do not use pink, magenta or purple on the frames.
 ```
 
+
+## 11. ปีกแยกซ้าย/ขวา (10 ภาพ, `wings_*_l` และ `wings_*_r`)
+
+ผู้ใช้ 2026-11-12: แบ่งปีกเป็น 2 ข้าง เกมจะวาดปีกข้างใกล้กล้องไว้หน้าตัว และปีกข้างไกลไว้หลังตัว ถูกต้องทุกทิศ (แทนวิธีตัดปีกใน #211)
+ปีกแต่ละแบบเจน 2 ภาพ ใช้ prompt 2 อันข้างล่างนี้ได้กับปีกทุกแบบ แค่แนบภาพเดิมของปีกแบบนั้นจาก `art_templates/cosmetics/raw/wings_<ชื่อ>.png`
+เซฟเป็น `art_templates/cosmetics/raw/wings_<ชื่อ>_l.png` (ปีกซ้าย) และ `wings_<ชื่อ>_r.png` (ปีกขวา)
+
+"ซ้าย" คือปีกซ้ายของตัวละคร: แถว 1 (หันหน้า) อยู่ฝั่งขวาของภาพ · แถว 2–4 (หันไปทางซ้าย) เป็นปีกข้างที่อยู่ใกล้คนดู · แถว 5 (หันหลัง) อยู่ฝั่งซ้ายของภาพ
+
+### ปีกซ้าย (`_l`)
+
+```
+Edit the attached sprite sheet of a pair of character wings (5 rows x 3 columns, the same wings in 5 views and 3 flap frames). Keep EXACTLY the same style, colors, size, layout and the position of everything in every cell. In every cell keep ONLY the wing that belongs to the character's LEFT side and completely erase the other wing (fill where it was with the flat background color): in row 1 (front view) keep the wing on the RIGHT side of the picture; in rows 2, 3 and 4 (turned toward the left) keep the wing NEARER to the viewer, the one in front; in row 5 (back view) keep the wing on the LEFT side of the picture. Keep the small binding at the wing's root. Do not move, resize or redraw the kept wing. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no text, no labels, no grid lines.
+```
+
+### ปีกขวา (`_r`)
+
+```
+Edit the attached sprite sheet of a pair of character wings (5 rows x 3 columns, the same wings in 5 views and 3 flap frames). Keep EXACTLY the same style, colors, size, layout and the position of everything in every cell. In every cell keep ONLY the wing that belongs to the character's RIGHT side and completely erase the other wing (fill where it was with the flat background color): in row 1 (front view) keep the wing on the LEFT side of the picture; in rows 2, 3 and 4 (turned toward the left) keep the wing FARTHER from the viewer, the one behind, and draw its whole shape where the near wing used to cover it; in row 5 (back view) keep the wing on the RIGHT side of the picture. Keep the small binding at the wing's root. Do not move or resize the kept wing. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no text, no labels, no grid lines.
+```
+
+ปีกค้างคาว (`wings_bat`) ภาพเดิมใช้พื้นเขียว ให้เปลี่ยนคำว่า `magenta (#FF00FF)` ใน prompt เป็น `pure bright green (#00FF00)`
