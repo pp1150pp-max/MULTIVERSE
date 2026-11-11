@@ -619,6 +619,13 @@ export class Db {
     this.transaction(() => this.writeCharacterAndStash(charId, data, accountId, stash));
   }
 
+  /** Saves only the stash (an admin edit while nobody on the account is online). */
+  saveStash(accountId: number, stash: StashData): void {
+    this.db.prepare(`INSERT INTO stashes (account_id, data, updated_at) VALUES (?, ?, ?)
+      ON CONFLICT(account_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`)
+      .run(accountId, JSON.stringify(stash), Date.now());
+  }
+
   /** The two writes of saveCharacterAndStash, for a transaction that does more (the market). */
   writeCharacterAndStash(charId: number, data: CharacterData, accountId: number, stash: StashData): void {
     this.saveCharacter(charId, data);
