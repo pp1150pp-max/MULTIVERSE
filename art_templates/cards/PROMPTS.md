@@ -13,21 +13,24 @@
 
 ## 1. กรอบการ์ด 3 ระดับ (3 ภาพ, แนวตั้ง 2:3)
 
-สร้างทีละภาพในแชทเดียวกัน ให้ได้กรอบชุดเดียวกันที่ต่างกันแค่สีและความหรู
+สร้างทีละภาพในแชทเดียวกัน **แนบ `public/assets/sprites/ui/inventory.png` (หน้าต่างกระเป๋า) ไปเป็นตัวอย่างสีและวัสดุทุกครั้ง**
+ทั้ง 3 ระดับเป็นเหล็กดำที่ตีขึ้นรูปกับบรอนซ์เก่าหม่นแบบเดียวกับ UI ของเกม และ**ต่างกันแค่ของประดับเล็ก ๆ** คือสีอัญมณีที่หม่นกับปริมาณลวดลายบรอนซ์ ห้ามเงาวับ ห้ามสีสด
 ช่องกลาง ช่องชื่อ และช่องผลต้องเป็นสีม่วงแดงล้วน เพื่อให้เกมตัดออกแล้ววางภาพมอนกับข้อความลงไป
+
+> รอบแรก (2026-11-11) กรอบออกมาเงาวับและสีสดแบบเกมการ์ดทั่วไป จึงไม่เข้ากับ UI ของเกม prompt ด้านล่างแก้ไขแล้ว
 
 ### ส่วนสไตล์
 
 ```text
-A trading card FRAME for a 16-bit SNES-era fantasy RPG, polished pixel art with a limited color palette, crisp dark outline, soft top-left lighting, small crisp pixels. Portrait 2:3 image, the frame fills the whole image edge to edge, perfectly symmetrical left and right. Layout from top to bottom: a small ornate banner plate at the top center (empty, no text), a large window taking about 65% of the height for the artwork, a wide nameplate under the window (empty, no text), and a slimmer rounded strip at the bottom for stats (empty, no text). The artwork window, the nameplate and the stats strip are filled with ONE perfectly flat solid magenta (#FF00FF) with no gradient. A small round empty socket at the top left corner for a group symbol. No text, no letters, no numbers, no monster, no character, no background outside the frame. No magenta anywhere on the frame itself.
+A card FRAME in the EXACT same art style, materials and colours as the attached inventory window: fine-detail 16-bit SNES-era pixel art with crisp pixels and no blur, original dark gothic design made of black forged iron with restrained, tarnished aged-bronze accents, dim and weathered, low contrast. The dark iron must dominate. Nothing shiny, glossy, bright, clean or saturated; no bright silver, no bright gold, no bright blue or purple, no white, no sparkles, no lens flare. Any gem or star must be small, few, dull and tarnished. Portrait 2:3 image, the frame fills the whole image edge to edge, perfectly symmetrical left and right, with one solid unbroken iron outer edge. Layout from top to bottom: a small blank aged-bronze plate at the top center (clear face, nothing overlapping it), a large recessed window taking about 65% of the height for the artwork, a wide blank aged-bronze nameplate under the window, and a slimmer recessed strip at the bottom for stats. A small round recessed iron socket at the top left corner for a group symbol. The artwork window, the nameplate face, the stats strip and the inside of the round socket are filled with ONE perfectly flat solid magenta (#FF00FF) with no gradient. No text, no letters, no numbers, no monster, no character. Do not use pink, magenta or purple on the frame itself.
 Frame:
 ```
 
 | ไฟล์ | ระดับ | คำอธิบาย (ต่อท้าย `Frame:`) |
 |---|---|---|
-| `card_frame_rare.png` | หายาก | `sturdy silver-blue steel frame with simple riveted corners, small sapphire gems at the four corners, cool blue trim, clean and modest` |
-| `card_frame_epic.png` | มหากาพย์ | `ornate violet-and-silver frame with engraved vines, amethyst gems at the corners and the top banner, a faint purple magical glow along the edges` |
-| `card_frame_legendary.png` | ตำนาน | `lavish gold frame with intricate filigree, small wings on both sides of the top banner, glowing orange-gold gems, tiny sparkles along the edges, the most luxurious of the three` |
+| `card_frame_rare.png` | หายาก | `the plainest of the three: plain riveted black iron with thin dull bronze edging, and four tiny dull dark-blue stones set in the corners` |
+| `card_frame_epic.png` | มหากาพย์ | `the same iron frame with a few more engraved bronze vines along the sides, and small dull dark-violet stones at the corners and the top plate` |
+| `card_frame_legendary.png` | ตำนาน | `the richest of the three but still dark and tarnished: thicker aged-bronze filigree and small spiky gothic ornaments on the iron, a few small dull bronze stars like the inventory window's, and small dim ember-orange stones at the corners and the top plate` |
 
 ## 2. ภาพมอนในการ์ด (26 ภาพ, แนวตั้ง 2:3)
 
@@ -90,23 +93,24 @@ Card art:
 ## 3. ไอคอน (ใช้ส่วนสไตล์ของไอคอนกระเป๋าเดิม)
 
 ใช้ **ส่วนสไตล์** จาก [art_templates/stones/PROMPTS.md](../stones/PROMPTS.md) แล้วต่อคำอธิบายท้าย `Item:`
+ของที่เป็นกรอบหรือ UI (การ์ดเล็ก การ์ดคว่ำ สัญลักษณ์กลุ่ม รู) ให้ใช้โทนเหล็กดำกับบรอนซ์หม่นแบบหน้าต่างกระเป๋าเหมือนกรอบการ์ด และแนบ `inventory.png` ไปด้วย
 ไอคอนการ์ดในกระเป๋าเกมจะย่อจากภาพมอนในหัวข้อ 2 ลงบนกรอบเล็กตามระดับ จึงไม่ต้องเจนไอคอนแยกทีละใบ
 
 | ไฟล์ | ภาพ | คำอธิบาย (ต่อท้าย `Item:`) |
 |---|---|---|
 | `stone_drill.png` | หินเจาะรู | `a hard dark grey stone shaped like a short drill bit with a spiral groove, a bright steel tip and a small glowing white spark at the point` |
-| `card_icon_rare.png` | การ์ดเล็กหายาก (กรอบไอคอน) | `a small blank trading card standing upright, silver-blue steel border with tiny sapphire corners, the card face filled with flat solid magenta (#FF00FF)` |
-| `card_icon_epic.png` | การ์ดเล็กมหากาพย์ | `a small blank trading card standing upright, ornate violet-and-silver border with amethyst corners, the card face filled with flat solid magenta (#FF00FF)` |
-| `card_icon_legendary.png` | การ์ดเล็กตำนาน | `a small blank trading card standing upright, lavish gold filigree border with glowing orange-gold corners, the card face filled with flat solid magenta (#FF00FF)` |
-| `card_back.png` | การ์ดคว่ำบนพื้น | `a single trading card lying face down at a slight angle, a dark blue card back with a silver star-and-portal emblem in the center, a soft white glow around it` |
-| `card_group_weapon.png` | สัญลักษณ์กลุ่มอาวุธ | `a small round emblem badge with a crossed sword and gun in silver on a dark red background` |
-| `card_group_armor.png` | สัญลักษณ์กลุ่มเกราะ | `a small round emblem badge with a heater shield in silver on a dark blue background` |
-| `card_group_accessory.png` | สัญลักษณ์กลุ่มเครื่องประดับ | `a small round emblem badge with a ring and a pendant in gold on a dark green background` |
-| `socket_empty.png` | รูว่าง | `a small round empty socket hole drilled into dark metal, a dark hollow center with a thin silver rim` |
-| `socket_filled.png` | รูมีการ์ด | `a small round socket in dark metal holding a tiny glowing card-shaped crystal, with a soft white glow` |
+| `card_icon_rare.png` | การ์ดเล็กหายาก (กรอบไอคอน) | `a small blank trading card standing upright, plain black iron border with thin dull bronze edging and tiny dull dark-blue corner stones, the card face filled with flat solid magenta (#FF00FF)` |
+| `card_icon_epic.png` | การ์ดเล็กมหากาพย์ | `a small blank trading card standing upright, black iron border with a few dull bronze vines and tiny dull dark-violet corner stones, the card face filled with flat solid magenta (#FF00FF)` |
+| `card_icon_legendary.png` | การ์ดเล็กตำนาน | `a small blank trading card standing upright, black iron border with thicker tarnished bronze filigree and tiny dim ember-orange corner stones, the card face filled with flat solid magenta (#FF00FF)` |
+| `card_back.png` | การ์ดคว่ำบนพื้น | `a single trading card lying face down at a slight angle, a black iron card back with a small tarnished bronze star-and-portal emblem in the center, only a faint dim glow around its edge` |
+| `card_group_weapon.png` | สัญลักษณ์กลุ่มอาวุธ | `a small round emblem badge with a crossed sword and gun in tarnished bronze on dark iron, with a dull dark-red tint` |
+| `card_group_armor.png` | สัญลักษณ์กลุ่มเกราะ | `a small round emblem badge with a heater shield in tarnished bronze on dark iron, with a dull dark-blue tint` |
+| `card_group_accessory.png` | สัญลักษณ์กลุ่มเครื่องประดับ | `a small round emblem badge with a ring and a pendant in tarnished bronze on dark iron, with a dull dark-green tint` |
+| `socket_empty.png` | รูว่าง | `a small round empty socket hole drilled into dark metal, a dark hollow center with a thin tarnished bronze rim` |
+| `socket_filled.png` | รูมีการ์ด | `a small round socket in dark metal holding a tiny glowing card-shaped crystal, with only a faint dim glow` |
 | `forge_drill.png` | เมนูเจาะรู | `a blacksmith hand drill with a wooden handle and a steel spiral bit, with a few metal shavings` |
 | `forge_socket.png` | เมนูเสียบการ์ด | `a small trading card being slid into a glowing round socket on a piece of armour` |
-| `forge_fuse.png` | เมนูรวมการ์ด | `three small trading cards fanned out and merging into one bright glowing card in the middle, with magic sparkles` |
+| `forge_fuse.png` | เมนูรวมการ์ด | `three small trading cards fanned out and merging into one card in the middle with a faint dim glow` |
 | `market_cards.png` | หมวดการ์ดในตลาด | `a neat stack of three trading cards with a small gold coin on top` |
 
 ## 4. เอฟเฟกต์ (ทำทีหลังได้)
