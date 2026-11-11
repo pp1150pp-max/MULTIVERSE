@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import { spritesWebp } from './tools/vite-sprites-webp';
 
 // The dev game server started by `npm run dev` (tools/dev.mjs) — port 2568 unless DEV_SERVER_PORT says otherwise.
 const GAME_SERVER = `http://localhost:${process.env.DEV_SERVER_PORT ?? 2568}`;
@@ -15,6 +16,8 @@ export default {
     },
   },
   plugins: [
+    // Sprite PNGs ship as WebP (build only; dev serves the PNGs).
+    spritesWebp(),
     {
       // In development, /admin opens the admin page too (instead of the game).
       name: 'admin-page',

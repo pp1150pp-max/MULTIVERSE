@@ -32,6 +32,7 @@ import { MarketWindow } from './market';
 import { playSound } from './audio/sfx';
 import { COIN_ICON, emptySlotIcon, FORGE_ICON, itemIcon, potionIcon, skillIcon, stoneIcon } from './icons';
 import { shutdownCancelled, shutdownWarning, type ShutdownMode } from '../shared/net/protocol';
+import { imgUrl } from './img';
 
 /** Yellow, like the game's level-up lines. */
 const SHUTDOWN_COLOR = '#ffd34a';
@@ -184,7 +185,7 @@ export class Hud {
     this.mm = $<HTMLCanvasElement>('minimap').getContext('2d')!;
     this.setHudStyle(loadHudStyle());
     // Big enough to show up late on first opening the bag, so it's fetched now.
-    new Image().src = 'assets/sprites/ui/inventory.png';
+    new Image().src = imgUrl('assets/sprites/ui/inventory.png');
     $('btn-hud-style').onclick = () => this.setHudStyle($('hud').classList.contains('hud-orbs') ? 'bars' : 'orbs');
     this.fullMap = new FullMap($<HTMLCanvasElement>('fullmap-canvas'));
     try {
@@ -882,7 +883,7 @@ export class Hud {
         const count = p.potionCount(s.kind, size);
         s.extra.textContent = `${POTION_SIZE_LABEL[size]} ${count}`;
         const img = s.el.querySelector<HTMLImageElement>('.icon img');
-        const src = `assets/sprites/icons/potion_${s.kind}_${size}.png`;
+        const src = imgUrl(`assets/sprites/icons/potion_${s.kind}_${size}.png`);
         if (img && img.getAttribute('src') !== src) img.setAttribute('src', src);
         s.el.title = `${potionName(s.kind, size)} — ฟื้น ${potionHeal(s.kind, size, p.cls.id)} ${s.kind.toUpperCase()}\nคลิกยาในกระเป๋าเพื่อเลือกขนาด`;
         s.cd.style.height = `${(Math.max(0, p.potCd) / POTION_CD) * 100}%`;
