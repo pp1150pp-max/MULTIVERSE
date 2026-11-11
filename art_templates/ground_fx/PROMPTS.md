@@ -117,6 +117,35 @@ out, then breaking up into embers.
 
 เซฟภาพที่ได้ไว้ที่ `art_templates/ground_fx/raw/gun_ult.png` จะตัดเป็น `public/assets/sprites/fx/gun_ult.png`
 
+**`enhance.png` (3 แถว): ตีบวกที่ช่างตีเหล็ก**
+
+แถว 1 เล่นในหน้าต่างช่างตอนกดตี ส่วนแถว 2 และ 3 เล่นเหนือหัวตัวละครให้คนรอบ ๆ เห็น
+ประโยคแรกของกฎด้านบนห้ามมีอาวุธ แต่แผ่นนี้ต้องมีค้อน จึงใช้กฎชุดเดียวกันที่แก้ข้อนี้แล้วด้านล่าง ถ้าเริ่มแชทใหม่ ให้แนบ `sword.png` เป็นตัวอย่าง
+
+```
+EXACT same fine-detail 16-bit SNES-era pixel-art style as the game above: crisp pixels, hard-edged color bands, no blur,
+no soft gradients, no glow haze. No characters. Generate an image: an animation sheet as a strict grid of exactly 3 rows
+x 6 columns, every cell the same size, each effect fully inside its own cell with empty space around it, nothing touching
+or crossing cell borders. Each row plays from left to right over 6 frames. Background ONE perfectly flat solid magenta
+(#FF00FF), no shadows, no ground, no text, no labels, no numbers, no grid lines. Do not use pink, magenta or purple in
+the effects.
+Row 1, BLACKSMITH HAMMER STRIKE, seen from the side: a heavy dark-iron blacksmith hammer with a worn brown wooden handle
+and tarnished bronze bands; frame 1 the hammer raised high and tilted back, frame 2 swinging down with short motion
+lines, frame 3 the moment of impact at the bottom of the cell with a bright white-yellow star flash and orange sparks
+bursting out sideways, frame 4 the hammer bouncing up slightly with sparks flying, frame 5 small embers falling, frame 6
+the hammer back at rest with two or three fading embers. The hammer stays the same size and design in every frame.
+Row 2, ENHANCE SUCCESS, seen from the front, grand and triumphant: frame 1 a small bright golden spark at the center,
+frame 2 a golden starburst with long sharp rays and a thin white shock ring, frame 3 the peak: a big radiant golden
+burst with a short vertical pillar of golden light, small four-point stars and gold sparks shooting upward and outward,
+frame 4 the ring widening and the rays thinning while golden sparks rise, frame 5 scattered rising gold sparkles and
+small stars, frame 6 a few tiny fading gold twinkles.
+Row 3, ENHANCE FAIL, seen from the front: frame 1 a dull orange spark at the center, frame 2 a short grey-orange puff
+cracking apart, frame 3 a dark grey smoke cloud with a few broken dull-red sparks and small dark metal shards falling,
+frame 4 the smoke spreading and drifting down, frame 5 thin grey wisps and two falling shards, frame 6 almost gone.
+```
+
+เซฟภาพที่ได้ไว้ที่ `art_templates/ground_fx/raw/enhance.png` จะตัดเป็น `public/assets/sprites/fx/enhance.png`
+
 ## เลขดาเมจ
 
 ไฟล์ `public/assets/sprites/icons/digits.png` เรียง 4 แถว (ปกติ คริติคอล โดนตี ฟื้นเลือด) แถวละ 13 ตัว ช่องละ 58×64 และ `crit_burst.png` เป็นแสงหลังเลขคริติคอล

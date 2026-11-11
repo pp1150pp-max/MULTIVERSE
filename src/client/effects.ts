@@ -3,7 +3,7 @@ import { fxSheets, fxTex, type FxSheet } from './assets';
 import type { FxApi, SkillEffect } from '../shared/sim/types';
 
 const FRAMES = 6;
-const SHEET_ROWS: Record<FxSheet, number> = { sword: 4, mage: 5, gun: 4, gun_ult: 3 };
+const SHEET_ROWS: Record<FxSheet, number> = { sword: 4, mage: 5, gun: 4, gun_ult: 3, enhance: 3 };
 
 interface EffectDef {
   sheet: FxSheet;
@@ -11,6 +11,8 @@ interface EffectDef {
   life: number;
   /** Lies flat on the ground, or faces the camera at this height. */
   height: number | 'ground';
+  /** Facing the camera without turning to the effect's angle (things that rise, like the enhance burst). */
+  upright?: boolean;
 }
 
 const EFFECTS: Record<SkillEffect, EffectDef> = {
@@ -26,6 +28,9 @@ const EFFECTS: Record<SkillEffect, EffectDef> = {
   // Headshot (Gunslinger R): the reticle locks on over the whole aim, then a big hit on the target.
   reticle: { sheet: 'gun_ult', row: 0, life: 0.8, height: 'ground' },
   headshot_hit: { sheet: 'gun_ult', row: 2, life: 0.42, height: 0.95 },
+  // Blacksmith result over the player's head, seen by everyone nearby (row 0 is the hammer, played in the forge window).
+  enhance_ok: { sheet: 'enhance', row: 1, life: 0.9, height: 2.5, upright: true },
+  enhance_fail: { sheet: 'enhance', row: 2, life: 0.9, height: 2.5, upright: true },
 };
 
 /** Flying shots, looked up by the colour the simulation gives each projectile. */
@@ -162,7 +167,8 @@ export class Effects implements FxApi {
       mesh.scale.setScalar(size);
       this.add(mesh, def.life, play);
     } else {
-      const mat = new THREE.SpriteMaterial({ map: tex, alphaTest: 0.5, transparent: false, rotation: screenAngle(Math.cos(angle), Math.sin(angle)) });
+      const rotation = def.upright ? 0 : screenAngle(Math.cos(angle), Math.sin(angle));
+      const mat = new THREE.SpriteMaterial({ map: tex, alphaTest: 0.5, transparent: false, rotation });
       const spr = new THREE.Sprite(mat);
       spr.position.set(x, def.height, z);
       spr.scale.setScalar(size * 2);

@@ -56,7 +56,7 @@ export interface FxApi {
 }
 
 export type SkillEffect = 'slash' | 'whirlwind' | 'charge' | 'quake' | 'explosion' | 'frost' | 'crater' | 'muzzle' | 'impact'
-  | 'reticle' | 'headshot_hit';
+  | 'reticle' | 'headshot_hit' | 'enhance_ok' | 'enhance_fail';
 export type FxName = keyof FxApi;
 /** One-shot sounds with no matching visual event. The client's audio code decides how each one sounds. */
 export type SfxName =

@@ -19,7 +19,21 @@ html, body {
   color: var(--ink);
   font-family: 'Kanit', system-ui, sans-serif;
   user-select: none;
+  /* Phones and tablets: the page never scrolls, bounces, pull-to-refreshes, or shows the long-press
+     callout / tap flash (mobile plan 5.2, 5.8). Nothing changes with a mouse. */
+  position: fixed; inset: 0;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
+input, textarea { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+/* Touch: no double-tap zoom or 300ms delay on buttons; the game canvas takes every gesture itself. */
+button { touch-action: manipulation; }
+#app > canvas { touch-action: none; }
+/* Lists that scroll keep the scroll to themselves instead of passing it on to the page. */
+.inv-side, #log.open, #menu, #loading, #forge-rates, #market .ui-tab-body, .party-results, #mail-win .mail-list,
+#mail-win .mail-text, #trade-find-results, #friends-win .friends-list, #channels-win .ch-list, #cos-win .cos-grid { overscroll-behavior: contain; }
 
 body.cursor-attack canvas { cursor: crosshair; }
 body.cursor-use canvas { cursor: pointer; }
@@ -73,6 +87,15 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 .fnum.gold { color: #f2c230; font-size: 14px; }
 .fnum.info { color: #e0e0e0; font-size: 13px; }
 .fnum.lvl { color: #ffe27a; font-family: 'Cinzel', serif; font-size: 26px; font-weight: 800; }
+/* Blacksmith result over the head: a big gold "+N สำเร็จ!" that pops in, or a dull grey fail. */
+.fnum.enh {
+  color: #ffe27a; font-family: 'Cinzel', serif; font-size: 34px; font-weight: 800;
+  text-shadow: -2px -2px 0 #3a1c04, 2px -2px 0 #3a1c04, -2px 2px 0 #3a1c04, 2px 2px 0 #3a1c04, 0 3px 0 #3a1c04, 0 0 14px rgba(255, 196, 64, 0.9);
+  animation: enh-pop 0.45s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+.fnum.enhfail { color: #b8bcc4; font-size: 24px; animation: enh-shake 0.4s linear; }
+@keyframes enh-pop { from { scale: 0.3; } 60% { scale: 1.25; } to { scale: 1; } }
+@keyframes enh-shake { 0%, 100% { translate: 0; } 25% { translate: -4px 0; } 75% { translate: 4px 0; } }
 
 .plate { text-align: center; font-size: 11px; text-shadow: 0 0 3px #000; }
 .plate .pname { color: #f2e6c8; margin-bottom: 2px; }
@@ -155,7 +178,7 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 #hud { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
 #hud button, #hud .panel, #hud #skillbar, #hud #dialog, #hud #death { pointer-events: auto; }
 
-#hud-topleft { position: absolute; top: 12px; left: 12px; }
+#hud-topleft { position: absolute; top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); }
 .char-card {
   display: flex; gap: 10px; align-items: center;
   background: var(--panel); border: 2px solid #4a4640; outline: 1px solid var(--panel-edge); outline-offset: -4px; border-radius: 4px; padding: 8px 14px 8px 8px;
@@ -166,7 +189,7 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 #hud-gold { font-size: 12px; color: #f2c230; }
 #hud-zone { margin-top: 6px; font-size: 12px; color: var(--ink-dim); text-shadow: 0 0 3px #000; }
 
-#hud-topright { position: absolute; top: 12px; right: 12px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+#hud-topright { position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 #minimap-wrap { position: relative; width: 176px; height: 176px; margin-bottom: 8px; }
 /* Round 16-bit buttons on the minimap's lower-right rim: 🔍 (full map), + and − (zoom). */
 .mm-btn {
@@ -252,7 +275,7 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 #boss-bar .bar { height: 14px; background: #2a0808; border: 2px solid #6b2a1a; border-radius: 3px; overflow: hidden; }
 #boss-bar .fill { height: 100%; background: linear-gradient(#ff5a3a, #a01a10); transition: width 0.15s; }
 
-#log { position: absolute; left: 12px; bottom: 190px; width: min(420px, 45vw); font-size: 13px; }
+#log { position: absolute; left: max(12px, env(safe-area-inset-left)); bottom: calc(190px + env(safe-area-inset-bottom)); width: min(420px, 45vw); font-size: 13px; }
 .log-line { text-shadow: 0 0 3px #000, 1px 1px 0 #000; padding: 1px 0; overflow-wrap: anywhere; transition: opacity 1.5s; }
 .log-line.fade { opacity: 0; }
 /* While playing only the newest 9 lines show; with the chat open (Enter) every kept line shows and scrolls. */
@@ -285,7 +308,7 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 #log-tabs span { margin-left: auto; font-size: 11px; color: #8a7a5c; }
 
 #hud-bottom {
-  position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%);
+  position: absolute; left: 50%; bottom: max(4px, env(safe-area-inset-bottom)); transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: center; gap: 0;
   --bar-w: min(560px, 94vw);
 }
@@ -296,8 +319,8 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 .hud-orbs .bars, .hud-bars .orb { display: none; }
 /* Orb mode: the HP orb fills the bottom-left corner (its height is --orb × 433/414), so the chat box
    and the message log sit above it at every screen size instead of at fixed heights. */
-.hud-orbs #chat { bottom: calc(var(--orb) * 433 / 414 + 6px); }
-.hud-orbs #log { bottom: calc(var(--orb) * 433 / 414 + 42px); }
+.hud-orbs #chat { bottom: calc(var(--orb) * 433 / 414 + 6px + env(safe-area-inset-bottom)); }
+.hud-orbs #log { bottom: calc(var(--orb) * 433 / 414 + 42px + env(safe-area-inset-bottom)); }
 .bars { display: flex; flex-direction: column; gap: 0; margin-top: 2px; }
 .bar {
   position: relative; width: min(300px, 40vw); aspect-ratio: 1352 / 152;
@@ -310,9 +333,9 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 .bar.mp .fill { background-image: url(/assets/sprites/ui/bar_mp.png); }
 .bar span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 11px; font-weight: 600; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; }
 
-.orb { position: absolute; bottom: 2px; width: var(--orb); aspect-ratio: 414 / 433; pointer-events: none; }
-#orb-hp { left: 2px; }
-#orb-mp { right: 2px; }
+.orb { position: absolute; bottom: max(2px, env(safe-area-inset-bottom)); width: var(--orb); aspect-ratio: 414 / 433; pointer-events: none; }
+#orb-hp { left: max(2px, env(safe-area-inset-left)); }
+#orb-mp { right: max(2px, env(safe-area-inset-right)); }
 #orb-mp .orb-art { transform: scaleX(-1); }
 .orb-art { position: absolute; inset: 0; background: url(/assets/sprites/ui/orb_cradle.png) center / 100% 100% no-repeat; }
 .orb-well { position: absolute; left: 14.3%; top: 17.1%; width: 72%; height: 68.8%; border-radius: 50%; overflow: hidden; }
@@ -394,12 +417,15 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
   left: 50%; top: 4px; transform: translateX(-50%); display: flex; align-items: flex-start; gap: 6px; z-index: 3;
   padding: 0; background: none; border: 0; outline: 0; box-shadow: none; --inv-w: min(560px, 96vw, calc((100vh - 8px) * 0.75));
 }
+/* A custom property has no fallback: only browsers that know dvh get the dvh width. */
+@supports (height: 100dvh) { #inventory { --inv-w: min(560px, 96vw, calc((100dvh - 8px) * 0.75)); } }
 #inventory::before, #inventory::after { content: none; }
 /* Beside an open shop there's only room for the window itself. */
 #hud:has(#shop:not(.hidden)) #inventory, #hud:has(#stash:not(.hidden)) #inventory, #hud:has(#market:not(.hidden)) #inventory, #hud:has(#forge:not(.hidden)) #inventory { left: auto; right: 4px; transform: none; }
 #hud:has(#shop:not(.hidden)) .inv-side, #hud:has(#stash:not(.hidden)) .inv-side, #hud:has(#market:not(.hidden)) .inv-side, #hud:has(#forge:not(.hidden)) .inv-side { display: none; }
 .inv-side {
   width: 220px; flex: none; max-height: calc(100vh - 8px); overflow-y: auto; padding: 12px;
+  max-height: calc(100dvh - 8px);
   background: var(--panel); border: 3px solid #4a4640; outline: 1px solid var(--panel-edge); outline-offset: -6px; border-radius: 4px;
 }
 .inv-side-title { margin: 10px 0 4px; font-family: 'Cinzel', 'Kanit', serif; font-weight: 600; font-size: 13px; color: var(--gold-hi); border-bottom: 1px solid #4a3a20; }
@@ -683,10 +709,12 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #forge {
   left: 12px; top: 120px; padding: 14px 14px 10px;
   width: clamp(420px, calc(100vw - min(560px, 96vw, calc((100vh - 8px) * 0.75)) - 28px), 720px);
+  width: clamp(420px, calc(100vw - min(560px, 96vw, calc((100dvh - 8px) * 0.75)) - 28px), 720px);
   --fg-violet: #8a5cff; --fg-violet-hi: #c9a8ff;
 }
 /* Below the HP and MP bars when there is room; on a short screen it moves up over them rather than off the bottom. */
 .hud-bars #forge { top: clamp(4px, calc(100vh - 440px), 216px); }
+.hud-bars #forge { top: clamp(4px, calc(100dvh - 440px), 216px); }
 #forge .panel-head { margin-bottom: 10px; }
 #forge .tier { white-space: nowrap; }
 #forge-body { display: grid; grid-template-columns: minmax(88px, 0.7fr) minmax(124px, 0.95fr) minmax(220px, 2.1fr); gap: 8px; min-height: var(--forge-body-h, 268px); }
@@ -721,6 +749,14 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
   border: 1px solid rgba(201, 168, 255, 0.5); box-shadow: 0 0 16px rgba(138, 92, 255, 0.5), inset 0 0 16px rgba(138, 92, 255, 0.4);
 }
 @keyframes forge-spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+/* Hammer strike over the slot while an enhance or reroll runs: row 1 of fx/enhance.png, 6 frames. */
+#forge-hammer {
+  position: absolute; left: 50%; top: 45%; z-index: 2; width: 128px; height: 128px; transform: translate(-50%, -88%);
+  pointer-events: none; visibility: hidden; image-rendering: pixelated;
+  background: url(/assets/sprites/fx/enhance.png) 0 0 / 600% 300% no-repeat;
+}
+#forge-hammer.swing { visibility: visible; animation: forge-hammer var(--swing, 0.6s) steps(6) forwards; }
+@keyframes forge-hammer { from { background-position-x: 0%; } to { background-position-x: 120%; } }
 #forge-slot {
   position: relative; z-index: 1; width: 84px; height: 150px; display: grid; place-items: center;
   border: 3px solid #7a6a9a; border-radius: 6px; background: linear-gradient(#2c1d4a, #160f26);
@@ -786,6 +822,11 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #forge-actions .gi { width: 22px; height: 22px; vertical-align: middle; image-rendering: pixelated; }
 #forge-go { background: linear-gradient(#5a6cff, #2a2f9a); border: 2px solid #a8b4ff; color: #fff; box-shadow: 0 0 0 2px #0c0c24, 0 0 12px rgba(90, 108, 255, 0.5); }
 #forge-go:hover:not(:disabled) { filter: brightness(1.15); color: #fff; }
+/* Blacksmith cooldown (FORGE_CD): a dark bar drains from the button, which ignores clicks until it is gone. */
+#forge-go { position: relative; overflow: hidden; }
+#forge-go.cooling { pointer-events: none; }
+#forge-go.cooling::after { content: ''; position: absolute; inset: 0; background: rgba(8, 8, 24, 0.55); transform-origin: right; animation: forge-cd var(--cd, 1s) linear forwards; }
+@keyframes forge-cd { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 #forge-cancel { background: linear-gradient(#c8402e, #7a1c14); border: 2px solid #ff9a86; color: #fff; box-shadow: 0 0 0 2px #240c0a; }
 #forge-cancel:hover:not(:disabled) { filter: brightness(1.15); color: #fff; }
 #forge-actions button:disabled { filter: grayscale(0.7) brightness(0.7); opacity: 0.7; font-size: 14px; }
@@ -886,7 +927,7 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 .plate.ally .pname { color: #9fe0ff; }
 .plate.ally .pfill { background: #3ec05a; }
 .loot-label.locked { opacity: 0.55; }
-#chat { position: absolute; left: 12px; bottom: 152px; width: min(420px, 45vw); pointer-events: auto; }
+#chat { position: absolute; left: max(12px, env(safe-area-inset-left)); bottom: calc(152px + env(safe-area-inset-bottom)); width: min(420px, 45vw); pointer-events: auto; }
 #chat input {
   width: 100%; font-family: inherit; font-size: 14px; padding: 6px 10px; color: var(--ink);
   background: rgba(12, 10, 8, 0.9); border: 1px solid var(--gold); border-radius: 4px; outline: none;
@@ -987,7 +1028,9 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 /* ---------------------------------------------------------------- market broker (src/client/market.ts) */
 
 #market { left: 12px; top: 96px; width: 640px; max-height: calc(100vh - 106px); display: flex; flex-direction: column; }
+#market { max-height: calc(100dvh - 106px); }
 .hud-bars #market { top: 196px; max-height: calc(100vh - 206px); }
+.hud-bars #market { max-height: calc(100dvh - 206px); }
 #market .npc-line { margin-bottom: 4px; }
 #market .ui-tab-body { min-height: 0; overflow-y: auto; flex: 1 1 auto; }
 /* The market list must scroll (it can be long): a thin gold bar that matches the frame instead of the default grey one (owner). */

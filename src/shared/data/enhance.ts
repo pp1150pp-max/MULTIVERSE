@@ -14,6 +14,8 @@ export const ENHANCE_STONES_PER_TRY = 1;
 export const PITY_STEP = 0.01;
 /** Reaching this level or higher is announced to the whole server. */
 export const ANNOUNCE_FROM = 10;
+/** Seconds between two blacksmith actions (enhance or reroll) by the same player (owner: 1). */
+export const FORGE_CD = 1;
 
 /** Bonus % of each stat line gained by reaching this level (index = + level). +5 = 20%, +10 = 45%, +15 = 95%. */
 const STEP_PCT = [0, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 10, 10, 10, 10, 10];
