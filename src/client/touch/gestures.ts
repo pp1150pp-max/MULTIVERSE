@@ -18,7 +18,7 @@ interface Finger { x0: number; y0: number; x: number; y: number; t: number; move
 export class TouchGestures {
   private readonly fingers = new Map<number, Finger>();
   private stickId: number | null = null;
-  private pinch: { d0: number; zoom0: number } | null = null;
+  private pinch: { a: number; b: number; d0: number; zoom0: number } | null = null;
 
   constructor(private readonly g: Game, canvas: HTMLCanvasElement) {
     canvas.addEventListener('pointerdown', (e) => this.down(e, canvas), { passive: false });
@@ -42,12 +42,14 @@ export class TouchGestures {
     canvas.setPointerCapture(e.pointerId);
     const f: Finger = { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t: performance.now(), moved: false, pinched: false };
     this.fingers.set(e.pointerId, f);
-    if (this.fingers.size === 2) {
-      // Two fingers: pinch zoom. The joystick lets go and neither finger can count as a tap.
+    // A second finger while walking with the joystick is a tap (lock on, talk…). A second finger while the
+    // first one is still (a joystick not yet moved, or a finger resting on the game) starts a pinch zoom.
+    const stick = this.stickId === null ? null : this.fingers.get(this.stickId);
+    if (this.fingers.size === 2 && !(stick && stick.moved)) {
       this.endStick();
-      const [a, b] = [...this.fingers.values()];
+      const [[ia, a], [ib, b]] = [...this.fingers];
       a.pinched = b.pinched = true;
-      this.pinch = { d0: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), zoom0: this.g.zoom };
+      this.pinch = { a: ia, b: ib, d0: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), zoom0: this.g.zoom };
       return;
     }
     if (this.fingers.size === 1 && this.inStickZone(f.x, f.y)) {
@@ -62,8 +64,9 @@ export class TouchGestures {
     f.x = e.clientX;
     f.y = e.clientY;
     if (Math.hypot(f.x - f.x0, f.y - f.y0) > TAP_SLOP) f.moved = true;
-    if (this.pinch && this.fingers.size >= 2) {
-      const [a, b] = [...this.fingers.values()];
+    const a = this.pinch && this.fingers.get(this.pinch.a);
+    const b = this.pinch && this.fingers.get(this.pinch.b);
+    if (this.pinch && a && b) {
       const d = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
       // Fingers apart = closer in (a smaller view), like zooming a map.
       this.g.zoom = this.pinch.zoom0 * (this.pinch.d0 / d);
@@ -88,7 +91,7 @@ export class TouchGestures {
     if (!f) return;
     this.fingers.delete(e.pointerId);
     if (e.pointerId === this.stickId) this.endStick();
-    if (this.fingers.size < 2) this.pinch = null;
+    if (this.pinch && (e.pointerId === this.pinch.a || e.pointerId === this.pinch.b)) this.pinch = null;
     if (lifted && !f.moved && !f.pinched && performance.now() - f.t < TAP_MS) this.g.tapAt(f.x, f.y);
   }
 

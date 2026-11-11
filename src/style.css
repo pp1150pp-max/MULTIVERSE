@@ -1320,11 +1320,11 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
    (2026-11-11): attack 84px, skills 64px, other buttons 48px, all × --s (bigger on tablets).
    Each pad button sits by its centre: --x / --y px from the bottom-right corner of the safe area. */
 #touch-ui { display: none; }
-body.touch-ui #touch-ui { display: block; position: absolute; inset: 0; pointer-events: none; z-index: 2; --s: 1; }
+/* No z-index and first in #hud: every window and dialog opened later paints over the buttons. */
+body.touch-ui #touch-ui { display: block; position: absolute; inset: 0; pointer-events: none; --s: 1; }
 @media (min-width: 700px) and (min-height: 700px) { body.touch-ui #touch-ui { --s: 1.3; } }
 /* The keyboard hint bar, the top icon row (all of it is in the ☰ system menu) and the PC mount button. */
 body.touch-ui #skillbar, body.touch-ui #hud-iconrow, body.touch-ui #mount-btn { display: none !important; }
-body.touch-ui #hud { --orb: min(120px, 16vw); }
 
 #touch-ui .tc-btn, #touch-ui .tc-btn:hover {
   position: absolute; width: var(--d); height: var(--d); padding: 0; border: 0; border-radius: 50%; box-shadow: none;
@@ -1388,7 +1388,7 @@ body.touch-ui #hud { --orb: min(120px, 16vw); }
 
 /* Hold a potion button: pick which size it drinks. */
 #tc-potpick {
-  position: absolute; display: flex; gap: 6px; padding: 6px; pointer-events: auto;
+  position: absolute; z-index: 8; display: flex; gap: 6px; padding: 6px; pointer-events: auto;
   background: var(--panel); border: 2px solid #4a4640; outline: 1px solid var(--panel-edge); outline-offset: -5px; border-radius: 6px;
 }
 #tc-potpick.hidden { display: none; }

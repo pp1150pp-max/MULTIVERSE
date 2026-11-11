@@ -588,7 +588,7 @@ export class Game {
    *  a drop / NPC / rest spot / boss altar is walked to and used, another player opens the player menu,
    *  and open ground is walked to. A tap never attacks: that's the attack button's job. */
   tapAt(sx: number, sy: number): void {
-    if (!this.player.alive) return;
+    if (!this.player.alive || this.hud.dialogOpen) return;
     const pxPerUnit = window.innerHeight / this.viewSize;
     const m = this.monsterAt(sx, sy, pxPerUnit, TAP_SCALE);
     if (m) {

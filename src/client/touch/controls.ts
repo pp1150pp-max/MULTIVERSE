@@ -63,7 +63,7 @@ export class TouchControls {
         <button id="tc-talk" class="tc-btn tc-talk hidden"><span class="tc-ico">${art('icon_talk')}</span><span class="tc-label">คุย/ใช้</span></button>
       </div>
       <div id="tc-potpick" class="hidden"></div>`;
-    document.getElementById('hud')!.append(this.root);
+    document.getElementById('hud')!.prepend(this.root);
     const q = <T extends HTMLElement = HTMLElement>(sel: string) => this.root.querySelector<T>(sel)!;
     this.stick = q('#tc-stick');
     this.knob = q('#tc-knob');
