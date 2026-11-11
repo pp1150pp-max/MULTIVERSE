@@ -170,18 +170,21 @@ const settingRow = (): string | null => dbRead((db) => (db.prepare('SELECT value
 async function run(): Promise<void> {
   const port = await freePort();
   const base = `http://localhost:${port}`;
-  proc = spawn(process.execPath, ['--import', 'tsx', 'server/main.ts'], {
-    cwd: ROOT, env: { ...process.env, PORT: String(port), DB_FILE }, stdio: ['ignore', 'ignore', 'inherit'],
-  });
-  for (let i = 0; ; i++) {
-    try {
-      await fetch(`${base}/api/me`);
-      break;
-    } catch {
-      if (i > 100) throw new Error('test server did not start');
-      await sleep(100);
+  const startServer = async (): Promise<void> => {
+    proc = spawn(process.execPath, ['--import', 'tsx', 'server/main.ts'], {
+      cwd: ROOT, env: { ...process.env, PORT: String(port), DB_FILE }, stdio: ['ignore', 'ignore', 'inherit'],
+    });
+    for (let i = 0; ; i++) {
+      try {
+        await fetch(`${base}/api/me`);
+        break;
+      } catch {
+        if (i > 100) throw new Error('test server did not start');
+        await sleep(100);
+      }
     }
-  }
+  };
+  await startServer();
   const api = async (method: string, path: string, body?: unknown, token?: string) => {
     const r = await fetch(`${base}/api${path}`, {
       method,
@@ -258,6 +261,22 @@ async function run(): Promise<void> {
   await api('POST', '/admin/balance', { tuning }, tok.owner1);
   await sleep(200);
   ok(auditCount() === 1 && p1.msgs.filter((m) => m.t === 'balance').length === 1, 'saving the same again logs and sends nothing');
+
+  // The saved numbers survive a server restart (main.ts applies them before anything is read).
+  p1.ws.close();
+  await sleep(300);
+  const old = proc!;
+  const exited = new Promise((r) => old.once('exit', r));
+  old.kill();
+  await exited;
+  await startServer();
+  const r1 = joinWorld(tok.plain1, chars.plain1);
+  await r1.ready;
+  ok(r1.msgs.find((m) => m.t === 'welcome')?.balance?.classes?.sword?.base?.maxHp === 200, 'after a restart, joining gets the saved balance');
+  ok(near(lastSnap(r1.msgs).me.stats.maxHp, hp0 + (200 - 130) * 2), 'after a restart, the character uses the saved numbers');
+  ok(lastInv(r1.msgs)?.equipment?.weapon?.tierK === '10,20,30,20,20|40', 'after a restart, items keep the tuned labels');
+  p1.ws = r1.ws;
+  p1.msgs = r1.msgs;
 
   // The owner switches the tool off for GMs.
   const defs = (await api('GET', '/admin/role-defs', undefined, tok.owner1)).data;

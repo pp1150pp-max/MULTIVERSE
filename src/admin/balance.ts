@@ -210,6 +210,12 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     summary,
     h('div', { class: 'row bal-line' },
       h('button', { class: 'primary', onclick: () => {
+        // A box with a value out of its range keeps the last good value in the draft: fix it first.
+        if (box.querySelector('input.bal-bad')) {
+          msg.className = 'msg bad';
+          msg.textContent = 'มีช่องที่ใส่ค่าไม่ถูกต้อง (กรอบแดง) แก้ก่อนบันทึก';
+          return;
+        }
         const c = draftTuning();
         if (!c.tuning) {
           msg.className = 'msg bad';
