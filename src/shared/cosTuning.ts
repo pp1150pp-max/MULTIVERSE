@@ -73,6 +73,70 @@ export const COS_TUNE_FIELDS: Record<TunedSlot, Record<string, TuneField>> = {
 
 export type TuneValues = Record<string, number | boolean>;
 
+// ---- X / Y / Z axes (owner 2026-11-11) ----
+// X = the character's right (+) / left, Y = up / down, Z = forward (+) / back, turning with the way the
+// character faces. The base value of each axis is one of the fields above (kept under its old key so old
+// saves read as they are, nothing jumps); on top of it each view (front / side / back) has its own
+// offset `d<axis>_<view>`, added in that view only. A view row: 0 front, 1 front diagonal, 2 side,
+// 3 back diagonal, 4 back (the same rows as the sprite sheets).
+export type Axis = 'x' | 'y' | 'z';
+export const AXES: readonly Axis[] = ['x', 'y', 'z'];
+export type ViewGroup = 'front' | 'side' | 'back';
+export const VIEW_GROUPS: readonly ViewGroup[] = ['front', 'side', 'back'];
+
+/** Which stored view group a view row uses (the diagonals share the front / back one). */
+export const viewGroupOfRow = (row: number): ViewGroup => (row <= 1 ? 'front' : row === 2 ? 'side' : 'back');
+/** Z points into / out of the camera from straight front and back, X from the side: no visible effect there. */
+export const axisHiddenInRow = (axis: Axis, row: number): boolean => (axis === 'z' && (row === 0 || row === 4)) || (axis === 'x' && row === 2);
+/** Field key of an axis's offset in a view. */
+export const viewOffKey = (axis: Axis, g: ViewGroup): string => `d${axis}_${g}`;
+
+export interface AxisSpec {
+  axis: Axis;
+  /** The base field this axis reads (value shown = sign × field). */
+  key: string;
+  sign: 1 | -1;
+  label: string;
+  /** Hidden for a piece whose switch `key` is off (a pet that walks has no height). */
+  onlyIf?: string;
+  /** Wings only: the height while riding (the other Y is standing). */
+  ride?: boolean;
+}
+
+/** The axes each kind of piece has (a field of COS_TUNE_FIELDS each). The aura is flat on the ground: X only. */
+export const COS_AXES: Record<TunedSlot, AxisSpec[]> = {
+  wings: [
+    { axis: 'x', key: 'shift', sign: 1, label: 'X ซ้าย/ขวา' },
+    { axis: 'y', key: 'backStand', sign: 1, label: 'Y ขึ้น/ลง (ตอนยืน)' },
+    { axis: 'y', key: 'backSeat', sign: 1, label: 'Y ขึ้น/ลง (ตอนขี่ จากอาน)', ride: true },
+    { axis: 'z', key: 'back', sign: -1, label: 'Z หน้า/หลัง' },
+  ],
+  mount: [
+    { axis: 'x', key: 'shift', sign: 1, label: 'X ซ้าย/ขวา' },
+    { axis: 'y', key: 'seat', sign: 1, label: 'Y ความสูงที่นั่ง' },
+    { axis: 'z', key: 'z', sign: 1, label: 'Z หน้า/หลัง' },
+  ],
+  pet: [
+    { axis: 'x', key: 'side', sign: -1, label: 'X ซ้าย/ขวา' },
+    { axis: 'y', key: 'float', sign: 1, label: 'Y ความสูงลอย', onlyIf: 'fly' },
+    { axis: 'z', key: 'back', sign: -1, label: 'Z หน้า/หลัง' },
+  ],
+  aura: [{ axis: 'x', key: 'shift', sign: 1, label: 'X ซ้าย/ขวา' }],
+};
+
+// The new fields: the mount's own Z, and every view offset.
+COS_TUNE_FIELDS.mount.z = num(-1.5, 1.5, 0.02, 'ขยับหน้า/หลังของตัวละคร');
+for (const slot of TUNED_SLOTS) {
+  for (const s of COS_AXES[slot]) {
+    for (const g of VIEW_GROUPS) {
+      const key = viewOffKey(s.axis, g);
+      if (!COS_TUNE_FIELDS[slot][key]) COS_TUNE_FIELDS[slot][key] = num(-1.5, 1.5, 0.01, `ส่วนปรับ ${s.axis.toUpperCase()} มุม${g === 'front' ? 'หน้า' : g === 'side' ? 'ข้าง' : 'หลัง'}`);
+    }
+  }
+}
+const zeroViewOffsets = (slot: TunedSlot): TuneValues =>
+  Object.fromEntries(Object.keys(COS_TUNE_FIELDS[slot]).filter((k) => /^d[xyz]_/.test(k)).map((k) => [k, 0]));
+
 /**
  * Mounts: the values before the bench (owner-approved art fits, #192/#194/#198). The hoverboard and the
  * tortoise are out of the catalogue for now (owner 2026-11-10, #200), so these two rows are unused (no
@@ -93,7 +157,12 @@ const PET_FLYING = new Set(['pet_dragon', 'pet_bot', 'pet_wisp']);
 export function cosTuneDefaults(id: string): TuneValues | undefined {
   const c = cosById(id);
   if (!c || c.slot === 'title') return undefined;
-  switch (c.slot) {
+  const d = baseDefaults(id, c.slot);
+  return d && { ...d, ...zeroViewOffsets(c.slot) };
+}
+
+function baseDefaults(id: string, slot: TunedSlot): TuneValues | undefined {
+  switch (slot) {
     case 'wings':
       // Owner 2026-11-10: 25% bigger than the first 1.3 (#197); roots (60% up the picture) on the middle of
       // the back, 1.35 up standing and 1.0 above the saddle riding; behind the body, over the back when it
@@ -105,7 +174,7 @@ export function cosTuneDefaults(id: string): TuneValues | undefined {
       // the rider on the front diagonal, the side and the back diagonal (the end nearer the camera in front,
       // the rest behind); the rider on top from straight behind; a board always just behind the feet.
       return {
-        h: m?.h ?? 1.35, seat: m?.seat ?? 0.55, shift: 0, headOnLift: 0.18, front: 0.1, cutFrontDiag: true, cutSide: true, cutBackDiag: true, splitFront: 0.1, frontDiag: true, behind: 0.1,
+        h: m?.h ?? 1.35, seat: m?.seat ?? 0.55, shift: 0, headOnLift: 0.18, front: 0.1, cutFrontDiag: true, cutSide: true, z: 0, cutBackDiag: true, splitFront: 0.1, frontDiag: true, behind: 0.1,
         under: m?.under ?? false, underBehind: 0.05, board: m?.board ?? false, anim: 11,
       };
     }
