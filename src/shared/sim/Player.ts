@@ -276,6 +276,8 @@ export class Player extends Unit {
   stats: Stats = emptyStats();
   cd: Partial<Record<SkillSlot, number>> = {};
   potCd = 0;
+  /** Sim time of the last blacksmith action (enhance or reroll), for FORGE_CD. Not saved. */
+  forgeAt = -Infinity;
   /** Seconds until the fountain or a campfire can restore this player again (Sim.rest). */
   restCd = 0;
   /** Seconds left on a return-scroll cast (0 = not casting), and where it started (moving away cancels it). */

@@ -73,6 +73,15 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 .fnum.gold { color: #f2c230; font-size: 14px; }
 .fnum.info { color: #e0e0e0; font-size: 13px; }
 .fnum.lvl { color: #ffe27a; font-family: 'Cinzel', serif; font-size: 26px; font-weight: 800; }
+/* Blacksmith result over the head: a big gold "+N สำเร็จ!" that pops in, or a dull grey fail. */
+.fnum.enh {
+  color: #ffe27a; font-family: 'Cinzel', serif; font-size: 34px; font-weight: 800;
+  text-shadow: -2px -2px 0 #3a1c04, 2px -2px 0 #3a1c04, -2px 2px 0 #3a1c04, 2px 2px 0 #3a1c04, 0 3px 0 #3a1c04, 0 0 14px rgba(255, 196, 64, 0.9);
+  animation: enh-pop 0.45s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+.fnum.enhfail { color: #b8bcc4; font-size: 24px; animation: enh-shake 0.4s linear; }
+@keyframes enh-pop { from { scale: 0.3; } 60% { scale: 1.25; } to { scale: 1; } }
+@keyframes enh-shake { 0%, 100% { translate: 0; } 25% { translate: -4px 0; } 75% { translate: 4px 0; } }
 
 .plate { text-align: center; font-size: 11px; text-shadow: 0 0 3px #000; }
 .plate .pname { color: #f2e6c8; margin-bottom: 2px; }
@@ -721,6 +730,14 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
   border: 1px solid rgba(201, 168, 255, 0.5); box-shadow: 0 0 16px rgba(138, 92, 255, 0.5), inset 0 0 16px rgba(138, 92, 255, 0.4);
 }
 @keyframes forge-spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+/* Hammer strike over the slot while an enhance or reroll runs: row 1 of fx/enhance.png, 6 frames. */
+#forge-hammer {
+  position: absolute; left: 50%; top: 45%; z-index: 2; width: 128px; height: 128px; transform: translate(-50%, -88%);
+  pointer-events: none; visibility: hidden; image-rendering: pixelated;
+  background: url(/assets/sprites/fx/enhance.png) 0 0 / 600% 300% no-repeat;
+}
+#forge-hammer.swing { visibility: visible; animation: forge-hammer var(--swing, 0.6s) steps(6) forwards; }
+@keyframes forge-hammer { from { background-position-x: 0%; } to { background-position-x: 120%; } }
 #forge-slot {
   position: relative; z-index: 1; width: 84px; height: 150px; display: grid; place-items: center;
   border: 3px solid #7a6a9a; border-radius: 6px; background: linear-gradient(#2c1d4a, #160f26);
@@ -786,6 +803,11 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #forge-actions .gi { width: 22px; height: 22px; vertical-align: middle; image-rendering: pixelated; }
 #forge-go { background: linear-gradient(#5a6cff, #2a2f9a); border: 2px solid #a8b4ff; color: #fff; box-shadow: 0 0 0 2px #0c0c24, 0 0 12px rgba(90, 108, 255, 0.5); }
 #forge-go:hover:not(:disabled) { filter: brightness(1.15); color: #fff; }
+/* Blacksmith cooldown (FORGE_CD): a dark bar drains from the button, which ignores clicks until it is gone. */
+#forge-go { position: relative; overflow: hidden; }
+#forge-go.cooling { pointer-events: none; }
+#forge-go.cooling::after { content: ''; position: absolute; inset: 0; background: rgba(8, 8, 24, 0.55); transform-origin: right; animation: forge-cd var(--cd, 1s) linear forwards; }
+@keyframes forge-cd { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 #forge-cancel { background: linear-gradient(#c8402e, #7a1c14); border: 2px solid #ff9a86; color: #fff; box-shadow: 0 0 0 2px #240c0a; }
 #forge-cancel:hover:not(:disabled) { filter: brightness(1.15); color: #fff; }
 #forge-actions button:disabled { filter: grayscale(0.7) brightness(0.7); opacity: 0.7; font-size: 14px; }
