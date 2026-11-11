@@ -59,11 +59,11 @@ function depthAt(x: number, z: number, raised: number, depth: number): [number, 
 }
 
 /**
- * Players were made shorter (owner 2026-11-11: as tall as the NPCs, sprite.json height 2.6 → 2.5) after the
+ * Players were made shorter (owner 2026-11-11/12: as tall as the NPCs, 1.87, sprite.json height 2.6 → 2.4) after the
  * cosmetics were tuned on them, so every size and distance of a cosmetic shrinks with them. The saved
  * tuning is left as it is; this applies on top, so a piece keeps its place on the body.
  */
-const PLAYER_SCALE = 2.5 / 2.6;
+const PLAYER_SCALE = 2.4 / 2.6;
 /** Tuning fields that are not sizes or distances (a fraction, a speed, a rate, a brightness): not scaled. */
 const UNSCALED = new Set(['root', 'flap', 'flapWalk', 'anim', 'alpha', 'pulse', 'sparks', 'stepEvery']);
 /** A cosmetic's tuning number, sizes and distances scaled to the player's size. */
