@@ -259,6 +259,19 @@ export function cosTuneOf(tuning: CosTuning, id: string): TuneValues | undefined
   return d && { ...d, ...tuning[id] };
 }
 
+/**
+ * The tuning after saving only the fields of ONE cosmetic that `part` picks (its base values, or one view
+ * group's offsets) from what is tried out now (`cur`): everything else stays as `saved`. Returns the clean tuning.
+ */
+export function savePartOf(saved: CosTuning, id: string, cur: TuneValues, part: (key: string) => boolean): CosTuning {
+  const base = cosTuneOf(saved, id);
+  const c = cosById(id);
+  if (!base || !c || c.slot === 'title') return saved;
+  const vals: TuneValues = { ...base };
+  for (const k of Object.keys(COS_TUNE_FIELDS[c.slot])) if (part(k)) vals[k] = cur[k];
+  return checkCosTuning({ ...saved, [id]: vals }, false).tuning ?? saved;
+}
+
 /** Same tuning? (both already clean, as checkCosTuning returns them) */
 export function sameCosTuning(a: CosTuning, b: CosTuning): boolean {
   return JSON.stringify(a) === JSON.stringify(b);

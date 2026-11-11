@@ -9,7 +9,7 @@ import { Effects } from './effects';
 import { PlayerView } from './views';
 import { ISO_DIR } from './world';
 import { applyCosTuning, cosTune, currentCosTuning, resetCosTune, setCosTuneValue } from './cosTune';
-import { axisHiddenInRow, checkCosTuning, COS_AXES, COS_TUNE_FIELDS, cosTuneOf, sameCosTuning, viewGroupOfRow, viewOffKey, type CosTuning, type TunedSlot } from '../shared/cosTuning';
+import { axisHiddenInRow, checkCosTuning, COS_AXES, COS_TUNE_FIELDS, cosTuneOf, sameCosTuning, savePartOf, viewGroupOfRow, viewOffKey, type CosTuning, type TunedSlot } from '../shared/cosTuning';
 import { COSMETICS, COS_SLOTS, COS_SLOT_NAME, cosById, MOUNT_SPEED, type CosSlot, type CosWorn } from '../shared/data/cosmetics';
 import { Player } from '../shared/sim/Player';
 import type { Sim } from '../shared/sim/Sim';
@@ -89,6 +89,8 @@ const rowOfDir = (i: number): number => {
   const d = DIRS[i];
   return d.sy < 0 ? (d.sx ? 1 : 0) : d.sy === 0 ? 2 : d.sx ? 3 : 4;
 };
+/** Names of the stored view groups. */
+const GROUP_NAME = { front: 'หน้า (หน้าตรง+เฉียงหน้า)', side: 'ข้าง', back: 'หลัง (เฉียงหลัง+หลังตรง)' } as const;
 const round = (n: number) => Math.round(n * 1000) / 1000;
 
 const state = {
@@ -336,6 +338,31 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
     statusEl.textContent = serverMsg || (same ? '✓ ตอนนี้ตรงกับค่าของเซิร์ฟ' : '• ตอนนี้ต่างจากค่าของเซิร์ฟ (ยังไม่ได้บันทึก)');
   }
 
+  /** The fields a view picker choice covers: the base values (`view` < 0) or one view group's offsets. */
+  function partOf(view: number): (key: string) => boolean {
+    if (view < 0) return (k) => !/^d[xyz]_/.test(k);
+    const g = viewGroupOfRow(view);
+    return (k) => new RegExp(`^d[xyz]_${g}$`).test(k);
+  }
+
+  /**
+   * Owner only: saves one piece's `part` (see partOf) for the whole server. Everything else stays as last saved:
+   * other pieces, other views, and this piece's other fields (still only tried out on the bench).
+   */
+  async function savePart(id: string, slot: TunedSlot, part: (key: string) => boolean, partName: string): Promise<void> {
+    if (!server || !confirm(`บันทึก${partName}ของ ${cosById(id)?.name ?? id} เป็นค่าเริ่มต้นทั้งเซิร์ฟเลยไหม? (ชิ้นอื่นและมุมอื่นไม่เปลี่ยน)`)) return;
+    const next = savePartOf(serverTuning ?? {}, id, cosTune(id)!, part);
+    try {
+      const r = await server.save(next);
+      serverTuning = r.tuning;
+      serverMsg = '✓ บันทึกแล้ว ผู้เล่นที่ออนไลน์อยู่เห็นทันที';
+    } catch (e) {
+      serverMsg = `บันทึกไม่สำเร็จ: ${(e as Error).message}`;
+    }
+    buildPanel();
+    serverMsg = '';
+  }
+
   function buildPanel(): void {
     panel.innerHTML = '';
     const add = <T extends HTMLElement>(parent: HTMLElement, e: T): T => {
@@ -534,7 +561,17 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
           row(f.label, r, det);
         }
       }
-      button('คืนค่าชิ้นนี้เป็นค่าที่บันทึกไว้', () => {
+      // Save / reset just this piece, and just what the view picker shows: the base values (every view) or the
+      // offsets of that view's group (front = front + front diagonal, back = back diagonal + back).
+      const part = partOf(state.view);
+      const partName = state.view < 0 ? 'ค่าหลัก' : `มุม${GROUP_NAME[viewGroupOfRow(state.view)]}`;
+      button(`คืนค่า${partName}ของชิ้นนี้`, () => {
+        const saved = cosTuneOf(serverTuning ?? {}, c.id)!;
+        for (const k of Object.keys(COS_TUNE_FIELDS[slot as TunedSlot])) if (part(k)) setCosTuneValue(c.id, k, saved[k]);
+        buildPanel();
+      }, det);
+      if (server && canEdit) button(`💾 บันทึก${partName}ของชิ้นนี้`, () => void savePart(c.id, slot as TunedSlot, part, partName), det);
+      button('คืนค่าชิ้นนี้ทั้งหมดเป็นค่าที่บันทึกไว้', () => {
         resetCosTune(c.id, serverTuning?.[c.id]);
         buildPanel();
       }, det);
