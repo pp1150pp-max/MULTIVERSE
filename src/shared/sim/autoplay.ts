@@ -183,6 +183,8 @@ export class AutoPlay {
       if (p.cls.id === 'sword' && d > 4 && d < 7) this.tryCast(g, out, 'r');
       return out;
     }
+    // In reach: stop. The walk target set above is the monster's spot and would carry ranged classes into its face.
+    out.moveTo = { x: p.x, z: p.z };
     out.basic = true;
     this.castByOrder(p, out);
     return out;
