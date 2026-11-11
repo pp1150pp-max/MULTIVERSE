@@ -230,20 +230,22 @@ function oldItem(): Item {
   p.addStones('reroll_values', 1);
   p.addStones('reroll_stat', 1);
   const gold = p.gold;
-  ok(sim.reroll(p, item.uid, 'values') === item && p.gold === gold - rerollCost(item, 'values'), 'reroll values: done next to the blacksmith, gold taken');
-  ok(sim.reroll(p, item.uid, 'stat') === item && linesValid(item, 'sim'), 'reroll stat on a bag item');
+  // Skip the 1 s blacksmith cooldown (FORGE_CD) so each call is judged on its own merits.
+  const reroll = (uid: string, kind: 'values' | 'stat') => ((p.forgeAt = -Infinity), sim.reroll(p, uid, kind));
+  ok(reroll(item.uid, 'values') === item && p.gold === gold - rerollCost(item, 'values'), 'reroll values: done next to the blacksmith, gold taken');
+  ok(reroll(item.uid, 'stat') === item && linesValid(item, 'sim'), 'reroll stat on a bag item');
   const worn = p.equipment.weapon!;
   // The starter weapon's ATK tier may be one value wide; its locked crit line is not.
   const statsOf = () => `${p.stats.atk}/${p.stats.crit}`;
   const before = statsOf();
   p.addStones('reroll_values', 20);
-  for (let i = 0; i < 20 && statsOf() === before; i++) sim.reroll(p, worn.uid, 'values');
+  for (let i = 0; i < 20 && statsOf() === before; i++) reroll(worn.uid, 'values');
   ok(statsOf() !== before || worn.lines!.every((l) => l.min === l.max), 'reroll on worn gear updates the character stats');
-  ok(sim.reroll(p, 'nope', 'values') === null, 'reroll: unknown item refused');
+  ok(reroll('nope', 'values') === null, 'reroll: unknown item refused');
   p.stash.items[0] = makeItem('weapon_5', 'rare', 20, 'sword');
-  ok(sim.reroll(p, (p.stash.items[0] as Item).uid, 'values') === null, 'reroll: stash items refused');
+  ok(reroll((p.stash.items[0] as Item).uid, 'values') === null, 'reroll: stash items refused');
   p.gold = 0;
-  ok(sim.reroll(p, item.uid, 'values') === null, 'reroll: not enough gold refused');
+  ok(reroll(item.uid, 'values') === null, 'reroll: not enough gold refused');
 }
 
 finish('item-tiers');
