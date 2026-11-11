@@ -259,6 +259,11 @@ td.changed, input.changed { background: #3a3110; }
 .bal-num.bal-changed { border-color: var(--gold); background: #2a2210; }
 .bal-num.bal-bad { border-color: var(--bad); }
 .bal-out { color: var(--gold-hi); text-align: right; }
+
+/* Two rows: categories, then that category's sub-tabs. Both scroll sideways on a phone instead of overflowing the page. */
+.tabs.subtabs { padding-top: 8px; background: var(--panel); }
+.tabs.cats button { font-weight: 600; }
+.tabs.subtabs button { font-size: 14px; }
 .card-thumb { display: block; width: 72px; height: 108px; object-fit: cover; border: 1px solid var(--edge-dim); border-radius: 4px; margin-bottom: 4px; cursor: zoom-in; image-rendering: pixelated; }
 .card-fx .row { flex-wrap: nowrap; }
 .card-art-view { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.8); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; cursor: zoom-out; color: var(--gold-hi); font-size: 18px; }
