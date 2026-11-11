@@ -5,7 +5,7 @@
 // only (like cos_tuning), so an untouched server runs exactly the code. The server applies them at start
 // and on every save, and sends them to every browser so tooltips and the blacksmith's odds match.
 import { CLASSES, CLASS_IDS } from './data/classes';
-import { CODE_BOSS_TIER_BOOST, CODE_RANGE_FLOOR, CODE_TIER_WEIGHT, CODE_TIER_WIDTH, setTierTables } from './data/items';
+import { CODE_BOSS_TIER_BOOST, CODE_RANGE_FLOOR, CODE_TIER_WEIGHT, CODE_TIER_WIDTH, setTierTables, type TierTableDef } from './data/items';
 import { addInto, emptyStats } from './formulas';
 import { STAT_KEYS, STAT_LABEL, type ClassId, type StatKey, type Stats } from './types';
 
@@ -23,6 +23,15 @@ export type StatPart = 'base' | 'growth' | 'mult';
 export const STAT_PARTS: readonly StatPart[] = ['base', 'growth', 'mult'];
 export const STAT_PART_NAME: Record<StatPart, string> = { base: 'Lv1', growth: 'ต่อเลเวล', mult: 'ตัวคูณ' };
 
+/**
+ * One stat's own tier table (owner 2026-11-11): each part given replaces the central table's, each part left
+ * out follows the central one. Arrays T1 first; widths and floor in %.
+ */
+export interface StatTierTuning { weight?: number[]; width?: number[]; floor?: number; bossBoost?: number }
+export type StatTierPart = keyof StatTierTuning;
+export const STAT_TIER_PARTS: readonly StatTierPart[] = ['weight', 'width', 'floor', 'bossBoost'];
+export const STAT_TIER_PART_NAME: Record<StatTierPart, string> = { weight: 'โอกาส', width: 'ความกว้าง', floor: 'ค่าต่ำสุด', bossBoost: 'บอสเพิ่ม tier' };
+
 /** Every tunable number, as the game uses it. Tier arrays are T1 first; widths and floor in %. */
 export interface Balance {
   classes: Record<ClassId, ClassBalance>;
@@ -32,6 +41,8 @@ export interface Balance {
   tierWidth: number[];
   rangeFloor: number;
   bossTierBoost: number;
+  /** Stats with a tier table of their own (none in code); the others use the central one above. */
+  statTiers: Partial<Record<StatKey, StatTierTuning>>;
 }
 
 /** What is saved: only what differs from the code. Tier arrays are saved whole when any entry differs. */
@@ -43,6 +54,11 @@ export interface BalanceTuning {
   tierWidth?: number[];
   rangeFloor?: number;
   bossTierBoost?: number;
+  /**
+   * A stat listed here has its own tier table (only the parts given; the rest follow the central table).
+   * Kept even when its numbers equal the code's: listing it is the change ("ตั้งเอง").
+   */
+  statTiers?: Partial<Record<StatKey, StatTierTuning>>;
 }
 
 /** Highest Lv1 / per-level value of each stat (owner 2026-11-11); the lowest is 0. */
@@ -82,6 +98,7 @@ export function codeBalance(): Balance {
     tierWidth: [...CODE_TIER_WIDTH],
     rangeFloor: CODE_RANGE_FLOOR,
     bossTierBoost: CODE_BOSS_TIER_BOOST,
+    statTiers: {},
   };
 }
 
@@ -103,6 +120,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.tierWidth) b.tierWidth = [...t.tierWidth];
   if (t.rangeFloor !== undefined) b.rangeFloor = t.rangeFloor;
   if (t.bossTierBoost !== undefined) b.bossTierBoost = t.bossTierBoost;
+  if (t.statTiers) b.statTiers = structuredClone(t.statTiers);
   return b;
 }
 
@@ -113,7 +131,20 @@ let current: Balance = mergeBalance({});
 export function applyBalance(t: BalanceTuning): void {
   tuning = t;
   current = mergeBalance(t);
-  setTierTables(current.tierWidth, current.rangeFloor, current.tierWeight, current.bossTierBoost);
+  const own: Partial<Record<StatKey, TierTableDef>> = {};
+  for (const k of STAT_KEYS) if (current.statTiers[k]) own[k] = statTierTable(current, k);
+  setTierTables(statTierTable(current, null), own);
+}
+
+/** The whole tier table a stat uses (its own parts, the rest central), or the central one (null). */
+export function statTierTable(b: Balance, stat: StatKey | null): TierTableDef {
+  const o = stat ? b.statTiers[stat] : undefined;
+  return {
+    width: o?.width ?? b.tierWidth,
+    floor: o?.floor ?? b.rangeFloor,
+    weight: o?.weight ?? b.tierWeight,
+    bossBoost: o?.bossBoost ?? b.bossTierBoost,
+  };
 }
 
 /** The numbers in use. */
@@ -157,7 +188,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -237,33 +268,83 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (n !== undefined && n !== CODE[key]) out[key] = n;
     return null;
   };
-  // Tier arrays: 5 numbers, T1 first.
-  const arr = (key: 'tierWeight' | 'tierWidth', range: readonly [number, number], what: string, whole: (a: number[]) => string | null): string | null => {
-    const x = o[key];
-    if (x === undefined) return null;
-    if (!Array.isArray(x) || x.length !== 5) return strict ? `${what} ต้องมี 5 ค่า (T1–T5)` : null;
+  /** A tier array (5 numbers, T1 first): the array, undefined (missing / dropped), or an error to return. */
+  const tierArr = (x: unknown, range: readonly [number, number], what: string, whole: (a: number[]) => string | null): number[] | undefined | string => {
+    if (x === undefined) return undefined;
+    if (!Array.isArray(x) || x.length !== 5) return strict ? `${what} ต้องมี 5 ค่า (T1–T5)` : undefined;
     const a: number[] = [];
     for (let i = 0; i < 5; i++) {
       const n = num(x[i], range[0], range[1], `${what} T${i + 1}`);
       if (typeof n === 'string') return n;
-      if (n === undefined) return strict ? `${what} T${i + 1} ต้องเป็นตัวเลข` : null;
+      if (n === undefined) return strict ? `${what} T${i + 1} ต้องเป็นตัวเลข` : undefined;
       a.push(n);
     }
     const e = whole(a);
-    if (e) return strict ? e : null;
-    if (a.some((n, i) => n !== CODE[key][i])) out[key] = a;
+    if (e) return strict ? e : undefined;
+    return a;
+  };
+  const weightsOk = (what: string) => (a: number[]): string | null => (a.reduce((s, n) => s + n, 0) > 0 ? null : `${what} รวมกันต้องมากกว่า 0`);
+  const widthsOk = (what: string) => (a: number[]): string | null => {
+    const sum = round3(a.reduce((s, n) => s + n, 0));
+    return Math.abs(sum - 100) <= 0.001 ? null : `${what} รวมกันต้องได้ 100% (ตอนนี้ ${sum}%)`;
+  };
+  // Central tier arrays: saved whole when any entry differs from the code.
+  const arr = (key: 'tierWeight' | 'tierWidth', range: readonly [number, number], what: string, whole: (a: number[]) => string | null): string | null => {
+    const a = tierArr(o[key], range, what, whole);
+    if (typeof a === 'string') return a;
+    if (a && a.some((n, i) => n !== CODE[key][i])) out[key] = a;
+    return null;
+  };
+  // Stats' own tier tables: every part given is kept (equal to the code or not), in STAT_KEYS / STAT_TIER_PARTS order.
+  const statTiers = (): string | null => {
+    const x = o.statTiers;
+    if (x === undefined) return null;
+    if (!x || typeof x !== 'object' || Array.isArray(x)) return strict ? 'ตาราง tier ต่อสเตตัสไม่ถูกต้อง' : null;
+    const given = x as Record<string, unknown>;
+    if (strict) {
+      const extra = Object.keys(given).find((k) => !(STAT_KEYS as readonly string[]).includes(k));
+      if (extra) return `ตาราง tier: ไม่รู้จักสเตตัส "${extra.slice(0, 20)}"`;
+    }
+    const res: Partial<Record<StatKey, StatTierTuning>> = {};
+    for (const k of STAT_KEYS) {
+      const g = given[k];
+      if (g === undefined) continue;
+      const name = `tier ${STAT_LABEL[k]}`;
+      if (!g || typeof g !== 'object' || Array.isArray(g)) {
+        if (strict) return `ตาราง ${name} ไม่ถูกต้อง`;
+        continue;
+      }
+      const go = g as Record<string, unknown>;
+      if (strict) {
+        const extra = Object.keys(go).find((p) => !(STAT_TIER_PARTS as readonly string[]).includes(p));
+        if (extra) return `ตาราง ${name}: ไม่รู้จักค่า "${extra.slice(0, 20)}"`;
+      }
+      const t: StatTierTuning = {};
+      const w = tierArr(go.weight, BALANCE_RANGE.tierWeight, `โอกาส ${name}`, weightsOk(`โอกาส ${name}`));
+      if (typeof w === 'string') return w;
+      if (w) t.weight = w;
+      const wd = tierArr(go.width, BALANCE_RANGE.tierWidth, `ความกว้าง ${name}`, widthsOk(`ความกว้าง ${name}`));
+      if (typeof wd === 'string') return wd;
+      if (wd) t.width = wd;
+      const f = num(go.floor, ...BALANCE_RANGE.rangeFloor, `ค่าต่ำสุดของช่วง ${name} %`);
+      if (typeof f === 'string') return f;
+      if (f !== undefined) t.floor = f;
+      const bb = num(go.bossBoost, ...BALANCE_RANGE.bossTierBoost, `บอสเพิ่มโอกาส ${name} ดี`);
+      if (typeof bb === 'string') return bb;
+      if (bb !== undefined) t.bossBoost = bb;
+      if (Object.keys(t).length) res[k] = t;
+    }
+    if (Object.keys(res).length) out.statTiers = res;
     return null;
   };
   const err =
     one('hpRegenMult', BALANCE_RANGE.regenMult, 'ตัวคูณฟื้น HP') ??
     one('mpRegenMult', BALANCE_RANGE.regenMult, 'ตัวคูณฟื้น MP') ??
-    arr('tierWeight', BALANCE_RANGE.tierWeight, 'โอกาส tier', (a) => (a.reduce((s, n) => s + n, 0) > 0 ? null : 'โอกาส tier รวมกันต้องมากกว่า 0')) ??
-    arr('tierWidth', BALANCE_RANGE.tierWidth, 'ความกว้าง tier', (a) => {
-      const sum = round3(a.reduce((s, n) => s + n, 0));
-      return Math.abs(sum - 100) <= 0.001 ? null : `ความกว้าง tier รวมกันต้องได้ 100% (ตอนนี้ ${sum}%)`;
-    }) ??
+    arr('tierWeight', BALANCE_RANGE.tierWeight, 'โอกาส tier', weightsOk('โอกาส tier')) ??
+    arr('tierWidth', BALANCE_RANGE.tierWidth, 'ความกว้าง tier', widthsOk('ความกว้าง tier')) ??
     one('rangeFloor', BALANCE_RANGE.rangeFloor, 'ค่าต่ำสุดของช่วง %') ??
-    one('bossTierBoost', BALANCE_RANGE.bossTierBoost, 'บอสเพิ่มโอกาส tier ดี');
+    one('bossTierBoost', BALANCE_RANGE.bossTierBoost, 'บอสเพิ่มโอกาส tier ดี') ??
+    statTiers();
   if (err) return { error: err };
   // Fixed key order.
   const ordered: BalanceTuning = {};
@@ -276,9 +357,16 @@ export function sameBalance(a: BalanceTuning, b: BalanceTuning): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-/** Whether the tier widths or floor differ (so item tier labels are redone). */
+/** Whether any stat's tier widths or floor differ, central or its own (so item tier labels are redone). */
 export function tierLabelsChange(a: BalanceTuning, b: BalanceTuning): boolean {
-  return JSON.stringify([a.tierWidth, a.rangeFloor]) !== JSON.stringify([b.tierWidth, b.rangeFloor]);
+  const labels = (t: BalanceTuning): string => {
+    const m = mergeBalance(t);
+    return JSON.stringify([null, ...STAT_KEYS].map((k) => {
+      const d = statTierTable(m, k);
+      return [d.width, d.floor];
+    }));
+  };
+  return labels(a) !== labels(b);
 }
 
 /** Short Thai text of what differs, for the audit log (e.g. "นักดาบ Lv1 พลังโจมตี 12 → 15"). */
@@ -303,5 +391,14 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.tierWidth.join() !== b.tierWidth.join()) out.push(`ความกว้าง tier ${a.tierWidth.join('/')} → ${b.tierWidth.join('/')}`);
   if (a.rangeFloor !== b.rangeFloor) out.push(`ค่าต่ำสุดของช่วง ${a.rangeFloor}% → ${b.rangeFloor}%`);
   if (a.bossTierBoost !== b.bossTierBoost) out.push(`บอสเพิ่มโอกาส tier ดี ${a.bossTierBoost} → ${b.bossTierBoost}`);
+  const part = (p: StatTierPart, v: StatTierTuning[StatTierPart]): string =>
+    v === undefined ? 'ตารางกลาง' : Array.isArray(v) ? v.join('/') : p === 'floor' ? `${v}%` : String(v);
+  for (const k of STAT_KEYS) {
+    for (const p of STAT_TIER_PARTS) {
+      const x = a.statTiers[k]?.[p];
+      const y = b.statTiers[k]?.[p];
+      if (JSON.stringify(x) !== JSON.stringify(y)) out.push(`tier ${STAT_LABEL[k]} ${STAT_TIER_PART_NAME[p]} ${part(p, x)} → ${part(p, y)}`);
+    }
+  }
   return out.join(', ');
 }

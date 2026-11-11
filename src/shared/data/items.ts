@@ -1,5 +1,5 @@
 import {
-  RARITIES, type ClassId, type EquipSlot, type Item, type Rarity, type SlotId, type StatKey, type StatLine, type Stats, type StatTier,
+  RARITIES, STAT_KEYS, type ClassId, type EquipSlot, type Item, type Rarity, type SlotId, type StatKey, type StatLine, type Stats, type StatTier,
 } from '../types';
 import { mulberry32, pick, type Rng } from '../rng';
 
@@ -151,19 +151,26 @@ export const CODE_TIER_WEIGHT: readonly number[] = [3, 9, 18, 30, 40];
 /** How much likelier bosses make the better tiers (rollTier's `boost`). Their rarity boost stays 1.5 in code. */
 export const CODE_BOSS_TIER_BOOST = 1.5;
 
-let TIER_WEIGHT: readonly number[] = CODE_TIER_WEIGHT;
-let RANGE_FLOOR = CODE_RANGE_FLOOR / 100;
-let BOSS_TIER_BOOST = CODE_BOSS_TIER_BOOST;
-/** Edges between tiers as parts of the range, lowest first (T5 starts at 0, T1 ends at 1). */
-let TIER_EDGES: readonly number[] = [];
-/**
- * Where an average roll lands in its range (0 = lowest, 1 = highest). Ranges are placed so that this point
- * is the stat's old average, so items stay as strong as before on average (owner's choice). It always uses
- * the CODE tier chances (owner 2026-11-11): tuning the chances changes new drops only, never the ranges.
- */
-let MEAN_POS = 0;
-/** '' with the code's widths and floor; otherwise names them, so saved items know their labels are out of date. */
-let TIER_KEY = '';
+/** One tier table as given (checked by src/shared/balance.ts): widths in % T1 first adding up to 100, floor in %, chances T1 first, bosses' boost. */
+export interface TierTableDef { width: readonly number[]; floor: number; weight: readonly number[]; bossBoost: number }
+
+/** A tier table ready to use. */
+interface TierTable {
+  weight: readonly number[];
+  bossBoost: number;
+  /** A line's lowest roll as a part of its highest. */
+  floor: number;
+  /** Edges between tiers as parts of the range, lowest first (T5 starts at 0, T1 ends at 1). */
+  edges: readonly number[];
+  /**
+   * Where an average roll lands in its range (0 = lowest, 1 = highest). Ranges are placed so that this point
+   * is the stat's old average, so items stay as strong as before on average (owner's choice). It always uses
+   * the CODE tier chances (owner 2026-11-11): tuning the chances changes new drops only, never the ranges.
+   */
+  meanPos: number;
+  /** '' with the code's widths and floor; otherwise names them, so saved items know their labels are out of date. */
+  key: string;
+}
 
 /** Tier edges from widths in % (T1 first): lowest first, the top edge exactly 1. */
 function edgesOf(width: readonly number[]): number[] {
@@ -174,48 +181,79 @@ function edgesOf(width: readonly number[]): number[] {
   return out;
 }
 
-/**
- * Uses these tier tables from now on (already checked by src/shared/balance.ts): widths in % (T1 first,
- * adding up to 100), the floor in %, the chances T1 first, and the bosses' tier boost.
- */
-export function setTierTables(width: readonly number[], floor: number, weight: readonly number[], bossBoost: number): void {
-  TIER_EDGES = edgesOf(width);
-  RANGE_FLOOR = floor / 100;
-  TIER_WEIGHT = [...weight];
-  BOSS_TIER_BOOST = bossBoost;
+function tableOf(d: TierTableDef): TierTable {
+  const edges = edgesOf(d.width);
   // Tier i (T1 = 0) spans edges 4 - i … 5 - i.
-  MEAN_POS = CODE_TIER_WEIGHT.reduce((s, w, i) => s + w * (TIER_EDGES[4 - i] + TIER_EDGES[5 - i]) / 2, 0)
+  const meanPos = CODE_TIER_WEIGHT.reduce((s, w, i) => s + w * (edges[4 - i] + edges[5 - i]) / 2, 0)
     / CODE_TIER_WEIGHT.reduce((a, b) => a + b, 0);
-  const same = floor === CODE_RANGE_FLOOR && width.every((w, i) => w === CODE_TIER_WIDTH[i]);
-  TIER_KEY = same ? '' : `${width.join(',')}|${floor}`;
+  const same = d.floor === CODE_RANGE_FLOOR && d.width.every((w, i) => w === CODE_TIER_WIDTH[i]);
+  return { weight: [...d.weight], bossBoost: d.bossBoost, floor: d.floor / 100, edges, meanPos, key: same ? '' : `${d.width.join(',')}|${d.floor}` };
 }
-setTierTables(CODE_TIER_WIDTH, CODE_RANGE_FLOOR, CODE_TIER_WEIGHT, CODE_BOSS_TIER_BOOST);
+
+/** The central table: every stat without a table of its own uses it. */
+let CENTRAL: TierTable = tableOf({ width: CODE_TIER_WIDTH, floor: CODE_RANGE_FLOOR, weight: CODE_TIER_WEIGHT, bossBoost: CODE_BOSS_TIER_BOOST });
+/** Stats the owner gave a table of their own (owner 2026-11-11; none in code). */
+let OWN: Partial<Record<StatKey, TierTable>> = {};
+const tableFor = (stat: StatKey): TierTable => OWN[stat] ?? CENTRAL;
+
+/**
+ * Uses these tier tables from now on (already checked and filled in by src/shared/balance.ts): the central
+ * one, and whole tables for the stats that have their own.
+ */
+export function setTierTables(central: TierTableDef, own: Partial<Record<StatKey, TierTableDef>> = {}): void {
+  CENTRAL = tableOf(central);
+  OWN = {};
+  for (const k of Object.keys(own) as StatKey[]) OWN[k] = tableOf(own[k]!);
+}
 
 /** Lines' min–max follow the current tier tables. Older items are upgraded on load (upgradeItem). */
 export const TIER_VERSION = 3;
 
 /**
- * Marks an item's lines as following the current tier tables: TIER_VERSION, plus `tierK` naming the tuned
- * widths/floor (left out with the code's own, so untuned servers never touch old saves).
+ * The key naming the tuned widths/floor an item's lines follow: the central table's ('' = the code's), plus
+ * `;stat=key` for each stat on the item whose own table labels differently. Untuned servers give '' so they
+ * never touch old saves, and tuning one stat's table only marks the items that carry that stat.
  */
+function itemTierKey(item: Item): string {
+  let key = CENTRAL.key;
+  const stats = new Set(item.lines?.map((l) => l.stat));
+  for (const k of STAT_KEYS) {
+    const own = OWN[k];
+    if (own && stats.has(k) && own.key !== CENTRAL.key) key += `;${k}=${own.key}`;
+  }
+  return key;
+}
+
+/** Marks an item's lines as following the current tier tables: TIER_VERSION, plus `tierK` (itemTierKey, left out when ''). */
 export function stampTier(item: Item): void {
   item.tierV = TIER_VERSION;
-  if (TIER_KEY) item.tierK = TIER_KEY;
+  const key = itemTierKey(item);
+  if (key) item.tierK = key;
   else delete item.tierK;
 }
 
-/** A line's whole range (lo = lowest roll, hi = highest) whose average roll (MEAN_POS) is `mean`. */
-function rangeAround(mean: number): [number, number] {
-  const hi = mean / (RANGE_FLOOR + MEAN_POS * (1 - RANGE_FLOOR));
-  return [RANGE_FLOOR * hi, hi];
+/** A line's whole range (lo = lowest roll, hi = highest) whose average roll (the table's meanPos) is `mean`. */
+function rangeAround(stat: StatKey, mean: number): [number, number] {
+  const t = tableFor(stat);
+  const hi = mean / (t.floor + t.meanPos * (1 - t.floor));
+  return [t.floor * hi, hi];
 }
 
-/** boost > 0 makes the better tiers likelier (bosses use ~1.5). */
-export function rollTier(r: Rng, boost = 0): StatTier {
-  const w = TIER_WEIGHT.map((x, i) => x * (1 + boost * (TIER_WEIGHT.length - 1 - i)));
-  let roll = r() * w.reduce((a, b) => a + b, 0);
-  for (let i = 0; i < w.length; i++) {
-    roll -= w[i];
+/** Chance of T1 … T5 (adding up to 1) for this stat, from a boss (`boss`) or not. */
+export function tierChances(stat: StatKey, boss = false): number[] {
+  const t = tableFor(stat);
+  const boost = boss ? t.bossBoost : 0;
+  const w = t.weight.map((x, i) => x * (1 + boost * (t.weight.length - 1 - i)));
+  const total = w.reduce((a, b) => a + b, 0);
+  return w.map((x) => x / total);
+}
+
+/** A tier for this stat from its table; `boss` makes the better tiers likelier by the table's boss boost. */
+export function rollTier(stat: StatKey, r: Rng, boss = false): StatTier {
+  const c = tierChances(stat, boss);
+  let roll = r();
+  for (let i = 0; i < c.length; i++) {
+    roll -= c[i];
     if (roll <= 0) return (i + 1) as StatTier;
   }
   return 5;
@@ -238,10 +276,11 @@ export function tierRanges(stat: StatKey, lo: number, hi: number): TierRange[] {
   const step = statStep(stat);
   const units = (v: number) => Math.round(v / step);
   const value = (u: number) => (step === 1 ? u : u / 10);
+  const edges = tableFor(stat).edges;
   const out: TierRange[] = [];
   let from = Math.max(1, units(lo));
   for (let i = 0; i < 5; i++) {
-    const to = Math.max(from, units(lo + TIER_EDGES[i + 1] * (hi - lo)));
+    const to = Math.max(from, units(lo + edges[i + 1] * (hi - lo)));
     out.unshift({ tier: (5 - i) as StatTier, min: value(from), max: value(to) });
     from = to + 1;
   }
@@ -267,9 +306,9 @@ function lineOfTier(stat: StatKey, tier: StatTier, lo: number, hi: number, r: Rn
   return { stat, value: rollIn(stat, t, r), tier, min: t.min, max: t.max };
 }
 
-/** Rolls one stat in lo–hi: first its tier, then a value inside that tier's range. */
-function rollLine(stat: StatKey, lo: number, hi: number, r: Rng, boost = 0): StatLine {
-  return lineOfTier(stat, rollTier(r, boost), lo, hi, r);
+/** Rolls one stat in lo–hi: first its tier (from a boss: `boss`), then a value inside that tier's range. */
+function rollLine(stat: StatKey, lo: number, hi: number, r: Rng, boss = false): StatLine {
+  return lineOfTier(stat, rollTier(stat, r, boss), lo, hi, r);
 }
 
 const RARITY_WEIGHT = [62, 24, 10, 3.4, 0.6];
@@ -302,8 +341,8 @@ export function rollRarity(r: Rng, boost = 0): Rarity {
 }
 
 function build(base: BaseItem, rarity: Rarity, level: number, cls: ClassId, r: Rng, boost = 0): Item {
-  // `boost` is the rarity boost (bosses 1.5); boosted drops roll their tiers with the tuned boss tier boost.
-  const tierBoost = boost > 0 ? BOSS_TIER_BOOST : 0;
+  // `boost` is the rarity boost (bosses 1.5); boosted drops roll their tiers with each stat's tuned boss tier boost.
+  const tierBoost = boost > 0;
   const lines: StatLine[] = [];
   // Main stats first (the kind's own stats), then the extras, each picked once.
   for (const k of Object.keys(base.main) as StatKey[]) lines.push(rollLine(k, ...rowRange(base, rarity, level, k, 'main'), r, tierBoost));
@@ -366,11 +405,11 @@ export function makeItem(baseId: string, rarity: Rarity, level: number, cls: Cla
 type RowKind = 'main' | 'locked' | 'extra';
 function rowRange(base: BaseItem, rarity: Rarity, level: number, stat: StatKey, kind: RowKind): [number, number] {
   const rm = RARITY_MULT[rarity];
-  if (kind === 'main') return rangeAround((base.main[stat] ?? 0) * (1 + (level - 1) * 0.12) * rm);
+  if (kind === 'main') return rangeAround(stat, (base.main[stat] ?? 0) * (1 + (level - 1) * 0.12) * rm);
   // Extras average the middle of their table min–max, raised with item level.
   const a = AFFIXES.find((x) => x.stat === stat)!;
   const scale = kind === 'extra' ? EXTRA_SCALE[stat] ?? 1 : 1;
-  return rangeAround(((a.min + a.max) / 2 + a.per * (level - 1)) * rm * scale);
+  return rangeAround(stat, ((a.min + a.max) / 2 + a.per * (level - 1)) * rm * scale);
 }
 
 /**
@@ -456,7 +495,7 @@ function hash(s: string): number {
  */
 export function upgradeItem<T>(item: T): T {
   const it = item as unknown as Item;
-  if (!it || typeof it !== 'object' || !('baseId' in it) || (it.tierV === TIER_VERSION && (it.tierK ?? '') === TIER_KEY)) return item;
+  if (!it || typeof it !== 'object' || !('baseId' in it) || (it.tierV === TIER_VERSION && (it.tierK ?? '') === itemTierKey(it))) return item;
   const base = BASES.find((b) => b.id === it.baseId);
   if (!base || !it.lines?.length) return item;
   if ((it.tierV ?? 0) < 3) {
@@ -537,7 +576,7 @@ export function rerollStat(item: Item, r: Rng = Math.random): number {
 export interface StatRerollOdds {
   /** Every stat an extra line can become, in AFFIXES order (0 = can't on this item). */
   stats: { stat: StatKey; chance: number }[];
-  /** Chance of T1 … T5. */
+  /** Chance of T1 … T5 over every stat it can give (each stat rolls from its own tier table). */
   tiers: number[];
   /** The item has no extras (commons): one of its own lines is rerolled, its kind stays. */
   mainOnly: boolean;
@@ -545,27 +584,29 @@ export interface StatRerollOdds {
 
 /** The odds rerollStat rolls with, exactly: for this item, or in general (no item, or one that can't be rerolled). */
 export function statRerollOdds(item?: Item | null): StatRerollOdds {
-  const total = TIER_WEIGHT.reduce((a, b) => a + b, 0);
-  const tiers = TIER_WEIGHT.map((w) => w / total);
   const ranges = item && lineRanges(item);
   const chance = new Map<StatKey, number>(AFFIXES.map((a) => [a.stat, 0]));
   const add = (s: StatKey, c: number) => chance.set(s, (chance.get(s) ?? 0) + c);
   const lines = item?.lines;
+  let mainOnly = false;
   if (!ranges || !lines) {
     for (const a of AFFIXES) add(a.stat, 1 / AFFIXES.length);
-    return { stats: [...chance].map(([stat, c]) => ({ stat, chance: c })), tiers, mainOnly: false };
+  } else {
+    const extras = ranges.map((x, i) => (x.main ? -1 : i)).filter((i) => i >= 0);
+    if (!extras.length) {
+      // Same stat, new tier and value: each of its lines is equally likely.
+      mainOnly = true;
+      chance.clear();
+      for (const l of lines) add(l.stat, 1 / lines.length);
+    }
+    for (const at of extras) {
+      const taken = new Set(extras.filter((i) => i !== at).map((i) => lines[i].stat));
+      const pool = AFFIXES.filter((a) => !taken.has(a.stat));
+      for (const a of pool) add(a.stat, 1 / extras.length / pool.length);
+    }
   }
-  const extras = ranges.map((x, i) => (x.main ? -1 : i)).filter((i) => i >= 0);
-  if (!extras.length) {
-    // Same stat, new tier and value: each of its lines is equally likely.
-    chance.clear();
-    for (const l of lines) add(l.stat, 1 / lines.length);
-    return { stats: [...chance].map(([stat, c]) => ({ stat, chance: c })), tiers, mainOnly: true };
-  }
-  for (const at of extras) {
-    const taken = new Set(extras.filter((i) => i !== at).map((i) => lines[i].stat));
-    const pool = AFFIXES.filter((a) => !taken.has(a.stat));
-    for (const a of pool) add(a.stat, 1 / extras.length / pool.length);
-  }
-  return { stats: [...chance].map(([stat, c]) => ({ stat, chance: c })), tiers, mainOnly: false };
+  // Each stat rolls its tier from its own table (owner 2026-11-11): one row of all of them together.
+  const tiers = [0, 0, 0, 0, 0];
+  for (const [stat, c] of chance) tierChances(stat).forEach((t, i) => (tiers[i] += c * t));
+  return { stats: [...chance].map(([stat, c]) => ({ stat, chance: c })), tiers, mainOnly };
 }
