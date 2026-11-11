@@ -33,6 +33,24 @@ interface View {
   group: THREE.Group;
   /** `outer`: for a wave, how far out its gaps still matter. */
   update(t: number, outer?: number): void;
+  /** The server's latest copy of the hazard, for those that move (the witch's vials and curses follow players). */
+  sync?(h: Hazard): void;
+}
+
+/** Glides a group toward where the server last put its hazard, so snapshot steps don't show. */
+function follower(group: THREE.Group): { sync(h: Hazard): void; step(): void } {
+  let tx = group.position.x;
+  let tz = group.position.z;
+  return {
+    sync(h) {
+      tx = h.x;
+      tz = h.z;
+    },
+    step() {
+      group.position.x += (tx - group.position.x) * 0.35;
+      group.position.z += (tz - group.position.z) * 0.35;
+    },
+  };
 }
 
 function meteorView(h: MeteorHazard): View {
@@ -188,13 +206,18 @@ function vialView(h: VialHazard): View {
   const fill = landing(group, h.r, WARN);
   const vial = witchSprite('fx_witch_vial', 0.9, false);
   group.add(vial);
+  const follow = follower(group);
   return {
     group,
+    sync: follow.sync,
     update(t) {
+      follow.step();
       const k = Math.min(1, Math.max(0, (t - h.start) / (h.hit - h.start)));
       fill(k);
-      // Flies in an arc from where she stood, spinning.
-      vial.position.set((h.fromX - h.x) * (1 - k), 1.2 + Math.sin(Math.PI * k) * 4, (h.fromZ - h.z) * (1 - k));
+      // Flies in an arc from where she stood to whoever it is after, spinning.
+      const gx = group.position.x;
+      const gz = group.position.z;
+      vial.position.set((h.fromX - gx) * (1 - k), 1.2 + Math.sin(Math.PI * k) * 3, (h.fromZ - gz) * (1 - k));
       vial.material.rotation = t * 9;
     },
   };
@@ -250,15 +273,26 @@ function hexView(h: HexHazard): View {
   const circle = witchDecal('fx_witch_circle', h.r, 0.95);
   const fill = landing(group, h.r, HEX_COLOR);
   const sigil = witchSprite('fx_witch_sigil', 1.1, false);
-  group.add(circle, sigil);
+  // Flashes white over the circle once it stops: the moment to dash out.
+  const flash = decal(mat('#ffffff', 0, fxTex.disc, true));
+  flash.scale.setScalar(h.r);
+  group.add(circle, sigil, flash);
+  const follow = follower(group);
+  let lock = h.lock;
   return {
     group,
+    sync(x) {
+      follow.sync(x);
+      if (x.k === 'hex') lock = x.lock;
+    },
     update(t) {
-      const k = (t - h.start) / (h.hit - h.start);
-      fill(k);
-      circle.rotation.y = t * 0.8;
+      // Follows its player until it locks, then stays put.
+      if (t < lock) follow.step();
+      fill((t - h.start) / (lock - h.start));
+      circle.rotation.y = t * (t < lock ? 0.8 : 4);
       sigil.position.set(0, 3 + Math.sin(t * 5) * 0.15, 0);
       sigil.material.opacity = 0.6 + 0.4 * Math.sin(t * 12);
+      (flash.material as THREE.MeshBasicMaterial).opacity = t >= lock ? 0.25 + 0.35 * (Math.sin(t * 40) > 0 ? 1 : 0) : 0;
     },
   };
 }
@@ -300,6 +334,7 @@ export class HazardViews {
         this.views.set(h.id, v);
         this.scene.add(v.group);
       }
+      v.sync?.(h);
       v.update(time, outer.get(h.id));
     }
     for (const [id, v] of this.views) {
