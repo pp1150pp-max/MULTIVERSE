@@ -10,6 +10,7 @@ import { questRows, seekerMark } from '../shared/quests';
 import type { RestSpot } from '../shared/sim/terrain';
 import type { CosmeticDef } from '../shared/data/cosmetics';
 import { shownCos } from './cosLook';
+import { isTouchMode } from './touch/device';
 import { seatOf } from './cosmeticViews';
 
 interface Num { el: HTMLDivElement; x: number; y: number; z: number; t: number; life: number; height: number; dx: number; dy: number; pop: number }
@@ -239,7 +240,7 @@ export class Floating {
     spots.forEach((r, i) => {
       const el = this.restEls[i];
       const role = r.kind === 'fountain' ? '💧 ฟื้นพลัง' : '🔥 พักฟื้น';
-      const name = readyIn > 0 ? `พักได้อีก ${readyIn} วิ` : 'HP/MP เต็ม · กด T';
+      const name = readyIn > 0 ? `พักได้อีก ${readyIn} วิ` : `HP/MP เต็ม · ${isTouchMode() ? 'แตะ คุย/ใช้' : 'กด T'}`;
       const roleEl = el.querySelector('.npc-role')!;
       const nameEl = el.querySelector('.npc-name')!;
       if (roleEl.textContent !== role) roleEl.textContent = role;

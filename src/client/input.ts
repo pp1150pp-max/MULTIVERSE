@@ -14,6 +14,8 @@ export class Input {
   /** Left button went down this frame (a click), not just held. */
   lmbPressed = false;
   wheel = 0;
+  /** The on-screen joystick (touch): screen direction, x right and y up, length 0..1. Null when not held. */
+  stick: { x: number; y: number } | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     window.addEventListener('keydown', (e) => {
@@ -23,9 +25,9 @@ export class Input {
       if (e.code === 'Space' || e.code === 'Tab') e.preventDefault();
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
-    window.addEventListener('blur', () => {
-      this.keys.clear();
-      this.lmb = this.rmb = false;
+    window.addEventListener('blur', () => this.releaseAll());
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) this.releaseAll();
     });
     canvas.addEventListener('mousedown', (e) => {
       if (e.button === 0) {
@@ -58,6 +60,33 @@ export class Input {
   pressed(code: string): boolean {
     return this.pressedSet.has(code);
   }
+
+  /** On-screen buttons (touch): hold a key down like the keyboard does… */
+  press(code: string): void {
+    if (!this.keys.has(code)) this.pressedSet.add(code);
+    this.keys.add(code);
+  }
+
+  /** …and let it go. */
+  release(code: string): void {
+    this.keys.delete(code);
+  }
+
+  /** A key pressed and let go in one go (one frame's press), e.g. dash or a potion. */
+  tap(code: string): void {
+    this.pressedSet.add(code);
+  }
+
+  /** Lets go of everything held (switching apps, typing): no character left walking or attacking on its own. */
+  releaseAll(): void {
+    this.keys.clear();
+    this.lmb = this.rmb = false;
+    this.stick = null;
+    for (const fn of this.releaseHooks) fn();
+  }
+
+  /** Called by releaseAll, so the on-screen controls can reset too. */
+  readonly releaseHooks: (() => void)[] = [];
 
   endFrame(): void {
     this.pressedSet.clear();

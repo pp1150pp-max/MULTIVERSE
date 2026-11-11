@@ -39,11 +39,22 @@ import { SystemMenu } from './sysmenu';
 import { endEntryLoading, flashZoneLoading, preloadLoadingArt } from './loadingScreen';
 import { LootView, MonsterView, PlayerView, ProjectileView, ViewSet } from './views';
 import { isSoftwareRenderer } from '../shared/net/protocol';
+import { isTouchMode } from './touch/device';
+import { TouchControls, TOUCH_ATTACK } from './touch/controls';
+import { TouchGestures } from './touch/gestures';
 
 const S = Math.SQRT1_2;
 // Screen-space right / up projected onto the ground plane.
 const RIGHT = { x: S, z: -S };
 const UP = { x: -S, z: -S };
+/** Touch: with no monster tapped, skills and attacks aim at the nearest living monster this close (owner 2026-11-11). */
+const AUTO_LOCK_RANGE = 10;
+/** Touch: things are this much easier to hit with a finger than with the mouse (owner 2026-11-11). */
+const TAP_SCALE = 1.5;
+/** Touch, phone held upright: the camera starts this far out so the narrow screen still shows enough map (owner). */
+const PORTRAIT_VIEW_SIZE = 24;
+const MIN_VIEW = 10;
+const MAX_VIEW = 28;
 
 export type { Intent };
 
@@ -107,6 +118,13 @@ export class Game {
   /** Where a left click sent the player: walk there, then pick up / talk / rest on arrival. */
   private goal: ClickGoal | null = null;
   mouseWorld: Vec2 = { x: 0, z: 0 };
+  /** Touch: the monster tapped to lock on to (its id), or null = aim at the nearest one. */
+  private lockId: number | null = null;
+  /** Red circle under the locked monster (touch). */
+  private lockRing!: AutoRing;
+  /** True while a "talk / use" prompt shows (near an NPC, rest spot or boss altar): the touch button appears. */
+  talkReady = false;
+  touch!: TouchControls;
 
   private viewSize = 17;
   private readonly camTarget = new THREE.Vector3();
@@ -138,6 +156,7 @@ export class Game {
     container.prepend(this.renderer.domElement);
 
     const aspect = window.innerWidth / window.innerHeight;
+    if (isTouchMode() && aspect < 1) this.viewSize = PORTRAIT_VIEW_SIZE;
     this.camera = new THREE.OrthographicCamera(-aspect, aspect, 1, -1, 0.1, 400);
     this.updateProjection();
 
@@ -146,6 +165,7 @@ export class Game {
     this.input = new Input(this.renderer.domElement);
     this.fx = new Effects(this.scene);
     this.autoRing = new AutoRing(this.scene);
+    this.lockRing = new AutoRing(this.scene, '#ff4a3a');
     this.hazardViews = new HazardViews(this.scene);
     this.floating = new Floating(document.getElementById('float-layer')!);
 
@@ -171,6 +191,8 @@ export class Game {
     this.mailUI = new MailUI(this);
     this.report = new ReportUI(this);
     initDraggableWindows(document.getElementById('hud')!);
+    this.touch = new TouchControls(this);
+    new TouchGestures(this, this.renderer.domElement);
     this.checkGpu();
     window.addEventListener('resize', () => {
       this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -274,7 +296,7 @@ export class Game {
   }
 
   /** Walk to a point picked on the full map, around trees and rocks. False if there is no way there. */
-  walkTo(x: number, z: number): boolean {
+  walkTo(x: number, z: number, autoOffMsg = 'ปิด Auto Play — เดินตามแผนที่'): boolean {
     const p = this.player;
     if (!p.alive) return false;
     const route = findPath(this.backend.terrain, { x: p.x, z: p.z }, { x, z });
@@ -282,7 +304,7 @@ export class Game {
       this.hud.log('ไปจุดนั้นไม่ได้', '#ff8a6a');
       return false;
     }
-    if (this.autoPlay) this.toggleAuto(false, 'ปิด Auto Play — เดินตามแผนที่');
+    if (this.autoPlay) this.toggleAuto(false, autoOffMsg);
     this.mapRoute = route;
     this.routeBest = Infinity;
     this.routeBestAt = performance.now();
@@ -356,6 +378,7 @@ export class Game {
     this.camTarget.set(this.player.x, 0, this.player.z);
     this.autoPlay = false;
     this.hovered = null;
+    this.lockId = null;
     this.hud.onZoneChanged();
   }
 
@@ -456,12 +479,22 @@ export class Game {
     if (i.down('KeyS') || i.down('ArrowDown')) my -= 1;
     if (i.down('KeyD') || i.down('ArrowRight')) mx += 1;
     if (i.down('KeyA') || i.down('ArrowLeft')) mx -= 1;
+    // The on-screen joystick (touch) when no walking key is held: any direction, always full speed.
+    const st = i.stick;
+    const sx = mx || my ? mx : st?.x ?? 0;
+    const sy = mx || my ? my : st?.y ?? 0;
     let move: Vec2 | null = null;
-    if (mx || my) {
-      const x = RIGHT.x * mx + UP.x * my;
-      const z = RIGHT.z * mx + UP.z * my;
+    if (sx || sy) {
+      const x = RIGHT.x * sx + UP.x * sy;
+      const z = RIGHT.z * sx + UP.z * sy;
       const l = Math.hypot(x, z);
-      move = { x: x / l, z: z / l };
+      if (l > 1e-6) move = { x: x / l, z: z / l };
+    }
+    // The touch attack button cancels a tapped walk, as attacking does with the mouse.
+    const touchAttack = i.down(TOUCH_ATTACK);
+    if (touchAttack) {
+      this.goal = null;
+      this.mapRoute = [];
     }
     let moveTo: Vec2 | null = null;
     // Walking by hand or right-clicking forgets a clicked goal; otherwise keep walking to it.
@@ -476,8 +509,8 @@ export class Game {
     return {
       move,
       moveTo,
-      aim: h ? { x: h.x, z: h.z } : { ...this.mouseWorld },
-      basic: i.lmb && !this.goal && !this.playerClick,
+      aim: h ? { x: h.x, z: h.z } : isTouchMode() ? this.facingPoint() : { ...this.mouseWorld },
+      basic: (i.lmb && !this.goal && !this.playerClick) || touchAttack,
       skills,
       dash: i.pressed('Space'),
       potion: i.pressed('Digit1') ? 'hp' : i.pressed('Digit2') ? 'mp' : null,
@@ -489,19 +522,16 @@ export class Game {
     this.raycaster.setFromCamera(this.ndc, this.camera);
     if (this.raycaster.ray.intersectPlane(this.ground, this.tmp)) this.mouseWorld = { x: this.tmp.x, z: this.tmp.z };
 
-    const pxPerUnit = window.innerHeight / this.viewSize;
-    let best: Monster | null = null;
-    let bd = Infinity;
-    for (const m of this.monsters) {
-      if (!m.alive) continue;
-      const s = this.toScreen(m.x, m.def.height * 0.3, m.z);
-      const d = Math.hypot(s.sx - this.input.mouseX, s.sy - this.input.mouseY);
-      const r = Math.max(18, m.def.height * 0.4 * pxPerUnit);
-      if (d < r && d < bd) {
-        bd = d;
-        best = m;
-      }
+    // Touch: nothing is "under the mouse". The target is the tapped monster or the nearest one.
+    if (isTouchMode()) {
+      this.hovered = this.touchTarget();
+      this.hoverUse = null;
+      this.hoveredPlayer = null;
+      document.body.classList.remove('cursor-attack', 'cursor-use');
+      return;
     }
+    const pxPerUnit = window.innerHeight / this.viewSize;
+    const best = this.monsterAt(this.input.mouseX, this.input.mouseY, pxPerUnit);
     this.hovered = best;
     this.hoverUse = best ? null : this.findUsable(pxPerUnit);
     this.hoveredPlayer = best || this.hoverUse ? null : this.findPlayer(pxPerUnit);
@@ -509,15 +539,101 @@ export class Game {
     document.body.classList.toggle('cursor-use', !!this.hoverUse);
   }
 
-  /** Another player under the mouse, if any. */
-  private findPlayer(pxPerUnit: number): Player | null {
+  /** The living monster at screen point (sx, sy), if any. `scale` widens the hit circle (fingers). */
+  private monsterAt(sx: number, sy: number, pxPerUnit: number, scale = 1): Monster | null {
+    let best: Monster | null = null;
+    let bd = Infinity;
+    for (const m of this.monsters) {
+      if (!m.alive) continue;
+      const s = this.toScreen(m.x, m.def.height * 0.3, m.z);
+      const d = Math.hypot(s.sx - sx, s.sy - sy);
+      const r = Math.max(18, m.def.height * 0.4 * pxPerUnit) * scale;
+      if (d < r && d < bd) {
+        bd = d;
+        best = m;
+      }
+    }
+    return best;
+  }
+
+  /** Touch: the monster attacks and skills go to — the tapped one while it lives, else the nearest within AUTO_LOCK_RANGE. */
+  private touchTarget(): Monster | null {
+    if (this.lockId !== null) {
+      const m = this.monsters.find((x) => x.id === this.lockId);
+      if (m?.alive) return m;
+      this.lockId = null;
+    }
+    const p = this.player;
+    let best: Monster | null = null;
+    let bd = AUTO_LOCK_RANGE;
+    for (const m of this.monsters) {
+      if (!m.alive) continue;
+      const d = Math.hypot(m.x - p.x, m.z - p.z);
+      if (d < bd) {
+        bd = d;
+        best = m;
+      }
+    }
+    return best;
+  }
+
+  /** A point a few steps ahead of where the player faces (touch, with no monster to aim at). */
+  private facingPoint(): Vec2 {
+    const p = this.player;
+    const l = Math.hypot(p.faceX, p.faceZ) || 1;
+    return { x: p.x + (p.faceX / l) * 3, z: p.z + (p.faceZ / l) * 3 };
+  }
+
+  /** Touch: a quick tap on the game at screen point (sx, sy). A monster locks on (tap it again to let go),
+   *  a drop / NPC / rest spot / boss altar is walked to and used, another player opens the player menu,
+   *  and open ground is walked to. A tap never attacks: that's the attack button's job. */
+  tapAt(sx: number, sy: number): void {
+    if (!this.player.alive) return;
+    const pxPerUnit = window.innerHeight / this.viewSize;
+    const m = this.monsterAt(sx, sy, pxPerUnit, TAP_SCALE);
+    if (m) {
+      this.lockId = this.lockId === m.id ? null : m.id;
+      return;
+    }
+    const use = this.findUsable(pxPerUnit, sx, sy, TAP_SCALE);
+    if (use) {
+      this.mapRoute = [];
+      this.goal = use;
+      this.fx.marker(use.x, use.z);
+      return;
+    }
+    const other = this.findPlayer(pxPerUnit, sx, sy, TAP_SCALE);
+    if (other) {
+      this.party.playerMenu(other, sx, sy);
+      return;
+    }
+    this.lockId = null;
+    this.ndc.set((sx / window.innerWidth) * 2 - 1, -(sy / window.innerHeight) * 2 + 1);
+    this.raycaster.setFromCamera(this.ndc, this.camera);
+    if (!this.raycaster.ray.intersectPlane(this.ground, this.tmp)) return;
+    this.goal = null;
+    this.walkTo(this.tmp.x, this.tmp.z, 'ปิด Auto Play — เดินเอง');
+  }
+
+  /** Camera zoom (world units shown top to bottom), as the mouse wheel and the pinch set it. */
+  get zoom(): number {
+    return this.viewSize;
+  }
+
+  set zoom(v: number) {
+    this.viewSize = Math.max(MIN_VIEW, Math.min(MAX_VIEW, v));
+    this.updateProjection();
+  }
+
+  /** Another player at screen point (sx, sy) (default: under the mouse), if any. */
+  private findPlayer(pxPerUnit: number, sx = this.input.mouseX, sy = this.input.mouseY, scale = 1): Player | null {
     let best: Player | null = null;
     let bd = Infinity;
     for (const o of this.backend.players) {
       if (o === this.player) continue;
       const s = this.toScreen(o.x, 0.9, o.z);
-      const d = Math.hypot(s.sx - this.input.mouseX, s.sy - this.input.mouseY);
-      if (s.on && d < Math.max(20, 0.6 * pxPerUnit) && d < bd) {
+      const d = Math.hypot(s.sx - sx, s.sy - sy);
+      if (s.on && d < Math.max(20, 0.6 * pxPerUnit) * scale && d < bd) {
         bd = d;
         best = o;
       }
@@ -525,16 +641,14 @@ export class Game {
     return best;
   }
 
-  /** The drop, NPC or rest spot nearest the mouse, if it is close enough on screen. */
-  private findUsable(pxPerUnit: number): ClickGoal | null {
-    const mx = this.input.mouseX;
-    const my = this.input.mouseY;
+  /** The drop, NPC or rest spot nearest screen point (mx, my) (default: the mouse), if it is close enough on screen. */
+  private findUsable(pxPerUnit: number, mx = this.input.mouseX, my = this.input.mouseY, scale = 1): ClickGoal | null {
     let best: ClickGoal | null = null;
     let bd = Infinity;
     const consider = (g: ClickGoal, y: number, r: number) => {
       const s = this.toScreen(g.x, y, g.z);
       const d = Math.hypot(s.sx - mx, s.sy - my);
-      if (s.on && d < r && d < bd) {
+      if (s.on && d < r * scale && d < bd) {
         bd = d;
         best = g;
       }
@@ -610,10 +724,7 @@ export class Game {
     if (i.pressed('KeyM')) this.hud.toggleMap();
     if (i.pressed('Escape')) this.sysMenu.onEscape();
     if (i.pressed('Enter')) this.hud.openChat();
-    if (i.wheel) {
-      this.viewSize = Math.max(10, Math.min(28, this.viewSize + i.wheel * 1.2));
-      this.updateProjection();
-    }
+    if (i.wheel) this.zoom = this.viewSize + i.wheel * 1.2;
 
     const p = this.player;
     let intent = IDLE_INTENT;
@@ -657,11 +768,14 @@ export class Game {
     const rest = !near && !summ && p.alive ? restSpotNear(spots, p) : null;
     const restIn = Math.max(0, Math.ceil(p.restCd));
     const restName = rest?.kind === 'fountain' ? 'น้ำพุ' : 'กองไฟ';
+    const key = isTouchMode() ? 'แตะ คุย/ใช้' : 'กด T';
     const prompt = this.hud.dialogOpen ? null
-      : near ? `${near.name} — กด T เพื่อ${near.action}`
-      : summ ? `แท่นเรียก${bossShortName(MONSTERS[summ.boss].nameTh)} — กด T เพื่อใส่กุญแจ`
-      : rest ? (restIn > 0 ? `${restName} — พักได้อีกใน ${restIn} วิ` : `${restName} — กด T เพื่อฟื้น HP/MP ให้เต็ม`)
+      : near ? `${near.name} — ${key} เพื่อ${near.action}`
+      : summ ? `แท่นเรียก${bossShortName(MONSTERS[summ.boss].nameTh)} — ${key} เพื่อใส่กุญแจ`
+      : rest ? (restIn > 0 ? `${restName} — พักได้อีกใน ${restIn} วิ` : `${restName} — ${key} เพื่อฟื้น HP/MP ให้เต็ม`)
       : null;
+    // The touch "talk / use" button: only when T would do something now (not while a rest spot is cooling down).
+    this.talkReady = !!prompt && !!(near || summ || (rest && restIn <= 0));
     this.floating.npcBadges(this, this.npcs);
     this.floating.restBadges(this, spots, restIn);
     if (near) this.floating.npcPrompt(this, near.x, 3.7, near.z, prompt);
@@ -685,6 +799,10 @@ export class Game {
       const c = this.autoPlay && this.autoAnchor ? this.autoAnchor : p;
       this.autoRing.show(c.x, c.z, (preview ?? p.autoSettings.range) / AUTO_PX_PER_UNIT);
     } else this.autoRing.hide();
+    // Touch: red circle under the monster tapped to lock on.
+    const locked = this.lockId !== null && isTouchMode() ? this.hovered : null;
+    if (locked) this.lockRing.show(locked.x, locked.z, locked.def.radius + 0.2);
+    else this.lockRing.hide();
 
     this.fx.update(dt);
     this.hazardViews.update(this.backend.hazards, this.backend.time);
@@ -693,6 +811,7 @@ export class Game {
     this.cosmetics.update();
     this.floating.update(dt, this);
     this.hud.update(dt);
+    this.touch.update();
     this.party.update();
     this.trade.update();
     this.friends.update();

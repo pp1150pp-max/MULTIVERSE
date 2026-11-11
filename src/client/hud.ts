@@ -32,6 +32,7 @@ import { MarketWindow } from './market';
 import { playSound } from './audio/sfx';
 import { COIN_ICON, emptySlotIcon, FORGE_ICON, itemIcon, potionIcon, skillIcon, stoneIcon } from './icons';
 import { shutdownCancelled, shutdownWarning, type ShutdownMode } from '../shared/net/protocol';
+import { isTouchMode } from './touch/device';
 
 /** Yellow, like the game's level-up lines. */
 const SHUTDOWN_COLOR = '#ffd34a';
@@ -873,7 +874,7 @@ export class Hud {
     $('expbar').title = gate ? `ต้องลงบอส ${gate.nameTh} ก่อนถึงจะเลเวลเกิน ${gate.level} ได้ (EXP ที่เกินจะหายไป)` : '';
     $('hud-level').textContent = `Lv.${p.level} ${p.cls.name}`;
     $('hud-gold').textContent = `${p.gold.toLocaleString()} G`;
-    if (this.g.backend.online) $('hud-online').textContent = `🌐 ออนไลน์ ${this.g.backend.onlineCount} คน · กด Enter เพื่อแชท`;
+    if (this.g.backend.online) $('hud-online').textContent = `🌐 ออนไลน์ ${this.g.backend.onlineCount} คน${isTouchMode() ? '' : ' · กด Enter เพื่อแชท'}`;
     this.showPing(this.g.backend.ping);
 
     for (const s of this.slotEls) {
