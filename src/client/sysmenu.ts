@@ -3,6 +3,7 @@
 // which is simpler and safer than tearing the 3D scene down by hand.
 import type { Game } from './Game';
 import { logout } from './net/api';
+import { imgUrl } from './img';
 
 /** Read once by the title menu after the reload. */
 export const AFTER_EXIT_KEY = 'multiverse-after-exit';
@@ -15,7 +16,7 @@ const COMBAT_WINDOW = 5;
 
 /** Painted badge from public/assets/sprites/ui/ico_<name>.png. A glyph draws on the blank badge for systems with no art yet. */
 const badge = (name: string, glyph = ''): string =>
-  `<img src="assets/sprites/ui/ico_${name}.png" alt="">${glyph ? `<span class="ico-glyph">${glyph}</span>` : ''}`;
+  `<img src="${imgUrl(`assets/sprites/ui/ico_${name}.png`)}" alt="">${glyph ? `<span class="ico-glyph">${glyph}</span>` : ''}`;
 
 /** Party has no painted badge yet: the blank one with a glyph. Swap for badge('party') once ico_party.png exists. */
 const PARTY_ICON = badge('blank', '👥');

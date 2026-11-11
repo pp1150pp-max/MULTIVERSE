@@ -8,6 +8,7 @@ import {
 import { ITEM_ART } from '../shared/data/items';
 import { STONE_KINDS } from '../shared/types';
 import { MAP_ICONS } from './mapIconNames';
+import { imgUrl } from './img';
 import { COSMETICS } from '../shared/data/cosmetics';
 import type { AnimSet, CharManifest } from './AnimatedActor';
 
@@ -405,7 +406,7 @@ async function loadTexture(url: string): Promise<THREE.Texture> {
   const d: Download = { loaded: 0, size: null };
   downloads.push(d);
   try {
-    const res = await fetch(url);
+    const res = await fetch(imgUrl(url));
     if (!res.ok || !res.body) throw new Error(`missing ${url}`);
     d.size = Number(res.headers.get('content-length')) || null;
     const chunks: Uint8Array[] = [];
@@ -467,7 +468,7 @@ function loadImage(url: string): Promise<HTMLImageElement> {
     const img = new Image();
     img.onload = () => ok(img);
     img.onerror = () => fail(new Error(`missing ${url}`));
-    img.src = url;
+    img.src = imgUrl(url);
   });
 }
 

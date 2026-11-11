@@ -19,6 +19,7 @@ import type {
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { applyBalance, checkBalance } from '../shared/balance';
 import { renderBalance } from './balance';
+import { equipEntries, itemGrid, listEntries, type ItemCtx } from './items';
 import { itemNames, makeItem, roundStat, rowRanges, tierOf } from '../shared/data/items';
 import { checkShutdownText, SHUTDOWN_SECONDS, SHUTDOWN_TEXT_MAX, SHUTDOWN_TIME_TOKEN, shutdownWarning, type ShutdownMode } from '../shared/net/protocol';
 import { isStack, RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, SLOTS, STAT_KEYS, STAT_LABEL, BLACKSMITH_STONES, BOSS_KEYS, type BagEntry, type ClassId, type Item, type Rarity } from '../shared/types';
@@ -906,7 +907,7 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
       const info = h('span', { class: 'muted' });
       const showInfo = () => {
         const bad = !(row.value >= step && row.value <= top);
-        const t = tierOf(row.stat, row.value, r.lo, r.hi);
+        const t = tierOf(row.stat, r.level, row.value, r.lo, r.hi);
         info.textContent = `ปกติ ${r.min}–${r.max} · T${t.tier} (${t.min}–${t.max})${r.main ? ' · สเตตัสหลัก' : ''}${bad ? ` · ต้องอยู่ระหว่าง ${step}–${top}` : ''}`;
         info.style.color = bad ? 'var(--bad)' : '';
       };
@@ -1874,6 +1875,15 @@ async function openAccount(id: number, note?: { text: string; ok: boolean; passw
   /** More tabs (added by other features), shown before "จัดการ". */
   const extraPanes: [string, string, () => Node][] = [];
 
+  // Worn gear, bag and stash as slot grids; a click shows the item (and the edit form with itemEdit).
+  const ictx: ItemCtx | null = meta && {
+    h, api, meta, canEdit: can('itemEdit'),
+    done: (text) => {
+      reloadUsers();
+      void openAccount(id, { text, ok: true });
+    },
+  };
+
   // Characters
   const chars = d.characters.map((c) => {
     const eq = Object.values(c.equipment).filter((x): x is Item => !!x);
@@ -1898,8 +1908,10 @@ async function openAccount(id: number, note?: { text: string; ok: boolean; passw
         h('div', { style: 'flex:1' }, h('b', {}, c.name), h('span', { class: c.online ? 'tag on' : 'tag' }, c.online ? 'ออนไลน์' : 'ออฟไลน์'),
           h('div', { class: 'muted' }, `${className(c.classId)} · Lv.${c.level} · ${zoneName(c.zone)} · ${fmt(c.gold)} G`)),
         can('charView') ? h('button', { class: 'small', onclick: () => void openChar(c.charId) }, 'แก้ไข') : null),
-      h('div', { class: 'sub' }, 'สวมใส่'), itemList(eq, 'ไม่ได้สวมอะไร'),
-      h('div', { class: 'sub' }, `กระเป๋า (ว่าง ${c.bagFree} ช่อง)`), itemList(c.bag, 'กระเป๋าว่าง'),
+      h('div', { class: 'sub' }, 'สวมใส่'),
+      ictx ? itemGrid(ictx, { place: 'equip', charId: c.charId, cls: c.classId, level: c.level }, equipEntries(c.equipment)) : itemList(eq, 'ไม่ได้สวมอะไร'),
+      h('div', { class: 'sub' }, `กระเป๋า (ว่าง ${c.bagFree} ช่อง)`),
+      ictx ? itemGrid(ictx, { place: 'bag', charId: c.charId, cls: c.classId, level: c.level }, listEntries(c.bag)) : itemList(c.bag, 'กระเป๋าว่าง'),
       del,
     );
   });
@@ -1918,7 +1930,8 @@ async function openAccount(id: number, note?: { text: string; ok: boolean; passw
   if (!a.guest) {
     panes.push(['stash', 'คลัง', () => h('div', { class: 'char-card' },
       h('div', { class: 'sub', style: 'margin-top:0' }, d.stash ? `คลัง ${d.stash.size} ช่อง · ทอง ${fmt(d.stash.gold)} G` : 'คลัง'),
-      d.stash ? itemList(d.stash.items, 'คลังว่าง') : h('div', { class: 'muted' }, 'ยังไม่เคยใช้คลัง'))]);
+      !d.stash ? h('div', { class: 'muted' }, 'ยังไม่เคยใช้คลัง')
+        : ictx ? itemGrid(ictx, { place: 'stash', accountId: id }, listEntries(d.stash.items)) : itemList(d.stash.items, 'คลังว่าง'))]);
   }
   if (!a.guest && d.cosmetics) {
     const owned = new Set(d.cosmetics);

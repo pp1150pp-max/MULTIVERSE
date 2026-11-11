@@ -5,7 +5,9 @@
 // only (like cos_tuning), so an untouched server runs exactly the code. The server applies them at start
 // and on every save, and sends them to every browser so tooltips and the blacksmith's odds match.
 import { CLASSES, CLASS_IDS } from './data/classes';
-import { CODE_BOSS_TIER_BOOST, CODE_RANGE_FLOOR, CODE_TIER_WEIGHT, CODE_TIER_WIDTH, setTierTables } from './data/items';
+import {
+  CODE_BOSS_TIER_BOOST, CODE_RANGE_FLOOR, CODE_TIER_WEIGHT, CODE_TIER_WIDTH, setTierTables, TIER_BAND_NAME, TIER_BANDS, type TierBand, type TierTableDef,
+} from './data/items';
 import { addInto, emptyStats } from './formulas';
 import { STAT_KEYS, STAT_LABEL, type ClassId, type StatKey, type Stats } from './types';
 
@@ -23,6 +25,19 @@ export type StatPart = 'base' | 'growth' | 'mult';
 export const STAT_PARTS: readonly StatPart[] = ['base', 'growth', 'mult'];
 export const STAT_PART_NAME: Record<StatPart, string> = { base: 'Lv1', growth: 'ต่อเลเวล', mult: 'ตัวคูณ' };
 
+/**
+ * Some parts of a tier table (owner 2026-11-11): each part given replaces the one it would otherwise use, each
+ * part left out falls through. Arrays T1 first; widths and floor in %. A stat at an item's level band takes
+ * each part from the first that has it: the stat's table for that band -> the stat's table for every level ->
+ * the band's table for every stat -> the central table.
+ */
+export interface TierParts { weight?: number[]; width?: number[]; floor?: number; bossBoost?: number }
+/** One stat's own tier table for every level, plus its tables for single level bands. */
+export interface StatTierTuning extends TierParts { bands?: Partial<Record<TierBand, TierParts>> }
+export type StatTierPart = keyof TierParts;
+export const STAT_TIER_PARTS: readonly StatTierPart[] = ['weight', 'width', 'floor', 'bossBoost'];
+export const STAT_TIER_PART_NAME: Record<StatTierPart, string> = { weight: 'โอกาส', width: 'ความกว้าง', floor: 'ค่าต่ำสุด', bossBoost: 'บอสเพิ่ม tier' };
+
 /** Every tunable number, as the game uses it. Tier arrays are T1 first; widths and floor in %. */
 export interface Balance {
   classes: Record<ClassId, ClassBalance>;
@@ -32,6 +47,10 @@ export interface Balance {
   tierWidth: number[];
   rangeFloor: number;
   bossTierBoost: number;
+  /** Stats with a tier table of their own (none in code); the others use the central one above. */
+  statTiers: Partial<Record<StatKey, StatTierTuning>>;
+  /** Level bands with a tier table of their own for every stat (none in code). */
+  bandTiers: Partial<Record<TierBand, TierParts>>;
 }
 
 /** What is saved: only what differs from the code. Tier arrays are saved whole when any entry differs. */
@@ -43,6 +62,13 @@ export interface BalanceTuning {
   tierWidth?: number[];
   rangeFloor?: number;
   bossTierBoost?: number;
+  /**
+   * A stat listed here has its own tier table (only the parts given; the rest follow the central table).
+   * Kept even when its numbers equal the code's: listing it is the change ("ตั้งเอง").
+   */
+  statTiers?: Partial<Record<StatKey, StatTierTuning>>;
+  /** Same for level bands (all stats on items of that level band). */
+  bandTiers?: Partial<Record<TierBand, TierParts>>;
 }
 
 /** Highest Lv1 / per-level value of each stat (owner 2026-11-11); the lowest is 0. */
@@ -82,6 +108,8 @@ export function codeBalance(): Balance {
     tierWidth: [...CODE_TIER_WIDTH],
     rangeFloor: CODE_RANGE_FLOOR,
     bossTierBoost: CODE_BOSS_TIER_BOOST,
+    statTiers: {},
+    bandTiers: {},
   };
 }
 
@@ -103,6 +131,8 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.tierWidth) b.tierWidth = [...t.tierWidth];
   if (t.rangeFloor !== undefined) b.rangeFloor = t.rangeFloor;
   if (t.bossTierBoost !== undefined) b.bossTierBoost = t.bossTierBoost;
+  if (t.statTiers) b.statTiers = structuredClone(t.statTiers);
+  if (t.bandTiers) b.bandTiers = structuredClone(t.bandTiers);
   return b;
 }
 
@@ -113,8 +143,45 @@ let current: Balance = mergeBalance({});
 export function applyBalance(t: BalanceTuning): void {
   tuning = t;
   current = mergeBalance(t);
-  setTierTables(current.tierWidth, current.rangeFloor, current.tierWeight, current.bossTierBoost);
+  const b = current;
+  setTierTables((stat, band) => statTierTable(b, stat, band));
 }
+
+/** The tables a stat at a band takes parts from, first first (see TierParts); null stat / band = any. */
+function tierChain(b: Balance, stat: StatKey | null, band: number | null): TierParts[] {
+  const id = band === null ? null : TIER_BANDS[band];
+  const st = stat ? b.statTiers[stat] : undefined;
+  const out: (TierParts | undefined)[] = [id ? st?.bands?.[id] : undefined, st, id ? b.bandTiers[id] : undefined];
+  return out.filter((x): x is TierParts => !!x);
+}
+
+/**
+ * The whole tier table a stat uses on items of a level band (index into TIER_BANDS). `stat` null = stats
+ * without their own; `band` null = every level (the stat's own table for all levels, or the central one).
+ */
+export function statTierTable(b: Balance, stat: StatKey | null, band: number | null): TierTableDef {
+  const chain = tierChain(b, stat, band);
+  const pick = <P extends StatTierPart>(p: P): TierParts[P] => chain.find((c) => c[p] !== undefined)?.[p];
+  return {
+    width: pick('width') ?? b.tierWidth,
+    floor: pick('floor') ?? b.rangeFloor,
+    weight: pick('weight') ?? b.tierWeight,
+    bossBoost: pick('bossBoost') ?? b.bossTierBoost,
+  };
+}
+
+/** Where a stat at a band takes its table from, in Thai (for the admin page). */
+export function tierSourceName(b: Balance, stat: StatKey | null, band: number | null): string {
+  const id = band === null ? null : TIER_BANDS[band];
+  const st = stat ? b.statTiers[stat] : undefined;
+  if (stat && id && hasParts(st?.bands?.[id])) return `${STAT_LABEL[stat]} ${TIER_BAND_NAME[id]}`;
+  if (stat && hasParts(st)) return `${STAT_LABEL[stat]} ทุกเลเวล`;
+  if (id && hasParts(b.bandTiers[id])) return `ทุกสเตตัส ${TIER_BAND_NAME[id]}`;
+  return 'ตารางกลาง';
+}
+
+/** Whether these tier parts set anything. */
+export const hasParts = (t: TierParts | undefined): boolean => !!t && STAT_TIER_PARTS.some((p) => t[p] !== undefined);
 
 /** The numbers in use. */
 export const currentBalance = (): Balance => current;
@@ -157,7 +224,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -237,33 +304,122 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (n !== undefined && n !== CODE[key]) out[key] = n;
     return null;
   };
-  // Tier arrays: 5 numbers, T1 first.
-  const arr = (key: 'tierWeight' | 'tierWidth', range: readonly [number, number], what: string, whole: (a: number[]) => string | null): string | null => {
-    const x = o[key];
-    if (x === undefined) return null;
-    if (!Array.isArray(x) || x.length !== 5) return strict ? `${what} ต้องมี 5 ค่า (T1–T5)` : null;
+  /** A tier array (5 numbers, T1 first): the array, undefined (missing / dropped), or an error to return. */
+  const tierArr = (x: unknown, range: readonly [number, number], what: string, whole: (a: number[]) => string | null): number[] | undefined | string => {
+    if (x === undefined) return undefined;
+    if (!Array.isArray(x) || x.length !== 5) return strict ? `${what} ต้องมี 5 ค่า (T1–T5)` : undefined;
     const a: number[] = [];
     for (let i = 0; i < 5; i++) {
       const n = num(x[i], range[0], range[1], `${what} T${i + 1}`);
       if (typeof n === 'string') return n;
-      if (n === undefined) return strict ? `${what} T${i + 1} ต้องเป็นตัวเลข` : null;
+      if (n === undefined) return strict ? `${what} T${i + 1} ต้องเป็นตัวเลข` : undefined;
       a.push(n);
     }
     const e = whole(a);
-    if (e) return strict ? e : null;
-    if (a.some((n, i) => n !== CODE[key][i])) out[key] = a;
+    if (e) return strict ? e : undefined;
+    return a;
+  };
+  const weightsOk = (what: string) => (a: number[]): string | null => (a.reduce((s, n) => s + n, 0) > 0 ? null : `${what} รวมกันต้องมากกว่า 0`);
+  const widthsOk = (what: string) => (a: number[]): string | null => {
+    const sum = round3(a.reduce((s, n) => s + n, 0));
+    return Math.abs(sum - 100) <= 0.001 ? null : `${what} รวมกันต้องได้ 100% (ตอนนี้ ${sum}%)`;
+  };
+  // Central tier arrays: saved whole when any entry differs from the code.
+  const arr = (key: 'tierWeight' | 'tierWidth', range: readonly [number, number], what: string, whole: (a: number[]) => string | null): string | null => {
+    const a = tierArr(o[key], range, what, whole);
+    if (typeof a === 'string') return a;
+    if (a && a.some((n, i) => n !== CODE[key][i])) out[key] = a;
+    return null;
+  };
+  /** Tier parts of one table (`what` names it): every part given is kept, equal to the code or not, in STAT_TIER_PARTS order. */
+  const tierParts = (go: Record<string, unknown>, what: string, extraKeys: readonly string[]): TierParts | string => {
+    if (strict) {
+      const extra = Object.keys(go).find((p) => !(STAT_TIER_PARTS as readonly string[]).includes(p) && !extraKeys.includes(p));
+      if (extra) return `ตาราง ${what}: ไม่รู้จักค่า "${extra.slice(0, 20)}"`;
+    }
+    const t: TierParts = {};
+    const w = tierArr(go.weight, BALANCE_RANGE.tierWeight, `โอกาส ${what}`, weightsOk(`โอกาส ${what}`));
+    if (typeof w === 'string') return w;
+    if (w) t.weight = w;
+    const wd = tierArr(go.width, BALANCE_RANGE.tierWidth, `ความกว้าง ${what}`, widthsOk(`ความกว้าง ${what}`));
+    if (typeof wd === 'string') return wd;
+    if (wd) t.width = wd;
+    const f = num(go.floor, ...BALANCE_RANGE.rangeFloor, `ค่าต่ำสุดของช่วง ${what} %`);
+    if (typeof f === 'string') return f;
+    if (f !== undefined) t.floor = f;
+    const bb = num(go.bossBoost, ...BALANCE_RANGE.bossTierBoost, `บอสเพิ่มโอกาส ${what} ดี`);
+    if (typeof bb === 'string') return bb;
+    if (bb !== undefined) t.bossBoost = bb;
+    return t;
+  };
+  const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
+  /** Tables per level band from `x` (in TIER_BANDS order), or an error; `what` names whose. */
+  const bandTables = (x: unknown, what: string): Partial<Record<TierBand, TierParts>> | string => {
+    const res: Partial<Record<TierBand, TierParts>> = {};
+    if (x === undefined) return res;
+    if (!isObj(x)) return strict ? `ตาราง tier ตามช่วงเลเวล${what}ไม่ถูกต้อง` : res;
+    if (strict) {
+      const extra = Object.keys(x).find((k) => !(TIER_BANDS as readonly string[]).includes(k));
+      if (extra) return `ตาราง tier${what}: ไม่รู้จักช่วงเลเวล "${extra.slice(0, 20)}"`;
+    }
+    for (const id of TIER_BANDS) {
+      const g = x[id];
+      if (g === undefined) continue;
+      const name = `tier${what} ${TIER_BAND_NAME[id]}`;
+      if (!isObj(g)) {
+        if (strict) return `ตาราง ${name} ไม่ถูกต้อง`;
+        continue;
+      }
+      const t = tierParts(g, name, []);
+      if (typeof t === 'string') return t;
+      if (hasParts(t)) res[id] = t;
+    }
+    return res;
+  };
+  // Stats' own tier tables (every level, then per level band), in STAT_KEYS order.
+  const statTiers = (): string | null => {
+    const x = o.statTiers;
+    if (x === undefined) return null;
+    if (!isObj(x)) return strict ? 'ตาราง tier ต่อสเตตัสไม่ถูกต้อง' : null;
+    if (strict) {
+      const extra = Object.keys(x).find((k) => !(STAT_KEYS as readonly string[]).includes(k));
+      if (extra) return `ตาราง tier: ไม่รู้จักสเตตัส "${extra.slice(0, 20)}"`;
+    }
+    const res: Partial<Record<StatKey, StatTierTuning>> = {};
+    for (const k of STAT_KEYS) {
+      const g = x[k];
+      if (g === undefined) continue;
+      const name = `tier ${STAT_LABEL[k]}`;
+      if (!isObj(g)) {
+        if (strict) return `ตาราง ${name} ไม่ถูกต้อง`;
+        continue;
+      }
+      const t: StatTierTuning | string = tierParts(g, name, ['bands']);
+      if (typeof t === 'string') return t;
+      const bands = bandTables(g.bands, ` ${STAT_LABEL[k]}`);
+      if (typeof bands === 'string') return bands;
+      if (Object.keys(bands).length) t.bands = bands;
+      if (hasParts(t) || t.bands) res[k] = t;
+    }
+    if (Object.keys(res).length) out.statTiers = res;
+    return null;
+  };
+  // Level bands' own tier tables (all stats).
+  const bandTiers = (): string | null => {
+    const bands = bandTables(o.bandTiers, '');
+    if (typeof bands === 'string') return bands;
+    if (Object.keys(bands).length) out.bandTiers = bands;
     return null;
   };
   const err =
     one('hpRegenMult', BALANCE_RANGE.regenMult, 'ตัวคูณฟื้น HP') ??
     one('mpRegenMult', BALANCE_RANGE.regenMult, 'ตัวคูณฟื้น MP') ??
-    arr('tierWeight', BALANCE_RANGE.tierWeight, 'โอกาส tier', (a) => (a.reduce((s, n) => s + n, 0) > 0 ? null : 'โอกาส tier รวมกันต้องมากกว่า 0')) ??
-    arr('tierWidth', BALANCE_RANGE.tierWidth, 'ความกว้าง tier', (a) => {
-      const sum = round3(a.reduce((s, n) => s + n, 0));
-      return Math.abs(sum - 100) <= 0.001 ? null : `ความกว้าง tier รวมกันต้องได้ 100% (ตอนนี้ ${sum}%)`;
-    }) ??
+    arr('tierWeight', BALANCE_RANGE.tierWeight, 'โอกาส tier', weightsOk('โอกาส tier')) ??
+    arr('tierWidth', BALANCE_RANGE.tierWidth, 'ความกว้าง tier', widthsOk('ความกว้าง tier')) ??
     one('rangeFloor', BALANCE_RANGE.rangeFloor, 'ค่าต่ำสุดของช่วง %') ??
-    one('bossTierBoost', BALANCE_RANGE.bossTierBoost, 'บอสเพิ่มโอกาส tier ดี');
+    one('bossTierBoost', BALANCE_RANGE.bossTierBoost, 'บอสเพิ่มโอกาส tier ดี') ??
+    statTiers() ??
+    bandTiers();
   if (err) return { error: err };
   // Fixed key order.
   const ordered: BalanceTuning = {};
@@ -276,9 +432,16 @@ export function sameBalance(a: BalanceTuning, b: BalanceTuning): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-/** Whether the tier widths or floor differ (so item tier labels are redone). */
+/** Whether any stat's tier widths or floor differ, central or its own (so item tier labels are redone). */
 export function tierLabelsChange(a: BalanceTuning, b: BalanceTuning): boolean {
-  return JSON.stringify([a.tierWidth, a.rangeFloor]) !== JSON.stringify([b.tierWidth, b.rangeFloor]);
+  const labels = (t: BalanceTuning): string => {
+    const m = mergeBalance(t);
+    return JSON.stringify([null, ...STAT_KEYS].map((k) => TIER_BANDS.map((_, band) => {
+      const d = statTierTable(m, k, band);
+      return [d.width, d.floor];
+    })));
+  };
+  return labels(a) !== labels(b);
 }
 
 /** Short Thai text of what differs, for the audit log (e.g. "นักดาบ Lv1 พลังโจมตี 12 → 15"). */
@@ -303,5 +466,17 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.tierWidth.join() !== b.tierWidth.join()) out.push(`ความกว้าง tier ${a.tierWidth.join('/')} → ${b.tierWidth.join('/')}`);
   if (a.rangeFloor !== b.rangeFloor) out.push(`ค่าต่ำสุดของช่วง ${a.rangeFloor}% → ${b.rangeFloor}%`);
   if (a.bossTierBoost !== b.bossTierBoost) out.push(`บอสเพิ่มโอกาส tier ดี ${a.bossTierBoost} → ${b.bossTierBoost}`);
+  const part = (p: StatTierPart, v: TierParts[StatTierPart]): string =>
+    v === undefined ? 'ไม่ได้ตั้ง' : Array.isArray(v) ? v.join('/') : p === 'floor' ? `${v}%` : String(v);
+  const parts = (what: string, x: TierParts | undefined, y: TierParts | undefined): void => {
+    for (const p of STAT_TIER_PARTS) {
+      if (JSON.stringify(x?.[p]) !== JSON.stringify(y?.[p])) out.push(`tier ${what} ${STAT_TIER_PART_NAME[p]} ${part(p, x?.[p])} → ${part(p, y?.[p])}`);
+    }
+  };
+  for (const id of TIER_BANDS) parts(`ทุกสเตตัส ${TIER_BAND_NAME[id]}`, a.bandTiers[id], b.bandTiers[id]);
+  for (const k of STAT_KEYS) {
+    parts(STAT_LABEL[k], a.statTiers[k], b.statTiers[k]);
+    for (const id of TIER_BANDS) parts(`${STAT_LABEL[k]} ${TIER_BAND_NAME[id]}`, a.statTiers[k]?.bands?.[id], b.statTiers[k]?.bands?.[id]);
+  }
   return out.join(', ');
 }

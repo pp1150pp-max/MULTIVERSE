@@ -1,13 +1,16 @@
 // Admin page (/admin): roles, limits and the shapes of the /api/admin requests, shared by the page
 // and the server. The server checks the role and every value on each call; the page is only a view.
-import { isPotion, isStack, sameStack, STAT_KEYS, STAT_LABEL, STONE_KINDS, type BagEntry, type PotionKind, type PotionStack, type StoneStack, type ClassId, type EquipSlot, type Item, type Rarity, type SlotId, type StatKey, type StatLine } from './types';
+import { isPotion, isStack, isStone, RARITIES, RARITY_LABEL, sameStack, STAT_KEYS, STAT_LABEL, STONE_KINDS, type BagEntry, type PotionKind, type PotionStack, type StoneStack, type ClassId, type EquipSlot, type Item, type Rarity, type SlotId, type StatKey, type StatLine } from './types';
 import type { ShutdownMode } from './net/protocol';
 import type { OrbLook } from './orbLook';
 import type { CosTuning } from './cosTuning';
 import type { CardTuning } from './cardTuning';
 import type { BalanceTuning } from './balance';
-import { itemNames, makeItem, roundStat, rowRanges, stampTier, statStep, tierOf } from './data/items';
-import { POTION_SIZES, potionName, stackLimit } from './data/potions';
+import { ITEM_BASES, itemNames, makeItem, roundStat, rowRanges, stampTier, statStep, tierOf } from './data/items';
+import { CLASS_IDS } from './data/classes';
+import { MAX_LEVEL } from './formulas';
+import { MAX_PLUS } from './data/enhance';
+import { entryName, POTION_SIZES, potionName, stackLimit } from './data/potions';
 import { STONE_NAME } from './data/stones';
 
 /**
@@ -151,7 +154,7 @@ export interface AdminShutdownText { texts: Record<ShutdownMode, string>; defaul
  * switch: the Permissions tab, the audit log, restarting / stopping the server, deleting accounts or
  * characters, and making someone owner (command line).
  */
-export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cardView' | 'cardTune' | 'balance';
+export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit';
 
 /**
  * The defaults: which built-in role may use each tool (owner always has all). The owner can change
@@ -207,6 +210,8 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   cardTune: ['owner'],
   // The "ปรับสมดุล" tab: class stats and item tier tables, saved server-wide (owner 2026-11-11: owner and GMs).
   balance: ['owner', 'gm'],
+  // Editing or deleting any item a player wears / carries / stores, from the account sheet (owner 2026-11-11: owner and GMs).
+  itemEdit: ['owner', 'gm'],
 };
 
 export const ADMIN_FEATURES = Object.keys(FEATURE_ROLES) as AdminFeature[];
@@ -244,6 +249,7 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   teleport: { name: 'ย้ายโซน', desc: 'ย้ายตัวละครไปแคมป์ของโซนที่เลือก', group: 'ผู้เล่น' },
   channelWarp: { name: 'วาร์ปเลือก CH', desc: 'ตอนย้ายโซน เลือก CH ได้ เข้าได้แม้ห้องเต็ม', group: 'ผู้เล่น' },
   cosmetics: { name: 'ให้/ถอนของแต่งตัว', desc: 'ให้หรือถอนของแต่งตัวในหน้าบัญชี', group: 'ผู้เล่น' },
+  itemEdit: { name: 'แก้ไอเทมของผู้เล่น', desc: 'ในหน้าบัญชี: แก้ชนิด ความหายาก เลเวล อาชีพ ชื่อ ตีบวก pity สเตตัสทุกบรรทัด จำนวนยา/หิน หรือลบไอเทม ที่สวม/กระเป๋า/คลัง (ต้องมี "ผู้ใช้ทั้งหมด" ด้วย)', group: 'ผู้เล่น' },
   staffTarget: { name: 'จัดการบัญชีทีมงานคนอื่น', desc: 'แบน รีเซ็ตรหัส แก้ตัวละครของบัญชีที่มีสิทธิ์ผู้ดูแล (ไม่มี = ทำได้แค่ผู้เล่นธรรมดาและตัวเอง) · บัญชี owner แตะไม่ได้เสมอ', group: 'ผู้เล่น' },
   users: { name: 'ผู้ใช้ทั้งหมด', desc: 'ตารางบัญชีในแท็บ "ผู้ใช้และตัวละคร": ทุกบัญชี ตัวละคร ทอง คลัง', group: 'ผู้เล่น' },
   resetPassword: { name: 'ตั้งรหัสผ่านชั่วคราว', desc: 'ตั้งรหัสผ่านใหม่ให้บัญชีที่ลืมรหัส', group: 'ผู้เล่น' },
@@ -434,7 +440,7 @@ export function customItem(baseId: string, rarity: Rarity, level: number, cls: C
     const r = ranges[i];
     const top = roundStat(stat, r.hi * ADMIN_STAT_MULT);
     if (value < statStep(stat) || roundStat(stat, value) !== value || value > top) return `${STAT_LABEL[stat]} ต้องอยู่ระหว่าง ${statStep(stat)}–${top}`;
-    const t = tierOf(stat, value, r.lo, r.hi);
+    const t = tierOf(stat, level, value, r.lo, r.hi);
     lines.push({ stat, value, tier: t.tier, min: t.min, max: t.max });
   }
   item.name = name;
@@ -443,6 +449,64 @@ export function customItem(baseId: string, rarity: Rarity, level: number, cls: C
   item.stats = {};
   for (const l of lines) item.stats[l.stat] = roundStat(l.stat, (item.stats[l.stat] ?? 0) + l.value);
   return item;
+}
+
+/** What the editor shows for row `i` of these stats at this value: its normal range, cap and tier. */
+export function adminRowInfo(baseId: string, rarity: Rarity, level: number, stats: StatKey[], i: number, value: number):
+  { min: number; max: number; lo: number; hi: number; main: boolean; step: number; top: number; tier: number; tmin: number; tmax: number } | null {
+  const r = rowRanges(baseId, rarity, level, stats)?.[i];
+  if (!r) return null;
+  const stat = stats[i];
+  const t = tierOf(stat, value, r.lo, r.hi);
+  return { min: r.min, max: r.max, lo: r.lo, hi: r.hi, main: r.main, step: statStep(stat), top: roundStat(stat, r.hi * ADMIN_STAT_MULT), tier: t.tier, tmin: t.min, tmax: t.max };
+}
+
+// ------------------------------------------------------------ editing an item a player has (itemEdit)
+
+/** Where an item sits on the account sheet: a worn place, a bag slot or a stash slot. */
+export type AdminItemPlace = 'equip' | 'bag' | 'stash';
+/** Most failed-enhance pity an edit may set (each one is +1% on the next chance). */
+export const ADMIN_PITY_MAX = 100;
+
+/**
+ * What the page saw in a slot, so the server can tell the slot still holds it (the player may have
+ * moved things since the sheet was drawn): gear by its uid, a stack by its kind.
+ */
+export function entrySig(e: BagEntry): string {
+  if (isPotion(e)) return `potion:${e.potion}:${e.size}`;
+  if (isStone(e)) return `stone:${e.stone}`;
+  return `item:${e.uid}`;
+}
+
+/**
+ * The item `old` becomes after an edit: kind, rarity, level, class, name, +N, pity and every stat row
+ * as the page sent them. Checks every value (like customItem, stats up to ADMIN_STAT_MULT × the normal
+ * top, tiers worked out from the values). Keeps the uid. A Thai error instead of an item.
+ */
+export function editGear(old: Item, body: Record<string, unknown>): Item | string {
+  const base = ITEM_BASES.find((b) => b.id === body.baseId);
+  if (!base) return 'ไม่มีไอเทมชนิดนี้';
+  const rarity = RARITIES.find((r) => r === body.rarity);
+  if (!rarity) return 'ระดับความหายากไม่ถูกต้อง';
+  const cls = CLASS_IDS.find((k) => k === body.classId);
+  if (!cls) return 'อาชีพไม่ถูกต้อง';
+  const whole = (v: unknown, lo: number, hi: number): v is number => typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi;
+  if (!whole(body.level, base.minLevel, MAX_LEVEL)) return `เลเวลไอเทมต้องเป็น ${base.minLevel}–${MAX_LEVEL} (ขั้นต่ำของชนิดนี้ Lv.${base.minLevel})`;
+  if (!whole(body.plus, 0, MAX_PLUS)) return `ระดับตีบวกต้องเป็น 0–${MAX_PLUS}`;
+  if (!whole(body.pity, 0, ADMIN_PITY_MAX)) return `pity ต้องเป็น 0–${ADMIN_PITY_MAX}`;
+  const item = customItem(base.id, rarity, body.level, cls, body.name, body.lines);
+  if (typeof item === 'string') return item;
+  item.uid = old.uid;
+  if (body.plus) item.plus = body.plus;
+  if (body.pity) item.pity = body.pity;
+  return item;
+}
+
+/** One line for the audit log: everything that makes up the entry. */
+export function describeEntry(e: BagEntry): string {
+  if (isStack(e)) return entryName(e);
+  const lines = (e.lines ?? []).map((l) => `${STAT_LABEL[l.stat]} ${l.value} T${l.tier}`).join(', ') || 'ไม่มีสเตตัส';
+  return `${e.plus ? `+${e.plus} ` : ''}${e.name} [${RARITY_LABEL[e.rarity]}] Lv.${e.level}${e.cls ? ` (${e.cls})` : ''}${e.pity ? ` pity ${e.pity}` : ''} · ${lines}`;
 }
 
 /** The smallest value a chosen stat row may have. */

@@ -63,6 +63,9 @@ npm run stop-server -- --restart # เหมือนกัน แต่ npm run
 - ข้อมูลตัวละครที่เซฟคือ `CharacterData` (`src/shared/sim/Player.ts`) เก็บใน SQLite บน server (`server/db.ts`)
   ถ้าเปลี่ยนรูปแบบ ต้องคิดถึงเซฟเก่าเสมอ (ฟิลด์ใหม่ให้เป็น optional หรือมีค่าเริ่มต้น)
 - ตัวเลขเกมอยู่ใน `src/shared/data/` เช่น `monsters.ts` (อัตราดรอป), `items.ts`, `enhance.ts`, `potions.ts`, `reroll.ts`
+- **ภาพในเกมขึ้นเว็บเป็น WebP** (โหลดเร็วขึ้น โดยเฉพาะบนมือถือ): ภาพใหม่ใน `public/assets/sprites/` ยังใส่เป็น PNG ตามเดิม ตอน build จะแปลงเอง (`tools/vite-sprites-webp.ts`: q90 + smart subsample, alpha คงเดิม, cache ใน `node_modules/.cache/`) แล้วลบ PNG ออกจาก build · `npm run dev` ยังใช้ PNG
+  - path ภาพที่เขียนใน TS ต้องผ่าน `imgUrl()` (`src/client/img.ts`) หรือโหลดผ่าน `loadTexture`/`loadImage` ใน `src/client/assets.ts` ถ้าลืม ภาพจะหายเฉพาะตอน build (ตอน dev ยังเห็นปกติ)
+  - ใน `index.html` และ CSS เขียน `assets/sprites/….png` ได้เลย plugin เปลี่ยนเป็น `.webp` ให้ · ไฟล์ที่เป็น `.webp` อยู่แล้ว (การ์ด, ภาพหน้าโหลด) build ไม่แตะ
 
 ## ระบบที่ตกลงกับเจ้าของไว้แล้ว (รายละเอียดอยู่ในไฟล์ของแต่ละระบบ)
 
@@ -71,7 +74,7 @@ npm run stop-server -- --restart # เหมือนกัน แต่ npm run
 | กระเป๋า ยา ไอเทม ช่างตีเหล็ก | กระเป๋า 30 ช่อง ยาช่องละ 10 · tier T1–T5 แบบ PoE2 · ช่างตีเหล็ก 3 เมนู (ตีบวก/สุ่มค่า/สุ่มสเตตัส) จ่ายทอง · ลูกแก้วตีบวก 1 ลูกต่อของที่สวม +7 ขึ้นไป หน้าตาทั้งเซิร์ฟแก้ได้เฉพาะเจ้าของใน /admin | [items-and-forge.md](docs/systems/items-and-forge.md) |
 | เมือง แมพ ภาพ หน้าต่าง EXP | EXP โค้งชันขึ้น Lv20+ · Auto ได้ EXP 50% · ประตูบอสที่ Lv 10/20/30/40 · เมืองศูนย์กลาง `nexus_city` เป็น safe zone + ประตู 4 มุม · Auto Play รันบน server · ภาพ 16-bit isometric · หน้าต่างลากได้ไม่จำตำแหน่ง · EXP แบ่งตามดาเมจ | [world-and-ui.md](docs/systems/world-and-ui.md) |
 | คลัง และตลาดฝากขาย | คลังร่วมทั้งบัญชี 30–90 ช่อง · ตลาด 5%+5% 48 ชม. กล่องรับของที่ NPC · Guest ใช้ไม่ได้ | [stash-and-market.md](docs/systems/stash-and-market.md) |
-| Login, Guest, /admin | ปุ่ม Guest Login ปิดอยู่ · Guest ลบเมื่อไม่ออนไลน์ 24 ชม. · role owner/gm + role ที่ owner สร้างเอง (แท็บ "สิทธิ์" ติ๊กเครื่องมือต่อ role, DB เก็บเฉพาะที่ต่างจาก `FEATURE_ROLES`, ลบ role ที่มีคนใช้ไม่ได้) · `admin_audit` | [accounts-and-admin.md](docs/systems/accounts-and-admin.md) |
+| Login, Guest, /admin | ปุ่ม Guest Login ปิดอยู่ · Guest ลบเมื่อไม่ออนไลน์ 24 ชม. · role owner/gm + role ที่ owner สร้างเอง (แท็บ "สิทธิ์" ติ๊กเครื่องมือต่อ role, DB เก็บเฉพาะที่ต่างจาก `FEATURE_ROLES`, ลบ role ที่มีคนใช้ไม่ได้) · หน้าบัญชีแสดงไอเทมเป็นตารางช่อง กดดู/แก้ได้ทุกอย่าง (สวิตช์ `itemEdit`) · `admin_audit` | [accounts-and-admin.md](docs/systems/accounts-and-admin.md) |
 | ปาร์ตี้ | สูงสุด 3 ตัว (บัญชีละ 1) ไม่ใช่ Guest · หัวหน้าชวน/เตะ · หลุดได้ 60 วิ · ไม่เซฟ · ของดรอปแชร์ทั้งปาร์ตี้ · EXP เก็บ 50% แบ่ง 50% ให้คนแมพเดียวกันที่ไม่ต่ำกว่า 5 เลเวล | [party.md](docs/systems/party.md) |
 | เทรดระหว่างผู้เล่น | ไม่ใช่ Guest แมพเดียวกัน บัญชีเดียวกันเทรดกันเองไม่ได้ · 8 ช่อง+ทอง · ยืนยันทั้งคู่แล้วนับ 3 วิ แก้ข้อเสนอ = ยืนยันถูกรีเซ็ตทั้งคู่ · ภาษีทองผู้ส่ง 3% (ผู้รับได้ 97%) · แลกใน transaction เดียว · ตาย/หลุด/เปลี่ยนแมพ = ยกเลิก · ประวัติใน /admin | [trade.md](docs/systems/trade.md) |
 | กล่องจดหมาย | owner ส่งถึงตัวละคร/บัญชี/ทุกตัวละคร/ทุกบัญชี (Guest ไม่ได้) พร้อมของแนบ ≤ 10 ชิ้น · รับ all-or-nothing ครั้งเดียว · ลบไม่ได้ถ้ายังมีของแนบ · หมดอายุ 30 วัน · ดึงกลับได้เฉพาะสำเนาที่ยังไม่รับ | [mail.md](docs/systems/mail.md) |
@@ -80,5 +83,5 @@ npm run stop-server -- --restart # เหมือนกัน แต่ npm run
 | แชนแนล (CH) | เฉพาะ 4 แมพฟาร์ม (ค่าต่อแมพ `ZoneDef.channels`) · ห้องละ 20 ลูกตี้ตามหัวตี้ได้ 22 · เข้าห้องเลขต่ำสุดที่ว่าง เต็มหมดเปิดใหม่ ห้องว่างปิด (CH 1 อยู่ตลอด) · ย้ายเองต้องพ้นการต่อสู้ 10 วิ · หลุดกลับใน 60 วิ = แมพ/CH/จุดเดิม · ปาร์ตี้/เทรด = ห้องเดียวกัน · GM วาร์ปเลือก CH ได้ | [channels.md](docs/systems/channels.md) |
 | แจ้งปัญหา / ข้อเสนอแนะ | ปุ่มในเมนูระบบ (ไม่ใช่ Guest) · 10–500 ตัวอักษร · 1 ครั้ง/60 วิ, 5/วัน/บัญชี, 15/วัน/IP, 60/ชม. ทั้งเซิร์ฟ, ห้ามข้อความซ้ำใน 24 ชม. · server ใส่แมพ/ตำแหน่ง/เลเวล/ping เอง · เฉพาะ "รายงานผู้เล่น" แจ้ง owner/GM ออนไลน์ทันที · แท็บ "รายงาน" ใน /admin + ห้ามรายงานต่อบัญชี | [reports.md](docs/systems/reports.md) |
 | ของแต่งตัว | ค่าการวาง/หน้าตาแยกรายชิ้น (ปีก สัตว์ขี่ สัตว์เลี้ยง ออร่า) · แท็บ "ของแต่งตัว" ใน /admin ทดลอง owner+GM บันทึกทั้งเซิร์ฟเฉพาะ owner · เก็บเฉพาะค่าที่ต่างจากโค้ด | [cosmetics.md](docs/systems/cosmetics.md) |
-| ปรับสมดุล | แท็บใน /admin (สวิตช์ `balance` owner+GM) ปรับค่าอาชีพ/ตัวคูณ/ตัวตัดฟื้น/ตาราง tier · เก็บเฉพาะค่าที่ต่างจากโค้ด · มีผลทันที · ลง audit · โอกาส tier ไม่ย้ายช่วง · ของเก่าค่าเดิม ป้าย tier คำนวณใหม่ (`tierK`) | [balance.md](docs/systems/balance.md) |
+| ปรับสมดุล | แท็บใน /admin (สวิตช์ `balance` owner+GM) ปรับค่าอาชีพ/ตัวคูณ/ตัวตัดฟื้น/ตาราง tier (กลาง + แยกต่อสเตตัส/ช่วงเลเวล) · เก็บเฉพาะค่าที่ต่างจากโค้ด · มีผลทันที · ลง audit · โอกาส tier ไม่ย้ายช่วง · ของเก่าค่าเดิม ป้าย tier คำนวณใหม่ (`tierK`) | [balance.md](docs/systems/balance.md) |
 | ปิด/รีสตาร์ท server, สำรอง DB | countdown เสมอ · exit code 75 = รีสตาร์ท · backup `VACUUM INTO` | [server-ops.md](docs/systems/server-ops.md) |

@@ -11,10 +11,10 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import {
-  applyBalance, BALANCE_SETTING, balanceChanges, checkBalance, classStatsAt, codeBalance, currentBalanceTuning, mergeBalance,
+  applyBalance, BALANCE_SETTING, balanceChanges, checkBalance, classStatsAt, codeBalance, currentBalanceTuning, mergeBalance, tierLabelsChange,
 } from '../src/shared/balance';
 import { CLASSES, CLASS_IDS } from '../src/shared/data/classes';
-import { makeItem, rollItem, rowRanges, statRerollOdds, upgradeItem } from '../src/shared/data/items';
+import { lineRanges, makeItem, rerollStat, rerollValues, rollItem, rowRanges, statRerollOdds, tierChances, tierRanges, upgradeItem } from '../src/shared/data/items';
 import { ZONE_HUB } from '../src/shared/data/zones';
 import { mulberry32 } from '../src/shared/rng';
 import { newCharacterData } from '../src/shared/sim/Player';
@@ -144,6 +144,151 @@ const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
   ok(JSON.stringify(mergeBalance({})) === JSON.stringify(codeBalance()), 'an empty tuning is the code');
 }
 
+// ---------------------------------------------------------- each stat's own tier table (owner 2026-11-11)
+{
+  // What may be saved: a listed stat is kept even when its numbers equal the code (listing it is the change).
+  const same = checkBalance({ statTiers: { moveSpeed: { floor: 40, weight: [3, 9, 18, 30, 40] } } }, true).tuning;
+  ok(JSON.stringify(same) === '{"statTiers":{"moveSpeed":{"weight":[3,9,18,30,40],"floor":40}}}', 'a stat\'s own table is kept even with code numbers, parts in a fixed order');
+  const order = checkBalance({ statTiers: { moveSpeed: { floor: 20 }, atk: { bossBoost: 0 } } }, true).tuning;
+  ok(JSON.stringify(order) === '{"statTiers":{"atk":{"bossBoost":0},"moveSpeed":{"floor":20}}}', 'stats come in STAT_KEYS order');
+  for (const [what, t] of [
+    ['unknown stat', { statTiers: { luck: { floor: 20 } } }],
+    ['unknown part', { statTiers: { moveSpeed: { colour: 1 } } }],
+    ['not an object', { statTiers: [1] }],
+    ['own widths not 100', { statTiers: { moveSpeed: { width: [20, 20, 20, 20, 10] } } }],
+    ['own chances all 0', { statTiers: { moveSpeed: { weight: [0, 0, 0, 0, 0] } } }],
+    ['own floor 2%', { statTiers: { moveSpeed: { floor: 2 } } }],
+    ['own boss boost 11', { statTiers: { moveSpeed: { bossBoost: 11 } } }],
+  ] as const) {
+    ok(!!checkBalance(t, true).error, `refused: ${what}`);
+  }
+  const lenient = checkBalance({ statTiers: { luck: { floor: 20 }, moveSpeed: { floor: 2, width: [10, 20, 30, 20, 20] }, atk: { floor: 1 } } }, false).tuning;
+  ok(JSON.stringify(lenient) === '{"statTiers":{"moveSpeed":{"width":[10,20,30,20,20]}}}', 'own tables read back leniently: bad parts dropped, empty stats dropped');
+  ok(balanceChanges({}, { statTiers: { moveSpeed: { floor: 20 } } }).endsWith('ค่าต่ำสุด ไม่ได้ตั้ง → 20%'), 'audit text names the stat\'s own table');
+  ok(tierLabelsChange({}, { statTiers: { moveSpeed: { floor: 20 } } }) && !tierLabelsChange({}, { statTiers: { moveSpeed: { weight: [1, 1, 1, 1, 1] } } }),
+    'only own widths/floor change labels, own chances do not');
+
+  // Chances: each stat rolls from its own; the ranges never move.
+  const stats = ['atk', 'crit', 'moveSpeed'] as const;
+  const before = JSON.stringify(rowRanges('weapon_3', 'rare', 10, [...stats]));
+  applyBalance({ statTiers: { moveSpeed: { weight: [100, 0, 0, 0, 0], bossBoost: 0 } } });
+  ok(JSON.stringify(rowRanges('weapon_3', 'rare', 10, [...stats])) === before, 'a stat\'s own chances do not move any range');
+  ok(near(tierChances('moveSpeed', 1)[0], 1) && near(tierChances('atk', 1)[0], 0.03), 'the stat uses its own chances, the others the central ones');
+  ok(near(tierChances('moveSpeed', 1, true)[0], 1) && tierChances('atk', 1, true)[0] > 0.03, 'boss boost per stat (own 0, central 1.5)');
+  ok(near(statRerollOdds().tiers[0], 0.9 * 0.03 + 0.1 * 1), 'the blacksmith row is every stat\'s chances together');
+  const drops = Array.from({ length: 400 }, (_, i) => rollItem(mulberry32(500 + i), 20, 'mage', 1.5)).flatMap((it) => it.lines ?? []);
+  const move = drops.filter((l) => l.stat === 'moveSpeed');
+  ok(move.length > 10 && move.every((l) => l.tier === 1), `real drops: every moveSpeed line rolls T1 (${move.length} lines)`);
+  ok(drops.some((l) => l.stat !== 'moveSpeed' && l.tier !== 1), 'real drops: the other stats still roll every tier');
+  ok(makeItem('cap', 'common', 1, 'mage')!.tierK === undefined, 'own chances alone do not mark items');
+
+  // Widths / floor: only items carrying that stat are relabelled, values never change, and back again.
+  applyBalance({});
+  const items: Item[] = Array.from({ length: 300 }, (_, i) => rollItem(mulberry32(900 + i), 20, 'sword'));
+  const orig = JSON.stringify(items);
+  const has = (it: Item) => it.lines!.some((l) => l.stat === 'moveSpeed');
+  ok(items.some(has) && items.some((it) => !has(it)), 'test items both with and without a moveSpeed line');
+  applyBalance({ statTiers: { moveSpeed: { floor: 10, width: [40, 30, 15, 10, 5] } } });
+  const copy = structuredClone(items).map((it) => upgradeItem(it));
+  ok(copy.every((it, i) => JSON.stringify(it.stats) === JSON.stringify(items[i].stats) && it.lines!.every((l, j) => l.value === items[i].lines![j].value)), 'own widths: every value stays the same');
+  ok(copy.every((it, i) => has(it) ? it.tierK === ';moveSpeed=40,30,15,10,5|10' : JSON.stringify(it) === JSON.stringify(items[i])), 'only items with the stat get the key; the rest are untouched');
+  ok(copy.every((it, i) => it.lines!.every((l, j) => l.stat === 'moveSpeed' || (l.tier === items[i].lines![j].tier && l.min === items[i].lines![j].min))), 'other lines keep their labels');
+  ok(copy.some((it, i) => it.lines!.some((l, j) => l.stat === 'moveSpeed' && (l.tier !== items[i].lines![j].tier || l.min !== items[i].lines![j].min))), 'moveSpeed lines are relabelled');
+  // Central tuned too: the central part of the key keeps its old form.
+  applyBalance({ tierWidth: [10, 20, 30, 20, 20], statTiers: { moveSpeed: { floor: 10, width: [40, 30, 15, 10, 5] } } });
+  copy.forEach((it) => upgradeItem(it));
+  ok(copy.every((it) => it.tierK === (has(it) ? '10,20,30,20,20|40;moveSpeed=40,30,15,10,5|10' : '10,20,30,20,20|40')), 'central key unchanged in form, the stat added after it');
+  // A stat set back to the code numbers while the central table is tuned keeps the code labels.
+  applyBalance({ rangeFloor: 30, statTiers: { moveSpeed: { width: [25, 25, 25, 15, 10], floor: 40 } } });
+  applyBalance({});
+  const codeMove = JSON.stringify(rowRanges('weapon_3', 'rare', 10, ['moveSpeed']));
+  const codeAtk = JSON.stringify(rowRanges('weapon_3', 'rare', 10, ['atk']));
+  applyBalance({ rangeFloor: 30, statTiers: { moveSpeed: { width: [25, 25, 25, 15, 10], floor: 40 } } });
+  ok(JSON.stringify(rowRanges('weapon_3', 'rare', 10, ['moveSpeed'])) === codeMove && JSON.stringify(rowRanges('weapon_3', 'rare', 10, ['atk'])) !== codeAtk,
+    'an own table with the code numbers keeps that stat on the code ranges while the central one moves');
+  applyBalance({});
+  copy.forEach((it) => upgradeItem(it));
+  ok(JSON.stringify(copy) === orig, 'back to the code tables: the items are exactly as before');
+
+  // The blacksmith rolls each stat from its own table too.
+  applyBalance({ statTiers: { moveSpeed: { weight: [100, 0, 0, 0, 0], floor: 10, width: [40, 30, 15, 10, 5] } } });
+  const rare = items.filter((it) => it.rarity === 'rare' || it.rarity === 'epic').map((it) => upgradeItem(structuredClone(it)));
+  let n = 0;
+  let t1 = 0;
+  let expect = 0;
+  let moveOk = true;
+  for (let i = 0; i < 3000; i++) {
+    const it = structuredClone(rare[i % rare.length]);
+    expect += statRerollOdds(it).tiers[0];
+    const at = rerollStat(it, mulberry32(7000 + i));
+    const l = it.lines![at];
+    n++;
+    if (l.tier === 1) t1++;
+    if (l.stat === 'moveSpeed' && l.tier !== 1) moveOk = false;
+  }
+  ok(moveOk, 'สุ่มสเตตัส: a new moveSpeed line always rolls T1 from its own chances');
+  ok(Math.abs(t1 / n - expect / n) < 0.02, `สุ่มสเตตัส: T1 rate ${(t1 / n).toFixed(3)} matches the odds row ${(expect / n).toFixed(3)}`);
+  const withMove = items.filter(has).map((it) => upgradeItem(structuredClone(it)));
+  let inRange = true;
+  for (const [i, it] of withMove.entries()) {
+    rerollValues(it, mulberry32(8000 + i));
+    const r = lineRanges(it)!;
+    it.lines!.forEach((l, j) => {
+      const t = tierRanges(l.stat, it.level, r[j].lo, r[j].hi)[l.tier - 1];
+      if (l.value < t.min - 1e-9 || l.value > t.max + 1e-9 || l.min !== t.min || l.max !== t.max) inRange = false;
+    });
+  }
+  ok(inRange && withMove.length > 0, 'สุ่มค่าตัวเลข: every line (moveSpeed on its own widths) lands in its tier range');
+  ok(withMove.every((it) => it.tierK === ';moveSpeed=40,30,15,10,5|10'), 'rerolled items carry the key of the stats on them');
+  applyBalance({});
+}
+
+// ---------------------------------------------------------- tier tables per item-level band (owner 2026-11-11)
+{
+  // What may be saved.
+  const t = checkBalance({ bandTiers: { '31-40': { floor: 20 }, '1-10': { bossBoost: 0 } }, statTiers: { moveSpeed: { bands: { '41-50': { weight: [1, 1, 1, 1, 1] } }, floor: 30 } } }, true).tuning;
+  ok(JSON.stringify(t) === '{"statTiers":{"moveSpeed":{"floor":30,"bands":{"41-50":{"weight":[1,1,1,1,1]}}}},"bandTiers":{"1-10":{"bossBoost":0},"31-40":{"floor":20}}}',
+    'band tables kept in TIER_BANDS order, a stat\'s bands after its own parts');
+  for (const [what, x] of [
+    ['unknown band', { bandTiers: { '51-60': { floor: 20 } } }],
+    ['unknown band of a stat', { statTiers: { atk: { bands: { '0-9': { floor: 20 } } } } }],
+    ['band floor 2%', { bandTiers: { '11-20': { floor: 2 } } }],
+    ['stat band widths not 100', { statTiers: { atk: { bands: { '11-20': { width: [50, 50, 50, 50, 50] } } } } }],
+    ['bands not an object', { bandTiers: [1] }],
+  ] as const) {
+    ok(!!checkBalance(x, true).error, `refused: ${what}`);
+  }
+  ok(JSON.stringify(checkBalance({ bandTiers: { '51-60': { floor: 20 }, '11-20': { floor: 2, bossBoost: 3 } } }, false).tuning) === '{"bandTiers":{"11-20":{"bossBoost":3}}}', 'band tables read back leniently');
+  ok(balanceChanges({}, { bandTiers: { '31-40': { floor: 20 } } }).includes('Lv31–40 ค่าต่ำสุด ไม่ได้ตั้ง → 20%'), 'audit text names the band');
+  ok(tierLabelsChange({}, { bandTiers: { '31-40': { floor: 20 } } }) && tierLabelsChange({}, { statTiers: { atk: { bands: { '1-10': { width: [40, 30, 15, 10, 5] } } } } }), 'band widths/floor change labels');
+
+  // Which table wins, part by part: stat+band → stat → band → central.
+  applyBalance({
+    tierWeight: [1, 0, 0, 0, 0],
+    bandTiers: { '31-40': { weight: [0, 1, 0, 0, 0] } },
+    statTiers: { moveSpeed: { weight: [0, 0, 1, 0, 0], bands: { '31-40': { weight: [0, 0, 0, 1, 0] } } }, atk: { bossBoost: 0 } },
+  });
+  const top = (stat: 'moveSpeed' | 'atk' | 'def', level: number) => tierChances(stat, level).indexOf(1) + 1;
+  ok(top('def', 5) === 1 && top('def', 35) === 2 && top('atk', 35) === 2 && top('moveSpeed', 5) === 3 && top('moveSpeed', 35) === 4,
+    'stat+band → stat → band → central (def Lv5 T1, def/atk Lv35 T2, moveSpeed Lv5 T3, moveSpeed Lv35 T4)');
+  ok(top('atk', 40) === 2 && top('atk', 41) === 1 && top('atk', 31) === 2 && top('atk', 30) === 1, 'band edges: Lv31–40 in, 30 and 41 out');
+  const drops = (level: number) => Array.from({ length: 150 }, (_, i) => rollItem(mulberry32(40 + i), level, 'gunslinger')).flatMap((it) => it.lines ?? []);
+  ok(drops(35).every((l) => l.tier === (l.stat === 'moveSpeed' ? 4 : 2)) && drops(15).every((l) => l.tier === (l.stat === 'moveSpeed' ? 3 : 1)), 'real drops follow the item level\'s band');
+  applyBalance({});
+
+  // Widths / floor of one band: only items of that level are relabelled; values never change.
+  const items: Item[] = [15, 35, 45].flatMap((lv) => Array.from({ length: 30 }, (_, i) => rollItem(mulberry32(lv * 100 + i), lv, 'mage')));
+  const orig = JSON.stringify(items);
+  applyBalance({ bandTiers: { '31-40': { floor: 15, width: [10, 20, 30, 20, 20] } } });
+  const copy = structuredClone(items).map((it) => upgradeItem(it));
+  ok(copy.every((it, i) => JSON.stringify(it.stats) === JSON.stringify(items[i].stats)), 'band widths: every value stays the same');
+  ok(copy.every((it, i) => it.level === 35 ? it.tierK === '10,20,30,20,20|15' : JSON.stringify(it) === JSON.stringify(items[i])), 'only items of Lv31–40 get the key; the others are untouched');
+  ok(copy.some((it, i) => it.level === 35 && it.lines!.some((l, j) => l.tier !== items[i].lines![j].tier || l.min !== items[i].lines![j].min)), 'Lv31–40 items are relabelled');
+  applyBalance({});
+  copy.forEach((it) => upgradeItem(it));
+  ok(JSON.stringify(copy) === orig, 'back to the code tables: the items are exactly as before');
+}
+
 // ---------------------------------------------------------- against a real server
 function freePort(): Promise<number> {
   return new Promise((res, rej) => {
@@ -234,6 +379,7 @@ async function run(): Promise<void> {
     ['range', { classes: { sword: { base: { atk: 20000 } } } }],
     ['unknown class', { classes: { ninja: {} } }],
     ['widths', { tierWidth: [50, 50, 50, 50, 50] }],
+    ['own table of an unknown stat', { statTiers: { luck: { floor: 20 } } }],
     ['not an object', 'x'],
   ] as const) {
     ok((await api('POST', '/admin/balance', { tuning }, tok.owner1)).status === 400, `bad ${what} refused`);
