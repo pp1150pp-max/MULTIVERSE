@@ -21,7 +21,9 @@ import type { AdminShutdownText } from '../src/shared/admin';
 import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../src/shared/net/protocol';
 import { SHUTDOWN_TEXT_KEY } from './db';
 import { checkOrbLook, DEFAULT_ORB_LOOK, orbLookChanges, ORB_LOOK_RANGES, ORB_PALETTE_IDS, ORB_SHAPE_IDS, sameOrbLook } from '../src/shared/orbLook';
-import type { AdminCosLook, AdminOrbLook } from '../src/shared/admin';
+import type { AdminCardTune, AdminCosLook, AdminOrbLook } from '../src/shared/admin';
+import { applyCardTuning, cardTuningChanges, checkCardTuning, sameCardTuning } from '../src/shared/cardTuning';
+import { cardName } from '../src/shared/data/cards';
 import { checkCosTuning, cosTuningChanges, sameCosTuning } from '../src/shared/cosTuning';
 import { COS_SLOT_NAME, cosById } from '../src/shared/data/cosmetics';
 
@@ -31,6 +33,7 @@ const orbLookState = (db: Db, canEdit: boolean): AdminOrbLook => ({
   palettes: [...ORB_PALETTE_IDS], shapes: [...ORB_SHAPE_IDS], ranges: ORB_LOOK_RANGES,
 });
 const cosLookState = (db: Db, canEdit: boolean): AdminCosLook => ({ tuning: db.cosTuning(), canEdit });
+const cardTuneState = (db: Db, canEdit: boolean): AdminCardTune => ({ tuning: db.cardTuning(), canEdit });
 const shutdownTextState = (db: Db): AdminShutdownText => ({ texts: db.shutdownTexts(), defaults: { ...DEFAULT_SHUTDOWN_TEXT } });
 
 const NO_RIGHTS = ADMIN_NO_RIGHTS;
@@ -347,6 +350,30 @@ export async function ownerToolsApi(
       world.cosTuningChanged(c.tuning);
     }
     send(res, 200, cosLookState(db, true));
+    return true;
+  }
+
+  // ---------------------------------------------------------- card tuning (server-wide)
+  if (method === 'GET' && path === '/api/admin/card-tune') {
+    const a = requireFeature(req, db, 'cardView');
+    send(res, 200, cardTuneState(db, a.features.includes('cardTune')));
+    return true;
+  }
+
+  if (method === 'POST' && path === '/api/admin/card-tune') {
+    const a = requireFeature(req, db, 'cardTune');
+    const body = await readJson(req);
+    // `reset: true` = everything back to the code defaults; otherwise `tuning` is the whole new set of values.
+    const c = body.reset === true ? { tuning: {} } : checkCardTuning(body.tuning, true);
+    if (!c.tuning) throw new HttpError(400, c.error);
+    const before = db.cardTuning();
+    if (!sameCardTuning(before, c.tuning)) {
+      db.setCardTuning(c.tuning);
+      applyCardTuning(c.tuning);
+      const changes = cardTuningChanges(before, c.tuning, cardName);
+      log(db, a, 'card-tune', 'ค่าการ์ดทั้งเซิร์ฟ', (body.reset === true ? 'คืนค่าเริ่มต้น: ' : '') + (changes.length > 1500 ? changes.slice(0, 1500) + '…' : changes));
+    }
+    send(res, 200, cardTuneState(db, true));
     return true;
   }
 

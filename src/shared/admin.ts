@@ -4,6 +4,7 @@ import { isPotion, isStack, sameStack, STAT_KEYS, STAT_LABEL, STONE_KINDS, type 
 import type { ShutdownMode } from './net/protocol';
 import type { OrbLook } from './orbLook';
 import type { CosTuning } from './cosTuning';
+import type { CardTuning } from './cardTuning';
 import { itemNames, makeItem, roundStat, rowRanges, statStep, tierOf, TIER_VERSION } from './data/items';
 import { POTION_SIZES, potionName, stackLimit } from './data/potions';
 import { STONE_NAME } from './data/stones';
@@ -147,7 +148,7 @@ export interface AdminShutdownText { texts: Record<ShutdownMode, string>; defaul
  * switch: the Permissions tab, the audit log, restarting / stopping the server, deleting accounts or
  * characters, and making someone owner (command line).
  */
-export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook';
+export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cardView' | 'cardTune';
 
 /**
  * The defaults: which built-in role may use each tool (owner always has all). The owner can change
@@ -197,6 +198,10 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   cosPreview: ['owner', 'gm'],
   // Saving the server-wide cosmetic tuning from that tab (owner 2026-11-10: owner only).
   cosLook: ['owner'],
+  // The card tuning tab "การ์ด" (owner 2026-11-11: owner and GMs may look).
+  cardView: ['owner', 'gm'],
+  // Saving the server-wide card numbers from that tab (owner 2026-11-11: owner only).
+  cardTune: ['owner'],
 };
 
 export const ADMIN_FEATURES = Object.keys(FEATURE_ROLES) as AdminFeature[];
@@ -222,7 +227,7 @@ export function featureOverrides(role: AdminRole, features: readonly AdminFeatur
 }
 
 /** Groups of the Permissions tab, in order. */
-export const FEATURE_GROUPS = ['ผู้เล่นและตัวละคร', 'บัญชี', 'ข้อมูลและประวัติ', 'สื่อสาร', 'Server', 'ทดลองหน้าตา'] as const;
+export const FEATURE_GROUPS = ['ผู้เล่นและตัวละคร', 'บัญชี', 'ข้อมูลและประวัติ', 'สื่อสาร', 'Server', 'ทดลองหน้าตา', 'ปรับสมดุลเกม'] as const;
 
 /** Thai name, a line on what it unlocks, and its group, for the Permissions tab. */
 export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; group: (typeof FEATURE_GROUPS)[number] }> = {
@@ -253,6 +258,8 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   orbLook: { name: 'บันทึกลูกแก้วทั้งเซิร์ฟ', desc: 'บันทึกหน้าตาลูกแก้วตีบวกที่ทุกคนเห็น', group: 'ทดลองหน้าตา' },
   cosPreview: { name: 'ทดลองของแต่งตัว', desc: 'แท็บ "ของแต่งตัว": ลองตำแหน่ง/หน้าตาปีก สัตว์ขี่ สัตว์เลี้ยง ออร่า ไม่เปลี่ยนอะไรในเกม', group: 'ทดลองหน้าตา' },
   cosLook: { name: 'บันทึกของแต่งตัวทั้งเซิร์ฟ', desc: 'บันทึกค่าตำแหน่ง/หน้าตาของแต่งตัวที่ทุกคนเห็น (ต้องมี "ทดลองของแต่งตัว" ด้วย)', group: 'ทดลองหน้าตา' },
+  cardView: { name: 'ดูค่าการ์ด', desc: 'แท็บ "การ์ด": ดูผลของการ์ดทุกใบ เรทดรอป ราคา และเพดาน', group: 'ปรับสมดุลเกม' },
+  cardTune: { name: 'แก้ค่าการ์ดทั้งเซิร์ฟ', desc: 'แก้และบันทึกค่าการ์ดที่ใช้ทั้งเซิร์ฟ (ต้องมี "ดูค่าการ์ด" ด้วย)', group: 'ปรับสมดุลเกม' },
 };
 
 /** Shown on the Permissions tab: what no role but owner can ever do. */
@@ -485,6 +492,13 @@ export function addStackToBag(bag: (BagEntry | null)[], slots: number, kind: Adm
     left -= add;
   }
   return n - left;
+}
+
+/** GET/POST /api/admin/card-tune: the server-wide card tuning (only what differs from the code defaults). */
+export interface AdminCardTune {
+  tuning: CardTuning;
+  /** May this admin save it (the `cardTune` switch). */
+  canEdit: boolean;
 }
 
 /** GET/POST /api/admin/cos-look: the server-wide cosmetic tuning (only what differs from the code defaults). */

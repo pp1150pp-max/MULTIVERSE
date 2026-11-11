@@ -244,3 +244,10 @@ details summary { cursor: pointer; margin-top: 8px; }
 .perm { display: flex; gap: 10px; align-items: flex-start; padding: 7px 0; border-bottom: 1px solid #2a241b; cursor: pointer; }
 .perm input { width: auto; flex: none; margin-top: 3px; }
 .perm .muted { font-size: 12px; }
+
+/* ---------------------------------------------------------------- card tuning tab */
+td.changed, input.changed { background: #3a3110; }
+.card-num { margin-bottom: 6px; }
+.card-num-head { margin: 14px 0 6px; font-size: 14px; color: var(--gold); font-weight: 600; }
+.card-save { position: sticky; top: 0; z-index: 5; }
+.card-fx select { min-width: 150px; }
