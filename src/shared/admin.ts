@@ -5,7 +5,8 @@ import type { ShutdownMode } from './net/protocol';
 import type { OrbLook } from './orbLook';
 import type { CosTuning } from './cosTuning';
 import type { CardTuning } from './cardTuning';
-import { itemNames, makeItem, roundStat, rowRanges, statStep, tierOf, TIER_VERSION } from './data/items';
+import type { BalanceTuning } from './balance';
+import { itemNames, makeItem, roundStat, rowRanges, stampTier, statStep, tierOf } from './data/items';
 import { POTION_SIZES, potionName, stackLimit } from './data/potions';
 import { STONE_NAME } from './data/stones';
 
@@ -62,6 +63,8 @@ export interface AdminMeta {
   /** Item kinds the spawn form offers; `name` is what the given class sees, `names` per class. */
   bases: { id: string; slot: SlotId; names: Partial<Record<ClassId | 'any', string>>; minLevel: number }[];
   rarities: Rarity[];
+  /** The game balance in use (src/shared/balance.ts), so the custom-item form's tiers match the server's. */
+  balance: BalanceTuning;
 }
 
 /** One online player in the admin table. Ping numbers are from the latest report (null = none yet). */
@@ -148,7 +151,7 @@ export interface AdminShutdownText { texts: Record<ShutdownMode, string>; defaul
  * switch: the Permissions tab, the audit log, restarting / stopping the server, deleting accounts or
  * characters, and making someone owner (command line).
  */
-export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cardView' | 'cardTune';
+export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cardView' | 'cardTune' | 'balance';
 
 /**
  * The defaults: which built-in role may use each tool (owner always has all). The owner can change
@@ -202,6 +205,8 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   cardView: ['owner', 'gm'],
   // Saving the server-wide card numbers from that tab (owner 2026-11-11: owner only).
   cardTune: ['owner'],
+  // The "ปรับสมดุล" tab: class stats and item tier tables, saved server-wide (owner 2026-11-11: owner and GMs).
+  balance: ['owner', 'gm'],
 };
 
 export const ADMIN_FEATURES = Object.keys(FEATURE_ROLES) as AdminFeature[];
@@ -257,6 +262,7 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   orbPreview: { name: 'ทดลองลูกแก้วตีบวก', desc: 'แท็บ "ลูกแก้วตีบวก": ลองหน้าตา ไม่เปลี่ยนอะไรในเกม', group: 'ทดลองหน้าตา' },
   orbLook: { name: 'บันทึกลูกแก้วทั้งเซิร์ฟ', desc: 'บันทึกหน้าตาลูกแก้วตีบวกที่ทุกคนเห็น', group: 'ทดลองหน้าตา' },
   cosPreview: { name: 'ทดลองของแต่งตัว', desc: 'แท็บ "ของแต่งตัว": ลองตำแหน่ง/หน้าตาปีก สัตว์ขี่ สัตว์เลี้ยง ออร่า ไม่เปลี่ยนอะไรในเกม', group: 'ทดลองหน้าตา' },
+  balance: { name: 'ปรับสมดุล (อาชีพ, tier)', desc: 'แท็บ "ปรับสมดุล": แก้ค่าสเตตัสอาชีพ ตัวคูณ ตัวตัดฟื้น และตาราง tier T1–T5 ของทั้งเซิร์ฟ มีผลทันที', group: 'ปรับสมดุลเกม' },
   cosLook: { name: 'บันทึกของแต่งตัวทั้งเซิร์ฟ', desc: 'บันทึกค่าตำแหน่ง/หน้าตาของแต่งตัวที่ทุกคนเห็น (ต้องมี "ทดลองของแต่งตัว" ด้วย)', group: 'ทดลองหน้าตา' },
   cardView: { name: 'ดูค่าการ์ด', desc: 'แท็บ "การ์ด": ดูผลของการ์ดทุกใบ เรทดรอป ราคา และเพดาน', group: 'ปรับสมดุลเกม' },
   cardTune: { name: 'แก้ค่าการ์ดทั้งเซิร์ฟ', desc: 'แก้และบันทึกค่าการ์ดที่ใช้ทั้งเซิร์ฟ (ต้องมี "ดูค่าการ์ด" ด้วย)', group: 'ปรับสมดุลเกม' },
@@ -433,7 +439,7 @@ export function customItem(baseId: string, rarity: Rarity, level: number, cls: C
   }
   item.name = name;
   item.lines = lines;
-  item.tierV = TIER_VERSION;
+  stampTier(item);
   item.stats = {};
   for (const l of lines) item.stats[l.stat] = roundStat(l.stat, (item.stats[l.stat] ?? 0) + l.value);
   return item;
@@ -499,6 +505,11 @@ export interface AdminCardTune {
   tuning: CardTuning;
   /** May this admin save it (the `cardTune` switch). */
   canEdit: boolean;
+}
+
+/** GET/POST /api/admin/balance: the server-wide game balance (only what differs from the code). */
+export interface AdminBalance {
+  tuning: BalanceTuning;
 }
 
 /** GET/POST /api/admin/cos-look: the server-wide cosmetic tuning (only what differs from the code defaults). */

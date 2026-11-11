@@ -251,3 +251,11 @@ td.changed, input.changed { background: #3a3110; }
 .card-num-head { margin: 14px 0 6px; font-size: 14px; color: var(--gold); font-weight: 600; }
 .card-save { position: sticky; top: 0; z-index: 5; }
 .card-fx select { min-width: 150px; }
+/* Balance tab (classes and item tiers). */
+.bal-scroll { overflow-x: auto; margin: 8px 0; }
+.bal-table td, .bal-table th { white-space: nowrap; }
+.bal-table input.bal-num { width: 90px; }
+.bal-line input.bal-num { max-width: 140px; }
+.bal-num.bal-changed { border-color: var(--gold); background: #2a2210; }
+.bal-num.bal-bad { border-color: var(--bad); }
+.bal-out { color: var(--gold-hi); text-align: right; }

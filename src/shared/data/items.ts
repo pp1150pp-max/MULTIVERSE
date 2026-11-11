@@ -137,26 +137,72 @@ const EXTRA_SCALE: Partial<Record<StatKey, number>> = { atk: 0.5, atkSpeed: 0.5,
 const LOCKED_LINE: Partial<Record<SlotId, StatKey>> = { weapon: 'crit' };
 
 /**
- * Tier ranges as parts of a line's whole range (0 = its lowest roll, 1 = its highest), T1 first.
+ * Tier tables. The code defaults are below; the /admin "ปรับสมดุล" tab can change them server-wide
+ * (src/shared/balance.ts calls setTierTables), so everything reads the `let`s, never the defaults.
+ *
+ * Tier widths are parts of a line's whole range (0 = its lowest roll, 100 = its highest), in %, T1 first.
  * Owner 2026-11-07: T1–T3 a quarter each, T4 15%, T5 the bottom 10%.
  */
-const TIER_BAND: readonly (readonly [number, number])[] = [[0.75, 1], [0.5, 0.75], [0.25, 0.5], [0.1, 0.25], [0, 0.1]];
-/** A line's lowest roll is this part of its highest (owner: medium spread, T5 starts at 40% of T1's top). */
-const RANGE_FLOOR = 0.4;
+export const CODE_TIER_WIDTH: readonly number[] = [25, 25, 25, 15, 10];
+/** A line's lowest roll is this % of its highest (owner: medium spread, T5 starts at 40% of T1's top). */
+export const CODE_RANGE_FLOOR = 40;
 /** Chance of tier 1 (best) … tier 5. */
-const TIER_WEIGHT = [3, 9, 18, 30, 40];
-/**
- * Where an average roll lands in its range (0 = lowest, 1 = highest) with TIER_WEIGHT and TIER_BAND.
- * Ranges are placed so that this point is the stat's old average, so items stay as strong as before on
- * average (owner's choice).
- */
-const MEAN_POS = TIER_BAND.reduce((s, [a, b], i) => s + TIER_WEIGHT[i] * (a + b) / 2, 0)
-  / TIER_WEIGHT.reduce((a, b) => a + b, 0);
-/** Edges between tiers as parts of the range, lowest first (T5 starts at 0, T1 ends at 1). */
-const TIER_EDGES = [0, ...TIER_BAND.map(([, b]) => b).reverse()];
+export const CODE_TIER_WEIGHT: readonly number[] = [3, 9, 18, 30, 40];
+/** How much likelier bosses make the better tiers (rollTier's `boost`). Their rarity boost stays 1.5 in code. */
+export const CODE_BOSS_TIER_BOOST = 1.5;
 
-/** Lines' min–max follow the current tier tables (TIER_BAND, RANGE_FLOOR). Older items are upgraded on load. */
+let TIER_WEIGHT: readonly number[] = CODE_TIER_WEIGHT;
+let RANGE_FLOOR = CODE_RANGE_FLOOR / 100;
+let BOSS_TIER_BOOST = CODE_BOSS_TIER_BOOST;
+/** Edges between tiers as parts of the range, lowest first (T5 starts at 0, T1 ends at 1). */
+let TIER_EDGES: readonly number[] = [];
+/**
+ * Where an average roll lands in its range (0 = lowest, 1 = highest). Ranges are placed so that this point
+ * is the stat's old average, so items stay as strong as before on average (owner's choice). It always uses
+ * the CODE tier chances (owner 2026-11-11): tuning the chances changes new drops only, never the ranges.
+ */
+let MEAN_POS = 0;
+/** '' with the code's widths and floor; otherwise names them, so saved items know their labels are out of date. */
+let TIER_KEY = '';
+
+/** Tier edges from widths in % (T1 first): lowest first, the top edge exactly 1. */
+function edgesOf(width: readonly number[]): number[] {
+  const out = [0];
+  let sum = 0;
+  for (let i = width.length - 1; i > 0; i--) out.push((sum += width[i]) / 100);
+  out.push(1);
+  return out;
+}
+
+/**
+ * Uses these tier tables from now on (already checked by src/shared/balance.ts): widths in % (T1 first,
+ * adding up to 100), the floor in %, the chances T1 first, and the bosses' tier boost.
+ */
+export function setTierTables(width: readonly number[], floor: number, weight: readonly number[], bossBoost: number): void {
+  TIER_EDGES = edgesOf(width);
+  RANGE_FLOOR = floor / 100;
+  TIER_WEIGHT = [...weight];
+  BOSS_TIER_BOOST = bossBoost;
+  // Tier i (T1 = 0) spans edges 4 - i … 5 - i.
+  MEAN_POS = CODE_TIER_WEIGHT.reduce((s, w, i) => s + w * (TIER_EDGES[4 - i] + TIER_EDGES[5 - i]) / 2, 0)
+    / CODE_TIER_WEIGHT.reduce((a, b) => a + b, 0);
+  const same = floor === CODE_RANGE_FLOOR && width.every((w, i) => w === CODE_TIER_WIDTH[i]);
+  TIER_KEY = same ? '' : `${width.join(',')}|${floor}`;
+}
+setTierTables(CODE_TIER_WIDTH, CODE_RANGE_FLOOR, CODE_TIER_WEIGHT, CODE_BOSS_TIER_BOOST);
+
+/** Lines' min–max follow the current tier tables. Older items are upgraded on load (upgradeItem). */
 export const TIER_VERSION = 3;
+
+/**
+ * Marks an item's lines as following the current tier tables: TIER_VERSION, plus `tierK` naming the tuned
+ * widths/floor (left out with the code's own, so untuned servers never touch old saves).
+ */
+export function stampTier(item: Item): void {
+  item.tierV = TIER_VERSION;
+  if (TIER_KEY) item.tierK = TIER_KEY;
+  else delete item.tierK;
+}
 
 /** A line's whole range (lo = lowest roll, hi = highest) whose average roll (MEAN_POS) is `mean`. */
 function rangeAround(mean: number): [number, number] {
@@ -256,16 +302,18 @@ export function rollRarity(r: Rng, boost = 0): Rarity {
 }
 
 function build(base: BaseItem, rarity: Rarity, level: number, cls: ClassId, r: Rng, boost = 0): Item {
+  // `boost` is the rarity boost (bosses 1.5); boosted drops roll their tiers with the tuned boss tier boost.
+  const tierBoost = boost > 0 ? BOSS_TIER_BOOST : 0;
   const lines: StatLine[] = [];
   // Main stats first (the kind's own stats), then the extras, each picked once.
-  for (const k of Object.keys(base.main) as StatKey[]) lines.push(rollLine(k, ...rowRange(base, rarity, level, k, 'main'), r, boost));
+  for (const k of Object.keys(base.main) as StatKey[]) lines.push(rollLine(k, ...rowRange(base, rarity, level, k, 'main'), r, tierBoost));
   const locked = LOCKED_LINE[base.slot];
-  if (locked) lines.push(rollLine(locked, ...rowRange(base, rarity, level, locked, 'locked'), r, boost));
+  if (locked) lines.push(rollLine(locked, ...rowRange(base, rarity, level, locked, 'locked'), r, tierBoost));
   let n = AFFIX_COUNT[rarity] + (base.slot === 'ring' ? 1 : 0);
   const pool = [...AFFIXES];
   while (n-- > 0 && pool.length) {
     const a = pool.splice(Math.floor(r() * pool.length), 1)[0];
-    lines.push(rollLine(a.stat, ...rowRange(base, rarity, level, a.stat, 'extra'), r, boost));
+    lines.push(rollLine(a.stat, ...rowRange(base, rarity, level, a.stat, 'extra'), r, tierBoost));
   }
   const stats = sumLines(lines);
   const owner = ownerClass(base, cls);
@@ -273,7 +321,8 @@ function build(base: BaseItem, rarity: Rarity, level: number, cls: ClassId, r: R
   const pre = PREFIX[rarity];
   if (pre) name = `${pick(r, pre)} ${name}`;
   const value = Math.round((5 + level * 3) * (1 + RARITIES.indexOf(rarity) * 1.5));
-  const item: Item = { uid: newUid(), baseId: base.id, name, slot: base.slot, rarity, level, stats, value, lines, tierV: TIER_VERSION };
+  const item: Item = { uid: newUid(), baseId: base.id, name, slot: base.slot, rarity, level, stats, value, lines };
+  stampTier(item);
   if (!base.names.any) item.cls = owner;
   return item;
 }
@@ -407,7 +456,7 @@ function hash(s: string): number {
  */
 export function upgradeItem<T>(item: T): T {
   const it = item as unknown as Item;
-  if (!it || typeof it !== 'object' || !('baseId' in it) || it.tierV === TIER_VERSION) return item;
+  if (!it || typeof it !== 'object' || !('baseId' in it) || (it.tierV === TIER_VERSION && (it.tierK ?? '') === TIER_KEY)) return item;
   const base = BASES.find((b) => b.id === it.baseId);
   if (!base || !it.lines?.length) return item;
   if ((it.tierV ?? 0) < 3) {
@@ -430,7 +479,7 @@ export function upgradeItem<T>(item: T): T {
     const t = tierOf(l.stat, l.value, ranges[i].lo, ranges[i].hi);
     return { stat: l.stat, value: l.value, tier: t.tier, min: t.min, max: t.max };
   });
-  it.tierV = TIER_VERSION;
+  stampTier(it);
   return item;
 }
 
@@ -443,7 +492,7 @@ export function rerollBlock(item: Item): string | null {
 function relines(item: Item, lines: StatLine[]): void {
   item.lines = lines;
   item.stats = sumLines(lines);
-  item.tierV = TIER_VERSION;
+  stampTier(item);
 }
 
 /**

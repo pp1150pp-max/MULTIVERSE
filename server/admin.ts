@@ -15,6 +15,7 @@ import { tradeAdminApi } from './admin-trade';
 import { reportsAdminApi } from './admin-reports';
 import { rolesAdminApi } from './admin-roles';
 import type { Backups } from './backup';
+import { currentBalanceTuning } from '../src/shared/balance';
 import {
   ADMIN_AUDIT_PAGE, ADMIN_GOLD_MAX, ADMIN_NO_RIGHTS, ADMIN_ITEMS_MAX, ADMIN_SEARCH_MAX,
   addStackToBag, adminStack, adminStackName, customItem, OWNER_ROLE, type AdminFeature, type AdminCharRow, type AdminEditResult, type AdminMe, type AdminMeta, type AdminRole, type AdminServerState,
@@ -137,6 +138,7 @@ export async function adminApi(
       zones: Object.values(ZONES).map((z) => ({ id: z.id, nameTh: z.nameTh, levels: z.levels })),
       bases: ITEM_BASES.map((b) => ({ id: b.id, slot: b.slot, names: b.names, minLevel: b.minLevel })),
       rarities: RARITIES,
+      balance: currentBalanceTuning(),
     };
     return send(res, 200, meta);
   }

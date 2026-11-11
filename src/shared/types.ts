@@ -82,6 +82,11 @@ export interface Item {
   lines?: StatLine[];
   /** Tier tables the lines follow (see TIER_VERSION in data/items). Missing = older lines, upgraded on load. */
   tierV?: number;
+  /**
+   * The tuned tier widths/floor the lines' tier and min–max were worked out with (stampTier in data/items).
+   * Missing = the code's own. When it differs from the tables in use, the labels are redone on load; values never change.
+   */
+  tierK?: string;
 }
 
 /** Stat tiers: 1 is the best, 5 the lowest. Each has its own range (see tierRanges in data/items). */

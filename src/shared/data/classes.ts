@@ -2,7 +2,7 @@ import type { ClassId, Stats } from '../types';
 
 /**
  * Starting MP regen, the same for every class (owner 2026-11-10: 5 MP a second at Lv.1).
- * The player's stats cut all regen by MP_REGEN_MULT (0.25, Player.ts) afterwards, so this is 5 / 0.25.
+ * The player's stats cut all regen by the MP regen multiplier (0.25 in code, src/shared/balance.ts) afterwards, so this is 5 / 0.25.
  */
 export const BASE_MP_REGEN = 20;
 

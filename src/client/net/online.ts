@@ -13,6 +13,7 @@ import { validOrbCode } from '../../shared/data/enhance';
 import { checkOrbLook } from '../../shared/orbLook';
 import { applyOrbLook } from '../orbs';
 import { checkCosTuning } from '../../shared/cosTuning';
+import { applyBalance, checkBalance } from '../../shared/balance';
 import { applyCosTuning } from '../cosTune';
 import { EQUIP_SLOTS } from '../../shared/types';
 import { cleanCosOwned, cosCodes, cosFromCodes, type CosSlot } from '../../shared/data/cosmetics';
@@ -102,6 +103,7 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
         guest = m.guest === true;
         useOrbLook(m.orbLook);
         useCosTuning(m.cosTuning);
+        useBalance(m.balance);
       }
       if (m.t === 'snap' && you >= 0 && !settled) {
         settled = true;
@@ -447,6 +449,9 @@ export class OnlineBackend implements Backend {
         break;
       case 'cosTuning':
         useCosTuning(m.tuning);
+        break;
+      case 'balance':
+        useBalance(m.tuning);
         break;
       case 'orbLook':
         useOrbLook(m.look);
@@ -991,6 +996,11 @@ export class OnlineBackend implements Backend {
 /** The server-wide cosmetic tuning (missing from an older server = the code defaults). */
 function useCosTuning(v: unknown): void {
   applyCosTuning(v === undefined ? {} : checkCosTuning(v, false).tuning ?? {});
+}
+
+/** The server's game balance (class stats, tier tables), so tooltips and the blacksmith's odds match it. */
+function useBalance(v: unknown): void {
+  applyBalance(v === undefined ? {} : checkBalance(v, false).tuning ?? {});
 }
 
 function useOrbLook(v: unknown): void {

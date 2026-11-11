@@ -26,6 +26,8 @@ import { applyCardTuning, cardTuningChanges, checkCardTuning, sameCardTuning } f
 import { cardName } from '../src/shared/data/cards';
 import { checkCosTuning, cosTuningChanges, sameCosTuning } from '../src/shared/cosTuning';
 import { COS_SLOT_NAME, cosById } from '../src/shared/data/cosmetics';
+import { balanceChanges, checkBalance, currentBalanceTuning, sameBalance } from '../src/shared/balance';
+import type { AdminBalance } from '../src/shared/admin';
 
 const MODE_NAME: Record<ShutdownMode, string> = { restart: 'ข้อความรีสตาร์ท', shutdown: 'ข้อความปิด server' };
 const orbLookState = (db: Db, canEdit: boolean): AdminOrbLook => ({
@@ -374,6 +376,30 @@ export async function ownerToolsApi(
       log(db, a, 'card-tune', 'ค่าการ์ดทั้งเซิร์ฟ', (body.reset === true ? 'คืนค่าเริ่มต้น: ' : '') + (changes.length > 1500 ? changes.slice(0, 1500) + '…' : changes));
     }
     send(res, 200, cardTuneState(db, true));
+    return true;
+  }
+
+  // ---------------------------------------------------------- game balance (server-wide, src/shared/balance.ts)
+  if (method === 'GET' && path === '/api/admin/balance') {
+    requireFeature(req, db, 'balance');
+    send(res, 200, { tuning: currentBalanceTuning() } satisfies AdminBalance);
+    return true;
+  }
+
+  if (method === 'POST' && path === '/api/admin/balance') {
+    const a = requireFeature(req, db, 'balance');
+    const body = await readJson(req);
+    // `reset: true` = everything back to the code; otherwise `tuning` is the whole new set of changes.
+    const c = body.reset === true ? { tuning: {} } : checkBalance(body.tuning, true);
+    if (!c.tuning) throw new HttpError(400, c.error);
+    const before = currentBalanceTuning();
+    if (!sameBalance(before, c.tuning)) {
+      db.setBalance(c.tuning);
+      const changes = balanceChanges(before, c.tuning);
+      log(db, a, 'balance', 'ปรับสมดุล ทั้งเซิร์ฟ', (body.reset === true ? 'คืนค่าในโค้ด: ' : '') + (changes.length > 1500 ? changes.slice(0, 1500) + '…' : changes));
+      world.balanceChanged(c.tuning);
+    }
+    send(res, 200, { tuning: currentBalanceTuning() } satisfies AdminBalance);
     return true;
   }
 

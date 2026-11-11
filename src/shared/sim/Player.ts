@@ -18,11 +18,8 @@ import {
 } from '../types';
 import type { LootKind } from './Loot';
 import { newStash, type StashData } from './stash';
+import { classBalance, finishStats } from '../balance';
 
-/** Share of the HP regen stat that actually applies (owner: -60%). */
-export const HP_REGEN_MULT = 0.4;
-/** Same for MP regen (owner: -75%, so skills lean on MP potions). */
-export const MP_REGEN_MULT = 0.25;
 /** Seconds after the last hit taken, attack or skill before out-of-combat regen kicks in. */
 export const COMBAT_LINGER = 5;
 /** Regen multiplier while out of combat. */
@@ -434,8 +431,10 @@ export class Player extends Unit {
 
   recompute(): void {
     const s = emptyStats();
-    addInto(s, this.cls.base);
-    addInto(s, this.cls.growth, this.level - 1);
+    // Class numbers as tuned on the admin page (src/shared/balance.ts; the code's own when untouched).
+    const c = classBalance(this.cls.id);
+    addInto(s, c.base);
+    addInto(s, c.growth, this.level - 1);
     let best = 0;
     for (const it of Object.values(this.equipment)) {
       if (!it) continue;
@@ -444,10 +443,8 @@ export class Player extends Unit {
     }
     this.aura = auraTier(best);
     this.orbs = orbCodes(this.equipment);
-    for (const [k, mult] of Object.entries(this.cls.statMult ?? {}) as [keyof Stats, number][]) s[k] *= mult;
-    // Regen is cut so players lean on potions; applied last so gear is cut too.
-    s.hpRegen *= HP_REGEN_MULT;
-    s.mpRegen *= MP_REGEN_MULT;
+    // Class multipliers, then the regen cuts (so players lean on potions), gear included.
+    finishStats(s, this.cls.id);
     this.stats = s;
     this.hp = Math.min(this.hp, s.maxHp);
     this.mp = Math.min(this.mp, s.maxMp);

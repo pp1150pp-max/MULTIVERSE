@@ -2,6 +2,7 @@
 // Serves the account API under /api and, when `dist/` exists, the game itself — so friends only
 // need a browser and this computer's address.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { applyBalance } from '../src/shared/balance';
 import { clientIp } from './clientIp';
 import { readFile, stat } from 'node:fs/promises';
 import { networkInterfaces } from 'node:os';
@@ -44,6 +45,8 @@ const CONTROL_TOKEN = randomBytes(32).toString('hex');
 const db = new Db(DB_FILE);
 // The owner's card numbers (/admin "การ์ด") are in force from the start.
 applyCardTuning(db.cardTuning());
+// The saved game balance (admin "ปรับสมดุล" tab) before any character, stash or listing is read.
+applyBalance(db.balance());
 const backups = new Backups(db, DB_FILE);
 const limiter = new AttemptLimiter();
 /** Brake on making guests: each new guest counts as one "attempt" for its address. */
