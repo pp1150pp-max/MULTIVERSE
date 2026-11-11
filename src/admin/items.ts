@@ -10,6 +10,7 @@ import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { POTION_SIZE_LABEL, potionName, potionSellPrice, stackLimit } from '../shared/data/potions';
 import { STONE_COLOR, STONE_DESC, STONE_NAME, stoneSellPrice } from '../shared/data/stones';
 import { drawIcon } from '../client/placeholder';
+import { imgUrl } from '../client/img';
 import {
   EQUIP_SLOTS, EQUIP_SLOT_LABEL, isPotion, isStack, isStone, RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, SLOTS, STAT_KEYS, STAT_LABEL, wornPlaces,
   type BagEntry, type ClassId, type EquipSlot, type Item, type Rarity, type StatLine,
@@ -42,7 +43,7 @@ function img(file: string, alt: () => HTMLCanvasElement, key: string): HTMLImage
   el.className = 'gi';
   el.alt = '';
   el.draggable = false;
-  el.src = `assets/sprites/icons/${file}.png`;
+  el.src = imgUrl(`assets/sprites/icons/${file}.png`);
   el.onerror = () => {
     el.onerror = null;
     let src = fallback.get(key);
