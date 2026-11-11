@@ -7,7 +7,6 @@ import { MONSTERS } from '../shared/data/monsters';
 import { BOSS_KEY, BOSS_QUEST_KEY, STONE_COLOR, STONE_NAME } from '../shared/data/stones';
 import { bossShortName, ROOM_KEYS_MAX, roomInviteText, type RoomAnswer, type RoomLobbyView } from '../shared/bossRoom';
 import { potionIcon, stoneIcon } from './icons';
-import { ROOM_EXIT_RANGE } from '../shared/sim/terrain';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -81,8 +80,8 @@ export class RoomUI {
     this.countdown = el('div', 'hidden');
     this.countdown.id = 'room-countdown';
     $('hud').append(this.countdown);
-    // Standing by the open portal: the way out (clicking the portal itself does the same).
-    this.exitBtn = el('button', 'primary hidden', '🚪 ออกจากห้องบอส');
+    // The boss is dead: the way out, from anywhere in the room (there is no portal, owner 2026-11-12).
+    this.exitBtn = el('button', 'primary hidden', 'ออกจากห้องบอส');
     this.exitBtn.id = 'btn-room-exit';
     this.exitBtn.onclick = () => this.g.backend.roomLeave();
     $('hud').append(this.exitBtn);
@@ -231,12 +230,14 @@ export class RoomUI {
     this.invites.delete(id);
   }
 
-  /** In a boss room whose boss is dead, alive and close enough to its portal to leave through it. */
-  nearExit(): boolean {
+  /** The leave button: in a boss room whose boss is dead, alive. Shows how long until everyone is sent out. */
+  private updateExit(): void {
     const r = this.g.backend.room;
-    const pt = this.g.backend.zone.portals[0];
-    const p = this.g.player;
-    return !!r && r.leaveIn !== undefined && !!pt && p.alive && Math.hypot(p.x - pt.x, p.z - pt.z) <= ROOM_EXIT_RANGE;
+    const show = !!r && r.leaveIn !== undefined && this.g.player.alive;
+    this.exitBtn.classList.toggle('hidden', !show);
+    if (!show) return;
+    const label = `ออกจากห้องบอส (ออกอัตโนมัติใน ${Math.ceil(r.leaveIn!)} วิ)`;
+    if (this.exitBtn.textContent !== label) this.exitBtn.textContent = label;
   }
 
   private updateCountdown(): void {
@@ -293,7 +294,7 @@ export class RoomUI {
       : '';
     this.updateRevive();
     this.updateCountdown();
-    this.exitBtn.classList.toggle('hidden', !this.nearExit());
+    this.updateExit();
     if (text !== this.drawnLine) {
       this.drawnLine = text;
       this.line.textContent = text;

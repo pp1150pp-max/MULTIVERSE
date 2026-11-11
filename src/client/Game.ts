@@ -11,7 +11,7 @@ import type { Loot } from '../shared/sim/Loot';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../shared/sim/types';
 import type { Backend, ProjectileLike } from './backend';
 import { ISO_DIR, World } from './world';
-import { restSpotNear, ROOM_EXIT_RANGE, SUMMONER_HEIGHT, SUMMONER_RANGE } from '../shared/sim/terrain';
+import { restSpotNear, SUMMONER_HEIGHT, SUMMONER_RANGE } from '../shared/sim/terrain';
 import { Input } from './input';
 import { Effects } from './effects';
 import { Floating, countdown } from './floating';
@@ -61,8 +61,7 @@ type ClickGoal =
   | { kind: 'loot'; id: number; x: number; z: number }
   | { kind: 'npc'; id: NpcId; x: number; z: number }
   | { kind: 'rest'; x: number; z: number }
-  | { kind: 'summoner'; x: number; z: number }
-  | { kind: 'exit'; x: number; z: number };
+  | { kind: 'summoner'; x: number; z: number };
 
 export interface Npc { id: NpcId; name: string; action: string; icon: string; role: string; x: number; z: number; actor: SpriteActor }
 
@@ -658,9 +657,6 @@ export class Game {
     for (const s of this.backend.terrain.restSpots) consider({ kind: 'rest', x: s.x, z: s.z }, 0.6, Math.max(22, (s.kind === 'fountain' ? 2.2 : 0.9) * pxPerUnit));
     const sm = this.backend.terrain.summoner;
     if (sm) consider({ kind: 'summoner', x: sm.x, z: sm.z }, 1.4, Math.max(22, 1.2 * pxPerUnit));
-    // A boss room's portal: clicked to leave (never walked into).
-    const exit = this.backend.room ? this.backend.zone.portals[0] : undefined;
-    if (exit) consider({ kind: 'exit', x: exit.x, z: exit.z }, 1.4, Math.max(26, 1.4 * pxPerUnit));
     return best;
   }
 
@@ -685,12 +681,6 @@ export class Game {
     } else if (g.kind === 'npc') {
       if (d < NPC_TALK_RANGE - 0.4) {
         this.hud.talkTo(g.id);
-        this.goal = null;
-      }
-    } else if (g.kind === 'exit') {
-      // Close enough: ask to leave (the server says so if the boss is still alive).
-      if (d < ROOM_EXIT_RANGE - 0.4) {
-        this.backend.roomLeave();
         this.goal = null;
       }
     } else if (g.kind === 'summoner') {
@@ -791,14 +781,9 @@ export class Game {
     // height plus room for its 4px bob) so the two never overlap whatever the zoom.
     else if (rest) this.floating.npcPrompt(this, rest.x, Floating.restBadgeY(rest.kind), rest.z, prompt, this.floating.restBadgeHeight(spots.indexOf(rest)) + 8);
     else this.floating.npcPrompt(this, 0, 0, 0, prompt);
-    // In a boss room once the boss is dead: the way home and how long until everyone is sent there.
-    const room = this.backend.room;
-    const exit = room?.leaveIn !== undefined ? this.backend.zone.portals[0] : undefined;
-    this.floating.bossTimer(this, exit?.x ?? 0, exit?.z ?? 0, exit ? `คลิกประตูเพื่อออก · ออกอัตโนมัติใน ${countdown(room!.leaveIn!)}` : null);
     if (near && i.pressed('KeyT')) this.hud.talkTo(near.id);
     else if (summ && i.pressed('KeyT')) this.rooms.toggle();
     else if (rest && i.pressed('KeyT')) this.backend.rest();
-    else if (this.rooms.nearExit() && i.pressed('KeyT')) this.backend.roomLeave();
 
     // Farming circle: while Auto runs (around where it started) and while the settings window is open
     // (around the player if Auto is off), following the number as it is typed.

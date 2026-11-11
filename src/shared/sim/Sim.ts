@@ -21,7 +21,7 @@ import { classBalance } from '../balance';
 import { COS_SLOT_NAME, cosById, MOUNT_CALM } from '../data/cosmetics';
 import {
   isBound, isItem, isPotion, isStack, isStone, RARITY_LABEL, sameStack, SLOT_LABEL, BLACKSMITH_STONES, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
-import { PORTAL_RANGE, ROOM_EXIT_RANGE, REST_CD, restSpotNear, Terrain, type RestSpot } from './terrain';
+import { PORTAL_RANGE, REST_CD, restSpotNear, Terrain, type RestSpot } from './terrain';
 import {
   BUYBACK_RESET, buybackPrice, cleanAutoSettings, lootPots, Player, sortEntries,
   type AutoSettings, type CharacterData, type LootFilter, type SortKey,
@@ -1415,30 +1415,23 @@ export class Sim {
   }
 
   /**
-   * Leaving a boss room through its portal (owner 2026-11-12: only by clicking it or its button, never
-   * by walking into it): once the boss is dead, standing near it. Comes out by the map's summoner.
-   * Returns why not, or null when on the way.
+   * Leaving a boss room by its button (owner 2026-11-12: no portal, only the button): once the boss is
+   * dead, from anywhere in the room. Comes out by the map's summoner. Returns why not, or null when on the way.
    */
   leaveRoom(p: Player): string | null {
-    const pt = this.zone.portals[0];
     const spot = lairExitSpot(this.zone);
-    if (!this.zone.roomOf || !pt || !spot) return 'ไม่ได้อยู่ในห้องบอส';
+    if (!this.zone.roomOf || !spot) return 'ไม่ได้อยู่ในห้องบอส';
     if (!p.alive) return 'ตายอยู่';
-    const why = !this.cleared ? 'ประตูจะเปิดเมื่อปราบบอสได้'
-      : Math.hypot(p.x - pt.x, p.z - pt.z) > ROOM_EXIT_RANGE ? 'เข้าใกล้ประตูก่อน'
-      : null;
-    if (why) {
-      this.text(pt.x, 2.2, pt.z, why, 'info', 1.2, p.id);
-      return why;
+    if (!this.cleared) {
+      this.log('ออกได้เมื่อปราบบอสแล้ว', '#ff9a6a', p.id);
+      return 'ออกได้เมื่อปราบบอสแล้ว';
     }
-    this.fx('burst', pt.x, 1.4, pt.z, '#6affd0', 18, 3);
+    this.fx('burst', p.x, 1.4, p.z, '#6affd0', 18, 3);
     this.events.push({ t: 'travel', to: p.id, zone: spot.field, spot: { x: spot.x, z: spot.z } });
     return null;
   }
 
   private checkPortals(p: Player): void {
-    // A boss room's portal is clicked, not walked into (Sim.leaveRoom).
-    if (this.zone.roomOf) return;
     for (const pt of this.zone.portals) {
       const d = Math.hypot(p.x - pt.x, p.z - pt.z);
       if (d > PORTAL_RANGE) {
