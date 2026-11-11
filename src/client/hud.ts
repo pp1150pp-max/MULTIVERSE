@@ -1859,7 +1859,8 @@ export class Hud {
     const before = (item.lines ?? []).map((l) => ({ ...l }));
     this.enhancing = true;
     this.startForgeCd();
-    const out = await this.g.backend.reroll(item.uid, kind).finally(() => (this.enhancing = false));
+    const [out] = await Promise.all([this.g.backend.reroll(item.uid, kind), this.swingHammer()])
+      .finally(() => (this.enhancing = false));
     if (!out) {
       this.forgeResult('fail', 'สุ่มไม่สำเร็จ');
       return;
@@ -1888,13 +1889,28 @@ export class Hud {
     }, FORGE_CD * 1000 + 20);
   }
 
+  /** Swings the hammer over the forge slot; resolves when it has struck, so the result shows after the hit. */
+  private swingHammer(): Promise<void> {
+    const ms = 600;
+    const el = $('forge-hammer');
+    el.style.setProperty('--swing', `${ms}ms`);
+    el.classList.remove('swing');
+    void el.offsetWidth; // restart the animation
+    el.classList.add('swing');
+    return new Promise((done) => setTimeout(() => {
+      el.classList.remove('swing');
+      done();
+    }, ms));
+  }
+
   private async enhance(): Promise<void> {
     if (!this.forgeSel || this.enhancing || this.forgeCooling()) return;
     const sel = this.forgeItems().find((w) => w.uid === this.forgeSel);
     const protect = !!sel && dropsOnFail(sel) && this.forgeProtect;
     this.enhancing = true;
     this.startForgeCd();
-    const out = await this.g.backend.enhance(this.forgeSel, protect).finally(() => (this.enhancing = false));
+    const [out] = await Promise.all([this.g.backend.enhance(this.forgeSel, protect), this.swingHammer()])
+      .finally(() => (this.enhancing = false));
     if (!out) return;
     const { result, item } = out;
     if (result === 'success') {

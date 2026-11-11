@@ -1300,16 +1300,17 @@ export class Sim {
     if (worn) p.recompute();
     if (result === 'success') {
       this.log(`🔨 ตีบวกสำเร็จ → ${itemName(item)}`, '#ffd34a', p.id);
+      this.fx('effect', 'enhance_ok', p.x, p.z, 0, 1.3);
       this.fx('burst', p.x, 1.2, p.z, '#ffd34a', 14, 3);
-      this.text(p.x, p.topY + 0.3, p.z, `+${plusOf(item)} สำเร็จ!`, 'lvl', 1.4);
+      this.text(p.x, p.topY + 0.6, p.z, `+${plusOf(item)} สำเร็จ!`, 'enh', 1.6);
       if (plusOf(item) >= ANNOUNCE_FROM) {
         this.events.push({ t: 'announce', text: `🔨 ${p.name} ตี${SLOT_LABEL[item.slot]} ${item.name} เป็น +${plusOf(item)} สำเร็จ!` });
       }
     } else {
       const why = result === 'drop' ? ` ระดับลดเหลือ +${plusOf(item)}` : result === 'saved' ? ' (หินกันระดับลดทำงาน ระดับเท่าเดิม)' : '';
       this.log(`🔨 ตีบวก ${itemName(item)} ล้มเหลว${why}`, '#ff8a6a', p.id);
-      this.fx('burst', p.x, 1.2, p.z, '#8a8f96', 10, 2);
-      this.text(p.x, p.topY + 0.3, p.z, 'ล้มเหลว', 'hurt', 1.2);
+      this.fx('effect', 'enhance_fail', p.x, p.z, 0, 1.1);
+      this.text(p.x, p.topY + 0.6, p.z, result === 'drop' ? `ล้มเหลว +${plusOf(item)}` : 'ล้มเหลว', 'enhfail', 1.4);
     }
     this.sfx(result === 'success' ? 'enhance_ok' : 'enhance_fail', p.x, p.z, p.id);
     this.afterChange(p);
