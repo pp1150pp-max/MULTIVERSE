@@ -8,6 +8,7 @@ import { POTION_SIZES, POTION_SIZE_LABEL, potionName } from '../../shared/data/p
 import { isPotion, type PotionKind, type PotionSize } from '../../shared/types';
 import type { SkillSlot } from '../../shared/data/classes';
 import { isTouchMode, onPointerModeChange } from './device';
+import { imgUrl } from '../img';
 
 /** The virtual key the attack button holds down (read by Game.manualIntent as "basic attack"). */
 export const TOUCH_ATTACK = 'TouchAttack';
@@ -17,8 +18,8 @@ const POTION_HOLD_MS = 450;
 
 const POTION_CD = 1.5;
 
-const art = (name: string): string => `<img src="assets/sprites/ui/touch/${name}.png" alt="" draggable="false">`;
-const badgeArt = (name: string): string => `<img src="assets/sprites/ui/ico_${name}.png" alt="" draggable="false">`;
+const art = (name: string): string => `<img src="${imgUrl(`assets/sprites/ui/touch/${name}.png`)}" alt="" draggable="false">`;
+const badgeArt = (name: string): string => `<img src="${imgUrl(`assets/sprites/ui/ico_${name}.png`)}" alt="" draggable="false">`;
 
 interface SkillButton { slot: SkillSlot; el: HTMLElement; cd: HTMLElement; num: HTMLElement }
 interface PotionButton { kind: PotionKind; el: HTMLElement; cd: HTMLElement; num: HTMLElement; img: HTMLImageElement | null }
@@ -226,7 +227,7 @@ export class TouchControls {
       const count = p.potionCount(b.kind, size);
       const txt = String(count);
       if (b.num.textContent !== txt) b.num.textContent = txt;
-      const src = `assets/sprites/icons/potion_${b.kind}_${size}.png`;
+      const src = imgUrl(`assets/sprites/icons/potion_${b.kind}_${size}.png`);
       if (b.img && b.img.getAttribute('src') !== src) b.img.setAttribute('src', src);
       b.cd.style.height = `${(Math.max(0, p.potCd) / POTION_CD) * 100}%`;
       b.el.classList.toggle('empty', count <= 0);
