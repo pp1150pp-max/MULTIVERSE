@@ -6,7 +6,7 @@
 // Rules agreed with the owner: docs/systems/channels.md.
 import { Sim } from '../src/shared/sim/Sim';
 import type { ZoneDef } from '../src/shared/data/zones';
-import { CH_PARTY_CAP, CH_RECONNECT_MS, CH_SOLO_CAP, CH_SWITCH_CALM, hasChannels, type ChannelRow } from '../src/shared/channels';
+import { CH_PARTY_CAP, CH_RECONNECT_MS, CH_RESERVED, CH_SOLO_CAP, CH_SWITCH_CALM, hasChannels, type ChannelRow } from '../src/shared/channels';
 
 /**
  * When a player last fought (a hit taken, an attack or a skill), in wall-clock ms, for the
@@ -69,14 +69,15 @@ export class Channels {
   private readonly drops = new Map<number, DropNote>();
 
   constructor(
-    zones: ZoneDef[],
+    private readonly zones: ZoneDef[],
     /** Wall clock in ms (tests pass a fake one). */
     private readonly now: () => number = Date.now,
     private readonly makeSim: (zone: ZoneDef) => Sim = (zone) => new Sim(zone),
   ) {
     for (const zone of zones) {
       this.byZone.set(zone.id, []);
-      this.open(zone, 1);
+      // A farm map starts with no channel running (CH 1–10 are reserved slots, see list()); the hub has its one.
+      if (!hasChannels(zone)) this.open(zone, 1);
     }
   }
 
@@ -110,27 +111,54 @@ export class Channels {
 
   /** Each channel of a zone with its number of players, for the channel window and /admin. */
   list(zoneId: string): ChannelRow[] {
-    return this.channels(zoneId).map((c) => ({ ch: c.ch, n: this.count(c) }));
+    const open = this.channels(zoneId);
+    const zone = open[0]?.zone ?? this.zoneOf(zoneId);
+    if (!zone || !hasChannels(zone)) return open.map((c) => ({ ch: c.ch, n: this.count(c) }));
+    // CH 1–CH_RESERVED always show (no Sim behind a free one: 0 players); above that only the open ones.
+    const rows: ChannelRow[] = [];
+    for (let ch = 1; ch <= CH_RESERVED; ch++) rows.push({ ch, n: open.find((c) => c.ch === ch) ? this.count(open.find((c) => c.ch === ch)!) : 0 });
+    for (const c of open) if (c.ch > CH_RESERVED) rows.push({ ch: c.ch, n: this.count(c) });
+    return rows;
+  }
+
+  /**
+   * The open channel `ch` of a zone, opening it (a fresh Sim, monsters respawned) when it is one of the
+   * reserved CH 1–CH_RESERVED that nobody is in. Undefined for a number that is neither. Whoever calls
+   * this must put a player in it, or call release().
+   */
+  ensure(zoneId: string, ch: number): Channel | undefined {
+    const open = this.get(zoneId, ch);
+    if (open) return open;
+    const zone = this.zoneOf(zoneId);
+    if (!zone || !hasChannels(zone) || !Number.isSafeInteger(ch) || ch < 1 || ch > CH_RESERVED) return undefined;
+    return this.open(zone, ch);
+  }
+
+  /** Closes a channel opened by ensure() that ended up with nobody (a refused switch), unless it is held for a dropped player. */
+  release(c: Channel): void {
+    if (this.count(c) === 0 && !this.heldKeys().has(`${c.zone.id}|${c.ch}`)) this.close(c);
   }
 
   /**
    * The channel someone entering this zone goes to:
    *   1. a party member whose leader is on this map: the leader's channel, while it has fewer than CH_PARTY_CAP;
    *   2. `prefer` (the channel number they were last in), if this map has it and it has fewer than CH_SOLO_CAP;
-   *   3. the lowest-numbered channel with fewer than CH_SOLO_CAP;
-   *   4. all full: a new channel (the lowest free number).
-   * A zone without channels always gives its only one. Undefined only for an unknown zone.
+   *   3. the open channel with the fewest players (below CH_SOLO_CAP; a tie: the lower number);
+   *   4. none open, or all full: a new channel (the lowest free number).
+   * A zone without channels always gives its only one; on a farm map with no channel running, CH 1 opens. Undefined only for an unknown zone.
    */
   place(zoneId: string, opts: PlaceOpts = {}): Channel | undefined {
     const list = this.byZone.get(zoneId);
-    if (!list?.length) return undefined;
-    const zone = list[0].zone;
+    const zone = this.zoneOf(zoneId);
+    if (!list || !zone) return undefined;
     if (!hasChannels(zone)) return list[0];
     const lead = opts.leader && this.bySim.get(opts.leader);
     if (lead && lead.zone === zone && this.count(lead) < CH_PARTY_CAP) return lead;
     const pref = opts.prefer !== undefined ? list.find((c) => c.ch === opts.prefer) : undefined;
     if (pref && this.count(pref) < CH_SOLO_CAP) return pref;
-    return list.find((c) => this.count(c) < CH_SOLO_CAP) ?? this.open(zone);
+    let best: Channel | undefined;
+    for (const c of list) if (this.count(c) < CH_SOLO_CAP && (!best || this.count(c) < this.count(best))) best = c;
+    return best ?? this.open(zone);
   }
 
   /** How many players this channel takes from someone joining it (a member going to their leader: CH_PARTY_CAP). */
@@ -153,19 +181,18 @@ export class Channels {
   }
 
   /**
-   * Closes channels nobody is in, except CH 1 of each map and one that a dropped player may come back
-   * to. Players are never moved to merge channels. Returns the channels closed (for the log).
+   * Closes channels nobody is in (a reserved CH 1–10 goes back to a free slot), except one that a
+   * dropped player may come back to and the hub's only channel. Players are never moved to merge channels. Returns the channels closed (for the log).
    */
   sweep(): Channel[] {
     const t = this.now();
     for (const [id, d] of this.drops) if (t >= d.until) this.drops.delete(id);
-    const held = new Set([...this.drops.values()].map((d) => `${d.zone}|${d.ch}`));
+    const held = this.heldKeys();
     const closed: Channel[] = [];
     for (const [zoneId, list] of this.byZone) {
       for (const c of [...list]) {
-        if (c.ch === 1 || this.count(c) > 0 || held.has(`${zoneId}|${c.ch}`)) continue;
-        list.splice(list.indexOf(c), 1);
-        this.bySim.delete(c.sim);
+        if (!hasChannels(c.zone) || this.count(c) > 0 || held.has(`${zoneId}|${c.ch}`)) continue;
+        this.close(c);
         closed.push(c);
       }
     }
@@ -202,6 +229,20 @@ export class Channels {
   }
 
   // ------------------------------------------------------------ helpers
+
+  private zoneOf(zoneId: string): ZoneDef | undefined {
+    return this.byZone.get(zoneId)?.[0]?.zone ?? this.zones.find((z) => z.id === zoneId);
+  }
+
+  private heldKeys(): Set<string> {
+    return new Set([...this.drops.values()].map((d) => `${d.zone}|${d.ch}`));
+  }
+
+  private close(c: Channel): void {
+    const list = this.byZone.get(c.zone.id)!;
+    list.splice(list.indexOf(c), 1);
+    this.bySim.delete(c.sim);
+  }
 
   /** Opens channel `ch` of a zone (default: the lowest number not in use). */
   private open(zone: ZoneDef, ch?: number): Channel {

@@ -7,6 +7,8 @@ import type { ZoneDef } from './data/zones';
 export const CH_SOLO_CAP = 20;
 /** A party member following their leader into the leader's channel may go up to this (party max is 3). */
 export const CH_PARTY_CAP = 22;
+/** CH 1 to this number always show in the channel window; a free one is just a number until someone enters it. */
+export const CH_RESERVED = 10;
 /** Seconds out of combat (no hit taken, no attack or skill) before a player may switch channel. */
 export const CH_SWITCH_CALM = 10;
 /** A dropped connection back within this many ms returns to the same map, channel and spot. */
