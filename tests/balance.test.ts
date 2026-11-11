@@ -14,7 +14,7 @@ import {
   applyBalance, BALANCE_SETTING, balanceChanges, checkBalance, classStatsAt, codeBalance, currentBalanceTuning, mergeBalance, tierLabelsChange,
 } from '../src/shared/balance';
 import { CLASSES, CLASS_IDS } from '../src/shared/data/classes';
-import { makeItem, rollItem, rowRanges, statRerollOdds, tierChances, upgradeItem } from '../src/shared/data/items';
+import { lineRanges, makeItem, rerollStat, rerollValues, rollItem, rowRanges, statRerollOdds, tierChances, tierRanges, upgradeItem } from '../src/shared/data/items';
 import { ZONE_HUB } from '../src/shared/data/zones';
 import { mulberry32 } from '../src/shared/rng';
 import { newCharacterData } from '../src/shared/sim/Player';
@@ -209,6 +209,38 @@ const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
   applyBalance({});
   copy.forEach((it) => upgradeItem(it));
   ok(JSON.stringify(copy) === orig, 'back to the code tables: the items are exactly as before');
+
+  // The blacksmith rolls each stat from its own table too.
+  applyBalance({ statTiers: { moveSpeed: { weight: [100, 0, 0, 0, 0], floor: 10, width: [40, 30, 15, 10, 5] } } });
+  const rare = items.filter((it) => it.rarity === 'rare' || it.rarity === 'epic').map((it) => upgradeItem(structuredClone(it)));
+  let n = 0;
+  let t1 = 0;
+  let expect = 0;
+  let moveOk = true;
+  for (let i = 0; i < 3000; i++) {
+    const it = structuredClone(rare[i % rare.length]);
+    expect += statRerollOdds(it).tiers[0];
+    const at = rerollStat(it, mulberry32(7000 + i));
+    const l = it.lines![at];
+    n++;
+    if (l.tier === 1) t1++;
+    if (l.stat === 'moveSpeed' && l.tier !== 1) moveOk = false;
+  }
+  ok(moveOk, 'สุ่มสเตตัส: a new moveSpeed line always rolls T1 from its own chances');
+  ok(Math.abs(t1 / n - expect / n) < 0.02, `สุ่มสเตตัส: T1 rate ${(t1 / n).toFixed(3)} matches the odds row ${(expect / n).toFixed(3)}`);
+  const withMove = items.filter(has).map((it) => upgradeItem(structuredClone(it)));
+  let inRange = true;
+  for (const [i, it] of withMove.entries()) {
+    rerollValues(it, mulberry32(8000 + i));
+    const r = lineRanges(it)!;
+    it.lines!.forEach((l, j) => {
+      const t = tierRanges(l.stat, r[j].lo, r[j].hi)[l.tier - 1];
+      if (l.value < t.min - 1e-9 || l.value > t.max + 1e-9 || l.min !== t.min || l.max !== t.max) inRange = false;
+    });
+  }
+  ok(inRange && withMove.length > 0, 'สุ่มค่าตัวเลข: every line (moveSpeed on its own widths) lands in its tier range');
+  ok(withMove.every((it) => it.tierK === ';moveSpeed=40,30,15,10,5|10'), 'rerolled items carry the key of the stats on them');
+  applyBalance({});
 }
 
 // ---------------------------------------------------------- against a real server

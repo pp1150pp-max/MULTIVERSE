@@ -83,7 +83,8 @@ export interface Item {
   /** Tier tables the lines follow (see TIER_VERSION in data/items). Missing = older lines, upgraded on load. */
   tierV?: number;
   /**
-   * The tuned tier widths/floor the lines' tier and min–max were worked out with (stampTier in data/items).
+   * The tuned tier widths/floor the lines' tier and min–max were worked out with (stampTier in data/items):
+   * the central table's, then `;stat=widths|floor` for each stat on the item that has its own table.
    * Missing = the code's own. When it differs from the tables in use, the labels are redone on load; values never change.
    */
   tierK?: string;
