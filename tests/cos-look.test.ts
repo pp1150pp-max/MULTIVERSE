@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
-import { checkCosTuning, COS_TUNE_FIELDS, COS_TUNING_SETTING, cosTuneDefaults, cosTuneOf, cosTuningChanges, TUNED_SLOTS } from '../src/shared/cosTuning';
+import { axisHiddenInRow, checkCosTuning, COS_AXES, COS_TUNE_FIELDS, viewGroupOfRow, viewOffKey, COS_TUNING_SETTING, cosTuneDefaults, cosTuneOf, cosTuningChanges, TUNED_SLOTS } from '../src/shared/cosTuning';
 import { COSMETICS } from '../src/shared/data/cosmetics';
 import { finish, ok } from './check';
 
@@ -41,7 +41,7 @@ ok(JSON.stringify(checkCosTuning({ mount_tortoise: { h: 2 }, mount_wolf: { seat:
 ok(!!checkCosTuning({ mount_hoverboard: { h: 1 } }, true).error, 'a removed mount cannot be saved');
 ok(cosTuneDefaults('pet_dragon')?.fly === true && cosTuneDefaults('pet_cat')?.fly === false, 'pet flying defaults kept');
 ok(JSON.stringify(checkCosTuning({ wings_angel: { root: 0.6 } }, true).tuning) === '{}', 'a value equal to the code default is not stored');
-ok(checkCosTuning({ wings_angel: { backStand: 1.23456 } }, true).tuning?.wings_angel?.backStand === 1.23, 'numbers are rounded to 2 decimals');
+ok(checkCosTuning({ wings_angel: { backStand: 1.23456 } }, true).tuning?.wings_angel?.backStand === 1.235, 'numbers are rounded to 3 decimals');
 ok(!!checkCosTuning({ wings_angel: { backStand: 9 } }, true).error, 'out of range is refused');
 ok(!!checkCosTuning({ wings_angel: { backStand: '1' } }, true).error, 'a number sent as text is refused');
 ok(!!checkCosTuning({ pet_cat: { fly: 1 } }, true).error, 'an on/off field must be true/false');
@@ -53,6 +53,18 @@ const lenient = checkCosTuning({ wings_nope: { lift: 1 }, wings_bat: { backStand
 ok(JSON.stringify(lenient) === '{"wings_bat":{"back":0.3}}', 'read back leniently: unknown and bad entries dropped, the rest kept');
 ok(cosTuneOf({ wings_bat: { back: 0.3 } }, 'wings_bat')?.backStand === 1.35, 'changes go on top of the code defaults');
 ok(cosTuningChanges({}, { wings_bat: { back: 0.3 } }) === 'wings_bat.back 0.22 → 0.3', 'audit text lists what changed');
+
+// X/Y/Z axes: every axis reads a real field, old saves (old keys only) read unchanged, view offsets start at 0.
+for (const slot of TUNED_SLOTS) {
+  for (const s of COS_AXES[slot]) ok(COS_TUNE_FIELDS[slot][s.key]?.kind === 'num', `${slot}: axis ${s.axis} reads field ${s.key}`);
+}
+ok(COS_AXES.aura.every((s) => s.axis === 'x'), 'an aura has only the X axis');
+ok(axisHiddenInRow('z', 0) && axisHiddenInRow('z', 4) && !axisHiddenInRow('z', 1) && !axisHiddenInRow('z', 3) && axisHiddenInRow('x', 2) && !axisHiddenInRow('x', 1), 'Z hidden straight front/back, X hidden from the side, diagonals show all');
+ok(viewGroupOfRow(0) === 'front' && viewGroupOfRow(1) === 'front' && viewGroupOfRow(2) === 'side' && viewGroupOfRow(3) === 'back' && viewGroupOfRow(4) === 'back', 'diagonals count as front / back');
+ok(cosTuneDefaults('wings_angel')?.[viewOffKey('y', 'back')] === 0 && cosTuneDefaults('mount_wolf')?.z === 0, 'view offsets and the mount Z start at 0');
+ok(cosTuneOf({ wings_bat: { shift: 0.2, back: 0.3 } }, 'wings_bat')?.dx_side === 0, 'an old save (old keys) reads with zero view offsets, positions unchanged');
+ok(checkCosTuning({ wings_angel: { dy_front: 0.1 } }, true).tuning?.wings_angel?.dy_front === 0.1, 'a view offset can be saved');
+ok(!!checkCosTuning({ aura_star: { dz_front: 0.1 } }, true).error, 'an aura has no Z offset');
 
 // ---------------------------------------------------------- against a real server
 function freePort(): Promise<number> {

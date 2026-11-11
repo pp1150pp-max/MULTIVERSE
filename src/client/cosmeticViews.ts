@@ -12,6 +12,7 @@ import type { Effects } from './effects';
 import { shownCos, shownRiding } from './cosLook';
 import { tuneBool, tuneNum } from './cosTune';
 import { ISO_DIR } from './world';
+import { axisHiddenInRow, viewGroupOfRow, viewOffKey, type Axis } from '../shared/cosTuning';
 
 /**
  * Draw order between the character and its cosmetics. The camera is orthographic and looks down, so a
@@ -32,6 +33,25 @@ function screenShift(p: Player, amount: number): [number, number] {
   return [dir * amount * Math.SQRT1_2, -dir * amount * Math.SQRT1_2];
 }
 
+/**
+ * The per-view X/Y/Z offsets of a piece (owner 2026-11-11, see cosTuning.ts): X = the character's right,
+ * Y = up, Z = forward, in the view the character shows now. An axis that has no visible effect in the view
+ * (Z straight from the front or back, X from the side) is left out.
+ */
+function viewOff(p: Player, id: string): { x: number; y: number; z: number; rx: number; rz: number; fx: number; fz: number } {
+  const row = viewRow(p);
+  const g = viewGroupOfRow(row);
+  const val = (a: Axis) => (axisHiddenInRow(a, row) ? 0 : tuneNum(id, viewOffKey(a, g)));
+  const fl = Math.hypot(p.faceX, p.faceZ) || 1;
+  // forward (fx, fz) and the character's right (−fz, fx), as unit vectors in the world's x/z plane.
+  return { x: val('x'), y: val('y'), z: val('z'), rx: -p.faceZ / fl, rz: p.faceX / fl, fx: p.faceX / fl, fz: p.faceZ / fl };
+}
+
+/** World x/z shift of a piece for `dx` to the character's right and `dz` forward. */
+function moveBy(o: ReturnType<typeof viewOff>, dx: number, dz: number): [number, number] {
+  return [o.rx * dx + o.fx * dz, o.rz * dx + o.fz * dz];
+}
+
 function depthAt(x: number, z: number, raised: number, depth: number): [number, number, number] {
   const k = depth - raised * ISO_DIR.y;
   return [x + ISO_DIR.x * k, ISO_DIR.y * k, z + ISO_DIR.z * k];
@@ -46,7 +66,7 @@ export function seatOf(p: Player): number {
   if (!m) return 0;
   // Seen head-on or from behind the rider sits higher, so the mount's head (or rear) in front of them
   // doesn't hide their body.
-  return tuneNum(m.id, 'seat') + (!tuneBool(m.id, 'under') && headOn(p) ? tuneNum(m.id, 'headOnLift') : 0);
+  return tuneNum(m.id, 'seat') + viewOff(p, m.id).y + (!tuneBool(m.id, 'under') && headOn(p) ? tuneNum(m.id, 'headOnLift') : 0);
 }
 
 /** The sheet row a facing shows: 0 front, 1 front diagonal, 2 side, 3 back diagonal, 4 back. */
@@ -200,13 +220,17 @@ export class CosmeticRig {
       const bx = -p.faceX / fl;
       const bz = -p.faceZ / fl;
       const along = bx * TO_CAM.x + bz * TO_CAM.z;
-      const sx = (bx - along * TO_CAM.x) * tuneNum(id, 'back');
-      const sz = (bz - along * TO_CAM.z) * tuneNum(id, 'back');
+      const vo = viewOff(p, id);
+      // Z (forward +) is the old "back" turned around, with this view's offset on top.
+      const backBy = tuneNum(id, 'back') - vo.z;
+      const [ox, oz] = moveBy(vo, vo.x, 0);
+      const sx = (bx - along * TO_CAM.x) * backBy + ox;
+      const sz = (bz - along * TO_CAM.z) * backBy + oz;
       // Roots on the middle of the back (wingsLift over the rider's own base); 0.15 behind the body, or in front of it when
       // the back is turned to the camera.
       // (Tuned: `depth` from the body, `overBack` switches the in-front-from-behind part.)
       const back = tuneBool(id, 'overBack') && (p.faceX + p.faceZ) / fl < -0.3;
-      const lift = wingsLift(id, seat > 0);
+      const lift = wingsLift(id, seat > 0) + vo.y;
       const depth = tuneNum(id, 'depth');
       const [hx, hz] = screenShift(p, tuneNum(id, 'shift'));
       const [wx, wy, wz] = depthAt(p.x + sx + hx, p.z + sz + hz, lift, back ? depth : -depth);
@@ -233,7 +257,9 @@ export class CosmeticRig {
       const split = !under && mountSplit(p, id);
       const d = under ? -tuneNum(id, 'underBehind') : !split && mountInFront(p, id) ? tuneNum(id, 'front') : -tuneNum(id, 'behind');
       const [shx, shz] = screenShift(p, tuneNum(id, 'shift'));
-      const [mx, my, mz] = depthAt(p.x + shx, p.z + shz, -seat, d);
+      const vo = viewOff(p, id);
+      const [ox, oz] = moveBy(vo, vo.x, tuneNum(id, 'z') + vo.z);
+      const [mx, my, mz] = depthAt(p.x + shx + ox, p.z + shz + oz, -seat, d);
       a.group.position.set(mx, my, mz);
       a.face(p.faceX, p.faceZ);
       // On the front diagonal: the whole mount behind the rider, plus its head half again in front of them,
@@ -256,7 +282,7 @@ export class CosmeticRig {
           const sign = (sx >= 0 ? 1 : -1) * (viewRow(p) === 3 ? -1 : 1);
           this.headClip.normal.set(sign * Math.SQRT1_2, 0, -sign * Math.SQRT1_2);
           this.headClip.constant = -(this.headClip.normal.x * p.x + this.headClip.normal.z * p.z);
-          const [hx, hy, hz] = depthAt(p.x + shx, p.z + shz, -seat, tuneNum(id, 'splitFront'));
+          const [hx, hy, hz] = depthAt(p.x + shx + ox, p.z + shz + oz, -seat, tuneNum(id, 'splitFront'));
           this.mountHead.group.position.set(hx, hy, hz);
         }
       }
@@ -274,8 +300,10 @@ export class CosmeticRig {
       const fl = Math.hypot(p.faceX, p.faceZ) || 1;
       const back = tuneNum(pet.id, 'back');
       const side = tuneNum(pet.id, 'side');
-      const tx = p.x - (p.faceX / fl) * back + (p.faceZ / fl) * side;
-      const tz = p.z - (p.faceZ / fl) * back - (p.faceX / fl) * side;
+      const vo = viewOff(p, pet.id);
+      const [ox, oz] = moveBy(vo, vo.x, vo.z);
+      const tx = p.x - (p.faceX / fl) * back + (p.faceZ / fl) * side + ox;
+      const tz = p.z - (p.faceZ / fl) * back - (p.faceX / fl) * side + oz;
       const dx = tx - pet.x;
       const dz = tz - pet.z;
       const dist = Math.hypot(dx, dz);
@@ -297,7 +325,7 @@ export class CosmeticRig {
       const flying = tuneBool(pet.id, 'fly');
       const a = pet.actor;
       a.group.position.set(pet.x, 0, pet.z);
-      a.setLift(flying ? tuneNum(pet.id, 'float') + Math.sin(this.clock * 3) * tuneNum(pet.id, 'bob') : 0);
+      a.setLift(flying ? tuneNum(pet.id, 'float') + vo.y + Math.sin(this.clock * 3) * tuneNum(pet.id, 'bob') : 0);
       a.face(pet.fx, pet.fz);
       a.update(dt, walking || flying, tuneNum(pet.id, 'anim'));
     }
@@ -325,7 +353,9 @@ export class CosmeticRig {
       (this.aura.m.material as THREE.MeshBasicMaterial).opacity = tuneNum(id, 'alpha');
       const size = tuneNum(id, 'size') * (1 + Math.sin(this.clock * 2.5) * tuneNum(id, 'pulse'));
       const [ax, az] = screenShift(p, tuneNum(id, 'shift'));
-      this.aura.m.position.set(p.x + ax, 0.05, p.z + az);
+      const vo = viewOff(p, id);
+      const [ox, oz] = moveBy(vo, vo.x, 0);
+      this.aura.m.position.set(p.x + ax + ox, 0.05, p.z + az + oz);
       this.aura.m.scale.set(size, size, 1);
       if (Math.random() < tuneNum(id, 'sparks') * dt) {
         const ang = Math.random() * Math.PI * 2;

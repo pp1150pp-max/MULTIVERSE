@@ -39,8 +39,9 @@ export function setCosTuneValue(id: string, key: string, v: number | boolean): v
   cache.delete(id);
 }
 
-/** The bench puts one cosmetic back to its code defaults. */
-export function resetCosTune(id: string): void {
-  delete tuning[id];
+/** The bench puts one cosmetic back to `to` (the saved server-wide changes of it), or to its code defaults. */
+export function resetCosTune(id: string, to?: TuneValues): void {
+  if (to && Object.keys(to).length) tuning[id] = { ...to };
+  else delete tuning[id];
   cache.delete(id);
 }
