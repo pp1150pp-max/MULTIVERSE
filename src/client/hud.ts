@@ -4,7 +4,7 @@ import type { Game } from './Game';
 import { NPC_USE_RANGE, type NpcId } from '../shared/data/npcs';
 import type { SkillSlot } from '../shared/data/classes';
 import {
-  bonusPct, DROP_ON_FAIL_FROM, dropsOnFail, effectiveStats, enhanceBonus, enhanceCost, ENHANCE_STONES_PER_TRY, itemName,
+  bonusPct, DROP_ON_FAIL_FROM, dropsOnFail, FORGE_CD, effectiveStats, enhanceBonus, enhanceCost, ENHANCE_STONES_PER_TRY, itemName,
   MAX_PLUS, PITY_STEP, pityBonus, plusOf, rateFor, sellValue, STONE_FROM, stonesNeeded, successRate,
 } from '../shared/data/enhance';
 import {
@@ -161,6 +161,8 @@ export class Hud {
   /** Set while the amount dialog (stack split / partial sell) is open. */
   private amountDone: ((n: number) => void) | null = null;
   private enhancing = false;
+  /** performance.now() when the next blacksmith action may be sent (FORGE_CD after the last one). */
+  private forgeReadyAt = 0;
   /** Use a protection stone on attempts that can drop the level (the forge's tick box; off until ticked). */
   private forgeProtect = false;
   /** The blacksmith's menu: enhance, or one of the rerolls. */
@@ -1842,7 +1844,7 @@ export class Hud {
   private askReroll(kind: RerollKind): void {
     const item = this.forgeItems().find((w) => w.uid === this.forgeSel);
     const ranges = item && lineRanges(item);
-    if (!item || !ranges || !item.lines || this.enhancing) return;
+    if (!item || !ranges || !item.lines || this.enhancing || this.forgeCooling()) return;
     const over = item.lines.some((l) => l.value > l.max);
     this.confirm(
       `${REROLL_NAME[kind]} ${itemName(item)}?<br><small>ค่าบริการ ${rerollCost(item, kind).toLocaleString()} G + ${STONE_NAME[REROLL_STONE[kind]]} 1 ก้อน · ค่าเดิมจะหายไป ย้อนคืนไม่ได้` +
@@ -1853,9 +1855,10 @@ export class Hud {
   }
 
   private async reroll(item: Item, kind: RerollKind): Promise<void> {
-    if (this.enhancing) return;
+    if (this.enhancing || this.forgeCooling()) return;
     const before = (item.lines ?? []).map((l) => ({ ...l }));
     this.enhancing = true;
+    this.startForgeCd();
     const out = await this.g.backend.reroll(item.uid, kind).finally(() => (this.enhancing = false));
     if (!out) {
       this.forgeResult('fail', 'สุ่มไม่สำเร็จ');
@@ -1867,11 +1870,30 @@ export class Hud {
     this.renderForge();
   }
 
+  /** True while the blacksmith cooldown (FORGE_CD) is running. */
+  private forgeCooling(): boolean {
+    return performance.now() < this.forgeReadyAt;
+  }
+
+  /** Starts the blacksmith cooldown: the action button shows a draining bar until it ends. */
+  private startForgeCd(): void {
+    this.forgeReadyAt = performance.now() + FORGE_CD * 1000;
+    const go = $('forge-go');
+    go.style.setProperty('--cd', `${FORGE_CD}s`);
+    go.classList.remove('cooling');
+    void go.offsetWidth; // restart the bar
+    go.classList.add('cooling');
+    setTimeout(() => {
+      if (!this.forgeCooling()) go.classList.remove('cooling');
+    }, FORGE_CD * 1000 + 20);
+  }
+
   private async enhance(): Promise<void> {
-    if (!this.forgeSel || this.enhancing) return;
+    if (!this.forgeSel || this.enhancing || this.forgeCooling()) return;
     const sel = this.forgeItems().find((w) => w.uid === this.forgeSel);
     const protect = !!sel && dropsOnFail(sel) && this.forgeProtect;
     this.enhancing = true;
+    this.startForgeCd();
     const out = await this.g.backend.enhance(this.forgeSel, protect).finally(() => (this.enhancing = false));
     if (!out) return;
     const { result, item } = out;

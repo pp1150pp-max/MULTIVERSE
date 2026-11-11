@@ -9,7 +9,7 @@ import { REROLL_NAME, rerollCost, type RerollKind } from '../data/reroll';
 import { inBossArena, LAVA_BURN, LAVA_TICK } from '../data/zones';
 import type { Hazard } from './volcanoHeart';
 import {
-  ANNOUNCE_FROM, dropsOnFail, enhanceCost, itemName, MAX_PLUS, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
+  ANNOUNCE_FROM, dropsOnFail, FORGE_CD, enhanceCost, itemName, MAX_PLUS, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
 } from '../data/enhance';
 import { entryName, potionName, POTION_STACK, POTIONS, stackLimit } from '../data/potions';
 import { BOSS_KEY, BOSS_QUEST_KEY, BOSS_STONE_CHANCE, BOUND_MSG, PHOENIX_PRICE, QUEST_KILLS, REVIVES_PER_KEY, STONE_STACK, KEY_DROP_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, RETURN_CAST, RETURN_SCROLL_PRICE, STONE_COLOR, STONE_NAME } from '../data/stones';
@@ -1284,6 +1284,7 @@ export class Sim {
    */
   enhance(p: Player, uid: string, protect: boolean): { result: EnhanceResult; item: Item } | null {
     if (!this.near(p, 'blacksmith')) return null;
+    if (this.time < p.forgeAt + FORGE_CD) return null;
     const worn = Object.values(p.equipment).find((w) => w?.uid === uid);
     const item = worn ?? p.bag.find((w): w is Item => isItem(w) && w.uid === uid);
     if (!item || plusOf(item) >= MAX_PLUS) return null;
@@ -1291,6 +1292,7 @@ export class Sim {
     const stones = stonesNeeded(item);
     const useProtect = protect && dropsOnFail(item);
     if (p.gold < cost || p.stoneCount('enhance') < stones || (useProtect && p.stoneCount('protect') < 1)) return null;
+    p.forgeAt = this.time;
     p.gold -= cost;
     p.takeStones('enhance', stones);
     if (useProtect) p.takeStones('protect', 1);
@@ -1321,12 +1323,14 @@ export class Sim {
    */
   reroll(p: Player, uid: string, kind: RerollKind): Item | null {
     if (!this.near(p, 'blacksmith')) return null;
+    if (this.time < p.forgeAt + FORGE_CD) return null;
     const worn = Object.values(p.equipment).find((w) => w?.uid === uid);
     const item = worn ?? p.bag.find((w): w is Item => isItem(w) && w.uid === uid);
     if (!item || !lineRanges(item)) return null;
     const cost = rerollCost(item, kind);
     const stone = REROLL_STONE[kind];
     if (p.gold < cost || p.stoneCount(stone) < 1) return null;
+    p.forgeAt = this.time;
     p.gold -= cost;
     p.takeStones(stone, 1);
     if (kind === 'values') rerollValues(item);

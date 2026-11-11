@@ -786,6 +786,11 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #forge-actions .gi { width: 22px; height: 22px; vertical-align: middle; image-rendering: pixelated; }
 #forge-go { background: linear-gradient(#5a6cff, #2a2f9a); border: 2px solid #a8b4ff; color: #fff; box-shadow: 0 0 0 2px #0c0c24, 0 0 12px rgba(90, 108, 255, 0.5); }
 #forge-go:hover:not(:disabled) { filter: brightness(1.15); color: #fff; }
+/* Blacksmith cooldown (FORGE_CD): a dark bar drains from the button, which ignores clicks until it is gone. */
+#forge-go { position: relative; overflow: hidden; }
+#forge-go.cooling { pointer-events: none; }
+#forge-go.cooling::after { content: ''; position: absolute; inset: 0; background: rgba(8, 8, 24, 0.55); transform-origin: right; animation: forge-cd var(--cd, 1s) linear forwards; }
+@keyframes forge-cd { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 #forge-cancel { background: linear-gradient(#c8402e, #7a1c14); border: 2px solid #ff9a86; color: #fff; box-shadow: 0 0 0 2px #240c0a; }
 #forge-cancel:hover:not(:disabled) { filter: brightness(1.15); color: #fff; }
 #forge-actions button:disabled { filter: grayscale(0.7) brightness(0.7); opacity: 0.7; font-size: 14px; }
