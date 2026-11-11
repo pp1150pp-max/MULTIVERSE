@@ -1325,7 +1325,17 @@ body.touch-ui #touch-ui { display: block; position: absolute; inset: 0; pointer-
 /* Phones get the buttons at 75% (owner 2026-11-11: "ใหญ่ไป"); tablets at full size. */
 @media (min-width: 700px) and (min-height: 700px) { body.touch-ui #touch-ui { --s: 1; } }
 /* The character card and HP/MP bars at 70% on phones (owner 2026-11-11). */
-@media not ((min-width: 700px) and (min-height: 700px)) { body.touch-ui #hud-topleft { transform: scale(0.7); transform-origin: top left; } }
+/* Touch: HP/MP bars beside the character card, after the name, shorter (owner 2026-11-12). */
+body.touch-ui #hud-topleft { display: grid; grid-template-columns: auto auto; column-gap: 4px; align-items: center; justify-content: start; }
+body.touch-ui #hud-topleft > :not(.char-card):not(.bars) { grid-column: 1 / -1; }
+body.touch-ui #hud-topleft .bars { margin-top: 0; }
+body.touch-ui #hud-topleft .bar { width: 200px; }
+/* Phones: the card at 70% and the bars shorter still (zoom, unlike transform, also shrinks the space they take). */
+@media not ((min-width: 700px) and (min-height: 700px)) {
+  body.touch-ui .char-card { zoom: 0.7; }
+  body.touch-ui #hud-topleft .bar { width: 150px; }
+  body.touch-ui #hud-topleft .bar span { font-size: 9px; }
+}
 /* Touch: the character card only as wide as its contents, not the empty space out to the bars' width (owner 2026-11-12). */
 body.touch-ui .char-card { width: fit-content; }
 /* The keyboard hint bar, the top icon row (all of it is in the ☰ system menu) and the PC mount button. */
