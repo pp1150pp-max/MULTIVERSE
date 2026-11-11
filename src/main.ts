@@ -1,5 +1,6 @@
 import './client/noBrowserMenu';
 import './style.css';
+import './client/touch/device';
 import { assetSources, loadGameAssets, loadMenuAssets } from './client/assets';
 import { CLASS_IDS } from './shared/data/classes';
 import { Game } from './client/Game';

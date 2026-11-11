@@ -28,6 +28,8 @@ export default {
   ],
   server: {
     port: 5173,
+    // Reachable from other devices on the same Wi-Fi (phones and tablets): http://<this PC's IP>:5173
+    host: true,
     open: true,
     // Art work folders aren't part of the game; archives/PSDs there can be locked while saving
     // and would crash the file watcher (EBUSY). The server's database lives in server/data.
