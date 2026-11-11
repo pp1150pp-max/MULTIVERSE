@@ -12,7 +12,7 @@ import type { Effects } from './effects';
 import { shownCos, shownRiding } from './cosLook';
 import { tuneBool, tuneNum } from './cosTune';
 import { ISO_DIR } from './world';
-import { axisHiddenInRow, viewGroupOfRow, viewOffKey, type Axis } from '../shared/cosTuning';
+import { axisHiddenInDir, viewDirOf, viewOffKey, type Axis } from '../shared/cosTuning';
 
 /**
  * Draw order between the character and its cosmetics. The camera is orthographic and looks down, so a
@@ -40,8 +40,9 @@ function screenShift(p: Player, amount: number): [number, number] {
  */
 function viewOff(p: Player, id: string): { x: number; y: number; z: number; rx: number; rz: number; fx: number; fz: number } {
   const row = viewRow(p);
-  const g = viewGroupOfRow(row);
-  const val = (a: Axis) => (axisHiddenInRow(a, row) ? 0 : tuneNum(id, viewOffKey(a, g)));
+  // Which side of the screen it faces (a side or diagonal facing is drawn mirrored toward the left).
+  const dir = viewDirOf(row, (p.faceX - p.faceZ) * Math.SQRT1_2 >= -0.05);
+  const val = (a: Axis) => (axisHiddenInDir(a, dir) ? 0 : tuneNum(id, viewOffKey(a, dir)));
   const fl = Math.hypot(p.faceX, p.faceZ) || 1;
   // forward (fx, fz) and the character's right (−fz, fx), as unit vectors in the world's x/z plane.
   return { x: val('x'), y: val('y'), z: val('z'), rx: -p.faceZ / fl, rz: p.faceX / fl, fx: p.faceX / fl, fz: p.faceZ / fl };

@@ -76,20 +76,50 @@ export type TuneValues = Record<string, number | boolean>;
 // ---- X / Y / Z axes (owner 2026-11-11) ----
 // X = the character's right (+) / left, Y = up / down, Z = forward (+) / back, turning with the way the
 // character faces. The base value of each axis is one of the fields above (kept under its old key so old
-// saves read as they are, nothing jumps); on top of it each view (front / side / back) has its own
-// offset `d<axis>_<view>`, added in that view only. A view row: 0 front, 1 front diagonal, 2 side,
-// 3 back diagonal, 4 back (the same rows as the sprite sheets).
+// saves read as they are, nothing jumps); on top of it each of the 8 facings has its own offset
+// `d<axis>_at_<dir>`, added in that facing only. Left / right are the side of the SCREEN the character faces.
 export type Axis = 'x' | 'y' | 'z';
 export const AXES: readonly Axis[] = ['x', 'y', 'z'];
-export type ViewGroup = 'front' | 'side' | 'back';
-export const VIEW_GROUPS: readonly ViewGroup[] = ['front', 'side', 'back'];
+export type ViewDir = 'front' | 'frontRight' | 'right' | 'backRight' | 'back' | 'backLeft' | 'left' | 'frontLeft';
+export const VIEW_DIRS: readonly ViewDir[] = ['front', 'frontRight', 'right', 'backRight', 'back', 'backLeft', 'left', 'frontLeft'];
+export const VIEW_DIR_NAME: Record<ViewDir, string> = {
+  front: 'หน้า', frontRight: 'เฉียงหน้าขวา', right: 'ขวา', backRight: 'เฉียงหลังขวา', back: 'หลัง', backLeft: 'เฉียงหลังซ้าย', left: 'ซ้าย', frontLeft: 'เฉียงหน้าซ้าย',
+};
 
-/** Which stored view group a view row uses (the diagonals share the front / back one). */
-export const viewGroupOfRow = (row: number): ViewGroup => (row <= 1 ? 'front' : row === 2 ? 'side' : 'back');
+/** The facing from a sheet row (0 front, 1 front diagonal, 2 side, 3 back diagonal, 4 back) and the screen side it faces. */
+export function viewDirOf(row: number, faceRight: boolean): ViewDir {
+  if (row <= 0) return 'front';
+  if (row >= 4) return 'back';
+  const side = faceRight ? 'Right' : 'Left';
+  return (row === 1 ? `front${side}` : row === 2 ? side.toLowerCase() : `back${side}`) as ViewDir;
+}
+/** The sheet row of a facing (the sprite sheets are drawn for 5 rows, the rest mirrored). */
+export const rowOfViewDir = (d: ViewDir): number => (d === 'front' ? 0 : d === 'back' ? 4 : d === 'left' || d === 'right' ? 2 : d.startsWith('front') ? 1 : 3);
 /** Z points into / out of the camera from straight front and back, X from the side: no visible effect there. */
-export const axisHiddenInRow = (axis: Axis, row: number): boolean => (axis === 'z' && (row === 0 || row === 4)) || (axis === 'x' && row === 2);
-/** Field key of an axis's offset in a view. */
-export const viewOffKey = (axis: Axis, g: ViewGroup): string => `d${axis}_${g}`;
+export const axisHiddenInDir = (axis: Axis, d: ViewDir): boolean => (axis === 'z' && (d === 'front' || d === 'back')) || (axis === 'x' && (d === 'left' || d === 'right'));
+/** Field key of an axis's offset in a facing. */
+export const viewOffKey = (axis: Axis, d: ViewDir): string => `d${axis}_at_${d}`;
+
+// Before 2026-11-11 (late) the offsets were per group: front (front + both front diagonals), side (left + right),
+// back (back + both back diagonals). Saved ones are copied to every facing the group covered. The offsets are
+// relative to the character, so the same number gives the same place on the screen as before.
+const LEGACY_GROUP: Record<string, ViewDir[]> = {
+  front: ['front', 'frontLeft', 'frontRight'],
+  side: ['left', 'right'],
+  back: ['back', 'backLeft', 'backRight'],
+};
+const LEGACY_KEY = /^d([xyz])_(front|side|back)$/;
+/** A saved entry with any old per-group offsets spread to the facings (a facing's own saved value wins). */
+function expandLegacy(g: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(g)) {
+    const m = LEGACY_KEY.exec(k);
+    if (m) for (const d of LEGACY_GROUP[m[2]]) out[`d${m[1]}_at_${d}`] = v;
+    else out[k] = v;
+  }
+  for (const [k, v] of Object.entries(g)) if (!LEGACY_KEY.test(k)) out[k] = v;
+  return out;
+}
 
 export interface AxisSpec {
   axis: Axis;
@@ -128,9 +158,9 @@ export const COS_AXES: Record<TunedSlot, AxisSpec[]> = {
 COS_TUNE_FIELDS.mount.z = num(-1.5, 1.5, 0.02, 'ขยับหน้า/หลังของตัวละคร');
 for (const slot of TUNED_SLOTS) {
   for (const s of COS_AXES[slot]) {
-    for (const g of VIEW_GROUPS) {
+    for (const g of VIEW_DIRS) {
       const key = viewOffKey(s.axis, g);
-      if (!COS_TUNE_FIELDS[slot][key]) COS_TUNE_FIELDS[slot][key] = num(-1.5, 1.5, 0.005, `ส่วนปรับ ${s.axis.toUpperCase()} มุม${g === 'front' ? 'หน้า' : g === 'side' ? 'ข้าง' : 'หลัง'}`);
+      if (!COS_TUNE_FIELDS[slot][key]) COS_TUNE_FIELDS[slot][key] = num(-1.5, 1.5, 0.005, `ส่วนปรับ ${s.axis.toUpperCase()} ทิศ${VIEW_DIR_NAME[g]}`);
     }
   }
 }
@@ -217,7 +247,7 @@ export function checkCosTuning(v: unknown, strict: boolean): { tuning: CosTuning
       if (strict) return { error: `ค่าของ ${c.id} ไม่ถูกต้อง` };
       continue;
     }
-    const g = given as Record<string, unknown>;
+    const g = expandLegacy(given as Record<string, unknown>);
     const fields = COS_TUNE_FIELDS[c.slot as TunedSlot];
     if (strict) {
       const extra = Object.keys(g).find((k) => !(k in fields));
