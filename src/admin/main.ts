@@ -1,6 +1,7 @@
 // The admin page (/admin). Shows what /api/admin returns and sends edits to it; the server checks the
 // role and every value, so nothing here is a safeguard. Names, GPU strings and the like come from
 // players: they are only ever put on the page as text (never as HTML).
+import '../client/noBrowserMenu';
 import './admin.css';
 import { ADMIN_AUDIT_PAGE, ADMIN_ITEM_ROWS_MAX, ADMIN_STAT_MULT, statStep, type AdminItemRow, ADMIN_NO_RIGHTS as NO_RIGHTS, HISTORY_DAYS, HISTORY_PAGE, SESSION_PAGE_SIZES, SESSION_SEARCH_MAX, BAN_DURATIONS, BAN_FOREVER, BAN_REASON_MAX, BROADCAST_EVERY_MS, BROADCAST_MAX, FEATURE_GROUPS, FEATURE_INFO, OWNER_ONLY_TOOLS, OWNER_ROLE, ROLE_ID_RE, ROLE_NAME_MAX, type RoleDef, type RoleDefsResponse } from '../shared/admin';
 import { MAX_CHARACTERS } from '../shared/api';

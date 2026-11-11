@@ -1,3 +1,4 @@
+import './client/noBrowserMenu';
 import './style.css';
 import { assetSources, loadGameAssets, loadMenuAssets } from './client/assets';
 import { CLASS_IDS } from './shared/data/classes';

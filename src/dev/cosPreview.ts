@@ -1,5 +1,6 @@
 // cosmetics.html under `npm run dev`: the cosmetics test bench on a page of its own (code defaults, no
 // server). The same bench is in the /admin "ของแต่งตัว" tab (src/client/cosPreview.ts).
+import '../client/noBrowserMenu';
 import { mountCosPreview } from '../client/cosPreview';
 
 const root = document.getElementById('cosp')!;
