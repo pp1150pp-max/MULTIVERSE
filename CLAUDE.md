@@ -63,6 +63,9 @@ npm run stop-server -- --restart # เหมือนกัน แต่ npm run
 - ข้อมูลตัวละครที่เซฟคือ `CharacterData` (`src/shared/sim/Player.ts`) เก็บใน SQLite บน server (`server/db.ts`)
   ถ้าเปลี่ยนรูปแบบ ต้องคิดถึงเซฟเก่าเสมอ (ฟิลด์ใหม่ให้เป็น optional หรือมีค่าเริ่มต้น)
 - ตัวเลขเกมอยู่ใน `src/shared/data/` เช่น `monsters.ts` (อัตราดรอป), `items.ts`, `enhance.ts`, `potions.ts`, `reroll.ts`
+- **ภาพในเกมขึ้นเว็บเป็น WebP** (โหลดเร็วขึ้น โดยเฉพาะบนมือถือ): ภาพใหม่ใน `public/assets/sprites/` ยังใส่เป็น PNG ตามเดิม ตอน build จะแปลงเอง (`tools/vite-sprites-webp.ts`: q90 + smart subsample, alpha คงเดิม, cache ใน `node_modules/.cache/`) แล้วลบ PNG ออกจาก build · `npm run dev` ยังใช้ PNG
+  - path ภาพที่เขียนใน TS ต้องผ่าน `imgUrl()` (`src/client/img.ts`) หรือโหลดผ่าน `loadTexture`/`loadImage` ใน `src/client/assets.ts` ถ้าลืม ภาพจะหายเฉพาะตอน build (ตอน dev ยังเห็นปกติ)
+  - ใน `index.html` และ CSS เขียน `assets/sprites/….png` ได้เลย plugin เปลี่ยนเป็น `.webp` ให้ · ไฟล์ที่เป็น `.webp` อยู่แล้ว (การ์ด, ภาพหน้าโหลด) build ไม่แตะ
 
 ## ระบบที่ตกลงกับเจ้าของไว้แล้ว (รายละเอียดอยู่ในไฟล์ของแต่ละระบบ)
 

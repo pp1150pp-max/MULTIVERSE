@@ -6,6 +6,7 @@ import { RARITY_COLOR } from '../shared/types';
 import { itemName } from '../shared/data/enhance';
 import { expGapMult } from '../shared/formulas';
 import { iconImg } from './icons';
+import { imgUrl } from './img';
 import { questRows, seekerMark } from '../shared/quests';
 import type { RestSpot } from '../shared/sim/terrain';
 import type { CosmeticDef } from '../shared/data/cosmetics';
@@ -19,8 +20,8 @@ interface Plate { el: HTMLDivElement; fill: HTMLDivElement; title?: HTMLDivEleme
 /** Which row of the number sheet each kind of number uses. */
 const GLYPH_ROW: Record<string, number> = { dmg: 0, crit: 1, hurt: 2, heal: 3 };
 const NUMBER = /^[-+]?\d+!?$/;
-export const GLYPH_SHEET = 'assets/sprites/icons/digits.png';
-export const CRIT_BURST = 'assets/sprites/icons/crit_burst.png';
+export const GLYPH_SHEET = imgUrl('assets/sprites/icons/digits.png');
+export const CRIT_BURST = imgUrl('assets/sprites/icons/crit_burst.png');
 const GLYPH_ORDER = '0123456789+-!';
 /** Width of each cell in the sheet, and of each character in it, as a share of its height. */
 const GLYPH_CELL = 58 / 64;
