@@ -60,7 +60,7 @@ Card art:
 | ไฟล์ | มอน | คำอธิบาย |
 |---|---|---|
 | `card_art_bog_toad.png` | คางคกหนอง | `Bog Toad, a chubby round olive-brown toad with a few small warts, a pale cream belly, big golden eyes and a wide silly smile, sitting proudly on a lily pad with small healing bubbles rising` |
-| `card_art_marsh_leech.png` | ปลิงหนอง | `Marsh Leech, a plump soft dark-purple worm rearing up in a gentle S curve, glossy highlights, two big cute eyes, a small red glow of drained life flowing toward it, in murky water` |
+| `card_art_marsh_leech.png` | ปลิงหนอง | `Marsh Leech, a plump soft dark-purple worm rearing up in a gentle S curve, glossy highlights, two big cute eyes, its round sucker mouth wide open showing a ring of many small sharp pointed teeth (this card only, unlike the toothless in-game sprite), a small red glow of drained life flowing into its mouth, in murky water` |
 | `card_art_swamp_serpent.png` | งูหนองน้ำ | `Swamp Serpent, a small cute teal-blue water snake with cream-yellow belly scales, big eyes and small rounded fins on its head, striking forward out of the water with a sharp splash` |
 | `card_art_mire_ghoul.png` | ผีโคลน | `Mire Ghoul, the same design as the attached sprite, rising out of thick mud with mud dripping off its arms, standing firm like a wall, in a foggy swamp` |
 | `card_art_will_o_wisp.png` | ผีไต้ไฟ | `Will-o'-Wisp, the same design as the attached sprite, floating with swirling pale-green spirit flames around it, lighting up a dark misty swamp at night` |
