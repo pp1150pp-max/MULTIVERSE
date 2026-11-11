@@ -1,13 +1,17 @@
-// The /admin "ปรับสมดุล" tab: every class's stats and the item tier tables (src/shared/balance.ts).
+// The /admin "ปรับสมดุล" tab: every class's stats and the item tier tables: central, per stat and per item-level band,
+// with a preview of the real numbers an item rolls (src/shared/balance.ts).
 // Edits a draft with a live preview (class stats at Lv1/10/50 with nothing worn, tier chances); saving
 // sends the whole draft, the server checks it, stores only what differs from the code, logs the change
 // and applies it to everyone online at once.
 import {
-  BALANCE_RANGE, balanceChanges, checkBalance, classStatsAt, codeBalance, mergeBalance, STAT_MAX, STAT_PART_NAME, STAT_PARTS,
-  type Balance, type BalanceTuning, type StatPart,
+  applyBalance, BALANCE_RANGE, balanceChanges, checkBalance, classStatsAt, codeBalance, currentBalanceTuning, hasParts, mergeBalance, STAT_MAX,
+  STAT_PART_NAME, STAT_PARTS, STAT_TIER_PARTS, statTierTable, tierLabelsChange, tierSourceName,
+  type Balance, type BalanceTuning, type StatPart, type TierParts,
 } from '../shared/balance';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
-import { STAT_KEYS, STAT_LABEL, type ClassId, type StatKey } from '../shared/types';
+import { ITEM_BASES, itemRowKinds, rowRanges, TIER_BAND_NAME, TIER_BANDS, tierBandOf, tierChances, tierRanges } from '../shared/data/items';
+import { MAX_LEVEL } from '../shared/formulas';
+import { RARITIES, RARITY_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, type ClassId, type Rarity, type StatKey } from '../shared/types';
 
 type Kids = (Node | string | null | undefined | false)[];
 type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, unknown>, ...kids: Kids) => HTMLElementTagNameMap[K];
@@ -113,60 +117,239 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   };
 
   // ---------------------------------------------------------- tiers
-  const tierCard = h('div', { class: 'card' });
-  const drawTiers = (): void => {
-    const chanceCells = draft.tierWeight.map(() => h('td', { class: 'bal-out' }));
-    const bossCells = draft.tierWeight.map(() => h('td', { class: 'bal-out' }));
-    const edgeCells = draft.tierWeight.map(() => h('td', { class: 'bal-out' }));
+  /** One tier table being edited: the central one (bound to the draft's fields) or a stat's own. */
+  interface TierEdit { weight: number[]; width: number[]; floor: number; bossBoost: number }
+  const central: TierEdit = {
+    get weight() { return draft.tierWeight; },
+    get width() { return draft.tierWidth; },
+    get floor() { return draft.rangeFloor; },
+    set floor(n: number) { draft.rangeFloor = n; },
+    get bossBoost() { return draft.bossTierBoost; },
+    set bossBoost(n: number) { draft.bossTierBoost = n; },
+  };
+  /** Stats with their own table in the draft, in STAT_KEYS order. */
+  /** The draft's own parts for a stat (null = every stat) at a band (null = every level); null stat and band = none (the central table). */
+  const scopeParts = (stat: StatKey | null, band: number | null): TierParts | undefined => {
+    const id = band === null ? null : TIER_BANDS[band];
+    if (stat === null) return id ? draft.bandTiers[id] : undefined;
+    const st = draft.statTiers[stat];
+    return id ? st?.bands?.[id] : st;
+  };
+  const setScope = (stat: StatKey | null, band: number | null, t: TierParts): void => {
+    const id = band === null ? null : TIER_BANDS[band];
+    if (stat === null) {
+      if (id) draft.bandTiers[id] = t;
+      return;
+    }
+    const st = (draft.statTiers[stat] ??= {});
+    if (id) (st.bands ??= {})[id] = t;
+    else Object.assign(st, t);
+  };
+  const clearScope = (stat: StatKey | null, band: number | null): void => {
+    const id = band === null ? null : TIER_BANDS[band];
+    if (stat === null) {
+      if (id) delete draft.bandTiers[id];
+      return;
+    }
+    const st = draft.statTiers[stat];
+    if (!st) return;
+    if (id) {
+      if (st.bands) delete st.bands[id];
+      if (st.bands && !Object.keys(st.bands).length) delete st.bands;
+    } else {
+      for (const p of STAT_TIER_PARTS) delete st[p];
+    }
+    if (!hasParts(st) && !st.bands) delete draft.statTiers[stat];
+  };
+  /** Every stat × band with a table of its own in the draft. */
+  const ownScopes = (): [StatKey | null, number | null][] => {
+    const out: [StatKey | null, number | null][] = [];
+    TIER_BANDS.forEach((_, b) => { if (hasParts(scopeParts(null, b))) out.push([null, b]); });
+    for (const k of STAT_KEYS) {
+      if (hasParts(scopeParts(k, null))) out.push([k, null]);
+      TIER_BANDS.forEach((_, b) => { if (hasParts(scopeParts(k, b))) out.push([k, b]); });
+    }
+    return out;
+  };
+  const first = ownScopes()[0];
+  let tierStat: StatKey | null = first ? first[0] : 'moveSpeed';
+  let tierBand: number | null = first ? first[1] : null;
+
+  /** The table, width total and floor/boss boxes of one tier table. Boxes are gold where they differ from the code's central table. */
+  const tierEditor = (t: TierEdit, refresh: () => void): Node[] => {
+    const chanceCells = t.weight.map(() => h('td', { class: 'bal-out' }));
+    const bossCells = t.weight.map(() => h('td', { class: 'bal-out' }));
+    const edgeCells = t.weight.map(() => h('td', { class: 'bal-out' }));
     const widthSum = h('span');
-    const labelNote = h('div', { class: 'muted' });
-    const refresh = (): void => {
-      const total = draft.tierWeight.reduce((a, b) => a + b, 0);
-      const bw = draft.tierWeight.map((w, i) => w * (1 + draft.bossTierBoost * (4 - i)));
+    const update = (): void => {
+      const total = t.weight.reduce((a, b) => a + b, 0);
+      const bw = t.weight.map((w, i) => w * (1 + t.bossBoost * (4 - i)));
       const btotal = bw.reduce((a, b) => a + b, 0);
-      draft.tierWeight.forEach((w, i) => {
+      t.weight.forEach((w, i) => {
         chanceCells[i].textContent = total > 0 ? pct(w / total) : '—';
         bossCells[i].textContent = btotal > 0 ? pct(bw[i] / btotal) : '—';
       });
       // Where each tier sits in a line's range, as % of its highest roll (floor at 0 of the range).
       let top = 100;
-      draft.tierWidth.forEach((w, i) => {
+      t.width.forEach((w, i) => {
         const lo = top - w;
-        const at = (x: number) => Math.round((draft.rangeFloor + (100 - draft.rangeFloor) * x / 100) * 10) / 10;
+        const at = (x: number) => Math.round((t.floor + (100 - t.floor) * x / 100) * 10) / 10;
         edgeCells[i].textContent = `${at(lo)}–${at(top)}%`;
         top = lo;
       });
-      const sum = Math.round(draft.tierWidth.reduce((a, b) => a + b, 0) * 1000) / 1000;
+      const sum = Math.round(t.width.reduce((a, b) => a + b, 0) * 1000) / 1000;
       widthSum.textContent = `รวม ${sum}%`;
       widthSum.className = Math.abs(sum - 100) <= 0.001 ? 'good' : 'warn';
-      const labels = draft.rangeFloor !== mergeBalance(saved).rangeFloor || draft.tierWidth.join() !== mergeBalance(saved).tierWidth.join();
-      labelNote.textContent = labels
-        ? '⚠ เปลี่ยนความกว้าง/ค่าต่ำสุดแล้ว: ของที่ผู้เล่นมีอยู่ ค่าเดิมไม่เปลี่ยน แต่ป้าย tier และช่วง min–max ที่แสดงจะคำนวณใหม่ (สุ่มค่าตัวเลขที่ช่างตีเหล็กใช้ tier ใหม่)'
-        : '';
-      updateSummary();
     };
-    const rows = draft.tierWeight.map((_, i) => h('tr', {},
+    const changed = (): void => { update(); refresh(); };
+    const rows = t.weight.map((_, i) => h('tr', {},
       h('td', {}, `T${i + 1}`),
-      h('td', {}, numBox(() => draft.tierWeight[i], (n) => { draft.tierWeight[i] = n; }, code.tierWeight[i], ...BALANCE_RANGE.tierWeight, 1, refresh)),
+      h('td', {}, numBox(() => t.weight[i], (n) => { t.weight[i] = n; }, code.tierWeight[i], ...BALANCE_RANGE.tierWeight, 1, changed)),
       chanceCells[i], bossCells[i],
-      h('td', {}, numBox(() => draft.tierWidth[i], (n) => { draft.tierWidth[i] = n; }, code.tierWidth[i], ...BALANCE_RANGE.tierWidth, 0.5, refresh)),
+      h('td', {}, numBox(() => t.width[i], (n) => { t.width[i] = n; }, code.tierWidth[i], ...BALANCE_RANGE.tierWidth, 0.5, changed)),
       edgeCells[i],
     ));
-    tierCard.replaceChildren(
-      h('h2', {}, 'Tier T1–T5 ของสเตตัสบนไอเทม'),
-      h('div', { class: 'muted' }, 'โอกาสเป็นน้ำหนัก (คิดเป็น % ให้เอง) · เปลี่ยนโอกาสมีผลกับของดรอปใหม่เท่านั้น ช่วงค่าไม่เลื่อน · ความกว้างรวมกันต้องได้ 100%'),
+    update();
+    return [
       h('div', { class: 'bal-scroll' }, h('table', { class: 'bal-table' },
         h('thead', {}, h('tr', {}, h('th', {}, 'Tier'), h('th', {}, 'น้ำหนักโอกาส'), h('th', { class: 'bal-out' }, 'โอกาส'), h('th', { class: 'bal-out' }, 'โอกาส (บอส)'),
           h('th', {}, 'ความกว้าง %'), h('th', { class: 'bal-out' }, 'ช่วง (% ของค่าสูงสุด)'))),
         h('tbody', {}, ...rows))),
       h('div', { class: 'muted' }, widthSum),
       h('div', { class: 'row bal-line' },
-        h('label', {}, 'ค่าต่ำสุดของช่วง (% ของค่าสูงสุด)', numBox(() => draft.rangeFloor, (n) => { draft.rangeFloor = n; }, code.rangeFloor, ...BALANCE_RANGE.rangeFloor, 1, refresh)),
-        h('label', {}, 'บอสเพิ่มโอกาส tier ดี', numBox(() => draft.bossTierBoost, (n) => { draft.bossTierBoost = n; }, code.bossTierBoost, ...BALANCE_RANGE.bossTierBoost, 0.1, refresh)),
+        h('label', {}, 'ค่าต่ำสุดของช่วง (% ของค่าสูงสุด)', numBox(() => t.floor, (n) => { t.floor = n; }, code.rangeFloor, ...BALANCE_RANGE.rangeFloor, 1, changed)),
+        h('label', {}, 'บอสเพิ่มโอกาส tier ดี', numBox(() => t.bossBoost, (n) => { t.bossBoost = n; }, code.bossTierBoost, ...BALANCE_RANGE.bossTierBoost, 0.1, changed)),
       ),
+    ];
+  };
+
+  const tierCard = h('div', { class: 'card' });
+  const drawTiers = (): void => {
+    const labelNote = h('div', { class: 'muted' });
+    const refresh = (): void => {
+      const c = draftTuning();
+      labelNote.textContent = c.tuning && tierLabelsChange(saved, c.tuning)
+        ? '⚠ เปลี่ยนความกว้าง/ค่าต่ำสุดแล้ว: ของที่ผู้เล่นมีอยู่ ค่าเดิมไม่เปลี่ยน แต่ป้าย tier และช่วง min–max ที่แสดงจะคำนวณใหม่ (สุ่มค่าตัวเลขที่ช่างตีเหล็กใช้ tier ใหม่)'
+        : '';
+      updateSummary();
+    };
+
+    // A table of its own for a stat and/or a level band: pick both, then edit it or give it one.
+    const scopeName = (stat: StatKey | null, band: number | null): string =>
+      `${stat ? STAT_LABEL[stat] : 'ทุกสเตตัส'} · ${band === null ? 'ทุกเลเวล' : TIER_BAND_NAME[TIER_BANDS[band]]}`;
+    const own = scopeParts(tierStat, tierBand);
+    let ownEdit: TierEdit | null = null;
+    if (own && hasParts(own)) {
+      // Parts left out (only possible through the API) are filled from the table they fall through to.
+      const fill = statTierTable(draft, tierStat, tierBand);
+      own.weight ??= [...fill.weight];
+      own.width ??= [...fill.width];
+      own.floor ??= fill.floor;
+      own.bossBoost ??= fill.bossBoost;
+      ownEdit = own as TierEdit;
+    }
+    const list = ownScopes().map(([k, b]) => scopeName(k, b));
+    const pickStat = h('select', { onchange: (e: Event) => { const v = (e.target as HTMLSelectElement).value; tierStat = v ? v as StatKey : null; drawTiers(); } },
+      h('option', { value: '', selected: tierStat === null }, 'ทุกสเตตัส'),
+      ...STAT_KEYS.map((k) => h('option', { value: k, selected: k === tierStat }, STAT_LABEL[k])));
+    const pickBand = h('select', { onchange: (e: Event) => { const v = (e.target as HTMLSelectElement).value; tierBand = v === '' ? null : Number(v); drawTiers(); } },
+      h('option', { value: '', selected: tierBand === null }, 'ทุกเลเวล'),
+      ...TIER_BANDS.map((id, i) => h('option', { value: String(i), selected: i === tierBand }, TIER_BAND_NAME[id])));
+    let ownPart: Node[];
+    if (tierStat === null && tierBand === null) {
+      ownPart = [h('div', { class: 'muted' }, 'ทุกสเตตัส ทุกเลเวล = ตารางกลางด้านบน')];
+    } else if (ownEdit) {
+      ownPart = [
+        ...tierEditor(ownEdit, refresh),
+        h('div', { class: 'row bal-line' }, h('button', { onclick: () => { clearScope(tierStat, tierBand); drawTiers(); } }, '↩ เลิกตั้งตารางนี้ (กลับไปใช้ตารางที่ครอบอยู่)')),
+      ];
+    } else {
+      ownPart = [
+        h('div', { class: 'muted' }, `ตอนนี้ใช้: ${tierSourceName(draft, tierStat, tierBand)}`),
+        h('div', { class: 'row bal-line' }, h('button', { onclick: () => {
+          const t = statTierTable(draft, tierStat, tierBand);
+          setScope(tierStat, tierBand, { weight: [...t.weight], width: [...t.width], floor: t.floor, bossBoost: t.bossBoost });
+          drawTiers();
+        } }, '✎ ตั้งตารางเอง (เริ่มจากค่าที่ใช้อยู่ตอนนี้)')),
+      ];
+    }
+
+    tierCard.replaceChildren(
+      h('h2', {}, 'Tier T1–T5 ของสเตตัสบนไอเทม'),
+      h('div', { class: 'muted' }, 'โอกาสเป็นน้ำหนัก (คิดเป็น % ให้เอง) · เปลี่ยนโอกาสมีผลกับของดรอปใหม่เท่านั้น ช่วงค่าไม่เลื่อน · ความกว้างรวมกันต้องได้ 100%'),
+      h('h3', {}, 'ตารางกลาง'),
+      h('div', { class: 'muted' }, 'ใช้กับทุกสเตตัสทุกเลเวลที่ไม่ได้ตั้งตารางเอง'),
+      ...tierEditor(central, refresh),
+      h('h3', {}, 'ตารางแยกตามสเตตัส / ช่วงเลเวลไอเทม'),
+      h('div', { class: 'muted' }, 'ลำดับที่ใช้ (ทีละช่อง): สเตตัส+ช่วงเลเวล → สเตตัสทุกเลเวล → ทุกสเตตัสในช่วงเลเวล → ตารางกลาง · ช่วงเลเวลดูจากเลเวลของไอเทม'),
+      h('div', { class: 'muted' }, list.length ? `ตั้งเองอยู่: ${list.join(', ')}` : 'ยังไม่มี ทุกอย่างใช้ตารางกลาง'),
+      h('div', { class: 'row bal-line' }, h('label', {}, 'สเตตัส', pickStat), h('label', {}, 'ช่วงเลเวล', pickBand)),
+      ...ownPart,
       labelNote,
     );
     refresh();
+  };
+
+  // ---------------------------------------------------------- preview: real numbers
+  const previewCard = h('div', { class: 'card' });
+  let pvBase = ITEM_BASES[0].id;
+  let pvRarity: Rarity = 'rare';
+  let pvLevel = 10;
+  const drawPreview = (): void => {
+    const c = draftTuning();
+    const body = h('div');
+    const base = ITEM_BASES.find((b) => b.id === pvBase)!;
+    const pickBase = h('select', { onchange: (e: Event) => { pvBase = (e.target as HTMLSelectElement).value; drawPreview(); } },
+      ...ITEM_BASES.map((b) => h('option', { value: b.id, selected: b.id === pvBase },
+        `${b.names.any ?? b.names.sword ?? b.id} [${SLOT_LABEL[b.slot]}] (Lv.${b.minLevel}+)`)));
+    const pickRarity = h('select', { onchange: (e: Event) => { pvRarity = (e.target as HTMLSelectElement).value as Rarity; drawPreview(); } },
+      ...RARITIES.map((r) => h('option', { value: r, selected: r === pvRarity }, RARITY_LABEL[r])));
+    const lv = h('input', { type: 'number', min: '1', max: String(MAX_LEVEL), step: '1', value: String(pvLevel) });
+    lv.className = 'bal-num';
+    lv.addEventListener('change', () => {
+      const n = Math.round(Number(lv.value));
+      if (Number.isFinite(n) && n >= 1 && n <= MAX_LEVEL) { pvLevel = n; drawPreview(); }
+    });
+    if (!c.tuning) {
+      body.append(h('div', { class: 'msg bad' }, `แก้ค่าที่ผิดก่อนถึงจะดูตัวอย่างได้: ${c.error}`));
+    } else {
+      // Work the numbers out with the draft's tables, then put the saved ones back.
+      const keep = currentBalanceTuning();
+      applyBalance(c.tuning);
+      try {
+        const rows = itemRowKinds(pvBase) ?? [];
+        const ranges = rowRanges(pvBase, pvRarity, pvLevel, rows.map((r) => r.stat)) ?? [];
+        const kindName = { main: 'หลัก', locked: 'ล็อก', extra: 'เสริม' } as const;
+        const band = tierBandOf(pvLevel);
+        const tr = rows.map((row, i) => {
+          const r = ranges[i];
+          const t = tierRanges(row.stat, pvLevel, r.lo, r.hi);
+          const ch = tierChances(row.stat, pvLevel);
+          const bch = tierChances(row.stat, pvLevel, true);
+          return h('tr', {},
+            h('td', {}, STAT_LABEL[row.stat]),
+            h('td', {}, kindName[row.kind]),
+            ...t.map((x, j) => h('td', { class: 'bal-out', title: `โอกาส ${pct(ch[j])} · บอส ${pct(bch[j])}` }, x.min === x.max ? String(x.min) : `${x.min}–${x.max}`)),
+            h('td', { class: 'muted' }, tierSourceName(mergeBalance(c.tuning!), row.stat, band)),
+          );
+        });
+        body.append(
+          h('div', { class: 'bal-scroll' }, h('table', { class: 'bal-table' },
+            h('thead', {}, h('tr', {}, h('th', {}, 'สเตตัส'), h('th', {}, 'บรรทัด'),
+              ...[1, 2, 3, 4, 5].map((n) => h('th', { class: 'bal-out' }, `T${n}`)), h('th', {}, 'ใช้ตาราง'))),
+            h('tbody', {}, ...tr))),
+        );
+      } finally {
+        applyBalance(keep);
+      }
+    }
+    previewCard.replaceChildren(
+      h('h2', {}, 'ตัวอย่างค่าจริงที่สุ่มได้'),
+      h('div', { class: 'muted' }, 'คิดจากค่าที่กำลังแก้ (ยังไม่บันทึกก็เห็น) · ชี้ค้างที่ช่องเพื่อดูโอกาสของ tier นั้น (ปกติ/บอส) · บรรทัด "เสริม" = สเตตัสที่สุ่มจากความหายาก'),
+      h('div', { class: 'row bal-line' }, h('label', {}, 'ชนิดไอเทม', pickBase), h('label', {}, 'ความหายาก', pickRarity), h('label', {}, 'เลเวลไอเทม', lv)),
+      h('div', { class: 'muted' }, `${base.names.any ?? base.names.sword ?? base.id} ${RARITY_LABEL[pvRarity]} Lv.${pvLevel} · ช่วงเลเวล ${TIER_BAND_NAME[TIER_BANDS[tierBandOf(pvLevel)]]}`),
+      body,
+    );
   };
 
   // ---------------------------------------------------------- save bar
@@ -175,6 +358,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   const draftTuning = (): ReturnType<typeof checkBalance> => checkBalance(draft, true);
   function updateSummary(): void {
     const c = draftTuning();
+    drawPreview();
     if (!c.tuning) {
       summary.textContent = `⚠ ${c.error}`;
       summary.className = 'msg bad';
@@ -236,6 +420,6 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     msg,
   );
 
-  box.replaceChildren(classCard, regenCard, tierCard, bar);
+  box.replaceChildren(classCard, regenCard, tierCard, previewCard, bar);
   redraw();
 }
