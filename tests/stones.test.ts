@@ -28,6 +28,7 @@ outer: for (let x = -80; x <= 80; x++) for (let z = -80; z <= 80; z++) {
 ok(near(p, 'blacksmith'), 'standing at the blacksmith');
 
 for (const kind of REROLL_KINDS) {
+  p.forgeAt = -Infinity; // skip the 1 s blacksmith cooldown (FORGE_CD) between kinds
   const stone = REROLL_STONE[kind];
   const gold = p.gold;
   ok(sim.reroll(p, item.uid, kind) === null && p.gold === gold, `${kind}: refused without ${stone}, no gold taken`);
