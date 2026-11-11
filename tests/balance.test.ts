@@ -164,7 +164,7 @@ const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
   }
   const lenient = checkBalance({ statTiers: { luck: { floor: 20 }, moveSpeed: { floor: 2, width: [10, 20, 30, 20, 20] }, atk: { floor: 1 } } }, false).tuning;
   ok(JSON.stringify(lenient) === '{"statTiers":{"moveSpeed":{"width":[10,20,30,20,20]}}}', 'own tables read back leniently: bad parts dropped, empty stats dropped');
-  ok(balanceChanges({}, { statTiers: { moveSpeed: { floor: 20 } } }).endsWith('ค่าต่ำสุด ตารางกลาง → 20%'), 'audit text names the stat\'s own table');
+  ok(balanceChanges({}, { statTiers: { moveSpeed: { floor: 20 } } }).endsWith('ค่าต่ำสุด ไม่ได้ตั้ง → 20%'), 'audit text names the stat\'s own table');
   ok(tierLabelsChange({}, { statTiers: { moveSpeed: { floor: 20 } } }) && !tierLabelsChange({}, { statTiers: { moveSpeed: { weight: [1, 1, 1, 1, 1] } } }),
     'only own widths/floor change labels, own chances do not');
 
@@ -173,8 +173,8 @@ const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
   const before = JSON.stringify(rowRanges('weapon_3', 'rare', 10, [...stats]));
   applyBalance({ statTiers: { moveSpeed: { weight: [100, 0, 0, 0, 0], bossBoost: 0 } } });
   ok(JSON.stringify(rowRanges('weapon_3', 'rare', 10, [...stats])) === before, 'a stat\'s own chances do not move any range');
-  ok(near(tierChances('moveSpeed')[0], 1) && near(tierChances('atk')[0], 0.03), 'the stat uses its own chances, the others the central ones');
-  ok(near(tierChances('moveSpeed', true)[0], 1) && tierChances('atk', true)[0] > 0.03, 'boss boost per stat (own 0, central 1.5)');
+  ok(near(tierChances('moveSpeed', 1)[0], 1) && near(tierChances('atk', 1)[0], 0.03), 'the stat uses its own chances, the others the central ones');
+  ok(near(tierChances('moveSpeed', 1, true)[0], 1) && tierChances('atk', 1, true)[0] > 0.03, 'boss boost per stat (own 0, central 1.5)');
   ok(near(statRerollOdds().tiers[0], 0.9 * 0.03 + 0.1 * 1), 'the blacksmith row is every stat\'s chances together');
   const drops = Array.from({ length: 400 }, (_, i) => rollItem(mulberry32(500 + i), 20, 'mage', 1.5)).flatMap((it) => it.lines ?? []);
   const move = drops.filter((l) => l.stat === 'moveSpeed');
@@ -234,13 +234,59 @@ const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
     rerollValues(it, mulberry32(8000 + i));
     const r = lineRanges(it)!;
     it.lines!.forEach((l, j) => {
-      const t = tierRanges(l.stat, r[j].lo, r[j].hi)[l.tier - 1];
+      const t = tierRanges(l.stat, it.level, r[j].lo, r[j].hi)[l.tier - 1];
       if (l.value < t.min - 1e-9 || l.value > t.max + 1e-9 || l.min !== t.min || l.max !== t.max) inRange = false;
     });
   }
   ok(inRange && withMove.length > 0, 'สุ่มค่าตัวเลข: every line (moveSpeed on its own widths) lands in its tier range');
   ok(withMove.every((it) => it.tierK === ';moveSpeed=40,30,15,10,5|10'), 'rerolled items carry the key of the stats on them');
   applyBalance({});
+}
+
+// ---------------------------------------------------------- tier tables per item-level band (owner 2026-11-11)
+{
+  // What may be saved.
+  const t = checkBalance({ bandTiers: { '31-40': { floor: 20 }, '1-10': { bossBoost: 0 } }, statTiers: { moveSpeed: { bands: { '41-50': { weight: [1, 1, 1, 1, 1] } }, floor: 30 } } }, true).tuning;
+  ok(JSON.stringify(t) === '{"statTiers":{"moveSpeed":{"floor":30,"bands":{"41-50":{"weight":[1,1,1,1,1]}}}},"bandTiers":{"1-10":{"bossBoost":0},"31-40":{"floor":20}}}',
+    'band tables kept in TIER_BANDS order, a stat\'s bands after its own parts');
+  for (const [what, x] of [
+    ['unknown band', { bandTiers: { '51-60': { floor: 20 } } }],
+    ['unknown band of a stat', { statTiers: { atk: { bands: { '0-9': { floor: 20 } } } } }],
+    ['band floor 2%', { bandTiers: { '11-20': { floor: 2 } } }],
+    ['stat band widths not 100', { statTiers: { atk: { bands: { '11-20': { width: [50, 50, 50, 50, 50] } } } } }],
+    ['bands not an object', { bandTiers: [1] }],
+  ] as const) {
+    ok(!!checkBalance(x, true).error, `refused: ${what}`);
+  }
+  ok(JSON.stringify(checkBalance({ bandTiers: { '51-60': { floor: 20 }, '11-20': { floor: 2, bossBoost: 3 } } }, false).tuning) === '{"bandTiers":{"11-20":{"bossBoost":3}}}', 'band tables read back leniently');
+  ok(balanceChanges({}, { bandTiers: { '31-40': { floor: 20 } } }).includes('Lv31–40 ค่าต่ำสุด ไม่ได้ตั้ง → 20%'), 'audit text names the band');
+  ok(tierLabelsChange({}, { bandTiers: { '31-40': { floor: 20 } } }) && tierLabelsChange({}, { statTiers: { atk: { bands: { '1-10': { width: [40, 30, 15, 10, 5] } } } } }), 'band widths/floor change labels');
+
+  // Which table wins, part by part: stat+band → stat → band → central.
+  applyBalance({
+    tierWeight: [1, 0, 0, 0, 0],
+    bandTiers: { '31-40': { weight: [0, 1, 0, 0, 0] } },
+    statTiers: { moveSpeed: { weight: [0, 0, 1, 0, 0], bands: { '31-40': { weight: [0, 0, 0, 1, 0] } } }, atk: { bossBoost: 0 } },
+  });
+  const top = (stat: 'moveSpeed' | 'atk' | 'def', level: number) => tierChances(stat, level).indexOf(1) + 1;
+  ok(top('def', 5) === 1 && top('def', 35) === 2 && top('atk', 35) === 2 && top('moveSpeed', 5) === 3 && top('moveSpeed', 35) === 4,
+    'stat+band → stat → band → central (def Lv5 T1, def/atk Lv35 T2, moveSpeed Lv5 T3, moveSpeed Lv35 T4)');
+  ok(top('atk', 40) === 2 && top('atk', 41) === 1 && top('atk', 31) === 2 && top('atk', 30) === 1, 'band edges: Lv31–40 in, 30 and 41 out');
+  const drops = (level: number) => Array.from({ length: 150 }, (_, i) => rollItem(mulberry32(40 + i), level, 'gunslinger')).flatMap((it) => it.lines ?? []);
+  ok(drops(35).every((l) => l.tier === (l.stat === 'moveSpeed' ? 4 : 2)) && drops(15).every((l) => l.tier === (l.stat === 'moveSpeed' ? 3 : 1)), 'real drops follow the item level\'s band');
+  applyBalance({});
+
+  // Widths / floor of one band: only items of that level are relabelled; values never change.
+  const items: Item[] = [15, 35, 45].flatMap((lv) => Array.from({ length: 30 }, (_, i) => rollItem(mulberry32(lv * 100 + i), lv, 'mage')));
+  const orig = JSON.stringify(items);
+  applyBalance({ bandTiers: { '31-40': { floor: 15, width: [10, 20, 30, 20, 20] } } });
+  const copy = structuredClone(items).map((it) => upgradeItem(it));
+  ok(copy.every((it, i) => JSON.stringify(it.stats) === JSON.stringify(items[i].stats)), 'band widths: every value stays the same');
+  ok(copy.every((it, i) => it.level === 35 ? it.tierK === '10,20,30,20,20|15' : JSON.stringify(it) === JSON.stringify(items[i])), 'only items of Lv31–40 get the key; the others are untouched');
+  ok(copy.some((it, i) => it.level === 35 && it.lines!.some((l, j) => l.tier !== items[i].lines![j].tier || l.min !== items[i].lines![j].min)), 'Lv31–40 items are relabelled');
+  applyBalance({});
+  copy.forEach((it) => upgradeItem(it));
+  ok(JSON.stringify(copy) === orig, 'back to the code tables: the items are exactly as before');
 }
 
 // ---------------------------------------------------------- against a real server

@@ -434,7 +434,7 @@ export function customItem(baseId: string, rarity: Rarity, level: number, cls: C
     const r = ranges[i];
     const top = roundStat(stat, r.hi * ADMIN_STAT_MULT);
     if (value < statStep(stat) || roundStat(stat, value) !== value || value > top) return `${STAT_LABEL[stat]} ต้องอยู่ระหว่าง ${statStep(stat)}–${top}`;
-    const t = tierOf(stat, value, r.lo, r.hi);
+    const t = tierOf(stat, level, value, r.lo, r.hi);
     lines.push({ stat, value, tier: t.tier, min: t.min, max: t.max });
   }
   item.name = name;

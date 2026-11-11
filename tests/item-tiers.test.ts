@@ -24,7 +24,7 @@ function linesValid(it: Item, label: string): boolean {
   let good = true;
   const total: Partial<Record<StatKey, number>> = {};
   it.lines.forEach((l, i) => {
-    const t = tierRanges(l.stat, ranges[i].lo, ranges[i].hi)[l.tier - 1];
+    const t = tierRanges(l.stat, it.level, ranges[i].lo, ranges[i].hi)[l.tier - 1];
     if (l.min !== t.min || l.max !== t.max || l.value < l.min - 1e-9 || l.value > l.max + 1e-9) good = false;
     if (statStep(l.stat) === 0.1 ? !decimals(l.value) : !Number.isInteger(l.value)) good = false;
     total[l.stat] = (total[l.stat] ?? 0) + l.value;
@@ -38,20 +38,20 @@ function linesValid(it: Item, label: string): boolean {
   let good = true;
   for (const stat of STAT_KEYS) {
     for (const [lo, hi] of [[0.4, 1], [2, 5], [10, 25], [40, 100], [300, 750]] as const) {
-      const t = tierRanges(stat, lo, hi);
+      const t = tierRanges(stat, 1, lo, hi);
       const step = statStep(stat);
       if (t.length !== 5 || t.some((x, i) => x.tier !== i + 1 || x.max < x.min)) good = false;
       for (let i = 0; i < 4; i++) if (!near(t[i].min, t[i + 1].max + step)) good = false; // no gap, no overlap
     }
   }
   ok(good, 'tiers: five ranges, T1 on top, next to each other with no gap or overlap');
-  const t = tierRanges('atk', 40, 100);
+  const t = tierRanges('atk', 1, 40, 100);
   ok(t[0].max === 100 && t[4].min === 40, 'tiers: T1 ends at the top, T5 starts at the bottom');
   ok(t[0].min === 86 && t[1].min === 71 && t[2].min === 56 && t[3].min === 47 && t[4].max === 46,
     `tiers: T1–T3 a quarter each, T4 15%, T5 10% (${t.map((x) => `${x.min}–${x.max}`).join(' ')})`);
-  ok(tierOf('atk', 999, 40, 100).tier === 1 && tierOf('atk', 1, 40, 100).tier === 5 && tierOf('atk', 60, 40, 100).tier === 3,
+  ok(tierOf('atk', 1, 999, 40, 100).tier === 1 && tierOf('atk', 1, 1, 40, 100).tier === 5 && tierOf('atk', 1, 60, 40, 100).tier === 3,
     'tierOf: above the range is T1, below it T5');
-  const small = tierRanges('atk', 2, 5);
+  const small = tierRanges('atk', 1, 2, 5);
   ok(small.every((x) => x.max >= x.min) && small[0].min > small[1].max, 'tiers: small numbers still give five distinct ranges');
 }
 
@@ -179,7 +179,7 @@ function oldItem(): Item {
   ok(r[1].main && !r[2].main, 'old weapon: the added crit line is locked, the old crit stays an extra');
   ok(linesValid(it, 'old weapon'), 'old weapon: every line in its tier, stats are the lines\' total');
   ok(it.lines!.every((l, i) => {
-    const t = tierOf(l.stat, l.value, r[i].lo, r[i].hi);
+    const t = tierOf(l.stat, 20, l.value, r[i].lo, r[i].hi);
     return l.tier === t.tier && l.min === t.min && l.max === t.max;
   }), 'old item: tier and range taken from where the value falls now');
   const again = JSON.stringify(it);
