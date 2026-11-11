@@ -152,6 +152,13 @@ export class CosmeticRig {
   private mount: Piece | null = null;
   /** The mount's head half, drawn in front of the rider on the front diagonal (see mountSplit). */
   private mountHead: SpriteActor | null = null;
+  /**
+   * The wings again, cut to the half behind the body's middle on screen and drawn in front of the body, seen
+   * from the side: the near wing over the back, the far one behind it (owner 2026-11-11).
+   */
+  private wingNear: SpriteActor | null = null;
+  private readonly wingClip = new THREE.Plane();
+  private nearAlpha = 1;
   private readonly headClip = new THREE.Plane();
   private pet: (Piece & { x: number; z: number; fx: number; fz: number }) | null = null;
   private aura: { id: string; m: THREE.Mesh } | null = null;
@@ -207,7 +214,9 @@ export class CosmeticRig {
     const fade = p.alive ? 1 : Math.max(0, 1 - this.deadT / WINGS_FADE);
     const showWings = (alive || (!p.alive && fade > 0)) && p.toadT <= 0;
     const wc = showWings ? shownCos(p, 'wings') : undefined;
+    const hadWings = this.wings;
     this.wings = this.piece(this.wings, wc, wc ? tuneNum(wc.id, 'h') : 0, 0);
+    if (this.wings !== hadWings) this.dropWingNear();
     if (!this.wings) this.wingsAlpha = 1;
     if (this.wings) {
       const id = this.wings.id;
@@ -239,7 +248,37 @@ export class CosmeticRig {
       a.setLift(lift + seat);
       a.face(p.faceX, p.faceZ);
       a.update(dt, true, tuneNum(id, p.moving ? 'flapWalk' : 'flap'));
+
+      // Seen from the side: the near wing comes over the back. A copy made and animated with the wings every
+      // frame (same frame, same fade), shown only from the side, cut at the body's middle on screen.
+      const wh = tuneNum(id, 'h');
+      if (!this.wingNear) {
+        this.wingNear = new SpriteActor(sheets[cosSheetKey(id)], wh, 0, COS_CYCLE);
+        this.wingNear.setClip([this.wingClip]);
+        this.scene.add(this.wingNear.group);
+      }
+      const n = this.wingNear;
+      if (n.height !== wh) n.setHeight(wh);
+      if (fade !== this.nearAlpha) {
+        this.nearAlpha = fade;
+        n.setOpacity(fade);
+      }
+      n.face(p.faceX, p.faceZ);
+      n.update(dt, true, tuneNum(id, p.moving ? 'flapWalk' : 'flap'));
+      const side = viewRow(p) === 2;
+      n.group.visible = side;
+      if (side) {
+        // Screen right in the world is +x −z: keep the side away from where the character faces.
+        const fsx = (p.faceX - p.faceZ) * Math.SQRT1_2;
+        const sign = fsx >= 0 ? -1 : 1;
+        this.wingClip.normal.set(sign * Math.SQRT1_2, 0, -sign * Math.SQRT1_2);
+        this.wingClip.constant = -(this.wingClip.normal.x * p.x + this.wingClip.normal.z * p.z);
+        const [nx, ny, nz] = depthAt(p.x + sx + hx, p.z + sz + hz, lift, depth);
+        n.group.position.set(nx, ny, nz);
+        n.setLift(lift + seat);
+      }
     }
+    if (!this.wings) this.dropWingNear();
 
     // ---- mount: under the rider
     const mc = shownRiding(p) && alive ? shownCos(p, 'mount') : undefined;
@@ -374,6 +413,14 @@ export class CosmeticRig {
     }
   }
 
+  private dropWingNear(): void {
+    this.nearAlpha = 1;
+    if (!this.wingNear) return;
+    this.scene.remove(this.wingNear.group);
+    this.wingNear.dispose();
+    this.wingNear = null;
+  }
+
   private dropMountHead(): void {
     if (!this.mountHead) return;
     this.scene.remove(this.mountHead.group);
@@ -383,6 +430,7 @@ export class CosmeticRig {
 
   dispose(): void {
     this.dropMountHead();
+    this.dropWingNear();
     for (const pc of [this.wings, this.mount, this.pet]) {
       if (!pc) continue;
       this.scene.remove(pc.actor.group);
