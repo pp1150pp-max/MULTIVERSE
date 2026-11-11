@@ -8,7 +8,8 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import sharp from 'sharp';
+// sharp is loaded only when a build converts files, so dev and checkouts without it still start.
+type Sharp = typeof import('sharp');
 
 /** Picked with the owner from side-by-side tests: q90 with smart chroma subsampling, alpha kept exact. */
 const WEBP = { quality: 90, smartSubsample: true, alphaQuality: 100, effort: 4 } as const;
@@ -25,7 +26,7 @@ async function listPngs(dir: string): Promise<string[]> {
   return out;
 }
 
-async function convert(png: string, cacheDir: string): Promise<{ before: number; after: number }> {
+async function convert(sharp: Sharp, png: string, cacheDir: string): Promise<{ before: number; after: number }> {
   const data = await readFile(png);
   const key = createHash('sha1').update(SETTINGS_KEY).update(data).digest('hex');
   const cached = join(cacheDir, key + '.webp');
@@ -69,10 +70,11 @@ export function spritesWebp() {
       const cacheDir = join(root, 'node_modules', '.cache', 'sprites-webp');
       await mkdir(cacheDir, { recursive: true });
       const pngs = await listPngs(sprites);
+      const { default: sharp } = await import('sharp');
       let before = 0, after = 0, next = 0;
       const worker = async () => {
         while (next < pngs.length) {
-          const r = await convert(pngs[next++], cacheDir);
+          const r = await convert(sharp, pngs[next++], cacheDir);
           before += r.before;
           after += r.after;
         }
