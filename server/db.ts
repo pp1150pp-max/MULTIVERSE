@@ -10,6 +10,7 @@ import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
 import { cleanCosOwned } from '../src/shared/data/cosmetics';
 import { checkCosTuning, COS_TUNING_SETTING, type CosTuning } from '../src/shared/cosTuning';
+import { CARD_TUNING_SETTING, checkCardTuning, type CardTuning } from '../src/shared/cardTuning';
 import { checkOrbLook, DEFAULT_ORB_LOOK, ORB_LOOK_SETTING, sameOrbLook, type OrbLook } from '../src/shared/orbLook';
 import { MARKET_HISTORY_DAYS, type MarketQuery } from '../src/shared/sim/market';
 import { MAIL_HISTORY_DAYS } from '../src/shared/mail';
@@ -394,6 +395,23 @@ export class Db {
   /** Saves the server-wide cosmetic tuning (already clean; nothing changed is stored as no row). */
   setCosTuning(t: CosTuning): void {
     this.setSetting(COS_TUNING_SETTING, Object.keys(t).length ? JSON.stringify(t) : null);
+  }
+
+  /** The server-wide card tuning: only the changes from the code defaults ({} until the owner saves some). */
+  cardTuning(): CardTuning {
+    const v = this.getSetting(CARD_TUNING_SETTING);
+    if (v === null) return {};
+    try {
+      // Checked again, leniently: a card or number the code no longer knows is dropped, the rest kept.
+      return checkCardTuning(JSON.parse(v), false).tuning ?? {};
+    } catch {
+      return {};
+    }
+  }
+
+  /** Saves the server-wide card tuning (already clean; nothing changed is stored as no row). */
+  setCardTuning(t: CardTuning): void {
+    this.setSetting(CARD_TUNING_SETTING, t.cards || t.nums ? JSON.stringify(t) : null);
   }
 
   shutdownTexts(): Record<ShutdownMode, string> {

@@ -25,6 +25,7 @@ import { createInterface } from 'node:readline';
 import { RESTART_EXIT_CODE, SHUTDOWN_SECONDS, shutdownWarning, type ShutdownMode } from '../src/shared/net/protocol';
 import { rmSync, writeFileSync } from 'node:fs';
 import { announceShared, runningTunnel, startTunnel } from './tunnel';
+import { applyCardTuning } from '../src/shared/cardTuning';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const PORT = Number(process.env.PORT ?? 2567);
@@ -41,6 +42,8 @@ const CONTROL_FILE = controlFilePath(DB_FILE, PORT);
 const CONTROL_TOKEN = randomBytes(32).toString('hex');
 
 const db = new Db(DB_FILE);
+// The owner's card numbers (/admin "การ์ด") are in force from the start.
+applyCardTuning(db.cardTuning());
 const backups = new Backups(db, DB_FILE);
 const limiter = new AttemptLimiter();
 /** Brake on making guests: each new guest counts as one "attempt" for its address. */
