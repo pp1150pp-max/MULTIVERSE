@@ -493,12 +493,28 @@ function bossRoom(field: ZoneDef): ZoneDef {
     branches: [],
     spawns: [],
     boss: { monster: lair.boss, x: 0, z: 0, radius: BOSS_RADIUS[lair.boss] ?? 1, count: 1, respawn: [0, 0] },
-    portals: [{ to: HUB_ID, x: exit.x, z: exit.z, minLevel: 0 }],
+    // Leads back to this map, next to its summoner (lairExitSpot). Clicked, never walked into (owner 2026-11-12).
+    portals: [{ to: field.id, x: exit.x, z: exit.z, minLevel: 0 }],
     roomOf: field.id,
     arenaRadius: field.arenaRadius,
     bossSolid: lair.boss === 'volcano_heart' ? 1.5 : undefined,
     monsterBoost: field.monsterBoost,
   };
+}
+
+/** How far from the summoner someone coming out of its room stands. */
+export const LAIR_EXIT_RADIUS = 3;
+
+/**
+ * Where someone leaving a boss room comes out (owner 2026-11-12: win or lose): a random spot around the
+ * summoner of the room's own map. Null when the zone is not a boss room.
+ */
+export function lairExitSpot(room: ZoneDef, r: () => number = Math.random): { field: string; x: number; z: number } | null {
+  const field = room.roomOf ? ZONES[room.roomOf] : undefined;
+  const lair = field?.lair;
+  if (!field || !lair) return null;
+  const a = r() * Math.PI * 2;
+  return { field: field.id, x: lair.x + Math.cos(a) * LAIR_EXIT_RADIUS, z: lair.z + Math.sin(a) * LAIR_EXIT_RADIUS };
 }
 
 /** Boss rooms, by the id of the map whose summoner opens them. Not in ZONES: the server makes one Sim per group. */

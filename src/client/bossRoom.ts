@@ -7,6 +7,7 @@ import { MONSTERS } from '../shared/data/monsters';
 import { BOSS_KEY, BOSS_QUEST_KEY, STONE_COLOR, STONE_NAME } from '../shared/data/stones';
 import { bossShortName, ROOM_KEYS_MAX, roomInviteText, type RoomAnswer, type RoomLobbyView } from '../shared/bossRoom';
 import { potionIcon, stoneIcon } from './icons';
+import { ROOM_EXIT_RANGE } from '../shared/sim/terrain';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -52,6 +53,9 @@ export class RoomUI {
   /** The line on the HUD while in a room. */
   private readonly line: HTMLElement;
   private drawnLine = '';
+  private readonly countdown: HTMLElement;
+  private drawnCount = 0;
+  private readonly exitBtn: HTMLButtonElement;
 
   constructor(private readonly g: Game) {
     this.win = el('div', 'panel hidden');
@@ -73,6 +77,15 @@ export class RoomUI {
     $('hud').append(this.invitesBox);
 
     $('btn-revive').onclick = () => this.g.backend.roomRevive();
+    // The countdown before the boss appears, big in the middle of the screen (owner 2026-11-12).
+    this.countdown = el('div', 'hidden');
+    this.countdown.id = 'room-countdown';
+    $('hud').append(this.countdown);
+    // Standing by the open portal: the way out (clicking the portal itself does the same).
+    this.exitBtn = el('button', 'primary hidden', '🚪 ออกจากห้องบอส');
+    this.exitBtn.id = 'btn-room-exit';
+    this.exitBtn.onclick = () => this.g.backend.roomLeave();
+    $('hud').append(this.exitBtn);
     this.line = el('div', 'hidden');
     this.line.id = 'room-line';
     $('hud').append(this.line);
@@ -218,12 +231,37 @@ export class RoomUI {
     this.invites.delete(id);
   }
 
+  /** In a boss room whose boss is dead, alive and close enough to its portal to leave through it. */
+  nearExit(): boolean {
+    const r = this.g.backend.room;
+    const pt = this.g.backend.zone.portals[0];
+    const p = this.g.player;
+    return !!r && r.leaveIn !== undefined && !!pt && p.alive && Math.hypot(p.x - pt.x, p.z - pt.z) <= ROOM_EXIT_RANGE;
+  }
+
+  private updateCountdown(): void {
+    const left = this.g.backend.room?.bossIn;
+    const n = left === undefined ? 0 : Math.ceil(left);
+    if (n === this.drawnCount) return;
+    this.drawnCount = n;
+    this.countdown.classList.toggle('hidden', n <= 0);
+    if (n <= 0) return;
+    this.countdown.textContent = String(n);
+    // Replays the pop for each new number.
+    this.countdown.classList.remove('pop');
+    void this.countdown.offsetWidth;
+    this.countdown.classList.add('pop');
+  }
+
   /** Dead in a boss room: the death screen offers getting up here with a phoenix feather. */
   private updateRevive(): void {
     const btn = $<HTMLButtonElement>('btn-revive');
     const r = this.g.backend.room;
     const have = this.g.player.stoneCount('phoenix');
     const show = !!r && !this.g.player.alive;
+    const respawn = r ? 'ฟื้นคืนชีพที่แท่นเรียกบอส' : 'ฟื้นคืนชีพที่เมือง';
+    const rb = $('btn-respawn');
+    if (rb.textContent !== respawn) rb.textContent = respawn;
     btn.classList.toggle('hidden', !show);
     if (!show) return;
     btn.disabled = r.revives <= 0 || have <= 0;
@@ -251,9 +289,11 @@ export class RoomUI {
     const text = r
       ? `${bossShortName(MONSTERS[r.boss]?.nameTh ?? r.boss)} ×${r.keys} · ห้อง ${r.channel} · ❤ ${r.revives}` +
         (r.wipeIn !== undefined ? ` · ทุกคนล้มหมด! ชุบภายใน ${Math.ceil(r.wipeIn)} วิ` : '') +
-        (r.leaveIn !== undefined ? ` · กลับเมืองใน ${Math.ceil(r.leaveIn)} วิ` : '')
+        (r.leaveIn !== undefined ? ` · ออกไปที่แท่นเรียกบอสใน ${Math.ceil(r.leaveIn)} วิ` : '')
       : '';
     this.updateRevive();
+    this.updateCountdown();
+    this.exitBtn.classList.toggle('hidden', !this.nearExit());
     if (text !== this.drawnLine) {
       this.drawnLine = text;
       this.line.textContent = text;

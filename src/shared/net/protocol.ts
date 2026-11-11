@@ -148,6 +148,7 @@ export type ActionMsg =
   | { t: 'act'; a: 'buyPhoenix'; n: number }
   /** Dead in a boss room: get up where you fell, for one phoenix feather. */
   | { t: 'act'; a: 'roomRevive' }
+  | { t: 'act'; a: 'roomLeave' }
   | { t: 'act'; a: 'roomAnswer'; id: number; yes: boolean }
   | { t: 'act'; a: 'roomStart' }
   | { t: 'act'; a: 'roomCancel' }
