@@ -17,6 +17,8 @@ import type {
   AdminAccountDetail, AdminAccountsResponse, AdminCardTune, AdminCosLook, AdminFeature, AdminOrbLook, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, SessionPage, SessionSort, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AdminShutdownText, AuditRow,
 } from '../shared/admin';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
+import { applyBalance, checkBalance } from '../shared/balance';
+import { renderBalance } from './balance';
 import { itemNames, makeItem, roundStat, rowRanges, tierOf } from '../shared/data/items';
 import { checkShutdownText, SHUTDOWN_SECONDS, SHUTDOWN_TEXT_MAX, SHUTDOWN_TIME_TOKEN, shutdownWarning, type ShutdownMode } from '../shared/net/protocol';
 import { isStack, RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, SLOTS, STAT_KEYS, STAT_LABEL, BLACKSMITH_STONES, BOSS_KEYS, type BagEntry, type ClassId, type Item, type Rarity } from '../shared/types';
@@ -145,7 +147,7 @@ const root = document.getElementById('admin')!;
 let me: AdminMe | null = null;
 let meta: AdminMeta | null = null;
 let online: AdminOnline | null = null;
-type Tab = 'online' | 'search' | 'users' | 'stats' | 'sessions' | 'chat' | 'mail' | 'trades' | 'reports' | 'orbs' | 'cos' | 'cards' | 'roles' | 'audit' | 'server';
+type Tab = 'online' | 'search' | 'users' | 'stats' | 'sessions' | 'chat' | 'mail' | 'trades' | 'reports' | 'orbs' | 'cos' | 'cards' | 'balance' | 'roles' | 'audit' | 'server';
 let tab: Tab = 'online';
 let timer = 0;
 
@@ -235,6 +237,8 @@ async function start(): Promise<void> {
   try {
     me = await api<AdminMe>('GET', '/admin/me');
     meta = await api<AdminMeta>('GET', '/admin/meta');
+    // The server's game balance, so the custom-item form's tiers match the server's.
+    applyBalance(checkBalance(meta.balance, false).tuning ?? {});
   } catch (e) {
     if ((e as ApiError).status === 0) {
       root.replaceChildren(h('div', { class: 'center' }, h('div', { class: 'card msg bad' }, (e as Error).message)));
@@ -259,6 +263,7 @@ function renderShell(): void {
   if (me.features.includes('orbPreview')) tabs.push(['orbs', 'ลูกแก้วตีบวก']);
   if (me.features.includes('cosPreview')) tabs.push(['cos', 'ของแต่งตัว']);
   if (me.features.includes('cardView')) tabs.push(['cards', 'การ์ด']);
+  if (me.features.includes('balance')) tabs.push(['balance', 'ปรับสมดุล']);
   if (me.role === OWNER_ROLE) tabs.push(['roles', 'สิทธิ์'], ['audit', 'ประวัติ']);
   if (me.role === 'owner' || me.features.includes('broadcast') || me.features.includes('backup') || me.features.includes('shutdownText')) tabs.push(['server', 'Server']);
   // A role without the tab that was open (or with no tabs at all) starts on its first one.
@@ -299,6 +304,7 @@ function setTab(t: Tab): void {
   else if (t === 'reports') void renderReports();
   else if (t === 'orbs') void renderOrbs();
   else if (t === 'cos') void renderCos();
+  else if (t === 'balance') void renderBalance(view, h, api, (tuning) => applyBalance(tuning));
   else if (t === 'roles') void renderRoles();
   else if (t === 'audit') void renderAudit();
   else if (t === 'cards') void renderCards();
@@ -1464,7 +1470,7 @@ const ACTION_TH: Record<string, string> = {
   level: 'ตั้งเลเวล', gold: 'ทอง', items: 'เสกไอเทม', kick: 'เตะ', teleport: 'ย้ายโซน', grant: 'ให้สิทธิ์', revoke: 'ถอนสิทธิ์',
   server: 'Server', password: 'ตั้งรหัสผ่าน', ban: 'แบน', unban: 'ปลดแบน', broadcast: 'ประกาศ', backup: 'สำรองข้อมูล',
   'delete-account': 'ลบบัญชี', 'delete-character': 'ลบตัวละคร', 'chat-delete': 'ลบแชท',
-  'shutdown-text': 'ข้อความเตือนปิด server', 'orb-look': 'หน้าตาลูกแก้วตีบวก', 'cos-look': 'ค่าของแต่งตัว', mail: 'ส่งจดหมาย', mailRecall: 'ดึงจดหมายกลับ',
+  'shutdown-text': 'ข้อความเตือนปิด server', 'orb-look': 'หน้าตาลูกแก้วตีบวก', 'cos-look': 'ค่าของแต่งตัว', balance: 'ปรับสมดุล', mail: 'ส่งจดหมาย', mailRecall: 'ดึงจดหมายกลับ',
   'report-status': 'สถานะรายงาน', 'report-ban': 'ห้ามรายงาน', 'report-unban': 'ปลดห้ามรายงาน',
   'cosmetic-give': 'ให้ Cosmetics', 'cosmetic-take': 'ยึด Cosmetics คืน',
 };

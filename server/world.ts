@@ -8,6 +8,8 @@ import type { Db } from './db';
 import { Sim } from '../src/shared/sim/Sim';
 import { HUB_ID, ZONES } from '../src/shared/data/zones';
 import { SORT_KEYS, type LootFilter, type Player } from '../src/shared/sim/Player';
+import { applyBalance, currentBalanceTuning, type BalanceTuning } from '../src/shared/balance';
+import { upgradeItem } from '../src/shared/data/items';
 import { POTION_SIZES } from '../src/shared/data/potions';
 import { REROLL_KINDS } from '../src/shared/data/reroll';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../src/shared/sim/types';
@@ -494,7 +496,7 @@ export class GameWorld {
     if (!acc.guest) this.friendsJoined(s, accountWasOnline);
     // Back within the grace time (or a takeover): still in the party.
     player.partyId = this.parties.online(charId);
-    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), guest: acc.guest, orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning() });
+    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), guest: acc.guest, orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), balance: currentBalanceTuning() });
     this.broadcastSystem(`${player.name} เข้าสู่โลก`);
     // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
     if (!acc.guest) setTimeout(() => this.sessions.has(s) && (this.marketOnJoin(s), this.mailNote(s, true)), MARKET_JOIN_NOTE_MS);
@@ -1210,6 +1212,27 @@ export class GameWorld {
   /** Sends the new server-wide cosmetic tuning to everyone online (already saved by the admin API). */
   cosTuningChanged(tuning: CosTuning): void {
     for (const s of this.sessions) this.send(s.ws, { t: 'cosTuning', tuning });
+  }
+
+  /**
+   * Uses the new server-wide game balance (already saved by the admin API) right away: every character in
+   * play gets its stats worked out again and its items' tier labels redone (values never change; the
+   * snapshot sends the new labels), loot on the ground too, and every browser gets the new numbers.
+   * Offline characters, stashes and market listings get their labels when they are next read (upgradeItem).
+   */
+  balanceChanged(tuning: BalanceTuning): void {
+    applyBalance(tuning);
+    for (const sim of [...this.channels.sims(), ...this.rooms.sims()]) {
+      for (const p of sim.players) {
+        for (const it of Object.values(p.equipment)) upgradeItem(it);
+        for (const e of p.bag) upgradeItem(e);
+        for (const b of p.buyback) upgradeItem(b?.item);
+        for (const e of p.stash.items) upgradeItem(e);
+        p.recompute();
+      }
+      for (const l of sim.loots) if (l.kind.type === 'item') upgradeItem(l.kind.item);
+    }
+    for (const s of this.sessions) this.send(s.ws, { t: 'balance', tuning });
   }
 
   /** Sends the new server-wide orb look to everyone online (already saved by the admin API). */

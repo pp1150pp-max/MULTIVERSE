@@ -11,6 +11,7 @@ import { cleanStash, type StashData } from '../src/shared/sim/stash';
 import { cleanCosOwned } from '../src/shared/data/cosmetics';
 import { checkCosTuning, COS_TUNING_SETTING, type CosTuning } from '../src/shared/cosTuning';
 import { CARD_TUNING_SETTING, checkCardTuning, type CardTuning } from '../src/shared/cardTuning';
+import { BALANCE_SETTING, checkBalance, type BalanceTuning } from '../src/shared/balance';
 import { checkOrbLook, DEFAULT_ORB_LOOK, ORB_LOOK_SETTING, sameOrbLook, type OrbLook } from '../src/shared/orbLook';
 import { MARKET_HISTORY_DAYS, type MarketQuery } from '../src/shared/sim/market';
 import { MAIL_HISTORY_DAYS } from '../src/shared/mail';
@@ -409,9 +410,26 @@ export class Db {
     }
   }
 
+  /** The server-wide game balance: only the changes from the code ({} until someone saves some). */
+  balance(): BalanceTuning {
+    const v = this.getSetting(BALANCE_SETTING);
+    if (v === null) return {};
+    try {
+      // Checked again, leniently: anything the code no longer accepts is dropped, the rest kept.
+      return checkBalance(JSON.parse(v), false).tuning ?? {};
+    } catch {
+      return {};
+    }
+  }
+
   /** Saves the server-wide card tuning (already clean; nothing changed is stored as no row). */
   setCardTuning(t: CardTuning): void {
     this.setSetting(CARD_TUNING_SETTING, t.cards || t.nums ? JSON.stringify(t) : null);
+  }
+
+  /** Saves the server-wide game balance (already clean; no changes is stored as no row). */
+  setBalance(t: BalanceTuning): void {
+    this.setSetting(BALANCE_SETTING, Object.keys(t).length ? JSON.stringify(t) : null);
   }
 
   shutdownTexts(): Record<ShutdownMode, string> {

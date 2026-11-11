@@ -17,6 +17,7 @@ import { NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { pick, rand, randInt } from '../rng';
 import { splitExp } from '../party';
 import { CLASS_IDS } from '../data/classes';
+import { classBalance } from '../balance';
 import { COS_SLOT_NAME, cosById, MOUNT_CALM } from '../data/cosmetics';
 import {
   isBound, isItem, isPotion, isStack, isStone, RARITY_LABEL, sameStack, SLOT_LABEL, BLACKSMITH_STONES, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
@@ -297,7 +298,7 @@ export class Sim {
     if (opts.maxMult) raw = Math.min(raw, p.stats.atk * opts.maxMult);
     const def = this.time < m.armorBreakUntil ? m.defense * (1 - m.armorBreak) : m.defense;
     const under = m.isBoss && m.level - p.level > BOSS_LEVEL_GAP;
-    const bossMult = m.isBoss ? p.cls.bossDmgMult ?? 1 : 1;
+    const bossMult = m.isBoss ? classBalance(p.cls.id).bossDmgMult : 1;
     const dmg = Math.max(1, Math.round(mitigate(raw, def) * bossMult * (under ? BOSS_UNDERLEVEL_MULT : 1)));
     if (!m.damageBy.has(p.id)) {
       m.damageBy.set(p.id, 0);
