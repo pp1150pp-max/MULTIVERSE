@@ -99,7 +99,7 @@ async function run(): Promise<void> {
   ok(P.welcome()?.zone === 'nexus_city' && P.welcome()?.ch === 1, 'joining: the hub, CH 1');
 
   // ---------------------------------------------------------- GM warp into a channel
-  ok((await warp(a.id('Pia'), { zone: 'emerald_forest', ch: 2 })).status === 400, 'warp into a channel that is not open: refused');
+  ok((await warp(a.id('Pia'), { zone: 'emerald_forest', ch: 11 })).status === 400, 'warp into CH 11 while it is not open: refused (only CH 1–10 are reserved)');
   ok((await warp(a.id('Pia'), { zone: 'nexus_city', ch: 1 })).status === 400, 'choosing a CH on a map without channels: refused');
   ok((await warp(a.id('Pia'), { zone: 'emerald_forest', ch: 'x' })).status === 400, 'a CH that is not a number: refused');
   const w = await warp(a.id('Pia'), { zone: 'emerald_forest', ch: 1 });
@@ -119,10 +119,20 @@ async function run(): Promise<void> {
   P.act({ a: 'chList' });
   await sleep(300);
   const view = P.msgs.filter((m) => m.t === 'channels').at(-1)?.view;
-  ok(view?.zone === 'emerald_forest' && view.ch === 1 && view.list.length === 1 && view.list[0].n === 2, `the list: CH 1 with 2 players (${JSON.stringify(view)})`);
-  P.act({ a: 'chSwitch', ch: 5 });
+  ok(view?.zone === 'emerald_forest' && view.ch === 1 && view.list.length === 10 && view.list[0].n === 2 && view.list.slice(1).every((r: any) => r.n === 0), `the list: CH 1–10 always shown, CH 1 with 2 players, the rest free (${JSON.stringify(view)})`);
+  P.act({ a: 'chSwitch', ch: 11 });
   await sleep(300);
-  ok(P.lines().some((t) => t.includes('ไม่มีแชนแนลนี้')), 'switching to a channel that does not exist: refused');
+  ok(P.lines().some((t) => t.includes('ไม่มีแชนแนลนี้')), 'switching to CH 11 (not open): refused');
+  P.act({ a: 'chSwitch', ch: 5 });
+  await sleep(600);
+  ok(P.lastZone()?.zone === 'emerald_forest' && P.lastZone()?.ch === 5, 'switching to a free reserved CH 5: it opens and she goes in');
+  P.act({ a: 'chList' });
+  await sleep(600);
+  const view5 = P.msgs.filter((m) => m.t === 'channels').at(-1)?.view;
+  ok(view5?.ch === 5 && view5.list.find((r: any) => r.ch === 5)?.n === 1 && view5.list.find((r: any) => r.ch === 1)?.n === 1, 'the list now shows CH 5 with 1 player');
+  P.act({ a: 'chSwitch', ch: 1 });
+  await sleep(600);
+  ok(P.lastZone()?.ch === 1, 'back to CH 1');
   P.act({ a: 'chSwitch', ch: 1 });
   await sleep(300);
   ok(P.lines().some((t) => t.includes('อยู่แล้ว')), 'switching to your own channel: refused');

@@ -146,7 +146,7 @@ export class ChannelUI {
       const full = c.n >= cap;
       const row = el('div', `ch-row${here ? ' here' : ''}`);
       const name = el('b', '', `CH ${c.ch}`);
-      const n = el('span', 'ch-n', `${c.n} คน${c.n >= CH_SOLO_CAP ? ' · เต็ม' : ''}${c.ch === lead ? ' · หัวตี้อยู่ที่นี่' : ''}`);
+      const n = el('span', 'ch-n', `${c.n === 0 ? 'ว่าง' : `${c.n} คน`}${c.n >= CH_SOLO_CAP ? ' · เต็ม' : ''}${c.ch === lead ? ' · หัวตี้อยู่ที่นี่' : ''}`);
       const go = el('button', '', here ? 'อยู่ที่นี่' : 'ย้าย');
       go.disabled = here || full || v.wait > 0;
       go.onclick = () => b.chSwitch(c.ch);

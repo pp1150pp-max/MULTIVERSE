@@ -38,7 +38,7 @@ import { FRIEND_NAME_MAX, type FriendChar } from '../src/shared/friends';
 import { PARTY_SEARCH_LIMIT, PARTY_SEARCH_MAX, type PartyFound, type PartySnap } from '../src/shared/party';
 import { BossRooms } from './bossRooms';
 import { Channels, FightClock, type Channel } from './channels';
-import { hasChannels, type ChannelsView } from '../src/shared/channels';
+import { CH_RESERVED, hasChannels, type ChannelsView } from '../src/shared/channels';
 import { STONE_NAME, STONE_STACK } from '../src/shared/data/stones';
 import { COS_SLOTS, cosById, cosCodes } from '../src/shared/data/cosmetics';
 
@@ -1655,7 +1655,7 @@ export class GameWorld {
 
   /** Everyone in the world, with the connection numbers the admin page shows (IP included). */
   adminOnline(): AdminOnline {
-    // One line per channel of a map with channels (CH 1 always there), one per map otherwise.
+    // One line per channel of a map with channels (only those running; free reserved ones have no Sim), one per map otherwise.
     const zones: AdminOnline['zones'] = Object.values(ZONES).flatMap((z) => this.channels.channels(z.id).map((c) => ({
       id: z.id, nameTh: z.nameTh, ...(hasChannels(z) ? { ch: c.ch } : {}), count: this.channels.count(c),
     })));
@@ -1765,8 +1765,8 @@ export class GameWorld {
       this.travel(s, zoneId, true);
       return null;
     }
-    const c = this.channels.get(zoneId, ch);
-    if (!c) return `โซนนี้ไม่มี CH ${ch} (เปิดอยู่: ${this.channels.channels(zoneId).map((x) => x.ch).join(', ')})`;
+    const c = this.channels.ensure(zoneId, ch);
+    if (!c) return `โซนนี้ไม่มี CH ${ch} (เลือกได้ CH 1–${CH_RESERVED} หรือห้องที่เปิดอยู่: ${this.channels.channels(zoneId).map((x) => x.ch).join(', ')})`;
     if (c.sim === s.sim) return `อยู่ที่ CH ${ch} อยู่แล้ว`;
     this.travel(s, c.sim, true);
     return null;
@@ -1823,7 +1823,7 @@ export class GameWorld {
     let target: Channel | undefined;
     if (m.a === 'chSwitch') {
       if (!Number.isSafeInteger(m.ch)) return;
-      target = this.channels.get(s.sim.zone.id, m.ch);
+      target = this.channels.ensure(s.sim.zone.id, m.ch);
     } else if (m.a === 'chJoin') {
       if (typeof m.name !== 'string' || !m.name.trim() || m.name.length > FRIEND_NAME_MAX) return;
       const name = m.name.trim().toLowerCase();
@@ -1839,7 +1839,10 @@ export class GameWorld {
     } else return;
     const cap = target ? this.channels.capFor(target, this.leaderSim(s)) : 0;
     const err = this.channels.switchError(s.player.alive, here, target, cap, this.calmLeft(s));
-    if (err || !target) return tell(err ?? 'ไม่มีแชนแนลนี้ในแมพนี้');
+    if (err || !target) {
+      if (target) this.channels.release(target); // a reserved channel opened just to check, nobody went in
+      return tell(err ?? 'ไม่มีแชนแนลนี้ในแมพนี้');
+    }
     // The browser logs "เดินทางสู่ … · CH n" on the zone message, like any map change.
     this.travel(s, target.sim, false, { x: s.player.x, z: s.player.z });
   }
