@@ -1326,6 +1326,8 @@ body.touch-ui #touch-ui { display: block; position: absolute; inset: 0; pointer-
 @media (min-width: 700px) and (min-height: 700px) { body.touch-ui #touch-ui { --s: 1; } }
 /* The character card and HP/MP bars at 70% on phones (owner 2026-11-11). */
 @media not ((min-width: 700px) and (min-height: 700px)) { body.touch-ui #hud-topleft { transform: scale(0.7); transform-origin: top left; } }
+/* Touch: the character card only as wide as its contents, not the empty space out to the bars' width (owner 2026-11-12). */
+body.touch-ui .char-card { width: fit-content; }
 /* The keyboard hint bar, the top icon row (all of it is in the ☰ system menu) and the PC mount button. */
 body.touch-ui #skillbar, body.touch-ui #hud-iconrow, body.touch-ui #mount-btn { display: none !important; }
 
