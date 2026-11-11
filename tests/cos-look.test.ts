@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
-import { axisHiddenInRow, checkCosTuning, COS_AXES, COS_TUNE_FIELDS, viewGroupOfRow, viewOffKey, COS_TUNING_SETTING, cosTuneDefaults, cosTuneOf, cosTuningChanges, TUNED_SLOTS } from '../src/shared/cosTuning';
+import { savePartOf, axisHiddenInRow, checkCosTuning, COS_AXES, COS_TUNE_FIELDS, viewGroupOfRow, viewOffKey, COS_TUNING_SETTING, cosTuneDefaults, cosTuneOf, cosTuningChanges, TUNED_SLOTS } from '../src/shared/cosTuning';
 import { COSMETICS } from '../src/shared/data/cosmetics';
 import { finish, ok } from './check';
 
@@ -65,6 +65,17 @@ ok(cosTuneDefaults('wings_angel')?.[viewOffKey('y', 'back')] === 0 && cosTuneDef
 ok(cosTuneOf({ wings_bat: { shift: 0.2, back: 0.3 } }, 'wings_bat')?.dx_side === 0, 'an old save (old keys) reads with zero view offsets, positions unchanged');
 ok(checkCosTuning({ wings_angel: { dy_front: 0.1 } }, true).tuning?.wings_angel?.dy_front === 0.1, 'a view offset can be saved');
 ok(!!checkCosTuning({ aura_star: { dz_front: 0.1 } }, true).error, 'an aura has no Z offset');
+
+// Saving one piece's part: only that piece and only the picked fields change, the rest stays as last saved.
+{
+  const saved = { wings_angel: { dy_back: 0.2 }, wings_bat: { backStand: 1.5 } };
+  const cur = { ...cosTuneDefaults('wings_angel')!, dy_front: 0.3, dy_back: 0.9, dx_side: 0.1, backStand: 1.6 };
+  const front = savePartOf(saved, 'wings_angel', cur, (k) => /^d[xyz]_front$/.test(k));
+  ok(JSON.stringify(front) === JSON.stringify({ wings_angel: { dy_front: 0.3, dy_back: 0.2 }, wings_bat: { backStand: 1.5 } }), 'saving the front view saves only the front offsets of that piece');
+  const base = savePartOf(saved, 'wings_angel', cur, (k) => !/^d[xyz]_/.test(k));
+  ok(JSON.stringify(base) === JSON.stringify({ wings_angel: { backStand: 1.6, dy_back: 0.2 }, wings_bat: { backStand: 1.5 } }), 'saving the base values leaves every view offset as saved');
+  ok(savePartOf({ wings_angel: { dy_front: 0.3 } }, 'wings_angel', cosTuneDefaults('wings_angel')!, (k) => /^d[xyz]_front$/.test(k)).wings_angel === undefined, 'a part set back to the default is no longer stored');
+}
 
 // ---------------------------------------------------------- against a real server
 function freePort(): Promise<number> {
