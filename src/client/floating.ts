@@ -15,7 +15,7 @@ import { isTouchMode } from './touch/device';
 import { seatOf } from './cosmeticViews';
 
 interface Num { el: HTMLDivElement; x: number; y: number; z: number; t: number; life: number; height: number; dx: number; dy: number; pop: number }
-interface Plate { el: HTMLDivElement; fill: HTMLDivElement; title?: HTMLDivElement; cos?: string }
+interface Plate { el: HTMLDivElement; fill: HTMLDivElement; title?: HTMLDivElement; name?: HTMLDivElement; cos?: string }
 
 /** DOM overlay for damage numbers, monster nameplates and loot labels. */
 /** Which row of the number sheet each kind of number uses. */
@@ -387,16 +387,18 @@ export class Floating {
         title.className = 'cos-title hidden';
         el.append(title, name, bar);
         this.root.append(el);
-        pl = { el, fill, title };
+        pl = { el, fill, title, name };
         this.names.set(p, pl);
       }
       const set = shownCos(p, 'title');
       if (pl.cos !== set?.id) {
         pl.cos = set?.id;
         paintTitle(pl.title!, set);
-        paintCos(pl.el.children[1] as HTMLElement, set);
+        paintCos(pl.name!, set);
       }
-      (pl.el.firstChild as HTMLElement).textContent = `Lv.${p.level} ${p.name}${p.alive ? '' : ' 💀'}`;
+      // The name row, not firstChild: the (usually hidden) title row comes first in the plate.
+      const label = `Lv.${p.level} ${p.name}${p.alive ? '' : ' 💀'}`;
+      if (pl.name!.textContent !== label) pl.name!.textContent = label;
       pl.el.classList.toggle('party', !!g.party.memberOf(p));
       pl.el.style.transform = `translate(${s.sx}px, ${s.sy}px) translate(-50%, -100%)`;
       pl.fill.style.width = `${(Math.max(0, p.hp) / Math.max(1, p.maxHp)) * 100}%`;
