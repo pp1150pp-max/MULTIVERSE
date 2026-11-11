@@ -39,7 +39,7 @@ export class TouchGestures {
     if (e.pointerType === 'mouse') return;
     // No mouse events copied from this touch (they would attack on PC paths) and no browser gestures.
     e.preventDefault();
-    canvas.setPointerCapture(e.pointerId);
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
     const f: Finger = { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t: performance.now(), moved: false, pinched: false };
     this.fingers.set(e.pointerId, f);
     // A second finger while walking with the joystick is a tap (lock on, talk…). A second finger while the

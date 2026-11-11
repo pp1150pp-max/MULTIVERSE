@@ -125,7 +125,7 @@ export class TouchControls {
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      el.setPointerCapture(e.pointerId);
+      try { el.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
       el.classList.add('down');
       down();
     });

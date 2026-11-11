@@ -1336,7 +1336,10 @@ body.touch-ui #skillbar, body.touch-ui #hud-iconrow, body.touch-ui #mount-btn { 
 #touch-ui .tc-mini { --d: calc(44px * var(--s)); }
 #touch-ui .tc-talk { --d: calc(56px * var(--s)); }
 #tc-pad { position: absolute; right: max(8px, env(safe-area-inset-right)); bottom: max(8px, env(safe-area-inset-bottom)); width: 0; height: 0; }
-#tc-pad .tc-btn { right: calc(var(--x) * var(--s) - var(--d) / 2); bottom: calc(var(--y) * var(--s) - var(--d) / 2); }
+/* HP/MP as orbs: the MP orb fills the bottom-right corner, so the pad moves beside it (landscape) or on top of it (portrait). */
+.hud-orbs #tc-pad { right: calc(max(4px, env(safe-area-inset-right)) + var(--orb)); }
+@media (orientation: portrait) { .hud-orbs #tc-pad { right: max(8px, env(safe-area-inset-right)); bottom: calc(max(4px, env(safe-area-inset-bottom)) + var(--orb) * 433 / 414); } }
+#tc-pad .tc-btn { right: calc(var(--x) * var(--s) * 1px - var(--d) / 2); bottom: calc(var(--y) * var(--s) * 1px - var(--d) / 2); }
 #touch-ui .tc-btn.down { transform: scale(0.92); filter: brightness(1.25); }
 #touch-ui .tc-btn.hidden { display: none; }
 .tc-ico { position: absolute; inset: 19%; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; }
@@ -1376,9 +1379,9 @@ body.touch-ui #skillbar, body.touch-ui #hud-iconrow, body.touch-ui #mount-btn { 
   #tc-pad #tc-mount { --x: 34; --y: 386; }
 }
 
-/* ☰ (the system menu, with everything from the hidden icon row) beside the minimap; chat under the character card. */
-#touch-ui #tc-menu { top: max(12px, env(safe-area-inset-top)); right: calc(max(12px, env(safe-area-inset-right)) + 186px); }
-#touch-ui #tc-chat { top: calc(max(12px, env(safe-area-inset-top)) + 112px); left: max(12px, env(safe-area-inset-left)); }
+/* Under the character card: chat, then ☰ (the system menu, with everything from the hidden icon row). */
+#touch-ui #tc-menu { top: calc(max(12px, env(safe-area-inset-top)) + 150px); left: calc(max(12px, env(safe-area-inset-left)) + 58px * var(--s)); }
+#touch-ui #tc-chat { top: calc(max(12px, env(safe-area-inset-top)) + 150px); left: max(12px, env(safe-area-inset-left)); }
 
 /* The floating joystick: appears where the finger lands (left side), the knob follows the finger. */
 #tc-stick { position: absolute; width: calc(128px * var(--s)); height: calc(128px * var(--s)); transform: translate(-50%, -50%); pointer-events: none; opacity: 0.85; }
