@@ -4,7 +4,7 @@ import './client/touch/device';
 import { assetSources, loadGameAssets, loadMenuAssets } from './client/assets';
 import { CLASS_IDS } from './shared/data/classes';
 import { Game } from './client/Game';
-import { buildMenu, portrait } from './client/menu';
+import { buildMenu, facePortrait } from './client/menu';
 import type { OnlineBackend } from './client/net/online';
 import { audioEngine } from './client/audio/engine';
 
@@ -12,7 +12,7 @@ const $ = (id: string) => document.getElementById(id)!;
 
 function start(game: Game, classId: string): void {
   $('menu').classList.add('hidden');
-  $('hud-portrait').append(portrait(classId, 44));
+  $('hud-portrait').append(facePortrait(classId, 44));
   game.start();
   (window as unknown as { game: Game }).game = game;
 }

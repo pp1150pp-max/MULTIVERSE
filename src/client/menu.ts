@@ -8,10 +8,21 @@ import { connectOnline, type OnlineBackend } from './net/online';
 import { preloadHudImages, skillIcon } from './icons';
 import { AFTER_EXIT_KEY } from './sysmenu';
 import { beginEntryLoading, cancelEntryLoading } from './loadingScreen';
+import { imgUrl } from './img';
 
 export type Launcher = (backend: OnlineBackend) => void;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+
+/** Painted head-and-shoulders picture of a class (ui/portrait_<class>.png), for the HUD frame and the character list. */
+export function facePortrait(classId: string, size: number): HTMLImageElement {
+  const img = new Image(size, size);
+  img.className = 'face-portrait';
+  img.alt = '';
+  img.draggable = false;
+  img.src = imgUrl(`assets/sprites/ui/portrait_${classId}.png`);
+  return img;
+}
 
 export function portrait(key: string, size: number): HTMLCanvasElement {
   const c = document.createElement('canvas');
@@ -376,7 +387,7 @@ class OnlineMenu {
       }
       slot.className = `char-slot${c.id === this.selected && !this.creating ? ' selected' : ''}`;
       slot.dataset.id = String(c.id);
-      slot.append(portrait(c.classId, 80));
+      slot.append(facePortrait(c.classId, 80));
       const armed = this.armedDelete?.id === c.id && Date.now() - this.armedDelete.t < 3000;
       slot.insertAdjacentHTML('beforeend',
         `<div class="cname">${escapeHtml(c.name)}</div><div class="cmeta">Lv.${c.level} ${CLASSES[c.classId].name}</div>` +

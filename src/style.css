@@ -183,7 +183,7 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
   display: flex; gap: 10px; align-items: center;
   background: var(--panel); border: 2px solid #4a4640; outline: 1px solid var(--panel-edge); outline-offset: -4px; border-radius: 4px; padding: 8px 14px 8px 8px;
 }
-#hud-portrait canvas { display: block; background: #2a2418; border: 1px solid var(--panel-edge); border-radius: 4px; image-rendering: pixelated; }
+#hud-portrait img { display: block; background: #2a2418; border: 1px solid var(--panel-edge); border-radius: 4px; object-fit: cover; }
 #hud-name { font-weight: 600; font-size: 15px; }
 #hud-level { font-size: 12px; color: var(--gold-hi); }
 #hud-gold { font-size: 12px; color: #f2c230; }
@@ -913,7 +913,7 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 }
 .char-slot:hover { border-color: var(--panel-edge); }
 .char-slot.selected { border-color: var(--gold-hi); box-shadow: 0 0 18px rgba(242, 213, 138, 0.25); }
-.char-slot canvas { width: 80px; height: 80px; image-rendering: pixelated; }
+.char-slot img { width: 80px; height: 80px; border-radius: 4px; object-fit: cover; }
 .char-slot .cname { font-weight: 600; }
 .char-slot .cmeta { font-size: 12px; color: var(--ink-dim); }
 .char-slot.empty { color: var(--ink-dim); border-style: dashed; font-size: 14px; }
