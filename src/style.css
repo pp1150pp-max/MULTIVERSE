@@ -1377,6 +1377,8 @@ body.touch-ui #skillbar, body.touch-ui #hud-iconrow, body.touch-ui #mount-btn { 
 #tc-pad #tc-mount { --x: 300; --y: 110; }
 #tc-pad #tc-talk { --x: 164; --y: 182; }
 #tc-pad #tc-auto { --x: 236; --y: 182; }
+/* Drag-to-aim: the finger is back on the button, so lifting cancels (PR 3). */
+#touch-ui .tc-btn.aim-cancel .tc-ico { filter: drop-shadow(0 0 8px #ff6a5a) brightness(1.25); }
 #touch-ui .tc-talk { --d: calc(56px * var(--s)); }
 /* The EXP bar moves to the top middle, out of the buttons' way. */
 body.touch-ui #hud-bottom { top: max(4px, env(safe-area-inset-top)); bottom: auto; --bar-w: min(320px, 38vw); }

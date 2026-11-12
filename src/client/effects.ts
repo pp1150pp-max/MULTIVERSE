@@ -309,3 +309,62 @@ export class Effects implements FxApi {
     });
   }
 }
+
+/**
+ * Touch drag-to-aim guide (mobile plan 3.3): a line along the aimed direction, sized to the skill's reach
+ * (with a ring at its end for skills that burst there), or a circle on the ground where an area skill lands.
+ * Drawn with plain Three.js shapes, no images. One persistent guide, moved every frame while a finger aims.
+ */
+export class AimGuide {
+  private readonly group = new THREE.Group();
+  private readonly line: THREE.Mesh;
+  private readonly lineEdge: THREE.Mesh;
+  private readonly spot = new THREE.Group();
+  private readonly spotEdge: THREE.Mesh;
+  private readonly spotDisc: THREE.Mesh;
+
+  constructor(scene: THREE.Scene, color = '#9fd8ff') {
+    const mat = (opacity: number) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide });
+    // A 1-unit strip from the origin along +x, stretched to the reach; a thin bright centre line on top.
+    this.line = new THREE.Mesh(flat(new THREE.PlaneGeometry(1, 0.7).translate(0.5, 0, 0)), mat(0.22));
+    this.lineEdge = new THREE.Mesh(flat(new THREE.PlaneGeometry(1, 0.1).translate(0.5, 0, 0)), mat(0.75));
+    this.lineEdge.position.y = 0.005;
+    this.spotDisc = new THREE.Mesh(flat(new THREE.CircleGeometry(1, 64)), mat(0.18));
+    this.spotEdge = new THREE.Mesh(flat(new THREE.RingGeometry(0.93, 1, 64)), mat(0.85));
+    this.spot.add(this.spotDisc, this.spotEdge);
+    this.line.renderOrder = this.lineEdge.renderOrder = this.spotDisc.renderOrder = this.spotEdge.renderOrder = 3;
+    this.group.add(this.line, this.lineEdge);
+    this.group.position.y = 0.08;
+    this.spot.position.y = 0.09;
+    this.group.visible = this.spot.visible = false;
+    scene.add(this.group, this.spot);
+  }
+
+  /** A line from (x, z) along `angle` (radians, atan2(dz, dx)) for `length` units; `endRadius` adds a ring at its end. */
+  showLine(x: number, z: number, angle: number, length: number, endRadius = 0): void {
+    this.group.visible = true;
+    this.group.position.x = x;
+    this.group.position.z = z;
+    this.group.rotation.y = -angle;
+    this.line.scale.x = this.lineEdge.scale.x = length;
+    if (endRadius > 0) this.placeSpot(x + Math.cos(angle) * length, z + Math.sin(angle) * length, endRadius);
+    else this.spot.visible = false;
+  }
+
+  /** A circle of `radius` on the ground at (x, z), for skills that land on a spot. */
+  showCircle(x: number, z: number, radius: number): void {
+    this.group.visible = false;
+    this.placeSpot(x, z, radius);
+  }
+
+  hide(): void {
+    this.group.visible = this.spot.visible = false;
+  }
+
+  private placeSpot(x: number, z: number, radius: number): void {
+    this.spot.visible = true;
+    this.spot.position.x = x;
+    this.spot.position.z = z;
+    this.spot.scale.setScalar(radius);
+  }
+}

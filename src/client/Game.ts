@@ -13,7 +13,7 @@ import type { Backend, ProjectileLike } from './backend';
 import { ISO_DIR, World } from './world';
 import { restSpotNear, SUMMONER_HEIGHT, SUMMONER_RANGE } from '../shared/sim/terrain';
 import { Input } from './input';
-import { Effects } from './effects';
+import { AimGuide, Effects } from './effects';
 import { Floating, countdown } from './floating';
 import { MONSTERS } from '../shared/data/monsters';
 import { Hud } from './hud';
@@ -47,6 +47,8 @@ const S = Math.SQRT1_2;
 // Screen-space right / up projected onto the ground plane.
 const RIGHT = { x: S, z: -S };
 const UP = { x: -S, z: -S };
+/** Touch drag-to-aim: dragging this far (px) off the button puts a ground-target skill (Meteor) at full range. */
+const AIM_FULL_DRAG = 90;
 /** Touch: with no monster tapped, skills and attacks aim at the nearest living monster this close (owner 2026-11-11). */
 const AUTO_LOCK_RANGE = 10;
 /** Touch: things are this much easier to hit with a finger than with the mouse (owner 2026-11-11). */
@@ -122,6 +124,8 @@ export class Game {
   private lockId: number | null = null;
   /** Red circle under the locked monster (touch). */
   private lockRing!: AutoRing;
+  /** Touch: the aim line / ground circle while a finger drags off a skill button. */
+  aimGuide!: AimGuide;
   touch!: TouchControls;
 
   private viewSize = 17;
@@ -163,6 +167,7 @@ export class Game {
     this.fx = new Effects(this.scene);
     this.autoRing = new AutoRing(this.scene);
     this.lockRing = new AutoRing(this.scene, '#ff4a3a');
+    this.aimGuide = new AimGuide(this.scene);
     this.hazardViews = new HazardViews(this.scene);
     this.floating = new Floating(document.getElementById('float-layer')!);
 
@@ -506,7 +511,7 @@ export class Game {
     return {
       move,
       moveTo,
-      aim: h ? { x: h.x, z: h.z } : isTouchMode() ? this.facingPoint() : { ...this.mouseWorld },
+      aim: i.aimOverride ? { ...i.aimOverride } : h ? { x: h.x, z: h.z } : isTouchMode() ? this.facingPoint() : { ...this.mouseWorld },
       basic: (i.lmb && !this.goal && !this.playerClick) || touchAttack,
       skills,
       dash: i.pressed('Space'),
@@ -572,6 +577,28 @@ export class Game {
       }
     }
     return best;
+  }
+
+  /**
+   * Touch drag-to-aim: a finger dragged (dx, dy) screen pixels off a button aims from the player toward the
+   * ground under the player's screen spot plus that drag. Returns the aimed offset from the player in world
+   * units: `range` long, or for a skill that lands on a spot (`byDrag`), longer the further the finger goes
+   * (full range at AIM_FULL_DRAG px).
+   */
+  dragAimOffset(dx: number, dy: number, range: number, byDrag: boolean): Vec2 {
+    const p = this.player;
+    const v = this.tmp.set(p.x, 0, p.z).project(this.camera);
+    this.ndc.set(v.x + (dx / window.innerWidth) * 2, v.y - (dy / window.innerHeight) * 2);
+    this.raycaster.setFromCamera(this.ndc, this.camera);
+    let x = RIGHT.x * dx - UP.x * dy;
+    let z = RIGHT.z * dx - UP.z * dy;
+    if (this.raycaster.ray.intersectPlane(this.ground, this.tmp)) {
+      x = this.tmp.x - p.x;
+      z = this.tmp.z - p.z;
+    }
+    const l = Math.hypot(x, z) || 1;
+    const dist = byDrag ? range * Math.min(1, Math.max(0.15, Math.hypot(dx, dy) / AIM_FULL_DRAG)) : range;
+    return { x: (x / l) * dist, z: (z / l) * dist };
   }
 
   /** A point a few steps ahead of where the player faces (touch, with no monster to aim at). */
