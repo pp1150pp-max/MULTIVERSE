@@ -22,7 +22,7 @@ import { renderBalance } from './balance';
 import { renderDaily } from './daily';
 import { equipEntries, itemGrid, listEntries, type ItemCtx } from './items';
 import { itemNames, makeItem, roundStat, rowRanges, tierOf } from '../shared/data/items';
-import { checkShutdownText, SHUTDOWN_SECONDS, SHUTDOWN_TEXT_MAX, SHUTDOWN_TIME_TOKEN, shutdownWarning, type ShutdownMode } from '../shared/net/protocol';
+import { checkShutdownText, countdownTime, SHUTDOWN_CHOICES, SHUTDOWN_SECONDS, SHUTDOWN_TEXT_MAX, SHUTDOWN_TIME_TOKEN, shutdownWarning, type ShutdownMode } from '../shared/net/protocol';
 import { isStack, RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, SLOTS, STAT_KEYS, STAT_LABEL, BLACKSMITH_STONES, BOSS_KEYS, REWARD_ITEMS, type BagEntry, type ClassId, type Item, type Rarity } from '../shared/types';
 
 const ADMIN_TOKEN = 'multiverse-admin-token';
@@ -1586,8 +1586,9 @@ async function renderRestart(): Promise<void> {
   const restart = h('button', { class: 'primary' }, 'รีสตาร์ท');
   const stop = h('button', { class: 'danger' }, 'ปิด server');
   const cancel = h('button', { class: 'primary hidden' }, 'ยกเลิกการนับถอยหลัง');
+  const secs = h('select', { title: 'นับถอยหลังนานเท่าไร' }, ...SHUTDOWN_CHOICES.map((n) => h('option', { value: String(n) }, `นับ ${countdownTime(n)}`)));
   const draw = (st: AdminServerState) => {
-    restart.disabled = stop.disabled = !!st.stopping;
+    restart.disabled = stop.disabled = secs.disabled = !!st.stopping;
     cancel.classList.toggle('hidden', !st.stopping);
     cancel.disabled = false;
     if (!st.stopping) {
@@ -1599,18 +1600,18 @@ async function renderRestart(): Promise<void> {
     if (st.stopping) {
       status.className = 'msg bad';
       status.textContent = st.stopping === 'restart'
-        ? `กำลังนับถอยหลังรีสตาร์ท (${SHUTDOWN_SECONDS} วินาที) — หน้านี้จะต่อไม่ได้ชั่วครู่ แล้วรีเฟรชใหม่`
-        : `กำลังนับถอยหลังปิด server (${SHUTDOWN_SECONDS} วินาที)`;
+        ? `กำลังนับถอยหลังรีสตาร์ท (${countdownTime(st.seconds ?? SHUTDOWN_SECONDS)}) — หน้านี้จะต่อไม่ได้ชั่วครู่ แล้วรีเฟรชใหม่`
+        : `กำลังนับถอยหลังปิด server (${countdownTime(st.seconds ?? SHUTDOWN_SECONDS)})`;
     }
   };
   const go = async (mode: ShutdownMode, btn: HTMLButtonElement) => {
     const what = mode === 'restart' ? 'รีสตาร์ท server' : 'ปิด server';
     if (!confirm(`${what}?
 
-ผู้เล่นทุกคนจะเห็นคำเตือน ${SHUTDOWN_SECONDS} วินาที แล้วถูกเซฟและตัดการเชื่อมต่อ`)) return;
+ผู้เล่นทุกคนจะเห็นคำเตือนนับถอยหลัง ${countdownTime(Number(secs.value))} แล้วถูกเซฟและตัดการเชื่อมต่อ`)) return;
     btn.disabled = true;
     try {
-      draw(await api<AdminServerState>('POST', '/admin/server', { mode }));
+      draw(await api<AdminServerState>('POST', '/admin/server', { mode, seconds: Number(secs.value) }));
     } catch (e) {
       status.className = 'msg bad';
       status.textContent = (e as Error).message;
@@ -1632,9 +1633,9 @@ async function renderRestart(): Promise<void> {
   restart.onclick = () => void go('restart', restart);
   stop.onclick = () => void go('shutdown', stop);
   const note = h('div', { class: 'muted', style: 'margin:-6px 0 10px' },
-    `ทั้งสองแบบ: ผู้เล่นเห็นคำเตือนนับถอยหลัง ${SHUTDOWN_SECONDS} วินาที และเข้าเกมใหม่ไม่ได้ระหว่างนั้น แล้ว server เซฟทุกคนก่อนตัดการเชื่อมต่อ · `
+    `ทั้งสองแบบ: ผู้เล่นเห็นคำเตือนนับถอยหลังตามเวลาที่เลือก (${countdownTime(SHUTDOWN_CHOICES[0])}–${countdownTime(SHUTDOWN_CHOICES[SHUTDOWN_CHOICES.length - 1])}) และเข้าเกมใหม่ไม่ได้ระหว่างนั้น แล้ว server เซฟทุกคนก่อนตัดการเชื่อมต่อ · `
     + 'รีสตาร์ท = เปิดใหม่ด้วยโค้ดที่ build ไว้แล้ว (ไม่ build ใหม่) ลิงก์เพื่อนไม่เปลี่ยน · ปิด server = ปิดเลย ต้องเปิดใหม่เองที่เครื่อง');
-  view.append(h('div', { class: 'card' }, h('h2', {}, 'รีสตาร์ท / ปิด server'), note, h('div', { class: 'row' }, restart, stop, cancel), status));
+  view.append(h('div', { class: 'card' }, h('h2', {}, 'รีสตาร์ท / ปิด server'), note, h('div', { class: 'row' }, secs, restart, stop, cancel), status));
   try {
     const st = await api<AdminServerState>('GET', '/admin/server');
     draw(st);
