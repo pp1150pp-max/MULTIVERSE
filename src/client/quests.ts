@@ -60,6 +60,8 @@ export class QuestUI {
     this.body.replaceChildren(el('div', 'quest-intro',
       'ประตูสู่ห้องบอสต้องใช้กุญแจ — ช่วยข้าล่ามอนสเตอร์ แล้วข้าจะมอบกุญแจที่ใช้ได้จนกว่าเจ้าจะปราบบอสตัวนั้นได้'));
     for (const r of rows) {
+      // Finished quests (that boss is beaten) leave the list (owner 2026-11-12).
+      if (r.state === 'done') continue;
       const name = bossShortName(MONSTERS[r.boss].nameTh);
       const row = el('div', `quest-row ${r.state}`);
       const text = el('div', 'quest-text');
@@ -70,7 +72,6 @@ export class QuestUI {
         : r.state === 'going' ? `ล่ามอนสเตอร์ใน${r.map.nameTh} ${r.kills}/${QUEST_KILLS}`
         : r.state === 'ready' ? `ล่าครบ ${QUEST_KILLS} ตัวแล้ว — รับกุญแจได้เลย`
         : r.state === 'holding' ? `มีกุญแจแล้ว — ใส่ที่แท่นเรียก${name}`
-        : r.state === 'done' ? `ปราบ${name}แล้ว`
         : `ต้อง Lv.${r.map.levels[0]} ขึ้นไป`;
       text.append(sub);
       row.append(text);
