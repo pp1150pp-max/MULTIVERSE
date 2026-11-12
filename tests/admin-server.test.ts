@@ -149,6 +149,8 @@ async function run(): Promise<void> {
   const row = online.data.players?.find((p: any) => p.charId === charId);
   ok(online.status === 200 && row && row.username === 'plain1' && typeof row.ip === 'string', 'online list shows the player with IP');
   ok(online.data.zones.find((z: any) => z.id === 'nexus_city')?.count === 1, 'online count per zone (everyone starts in the hub)');
+  const pSnap = c.msgs.filter((m) => m.t === 'snap').at(-1);
+  ok(pSnap?.here === 1 && pSnap.online === undefined, `a normal player's snapshot has the map count only (here ${pSnap?.here}, online ${pSnap?.online})`);
   const found = await api('GET', '/admin/characters?q=test', undefined, gmTok);
   ok(found.data.length === 1 && found.data[0].online === true, 'search finds the character (online)');
   ok((await api('GET', '/admin/characters?q=%25', undefined, gmTok)).data.length === 0, 'a typed % is not a wildcard');
@@ -268,6 +270,8 @@ async function run(): Promise<void> {
   const gc = joinWorld(gmTok, own.data.id);
   await gc.ready;
   await sleep(300);
+  const gSnap = gc.msgs.filter((m) => m.t === 'snap').at(-1);
+  ok(typeof gSnap?.online === 'number' && gSnap.online >= 1 && gSnap.here >= 1, `a GM's snapshot also has the whole server's count (here ${gSnap?.here}, online ${gSnap?.online})`);
   const gmPot = await edit('items', { kind: 'potion', potion: 'mp', size: 'm', count: ADMIN_ITEMS_MAX }, gmTok, own.data.id);
   ok(gmPot.status === 200 && gmPot.data.msg === 'เสกให้ 10 ชิ้น: ยา MP กลาง', `GM spawns 10 potions online (${gmPot.data.msg ?? gmPot.data.error})`);
   const gmStone = await edit('items', { kind: 'stone', stone: 'protect', count: 3 }, gmTok, own.data.id);

@@ -267,7 +267,10 @@ export interface PrivateSnap {
 export interface SnapshotMsg {
   t: 'snap';
   time: number;
-  online: number;
+  /** Players in your map and channel (or boss room), you included. */
+  here: number;
+  /** Players in the whole server: only sent to owner and GM (owner 2026-11-12). */
+  online?: number;
   me: PrivateSnap;
   players: PlayerSnap[];
   monsters: MonsterSnap[];
