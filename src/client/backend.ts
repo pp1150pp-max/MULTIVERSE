@@ -11,7 +11,7 @@ import type { Hazard } from '../shared/sim/volcanoHeart';
 import type { NpcId } from '../shared/data/npcs';
 import type { EnhanceResult } from '../shared/data/enhance';
 import type { RerollKind } from '../shared/data/reroll';
-import type { EquipSlot, Item, PotionKind, PotionSize, Rarity } from '../shared/types';
+import type { BuffScroll, EquipSlot, Item, PotionKind, PotionSize, Rarity } from '../shared/types';
 import type { MarketCall, MarketReply } from '../shared/sim/market';
 import type { MailCall, MailReply } from '../shared/mail';
 import type { ReportReply } from '../shared/reports';
@@ -78,6 +78,8 @@ export interface Backend {
   buyReturnScroll(n: number): void;
   /** Starts casting a return scroll (sent with the next input). */
   useReturnScroll(): void;
+  /** Uses one EXP or drop scroll from the bag (the server checks). */
+  useBuffScroll(kind: BuffScroll): void;
   sortBag(key: SortKey, desc: boolean): void;
   /** Drag & drop between two bag slots (swap, or merge the same potion). */
   moveInBag(from: number, to: number): void;
