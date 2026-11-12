@@ -28,6 +28,7 @@
 2. ล็อกอิน (เปิดเบราว์เซอร์ เลือกโดเมน): `cloudflared tunnel login` → ได้ `%USERPROFILE%\.cloudflared\cert.pem`
 3. สร้าง tunnel: `cloudflared tunnel create multiverse` → ได้ไฟล์ credentials `.json` ใน `%USERPROFILE%\.cloudflared\` (**ห้าม commit / ห้ามส่งใคร**)
 4. ผูกชื่อลิงก์: `cloudflared tunnel route dns multiverse play.<โดเมน>` (หรือโดเมนหลักตรง ๆ)
+   แล้วเช็คที่ Cloudflare → DNS → Records ว่าแถว CNAME ของชื่อนั้นเป็น **Proxied** (เมฆสีส้ม) ถ้าเป็น DNS only จะเข้าไม่ได้ (timeout) · Error 1033 = DNS ถูกแล้วแต่ cloudflared ยังไม่ได้รัน
 5. สร้าง `server/data/tunnel-config.json` (git-ignored ผ่าน `server/data/`):
    ```json
    { "name": "multiverse", "hostname": "play.<โดเมน>" }
