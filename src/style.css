@@ -1365,7 +1365,7 @@ body.touch-ui #skillbar, body.touch-ui #hud-iconrow, body.touch-ui #mount-btn { 
 #tc-auto.active .tc-label { color: #9fd8ff; }
 
 /* A compact grid in the bottom-right corner (owner 2026-11-11, landscape only): attack in the corner, dash above it,
-   Q/E/R along the bottom, potions / return scroll / mount in the row above, then AUTO. */
+   Q/E/R along the bottom, potions / return scroll / mount in the row above, then talk (near an NPC) and AUTO. */
 #tc-pad .tc-attack { --x: 50; --y: 50; }
 #tc-pad [data-slot="dash"] { --x: 50; --y: 132; }
 #tc-pad [data-slot="q"] { --x: 138; --y: 40; }
@@ -1375,7 +1375,9 @@ body.touch-ui #skillbar, body.touch-ui #hud-iconrow, body.touch-ui #mount-btn { 
 #tc-pad [data-pot="mp"] { --x: 188; --y: 110; }
 #tc-pad #tc-scroll { --x: 244; --y: 110; }
 #tc-pad #tc-mount { --x: 300; --y: 110; }
+#tc-pad #tc-talk { --x: 164; --y: 182; }
 #tc-pad #tc-auto { --x: 236; --y: 182; }
+#touch-ui .tc-talk { --d: calc(56px * var(--s)); }
 /* The EXP bar moves to the top middle, out of the buttons' way. */
 body.touch-ui #hud-bottom { top: max(4px, env(safe-area-inset-top)); bottom: auto; --bar-w: min(320px, 38vw); }
 

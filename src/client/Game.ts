@@ -113,6 +113,8 @@ export class Game {
   hovered: Monster | null = null;
   /** A drop, NPC or rest spot under the mouse (only when no monster is): a left click walks there and uses it. */
   private hoverUse: ClickGoal | null = null;
+  /** True while the player stands near an NPC (no window open): the touch "พูดคุย" button shows (owner 2026-11-12). */
+  talkReady = false;
   /** Where a left click sent the player: walk there, then pick up / talk / rest on arrival. */
   private goal: ClickGoal | null = null;
   mouseWorld: Vec2 = { x: 0, z: 0 };
@@ -763,13 +765,14 @@ export class Game {
     const rest = !near && !summ && p.alive ? restSpotNear(spots, p) : null;
     const restIn = Math.max(0, Math.ceil(p.restCd));
     const restName = rest?.kind === 'fountain' ? 'น้ำพุ' : 'กองไฟ';
-    // Touch: no T key and no talk button (owner 2026-11-11) — tap the NPC, rest spot or altar itself.
+    // Touch: no T key — tap the NPC, rest spot or altar itself; near an NPC a "พูดคุย" button shows too.
     const key = isTouchMode() ? 'แตะ' : 'กด T ';
     const prompt = this.hud.dialogOpen ? null
       : near ? `${near.name} — ${key}เพื่อ${near.action}`
       : summ ? `แท่นเรียก${bossShortName(MONSTERS[summ.boss].nameTh)} — ${key}เพื่อใส่กุญแจ`
       : rest ? (restIn > 0 ? `${restName} — พักได้อีกใน ${restIn} วิ` : `${restName} — ${key}เพื่อฟื้น HP/MP ให้เต็ม`)
       : null;
+    this.talkReady = !!near && !this.hud.dialogOpen;
     this.floating.npcBadges(this, this.npcs);
     this.floating.restBadges(this, spots, restIn);
     if (near) this.floating.npcPrompt(this, near.x, 3.7, near.z, prompt);
