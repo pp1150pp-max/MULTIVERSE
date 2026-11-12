@@ -16,6 +16,8 @@ export class Input {
   wheel = 0;
   /** The on-screen joystick (touch): screen direction, x right and y up, length 0..1. Null when not held. */
   stick: { x: number; y: number } | null = null;
+  /** Touch drag-to-aim: the ground point a skill or attack button is aimed at (wins over the locked target). Null when not aiming. */
+  aimOverride: { x: number; z: number } | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     window.addEventListener('keydown', (e) => {
@@ -82,6 +84,7 @@ export class Input {
     this.keys.clear();
     this.lmb = this.rmb = false;
     this.stick = null;
+    this.aimOverride = null;
     for (const fn of this.releaseHooks) fn();
   }
 
