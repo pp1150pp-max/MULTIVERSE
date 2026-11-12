@@ -324,15 +324,16 @@ export class AimGuide {
   private readonly spotDisc: THREE.Mesh;
 
   constructor(scene: THREE.Scene, color = '#9fd8ff') {
-    const mat = (opacity: number) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide });
+    // Drawn over trees and props (no depth test): an aim hidden behind a tree is no use.
+    const mat = (opacity: number) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, depthTest: false, side: THREE.DoubleSide });
     // A 1-unit strip from the origin along +x, stretched to the reach; a thin bright centre line on top.
-    this.line = new THREE.Mesh(flat(new THREE.PlaneGeometry(1, 0.7).translate(0.5, 0, 0)), mat(0.22));
-    this.lineEdge = new THREE.Mesh(flat(new THREE.PlaneGeometry(1, 0.1).translate(0.5, 0, 0)), mat(0.75));
+    this.line = new THREE.Mesh(flat(new THREE.PlaneGeometry(1, 0.7).translate(0.5, 0, 0)), mat(0.3));
+    this.lineEdge = new THREE.Mesh(flat(new THREE.PlaneGeometry(1, 0.1).translate(0.5, 0, 0)), mat(0.9));
     this.lineEdge.position.y = 0.005;
-    this.spotDisc = new THREE.Mesh(flat(new THREE.CircleGeometry(1, 64)), mat(0.18));
+    this.spotDisc = new THREE.Mesh(flat(new THREE.CircleGeometry(1, 64)), mat(0.25));
     this.spotEdge = new THREE.Mesh(flat(new THREE.RingGeometry(0.93, 1, 64)), mat(0.85));
     this.spot.add(this.spotDisc, this.spotEdge);
-    this.line.renderOrder = this.lineEdge.renderOrder = this.spotDisc.renderOrder = this.spotEdge.renderOrder = 3;
+    this.line.renderOrder = this.lineEdge.renderOrder = this.spotDisc.renderOrder = this.spotEdge.renderOrder = 50;
     this.group.add(this.line, this.lineEdge);
     this.group.position.y = 0.08;
     this.spot.position.y = 0.09;
