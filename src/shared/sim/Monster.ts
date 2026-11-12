@@ -5,6 +5,7 @@ import type { MonsterDef, ShotDef } from '../data/monsters';
 import { NO_BOOST, type MonsterBoost, type SpawnArea } from '../data/zones';
 import { VolcanoHeartBrain } from './volcanoHeart';
 import { SPELL_GAP, WitchSpells } from './bogWitch';
+import { monsterMults, NO_MONSTER_MULT, type MonsterMults } from '../balance';
 
 const BOSS_RAMP_PER_SEC = 0.2;
 const BOSS_RAMP_MAX = 3;
@@ -31,21 +32,23 @@ export class Monster extends Unit {
   readonly def: MonsterDef;
   readonly area: SpawnArea;
   /** Max HP for one player; bosses get more for each extra player who hits them (see addFighter). */
-  private readonly baseHp: number;
+  private baseHp = 0;
   private hpMult = 1;
-  readonly atk: number;
-  readonly defense: number;
+  atk = 0;
+  defense = 0;
   /** Armor break (Gunslinger's Armor-Piercing Round): defense is lowered by this share until `armorBreakUntil` (sim time). */
   armorBreak = 0;
   armorBreakUntil = 0;
-  readonly expReward: number;
+  expReward = 0;
   state: State = 'idle';
   aggroT = 0;
   windupT = 0;
   enraged = false;
   deadT = 0;
-  /** Called in by a boss: gives no EXP, gold or items, and never respawns. */
+  /** Called in by a boss: gives no EXP, gold or items, and never respawns. Set with markSummoned. */
   summoned = false;
+  /** The admin's multipliers in use for it (×1 for bosses and their minions), see retune. */
+  mult: Readonly<MonsterMults> = NO_MONSTER_MULT;
   /** Bosses: seconds of fighting since they last landed a hit. They speed up the longer it gets. */
   rampT = 0;
   /** Height above the ground while jumping, for drawing. */
@@ -89,10 +92,16 @@ export class Monster extends Unit {
 
   /** The zone's monster boost: multiplies HP, attack and defense, and speed (moving and attacking). */
   private readonly zoneSpeed: number;
+  /** HP, attack and defense before the admin's multipliers (level, zone boost, keys). */
+  private readonly rawHp: number;
+  private readonly rawAtk: number;
+  private readonly rawDef: number;
+  private readonly rawExp: number;
   /** The zone's boost: how much faster skill cooldowns run. */
   readonly skillSpeed: number;
   /** Range at which it attacks whoever comes near: its own, or the zone's when that is larger. */
-  private readonly aggroRange: number;
+  private aggroRange = 0;
+  private readonly zoneAggro: number;
   /** The zone makes even passive monsters attack on sight. */
   private readonly forceAggro: boolean;
 
@@ -105,15 +114,16 @@ export class Monster extends Unit {
     const tough = def.ignoreTough ? 1 : (boost.tough ?? 1) * (def.behavior === 'boss' ? 1 : boost.mobTough ?? 1);
     // Keys put into a boss room: HP and attack (not defense or speed) times the number of keys (owner).
     const keys = boost.keys ?? 1;
-    this.baseHp = Math.round(def.hp * sc * boost.stats * tough * keys);
-    this.hp = this.baseHp;
-    this.atk = def.atk * sc * boost.stats * keys;
-    this.defense = def.def * sc * boost.stats * tough;
+    this.rawHp = def.hp * sc * boost.stats * tough * keys;
+    this.rawAtk = def.atk * sc * boost.stats * keys;
+    this.rawDef = def.def * sc * boost.stats * tough;
+    this.rawExp = def.exp * sc;
     this.zoneSpeed = boost.speed * (def.speedMult ?? 1);
     this.skillSpeed = (boost.skill ?? 1) * (def.speedMult ?? 1);
-    this.aggroRange = Math.max(def.aggroRange, boost.aggro ?? 0);
+    this.zoneAggro = boost.aggro ?? 0;
     this.forceAggro = (boost.aggro ?? 0) > 0;
-    this.expReward = Math.round(def.exp * sc);
+    this.retune();
+    this.hp = this.maxHp;
     this.radius = def.radius;
     this.x = x;
     this.z = z;
@@ -121,6 +131,33 @@ export class Monster extends Unit {
   }
 
   get maxHp(): number { return Math.round(this.baseHp * this.hpMult); }
+
+  /**
+   * Takes the admin's monster multipliers in use (src/shared/balance.ts): on spawn, and for every monster
+   * already out when they are saved. The share of HP left stays the same.
+   */
+  retune(): void {
+    const m = this.isBoss || this.summoned ? NO_MONSTER_MULT : monsterMults(this.def);
+    const share = this.baseHp > 0 ? this.hp / this.maxHp : 1;
+    this.mult = m;
+    this.baseHp = Math.max(1, Math.round(this.rawHp * m.hp));
+    this.atk = this.rawAtk * m.atk;
+    this.defense = this.rawDef * m.def;
+    this.expReward = Math.round(this.rawExp * m.exp);
+    // Passive kinds (0) stay passive; the zone's forced aggro is not multiplied.
+    this.aggroRange = Math.max(this.def.aggroRange * m.aggro, this.zoneAggro);
+    if (this.alive && share > 0) this.hp = Math.max(1, Math.min(this.maxHp, share * this.maxHp));
+  }
+
+  /** Called in by a boss: no multipliers, no rewards, no respawn. */
+  markSummoned(): void {
+    this.summoned = true;
+    this.retune();
+    this.hp = this.maxHp;
+  }
+
+  /** How far it reaches with a melee hit or starts shooting from, multiplier included. */
+  private get attackRange(): number { return this.def.attackRange * this.mult.range; }
 
   /**
    * Bosses: called when a player hits it for the first time this fight (`fighters` counts them,
@@ -147,7 +184,7 @@ export class Monster extends Unit {
     this.hpMult = maxHp / this.baseHp;
   }
   /** Walking speed before enrage, ramps and slows: the def's, times the zone's boost. */
-  private get baseSpeed(): number { return this.def.speed * this.zoneSpeed; }
+  private get baseSpeed(): number { return this.def.speed * this.zoneSpeed * this.mult.speed; }
   get topY(): number { return this.def.height * 0.75; }
   get isBoss(): boolean { return this.def.behavior === 'boss'; }
   get isHostile(): boolean {
@@ -295,7 +332,7 @@ export class Monster extends Unit {
       // Bosses keep walking in while winding up a normal hit, so stepping back no longer dodges it.
       // The slam stays put: its warning circle is drawn where the boss stands.
       let dNow = d;
-      if (this.isBoss && this.windKind === 'melee' && p && d > this.def.attackRange * 0.6) {
+      if (this.isBoss && this.windKind === 'melee' && p && d > this.attackRange * 0.6) {
         const s = this.chaseSpeed() * this.speedMult() * dt;
         this.x += (dx / d) * s;
         this.z += (dz / d) * s;
@@ -367,7 +404,7 @@ export class Monster extends Unit {
             this.enraged = true;
             sim.onBossEnrage(this);
           }
-          const reach = this.def.attackRange + p.radius;
+          const reach = this.attackRange + p.radius;
           const frenzy = this.enraged ? this.def.frenzy : undefined;
           const leap = this.def.leap;
           const thrown = this.def.thrown;
@@ -392,7 +429,7 @@ export class Monster extends Unit {
             if (this.atkCd <= 0) {
               this.windKind = 'melee';
               this.windupT = (this.isBoss ? 0.5 : this.def.shot ? 0.5 : 0.35) * this.skillMult();
-              this.atkCd = (this.def.attackCooldown / this.zoneSpeed) * (frenzy ? frenzy.skill : this.enraged ? 0.75 : 1);
+              this.atkCd = (this.def.attackCooldown / (this.zoneSpeed * this.mult.atkSpeed)) * (frenzy ? frenzy.skill : this.enraged ? 0.75 : 1);
               if (this.def.shot) this.warnShot(sim, p, this.def.shot);
             }
           } else {
@@ -544,13 +581,13 @@ export class Monster extends Unit {
   /** Locks the aim for the coming shot and marks its path on the ground, so it can be stepped out of. */
   private warnShot(sim: Sim, p: Player, shot: ShotDef): void {
     this.shotAngle = Math.atan2(p.z - this.z, p.x - this.x);
-    sim.fx('lineTelegraph', this.x, this.z, this.shotAngle, shot.range, shot.radius * 2, this.windupT);
+    sim.fx('lineTelegraph', this.x, this.z, this.shotAngle, shot.range * this.mult.range, shot.radius * 2, this.windupT);
   }
 
   private fire(sim: Sim, shot: ShotDef): void {
     sim.addEnemyShot(this, {
       x: this.x, z: this.z, angle: this.shotAngle,
-      speed: shot.speed, range: shot.range, radius: shot.radius, mult: shot.mult,
+      speed: shot.speed, range: shot.range * this.mult.range, radius: shot.radius, mult: shot.mult,
       color: shot.color, size: shot.size, art: shot.art,
     });
   }
@@ -568,8 +605,8 @@ export class Monster extends Unit {
       this.fire(sim, this.def.shot);
     } else if (this.windKind === 'melee') {
       const ang = Math.atan2(this.faceZ, this.faceX);
-      sim.fx('slash', this.x, this.z, ang, Math.PI * 0.6, this.def.attackRange + 0.6, '#ff8a6a');
-      if (p?.alive && d <= this.def.attackRange + p.radius + 0.5) sim.hitPlayer(this, p, 1, {});
+      sim.fx('slash', this.x, this.z, ang, Math.PI * 0.6, this.attackRange + 0.6, '#ff8a6a');
+      if (p?.alive && d <= this.attackRange + p.radius + 0.5) sim.hitPlayer(this, p, 1, {});
     } else if (this.windKind === 'slam') {
       const radius = this.slamRadius;
       sim.fx('ring', this.x, this.z, radius, '#ffb070', 0.45);

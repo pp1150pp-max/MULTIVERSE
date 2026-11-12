@@ -6,8 +6,9 @@
 // and on every save, and sends them to every browser so tooltips and the blacksmith's odds match.
 import { CLASSES, CLASS_IDS } from './data/classes';
 import {
-  CODE_BOSS_TIER_BOOST, CODE_RANGE_FLOOR, CODE_TIER_WEIGHT, CODE_TIER_WIDTH, setItemStatMult, setTierTables, TIER_BAND_NAME, TIER_BANDS, type TierBand, type TierTableDef,
+  CODE_BOSS_TIER_BOOST, CODE_RANGE_FLOOR, CODE_TIER_WEIGHT, CODE_TIER_WIDTH, setItemStatMult, setTierTables, TIER_BAND_NAME, TIER_BANDS, tierBandOf, type TierBand, type TierTableDef,
 } from './data/items';
+import { MONSTERS, type MonsterDef } from './data/monsters';
 import { addInto, emptyStats } from './formulas';
 import { STAT_KEYS, STAT_LABEL, type ClassId, type StatKey, type Stats } from './types';
 
@@ -38,6 +39,31 @@ export type StatTierPart = keyof TierParts;
 export const STAT_TIER_PARTS: readonly StatTierPart[] = ['weight', 'width', 'floor', 'bossBoost'];
 export const STAT_TIER_PART_NAME: Record<StatTierPart, string> = { weight: 'โอกาส', width: 'ความกว้าง', floor: 'ค่าต่ำสุด', bossBoost: 'บอสเพิ่ม tier' };
 
+/**
+ * Ordinary monsters' multipliers (owner 2026-11-12): by level band (of the monster kind's lowest level) and by
+ * kind, the two multiplied together. Not bosses, nor the minions a boss calls (see monsterMults).
+ */
+export const MONSTER_STATS = ['hp', 'atk', 'def', 'speed', 'atkSpeed', 'exp', 'gold', 'aggro', 'range'] as const;
+export type MonsterStat = (typeof MONSTER_STATS)[number];
+export type MonsterMults = Record<MonsterStat, number>;
+export const MONSTER_STAT_NAME: Record<MonsterStat, string> = {
+  hp: 'HP', atk: 'ATK', def: 'DEF', speed: 'วิ่งเร็ว', atkSpeed: 'ตีเร็ว', exp: 'EXP', gold: 'ทอง', aggro: 'ระยะ aggro', range: 'ระยะโจมตี',
+};
+/** Multipliers that are not ×1: per level band and per monster kind (id). */
+export interface MonsterTuning {
+  bands?: Partial<Record<TierBand, Partial<MonsterMults>>>;
+  types?: Record<string, Partial<MonsterMults>>;
+}
+export const NO_MONSTER_MULT: Readonly<MonsterMults> = Object.freeze(Object.fromEntries(MONSTER_STATS.map((k) => [k, 1])) as MonsterMults);
+/** Monster kinds the multipliers apply to: all but bosses and kinds that only ever come when a boss calls them. */
+export const isTunableMonster = (def: MonsterDef): boolean => def.behavior !== 'boss' && !def.summonOnly;
+/** Tunable kinds, by lowest level (the admin page's list). */
+export const TUNABLE_MONSTERS: readonly MonsterDef[] = Object.values(MONSTERS)
+  .filter(isTunableMonster)
+  .sort((a, b) => a.levels[0] - b.levels[0] || a.levels[1] - b.levels[1]);
+/** The level band a monster kind is tuned in (index into TIER_BANDS): by its lowest level. */
+export const monsterBandOf = (def: MonsterDef): number => tierBandOf(def.levels[0]);
+
 /** Every tunable number, as the game uses it. Tier arrays are T1 first; widths and floor in %. */
 export interface Balance {
   classes: Record<ClassId, ClassBalance>;
@@ -57,6 +83,8 @@ export interface Balance {
    * item, see server/admin-tools.ts); the normal save keeps them as they are.
    */
   itemStatMult: Record<StatKey, number>;
+  /** Ordinary monsters' multipliers that are not ×1 (none in code). */
+  monsters: MonsterTuning;
 }
 
 /** What is saved: only what differs from the code. Tier arrays are saved whole when any entry differs. */
@@ -77,6 +105,8 @@ export interface BalanceTuning {
   bandTiers?: Partial<Record<TierBand, TierParts>>;
   /** Item stat multipliers that are not ×1. */
   itemStatMult?: Partial<Record<StatKey, number>>;
+  /** Ordinary monsters' multipliers that are not ×1. */
+  monsters?: MonsterTuning;
 }
 
 /** Highest Lv1 / per-level value of each stat (owner 2026-11-11); the lowest is 0. */
@@ -93,6 +123,7 @@ export const BALANCE_RANGE = {
   rangeFloor: [5, 95],
   bossTierBoost: [0, 10],
   itemStatMult: [0.1, 10],
+  monsterMult: [0.1, 10],
 } as const satisfies Record<string, readonly [number, number]>;
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
@@ -120,6 +151,7 @@ export function codeBalance(): Balance {
     statTiers: {},
     bandTiers: {},
     itemStatMult: full(undefined, 1),
+    monsters: {},
   };
 }
 
@@ -144,6 +176,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.statTiers) b.statTiers = structuredClone(t.statTiers);
   if (t.bandTiers) b.bandTiers = structuredClone(t.bandTiers);
   Object.assign(b.itemStatMult, t.itemStatMult);
+  if (t.monsters) b.monsters = structuredClone(t.monsters);
   return b;
 }
 
@@ -199,6 +232,20 @@ export const hasParts = (t: TierParts | undefined): boolean => !!t && STAT_TIER_
 export const currentBalance = (): Balance => current;
 /** The tuning in use (only the changes from the code). */
 export const currentBalanceTuning = (): BalanceTuning => tuning;
+/**
+ * A monster kind's multipliers in use: its level band's times its own. ×1 for bosses and summon-only kinds
+ * (Monster also leaves out the minions a boss called).
+ */
+export function monsterMults(def: MonsterDef, b: Balance = current): MonsterMults {
+  if (!isTunableMonster(def)) return NO_MONSTER_MULT;
+  const band = b.monsters.bands?.[TIER_BANDS[monsterBandOf(def)]];
+  const own = b.monsters.types?.[def.id];
+  if (!band && !own) return NO_MONSTER_MULT;
+  const m = { ...NO_MONSTER_MULT };
+  for (const k of MONSTER_STATS) m[k] = (band?.[k] ?? 1) * (own?.[k] ?? 1);
+  return m;
+}
+
 /** One class's numbers in use. */
 export const classBalance = (id: ClassId): ClassBalance => current.classes[id];
 
@@ -236,7 +283,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'monsters'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -434,6 +481,72 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (Object.keys(res).length) out.itemStatMult = res;
     return null;
   };
+  /** One set of monster multipliers (only those not ×1, in MONSTER_STATS order), or an error; `what` names whose. */
+  const monsterSet = (x: unknown, what: string): Partial<MonsterMults> | string => {
+    const res: Partial<MonsterMults> = {};
+    if (!isObj(x)) return strict ? `ตัวคูณมอน${what}ไม่ถูกต้อง` : res;
+    if (strict) {
+      const extra = Object.keys(x).find((k) => !(MONSTER_STATS as readonly string[]).includes(k));
+      if (extra) return `ตัวคูณมอน${what}: ไม่รู้จักค่า "${extra.slice(0, 20)}"`;
+    }
+    for (const k of MONSTER_STATS) {
+      const n = num(x[k], ...BALANCE_RANGE.monsterMult, `ตัวคูณ${MONSTER_STAT_NAME[k]}มอน${what}`);
+      if (typeof n === 'string') return n;
+      if (n !== undefined && n !== 1) res[k] = n;
+    }
+    return res;
+  };
+  // Ordinary monsters' multipliers: level bands in TIER_BANDS order, then kinds in TUNABLE_MONSTERS order.
+  const monsters = (): string | null => {
+    const x = o.monsters;
+    if (x === undefined) return null;
+    if (!isObj(x)) return strict ? 'ตัวคูณมอนไม่ถูกต้อง' : null;
+    if (strict) {
+      const extra = Object.keys(x).find((k) => k !== 'bands' && k !== 'types');
+      if (extra) return `ตัวคูณมอน: ไม่รู้จักค่า "${extra.slice(0, 20)}"`;
+    }
+    const res: MonsterTuning = {};
+    if (x.bands !== undefined) {
+      if (!isObj(x.bands)) {
+        if (strict) return 'ตัวคูณมอนตามช่วงเลเวลไม่ถูกต้อง';
+      } else {
+        const given = x.bands;
+        if (strict) {
+          const extra = Object.keys(given).find((k) => !(TIER_BANDS as readonly string[]).includes(k));
+          if (extra) return `ตัวคูณมอน: ไม่รู้จักช่วงเลเวล "${extra.slice(0, 20)}"`;
+        }
+        const bands: NonNullable<MonsterTuning['bands']> = {};
+        for (const id of TIER_BANDS) {
+          if (given[id] === undefined) continue;
+          const m = monsterSet(given[id], ` ${TIER_BAND_NAME[id]}`);
+          if (typeof m === 'string') return m;
+          if (Object.keys(m).length) bands[id] = m;
+        }
+        if (Object.keys(bands).length) res.bands = bands;
+      }
+    }
+    if (x.types !== undefined) {
+      if (!isObj(x.types)) {
+        if (strict) return 'ตัวคูณมอนรายตัวไม่ถูกต้อง';
+      } else {
+        const given = x.types;
+        if (strict) {
+          const extra = Object.keys(given).find((k) => !TUNABLE_MONSTERS.some((d) => d.id === k));
+          if (extra) return `ตัวคูณมอน: ปรับมอน "${extra.slice(0, 30)}" ไม่ได้`;
+        }
+        const types: Record<string, Partial<MonsterMults>> = {};
+        for (const d of TUNABLE_MONSTERS) {
+          if (given[d.id] === undefined) continue;
+          const m = monsterSet(given[d.id], ` ${d.nameTh}`);
+          if (typeof m === 'string') return m;
+          if (Object.keys(m).length) types[d.id] = m;
+        }
+        if (Object.keys(types).length) res.types = types;
+      }
+    }
+    if (res.bands || res.types) out.monsters = res;
+    return null;
+  };
   // Level bands' own tier tables (all stats).
   const bandTiers = (): string | null => {
     const bands = bandTables(o.bandTiers, '');
@@ -450,7 +563,8 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     one('bossTierBoost', BALANCE_RANGE.bossTierBoost, 'บอสเพิ่มโอกาส tier ดี') ??
     statTiers() ??
     bandTiers() ??
-    itemMult();
+    itemMult() ??
+    monsters();
   if (err) return { error: err };
   // Fixed key order.
   const ordered: BalanceTuning = {};
@@ -512,6 +626,15 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   for (const k of STAT_KEYS) {
     if (a.itemStatMult[k] !== b.itemStatMult[k]) out.push(`ตัวคูณ${STAT_LABEL[k]}บนไอเทม ×${a.itemStatMult[k]} → ×${b.itemStatMult[k]}`);
   }
+  const mons = (what: string, x: Partial<MonsterMults> | undefined, y: Partial<MonsterMults> | undefined): void => {
+    for (const k of MONSTER_STATS) {
+      const p = x?.[k] ?? 1;
+      const q = y?.[k] ?? 1;
+      if (p !== q) out.push(`มอน ${what} ${MONSTER_STAT_NAME[k]} ×${p} → ×${q}`);
+    }
+  };
+  for (const id of TIER_BANDS) mons(TIER_BAND_NAME[id], a.monsters.bands?.[id], b.monsters.bands?.[id]);
+  for (const d of TUNABLE_MONSTERS) mons(d.nameTh, a.monsters.types?.[d.id], b.monsters.types?.[d.id]);
   return out.join(', ');
 }
 
