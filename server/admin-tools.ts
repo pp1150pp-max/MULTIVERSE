@@ -31,6 +31,8 @@ import { upgradeItem } from '../src/shared/data/items';
 import { searchStats } from '../src/shared/sim/market';
 import type { Item, StoneStack } from '../src/shared/types';
 import type { AdminBalance } from '../src/shared/admin';
+import { DAILY_DEFAULT } from '../src/shared/daily';
+import { STONE_NAME } from '../src/shared/data/stones';
 
 const MODE_NAME: Record<ShutdownMode, string> = { restart: 'ข้อความรีสตาร์ท', shutdown: 'ข้อความปิด server' };
 const orbLookState = (db: Db, canEdit: boolean): AdminOrbLook => ({
@@ -379,6 +381,27 @@ export async function ownerToolsApi(
       log(db, a, 'card-tune', 'ค่าการ์ดทั้งเซิร์ฟ', (body.reset === true ? 'คืนค่าเริ่มต้น: ' : '') + (changes.length > 1500 ? changes.slice(0, 1500) + '…' : changes));
     }
     send(res, 200, cardTuneState(db, true));
+    return true;
+  }
+
+  // ---------------------------------------------------------- daily login rewards (server/daily.ts)
+  if (method === 'GET' && path === '/api/admin/daily') {
+    requireFeature(req, db, 'daily');
+    send(res, 200, { defaults: DAILY_DEFAULT, overrides: world.daily.overrides() });
+    return true;
+  }
+
+  if (method === 'POST' && path === '/api/admin/daily') {
+    const a = requireFeature(req, db, 'daily');
+    const body = await readJson(req);
+    const before = world.daily.overrides();
+    const o = world.daily.setOverrides(body.overrides);
+    if (typeof o === 'string') throw new HttpError(400, o);
+    const changed = Array.from({ length: 31 }, (_, i) => i + 1).filter((d) => JSON.stringify(before[d]) !== JSON.stringify(o[d]));
+    if (changed.length) {
+      log(db, a, 'daily', 'ล็อกอินรายวัน', changed.map((d) => { const r = o[d] ?? DAILY_DEFAULT[d - 1]; return `วันที่ ${d}: ${STONE_NAME[r.stone]} ×${r.count}`; }).join(', '));
+    }
+    send(res, 200, { defaults: DAILY_DEFAULT, overrides: o });
     return true;
   }
 

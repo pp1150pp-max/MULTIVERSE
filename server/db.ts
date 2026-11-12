@@ -238,6 +238,19 @@ export class Db {
       );
       CREATE INDEX IF NOT EXISTS mail_box_account ON mail_box(account_id, deleted_at);
       CREATE INDEX IF NOT EXISTS mail_box_send ON mail_box(send_id);
+      -- Daily login (see server/daily.ts): one row per account and Thai calendar day it got (makeup 1 = a make-up),
+      -- and the mail send each delivery day / reward reuses, so the admin mail history gets a few rows a day, not one per account.
+      CREATE TABLE IF NOT EXISTS daily_claims (
+        account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        day TEXT NOT NULL,
+        makeup INTEGER NOT NULL,
+        at INTEGER NOT NULL,
+        PRIMARY KEY (account_id, day)
+      );
+      CREATE TABLE IF NOT EXISTS daily_mail (
+        key TEXT PRIMARY KEY,
+        send_id INTEGER NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS trade_log (
         id INTEGER PRIMARY KEY,
         at INTEGER NOT NULL,
@@ -1093,6 +1106,30 @@ export class Db {
   marketSetNotified(ids: readonly number[], now: number): void {
     const upd = this.db.prepare('UPDATE market_listings SET notified_at = ? WHERE id = ?');
     for (const id of ids) upd.run(now, id);
+  }
+
+  // ------------------------------------------------------------ daily login (server/daily.ts)
+
+  /** Marks a day as got; false when this account already has it (so a race can't deliver twice). */
+  dailyClaim(accountId: number, day: string, makeup: boolean, at: number): boolean {
+    return Number(this.db.prepare('INSERT OR IGNORE INTO daily_claims (account_id, day, makeup, at) VALUES (?, ?, ?, ?)')
+      .run(accountId, day, makeup ? 1 : 0, at).changes) === 1;
+  }
+
+  /** The days this account got in one month ('YYYY-MM'): day of the month → was it a make-up. */
+  dailyMonth(accountId: number, month: string): Map<number, boolean> {
+    const rows = this.db.prepare("SELECT day, makeup FROM daily_claims WHERE account_id = ? AND day LIKE ? || '-%'").all(accountId, month) as { day: string; makeup: number }[];
+    return new Map(rows.map((r) => [Number(r.day.slice(8)), r.makeup === 1]));
+  }
+
+  /** The mail send kept for this key, if it still exists. */
+  dailyMailSend(key: string): number | undefined {
+    const r = this.db.prepare('SELECT d.send_id AS id FROM daily_mail d JOIN mail_sends s ON s.id = d.send_id WHERE d.key = ?').get(key) as { id: number } | undefined;
+    return r?.id;
+  }
+
+  dailyMailKeep(key: string, sendId: number): void {
+    this.db.prepare('INSERT OR REPLACE INTO daily_mail (key, send_id) VALUES (?, ?)').run(key, sendId);
   }
 
   // ------------------------------------------------------------ mailbox (server/mail.ts)

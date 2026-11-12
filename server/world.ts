@@ -26,6 +26,8 @@ import type { OrbLook } from '../src/shared/orbLook';
 import type { CosTuning } from '../src/shared/cosTuning';
 import { banMessage } from '../src/shared/api';
 import { Market, type MarketNote } from './market';
+import { Daily } from './daily';
+import { DAILY_GUEST_MSG, thaiDate } from '../src/shared/daily';
 import { Mail } from './mail';
 import type { MailCall } from '../src/shared/mail';
 import { Reports } from './reports';
@@ -42,6 +44,8 @@ import { CH_RESERVED, hasChannels, type ChannelsView } from '../src/shared/chann
 import { MEGAPHONE_EVERY_MS, megaphoneText, STONE_NAME, STONE_STACK } from '../src/shared/data/stones';
 import { COS_SLOTS, cosById, cosCodes } from '../src/shared/data/cosmetics';
 
+/** How often the world looks for the Thai calendar day turning over. */
+const DAILY_CHECK_MS = 30_000;
 const AUTOSAVE_MS = 30_000;
 const GUEST_STASH_MSG = 'Guest ใช้คลังเก็บของไม่ได้ — สมัครสมาชิกเพื่อใช้คลัง (ตัวละครนี้จะย้ายไปอยู่ในบัญชีใหม่)';
 const JOIN_TIMEOUT_MS = 10_000;
@@ -245,6 +249,9 @@ export class GameWorld {
   private readonly stashes = new Map<number, StashData>();
   private readonly market: Market;
   readonly mail: Mail;
+  readonly daily: Daily;
+  /** The Thai calendar day last checked, to hand out the new day's reward to everyone online at midnight. */
+  private dailyDay = thaiDate(Date.now()).key;
   /** Parties, keyed on character ids (in memory only: a restart ends them). */
   readonly parties: Parties;
   /** Player-to-player trades (in memory only). */
@@ -267,6 +274,8 @@ export class GameWorld {
     setInterval(() => this.logPings(), PING_LOG_MS);
     this.market = new Market(db);
     this.mail = new Mail(db);
+    this.daily = new Daily(db);
+    setInterval(() => this.dailyRollover(), DAILY_CHECK_MS);
     this.reports = new Reports(db);
     this.parties = new Parties({
       notice: (ids, text) => {
@@ -505,7 +514,7 @@ export class GameWorld {
     this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), guest: acc.guest, orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), balance: currentBalanceTuning() });
     this.broadcastSystem(`${player.name} เข้าสู่โลก`);
     // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
-    if (!acc.guest) setTimeout(() => this.sessions.has(s) && (this.marketOnJoin(s), this.mailNote(s, true)), MARKET_JOIN_NOTE_MS);
+    if (!acc.guest) setTimeout(() => this.sessions.has(s) && (this.marketOnJoin(s), this.dailyCheck(s), this.mailNote(s, true)), MARKET_JOIN_NOTE_MS);
     console.log(`[world] ${acc.username} joined as ${player.name}${acc.guest ? ' (guest)' : ''} from ${ip} (${this.sessions.size} online)`);
     return s;
   }
@@ -577,6 +586,48 @@ export class GameWorld {
     const to = toCharId === undefined ? [...this.sessions] : [...this.sessions].filter((s) => s.charId === toCharId);
     for (const s of to) this.send(s.ws, { t: 'announce', text, from, direct: toCharId !== undefined });
     return to.length;
+  }
+
+  /** Today's daily login reward for this account, mailed the first time today; then the calendar pops up. */
+  private dailyCheck(s: Session): void {
+    if (s.guest) return;
+    try {
+      if (!this.daily.deliver(s.accountId)) return;
+      this.sendDaily(s, true);
+      for (const o of this.sessions) if (o.accountId === s.accountId) this.mailNote(o);
+    } catch (e) {
+      console.error('[daily] delivery failed', e);
+    }
+  }
+
+  private sendDaily(s: Session, popup: boolean): void {
+    try {
+      this.send(s.ws, { t: 'daily', view: { ...this.daily.view(s.accountId), ...(popup ? { popup: true } : {}) } });
+    } catch (e) {
+      console.error('[daily] view failed', e);
+    }
+  }
+
+  private dailyMakeup(s: Session, day: unknown): void {
+    if (s.guest) return this.send(s.ws, { t: 'chat', name: '', text: DAILY_GUEST_MSG });
+    let err: string | null;
+    try {
+      err = this.daily.makeup(s.accountId, day);
+    } catch (e) {
+      console.error('[daily] make-up failed', e);
+      err = 'ชดเชยไม่สำเร็จ ลองใหม่อีกครั้ง';
+    }
+    if (err) this.send(s.ws, { t: 'chat', name: '', text: err });
+    else for (const o of this.sessions) if (o.accountId === s.accountId) this.mailNote(o);
+    this.sendDaily(s, false);
+  }
+
+  /** Midnight (Thai time) with players online: each account online gets the new day's reward. */
+  private dailyRollover(): void {
+    const day = thaiDate(Date.now()).key;
+    if (day === this.dailyDay) return;
+    this.dailyDay = day;
+    for (const s of [...this.sessions]) this.dailyCheck(s);
   }
 
   /**
@@ -818,6 +869,13 @@ export class GameWorld {
         if ((m.kind === 'hp' || m.kind === 'mp') && POTION_SIZES.includes(m.size)) {
           sim.buyPotion(p, m.kind, m.size, Math.max(0, Math.min(99, Math.floor(num(m.n)))));
         }
+        break;
+      case 'daily':
+        if (s.guest) this.send(s.ws, { t: 'chat', name: '', text: DAILY_GUEST_MSG });
+        else this.sendDaily(s, false);
+        break;
+      case 'dailyMakeup':
+        this.dailyMakeup(s, m.day);
         break;
       case 'megaphone':
         this.megaphone(s, m.text);

@@ -82,6 +82,10 @@ export interface Backend {
   useBuffScroll(kind: BuffScroll): void;
   /** Announces `text` to everyone with a megaphone from the bag (the server checks). */
   useMegaphone(text: string): void;
+  /** Asks for this month's daily login calendar (answered through onDaily). */
+  dailyOpen(): void;
+  /** Makes up an earlier missed day of this month (the server checks). */
+  dailyMakeup(day: number): void;
   sortBag(key: SortKey, desc: boolean): void;
   /** Drag & drop between two bag slots (swap, or merge the same potion). */
   moveInBag(from: number, to: number): void;

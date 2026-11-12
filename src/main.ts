@@ -39,6 +39,7 @@ function launch(backend: OnlineBackend): void {
   backend.onAnnounce = (text, from, direct, megaphone) => game.hud.announce(text, from, direct, megaphone);
   backend.onMarketNote = (text, sub) => game.hud.marketNote(text, sub);
   backend.onMailNote = (unread, fresh) => game.mailUI.note(unread, fresh);
+  backend.onDaily = (view) => game.daily.show(view);
   start(game, backend.me.cls.id);
 }
 
