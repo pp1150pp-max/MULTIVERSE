@@ -80,7 +80,8 @@ if (process.argv.includes('--worker')) {
     bytesAt = 0;
     target: { x: number; z: number } | null = null;
     constructor(readonly spec: BotSpec) {
-      this.ws = new WebSocket(`${base.replace('http', 'ws')}/ws`, { perMessageDeflate: true });
+      // Browsers compress every frame once deflate is agreed; ws would skip messages under 1 KB (all of ours).
+      this.ws = new WebSocket(`${base.replace('http', 'ws')}/ws`, { perMessageDeflate: { threshold: 0 } });
       this.ws.on('open', () => this.send({ t: 'join', token: spec.token, characterId: spec.charId }));
       this.ws.on('message', (raw) => this.onMsg(JSON.parse(raw.toString())));
       this.ws.on('error', () => {});
