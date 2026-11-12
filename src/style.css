@@ -1218,7 +1218,8 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #report-win .report-note { font-size: 11px; color: var(--ink-dim); }
 #report-win .report-msg { min-height: 1em; }
 /* Daily login calendar: 7 columns, one cell per day with its reward. */
-#daily-win { left: 50%; top: 60px; transform: translateX(-50%); width: min(460px, calc(100vw - 32px)); max-height: calc(100vh - 80px); overflow-y: auto; font-size: 12px; }
+/* No scrollbars (owner): the width follows the screen height too, so up to 6 weeks of cells always fit. */
+#daily-win { left: 50%; top: 8px; transform: translateX(-50%); width: min(460px, calc(100vw - 32px), calc((100vh - 250px) * 7 / 6 + 60px)); font-size: 12px; }
 #daily-win .daily-note, #daily-win .daily-foot { margin: 6px 8px; color: var(--ink-dim); font-size: 11px; }
 #daily-win .daily-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 0 8px; }
 #daily-win .daily-wd { text-align: center; color: var(--gold); font-size: 11px; }
@@ -1235,6 +1236,19 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #daily-win .daily-cell.missed:hover, #daily-win .daily-cell.picked { opacity: 1; border-color: var(--gold); }
 #daily-win .daily-cell.is-today { border-color: var(--gold); box-shadow: 0 0 6px var(--gold); }
 #daily-win .daily-btns { display: flex; gap: 6px; justify-content: center; margin: 4px 8px 8px; }
+/* Short screens (a phone on its side): calendar on the left sized by the height, text and buttons on the right. */
+@media (max-height: 520px) {
+  #daily-win {
+    width: min(calc(100vw - 32px), 680px); padding: 10px 12px; display: grid; column-gap: 10px; align-content: start;
+    grid-template-columns: calc((100vh - 96px) / 6.4 * 7) 1fr; grid-template-areas: 'head head' 'grid note' 'grid foot' 'grid btns';
+  }
+  #daily-win .panel-head { grid-area: head; margin-bottom: 8px; }
+  #daily-win .daily-grid { grid-area: grid; padding: 0; gap: 2px; }
+  #daily-win .daily-note { grid-area: note; }
+  #daily-win .daily-foot { grid-area: foot; }
+  #daily-win .daily-btns { grid-area: btns; flex-direction: column; align-items: stretch; }
+  #daily-win .daily-num, #daily-win .daily-count { font-size: 9px; }
+}
 #megaphone-win { left: 50%; top: 80px; transform: translateX(-50%); width: min(400px, 92vw); font-size: 13px; }
 #megaphone-win .mega-body { display: flex; flex-direction: column; gap: 6px; }
 #megaphone-win textarea { resize: none; padding: 4px 6px; font: inherit; }
