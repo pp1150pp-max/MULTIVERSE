@@ -212,7 +212,7 @@ function baseDefaults(id: string, slot: TunedSlot): TuneValues | undefined {
       // the back, 1.35 up standing and 1.0 above the saddle riding; behind the body, over the back when it
       // is turned to the camera (#200).
       return { h: 1.625, root: 0.6, backStand: 1.35, backSeat: 1, back: 0.22, shift: 0, depth: 0.15, overBack: true,
-        oneSize: 1, oneBack: 1.125, oneBackSeat: 0.85, oneTilt: 0.18, oneSqueeze: 0.8, oneDepth: 0.15,
+        oneSize: 0.9, oneBack: 1.125, oneBackSeat: 0.85, oneTilt: 0.18, oneSqueeze: 0.8, oneDepth: 0.15,
         nearSide: true, nearFrontDiag: false, nearBackDiag: false, nearCut: 0, nearDepth: 0.15, flap: 5, flapWalk: 10 };
     case 'mount': {
       const m = MOUNT_DEFAULTS[id];
