@@ -49,6 +49,8 @@ const ruin = (key: string, standIn: string | null): SheetSpec =>
 
 /** The sheets key of a cosmetic's walk sheet. */
 export const cosSheetKey = (id: string): string => `cos_${id}`;
+/** The sheets key of a wing's single-wing picture (wingPair.ts). */
+export const cosOneKey = (id: string): string => `cos_${id}_one`;
 
 export const SHEET_SPECS: Record<string, SheetSpec> = {
   sword: sheet('player/sword.png', () => makeSheet(32, drawHuman('sword'))),
@@ -63,6 +65,11 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   // Cosmetics with a body (wings, mounts, pets): 8-direction walk sheets like the monsters' (see cosmeticViews.ts).
   ...Object.fromEntries(COSMETICS.filter((c) => c.slot !== 'aura' && c.slot !== 'title').map((c) => [
     cosSheetKey(c.id), monster(`cosmetics/${c.id}.png`, () => makeSheet(c.slot === 'pet' ? 32 : 48, drawCosmetic(c))),
+  ])),
+  // Wings from ONE wing picture, mirrored into the pair (wingPair.ts). Used only when the file exists
+  // (assetSources 'file'); otherwise the pair sheet above is drawn as before.
+  ...Object.fromEntries(COSMETICS.filter((c) => c.slot === 'wings').map((c) => [
+    cosOneKey(c.id), { path: `${BASE}cosmetics/${c.id}_one.png`, cols: 3, rows: 5, fileSideFaces: 'left' as const, placeholder: () => document.createElement('canvas') },
   ])),
 
   green_slime: monster('monsters/green_slime.png', () => makeSheet(32, drawSlime(['#6cc25a', '#4a9a3e', '#c8f0b0']))),
