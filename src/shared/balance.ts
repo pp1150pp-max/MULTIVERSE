@@ -4,7 +4,7 @@
 // data/classes.ts and data/items.ts, and changes are saved in the server's settings table as overrides
 // only (like cos_tuning), so an untouched server runs exactly the code. The server applies them at start
 // and on every save, and sends them to every browser so tooltips and the blacksmith's odds match.
-import { CLASSES, CLASS_IDS } from './data/classes';
+import { CLASSES, CLASS_IDS, MP_COST_PER_LEVEL } from './data/classes';
 import {
   CODE_BOSS_TIER_BOOST, CODE_RANGE_FLOOR, CODE_TIER_WEIGHT, CODE_TIER_WIDTH, setItemStatMult, setTierTables, TIER_BAND_NAME, TIER_BANDS, tierBandOf, type TierBand, type TierTableDef,
 } from './data/items';
@@ -20,8 +20,11 @@ export const CODE_HP_REGEN_MULT = 0.4;
 /** Same for MP regen (owner: -75%, so skills lean on MP potions). */
 export const CODE_MP_REGEN_MULT = 0.25;
 
-/** One class's numbers: Lv1 stats, added per level, final multipliers (gear included), damage to bosses. */
-export interface ClassBalance { base: Stats; growth: Stats; mult: Stats; bossDmgMult: number }
+/**
+ * One class's numbers: Lv1 stats, added per level, final multipliers (gear included), damage to bosses, and how
+ * many % more MP its skills cost per level above 1 (see skillMpCost).
+ */
+export interface ClassBalance { base: Stats; growth: Stats; mult: Stats; bossDmgMult: number; mpCostPerLevel: number }
 export type StatPart = 'base' | 'growth' | 'mult';
 export const STAT_PARTS: readonly StatPart[] = ['base', 'growth', 'mult'];
 export const STAT_PART_NAME: Record<StatPart, string> = { base: 'Lv1', growth: 'ต่อเลเวล', mult: 'ตัวคูณ' };
@@ -89,7 +92,7 @@ export interface Balance {
 
 /** What is saved: only what differs from the code. Tier arrays are saved whole when any entry differs. */
 export interface BalanceTuning {
-  classes?: Partial<Record<ClassId, { base?: Partial<Stats>; growth?: Partial<Stats>; mult?: Partial<Stats>; bossDmgMult?: number }>>;
+  classes?: Partial<Record<ClassId, { base?: Partial<Stats>; growth?: Partial<Stats>; mult?: Partial<Stats>; bossDmgMult?: number; mpCostPerLevel?: number }>>;
   hpRegenMult?: number;
   mpRegenMult?: number;
   tierWeight?: number[];
@@ -117,6 +120,7 @@ export const STAT_MAX: Record<StatKey, number> = {
 export const BALANCE_RANGE = {
   mult: [0, 10],
   bossDmgMult: [0.1, 10],
+  mpCostPerLevel: [0, 20],
   regenMult: [0, 5],
   tierWeight: [0, 1000],
   tierWidth: [1, 96],
@@ -138,7 +142,7 @@ export function codeBalance(): Balance {
   const classes = {} as Record<ClassId, ClassBalance>;
   for (const id of CLASS_IDS) {
     const c = CLASSES[id];
-    classes[id] = { base: full(c.base, 0), growth: full(c.growth, 0), mult: full(c.statMult, 1), bossDmgMult: c.bossDmgMult ?? 1 };
+    classes[id] = { base: full(c.base, 0), growth: full(c.growth, 0), mult: full(c.statMult, 1), bossDmgMult: c.bossDmgMult ?? 1, mpCostPerLevel: MP_COST_PER_LEVEL };
   }
   return {
     classes,
@@ -166,6 +170,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
     const c = b.classes[id];
     for (const part of STAT_PARTS) Object.assign(c[part], ct[part]);
     if (ct.bossDmgMult !== undefined) c.bossDmgMult = ct.bossDmgMult;
+    if (ct.mpCostPerLevel !== undefined) c.mpCostPerLevel = ct.mpCostPerLevel;
   }
   if (t.hpRegenMult !== undefined) b.hpRegenMult = t.hpRegenMult;
   if (t.mpRegenMult !== undefined) b.mpRegenMult = t.mpRegenMult;
@@ -250,6 +255,17 @@ export function monsterMults(def: MonsterDef, b: Balance = current): MonsterMult
 export const classBalance = (id: ClassId): ClassBalance => current.classes[id];
 
 /**
+ * The MP a skill costs a character of this class at this level (owner 2026-11-13): the skill's `mp` in code
+ * × (1 + k × (level − 1)), k = the class's % per level, rounded to the nearest whole MP. Free skills stay free.
+ * Casting, the "enough MP?" checks, Auto and the HUD all use this.
+ */
+export function skillMpCost(baseMp: number, id: ClassId, level: number, b: Balance = current): number {
+  if (baseMp <= 0) return 0;
+  const k = b.classes[id].mpCostPerLevel;
+  return Math.round((baseMp * (100 + k * Math.max(0, level - 1))) / 100);
+}
+
+/**
  * The last steps of a character's stats, after class, level and gear are added up: the class multipliers
  * (gear included), then the regen cuts so players lean on potions. Player.recompute and the admin preview
  * both use it.
@@ -320,7 +336,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
         }
         const go = g as Record<string, unknown>;
         if (strict) {
-          const extra = Object.keys(go).find((k) => !(STAT_PARTS as string[]).includes(k) && k !== 'bossDmgMult');
+          const extra = Object.keys(go).find((k) => !(STAT_PARTS as string[]).includes(k) && k !== 'bossDmgMult' && k !== 'mpCostPerLevel');
           if (extra) return { error: `${name}: ไม่รู้จักค่า "${extra.slice(0, 20)}"` };
         }
         const code = CODE.classes[id];
@@ -350,6 +366,9 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
         const bm = num(go.bossDmgMult, ...BALANCE_RANGE.bossDmgMult, `${name} ดาเมจใส่บอส`);
         if (typeof bm === 'string') return { error: bm };
         if (bm !== undefined && bm !== code.bossDmgMult) cls.bossDmgMult = bm;
+        const mc = num(go.mpCostPerLevel, ...BALANCE_RANGE.mpCostPerLevel, `${name} MP สกิลเพิ่ม % ต่อเลเวล`);
+        if (typeof mc === 'string') return { error: mc };
+        if (mc !== undefined && mc !== code.mpCostPerLevel) cls.mpCostPerLevel = mc;
         if (Object.keys(cls).length) classes[id] = cls;
       }
       if (Object.keys(classes).length) out.classes = classes;
@@ -604,6 +623,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
       }
     }
     if (a.classes[id].bossDmgMult !== b.classes[id].bossDmgMult) out.push(`${name} ดาเมจใส่บอส ×${a.classes[id].bossDmgMult} → ×${b.classes[id].bossDmgMult}`);
+    if (a.classes[id].mpCostPerLevel !== b.classes[id].mpCostPerLevel) out.push(`MP สกิล/เลเวล ${name} ${a.classes[id].mpCostPerLevel}% → ${b.classes[id].mpCostPerLevel}%`);
   }
   if (a.hpRegenMult !== b.hpRegenMult) out.push(`ตัวคูณฟื้น HP ${a.hpRegenMult} → ${b.hpRegenMult}`);
   if (a.mpRegenMult !== b.mpRegenMult) out.push(`ตัวคูณฟื้น MP ${a.mpRegenMult} → ${b.mpRegenMult}`);

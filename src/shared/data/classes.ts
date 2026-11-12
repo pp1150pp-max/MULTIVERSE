@@ -6,6 +6,12 @@ import type { ClassId, Stats } from '../types';
  */
 export const BASE_MP_REGEN = 20;
 
+/**
+ * Skills cost this many % more MP per level above 1 (owner 2026-11-13), the same for every class in code;
+ * tuned per class in the /admin balance tab. See skillMpCost in src/shared/balance.ts.
+ */
+export const MP_COST_PER_LEVEL = 3;
+
 export type SkillSlot = 'basic' | 'q' | 'e' | 'r' | 'dash';
 
 export interface SkillDef {

@@ -314,7 +314,7 @@ export class TouchControls {
       s.cd.style.height = sk?.cooldown ? `${(remain / sk.cooldown) * 100}%` : '0%';
       const txt = remain > 0 && (sk?.cooldown ?? 0) > 1 ? remain.toFixed(remain < 10 ? 1 : 0) : '';
       if (s.num.textContent !== txt) s.num.textContent = txt;
-      s.el.classList.toggle('nomp', !!sk && p.mp < sk.mp);
+      s.el.classList.toggle('nomp', !!sk && p.mp < p.skillMp(sk));
     }
     for (const b of this.potions) {
       const size = p.potionToUse(b.kind) ?? p.potSel[b.kind];

@@ -875,7 +875,7 @@ export class Hud {
     const reach = SKILL_REACH[sk.id];
     const remain = p.cd[kind] ?? 0;
     const stats = [
-      sk.mp ? `<div>MP <span class="tt-val">${sk.mp}</span></div>` : '',
+      sk.mp ? `<div>MP <span class="tt-val">${p.skillMp(sk)}</span></div>` : '',
       sk.cooldown ? `<div>คูลดาวน์ <span class="tt-val">${sk.cooldown} วิ</span></div>` : '',
       sk.killCdCut ? `<div>ฆ่ามอนได้ ลดคูลดาวน์ที่เหลือ <span class="tt-val">${Math.round(sk.killCdCut * 100)}%</span></div>` : '',
       reach ? `<div><span class="tt-val">${reachText(reach)}</span></div>` : '',
@@ -948,7 +948,7 @@ export class Hud {
       const remain = p.cd[s.kind] ?? 0;
       s.cd.style.height = sk.cooldown ? `${(remain / sk.cooldown) * 100}%` : '0%';
       s.extra.textContent = remain > 0 ? remain.toFixed(1) : '';
-      s.el.classList.toggle('nomp', p.mp < sk.mp);
+      s.el.classList.toggle('nomp', p.mp < p.skillMp(sk));
     }
 
     const auto = $('btn-auto');
