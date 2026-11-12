@@ -80,6 +80,8 @@ export interface Backend {
   useReturnScroll(): void;
   /** Uses one EXP or drop scroll from the bag (the server checks). */
   useBuffScroll(kind: BuffScroll): void;
+  /** Announces `text` to everyone with a megaphone from the bag (the server checks). */
+  useMegaphone(text: string): void;
   sortBag(key: SortKey, desc: boolean): void;
   /** Drag & drop between two bag slots (swap, or merge the same potion). */
   moveInBag(from: number, to: number): void;

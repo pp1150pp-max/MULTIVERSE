@@ -686,6 +686,13 @@ export class Sim {
     this.afterChange(p);
   }
 
+  /** Uses up one megaphone (the server has already checked the message and the cooldown). False = none in the bag. */
+  useMegaphone(p: Player): boolean {
+    if (!p.takeStones('megaphone', 1)) return false;
+    this.afterChange(p);
+    return true;
+  }
+
   /** Counts each running buff down by the seconds played; tells the player when one runs out. */
   private tickBuffs(p: Player, dt: number): void {
     for (const k of BUFF_SCROLLS) {

@@ -25,6 +25,7 @@ const field = () => {
   const i = p.bag.findIndex((e) => e && 'stone' in e && e.stone === 'exp_scroll');
   ok(isBound(p.bag[i]), 'EXP scroll is bound');
   ok(isBound({ stone: 'drop_scroll', count: 1 }), 'drop scroll is bound');
+  ok(isBound({ stone: 'megaphone', count: 1 }) && stoneSellPrice('megaphone') === 0, 'megaphone is bound, no merchant price');
   ok(!marketSellable(p.bag[i]), 'not on the market');
   ok(typeof makeOffer(p.bag, i) === 'string', 'not tradeable');
   ok(sim.sellItem(p, i) === 0 && p.stoneCount('exp_scroll') === 3, 'merchant refuses it');

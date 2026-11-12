@@ -39,7 +39,7 @@ import { PARTY_SEARCH_LIMIT, PARTY_SEARCH_MAX, type PartyFound, type PartySnap }
 import { BossRooms } from './bossRooms';
 import { Channels, FightClock, type Channel } from './channels';
 import { CH_RESERVED, hasChannels, type ChannelsView } from '../src/shared/channels';
-import { STONE_NAME, STONE_STACK } from '../src/shared/data/stones';
+import { MEGAPHONE_EVERY_MS, megaphoneText, STONE_NAME, STONE_STACK } from '../src/shared/data/stones';
 import { COS_SLOTS, cosById, cosCodes } from '../src/shared/data/cosmetics';
 
 const AUTOSAVE_MS = 30_000;
@@ -562,6 +562,9 @@ export class GameWorld {
   }
 
   /** The live stash of an account with someone online (the saved one may be up to 30 s old). */
+  /** performance.now() of the last megaphone announcement (one per MEGAPHONE_EVERY_MS server-wide). */
+  private megaphoneAt = -Infinity;
+
   liveStash(accountId: number): StashData | undefined {
     return this.stashes.get(accountId);
   }
@@ -574,6 +577,29 @@ export class GameWorld {
     const to = toCharId === undefined ? [...this.sessions] : [...this.sessions].filter((s) => s.charId === toCharId);
     for (const s of to) this.send(s.ws, { t: 'announce', text, from, direct: toCharId !== undefined });
     return to.length;
+  }
+
+  /**
+   * A player's megaphone: one announcement for the whole server (every map, channel and boss room) at most
+   * every MEGAPHONE_EVERY_MS. Everything is checked before the megaphone is used, so a refusal keeps it.
+   */
+  private megaphone(s: Session, raw: unknown): void {
+    const tell = (text: string) => this.send(s.ws, { t: 'chat', name: '', text });
+    if (s.guest) return tell('Guest ใช้โทรโข่งไม่ได้ — สมัครสมาชิกก่อน');
+    const msg = megaphoneText(raw);
+    if ('error' in msg) return tell(msg.error);
+    if (s.player.stoneCount('megaphone') < 1) return tell(`ไม่มี${STONE_NAME.megaphone}`);
+    const now = performance.now();
+    const wait = this.megaphoneAt + MEGAPHONE_EVERY_MS - now;
+    if (wait > 0) return tell(`มีคนเพิ่งใช้โทรโข่ง — รออีก ${Math.ceil(wait / 1000)} วินาทีแล้วลองใหม่ (โทรโข่งยังอยู่)`);
+    if (!s.sim.useMegaphone(s.player)) return;
+    this.megaphoneAt = now;
+    for (const o of this.sessions) this.send(o.ws, { t: 'announce', text: msg.text, from: s.player.name, direct: false, megaphone: true });
+    try {
+      this.db.logChat({ accountId: s.accountId, username: s.username, charName: s.player.name, zone: s.sim.zone.id, text: `[โทรโข่ง] ${msg.text}` });
+    } catch (e) {
+      console.error('[world] logging chat failed', e);
+    }
   }
 
   /** play_sessions rows of everyone in the world now, with their GPU and averages so far. */
@@ -792,6 +818,9 @@ export class GameWorld {
         if ((m.kind === 'hp' || m.kind === 'mp') && POTION_SIZES.includes(m.size)) {
           sim.buyPotion(p, m.kind, m.size, Math.max(0, Math.min(99, Math.floor(num(m.n)))));
         }
+        break;
+      case 'megaphone':
+        this.megaphone(s, m.text);
         break;
       case 'useBuff':
         // Sim.useBuffScroll ignores anything that isn't a buff scroll kind.

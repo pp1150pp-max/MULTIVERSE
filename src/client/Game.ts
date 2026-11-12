@@ -35,6 +35,7 @@ import { QuestTracker } from './questTracker';
 import { bossShortName } from '../shared/bossRoom';
 import { MailUI } from './mail';
 import { ReportUI } from './report';
+import { MegaphoneUI } from './megaphone';
 import { SystemMenu } from './sysmenu';
 import { endEntryLoading, flashZoneLoading, preloadLoadingArt } from './loadingScreen';
 import { LootView, MonsterView, PlayerView, ProjectileView, ViewSet } from './views';
@@ -95,6 +96,7 @@ export class Game {
   readonly questTracker: QuestTracker;
   readonly mailUI: MailUI;
   readonly report: ReportUI;
+  readonly megaphone: MegaphoneUI;
   /** Another player under the mouse (when no monster or usable thing is): a left click offers a party invite. */
   private hoveredPlayer: Player | null = null;
   /** The left button went down on a player: no basic attack until it is let go. */
@@ -192,6 +194,7 @@ export class Game {
     this.questTracker = new QuestTracker(this);
     this.mailUI = new MailUI(this);
     this.report = new ReportUI(this);
+    this.megaphone = new MegaphoneUI(this);
     initDraggableWindows(document.getElementById('hud')!);
     this.touch = new TouchControls(this);
     new TouchGestures(this, this.renderer.domElement);

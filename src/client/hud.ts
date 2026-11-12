@@ -22,7 +22,7 @@ import { ZONE_1 } from '../shared/data/zones';
 import { expToNext } from '../shared/formulas';
 import { blockingGate } from '../shared/data/bossGates';
 import {
-  BUFF_SCROLLS, isBossKey, isBound, isBuffScroll, isConsumable, isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
+  BUFF_SCROLLS, isBossKey, isBound, isBoundKind, isBuffScroll, isConsumable, isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
   type BagEntry, type Item, type StatLine, type PotionKind, type PotionSize, type PotionStack, type Rarity, type StoneStack, type StoneKind, type EquipSlot, type StatKey,
 } from '../shared/types';
 import { drawEdgeMarker, drawMapIcon, drawPin, facingAngle, partyDot } from './mapIcons';
@@ -326,6 +326,7 @@ export class Hud {
       if (isStone(entry)) {
         if (entry.stone === 'return_scroll') g.useReturnScroll();
         else if (isBuffScroll(entry.stone)) g.backend.useBuffScroll(entry.stone);
+        else if (entry.stone === 'megaphone') g.megaphone.toggle(true);
         return;
       }
       // At the blacksmith a click on gear puts it in the forge's slot instead of wearing it.
@@ -397,7 +398,7 @@ export class Hud {
         return;
       }
       if (isPotion(item)) this.showPotionTip(item, e, `คลิกซ้าย: ใช้กับปุ่มด่วน · คลิกขวา: ${right}${split}`);
-      else if (isStone(item)) this.showStoneTip(item, e, `${item.stone === 'return_scroll' ? 'คลิกซ้าย / ปุ่ม G: ใช้ · ' : isBuffScroll(item.stone) ? 'คลิกซ้าย: ใช้ · ' : ''}คลิกขวา: ${right}${split}`);
+      else if (isStone(item)) this.showStoneTip(item, e, `${item.stone === 'return_scroll' ? 'คลิกซ้าย / ปุ่ม G: ใช้ · ' : isBuffScroll(item.stone) || item.stone === 'megaphone' ? 'คลิกซ้าย: ใช้ · ' : ''}คลิกขวา: ${right}${split}`);
       else if (item) {
         const both = item.slot === 'ring' && g.player.equipment.ring && g.player.equipment.ring2;
         if (this.forgeOpen) this.showTip(item, e, `คลิกซ้าย / ลาก: วางที่ช่างตีเหล็ก · คลิกขวา: ${right}`);
@@ -1283,6 +1284,7 @@ export class Hud {
     this.g.trade.toggleFind(false);
     this.g.mailUI.toggle(false);
     this.g.report.toggle(false);
+    this.g.megaphone.toggle(false);
     this.g.friends.toggle(false);
     this.g.cosmetics.toggle(false);
     if (this.dialogOpen) this.closeDialog();
@@ -2133,7 +2135,7 @@ export class Hud {
     tip.innerHTML =
       `<div class="tt-name" style="color:${STONE_COLOR[s.stone]}">${STONE_NAME[s.stone]}</div>` +
       `<div class="tt-sub">${
-        isBuffScroll(s.stone) ? `ของใช้ · ${s.count} / ${STONE_STACK} ใบ · ผูกกับตัวละคร`
+        isBoundKind(s.stone) && isConsumable(s.stone) ? `ของใช้ · ${s.count} / ${STONE_STACK} ${stoneUnit(s.stone)} · ผูกกับตัวละคร`
         : isConsumable(s.stone) ? `ของใช้ · ${s.count} / ${STONE_STACK} ${stoneUnit(s.stone)} · ซื้อได้ที่พ่อค้า`
         : isBossKey(s.stone) ? `Artifact · ${s.count} / ${STONE_STACK} อัน · ดรอปจากมอนสเตอร์ในแมพของบอส`
         : isBound(s) ? 'กุญแจเควส · ผูกกับตัวละคร'
@@ -2248,15 +2250,28 @@ export class Hud {
     this.log(text, SHUTDOWN_COLOR);
   }
 
-  /** An announcement from the server's owner: a banner for a while (like the restart warning) and a chat line. */
-  announce(text: string, from: string, direct: boolean): void {
+  /** performance.now() until which the owner's banner is up: a megaphone waits for it instead of covering it. */
+  private adminBannerUntil = 0;
+
+  /**
+   * An announcement: a banner for a while (like the restart warning) and a chat line. From the server's
+   * owner, or (`megaphone`) from a player's megaphone: same frame, its own heading and the character's name.
+   */
+  announce(text: string, from: string, direct: boolean, megaphone = false): void {
+    const wait = this.adminBannerUntil - performance.now();
+    if (megaphone && wait > 0) {
+      window.setTimeout(() => this.announce(text, from, direct, true), wait + 50);
+      return;
+    }
+    if (!megaphone) this.adminBannerUntil = performance.now() + ANNOUNCE_MS;
     document.getElementById('announce-banner')?.remove();
     const el = document.createElement('div');
     el.id = 'announce-banner';
+    if (megaphone) el.classList.add('megaphone');
     // Text only (textContent), so nothing the sender types can become HTML on anyone's screen.
     const head = document.createElement('div');
     head.className = 'announce-head';
-    head.textContent = direct ? '📢 ข้อความจาก GM ถึงคุณ' : '📢 ประกาศ';
+    head.textContent = megaphone ? '📣 โทรโข่ง' : direct ? '📢 ข้อความจาก GM ถึงคุณ' : '📢 ประกาศ';
     const body = document.createElement('div');
     body.textContent = text;
     const sign = document.createElement('div');
@@ -2267,8 +2282,8 @@ export class Hud {
     setTimeout(() => el.remove(), ANNOUNCE_MS);
     const line = document.createElement('div');
     line.className = 'log-line';
-    line.style.color = SHUTDOWN_COLOR;
-    line.textContent = direct ? `📢 ข้อความจาก ${from} ถึงคุณ: ${text}` : `📢 ประกาศ: ${text} — ${from}`;
+    line.style.color = megaphone ? STONE_COLOR.megaphone : SHUTDOWN_COLOR;
+    line.textContent = megaphone ? `📣 ${from}: ${text}` : direct ? `📢 ข้อความจาก ${from} ถึงคุณ: ${text}` : `📢 ประกาศ: ${text} — ${from}`;
     this.pushLog(line, ANNOUNCE_MS * 3);
   }
 
