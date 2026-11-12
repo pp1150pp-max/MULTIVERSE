@@ -3,6 +3,7 @@ import { placeLabel } from '../shared/channels';
 import type { Game } from './Game';
 import { NPC_USE_RANGE, type NpcId } from '../shared/data/npcs';
 import type { SkillSlot } from '../shared/data/classes';
+import { SKILL_REACH, reachRadius, reachText } from '../shared/data/skillRanges';
 import {
   bonusPct, DROP_ON_FAIL_FROM, dropsOnFail, FORGE_CD, effectiveStats, enhanceBonus, enhanceCost, ENHANCE_STONES_PER_TRY, itemName,
   MAX_PLUS, PITY_STEP, pityBonus, plusOf, rateFor, sellValue, STONE_FROM, stonesNeeded, successRate,
@@ -835,19 +836,57 @@ export class Hud {
   private buildSkillbar(): void {
     const bar = $('skillbar');
     bar.innerHTML = '';
-    const add = (kind: SkillSlot | PotionKind, icon: string, key: string, title: string) => {
+    const add = (kind: SkillSlot | PotionKind, icon: string, key: string) => {
       const el = document.createElement('div');
       el.className = `skill skill-${kind}`;
       el.innerHTML = `<div class="icon">${icon}</div><div class="cd"></div><div class="key">${key}</div><div class="extra"></div>`;
-      el.title = title;
+      // The game's own tooltip, not the browser's `title`. Rebuilt on every move so the cooldown stays current.
+      el.addEventListener('mouseenter', (e) => this.showSkillTip(kind, key, e));
+      el.addEventListener('mousemove', (e) => this.showSkillTip(kind, key, e));
+      el.addEventListener('mouseleave', () => {
+        this.hideTip();
+        this.g.showSkillRange(null);
+      });
       bar.append(el);
       this.slotEls.push({ kind, el, cd: el.querySelector('.cd')!, extra: el.querySelector('.extra')! });
     };
-    for (const s of this.g.player.cls.skills) {
-      add(s.slot, skillIcon(s.id), KEY_LABEL[s.slot], `${s.name} (${s.nameTh})\n${s.desc}${s.mp ? `\nMP ${s.mp}` : ''}${s.cooldown ? ` · คูลดาวน์ ${s.cooldown} วิ` : ''}`);
+    for (const s of this.g.player.cls.skills) add(s.slot, skillIcon(s.id), KEY_LABEL[s.slot]);
+    add('hp', potionIcon('hp'), '1');
+    add('mp', potionIcon('mp'), '2');
+  }
+
+  /** Tooltip for a skill-bar button (skill or potion); desktop only. Skills also ring their reach on the ground. */
+  private showSkillTip(kind: SkillSlot | PotionKind, key: string, e: MouseEvent): void {
+    if (isTouchMode()) return;
+    const p = this.g.player;
+    const tip = $('tooltip');
+    if (kind === 'hp' || kind === 'mp') {
+      const size = p.potionToUse(kind) ?? p.potSel[kind];
+      tip.innerHTML =
+        `<div class="tt-name" style="color:${POTION_COLOR[kind]}">${potionName(kind, size)}</div>` +
+        `<div class="tt-sub">ยา · ปุ่ม ${key}</div>` +
+        `<div class="tt-stats"><div>ฟื้น <span class="tt-val">${potionHeal(kind, size, p.cls.id)} ${kind.toUpperCase()}</span></div></div>` +
+        `<div class="tt-hint">คลิกยาในกระเป๋าเพื่อเลือกขนาด</div>`;
+      this.placeTip(tip, e);
+      return;
     }
-    add('hp', potionIcon('hp'), '1', '');
-    add('mp', potionIcon('mp'), '2', '');
+    const sk = p.skill(kind);
+    if (!sk) return;
+    const reach = SKILL_REACH[sk.id];
+    const remain = p.cd[kind] ?? 0;
+    const stats = [
+      sk.mp ? `<div>MP <span class="tt-val">${sk.mp}</span></div>` : '',
+      sk.cooldown ? `<div>คูลดาวน์ <span class="tt-val">${sk.cooldown} วิ</span></div>` : '',
+      sk.killCdCut ? `<div>ฆ่ามอนได้ ลดคูลดาวน์ที่เหลือ <span class="tt-val">${Math.round(sk.killCdCut * 100)}%</span></div>` : '',
+      reach ? `<div><span class="tt-val">${reachText(reach)}</span></div>` : '',
+    ].join('');
+    tip.innerHTML =
+      `<div class="tt-name">${sk.name} (${sk.nameTh})</div>` +
+      `<div class="tt-sub">ปุ่ม ${key}</div>` +
+      `<div class="tt-stats"><div>${sk.desc}</div>${stats}</div>` +
+      (remain > 0 ? `<div class="tt-hint">คูลดาวน์เหลือ ${remain.toFixed(1)} วิ</div>` : '');
+    this.placeTip(tip, e);
+    this.g.showSkillRange(reach ? reachRadius(reach) : null);
   }
 
   // ------------------------------------------------------------ per-frame
