@@ -128,6 +128,9 @@ export class Game {
   private lockId: number | null = null;
   /** Red circle under the locked monster (touch). */
   private lockRing!: AutoRing;
+  private skillRing!: AutoRing;
+  /** Radius of the ring shown while the mouse is on a skill button, or null. */
+  private skillRingR: number | null = null;
   /** Touch: the aim line / ground circle while a finger drags off a skill button. */
   aimGuide!: AimGuide;
   touch!: TouchControls;
@@ -171,6 +174,7 @@ export class Game {
     this.fx = new Effects(this.scene);
     this.autoRing = new AutoRing(this.scene);
     this.lockRing = new AutoRing(this.scene, '#ff4a3a');
+    this.skillRing = new AutoRing(this.scene, '#ffcf5a');
     this.aimGuide = new AimGuide(this.scene);
     this.hazardViews = new HazardViews(this.scene);
     this.floating = new Floating(document.getElementById('float-layer')!);
@@ -251,6 +255,11 @@ export class Game {
   }
 
   // ------------------------------------------------------------ helpers
+
+  /** Draws a ring of this radius around the player while the mouse is on a skill button; null hides it. */
+  showSkillRange(radius: number | null): void {
+    this.skillRingR = radius;
+  }
 
   shake(amount: number): void {
     this.shakeAmt = Math.max(this.shakeAmt, amount);
@@ -825,6 +834,8 @@ export class Game {
       const c = this.autoPlay && this.autoAnchor ? this.autoAnchor : p;
       this.autoRing.show(c.x, c.z, (preview ?? p.autoSettings.range) / AUTO_PX_PER_UNIT);
     } else this.autoRing.hide();
+    if (this.skillRingR !== null) this.skillRing.show(p.x, p.z, this.skillRingR);
+    else this.skillRing.hide();
     // Touch: red circle under the monster tapped to lock on.
     const locked = this.lockId !== null && isTouchMode() ? this.hovered : null;
     if (locked) this.lockRing.show(locked.x, locked.z, locked.def.radius + 0.2);
