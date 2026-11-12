@@ -138,6 +138,8 @@ interface Session {
   skipped: number;
   /** Owner or GM when joining: their snapshots carry the whole server's player count. */
   staff: boolean;
+  /** The connection negotiated compression (WS_DEFLATE); logged at join and in the per-minute line when off. */
+  deflate: boolean;
   /** When the last pong went out (null before the first ping). The client's next ping says it got it. */
   pongAt: number | null;
   /** When the last snapshot went out while the client was behind (sent at most once per SLOW_SNAP_MS). */
@@ -215,8 +217,20 @@ const PING_WARN_EVERY_MS = 30_000;
 /**
  * Data still waiting to go out to a player beyond which their next snapshot is skipped: a few
  * snapshots' worth, so a slow connection lags a moment instead of falling ever further behind.
+ * Compressed snapshots are a tenth the size or less, so about a second of them fits in far fewer
+ * bytes; ws also counts a message still waiting for compression at its full size (up to ~14 KB in a
+ * crowded map), so the limit stays above one uncompressed snapshot.
  */
 const SNAP_BACKLOG_BYTES = 64 * 1024;
+const SNAP_BACKLOG_DEFLATE_BYTES = 16 * 1024;
+/**
+ * WebSocket compression (permessage-deflate, negotiated by every browser on its own). Snapshots a
+ * fifteenth of a second apart are nearly the same text, so keeping the compression context between
+ * messages (the default, not turned off here) shrinks them to about a tenth or less: a farm map with
+ * 8 players went from ~510 to ~20 kbps in a headless test. Messages under 256 bytes (pongs) go as they are.
+ * A client (or a proxy on the way) that does not offer it gets plain JSON as before.
+ */
+const WS_DEFLATE = { threshold: 256 } as const;
 /**
  * A client answers each pong with its next ping about PING_MS later. No ping this long after a pong
  * means it has not got the pong yet: the data we send is piling up on the way, so slow down.
@@ -269,7 +283,7 @@ export class GameWorld {
   private tickN = 0;
 
   constructor(private readonly db: Db, http: HttpServer) {
-    const wss = new WebSocketServer({ server: http, path: WS_PATH, maxPayload: 16 * 1024 });
+    const wss = new WebSocketServer({ server: http, path: WS_PATH, maxPayload: 16 * 1024, perMessageDeflate: WS_DEFLATE });
     wss.on('connection', (ws, req) => this.onConnection(ws, req));
     setInterval(() => this.tick(), 1000 / TICK_HZ);
     setInterval(() => this.saveAll(), AUTOSAVE_MS);
@@ -494,7 +508,7 @@ export class GameWorld {
       ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId, sim, player,
       move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null, recall: false,
       auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, saveDue: null,
-      ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, staff: !acc.guest && ['owner', 'gm'].includes(this.db.adminRole(acc.id) ?? ''), pongAt: null, slowSnapAt: -Infinity,
+      ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, deflate: ws.extensions.includes('permessage-deflate'), staff: !acc.guest && ['owner', 'gm'].includes(this.db.adminRole(acc.id) ?? ''), pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity, blockTrades: false,
       lastFriendAt: -Infinity, friendKey: '', lastCh: back?.channel.ch ?? 1, fight: new FightClock(Math.max(player.lastHurt, player.lastAttack)), lastChListAt: -Infinity, lastChAt: -Infinity,
@@ -517,7 +531,7 @@ export class GameWorld {
     this.broadcastSystem(`${player.name} เข้าสู่โลก`);
     // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
     if (!acc.guest) setTimeout(() => this.sessions.has(s) && (this.marketOnJoin(s), this.dailyCheck(s), this.mailNote(s, true)), MARKET_JOIN_NOTE_MS);
-    console.log(`[world] ${acc.username} joined as ${player.name}${acc.guest ? ' (guest)' : ''} from ${ip} (${this.sessions.size} online)`);
+    console.log(`[world] ${acc.username} joined as ${player.name}${acc.guest ? ' (guest)' : ''} from ${ip}${s.deflate ? '' : ' (no compression)'} (${this.sessions.size} online)`);
     return s;
   }
 
@@ -804,6 +818,7 @@ export class GameWorld {
       if (s.fpsCount) bits.push(`${Math.round(s.fpsSum / s.fpsCount)} fps`, `max frame ${fmtMs(s.maxFrame)}`);
       if (s.maxWait) bits.push(`no pong up to ${fmtMs(s.maxWait)}`);
       if (s.skipped) bits.push(`${s.skipped} snapshots skipped (slow download)`);
+      if (!s.deflate) bits.push('no compression');
       if (s.hidden) bits.push(s.fpsCount ? 'tab hidden part of the time' : 'tab hidden');
       s.rttSum = s.rttCount = s.fpsSum = s.fpsCount = s.maxFrame = s.maxWait = s.skipped = 0;
       s.hidden = false;
@@ -1657,7 +1672,7 @@ export class GameWorld {
     // client has not answered our last pong in time; then send one snapshot a second until it does.
     const now = performance.now();
     const late = s.pongAt !== null && now - s.pongAt > PONG_LATE_MS;
-    if (s.ws.bufferedAmount > SNAP_BACKLOG_BYTES || (late && now - s.slowSnapAt < SLOW_SNAP_MS)) {
+    if (s.ws.bufferedAmount > (s.deflate ? SNAP_BACKLOG_DEFLATE_BYTES : SNAP_BACKLOG_BYTES) || (late && now - s.slowSnapAt < SLOW_SNAP_MS)) {
       s.skipped++;
       return;
     }

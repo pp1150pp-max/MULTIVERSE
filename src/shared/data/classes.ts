@@ -56,7 +56,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     bossDmgMult: 2,
     skills: [
       { id: 'slash', slot: 'basic', name: 'Slash', nameTh: 'ฟัน', desc: 'ฟันเป็นวงโค้งด้านหน้า 100% ATK', mp: 0, cooldown: 0 },
-      { id: 'whirlwind', slot: 'q', name: 'Whirlwind', nameTh: 'พายุดาบ', desc: 'หมุนตัวฟันรอบทิศ 180% ATK ไม่รับดาเมจ 0.6 วิ และดูดเลือด 30% ของดาเมจ 3 วิ', mp: 15, cooldown: 6 },
+      { id: 'whirlwind', slot: 'q', name: 'Whirlwind', nameTh: 'พายุดาบ', desc: 'หมุนตัวฟันรอบทิศ 180% ATK ไม่รับดาเมจ 0.6 วิ และดูดเลือด 5% ของดาเมจ 3 วิ', mp: 15, cooldown: 6 },
       { id: 'earthquake', slot: 'e', name: 'Earthquake', nameTh: 'ปฐพีแยก', desc: 'กระแทกพื้นรอบตัว 200% ATK และสตัน 1 วิ', mp: 20, cooldown: 7 },
       { id: 'charge', slot: 'r', name: 'Charge', nameTh: 'พุ่งชน', desc: 'พุ่งไปตามทิศเมาส์ ชนศัตรูตลอดทาง 150% ATK และกระเด็น ทุกครั้งที่ฆ่ามอนได้ คูลดาวน์ที่เหลือลดลงครึ่งหนึ่ง', mp: 25, cooldown: 15, killCdCut: 0.5 },
       dash('Dash', 'แดช'),
