@@ -1217,6 +1217,24 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #report-win .report-count { text-align: right; font-size: 11px; color: var(--ink-dim); }
 #report-win .report-note { font-size: 11px; color: var(--ink-dim); }
 #report-win .report-msg { min-height: 1em; }
+/* Daily login calendar: 7 columns, one cell per day with its reward. */
+#daily-win { left: 50%; top: 60px; transform: translateX(-50%); width: min(460px, calc(100vw - 32px)); max-height: calc(100vh - 80px); overflow-y: auto; font-size: 12px; }
+#daily-win .daily-note, #daily-win .daily-foot { margin: 6px 8px; color: var(--ink-dim); font-size: 11px; }
+#daily-win .daily-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 0 8px; }
+#daily-win .daily-wd { text-align: center; color: var(--gold); font-size: 11px; }
+#daily-win .daily-cell { position: relative; aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid #4a3e2a; border-radius: 4px; background: rgba(20, 16, 10, 0.75); }
+#daily-win .daily-cell.blank { border: none; background: none; }
+#daily-win .daily-cell .gi { width: 60%; height: 60%; }
+#daily-win .daily-num { position: absolute; top: 1px; left: 3px; font-size: 10px; color: var(--ink-dim); }
+#daily-win .daily-count { position: absolute; bottom: 1px; right: 3px; font-size: 10px; color: #f2ead8; text-shadow: 0 0 2px #000; }
+#daily-win .daily-cell.got, #daily-win .daily-cell.madeUp { border-color: #6aa84f; }
+#daily-win .daily-cell.got .gi, #daily-win .daily-cell.madeUp .gi { opacity: 0.55; }
+#daily-win .daily-mark { position: absolute; inset: auto 0 35% 0; text-align: center; color: #9fe0a0; font-weight: 700; font-size: 12px; text-shadow: 0 0 3px #000; }
+#daily-win .daily-cell.madeUp .daily-mark { font-size: 9px; }
+#daily-win .daily-cell.missed { opacity: 0.45; cursor: pointer; }
+#daily-win .daily-cell.missed:hover, #daily-win .daily-cell.picked { opacity: 1; border-color: var(--gold); }
+#daily-win .daily-cell.is-today { border-color: var(--gold); box-shadow: 0 0 6px var(--gold); }
+#daily-win .daily-btns { display: flex; gap: 6px; justify-content: center; margin: 4px 8px 8px; }
 #megaphone-win { left: 50%; top: 80px; transform: translateX(-50%); width: min(400px, 92vw); font-size: 13px; }
 #megaphone-win .mega-body { display: flex; flex-direction: column; gap: 6px; }
 #megaphone-win textarea { resize: none; padding: 4px 6px; font: inherit; }

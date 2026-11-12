@@ -30,9 +30,12 @@ const TRADE_ICON = badge('blank', '🤝');
 /** Friends: painted badge (art_templates/ui/raw/ico_friends.png, magenta keyed out and cut to 96×96). */
 const FRIENDS_ICON = badge('friends');
 
+/** Daily login calendar: painted badge (art_templates/ui/raw/ico_daily.png, magenta keyed out, 96×96). */
+const DAILY_ICON = badge('daily');
+
 /** Icon grid, 3 columns: [action, icon, label]. Only systems that exist; add a tile when a new one is built. */
 const MENU_ITEMS: [string, string, string][] = [
-  ['bag', badge('bag'), 'กระเป๋า'], ['party', PARTY_ICON, 'ปาร์ตี้'], ['friends', FRIENDS_ICON, 'เพื่อน'], ['trade', TRADE_ICON, 'เทรด'], ['mail', MAIL_ICON, 'จดหมาย'], ['map', badge('map'), 'แผนที่'],
+  ['bag', badge('bag'), 'กระเป๋า'], ['party', PARTY_ICON, 'ปาร์ตี้'], ['friends', FRIENDS_ICON, 'เพื่อน'], ['trade', TRADE_ICON, 'เทรด'], ['mail', MAIL_ICON, 'จดหมาย'], ['daily', DAILY_ICON, 'ล็อกอินรายวัน'], ['map', badge('map'), 'แผนที่'],
   ['cosmetics', badge('blank', '👑'), 'แต่งตัว'], ['autoset', badge('autoset'), 'ตั้งค่า Auto'], ['audio', badge('blank', '🔊'), 'เสียง'], ['help', badge('help'), 'วิธีเล่น'],
   ['report', badge('blank', '🐞'), 'แจ้งปัญหา'], ['settings', badge('settings'), 'ตั้งค่า'],
   // Touch play only (hidden by CSS with a mouse), and only where the browser can do it (not iPhone Safari).
@@ -42,7 +45,7 @@ const MENU_ITEMS: [string, string, string][] = [
 /** Top-right icon row: [button id, icon, label]. */
 const TOP_ICONS: [string, string, string][] = [
   ['top-auto', badge('auto'), 'AUTO: OFF'], ['top-bag', badge('bag'), 'กระเป๋า'],
-  ['top-party', PARTY_ICON, 'ปาร์ตี้'], ['top-friends', FRIENDS_ICON, 'เพื่อน'], ['top-mail', MAIL_ICON, 'จดหมาย'], ['top-map', badge('map'), 'แผนที่'], ['top-menu', badge('menu'), 'เมนู'],
+  ['top-party', PARTY_ICON, 'ปาร์ตี้'], ['top-friends', FRIENDS_ICON, 'เพื่อน'], ['top-mail', MAIL_ICON, 'จดหมาย'], ['top-daily', DAILY_ICON, 'รายวัน'], ['top-map', badge('map'), 'แผนที่'], ['top-menu', badge('menu'), 'เมนู'],
 ];
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -62,7 +65,7 @@ export class SystemMenu {
     const row = document.createElement('div');
     row.id = 'hud-iconrow';
     // Guests get no mail (or reports), so they have no such icon.
-    const noMail = ([id]: string[]) => !(guest && (id === 'mail' || id === 'top-mail' || id === 'trade' || id === 'friends' || id === 'top-friends' || id === 'report'));
+    const noMail = ([id]: string[]) => !(guest && (id === 'mail' || id === 'top-mail' || id === 'trade' || id === 'friends' || id === 'top-friends' || id === 'report' || id === 'daily' || id === 'top-daily'));
     row.innerHTML = TOP_ICONS.filter(noMail).map(
       ([id, icon, label]) =>
         `<button id="${id}" class="top-icon"${id ? '' : ' disabled'}><span class="sys-ico">${icon}</span><span class="sys-label">${label}</span><i class="badge hidden" data-badge="${label}"></i></button>`,
@@ -74,6 +77,7 @@ export class SystemMenu {
     $('top-party').onclick = () => g.party.toggle();
     if (!guest) $('top-mail').onclick = () => g.mailUI.toggle();
     if (!guest) $('top-friends').onclick = () => g.friends.toggle();
+    if (!guest) $('top-daily').onclick = () => g.daily.toggle();
     $('top-map').onclick = () => g.hud.toggleMap();
     $('top-menu').onclick = () => this.toggle();
 
@@ -211,6 +215,9 @@ export class SystemMenu {
       case 'mail':
         this.toggle(false);
         return this.g.mailUI.toggle(true);
+      case 'daily':
+        this.toggle(false);
+        return this.g.daily.toggle(true);
       case 'report':
         this.toggle(false);
         return this.g.report.toggle(true);

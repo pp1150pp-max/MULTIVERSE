@@ -19,6 +19,7 @@ import { EQUIP_SLOTS } from '../../shared/types';
 import { cleanCosOwned, cosCodes, cosFromCodes, type CosSlot } from '../../shared/data/cosmetics';
 import { zoneById, type SpawnArea, type ZoneDef } from '../../shared/data/zones';
 import type { NpcId } from '../../shared/data/npcs';
+import type { DailyView } from '../../shared/daily';
 import type { BuffScroll, EquipSlot, Item, PotionKind, PotionSize, Rarity, Vec2 } from '../../shared/types';
 import type { SkillSlot } from '../../shared/data/classes';
 import { INPUT_HZ, PING_MS, WS_CLOSE_QUIT, WS_PATH, type ClientMsg, type ServerMsg, type ShutdownMode, type SnapshotMsg } from '../../shared/net/protocol';
@@ -221,6 +222,8 @@ export class OnlineBackend implements Backend {
   mailUnread = 0;
   /** New mail arrived (or you joined with some): `fresh` is how many you haven't been told about. */
   onMailNote: ((unread: number, fresh: number) => void) | null = null;
+  /** This month's daily login calendar (with `popup` after today's reward was just mailed). */
+  onDaily: ((view: DailyView) => void) | null = null;
   private readonly enhanceWait = new Map<number, (o: EnhanceOutcome) => void>();
   private readonly rerollWait = new Map<number, (item: Item | null) => void>();
   private kickMsg = '';
@@ -437,6 +440,9 @@ export class OnlineBackend implements Backend {
         done?.(reply);
         break;
       }
+      case 'daily':
+        this.onDaily?.(m.view);
+        break;
       case 'mailNote':
         this.mailUnread = m.unread;
         this.onMailNote?.(m.unread, m.fresh);
@@ -862,6 +868,8 @@ export class OnlineBackend implements Backend {
   useReturnScroll(): void { this.pendingRecall = true; }
   useBuffScroll(kind: BuffScroll): void { this.send({ t: 'act', a: 'useBuff', stone: kind }); }
   useMegaphone(text: string): void { this.send({ t: 'act', a: 'megaphone', text }); }
+  dailyOpen(): void { this.send({ t: 'act', a: 'daily' }); }
+  dailyMakeup(day: number): void { this.send({ t: 'act', a: 'dailyMakeup', day }); }
   sortBag(key: SortKey, desc: boolean): void { this.send({ t: 'act', a: 'sort', key, desc }); }
   moveInBag(from: number, to: number): void { this.send({ t: 'act', a: 'move', from, to }); }
   setAuto(on: boolean): void { this.send({ t: 'act', a: 'auto', on }); }
