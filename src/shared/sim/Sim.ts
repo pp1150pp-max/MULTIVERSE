@@ -845,7 +845,8 @@ export class Sim {
     // A boss room's boss drops everything once per key put in (owner: rewards times the keys).
     const times = m.isBoss ? this.keys : 1;
     const gold = Math.round(randInt(r, d.gold[0], d.gold[1]) * (1 + 0.1 * (m.level - d.levels[0])) * DROP_GOLD_MULT * m.mult.gold) * times;
-    this.spawnLoot(m, { type: 'gold', amount: gold }, owner, party);
+    // A low gold multiplier (admin) can round a drop down to nothing: no empty pile then.
+    if (gold > 0) this.spawnLoot(m, { type: 'gold', amount: gold }, owner, party);
     if (m.isBoss) {
       const loot = d.bossLoot;
       for (let k = 0; k < times; k++) {
