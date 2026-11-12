@@ -193,7 +193,7 @@ export class AutoPlay {
   /** Whether Auto may cast this skill now: switched on in the settings, off cooldown, and enough MP. */
   private ready(p: Player, slot: AutoSkill): boolean {
     const sk = p.skill(slot);
-    return !!sk && p.autoSettings.skills[slot] && (p.cd[slot] ?? 0) <= 0 && p.mp >= sk.mp + 5;
+    return !!sk && p.autoSettings.skills[slot] && (p.cd[slot] ?? 0) <= 0 && p.mp >= p.skillMp(sk) + 5;
   }
 
   private tryCast(g: AutoWorld, out: Intent, slot: AutoSkill): void {

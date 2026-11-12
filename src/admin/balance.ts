@@ -4,7 +4,7 @@
 // sends the whole draft, the server checks it, stores only what differs from the code, logs the change
 // and applies it to everyone online at once.
 import {
-  applyBalance, BALANCE_RANGE, balanceChanges, checkBalance, classStatsAt, codeBalance, currentBalanceTuning, hasParts, mergeBalance, MONSTER_STAT_NAME,
+  applyBalance, BALANCE_RANGE, balanceChanges, checkBalance, classStatsAt, skillMpCost, codeBalance, currentBalanceTuning, hasParts, mergeBalance, MONSTER_STAT_NAME,
   MONSTER_STATS, monsterBandOf, monsterMults, NO_MONSTER_MULT, STAT_MAX, STAT_PART_NAME, STAT_PARTS, STAT_TIER_PARTS, statTierTable, tierLabelsChange,
   tierSourceName, TUNABLE_MONSTERS, withItemStatMult,
   type Balance, type BalanceTuning, type MonsterMults, type MonsterStat, type StatPart, type TierParts,
@@ -21,6 +21,8 @@ type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, 
 type Api = <T>(method: string, path: string, body?: unknown) => Promise<T>;
 
 const PREVIEW_LEVELS = [1, 10, 50];
+/** Levels shown in the skill MP preview. */
+const MP_COST_LEVELS = [1, 20, 40, 50];
 /** Stats shown with one decimal (the % ones and regen); the rest are whole numbers in the game. */
 const DECIMAL = new Set<StatKey>(['crit', 'critDmg', 'atkSpeed', 'moveSpeed', 'hpRegen', 'mpRegen']);
 const show = (k: StatKey, v: number): string => (DECIMAL.has(k) ? (Math.round(v * 10) / 10).toString() : Math.round(v).toLocaleString());
@@ -74,9 +76,13 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     const tabs = h('div', { class: 'subtabs' }, ...CLASS_IDS.map((id) =>
       h('button', { class: id === cls ? 'on' : '', onclick: () => { cls = id; drawClass(); } }, CLASSES[id].nameTh)));
     const previewCells = new Map<StatKey, HTMLTableCellElement[]>();
+    const mpCostOut = h('div', { class: 'muted' });
     const refresh = (): void => {
       const at = PREVIEW_LEVELS.map((lv) => classStatsAt(cls, lv, draft));
       for (const k of STAT_KEYS) previewCells.get(k)!.forEach((td, i) => { td.textContent = show(k, at[i][k]); });
+      // Real MP of each paid skill at a few levels, e.g. "ลูกไฟ Lv1 10 → Lv40 22 → Lv50 25".
+      mpCostOut.replaceChildren(...CLASSES[cls].skills.filter((sk) => sk.mp > 0).map((sk) =>
+        h('div', {}, `${sk.nameTh} ${MP_COST_LEVELS.map((lv) => `Lv${lv} ${skillMpCost(sk.mp, cls, lv, draft)}`).join(' → ')}`)));
       updateSummary();
     };
     const rows = STAT_KEYS.map((k) => {
@@ -95,12 +101,16 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         ...PREVIEW_LEVELS.map((lv) => h('th', { class: 'bal-out' }, `ได้จริง Lv${lv}`)))),
       h('tbody', {}, ...rows));
     const boss = numBox(() => c.bossDmgMult, (n) => { c.bossDmgMult = n; }, cc.bossDmgMult, ...BALANCE_RANGE.bossDmgMult, 0.05, refresh);
+    const mpCost = numBox(() => c.mpCostPerLevel, (n) => { c.mpCostPerLevel = n; }, cc.mpCostPerLevel, ...BALANCE_RANGE.mpCostPerLevel, 0.5, refresh);
     classCard.replaceChildren(
       h('h2', {}, 'ค่าอาชีพ'),
       tabs,
       h('div', { class: 'muted' }, '"ได้จริง" = ค่าตอนไม่ใส่ของ หลังคูณตัวคูณอาชีพและตัวตัดฟื้นแล้ว · ตัวคูณใช้กับค่ารวมของใส่ด้วย · ช่องสีทอง = ต่างจากค่าในโค้ด (ชี้ค้างดูค่าในโค้ด)'),
       h('div', { class: 'bal-scroll' }, table),
       h('div', { class: 'row bal-line' }, h('label', {}, 'ดาเมจใส่บอส (×)', boss)),
+      h('div', { class: 'row bal-line' }, h('label', {}, 'MP สกิลเพิ่ม % ต่อเลเวล', mpCost)),
+      h('div', { class: 'muted' }, 'MP ที่สกิลใช้ = MP ในโค้ด × (1 + % × (เลเวล − 1)) ปัดเป็นจำนวนเต็มใกล้สุด · โจมตีปกติและพุ่งยังไม่ใช้ MP · ค่าจริงตามเลเวล:'),
+      mpCostOut,
     );
     refresh();
   };

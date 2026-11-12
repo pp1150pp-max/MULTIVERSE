@@ -19,7 +19,7 @@ import {
 } from '../types';
 import type { LootKind } from './Loot';
 import { newStash, type StashData } from './stash';
-import { classBalance, finishStats } from '../balance';
+import { classBalance, finishStats, skillMpCost } from '../balance';
 
 /** Seconds after the last hit taken, attack or skill before out-of-combat regen kicks in. */
 export const COMBAT_LINGER = 5;
@@ -468,6 +468,11 @@ export class Player extends Unit {
 
   skill(slot: SkillSlot): SkillDef | undefined {
     return this.cls.skills.find((s) => s.slot === slot);
+  }
+
+  /** The MP this skill costs at this character's level (balance tab: % more per level, per class). */
+  skillMp(sk: SkillDef): number {
+    return skillMpCost(sk.mp, this.cls.id, this.level);
   }
 
   recompute(): void {
@@ -955,7 +960,8 @@ export class Player extends Unit {
     for (const slot of peaceful ? [] : it.skills) {
       const sk = this.skill(slot);
       if (!sk || (this.cd[slot] ?? 0) > 0) continue;
-      if (this.mp < sk.mp) {
+      const cost = this.skillMp(sk);
+      if (this.mp < cost) {
         if (sim.time > this.noMpMsgT) {
           sim.text(this.x, this.topY, this.z, 'MP ไม่พอ', 'mana', undefined, this.id);
           this.noMpMsgT = sim.time + 1;
@@ -968,7 +974,7 @@ export class Player extends Unit {
         // without one the attack animation plays (unless the skill is a dash).
         // A skill that starts by aiming (Headshot) gets no attack fallback: its shot animates when it fires.
         sim.anim(this.id, `skill_${slot}`, this.rootT > 0 ? {} : { duration: this.attackAnimDuration(), fallback: 'attack' });
-        this.mp -= sk.mp;
+        this.mp -= cost;
         this.cd[slot] = sk.cooldown;
         this.lastAttack = sim.time;
         this.faceLockT = 0.3;
