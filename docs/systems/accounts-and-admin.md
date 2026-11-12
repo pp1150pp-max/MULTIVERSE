@@ -5,7 +5,7 @@
 ## หน้า Login
 
 - หน้าแรกคือแผง **Login**: ฟอร์มเข้าสู่ระบบ/สมัคร แล้วตามด้วยปุ่ม **Guest Login** (ไม่มี Singleplayer แล้ว เซฟ SP เก่าในเบราว์เซอร์ถูกทิ้ง ไม่ import)
-  - เจ้าของสั่งให้ปุ่ม Guest Login เป็นแค่รูปไปก่อน กดแล้วไม่เกิดอะไร ระบบ Guest บน server ยังอยู่ครบ เปิดกลับด้วย `GUEST_LOGIN_ENABLED` ใน `src/client/menu.ts`
+  - ปุ่ม Guest Login เปิดใช้งาน (เจ้าของสั่งเปิดกลับ 2026-11-12 หลังเคยปิดเป็นแค่รูป) ปิดอีกครั้งได้ด้วย `GUEST_LOGIN_ENABLED` ใน `src/client/menu.ts`
 
 ## Guest
 
