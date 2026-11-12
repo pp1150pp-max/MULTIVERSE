@@ -12,6 +12,7 @@ import { auraTier, effectiveStats, orbCodes, plusOf, sellValue } from '../data/e
 import { itemClass, starterWeapon, upgradeItem } from '../data/items';
 import { anyStackValue, potionHeal, POTIONS, POTION_SIZES, POTION_STACK, stackLimit } from '../data/potions';
 import { BOSS_QUEST_KEY, QUEST_KILLS, STONE_STACK } from '../data/stones';
+import { cleanGearDone, cleanGearQuests } from '../gearQuests';
 import {
   isPotion, isStack, isStone, RARITIES, sameStack, SLOTS, STONE_KINDS, wornPlaces,
   type BagEntry, type EquipSlot, type StoneKind, type ClassId, type Item, type PotionKind, type PotionSize, type Rarity, type SlotId, type Stats, type Vec2,
@@ -207,6 +208,10 @@ export interface CharacterData {
   bossKills?: string[];
   /** The Seeker's key quests taken: boss id → monsters killed so far (see QUEST_KILLS). Missing = none. */
   quests?: Record<string, number>;
+  /** The Seeker's gear quests taken (src/shared/gearQuests.ts): quest id → kills so far. Missing = none. */
+  gearQuests?: Record<string, number>;
+  /** Gear quests handed in. Missing = none. */
+  gearDone?: string[];
   /** Cosmetics worn (src/shared/data/cosmetics.ts), kept by the server to what the account owns. Missing = none. */
   cosmetics?: CosWorn;
 }
@@ -296,6 +301,10 @@ export class Player extends Unit {
   bossKills: string[];
   /** The Seeker's key quests taken: boss id → monsters killed so far. Saved. */
   quests: Record<string, number>;
+  /** The Seeker's gear quests taken: quest id → kills so far. Saved. */
+  gearQuests: Record<string, number>;
+  /** Gear quests handed in. Saved. */
+  gearDone: string[];
   /** True while Auto Play runs for this player (set by the server each tick); Sim halves their EXP. Never saved. */
   autoOn = false;
   /** Told once per stuck level that a boss gate is holding the EXP bar. Never saved. */
@@ -345,6 +354,8 @@ export class Player extends Unit {
     this.bag = Array.from({ length: BAG_SIZE }, (_, i) => data.bag[i] ?? null);
     this.zone = data.zone;
     this.quests = cleanQuests(data.quests);
+    this.gearQuests = cleanGearQuests(data.gearQuests);
+    this.gearDone = cleanGearDone(data.gearDone);
     this.cosmetics = cleanCosWorn(data.cosmetics);
     this.bossKills = [...new Set([...gatesPassedBy(data.level), ...(Array.isArray(data.bossKills) ? data.bossKills.filter((x) => typeof x === 'string') : [])])];
     this.potSel = { hp: 's', mp: 's', ...data.potSel };
@@ -469,6 +480,8 @@ export class Player extends Unit {
       buybackLeft: Math.round(this.buybackLeft),
       bossKills: this.bossKills,
       quests: { ...this.quests },
+      gearQuests: { ...this.gearQuests },
+      gearDone: [...this.gearDone],
       cosmetics: { ...this.cosmetics },
     };
   }

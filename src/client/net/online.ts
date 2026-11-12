@@ -662,6 +662,8 @@ export class OnlineBackend implements Backend {
     me.exp = pv.exp;
     if (pv.bossKills) me.bossKills = pv.bossKills;
     if (pv.quests) me.quests = pv.quests;
+    if (pv.gearQuests) me.gearQuests = pv.gearQuests;
+    if (pv.gearDone) me.gearDone = pv.gearDone;
     me.level = pv.level;
     me.gold = pv.gold;
     me.potSel = { ...pv.potSel };
@@ -954,6 +956,8 @@ export class OnlineBackend implements Backend {
   roomOpen(keys: number, quest = false): void { this.send({ t: 'act', a: 'roomOpen', keys, ...(quest ? { quest } : {}) }); }
   questAccept(boss: string): void { this.send({ t: 'act', a: 'questAccept', boss }); }
   questTurnIn(boss: string): void { this.send({ t: 'act', a: 'questTurnIn', boss }); }
+  gearAccept(id: string): void { this.send({ t: 'act', a: 'gearAccept', id }); }
+  gearTurnIn(id: string): void { this.send({ t: 'act', a: 'gearTurnIn', id }); }
   buyPhoenix(n: number): void { this.send({ t: 'act', a: 'buyPhoenix', n }); }
   roomRevive(): void { this.send({ t: 'act', a: 'roomRevive' }); }
   roomLeave(): void { this.send({ t: 'act', a: 'roomLeave' }); }

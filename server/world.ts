@@ -924,6 +924,13 @@ export class GameWorld {
       case 'questTurnIn':
         if (typeof m.boss === 'string' && sim.questTurnIn(p, m.boss)) this.save(s);
         break;
+      case 'gearAccept':
+        // Sim.gearAccept checks the id, the quest's state and the distance to The Seeker.
+        if (typeof m.id === 'string') sim.gearAccept(p, m.id);
+        break;
+      case 'gearTurnIn':
+        if (typeof m.id === 'string' && sim.gearTurnIn(p, m.id)) this.save(s);
+        break;
       case 'reroll': {
         // Sim.reroll checks the NPC distance, ownership, the item's lines and gold itself.
         const kind = REROLL_KINDS.includes(m.kind) ? m.kind : null;
@@ -1564,7 +1571,7 @@ export class GameWorld {
     const inv = JSON.stringify([p.equipment, p.bag, p.buyback]);
     const me: PrivateSnap = {
       hp: r2(p.hp), mp: r2(p.mp), exp: p.exp, level: p.level, gold: p.gold,
-      potSel: p.potSel, lootFilter: p.lootFilter, autoSettings: p.autoSettings, bossKills: p.bossKills, quests: p.quests, stats: p.stats, cd: p.cd, potCd: r2(p.potCd), restCd: r2(Math.max(0, p.restCd)), castT: p.castT > 0 ? r2(p.castT) : undefined,
+      potSel: p.potSel, lootFilter: p.lootFilter, autoSettings: p.autoSettings, bossKills: p.bossKills, quests: p.quests, gearQuests: p.gearQuests, gearDone: p.gearDone, stats: p.stats, cd: p.cd, potCd: r2(p.potCd), restCd: r2(Math.max(0, p.restCd)), castT: p.castT > 0 ? r2(p.castT) : undefined,
       // Slowed (the Bog Witch's poison): the browser walks slower too, or its moves would be refused.
       ...(p.slowT > 0 && p.slowAmt > 0 ? { slow: p.slowAmt } : {}),
       serverMoves: serverMoves(p) || !!s.auto, epoch: s.epoch, ack: s.lastSeq, buybackLeft: Math.round(p.buybackLeft),
