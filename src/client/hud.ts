@@ -1284,6 +1284,7 @@ export class Hud {
     this.g.trade.toggleFind(false);
     this.g.mailUI.toggle(false);
     this.g.report.toggle(false);
+    this.g.megaphone.toggle(false);
     this.g.friends.toggle(false);
     this.g.cosmetics.toggle(false);
     if (this.dialogOpen) this.closeDialog();
