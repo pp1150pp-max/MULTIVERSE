@@ -1,7 +1,7 @@
 // The game rules, with no rendering. The game server runs one of these per zone. Whoever drives it calls step() every frame and reads drainEvents()
 // to show effects, damage numbers and messages.
 import { HUB_ID, NO_BOOST, ZONES, inSafeArea, type MonsterBoost, type SafeArea, type ZoneDef, type SpawnArea } from '../data/zones';
-import { MONSTERS } from '../data/monsters';
+import { DROP_GOLD_MULT, MONSTERS } from '../data/monsters';
 import { AUTO_EXP_MULT, expGapMult, expToNext, mitigate, MAX_LEVEL, MISS_GAP, outLevelled } from '../formulas';
 import { blockingGate, BOSS_GATE_IDS } from '../data/bossGates';
 import { lineRanges, rerollStat, rerollValues, rollItem } from '../data/items';
@@ -120,7 +120,6 @@ interface Spawner { area: SpawnArea; alive: number; queue: number[]; boss: boole
 export const LOOT_CLICK_RANGE = 1.5;
 
 /** Owner's balance (2026-11-09): gold drops x2, potion drop chance x2, boss potions x2. */
-const DROP_GOLD_MULT = 2;
 const DROP_POTION_MULT = 2;
 
 export class Sim {
@@ -484,7 +483,7 @@ export class Sim {
         z = boss.z;
       }
       const m = new Monster(this.newId(), def, randInt(r, def.levels[0], def.levels[1]), area, x, z, this.boost);
-      m.summoned = true;
+      m.markSummoned();
       m.target = prey.length ? prey[i % prey.length] : boss.target;
       m.aggroT = 12;
       m.state = 'chase';
@@ -939,8 +938,9 @@ export class Sim {
     const chance = (c: number) => r() < Math.min(1, c * boost);
     // A boss room's boss drops everything once per key put in (owner: rewards times the keys).
     const times = m.isBoss ? this.keys : 1;
-    const gold = Math.round(randInt(r, d.gold[0], d.gold[1]) * (1 + 0.1 * (m.level - d.levels[0])) * DROP_GOLD_MULT) * times;
-    this.spawnLoot(m, { type: 'gold', amount: gold }, owner, party);
+    const gold = Math.round(randInt(r, d.gold[0], d.gold[1]) * (1 + 0.1 * (m.level - d.levels[0])) * DROP_GOLD_MULT * m.mult.gold) * times;
+    // A low gold multiplier (admin) can round a drop down to nothing: no empty pile then.
+    if (gold > 0) this.spawnLoot(m, { type: 'gold', amount: gold }, owner, party);
     if (m.isBoss) {
       const loot = d.bossLoot;
       for (let k = 0; k < times; k++) {

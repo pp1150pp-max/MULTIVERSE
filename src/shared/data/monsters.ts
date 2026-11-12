@@ -59,6 +59,8 @@ export interface MonsterDef {
   /** Bosses only: below half HP, chase speed is multiplied by `speed` and every attack's
    *  cooldown and wind-up by `skill` — replaces the usual enrage boost. */
   frenzy?: { speed: number; skill: number };
+  /** Only ever comes when a boss calls it (no spawn area): left out of the admin's monster multipliers. */
+  summonOnly?: boolean;
   /** Not weakened by the zone's `tough` (keeps the full `stats` HP and defense). */
   ignoreTough?: boolean;
   /** Extra speed on top of the zone's: moving, attacking and skill cooldowns. */
@@ -74,6 +76,9 @@ export interface MonsterDef {
   itemChance: number;
   potionChance: number;
 }
+
+/** Every gold drop is this many times the monster's own range (Sim.dropLoot). */
+export const DROP_GOLD_MULT = 2;
 
 // Zone 1 — Emerald Forest (ตามชีตคอนเซ็ปต์)
 export const MONSTERS: Record<string, MonsterDef> = {
@@ -205,7 +210,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'yeti_minion', name: 'Yeti Minion', nameTh: 'เยติลูกน้อง', levels: [28, 28],
     hp: 1800, atk: 85, def: 22, speed: 2.5, exp: 0, gold: [0, 0],
     aggroRange: 9, attackRange: 1.4, attackCooldown: 1.4, height: 2.3, radius: 0.8,
-    ignoreTough: true, speedMult: 1.3,
+    ignoreTough: true, speedMult: 1.3, summonOnly: true,
     behavior: 'aggressive', itemChance: 0, potionChance: 0,
     leap: { cooldown: 8, windup: 1, radius: 1.8, mult: 1.5, minRange: 2.5, maxRange: 8 },
     thrown: { art: 'snowball', speed: 8, range: 8, mult: 1, radius: 0.45, size: 1, color: '#e6f2fb', minRange: 3, cooldown: 6 },

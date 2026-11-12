@@ -1240,6 +1240,7 @@ export class GameWorld {
    * play gets its stats worked out again and its items' tier labels redone (values never change; the
    * snapshot sends the new labels), loot on the ground too, and every browser gets the new numbers.
    * Offline characters, stashes and market listings get their labels when they are next read (upgradeItem).
+   * Monsters out on every map, channel and boss room take the new monster multipliers.
    */
   balanceChanged(tuning: BalanceTuning): void {
     applyBalance(tuning);
@@ -1252,6 +1253,8 @@ export class GameWorld {
         p.recompute();
       }
       for (const l of sim.loots) if (l.kind.type === 'item') upgradeItem(l.kind.item);
+      // Monsters already out take the new multipliers at once (same share of HP left).
+      for (const m of sim.monsters) m.retune();
     }
     for (const s of this.sessions) this.send(s.ws, { t: 'balance', tuning });
   }

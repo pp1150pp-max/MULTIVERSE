@@ -4,10 +4,13 @@
 // sends the whole draft, the server checks it, stores only what differs from the code, logs the change
 // and applies it to everyone online at once.
 import {
-  applyBalance, BALANCE_RANGE, balanceChanges, checkBalance, classStatsAt, codeBalance, currentBalanceTuning, hasParts, mergeBalance, STAT_MAX,
-  STAT_PART_NAME, STAT_PARTS, STAT_TIER_PARTS, statTierTable, tierLabelsChange, tierSourceName, withItemStatMult,
-  type Balance, type BalanceTuning, type StatPart, type TierParts,
+  applyBalance, BALANCE_RANGE, balanceChanges, checkBalance, classStatsAt, codeBalance, currentBalanceTuning, hasParts, mergeBalance, MONSTER_STAT_NAME,
+  MONSTER_STATS, monsterBandOf, monsterMults, NO_MONSTER_MULT, STAT_MAX, STAT_PART_NAME, STAT_PARTS, STAT_TIER_PARTS, statTierTable, tierLabelsChange,
+  tierSourceName, TUNABLE_MONSTERS, withItemStatMult,
+  type Balance, type BalanceTuning, type MonsterMults, type MonsterStat, type StatPart, type TierParts,
 } from '../shared/balance';
+import { DROP_GOLD_MULT, type MonsterDef } from '../shared/data/monsters';
+import { NO_BOOST, ZONES, type MonsterBoost } from '../shared/data/zones';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { ITEM_BASES, itemRowKinds, rowRanges, TIER_BAND_NAME, TIER_BANDS, tierBandOf, tierChances, tierRanges } from '../shared/data/items';
 import { MAX_LEVEL } from '../shared/formulas';
@@ -448,6 +451,94 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
+  // ---------------------------------------------------------- ordinary monsters
+  const monsterCard = h('div', { class: 'card' });
+  /** The zone boost a monster kind spawns with (its spawn area's, else its map's). */
+  const boostOf = (def: MonsterDef): MonsterBoost => {
+    for (const z of Object.values(ZONES)) {
+      const sp = z.spawns.find((s) => s.monster === def.id);
+      if (sp) return sp.boost ?? z.monsterBoost ?? NO_BOOST;
+    }
+    return NO_BOOST;
+  };
+  /** Its real numbers at its lowest level with these multipliers, worked out like Monster and Sim do. */
+  const realOf = (def: MonsterDef, m: Readonly<MonsterMults>): Record<MonsterStat, string> => {
+    const b = boostOf(def);
+    const tough = def.ignoreTough ? 1 : (b.tough ?? 1) * (b.mobTough ?? 1);
+    const spd = b.speed * (def.speedMult ?? 1);
+    const r1 = (n: number) => (Math.round(n * 10) / 10).toString();
+    const gold = (n: number) => Math.round(n * DROP_GOLD_MULT * m.gold);
+    return {
+      hp: Math.max(1, Math.round(def.hp * b.stats * tough * m.hp)).toLocaleString(),
+      atk: Math.round(def.atk * b.stats * m.atk).toLocaleString(),
+      def: Math.round(def.def * b.stats * tough * m.def).toLocaleString(),
+      speed: r1(def.speed * spd * m.speed),
+      atkSpeed: `${(Math.round((def.attackCooldown / (spd * m.atkSpeed)) * 100) / 100).toString()} วิ`,
+      exp: Math.round(def.exp * m.exp).toLocaleString(),
+      gold: `${gold(def.gold[0])}–${gold(def.gold[1])}`,
+      aggro: r1(Math.max(def.aggroRange * m.aggro, b.aggro ?? 0)),
+      range: r1(def.attackRange * m.range) + (def.shot ? ` (ยิง ${r1(def.shot.range * m.range)})` : ''),
+    };
+  };
+  /** A multiplier box for one set (a band's or a kind's) in the draft; ×1 removes the entry. */
+  const multBox = (get: () => Partial<MonsterMults> | undefined, make: () => Partial<MonsterMults>, drop: () => void, k: MonsterStat, refresh: () => void): HTMLInputElement =>
+    numBox(() => get()?.[k] ?? 1, (n) => {
+      const set = make();
+      if (n === 1) delete set[k];
+      else set[k] = n;
+      if (!Object.keys(set).length) drop();
+    }, 1, ...BALANCE_RANGE.monsterMult, 0.05, refresh);
+  const drawMonsters = (): void => {
+    const mons = draft.monsters;
+    // Typing only updates the "real numbers" rows (redrawing would take the focus away).
+    const realCells: { def: MonsterDef; cells: HTMLTableCellElement[] }[] = [];
+    const refresh = (): void => {
+      for (const { def, cells } of realCells) {
+        const before = realOf(def, NO_MONSTER_MULT);
+        const after = realOf(def, monsterMults(def, draft));
+        MONSTER_STATS.forEach((k, i) => {
+          const moved = before[k] !== after[k];
+          cells[i].textContent = moved ? `${before[k]} → ${after[k]}` : before[k];
+          cells[i].classList.toggle('bal-changed', moved);
+        });
+      }
+      updateSummary();
+    };
+    const bandRows = TIER_BANDS.map((id) => h('tr', {}, h('td', {}, TIER_BAND_NAME[id]), ...MONSTER_STATS.map((k) => h('td', {},
+      multBox(() => mons.bands?.[id], () => ((mons.bands ??= {})[id] ??= {}), () => {
+        delete mons.bands![id];
+        if (!Object.keys(mons.bands!).length) delete mons.bands;
+      }, k, refresh)))));
+    const head = (first: string) => h('thead', {}, h('tr', {}, h('th', {}, first), ...MONSTER_STATS.map((k) => h('th', {}, `${MONSTER_STAT_NAME[k]} ×`))));
+    const kindRows = TUNABLE_MONSTERS.flatMap((def) => {
+      const band = TIER_BANDS[monsterBandOf(def)];
+      const cells = MONSTER_STATS.map(() => h('td', { class: 'bal-out' }));
+      realCells.push({ def, cells });
+      const lv = def.levels[0] === def.levels[1] ? `Lv${def.levels[0]}` : `Lv${def.levels[0]}–${def.levels[1]}`;
+      return [
+        h('tr', {}, h('td', {}, h('b', {}, def.nameTh), ` ${lv}`),
+          ...MONSTER_STATS.map((k) => h('td', {}, multBox(() => mons.types?.[def.id], () => ((mons.types ??= {})[def.id] ??= {}), () => {
+            delete mons.types![def.id];
+            if (!Object.keys(mons.types!).length) delete mons.types;
+          }, k, refresh)))),
+        h('tr', {}, h('td', { class: 'muted' }, `ค่าจริง Lv${def.levels[0]} (ช่วง ${TIER_BAND_NAME[band]})`),
+          ...cells),
+      ];
+    });
+    monsterCard.replaceChildren(
+      h('h2', {}, 'มอนธรรมดา (ตัวคูณ)'),
+      h('div', { class: 'muted' },
+        `ไม่รวมบอสห้องบอสและลูกน้องที่บอสเรียก · ค่าที่ใช้จริง = ตัวคูณช่วงเลเวล × ตัวคูณรายตัว · ช่วงเลเวลดูจากเลเวลต่ำสุดของชนิดมอน · ใส่ได้ ×${BALANCE_RANGE.monsterMult[0]}–×${BALANCE_RANGE.monsterMult[1]} · ` +
+        'ตีเร็ว ×2 = ตีถี่ขึ้น 2 เท่า · ระยะโจมตีคูณระยะกระสุนของมอนยิงไกลด้วย · ระยะ aggro ของมอนที่ไม่ตีก่อน (0) ยังเป็น 0 · บันทึกแล้วมอนที่อยู่ในเกมได้ค่าใหม่ทันที (HP คงสัดส่วนเดิม)'),
+      h('h3', {}, 'ตามช่วงเลเวล'),
+      h('div', { class: 'bal-scroll' }, h('table', { class: 'bal-table' }, head('ช่วงเลเวล'), h('tbody', {}, ...bandRows))),
+      h('h3', {}, 'รายตัว'),
+      h('div', { class: 'muted' }, 'แถว "ค่าจริง" = ค่าในโค้ด → หลังคูณทั้งสองชั้น ที่เลเวลต่ำสุดของชนิดนั้น รวมที่แมพเพิ่มให้แล้ว (ทองรวมตัวคูณดรอปทองของเกม, ตีเร็วแสดงเป็นวินาทีต่อครั้ง)'),
+      h('div', { class: 'bal-scroll' }, h('table', { class: 'bal-table' }, head('มอน'), h('tbody', {}, ...kindRows))),
+    );
+    refresh();
+  };
+
   // ---------------------------------------------------------- save bar
   const summary = h('div', { class: 'muted' });
   /** The draft as the server would store it, or a Thai error. */
@@ -468,6 +559,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawClass();
     drawRegen();
     drawTiers();
+    drawMonsters();
   };
   const save = async (body: { tuning: BalanceTuning } | { reset: true }, ask: string): Promise<void> => {
     if (!confirm(ask)) return;
@@ -511,11 +603,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         void save({ tuning: c.tuning }, `ใช้ค่าใหม่กับทั้งเซิร์ฟทันทีไหม?\n\n${changes.slice(0, 1200)}`);
       } }, '💾 บันทึกทั้งเซิร์ฟ'),
       h('button', { onclick: () => { draft = mergeBalance(saved); redraw(); msg.textContent = ''; } }, 'ยกเลิกที่ยังไม่บันทึก'),
-      h('button', { onclick: () => void save({ reset: true }, 'คืนทุกค่า (อาชีพและ tier) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?') }, '↺ คืนค่าในโค้ด'),
+      h('button', { onclick: () => void save({ reset: true }, 'คืนทุกค่า (อาชีพ tier และตัวคูณมอน) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?') }, '↺ คืนค่าในโค้ด'),
     ),
     msg,
   );
 
-  box.replaceChildren(classCard, regenCard, tierCard, previewCard, bar);
+  box.replaceChildren(classCard, regenCard, tierCard, previewCard, monsterCard, bar);
   redraw();
 }
