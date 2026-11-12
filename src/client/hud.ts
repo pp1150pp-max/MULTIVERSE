@@ -10,11 +10,11 @@ import {
 import {
   entryName, POTION_SIZES, POTION_SIZE_LABEL, POTION_STACK, POTIONS, potionHeal, potionName, potionSellPrice, stackLimit,
 } from '../shared/data/potions';
-import { MONSTER_STONES, REROLL_STONE, RETURN_CAST, RETURN_SCROLL_PRICE, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_STACK, stoneSellPrice, stoneStackValue, stoneUnit, PHOENIX_PRICE } from '../shared/data/stones';
+import { BUFF_LABEL, MONSTER_STONES, REROLL_STONE, RETURN_CAST, RETURN_SCROLL_PRICE, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_STACK, stoneSellPrice, stoneStackValue, stoneUnit, PHOENIX_PRICE } from '../shared/data/stones';
 import { lineRanges, rerollBlock, statRerollOdds } from '../shared/data/items';
 import { REROLL_NAME, rerollCost, type RerollKind } from '../shared/data/reroll';
 import { FullMap } from './fullmap';
-import { AUTO_PX_PER_UNIT, AUTO_RANGE_MAX, AUTO_RANGE_MIN, buybackPrice, cleanAutoSettings, lootPots, type AutoSkill, type LootFilter, type SortKey } from '../shared/sim/Player';
+import { AUTO_PX_PER_UNIT, AUTO_RANGE_MAX, AUTO_RANGE_MIN, buybackPrice, cleanAutoSettings, lootPots, type AutoSkill, type Buffs, type LootFilter, type SortKey } from '../shared/sim/Player';
 import { isBulkSellable } from '../shared/sim/Sim';
 import { nextRowPrice, STASH_MAX, STASH_ROW, STASH_ROW_PRICES, STASH_START } from '../shared/sim/stash';
 import { MONSTERS } from '../shared/data/monsters';
@@ -22,7 +22,7 @@ import { ZONE_1 } from '../shared/data/zones';
 import { expToNext } from '../shared/formulas';
 import { blockingGate } from '../shared/data/bossGates';
 import {
-  isBossKey, isBound, isConsumable, isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
+  BUFF_SCROLLS, isBossKey, isBound, isBuffScroll, isConsumable, isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
   type BagEntry, type Item, type StatLine, type PotionKind, type PotionSize, type PotionStack, type Rarity, type StoneStack, type StoneKind, type EquipSlot, type StatKey,
 } from '../shared/types';
 import { drawEdgeMarker, drawMapIcon, drawPin, facingAngle, partyDot } from './mapIcons';
@@ -146,6 +146,8 @@ export class Hud {
   private bagOpen = false;
   /** Level the bag was last drawn for (gear above it is marked as locked). */
   private drawnLevel = 0;
+  /** Last buff row drawn (redrawn only when a second ticks over). */
+  private drawnBuffs = '';
   /** A bag or stash item being dragged with the mouse (ghost appears once the mouse moves a few pixels). */
   private drag: { src: 'bag' | 'stash' | 'equip'; i: number; x: number; y: number; ghost: HTMLElement | null } | null = null;
   /** True right after a drag ends, so the click that follows mouseup does nothing. */
@@ -323,6 +325,7 @@ export class Hud {
       }
       if (isStone(entry)) {
         if (entry.stone === 'return_scroll') g.useReturnScroll();
+        else if (isBuffScroll(entry.stone)) g.backend.useBuffScroll(entry.stone);
         return;
       }
       // At the blacksmith a click on gear puts it in the forge's slot instead of wearing it.
@@ -394,7 +397,7 @@ export class Hud {
         return;
       }
       if (isPotion(item)) this.showPotionTip(item, e, `คลิกซ้าย: ใช้กับปุ่มด่วน · คลิกขวา: ${right}${split}`);
-      else if (isStone(item)) this.showStoneTip(item, e, `${item.stone === 'return_scroll' ? 'คลิกซ้าย / ปุ่ม G: ใช้ · ' : ''}คลิกขวา: ${right}${split}`);
+      else if (isStone(item)) this.showStoneTip(item, e, `${item.stone === 'return_scroll' ? 'คลิกซ้าย / ปุ่ม G: ใช้ · ' : isBuffScroll(item.stone) ? 'คลิกซ้าย: ใช้ · ' : ''}คลิกขวา: ${right}${split}`);
       else if (item) {
         const both = item.slot === 'ring' && g.player.equipment.ring && g.player.equipment.ring2;
         if (this.forgeOpen) this.showTip(item, e, `คลิกซ้าย / ลาก: วางที่ช่างตีเหล็ก · คลิกขวา: ${right}`);
@@ -854,6 +857,7 @@ export class Hud {
     const cast = $('cast-bar');
     cast.classList.toggle('hidden', !(p.castT > 0));
     if (p.castT > 0) (cast.firstElementChild as HTMLElement).style.width = `${(1 - p.castT / RETURN_CAST) * 100}%`;
+    this.drawBuffs(p.buffs);
     if (p.level !== this.drawnLevel) {
       this.drawnLevel = p.level;
       this.markInventory();
@@ -2108,12 +2112,29 @@ export class Hud {
     this.placeTip(tip, e);
   }
 
+  /** Running buff scrolls under the online line: icon, label and time left (h:mm:ss). */
+  private drawBuffs(buffs: Buffs): void {
+    const parts: string[] = [];
+    for (const k of BUFF_SCROLLS) {
+      const t = buffs[k];
+      if (!t || t <= 0) continue;
+      const s = Math.ceil(t);
+      const time = `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+      parts.push(`<div class="buff" style="--bc:${STONE_COLOR[k]}" title="${STONE_NAME[k]} — เวลาที่เหลือ (นับเฉพาะตอนออนไลน์)">${stoneIcon(k)}<span>${BUFF_LABEL[k]} ${time}</span></div>`);
+    }
+    const html = parts.join('');
+    if (html === this.drawnBuffs) return;
+    this.drawnBuffs = html;
+    $('hud-buffs').innerHTML = html;
+  }
+
   showStoneTip(s: StoneStack, e: MouseEvent, hint: string): void {
     const tip = $('tooltip');
     tip.innerHTML =
       `<div class="tt-name" style="color:${STONE_COLOR[s.stone]}">${STONE_NAME[s.stone]}</div>` +
       `<div class="tt-sub">${
-        isConsumable(s.stone) ? `ของใช้ · ${s.count} / ${STONE_STACK} ${stoneUnit(s.stone)} · ซื้อได้ที่พ่อค้า`
+        isBuffScroll(s.stone) ? `ของใช้ · ${s.count} / ${STONE_STACK} ใบ · ผูกกับตัวละคร`
+        : isConsumable(s.stone) ? `ของใช้ · ${s.count} / ${STONE_STACK} ${stoneUnit(s.stone)} · ซื้อได้ที่พ่อค้า`
         : isBossKey(s.stone) ? `Artifact · ${s.count} / ${STONE_STACK} อัน · ดรอปจากมอนสเตอร์ในแมพของบอส`
         : isBound(s) ? 'กุญแจเควส · ผูกกับตัวละคร'
         : s.stone === 'phoenix' ? `ไอเทมชุบชีวิต · ${s.count} / ${STONE_STACK} อัน · ซื้อจากพ่อค้า`

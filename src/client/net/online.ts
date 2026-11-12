@@ -19,7 +19,7 @@ import { EQUIP_SLOTS } from '../../shared/types';
 import { cleanCosOwned, cosCodes, cosFromCodes, type CosSlot } from '../../shared/data/cosmetics';
 import { zoneById, type SpawnArea, type ZoneDef } from '../../shared/data/zones';
 import type { NpcId } from '../../shared/data/npcs';
-import type { EquipSlot, Item, PotionKind, PotionSize, Rarity, Vec2 } from '../../shared/types';
+import type { BuffScroll, EquipSlot, Item, PotionKind, PotionSize, Rarity, Vec2 } from '../../shared/types';
 import type { SkillSlot } from '../../shared/data/classes';
 import { INPUT_HZ, PING_MS, WS_CLOSE_QUIT, WS_PATH, type ClientMsg, type ServerMsg, type ShutdownMode, type SnapshotMsg } from '../../shared/net/protocol';
 import type { PartyFound, PartySnap } from '../../shared/party';
@@ -674,6 +674,7 @@ export class OnlineBackend implements Backend {
     me.potCd = pv.potCd;
     me.restCd = pv.restCd ?? 0;
     me.castT = pv.castT ?? 0;
+    me.buffs = pv.buffs ?? {};
     if (typeof pv.buybackLeft === 'number') me.buybackLeft = pv.buybackLeft;
     if (pv.inv) {
       me.equipment = pv.inv.equipment;
@@ -859,6 +860,7 @@ export class OnlineBackend implements Backend {
   cosWear(slot: CosSlot, id: string | null): void { this.send({ t: 'act', a: 'cosWear', slot, id }); }
   toggleMount(): void { this.send({ t: 'act', a: 'mount' }); }
   useReturnScroll(): void { this.pendingRecall = true; }
+  useBuffScroll(kind: BuffScroll): void { this.send({ t: 'act', a: 'useBuff', stone: kind }); }
   sortBag(key: SortKey, desc: boolean): void { this.send({ t: 'act', a: 'sort', key, desc }); }
   moveInBag(from: number, to: number): void { this.send({ t: 'act', a: 'move', from, to }); }
   setAuto(on: boolean): void { this.send({ t: 'act', a: 'auto', on }); }

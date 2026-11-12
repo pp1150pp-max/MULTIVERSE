@@ -684,6 +684,8 @@ const GEM: Record<`stone_${StoneKind}`, [string, string, string]> = {
   stone_phoenix: ['#8a2a10', '#ff9a3a', '#ffe8a0'],
   // Return scroll: parchment with a teal rune until its painted icon exists.
   stone_return_scroll: ['#8a6a3a', '#efdcae', '#5fe0d0'],
+  stone_exp_scroll: ['#8a6a3a', '#efdcae', '#7ee06a'],
+  stone_drop_scroll: ['#8a6a3a', '#efdcae', '#ffc23a'],
 };
 
 export function drawIcon(
@@ -691,7 +693,7 @@ export function drawIcon(
 ): HTMLCanvasElement {
   const c = newCanvas(16, 16);
   const ctx = c.getContext('2d')!;
-  if (kind === 'stone_return_scroll') {
+  if (kind === 'stone_return_scroll' || kind === 'stone_exp_scroll' || kind === 'stone_drop_scroll') {
     // A rolled scroll lying across, with a rune on the open part.
     const [dark, mid, light] = GEM[kind];
     rect(ctx, 1, 2, 5, 12, 7, mid);

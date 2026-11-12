@@ -142,16 +142,25 @@ export type ShopStone = 'phoenix';
  * Consumables bought from the merchant (owner 2026-11-10: the return scroll). They share the stone stack too,
  * so they stack, sell, trade, go in the stash and on the market (under their own "ของใช้" tab).
  */
-export type Consumable = 'return_scroll';
-export const CONSUMABLES: Consumable[] = ['return_scroll'];
+export type Consumable = 'return_scroll' | BuffScroll;
+export const CONSUMABLES: Consumable[] = ['return_scroll', 'exp_scroll', 'drop_scroll'];
+/**
+ * Timed boosts (owner 2026-11-12): EXP ×2 and drop chance ×2 for 30 minutes of play each. Rewards (daily
+ * login, mail from the owner), never bought, so they are bound to the character like quest keys.
+ */
+export type BuffScroll = 'exp_scroll' | 'drop_scroll';
+export const BUFF_SCROLLS: BuffScroll[] = ['exp_scroll', 'drop_scroll'];
 /** Everything a stone stack can hold: blacksmith stones, boss keys, quest keys, phoenix feathers and consumables. */
 export type StoneKind = BlacksmithStone | BossKey | QuestKey | ShopStone | Consumable;
 export const STONE_KINDS: StoneKind[] = [...BLACKSMITH_STONES, ...BOSS_KEYS, ...QUEST_KEYS, 'phoenix', ...CONSUMABLES];
 export const isBossKey = (k: StoneKind): k is BossKey => (BOSS_KEYS as StoneKind[]).includes(k);
 export const isQuestKey = (k: StoneKind): k is QuestKey => (QUEST_KEYS as StoneKind[]).includes(k);
-/** A quest key: stays in its owner's bag. */
-export const isBound = (e: BagEntry | null | undefined): boolean => isStone(e) && isQuestKey(e.stone);
 export const isConsumable = (k: StoneKind): k is Consumable => (CONSUMABLES as StoneKind[]).includes(k);
+export const isBuffScroll = (k: StoneKind): k is BuffScroll => (BUFF_SCROLLS as StoneKind[]).includes(k);
+/** Kinds bound to the character: quest keys and reward scrolls. */
+export const isBoundKind = (k: StoneKind): boolean => isQuestKey(k) || isBuffScroll(k);
+/** A bound stack (isBoundKind): stays in its owner's bag. */
+export const isBound = (e: BagEntry | null | undefined): boolean => isStone(e) && isBoundKind(e.stone);
 
 /** Stones of one kind sharing a bag slot (up to STONE_STACK). */
 export interface StoneStack {
