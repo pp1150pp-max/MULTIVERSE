@@ -139,7 +139,7 @@ export interface AuditRow { id: number; at: number; admin: string; action: strin
 export interface AdminEditResult { msg: string; char: AdminCharRow | null }
 
 /** Owner's server panel: whether a restart comes back by itself, and a countdown already running. */
-export interface AdminServerState { supervised: boolean; stopping: ShutdownMode | null }
+export interface AdminServerState { supervised: boolean; stopping: ShutdownMode | null; /** Length of the countdown running now (seconds). */ seconds?: number }
 
 /**
  * The countdown texts (Server tab): what is in use now and the defaults. Saving sends

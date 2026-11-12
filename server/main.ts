@@ -23,7 +23,7 @@ import { Backups } from './backup';
 import { HISTORY_DAYS } from '../src/shared/admin';
 import { controlFilePath, CTRL_C_WINDOW_MS, DoublePress, isLocalControl, STOP_PATH, type ControlFile } from './control';
 import { createInterface } from 'node:readline';
-import { RESTART_EXIT_CODE, SHUTDOWN_SECONDS, shutdownWarning, type ShutdownMode } from '../src/shared/net/protocol';
+import { RESTART_EXIT_CODE, SHUTDOWN_SECONDS, SHUTDOWN_SECONDS_MAX, shutdownSeconds, shutdownWarning, type ShutdownMode } from '../src/shared/net/protocol';
 import { rmSync, writeFileSync } from 'node:fs';
 import { announceShared, runningTunnel, startTunnel } from './tunnel';
 import { applyCardTuning } from '../src/shared/cardTuning';
@@ -37,8 +37,9 @@ const PUBLIC = process.argv.includes('--public');
 
 /** Set by npm run online (server/online-main.ts), which starts the server again after a restart. */
 const SUPERVISED = process.env.MULTIVERSE_SUPERVISED === '1';
-/** Countdown before stopping; SHUTDOWN_SECONDS env only shortens it for tests. */
-const SHUTDOWN_S = Math.min(SHUTDOWN_SECONDS, Math.max(1, Math.floor(Number(process.env.SHUTDOWN_SECONDS) || SHUTDOWN_SECONDS)));
+/** SHUTDOWN_SECONDS env only shortens every countdown, for tests. */
+const TEST_COUNTDOWN_CAP = Math.max(0, Math.floor(Number(process.env.SHUTDOWN_SECONDS) || 0));
+const countdownOf = (secs: number): number => (TEST_COUNTDOWN_CAP ? Math.max(1, Math.min(secs, TEST_COUNTDOWN_CAP)) : secs);
 const CONTROL_FILE = controlFilePath(DB_FILE, PORT);
 const CONTROL_TOKEN = randomBytes(32).toString('hex');
 
@@ -88,16 +89,18 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string): Pro
   const method = req.method ?? 'GET';
 
   if (path.startsWith('/api/admin/')) {
-    return adminApi(req, res, path, db, world, { supervised: SUPERVISED, stopping: () => stopMode, stop: beginStop, cancel: cancelStop }, backups);
+    return adminApi(req, res, path, db, world, { supervised: SUPERVISED, stopping: () => stopMode, seconds: () => stopSeconds, stop: beginStop, cancel: cancelStop }, backups);
   }
 
   // npm run stop-server (server/stop-main.ts): only from this computer, with the token in CONTROL_FILE.
   if (method === 'POST' && path === STOP_PATH) {
     if (!isLocalControl(req, CONTROL_TOKEN)) throw new HttpError(403, 'Forbidden');
     const body = await readJson(req);
-    const err = beginStop(body.mode === 'restart' ? 'restart' : 'shutdown', 'npm run stop-server');
+    const secs = shutdownSeconds(body.seconds);
+    if (secs === null) throw new HttpError(400, `เวลานับถอยหลังต้องเป็น ${SHUTDOWN_SECONDS}–${SHUTDOWN_SECONDS_MAX} วินาที`);
+    const err = beginStop(body.mode === 'restart' ? 'restart' : 'shutdown', 'npm run stop-server', secs);
     if (err && !stopMode) throw new HttpError(400, err);
-    return send(res, 202, { seconds: SHUTDOWN_S, mode: stopMode, note: err });
+    return send(res, 202, { seconds: stopSeconds, mode: stopMode, note: err });
   }
   // stop-server asks while it waits, to notice a cancelled countdown.
   if (method === 'GET' && path === STOP_PATH) {
@@ -370,13 +373,17 @@ let stopTimer: ReturnType<typeof setTimeout> | undefined;
 let finished = false;
 const STOP_HINT = '  พิมพ์ c แล้ว Enter เพื่อยกเลิก · พิมพ์ f แล้ว Enter เพื่อปิดทันที (ยังเซฟทุกคน)';
 
-function beginStop(mode: ShutdownMode, by: string): string | null {
+/** Length of the countdown running now (seconds). */
+let stopSeconds = countdownOf(SHUTDOWN_SECONDS);
+
+function beginStop(mode: ShutdownMode, by: string, seconds = SHUTDOWN_SECONDS): string | null {
   if (stopMode) return `กำลัง${stopMode === 'restart' ? 'รีสตาร์ท' : 'ปิด'}อยู่แล้ว`;
   if (mode === 'restart' && !SUPERVISED) return 'server นี้ไม่ได้เปิดด้วย npm run online จึงเปิดใหม่เองไม่ได้ — ใช้ "ปิด server" แล้วเปิดใหม่เอง';
   stopMode = mode;
-  console.log(`\n[server] ${by}: ${mode === 'restart' ? 'restarting' : 'shutting down'} in ${SHUTDOWN_S} s (players warned)`);
+  stopSeconds = countdownOf(seconds);
+  console.log(`\n[server] ${by}: ${mode === 'restart' ? 'restarting' : 'shutting down'} in ${stopSeconds} s (players warned)`);
   console.log(STOP_HINT);
-  let left = SHUTDOWN_S;
+  let left = stopSeconds;
   // The owner's wording from the admin page (or the default), read once when the countdown starts.
   const template = db.shutdownTexts()[mode];
   const tick = () => {

@@ -21,7 +21,7 @@ import {
   ADMIN_AUDIT_PAGE, ADMIN_GOLD_MAX, ADMIN_NO_RIGHTS, ADMIN_ITEMS_MAX, ADMIN_SEARCH_MAX,
   addStackToBag, adminStack, adminStackName, customItem, OWNER_ROLE, type AdminFeature, type AdminCharRow, type AdminEditResult, type AdminMe, type AdminMeta, type AdminRole, type AdminServerState,
 } from '../src/shared/admin';
-import { shutdownCancelled, type ShutdownMode } from '../src/shared/net/protocol';
+import { countdownTime, SHUTDOWN_SECONDS, SHUTDOWN_SECONDS_MAX, shutdownCancelled, shutdownSeconds, type ShutdownMode } from '../src/shared/net/protocol';
 import { BAG_SIZE, type CharacterData, type Player } from '../src/shared/sim/Player';
 import { expToNext, MAX_LEVEL } from '../src/shared/formulas';
 import { gatesPassedBy } from '../src/shared/data/bossGates';
@@ -105,12 +105,16 @@ export function charRow(c: AdminCharacterRow, live: Player | undefined): AdminCh
 }
 
 /** Stopping the server, from main.ts (the same countdown as Ctrl+C and npm run stop-server). */
+const serverState = (c: ServerControl): AdminServerState => ({ supervised: c.supervised, stopping: c.stopping(), seconds: c.seconds() });
+
 export interface ServerControl {
   /** Started by npm run online, which can start the server again after a restart. */
   supervised: boolean;
   stopping(): ShutdownMode | null;
-  /** Starts the countdown; returns why it can't, or null. */
-  stop(mode: ShutdownMode, by: string): string | null;
+  /** Length of the countdown running now (seconds). */
+  seconds(): number;
+  /** Starts a countdown of `seconds` (default SHUTDOWN_SECONDS); returns why it can't, or null. */
+  stop(mode: ShutdownMode, by: string, seconds?: number): string | null;
   /** Cancels a running countdown; returns why it can't, or null. */
   cancel(by: string): string | null;
 }
@@ -184,7 +188,7 @@ export async function adminApi(
 
   if (method === 'GET' && path === '/api/admin/server') {
     requireAdmin(req, db, 'owner');
-    return send(res, 200, { supervised: control.supervised, stopping: control.stopping() } satisfies AdminServerState);
+    return send(res, 200, serverState(control));
   }
 
   if (method === 'POST' && path === '/api/admin/server') {
@@ -195,14 +199,16 @@ export async function adminApi(
       const err = control.cancel(`admin page (${a.acc.username})`);
       if (err || !was) throw new HttpError(409, err ?? 'ไม่ได้นับถอยหลังอยู่');
       log(db, a, 'server', 'server', shutdownCancelled(was));
-      return send(res, 200, { supervised: control.supervised, stopping: control.stopping() } satisfies AdminServerState);
+      return send(res, 200, serverState(control));
     }
     const mode: ShutdownMode | null = body.mode === 'restart' ? 'restart' : body.mode === 'shutdown' ? 'shutdown' : null;
     if (!mode) throw new HttpError(400, 'เลือก รีสตาร์ท หรือ ปิด server');
-    const err = control.stop(mode, `admin page (${a.acc.username})`);
+    const secs = shutdownSeconds(body.seconds);
+    if (secs === null) throw new HttpError(400, `เวลานับถอยหลังต้องเป็น ${SHUTDOWN_SECONDS}–${SHUTDOWN_SECONDS_MAX} วินาที`);
+    const err = control.stop(mode, `admin page (${a.acc.username})`, secs);
     if (err) throw new HttpError(409, err);
-    log(db, a, 'server', 'server', mode === 'restart' ? 'รีสตาร์ท' : 'ปิด server');
-    return send(res, 200, { supervised: control.supervised, stopping: control.stopping() } satisfies AdminServerState);
+    log(db, a, 'server', 'server', `${mode === 'restart' ? 'รีสตาร์ท' : 'ปิด server'} (นับ ${countdownTime(secs)})`);
+    return send(res, 200, serverState(control));
   }
 
   throw new HttpError(404, 'ไม่พบ API นี้');

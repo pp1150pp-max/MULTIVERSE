@@ -9,9 +9,12 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
-import { countdownTime, DEFAULT_SHUTDOWN_TEXT, RESTART_EXIT_CODE, SHUTDOWN_TEXT_MAX, shutdownCancelled, shutdownKick, shutdownWarning } from '../src/shared/net/protocol';
+import { countdownTime, DEFAULT_SHUTDOWN_TEXT, shutdownSeconds, RESTART_EXIT_CODE, SHUTDOWN_TEXT_MAX, shutdownCancelled, shutdownKick, shutdownWarning } from '../src/shared/net/protocol';
 import { controlFilePath, CTRL_C_WINDOW_MS, DoublePress, STOP_PATH, TOKEN_HEADER } from '../server/control';
 import { finish, ok } from './check';
+
+ok(shutdownSeconds(undefined) === 10 && shutdownSeconds(120) === 120 && shutdownSeconds('120') === 120, 'countdown length: default 10 s, 2 min accepted');
+ok(shutdownSeconds(9) === null && shutdownSeconds(601) === null && shutdownSeconds('x') === null, 'countdown length: out of range refused');
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const dir = mkdtempSync(join(tmpdir(), 'multiverse-shutdown-test-'));
@@ -105,6 +108,9 @@ async function run(): Promise<void> {
   ok((await A.api('GET', '/admin/server', undefined, tok.gm1)).status === 403, 'GM cannot see the server panel');
   ok((await A.api('POST', '/admin/server', { mode: 'shutdown' }, tok.plain1)).status === 403, 'player cannot shut the server down');
   ok((await A.api('POST', '/admin/server', { mode: 'nope' }, tok.owner1)).status === 400, 'unknown mode refused');
+  ok((await A.api('POST', '/admin/server', { mode: 'restart', seconds: 5 }, tok.owner1)).status === 400, 'countdown shorter than 10 s refused');
+  ok((await A.api('POST', '/admin/server', { mode: 'restart', seconds: 601 }, tok.owner1)).status === 400, 'countdown longer than 10 min refused');
+  ok((await A.api('POST', '/admin/server', { mode: 'restart', seconds: 1.5 }, tok.owner1)).status === 400, 'countdown must be whole seconds');
   // The script endpoint needs the token from the control file.
   ok((await A.api('POST', STOP_PATH, { mode: 'shutdown' })).status === 403, 'stop endpoint without token → 403');
   ok((await A.api('POST', STOP_PATH, { mode: 'shutdown' }, undefined, { [TOKEN_HEADER]: 'x'.repeat(64) })).status === 403, 'stop endpoint with a wrong token → 403');
@@ -118,7 +124,7 @@ async function run(): Promise<void> {
   ok((await A.api('POST', '/admin/shutdown-text', { restart: 'x {เวลา}' }, tok.gm1)).status === 403, 'GM cannot change the countdown texts');
   ok((await A.api('POST', '/admin/shutdown-text', { restart: 'x {เวลา}' }, tok.plain1)).status === 403, 'player cannot change the countdown texts');
   const st0 = await A.api('GET', '/admin/shutdown-text', undefined, tok.owner1);
-  ok(st0.status === 200 && st0.data.texts.restart === DEFAULT_SHUTDOWN_TEXT.restart && st0.data.texts.restart === 'มีการอัปเดตเซิร์ฟเวอร์ กำลังจะรีสตาร์ทใน {เวลา}'
+  ok(st0.status === 200 && st0.data.texts.restart === DEFAULT_SHUTDOWN_TEXT.restart && st0.data.texts.restart === 'มีการอัปเดต server จะ Restart ในอีก {เวลา}'
     && st0.data.texts.shutdown === DEFAULT_SHUTDOWN_TEXT.shutdown, 'defaults until the owner sets a text');
   const noToken = await A.api('POST', '/admin/shutdown-text', { restart: 'อัปเดตเร็ว ๆ นี้', shutdown: 'ปิดใน {เวลา}' }, tok.owner1);
   ok(noToken.status === 400 && String(noToken.data.error).includes('{เวลา}'), `text without {เวลา} refused (${noToken.data.error})`);
@@ -144,8 +150,9 @@ async function run(): Promise<void> {
   ok(p1.msgs.some((m) => m.t === 'snap') && p2.msgs.some((m) => m.t === 'snap'), 'two players in the world');
 
   // ---------------------------------------------------------- owner restarts from the admin page
-  const restart = await A.api('POST', '/admin/server', { mode: 'restart' }, tok.owner1);
-  ok(restart.status === 200 && restart.data.stopping === 'restart', `owner starts a restart (${restart.status} ${restart.data.error ?? ''})`);
+  // 2 minutes asked for; the test server caps every countdown at COUNTDOWN.
+  const restart = await A.api('POST', '/admin/server', { mode: 'restart', seconds: 120 }, tok.owner1);
+  ok(restart.status === 200 && restart.data.stopping === 'restart' && restart.data.seconds === COUNTDOWN, `owner starts a restart (${restart.status} ${restart.data.error ?? ''})`);
   ok((await A.api('POST', '/admin/server', { mode: 'shutdown' }, tok.owner1)).status === 409, 'a second stop during the countdown is refused');
   await sleep(600);
   const late = A.joinWorld(tok.late1, chars.late1);
@@ -174,7 +181,7 @@ async function run(): Promise<void> {
   const db = new DatabaseSync(DB_FILE, { readOnly: true });
   const audit = db.prepare("SELECT * FROM admin_audit WHERE action = 'server'").all() as any[];
   db.close();
-  ok(audit.length === 1 && audit[0].admin_name === 'owner1' && audit[0].details === 'รีสตาร์ท', 'restart written to the audit log');
+  ok(audit.length === 1 && audit[0].admin_name === 'owner1' && audit[0].details === 'รีสตาร์ท (นับ 2 นาที)', 'restart written to the audit log');
 
   // ---------------------------------------------------------- server B: plain npm run server, stopped by the script
   const B = await startServer(false);
@@ -250,7 +257,7 @@ async function run(): Promise<void> {
   const cancel = await C.api('POST', '/admin/server', { mode: 'cancel' }, ownerC);
   ok(cancel.status === 200 && cancel.data.stopping === null, 'owner cancels from the admin page');
   const wText = w.msgs.find((m) => m.t === 'shutdown')?.text;
-  ok(wText === shutdownWarning('restart', 3) && wText === '⚠ มีการอัปเดตเซิร์ฟเวอร์ กำลังจะรีสตาร์ทใน 3 วินาที', `default restart text after the reset (${wText})`);
+  ok(wText === shutdownWarning('restart', 3) && wText === '⚠ มีการอัปเดต server จะ Restart ในอีก 3 วินาที', `default restart text after the reset (${wText})`);
   await sleep(300);
   ok(w.msgs.some((m) => m.t === 'shutdownCancel' && m.mode === 'restart'), `player told "${shutdownCancelled('restart')}"`);
   const after = C.joinWorld(tok.plain2, chars.plain2);

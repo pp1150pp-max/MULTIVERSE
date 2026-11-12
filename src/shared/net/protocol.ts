@@ -356,8 +356,18 @@ export type ServerMsg =
 
 /** How the server is going away: `restart` comes back by itself (under npm run online), `shutdown` doesn't. */
 export type ShutdownMode = 'restart' | 'shutdown';
-/** Seconds players are warned before the server stops. */
+/** Seconds players are warned before the server stops, unless a longer countdown is picked. */
 export const SHUTDOWN_SECONDS = 10;
+/** Countdown lengths offered (npm run stop-server -- --seconds N, admin page); any whole number in range is accepted. */
+export const SHUTDOWN_CHOICES = [10, 60, 120, 300] as const;
+export const SHUTDOWN_SECONDS_MAX = 600;
+
+/** A requested countdown length: missing = SHUTDOWN_SECONDS, otherwise whole seconds SHUTDOWN_SECONDS–SHUTDOWN_SECONDS_MAX, or null when invalid. */
+export function shutdownSeconds(v: unknown): number | null {
+  if (v === undefined || v === null || v === '') return SHUTDOWN_SECONDS;
+  const n = Number(v);
+  return Number.isInteger(n) && n >= SHUTDOWN_SECONDS && n <= SHUTDOWN_SECONDS_MAX ? n : null;
+}
 /** Exit code that asks npm run online (server/online-main.ts) to start the server again. */
 export const RESTART_EXIT_CODE = 75;
 
@@ -367,7 +377,7 @@ export const SHUTDOWN_TIME_TOKEN = '{เวลา}';
 export const SHUTDOWN_TEXT_MAX = 100;
 /** Countdown texts until the owner sets their own (admin page, Server tab). */
 export const DEFAULT_SHUTDOWN_TEXT: Record<ShutdownMode, string> = {
-  restart: `มีการอัปเดตเซิร์ฟเวอร์ กำลังจะรีสตาร์ทใน ${SHUTDOWN_TIME_TOKEN}`,
+  restart: `มีการอัปเดต server จะ Restart ในอีก ${SHUTDOWN_TIME_TOKEN}`,
   shutdown: `เซิร์ฟเวอร์กำลังจะปิดใน ${SHUTDOWN_TIME_TOKEN}`,
 };
 
