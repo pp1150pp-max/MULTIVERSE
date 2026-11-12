@@ -274,3 +274,15 @@ For the same game, in the same fine-detail 16-bit SNES-era JRPG pixel art style 
 For the same game, in the same fine-detail 16-bit SNES-era JRPG pixel art style as the characters: small crisp pixels, no chunky pixels, rich shading, seen from the same 2D isometric camera angle (slightly from above). Generate an image of TWO empty UI frames for a player's name and chat, one above the other with a wide empty gap, theme: polished gold and deep brown, ornate royal filigree with a tiny crown. TOP: a name plate frame, a wide horizontal banner about 5 times as wide as tall, a decorated border with ornaments ONLY on the four corners (and at most one small ornament at the middle of the top edge), the straight edges between them plain and even so they can be stretched, the inside one flat solid dark color with NO pattern and NO text. BOTTOM: a chat speech bubble frame about 2 times as wide as tall, rounded, with the same themed border and corner ornaments, a small tail at the bottom center pointing down, the inside one flat solid light color with NO pattern and NO text. Front view, flat, no perspective. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no text, no letters, no labels. Do not use pink, magenta or purple on the frames.
 ```
 
+
+## 11. ปีกข้างเดียว (`wings_*_one`)
+
+ผู้ใช้ 2026-11-12: เกมใช้ภาพ "ปีกข้างเดียว" แล้วกลับด้านสร้างอีกข้างเอง (หันหน้า/หลัง = ปีกคู่, หันข้าง = ข้างใกล้หน้าตัว ข้างไกลหลังตัว, เฉียง = ปีกคู่เอียงตามทิศ)
+แนบภาพปีกคู่เดิมจาก `art_templates/cosmetics/raw/wings_<ชื่อ>.png` แล้วเซฟเป็น `art_templates/cosmetics/raw/wings_<ชื่อ>_one.png`
+ปีกเทวดาทำแล้ว (`wings_angel_one.png`) ที่เหลือ: ค้างคาว (`bat`) ฟีนิกซ์ (`phoenix`) ผีเสื้อ (`butterfly`) กลไก (`mech`)
+
+```
+Edit the attached sprite sheet of a pair of character wings (5 rows x 3 columns: the same wings in 5 views and 3 flap frames). In EVERY cell keep ONLY ONE wing and completely erase the other one (fill where it was with the flat background color): in rows 1 and 5 (front and back views) keep the wing on the RIGHT side of the picture; in rows 2, 3 and 4 (turned toward the left) keep the wing NEARER to the viewer. Keep the small binding / root piece at the base of the kept wing. Keep exactly the same style, colors, size, flap pose and position of the kept wing in every cell; do not redraw or move it. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no text, no labels, no grid lines.
+```
+
+ปีกค้างคาวภาพเดิมใช้พื้นเขียว: แก้ `magenta (#FF00FF)` ใน prompt เป็น `pure bright green (#00FF00)`

@@ -6,7 +6,8 @@
 import * as THREE from 'three';
 import type { Player } from '../shared/sim/Player';
 import type { CosmeticDef } from '../shared/data/cosmetics';
-import { cosSheetKey, fxTex, sheets } from './assets';
+import { assetSources, cosOneKey, cosSheetKey, fxTex, sheets } from './assets';
+import { WingPair } from './wingPair';
 import { SpriteActor } from './SpriteActor';
 import type { Effects } from './effects';
 import { shownCos, shownRiding } from './cosLook';
@@ -65,7 +66,7 @@ function depthAt(x: number, z: number, raised: number, depth: number): [number, 
  */
 const PLAYER_SCALE = 2.4 / 2.6;
 /** Tuning fields that are not sizes or distances (a fraction, a speed, a rate, a brightness): not scaled. */
-const UNSCALED = new Set(['root', 'flap', 'flapWalk', 'anim', 'alpha', 'pulse', 'sparks', 'stepEvery']);
+const UNSCALED = new Set(['oneSize', 'oneBack', 'oneBackSeat', 'oneTilt', 'oneSqueeze', 'oneDepth', 'root', 'flap', 'flapWalk', 'anim', 'alpha', 'pulse', 'sparks', 'stepEvery']);
 /** A cosmetic's tuning number, sizes and distances scaled to the player's size. */
 function tuneNum(id: string, key: string): number {
   const v = tunedValue(id, key);
@@ -171,6 +172,9 @@ export class CosmeticRig {
    * from the side: the near wing over the back, the far one behind it (owner 2026-11-11).
    */
   private wingNear: SpriteActor | null = null;
+  /** Wings from a single-wing picture, mirrored into the pair (wingPair.ts), when that picture exists. */
+  private wingPair: { id: string; pair: WingPair } | null = null;
+  private wingT = 0;
   private readonly wingClip = new THREE.Plane();
   private nearAlpha = 1;
   private readonly headClip = new THREE.Plane();
@@ -228,8 +232,10 @@ export class CosmeticRig {
     const fade = p.alive ? 1 : Math.max(0, 1 - this.deadT / WINGS_FADE);
     const showWings = (alive || (!p.alive && fade > 0)) && p.toadT <= 0;
     const wc = showWings ? shownCos(p, 'wings') : undefined;
+    // A single-wing picture (owner 2026-11-12) replaces the pair picture below when it exists.
+    const one = wc && assetSources[cosOneKey(wc.id)] === 'file' ? sheets[cosOneKey(wc.id)] : undefined;
     const hadWings = this.wings;
-    this.wings = this.piece(this.wings, wc, wc ? tuneNum(wc.id, 'h') : 0, 0);
+    this.wings = this.piece(this.wings, one ? undefined : wc, wc ? tuneNum(wc.id, 'h') : 0, 0);
     if (this.wings !== hadWings) this.dropWingNear();
     if (!this.wings) this.wingsAlpha = 1;
     if (this.wings) {
@@ -297,6 +303,24 @@ export class CosmeticRig {
       }
     }
     if (!this.wings) this.dropWingNear();
+
+    // ---- wings from one picture (wingPair.ts): mirrored into the pair, laid out per view as in the mock-ups.
+    if (this.wingPair && (!one || this.wingPair.id !== wc!.id)) this.dropWingPair();
+    if (one && wc) {
+      const id = wc.id;
+      this.wingPair ??= { id, pair: new WingPair(this.scene, one) };
+      this.wingT += dt;
+      const vo = viewOff(p, id);
+      const [dx, dz] = moveBy(vo, vo.x, vo.z);
+      this.wingPair.pair.update({
+        x: p.x, y: seat, z: p.z,
+        view: viewRow(p), left: (p.faceX - p.faceZ) * Math.SQRT1_2 < -0.05,
+        back: tuneNum(id, seat > 0 ? 'oneBackSeat' : 'oneBack'), size: tuneNum(id, 'oneSize'), depth: tuneNum(id, 'oneDepth'),
+        tilt: tuneNum(id, 'oneTilt'), squeeze: tuneNum(id, 'oneSqueeze'),
+        t: this.wingT, fps: tuneNum(id, p.moving ? 'flapWalk' : 'flap'),
+        dx, dy: vo.y, dz, alpha: fade,
+      });
+    }
 
     // ---- mount: under the rider
     const mc = shownRiding(p) && alive ? shownCos(p, 'mount') : undefined;
@@ -431,6 +455,11 @@ export class CosmeticRig {
     }
   }
 
+  private dropWingPair(): void {
+    this.wingPair?.pair.dispose();
+    this.wingPair = null;
+  }
+
   private dropWingNear(): void {
     this.nearAlpha = 1;
     if (!this.wingNear) return;
@@ -449,6 +478,7 @@ export class CosmeticRig {
   dispose(): void {
     this.dropMountHead();
     this.dropWingNear();
+    this.dropWingPair();
     for (const pc of [this.wings, this.mount, this.pet]) {
       if (!pc) continue;
       this.scene.remove(pc.actor.group);

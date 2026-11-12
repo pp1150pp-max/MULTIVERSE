@@ -266,3 +266,38 @@ for (const cls of CLASSES) {
     save(layout(src, grid, 200 / (front.box[3] - front.box[1]), null, 208, 2), path.join(ROOT, 'public/assets/sprites/npc/stylist.png'));
   } else console.warn(`missing ${file}`);
 }
+
+// ---- single wings (art_templates/cosmetics/raw/<id>_one.png: ONE wing per cell, 5 rows × 3 frames). The game mirrors
+// it into the pair (src/client/cosmeticViews.ts, WingPair). Every cell puts the wing's root (the binding at its left
+// edge) at the cell's left edge, half way down, so the game can turn and mirror each frame around it. One scale for the
+// sheet: the front view's first frame 160 px tall, on the class sheets' scale (a body is 200 px).
+for (const id of COSMETICS.filter((c) => c.startsWith('wings_'))) {
+  const file = path.join(RAW_ROOT, 'art_templates/cosmetics/raw', `${id}_one.png`);
+  if (!fs.existsSync(file)) continue;
+  const src = key(read(file));
+  const grid = cells(src, 5, 3, 0.05, `${id}_one`);
+  const W0 = src.w;
+  // Root of each figure: its left edge, at the height of the pixels there.
+  for (const f of grid.flat()) {
+    const [l, t, , b] = f.box;
+    let sy = 0, n = 0;
+    for (const k of f.mask) {
+      const x = k % W0;
+      if (x < l + 8) { sy += (k - x) / W0; n++; }
+    }
+    f.root = [l, n ? sy / n : (t + b) / 2];
+  }
+  const front = grid[0][0];
+  const k = 160 / (front.box[3] - front.box[1]);
+  let w = 0, half = 0;
+  for (const f of grid.flat()) {
+    w = Math.max(w, (f.box[2] - f.root[0]) * k);
+    half = Math.max(half, (f.root[1] - f.box[1]) * k, (f.box[3] - f.root[1]) * k);
+  }
+  const CW = Math.ceil(w) + 4, CH = Math.ceil(half) * 2 + 4;
+  const dst = { w: CW * 3, h: CH * 5, d: Buffer.alloc(CW * 3 * CH * 5 * 4) };
+  grid.forEach((row, r) => row.forEach((f, c) => {
+    place(src, f, k, dst, c * CW + 1, r * CH + Math.round(CH / 2 - (f.root[1] - f.box[1]) * k));
+  }));
+  save(dst, path.join(ROOT, 'public/assets/sprites/cosmetics', `${id}_one.png`));
+}

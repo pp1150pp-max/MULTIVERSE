@@ -31,6 +31,14 @@ export const COS_TUNE_FIELDS: Record<TunedSlot, Record<string, TuneField>> = {
     depth: num(0, 0.5, 0.01, 'ระยะวาดหลังตัว (หรือทับหลัง) ห่างเท่าไร'),
     overBack: bool('หันหลังให้กล้อง: ปีกวาดทับหลัง (ปิด = หลังตัวเสมอ)'),
     // The near wing drawn over the body (a copy of the wings cut at the body's middle, #211).
+    // Wings from a single-wing picture, mirrored into the pair (owner 2026-11-12, wingPair.ts). Used when
+    // public/assets/sprites/cosmetics/<id>_one.png exists; the fields above are for the old pair picture.
+    oneSize: num(0.3, 2.5, 0.01, 'ปีกข้างเดียว: ขนาด (คูณ)'),
+    oneBack: num(0, 2.5, 0.01, 'ปีกข้างเดียว: ความสูงโคนปีก ตอนยืน'),
+    oneBackSeat: num(0, 2.5, 0.01, 'ปีกข้างเดียว: ความสูงโคนปีก ตอนนั่งขี่ (จากอาน)'),
+    oneTilt: num(0, 0.8, 0.01, 'ปีกข้างเดียว: มุมเอียงตอนหันเฉียง'),
+    oneSqueeze: num(0.3, 1, 0.01, 'ปีกข้างเดียว: ปีกข้างไกลแคบลงตอนหันเฉียง (คูณ)'),
+    oneDepth: num(0, 0.5, 0.01, 'ปีกข้างเดียว: ระยะวาดหลังตัว / ทับหลัง'),
     nearSide: bool('หันข้าง: ปีกข้างใกล้วาดทับหน้าตัว'),
     nearFrontDiag: bool('หันเฉียงเข้ากล้อง: ปีกข้างใกล้วาดทับหน้าตัว'),
     nearBackDiag: bool('หันเฉียงหลัง: ปีกข้างใกล้วาดทับหน้าตัว'),
@@ -204,6 +212,7 @@ function baseDefaults(id: string, slot: TunedSlot): TuneValues | undefined {
       // the back, 1.35 up standing and 1.0 above the saddle riding; behind the body, over the back when it
       // is turned to the camera (#200).
       return { h: 1.625, root: 0.6, backStand: 1.35, backSeat: 1, back: 0.22, shift: 0, depth: 0.15, overBack: true,
+        oneSize: 1, oneBack: 1.125, oneBackSeat: 0.85, oneTilt: 0.18, oneSqueeze: 0.8, oneDepth: 0.15,
         nearSide: true, nearFrontDiag: false, nearBackDiag: false, nearCut: 0, nearDepth: 0.15, flap: 5, flapWalk: 10 };
     case 'mount': {
       const m = MOUNT_DEFAULTS[id];
