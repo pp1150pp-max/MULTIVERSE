@@ -91,8 +91,8 @@ function buildClassCards(container: HTMLElement): () => ClassId {
   return () => chosen;
 }
 
-/** Owner's decision: the Guest Login button is picture-only for now. Set to true to connect it again. */
-const GUEST_LOGIN_ENABLED: boolean = false;
+/** Owner turned Guest Login back on (2026-11-12). Set to false to make the button picture-only again. */
+const GUEST_LOGIN_ENABLED: boolean = true;
 
 type Panel = 'guest' | 'online';
 
