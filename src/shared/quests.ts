@@ -32,7 +32,10 @@ export function questRows(p: QuestHolder): QuestRow[] {
   });
 }
 
-/** The mark over The Seeker: ? when a quest waits to be handed in (it wins), ! when he has one to give, else none. */
-export function seekerMark(rows: readonly QuestRow[]): '?' | '!' | '' {
+/**
+ * The mark over The Seeker: ? when a quest waits to be handed in (it wins), ! when he has one to give, else
+ * none. Takes his key quests and his gear quests (src/shared/gearQuests.ts) together.
+ */
+export function seekerMark(rows: readonly { state: string }[]): '?' | '!' | '' {
   return rows.some((r) => r.state === 'ready') ? '?' : rows.some((r) => r.state === 'offer') ? '!' : '';
 }

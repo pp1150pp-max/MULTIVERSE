@@ -4,6 +4,7 @@
 import type { Game } from './Game';
 import { QUEST_KILLS, STONE_NAME } from '../shared/data/stones';
 import { questRows } from '../shared/quests';
+import { GEAR_KILLS, GEAR_PART_NAME, gearRows } from '../shared/gearQuests';
 
 const FOLD_KEY = 'multiverse-quest-tracker-folded';
 
@@ -47,8 +48,12 @@ export class QuestTracker {
   }
 
   update(): void {
-    const rows = questRows(this.g.player).filter((r) => r.state === 'going' || r.state === 'ready');
-    const sig = JSON.stringify([this.folded, rows.map((r) => [r.boss, r.state, r.kills])]);
+    // Key quests then gear quests, each as a name, the map, kills so far and the goal.
+    const rows = [
+      ...questRows(this.g.player).map((r) => ({ id: r.boss, name: STONE_NAME[r.key], map: r.map, state: r.state, kills: r.kills, max: QUEST_KILLS })),
+      ...gearRows(this.g.player).map((r) => ({ id: r.id, name: `${GEAR_PART_NAME[r.part]} · ${r.map.nameTh}`, map: r.map, state: r.state, kills: r.kills, max: GEAR_KILLS })),
+    ].filter((r) => r.state === 'going' || r.state === 'ready');
+    const sig = JSON.stringify([this.folded, rows.map((r) => [r.id, r.state, r.kills])]);
     if (sig === this.drawn) return;
     this.drawn = sig;
     this.box.classList.toggle('hidden', !rows.length);
@@ -66,16 +71,16 @@ export class QuestTracker {
       row.onclick = () => this.g.hud.toggleMap(true);
       const name = document.createElement('div');
       name.className = 'qt-name';
-      name.textContent = STONE_NAME[r.key];
+      name.textContent = r.name;
       const goal = document.createElement('div');
       goal.className = 'qt-goal';
       goal.textContent = r.state === 'ready'
         ? 'ล่าครบแล้ว — กลับไปหา The Seeker'
-        : `ล่ามอนสเตอร์ใน${r.map.nameTh} ${r.kills}/${QUEST_KILLS}`;
+        : `ล่ามอนสเตอร์ใน${r.map.nameTh} ${r.kills}/${r.max}`;
       const bar = document.createElement('div');
       bar.className = 'qt-bar';
       const fill = document.createElement('div');
-      fill.style.width = `${Math.min(100, (r.kills / QUEST_KILLS) * 100)}%`;
+      fill.style.width = `${Math.min(100, (r.kills / r.max) * 100)}%`;
       bar.append(fill);
       row.append(name, goal, bar);
       this.list.append(row);

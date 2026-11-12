@@ -8,6 +8,7 @@ import { expGapMult } from '../shared/formulas';
 import { iconImg } from './icons';
 import { imgUrl } from './img';
 import { questRows, seekerMark } from '../shared/quests';
+import { gearRows } from '../shared/gearQuests';
 import type { RestSpot } from '../shared/sim/terrain';
 import type { CosmeticDef } from '../shared/data/cosmetics';
 import { shownCos } from './cosLook';
@@ -284,7 +285,7 @@ export class Floating {
       el.classList.toggle('alert', n.id === 'broker' && g.backend.marketBox > 0);
       if (n.id === 'seeker') {
         const markEl = el.querySelector<HTMLElement>('.npc-mark')!;
-        const mark = seekerMark(questRows(g.player));
+        const mark = seekerMark([...questRows(g.player), ...gearRows(g.player)]);
         if (markEl.textContent !== mark) markEl.textContent = mark;
         markEl.classList.toggle('hidden', !mark);
         markEl.classList.toggle('turn-in', mark === '?');

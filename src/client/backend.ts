@@ -187,6 +187,9 @@ export interface Backend {
   /** The Seeker's key quests (the server checks you stand by him). */
   questAccept(boss: string): void;
   questTurnIn(boss: string): void;
+  /** The Seeker's gear quests by quest id (src/shared/gearQuests.ts; the server checks you stand by him). */
+  gearAccept(id: string): void;
+  gearTurnIn(id: string): void;
   buyPhoenix(n: number): void;
   /** Dead in a boss room: get up here for one phoenix feather. */
   roomRevive(): void;
