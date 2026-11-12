@@ -17,3 +17,27 @@
 
 - สำรอง DB: `server/data/backups/` (`VACUUM INTO`) อัตโนมัติวันละครั้งเก็บ 7 ไฟล์, กดเองเก็บ 10, ก่อนลบเก็บ 20 (`BACKUP_KEEP` ใน `server/backup.ts`)
 - กู้คืน: `npm run stop-server` → ลบ `multiverse.db-wal` / `multiverse.db-shm` → คัดลอกไฟล์สำรองทับ `server/data/multiverse.db` → `npm run online`
+
+## ลิงก์ถาวรให้เพื่อน (named tunnel + โดเมนของเจ้าของ)
+
+ค่าเริ่มต้น `npm run tunnel` / `npm run online` ใช้ quick tunnel (`*.trycloudflare.com` เปลี่ยนทุกครั้งที่ tunnel เริ่มใหม่) ถ้ามีไฟล์ตั้งค่าด้านล่าง (หรือ env `TUNNEL_NAME` + `TUNNEL_HOSTNAME`) จะใช้ named tunnel แทนโดยอัตโนมัติ และแสดง `https://<hostname>` เป็นลิงก์ให้เพื่อน ถ้าไม่มี = quick tunnel เดิม (โค้ดอยู่ใน `server/tunnel.ts`)
+
+### ตั้งครั้งแรก (เจ้าของทำเอง · ใช้ cloudflared ตัวเดียวกับที่เกมหาเจอ)
+
+1. โดเมนต้องอยู่บน Cloudflare (ซื้อที่ Cloudflare Registrar หรือที่อื่นแล้วเปลี่ยน nameserver มาที่ Cloudflare แพ็กเกจฟรี)
+2. ล็อกอิน (เปิดเบราว์เซอร์ เลือกโดเมน): `cloudflared tunnel login` → ได้ `%USERPROFILE%\.cloudflared\cert.pem`
+3. สร้าง tunnel: `cloudflared tunnel create multiverse` → ได้ไฟล์ credentials `.json` ใน `%USERPROFILE%\.cloudflared\` (**ห้าม commit / ห้ามส่งใคร**)
+4. ผูกชื่อลิงก์: `cloudflared tunnel route dns multiverse play.<โดเมน>` (หรือโดเมนหลักตรง ๆ)
+5. สร้าง `server/data/tunnel-config.json` (git-ignored ผ่าน `server/data/`):
+   ```json
+   { "name": "multiverse", "hostname": "play.<โดเมน>" }
+   ```
+   server ส่งต่อ `http://localhost:2567` ให้เอง (`--url`) รวม WebSocket `/ws` ไม่ต้องเขียน config.yml
+
+### ใช้งานประจำ
+
+เหมือนเดิม: `npm run tunnel` ค้างไว้ + `npm run online` (หรือ online อย่างเดียว) ลิงก์ที่ขึ้นเป็นลิงก์ถาวรเสมอ
+
+### สลับจาก quick tunnel บน server จริง
+
+ทำหลังตั้งค่าครบและ merge แล้ว: ปิด tunnel เดิม (หน้าต่าง `npm run tunnel` กด Ctrl+C) → เปิด `npm run tunnel` ใหม่ (ไม่ต้องแตะ server) → เพื่อนใช้ลิงก์ถาวรใหม่ แล้วเลิกใช้ลิงก์ trycloudflare

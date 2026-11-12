@@ -13,6 +13,8 @@ const LINK_RE = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/;
 const LOCAL_EXE = join(resolve(fileURLToPath(new URL('..', import.meta.url))), 'tools', 'bin', 'cloudflared.exe');
 /** Written by `npm run tunnel` while its link is up. git-ignored with the rest of server/data. */
 const STATE_FILE = join(resolve(fileURLToPath(new URL('..', import.meta.url))), 'server', 'data', 'tunnel.json');
+/** Optional permanent link: {"name": "<tunnel name>", "hostname": "play.example.com"} (git-ignored, or env TUNNEL_NAME + TUNNEL_HOSTNAME). */
+const CONFIG_FILE = join(resolve(fileURLToPath(new URL('..', import.meta.url))), 'server', 'data', 'tunnel-config.json');
 const DOWNLOAD_URL = 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe';
 
 /** The project's own copy, or one installed with winget. */
@@ -37,6 +39,23 @@ async function download(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/** Named-tunnel settings when set up (see docs/systems/server-ops.md); null = use a random quick tunnel. */
+function namedTunnel(): { name: string; hostname: string } | null {
+  let name = process.env.TUNNEL_NAME;
+  let hostname = process.env.TUNNEL_HOSTNAME;
+  if (!name || !hostname) {
+    try {
+      const c = JSON.parse(readFileSync(CONFIG_FILE, 'utf8')) as { name?: string; hostname?: string };
+      name = c.name;
+      hostname = c.hostname;
+    } catch {
+      return null;
+    }
+  }
+  if (!name || !hostname) return null;
+  return { name, hostname: hostname.replace(/^https?:\/\//, '').replace(/\/.*$/, '') };
 }
 
 /** Copies text to the Windows clipboard so the link can be pasted straight into chat. */
@@ -81,14 +100,15 @@ export function announceShared(link: string): void {
   announce(link, true);
 }
 
-function announce(link: string, stays = false, keptBy = 'npm run tunnel'): void {
+function announce(link: string, stays = false, keptBy = 'npm run tunnel', permanent = false): void {
   const copied = copyToClipboard(link);
   const line = '='.repeat(64);
   console.log(`\n${line}`);
   console.log('  🌐 ลิงก์สำหรับเพื่อน (กดแล้วเข้าเล่นได้เลย ไม่ต้องลงอะไร):');
   console.log(`\n     ${link}\n`);
   console.log(`  ${copied ? '📋 คัดลอกลิงก์ไว้แล้ว — กด Ctrl+V วางส่งเพื่อนได้เลย' : 'คัดลอกลิงก์ด้านบนส่งให้เพื่อน'}`);
-  console.log(stays
+  if (permanent) console.log('  ลิงก์ถาวร — ไม่เปลี่ยนแม้ปิด/เปิด server หรือเครื่องใหม่');
+  else console.log(stays
     ? `  ลิงก์นี้อยู่ตราบที่หน้าต่าง ${keptBy} ยังเปิดอยู่ — ${keptBy === 'npm run tunnel' ? 'ปิด/เปิด server ใหม่' : 'รีสตาร์ท server'} ลิงก์ไม่เปลี่ยน`
     : '  ลิงก์นี้ใช้ได้จนกว่าจะปิด server — เปิดใหม่จะได้ลิงก์ใหม่\n  (อยากให้ลิงก์ไม่เปลี่ยนตอนอัปเดตเกม: เปิด npm run tunnel ค้างไว้อีกหน้าต่างหนึ่ง)');
   console.log(`${line}\n`);
@@ -105,12 +125,15 @@ export async function startTunnel(port: number, opts: { shared?: boolean; keptBy
     help();
     return null;
   }
+  const named = namedTunnel();
   let found = false;
   let child: ChildProcess;
   try {
     // Its own process group on Windows (hidden), so Ctrl+C in the server window doesn't cut the link while
     // the server is still counting down; whoever started it kills it when done.
-    child = spawn(exe, ['tunnel', '--no-autoupdate', '--url', `http://localhost:${port}`], {
+    child = spawn(exe, named
+      ? ['tunnel', '--no-autoupdate', 'run', '--url', `http://localhost:${port}`, named.name]
+      : ['tunnel', '--no-autoupdate', '--url', `http://localhost:${port}`], {
       stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform === 'win32', windowsHide: true,
     });
   } catch {
@@ -119,11 +142,13 @@ export async function startTunnel(port: number, opts: { shared?: boolean; keptBy
   }
   const scan = (chunk: Buffer) => {
     if (found) return;
-    const m = LINK_RE.exec(chunk.toString());
-    if (m) {
+    const text = chunk.toString();
+    // Named tunnel: the link is fixed; it is up once cloudflared registers a connection to Cloudflare.
+    const link = named ? (text.includes('Registered tunnel connection') ? `https://${named.hostname}` : null) : (LINK_RE.exec(text)?.[0] ?? null);
+    if (link) {
       found = true;
-      announce(m[0], opts.shared, opts.keptBy);
-      if (opts.shared && child.pid) saveState(child.pid, m[0], port);
+      announce(link, opts.shared, opts.keptBy, !!named);
+      if (opts.shared && child.pid) saveState(child.pid, link, port);
     }
   };
   child.stdout?.on('data', scan);
