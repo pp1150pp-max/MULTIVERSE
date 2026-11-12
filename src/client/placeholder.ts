@@ -686,6 +686,7 @@ const GEM: Record<`stone_${StoneKind}`, [string, string, string]> = {
   stone_return_scroll: ['#8a6a3a', '#efdcae', '#5fe0d0'],
   stone_exp_scroll: ['#8a6a3a', '#efdcae', '#7ee06a'],
   stone_drop_scroll: ['#8a6a3a', '#efdcae', '#ffc23a'],
+  stone_megaphone: ['#6a4a1a', '#d8a040', '#ffe0a0'],
 };
 
 export function drawIcon(

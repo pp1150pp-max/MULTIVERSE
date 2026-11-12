@@ -72,6 +72,8 @@ export type ActionMsg =
   | { t: 'act'; a: 'buyScroll'; n: number }
   /** Uses one EXP or drop scroll from the bag (Sim.useBuffScroll). */
   | { t: 'act'; a: 'useBuff'; stone: BuffScroll }
+  /** Announces `text` to the whole server with a megaphone from the bag (server checks length, Guest and the cooldown). */
+  | { t: 'act'; a: 'megaphone'; text: string }
   | { t: 'act'; a: 'sort'; key: SortKey; desc: boolean }
   | { t: 'act'; a: 'move'; from: number; to: number }
   /** Auto Play on/off. The server plays it, so it keeps farming while the browser tab is hidden. */
@@ -339,7 +341,7 @@ export type ServerMsg =
   /** The server stops (or restarts) in `seconds`; sent once a second during the countdown. */
   | { t: 'shutdown'; mode: ShutdownMode; seconds: number; text?: string }
   /** An announcement from the server's owner (admin page): shown as a banner and a chat line. */
-  | { t: 'announce'; text: string; from: string; direct: boolean }
+  | { t: 'announce'; text: string; from: string; direct: boolean; megaphone?: boolean }
   /** The countdown was cancelled: the server stays up. */
   | { t: 'shutdownCancel'; mode: ShutdownMode };
 

@@ -1,6 +1,6 @@
 // Blacksmith stones: dropped by bosses (reroll stones rarely by other monsters too), stacked in the bag like potions.
 // Boss keys (Artifacts) share the stone stack: they stack, sell, trade and list on the market the same way.
-import { isBuffScroll, isConsumable, type BossKey, type BuffScroll, type QuestKey, type StoneKind, type StoneStack } from '../types';
+import { isBoundKind, isBuffScroll, isConsumable, type BossKey, type BuffScroll, type QuestKey, type StoneKind, type StoneStack } from '../types';
 import type { RerollKind } from './reroll';
 
 /** Most stones (or keys) one bag or stash slot can hold (owner: 10). */
@@ -59,6 +59,7 @@ export const STONE_NAME: Record<StoneKind, string> = {
   return_scroll: 'ม้วนคัมภีร์กลับเมือง',
   exp_scroll: 'ใบคูณ EXP 100%',
   drop_scroll: 'ใบคูณดรอป 100%',
+  megaphone: 'โทรโข่ง',
 };
 
 const keyDesc = (boss: string, zone: string): string =>
@@ -84,6 +85,7 @@ export const STONE_DESC: Record<StoneKind, string> = {
   return_scroll: 'ร่าย 3 วินาทีแล้ววาร์ปกลับกลางเมืองศูนย์กลางมิติ (ปุ่ม G หรือคลิก) · โดนโจมตี เดิน ตี หรือใช้สกิลระหว่างร่าย = ยกเลิก ม้วนไม่หาย',
   exp_scroll: 'คลิกเพื่อใช้: EXP ที่ได้ ×2 (รวมส่วนแบ่งปาร์ตี้และตอนเปิด Auto) นาน 30 นาทีที่ออนไลน์ · ใช้ซ้อนได้ บวกเวลาเพิ่ม สูงสุด 5 ชั่วโมง',
   drop_scroll: 'คลิกเพื่อใช้: โอกาสดรอปไอเทม ยา หิน และกุญแจ ×2 (ไม่รวมทอง) นาน 30 นาทีที่ออนไลน์ · นับใบของคนที่ได้สิทธิ์เก็บของ · ใช้ซ้อนได้ บวกเวลาเพิ่ม สูงสุด 5 ชั่วโมง',
+  megaphone: 'คลิกเพื่อใช้: พิมพ์ข้อความไม่เกิน 100 ตัว ประกาศขึ้นกลางจอถึงผู้เล่นทุกคนในเซิร์ฟเวอร์ · ทั้งเซิร์ฟเวอร์ประกาศได้ 1 ครั้งต่อ 30 วินาที ถ้าติดคิว โทรโข่งไม่หาย',
 };
 
 export const STONE_COLOR: Record<StoneKind, string> = {
@@ -103,10 +105,11 @@ export const STONE_COLOR: Record<StoneKind, string> = {
   return_scroll: '#5fe0d0',
   exp_scroll: '#7ee06a',
   drop_scroll: '#ffc23a',
+  megaphone: '#ffb347',
 };
 
 /** "ก้อน" for stones, "อัน" for keys and feathers, "ม้วน" for the return scroll. */
-export const stoneUnit = (k: StoneKind): string => (k === 'return_scroll' ? 'ม้วน' : isBuffScroll(k) ? 'ใบ' : k.includes('key_') || k === 'phoenix' ? 'อัน' : 'ก้อน');
+export const stoneUnit = (k: StoneKind): string => (k === 'return_scroll' ? 'ม้วน' : isBuffScroll(k) ? 'ใบ' : k === 'megaphone' ? 'อัน' : k.includes('key_') || k === 'phoenix' ? 'อัน' : 'ก้อน');
 
 /** Return scroll: the merchant's price (owner: 500 G) and how long it takes to cast (owner: 3 s). */
 export const RETURN_SCROLL_PRICE = 500;
@@ -116,7 +119,7 @@ export const RETURN_CAST = 3;
 export function stoneSellPrice(k: StoneKind): number {
   if (k === 'phoenix') return PHOENIX_PRICE / 2;
   // Bound rewards never reach the merchant.
-  if (isBuffScroll(k)) return 0;
+  if (isBoundKind(k)) return 0;
   return isConsumable(k) ? Math.floor(RETURN_SCROLL_PRICE / 2) : STONE_SELL;
 }
 
@@ -135,4 +138,17 @@ export const BUFF_LABEL: Record<BuffScroll, string> = { exp_scroll: 'EXP ×2', d
 export function fmtBuff(sec: number): string {
   const m = Math.ceil(sec / 60);
   return m >= 60 ? `${Math.floor(m / 60)} ชม. ${String(m % 60).padStart(2, '0')} นาที` : `${m} นาที`;
+}
+
+/** Megaphone (owner 2026-11-12): longest message, and one announcement this often across the whole server. */
+export const MEGAPHONE_MAX = 100;
+export const MEGAPHONE_EVERY_MS = 30_000;
+
+/** A megaphone message cleaned the way chat is (control characters out, trimmed), or why it can't be sent. */
+export function megaphoneText(raw: unknown): { text: string } | { error: string } {
+  if (typeof raw !== 'string') return { error: 'ข้อความไม่ถูกต้อง' };
+  const text = raw.replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  if (!text) return { error: 'พิมพ์ข้อความก่อนใช้โทรโข่ง' };
+  if ([...text].length > MEGAPHONE_MAX) return { error: `ข้อความยาวได้ไม่เกิน ${MEGAPHONE_MAX} ตัว` };
+  return { text };
 }

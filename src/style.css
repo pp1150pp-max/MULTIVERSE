@@ -1024,6 +1024,7 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #announce-banner { top: 24%; font-size: 22px; white-space: normal; overflow-wrap: anywhere; width: max-content; max-width: min(720px, calc(100% - 32px)); }
 #announce-banner .announce-head { font-size: 14px; opacity: 0.85; margin-bottom: 2px; }
 #announce-banner .announce-from { font-size: 14px; opacity: 0.85; margin-top: 4px; text-align: right; }
+#announce-banner.megaphone .announce-head { color: #ffb347; }
 @media (max-width: 700px) { #announce-banner { font-size: 17px; top: 26%; } }
 
 /* Window title bars: drag to move, double-click to put back (src/client/dragwindow.ts). */
@@ -1216,6 +1217,11 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #report-win .report-count { text-align: right; font-size: 11px; color: var(--ink-dim); }
 #report-win .report-note { font-size: 11px; color: var(--ink-dim); }
 #report-win .report-msg { min-height: 1em; }
+#megaphone-win { left: 50%; top: 80px; transform: translateX(-50%); width: min(400px, 92vw); font-size: 13px; }
+#megaphone-win .mega-body { display: flex; flex-direction: column; gap: 6px; }
+#megaphone-win textarea { resize: none; padding: 4px 6px; font: inherit; }
+#megaphone-win .mega-count { text-align: right; font-size: 11px; color: var(--ink-dim); }
+#megaphone-win .mega-note { font-size: 11px; color: var(--ink-dim); }
 #friends-win { left: 50%; top: 80px; transform: translateX(-50%); width: min(420px, 92vw); font-size: 13px; }
 #friends-win .friends-body { display: flex; flex-direction: column; gap: 6px; }
 #friends-win .friends-add { display: flex; gap: 6px; }

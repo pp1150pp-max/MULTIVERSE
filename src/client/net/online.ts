@@ -158,7 +158,7 @@ export class OnlineBackend implements Backend {
   private readonly partyWait = new Map<number, (list: PartyFound[]) => void>();
   onDisconnect: ((msg: string) => void) | null = null;
   /** An announcement from the server's owner. */
-  onAnnounce: ((text: string, from: string, direct: boolean) => void) | null = null;
+  onAnnounce: ((text: string, from: string, direct: boolean, megaphone: boolean) => void) | null = null;
   /**
    * The server stops or restarts in `seconds` (sent once a second); null = cancelled. `text` is the
    * line to show, with the time filled in by the server (the owner's wording); absent = the default.
@@ -457,7 +457,7 @@ export class OnlineBackend implements Backend {
         useOrbLook(m.look);
         break;
       case 'announce':
-        this.onAnnounce?.(m.text, m.from, m.direct);
+        this.onAnnounce?.(m.text, m.from, m.direct, !!m.megaphone);
         break;
       case 'shutdownCancel':
         this.onShutdown?.(m.mode, null);
@@ -861,6 +861,7 @@ export class OnlineBackend implements Backend {
   toggleMount(): void { this.send({ t: 'act', a: 'mount' }); }
   useReturnScroll(): void { this.pendingRecall = true; }
   useBuffScroll(kind: BuffScroll): void { this.send({ t: 'act', a: 'useBuff', stone: kind }); }
+  useMegaphone(text: string): void { this.send({ t: 'act', a: 'megaphone', text }); }
   sortBag(key: SortKey, desc: boolean): void { this.send({ t: 'act', a: 'sort', key, desc }); }
   moveInBag(from: number, to: number): void { this.send({ t: 'act', a: 'move', from, to }); }
   setAuto(on: boolean): void { this.send({ t: 'act', a: 'auto', on }); }
