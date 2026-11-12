@@ -136,6 +136,8 @@ interface Session {
   maxWait: number;
   /** Snapshots skipped because the connection had not taken the earlier ones yet (see sendSnapshot). */
   skipped: number;
+  /** Owner or GM when joining: their snapshots carry the whole server's player count. */
+  staff: boolean;
   /** The connection negotiated compression (WS_DEFLATE); logged at join and in the per-minute line when off. */
   deflate: boolean;
   /** When the last pong went out (null before the first ping). The client's next ping says it got it. */
@@ -506,7 +508,7 @@ export class GameWorld {
       ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId, sim, player,
       move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null, recall: false,
       auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, saveDue: null,
-      ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, deflate: ws.extensions.includes('permessage-deflate'), pongAt: null, slowSnapAt: -Infinity,
+      ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, deflate: ws.extensions.includes('permessage-deflate'), staff: !acc.guest && ['owner', 'gm'].includes(this.db.adminRole(acc.id) ?? ''), pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity, blockTrades: false,
       lastFriendAt: -Infinity, friendKey: '', lastCh: back?.channel.ch ?? 1, fight: new FightClock(Math.max(player.lastHurt, player.lastAttack)), lastChListAt: -Infinity, lastChAt: -Infinity,
@@ -1704,7 +1706,8 @@ export class GameWorld {
     const msg: SnapshotMsg = {
       t: 'snap',
       time: r2(sim.time),
-      online: this.sessions.size,
+      here: sim.players.length,
+      ...(s.staff ? { online: this.sessions.size } : {}),
       me,
       players: sim.players.filter(near).map((o) => ({
         id: o.id, name: o.name, cls: o.cls.id, lv: o.level,

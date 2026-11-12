@@ -133,7 +133,8 @@ export class OnlineBackend implements Backend {
   monsters: Monster[] = [];
   projectiles: MirrorProjectile[] = [];
   loots: Loot[] = [];
-  onlineCount = 1;
+  hereCount = 1;
+  onlineCount: number | null = null;
   /**
    * Hooks for the game screen. `ch: 'party'` = party chat or a party notice; `ch: 'whisper'` = a whisper
    * from `name`, or (with `to`) your own whisper to `to`.
@@ -531,7 +532,8 @@ export class OnlineBackend implements Backend {
   private applySnapshot(s: SnapshotMsg): void {
     this.serverTime = s.time;
     this.serverTimeAt = performance.now();
-    this.onlineCount = s.online;
+    this.hereCount = s.here;
+    this.onlineCount = s.online ?? null;
     this.hazards = s.hazards ?? [];
     this.roomSnap = s.room ?? null;
     this.roomAt = performance.now();

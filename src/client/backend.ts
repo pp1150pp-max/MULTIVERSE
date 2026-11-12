@@ -52,8 +52,10 @@ export interface Backend {
   readonly room: RoomSnap | null;
   /** Simulation clock (seconds). */
   readonly time: number;
-  /** Players in the world right now. */
-  readonly onlineCount: number;
+  /** Players in your map and channel right now, you included. */
+  readonly hereCount: number;
+  /** Players in the whole server; null unless you are owner or GM. */
+  readonly onlineCount: number | null;
   /** Round trip to the server in ms, or null when disconnected or not measured yet. */
   readonly ping: number | null;
   /** Online only: the game loop drew a frame (frame rate and stalls go to the server's lag log). */

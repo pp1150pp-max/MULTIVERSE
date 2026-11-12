@@ -882,7 +882,13 @@ export class Hud {
     $('expbar').title = gate ? `ต้องลงบอส ${gate.nameTh} ก่อนถึงจะเลเวลเกิน ${gate.level} ได้ (EXP ที่เกินจะหายไป)` : '';
     $('hud-level').textContent = `Lv.${p.level} ${p.cls.name}`;
     $('hud-gold').textContent = `${p.gold.toLocaleString()} G`;
-    if (this.g.backend.online) $('hud-online').textContent = `🌐 ออนไลน์ ${this.g.backend.onlineCount} คน${isTouchMode() ? '' : ' · กด Enter เพื่อแชท'}`;
+    if (this.g.backend.online) {
+      $('hud-online').textContent = `🌐 ในแมพนี้ ${this.g.backend.hereCount} คน${isTouchMode() ? '' : ' · กด Enter เพื่อแชท'}`;
+      // The whole server's count: the server sends it to owner and GM only.
+      const all = this.g.backend.onlineCount;
+      $('hud-online-all').classList.toggle('hidden', all === null);
+      if (all !== null) $('hud-online-all').textContent = `🛡 ออนไลน์ทั้งหมด ${all} คน`;
+    }
     this.showPing(this.g.backend.ping);
 
     for (const s of this.slotEls) {
