@@ -1,10 +1,10 @@
 // WebSocket messages between the browser and the game server (JSON). The server runs the
 // simulation; clients send their input and get snapshots of what is near them plus SimEvents.
 import type { SkillSlot } from '../data/classes';
-import type { BagEntry, ClassId, EquipSlot, Item, PotionKind, PotionSize, Rarity, Stats, Vec2 } from '../types';
+import type { BagEntry, BuffScroll, ClassId, EquipSlot, Item, PotionKind, PotionSize, Rarity, Stats, Vec2 } from '../types';
 import type { LootKind } from '../sim/Loot';
 import type { SimEvent } from '../sim/types';
-import type { AutoSettings, BuybackEntry, LootFilter, PotionSelect, SortKey } from '../sim/Player';
+import type { AutoSettings, Buffs, BuybackEntry, LootFilter, PotionSelect, SortKey } from '../sim/Player';
 import type { EnhanceResult } from '../data/enhance';
 import type { RerollKind } from '../data/reroll';
 import type { OrbLook } from '../orbLook';
@@ -70,6 +70,8 @@ export type ActionMsg =
   | { t: 'act'; a: 'buy'; kind: PotionKind; size: PotionSize; n: number }
   /** Buy `n` return scrolls from the merchant. */
   | { t: 'act'; a: 'buyScroll'; n: number }
+  /** Uses one EXP or drop scroll from the bag (Sim.useBuffScroll). */
+  | { t: 'act'; a: 'useBuff'; stone: BuffScroll }
   | { t: 'act'; a: 'sort'; key: SortKey; desc: boolean }
   | { t: 'act'; a: 'move'; from: number; to: number }
   /** Auto Play on/off. The server plays it, so it keeps farming while the browser tab is hidden. */
@@ -144,6 +146,9 @@ export type ActionMsg =
   // The Seeker's key quests (Sim.questAccept / questTurnIn): `boss` is the boss's monster id.
   | { t: 'act'; a: 'questAccept'; boss: string }
   | { t: 'act'; a: 'questTurnIn'; boss: string }
+  // The Seeker's gear quests (Sim.gearAccept / gearTurnIn): `id` is a gear quest id (src/shared/gearQuests.ts).
+  | { t: 'act'; a: 'gearAccept'; id: string }
+  | { t: 'act'; a: 'gearTurnIn'; id: string }
   /** Buy `n` phoenix feathers from the merchant. */
   | { t: 'act'; a: 'buyPhoenix'; n: number }
   /** Dead in a boss room: get up where you fell, for one phoenix feather. */
@@ -227,9 +232,14 @@ export interface PrivateSnap {
   bossKills?: string[];
   /** The Seeker's key quests taken: boss id → kills so far. */
   quests?: Record<string, number>;
-  cd: Partial<Record<SkillSlot, number>>; potCd: number; restCd: number;
+  /** The Seeker's gear quests taken (quest id → kills so far) and handed in. */
+  gearQuests?: Record<string, number>;
+  gearDone?: string[];
+  cd:Partial<Record<SkillSlot, number>>; potCd: number; restCd: number;
   /** Seconds left on a return-scroll cast (left out when not casting). */
   castT?: number;
+  /** Buff scrolls running: seconds of play left on each (left out when none). */
+  buffs?: Buffs;
   /** Share of move speed taken away by a slow right now (missing = none). */
   slow?: number;
   /** True while the server moves the character (dash, knockback, stun, dead, Auto Play) — follow its position. */

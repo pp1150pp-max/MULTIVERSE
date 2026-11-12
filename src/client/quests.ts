@@ -7,6 +7,8 @@ import { QUEST_KILLS, STONE_NAME } from '../shared/data/stones';
 import { questRows } from '../shared/quests';
 import { bossShortName } from '../shared/bossRoom';
 import { stoneIcon } from './icons';
+import { GEAR_KILLS, GEAR_PART_NAME, gearRarity, gearRewardText, gearRows, type GearRow } from '../shared/gearQuests';
+import { RARITY_COLOR, RARITY_LABEL } from '../shared/types';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -54,11 +56,13 @@ export class QuestUI {
       return;
     }
     const rows = questRows(this.g.player);
-    const sig = JSON.stringify(rows.map((r) => [r.state, r.kills]));
+    const gear = gearRows(this.g.player);
+    const sig = JSON.stringify([rows.map((r) => [r.state, r.kills]), gear.map((r) => [r.state, r.kills]), this.g.player.level]);
     if (sig === this.drawn) return;
     this.drawn = sig;
     this.body.replaceChildren(el('div', 'quest-intro',
       'ประตูสู่ห้องบอสต้องใช้กุญแจ — ช่วยข้าล่ามอนสเตอร์ แล้วข้าจะมอบกุญแจที่ใช้ได้จนกว่าเจ้าจะปราบบอสตัวนั้นได้'));
+    if (rows.some((r) => r.state !== 'done')) this.body.append(el('div', 'quest-head', 'กุญแจบอส'));
     for (const r of rows) {
       // Finished quests (that boss is beaten) leave the list (owner 2026-11-12).
       if (r.state === 'done') continue;
@@ -82,11 +86,42 @@ export class QuestUI {
       }
       this.body.append(row);
     }
+    this.gearSection(gear);
     const story = el('button', '', 'ฟังเรื่องราว');
     story.onclick = () => {
       this.toggle(false);
       this.story();
     };
     this.body.append(story);
+  }
+
+  /** The gear quests: each map's next one (or the one under way), and a map not reached yet as one locked line. */
+  private gearSection(rows: GearRow[]): void {
+    const lvl = this.g.player.level;
+    const shown = rows.filter((r) => r.state !== 'done' && (r.state !== 'locked' || (r.part === 'weapon' && lvl < r.map.levels[0])));
+    if (!shown.length) return;
+    this.body.append(el('div', 'quest-head', 'อุปกรณ์'));
+    for (const r of shown) {
+      const rarity = gearRarity(r.map);
+      const row = el('div', `quest-row ${r.state}`);
+      const text = el('div', 'quest-text');
+      const grade = el('span', '', ` (${RARITY_LABEL[rarity]})`);
+      grade.style.color = RARITY_COLOR[rarity];
+      text.append(el('b', '', `${GEAR_PART_NAME[r.part]} · ${r.map.nameTh}`), grade);
+      const sub = el('div', 'quest-sub');
+      sub.textContent =
+        r.state === 'offer' ? `ล่ามอนสเตอร์ใน${r.map.nameTh} ${GEAR_KILLS} ตัว · ได้ ${gearRewardText(r.part)}`
+        : r.state === 'going' ? `ล่ามอนสเตอร์ใน${r.map.nameTh} ${r.kills}/${GEAR_KILLS}`
+        : r.state === 'ready' ? `ล่าครบ ${GEAR_KILLS} ตัวแล้ว — รับ ${gearRewardText(r.part)} ได้เลย`
+        : `ต้อง Lv.${r.map.levels[0]} ขึ้นไป`;
+      text.append(sub);
+      row.append(text);
+      if (r.state === 'offer' || r.state === 'ready') {
+        const btn = el('button', 'primary', r.state === 'offer' ? 'รับภารกิจ' : 'รับอุปกรณ์');
+        btn.onclick = () => (r.state === 'offer' ? this.g.backend.gearAccept(r.id) : this.g.backend.gearTurnIn(r.id));
+        row.append(btn);
+      }
+      this.body.append(row);
+    }
   }
 }

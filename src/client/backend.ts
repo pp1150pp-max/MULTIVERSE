@@ -11,7 +11,7 @@ import type { Hazard } from '../shared/sim/volcanoHeart';
 import type { NpcId } from '../shared/data/npcs';
 import type { EnhanceResult } from '../shared/data/enhance';
 import type { RerollKind } from '../shared/data/reroll';
-import type { EquipSlot, Item, PotionKind, PotionSize, Rarity } from '../shared/types';
+import type { BuffScroll, EquipSlot, Item, PotionKind, PotionSize, Rarity } from '../shared/types';
 import type { MarketCall, MarketReply } from '../shared/sim/market';
 import type { MailCall, MailReply } from '../shared/mail';
 import type { ReportReply } from '../shared/reports';
@@ -78,6 +78,8 @@ export interface Backend {
   buyReturnScroll(n: number): void;
   /** Starts casting a return scroll (sent with the next input). */
   useReturnScroll(): void;
+  /** Uses one EXP or drop scroll from the bag (the server checks). */
+  useBuffScroll(kind: BuffScroll): void;
   sortBag(key: SortKey, desc: boolean): void;
   /** Drag & drop between two bag slots (swap, or merge the same potion). */
   moveInBag(from: number, to: number): void;
@@ -187,6 +189,9 @@ export interface Backend {
   /** The Seeker's key quests (the server checks you stand by him). */
   questAccept(boss: string): void;
   questTurnIn(boss: string): void;
+  /** The Seeker's gear quests by quest id (src/shared/gearQuests.ts; the server checks you stand by him). */
+  gearAccept(id: string): void;
+  gearTurnIn(id: string): void;
   buyPhoenix(n: number): void;
   /** Dead in a boss room: get up here for one phoenix feather. */
   roomRevive(): void;

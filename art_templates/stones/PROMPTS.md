@@ -30,3 +30,13 @@ Item:
 | ไฟล์ | ของ | คำอธิบาย |
 |---|---|---|
 | `stone_return_scroll.png` | ม้วนคัมภีร์กลับเมือง | `a rolled parchment scroll tied with a red ribbon and a gold wax seal, one end slightly unrolled to show a glowing teal portal rune, with a soft teal magical glow and a few tiny sparkles around it` |
+
+## ใบคูณ EXP / ใบคูณดรอป / โทรโข่ง (ของรางวัล ผูกตัวละคร)
+
+ใช้ส่วนสไตล์เดียวกับด้านบน เซฟที่ `art_templates/stones/raw/` แล้วตัดด้วยคำสั่งเดียวกัน
+
+| ไฟล์ | ของ | คำอธิบาย |
+|---|---|---|
+| `stone_exp_scroll.png` | ใบคูณ EXP 100% | `a rolled parchment scroll tied with a green ribbon and a gold wax seal stamped with an upward arrow, one end slightly unrolled to show a glowing emerald-green rune, with soft green magical sparkles around it` |
+| `stone_drop_scroll.png` | ใบคูณดรอป 100% | `a rolled parchment scroll tied with a purple ribbon and a gold wax seal stamped with a small treasure chest, one end slightly unrolled to show a glowing amber-gold rune, with a few tiny gold coins and sparkles floating around it` |
+| `stone_megaphone.png` | โทรโข่ง | `a handheld brass megaphone horn with a worn leather grip and riveted bronze bands, pointing to the right, with three small curved sound-wave lines coming out of the wide end` |

@@ -12,7 +12,7 @@ import {
   ANNOUNCE_FROM, dropsOnFail, FORGE_CD, enhanceCost, itemName, MAX_PLUS, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
 } from '../data/enhance';
 import { entryName, potionName, POTION_STACK, POTIONS, stackLimit } from '../data/potions';
-import { BOSS_KEY, BOSS_QUEST_KEY, BOSS_STONE_CHANCE, BOUND_MSG, PHOENIX_PRICE, QUEST_KILLS, REVIVES_PER_KEY, STONE_STACK, KEY_DROP_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, RETURN_CAST, RETURN_SCROLL_PRICE, STONE_COLOR, STONE_NAME } from '../data/stones';
+import { BOSS_KEY, BOSS_QUEST_KEY, BOSS_STONE_CHANCE, BOUND_MSG, BUFF_LABEL, BUFF_MAX, BUFF_MULT, BUFF_TIME, fmtBuff, PHOENIX_PRICE, QUEST_KILLS, REVIVES_PER_KEY, STONE_STACK, KEY_DROP_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, RETURN_CAST, RETURN_SCROLL_PRICE, STONE_COLOR, STONE_NAME } from '../data/stones';
 import { NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { pick, rand, randInt } from '../rng';
 import { splitExp } from '../party';
@@ -20,7 +20,7 @@ import { CLASS_IDS } from '../data/classes';
 import { classBalance } from '../balance';
 import { COS_SLOT_NAME, cosById, MOUNT_CALM } from '../data/cosmetics';
 import {
-  isBound, isItem, isPotion, isStack, isStone, RARITY_LABEL, sameStack, SLOT_LABEL, BLACKSMITH_STONES, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity } from '../types';
+  isBound, isBuffScroll, isItem, isPotion, isStack, isStone, RARITY_LABEL, sameStack, SLOT_LABEL, BLACKSMITH_STONES, BUFF_SCROLLS, type BagEntry, type BuffScroll, type Item, type StoneKind, type PotionKind, type PotionSize, type Rarity } from '../types';
 import { PORTAL_RANGE, REST_CD, restSpotNear, Terrain, type RestSpot } from './terrain';
 import {
   BUYBACK_RESET, buybackPrice, cleanAutoSettings, lootPots, Player, sortEntries,
@@ -32,6 +32,8 @@ import { Loot, LOOT_PRIORITY_TIME, type LootKind } from './Loot';
 import { nextRowPrice, STASH_GOLD_MAX, STASH_ROW } from './stash';
 import { splitInto } from './split';
 import { questRows } from '../quests';
+import { GEAR_KILLS, GEAR_PART_NAME, gearReward, gearRow } from '../gearQuests';
+import { RARITY_COLOR } from '../types';
 import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type SfxName, type SimEvent } from './types';
 
 /** Gear of this rarity that "sell all" may take: never potions or enhanced items. */
@@ -508,7 +510,10 @@ export class Sim {
     if (!m.summoned) {
       this.shareExp(m);
       this.dropLoot(m);
-      if (!m.isBoss) this.questProgress(m);
+      if (!m.isBoss) {
+        this.questProgress(m);
+        this.gearProgress(m);
+      }
     }
     const sp = this.spawners.find((s) => s.area === m.area);
     if (sp) {
@@ -659,6 +664,43 @@ export class Sim {
     return this.zone.roomOf ? 'ใช้ในห้องบอสไม่ได้' : null;
   }
 
+  /**
+   * Uses one buff scroll from the bag: BUFF_TIME more seconds of its boost, up to BUFF_MAX. A scroll that
+   * would go past the cap is refused and kept (owner 2026-11-12: using another adds time).
+   */
+  useBuffScroll(p: Player, kind: string): void {
+    if (!isBuffScroll(kind as StoneKind)) return;
+    const k = kind as BuffScroll;
+    if (!p.alive) return;
+    if (p.stoneCount(k) < 1) return void this.text(p.x, p.topY, p.z, `ไม่มี${STONE_NAME[k]}`, 'info', 1, p.id);
+    const left = p.buffs[k] ?? 0;
+    if (left + BUFF_TIME > BUFF_MAX) {
+      this.log(`${BUFF_LABEL[k]} สะสมได้สูงสุด ${BUFF_MAX / 3600} ชั่วโมง — ตอนนี้เหลือ ${fmtBuff(left)} รอให้ลดลงก่อนค่อยใช้ใบใหม่`, '#ff8a6a', p.id);
+      return;
+    }
+    if (!p.takeStones(k, 1)) return;
+    p.buffs[k] = left + BUFF_TIME;
+    this.fx('burst', p.x, 1, p.z, STONE_COLOR[k], 16, 3);
+    this.sfx('drink', p.x, p.z, p.id);
+    this.log(`ใช้${STONE_NAME[k]} — ${BUFF_LABEL[k]} เหลือ ${fmtBuff(p.buffs[k]!)}`, STONE_COLOR[k], p.id);
+    this.afterChange(p);
+  }
+
+  /** Counts each running buff down by the seconds played; tells the player when one runs out. */
+  private tickBuffs(p: Player, dt: number): void {
+    for (const k of BUFF_SCROLLS) {
+      const left = p.buffs[k];
+      if (left === undefined) continue;
+      if (left - dt > 0) {
+        p.buffs[k] = left - dt;
+        continue;
+      }
+      delete p.buffs[k];
+      this.log(`${BUFF_LABEL[k]} หมดเวลาแล้ว`, '#b9b09a', p.id);
+      this.events.push({ t: 'save', to: p.id });
+    }
+  }
+
   /** Starts the RETURN_CAST-second cast. The scroll is only used up when the cast finishes. */
   startReturnCast(p: Player): void {
     if (!p.alive || p.castT > 0) return;
@@ -735,9 +777,10 @@ export class Sim {
     else if (this.zone.id !== HUB_ID) this.events.push({ t: 'travel', to: p.id, zone: HUB_ID, atCamp: true });
   }
 
-  /** EXP this player really gets from `n`: half while Auto Play is on. */
+  /** EXP this player really gets from `n`: half while Auto Play is on, then doubled by an EXP scroll. */
   private autoExp(p: Player, n: number): number {
-    return p.autoOn ? Math.floor(n * AUTO_EXP_MULT) : n;
+    const auto = p.autoOn ? Math.floor(n * AUTO_EXP_MULT) : n;
+    return p.buffs.exp_scroll ? auto * BUFF_MULT : auto;
   }
 
   private addExp(p: Player, n: number): void {
@@ -818,6 +861,54 @@ export class Sim {
     }
   }
 
+  // ------------------------------------------------------------ The Seeker's gear quests (src/shared/gearQuests.ts)
+
+  gearAccept(p: Player, id: string): boolean {
+    const r = gearRow(p, id);
+    if (!r || r.state !== 'offer' || !this.near(p, 'seeker')) return false;
+    p.gearQuests[id] = 0;
+    this.log(`รับภารกิจ: ล่ามอนสเตอร์ใน${r.map.nameTh} ${GEAR_KILLS} ตัว แล้วกลับมาหา The Seeker เพื่อรับ${GEAR_PART_NAME[r.part]}`, '#ffd34a', p.id);
+    this.events.push({ t: 'save', to: p.id });
+    return true;
+  }
+
+  gearTurnIn(p: Player, id: string): boolean {
+    const r = gearRow(p, id);
+    if (!r || r.state !== 'ready' || !this.near(p, 'seeker')) return false;
+    const items = gearReward(r.map, r.part, p.cls.id, p.level);
+    const free = p.bag.filter((e) => e === null).length;
+    if (free < items.length) {
+      this.log(`กระเป๋าเต็ม — เคลียร์ช่องว่าง ${items.length} ช่องก่อนรับ${GEAR_PART_NAME[r.part]}`, '#ff8a6a', p.id);
+      return false;
+    }
+    for (const it of items) p.addToBag(it);
+    delete p.gearQuests[id];
+    p.gearDone.push(id);
+    this.log(`ได้รับ${GEAR_PART_NAME[r.part]}: ${items.map((it) => it.name).join(', ')}`, RARITY_COLOR[items[0]?.rarity ?? 'uncommon'], p.id);
+    this.sfx('trade', p.x, p.z, p.id);
+    this.events.push({ t: 'save', to: p.id });
+    return true;
+  }
+
+  /** A monster of a map died: everyone who hit it and has one of that map's gear quests under way counts one. */
+  private gearProgress(m: Monster): void {
+    const map = this.homeOf(m.def);
+    if (!map) return;
+    for (const [pid, dealt] of m.damageBy) {
+      const p = this.players.find((x) => x.id === pid);
+      if (!p || dealt <= 0) continue;
+      for (const [id, n] of Object.entries(p.gearQuests)) {
+        if (!id.startsWith(`${map.id}:`) || n >= GEAR_KILLS) continue;
+        p.gearQuests[id] = n + 1;
+        this.text(m.x, m.topY + 1.3, m.z, `อุปกรณ์ ${n + 1}/${GEAR_KILLS}`, 'info', 1, p.id);
+        if (n + 1 >= GEAR_KILLS) {
+          this.log(`ล่าครบ ${GEAR_KILLS} ตัวแล้ว — กลับไปหา The Seeker ที่เมืองเพื่อรับอุปกรณ์`, '#ffd34a', p.id);
+          this.events.push({ t: 'save', to: p.id });
+        }
+      }
+    }
+  }
+
   // ------------------------------------------------------------ loot
 
   private dropLoot(m: Monster): void {
@@ -842,6 +933,9 @@ export class Sim {
     const owner = top?.id;
     // Everyone in the top damage dealer's party (on this map) shares that first pick, gold included.
     const party = top?.partyId ?? null;
+    // The drop scroll of whoever gets first pick doubles every chance below (never the gold or fixed counts).
+    const boost = top?.buffs.drop_scroll ? BUFF_MULT : 1;
+    const chance = (c: number) => r() < Math.min(1, c * boost);
     // A boss room's boss drops everything once per key put in (owner: rewards times the keys).
     const times = m.isBoss ? this.keys : 1;
     const gold = Math.round(randInt(r, d.gold[0], d.gold[1]) * (1 + 0.1 * (m.level - d.levels[0])) * DROP_GOLD_MULT * m.mult.gold) * times;
@@ -857,21 +951,21 @@ export class Sim {
         this.spawnLoot(m, { type: 'potion', pot: 'mp', size: 's', count: DROP_POTION_MULT }, owner, party);
         // Every blacksmith stone kind can drop from a boss, each rolled on its own.
         for (const stone of BLACKSMITH_STONES) {
-          if (r() < (loot?.stoneChance ?? BOSS_STONE_CHANCE)) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner, party);
+          if (chance(loot?.stoneChance ?? BOSS_STONE_CHANCE)) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner, party);
         }
       }
       return;
     }
-    if (r() < d.itemChance) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 0, band) }, owner, party);
-    if (r() < d.potionChance * DROP_POTION_MULT) this.spawnLoot(m, { type: 'potion', pot: r() < 0.6 ? 'hp' : 'mp', size: 's', count: 1 }, owner, party);
+    if (chance(d.itemChance)) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 0, band) }, owner, party);
+    if (chance(d.potionChance * DROP_POTION_MULT)) this.spawnLoot(m, { type: 'potion', pot: r() < 0.6 ? 'hp' : 'mp', size: 's', count: 1 }, owner, party);
     // Reroll stones, rarely, from monsters that drop items at all (not summoned minions).
     if (d.itemChance > 0) {
       for (const stone of MONSTER_STONES) {
-        if (r() < MONSTER_STONE_CHANCE) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner, party);
+        if (chance(MONSTER_STONE_CHANCE)) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner, party);
       }
       // The key of its home map's boss, wherever it stands (its map or the hub).
       const key = home?.lair && BOSS_KEY[home.lair.boss];
-      if (key && r() < KEY_DROP_CHANCE) this.spawnLoot(m, { type: 'stone', stone: key, count: 1 }, owner, party);
+      if (key && chance(KEY_DROP_CHANCE)) this.spawnLoot(m, { type: 'stone', stone: key, count: 1 }, owner, party);
     }
   }
 
@@ -1378,7 +1472,10 @@ export class Sim {
       this.tickReturnCast(p, dt, it);
       this.tickMount(p);
     }
-    for (const p of this.players) this.tickBuyback(p, dt);
+    for (const p of this.players) {
+      this.tickBuyback(p, dt);
+      this.tickBuffs(p, dt);
+    }
     for (const p of this.players) if (p.alive) this.checkPortals(p);
     if (this.zone.lavaPools) for (const p of this.players) if (p.alive) this.tickLava(p, dt);
 

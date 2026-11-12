@@ -1,6 +1,6 @@
 // Blacksmith stones: dropped by bosses (reroll stones rarely by other monsters too), stacked in the bag like potions.
 // Boss keys (Artifacts) share the stone stack: they stack, sell, trade and list on the market the same way.
-import { isConsumable, type BossKey, type QuestKey, type StoneKind, type StoneStack } from '../types';
+import { isBuffScroll, isConsumable, type BossKey, type BuffScroll, type QuestKey, type StoneKind, type StoneStack } from '../types';
 import type { RerollKind } from './reroll';
 
 /** Most stones (or keys) one bag or stash slot can hold (owner: 10). */
@@ -38,7 +38,7 @@ export const BOSS_QUEST_KEY: Record<string, QuestKey> = {
 /** The Seeker's key quest: kill this many monsters of the boss's map (owner: 30). */
 export const QUEST_KILLS = 30;
 /** Said whenever a quest key would leave the bag. */
-export const BOUND_MSG = 'กุญแจเควสผูกกับตัวละคร — ขาย ทิ้ง ฝากคลัง เทรด หรือลงตลาดไม่ได้';
+export const BOUND_MSG = 'ของชิ้นนี้ผูกกับตัวละคร — ขาย ทิ้ง ฝากคลัง เทรด หรือลงตลาดไม่ได้';
 /** Chance that a monster from a boss's map drops that boss's key, also when it stands in the hub (owner: 1%, lowered to 0.3% on 2026-11-10). */
 export const KEY_DROP_CHANCE = 0.003;
 
@@ -57,6 +57,8 @@ export const STONE_NAME: Record<StoneKind, string> = {
   qkey_heart: 'แกนหัวใจลาวา (เควส)',
   phoenix: 'ขนนกฟีนิกซ์',
   return_scroll: 'ม้วนคัมภีร์กลับเมือง',
+  exp_scroll: 'ใบคูณ EXP 100%',
+  drop_scroll: 'ใบคูณดรอป 100%',
 };
 
 const keyDesc = (boss: string, zone: string): string =>
@@ -80,6 +82,8 @@ export const STONE_DESC: Record<StoneKind, string> = {
   qkey_heart: questDesc('หัวใจภูเขาไฟ'),
   phoenix: 'ใช้ตอนล้มในห้องบอส: ฟื้นตรงที่ล้มด้วย HP/MP ครึ่งหนึ่ง (1 อันต่อครั้ง ใช้ได้สูงสุด 3 ครั้งต่อกุญแจที่ใส่)',
   return_scroll: 'ร่าย 3 วินาทีแล้ววาร์ปกลับกลางเมืองศูนย์กลางมิติ (ปุ่ม G หรือคลิก) · โดนโจมตี เดิน ตี หรือใช้สกิลระหว่างร่าย = ยกเลิก ม้วนไม่หาย',
+  exp_scroll: 'คลิกเพื่อใช้: EXP ที่ได้ ×2 (รวมส่วนแบ่งปาร์ตี้และตอนเปิด Auto) นาน 30 นาทีที่ออนไลน์ · ใช้ซ้อนได้ บวกเวลาเพิ่ม สูงสุด 5 ชั่วโมง',
+  drop_scroll: 'คลิกเพื่อใช้: โอกาสดรอปไอเทม ยา หิน และกุญแจ ×2 (ไม่รวมทอง) นาน 30 นาทีที่ออนไลน์ · นับใบของคนที่ได้สิทธิ์เก็บของ · ใช้ซ้อนได้ บวกเวลาเพิ่ม สูงสุด 5 ชั่วโมง',
 };
 
 export const STONE_COLOR: Record<StoneKind, string> = {
@@ -97,10 +101,12 @@ export const STONE_COLOR: Record<StoneKind, string> = {
   qkey_heart: '#ff6a3a',
   phoenix: '#ff9a3a',
   return_scroll: '#5fe0d0',
+  exp_scroll: '#7ee06a',
+  drop_scroll: '#ffc23a',
 };
 
 /** "ก้อน" for stones, "อัน" for keys and feathers, "ม้วน" for the return scroll. */
-export const stoneUnit = (k: StoneKind): string => (k === 'return_scroll' ? 'ม้วน' : k.includes('key_') || k === 'phoenix' ? 'อัน' : 'ก้อน');
+export const stoneUnit = (k: StoneKind): string => (k === 'return_scroll' ? 'ม้วน' : isBuffScroll(k) ? 'ใบ' : k.includes('key_') || k === 'phoenix' ? 'อัน' : 'ก้อน');
 
 /** Return scroll: the merchant's price (owner: 500 G) and how long it takes to cast (owner: 3 s). */
 export const RETURN_SCROLL_PRICE = 500;
@@ -109,9 +115,24 @@ export const RETURN_CAST = 3;
 /** What the merchant pays for one: shop items (feather, consumables) half their shop price, stones and keys STONE_SELL. */
 export function stoneSellPrice(k: StoneKind): number {
   if (k === 'phoenix') return PHOENIX_PRICE / 2;
+  // Bound rewards never reach the merchant.
+  if (isBuffScroll(k)) return 0;
   return isConsumable(k) ? Math.floor(RETURN_SCROLL_PRICE / 2) : STONE_SELL;
 }
 
 export function stoneStackValue(s: StoneStack): number {
   return stoneSellPrice(s.stone) * s.count;
+}
+
+/** A buff scroll's boost (owner 2026-11-12: +100% = ×2), what one scroll adds (30 min) and the most that can be stored (5 h), in seconds of play. */
+export const BUFF_MULT = 2;
+export const BUFF_TIME = 30 * 60;
+export const BUFF_MAX = 5 * 60 * 60;
+/** Short label of each buff on the HUD. */
+export const BUFF_LABEL: Record<BuffScroll, string> = { exp_scroll: 'EXP ×2', drop_scroll: 'ดรอป ×2' };
+
+/** Buff time left as "1 ชม. 05 นาที" / "12 นาที". */
+export function fmtBuff(sec: number): string {
+  const m = Math.ceil(sec / 60);
+  return m >= 60 ? `${Math.floor(m / 60)} ชม. ${String(m % 60).padStart(2, '0')} นาที` : `${m} นาที`;
 }

@@ -11,10 +11,11 @@ import { cleanCosWorn, MOUNT_SPEED, type CosWorn } from '../data/cosmetics';
 import { auraTier, effectiveStats, orbCodes, plusOf, sellValue } from '../data/enhance';
 import { itemClass, starterWeapon, upgradeItem } from '../data/items';
 import { anyStackValue, potionHeal, POTIONS, POTION_SIZES, POTION_STACK, stackLimit } from '../data/potions';
-import { BOSS_QUEST_KEY, QUEST_KILLS, STONE_STACK } from '../data/stones';
+import { BOSS_QUEST_KEY, BUFF_MAX, QUEST_KILLS, STONE_STACK } from '../data/stones';
+import { cleanGearDone, cleanGearQuests } from '../gearQuests';
 import {
-  isPotion, isStack, isStone, RARITIES, sameStack, SLOTS, STONE_KINDS, wornPlaces,
-  type BagEntry, type EquipSlot, type StoneKind, type ClassId, type Item, type PotionKind, type PotionSize, type Rarity, type SlotId, type Stats, type Vec2,
+  BUFF_SCROLLS, isPotion, isStack, isStone, RARITIES, sameStack, SLOTS, STONE_KINDS, wornPlaces,
+  type BagEntry, type BuffScroll, type EquipSlot, type StoneKind, type ClassId, type Item, type PotionKind, type PotionSize, type Rarity, type SlotId, type Stats, type Vec2,
 } from '../types';
 import type { LootKind } from './Loot';
 import { newStash, type StashData } from './stash';
@@ -207,8 +208,37 @@ export interface CharacterData {
   bossKills?: string[];
   /** The Seeker's key quests taken: boss id → monsters killed so far (see QUEST_KILLS). Missing = none. */
   quests?: Record<string, number>;
+  /** The Seeker's gear quests taken (src/shared/gearQuests.ts): quest id → kills so far. Missing = none. */
+  gearQuests?: Record<string, number>;
+  /** Gear quests handed in. Missing = none. */
+  gearDone?: string[];
   /** Cosmetics worn (src/shared/data/cosmetics.ts), kept by the server to what the account owns. Missing = none. */
   cosmetics?: CosWorn;
+  /** Buff scrolls running: seconds of play left on each (see BUFF_MAX). Missing = none. */
+  buffs?: Buffs;
+}
+
+export type Buffs = Partial<Record<BuffScroll, number>>;
+
+/** Whole seconds, without the ones that ran out (for saving and the snapshot). */
+export function roundBuffs(b: Buffs): Buffs {
+  const out: Buffs = {};
+  for (const k of BUFF_SCROLLS) {
+    const t = b[k];
+    if (t && t > 0) out[k] = Math.ceil(t);
+  }
+  return out;
+}
+
+/** A save's buff timers, kept to known kinds and 0–BUFF_MAX seconds. */
+export function cleanBuffs(v: unknown): Buffs {
+  const out: Buffs = {};
+  if (!v || typeof v !== 'object') return out;
+  for (const k of BUFF_SCROLLS) {
+    const t = (v as Record<string, unknown>)[k];
+    if (typeof t === 'number' && Number.isFinite(t) && t > 0) out[k] = Math.min(t, BUFF_MAX);
+  }
+  return out;
 }
 
 /**
@@ -296,6 +326,12 @@ export class Player extends Unit {
   bossKills: string[];
   /** The Seeker's key quests taken: boss id → monsters killed so far. Saved. */
   quests: Record<string, number>;
+  /** The Seeker's gear quests taken: quest id → kills so far. Saved. */
+  gearQuests: Record<string, number>;
+  /** Gear quests handed in. Saved. */
+  gearDone: string[];
+  /** Buff scrolls running: seconds of play left on each. Saved; counted down by Sim.tickBuffs. */
+  buffs: Buffs;
   /** True while Auto Play runs for this player (set by the server each tick); Sim halves their EXP. Never saved. */
   autoOn = false;
   /** Told once per stuck level that a boss gate is holding the EXP bar. Never saved. */
@@ -345,7 +381,10 @@ export class Player extends Unit {
     this.bag = Array.from({ length: BAG_SIZE }, (_, i) => data.bag[i] ?? null);
     this.zone = data.zone;
     this.quests = cleanQuests(data.quests);
+    this.gearQuests = cleanGearQuests(data.gearQuests);
+    this.gearDone = cleanGearDone(data.gearDone);
     this.cosmetics = cleanCosWorn(data.cosmetics);
+    this.buffs = cleanBuffs(data.buffs);
     this.bossKills = [...new Set([...gatesPassedBy(data.level), ...(Array.isArray(data.bossKills) ? data.bossKills.filter((x) => typeof x === 'string') : [])])];
     this.potSel = { hp: 's', mp: 's', ...data.potSel };
     this.lootFilter = data.lootFilter
@@ -469,7 +508,10 @@ export class Player extends Unit {
       buybackLeft: Math.round(this.buybackLeft),
       bossKills: this.bossKills,
       quests: { ...this.quests },
+      gearQuests: { ...this.gearQuests },
+      gearDone: [...this.gearDone],
       cosmetics: { ...this.cosmetics },
+      buffs: roundBuffs(this.buffs),
     };
   }
 
