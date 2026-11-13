@@ -291,7 +291,7 @@ export class GameWorld {
   constructor(private readonly db: Db, http: HttpServer) {
     const wss = new WebSocketServer({ server: http, path: WS_PATH, maxPayload: 16 * 1024, perMessageDeflate: WS_DEFLATE });
     wss.on('connection', (ws, req) => this.onConnection(ws, req));
-    setInterval(() => this.tick(), 1000 / TICK_HZ);
+    this.startTicking();
     setInterval(() => this.saveAll(), AUTOSAVE_MS);
     setInterval(() => this.logPings(), PING_LOG_MS);
     setInterval(() => this.logPerf(), PERF_LOG_MS);
@@ -409,6 +409,26 @@ export class GameWorld {
     setInterval(() => this.rooms.tick(), 250);
     this.expireMarket();
     setInterval(() => this.expireMarket(), MARKET_EXPIRE_MS);
+  }
+
+  /**
+   * Runs tick() TICK_HZ times a second on average. A plain setInterval(1000 / TICK_HZ) only managed
+   * ~21 a second on Windows, whose timers fire on a ~15.6 ms grid (33.3 ms became 46.8 ms), so
+   * snapshots went out ~11 times a second instead of SNAPSHOT_HZ. Instead a short timer checks the
+   * clock and runs a tick whenever one is due: ticks land on the timer grid (31 or 47 ms apart on
+   * Windows) but keep the average. One tick per wake-up, and after a long stall (the event loop was
+   * blocked) the schedule restarts from now rather than running the missed ticks in a burst.
+   */
+  private startTicking(): void {
+    const step = 1000 / TICK_HZ;
+    let due = performance.now() + step;
+    setInterval(() => {
+      const now = performance.now();
+      if (now < due) return;
+      due += step;
+      if (now - due > step * 3) due = now + step;
+      this.tick();
+    }, step / 4);
   }
 
   get onlineCount(): number {
@@ -2084,9 +2104,21 @@ export class GameWorld {
     }
   }
 
+  /**
+   * Saves everyone in one database transaction: one commit (one wait for the disk) instead of one
+   * per character, which froze the game for ~0.8 ms per player every AUTOSAVE_MS. Each character is
+   * still its own savepoint inside (Db.transaction), so one failing save does not undo the others.
+   */
   saveAll(): void {
     const t0 = performance.now();
-    for (const s of this.sessions) this.save(s);
+    try {
+      this.db.transaction(() => {
+        for (const s of this.sessions) this.save(s);
+      });
+    } catch (e) {
+      // The commit itself failed: nothing was written; the next autosave (or a logout) tries again.
+      console.error('[world] autosave failed', e);
+    }
     this.perf.autosave(performance.now() - t0);
   }
 }
