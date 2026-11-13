@@ -20,7 +20,7 @@ import {
 import type { LootKind } from './Loot';
 import { newStash, type StashData } from './stash';
 import { classBalance, currentBalance, finishStats, skillMpCost } from '../balance';
-import { AUTO_LOOT_ORDERS, AUTO_OUT_ACTIONS, AUTO_TARGET_MODES, type AutoLootOrder, type AutoOutAction, type AutoTargetMode } from '../autoTuning';
+import { AUTO_DEFAULT_KEYS, AUTO_LOOT_ORDERS, AUTO_OUT_ACTIONS, AUTO_TARGET_MODES, type AutoDefaults, type AutoLootOrder, type AutoOutAction, type AutoTargetMode } from '../autoTuning';
 import { MONSTERS } from '../data/monsters';
 
 /** Seconds after the last hit taken, attack or skill before out-of-combat regen kicks in. */
@@ -73,7 +73,10 @@ export interface AutoSettings {
   /** Priority: Auto casts the first skill in this list that is switched on and ready. Always q, e and r once each. */
   order: AutoSkill[];
   loot: boolean;
-  // Options added 2026-11-13. Saves without them get the server's defaults (admin "ปรับสมดุล" → Auto Play).
+  // Options added 2026-11-13. Until the player picks one themselves (listed in `optsSet`), it follows the
+  // server's default (admin "ปรับสมดุล" → Auto Play), even after the owner changes that default.
+  /** The options below the player has picked themselves; the rest take the server's defaults. */
+  optsSet?: (keyof AutoDefaults)[];
   /** When drops are picked up: kill attackers first / the old balanced way / drops first. */
   lootOrder: AutoLootOrder;
   /** Also pick up other players' drops once their priority time is over (false = own and party drops, and ownerless ones). */
@@ -127,9 +130,11 @@ export function cleanAutoSettings(raw: unknown): AutoSettings {
   const num = (v: unknown, def: number, lo: number, hi: number) =>
     typeof v === 'number' && Number.isFinite(v) ? Math.round(Math.max(lo, Math.min(hi, v))) : def;
   const sk = (r.skills ?? {}) as Partial<AutoSettings['skills']>;
-  // Options a save doesn't have yet take the server's defaults (tunable on /admin).
+  // Options the player hasn't picked take the server's defaults (tunable on /admin).
   const ad = currentBalance().auto.defaults;
   const pick = <T,>(v: unknown, ok: readonly T[], def: T): T => (ok.includes(v as T) ? (v as T) : def);
+  const own = AUTO_DEFAULT_KEYS.filter((k) => Array.isArray(r.optsSet) && r.optsSet.includes(k));
+  const mine = (k: keyof AutoDefaults) => own.includes(k);
   return {
     // Saves from before `rangeSet` hold 300, the old default, which the player never chose: use today's default.
     // Any other number there was typed by the player, so it stays.
@@ -142,12 +147,13 @@ export function cleanAutoSettings(raw: unknown): AutoSettings {
     skills: { q: sk.q !== false, e: sk.e !== false, r: sk.r !== false },
     order: cleanAutoOrder(r.order),
     loot: r.loot !== false,
-    lootOrder: pick(r.lootOrder, AUTO_LOOT_ORDERS, ad.lootOrder),
-    othersLoot: typeof r.othersLoot === 'boolean' ? r.othersLoot : ad.othersLoot,
-    noHp: pick(r.noHp, AUTO_OUT_ACTIONS, ad.noHp),
-    noMp: pick(r.noMp, AUTO_OUT_ACTIONS, ad.noMp),
-    bagFull: pick(r.bagFull, AUTO_OUT_ACTIONS, ad.bagFull),
-    target: pick(r.target, AUTO_TARGET_MODES, ad.target),
+    optsSet: own,
+    lootOrder: mine('lootOrder') ? pick(r.lootOrder, AUTO_LOOT_ORDERS, ad.lootOrder) : ad.lootOrder,
+    othersLoot: mine('othersLoot') && typeof r.othersLoot === 'boolean' ? r.othersLoot : ad.othersLoot,
+    noHp: mine('noHp') ? pick(r.noHp, AUTO_OUT_ACTIONS, ad.noHp) : ad.noHp,
+    noMp: mine('noMp') ? pick(r.noMp, AUTO_OUT_ACTIONS, ad.noMp) : ad.noMp,
+    bagFull: mine('bagFull') ? pick(r.bagFull, AUTO_OUT_ACTIONS, ad.bagFull) : ad.bagFull,
+    target: mine('target') ? pick(r.target, AUTO_TARGET_MODES, ad.target) : ad.target,
     skip: cleanAutoSkip(r.skip),
   };
 }

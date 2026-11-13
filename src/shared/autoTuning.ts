@@ -100,7 +100,9 @@ const DEFAULT_CHOICES: { [K in keyof AutoDefaults]: readonly AutoDefaults[K][] }
   bagFull: AUTO_OUT_ACTIONS,
   target: AUTO_TARGET_MODES,
 };
-const DEFAULT_KEYS = Object.keys(DEFAULT_CHOICES) as (keyof AutoDefaults)[];
+/** The options that have a server default (and a player's own pick, AutoSettings.optsSet). */
+export const AUTO_DEFAULT_KEYS = Object.keys(DEFAULT_CHOICES) as (keyof AutoDefaults)[];
+const DEFAULT_KEYS = AUTO_DEFAULT_KEYS;
 export const AUTO_DEFAULT_NAME: Record<keyof AutoDefaults, string> = {
   lootOrder: 'ลำดับเก็บของ', othersLoot: 'เก็บของคนอื่น', noHp: 'ยา HP หมด', noMp: 'ยา MP หมด', bagFull: 'กระเป๋าเต็ม', target: 'เป้าหมาย',
 };

@@ -35,6 +35,8 @@ export const AUTO_TOWN_MSG = 'ใช้ Auto Play ในเมืองไม่
 const RANGE: Record<string, number> = { sword: 1.9, mage: 8.5, gunslinger: 9 };
 /** A drop counts as "got closer" (resetting the give-up timer) only when Auto is this much nearer than before. */
 const LOOT_PROGRESS = 0.25;
+/** Monsters farther than this are never targeted (nor hold up "fight first" looting). */
+const TARGET_REACH = 24;
 /** Thai reasons for the "out of supplies" options. */
 const OUT_WHY = { noHp: 'ยา HP หมด', noMp: 'ยา MP หมด', bagFull: 'กระเป๋าเต็ม' } as const;
 /** Seconds with nothing to fight before Auto tells the player: quickly when no monster lives in the circle at all,
@@ -261,7 +263,8 @@ export class AutoPlay {
     }
 
     const cfg = currentBalance().auto;
-    const attackers = g.monsters.filter((m) => AutoPlay.attacking(m, p)).length;
+    // Same reach as pickTarget, so one chasing from too far to fight doesn't hold up the looting.
+    const attackers = g.monsters.filter((m) => AutoPlay.attacking(m, p) && dist(m) <= TARGET_REACH).length;
     if (this.outOfSupplies(p, cfg, attackers > 0, out)) return out;
 
     const loot = this.pickLoot(g, cfg, attackers);
@@ -339,7 +342,7 @@ export class AutoPlay {
     for (const m of g.monsters) {
       if (!m.alive || m.isBoss || m.state === 'return' || inBossArena(g.zone, m.x, m.z)) continue;
       const d = Math.hypot(m.x - p.x, m.z - p.z);
-      if (d > 24) continue;
+      if (d > TARGET_REACH) continue;
       const attacking = AutoPlay.attacking(m, p);
       if (!attacking && skip.includes(m.def.id)) continue;
       // Only inside the circle, except monsters already attacking the player.

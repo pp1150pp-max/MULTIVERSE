@@ -20,7 +20,7 @@ import { isBulkSellable } from '../shared/sim/Sim';
 import { nextRowPrice, STASH_MAX, STASH_ROW, STASH_ROW_PRICES, STASH_START } from '../shared/sim/stash';
 import { MONSTERS } from '../shared/data/monsters';
 import { currentBalance } from '../shared/balance';
-import { AUTO_LOOT_ORDER_NAME, AUTO_LOOT_ORDERS, AUTO_OUT_ACTION_NAME, AUTO_OUT_ACTIONS, AUTO_TARGET_MODES, AUTO_TARGET_NAME } from '../shared/autoTuning';
+import { AUTO_DEFAULT_KEYS, AUTO_LOOT_ORDER_NAME, AUTO_LOOT_ORDERS, AUTO_OUT_ACTION_NAME, AUTO_OUT_ACTIONS, AUTO_TARGET_MODES, AUTO_TARGET_NAME } from '../shared/autoTuning';
 import { ZONE_1 } from '../shared/data/zones';
 import { expToNext } from '../shared/formulas';
 import { blockingGate } from '../shared/data/bossGates';
@@ -1367,11 +1367,16 @@ export class Hud {
     const boxes = [...$('aset-skip').querySelectorAll<HTMLInputElement>('input[data-monster]')];
     const here = new Set(boxes.map((b) => b.dataset.monster!));
     const skip = [...cur.skip.filter((id) => !here.has(id)), ...boxes.filter((b) => !b.checked).map((b) => b.dataset.monster!)];
+    const opts = {
+      lootOrder: val('aset-lootorder'), othersLoot: val('aset-others') === '1',
+      noHp: val('aset-nohp'), noMp: val('aset-nomp'), bagFull: val('aset-bagfull'), target: val('aset-target'),
+    };
+    // An option the player changes is theirs from now on; the others keep following the server's default.
+    const optsSet = AUTO_DEFAULT_KEYS.filter((k) => cur.optsSet?.includes(k) || opts[k] !== cur[k]);
     const s = cleanAutoSettings({
       range: num('aset-range'), hpPct: num('aset-hp'), mpPct: num('aset-mp'), skills, order, loot: $<HTMLInputElement>('aset-loot').checked,
       rangeSet: cur.rangeSet || num('aset-range') !== cur.range,
-      lootOrder: val('aset-lootorder'), othersLoot: val('aset-others') === '1',
-      noHp: val('aset-nohp'), noMp: val('aset-nomp'), bagFull: val('aset-bagfull'), target: val('aset-target'), skip,
+      ...opts, optsSet, skip,
     });
     this.g.backend.setAutoSettings(s);
     this.fillAutoSettings();

@@ -10,6 +10,7 @@ import { cleanAutoSettings, type AutoSettings, type Player } from '../src/shared
 import type { Monster } from '../src/shared/sim/Monster';
 import { IDLE_INTENT, type Intent } from '../src/shared/sim/types';
 import { applyBalance, checkBalance } from '../src/shared/balance';
+import { AUTO_DEFAULT_KEYS } from '../src/shared/autoTuning';
 
 const sim = new Sim(ZONE_1);
 for (let i = 0; i < 300 && sim.monsters.filter((m) => m.alive && !m.isBoss).length < 2; i++) sim.step(0.1);
@@ -31,7 +32,8 @@ function place(m: Monster, attacking: boolean, dx = 1.5): void {
   m.target = attacking ? p : null;
 }
 function settings(s: Partial<AutoSettings>): void {
-  p.autoSettings = cleanAutoSettings({ ...p.autoSettings, ...s });
+  // As if picked in the Auto window: every option is the player's own.
+  p.autoSettings = cleanAutoSettings({ ...p.autoSettings, ...s, optsSet: [...AUTO_DEFAULT_KEYS] });
 }
 function run(monsters: Monster[], loots: Loot[], time = 1, auto = new AutoPlay()): { it: Intent; auto: AutoPlay } {
   if (time === 1) auto.start(p.x, p.z);
@@ -44,7 +46,7 @@ const goesTo = (it: Intent, l: Loot) => !!it.moveTo && Math.hypot(it.moveTo.x - 
 const fresh = cleanAutoSettings({ range: 500 });
 ok(fresh.lootOrder === 'fight' && fresh.othersLoot && fresh.noHp === 'fight' && fresh.noMp === 'fight' && fresh.bagFull === 'fight' && fresh.target === 'attacker' && fresh.skip.length === 0,
   'old saves get the code defaults');
-const junk = cleanAutoSettings({ lootOrder: 'x', othersLoot: 'yes', noHp: 'boom', target: 3, skip: ['nope', mob.def.id, mob.def.id, 'boss_bear'] });
+const junk = cleanAutoSettings({ optsSet: ['lootOrder', 'othersLoot', 'noHp', 'target', 'bogus'], lootOrder: 'x', othersLoot: 'yes', noHp: 'boom', target: 3, skip: ['nope', mob.def.id, mob.def.id, 'boss_bear'] });
 ok(junk.lootOrder === 'fight' && junk.othersLoot === true && junk.noHp === 'fight' && junk.target === 'attacker', 'bad values fall back to defaults');
 ok(junk.skip.length === 1 && junk.skip[0] === mob.def.id, 'skip keeps known non-boss kinds once');
 
@@ -158,6 +160,11 @@ ok(!r.it.recall && !r.auto.takeStop() && (r.it.basic || !!r.it.moveTo), '"scroll
 place(mob, false, 10);
 r = run([mob], []);
 ok(r.it.recall === true && /ม้วน/.test(r.auto.takeStop() ?? ''), '"scroll" with nothing attacking: reads the scroll and stops Auto');
+// The real Sim starts the cast from that intent (Auto is off from the next tick, so nothing breaks it).
+const recallIt = r.it;
+sim.step(0.05, (pl) => (pl === p ? recallIt : IDLE_INTENT));
+ok(p.castT > 0, 'the return scroll cast really starts');
+p.castT = 0;
 
 // ---- admin switches and defaults (balance tuning `auto`)
 const c = checkBalance({ auto: { allow: { scroll: false, lootFirst: false }, giveUpSec: 2, defaults: { lootOrder: 'balanced' } } }, true);
@@ -176,6 +183,18 @@ ok(!goesTo(r.it, far2), '"loot first" switched off: behaves like balanced');
 applyBalance({});
 r = run([mob], [far2]);
 ok(goesTo(r.it, far2), '"loot first" back on: walks to the far drop again');
+
+// ---- an option the player never picked keeps following the server default, through save and load
+const saved = JSON.parse(JSON.stringify(cleanAutoSettings({ range: 500 }))) as AutoSettings;
+ok(saved.lootOrder === 'fight' && (saved.optsSet ?? []).length === 0, 'a character that never picked saves no own options');
+applyBalance(checkBalance({ auto: { defaults: { lootOrder: 'loot', noHp: 'stop' } } }, true).tuning!);
+const reloaded = cleanAutoSettings(saved);
+ok(reloaded.lootOrder === 'loot' && reloaded.noHp === 'stop', 'after the owner changes the defaults, it follows them on load');
+const picked = cleanAutoSettings({ ...saved, lootOrder: 'balanced', optsSet: ['lootOrder'] });
+const picked2 = cleanAutoSettings(JSON.parse(JSON.stringify(picked)));
+ok(picked2.lootOrder === 'balanced' && picked2.noHp === 'stop', 'an option the player picked stays theirs; the rest follow the default');
+ok(cleanAutoSettings({ lootOrder: 'balanced' }).lootOrder === 'loot', 'a value without optsSet (old/forged) is not taken as the player\'s pick');
+applyBalance({});
 
 sim.removePlayer(p as Player);
 finish('auto-options');

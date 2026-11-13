@@ -236,7 +236,7 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 .auto-row { display: flex; gap: 4px; }
 .auto-row #btn-auto { flex: 1; }
 #btn-auto-set { padding-left: 8px; padding-right: 8px; }
-#auto-settings { right: 168px; top: 12px; width: min(300px, 92vw); font-size: 13px; }
+#auto-settings { right: 168px; top: 12px; width: min(300px, 92vw); font-size: 13px; max-height: calc(100vh - 24px); overflow-y: auto; }
 #auto-settings .aset-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; }
 #auto-settings input[type='number'] {
   width: 64px; font-family: inherit; font-size: 13px; padding: 2px 4px; text-align: right;

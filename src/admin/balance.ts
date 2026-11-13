@@ -583,7 +583,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     };
     autoCard.replaceChildren(
       h('h2', {}, 'Auto Play'),
-      h('div', { class: 'muted' }, 'ค่าเริ่มต้น = ตัวเลือกของตัวละครที่ยังไม่เคยกดเปลี่ยนในหน้าต่างตั้งค่า Auto (ใครเปลี่ยนแล้วใช้ค่าของตัวเอง)'),
+      h('div', { class: 'muted' }, 'ค่าเริ่มต้น = ใช้กับตัวเลือกที่ผู้เล่นยังไม่เคยเปลี่ยนเองในหน้าต่างตั้งค่า Auto (มีผลทันทีแม้คนที่ออนไลน์ · ช่องที่ผู้เล่นเปลี่ยนเองแล้วใช้ค่าของเขา)'),
       h('div', { class: 'row bal-line' },
         h('label', {}, `${AUTO_DEFAULT_NAME.lootOrder} `, pick('lootOrder', AUTO_LOOT_ORDERS)),
         h('label', {}, `${AUTO_DEFAULT_NAME.othersLoot} `, pick('othersLoot', [true, false])),
@@ -663,7 +663,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         void save({ tuning: c.tuning }, `ใช้ค่าใหม่กับทั้งเซิร์ฟทันทีไหม?\n\n${changes.slice(0, 1200)}`);
       } }, '💾 บันทึกทั้งเซิร์ฟ'),
       h('button', { onclick: () => { draft = mergeBalance(saved); redraw(); msg.textContent = ''; } }, 'ยกเลิกที่ยังไม่บันทึก'),
-      h('button', { onclick: () => void save({ reset: true }, 'คืนทุกค่า (อาชีพ tier และตัวคูณมอน) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?') }, '↺ คืนค่าในโค้ด'),
+      h('button', { onclick: () => void save({ reset: true }, 'คืนทุกค่า (อาชีพ tier ตัวคูณมอน และ Auto Play) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?') }, '↺ คืนค่าในโค้ด'),
     ),
     msg,
   );
