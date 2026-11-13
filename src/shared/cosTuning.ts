@@ -319,12 +319,11 @@ export function savePartOf(saved: CosTuning, id: string, cur: TuneValues, part: 
 }
 
 /**
- * Pasting text copied from the bench ("คัดลอกค่าที่ตั้งไว้") onto the saved tuning, for editing many pieces at
- * once (the /admin "จัดการของแต่งตัว" tab). The text is cosmetic id → its changes from the code default, so
- * every piece it names gets exactly those values (fields left out = code default); pieces it doesn't name stay
- * as saved. The copy button names every tuned piece (`{}` for one at its code default); older copies named only
- * the changed pieces and paste the same way. Checked strictly (an error on anything wrong); `only` limits it
- * to some of the named pieces. Returns the clean tuning and the ids it named.
+ * Puts the values of some pieces on top of the saved tuning (the /admin "จัดการของแต่งตัว" tab saves the
+ * pieces it changed this way, merged on the server). `text` is cosmetic id → its values (only the changes
+ * from the code default, or all of them), so every piece it names gets exactly those values (fields left out
+ * = code default); pieces it doesn't name stay as saved. Checked strictly (an error on anything wrong); `only`
+ * limits it to some of the named pieces. Returns the clean tuning and the ids it named.
  */
 export function pasteCosTuning(saved: CosTuning, text: unknown, only?: readonly string[]): { tuning: CosTuning; ids: string[]; error?: undefined } | { tuning?: undefined; ids?: undefined; error: string } {
   const c = checkCosTuning(text, true);

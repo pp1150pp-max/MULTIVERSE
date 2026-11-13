@@ -116,6 +116,8 @@ ok(!!checkCosTuning({ aura_star: { dz_at_front: 0.1 } }, true).error, 'an aura h
   ok(JSON.stringify(only.tuning) === JSON.stringify({ wings_angel: { back: 0.3 }, pet_cat: { float: 1 } }) && only.ids?.join() === 'mount_wolf', 'only the ticked pieces are pasted');
   ok(!!pasteCosTuning(saved, { wings_angel: { backStand: 9 } }).error && !!pasteCosTuning(saved, { title_gold: {} }).error && !!pasteCosTuning(saved, 'x').error, 'pasting bad text is refused (range, title set, not an object)');
   ok(pasteCosTuning({}, { wings_angel: { dy_front: 0.3 } }).tuning?.wings_angel?.dy_at_frontLeft === 0.3, 'an old copy with the 3-group offsets pastes as the 8 facings');
+  const full = pasteCosTuning(saved, { wings_angel: { ...cosTuneDefaults('wings_angel')!, backStand: 1.5 }, mount_wolf: { ...cosTuneDefaults('mount_wolf')!, seat: 0.7 } });
+  ok(JSON.stringify(full.tuning) === JSON.stringify({ wings_angel: { backStand: 1.5 }, mount_wolf: { seat: 0.7 }, pet_cat: { float: 1 } }), `the management tab sends every value of a changed piece: only what differs from the code is stored (${JSON.stringify(full.tuning)})`);
 }
 
 // ---------------------------------------------------------- against a real server
