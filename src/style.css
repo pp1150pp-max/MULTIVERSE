@@ -1553,3 +1553,27 @@ input[type=range]::-moz-range-thumb {
   width: calc(var(--ctl-box) - 6px); height: calc(var(--ctl-box) - 6px); background: var(--ctl-accent); border: 1px solid #0d0a07; border-radius: 2px;
 }
 input[type=range]:hover::-webkit-slider-thumb { background: var(--ctl-accent-hi); }
+
+/* ===== Window home spots (owner 2026-11-13): each window has its own place so several can be open without piling up.
+   Bag on the right; party / friends / mail on the left (stepped down so every title bar stays visible); shop, stash,
+   forge and market already sit on the left. Big map, menu, help and the rest stay centred. Placed last so these win. */
+#inventory { left: auto; right: 4px; transform: none; }
+#party-win, #friends-win, #mail-win { left: 12px; transform: none; top: calc(120px + var(--win-step, 0px)); max-height: calc(100vh - 130px); overflow-y: auto; }
+#friends-win { --win-step: 28px; }
+#mail-win { --win-step: 56px; }
+.hud-bars #party-win, .hud-bars #friends-win, .hud-bars #mail-win { top: calc(216px + var(--win-step, 0px)); max-height: calc(100vh - 226px); }
+@supports (height: 100dvh) {
+  #party-win, #friends-win, #mail-win { max-height: calc(100dvh - 130px); }
+  .hud-bars #party-win, .hud-bars #friends-win, .hud-bars #mail-win { max-height: calc(100dvh - 226px); }
+}
+
+/* Collapse the bag's left panel (stats / loot filter): a small arrow on the bag's left edge, remembered in localStorage.
+   It hides along with the panel when a shop, stash, market or forge is open (the panel is already hidden then). */
+#inventory.side-collapsed .inv-side { display: none; }
+.inv-side-toggle {
+  position: absolute; left: -16px; top: 50%; z-index: 2; width: 24px; height: 44px; margin-top: -22px; padding: 0;
+  font-size: 12px; line-height: 1; display: flex; align-items: center; justify-content: center;
+}
+@media (pointer: coarse) { .inv-side-toggle { width: 32px; height: 52px; margin-top: -26px; left: -22px; font-size: 14px; } }
+#hud:has(#shop:not(.hidden)) .inv-side-toggle, #hud:has(#stash:not(.hidden)) .inv-side-toggle,
+#hud:has(#market:not(.hidden)) .inv-side-toggle, #hud:has(#forge:not(.hidden)) .inv-side-toggle { display: none; }
