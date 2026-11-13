@@ -132,6 +132,22 @@ async function keepTunnel(): Promise<void> {
   }
 }
 
+// A server left running without this (e.g. after "End" in Task Scheduler) is not taken over: waiting for
+// its port would start a new one after npm run stop-server, which must stop for good.
+async function refuseIfPortBusy(): Promise<void> {
+  if (!(await portBusy(PORT))) return;
+  say(`port ${PORT} มีโปรแกรมอื่นใช้อยู่ (server ตัวเก่ายังเปิดอยู่?) — ไม่เปิดซ้ำ · ปิดตัวนั้นด้วย npm run stop-server ก่อน`);
+  stopping = true;
+  const t = tunnel as ChildProcess | null;
+  if (t) {
+    t.kill();
+    clearTunnelState();
+  }
+  lock.close();
+  process.exit(1);
+}
+
+await refuseIfPortBusy(); // before the link, so nothing is left behind
 if (NO_TUNNEL) say('--no-tunnel: ไม่เปิดลิงก์สำหรับเพื่อน');
 else void keepTunnel();
 
@@ -140,13 +156,7 @@ else void keepTunnel();
 let crashes = 0;
 let code = 0;
 for (;;) {
-  // A server left running without this (e.g. after "End" in Task Scheduler) is not taken over: waiting for
-  // its port would start a new one after npm run stop-server, which must stop for good.
-  if (await portBusy(PORT)) {
-    say(`port ${PORT} มีโปรแกรมอื่นใช้อยู่ (server ตัวเก่ายังเปิดอยู่?) — ไม่เปิดซ้ำ · ปิดตัวนั้นด้วย npm run stop-server ก่อน`);
-    code = 1;
-    break;
-  }
+  await refuseIfPortBusy();
   const started = Date.now();
   code = await runServer();
   const ran = Date.now() - started;
@@ -161,7 +171,8 @@ for (;;) {
   }
   crashes = ran >= HEALTHY_MS ? 1 : crashes + 1;
   const wait = BACKOFF_S[Math.min(crashes, BACKOFF_S.length) - 1];
-  say(`⚠ server ดับเอง (exit code ${code}, รันได้ ${Math.round(ran / 1000)} วินาที, ครั้งที่ ${crashes} ติดกัน) — เปิดใหม่ใน ${wait} วินาที`);
+  const why = code === RESTART_EXIT_CODE ? 'รีสตาร์ทเร็วเกินไปหลังเปิด' : 'server ดับเอง';
+  say(`⚠ ${why} (exit code ${code}, รันได้ ${Math.round(ran / 1000)} วินาที, ครั้งที่ ${crashes} ติดกัน) — เปิดใหม่ใน ${wait} วินาที`);
   await sleep(wait * 1000);
 }
 

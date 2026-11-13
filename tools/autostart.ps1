@@ -20,6 +20,11 @@ function Elevate([string]$switchName) {
 function Pause-IfElevated { if ($isAdmin) { Write-Host ''; Read-Host 'Press Enter to close' | Out-Null } }
 
 if ($Install) {
+  # A worktree (another Claude session's copy) is deleted later: the task would point at nothing.
+  if ($Root -like '*\.claude\worktrees\*') {
+    Write-Host "Refused: $Root is a worktree. Run this from the main folder (where the live server runs)." -ForegroundColor Red
+    exit 1
+  }
   if (-not $isAdmin) { Elevate 'Install' }
   $node = (Get-Command node -ErrorAction Stop).Source
   if (-not (Test-Path (Join-Path $Root 'dist\index.html'))) {
@@ -80,3 +85,4 @@ Write-Host "Runs:        $($task.Actions[0].Execute) $($task.Actions[0].Argument
 Write-Host "Folder:      $($task.Actions[0].WorkingDirectory)"
 Write-Host "Last start:  $($info.LastRunTime)   last result: $($info.LastTaskResult) (267009 = still running)"
 Write-Host "Port 2567:   $(if ($listening) { 'server is listening' } else { 'nothing listening' })"
+Write-Host "Time limit:  $($task.Settings.ExecutionTimeLimit) (PT0S = none)   priority: $($task.Settings.Priority) (4 = normal)"
