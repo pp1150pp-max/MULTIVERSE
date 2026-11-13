@@ -285,11 +285,7 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
   max-height: min(40vh, 360px); overflow-y: auto; pointer-events: auto; padding: 0 8px 6px 10px;
   background: var(--panel); border: 3px solid #4a4640; outline: 1px solid var(--panel-edge); outline-offset: -7px; border-radius: 4px;
   box-shadow: 0 0 0 1px #000, 0 6px 20px rgba(0, 0, 0, 0.6);
-  scrollbar-width: thin; scrollbar-color: var(--gold) #0c0a08;
 }
-#log.open::-webkit-scrollbar { width: 8px; }
-#log.open::-webkit-scrollbar-track { background: #0c0a08; border-left: 1px solid #3a2f20; }
-#log.open::-webkit-scrollbar-thumb { background: var(--gold); border-radius: 3px; }
 #log.open .log-line.fade { opacity: 1; }
 #log.open .log-line { text-shadow: 1px 1px 0 #000; line-height: 1.5; }
 #log.open .log-line.chat { background: rgba(159, 224, 255, 0.07); border-left: 2px solid #9fe0ff; padding-left: 6px; margin: 1px 0; }
@@ -1041,12 +1037,6 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 .hud-bars #market { max-height: calc(100dvh - 206px); }
 #market .npc-line { margin-bottom: 4px; }
 #market .ui-tab-body { min-height: 0; overflow-y: auto; flex: 1 1 auto; }
-/* The market list must scroll (it can be long): a thin gold bar that matches the frame instead of the default grey one (owner). */
-#market .ui-tab-body { scrollbar-width: thin; scrollbar-color: #8f7238 transparent; }
-#market .ui-tab-body::-webkit-scrollbar { width: 6px; }
-#market .ui-tab-body::-webkit-scrollbar-track { background: transparent; }
-#market .ui-tab-body::-webkit-scrollbar-thumb { background: #8f7238; border-radius: 3px; }
-#market .ui-tab-body::-webkit-scrollbar-thumb:hover { background: var(--gold-hi); }
 #market input[type=text], #market input[type=number], #market select {
   padding: 3px 6px; background: #12100d; color: var(--ink); border: 1px solid #8f7238; border-radius: 3px; font: inherit; font-size: 12px;
 }
@@ -1477,3 +1467,113 @@ body.touch-ui #log, body.touch-ui #chat {
   left: calc(max(16px, env(safe-area-inset-left)) + 112px); bottom: max(8px, env(safe-area-inset-bottom)); width: min(380px, calc(100vw - 420px));
 }
 body.touch-ui #hud:has(#chat:not(.hidden)) #log { bottom: calc(max(8px, env(safe-area-inset-bottom)) + 40px); }
+
+/* ===== Control skin (scrollbar, select, input, checkbox, radio, range) — 16-bit look =====
+   Everything reads the --ctl-* variables so the owner can swap in pictures later: set --ctl-arrow / --ctl-check /
+   --ctl-radio-dot to url(...) and give the thumbs a background-image. Rules use plain element selectors on purpose:
+   a window's own rule (e.g. `.bag-sort select`, `#market input`) is more specific and keeps its size/padding.
+   Note: Chrome ignores ::-webkit-scrollbar once scrollbar-color is set, so the standard properties go to Firefox only. */
+:root {
+  --ctl-bg: #12100d;
+  --ctl-bg-hi: #1d1710;
+  --ctl-edge: var(--panel-edge);
+  --ctl-edge-hi: var(--gold-hi);
+  --ctl-ink: var(--ink);
+  --ctl-accent: var(--gold);
+  --ctl-accent-hi: var(--gold-hi);
+  --ctl-track: #0c0a08;
+  --ctl-track-edge: #3a2f20;
+  --ctl-sb-size: 10px;
+  --ctl-box: 18px;
+  --ctl-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' shape-rendering='crispEdges'%3E%3Cpath fill='%23f2d58a' d='M0 0h10v1H8v1H7v1H6v1H4V3H3V2H2V1H0z M4 4h2v2H4z'/%3E%3C/svg%3E");
+  --ctl-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10' shape-rendering='crispEdges'%3E%3Cpath fill='%23f2d58a' d='M1 5h2v1h1v1h1V6h1V5h1V4h1V3h1v2H9v1H8v1H7v1H6v1H4V8H3V7H2V6H1z'/%3E%3C/svg%3E");
+}
+@media (pointer: coarse) { :root { --ctl-box: 24px; --ctl-sb-size: 12px; } }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: var(--ctl-sb-size); height: var(--ctl-sb-size); }
+::-webkit-scrollbar-track { background: var(--ctl-track); border-left: 1px solid var(--ctl-track-edge); }
+::-webkit-scrollbar-thumb {
+  background: var(--ctl-edge); border: 1px solid #0d0a07; border-radius: 0;
+  box-shadow: inset 1px 1px 0 var(--ctl-accent-hi), inset -1px -1px 0 rgba(0, 0, 0, 0.45);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--ctl-accent); }
+::-webkit-scrollbar-button, ::-webkit-scrollbar-corner { display: none; background: var(--ctl-track); }
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: thin; scrollbar-color: var(--ctl-edge) var(--ctl-track); }
+}
+
+/* Text-like inputs, textarea, select */
+input:not([type]), input[type=text], input[type=number], input[type=password], input[type=search], textarea, select {
+  font-family: inherit; color: var(--ctl-ink); background-color: var(--ctl-bg);
+  border: 1px solid var(--ctl-edge); border-radius: 3px; box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.7);
+  outline: none;
+}
+input:not([type]):focus, input[type=text]:focus, input[type=number]:focus, input[type=password]:focus, input[type=search]:focus,
+textarea:focus, select:focus { border-color: var(--ctl-edge-hi); box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(242, 213, 138, 0.3); }
+input::placeholder, textarea::placeholder { color: #7d745f; }
+input:disabled, textarea:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
+input::selection, textarea::selection { background: var(--ctl-accent); color: #24170a; }
+/* Number: the tiny browser spin arrows are hard to hit and clash with the look — type the value (the +/- sliders and presets stay). */
+input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+textarea { resize: vertical; }
+textarea::-webkit-resizer { background: linear-gradient(135deg, transparent 50%, var(--ctl-edge) 50% 60%, transparent 60% 75%, var(--ctl-edge) 75% 85%, transparent 85%); }
+
+/* Select: own arrow, closed look is skinned; the opened list is drawn by the browser (only colours are ours). */
+select {
+  -webkit-appearance: none; -moz-appearance: none; appearance: none;
+  padding-right: 22px; cursor: pointer; text-overflow: ellipsis;
+  background-image: var(--ctl-arrow); background-repeat: no-repeat; background-position: right 6px center; background-size: 10px 6px;
+}
+select:hover { border-color: var(--ctl-edge-hi); }
+select option, select optgroup { background: var(--ctl-bg-hi); color: var(--ctl-ink); }
+
+/* Checkbox / radio: pixel box, gold tick. The box grows on touch screens. */
+input[type=checkbox], input[type=radio] {
+  -webkit-appearance: none; -moz-appearance: none; appearance: none;
+  flex: none; width: var(--ctl-box); height: var(--ctl-box); margin: 0 4px 0 0; vertical-align: middle; cursor: pointer;
+  background-color: var(--ctl-bg); border: 1px solid var(--ctl-edge); border-radius: 2px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.7); background-repeat: no-repeat; background-position: center; background-size: 80% 80%;
+}
+input[type=radio] { border-radius: 50%; }
+input[type=checkbox]:checked { background-image: var(--ctl-check); border-color: var(--ctl-edge-hi); }
+input[type=radio]:checked { background-image: radial-gradient(circle, var(--ctl-accent-hi) 0 38%, transparent 42%); border-color: var(--ctl-edge-hi); }
+input[type=checkbox]:hover, input[type=radio]:hover, input[type=checkbox]:focus-visible, input[type=radio]:focus-visible { border-color: var(--ctl-edge-hi); }
+
+/* Range: flat dark groove, square gold knob */
+input[type=range] { -webkit-appearance: none; appearance: none; background: transparent; height: var(--ctl-box); margin: 0; cursor: pointer; }
+input[type=range]::-webkit-slider-runnable-track { height: 6px; background: var(--ctl-bg); border: 1px solid var(--ctl-edge); box-shadow: inset 0 1px 2px #000; }
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: calc(var(--ctl-box) - 4px); height: calc(var(--ctl-box) - 4px); margin-top: calc((6px - var(--ctl-box) + 4px) / 2 - 1px);
+  background: var(--ctl-accent); border: 1px solid #0d0a07; border-radius: 2px; box-shadow: inset 1px 1px 0 var(--ctl-accent-hi), inset -1px -1px 0 rgba(0, 0, 0, 0.45);
+}
+input[type=range]::-moz-range-track { height: 6px; background: var(--ctl-bg); border: 1px solid var(--ctl-edge); }
+input[type=range]::-moz-range-thumb {
+  width: calc(var(--ctl-box) - 6px); height: calc(var(--ctl-box) - 6px); background: var(--ctl-accent); border: 1px solid #0d0a07; border-radius: 2px;
+}
+input[type=range]:hover::-webkit-slider-thumb { background: var(--ctl-accent-hi); }
+
+/* ===== Window home spots (owner 2026-11-13): each window has its own place so several can be open without piling up.
+   Bag on the right; party / friends / mail on the left (stepped down so every title bar stays visible); shop, stash,
+   forge and market already sit on the left. Big map, menu, help and the rest stay centred. Placed last so these win. */
+#inventory { left: auto; right: 4px; transform: none; }
+#party-win, #friends-win, #mail-win { left: 12px; transform: none; top: calc(120px + var(--win-step, 0px)); max-height: calc(100vh - 130px); overflow-y: auto; }
+#friends-win { --win-step: 28px; }
+#mail-win { --win-step: 56px; }
+.hud-bars #party-win, .hud-bars #friends-win, .hud-bars #mail-win { top: calc(216px + var(--win-step, 0px)); max-height: calc(100vh - 226px); }
+@supports (height: 100dvh) {
+  #party-win, #friends-win, #mail-win { max-height: calc(100dvh - 130px); }
+  .hud-bars #party-win, .hud-bars #friends-win, .hud-bars #mail-win { max-height: calc(100dvh - 226px); }
+}
+
+/* Collapse the bag's left panel (stats / loot filter): a small arrow on the bag's left edge, remembered in localStorage.
+   It hides along with the panel when a shop, stash, market or forge is open (the panel is already hidden then). */
+#inventory.side-collapsed .inv-side { display: none; }
+.inv-side-toggle {
+  position: absolute; left: -16px; top: 50%; z-index: 2; width: 24px; height: 44px; margin-top: -22px; padding: 0;
+  font-size: 12px; line-height: 1; display: flex; align-items: center; justify-content: center;
+}
+@media (pointer: coarse) { .inv-side-toggle { width: 32px; height: 52px; margin-top: -26px; left: -22px; font-size: 14px; } }
+#hud:has(#shop:not(.hidden)) .inv-side-toggle, #hud:has(#stash:not(.hidden)) .inv-side-toggle,
+#hud:has(#market:not(.hidden)) .inv-side-toggle, #hud:has(#forge:not(.hidden)) .inv-side-toggle { display: none; }
