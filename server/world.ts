@@ -45,6 +45,7 @@ import { CH_RESERVED, hasChannels, type ChannelsView } from '../src/shared/chann
 import { MEGAPHONE_EVERY_MS, megaphoneText, STONE_NAME, STONE_STACK } from '../src/shared/data/stones';
 import { COS_SLOTS, cosById, cosCodes } from '../src/shared/data/cosmetics';
 import { cosHiddenIds, mayPutOnCos } from '../src/shared/cosShop';
+import { orbItemsRegistered } from '../src/shared/orbItems';
 
 /** How often the world looks for the Thai calendar day turning over. */
 const DAILY_CHECK_MS = 30_000;
@@ -580,7 +581,7 @@ export class GameWorld {
     if (!acc.guest) this.friendsJoined(s, accountWasOnline);
     // Back within the grace time (or a takeover): still in the party.
     player.partyId = this.parties.online(charId);
-    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), guest: acc.guest, orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), cosHidden: [...this.cosHidden], balance: currentBalanceTuning() });
+    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), guest: acc.guest, orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning() });
     this.broadcastSystem(`${player.name} เข้าสู่โลก`);
     // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
     if (!acc.guest) setTimeout(() => this.sessions.has(s) && (this.marketOnJoin(s), this.dailyCheck(s), this.mailNote(s, true)), MARKET_JOIN_NOTE_MS);
@@ -1397,6 +1398,12 @@ export class GameWorld {
   cosHiddenChanged(ids: string[]): void {
     this.cosHidden = new Set(ids);
     for (const s of this.sessions) this.send(s.ws, { t: 'cosHidden', ids });
+  }
+
+  /** The orb looks changed (already saved and registered by the admin API): everyone online gets the new list. */
+  orbItemsChanged(): void {
+    const items = [...orbItemsRegistered()];
+    for (const s of this.sessions) this.send(s.ws, { t: 'orbItems', items });
   }
 
   /**

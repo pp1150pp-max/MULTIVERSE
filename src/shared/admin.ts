@@ -3,6 +3,7 @@
 import { isPotion, isStack, isStone, RARITIES, RARITY_LABEL, sameStack, STAT_KEYS, STAT_LABEL, STONE_KINDS, type BagEntry, type PotionKind, type PotionStack, type StoneStack, type ClassId, type EquipSlot, type Item, type Rarity, type SlotId, type StatKey, type StatLine } from './types';
 import type { ShutdownMode } from './net/protocol';
 import type { OrbLook } from './orbLook';
+import type { OrbItem, OrbItems } from './orbItems';
 import type { CosTuning } from './cosTuning';
 import type { CosShop } from './cosShop';
 import type { CardTuning } from './cardTuning';
@@ -155,7 +156,7 @@ export interface AdminShutdownText { texts: Record<ShutdownMode, string>; defaul
  * switch: the Permissions tab, the audit log, restarting / stopping the server, deleting accounts or
  * characters, and making someone owner (command line).
  */
-export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily';
+export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily';
 
 /**
  * The defaults: which built-in role may use each tool (owner always has all). The owner can change
@@ -209,6 +210,9 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   cosManage: ['owner', 'gm'],
   // Saving hidden / shown and prices from that tab (owner 2026-11-13: owner only). Its look values save with cosLook.
   cosManageEdit: ['owner'],
+  // "เพิ่มในร้านค้า" on the orb bench: a new orb look cosmetic, hidden, no price (owner 2026-11-13: owner and GMs).
+  // Renaming, deleting and changing an added orb look saves with cosManageEdit.
+  orbShopAdd: ['owner', 'gm'],
   // The card tuning tab "การ์ด" (owner 2026-11-11: owner and GMs may look).
   cardView: ['owner', 'gm'],
   // Saving the server-wide card numbers from that tab (owner 2026-11-11: owner only).
@@ -281,7 +285,8 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   itemStatMult: { name: 'คอนเฟิร์มตัวคูณสเตตัสบนไอเทม', desc: 'แท็บ "ปรับสมดุล": คอนเฟิร์มตัวคูณค่าสเตตัสบนไอเทม คูณค่าของทุกชิ้นในเซิร์ฟจริง (สำรอง DB ให้ก่อน) · ทดลองดูตัวอย่างได้ด้วยสิทธิ์ "ปรับสมดุล"', group: 'ปรับเกม' },
   cosLook: { name: 'บันทึกของแต่งตัวทั้งเซิร์ฟ', desc: 'บันทึกค่าตำแหน่ง/หน้าตาของแต่งตัวที่ทุกคนเห็น (ต้องมี "ทดลองของแต่งตัว" ด้วย)', group: 'หน้าตา' },
   cosManage: { name: 'ดูจัดการของแต่งตัว', desc: 'แท็บ "จัดการของแต่งตัว": ดูทุกชิ้นว่าซ่อน/แสดง ราคาเพชร และค่าหน้าตารายชิ้น', group: 'หน้าตา' },
-  cosManageEdit: { name: 'ซ่อน/ตั้งราคาของแต่งตัว', desc: 'บันทึกการซ่อน/แสดงรายชิ้นในหน้าต่าง "แต่งตัว" ของผู้เล่น และราคาเพชร (ต้องมี "ดูจัดการของแต่งตัว" ด้วย · แก้ค่าหน้าตาในแท็บนั้นใช้สิทธิ์ "บันทึกของแต่งตัวทั้งเซิร์ฟ")', group: 'หน้าตา' },
+  cosManageEdit: { name: 'ซ่อน/ตั้งราคาของแต่งตัว', desc: 'บันทึกการซ่อน/แสดงรายชิ้นในหน้าต่าง "แต่งตัว" ของผู้เล่น และราคาเพชร (ต้องมี "ดูจัดการของแต่งตัว" ด้วย · แก้ค่าหน้าตาในแท็บนั้นใช้สิทธิ์ "บันทึกของแต่งตัวทั้งเซิร์ฟ" · แก้ชื่อ/หน้าตา/ลบลูกแก้วที่เพิ่มในร้านค้าก็ใช้สิทธิ์นี้)', group: 'หน้าตา' },
+  orbShopAdd: { name: 'เพิ่มลูกแก้วในร้านค้า', desc: 'ปุ่ม "เพิ่มในร้านค้า" ในแท็บ "ลูกแก้วตีบวก": เพิ่มหน้าตาที่ตั้งไว้เป็นของแต่งตัวชิ้นใหม่ (เริ่มแบบซ่อน ไม่มีราคา)', group: 'หน้าตา' },
   cardView: { name: 'ดูค่าการ์ด', desc: 'แท็บ "การ์ด": ดูผลของการ์ดทุกใบ เรทดรอป ราคา และเพดาน', group: 'ปรับเกม' },
   cardTune: { name: 'แก้ค่าการ์ดทั้งเซิร์ฟ', desc: 'แก้และบันทึกค่าการ์ดที่ใช้ทั้งเซิร์ฟ (ต้องมี "ดูค่าการ์ด" ด้วย)', group: 'ปรับเกม' },
 };
@@ -345,6 +350,8 @@ export interface AdminAccountDetail {
   cosmetics: string[] | null;
   /** Cosmetic ids hidden from the in-game window (may still be given; marked on the sheet). */
   cosHidden?: string[];
+  /** The orb looks in the shop (they are cosmetics of slot 'orb', made in /admin). */
+  orbItems?: OrbItem[];
 }
 
 export interface BackupRow { name: string; size: number; at: number; kind: string }
@@ -614,6 +621,21 @@ export interface AdminCosShop {
   canEdit: boolean;
   /** May save look values from the tab (the `cosLook` switch). */
   canPaste: boolean;
+  /** The orb looks added from the orb bench (src/shared/orbItems.ts); renamed / changed / deleted with `canEdit`. */
+  orbs: OrbItems;
+  /** How many accounts own each orb look (one owned can't be deleted). */
+  orbOwners: Record<string, number>;
+}
+
+/** GET/POST /api/admin/orb-items: the orb looks in the shop, for the orb bench. */
+export interface AdminOrbItems {
+  orbs: OrbItems;
+  /** May add one ("เพิ่มในร้านค้า", the `orbShopAdd` switch). */
+  canAdd: boolean;
+  /** May change / rename / delete one (the `cosManageEdit` switch). */
+  canEdit: boolean;
+  /** POST add: the id of the new piece. */
+  added?: string;
 }
 
 /** GET/POST /api/admin/orb-look: the server-wide enhancement orb look and what may be chosen. */

@@ -21,11 +21,12 @@ import type { AdminShutdownText } from '../src/shared/admin';
 import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../src/shared/net/protocol';
 import { SHUTDOWN_TEXT_KEY } from './db';
 import { checkOrbLook, DEFAULT_ORB_LOOK, orbLookChanges, ORB_LOOK_RANGES, ORB_PALETTE_IDS, ORB_SHAPE_IDS, sameOrbLook } from '../src/shared/orbLook';
-import type { AdminCardTune, AdminCosLook, AdminCosShop, AdminOrbLook } from '../src/shared/admin';
+import type { AdminCardTune, AdminCosLook, AdminCosShop, AdminOrbItems, AdminOrbLook } from '../src/shared/admin';
 import { applyCardTuning, cardTuningChanges, checkCardTuning, sameCardTuning } from '../src/shared/cardTuning';
 import { cardName } from '../src/shared/data/cards';
 import { checkCosTuning, cosTuningChanges, pasteCosTuning, sameCosTuning } from '../src/shared/cosTuning';
 import { checkCosShop, cosHiddenIds, cosShopChanges, sameCosShop } from '../src/shared/cosShop';
+import { checkOrbItems, checkOrbName, orbItemId, orbItemsChanges, ORB_ITEM_MAX, type OrbItems } from '../src/shared/orbItems';
 import { COS_SLOT_NAME, cosById } from '../src/shared/data/cosmetics';
 import { balanceChanges, checkBalance, currentBalanceTuning, sameBalance, withItemStatMult } from '../src/shared/balance';
 import { upgradeItem } from '../src/shared/data/items';
@@ -41,8 +42,15 @@ const orbLookState = (db: Db, canEdit: boolean): AdminOrbLook => ({
   palettes: [...ORB_PALETTE_IDS], shapes: [...ORB_SHAPE_IDS], ranges: ORB_LOOK_RANGES,
 });
 const cosLookState = (db: Db, canEdit: boolean): AdminCosLook => ({ tuning: db.cosTuning(), canEdit });
-const cosShopState = (db: Db, a: Admin): AdminCosShop => ({
-  shop: db.cosShop(), tuning: db.cosTuning(), canEdit: a.features.includes('cosManageEdit'), canPaste: a.features.includes('cosLook'),
+const cosShopState = (db: Db, a: Admin): AdminCosShop => {
+  const orbs = db.orbItems();
+  return {
+    shop: db.cosShop(), tuning: db.cosTuning(), canEdit: a.features.includes('cosManageEdit'), canPaste: a.features.includes('cosLook'),
+    orbs, orbOwners: Object.fromEntries(orbs.items.map((i) => [i.id, db.cosmeticOwners(i.id)])),
+  };
+};
+const orbItemsState = (db: Db, a: Admin, added?: string): AdminOrbItems => ({
+  orbs: db.orbItems(), canAdd: a.features.includes('orbShopAdd'), canEdit: a.features.includes('cosManageEdit'), ...(added ? { added } : {}),
 });
 const cardTuneState = (db: Db, canEdit: boolean): AdminCardTune => ({ tuning: db.cardTuning(), canEdit });
 const shutdownTextState = (db: Db): AdminShutdownText => ({ texts: db.shutdownTexts(), defaults: { ...DEFAULT_SHUTDOWN_TEXT } });
@@ -178,7 +186,7 @@ export async function ownerToolsApi(
       });
       const stash = world.liveStash(id) ?? db.savedStash(id);
       const body: AdminAccountDetail = {
-        account: row, characters, stash: row.guest || !stash ? null : stash, cosmetics: row.guest ? null : db.cosmeticsOwned(id), cosHidden: cosHiddenIds(db.cosShop()),
+        account: row, characters, stash: row.guest || !stash ? null : stash, cosmetics: row.guest ? null : db.cosmeticsOwned(id), cosHidden: cosHiddenIds(db.cosShop()), orbItems: db.orbItems().items,
       };
       send(res, 200, body);
       return true;
@@ -395,6 +403,11 @@ export async function ownerToolsApi(
     const c = checkCosShop(body.shop, true);
     if (!c.shop) throw new HttpError(400, c.error);
     const before = db.cosShop();
+    // `base` = the set the tab was showing. If it changed since (someone saved, or an orb look was added
+    // hidden), saving the whole set would undo that.
+    if (body.base !== undefined && !sameCosShop(checkCosShop(body.base, false).shop ?? {}, before)) {
+      throw new HttpError(409, 'ค่าของเซิร์ฟเปลี่ยนไปแล้วหลังโหลดหน้านี้ กดโหลดค่าของเซิร์ฟใหม่ก่อน');
+    }
     if (!sameCosShop(before, c.shop)) {
       db.setCosShop(c.shop);
       const changes = cosShopChanges(before, c.shop);
@@ -403,6 +416,95 @@ export async function ownerToolsApi(
       if (hidden.join() !== cosHiddenIds(before).join()) world.cosHiddenChanged(hidden);
     }
     send(res, 200, cosShopState(db, a));
+    return true;
+  }
+
+  // ---------------------------------------------------------- orb looks in the shop (src/shared/orbItems.ts)
+  if (method === 'GET' && path === '/api/admin/orb-items') {
+    const a = requireFeature(req, db, 'orbPreview');
+    send(res, 200, orbItemsState(db, a));
+    return true;
+  }
+
+  if (method === 'POST' && path === '/api/admin/orb-items') {
+    const body = await readJson(req);
+    const before = db.orbItems();
+    // Saves (which also puts them in the cosmetic list), then `then` (before players hear of it), then tells everyone.
+    const saveOrbs = (a: Admin, after: OrbItems, then?: () => void): void => {
+      const c = checkOrbItems(after, true);
+      if (!c.items) throw new HttpError(400, c.error);
+      db.setOrbItems(c.items);
+      then?.();
+      const changes = orbItemsChanges(before, c.items);
+      log(db, a, 'orb-items', 'ลูกแก้วตีบวกในร้านค้า', changes.length > 1500 ? changes.slice(0, 1500) + '…' : changes);
+      world.orbItemsChanged();
+    };
+    // Changes the hidden / price entry of one piece (the shop settings are a separate setting).
+    const setShop = (id: string, entry: { hidden?: true } | null): void => {
+      const shop = db.cosShop();
+      const next = { ...shop };
+      if (entry) next[id] = entry;
+      else delete next[id];
+      const c = checkCosShop(next, false).shop ?? {};
+      if (sameCosShop(shop, c)) return;
+      db.setCosShop(c);
+      const hidden = cosHiddenIds(c);
+      if (hidden.join() !== cosHiddenIds(shop).join()) world.cosHiddenChanged(hidden);
+    };
+
+    if (body.add !== undefined) {
+      // "เพิ่มในร้านค้า": a new piece with the look on the bench, hidden and with no price until set in the shop tab.
+      const a = requireFeature(req, db, 'orbShopAdd');
+      const add = body.add as { name?: unknown; look?: unknown };
+      const name = checkOrbName(add?.name);
+      if (!name.name) throw new HttpError(400, name.error ?? 'ชื่อไม่ถูกต้อง');
+      const look = checkOrbLook(add?.look);
+      if (!look.look) throw new HttpError(400, look.error);
+      if (before.items.length >= ORB_ITEM_MAX) throw new HttpError(400, `ลูกแก้วในร้านค้ามีได้ไม่เกิน ${ORB_ITEM_MAX} ชิ้น`);
+      const id = orbItemId(before.next);
+      // Hidden before players get the new list, so it is never shown for a moment.
+      saveOrbs(a, { next: before.next + 1, items: [...before.items, { id, n: before.next, name: name.name, look: look.look }] }, () => setShop(id, { hidden: true }));
+      send(res, 200, orbItemsState(db, a, id));
+      return true;
+    }
+
+    const a = requireFeature(req, db, 'cosManageEdit');
+    if (typeof body.remove === 'string') {
+      const it = before.items.find((i) => i.id === body.remove);
+      if (!it) throw new HttpError(404, 'ไม่มีลูกแก้วชิ้นนี้แล้ว');
+      const owners = db.cosmeticOwners(it.id);
+      if (owners > 0) throw new HttpError(409, `ลบไม่ได้: มี ${owners} บัญชีที่มีชิ้นนี้ (เอาออกจากบัญชีก่อน หรือซ่อนไว้แทน)`);
+      saveOrbs(a, { next: before.next, items: before.items.filter((i) => i.id !== it.id) }, () => setShop(it.id, null));
+      send(res, 200, orbItemsState(db, a));
+      return true;
+    }
+
+    // `edit` = id → { name?, look? } for some pieces; `base` = the list the page was showing.
+    if (!body.edit || typeof body.edit !== 'object' || Array.isArray(body.edit)) throw new HttpError(400, 'ไม่มีอะไรให้บันทึก');
+    if (body.base !== undefined && JSON.stringify(checkOrbItems(body.base, false).items) !== JSON.stringify(before)) {
+      throw new HttpError(409, 'ลูกแก้วในร้านค้าเปลี่ยนไปแล้วหลังโหลดหน้านี้ กดโหลดค่าของเซิร์ฟใหม่ก่อน');
+    }
+    const items = before.items.map((i) => ({ ...i }));
+    for (const [id, ch] of Object.entries(body.edit as Record<string, unknown>)) {
+      const it = items.find((i) => i.id === id);
+      if (!it) throw new HttpError(404, `ไม่มีลูกแก้ว "${id.slice(0, 20)}"`);
+      if (!ch || typeof ch !== 'object') throw new HttpError(400, `ค่าของ ${id} ไม่ถูกต้อง`);
+      const { name, look, ...extra } = ch as { name?: unknown; look?: unknown };
+      if (Object.keys(extra).length) throw new HttpError(400, `ไม่รู้จักค่า "${Object.keys(extra)[0].slice(0, 20)}"`);
+      if (name !== undefined) {
+        const n = checkOrbName(name);
+        if (!n.name) throw new HttpError(400, `${id}: ${n.error}`);
+        it.name = n.name;
+      }
+      if (look !== undefined) {
+        const l = checkOrbLook(look);
+        if (!l.look) throw new HttpError(400, `${id}: ${l.error}`);
+        it.look = l.look;
+      }
+    }
+    const after = { next: before.next, items };
+    if (JSON.stringify(after) !== JSON.stringify(before)) saveOrbs(a, after);
+    send(res, 200, orbItemsState(db, a));
     return true;
   }
 

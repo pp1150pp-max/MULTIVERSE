@@ -9,6 +9,8 @@ import { COSMETICS, COS_SLOTS, COS_SLOT_NAME, cosById, type CosmeticDef, type Co
 import { setLookOwner, setTryOn } from './cosLook';
 import { cosHiddenKey, isCosHidden } from './cosTune';
 import { cosCardImage } from './cosmeticViews';
+import { orbItemLook, orbItemsVersion } from '../shared/orbItems';
+import { ORB_PALETTES } from './orbs';
 
 type Tab = 'shop' | 'mine';
 
@@ -35,6 +37,21 @@ function picture(c: CosmeticDef): HTMLElement {
     box.style.setProperty('--c1', c.color);
     box.style.setProperty('--c2', c.color2);
     box.append(el('div', 'cos-n', 'ชื่อตัวละคร'), el('div', 'cos-b', 'สวัสดี!'));
+    return box;
+  }
+  if (c.slot === 'orb') {
+    // Three orbs in the look's palette and shape (at +7, +11 and +15), drawn with CSS.
+    const look = orbItemLook(c.id);
+    const pal = ORB_PALETTES.find((p) => p.id === look?.palette) ?? ORB_PALETTES[0];
+    const box = el('div', `cos-pic cos-pic-orb ${look?.shape ?? ''}`);
+    for (const [slot, plus] of [[0, 7], [3, 11], [6, 15]]) {
+      const col = pal.colors(slot, plus);
+      const o = el('i');
+      o.style.setProperty('--c1', col.core);
+      o.style.setProperty('--c2', col.accent);
+      o.style.setProperty('--c3', col.glow);
+      box.append(o);
+    }
     return box;
   }
   let src = picCache.get(c.id);
@@ -100,7 +117,7 @@ export class CosmeticsUI {
     if (this.mountBtn.textContent !== label) this.mountBtn.textContent = label;
     this.mountBtn.classList.toggle('on', me.mounted);
     if (!this.open) return;
-    const key = JSON.stringify([this.tab, this.slot, this.trying, me.cosmetics, this.g.backend.cosOwned, cosHiddenKey()]);
+    const key = JSON.stringify([this.tab, this.slot, this.trying, me.cosmetics, this.g.backend.cosOwned, cosHiddenKey(), orbItemsVersion()]);
     if (key === this.drawn) return;
     this.drawn = key;
     this.draw();
@@ -123,9 +140,10 @@ export class CosmeticsUI {
     const guest = this.g.backend.guest;
     /** Listed under ของฉัน: owned, and not hidden unless worn. */
     const mine = (c: CosmeticDef) => owned.has(c.id) && (!isCosHidden(c.id) || worn[c.slot] === c.id);
-    // A piece being tried on that just got hidden comes off.
-    if (Object.values(this.trying).some((id) => id && isCosHidden(id))) {
-      for (const s of COS_SLOTS) if (this.trying[s] && isCosHidden(this.trying[s]!)) delete this.trying[s];
+    // A piece being tried on that just got hidden (or an orb look deleted) comes off.
+    const gone = (id: string | undefined) => !!id && (isCosHidden(id) || !cosById(id));
+    if (COS_SLOTS.some((s) => gone(this.trying[s]))) {
+      for (const s of COS_SLOTS) if (gone(this.trying[s])) delete this.trying[s];
       setTryOn(this.trying);
     }
 
@@ -180,6 +198,7 @@ export class CosmeticsUI {
     if (this.tab === 'shop') notes.push(el('div', 'cos-note', 'ยังไม่เปิดขาย ลองสวมได้ (เห็นแค่คุณ ปิดหน้าต่างแล้วจะถอดออก)'));
     else if (guest) notes.push(el('div', 'cos-note', 'Guest รับ Cosmetics ไม่ได้ สมัครสมาชิกเพื่อรับของ'));
     else if (!cards.length) notes.push(el('div', 'cos-note', `ยังไม่มี${COS_SLOT_NAME[this.slot]} ทุกตัวละครในบัญชีใช้ของที่ได้รับร่วมกัน`));
+    if (this.slot === 'orb') notes.push(el('div', 'cos-note', 'ลูกแก้วตีบวก: เปลี่ยนหน้าตาลูกแก้วของคุณ ลูกแก้วมีเมื่อสวมของที่ตีบวก +7 ขึ้นไป (1 ชิ้น = 1 ลูก) ไม่มีของ +7 จะไม่เห็นลูกแก้ว'));
     if (this.slot === 'mount') notes.push(el('div', 'cos-note', 'สัตว์ขี่: เดินเร็วขึ้น 30% กด Z เพื่อขึ้น/ลง โจมตี ใช้สกิล หรือโดนตีจะลงเอง ขึ้นใหม่ได้หลังเลิกสู้ 3 วิ ขี่ในห้องบอสไม่ได้'));
     this.body.replaceChildren(...notes, el('div', 'cos-grid'));
     this.body.lastElementChild!.append(...cards);

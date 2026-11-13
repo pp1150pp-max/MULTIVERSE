@@ -23,8 +23,8 @@ let proc: ChildProcess | null = null;
 // ---------------------------------------------------------- checks (no server)
 for (const c of COSMETICS) {
   const d = cosTuneDefaults(c.id);
-  if (c.slot === 'title') {
-    ok(d === undefined, `${c.id}: a title set has no tuning`);
+  if (c.slot === 'title' || c.slot === 'orb') {
+    ok(d === undefined, `${c.id}: a title set or orb look has no tuning`);
     continue;
   }
   const fields = COS_TUNE_FIELDS[c.slot];

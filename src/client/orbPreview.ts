@@ -9,6 +9,7 @@ import { PlayerView } from './views';
 import { ISO_DIR } from './world';
 import { applyOrbLook, currentOrbLook, ORB_LEVELS, ORB_PALETTES, ORB_SHAPES, orbMixState, orbPalette, orbShape, orbTuning, setOrbMix, setOrbPalette, setOrbShape } from './orbs';
 import { DEFAULT_ORB_LOOK, sameOrbLook, type OrbLook } from '../shared/orbLook';
+import type { AdminOrbItems } from '../shared/admin';
 import { Player } from '../shared/sim/Player';
 import type { Sim } from '../shared/sim/Sim';
 import { auraTier, orbCodes, ORB_MIN_PLUS } from '../shared/data/enhance';
@@ -50,6 +51,16 @@ levels.ring = 15;
 export interface OrbLookServer {
   load(): Promise<{ look: OrbLook; canEdit: boolean }>;
   save(look: OrbLook | 'reset'): Promise<{ look: OrbLook; canEdit: boolean }>;
+  /** The orb looks in the shop (src/shared/orbItems.ts): add the bench's look as a new one, or save over one. */
+  shop?: OrbShopServer;
+}
+
+export interface OrbShopServer {
+  load(): Promise<AdminOrbItems>;
+  add(name: string, look: OrbLook): Promise<AdminOrbItems>;
+  overwrite(id: string, look: OrbLook): Promise<AdminOrbItems>;
+  /** Open with this piece's look ("เปิดในแท่นทดลอง" in the shop tab). */
+  open?: string;
 }
 
 /** Ranges the dice button picks from (kept inside what still looks sensible, narrower than the sliders). */
@@ -150,6 +161,23 @@ export async function mountOrbPreview(root: HTMLElement, note: string, server?: 
       applyOrbLook(r.look);
     } catch (e) {
       serverMsg = `โหลดค่าของเซิร์ฟไม่สำเร็จ: ${(e as Error).message}`;
+    }
+  }
+  // The orb looks in the shop, and the one being changed here (null = making a new one).
+  let shopState: AdminOrbItems | null = null;
+  let editing: string | null = null;
+  let shopMsg = '';
+  const shop = server?.shop;
+  if (shop) {
+    try {
+      shopState = await shop.load();
+      const it = shopState.orbs.items.find((i) => i.id === shop.open);
+      if (it) {
+        applyOrbLook(it.look);
+        editing = it.id;
+      }
+    } catch (e) {
+      shopMsg = `โหลดลูกแก้วในร้านค้าไม่สำเร็จ: ${(e as Error).message}`;
     }
   }
 
@@ -542,6 +570,59 @@ export async function mountOrbPreview(root: HTMLElement, note: string, server?: 
         button('คืนค่าของเซิร์ฟเป็นค่าเริ่มต้นในโค้ด', () => void saveWith('reset', 'คืนหน้าตาลูกแก้วของทุกคนเป็นค่าเริ่มต้นในโค้ดไหม?'));
       } else {
         h('div', 'บันทึกค่าของเซิร์ฟได้เฉพาะเจ้าของ (GM ทดลองได้อย่างเดียว)').className = 'note';
+      }
+    }
+
+    if (shop) {
+      h('h2', 'ลูกแก้วในร้านค้า (ของแต่งตัวที่ผู้เล่นสวมได้)');
+      const items = shopState?.orbs.items ?? [];
+      const cur = items.find((i) => i.id === editing) ?? null;
+      if (shopMsg) h('div', shopMsg).className = 'note';
+      const pick = document.createElement('select');
+      pick.append(new Option('— หน้าตาที่ตั้งอยู่ (ทำชิ้นใหม่) —', ''), ...items.map((i) => new Option(i.name, i.id)));
+      pick.value = cur?.id ?? '';
+      pick.onchange = () => {
+        editing = pick.value || null;
+        const it = items.find((i) => i.id === editing);
+        if (it) applyOrbLook(it.look);
+        buildPanel();
+      };
+      row('เปิดชิ้นในร้าน', pick);
+      const run = async (fn: () => Promise<AdminOrbItems>, done: (r: AdminOrbItems) => string) => {
+        try {
+          shopState = await fn();
+          shopMsg = done(shopState);
+        } catch (e) {
+          shopMsg = `ไม่สำเร็จ: ${(e as Error).message}`;
+        }
+        buildPanel();
+        shopMsg = '';
+      };
+      const mixed = orbMixState().palettes.some((x) => x) || orbMixState().shapes.some((x) => x);
+      if (mixed) h('div', 'ต่างสี/ต่างทรงรายลูกจากปุ่มสุ่มไม่ถูกบันทึก (ใช้ชุดสีและรูปทรงหลัก)').className = 'note';
+      if (cur) {
+        const same = sameOrbLook(cur.look, currentOrbLook());
+        h('div', same ? `✓ ตรงกับ "${cur.name}" ในร้าน` : `• ต่างจาก "${cur.name}" ในร้าน (ยังไม่ได้บันทึก)`).className = 'note';
+        if (shopState?.canEdit) {
+          button(`💾 บันทึกทับ "${cur.name}"`, () => {
+            if (!confirm(`เปลี่ยนหน้าตาของ "${cur.name}" เป็นแบบนี้เลยไหม? คนที่สวมอยู่จะเห็นแบบใหม่ทันที`)) return;
+            void run(() => shop.overwrite(cur.id, currentOrbLook()), () => `✓ บันทึกทับ "${cur.name}" แล้ว`);
+          });
+        } else {
+          h('div', 'บันทึกทับชิ้นในร้านได้เฉพาะผู้มีสิทธิ์ "ซ่อน/ตั้งราคาของแต่งตัว"').className = 'note';
+        }
+      }
+      if (shopState?.canAdd) {
+        button('➕ เพิ่มในร้านค้า', () => {
+          const name = prompt('ชื่อลูกแก้วชิ้นใหม่ (ไม่เกิน 30 ตัวอักษร)', '')?.trim();
+          if (!name) return;
+          void run(() => shop.add(name, currentOrbLook()), (r) => {
+            editing = r.added ?? null;
+            return `✓ เพิ่ม "${name}" แล้ว (ซ่อนอยู่ ยังไม่มีราคา) ตั้งราคา/แสดงได้ที่แท็บ "จัดการของแต่งตัว"`;
+          });
+        });
+      } else if (shopState) {
+        h('div', 'เพิ่มในร้านค้าได้เฉพาะผู้มีสิทธิ์ "เพิ่มลูกแก้วในร้านค้า"').className = 'note';
       }
     }
 
