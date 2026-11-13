@@ -20,7 +20,7 @@
 
 - **Task Scheduler ตอนเครื่องบูต** ชื่อ task `MULTIVERSE server` (เจ้าของเลือกแบบบูต ไม่ใช่แบบล็อกอิน) รันในนามผู้ใช้ Windows ของเจ้าของแบบ S4U = ไม่ต้องมีใครล็อกอิน ไม่เก็บรหัสผ่าน ไม่มีหน้าต่าง · หน่วง 30 วิหลังบูต · ไม่มีเวลาจำกัด (ค่าเริ่มต้นของ Windows ตัดที่ 3 วันโดยไม่เซฟ) · priority ปกติ · เปิดได้ทีละตัว
   - task รัน `npm run always-on` = `server/online-main.ts --always-on` ในโฟลเดอร์หลัก (ไม่ build ใช้ `dist/` ที่ build ไว้)
-  - ลงทะเบียน/ลบ ต้องสิทธิ์ admin 1 ครั้ง (สคริปต์ขอเอง): `npm run autostart -- -Install` / `-Uninstall` · ดูสถานะ `npm run autostart` · เปิดตอนนี้ `npm run autostart -- -Start` (ถ้า Windows ไม่ให้ผู้ใช้ธรรมดาสั่ง task ที่ลงด้วย admin จะเด้งขอสิทธิ์ admin บนจอเจ้าของ) · **`-Install` รันจากโฟลเดอร์หลัก `C:SERSPENCILVESTERDESKTOPGAME_1` ������������������������** (��������������������������������������� WORKTREE ��������������� WORKTREE ���������������������������������)
+  - ลงทะเบียน/ลบ ต้องสิทธิ์ admin 1 ครั้ง (สคริปต์ขอเอง): `npm run autostart -- -Install` / `-Uninstall` · ดูสถานะ `npm run autostart` · เปิดตอนนี้ `npm run autostart -- -Start` (ถ้า Windows ไม่ให้ผู้ใช้ธรรมดาสั่ง task ที่ลงด้วย admin จะเด้งขอสิทธิ์ admin บนจอเจ้าของ) · **`-Install` รันจากโฟลเดอร์หลัก `C:\Users\Pencilvester\Desktop\game_1` เท่านั้น** (สคริปต์ปฏิเสธ worktree เพราะ worktree ถูกลบทีหลัง)
   - โฟลเดอร์และ path ของ `node.exe` ถูกจำตอน `-Install` (ย้ายโฟลเดอร์/ลง Node ใหม่ ให้ `-Install` ซ้ำ)
   - **ห้ามกด "End" ที่ task ใน Task Scheduler** ตัวคุมจะตายทันที (server แยก process จึงยังรันต่อ แต่ไม่มีใครคุมแล้ว) ปิดด้วย `npm run stop-server` เสมอ
 - **ตัวคุม (`server/online-main.ts`) ทั้ง `npm run online` และ always-on** ตัดสินจาก exit code ของ server:
