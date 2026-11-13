@@ -140,6 +140,8 @@ export type MailCall =
   | { a: 'mailList' }
   | { a: 'mailRead'; id: number }
   /** id -1 = every mail with attachments (each one all-or-nothing). */
+  /** Marks every mail read without claiming attachments. */
+  | { a: 'mailReadAll' }
   | { a: 'mailClaim'; id: number }
   | { a: 'mailDelete'; id: number }
   /** Deletes every read mail that has nothing left to claim. */

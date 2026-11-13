@@ -271,4 +271,23 @@ const guest = actor('Guesty', undefined, true);
   ok(mail.unread(a) === 0, 'expired mail is not counted as unread');
 }
 
+// ------------------------------------------------------------ read all: badge clears, attachments stay
+{
+  const carol = actor('Carol');
+  ok(call(guest, { a: 'mailReadAll' }).ok === false, 'a guest cannot mark all read');
+  const t = send({ kind: 'char', name: 'Carol' }, undefined, 'อ่านทั้งหมด 1');
+  const g = send({ kind: 'account', username: 'acc-Carol' }, { gold: 700 }, 'อ่านทั้งหมด 2');
+  ok(typeof t !== 'string' && typeof g !== 'string', 'sent two mails to Carol');
+  ok(call(carol, { a: 'mailList' }).unread === 2, 'two unread');
+  const goldBefore = carol.player.gold;
+  const r = call(carol, { a: 'mailReadAll' });
+  ok(r.ok && r.unread === 0 && r.list!.every((m) => m.read), 'read all clears the unread count and flags every mail read');
+  ok(r.list!.some((m) => m.attach) && carol.player.gold === goldBefore, 'read all does not claim attachments');
+  ok(call(carol, { a: 'mailClaim', id: -1 }).ok && carol.player.gold === goldBefore + 700, 'the attachment is still there to claim');
+  const own = send({ kind: 'char', name: 'Alice' }, undefined, 'ของอลิซ');
+  ok(typeof own !== 'string' && call(carol, { a: 'mailReadAll' }).ok && call(alice, { a: 'mailList' }).unread === 1, "read all twice is harmless and leaves other people's mail unread");
+  call(alice, { a: 'mailReadAll' });
+  for (const row of db.mailHistory(50)) mail.recall(row.id);
+}
+
 finish('mail');

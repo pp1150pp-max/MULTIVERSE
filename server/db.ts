@@ -1266,6 +1266,13 @@ export class Db {
       .get(accountId, charId, now) as { n: number }).n;
   }
 
+  /** Marks every unread mail of this character / account as read (attachments stay unclaimed); returns how many. */
+  mailMarkAllRead(accountId: number, charId: number, now: number): number {
+    return Number(this.db.prepare(`UPDATE mail_box SET read_at = ? WHERE account_id = ? AND (char_id IS NULL OR char_id = ?)
+      AND deleted_at IS NULL AND recalled_at IS NULL AND read_at IS NULL
+      AND (SELECT expires_at FROM mail_sends WHERE id = send_id) > ?`).run(now, accountId, charId, now).changes);
+  }
+
   /** Marks this character's new mail as announced; returns how many were new. */
   mailTakeFresh(accountId: number, charId: number, now: number): number {
     return Number(this.db.prepare(`UPDATE mail_box SET notified_at = ? WHERE account_id = ? AND (char_id IS NULL OR char_id = ?) AND notified_at IS NULL

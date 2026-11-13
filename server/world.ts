@@ -76,7 +76,7 @@ const TRADE_LOCKED = new Set([
   'equip', 'unequip', 'drop', 'buy', 'move', 'sort', 'buyBack', 'sell', 'split', 'sellRarity', 'enhance', 'reroll',
   'stashPut', 'stashTake', 'stashMove', 'stashSort', 'stashBuy', 'stashGold', 'stashSplit',
   'mktSearch', 'mktMine', 'mktPrice', 'mktList', 'mktCancel', 'mktBuy', 'mktClaim',
-  'mailList', 'mailRead', 'mailClaim', 'mailDelete', 'mailDeleteRead', 'roomOpen', 'buyPhoenix',
+  'mailList', 'mailRead', 'mailReadAll', 'mailClaim', 'mailDelete', 'mailDeleteRead', 'roomOpen', 'buyPhoenix',
 ]);
 const TRADE_LOCKED_MSG = 'กำลังเทรดอยู่ — ปิดหน้าต่างเทรดก่อนถึงจะจัดการของได้';
 const PARTY_GUEST_MSG = 'Guest ใช้ระบบปาร์ตี้ไม่ได้ — สมัครสมาชิกเพื่อใช้งาน';
@@ -1057,6 +1057,7 @@ export class GameWorld {
         return;
       case 'mailList':
       case 'mailRead':
+      case 'mailReadAll':
       case 'mailClaim':
       case 'mailDelete':
       case 'mailDeleteRead':
