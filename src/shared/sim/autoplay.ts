@@ -4,6 +4,8 @@ import { AUTO_PX_PER_UNIT, type AutoSkill, type Player } from './Player';
 import type { Loot } from './Loot';
 import { MONSTERS } from '../data/monsters';
 import { inBossArena, inSafeArea, lavaAt, type ZoneDef } from '../data/zones';
+import { currentBalance } from '../balance';
+import type { AutoConfig, AutoOutAction } from '../autoTuning';
 
 /** What the bot needs to see. The server builds one per player. */
 export interface AutoWorld {
@@ -31,8 +33,10 @@ export const AUTO_BOSS_MSG = 'ปิด Auto Play — บอสต้องส�
 export const AUTO_TOWN_MSG = 'ใช้ Auto Play ในเมืองไม่ได้ — ออกไปนอกเมืองก่อน';
 
 const RANGE: Record<string, number> = { sword: 1.9, mage: 8.5, gunslinger: 9 };
-/** Loot within this distance is fetched even while monsters attack; anywhere in the farming circle when it's calm. */
-const LOOT_NEAR = 5;
+/** A drop counts as "got closer" (resetting the give-up timer) only when Auto is this much nearer than before. */
+const LOOT_PROGRESS = 0.25;
+/** Thai reasons for the "out of supplies" options. */
+const OUT_WHY = { noHp: 'ยา HP หมด', noMp: 'ยา MP หมด', bagFull: 'กระเป๋าเต็ม' } as const;
 /** Seconds with nothing to fight before Auto tells the player: quickly when no monster lives in the circle at all,
  *  later when it is only waiting for respawns. Then at most one message per IDLE_HINT_EVERY. */
 const IDLE_HINT_EMPTY = 3;
@@ -59,6 +63,12 @@ export class AutoPlay {
   private hintAt = -Infinity;
   private hint: string | null = null;
   private levelHintAt = -Infinity;
+  /** The drop Auto walks to, its nearest distance so far and since when it hasn't got closer (give-up timer). */
+  private chase: { id: number; bestD: number; since: number } | null = null;
+  /** Drops Auto gave up on (couldn't reach or pick up): ignored from now on. */
+  private gaveUp = new Set<number>();
+  /** Auto wants to be switched off (out of supplies, or reading the return scroll): the message why. */
+  private stopMsg: string | null = null;
 
   /** Auto was just switched on here. */
   start(x: number, z: number): void {
@@ -67,6 +77,16 @@ export class AutoPlay {
     this.hintAt = -Infinity;
     this.levelHintAt = -Infinity;
     this.reset();
+  }
+
+  /**
+   * Auto switched itself off (out of potions / full bag, per the player's options): the message for the player,
+   * once. Whoever runs the bot turns it off when this is set (the intent may carry `recall` to start the scroll).
+   */
+  takeStop(): string | null {
+    const m = this.stopMsg;
+    this.stopMsg = null;
+    return m;
   }
 
   /** A message for the player (nothing to fight in the circle), once; whoever runs the bot shows it. */
@@ -100,6 +120,106 @@ export class AutoPlay {
   reset(): void {
     this.target = null;
     this.roam = null;
+    this.chase = null;
+  }
+
+  /** A monster after this player right now (not one walking back home). */
+  private static attacking(m: Monster, p: Player): boolean {
+    return m.alive && !m.isBoss && m.isHostile && m.state !== 'return' && m.target?.id === p.id;
+  }
+
+  /**
+   * HP potions gone, MP potions gone or the bag full, with the player's option for it not "fight on":
+   * stops Auto (stopMsg), or reads the return scroll once nothing attacks. True = this frame is handled.
+   */
+  private outOfSupplies(p: Player, cfg: AutoConfig, attacked: boolean, out: Intent): boolean {
+    const set = p.autoSettings;
+    const checks: [keyof typeof OUT_WHY, boolean, AutoOutAction][] = [
+      ['noHp', p.potionCount('hp') <= 0, set.noHp],
+      ['noMp', p.potionCount('mp') <= 0, set.noMp],
+      ['bagFull', !p.hasBagSpace(), set.bagFull],
+    ];
+    for (const [k, hit, chosen] of checks) {
+      if (!hit || chosen === 'fight') continue;
+      const action = chosen === 'scroll' && !cfg.allow.scroll ? 'stop' : chosen;
+      const why = OUT_WHY[k];
+      if (action === 'stop') {
+        this.stopMsg = `ปิด Auto Play — ${why}`;
+        return true;
+      }
+      if (p.stoneCount('return_scroll') < 1) {
+        this.stopMsg = `ปิด Auto Play — ${why} และไม่มีม้วนคัมภีร์กลับเมือง`;
+        return true;
+      }
+      // Being hit breaks the cast: fight off whatever attacks first, then read the scroll.
+      if (attacked) return false;
+      this.stopMsg = `ปิด Auto Play — ${why} ใช้ม้วนคัมภีร์กลับเมือง`;
+      out.recall = true;
+      out.moveTo = null;
+      out.basic = false;
+      out.skills = [];
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * The drop to walk to now, or null, by the player's loot order and options. A drop Auto walks to without
+   * getting closer for `giveUpSec` (stuck on something, or the server won't hand it over) is skipped for good.
+   */
+  private pickLoot(g: AutoWorld, cfg: AutoConfig, attackers: number): Loot | null {
+    const p = g.player;
+    const set = p.autoSettings;
+    if (!set.loot) {
+      this.chase = null;
+      return null;
+    }
+    const order = set.lootOrder === 'loot' && !cfg.allow.lootFirst ? 'balanced' : set.lootOrder;
+    // Fight first: nothing is picked up while anything attacks.
+    if (order === 'fight' && attackers > 0) {
+      this.chase = null;
+      return null;
+    }
+    const othersLoot = set.othersLoot && cfg.allow.othersLoot;
+    const dist = (a: { x: number; z: number }) => Math.hypot(a.x - p.x, a.z - p.z);
+    let maxD = Infinity;
+    // Balanced (the old way): drops close by even mid-fight; anything in the circle once nothing is near.
+    if (order === 'balanced' && g.monsters.some((m) => m.isHostile && dist(m) < cfg.threatDist)) maxD = cfg.nearDist;
+    const R = this.radius(p);
+    if (this.gaveUp.size > 50) {
+      const live = new Set(g.loots.map((l) => l.id));
+      for (const id of this.gaveUp) if (!live.has(id)) this.gaveUp.delete(id);
+    }
+    for (;;) {
+      let best: Loot | null = null;
+      let bd = maxD;
+      for (const l of g.loots) {
+        if (this.gaveUp.has(l.id) || this.fromAnchor(l) > R + 0.5 || inBossArena(g.zone, l.x, l.z) || lavaAt(g.zone, l.x, l.z)) continue;
+        // Loot that doesn't fit in the bag (or the loot filter skips) is ignored, so a full bag just keeps fighting.
+        if (l.dead || l.dropped || !l.canTake(p, g.time) || !p.wantsLoot(l.kind, false) || !p.canFit(l.kind)) continue;
+        // Own drops only: this player's or the party's, and those nobody owns.
+        if (!othersLoot && l.owner !== null && l.owner !== p.id && !(p.partyId !== null && l.ownerParty === p.partyId)) continue;
+        const d = dist(l);
+        if (d < bd) {
+          bd = d;
+          best = l;
+        }
+      }
+      if (!best) {
+        this.chase = null;
+        return null;
+      }
+      if (!this.chase || this.chase.id !== best.id) this.chase = { id: best.id, bestD: bd, since: g.time };
+      else if (bd < this.chase.bestD - LOOT_PROGRESS) {
+        this.chase.bestD = bd;
+        this.chase.since = g.time;
+      } else if (g.time - this.chase.since > cfg.giveUpSec) {
+        this.gaveUp.add(best.id);
+        this.chase = null;
+        continue;
+      }
+      return best;
+    }
   }
 
   /** The farming circle's radius in world units. */
@@ -140,29 +260,24 @@ export class AutoPlay {
       return out;
     }
 
-    // Loot close by is picked up even mid-fight; anything else in the circle once nothing is attacking.
-    // Loot that doesn't fit in the bag (or the loot filter skips) is ignored, so a full bag just keeps fighting.
-    const threatened = g.monsters.some((m) => m.isHostile && dist(m) < 3.5);
-    let best = null as { x: number; z: number } | null;
-    let bd = threatened ? LOOT_NEAR : Infinity;
-    for (const l of set.loot ? g.loots : []) {
-      if (this.fromAnchor(l) > R + 0.5 || inBossArena(g.zone, l.x, l.z) || lavaAt(g.zone, l.x, l.z)) continue;
-      if (l.dead || l.dropped || !l.canTake(p, g.time) || !p.wantsLoot(l.kind, false) || !p.canFit(l.kind)) continue;
-      const d = dist(l);
-      if (d < bd) {
-        bd = d;
-        best = l;
-      }
-    }
-    if (best) {
-      out.moveTo = { x: best.x, z: best.z };
+    const cfg = currentBalance().auto;
+    const attackers = g.monsters.filter((m) => AutoPlay.attacking(m, p)).length;
+    if (this.outOfSupplies(p, cfg, attackers > 0, out)) return out;
+
+    const loot = this.pickLoot(g, cfg, attackers);
+    if (loot) {
+      out.moveTo = { x: loot.x, z: loot.z };
       return out;
     }
 
     const t = this.target;
     const strayed = !!t && !t.isHostile && this.fromAnchor(t) > R + 3;
-    if (!t || !t.alive || dist(t) > 22 || t.state === 'return' || strayed || g.time > this.retargetAt) {
-      this.target = this.pickTarget(g);
+    // Switch at once when the target is a kind the player now skips, or (target mode "attacker") something
+    // attacks the player while Auto goes for another monster.
+    const skipped = !!t && cfg.allow.skip && set.skip.includes(t.def.id) && !AutoPlay.attacking(t, p);
+    const ambushed = !!t && set.target === 'attacker' && attackers > 0 && !AutoPlay.attacking(t, p);
+    if (!t || !t.alive || dist(t) > 22 || t.state === 'return' || strayed || skipped || ambushed || g.time > this.retargetAt) {
+      this.target = this.pickTarget(g, cfg);
       this.retargetAt = g.time + 4;
     }
     const target = this.target;
@@ -210,17 +325,26 @@ export class AutoPlay {
     if (slot) out.skills.push(slot);
   }
 
-  private pickTarget(g: AutoWorld): Monster | null {
+  /**
+   * The monster to fight. Target mode "attacker": those after the player first (then other hostile ones a
+   * little ahead, as before), nearest among them; "near": just the nearest. Kinds the player skips are left
+   * alone unless they attack the player.
+   */
+  private pickTarget(g: AutoWorld, cfg: AutoConfig): Monster | null {
     const p = g.player;
+    const set = p.autoSettings;
+    const skip = cfg.allow.skip ? set.skip : [];
     let best: Monster | null = null;
     let bs = Infinity;
     for (const m of g.monsters) {
       if (!m.alive || m.isBoss || m.state === 'return' || inBossArena(g.zone, m.x, m.z)) continue;
       const d = Math.hypot(m.x - p.x, m.z - p.z);
       if (d > 24) continue;
+      const attacking = AutoPlay.attacking(m, p);
+      if (!attacking && skip.includes(m.def.id)) continue;
       // Only inside the circle, except monsters already attacking the player.
-      if (this.fromAnchor(m) > this.radius(p) && !(m.isHostile && d < 4.5)) continue;
-      const score = d - (m.isHostile ? 10 : 0);
+      if (this.fromAnchor(m) > this.radius(p) && !(m.isHostile && d < 4.5) && !attacking) continue;
+      const score = set.target === 'near' ? d : d - (attacking ? 1000 : m.isHostile ? 10 : 0);
       if (score < bs) {
         bs = score;
         best = m;

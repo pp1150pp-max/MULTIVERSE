@@ -244,6 +244,8 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 }
 #auto-settings .aset-title { margin-top: 12px; color: var(--gold-hi); }
 #auto-settings .aset-check { display: flex; align-items: center; gap: 6px; margin-top: 6px; cursor: pointer; }
+#auto-settings .aset-row select { max-width: 60%; }
+#aset-skip { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
 #aset-skills { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
 #auto-settings .aset-skill {
   display: flex; align-items: center; gap: 5px; padding: 3px 4px;
