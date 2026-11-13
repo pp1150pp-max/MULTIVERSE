@@ -30,6 +30,9 @@ npm run online     # build + server + ลิงก์ Cloudflare ให้เพ
 npm run tunnel     # ลิงก์ให้เพื่อนอย่างเดียว เปิดค้างไว้ → รีสตาร์ท server แล้วลิงก์ไม่เปลี่ยน
 npm run stop-server              # ปิด server (port 2567) แบบเตือนผู้เล่น 10 วิ + เซฟทุกคน แล้วรอจนปิดเสร็จ
 npm run stop-server -- --restart # เหมือนกัน แต่ npm run online เปิด server ใหม่เอง (โค้ดที่ build ไว้แล้ว ไม่ build ใหม่)
+npm run always-on  # ตัวคุม server+ลิงก์แบบไม่ build ไม่มีหน้าต่าง (ที่ task ตอนบูตรัน) ล่มแล้วเปิดใหม่เอง
+npm run autostart  # สถานะ task ตอนบูต · -- -Install / -Uninstall (ขอสิทธิ์ admin) · -- -Start = เปิดตอนนี้
+npm run logs       # log ของ server จริง (server/data/logs/) · -- --follow ดูต่อเรื่อย ๆ
 ```
 
 ## Server จริง (ห้ามพลาด)
@@ -85,4 +88,4 @@ npm run stop-server -- --restart # เหมือนกัน แต่ npm run
 | ของแต่งตัว | ค่าการวาง/หน้าตาแยกรายชิ้น (ปีก สัตว์ขี่ สัตว์เลี้ยง ออร่า) · แท็บ "ของแต่งตัว" ใน /admin ทดลอง owner+GM บันทึกทั้งเซิร์ฟเฉพาะ owner · เก็บเฉพาะค่าที่ต่างจากโค้ด | [cosmetics.md](docs/systems/cosmetics.md) |
 | ปรับสมดุล | แท็บใน /admin (สวิตช์ `balance` owner+GM) ปรับค่าอาชีพ/ตัวคูณ/ตัวตัดฟื้น/ตาราง tier (กลาง + แยกต่อสเตตัส/ช่วงเลเวล) · ตัวคูณค่าสเตตัสบนไอเทม (ทดลองก่อน คอนเฟิร์มเฉพาะ owner คูณของทุกชิ้นจริง สำรอง DB ก่อน `mulK` กันซ้ำ) · เก็บเฉพาะค่าที่ต่างจากโค้ด · มีผลทันที · ลง audit · โอกาส tier ไม่ย้ายช่วง · ของเก่าค่าเดิม ป้าย tier คำนวณใหม่ (`tierK`) · ตัวคูณมอนธรรมดา (ช่วงเลเวล × รายตัว, 9 สเตตัส ×0.1–×10, ไม่รวมบอส/ลูกน้อง, มอนที่อยู่แล้วได้ทันที HP คงสัดส่วน) · MP สกิล = ในโค้ด × (1 + %×(Lv−1)) แยกต่ออาชีพ ค่าในโค้ด 3% (0–20%) ปัดใกล้สุด | [balance.md](docs/systems/balance.md) |
 | ล็อกอินรายวัน | ปฏิทินรายเดือนต่อบัญชี (ไม่ใช่ Guest) ตัดวัน 00:00 เวลาไทย · เข้าเกมวันไหนได้ของวันนั้นทางจดหมายอัตโนมัติ · พลาด = หาย ชดเชยฟรีเดือนละ 3 วัน · ตารางของแก้ได้ในแท็บ /admin (owner, เก็บเฉพาะที่ต่าง) | [daily-login.md](docs/systems/daily-login.md) |
-| ปิด/รีสตาร์ท server, สำรอง DB, เน็ตช้า | countdown เสมอ · exit code 75 = รีสตาร์ท · backup `VACUUM INTO` · WebSocket บีบอัด (permessage-deflate) log บอก `no compression` | [server-ops.md](docs/systems/server-ops.md) |
+| ปิด/รีสตาร์ท server, สำรอง DB, เน็ตช้า | countdown เสมอ · exit code 75 = รีสตาร์ท · server จริงเปิดเองตอนบูตด้วย Task Scheduler `MULTIVERSE server` (`npm run always-on`, ล่ม = เปิดใหม่, exit 0 = ปิดจริง, log `npm run logs`) · backup `VACUUM INTO` ทุก 6 ชม. เก็บ 28 · WebSocket บีบอัด (permessage-deflate) log บอก `no compression` | [server-ops.md](docs/systems/server-ops.md) |

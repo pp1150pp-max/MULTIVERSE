@@ -2101,7 +2101,7 @@ function backupCard(): HTMLElement {
   const list = h('div');
   const msg = h('div', { class: 'msg' });
   const btn = h('button', { class: 'primary' }, 'สำรองตอนนี้');
-  const KIND: Record<string, string> = { daily: 'อัตโนมัติรายวัน', manual: 'กดเอง', 'before-delete': 'ก่อนลบ', 'before-item-mult': 'ก่อนคูณสเตตัสไอเทม' };
+  const KIND: Record<string, string> = { daily: 'อัตโนมัติ (ทุก 6 ชม.)', manual: 'กดเอง', 'before-delete': 'ก่อนลบ', 'before-item-mult': 'ก่อนคูณสเตตัสไอเทม' };
   let showAll = false;
   let last: BackupRow[] = [];
   const draw = (rows: BackupRow[]) => {
@@ -2136,7 +2136,7 @@ function backupCard(): HTMLElement {
   });
   return h('div', { class: 'card' }, h('h2', {}, 'สำรองฐานข้อมูล'),
     h('div', { class: 'muted', style: 'margin:-6px 0 8px' },
-      'เก็บใน server/data/backups/ · สำรองอัตโนมัติวันละครั้ง (เก็บ 7 ไฟล์ล่าสุด) และก่อนลบบัญชี/ตัวละครทุกครั้ง · ' +
+      'เก็บใน server/data/backups/ · สำรองอัตโนมัติทุก 6 ชั่วโมง (เก็บ 28 ไฟล์ล่าสุด = 7 วัน) และก่อนลบบัญชี/ตัวละครทุกครั้ง · ' +
       'กู้คืน: ปิด server (npm run stop-server) แล้วคัดลอกไฟล์สำรองทับ server/data/multiverse.db (ลบไฟล์ -wal และ -shm ข้าง ๆ ก่อน) แล้วเปิด server ใหม่'),
     h('div', { class: 'row' }, btn), msg, list);
 }

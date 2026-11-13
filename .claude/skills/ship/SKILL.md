@@ -11,7 +11,7 @@ disable-model-invocation: true
 **ห้าม:**
 - `gh pr merge --delete-branch`
 - `npm run build` (ใช้ `npx vite build` ในขั้นอัปเดตเท่านั้น)
-- kill task ของ `npm run online`
+- kill task ของ `npm run online` หรือกด "End" ที่ task `MULTIVERSE server` ใน Task Scheduler
 - แก้หรือ checkout branch อื่นในโฟลเดอร์หลัก เพราะ server จริงรันโค้ดจากที่นั่น
   - งานที่ต้องแก้โค้ด ให้ทำใน `git worktree` แยก
   - ถ้าเชื่อม `node_modules` ด้วย junction ต้องลบ junction ด้วย `cmd /c rmdir` **ก่อน** `git worktree remove`
@@ -53,9 +53,9 @@ disable-model-invocation: true
 ทำตาม `.claude/skills/update-server/SKILL.md` ตั้งแต่ขั้น 3 (สำรอง DB) จนถึงขั้น 6 (ยืนยันลิงก์)
 
 - **สำรอง DB ทุกครั้ง** ตั้งชื่อไฟล์ตามสิ่งที่ขึ้นไป เช่น `multiverse-before-<เรื่อง>-<เวลา>.db`
-- **ถ้า server ไม่ได้เปิดอยู่** (port 2567 ว่าง หรือ task `npm run online` จบไปแล้ว):
-  - เปิด `npm run tunnel` ก่อน แล้วเปิด `npm run online` แบบ background
-  - ลิงก์ใหม่ต้องบอกเจ้าของชัด ๆ ให้ส่งเพื่อน
+- server จริงปกติรันจาก Task Scheduler `MULTIVERSE server` (`npm run always-on` ไม่มีหน้าต่าง) · สถานะ `npm run autostart` · log `npm run logs` (ดูว่าขึ้น "พร้อมแล้ว" หลังรีสตาร์ท)
+- **ถ้า server ไม่ได้เปิดอยู่** (port 2567 ว่าง): `npm run autostart -- -Start` แล้วรอ "พร้อมแล้ว" ใน `npm run logs` · ห้ามเปิดในแท็บ Terminal ของแอปหรือ task background ของ session
+  - ลิงก์ถาวรไม่เปลี่ยน (ถ้ายังใช้ quick tunnel อยู่ ลิงก์ใหม่ต้องบอกเจ้าของชัด ๆ ให้ส่งเพื่อน)
 - **ลิงก์ใหม่อาจยังเข้าไม่ได้ทันที** (DNS ยังไม่ทัน, curl ได้ 000 / exit 6): ให้ลองซ้ำสักพัก อย่าเพิ่งสรุปว่าพัง
 
 ## หยุดถามก่อน (ไม่ต้องถามกรณีอื่น)
@@ -63,7 +63,7 @@ disable-model-invocation: true
 - **PR ชนกับ main** ต้องรวมโค้ดสองฝั่งเอง: บอกว่าชนไฟล์ไหน เป็นงานเรื่องอะไรกับอะไร แล้วถามว่าจะให้รวมเลยไหม
   - ระหว่างนี้ merge ตัวอื่นที่ไม่เกี่ยวต่อไปได้
 - **CI ไม่ผ่าน** (รัน rerun แล้วก็ยังไม่ผ่าน)
-- **PR เปลี่ยน dependency ใน `package.json`:** ต้อง `npm ci` ซึ่งต้องปิด server เต็ม ผู้เล่นจะเห็นป้ายปิด ไม่ใช่ป้ายอัปเดต
+- **PR เปลี่ยน dependency ใน `package.json`:** ต้อง `npm ci` ซึ่งต้องปิด server เต็ม ผู้เล่นจะเห็นป้ายปิด ไม่ใช่ป้ายอัปเดต (`npm run stop-server` → `npm ci` → `npx vite build` → `npm run autostart -- -Start`)
 - **ไม่มีอะไรใหม่เลย** (ไม่มี PR พร้อม และ main ตรงกับ server แล้ว): บอกว่าไม่มีอะไรต้องขึ้น อย่ารีสตาร์ทให้ผู้เล่นหลุดเปล่า ๆ
 - **เจอสิ่งที่ดูผิดกติกาใน `docs/systems/`** ระหว่างอ่าน diff: ถามก่อน merge PR นั้น
 

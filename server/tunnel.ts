@@ -3,7 +3,7 @@
 // The address is new each time cloudflared starts. `npm run tunnel` keeps cloudflared in its own window,
 // so restarting the server (npm run online) keeps the same link; the running link is noted in
 // server/data/tunnel.json so the server can show it.
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -76,9 +76,20 @@ export function runningTunnel(port: number): string | null {
     const s = JSON.parse(readFileSync(STATE_FILE, 'utf8')) as { pid?: number; link?: string; port?: number };
     if (!s.pid || !s.link || s.port !== port) return null;
     process.kill(s.pid, 0); // throws when that process is gone
+    // After a reboot the file is still there and Windows may have given that pid to another program.
+    if (process.platform === 'win32' && !isCloudflared(s.pid)) return null;
     return s.link;
   } catch {
     return null;
+  }
+}
+
+function isCloudflared(pid: number): boolean {
+  try {
+    const out = execFileSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], { encoding: 'utf8', windowsHide: true });
+    return out.toLowerCase().includes('cloudflared');
+  } catch {
+    return true; // can't tell: trust the pid check
   }
 }
 
@@ -115,7 +126,8 @@ function announce(link: string, stays = false, keptBy = 'npm run tunnel', perman
 }
 
 /** Starts the tunnel (downloading cloudflared on first use); resolves to the child process (kill it on shutdown) or null when it can't start. */
-export async function startTunnel(port: number, opts: { shared?: boolean; keptBy?: string } = {}): Promise<ChildProcess | null> {
+/** supervised: npm run online / always-on opens it again by itself when it closes (only changes the messages). */
+export async function startTunnel(port: number, opts: { shared?: boolean; keptBy?: string; supervised?: boolean } = {}): Promise<ChildProcess | null> {
   const exe = findCloudflared() ?? (await download());
   const help = () => {
     console.log('\n  ⚠ เปิดลิงก์สำหรับเพื่อนไม่ได้ เพราะหาโปรแกรม cloudflared ไม่เจอ และดาวน์โหลดไม่สำเร็จ');
@@ -156,7 +168,8 @@ export async function startTunnel(port: number, opts: { shared?: boolean; keptBy
   child.on('error', () => help());
   child.on('exit', (code) => {
     if (opts.shared) clearTunnelState();
-    if (!found) console.log(`\n  ⚠ cloudflared ปิดตัวไป (code ${code}) — ลองรัน npm run online ใหม่อีกครั้ง\n`);
+    if (opts.supervised) console.log(`  cloudflared ปิดตัวไป (code ${code})`);
+    else if (!found) console.log(`\n  ⚠ cloudflared ปิดตัวไป (code ${code}) — ลองรัน npm run online ใหม่อีกครั้ง\n`);
     else console.log('\n  ⚠ ลิงก์สำหรับเพื่อนปิดไปแล้ว (cloudflared หยุดทำงาน) — ปิด server แล้วรัน npm run online ใหม่\n');
   });
   setTimeout(() => {
