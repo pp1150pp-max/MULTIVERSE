@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { orbPlus, orbSlot } from '../shared/data/enhance';
 import { EQUIP_SLOTS } from '../shared/types';
-import { DEFAULT_ORB_LOOK, ORB_PALETTE_IDS, ORB_SHAPE_IDS, type OrbLook, type OrbPaletteId, type OrbShapeId } from '../shared/orbLook';
+import { DEFAULT_ORB_LOOK, ORB_PALETTE_IDS, ORB_PALETTE_NAME, ORB_SHAPE_IDS, ORB_SHAPE_NAME, type OrbLook, type OrbPaletteId, type OrbShapeId } from '../shared/orbLook';
 
 /** How an orb of one + level looks. Sizes are in world units (the player is about 1.9 tall). */
 export interface OrbLevel {
@@ -44,7 +44,9 @@ const MAX_ORBS = EQUIP_SLOTS.length;
  * Sizes and motion in use: the server-wide look (OrbLook, sent by the server) minus palette and shape,
  * which have their own setters. Starts at the default until the server's look arrives.
  */
-export const orbTuning: Omit<OrbLook, 'palette' | 'shape'> = (({ palette: _p, shape: _s, ...rest }) => rest)({ ...DEFAULT_ORB_LOOK });
+/** The numbers of a look (everything but palette and shape). */
+export type OrbTune = Omit<OrbLook, 'palette' | 'shape'>;
+export const orbTuning: OrbTune = (({ palette: _p, shape: _s, ...rest }) => rest)({ ...DEFAULT_ORB_LOOK });
 
 // ------------------------------------------------------------ palettes
 
@@ -159,17 +161,10 @@ const PALETTE_DEFS: Record<OrbPaletteId, Omit<OrbPalette, 'id'>> = {
   },
 };
 
-export const ORB_PALETTES: OrbPalette[] = ORB_PALETTE_IDS.map((id) => ({ id, ...PALETTE_DEFS[id] }));
+export const ORB_PALETTES: OrbPalette[] = ORB_PALETTE_IDS.map((id) => ({ id, ...PALETTE_DEFS[id], name: ORB_PALETTE_NAME[id] }));
 
-/** Orb outlines to try (rows of the orb atlas). */
-const SHAPE_NAMES: Record<OrbShapeId, string> = {
-  sphere: 'ลูกกลม',
-  crystal: 'คริสตัล (ข้าวหลามตัด)',
-  flame: 'เปลวไฟ/วิญญาณ',
-  star: 'ดาว 4 แฉก',
-};
-/** In ORB_SHAPE_IDS order (= rows of the orb picture). */
-export const ORB_SHAPES: { id: OrbShapeId; name: string }[] = ORB_SHAPE_IDS.map((id) => ({ id, name: SHAPE_NAMES[id] }));
+/** Orb outlines to try (rows of the orb atlas), in ORB_SHAPE_IDS order (= rows of the orb picture). */
+export const ORB_SHAPES: { id: OrbShapeId; name: string }[] = ORB_SHAPE_IDS.map((id) => ({ id, name: ORB_SHAPE_NAME[id] }));
 /** The shape (ORB_SHAPES index) every orb is drawn with, unless orbMix says otherwise for its slot. */
 let shape = 0;
 /** Bumped when the palette, shape or mix changes, so every ring repaints. */
@@ -485,16 +480,16 @@ function heightIndex(i: number, n: number): number {
  * Where orb `i` of `n` is, relative to the character's feet, at time `t` (seconds). `phase` makes
  * each character's ring start differently. Pure, so it can be checked without a browser.
  */
-export function orbOffset(i: number, n: number, t: number, phase: number, out: THREE.Vector3): THREE.Vector3 {
+export function orbOffset(i: number, n: number, t: number, phase: number, out: THREE.Vector3, tu: OrbTune = orbTuning): THREE.Vector3 {
   const spacing = TAU / n;
   const ph = phase + i * 1.7;
   // One shared turn keeps the ring evenly spaced; each orb sways a little ahead and behind its place at
   // its own rate, so they don't move as one rigid wheel. The sway shrinks as the ring fills up, so
   // neighbours never touch (checked for 2–10 orbs at +15).
-  const sway = n > 1 ? Math.sin(t * (0.9 + 0.23 * i) + ph) * spacing * SWAY[Math.min(n, 10)] * orbTuning.sway : 0;
-  const a = t * orbTuning.speed * TAU + i * spacing + sway;
-  const r = orbTuning.radius * (1 + 0.06 * Math.sin(t * 0.7 + ph));
-  const y = HEIGHTS[heightIndex(i, n)] + orbTuning.height + Math.sin(t * (1.6 + 0.19 * i) * orbTuning.bobSpeed + ph) * orbTuning.bob;
+  const sway = n > 1 ? Math.sin(t * (0.9 + 0.23 * i) + ph) * spacing * SWAY[Math.min(n, 10)] * tu.sway : 0;
+  const a = t * tu.speed * TAU + i * spacing + sway;
+  const r = tu.radius * (1 + 0.06 * Math.sin(t * 0.7 + ph));
+  const y = HEIGHTS[heightIndex(i, n)] + tu.height + Math.sin(t * (1.6 + 0.19 * i) * tu.bobSpeed + ph) * tu.bob;
   return out.set(Math.cos(a) * r, y, Math.sin(a) * r);
 }
 /** Sway (share of the gap between orbs) by orb count. */
@@ -512,6 +507,8 @@ export class OrbRing {
   private readonly glow: THREE.Points;
   private codes: readonly number[] = [];
   private paletteVer = -1;
+  /** The character's own orb look (a worn 'orb' cosmetic), or null = the server-wide look. */
+  private look: OrbLook | null = null;
   private n = 0;
   private readonly levels: OrbLevel[] = [];
   /** Orb atlas cell per orb: detail + 4 × shape. */
@@ -542,14 +539,18 @@ export class OrbRing {
     this.codes = codes;
     this.paletteVer = paletteVer;
     this.n = Math.min(MAX_ORBS, codes.length);
+    const look = this.look;
+    const lookPal = look ? ORB_PALETTES.find((p) => p.id === look.palette) ?? palette : null;
+    const lookShape = look ? Math.max(0, ORB_SHAPES.findIndex((x) => x.id === look.shape)) : 0;
     for (let i = 0; i < this.n; i++) {
       const plus = Math.max(7, Math.min(15, orbPlus(codes[i])));
       this.levels[i] = ORB_LEVELS[plus];
       const slot = orbSlot(codes[i]);
+      // An own look uses its palette and shape for every orb (the bench's per-orb mix is for the server-wide look).
       const own = orbMix.palettes[slot];
-      const pal = own ? ORB_PALETTES.find((p) => p.id === own) ?? palette : palette;
+      const pal = lookPal ?? (own ? ORB_PALETTES.find((p) => p.id === own) ?? palette : palette);
       const c = pal.colors(slot, plus);
-      this.cells[i] = this.levels[i].detail + 4 * (orbMix.shapes[slot] ?? shape);
+      this.cells[i] = this.levels[i].detail + 4 * (look ? lookShape : orbMix.shapes[slot] ?? shape);
       putRgb(this.cols, i * 9, c.core);
       putRgb(this.cols, i * 9 + 3, c.accent);
       putRgb(this.cols, i * 9 + 6, c.glow);
@@ -565,11 +566,18 @@ export class OrbRing {
   }
 
   private orbAt(i: number, t: number, out: THREE.Vector3): THREE.Vector3 {
-    return orbOffset(i, this.n, t, this.phase, out);
+    return orbOffset(i, this.n, t, this.phase, out, this.look ?? orbTuning);
   }
 
-  /** `codes` = the player's orbs (Player.orbs); `show` false hides the whole ring (e.g. dead). */
-  update(t: number, x: number, z: number, codes: readonly number[], show: boolean): void {
+  /**
+   * `codes` = the player's orbs (Player.orbs); `show` false hides the whole ring (e.g. dead); `look` = the
+   * look of the 'orb' cosmetic the character shows (null = the server-wide look).
+   */
+  update(t: number, x: number, z: number, codes: readonly number[], show: boolean, look: OrbLook | null = null): void {
+    if (look !== this.look) {
+      this.look = look;
+      this.paletteVer = -1;
+    }
     if (!this.sameCodes(codes) || this.paletteVer !== paletteVer) this.setCodes(codes);
     const on = show && this.n > 0;
     this.core.visible = this.glow.visible = on;
@@ -577,8 +585,9 @@ export class OrbRing {
     this.core.position.set(x, 0, z);
     this.glow.position.set(x, 0, z);
 
-    const sc = orbTuning.scale;
-    const haloKind = orbTuning.softGlow ? 0 : 2;
+    const tu = this.look ?? orbTuning;
+    const sc = tu.scale;
+    const haloKind = tu.softGlow ? 0 : 2;
     const { cPos, cCol, cAcc, cSize, cDet } = this.cBuf;
     const v = this.v;
     this.g = 0;
@@ -597,10 +606,10 @@ export class OrbRing {
 
       // Halo, breathing slowly.
       const pulse = 1 + 0.1 * Math.sin(t * 3 + this.phase + i);
-      this.glowPoint(v.x, v.y, v.z, o + 6, L.glow * sc * orbTuning.glow * pulse, Math.min(1, L.glowAlpha * orbTuning.glowAlpha), haloKind);
+      this.glowPoint(v.x, v.y, v.z, o + 6, L.glow * sc * tu.glow * pulse, Math.min(1, L.glowAlpha * tu.glowAlpha), haloKind);
 
       // Trail: where the orb was a moment ago, smaller and fainter.
-      const trail = Math.min(2 * MAX_TRAIL, Math.round(L.trail * orbTuning.trail));
+      const trail = Math.min(2 * MAX_TRAIL, Math.round(L.trail * tu.trail));
       for (let j = 1; j <= trail; j++) {
         this.orbAt(i, t - j * 0.045, v);
         const k = 1 - j / (trail + 1);
@@ -608,7 +617,7 @@ export class OrbRing {
       }
 
       // Sparks: each one lives SPARK_LIFE seconds, starts where the orb was, then drifts up and fades.
-      const sparks = Math.min(2 * MAX_PARTICLES, Math.round(L.particles * orbTuning.particles));
+      const sparks = Math.min(2 * MAX_PARTICLES, Math.round(L.particles * tu.particles));
       for (let j = 0; j < sparks; j++) {
         const cyc = t / SPARK_LIFE + j / sparks + hash(i * 13 + j);
         const age = cyc - Math.floor(cyc);

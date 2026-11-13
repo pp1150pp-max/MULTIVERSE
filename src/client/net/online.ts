@@ -11,6 +11,7 @@ import type { Intent, SimEvent } from '../../shared/sim/types';
 import { MONSTERS } from '../../shared/data/monsters';
 import { validOrbCode } from '../../shared/data/enhance';
 import { checkOrbLook } from '../../shared/orbLook';
+import { checkOrbItems, registerOrbItems } from '../../shared/orbItems';
 import { applyOrbLook } from '../orbs';
 import { checkCosTuning } from '../../shared/cosTuning';
 import { applyBalance, checkBalance } from '../../shared/balance';
@@ -105,6 +106,7 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
         useOrbLook(m.orbLook);
         useCosTuning(m.cosTuning);
         applyCosHidden(m.cosHidden);
+        useOrbItems(m.orbItems);
         useBalance(m.balance);
       }
       if (m.t === 'snap' && you >= 0 && !settled) {
@@ -463,6 +465,9 @@ export class OnlineBackend implements Backend {
         break;
       case 'balance':
         useBalance(m.tuning);
+        break;
+      case 'orbItems':
+        useOrbItems(m.items);
         break;
       case 'orbLook':
         useOrbLook(m.look);
@@ -1030,6 +1035,12 @@ function useBalance(v: unknown): void {
 function useOrbLook(v: unknown): void {
   const look = v === undefined ? undefined : checkOrbLook(v).look;
   if (look) applyOrbLook(look);
+}
+
+/** The orb looks in the shop (src/shared/orbItems.ts), checked again; they become cosmetics of slot 'orb'. */
+function useOrbItems(v: unknown): void {
+  if (!Array.isArray(v)) return;
+  registerOrbItems(checkOrbItems({ next: 1, items: v }, false).items?.items ?? []);
 }
 
 const NO_ORBS: readonly number[] = [];

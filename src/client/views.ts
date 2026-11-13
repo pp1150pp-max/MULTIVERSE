@@ -11,6 +11,8 @@ import type { SimEvent } from '../shared/sim/types';
 import { SpriteActor } from './SpriteActor';
 import { OrbRing } from './orbs';
 import { CosmeticRig, ridePose } from './cosmeticViews';
+import { shownCos } from './cosLook';
+import { orbItemLook } from '../shared/orbItems';
 import { AnimatedActor, type Actor } from './AnimatedActor';
 import { animSets, decalTex, fxTex, sheets } from './assets';
 import type { Effects, ShotSprite } from './effects';
@@ -86,7 +88,7 @@ export class PlayerView {
     this.actor.update(dt, p.moving, p.isDashing ? 14 : undefined);
     this.updateAura(dt, fx);
     // Owner 2026-11-10: the orbs stay while dead (only the aura goes).
-    this.orbs.update(this.clock, p.x, p.z, p.orbs, true);
+    this.orbs.update(this.clock, p.x, p.z, p.orbs, true, orbItemLook(shownCos(p, 'orb')?.id) ?? null);
     this.cos.update(dt, p, fx);
     this.updateToad(dt, fx);
     this.sync();

@@ -8,6 +8,7 @@ import type { AutoSettings, Buffs, BuybackEntry, LootFilter, PotionSelect, SortK
 import type { EnhanceResult } from '../data/enhance';
 import type { RerollKind } from '../data/reroll';
 import type { OrbLook } from '../orbLook';
+import type { OrbItem } from '../orbItems';
 import type { CosTuning } from '../cosTuning';
 import type { BalanceTuning } from '../balance';
 import type { DailyView } from '../daily';
@@ -288,7 +289,7 @@ export interface SnapshotMsg {
 export type ServerMsg =
   /** `guest`: playing a guest character (no stash, deleted after a day offline). */
   /** `ch`: the channel of that zone (1 when it has none). */
-  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; guest?: boolean; orbLook?: OrbLook; cosTuning?: CosTuning; cosHidden?: string[]; balance?: BalanceTuning }
+  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; guest?: boolean; orbLook?: OrbLook; cosTuning?: CosTuning; cosHidden?: string[]; orbItems?: OrbItem[]; balance?: BalanceTuning }
   /** The owner changed the server-wide enhancement orb look (src/shared/orbLook.ts). */
   | { t: 'orbLook'; look: OrbLook }
   /** An admin changed the server-wide game balance (src/shared/balance.ts). */
@@ -297,6 +298,8 @@ export type ServerMsg =
   | { t: 'cosTuning'; tuning: CosTuning }
   /** The owner hid / showed cosmetics in the "แต่งตัว" window (src/shared/cosShop.ts): the hidden ids. Never prices. */
   | { t: 'cosHidden'; ids: string[] }
+  /** The orb looks made in /admin changed (src/shared/orbItems.ts): the whole list. */
+  | { t: 'orbItems'; items: OrbItem[] }
   /**
    * You walked through a portal (or switched channel): you are now `you` in zone `zone`, channel `ch`,
    * standing at x/z. Snapshots from there follow.

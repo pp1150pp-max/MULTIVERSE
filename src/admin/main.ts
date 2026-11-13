@@ -11,10 +11,11 @@ import { MAIL_BODY_MAX, MAIL_DAYS, MAIL_TITLE_MAX, type MailRecipientRow, type M
 import { entryName, POTION_SIZES, potionName } from '../shared/data/potions';
 import { STONE_NAME } from '../shared/data/stones';
 import { COSMETICS, COS_SLOTS, COS_SLOT_NAME } from '../shared/data/cosmetics';
+import { registerOrbItems } from '../shared/orbItems';
 import { CARD_DEFAULTS, CARD_FX, CARD_FX_MAX, CARD_FX_NAME, CARD_GROUPS, CARD_GROUP_NAME, CARD_NUM_FIELDS, CARD_RARITY_NAME, cardArt, cardName, type CardFx, type CardGroup, type CardId } from '../shared/data/cards';
 import { CARD_FX_LIMIT, type CardTuning } from '../shared/cardTuning';
 import type {
-  AdminAccountDetail, AdminAccountsResponse, AdminCardTune, AdminCosLook, AdminFeature, AdminOrbLook, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, SessionPage, SessionSort, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AdminShutdownText, AuditRow,
+  AdminAccountDetail, AdminAccountsResponse, AdminCardTune, AdminCosLook, AdminFeature, AdminOrbItems, AdminOrbLook, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, SessionPage, SessionSort, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AdminShutdownText, AuditRow,
 } from '../shared/admin';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { applyBalance, checkBalance } from '../shared/balance';
@@ -347,7 +348,7 @@ function setTab(t: Tab): void {
   else if (t === 'cos') void renderCos();
   else if (t === 'balance') void renderBalance(view, h, api, (tuning) => applyBalance(tuning), can('itemStatMult'));
   else if (t === 'daily') void renderDaily(view, h, api);
-  else if (t === 'cosManage') void renderCosManage(view, h, api);
+  else if (t === 'cosManage') void renderCosManage(view, h, api, allowedTabs.has('orbs') ? (id) => { orbOpenId = id; setTab('orbs'); } : null);
   else if (t === 'roles') void renderRoles();
   else if (t === 'audit') void renderAudit();
   else if (t === 'cards') void renderCards();
@@ -360,8 +361,13 @@ function setTab(t: Tab): void {
 /** Stops the orb test bench (its renderer and frame loop) when another tab opens. */
 let stopOrbs: (() => void) | null = null;
 
+/** An orb look of the shop to open on the orb bench (the shop tab's "เปิดในแท่นทดลอง"), used once. */
+let orbOpenId: string | undefined;
+
 /** The enhancement orb test bench (src/client/orbPreview.ts), loaded only when this tab opens. */
 async function renderOrbs(): Promise<void> {
+  const open = orbOpenId;
+  orbOpenId = undefined;
   const box = h('div', { class: 'orb-bench' }, 'กำลังโหลด…');
   view.append(box);
   try {
@@ -370,6 +376,12 @@ async function renderOrbs(): Promise<void> {
     const stop = await mountOrbPreview(box, 'ทดลองที่นี่ไม่เปลี่ยนอะไรในเกม จนกว่าเจ้าของกด "บันทึกเป็นค่าเริ่มต้นทั้งเซิร์ฟ" · เดิน: WASD / ลูกศร หรือคลิกพื้น', {
       load: () => api<AdminOrbLook>('GET', '/admin/orb-look'),
       save: (look) => api<AdminOrbLook>('POST', '/admin/orb-look', look === 'reset' ? { reset: true } : { look }),
+      shop: {
+        load: () => api<AdminOrbItems>('GET', '/admin/orb-items'),
+        add: (name, look) => api<AdminOrbItems>('POST', '/admin/orb-items', { add: { name, look } }),
+        overwrite: (id, look) => api<AdminOrbItems>('POST', '/admin/orb-items', { edit: { [id]: { look } } }),
+        open,
+      },
     });
     if (tab !== 'orbs' || !box.isConnected) stop();
     else stopOrbs = stop;
@@ -1534,7 +1546,7 @@ const ACTION_TH: Record<string, string> = {
   level: 'ตั้งเลเวล', gold: 'ทอง', items: 'เสกไอเทม', kick: 'เตะ', teleport: 'ย้ายโซน', grant: 'ให้สิทธิ์', revoke: 'ถอนสิทธิ์',
   server: 'Server', password: 'ตั้งรหัสผ่าน', ban: 'แบน', unban: 'ปลดแบน', broadcast: 'ประกาศ', backup: 'สำรองข้อมูล',
   'delete-account': 'ลบบัญชี', 'delete-character': 'ลบตัวละคร', 'chat-delete': 'ลบแชท',
-  'shutdown-text': 'ข้อความเตือนปิด server', 'orb-look': 'หน้าตาลูกแก้วตีบวก', 'cos-look': 'ค่าของแต่งตัว', 'cos-shop': 'ซ่อน/ราคาของแต่งตัว', balance: 'ปรับสมดุล', daily: 'ล็อกอินรายวัน', mail: 'ส่งจดหมาย', mailRecall: 'ดึงจดหมายกลับ',
+  'shutdown-text': 'ข้อความเตือนปิด server', 'orb-look': 'หน้าตาลูกแก้วตีบวก', 'cos-look': 'ค่าของแต่งตัว', 'cos-shop': 'ซ่อน/ราคาของแต่งตัว', 'orb-items': 'ลูกแก้วในร้านค้า', balance: 'ปรับสมดุล', daily: 'ล็อกอินรายวัน', mail: 'ส่งจดหมาย', mailRecall: 'ดึงจดหมายกลับ',
   'report-status': 'สถานะรายงาน', 'report-ban': 'ห้ามรายงาน', 'report-unban': 'ปลดห้ามรายงาน',
   'cosmetic-give': 'ให้ Cosmetics', 'cosmetic-take': 'ยึด Cosmetics คืน',
 };
@@ -1792,6 +1804,7 @@ async function openAccount(id: number, note?: { text: string; ok: boolean; passw
   let d: AdminAccountDetail;
   try {
     d = await api<AdminAccountDetail>('GET', `/admin/accounts/${id}`);
+    registerOrbItems(d.orbItems ?? []);
   } catch (e) {
     alert((e as Error).message);
     return;

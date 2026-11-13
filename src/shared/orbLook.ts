@@ -13,6 +13,19 @@ export type OrbPaletteId = (typeof ORB_PALETTE_IDS)[number];
 export const ORB_SHAPE_IDS = ['sphere', 'crystal', 'flame', 'star'] as const;
 export type OrbShapeId = (typeof ORB_SHAPE_IDS)[number];
 
+/** Names shown in /admin (the orb bench and the shop tab). */
+export const ORB_PALETTE_NAME: Record<OrbPaletteId, string> = {
+  arcane: 'Arcane ฟ้า/ม่วง', holy: 'Holy ทอง', fire: 'Fire แดง/ส้ม', ice: 'Ice ฟ้าน้ำแข็ง/ขาว', nature: 'Nature เขียวมรกต',
+  void: 'Void ม่วงดำ/ชมพู', blood: 'Blood Moon แดงเข้ม', ocean: 'Ocean ฟ้าเขียวทะเล', moon: 'Moonlight เงิน/ขาว',
+  toxic: 'Toxic เขียวมะนาว/ม่วง', prism: 'Prism สีรุ้งตามระดับ', slot: 'สีตามช่องที่สวม', tier: 'ไล่สีตามระดับ (เข้ากับออร่า)',
+};
+export const ORB_SHAPE_NAME: Record<OrbShapeId, string> = {
+  sphere: 'ลูกกลม',
+  crystal: 'คริสตัล (ข้าวหลามตัด)',
+  flame: 'เปลวไฟ/วิญญาณ',
+  star: 'ดาว 4 แฉก',
+};
+
 export interface OrbLook {
   palette: OrbPaletteId;
   shape: OrbShapeId;

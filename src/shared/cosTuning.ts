@@ -8,7 +8,7 @@
 import { COSMETICS, cosById, type CosSlot } from './data/cosmetics';
 
 /** Slots with a tuning (title sets are name frames and chat bubbles, no 3D placement). */
-export type TunedSlot = Exclude<CosSlot, 'title'>;
+export type TunedSlot = Exclude<CosSlot, 'title' | 'orb'>;
 export const TUNED_SLOTS: readonly TunedSlot[] = ['wings', 'mount', 'pet', 'aura'];
 
 /** One field: a number with its range and slider step, or an on/off switch. `label` is the admin's Thai name. */
@@ -200,7 +200,7 @@ const PET_FLYING = new Set(['pet_dragon', 'pet_bot', 'pet_wisp']);
 /** The code default of every field of one cosmetic (undefined for an unknown id or a title set). */
 export function cosTuneDefaults(id: string): TuneValues | undefined {
   const c = cosById(id);
-  if (!c || c.slot === 'title') return undefined;
+  if (!c || c.slot === 'title' || c.slot === 'orb') return undefined;
   const d = baseDefaults(id, c.slot);
   return d && { ...d, ...zeroViewOffsets(c.slot) };
 }
@@ -312,7 +312,7 @@ export function cosTuneOf(tuning: CosTuning, id: string): TuneValues | undefined
 export function savePartOf(saved: CosTuning, id: string, cur: TuneValues, part: (key: string) => boolean): CosTuning {
   const base = cosTuneOf(saved, id);
   const c = cosById(id);
-  if (!base || !c || c.slot === 'title') return saved;
+  if (!base || !c || c.slot === 'title' || c.slot === 'orb') return saved;
   const vals: TuneValues = { ...base };
   for (const k of Object.keys(COS_TUNE_FIELDS[c.slot])) if (part(k)) vals[k] = cur[k];
   return checkCosTuning({ ...saved, [id]: vals }, false).tuning ?? saved;

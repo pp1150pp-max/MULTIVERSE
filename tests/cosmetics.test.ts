@@ -16,7 +16,7 @@ const run = (sim: Sim, secs: number) => {
 
 // ---- catalogue
 // Owner 2026-11-10: hoverboard and tortoise out for now, so 3 mounts.
-const PER_SLOT: Record<string, number> = { wings: 5, mount: 3, pet: 5, aura: 5, title: 5 };
+const PER_SLOT: Record<string, number> = { wings: 5, mount: 3, pet: 5, aura: 5, title: 5, orb: 0 }; // orb looks are made in /admin (tests/orb-items.test.ts)
 ok(COSMETICS.length === 23, `23 cosmetics (${COSMETICS.length})`);
 for (const slot of COS_SLOTS) ok(COSMETICS.filter((c) => c.slot === slot).length === PER_SLOT[slot], `${PER_SLOT[slot]} × ${slot}`);
 ok(new Set(COSMETICS.map((c) => c.id)).size === 23 && new Set(COSMETICS.map((c) => c.code)).size === 23, 'ids and codes unique');

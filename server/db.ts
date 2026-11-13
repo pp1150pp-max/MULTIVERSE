@@ -11,6 +11,7 @@ import { cleanStash, type StashData } from '../src/shared/sim/stash';
 import { cleanCosOwned } from '../src/shared/data/cosmetics';
 import { checkCosTuning, COS_TUNING_SETTING, type CosTuning } from '../src/shared/cosTuning';
 import { checkCosShop, COS_SHOP_SETTING, type CosShop } from '../src/shared/cosShop';
+import { checkOrbItems, ORB_ITEMS_SETTING, registerOrbItems, type OrbItems } from '../src/shared/orbItems';
 import { CARD_TUNING_SETTING, checkCardTuning, type CardTuning } from '../src/shared/cardTuning';
 import { BALANCE_SETTING, checkBalance, type BalanceTuning } from '../src/shared/balance';
 import { checkOrbLook, DEFAULT_ORB_LOOK, ORB_LOOK_SETTING, sameOrbLook, type OrbLook } from '../src/shared/orbLook';
@@ -358,6 +359,9 @@ export class Db {
         created_at INTEGER NOT NULL
       );
     `);
+    // The orb looks made in /admin are cosmetics too: put them in the list before anything reads owned or
+    // worn cosmetics, hidden pieces or prices (those drop ids they don't know).
+    registerOrbItems(this.orbItems().items);
   }
 
   close(): void {
@@ -427,6 +431,24 @@ export class Db {
   /** Saves the shop settings (already clean; nothing set is stored as no row). */
   setCosShop(shop: CosShop): void {
     this.setSetting(COS_SHOP_SETTING, Object.keys(shop).length ? JSON.stringify(shop) : null);
+  }
+
+  /** The orb looks made in /admin (src/shared/orbItems.ts); none until someone adds one. */
+  orbItems(): OrbItems {
+    const v = this.getSetting(ORB_ITEMS_SETTING);
+    if (v === null) return { next: 1, items: [] };
+    try {
+      // Checked again, leniently: a broken piece is dropped, the rest kept.
+      return checkOrbItems(JSON.parse(v), false).items ?? { next: 1, items: [] };
+    } catch {
+      return { next: 1, items: [] };
+    }
+  }
+
+  /** Saves the orb looks (already clean) and puts them into the cosmetic list. */
+  setOrbItems(items: OrbItems): void {
+    this.setSetting(ORB_ITEMS_SETTING, items.items.length || items.next > 1 ? JSON.stringify(items) : null);
+    registerOrbItems(items.items);
   }
 
   /** The server-wide card tuning: only the changes from the code defaults ({} until the owner saves some). */
@@ -660,6 +682,12 @@ export class Db {
     const r = this.db.prepare('INSERT OR IGNORE INTO account_cosmetics (account_id, cosmetic_id, granted_at, granted_by) VALUES (?, ?, ?, ?)')
       .run(accountId, cosmeticId, Date.now(), by);
     return Number(r.changes) > 0;
+  }
+
+  /** How many accounts own a cosmetic. */
+  cosmeticOwners(cosmeticId: string): number {
+    const r = this.db.prepare('SELECT COUNT(*) AS n FROM account_cosmetics WHERE cosmetic_id = ?').get(cosmeticId) as { n: number };
+    return Number(r.n);
   }
 
   /** Takes a cosmetic back; false when the account didn't have it. */
