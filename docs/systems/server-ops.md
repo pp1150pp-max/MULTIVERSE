@@ -4,7 +4,7 @@
 
 - **ปิด/รีสตาร์ท server จริงต้องผ่าน countdown เสมอ** (ผู้เล่นเห็นป้ายเตือน 10 วินาที หรือนานกว่าที่เลือก, เข้าเกมใหม่ไม่ได้ระหว่างนั้น, เซฟทุกคนพร้อมคลังก่อนปิด)
   - **ความยาวนับถอยหลัง** (เจ้าของตกลง 2026-11-12): ค่าเริ่มต้น 10 วิ เลือกได้ 10 วิ–10 นาที (จำนวนเต็มวินาที) · `/admin` แท็บ Server มีช่องเลือก 10 วิ / 1 / 2 / 5 นาที · `npm run stop-server -- --restart --seconds 120` (ถ้าครอบด้วย `timeout` ต้องนานกว่าเวลานับ) · Ctrl+C ใช้ 10 วิเสมอ · ลง audit พร้อมเวลานับ · ข้อความเริ่มต้นของรีสตาร์ท: "มีการอัปเดต server จะ Restart ในอีก {เวลา}"
-  - อัปเดตเกม: `npm run stop-server` → รอจนขึ้น "server ปิดแล้ว" → `npm run online` (build ใหม่แล้วเปิด)
+  - อัปเดตเกม: `npx vite build` → `npm run stop-server -- --restart` (ตัวคุมเปิดใหม่เอง ดู "always-on" ด้านล่าง) · ถ้าต้องปิดเต็ม (เช่น `npm ci`): `npm run stop-server` → รอจนขึ้น "server ปิดแล้ว" → `npm run autostart -- -Start` (หรือ `npm run online` ในหน้าต่าง ถ้ายังไม่ได้ลง task)
   - **อย่า kill task/หน้าต่างของ `npm run online` ตรง ๆ** บน Windows node จะตายทันทีโดยไม่เตือนและไม่เซฟ (เสียของที่ยังไม่เซฟ ~30 วิ)
   - Ctrl+C ในหน้าต่าง server: กดครั้งเดียวแค่ขึ้นคำเตือนใน console · กดอีกครั้งภายใน 3 วินาที = เริ่มนับถอยหลังปิด server
   - ระหว่างนับถอยหลัง: พิมพ์ `c` + Enter = ยกเลิก (ผู้เล่นเห็น "ยกเลิกการรีสตาร์ท/ยกเลิกการปิด server" และเข้าเกมได้ตามเดิม) · `f` + Enter = ปิดทันที (ยังเซฟทุกคน) · Ctrl+C ระหว่างนับไม่มีผล
@@ -14,10 +14,31 @@
   - `npm run stop-server` คุยกับ server ผ่าน token ในไฟล์ `server/data/control-<port>.json` (สร้างตอน server เปิด) รับเฉพาะจากเครื่องนี้
 - `npm run online` ใช้ port 2567 ถ้าขึ้น `EADDRINUSE` แปลว่ามี server ตัวเก่ารันค้างอยู่
 
+## เปิดเองตอนบูต + ล่มแล้วเปิดใหม่ (always-on, เจ้าของเลือก 2026-11-13)
+
+เหตุ: 13 พ.ย. 2026 เครื่องรีสตาร์ทเอง และแท็บ Terminal ของแอป Claude หายพา server ดับ (ผู้เล่นเห็น 502 ไม่มีนับถอยหลัง/เซฟ)
+
+- **Task Scheduler ตอนเครื่องบูต** ชื่อ task `MULTIVERSE server` (เจ้าของเลือกแบบบูต ไม่ใช่แบบล็อกอิน) รันในนามผู้ใช้ Windows ของเจ้าของแบบ S4U = ไม่ต้องมีใครล็อกอิน ไม่เก็บรหัสผ่าน ไม่มีหน้าต่าง · หน่วง 30 วิหลังบูต · ไม่มีเวลาจำกัด (ค่าเริ่มต้นของ Windows ตัดที่ 3 วันโดยไม่เซฟ) · priority ปกติ · เปิดได้ทีละตัว
+  - task รัน `npm run always-on` = `server/online-main.ts --always-on` ในโฟลเดอร์หลัก (ไม่ build ใช้ `dist/` ที่ build ไว้)
+  - ลงทะเบียน/ลบ ต้องสิทธิ์ admin 1 ครั้ง (สคริปต์ขอเอง): `npm run autostart -- -Install` / `-Uninstall` · ดูสถานะ `npm run autostart` · เปิดตอนนี้ `npm run autostart -- -Start` (ถ้า Windows ไม่ให้ผู้ใช้ธรรมดาสั่ง task ที่ลงด้วย admin จะเด้งขอสิทธิ์ admin บนจอเจ้าของ) · **`-Install` รันจากโฟลเดอร์หลัก `C:\Users\Pencilvester\Desktop\game_1` เท่านั้น** (สคริปต์ปฏิเสธ worktree เพราะ worktree ถูกลบทีหลัง)
+  - โฟลเดอร์และ path ของ `node.exe` ถูกจำตอน `-Install` (ย้ายโฟลเดอร์/ลง Node ใหม่ ให้ `-Install` ซ้ำ)
+  - **ห้ามกด "End" ที่ task ใน Task Scheduler** ตัวคุมจะตายทันที (server แยก process จึงยังรันต่อ แต่ไม่มีใครคุมแล้ว) ปิดด้วย `npm run stop-server` เสมอ
+- **ตัวคุม (`server/online-main.ts`) ทั้ง `npm run online` และ always-on** ตัดสินจาก exit code ของ server:
+  - `0` (stop-server โหมดปิด, ปุ่มปิดใน /admin, Ctrl+C 2 ครั้ง) = ปิดจริง ปิด tunnel ด้วย แล้วตัวคุมจบ (task จบ) · เปิดใหม่: `npm run autostart -- -Start` หรือรีบูต
+  - `75` (รีสตาร์ท) = เปิดใหม่ทันทีด้วยโค้ดที่ build ไว้
+  - อื่น ๆ (ล่ม) = เปิดใหม่หลังรอ 5 → 10 → 30 วิ → 1 → 2 → 5 นาที (นับต่อเมื่อล่มติดกัน รันได้ 10 นาทีแล้วนับใหม่)
+  - cloudflared ตายก็เปิดใหม่ด้วยช่วงรอแบบเดียวกัน · ถ้ามีหน้าต่าง `npm run tunnel` เปิดอยู่จะใช้ลิงก์ของมันและเฝ้าดู ถ้าปิดไปจะเปิดลิงก์เอง
+  - เปิดได้ทีละตัว: จับ port ล็อก `127.0.0.1:<PORT+10000>` (12567) ตัวที่สองบอกว่าเปิดอยู่แล้วแล้วจบ
+  - ถ้า port 2567 มีโปรแกรมอื่นใช้อยู่ (เช่น server ที่ค้างหลังกด End) ตัวคุมไม่เปิดซ้ำและไม่รอยึด เพราะจะทำให้ stop-server ไม่ปิดจริง → `npm run stop-server` ตัวนั้นก่อนแล้ว `-Start`
+  - `tunnel.json` ค้างหลังรีบูต: ตรวจว่า pid นั้นเป็น `cloudflared` จริง (Windows เอา pid ไปใช้ซ้ำได้)
+  - always-on แยก server เป็น process อิสระ (`detached`) เพราะบน Windows ลูกที่ไม่แยกจะตายทันทีตามตัวคุมโดยไม่เซฟ · `npm run online` ในหน้าต่างไม่แยก (Ctrl+C / พิมพ์ c f ต้องถึง server)
+- **log:** `server/data/logs/online-YYYY-MM-DD.log` วันละไฟล์ ทุกบรรทัดมีเวลา เก็บ 30 วัน (`LOG_KEEP_DAYS` ใน `server/logfile.ts`) · ดู: `npm run logs` (60 บรรทัดท้าย) · `npm run logs -- --follow` (ดูต่อเรื่อย ๆ) · `--lines N`
+- **กันเครื่องรีสตาร์ทเองตอนกลางวัน (เจ้าของตั้งเอง ไม่ใช่โค้ด):** Settings → Update & Security → Windows Update → *Change active hours* (ได้สูงสุด 18 ชม. เช่น 08:00–02:00) · *Pause updates* ช่วงที่มีคนเล่นเยอะ · Windows 10 Pro: `gpedit.msc` → Computer Configuration → Administrative Templates → Windows Components → Windows Update → *No auto-restart with logged on users for scheduled automatic updates installations* = Enabled (ใช้ได้เมื่อมีคนล็อกอินค้างไว้) · ถ้ายังรีสตาร์ทเอง task จะเปิด server ให้ใหม่ แต่ผู้เล่นหลุดโดยไม่มีนับถอยหลัง (เซฟอัตโนมัติล่าสุดยังอยู่)
+
 ## สำรอง / กู้คืน DB
 
-- สำรอง DB: `server/data/backups/` (`VACUUM INTO`) อัตโนมัติวันละครั้งเก็บ 7 ไฟล์, กดเองเก็บ 10, ก่อนลบเก็บ 20 (`BACKUP_KEEP` ใน `server/backup.ts`)
-- กู้คืน: `npm run stop-server` → ลบ `multiverse.db-wal` / `multiverse.db-shm` → คัดลอกไฟล์สำรองทับ `server/data/multiverse.db` → `npm run online`
+- สำรอง DB: `server/data/backups/` (`VACUUM INTO`) อัตโนมัติทุก 6 ชม. เก็บ 28 ไฟล์ = 7 วัน (เจ้าของเลือก 2026-11-13, ชนิดไฟล์ยังชื่อ `daily` ให้ไฟล์เก่าหมุนรวมกัน), กดเองเก็บ 10, ก่อนลบเก็บ 20 (`BACKUP_KEEP`/`AUTO_MS` ใน `server/backup.ts`) · server นับจากไฟล์ล่าสุด รีสตาร์ทบ่อยก็ไม่สำรองถี่ขึ้น
+- กู้คืน: `npm run stop-server` → ลบ `multiverse.db-wal` / `multiverse.db-shm` → คัดลอกไฟล์สำรองทับ `server/data/multiverse.db` → `npm run autostart -- -Start` (หรือ `npm run online`)
 
 ## ลิงก์ถาวรให้เพื่อน (named tunnel + โดเมนของเจ้าของ)
 

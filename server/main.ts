@@ -37,6 +37,10 @@ const PUBLIC = process.argv.includes('--public');
 
 /** Set by npm run online (server/online-main.ts), which starts the server again after a restart. */
 const SUPERVISED = process.env.MULTIVERSE_SUPERVISED === '1';
+// Output goes through npm run online's pipe. If that process is gone, a write must not take the server
+// down without the countdown and save: drop the output instead.
+process.stdout.on('error', () => {});
+process.stderr.on('error', () => {});
 /** SHUTDOWN_SECONDS env only shortens every countdown, for tests. */
 const TEST_COUNTDOWN_CAP = Math.max(0, Math.floor(Number(process.env.SHUTDOWN_SECONDS) || 0));
 const countdownOf = (secs: number): number => (TEST_COUNTDOWN_CAP ? Math.max(1, Math.min(secs, TEST_COUNTDOWN_CAP)) : secs);

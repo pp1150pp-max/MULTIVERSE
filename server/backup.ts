@@ -1,4 +1,4 @@
-// Database backups in server/data/backups/: a daily one (the last BACKUP_KEEP.daily kept), one when the
+// Database backups in server/data/backups/: an automatic one every AUTO_MS (kind 'daily', the last BACKUP_KEEP.daily kept), one when the
 // owner presses "สำรองตอนนี้", and one before every account/character delete. Made with SQLite's
 // VACUUM INTO, which writes a consistent copy while the server keeps running.
 //
@@ -12,9 +12,10 @@ import type { BackupRow } from '../src/shared/admin';
 
 export type BackupKind = 'daily' | 'manual' | 'before-delete' | 'before-item-mult';
 /** How many of each kind are kept; older ones are deleted when a new one is made. */
-export const BACKUP_KEEP: Record<BackupKind, number> = { daily: 7, manual: 10, 'before-delete': 20, 'before-item-mult': 10 };
-const DAY_MS = 24 * 60 * 60 * 1000;
-const CHECK_MS = 60 * 60 * 1000;
+export const BACKUP_KEEP: Record<BackupKind, number> = { daily: 28, manual: 10, 'before-delete': 20, 'before-item-mult': 10 };
+/** How often the automatic backup (kind 'daily', the name kept for older files) is made: every 6 hours (owner, 2026-11-13). */
+const AUTO_MS = 6 * 60 * 60 * 1000;
+const CHECK_MS = 10 * 60 * 1000;
 
 const pad = (n: number, w = 2) => String(n).padStart(w, '0');
 function stamp(d: Date): string {
@@ -70,11 +71,11 @@ export class Backups {
     }
   }
 
-  /** Makes a daily backup now if the newest is a day old (or there is none), then checks every hour. */
+  /** Makes an automatic backup now if the newest is AUTO_MS old (or there is none), then checks every CHECK_MS. */
   startDaily(): void {
     const check = () => {
       const last = this.list().find((b) => b.kind === 'daily');
-      if (last && Date.now() - last.at < DAY_MS) return;
+      if (last && Date.now() - last.at < AUTO_MS) return;
       try {
         this.make('daily');
       } catch (e) {
