@@ -17,12 +17,18 @@ const secArg = process.argv.findIndex((a) => a === '--seconds' || a.startsWith('
 const SECONDS = secArg < 0 ? undefined : (process.argv[secArg].split('=')[1] ?? process.argv[secArg + 1]);
 const FILE = controlFilePath(DB_FILE, PORT);
 
+/**
+ * Is that process still running? EPERM means it exists but we may not signal it: the live server runs
+ * from Task Scheduler in another Windows session (Services), so that is the normal answer for it. Only
+ * ESRCH (no such process) means it is gone; treating EPERM as gone used to delete the control file of a
+ * running server, so nothing could stop it until it restarted.
+ */
 const alive = (pid: number): boolean => {
   try {
     process.kill(pid, 0);
     return true;
-  } catch {
-    return false;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === 'EPERM';
   }
 };
 
