@@ -615,7 +615,10 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
     // ---- copy / reset
     h('h2', 'บันทึกค่า');
     button('คัดลอกค่าที่ตั้งไว้', () => {
-      const text = JSON.stringify(checkCosTuning(currentCosTuning(), false).tuning ?? {});
+      // Every tuned piece by name ({} = its code defaults), so pasting it in "จัดการของแต่งตัว" also puts
+      // a piece set back to its defaults back (older copies listed only the changed pieces; both paste).
+      const t = checkCosTuning(currentCosTuning(), false).tuning ?? {};
+      const text = JSON.stringify(Object.fromEntries(COSMETICS.filter((c) => c.slot !== 'title').map((c) => [c.id, t[c.id] ?? {}])));
       out.value = text;
       navigator.clipboard?.writeText(text).catch(() => {});
     });
@@ -627,7 +630,7 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
     out.readOnly = true;
     out.rows = 3;
     out.style.width = '100%';
-    out.placeholder = 'กด "คัดลอกค่าที่ตั้งไว้" แล้ววางข้อความนี้ให้ Claude (เฉพาะค่าที่ต่างจากในโค้ด)';
+    out.placeholder = 'กด "คัดลอกค่าที่ตั้งไว้" แล้ววางในแท็บ "จัดการของแต่งตัว" (บันทึกหลายชิ้นพร้อมกัน) หรือส่งให้ Claude · ทุกชิ้น เฉพาะค่าที่ต่างจากในโค้ด';
     panel.append(out);
   }
 

@@ -204,6 +204,29 @@ async function run(): Promise<void> {
   await sleep(300);
   ok(JSON.stringify(A2.seen()?.cos) === JSON.stringify([codes[0]]), 'still worn after logging in again');
 
+  // ---- hidden by the owner ("จัดการของแต่งตัว"): whoever wears it keeps it, nobody can put it on again
+  const hide = (shop: object) => api('POST', '/admin/cos-shop', { shop }, owner.tok);
+  ok((await hide({ wings_angel: { hidden: true }, pet_cat: { hidden: true } })).status === 200, 'owner hides the angel wings and the cat');
+  await sleep(400);
+  ok(JSON.stringify(A2.seen()?.cos) === JSON.stringify([codes[0]]), 'hidden: the player wearing it keeps it on');
+  ok(JSON.stringify(B.seen(A2.you())?.cos) === JSON.stringify([codes[0]]), 'hidden: others still see it on them');
+  ok((await api('POST', `/admin/accounts/${accId}/cosmetics`, { id: 'pet_cat', give: true }, owner.tok)).status === 200, 'a hidden piece can still be given (owner 2026-11-13)');
+  await sleep(300);
+  A2.act({ a: 'cosWear', slot: 'pet', id: 'pet_cat' });
+  await sleep(300);
+  ok(JSON.stringify(A2.seen()?.cos) === JSON.stringify([codes[0]]) && A2.lines().some((l) => l.includes('ปิดไว้ชั่วคราว')), 'an owned but hidden piece cannot be put on (server refuses)');
+  A2.act({ a: 'cosWear', slot: 'wings', id: null });
+  await sleep(300);
+  ok(!A2.seen()?.cos, 'the hidden piece worn can be taken off');
+  A2.act({ a: 'cosWear', slot: 'wings', id: 'wings_angel' });
+  await sleep(300);
+  ok(!A2.seen()?.cos, 'once off, it cannot be put back on while hidden');
+  ok((await hide({})).status === 200, 'owner shows everything again');
+  await sleep(300);
+  A2.act({ a: 'cosWear', slot: 'wings', id: 'wings_angel' });
+  await sleep(300);
+  ok(JSON.stringify(A2.seen()?.cos) === JSON.stringify([codes[0]]), 'shown again: it can be worn');
+
   // ---- guests
   G.act({ a: 'cosWear', slot: 'wings', id: 'wings_angel' });
   await sleep(300);

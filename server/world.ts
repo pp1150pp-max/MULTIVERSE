@@ -44,6 +44,7 @@ import { Perf, PERF_LOG_MS } from './perf';
 import { CH_RESERVED, hasChannels, type ChannelsView } from '../src/shared/channels';
 import { MEGAPHONE_EVERY_MS, megaphoneText, STONE_NAME, STONE_STACK } from '../src/shared/data/stones';
 import { COS_SLOTS, cosById, cosCodes } from '../src/shared/data/cosmetics';
+import { cosHiddenIds, mayPutOnCos } from '../src/shared/cosShop';
 
 /** How often the world looks for the Thai calendar day turning over. */
 const DAILY_CHECK_MS = 30_000;
@@ -287,8 +288,11 @@ export class GameWorld {
   /** Socket bytesWritten at the last perf report, per connection; and bytes of connections closed since. */
   private readonly wireAt = new WeakMap<WebSocket, number>();
   private wireGone = 0;
+  /** Cosmetics hidden from the in-game window (src/shared/cosShop.ts): can't be put on again, the worn ones stay. */
+  private cosHidden: Set<string>;
 
   constructor(private readonly db: Db, http: HttpServer) {
+    this.cosHidden = new Set(cosHiddenIds(db.cosShop()));
     const wss = new WebSocketServer({ server: http, path: WS_PATH, maxPayload: 16 * 1024, perMessageDeflate: WS_DEFLATE });
     wss.on('connection', (ws, req) => this.onConnection(ws, req));
     this.startTicking();
@@ -576,7 +580,7 @@ export class GameWorld {
     if (!acc.guest) this.friendsJoined(s, accountWasOnline);
     // Back within the grace time (or a takeover): still in the party.
     player.partyId = this.parties.online(charId);
-    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), guest: acc.guest, orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), balance: currentBalanceTuning() });
+    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), guest: acc.guest, orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), cosHidden: [...this.cosHidden], balance: currentBalanceTuning() });
     this.broadcastSystem(`${player.name} เข้าสู่โลก`);
     // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
     if (!acc.guest) setTimeout(() => this.sessions.has(s) && (this.marketOnJoin(s), this.dailyCheck(s), this.mailNote(s, true)), MARKET_JOIN_NOTE_MS);
@@ -1389,6 +1393,12 @@ export class GameWorld {
     for (const s of this.sessions) this.send(s.ws, { t: 'cosTuning', tuning });
   }
 
+  /** The owner hid / showed cosmetics (already saved by the admin API): used for wearing from now on and sent to everyone online. Nobody's worn piece comes off. */
+  cosHiddenChanged(ids: string[]): void {
+    this.cosHidden = new Set(ids);
+    for (const s of this.sessions) this.send(s.ws, { t: 'cosHidden', ids });
+  }
+
   /**
    * Uses the new server-wide game balance (already saved by the admin API) right away: every character in
    * play gets its stats worked out again and its items' tier labels redone (values never change; the
@@ -2059,6 +2069,10 @@ export class GameWorld {
         return;
       }
       if (p.cosmetics[key] === c.id) return;
+      if (!mayPutOnCos(c.id, p.cosmetics[key], this.cosHidden)) {
+        this.send(s.ws, { t: 'chat', name: '', text: 'ชิ้นนี้ปิดไว้ชั่วคราว ยังสวมไม่ได้' });
+        return;
+      }
       p.cosmetics[key] = c.id;
     }
     // A new mount (or none) means getting on again.

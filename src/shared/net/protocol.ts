@@ -288,13 +288,15 @@ export interface SnapshotMsg {
 export type ServerMsg =
   /** `guest`: playing a guest character (no stash, deleted after a day offline). */
   /** `ch`: the channel of that zone (1 when it has none). */
-  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; guest?: boolean; orbLook?: OrbLook; cosTuning?: CosTuning; balance?: BalanceTuning }
+  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; guest?: boolean; orbLook?: OrbLook; cosTuning?: CosTuning; cosHidden?: string[]; balance?: BalanceTuning }
   /** The owner changed the server-wide enhancement orb look (src/shared/orbLook.ts). */
   | { t: 'orbLook'; look: OrbLook }
   /** An admin changed the server-wide game balance (src/shared/balance.ts). */
   | { t: 'balance'; tuning: BalanceTuning }
   /** The owner changed the server-wide cosmetic tuning (src/shared/cosTuning.ts). */
   | { t: 'cosTuning'; tuning: CosTuning }
+  /** The owner hid / showed cosmetics in the "แต่งตัว" window (src/shared/cosShop.ts): the hidden ids. Never prices. */
+  | { t: 'cosHidden'; ids: string[] }
   /**
    * You walked through a portal (or switched channel): you are now `you` in zone `zone`, channel `ch`,
    * standing at x/z. Snapshots from there follow.

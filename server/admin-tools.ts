@@ -21,10 +21,11 @@ import type { AdminShutdownText } from '../src/shared/admin';
 import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../src/shared/net/protocol';
 import { SHUTDOWN_TEXT_KEY } from './db';
 import { checkOrbLook, DEFAULT_ORB_LOOK, orbLookChanges, ORB_LOOK_RANGES, ORB_PALETTE_IDS, ORB_SHAPE_IDS, sameOrbLook } from '../src/shared/orbLook';
-import type { AdminCardTune, AdminCosLook, AdminOrbLook } from '../src/shared/admin';
+import type { AdminCardTune, AdminCosLook, AdminCosShop, AdminOrbLook } from '../src/shared/admin';
 import { applyCardTuning, cardTuningChanges, checkCardTuning, sameCardTuning } from '../src/shared/cardTuning';
 import { cardName } from '../src/shared/data/cards';
-import { checkCosTuning, cosTuningChanges, sameCosTuning } from '../src/shared/cosTuning';
+import { checkCosTuning, cosTuningChanges, pasteCosTuning, sameCosTuning } from '../src/shared/cosTuning';
+import { checkCosShop, cosHiddenIds, cosShopChanges, sameCosShop } from '../src/shared/cosShop';
 import { COS_SLOT_NAME, cosById } from '../src/shared/data/cosmetics';
 import { balanceChanges, checkBalance, currentBalanceTuning, sameBalance, withItemStatMult } from '../src/shared/balance';
 import { upgradeItem } from '../src/shared/data/items';
@@ -40,6 +41,9 @@ const orbLookState = (db: Db, canEdit: boolean): AdminOrbLook => ({
   palettes: [...ORB_PALETTE_IDS], shapes: [...ORB_SHAPE_IDS], ranges: ORB_LOOK_RANGES,
 });
 const cosLookState = (db: Db, canEdit: boolean): AdminCosLook => ({ tuning: db.cosTuning(), canEdit });
+const cosShopState = (db: Db, a: Admin): AdminCosShop => ({
+  shop: db.cosShop(), tuning: db.cosTuning(), canEdit: a.features.includes('cosManageEdit'), canPaste: a.features.includes('cosLook'),
+});
 const cardTuneState = (db: Db, canEdit: boolean): AdminCardTune => ({ tuning: db.cardTuning(), canEdit });
 const shutdownTextState = (db: Db): AdminShutdownText => ({ texts: db.shutdownTexts(), defaults: { ...DEFAULT_SHUTDOWN_TEXT } });
 
@@ -174,7 +178,7 @@ export async function ownerToolsApi(
       });
       const stash = world.liveStash(id) ?? db.savedStash(id);
       const body: AdminAccountDetail = {
-        account: row, characters, stash: row.guest || !stash ? null : stash, cosmetics: row.guest ? null : db.cosmeticsOwned(id),
+        account: row, characters, stash: row.guest || !stash ? null : stash, cosmetics: row.guest ? null : db.cosmeticsOwned(id), cosHidden: cosHiddenIds(db.cosShop()),
       };
       send(res, 200, body);
       return true;
@@ -346,17 +350,59 @@ export async function ownerToolsApi(
   if (method === 'POST' && path === '/api/admin/cos-look') {
     const a = requireFeature(req, db, 'cosLook');
     const body = await readJson(req);
-    // `reset: true` = every cosmetic back to the code defaults; otherwise `tuning` is the whole new set of changes.
-    const c = body.reset === true ? { tuning: {} } : checkCosTuning(body.tuning, true);
-    if (!c.tuning) throw new HttpError(400, c.error);
     const before = db.cosTuning();
+    // `reset: true` = every cosmetic back to the code defaults; `paste` = text copied from the bench put on top
+    // of what is saved (only the pieces it names, or those of them in `only`; the "จัดการของแต่งตัว" tab);
+    // otherwise `tuning` is the whole new set of changes.
+    let c: { tuning?: typeof before; error?: string };
+    let what = '';
+    if (body.reset === true) {
+      c = { tuning: {} };
+      what = 'คืนค่าเริ่มต้น: ';
+    } else if (body.paste !== undefined) {
+      // The preview was worked out on `base`; if someone saved in between, its before → after is wrong.
+      if (body.base !== undefined && !sameCosTuning(checkCosTuning(body.base, false).tuning ?? {}, before)) {
+        throw new HttpError(409, 'ค่าของเซิร์ฟเปลี่ยนไปแล้วหลังโหลดหน้านี้ กดดูตัวอย่างใหม่อีกครั้ง');
+      }
+      const only = Array.isArray(body.only) ? body.only.filter((x: unknown): x is string => typeof x === 'string') : undefined;
+      c = pasteCosTuning(before, body.paste, only);
+      what = 'วางค่า: ';
+    } else {
+      c = checkCosTuning(body.tuning, true);
+    }
+    if (!c.tuning) throw new HttpError(400, c.error ?? 'ค่าของแต่งตัวไม่ถูกต้อง');
     if (!sameCosTuning(before, c.tuning)) {
       db.setCosTuning(c.tuning);
       const changes = cosTuningChanges(before, c.tuning);
-      log(db, a, 'cos-look', 'ของแต่งตัว ค่าเริ่มต้นทั้งเซิร์ฟ', (body.reset === true ? 'คืนค่าเริ่มต้น: ' : '') + (changes.length > 1500 ? changes.slice(0, 1500) + '…' : changes));
+      log(db, a, 'cos-look', 'ของแต่งตัว ค่าเริ่มต้นทั้งเซิร์ฟ', what + (changes.length > 1500 ? changes.slice(0, 1500) + '…' : changes));
       world.cosTuningChanged(c.tuning);
     }
     send(res, 200, cosLookState(db, true));
+    return true;
+  }
+
+  // ---------------------------------------------------------- cosmetic shop settings: hidden / diamond price
+  if (method === 'GET' && path === '/api/admin/cos-shop') {
+    const a = requireFeature(req, db, 'cosManage');
+    send(res, 200, cosShopState(db, a));
+    return true;
+  }
+
+  if (method === 'POST' && path === '/api/admin/cos-shop') {
+    const a = requireFeature(req, db, 'cosManageEdit');
+    const body = await readJson(req);
+    // `shop` is the whole new set (only what differs from the code: shown, no price).
+    const c = checkCosShop(body.shop, true);
+    if (!c.shop) throw new HttpError(400, c.error);
+    const before = db.cosShop();
+    if (!sameCosShop(before, c.shop)) {
+      db.setCosShop(c.shop);
+      const changes = cosShopChanges(before, c.shop);
+      log(db, a, 'cos-shop', 'ของแต่งตัว ซ่อน/ราคา', changes.length > 1500 ? changes.slice(0, 1500) + '…' : changes);
+      const hidden = cosHiddenIds(c.shop);
+      if (hidden.join() !== cosHiddenIds(before).join()) world.cosHiddenChanged(hidden);
+    }
+    send(res, 200, cosShopState(db, a));
     return true;
   }
 

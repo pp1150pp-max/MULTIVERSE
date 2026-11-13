@@ -14,7 +14,7 @@ import { checkOrbLook } from '../../shared/orbLook';
 import { applyOrbLook } from '../orbs';
 import { checkCosTuning } from '../../shared/cosTuning';
 import { applyBalance, checkBalance } from '../../shared/balance';
-import { applyCosTuning } from '../cosTune';
+import { applyCosHidden, applyCosTuning } from '../cosTune';
 import { EQUIP_SLOTS } from '../../shared/types';
 import { cleanCosOwned, cosCodes, cosFromCodes, type CosSlot } from '../../shared/data/cosmetics';
 import { zoneById, type SpawnArea, type ZoneDef } from '../../shared/data/zones';
@@ -104,6 +104,7 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
         guest = m.guest === true;
         useOrbLook(m.orbLook);
         useCosTuning(m.cosTuning);
+        applyCosHidden(m.cosHidden);
         useBalance(m.balance);
       }
       if (m.t === 'snap' && you >= 0 && !settled) {
@@ -456,6 +457,9 @@ export class OnlineBackend implements Backend {
         break;
       case 'cosTuning':
         useCosTuning(m.tuning);
+        break;
+      case 'cosHidden':
+        applyCosHidden(m.ids);
         break;
       case 'balance':
         useBalance(m.tuning);
