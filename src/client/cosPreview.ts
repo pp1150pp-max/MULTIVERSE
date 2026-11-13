@@ -405,6 +405,7 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
       rebuildHero();
     }));
     for (const slot of COS_SLOTS) {
+      if (slot === 'orb') continue; // orb looks are made on the orb bench
       const opts: [string, string][] = [['', '— ไม่ใส่ —'], ...COSMETICS.filter((c) => c.slot === slot).map((c): [string, string] => [c.id, c.name])];
       row(COS_SLOT_NAME[slot], select(opts, state.worn[slot] ?? '', (v) => {
         if (v) state.worn[slot] = v;
@@ -491,7 +492,7 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
     }));
     h('div', 'X = ซ้าย/ขวาของตัวละคร · Y = ขึ้น/ลง · Z = หน้า/หลัง · เลือกมุมแล้วเห็นเฉพาะแกนที่มีผลในมุมนั้น (ส่วนปรับของแต่ละทิศ ทั้ง 8 ทิศแยกกัน บวกเพิ่มจากค่าหลัก)').className = 'note';
     for (const slot of COS_SLOTS) {
-      if (slot === 'title') continue;
+      if (slot === 'title' || slot === 'orb') continue;
       const c = cosById(state.worn[slot]);
       if (!c) continue;
       // What "changed" means and what the reset buttons go back to: the last saved server-wide values.
@@ -615,10 +616,9 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
     // ---- copy / reset
     h('h2', 'บันทึกค่า');
     button('คัดลอกค่าที่ตั้งไว้', () => {
-      // Every tuned piece by name ({} = its code defaults), so pasting it in "จัดการของแต่งตัว" also puts
-      // a piece set back to its defaults back (older copies listed only the changed pieces; both paste).
+      // Every tuned piece by name ({} = its code defaults), so a copy says exactly what each piece uses.
       const t = checkCosTuning(currentCosTuning(), false).tuning ?? {};
-      const text = JSON.stringify(Object.fromEntries(COSMETICS.filter((c) => c.slot !== 'title').map((c) => [c.id, t[c.id] ?? {}])));
+      const text = JSON.stringify(Object.fromEntries(COSMETICS.filter((c) => c.slot !== 'title' && c.slot !== 'orb').map((c) => [c.id, t[c.id] ?? {}])));
       out.value = text;
       navigator.clipboard?.writeText(text).catch(() => {});
     });
@@ -630,7 +630,7 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
     out.readOnly = true;
     out.rows = 3;
     out.style.width = '100%';
-    out.placeholder = 'กด "คัดลอกค่าที่ตั้งไว้" แล้ววางในแท็บ "จัดการของแต่งตัว" (บันทึกหลายชิ้นพร้อมกัน) หรือส่งให้ Claude · ทุกชิ้น เฉพาะค่าที่ต่างจากในโค้ด';
+    out.placeholder = 'กด "คัดลอกค่าที่ตั้งไว้" แล้ววางข้อความนี้ให้ Claude (ทุกชิ้น เฉพาะค่าที่ต่างจากในโค้ด) · แก้หลายชิ้นพร้อมกันได้ในแท็บ "จัดการของแต่งตัว"';
     panel.append(out);
   }
 

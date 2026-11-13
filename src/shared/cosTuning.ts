@@ -8,7 +8,7 @@
 import { COSMETICS, cosById, type CosSlot } from './data/cosmetics';
 
 /** Slots with a tuning (title sets are name frames and chat bubbles, no 3D placement). */
-export type TunedSlot = Exclude<CosSlot, 'title'>;
+export type TunedSlot = Exclude<CosSlot, 'title' | 'orb'>;
 export const TUNED_SLOTS: readonly TunedSlot[] = ['wings', 'mount', 'pet', 'aura'];
 
 /** One field: a number with its range and slider step, or an on/off switch. `label` is the admin's Thai name. */
@@ -200,7 +200,7 @@ const PET_FLYING = new Set(['pet_dragon', 'pet_bot', 'pet_wisp']);
 /** The code default of every field of one cosmetic (undefined for an unknown id or a title set). */
 export function cosTuneDefaults(id: string): TuneValues | undefined {
   const c = cosById(id);
-  if (!c || c.slot === 'title') return undefined;
+  if (!c || c.slot === 'title' || c.slot === 'orb') return undefined;
   const d = baseDefaults(id, c.slot);
   return d && { ...d, ...zeroViewOffsets(c.slot) };
 }
@@ -312,19 +312,18 @@ export function cosTuneOf(tuning: CosTuning, id: string): TuneValues | undefined
 export function savePartOf(saved: CosTuning, id: string, cur: TuneValues, part: (key: string) => boolean): CosTuning {
   const base = cosTuneOf(saved, id);
   const c = cosById(id);
-  if (!base || !c || c.slot === 'title') return saved;
+  if (!base || !c || c.slot === 'title' || c.slot === 'orb') return saved;
   const vals: TuneValues = { ...base };
   for (const k of Object.keys(COS_TUNE_FIELDS[c.slot])) if (part(k)) vals[k] = cur[k];
   return checkCosTuning({ ...saved, [id]: vals }, false).tuning ?? saved;
 }
 
 /**
- * Pasting text copied from the bench ("คัดลอกค่าที่ตั้งไว้") onto the saved tuning, for editing many pieces at
- * once (the /admin "จัดการของแต่งตัว" tab). The text is cosmetic id → its changes from the code default, so
- * every piece it names gets exactly those values (fields left out = code default); pieces it doesn't name stay
- * as saved. The copy button names every tuned piece (`{}` for one at its code default); older copies named only
- * the changed pieces and paste the same way. Checked strictly (an error on anything wrong); `only` limits it
- * to some of the named pieces. Returns the clean tuning and the ids it named.
+ * Puts the values of some pieces on top of the saved tuning (the /admin "จัดการของแต่งตัว" tab saves the
+ * pieces it changed this way, merged on the server). `text` is cosmetic id → its values (only the changes
+ * from the code default, or all of them), so every piece it names gets exactly those values (fields left out
+ * = code default); pieces it doesn't name stay as saved. Checked strictly (an error on anything wrong); `only`
+ * limits it to some of the named pieces. Returns the clean tuning and the ids it named.
  */
 export function pasteCosTuning(saved: CosTuning, text: unknown, only?: readonly string[]): { tuning: CosTuning; ids: string[]; error?: undefined } | { tuning?: undefined; ids?: undefined; error: string } {
   const c = checkCosTuning(text, true);

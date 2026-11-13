@@ -3,9 +3,13 @@
 // Never items: they don't go in the bag, stash, market, trade or mail. Not on sale yet (the shop only
 // shows them and lets you try them on); an admin gives them out from /admin.
 
-/** Where a cosmetic is worn. A `title` is a set: a name frame and a chat bubble style (the title text is not shown for now). */
-export type CosSlot = 'wings' | 'mount' | 'pet' | 'aura' | 'title';
-export const COS_SLOTS: readonly CosSlot[] = ['wings', 'mount', 'pet', 'aura', 'title'];
+/**
+ * Where a cosmetic is worn. A `title` is a set: a name frame and a chat bubble style (the title text is not shown for now).
+ * An `orb` is a look for the enhancement orbs (src/shared/orbItems.ts), made in /admin while the server runs.
+ * Keep `orb` last: the order of the others is part of their snapshot codes.
+ */
+export type CosSlot = 'wings' | 'mount' | 'pet' | 'aura' | 'title' | 'orb';
+export const COS_SLOTS: readonly CosSlot[] = ['wings', 'mount', 'pet', 'aura', 'title', 'orb'];
 
 export const COS_SLOT_NAME: Record<CosSlot, string> = {
   wings: 'ปีก',
@@ -14,11 +18,12 @@ export const COS_SLOT_NAME: Record<CosSlot, string> = {
   aura: 'ออร่า / รอยเท้า',
   // Owner 2026-11-10: no titles for now; the set is a name frame and a chat bubble.
   title: 'กรอบชื่อ / ฟองแชท',
+  orb: 'ลูกแก้วตีบวก',
 };
 
 export interface CosmeticDef {
   id: string;
-  /** Sent in snapshots instead of the id: COS_SLOTS index * 16 + n (1–15). Never change a used one. */
+  /** Sent in snapshots instead of the id: COS_SLOTS index * 16 + n (1–15); orb looks ORB_ITEM_CODE_BASE + n. Never change a used one. */
   code: number;
   slot: CosSlot;
   name: string;
@@ -34,8 +39,11 @@ const def = (slot: CosSlot, n: number, id: string, name: string, desc: string, c
   id, code: COS_SLOTS.indexOf(slot) * 16 + n, slot, name, desc, color, color2, ...(title ? { title } : {}),
 });
 
-/** The first set: 5 of each kind. The order here is the shop's order. */
-export const COSMETICS: readonly CosmeticDef[] = [
+/**
+ * The first set: 5 of each kind. The order here is the shop's order. Orb looks are added at the end while
+ * the server runs (setSlotCosmetics), so this array changes in place: never keep a copy of it.
+ */
+export const COSMETICS: CosmeticDef[] = [
   def('wings', 1, 'wings_angel', 'ปีกเทวดา', 'ปีกขนนกสีขาวเรืองแสงอ่อน ๆ', '#ffffff', '#ffe9a8'),
   def('wings', 2, 'wings_bat', 'ปีกค้างคาวรัตติกาล', 'ปีกหนังสีม่วงเข้มแบบค้างคาว', '#5a2a6e', '#c04070'),
   def('wings', 3, 'wings_phoenix', 'ปีกเพลิงฟีนิกซ์', 'ปีกเปลวไฟสีส้มทอง', '#ff7a2a', '#ffd04a'),
@@ -71,6 +79,18 @@ export const COSMETICS: readonly CosmeticDef[] = [
 
 const BY_ID = new Map(COSMETICS.map((c) => [c.id, c]));
 const BY_CODE = new Map(COSMETICS.map((c) => [c.code, c]));
+
+/** Replaces every cosmetic of one slot (the orb looks made in /admin, see src/shared/orbItems.ts). */
+export function setSlotCosmetics(slot: CosSlot, defs: readonly CosmeticDef[]): void {
+  for (let i = COSMETICS.length - 1; i >= 0; i--) if (COSMETICS[i].slot === slot) COSMETICS.splice(i, 1);
+  for (const d of defs) if (d.slot === slot && !COSMETICS.some((c) => c.id === d.id || c.code === d.code)) COSMETICS.push(d);
+  BY_ID.clear();
+  BY_CODE.clear();
+  for (const c of COSMETICS) {
+    BY_ID.set(c.id, c);
+    BY_CODE.set(c.code, c);
+  }
+}
 
 export const cosById = (id: unknown): CosmeticDef | undefined => (typeof id === 'string' ? BY_ID.get(id) : undefined);
 export const cosByCode = (code: unknown): CosmeticDef | undefined => (typeof code === 'number' ? BY_CODE.get(code) : undefined);
