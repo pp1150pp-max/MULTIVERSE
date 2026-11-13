@@ -10,6 +10,10 @@ import {
   type Balance, type BalanceTuning, type MonsterMults, type MonsterStat, type StatPart, type TierParts,
 } from '../shared/balance';
 import { DROP_GOLD_MULT, type MonsterDef } from '../shared/data/monsters';
+import {
+  AUTO_ALLOW_NAME, AUTO_ALLOWS, AUTO_DEFAULT_NAME, AUTO_LOOT_ORDERS, AUTO_NUM_NAME, AUTO_OUT_ACTIONS, AUTO_RANGE, AUTO_TARGET_MODES, autoDefaultValueName,
+  type AutoAllow, type AutoDefaults,
+} from '../shared/autoTuning';
 import { NO_BOOST, ZONES, type MonsterBoost } from '../shared/data/zones';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { ITEM_BASES, itemRowKinds, rowRanges, TIER_BAND_NAME, TIER_BANDS, tierBandOf, tierChances, tierRanges } from '../shared/data/items';
@@ -552,6 +556,51 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   // ---------------------------------------------------------- save bar
   const summary = h('div', { class: 'muted' });
   /** The draft as the server would store it, or a Thai error. */
+  // ---------------------------------------------------------- Auto Play (src/shared/autoTuning.ts)
+  const autoCard = h('div', { class: 'card' });
+  const drawAuto = (): void => {
+    const a = draft.auto;
+    const ca = code.auto;
+    const refresh = (): void => { updateSummary(); };
+    const pick = <K extends keyof AutoDefaults>(k: K, values: readonly AutoDefaults[K][]): HTMLSelectElement => {
+      const sel = h('select', {
+        title: `ค่าในโค้ด: ${autoDefaultValueName(k, ca.defaults[k])}`,
+        onchange: (e: Event) => {
+          const i = (e.target as HTMLSelectElement).selectedIndex;
+          a.defaults[k] = values[i];
+          sel.classList.toggle('bal-changed', a.defaults[k] !== ca.defaults[k]);
+          refresh();
+        },
+      }, ...values.map((v) => h('option', { selected: v === a.defaults[k] }, autoDefaultValueName(k, v))));
+      sel.classList.toggle('bal-changed', a.defaults[k] !== ca.defaults[k]);
+      return sel;
+    };
+    const num = (k: keyof typeof AUTO_RANGE, step: number) =>
+      h('label', {}, AUTO_NUM_NAME[k], numBox(() => a[k], (n) => { a[k] = n; }, ca[k], AUTO_RANGE[k][0], AUTO_RANGE[k][1], step, refresh));
+    const allow = (k: AutoAllow) => {
+      const cb = h('input', { type: 'checkbox', checked: a.allow[k], onchange: (e: Event) => { a.allow[k] = (e.target as HTMLInputElement).checked; refresh(); } });
+      return h('label', {}, cb, ` ${AUTO_ALLOW_NAME[k]}`);
+    };
+    autoCard.replaceChildren(
+      h('h2', {}, 'Auto Play'),
+      h('div', { class: 'muted' }, 'ค่าเริ่มต้น = ใช้กับตัวเลือกที่ผู้เล่นยังไม่เคยเปลี่ยนเองในหน้าต่างตั้งค่า Auto (มีผลทันทีแม้คนที่ออนไลน์ · ช่องที่ผู้เล่นเปลี่ยนเองแล้วใช้ค่าของเขา)'),
+      h('div', { class: 'row bal-line' },
+        h('label', {}, `${AUTO_DEFAULT_NAME.lootOrder} `, pick('lootOrder', AUTO_LOOT_ORDERS)),
+        h('label', {}, `${AUTO_DEFAULT_NAME.othersLoot} `, pick('othersLoot', [true, false])),
+        h('label', {}, `${AUTO_DEFAULT_NAME.target} `, pick('target', AUTO_TARGET_MODES)),
+      ),
+      h('div', { class: 'row bal-line' },
+        h('label', {}, `${AUTO_DEFAULT_NAME.noHp} `, pick('noHp', AUTO_OUT_ACTIONS)),
+        h('label', {}, `${AUTO_DEFAULT_NAME.noMp} `, pick('noMp', AUTO_OUT_ACTIONS)),
+        h('label', {}, `${AUTO_DEFAULT_NAME.bagFull} `, pick('bagFull', AUTO_OUT_ACTIONS)),
+      ),
+      h('div', { class: 'row bal-line' }, num('giveUpSec', 0.5), num('nearDist', 0.5), num('threatDist', 0.5)),
+      h('div', { class: 'muted' }, 'ข้ามของ = เดินไปหาของชิ้นเดิมแล้วไม่เข้าใกล้ขึ้นเลยนานเท่านี้ (ติดสิ่งกีดขวาง/เก็บไม่ได้) จะเลิกสนใจชิ้นนั้น · ระยะ 2 ช่องหลังใช้กับลำดับ "สมดุล" (1 ช่องในแมพ = 50 px)'),
+      h('div', { class: 'muted' }, 'สวิตช์ทั้งเซิร์ฟ (ติ๊กออก = ผู้เล่นเลือกไม่ได้ Auto ใช้แบบปลอดภัยแทน: เก็บของก่อน→สมดุล, ของคนอื่น→ของตัวเอง, ม้วน→หยุด Auto, ชนิดมอนที่ไม่ตี→ตีทุกชนิด)'),
+      h('div', { class: 'row bal-line' }, ...AUTO_ALLOWS.map(allow)),
+    );
+  };
+
   const draftTuning = (): ReturnType<typeof checkBalance> => checkBalance(draft, true);
   function updateSummary(): void {
     const c = draftTuning();
@@ -570,8 +619,9 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawRegen();
     drawTiers();
     drawMonsters();
+    drawAuto();
   };
-  const save = async (body: { tuning: BalanceTuning } | { reset: true }, ask: string): Promise<void> => {
+  const save =async (body: { tuning: BalanceTuning } | { reset: true }, ask: string): Promise<void> => {
     if (!confirm(ask)) return;
     msg.className = 'msg';
     msg.textContent = 'กำลังบันทึก…';
@@ -613,11 +663,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         void save({ tuning: c.tuning }, `ใช้ค่าใหม่กับทั้งเซิร์ฟทันทีไหม?\n\n${changes.slice(0, 1200)}`);
       } }, '💾 บันทึกทั้งเซิร์ฟ'),
       h('button', { onclick: () => { draft = mergeBalance(saved); redraw(); msg.textContent = ''; } }, 'ยกเลิกที่ยังไม่บันทึก'),
-      h('button', { onclick: () => void save({ reset: true }, 'คืนทุกค่า (อาชีพ tier และตัวคูณมอน) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?') }, '↺ คืนค่าในโค้ด'),
+      h('button', { onclick: () => void save({ reset: true }, 'คืนทุกค่า (อาชีพ tier ตัวคูณมอน และ Auto Play) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?') }, '↺ คืนค่าในโค้ด'),
     ),
     msg,
   );
 
-  box.replaceChildren(classCard, regenCard, tierCard, previewCard, monsterCard, bar);
+  box.replaceChildren(classCard, regenCard, tierCard, previewCard, monsterCard, autoCard, bar);
   redraw();
 }

@@ -7,7 +7,7 @@ import { clientIp } from './clientIp';
 import type { Db } from './db';
 import { Sim } from '../src/shared/sim/Sim';
 import { HUB_ID, lairExitSpot, ZONES } from '../src/shared/data/zones';
-import { roundBuffs, SORT_KEYS, type LootFilter, type Player } from '../src/shared/sim/Player';
+import { cleanAutoSettings, roundBuffs, SORT_KEYS, type LootFilter, type Player } from '../src/shared/sim/Player';
 import { applyBalance, currentBalanceTuning, type BalanceTuning } from '../src/shared/balance';
 import { upgradeItem } from '../src/shared/data/items';
 import { POTION_SIZES } from '../src/shared/data/potions';
@@ -1423,6 +1423,8 @@ export class GameWorld {
         for (const b of p.buyback) upgradeItem(b?.item);
         for (const e of p.stash.items) upgradeItem(e);
         p.recompute();
+        // Auto options the player never picked follow the new defaults at once.
+        p.autoSettings = cleanAutoSettings(p.autoSettings);
       }
       for (const l of sim.loots) if (l.kind.type === 'item') upgradeItem(l.kind.item);
       // Monsters already out take the new multipliers at once (same share of HP left).
@@ -1602,6 +1604,12 @@ export class GameWorld {
       it = s.auto.intent(world, { ...it, move: null, pos: null });
       const hint = s.auto.takeHint();
       if (hint) s.outbox.push({ t: 'log', msg: hint, color: AUTO_HINT_COLOR, to: p.id });
+      // Out of potions / full bag with the player's option "stop" or "return scroll" (the intent then reads it).
+      const stop = s.auto.takeStop();
+      if (stop) {
+        s.auto = null;
+        s.outbox.push({ t: 'autoOff', to: p.id, msg: stop });
+      }
     }
     s.dash = false;
     s.potion = null;

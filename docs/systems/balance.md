@@ -133,3 +133,7 @@
 - ตัวคูณมอน: `monsterMults`/`TUNABLE_MONSTERS` ใน `balance.ts` · `Monster.retune` · ทองใน `Sim` (`m.mult.gold`)
 - MP สกิลตามเลเวล: `skillMpCost` ใน `balance.ts` · `Player.skillMp`
 - เทสต์ `tests/balance.test.ts`, `tests/monster-balance.test.ts` และ `tests/mp-cost.test.ts` (server ทดสอบ + DB ชั่วคราว)
+
+## Auto Play (2026-11-13)
+
+- การ์ด "Auto Play" ท้ายแท็บ: ค่าเริ่มต้นของตัวเลือก Auto, เวลาข้ามของที่เก็บไม่ได้, ระยะของแบบสมดุล, สวิตช์ปิดตัวเลือกทั้งเซิร์ฟ · เก็บใน `BalanceTuning.auto` (`src/shared/autoTuning.ts`) บันทึก/คืนค่า/ลง audit พร้อมค่าสมดุลอื่น · รายละเอียดพฤติกรรม: [world-and-ui.md](world-and-ui.md) หัวข้อ Auto Play
