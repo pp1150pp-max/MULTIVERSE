@@ -47,7 +47,7 @@ export class Monster extends Unit {
   deadT = 0;
   /** Called in by a boss: gives no EXP, gold or items, and never respawns. Set with markSummoned. */
   summoned = false;
-  /** The admin's multipliers in use for it (×1 for bosses and their minions), see retune. */
+  /** The admin's multipliers in use for it (×1 for bosses; minions use their kind's), see retune. */
   mult: Readonly<MonsterMults> = NO_MONSTER_MULT;
   /** Bosses: seconds of fighting since they last landed a hit. They speed up the longer it gets. */
   rampT = 0;
@@ -137,7 +137,7 @@ export class Monster extends Unit {
    * already out when they are saved. The share of HP left stays the same.
    */
   retune(): void {
-    const m = this.isBoss || this.summoned ? NO_MONSTER_MULT : monsterMults(this.def);
+    const m = this.isBoss ? NO_MONSTER_MULT : monsterMults(this.def);
     const share = this.baseHp > 0 ? this.hp / this.maxHp : 1;
     this.mult = m;
     this.baseHp = Math.max(1, Math.round(this.rawHp * m.hp));
@@ -149,7 +149,7 @@ export class Monster extends Unit {
     if (this.alive && share > 0) this.hp = Math.max(1, Math.min(this.maxHp, share * this.maxHp));
   }
 
-  /** Called in by a boss: no multipliers, no rewards, no respawn. */
+  /** Called in by a boss: no rewards, no respawn. The admin's multipliers for its kind still apply. */
   markSummoned(): void {
     this.summoned = true;
     this.retune();

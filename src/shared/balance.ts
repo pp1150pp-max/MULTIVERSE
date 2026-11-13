@@ -44,7 +44,7 @@ export const STAT_TIER_PART_NAME: Record<StatTierPart, string> = { weight: 'โ�
 
 /**
  * Ordinary monsters' multipliers (owner 2026-11-12): by level band (of the monster kind's lowest level) and by
- * kind, the two multiplied together. Not bosses, nor the minions a boss calls (see monsterMults).
+ * kind, the two multiplied together. Not bosses; the minions a boss calls count by their own kind (owner 2026-11-13).
  */
 export const MONSTER_STATS = ['hp', 'atk', 'def', 'speed', 'atkSpeed', 'exp', 'gold', 'aggro', 'range'] as const;
 export type MonsterStat = (typeof MONSTER_STATS)[number];
@@ -58,8 +58,8 @@ export interface MonsterTuning {
   types?: Record<string, Partial<MonsterMults>>;
 }
 export const NO_MONSTER_MULT: Readonly<MonsterMults> = Object.freeze(Object.fromEntries(MONSTER_STATS.map((k) => [k, 1])) as MonsterMults);
-/** Monster kinds the multipliers apply to: all but bosses and kinds that only ever come when a boss calls them. */
-export const isTunableMonster = (def: MonsterDef): boolean => def.behavior !== 'boss' && !def.summonOnly;
+/** Monster kinds the multipliers apply to: all but bosses (minions a boss calls are included, owner 2026-11-13). */
+export const isTunableMonster = (def: MonsterDef): boolean => def.behavior !== 'boss';
 /** Tunable kinds, by lowest level (the admin page's list). */
 export const TUNABLE_MONSTERS: readonly MonsterDef[] = Object.values(MONSTERS)
   .filter(isTunableMonster)
@@ -238,8 +238,7 @@ export const currentBalance = (): Balance => current;
 /** The tuning in use (only the changes from the code). */
 export const currentBalanceTuning = (): BalanceTuning => tuning;
 /**
- * A monster kind's multipliers in use: its level band's times its own. ×1 for bosses and summon-only kinds
- * (Monster also leaves out the minions a boss called).
+ * A monster kind's multipliers in use: its level band's times its own. ×1 for bosses.
  */
 export function monsterMults(def: MonsterDef, b: Balance = current): MonsterMults {
   if (!isTunableMonster(def)) return NO_MONSTER_MULT;

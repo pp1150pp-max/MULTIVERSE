@@ -29,7 +29,7 @@ const mk = (id: string, lv?: number) => new Monster(1, MONSTERS[id], lv ?? MONST
 {
   const ids = TUNABLE_MONSTERS.map((d) => d.id);
   ok(!ids.some((id) => MONSTERS[id].behavior === 'boss'), 'no boss in the tunable list');
-  ok(!ids.includes('yeti_minion'), 'the summon-only yeti minion is not in the list');
+  ok(ids.includes('yeti_minion'), 'the summon-only yeti minion is in the list');
   ok(ids.includes('forest_wolf') && ids.includes('polar_bear'), 'field wolves and the polar bear are');
   ok(ids.every((id, i) => i === 0 || MONSTERS[ids[i - 1]].levels[0] <= MONSTERS[id].levels[0]), 'listed by level');
 
@@ -44,7 +44,6 @@ const mk = (id: string, lv?: number) => new Monster(1, MONSTERS[id], lv ?? MONST
     ['unknown band', { bands: { '51-60': { hp: 2 } } }],
     ['unknown monster', { types: { dragon: { hp: 2 } } }],
     ['a boss', { types: { yeti: { hp: 2 } } }],
-    ['a summon-only minion', { types: { yeti_minion: { hp: 2 } } }],
     ['unknown part', { kinds: {} }],
     ['text', { types: { wild_boar: { hp: '2' } } }],
     ['not an object', 'x'],
@@ -76,12 +75,20 @@ const mk = (id: string, lv?: number) => new Monster(1, MONSTERS[id], lv ?? MONST
   const witch = mk('bog_witch');
   ok(witch.maxHp === witch0.maxHp && witch.atk === witch0.atk, 'a boss keeps the code numbers');
 
-  // A minion called by a boss: ×1 even when its kind (wolf) is tuned.
+  // A minion called by a boss gets its kind's multipliers, like the field monster, and stays at full HP.
   const wolf = mk('forest_wolf');
   ok(wolf.maxHp > 0 && wolf.mult.hp === 2, 'a field wolf gets its band');
   const minion = mk('forest_wolf');
   minion.markSummoned();
-  ok(minion.mult === NO_MONSTER_MULT && minion.hp === minion.maxHp && minion.maxHp === Math.round(wolf.maxHp / 2), 'a wolf the bear calls stays at the code numbers, full HP');
+  ok(minion.mult.hp === 2 && minion.hp === minion.maxHp && minion.maxHp === wolf.maxHp, 'a wolf the bear calls gets the same multipliers as the field wolf, full HP');
+  const yeti = mk('yeti_minion');
+  const yetiBase = yeti.maxHp;
+  yeti.markSummoned();
+  ok(yeti.mult.hp === 1 && yeti.maxHp === yetiBase, 'yeti minion at ×1 while its band and kind are untuned');
+  applyBalance({ monsters: { bands: { '21-30': { atk: 2 } }, types: { yeti_minion: { hp: 3 } } } });
+  yeti.retune();
+  ok(yeti.mult.atk === 2 && yeti.mult.hp === 3 && yeti.maxHp === yetiBase * 3, 'yeti minion: band Lv21–30 × its own kind, existing minion retuned');
+  applyBalance({ monsters: { bands: { '1-10': { hp: 2, atk: 3, exp: 1.5, gold: 2 }, '11-20': { hp: 4 } }, types: { wild_boar: { hp: 1.5, range: 2, atkSpeed: 2 } } } });
 
   // An existing monster when the multipliers change: HP keeps its share.
   ghoul0.hp = ghoul0.maxHp / 4;
