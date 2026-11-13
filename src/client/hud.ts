@@ -55,6 +55,7 @@ const MINIMAP_SIZE = 176;
 /** Zoom levels of the minimap (pixels per world unit): far, normal, near. The + and − buttons step through them. */
 const MINIMAP_ZOOMS = [1.8, 2.6, 3.8];
 const MINIMAP_ZOOM_KEY = 'multiverse-minimap-zoom';
+const BAG_SIDE_KEY = 'multiverse-bag-side-collapsed';
 
 type HudStyle = 'orbs' | 'bars';
 const HUD_STYLE_KEY = 'multiverse-hud-style';
@@ -245,6 +246,32 @@ export class Hud {
     for (const id of ['aset-range', 'aset-hp', 'aset-mp', 'aset-loot']) $(id).addEventListener('change', () => this.applyAutoSettings());
     $('btn-respawn').onclick = () => g.respawn();
     $('inv-close').onclick = () => this.toggleBag(false);
+    // Fold the bag's left panel away (and back); remembered in this browser only.
+    const bagBox = $('inventory');
+    const sideBtn = $('inv-side-toggle');
+    const setSide = (collapsed: boolean): void => {
+      bagBox.classList.toggle('side-collapsed', collapsed);
+      sideBtn.textContent = collapsed ? '▶' : '◀';
+      const tip = collapsed ? 'แสดงแผงค่าสถานะ' : 'พับแผงค่าสถานะ';
+      sideBtn.title = tip;
+      sideBtn.setAttribute('aria-label', tip);
+    };
+    let sideCollapsed = false;
+    try {
+      sideCollapsed = localStorage.getItem(BAG_SIDE_KEY) === '1';
+    } catch {
+      /* storage blocked: start with the panel shown */
+    }
+    setSide(sideCollapsed);
+    sideBtn.onclick = () => {
+      sideCollapsed = !sideCollapsed;
+      setSide(sideCollapsed);
+      try {
+        localStorage.setItem(BAG_SIDE_KEY, sideCollapsed ? '1' : '0');
+      } catch {
+        /* storage blocked: only this session remembers */
+      }
+    };
     $('help-close').onclick = () => this.toggleHelp(false);
     $('dialog').onclick = () => this.advanceDialog();
     $('btn-reconnect').onclick = () => location.reload();
