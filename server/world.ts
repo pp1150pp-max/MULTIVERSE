@@ -40,6 +40,7 @@ import { FRIEND_NAME_MAX, type FriendChar } from '../src/shared/friends';
 import { PARTY_SEARCH_LIMIT, PARTY_SEARCH_MAX, type PartyFound, type PartySnap } from '../src/shared/party';
 import { BossRooms } from './bossRooms';
 import { Channels, FightClock, type Channel } from './channels';
+import { Perf, PERF_LOG_MS } from './perf';
 import { CH_RESERVED, hasChannels, type ChannelsView } from '../src/shared/channels';
 import { MEGAPHONE_EVERY_MS, megaphoneText, STONE_NAME, STONE_STACK } from '../src/shared/data/stones';
 import { COS_SLOTS, cosById, cosCodes } from '../src/shared/data/cosmetics';
@@ -281,13 +282,19 @@ export class GameWorld {
   private closing: ShutdownMode | null = null;
   private last = performance.now();
   private tickN = 0;
+  /** Load numbers for the `[perf]` log line (server/perf.ts). */
+  readonly perf = new Perf();
+  /** Socket bytesWritten at the last perf report, per connection; and bytes of connections closed since. */
+  private readonly wireAt = new WeakMap<WebSocket, number>();
+  private wireGone = 0;
 
   constructor(private readonly db: Db, http: HttpServer) {
     const wss = new WebSocketServer({ server: http, path: WS_PATH, maxPayload: 16 * 1024, perMessageDeflate: WS_DEFLATE });
     wss.on('connection', (ws, req) => this.onConnection(ws, req));
-    setInterval(() => this.tick(), 1000 / TICK_HZ);
+    this.startTicking();
     setInterval(() => this.saveAll(), AUTOSAVE_MS);
     setInterval(() => this.logPings(), PING_LOG_MS);
+    setInterval(() => this.logPerf(), PERF_LOG_MS);
     this.market = new Market(db);
     this.mail = new Mail(db);
     this.daily = new Daily(db);
@@ -404,6 +411,26 @@ export class GameWorld {
     setInterval(() => this.expireMarket(), MARKET_EXPIRE_MS);
   }
 
+  /**
+   * Runs tick() TICK_HZ times a second on average. A plain setInterval(1000 / TICK_HZ) only managed
+   * ~21 a second on Windows, whose timers fire on a ~15.6 ms grid (33.3 ms became 46.8 ms), so
+   * snapshots went out ~11 times a second instead of SNAPSHOT_HZ. Instead a short timer checks the
+   * clock and runs a tick whenever one is due: ticks land on the timer grid (31 or 47 ms apart on
+   * Windows) but keep the average. One tick per wake-up, and after a long stall (the event loop was
+   * blocked) the schedule restarts from now rather than running the missed ticks in a burst.
+   */
+  private startTicking(): void {
+    const step = 1000 / TICK_HZ;
+    let due = performance.now() + step;
+    setInterval(() => {
+      const now = performance.now();
+      if (now < due) return;
+      due += step;
+      if (now - due > step * 3) due = now + step;
+      this.tick();
+    }, step / 4);
+  }
+
   get onlineCount(): number {
     return this.sessions.size;
   }
@@ -411,7 +438,29 @@ export class GameWorld {
   // ------------------------------------------------------------ connections
 
   private send(ws: WebSocket, msg: ServerMsg): void {
-    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+    if (ws.readyState !== WebSocket.OPEN) return;
+    const text = JSON.stringify(msg);
+    this.perf.sent(text.length);
+    ws.send(text);
+  }
+
+  /** Bytes written to a connection's socket since the last perf report (after compression, with frame headers). */
+  private wireDelta(ws: WebSocket): number {
+    const sock = (ws as unknown as { _socket?: { bytesWritten?: number } })._socket;
+    const now = sock?.bytesWritten ?? 0;
+    const d = now - (this.wireAt.get(ws) ?? 0);
+    this.wireAt.set(ws, now);
+    return Math.max(0, d);
+  }
+
+  /** The `[perf]` line: only while someone is online (an idle server stays quiet). */
+  private logPerf(): void {
+    let wire = this.wireGone;
+    this.wireGone = 0;
+    for (const s of this.sessions) wire += this.wireDelta(s.ws);
+    const sims = [...this.channels.sims(), ...this.rooms.sims()];
+    const r = this.perf.report(this.sessions.size, sims.length, sims.reduce((n, sim) => n + sim.monsters.length, 0), wire);
+    if (this.sessions.size) Perf.log(r);
   }
 
   private onConnection(ws: WebSocket, req: IncomingMessage): void {
@@ -542,6 +591,7 @@ export class GameWorld {
     // Before saving: a summoning this character led gives its keys back now.
     this.rooms.gone(s.charId);
     this.save(s);
+    this.wireGone += this.wireDelta(s.ws);
     if (how === 'quit') this.parties.leave(s.charId);
     else if (how === 'drop') {
       const p = s.player;
@@ -1547,8 +1597,11 @@ export class GameWorld {
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
     const travels: { s: Session; zone: string; atCamp?: boolean; spot?: Vec2 }[] = [];
+    let simMs = 0;
     for (const sim of [...this.channels.sims(), ...this.rooms.sims()]) {
+      const t0 = performance.now();
       sim.step(dt, this.intentOf);
+      simMs += performance.now() - t0;
       for (const ev of sim.drainEvents()) {
         if (ev.t === 'save') {
           const s = this.sessionById(sim, ev.to);
@@ -1579,6 +1632,9 @@ export class GameWorld {
         }
       }
     }
+    const tEvents = performance.now();
+    this.perf.part('sim', simMs);
+    this.perf.part('events', tEvents - now - simMs);
     for (const t of travels) this.travel(t.s, t.zone, t.atCamp, t.spot);
     // Fighting (a hit taken, an attack or a skill) holds off a channel switch for CH_SWITCH_CALM seconds.
     const t = Date.now();
@@ -1587,12 +1643,18 @@ export class GameWorld {
       for (const c of this.channels.sweep()) console.log(`[channels] ${c.zone.name} CH ${c.ch} closed (empty)`);
     }
 
+    const tSnap = performance.now();
     if (++this.tickN % Math.round(TICK_HZ / SNAPSHOT_HZ) === 0) {
       for (const s of this.sessions) this.sendSnapshot(s);
     }
+    const tSave = performance.now();
     for (const s of this.sessions) {
       if (s.saveDue !== null && now >= s.saveDue) this.save(s);
     }
+    const end = performance.now();
+    this.perf.part('snap', tSave - tSnap);
+    this.perf.part('save', end - tSave);
+    this.perf.tick(end - now);
   }
 
   /** Player ids are per zone, so look them up within one Sim. */
@@ -1674,6 +1736,7 @@ export class GameWorld {
     const late = s.pongAt !== null && now - s.pongAt > PONG_LATE_MS;
     if (s.ws.bufferedAmount > (s.deflate ? SNAP_BACKLOG_DEFLATE_BYTES : SNAP_BACKLOG_BYTES) || (late && now - s.slowSnapAt < SLOW_SNAP_MS)) {
       s.skipped++;
+      this.perf.skipped++;
       return;
     }
     if (late) s.slowSnapAt = now;
@@ -2041,8 +2104,22 @@ export class GameWorld {
     }
   }
 
+  /**
+   * Saves everyone in one database transaction: one commit (one wait for the disk) instead of one
+   * per character, which froze the game for ~0.8 ms per player every AUTOSAVE_MS. Each character is
+   * still its own savepoint inside (Db.transaction), so one failing save does not undo the others.
+   */
   saveAll(): void {
-    for (const s of this.sessions) this.save(s);
+    const t0 = performance.now();
+    try {
+      this.db.transaction(() => {
+        for (const s of this.sessions) this.save(s);
+      });
+    } catch (e) {
+      // The commit itself failed: nothing was written; the next autosave (or a logout) tries again.
+      console.error('[world] autosave failed', e);
+    }
+    this.perf.autosave(performance.now() - t0);
   }
 }
 

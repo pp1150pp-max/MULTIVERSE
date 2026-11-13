@@ -757,16 +757,30 @@ export class Db {
     return this.db.prepare('DELETE FROM blocks WHERE blocker = ? AND blocked = ?').run(blocker, blocked).changes > 0;
   }
 
-  /** Runs `fn` in one transaction: everything it wrote is kept, or (if it throws) none of it. */
+  /** How many transaction() calls are running (inner ones are savepoints). */
+  private txDepth = 0;
+
+  /**
+   * Runs `fn` in one transaction: everything it wrote is kept, or (if it throws) none of it. Called
+   * inside another transaction it is a savepoint: a throw undoes only this part, and nothing is on
+   * disk until the outermost one commits (World.saveAll saves everyone with one commit).
+   */
   transaction<T>(fn: () => T): T {
-    this.db.exec('BEGIN');
+    const sp = this.txDepth ? `sp${this.txDepth}` : null;
+    this.db.exec(sp ? `SAVEPOINT ${sp}` : 'BEGIN');
+    this.txDepth++;
     try {
       const out = fn();
-      this.db.exec('COMMIT');
+      this.db.exec(sp ? `RELEASE ${sp}` : 'COMMIT');
       return out;
     } catch (e) {
-      this.db.exec('ROLLBACK');
+      if (sp) {
+        this.db.exec(`ROLLBACK TO ${sp}`);
+        this.db.exec(`RELEASE ${sp}`);
+      } else this.db.exec('ROLLBACK');
       throw e;
+    } finally {
+      this.txDepth--;
     }
   }
 
