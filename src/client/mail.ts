@@ -119,6 +119,11 @@ export class MailUI {
     this.render();
   }
 
+  private async readAll(): Promise<void> {
+    await this.call({ a: 'mailReadAll' });
+    this.render();
+  }
+
   private async removeRead(): Promise<void> {
     await this.call({ a: 'mailDeleteRead' });
     this.render();
@@ -130,9 +135,12 @@ export class MailUI {
     const bar = el('div', 'mail-bar');
     const all = el('button', '', 'รับทั้งหมด');
     all.onclick = () => void this.claim(-1);
+    const readAll = el('button', '', 'อ่านทั้งหมด');
+    readAll.title = 'ทำเครื่องหมายว่าอ่านแล้วทุกฉบับ (ไม่รับของแนบ)';
+    readAll.onclick = () => void this.readAll();
     const del = el('button', '', 'ลบที่อ่านแล้วทั้งหมด');
     del.onclick = () => void this.removeRead();
-    bar.append(all, del);
+    bar.append(all, readAll, del);
     const list = el('div', 'mail-list');
     for (const m of this.list) {
       const row = el('button', `mail-row${m.read ? '' : ' unread'}`);

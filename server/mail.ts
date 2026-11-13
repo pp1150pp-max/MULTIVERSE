@@ -149,6 +149,7 @@ export class Mail {
     switch (call.a) {
       case 'mailList': return { ok: true, list: this.list(a), unread: this.unread(a) };
       case 'mailRead': return this.read(a, call.id);
+      case 'mailReadAll': return this.readAll(a);
       case 'mailClaim': return this.claim(a, call.id);
       case 'mailDelete': return this.remove(a, call.id);
       case 'mailDeleteRead': return this.removeRead(a);
@@ -185,6 +186,12 @@ export class Mail {
     const att = parseAttach(r.attach);
     const mail: MailFull = { ...this.head({ ...r, read_at: r.read_at ?? now }), body: r.body, lines: r.claimed_at === null ? describeAttach(att) : [] };
     return { ok: true, mail, unread: this.unread(a) };
+  }
+
+  /** Marks everything read; attachments stay waiting. */
+  private readAll(a: MailActor): MailReply {
+    const n = this.db.mailMarkAllRead(a.accountId, a.charId, this.now());
+    return { ok: true, msg: n ? `ทำเครื่องหมายอ่านแล้ว ${n} ฉบับ (ของแนบยังรอรับอยู่)` : 'ไม่มีจดหมายที่ยังไม่ได้อ่าน', list: this.list(a), unread: this.unread(a) };
   }
 
   /** Saves the character (and its account's stash, as a normal save does) inside the current transaction. */
