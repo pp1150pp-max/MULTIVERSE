@@ -20,6 +20,7 @@ import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { applyBalance, checkBalance } from '../shared/balance';
 import { renderBalance } from './balance';
 import { renderDaily } from './daily';
+import { renderCosManage } from './cosManage';
 import { equipEntries, itemGrid, listEntries, type ItemCtx } from './items';
 import { itemNames, makeItem, roundStat, rowRanges, tierOf } from '../shared/data/items';
 import { checkShutdownText, countdownTime, SHUTDOWN_CHOICES, SHUTDOWN_SECONDS, SHUTDOWN_TEXT_MAX, SHUTDOWN_TIME_TOKEN, shutdownWarning, type ShutdownMode } from '../shared/net/protocol';
@@ -149,7 +150,7 @@ const root = document.getElementById('admin')!;
 let me: AdminMe | null = null;
 let meta: AdminMeta | null = null;
 let online: AdminOnline | null = null;
-type Tab = 'online' | 'users' | 'stats' | 'sessions' | 'chat' | 'mail' | 'trades' | 'reports' | 'orbs' | 'cos' | 'cards' | 'balance' | 'daily' | 'roles' | 'audit' | 'broadcast' | 'server';
+type Tab = 'online' | 'users' | 'stats' | 'sessions' | 'chat' | 'mail' | 'trades' | 'reports' | 'orbs' | 'cos' | 'cosManage' | 'cards' | 'balance' | 'daily' | 'roles' | 'audit' | 'broadcast' | 'server';
 let tab: Tab = 'online';
 let timer = 0;
 
@@ -256,13 +257,13 @@ const CATEGORIES: { name: (typeof FEATURE_GROUPS)[number]; tabs: Tab[] }[] = [
   { name: 'ประวัติ', tabs: ['stats', 'sessions', 'chat', 'trades', 'audit'] },
   { name: 'สื่อสาร', tabs: ['mail', 'reports', 'broadcast'] },
   { name: 'ปรับเกม', tabs: ['balance', 'cards', 'daily'] },
-  { name: 'หน้าตา', tabs: ['orbs', 'cos'] },
+  { name: 'หน้าตา', tabs: ['orbs', 'cos', 'cosManage'] },
   { name: 'ระบบ', tabs: ['server', 'roles'] },
 ];
 const TAB_LABEL: Record<Tab, string> = {
   online: 'ออนไลน์', users: 'ผู้ใช้และตัวละคร', stats: 'สถิติ', sessions: 'การเข้าเล่น', chat: 'แชท', trades: 'เทรด',
   audit: 'ประวัติ (audit)', mail: 'จดหมาย', reports: 'รายงาน', broadcast: 'ประกาศ', balance: 'ปรับสมดุล', cards: 'การ์ด', daily: 'ล็อกอินรายวัน',
-  orbs: 'ลูกแก้วตีบวก', cos: 'ของแต่งตัว', server: 'Server', roles: 'สิทธิ์',
+  orbs: 'ลูกแก้วตีบวก', cos: 'ของแต่งตัว', cosManage: 'จัดการของแต่งตัว', server: 'Server', roles: 'สิทธิ์',
 };
 
 /** Whether the signed-in role may see a tab (the server checks again on every call). */
@@ -285,6 +286,7 @@ function tabAllowed(t: Tab): boolean {
     case 'cards': return f.includes('cardView');
     case 'orbs': return f.includes('orbPreview');
     case 'cos': return f.includes('cosPreview');
+    case 'cosManage': return f.includes('cosManage');
     case 'server': return me.role === 'owner' || f.includes('backup') || f.includes('shutdownText');
   }
 }
@@ -345,6 +347,7 @@ function setTab(t: Tab): void {
   else if (t === 'cos') void renderCos();
   else if (t === 'balance') void renderBalance(view, h, api, (tuning) => applyBalance(tuning), can('itemStatMult'));
   else if (t === 'daily') void renderDaily(view, h, api);
+  else if (t === 'cosManage') void renderCosManage(view, h, api);
   else if (t === 'roles') void renderRoles();
   else if (t === 'audit') void renderAudit();
   else if (t === 'cards') void renderCards();
@@ -1531,7 +1534,7 @@ const ACTION_TH: Record<string, string> = {
   level: 'ตั้งเลเวล', gold: 'ทอง', items: 'เสกไอเทม', kick: 'เตะ', teleport: 'ย้ายโซน', grant: 'ให้สิทธิ์', revoke: 'ถอนสิทธิ์',
   server: 'Server', password: 'ตั้งรหัสผ่าน', ban: 'แบน', unban: 'ปลดแบน', broadcast: 'ประกาศ', backup: 'สำรองข้อมูล',
   'delete-account': 'ลบบัญชี', 'delete-character': 'ลบตัวละคร', 'chat-delete': 'ลบแชท',
-  'shutdown-text': 'ข้อความเตือนปิด server', 'orb-look': 'หน้าตาลูกแก้วตีบวก', 'cos-look': 'ค่าของแต่งตัว', balance: 'ปรับสมดุล', daily: 'ล็อกอินรายวัน', mail: 'ส่งจดหมาย', mailRecall: 'ดึงจดหมายกลับ',
+  'shutdown-text': 'ข้อความเตือนปิด server', 'orb-look': 'หน้าตาลูกแก้วตีบวก', 'cos-look': 'ค่าของแต่งตัว', 'cos-shop': 'ซ่อน/ราคาของแต่งตัว', balance: 'ปรับสมดุล', daily: 'ล็อกอินรายวัน', mail: 'ส่งจดหมาย', mailRecall: 'ดึงจดหมายกลับ',
   'report-status': 'สถานะรายงาน', 'report-ban': 'ห้ามรายงาน', 'report-unban': 'ปลดห้ามรายงาน',
   'cosmetic-give': 'ให้ Cosmetics', 'cosmetic-take': 'ยึด Cosmetics คืน',
 };
@@ -1941,6 +1944,7 @@ async function openAccount(id: number, note?: { text: string; ok: boolean; passw
   }
   if (!a.guest && d.cosmetics) {
     const owned = new Set(d.cosmetics);
+    const hidden = new Set(d.cosHidden ?? []);
     const canEdit = can('cosmetics');
     panes.push(['cosmetics', `Cosmetics (${owned.size})`, () => h('div', { class: 'char-card' },
       h('div', { class: 'muted' }, canEdit
@@ -1964,7 +1968,8 @@ async function openAccount(id: number, note?: { text: string; ok: boolean; passw
             btn = b;
           }
           return h('li', {}, h('span', { style: `color:${c.color}` }, '■ '), c.name, ' ',
-            has ? h('span', { class: 'tag on' }, 'มีแล้ว') : null, ' ', btn);
+            has ? h('span', { class: 'tag on' }, 'มีแล้ว') : null, ' ',
+            hidden.has(c.id) ? h('span', { class: 'tag', title: 'ซ่อนในหน้าต่างแต่งตัว: ให้ได้ แต่ผู้เล่นสวมไม่ได้จนกว่าจะแสดงกลับ' }, 'ซ่อนอยู่') : null, ' ', btn);
         }))))) ]);
   }
   for (const [key, label, make] of extraPanes) panes.push([key, label, make]);

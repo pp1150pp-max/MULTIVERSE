@@ -318,6 +318,27 @@ export function savePartOf(saved: CosTuning, id: string, cur: TuneValues, part: 
   return checkCosTuning({ ...saved, [id]: vals }, false).tuning ?? saved;
 }
 
+/**
+ * Pasting text copied from the bench ("คัดลอกค่าที่ตั้งไว้") onto the saved tuning, for editing many pieces at
+ * once (the /admin "จัดการของแต่งตัว" tab). The text is cosmetic id → its changes from the code default, so
+ * every piece it names gets exactly those values (fields left out = code default); pieces it doesn't name stay
+ * as saved. The copy button names every tuned piece (`{}` for one at its code default); older copies named only
+ * the changed pieces and paste the same way. Checked strictly (an error on anything wrong); `only` limits it
+ * to some of the named pieces. Returns the clean tuning and the ids it named.
+ */
+export function pasteCosTuning(saved: CosTuning, text: unknown, only?: readonly string[]): { tuning: CosTuning; ids: string[]; error?: undefined } | { tuning?: undefined; ids?: undefined; error: string } {
+  const c = checkCosTuning(text, true);
+  if (!c.tuning) return { error: c.error };
+  const named = new Set(Object.keys(text as object));
+  const ids = COSMETICS.filter((x) => named.has(x.id) && (!only || only.includes(x.id))).map((x) => x.id);
+  const next: CosTuning = { ...saved };
+  for (const id of ids) {
+    if (c.tuning[id]) next[id] = c.tuning[id];
+    else delete next[id];
+  }
+  return { tuning: checkCosTuning(next, false).tuning ?? {}, ids };
+}
+
 /** Same tuning? (both already clean, as checkCosTuning returns them) */
 export function sameCosTuning(a: CosTuning, b: CosTuning): boolean {
   return JSON.stringify(a) === JSON.stringify(b);

@@ -9,8 +9,9 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
-import { savePartOf, axisHiddenInDir, checkCosTuning, COS_AXES, COS_TUNE_FIELDS, viewDirOf, viewOffKey, COS_TUNING_SETTING, cosTuneDefaults, cosTuneOf, cosTuningChanges, TUNED_SLOTS } from '../src/shared/cosTuning';
+import { pasteCosTuning, savePartOf, axisHiddenInDir, checkCosTuning, COS_AXES, COS_TUNE_FIELDS, viewDirOf, viewOffKey, COS_TUNING_SETTING, cosTuneDefaults, cosTuneOf, cosTuningChanges, TUNED_SLOTS } from '../src/shared/cosTuning';
 import { COSMETICS } from '../src/shared/data/cosmetics';
+import { checkCosShop, COS_SHOP_SETTING, cosHiddenIds, cosPrice, cosShopChanges, mayPutOnCos } from '../src/shared/cosShop';
 import { finish, ok } from './check';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -86,6 +87,37 @@ ok(!!checkCosTuning({ aura_star: { dz_at_front: 0.1 } }, true).error, 'an aura h
   ok(checkCosTuning({ wings_angel: { dy_front: 0.3, dy_at_frontLeft: 0.5 } }, true).tuning?.wings_angel?.dy_at_frontLeft === 0.5, 'a facing saved on its own wins over the old group value');
 }
 
+// Shop settings (the "จัดการของแต่งตัว" tab): hidden / diamond price per piece, overrides only.
+{
+  const good = checkCosShop({ pet_cat: { price: 500 }, wings_bat: { hidden: true }, title_gold: { hidden: true, price: 1_000_000 }, aura_star: { hidden: false } }, true);
+  ok(JSON.stringify(good.shop) === '{"wings_bat":{"hidden":true},"pet_cat":{"price":500},"title_gold":{"hidden":true,"price":1000000}}', `shop: kept in catalogue order, shown + no price not stored, titles too (${JSON.stringify(good.shop)})`);
+  for (const [what, v] of [
+    ['price 0', { pet_cat: { price: 0 } }], ['price not whole', { pet_cat: { price: 1.5 } }], ['price too big', { pet_cat: { price: 1_000_001 } }],
+    ['price as text', { pet_cat: { price: '5' } }], ['hidden not true/false', { pet_cat: { hidden: 1 } }], ['extra field', { pet_cat: { sale: true } }],
+    ['unknown cosmetic', { pet_nope: { hidden: true } }], ['removed mount', { mount_tortoise: { hidden: true } }], ['not an object', []],
+  ] as const) ok(!!checkCosShop(v, true).error, `shop: ${what} refused`);
+  ok(JSON.stringify(checkCosShop({ pet_nope: { hidden: true }, pet_cat: { price: -1, hidden: true } }, false).shop) === '{"pet_cat":{"hidden":true}}', 'shop read back leniently: unknown and bad entries dropped, the rest kept');
+  ok(JSON.stringify(checkCosShop({ pet_cat: { price: null } }, true).shop) === '{}', 'shop: an empty price = no price');
+  ok(JSON.stringify(cosHiddenIds(good.shop!)) === '["wings_bat","title_gold"]' && cosPrice(good.shop!, 'pet_cat') === 500 && cosPrice(good.shop!, 'wings_bat') === undefined, 'hidden ids and price lookups');
+  ok(cosShopChanges({ pet_cat: { price: 500 } }, { pet_cat: { price: 600, hidden: true } }) === 'pet_cat: ซ่อน ราคา 500 → 600 เพชร', `shop audit text (${cosShopChanges({ pet_cat: { price: 500 } }, { pet_cat: { price: 600, hidden: true } })})`);
+  const hid = new Set(['wings_bat']);
+  ok(!mayPutOnCos('wings_bat', undefined, hid) && !mayPutOnCos('wings_bat', 'wings_angel', hid), 'a hidden piece cannot be put on');
+  ok(mayPutOnCos('wings_bat', 'wings_bat', hid) && mayPutOnCos('wings_angel', 'wings_bat', hid), 'the hidden piece already worn stays; a shown one can be put on');
+}
+
+// Pasting bench text onto the saved tuning: named pieces get exactly the text's values, others stay.
+{
+  const saved = { wings_angel: { back: 0.3 }, mount_wolf: { seat: 0.6 }, pet_cat: { float: 1 } };
+  const oldCopy = pasteCosTuning(saved, { wings_angel: { backStand: 1.4 }, aura_star: { size: 3 } });
+  ok(JSON.stringify(oldCopy.tuning) === JSON.stringify({ wings_angel: { backStand: 1.4 }, mount_wolf: { seat: 0.6 }, pet_cat: { float: 1 }, aura_star: { size: 3 } }) && oldCopy.ids?.join() === 'wings_angel,aura_star', `old copy format (changed pieces only): those pieces replaced, the rest kept (${JSON.stringify(oldCopy.tuning)})`);
+  const newCopy = pasteCosTuning(saved, { wings_angel: { back: 0.3 }, mount_wolf: {}, pet_cat: { float: 1 } });
+  ok(JSON.stringify(newCopy.tuning) === JSON.stringify({ wings_angel: { back: 0.3 }, pet_cat: { float: 1 } }), 'new copy format: a piece named with {} goes back to the code defaults');
+  const only = pasteCosTuning(saved, { wings_angel: { back: 0.5 }, mount_wolf: {} }, ['mount_wolf']);
+  ok(JSON.stringify(only.tuning) === JSON.stringify({ wings_angel: { back: 0.3 }, pet_cat: { float: 1 } }) && only.ids?.join() === 'mount_wolf', 'only the ticked pieces are pasted');
+  ok(!!pasteCosTuning(saved, { wings_angel: { backStand: 9 } }).error && !!pasteCosTuning(saved, { title_gold: {} }).error && !!pasteCosTuning(saved, 'x').error, 'pasting bad text is refused (range, title set, not an object)');
+  ok(pasteCosTuning({}, { wings_angel: { dy_front: 0.3 } }).tuning?.wings_angel?.dy_at_frontLeft === 0.3, 'an old copy with the 3-group offsets pastes as the 8 facings');
+}
+
 // ---------------------------------------------------------- against a real server
 function freePort(): Promise<number> {
   return new Promise((res, rej) => {
@@ -104,11 +136,17 @@ const auditCount = (): number => {
   db.close();
   return n;
 };
-const settingRow = (): string | null => {
+const settingRow = (key = COS_TUNING_SETTING): string | null => {
   const db = new DatabaseSync(DB_FILE, { readOnly: true });
-  const r = db.prepare('SELECT value FROM settings WHERE key = ?').get(COS_TUNING_SETTING) as { value: string } | undefined;
+  const r = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
   db.close();
   return r?.value ?? null;
+};
+const auditOf = (action: string): string[] => {
+  const db = new DatabaseSync(DB_FILE, { readOnly: true });
+  const rows = db.prepare('SELECT details FROM admin_audit WHERE action = ? ORDER BY id').all(action) as { details: string }[];
+  db.close();
+  return rows.map((r) => r.details);
 };
 
 async function run(): Promise<void> {
@@ -209,7 +247,49 @@ async function run(): Promise<void> {
   ok(reset.status === 200 && JSON.stringify(reset.data.tuning) === '{}' && settingRow() === null, 'reset goes back to the code defaults and removes the setting');
   ok(JSON.stringify(p2.msgs.filter((m) => m.t === 'cosTuning').at(-1)?.tuning) === '{}', 'players online get the reset too');
   ok(auditCount() === 2, 'the reset is in the audit log');
+
+  // ---- paste bench text for many pieces (the "จัดการของแต่งตัว" tab), merged on the server
+  await api('POST', '/admin/cos-look', { tuning: { wings_angel: { back: 0.3 }, mount_wolf: { seat: 0.6 } } }, tok.owner1);
+  const pasteBase = (await api('GET', '/admin/cos-look', undefined, tok.owner1)).data.tuning;
+  const paste = { wings_angel: { backStand: 1.4 }, mount_wolf: {}, pet_cat: { float: 1 }, aura_star: { size: 3 } };
+  ok((await api('POST', '/admin/cos-look', { paste, base: pasteBase }, tok.gm1)).status === 403, 'GM cannot save a paste');
+  ok((await api('POST', '/admin/cos-look', { paste: { wings_angel: { backStand: 99 } }, base: pasteBase }, tok.owner1)).status === 400, 'a bad paste is refused');
+  const n0 = auditCount();
+  const pasted = await api('POST', '/admin/cos-look', { paste, only: ['wings_angel', 'mount_wolf', 'pet_cat'], base: pasteBase }, tok.owner1);
+  ok(pasted.status === 200 && JSON.stringify(pasted.data.tuning) === JSON.stringify({ wings_angel: { backStand: 1.4 }, pet_cat: { float: 1 } }), `paste: ticked pieces replaced, the {} one back to the code, the unticked one untouched (${JSON.stringify(pasted.data.tuning)})`);
+  ok(auditCount() === n0 + 1 && /^วางค่า: .*wings_angel\.backStand 1\.35 → 1\.4/.test(auditOf('cos-look').at(-1) ?? ''), `paste written to the audit log (${auditOf('cos-look').at(-1)})`);
+  ok(JSON.parse(settingRow() ?? '{}').pet_cat?.float === 1, 'paste saved in the same cos_tuning setting');
+  await sleep(300);
+  ok(p2.msgs.filter((m) => m.t === 'cosTuning').at(-1)?.tuning?.pet_cat?.float === 1, 'players online get the pasted values');
+  const stale = await api('POST', '/admin/cos-look', { paste, base: pasteBase }, tok.owner1);
+  ok(stale.status === 409 && auditCount() === n0 + 1, 'a paste previewed on values saved over since is refused (409), nothing changes');
+
+  // ---- hidden / price (the "จัดการของแต่งตัว" tab)
+  const gmShop = await api('GET', '/admin/cos-shop', undefined, tok.gm1);
+  ok(gmShop.status === 200 && gmShop.data.canEdit === false && gmShop.data.canPaste === false && JSON.stringify(gmShop.data.shop) === '{}', 'GM sees the shop settings (nothing saved: all shown, no prices) but may not save');
+  ok((await api('GET', '/admin/cos-shop', undefined, tok.plain1)).status === 403, 'a player cannot read the shop settings');
+  const shop = { wings_bat: { hidden: true }, pet_cat: { price: 500 } };
+  ok((await api('POST', '/admin/cos-shop', { shop }, tok.gm1)).status === 403, 'GM cannot save the shop settings');
+  ok((await api('POST', '/admin/cos-shop', { shop: { pet_cat: { price: 0 } } }, tok.owner1)).status === 400, 'a bad price is refused');
+  ok((await api('POST', '/admin/cos-shop', { shop: { pet_nope: { hidden: true } } }, tok.owner1)).status === 400, 'an unknown cosmetic is refused');
+  ok(settingRow(COS_SHOP_SETTING) === null && auditOf('cos-shop').length === 0, 'refused shop saves leave no setting and no audit row');
+  const ownShop = await api('POST', '/admin/cos-shop', { shop }, tok.owner1);
+  ok(ownShop.status === 200 && ownShop.data.canEdit === true && ownShop.data.shop.pet_cat?.price === 500, 'the owner saves hidden + price');
+  ok(JSON.parse(settingRow(COS_SHOP_SETTING) ?? '{}').wings_bat?.hidden === true, 'saved in the settings table (cos_shop)');
+  ok(auditOf('cos-shop').length === 1 && auditOf('cos-shop')[0].includes('wings_bat: ซ่อน') && auditOf('cos-shop')[0].includes('pet_cat: ราคา — → 500 เพชร'), `shop change in the audit log (${auditOf('cos-shop')[0]})`);
+  await sleep(300);
+  const hid = p2.msgs.filter((m) => m.t === 'cosHidden');
+  ok(hid.length === 1 && JSON.stringify(hid[0].ids) === '["wings_bat"]', 'players online get the hidden list at once');
+  ok(!JSON.stringify(p2.msgs.filter((m) => m.t !== 'snap')).includes('"price"'), 'prices are never sent to players');
+  await api('POST', '/admin/cos-shop', { shop: { wings_bat: { hidden: true }, pet_cat: { price: 600 } } }, tok.owner1);
+  await sleep(200);
+  ok(auditOf('cos-shop').length === 2 && p2.msgs.filter((m) => m.t === 'cosHidden').length === 1, 'a price-only change is logged but sends nothing to players');
   p1.ws.close();
+  await sleep(200);
+  const p3 = joinWorld(tok.plain1, chars.plain1);
+  await p3.ready;
+  ok(JSON.stringify(p3.msgs.find((m) => m.t === 'welcome')?.cosHidden) === '["wings_bat"]', 'joining later gets the hidden list in welcome');
+  p3.ws.close();
   p2.ws.close();
 }
 

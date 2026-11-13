@@ -45,3 +45,22 @@ export function resetCosTune(id: string, to?: TuneValues): void {
   else delete tuning[id];
   cache.delete(id);
 }
+
+// ------------------------------------------------------------ hidden pieces (src/shared/cosShop.ts)
+
+let hidden: ReadonlySet<string> = new Set();
+
+/** The ids the server hides from the cosmetics window (anything odd ignored; missing = none hidden). */
+export function applyCosHidden(ids: unknown): void {
+  hidden = new Set(Array.isArray(ids) ? ids.filter((x): x is string => typeof x === 'string') : []);
+}
+
+/** Hidden from the cosmetics window: not listed (unless worn) and can't be put on. */
+export function isCosHidden(id: string): boolean {
+  return hidden.has(id);
+}
+
+/** Changes whenever the hidden list does (for the window's redraw check). */
+export function cosHiddenKey(): string {
+  return [...hidden].join(',');
+}

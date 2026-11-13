@@ -1,11 +1,13 @@
 // The cosmetics window ("แต่งตัว"), opened from the menu or at the stylist in town. Two tabs:
 // - ร้าน: every cosmetic, with try-on (shown on your own character, only to you; taken off when the
 //   window closes). Buying is not open yet (owner: no prices, a "เร็ว ๆ นี้" button).
+// Pieces the owner hid in /admin (src/shared/cosShop.ts) aren't listed, except under ของฉัน while worn (to take off).
 // - ของฉัน: what the account owns (an admin gives them out), to wear or take off. The server checks it.
 // Also the mount button (Z) shown while a mount is worn.
 import type { Game } from './Game';
 import { COSMETICS, COS_SLOTS, COS_SLOT_NAME, cosById, type CosmeticDef, type CosSlot, type CosWorn } from '../shared/data/cosmetics';
 import { setLookOwner, setTryOn } from './cosLook';
+import { cosHiddenKey, isCosHidden } from './cosTune';
 import { cosCardImage } from './cosmeticViews';
 
 type Tab = 'shop' | 'mine';
@@ -98,7 +100,7 @@ export class CosmeticsUI {
     if (this.mountBtn.textContent !== label) this.mountBtn.textContent = label;
     this.mountBtn.classList.toggle('on', me.mounted);
     if (!this.open) return;
-    const key = JSON.stringify([this.tab, this.slot, this.trying, me.cosmetics, this.g.backend.cosOwned]);
+    const key = JSON.stringify([this.tab, this.slot, this.trying, me.cosmetics, this.g.backend.cosOwned, cosHiddenKey()]);
     if (key === this.drawn) return;
     this.drawn = key;
     this.draw();
@@ -119,9 +121,16 @@ export class CosmeticsUI {
     const owned = new Set(this.g.backend.cosOwned);
     const worn = this.g.player.cosmetics;
     const guest = this.g.backend.guest;
+    /** Listed under ของฉัน: owned, and not hidden unless worn. */
+    const mine = (c: CosmeticDef) => owned.has(c.id) && (!isCosHidden(c.id) || worn[c.slot] === c.id);
+    // A piece being tried on that just got hidden comes off.
+    if (Object.values(this.trying).some((id) => id && isCosHidden(id))) {
+      for (const s of COS_SLOTS) if (this.trying[s] && isCosHidden(this.trying[s]!)) delete this.trying[s];
+      setTryOn(this.trying);
+    }
 
     this.tabsEl.replaceChildren(
-      ...([['shop', 'ร้าน'], ['mine', `ของฉัน (${owned.size})`]] as [Tab, string][]).map(([t, label]) =>
+      ...([['shop', 'ร้าน'], ['mine', `ของฉัน (${COSMETICS.filter(mine).length})`]] as [Tab, string][]).map(([t, label]) =>
         button(label, () => {
           this.tab = t;
           this.update();
@@ -137,7 +146,7 @@ export class CosmeticsUI {
       ),
     );
 
-    const list = COSMETICS.filter((c) => c.slot === this.slot && (this.tab === 'shop' || owned.has(c.id)));
+    const list = COSMETICS.filter((c) => c.slot === this.slot && (this.tab === 'shop' ? !isCosHidden(c.id) : mine(c)));
     const cards = list.map((c) => {
       const card = el('div', 'cos-card');
       if (worn[c.slot] === c.id) card.classList.add('worn');
@@ -146,6 +155,7 @@ export class CosmeticsUI {
       const tags = el('div', 'cos-tags');
       if (owned.has(c.id)) tags.append(el('span', 'tag on', 'มีแล้ว'));
       if (worn[c.slot] === c.id) tags.append(el('span', 'tag', 'สวมอยู่'));
+      if (isCosHidden(c.id)) tags.append(el('span', 'tag', 'ปิดชั่วคราว ถอดแล้วสวมใหม่ไม่ได้'));
       info.append(tags);
       const btns = el('div', 'cos-btns');
       if (this.tab === 'shop') {

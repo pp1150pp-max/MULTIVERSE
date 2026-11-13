@@ -4,6 +4,7 @@ import { isPotion, isStack, isStone, RARITIES, RARITY_LABEL, sameStack, STAT_KEY
 import type { ShutdownMode } from './net/protocol';
 import type { OrbLook } from './orbLook';
 import type { CosTuning } from './cosTuning';
+import type { CosShop } from './cosShop';
 import type { CardTuning } from './cardTuning';
 import type { BalanceTuning } from './balance';
 import { ITEM_BASES, itemNames, makeItem, roundStat, rowRanges, stampTier, statStep, tierOf } from './data/items';
@@ -154,7 +155,7 @@ export interface AdminShutdownText { texts: Record<ShutdownMode, string>; defaul
  * switch: the Permissions tab, the audit log, restarting / stopping the server, deleting accounts or
  * characters, and making someone owner (command line).
  */
-export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily';
+export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily';
 
 /**
  * The defaults: which built-in role may use each tool (owner always has all). The owner can change
@@ -204,6 +205,10 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   cosPreview: ['owner', 'gm'],
   // Saving the server-wide cosmetic tuning from that tab (owner 2026-11-10: owner only).
   cosLook: ['owner'],
+  // The "จัดการของแต่งตัว" tab: every piece with hidden / shown and its diamond price (owner 2026-11-13: owner and GMs may look).
+  cosManage: ['owner', 'gm'],
+  // Saving hidden / shown and prices from that tab (owner 2026-11-13: owner only). Pasting bench values saves with cosLook.
+  cosManageEdit: ['owner'],
   // The card tuning tab "การ์ด" (owner 2026-11-11: owner and GMs may look).
   cardView: ['owner', 'gm'],
   // Saving the server-wide card numbers from that tab (owner 2026-11-11: owner only).
@@ -275,6 +280,8 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   daily: { name: 'ล็อกอินรายวัน', desc: 'แท็บ "ล็อกอินรายวัน": แก้ของรางวัลแต่ละวันของปฏิทิน (มีผลกับของที่ส่งหลังบันทึก)', group: 'ปรับเกม' },
   itemStatMult: { name: 'คอนเฟิร์มตัวคูณสเตตัสบนไอเทม', desc: 'แท็บ "ปรับสมดุล": คอนเฟิร์มตัวคูณค่าสเตตัสบนไอเทม คูณค่าของทุกชิ้นในเซิร์ฟจริง (สำรอง DB ให้ก่อน) · ทดลองดูตัวอย่างได้ด้วยสิทธิ์ "ปรับสมดุล"', group: 'ปรับเกม' },
   cosLook: { name: 'บันทึกของแต่งตัวทั้งเซิร์ฟ', desc: 'บันทึกค่าตำแหน่ง/หน้าตาของแต่งตัวที่ทุกคนเห็น (ต้องมี "ทดลองของแต่งตัว" ด้วย)', group: 'หน้าตา' },
+  cosManage: { name: 'ดูจัดการของแต่งตัว', desc: 'แท็บ "จัดการของแต่งตัว": ดูทุกชิ้นว่าซ่อน/แสดง ราคาเพชร และตัวอย่างการวางค่าจากแท่นทดลอง', group: 'หน้าตา' },
+  cosManageEdit: { name: 'ซ่อน/ตั้งราคาของแต่งตัว', desc: 'บันทึกการซ่อน/แสดงรายชิ้นในหน้าต่าง "แต่งตัว" ของผู้เล่น และราคาเพชร (ต้องมี "ดูจัดการของแต่งตัว" ด้วย · วางค่าหลายชิ้นใช้สิทธิ์ "บันทึกของแต่งตัวทั้งเซิร์ฟ")', group: 'หน้าตา' },
   cardView: { name: 'ดูค่าการ์ด', desc: 'แท็บ "การ์ด": ดูผลของการ์ดทุกใบ เรทดรอป ราคา และเพดาน', group: 'ปรับเกม' },
   cardTune: { name: 'แก้ค่าการ์ดทั้งเซิร์ฟ', desc: 'แก้และบันทึกค่าการ์ดที่ใช้ทั้งเซิร์ฟ (ต้องมี "ดูค่าการ์ด" ด้วย)', group: 'ปรับเกม' },
 };
@@ -336,6 +343,8 @@ export interface AdminAccountDetail {
   stash: { size: number; gold: number; items: (BagEntry | null)[] } | null;
   /** Cosmetic ids the account owns (src/shared/data/cosmetics.ts); null for a guest. */
   cosmetics: string[] | null;
+  /** Cosmetic ids hidden from the in-game window (may still be given; marked on the sheet). */
+  cosHidden?: string[];
 }
 
 export interface BackupRow { name: string; size: number; at: number; kind: string }
@@ -593,6 +602,18 @@ export interface AdminCosLook {
   tuning: CosTuning;
   /** May this admin save it (the `cosLook` switch). */
   canEdit: boolean;
+}
+
+/** GET/POST /api/admin/cos-shop: the "จัดการของแต่งตัว" tab. */
+export interface AdminCosShop {
+  /** Hidden / price per cosmetic (only what differs from the code: shown, no price). */
+  shop: CosShop;
+  /** The saved server-wide tuning, for the paste preview. */
+  tuning: CosTuning;
+  /** May save hidden / prices (the `cosManageEdit` switch). */
+  canEdit: boolean;
+  /** May save pasted bench values (the `cosLook` switch). */
+  canPaste: boolean;
 }
 
 /** GET/POST /api/admin/orb-look: the server-wide enhancement orb look and what may be chosen. */

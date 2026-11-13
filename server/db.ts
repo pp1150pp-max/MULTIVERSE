@@ -10,6 +10,7 @@ import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
 import { cleanCosOwned } from '../src/shared/data/cosmetics';
 import { checkCosTuning, COS_TUNING_SETTING, type CosTuning } from '../src/shared/cosTuning';
+import { checkCosShop, COS_SHOP_SETTING, type CosShop } from '../src/shared/cosShop';
 import { CARD_TUNING_SETTING, checkCardTuning, type CardTuning } from '../src/shared/cardTuning';
 import { BALANCE_SETTING, checkBalance, type BalanceTuning } from '../src/shared/balance';
 import { checkOrbLook, DEFAULT_ORB_LOOK, ORB_LOOK_SETTING, sameOrbLook, type OrbLook } from '../src/shared/orbLook';
@@ -409,6 +410,23 @@ export class Db {
   /** Saves the server-wide cosmetic tuning (already clean; nothing changed is stored as no row). */
   setCosTuning(t: CosTuning): void {
     this.setSetting(COS_TUNING_SETTING, Object.keys(t).length ? JSON.stringify(t) : null);
+  }
+
+  /** Per-cosmetic shop settings (hidden, diamond price): only what differs from the code ({} = all shown, no prices). */
+  cosShop(): CosShop {
+    const v = this.getSetting(COS_SHOP_SETTING);
+    if (v === null) return {};
+    try {
+      // Checked again, leniently: a cosmetic the code no longer knows is dropped, the rest kept.
+      return checkCosShop(JSON.parse(v), false).shop ?? {};
+    } catch {
+      return {};
+    }
+  }
+
+  /** Saves the shop settings (already clean; nothing set is stored as no row). */
+  setCosShop(shop: CosShop): void {
+    this.setSetting(COS_SHOP_SETTING, Object.keys(shop).length ? JSON.stringify(shop) : null);
   }
 
   /** The server-wide card tuning: only the changes from the code defaults ({} until the owner saves some). */

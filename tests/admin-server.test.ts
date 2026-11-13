@@ -338,7 +338,7 @@ async function run(): Promise<void> {
   const ownerId = (await api('GET', '/admin/accounts', undefined, ownerTok)).data.rows.find((r: any) => r.username === 'owner1').accountId;
   ok((await api('GET', '/admin/me', undefined, ownerTok)).data.features.length === Object.keys(FEATURE_ROLES).length, 'owner has every owner tool');
   ok(JSON.stringify((await api('GET', '/admin/me', undefined, gmTok)).data.features) === JSON.stringify(GM_DEFAULT), 'GM has only its FEATURE_ROLES tools (the base tools, broadcast, orb bench, channel warp, reports, cosmetics bench, card view, balance tab)');
-  ok(GM_DEFAULT.join() === 'online,charView,charEdit,kick,teleport,broadcast,orbPreview,channelWarp,reports,cosPreview,cardView,balance,itemEdit', `GM defaults: the base tools plus what the owner gave GMs since (card view, balance and item edit 2026-11-11) (${GM_DEFAULT.join()})`);
+  ok(GM_DEFAULT.join() === 'online,charView,charEdit,kick,teleport,broadcast,orbPreview,channelWarp,reports,cosPreview,cosManage,cardView,balance,itemEdit', `GM defaults: the base tools plus what the owner gave GMs since (card view, balance and item edit 2026-11-11) (${GM_DEFAULT.join()})`);
   const trades = await api('GET', '/admin/trades', undefined, ownerTok);
   ok(trades.status === 200 && Array.isArray(trades.data) && (await api('GET', '/admin/trades?q=x%25', undefined, ownerTok)).status === 200, 'owner reads the trade log (and a search with odd characters is fine)');
   const gmDenied: [string, string, unknown?][] = [
