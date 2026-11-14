@@ -15,7 +15,7 @@ import { shownCos } from './cosLook';
 import { orbItemLook } from '../shared/orbItems';
 import { AnimatedActor, type Actor } from './AnimatedActor';
 import { animSets, decalTex, fxTex, sheets } from './assets';
-import type { Effects, ShotSprite } from './effects';
+import { PassiveAura, type Effects, type ShotSprite } from './effects';
 import type { ProjectileLike } from './backend';
 
 type AnimEvent = Extract<SimEvent, { t: 'anim' }>;
@@ -63,6 +63,9 @@ export class PlayerView {
   private lastZ = NaN;
   /** Shown instead of the character while the Bog Witch's curse lasts. */
   private toad: SpriteActor | null = null;
+  /** The worn passive's aura under the feet, and which passive it was made for. */
+  private passiveAura: PassiveAura | null = null;
+  private passiveId: string | undefined;
 
   constructor(readonly p: Player, private readonly scene: THREE.Scene) {
     const anim = animSets[p.cls.id];
@@ -91,7 +94,30 @@ export class PlayerView {
     this.orbs.update(this.clock, p.x, p.z, p.orbs, true, orbItemLook(shownCos(p, 'orb')?.id) ?? null);
     this.cos.update(dt, p, fx);
     this.updateToad(dt, fx);
+    this.updatePassiveAura(dt);
     this.sync();
+  }
+
+  /** The aura of the worn passive (owner 2026-11-15: everyone sees it), hidden while dead or a toad. */
+  private updatePassiveAura(dt: number): void {
+    const p = this.p;
+    const id = p.skillBook.worn.passive;
+    if (id !== this.passiveId) {
+      this.passiveId = id;
+      this.disposePassiveAura();
+      this.passiveAura = PassiveAura.for(id);
+      if (this.passiveAura) this.scene.add(this.passiveAura.mesh);
+    }
+    if (!this.passiveAura) return;
+    this.passiveAura.mesh.visible = p.alive && p.toadT <= 0;
+    this.passiveAura.update(dt, p.x, p.z);
+  }
+
+  private disposePassiveAura(): void {
+    if (!this.passiveAura) return;
+    this.scene.remove(this.passiveAura.mesh);
+    this.passiveAura.dispose();
+    this.passiveAura = null;
   }
 
   /**
@@ -239,6 +265,7 @@ export class PlayerView {
 
   dispose(): void {
     this.disposeAura();
+    this.disposePassiveAura();
     if (this.toad) {
       this.scene.remove(this.toad.group);
       this.toad.dispose();

@@ -7,6 +7,9 @@ const SHEET_ROWS: Record<FxSheet, number> = {
   sword: 4, mage: 5, gun: 4, gun_ult: 3, enhance: 3,
   // Sword
   sw_blade: 4, sw_gale: 4, sw_bulwark: 4,
+
+  // Mage
+  mg_a: 6, mg_b: 6, mg_c: 6, mg_d: 3,
   // Gunslinger
   gs_skill: 6, gs_gear: 6, gs_passive: 3,
 };
@@ -56,6 +59,22 @@ const EFFECTS: Record<SkillEffect, EffectDef> = {
   sw_shout: { sheet: 'sw_bulwark', row: 1, life: 0.55, height: 'ground' },
   sw_crack: { sheet: 'sw_bulwark', row: 2, life: 0.5, height: 'ground' },
   sw_armorhit: { sheet: 'sw_bulwark', row: 3, life: 0.32, height: 0.9 },
+
+  // Mage (art_templates/mage/SKILL_FX_PROMPTS.md). Lasting zones are sent again each tick, so their life ≈ one tick.
+  mg_lightning: { sheet: 'mg_a', row: 4, life: 0.35, height: 1.4, upright: true },
+  mg_burst: { sheet: 'mg_a', row: 5, life: 0.5, height: 0.9, upright: true },
+  mg_starhit: { sheet: 'mg_b', row: 0, life: 0.4, height: 0.9, upright: true },
+  mg_firefield: { sheet: 'mg_b', row: 1, life: 0.55, height: 'ground' },
+  mg_flamewave: { sheet: 'mg_b', row: 2, life: 0.4, height: 'ground' },
+  mg_poison: { sheet: 'mg_b', row: 3, life: 1.1, height: 'ground' },
+  mg_ash: { sheet: 'mg_b', row: 4, life: 0.5, height: 'ground' },
+  mg_decay: { sheet: 'mg_b', row: 5, life: 1, height: 'ground' },
+  mg_shock: { sheet: 'mg_c', row: 0, life: 0.45, height: 'ground' },
+  mg_curse: { sheet: 'mg_c', row: 1, life: 0.9, height: 'ground' },
+  mg_vortex: { sheet: 'mg_c', row: 2, life: 0.3, height: 'ground' },
+  mg_empower: { sheet: 'mg_c', row: 3, life: 0.9, height: 'ground' },
+  mg_shield: { sheet: 'mg_c', row: 4, life: 1, height: 'ground' },
+  mg_timewarp: { sheet: 'mg_c', row: 5, life: 1, height: 'ground' },
   // Gunslinger (art_templates/skills/FX_GUNSLINGER.md). Lasting things (mine, drone, turret, smoke, burning) are
   // played again by the sim every tick, so their life is about one tick.
   // The aura and smoke are drawn already seen at an angle, so they face the camera at the feet instead of lying flat.
@@ -82,6 +101,12 @@ const SHOT_ART: Record<string, { sheet: FxSheet; row: number; scale: number }> =
   '#ff6a5a': { sheet: 'gun_ult', row: 1, scale: 3 },
   // Sword
   '#ff7a4a': { sheet: 'sw_blade', row: 1, scale: 2.6 },
+
+  // Mage: Arcane Lance, Volatile Orb, Ice Cage, venom bolts (Searing Mark, Crystal Spikes)
+  '#ffb06a': { sheet: 'mg_a', row: 0, scale: 3 },
+  '#ff9a4a': { sheet: 'mg_a', row: 1, scale: 2.2 },
+  '#bfe6ff': { sheet: 'mg_a', row: 2, scale: 2.6 },
+  '#9be05a': { sheet: 'mg_a', row: 3, scale: 2.6 },
   // Gunslinger: crit round, buffed basic shot, incendiary, rocket, railgun
   '#ff5a6a': { sheet: 'gs_skill', row: 0, scale: 2.4 },
   '#ffb040': { sheet: 'gs_skill', row: 1, scale: 2.4 },
@@ -89,6 +114,46 @@ const SHOT_ART: Record<string, { sheet: FxSheet; row: number; scale: number }> =
   '#6affc8': { sheet: 'gs_gear', row: 0, scale: 2.8 },
   '#a0fff4': { sheet: 'gs_gear', row: 4, scale: 3.4 },
 };
+
+/** Mage passive auras under the feet (sheet mg_d), by worn passive id; everyone sees them (owner 2026-11-15). */
+const PASSIVE_AURA: Record<string, { sheet: FxSheet; row: number; size: number }> = {
+  mg_elementmastery: { sheet: 'mg_d', row: 0, size: 1.1 },
+  mg_manasource: { sheet: 'mg_d', row: 1, size: 1.1 },
+  mg_arcanepower: { sheet: 'mg_d', row: 2, size: 1.1 },
+};
+
+/** A looping ground aura under a player for the passive they wear (null when that passive or its sheet has none). */
+export class PassiveAura {
+  readonly mesh: THREE.Mesh;
+  private t = 0;
+
+  private constructor(private readonly tex: THREE.Texture, private readonly art: { sheet: FxSheet; row: number; size: number }) {
+    this.mesh = new THREE.Mesh(
+      flat(new THREE.PlaneGeometry(2, 2)),
+      new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.5, depthWrite: false, side: THREE.DoubleSide }),
+    );
+    this.mesh.scale.setScalar(art.size);
+    showFrame(tex, art.sheet, art.row, 0);
+  }
+
+  static for(passive: string | undefined): PassiveAura | null {
+    const art = passive ? PASSIVE_AURA[passive] : undefined;
+    const tex = art && frameTexture(art.sheet);
+    return art && tex ? new PassiveAura(tex, art) : null;
+  }
+
+  update(dt: number, x: number, z: number): void {
+    this.t += dt;
+    showFrame(this.tex, this.art.sheet, this.art.row, Math.floor(this.t * 8) % FRAMES);
+    this.mesh.position.set(x, 0.07, z);
+  }
+
+  dispose(): void {
+    this.tex.dispose();
+    this.mesh.geometry.dispose();
+    (this.mesh.material as THREE.Material).dispose();
+  }
+}
 
 /** The on-screen angle of a world direction under the isometric camera. */
 const screenAngle = (dx: number, dz: number) => Math.atan2(-dx - dz, dx - dz);

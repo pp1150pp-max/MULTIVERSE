@@ -206,7 +206,7 @@ export type ClientMsg =
 
 /**
  * Another player (or yourself) as everyone sees them.
- * The look bundle (name, cls, lv, maxHp, aura, orbs, cos, mnt, toad) comes all together, and with
+ * The look bundle (name, cls, lv, maxHp, aura, orbs, cos, mnt, toad, psv) comes all together, and with
  * snapshot delta only when this browser does not have it yet (new in view) or some of it changed.
  * `name` missing = no bundle this time: keep the one you have. Inside a bundle, missing aura/orbs/… = none.
  */
@@ -226,6 +226,8 @@ export interface PlayerSnap {
   mnt?: 1;
   /** Cursed into a toad by the Bog Witch (missing = not). */
   toad?: 1;
+  /** The passive skill worn (its id), drawn as an aura under the feet that everyone sees (missing = none). */
+  psv?: string;
 }
 
 /** The look bundle (def, lv, mhp) works like PlayerSnap's: `def` missing = keep what you have. */

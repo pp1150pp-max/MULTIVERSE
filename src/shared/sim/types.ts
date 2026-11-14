@@ -68,6 +68,9 @@ export type SkillEffect = 'slash' | 'whirlwind' | 'charge' | 'quake' | 'explosio
   | 'sw_cleave' | 'sw_cleave_red' | 'sw_wave' | 'sw_bigsword' | 'sw_nova'
   | 'sw_streak' | 'sw_windring' | 'sw_xslash' | 'sw_xslash_gold' | 'sw_aura'
   | 'sw_barrier' | 'sw_shout' | 'sw_crack' | 'sw_armorhit'
+  // Mage skills (sheets mg_a / mg_b / mg_c, owner 2026-11-15)
+  | 'mg_lightning' | 'mg_burst' | 'mg_starhit' | 'mg_firefield' | 'mg_flamewave' | 'mg_poison' | 'mg_ash' | 'mg_decay'
+  | 'mg_shock' | 'mg_curse' | 'mg_vortex' | 'mg_empower' | 'mg_shield' | 'mg_timewarp'
   // Gunslinger
   | 'gs_aura_crit' | 'gs_aura_rapid' | 'gs_burn' | 'gs_smoke' | 'gs_mine' | 'gs_drone' | 'gs_turret' | 'gs_blast'
   | 'gs_hawkeye' | 'gs_trigger' | 'gs_special';
