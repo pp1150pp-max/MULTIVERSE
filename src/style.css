@@ -1679,3 +1679,6 @@ input[type=range]:hover::-webkit-slider-thumb { background: var(--ctl-accent-hi)
 #item-detail .idt-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 12px; }
 #item-detail .idt-acts button { min-height: 44px; font-size: 14px; }
 #item-detail .idt-acts button.primary { grid-column: 1 / -1; }
+/* Long press = right click on touch: no text selection or iOS callout in the windows. */
+.touch-ui #hud .panel { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.touch-ui #hud .panel input, .touch-ui #hud .panel textarea { -webkit-user-select: text; user-select: text; }

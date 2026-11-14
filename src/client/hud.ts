@@ -48,6 +48,9 @@ const HIDDEN_RATE_FROM = 11;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
+/** What the touch detail sheet shows: a bag slot, a stash slot or a worn item. */
+type DetailAt = { bag: number } | { stash: number } | { slot: EquipSlot };
+
 /** Lines of chat and messages kept for scrolling back (with the chat open); while playing only the newest 9 show (style.css). */
 const LOG_KEEP = 50;
 /** Sockets whose empty look is their name, not a faded item picture (none: every slot has its picture now). */
@@ -574,7 +577,10 @@ export class Hud {
       this.markInventory();
     });
     sg.addEventListener('click', (e) => {
-      if ((e.target as HTMLElement).closest('[data-buyrow]')) this.buyStashRow();
+      if ((e.target as HTMLElement).closest('[data-buyrow]')) return this.buyStashRow();
+      if (!isTouchMode() || this.justDragged) return;
+      const i = this.stashIndex(e);
+      if (i >= 0 && g.player.stash.items[i]) this.openDetail({ stash: i });
     });
     sg.addEventListener('mousemove', (e) => {
       if (this.drag?.ghost) return;
@@ -2218,7 +2224,7 @@ export class Hud {
   // ------------------------------------------------------------ item detail (touch)
 
   /** What the open detail sheet shows: a bag slot or a worn item. */
-  private detail: { bag: number } | { slot: EquipSlot } | null = null;
+  private detail: DetailAt | null = null;
   private detailEl: HTMLElement | null = null;
 
   /** Ask before dropping a bag item on the ground. */
@@ -2242,10 +2248,10 @@ export class Hud {
    * Touch only: the item's details with a button for each thing that can be done with it right now.
    * Wear / use and drop are always there; sell, store, list, forge and trade show while that window is open.
    */
-  private openDetail(at: { bag: number } | { slot: EquipSlot }): void {
+  private openDetail(at: DetailAt): void {
     const g = this.g;
     const p = g.player;
-    const entry = 'bag' in at ? p.bag[at.bag] : p.equipment[at.slot];
+    const entry = 'bag' in at ? p.bag[at.bag] : 'stash' in at ? p.stash.items[at.stash] : p.equipment[at.slot];
     if (!entry) return this.closeDetail();
     if (!this.detailEl) {
       const el = document.createElement('div');
@@ -2264,15 +2270,21 @@ export class Hud {
     this.hideTip();
     const cell = 'bag' in at
       ? $('bag-grid').querySelector<HTMLElement>(`[data-i="${at.bag}"]`)
-      : $('equip-slots').querySelector<HTMLElement>(`[data-slot="${at.slot}"]`);
+      : 'stash' in at
+        ? $('stash-grid').querySelector<HTMLElement>(`[data-s="${at.stash}"]`)
+        : $('equip-slots').querySelector<HTMLElement>(`[data-slot="${at.slot}"]`);
     const icon = cell?.cloneNode(true) as HTMLElement | undefined;
     icon?.removeAttribute('data-i');
+    icon?.removeAttribute('data-s');
     icon?.removeAttribute('data-slot');
     icon?.classList.remove('sel', 'dragging');
     this.detailEl.querySelector('.idt-top')!.innerHTML = `<div class="idt-icon">${icon?.outerHTML ?? ''}</div><div class="idt-info">${info}</div>`;
 
     const acts: { label: string; run: () => void; main?: boolean; off?: boolean }[] = [];
-    if ('slot' in at) {
+    if ('stash' in at) {
+      const i = at.stash;
+      acts.push({ label: 'ย้ายเข้ากระเป๋า', run: () => g.backend.stashTake(i, -1), main: true });
+    } else if ('slot' in at) {
       const slot = at.slot;
       if (this.forgeOpen) acts.push({ label: 'วางที่ช่างตีเหล็ก', run: () => this.forgePlace(entry), main: true });
       else acts.push({ label: 'ถอด', run: () => g.backend.unequip(slot), main: true });
@@ -2298,6 +2310,14 @@ export class Hud {
       if (this.shopOpen) acts.push({ label: isStack(entry) ? 'ขายทั้งช่อง' : 'ขาย', run: () => this.sellFromBag(i) });
       if (this.stashOpen) acts.push({ label: 'ฝากเข้าคลัง', run: () => g.backend.stashPut(i, -1) });
       if (this.market.isOpen) acts.push({ label: 'ลงขายในตลาด', run: () => this.market.bagRightClick(i) });
+      if (isStack(entry) && entry.count > 1) {
+        const free = p.bag.findIndex((x) => !x);
+        acts.push({
+          label: free < 0 ? 'แบ่งกองไม่ได้ — กระเป๋าเต็ม' : 'แบ่งกอง',
+          run: () => this.splitDrag('bag', i, $('bag-grid').querySelector<HTMLElement>(`[data-i="${free}"]`), null),
+          off: free < 0,
+        });
+      }
       acts.push({ label: 'วางลงพื้น', run: () => this.askDrop(i) });
     }
     const box = this.detailEl.querySelector<HTMLElement>('.idt-acts')!;
@@ -2424,6 +2444,12 @@ export class Hud {
   }
 
   private placeTip(tip: HTMLElement, e: MouseEvent): void {
+    // Touch: never pop up. iOS drops a tap's click when the tap's hover changes the page, so every
+    // tooltip on a tappable cell (shop, stash, market, trade, forge) would eat the tap.
+    if (isTouchMode()) {
+      tip.classList.add('hidden');
+      return;
+    }
     tip.classList.remove('hidden');
     const x = Math.min(e.clientX + 16, window.innerWidth - tip.offsetWidth - 8);
     const y = Math.min(e.clientY + 16, window.innerHeight - tip.offsetHeight - 8);

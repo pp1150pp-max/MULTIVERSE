@@ -103,3 +103,50 @@ for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
 document.addEventListener('touchmove', (e) => {
   if (e.touches.length > 1 && (e.target as HTMLElement | null)?.tagName === 'CANVAS') e.preventDefault();
 }, { passive: false });
+
+// Long press = right click, for touch players: what a right click does in a window (buy a whole stack
+// at the shop, the party row menu, a pin on the big map, ...). Only inside the HUD's windows: the game
+// canvas and the on-screen controls have their own long-press handling. The tap's click is eaten after.
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_SLOP = 10;
+let press: { id: number; x: number; y: number; timer: number } | null = null;
+let eatClick = false;
+const endPress = (): void => {
+  if (press) clearTimeout(press.timer);
+  press = null;
+};
+window.addEventListener('pointerdown', (e) => {
+  endPress();
+  if (e.pointerType === 'mouse') return;
+  const t = e.target as HTMLElement | null;
+  if (!t?.closest?.('#hud') || t.closest('#touch-ui, input, textarea, select') || (t.tagName === 'CANVAS' && !t.closest('.panel'))) return;
+  const { clientX: x, clientY: y } = e;
+  press = {
+    id: e.pointerId, x, y,
+    timer: window.setTimeout(() => {
+      press = null;
+      eatClick = true;
+      setTimeout(() => (eatClick = false), 800);
+      t.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 2 }));
+    }, LONG_PRESS_MS),
+  };
+}, true);
+window.addEventListener('pointermove', (e) => {
+  if (press && e.pointerId === press.id && Math.hypot(e.clientX - press.x, e.clientY - press.y) > LONG_PRESS_SLOP) endPress();
+}, true);
+window.addEventListener('pointerup', endPress, true);
+window.addEventListener('pointercancel', endPress, true);
+// Android fires its own contextmenu on a long press: take that one, don't fire a second.
+window.addEventListener('contextmenu', (e) => {
+  if (e.isTrusted && press) {
+    endPress();
+    eatClick = true;
+    setTimeout(() => (eatClick = false), 800);
+  }
+}, true);
+window.addEventListener('click', (e) => {
+  if (!eatClick) return;
+  eatClick = false;
+  e.stopImmediatePropagation();
+  e.preventDefault();
+}, true);
