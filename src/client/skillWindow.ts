@@ -4,12 +4,12 @@
 // A learned star turns gold with its rank, and the line leading to it lights up; a locked one is dashed with the level
 // it opens at. Lines only show the order: reaching the level is enough to learn a skill (owner 2026-11-14).
 // Clicking a star shows it in the details box with its buttons. Every click is a request: the server checks points,
-// levels, gold and combat (Sim.learnSkill / refundSkill / wearSkill) and its snapshot redraws this.
+// levels, gold and combat (Sim.learnSkill / refundSkill / resetSkills / wearSkill) and its snapshot redraws this.
 // The sky is `ui/skill_sky.png` (the owner makes it, see art_templates/skills/PROMPTS.md) over a CSS star field.
 import type { Game } from './Game';
 import { KIND_NAME, SLOT_KIND, WEAR_SLOTS, type SkillDef, type WearSlot } from '../shared/data/classes';
 import {
-  learnBlock, maxRank, pointsEarned, pointsLeft, rankedCooldown, rankedDmg, rankedMp, rankOf, refundPrice, skillParamLines, skillReach, unlockLevel,
+  learnBlock, maxRank, pointsEarned, pointsLeft, pointsSpent, rankedCooldown, rankedDmg, rankedMp, rankOf, refundPrice, skillParamLines, skillReach, unlockLevel,
 } from '../shared/skillBook';
 import { reachText } from '../shared/data/skillRanges';
 import { skillIcon } from './icons';
@@ -28,6 +28,8 @@ export class SkillWindow {
   private readonly win: HTMLElement;
   private readonly top: HTMLElement;
   private readonly wrap: HTMLElement;
+  /** "Reset all skills" over the map's corner (owner 2026-11-15). */
+  private readonly reset: HTMLButtonElement;
   private readonly detail: HTMLElement;
   /** What the window shows, so it is redrawn only when something changed. */
   private drawn = '';
@@ -49,7 +51,11 @@ export class SkillWindow {
     this.wrap = el('div', 'sk-mapwrap');
     this.detail = el('div', 'sk-detail');
     const body = el('div', 'sk-body');
-    body.append(this.wrap, this.detail);
+    this.reset = el('button', 'sk-reset', '↺ รีเซ็ตสกิลทั้งหมด');
+    this.reset.dataset.reset = '1';
+    const mapBox = el('div', 'sk-mapbox');
+    mapBox.append(this.wrap, this.reset);
+    body.append(mapBox, this.detail);
     this.win.append(head, this.top, body,
       el('div', 'hint', 'คลิกดาวเพื่อดูรายละเอียด · ถึงเลเวลแล้วเรียนได้เลย (1 แต้มต่อแรงก์) · ใส่หรือเปลี่ยนสกิลได้เมื่อไม่ได้ต่อสู้'));
     this.win.addEventListener('click', (e) => this.onClick(e));
@@ -107,6 +113,7 @@ export class SkillWindow {
       `<div class="sk-slots">${slots}</div>` +
       `<div class="sk-points"><span>แต้มคงเหลือ <b>${left}</b> / ${pointsEarned(p.level)}</span>` +
       `<span class="sk-refund">คืนแต้ม: ${price ? `${price.toLocaleString()} G/แต้ม` : 'ฟรี'}</span></div>`;
+    this.reset.disabled = pointsSpent(book) === 0;
     this.renderMap();
     this.renderDetail();
   }
@@ -200,6 +207,7 @@ export class SkillWindow {
     const btns =
       `<button data-learn="${sk.id}" ${block ? 'disabled' : ''}>${rank ? '+ อัปแรงก์' : '+ เรียน'} (1 แต้ม)</button>` +
       (rank ? `<button data-refund="${sk.id}">− คืนแต้ม</button>` : '') +
+      (rank > 1 ? `<button data-refund-all="${sk.id}">คืนแต้มสกิลนี้ทั้งหมด (${p.skillBook.ranks[sk.id]} แต้ม)</button>` : '') +
       (rank ? slots.map((s) => `<button data-wear="${s}" data-id="${sk.id}" class="${wornOn === s ? 'on' : ''}">${wornOn === s ? 'ถอดจาก' : 'ใส่'}${s === 'passive' ? 'ช่องพาสซีฟ' : `ช่อง ${SLOT_LABEL[s]}`}</button>`).join('') : '');
     this.detail.innerHTML =
       `<div class="sk-dhead"><span class="sk-ico${sk.kind === 'ult' ? ' ult' : ''}">${skillIcon(sk.id)}</span><span><b>${sk.nameTh}</b> (${sk.name})<br>` +
@@ -212,12 +220,34 @@ export class SkillWindow {
       (block && rank < maxRank() ? `<div class="sk-dwhy">${block}</div>` : '');
   }
 
+  /** " ราคา 3,000 G" for taking back n points now, or " (ฟรี)". */
+  private costText(n: number): string {
+    const price = refundPrice(this.g.player.level) * n;
+    return price ? ` ราคา ${price.toLocaleString()} G` : ' (ฟรี)';
+  }
+
   private onClick(e: MouseEvent): void {
     const t = e.target as HTMLElement;
     const b = this.g.backend;
     const p = this.g.player;
     const learn = t.closest<HTMLElement>('[data-learn]');
     if (learn) return b.learnSkill(learn.dataset.learn!);
+    // Every point of one skill, or of all skills: always asked first, with the gold it costs (owner 2026-11-15).
+    const refundAll = t.closest<HTMLElement>('[data-refund-all]');
+    if (refundAll) {
+      const id = refundAll.dataset.refundAll!;
+      const sk = p.cls.skills.find((s) => s.id === id);
+      const n = p.skillBook.ranks[id] ?? 0;
+      if (!sk || !n) return;
+      this.g.hud.confirm(`คืนแต้มทั้งหมด ${n} แต้มจาก<b>${sk.nameTh}</b>${this.costText(n)}<br>สกิลนี้จะถูกลืมและถอดออกจากช่อง`, 'คืนทั้งหมด', () => b.refundSkill(id, true));
+      return;
+    }
+    if (t.closest('[data-reset]')) {
+      const n = pointsSpent(p.skillBook);
+      if (!n) return;
+      this.g.hud.confirm(`รีเซ็ตสกิลทั้งหมด ได้คืน ${n} แต้ม${this.costText(n)}<br>ทุกสกิลจะถูกลืมและถอดออกจากช่อง`, 'รีเซ็ต', () => b.resetSkills());
+      return;
+    }
     const refund = t.closest<HTMLElement>('[data-refund]');
     if (refund) {
       const id = refund.dataset.refund!;

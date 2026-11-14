@@ -933,7 +933,8 @@ export class OnlineBackend implements Backend {
     this.send({ t: 'act', a: 'autoSettings', settings });
   }
   learnSkill(id: string): void { this.send({ t: 'act', a: 'skillLearn', id }); }
-  refundSkill(id: string): void { this.send({ t: 'act', a: 'skillRefund', id }); }
+  refundSkill(id: string, all = false): void { this.send(all ? { t: 'act', a: 'skillRefund', id, all } : { t: 'act', a: 'skillRefund', id }); }
+  resetSkills(): void { this.send({ t: 'act', a: 'skillReset' }); }
   wearSkill(slot: WearSlot, id: string | null): void { this.send({ t: 'act', a: 'skillWear', slot, id }); }
   sell(i: number, n?: number): void { this.send({ t: 'act', a: 'sell', i, n }); }
   splitInBag(from: number, to: number, n: number): void { this.send({ t: 'act', a: 'split', from, to, n }); }

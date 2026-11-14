@@ -1028,7 +1028,11 @@ export class GameWorld {
         sim.learnSkill(p, m.id);
         break;
       case 'skillRefund':
-        sim.refundSkill(p, m.id);
+        // Sim checks the skill, combat and gold; `all` counts only when it is exactly true.
+        sim.refundSkill(p, m.id, m.all === true);
+        break;
+      case 'skillReset':
+        sim.resetSkills(p);
         break;
       case 'skillWear':
         // Sim checks the slot, that the skill is learned and of the slot's kind, and that the player is out of combat.
