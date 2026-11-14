@@ -95,3 +95,42 @@ magenta (#FF00FF), no shadows on it. No readable words, no logos. Do not use pin
 | `skill_gs_hawkeye.png` | สายตาเหยี่ยว | a hawk's sharp eye merged with a red crosshair |
 | `skill_gs_triggerfinger.png` | นิ้วไกไว | a finger on a revolver trigger with amber motion blur |
 | `skill_gs_specialammo.png` | กระสุนพิเศษ | an open ammo belt of mixed special shells glowing teal |
+
+## เมจ (`skill_mg_*.png`) — เจ้าของอนุมัติตาราง 2026-11-14
+
+แนบ `icons/skill_fireball.png` เป็นตัวอย่างสไตล์ แล้วใส่ข้อความในคอลัมน์ SYMBOL แทน `<SYMBOL>` ในแม่แบบด้านบน
+สีหลักตามสาย: สาย 1 ส้มไฟ · สาย 2 เขียวพิษ · สาย 3 ฟ้าน้ำแข็ง · พาสซีฟ ม่วงอาคมกับทอง
+ลูกไฟ วงน้ำแข็ง และอุกกาบาตมีไอคอนเดิมแล้ว
+
+| ไฟล์ | ท่า | SYMBOL |
+|---|---|---|
+| `skill_mg_arcanelance.png` | หอกอาร์เคน | a long glowing orange-violet arcane spear of light flying diagonally, piercing through three small dark silhouettes in a row |
+| `skill_mg_chainlightning.png` | สายฟ้าฟาด | a bright blue-white forked lightning bolt jumping in a zigzag chain between three glowing impact sparks |
+| `skill_mg_manaburst.png` | ระเบิดมานา | a round burst of orange-gold mana energy exploding outward from a central point with radiating shards |
+| `skill_mg_flamewave.png` | คลื่นเพลิง | a wide fan-shaped wave of roaring orange flames sweeping forward |
+| `skill_mg_volatileorb.png` | ลูกแก้วระเบิด | a large unstable glowing orange glass orb with cracks of fire leaking light, about to explode |
+| `skill_mg_crystalrain.png` | ฝนผลึก | many sharp pale amber crystal shards falling from above onto a glowing circle on the ground |
+| `skill_mg_chargedblast.png` | เวทชาร์จ | a mage's staff tip gathering a swirling sphere of orange-white energy with spiralling sparks |
+| `skill_mg_starfall.png` | ดาวตก | several golden magic stars with long trails falling from a dark night sky |
+| `skill_mg_flameground.png` | พื้นเพลิง | a circle of burning orange flames rising from cracked ground |
+| `skill_mg_poisonmist.png` | หมอกพิษอาคม | a swirling cloud of toxic green mist with small skull-shaped wisps |
+| `skill_mg_searingmark.png` | ตราเผาผลาญ | a glowing green-and-orange magic sigil brand burning on a dark surface, sparks around it |
+| `skill_mg_decayring.png` | วงแหวนสลาย | a ring of corroding sickly green energy with crumbling fragments drifting off |
+| `skill_mg_thunderstorm.png` | พายุสายฟ้า | a dark storm cloud with several green-white lightning bolts striking down |
+| `skill_mg_crystalspikes.png` | หนามผลึก | a cluster of sharp green crystals planted in the ground shooting thin spikes outward |
+| `skill_mg_cursedash.png` | เถ้าถ่านคำสาป | a cursed plume of grey ash and green embers blowing forward with a faint skull shape |
+| `skill_mg_hexseed.png` | เมล็ดเวทระเบิด | a glowing green magic seed with hex runes, cracking open with light bursting out |
+| `skill_mg_firerain.png` | ฝนเพลิง | burning fireballs raining down from a red sky onto a fiery circle |
+| `skill_mg_decayfield.png` | สนามเสื่อมสลาย | a wide dark-green field of decay with withered cracks and rising toxic motes around a central rune |
+| `skill_mg_forcewave.png` | คลื่นผลัก | a pale blue shockwave ring blasting outward from a centre point, pushing debris away |
+| `skill_mg_frailcurse.png` | คำสาปเปราะบาง | a cracked shield icon covered by a violet curse rune |
+| `skill_mg_icecage.png` | กรงน้ำแข็ง | a small dark figure trapped inside a cage of icy blue crystal bars |
+| `skill_mg_gravitywell.png` | หลุมแรงโน้มถ่วง | a swirling dark violet-blue vortex pulling small rocks and sparks into its centre |
+| `skill_mg_sealveil.png` | ม่านผนึกเวท | a translucent blue-violet veil with a glowing seal rune over a broken sword |
+| `skill_mg_empowerfield.png` | สนามเร่งอาคม | a glowing golden rune circle on the ground with upward arrows of light rising from it |
+| `skill_mg_manashield.png` | โล่มานาหมู่ | a large translucent blue mana bubble shield with a glowing hexagon pattern |
+| `skill_mg_timewarp.png` | บิดเบือนเวลา | a twisted glowing blue hourglass with swirling clock hands and a spiral around it |
+| `skill_mg_manawell.png` | วงคืนพลัง | a glowing blue magic circle on the ground with sparkling mana droplets rising up |
+| `skill_mg_elementmastery.png` | ชำนาญธาตุ (พาสซีฟ) | three small orbs of fire, ice and poison orbiting a glowing golden rune |
+| `skill_mg_manasource.png` | แหล่งมานา (พาสซีฟ) | an overflowing blue crystal chalice of glowing mana |
+| `skill_mg_arcanepower.png` | พลังอาคม (พาสซีฟ) | a cracked violet arcane crystal heart radiating power, with a thin red crack |
