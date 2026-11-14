@@ -35,7 +35,13 @@ const alive = (pid: number): boolean => {
 let ctl: ControlFile;
 try {
   ctl = JSON.parse(readFileSync(FILE, 'utf8')) as ControlFile;
-} catch {
+} catch (e) {
+  // No file = no server. Any other error (e.g. run as a Linux user that may not read server/data) must not
+  // look like "nothing to stop": the server would keep running while the caller thinks it stopped.
+  if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
+    console.error(`อ่าน ${FILE} ไม่ได้ (${(e as Error).message}) — รันด้วย user ที่รัน server (บน VPS: multiverse)`);
+    process.exit(1);
+  }
   console.log(`ไม่พบ server ที่เปิดอยู่ (port ${PORT}) — ไม่มีอะไรต้องปิด`);
   process.exit(0);
 }
@@ -53,7 +59,7 @@ try {
     body: JSON.stringify({ mode: RESTART ? 'restart' : 'shutdown', seconds: SECONDS }),
   });
 } catch {
-  console.error(`ติดต่อ server (port ${PORT}, pid ${ctl.pid}) ไม่ได้ — ถ้าค้างจริงให้ปิดหน้าต่างของมันเอง`);
+  console.error(`ติดต่อ server (port ${PORT}, pid ${ctl.pid}) ไม่ได้ — ถ้าค้างจริงให้ปิดหน้าต่างของมันเอง (VPS: ดู npm run logs / journalctl -u multiverse)`);
   process.exit(1);
 }
 const data = (await res.json().catch(() => ({}))) as { seconds?: number; error?: string; note?: string };
@@ -84,4 +90,4 @@ while (alive(ctl.pid)) {
   }
   await new Promise((r) => setTimeout(r, 250));
 }
-console.log(RESTART ? 'server ปิดแล้ว — npm run online กำลังเปิดใหม่' : 'server ปิดแล้ว');
+console.log(RESTART ? 'server ปิดแล้ว — ตัวคุม (npm run online / always-on) กำลังเปิดใหม่' : 'server ปิดแล้ว');
