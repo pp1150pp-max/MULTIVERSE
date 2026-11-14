@@ -168,6 +168,25 @@ for (const s of learn.filter((x) => x.kind !== 'passive' && x.dmg > 0)) {
   ok(sim.drainEvents().some((e) => e.t === 'text' && e.text === 'ประหาร!'), 'Execute: low HP shows the bonus');
 }
 
+{
+  // Shadow Swap: no damage for the whole move, between and after its dashes too.
+  const { sim, p, m } = arena(3);
+  for (const [x, z] of [[2, 2], [-1, 3]]) {
+    const extra = Object.assign(Object.create(Object.getPrototypeOf(m)), m) as Monster;
+    extra.x = x;
+    extra.z = z;
+    sim.monsters.push(extra);
+  }
+  ok(castSkill(sim, p, sk('sw_shadowswap'), { x: 0, z: 0 }, 1), 'Shadow Swap: cast with monsters around');
+  const hp = p.hp;
+  // Its three legs end by 0.6 s; it guards until 0.86 s.
+  for (let i = 0; i < 24; i++) {
+    sim.step(TICK, () => IDLE_INTENT);
+    sim.hitPlayer(m, p, 5, {});
+  }
+  ok(p.hp === hp, `Shadow Swap: no damage taken during the whole move (${hp - p.hp})`);
+}
+
 // ---------------------------------------------------------- passives
 {
   const { sim, p, m } = arena();

@@ -267,7 +267,10 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
         return false;
       }
       const step = 0.22;
-      p.invulnT = Math.max(p.invulnT, targets.length * step + 0.2);
+      // No damage for the whole move: each leg's dash sets its own short invulnerability, so it is put back after.
+      const end = sim.time + targets.length * step + 0.2;
+      const guard = () => { p.invulnT = Math.max(p.invulnT, end - sim.time); };
+      guard();
       targets.forEach((m, i) => {
         sim.schedule(i * step, () => {
           if (!p.alive || !m.alive) return;
@@ -275,6 +278,7 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
           const dz = m.z - p.z;
           const d = Math.hypot(dx, dz);
           if (d > m.radius + 0.9) p.startDash(dx, dz, d - m.radius - 0.8, 0.12, 'dash');
+          guard();
           sim.schedule(0.13, () => {
             if (!p.alive || !m.alive) return;
             const a = Math.atan2(m.z - p.z, m.x - p.x);
