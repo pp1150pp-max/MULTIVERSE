@@ -63,6 +63,9 @@ export const COS_TUNE_FIELDS: Record<TunedSlot, Record<string, TuneField>> = {
     underBehind: num(0, 0.5, 0.01, 'ระยะวาดหลังผู้ขี่ ตอนอยู่ใต้เท้า'),
     board: bool('ท่ายืนบนบอร์ด (ปิด = นั่งคร่อม)'),
     anim: num(0, 25, 0.5, 'ความเร็วขยับขา'),
+    riderSword: num(0.8, 1.8, 0.01, 'ขยายตอนขี่ (คน + สัตว์ขี่ + ปีก): นักดาบ (คูณ)'),
+    riderMage: num(0.8, 1.8, 0.01, 'ขยายตอนขี่ (คน + สัตว์ขี่ + ปีก): เมจ (คูณ)'),
+    riderGunslinger: num(0.8, 1.8, 0.01, 'ขยายตอนขี่ (คน + สัตว์ขี่ + ปีก): Gunslinger (คูณ)'),
   },
   pet: {
     h: num(0.3, 2.5, 0.05, 'ขนาด (ความสูงภาพ)'),
@@ -72,6 +75,9 @@ export const COS_TUNE_FIELDS: Record<TunedSlot, Record<string, TuneField>> = {
     float: num(0, 2.5, 0.05, 'ความสูงลอย (ตอนบิน)'),
     bob: num(0, 0.5, 0.01, 'ระยะลอยขึ้นลง (ตอนบิน)'),
     anim: num(0, 25, 0.5, 'ความเร็วขยับ'),
+    standFront: bool('ตอนเจ้าของยืนนิ่ง: มายืนเฉียงด้านหน้า (ฝั่งกล้อง) ไม่ให้ตัวละครบัง'),
+    frontDist: num(0, 2, 0.05, 'ยืนด้านหน้า: ระยะมาทางกล้อง'),
+    frontSide: num(0, 2, 0.05, 'ยืนด้านหน้า: ระยะด้านข้างบนจอ'),
   },
   aura: {
     size: num(0.5, 5, 0.05, 'ขนาดวงบนพื้น'),
@@ -222,11 +228,15 @@ function baseDefaults(id: string, slot: TunedSlot): TuneValues | undefined {
       return {
         h: m?.h ?? 1.35, seat: m?.seat ?? 0.55, shift: 0, headOnLift: 0.18, front: 0.1, cutFrontDiag: true, cutSide: true, z: 0, cutBackDiag: true, splitFront: 0.1, frontDiag: true, behind: 0.1,
         under: m?.under ?? false, underBehind: 0.05, board: m?.board ?? false, anim: 11,
+        // Owner 2026-11-14: the sitting pictures are drawn smaller than the standing ones, by class; riding
+        // grows the rider, the mount and the wings together so the rider looks about NPC size.
+        riderSword: 1.05, riderMage: 1.25, riderGunslinger: 1.2,
       };
     }
     case 'pet': {
       const fly = PET_FLYING.has(id);
-      return { h: 0.8, back: 1.1, side: 0.6, fly, float: 0.8, bob: 0.1, anim: fly ? 7 : 10 };
+      // Owner 2026-11-14: standing still it comes round to the camera side, so the owner doesn't hide it.
+      return { h: 0.8, back: 1.1, side: 0.6, fly, float: 0.8, bob: 0.1, anim: fly ? 7 : 10, standFront: true, frontDist: 0.8, frontSide: 0.8 };
     }
     case 'aura':
       return { size: 2.1, shift: 0, alpha: 0.55, pulse: 0.06, sparks: 4, sparkSize: 0.3, stepEvery: 0.28, stepSize: 0.32 };

@@ -15,7 +15,7 @@ import { registerOrbItems } from '../shared/orbItems';
 import { CARD_DEFAULTS, CARD_FX, CARD_FX_MAX, CARD_FX_NAME, CARD_GROUPS, CARD_GROUP_NAME, CARD_NUM_FIELDS, CARD_RARITY_NAME, cardArt, cardName, type CardFx, type CardGroup, type CardId } from '../shared/data/cards';
 import { CARD_FX_LIMIT, type CardTuning } from '../shared/cardTuning';
 import type {
-  AdminAccountDetail, AdminAccountsResponse, AdminCardTune, AdminCosLook, AdminFeature, AdminOrbItems, AdminOrbLook, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, SessionPage, SessionSort, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AdminShutdownText, AuditRow,
+  AdminAccountDetail, AdminAccountsResponse, AdminCardTune, AdminCosLook, AdminFeature, AdminOrbItems, AdminOrbLook, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, SessionPage, SessionSort, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AdminShutdownText, AdminSnapDelta, AuditRow,
 } from '../shared/admin';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { applyBalance, checkBalance } from '../shared/balance';
@@ -288,7 +288,7 @@ function tabAllowed(t: Tab): boolean {
     case 'orbs': return f.includes('orbPreview');
     case 'cos': return f.includes('cosPreview');
     case 'cosManage': return f.includes('cosManage');
-    case 'server': return me.role === 'owner' || f.includes('backup') || f.includes('shutdownText');
+    case 'server': return me.role === 'owner' || f.includes('backup') || f.includes('shutdownText') || f.includes('netDelta');
   }
 }
 
@@ -1546,7 +1546,7 @@ const ACTION_TH: Record<string, string> = {
   level: 'ตั้งเลเวล', gold: 'ทอง', items: 'เสกไอเทม', kick: 'เตะ', teleport: 'ย้ายโซน', grant: 'ให้สิทธิ์', revoke: 'ถอนสิทธิ์',
   server: 'Server', password: 'ตั้งรหัสผ่าน', ban: 'แบน', unban: 'ปลดแบน', broadcast: 'ประกาศ', backup: 'สำรองข้อมูล',
   'delete-account': 'ลบบัญชี', 'delete-character': 'ลบตัวละคร', 'chat-delete': 'ลบแชท',
-  'shutdown-text': 'ข้อความเตือนปิด server', 'orb-look': 'หน้าตาลูกแก้วตีบวก', 'cos-look': 'ค่าของแต่งตัว', 'cos-shop': 'ซ่อน/ราคาของแต่งตัว', 'orb-items': 'ลูกแก้วในร้านค้า', balance: 'ปรับสมดุล', daily: 'ล็อกอินรายวัน', mail: 'ส่งจดหมาย', mailRecall: 'ดึงจดหมายกลับ',
+  'shutdown-text': 'ข้อความเตือนปิด server', 'snap-delta': 'ลดขนาด snapshot', 'orb-look': 'หน้าตาลูกแก้วตีบวก', 'cos-look': 'ค่าของแต่งตัว', 'cos-shop': 'ซ่อน/ราคาของแต่งตัว', 'orb-items': 'ลูกแก้วในร้านค้า', balance: 'ปรับสมดุล', daily: 'ล็อกอินรายวัน', mail: 'ส่งจดหมาย', mailRecall: 'ดึงจดหมายกลับ',
   'report-status': 'สถานะรายงาน', 'report-ban': 'ห้ามรายงาน', 'report-unban': 'ปลดห้ามรายงาน',
   'cosmetic-give': 'ให้ Cosmetics', 'cosmetic-take': 'ยึด Cosmetics คืน',
 };
@@ -1592,6 +1592,7 @@ async function renderServer(): Promise<void> {
   // Restart / shut down first: it is what the owner comes here for in a hurry (the backup list is long).
   const restart = me?.role === 'owner' ? renderRestart() : null;
   if (can('shutdownText')) view.append(shutdownTextCard());
+  if (can('netDelta')) view.append(snapDeltaCard());
   if (can('backup')) view.append(backupCard());
   await restart;
 }
@@ -2025,6 +2026,55 @@ async function openAccount(id: number, note?: { text: string; ok: boolean; passw
 const BACKUP_LIST_SHORT = 5;
 
 /** The countdown banner wording for a restart and a shutdown (used by every way of stopping). */
+/** Snapshot delta: the on/off switch and its counters (JSON before compression). */
+function snapDeltaCard(): HTMLElement {
+  const msg = h('div', { class: 'msg' });
+  const status = h('div', { style: 'margin-bottom:8px' });
+  const numbers = h('div', { class: 'muted', style: 'line-height:1.7' });
+  const toggle = h('button', { class: 'primary' }, '…');
+  const refresh = h('button', { class: 'small' }, 'รีเฟรชตัวเลข');
+  let state: AdminSnapDelta | null = null;
+  const kb = (n: number) => `${fmt(Math.round(n / 1024))} KB`;
+  const load = (st: AdminSnapDelta) => {
+    state = st;
+    status.textContent = st.on ? 'สถานะ: เปิดอยู่ — ส่งค่าที่แทบไม่เปลี่ยนเฉพาะตอนเปลี่ยน' : 'สถานะ: ปิดอยู่ — ส่ง snapshot เต็มทุกครั้ง (แบบเดิม)';
+    toggle.textContent = st.on ? 'ปิด (ส่งเต็มทุกครั้ง)' : 'เปิด';
+    const s = st.stats;
+    const whole = s.sentBytes + s.savedBytes;
+    const pct = whole ? Math.round((s.savedBytes / whole) * 1000) / 10 : 0;
+    numbers.replaceChildren(
+      h('div', {}, `นับตั้งแต่ ${time(s.since)} · ส่ง snapshot ${fmt(s.snaps)} ครั้ง (แบบลดขนาด ${fmt(s.deltaSnaps)})`),
+      h('div', {}, `ข้อมูล JSON ที่ส่ง ${kb(s.sentBytes)} · ประหยัดได้ ${kb(s.savedBytes)} (${pct}% ของ JSON ก่อนบีบอัด — เน็ตจริงหลังบีบอัดลดน้อยกว่านี้)`),
+      h('div', {}, `ส่งค่าของตัวเองใหม่ ${fmt(s.meResends)} ครั้ง · ส่งข้อมูลหน้าตาผู้เล่น/มอนใหม่ ${fmt(s.lookResends)} ครั้ง`),
+      h('div', {}, `ผู้เล่นออนไลน์ตอนนี้: รองรับการลดขนาด ${fmt(st.clients.delta)} คน · แท็บเก่าที่ได้แบบเต็ม ${fmt(st.clients.full)} คน`),
+    );
+  };
+  const fail = (e: Error) => {
+    msg.className = 'msg bad';
+    msg.textContent = e.message;
+  };
+  toggle.onclick = async () => {
+    if (!state) return;
+    toggle.disabled = true;
+    try {
+      load(await api<AdminSnapDelta>('POST', '/admin/snap-delta', { on: !state.on }));
+      msg.className = 'msg ok';
+      msg.textContent = 'บันทึกแล้ว — มีผลทันทีกับทุกคน (ตัวนับเริ่มใหม่)';
+    } catch (e) {
+      fail(e as Error);
+    } finally {
+      toggle.disabled = false;
+    }
+  };
+  const reload = () => void api<AdminSnapDelta>('GET', '/admin/snap-delta').then(load, fail);
+  refresh.onclick = reload;
+  reload();
+  return h('div', { class: 'card' }, h('h2', {}, 'ลดขนาด snapshot (เน็ตขาออก)'),
+    h('div', { class: 'muted', style: 'margin:-6px 0 10px' },
+      'ค่าที่แทบไม่เปลี่ยน (ตัวกรองของ ตั้งค่า Auto สเตตัส สกิล เควส · ชื่อ/คลาส/ของแต่งตัวของผู้เล่นอื่น · ชนิด/เลเวลมอน) ส่งเฉพาะตอนเปลี่ยน · เข้าเกม/เปลี่ยนแมพ/CH ได้ครบเสมอ · ปิดไว้ = ส่งเต็มทุกครั้งแบบเดิม (ใช้ถ้าสงสัยว่าภาพในเกมเพี้ยน)'),
+    status, numbers, h('div', { class: 'row', style: 'align-items:center;margin-top:8px' }, refresh, h('span', { style: 'flex:1' }), toggle), msg);
+}
+
 function shutdownTextCard(): HTMLElement {
   const msg = h('div', { class: 'msg' });
   const save = h('button', { class: 'primary' }, 'บันทึก');

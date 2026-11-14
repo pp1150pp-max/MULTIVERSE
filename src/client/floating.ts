@@ -14,7 +14,7 @@ import type { RestSpot } from '../shared/sim/terrain';
 import type { CosmeticDef } from '../shared/data/cosmetics';
 import { shownCos } from './cosLook';
 import { isTouchMode } from './touch/device';
-import { seatOf } from './cosmeticViews';
+import { rideScale, seatOf } from './cosmeticViews';
 
 interface Num { el: HTMLDivElement; x: number; y: number; z: number; t: number; life: number; height: number; dx: number; dy: number; pop: number }
 interface Plate { el: HTMLDivElement; fill: HTMLDivElement; title?: HTMLDivElement; name?: HTMLDivElement; cos?: string }
@@ -462,5 +462,5 @@ function paintCos(el: HTMLElement, set: CosmeticDef | undefined): void {
 
 /** World height just over a character's head, where its nameplate and chat bubble go (higher on a mount). */
 function headY(p: Player): number {
-  return p.topY + 0.35 + seatOf(p);
+  return p.topY * rideScale(p) + 0.35 + seatOf(p);
 }

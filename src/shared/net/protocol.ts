@@ -182,7 +182,11 @@ export type ActionMsg =
 export const WS_CLOSE_QUIT = 4000;
 
 export type ClientMsg =
-  | { t: 'join'; token: string; characterId: number }
+  /**
+   * `delta: 1` = this browser understands snapshots that leave out what it already has (see
+   * PlayerSnap / MonsterSnap / PrivateSnap). Without it (a tab opened before the update) every snapshot is whole.
+   */
+  | { t: 'join'; token: string; characterId: number; delta?: 1 }
   | InputMsg
   | ActionMsg
   /** `ch: 'party'` = to the party only; `ch: 'whisper'` = only to the online character named `to`. */
@@ -199,11 +203,16 @@ export type ClientMsg =
 
 // ------------------------------------------------------------ server → client
 
-/** Another player (or yourself) as everyone sees them. */
+/**
+ * Another player (or yourself) as everyone sees them.
+ * The look bundle (name, cls, lv, maxHp, aura, orbs, cos, mnt, toad) comes all together, and with
+ * snapshot delta only when this browser does not have it yet (new in view) or some of it changed.
+ * `name` missing = no bundle this time: keep the one you have. Inside a bundle, missing aura/orbs/… = none.
+ */
 export interface PlayerSnap {
-  id: number; name: string; cls: ClassId; lv: number;
+  id: number; name?: string; cls?: ClassId; lv?: number;
   x: number; z: number; fx: number; fz: number; mv: boolean;
-  alive: boolean; hp: number; maxHp: number;
+  alive: boolean; hp: number; maxHp?: number;
   /** Dashing: 'dash' | 'charge', or 0 when not. */
   dash: 'dash' | 'charge' | 0;
   /** Enhancement aura tier 1–4 (missing = none). */
@@ -218,8 +227,9 @@ export interface PlayerSnap {
   toad?: 1;
 }
 
+/** The look bundle (def, lv, mhp) works like PlayerSnap's: `def` missing = keep what you have. */
 export interface MonsterSnap {
-  id: number; def: string; lv: number;
+  id: number; def?: string; lv?: number;
   x: number; z: number; fx: number; fz: number; mv: boolean;
   alive: boolean; deadT: number; hp: number;
   /** Max HP as the server has it (zone boosts, the hub's visitors from other maps, boss HP per player). */
@@ -240,10 +250,14 @@ export interface LootSnap {
   forever?: boolean;
 }
 
-/** Only sent to the player it belongs to. */
+/**
+ * Only sent to the player it belongs to. potSel, lootFilter, autoSettings, stats, skills, bossKills,
+ * quests, gearQuests and gearDone: with snapshot delta only when they changed (missing = keep yours);
+ * the first snapshot after joining or a zone / channel change always has them all.
+ */
 export interface PrivateSnap {
   hp: number; mp: number; exp: number; level: number; gold: number;
-  potSel: PotionSelect; lootFilter: LootFilter; autoSettings: AutoSettings; stats: Stats;
+  potSel?: PotionSelect; lootFilter?: LootFilter; autoSettings?: AutoSettings; stats?: Stats;
   /** Gate bosses this character has killed (BOSS_GATES). */
   bossKills?: string[];
   /** The Seeker's key quests taken: boss id → kills so far. */
@@ -256,7 +270,7 @@ export interface PrivateSnap {
   /** Cooldown left by skill id ('dash' for the dash). */
   cd: Record<string, number>; potCd: number; restCd: number;
   /** Skills learned and worn. */
-  skills: SkillBook;
+  skills?: SkillBook;
   /** Seconds left on a return-scroll cast (left out when not casting). */
   castT?: number;
   /** Buff scrolls running: seconds of play left on each (left out when none). */

@@ -96,7 +96,7 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
       ws.close();
     };
     const timer = setTimeout(() => fail('server ไม่ตอบกลับ ลองใหม่อีกครั้ง'), 10_000);
-    ws.onopen = () => ws.send(JSON.stringify({ t: 'join', token, characterId } satisfies ClientMsg));
+    ws.onopen = () => ws.send(JSON.stringify({ t: 'join', token, characterId, delta: 1 } satisfies ClientMsg));
     ws.onmessage = (e) => {
       const m = JSON.parse(e.data as string) as ServerMsg;
       if (m.t === 'kick') return fail(m.msg);
@@ -213,6 +213,9 @@ export class OnlineBackend implements Backend {
   private pendingDash = false;
   private filterPending = false;
   private autoSetPending = false;
+  /** The server's lootFilter / autoSettings that came while our own change was pending. */
+  private heldFilter: LootFilter | null = null;
+  private heldAutoSettings: AutoSettings | null = null;
   private pendingPotion: 'hp' | 'mp' | null = null;
   private pendingRecall = false;
   private enhanceReq = 0;
@@ -261,7 +264,8 @@ export class OnlineBackend implements Backend {
     this.terrain = new Terrain(this.zone);
     const mine = first.players.find((p) => p.id === myId)!;
     const data: CharacterData = {
-      name: mine.name, classId: mine.cls, level: first.me.level, exp: first.me.exp, gold: first.me.gold,
+      // The first snapshot after joining always carries everything (look bundle included).
+      name: mine.name!, classId: mine.cls!, level: first.me.level, exp: first.me.exp, gold: first.me.gold,
       potSel: first.me.potSel, lootFilter: first.me.lootFilter, autoSettings: first.me.autoSettings, bossKills: first.me.bossKills,
       equipment: first.me.inv?.equipment ?? {}, bag: first.me.inv?.bag ?? [], zone: this.zone.id,
       buyback: first.me.inv?.buyback, buybackLeft: first.me.buybackLeft, skills: first.me.skills,
@@ -563,10 +567,15 @@ export class OnlineBackend implements Backend {
     const seenP = new Set<number>();
     for (const ps of s.players) {
       seenP.add(ps.id);
+      // The look bundle (name … toad) comes all together, and with snapshot delta only when it is new
+      // to us or changed: `name` missing = keep what we have.
+      const look = ps.name !== undefined;
       let p = this.playerMap.get(ps.id);
       if (!p) {
+        // The server always sends the bundle for someone new in view; without it there is nothing to draw.
+        if (!look || !ps.cls) continue;
         p = new Player(ps.id, NO_SIM, {
-          name: ps.name, classId: ps.cls, level: ps.lv, exp: 0, gold: 0, equipment: {}, bag: [],
+          name: ps.name!, classId: ps.cls, level: ps.lv ?? 1, exp: 0, gold: 0, equipment: {}, bag: [],
         });
         p.x = ps.x;
         p.z = ps.z;
@@ -574,20 +583,22 @@ export class OnlineBackend implements Backend {
       }
       p.alive = ps.alive;
       p.dashT = ps.dash ? 1 : 0;
-      p.aura = ps.aura ?? 0;
-      p.toadT = ps.toad ? 1 : 0;
-      setOrbs(p, ps.orbs);
-      setCos(p, ps.cos);
-      p.mounted = ps.mnt === 1;
+      if (look) {
+        p.aura = ps.aura ?? 0;
+        p.toadT = ps.toad ? 1 : 0;
+        setOrbs(p, ps.orbs);
+        setCos(p, ps.cos);
+        p.mounted = ps.mnt === 1;
+      }
       if (ps.dash) p.dashKind = ps.dash;
       if (p === this.me) {
         this.applyMine(s, ps.x, ps.z, ps.fx, ps.fz, ps.mv);
         continue;
       }
       this.glide(p, ps.x, ps.z, p);
-      p.level = ps.lv;
+      if (ps.lv !== undefined) p.level = ps.lv;
       p.hp = ps.hp;
-      p.stats.maxHp = ps.maxHp;
+      if (ps.maxHp !== undefined) p.stats.maxHp = ps.maxHp;
       p.faceX = ps.fx;
       p.faceZ = ps.fz;
       p.moving = ps.mv;
@@ -606,10 +617,11 @@ export class OnlineBackend implements Backend {
       seenM.add(ms.id);
       let m = this.monsterMap.get(ms.id);
       if (!m) {
-        const def = MONSTERS[ms.def];
+        // `def` missing = no look bundle (snapshot delta); the server always sends it for a monster new in view.
+        const def = ms.def === undefined ? undefined : MONSTERS[ms.def];
         if (!def) continue;
         // The zone's boost too, so the HP bar's maximum matches the server's.
-        m = new Monster(ms.id, def, ms.lv, NO_AREA, ms.x, ms.z, this.zone.monsterBoost);
+        m = new Monster(ms.id, def, ms.lv ?? 1, NO_AREA, ms.x, ms.z, this.zone.monsterBoost);
         this.monsterMap.set(ms.id, m);
       }
       this.glide(m, ms.x, ms.z, m);
@@ -686,10 +698,19 @@ export class OnlineBackend implements Backend {
     if (pv.tut) me.tut = pv.tut;
     me.level = pv.level;
     me.gold = pv.gold;
-    me.potSel = { ...pv.potSel };
-    if (!this.filterPending) me.lootFilter = pv.lootFilter;
-    if (!this.autoSetPending && pv.autoSettings) me.autoSettings = pv.autoSettings;
-    me.stats = pv.stats;
+    // These come only when they changed (snapshot delta): missing = keep ours.
+    if (pv.potSel) me.potSel = { ...pv.potSel };
+    // Right after our own change, keep the server's answer aside instead of flipping back to an older
+    // value; it is put in when the wait ends (it may be the only copy we get, see setLootFilter).
+    if (pv.lootFilter) {
+      if (this.filterPending) this.heldFilter = pv.lootFilter;
+      else me.lootFilter = pv.lootFilter;
+    }
+    if (pv.autoSettings) {
+      if (this.autoSetPending) this.heldAutoSettings = pv.autoSettings;
+      else me.autoSettings = pv.autoSettings;
+    }
+    if (pv.stats) me.stats = pv.stats;
     me.cd = { ...pv.cd };
     if (pv.skills) me.skillBook = cleanSkillBook(me.cls.id, pv.skills);
     me.potCd = pv.potCd;
@@ -892,13 +913,23 @@ export class OnlineBackend implements Backend {
     // Show the change right away; snapshots sent before the server saw it would otherwise flip it back.
     this.me.lootFilter = filter;
     this.filterPending = true;
-    setTimeout(() => (this.filterPending = false), 800);
+    this.heldFilter = null;
+    setTimeout(() => {
+      this.filterPending = false;
+      if (this.heldFilter) this.me.lootFilter = this.heldFilter;
+      this.heldFilter = null;
+    }, 800);
     this.send({ t: 'act', a: 'lootFilter', filter });
   }
   setAutoSettings(settings: AutoSettings): void {
     this.me.autoSettings = settings;
     this.autoSetPending = true;
-    setTimeout(() => (this.autoSetPending = false), 800);
+    this.heldAutoSettings = null;
+    setTimeout(() => {
+      this.autoSetPending = false;
+      if (this.heldAutoSettings) this.me.autoSettings = this.heldAutoSettings;
+      this.heldAutoSettings = null;
+    }, 800);
     this.send({ t: 'act', a: 'autoSettings', settings });
   }
   learnSkill(id: string): void { this.send({ t: 'act', a: 'skillLearn', id }); }

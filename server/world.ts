@@ -13,15 +13,16 @@ import { upgradeItem } from '../src/shared/data/items';
 import { POTION_SIZES } from '../src/shared/data/potions';
 import { REROLL_KINDS } from '../src/shared/data/reroll';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../src/shared/sim/types';
+import type { Monster } from '../src/shared/sim/Monster';
 import { AUTO_HINT_COLOR, autoBlocked, AutoPlay, type AutoWorld } from '../src/shared/sim/autoplay';
 import {
   CHAT_MAX, GPU_NAME_MAX, shutdownKick, type ShutdownMode, INTEREST_RADIUS, PING_MS, isSoftwareRenderer, SNAPSHOT_HZ, TICK_HZ, WS_PATH, r2,
-  type ClientMsg, type InputMsg, type ActionMsg, type PrivateSnap, type ServerMsg, type SnapshotMsg, WS_CLOSE_QUIT,
+  type ClientMsg, type InputMsg, type ActionMsg, type PrivateSnap, type PlayerSnap, type MonsterSnap, type ServerMsg, type SnapshotMsg, WS_CLOSE_QUIT,
 } from '../src/shared/net/protocol';
 import { EQUIP_SLOTS, RARITIES, type Vec2 } from '../src/shared/types';
 import type { SkillSlot } from '../src/shared/data/classes';
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
-import type { AdminOnline, AdminOnlineRow } from '../src/shared/admin';
+import type { AdminOnline, AdminOnlineRow, AdminSnapDelta, SnapDeltaStats } from '../src/shared/admin';
 import type { OrbLook } from '../src/shared/orbLook';
 import type { CosTuning } from '../src/shared/cosTuning';
 import { banMessage } from '../src/shared/api';
@@ -124,6 +125,13 @@ interface Session {
   /** Cosmetic ids the account owns (guests: none), and what the last snapshot sent of it. */
   cosOwned: string[];
   lastCosOwned: string;
+  /** The browser understands snapshots that leave out what it already has (join `delta: 1`). */
+  delta: boolean;
+  /** Snapshot delta (SNAP_DELTA_KEY): the JSON of each STATIC_ME field the last sent snapshot carried. */
+  lastMe: Map<string, string>;
+  /** Players / monsters in the last sent snapshot (id → the JSON of their look bundle). */
+  seenP: Map<number, string>;
+  seenM: Map<number, string>;
   outbox: SimEvent[];
   lastChatAt: number;
   /** When this session last used the market (performance.now()), to keep searches from flooding the server. */
@@ -295,10 +303,14 @@ export class GameWorld {
   /** Socket bytesWritten at the last perf report, per connection; and bytes of connections closed since. */
   private readonly wireAt = new WeakMap<WebSocket, number>();
   private wireGone = 0;
+  /** Snapshots leave out what the browser already has (admin switch, settings key SNAP_DELTA_KEY; on unless set to '0'). */
+  private snapDelta: boolean;
+  private deltaStats: SnapDeltaStats = freshDeltaStats();
   /** Cosmetics hidden from the in-game window (src/shared/cosShop.ts): can't be put on again, the worn ones stay. */
   private cosHidden: Set<string>;
 
   constructor(private readonly db: Db, http: HttpServer) {
+    this.snapDelta = db.getSetting(SNAP_DELTA_KEY) !== '0';
     this.cosHidden = new Set(cosHiddenIds(db.cosShop()));
     const wss = new WebSocketServer({ server: http, path: WS_PATH, maxPayload: 16 * 1024, perMessageDeflate: WS_DEFLATE });
     wss.on('connection', (ws, req) => this.onConnection(ws, req));
@@ -449,10 +461,16 @@ export class GameWorld {
   // ------------------------------------------------------------ connections
 
   private send(ws: WebSocket, msg: ServerMsg): void {
-    if (ws.readyState !== WebSocket.OPEN) return;
+    this.sendLen(ws, msg);
+  }
+
+  /** send(), returning how many characters of JSON went out (0 when the connection is not open). */
+  private sendLen(ws: WebSocket, msg: ServerMsg): number {
+    if (ws.readyState !== WebSocket.OPEN) return 0;
     const text = JSON.stringify(msg);
     this.perf.sent(text.length);
     ws.send(text);
+    return text.length;
   }
 
   /** Bytes written to a connection's socket since the last perf report (after compression, with frame headers). */
@@ -491,7 +509,7 @@ export class GameWorld {
       if (!msg || typeof msg !== 'object') return;
       if (!session) {
         if (msg.t !== 'join') return;
-        session = this.join(ws, msg.token, msg.characterId, ip);
+        session = this.join(ws, msg.token, msg.characterId, ip, msg.delta === 1);
         clearTimeout(timeout);
         return;
       }
@@ -512,7 +530,7 @@ export class GameWorld {
     ws.on('error', () => ws.close());
   }
 
-  private join(ws: WebSocket, token: unknown, characterId: unknown, ip: string): Session | null {
+  private join(ws: WebSocket, token: unknown, characterId: unknown, ip: string, delta = false): Session | null {
     const acc = typeof token === 'string' ? this.db.sessionAccount(token) : undefined;
     const charId = num(characterId, -1);
     let data = acc ? this.db.loadCharacter(acc.id, charId) : undefined;
@@ -574,7 +592,7 @@ export class GameWorld {
     const s: Session = {
       ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId, sim, player,
       move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null, recall: false,
-      auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', lastTut: '', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, saveDue: null,
+      auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', lastTut: '', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', delta, lastMe: new Map(), seenP: new Map(), seenM: new Map(), outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, saveDue: null,
       ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, deflate: ws.extensions.includes('permessage-deflate'), staff: !acc.guest && ['owner', 'gm'].includes(this.db.adminRole(acc.id) ?? ''), pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity, blockTrades: false,
@@ -914,6 +932,10 @@ export class GameWorld {
   }
 
   private onAction(s: Session, m: ActionMsg): void {
+    // Snapshot delta: the browser may have changed its own copy already (loot filter, Auto settings…).
+    // If we refuse or clamp that back to what we had, nothing "changed" here and it would stay wrong;
+    // so every action gets the next snapshot's PrivateSnap fields once, whatever happened.
+    s.lastMe.clear();
     const p = s.player;
     const sim = s.sim;
     const i = num((m as { i?: unknown }).i, -1);
@@ -1760,7 +1782,9 @@ export class GameWorld {
 
     const tSnap = performance.now();
     if (++this.tickN % Math.round(TICK_HZ / SNAPSHOT_HZ) === 0) {
-      for (const s of this.sessions) this.sendSnapshot(s);
+      // Each player's / monster's look bundle is worked out once per round, not once per viewer.
+      const looks: Looks = new Map();
+      for (const s of this.sessions) this.sendSnapshot(s, looks);
     }
     const tSave = performance.now();
     for (const s of this.sessions) {
@@ -1828,6 +1852,8 @@ export class GameWorld {
     s.epoch++;
     s.lastInv = '';
     s.lastStash = '';
+    // The browser starts the new zone with empty lists: everything goes again.
+    forgetSent(s);
     // Waking up in town after dying in a zone: the old zone's `revived` and its EXP-loss line must
     // still reach the browser (it closes the death screen), so they move along under the new id.
     s.outbox = s.outbox.flatMap((ev): SimEvent[] => {
@@ -1840,7 +1866,7 @@ export class GameWorld {
     console.log(`[world] ${s.username} → ${dest.zone.name}${chan && hasChannels(chan.zone) ? ` CH ${chan.ch}` : ''}`);
   }
 
-  private sendSnapshot(s: Session): void {
+  private sendSnapshot(s: Session, looks: Looks): void {
     // A player whose download is slower than our snapshots would otherwise get an ever longer queue:
     // everything (pongs, chat) waits behind old positions and the delay only grows. Skip snapshots
     // instead; nothing is lost, since the next one carries the full state and keeps the events,
@@ -1860,11 +1886,45 @@ export class GameWorld {
     const inv = JSON.stringify([p.equipment, p.bag, p.buyback]);
     const me: PrivateSnap = {
       hp: r2(p.hp), mp: r2(p.mp), exp: p.exp, level: p.level, gold: p.gold,
-      potSel: p.potSel, lootFilter: p.lootFilter, autoSettings: p.autoSettings, bossKills: p.bossKills, quests: p.quests, gearQuests: p.gearQuests, gearDone: p.gearDone, stats: p.stats, cd: p.cd, skills: p.skillBook, potCd: r2(p.potCd), restCd: r2(Math.max(0, p.restCd)), castT: p.castT > 0 ? r2(p.castT) : undefined,
+      cd: p.cd, potCd: r2(p.potCd), restCd: r2(Math.max(0, p.restCd)), castT: p.castT > 0 ? r2(p.castT) : undefined,
       ...(Object.keys(p.buffs).length ? { buffs: roundBuffs(p.buffs) } : {}),
       // Slowed (the Bog Witch's poison): the browser walks slower too, or its moves would be refused.
       ...(p.slowT > 0 && p.slowAmt > 0 ? { slow: p.slowAmt } : {}),
       serverMoves: serverMoves(p) || !!s.auto, epoch: s.epoch, ack: s.lastSeq, buybackLeft: Math.round(p.buybackLeft),
+    };
+    // Fields that hardly ever change: with delta on, only when they differ from what this browser last got.
+    const delta = this.snapDelta && s.delta;
+    if (!delta) forgetSent(s);
+    const st = this.deltaStats;
+    const statics: Pick<PrivateSnap, StaticMeKey> = {
+      potSel: p.potSel, lootFilter: p.lootFilter, autoSettings: p.autoSettings, stats: p.stats, skills: p.skillBook,
+      bossKills: p.bossKills, quests: p.quests, gearQuests: p.gearQuests, gearDone: p.gearDone,
+    };
+    for (const k of STATIC_ME) {
+      if (!delta) {
+        (me as unknown as Record<string, unknown>)[k] = statics[k];
+        continue;
+      }
+      const json = JSON.stringify(statics[k]) ?? '';
+      if (s.lastMe.get(k) === json) st.savedBytes += k.length + 4 + json.length;
+      else {
+        s.lastMe.set(k, json);
+        (me as unknown as Record<string, unknown>)[k] = statics[k];
+        st.meResends++;
+      }
+    }
+    const nextP = new Map<number, string>();
+    const nextM = new Map<number, string>();
+    /** The look bundle when this browser needs it (new in view, or changed), nothing otherwise. */
+    const withLook = <T extends object>(seen: Map<number, string>, next: Map<number, string>, id: number, look: Look): Partial<T> => {
+      if (!delta) return look.look as T;
+      next.set(id, look.json);
+      if (seen.get(id) === look.json) {
+        st.savedBytes += look.json.length;
+        return {};
+      }
+      st.lookResends++;
+      return look.look as T;
     };
     if (inv !== s.lastInv) {
       s.lastInv = inv;
@@ -1892,21 +1952,18 @@ export class GameWorld {
       here: sim.players.length,
       ...(s.staff ? { online: this.sessions.size } : {}),
       me,
-      players: sim.players.filter(near).map((o) => ({
-        id: o.id, name: o.name, cls: o.cls.id, lv: o.level,
+      players: sim.players.filter(near).map((o): PlayerSnap => ({
+        id: o.id,
         x: r2(o.x), z: r2(o.z), fx: r2(o.faceX), fz: r2(o.faceZ), mv: o.moving,
-        alive: o.alive, hp: Math.round(o.hp), maxHp: Math.round(o.maxHp), dash: o.isDashing ? o.dashKind : 0,
-        ...(o.aura ? { aura: o.aura } : {}),
-        ...(o.toadT > 0 ? { toad: 1 as const } : {}),
-        // Worked out by Player.recompute from the server's own copy of the gear (orbCodes clamps the levels).
-        ...(o.orbs.length ? { orbs: o.orbs as number[] } : {}),
-        ...cosSnap(o),
+        alive: o.alive, hp: Math.round(o.hp), dash: o.isDashing ? o.dashKind : 0,
+        ...withLook<PlayerLook>(s.seenP, nextP, o.id, playerLook(o, looks)),
       })),
-      monsters: sim.monsters.filter(near).map((m) => ({
-        id: m.id, def: m.def.id, lv: m.level,
+      monsters: sim.monsters.filter(near).map((m): MonsterSnap => ({
+        id: m.id,
         x: r2(m.x), z: r2(m.z), fx: r2(m.faceX), fz: r2(m.faceZ), mv: m.moving,
-        alive: m.alive, deadT: r2(m.deadT), hp: Math.round(m.hp), mhp: m.maxHp,
+        alive: m.alive, deadT: r2(m.deadT), hp: Math.round(m.hp),
         st: m.state, wind: m.windupT > 0, enr: m.enraged, y: r2(m.lift),
+        ...withLook<MonsterLook>(s.seenM, nextM, m.id, monsterLook(m, looks)),
       })),
       projectiles: sim.projectiles.filter(near).map((pr) => ({
         id: pr.id, x: r2(pr.x), z: r2(pr.z),
@@ -1925,7 +1982,31 @@ export class GameWorld {
       events: s.outbox,
     };
     s.outbox = [];
-    this.send(s.ws, msg);
+    // Only now, once it really goes out: a skipped snapshot (above) leaves the caches as they were.
+    if (delta) {
+      s.seenP = nextP;
+      s.seenM = nextM;
+      st.deltaSnaps++;
+    }
+    st.snaps++;
+    st.sentBytes += this.sendLen(s.ws, msg);
+  }
+
+  // ------------------------------------------------------------ snapshot delta (admin page, Server tab)
+
+  /** The switch and its counters since the server started (or since the switch last changed). */
+  snapDeltaState(): AdminSnapDelta {
+    let delta = 0;
+    for (const s of this.sessions) if (s.delta) delta++;
+    return { on: this.snapDelta, stats: { ...this.deltaStats }, clients: { delta, full: this.sessions.size - delta } };
+  }
+
+  /** Turns snapshot delta on / off for everyone; every browser gets everything again on its next snapshot. */
+  setSnapDelta(on: boolean): void {
+    this.snapDelta = on;
+    this.db.setSetting(SNAP_DELTA_KEY, on ? null : '0');
+    for (const s of this.sessions) forgetSent(s);
+    this.deltaStats = freshDeltaStats();
   }
 
   // ------------------------------------------------------------ stopping the server (server/main.ts)
@@ -2252,6 +2333,55 @@ export class GameWorld {
 }
 
 /** A player's cosmetics for the snapshot (left out when none). */
+/** The settings row of the snapshot delta switch: '0' = off, missing = on (the default). */
+const SNAP_DELTA_KEY = 'snap_delta';
+/** PrivateSnap fields that hardly ever change: sent only when they did (snapshot delta). */
+type StaticMeKey = 'potSel' | 'lootFilter' | 'autoSettings' | 'stats' | 'skills' | 'bossKills' | 'quests' | 'gearQuests' | 'gearDone';
+const STATIC_ME: readonly StaticMeKey[] = ['potSel', 'lootFilter', 'autoSettings', 'stats', 'skills', 'bossKills', 'quests', 'gearQuests', 'gearDone'];
+type PlayerLook = Pick<PlayerSnap, 'name' | 'cls' | 'lv' | 'maxHp' | 'aura' | 'orbs' | 'cos' | 'mnt' | 'toad'>;
+type MonsterLook = Pick<MonsterSnap, 'def' | 'lv' | 'mhp'>;
+/** A look bundle and its JSON (what the per-browser caches compare). */
+interface Look { look: PlayerLook | MonsterLook; json: string }
+type Looks = Map<Player | Monster, Look>;
+
+const freshDeltaStats = (): SnapDeltaStats => ({ since: Date.now(), snaps: 0, deltaSnaps: 0, sentBytes: 0, savedBytes: 0, meResends: 0, lookResends: 0 });
+
+/** Forgets what a browser was sent, so its next snapshot carries everything. */
+function forgetSent(s: Session): void {
+  s.lastMe.clear();
+  s.seenP.clear();
+  s.seenM.clear();
+}
+
+/** A player's look bundle: name, class, level, max HP, aura, orbs, cosmetics, riding, toad. */
+function playerLook(o: Player, looks: Looks): Look {
+  let l = looks.get(o);
+  if (!l) {
+    const look: PlayerLook = {
+      name: o.name, cls: o.cls.id, lv: o.level, maxHp: Math.round(o.maxHp),
+      ...(o.aura ? { aura: o.aura } : {}),
+      ...(o.toadT > 0 ? { toad: 1 as const } : {}),
+      // Worked out by Player.recompute from the server's own copy of the gear (orbCodes clamps the levels).
+      ...(o.orbs.length ? { orbs: o.orbs as number[] } : {}),
+      ...cosSnap(o),
+    };
+    l = { look, json: JSON.stringify(look) };
+    looks.set(o, l);
+  }
+  return l;
+}
+
+/** A monster's look bundle: kind, level, max HP. */
+function monsterLook(m: Monster, looks: Looks): Look {
+  let l = looks.get(m);
+  if (!l) {
+    const look: MonsterLook = { def: m.def.id, lv: m.level, mhp: m.maxHp };
+    l = { look, json: JSON.stringify(look) };
+    looks.set(m, l);
+  }
+  return l;
+}
+
 function cosSnap(o: Player): { cos?: number[]; mnt?: 1 } {
   const codes = cosCodes(o.cosmetics);
   if (!codes.length) return {};

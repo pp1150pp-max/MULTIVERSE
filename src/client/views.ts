@@ -10,7 +10,7 @@ import { LOOT_POP_TIME, type Loot } from '../shared/sim/Loot';
 import type { SimEvent } from '../shared/sim/types';
 import { SpriteActor } from './SpriteActor';
 import { OrbRing } from './orbs';
-import { CosmeticRig, ridePose } from './cosmeticViews';
+import { CosmeticRig, rideScale, ridePose } from './cosmeticViews';
 import { shownCos } from './cosLook';
 import { orbItemLook } from '../shared/orbItems';
 import { AnimatedActor, type Actor } from './AnimatedActor';
@@ -176,6 +176,8 @@ export class PlayerView {
     this.actor.group.position.z = this.p.z;
     // Sitting on a mount.
     this.actor.group.position.y = this.p.alive ? this.cos.seat(this.p) : 0;
+    // Riding: drawn bigger, with the mount and the wings (see rideScale).
+    this.actor.group.scale.setScalar(this.p.alive ? rideScale(this.p) : 1);
   }
 
   /** Cycles attack → attack_2 → attack_3 while hits keep coming within a second. */
