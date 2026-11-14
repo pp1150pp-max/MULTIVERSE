@@ -17,6 +17,8 @@ interface EffectDef {
   height: number | 'ground';
   /** Facing the camera without turning to the effect's angle (things that rise, like the enhance burst). */
   upright?: boolean;
+  /** Standing on the ground whatever its size (art drawn at the bottom of its cell: a dome, a sword stuck in the ground). */
+  stand?: boolean;
   /** Multiplies the art's colours (a tinted copy of a row, e.g. the sword's dark-red Execute). */
   tint?: string;
 }
@@ -41,14 +43,14 @@ const EFFECTS: Record<SkillEffect, EffectDef> = {
   sw_cleave: { sheet: 'sw_blade', row: 0, life: 0.26, height: 'ground' },
   sw_cleave_red: { sheet: 'sw_blade', row: 0, life: 0.3, height: 'ground', tint: '#ff6a6a' },
   sw_wave: { sheet: 'sw_blade', row: 1, life: 0.3, height: 0.9 },
-  sw_bigsword: { sheet: 'sw_blade', row: 2, life: 0.5, height: 1.4, upright: true },
+  sw_bigsword: { sheet: 'sw_blade', row: 2, life: 0.5, height: 0, upright: true, stand: true },
   sw_nova: { sheet: 'sw_blade', row: 3, life: 0.5, height: 'ground' },
   sw_streak: { sheet: 'sw_gale', row: 0, life: 0.3, height: 0.95 },
   sw_windring: { sheet: 'sw_gale', row: 1, life: 0.36, height: 'ground' },
   sw_xslash: { sheet: 'sw_gale', row: 2, life: 0.28, height: 1, upright: true },
   sw_xslash_gold: { sheet: 'sw_gale', row: 2, life: 0.28, height: 1, upright: true, tint: '#ffd36a' },
-  sw_aura: { sheet: 'sw_gale', row: 3, life: 0.6, height: 1.1, upright: true },
-  sw_barrier: { sheet: 'sw_bulwark', row: 0, life: 0.7, height: 1.1, upright: true },
+  sw_aura: { sheet: 'sw_gale', row: 3, life: 0.6, height: 0, upright: true, stand: true },
+  sw_barrier: { sheet: 'sw_bulwark', row: 0, life: 0.7, height: 0, upright: true, stand: true },
   sw_shout: { sheet: 'sw_bulwark', row: 1, life: 0.55, height: 'ground' },
   sw_crack: { sheet: 'sw_bulwark', row: 2, life: 0.5, height: 'ground' },
   sw_armorhit: { sheet: 'sw_bulwark', row: 3, life: 0.32, height: 0.9 },
@@ -193,7 +195,8 @@ export class Effects implements FxApi {
       const rotation = def.upright ? 0 : screenAngle(Math.cos(angle), Math.sin(angle));
       const mat = new THREE.SpriteMaterial({ map: tex, alphaTest: 0.5, transparent: false, rotation, color: def.tint ?? '#ffffff' });
       const spr = new THREE.Sprite(mat);
-      spr.position.set(x, def.height, z);
+      // The sprite is size × 2 tall: centred at `size` its bottom edge is on the ground.
+      spr.position.set(x, def.stand ? size * 0.9 : def.height, z);
       spr.scale.setScalar(size * 2);
       this.add(spr, def.life, play);
     }
