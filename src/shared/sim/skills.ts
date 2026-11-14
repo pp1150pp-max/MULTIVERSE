@@ -7,7 +7,7 @@ import type { HitOpts } from './types';
 import type { ProjOpts } from './Projectile';
 import * as R from '../data/skillRanges';
 import { rankedDmg, skillParam, skillReach, skillValues } from '../skillBook';
-import { passiveSkillScale } from '../passives';
+import { passiveOnBasic, passiveSkillScale } from '../passives';
 import { castSword } from './swordSkills';
 
 // ------------------------------------------------------------ Gunslinger's basic shot and its buffs
@@ -129,9 +129,13 @@ function clampPoint(p: Player, aim: Vec2, far: number): Vec2 {
   return d > far ? { x: p.x + ((aim.x - p.x) / d) * far, z: p.z + ((aim.z - p.z) / d) * far } : { x: aim.x, z: aim.z };
 }
 
-/** A blast on the ground: the explosion picture and every monster in it hit. */
-function blast(sim: Sim, p: Player, x: number, z: number, r: number, mult: number, opts: HitOpts = {}): void {
-  sim.fx('effect', 'explosion', x, z, 0, r);
+/**
+ * A Gunslinger blast on the ground: the tech explosion and every monster in it hit. `special` = made bigger by the
+ * Special Ammo passive, which shows its own ring too.
+ */
+function blast(sim: Sim, p: Player, x: number, z: number, r: number, mult: number, opts: HitOpts = {}, special = false): void {
+  sim.fx('effect', 'gs_blast', x, z, 0, r);
+  if (special) sim.fx('effect', 'gs_special', x, z, 0, r);
   forCircle(sim, x, z, r, (m) => sim.hitMonster(p, m, mult, { kb: 3, fromX: x, fromZ: z, ...opts }));
 }
 
@@ -175,6 +179,7 @@ const aimAngle = (p: Player, aim: Vec2) => Math.atan2(aim.z - p.z, aim.x - p.x);
 
 export function basicAttack(sim: Sim, p: Player, aim: Vec2): void {
   const ang = aimAngle(p, aim);
+  passiveOnBasic(sim, p);
   switch (p.cls.id) {
     case 'sword': {
       const range = R.SLASH_RANGE;
@@ -275,6 +280,8 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
   const P = (key: string): number => skillParam(sk, key, rank);
   /** A blast or area size, scaled by the passive. */
   const A = (key: string): number => P(key) * sc.area;
+  /** Blasts made bigger by the worn passive (Gunslinger Special Ammo) show its ring. */
+  const special = sc.area > 1;
   const reach = skillReach(sk);
   const far = reach ? (reach.kind === 'self' ? reach.radius : reach.range) : 0;
   // The Swordsman's 30 skills: sim/swordSkills.ts.
@@ -779,59 +786,59 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
     }
     case 'gs_sniperfocus':
       p.addStatBuff(sk.id, P('time'), { crit: P('crit'), critDmg: P('critDmg') });
-      buffFx(sim, p, '#ff5a6a');
+      buffFx(sim, p, 'gs_aura_crit');
       return true;
 
     // Rapid Fire line: buffs for the basic shot.
     case 'gs_hotrounds':
       p.gun.onHit[sk.id] = { until: sim.time + P('time'), add: P('onHit') * sc.dmg };
-      buffFx(sim, p, '#ffc85a');
+      buffFx(sim, p, 'gs_aura_rapid');
       return true;
     case 'gs_quickreload':
       p.addStatBuff(sk.id, P('time'), { atkSpeed: P('atkSpeed') });
-      buffFx(sim, p, '#ffc85a');
+      buffFx(sim, p, 'gs_aura_rapid');
       return true;
     case 'gs_doubletap':
       p.gun.double = { left: Math.round(P('shots')), second: P('second') / 100 };
-      buffFx(sim, p, '#ffc85a');
+      buffFx(sim, p, 'gs_aura_rapid');
       return true;
     case 'gs_shockrounds': {
       const until = sim.time + P('time');
       p.gun.onHit[sk.id] = { until, add: P('onHit') * sc.dmg };
       p.gun.shock = { until, slow: P('slow') / 100, slowT: P('slowTime') };
-      buffFx(sim, p, '#9fd8ff');
+      buffFx(sim, p, 'gs_aura_rapid');
       return true;
     }
     case 'gs_stackfire':
       p.gun.stack = { until: sim.time + P('time'), per: P('perStack') * sc.dmg, max: Math.round(P('maxStacks')), target: 0, n: 0 };
-      buffFx(sim, p, '#ffc85a');
+      buffFx(sim, p, 'gs_aura_rapid');
       return true;
     case 'gs_splitshot':
       p.gun.split = { until: sim.time + P('time'), n: Math.round(P('bullets')), arc: (P('arc') * Math.PI) / 180, side: P('side') / 100 };
-      buffFx(sim, p, '#ffc85a');
+      buffFx(sim, p, 'gs_aura_rapid');
       return true;
     case 'gs_piercerounds': {
       const until = sim.time + P('time');
       p.gun.onHit[sk.id] = { until, add: P('onHit') * sc.dmg };
       p.gun.pierceUntil = until;
-      buffFx(sim, p, '#ffc85a');
+      buffFx(sim, p, 'gs_aura_rapid');
       return true;
     }
     case 'gs_overdrive': {
       const time = P('time');
       p.addStatBuff(sk.id, time, { atkSpeed: P('atkSpeed'), moveSpeed: P('moveSpeed') });
       p.gun.onHit[sk.id] = { until: sim.time + time, add: P('onHit') * sc.dmg };
-      buffFx(sim, p, '#ffb040');
+      buffFx(sim, p, 'gs_aura_rapid');
       return true;
     }
     case 'gs_bulletstorm':
       p.gun.storm = { until: sim.time + P('time'), n: Math.round(P('pellets')), arc: (P('arc') * Math.PI) / 180, mult: dmg };
-      buffFx(sim, p, '#ffb040');
+      buffFx(sim, p, 'gs_aura_rapid');
       return true;
 
     // Special Weapons line.
     case 'gs_explosive':
-      sim.addProjectile(p, shotFrom(p, ang, far, dmg, { speed: 22, radius: 0.4, color: '#7affe0', size: 0.8, explode: A('blast') }));
+      sim.addProjectile(p, shotFrom(p, ang, far, dmg, { speed: 22, radius: 0.4, color: '#7affe0', size: 0.8, explode: A('blast'), blastFx: 'gs_blast', specialFx: special }));
       muzzle(sim, p, ang, 0.8);
       return true;
     case 'gs_incendiary': {
@@ -841,7 +848,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
         color: '#ff8a3a', size: 0.6,
         after: (m) => repeat(sim, 1, ticks, () => {
           if (!m.alive || !live(sim, p)) return false;
-          sim.fx('burst', m.x, 0.9, m.z, '#ff8a3a', 5, 2);
+          sim.fx('effect', 'gs_burn', m.x, m.z, 0, 0.6);
           sim.hitMonster(p, m, burn);
         }),
       }));
@@ -856,12 +863,12 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
       const radius = far * sc.area;
       const stun = P('stun');
       const step = 0.2;
-      sim.fx('ring', x, z, 0.6, '#7affe0', 1);
+      sim.fx('effect', 'gs_mine', x, z, 0, 0.6);
       repeat(sim, step, Math.round(P('life') / step), (i) => {
         if (!live(sim, p)) return false;
-        if (i % 5 === 4) sim.fx('ring', x, z, 0.6, '#7affe0', 1);
+        if (i % 5 === 4) sim.fx('effect', 'gs_mine', x, z, 0, 0.6);
         if (!nearest(sim, x, z, trigger)) return;
-        blast(sim, p, x, z, radius, dmg, { stun, kb: 4 });
+        blast(sim, p, x, z, radius, dmg, { stun, kb: 4 }, special);
         sim.shake(0.3, { to: p.id });
         return false;
       });
@@ -873,7 +880,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
       const slow = P('slow') / 100;
       repeat(sim, 1, Math.max(1, Math.round(P('time'))), () => {
         if (!live(sim, p)) return false;
-        sim.fx('disc', at.x, at.z, radius, '#8a9aa0', 1);
+        sim.fx('effect', 'gs_smoke', at.x, at.z, 0, radius);
         forCircle(sim, at.x, at.z, radius, (m) => sim.hitMonster(p, m, dmg, { slow, slowT: 1.2 }));
       }, 0.3);
       sim.fx('telegraph', at.x, at.z, radius, 0.3, '#8a9aa0');
@@ -881,7 +888,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
     }
     case 'gs_railgun':
       aimThen(sim, p, ang, far, P('charge'), () =>
-        sim.addProjectile(p, shotFrom(p, ang, far, dmg, { speed: 50, radius: 0.5, color: '#7affe0', size: 1, kb: 3, pierce: true })));
+        sim.addProjectile(p, shotFrom(p, ang, far, dmg, { speed: 50, radius: 0.5, color: '#a0fff4', size: 1, kb: 3, pierce: true })));
       return true;
     case 'gs_drone': {
       // Hovers by the player's shoulder and shoots the nearest monster within reach.
@@ -890,7 +897,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
         if (!live(sim, p)) return false;
         const dx = p.x + 0.8;
         const dz = p.z - 0.8;
-        sim.fx('ring', dx, dz, 0.35, '#7affe0', every);
+        sim.fx('effect', 'gs_drone', dx, dz, 0, 0.45);
         const m = nearest(sim, dx, dz, far);
         if (!m) return;
         const a = Math.atan2(m.z - dz, m.x - dx);
@@ -912,7 +919,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
         const range = m ? Math.min(far, Math.hypot(m.x - p.x, m.z - p.z)) : far;
         sim.schedule(i * 0.08, () => {
           if (!p.alive) return;
-          sim.addProjectile(p, shotFrom(p, a, range, dmg, { speed: 20, radius: 0.4, color: '#7affe0', size: 0.7, explode: r }));
+          sim.addProjectile(p, shotFrom(p, a, range, dmg, { speed: 20, radius: 0.4, color: '#6affc8', size: 0.7, explode: r, blastFx: 'gs_blast', specialFx: special }));
         });
       }
       muzzle(sim, p, ang, 0.8);
@@ -928,14 +935,14 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
       sim.fx('telegraph', at.x, at.z, radius, delay, '#7affe0');
       sim.schedule(delay, () => {
         if (!live(sim, p)) return;
-        blast(sim, p, at.x, at.z, radius, dmg, { kb: 4 });
+        blast(sim, p, at.x, at.z, radius, dmg, { kb: 4 }, special);
         for (let i = 0; i < n; i++) {
           const a = Math.random() * Math.PI * 2;
           const d = radius * (0.5 + Math.random() * 0.5);
           const bx = at.x + Math.cos(a) * d;
           const bz = at.z + Math.sin(a) * d;
           sim.schedule(0.15 + i * 0.08, () => {
-            if (live(sim, p)) blast(sim, p, bx, bz, small, smallDmg, { kb: 1 });
+            if (live(sim, p)) blast(sim, p, bx, bz, small, smallDmg, { kb: 1 }, special);
           });
         }
       });
@@ -953,7 +960,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
           if (!live(sim, p)) return;
           const a = Math.random() * Math.PI * 2;
           const d = Math.sqrt(Math.random()) * radius;
-          blast(sim, p, at.x + Math.cos(a) * d, at.z + Math.sin(a) * d, r, dmg, { kb: 2 });
+          blast(sim, p, at.x + Math.cos(a) * d, at.z + Math.sin(a) * d, r, dmg, { kb: 2 }, special);
         });
       }
       return true;
@@ -964,10 +971,10 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
       const z = p.z;
       const every = Math.max(0.1, P('every'));
       const showEvery = Math.max(1, Math.round(1 / every));
-      sim.fx('ring', x, z, 0.7, '#7affe0', 1);
+      sim.fx('effect', 'gs_turret', x, z, 0, 0.7);
       repeat(sim, every, Math.floor(P('life') / every), (i) => {
         if (!live(sim, p)) return false;
-        if (i % showEvery === 0) sim.fx('ring', x, z, 0.7, '#7affe0', 1);
+        if (i % showEvery === 0) sim.fx('effect', 'gs_turret', x, z, 0, 0.7);
         const m = nearest(sim, x, z, far);
         if (!m) return;
         const a = Math.atan2(m.z - z, m.x - x);
@@ -984,8 +991,7 @@ function muzzle(sim: Sim, p: Player, ang: number, size: number): void {
   sim.fx('effect', 'muzzle', p.x + Math.cos(ang) * 1, p.z + Math.sin(ang) * 1, ang, size);
 }
 
-/** A buff skill's flash around the player. */
-function buffFx(sim: Sim, p: Player, color: string): void {
-  sim.fx('ring', p.x, p.z, 1.3, color, 0.5);
-  sim.fx('burst', p.x, 1, p.z, color, 8, 3);
+/** A buff skill's aura around the player, in its line's colour. */
+function buffFx(sim: Sim, p: Player, aura: 'gs_aura_crit' | 'gs_aura_rapid'): void {
+  sim.fx('effect', aura, p.x, p.z, 0, 1.6);
 }

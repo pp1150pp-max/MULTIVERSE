@@ -10,6 +10,8 @@ const SHEET_ROWS: Record<FxSheet, number> = {
 
   // Mage
   mg_a: 6, mg_b: 6, mg_c: 6, mg_d: 3,
+  // Gunslinger
+  gs_skill: 6, gs_gear: 6, gs_passive: 3,
 };
 
 interface EffectDef {
@@ -73,6 +75,20 @@ const EFFECTS: Record<SkillEffect, EffectDef> = {
   mg_empower: { sheet: 'mg_c', row: 3, life: 0.9, height: 'ground' },
   mg_shield: { sheet: 'mg_c', row: 4, life: 1, height: 'ground' },
   mg_timewarp: { sheet: 'mg_c', row: 5, life: 1, height: 'ground' },
+  // Gunslinger (art_templates/skills/FX_GUNSLINGER.md). Lasting things (mine, drone, turret, smoke, burning) are
+  // played again by the sim every tick, so their life is about one tick.
+  // The aura and smoke are drawn already seen at an angle, so they face the camera at the feet instead of lying flat.
+  gs_aura_crit: { sheet: 'gs_skill', row: 2, life: 0.5, height: 0.4, upright: true, tint: '#ff5a6a' },
+  gs_aura_rapid: { sheet: 'gs_skill', row: 2, life: 0.5, height: 0.4, upright: true, tint: '#ffc85a' },
+  gs_burn: { sheet: 'gs_skill', row: 4, life: 0.6, height: 0.8, upright: true },
+  gs_smoke: { sheet: 'gs_skill', row: 5, life: 1, height: 0.7, upright: true },
+  gs_mine: { sheet: 'gs_gear', row: 1, life: 1, height: 'ground' },
+  gs_drone: { sheet: 'gs_gear', row: 2, life: 0.8, height: 1.9, upright: true },
+  gs_turret: { sheet: 'gs_gear', row: 3, life: 1, height: 0.7, upright: true },
+  gs_blast: { sheet: 'gs_gear', row: 5, life: 0.5, height: 0.9, upright: true },
+  gs_hawkeye: { sheet: 'gs_passive', row: 0, life: 0.45, height: 2.2, upright: true },
+  gs_trigger: { sheet: 'gs_passive', row: 1, life: 0.3, height: 0.95, upright: true },
+  gs_special: { sheet: 'gs_passive', row: 2, life: 0.5, height: 'ground' },
 };
 
 /** Flying shots, looked up by the colour the simulation gives each projectile. */
@@ -91,6 +107,12 @@ const SHOT_ART: Record<string, { sheet: FxSheet; row: number; scale: number }> =
   '#ff9a4a': { sheet: 'mg_a', row: 1, scale: 2.2 },
   '#bfe6ff': { sheet: 'mg_a', row: 2, scale: 2.6 },
   '#9be05a': { sheet: 'mg_a', row: 3, scale: 2.6 },
+  // Gunslinger: crit round, buffed basic shot, incendiary, rocket, railgun
+  '#ff5a6a': { sheet: 'gs_skill', row: 0, scale: 2.4 },
+  '#ffb040': { sheet: 'gs_skill', row: 1, scale: 2.4 },
+  '#ff8a3a': { sheet: 'gs_skill', row: 3, scale: 2.6 },
+  '#6affc8': { sheet: 'gs_gear', row: 0, scale: 2.8 },
+  '#a0fff4': { sheet: 'gs_gear', row: 4, scale: 3.4 },
 };
 
 /** Mage passive auras under the feet (sheet mg_d), by worn passive id; everyone sees them (owner 2026-11-15). */
