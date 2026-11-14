@@ -12,6 +12,7 @@ import { SpriteActor } from './SpriteActor';
 import type { Effects } from './effects';
 import { shownCos, shownRiding } from './cosLook';
 import { tuneBool, tuneNum as tunedValue } from './cosTune';
+import { cosById } from '../shared/data/cosmetics';
 import { ISO_DIR } from './world';
 import { axisHiddenInDir, viewDirOf, viewOffKey, type Axis } from '../shared/cosTuning';
 
@@ -66,11 +67,26 @@ function depthAt(x: number, z: number, raised: number, depth: number): [number, 
  */
 const PLAYER_SCALE = 2.4 / 2.6;
 /** Tuning fields that are not sizes or distances (a fraction, a speed, a rate, a brightness): not scaled. */
-const UNSCALED = new Set(['oneSize', 'oneBack', 'oneBackSeat', 'oneTilt', 'oneSqueeze', 'oneDepth', 'root', 'flap', 'flapWalk', 'anim', 'alpha', 'pulse', 'sparks', 'stepEvery']);
-/** A cosmetic's tuning number, sizes and distances scaled to the player's size. */
+const UNSCALED = new Set(['riderSword', 'riderMage', 'riderGunslinger', 'frontDist', 'frontSide', 'oneSize', 'oneBack', 'oneBackSeat', 'oneTilt', 'oneSqueeze', 'oneDepth', 'root', 'flap', 'flapWalk', 'anim', 'alpha', 'pulse', 'sparks', 'stepEvery']);
+/**
+ * How much bigger a character is drawn while riding (owner 2026-11-14): the sitting pictures are drawn
+ * smaller than the standing ones, so the rider, the mount and the wings grow together by the mount's
+ * per-class factor (the /admin "ของแต่งตัว" tab). 1 on foot. The pet and the aura keep their size.
+ */
+export function rideScale(p: Player): number {
+  const m = shownRiding(p) ? shownCos(p, 'mount') : undefined;
+  if (!m) return 1;
+  const key = p.cls.id === 'sword' ? 'riderSword' : p.cls.id === 'mage' ? 'riderMage' : 'riderGunslinger';
+  return tunedValue(m.id, key) || 1;
+}
+/** The ride scale of the character being drawn right now (set by seatOf / CosmeticRig.update). */
+let curRide = 1;
+/** A cosmetic's tuning number, sizes and distances scaled to the player's size (and, for the mount and the wings, the ride scale). */
 function tuneNum(id: string, key: string): number {
   const v = tunedValue(id, key);
-  return UNSCALED.has(key) ? v : v * PLAYER_SCALE;
+  if (UNSCALED.has(key)) return v;
+  const slot = cosById(id)?.slot;
+  return v * PLAYER_SCALE * (slot === 'mount' || slot === 'wings' ? curRide : 1);
 }
 
 // Every size and distance below is the cosmetic's tuning (src/shared/cosTuning.ts: the code defaults,
@@ -80,6 +96,7 @@ function tuneNum(id: string, key: string): number {
 export function seatOf(p: Player): number {
   const m = shownRiding(p) ? shownCos(p, 'mount') : undefined;
   if (!m) return 0;
+  curRide = rideScale(p);
   // Seen head-on or from behind the rider sits higher, so the mount's head (or rear) in front of them
   // doesn't hide their body.
   return tuneNum(m.id, 'seat') + viewOff(p, m.id).y + (!tuneBool(m.id, 'under') && headOn(p) ? tuneNum(m.id, 'headOnLift') : 0);
@@ -223,6 +240,7 @@ export class CosmeticRig {
     this.clock += dt;
     // Cursed into a toad by the Bog Witch: no wings, mount or aura on the toad (the pet still follows).
     const alive = p.alive && p.toadT <= 0;
+    curRide = alive ? rideScale(p) : 1;
     const seat = alive ? this.seat(p) : 0;
 
     // ---- wings: on the back, flapping all the time (faster while walking). Behind the body seen from the
@@ -371,7 +389,7 @@ export class CosmeticRig {
       a.update(dt, p.moving, tuneNum(id, 'anim'));
     }
 
-    // ---- pet: follows a step behind and beside, on the ground or floating
+    // ---- pet: follows a step behind and beside, on the ground or floating (its own size: no ride scale)
     const pt = shownCos(p, 'pet');
     const hadPet = this.pet;
     const pc = this.piece(this.pet, pt, pt ? tuneNum(pt.id, 'h') : 0, 0.25);
@@ -384,8 +402,17 @@ export class CosmeticRig {
       const side = tuneNum(pet.id, 'side');
       const vo = viewOff(p, pet.id);
       const [ox, oz] = moveBy(vo, vo.x, vo.z);
-      const tx = p.x - (p.faceX / fl) * back + (p.faceZ / fl) * side + ox;
-      const tz = p.z - (p.faceZ / fl) * back - (p.faceX / fl) * side + oz;
+      let tx = p.x - (p.faceX / fl) * back + (p.faceZ / fl) * side + ox;
+      let tz = p.z - (p.faceZ / fl) * back - (p.faceX / fl) * side + oz;
+      // Owner standing still: come round to the camera side (toward +x +z), off to the side on screen it
+      // already is on, so the owner never hides it (owner 2026-11-14).
+      if (!p.moving && tuneBool(pet.id, 'standFront')) {
+        const near = tuneNum(pet.id, 'frontDist') * PLAYER_SCALE;
+        const across = tuneNum(pet.id, 'frontSide') * PLAYER_SCALE;
+        const onRight = (pet.x - pet.z) - (p.x - p.z) >= 0 ? 1 : -1;
+        tx = p.x + (near + across * onRight) * Math.SQRT1_2;
+        tz = p.z + (near - across * onRight) * Math.SQRT1_2;
+      }
       const dx = tx - pet.x;
       const dz = tz - pet.z;
       const dist = Math.hypot(dx, dz);
