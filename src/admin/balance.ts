@@ -706,7 +706,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'muted' }, 'ค่ารายสกิล: % ต่อแรงก์คิดจากแรงก์ 1 (เช่น ดาเมจ 5% → แรงก์ 10 = ×1.45) · คูลดาวน์ %/แรงก์ ติดลบ = สั้นลง · MP คูณต่อจาก MP สกิล/เลเวลของอาชีพ · เวลาสถานะ = สตัน ช้า ลดเกราะ ไม่รับดาเมจ ดูดเลือด · ระยะ/รัศมี = ระยะยิง/พุ่ง หรือรัศมีรอบตัว (วงระเบิด/วงตกอยู่ในค่าพิเศษ)'),
       tabs,
       h('div', { class: 'bal-scroll' }, h('table', { class: 'bal-table' },
-        h('thead', {}, h('tr', {}, h('th', {}, 'สกิล'), ...SKILL_VALUE_KEYS.map((k) => h('th', {}, SKILL_VALUE_NAME[k])), h('th', {}, 'ค่าพิเศษ (* = โตตามเวลาสถานะ)'), h('th', { class: 'bal-out' }, 'ได้จริง (แรงก์ 1 → สูงสุด)'))),
+        h('thead', {}, h('tr', {}, h('th', {}, 'สกิล'), ...SKILL_VALUE_KEYS.map((k) => h('th', {}, SKILL_VALUE_NAME[k])), h('th', {}, 'ค่าพิเศษ (* = โตตามเวลาสถานะ/ผลพาสซีฟ)'), h('th', { class: 'bal-out' }, 'ได้จริง (แรงก์ 1 → สูงสุด)'))),
         h('tbody', {}, ...rows))),
     );
     outs.forEach((f) => f());

@@ -436,6 +436,20 @@ export class Player extends Unit {
   statBuffs: { id: string; until: number; mods: Partial<Stats> }[] = [];
   /** Gunslinger Rapid Fire line: what the basic shot does while its buffs run. Never saved. */
   gun: GunBuffs = emptyGunBuffs();
+  // Timed statuses from skills (shared by every class; not saved, death ends them). Each lasts until its sim time;
+  // a recast keeps the stronger value and refreshes the time.
+  /** HP points of damage absorbed before HP, until `shieldUntil`. */
+  shield = 0;
+  shieldUntil = 0;
+  /** Damage taken × this until `takenUntil` (e.g. 0.7 = 30% less). */
+  takenMult = 1;
+  takenUntil = 0;
+  /** Damage dealt × this until `dmgUntil`. */
+  dmgMult = 1;
+  dmgUntil = 0;
+  /** Skill cooldowns (not the dash) run (1 + haste)× as fast until `hasteUntil`. */
+  haste = 0;
+  hasteUntil = 0;
   private dashVx = 0;
   private dashVz = 0;
   private chargeHit = new Set<Monster>();
@@ -901,6 +915,11 @@ export class Player extends Unit {
     passiveOnDash(this);
   }
 
+  /** Sim time now (for timed statuses and passives). */
+  simTime(): number {
+    return this.sim.time;
+  }
+
   /** Starts (or restarts) a timed stat buff from a skill: the same id replaces the one running. */
   addStatBuff(id: string, seconds: number, mods: Partial<Stats>): void {
     this.statBuffs = this.statBuffs.filter((b) => b.id !== id);
@@ -908,9 +927,11 @@ export class Player extends Unit {
     this.recompute();
   }
 
-  /** Ends every skill buff (death). */
+  /** Ends every skill buff and timed status (death). */
   clearSkillBuffs(): void {
     this.gun = emptyGunBuffs();
+    this.shield = 0;
+    this.shieldUntil = this.takenUntil = this.dmgUntil = this.hasteUntil = 0;
     if (this.statBuffs.length) {
       this.statBuffs = [];
       this.recompute();
@@ -988,7 +1009,8 @@ export class Player extends Unit {
       this.statBuffs = this.statBuffs.filter((b) => b.until > sim.time);
       this.recompute();
     }
-    for (const k of Object.keys(this.cd)) this.cd[k] = Math.max(0, this.cd[k] - dt);
+    const cdStep = sim.time < this.hasteUntil ? dt * (1 + this.haste) : dt;
+    for (const k of Object.keys(this.cd)) this.cd[k] = Math.max(0, this.cd[k] - (k === 'dash' ? dt : cdStep));
     this.atkT -= dt;
     this.potCd -= dt;
     this.restCd -= dt;

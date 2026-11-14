@@ -6,7 +6,7 @@ import type { Vec2 } from '../types';
 import type { HitOpts } from './types';
 import type { ProjOpts } from './Projectile';
 import * as R from '../data/skillRanges';
-import { rankedDmg, skillParam, skillReach } from '../skillBook';
+import { rankedDmg, skillParam, skillReach, skillValues } from '../skillBook';
 import { passiveSkillScale } from '../passives';
 
 // ------------------------------------------------------------ Gunslinger's basic shot and its buffs
@@ -191,6 +191,76 @@ export function basicAttack(sim: Sim, p: Player, aim: Vec2): void {
   }
 }
 
+// ------------------------------------------------------------ building blocks shared by skills (owner-approved
+// mage table 2026-11-14). Every delayed step checks the caster is
+// still alive and still in this sim (a zone change takes them out).
+
+/** Runs `fn(i)` `times` times, `every` seconds apart from `first`, while the caster is still here. */
+export function tickFor(sim: Sim, p: Player, every: number, times: number, fn: (i: number) => void, first = 0): void {
+  for (let i = 0; i < times; i++) sim.schedule(first + i * every, () => { if (live(sim, p)) fn(i); });
+}
+
+/** Damage over time (burning / poison): `perTick` × ATK each second for `seconds`, through hitMonster (boss rules, crit, aggro). */
+export function dot(sim: Sim, p: Player, m: Monster, perTick: number, seconds: number, sk: SkillDef, color: string): void {
+  const ticks = Math.max(1, Math.round(seconds));
+  m.dotUntil = Math.max(m.dotUntil, sim.time + ticks);
+  tickFor(sim, p, 1, ticks, () => {
+    if (!m.alive) return;
+    sim.hitMonster(p, m, perTick, { skill: sk });
+    sim.fx('puff', m.x, 0.9, m.z, color, 0.5, 0.5);
+  }, 1);
+}
+
+/** Every living player (the caster too) within `r` of a point. Area buffs reach all of them, party or not (owner). */
+function forPlayers(sim: Sim, x: number, z: number, r: number, fn: (q: Player) => void): void {
+  for (const q of sim.players) if (q.alive && Math.hypot(q.x - x, q.z - z) <= r + q.radius) fn(q);
+}
+
+/** The mouse spot, pulled in to `far` from the caster. */
+function landing(p: Player, aim: Vec2, far: number): Vec2 {
+  const d = Math.hypot(aim.x - p.x, aim.z - p.z);
+  return d <= far ? { x: aim.x, z: aim.z } : { x: p.x + ((aim.x - p.x) / d) * far, z: p.z + ((aim.z - p.z) / d) * far };
+}
+
+/** The living monster nearest a point within `r`, leaving out `skip`. */
+function nearestTo(sim: Sim, x: number, z: number, r: number, skip?: Set<Monster>): Monster | null {
+  let best: Monster | null = null;
+  let bd = Infinity;
+  for (const m of sim.monsters) {
+    if (!m.alive || skip?.has(m)) continue;
+    const d = Math.hypot(m.x - x, m.z - z) - m.radius;
+    if (d <= r && d < bd) {
+      bd = d;
+      best = m;
+    }
+  }
+  return best;
+}
+
+/** Monsters a skill can push or pull: not bosses (the same rule as knockback). */
+const movable = (m: Monster): boolean => !m.isBoss && !m.def.pattern;
+
+/** A random spot inside a circle. */
+function spotIn(x: number, z: number, r: number): Vec2 {
+  const a = Math.random() * Math.PI * 2;
+  const d = Math.sqrt(Math.random()) * r;
+  return { x: x + Math.cos(a) * d, z: z + Math.sin(a) * d };
+}
+
+/** A damage-absorbing shield on a player: the stronger one wins and the time refreshes. */
+function giveShield(sim: Sim, q: Player, amount: number, seconds: number): void {
+  const hp = Math.round(amount);
+  if (hp <= 0) return;
+  q.shield = sim.time < q.shieldUntil ? Math.max(q.shield, hp) : hp;
+  q.shieldUntil = sim.time + seconds;
+  sim.fx('ring', q.x, q.z, 1.1, '#9fd8ff', seconds);
+  sim.text(q.x, q.topY, q.z, `โล่ ${hp}`, 'info', 1);
+}
+
+const FIRE = '#ff7a2a';
+const VENOM = '#9be05a';
+const FROST = '#7ab8ff';
+
 /**
  * Returns false if the skill could not be used (nothing was spent). `rank` (1 up) scales the damage of every hit and
  * the status times (stun, slow, armor break, guard, lifesteal) by the skill's growth on the balance tab.
@@ -232,11 +302,11 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
 
     // ---------------- Mage
     case 'fireball':
-      sim.addProjectile(p, { x: p.x, z: p.z, angle: ang, speed: 13, range: far, radius: 0.45, mult: dmg, color: '#ff7a2a', size: 1.1, explode: P('blast') });
+      sim.addProjectile(p, { x: p.x, z: p.z, angle: ang, speed: 13, range: far, radius: 0.45, mult: dmg, color: '#ff7a2a', size: 1.1, explode: P('blast'), hit: { skill: sk } });
       return true;
     case 'frostnova':
       sim.fx('effect', 'frost', p.x, p.z, 0, 4.8);
-      forCircle(sim, p.x, p.z, far, (m) => sim.hitMonster(p, m, dmg, { slow: P('slow') / 100, slowT: P('slowTime') }));
+      forCircle(sim, p.x, p.z, far, (m) => sim.hitMonster(p, m, dmg, { slow: P('slow') / 100, slowT: P('slowTime'), skill: sk }));
       return true;
     case 'meteor': {
       let tx = aim.x;
@@ -254,7 +324,344 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
       sim.schedule(delay, () => {
         sim.fx('effect', 'crater', tx, tz, 0, 4);
         sim.shake(0.5, { to: p.id });
-        forCircle(sim, tx, tz, radius, (m) => sim.hitMonster(p, m, dmg, { stun, kb: 4, fromX: tx, fromZ: tz }));
+        forCircle(sim, tx, tz, radius, (m) => sim.hitMonster(p, m, dmg, { stun, kb: 4, fromX: tx, fromZ: tz, skill: sk }));
+      });
+      return true;
+    }
+
+    // Mage line 1: burst damage
+    case 'mg_arcanelance':
+      sim.addProjectile(p, { x: p.x, z: p.z, angle: ang, speed: 22, range: far, radius: 0.5, mult: dmg, color: '#ffb06a', size: 1, pierce: true, kb: 2, hit: { skill: sk } });
+      return true;
+    case 'mg_chainlightning': {
+      // The monster nearest the mouse that the caster can reach; nothing in reach = not cast (no MP spent).
+      let cur: Monster | null = null;
+      let bd = Infinity;
+      for (const m of sim.monsters) {
+        if (!m.alive || Math.hypot(m.x - p.x, m.z - p.z) > far + m.radius) continue;
+        const d = Math.hypot(m.x - aim.x, m.z - aim.z);
+        if (d < bd) {
+          bd = d;
+          cur = m;
+        }
+      }
+      if (!cur) return false;
+      const hit = new Set<Monster>();
+      let mult = dmg;
+      let fromX = p.x;
+      let fromZ = p.z;
+      const jumps = Math.round(P('jumps'));
+      for (let i = 0; cur && i <= jumps; i++) {
+        hit.add(cur);
+        const len = Math.hypot(cur.x - fromX, cur.z - fromZ);
+        sim.fx('lineTelegraph', fromX, fromZ, Math.atan2(cur.z - fromZ, cur.x - fromX), len, 0.25, 0.15);
+        sim.fx('effect', 'impact', cur.x, cur.z, 0, 1);
+        sim.fx('burst', cur.x, 1, cur.z, '#bfe0ff', 8, 3);
+        sim.hitMonster(p, cur, mult, { skill: sk });
+        fromX = cur.x;
+        fromZ = cur.z;
+        mult *= Math.max(0, 1 - P('falloff') / 100);
+        cur = nearestTo(sim, fromX, fromZ, P('jumpRange'), hit);
+      }
+      return true;
+    }
+    case 'mg_manaburst': {
+      const c = landing(p, aim, far);
+      const r = P('radius');
+      sim.fx('effect', 'explosion', c.x, c.z, 0, r);
+      sim.fx('ring', c.x, c.z, r, FIRE, 0.4);
+      forCircle(sim, c.x, c.z, r, (m) => sim.hitMonster(p, m, dmg, { kb: 3, fromX: c.x, fromZ: c.z, skill: sk }));
+      return true;
+    }
+    case 'mg_flamewave': {
+      const arc = (P('arc') * Math.PI) / 180;
+      sim.fx('slash', p.x, p.z, ang, arc, far, FIRE);
+      sim.fx('burst', p.x + Math.cos(ang) * far * 0.6, 0.8, p.z + Math.sin(ang) * far * 0.6, FIRE, 14, 4);
+      forCone(sim, p.x, p.z, ang, arc, far, (m) => sim.hitMonster(p, m, dmg, { kb: 5, skill: sk }));
+      return true;
+    }
+    case 'mg_volatileorb':
+      sim.addProjectile(p, { x: p.x, z: p.z, angle: ang, speed: 8, range: far, radius: 0.6, mult: dmg, color: '#ff9a4a', size: 1.6, explode: P('blast'), hit: { skill: sk } });
+      return true;
+    case 'mg_crystalrain': {
+      const c = landing(p, aim, far);
+      const r = P('radius');
+      const waves = Math.round(P('waves'));
+      const gap = P('gap');
+      sim.fx('telegraph', c.x, c.z, r, 0.2 + waves * gap, '#ffd0a0');
+      tickFor(sim, p, gap, waves, () => {
+        sim.fx('burst', c.x, 2, c.z, '#ffe0c0', 12, 4);
+        forCircle(sim, c.x, c.z, r, (m) => sim.hitMonster(p, m, dmg, { skill: sk }));
+      }, 0.2);
+      return true;
+    }
+    case 'mg_chargedblast': {
+      // Stand still to charge (like Headshot's aim), then the blast around the caster.
+      const t = P('charge');
+      p.rootT = t;
+      sim.fx('telegraph', p.x, p.z, far, t, FIRE);
+      sim.schedule(t, () => {
+        if (!live(sim, p)) return;
+        sim.fx('effect', 'explosion', p.x, p.z, 0, far);
+        sim.shake(0.5, { to: p.id });
+        sim.anim(p.id, 'attack', { duration: 0.3 });
+        forCircle(sim, p.x, p.z, far, (m) => sim.hitMonster(p, m, dmg, { kb: 5, skill: sk }));
+      });
+      return true;
+    }
+    case 'mg_starfall': {
+      const c = landing(p, aim, far);
+      const r = P('radius');
+      const sr = P('starRadius');
+      const warn = 0.35;
+      tickFor(sim, p, P('gap'), Math.round(P('stars')), () => {
+        const s = spotIn(c.x, c.z, r);
+        sim.fx('telegraph', s.x, s.z, sr, warn, '#ffe08a');
+        sim.schedule(warn, () => {
+          if (!live(sim, p)) return;
+          sim.fx('effect', 'explosion', s.x, s.z, 0, sr);
+          forCircle(sim, s.x, s.z, sr, (m) => sim.hitMonster(p, m, dmg, { kb: 2, fromX: s.x, fromZ: s.z, skill: sk }));
+        });
+      });
+      return true;
+    }
+
+    // Mage line 2: damage over time
+    case 'mg_flameground': {
+      const c = landing(p, aim, far);
+      const r = P('radius');
+      const ticks = Math.max(1, Math.round(P('duration')));
+      sim.fx('disc', c.x, c.z, r, FIRE, ticks);
+      tickFor(sim, p, 1, ticks, () => {
+        sim.fx('burst', c.x, 0.4, c.z, FIRE, 6, 2);
+        forCircle(sim, c.x, c.z, r, (m) => {
+          m.dotUntil = Math.max(m.dotUntil, sim.time + 1.1);
+          sim.hitMonster(p, m, dmg, { skill: sk });
+        });
+      });
+      return true;
+    }
+    case 'mg_poisonmist': {
+      const c = landing(p, aim, far);
+      const r = P('radius');
+      sim.fx('disc', c.x, c.z, r, VENOM, 1.5);
+      sim.fx('puff', c.x, 0.6, c.z, VENOM, 1.2, r);
+      forCircle(sim, c.x, c.z, r, (m) => dot(sim, p, m, dmg, P('dotTime'), sk, VENOM));
+      return true;
+    }
+    case 'mg_searingmark': {
+      const blast = P('blast');
+      const delay = P('delay');
+      // The shot itself does no damage: it brands the first monster, which blows up later.
+      sim.addProjectile(p, {
+        x: p.x, z: p.z, angle: ang, speed: 20, range: far, radius: 0.4, mult: 0, color: VENOM, size: 0.7,
+        after: (m) => {
+          sim.fx('ring', m.x, m.z, 1, VENOM, delay);
+          sim.schedule(delay, () => {
+            if (!live(sim, p)) return;
+            sim.fx('effect', 'explosion', m.x, m.z, 0, blast);
+            forCircle(sim, m.x, m.z, blast, (t) => sim.hitMonster(p, t, dmg, { kb: 3, fromX: m.x, fromZ: m.z, skill: sk }));
+          });
+        },
+      });
+      return true;
+    }
+    case 'mg_decayring': {
+      const ticks = Math.max(1, Math.round(P('duration')));
+      const ab = P('armorBreak') / 100;
+      const abT = P('armorBreakTime');
+      tickFor(sim, p, 1, ticks, () => {
+        sim.fx('ring', p.x, p.z, far, VENOM, 0.9);
+        forCircle(sim, p.x, p.z, far, (m) => {
+          m.dotUntil = Math.max(m.dotUntil, sim.time + 1.1);
+          sim.hitMonster(p, m, dmg, { armorBreak: ab, armorBreakT: abT, skill: sk });
+        });
+      });
+      return true;
+    }
+    case 'mg_thunderstorm': {
+      const c = landing(p, aim, far);
+      const r = P('radius');
+      const strikes = Math.round(P('strikes'));
+      const every = P('every');
+      sim.fx('disc', c.x, c.z, r, '#8aa0c8', 0.3 + strikes * every);
+      tickFor(sim, p, every, strikes, () => {
+        const inside = sim.monsters.filter((m) => m.alive && Math.hypot(m.x - c.x, m.z - c.z) <= r + m.radius);
+        if (!inside.length) return;
+        const m = inside[Math.floor(Math.random() * inside.length)];
+        sim.fx('effect', 'impact', m.x, m.z, 0, 1.2);
+        sim.fx('burst', m.x, 2, m.z, '#dfe8ff', 10, 4);
+        sim.hitMonster(p, m, dmg, { skill: sk });
+      }, 0.3);
+      return true;
+    }
+    case 'mg_crystalspikes': {
+      const c = landing(p, aim, far);
+      const r = P('radius');
+      const every = P('every');
+      const shots = Math.max(1, Math.floor(P('duration') / every));
+      sim.fx('ring', c.x, c.z, 0.8, VENOM, shots * every);
+      tickFor(sim, p, every, shots, () => {
+        const t = nearestTo(sim, c.x, c.z, r);
+        if (!t) return;
+        sim.addProjectile(p, { x: c.x, z: c.z, angle: Math.atan2(t.z - c.z, t.x - c.x), speed: 18, range: r + 1, radius: 0.3, mult: dmg, color: VENOM, size: 0.6, kb: 1, hit: { skill: sk } });
+      }, every);
+      return true;
+    }
+    case 'mg_cursedash': {
+      const arc = (P('arc') * Math.PI) / 180;
+      const burn = P('dotTime');
+      const weak = P('weak') / 100;
+      const weakT = P('weakTime');
+      sim.fx('slash', p.x, p.z, ang, arc, far, '#6a6a5a');
+      forCone(sim, p.x, p.z, ang, arc, far, (m) => {
+        // The first burn lands at once and carries the attack-down; the rest burn each second.
+        sim.hitMonster(p, m, dmg, { weak, weakT, skill: sk });
+        dot(sim, p, m, dmg, burn, sk, FIRE);
+      });
+      return true;
+    }
+    case 'mg_hexseed': {
+      const c = landing(p, aim, far);
+      const r = P('radius');
+      const base = skillValues(sk).dmg;
+      // The poison grows with rank like the blast does.
+      const poison = P('poison') * (base > 0 ? dmg / base : 1);
+      const seedT = P('seedTime');
+      const blast = P('seedBlast');
+      sim.fx('ring', c.x, c.z, r, VENOM, 0.6);
+      forCircle(sim, c.x, c.z, r, (m) => {
+        dot(sim, p, m, poison, seedT, sk, VENOM);
+        sim.schedule(seedT, () => {
+          if (!live(sim, p)) return;
+          // Bursts where the seed is now, even if its carrier just died.
+          sim.fx('effect', 'explosion', m.x, m.z, 0, blast);
+          forCircle(sim, m.x, m.z, blast, (t) => sim.hitMonster(p, t, dmg, { kb: 2, fromX: m.x, fromZ: m.z, skill: sk }));
+        });
+      });
+      return true;
+    }
+    case 'mg_firerain': {
+      const c = landing(p, aim, far);
+      const r = P('radius');
+      const every = P('every');
+      const hits = Math.max(1, Math.round(P('duration') / every));
+      sim.fx('disc', c.x, c.z, r, FIRE, hits * every + 0.2);
+      tickFor(sim, p, every, hits, () => {
+        const s = spotIn(c.x, c.z, r * 0.8);
+        sim.fx('burst', s.x, 2.5, s.z, FIRE, 8, 4);
+        forCircle(sim, c.x, c.z, r, (m) => {
+          m.dotUntil = Math.max(m.dotUntil, sim.time + every + 0.1);
+          sim.hitMonster(p, m, dmg, { skill: sk });
+        });
+      }, 0.2);
+      return true;
+    }
+    case 'mg_decayfield': {
+      const ticks = Math.max(1, Math.round(P('duration')));
+      const ab = P('armorBreak') / 100;
+      const weak = P('weak') / 100;
+      tickFor(sim, p, 1, ticks, () => {
+        sim.fx('disc', p.x, p.z, far, VENOM, 0.9);
+        // Statuses last a little past each tick, so they hold while the monster stays inside.
+        forCircle(sim, p.x, p.z, far, (m) => {
+          m.dotUntil = Math.max(m.dotUntil, sim.time + 1.1);
+          sim.hitMonster(p, m, dmg, { armorBreak: ab, armorBreakT: 1.2, weak, weakT: 1.2, skill: sk });
+        });
+      });
+      return true;
+    }
+
+    // Mage line 3: control / buffs. Buffs reach every player in the circle, party or not (owner 2026-11-14).
+    case 'mg_forcewave':
+      sim.fx('ring', p.x, p.z, far, FROST, 0.5);
+      sim.fx('effect', 'frost', p.x, p.z, 0, far);
+      forCircle(sim, p.x, p.z, far, (m) => sim.hitMonster(p, m, dmg, { kb: P('push'), stun: P('stun'), skill: sk }));
+      return true;
+    case 'mg_frailcurse': {
+      const c = landing(p, aim, far);
+      const r = P('radius');
+      sim.fx('disc', c.x, c.z, r, '#a08aff', 0.8);
+      forCircle(sim, c.x, c.z, r, (m) => sim.hitMonster(p, m, dmg, { armorBreak: P('armorBreak') / 100, armorBreakT: P('armorBreakTime'), skill: sk }));
+      return true;
+    }
+    case 'mg_icecage':
+      sim.addProjectile(p, {
+        x: p.x, z: p.z, angle: ang, speed: 20, range: far, radius: 0.45, mult: dmg, color: '#bfe6ff', size: 0.9, kb: 0,
+        hit: { stun: P('stun'), skill: sk }, hitFx: { name: 'frost', size: 1.2 },
+      });
+      return true;
+    case 'mg_gravitywell': {
+      const c = landing(p, aim, far);
+      const r = P('radius');
+      const pullT = P('pullTime');
+      const pull = P('pull');
+      sim.fx('disc', c.x, c.z, r, '#5a4a9a', pullT);
+      const step = 0.25;
+      tickFor(sim, p, step, Math.max(1, Math.round(pullT / step)), () => {
+        forCircle(sim, c.x, c.z, r, (m) => { if (movable(m)) m.knockback(c.x, c.z, -pull); });
+      });
+      sim.schedule(pullT, () => {
+        if (!live(sim, p)) return;
+        sim.fx('effect', 'explosion', c.x, c.z, 0, r * 0.7);
+        forCircle(sim, c.x, c.z, r, (m) => sim.hitMonster(p, m, dmg, { skill: sk }));
+      });
+      return true;
+    }
+    case 'mg_sealveil':
+      sim.fx('ring', p.x, p.z, far, '#a08aff', 0.6);
+      forCircle(sim, p.x, p.z, far, (m) => sim.hitMonster(p, m, dmg, { weak: P('weak') / 100, weakT: P('weakTime'), skill: sk }));
+      return true;
+    case 'mg_empowerfield': {
+      const mult = 1 + P('dmgBonus') / 100;
+      const t = P('buffTime');
+      sim.fx('ring', p.x, p.z, far, '#ffd34a', 0.6);
+      forPlayers(sim, p.x, p.z, far, (q) => {
+        q.dmgMult = sim.time < q.dmgUntil ? Math.max(q.dmgMult, mult) : mult;
+        q.dmgUntil = sim.time + t;
+        sim.fx('burst', q.x, 1.2, q.z, '#ffd34a', 8, 2);
+        sim.text(q.x, q.topY, q.z, `ดาเมจ +${Math.round(P('dmgBonus'))}%`, 'info', 1);
+      });
+      return true;
+    }
+    case 'mg_manashield': {
+      const t = P('buffTime');
+      sim.fx('ring', p.x, p.z, far, FROST, 0.6);
+      forPlayers(sim, p.x, p.z, far, (q) => giveShield(sim, q, (q.maxHp * P('shieldPct')) / 100, t));
+      return true;
+    }
+    case 'mg_timewarp': {
+      const haste = P('haste') / 100;
+      const hasteT = P('hasteTime');
+      sim.fx('effect', 'frost', p.x, p.z, 0, far);
+      sim.fx('ring', p.x, p.z, far, '#c0a0ff', 0.8);
+      forCircle(sim, p.x, p.z, far, (m) => sim.hitMonster(p, m, dmg, { slow: P('slow') / 100, slowT: P('slowTime'), skill: sk }));
+      forPlayers(sim, p.x, p.z, far, (q) => {
+        q.haste = sim.time < q.hasteUntil ? Math.max(q.haste, haste) : haste;
+        q.hasteUntil = sim.time + hasteT;
+        sim.text(q.x, q.topY, q.z, 'คูลดาวน์เร็วขึ้น', 'info', 1);
+      });
+      return true;
+    }
+    case 'mg_manawell': {
+      // A circle on the ground where the caster stands.
+      const c = { x: p.x, z: p.z };
+      const ticks = Math.max(1, Math.round(P('duration')));
+      const slow = P('slow') / 100;
+      forPlayers(sim, c.x, c.z, far, (q) => giveShield(sim, q, (q.maxHp * P('shieldPct')) / 100, ticks));
+      tickFor(sim, p, 1, ticks, () => {
+        sim.fx('disc', c.x, c.z, far, FROST, 1);
+        forPlayers(sim, c.x, c.z, far, (q) => {
+          const add = Math.min(q.stats.maxMp - q.mp, (q.stats.maxMp * P('mpPct')) / 100);
+          if (add <= 0) return;
+          q.mp += add;
+          sim.text(q.x, q.topY, q.z, `+${Math.round(add)} MP`, 'mana', 0.6);
+        });
+        // Slowed without a hit: no damage and no aggro.
+        forCircle(sim, c.x, c.z, far, (m) => {
+          m.slowAmt = slow;
+          m.slowT = Math.max(m.slowT, 1.2);
+        });
       });
       return true;
     }

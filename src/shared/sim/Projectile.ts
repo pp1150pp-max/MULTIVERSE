@@ -118,12 +118,13 @@ export class Projectile {
       sim.fx('effect', 'explosion', this.x, this.z, 0, r);
       for (const t of sim.monsters) {
         if (t.alive && Math.hypot(t.x - this.x, t.z - this.z) <= r + t.radius) {
-          sim.hitMonster(this.owner, t, this.o.mult, { kb: 4, fromX: this.x, fromZ: this.z });
+          sim.hitMonster(this.owner, t, this.o.mult, { kb: 4, fromX: this.x, fromZ: this.z, ...this.o.hit });
         }
       }
     } else if (m) {
       const mult = this.o.mult + (this.o.bonus?.(m) ?? 0);
-      sim.hitMonster(this.owner, m, mult, { kb: this.o.kb ?? 2, fromX: this.x - this.dx, fromZ: this.z - this.dz, ...this.o.hit });
+      // A carrier shot (mult 0) only delivers its after() (a mark that goes off later).
+      if (mult > 0) sim.hitMonster(this.owner, m, mult, { kb: this.o.kb ?? 2, fromX: this.x - this.dx, fromZ: this.z - this.dz, ...this.o.hit });
       this.o.after?.(m);
       if (this.o.hitFx) sim.fx('effect', this.o.hitFx.name, m.x, m.z, this.o.angle, this.o.hitFx.size);
       else sim.fx('burst', this.x, 0.85, this.z, this.o.color, 5, 3);
