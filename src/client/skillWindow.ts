@@ -13,7 +13,7 @@ import {
 } from '../shared/skillBook';
 import { reachText } from '../shared/data/skillRanges';
 import { skillIcon } from './icons';
-import { constellation, PAD } from './skillMap';
+import { constellation, PAD, SIZE } from './skillMap';
 
 const SLOT_LABEL: Record<WearSlot, string> = { q: 'Q', e: 'E', r: 'R', passive: 'พาสซีฟ' };
 
@@ -53,6 +53,11 @@ export class SkillWindow {
     this.win.append(head, this.top, body,
       el('div', 'hint', 'คลิกดาวเพื่อดูรายละเอียด · ถึงเลเวลแล้วเรียนได้เลย (1 แต้มต่อแรงก์) · ใส่หรือเปลี่ยนสกิลได้เมื่อไม่ได้ต่อสู้'));
     this.win.addEventListener('click', (e) => this.onClick(e));
+    // A new screen size (a phone turned, a window resized) fits and centres the map again.
+    window.addEventListener('resize', () => {
+      this.drawn = '';
+      this.centre = true;
+    });
     // The window is made draggable with the others (initDraggableWindows in Game, built right after this).
     document.getElementById('hud')!.append(this.win);
   }
@@ -109,9 +114,9 @@ export class SkillWindow {
   /** The constellation: lines (gold up to learned stars, dashed to locked ones), the centre star, labels and stars. */
   private renderMap(): void {
     const p = this.g.player;
-    const { stars, labels } = constellation(p.cls.skills);
+    const { stars, labels, outline, spots } = constellation(p.cls.skills);
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    for (const s of [...stars, ...labels, { x: 0, y: 0, size: 0 }]) {
+    for (const s of [...stars, ...labels, ...spots.map((q) => ({ ...q, size: SIZE.ult })), { x: 0, y: 0, size: 0 }]) {
       const h = ('size' in s ? s.size : 60) / 2;
       x0 = Math.min(x0, s.x - h); y0 = Math.min(y0, s.y - h);
       x1 = Math.max(x1, s.x + h); y1 = Math.max(y1, s.y + h);
@@ -131,7 +136,9 @@ export class SkillWindow {
       const a = (i * Math.PI) / 8, r = i % 2 ? 16 : 30;
       return `<line x1="${X(0)}" y1="${Y(0)}" x2="${X(Math.cos(a) * r)}" y2="${Y(Math.sin(a) * r)}"/>`;
     }).join('');
-    const svg = `<svg class="sk-lines" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${lines}` +
+    const ghost = outline.map((s) => `<line class="ghost" x1="${X(s.from.x)}" y1="${Y(s.from.y)}" x2="${X(s.to.x)}" y2="${Y(s.to.y)}" style="--lc:${p.cls.lines[s.line].color}"/>`).join('') +
+      spots.map((s) => `<circle class="spot" cx="${X(s.x)}" cy="${Y(s.y)}" r="3"/>`).join('');
+    const svg = `<svg class="sk-lines" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${ghost}${lines}` +
       `<g class="sk-core">${rays}<circle cx="${X(0)}" cy="${Y(0)}" r="6"/></g></svg>`;
 
     const names = p.cls.lines.map((l, i) =>

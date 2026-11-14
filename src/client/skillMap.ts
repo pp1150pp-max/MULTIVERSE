@@ -32,8 +32,14 @@ function onArm(line: number, d: number, side: number): Pt {
 /** Where the normal skill of this tier sits on its arm (tier 0 nearest the centre, zig-zagging). */
 const normalAt = (line: number, tier: number): Pt => onArm(line, ARM_START + tier * ARM_STEP, (tier % 2 ? 1 : -1) * ARM_ZIG);
 
+/** Where ultimate j of a line sits: off the arm between normal tiers 1+2j and 2+2j, sides taking turns. */
+const ultAt = (line: number, j: number): Pt => onArm(line, ARM_START + (1.5 + 2 * j) * ARM_STEP, (j % 2 ? 1 : -1) * ULT_SIDE);
+
 /** Every skill's star, with the point its line comes from, around a centre at 0,0. */
-export function constellation(skills: readonly SkillDef[]): { stars: Star[]; labels: Pt[] } {
+/** A segment of the constellation's outline (drawn faintly under the stars, so empty places show the shape). */
+export interface Seg { from: Pt; to: Pt; line: number }
+
+export function constellation(skills: readonly SkillDef[]): { stars: Star[]; labels: Pt[]; outline: Seg[]; spots: Pt[] } {
   const stars: Star[] = [];
   const passives = skills.filter((s) => s.kind === 'passive').sort((a, b) => unlockLevel(a) - unlockLevel(b));
   for (const sk of skills) {
@@ -44,8 +50,7 @@ export function constellation(skills: readonly SkillDef[]): { stars: Star[]; lab
     } else if (sk.kind === 'ult' && sk.line !== undefined) {
       // Ultimate j opens between normal tiers 1+2j and 2+2j: it hangs off the arm there, sides taking turns.
       const j = sk.tier ?? 0;
-      const at = onArm(sk.line, ARM_START + (1.5 + 2 * j) * ARM_STEP, (j % 2 ? 1 : -1) * ULT_SIDE);
-      stars.push({ ...at, sk, size: SIZE.ult, from: normalAt(sk.line, 1 + 2 * j) });
+      stars.push({ ...ultAt(sk.line, j), sk, size: SIZE.ult, from: normalAt(sk.line, 1 + 2 * j) });
     }
   }
   passives.forEach((sk, i) => {
@@ -55,6 +60,24 @@ export function constellation(skills: readonly SkillDef[]): { stars: Star[]; lab
   });
   // Each line's name sits past the far end of its arm.
   const labels = ARM_ANGLE.map((_, i) => onArm(i, ARM_START + 7 * ARM_STEP + 44, 0));
-  return { stars, labels };
+  // The outline of every arm (8 normal places and 2 ultimates), and a small dot on each place no skill takes yet.
+  const outline: Seg[] = [];
+  const spots: Pt[] = [];
+  const near = (p: Pt) => stars.some((s) => Math.hypot(s.x - p.x, s.y - p.y) < 1);
+  ARM_ANGLE.forEach((_, line) => {
+    let prev = onArm(line, 22, 0);
+    for (let t = 0; t < 8; t++) {
+      const p = normalAt(line, t);
+      outline.push({ from: prev, to: p, line });
+      if (!near(p)) spots.push(p);
+      prev = p;
+    }
+    for (let j = 0; j < 2; j++) {
+      const p = ultAt(line, j);
+      outline.push({ from: normalAt(line, 1 + 2 * j), to: p, line });
+      if (!near(p)) spots.push(p);
+    }
+  });
+  return { stars, labels, outline, spots };
 }
 

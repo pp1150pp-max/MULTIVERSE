@@ -1623,6 +1623,8 @@ input[type=range]:hover::-webkit-slider-thumb { background: var(--ctl-accent-hi)
 #skills-win .sk-lines { position: absolute; inset: 0; pointer-events: none; }
 #skills-win .sk-lines > line { stroke: var(--lc); stroke-opacity: 0.35; stroke-width: 1.5; }
 #skills-win .sk-lines > line.lit { stroke: #f2c14e; stroke-opacity: 1; stroke-width: 2.5; }
+#skills-win .sk-lines > line.ghost { stroke: var(--lc); stroke-opacity: 0.16; stroke-width: 1; }
+#skills-win .sk-lines > circle.spot { fill: #8b88a8; fill-opacity: 0.45; }
 #skills-win .sk-lines > line.dash { stroke-dasharray: 3 4; stroke: #6d6a80; stroke-opacity: 0.6; }
 #skills-win .sk-core line { stroke: #f2d58a; stroke-width: 1.4; }
 #skills-win .sk-core circle { fill: #f2d58a; }
