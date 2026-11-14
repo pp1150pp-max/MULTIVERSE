@@ -35,9 +35,12 @@
 - **log:** `server/data/logs/online-YYYY-MM-DD.log` วันละไฟล์ ทุกบรรทัดมีเวลา เก็บ 30 วัน (`LOG_KEEP_DAYS` ใน `server/logfile.ts`) · ดู: `npm run logs` (60 บรรทัดท้าย) · `npm run logs -- --follow` (ดูต่อเรื่อย ๆ) · `--lines N`
 - **กันเครื่องรีสตาร์ทเองตอนกลางวัน (เจ้าของตั้งเอง ไม่ใช่โค้ด):** Settings → Update & Security → Windows Update → *Change active hours* (ได้สูงสุด 18 ชม. เช่น 08:00–02:00) · *Pause updates* ช่วงที่มีคนเล่นเยอะ · Windows 10 Pro: `gpedit.msc` → Computer Configuration → Administrative Templates → Windows Components → Windows Update → *No auto-restart with logged on users for scheduled automatic updates installations* = Enabled (ใช้ได้เมื่อมีคนล็อกอินค้างไว้) · ถ้ายังรีสตาร์ทเอง task จะเปิด server ให้ใหม่ แต่ผู้เล่นหลุดโดยไม่มีนับถอยหลัง (เซฟอัตโนมัติล่าสุดยังอยู่)
 
-## VPS (Linux) — เตรียมย้าย (Hostatom Cloud VPS SSD2 ในไทย 2 vCPU / 4 GB, Ubuntu 24.04, เช่า 2026-11-15)
+## VPS (Linux) — ที่อยู่ของ server จริง (Hostatom Cloud VPS SSD2 ในไทย 2 vCPU / 4 GB, Ubuntu 24.04, เช่า 2026-11-15)
 
-แผนวันย้าย เช็คลิสต์ และวิธีย้ายกลับ: [../vps-move.md](../vps-move.md) · จนกว่าจะย้ายจริง server จริงยังอยู่ที่เครื่อง Windows ตามหัวข้อด้านบน
+แผนวันย้าย เช็คลิสต์ และวิธีย้ายกลับ: [../vps-move.md](../vps-move.md) · หัวข้อ Windows / Task Scheduler ด้านบนใช้กับเครื่องบ้านตอนย้ายกลับ
+
+- สั่งงานจากเครื่องบ้าน: `ssh -o BatchMode=yes multiverse-vps "cd MULTIVERSE && <คำสั่ง>"` (ชื่อ SSH ใน `~/.ssh/config` ของเครื่องบ้าน) · อัปเดตเกม: VPS `git pull --ff-only && npx vite build` → `npm run stop-server -- --restart` (skill `/update-server`) · ตรวจ typecheck/test บนเครื่องบ้าน ไม่รันบน VPS
+- **ห้าม** `kill` / `systemctl kill` / `systemctl restart` (restart = ปิดแบบโหมดปิดแล้วเปิดใหม่ ผู้เล่นเห็นป้ายปิด ไม่ใช่ป้ายอัปเดต) · ปิดเต็ม: `npm run stop-server` · เปิด: `npm run autostart -- -Start`
 
 - ติดตั้งเครื่องใหม่: `tools/vps-setup.sh` (root, รันซ้ำได้): Node รุ่นเดียวกับเครื่องบ้าน (`NODE_VERSION`, ตอนนี้ 24.22.1 ตรวจ SHA256), git, cloudflared (apt ของ Cloudflare), swap 2 GB, timezone Asia/Bangkok, ufw เปิดแค่ SSH, SSH ใช้ key เท่านั้น, user `multiverse` (เป็นเจ้าของโค้ดใน `/home/multiverse/MULTIVERSE` รัน server และเป็น user ที่ SSH เข้ามาสั่งงาน) · sudo ได้แค่ `systemctl start/stop/status multiverse`
 - **systemd unit `multiverse`** (`tools/multiverse.service`) แทน Task Scheduler: รัน `server/online-main.ts --always-on` ตัวเดียวกับ Windows (exit 75 = ตัวคุมเปิดใหม่เอง, exit 0 = ปิดจริง unit ไม่เปิดใหม่, ล่ม = ตัวคุมเปิดใหม่, ตัวคุมตายเอง = systemd เปิดใหม่ใน 10 วิ) · เปิดเองตอนบูต · `systemctl stop` / รีบูตเครื่อง รัน `stop-server` ก่อน (ExecStop) = นับถอยหลัง + เซฟทุกคนขณะลิงก์ยังอยู่ · ไม่สำเร็จค่อย SIGTERM (server ก็นับถอยหลัง) แล้ว SIGKILL หลัง 120 วิ
