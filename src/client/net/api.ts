@@ -3,7 +3,9 @@
 //
 // The browser remembers up to two tokens: the logged-in account's, and a guest's. A guest is a
 // temporary account on the server with one character; the token is all this browser keeps of it.
-import type { ApiError, AuthResponse, CharacterSummary, GuestResponse, MeResponse } from '../../shared/api';
+import type {
+  ApiError, AuthResponse, CharacterSummary, GoogleConfigResponse, GoogleFinishResponse, GoogleStartRequest, GoogleStartResponse, GuestResponse, MeResponse,
+} from '../../shared/api';
 import type { ClassId } from '../../shared/types';
 
 const TOKEN_KEY = 'multiverse-online-token';
@@ -84,6 +86,35 @@ export const me = () => call<MeResponse>('GET', '/me');
 export const listCharacters = () => call<CharacterSummary[]>('GET', '/characters');
 export const createCharacter = (name: string, classId: ClassId) => call<CharacterSummary>('POST', '/characters', { name, classId });
 export const deleteCharacter = (id: number) => call<object>('DELETE', `/characters/${id}`);
+
+// ------------------------------------------------------------ Google login (server/google.ts)
+
+/** Whether the Login page offers Google (false on any failure: the button just stays hidden). */
+export const googleEnabled = (): Promise<boolean> =>
+  call<GoogleConfigResponse>('GET', '/auth/google/config').then((r) => r.enabled, () => false);
+
+/**
+ * Leaves for Google. login / upgrade send this browser's guest token (a new account takes the guest's
+ * character); link uses the logged-in account's token.
+ */
+export async function googleStart(mode: GoogleStartRequest['mode']): Promise<never> {
+  const r = await call<GoogleStartResponse>('POST', '/auth/google/start',
+    { mode, guestToken: mode === 'link' ? undefined : guestToken() ?? undefined } satisfies GoogleStartRequest);
+  location.assign(r.url);
+  return new Promise<never>(() => {});
+}
+
+/** Reads the ticket Google's round trip came back with; with `username`, makes the new account. A login is remembered. */
+export async function googleFinish(ticket: string, username?: string, movedGuest = false): Promise<GoogleFinishResponse> {
+  const r = await call<GoogleFinishResponse>('POST', '/auth/google/finish', { ticket, username });
+  if (r.kind === 'session') {
+    store(TOKEN_KEY, r.token);
+    if (movedGuest) store(GUEST_KEY, null);
+  }
+  return r;
+}
+
+export const unlinkGoogle = () => call<object>('POST', '/auth/google/unlink', {});
 
 // ------------------------------------------------------------ guest
 

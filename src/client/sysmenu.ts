@@ -2,12 +2,14 @@
 // Leaving closes the connection (the server saves on close) and reloads the page into the right menu screen,
 // which is simpler and safer than tearing the 3D scene down by hand.
 import type { Game } from './Game';
-import { logout } from './net/api';
+import { googleEnabled, logout } from './net/api';
 import { imgUrl } from './img';
 
 /** Read once by the title menu after the reload. */
 export const AFTER_EXIT_KEY = 'multiverse-after-exit';
 export type AfterExit = 'characters' | 'title';
+/** sessionStorage: 'link' / 'upgrade' = go on to Google once the game is left (menu.ts buildMenu). */
+export const GOOGLE_AFTER_EXIT_KEY = 'multiverse-google-after-exit';
 
 /** Leaving while in combat waits this long; moving or getting hit cancels it (owner). */
 const EXIT_COUNTDOWN = 5;
@@ -102,6 +104,7 @@ export class SystemMenu {
         <button data-act="partyblock" id="sys-partyblock"></button>
         ${guest ? '' : '<button data-act="tradeblock" id="sys-tradeblock"></button>'}
         <div class="sys-sep"></div>
+        <button data-act="google" id="sys-google" class="hidden">${guest ? 'บันทึกตัวละครด้วย Google' : 'ผูกบัญชี Google'}</button>
         <button data-act="chars">${guest ? 'กลับไปหน้า Guest' : 'กลับไปเลือกตัวละคร'}</button>
         <button data-act="logout">${guest ? 'กลับหน้าแรก' : 'ออกจากระบบ'}</button>
         ${guest ? '<div class="sys-note">สมัครสมาชิกที่หน้าแรก<br>เพื่อเก็บตัวละคร Guest นี้ไว้ถาวร</div>' : ''}
@@ -109,6 +112,7 @@ export class SystemMenu {
         <button data-act="resume" class="primary">กลับเข้าเกม</button>
         <button data-act="back">‹ กลับ</button>
       </div>`;
+    void googleEnabled().then((on) => this.panel.querySelector('#sys-google')?.classList.toggle('hidden', !on));
     this.panel.addEventListener('click', (e) => {
       const act = (e.target as HTMLElement).closest<HTMLElement>('[data-act]')?.dataset.act;
       if (act) this.onAct(act);
@@ -253,6 +257,16 @@ export class SystemMenu {
         $('btn-hud-style').click();
         return void ($('sys-hudstyle').textContent = $('btn-hud-style').textContent);
       case 'chars':
+        return this.requestExit('characters');
+      case 'google':
+        if (!confirm(this.g.backend.guest
+          ? 'ออกจากเกมแล้วไปหน้า Google เพื่อเก็บตัวละคร Guest นี้ไว้ในบัญชี Google?'
+          : 'ออกจากเกมแล้วไปหน้า Google เพื่อผูกบัญชี? (ชื่อผู้ใช้และรหัสผ่านเดิมยังใช้ได้)')) return;
+        try {
+          sessionStorage.setItem(GOOGLE_AFTER_EXIT_KEY, this.g.backend.guest ? 'upgrade' : 'link');
+        } catch {
+          // Storage blocked: the player just lands on the menu and links from there.
+        }
         return this.requestExit('characters');
       case 'logout':
         return this.requestExit('title');

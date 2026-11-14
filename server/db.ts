@@ -365,6 +365,15 @@ export class Db {
         features TEXT NOT NULL DEFAULT '{}',
         created_at INTEGER NOT NULL
       );
+      -- Google accounts linked to game accounts (server/google.ts): one each way. Only what logging in
+      -- needs is kept (privacy.html says so): Google's account id, the email and the display name.
+      CREATE TABLE IF NOT EXISTS account_google (
+        account_id INTEGER PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
+        sub TEXT NOT NULL UNIQUE,
+        email TEXT NOT NULL,
+        name TEXT NOT NULL DEFAULT '',
+        linked_at INTEGER NOT NULL
+      );
     `);
     // The orb looks made in /admin are cosmetics too: put them in the list before anything reads owned or
     // worn cosmetics, hidden pieces or prices (those drop ids they don't know).
@@ -553,6 +562,78 @@ export class Db {
     return Number(r.lastInsertRowid);
   }
 
+  // ------------------------------------------------------------ Google login (server/google.ts)
+
+  /** The game account a Google account is linked to. */
+  accountByGoogle(sub: string): { id: number; username: string; guest: boolean } | undefined {
+    const r = this.db.prepare('SELECT a.id, a.username, a.is_guest FROM account_google g JOIN accounts a ON a.id = g.account_id WHERE g.sub = ?')
+      .get(sub) as { id: number; username: string; is_guest: number } | undefined;
+    return r && { id: r.id, username: r.username, guest: r.is_guest === 1 };
+  }
+
+  /** The Google account linked to a game account (email and name), if any. */
+  googleOf(accountId: number): { email: string; name: string; linkedAt: number } | undefined {
+    const r = this.db.prepare('SELECT email, name, linked_at FROM account_google WHERE account_id = ?').get(accountId) as
+      { email: string; name: string; linked_at: number } | undefined;
+    return r && { email: r.email, name: r.name, linkedAt: r.linked_at };
+  }
+
+  /** Every linked account, for the admin page. */
+  googleLinks(): { accountId: number; username: string; email: string; name: string; linkedAt: number }[] {
+    return (this.db.prepare(`SELECT g.account_id, a.username, g.email, g.name, g.linked_at FROM account_google g
+      JOIN accounts a ON a.id = g.account_id ORDER BY g.linked_at DESC`).all() as
+      { account_id: number; username: string; email: string; name: string; linked_at: number }[])
+      .map((r) => ({ accountId: r.account_id, username: r.username, email: r.email, name: r.name, linkedAt: r.linked_at }));
+  }
+
+  /** Links Google to a real account. False when either side is already linked. */
+  linkGoogle(accountId: number, g: { sub: string; email: string; name: string }): boolean {
+    const r = this.db.prepare(`INSERT OR IGNORE INTO account_google (account_id, sub, email, name, linked_at)
+      SELECT ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM accounts WHERE id = ? AND is_guest = 0)`)
+      .run(accountId, g.sub, g.email, g.name, Date.now(), accountId);
+    return r.changes > 0;
+  }
+
+  /** Refreshes the email / name Google gave on a later login. */
+  touchGoogle(sub: string, email: string, name: string): void {
+    this.db.prepare('UPDATE account_google SET email = ?, name = ? WHERE sub = ?').run(email, name, sub);
+  }
+
+  unlinkGoogle(accountId: number): boolean {
+    return this.db.prepare('DELETE FROM account_google WHERE account_id = ?').run(accountId).changes > 0;
+  }
+
+  /** True when the account can log in with a password (Google-only accounts and guests have none). */
+  hasPassword(accountId: number): boolean {
+    const r = this.db.prepare('SELECT pass_hash FROM accounts WHERE id = ?').get(accountId) as { pass_hash: string } | undefined;
+    return !!r?.pass_hash.startsWith('scrypt$');
+  }
+
+  /**
+   * A new account that logs in with Google only (no password), or — `guestId` set — that guest
+   * becoming it, character and all (its login tokens end). In one transaction. Returns the account id,
+   * or null when the username is taken, the Google account got linked meanwhile, or the guest is gone.
+   */
+  createGoogleAccount(username: string, g: { sub: string; email: string; name: string }, guestId: number | null = null): number | null {
+    if (this.usernameTaken(username)) return null;
+    return this.transaction(() => {
+      if (this.db.prepare('SELECT 1 FROM account_google WHERE sub = ?').get(g.sub)) return null;
+      let id: number;
+      if (guestId !== null) {
+        const n = this.db.prepare("UPDATE accounts SET username = ?, pass_hash = '', is_guest = 0, last_online = NULL WHERE id = ? AND is_guest = 1")
+          .run(username, guestId).changes;
+        if (!n) return null;
+        this.db.prepare('DELETE FROM sessions WHERE account_id = ?').run(guestId);
+        id = guestId;
+      } else {
+        id = Number(this.db.prepare("INSERT INTO accounts (username, pass_hash, created_at) VALUES (?, '', ?)").run(username, Date.now()).lastInsertRowid);
+      }
+      this.db.prepare('INSERT INTO account_google (account_id, sub, email, name, linked_at) VALUES (?, ?, ?, ?, ?)')
+        .run(id, g.sub, g.email, g.name, Date.now());
+      return id;
+    });
+  }
+
   // ------------------------------------------------------------ guests
 
   /**
@@ -592,6 +673,10 @@ export class Db {
       this.db.exec('ROLLBACK');
       throw e;
     }
+  }
+
+  isGuestAccount(accountId: number): boolean {
+    return !!this.db.prepare('SELECT 1 FROM accounts WHERE id = ? AND is_guest = 1').get(accountId);
   }
 
   /** Deletes a guest with its character and login tokens (does nothing to a real account). */
