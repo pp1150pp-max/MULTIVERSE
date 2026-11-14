@@ -58,14 +58,15 @@ const EFFECTS: Record<SkillEffect, EffectDef> = {
   sw_armorhit: { sheet: 'sw_bulwark', row: 3, life: 0.32, height: 0.9 },
   // Gunslinger (art_templates/skills/FX_GUNSLINGER.md). Lasting things (mine, drone, turret, smoke, burning) are
   // played again by the sim every tick, so their life is about one tick.
-  gs_aura_crit: { sheet: 'gs_skill', row: 2, life: 0.5, height: 'ground', tint: '#ff5a6a' },
-  gs_aura_rapid: { sheet: 'gs_skill', row: 2, life: 0.5, height: 'ground', tint: '#ffc85a' },
+  // The aura and smoke are drawn already seen at an angle, so they face the camera at the feet instead of lying flat.
+  gs_aura_crit: { sheet: 'gs_skill', row: 2, life: 0.5, height: 0.4, upright: true, tint: '#ff5a6a' },
+  gs_aura_rapid: { sheet: 'gs_skill', row: 2, life: 0.5, height: 0.4, upright: true, tint: '#ffc85a' },
   gs_burn: { sheet: 'gs_skill', row: 4, life: 0.6, height: 0.8, upright: true },
-  gs_smoke: { sheet: 'gs_skill', row: 5, life: 1, height: 'ground' },
+  gs_smoke: { sheet: 'gs_skill', row: 5, life: 1, height: 0.7, upright: true },
   gs_mine: { sheet: 'gs_gear', row: 1, life: 1, height: 'ground' },
   gs_drone: { sheet: 'gs_gear', row: 2, life: 0.8, height: 1.9, upright: true },
-  gs_turret: { sheet: 'gs_gear', row: 3, life: 1, height: 0.7 },
-  gs_blast: { sheet: 'gs_gear', row: 5, life: 0.5, height: 0.9 },
+  gs_turret: { sheet: 'gs_gear', row: 3, life: 1, height: 0.7, upright: true },
+  gs_blast: { sheet: 'gs_gear', row: 5, life: 0.5, height: 0.9, upright: true },
   gs_hawkeye: { sheet: 'gs_passive', row: 0, life: 0.45, height: 2.2, upright: true },
   gs_trigger: { sheet: 'gs_passive', row: 1, life: 0.3, height: 0.95, upright: true },
   gs_special: { sheet: 'gs_passive', row: 2, life: 0.5, height: 'ground' },
