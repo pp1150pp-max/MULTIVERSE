@@ -15,7 +15,7 @@ import { registerOrbItems } from '../shared/orbItems';
 import { CARD_DEFAULTS, CARD_FX, CARD_FX_MAX, CARD_FX_NAME, CARD_GROUPS, CARD_GROUP_NAME, CARD_NUM_FIELDS, CARD_RARITY_NAME, cardArt, cardName, type CardFx, type CardGroup, type CardId } from '../shared/data/cards';
 import { CARD_FX_LIMIT, type CardTuning } from '../shared/cardTuning';
 import type {
-  AdminAccountDetail, AdminAccountsResponse, AdminCardTune, AdminCosLook, AdminFeature, AdminOrbItems, AdminOrbLook, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, SessionPage, SessionSort, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AdminShutdownText, AdminSnapDelta, AuditRow,
+  AdminAccountDetail, AdminAccountsResponse, AdminCardTune, AdminCosLook, AdminFeature, AdminOrbItems, AdminOrbLook, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, SessionPage, SessionSort, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AdminShutdownText, AdminSnapDelta, AdminGoogle, AuditRow,
 } from '../shared/admin';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { applyBalance, checkBalance } from '../shared/balance';
@@ -288,7 +288,7 @@ function tabAllowed(t: Tab): boolean {
     case 'orbs': return f.includes('orbPreview');
     case 'cos': return f.includes('cosPreview');
     case 'cosManage': return f.includes('cosManage');
-    case 'server': return me.role === 'owner' || f.includes('backup') || f.includes('shutdownText') || f.includes('netDelta');
+    case 'server': return me.role === 'owner' || f.includes('backup') || f.includes('shutdownText') || f.includes('netDelta') || f.includes('googleLogin');
   }
 }
 
@@ -1546,7 +1546,7 @@ const ACTION_TH: Record<string, string> = {
   level: 'ตั้งเลเวล', gold: 'ทอง', items: 'เสกไอเทม', kick: 'เตะ', teleport: 'ย้ายโซน', grant: 'ให้สิทธิ์', revoke: 'ถอนสิทธิ์',
   server: 'Server', password: 'ตั้งรหัสผ่าน', ban: 'แบน', unban: 'ปลดแบน', broadcast: 'ประกาศ', backup: 'สำรองข้อมูล',
   'delete-account': 'ลบบัญชี', 'delete-character': 'ลบตัวละคร', 'chat-delete': 'ลบแชท',
-  'shutdown-text': 'ข้อความเตือนปิด server', 'snap-delta': 'ลดขนาด snapshot', 'orb-look': 'หน้าตาลูกแก้วตีบวก', 'cos-look': 'ค่าของแต่งตัว', 'cos-shop': 'ซ่อน/ราคาของแต่งตัว', 'orb-items': 'ลูกแก้วในร้านค้า', balance: 'ปรับสมดุล', daily: 'ล็อกอินรายวัน', mail: 'ส่งจดหมาย', mailRecall: 'ดึงจดหมายกลับ',
+  'shutdown-text': 'ข้อความเตือนปิด server', 'snap-delta': 'ลดขนาด snapshot', 'google-login': 'เข้าสู่ระบบด้วย Google', 'google-unlink': 'ยกเลิกการผูก Google', 'orb-look': 'หน้าตาลูกแก้วตีบวก', 'cos-look': 'ค่าของแต่งตัว', 'cos-shop': 'ซ่อน/ราคาของแต่งตัว', 'orb-items': 'ลูกแก้วในร้านค้า', balance: 'ปรับสมดุล', daily: 'ล็อกอินรายวัน', mail: 'ส่งจดหมาย', mailRecall: 'ดึงจดหมายกลับ',
   'report-status': 'สถานะรายงาน', 'report-ban': 'ห้ามรายงาน', 'report-unban': 'ปลดห้ามรายงาน',
   'cosmetic-give': 'ให้ Cosmetics', 'cosmetic-take': 'ยึด Cosmetics คืน',
 };
@@ -1593,6 +1593,7 @@ async function renderServer(): Promise<void> {
   const restart = me?.role === 'owner' ? renderRestart() : null;
   if (can('shutdownText')) view.append(shutdownTextCard());
   if (can('netDelta')) view.append(snapDeltaCard());
+  if (can('googleLogin')) view.append(googleCard());
   if (can('backup')) view.append(backupCard());
   await restart;
 }
@@ -1693,7 +1694,7 @@ async function renderUsers(): Promise<void> {
   const msg = h('div', { class: 'msg' });
   const q = h('input', { placeholder: 'ชื่อผู้ใช้ หรือชื่อตัวละคร', value: users.q, autocapitalize: 'off' });
   const filter = h('select', {},
-    ...[['all', 'ทั้งหมด'], ['real', 'บัญชีจริง'], ['guest', 'Guest'], ['admin', 'GM / Owner'], ['banned', 'ถูกแบน']]
+    ...[['all', 'ทั้งหมด'], ['real', 'บัญชีจริง'], ['guest', 'Guest'], ['google', 'ผูก Google'], ['admin', 'GM / Owner'], ['banned', 'ถูกแบน']]
       .map(([v, l]) => h('option', { value: v, selected: v === users.filter }, l)));
   const cols: [UserSort | null, string][] = [
     ['username', 'ชื่อผู้ใช้'], [null, 'ประเภท'], [null, 'สิทธิ์'], ['createdAt', 'สมัครเมื่อ'], ['lastOnline', 'ออนไลน์ล่าสุด'],
@@ -1723,6 +1724,7 @@ async function renderUsers(): Promise<void> {
       if (users.filter === 'guest' && !r.guest) return false;
       if (users.filter === 'admin' && !r.role) return false;
       if (users.filter === 'banned' && !r.bannedUntil) return false;
+      if (users.filter === 'google' && !r.google) return false;
       return !needle || r.username.toLowerCase().includes(needle) || r.names.some((n) => n.toLowerCase().includes(needle));
     });
     const key = users.sort;
@@ -1737,7 +1739,8 @@ async function renderUsers(): Promise<void> {
       const cell = (label: string, content: Node | string, cls = '') => h('td', { 'data-label': label, class: cls }, content);
       return h('tr', { class: 'click', onclick: () => void openAccount(r.accountId) },
         cell('ชื่อผู้ใช้', h('span', {}, r.guest ? `Guest · ${r.names[0] ?? ''}` : r.username,
-          r.bannedUntil ? h('span', { class: 'tag ban' }, 'แบน') : null), 'head'),
+          r.bannedUntil ? h('span', { class: 'tag ban' }, 'แบน') : null,
+          r.google ? h('span', { class: 'tag', title: `Google: ${r.google}` }, 'G') : null), 'head'),
         cell('ประเภท', r.guest ? 'Guest' : 'บัญชีจริง'),
         cell('สิทธิ์', r.role ? h('span', { class: 'role' }, roleLabel(r.role)) : '–'),
         cell('สมัครเมื่อ', dateOnly(r.createdAt)),
@@ -2027,6 +2030,74 @@ const BACKUP_LIST_SHORT = 5;
 
 /** The countdown banner wording for a restart and a shutdown (used by every way of stopping). */
 /** Snapshot delta: the on/off switch and its counters (JSON before compression). */
+/** Google login: on/off for the Login page's button, whether the client file is in place, who is linked (unlink). */
+function googleCard(): HTMLElement {
+  const msg = h('div', { class: 'msg' });
+  const status = h('div', { style: 'margin-bottom:8px;line-height:1.7' });
+  const toggle = h('button', { class: 'primary' }, '…');
+  const list = h('div');
+  let state: AdminGoogle | null = null;
+  const fail = (e: Error) => {
+    msg.className = 'msg bad';
+    msg.textContent = e.message;
+  };
+  const load = (st: AdminGoogle) => {
+    state = st;
+    toggle.textContent = st.on ? 'ปิดการเข้าสู่ระบบด้วย Google' : 'เปิดการเข้าสู่ระบบด้วย Google';
+    status.replaceChildren(
+      h('div', {}, st.on ? (st.configured ? 'สถานะ: เปิด — หน้า Login มีปุ่ม Google' : 'สถานะ: เปิด แต่ยังไม่พบไฟล์ของ Google → ปุ่มยังไม่ขึ้น') : 'สถานะ: ปิด — ไม่มีปุ่ม Google (บัญชีที่ผูกไว้เข้าด้วยรหัสผ่านได้ บัญชีที่มีแต่ Google เข้าไม่ได้จนกว่าจะเปิด)'),
+      st.configured
+        ? h('div', { class: 'muted' }, `ไฟล์: ${st.file} · client id ลงท้าย …${st.clientIdTail} · redirect: ${st.redirectUris.join(', ')}`)
+        : h('div', { class: 'muted' }, `วางไฟล์ JSON จาก Google Cloud Console ไว้ที่ (ที่แรกที่เจอ): ${st.paths.join(' · ')}`),
+    );
+    const rows = st.links.map((l) => h('tr', {},
+      h('td', { 'data-label': 'ชื่อผู้ใช้', class: 'head' }, l.username),
+      h('td', { 'data-label': 'Google' }, l.email + (l.name ? ` (${l.name})` : '')),
+      h('td', { 'data-label': 'ผูกเมื่อ' }, time(l.linkedAt)),
+      h('td', { 'data-label': 'รหัสผ่าน' }, l.hasPassword ? 'มี' : 'ไม่มี (Google อย่างเดียว)'),
+      h('td', {}, h('button', {
+        class: 'small danger',
+        onclick: async () => {
+          const warn = l.hasPassword ? '' : '\nบัญชีนี้ไม่มีรหัสผ่าน: เจ้าของบัญชีจะเข้าเกมไม่ได้จนกว่าจะรีเซ็ตรหัสผ่านให้';
+          if (!confirm(`ยกเลิกการผูก Google ของ ${l.username} (${l.email})?${warn}`)) return;
+          try {
+            load(await api<AdminGoogle>('POST', '/admin/google', { unlink: l.accountId }));
+            msg.className = 'msg ok';
+            msg.textContent = `ยกเลิกการผูกของ ${l.username} แล้ว`;
+          } catch (e) {
+            fail(e as Error);
+          }
+        },
+      }, 'ยกเลิกการผูก')),
+    ));
+    list.replaceChildren(
+      h('h3', {}, `บัญชีที่ผูก Google (${st.links.length})`),
+      st.links.length
+        ? h('table', { class: 'cards' }, h('thead', {}, h('tr', {}, ...['ชื่อผู้ใช้', 'Google', 'ผูกเมื่อ', 'รหัสผ่าน', ''].map((t) => h('th', {}, t)))), h('tbody', {}, ...rows))
+        : h('div', { class: 'muted' }, 'ยังไม่มี'),
+    );
+  };
+  toggle.onclick = async () => {
+    if (!state) return;
+    if (state.on && !confirm('ปิดการเข้าสู่ระบบด้วย Google? บัญชีที่มีแต่ Google (ไม่มีรหัสผ่าน) จะเข้าเกมไม่ได้จนกว่าจะเปิดกลับ')) return;
+    toggle.disabled = true;
+    try {
+      load(await api<AdminGoogle>('POST', '/admin/google', { on: !state.on }));
+      msg.className = 'msg ok';
+      msg.textContent = 'บันทึกแล้ว — มีผลทันที';
+    } catch (e) {
+      fail(e as Error);
+    } finally {
+      toggle.disabled = false;
+    }
+  };
+  void api<AdminGoogle>('GET', '/admin/google').then(load, fail);
+  return h('div', { class: 'card' }, h('h2', {}, 'เข้าสู่ระบบด้วย Google'),
+    h('div', { class: 'muted', style: 'margin:-6px 0 10px' },
+      'ปุ่ม "เข้าสู่ระบบด้วย Google" ที่หน้า Login · ผู้เล่นผูก Google กับบัญชีเดิมได้ที่หน้าเลือกตัวละคร/เมนูระบบ (รหัสผ่านเดิมยังใช้ได้) · Guest บันทึกตัวละครเป็นบัญชี Google ได้ · เก็บแค่รหัสบัญชี Google อีเมล และชื่อ'),
+    status, h('div', { class: 'row', style: 'margin:8px 0' }, toggle), msg, list);
+}
+
 function snapDeltaCard(): HTMLElement {
   const msg = h('div', { class: 'msg' });
   const status = h('div', { style: 'margin-bottom:8px' });
