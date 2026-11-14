@@ -23,6 +23,10 @@ export interface ProjOpts {
   hitFx?: { name: SkillEffect; size: number };
   /** Monster shots: the picture to draw. Player shots leave this out. */
   art?: 'ice_shard' | 'snowball' | 'ember_bolt';
+  /** Player shots: extra damage multiplier (× ATK) on this target, worked out as it lands (execute, stacks, weak spots). */
+  bonus?: (m: Monster) => number;
+  /** Player shots: runs after a single-target or piercing hit lands on `m` (bounces, burning, marks). */
+  after?: (m: Monster) => void;
 }
 
 /** A monster's shot: flies straight until it hits a player or runs out of range, so it can be dodged. */
@@ -92,7 +96,9 @@ export class Projectile {
       if (Math.hypot(m.x - this.x, m.z - this.z) < this.o.radius + m.radius) {
         if (this.o.pierce) {
           this.hit.add(m);
-          sim.hitMonster(this.owner, m, this.o.mult, { kb: this.o.kb ?? 2, fromX: this.x - this.dx, fromZ: this.z - this.dz });
+          const mult = this.o.mult + (this.o.bonus?.(m) ?? 0);
+          sim.hitMonster(this.owner, m, mult, { kb: this.o.kb ?? 2, fromX: this.x - this.dx, fromZ: this.z - this.dz, ...this.o.hit });
+          this.o.after?.(m);
           sim.fx('burst', this.x, 0.85, this.z, this.o.color, 4, 3);
           continue;
         }
@@ -116,7 +122,9 @@ export class Projectile {
         }
       }
     } else if (m) {
-      sim.hitMonster(this.owner, m, this.o.mult, { kb: this.o.kb ?? 2, fromX: this.x - this.dx, fromZ: this.z - this.dz, ...this.o.hit });
+      const mult = this.o.mult + (this.o.bonus?.(m) ?? 0);
+      sim.hitMonster(this.owner, m, mult, { kb: this.o.kb ?? 2, fromX: this.x - this.dx, fromZ: this.z - this.dz, ...this.o.hit });
+      this.o.after?.(m);
       if (this.o.hitFx) sim.fx('effect', this.o.hitFx.name, m.x, m.z, this.o.angle, this.o.hitFx.size);
       else sim.fx('burst', this.x, 0.85, this.z, this.o.color, 5, 3);
     }

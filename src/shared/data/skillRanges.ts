@@ -43,6 +43,28 @@ export const SKILL_REACH: Record<string, SkillReach> = {
   rapidfire: { kind: 'shot', range: RAPIDFIRE_RANGE },
   pierce: { kind: 'shot', range: PIERCE_RANGE },
   headshot: { kind: 'shot', range: HEADSHOT_RANGE },
+  // Gunslinger (2026-11-14). Buffs of the Rapid Fire line and Sniper Focus act on the player only: no reach.
+  // A blast's / landing circle's size is the skill's `blast` / `radius` number (data/gunslingerSkills.ts).
+  gs_deadeye: { kind: 'shot', range: 14 },
+  gs_aimedshot: { kind: 'shot', range: 16 },
+  gs_ricochet: { kind: 'shot', range: 13 },
+  gs_counter: { kind: 'shot', range: 14 },
+  gs_weakspot: { kind: 'shot', range: 15 },
+  gs_finisher: { kind: 'shot', range: 15 },
+  gs_lockon: { kind: 'shot', range: 16 },
+  gs_explosive: { kind: 'shot', range: 12, blast: 2.4 },
+  gs_incendiary: { kind: 'shot', range: 13 },
+  /** The mine's blast around where it was laid. */
+  gs_mine: { kind: 'self', radius: 3 },
+  gs_smoke: { kind: 'point', range: 10, radius: 3.5 },
+  gs_railgun: { kind: 'shot', range: 20 },
+  /** How far from the player the drone looks for a target. */
+  gs_drone: { kind: 'self', radius: 9 },
+  gs_seeker: { kind: 'shot', range: 14, blast: 1.8 },
+  gs_cluster: { kind: 'point', range: 11, radius: 3 },
+  gs_rocketrain: { kind: 'point', range: 14, radius: 4 },
+  /** How far from the turret it looks for a target. */
+  gs_turret: { kind: 'self', radius: 11 },
 };
 
 /** Radius of the ring to draw on the ground for a skill: its own circle, or how far it reaches. */

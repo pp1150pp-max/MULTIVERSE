@@ -1,4 +1,5 @@
 import type { ClassId, Stats } from '../types';
+import { GUNSLINGER_SKILLS } from './gunslingerSkills';
 
 /**
  * Starting MP regen, the same for every class (owner 2026-11-10: 5 MP a second at Lv.1).
@@ -68,7 +69,8 @@ export interface SkillDef {
 }
 
 /** One of a skill's own numbers: its code value, Thai name and unit, and the range /admin allows. */
-export interface SkillParam { v: number; nameTh: string; unit: string; lo: number; hi: number; status?: boolean }
+/** `status` ones grow with the skill's status %/rank, `dmg` ones (extra damage × ATK) with its damage %/rank. */
+export interface SkillParam { v: number; nameTh: string; unit: string; lo: number; hi: number; status?: boolean; dmg?: boolean }
 const sec = (v: number, nameTh: string): SkillParam => ({ v, nameTh, unit: 'วิ', lo: 0, hi: 30, status: true });
 const pctP = (v: number, nameTh: string): SkillParam => ({ v, nameTh, unit: '%', lo: 0, hi: 100 });
 const metres = (v: number, nameTh: string): SkillParam => ({ v, nameTh, unit: 'ม.', lo: 0.5, hi: 30 });
@@ -168,12 +170,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     ],
     skills: [
       { id: 'shot', kind: 'basic', name: 'Quick Shot', nameTh: 'ยิงเร็ว', desc: 'ยิงกระสุนความเร็วสูง 100% ATK', dmg: 1, mp: 0, cooldown: 0 },
-      { id: 'rapidfire', kind: 'normal', line: 1, tier: 0, anim: 'q', name: 'Rapid Fire', nameTh: 'ยิงรัว', desc: 'ยิงรัวหลายนัดติดกันไปทางเมาส์ (ดาเมจต่อนัด)', dmg: 0.4, mp: 10, cooldown: 3,
-        params: { shots: { v: 3, nameTh: 'จำนวนนัด', unit: 'นัด', lo: 1, hi: 10 } } },
-      { id: 'pierce', kind: 'normal', line: 0, tier: 0, anim: 'e', name: 'Armor-Piercing Round', nameTh: 'กระสุนเจาะเกราะ', desc: 'กระสุนนัดหนัก ลดพลังป้องกันของเป้าหมาย', dmg: 1.5, mp: 14, cooldown: 5,
-        params: { armorBreak: pctP(20, 'ลดพลังป้องกัน'), armorBreakTime: sec(3, 'เวลาลดพลังป้องกัน') } },
-      { id: 'headshot', kind: 'ult', line: 0, tier: 0, anim: 'r', name: 'Headshot', nameTh: 'ยิงหัว', desc: 'ยืนนิ่งเล็งแล้วยิงนัดเดียว คริติคอลแน่นอน บวกความแรงคริติคอลของตัวละคร', dmg: 3, mp: 30, cooldown: 12,
-        params: { aim: { v: 0.8, nameTh: 'เวลาเล็ง', unit: 'วิ', lo: 0, hi: 5 } } },
+      ...GUNSLINGER_SKILLS,
       dash('Tumble', 'กลิ้งหลบ'),
     ],
   },

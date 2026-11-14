@@ -39,6 +39,10 @@ export class Monster extends Unit {
   /** Armor break (Gunslinger's Armor-Piercing Round): defense is lowered by this share until `armorBreakUntil` (sim time). */
   armorBreak = 0;
   armorBreakUntil = 0;
+  /** Gunslinger's Deadeye mark: player `markBy` gets +`markCrit` crit chance on this monster until `markUntil` (sim time). */
+  markBy = 0;
+  markUntil = 0;
+  markCrit = 0;
   expReward = 0;
   state: State = 'idle';
   aggroT = 0;

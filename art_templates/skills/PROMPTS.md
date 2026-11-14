@@ -39,3 +39,59 @@ aged-bronze accents, and inside it a bold clear symbol of an open glowing spellb
 lightning bolt rising from its pages. Centred, with empty space around it. Background ONE perfectly flat solid
 magenta (#FF00FF), no shadows on it. No readable words, no logos. Do not use pink, magenta or purple in the badge.
 ```
+
+## Gunslinger (30 ท่าใหม่ + พาสซีฟ 3, อนุมัติ 2026-11-14)
+
+ยิงรัว (`rapidfire`) กระสุนเจาะเกราะ (`pierce`) และยิงหัว (`headshot`) มีไอคอนอยู่แล้ว
+ท่าอื่นใช้แม่แบบด้านบน แนบ `icons/skill_pierce.png` แล้วแทนที่ `<SYMBOL>` ด้วยข้อความในคอลัมน์ขวา
+ใส่สีของสายไว้ในคำบรรยาย: สายคริติคอลสีแดง (#ff5a6a) สายยิงเร็วสีเหลืองอำพัน (#ffc85a) สายอาวุธพิเศษสีฟ้าเขียว (#7affe0)
+
+**สายคริติคอล/เล็งแม่น (แดง)**
+
+| ไฟล์ | ชื่อ | `<SYMBOL>` |
+|---|---|---|
+| `skill_gs_deadeye.png` | เล็งจุดตาย | a glowing red crosshair locked onto a small skull-shaped weak point, with a red target mark |
+| `skill_gs_aimedshot.png` | ยิงประณีต | a long revolver barrel seen from the side with a thin red aiming line and a tiny scope glint |
+| `skill_gs_ricochet.png` | กระสุนสะท้อน | a single bullet trail zig-zagging and bouncing off three points in sharp red streaks |
+| `skill_gs_counter.png` | ยิงสวนกลับ | a gunslinger silhouette leaping backwards while a pistol fires forward, red motion arc |
+| `skill_gs_weakspot.png` | เจาะจุดอ่อน | a cracked steel armour plate with a bullet punching through the crack, red sparks |
+| `skill_gs_finisher.png` | ยิงปิดฉาก | a smoking pistol muzzle over a nearly empty red health bar shattering |
+| `skill_gs_lockon.png` | ล็อกเป้า | a square red lock-on reticle with four arrows closing in, and five small bullets in a row |
+| `skill_gs_sniperfocus.png` | โฟกัสสไนเปอร์ (อัลติ) | a sniper scope lens with a glowing red eye reflected in it and a sharp crosshair |
+
+**สายยิงเร็ว (เหลืองอำพัน) — เสริมการยิงปกติ**
+
+| ไฟล์ | ชื่อ | `<SYMBOL>` |
+|---|---|---|
+| `skill_gs_hotrounds.png` | กระสุนร้อน | three glowing orange-hot bullets with heat shimmer |
+| `skill_gs_quickreload.png` | รีโหลดฉับไว | a revolver cylinder spinning with amber speed lines and bullets snapping in |
+| `skill_gs_doubletap.png` | ยิงสองนัด | two amber bullets flying side by side from one muzzle flash |
+| `skill_gs_shockrounds.png` | กระสุนช็อต | an amber bullet wrapped in crackling blue-white electric arcs |
+| `skill_gs_stackfire.png` | ยิงย้ำเป้า | a target with several bullet holes stacked in the bullseye, amber glow growing |
+| `skill_gs_splitshot.png` | กระสุนแยก | one amber bullet splitting into three diverging trails |
+| `skill_gs_piercerounds.png` | กระสุนทะลวง | a long amber bullet piercing straight through a row of three thin plates |
+| `skill_gs_overdrive.png` | โอเวอร์ไดรฟ์ (อัลติ) | a pistol glowing white-hot amber with a roaring flame trail and a speed gauge maxed out |
+| `skill_gs_bulletstorm.png` | พายุลูกกระสุน (อัลติ) | a wide fan of many amber bullets bursting out of twin pistols like a storm |
+
+**สายอาวุธพิเศษ (ฟ้าเขียว)**
+
+| ไฟล์ | ชื่อ | `<SYMBOL>` |
+|---|---|---|
+| `skill_gs_explosive.png` | กระสุนระเบิด | a chunky teal-tipped shell bursting into a round explosion |
+| `skill_gs_incendiary.png` | กระสุนเพลิง | a bullet trailing fire, setting a small teal-and-orange flame |
+| `skill_gs_mine.png` | กับระเบิด | a round metal land mine with a blinking teal light half-buried in dirt |
+| `skill_gs_smoke.png` | ระเบิดควัน | a canister grenade releasing a thick grey smoke cloud with a teal pin |
+| `skill_gs_railgun.png` | กระสุนรางแม่เหล็ก | a heavy twin-rail gun barrel firing a straight teal energy beam |
+| `skill_gs_drone.png` | โดรนสนับสนุน | a small hovering four-rotor drone with a tiny gun and a teal eye light |
+| `skill_gs_seeker.png` | จรวดติดตาม | three small rockets with teal exhaust curving toward a target |
+| `skill_gs_cluster.png` | ระเบิดลูกปราย | one bomb breaking apart into several small teal bomblets |
+| `skill_gs_rocketrain.png` | ฝนจรวด (อัลติ) | many rockets falling diagonally from the sky onto a glowing teal circle |
+| `skill_gs_turret.png` | ป้อมปืนพกพา (อัลติ) | a compact tripod gun turret with a teal sensor light, firing |
+
+**พาสซีฟ**
+
+| ไฟล์ | ชื่อ | `<SYMBOL>` |
+|---|---|---|
+| `skill_gs_hawkeye.png` | สายตาเหยี่ยว | a hawk's sharp eye merged with a red crosshair |
+| `skill_gs_triggerfinger.png` | นิ้วไกไว | a finger on a revolver trigger with amber motion blur |
+| `skill_gs_specialammo.png` | กระสุนพิเศษ | an open ammo belt of mixed special shells glowing teal |

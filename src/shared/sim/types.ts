@@ -38,6 +38,8 @@ export interface HitOpts {
   /** Lowers the target's defense by this share (0–1) for `armorBreakT` seconds, for every attacker. */
   armorBreak?: number;
   armorBreakT?: number;
+  /** Extra crit chance (percentage points) for this hit only (Gunslinger counter shot, lock-on). */
+  critBonus?: number;
 }
 
 /** Visual effects the renderer knows how to draw. The client's Effects class implements this. */

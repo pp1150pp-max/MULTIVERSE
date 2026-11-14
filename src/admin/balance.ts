@@ -17,6 +17,7 @@ import {
 import { NO_BOOST, ZONES, type MonsterBoost } from '../shared/data/zones';
 import { SKILL_NUM_NAME, SKILL_RANGE, SKILL_VALUE_KEYS, SKILL_VALUE_NAME, SKILL_VALUE_RANGE, UNLOCK_TIERS } from '../shared/skillTuning';
 import { rankedCooldown, rankedDmg, rankedMp } from '../shared/skillBook';
+import { SKILL_REACH } from '../shared/data/skillRanges';
 import { CLASSES, CLASS_IDS, isLearnable, KIND_NAME, LEARN_KINDS } from '../shared/data/classes';
 import { ITEM_BASES, itemRowKinds, rowRanges, TIER_BAND_NAME, TIER_BANDS, tierBandOf, tierChances, tierRanges } from '../shared/data/items';
 import { MAX_LEVEL } from '../shared/formulas';
@@ -31,6 +32,8 @@ type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, 
 type Api = <T>(method: string, path: string, body?: unknown) => Promise<T>;
 
 const PREVIEW_LEVELS = [1, 10, 50];
+/** Units of skill numbers that are counts (step 1 on the skill table). */
+const COUNT_UNITS = new Set(['นัด', 'ลูก', 'ครั้ง', 'ชั้น', '°']);
 /** Levels shown in the skill MP preview. */
 const MP_COST_LEVELS = [1, 20, 40, 50];
 /** Stats shown with one decimal (the % ones and regen); the rest are whole numbers in the game. */
@@ -687,10 +690,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       const line = sk.line !== undefined ? c.lines[sk.line].nameTh : '';
       return h('tr', {},
         h('td', {}, `${sk.nameTh} (${KIND_NAME[sk.kind as 'normal']}${line ? ` · ${line}` : ''})`),
-        ...SKILL_VALUE_KEYS.map((k) => h('td', {}, numBox(() => v[k], (n) => { v[k] = n; }, cv[k], SKILL_VALUE_RANGE[k][0], SKILL_VALUE_RANGE[k][1], k === 'dmg' || k === 'reach' ? 0.05 : k === 'cooldown' ? 0.5 : 1, refresh))),
-        // The skill's own numbers (stun, slow, shots...): "สถานะ" ones grow with เวลาสถานะ %/แรงก์.
+        // Buffs and passives reach nothing: no reach box.
+        ...SKILL_VALUE_KEYS.map((k) => h('td', {}, k === 'reach' && !SKILL_REACH[sk.id] ? '—' : numBox(() => v[k], (n) => { v[k] = n; }, cv[k], SKILL_VALUE_RANGE[k][0], SKILL_VALUE_RANGE[k][1], k === 'dmg' || k === 'reach' ? 0.05 : k === 'cooldown' ? 0.5 : 1, refresh))),
+        // The skill's own numbers (stun, slow, shots...): * ones grow with เวลาสถานะ/ผลพาสซีฟ %/แรงก์, † ones (extra damage) with ดาเมจ %/แรงก์.
         h('td', {}, ...Object.entries(sk.params ?? {}).map(([pk, d]) => h('label', { class: 'bal-param' },
-          `${d.nameTh}${d.status ? '*' : ''} `, numBox(() => v.params[pk], (n) => { v.params[pk] = n; }, cv.params[pk], d.lo, d.hi, d.unit === 'นัด' ? 1 : 0.05, refresh), ` ${d.unit}`))),
+          `${d.nameTh}${d.status ? '*' : d.dmg ? '†' : ''} `, numBox(() => v.params[pk], (n) => { v.params[pk] = n; }, cv.params[pk], d.lo, d.hi, COUNT_UNITS.has(d.unit) ? 1 : 0.05, refresh), ` ${d.unit}`))),
         out);
     });
     skillCard.replaceChildren(

@@ -3,7 +3,8 @@ import type { Sim } from './Sim';
 import type { Monster } from './Monster';
 import type { Terrain } from './terrain';
 import type { Intent } from './types';
-import { castSkill, basicAttack } from './skills';
+import { castSkill, basicAttack, emptyGunBuffs, type GunBuffs } from './skills';
+import { passiveOnCast, passiveOnDash, passiveOnKill, passiveStats } from '../passives';
 import { CLASSES, type ClassDef, type SkillDef, type SkillSlot } from '../data/classes';
 import { cleanSkillBook, rankedCooldown, rankedMp, rankOf, skillParam, type SkillBook } from '../skillBook';
 import { addInto, BASE_MOVE_SPEED, emptyStats } from '../formulas';
@@ -431,6 +432,10 @@ export class Player extends Unit {
   /** Share of damage dealt that heals the player, until sim time `lifestealUntil` (sword Q). */
   lifesteal = 0;
   lifestealUntil = -1;
+  /** Timed stat buffs from skills (Gunslinger Sniper Focus, Quick Reload, Overdrive...), added after the class multipliers. Never saved; death ends them. */
+  statBuffs: { id: string; until: number; mods: Partial<Stats> }[] = [];
+  /** Gunslinger Rapid Fire line: what the basic shot does while its buffs run. Never saved. */
+  gun: GunBuffs = emptyGunBuffs();
   private dashVx = 0;
   private dashVz = 0;
   private chargeHit = new Set<Monster>();
@@ -577,6 +582,9 @@ export class Player extends Unit {
     this.orbs = orbCodes(this.equipment);
     // Class multipliers, then the regen cuts (so players lean on potions), gear included.
     finishStats(s, this.cls.id);
+    // The worn passive and skill buffs, flat in Stats units ("+40% attack speed" is +40 atkSpeed).
+    passiveStats(this, s);
+    for (const b of this.statBuffs) addInto(s, b.mods);
     this.stats = s;
     this.hp = Math.min(this.hp, s.maxHp);
     this.mp = Math.min(this.mp, s.maxMp);
@@ -890,10 +898,28 @@ export class Player extends Unit {
     this.moveTarget = null;
     this.face(dx, dz);
     this.sim.anim(this.id, 'dash', { duration: time + 0.12 });
+    passiveOnDash(this);
+  }
+
+  /** Starts (or restarts) a timed stat buff from a skill: the same id replaces the one running. */
+  addStatBuff(id: string, seconds: number, mods: Partial<Stats>): void {
+    this.statBuffs = this.statBuffs.filter((b) => b.id !== id);
+    this.statBuffs.push({ id, until: this.sim.time + seconds, mods });
+    this.recompute();
+  }
+
+  /** Ends every skill buff (death). */
+  clearSkillBuffs(): void {
+    this.gun = emptyGunBuffs();
+    if (this.statBuffs.length) {
+      this.statBuffs = [];
+      this.recompute();
+    }
   }
 
   /** This player landed a killing blow: skills with a killCdCut number (sword Charge) come back sooner. */
-  onKill(): void {
+  onKill(m: Monster): void {
+    passiveOnKill(this, m);
     for (const sk of this.cls.skills) {
       const left = this.cd[sk.id] ?? 0;
       const cut = sk.params?.killCdCut ? skillParam(sk, 'killCdCut') / 100 : 0;
@@ -958,6 +984,10 @@ export class Player extends Unit {
       return;
     }
     this.tickStatus(dt, sim.terrain);
+    if (this.statBuffs.some((b) => b.until <= sim.time)) {
+      this.statBuffs = this.statBuffs.filter((b) => b.until > sim.time);
+      this.recompute();
+    }
     for (const k of Object.keys(this.cd)) this.cd[k] = Math.max(0, this.cd[k] - dt);
     this.atkT -= dt;
     this.potCd -= dt;
@@ -1065,6 +1095,7 @@ export class Player extends Unit {
         this.mp -= cost;
         this.cd[sk.id] = this.skillCooldown(sk);
         this.lastAttack = sim.time;
+        passiveOnCast(this, sk);
         this.faceLockT = 0.3;
       }
       if (this.dashT > 0 || this.rootT > 0) return;
