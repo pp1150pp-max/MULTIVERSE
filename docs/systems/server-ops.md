@@ -35,9 +35,12 @@
 - **log:** `server/data/logs/online-YYYY-MM-DD.log` วันละไฟล์ ทุกบรรทัดมีเวลา เก็บ 30 วัน (`LOG_KEEP_DAYS` ใน `server/logfile.ts`) · ดู: `npm run logs` (60 บรรทัดท้าย) · `npm run logs -- --follow` (ดูต่อเรื่อย ๆ) · `--lines N`
 - **กันเครื่องรีสตาร์ทเองตอนกลางวัน (เจ้าของตั้งเอง ไม่ใช่โค้ด):** Settings → Update & Security → Windows Update → *Change active hours* (ได้สูงสุด 18 ชม. เช่น 08:00–02:00) · *Pause updates* ช่วงที่มีคนเล่นเยอะ · Windows 10 Pro: `gpedit.msc` → Computer Configuration → Administrative Templates → Windows Components → Windows Update → *No auto-restart with logged on users for scheduled automatic updates installations* = Enabled (ใช้ได้เมื่อมีคนล็อกอินค้างไว้) · ถ้ายังรีสตาร์ทเอง task จะเปิด server ให้ใหม่ แต่ผู้เล่นหลุดโดยไม่มีนับถอยหลัง (เซฟอัตโนมัติล่าสุดยังอยู่)
 
-## VPS (Linux) — เตรียมย้าย (เจ้าของเลือก Vultr กรุงเทพ 2 vCPU / 4 GB, Ubuntu 24.04, 2026-11-14)
+## VPS (Linux) — ที่อยู่ของ server จริง (Vultr กรุงเทพ 2 vCPU / 4 GB, Ubuntu 24.04, เจ้าของเลือก 2026-11-14)
 
-แผนวันย้าย เช็คลิสต์ และวิธีย้ายกลับ: [../vps-move.md](../vps-move.md) · จนกว่าจะย้ายจริง server จริงยังอยู่ที่เครื่อง Windows ตามหัวข้อด้านบน
+แผนวันย้าย เช็คลิสต์ และวิธีย้ายกลับ: [../vps-move.md](../vps-move.md) · หัวข้อ Windows / Task Scheduler ด้านบนใช้กับเครื่องบ้านตอนย้ายกลับ
+
+- สั่งงานจากเครื่องบ้าน: `ssh -o BatchMode=yes multiverse-vps "cd MULTIVERSE && <คำสั่ง>"` (ชื่อ SSH ใน `~/.ssh/config` ของเครื่องบ้าน) · อัปเดตเกม: VPS `git pull --ff-only && npx vite build` → `npm run stop-server -- --restart` (skill `/update-server`) · ตรวจ typecheck/test บนเครื่องบ้าน ไม่รันบน VPS
+- **ห้าม** `kill` / `systemctl kill` / `systemctl restart` (restart = ปิดแบบโหมดปิดแล้วเปิดใหม่ ผู้เล่นเห็นป้ายปิด ไม่ใช่ป้ายอัปเดต) · ปิดเต็ม: `npm run stop-server` · เปิด: `npm run autostart -- -Start`
 
 - ติดตั้งเครื่องใหม่: `tools/vps-setup.sh` (root, รันซ้ำได้): Node รุ่นเดียวกับเครื่องบ้าน (`NODE_VERSION`, ตอนนี้ 24.22.1 ตรวจ SHA256), git, cloudflared (apt ของ Cloudflare), swap 2 GB, timezone Asia/Bangkok, ufw เปิดแค่ SSH, SSH ใช้ key เท่านั้น, user `multiverse` (เป็นเจ้าของโค้ดใน `/home/multiverse/MULTIVERSE` รัน server และเป็น user ที่ SSH เข้ามาสั่งงาน) · sudo ได้แค่ `systemctl start/stop/status multiverse`
 - **systemd unit `multiverse`** (`tools/multiverse.service`) แทน Task Scheduler: รัน `server/online-main.ts --always-on` ตัวเดียวกับ Windows (exit 75 = ตัวคุมเปิดใหม่เอง, exit 0 = ปิดจริง unit ไม่เปิดใหม่, ล่ม = ตัวคุมเปิดใหม่, ตัวคุมตายเอง = systemd เปิดใหม่ใน 10 วิ) · เปิดเองตอนบูต · `systemctl stop` / รีบูตเครื่อง รัน `stop-server` ก่อน (ExecStop) = นับถอยหลัง + เซฟทุกคนขณะลิงก์ยังอยู่ · ไม่สำเร็จค่อย SIGTERM (server ก็นับถอยหลัง) แล้ว SIGKILL หลัง 120 วิ
@@ -45,7 +48,6 @@
 - คำสั่งเดิมใช้ได้ทั้งสองเครื่อง: `npm run autostart` (Windows → `tools/autostart.ps1` เหมือนเดิม · Linux → systemctl: สถานะ / `-Start` / `-Install` และ `-Uninstall` ต้อง root: `sudo node tools/autostart.mjs -Install`) · `npm run stop-server` · `npm run logs` (ไฟล์ log เดิมใน `server/data/logs/`, ถ้าตัวคุมเปิดไม่ขึ้นเลยดู `journalctl -u multiverse`)
 - `stop-server` อ่านไฟล์ control ไม่ได้เพราะสิทธิ์ (รันผิด user) = error exit 1 (ไม่ใช่ "ไม่มีอะไรต้องปิด" แบบเดิม)
 - **สำรองนอกเครื่อง:** `npm run pull-backup` บนเครื่องบ้าน ดึงไฟล์สำรองล่าสุดที่เก่ากว่า 1 นาทีจาก `server/data/backups/` บน VPS ผ่าน scp → `<home>/MULTIVERSE-backups` (นอก repo, เปลี่ยนด้วย `BACKUP_PULL_DIR`) ตรวจ SHA-256 + `quick_check` เก็บ 30 ไฟล์ (`--keep N`) · ไม่ดึง `multiverse.db` ที่กำลังใช้ · ใช้ชื่อ SSH `multiverse-vps` จาก `~/.ssh/config` (`VPS_SSH`) ไม่เขียน IP ใน repo สาธารณะ
-- ยังไม่ได้ทดสอบบน Linux จริง (CI รันแค่ build) ต้องซ้อมตาม vps-move.md หัวข้อ B ก่อนวันย้าย
 
 ## สำรอง / กู้คืน DB
 

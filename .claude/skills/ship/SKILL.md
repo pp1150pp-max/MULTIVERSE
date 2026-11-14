@@ -11,8 +11,9 @@ disable-model-invocation: true
 **ห้าม:**
 - `gh pr merge --delete-branch`
 - `npm run build` (ใช้ `npx vite build` ในขั้นอัปเดตเท่านั้น)
-- kill task ของ `npm run online` หรือกด "End" ที่ task `MULTIVERSE server` ใน Task Scheduler
-- แก้หรือ checkout branch อื่นในโฟลเดอร์หลัก เพราะ server จริงรันโค้ดจากที่นั่น
+- `kill` / `systemctl kill` / `systemctl restart` server บน VPS (ปิด/รีสตาร์ทผ่าน `npm run stop-server` เท่านั้น)
+- แก้ไฟล์หรือ checkout branch อื่นใน `~/MULTIVERSE` บน VPS เพราะ server จริงรันโค้ดจากที่นั่น (บน VPS ทำแค่ `git pull --ff-only`)
+- แก้หรือ checkout branch อื่นในโฟลเดอร์หลักที่บ้าน (เป็นที่ตรวจ main ก่อนขึ้น และทางถอยถ้าต้องย้ายกลับ)
   - งานที่ต้องแก้โค้ด ให้ทำใน `git worktree` แยก
   - ถ้าเชื่อม `node_modules` ด้วย junction ต้องลบ junction ด้วย `cmd /c rmdir` **ก่อน** `git worktree remove`
 
@@ -20,7 +21,7 @@ disable-model-invocation: true
 
 - `git fetch` แล้ว `gh pr list --state open --json number,title,headRefName,baseRefName,isDraft,mergeable,statusCheckRollup,body`
 - `git log --oneline HEAD..origin/main`: commit ที่คนอื่น merge เข้า main แล้ว แต่ server ยังไม่มี
-- ดูว่า server ตอนนี้รัน commit ไหน (`git log -1` ของโฟลเดอร์หลัก) และ port 2567 เปิดอยู่ไหม
+- ดูว่า server ตอนนี้รัน commit ไหน: `ssh -o BatchMode=yes multiverse-vps "cd MULTIVERSE && git log -1 --oneline && npm run autostart"` (ติดต่อ VPS ไม่ได้ = หยุดบอกเจ้าของ)
 
 ## 2. ตรวจทีละ PR
 
@@ -52,10 +53,11 @@ disable-model-invocation: true
 
 ทำตาม `.claude/skills/update-server/SKILL.md` ตั้งแต่ขั้น 3 (สำรอง DB) จนถึงขั้น 6 (ยืนยันลิงก์)
 
-- **สำรอง DB ทุกครั้ง** ตั้งชื่อไฟล์ตามสิ่งที่ขึ้นไป เช่น `multiverse-before-<เรื่อง>-<เวลา>.db`
-- server จริงปกติรันจาก Task Scheduler `MULTIVERSE server` (`npm run always-on` ไม่มีหน้าต่าง) · สถานะ `npm run autostart` · log `npm run logs` (ดูว่าขึ้น "พร้อมแล้ว" หลังรีสตาร์ท)
-- **ถ้า server ไม่ได้เปิดอยู่** (port 2567 ว่าง): `npm run autostart -- -Start` แล้วรอ "พร้อมแล้ว" ใน `npm run logs` · ห้ามเปิดในแท็บ Terminal ของแอปหรือ task background ของ session
-  - ลิงก์ถาวรไม่เปลี่ยน (ถ้ายังใช้ quick tunnel อยู่ ลิงก์ใหม่ต้องบอกเจ้าของชัด ๆ ให้ส่งเพื่อน)
+- server จริงอยู่บน VPS (systemd unit `multiverse`) ทุกคำสั่งไปทาง `ssh -o BatchMode=yes multiverse-vps "cd MULTIVERSE && …"` · สถานะ `npm run autostart` · log `npm run logs` (ดูว่าขึ้น "พร้อมแล้ว" หลังรีสตาร์ท)
+- **สำรอง DB บน VPS ทุกครั้ง** ตั้งชื่อไฟล์ตามสิ่งที่ขึ้นไป เช่น `multiverse-before-<เรื่อง>-<เวลา>.db` (`sqlite3 … "VACUUM INTO …"` ตามขั้น 3 ของ update-server)
+- **ถ้า server ไม่ได้เปิดอยู่**: VPS `npm run autostart -- -Start` แล้วรอ "พร้อมแล้ว" ใน `npm run logs`
+  - ลิงก์ถาวรไม่เปลี่ยน
+- จบแล้ว `npm run pull-backup` บนเครื่องบ้าน (เก็บสำเนา DB นอก VPS)
 - **ลิงก์ใหม่อาจยังเข้าไม่ได้ทันที** (DNS ยังไม่ทัน, curl ได้ 000 / exit 6): ให้ลองซ้ำสักพัก อย่าเพิ่งสรุปว่าพัง
 
 ## หยุดถามก่อน (ไม่ต้องถามกรณีอื่น)
@@ -63,7 +65,7 @@ disable-model-invocation: true
 - **PR ชนกับ main** ต้องรวมโค้ดสองฝั่งเอง: บอกว่าชนไฟล์ไหน เป็นงานเรื่องอะไรกับอะไร แล้วถามว่าจะให้รวมเลยไหม
   - ระหว่างนี้ merge ตัวอื่นที่ไม่เกี่ยวต่อไปได้
 - **CI ไม่ผ่าน** (รัน rerun แล้วก็ยังไม่ผ่าน)
-- **PR เปลี่ยน dependency ใน `package.json`:** ต้อง `npm ci` ซึ่งต้องปิด server เต็ม ผู้เล่นจะเห็นป้ายปิด ไม่ใช่ป้ายอัปเดต (`npm run stop-server` → `npm ci` → `npx vite build` → `npm run autostart -- -Start`)
+- **PR เปลี่ยน dependency ใน `package.json`:** ต้อง `npm ci` บน VPS ซึ่งต้องปิด server เต็ม ผู้เล่นจะเห็นป้ายปิด ไม่ใช่ป้ายอัปเดต (VPS: `npm run stop-server` → `git pull --ff-only` → `npm ci` → `npx vite build` → `npm run autostart -- -Start`)
 - **ไม่มีอะไรใหม่เลย** (ไม่มี PR พร้อม และ main ตรงกับ server แล้ว): บอกว่าไม่มีอะไรต้องขึ้น อย่ารีสตาร์ทให้ผู้เล่นหลุดเปล่า ๆ
 - **เจอสิ่งที่ดูผิดกติกาใน `docs/systems/`** ระหว่างอ่าน diff: ถามก่อน merge PR นั้น
 
@@ -72,5 +74,5 @@ disable-model-invocation: true
 - commit ที่ server รันอยู่ และลิงก์ (บอกว่าเปลี่ยนหรือไม่)
 - **ขึ้นไปรอบนี้:** แต่ละ PR บรรทัดเดียว พร้อมเลข #
 - **ข้ามไป:** PR ไหน และเพราะอะไร
-- ผล typecheck/test และชื่อไฟล์สำรอง DB
+- ผล typecheck/test, ชื่อไฟล์สำรอง DB และไฟล์ที่ pull-backup ดึงมา
 - **สิ่งที่ยังไม่ได้ลองในเกมจริง**
