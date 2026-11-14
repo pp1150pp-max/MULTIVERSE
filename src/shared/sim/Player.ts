@@ -2,7 +2,7 @@ import { Unit } from './Unit';
 import type { Sim } from './Sim';
 import type { Monster } from './Monster';
 import type { Terrain } from './terrain';
-import type { Intent } from './types';
+import type { Intent, SkillEffect } from './types';
 import { castSkill, basicAttack, emptyGunBuffs, type GunBuffs } from './skills';
 import { passiveDashCdMult, passiveOnCast, passiveOnDash, passiveOnKill, passiveStats } from '../passives';
 import { CLASSES, type ClassDef, type SkillDef, type SkillSlot } from '../data/classes';
@@ -950,6 +950,11 @@ export class Player extends Unit {
   }
 
   /** Living monsters within `r` of this player (passives such as the sword's Duelist). */
+  /** Plays a skill effect drawing at (x, z) for everyone nearby (passives that show when they kick in). */
+  effectAt(name: SkillEffect, x: number, z: number, angle: number, size: number): void {
+    this.sim.fx('effect', name, x, z, angle, size);
+  }
+
   monstersNear(r: number): number {
     let n = 0;
     for (const m of this.sim.monsters) if (m.alive && Math.hypot(m.x - this.x, m.z - this.z) <= r + m.radius) n++;

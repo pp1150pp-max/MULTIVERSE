@@ -390,6 +390,7 @@ export class Sim {
     if (opts.kb && !steady) p.knockback(opts.fromX ?? m.x, opts.fromZ ?? m.z, opts.kb);
     // Sword Thorn Armor: a share of the damage goes back at the attacker (through its defense, like any hit).
     if (this.time < p.reflectUntil && p.reflect > 0 && dmg > 0 && m.alive && p.stats.atk > 0) {
+      this.fx('effect', 'sw_armorhit', m.x, m.z, 0, 0.9);
       this.hitMonster(p, m, (dmg * p.reflect) / p.stats.atk, { maxMult: (dmg * p.reflect) / p.stats.atk });
     }
     if (p.hp <= 0) this.killPlayer(p);
