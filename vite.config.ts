@@ -6,12 +6,14 @@ const GAME_SERVER = `http://localhost:${process.env.DEV_SERVER_PORT ?? 2568}`;
 
 export default {
   base: './',
-  // Two pages: the game, and the admin page that the game server serves at /admin.
+  // The game, the admin page (served at /admin) and the /privacy and /terms pages.
   build: {
     rollupOptions: {
       input: {
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
         admin: fileURLToPath(new URL('./admin.html', import.meta.url)),
+        privacy: fileURLToPath(new URL('./privacy.html', import.meta.url)),
+        terms: fileURLToPath(new URL('./terms.html', import.meta.url)),
       },
     },
   },
@@ -19,11 +21,12 @@ export default {
     // Sprite PNGs ship as WebP (build only; dev serves the PNGs).
     spritesWebp(),
     {
-      // In development, /admin opens the admin page too (instead of the game).
+      // In development, /admin, /privacy and /terms open their pages too (instead of the game).
       name: 'admin-page',
       configureServer(server: { middlewares: { use(fn: (req: { url?: string }, res: unknown, next: () => void) => void): void } }) {
         server.middlewares.use((req, _res, next) => {
-          if (req.url === '/admin' || req.url?.startsWith('/admin?')) req.url = '/admin.html' + req.url.slice(6);
+          const m = /^\/(admin|privacy|terms)(\?.*)?$/.exec(req.url ?? '');
+          if (m) req.url = `/${m[1]}.html${m[2] ?? ''}`;
           next();
         });
       },
