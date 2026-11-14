@@ -89,7 +89,8 @@ export type ActionMsg =
   | { t: 'act'; a: 'autoSettings'; settings: AutoSettings }
   /** Skill window (owner 2026-11-14): learn / rank up a skill for one point, take one point back, or wear a learned skill (null = take off). */
   | { t: 'act'; a: 'skillLearn'; id: string }
-  | { t: 'act'; a: 'skillRefund'; id: string }
+  | { t: 'act'; a: 'skillRefund'; id: string; all?: boolean }
+  | { t: 'act'; a: 'skillReset' }
   | { t: 'act'; a: 'skillWear'; slot: WearSlot; id: string | null }
   /** `n` = sell only that many from a potion/stone stack (omitted = the whole slot). */
   | { t: 'act'; a: 'sell'; i: number; n?: number }

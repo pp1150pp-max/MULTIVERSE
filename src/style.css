@@ -1616,6 +1616,9 @@ input[type=range]:hover::-webkit-slider-thumb { background: var(--ctl-accent-hi)
 #skills-win .sk-empty { color: var(--ink-dim); text-align: center; padding: 8px 4px; font-size: 11px; }
 /* The constellation (sky image by the owner, art_templates/skills/PROMPTS.md; CSS stars under it until then). */
 #skills-win .sk-body { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 8px; align-items: start; }
+#skills-win .sk-mapbox { position: relative; min-width: 0; }
+#skills-win .sk-reset { position: absolute; right: 10px; bottom: 10px; z-index: 1; padding: 4px 10px; font-size: 11px; background: rgba(20, 16, 10, 0.85); }
+#skills-win .sk-reset:disabled { opacity: 0.4; }
 #skills-win .sk-mapwrap { overflow: auto; max-height: calc(100vh - 190px); border: 1px solid #4a3e2a; border-radius: 4px; background: #0a0f24; }
 #skills-win .sk-map {
   position: relative; margin: 0 auto;
