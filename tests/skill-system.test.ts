@@ -88,6 +88,29 @@ const sk = (id: string) => [...CLASSES.sword.skills, ...CLASSES.mage.skills, ...
   ok(JSON.stringify(back.skillBook) === JSON.stringify(p.skillBook), 'the book is saved and loaded');
 }
 
+// ---------------------------------------------------------- every point of a skill, and a full reset (owner 2026-11-15)
+{
+  const sim = new Sim(ZONE_1);
+  const p = sim.addPlayer({ ...newCharacterData('All', 'mage'), level: 40 });
+  for (let i = 0; i < 6; i++) sim.learnSkill(p, 'fireball');
+  sim.learnSkill(p, 'frostnova');
+  sim.learnSkill(p, 'meteor');
+  ok(p.skillBook.ranks.fireball === 6 && p.skill('q')?.id === 'fireball', 'set up: Fireball rank 6 on Q');
+  p.gold = 5000;
+  ok(!sim.refundSkill(p, 'fireball', true) && p.skillBook.ranks.fireball === 6 && p.gold === 5000, 'all 6 points cost 6,000 G: refused with 5,000 G');
+  p.gold = 7000;
+  p.lastHurt = sim.time;
+  ok(!sim.refundSkill(p, 'fireball', true) && !sim.resetSkills(p), 'no refund-all or reset in combat');
+  p.lastHurt = -99;
+  ok(sim.refundSkill(p, 'fireball', true) && p.skillBook.ranks.fireball === undefined && !p.skill('q') && p.gold === 1000, 'all 6 points back for 6,000 G: forgotten and taken off Q');
+  ok(!sim.refundSkill(p, 'fireball', true), 'nothing left to take back');
+  ok(!sim.resetSkills(p) && p.skillBook.ranks.frostnova === 1, 'reset of 2 points needs 2,000 G: refused with 1,000 G');
+  p.level = 15; // 15 points earned (< 21): free
+  ok(sim.resetSkills(p) && JSON.stringify(p.skillBook) === JSON.stringify({ ranks: {}, worn: {} }) && p.gold === 1000, 'Lv15: reset is free, every skill forgotten and taken off');
+  ok(pointsLeft(p.level, p.skillBook) === 15, 'all 15 points are back');
+  ok(!sim.resetSkills(p), 'nothing to reset');
+}
+
 // ---------------------------------------------------------- casting: rank MP and the cooldown kept on the skill
 {
   const sim = new Sim(ZONE_1);

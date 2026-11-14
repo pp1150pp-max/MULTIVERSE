@@ -99,7 +99,10 @@ export interface Backend {
   setAutoSettings(s: AutoSettings): void;
   /** Skill window: learn a skill or its next rank (one point), take one point back, wear a learned skill (null = take off). */
   learnSkill(id: string): void;
-  refundSkill(id: string): void;
+  /** Takes one point (or, with `all`, every point) back from a skill. */
+  refundSkill(id: string, all?: boolean): void;
+  /** Takes every skill point back. */
+  resetSkills(): void;
   wearSkill(slot: WearSlot, id: string | null): void;
   /** `n` = sell only that many from a potion/stone stack (omitted = the whole slot). */
   sell(bagIndex: number, n?: number): void;

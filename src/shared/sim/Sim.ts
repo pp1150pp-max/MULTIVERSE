@@ -17,7 +17,7 @@ import { NPC_INFO, NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { pick, rand, randInt } from '../rng';
 import { splitExp } from '../party';
 import { CLASS_IDS, SLOT_KIND, WEAR_SLOTS, type WearSlot } from '../data/classes';
-import { learnable, learnBlock, rankOf, refundPrice, unlearnOne, wear, wearBlock } from '../skillBook';
+import { emptySkillBook, learnable, learnBlock, pointsSpent, rankOf, refundPrice, unlearnOne, wear, wearBlock } from '../skillBook';
 import { classBalance, currentBalance } from '../balance';
 import { COS_SLOT_NAME, cosById, MOUNT_CALM } from '../data/cosmetics';
 import {
@@ -1219,24 +1219,47 @@ export class Sim {
    * Takes one point back from skill `id` (rank 1 → forgotten and taken off). Free while the character has earned
    * few points, then gold per point (owner 2026-11-14). Not in combat, since it can empty a slot.
    */
-  refundSkill(p: Player, id: unknown): boolean {
+  refundSkill(p: Player, id: unknown, all = false): boolean {
     const sk = learnable(p.cls.id, id);
-    if (!sk || !p.skillBook.ranks[sk.id]) return false;
+    const has = sk ? p.skillBook.ranks[sk.id] ?? 0 : 0;
+    if (!sk || !has) return false;
+    // One point, or every point in this skill (owner 2026-11-15) at the same price per point.
+    const n = all ? has : 1;
+    if (!this.canRefund(p, n)) return false;
+    const price = refundPrice(p.level) * n;
+    p.gold -= price;
+    for (let i = 0; i < n; i++) unlearnOne(p.skillBook, sk.id);
+    p.recompute();
+    const left = rankOf(p.skillBook, sk.id);
+    this.log(`คืน ${n} แต้มจาก${sk.nameTh}${left ? ` (เหลือแรงก์ ${left})` : ' (ลืมสกิลแล้ว)'}${price ? ` −${price.toLocaleString()} G` : ''}`, '#9fd8ff', p.id);
+    this.events.push({ t: 'save', to: p.id });
+    return true;
+  }
+
+  /** Takes back every skill point (owner 2026-11-15): all skills forgotten and taken off, at the refund price per point. */
+  resetSkills(p: Player): boolean {
+    const n = pointsSpent(p.skillBook);
+    if (!n || !this.canRefund(p, n)) return false;
+    const price = refundPrice(p.level) * n;
+    p.gold -= price;
+    p.skillBook = emptySkillBook();
+    p.recompute();
+    this.log(`รีเซ็ตสกิลทั้งหมด ได้คืน ${n} แต้ม${price ? ` −${price.toLocaleString()} G` : ''}`, '#9fd8ff', p.id);
+    this.events.push({ t: 'save', to: p.id });
+    return true;
+  }
+
+  /** Out of combat and enough gold to take `n` points back (says why not in the log). */
+  private canRefund(p: Player, n: number): boolean {
     if (p.inCombat()) {
       this.log('คืนแต้มสกิลระหว่างต่อสู้ไม่ได้', '#ff8a6a', p.id);
       return false;
     }
     const price = refundPrice(p.level);
-    if (p.gold < price) {
-      this.log(`ทองไม่พอ — คืนแต้มละ ${price.toLocaleString()} G`, '#ff8a6a', p.id);
+    if (p.gold < price * n) {
+      this.log(`ทองไม่พอ — คืน ${n} แต้ม แต้มละ ${price.toLocaleString()} G รวม ${(price * n).toLocaleString()} G`, '#ff8a6a', p.id);
       return false;
     }
-    p.gold -= price;
-    unlearnOne(p.skillBook, sk.id);
-    p.recompute();
-    const left = rankOf(p.skillBook, sk.id);
-    this.log(`คืนแต้ม${sk.nameTh}${left ? ` (เหลือแรงก์ ${left})` : ' (ลืมสกิลแล้ว)'}${price ? ` −${price.toLocaleString()} G` : ''}`, '#9fd8ff', p.id);
-    this.events.push({ t: 'save', to: p.id });
     return true;
   }
 
