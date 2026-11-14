@@ -269,3 +269,92 @@ Replace all of it with ONE perfectly flat solid magenta (#FF00FF) background, so
 with crisp dark outlines against the magenta. No shadow under the body, no ground, no text. Do not use pink, magenta or
 purple on the knight or the katana.
 ```
+
+---
+
+## เอฟเฟกต์สกิลใหม่ 3 แผ่น (สายละแผ่น, เจ้าของอนุมัติ 2026-11-15)
+
+แผนเต็ม: ภาพไหนใช้กับท่าไหน อยู่ใน [docs/plans/sword-fx.md](../../docs/plans/sword-fx.md)
+
+- **ภาพตัวอย่างสไตล์:** แนบ `public/assets/sprites/fx/sword.png` ไปด้วยทุกครั้ง
+- **รูปแบบ:** แผ่นละ 4 แถว × 6 เฟรม พื้นแมเจนตา
+- **ภาพดิบ:** เซฟที่ `art_templates/sword/raw/` โดยใช้ชื่อ `sw_blade.png`, `sw_gale.png` และ `sw_bulwark.png`
+- **ไม่ต้องตัดเอง:** แจ้งผมเมื่อเซฟเสร็จ ผมจะตัดด้วย `tools/cut_fx_sheet.cjs` แล้วเซฟไว้ที่ `public/assets/sprites/fx/` ให้
+- **ห้าม:** ห้ามมีตัวละคร ห้ามมีโล่ และห้ามมีตัวหนังสือในภาพ
+
+### 1. `sw_blade.png`: สายคมดาบ (แดงส้ม)
+
+```
+Use the attached effect sheet as the EXACT style reference. EXACT same fine-detail 16-bit SNES-era pixel-art style:
+crisp pixels, hard-edged color bands, no blur, no soft gradients, no glow haze. Only the effects, no characters, no
+people, no shields. Generate an image: an animation sheet as a strict grid of exactly 4 rows x 6 columns, every cell the
+same size, each effect fully inside its own cell with empty space around it, nothing touching or crossing cell borders.
+Each row is one effect playing from left to right over 6 frames. Colours: fiery orange, red-orange and hot white-yellow.
+Row 1, HEAVY CLEAVE, seen straight from above and lying flat like a floor decal: one thick heavy crescent sword slash,
+its curved side pointing to the right; frame 1 a thin bright line, frame 2 the crescent widening, frame 3 the peak, a
+thick blazing orange-red crescent with a white-hot edge and small sparks, frames 4 to 6 the crescent thinning, breaking
+into sparks and fading.
+Row 2, FLYING SWORD WAVE, seen from the side, flying to the right: a crescent-shaped blade of orange-red energy with a
+short flame trail behind it; frame 1 small and forming, frames 2 to 5 the same full-size crescent flying with its
+flames flickering a little differently in each frame (these loop), frame 6 breaking apart into sparks.
+Row 3, GIANT SWORD IMPACT, seen from the front: a huge glowing orange broadsword made of light falling point-down onto
+the ground; frame 1 the sword high at the top of the cell, frame 2 halfway down with speed lines, frame 3 the blade
+stabbing into the ground at the bottom of the cell with a bright white-yellow impact flash, frame 4 an orange shockwave
+and rock chips bursting sideways, frame 5 the sword fading with embers, frame 6 a few embers and a small dust puff.
+Row 4, POWER NOVA, seen straight from above, flat like a floor decal: a burst of orange-red power from the centre;
+frame 1 a small bright core, frame 2 a ring of energy pushing out with sharp blade-like spikes, frame 3 the peak, a wide
+blazing ring of blades with a white-hot core, frames 4 to 6 the ring widening, thinning and fading into sparks.
+Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no ground, no text, no labels, no numbers, no grid
+lines. Do not use pink, magenta or purple in the effects.
+```
+
+### 2. `sw_gale.png`: สายวายุ (ฟ้า)
+
+```
+Use the attached effect sheet as the EXACT style reference. EXACT same fine-detail 16-bit SNES-era pixel-art style:
+crisp pixels, hard-edged color bands, no blur, no soft gradients, no glow haze. Only the effects, no characters, no
+people, no shields. Generate an image: an animation sheet as a strict grid of exactly 4 rows x 6 columns, every cell the
+same size, each effect fully inside its own cell with empty space around it, nothing touching or crossing cell borders.
+Each row is one effect playing from left to right over 6 frames. Colours: sky blue, cyan and white, with a little deep
+blue for shading.
+Row 1, WIND DASH STREAK, seen from the side, moving to the right: a long streak of cyan wind with sharp speed lines and
+two or three faint pale-blue crescent blade arcs inside it; frame 1 a short streak, frames 2 and 3 the streak
+stretching long and bright, frames 4 to 6 the streak thinning and breaking into wisps.
+Row 2, WIND SPIN RING, seen straight from above, flat like a floor decal: a ring of spinning sky-blue wind blades around
+an empty centre; frame 1 a thin faint ring, frames 2 and 3 the ring full and bright with curved blade shapes turning
+clockwise, frames 4 to 6 the ring spinning out, thinning and fading into wisps.
+Row 3, CROSS SLASH FLASH, seen from the front: two sharp crossing slash lines making an X of white-cyan light; frame 1
+the first diagonal slash appearing, frame 2 the second slash crossing it, frame 3 the peak, a bright X flash with a small
+starburst in the centre, frames 4 to 6 the X splitting into thin lines and fading with tiny blue sparks.
+Row 4, WIND AURA, seen from the front: a column of swirling sky-blue wind spiralling upward around an empty centre, the
+size of a person but with no person; frame 1 a few wisps at the bottom, frames 2 and 3 the full spiral rising with small
+leaf-like wind blades, frames 4 to 6 the spiral rising further, loosening and fading at the top.
+Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no ground, no text, no labels, no numbers, no grid
+lines. Do not use pink, magenta or purple in the effects.
+```
+
+### 3. `sw_bulwark.png`: สายปราการ (ทอง)
+
+```
+Use the attached effect sheet as the EXACT style reference. EXACT same fine-detail 16-bit SNES-era pixel-art style:
+crisp pixels, hard-edged color bands, no blur, no soft gradients, no glow haze. Only the effects, no characters, no
+people, no shields. Generate an image: an animation sheet as a strict grid of exactly 4 rows x 6 columns, every cell the
+same size, each effect fully inside its own cell with empty space around it, nothing touching or crossing cell borders.
+Each row is one effect playing from left to right over 6 frames. Colours: warm gold, amber and white-yellow, with brown
+for rocks.
+Row 1, GOLDEN BARRIER, seen from the front: a dome-shaped barrier of golden light made of small hexagon plates around an
+empty space the size of a person, with no person inside; frame 1 a few plates appearing at the bottom, frames 2 and 3
+the full dome forming and shining, frame 4 a bright shimmer passing over it, frames 5 and 6 the plates fading one by one.
+Row 2, RALLYING SHOUT RINGS, seen straight from above, flat like a floor decal: golden shockwave rings spreading out from
+the centre; frame 1 a small bright ring, frames 2 to 4 two or three rings expanding one after another with tiny golden
+sparks, frames 5 and 6 the outer ring wide and thin, fading.
+Row 3, GROUND CRACK LINE, seen straight from above, flat like a floor decal: a straight crack in the ground running
+from the left edge of the cell to the right, glowing amber inside; frame 1 a short crack at the left, frames 2 and 3 the
+crack racing to the right with brown rock chips bursting up along it, frame 4 the whole crack glowing, frames 5 and 6 the
+glow fading and dust settling.
+Row 4, ARMOR IMPACT, seen from the front: a heavy golden impact burst with sharp metal spikes pointing outward, like a
+blow bouncing off steel armour; frame 1 a bright small flash, frame 2 a golden star with sharp spikes, frame 3 the peak,
+a big spiky burst with a white-hot core and flying metal sparks, frames 4 to 6 the spikes shrinking and sparks fading.
+Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no ground, no text, no labels, no numbers, no grid
+lines. Do not use pink, magenta or purple in the effects.
+```

@@ -7,6 +7,7 @@ import type { Player } from './Player';
 import type { Monster } from './Monster';
 import type { SkillDef } from '../data/classes';
 import type { Vec2 } from '../types';
+import type { SkillEffect } from './types';
 import { forCircle, forCone } from './skills';
 
 /** The skill's numbers at its rank, worked out by castSkill. */
@@ -46,10 +47,15 @@ function monstersAround(sim: Sim, x: number, z: number, r: number): Monster[] {
     .sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z));
 }
 
-/** A swing in front: the coloured arc plus the sword's slash. */
-function swingFx(sim: Sim, p: Player, ang: number, range: number, arc: number, color: string): void {
+/** A swing in front: the coloured arc plus a slash drawing (the basic one, or a line's own, owner 2026-11-15). */
+function swingFx(sim: Sim, p: Player, ang: number, range: number, arc: number, color: string, art: SkillEffect = 'slash'): void {
   sim.fx('slash', p.x, p.z, ang, arc, range, color);
-  sim.fx('effect', 'slash', p.x + Math.cos(ang) * range * 0.55, p.z + Math.sin(ang) * range * 0.55, ang, range * 0.8);
+  sim.fx('effect', art, p.x + Math.cos(ang) * range * 0.55, p.z + Math.sin(ang) * range * 0.55, ang, range * 0.8);
+}
+
+/** A crack along the ground from (x, z) for `len` along `ang` (the crack art runs across its square). */
+function crackFx(sim: Sim, x: number, z: number, ang: number, len: number): void {
+  sim.fx('effect', 'sw_crack', x + (Math.cos(ang) * len) / 2, z + (Math.sin(ang) * len) / 2, ang, len / 2);
 }
 
 /** A point within `far` of the player, towards the mouse. */
@@ -89,12 +95,13 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
       return true;
     case 'sw_heavyslash': {
       const arc = deg(P('arc'));
-      swingFx(sim, p, ang, far, arc, color);
+      swingFx(sim, p, ang, far, arc, color, 'sw_cleave');
       forCone(sim, p.x, p.z, ang, arc, far, (m) => sim.hitMonster(p, m, dmg, { kb: 4 }));
       return true;
     }
     case 'sw_sunder':
-      swingFx(sim, p, ang, far, SWING, '#ffb05a');
+      swingFx(sim, p, ang, far, SWING, '#ffb05a', 'sw_cleave');
+      sim.fx('effect', 'sw_armorhit', p.x + Math.cos(ang) * far * 0.7, p.z + Math.sin(ang) * far * 0.7, ang, 1);
       forCone(sim, p.x, p.z, ang, SWING, far, (m) => sim.hitMonster(p, m, dmg, { kb: 2, armorBreak: P('armorBreak') / 100, armorBreakT: P('armorBreakTime') }));
       return true;
     case 'sw_swordwave':
@@ -104,7 +111,7 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
       return true;
     case 'sw_execute': {
       const arc = Math.PI * 0.6;
-      swingFx(sim, p, ang, far, arc, '#ff4a3a');
+      swingFx(sim, p, ang, far, arc, '#ff4a3a', 'sw_cleave_red');
       const below = P('below') / 100;
       forCone(sim, p.x, p.z, ang, arc, far, (m) => {
         // Low HP: more damage (bosses get a share of the bonus).
@@ -122,7 +129,7 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
         sim.schedule(i * gap, () => {
           if (!p.alive) return;
           const a = p.aimAngle();
-          swingFx(sim, p, a, far, Math.PI * 0.6, color);
+          swingFx(sim, p, a, far, Math.PI * 0.6, color, 'sw_cleave');
           forCone(sim, p.x, p.z, a, Math.PI * 0.6, far, (m) => sim.hitMonster(p, m, dmg, { kb: 0.5 }));
         });
       }
@@ -133,8 +140,7 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
       for (let i = 0; i < waves; i++) {
         sim.schedule(i * P('gap'), () => {
           if (!p.alive) return;
-          sim.fx('effect', 'whirlwind', p.x, p.z, ang, far * 1.05);
-          sim.fx('ring', p.x, p.z, far, color, 0.4);
+          sim.fx('effect', 'sw_nova', p.x, p.z, ang, far * 1.05);
           forCircle(sim, p.x, p.z, far, (m) => sim.hitMonster(p, m, dmg, { kb: 3 }));
         });
       }
@@ -147,6 +153,7 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
       sim.fx('telegraph', t.x, t.z, r, 0.25, color);
       sim.schedule(0.25, () => {
         if (!p.alive) return;
+        sim.fx('effect', 'sw_bigsword', t.x, t.z, 0, r * 0.8);
         sim.fx('effect', 'crater', t.x, t.z, 0, r * 1.5);
         sim.shake(0.4, { to: p.id });
         forCircle(sim, t.x, t.z, r, (m) => sim.hitMonster(p, m, dmg * (m.isBoss ? 1 + P('bossBonus') / 100 : 1), { kb: 4, fromX: t.x, fromZ: t.z }));
@@ -160,8 +167,8 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
       sim.fx('telegraph', p.x, p.z, far, wait, color);
       sim.schedule(wait, () => {
         if (!p.alive) return;
+        sim.fx('effect', 'sw_nova', p.x, p.z, 0, far * 1.1);
         sim.fx('effect', 'quake', p.x, p.z, 0, far * 1.1);
-        sim.fx('effect', 'explosion', p.x, p.z, 0, far * 0.7);
         sim.shake(0.6, { to: p.id });
         forCircle(sim, p.x, p.z, far, (m) => sim.hitMonster(p, m, dmg, { stun: P('stun'), kb: 6 }));
         sim.anim(p.id, 'attack', { duration: 0.3 });
@@ -174,8 +181,8 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
       const delay = P('delay');
       sim.fx('telegraph', t.x, t.z, r, delay, '#ff6a3a');
       sim.schedule(delay, () => {
+        sim.fx('effect', 'sw_bigsword', t.x, t.z, 0, r * 1.2);
         sim.fx('effect', 'crater', t.x, t.z, 0, r * 1.4);
-        sim.fx('effect', 'slash', t.x, t.z, -Math.PI / 2, r * 1.2);
         sim.shake(0.6, { to: p.id });
         forCircle(sim, t.x, t.z, r, (m) => sim.hitMonster(p, m, dmg, {
           kb: 4, fromX: t.x, fromZ: t.z, armorBreak: P('armorBreak') / 100, armorBreakT: P('armorBreakTime'),
@@ -197,6 +204,7 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
           const a = p.aimAngle();
           const last = i === 2;
           swingFx(sim, p, a, far, SWING, last ? '#ffffff' : color);
+          if (last) sim.fx('effect', 'sw_windring', p.x + Math.cos(a) * far * 0.5, p.z + Math.sin(a) * far * 0.5, a, far * 0.8);
           forCone(sim, p.x, p.z, a, SWING, far, (m) => sim.hitMonster(p, m, last ? dmg * fin : dmg, { kb: last ? 5 : 1 }));
         });
       }
@@ -206,20 +214,23 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
       swingFx(sim, p, ang, far, SWING, color);
       forCone(sim, p.x, p.z, ang, SWING, far, (m) => sim.hitMonster(p, m, dmg, { kb: 3, slow: P('slow') / 100, slowT: P('slowTime') }));
       p.startDash(-Math.cos(ang), -Math.sin(ang), P('back'), 0.2, 'dash');
+      sim.fx('effect', 'sw_streak', p.x - Math.cos(ang), p.z - Math.sin(ang), ang + Math.PI, 1.2);
       // Keep facing the enemies while hopping back.
       p.face(Math.cos(ang), Math.sin(ang));
       return true;
     case 'sw_hunt':
       hitDash(p, ang, far, 0.25, dmg, 3, false);
       p.addStatBuff('sw_hunt', P('buffTime'), { atkSpeed: P('atkSpeed') });
-      sim.fx('effect', 'charge', p.x + Math.cos(ang), p.z + Math.sin(ang), ang, 1.4);
+      sim.fx('effect', 'sw_streak', p.x + Math.cos(ang), p.z + Math.sin(ang), ang, 1.6);
+      sim.fx('effect', 'sw_aura', p.x, p.z, 0, 0.9);
       return true;
     case 'sw_spindodge': {
       p.startDash(Math.cos(ang), Math.sin(ang), far, 0.18, 'dash');
+      sim.fx('effect', 'sw_streak', p.x + Math.cos(ang), p.z + Math.sin(ang), ang, 1.2);
       const r = P('spin');
       sim.schedule(0.2, () => {
         if (!p.alive) return;
-        sim.fx('effect', 'whirlwind', p.x, p.z, ang, r * 1.05);
+        sim.fx('effect', 'sw_windring', p.x, p.z, ang, r * 1.05);
         forCircle(sim, p.x, p.z, r, (m) => sim.hitMonster(p, m, dmg, { kb: 4 }));
       });
       return true;
@@ -232,9 +243,10 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
           if (!p.alive) return;
           const a = i === 0 ? ang : p.aimAngle();
           p.startDash(Math.cos(a), Math.sin(a), far / steps, 0.14, 'dash');
+          sim.fx('effect', 'sw_streak', p.x + Math.cos(a), p.z + Math.sin(a), a, 1);
           sim.schedule(0.15, () => {
             if (!p.alive) return;
-            sim.fx('effect', 'whirlwind', p.x, p.z, a, r * 1.05);
+            sim.fx('effect', 'sw_windring', p.x, p.z, a, r * 1.05);
             forCircle(sim, p.x, p.z, r, (m) => sim.hitMonster(p, m, dmg, { kb: 2 }));
           });
         });
@@ -243,11 +255,12 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
     }
     case 'sw_shadowstep': {
       p.startDash(Math.cos(ang), Math.sin(ang), far, 0.12, 'dash');
+      sim.fx('effect', 'sw_streak', p.x + Math.cos(ang) * 2, p.z + Math.sin(ang) * 2, ang, 2);
       const r = P('spin');
       sim.schedule(0.14, () => {
         if (!p.alive) return;
         sim.fx('burst', p.x, 1, p.z, '#8a7aff', 10, 3);
-        sim.fx('effect', 'whirlwind', p.x, p.z, ang, r * 1.05);
+        sim.fx('effect', 'sw_windring', p.x, p.z, ang, r * 1.05);
         forCircle(sim, p.x, p.z, r, (m) => sim.hitMonster(p, m, dmg, { kb: 3 }));
         p.addStatBuff('sw_shadowstep', P('buffTime'), { crit: P('crit') });
       });
@@ -255,7 +268,7 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
     }
     case 'sw_overdrive':
       p.addStatBuff('sw_overdrive', P('buffTime'), { atkSpeed: P('atkSpeed'), moveSpeed: P('moveSpeed') });
-      sim.fx('ring', p.x, p.z, 1.4, color, 0.6);
+      sim.fx('effect', 'sw_aura', p.x, p.z, 0, 1);
       sim.fx('burst', p.x, 1, p.z, color, 12, 3);
       sim.text(p.x, p.topY + 0.4, p.z, 'เร่งเครื่อง!', 'info', 0.8);
       return true;
@@ -282,7 +295,7 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
           sim.schedule(0.13, () => {
             if (!p.alive || !m.alive) return;
             const a = Math.atan2(m.z - p.z, m.x - p.x);
-            sim.fx('effect', 'slash', m.x, m.z, a, 1.4);
+            sim.fx('effect', 'sw_xslash', m.x, m.z, a, 1);
             sim.fx('burst', m.x, 1, m.z, color, 6, 3);
             sim.hitMonster(p, m, dmg, { kb: 2 });
           });
@@ -306,7 +319,7 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
           const near = monstersAround(sim, p.x, p.z, far);
           const m = near[Math.floor(Math.random() * near.length)];
           if (!m) return;
-          sim.fx('effect', 'slash', m.x, m.z, Math.random() * Math.PI * 2, 1.3);
+          sim.fx('effect', 'sw_xslash', m.x, m.z, Math.random() * Math.PI * 2, 0.9);
           sim.hitMonster(p, m, dmg, { kb: 1 });
         });
       }
@@ -321,7 +334,7 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
       return true;
     case 'sw_armorbash':
       // An armoured shoulder (the sword has no shield, owner 2026-11-14).
-      sim.fx('effect', 'impact', p.x + Math.cos(ang) * far * 0.6, p.z + Math.sin(ang) * far * 0.6, ang, 1.4);
+      sim.fx('effect', 'sw_armorhit', p.x + Math.cos(ang) * far * 0.6, p.z + Math.sin(ang) * far * 0.6, ang, 1.2);
       forCone(sim, p.x, p.z, ang, Math.PI * 0.5, far, (m) => sim.hitMonster(p, m, dmg, { stun: P('stun'), kb: 8 }));
       return true;
     case 'sw_taunt':
@@ -331,17 +344,18 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
         sim.text(m.x, m.topY + 0.4, m.z, '!', 'crit', 0.6);
       });
       p.addTakenMult(1 - P('less') / 100, P('buffTime'));
-      sim.fx('ring', p.x, p.z, far, color, 0.5);
+      sim.fx('effect', 'sw_shout', p.x, p.z, 0, far);
       return true;
     case 'sw_guard':
       p.addTakenMult(1 - P('less') / 100, P('buffTime'));
+      sim.fx('effect', 'sw_barrier', p.x, p.z, 0, 1);
       sim.fx('ring', p.x, p.z, 1.3, color, P('buffTime'));
       sim.text(p.x, p.topY + 0.4, p.z, 'ตั้งรับ', 'info', 0.8);
       return true;
     case 'sw_shockwave': {
       // A crack running along the ground, hitting everything in its line at once.
       sim.fx('lineTelegraph', p.x, p.z, ang, far, 1.2, 0.25);
-      for (let d = 1.5; d <= far; d += 2) sim.fx('effect', 'quake', p.x + Math.cos(ang) * d, p.z + Math.sin(ang) * d, 0, 1.6);
+      crackFx(sim, p.x, p.z, ang, far);
       forLine(sim, p.x, p.z, ang, far, 1, (m) => sim.hitMonster(p, m, dmg, { kb: 2, slow: P('slow') / 100, slowT: P('slowTime') }));
       return true;
     }
@@ -349,6 +363,7 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
       p.reflect = P('reflect') / 100;
       p.reflectUntil = sim.time + P('buffTime');
       p.addTakenMult(1 - P('less') / 100, P('buffTime'));
+      sim.fx('effect', 'sw_armorhit', p.x, p.z, 0, 1);
       sim.fx('ring', p.x, p.z, 1.3, '#ff8a5a', P('buffTime'));
       sim.text(p.x, p.topY + 0.4, p.z, 'เกราะสะท้อน', 'info', 0.8);
       return true;
@@ -357,6 +372,7 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
       p.steadyUntil = sim.time + P('buffTime');
       p.addStatBuff('sw_anchor', P('buffTime'), { moveSpeed: -P('moveSlow') });
       sim.fx('effect', 'quake', p.x, p.z, 0, 1.6);
+      sim.fx('effect', 'sw_barrier', p.x, p.z, 0, 1);
       sim.fx('ring', p.x, p.z, 1.3, color, P('buffTime'));
       return true;
     case 'sw_warcry': {
@@ -371,7 +387,7 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
         q.addDmgMult(1 + P('atk') / 100, t);
         sim.text(q.x, q.topY + 0.4, q.z, 'ปลุกใจ!', 'info', 0.8);
       }
-      sim.fx('ring', p.x, p.z, far, color, 0.6);
+      sim.fx('effect', 'sw_shout', p.x, p.z, 0, far);
       sim.fx('burst', p.x, 1.2, p.z, color, 14, 4);
       return true;
     }
@@ -382,6 +398,8 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
           if (!p.alive) return;
           const r = far * share;
           sim.fx('effect', 'quake', p.x, p.z, 0, r * 1.05);
+          // Three cracks running out from the player, turned a little more each wave.
+          for (let k = 0; k < 3; k++) crackFx(sim, p.x, p.z, ang + i * 0.7 + (k * Math.PI * 2) / 3, r);
           sim.shake(0.4, { to: p.id });
           forCircle(sim, p.x, p.z, r, (m) => sim.hitMonster(p, m, dmg, { stun: P('stun'), slow: P('slow') / 100, slowT: P('slowTime'), kb: 2 }));
         });
@@ -392,7 +410,8 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
       const t = P('buffTime');
       forCircle(sim, p.x, p.z, far, (m) => m.taunt(p));
       p.addTakenMult(1 - P('less') / 100, t);
-      sim.fx('ring', p.x, p.z, far, color, 0.6);
+      sim.fx('effect', 'sw_shout', p.x, p.z, 0, far);
+      sim.fx('effect', 'sw_barrier', p.x, p.z, 0, 1.1);
       sim.fx('ring', p.x, p.z, 1.4, '#ffe08a', t);
       sim.text(p.x, p.topY + 0.4, p.z, 'ราชันย์ไม่ล้ม!', 'crit', 1);
       // Heals a share of max HP over the whole time, in half-second ticks.

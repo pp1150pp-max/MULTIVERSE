@@ -187,6 +187,27 @@ for (const s of learn.filter((x) => x.kind !== 'passive' && x.dmg > 0)) {
   ok(p.hp === hp, `Shadow Swap: no damage taken during the whole move (${hp - p.hp})`);
 }
 
+{
+  // Effect art (owner 2026-11-15, docs/plans/sword-fx.md): every new skill plays one of the sword lines' own drawings.
+  const OLD_ART = ['whirlwind', 'earthquake', 'charge'];
+  const missing: string[] = [];
+  for (const s of learn.filter((x) => x.kind !== 'passive' && !OLD_ART.includes(x.id))) {
+    const dist = s.id === 'sw_crush' || s.id === 'sw_judgement' ? 2.5 : 1.6;
+    const { sim, p, m } = arena(dist);
+    sim.drainEvents();
+    castSkill(sim, p, s, { x: m.x, z: m.z }, 1);
+    let seen = sim.drainEvents();
+    for (let i = 0; i < 40; i++) {
+      sim.step(TICK, () => IDLE_INTENT);
+      seen = seen.concat(sim.drainEvents());
+    }
+    const own = seen.some((e) => e.t === 'fx' && e.name === 'effect' && String(e.args[0]).startsWith('sw_'));
+    // Sword Wave's art is its flying shot (drawn by its colour), not an effect event.
+    if (!own && s.id !== 'sw_swordwave') missing.push(s.id);
+  }
+  ok(missing.length === 0, `every new sword skill plays a sword-line effect (missing: ${missing.join(', ') || 'none'})`);
+}
+
 // ---------------------------------------------------------- passives
 {
   const { sim, p, m } = arena();

@@ -3,7 +3,11 @@ import { fxSheets, fxTex, type FxSheet } from './assets';
 import type { FxApi, SkillEffect } from '../shared/sim/types';
 
 const FRAMES = 6;
-const SHEET_ROWS: Record<FxSheet, number> = { sword: 4, mage: 5, gun: 4, gun_ult: 3, enhance: 3 };
+const SHEET_ROWS: Record<FxSheet, number> = {
+  sword: 4, mage: 5, gun: 4, gun_ult: 3, enhance: 3,
+  // Sword
+  sw_blade: 4, sw_gale: 4, sw_bulwark: 4,
+};
 
 interface EffectDef {
   sheet: FxSheet;
@@ -13,6 +17,10 @@ interface EffectDef {
   height: number | 'ground';
   /** Facing the camera without turning to the effect's angle (things that rise, like the enhance burst). */
   upright?: boolean;
+  /** Standing on the ground whatever its size (art drawn at the bottom of its cell: a dome, a sword stuck in the ground). */
+  stand?: boolean;
+  /** Multiplies the art's colours (a tinted copy of a row, e.g. the sword's dark-red Execute). */
+  tint?: string;
 }
 
 const EFFECTS: Record<SkillEffect, EffectDef> = {
@@ -31,6 +39,21 @@ const EFFECTS: Record<SkillEffect, EffectDef> = {
   // Blacksmith result over the player's head, seen by everyone nearby (row 0 is the hammer, played in the forge window).
   enhance_ok: { sheet: 'enhance', row: 1, life: 0.9, height: 2.5, upright: true },
   enhance_fail: { sheet: 'enhance', row: 2, life: 0.9, height: 2.5, upright: true },
+  // Sword skills (owner 2026-11-15, docs/plans/sword-fx.md): one sheet per line, several skills share a row.
+  sw_cleave: { sheet: 'sw_blade', row: 0, life: 0.26, height: 'ground' },
+  sw_cleave_red: { sheet: 'sw_blade', row: 0, life: 0.3, height: 'ground', tint: '#ff6a6a' },
+  sw_wave: { sheet: 'sw_blade', row: 1, life: 0.3, height: 0.9 },
+  sw_bigsword: { sheet: 'sw_blade', row: 2, life: 0.5, height: 0, upright: true, stand: true },
+  sw_nova: { sheet: 'sw_blade', row: 3, life: 0.5, height: 'ground' },
+  sw_streak: { sheet: 'sw_gale', row: 0, life: 0.3, height: 0.95 },
+  sw_windring: { sheet: 'sw_gale', row: 1, life: 0.36, height: 'ground' },
+  sw_xslash: { sheet: 'sw_gale', row: 2, life: 0.28, height: 1, upright: true },
+  sw_xslash_gold: { sheet: 'sw_gale', row: 2, life: 0.28, height: 1, upright: true, tint: '#ffd36a' },
+  sw_aura: { sheet: 'sw_gale', row: 3, life: 0.6, height: 0, upright: true, stand: true },
+  sw_barrier: { sheet: 'sw_bulwark', row: 0, life: 0.7, height: 0, upright: true, stand: true },
+  sw_shout: { sheet: 'sw_bulwark', row: 1, life: 0.55, height: 'ground' },
+  sw_crack: { sheet: 'sw_bulwark', row: 2, life: 0.5, height: 'ground' },
+  sw_armorhit: { sheet: 'sw_bulwark', row: 3, life: 0.32, height: 0.9 },
 };
 
 /** Flying shots, looked up by the colour the simulation gives each projectile. */
@@ -41,6 +64,8 @@ const SHOT_ART: Record<string, { sheet: FxSheet; row: number; scale: number }> =
   '#ffc85a': { sheet: 'gun', row: 1, scale: 2.4 },
   '#7affe0': { sheet: 'gun', row: 2, scale: 3 },
   '#ff6a5a': { sheet: 'gun_ult', row: 1, scale: 3 },
+  // Sword
+  '#ff7a4a': { sheet: 'sw_blade', row: 1, scale: 2.6 },
 };
 
 /** The on-screen angle of a world direction under the isometric camera. */
@@ -161,16 +186,17 @@ export class Effects implements FxApi {
     showFrame(tex, def.sheet, def.row, 0);
     const play = (k: number) => showFrame(tex, def.sheet, def.row, Math.min(FRAMES - 1, Math.floor(k * FRAMES)));
     if (def.height === 'ground') {
-      const mesh = this.decal(new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.5, depthWrite: false, side: THREE.DoubleSide }));
+      const mesh = this.decal(new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.5, depthWrite: false, side: THREE.DoubleSide, color: def.tint ?? '#ffffff' }));
       mesh.position.set(x, 0.09, z);
       mesh.rotation.y = -angle;
       mesh.scale.setScalar(size);
       this.add(mesh, def.life, play);
     } else {
       const rotation = def.upright ? 0 : screenAngle(Math.cos(angle), Math.sin(angle));
-      const mat = new THREE.SpriteMaterial({ map: tex, alphaTest: 0.5, transparent: false, rotation });
+      const mat = new THREE.SpriteMaterial({ map: tex, alphaTest: 0.5, transparent: false, rotation, color: def.tint ?? '#ffffff' });
       const spr = new THREE.Sprite(mat);
-      spr.position.set(x, def.height, z);
+      // The sprite is size × 2 tall: centred at `size` its bottom edge is on the ground.
+      spr.position.set(x, def.stand ? size * 0.9 : def.height, z);
       spr.scale.setScalar(size * 2);
       this.add(spr, def.life, play);
     }
