@@ -37,7 +37,7 @@ import { GEAR_KILLS, GEAR_PART_NAME, gearReward, gearRow } from '../gearQuests';
 import { TUT_ACCEPT_GOLD, TUT_ACCEPT_STONES, TUT_NPC, TUT_STEPS, TUT_STEP_NAME, TUT_TASKS, TUT_TASK_NAME, tutRows, tutTurnInReward, type TutStep, type TutTask } from '../tutorial';
 import { putAll, type MailAttach } from '../mail';
 import { RARITY_COLOR } from '../types';
-import { passiveDealMult, passiveTakenMult } from '../passives';
+import { passiveOnCrit, passiveDealMult, passiveTakenMult } from '../passives';
 import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type SfxName, type SimEvent } from './types';
 
 /** Gear of this rarity that "sell all" may take: never potions or enhanced items. */
@@ -333,7 +333,10 @@ export class Sim {
     }
     this.events.push({ t: 'flash', id: m.id });
     this.text(m.x, m.topY, m.z, crit ? `${dmg}!` : String(dmg), crit ? 'crit' : 'dmg');
-    if (crit) this.sfx('crit', m.x, m.z);
+    if (crit) {
+      this.sfx('crit', m.x, m.z);
+      passiveOnCrit(this, p, m);
+    }
     if (opts.kb && !m.isBoss) m.knockback(opts.fromX ?? p.x, opts.fromZ ?? p.z, opts.kb);
     if (opts.stun && !m.def.pattern) m.stunT = Math.max(m.stunT, m.isBoss ? opts.stun * 0.3 : opts.stun);
     if (opts.slow) {

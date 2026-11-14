@@ -3,6 +3,7 @@
 // the Sim and Player only call the functions here. A passive's numbers are its SkillDef.params (tuned on /admin);
 // `status` ones grow by the skill's status %/rank.
 import type { Player } from './sim/Player';
+import type { Sim } from './sim/Sim';
 import type { Monster } from './sim/Monster';
 import type { SkillDef } from './data/classes';
 import type { Stats } from './types';
@@ -30,6 +31,10 @@ export interface PassiveHooks {
   onDash?(p: Player, v: PassiveValue): void;
   /** How a skill is cast: × its damage and × the size of its blasts and areas (castSkill). */
   skillScale?(p: Player, sk: SkillDef, v: PassiveValue): { dmg?: number; area?: number };
+  /** This player's hit on `m` was a critical hit (Sim.hitMonster), e.g. to show the passive working. */
+  onCrit?(sim: Sim, p: Player, m: Monster, v: PassiveValue): void;
+  /** This player fired a basic attack (basicAttack). */
+  onBasic?(sim: Sim, p: Player, v: PassiveValue): void;
   /** × the dash's cooldown (Player.update, the plain dash). */
   dashCdMult?(p: Player, v: PassiveValue): number;
 }
@@ -91,4 +96,14 @@ export function passiveSkillScale(p: Player, sk: SkillDef): { dmg: number; area:
 export function passiveDashCdMult(p: Player): number {
   const w = worn(p);
   return w?.h.dashCdMult?.(p, w.v) ?? 1;
+}
+
+export function passiveOnCrit(sim: Sim, p: Player, m: Monster): void {
+  const w = worn(p);
+  w?.h.onCrit?.(sim, p, m, w.v);
+}
+
+export function passiveOnBasic(sim: Sim, p: Player): void {
+  const w = worn(p);
+  w?.h.onBasic?.(sim, p, w.v);
 }

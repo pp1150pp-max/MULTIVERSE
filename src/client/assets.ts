@@ -336,7 +336,9 @@ async function loadGroundTile(name: GroundTile): Promise<void> {
 /** Skill animation sheets, one per class: 6 frames across, one effect per row. */
 export type FxSheet = 'sword' | 'mage' | 'gun' | 'gun_ult' | 'enhance'
   // Sword skill lines (2026-11-15): Blade, Gale, Bulwark.
-  | 'sw_blade' | 'sw_gale' | 'sw_bulwark';
+  | 'sw_blade' | 'sw_gale' | 'sw_bulwark'
+  // Gunslinger skills (art_templates/skills/FX_GUNSLINGER.md)
+  | 'gs_skill' | 'gs_gear' | 'gs_passive';
 export const fxSheets: Partial<Record<FxSheet, THREE.Texture>> = {};
 
 async function loadFxSheet(name: FxSheet): Promise<void> {
@@ -520,6 +522,8 @@ async function loadAssets(): Promise<void> {
   // Everything at once: the files don't depend on each other.
   await Promise.all([
     ...(['sword', 'mage', 'gun', 'gun_ult', 'enhance', 'sw_blade', 'sw_gale', 'sw_bulwark'] as const).map((n) => loadFxSheet(n)),
+    // Gunslinger
+    ...(['gs_skill', 'gs_gear', 'gs_passive'] as const).map((n) => loadFxSheet(n)),
     loadDecals(),
     ...(['grass', 'dirt', 'water', 'marsh', 'mud', 'pave', 'brick', 'snow', 'snow_path', 'ice', 'ash_rock', 'ash_path', 'lava',
       'room_forest', 'room_marsh', 'room_snow', 'room_volcano'] as const).map((n) => loadGroundTile(n)),

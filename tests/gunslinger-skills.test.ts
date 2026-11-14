@@ -213,4 +213,54 @@ const playerShots = (sim: Sim): Projectile[] => sim.projectiles.filter((x): x is
   ok(b.ranks.rapidfire === 3 && b.worn.q === 'rapidfire' && b.worn.e === 'pierce' && b.worn.r === 'headshot', 'old skill ids still load and stay worn');
 }
 
+// ---------------------------------------------------------- cast effects (owner 2026-11-15: 3 sheets, shared rows)
+{
+  const effects = (sim: Sim): string[] => sim.drainEvents()
+    .filter((e) => e.t === 'fx' && e.name === 'effect').map((e) => String((e as { args: unknown[] }).args[0]));
+  const { sim, p, mob } = arena();
+  const aim = { x: mob.x, z: mob.z };
+  sim.step(1 / 30, (x) => (x === p ? { ...IDLE_INTENT, aim } : IDLE_INTENT));
+  sim.drainEvents();
+  castSkill(sim, p, sk('gs_sniperfocus'), aim, 1);
+  castSkill(sim, p, sk('gs_hotrounds'), aim, 1);
+  const auras = effects(sim);
+  ok(auras.includes('gs_aura_crit') && auras.includes('gs_aura_rapid'), 'buffs show the aura in their line colour');
+
+  castSkill(sim, p, sk('gs_mine'), aim, 1);
+  castSkill(sim, p, sk('gs_turret'), aim, 1);
+  castSkill(sim, p, sk('gs_drone'), aim, 1);
+  castSkill(sim, p, sk('gs_smoke'), aim, 1);
+  for (let i = 0; i < 45; i++) sim.step(1 / 30, (x) => (x === p ? { ...IDLE_INTENT, aim } : IDLE_INTENT));
+  const gear = effects(sim);
+  for (const name of ['gs_mine', 'gs_turret', 'gs_drone', 'gs_smoke', 'gs_blast']) ok(gear.includes(name), name + ' is shown');
+
+  // Passives: Hawkeye over a crit, Trigger Finger every 4 basic shots, Special Ammo's ring on a bigger blast.
+  p.level = 30;
+  sim.learnSkill(p, 'gs_hawkeye');
+  const crit = p.stats.crit;
+  p.stats.crit = 100;
+  castSkill(sim, p, sk('pierce'), aim, 1);
+  for (let i = 0; i < 20; i++) sim.step(1 / 30);
+  ok(effects(sim).includes('gs_hawkeye'), 'Hawkeye: the hawk eye shows on a crit');
+  p.stats.crit = crit;
+
+  sim.learnSkill(p, 'gs_triggerfinger');
+  const outOfCombat = (): void => { p.lastAttack = -99; p.lastHurt = -99; };
+  outOfCombat();
+  sim.wearSkill(p, 'passive', 'gs_triggerfinger');
+  let flashes = 0;
+  for (let i = 0; i < 8; i++) {
+    for (let k = 0; k < 15; k++) sim.step(1 / 30, (x) => (x === p ? { ...IDLE_INTENT, aim, basic: k === 0 } : IDLE_INTENT));
+    flashes += effects(sim).filter((n) => n === 'gs_trigger').length;
+  }
+  ok(flashes === 2, 'Trigger Finger: a flash every 4 basic shots (' + flashes + ' in 8)');
+
+  sim.learnSkill(p, 'gs_specialammo');
+  outOfCombat();
+  sim.wearSkill(p, 'passive', 'gs_specialammo');
+  castSkill(sim, p, sk('gs_cluster'), aim, 1);
+  for (let i = 0; i < 30; i++) sim.step(1 / 30);
+  ok(effects(sim).includes('gs_special'), 'Special Ammo: its ring on the bigger blast');
+}
+
 finish('gunslinger-skills');

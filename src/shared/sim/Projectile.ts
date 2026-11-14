@@ -27,6 +27,10 @@ export interface ProjOpts {
   bonus?: (m: Monster) => number;
   /** Player shots: runs after a single-target or piercing hit lands on `m` (bounces, burning, marks). */
   after?: (m: Monster) => void;
+  /** Player shots that explode: the blast picture (the fireball's 'explosion' if left out). */
+  blastFx?: SkillEffect;
+  /** Also show the Special Ammo passive's ring on the blast (Gunslinger). */
+  specialFx?: boolean;
 }
 
 /** A monster's shot: flies straight until it hits a player or runs out of range, so it can be dodged. */
@@ -115,7 +119,8 @@ export class Projectile {
     const sim = this.sim;
     if (this.o.explode) {
       const r = this.o.explode;
-      sim.fx('effect', 'explosion', this.x, this.z, 0, r);
+      sim.fx('effect', this.o.blastFx ?? 'explosion', this.x, this.z, 0, r);
+      if (this.o.specialFx) sim.fx('effect', 'gs_special', this.x, this.z, 0, r);
       for (const t of sim.monsters) {
         if (t.alive && Math.hypot(t.x - this.x, t.z - this.z) <= r + t.radius) {
           sim.hitMonster(this.owner, t, this.o.mult, { kb: 4, fromX: this.x, fromZ: this.z, ...this.o.hit });

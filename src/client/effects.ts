@@ -7,6 +7,8 @@ const SHEET_ROWS: Record<FxSheet, number> = {
   sword: 4, mage: 5, gun: 4, gun_ult: 3, enhance: 3,
   // Sword
   sw_blade: 4, sw_gale: 4, sw_bulwark: 4,
+  // Gunslinger
+  gs_skill: 6, gs_gear: 6, gs_passive: 3,
 };
 
 interface EffectDef {
@@ -54,6 +56,19 @@ const EFFECTS: Record<SkillEffect, EffectDef> = {
   sw_shout: { sheet: 'sw_bulwark', row: 1, life: 0.55, height: 'ground' },
   sw_crack: { sheet: 'sw_bulwark', row: 2, life: 0.5, height: 'ground' },
   sw_armorhit: { sheet: 'sw_bulwark', row: 3, life: 0.32, height: 0.9 },
+  // Gunslinger (art_templates/skills/FX_GUNSLINGER.md). Lasting things (mine, drone, turret, smoke, burning) are
+  // played again by the sim every tick, so their life is about one tick.
+  gs_aura_crit: { sheet: 'gs_skill', row: 2, life: 0.5, height: 'ground', tint: '#ff5a6a' },
+  gs_aura_rapid: { sheet: 'gs_skill', row: 2, life: 0.5, height: 'ground', tint: '#ffc85a' },
+  gs_burn: { sheet: 'gs_skill', row: 4, life: 0.6, height: 0.8, upright: true },
+  gs_smoke: { sheet: 'gs_skill', row: 5, life: 1, height: 'ground' },
+  gs_mine: { sheet: 'gs_gear', row: 1, life: 1, height: 'ground' },
+  gs_drone: { sheet: 'gs_gear', row: 2, life: 0.8, height: 1.9, upright: true },
+  gs_turret: { sheet: 'gs_gear', row: 3, life: 1, height: 0.7 },
+  gs_blast: { sheet: 'gs_gear', row: 5, life: 0.5, height: 0.9 },
+  gs_hawkeye: { sheet: 'gs_passive', row: 0, life: 0.45, height: 2.2, upright: true },
+  gs_trigger: { sheet: 'gs_passive', row: 1, life: 0.3, height: 0.95, upright: true },
+  gs_special: { sheet: 'gs_passive', row: 2, life: 0.5, height: 'ground' },
 };
 
 /** Flying shots, looked up by the colour the simulation gives each projectile. */
@@ -66,6 +81,12 @@ const SHOT_ART: Record<string, { sheet: FxSheet; row: number; scale: number }> =
   '#ff6a5a': { sheet: 'gun_ult', row: 1, scale: 3 },
   // Sword
   '#ff7a4a': { sheet: 'sw_blade', row: 1, scale: 2.6 },
+  // Gunslinger: crit round, buffed basic shot, incendiary, rocket, railgun
+  '#ff5a6a': { sheet: 'gs_skill', row: 0, scale: 2.4 },
+  '#ffb040': { sheet: 'gs_skill', row: 1, scale: 2.4 },
+  '#ff8a3a': { sheet: 'gs_skill', row: 3, scale: 2.6 },
+  '#6affc8': { sheet: 'gs_gear', row: 0, scale: 2.8 },
+  '#a0fff4': { sheet: 'gs_gear', row: 4, scale: 3.4 },
 };
 
 /** The on-screen angle of a world direction under the isometric camera. */

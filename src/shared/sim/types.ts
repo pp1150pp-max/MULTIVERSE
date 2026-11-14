@@ -67,7 +67,10 @@ export type SkillEffect = 'slash' | 'whirlwind' | 'charge' | 'quake' | 'explosio
   // Sword skills (2026-11-15, fx/sw_blade, sw_gale, sw_bulwark). `_red` / `_gold` are tinted copies of a row.
   | 'sw_cleave' | 'sw_cleave_red' | 'sw_wave' | 'sw_bigsword' | 'sw_nova'
   | 'sw_streak' | 'sw_windring' | 'sw_xslash' | 'sw_xslash_gold' | 'sw_aura'
-  | 'sw_barrier' | 'sw_shout' | 'sw_crack' | 'sw_armorhit';
+  | 'sw_barrier' | 'sw_shout' | 'sw_crack' | 'sw_armorhit'
+  // Gunslinger
+  | 'gs_aura_crit' | 'gs_aura_rapid' | 'gs_burn' | 'gs_smoke' | 'gs_mine' | 'gs_drone' | 'gs_turret' | 'gs_blast'
+  | 'gs_hawkeye' | 'gs_trigger' | 'gs_special';
 export type FxName = keyof FxApi;
 /** One-shot sounds with no matching visual event. The client's audio code decides how each one sounds. */
 export type SfxName =
