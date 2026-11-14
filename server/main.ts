@@ -19,6 +19,7 @@ import { newCharacterData } from '../src/shared/sim/Player';
 import { GameWorld } from './world';
 import { bearer, HttpError, readJson, send, str } from './http';
 import { adminApi } from './admin';
+import { googleApi } from './google-api';
 import { Backups } from './backup';
 import { HISTORY_DAYS } from '../src/shared/admin';
 import { controlFilePath, CTRL_C_WINDOW_MS, DoublePress, isLocalControl, STOP_PATH, type ControlFile } from './control';
@@ -115,6 +116,8 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string): Pro
     return send(res, 200, { mode: stopMode });
   }
 
+  if (await googleApi(req, res, path, { db, world, startSession })) return;
+
   if (method === 'POST' && path === '/api/register') {
     const ip = clientIp(req);
     if (limiter.blocked(ip)) throw new HttpError(429, 'ลองผิดหลายครั้งเกินไป รอสักครู่แล้วลองใหม่');
@@ -194,7 +197,8 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string): Pro
 
   if (method === 'GET' && path === '/api/me') {
     const acc = requireAccount(req);
-    return send(res, 200, { username: acc.guest ? 'Guest' : acc.username, guest: acc.guest } satisfies MeResponse);
+    const google = acc.guest ? null : db.googleOf(acc.id)?.email ?? null;
+    return send(res, 200, { username: acc.guest ? 'Guest' : acc.username, guest: acc.guest, google, hasPassword: !acc.guest && db.hasPassword(acc.id) } satisfies MeResponse);
   }
 
   if (path === '/api/characters' && method === 'GET') {
@@ -303,12 +307,14 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse, path: stri
 
 // ------------------------------------------------------------ server
 
+/** Pages served without `.html`: the admin page (its data comes from /api/admin, which checks the role) and the public /privacy and /terms pages. */
+const PAGES = new Set(['/admin', '/privacy', '/terms']);
+
 const server = createServer(async (req, res) => {
   const path = new URL(req.url ?? '/', 'http://localhost').pathname;
   try {
     if (path.startsWith('/api/')) await api(req, res, path);
-    // The admin page is public HTML; everything it shows comes from /api/admin, which checks the role.
-    else if ((req.method === 'GET' || req.method === 'HEAD') && path === '/admin') await serveStatic(req, res, '/admin.html');
+    else if ((req.method === 'GET' || req.method === 'HEAD') && PAGES.has(path)) await serveStatic(req, res, path + '.html');
     else if (path === '/admin/') {
       // The page loads its files by relative paths (Vite base './'), which only work from /admin.
       res.writeHead(301, { Location: '/admin' });

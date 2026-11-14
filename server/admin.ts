@@ -10,6 +10,7 @@ import type { Db, AdminCharacterRow, SessionAccount } from './db';
 import type { GameWorld } from './world';
 import { bearer, HttpError, readJson, send, str } from './http';
 import { ownerToolsApi } from './admin-tools';
+import { googleAdminApi } from './google-api';
 import { mailAdminApi } from './admin-mail';
 import { tradeAdminApi } from './admin-trade';
 import { reportsAdminApi } from './admin-reports';
@@ -125,6 +126,7 @@ export async function adminApi(
   const method = req.method ?? 'GET';
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (await ownerToolsApi(req, res, path, method, url, db, world, backups)) return;
+  if (await googleAdminApi(req, res, path, db)) return;
   if (await mailAdminApi(req, res, path, method, db, world)) return;
   if (tradeAdminApi(req, res, path, method, db)) return;
   if (await reportsAdminApi(req, res, path, method, db)) return;

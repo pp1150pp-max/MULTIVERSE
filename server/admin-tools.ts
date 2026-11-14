@@ -101,6 +101,7 @@ const clean = (v: unknown, max: number): string => str(v).replace(/[\p{Cc}\p{Cf}
 function accountRows(db: Db, world: GameWorld): AdminAccountRow[] {
   const online = new Set(world.onlineAccounts());
   const now = Date.now();
+  const google = new Map(db.googleLinks().map((l) => [l.accountId, l.email]));
   return db.adminAccounts().map((a) => {
     const chars = a.chars.map((c) => {
       const live = world.livePlayer(c.id);
@@ -123,6 +124,7 @@ function accountRows(db: Db, world: GameWorld): AdminAccountRow[] {
       totalGold: chars.reduce((s, c) => s + c.gold, 0) + stashGold,
       stashSize: stash ? stash.size : a.stashSize,
       bannedUntil: banned ? a.banUntil : null,
+      google: google.get(a.id) ?? null,
       banReason: banned ? a.banReason : null,
     };
   });

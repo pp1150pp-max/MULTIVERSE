@@ -36,8 +36,11 @@ export function isClassId(v: unknown): v is ClassId {
 
 export interface AuthRequest { username: string; password: string }
 export interface AuthResponse { token: string; username: string }
-/** `guest`: the token belongs to a guest (a temporary account with one character), not a real account. */
-export interface MeResponse { username: string; guest: boolean }
+/**
+ * `guest`: the token belongs to a guest (a temporary account with one character), not a real account.
+ * `google`: the email of the linked Google account (null = none) · `hasPassword`: can log in with a password.
+ */
+export interface MeResponse { username: string; guest: boolean; google?: string | null; hasPassword?: boolean }
 /** Register: `guestToken` (optional) moves that guest's character into the new account. */
 export interface RegisterRequest extends AuthRequest { guestToken?: string }
 export interface GuestRequest { name: string; classId: ClassId }
@@ -59,6 +62,23 @@ export function banMessage(until: number, reason: string): string {
     : `ถึง ${new Date(until).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })}`;
   return `บัญชีนี้ถูกระงับ${when}${reason ? ` — เหตุผล: ${reason}` : ''}`;
 }
+
+// ------------------------------------------------------------ Google login (server/google.ts)
+
+/** `settings` key: '0' = the owner switched Google login off on the admin page (no row = on). */
+export const GOOGLE_LOGIN_SETTING = 'google_login';
+/** Whether the Login page shows the Google button (switched on and the client file in place). */
+export interface GoogleConfigResponse { enabled: boolean }
+/** login: log in or make an account (a guest on this browser moves into a new one) · link: add Google to the logged-in account · upgrade: the guest becomes a Google account. */
+export interface GoogleStartRequest { mode: 'login' | 'link' | 'upgrade'; guestToken?: string }
+export interface GoogleStartResponse { url: string }
+/** The ticket from /#google=…; with `username` for a new account (after a needName answer). */
+export interface GoogleFinishRequest { ticket: string; username?: string }
+export type GoogleFinishResponse =
+  | { kind: 'session'; token: string; username: string }
+  | { kind: 'needName'; email: string; guest: boolean }
+  | { kind: 'linked'; email: string }
+  | { kind: 'error'; message: string };
 
 /** Every failed request answers with this body and a 4xx/5xx status. */
 export interface ApiError { error: string }

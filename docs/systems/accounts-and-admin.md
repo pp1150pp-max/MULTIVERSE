@@ -2,10 +2,30 @@
 
 สรุปสั้นอยู่ใน [CLAUDE.md](../../CLAUDE.md) · สำรอง/กู้คืน DB: [server-ops.md](server-ops.md)
 
+## หน้านโยบายความเป็นส่วนตัว / ข้อตกลงการใช้งาน (เจ้าของตกลง 2026-11-15)
+
+- `/privacy` (`privacy.html`) และ `/terms` (`terms.html`) ภาษาไทย เปิดได้โดยไม่ต้อง login (Google OAuth consent screen ชี้มาที่สองหน้านี้ ห้ามเปลี่ยน path) · หน้าตาใช้ `src/legal.css` ไม่มีโค้ดเกม
+- ผู้ให้บริการ "ทีม MULTIVERSE" · ติดต่อ ppicchamultiverse@gmail.com · privacy บอกว่าจาก Google เก็บแค่รหัสบัญชี Google อีเมล ชื่อ ใช้ login เท่านั้น และบอกข้อมูลที่เกมเก็บจริง (แชท 30 วัน, IP/การเชื่อมต่อ 90 วัน ตาม `HISTORY_DAYS`, รายงาน) · ถ้าเกมเริ่มเก็บข้อมูลใหม่ (เช่น ระบบเติมเงิน อีเมล) ต้องแก้หน้า privacy และวันที่ด้วย
+- server เสิร์ฟผ่าน `PAGES` ใน `server/main.ts` · ตอน `npm run dev` Vite เปิดให้เหมือนกัน · ยังไม่มีการตั้งค่าใน /admin (แก้ข้อความในไฟล์)
+
 ## หน้า Login
 
 - หน้าแรกคือแผง **Login**: ฟอร์มเข้าสู่ระบบ/สมัคร แล้วตามด้วยปุ่ม **Guest Login** (ไม่มี Singleplayer แล้ว เซฟ SP เก่าในเบราว์เซอร์ถูกทิ้ง ไม่ import)
   - ปุ่ม Guest Login เปิดใช้งาน (เจ้าของสั่งเปิดกลับ 2026-11-12 หลังเคยปิดเป็นแค่รูป) ปิดอีกครั้งได้ด้วย `GUEST_LOGIN_ENABLED` ใน `src/client/menu.ts`
+
+## เข้าสู่ระบบด้วย Google (เจ้าของตกลง 2026-11-15)
+
+- โค้ด: `server/google.ts` (flow) · `server/google-api.ts` (route + การ์ด /admin) · ตาราง `account_google` (account_id, sub = รหัสบัญชี Google, email, name, linked_at) · Google 1 บัญชี ↔ บัญชีเกม 1 บัญชี
+- **flow (authorization code + PKCE ทำที่ server):** `POST /api/auth/google/start { mode, guestToken? }` → server จำ state + PKCE verifier + nonce 10 นาที → หน้า Google → `GET /api/auth/google/callback` → server แลก code กับ Google เอง (client secret + verifier) ตรวจ `iss` `aud` `exp` `nonce` และอีเมลที่ยืนยันแล้ว → ส่งกลับ `/#google=<ticket>` (ticket ใช้ครั้งเดียว 60 วิ ไม่มี token login ใน URL) → หน้าเกม `POST /api/auth/google/finish { ticket, username? }`
+- **3 โหมด:** `login` (Google ที่ผูกแล้ว = เข้าบัญชีนั้น · ยังไม่ผูก = ตั้งชื่อผู้ใช้เอง แล้วได้บัญชีใหม่ที่ไม่มีรหัสผ่าน · ถ้าเบราว์เซอร์มี Guest ตัวละคร Guest ย้ายเข้าบัญชีใหม่เหมือนสมัครปกติ) · `link` (ผูก Google กับบัญชีที่ login อยู่ ชื่อผู้ใช้/รหัสผ่านเดิมยังใช้ได้) · `upgrade` (Guest → บัญชี Google ตัวละครครบ · ถ้า Google นั้นผูกบัญชีอื่นแล้ว = ไม่ยอม บอกให้ login บัญชีนั้นแทน)
+- **กัน CSRF:** start ตั้ง cookie `mv_gbind` (HttpOnly, SameSite=Lax, Path `/api/auth/google`, 10 นาที, Secure บน https) เก็บ hash ไว้กับ state · callback และ finish ต้องมา cookie เดียวกัน ไม่ตรง = ไม่ยอม (กันคนอื่นส่งลิงก์ Google/ticket ของตัวเองมาให้กดแล้ว login/ผูกผิดบัญชี)
+- ตรวจแบนก่อน login · จำกัด start 30 ครั้ง/10 นาที/IP · ชื่อผู้ใช้กติกาเดียวกับสมัคร
+- **ผู้เล่น:** ปุ่ม "เข้าสู่ระบบด้วย Google" ที่หน้า Login (ซ่อนเมื่อปิดหรือไม่มีไฟล์) · หน้าเลือกตัวละคร: "ผูกบัญชี Google" หรือ "ผูก Google แล้ว: อีเมล" + ยกเลิกการผูก (เฉพาะบัญชีที่มีรหัสผ่าน ไม่งั้นเข้าไม่ได้อีก) · หน้า Guest: "บันทึกตัวละครด้วย Google" · เมนูระบบในเกม → ตั้งค่า: ปุ่มเดียวกัน (ออกจากเกมก่อน แล้วไป Google ต่อเอง)
+- บัญชี Google อย่างเดียวไม่มีรหัสผ่าน (`pass_hash` ว่าง) ตั้งรหัสผ่านเพิ่มยังไม่มี (เจ้าของ: ยังไม่ทำ) · ถ้า admin ยกเลิกการผูกบัญชีแบบนี้ ต้องรีเซ็ตรหัสผ่านให้ถึงจะเข้าได้
+- **ไฟล์ของ Google (ห้าม commit):** JSON ที่ดาวน์โหลดจาก Google Cloud Console (web client) server หาที่แรกที่เจอ: env `GOOGLE_OAUTH_FILE` → `server/data/google-oauth.json` → `~/secrets/google-oauth.json` → `~/secrets/client_secret_….json` (ถ้ามีไฟล์เดียว ใช้ชื่อเดิมจาก Google ได้เลย) · อ่านใหม่ทุกครั้ง วางไฟล์แล้วไม่ต้องรีสตาร์ท · บน VPS คัดไปที่ `~/secrets/` ด้วย scp
+- **redirect URI:** `<origin>/api/auth/google/callback` ต้องอยู่ทั้งใน Google Cloud Console และในไฟล์ JSON (ดาวน์โหลดใหม่หลังเพิ่ม) · server เลือกตัวที่ตรงกับ origin ที่ผู้เล่นเปิด (`https://play.multiverse-game.com` / `http://localhost:5173` ตอน dev) ไม่ตรง = ไม่ให้เริ่ม และ log บอกว่าต้องเพิ่มอะไร
+- **/admin:** แท็บ Server การ์ด "เข้าสู่ระบบด้วย Google" (สวิตช์ `googleLogin` owner): เปิด/ปิดปุ่ม (settings `google_login` = '0' ตอนปิด ไม่มีแถว = เปิด) · บอกว่าเจอไฟล์ที่ไหน client id ลงท้ายอะไร · รายชื่อบัญชีที่ผูก (อีเมล ชื่อ ผูกเมื่อ มีรหัสผ่านไหม) + ยกเลิกการผูก · ตาราง "ผู้ใช้ทั้งหมด" มีป้าย `G` และตัวกรอง "ผูก Google" · audit `google-login` / `google-unlink`
+- เทสต์: `tests/google-login.test.ts` (Google ปลอมผ่าน `GOOGLE_TOKEN_URL`)
 
 ## Guest
 

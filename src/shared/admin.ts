@@ -175,7 +175,7 @@ export interface AdminSnapDelta { on: boolean; stats: SnapDeltaStats; clients: {
  * switch: the Permissions tab, the audit log, restarting / stopping the server, deleting accounts or
  * characters, and making someone owner (command line).
  */
-export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta';
+export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'googleLogin';
 
 /**
  * The defaults: which built-in role may use each tool (owner always has all). The owner can change
@@ -245,6 +245,8 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   daily: ['owner'],
   // The snapshot delta switch on the Server tab (owner 2026-11-14: owner and GMs).
   netDelta: ['owner', 'gm'],
+  // The Google login card on the Server tab: switch it on/off, see and unlink linked accounts (owner 2026-11-15: owner only).
+  googleLogin: ['owner'],
 };
 
 export const ADMIN_FEATURES = Object.keys(FEATURE_ROLES) as AdminFeature[];
@@ -304,6 +306,7 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   balance: { name: 'ปรับสมดุล (อาชีพ, tier)', desc: 'แท็บ "ปรับสมดุล": แก้ค่าสเตตัสอาชีพ ตัวคูณ ตัวตัดฟื้น และตาราง tier T1–T5 ของทั้งเซิร์ฟ มีผลทันที', group: 'ปรับเกม' },
   daily: { name: 'ล็อกอินรายวัน', desc: 'แท็บ "ล็อกอินรายวัน": แก้ของรางวัลแต่ละวันของปฏิทิน (มีผลกับของที่ส่งหลังบันทึก)', group: 'ปรับเกม' },
   netDelta: { name: 'ลดขนาด snapshot', desc: 'แท็บ Server: สวิตช์ส่งค่าที่แทบไม่เปลี่ยนเฉพาะตอนเปลี่ยน (ลดเน็ตขาออก) และตัวนับ', group: 'ระบบ' },
+  googleLogin: { name: 'เข้าสู่ระบบด้วย Google', desc: 'แท็บ Server: เปิด/ปิดปุ่ม Google ที่หน้า Login ดูบัญชีที่ผูก Google และยกเลิกการผูก', group: 'ระบบ' },
   itemStatMult: { name: 'คอนเฟิร์มตัวคูณสเตตัสบนไอเทม', desc: 'แท็บ "ปรับสมดุล": คอนเฟิร์มตัวคูณค่าสเตตัสบนไอเทม คูณค่าของทุกชิ้นในเซิร์ฟจริง (สำรอง DB ให้ก่อน) · ทดลองดูตัวอย่างได้ด้วยสิทธิ์ "ปรับสมดุล"', group: 'ปรับเกม' },
   cosLook: { name: 'บันทึกของแต่งตัวทั้งเซิร์ฟ', desc: 'บันทึกค่าตำแหน่ง/หน้าตาของแต่งตัวที่ทุกคนเห็น (ต้องมี "ทดลองของแต่งตัว" ด้วย)', group: 'หน้าตา' },
   cosManage: { name: 'ดูจัดการของแต่งตัว', desc: 'แท็บ "จัดการของแต่งตัว": ดูทุกชิ้นว่าซ่อน/แสดง ราคาเพชร และค่าหน้าตารายชิ้น', group: 'หน้าตา' },
@@ -350,6 +353,8 @@ export interface AdminAccountRow {
   stashSize: number | null;
   /** Ban end time (BAN_FOREVER = permanent) while banned, else null. */
   bannedUntil: number | null;
+  /** Email of the linked Google account, or null. */
+  google?: string | null;
   banReason: string | null;
 }
 
@@ -374,6 +379,21 @@ export interface AdminAccountDetail {
   cosHidden?: string[];
   /** The orb looks in the shop (they are cosmetics of slot 'orb', made in /admin). */
   orbItems?: OrbItem[];
+}
+
+/**
+ * Google login card (Server tab). `configured`: the client JSON was found (`file` = where, `clientIdTail`
+ * = the end of its client id); `redirectUris` = what it allows. Saving sends `{ on }`; unlinking `{ unlink: accountId }`.
+ */
+export interface AdminGoogle {
+  on: boolean;
+  configured: boolean;
+  file: string | null;
+  clientIdTail: string | null;
+  redirectUris: string[];
+  /** Where the server looks for the file, in order. */
+  paths: string[];
+  links: { accountId: number; username: string; email: string; name: string; linkedAt: number; hasPassword: boolean }[];
 }
 
 export interface BackupRow { name: string; size: number; at: number; kind: string }

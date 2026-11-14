@@ -6,7 +6,7 @@ import type { ClassId } from '../shared/types';
 import * as api from './net/api';
 import { connectOnline, type OnlineBackend } from './net/online';
 import { preloadHudImages } from './icons';
-import { AFTER_EXIT_KEY } from './sysmenu';
+import { AFTER_EXIT_KEY, GOOGLE_AFTER_EXIT_KEY } from './sysmenu';
 import { beginEntryLoading, cancelEntryLoading } from './loadingScreen';
 import { imgUrl } from './img';
 
@@ -111,8 +111,12 @@ class GuestMenu {
   private busy = false;
   private readonly chosenClass: () => ClassId;
 
-  constructor(private readonly launch: Launcher) {
+  constructor(private readonly launch: Launcher, private readonly googleOn: Promise<boolean>) {
     this.chosenClass = buildClassCards($('guest-class-cards'));
+    $('btn-guest-google').onclick = () => {
+      $('guest-error').textContent = 'กำลังไปที่ Google…';
+      api.googleStart('upgrade').catch((e: Error) => ($('guest-error').textContent = e.message));
+    };
     $('btn-guest-continue').onclick = () => this.char && void this.enter(this.char.id);
     $('btn-guest-new').onclick = () => {
       if (!this.char) return;
@@ -140,6 +144,7 @@ class GuestMenu {
     if (!this.char) return this.showCreate();
     $('guest-continue').classList.remove('hidden');
     $('btn-guest-continue').textContent = `เล่นต่อ: ${describe(this.char)}`;
+    $('btn-guest-google').classList.toggle('hidden', !(await this.googleOn));
   }
 
   private showCreate(): void {
@@ -196,9 +201,23 @@ class OnlineMenu {
   private busy = false;
   private readonly chosenClass: () => ClassId;
   private armedDelete: { id: number; t: number } | null = null;
+  /** A Google round trip that needs a username for the new account. */
+  private googleTicket: { ticket: string; guest: boolean } | null = null;
 
-  constructor(private readonly launch: Launcher) {
+  constructor(private readonly launch: Launcher, private readonly googleOn: Promise<boolean>) {
     this.chosenClass = buildClassCards($('online-class-cards'));
+    $('btn-google').onclick = () => {
+      $('login-error').textContent = 'กำลังไปที่ Google…';
+      api.googleStart('login').catch((e: Error) => ($('login-error').textContent = e.message));
+    };
+    $('google-name-box').addEventListener('submit', (e) => {
+      e.preventDefault();
+      void this.googleName();
+    });
+    $('btn-google-name-back').onclick = () => {
+      this.googleTicket = null;
+      this.showLogin();
+    };
     $('login-box').addEventListener('submit', (e) => {
       e.preventDefault();
       void this.login();
@@ -247,6 +266,7 @@ class OnlineMenu {
     const resume = $('btn-account-continue');
     resume.classList.add('hidden');
     this.showLogin();
+    void this.googleOn.then((on) => $('btn-google').classList.toggle('hidden', !on));
     void this.showGuestMoveHint();
     if (!api.savedToken()) return;
     try {
@@ -275,6 +295,7 @@ class OnlineMenu {
   private showLogin(error = ''): void {
     $('login-box').classList.remove('hidden');
     $('register-box').classList.add('hidden');
+    $('google-name-box').classList.add('hidden');
     $('char-box').classList.add('hidden');
     $('login-error').textContent = error;
     $<HTMLInputElement>('login-user').focus();
@@ -302,6 +323,7 @@ class OnlineMenu {
 
   private showRegister(): void {
     $('login-box').classList.add('hidden');
+    $('google-name-box').classList.add('hidden');
     $('register-box').classList.remove('hidden');
     $('register-error').textContent = '';
     // Carry over a username typed into the Login form by mistake.
@@ -360,16 +382,118 @@ class OnlineMenu {
     await this.open();
   }
 
-  private async showCharacters(username: string): Promise<void> {
+  private async showCharacters(username: string, note = ''): Promise<void> {
     $('account-name').textContent = username;
     $('login-box').classList.add('hidden');
     $('register-box').classList.add('hidden');
+    $('google-name-box').classList.add('hidden');
     $('char-box').classList.remove('hidden');
-    $('char-error').textContent = '';
+    $('char-error').textContent = note;
+    void this.showGoogleRow();
     this.chars = await api.listCharacters();
     if (!this.chars.some((c) => c.id === this.selected)) this.selected = this.chars[0]?.id ?? null;
     this.creating = this.chars.length === 0;
     this.render();
+  }
+
+  /** Under the account name: the linked Google account (unlink when there is a password), or a button to link one. */
+  private async showGoogleRow(): Promise<void> {
+    const row = $('google-link-row');
+    row.classList.add('hidden');
+    const [me, on] = await Promise.all([api.me().catch(() => null), this.googleOn]);
+    if (!me || me.guest) return;
+    row.replaceChildren();
+    if (me.google) {
+      const label = document.createElement('span');
+      label.innerHTML = `ผูก Google แล้ว: <b>${escapeHtml(me.google)}</b>`;
+      row.append(label);
+      if (me.hasPassword) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = 'ยกเลิกการผูก';
+        b.onclick = async () => {
+          if (!confirm(`ยกเลิกการผูก Google (${me.google})? หลังจากนี้เข้าได้ด้วยชื่อผู้ใช้และรหัสผ่านเท่านั้น`)) return;
+          try {
+            await api.unlinkGoogle();
+            $('char-error').textContent = 'ยกเลิกการผูก Google แล้ว';
+          } catch (e) {
+            $('char-error').textContent = (e as Error).message;
+          }
+          void this.showGoogleRow();
+        };
+        row.append(b);
+      }
+    } else if (on) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'logon-google';
+      b.textContent = 'ผูกบัญชี Google';
+      b.title = 'เข้าเกมด้วย Google ได้อีกทาง (ชื่อผู้ใช้และรหัสผ่านเดิมยังใช้ได้)';
+      b.onclick = () => void this.linkGoogle();
+      row.append(b);
+    } else {
+      return;
+    }
+    row.classList.remove('hidden');
+  }
+
+  /** Leaves for Google to link it to the logged-in account. */
+  async linkGoogle(): Promise<void> {
+    $('char-error').textContent = 'กำลังไปที่ Google…';
+    await api.googleStart('link').catch((e: Error) => ($('char-error').textContent = e.message));
+  }
+
+  /** Back from Google (the ticket from /#google=…). */
+  async googleReturn(ticket: string): Promise<void> {
+    show('online');
+    this.showLogin('กำลังเข้าสู่ระบบด้วย Google…');
+    let r;
+    try {
+      r = await api.googleFinish(ticket);
+    } catch (e) {
+      return this.showLogin((e as Error).message);
+    }
+    if (r.kind === 'error') {
+      // A failed link happened while logged in: back to the character list with the reason.
+      const me = api.savedToken() ? await api.me().catch(() => null) : null;
+      if (me && !me.guest) return void this.showCharacters(me.username, r.message).catch((e: Error) => this.showLogin(e.message));
+      return this.showLogin(r.message);
+    }
+    if (r.kind === 'session') return void this.showCharacters(r.username).catch((e: Error) => this.showLogin(e.message));
+    if (r.kind === 'linked') {
+      const me = await api.me().catch(() => null);
+      if (me) return void this.showCharacters(me.username, `ผูก Google (${r.email}) แล้ว — ครั้งหน้ากด "เข้าสู่ระบบด้วย Google" ได้เลย`);
+      return this.showLogin(`ผูก Google (${r.email}) แล้ว`);
+    }
+    this.googleTicket = { ticket, guest: r.guest };
+    $('login-box').classList.add('hidden');
+    $('google-name-box').classList.remove('hidden');
+    $('google-name-email').textContent = r.email;
+    $('google-guest-hint').classList.toggle('hidden', !r.guest);
+    $('google-name-error').textContent = '';
+    $<HTMLInputElement>('google-user').focus();
+  }
+
+  private async googleName(): Promise<void> {
+    const t = this.googleTicket;
+    if (this.busy || !t) return;
+    const username = $<HTMLInputElement>('google-user').value.trim();
+    const bad = checkUsername(username);
+    const err = $('google-name-error');
+    if (bad) return void (err.textContent = bad);
+    this.busy = true;
+    err.textContent = 'กำลังสร้างบัญชี…';
+    try {
+      const r = await api.googleFinish(t.ticket, username, t.guest);
+      if (r.kind !== 'session') throw new Error(r.kind === 'error' ? r.message : 'ลองใหม่อีกครั้ง');
+      this.googleTicket = null;
+      err.textContent = '';
+      await this.showCharacters(r.username);
+    } catch (e) {
+      err.textContent = (e as Error).message;
+    } finally {
+      this.busy = false;
+    }
   }
 
   private render(): void {
@@ -487,9 +611,10 @@ function escapeHtml(s: string): string {
 }
 
 export function buildMenu(launch: Launcher): void {
-  const online = new OnlineMenu(launch);
+  const googleOn = api.googleEnabled();
+  const online = new OnlineMenu(launch, googleOn);
   if (GUEST_LOGIN_ENABLED) {
-    const guest = new GuestMenu(launch);
+    const guest = new GuestMenu(launch, googleOn);
     $('btn-mode-guest').onclick = () => {
       show('guest');
       void guest.open();
@@ -501,6 +626,27 @@ export function buildMenu(launch: Launcher): void {
   };
   document.querySelectorAll<HTMLElement>('.btn-back').forEach((b) => (b.onclick = () => toLogin()));
   $('menu').classList.remove('hidden');
+  // Back from Google: the ticket is in the fragment. Taken out of the address bar at once.
+  const ticket = /^#google=([\w-]{16,64})$/.exec(location.hash)?.[1];
+  if (ticket) {
+    history.replaceState(null, '', location.pathname + location.search);
+    void online.googleReturn(ticket);
+    return;
+  }
+  // "ผูก Google" from the in-game menu: the game was left first (sysmenu.ts), now off to Google.
+  let viaGoogle: string | null = null;
+  try {
+    viaGoogle = sessionStorage.getItem(GOOGLE_AFTER_EXIT_KEY);
+    sessionStorage.removeItem(GOOGLE_AFTER_EXIT_KEY);
+  } catch {
+    // Storage blocked: nothing to resume.
+  }
+  if (viaGoogle === 'upgrade') {
+    show('guest');
+    $('guest-error').textContent = 'กำลังไปที่ Google…';
+    api.googleStart('upgrade').catch((e: Error) => ($('guest-error').textContent = e.message));
+    return;
+  }
   // Back from the in-game menu: open the character list (or the guest screen) instead of the Login form.
   let after: string | null = null;
   try {
@@ -511,4 +657,5 @@ export function buildMenu(launch: Launcher): void {
   }
   toLogin(after === 'characters');
   if (after === 'guest') $('btn-mode-guest').click();
+  if (viaGoogle === 'link') void online.linkGoogle();
 }

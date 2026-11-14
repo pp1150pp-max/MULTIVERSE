@@ -602,6 +602,12 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 #btn-account-continue { margin-bottom: 12px; }
 .logon-or { display: flex; align-items: center; gap: 12px; margin: 14px 0 12px; color: var(--ink-dim); font-size: 13px; }
 .logon-or::before, .logon-or::after { content: ''; flex: 1; border-top: 1px dashed var(--panel-edge); }
+.logon-google, .logon-google:hover { display: inline-flex; align-items: center; justify-content: center; gap: 10px; font-weight: 600; background: #fff; color: #1f1f1f; border-color: #747775; }
+.logon-google:hover { background: #f1f3f4; }
+#btn-google { margin-bottom: 10px; }
+.google-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0 10px; font-size: 13px; color: var(--ink-dim); }
+.google-row b { color: var(--ink); font-weight: 600; }
+.google-row button { padding: 3px 10px; font-size: 12px; }
 .logon-guest, .logon-guest:hover { font-weight: 600; background: linear-gradient(#3b4048, #1c1f25); border-color: #8c93a0; color: var(--ink); cursor: default; }
 .name-row { display: flex; gap: 10px; justify-content: center; align-items: center; margin-bottom: 16px; }
 .name-row input {
