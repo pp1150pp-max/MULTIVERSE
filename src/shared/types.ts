@@ -118,6 +118,8 @@ export interface PotionStack {
   potion: PotionKind;
   size: PotionSize;
   count: number;
+  /** Bound to the character (a tutorial quest reward): never merges with unbound bottles. Missing = not bound. */
+  bound?: true;
 }
 
 /** Boss-only blacksmith materials: protection keeps the + level on a fail, enhance is needed from +11. */
@@ -161,13 +163,15 @@ export const isConsumable = (k: StoneKind): k is Consumable => (CONSUMABLES as S
 export const isBuffScroll = (k: StoneKind): k is BuffScroll => (BUFF_SCROLLS as StoneKind[]).includes(k);
 /** Kinds bound to the character: quest keys and reward consumables (REWARD_ITEMS). */
 export const isBoundKind = (k: StoneKind): boolean => isQuestKey(k) || (REWARD_ITEMS as StoneKind[]).includes(k);
-/** A bound stack (isBoundKind): stays in its owner's bag. */
-export const isBound = (e: BagEntry | null | undefined): boolean => isStone(e) && isBoundKind(e.stone);
+/** A bound stack (isBoundKind, or marked bound: tutorial quest rewards): stays in its owner's bag. */
+export const isBound = (e: BagEntry | null | undefined): boolean => (isStack(e) && e.bound === true) || (isStone(e) && isBoundKind(e.stone));
 
 /** Stones of one kind sharing a bag slot (up to STONE_STACK). */
 export interface StoneStack {
   stone: StoneKind;
   count: number;
+  /** Bound to the character (a tutorial quest reward): never merges with unbound stones. Missing = not bound. */
+  bound?: true;
 }
 
 /** Anything a bag slot can hold. */
@@ -192,8 +196,9 @@ export function isItem(e: BagEntry | null | undefined): e is Item {
   return !!e && !isStack(e);
 }
 
-/** Two stacks that may merge: the same potion kind and size, or the same stone. */
+/** Two stacks that may merge: the same potion kind and size, or the same stone, both bound or both not. */
 export function sameStack(a: BagEntry | null | undefined, b: BagEntry | null | undefined): boolean {
+  if (isStack(a) && isStack(b) && !a.bound !== !b.bound) return false;
   if (isPotion(a) && isPotion(b)) return a.potion === b.potion && a.size === b.size;
   if (isStone(a) && isStone(b)) return a.stone === b.stone;
   return false;

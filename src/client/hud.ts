@@ -1414,9 +1414,17 @@ export class Hud {
     this.g.friends.toggle(false);
     this.g.cosmetics.toggle(false);
     if (this.dialogOpen) this.closeDialog();
+    this.g.tutorial.close();
   }
 
   talkTo(id: NpcId): void {
+    // A tutorial step to take or hand in here: talk about it first (that window has a button on to the NPC's own).
+    if (id !== 'seeker' && this.g.tutorial.wants(id)) return this.g.tutorial.show(id);
+    this.openNpcWindow(id);
+  }
+
+  /** The NPC's own window (shop, stash, forge, market…), skipping the tutorial talk. */
+  openNpcWindow(id: NpcId): void {
     // His key quests; his story is a button in that window.
     if (id === 'seeker') this.g.quests.toggle(true);
     else if (id === 'merchant') this.openShop();
@@ -2234,9 +2242,9 @@ export class Hud {
     const quick = this.g.player.potSel[s.potion] === s.size;
     tip.innerHTML =
       `<div class="tt-name" style="color:${POTION_COLOR[s.potion]}">${potionName(s.potion, s.size)}</div>` +
-      `<div class="tt-sub">ยา · ${s.count} / ${POTION_STACK} ขวด${quick ? ` · ใช้กับปุ่ม ${s.potion === 'hp' ? 1 : 2} อยู่` : ''}</div>` +
+      `<div class="tt-sub">ยา · ${s.count} / ${POTION_STACK} ขวด${quick ? ` · ใช้กับปุ่ม ${s.potion === 'hp' ? 1 : 2} อยู่` : ''}${s.bound ? ' · ผูกกับตัวละคร (รางวัลภารกิจ)' : ''}</div>` +
       `<div class="tt-stats"><div>ฟื้น ${potionHeal(s.potion, s.size, this.g.player.cls.id)} ${s.potion.toUpperCase()} ต่อขวด</div></div>` +
-      `<div class="tt-hint">${hint}</div><div class="tt-val">ขายให้พ่อค้าได้ขวดละ ${potionSellPrice(s.potion, s.size)} G</div>`;
+      `<div class="tt-hint">${hint}</div><div class="tt-val">${s.bound ? 'ขาย ทิ้ง ฝากคลัง หรือเทรดไม่ได้' : `ขายให้พ่อค้าได้ขวดละ ${potionSellPrice(s.potion, s.size)} G`}</div>`;
     this.placeTip(tip, e);
   }
 
@@ -2264,11 +2272,11 @@ export class Hud {
         isBoundKind(s.stone) && isConsumable(s.stone) ? `ของใช้ · ${s.count} / ${STONE_STACK} ${stoneUnit(s.stone)} · ผูกกับตัวละคร`
         : isConsumable(s.stone) ? `ของใช้ · ${s.count} / ${STONE_STACK} ${stoneUnit(s.stone)} · ซื้อได้ที่พ่อค้า`
         : isBossKey(s.stone) ? `Artifact · ${s.count} / ${STONE_STACK} อัน · ดรอปจากมอนสเตอร์ในแมพของบอส`
-        : isBound(s) ? 'กุญแจเควส · ผูกกับตัวละคร'
+        : isBound(s) && !s.bound ? 'กุญแจเควส · ผูกกับตัวละคร'
         : s.stone === 'phoenix' ? `ไอเทมชุบชีวิต · ${s.count} / ${STONE_STACK} อัน · ซื้อจากพ่อค้า`
         // Reroll stones also drop (rarely) from ordinary monsters: MONSTER_STONES.
         : MONSTER_STONES.includes(s.stone) ? `วัตถุดิบช่างตีเหล็ก · ${s.count} / ${STONE_STACK} ก้อน · ดรอปจากบอส และมอนสเตอร์ทั่วไป (หายาก)`
-        : `วัตถุดิบตีบวก · ${s.count} / ${STONE_STACK} ก้อน · ดรอปจากบอสเท่านั้น`}</div>` +
+        : `วัตถุดิบตีบวก · ${s.count} / ${STONE_STACK} ก้อน · ดรอปจากบอสเท่านั้น`}${s.bound ? ' · ผูกกับตัวละคร (รางวัลภารกิจ)' : ''}</div>` +
       `<div class="tt-stats"><div>${STONE_DESC[s.stone]}</div></div>` +
       `<div class="tt-hint">${hint}</div><div class="tt-val">${isBound(s) ? 'ขาย ทิ้ง ฝากคลัง หรือเทรดไม่ได้' : `ขายให้พ่อค้าได้${stoneUnit(s.stone)}ละ ${stoneSellPrice(s.stone).toLocaleString()} G`}</div>`;
     this.placeTip(tip, e);

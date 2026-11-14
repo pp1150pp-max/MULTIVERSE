@@ -8,6 +8,7 @@ import { GUEST_TTL_HOURS, type CharacterSummary } from '../src/shared/api';
 import type { ClassId } from '../src/shared/types';
 import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../src/shared/net/protocol';
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
+import { cleanTutorial, type TutorialData } from '../src/shared/tutorial';
 import { cleanCosOwned } from '../src/shared/data/cosmetics';
 import { checkCosTuning, COS_TUNING_SETTING, type CosTuning } from '../src/shared/cosTuning';
 import { checkCosShop, COS_SHOP_SETTING, type CosShop } from '../src/shared/cosShop';
@@ -124,6 +125,12 @@ export class Db {
       );
       CREATE INDEX IF NOT EXISTS characters_by_account ON characters(account_id);
       CREATE TABLE IF NOT EXISTS stashes (
+        account_id INTEGER PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
+        data TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      -- Tutorial quests (src/shared/tutorial.ts): one row per account, shared by its characters.
+      CREATE TABLE IF NOT EXISTS tutorials (
         account_id INTEGER PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
         data TEXT NOT NULL,
         updated_at INTEGER NOT NULL
@@ -717,6 +724,32 @@ export class Db {
     this.db.prepare(`INSERT INTO stashes (account_id, data, updated_at) VALUES (?, ?, ?)
       ON CONFLICT(account_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`)
       .run(accountId, JSON.stringify(stash), Date.now());
+  }
+
+  // ------------------------------------------------------------ tutorial quests (one row per account)
+
+  /**
+   * The account's tutorial quests (none yet = nothing done). A step under way taken by a character the
+   * account no longer has is dropped, so a deleted character never blocks the chain.
+   */
+  loadTutorial(accountId: number): TutorialData {
+    const r = this.db.prepare('SELECT data FROM tutorials WHERE account_id = ?').get(accountId) as { data: string } | undefined;
+    let raw: unknown = null;
+    try {
+      raw = r ? JSON.parse(r.data) : null;
+    } catch {
+      raw = null;
+    }
+    const t = cleanTutorial(raw);
+    if (t.cur && !this.listCharacters(accountId).some((c) => c.name === t.cur!.by)) delete t.cur;
+    return t;
+  }
+
+  /** Saves the account's tutorial quests (inside the caller's transaction when there is one). */
+  saveTutorial(accountId: number, t: TutorialData): void {
+    this.db.prepare(`INSERT INTO tutorials (account_id, data, updated_at) VALUES (?, ?, ?)
+      ON CONFLICT(account_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`)
+      .run(accountId, JSON.stringify(t), Date.now());
   }
 
   /** The two writes of saveCharacterAndStash, for a transaction that does more (the market). */

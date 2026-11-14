@@ -32,6 +32,7 @@ import { ChannelUI } from './channels';
 import { RoomUI } from './bossRoom';
 import { QuestUI } from './quests';
 import { QuestTracker } from './questTracker';
+import { TutorialUI } from './tutorial';
 import { bossShortName } from '../shared/bossRoom';
 import { MailUI } from './mail';
 import { ReportUI } from './report';
@@ -95,6 +96,7 @@ export class Game {
   readonly rooms: RoomUI;
   readonly quests: QuestUI;
   readonly questTracker: QuestTracker;
+  readonly tutorial: TutorialUI;
   readonly mailUI: MailUI;
   readonly report: ReportUI;
   readonly megaphone: MegaphoneUI;
@@ -198,6 +200,7 @@ export class Game {
     this.rooms = new RoomUI(this);
     this.quests = new QuestUI(this, () => this.hud.openDialog());
     this.questTracker = new QuestTracker(this);
+    this.tutorial = new TutorialUI(this, (id) => this.hud.openNpcWindow(id));
     this.mailUI = new MailUI(this);
     this.report = new ReportUI(this);
     this.megaphone = new MegaphoneUI(this);
@@ -856,6 +859,7 @@ export class Game {
     this.rooms.update();
     this.quests.update();
     this.questTracker.update();
+    this.tutorial.update();
   }
 
   private updateCamera(dt: number): void {

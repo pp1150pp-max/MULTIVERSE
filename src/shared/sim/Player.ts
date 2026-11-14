@@ -13,6 +13,7 @@ import { itemClass, starterWeapon, upgradeItem } from '../data/items';
 import { anyStackValue, potionHeal, POTIONS, POTION_SIZES, POTION_STACK, stackLimit } from '../data/potions';
 import { BOSS_QUEST_KEY, BUFF_MAX, QUEST_KILLS, STONE_STACK } from '../data/stones';
 import { cleanGearDone, cleanGearQuests } from '../gearQuests';
+import type { TutorialData } from '../tutorial';
 import {
   BUFF_SCROLLS, isPotion, isStack, isStone, RARITIES, sameStack, SLOTS, STONE_KINDS, wornPlaces,
   type BagEntry, type BuffScroll, type EquipSlot, type StoneKind, type ClassId, type Item, type PotionKind, type PotionSize, type Rarity, type SlotId, type Stats, type Vec2,
@@ -176,12 +177,14 @@ export function buybackPrice(e: BuybackEntry): number {
  */
 export function sortEntries(list: readonly (BagEntry | null)[], key: SortKey, desc: boolean): (BagEntry | null)[] {
   const items: Item[] = [];
+  // Bound stacks (tutorial rewards) are counted apart and never merge with unbound ones ("b" in the key).
   const pots = new Map<string, number>();
-  const stones = new Map<StoneKind, number>();
+  const stones = new Map<string, number>();
+  const add = (m: Map<string, number>, k: string, n: number) => m.set(k, (m.get(k) ?? 0) + n);
   for (const e of list) {
     if (!e) continue;
-    if (isPotion(e)) pots.set(`${e.potion}:${e.size}`, (pots.get(`${e.potion}:${e.size}`) ?? 0) + e.count);
-    else if (isStone(e)) stones.set(e.stone, (stones.get(e.stone) ?? 0) + e.count);
+    if (isPotion(e)) add(pots, `${e.potion}:${e.size}${e.bound ? ':b' : ''}`, e.count);
+    else if (isStone(e)) add(stones, `${e.stone}${e.bound ? ':b' : ''}`, e.count);
     else items.push(e);
   }
   const rank = (it: Item): number => {
@@ -203,14 +206,19 @@ export function sortEntries(list: readonly (BagEntry | null)[], key: SortKey, de
   const potOrder = (['hp', 'mp'] as const).flatMap((k) => POTION_SIZES.map((s) => [k, s] as const));
   if (key === 'value') potOrder.sort((a, b) => dir * (POTIONS[a[0]][a[1]].price - POTIONS[b[0]][b[1]].price));
   const stacks: BagEntry[] = [];
+  const bound = (b: boolean) => (b ? { bound: true as const } : {});
   for (const [k, s] of potOrder) {
-    for (let n = pots.get(`${k}:${s}`) ?? 0; n > 0; n -= POTION_STACK) {
-      stacks.push({ potion: k, size: s, count: Math.min(n, POTION_STACK) });
+    for (const b of [false, true]) {
+      for (let n = pots.get(`${k}:${s}${b ? ':b' : ''}`) ?? 0; n > 0; n -= POTION_STACK) {
+        stacks.push({ potion: k, size: s, count: Math.min(n, POTION_STACK), ...bound(b) });
+      }
     }
   }
   // Stones last, merged into full stacks too.
   for (const k of STONE_KINDS) {
-    for (let n = stones.get(k) ?? 0; n > 0; n -= STONE_STACK) stacks.push({ stone: k, count: Math.min(n, STONE_STACK) });
+    for (const b of [false, true]) {
+      for (let n = stones.get(`${k}${b ? ':b' : ''}`) ?? 0; n > 0; n -= STONE_STACK) stacks.push({ stone: k, count: Math.min(n, STONE_STACK), ...bound(b) });
+    }
   }
   const all = [...items, ...stacks];
   return Array.from({ length: list.length }, (_, i) => all[i] ?? null);
@@ -333,6 +341,8 @@ export class Player extends Unit {
    * character of the account, so whoever runs the Sim hands the same object to each of them.
    */
   stash: StashData = newStash();
+  /** The account's tutorial quests (src/shared/tutorial.ts): like the stash, saved on its own and shared by its characters. */
+  tut: TutorialData = { done: [] };
   /**
    * Enhancement aura tier (see auraTier): from the highest + item worn. The server works it out;
    * other players' mirrors in the browser have no equipment, so theirs comes from the snapshot.
@@ -720,7 +730,7 @@ export class Player extends Unit {
     let n = 0;
     for (const e of this.bag) {
       if (!e) n += POTION_STACK;
-      else if (isPotion(e) && e.potion === kind && e.size === size) n += POTION_STACK - e.count;
+      else if (isPotion(e) && !e.bound && e.potion === kind && e.size === size) n += POTION_STACK - e.count;
     }
     return n;
   }
@@ -730,7 +740,7 @@ export class Player extends Unit {
     if (n <= 0 || this.potionRoom(kind, size) < n) return false;
     for (const e of this.bag) {
       if (n <= 0) break;
-      if (isPotion(e) && e.potion === kind && e.size === size && e.count < POTION_STACK) {
+      if (isPotion(e) && !e.bound && e.potion === kind && e.size === size && e.count < POTION_STACK) {
         const add = Math.min(n, POTION_STACK - e.count);
         e.count += add;
         n -= add;
@@ -775,7 +785,7 @@ export class Player extends Unit {
     let n = 0;
     for (const e of this.bag) {
       if (!e) n += STONE_STACK;
-      else if (isStone(e) && e.stone === kind) n += STONE_STACK - e.count;
+      else if (isStone(e) && !e.bound && e.stone === kind) n += STONE_STACK - e.count;
     }
     return n;
   }
@@ -785,7 +795,7 @@ export class Player extends Unit {
     if (n <= 0 || this.stoneRoom(kind) < n) return false;
     for (const e of this.bag) {
       if (n <= 0) break;
-      if (isStone(e) && e.stone === kind && e.count < STONE_STACK) {
+      if (isStone(e) && !e.bound && e.stone === kind && e.count < STONE_STACK) {
         const add = Math.min(n, STONE_STACK - e.count);
         e.count += add;
         n -= add;

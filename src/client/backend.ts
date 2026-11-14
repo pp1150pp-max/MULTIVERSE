@@ -10,6 +10,7 @@ import type { ZoneDef } from '../shared/data/zones';
 import type { Hazard } from '../shared/sim/volcanoHeart';
 import type { NpcId } from '../shared/data/npcs';
 import type { EnhanceResult } from '../shared/data/enhance';
+import type { TutStep } from '../shared/tutorial';
 import type { RerollKind } from '../shared/data/reroll';
 import type { BuffScroll, EquipSlot, Item, PotionKind, PotionSize, Rarity } from '../shared/types';
 import type { MarketCall, MarketReply } from '../shared/sim/market';
@@ -200,6 +201,9 @@ export interface Backend {
   /** The Seeker's gear quests by quest id (src/shared/gearQuests.ts; the server checks you stand by him). */
   gearAccept(id: string): void;
   gearTurnIn(id: string): void;
+  /** Tutorial quests: take / hand in a step at its NPC (the server checks the distance and the state). */
+  tutAccept(step: TutStep): void;
+  tutTurnIn(step: TutStep): void;
   buyPhoenix(n: number): void;
   /** Dead in a boss room: get up here for one phoenix feather. */
   roomRevive(): void;
