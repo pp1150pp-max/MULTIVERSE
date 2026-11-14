@@ -1,0 +1,39 @@
+# systemd unit for the live MULTIVERSE server on the Linux VPS: the Linux side of the Windows startup task
+# (tools/autostart.ps1). Not used as is: `sudo node tools/autostart.mjs -Install` fills in the @...@ values
+# and writes /etc/systemd/system/multiverse.service (tools/vps-setup.sh does this).
+#
+# What the supervisor (server/online-main.ts --always-on) does is unchanged from Windows:
+#   exit 75 (restart)   -> it starts the server again itself; systemd sees nothing
+#   exit 0 (stop)       -> it stops for good, link too; Restart=on-failure does not start it again
+#   a crash             -> it starts the server again after a pause; if the supervisor itself dies,
+#                          systemd starts it again (RestartSec)
+# Stopping the unit (systemctl stop, or a reboot) runs npm run stop-server first: players see the
+# countdown and everyone is saved while the link is still up. Only if that fails does SIGTERM go to the
+# supervisor (which passes it to the server: countdown too), then SIGKILL after TimeoutStopSec.
+[Unit]
+Description=MULTIVERSE game server + friends' link (npm run always-on in @ROOT@)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+Group=@USER@
+WorkingDirectory=@ROOT@
+# Only cloudflared on this machine reaches the game port (ufw blocks it too).
+Environment=MULTIVERSE_HOST=127.0.0.1
+# Log file names, log lines and backup names use local time.
+Environment=TZ=Asia/Bangkok
+Environment=PATH=@NODEDIR@:/usr/local/bin:/usr/bin:/bin
+ExecStart=@NODE@ --import tsx server/online-main.ts --always-on
+ExecStop=@NODE@ --import tsx server/stop-main.ts
+KillMode=mixed
+TimeoutStopSec=120
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
