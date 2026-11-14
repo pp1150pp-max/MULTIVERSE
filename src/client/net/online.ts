@@ -36,6 +36,7 @@ import type { RoomLobbyView, RoomSnap } from '../../shared/bossRoom';
 import type { MailCall, MailReply } from '../../shared/mail';
 import { WalkTarget } from '../walkTo';
 import type { ReportReply } from '../../shared/reports';
+import type { TutStep } from '../../shared/tutorial';
 
 /** Mirrors never run game logic, so they don't need a simulation behind them. */
 const NO_SIM = null as unknown as Sim;
@@ -681,6 +682,7 @@ export class OnlineBackend implements Backend {
     if (pv.quests) me.quests = pv.quests;
     if (pv.gearQuests) me.gearQuests = pv.gearQuests;
     if (pv.gearDone) me.gearDone = pv.gearDone;
+    if (pv.tut) me.tut = pv.tut;
     me.level = pv.level;
     me.gold = pv.gold;
     me.potSel = { ...pv.potSel };
@@ -980,6 +982,8 @@ export class OnlineBackend implements Backend {
   questTurnIn(boss: string): void { this.send({ t: 'act', a: 'questTurnIn', boss }); }
   gearAccept(id: string): void { this.send({ t: 'act', a: 'gearAccept', id }); }
   gearTurnIn(id: string): void { this.send({ t: 'act', a: 'gearTurnIn', id }); }
+  tutAccept(step: TutStep): void { this.send({ t: 'act', a: 'tutAccept', step }); }
+  tutTurnIn(step: TutStep): void { this.send({ t: 'act', a: 'tutTurnIn', step }); }
   buyPhoenix(n: number): void { this.send({ t: 'act', a: 'buyPhoenix', n }); }
   roomRevive(): void { this.send({ t: 'act', a: 'roomRevive' }); }
   roomLeave(): void { this.send({ t: 'act', a: 'roomLeave' }); }

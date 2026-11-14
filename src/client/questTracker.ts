@@ -5,6 +5,8 @@ import type { Game } from './Game';
 import { QUEST_KILLS, STONE_NAME } from '../shared/data/stones';
 import { questRows } from '../shared/quests';
 import { GEAR_KILLS, GEAR_PART_NAME, gearRows } from '../shared/gearQuests';
+import { TUT_STEP_NAME, TUT_TASK_NAME, TUT_TASKS, tutRows } from '../shared/tutorial';
+import { NPC_INFO } from '../shared/data/npcs';
 
 const FOLD_KEY = 'multiverse-quest-tracker-folded';
 
@@ -48,10 +50,17 @@ export class QuestTracker {
   }
 
   update(): void {
-    // Key quests then gear quests, each as a name, the map, kills so far and the goal.
+    // Tutorial step, key quests then gear quests, each as a name, the goal, how far along and how far to go.
+    // (A ready hunt says "go back to The Seeker" instead, below.)
+    const hunt = (map: { nameTh: string }, _state: string, kills: number) => `ล่ามอนสเตอร์ใน${map.nameTh} ${kills}`;
     const rows = [
-      ...questRows(this.g.player).map((r) => ({ id: r.boss, name: STONE_NAME[r.key], map: r.map, state: r.state, kills: r.kills, max: QUEST_KILLS })),
-      ...gearRows(this.g.player).map((r) => ({ id: r.id, name: `${GEAR_PART_NAME[r.part]} · ${r.map.nameTh}`, map: r.map, state: r.state, kills: r.kills, max: GEAR_KILLS })),
+      ...tutRows(this.g.player.tut, this.g.player.name).map((r) => {
+        const left = TUT_TASKS[r.step].filter((k) => !r.got.includes(k));
+        const goal = r.state === 'ready' ? `ครบแล้ว — กลับไปหา${NPC_INFO[r.npc].name}` : `ยังเหลือ: ${left.map((k) => TUT_TASK_NAME[k]).join(' · ')}`;
+        return { id: `tut:${r.step}`, name: `สอนระบบ · ${TUT_STEP_NAME[r.step]}`, goal, state: r.state as string, kills: r.got.length, max: TUT_TASKS[r.step].length };
+      }),
+      ...questRows(this.g.player).map((r) => ({ id: r.boss, name: STONE_NAME[r.key], goal: `${hunt(r.map, r.state, r.kills)}/${QUEST_KILLS}`, state: r.state as string, kills: r.kills, max: QUEST_KILLS })),
+      ...gearRows(this.g.player).map((r) => ({ id: r.id, name: `${GEAR_PART_NAME[r.part]} · ${r.map.nameTh}`, goal: `${hunt(r.map, r.state, r.kills)}/${GEAR_KILLS}`, state: r.state as string, kills: r.kills, max: GEAR_KILLS })),
     ].filter((r) => r.state === 'going' || r.state === 'ready');
     const sig = JSON.stringify([this.folded, rows.map((r) => [r.id, r.state, r.kills])]);
     if (sig === this.drawn) return;
@@ -74,9 +83,7 @@ export class QuestTracker {
       name.textContent = r.name;
       const goal = document.createElement('div');
       goal.className = 'qt-goal';
-      goal.textContent = r.state === 'ready'
-        ? 'ล่าครบแล้ว — กลับไปหา The Seeker'
-        : `ล่ามอนสเตอร์ใน${r.map.nameTh} ${r.kills}/${r.max}`;
+      goal.textContent = r.state === 'ready' && !r.id.startsWith('tut:') ? 'ล่าครบแล้ว — กลับไปหา The Seeker' : r.goal;
       const bar = document.createElement('div');
       bar.className = 'qt-bar';
       const fill = document.createElement('div');

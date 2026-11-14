@@ -28,8 +28,10 @@ import { banMessage } from '../src/shared/api';
 import { Market, type MarketNote } from './market';
 import { Daily } from './daily';
 import { DAILY_GUEST_MSG, thaiDate } from '../src/shared/daily';
-import { Mail } from './mail';
+import { GUEST_MAIL_MSG, Mail } from './mail';
 import type { MailCall } from '../src/shared/mail';
+import { hasAttach, MAIL_MS, describeAttach } from '../src/shared/mail';
+import { TUT_STEPS, TUT_STEP_NAME, type TutorialData, type TutStep } from '../src/shared/tutorial';
 import { Reports } from './reports';
 import { REPORT_TOPIC_LABEL, type ReportCall } from '../src/shared/reports';
 import type { MarketCall } from '../src/shared/sim/market';
@@ -76,7 +78,7 @@ const TRADE_LOCKED = new Set([
   'equip', 'unequip', 'drop', 'buy', 'move', 'sort', 'buyBack', 'sell', 'split', 'sellRarity', 'enhance', 'reroll',
   'stashPut', 'stashTake', 'stashMove', 'stashSort', 'stashBuy', 'stashGold', 'stashSplit',
   'mktSearch', 'mktMine', 'mktPrice', 'mktList', 'mktCancel', 'mktBuy', 'mktClaim',
-  'mailList', 'mailRead', 'mailReadAll', 'mailClaim', 'mailDelete', 'mailDeleteRead', 'roomOpen', 'buyPhoenix',
+  'mailList', 'mailRead', 'mailReadAll', 'mailClaim', 'mailDelete', 'mailDeleteRead', 'roomOpen', 'buyPhoenix', 'tutAccept',
 ]);
 const TRADE_LOCKED_MSG = 'กำลังเทรดอยู่ — ปิดหน้าต่างเทรดก่อนถึงจะจัดการของได้';
 const PARTY_GUEST_MSG = 'Guest ใช้ระบบปาร์ตี้ไม่ได้ — สมัครสมาชิกเพื่อใช้งาน';
@@ -117,6 +119,8 @@ interface Session {
   epoch: number;
   lastInv: string;
   lastStash: string;
+  /** The tutorial state the last snapshot sent (JSON). */
+  lastTut: string;
   /** Cosmetic ids the account owns (guests: none), and what the last snapshot sent of it. */
   cosOwned: string[];
   lastCosOwned: string;
@@ -266,6 +270,8 @@ export class GameWorld {
    * so nothing can be copied by having two characters open it.
    */
   private readonly stashes = new Map<number, StashData>();
+  /** One live tutorial state per account with a character online, shared like the stash (src/shared/tutorial.ts). */
+  private readonly tuts = new Map<number, TutorialData>();
   private readonly market: Market;
   readonly mail: Mail;
   readonly daily: Daily;
@@ -558,10 +564,17 @@ export class GameWorld {
       }
       player.stash = stash;
     }
+    // Guests too: a guest who signs up keeps the account, and with it what it has done.
+    let tut = this.tuts.get(acc.id);
+    if (!tut) {
+      tut = this.db.loadTutorial(acc.id);
+      this.tuts.set(acc.id, tut);
+    }
+    player.tut = tut;
     const s: Session = {
       ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId, sim, player,
       move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null, recall: false,
-      auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, saveDue: null,
+      auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', lastTut: '', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, saveDue: null,
       ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, deflate: ws.extensions.includes('permessage-deflate'), staff: !acc.guest && ['owner', 'gm'].includes(this.db.adminRole(acc.id) ?? ''), pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity, blockTrades: false,
@@ -621,7 +634,10 @@ export class GameWorld {
     this.byPlayer.delete(s.player);
     s.sim.removePlayer(s.player);
     // Saved above; drop it from memory once nobody on the account is online.
-    if (![...this.sessions].some((o) => o.accountId === s.accountId)) this.stashes.delete(s.accountId);
+    if (![...this.sessions].some((o) => o.accountId === s.accountId)) {
+      this.stashes.delete(s.accountId);
+      this.tuts.delete(s.accountId);
+    }
     // Offline now (or shown as another character of the account).
     if (!s.guest) this.friendsMoved(s.accountId);
     // A lost connection or a login elsewhere comes straight back: don't tell the friends "online" again then.
@@ -1095,6 +1111,14 @@ export class GameWorld {
       case 'gearTurnIn':
         if (typeof m.id === 'string' && sim.gearTurnIn(p, m.id)) this.save(s);
         break;
+      case 'tutAccept':
+        // Sim.tutAccept checks the step, its state for this character and the distance to its NPC.
+        // Saved now: the gold given and the step taken must never come apart.
+        if (TUT_STEPS.includes(m.step) && sim.tutAccept(p, m.step)) this.save(s);
+        break;
+      case 'tutTurnIn':
+        if (TUT_STEPS.includes(m.step)) this.tutTurnIn(s, m.step);
+        break;
       case 'reroll': {
         // Sim.reroll checks the NPC distance, ownership, the item's lines and gold itself.
         const kind = REROLL_KINDS.includes(m.kind) ? m.kind : null;
@@ -1385,6 +1409,8 @@ export class GameWorld {
       return;
     }
     this.send(s.ws, { t: 'market', req, ...out.reply, now: Date.now() });
+    // The market step of the tutorial: a listing that went up (Market.list already saved the character).
+    if (m.a === 'mktList' && out.reply.ok && s.sim.tutTask(s.player, 'marketList')) this.save(s);
     if (out.sold) this.tellSeller(out.sold.seller_account, [out.sold]);
     for (const acc of out.boxChanged ?? []) this.sendMarketBox(acc);
   }
@@ -1536,6 +1562,43 @@ export class GameWorld {
     } catch (e) {
       console.error('[mail] notice failed', e);
     }
+  }
+
+  /**
+   * Hands a tutorial step in (src/shared/tutorial.ts): Sim marks it done, then its reward is mailed to this
+   * character (bound items) in the same transaction as the save, so it is given exactly once. Guests have
+   * no mailbox, so they can't hand a step in (owner 2026-11-14) until they sign up.
+   */
+  private tutTurnIn(s: Session, step: TutStep): void {
+    if (s.guest) {
+      this.send(s.ws, { t: 'chat', name: '', text: `${GUEST_MAIL_MSG} — รางวัลภารกิจสอนระบบส่งทางจดหมาย` });
+      return;
+    }
+    const got = s.sim.tutTurnIn(s.player, step);
+    if (!got) return;
+    const now = Date.now();
+    try {
+      this.db.transaction(() => {
+        if (hasAttach(got.reward)) {
+          const last = step === TUT_STEPS[TUT_STEPS.length - 1];
+          const id = this.db.mailSendInsert({
+            senderId: null, senderName: 'ภารกิจสอนระบบ', target: `${s.player.name} (เควสสอนระบบ ${TUT_STEP_NAME[step]})`,
+            title: last ? 'รางวัลจบภารกิจสอนระบบ' : `รางวัลภารกิจสอนระบบ: ${TUT_STEP_NAME[step]}`,
+            body: `${describeAttach(got.reward).join('\n')}\nของทุกชิ้นผูกกับตัวละครนี้ (ขาย ฝากคลัง เทรด หรือลงตลาดไม่ได้)`,
+            attach: JSON.stringify(got.reward), hasAttach: true, at: now, expiresAt: now + MAIL_MS,
+          });
+          this.db.mailBoxAdd(id, s.accountId, s.charId);
+        }
+        this.db.writeCharacterAndStash(s.charId, s.player.toData(), s.accountId, s.player.stash);
+        this.db.saveTutorial(s.accountId, s.player.tut);
+      });
+    } catch (e) {
+      got.undo();
+      console.error(`[tutorial] handing in ${step} failed for`, s.player.name, e);
+      this.send(s.ws, { t: 'chat', name: '', text: 'ส่งภารกิจไม่สำเร็จ ลองใหม่อีกครั้ง' });
+      return;
+    }
+    this.mailNote(s);
   }
 
   /** Mail was sent or pulled back: every character online hears about new mail, and with `always` gets its badge refreshed. */
@@ -1790,6 +1853,11 @@ export class GameWorld {
     if (stash !== s.lastStash) {
       s.lastStash = stash;
       me.stash = p.stash;
+    }
+    const tut = JSON.stringify(p.tut);
+    if (tut !== s.lastTut) {
+      s.lastTut = tut;
+      me.tut = p.tut;
     }
     const sim = s.sim;
     const msg: SnapshotMsg = {
@@ -2122,12 +2190,16 @@ export class GameWorld {
   private save(s: Session): void {
     s.saveDue = null;
     try {
-      if (s.guest) {
-        this.db.saveCharacter(s.charId, s.player.toData());
-      } else {
-        // Together with the stash, so an item never ends up in both or neither.
-        this.db.saveCharacterAndStash(s.charId, s.player.toData(), s.accountId, s.player.stash);
-      }
+      // The account's tutorial goes with the character, so a step's gold and the step taken never come apart.
+      this.db.transaction(() => {
+        if (s.guest) {
+          this.db.saveCharacter(s.charId, s.player.toData());
+        } else {
+          // Together with the stash, so an item never ends up in both or neither.
+          this.db.writeCharacterAndStash(s.charId, s.player.toData(), s.accountId, s.player.stash);
+        }
+        this.db.saveTutorial(s.accountId, s.player.tut);
+      });
       this.db.touchOnline(s.accountId);
     } catch (e) {
       console.error(`[world] saving ${s.player.name} failed`, e);

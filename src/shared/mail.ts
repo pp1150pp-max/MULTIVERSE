@@ -17,8 +17,10 @@ export const MAIL_BODY_MAX = 1000;
 /** One attachment line. Gear is rolled when it is claimed, for the character that claims it. */
 export type MailAttachItem =
   | { kind: 'equip'; baseId: string; rarity: Rarity; plus: number; level?: number; count: number }
-  | { kind: 'potion'; potion: 'hp' | 'mp'; size: 's' | 'm' | 'l'; count: number }
-  | { kind: 'stone'; stone: string; count: number };
+  | { kind: 'potion'; potion: 'hp' | 'mp'; size: 's' | 'm' | 'l'; count: number; bound?: true }
+  | { kind: 'stone'; stone: string; count: number; bound?: true };
+// `bound`: given bound to the character that claims it (tutorial quest rewards, src/shared/tutorial.ts).
+// Only the server sets it; cleanAttach (the admin form) never does.
 
 export interface MailAttach { gold: number; items: MailAttachItem[] }
 
@@ -76,7 +78,7 @@ export function describeAttach(a: MailAttach): string[] {
       out.push(`${x.plus ? `+${x.plus} ` : ''}${name} [${RARITY_LABEL[x.rarity]}]${x.level ? ` Lv.${x.level}` : ''} × ${x.count}`);
     } else {
       const s = (x.kind === 'potion' ? adminStack({ kind: 'potion', potion: x.potion, size: x.size }) : adminStack({ kind: 'stone', stone: x.stone })) as AdminStack;
-      out.push(`${adminStackName(s)} × ${x.count}`);
+      out.push(`${adminStackName(s)} × ${x.count}${x.bound ? ' (ผูกตัวละคร)' : ''}`);
     }
   }
   return out;
@@ -101,7 +103,7 @@ export function rollAttach(a: MailAttach, cls: ClassId, charLevel: number): BagE
       }
     } else {
       const s = x.kind === 'potion' ? adminStack({ kind: 'potion', potion: x.potion, size: x.size }) : adminStack({ kind: 'stone', stone: x.stone });
-      if (typeof s !== 'string') out.push({ ...s, count: x.count } as BagEntry);
+      if (typeof s !== 'string') out.push({ ...s, count: x.count, ...(x.bound ? { bound: true } : {}) } as BagEntry);
     }
   }
   return out;

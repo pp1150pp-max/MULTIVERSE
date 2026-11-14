@@ -13,11 +13,11 @@ import {
 } from '../data/enhance';
 import { entryName, potionName, POTION_STACK, POTIONS, stackLimit } from '../data/potions';
 import { BOSS_KEY, BOSS_QUEST_KEY, BOSS_STONE_CHANCE, BOUND_MSG, BUFF_LABEL, BUFF_MAX, BUFF_MULT, BUFF_TIME, fmtBuff, PHOENIX_PRICE, QUEST_KILLS, REVIVES_PER_KEY, STONE_STACK, KEY_DROP_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, RETURN_CAST, RETURN_SCROLL_PRICE, STONE_COLOR, STONE_NAME } from '../data/stones';
-import { NPC_USE_RANGE, type NpcId } from '../data/npcs';
+import { NPC_INFO, NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { pick, rand, randInt } from '../rng';
 import { splitExp } from '../party';
 import { CLASS_IDS } from '../data/classes';
-import { classBalance } from '../balance';
+import { classBalance, currentBalance } from '../balance';
 import { COS_SLOT_NAME, cosById, MOUNT_CALM } from '../data/cosmetics';
 import {
   isBound, isBuffScroll, isItem, isPotion, isStack, isStone, RARITY_LABEL, sameStack, SLOT_LABEL, BLACKSMITH_STONES, BUFF_SCROLLS, type BagEntry, type BuffScroll, type Item, type StoneKind, type PotionKind, type PotionSize, type Rarity } from '../types';
@@ -33,6 +33,8 @@ import { nextRowPrice, STASH_GOLD_MAX, STASH_ROW } from './stash';
 import { splitInto } from './split';
 import { questRows } from '../quests';
 import { GEAR_KILLS, GEAR_PART_NAME, gearReward, gearRow } from '../gearQuests';
+import { TUT_ACCEPT_GOLD, TUT_ACCEPT_STONES, TUT_NPC, TUT_STEPS, TUT_STEP_NAME, TUT_TASKS, TUT_TASK_NAME, tutRows, tutTurnInReward, type TutStep, type TutTask } from '../tutorial';
+import { putAll, type MailAttach } from '../mail';
 import { RARITY_COLOR } from '../types';
 import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type SfxName, type SimEvent } from './types';
 
@@ -916,6 +918,66 @@ export class Sim {
     }
   }
 
+  // ------------------------------------------------------------ tutorial quests (src/shared/tutorial.ts)
+
+  /**
+   * Takes a tutorial step from its NPC: gold now, plus the step's bound stones into the bag (refused, with
+   * nothing given, if they don't fit). The server saves right after, so the gold and the taken step stay together.
+   */
+  tutAccept(p: Player, step: TutStep): boolean {
+    const row = tutRows(p.tut, p.name).find((r) => r.step === step);
+    if (!row || row.state !== 'offer' || !this.near(p, TUT_NPC[step])) return false;
+    const stones = (TUT_ACCEPT_STONES[step] ?? []).map((s) => ({ stone: s.stone, count: s.count, bound: true as const }));
+    if (stones.length && !putAll(structuredClone(p.bag), stones)) {
+      this.log(`กระเป๋าเต็ม — เคลียร์ช่องว่าง ${stones.length} ช่องก่อนรับภารกิจ`, '#ff8a6a', p.id);
+      return false;
+    }
+    putAll(p.bag, stones);
+    p.tut.cur = { step, by: p.name, got: [] };
+    p.gold += TUT_ACCEPT_GOLD;
+    const extra = stones.map((s) => `${STONE_NAME[s.stone]} ×${s.count}`).join(', ');
+    this.log(`รับภารกิจสอนระบบ: ${TUT_STEP_NAME[step]} (+${TUT_ACCEPT_GOLD.toLocaleString()} G${extra ? `, ${extra} ผูกตัวละคร` : ''})`, '#ffd34a', p.id);
+    for (const k of TUT_TASKS[step]) this.log(`• ${TUT_TASK_NAME[k]}`, '#ffd34a', p.id);
+    this.sfx('trade', p.x, p.z, p.id);
+    this.afterChange(p);
+    return true;
+  }
+
+  /**
+   * Hands a finished tutorial step in to its NPC: marks it done and returns the reward the server mails
+   * (src/shared/tutorial.ts tutTurnInReward), or null when it can't be handed in. `undo` puts it back
+   * if the mail can't be written.
+   */
+  tutTurnIn(p: Player, step: TutStep): { reward: MailAttach; undo: () => void } | null {
+    const row = tutRows(p.tut, p.name).find((r) => r.step === step);
+    if (!row || row.state !== 'ready' || !this.near(p, TUT_NPC[step])) return null;
+    const before = structuredClone(p.tut);
+    p.tut.done.push(step);
+    delete p.tut.cur;
+    const last = step === TUT_STEPS[TUT_STEPS.length - 1];
+    this.log(last ? 'จบภารกิจสอนระบบครบทุกขั้นแล้ว! รางวัลส่งไปที่กล่องจดหมาย' : `ส่งภารกิจสอนระบบ: ${TUT_STEP_NAME[step]} — รางวัลส่งไปที่กล่องจดหมาย`, '#ffd34a', p.id);
+    this.sfx('trade', p.x, p.z, p.id);
+    this.events.push({ t: 'save', to: p.id });
+    return {
+      reward: tutTurnInReward(step, currentBalance().tutorial),
+      undo: () => {
+        p.tut.done = before.done;
+        p.tut.cur = before.cur;
+      },
+    };
+  }
+
+  /** Counts one thing a tutorial step asks for, when the player has that step under way. True = it counted. */
+  tutTask(p: Player, task: TutTask): boolean {
+    const cur = p.tut.cur;
+    if (!cur || cur.by !== p.name || !TUT_TASKS[cur.step].includes(task) || cur.got.includes(task)) return false;
+    cur.got.push(task);
+    const left = TUT_TASKS[cur.step].filter((k) => !cur.got.includes(k)).length;
+    this.log(left ? `ภารกิจสอนระบบ: ${TUT_TASK_NAME[task]} ✓ (เหลืออีก ${left})` : `ภารกิจสอนระบบ ${TUT_STEP_NAME[cur.step]} ครบแล้ว — กลับไปส่งที่${NPC_INFO[TUT_NPC[cur.step]].name}`, '#ffd34a', p.id);
+    this.events.push({ t: 'save', to: p.id });
+    return true;
+  }
+
   // ------------------------------------------------------------ loot
 
   private dropLoot(m: Monster): void {
@@ -1130,6 +1192,7 @@ export class Sim {
     }
     p.gold -= cost;
     this.log(`ซื้อ${potionName(kind, size)} × ${n} (−${cost} G)`, '#f2c230', p.id);
+    this.tutTask(p, 'buyPotion');
     this.sfx('trade', p.x, p.z, p.id);
     this.afterChange(p);
     return true;
@@ -1199,6 +1262,7 @@ export class Sim {
     }
     p.gold -= cost;
     this.log(`ซื้อ${STONE_NAME.return_scroll} × ${n} (−${cost.toLocaleString()} G)`, '#f2c230', p.id);
+    this.tutTask(p, 'buyScroll');
     this.sfx('trade', p.x, p.z, p.id);
     this.afterChange(p);
     return true;
@@ -1248,6 +1312,7 @@ export class Sim {
     const name = entryName(part ? { ...item, count: part } : item);
     const v = p.sell(i, part);
     this.log(`ขาย ${name} ได้ ${v} G`, '#f2c230', p.id);
+    this.tutTask(p, 'sell');
     this.sfx('trade', p.x, p.z, p.id);
     this.afterChange(p);
     return v;
@@ -1269,6 +1334,7 @@ export class Sim {
       return 0;
     }
     this.log(`ขายของระดับ${RARITY_LABEL[rarity]} ${n} ชิ้น ได้ ${total} G`, '#f2c230', p.id);
+    this.tutTask(p, 'sell');
     this.sfx('trade', p.x, p.z, p.id);
     this.afterChange(p);
     return total;
@@ -1291,6 +1357,7 @@ export class Sim {
       this.log('คลังเต็ม', '#ff8a6a', p.id);
       return false;
     }
+    this.tutTask(p, 'stashItem');
     this.afterStash(p);
     return true;
   }
@@ -1327,6 +1394,7 @@ export class Sim {
     if (!a || !b) return false;
     if (from === 'bag' && to === 'stash' && isBound(a[i])) return this.refuseBound(p);
     if (!splitInto(a, i, b, j, n)) return false;
+    if (from === 'bag' && to === 'stash') this.tutTask(p, 'stashItem');
     this.afterStash(p);
     return true;
   }
@@ -1370,6 +1438,7 @@ export class Sim {
       p.gold -= amount;
       st.gold += amount;
       this.log(`ฝากทอง ${amount.toLocaleString()} G`, '#f2c230', p.id);
+      this.tutTask(p, 'stashGold');
     } else {
       const n = -amount;
       if (n > st.gold) {
@@ -1410,6 +1479,7 @@ export class Sim {
     p.takeStones('enhance', stones);
     if (useProtect) p.takeStones('protect', 1);
     const result = rollEnhance(item, Math.random, useProtect);
+    this.tutTask(p, 'enhance');
     if (worn) p.recompute();
     if (result === 'success') {
       this.log(`🔨 ตีบวกสำเร็จ → ${itemName(item)}`, '#ffd34a', p.id);
@@ -1449,6 +1519,7 @@ export class Sim {
     p.takeStones(stone, 1);
     if (kind === 'values') rerollValues(item);
     else rerollStat(item);
+    this.tutTask(p, kind === 'values' ? 'rerollValues' : 'rerollStat');
     if (worn) p.recompute();
     this.log(`🔨 ${REROLL_NAME[kind]} ${itemName(item)} (−${cost.toLocaleString()} G)`, '#c9a8ff', p.id);
     this.fx('burst', p.x, 1.2, p.z, '#c9a8ff', 12, 2.5);

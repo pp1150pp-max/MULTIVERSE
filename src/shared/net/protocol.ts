@@ -20,6 +20,7 @@ import type { ReportCall, ReportReply } from '../reports';
 import type { PartyFound, PartySnap } from '../party';
 import type { TradeView } from '../trade';
 import type { FriendsView } from '../friends';
+import type { TutorialData, TutStep } from '../tutorial';
 import type { RoomLobbyView, RoomSnap } from '../bossRoom';
 import type { ChannelsView } from '../channels';
 import type { CosSlot } from '../data/cosmetics';
@@ -156,6 +157,9 @@ export type ActionMsg =
   // The Seeker's gear quests (Sim.gearAccept / gearTurnIn): `id` is a gear quest id (src/shared/gearQuests.ts).
   | { t: 'act'; a: 'gearAccept'; id: string }
   | { t: 'act'; a: 'gearTurnIn'; id: string }
+  // Tutorial quests (Sim.tutAccept / tutTurnIn, src/shared/tutorial.ts): `step` is a tutorial step id.
+  | { t: 'act'; a: 'tutAccept'; step: TutStep }
+  | { t: 'act'; a: 'tutTurnIn'; step: TutStep }
   /** Buy `n` phoenix feathers from the merchant. */
   | { t: 'act'; a: 'buyPhoenix'; n: number }
   /** Dead in a boss room: get up where you fell, for one phoenix feather. */
@@ -242,6 +246,8 @@ export interface PrivateSnap {
   /** The Seeker's gear quests taken (quest id → kills so far) and handed in. */
   gearQuests?: Record<string, number>;
   gearDone?: string[];
+  /** The account's tutorial quests (sent when they change). */
+  tut?: TutorialData;
   cd:Partial<Record<SkillSlot, number>>; potCd: number; restCd: number;
   /** Seconds left on a return-scroll cast (left out when not casting). */
   castT?: number;

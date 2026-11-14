@@ -19,6 +19,10 @@ import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { ITEM_BASES, itemRowKinds, rowRanges, TIER_BAND_NAME, TIER_BANDS, tierBandOf, tierChances, tierRanges } from '../shared/data/items';
 import { MAX_LEVEL } from '../shared/formulas';
 import { RARITIES, RARITY_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, type ClassId, type Rarity, type StatKey } from '../shared/types';
+import { TUT_ACCEPT_GOLD, TUT_COUNT_MAX, TUT_GOLD_MAX, TUT_LINES_MAX, TUT_REWARD_KEYS, TUT_REWARD_NAME, TUT_STONES, tutRewardText, type TutRewardKey } from '../shared/tutorial';
+import type { MailAttachItem } from '../shared/mail';
+import { POTION_SIZES, potionName } from '../shared/data/potions';
+import { STONE_NAME } from '../shared/data/stones';
 
 type Kids = (Node | string | null | undefined | false)[];
 type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, unknown>, ...kids: Kids) => HTMLElementTagNameMap[K];
@@ -601,6 +605,55 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
+  // ---------------------------------------------------------- tutorial quest rewards (src/shared/tutorial.ts)
+  const tutCard = h('div', { class: 'card' });
+  /** Every potion and stone a reward may give, as select options (value = JSON of the line without count). */
+  type TutLine = { kind: 'potion'; potion: 'hp' | 'mp'; size: 's' | 'm' | 'l' } | { kind: 'stone'; stone: string };
+  const tutKinds: { label: string; line: TutLine }[] = [
+    ...(['hp', 'mp'] as const).flatMap((potion) => POTION_SIZES.map((size) => ({ label: potionName(potion, size), line: { kind: 'potion' as const, potion, size } }))),
+    ...TUT_STONES.map((stone) => ({ label: STONE_NAME[stone], line: { kind: 'stone' as const, stone } })),
+  ];
+  const lineKey = (x: TutLine | MailAttachItem): string =>
+    x.kind === 'potion' ? `p:${x.potion}:${x.size}` : x.kind === 'stone' ? `s:${x.stone}` : 'e';
+  const drawTut = (): void => {
+    const refresh = (): void => {
+      updateSummary();
+      drawTut();
+    };
+    const reward = (k: TutRewardKey) => {
+      const r = draft.tutorial[k];
+      const changed = JSON.stringify(r) !== JSON.stringify(code.tutorial[k]);
+      const lines = r.items.map((it, i) => {
+        const sel = h('select', {
+          onchange: (e: Event) => {
+            const pick = tutKinds[(e.target as HTMLSelectElement).selectedIndex];
+            r.items[i] = { ...pick.line, count: it.count } as MailAttachItem;
+            refresh();
+          },
+        }, ...tutKinds.map((o) => h('option', { selected: lineKey(o.line) === lineKey(it) }, o.label)));
+        const count = numBox(() => it.count, (n) => { it.count = n; }, it.count, 1, TUT_COUNT_MAX, 1, () => updateSummary());
+        const del = h('button', { onclick: () => { r.items.splice(i, 1); refresh(); } }, '✕');
+        return h('div', { class: 'row bal-line' }, sel, ' × ', count, del);
+      });
+      const add = h('button', {
+        disabled: r.items.length >= TUT_LINES_MAX,
+        onclick: () => { r.items.push({ ...tutKinds[0].line, count: 1 } as MailAttachItem); refresh(); },
+      }, '+ เพิ่มของ');
+      return h('div', { class: changed ? 'bal-changed' : '', style: 'margin:6px 0;padding:6px;border:1px solid #444;border-radius:4px' },
+        h('b', {}, TUT_REWARD_NAME[k]),
+        h('div', { class: 'muted' }, `ค่าในโค้ด: ${tutRewardText(code.tutorial[k])}`),
+        h('div', { class: 'row bal-line' }, h('label', {}, 'ทอง (G) ', numBox(() => r.gold, (n) => { r.gold = n; }, code.tutorial[k].gold, 0, TUT_GOLD_MAX, 100, () => updateSummary()))),
+        ...lines,
+        add,
+      );
+    };
+    tutCard.replaceChildren(
+      h('h2', {}, 'เควสสอนระบบ: รางวัล'),
+      h('div', { class: 'muted' }, `รางวัลส่งทางจดหมายถึงตัวละครที่ส่งภารกิจ ของทุกชิ้นผูกตัวละคร · ขั้นตลาดส่งพร้อมรางวัลจบสาย · มีผลกับการส่งภารกิจหลังบันทึก · ทองตอนรับภารกิจ ${TUT_ACCEPT_GOLD.toLocaleString()} G และหินตอนรับขั้นสุ่มค่าอยู่ในโค้ด`),
+      ...TUT_REWARD_KEYS.map(reward),
+    );
+  };
+
   const draftTuning = (): ReturnType<typeof checkBalance> => checkBalance(draft, true);
   function updateSummary(): void {
     const c = draftTuning();
@@ -620,6 +673,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawTiers();
     drawMonsters();
     drawAuto();
+    drawTut();
   };
   const save =async (body: { tuning: BalanceTuning } | { reset: true }, ask: string): Promise<void> => {
     if (!confirm(ask)) return;
@@ -663,11 +717,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         void save({ tuning: c.tuning }, `ใช้ค่าใหม่กับทั้งเซิร์ฟทันทีไหม?\n\n${changes.slice(0, 1200)}`);
       } }, '💾 บันทึกทั้งเซิร์ฟ'),
       h('button', { onclick: () => { draft = mergeBalance(saved); redraw(); msg.textContent = ''; } }, 'ยกเลิกที่ยังไม่บันทึก'),
-      h('button', { onclick: () => void save({ reset: true }, 'คืนทุกค่า (อาชีพ tier ตัวคูณมอน และ Auto Play) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?') }, '↺ คืนค่าในโค้ด'),
+      h('button', { onclick: () => void save({ reset: true }, 'คืนทุกค่า (อาชีพ tier ตัวคูณมอน Auto Play และรางวัลเควสสอนระบบ) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?') }, '↺ คืนค่าในโค้ด'),
     ),
     msg,
   );
 
-  box.replaceChildren(classCard, regenCard, tierCard, previewCard, monsterCard, autoCard, bar);
+  box.replaceChildren(classCard, regenCard, tierCard, previewCard, monsterCard, autoCard, tutCard, bar);
   redraw();
 }
