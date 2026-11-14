@@ -1,11 +1,14 @@
 // Turns a ChatGPT effect sheet (strict grid of 6 frames per row on magenta) into a game fx sheet:
 // the background becomes transparent and the picture is resampled to 256 px cells, keeping the layout,
 // because the game cuts frames by equal cells (see SHEET_ROWS in src/client/effects.ts).
-//   PNGJS=<path to pngjs> node tools/cut_fx_sheet.cjs <raw.png> <rows> <out.png>
+//   PNGJS=<path to pngjs> node tools/cut_fx_sheet.cjs <raw.png> <rows> <out.png> [strict]
+// `strict`: for sheets with violet or purple effects (the default takes anything magenta-ish out and greys violet).
+// Only colours close to the sheet's own background (sampled at the top-left corner) go, edges fade by that distance.
 const fs = require('fs');
 const { PNG } = require(process.env.PNGJS || 'pngjs');
 
-const [src, rowsArg, out] = process.argv.slice(2);
+const [src, rowsArg, out, mode] = process.argv.slice(2);
+const STRICT = mode === 'strict';
 const ROWS = Number(rowsArg);
 const COLS = 6;
 const CELL = 256;
@@ -17,9 +20,26 @@ const img = PNG.sync.read(fs.readFileSync(src));
 const { width: w, height: h, data } = img;
 const px = Buffer.from(data);
 const key = new Uint8Array(w * h);
-for (let i = 0; i < w * h; i++) key[i] = isKey(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]) ? 1 : 0;
+const bg = [data[0], data[1], data[2]];
+const dist = (p) => Math.hypot(data[p] - bg[0], data[p + 1] - bg[1], data[p + 2] - bg[2]);
+const NEAR = 70;
+const FAR = 150;
+for (let i = 0; i < w * h; i++) key[i] = STRICT ? (dist(i * 4) < NEAR ? 1 : 0) : isKey(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]) ? 1 : 0;
 // Blended pixels next to the background: fade them by how magenta they are and take the tint out.
 const R = 2;
+if (STRICT) for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+  const i = y * w + x, p = i * 4;
+  if (key[i]) { px[p + 3] = 0; continue; }
+  const d = dist(p);
+  if (d >= FAR) continue;
+  let edge = false;
+  for (let dy = -R; dy <= R && !edge; dy++) for (let dx = -R; dx <= R; dx++) {
+    const nx = x + dx, ny = y + dy;
+    if (nx >= 0 && ny >= 0 && nx < w && ny < h && key[ny * w + nx]) { edge = true; break; }
+  }
+  if (edge) px[p + 3] = Math.round(255 * (d - NEAR) / (FAR - NEAR));
+}
+else
 for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
   const i = y * w + x, p = i * 4;
   if (key[i]) { px[p + 3] = 0; continue; }
