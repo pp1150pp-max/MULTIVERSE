@@ -73,30 +73,42 @@ async function stopAll(): Promise<void> {
   rmSync(dir, { recursive: true, force: true });
 }
 
-async function api(method: string, path: string, body?: unknown, token?: string, origin = BASE) {
+async function api(method: string, path: string, body?: unknown, token?: string, origin = BASE, cookie = '') {
   const r = await fetch(`${BASE}/api${path}`, {
     method,
-    headers: { 'Content-Type': 'application/json', Origin: origin, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    headers: {
+      'Content-Type': 'application/json', Origin: origin, ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(cookie ? { Cookie: cookie } : {}),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  return { status: r.status, data: (await r.json().catch(() => ({}))) as any };
+  return { status: r.status, data: (await r.json().catch(() => ({}))) as any, setCookie: r.headers.get('set-cookie') ?? '' };
 }
 
+/** The browser-binding cookie from a /start answer, as a Cookie header ('' when none). */
+const cookieOf = (setCookie: string) => setCookie.split(';')[0] ?? '';
+
+/** Finishing a ticket from the browser that started (with its cookie). */
+let lastCookie = '';
+const finishT = (ticket: string, username?: string, cookie = lastCookie) =>
+  api('POST', '/auth/google/finish', username === undefined ? { ticket } : { ticket, username }, undefined, BASE, cookie);
+
 /** One trip through Google: start, "Google" answers with `claims` (nonce/aud/iss filled in unless given), callback, finish. */
-async function google(mode: string, claims: Record<string, unknown> | null, opts: { token?: string; guestToken?: string; nonce?: string; reuse?: boolean } = {}) {
+async function google(mode: string, claims: Record<string, unknown> | null, opts: { token?: string; guestToken?: string; nonce?: string; cookie?: string } = {}) {
   const s = await api('POST', '/auth/google/start', { mode, guestToken: opts.guestToken }, opts.token);
   if (s.status !== 200) return { start: s, result: null as any, state: '' };
+  lastCookie = cookieOf(s.setCookie);
+  const cookie = opts.cookie ?? lastCookie;
   const u = new URL(s.data.url);
   const state = u.searchParams.get('state')!;
   next = claims && {
     iss: 'https://accounts.google.com', aud: CLIENT_ID, exp: Math.floor(Date.now() / 1000) + 3600, email_verified: true,
     nonce: opts.nonce ?? u.searchParams.get('nonce'), ...claims,
   };
-  const cb = await fetch(`${BASE}/api/auth/google/callback?state=${state}&code=abc`, { redirect: 'manual' });
+  const cb = await fetch(`${BASE}/api/auth/google/callback?state=${state}&code=abc`, { redirect: 'manual', headers: cookie ? { Cookie: cookie } : {} });
   const loc = cb.headers.get('location') ?? '';
   const ticket = loc.startsWith('/#google=') ? loc.slice('/#google='.length) : '';
-  const f = await api('POST', '/auth/google/finish', { ticket });
-  return { start: s, result: f.data, ticket, state, url: u, location: loc };
+  const f = await finishT(ticket, undefined, cookie);
+  return { start: s, result: f.data, ticket, state, url: u, location: loc, cookie };
 }
 
 try {
@@ -120,11 +132,15 @@ try {
 
   // ---- new account
   ok(first.result.kind === 'needName' && first.result.email === 'alice@example.com' && first.result.guest === false, 'a new Google account asks for a username');
-  const bad = await api('POST', '/auth/google/finish', { ticket: first.ticket, username: 'a!' });
+  ok(/HttpOnly/.test(first.start.setCookie) && /SameSite=Lax/.test(first.start.setCookie) && /Path=\/api\/auth\/google/.test(first.start.setCookie),
+    'start sets an HttpOnly SameSite=Lax binding cookie for /api/auth/google');
+  const stolen = await finishT(first.ticket!, 'mallory', 'mv_gbind=someone-else');
+  ok(stolen.status === 410, 'a ticket can not be finished from another browser (cookie differs)');
+  const bad = await finishT(first.ticket!, 'a!');
   ok(bad.status === 400, 'username rules apply');
-  const made = await api('POST', '/auth/google/finish', { ticket: first.ticket, username: 'alice' });
+  const made = await finishT(first.ticket!, 'alice');
   ok(made.status === 201 && made.data.kind === 'session' && made.data.username === 'alice' && made.data.token, 'username chosen: account made and logged in');
-  const again = await api('POST', '/auth/google/finish', { ticket: first.ticket, username: 'alice2' });
+  const again = await finishT(first.ticket!, 'alice2');
   ok(again.status === 410, 'the ticket works once');
   const me = await api('GET', '/me', undefined, made.data.token);
   ok(me.data.google === 'alice@example.com' && me.data.hasPassword === false, '/me shows the linked email and no password');
@@ -138,12 +154,17 @@ try {
   ok(me2.data.google === 'alice@new.example.com', 'a changed Google email is updated');
 
   // ---- state, nonce, email checks
-  const reuse = await fetch(`${BASE}/api/auth/google/callback?state=${back.state}&code=abc`, { redirect: 'manual' });
+  const reuse = await fetch(`${BASE}/api/auth/google/callback?state=${back.state}&code=abc`, { redirect: 'manual', headers: { Cookie: back.cookie! } });
   const reuseTicket = (reuse.headers.get('location') ?? '').slice('/#google='.length);
-  const reused = await api('POST', '/auth/google/finish', { ticket: reuseTicket });
+  const reused = await finishT(reuseTicket);
   ok(reused.data.kind === 'error', 'a used state is refused');
   const forged = await fetch(`${BASE}/api/auth/google/callback?state=made-up&code=abc`, { redirect: 'manual' });
-  ok((await api('POST', '/auth/google/finish', { ticket: (forged.headers.get('location') ?? '').slice(9) })).data.kind === 'error', 'an unknown state is refused');
+  ok((await finishT((forged.headers.get('location') ?? '').slice(9))).data.kind === 'error', 'an unknown state is refused');
+  // Login / link CSRF: someone else's Google link opened in this browser (no cookie, or another one).
+  const noCookie = await google('login', { sub: 'g-alice', email: 'alice@example.com' }, { cookie: '' });
+  ok(noCookie.result.kind === 'error', 'callback without the binding cookie is refused');
+  const wrongCookie = await google('login', { sub: 'g-alice', email: 'alice@example.com' }, { cookie: 'mv_gbind=not-the-one' });
+  ok(wrongCookie.result.kind === 'error', 'callback with another browser\'s cookie is refused');
   const nonce = await google('login', { sub: 'g-alice', email: 'alice@example.com' }, { nonce: 'wrong' });
   ok(nonce.result.kind === 'error', 'a wrong nonce is refused');
   const aud = await google('login', { sub: 'g-alice', email: 'alice@example.com', aud: 'someone-else' });
@@ -182,9 +203,9 @@ try {
   ok(upTaken.result.kind === 'error' && String(upTaken.result.message).includes('alice'), 'upgrade with a Google account already in use is refused (names the account)');
   const up = await google('upgrade', { sub: 'g-dave', email: 'dave@example.com' }, { guestToken: guest.data.token });
   ok(up.result.kind === 'needName' && up.result.guest === true, 'upgrade asks for a username and says the guest moves');
-  const nameTaken = await api('POST', '/auth/google/finish', { ticket: up.ticket, username: 'carol' });
+  const nameTaken = await finishT(up.ticket!, 'carol');
   ok(nameTaken.status === 409, 'a taken username is refused and the ticket can try again');
-  const upDone = await api('POST', '/auth/google/finish', { ticket: up.ticket, username: 'dave' });
+  const upDone = await finishT(up.ticket!, 'dave');
   ok(upDone.status === 201 && upDone.data.username === 'dave', 'the guest became the Google account');
   const chars = await api('GET', '/characters', undefined, upDone.data.token);
   ok(Array.isArray(chars.data) && chars.data.some((c: any) => c.name === 'Wanderer'), 'the guest character came along');

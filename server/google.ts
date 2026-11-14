@@ -80,6 +80,8 @@ export const isGoogleMode = (v: unknown): v is GoogleMode => v === 'login' || v 
 /** What /start remembers until Google sends the browser back (GOOGLE_STATE_MS). */
 interface Pending {
   verifier: string; nonce: string; redirectUri: string; mode: GoogleMode;
+  /** Hash of the cookie (BIND_COOKIE) set on the browser that started: only that browser may finish. */
+  bind: string;
   /** link: the account to link; upgrade / login: the browser's guest (moved into a new account). */
   accountId: number | null; guestId: number | null; expires: number;
 }
@@ -92,16 +94,43 @@ const MAX_PENDING = 2000;
 
 const b64url = (b: Buffer) => b.toString('base64url');
 
+/**
+ * The cookie that ties a flow to the browser that started it (against login / link CSRF: someone
+ * else's Google round trip or ticket link can't be finished in your browser). HttpOnly, Lax (sent on
+ * Google's redirect back), only under /api/auth/google, 10 minutes.
+ */
+export const BIND_COOKIE = 'mv_gbind';
+
+export function newBind(): { value: string; hash: string } {
+  const value = b64url(randomBytes(24));
+  return { value, hash: bindHash(value) };
+}
+
+export const bindHash = (value: string): string => createHash('sha256').update(value).digest('base64url');
+
+export function bindCookie(value: string, secure: boolean): string {
+  return `${BIND_COOKIE}=${value}; HttpOnly; SameSite=Lax; Path=/api/auth/google; Max-Age=${GOOGLE_STATE_MS / 1000}${secure ? '; Secure' : ''}`;
+}
+
+/** The binding cookie's hash from a request, or '' without one. */
+export function requestBind(cookieHeader: string | undefined): string {
+  for (const part of (cookieHeader ?? '').split(';')) {
+    const [k, v] = part.trim().split('=');
+    if (k === BIND_COOKIE && v) return bindHash(v);
+  }
+  return '';
+}
+
 export class GoogleFlows {
   private readonly pending = new Map<string, Pending>();
 
   /** Starts a flow: the address to send the browser to. */
-  begin(cfg: GoogleConfig, redirectUri: string, mode: GoogleMode, accountId: number | null, guestId: number | null): string {
+  begin(cfg: GoogleConfig, redirectUri: string, mode: GoogleMode, accountId: number | null, guestId: number | null, bind: string): string {
     this.prune();
     const state = b64url(randomBytes(24));
     const verifier = b64url(randomBytes(32));
     const nonce = b64url(randomBytes(16));
-    this.pending.set(state, { verifier, nonce, redirectUri, mode, accountId, guestId, expires: Date.now() + GOOGLE_STATE_MS });
+    this.pending.set(state, { verifier, nonce, redirectUri, mode, accountId, guestId, bind, expires: Date.now() + GOOGLE_STATE_MS });
     const q = new URLSearchParams({
       client_id: cfg.clientId,
       redirect_uri: redirectUri,
@@ -185,21 +214,23 @@ export type GoogleResult =
 
 /** Short-lived tickets handed to the browser in the URL fragment. */
 export class GoogleTickets {
-  private readonly tickets = new Map<string, { result: GoogleResult; id?: GoogleId; guestId: number | null; expires: number }>();
+  private readonly tickets = new Map<string, { result: GoogleResult; id?: GoogleId; guestId: number | null; bind: string; expires: number }>();
 
-  add(result: GoogleResult, id?: GoogleId, guestId: number | null = null): string {
+  /** `bind`: the starting browser's cookie hash; reading needs the same ('' = an error anyone may read). */
+  add(result: GoogleResult, bind: string, id?: GoogleId, guestId: number | null = null): string {
     const now = Date.now();
     for (const [k, t] of this.tickets) if (t.expires <= now) this.tickets.delete(k);
     while (this.tickets.size >= MAX_PENDING) this.tickets.delete(this.tickets.keys().next().value!);
     const t = b64url(randomBytes(24));
     // A username can take a while to choose; everything else is read at once.
-    this.tickets.set(t, { result, id, guestId, expires: now + (result.kind === 'needName' ? GOOGLE_STATE_MS : 60_000) });
+    this.tickets.set(t, { result, id, guestId, bind, expires: now + (result.kind === 'needName' ? GOOGLE_STATE_MS : 60_000) });
     return t;
   }
 
   /** Reads a ticket. Only a needName ticket survives reading (until it is used with a username). */
-  read(ticket: string): { result: GoogleResult; id?: GoogleId; guestId: number | null } | null {
+  read(ticket: string, bind: string): { result: GoogleResult; id?: GoogleId; guestId: number | null } | null {
     const t = this.tickets.get(ticket);
+    if (t && t.bind && t.bind !== bind) return null;
     if (!t || t.expires <= Date.now()) {
       this.tickets.delete(ticket);
       return null;

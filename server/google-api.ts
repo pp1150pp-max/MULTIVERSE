@@ -7,7 +7,10 @@ import { AttemptLimiter } from './auth';
 import { clientIp } from './clientIp';
 import type { Db, SessionAccount } from './db';
 import { bearer, HttpError, readJson, send, str } from './http';
-import { CALLBACK_PATH, exchangeCode, GoogleFlows, GoogleTickets, googleConfigPaths, isGoogleMode, loadGoogleConfig, pickRedirectUri, type GoogleResult } from './google';
+import {
+  bindCookie, CALLBACK_PATH, exchangeCode, GoogleFlows, GoogleTickets, googleConfigPaths, isGoogleMode, loadGoogleConfig, newBind, pickRedirectUri,
+  requestBind, type GoogleResult,
+} from './google';
 import type { AdminGoogle } from '../src/shared/admin';
 import type { GameWorld } from './world';
 import {
@@ -75,13 +78,15 @@ export async function googleApi(req: IncomingMessage, res: ServerResponse, path:
       if (guest?.guest) guestId = guest.id;
       if (body.mode === 'upgrade' && guestId === null) throw new HttpError(400, 'ไม่พบตัวละคร Guest ในเครื่องนี้');
     }
-    send(res, 200, { url: flows.begin(cfg, redirectUri, body.mode, accountId, guestId) } satisfies GoogleStartResponse);
+    const bind = newBind();
+    res.setHeader('Set-Cookie', bindCookie(bind.value, redirectUri.startsWith('https:')));
+    send(res, 200, { url: flows.begin(cfg, redirectUri, body.mode, accountId, guestId, bind.hash) } satisfies GoogleStartResponse);
     return true;
   }
 
   if (method === 'GET' && path === CALLBACK_PATH) {
     const q = new URL(req.url ?? '/', 'http://localhost').searchParams;
-    const result = await callback(d, q.get('state') ?? '', q.get('code') ?? '', q.get('error'));
+    const result = await callback(d, q.get('state') ?? '', q.get('code') ?? '', q.get('error'), requestBind(req.headers.cookie));
     // Relative: back to the address the browser came from (the dev page or the real site).
     res.writeHead(302, { Location: `/#google=${result}`, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
     res.end();
@@ -91,7 +96,7 @@ export async function googleApi(req: IncomingMessage, res: ServerResponse, path:
   if (method === 'POST' && path === '/api/auth/google/finish') {
     const body = await readJson(req);
     const ticket = str(body.ticket);
-    const t = ticket ? tickets.read(ticket) : null;
+    const t = ticket ? tickets.read(ticket, requestBind(req.headers.cookie)) : null;
     if (!t) throw new HttpError(410, 'หมดเวลา กดเข้าสู่ระบบด้วย Google ใหม่อีกครั้ง');
     if (t.result.kind !== 'needName' || body.username === undefined) {
       send(res, 200, t.result satisfies GoogleFinishResponse);
@@ -141,11 +146,13 @@ function sessionOf(db: Db, token: string): SessionAccount | undefined {
 }
 
 /** Runs the callback and returns the ticket for the page (every outcome, errors too, is a ticket). */
-async function callback(d: GoogleApiDeps, state: string, code: string, error: string | null): Promise<string> {
+async function callback(d: GoogleApiDeps, state: string, code: string, error: string | null, bind: string): Promise<string> {
   const { db } = d;
-  const fail = (message: string) => tickets.add({ kind: 'error', message });
+  const fail = (message: string) => tickets.add({ kind: 'error', message }, '');
   const p = state ? flows.take(state) : null;
   if (!p) return fail('หมดเวลา หรือลิงก์นี้ถูกใช้ไปแล้ว — กดเข้าสู่ระบบด้วย Google ใหม่อีกครั้ง');
+  // Only the browser that pressed the button may come back with it (someone else's Google link refused).
+  if (!bind || bind !== p.bind) return fail('ลิงก์นี้ไม่ได้เริ่มจากเบราว์เซอร์นี้ — กดเข้าสู่ระบบด้วย Google จากหน้าเกมอีกครั้ง');
   if (error) return fail(error === 'access_denied' ? 'ยกเลิกการเข้าสู่ระบบด้วย Google แล้ว' : 'Google ไม่ยืนยันการเข้าสู่ระบบ ลองใหม่อีกครั้ง');
   const cfg = loadGoogleConfig(ROOT);
   if (!cfg || !googleLoginOn(db)) return fail('ตอนนี้ปิดการเข้าสู่ระบบด้วย Google อยู่');
@@ -179,9 +186,9 @@ async function callback(d: GoogleApiDeps, state: string, code: string, error: st
     }
   } else {
     const guest = p.guestId !== null && db.isGuestAccount(p.guestId);
-    return tickets.add({ kind: 'needName', email: id.email, guest }, id, guest ? p.guestId : null);
+    return tickets.add({ kind: 'needName', email: id.email, guest }, p.bind, id, guest ? p.guestId : null);
   }
-  return tickets.add(result, id);
+  return tickets.add(result, p.bind, id);
 }
 
 // ------------------------------------------------------------ admin page (Server tab card, feature googleLogin)

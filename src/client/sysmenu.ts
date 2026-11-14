@@ -59,6 +59,8 @@ export class SystemMenu {
   private readonly panel: HTMLElement;
   private readonly countdownEl: HTMLElement;
   private exit: { to: AfterExit; left: number } | null = null;
+  /** The pending exit goes on to Google (the "ผูก Google" button); written to sessionStorage only once really leaving. */
+  private toGoogle = false;
   private lastCombat = -99;
   private lastHp = -1;
   private clock = 0;
@@ -257,18 +259,16 @@ export class SystemMenu {
         $('btn-hud-style').click();
         return void ($('sys-hudstyle').textContent = $('btn-hud-style').textContent);
       case 'chars':
+        this.toGoogle = false;
         return this.requestExit('characters');
       case 'google':
         if (!confirm(this.g.backend.guest
           ? 'ออกจากเกมแล้วไปหน้า Google เพื่อเก็บตัวละคร Guest นี้ไว้ในบัญชี Google?'
           : 'ออกจากเกมแล้วไปหน้า Google เพื่อผูกบัญชี? (ชื่อผู้ใช้และรหัสผ่านเดิมยังใช้ได้)')) return;
-        try {
-          sessionStorage.setItem(GOOGLE_AFTER_EXIT_KEY, this.g.backend.guest ? 'upgrade' : 'link');
-        } catch {
-          // Storage blocked: the player just lands on the menu and links from there.
-        }
+        this.toGoogle = true;
         return this.requestExit('characters');
       case 'logout':
+        this.toGoogle = false;
         return this.requestExit('title');
     }
   }
@@ -283,6 +283,7 @@ export class SystemMenu {
 
   private cancelExit(msg: string): void {
     this.exit = null;
+    this.toGoogle = false;
     this.countdownEl.classList.add('hidden');
     this.g.hud.log(msg, '#ffcf6a');
   }
@@ -296,6 +297,8 @@ export class SystemMenu {
     if (to === 'title' && !this.g.backend.guest) await logout().catch(() => undefined);
     try {
       sessionStorage.setItem(AFTER_EXIT_KEY, to === 'characters' ? (this.g.backend.guest ? 'guest' : 'characters') : 'title');
+      // Set only now: an exit cancelled in combat must not send a later plain exit to Google.
+      if (this.toGoogle && to === 'characters') sessionStorage.setItem(GOOGLE_AFTER_EXIT_KEY, this.g.backend.guest ? 'upgrade' : 'link');
     } catch {
       // Storage blocked: the page just opens on the title screen.
     }
