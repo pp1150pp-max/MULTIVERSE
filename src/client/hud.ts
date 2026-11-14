@@ -344,6 +344,14 @@ export class Hud {
     const bag = $('bag-grid');
     this.setupDrag(bag, 'bag');
     this.setupDragEnd();
+    // Touch: a tap opens the item's detail sheet with buttons, since a phone has no hover or right click.
+    bag.addEventListener('click', (e) => {
+      if (!isTouchMode() || this.justDragged) return;
+      const i = this.cellIndex(e);
+      if (i < 0 || !g.player.bag[i]) return;
+      e.stopImmediatePropagation();
+      this.openDetail({ bag: i });
+    }, true);
     bag.addEventListener('click', (e) => {
       if (this.justDragged) return;
       const i = this.cellIndex(e);
@@ -400,16 +408,7 @@ export class Hud {
         this.sellFromBag(i);
         return;
       }
-      const dropAsk = () => this.confirm(
-        `วาง ${name} ลงบนพื้น?<br><small>เก็บคืนได้ภายใน 60 วินาที · ถ้าจะขาย ให้ไปหาพ่อค้าที่เมือง</small>`,
-        'วางลงพื้น',
-        () => {
-          if (g.player.bag[i] !== item) return;
-          g.dropFromBag(i);
-          this.markInventory();
-          if (this.forgeOpen) this.renderForge();
-        },
-      );
+      const dropAsk = () => this.askDrop(i);
       // Standing at the market broker: offer to list it or search for the same kind (the menu also has "drop").
       if (g.backend.npcDistance('broker') <= NPC_USE_RANGE) {
         this.market.bagMenu(i, e, dropAsk);
@@ -418,7 +417,8 @@ export class Hud {
       dropAsk();
     });
     bag.addEventListener('mousemove', (e) => {
-      if (this.drag?.ghost) return;
+      // On touch a tooltip popping up on the first tap makes iOS drop the tap's click.
+      if (this.drag?.ghost || isTouchMode()) return;
       const i = this.cellIndex(e);
       const item = i >= 0 ? g.player.bag[i] : null;
       const right = this.stashOpen ? 'ฝากเข้าคลัง' : this.market.isOpen ? 'เลือกมาลงขายในตลาด' : this.shopOpen ? (isStack(item) ? 'ขายทั้งช่อง' : 'ขาย') : 'วางลงพื้น';
@@ -479,6 +479,13 @@ export class Hud {
       this.drag = { src: 'equip', i: EQUIP_SLOTS.indexOf(slot), x: e.clientX, y: e.clientY, ghost: null };
     });
     eq.addEventListener('click', (e) => {
+      if (!isTouchMode() || this.justDragged) return;
+      const slot = eqSlot(e);
+      if (!slot || !g.player.equipment[slot]) return;
+      e.stopImmediatePropagation();
+      this.openDetail({ slot });
+    }, true);
+    eq.addEventListener('click', (e) => {
       if (this.justDragged) return;
       const slot = eqSlot(e);
       if (!slot) return;
@@ -492,7 +499,7 @@ export class Hud {
       this.markInventory();
     });
     eq.addEventListener('mousemove', (e) => {
-      if (this.drag?.ghost) return;
+      if (this.drag?.ghost || isTouchMode()) return;
       const slot = eqSlot(e);
       const item = slot ? g.player.equipment[slot] : undefined;
       if (item) this.showTip(item, e, this.forgeOpen ? 'คลิก / ลาก: วางที่ช่างตีเหล็ก' : 'คลิก: ถอดเก็บเข้ากระเป๋า');
@@ -1183,7 +1190,10 @@ export class Hud {
   toggleBag(force?: boolean): void {
     this.bagOpen = force ?? !this.bagOpen;
     $('inventory').classList.toggle('hidden', !this.bagOpen);
-    if (!this.bagOpen) this.hideTip();
+    if (!this.bagOpen) {
+      this.hideTip();
+      this.closeDetail();
+    }
     this.invDirty = true;
   }
 
@@ -1419,6 +1429,7 @@ export class Hud {
   closePanels(): void {
     if (this.amountDone) return this.closeAmount();
     if (this.confirmYes) return this.closeConfirm();
+    if (this.detail) return this.closeDetail();
     this.closeChat();
     this.toggleAutoSettings(false);
     this.toggleMap(false);
@@ -2202,6 +2213,112 @@ export class Hud {
     if (block) this.log(`ใส่ ${itemName(item)} ไม่ได้ — ${block}`, '#ff8a6a');
     else if (!wornPlaces(item.slot).includes(slot)) this.log(`${itemName(item)} ใส่ช่อง${EQUIP_SLOT_LABEL[slot]}ไม่ได้`, '#ff8a6a');
     else g.backend.equip(i, slot);
+  }
+
+  // ------------------------------------------------------------ item detail (touch)
+
+  /** What the open detail sheet shows: a bag slot or a worn item. */
+  private detail: { bag: number } | { slot: EquipSlot } | null = null;
+  private detailEl: HTMLElement | null = null;
+
+  /** Ask before dropping a bag item on the ground. */
+  private askDrop(i: number): void {
+    const item = this.g.player.bag[i];
+    if (!item) return;
+    const name = `<b style="color:${this.entryColor(item)}">${entryName(item)}</b>`;
+    this.confirm(
+      `วาง ${name} ลงบนพื้น?<br><small>เก็บคืนได้ภายใน 60 วินาที · ถ้าจะขาย ให้ไปหาพ่อค้าที่เมือง</small>`,
+      'วางลงพื้น',
+      () => {
+        if (this.g.player.bag[i] !== item) return;
+        this.g.dropFromBag(i);
+        this.markInventory();
+        if (this.forgeOpen) this.renderForge();
+      },
+    );
+  }
+
+  /**
+   * Touch only: the item's details with a button for each thing that can be done with it right now.
+   * Wear / use and drop are always there; sell, store, list, forge and trade show while that window is open.
+   */
+  private openDetail(at: { bag: number } | { slot: EquipSlot }): void {
+    const g = this.g;
+    const p = g.player;
+    const entry = 'bag' in at ? p.bag[at.bag] : p.equipment[at.slot];
+    if (!entry) return this.closeDetail();
+    if (!this.detailEl) {
+      const el = document.createElement('div');
+      el.id = 'item-detail';
+      el.className = 'panel hidden';
+      el.innerHTML = '<div class="panel-head"><span>รายละเอียดไอเทม</span><button data-close>✕</button></div>' +
+        '<div class="idt-top"></div><div class="idt-acts"></div>';
+      el.querySelector('[data-close]')!.addEventListener('click', () => this.closeDetail());
+      $('hud').append(el);
+      this.detailEl = el;
+    }
+    this.detail = at;
+    // The tooltip builders write into #tooltip: borrow that HTML for the sheet.
+    this.showEntryTip(entry, new MouseEvent('mousemove'), '');
+    const info = $('tooltip').innerHTML;
+    this.hideTip();
+    const cell = 'bag' in at
+      ? $('bag-grid').querySelector<HTMLElement>(`[data-i="${at.bag}"]`)
+      : $('equip-slots').querySelector<HTMLElement>(`[data-slot="${at.slot}"]`);
+    const icon = cell?.cloneNode(true) as HTMLElement | undefined;
+    icon?.removeAttribute('data-i');
+    icon?.removeAttribute('data-slot');
+    icon?.classList.remove('sel', 'dragging');
+    this.detailEl.querySelector('.idt-top')!.innerHTML = `<div class="idt-icon">${icon?.outerHTML ?? ''}</div><div class="idt-info">${info}</div>`;
+
+    const acts: { label: string; run: () => void; main?: boolean; off?: boolean }[] = [];
+    if ('slot' in at) {
+      const slot = at.slot;
+      if (this.forgeOpen) acts.push({ label: 'วางที่ช่างตีเหล็ก', run: () => this.forgePlace(entry), main: true });
+      else acts.push({ label: 'ถอด', run: () => g.backend.unequip(slot), main: true });
+    } else {
+      const i = at.bag;
+      if (g.trade.open) acts.push({ label: 'เสนอในการเทรด', run: () => g.trade.offer(i), main: true });
+      else if (this.forgeOpen && isItem(entry)) acts.push({ label: 'วางที่ช่างตีเหล็ก', run: () => this.forgePlace(entry), main: true });
+      else if (isItem(entry)) {
+        const block = p.equipBlock(entry);
+        const places = wornPlaces(entry.slot);
+        if (block) acts.push({ label: `สวมใส่ไม่ได้ — ${block}`, run: () => undefined, main: true, off: true });
+        else if (places.length > 1) {
+          for (const place of places) acts.push({ label: `ใส่ช่อง${EQUIP_SLOT_LABEL[place]}`, run: () => this.equipByDrag(i, place), main: true });
+        } else acts.push({ label: 'สวมใส่', run: () => g.backend.equip(i), main: true });
+      } else if (isPotion(entry)) {
+        acts.push({ label: `ใช้กับปุ่มยา ${entry.potion === 'hp' ? 1 : 2}`, run: () => g.backend.equip(i), main: true });
+      } else if (isStone(entry)) {
+        const st = entry.stone;
+        if (st === 'return_scroll') acts.push({ label: 'ใช้', run: () => g.useReturnScroll(), main: true });
+        else if (isBuffScroll(st)) acts.push({ label: 'ใช้', run: () => g.backend.useBuffScroll(st), main: true });
+        else if (st === 'megaphone') acts.push({ label: 'ใช้', run: () => g.megaphone.toggle(true), main: true });
+      }
+      if (this.shopOpen) acts.push({ label: isStack(entry) ? 'ขายทั้งช่อง' : 'ขาย', run: () => this.sellFromBag(i) });
+      if (this.stashOpen) acts.push({ label: 'ฝากเข้าคลัง', run: () => g.backend.stashPut(i, -1) });
+      if (this.market.isOpen) acts.push({ label: 'ลงขายในตลาด', run: () => this.market.bagRightClick(i) });
+      acts.push({ label: 'วางลงพื้น', run: () => this.askDrop(i) });
+    }
+    const box = this.detailEl.querySelector<HTMLElement>('.idt-acts')!;
+    box.replaceChildren(...acts.map((a) => {
+      const b = document.createElement('button');
+      b.textContent = a.label;
+      if (a.main) b.classList.add('primary');
+      b.disabled = !!a.off;
+      b.onclick = () => {
+        this.closeDetail();
+        a.run();
+        this.markInventory();
+      };
+      return b;
+    }));
+    this.detailEl.classList.remove('hidden');
+  }
+
+  private closeDetail(): void {
+    this.detail = null;
+    this.detailEl?.classList.add('hidden');
   }
 
   /** The tooltip for any bag entry (gear, potion or stone). */
