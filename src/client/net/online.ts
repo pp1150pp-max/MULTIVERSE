@@ -586,6 +586,9 @@ export class OnlineBackend implements Backend {
       if (look) {
         p.aura = ps.aura ?? 0;
         p.toadT = ps.toad ? 1 : 0;
+        // Only for the aura under the feet; your own book also comes whole in the private snapshot.
+        if (ps.psv) p.skillBook.worn.passive = ps.psv;
+        else delete p.skillBook.worn.passive;
         setOrbs(p, ps.orbs);
         setCos(p, ps.cos);
         p.mounted = ps.mnt === 1;

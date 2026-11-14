@@ -2342,7 +2342,7 @@ const SNAP_DELTA_KEY = 'snap_delta';
 /** PrivateSnap fields that hardly ever change: sent only when they did (snapshot delta). */
 type StaticMeKey = 'potSel' | 'lootFilter' | 'autoSettings' | 'stats' | 'skills' | 'bossKills' | 'quests' | 'gearQuests' | 'gearDone';
 const STATIC_ME: readonly StaticMeKey[] = ['potSel', 'lootFilter', 'autoSettings', 'stats', 'skills', 'bossKills', 'quests', 'gearQuests', 'gearDone'];
-type PlayerLook = Pick<PlayerSnap, 'name' | 'cls' | 'lv' | 'maxHp' | 'aura' | 'orbs' | 'cos' | 'mnt' | 'toad'>;
+type PlayerLook = Pick<PlayerSnap, 'name' | 'cls' | 'lv' | 'maxHp' | 'aura' | 'orbs' | 'cos' | 'mnt' | 'toad' | 'psv'>;
 type MonsterLook = Pick<MonsterSnap, 'def' | 'lv' | 'mhp'>;
 /** A look bundle and its JSON (what the per-browser caches compare). */
 interface Look { look: PlayerLook | MonsterLook; json: string }
@@ -2357,7 +2357,7 @@ function forgetSent(s: Session): void {
   s.seenM.clear();
 }
 
-/** A player's look bundle: name, class, level, max HP, aura, orbs, cosmetics, riding, toad. */
+/** A player's look bundle: name, class, level, max HP, aura, orbs, cosmetics, riding, toad, worn passive. */
 function playerLook(o: Player, looks: Looks): Look {
   let l = looks.get(o);
   if (!l) {
@@ -2365,6 +2365,8 @@ function playerLook(o: Player, looks: Looks): Look {
       name: o.name, cls: o.cls.id, lv: o.level, maxHp: Math.round(o.maxHp),
       ...(o.aura ? { aura: o.aura } : {}),
       ...(o.toadT > 0 ? { toad: 1 as const } : {}),
+      // The worn passive: everyone sees its aura (owner 2026-11-15).
+      ...(o.skillBook.worn.passive ? { psv: o.skillBook.worn.passive } : {}),
       // Worked out by Player.recompute from the server's own copy of the gear (orbCodes clamps the levels).
       ...(o.orbs.length ? { orbs: o.orbs as number[] } : {}),
       ...cosSnap(o),

@@ -336,7 +336,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
         hit.add(cur);
         const len = Math.hypot(cur.x - fromX, cur.z - fromZ);
         sim.fx('lineTelegraph', fromX, fromZ, Math.atan2(cur.z - fromZ, cur.x - fromX), len, 0.25, 0.15);
-        sim.fx('effect', 'impact', cur.x, cur.z, 0, 1);
+        sim.fx('effect', 'mg_lightning', cur.x, cur.z, 0, 1.2);
         sim.fx('burst', cur.x, 1, cur.z, '#bfe0ff', 8, 3);
         sim.hitMonster(p, cur, mult, { skill: sk });
         fromX = cur.x;
@@ -349,15 +349,14 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
     case 'mg_manaburst': {
       const c = landing(p, aim, far);
       const r = P('radius');
-      sim.fx('effect', 'explosion', c.x, c.z, 0, r);
+      sim.fx('effect', 'mg_burst', c.x, c.z, 0, r);
       sim.fx('ring', c.x, c.z, r, FIRE, 0.4);
       forCircle(sim, c.x, c.z, r, (m) => sim.hitMonster(p, m, dmg, { kb: 3, fromX: c.x, fromZ: c.z, skill: sk }));
       return true;
     }
     case 'mg_flamewave': {
       const arc = (P('arc') * Math.PI) / 180;
-      sim.fx('slash', p.x, p.z, ang, arc, far, FIRE);
-      sim.fx('burst', p.x + Math.cos(ang) * far * 0.6, 0.8, p.z + Math.sin(ang) * far * 0.6, FIRE, 14, 4);
+      sim.fx('effect', 'mg_flamewave', p.x + Math.cos(ang) * far * 0.5, p.z + Math.sin(ang) * far * 0.5, ang, far * 0.5);
       forCone(sim, p.x, p.z, ang, arc, far, (m) => sim.hitMonster(p, m, dmg, { kb: 5, skill: sk }));
       return true;
     }
@@ -371,7 +370,10 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
       const gap = P('gap');
       sim.fx('telegraph', c.x, c.z, r, 0.2 + waves * gap, '#ffd0a0');
       tickFor(sim, p, gap, waves, () => {
-        sim.fx('burst', c.x, 2, c.z, '#ffe0c0', 12, 4);
+        for (let k = 0; k < 3; k++) {
+          const s = spotIn(c.x, c.z, r * 0.8);
+          sim.fx('effect', 'mg_starhit', s.x, s.z, 0, 0.9);
+        }
         forCircle(sim, c.x, c.z, r, (m) => sim.hitMonster(p, m, dmg, { skill: sk }));
       }, 0.2);
       return true;
@@ -383,7 +385,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
       sim.fx('telegraph', p.x, p.z, far, t, FIRE);
       sim.schedule(t, () => {
         if (!live(sim, p)) return;
-        sim.fx('effect', 'explosion', p.x, p.z, 0, far);
+        sim.fx('effect', 'mg_burst', p.x, p.z, 0, far);
         sim.shake(0.5, { to: p.id });
         sim.anim(p.id, 'attack', { duration: 0.3 });
         forCircle(sim, p.x, p.z, far, (m) => sim.hitMonster(p, m, dmg, { kb: 5, skill: sk }));
@@ -400,7 +402,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
         sim.fx('telegraph', s.x, s.z, sr, warn, '#ffe08a');
         sim.schedule(warn, () => {
           if (!live(sim, p)) return;
-          sim.fx('effect', 'explosion', s.x, s.z, 0, sr);
+          sim.fx('effect', 'mg_starhit', s.x, s.z, 0, sr);
           forCircle(sim, s.x, s.z, sr, (m) => sim.hitMonster(p, m, dmg, { kb: 2, fromX: s.x, fromZ: s.z, skill: sk }));
         });
       });
@@ -414,7 +416,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
       const ticks = Math.max(1, Math.round(P('duration')));
       sim.fx('disc', c.x, c.z, r, FIRE, ticks);
       tickFor(sim, p, 1, ticks, () => {
-        sim.fx('burst', c.x, 0.4, c.z, FIRE, 6, 2);
+        sim.fx('effect', 'mg_firefield', c.x, c.z, 0, r);
         forCircle(sim, c.x, c.z, r, (m) => {
           m.dotUntil = Math.max(m.dotUntil, sim.time + 1.1);
           sim.hitMonster(p, m, dmg, { skill: sk });
@@ -426,7 +428,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
       const c = landing(p, aim, far);
       const r = P('radius');
       sim.fx('disc', c.x, c.z, r, VENOM, 1.5);
-      sim.fx('puff', c.x, 0.6, c.z, VENOM, 1.2, r);
+      sim.fx('effect', 'mg_poison', c.x, c.z, 0, r);
       forCircle(sim, c.x, c.z, r, (m) => dot(sim, p, m, dmg, P('dotTime'), sk, VENOM));
       return true;
     }
@@ -437,10 +439,10 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
       sim.addProjectile(p, {
         x: p.x, z: p.z, angle: ang, speed: 20, range: far, radius: 0.4, mult: 0, color: VENOM, size: 0.7,
         after: (m) => {
-          sim.fx('ring', m.x, m.z, 1, VENOM, delay);
+          sim.fx('effect', 'mg_curse', m.x, m.z, 0, 1);
           sim.schedule(delay, () => {
             if (!live(sim, p)) return;
-            sim.fx('effect', 'explosion', m.x, m.z, 0, blast);
+            sim.fx('effect', 'mg_burst', m.x, m.z, 0, blast);
             forCircle(sim, m.x, m.z, blast, (t) => sim.hitMonster(p, t, dmg, { kb: 3, fromX: m.x, fromZ: m.z, skill: sk }));
           });
         },
@@ -452,7 +454,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
       const ab = P('armorBreak') / 100;
       const abT = P('armorBreakTime');
       tickFor(sim, p, 1, ticks, () => {
-        sim.fx('ring', p.x, p.z, far, VENOM, 0.9);
+        sim.fx('effect', 'mg_decay', p.x, p.z, 0, far);
         forCircle(sim, p.x, p.z, far, (m) => {
           m.dotUntil = Math.max(m.dotUntil, sim.time + 1.1);
           sim.hitMonster(p, m, dmg, { armorBreak: ab, armorBreakT: abT, skill: sk });
@@ -470,7 +472,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
         const inside = sim.monsters.filter((m) => m.alive && Math.hypot(m.x - c.x, m.z - c.z) <= r + m.radius);
         if (!inside.length) return;
         const m = inside[Math.floor(Math.random() * inside.length)];
-        sim.fx('effect', 'impact', m.x, m.z, 0, 1.2);
+        sim.fx('effect', 'mg_lightning', m.x, m.z, 0, 1.3);
         sim.fx('burst', m.x, 2, m.z, '#dfe8ff', 10, 4);
         sim.hitMonster(p, m, dmg, { skill: sk });
       }, 0.3);
@@ -494,7 +496,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
       const burn = P('dotTime');
       const weak = P('weak') / 100;
       const weakT = P('weakTime');
-      sim.fx('slash', p.x, p.z, ang, arc, far, '#6a6a5a');
+      sim.fx('effect', 'mg_ash', p.x + Math.cos(ang) * far * 0.5, p.z + Math.sin(ang) * far * 0.5, ang, far * 0.5);
       forCone(sim, p.x, p.z, ang, arc, far, (m) => {
         // The first burn lands at once and carries the attack-down; the rest burn each second.
         sim.hitMonster(p, m, dmg, { weak, weakT, skill: sk });
@@ -510,7 +512,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
       const poison = P('poison') * (base > 0 ? dmg / base : 1);
       const seedT = P('seedTime');
       const blast = P('seedBlast');
-      sim.fx('ring', c.x, c.z, r, VENOM, 0.6);
+      sim.fx('effect', 'mg_poison', c.x, c.z, 0, r);
       forCircle(sim, c.x, c.z, r, (m) => {
         dot(sim, p, m, poison, seedT, sk, VENOM);
         sim.schedule(seedT, () => {
@@ -528,9 +530,10 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
       const every = P('every');
       const hits = Math.max(1, Math.round(P('duration') / every));
       sim.fx('disc', c.x, c.z, r, FIRE, hits * every + 0.2);
-      tickFor(sim, p, every, hits, () => {
+      tickFor(sim, p, every, hits, (i) => {
         const s = spotIn(c.x, c.z, r * 0.8);
         sim.fx('burst', s.x, 2.5, s.z, FIRE, 8, 4);
+        if (i % 2 === 0) sim.fx('effect', 'mg_firefield', c.x, c.z, 0, r);
         forCircle(sim, c.x, c.z, r, (m) => {
           m.dotUntil = Math.max(m.dotUntil, sim.time + every + 0.1);
           sim.hitMonster(p, m, dmg, { skill: sk });
@@ -543,7 +546,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
       const ab = P('armorBreak') / 100;
       const weak = P('weak') / 100;
       tickFor(sim, p, 1, ticks, () => {
-        sim.fx('disc', p.x, p.z, far, VENOM, 0.9);
+        sim.fx('effect', 'mg_decay', p.x, p.z, 0, far);
         // Statuses last a little past each tick, so they hold while the monster stays inside.
         forCircle(sim, p.x, p.z, far, (m) => {
           m.dotUntil = Math.max(m.dotUntil, sim.time + 1.1);
@@ -556,13 +559,13 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
     // Mage line 3: control / buffs. Buffs reach every player in the circle, party or not (owner 2026-11-14).
     case 'mg_forcewave':
       sim.fx('ring', p.x, p.z, far, FROST, 0.5);
-      sim.fx('effect', 'frost', p.x, p.z, 0, far);
+      sim.fx('effect', 'mg_shock', p.x, p.z, 0, far);
       forCircle(sim, p.x, p.z, far, (m) => sim.hitMonster(p, m, dmg, { kb: P('push'), stun: P('stun'), skill: sk }));
       return true;
     case 'mg_frailcurse': {
       const c = landing(p, aim, far);
       const r = P('radius');
-      sim.fx('disc', c.x, c.z, r, '#a08aff', 0.8);
+      sim.fx('effect', 'mg_curse', c.x, c.z, 0, r);
       forCircle(sim, c.x, c.z, r, (m) => sim.hitMonster(p, m, dmg, { armorBreak: P('armorBreak') / 100, armorBreakT: P('armorBreakTime'), skill: sk }));
       return true;
     }
@@ -580,23 +583,24 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
       sim.fx('disc', c.x, c.z, r, '#5a4a9a', pullT);
       const step = 0.25;
       tickFor(sim, p, step, Math.max(1, Math.round(pullT / step)), () => {
+        sim.fx('effect', 'mg_vortex', c.x, c.z, 0, r);
         forCircle(sim, c.x, c.z, r, (m) => { if (movable(m)) m.knockback(c.x, c.z, -pull); });
       });
       sim.schedule(pullT, () => {
         if (!live(sim, p)) return;
-        sim.fx('effect', 'explosion', c.x, c.z, 0, r * 0.7);
+        sim.fx('effect', 'mg_burst', c.x, c.z, 0, r * 0.7);
         forCircle(sim, c.x, c.z, r, (m) => sim.hitMonster(p, m, dmg, { skill: sk }));
       });
       return true;
     }
     case 'mg_sealveil':
-      sim.fx('ring', p.x, p.z, far, '#a08aff', 0.6);
+      sim.fx('effect', 'mg_curse', p.x, p.z, 0, far);
       forCircle(sim, p.x, p.z, far, (m) => sim.hitMonster(p, m, dmg, { weak: P('weak') / 100, weakT: P('weakTime'), skill: sk }));
       return true;
     case 'mg_empowerfield': {
       const mult = 1 + P('dmgBonus') / 100;
       const t = P('buffTime');
-      sim.fx('ring', p.x, p.z, far, '#ffd34a', 0.6);
+      sim.fx('effect', 'mg_empower', p.x, p.z, 0, far);
       forPlayers(sim, p.x, p.z, far, (q) => {
         q.dmgMult = sim.time < q.dmgUntil ? Math.max(q.dmgMult, mult) : mult;
         q.dmgUntil = sim.time + t;
@@ -607,15 +611,14 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
     }
     case 'mg_manashield': {
       const t = P('buffTime');
-      sim.fx('ring', p.x, p.z, far, FROST, 0.6);
+      sim.fx('effect', 'mg_shield', p.x, p.z, 0, far);
       forPlayers(sim, p.x, p.z, far, (q) => giveShield(sim, q, (q.maxHp * P('shieldPct')) / 100, t));
       return true;
     }
     case 'mg_timewarp': {
       const haste = P('haste') / 100;
       const hasteT = P('hasteTime');
-      sim.fx('effect', 'frost', p.x, p.z, 0, far);
-      sim.fx('ring', p.x, p.z, far, '#c0a0ff', 0.8);
+      sim.fx('effect', 'mg_timewarp', p.x, p.z, 0, far);
       forCircle(sim, p.x, p.z, far, (m) => sim.hitMonster(p, m, dmg, { slow: P('slow') / 100, slowT: P('slowTime'), skill: sk }));
       forPlayers(sim, p.x, p.z, far, (q) => {
         q.haste = sim.time < q.hasteUntil ? Math.max(q.haste, haste) : haste;
@@ -631,7 +634,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
       const slow = P('slow') / 100;
       forPlayers(sim, c.x, c.z, far, (q) => giveShield(sim, q, (q.maxHp * P('shieldPct')) / 100, ticks));
       tickFor(sim, p, 1, ticks, () => {
-        sim.fx('disc', c.x, c.z, far, FROST, 1);
+        sim.fx('effect', 'mg_shield', c.x, c.z, 0, far);
         forPlayers(sim, c.x, c.z, far, (q) => {
           const add = Math.min(q.stats.maxMp - q.mp, (q.stats.maxMp * P('mpPct')) / 100);
           if (add <= 0) return;
