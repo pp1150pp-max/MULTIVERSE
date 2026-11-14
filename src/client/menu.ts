@@ -5,7 +5,7 @@ import { MAX_CHARACTERS, PASSWORD_MIN, checkCharacterName, checkPassword, checkU
 import type { ClassId } from '../shared/types';
 import * as api from './net/api';
 import { connectOnline, type OnlineBackend } from './net/online';
-import { preloadHudImages, skillIcon } from './icons';
+import { preloadHudImages } from './icons';
 import { AFTER_EXIT_KEY } from './sysmenu';
 import { beginEntryLoading, cancelEntryLoading } from './loadingScreen';
 import { imgUrl } from './img';
@@ -79,7 +79,7 @@ function buildClassCards(container: HTMLElement): () => ClassId {
     const body = document.createElement('div');
     body.innerHTML =
       `<h3>${c.name} <small>${c.nameTh}</small></h3><p>${c.desc}</p>` +
-      `<ul>${c.skills.filter((s) => s.kind !== 'dash').map((s) => `<li>${skillIcon(s.id)} <b>${s.name}</b> — ${s.nameTh}</li>`).join('')}</ul>`;
+      `<ul>${c.lines.map((l) => `<li><i class="line-dot" style="background:${l.color}"></i>${l.nameTh}</li>`).join('')}</ul>`;
     card.append(body);
     card.onclick = () => {
       chosen = id;
