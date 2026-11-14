@@ -232,7 +232,7 @@ export class Sim {
     this.events.push({ t: 'log', msg, color, to });
   }
 
-  anim(id: number, name: string, opts: { duration?: number; fallback?: 'attack' } = {}): void {
+  anim(id: number, name: string, opts: { duration?: number; fallback?: 'attack'; skill?: string } = {}): void {
     this.events.push({ t: 'anim', id, name, ...opts });
   }
 

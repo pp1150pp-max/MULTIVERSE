@@ -1635,3 +1635,8 @@ input[type=range]:hover::-webkit-slider-thumb { background: var(--ctl-accent-hi)
   #skills-win .sk-col.active { display: block; }
   #skills-win .sk-prow { grid-template-columns: 1fr; }
 }
+#skills-win .sk-detail { margin: 0 4px 8px; padding: 6px 8px; border: 1px solid #4a3e2a; border-radius: 4px; background: rgba(20, 16, 10, 0.75); min-height: 40px; line-height: 1.5; }
+#skills-win .sk-dhead { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+#skills-win .sk-dsub { color: var(--ink-dim); font-size: 11px; }
+#skills-win .sk-row { cursor: pointer; }
+#skills-win .sk-row.sel { border-color: var(--gold-hi); }

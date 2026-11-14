@@ -1,15 +1,15 @@
 // The skill window (owner 2026-11-14, K or the ⚔ icon): one column per skill line with its own colour, skills in
 // unlock order and ultimates in gold frames, the passives in a row under them, and the worn Q/E/R and passive slots
-// with the points left on top. On a phone the three lines become tabs. Every click is a request: the server checks
-// points, levels, gold and combat (Sim.learnSkill / refundSkill / wearSkill) and its snapshot redraws this.
+// with the points left on top. Clicking (or tapping) a skill shows what it does now and at its next rank in the
+// details box, so phones can read it too. On a phone the three lines become tabs. Every click is a request: the
+// server checks points, levels, gold and combat (Sim.learnSkill / refundSkill / wearSkill) and its snapshot redraws this.
 import type { Game } from './Game';
 import { KIND_NAME, SLOT_KIND, WEAR_SLOTS, type SkillDef, type WearSlot } from '../shared/data/classes';
 import {
-  learnBlock, maxRank, pointsEarned, pointsLeft, rankedCooldown, rankedDmg, rankedMp, rankOf, refundPrice, unlockLevel,
+  learnBlock, maxRank, pointsEarned, pointsLeft, rankedCooldown, rankedDmg, rankedMp, rankOf, refundPrice, skillParamLines, skillReach, unlockLevel,
 } from '../shared/skillBook';
-import { SKILL_REACH, reachText } from '../shared/data/skillRanges';
+import { reachText } from '../shared/data/skillRanges';
 import { skillIcon } from './icons';
-import { makeDraggable } from './dragwindow';
 
 const SLOT_LABEL: Record<WearSlot, string> = { q: 'Q', e: 'E', r: 'R', passive: 'พาสซีฟ' };
 
@@ -23,6 +23,7 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''):
 export class SkillWindow {
   private readonly win: HTMLElement;
   private readonly top: HTMLElement;
+  private readonly detail: HTMLElement;
   private readonly tabs: HTMLElement;
   private readonly cols: HTMLElement;
   private readonly passives: HTMLElement;
@@ -30,6 +31,8 @@ export class SkillWindow {
   private drawn = '';
   /** The line shown on a narrow screen (tabs). */
   private tab = 0;
+  /** The skill in the details box. */
+  private sel = '';
   /** Points shown on the icon badge (-1 = not set yet). */
   private badge = -1;
 
@@ -41,15 +44,15 @@ export class SkillWindow {
     close.onclick = () => this.toggle(false);
     head.append(el('span', '', `สกิล — ${g.player.cls.nameTh}`), close);
     this.top = el('div', 'sk-top');
+    this.detail = el('div', 'sk-detail');
     this.tabs = el('div', 'sk-tabs');
     this.cols = el('div', 'sk-cols');
     this.passives = el('div', 'sk-passives');
-    this.win.append(head, this.top, this.tabs, this.cols, this.passives, el('div', 'hint', 'คลิก + เรียนหรืออัปแรงก์ (1 แต้ม) · − คืนแต้ม · Q/E/R ใส่สกิลลงช่อง (ใส่หรือเปลี่ยนได้เมื่อไม่ได้ต่อสู้)'));
+    this.win.append(head, this.top, this.detail, this.tabs, this.cols, this.passives,
+      el('div', 'hint', 'คลิกสกิลเพื่อดูรายละเอียด · + เรียนหรืออัปแรงก์ (1 แต้ม) · − คืนแต้ม · Q/E/R ใส่สกิลลงช่อง (ใส่หรือเปลี่ยนได้เมื่อไม่ได้ต่อสู้)'));
     this.win.addEventListener('click', (e) => this.onClick(e));
-    this.win.addEventListener('mouseover', (e) => this.onHover(e));
-    this.win.addEventListener('mouseleave', () => this.g.hud.hideTip());
+    // The window is made draggable with the others (initDraggableWindows in Game, built right after this).
     document.getElementById('hud')!.append(this.win);
-    makeDraggable(this.win, head);
   }
 
   get open(): boolean {
@@ -62,7 +65,7 @@ export class SkillWindow {
     if (show) {
       this.drawn = '';
       this.update();
-    } else this.g.hud.hideTip();
+    }
   }
 
   /** Every frame: the icon badge shows unspent points; the open window redraws when the book, level or gold changed. */
@@ -74,7 +77,7 @@ export class SkillWindow {
       this.g.sysMenu.setBadge('สกิล', left);
     }
     if (!this.open) return;
-    const key = JSON.stringify([p.skillBook, p.level, p.gold, this.tab]);
+    const key = JSON.stringify([p.skillBook, p.level, p.gold, this.tab, this.sel]);
     if (key === this.drawn) return;
     this.drawn = key;
     this.render();
@@ -96,6 +99,7 @@ export class SkillWindow {
       `<div class="sk-slots">${slots}</div>` +
       `<div class="sk-points"><span>แต้มคงเหลือ <b>${left}</b> / ${pointsEarned(p.level)}</span>` +
       `<span class="sk-refund">คืนแต้ม: ${price ? `${price.toLocaleString()} G/แต้ม` : 'ฟรี'}</span></div>`;
+    this.renderDetail();
     // Line tabs (shown only on a narrow screen by CSS).
     this.tabs.innerHTML = p.cls.lines.map((l, i) =>
       `<button data-tab="${i}" class="${i === this.tab ? 'active' : ''}" style="--lc:${l.color}">${l.nameTh}</button>`).join('');
@@ -124,13 +128,39 @@ export class SkillWindow {
     const wearBtns = rank
       ? slots.map((s) => `<button data-wear="${s}" data-id="${sk.id}" class="${wornOn === s ? 'on' : ''}">${s === 'passive' ? 'ใส่' : SLOT_LABEL[s]}</button>`).join('')
       : '';
-    return `<div class="sk-row${sk.kind === 'ult' ? ' ult' : ''}${locked ? ' locked' : ''}${rank ? ' learned' : ''}" data-id="${sk.id}">` +
+    return `<div class="sk-row${sk.kind === 'ult' ? ' ult' : ''}${locked ? ' locked' : ''}${rank ? ' learned' : ''}${sk.id === this.sel ? ' sel' : ''}" data-id="${sk.id}">` +
       `<span class="sk-ico">${skillIcon(sk.id)}</span>` +
       `<span class="sk-info"><span class="sk-name">${sk.nameTh}${sk.kind === 'ult' ? ' <i>อัลติ</i>' : ''}</span>` +
       `<span class="sk-rank">${locked ? `ปลด Lv.${need}` : `แรงก์ ${rank}/${maxRank()}`}</span></span>` +
       `<span class="sk-btns">${wearBtns}` +
       (rank ? `<button data-refund="${sk.id}" title="คืน 1 แต้ม">−</button>` : '') +
       `<button data-learn="${sk.id}" ${canLearn ? '' : 'disabled'} title="${rank ? 'อัปแรงก์ (1 แต้ม)' : 'เรียน (1 แต้ม)'}">+</button></span></div>`;
+  }
+
+  /** The details box: the chosen skill now and at its next rank (damage, MP, cooldown, reach and its own numbers). */
+  private renderDetail(): void {
+    const p = this.g.player;
+    const sk = p.cls.skills.find((s) => s.id === this.sel);
+    if (!sk) {
+      this.detail.innerHTML = '<div class="sk-empty">คลิกสกิลเพื่อดูรายละเอียด</div>';
+      return;
+    }
+    const rank = rankOf(p.skillBook, sk.id);
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const at = (r: number): string => [
+      sk.kind !== 'passive' ? `ดาเมจ ${Math.round(rankedDmg(sk, r) * 100)}% ATK` : '',
+      sk.mp ? `MP ${rankedMp(sk, p.cls.id, p.level, r)}` : '',
+      sk.cooldown ? `คูลดาวน์ ${r2(rankedCooldown(sk, r))} วิ` : '',
+      ...skillParamLines(sk, r),
+    ].filter(Boolean).join(' · ');
+    const reach = skillReach(sk);
+    const line = sk.line !== undefined ? ` · ${p.cls.lines[sk.line].nameTh}` : '';
+    this.detail.innerHTML =
+      `<div class="sk-dhead"><span class="sk-ico">${skillIcon(sk.id)}</span><span><b>${sk.nameTh}</b> (${sk.name})<br>` +
+      `<span class="sk-dsub">${KIND_NAME[sk.kind as 'normal']}${line} · ปลด Lv.${unlockLevel(sk)}${reach ? ` · ${reachText(reach)}` : ''}</span></span></div>` +
+      `<div>${sk.desc}</div>` +
+      (rank ? `<div>ตอนนี้ (แรงก์ ${rank}): <span class="tt-val">${at(rank)}</span></div>` : '') +
+      (rank < maxRank() ? `<div>${rank ? `แรงก์ ${rank + 1}` : 'เมื่อเรียน (แรงก์ 1)'}: <span class="tt-val">${at(rank + 1)}</span></div>` : '');
   }
 
   private onClick(e: MouseEvent): void {
@@ -140,8 +170,7 @@ export class SkillWindow {
     const tab = t.closest<HTMLElement>('[data-tab]');
     if (tab) {
       this.tab = Number(tab.dataset.tab);
-      this.update();
-      return;
+      return this.update();
     }
     const learn = t.closest<HTMLElement>('[data-learn]');
     if (learn) return b.learnSkill(learn.dataset.learn!);
@@ -161,38 +190,11 @@ export class SkillWindow {
       return b.wearSkill(slot, p.skillBook.worn[slot] === wear.dataset.id ? null : wear.dataset.id!);
     }
     const slot = t.closest<HTMLElement>('.sk-slot[data-id]');
-    if (slot) b.wearSkill(slot.dataset.slot as WearSlot, null);
-  }
-
-  /** Tooltip: what the skill does now and at its next rank. */
-  private onHover(e: MouseEvent): void {
-    const row = (e.target as HTMLElement).closest<HTMLElement>('.sk-row[data-id], .sk-slot[data-id]');
-    const p = this.g.player;
-    const sk = row ? p.cls.skills.find((s) => s.id === row.dataset.id) : undefined;
-    if (!sk) return this.g.hud.hideTip();
-    const rank = rankOf(p.skillBook, sk.id);
-    const line = (r: number) => {
-      const parts = [
-        sk.kind !== 'passive' ? `ดาเมจ ${Math.round(rankedDmg(sk, r) * 100)}% ATK` : '',
-        sk.mp ? `MP ${rankedMp(sk, p.cls.id, p.level, r)}` : '',
-        sk.cooldown ? `คูลดาวน์ ${rankedCooldown(sk, r)} วิ` : '',
-      ].filter(Boolean);
-      return parts.join(' · ');
-    };
-    const reach = SKILL_REACH[sk.id];
-    const tip = document.getElementById('tooltip')!;
-    tip.innerHTML =
-      `<div class="tt-name">${sk.name} (${sk.nameTh})</div>` +
-      `<div class="tt-sub">${KIND_NAME[sk.kind as 'normal']}${sk.line !== undefined ? ` · ${p.cls.lines[sk.line].nameTh}` : ''} · ปลด Lv.${unlockLevel(sk)}</div>` +
-      `<div class="tt-stats"><div>${sk.desc}</div>` +
-      (reach ? `<div><span class="tt-val">${reachText(reach)}</span></div>` : '') +
-      (rank ? `<div>ตอนนี้ (แรงก์ ${rank}): <span class="tt-val">${line(rank)}</span></div>` : '') +
-      (rank < maxRank() ? `<div>แรงก์ ${rank + 1}: <span class="tt-val">${line(rank + 1)}</span></div>` : '') +
-      `</div>`;
-    tip.classList.remove('hidden');
-    const x = Math.min(e.clientX + 16, window.innerWidth - tip.offsetWidth - 8);
-    const y = Math.min(e.clientY + 16, window.innerHeight - tip.offsetHeight - 8);
-    tip.style.left = `${x}px`;
-    tip.style.top = `${y}px`;
+    if (slot) return b.wearSkill(slot.dataset.slot as WearSlot, null);
+    const row = t.closest<HTMLElement>('.sk-row[data-id]');
+    if (row) {
+      this.sel = row.dataset.id!;
+      this.update();
+    }
   }
 }

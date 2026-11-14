@@ -6,6 +6,7 @@ import {
   CD_PER_RANK, DMG_PER_RANK, KIND_NAME, LEARN_KINDS, LEARNABLE_SKILLS, MP_PER_RANK, STATUS_PER_RANK, type LearnKind,
 } from './data/classes';
 import { MAX_LEVEL } from './formulas';
+import { reachRadius, SKILL_REACH } from './data/skillRanges';
 
 /** One learnable skill's numbers. Growth is in % per rank above 1 (negative = less). */
 export interface SkillValues {
@@ -20,13 +21,19 @@ export interface SkillValues {
   cdPerRank: number;
   /** Status times (stun, slow, armor break, guard, lifesteal): % per rank. */
   statusPerRank: number;
+  /** How far it reaches in metres: its range, or its radius for a skill around the player (see SKILL_REACH). */
+  reach: number;
+  /** The skill's own numbers (SkillDef.params): stun seconds, slow %, shots... */
+  params: Record<string, number>;
 }
-export const SKILL_VALUE_KEYS: readonly (keyof SkillValues)[] = ['dmg', 'dmgPerRank', 'mp', 'mpPerRank', 'cooldown', 'cdPerRank', 'statusPerRank'];
-export const SKILL_VALUE_NAME: Record<keyof SkillValues, string> = {
-  dmg: 'ดาเมจ ×ATK', dmgPerRank: 'ดาเมจ %/แรงก์', mp: 'MP', mpPerRank: 'MP %/แรงก์', cooldown: 'คูลดาวน์ วิ', cdPerRank: 'คูลดาวน์ %/แรงก์', statusPerRank: 'เวลาสถานะ %/แรงก์',
+/** The plain numbers of SkillValues (params are checked against each skill's own list). */
+export type SkillNum = Exclude<keyof SkillValues, 'params'>;
+export const SKILL_VALUE_KEYS: readonly SkillNum[] = ['dmg', 'dmgPerRank', 'mp', 'mpPerRank', 'cooldown', 'cdPerRank', 'statusPerRank', 'reach'];
+export const SKILL_VALUE_NAME: Record<SkillNum, string> = {
+  dmg: 'ดาเมจ ×ATK', dmgPerRank: 'ดาเมจ %/แรงก์', mp: 'MP', mpPerRank: 'MP %/แรงก์', cooldown: 'คูลดาวน์ วิ', cdPerRank: 'คูลดาวน์ %/แรงก์', statusPerRank: 'เวลาสถานะ %/แรงก์', reach: 'ระยะ/รัศมี ม.',
 };
-export const SKILL_VALUE_RANGE: Record<keyof SkillValues, readonly [number, number]> = {
-  dmg: [0, 100], dmgPerRank: [-50, 200], mp: [0, 10000], mpPerRank: [-50, 200], cooldown: [0, 600], cdPerRank: [-20, 50], statusPerRank: [-50, 200],
+export const SKILL_VALUE_RANGE: Record<SkillNum, readonly [number, number]> = {
+  dmg: [0, 100], dmgPerRank: [-50, 200], mp: [0, 10000], mpPerRank: [-50, 200], cooldown: [0, 600], cdPerRank: [-20, 50], statusPerRank: [-50, 200], reach: [0.5, 40],
 };
 
 export interface SkillConfig {
@@ -53,8 +60,10 @@ export interface SkillTuning {
   unlock?: Partial<Record<LearnKind, number[]>>;
   freeRefundBelow?: number;
   refundCost?: number;
-  skills?: Record<string, Partial<SkillValues>>;
+  skills?: Record<string, SkillValuesTuning>;
 }
+/** One skill's saved differences. */
+export type SkillValuesTuning = Partial<Record<SkillNum, number>> & { params?: Record<string, number> };
 
 export const SKILL_RANGE = {
   pointsPerLevel: [0, 10],
@@ -79,8 +88,11 @@ export const UNLOCK_TIERS: Record<LearnKind, number> = { normal: 8, ult: 2, pass
 export function codeSkills(): SkillConfig {
   const skills: Record<string, SkillValues> = {};
   for (const { sk } of LEARNABLE_SKILLS) {
+    const reach = SKILL_REACH[sk.id];
     skills[sk.id] = {
       dmg: sk.dmg, dmgPerRank: DMG_PER_RANK, mp: sk.mp, mpPerRank: MP_PER_RANK, cooldown: sk.cooldown, cdPerRank: CD_PER_RANK, statusPerRank: STATUS_PER_RANK,
+      reach: reach ? reachRadius(reach) : 0,
+      params: Object.fromEntries(Object.entries(sk.params ?? {}).map(([k, v]) => [k, v.v])),
     };
   }
   return {
@@ -100,7 +112,13 @@ export function mergeSkills(t: SkillTuning | undefined): SkillConfig {
   if (!t) return c;
   for (const k of NUMS) if (t[k] !== undefined) c[k] = t[k]!;
   for (const k of LEARN_KINDS) if (t.unlock?.[k]) c.unlock[k] = [...t.unlock[k]!];
-  for (const [id, v] of Object.entries(t.skills ?? {})) if (c.skills[id]) Object.assign(c.skills[id], v);
+  for (const [id, v] of Object.entries(t.skills ?? {})) {
+    const one = c.skills[id];
+    if (!one) continue;
+    const { params, ...nums } = v;
+    Object.assign(one, nums);
+    Object.assign(one.params, params);
+  }
   return c;
 }
 
@@ -108,6 +126,7 @@ const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 const whole = new Set<string>(['pointsPerLevel', 'lastPointLevel', 'maxRank', 'freeRefundBelow', 'refundCost']);
 const skillName = (id: string): string => LEARNABLE_SKILLS.find((x) => x.sk.id === id)?.sk.nameTh ?? id;
+const skillDef = (id: string) => LEARNABLE_SKILLS.find((x) => x.sk.id === id)?.sk;
 
 /**
  * Checks the `skills` part of a balance tuning (see checkBalance): strict = errors for anything wrong,
@@ -160,7 +179,7 @@ export function checkSkillTuning(x: unknown, strict: boolean): { tuning: SkillTu
     if (!isObj(x.skills)) {
       if (strict) return { error: 'ค่ารายสกิลไม่ถูกต้อง' };
     } else {
-      const s: Record<string, Partial<SkillValues>> = {};
+      const s: Record<string, SkillValuesTuning> = {};
       for (const [id, g] of Object.entries(x.skills)) {
         const code = CODE.skills[id];
         if (!code || !isObj(g)) {
@@ -168,10 +187,10 @@ export function checkSkillTuning(x: unknown, strict: boolean): { tuning: SkillTu
           continue;
         }
         if (strict) {
-          const extra = Object.keys(g).find((k) => !(SKILL_VALUE_KEYS as readonly string[]).includes(k));
+          const extra = Object.keys(g).find((k) => k !== 'params' && !(SKILL_VALUE_KEYS as readonly string[]).includes(k));
           if (extra) return { error: `สกิล ${skillName(id)}: ไม่รู้จัก "${extra.slice(0, 20)}"` };
         }
-        const one: Partial<SkillValues> = {};
+        const one: SkillValuesTuning = {};
         for (const k of SKILL_VALUE_KEYS) {
           const v = g[k];
           if (v === undefined) continue;
@@ -182,6 +201,28 @@ export function checkSkillTuning(x: unknown, strict: boolean): { tuning: SkillTu
           }
           const n = round3(v);
           if (n !== code[k]) one[k] = n;
+        }
+        if (g.params !== undefined) {
+          const defs = skillDef(id)?.params ?? {};
+          if (!isObj(g.params)) {
+            if (strict) return { error: `สกิล ${skillName(id)}: ค่าพิเศษไม่ถูกต้อง` };
+          } else {
+            const ps: Record<string, number> = {};
+            for (const [pk, pv] of Object.entries(g.params)) {
+              const d = defs[pk];
+              if (!d) {
+                if (strict) return { error: `สกิล ${skillName(id)}: ไม่รู้จัก "${pk.slice(0, 20)}"` };
+                continue;
+              }
+              if (typeof pv !== 'number' || !Number.isFinite(pv) || pv < d.lo || pv > d.hi) {
+                if (strict) return { error: `สกิล ${skillName(id)} ${d.nameTh} ต้องอยู่ระหว่าง ${d.lo} ถึง ${d.hi}` };
+                continue;
+              }
+              const n = round3(pv);
+              if (n !== code.params[pk]) ps[pk] = n;
+            }
+            if (Object.keys(ps).length) one.params = ps;
+          }
         }
         if (Object.keys(one).length) s[id] = one;
       }
@@ -201,6 +242,11 @@ export function skillChanges(a: SkillConfig, b: SkillConfig): string[] {
   for (const id of Object.keys(a.skills)) {
     for (const k of SKILL_VALUE_KEYS) {
       if (a.skills[id][k] !== b.skills[id]?.[k]) out.push(`สกิล ${skillName(id)} ${SKILL_VALUE_NAME[k]} ${a.skills[id][k]} → ${b.skills[id]?.[k]}`);
+    }
+    for (const [pk, d] of Object.entries(skillDef(id)?.params ?? {})) {
+      const x = a.skills[id].params[pk];
+      const y = b.skills[id]?.params[pk];
+      if (x !== y) out.push(`สกิล ${skillName(id)} ${d.nameTh} ${x} → ${y} ${d.unit}`);
     }
   }
   return out;

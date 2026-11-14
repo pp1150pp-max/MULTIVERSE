@@ -687,7 +687,10 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       const line = sk.line !== undefined ? c.lines[sk.line].nameTh : '';
       return h('tr', {},
         h('td', {}, `${sk.nameTh} (${KIND_NAME[sk.kind as 'normal']}${line ? ` · ${line}` : ''})`),
-        ...SKILL_VALUE_KEYS.map((k) => h('td', {}, numBox(() => v[k], (n) => { v[k] = n; }, cv[k], SKILL_VALUE_RANGE[k][0], SKILL_VALUE_RANGE[k][1], k === 'dmg' ? 0.05 : k === 'cooldown' ? 0.5 : 1, refresh))),
+        ...SKILL_VALUE_KEYS.map((k) => h('td', {}, numBox(() => v[k], (n) => { v[k] = n; }, cv[k], SKILL_VALUE_RANGE[k][0], SKILL_VALUE_RANGE[k][1], k === 'dmg' || k === 'reach' ? 0.05 : k === 'cooldown' ? 0.5 : 1, refresh))),
+        // The skill's own numbers (stun, slow, shots...): "สถานะ" ones grow with เวลาสถานะ %/แรงก์.
+        h('td', {}, ...Object.entries(sk.params ?? {}).map(([pk, d]) => h('label', { class: 'bal-param' },
+          `${d.nameTh}${d.status ? '*' : ''} `, numBox(() => v.params[pk], (n) => { v.params[pk] = n; }, cv.params[pk], d.lo, d.hi, d.unit === 'นัด' ? 1 : 0.05, refresh), ` ${d.unit}`))),
         out);
     });
     skillCard.replaceChildren(
@@ -696,11 +699,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'row bal-line' }, num('pointsPerLevel', 1), num('lastPointLevel', 1), num('maxRank', 1)),
       h('div', { class: 'row bal-line' }, num('freeRefundBelow', 1), num('refundCost', 100)),
       ...unlockRows,
-      h('div', { class: 'muted' }, 'ค่ารายสกิล: % ต่อแรงก์คิดจากแรงก์ 1 (เช่น ดาเมจ 5% → แรงก์ 10 = ×1.45) · คูลดาวน์ %/แรงก์ ติดลบ = สั้นลง · MP คูณต่อจาก MP สกิล/เลเวลของอาชีพ · เวลาสถานะ = สตัน ช้า ลดเกราะ ไม่รับดาเมจ ดูดเลือด'),
+      h('div', { class: 'muted' }, 'ค่ารายสกิล: % ต่อแรงก์คิดจากแรงก์ 1 (เช่น ดาเมจ 5% → แรงก์ 10 = ×1.45) · คูลดาวน์ %/แรงก์ ติดลบ = สั้นลง · MP คูณต่อจาก MP สกิล/เลเวลของอาชีพ · เวลาสถานะ = สตัน ช้า ลดเกราะ ไม่รับดาเมจ ดูดเลือด · ระยะ/รัศมี = ระยะยิง/พุ่ง หรือรัศมีรอบตัว (วงระเบิด/วงตกอยู่ในค่าพิเศษ)'),
       tabs,
-      h('table', { class: 'bal-table' },
-        h('thead', {}, h('tr', {}, h('th', {}, 'สกิล'), ...SKILL_VALUE_KEYS.map((k) => h('th', {}, SKILL_VALUE_NAME[k])), h('th', { class: 'bal-out' }, 'ได้จริง (แรงก์ 1 → สูงสุด)'))),
-        h('tbody', {}, ...rows)),
+      h('div', { class: 'bal-scroll' }, h('table', { class: 'bal-table' },
+        h('thead', {}, h('tr', {}, h('th', {}, 'สกิล'), ...SKILL_VALUE_KEYS.map((k) => h('th', {}, SKILL_VALUE_NAME[k])), h('th', {}, 'ค่าพิเศษ (* = โตตามเวลาสถานะ)'), h('th', { class: 'bal-out' }, 'ได้จริง (แรงก์ 1 → สูงสุด)'))),
+        h('tbody', {}, ...rows))),
     );
     outs.forEach((f) => f());
   };

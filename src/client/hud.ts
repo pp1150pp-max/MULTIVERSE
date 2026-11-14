@@ -3,8 +3,8 @@ import { placeLabel } from '../shared/channels';
 import type { Game } from './Game';
 import { NPC_USE_RANGE, type NpcId } from '../shared/data/npcs';
 import type { SkillSlot } from '../shared/data/classes';
-import { SKILL_REACH, reachRadius, reachText } from '../shared/data/skillRanges';
-import { rankedDmg } from '../shared/skillBook';
+import { reachRadius, reachText } from '../shared/data/skillRanges';
+import { rankedDmg, skillParamLines, skillReach } from '../shared/skillBook';
 import {
   bonusPct, DROP_ON_FAIL_FROM, dropsOnFail, FORGE_CD, effectiveStats, enhanceBonus, enhanceCost, ENHANCE_STONES_PER_TRY, itemName,
   MAX_PLUS, PITY_STEP, pityBonus, plusOf, rateFor, sellValue, STONE_FROM, stonesNeeded, successRate,
@@ -910,7 +910,7 @@ export class Hud {
       this.placeTip(tip, e);
       return;
     }
-    const reach = SKILL_REACH[sk.id];
+    const reach = skillReach(sk);
     const remain = p.cd[sk.id] ?? 0;
     const rank = p.skillRank(sk);
     const full = p.skillCooldown(sk);
@@ -918,7 +918,7 @@ export class Hud {
       sk.kind === 'normal' || sk.kind === 'ult' ? `<div>แรงก์ <span class="tt-val">${rank}</span> · ดาเมจ <span class="tt-val">${Math.round(rankedDmg(sk, rank) * 100)}% ATK</span></div>` : '',
       sk.mp ? `<div>MP <span class="tt-val">${p.skillMp(sk)}</span></div>` : '',
       full ? `<div>คูลดาวน์ <span class="tt-val">${full} วิ</span></div>` : '',
-      sk.killCdCut ? `<div>ฆ่ามอนได้ ลดคูลดาวน์ที่เหลือ <span class="tt-val">${Math.round(sk.killCdCut * 100)}%</span></div>` : '',
+      ...skillParamLines(sk, Math.max(1, rank)).map((l) => `<div><span class="tt-val">${l}</span></div>`),
       reach ? `<div><span class="tt-val">${reachText(reach)}</span></div>` : '',
     ].join('');
     tip.innerHTML =

@@ -10,7 +10,7 @@ import { Sim } from '../src/shared/sim/Sim';
 import { newCharacterData } from '../src/shared/sim/Player';
 import { IDLE_INTENT } from '../src/shared/sim/types';
 import {
-  cleanSkillBook, pointsEarned, pointsLeft, rankedCooldown, rankedDmg, rankedMp, refundPrice, unlockLevel,
+  cleanSkillBook, pointsEarned, pointsLeft, rankedCooldown, rankedDmg, rankedMp, refundPrice, skillParam, skillReach, unlockLevel,
 } from '../src/shared/skillBook';
 import { codeSkills } from '../src/shared/skillTuning';
 import { oldSkills } from './skills';
@@ -125,6 +125,19 @@ const sk = (id: string) => [...CLASSES.sword.skills, ...CLASSES.mage.skills, ...
   ok(pointsEarned(40) === 20 && unlockLevel(sk('meteor')) === 2, 'tuning applies: 2 points a level to Lv10, ultimates at Lv2');
   applyBalance({});
   ok(mergeBalance({}).skills.skills.fireball.dmg === 2.2, 'fireball 220% in code');
+  // Reach and a skill's own numbers (stun, slow...) are tuned too; status ones grow with the rank.
+  const t2 = checkBalance({ skills: { skills: { earthquake: { reach: 6, params: { stun: 2 } }, fireball: { params: { blast: 3 } } } } }, true).tuning!;
+  ok(JSON.stringify(t2) === '{"skills":{"skills":{"earthquake":{"reach":6,"params":{"stun":2}},"fireball":{"params":{"blast":3}}}}}', `reach and params stored (${JSON.stringify(t2)})`);
+  ok(checkBalance({ skills: { skills: { earthquake: { params: { nope: 1 } } } } }, true).error !== undefined, 'refused: unknown param');
+  ok(checkBalance({ skills: { skills: { frostnova: { params: { slow: 150 } } } } }, true).error !== undefined, 'refused: slow 150%');
+  ok(balanceChanges({}, t2).includes('สตัน 1 → 2 วิ'), `audit names the param (${balanceChanges({}, t2)})`);
+  applyBalance(t2);
+  ok(skillParam(sk('earthquake'), 'stun') === 2 && Math.abs(skillParam(sk('earthquake'), 'stun', 10) - 2.9) < 1e-9, 'stun 2 s, rank 10 = ×1.45 (status +5%)');
+  const r = skillReach(sk('earthquake'));
+  const f = skillReach(sk('fireball'));
+  ok(r?.kind === 'self' && r.radius === 6 && f?.kind === 'shot' && f.blast === 3 && f.range === 12, 'tuned reach: earthquake radius 6, fireball blast 3 (range 12)');
+  applyBalance({});
+  ok(skillParam(sk('rapidfire'), 'shots') === 3 && skillParam(sk('charge'), 'killCdCut') === 50, 'code: 3 shots, Charge kill cut 50%');
 }
 
 finish('skill-system');

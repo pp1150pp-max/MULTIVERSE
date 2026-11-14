@@ -5,7 +5,7 @@ import type { Terrain } from './terrain';
 import type { Intent } from './types';
 import { castSkill, basicAttack } from './skills';
 import { CLASSES, type ClassDef, type SkillDef, type SkillSlot } from '../data/classes';
-import { cleanSkillBook, rankedCooldown, rankedMp, rankOf, type SkillBook } from '../skillBook';
+import { cleanSkillBook, rankedCooldown, rankedMp, rankOf, skillParam, type SkillBook } from '../skillBook';
 import { addInto, BASE_MOVE_SPEED, emptyStats } from '../formulas';
 import { gatesPassedBy } from '../data/bossGates';
 import { cleanCosWorn, MOUNT_SPEED, type CosWorn } from '../data/cosmetics';
@@ -892,11 +892,12 @@ export class Player extends Unit {
     this.sim.anim(this.id, 'dash', { duration: time + 0.12 });
   }
 
-  /** This player landed a killing blow: skills with killCdCut (sword Charge) come back sooner. */
+  /** This player landed a killing blow: skills with a killCdCut number (sword Charge) come back sooner. */
   onKill(): void {
     for (const sk of this.cls.skills) {
       const left = this.cd[sk.id] ?? 0;
-      if (sk.killCdCut && left > 0) this.cd[sk.id] = left * (1 - sk.killCdCut);
+      const cut = sk.params?.killCdCut ? skillParam(sk, 'killCdCut') / 100 : 0;
+      if (cut && left > 0) this.cd[sk.id] = left * (1 - cut);
     }
   }
 
@@ -1060,7 +1061,7 @@ export class Player extends Unit {
         // without one the attack animation plays (unless the skill is a dash).
         // A skill that starts by aiming (Headshot) gets no attack fallback: its shot animates when it fires.
         // The skill's own class animation (skill_q/e/r), whichever slot it sits in.
-        sim.anim(this.id, `skill_${sk.anim ?? slot}`, this.rootT > 0 ? {} : { duration: this.attackAnimDuration(), fallback: 'attack' });
+        sim.anim(this.id, `skill_${sk.anim ?? slot}`, this.rootT > 0 ? { skill: sk.id } : { duration: this.attackAnimDuration(), fallback: 'attack', skill: sk.id });
         this.mp -= cost;
         this.cd[sk.id] = this.skillCooldown(sk);
         this.lastAttack = sim.time;

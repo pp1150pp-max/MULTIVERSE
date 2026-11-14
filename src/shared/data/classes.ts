@@ -60,9 +60,18 @@ export interface SkillDef {
   dmg: number;
   mp: number;
   cooldown: number;
-  /** Each kill by this player cuts the skill's remaining cooldown by this share (0.5 = halves it). */
-  killCdCut?: number;
+  /**
+   * The skill's own numbers besides damage, MP, cooldown and reach (stun seconds, slow %, shots...), each tunable per
+   * skill on the /admin balance tab. `status` ones grow with the skill's status %/rank.
+   */
+  params?: Record<string, SkillParam>;
 }
+
+/** One of a skill's own numbers: its code value, Thai name and unit, and the range /admin allows. */
+export interface SkillParam { v: number; nameTh: string; unit: string; lo: number; hi: number; status?: boolean }
+const sec = (v: number, nameTh: string): SkillParam => ({ v, nameTh, unit: 'วิ', lo: 0, hi: 30, status: true });
+const pctP = (v: number, nameTh: string): SkillParam => ({ v, nameTh, unit: '%', lo: 0, hi: 100 });
+const metres = (v: number, nameTh: string): SkillParam => ({ v, nameTh, unit: 'ม.', lo: 0.5, hi: 30 });
 
 /** One of a class's three skill lines: its name and colour on the skill window. */
 export interface SkillLine { nameTh: string; color: string }
@@ -113,9 +122,11 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     ],
     skills: [
       { id: 'slash', kind: 'basic', name: 'Slash', nameTh: 'ฟัน', desc: 'ฟันเป็นวงโค้งด้านหน้า 100% ATK', dmg: 1, mp: 0, cooldown: 0 },
-      { id: 'whirlwind', kind: 'normal', line: 0, tier: 0, anim: 'q', name: 'Whirlwind', nameTh: 'พายุดาบ', desc: 'หมุนตัวฟันรอบทิศ ไม่รับดาเมจชั่วครู่ และดูดเลือด 5% ของดาเมจ 3 วิ', dmg: 1.8, mp: 15, cooldown: 6 },
-      { id: 'earthquake', kind: 'normal', line: 2, tier: 0, anim: 'e', name: 'Earthquake', nameTh: 'ปฐพีแยก', desc: 'กระแทกพื้นรอบตัวและสตัน', dmg: 2, mp: 20, cooldown: 7 },
-      { id: 'charge', kind: 'ult', line: 1, tier: 0, anim: 'r', name: 'Charge', nameTh: 'พุ่งชน', desc: 'พุ่งไปตามทิศเมาส์ ชนศัตรูตลอดทางและกระเด็น ทุกครั้งที่ฆ่ามอนได้ คูลดาวน์ที่เหลือลดลงครึ่งหนึ่ง', dmg: 1.5, mp: 25, cooldown: 15, killCdCut: 0.5 },
+      { id: 'whirlwind', kind: 'normal', line: 0, tier: 0, anim: 'q', name: 'Whirlwind', nameTh: 'พายุดาบ', desc: 'หมุนตัวฟันรอบทิศ ไม่รับดาเมจชั่วครู่ และดูดเลือดจากดาเมจที่ทำ', dmg: 1.8, mp: 15, cooldown: 6,
+        params: { guard: sec(0.6, 'ไม่รับดาเมจ'), lifesteal: pctP(5, 'ดูดเลือด'), lifestealTime: sec(3, 'เวลาดูดเลือด') } },
+      { id: 'earthquake', kind: 'normal', line: 2, tier: 0, anim: 'e', name: 'Earthquake', nameTh: 'ปฐพีแยก', desc: 'กระแทกพื้นรอบตัวและสตัน', dmg: 2, mp: 20, cooldown: 7, params: { stun: sec(1, 'สตัน') } },
+      { id: 'charge', kind: 'ult', line: 1, tier: 0, anim: 'r', name: 'Charge', nameTh: 'พุ่งชน', desc: 'พุ่งไปตามทิศเมาส์ ชนศัตรูตลอดทางและกระเด็น ทุกครั้งที่ฆ่ามอนได้ คูลดาวน์ที่เหลือลดลงครึ่งหนึ่ง', dmg: 1.5, mp: 25, cooldown: 15,
+        params: { killCdCut: pctP(50, 'ฆ่ามอนได้ ลดคูลดาวน์ที่เหลือ') } },
       dash('Dash', 'แดช'),
     ],
   },
@@ -134,9 +145,11 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     ],
     skills: [
       { id: 'bolt', kind: 'basic', name: 'Arcane Bolt', nameTh: 'ลูกเวท', desc: 'ยิงลูกเวทไปทางเมาส์ 100% ATK', dmg: 1, mp: 0, cooldown: 0 },
-      { id: 'fireball', kind: 'normal', line: 0, tier: 0, anim: 'q', name: 'Fireball', nameTh: 'ลูกไฟ', desc: 'ลูกไฟระเบิดเป็นวง', dmg: 2.2, mp: 10, cooldown: 2.5 },
-      { id: 'frostnova', kind: 'normal', line: 2, tier: 0, anim: 'e', name: 'Frost Nova', nameTh: 'วงน้ำแข็ง', desc: 'คลื่นน้ำแข็งรอบตัว ทำให้ช้าลง 50%', dmg: 1.4, mp: 18, cooldown: 7 },
-      { id: 'meteor', kind: 'ult', line: 0, tier: 0, anim: 'r', name: 'Meteor', nameTh: 'อุกกาบาต', desc: 'เรียกอุกกาบาตลงตำแหน่งเมาส์ และสตันสั้นๆ', dmg: 4.5, mp: 35, cooldown: 14 },
+      { id: 'fireball', kind: 'normal', line: 0, tier: 0, anim: 'q', name: 'Fireball', nameTh: 'ลูกไฟ', desc: 'ลูกไฟระเบิดเป็นวง', dmg: 2.2, mp: 10, cooldown: 2.5, params: { blast: metres(2.6, 'รัศมีระเบิด') } },
+      { id: 'frostnova', kind: 'normal', line: 2, tier: 0, anim: 'e', name: 'Frost Nova', nameTh: 'วงน้ำแข็ง', desc: 'คลื่นน้ำแข็งรอบตัว ทำให้ศัตรูช้าลง', dmg: 1.4, mp: 18, cooldown: 7,
+        params: { slow: pctP(50, 'ช้าลง'), slowTime: sec(3, 'เวลาช้าลง') } },
+      { id: 'meteor', kind: 'ult', line: 0, tier: 0, anim: 'r', name: 'Meteor', nameTh: 'อุกกาบาต', desc: 'เรียกอุกกาบาตลงตำแหน่งเมาส์ และสตันสั้นๆ', dmg: 4.5, mp: 35, cooldown: 14,
+        params: { radius: metres(3.5, 'รัศมีวงตก'), stun: sec(0.8, 'สตัน') } },
       dash('Blink', 'วาร์ป'),
     ],
   },
@@ -155,9 +168,12 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     ],
     skills: [
       { id: 'shot', kind: 'basic', name: 'Quick Shot', nameTh: 'ยิงเร็ว', desc: 'ยิงกระสุนความเร็วสูง 100% ATK', dmg: 1, mp: 0, cooldown: 0 },
-      { id: 'rapidfire', kind: 'normal', line: 1, tier: 0, anim: 'q', name: 'Rapid Fire', nameTh: 'ยิงรัว', desc: 'ยิงรัว 3 นัดติดกันไปทางเมาส์ (ดาเมจต่อนัด)', dmg: 0.4, mp: 10, cooldown: 3 },
-      { id: 'pierce', kind: 'normal', line: 0, tier: 0, anim: 'e', name: 'Armor-Piercing Round', nameTh: 'กระสุนเจาะเกราะ', desc: 'กระสุนนัดหนัก ลดพลังป้องกันของเป้าหมาย 20%', dmg: 1.5, mp: 14, cooldown: 5 },
-      { id: 'headshot', kind: 'ult', line: 0, tier: 0, anim: 'r', name: 'Headshot', nameTh: 'ยิงหัว', desc: 'ยืนนิ่งเล็งแล้วยิงนัดเดียว คริติคอลแน่นอน บวกความแรงคริติคอลของตัวละคร', dmg: 3, mp: 30, cooldown: 12 },
+      { id: 'rapidfire', kind: 'normal', line: 1, tier: 0, anim: 'q', name: 'Rapid Fire', nameTh: 'ยิงรัว', desc: 'ยิงรัวหลายนัดติดกันไปทางเมาส์ (ดาเมจต่อนัด)', dmg: 0.4, mp: 10, cooldown: 3,
+        params: { shots: { v: 3, nameTh: 'จำนวนนัด', unit: 'นัด', lo: 1, hi: 10 } } },
+      { id: 'pierce', kind: 'normal', line: 0, tier: 0, anim: 'e', name: 'Armor-Piercing Round', nameTh: 'กระสุนเจาะเกราะ', desc: 'กระสุนนัดหนัก ลดพลังป้องกันของเป้าหมาย', dmg: 1.5, mp: 14, cooldown: 5,
+        params: { armorBreak: pctP(20, 'ลดพลังป้องกัน'), armorBreakTime: sec(3, 'เวลาลดพลังป้องกัน') } },
+      { id: 'headshot', kind: 'ult', line: 0, tier: 0, anim: 'r', name: 'Headshot', nameTh: 'ยิงหัว', desc: 'ยืนนิ่งเล็งแล้วยิงนัดเดียว คริติคอลแน่นอน บวกความแรงคริติคอลของตัวละคร', dmg: 3, mp: 30, cooldown: 12,
+        params: { aim: { v: 0.8, nameTh: 'เวลาเล็ง', unit: 'วิ', lo: 0, hi: 5 } } },
       dash('Tumble', 'กลิ้งหลบ'),
     ],
   },

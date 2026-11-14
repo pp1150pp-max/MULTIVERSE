@@ -8,6 +8,7 @@ import {
   CLASSES, isLearnable, KIND_NAME, SLOT_KIND, WEAR_SLOTS, type LearnKind, type SkillDef, type WearSlot,
 } from './data/classes';
 import type { SkillConfig, SkillValues } from './skillTuning';
+import { reachRadius, SKILL_REACH, type SkillReach } from './data/skillRanges';
 import type { ClassId } from './types';
 
 /** A character's learned ranks and worn skills, as saved (CharacterData.skills) and sent to its own browser. */
@@ -144,7 +145,11 @@ export function unlearnOne(book: SkillBook, id: string): void {
 
 /** The skill's numbers in use (its code values if it has no entry, e.g. a basic attack). */
 export function skillValues(sk: SkillDef, b?: Balance): SkillValues {
-  return cfgOf(b).skills[sk.id] ?? { dmg: sk.dmg, dmgPerRank: 0, mp: sk.mp, mpPerRank: 0, cooldown: sk.cooldown, cdPerRank: 0, statusPerRank: 0 };
+  const reach = SKILL_REACH[sk.id];
+  return cfgOf(b).skills[sk.id] ?? {
+    dmg: sk.dmg, dmgPerRank: 0, mp: sk.mp, mpPerRank: 0, cooldown: sk.cooldown, cdPerRank: 0, statusPerRank: 0, reach: reach ? reachRadius(reach) : 0,
+    params: Object.fromEntries(Object.entries(sk.params ?? {}).map(([k, v]) => [k, v.v])),
+  };
 }
 
 /** 1 + pct % for each rank above 1 (never below 0). */
@@ -175,4 +180,39 @@ export function rankedMp(sk: SkillDef, cls: ClassId, level: number, rank: number
   const v = skillValues(sk, b);
   const byLevel = skillMpCost(v.mp, cls, level, b);
   return Math.round(byLevel * grow(v.mpPerRank, rank));
+}
+
+/**
+ * One of the skill's own numbers (SkillDef.params) as tuned; with a rank, a status one (stun, slow time...) grows by
+ * the skill's status %/rank. 0 if the skill has no such number.
+ */
+export function skillParam(sk: SkillDef, key: string, rank?: number, b?: Balance): number {
+  const v = skillValues(sk, b).params[key] ?? sk.params?.[key]?.v ?? 0;
+  return rank !== undefined && sk.params?.[key]?.status ? v * statusScale(sk, rank, b) : v;
+}
+
+/**
+ * How the skill reaches, as tuned: its range (or radius around the player) from the balance, an explosion's or a
+ * landing circle's size from its `blast` / `radius` numbers. The hits, the tooltips, the ground ring and touch
+ * aiming all use it, so they always agree.
+ */
+export function skillReach(sk: SkillDef, b?: Balance): SkillReach | undefined {
+  const base = SKILL_REACH[sk.id];
+  if (!base || !isLearnable(sk)) return base;
+  const v = skillValues(sk, b);
+  switch (base.kind) {
+    case 'self': return { kind: 'self', radius: v.reach };
+    case 'cone': return { kind: 'cone', range: v.reach };
+    case 'dash': return { kind: 'dash', range: v.reach };
+    case 'shot': return base.blast !== undefined ? { kind: 'shot', range: v.reach, blast: skillParam(sk, 'blast', undefined, b) } : { kind: 'shot', range: v.reach };
+    case 'point': return { kind: 'point', range: v.reach, radius: skillParam(sk, 'radius', undefined, b) };
+  }
+}
+
+/** Thai lines of the skill's own numbers at a rank, e.g. "สตัน 1.05 วิ" (sizes are in the reach line instead). */
+export function skillParamLines(sk: SkillDef, rank: number, b?: Balance): string[] {
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  return Object.entries(sk.params ?? {})
+    .filter(([k]) => k !== 'blast' && k !== 'radius')
+    .map(([k, d]) => `${d.nameTh} ${r2(skillParam(sk, k, rank, b))} ${d.unit}`);
 }

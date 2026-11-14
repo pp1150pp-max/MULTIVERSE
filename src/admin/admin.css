@@ -257,6 +257,8 @@ td.changed, input.changed { background: #3a3110; }
 .bal-table input.bal-num { width: 90px; }
 .bal-line input.bal-num { max-width: 140px; }
 .bal-num.bal-changed { border-color: var(--gold); background: #2a2210; }
+.bal-param { display: block; white-space: nowrap; font-size: 12px; }
+.bal-param input.bal-num { width: 64px; }
 .bal-num.bal-bad { border-color: var(--bad); }
 .bal-out { color: var(--gold-hi); text-align: right; }
 
