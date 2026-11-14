@@ -303,12 +303,14 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse, path: stri
 
 // ------------------------------------------------------------ server
 
+/** Pages served without `.html`: the admin page (its data comes from /api/admin, which checks the role) and the public /privacy and /terms pages. */
+const PAGES = new Set(['/admin', '/privacy', '/terms']);
+
 const server = createServer(async (req, res) => {
   const path = new URL(req.url ?? '/', 'http://localhost').pathname;
   try {
     if (path.startsWith('/api/')) await api(req, res, path);
-    // The admin page is public HTML; everything it shows comes from /api/admin, which checks the role.
-    else if ((req.method === 'GET' || req.method === 'HEAD') && path === '/admin') await serveStatic(req, res, '/admin.html');
+    else if ((req.method === 'GET' || req.method === 'HEAD') && PAGES.has(path)) await serveStatic(req, res, path + '.html');
     else if (path === '/admin/') {
       // The page loads its files by relative paths (Vite base './'), which only work from /admin.
       res.writeHead(301, { Location: '/admin' });

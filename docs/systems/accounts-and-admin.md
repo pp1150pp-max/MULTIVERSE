@@ -2,6 +2,12 @@
 
 สรุปสั้นอยู่ใน [CLAUDE.md](../../CLAUDE.md) · สำรอง/กู้คืน DB: [server-ops.md](server-ops.md)
 
+## หน้านโยบายความเป็นส่วนตัว / ข้อตกลงการใช้งาน (เจ้าของตกลง 2026-11-15)
+
+- `/privacy` (`privacy.html`) และ `/terms` (`terms.html`) ภาษาไทย เปิดได้โดยไม่ต้อง login (Google OAuth consent screen ชี้มาที่สองหน้านี้ ห้ามเปลี่ยน path) · หน้าตาใช้ `src/legal.css` ไม่มีโค้ดเกม
+- ผู้ให้บริการ "ทีม MULTIVERSE" · ติดต่อ ppicchamultiverse@gmail.com · privacy บอกว่าจาก Google เก็บแค่รหัสบัญชี Google อีเมล ชื่อ ใช้ login เท่านั้น และบอกข้อมูลที่เกมเก็บจริง (แชท 30 วัน, IP/การเชื่อมต่อ 90 วัน ตาม `HISTORY_DAYS`, รายงาน) · ถ้าเกมเริ่มเก็บข้อมูลใหม่ (เช่น ระบบเติมเงิน อีเมล) ต้องแก้หน้า privacy และวันที่ด้วย
+- server เสิร์ฟผ่าน `PAGES` ใน `server/main.ts` · ตอน `npm run dev` Vite เปิดให้เหมือนกัน · ยังไม่มีการตั้งค่าใน /admin (แก้ข้อความในไฟล์)
+
 ## หน้า Login
 
 - หน้าแรกคือแผง **Login**: ฟอร์มเข้าสู่ระบบ/สมัคร แล้วตามด้วยปุ่ม **Guest Login** (ไม่มี Singleplayer แล้ว เซฟ SP เก่าในเบราว์เซอร์ถูกทิ้ง ไม่ import)
