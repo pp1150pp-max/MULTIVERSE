@@ -7,6 +7,8 @@ import type { Monster } from './sim/Monster';
 import type { SkillDef } from './data/classes';
 import type { Stats } from './types';
 import { learnable, rankOf, skillParam } from './skillBook';
+import { GUNSLINGER_PASSIVES } from './passives/gunslinger';
+import { MAGE_PASSIVES } from './passives/mage';
 import { SWORD_PASSIVES } from './passives/sword';
 
 /** One of the worn passive's numbers at its rank. */
@@ -16,8 +18,8 @@ export type PassiveValue = (key: string) => number;
 export interface PassiveHooks {
   /** Adds to the player's stats (in Player.recompute, after the class multipliers). */
   stats?(p: Player, s: Stats, v: PassiveValue): void;
-  /** × damage dealt to `m` (Sim.hitMonster). */
-  dealMult?(p: Player, m: Monster, v: PassiveValue): number;
+  /** × damage dealt to `m` (Sim.hitMonster); `skill` = the skill the hit came from (missing = basic attack or other). */
+  dealMult?(p: Player, m: Monster, v: PassiveValue, skill?: SkillDef): number;
   /** × damage taken (Sim.hitPlayer). */
   takenMult?(p: Player, v: PassiveValue): number;
   /** A skill of this player's was just cast (Player.update). */
@@ -34,6 +36,8 @@ export interface PassiveHooks {
 
 /** Every class's passives by skill id. Each class PR adds its own file here. */
 const HOOKS: Record<string, PassiveHooks> = {
+  ...GUNSLINGER_PASSIVES,
+  ...MAGE_PASSIVES,
   ...SWORD_PASSIVES,
 };
 
@@ -53,9 +57,9 @@ export function passiveStats(p: Player, s: Stats): void {
   w?.h.stats?.(p, s, w.v);
 }
 
-export function passiveDealMult(p: Player, m: Monster): number {
+export function passiveDealMult(p: Player, m: Monster, skill?: SkillDef): number {
   const w = worn(p);
-  return w?.h.dealMult?.(p, m, w.v) ?? 1;
+  return w?.h.dealMult?.(p, m, w.v, skill) ?? 1;
 }
 
 export function passiveTakenMult(p: Player): number {

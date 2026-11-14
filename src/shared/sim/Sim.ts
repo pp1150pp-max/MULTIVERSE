@@ -305,9 +305,10 @@ export class Sim {
       }
       return;
     }
-    let raw = p.stats.atk * mult * (0.9 + Math.random() * 0.2) * passiveDealMult(p, m);
+    let raw = p.stats.atk * mult * (0.9 + Math.random() * 0.2) * passiveDealMult(p, m, opts.skill);
     if (this.time < p.dmgUntil) raw *= p.dmgMult;
-    const crit = opts.forceCrit || Math.random() * 100 < p.stats.crit + (opts.critBonus ?? 0);
+    const marked = m.markBy === p.id && this.time < m.markUntil ? m.markCrit : 0;
+    const crit = opts.forceCrit || Math.random() * 100 < p.stats.crit + (opts.critBonus ?? 0) + marked;
     if (crit) raw *= 1 + p.stats.critDmg / 100;
     if (opts.maxMult) raw = Math.min(raw, p.stats.atk * opts.maxMult);
     const def = this.time < m.armorBreakUntil ? m.defense * (1 - m.armorBreak) : m.defense;
@@ -346,6 +347,12 @@ export class Sim {
       m.armorBreakUntil = this.time + (opts.armorBreakT ?? 3);
       this.text(m.x, m.topY + 0.4, m.z, 'เกราะแตก', 'info', 0.8);
     }
+    if (opts.weak) {
+      // Same as armor break: the strongest attack-down wins and a recast refreshes it.
+      if (this.time >= m.weakUntil) m.weak = 0;
+      m.weak = Math.min(0.95, Math.max(m.weak, opts.weak));
+      m.weakUntil = this.time + (opts.weakT ?? 3);
+    }
     m.onHit(this, p);
     if (m.hp <= 0) {
       this.killMonster(m);
@@ -359,8 +366,16 @@ export class Sim {
       this.text(p.x, p.topY, p.z, 'MISS', 'info', 0.6);
       return;
     }
+    const weak = this.time < m.weakUntil ? 1 - m.weak : 1;
     const taken = (this.time < p.takenUntil ? p.takenMult : 1) * passiveTakenMult(p);
-    const dmg = Math.round((mitigate(m.atk * mult * (0.9 + Math.random() * 0.2), p.stats.def) + p.maxHp * (opts.maxHpShare ?? 0)) * taken);
+    let dmg = Math.round((mitigate(m.atk * weak * mult * (0.9 + Math.random() * 0.2), p.stats.def) + p.maxHp * (opts.maxHpShare ?? 0)) * taken);
+    if (p.shield > 0 && this.time < p.shieldUntil) {
+      // A skill's shield takes the hit first.
+      const soak = Math.min(p.shield, dmg);
+      p.shield -= soak;
+      dmg -= soak;
+      if (soak > 0) this.text(p.x, p.topY + 0.4, p.z, `โล่ -${soak}`, 'info', 0.6);
+    }
     p.hp -= dmg;
     p.lastHurt = this.time;
     p.interruptPotions();

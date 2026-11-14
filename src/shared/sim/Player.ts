@@ -3,7 +3,7 @@ import type { Sim } from './Sim';
 import type { Monster } from './Monster';
 import type { Terrain } from './terrain';
 import type { Intent } from './types';
-import { castSkill, basicAttack } from './skills';
+import { castSkill, basicAttack, emptyGunBuffs, type GunBuffs } from './skills';
 import { passiveDashCdMult, passiveOnCast, passiveOnDash, passiveOnKill, passiveStats } from '../passives';
 import { CLASSES, type ClassDef, type SkillDef, type SkillSlot } from '../data/classes';
 import { cleanSkillBook, rankedCooldown, rankedMp, rankOf, skillParam, type SkillBook } from '../skillBook';
@@ -432,21 +432,29 @@ export class Player extends Unit {
   /** Share of damage dealt that heals the player, until sim time `lifestealUntil` (sword Q). */
   lifesteal = 0;
   lifestealUntil = -1;
-  // Timed statuses from skills (shared by every class; not saved). Each lasts until its sim time; a recast keeps the
-  // stronger value and refreshes the time.
+  /** Timed stat buffs from skills (Gunslinger Sniper Focus, Quick Reload, Overdrive...), added after the class multipliers. Never saved; death ends them. */
+  statBuffs: { id: string; until: number; mods: Partial<Stats> }[] = [];
+  /** Gunslinger Rapid Fire line: what the basic shot does while its buffs run. Never saved. */
+  gun: GunBuffs = emptyGunBuffs();
+  // Timed statuses from skills (shared by every class; not saved, death ends them). Each lasts until its sim time;
+  // a recast keeps the stronger value and refreshes the time.
+  /** HP points of damage absorbed before HP, until `shieldUntil`. */
+  shield = 0;
+  shieldUntil = 0;
   /** Damage taken × this until `takenUntil` (e.g. 0.7 = 30% less). */
   takenMult = 1;
   takenUntil = 0;
   /** Damage dealt × this until `dmgUntil`. */
   dmgMult = 1;
   dmgUntil = 0;
+  /** Skill cooldowns (not the dash) run (1 + haste)× as fast until `hasteUntil`. */
+  haste = 0;
+  hasteUntil = 0;
   /** Sword Thorn Armor: this share of damage taken goes back at the attacker until `reflectUntil`. */
   reflect = 0;
   reflectUntil = 0;
   /** Sword Anchor: no stuns or knockback from monsters until this sim time. */
   steadyUntil = 0;
-  /** Timed stat buffs from skills, added after the class multipliers (same id = replaced). Never saved; death ends them. */
-  statBuffs: { id: string; until: number; mods: Partial<Stats> }[] = [];
   /** How the hitting dash running now (Charge and the sword's dash skills) knocks back, and whether it taunts. */
   chargeKb = 9;
   chargeTaunt = true;
@@ -950,7 +958,9 @@ export class Player extends Unit {
 
   /** Ends every skill buff and timed status (death). */
   clearSkillBuffs(): void {
-    this.takenUntil = this.dmgUntil = this.reflectUntil = this.steadyUntil = 0;
+    this.gun = emptyGunBuffs();
+    this.shield = 0;
+    this.shieldUntil = this.takenUntil = this.dmgUntil = this.hasteUntil = this.reflectUntil = this.steadyUntil = 0;
     if (this.statBuffs.length) {
       this.statBuffs = [];
       this.recompute();
@@ -1028,7 +1038,8 @@ export class Player extends Unit {
       this.statBuffs = this.statBuffs.filter((b) => b.until > sim.time);
       this.recompute();
     }
-    for (const k of Object.keys(this.cd)) this.cd[k] = Math.max(0, this.cd[k] - dt);
+    const cdStep = sim.time < this.hasteUntil ? dt * (1 + this.haste) : dt;
+    for (const k of Object.keys(this.cd)) this.cd[k] = Math.max(0, this.cd[k] - (k === 'dash' ? dt : cdStep));
     this.atkT -= dt;
     this.potCd -= dt;
     this.restCd -= dt;

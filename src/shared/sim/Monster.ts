@@ -39,6 +39,20 @@ export class Monster extends Unit {
   /** Armor break (Gunslinger's Armor-Piercing Round): defense is lowered by this share until `armorBreakUntil` (sim time). */
   armorBreak = 0;
   armorBreakUntil = 0;
+  /** Gunslinger's Deadeye mark: player `markBy` gets +`markCrit` crit chance on this monster until `markUntil` (sim time). */
+  markBy = 0;
+  markUntil = 0;
+  markCrit = 0;
+  /** Attack down (shared skill status): the monster's hits deal this share less until `weakUntil` (sim time). */
+  weak = 0;
+  weakUntil = 0;
+  /** Burning / poisoned by a damage-over-time skill until this sim time (for passives that check statuses). */
+  dotUntil = 0;
+
+  /** True while it has any status from a player: stun, slow, armor break, attack down, burning/poison. */
+  hasStatus(now: number): boolean {
+    return this.stunT > 0 || this.slowT > 0 || now < this.armorBreakUntil || now < this.weakUntil || now < this.dotUntil;
+  }
   expReward = 0;
   state: State = 'idle';
   aggroT = 0;
