@@ -30,7 +30,7 @@ export interface SkillValues {
 export type SkillNum = Exclude<keyof SkillValues, 'params'>;
 export const SKILL_VALUE_KEYS: readonly SkillNum[] = ['dmg', 'dmgPerRank', 'mp', 'mpPerRank', 'cooldown', 'cdPerRank', 'statusPerRank', 'reach'];
 export const SKILL_VALUE_NAME: Record<SkillNum, string> = {
-  dmg: 'ดาเมจ ×ATK', dmgPerRank: 'ดาเมจ %/แรงก์', mp: 'MP', mpPerRank: 'MP %/แรงก์', cooldown: 'คูลดาวน์ วิ', cdPerRank: 'คูลดาวน์ %/แรงก์', statusPerRank: 'เวลาสถานะ %/แรงก์', reach: 'ระยะ/รัศมี ม.',
+  dmg: 'ดาเมจ ×ATK', dmgPerRank: 'ดาเมจ %/แรงก์', mp: 'MP', mpPerRank: 'MP %/แรงก์', cooldown: 'คูลดาวน์ วิ', cdPerRank: 'คูลดาวน์ %/แรงก์', statusPerRank: 'เวลาสถานะ/ผลพาสซีฟ %/แรงก์', reach: 'ระยะ/รัศมี ม.',
 };
 export const SKILL_VALUE_RANGE: Record<SkillNum, readonly [number, number]> = {
   dmg: [0, 100], dmgPerRank: [-50, 200], mp: [0, 10000], mpPerRank: [-50, 200], cooldown: [0, 600], cdPerRank: [-20, 50], statusPerRank: [-50, 200], reach: [0.5, 40],
@@ -194,6 +194,8 @@ export function checkSkillTuning(x: unknown, strict: boolean): { tuning: SkillTu
         for (const k of SKILL_VALUE_KEYS) {
           const v = g[k];
           if (v === undefined) continue;
+          // A skill with no reach (buffs, passives) keeps reach 0: nothing to tune.
+          if (k === 'reach' && !SKILL_REACH[id]) continue;
           const [lo, hi] = SKILL_VALUE_RANGE[k];
           if (typeof v !== 'number' || !Number.isFinite(v) || v < lo || v > hi) {
             if (strict) return { error: `สกิล ${skillName(id)} ${SKILL_VALUE_NAME[k]} ต้องอยู่ระหว่าง ${lo} ถึง ${hi}` };

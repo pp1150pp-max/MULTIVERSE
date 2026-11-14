@@ -1,4 +1,5 @@
 import type { ClassId, Stats } from '../types';
+import { GUNSLINGER_SKILLS } from './gunslingerSkills';
 
 /**
  * Starting MP regen, the same for every class (owner 2026-11-10: 5 MP a second at Lv.1).
@@ -68,10 +69,15 @@ export interface SkillDef {
 }
 
 /** One of a skill's own numbers: its code value, Thai name and unit, and the range /admin allows. */
-export interface SkillParam { v: number; nameTh: string; unit: string; lo: number; hi: number; status?: boolean }
+/** `status` ones grow with the skill's status %/rank, `dmg` ones (extra damage × ATK) with its damage %/rank. */
+export interface SkillParam { v: number; nameTh: string; unit: string; lo: number; hi: number; status?: boolean; dmg?: boolean }
 const sec = (v: number, nameTh: string): SkillParam => ({ v, nameTh, unit: 'วิ', lo: 0, hi: 30, status: true });
 const pctP = (v: number, nameTh: string): SkillParam => ({ v, nameTh, unit: '%', lo: 0, hi: 100 });
 const metres = (v: number, nameTh: string): SkillParam => ({ v, nameTh, unit: 'ม.', lo: 0.5, hi: 30 });
+/** A plain number that does not grow with rank (counts, zone lifetimes, gaps between hits...). */
+const num = (v: number, nameTh: string, unit: string, lo: number, hi: number): SkillParam => ({ v, nameTh, unit, lo, hi });
+/** A passive's % effect: grows with the skill's status %/rank (owner 2026-11-14: +5% of the value per rank). */
+const passiveP = (v: number, nameTh: string): SkillParam => ({ v, nameTh, unit: '%', lo: 0, hi: 300, status: true });
 
 /** One of a class's three skill lines: its name and colour on the skill window. */
 export interface SkillLine { nameTh: string; color: string }
@@ -138,6 +144,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     attackRate: 1.4,
     base: { maxHp: 90, maxMp: 100, atk: 14, def: 3, crit: 5, critDmg: 60, atkSpeed: 0, moveSpeed: 0, hpRegen: 0.8, mpRegen: BASE_MP_REGEN },
     growth: { maxHp: 12, maxMp: 10, atk: 3, def: 0.7, hpRegen: 0.1, mpRegen: 0.2 },
+    // Owner-approved table 2026-11-14 (docs/systems/skills-mage.md). New ids start with mg_.
     lines: [
       { nameTh: 'สายระเบิดดาเมจ', color: '#ff7a2a' },
       { nameTh: 'สายดาเมจต่อเนื่อง', color: '#9be05a' },
@@ -145,11 +152,74 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     ],
     skills: [
       { id: 'bolt', kind: 'basic', name: 'Arcane Bolt', nameTh: 'ลูกเวท', desc: 'ยิงลูกเวทไปทางเมาส์ 100% ATK', dmg: 1, mp: 0, cooldown: 0 },
+      // ---- Line 1: burst damage
       { id: 'fireball', kind: 'normal', line: 0, tier: 0, anim: 'q', name: 'Fireball', nameTh: 'ลูกไฟ', desc: 'ลูกไฟระเบิดเป็นวง', dmg: 2.2, mp: 10, cooldown: 2.5, params: { blast: metres(2.6, 'รัศมีระเบิด') } },
-      { id: 'frostnova', kind: 'normal', line: 2, tier: 0, anim: 'e', name: 'Frost Nova', nameTh: 'วงน้ำแข็ง', desc: 'คลื่นน้ำแข็งรอบตัว ทำให้ศัตรูช้าลง', dmg: 1.4, mp: 18, cooldown: 7,
-        params: { slow: pctP(50, 'ช้าลง'), slowTime: sec(3, 'เวลาช้าลง') } },
+      { id: 'mg_arcanelance', kind: 'normal', line: 0, tier: 1, anim: 'q', name: 'Arcane Lance', nameTh: 'หอกอาร์เคน', desc: 'หอกเวทพุ่งทะลุศัตรูทุกตัวในแนว', dmg: 2, mp: 14, cooldown: 5 },
+      { id: 'mg_chainlightning', kind: 'normal', line: 0, tier: 2, anim: 'q', name: 'Chain Lightning', nameTh: 'สายฟ้าฟาด', desc: 'ฟาดศัตรูที่ใกล้เมาส์ที่สุด แล้วเด้งต่อไปตัวใกล้เคียง ดาเมจลดทีละเด้ง', dmg: 2.4, mp: 16, cooldown: 6,
+        params: { jumps: num(3, 'จำนวนเด้ง', 'ครั้ง', 0, 10), jumpRange: metres(5, 'ระยะเด้ง'), falloff: pctP(20, 'ดาเมจลดต่อเด้ง') } },
+      { id: 'mg_manaburst', kind: 'normal', line: 0, tier: 3, anim: 'e', name: 'Mana Burst', nameTh: 'ระเบิดมานา', desc: 'ระเบิดพลังทันทีที่ตำแหน่งเมาส์', dmg: 2.6, mp: 18, cooldown: 7,
+        params: { radius: metres(3, 'รัศมีระเบิด') } },
+      { id: 'mg_flamewave', kind: 'normal', line: 0, tier: 4, anim: 'e', name: 'Flame Wave', nameTh: 'คลื่นเพลิง', desc: 'ไฟกวาดเป็นกรวยด้านหน้า ผลักศัตรูกระเด็น', dmg: 2.8, mp: 20, cooldown: 7,
+        params: { arc: num(100, 'มุมกรวย', 'องศา', 20, 360) } },
+      { id: 'mg_volatileorb', kind: 'normal', line: 0, tier: 5, anim: 'q', name: 'Volatile Orb', nameTh: 'ลูกแก้วระเบิด', desc: 'ลูกแก้วลอยช้า ระเบิดวงใหญ่เมื่อชนหรือสุดระยะ', dmg: 3.4, mp: 24, cooldown: 9,
+        params: { blast: metres(3.8, 'รัศมีระเบิด') } },
+      { id: 'mg_crystalrain', kind: 'normal', line: 0, tier: 6, anim: 'e', name: 'Crystal Rain', nameTh: 'ฝนผลึก', desc: 'ผลึกตกใส่วงที่เมาส์หลายระลอก (ดาเมจต่อระลอก)', dmg: 1, mp: 26, cooldown: 10,
+        params: { radius: metres(3.2, 'รัศมีวง'), waves: num(5, 'จำนวนระลอก', 'ระลอก', 1, 20), gap: num(0.3, 'ห่างระลอกละ', 'วิ', 0.05, 2) } },
+      { id: 'mg_chargedblast', kind: 'normal', line: 0, tier: 7, anim: 'e', name: 'Charged Blast', nameTh: 'เวทชาร์จ', desc: 'ยืนนิ่งชาร์จพลัง แล้วปล่อยระเบิดวงกว้างรอบตัว', dmg: 5, mp: 32, cooldown: 12,
+        params: { charge: num(0.8, 'เวลาชาร์จ (ยืนนิ่ง)', 'วิ', 0, 3) } },
       { id: 'meteor', kind: 'ult', line: 0, tier: 0, anim: 'r', name: 'Meteor', nameTh: 'อุกกาบาต', desc: 'เรียกอุกกาบาตลงตำแหน่งเมาส์ และสตันสั้นๆ', dmg: 4.5, mp: 35, cooldown: 14,
         params: { radius: metres(3.5, 'รัศมีวงตก'), stun: sec(0.8, 'สตัน') } },
+      { id: 'mg_starfall', kind: 'ult', line: 0, tier: 1, anim: 'r', name: 'Starfall', nameTh: 'ดาวตก', desc: 'ดาวเวทตกสุ่มทั่ววงใหญ่ทีละดวง (ดาเมจต่อดวง)', dmg: 2, mp: 55, cooldown: 25,
+        params: { radius: metres(6, 'รัศมีวงใหญ่'), stars: num(8, 'จำนวนดวง', 'ดวง', 1, 30), starRadius: metres(1.8, 'วงดวงละ'), gap: num(0.25, 'ห่างดวงละ', 'วิ', 0.05, 2) } },
+      // ---- Line 2: damage over time
+      { id: 'mg_flameground', kind: 'normal', line: 1, tier: 0, anim: 'e', name: 'Flame Ground', nameTh: 'พื้นเพลิง', desc: 'วางพื้นไฟที่เมาส์ ศัตรูที่ยืนในวงโดนทุกวิ (ดาเมจต่อวิ)', dmg: 0.6, mp: 12, cooldown: 5,
+        params: { radius: metres(2.8, 'รัศมีวง'), duration: num(4, 'อยู่นาน', 'วิ', 1, 30) } },
+      { id: 'mg_poisonmist', kind: 'normal', line: 1, tier: 1, anim: 'e', name: 'Poison Mist', nameTh: 'หมอกพิษอาคม', desc: 'หมอกพิษที่เมาส์ ศัตรูที่โดนติดพิษติดตัวไปแม้ออกจากวง (ดาเมจต่อวิ)', dmg: 0.45, mp: 14, cooldown: 7,
+        params: { radius: metres(3, 'รัศมีวง'), dotTime: sec(6, 'เวลาพิษ') } },
+      { id: 'mg_searingmark', kind: 'normal', line: 1, tier: 2, anim: 'q', name: 'Searing Mark', nameTh: 'ตราเผาผลาญ', desc: 'ยิงตราติดศัตรูตัวแรก ครบเวลาตราระเบิดรอบตัวมัน', dmg: 3, mp: 16, cooldown: 8,
+        params: { blast: metres(3, 'รัศมีระเบิด'), delay: num(2.5, 'ระเบิดหลัง', 'วิ', 0.2, 10) } },
+      { id: 'mg_decayring', kind: 'normal', line: 1, tier: 3, anim: 'e', name: 'Decay Ring', nameTh: 'วงแหวนสลาย', desc: 'วงกัดกร่อนติดตัว ศัตรูในวงโดนทุกวิและเกราะลด (ดาเมจต่อวิ)', dmg: 0.5, mp: 18, cooldown: 10,
+        params: { duration: num(5, 'อยู่นาน', 'วิ', 1, 30), armorBreak: pctP(15, 'ลดพลังป้องกัน'), armorBreakTime: sec(2, 'เวลาลดพลังป้องกัน') } },
+      { id: 'mg_thunderstorm', kind: 'normal', line: 1, tier: 4, anim: 'e', name: 'Thunderstorm', nameTh: 'พายุสายฟ้า', desc: 'เมฆสายฟ้าที่เมาส์ ฟาดศัตรูสุ่มในวงเป็นระยะ (ดาเมจต่อสาย)', dmg: 1.2, mp: 22, cooldown: 11,
+        params: { radius: metres(5, 'รัศมีวง'), strikes: num(6, 'จำนวนสาย', 'สาย', 1, 30), every: num(0.5, 'ฟาดทุก', 'วิ', 0.1, 3) } },
+      { id: 'mg_crystalspikes', kind: 'normal', line: 1, tier: 5, anim: 'e', name: 'Crystal Spikes', nameTh: 'หนามผลึก', desc: 'ปักผลึกที่เมาส์ ยิงหนามใส่ศัตรูที่ใกล้ที่สุดเป็นระยะ (ดาเมจต่อนัด)', dmg: 0.9, mp: 24, cooldown: 12,
+        params: { radius: metres(7, 'ระยะยิงของผลึก'), duration: num(6, 'อยู่นาน', 'วิ', 1, 30), every: num(0.75, 'ยิงทุก', 'วิ', 0.1, 3) } },
+      { id: 'mg_cursedash', kind: 'normal', line: 1, tier: 6, anim: 'e', name: 'Cursed Ash', nameTh: 'เถ้าถ่านคำสาป', desc: 'พ่นเถ้าเป็นกรวยด้านหน้า ติดไฟและลดพลังโจมตีศัตรู (ดาเมจไฟต่อวิ)', dmg: 0.5, mp: 26, cooldown: 10,
+        params: { arc: num(90, 'มุมกรวย', 'องศา', 20, 360), dotTime: sec(5, 'เวลาติดไฟ'), weak: pctP(20, 'ลดพลังโจมตี'), weakTime: sec(5, 'เวลาลดพลังโจมตี') } },
+      { id: 'mg_hexseed', kind: 'normal', line: 1, tier: 7, anim: 'e', name: 'Hex Seed', nameTh: 'เมล็ดเวทระเบิด', desc: 'ฝังเมล็ดในศัตรูทุกตัวในวง ติดพิษ ครบเวลาแตกระเบิดรอบตัวมันแต่ละตัว (ดาเมจ = ระเบิด)', dmg: 2.2, mp: 30, cooldown: 13,
+        params: { radius: metres(3.5, 'รัศมีวง'), poison: num(0.4, 'พิษต่อวิ', '×ATK', 0, 10), seedTime: num(4, 'แตกหลัง', 'วิ', 0.5, 15), seedBlast: metres(2.5, 'รัศมีแตก') } },
+      { id: 'mg_firerain', kind: 'ult', line: 1, tier: 0, anim: 'r', name: 'Fire Rain', nameTh: 'ฝนเพลิง', desc: 'ฝนไฟวงใหญ่ที่เมาส์ ตีถี่ (ดาเมจต่อครั้ง)', dmg: 0.7, mp: 40, cooldown: 18,
+        params: { radius: metres(5, 'รัศมีวง'), duration: num(6, 'อยู่นาน', 'วิ', 1, 30), every: num(0.5, 'ตีทุก', 'วิ', 0.1, 3) } },
+      { id: 'mg_decayfield', kind: 'ult', line: 1, tier: 1, anim: 'r', name: 'Decay Field', nameTh: 'สนามเสื่อมสลาย', desc: 'สนามใหญ่ติดตัว ศัตรูในสนามโดนทุกวิ ลดเกราะและพลังโจมตี (ดาเมจต่อวิ)', dmg: 1, mp: 55, cooldown: 28,
+        params: { duration: num(8, 'อยู่นาน', 'วิ', 1, 30), armorBreak: pctP(20, 'ลดพลังป้องกัน'), weak: pctP(25, 'ลดพลังโจมตี') } },
+      // ---- Line 3: control / buffs (buffs reach every player in the circle, owner 2026-11-14)
+      { id: 'frostnova', kind: 'normal', line: 2, tier: 0, anim: 'e', name: 'Frost Nova', nameTh: 'วงน้ำแข็ง', desc: 'คลื่นน้ำแข็งรอบตัว ทำให้ศัตรูช้าลง', dmg: 1.4, mp: 18, cooldown: 7,
+        params: { slow: pctP(50, 'ช้าลง'), slowTime: sec(3, 'เวลาช้าลง') } },
+      { id: 'mg_forcewave', kind: 'normal', line: 2, tier: 1, anim: 'e', name: 'Force Wave', nameTh: 'คลื่นผลัก', desc: 'ผลักศัตรูรอบตัวกระเด็นไกลและชะงักสั้นๆ (ไม่ผลักบอส)', dmg: 1, mp: 14, cooldown: 8,
+        params: { push: num(12, 'แรงผลัก', '', 1, 30), stun: sec(0.4, 'สตัน') } },
+      { id: 'mg_frailcurse', kind: 'normal', line: 2, tier: 2, anim: 'e', name: 'Frailty Curse', nameTh: 'คำสาปเปราะบาง', desc: 'คำสาปลงวงที่เมาส์ ลดพลังป้องกันศัตรู ทุกคนตีแรงขึ้น', dmg: 0.8, mp: 16, cooldown: 9,
+        params: { radius: metres(3.5, 'รัศมีวง'), armorBreak: pctP(30, 'ลดพลังป้องกัน'), armorBreakTime: sec(6, 'เวลาลดพลังป้องกัน') } },
+      { id: 'mg_icecage', kind: 'normal', line: 2, tier: 3, anim: 'q', name: 'Ice Cage', nameTh: 'กรงน้ำแข็ง', desc: 'ยิงก้อนน้ำแข็ง ตรึงศัตรูตัวแรกนิ่งสนิท (บอสโดน 30%)', dmg: 1.6, mp: 18, cooldown: 10,
+        params: { stun: sec(2.5, 'ตรึง') } },
+      { id: 'mg_gravitywell', kind: 'normal', line: 2, tier: 4, anim: 'e', name: 'Gravity Well', nameTh: 'หลุมแรงโน้มถ่วง', desc: 'หลุมที่เมาส์ดูดศัตรูเข้ากลาง แล้วยุบระเบิด (ไม่ดูดบอส)', dmg: 2, mp: 22, cooldown: 12,
+        params: { radius: metres(4.5, 'รัศมีวง'), pullTime: num(1.5, 'เวลาดูด', 'วิ', 0.25, 5), pull: num(6, 'แรงดูด', '', 1, 20) } },
+      { id: 'mg_sealveil', kind: 'normal', line: 2, tier: 5, anim: 'e', name: 'Sealing Veil', nameTh: 'ม่านผนึกเวท', desc: 'ม่านรอบตัว ศัตรูที่โดนพลังโจมตีลดลง', dmg: 1, mp: 20, cooldown: 12,
+        params: { weak: pctP(30, 'ลดพลังโจมตี'), weakTime: sec(6, 'เวลาลดพลังโจมตี') } },
+      { id: 'mg_empowerfield', kind: 'normal', line: 2, tier: 6, anim: 'e', name: 'Empowering Field', nameTh: 'สนามเร่งอาคม', desc: 'ตัวเองและผู้เล่นทุกคนในวงรอบตัว ทำดาเมจแรงขึ้น', dmg: 0, mp: 28, cooldown: 20,
+        params: { dmgBonus: { v: 20, nameTh: 'ดาเมจเพิ่ม', unit: '%', lo: 0, hi: 300 }, buffTime: sec(8, 'เวลาบัฟ') } },
+      { id: 'mg_manashield', kind: 'normal', line: 2, tier: 7, anim: 'e', name: 'Mana Shield', nameTh: 'โล่มานาหมู่', desc: 'ตัวเองและผู้เล่นทุกคนในวงรอบตัวได้โล่ดูดซับดาเมจ (ตาม HP สูงสุดของแต่ละคน)', dmg: 0, mp: 30, cooldown: 22,
+        params: { shieldPct: pctP(15, 'โล่ (% HP สูงสุด)'), buffTime: sec(6, 'เวลาโล่') } },
+      { id: 'mg_timewarp', kind: 'ult', line: 2, tier: 0, anim: 'r', name: 'Time Warp', nameTh: 'บิดเบือนเวลา', desc: 'ศัตรูรอบตัวช้าลงมาก และคูลดาวน์สกิลของผู้เล่นทุกคนในวงเดินเร็วขึ้น', dmg: 1.5, mp: 40, cooldown: 20,
+        params: { slow: pctP(60, 'ช้าลง'), slowTime: sec(5, 'เวลาช้าลง'), haste: { v: 50, nameTh: 'คูลดาวน์เร็วขึ้น', unit: '%', lo: 0, hi: 300 }, hasteTime: sec(5, 'เวลาคูลดาวน์เร็วขึ้น') } },
+      { id: 'mg_manawell', kind: 'ult', line: 2, tier: 1, anim: 'r', name: 'Mana Well', nameTh: 'วงคืนพลัง', desc: 'วางวงเวทใต้เท้า ผู้เล่นในวงฟื้น MP ทุกวิและได้โล่ ศัตรูในวงช้าลง', dmg: 0, mp: 0, cooldown: 40,
+        params: { duration: num(8, 'อยู่นาน', 'วิ', 1, 30), mpPct: num(4, 'ฟื้น MP ต่อวิ (% MP สูงสุด)', '%', 0, 50), shieldPct: pctP(10, 'โล่ (% HP สูงสุด)'), slow: pctP(30, 'ช้าลง') } },
+      // ---- Passives (one worn)
+      { id: 'mg_elementmastery', kind: 'passive', tier: 0, name: 'Elemental Mastery', nameTh: 'ชำนาญธาตุ', desc: 'ดาเมจแรงขึ้นต่อศัตรูที่ติดสถานะใดก็ได้ (ช้า สตัน ลดเกราะ ลดพลังโจมตี ติดไฟ/พิษ)', dmg: 0, mp: 0, cooldown: 0,
+        params: { bonus: passiveP(12, 'ดาเมจเพิ่ม') } },
+      { id: 'mg_manasource', kind: 'passive', tier: 1, name: 'Mana Source', nameTh: 'แหล่งมานา', desc: 'MP สูงสุดและการฟื้น MP เพิ่มขึ้น', dmg: 0, mp: 0, cooldown: 0,
+        params: { maxMp: passiveP(15, 'MP สูงสุดเพิ่ม'), mpRegen: passiveP(20, 'ฟื้น MP เพิ่ม') } },
+      { id: 'mg_arcanepower', kind: 'passive', tier: 2, name: 'Arcane Power', nameTh: 'พลังอาคม', desc: 'ดาเมจทุกอย่างแรงขึ้น แต่ HP สูงสุดลดลง', dmg: 0, mp: 0, cooldown: 0,
+        params: { bonus: passiveP(18, 'ดาเมจเพิ่ม'), hpCut: pctP(15, 'HP สูงสุดลดลง') } },
       dash('Blink', 'วาร์ป'),
     ],
   },
@@ -168,12 +238,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     ],
     skills: [
       { id: 'shot', kind: 'basic', name: 'Quick Shot', nameTh: 'ยิงเร็ว', desc: 'ยิงกระสุนความเร็วสูง 100% ATK', dmg: 1, mp: 0, cooldown: 0 },
-      { id: 'rapidfire', kind: 'normal', line: 1, tier: 0, anim: 'q', name: 'Rapid Fire', nameTh: 'ยิงรัว', desc: 'ยิงรัวหลายนัดติดกันไปทางเมาส์ (ดาเมจต่อนัด)', dmg: 0.4, mp: 10, cooldown: 3,
-        params: { shots: { v: 3, nameTh: 'จำนวนนัด', unit: 'นัด', lo: 1, hi: 10 } } },
-      { id: 'pierce', kind: 'normal', line: 0, tier: 0, anim: 'e', name: 'Armor-Piercing Round', nameTh: 'กระสุนเจาะเกราะ', desc: 'กระสุนนัดหนัก ลดพลังป้องกันของเป้าหมาย', dmg: 1.5, mp: 14, cooldown: 5,
-        params: { armorBreak: pctP(20, 'ลดพลังป้องกัน'), armorBreakTime: sec(3, 'เวลาลดพลังป้องกัน') } },
-      { id: 'headshot', kind: 'ult', line: 0, tier: 0, anim: 'r', name: 'Headshot', nameTh: 'ยิงหัว', desc: 'ยืนนิ่งเล็งแล้วยิงนัดเดียว คริติคอลแน่นอน บวกความแรงคริติคอลของตัวละคร', dmg: 3, mp: 30, cooldown: 12,
-        params: { aim: { v: 0.8, nameTh: 'เวลาเล็ง', unit: 'วิ', lo: 0, hi: 5 } } },
+      ...GUNSLINGER_SKILLS,
       dash('Tumble', 'กลิ้งหลบ'),
     ],
   },

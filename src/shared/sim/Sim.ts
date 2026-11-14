@@ -37,6 +37,7 @@ import { GEAR_KILLS, GEAR_PART_NAME, gearReward, gearRow } from '../gearQuests';
 import { TUT_ACCEPT_GOLD, TUT_ACCEPT_STONES, TUT_NPC, TUT_STEPS, TUT_STEP_NAME, TUT_TASKS, TUT_TASK_NAME, tutRows, tutTurnInReward, type TutStep, type TutTask } from '../tutorial';
 import { putAll, type MailAttach } from '../mail';
 import { RARITY_COLOR } from '../types';
+import { passiveDealMult, passiveTakenMult } from '../passives';
 import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type SfxName, type SimEvent } from './types';
 
 /** Gear of this rarity that "sell all" may take: never potions or enhanced items. */
@@ -304,8 +305,10 @@ export class Sim {
       }
       return;
     }
-    let raw = p.stats.atk * mult * (0.9 + Math.random() * 0.2);
-    const crit = opts.forceCrit || Math.random() * 100 < p.stats.crit;
+    let raw = p.stats.atk * mult * (0.9 + Math.random() * 0.2) * passiveDealMult(p, m, opts.skill);
+    if (this.time < p.dmgUntil) raw *= p.dmgMult;
+    const marked = m.markBy === p.id && this.time < m.markUntil ? m.markCrit : 0;
+    const crit = opts.forceCrit || Math.random() * 100 < p.stats.crit + (opts.critBonus ?? 0) + marked;
     if (crit) raw *= 1 + p.stats.critDmg / 100;
     if (opts.maxMult) raw = Math.min(raw, p.stats.atk * opts.maxMult);
     const def = this.time < m.armorBreakUntil ? m.defense * (1 - m.armorBreak) : m.defense;
@@ -344,10 +347,16 @@ export class Sim {
       m.armorBreakUntil = this.time + (opts.armorBreakT ?? 3);
       this.text(m.x, m.topY + 0.4, m.z, 'เกราะแตก', 'info', 0.8);
     }
+    if (opts.weak) {
+      // Same as armor break: the strongest attack-down wins and a recast refreshes it.
+      if (this.time >= m.weakUntil) m.weak = 0;
+      m.weak = Math.min(0.95, Math.max(m.weak, opts.weak));
+      m.weakUntil = this.time + (opts.weakT ?? 3);
+    }
     m.onHit(this, p);
     if (m.hp <= 0) {
       this.killMonster(m);
-      p.onKill();
+      p.onKill(m);
     }
   }
 
@@ -357,7 +366,16 @@ export class Sim {
       this.text(p.x, p.topY, p.z, 'MISS', 'info', 0.6);
       return;
     }
-    const dmg = Math.round(mitigate(m.atk * mult * (0.9 + Math.random() * 0.2), p.stats.def) + p.maxHp * (opts.maxHpShare ?? 0));
+    const weak = this.time < m.weakUntil ? 1 - m.weak : 1;
+    const taken = (this.time < p.takenUntil ? p.takenMult : 1) * passiveTakenMult(p);
+    let dmg = Math.round((mitigate(m.atk * weak * mult * (0.9 + Math.random() * 0.2), p.stats.def) + p.maxHp * (opts.maxHpShare ?? 0)) * taken);
+    if (p.shield > 0 && this.time < p.shieldUntil) {
+      // A skill's shield takes the hit first.
+      const soak = Math.min(p.shield, dmg);
+      p.shield -= soak;
+      dmg -= soak;
+      if (soak > 0) this.text(p.x, p.topY + 0.4, p.z, `โล่ -${soak}`, 'info', 0.6);
+    }
     p.hp -= dmg;
     p.lastHurt = this.time;
     p.interruptPotions();
@@ -598,6 +616,8 @@ export class Sim {
     p.moving = false;
     p.castT = 0;
     p.mounted = false;
+    // Skill buffs end with death.
+    p.clearSkillBuffs();
     this.events.push({ t: 'died', id: p.id });
   }
 
@@ -1183,6 +1203,8 @@ export class Sim {
       if (free) wear(p.skillBook, free, sk.id);
     }
     this.log(rank === 1 ? `เรียน${sk.nameTh}แล้ว` : `${sk.nameTh} แรงก์ ${rank}`, '#9fd8ff', p.id);
+    // The worn passive (and its rank) changes stats.
+    p.recompute();
     this.events.push({ t: 'save', to: p.id });
     return true;
   }
@@ -1205,6 +1227,7 @@ export class Sim {
     }
     p.gold -= price;
     unlearnOne(p.skillBook, sk.id);
+    p.recompute();
     const left = rankOf(p.skillBook, sk.id);
     this.log(`คืนแต้ม${sk.nameTh}${left ? ` (เหลือแรงก์ ${left})` : ' (ลืมสกิลแล้ว)'}${price ? ` −${price.toLocaleString()} G` : ''}`, '#9fd8ff', p.id);
     this.events.push({ t: 'save', to: p.id });
@@ -1227,6 +1250,7 @@ export class Sim {
       return false;
     }
     wear(p.skillBook, s, sid);
+    p.recompute();
     this.events.push({ t: 'save', to: p.id });
     return true;
   }
