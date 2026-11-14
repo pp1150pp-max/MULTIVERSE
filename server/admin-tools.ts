@@ -623,6 +623,25 @@ export async function ownerToolsApi(
     return true;
   }
 
+  // ---------------------------------------------------------- snapshot delta (Server tab)
+  if (method === 'GET' && path === '/api/admin/snap-delta') {
+    requireFeature(req, db, 'netDelta');
+    send(res, 200, world.snapDeltaState());
+    return true;
+  }
+
+  if (method === 'POST' && path === '/api/admin/snap-delta') {
+    const a = requireFeature(req, db, 'netDelta');
+    const body = await readJson(req);
+    if (typeof body.on !== 'boolean') throw new HttpError(400, 'ค่าเปิด/ปิดไม่ถูกต้อง');
+    if (body.on !== world.snapDeltaState().on) {
+      world.setSnapDelta(body.on);
+      log(db, a, 'snap-delta', 'ลดขนาด snapshot', body.on ? 'เปิด' : 'ปิด (ส่ง snapshot เต็มทุกครั้ง)');
+    }
+    send(res, 200, world.snapDeltaState());
+    return true;
+  }
+
   // ---------------------------------------------------------- countdown texts (every way of stopping uses them)
   if (method === 'GET' && path === '/api/admin/shutdown-text') {
     requireFeature(req, db, 'shutdownText');

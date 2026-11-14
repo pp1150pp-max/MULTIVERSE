@@ -149,6 +149,25 @@ export interface AdminServerState { supervised: boolean; stopping: ShutdownMode 
  */
 export interface AdminShutdownText { texts: Record<ShutdownMode, string>; defaults: Record<ShutdownMode, string> }
 
+/**
+ * Snapshot delta counters since the server started (or the switch last changed). Bytes are JSON
+ * characters before compression; `savedBytes` is what the left-out fields would have taken.
+ */
+export interface SnapDeltaStats {
+  since: number;
+  /** Snapshots sent, and how many of them went out as delta. */
+  snaps: number; deltaSnaps: number;
+  sentBytes: number; savedBytes: number;
+  /** A PrivateSnap field sent again because it changed (or was new), and a player's / monster's look bundle. */
+  meResends: number; lookResends: number;
+}
+
+/**
+ * Snapshot delta (Server tab): snapshots leave out what each browser already has. `clients.full` =
+ * browsers opened before the update, which get whole snapshots whatever the switch says. Saving sends `{ on }`.
+ */
+export interface AdminSnapDelta { on: boolean; stats: SnapDeltaStats; clients: { delta: number; full: number } }
+
 // ------------------------------------------------------------ owner tools (users, bans, broadcast, backups…)
 
 /**
@@ -156,7 +175,7 @@ export interface AdminShutdownText { texts: Record<ShutdownMode, string>; defaul
  * switch: the Permissions tab, the audit log, restarting / stopping the server, deleting accounts or
  * characters, and making someone owner (command line).
  */
-export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily';
+export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta';
 
 /**
  * The defaults: which built-in role may use each tool (owner always has all). The owner can change
@@ -224,6 +243,8 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   // Confirming item stat multipliers on the "ปรับสมดุล" tab, which also scales every saved item (owner 2026-11-11: owner only).
   itemStatMult: ['owner'],
   daily: ['owner'],
+  // The snapshot delta switch on the Server tab (owner 2026-11-14: owner and GMs).
+  netDelta: ['owner', 'gm'],
 };
 
 export const ADMIN_FEATURES = Object.keys(FEATURE_ROLES) as AdminFeature[];
@@ -282,6 +303,7 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   cosPreview: { name: 'ทดลองของแต่งตัว', desc: 'แท็บ "ของแต่งตัว": ลองตำแหน่ง/หน้าตาปีก สัตว์ขี่ สัตว์เลี้ยง ออร่า ไม่เปลี่ยนอะไรในเกม', group: 'หน้าตา' },
   balance: { name: 'ปรับสมดุล (อาชีพ, tier)', desc: 'แท็บ "ปรับสมดุล": แก้ค่าสเตตัสอาชีพ ตัวคูณ ตัวตัดฟื้น และตาราง tier T1–T5 ของทั้งเซิร์ฟ มีผลทันที', group: 'ปรับเกม' },
   daily: { name: 'ล็อกอินรายวัน', desc: 'แท็บ "ล็อกอินรายวัน": แก้ของรางวัลแต่ละวันของปฏิทิน (มีผลกับของที่ส่งหลังบันทึก)', group: 'ปรับเกม' },
+  netDelta: { name: 'ลดขนาด snapshot', desc: 'แท็บ Server: สวิตช์ส่งค่าที่แทบไม่เปลี่ยนเฉพาะตอนเปลี่ยน (ลดเน็ตขาออก) และตัวนับ', group: 'ระบบ' },
   itemStatMult: { name: 'คอนเฟิร์มตัวคูณสเตตัสบนไอเทม', desc: 'แท็บ "ปรับสมดุล": คอนเฟิร์มตัวคูณค่าสเตตัสบนไอเทม คูณค่าของทุกชิ้นในเซิร์ฟจริง (สำรอง DB ให้ก่อน) · ทดลองดูตัวอย่างได้ด้วยสิทธิ์ "ปรับสมดุล"', group: 'ปรับเกม' },
   cosLook: { name: 'บันทึกของแต่งตัวทั้งเซิร์ฟ', desc: 'บันทึกค่าตำแหน่ง/หน้าตาของแต่งตัวที่ทุกคนเห็น (ต้องมี "ทดลองของแต่งตัว" ด้วย)', group: 'หน้าตา' },
   cosManage: { name: 'ดูจัดการของแต่งตัว', desc: 'แท็บ "จัดการของแต่งตัว": ดูทุกชิ้นว่าซ่อน/แสดง ราคาเพชร และค่าหน้าตารายชิ้น', group: 'หน้าตา' },
