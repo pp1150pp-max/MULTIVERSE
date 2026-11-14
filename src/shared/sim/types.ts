@@ -1,5 +1,5 @@
 // Types shared by the simulation (run by the server) and the browser that shows it.
-import type { SkillSlot } from '../data/classes';
+import type { SkillDef, SkillSlot } from '../data/classes';
 import type { Item, Vec2 } from '../types';
 
 /** What a player wants to do this frame. Built from keyboard/mouse or by Auto Play. */
@@ -38,6 +38,13 @@ export interface HitOpts {
   /** Lowers the target's defense by this share (0–1) for `armorBreakT` seconds, for every attacker. */
   armorBreak?: number;
   armorBreakT?: number;
+  /** Extra crit chance (percentage points) for this hit only (Gunslinger counter shot, lock-on). */
+  critBonus?: number;
+  /** Lowers the target's attack by this share (0–1) for `weakT` seconds (strongest wins, a recast refreshes). */
+  weak?: number;
+  weakT?: number;
+  /** The skill this hit comes from (passives can check its line); missing = basic attack or other. */
+  skill?: SkillDef;
 }
 
 /** Visual effects the renderer knows how to draw. The client's Effects class implements this. */

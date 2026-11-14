@@ -30,6 +30,9 @@ import { applyCardTuning } from '../src/shared/cardTuning';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const PORT = Number(process.env.PORT ?? 2567);
+/** Address to listen on. 0.0.0.0 = the home network too (Windows PC); the VPS unit sets 127.0.0.1 so only
+ * cloudflared on the same machine reaches it (tools/multiverse.service). */
+const HOST = process.env.MULTIVERSE_HOST || '0.0.0.0';
 const DB_FILE = process.env.DB_FILE ?? join(ROOT, 'server', 'data', 'multiverse.db');
 const DIST = join(ROOT, 'dist');
 /** `--public`: also open a Cloudflare link so friends can join from anywhere (npm run online). */
@@ -346,11 +349,11 @@ const prune = () => {
 prune();
 setInterval(prune, CLEANUP_MS).unref();
 
-server.listen(PORT, '0.0.0.0', () => {
+server.listen(PORT, HOST, () => {
   writeFileSync(CONTROL_FILE, JSON.stringify({ pid: process.pid, port: PORT, token: CONTROL_TOKEN } satisfies ControlFile));
   console.log(`\nMULTIVERSE server พร้อมแล้ว — port ${PORT}`);
   console.log(`  เครื่องนี้:   http://localhost:${PORT}`);
-  for (const list of Object.values(networkInterfaces())) {
+  if (HOST === '0.0.0.0') for (const list of Object.values(networkInterfaces())) {
     for (const a of list ?? []) {
       if (a.family !== 'IPv4' || a.internal) continue;
       console.log(`  Wi-Fi บ้าน:  http://${a.address}:${PORT}`);

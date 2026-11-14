@@ -17,8 +17,12 @@ const STATE_FILE = join(resolve(fileURLToPath(new URL('..', import.meta.url))), 
 const CONFIG_FILE = join(resolve(fileURLToPath(new URL('..', import.meta.url))), 'server', 'data', 'tunnel-config.json');
 const DOWNLOAD_URL = 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe';
 
-/** The project's own copy, or one installed with winget. */
+/** The project's own copy, or one installed with winget (Windows) / apt (Linux, tools/vps-setup.sh). */
 function findCloudflared(): string | null {
+  if (process.platform !== 'win32') {
+    const dirs = [...(process.env.PATH ?? '').split(':').filter(Boolean), '/usr/bin', '/usr/local/bin'];
+    return dirs.map((d) => join(d, 'cloudflared')).find((p) => existsSync(p)) ?? null;
+  }
   const installed = [
     join(process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', 'cloudflared', 'cloudflared.exe'),
     join(process.env.ProgramFiles ?? 'C:\\Program Files', 'cloudflared', 'cloudflared.exe'),
@@ -76,8 +80,8 @@ export function runningTunnel(port: number): string | null {
     const s = JSON.parse(readFileSync(STATE_FILE, 'utf8')) as { pid?: number; link?: string; port?: number };
     if (!s.pid || !s.link || s.port !== port) return null;
     process.kill(s.pid, 0); // throws when that process is gone
-    // After a reboot the file is still there and Windows may have given that pid to another program.
-    if (process.platform === 'win32' && !isCloudflared(s.pid)) return null;
+    // After a reboot the file is still there and the system may have given that pid to another program.
+    if (!isCloudflared(s.pid)) return null;
     return s.link;
   } catch {
     return null;
@@ -85,6 +89,13 @@ export function runningTunnel(port: number): string | null {
 }
 
 function isCloudflared(pid: number): boolean {
+  if (process.platform !== 'win32') {
+    try {
+      return readFileSync(`/proc/${pid}/comm`, 'utf8').trim() === 'cloudflared';
+    } catch {
+      return existsSync('/proc/self') ? false : true; // no /proc (macOS): trust the pid check
+    }
+  }
   try {
     const out = execFileSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], { encoding: 'utf8', windowsHide: true });
     return out.toLowerCase().includes('cloudflared');
@@ -131,7 +142,8 @@ export async function startTunnel(port: number, opts: { shared?: boolean; keptBy
   const exe = findCloudflared() ?? (await download());
   const help = () => {
     console.log('\n  ⚠ เปิดลิงก์สำหรับเพื่อนไม่ได้ เพราะหาโปรแกรม cloudflared ไม่เจอ และดาวน์โหลดไม่สำเร็จ');
-    console.log('    เช็คอินเทอร์เน็ต แล้วรัน npm run online ใหม่ หรือติดตั้งเองด้วย: winget install Cloudflare.cloudflared\n');
+    console.log('    เช็คอินเทอร์เน็ต แล้วรัน npm run online ใหม่ หรือติดตั้งเองด้วย: ' +
+      (process.platform === 'win32' ? 'winget install Cloudflare.cloudflared' : 'sudo apt install cloudflared (ดู tools/vps-setup.sh)') + '\n');
   };
   if (!exe) {
     help();
@@ -141,12 +153,13 @@ export async function startTunnel(port: number, opts: { shared?: boolean; keptBy
   let found = false;
   let child: ChildProcess;
   try {
-    // Its own process group on Windows (hidden), so Ctrl+C in the server window doesn't cut the link while
-    // the server is still counting down; whoever started it kills it when done.
+    // Its own process group (hidden on Windows), so Ctrl+C in the server window, or systemd stopping the
+    // service on Linux, doesn't cut the link while the server is still counting down; whoever started it
+    // kills it when done.
     child = spawn(exe, named
-      ? ['tunnel', '--no-autoupdate', 'run', '--url', `http://localhost:${port}`, named.name]
-      : ['tunnel', '--no-autoupdate', '--url', `http://localhost:${port}`], {
-      stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform === 'win32', windowsHide: true,
+      ? ['tunnel', '--no-autoupdate', 'run', '--url', `http://127.0.0.1:${port}`, named.name]
+      : ['tunnel', '--no-autoupdate', '--url', `http://127.0.0.1:${port}`], {
+      stdio: ['ignore', 'pipe', 'pipe'], detached: true, windowsHide: true,
     });
   } catch {
     help();

@@ -161,6 +161,11 @@ export function rankedDmg(sk: SkillDef, rank: number, b?: Balance): number {
   return v.dmg * grow(v.dmgPerRank, rank);
 }
 
+/** How a skill's extra damage numbers (on-hit, burning, bomblets) grow at this rank: by its damage %/rank. */
+export function dmgGrowth(sk: SkillDef, rank: number, b?: Balance): number {
+  return grow(skillValues(sk, b).dmgPerRank, rank);
+}
+
 /** Cooldown in seconds at this rank. */
 export function rankedCooldown(sk: SkillDef, rank: number, b?: Balance): number {
   const v = skillValues(sk, b);
@@ -188,7 +193,10 @@ export function rankedMp(sk: SkillDef, cls: ClassId, level: number, rank: number
  */
 export function skillParam(sk: SkillDef, key: string, rank?: number, b?: Balance): number {
   const v = skillValues(sk, b).params[key] ?? sk.params?.[key]?.v ?? 0;
-  return rank !== undefined && sk.params?.[key]?.status ? v * statusScale(sk, rank, b) : v;
+  if (rank === undefined) return v;
+  if (sk.params?.[key]?.status) return v * statusScale(sk, rank, b);
+  if (sk.params?.[key]?.dmg) return v * dmgGrowth(sk, rank, b);
+  return v;
 }
 
 /**
