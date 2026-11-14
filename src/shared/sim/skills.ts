@@ -4,6 +4,7 @@ import type { Monster } from './Monster';
 import type { SkillDef } from '../data/classes';
 import type { Vec2 } from '../types';
 import * as R from '../data/skillRanges';
+import { rankedDmg, statusScale } from '../skillBook';
 
 function forCircle(sim: Sim, x: number, z: number, r: number, fn: (m: Monster) => void): void {
   for (const m of sim.monsters) {
@@ -58,37 +59,43 @@ export function basicAttack(sim: Sim, p: Player, aim: Vec2): void {
   }
 }
 
-/** Returns false if the skill could not be used (nothing was spent). */
-export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2): boolean {
+/**
+ * Returns false if the skill could not be used (nothing was spent). `rank` (1 up) scales the damage of every hit and
+ * the status times (stun, slow, armor break, guard, lifesteal) by the skill's growth on the balance tab.
+ */
+export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1): boolean {
   const ang = aimAngle(p, aim);
+  const dmg = rankedDmg(sk, rank);
+  const st = statusScale(sk, rank);
   switch (sk.id) {
     // ---------------- Sword
     case 'whirlwind':
       sim.fx('effect', 'whirlwind', p.x, p.z, ang, 3.4);
       // Set first so the spin's own hits heal too.
       p.lifesteal = WHIRLWIND_LIFESTEAL.share;
-      p.lifestealUntil = sim.time + WHIRLWIND_LIFESTEAL.time;
-      forCircle(sim, p.x, p.z, R.WHIRLWIND_RADIUS, (m) => sim.hitMonster(p, m, 1.8, { kb: 5 }));
-      p.invulnT = Math.max(p.invulnT, WHIRLWIND_GUARD);
-      sim.fx('ring', p.x, p.z, 1.3, '#ffcf5a', WHIRLWIND_GUARD);
+      p.lifestealUntil = sim.time + WHIRLWIND_LIFESTEAL.time * st;
+      forCircle(sim, p.x, p.z, R.WHIRLWIND_RADIUS, (m) => sim.hitMonster(p, m, dmg, { kb: 5 }));
+      p.invulnT = Math.max(p.invulnT, WHIRLWIND_GUARD * st);
+      sim.fx('ring', p.x, p.z, 1.3, '#ffcf5a', WHIRLWIND_GUARD * st);
       return true;
     case 'earthquake':
       sim.fx('effect', 'quake', p.x, p.z, 0, 4.8);
       sim.shake(0.5, { to: p.id });
-      forCircle(sim, p.x, p.z, R.EARTHQUAKE_RADIUS, (m) => sim.hitMonster(p, m, 2, { stun: 1, kb: 3 }));
+      forCircle(sim, p.x, p.z, R.EARTHQUAKE_RADIUS, (m) => sim.hitMonster(p, m, dmg, { stun: 1 * st, kb: 3 }));
       return true;
     case 'charge':
+      p.chargeMult = dmg;
       p.startDash(Math.cos(ang), Math.sin(ang), R.CHARGE_DIST, 0.3, 'charge');
       sim.fx('effect', 'charge', p.x + Math.cos(ang), p.z + Math.sin(ang), ang, 1.6);
       return true;
 
     // ---------------- Mage
     case 'fireball':
-      sim.addProjectile(p, { x: p.x, z: p.z, angle: ang, speed: 13, range: R.FIREBALL_RANGE, radius: 0.45, mult: 2.2, color: '#ff7a2a', size: 1.1, explode: R.FIREBALL_EXPLODE });
+      sim.addProjectile(p, { x: p.x, z: p.z, angle: ang, speed: 13, range: R.FIREBALL_RANGE, radius: 0.45, mult: dmg, color: '#ff7a2a', size: 1.1, explode: R.FIREBALL_EXPLODE });
       return true;
     case 'frostnova':
       sim.fx('effect', 'frost', p.x, p.z, 0, 4.8);
-      forCircle(sim, p.x, p.z, R.FROSTNOVA_RADIUS, (m) => sim.hitMonster(p, m, 1.4, { slow: 0.5, slowT: 3 }));
+      forCircle(sim, p.x, p.z, R.FROSTNOVA_RADIUS, (m) => sim.hitMonster(p, m, dmg, { slow: 0.5, slowT: 3 * st }));
       return true;
     case 'meteor': {
       let tx = aim.x;
@@ -104,7 +111,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2): boolean
       sim.schedule(delay, () => {
         sim.fx('effect', 'crater', tx, tz, 0, 4);
         sim.shake(0.5, { to: p.id });
-        forCircle(sim, tx, tz, R.METEOR_RADIUS, (m) => sim.hitMonster(p, m, 4.5, { stun: 0.8, kb: 4, fromX: tx, fromZ: tz }));
+        forCircle(sim, tx, tz, R.METEOR_RADIUS, (m) => sim.hitMonster(p, m, dmg, { stun: 0.8 * st, kb: 4, fromX: tx, fromZ: tz }));
       });
       return true;
     }
@@ -117,7 +124,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2): boolean
           if (!p.alive) return;
           const a = i === 0 ? ang : p.aimAngle();
           const jitter = (Math.random() - 0.5) * 0.08;
-          sim.addProjectile(p, { x: p.x, z: p.z, angle: a + jitter, speed: 28, range: R.RAPIDFIRE_RANGE, radius: 0.3, mult: 0.4, color: '#ffc85a', size: 0.45, kb: 1 });
+          sim.addProjectile(p, { x: p.x, z: p.z, angle: a + jitter, speed: 28, range: R.RAPIDFIRE_RANGE, radius: 0.3, mult: dmg, color: '#ffc85a', size: 0.45, kb: 1 });
           sim.fx('effect', 'muzzle', p.x + Math.cos(a) * 0.9, p.z + Math.sin(a) * 0.9, a, 0.6);
         });
       }
@@ -125,8 +132,8 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2): boolean
     case 'pierce':
       // Armor-Piercing Round: stops at the first target and breaks its armor for everyone.
       sim.addProjectile(p, {
-        x: p.x, z: p.z, angle: ang, speed: 34, range: R.PIERCE_RANGE, radius: 0.45, mult: 1.5, color: '#7affe0', size: 0.9, kb: 5,
-        hit: { armorBreak: 0.2, armorBreakT: 3 },
+        x: p.x, z: p.z, angle: ang, speed: 34, range: R.PIERCE_RANGE, radius: 0.45, mult: dmg, color: '#7affe0', size: 0.9, kb: 5,
+        hit: { armorBreak: 0.2, armorBreakT: 3 * st },
       });
       sim.fx('effect', 'muzzle', p.x + Math.cos(ang) * 1.1, p.z + Math.sin(ang) * 1.1, ang, 0.9);
       return true;
@@ -140,7 +147,7 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2): boolean
       sim.schedule(HEADSHOT_AIM, () => {
         if (!p.alive) return;
         sim.addProjectile(p, {
-          x: p.x, z: p.z, angle: ang, speed: 45, range: HEADSHOT_RANGE, radius: 0.5, mult: 3, color: '#ff6a5a', size: 1, kb: 6,
+          x: p.x, z: p.z, angle: ang, speed: 45, range: HEADSHOT_RANGE, radius: 0.5, mult: dmg, color: '#ff6a5a', size: 1, kb: 6,
           hit: { forceCrit: true },
           hitFx: { name: 'headshot_hit', size: 1.3 },
         });

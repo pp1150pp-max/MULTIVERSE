@@ -5,6 +5,7 @@ import type { Terrain } from './terrain';
 import type { Intent } from './types';
 import { castSkill, basicAttack } from './skills';
 import { CLASSES, type ClassDef, type SkillDef, type SkillSlot } from '../data/classes';
+import { cleanSkillBook, rankedCooldown, rankedMp, rankOf, type SkillBook } from '../skillBook';
 import { addInto, BASE_MOVE_SPEED, emptyStats } from '../formulas';
 import { gatesPassedBy } from '../data/bossGates';
 import { cleanCosWorn, MOUNT_SPEED, type CosWorn } from '../data/cosmetics';
@@ -20,7 +21,7 @@ import {
 } from '../types';
 import type { LootKind } from './Loot';
 import { newStash, type StashData } from './stash';
-import { classBalance, currentBalance, finishStats, skillMpCost } from '../balance';
+import { classBalance, currentBalance, finishStats } from '../balance';
 import { AUTO_DEFAULT_KEYS, AUTO_LOOT_ORDERS, AUTO_OUT_ACTIONS, AUTO_TARGET_MODES, type AutoDefaults, type AutoLootOrder, type AutoOutAction, type AutoTargetMode } from '../autoTuning';
 import { MONSTERS } from '../data/monsters';
 
@@ -270,6 +271,11 @@ export interface CharacterData {
   cosmetics?: CosWorn;
   /** Buff scrolls running: seconds of play left on each (see BUFF_MAX). Missing = none. */
   buffs?: Buffs;
+  /**
+   * Skills learned (id → rank) and worn (Q/E/R, passive). Missing in saves from before the skill system (owner
+   * 2026-11-14): the character starts with nothing learned and gets its points back from its level.
+   */
+  skills?: SkillBook;
 }
 
 export type Buffs = Partial<Record<BuffScroll, number>>;
@@ -360,7 +366,12 @@ export class Player extends Unit {
   /** Sim time of getting on: a hit dealt or taken after it throws the rider off. */
   mountedAt = -99;
   stats: Stats = emptyStats();
-  cd: Partial<Record<SkillSlot, number>> = {};
+  /** Seconds of cooldown left, by skill id ('dash' for the dash): kept on the skill, so taking it off and on again doesn't reset it. */
+  cd: Record<string, number> = {};
+  /** Skills learned and worn. Saved; changed only through Sim.learnSkill / refundSkill / wearSkill. */
+  skillBook: SkillBook;
+  /** Damage multiplier of the Charge running now (set when it is cast, by its rank). */
+  chargeMult = 0;
   potCd = 0;
   /** Sim time of the last blacksmith action (enhance or reroll), for FORGE_CD. Not saved. */
   forgeAt = -Infinity;
@@ -441,6 +452,7 @@ export class Player extends Unit {
     this.gearDone = cleanGearDone(data.gearDone);
     this.cosmetics = cleanCosWorn(data.cosmetics);
     this.buffs = cleanBuffs(data.buffs);
+    this.skillBook = cleanSkillBook(data.classId, data.skills);
     this.bossKills = [...new Set([...gatesPassedBy(data.level), ...(Array.isArray(data.bossKills) ? data.bossKills.filter((x) => typeof x === 'string') : [])])];
     this.potSel = { hp: 's', mp: 's', ...data.potSel };
     this.lootFilter = data.lootFilter
@@ -522,13 +534,31 @@ export class Player extends Unit {
     return Math.atan2(this.aimZ, this.aimX);
   }
 
+  /** The skill on a button: the class's basic attack or dash, or the skill worn on Q/E/R (undefined = empty slot). */
   skill(slot: SkillSlot): SkillDef | undefined {
-    return this.cls.skills.find((s) => s.slot === slot);
+    if (slot === 'basic' || slot === 'dash') return this.cls.skills.find((s) => s.kind === slot);
+    const id = this.skillBook.worn[slot];
+    return id ? this.cls.skills.find((s) => s.id === id) : undefined;
   }
 
-  /** The MP this skill costs at this character's level (balance tab: % more per level, per class). */
+  /** Rank of a skill in use (the basic attack and dash count as 1; 0 = not learned). */
+  skillRank(sk: SkillDef): number {
+    return sk.kind === 'basic' || sk.kind === 'dash' ? 1 : rankOf(this.skillBook, sk.id);
+  }
+
+  /** The MP this skill costs at this character's level and the skill's rank (both tuned on the balance tab). */
   skillMp(sk: SkillDef): number {
-    return skillMpCost(sk.mp, this.cls.id, this.level);
+    return rankedMp(sk, this.cls.id, this.level, Math.max(1, this.skillRank(sk)));
+  }
+
+  /** Full cooldown of this skill at its rank. */
+  skillCooldown(sk: SkillDef): number {
+    return sk.kind === 'basic' || sk.kind === 'dash' ? sk.cooldown : rankedCooldown(sk, Math.max(1, this.skillRank(sk)));
+  }
+
+  /** Hurt or attacked within the last few seconds (no swapping skills then). */
+  inCombat(): boolean {
+    return this.sim.time - Math.max(this.lastHurt, this.lastAttack) <= COMBAT_LINGER;
   }
 
   recompute(): void {
@@ -573,6 +603,7 @@ export class Player extends Unit {
       gearDone: [...this.gearDone],
       cosmetics: { ...this.cosmetics },
       buffs: roundBuffs(this.buffs),
+      skills: structuredClone(this.skillBook),
     };
   }
 
@@ -864,8 +895,8 @@ export class Player extends Unit {
   /** This player landed a killing blow: skills with killCdCut (sword Charge) come back sooner. */
   onKill(): void {
     for (const sk of this.cls.skills) {
-      const left = this.cd[sk.slot] ?? 0;
-      if (sk.killCdCut && left > 0) this.cd[sk.slot] = left * (1 - sk.killCdCut);
+      const left = this.cd[sk.id] ?? 0;
+      if (sk.killCdCut && left > 0) this.cd[sk.id] = left * (1 - sk.killCdCut);
     }
   }
 
@@ -926,7 +957,7 @@ export class Player extends Unit {
       return;
     }
     this.tickStatus(dt, sim.terrain);
-    for (const k of Object.keys(this.cd) as SkillSlot[]) this.cd[k] = Math.max(0, (this.cd[k] ?? 0) - dt);
+    for (const k of Object.keys(this.cd)) this.cd[k] = Math.max(0, this.cd[k] - dt);
     this.atkT -= dt;
     this.potCd -= dt;
     this.restCd -= dt;
@@ -935,8 +966,7 @@ export class Player extends Unit {
     this.snareT = Math.max(0, this.snareT - dt);
     this.toadT = Math.max(0, this.toadT - dt);
 
-    const inCombat = sim.time - Math.max(this.lastHurt, this.lastAttack) <= COMBAT_LINGER;
-    const ooc = inCombat ? 1 : OUT_OF_COMBAT_REGEN;
+    const ooc = this.inCombat() ? 1 : OUT_OF_COMBAT_REGEN;
     this.hp = Math.min(this.maxHp, this.hp + this.stats.hpRegen * ooc * dt);
     this.mp = Math.min(this.stats.maxMp, this.mp + this.stats.mpRegen * ooc * dt);
     this.tickPotions(dt);
@@ -961,7 +991,7 @@ export class Player extends Unit {
           if (!m.alive || this.chargeHit.has(m)) continue;
           if (Math.hypot(m.x - this.x, m.z - this.z) < m.radius + 1.2) {
             this.chargeHit.add(m);
-            sim.hitMonster(this, m, 1.5, { kb: 9, fromX: this.x, fromZ: this.z });
+            sim.hitMonster(this, m, this.chargeMult, { kb: 9, fromX: this.x, fromZ: this.z });
             // Hidden on purpose (not in the skill text): whatever it runs into turns on this player.
             m.taunt(this);
           }
@@ -1015,7 +1045,7 @@ export class Player extends Unit {
     const peaceful = sim.inSafe(this);
     for (const slot of peaceful ? [] : it.skills) {
       const sk = this.skill(slot);
-      if (!sk || (this.cd[slot] ?? 0) > 0) continue;
+      if (!sk || (this.cd[sk.id] ?? 0) > 0) continue;
       const cost = this.skillMp(sk);
       if (this.mp < cost) {
         if (sim.time > this.noMpMsgT) {
@@ -1025,13 +1055,14 @@ export class Player extends Unit {
         continue;
       }
       this.face(this.aimX, this.aimZ);
-      if (castSkill(sim, this, sk, aim)) {
+      if (castSkill(sim, this, sk, aim, Math.max(1, this.skillRank(sk)))) {
         // A dedicated skill animation wins over the dash animation a movement skill just started;
         // without one the attack animation plays (unless the skill is a dash).
         // A skill that starts by aiming (Headshot) gets no attack fallback: its shot animates when it fires.
-        sim.anim(this.id, `skill_${slot}`, this.rootT > 0 ? {} : { duration: this.attackAnimDuration(), fallback: 'attack' });
+        // The skill's own class animation (skill_q/e/r), whichever slot it sits in.
+        sim.anim(this.id, `skill_${sk.anim ?? slot}`, this.rootT > 0 ? {} : { duration: this.attackAnimDuration(), fallback: 'attack' });
         this.mp -= cost;
-        this.cd[slot] = sk.cooldown;
+        this.cd[sk.id] = this.skillCooldown(sk);
         this.lastAttack = sim.time;
         this.faceLockT = 0.3;
       }

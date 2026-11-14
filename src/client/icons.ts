@@ -9,7 +9,12 @@ import { imgUrl } from './img';
 export const iconImg = (name: string): string =>
   `<img class="gi" src="${imgUrl(`assets/sprites/icons/${name}.png`)}" alt="" draggable="false">`;
 
-export const skillIcon = (skillId: string): string => iconImg(`skill_${skillId}`);
+/**
+ * Skill icon. A skill with no painted icon yet (new skills wait for the owner's GPT icons, art_templates/skills/PROMPTS.md)
+ * shows the blank badge instead.
+ */
+export const skillIcon = (skillId: string): string =>
+  `<img class="gi" src="${imgUrl(`assets/sprites/icons/skill_${skillId}.png`)}" alt="" draggable="false" onerror="this.onerror=null;this.src='${imgUrl('assets/sprites/ui/ico_blank.png')}'">`;
 /** Potion icon: with a size, that bottle shape (small vial, medium flask, large ornate flask). */
 export const potionIcon = (kind: PotionKind, size?: PotionSize): string => iconImg(size ? `potion_${kind}_${size}` : `potion_${kind}`);
 export const COIN_ICON = iconImg('coin');

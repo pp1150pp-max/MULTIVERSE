@@ -38,6 +38,7 @@ import { MailUI } from './mail';
 import { ReportUI } from './report';
 import { MegaphoneUI } from './megaphone';
 import { DailyUI } from './daily';
+import { SkillWindow } from './skillWindow';
 import { SystemMenu } from './sysmenu';
 import { endEntryLoading, flashZoneLoading, preloadLoadingArt } from './loadingScreen';
 import { LootView, MonsterView, PlayerView, ProjectileView, ViewSet } from './views';
@@ -101,6 +102,7 @@ export class Game {
   readonly report: ReportUI;
   readonly megaphone: MegaphoneUI;
   readonly daily: DailyUI;
+  readonly skillWin: SkillWindow;
   /** Another player under the mouse (when no monster or usable thing is): a left click offers a party invite. */
   private hoveredPlayer: Player | null = null;
   /** The left button went down on a player: no basic attack until it is let go. */
@@ -205,6 +207,7 @@ export class Game {
     this.report = new ReportUI(this);
     this.megaphone = new MegaphoneUI(this);
     this.daily = new DailyUI(this);
+    this.skillWin = new SkillWindow(this);
     initDraggableWindows(document.getElementById('hud')!);
     this.touch = new TouchControls(this);
     new TouchGestures(this, this.renderer.domElement);
@@ -763,6 +766,7 @@ export class Game {
     if (i.pressed('KeyZ')) this.backend.toggleMount();
     if (i.pressed('KeyI') || i.pressed('KeyB')) this.hud.toggleBag();
     if (i.pressed('KeyH')) this.hud.toggleHelp();
+    if (i.pressed('KeyK')) this.skillWin.toggle();
     if (i.pressed('KeyM')) this.hud.toggleMap();
     if (i.pressed('Escape')) this.sysMenu.onEscape();
     if (i.pressed('Enter')) this.hud.openChat();
@@ -782,6 +786,7 @@ export class Game {
     const events = this.backend.frame(dt, intent);
     if (this.backend.zoneSeq !== this.zoneSeq) this.changeZone();
     this.sound.update(dt, this.backend);
+    this.skillWin.update();
 
     this.syncViews();
     for (const ev of events) this.handleEvent(ev);

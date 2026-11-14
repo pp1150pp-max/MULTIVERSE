@@ -16,7 +16,8 @@ import { BOSS_KEY, BOSS_QUEST_KEY, BOSS_STONE_CHANCE, BOUND_MSG, BUFF_LABEL, BUF
 import { NPC_INFO, NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { pick, rand, randInt } from '../rng';
 import { splitExp } from '../party';
-import { CLASS_IDS } from '../data/classes';
+import { CLASS_IDS, SLOT_KIND, WEAR_SLOTS, type WearSlot } from '../data/classes';
+import { learnable, learnBlock, rankOf, refundPrice, unlearnOne, wear, wearBlock } from '../skillBook';
 import { classBalance, currentBalance } from '../balance';
 import { COS_SLOT_NAME, cosById, MOUNT_CALM } from '../data/cosmetics';
 import {
@@ -1161,6 +1162,73 @@ export class Sim {
   setAutoSettings(p: Player, s: AutoSettings): void {
     p.autoSettings = cleanAutoSettings(s);
     this.events.push({ t: 'save', to: p.id });
+  }
+
+  // ------------------------------------------------------------ skills (owner 2026-11-14)
+
+  /** Learns skill `id` (rank 1) or ranks it up by one, for one skill point. The server checks everything here. */
+  learnSkill(p: Player, id: unknown): boolean {
+    const sk = learnable(p.cls.id, id);
+    if (!sk) return false;
+    const why = learnBlock(p.cls.id, p.level, p.skillBook, sk.id);
+    if (why) {
+      this.log(why, '#ff8a6a', p.id);
+      return false;
+    }
+    const rank = (p.skillBook.ranks[sk.id] ?? 0) + 1;
+    p.skillBook.ranks[sk.id] = rank;
+    // A first skill of a kind goes straight onto an empty slot that takes it.
+    if (rank === 1) {
+      const free = WEAR_SLOTS.find((s) => SLOT_KIND[s] === sk.kind && !p.skillBook.worn[s]);
+      if (free) wear(p.skillBook, free, sk.id);
+    }
+    this.log(rank === 1 ? `เรียน${sk.nameTh}แล้ว` : `${sk.nameTh} แรงก์ ${rank}`, '#9fd8ff', p.id);
+    this.events.push({ t: 'save', to: p.id });
+    return true;
+  }
+
+  /**
+   * Takes one point back from skill `id` (rank 1 → forgotten and taken off). Free while the character has earned
+   * few points, then gold per point (owner 2026-11-14). Not in combat, since it can empty a slot.
+   */
+  refundSkill(p: Player, id: unknown): boolean {
+    const sk = learnable(p.cls.id, id);
+    if (!sk || !p.skillBook.ranks[sk.id]) return false;
+    if (p.inCombat()) {
+      this.log('คืนแต้มสกิลระหว่างต่อสู้ไม่ได้', '#ff8a6a', p.id);
+      return false;
+    }
+    const price = refundPrice(p.level);
+    if (p.gold < price) {
+      this.log(`ทองไม่พอ — คืนแต้มละ ${price.toLocaleString()} G`, '#ff8a6a', p.id);
+      return false;
+    }
+    p.gold -= price;
+    unlearnOne(p.skillBook, sk.id);
+    const left = rankOf(p.skillBook, sk.id);
+    this.log(`คืนแต้ม${sk.nameTh}${left ? ` (เหลือแรงก์ ${left})` : ' (ลืมสกิลแล้ว)'}${price ? ` −${price.toLocaleString()} G` : ''}`, '#9fd8ff', p.id);
+    this.events.push({ t: 'save', to: p.id });
+    return true;
+  }
+
+  /** Wears learned skill `id` on `slot` (null = take it off). Out of combat only (owner 2026-11-14). */
+  wearSkill(p: Player, slot: unknown, id: unknown): boolean {
+    if (typeof slot !== 'string' || !(WEAR_SLOTS as readonly string[]).includes(slot)) return false;
+    const s = slot as WearSlot;
+    const sid = id === null ? null : typeof id === 'string' ? id : undefined;
+    if (sid === undefined) return false;
+    if (p.inCombat()) {
+      this.log('เปลี่ยนสกิลระหว่างต่อสู้ไม่ได้', '#ff8a6a', p.id);
+      return false;
+    }
+    const why = wearBlock(p.cls.id, p.skillBook, s, sid);
+    if (why) {
+      this.log(why, '#ff8a6a', p.id);
+      return false;
+    }
+    wear(p.skillBook, s, sid);
+    this.events.push({ t: 'save', to: p.id });
+    return true;
   }
 
   setLootFilter(p: Player, f: LootFilter): void {

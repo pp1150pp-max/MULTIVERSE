@@ -7,6 +7,7 @@ import { AutoPlay } from '../src/shared/sim/autoplay';
 import { cleanAutoSettings, DEFAULT_AUTO_SETTINGS, type AutoSkill } from '../src/shared/sim/Player';
 import { IDLE_INTENT } from '../src/shared/sim/types';
 import type { ClassId } from '../src/shared/types';
+import { oldSkills } from './skills';
 
 const sim = new Sim(ZONE_1);
 for (let i = 0; i < 300 && !sim.monsters.some((m) => m.alive && !m.isBoss); i++) sim.step(0.1);
@@ -15,7 +16,7 @@ ok(!!mob, 'zone 1 has a monster');
 
 /** What Auto casts this frame for a player of this class standing next to the monster. */
 function cast(classId: ClassId, opts: { order?: AutoSkill[]; off?: AutoSkill[]; cooling?: AutoSkill[] }): string[] {
-  const p = sim.addPlayer({ name: 'T', classId, level: 30, exp: 0, gold: 0, equipment: {}, bag: [] });
+  const p = sim.addPlayer({ name: 'T', classId, level: 30, exp: 0, gold: 0, equipment: {}, bag: [], skills: oldSkills(classId) });
   p.x = mob.x + 1;
   p.z = mob.z;
   const skills = { q: true, e: true, r: true };
@@ -23,7 +24,7 @@ function cast(classId: ClassId, opts: { order?: AutoSkill[]; off?: AutoSkill[]; 
   p.autoSettings = cleanAutoSettings({ ...DEFAULT_AUTO_SETTINGS, order: opts.order, skills });
   p.mp = 9999;
   p.cd = {};
-  for (const s of opts.cooling ?? []) p.cd[s] = 5;
+  for (const s of opts.cooling ?? []) p.cd[p.skill(s)!.id] = 5;
   const auto = new AutoPlay();
   auto.start(p.x, p.z);
   const it = auto.intent({ player: p, monsters: sim.monsters, loots: [], time: 1, zone: ZONE_1 }, IDLE_INTENT);

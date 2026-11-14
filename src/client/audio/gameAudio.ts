@@ -90,7 +90,8 @@ export class GameAudio {
     if (!p) return;
     // Charge is a dash too: its own sound plays from skill_r.
     if (slot === 'dash' && p.dashKind === 'charge') return;
-    const sound = p.skill(slot)?.id;
+    // The anim names the class animation (skill_q/e/r), which belongs to one skill whatever slot it sits in.
+    const sound = slot === 'basic' || slot === 'dash' ? p.skill(slot)?.id : p.cls.skills.find((s) => s.anim === slot)?.id;
     if (!sound || !isSoundName(sound)) return;
     if (p === b.me) playSound(sound);
     else this.at(sound, p.x, p.z, b.me, OTHER_PLAYER_GAIN);

@@ -310,9 +310,18 @@ export class TouchControls {
     const p = g.player;
     for (const s of this.skills) {
       const sk = p.skill(s.slot);
-      const remain = p.cd[s.slot] ?? 0;
-      s.cd.style.height = sk?.cooldown ? `${(remain / sk.cooldown) * 100}%` : '0%';
-      const txt = remain > 0 && (sk?.cooldown ?? 0) > 1 ? remain.toFixed(remain < 10 ? 1 : 0) : '';
+      // The skill worn on Q/E/R can change (skill window): swap the button's icon.
+      if (s.slot !== 'dash' && s.el.dataset.sk !== (sk?.id ?? '')) {
+        s.el.dataset.sk = sk?.id ?? '';
+        const ico = s.el.querySelector('.tc-ico')!;
+        ico.querySelector('img')?.remove();
+        if (sk) ico.insertAdjacentHTML('afterbegin', skillIcon(sk.id));
+        s.el.classList.toggle('empty', !sk);
+      }
+      const full = sk ? p.skillCooldown(sk) : 0;
+      const remain = sk ? p.cd[sk.id] ?? 0 : 0;
+      s.cd.style.height = full ? `${(remain / full) * 100}%` : '0%';
+      const txt = remain > 0 && full > 1 ? remain.toFixed(remain < 10 ? 1 : 0) : '';
       if (s.num.textContent !== txt) s.num.textContent = txt;
       s.el.classList.toggle('nomp', !!sk && p.mp < p.skillMp(sk));
     }

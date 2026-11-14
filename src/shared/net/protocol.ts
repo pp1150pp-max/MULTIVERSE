@@ -1,6 +1,7 @@
 // WebSocket messages between the browser and the game server (JSON). The server runs the
 // simulation; clients send their input and get snapshots of what is near them plus SimEvents.
-import type { SkillSlot } from '../data/classes';
+import type { SkillSlot, WearSlot } from '../data/classes';
+import type { SkillBook } from '../skillBook';
 import type { BagEntry, BuffScroll, ClassId, EquipSlot, Item, PotionKind, PotionSize, Rarity, Stats, Vec2 } from '../types';
 import type { LootKind } from '../sim/Loot';
 import type { SimEvent } from '../sim/types';
@@ -86,6 +87,10 @@ export type ActionMsg =
   | { t: 'act'; a: 'auto'; on: boolean }
   | { t: 'act'; a: 'lootFilter'; filter: LootFilter }
   | { t: 'act'; a: 'autoSettings'; settings: AutoSettings }
+  /** Skill window (owner 2026-11-14): learn / rank up a skill for one point, take one point back, or wear a learned skill (null = take off). */
+  | { t: 'act'; a: 'skillLearn'; id: string }
+  | { t: 'act'; a: 'skillRefund'; id: string }
+  | { t: 'act'; a: 'skillWear'; slot: WearSlot; id: string | null }
   /** `n` = sell only that many from a potion/stone stack (omitted = the whole slot). */
   | { t: 'act'; a: 'sell'; i: number; n?: number }
   /** Shift+drag in the bag: move `n` of the stack in `from` onto slot `to` (empty or the same stack). */
@@ -248,7 +253,10 @@ export interface PrivateSnap {
   gearDone?: string[];
   /** The account's tutorial quests (sent when they change). */
   tut?: TutorialData;
-  cd:Partial<Record<SkillSlot, number>>; potCd: number; restCd: number;
+  /** Cooldown left by skill id ('dash' for the dash). */
+  cd: Record<string, number>; potCd: number; restCd: number;
+  /** Skills learned and worn. */
+  skills: SkillBook;
   /** Seconds left on a return-scroll cast (left out when not casting). */
   castT?: number;
   /** Buff scrolls running: seconds of play left on each (left out when none). */

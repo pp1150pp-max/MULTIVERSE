@@ -33,9 +33,12 @@ const FRIENDS_ICON = badge('friends');
 /** Daily login calendar: painted badge (art_templates/ui/raw/ico_daily.png, magenta keyed out, 96×96). */
 const DAILY_ICON = badge('daily');
 
+/** Skills have no painted badge yet: the blank one with a glyph. Swap for badge('skills') once ico_skills.png exists. */
+const SKILLS_ICON = badge('blank', '⚔');
+
 /** Icon grid, 3 columns: [action, icon, label]. Only systems that exist; add a tile when a new one is built. */
 const MENU_ITEMS: [string, string, string][] = [
-  ['bag', badge('bag'), 'กระเป๋า'], ['party', PARTY_ICON, 'ปาร์ตี้'], ['friends', FRIENDS_ICON, 'เพื่อน'], ['trade', TRADE_ICON, 'เทรด'], ['daily', DAILY_ICON, 'ล็อกอินรายวัน'], ['map', badge('map'), 'แผนที่'],
+  ['bag', badge('bag'), 'กระเป๋า'], ['skills', SKILLS_ICON, 'สกิล'], ['party', PARTY_ICON, 'ปาร์ตี้'], ['friends', FRIENDS_ICON, 'เพื่อน'], ['trade', TRADE_ICON, 'เทรด'], ['daily', DAILY_ICON, 'ล็อกอินรายวัน'], ['map', badge('map'), 'แผนที่'],
   ['cosmetics', badge('blank', '👑'), 'แต่งตัว'], ['autoset', badge('autoset'), 'ตั้งค่า Auto'], ['audio', badge('blank', '🔊'), 'เสียง'], ['help', badge('help'), 'วิธีเล่น'],
   ['mail', MAIL_ICON, 'จดหมาย'], ['settings', badge('settings'), 'ตั้งค่า'],
   // Touch play only (hidden by CSS with a mouse), and only where the browser can do it (not iPhone Safari).
@@ -44,7 +47,7 @@ const MENU_ITEMS: [string, string, string][] = [
 
 /** Top-right icon row: [button id, icon, label]. */
 const TOP_ICONS: [string, string, string][] = [
-  ['top-auto', badge('auto'), 'AUTO: OFF'], ['top-bag', badge('bag'), 'กระเป๋า'],
+  ['top-auto', badge('auto'), 'AUTO: OFF'], ['top-bag', badge('bag'), 'กระเป๋า'], ['top-skills', SKILLS_ICON, 'สกิล'],
   ['top-party', PARTY_ICON, 'ปาร์ตี้'], ['top-friends', FRIENDS_ICON, 'เพื่อน'], ['top-report', badge('blank', '🐞'), 'แจ้งปัญหา'], ['top-daily', DAILY_ICON, 'รายวัน'], ['top-map', badge('map'), 'แผนที่'], ['top-menu', badge('menu'), 'เมนู'],
 ];
 
@@ -74,6 +77,7 @@ export class SystemMenu {
     this.autoBtn = $('top-auto');
     $('top-auto').onclick = () => g.toggleAuto();
     $('top-bag').onclick = () => g.hud.toggleBag();
+    $('top-skills').onclick = () => g.skillWin.toggle();
     $('top-party').onclick = () => g.party.toggle();
     if (!guest) $('top-report').onclick = () => g.report.toggle();
     if (!guest) $('top-friends').onclick = () => g.friends.toggle();
@@ -194,6 +198,9 @@ export class SystemMenu {
       case 'bag':
         this.toggle(false);
         return this.g.hud.toggleBag(true);
+      case 'skills':
+        this.toggle(false);
+        return this.g.skillWin.toggle(true);
       case 'map':
         this.toggle(false);
         return this.g.hud.toggleMap(true);
