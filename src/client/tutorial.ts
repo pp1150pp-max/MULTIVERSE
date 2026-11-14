@@ -86,7 +86,9 @@ export class TutorialUI {
         continue;
       }
       const stones = TUT_ACCEPT_STONES[r.step] ?? [];
-      if (r.state === 'offer') {
+      if (r.state === 'offer' && p.tut.paid?.includes(r.step)) {
+        this.body.append(el('div', 'quest-sub', 'รับต่อจากตัวละครที่ถูกลบ — บัญชีนี้ได้ของตอนรับภารกิจไปแล้ว จะไม่ได้ซ้ำ'));
+      } else if (r.state === 'offer') {
         const extra = stones.map((s) => `${STONE_NAME[s.stone]} ×${s.count}`).join(', ');
         this.body.append(el('div', 'quest-sub', `รับภารกิจแล้วได้ทันที: ${TUT_ACCEPT_GOLD.toLocaleString()} G${extra ? ` + ${extra} (เข้ากระเป๋า ผูกตัวละคร)` : ''}`));
       }

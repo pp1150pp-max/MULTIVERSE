@@ -218,7 +218,9 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string): Pro
     const acc = requireRealAccount(req);
     // Another device of the account may be playing it: its next save would bring it back.
     if (world.isCharacterOnline(Number(del[1]))) throw new HttpError(409, 'ตัวละครนี้กำลังเล่นอยู่ — ออกจากเกมก่อนแล้วค่อยลบ');
+    const gone = db.listCharacters(acc.id).find((c) => c.id === Number(del[1]));
     if (!db.deleteCharacter(acc.id, Number(del[1]))) throw new HttpError(404, 'ไม่พบตัวละครนี้');
+    if (gone) world.tutCharacterGone(acc.id, gone.name);
     console.log(`[character] ${acc.username} deleted character #${del[1]}`);
     return send(res, 200, {});
   }

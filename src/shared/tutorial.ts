@@ -45,7 +45,7 @@ export const TUT_INTRO: Record<TutStep, string> = {
   shop: 'มือใหม่ใช่ไหม? ก่อนออกไปล่า ต้องรู้จักซื้อขายกับข้าก่อน ลองซื้อยา ซื้อม้วนคัมภีร์กลับเมือง แล้วขายของที่ไม่ใช้ให้ข้าสักชิ้นดู',
   stash: 'กระเป๋ามีที่จำกัด ของสำคัญและทองฝากไว้กับข้าได้ ตัวละครทุกตัวในบัญชีใช้คลังเดียวกัน ลองฝากของสักชิ้นและฝากทองดูสิ',
   enhance: 'อาวุธดีต้องตีบวก! เอาอุปกรณ์ชิ้นไหนก็ได้มาให้ข้าตีบวกสักครั้ง สำเร็จหรือล้มเหลวก็ไม่เป็นไร',
-  reroll: 'ค่าบนอุปกรณ์ไม่ถูกใจ? ข้าสุ่มใหม่ได้ เอาหินที่ข้าให้ไปลองสุ่มค่าตัวเลขหนึ่งครั้ง และสุ่มสเตตัสอีกหนึ่งครั้ง (ต้องใช้อุปกรณ์ที่มีค่าเสริม)',
+  reroll: 'ค่าบนอุปกรณ์ไม่ถูกใจ? ข้าสุ่มใหม่ได้ เอาหินที่ข้าให้ไปลองสุ่มค่าตัวเลขหนึ่งครั้ง และสุ่มสเตตัสอีกหนึ่งครั้ง กับอุปกรณ์ชิ้นไหนก็ได้',
   market: 'ของที่เหลือใช้ ฝากข้าขายให้ผู้เล่นคนอื่นได้ ลองลงขายของสักชิ้นในตลาด แล้วรับรางวัลใหญ่ไปเลย',
 };
 
@@ -168,14 +168,23 @@ export function tutTurnInReward(step: TutStep, cfg: TutorialConfig): MailAttach 
 
 /** The step under way: which character took it (by name) and what it has done so far. */
 export interface TutCur { step: TutStep; by: string; got: TutTask[] }
-/** One account's tutorial (saved in the `tutorials` table, shared by its characters online). */
-export interface TutorialData { done: TutStep[]; cur?: TutCur }
+/**
+ * One account's tutorial (saved in the `tutorials` table, shared by its characters online). `paid`: steps
+ * whose accept gold (and stones) the account already got. When the character holding a step is deleted the
+ * step opens again for the account's other characters, but taking it again pays nothing (owner 2026-11-14),
+ * so deleting characters can't farm it.
+ */
+export interface TutorialData { done: TutStep[]; cur?: TutCur; paid?: TutStep[] }
+
+const steps = (v: unknown): TutStep[] => (Array.isArray(v) ? [...new Set(v.filter((s): s is TutStep => TUT_STEPS.includes(s as TutStep)))] : []);
 
 /** Read from storage: known steps and tasks only, so a broken or old row never breaks a login. */
 export function cleanTutorial(raw: unknown): TutorialData {
   const r = isObj(raw) ? raw : {};
-  const done = Array.isArray(r.done) ? [...new Set(r.done.filter((s): s is TutStep => TUT_STEPS.includes(s as TutStep)))] : [];
+  const done = steps(r.done);
   const out: TutorialData = { done };
+  const paid = steps(r.paid);
+  if (paid.length) out.paid = paid;
   const c = r.cur;
   if (isObj(c) && TUT_STEPS.includes(c.step as TutStep) && !done.includes(c.step as TutStep) && typeof c.by === 'string' && c.by) {
     const step = c.step as TutStep;

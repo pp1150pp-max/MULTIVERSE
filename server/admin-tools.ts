@@ -292,6 +292,7 @@ export async function ownerToolsApi(
     world.kickCharacter(c.id, 'ตัวละครนี้ถูกลบโดยผู้ดูแล');
     const backup = backups.make('before-delete');
     db.deleteCharacterById(c.id);
+    world.tutCharacterGone(c.accountId, c.name);
     log(db, a, 'delete-character', `${c.name} (${c.guest ? 'Guest' : c.username}, #${c.id})`, `Lv.${c.data.level} · สำรองไว้ที่ ${backup.name}`);
     send(res, 200, { msg: `ลบตัวละคร ${c.name} แล้ว (สำรองไว้ก่อนลบ: ${backup.name})`, backup });
     return true;

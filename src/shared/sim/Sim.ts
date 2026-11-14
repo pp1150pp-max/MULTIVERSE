@@ -923,20 +923,27 @@ export class Sim {
   /**
    * Takes a tutorial step from its NPC: gold now, plus the step's bound stones into the bag (refused, with
    * nothing given, if they don't fit). The server saves right after, so the gold and the taken step stay together.
+   * A step the account was already paid for (its holder was deleted) is taken again for nothing.
    */
   tutAccept(p: Player, step: TutStep): boolean {
     const row = tutRows(p.tut, p.name).find((r) => r.step === step);
     if (!row || row.state !== 'offer' || !this.near(p, TUT_NPC[step])) return false;
-    const stones = (TUT_ACCEPT_STONES[step] ?? []).map((s) => ({ stone: s.stone, count: s.count, bound: true as const }));
+    const pay = !p.tut.paid?.includes(step);
+    const stones = pay ? (TUT_ACCEPT_STONES[step] ?? []).map((s) => ({ stone: s.stone, count: s.count, bound: true as const })) : [];
     if (stones.length && !putAll(structuredClone(p.bag), stones)) {
       this.log(`กระเป๋าเต็ม — เคลียร์ช่องว่าง ${stones.length} ช่องก่อนรับภารกิจ`, '#ff8a6a', p.id);
       return false;
     }
     putAll(p.bag, stones);
     p.tut.cur = { step, by: p.name, got: [] };
-    p.gold += TUT_ACCEPT_GOLD;
-    const extra = stones.map((s) => `${STONE_NAME[s.stone]} ×${s.count}`).join(', ');
-    this.log(`รับภารกิจสอนระบบ: ${TUT_STEP_NAME[step]} (+${TUT_ACCEPT_GOLD.toLocaleString()} G${extra ? `, ${extra} ผูกตัวละคร` : ''})`, '#ffd34a', p.id);
+    if (pay) {
+      p.gold += TUT_ACCEPT_GOLD;
+      p.tut.paid = [...(p.tut.paid ?? []), step];
+      const extra = stones.map((s) => `${STONE_NAME[s.stone]} ×${s.count}`).join(', ');
+      this.log(`รับภารกิจสอนระบบ: ${TUT_STEP_NAME[step]} (+${TUT_ACCEPT_GOLD.toLocaleString()} G${extra ? `, ${extra} ผูกตัวละคร` : ''})`, '#ffd34a', p.id);
+    } else {
+      this.log(`รับภารกิจสอนระบบต่อ: ${TUT_STEP_NAME[step]} (บัญชีนี้ได้ของตอนรับไปแล้ว จึงไม่ได้ซ้ำ)`, '#ffd34a', p.id);
+    }
     for (const k of TUT_TASKS[step]) this.log(`• ${TUT_TASK_NAME[k]}`, '#ffd34a', p.id);
     this.sfx('trade', p.x, p.z, p.id);
     this.afterChange(p);

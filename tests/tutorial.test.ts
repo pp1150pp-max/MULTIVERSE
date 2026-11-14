@@ -50,7 +50,7 @@ at(p, 'merchant');
 hub.buyPotion(p, 'hp', 's', 1);
 const g0 = p.gold;
 ok(hub.tutAccept(p, 'shop') && p.gold === g0 + TUT_ACCEPT_GOLD, `taken, +${TUT_ACCEPT_GOLD} G`);
-ok(acc.cur?.got.length === 0, 'a buy before taking it does not count');
+ok(acc.cur?.got.length === 0 && acc.paid?.join() === 'shop', 'a buy before taking it does not count; the step is marked paid');
 ok(!hub.tutAccept(p, 'shop') && p.gold === g0 + TUT_ACCEPT_GOLD, 'not taken twice (no second gold)');
 ok(state(alt, 'shop') === 'busy' && !hub.tutAccept(alt, 'shop'), 'another character of the account sees it busy and cannot take it');
 ok(mark(p, 'merchant') === '', 'no mark while under way');
@@ -166,11 +166,30 @@ applyBalance({});
   const id = db.createAccount('tutor', 'scrypt$aa$bb')!;
   const ch = db.createCharacter(id, newCharacterData('TutorA', 'sword'));
   ok(JSON.stringify(db.loadTutorial(id)) === '{"done":[]}', 'a new account: nothing done');
-  db.saveTutorial(id, { done: ['shop'], cur: { step: 'stash', by: 'TutorA', got: ['stashGold'] } });
+  db.saveTutorial(id, { done: ['shop'], cur: { step: 'stash', by: 'TutorA', got: ['stashGold'] }, paid: ['shop', 'stash'] });
   ok(db.loadTutorial(id).cur?.got.join() === 'stashGold', 'saved and read back');
   db.deleteCharacter(id, ch.id);
   const t = db.loadTutorial(id);
-  ok(!t.cur && t.done.join() === 'shop', 'its character deleted: the step under way is dropped, done stays');
+  ok(!t.cur && t.done.join() === 'shop' && t.paid?.join() === 'shop,stash', 'its character deleted: the step under way is dropped, done and paid stay');
+
+  // Another character of the account takes the dropped step: it can go on, but gets nothing on taking it again.
+  const sim = new Sim(ZONE_HUB);
+  const b = sim.addPlayer({ ...newCharacterData('TutorB', 'mage'), gold: 0 });
+  b.tut = t;
+  const k = sim.terrain.npcPos.keeper!;
+  b.x = k.x + 1;
+  b.z = k.z + 1;
+  ok(tutRows(t, b.name).find((r) => r.step === 'stash')!.state === 'offer' && tutMark(tutRows(t, b.name), 'keeper') === '!', 'the dropped step is offered to the other character');
+  ok(sim.tutAccept(b, 'stash') && b.gold === 0 && t.cur?.by === 'TutorB', 'taken again: no second 1,000 G');
+  // Same for the reroll step's stones.
+  const r: TutorialData = { done: ['shop', 'stash', 'enhance'], paid: ['shop', 'stash', 'enhance', 'reroll'] };
+  b.tut = r;
+  const bs = sim.terrain.npcPos.blacksmith!;
+  b.x = bs.x + 1;
+  b.z = bs.z + 1;
+  ok(sim.tutAccept(b, 'reroll') && b.gold === 0 && b.stoneCount('reroll_values') === 0 && b.stoneCount('reroll_stat') === 0, 'reroll taken again: no second stones');
+  // The live state of an online account follows a delete at once (World.tutCharacterGone does this).
+  ok(JSON.stringify(cleanTutorial({ done: [], cur: { step: 'shop', by: 'X', got: [] }, paid: ['shop', 'nope'] }).paid) === '["shop"]', 'paid: known steps only');
   db.close();
   try {
     rmSync(dir, { recursive: true, force: true });

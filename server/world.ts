@@ -666,6 +666,21 @@ export class GameWorld {
   }
 
   /**
+   * A character was deleted (character names are unique): a tutorial step it held opens again for its
+   * account's characters online now (Db.loadTutorial does the same for a row read later). Taking it again pays nothing (`paid`).
+   */
+  tutCharacterGone(accountId: number, name: string): void {
+    const t = this.tuts.get(accountId);
+    if (!t || t.cur?.by !== name) return;
+    delete t.cur;
+    try {
+      this.db.saveTutorial(accountId, t);
+    } catch (e) {
+      console.error('[tutorial] saving after a character delete failed', e);
+    }
+  }
+
+  /**
    * An announcement from the admin page (a banner and a chat line): to everyone in the world, or with
    * `toCharId` to that one character. Returns how many got it (0 = that character isn't online).
    */
