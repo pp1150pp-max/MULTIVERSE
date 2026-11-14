@@ -24,6 +24,22 @@ a thin bronze-gold bevelled border, and one big bold clear symbol that reads ins
 The icon fills the whole image. No text, no letters, no numbers.
 ```
 
+## ฉากหลังหน้าต่างสกิล (กลุ่มดาว) `skill_sky.png`
+
+หน้าต่างสกิลเป็นกลุ่มดาว: ดาวกลางคือคลาส มี 3 สายแตกออกไปเป็นแขน (ซ้ายบน ขวาบน ล่าง) โค้ดวาดเส้นทอง ดาวสกิล และดาวกลางทับบนภาพนี้เอง ภาพจึงต้องเป็นแค่ท้องฟ้า ไม่มีดาวสกิลหรือเส้นเชื่อม
+- ไม่ต้องแนบภาพตัวอย่าง (หรือแนบ `public/assets/sprites/ui/ico_bag.png` ถ้าอยากให้โทนสีเข้ากับ UI)
+- เซฟภาพดิบเป็น `raw/skill_sky.png` แล้วย่อเป็น 1024×1024 เซฟที่ `public/assets/sprites/ui/skill_sky.png`
+- ถ้ายังไม่มีไฟล์ หน้าต่างจะใช้ท้องฟ้าที่วาดด้วย CSS ไปก่อน
+
+```
+A square background image for a fantasy RPG skill-constellation screen, in fine-detail 16-bit SNES-era pixel art with
+crisp pixels and no blur. A deep night sky in dark navy and indigo, softly darker toward the edges, scattered with many
+tiny pixel stars of different sizes and a few faint twinkling ones. Three very faint, soft nebula glows: warm
+red-orange at the upper left, cool blue at the upper right, and green at the bottom, each fading into the dark sky.
+The centre is slightly brighter with a faint golden haze. Keep everything low-contrast and subtle so icons and gold
+lines drawn on top stay easy to read. No constellation lines, no big planets, no moon, no frames, no UI, no text.
+```
+
 ## ไอคอนเมนู "สกิล" (`ico_skills.png`)
 
 ตอนนี้ปุ่มสกิลแถวบนขวาและในเมนูใช้ไอคอนว่างกับ ⚔ ไปก่อน ถ้าจะทำไอคอนจริง:

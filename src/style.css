@@ -1591,12 +1591,13 @@ input[type=range]:hover::-webkit-slider-thumb { background: var(--ctl-accent-hi)
 
 /* ---------------------------------------------------------------- skill window (owner 2026-11-14) */
 
-#skills-win { left: 50%; top: 8px; transform: translateX(-50%); width: min(820px, calc(100vw - 32px)); max-height: calc(100vh - 24px); overflow-y: auto; font-size: 12px; z-index: 4; }
-#skills-win .sk-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 0 4px 10px; }
+#skills-win { left: 50%; top: 8px; transform: translateX(-50%); width: min(920px, calc(100vw - 32px)); max-height: calc(100vh - 24px); overflow-y: auto; font-size: 12px; z-index: 4; }
+#skills-win .sk-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 0 4px 8px; }
 #skills-win .sk-slots { display: flex; gap: 6px; }
 #skills-win .sk-slot { display: flex; flex-direction: column; align-items: center; width: 64px; padding: 4px; border: 1px solid #4a3e2a; border-radius: 4px; background: rgba(20, 16, 10, 0.75); cursor: default; }
 #skills-win .sk-slot[data-id] { cursor: pointer; }
 #skills-win .sk-slot.ult { border-color: var(--gold); }
+#skills-win .sk-slot.pas .sk-ico { border-radius: 50%; overflow: hidden; }
 #skills-win .sk-slot b { color: var(--gold-hi); font-size: 11px; }
 #skills-win .sk-slot .sk-ico { width: 36px; height: 36px; border: 1px dashed #4a3e2a; }
 #skills-win .sk-slot .sk-sname { font-size: 10px; text-align: center; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
@@ -1605,38 +1606,57 @@ input[type=range]:hover::-webkit-slider-thumb { background: var(--ctl-accent-hi)
 #skills-win .sk-refund { color: var(--ink-dim); font-size: 11px; }
 #skills-win .sk-ico { display: inline-grid; place-items: center; flex: none; width: 34px; height: 34px; }
 #skills-win .sk-ico .gi { width: 100%; height: 100%; }
-#skills-win .sk-tabs { display: none; gap: 4px; margin: 0 4px 6px; }
-#skills-win .sk-tabs button { flex: 1; font-size: 11px; border-bottom: 2px solid var(--lc); padding: 4px 2px; }
-#skills-win .sk-tabs button.active { background: rgba(60, 46, 20, 0.85); color: #fff; }
-#skills-win .sk-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-#skills-win .sk-col { border: 1px solid #4a3e2a; border-top: 3px solid var(--lc); border-radius: 4px; background: rgba(10, 8, 6, 0.5); padding: 4px; min-width: 0; }
-#skills-win .sk-col-head { text-align: center; font-weight: bold; color: var(--lc, var(--gold-hi)); margin-bottom: 4px; }
-#skills-win .sk-row { display: flex; align-items: center; gap: 6px; padding: 3px; margin-bottom: 3px; border: 1px solid transparent; border-radius: 3px; }
-#skills-win .sk-row.learned { background: rgba(60, 46, 20, 0.45); }
-#skills-win .sk-row.ult .sk-ico { box-shadow: 0 0 0 2px var(--gold-hi), 0 0 6px rgba(242, 213, 138, 0.6); border-radius: 2px; }
-#skills-win .sk-row.locked { opacity: 0.45; }
-#skills-win .sk-row.locked .sk-ico { filter: grayscale(1); }
-#skills-win .sk-info { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-#skills-win .sk-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#skills-win .sk-name i { font-style: normal; font-size: 10px; color: var(--gold-hi); }
-#skills-win .sk-rank { font-size: 10px; color: var(--ink-dim); }
-#skills-win .sk-btns { display: flex; gap: 2px; flex: none; }
-#skills-win .sk-btns button { min-width: 22px; padding: 2px 4px; font-size: 11px; }
-#skills-win .sk-btns button.on { border-color: var(--gold-hi); color: var(--gold-hi); }
-#skills-win .sk-passives { margin-top: 8px; border: 1px solid #4a3e2a; border-radius: 4px; padding: 4px; background: rgba(10, 8, 6, 0.5); }
-#skills-win .sk-prow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 #skills-win .sk-empty { color: var(--ink-dim); text-align: center; padding: 8px 4px; font-size: 11px; }
-.skill.empty .icon { background: rgba(0, 0, 0, 0.35); }
-/* Narrow screens: the three lines become tabs. */
-@media (max-width: 700px) {
-  #skills-win .sk-tabs { display: flex; }
-  #skills-win .sk-cols { grid-template-columns: 1fr; }
-  #skills-win .sk-col { display: none; }
-  #skills-win .sk-col.active { display: block; }
-  #skills-win .sk-prow { grid-template-columns: 1fr; }
+/* The constellation (sky image by the owner, art_templates/skills/PROMPTS.md; CSS stars under it until then). */
+#skills-win .sk-body { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 8px; align-items: start; }
+#skills-win .sk-mapwrap { overflow: auto; max-height: calc(100vh - 190px); border: 1px solid #4a3e2a; border-radius: 4px; background: #0a0f24; }
+#skills-win .sk-map {
+  position: relative; margin: 0 auto;
+  background:
+    url(/assets/sprites/ui/skill_sky.png) center / cover no-repeat,
+    radial-gradient(1px 1px at 23px 41px, #fff, transparent), radial-gradient(1px 1px at 97px 13px, #cfd8ff, transparent),
+    radial-gradient(1.5px 1.5px at 151px 88px, #fff, transparent), radial-gradient(1px 1px at 61px 132px, #ffe9b0, transparent),
+    radial-gradient(1px 1px at 183px 157px, #fff, transparent), radial-gradient(1.5px 1.5px at 12px 179px, #cfd8ff, transparent),
+    radial-gradient(ellipse at 50% 50%, #1d2148 0%, #0a0f24 70%);
+  background-size: cover, 200px 200px, 200px 200px, 200px 200px, 200px 200px, 200px 200px, 200px 200px, cover;
 }
-#skills-win .sk-detail { margin: 0 4px 8px; padding: 6px 8px; border: 1px solid #4a3e2a; border-radius: 4px; background: rgba(20, 16, 10, 0.75); min-height: 40px; line-height: 1.5; }
+#skills-win .sk-lines { position: absolute; inset: 0; pointer-events: none; }
+#skills-win .sk-lines > line { stroke: var(--lc); stroke-opacity: 0.35; stroke-width: 1.5; }
+#skills-win .sk-lines > line.lit { stroke: #f2c14e; stroke-opacity: 1; stroke-width: 2.5; }
+#skills-win .sk-lines > line.ghost { stroke: var(--lc); stroke-opacity: 0.16; stroke-width: 1; }
+#skills-win .sk-lines > circle.spot { fill: #8b88a8; fill-opacity: 0.45; }
+#skills-win .sk-lines > line.dash { stroke-dasharray: 3 4; stroke: #6d6a80; stroke-opacity: 0.6; }
+#skills-win .sk-core line { stroke: #f2d58a; stroke-width: 1.4; }
+#skills-win .sk-core circle { fill: #f2d58a; }
+#skills-win .sk-lname { position: absolute; transform: translate(-50%, -50%); color: var(--lc); font-weight: bold; font-size: 13px; white-space: nowrap; text-shadow: 0 0 4px #000, 0 0 2px #000; pointer-events: none; }
+#skills-win .sk-node {
+  position: absolute; width: var(--sz); height: var(--sz); transform: translate(-50%, -50%); padding: 0; margin: 0;
+  border: 2px solid var(--lc); border-radius: 50%; background: #10142c; display: grid; place-items: center; cursor: pointer; overflow: visible;
+}
+#skills-win .sk-node .sk-ico { width: 80%; height: 80%; border-radius: 50%; overflow: hidden; }
+#skills-win .sk-node.ult { box-shadow: 0 0 0 3px #10142c, 0 0 0 5px var(--lc); }
+#skills-win .sk-node.learned { border-color: #f2c14e; box-shadow: 0 0 8px rgba(242, 193, 78, 0.8); }
+#skills-win .sk-node.ult.learned { box-shadow: 0 0 0 3px #10142c, 0 0 0 5px #f2c14e, 0 0 12px rgba(242, 193, 78, 0.8); }
+#skills-win .sk-node.can:not(.learned) { animation: sk-pulse 1.6s ease-in-out infinite; }
+#skills-win .sk-node.locked { border-style: dashed; border-color: #5a5870; }
+#skills-win .sk-node.locked .sk-ico { filter: grayscale(1) brightness(0.5); }
+#skills-win .sk-node.sel { outline: 2px solid #fff; outline-offset: 3px; }
+#skills-win .sk-nr { position: absolute; right: -4px; bottom: -4px; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 8px; background: #f2c14e; color: #2a1a00; font-size: 10px; font-weight: bold; line-height: 16px; text-align: center; }
+#skills-win .sk-nlv { position: absolute; left: 50%; bottom: -15px; transform: translateX(-50%); font-size: 10px; color: #a9a6c0; white-space: nowrap; text-shadow: 0 0 3px #000; }
+#skills-win .sk-nw { position: absolute; left: -5px; top: -5px; width: 15px; height: 15px; border-radius: 3px; background: #2b5fa8; color: #fff; font-size: 10px; font-weight: bold; line-height: 15px; text-align: center; }
+@keyframes sk-pulse { 50% { box-shadow: 0 0 10px var(--lc); } }
+#skills-win .sk-detail { padding: 8px; border: 1px solid #4a3e2a; border-radius: 4px; background: rgba(20, 16, 10, 0.75); min-height: 40px; line-height: 1.5; }
 #skills-win .sk-dhead { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+#skills-win .sk-dhead .sk-ico.ult { box-shadow: 0 0 0 2px var(--gold-hi); }
 #skills-win .sk-dsub { color: var(--ink-dim); font-size: 11px; }
-#skills-win .sk-row { cursor: pointer; }
-#skills-win .sk-row.sel { border-color: var(--gold-hi); }
+#skills-win .sk-desc, #skills-win .sk-dval { margin-bottom: 4px; }
+#skills-win .sk-dbtns { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+#skills-win .sk-dbtns button { padding: 3px 8px; font-size: 11px; }
+#skills-win .sk-dbtns button.on { border-color: var(--gold-hi); color: var(--gold-hi); }
+#skills-win .sk-dwhy { margin-top: 4px; color: var(--ink-dim); font-size: 11px; }
+.skill.empty .icon { background: rgba(0, 0, 0, 0.35); }
+/* Narrow screens: the details go under the map, which scrolls. */
+@media (max-width: 760px) {
+  #skills-win .sk-body { grid-template-columns: 1fr; }
+  #skills-win .sk-mapwrap { max-height: 55vh; }
+}
