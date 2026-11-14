@@ -620,7 +620,8 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 .class-card h3 small { font-family: 'Kanit', sans-serif; color: var(--ink-dim); font-weight: 300; font-size: 13px; }
 .class-card p { margin: 0 0 6px; font-size: 12px; color: var(--ink-dim); }
 .class-card ul { margin: 0; padding: 0; list-style: none; font-size: 12px; }
-.class-card li { padding: 1px 0; }
+.class-card li { padding: 2px 0; display: flex; align-items: center; gap: 8px; }
+.class-card .line-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; }
 .menu-buttons { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 .menu-buttons button { font-size: 16px; padding: 10px 22px; }
 .menu-foot { margin-top: 20px; font-size: 11px; color: #6b6450; }
