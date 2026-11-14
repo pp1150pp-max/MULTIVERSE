@@ -232,6 +232,8 @@ export class SkillWindow {
     if (node) {
       this.sel = node.dataset.id!;
       this.update();
+      // On a narrow screen the details sit under the map: bring them into view.
+      if (getComputedStyle(this.detail.parentElement!).gridTemplateColumns.split(' ').length === 1) this.detail.scrollIntoView({ block: 'nearest' });
     }
   }
 }

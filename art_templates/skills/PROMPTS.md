@@ -24,22 +24,6 @@ a thin bronze-gold bevelled border, and one big bold clear symbol that reads ins
 The icon fills the whole image. No text, no letters, no numbers.
 ```
 
-## ไอคอนเมนู "สกิล" (`ico_skills.png`)
-
-ตอนนี้ปุ่มสกิลแถวบนขวาและในเมนูใช้ไอคอนว่างกับ ⚔ ไปก่อน ถ้าจะทำไอคอนจริง:
-- แนบ `public/assets/sprites/ui/ico_bag.png` ไปเป็นตัวอย่างสไตล์
-- เซฟภาพดิบเป็น `raw/ico_skills.png`
-- ภาพที่ใช้ในเกมคือไฟล์ 96×96 ที่ลบพื้นแมเจนตาออกแล้ว เซฟที่ `public/assets/sprites/ui/ico_skills.png`
-- จากนั้นเปลี่ยน `SKILLS_ICON` ใน `src/client/sysmenu.ts` เป็น `badge('skills')`
-
-```
-Using the attached round menu badge as the exact style and colour reference, generate ONE matching round menu badge
-in fine-detail 16-bit SNES-era pixel art with crisp pixels and no blur: the same black forged iron ring with tarnished
-aged-bronze accents, and inside it a bold clear symbol of an open glowing spellbook with a small crossed sword and
-lightning bolt rising from its pages. Centred, with empty space around it. Background ONE perfectly flat solid
-magenta (#FF00FF), no shadows on it. No readable words, no logos. Do not use pink, magenta or purple in the badge.
-```
-
 ## ฉากหลังหน้าต่างสกิล (กลุ่มดาว) `skill_sky.png`
 
 หน้าต่างสกิลเป็นกลุ่มดาว: ดาวกลางคือคลาส มี 3 สายแตกออกไปเป็นแขน (ซ้ายบน ขวาบน ล่าง) โค้ดวาดเส้นทอง ดาวสกิล และดาวกลางทับบนภาพนี้เอง ภาพจึงต้องเป็นแค่ท้องฟ้า ไม่มีดาวสกิลหรือเส้นเชื่อม
@@ -54,4 +38,20 @@ tiny pixel stars of different sizes and a few faint twinkling ones. Three very f
 red-orange at the upper left, cool blue at the upper right, and green at the bottom, each fading into the dark sky.
 The centre is slightly brighter with a faint golden haze. Keep everything low-contrast and subtle so icons and gold
 lines drawn on top stay easy to read. No constellation lines, no big planets, no moon, no frames, no UI, no text.
+```
+
+## ไอคอนเมนู "สกิล" (`ico_skills.png`)
+
+ตอนนี้ปุ่มสกิลแถวบนขวาและในเมนูใช้ไอคอนว่างกับ ⚔ ไปก่อน ถ้าจะทำไอคอนจริง:
+- แนบ `public/assets/sprites/ui/ico_bag.png` ไปเป็นตัวอย่างสไตล์
+- เซฟภาพดิบเป็น `raw/ico_skills.png`
+- ภาพที่ใช้ในเกมคือไฟล์ 96×96 ที่ลบพื้นแมเจนตาออกแล้ว เซฟที่ `public/assets/sprites/ui/ico_skills.png`
+- จากนั้นเปลี่ยน `SKILLS_ICON` ใน `src/client/sysmenu.ts` เป็น `badge('skills')`
+
+```
+Using the attached round menu badge as the exact style and colour reference, generate ONE matching round menu badge
+in fine-detail 16-bit SNES-era pixel art with crisp pixels and no blur: the same black forged iron ring with tarnished
+aged-bronze accents, and inside it a bold clear symbol of an open glowing spellbook with a small crossed sword and
+lightning bolt rising from its pages. Centred, with empty space around it. Background ONE perfectly flat solid
+magenta (#FF00FF), no shadows on it. No readable words, no logos. Do not use pink, magenta or purple in the badge.
 ```
