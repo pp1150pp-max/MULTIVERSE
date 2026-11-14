@@ -148,7 +148,7 @@ export class SkillWindow {
     const rank = rankOf(p.skillBook, sk.id);
     const r2 = (n: number) => Math.round(n * 100) / 100;
     const at = (r: number): string => [
-      sk.kind !== 'passive' ? `ดาเมจ ${Math.round(rankedDmg(sk, r) * 100)}% ATK` : '',
+      sk.kind !== 'passive' && sk.dmg > 0 ? `ดาเมจ ${Math.round(rankedDmg(sk, r) * 100)}% ATK` : '',
       sk.mp ? `MP ${rankedMp(sk, p.cls.id, p.level, r)}` : '',
       sk.cooldown ? `คูลดาวน์ ${r2(rankedCooldown(sk, r))} วิ` : '',
       ...skillParamLines(sk, r),

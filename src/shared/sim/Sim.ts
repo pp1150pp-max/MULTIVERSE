@@ -37,6 +37,7 @@ import { GEAR_KILLS, GEAR_PART_NAME, gearReward, gearRow } from '../gearQuests';
 import { TUT_ACCEPT_GOLD, TUT_ACCEPT_STONES, TUT_NPC, TUT_STEPS, TUT_STEP_NAME, TUT_TASKS, TUT_TASK_NAME, tutRows, tutTurnInReward, type TutStep, type TutTask } from '../tutorial';
 import { putAll, type MailAttach } from '../mail';
 import { RARITY_COLOR } from '../types';
+import { passiveDealMult, passiveTakenMult } from '../passives';
 import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type SfxName, type SimEvent } from './types';
 
 /** Gear of this rarity that "sell all" may take: never potions or enhanced items. */
@@ -304,8 +305,9 @@ export class Sim {
       }
       return;
     }
-    let raw = p.stats.atk * mult * (0.9 + Math.random() * 0.2);
-    const crit = opts.forceCrit || Math.random() * 100 < p.stats.crit;
+    let raw = p.stats.atk * mult * (0.9 + Math.random() * 0.2) * passiveDealMult(p, m);
+    if (this.time < p.dmgUntil) raw *= p.dmgMult;
+    const crit = opts.forceCrit || Math.random() * 100 < p.stats.crit + (opts.critBonus ?? 0);
     if (crit) raw *= 1 + p.stats.critDmg / 100;
     if (opts.maxMult) raw = Math.min(raw, p.stats.atk * opts.maxMult);
     const def = this.time < m.armorBreakUntil ? m.defense * (1 - m.armorBreak) : m.defense;
@@ -347,7 +349,7 @@ export class Sim {
     m.onHit(this, p);
     if (m.hp <= 0) {
       this.killMonster(m);
-      p.onKill();
+      p.onKill(m);
     }
   }
 
@@ -357,7 +359,8 @@ export class Sim {
       this.text(p.x, p.topY, p.z, 'MISS', 'info', 0.6);
       return;
     }
-    const dmg = Math.round(mitigate(m.atk * mult * (0.9 + Math.random() * 0.2), p.stats.def) + p.maxHp * (opts.maxHpShare ?? 0));
+    const taken = (this.time < p.takenUntil ? p.takenMult : 1) * passiveTakenMult(p);
+    const dmg = Math.round((mitigate(m.atk * mult * (0.9 + Math.random() * 0.2), p.stats.def) + p.maxHp * (opts.maxHpShare ?? 0)) * taken);
     p.hp -= dmg;
     p.lastHurt = this.time;
     p.interruptPotions();
@@ -366,8 +369,14 @@ export class Sim {
     this.events.push({ t: 'flash', id: p.id });
     this.anim(p.id, 'hit');
     this.text(p.x, p.topY, p.z, `-${dmg}`, 'hurt');
-    if (opts.stun) p.stunT = Math.max(p.stunT, opts.stun);
-    if (opts.kb) p.knockback(opts.fromX ?? m.x, opts.fromZ ?? m.z, opts.kb);
+    // Sword Anchor: no stuns or knockback while it runs.
+    const steady = this.time < p.steadyUntil;
+    if (opts.stun && !steady) p.stunT = Math.max(p.stunT, opts.stun);
+    if (opts.kb && !steady) p.knockback(opts.fromX ?? m.x, opts.fromZ ?? m.z, opts.kb);
+    // Sword Thorn Armor: a share of the damage goes back at the attacker (through its defense, like any hit).
+    if (this.time < p.reflectUntil && p.reflect > 0 && dmg > 0 && m.alive && p.stats.atk > 0) {
+      this.hitMonster(p, m, (dmg * p.reflect) / p.stats.atk, { maxMult: (dmg * p.reflect) / p.stats.atk });
+    }
     if (p.hp <= 0) this.killPlayer(p);
   }
 
@@ -598,6 +607,8 @@ export class Sim {
     p.moving = false;
     p.castT = 0;
     p.mounted = false;
+    // Skill buffs end with death.
+    p.clearSkillBuffs();
     this.events.push({ t: 'died', id: p.id });
   }
 
@@ -1183,6 +1194,8 @@ export class Sim {
       if (free) wear(p.skillBook, free, sk.id);
     }
     this.log(rank === 1 ? `เรียน${sk.nameTh}แล้ว` : `${sk.nameTh} แรงก์ ${rank}`, '#9fd8ff', p.id);
+    // The worn passive (and its rank) changes stats.
+    p.recompute();
     this.events.push({ t: 'save', to: p.id });
     return true;
   }
@@ -1205,6 +1218,7 @@ export class Sim {
     }
     p.gold -= price;
     unlearnOne(p.skillBook, sk.id);
+    p.recompute();
     const left = rankOf(p.skillBook, sk.id);
     this.log(`คืนแต้ม${sk.nameTh}${left ? ` (เหลือแรงก์ ${left})` : ' (ลืมสกิลแล้ว)'}${price ? ` −${price.toLocaleString()} G` : ''}`, '#9fd8ff', p.id);
     this.events.push({ t: 'save', to: p.id });
@@ -1227,6 +1241,7 @@ export class Sim {
       return false;
     }
     wear(p.skillBook, s, sid);
+    p.recompute();
     this.events.push({ t: 'save', to: p.id });
     return true;
   }

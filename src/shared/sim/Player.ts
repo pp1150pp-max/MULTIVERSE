@@ -4,6 +4,7 @@ import type { Monster } from './Monster';
 import type { Terrain } from './terrain';
 import type { Intent } from './types';
 import { castSkill, basicAttack } from './skills';
+import { passiveDashCdMult, passiveOnCast, passiveOnDash, passiveOnKill, passiveStats } from '../passives';
 import { CLASSES, type ClassDef, type SkillDef, type SkillSlot } from '../data/classes';
 import { cleanSkillBook, rankedCooldown, rankedMp, rankOf, skillParam, type SkillBook } from '../skillBook';
 import { addInto, BASE_MOVE_SPEED, emptyStats } from '../formulas';
@@ -431,6 +432,24 @@ export class Player extends Unit {
   /** Share of damage dealt that heals the player, until sim time `lifestealUntil` (sword Q). */
   lifesteal = 0;
   lifestealUntil = -1;
+  // Timed statuses from skills (shared by every class; not saved). Each lasts until its sim time; a recast keeps the
+  // stronger value and refreshes the time.
+  /** Damage taken × this until `takenUntil` (e.g. 0.7 = 30% less). */
+  takenMult = 1;
+  takenUntil = 0;
+  /** Damage dealt × this until `dmgUntil`. */
+  dmgMult = 1;
+  dmgUntil = 0;
+  /** Sword Thorn Armor: this share of damage taken goes back at the attacker until `reflectUntil`. */
+  reflect = 0;
+  reflectUntil = 0;
+  /** Sword Anchor: no stuns or knockback from monsters until this sim time. */
+  steadyUntil = 0;
+  /** Timed stat buffs from skills, added after the class multipliers (same id = replaced). Never saved; death ends them. */
+  statBuffs: { id: string; until: number; mods: Partial<Stats> }[] = [];
+  /** How the hitting dash running now (Charge and the sword's dash skills) knocks back, and whether it taunts. */
+  chargeKb = 9;
+  chargeTaunt = true;
   private dashVx = 0;
   private dashVz = 0;
   private chargeHit = new Set<Monster>();
@@ -577,6 +596,9 @@ export class Player extends Unit {
     this.orbs = orbCodes(this.equipment);
     // Class multipliers, then the regen cuts (so players lean on potions), gear included.
     finishStats(s, this.cls.id);
+    // The worn passive and skill buffs, flat in Stats units ("+40% attack speed" is +40 atkSpeed).
+    passiveStats(this, s);
+    for (const b of this.statBuffs) addInto(s, b.mods);
     this.stats = s;
     this.hp = Math.min(this.hp, s.maxHp);
     this.mp = Math.min(this.mp, s.maxMp);
@@ -890,10 +912,54 @@ export class Player extends Unit {
     this.moveTarget = null;
     this.face(dx, dz);
     this.sim.anim(this.id, 'dash', { duration: time + 0.12 });
+    passiveOnDash(this);
+  }
+
+  /** Starts (or restarts) a timed stat buff from a skill: the same id replaces the one running. */
+  addStatBuff(id: string, seconds: number, mods: Partial<Stats>): void {
+    this.statBuffs = this.statBuffs.filter((b) => b.id !== id);
+    this.statBuffs.push({ id, until: this.sim.time + seconds, mods });
+    this.recompute();
+  }
+
+  /** Damage taken × `mult` for `seconds` (the stronger of this and one running wins; the later end wins). */
+  addTakenMult(mult: number, seconds: number): void {
+    const t = this.sim.time;
+    this.takenMult = t < this.takenUntil ? Math.min(this.takenMult, mult) : mult;
+    this.takenUntil = Math.max(this.takenUntil, t + seconds);
+  }
+
+  /** Damage dealt × `mult` for `seconds` (the stronger of this and one running wins; the later end wins). */
+  addDmgMult(mult: number, seconds: number): void {
+    const t = this.sim.time;
+    this.dmgMult = t < this.dmgUntil ? Math.max(this.dmgMult, mult) : mult;
+    this.dmgUntil = Math.max(this.dmgUntil, t + seconds);
+  }
+
+  /** Sim time now (for timed statuses and passives). */
+  simTime(): number {
+    return this.sim.time;
+  }
+
+  /** Living monsters within `r` of this player (passives such as the sword's Duelist). */
+  monstersNear(r: number): number {
+    let n = 0;
+    for (const m of this.sim.monsters) if (m.alive && Math.hypot(m.x - this.x, m.z - this.z) <= r + m.radius) n++;
+    return n;
+  }
+
+  /** Ends every skill buff and timed status (death). */
+  clearSkillBuffs(): void {
+    this.takenUntil = this.dmgUntil = this.reflectUntil = this.steadyUntil = 0;
+    if (this.statBuffs.length) {
+      this.statBuffs = [];
+      this.recompute();
+    }
   }
 
   /** This player landed a killing blow: skills with a killCdCut number (sword Charge) come back sooner. */
-  onKill(): void {
+  onKill(m: Monster): void {
+    passiveOnKill(this, m);
     for (const sk of this.cls.skills) {
       const left = this.cd[sk.id] ?? 0;
       const cut = sk.params?.killCdCut ? skillParam(sk, 'killCdCut') / 100 : 0;
@@ -958,6 +1024,10 @@ export class Player extends Unit {
       return;
     }
     this.tickStatus(dt, sim.terrain);
+    if (this.statBuffs.some((b) => b.until <= sim.time)) {
+      this.statBuffs = this.statBuffs.filter((b) => b.until > sim.time);
+      this.recompute();
+    }
     for (const k of Object.keys(this.cd)) this.cd[k] = Math.max(0, this.cd[k] - dt);
     this.atkT -= dt;
     this.potCd -= dt;
@@ -992,9 +1062,9 @@ export class Player extends Unit {
           if (!m.alive || this.chargeHit.has(m)) continue;
           if (Math.hypot(m.x - this.x, m.z - this.z) < m.radius + 1.2) {
             this.chargeHit.add(m);
-            sim.hitMonster(this, m, this.chargeMult, { kb: 9, fromX: this.x, fromZ: this.z });
-            // Hidden on purpose (not in the skill text): whatever it runs into turns on this player.
-            m.taunt(this);
+            sim.hitMonster(this, m, this.chargeMult, { kb: this.chargeKb, fromX: this.x, fromZ: this.z });
+            // Charge: whatever it runs into turns on this player (the other hitting dashes don't).
+            if (this.chargeTaunt) m.taunt(this);
           }
         }
       }
@@ -1038,7 +1108,7 @@ export class Player extends Unit {
       const dashSkill = this.skill('dash')!;
       const [dx, dz] = mx || mz ? [mx, mz] : [this.aimX, this.aimZ];
       this.startDash(dx, dz, 4.8, 0.18, 'dash');
-      this.cd.dash = dashSkill.cooldown;
+      this.cd.dash = dashSkill.cooldown * passiveDashCdMult(this);
       return;
     }
 
@@ -1065,6 +1135,7 @@ export class Player extends Unit {
         this.mp -= cost;
         this.cd[sk.id] = this.skillCooldown(sk);
         this.lastAttack = sim.time;
+        passiveOnCast(this, sk);
         this.faceLockT = 0.3;
       }
       if (this.dashT > 0 || this.rootT > 0) return;

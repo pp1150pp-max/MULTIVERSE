@@ -5,14 +5,15 @@ import type { SkillDef } from '../data/classes';
 import type { Vec2 } from '../types';
 import * as R from '../data/skillRanges';
 import { rankedDmg, skillParam, skillReach } from '../skillBook';
+import { castSword } from './swordSkills';
 
-function forCircle(sim: Sim, x: number, z: number, r: number, fn: (m: Monster) => void): void {
+export function forCircle(sim: Sim, x: number, z: number, r: number, fn: (m: Monster) => void): void {
   for (const m of sim.monsters) {
     if (m.alive && Math.hypot(m.x - x, m.z - z) <= r + m.radius) fn(m);
   }
 }
 
-function forCone(sim: Sim, x: number, z: number, angle: number, arc: number, r: number, fn: (m: Monster) => void): void {
+export function forCone(sim: Sim, x: number, z: number, angle: number, arc: number, r: number, fn: (m: Monster) => void): void {
   for (const m of sim.monsters) {
     if (!m.alive) continue;
     const dx = m.x - x;
@@ -62,30 +63,10 @@ export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1
   const P = (key: string): number => skillParam(sk, key, rank);
   const reach = skillReach(sk);
   const far = reach ? (reach.kind === 'self' ? reach.radius : reach.range) : 0;
+  // The Swordsman's 30 skills: sim/swordSkills.ts.
+  const sword = castSword(sim, p, sk, aim, { ang, dmg, P, far });
+  if (sword !== undefined) return sword;
   switch (sk.id) {
-    // ---------------- Sword
-    case 'whirlwind':
-      sim.fx('effect', 'whirlwind', p.x, p.z, ang, 3.4);
-      // Set first so the spin's own hits heal too.
-      // Heals for a share of all damage dealt for a few seconds (recasting restarts the timer).
-      p.lifesteal = P('lifesteal') / 100;
-      p.lifestealUntil = sim.time + P('lifestealTime');
-      forCircle(sim, p.x, p.z, far, (m) => sim.hitMonster(p, m, dmg, { kb: 5 }));
-      // A moment of taking no damage at all.
-      p.invulnT = Math.max(p.invulnT, P('guard'));
-      sim.fx('ring', p.x, p.z, 1.3, '#ffcf5a', P('guard'));
-      return true;
-    case 'earthquake':
-      sim.fx('effect', 'quake', p.x, p.z, 0, 4.8);
-      sim.shake(0.5, { to: p.id });
-      forCircle(sim, p.x, p.z, far, (m) => sim.hitMonster(p, m, dmg, { stun: P('stun'), kb: 3 }));
-      return true;
-    case 'charge':
-      p.chargeMult = dmg;
-      p.startDash(Math.cos(ang), Math.sin(ang), far, 0.3, 'charge');
-      sim.fx('effect', 'charge', p.x + Math.cos(ang), p.z + Math.sin(ang), ang, 1.6);
-      return true;
-
     // ---------------- Mage
     case 'fireball':
       sim.addProjectile(p, { x: p.x, z: p.z, angle: ang, speed: 13, range: far, radius: 0.45, mult: dmg, color: '#ff7a2a', size: 1.1, explode: P('blast') });

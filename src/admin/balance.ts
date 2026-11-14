@@ -25,6 +25,7 @@ import { TUT_ACCEPT_GOLD, TUT_COUNT_MAX, TUT_GOLD_MAX, TUT_LINES_MAX, TUT_REWARD
 import type { MailAttachItem } from '../shared/mail';
 import { POTION_SIZES, potionName } from '../shared/data/potions';
 import { STONE_NAME } from '../shared/data/stones';
+import { SKILL_REACH } from '../shared/data/skillRanges';
 
 type Kids = (Node | string | null | undefined | false)[];
 type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, unknown>, ...kids: Kids) => HTMLElementTagNameMap[K];
@@ -687,7 +688,8 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       const line = sk.line !== undefined ? c.lines[sk.line].nameTh : '';
       return h('tr', {},
         h('td', {}, `${sk.nameTh} (${KIND_NAME[sk.kind as 'normal']}${line ? ` · ${line}` : ''})`),
-        ...SKILL_VALUE_KEYS.map((k) => h('td', {}, numBox(() => v[k], (n) => { v[k] = n; }, cv[k], SKILL_VALUE_RANGE[k][0], SKILL_VALUE_RANGE[k][1], k === 'dmg' || k === 'reach' ? 0.05 : k === 'cooldown' ? 0.5 : 1, refresh))),
+        // Buffs and passives reach nowhere: no reach box.
+        ...SKILL_VALUE_KEYS.map((k) => k === 'reach' && !SKILL_REACH[sk.id] ? h('td', { class: 'muted' }, '—') : h('td', {}, numBox(() => v[k], (n) => { v[k] = n; }, cv[k], SKILL_VALUE_RANGE[k][0], SKILL_VALUE_RANGE[k][1], k === 'dmg' || k === 'reach' ? 0.05 : k === 'cooldown' ? 0.5 : 1, refresh))),
         // The skill's own numbers (stun, slow, shots...): "สถานะ" ones grow with เวลาสถานะ %/แรงก์.
         h('td', {}, ...Object.entries(sk.params ?? {}).map(([pk, d]) => h('label', { class: 'bal-param' },
           `${d.nameTh}${d.status ? '*' : ''} `, numBox(() => v.params[pk], (n) => { v.params[pk] = n; }, cv.params[pk], d.lo, d.hi, d.unit === 'นัด' ? 1 : 0.05, refresh), ` ${d.unit}`))),
