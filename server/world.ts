@@ -1001,6 +1001,17 @@ export class GameWorld {
         s.auto?.start(p.x, p.z);
         s.pendingPos = null;
         break;
+      case 'skillLearn':
+        // Sim checks the id belongs to the class, the level, the points and the max rank.
+        sim.learnSkill(p, m.id);
+        break;
+      case 'skillRefund':
+        sim.refundSkill(p, m.id);
+        break;
+      case 'skillWear':
+        // Sim checks the slot, that the skill is learned and of the slot's kind, and that the player is out of combat.
+        sim.wearSkill(p, m.slot, m.id);
+        break;
       case 'autoSettings':
         // cleanAutoSettings clamps every field, so whatever the client sent is safe.
         sim.setAutoSettings(p, m.settings);
@@ -1849,7 +1860,7 @@ export class GameWorld {
     const inv = JSON.stringify([p.equipment, p.bag, p.buyback]);
     const me: PrivateSnap = {
       hp: r2(p.hp), mp: r2(p.mp), exp: p.exp, level: p.level, gold: p.gold,
-      potSel: p.potSel, lootFilter: p.lootFilter, autoSettings: p.autoSettings, bossKills: p.bossKills, quests: p.quests, gearQuests: p.gearQuests, gearDone: p.gearDone, stats: p.stats, cd: p.cd, potCd: r2(p.potCd), restCd: r2(Math.max(0, p.restCd)), castT: p.castT > 0 ? r2(p.castT) : undefined,
+      potSel: p.potSel, lootFilter: p.lootFilter, autoSettings: p.autoSettings, bossKills: p.bossKills, quests: p.quests, gearQuests: p.gearQuests, gearDone: p.gearDone, stats: p.stats, cd: p.cd, skills: p.skillBook, potCd: r2(p.potCd), restCd: r2(Math.max(0, p.restCd)), castT: p.castT > 0 ? r2(p.castT) : undefined,
       ...(Object.keys(p.buffs).length ? { buffs: roundBuffs(p.buffs) } : {}),
       // Slowed (the Bog Witch's poison): the browser walks slower too, or its moves would be refused.
       ...(p.slowT > 0 && p.slowAmt > 0 ? { slow: p.slowAmt } : {}),

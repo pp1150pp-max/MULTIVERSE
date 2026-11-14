@@ -63,7 +63,7 @@ export class GameAudio {
         this.at('enrage', ev.x, ev.z, me);
         break;
       case 'anim':
-        this.onAnim(ev.id, ev.name, b);
+        this.onAnim(ev.id, ev.name, b, ev.skill);
         break;
       case 'flash': {
         if (ev.id === me.id) {
@@ -83,14 +83,15 @@ export class GameAudio {
     }
   }
 
-  private onAnim(id: number, name: string, b: Backend): void {
+  private onAnim(id: number, name: string, b: Backend, skill?: string): void {
     const slot = ANIM_SLOT[name];
     if (!slot) return;
     const p = b.players.find((x) => x.id === id);
     if (!p) return;
     // Charge is a dash too: its own sound plays from skill_r.
     if (slot === 'dash' && p.dashKind === 'charge') return;
-    const sound = p.skill(slot)?.id;
+    // A skill names itself (many share one animation row); the basic attack and dash are the class's own.
+    const sound = slot === 'basic' || slot === 'dash' ? p.skill(slot)?.id : skill;
     if (!sound || !isSoundName(sound)) return;
     if (p === b.me) playSound(sound);
     else this.at(sound, p.x, p.z, b.me, OTHER_PLAYER_GAIN);

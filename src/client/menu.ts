@@ -79,7 +79,7 @@ function buildClassCards(container: HTMLElement): () => ClassId {
     const body = document.createElement('div');
     body.innerHTML =
       `<h3>${c.name} <small>${c.nameTh}</small></h3><p>${c.desc}</p>` +
-      `<ul>${c.skills.filter((s) => s.slot !== 'dash').map((s) => `<li>${skillIcon(s.id)} <b>${s.name}</b> — ${s.nameTh}</li>`).join('')}</ul>`;
+      `<ul>${c.skills.filter((s) => s.kind !== 'dash').map((s) => `<li>${skillIcon(s.id)} <b>${s.name}</b> — ${s.nameTh}</li>`).join('')}</ul>`;
     card.append(body);
     card.onclick = () => {
       chosen = id;

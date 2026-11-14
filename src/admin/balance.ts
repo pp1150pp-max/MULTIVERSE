@@ -15,7 +15,9 @@ import {
   type AutoAllow, type AutoDefaults,
 } from '../shared/autoTuning';
 import { NO_BOOST, ZONES, type MonsterBoost } from '../shared/data/zones';
-import { CLASSES, CLASS_IDS } from '../shared/data/classes';
+import { SKILL_NUM_NAME, SKILL_RANGE, SKILL_VALUE_KEYS, SKILL_VALUE_NAME, SKILL_VALUE_RANGE, UNLOCK_TIERS } from '../shared/skillTuning';
+import { rankedCooldown, rankedDmg, rankedMp } from '../shared/skillBook';
+import { CLASSES, CLASS_IDS, isLearnable, KIND_NAME, LEARN_KINDS } from '../shared/data/classes';
 import { ITEM_BASES, itemRowKinds, rowRanges, TIER_BAND_NAME, TIER_BANDS, tierBandOf, tierChances, tierRanges } from '../shared/data/items';
 import { MAX_LEVEL } from '../shared/formulas';
 import { RARITIES, RARITY_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, type ClassId, type Rarity, type StatKey } from '../shared/types';
@@ -654,6 +656,58 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
+  // ---------------------------------------------------------- skills (src/shared/skillTuning.ts, owner 2026-11-14)
+  const skillCard = h('div', { class: 'card' });
+  let skillCls: ClassId = 'sword';
+  const drawSkills = (): void => {
+    const sc = draft.skills;
+    const cs = code.skills;
+    const outs: (() => void)[] = [];
+    const refresh = (): void => { outs.forEach((f) => f()); updateSummary(); };
+    const num = (k: keyof typeof SKILL_RANGE, step: number) =>
+      h('label', {}, `${SKILL_NUM_NAME[k]} `, numBox(() => sc[k], (n) => { sc[k] = n; }, cs[k], SKILL_RANGE[k][0], SKILL_RANGE[k][1], step, refresh));
+    // Unlock levels: one box per tier, e.g. ปลดล็อกสกิลธรรมดา [1][3][6]...
+    const unlockRows = LEARN_KINDS.map((k) => h('div', { class: 'row bal-line' },
+      h('span', {}, `เลเวลปลดล็อก${KIND_NAME[k]} (ลำดับที่ 1–${UNLOCK_TIERS[k]}) `),
+      ...sc.unlock[k].map((_, i) => numBox(() => sc.unlock[k][i], (n) => { sc.unlock[k][i] = n; }, cs.unlock[k][i], 1, MAX_LEVEL, 1, refresh))));
+    const tabs = h('div', { class: 'subtabs' }, ...CLASS_IDS.map((id) =>
+      h('button', { class: id === skillCls ? 'on' : '', onclick: () => { skillCls = id; drawSkills(); } }, CLASSES[id].nameTh)));
+    const c = CLASSES[skillCls];
+    const rows = c.skills.filter(isLearnable).map((sk) => {
+      const v = sc.skills[sk.id];
+      const cv = cs.skills[sk.id];
+      const out = h('td', { class: 'bal-out' });
+      const top = sc.maxRank;
+      const show2 = (n: number) => Math.round(n * 100) / 100;
+      outs.push(() => {
+        out.textContent = `ดาเมจ ${Math.round(rankedDmg(sk, 1, draft) * 100)}%→${Math.round(rankedDmg(sk, top, draft) * 100)}% · ` +
+          `MP Lv1 ${rankedMp(sk, skillCls, 1, 1, draft)} / Lv${sc.lastPointLevel} r${top} ${rankedMp(sk, skillCls, sc.lastPointLevel, top, draft)} · ` +
+          `CD ${show2(rankedCooldown(sk, 1, draft))}→${show2(rankedCooldown(sk, top, draft))} วิ`;
+      });
+      const line = sk.line !== undefined ? c.lines[sk.line].nameTh : '';
+      return h('tr', {},
+        h('td', {}, `${sk.nameTh} (${KIND_NAME[sk.kind as 'normal']}${line ? ` · ${line}` : ''})`),
+        ...SKILL_VALUE_KEYS.map((k) => h('td', {}, numBox(() => v[k], (n) => { v[k] = n; }, cv[k], SKILL_VALUE_RANGE[k][0], SKILL_VALUE_RANGE[k][1], k === 'dmg' || k === 'reach' ? 0.05 : k === 'cooldown' ? 0.5 : 1, refresh))),
+        // The skill's own numbers (stun, slow, shots...): "สถานะ" ones grow with เวลาสถานะ %/แรงก์.
+        h('td', {}, ...Object.entries(sk.params ?? {}).map(([pk, d]) => h('label', { class: 'bal-param' },
+          `${d.nameTh}${d.status ? '*' : ''} `, numBox(() => v.params[pk], (n) => { v.params[pk] = n; }, cv.params[pk], d.lo, d.hi, d.unit === 'นัด' ? 1 : 0.05, refresh), ` ${d.unit}`))),
+        out);
+    });
+    skillCard.replaceChildren(
+      h('h2', {}, 'ระบบสกิล'),
+      h('div', { class: 'muted' }, 'แต้มสกิล = เลเวล (ไม่เกินเลเวลที่ตั้ง) × แต้มต่อเลเวล · เรียนสกิล = แรงก์ 1 ใช้ 1 แต้ม อัปแรงก์ละ 1 แต้ม · คืนแต้มฟรีเมื่อแต้มรวมน้อยกว่าที่ตั้ง หลังจากนั้นเสียทองต่อแต้ม'),
+      h('div', { class: 'row bal-line' }, num('pointsPerLevel', 1), num('lastPointLevel', 1), num('maxRank', 1)),
+      h('div', { class: 'row bal-line' }, num('freeRefundBelow', 1), num('refundCost', 100)),
+      ...unlockRows,
+      h('div', { class: 'muted' }, 'ค่ารายสกิล: % ต่อแรงก์คิดจากแรงก์ 1 (เช่น ดาเมจ 5% → แรงก์ 10 = ×1.45) · คูลดาวน์ %/แรงก์ ติดลบ = สั้นลง · MP คูณต่อจาก MP สกิล/เลเวลของอาชีพ · เวลาสถานะ = สตัน ช้า ลดเกราะ ไม่รับดาเมจ ดูดเลือด · ระยะ/รัศมี = ระยะยิง/พุ่ง หรือรัศมีรอบตัว (วงระเบิด/วงตกอยู่ในค่าพิเศษ)'),
+      tabs,
+      h('div', { class: 'bal-scroll' }, h('table', { class: 'bal-table' },
+        h('thead', {}, h('tr', {}, h('th', {}, 'สกิล'), ...SKILL_VALUE_KEYS.map((k) => h('th', {}, SKILL_VALUE_NAME[k])), h('th', {}, 'ค่าพิเศษ (* = โตตามเวลาสถานะ)'), h('th', { class: 'bal-out' }, 'ได้จริง (แรงก์ 1 → สูงสุด)'))),
+        h('tbody', {}, ...rows))),
+    );
+    outs.forEach((f) => f());
+  };
+
   const draftTuning = (): ReturnType<typeof checkBalance> => checkBalance(draft, true);
   function updateSummary(): void {
     const c = draftTuning();
@@ -674,6 +728,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawMonsters();
     drawAuto();
     drawTut();
+    drawSkills();
   };
   const save =async (body: { tuning: BalanceTuning } | { reset: true }, ask: string): Promise<void> => {
     if (!confirm(ask)) return;
@@ -717,11 +772,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         void save({ tuning: c.tuning }, `ใช้ค่าใหม่กับทั้งเซิร์ฟทันทีไหม?\n\n${changes.slice(0, 1200)}`);
       } }, '💾 บันทึกทั้งเซิร์ฟ'),
       h('button', { onclick: () => { draft = mergeBalance(saved); redraw(); msg.textContent = ''; } }, 'ยกเลิกที่ยังไม่บันทึก'),
-      h('button', { onclick: () => void save({ reset: true }, 'คืนทุกค่า (อาชีพ tier ตัวคูณมอน Auto Play และรางวัลเควสสอนระบบ) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?') }, '↺ คืนค่าในโค้ด'),
+      h('button', { onclick: () => void save({ reset: true }, 'คืนทุกค่า (อาชีพ tier ตัวคูณมอน Auto Play รางวัลเควสสอนระบบ และระบบสกิล) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?') }, '↺ คืนค่าในโค้ด'),
     ),
     msg,
   );
 
-  box.replaceChildren(classCard, regenCard, tierCard, previewCard, monsterCard, autoCard, tutCard, bar);
+  box.replaceChildren(classCard, regenCard, tierCard, previewCard, monsterCard, autoCard, tutCard, skillCard, bar);
   redraw();
 }

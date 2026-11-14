@@ -22,7 +22,8 @@ import { zoneById, type SpawnArea, type ZoneDef } from '../../shared/data/zones'
 import type { NpcId } from '../../shared/data/npcs';
 import type { DailyView } from '../../shared/daily';
 import type { BuffScroll, EquipSlot, Item, PotionKind, PotionSize, Rarity, Vec2 } from '../../shared/types';
-import type { SkillSlot } from '../../shared/data/classes';
+import type { SkillSlot, WearSlot } from '../../shared/data/classes';
+import { cleanSkillBook } from '../../shared/skillBook';
 import { INPUT_HZ, PING_MS, WS_CLOSE_QUIT, WS_PATH, type ClientMsg, type ServerMsg, type ShutdownMode, type SnapshotMsg } from '../../shared/net/protocol';
 import type { PartyFound, PartySnap } from '../../shared/party';
 import type { TradeView } from '../../shared/trade';
@@ -263,7 +264,7 @@ export class OnlineBackend implements Backend {
       name: mine.name, classId: mine.cls, level: first.me.level, exp: first.me.exp, gold: first.me.gold,
       potSel: first.me.potSel, lootFilter: first.me.lootFilter, autoSettings: first.me.autoSettings, bossKills: first.me.bossKills,
       equipment: first.me.inv?.equipment ?? {}, bag: first.me.inv?.bag ?? [], zone: this.zone.id,
-      buyback: first.me.inv?.buyback, buybackLeft: first.me.buybackLeft,
+      buyback: first.me.inv?.buyback, buybackLeft: first.me.buybackLeft, skills: first.me.skills,
     };
     this.me = new Player(myId, NO_SIM, data);
     this.me.x = mine.x;
@@ -690,6 +691,7 @@ export class OnlineBackend implements Backend {
     if (!this.autoSetPending && pv.autoSettings) me.autoSettings = pv.autoSettings;
     me.stats = pv.stats;
     me.cd = { ...pv.cd };
+    if (pv.skills) me.skillBook = cleanSkillBook(me.cls.id, pv.skills);
     me.potCd = pv.potCd;
     me.restCd = pv.restCd ?? 0;
     me.castT = pv.castT ?? 0;
@@ -797,7 +799,7 @@ export class OnlineBackend implements Backend {
     for (const m of this.monsters) if (!m.alive) m.deadT += dt;
     for (const l of this.loots) l.t += dt;
     const me = this.me;
-    for (const key of Object.keys(me.cd) as SkillSlot[]) me.cd[key] = Math.max(0, (me.cd[key] ?? 0) - dt);
+    for (const key of Object.keys(me.cd)) me.cd[key] = Math.max(0, me.cd[key] - dt);
     me.potCd -= dt;
     me.restCd -= dt;
     if (me.castT > 0) me.castT = Math.max(0, me.castT - dt);
@@ -899,6 +901,9 @@ export class OnlineBackend implements Backend {
     setTimeout(() => (this.autoSetPending = false), 800);
     this.send({ t: 'act', a: 'autoSettings', settings });
   }
+  learnSkill(id: string): void { this.send({ t: 'act', a: 'skillLearn', id }); }
+  refundSkill(id: string): void { this.send({ t: 'act', a: 'skillRefund', id }); }
+  wearSkill(slot: WearSlot, id: string | null): void { this.send({ t: 'act', a: 'skillWear', slot, id }); }
   sell(i: number, n?: number): void { this.send({ t: 'act', a: 'sell', i, n }); }
   splitInBag(from: number, to: number, n: number): void { this.send({ t: 'act', a: 'split', from, to, n }); }
   stashSplit(from: 'bag' | 'stash', i: number, to: 'bag' | 'stash', j: number, n: number): void {

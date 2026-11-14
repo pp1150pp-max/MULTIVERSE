@@ -11,6 +11,7 @@ import {
 import { MONSTERS, type MonsterDef } from './data/monsters';
 import { autoChanges, checkAutoTuning, codeAuto, mergeAuto, type AutoConfig, type AutoTuning } from './autoTuning';
 import { checkTutorialTuning, codeTutorial, mergeTutorial, tutorialChanges, type TutorialConfig, type TutorialTuning } from './tutorial';
+import { checkSkillTuning, codeSkills, mergeSkills, skillChanges, type SkillConfig, type SkillTuning } from './skillTuning';
 import { addInto, emptyStats } from './formulas';
 import { STAT_KEYS, STAT_LABEL, type ClassId, type StatKey, type Stats } from './types';
 
@@ -94,6 +95,8 @@ export interface Balance {
   auto: AutoConfig;
   /** Tutorial quest rewards (tutorial.ts). */
   tutorial: TutorialConfig;
+  /** Skill points, ranks, unlock levels, refunds and every learnable skill's numbers (skillTuning.ts). */
+  skills: SkillConfig;
 }
 
 /** What is saved: only what differs from the code. Tier arrays are saved whole when any entry differs. */
@@ -120,6 +123,8 @@ export interface BalanceTuning {
   auto?: AutoTuning;
   /** Tutorial quest rewards that differ from the code. */
   tutorial?: TutorialTuning;
+  /** Skill system settings that differ from the code. */
+  skills?: SkillTuning;
 }
 
 /** Highest Lv1 / per-level value of each stat (owner 2026-11-11); the lowest is 0. */
@@ -168,6 +173,7 @@ export function codeBalance(): Balance {
     monsters: {},
     auto: codeAuto(),
     tutorial: codeTutorial(),
+    skills: codeSkills(),
   };
 }
 
@@ -196,6 +202,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.monsters) b.monsters = structuredClone(t.monsters);
   b.auto = mergeAuto(t.auto);
   b.tutorial = mergeTutorial(t.tutorial);
+  b.skills = mergeSkills(t.skills);
   return b;
 }
 
@@ -312,7 +319,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'monsters', 'auto', 'tutorial'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'monsters', 'auto', 'tutorial', 'skills'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -598,6 +605,12 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (c.tuning) out.tutorial = c.tuning;
     return null;
   };
+  const skills = (): string | null => {
+    const c = checkSkillTuning(o.skills, strict);
+    if ('error' in c) return c.error;
+    if (c.tuning) out.skills = c.tuning;
+    return null;
+  };
   const err =
     one('hpRegenMult', BALANCE_RANGE.regenMult, 'ตัวคูณฟื้น HP') ??
     one('mpRegenMult', BALANCE_RANGE.regenMult, 'ตัวคูณฟื้น MP') ??
@@ -610,7 +623,8 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     itemMult() ??
     monsters() ??
     auto() ??
-    tutorial();
+    tutorial() ??
+    skills();
   if (err) return { error: err };
   // Fixed key order.
   const ordered: BalanceTuning = {};
@@ -684,6 +698,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   for (const d of TUNABLE_MONSTERS) mons(d.nameTh, a.monsters.types?.[d.id], b.monsters.types?.[d.id]);
   out.push(...autoChanges(a.auto, b.auto));
   out.push(...tutorialChanges(a.tutorial, b.tutorial));
+  out.push(...skillChanges(a.skills, b.skills));
   return out.join(', ');
 }
 

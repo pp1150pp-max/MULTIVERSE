@@ -2,6 +2,7 @@
 // mirrors what it sends. Game, HUD and views only talk to this interface.
 import type { Terrain } from '../shared/sim/terrain';
 import type { CosSlot } from '../shared/data/cosmetics';
+import type { WearSlot } from '../shared/data/classes';
 import type { Player, AutoSettings, LootFilter, SortKey } from '../shared/sim/Player';
 import type { Monster } from '../shared/sim/Monster';
 import type { Loot } from '../shared/sim/Loot';
@@ -96,6 +97,10 @@ export interface Backend {
   setAuto(on: boolean): void;
   setLootFilter(f: LootFilter): void;
   setAutoSettings(s: AutoSettings): void;
+  /** Skill window: learn a skill or its next rank (one point), take one point back, wear a learned skill (null = take off). */
+  learnSkill(id: string): void;
+  refundSkill(id: string): void;
+  wearSkill(slot: WearSlot, id: string | null): void;
   /** `n` = sell only that many from a potion/stone stack (omitted = the whole slot). */
   sell(bagIndex: number, n?: number): void;
   /** Shift+drag: move `n` of a stack in bag slot `from` onto bag slot `to`. */

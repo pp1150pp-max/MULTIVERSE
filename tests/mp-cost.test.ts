@@ -15,6 +15,7 @@ import { ZONE_1 } from '../src/shared/data/zones';
 import { Sim } from '../src/shared/sim/Sim';
 import { IDLE_INTENT } from '../src/shared/sim/types';
 import { finish, ok } from './check';
+import { oldSkills } from './skills';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const dir = mkdtempSync(join(tmpdir(), 'multiverse-mp-cost-test-'));
@@ -48,7 +49,7 @@ let proc: ChildProcess | null = null;
   const sim = new Sim(ZONE_1);
   for (let i = 0; i < 300 && !sim.monsters.some((m) => m.alive && !m.isBoss); i++) sim.step(0.1);
   const mob = sim.monsters.find((m) => m.alive && !m.isBoss)!;
-  const p = sim.addPlayer({ name: 'M', classId: 'mage', level: 40, exp: 0, gold: 0, equipment: {}, bag: [] });
+  const p = sim.addPlayer({ name: 'M', classId: 'mage', level: 40, exp: 0, gold: 0, equipment: {}, bag: [], skills: oldSkills('mage') });
   /** MP spent casting fireball once at the monster, starting from `mp` (a very short step, so regen hardly counts). */
   const cast = (mp: number): number => {
     p.x = mob.x + 2;
@@ -61,9 +62,9 @@ let proc: ChildProcess | null = null;
   ok(!sim.inSafe(p), 'the test player stands outside any safe zone');
   ok(p.skillMp(p.skill('q')!) === 22, 'Player.skillMp: Lv40 fireball 22');
   const spent = cast(300);
-  ok(Math.abs(spent - 22) < 0.5 && (p.cd.q ?? 0) > 0, `Lv40 mage casts fireball for 22 MP (${spent.toFixed(2)})`);
+  ok(Math.abs(spent - 22) < 0.5 && (p.cd.fireball ?? 0) > 0, `Lv40 mage casts fireball for 22 MP (${spent.toFixed(2)})`);
   const short = cast(21);
-  ok(short <= 0 && (p.cd.q ?? 0) <= 0, `21 MP is not enough at Lv40: no cast (${short.toFixed(2)})`);
+  ok(short <= 0 && (p.cd.fireball ?? 0) <= 0, `21 MP is not enough at Lv40: no cast (${short.toFixed(2)})`);
   applyBalance({ classes: { mage: { mpCostPerLevel: 0 } } });
   ok(Math.abs(cast(300) - 10) < 0.5, '0% per level: back to the code cost (10) at once');
   applyBalance({});

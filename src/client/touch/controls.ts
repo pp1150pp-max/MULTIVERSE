@@ -6,7 +6,8 @@ import type { Game } from '../Game';
 import { potionIcon, skillIcon, stoneIcon } from '../icons';
 import { POTION_SIZES, POTION_SIZE_LABEL, potionName } from '../../shared/data/potions';
 import { isPotion, type PotionKind, type PotionSize } from '../../shared/types';
-import type { SkillSlot } from '../../shared/data/classes';
+import type { SkillDef, SkillSlot } from '../../shared/data/classes';
+import { skillReach } from '../../shared/skillBook';
 import { isTouchMode, onPointerModeChange } from './device';
 import { imgUrl } from '../img';
 import type { Vec2 } from '../../shared/types';
@@ -24,23 +25,22 @@ const AIM_DRAG_PX = 12;
 /** How long a released aimed skill keeps its key down, so the next input sent to the server carries it. */
 const CAST_HOLD_MS = 120;
 
+/** How a skill is aimed by dragging: the reach of the aim line, a ring at its end, or `spot` (lands where dragged). */
+interface AimSpec { range: number; burst?: number; spot?: boolean }
+
 /**
- * Skills that can be aimed by dragging, by skill id: the reach of the aim line (world units, as the server
- * uses it), a ring at the line's end for skills that burst there, or `spot` for skills that land on a point
- * (the circle goes as far as the finger drags). Skills around the player (Whirlwind, Earthquake, Frost Nova)
- * and the Swordsman's Slash are not listed: they have no aiming, as before.
+ * Aiming of a skill, from its reach as the server uses it (tuned on /admin, see skillReach): shots and dashes aim a
+ * line, a shot that explodes rings its end, a skill landing on a point (Meteor) follows the finger. Skills around the
+ * player and cone swings (Slash) have no aiming, as before.
  */
-const AIM: Record<string, { range: number; burst?: number; spot?: boolean }> = {
-  bolt: { range: 11 },
-  shot: { range: 12 },
-  charge: { range: 7 },
-  fireball: { range: 12, burst: 2.6 },
-  meteor: { range: 12, burst: 3.5, spot: true },
-  rapidfire: { range: 12 },
-  pierce: { range: 16 },
-  headshot: { range: 18 },
-};
-type AimSpec = (typeof AIM)[string];
+function aimSpec(sk: SkillDef | undefined): AimSpec | undefined {
+  const r = sk && skillReach(sk);
+  if (!r) return undefined;
+  if (r.kind === 'shot') return { range: r.range, burst: r.blast };
+  if (r.kind === 'dash') return { range: r.range };
+  if (r.kind === 'point') return { range: r.range, burst: r.radius, spot: true };
+  return undefined;
+}
 
 const art = (name: string): string => `<img src="${imgUrl(`assets/sprites/ui/touch/${name}.png`)}" alt="" draggable="false">`;
 const badgeArt = (name: string): string => `<img src="${imgUrl(`assets/sprites/ui/ico_${name}.png`)}" alt="" draggable="false">`;
@@ -185,7 +185,7 @@ export class TouchControls {
       cx = r.left + r.width / 2;
       cy = r.top + r.height / 2;
       dragging = false;
-      spec = AIM[this.g.player.skill(slot)?.id ?? ''];
+      spec = aimSpec(this.g.player.skill(slot));
       if (basic || !spec) input.press(code);
     });
     el.addEventListener('pointermove', (e) => {
@@ -310,9 +310,18 @@ export class TouchControls {
     const p = g.player;
     for (const s of this.skills) {
       const sk = p.skill(s.slot);
-      const remain = p.cd[s.slot] ?? 0;
-      s.cd.style.height = sk?.cooldown ? `${(remain / sk.cooldown) * 100}%` : '0%';
-      const txt = remain > 0 && (sk?.cooldown ?? 0) > 1 ? remain.toFixed(remain < 10 ? 1 : 0) : '';
+      // The skill worn on Q/E/R can change (skill window): swap the button's icon.
+      if (s.slot !== 'dash' && s.el.dataset.sk !== (sk?.id ?? '')) {
+        s.el.dataset.sk = sk?.id ?? '';
+        const ico = s.el.querySelector('.tc-ico')!;
+        ico.querySelector('img')?.remove();
+        if (sk) ico.insertAdjacentHTML('afterbegin', skillIcon(sk.id));
+        s.el.classList.toggle('empty', !sk);
+      }
+      const full = sk ? p.skillCooldown(sk) : 0;
+      const remain = sk ? p.cd[sk.id] ?? 0 : 0;
+      s.cd.style.height = full ? `${(remain / full) * 100}%` : '0%';
+      const txt = remain > 0 && full > 1 ? remain.toFixed(remain < 10 ? 1 : 0) : '';
       if (s.num.textContent !== txt) s.num.textContent = txt;
       s.el.classList.toggle('nomp', !!sk && p.mp < p.skillMp(sk));
     }

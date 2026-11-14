@@ -84,7 +84,8 @@ export type SimEvent =
   | { t: 'bossSpawn'; name: string }
   | { t: 'flash'; id: number }
   /** One-shot animation. `fallback` = play the attack animation if the actor lacks `name`. */
-  | { t: 'anim'; id: number; name: string; duration?: number; fallback?: 'attack' }
+  /** `skill` = the skill cast (its sound), since many skills share one class animation row. */
+  | { t: 'anim'; id: number; name: string; duration?: number; fallback?: 'attack'; skill?: string }
   | { t: 'item'; to: number; item: Item }
   | { t: 'inventory'; to: number }
   | { t: 'died'; id: number }

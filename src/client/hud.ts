@@ -3,7 +3,8 @@ import { placeLabel } from '../shared/channels';
 import type { Game } from './Game';
 import { NPC_USE_RANGE, type NpcId } from '../shared/data/npcs';
 import type { SkillSlot } from '../shared/data/classes';
-import { SKILL_REACH, reachRadius, reachText } from '../shared/data/skillRanges';
+import { reachRadius, reachText } from '../shared/data/skillRanges';
+import { rankedDmg, skillParamLines, skillReach } from '../shared/skillBook';
 import {
   bonusPct, DROP_ON_FAIL_FROM, dropsOnFail, FORGE_CD, effectiveStats, enhanceBonus, enhanceCost, ENHANCE_STONES_PER_TRY, itemName,
   MAX_PLUS, PITY_STEP, pityBonus, plusOf, rateFor, sellValue, STONE_FROM, stonesNeeded, successRate,
@@ -879,7 +880,11 @@ export class Hud {
       bar.append(el);
       this.slotEls.push({ kind, el, cd: el.querySelector('.cd')!, extra: el.querySelector('.extra')! });
     };
-    for (const s of this.g.player.cls.skills) add(s.slot, skillIcon(s.id), KEY_LABEL[s.slot]);
+    // Basic attack, the three loadout slots (their icons follow the skill worn, see update) and the dash.
+    for (const slot of ['basic', 'q', 'e', 'r', 'dash'] as const) {
+      const sk = this.g.player.skill(slot);
+      add(slot, sk ? skillIcon(sk.id) : '', KEY_LABEL[slot]);
+    }
     add('hp', potionIcon('hp'), '1');
     add('mp', potionIcon('mp'), '2');
   }
@@ -900,13 +905,20 @@ export class Hud {
       return;
     }
     const sk = p.skill(kind);
-    if (!sk) return;
-    const reach = SKILL_REACH[sk.id];
-    const remain = p.cd[kind] ?? 0;
+    if (!sk) {
+      tip.innerHTML = `<div class="tt-name">ช่อง ${key} ว่าง</div><div class="tt-hint">กด K เปิดหน้าต่างสกิลเพื่อเรียนและใส่สกิล</div>`;
+      this.placeTip(tip, e);
+      return;
+    }
+    const reach = skillReach(sk);
+    const remain = p.cd[sk.id] ?? 0;
+    const rank = p.skillRank(sk);
+    const full = p.skillCooldown(sk);
     const stats = [
+      sk.kind === 'normal' || sk.kind === 'ult' ? `<div>แรงก์ <span class="tt-val">${rank}</span> · ดาเมจ <span class="tt-val">${Math.round(rankedDmg(sk, rank) * 100)}% ATK</span></div>` : '',
       sk.mp ? `<div>MP <span class="tt-val">${p.skillMp(sk)}</span></div>` : '',
-      sk.cooldown ? `<div>คูลดาวน์ <span class="tt-val">${sk.cooldown} วิ</span></div>` : '',
-      sk.killCdCut ? `<div>ฆ่ามอนได้ ลดคูลดาวน์ที่เหลือ <span class="tt-val">${Math.round(sk.killCdCut * 100)}%</span></div>` : '',
+      full ? `<div>คูลดาวน์ <span class="tt-val">${full} วิ</span></div>` : '',
+      ...skillParamLines(sk, Math.max(1, rank)).map((l) => `<div><span class="tt-val">${l}</span></div>`),
       reach ? `<div><span class="tt-val">${reachText(reach)}</span></div>` : '',
     ].join('');
     tip.innerHTML =
@@ -973,9 +985,20 @@ export class Hud {
         continue;
       }
       const sk = p.skill(s.kind);
-      if (!sk) continue;
-      const remain = p.cd[s.kind] ?? 0;
-      s.cd.style.height = sk.cooldown ? `${(remain / sk.cooldown) * 100}%` : '0%';
+      // The skill worn on Q/E/R can change (skill window): swap the icon, empty slots show none.
+      if (s.el.dataset.sk !== (sk?.id ?? '')) {
+        s.el.dataset.sk = sk?.id ?? '';
+        s.el.querySelector('.icon')!.innerHTML = sk ? skillIcon(sk.id) : '';
+        s.el.classList.toggle('empty', !sk);
+      }
+      if (!sk) {
+        s.cd.style.height = '0%';
+        s.extra.textContent = '';
+        continue;
+      }
+      const full = p.skillCooldown(sk);
+      const remain = p.cd[sk.id] ?? 0;
+      s.cd.style.height = full ? `${(remain / full) * 100}%` : '0%';
       s.extra.textContent = remain > 0 ? remain.toFixed(1) : '';
       s.el.classList.toggle('nomp', p.mp < p.skillMp(sk));
     }
@@ -1401,6 +1424,7 @@ export class Hud {
     this.toggleMap(false);
     this.toggleBag(false);
     this.toggleHelp(false);
+    this.g.skillWin.toggle(false);
     this.closeShop();
     this.closeStash();
     this.closeForge();
