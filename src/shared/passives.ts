@@ -9,6 +9,7 @@ import type { Stats } from './types';
 import { learnable, rankOf, skillParam } from './skillBook';
 import { GUNSLINGER_PASSIVES } from './passives/gunslinger';
 import { MAGE_PASSIVES } from './passives/mage';
+import { SWORD_PASSIVES } from './passives/sword';
 
 /** One of the worn passive's numbers at its rank. */
 export type PassiveValue = (key: string) => number;
@@ -29,12 +30,15 @@ export interface PassiveHooks {
   onDash?(p: Player, v: PassiveValue): void;
   /** How a skill is cast: × its damage and × the size of its blasts and areas (castSkill). */
   skillScale?(p: Player, sk: SkillDef, v: PassiveValue): { dmg?: number; area?: number };
+  /** × the dash's cooldown (Player.update, the plain dash). */
+  dashCdMult?(p: Player, v: PassiveValue): number;
 }
 
 /** Every class's passives by skill id. Each class PR adds its own file here. */
 const HOOKS: Record<string, PassiveHooks> = {
   ...GUNSLINGER_PASSIVES,
   ...MAGE_PASSIVES,
+  ...SWORD_PASSIVES,
 };
 
 /** The passive this player wears, with its hooks and numbers, if any. */
@@ -82,4 +86,9 @@ export function passiveSkillScale(p: Player, sk: SkillDef): { dmg: number; area:
   const w = worn(p);
   const r = w?.h.skillScale?.(p, sk, w.v);
   return { dmg: r?.dmg ?? 1, area: r?.area ?? 1 };
+}
+
+export function passiveDashCdMult(p: Player): number {
+  const w = worn(p);
+  return w?.h.dashCdMult?.(p, w.v) ?? 1;
 }

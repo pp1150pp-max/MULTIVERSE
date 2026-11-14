@@ -915,7 +915,7 @@ export class Hud {
     const rank = p.skillRank(sk);
     const full = p.skillCooldown(sk);
     const stats = [
-      sk.kind === 'normal' || sk.kind === 'ult' ? `<div>แรงก์ <span class="tt-val">${rank}</span> · ดาเมจ <span class="tt-val">${Math.round(rankedDmg(sk, rank) * 100)}% ATK</span></div>` : '',
+      sk.kind === 'normal' || sk.kind === 'ult' ? `<div>แรงก์ <span class="tt-val">${rank}</span>${sk.dmg > 0 ? ` · ดาเมจ <span class="tt-val">${Math.round(rankedDmg(sk, rank) * 100)}% ATK</span>` : ''}</div>` : '',
       sk.mp ? `<div>MP <span class="tt-val">${p.skillMp(sk)}</span></div>` : '',
       full ? `<div>คูลดาวน์ <span class="tt-val">${full} วิ</span></div>` : '',
       ...skillParamLines(sk, Math.max(1, rank)).map((l) => `<div><span class="tt-val">${l}</span></div>`),

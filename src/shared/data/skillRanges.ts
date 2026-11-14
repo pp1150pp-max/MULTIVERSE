@@ -2,13 +2,11 @@
  * Skill reach in world units (metres), the one place the numbers live: `sim/skills.ts` uses them to hit
  * and the skill tooltip / ground ring on the client read the same values.
  */
+import { SWORD_REACH } from './swordSkills';
 
 export const SLASH_RANGE = 2.3;
 export const BOLT_RANGE = 11;
 export const SHOT_RANGE = 12;
-export const WHIRLWIND_RADIUS = 3.2;
-export const EARTHQUAKE_RADIUS = 4.5;
-export const CHARGE_DIST = 7;
 export const FIREBALL_RANGE = 12;
 export const FIREBALL_EXPLODE = 2.6;
 export const FROSTNOVA_RADIUS = 4.5;
@@ -32,9 +30,8 @@ export type SkillReach =
 
 export const SKILL_REACH: Record<string, SkillReach> = {
   slash: { kind: 'cone', range: SLASH_RANGE },
-  whirlwind: { kind: 'self', radius: WHIRLWIND_RADIUS },
-  earthquake: { kind: 'self', radius: EARTHQUAKE_RADIUS },
-  charge: { kind: 'dash', range: CHARGE_DIST },
+  // Swordsman's 30 skills (data/swordSkills.ts).
+  ...SWORD_REACH,
   bolt: { kind: 'shot', range: BOLT_RANGE },
   fireball: { kind: 'shot', range: FIREBALL_RANGE, blast: FIREBALL_EXPLODE },
   frostnova: { kind: 'self', radius: FROSTNOVA_RADIUS },

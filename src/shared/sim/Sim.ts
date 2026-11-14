@@ -384,8 +384,14 @@ export class Sim {
     this.events.push({ t: 'flash', id: p.id });
     this.anim(p.id, 'hit');
     this.text(p.x, p.topY, p.z, `-${dmg}`, 'hurt');
-    if (opts.stun) p.stunT = Math.max(p.stunT, opts.stun);
-    if (opts.kb) p.knockback(opts.fromX ?? m.x, opts.fromZ ?? m.z, opts.kb);
+    // Sword Anchor: no stuns or knockback while it runs.
+    const steady = this.time < p.steadyUntil;
+    if (opts.stun && !steady) p.stunT = Math.max(p.stunT, opts.stun);
+    if (opts.kb && !steady) p.knockback(opts.fromX ?? m.x, opts.fromZ ?? m.z, opts.kb);
+    // Sword Thorn Armor: a share of the damage goes back at the attacker (through its defense, like any hit).
+    if (this.time < p.reflectUntil && p.reflect > 0 && dmg > 0 && m.alive && p.stats.atk > 0) {
+      this.hitMonster(p, m, (dmg * p.reflect) / p.stats.atk, { maxMult: (dmg * p.reflect) / p.stats.atk });
+    }
     if (p.hp <= 0) this.killPlayer(p);
   }
 

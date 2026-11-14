@@ -1,4 +1,5 @@
 import type { ClassId, Stats } from '../types';
+import { SWORD_SKILLS } from './swordSkills';
 import { GUNSLINGER_SKILLS } from './gunslingerSkills';
 
 /**
@@ -122,17 +123,14 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     statMult: { atk: 2, maxHp: 2, def: 2 },
     bossDmgMult: 2,
     lines: [
-      { nameTh: 'สายทำดาเมจ', color: '#e8603c' },
-      { nameTh: 'สายพริ้ว/เคลื่อนที่', color: '#4cc3e8' },
-      { nameTh: 'สายแท็งก์/คุมพื้นที่', color: '#c9a24a' },
+      { nameTh: 'สายคมดาบ', color: '#e8603c' },
+      { nameTh: 'สายวายุ', color: '#4cc3e8' },
+      { nameTh: 'สายปราการ', color: '#c9a24a' },
     ],
     skills: [
       { id: 'slash', kind: 'basic', name: 'Slash', nameTh: 'ฟัน', desc: 'ฟันเป็นวงโค้งด้านหน้า 100% ATK', dmg: 1, mp: 0, cooldown: 0 },
-      { id: 'whirlwind', kind: 'normal', line: 0, tier: 0, anim: 'q', name: 'Whirlwind', nameTh: 'พายุดาบ', desc: 'หมุนตัวฟันรอบทิศ ไม่รับดาเมจชั่วครู่ และดูดเลือดจากดาเมจที่ทำ', dmg: 1.8, mp: 15, cooldown: 6,
-        params: { guard: sec(0.6, 'ไม่รับดาเมจ'), lifesteal: pctP(5, 'ดูดเลือด'), lifestealTime: sec(3, 'เวลาดูดเลือด') } },
-      { id: 'earthquake', kind: 'normal', line: 2, tier: 0, anim: 'e', name: 'Earthquake', nameTh: 'ปฐพีแยก', desc: 'กระแทกพื้นรอบตัวและสตัน', dmg: 2, mp: 20, cooldown: 7, params: { stun: sec(1, 'สตัน') } },
-      { id: 'charge', kind: 'ult', line: 1, tier: 0, anim: 'r', name: 'Charge', nameTh: 'พุ่งชน', desc: 'พุ่งไปตามทิศเมาส์ ชนศัตรูตลอดทางและกระเด็น ทุกครั้งที่ฆ่ามอนได้ คูลดาวน์ที่เหลือลดลงครึ่งหนึ่ง', dmg: 1.5, mp: 25, cooldown: 15,
-        params: { killCdCut: pctP(50, 'ฆ่ามอนได้ ลดคูลดาวน์ที่เหลือ') } },
+      // 30 skills and 3 passives (owner approved 2026-11-14): data/swordSkills.ts.
+      ...SWORD_SKILLS,
       dash('Dash', 'แดช'),
     ],
   },

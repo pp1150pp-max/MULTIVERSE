@@ -7,7 +7,8 @@ import type { SkillBook } from '../src/shared/skillBook';
 import type { ClassId } from '../src/shared/types';
 
 const OLD: Record<ClassId, [string, string, string]> = {
-  sword: ['whirlwind', 'earthquake', 'charge'],
+  // The sword's Charge became a normal skill (sword skills PR): its first R ultimate stands in.
+  sword: ['whirlwind', 'earthquake', 'sw_shadowswap'],
   mage: ['fireball', 'frostnova', 'meteor'],
   gunslinger: ['rapidfire', 'pierce', 'headshot'],
 };
