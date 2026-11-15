@@ -9,6 +9,7 @@ import {
   CODE_BOSS_TIER_BOOST, CODE_RANGE_FLOOR, CODE_TIER_WEIGHT, CODE_TIER_WIDTH, setItemStatMult, setTierTables, TIER_BAND_NAME, TIER_BANDS, tierBandOf, type TierBand, type TierTableDef,
 } from './data/items';
 import { MONSTERS, type MonsterDef } from './data/monsters';
+import { checkFxLayerTuning, codeFxLayer, fxLayerChanges, mergeFxLayer, type FxLayerConfig, type FxLayerTuning } from './fxLayerTuning';
 import { autoChanges, checkAutoTuning, codeAuto, mergeAuto, type AutoConfig, type AutoTuning } from './autoTuning';
 import { checkTutorialTuning, codeTutorial, mergeTutorial, tutorialChanges, type TutorialConfig, type TutorialTuning } from './tutorial';
 import { checkSkillTuning, codeSkills, mergeSkills, skillChanges, type SkillConfig, type SkillTuning } from './skillTuning';
@@ -93,6 +94,8 @@ export interface Balance {
   monsters: MonsterTuning;
   /** Auto Play defaults, distances and switches (autoTuning.ts). */
   auto: AutoConfig;
+  /** The skill effects' extra layer: glow, ground light, particles, hit feel (fxLayerTuning.ts). */
+  fxLayer: FxLayerConfig;
   /** Tutorial quest rewards (tutorial.ts). */
   tutorial: TutorialConfig;
   /** Skill points, ranks, unlock levels, refunds and every learnable skill's numbers (skillTuning.ts). */
@@ -121,6 +124,8 @@ export interface BalanceTuning {
   monsters?: MonsterTuning;
   /** Auto Play settings that differ from the code. */
   auto?: AutoTuning;
+  /** Skill effect extra-layer numbers that differ from the code. */
+  fxLayer?: FxLayerTuning;
   /** Tutorial quest rewards that differ from the code. */
   tutorial?: TutorialTuning;
   /** Skill system settings that differ from the code. */
@@ -172,6 +177,7 @@ export function codeBalance(): Balance {
     itemStatMult: full(undefined, 1),
     monsters: {},
     auto: codeAuto(),
+    fxLayer: codeFxLayer(),
     tutorial: codeTutorial(),
     skills: codeSkills(),
   };
@@ -201,6 +207,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   Object.assign(b.itemStatMult, t.itemStatMult);
   if (t.monsters) b.monsters = structuredClone(t.monsters);
   b.auto = mergeAuto(t.auto);
+  b.fxLayer = mergeFxLayer(t.fxLayer);
   b.tutorial = mergeTutorial(t.tutorial);
   b.skills = mergeSkills(t.skills);
   return b;
@@ -319,7 +326,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'monsters', 'auto', 'tutorial', 'skills'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'monsters', 'auto', 'tutorial', 'skills', 'fxLayer'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -605,6 +612,12 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (c.tuning) out.tutorial = c.tuning;
     return null;
   };
+  const fxLayer = (): string | null => {
+    const c = checkFxLayerTuning(o.fxLayer, strict);
+    if ('error' in c) return c.error;
+    if (c.tuning) out.fxLayer = c.tuning;
+    return null;
+  };
   const skills = (): string | null => {
     const c = checkSkillTuning(o.skills, strict);
     if ('error' in c) return c.error;
@@ -624,7 +637,8 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     monsters() ??
     auto() ??
     tutorial() ??
-    skills();
+    skills() ??
+    fxLayer();
   if (err) return { error: err };
   // Fixed key order.
   const ordered: BalanceTuning = {};
@@ -699,6 +713,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   out.push(...autoChanges(a.auto, b.auto));
   out.push(...tutorialChanges(a.tutorial, b.tutorial));
   out.push(...skillChanges(a.skills, b.skills));
+  out.push(...fxLayerChanges(a.fxLayer, b.fxLayer));
   return out.join(', ');
 }
 

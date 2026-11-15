@@ -238,7 +238,36 @@ export class Sim {
   }
 
   schedule(delay: number, fn: () => void): void {
-    this.timers.push({ at: this.time + delay, fn });
+    // Timers set while a player's skill runs stay that player's doing (their effects feel the hit on their screen).
+    const by = this.caster;
+    this.timers.push({ at: this.time + delay, fn: by ? () => this.asCaster(by, fn) : fn });
+  }
+
+  /** Monsters hit so far (hitMonster that got past the arena and level checks); asCaster compares it. */
+  private hitCount = 0;
+  /** The player whose skill is running now (asCaster), or null. */
+  private caster: Player | null = null;
+
+  /**
+   * Runs `fn` as player `p`'s doing (a cast, a timer it set, its shot flying): the skill effects it plays carry `p`'s
+   * id and whether it hit any monster, so the caster's own screen can feel the hit (src/client/fxLayer.ts).
+   */
+  asCaster<T>(p: Player, fn: () => T): T {
+    const from = this.events.length;
+    const hits = this.hitCount;
+    const was = this.caster;
+    this.caster = p;
+    try {
+      return fn();
+    } finally {
+      this.caster = was;
+      const hit = this.hitCount > hits;
+      for (let i = from; i < this.events.length; i++) {
+        const e = this.events[i];
+        // Only the effects not tagged yet (an inner asCaster, or a skill that tags its own, came first).
+        if (e.t === 'fx' && e.name === 'effect' && e.args.length === 5) (e.args as unknown[]).push(p.id, hit);
+      }
+    }
   }
 
   addProjectile(owner: Player, o: ProjOpts): void {
@@ -305,6 +334,7 @@ export class Sim {
       }
       return;
     }
+    this.hitCount++;
     let raw = p.stats.atk * mult * (0.9 + Math.random() * 0.2) * passiveDealMult(p, m, opts.skill);
     if (this.time < p.dmgUntil) raw *= p.dmgMult;
     const marked = m.markBy === p.id && this.time < m.markUntil ? m.markCrit : 0;

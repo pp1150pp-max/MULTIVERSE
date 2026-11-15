@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { fxSheets, fxTex, type FxSheet } from './assets';
 import type { FxApi, SkillEffect } from '../shared/sim/types';
+import { playLayer, ShotLayer, type FxLayerHooks, type FxLayerHost } from './fxLayer';
 
 const FRAMES = 6;
 const SHEET_ROWS: Record<FxSheet, number> = {
@@ -178,10 +179,14 @@ export class ShotSprite {
   readonly sprite: THREE.Sprite;
   private t = Math.random();
 
-  constructor(private readonly tex: THREE.Texture, private readonly art: { sheet: FxSheet; row: number; scale: number }, size: number) {
+  /** Its glow and trail (fxLayer.ts), if its colour has one. */
+  private readonly layer: ShotLayer | null;
+
+  constructor(private readonly tex: THREE.Texture, private readonly art: { sheet: FxSheet; row: number; scale: number }, size: number, host: FxLayerHost, color: string) {
     this.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, alphaTest: 0.5, transparent: false }));
     this.sprite.scale.setScalar(size * art.scale);
     showFrame(tex, art.sheet, art.row, 0);
+    this.layer = ShotLayer.for(host, color, this.sprite);
   }
 
   update(dt: number, dx: number, dz: number): void {
@@ -189,9 +194,11 @@ export class ShotSprite {
     // The first and last frames are the small build-up and fade, so a flying shot loops the middle.
     showFrame(this.tex, this.art.sheet, this.art.row, 1 + (Math.floor(this.t * 14) % (FRAMES - 2)));
     if (dx || dz) this.sprite.material.rotation = screenAngle(dx, dz);
+    this.layer?.update(dt);
   }
 
   dispose(): void {
+    this.layer?.dispose();
     this.tex.dispose();
     this.sprite.material.dispose();
   }
@@ -221,6 +228,8 @@ function disposeObj(obj: THREE.Object3D): void {
 
 export class Effects implements FxApi {
   private list: Fx[] = [];
+  /** Whose screen this is and the hit feel, for the extra layer (set by Game). */
+  layerHooks: FxLayerHooks | null = null;
 
   constructor(private readonly scene: THREE.Scene) {}
 
@@ -263,7 +272,7 @@ export class Effects implements FxApi {
   }
 
   /** Plays one row of a skill's animation sheet, once. */
-  effect(name: SkillEffect, x: number, z: number, angle: number, size: number): void {
+  effect(name: SkillEffect, x: number, z: number, angle: number, size: number, by?: number, hit?: boolean): void {
     const def = EFFECTS[name];
     const tex = frameTexture(def.sheet);
     if (!tex) {
@@ -278,6 +287,7 @@ export class Effects implements FxApi {
       mesh.rotation.y = -angle;
       mesh.scale.setScalar(size);
       this.add(mesh, def.life, play);
+      playLayer(this, this.layerHooks, name, mesh, x, 0, z, size, def.life, by, hit);
     } else {
       const rotation = def.upright ? 0 : screenAngle(Math.cos(angle), Math.sin(angle));
       const mat = new THREE.SpriteMaterial({ map: tex, alphaTest: 0.5, transparent: false, rotation, color: def.tint ?? '#ffffff' });
@@ -286,6 +296,7 @@ export class Effects implements FxApi {
       spr.position.set(x, def.stand ? size * 0.9 : def.height, z);
       spr.scale.setScalar(size * 2);
       this.add(spr, def.life, play);
+      playLayer(this, this.layerHooks, name, spr, x, spr.position.y, z, size, def.life, by, hit);
     }
   }
 
@@ -293,7 +304,7 @@ export class Effects implements FxApi {
   shotSprite(color: string, size: number): ShotSprite | null {
     const art = SHOT_ART[color];
     const tex = art && frameTexture(art.sheet);
-    return tex ? new ShotSprite(tex, art, size) : null;
+    return tex ? new ShotSprite(tex, art, size, this, color) : null;
   }
 
   /** Arc swipe on the ground. angle = atan2(dz, dx). */

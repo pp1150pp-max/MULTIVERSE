@@ -58,8 +58,11 @@ export interface FxApi {
   burst(x: number, y: number, z: number, color: string, n?: number, speed?: number): void;
   levelUp(x: number, z: number): void;
   meteor(x: number, z: number, duration: number): void;
-  /** Hand-drawn skill animation. `size` is its half-width in world units. */
-  effect(name: SkillEffect, x: number, z: number, angle: number, size: number): void;
+  /**
+   * Hand-drawn skill animation. `size` is its half-width in world units. `by` = the caster's id and `hit` = it hit
+   * something: the caster's own screen then feels the hit (fxLayer.ts, owner 2026-11-15).
+   */
+  effect(name: SkillEffect, x: number, z: number, angle: number, size: number, by?: number, hit?: boolean): void;
 }
 
 export type SkillEffect = 'slash' | 'whirlwind' | 'charge' | 'quake' | 'explosion' | 'frost' | 'crater' | 'muzzle' | 'impact'

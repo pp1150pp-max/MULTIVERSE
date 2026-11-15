@@ -88,12 +88,19 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
   switch (sk.id) {
     // ---------------- Line 0: Blade
     case 'whirlwind':
-      sim.fx('effect', 'whirlwind', p.x, p.z, ang, 3.4);
       // Set first so the spin's own hits heal too.
       // Heals for a share of all damage dealt for a few seconds (recasting restarts the timer).
       p.lifesteal = P('lifesteal') / 100;
       p.lifestealUntil = sim.time + P('lifestealTime');
-      forCircle(sim, p.x, p.z, far, (m) => sim.hitMonster(p, m, dmg, { kb: 5 }));
+      {
+        let hits = 0;
+        forCircle(sim, p.x, p.z, far, (m) => {
+          sim.hitMonster(p, m, dmg, { kb: 5 });
+          hits++;
+        });
+        // After the hits: the caster's screen feels them only when the spin hit something.
+        sim.fx('effect', 'whirlwind', p.x, p.z, ang, 3.4, p.id, hits > 0);
+      }
       // A moment of taking no damage at all.
       p.invulnT = Math.max(p.invulnT, P('guard'));
       sim.fx('ring', p.x, p.z, 1.3, '#ffcf5a', P('guard'));
