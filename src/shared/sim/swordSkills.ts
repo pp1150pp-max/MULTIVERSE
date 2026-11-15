@@ -8,7 +8,7 @@ import type { Monster } from './Monster';
 import type { SkillDef } from '../data/classes';
 import type { Vec2 } from '../types';
 import type { SkillEffect } from './types';
-import { forCircle, forCone } from './skills';
+import { forCircle, forCone, giveShield } from './skills';
 
 /** The skill's numbers at its rank, worked out by castSkill. */
 export interface CastCtx {
@@ -78,7 +78,12 @@ function hitDash(p: Player, ang: number, dist: number, time: number, mult: numbe
  * skill.
  */
 export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastCtx): boolean | undefined {
-  const { ang, dmg, P, far } = c;
+  const { ang, P, far } = c;
+  // Bulwark (owner 2026-11-15): each hit adds DEF × defDmg% + max HP × hpDmg% (0 for other skills), as × ATK.
+  const fromStats = p.stats.atk > 0 ? (p.stats.def * P('defDmg') + p.maxHp * P('hpDmg')) / 100 / p.stats.atk : 0;
+  const dmg = c.dmg + fromStats;
+  /** Bulwark shield: max HP × shieldHp% + DEF × shieldDef% for `seconds`. */
+  const shield = (seconds: number) => giveShield(sim, p, (p.maxHp * P('shieldHp') + p.stats.def * P('shieldDef')) / 100, seconds);
   const color = LINE_COLOR[sk.line ?? 0];
   switch (sk.id) {
     // ---------------- Line 0: Blade
@@ -344,10 +349,12 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
         sim.text(m.x, m.topY + 0.4, m.z, '!', 'crit', 0.6);
       });
       p.addTakenMult(1 - P('less') / 100, P('buffTime'));
+      shield(P('buffTime'));
       sim.fx('effect', 'sw_shout', p.x, p.z, 0, far);
       return true;
     case 'sw_guard':
       p.addTakenMult(1 - P('less') / 100, P('buffTime'));
+      shield(P('buffTime'));
       sim.fx('effect', 'sw_barrier', p.x, p.z, 0, 1);
       sim.fx('ring', p.x, p.z, 1.3, color, P('buffTime'));
       sim.text(p.x, p.topY + 0.4, p.z, 'ตั้งรับ', 'info', 0.8);
@@ -362,6 +369,7 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
     case 'sw_thorns':
       p.reflect = P('reflect') / 100;
       p.reflectUntil = sim.time + P('buffTime');
+      p.reflectFlat = (p.stats.def * P('reflectDef')) / 100;
       p.addTakenMult(1 - P('less') / 100, P('buffTime'));
       sim.fx('effect', 'sw_armorhit', p.x, p.z, 0, 1);
       sim.fx('ring', p.x, p.z, 1.3, '#ff8a5a', P('buffTime'));
@@ -370,6 +378,7 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
     case 'sw_anchor':
       p.addTakenMult(1 - P('less') / 100, P('buffTime'));
       p.steadyUntil = sim.time + P('buffTime');
+      shield(P('buffTime'));
       p.addStatBuff('sw_anchor', P('buffTime'), { moveSpeed: -P('moveSlow') });
       sim.fx('effect', 'quake', p.x, p.z, 0, 1.6);
       sim.fx('effect', 'sw_barrier', p.x, p.z, 0, 1);
@@ -378,12 +387,16 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
     case 'sw_warcry': {
       // Everyone standing in the circle, party or not (owner 2026-11-14).
       const t = P('buffTime');
+      // Everyone also gets a share of the caster's own DEF, without this buff (owner 2026-11-15).
+      p.statBuffs = p.statBuffs.filter((b) => b.id !== 'sw_warcry');
+      p.recompute();
+      const fromCaster = (p.stats.def * P('casterDef')) / 100;
       for (const q of sim.players) {
         if (!q.alive || Math.hypot(q.x - p.x, q.z - p.z) > far) continue;
         // The defense bonus is a share of the defense without this buff (a recast doesn't stack on itself).
         q.statBuffs = q.statBuffs.filter((b) => b.id !== 'sw_warcry');
         q.recompute();
-        q.addStatBuff('sw_warcry', t, { def: (q.stats.def * P('def')) / 100 });
+        q.addStatBuff('sw_warcry', t, { def: (q.stats.def * P('def')) / 100 + fromCaster });
         q.addDmgMult(1 + P('atk') / 100, t);
         sim.text(q.x, q.topY + 0.4, q.z, 'ปลุกใจ!', 'info', 0.8);
       }
@@ -410,6 +423,7 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
       const t = P('buffTime');
       forCircle(sim, p.x, p.z, far, (m) => m.taunt(p));
       p.addTakenMult(1 - P('less') / 100, t);
+      shield(t);
       sim.fx('effect', 'sw_shout', p.x, p.z, 0, far);
       sim.fx('effect', 'sw_barrier', p.x, p.z, 0, 1.1);
       sim.fx('ring', p.x, p.z, 1.4, '#ffe08a', t);

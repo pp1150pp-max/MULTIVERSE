@@ -15,6 +15,14 @@ const pct = (v: number, nameTh: string, hi = 100): SkillParam => ({ v, nameTh, u
 const pctGrow = (v: number, nameTh: string, hi = 200): SkillParam => ({ v, nameTh, unit: '%', lo: 0, hi, status: true });
 const metres = (v: number, nameTh: string, hi = 30): SkillParam => ({ v, nameTh, unit: 'ม.', lo: 0.5, hi });
 const count = (v: number, nameTh: string, unit: string, lo = 1, hi = 20): SkillParam => ({ v, nameTh, unit, lo, hi });
+/** Extra damage per hit from the caster's DEF or max HP, in % (owner 2026-11-15): grows with the skill's damage %/rank. */
+const fromStat = (v: number, nameTh: string, hi = 1000): SkillParam => ({ v, nameTh, unit: '%', lo: 0, hi, dmg: true });
+/** A shield or bonus from the caster's DEF or max HP, in %: grows with the skill's status %/rank (+5% a rank). */
+const fromStatGrow = (v: number, nameTh: string, hi = 1000): SkillParam => ({ v, nameTh, unit: '%', lo: 0, hi, status: true });
+/** Every Bulwark hit adds DEF × 100% + max HP × 3% (owner 2026-11-15). */
+const BULWARK_HIT = () => ({ defDmg: fromStat(100, 'ดาเมจเพิ่มจาก DEF'), hpDmg: fromStat(3, 'ดาเมจเพิ่มจาก HP สูงสุด', 100) });
+/** A Bulwark shield: max HP × hp% + DEF × def% (owner 2026-11-15). */
+const BULWARK_SHIELD = (hp: number, def: number) => ({ shieldHp: fromStatGrow(hp, 'โล่จาก HP สูงสุด', 100), shieldDef: fromStatGrow(def, 'โล่จาก DEF') });
 const deg = (v: number, nameTh: string): SkillParam => ({ v, nameTh, unit: '°', lo: 10, hi: 360 });
 
 type Def = Omit<SkillDef, 'kind' | 'line' | 'tier'>;
@@ -68,25 +76,25 @@ export const SWORD_SKILLS: SkillDef[] = [
     params: { hits: count(8, 'จำนวนครั้ง', 'ครั้ง', 1, 30), time: secFixed(1.2, 'เวลาท่า', 0.2, 5) } }),
 
   // ---------------- Line 2: Bulwark (stuns, taunts, less damage taken, buffs for everyone in the circle)
-  normal(2, 0, { id: 'earthquake', anim: 'e', name: 'Earthquake', nameTh: 'ปฐพีแยก', desc: 'กระแทกพื้นรอบตัวและสตัน', dmg: 2, mp: 20, cooldown: 7, params: { stun: sec(1, 'สตัน') } }),
-  normal(2, 1, { id: 'sw_armorbash', anim: 'q', name: 'Armor Bash', nameTh: 'กระแทกเกราะ', desc: 'พุ่งไหล่เกราะกระแทกด้านหน้า สตันและผลักไปไกล', dmg: 1.6, mp: 12, cooldown: 6,
-    params: { stun: sec(1.5, 'สตัน') } }),
-  normal(2, 2, { id: 'sw_taunt', anim: 'e', name: 'Taunt', nameTh: 'ยั่วยุ', desc: 'ศัตรูรอบตัว (บอสด้วย) หันมาตีเรา และเรารับดาเมจน้อยลงชั่วคราว', dmg: 0, mp: 10, cooldown: 12,
-    params: { less: pct(20, 'รับดาเมจลดลง', 95), buffTime: sec(4, 'เวลาบัฟ') } }),
-  normal(2, 3, { id: 'sw_guard', anim: 'e', name: 'Guard', nameTh: 'ตั้งรับ', desc: 'ตั้งดาบรับ รับดาเมจน้อยลงมากชั่วคราว', dmg: 0, mp: 15, cooldown: 14,
-    params: { less: pct(40, 'รับดาเมจลดลง', 95), buffTime: sec(3, 'เวลาบัฟ') } }),
-  normal(2, 4, { id: 'sw_shockwave', anim: 'e', name: 'Shockwave', nameTh: 'คลื่นสั่นสะเทือน', desc: 'คลื่นกระแทกพื้นเป็นแนว ทะลุทุกตัว ทำให้ช้าลง', dmg: 2.4, mp: 20, cooldown: 8,
-    params: { slow: pct(40, 'ช้าลง'), slowTime: sec(3, 'เวลาช้าลง') } }),
-  normal(2, 5, { id: 'sw_thorns', anim: 'e', name: 'Thorn Armor', nameTh: 'เกราะสะท้อน', desc: 'ดาเมจที่โดนสะท้อนกลับใส่มอนที่ตีเรา และรับดาเมจน้อยลงเล็กน้อย', dmg: 0, mp: 22, cooldown: 16,
-    params: { reflect: pct(30, 'สะท้อนดาเมจ', 500), less: pct(10, 'รับดาเมจลดลง', 95), buffTime: sec(6, 'เวลาบัฟ') } }),
-  normal(2, 6, { id: 'sw_anchor', anim: 'e', name: 'Anchor', nameTh: 'ปักหลัก', desc: 'รับดาเมจลดลงครึ่งหนึ่ง ไม่โดนสตันหรือกระเด็น แต่เดินช้าลง', dmg: 0, mp: 25, cooldown: 20,
-    params: { less: pct(50, 'รับดาเมจลดลง', 95), moveSlow: pct(30, 'เดินช้าลง', 90), buffTime: sec(5, 'เวลาบัฟ') } }),
-  normal(2, 7, { id: 'sw_warcry', anim: 'e', name: 'War Cry', nameTh: 'ปลุกใจนักรบ', desc: 'บัฟผู้เล่นทุกคนที่ยืนในวง (ไม่ต้องอยู่ปาร์ตี้): พลังป้องกันและพลังโจมตีเพิ่ม', dmg: 0, mp: 30, cooldown: 25,
-    params: { def: pct(30, 'พลังป้องกันเพิ่ม', 300), atk: pct(15, 'พลังโจมตีเพิ่ม', 300), buffTime: sec(8, 'เวลาบัฟ') } }),
-  ult(2, 0, { id: 'sw_cataclysm', anim: 'e', name: 'Cataclysm', nameTh: 'ปฐพีถล่ม', desc: 'แผ่นดินแยก 3 ระลอกขยายออกจากตัว สตันและทำให้ช้า (ดาเมจต่อระลอก)', dmg: 3, mp: 45, cooldown: 25,
-    params: { gap: secFixed(0.35, 'ระลอกห่างกัน', 0.05, 2), stun: sec(1.2, 'สตัน'), slow: pct(40, 'ช้าลง'), slowTime: sec(3, 'เวลาช้าลง') } }),
-  ult(2, 1, { id: 'sw_unbreakable', anim: 'e', name: 'Unbreakable', nameTh: 'ราชันย์ไม่ล้ม', desc: 'ยั่วยุศัตรูรอบตัวทั้งหมด รับดาเมจน้อยลงมาก และฟื้น HP ตลอดท่า', dmg: 0, mp: 50, cooldown: 40,
-    params: { less: pct(60, 'รับดาเมจลดลง', 95), heal: pct(25, 'ฟื้น HP สูงสุด', 100), buffTime: sec(6, 'เวลาท่า') } }),
+  normal(2, 0, { id: 'earthquake', anim: 'e', name: 'Earthquake', nameTh: 'ปฐพีแยก', desc: 'กระแทกพื้นรอบตัวและสตัน ดาเมจเพิ่มตาม DEF และ HP สูงสุด', dmg: 2, mp: 20, cooldown: 7, params: { stun: sec(1, 'สตัน'), ...BULWARK_HIT() } }),
+  normal(2, 1, { id: 'sw_armorbash', anim: 'q', name: 'Armor Bash', nameTh: 'กระแทกเกราะ', desc: 'พุ่งไหล่เกราะกระแทกด้านหน้า สตันและผลักไปไกล ดาเมจเพิ่มตาม DEF และ HP สูงสุด', dmg: 1.6, mp: 12, cooldown: 6,
+    params: { stun: sec(1.5, 'สตัน'), ...BULWARK_HIT() } }),
+  normal(2, 2, { id: 'sw_taunt', anim: 'e', name: 'Taunt', nameTh: 'ยั่วยุ', desc: 'ศัตรูรอบตัว (บอสด้วย) หันมาตีเรา เรารับดาเมจน้อยลง และได้โล่ตาม HP สูงสุดและ DEF', dmg: 0, mp: 10, cooldown: 12,
+    params: { less: pct(20, 'รับดาเมจลดลง', 95), buffTime: sec(4, 'เวลาบัฟ'), ...BULWARK_SHIELD(5, 100) } }),
+  normal(2, 3, { id: 'sw_guard', anim: 'e', name: 'Guard', nameTh: 'ตั้งรับ', desc: 'ตั้งดาบรับ รับดาเมจน้อยลงมากชั่วคราว และได้โล่ตาม HP สูงสุดและ DEF', dmg: 0, mp: 15, cooldown: 14,
+    params: { less: pct(40, 'รับดาเมจลดลง', 95), buffTime: sec(3, 'เวลาบัฟ'), ...BULWARK_SHIELD(10, 100) } }),
+  normal(2, 4, { id: 'sw_shockwave', anim: 'e', name: 'Shockwave', nameTh: 'คลื่นสั่นสะเทือน', desc: 'คลื่นกระแทกพื้นเป็นแนว ทะลุทุกตัว ทำให้ช้าลง ดาเมจเพิ่มตาม DEF และ HP สูงสุด', dmg: 2.4, mp: 20, cooldown: 8,
+    params: { slow: pct(40, 'ช้าลง'), slowTime: sec(3, 'เวลาช้าลง'), ...BULWARK_HIT() } }),
+  normal(2, 5, { id: 'sw_thorns', anim: 'e', name: 'Thorn Armor', nameTh: 'เกราะสะท้อน', desc: 'ดาเมจที่โดนสะท้อนกลับใส่มอนที่ตีเรา บวกดาเมจตาม DEF และรับดาเมจน้อยลงเล็กน้อย', dmg: 0, mp: 22, cooldown: 16,
+    params: { reflect: pct(30, 'สะท้อนดาเมจ', 500), reflectDef: fromStatGrow(50, 'สะท้อนเพิ่มจาก DEF'), less: pct(10, 'รับดาเมจลดลง', 95), buffTime: sec(6, 'เวลาบัฟ') } }),
+  normal(2, 6, { id: 'sw_anchor', anim: 'e', name: 'Anchor', nameTh: 'ปักหลัก', desc: 'รับดาเมจลดลงครึ่งหนึ่ง ไม่โดนสตันหรือกระเด็น ได้โล่ตาม HP สูงสุดและ DEF แต่เดินช้าลง', dmg: 0, mp: 25, cooldown: 20,
+    params: { less: pct(50, 'รับดาเมจลดลง', 95), moveSlow: pct(30, 'เดินช้าลง', 90), buffTime: sec(5, 'เวลาบัฟ'), ...BULWARK_SHIELD(10, 150) } }),
+  normal(2, 7, { id: 'sw_warcry', anim: 'e', name: 'War Cry', nameTh: 'ปลุกใจนักรบ', desc: 'บัฟผู้เล่นทุกคนที่ยืนในวง (ไม่ต้องอยู่ปาร์ตี้): พลังป้องกันและพลังโจมตีเพิ่ม และได้ DEF เพิ่มตาม DEF ของผู้ร่าย', dmg: 0, mp: 30, cooldown: 25,
+    params: { def: pct(30, 'พลังป้องกันเพิ่ม', 300), atk: pct(15, 'พลังโจมตีเพิ่ม', 300), casterDef: fromStatGrow(20, 'DEF เพิ่มจาก DEF ผู้ร่าย', 300), buffTime: sec(8, 'เวลาบัฟ') } }),
+  ult(2, 0, { id: 'sw_cataclysm', anim: 'e', name: 'Cataclysm', nameTh: 'ปฐพีถล่ม', desc: 'แผ่นดินแยก 3 ระลอกขยายออกจากตัว สตันและทำให้ช้า ดาเมจเพิ่มตาม DEF และ HP สูงสุด (ดาเมจต่อระลอก)', dmg: 3, mp: 45, cooldown: 25,
+    params: { gap: secFixed(0.35, 'ระลอกห่างกัน', 0.05, 2), stun: sec(1.2, 'สตัน'), slow: pct(40, 'ช้าลง'), slowTime: sec(3, 'เวลาช้าลง'), ...BULWARK_HIT() } }),
+  ult(2, 1, { id: 'sw_unbreakable', anim: 'e', name: 'Unbreakable', nameTh: 'ราชันย์ไม่ล้ม', desc: 'ยั่วยุศัตรูรอบตัวทั้งหมด รับดาเมจน้อยลงมาก ได้โล่ตาม HP สูงสุดและ DEF และฟื้น HP ตลอดท่า', dmg: 0, mp: 50, cooldown: 40,
+    params: { less: pct(60, 'รับดาเมจลดลง', 95), heal: pct(25, 'ฟื้น HP สูงสุด', 100), buffTime: sec(6, 'เวลาท่า'), ...BULWARK_SHIELD(20, 200) } }),
 
   // ---------------- Passives (one worn at a time)
   passive(0, { id: 'sw_duelist', name: 'Duelist', nameTh: 'นักดวล', desc: 'ดาเมจเพิ่มเมื่อศัตรูรอบตัวมีไม่เกินที่กำหนด (เหมาะกับตีบอส)',

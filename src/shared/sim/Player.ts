@@ -453,6 +453,8 @@ export class Player extends Unit {
   /** Sword Thorn Armor: this share of damage taken goes back at the attacker until `reflectUntil`. */
   reflect = 0;
   reflectUntil = 0;
+  /** Sword Thorn Armor: extra damage points added to each reflected hit (from the caster's DEF). */
+  reflectFlat = 0;
   /** Sword Anchor: no stuns or knockback from monsters until this sim time. */
   steadyUntil = 0;
   /** How the hitting dash running now (Charge and the sword's dash skills) knocks back, and whether it taunts. */
