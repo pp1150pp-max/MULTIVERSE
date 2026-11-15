@@ -21,13 +21,14 @@ server จริงอยู่บน VPS (Hostatom Cloud VPS SSD2 ในไท�
    - ติดต่อ VPS ได้: `ssh -o BatchMode=yes multiverse-vps true` (ถ้าไม่ได้ หยุดและบอกเจ้าของ ห้ามเดา)
    - **VPS:** `git status --short` ต้องว่าง · `git log -1 --oneline` (commit ที่รันอยู่) · `npm run autostart` (สถานะ unit) · `npm run logs -- --lines 20`
 2. **ตรวจโค้ดบนเครื่องบ้าน** — `npm run typecheck` และ `npm run test` ของ `origin/main` ต้องผ่านทั้งคู่ ถ้าไม่ผ่านให้หยุดแล้วรายงานเจ้าของ ห้ามรีสตาร์ท
-3. **ถ้า PR ที่ merge เปลี่ยนรูปแบบเซฟ/ตาราง DB** — สำรองก่อน: **VPS:** `sqlite3 server/data/multiverse.db "VACUUM INTO 'server/data/backups/multiverse-before-<เรื่อง>-<เวลา>.db'"` (หรือปุ่มสำรองใน `/admin`) · ถ้า `package.json` เปลี่ยน dependency ต้อง `npm ci` ซึ่งต้องปิด server เต็ม (โหมดปิด) → บอกเจ้าของก่อนว่าป้ายจะเป็นข้อความปิด ไม่ใช่อัปเดต แล้วทำ: `npm run stop-server` → `git pull --ff-only` → `npm ci` → `npx vite build` → `npm run autostart -- -Start`
-4. **pull + build** — **VPS:** `git pull --ff-only && npx vite build` (ทำทันทีก่อนรีสตาร์ท เพราะ `--restart` ไม่ build ให้) · ถ้า pull ไม่ fast-forward หยุดถามเจ้าของ
-5. **รีสตาร์ท**
-   - unit เปิดอยู่ → **VPS:** `npm run stop-server -- --restart --seconds 120` (คำสั่งรอจน server เก่าปิด ใช้ timeout ของ Bash ≥ 200 วิ) แล้ว **VPS:** `npm run logs -- --lines 40` จนขึ้น "รีสตาร์ท server" ตามด้วย "พร้อมแล้ว" ครั้งใหม่
-   - unit ไม่ได้เปิด (`npm run autostart` = ไม่ได้เปิด) → **VPS:** `npm run autostart -- -Start` แล้วดู log จนขึ้น "พร้อมแล้ว" และกล่องลิงก์
-   - unit เปิดอยู่แต่ log บอกว่า port 2567 มีโปรแกรมอื่นใช้ = server ที่ไม่มีตัวคุม → **VPS:** `npm run stop-server` ก่อน แล้ว `-Start`
-   - ถ้าใน log ไม่ขึ้นกล่องลิงก์ ให้ดู `cloudflared` ใน log (ตัวคุมเปิด cloudflared ใหม่เองเมื่อหลุด) · ตัวคุมเปิดไม่ขึ้นเลย: **VPS:** `journalctl -u multiverse -n 50 --no-pager`
+3. **ถ้า `package.json` เปลี่ยน dependency** — สคริปต์ในขั้น 4 จะปิด server เต็ม (ป้ายปิด 120 วิ ไม่ใช่ป้ายอัปเดต) แล้ว `npm ci` → บอกเจ้าของก่อน
+4. **deploy** — **VPS:** `tools/deploy.sh deploy <commit ของ origin/main ที่ตรวจในขั้น 2>` (ใช้ timeout ของ Bash ≥ 400 วิ) สคริปต์เดียวกับปุ่ม Deploy บน GitHub (`docs/systems/server-ops.md` หัวข้อ "ปุ่ม Deploy"):
+   สำรอง DB (`backups/multiverse-before-deploy-…db`) → pull (ต้องตรงกับ commit ที่ให้) → build ลง `dist-next` แล้วสลับ → รีสตาร์ทนับถอยหลัง 120 วิ (หรือเปิด unit ถ้าไม่ได้เปิด) → รอ server ตอบ
+   - `มีคนกำลัง deploy อยู่` (exit 3) = เพื่อนกดปุ่มอยู่ → รอแล้วดู `tools/deploy.sh status` ห้ามสั่งซ้อน
+   - `main ล่าสุดคือ … ไม่ใช่ …` (exit 5) = มีคน merge เพิ่ม → กลับไปขั้น 2 กับ commit ใหม่
+   - `git status ไม่ว่าง` (exit 4) / build ไม่ผ่าน (exit 6, ถอยโค้ดให้แล้ว) → หยุด รายงานเจ้าของ
+   - อยากตั้งชื่อไฟล์สำรองตามเรื่อง (PR เปลี่ยนเซฟ/ตาราง DB): **VPS:** `sqlite3 server/data/multiverse.db "VACUUM INTO 'server/data/backups/multiverse-before-<เรื่อง>-<เวลา>.db'"` ก่อนขั้นนี้
+5. **ถ้า server ไม่ขึ้น** — **VPS:** `tools/deploy.sh logs` · port 2567 มีโปรแกรมอื่นใช้ = server ที่ไม่มีตัวคุม → `npm run stop-server` แล้ว `npm run autostart -- -Start` · ไม่ขึ้นกล่องลิงก์ = ดู `cloudflared` ใน log (ตัวคุมเปิดใหม่เองเมื่อหลุด) · ตัวคุมเปิดไม่ขึ้นเลย: `journalctl -u multiverse -n 50 --no-pager`
 6. **ยืนยัน** — จากเครื่องบ้าน `curl -s -o /dev/null -w "%{http_code}"` ที่ `https://play.multiverse-game.com/` และ `/admin` ต้องได้ 200
 7. **สำรองนอกเครื่อง** — เครื่องบ้าน `npm run pull-backup` (ดึงไฟล์สำรองล่าสุดจาก VPS มาเก็บ) ถ้าล้มไม่ต้องหยุดงาน แต่บอกในรายงาน
 8. **รายงาน** — สั้น ๆ: commit ที่รันอยู่บน VPS (`git log -1 --oneline`), ลิงก์ (เปลี่ยนหรือไม่), ผล typecheck/test, สำรอง DB หรือไม่, pull-backup ได้ไฟล์ไหน

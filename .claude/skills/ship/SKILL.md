@@ -51,10 +51,10 @@ disable-model-invocation: true
 
 ## 5. ขึ้น server
 
-ทำตาม `.claude/skills/update-server/SKILL.md` ตั้งแต่ขั้น 3 (สำรอง DB) จนถึงขั้น 6 (ยืนยันลิงก์)
+ทำตาม `.claude/skills/update-server/SKILL.md` ตั้งแต่ขั้น 3 จนถึงขั้น 6 (ยืนยันลิงก์) — ขึ้นด้วย `tools/deploy.sh deploy <commit>` บน VPS ตัวเดียวกับปุ่ม Deploy ของเพื่อน
 
 - server จริงอยู่บน VPS (systemd unit `multiverse`) ทุกคำสั่งไปทาง `ssh -o BatchMode=yes multiverse-vps "cd MULTIVERSE && …"` · สถานะ `npm run autostart` · log `npm run logs` (ดูว่าขึ้น "พร้อมแล้ว" หลังรีสตาร์ท)
-- **สำรอง DB บน VPS ทุกครั้ง** ตั้งชื่อไฟล์ตามสิ่งที่ขึ้นไป เช่น `multiverse-before-<เรื่อง>-<เวลา>.db` (`sqlite3 … "VACUUM INTO …"` ตามขั้น 3 ของ update-server)
+- **สำรอง DB บน VPS ทุกครั้ง** ตั้งชื่อไฟล์ตามสิ่งที่ขึ้นไป เช่น `multiverse-before-<เรื่อง>-<เวลา>.db` (`deploy.sh` สำรองให้เองทุกครั้ง · ตั้งชื่อตามเรื่องได้ด้วย `sqlite3 … "VACUUM INTO …"` ตามขั้น 4 ของ update-server)
 - **ถ้า server ไม่ได้เปิดอยู่**: VPS `npm run autostart -- -Start` แล้วรอ "พร้อมแล้ว" ใน `npm run logs`
   - ลิงก์ถาวรไม่เปลี่ยน
 - จบแล้ว `npm run pull-backup` บนเครื่องบ้าน (เก็บสำเนา DB นอก VPS)
@@ -65,7 +65,7 @@ disable-model-invocation: true
 - **PR ชนกับ main** ต้องรวมโค้ดสองฝั่งเอง: บอกว่าชนไฟล์ไหน เป็นงานเรื่องอะไรกับอะไร แล้วถามว่าจะให้รวมเลยไหม
   - ระหว่างนี้ merge ตัวอื่นที่ไม่เกี่ยวต่อไปได้
 - **CI ไม่ผ่าน** (รัน rerun แล้วก็ยังไม่ผ่าน)
-- **PR เปลี่ยน dependency ใน `package.json`:** ต้อง `npm ci` บน VPS ซึ่งต้องปิด server เต็ม ผู้เล่นจะเห็นป้ายปิด ไม่ใช่ป้ายอัปเดต (VPS: `npm run stop-server` → `git pull --ff-only` → `npm ci` → `npx vite build` → `npm run autostart -- -Start`)
+- **PR เปลี่ยน dependency ใน `package.json`:** ต้อง `npm ci` บน VPS ซึ่งต้องปิด server เต็ม ผู้เล่นจะเห็นป้ายปิด ไม่ใช่ป้ายอัปเดต (`tools/deploy.sh` ทำให้เอง: ปิดเต็ม → `npm ci` → build → เปิด)
 - **ไม่มีอะไรใหม่เลย** (ไม่มี PR พร้อม และ main ตรงกับ server แล้ว): บอกว่าไม่มีอะไรต้องขึ้น อย่ารีสตาร์ทให้ผู้เล่นหลุดเปล่า ๆ
 - **เจอสิ่งที่ดูผิดกติกาใน `docs/systems/`** ระหว่างอ่าน diff: ถามก่อน merge PR นั้น
 
