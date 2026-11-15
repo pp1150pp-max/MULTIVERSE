@@ -27,12 +27,132 @@ export interface FxRecipe {
 }
 
 /**
- * Recipes by effect name. Only the effects listed here get the layer; the rest of the doc's suggested values are
- * added once the owner has seen one working (owner 2026-11-15: try one skill first, Whirlwind).
+ * Recipes by effect name, the values of the doc's tables (SKILL_FX_ALL.md, owner 2026-11-15: Whirlwind first, then
+ * all of them). Effects not listed (sw_wave, sw_xslash_gold, impact: no skill uses them yet) play as before.
+ * Lasting zones (fields, mist, mine, drone, turret…) are played again every tick, so they stay light and weigh 0.
  */
 export const FX_RECIPES: Partial<Record<SkillEffect, FxRecipe>> = {
+  // Sword
+  slash: { color: '#ffe6b0', glow: 0.5, ground: 0.6, particles: { kind: 'spark', n: 4 }, heavy: 0.2 },
   whirlwind: { color: '#9fe0ff', glow: 0.8, ground: 1.1, particles: { kind: 'spark', n: 10 }, heavy: 0.35 },
+  charge: { color: '#ffd08a', glow: 0.8, ground: 0.8, particles: { kind: 'dust', n: 8 }, punch: true, heavy: 0.5 },
+  quake: { color: '#d8a060', glow: 0.4, ground: 1.4, particles: { kind: 'dust', n: 14 }, heavy: 0.8 },
+  sw_cleave: { color: '#ffd6a0', glow: 0.6, ground: 0.7, particles: { kind: 'spark', n: 6 }, heavy: 0.4 },
+  sw_cleave_red: { color: '#ff5a5a', glow: 0.9, ground: 1, particles: { kind: 'shard', n: 10 }, punch: true, heavy: 0.8 },
+  sw_bigsword: { color: '#ffb35a', glow: 1, ground: 1.6, particles: { kind: 'shard', n: 14 }, punch: true, heavy: 1 },
+  crater: { color: '#ff8a3a', glow: 0, ground: 0, particles: { kind: 'dust', n: 10 }, heavy: 0 },
+  sw_nova: { color: '#ffb35a', glow: 1, ground: 1.4, particles: { kind: 'spark', n: 12 }, punch: true, heavy: 0.7 },
+  sw_streak: { color: '#9fe0ff', glow: 0.8, ground: 0.5, particles: { kind: 'spark', n: 6 }, heavy: 0.3 },
+  sw_windring: { color: '#9fe0ff', glow: 0.7, ground: 1, particles: { kind: 'spark', n: 8 }, heavy: 0.35 },
+  sw_xslash: { color: '#c8f0ff', glow: 1, ground: 0.8, particles: { kind: 'shard', n: 8 }, punch: true, heavy: 0.6 },
+  sw_aura: { color: '#9fe0ff', glow: 0.6, ground: 0.8, particles: { kind: 'star', n: 5 }, heavy: 0 },
+  sw_barrier: { color: '#ffd36a', glow: 0.7, ground: 1, particles: { kind: 'star', n: 5 }, heavy: 0 },
+  sw_shout: { color: '#ff9a4a', glow: 0.6, ground: 1.2, particles: { kind: 'dust', n: 8 }, heavy: 0.3 },
+  sw_crack: { color: '#d8a060', glow: 0.4, ground: 1, particles: { kind: 'dust', n: 12 }, heavy: 0.7 },
+  sw_armorhit: { color: '#e0e6ff', glow: 0.7, ground: 0.5, particles: { kind: 'shard', n: 8 }, punch: true, heavy: 0.5 },
+  // Mage
+  explosion: { color: '#ff7a2a', glow: 1, ground: 1.6, particles: { kind: 'ember', n: 12 }, punch: true, heavy: 0.6 },
+  frost: { color: '#9fd8ff', glow: 0.8, ground: 1.2, particles: { kind: 'shard', n: 12 }, punch: true, heavy: 0.5 },
+  mg_lightning: { color: '#bfe0ff', glow: 1.2, ground: 1, particles: { kind: 'spark', n: 10 }, punch: true, heavy: 0.5 },
+  mg_burst: { color: '#c89aff', glow: 1, ground: 1.3, particles: { kind: 'star', n: 8 }, punch: true, heavy: 0.6 },
+  mg_starhit: { color: '#ffe08a', glow: 1, ground: 1.4, particles: { kind: 'star', n: 7 }, punch: true, heavy: 0.45 },
+  mg_firefield: { color: '#ff7a2a', glow: 0.5, ground: 0.8, particles: { kind: 'ember', n: 3 }, heavy: 0 },
+  mg_flamewave: { color: '#ff7a2a', glow: 0.8, ground: 1.2, particles: { kind: 'ember', n: 10 }, heavy: 0.4 },
+  mg_poison: { color: '#9be05a', glow: 0.4, ground: 0.7, particles: { kind: 'ember', n: 3 }, heavy: 0 },
+  mg_ash: { color: '#b0a0a0', glow: 0.3, ground: 0.6, particles: { kind: 'dust', n: 6 }, heavy: 0 },
+  mg_decay: { color: '#a070ff', glow: 0.5, ground: 0.9, particles: { kind: 'ember', n: 3 }, heavy: 0 },
+  mg_shock: { color: '#9fd8ff', glow: 0.7, ground: 1.2, particles: { kind: 'dust', n: 10 }, punch: true, heavy: 0.5 },
+  mg_curse: { color: '#c040ff', glow: 0.6, ground: 0.8, particles: { kind: 'star', n: 4 }, heavy: 0 },
+  mg_vortex: { color: '#8a6aff', glow: 0.5, ground: 0.7, particles: { kind: 'ember', n: 2 }, heavy: 0 },
+  mg_empower: { color: '#ffd36a', glow: 0.6, ground: 1, particles: { kind: 'star', n: 5 }, heavy: 0 },
+  mg_shield: { color: '#7fd0ff', glow: 0.6, ground: 1, particles: { kind: 'star', n: 5 }, heavy: 0 },
+  mg_timewarp: { color: '#b0a0ff', glow: 0.7, ground: 1.2, particles: { kind: 'star', n: 6 }, heavy: 0 },
+  // Gunslinger (the muzzle flash plays on almost every shot, so it stays light)
+  muzzle: { color: '#ffe08a', glow: 0.6, ground: 0.3, particles: { kind: 'spark', n: 3 }, heavy: 0 },
+  reticle: { color: '#ff5a4a', glow: 0.6, ground: 0.6, heavy: 0 },
+  headshot_hit: { color: '#ff5a4a', glow: 1.2, ground: 1.2, particles: { kind: 'shard', n: 12 }, punch: true, heavy: 1 },
+  gs_aura_crit: { color: '#ff5a6a', glow: 0.6, ground: 0.7, particles: { kind: 'spark', n: 4 }, heavy: 0 },
+  gs_aura_rapid: { color: '#ffc85a', glow: 0.6, ground: 0.7, particles: { kind: 'spark', n: 4 }, heavy: 0 },
+  gs_burn: { color: '#ff8a3a', glow: 0.5, ground: 0.5, particles: { kind: 'ember', n: 2 }, heavy: 0 },
+  gs_smoke: { color: '#a0a0a0', glow: 0, ground: 0, particles: { kind: 'dust', n: 4 }, heavy: 0 },
+  gs_mine: { color: '#ff5a4a', glow: 0.4, ground: 0.3, heavy: 0 },
+  gs_drone: { color: '#6affc8', glow: 0.4, ground: 0, heavy: 0 },
+  gs_turret: { color: '#7affe0', glow: 0.3, ground: 0.3, heavy: 0 },
+  gs_blast: { color: '#ffb040', glow: 1, ground: 1.5, particles: { kind: 'ember', n: 10 }, punch: true, heavy: 0.6 },
+  gs_hawkeye: { color: '#ffe08a', glow: 0.6, ground: 0, particles: { kind: 'star', n: 3 }, heavy: 0 },
+  gs_trigger: { color: '#ffc85a', glow: 0.6, ground: 0.3, particles: { kind: 'spark', n: 4 }, heavy: 0 },
+  gs_special: { color: '#7affe0', glow: 0.6, ground: 0.8, particles: { kind: 'spark', n: 6 }, heavy: 0.2 },
 };
+
+/**
+ * Flying shots by their colour (the doc's "ลูกที่บิน" table): a glow around the shot and a trail of particles behind
+ * it. The basic attacks' shots (mage #9fd8ff, gun #ffe08a, rapid #ffc85a, buffed #ffb040) fly too often for one.
+ */
+export const SHOT_LAYERS: Record<string, { color: string; tail: ParticleKind }> = {
+  '#ff7a2a': { color: '#ff8a3a', tail: 'ember' }, // Fireball, the falling meteor
+  '#ff6a5a': { color: '#ff5a4a', tail: 'spark' }, // Headshot
+  '#ffb06a': { color: '#ffb06a', tail: 'spark' }, // Arcane Lance
+  '#ff9a4a': { color: '#ff9a4a', tail: 'ember' }, // Volatile Orb
+  '#bfe6ff': { color: '#bfe6ff', tail: 'star' }, // Ice Cage
+  '#9be05a': { color: '#9be05a', tail: 'ember' }, // Searing Mark, Crystal Spikes
+  '#ff7a4a': { color: '#ffb35a', tail: 'spark' }, // Sword Wave
+  '#7affe0': { color: '#7affe0', tail: 'spark' }, // Armor-Piercing, Explosive Round, Turret
+  '#ff5a6a': { color: '#ff5a6a', tail: 'spark' }, // the crit line's shots
+  '#ff8a3a': { color: '#ff8a3a', tail: 'ember' }, // Incendiary
+  '#6affc8': { color: '#6affc8', tail: 'dust' }, // Seeker rocket (smoke)
+  '#a0fff4': { color: '#a0fff4', tail: 'spark' }, // Railgun
+};
+
+/** A flying shot's glow (a child of its sprite, so it follows) and its trail, or null when it has none / the layer is off. */
+export class ShotLayer {
+  private t = 0;
+  private readonly glow: THREE.Sprite;
+  private readonly at = new THREE.Vector3();
+
+  private constructor(private readonly host: FxLayerHost, private readonly look: { color: string; tail: ParticleKind }, private readonly sprite: THREE.Sprite) {
+    const cfg = currentBalance().fxLayer;
+    // Relative to the shot sprite's own scale.
+    this.glow = glowSprite(look.color, 1.6);
+    this.glow.material.opacity = Math.min(1, 0.6 * cfg.glow);
+    this.glow.renderOrder = -1;
+    sprite.add(this.glow);
+  }
+
+  static for(host: FxLayerHost, color: string, sprite: THREE.Sprite): ShotLayer | null {
+    const look = SHOT_LAYERS[color];
+    return look && currentBalance().fxLayer.enabled ? new ShotLayer(host, look, sprite) : null;
+  }
+
+  dispose(): void {
+    this.glow.removeFromParent();
+    this.glow.material.dispose();
+  }
+
+  /** Drops trail particles behind the shot as it flies (about 25 a second, × the particles setting). */
+  update(dt: number): void {
+    const every = 0.04 / Math.max(0.05, currentBalance().fxLayer.particles);
+    this.t += dt;
+    if (this.t < every) return;
+    this.t = 0;
+    if (currentBalance().fxLayer.particles <= 0) return;
+    this.sprite.getWorldPosition(this.at);
+    trail(this.host, this.look.tail, this.look.color, this.at);
+  }
+}
+
+/** One small trail particle left at a flying shot's place. */
+function trail(host: FxLayerHost, kind: ParticleKind, color: string, at: THREE.Vector3): void {
+  const s = glowSprite(color, kind === 'dust' ? 0.5 : 0.28, kind === 'dust' ? 0.5 : 0.28, kind !== 'dust');
+  s.position.copy(at);
+  const m = s.material;
+  const life = kind === 'dust' ? 0.5 : 0.3;
+  const rise = kind === 'ember' ? 0.8 : kind === 'dust' ? 0.3 : 0;
+  host.add(s, life, (k, dt) => {
+    s.position.y += rise * dt;
+    m.opacity = (kind === 'dust' ? 0.4 : 0.8) * (1 - k) * (kind === 'star' ? 0.5 + 0.5 * Math.sin(k * 20) : 1);
+    if (kind === 'dust') s.scale.setScalar(0.5 + 0.6 * k);
+  });
+}
 
 /** What the layer needs from the game: whose screen this is, and the hit feel. */
 export interface FxLayerHooks {

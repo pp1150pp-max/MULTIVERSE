@@ -9,6 +9,7 @@ import { Sim } from '../src/shared/sim/Sim';
 import { newCharacterData } from '../src/shared/sim/Player';
 import { castSkill } from '../src/shared/sim/skills';
 import { codeFxLayer } from '../src/shared/fxLayerTuning';
+import { IDLE_INTENT } from '../src/shared/sim/types';
 
 {
   const c = codeFxLayer();
@@ -47,6 +48,36 @@ function whirl(withMonster: boolean): unknown[] {
   ok(a.length > 0 && a[5] === a[7] && a[6] === true, `Whirlwind that hits: caster id and hit = true (${JSON.stringify(a)})`);
   const b = whirl(false);
   ok(b.length > 0 && b[5] === b[7] && b[6] === false, `Whirlwind into the air: hit = false (${JSON.stringify(b)})`);
+}
+
+// Every skill's effects carry the caster, also when played later: a Fireball's blast (its shot flies first) and the
+// Meteor's crater (a timer).
+function later(cls: 'mage', id: string, name: string, withMonster: boolean): unknown[] {
+  const sim = new Sim(ZONE_1);
+  const m = sim.monsters.find((x) => !x.isBoss)!;
+  sim.monsters.length = 0;
+  if (withMonster) sim.monsters.push(m);
+  m.x = 0;
+  m.z = 0;
+  m.hp = 1e7;
+  const p = sim.addPlayer({ ...newCharacterData('Caster', cls), level: 40 });
+  p.x = -5;
+  p.z = 0;
+  castSkill(sim, p, CLASSES[cls].skills.find((s) => s.id === id)!, { x: 0, z: 0 }, 1);
+  for (let i = 0; i < 90; i++) {
+    sim.step(1 / 30, () => IDLE_INTENT);
+    const ev = sim.drainEvents().find((e) => e.t === 'fx' && e.name === 'effect' && (e.args as unknown[])[0] === name);
+    if (ev && ev.t === 'fx') return [...(ev.args as unknown[]), p.id];
+  }
+  return [];
+}
+{
+  const a = later('mage', 'fireball', 'explosion', true);
+  ok(a.length === 8 && a[5] === a[7] && a[6] === true, `Fireball's blast: caster id, hit (${JSON.stringify(a)})`);
+  const b = later('mage', 'meteor', 'crater', true);
+  ok(b.length === 8 && b[5] === b[7] && b[6] === true, `Meteor's crater (a timer): caster id, hit (${JSON.stringify(b)})`);
+  const c = later('mage', 'meteor', 'crater', false);
+  ok(c.length === 8 && c[6] === false, `Meteor on nothing: hit = false (${JSON.stringify(c)})`);
 }
 
 finish('fx-layer');

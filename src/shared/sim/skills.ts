@@ -272,6 +272,11 @@ const FROST = '#7ab8ff';
  * the status times (stun, slow, armor break, guard, lifesteal) by the skill's growth on the balance tab.
  */
 export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1): boolean {
+  // Everything the cast plays, now or later (timers, shots), is the caster's: see Sim.asCaster.
+  return sim.asCaster(p, () => cast(sim, p, sk, aim, rank));
+}
+
+function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boolean {
   const ang = aimAngle(p, aim);
   // The worn passive may scale a skill's damage and the size of its blasts (Gunslinger Special Ammo).
   const sc = passiveSkillScale(p, sk);
