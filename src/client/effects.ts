@@ -27,6 +27,8 @@ interface EffectDef {
   stand?: boolean;
   /** Multiplies the art's colours (a tinted copy of a row, e.g. the sword's dark-red Execute). */
   tint?: string;
+  /** The row is drawn as one seamless loop (all 6 frames at full strength), for zones; otherwise a zone loops frames 2–5. */
+  loop?: boolean;
 }
 
 const EFFECTS: Record<SkillEffect, EffectDef> = {
@@ -156,6 +158,30 @@ export class PassiveAura {
   }
 }
 
+/** Lasting zones: frames a second, fade in / out seconds, and how often their extra layer plays again (and for how long). */
+const ZONE_FPS = 8;
+const ZONE_FADE_IN = 0.25;
+const ZONE_FADE_OUT = 0.45;
+const ZONE_LAYER_EVERY = 0.45;
+const ZONE_LAYER_LIFE = 0.9;
+
+let softEdgeTex: THREE.Texture | null = null;
+/** Alpha mask for zones: solid in the middle, fading to nothing at the rim, so the art melts into the ground. */
+function softEdge(): THREE.Texture {
+  if (softEdgeTex) return softEdgeTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d')!;
+  const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grad.addColorStop(0, '#fff');
+  grad.addColorStop(0.62, '#fff');
+  grad.addColorStop(1, '#000');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  softEdgeTex = new THREE.CanvasTexture(c);
+  return softEdgeTex;
+}
+
 /** The on-screen angle of a world direction under the isometric camera. */
 const screenAngle = (dx: number, dz: number) => Math.atan2(-dx - dz, dx - dz);
 
@@ -230,6 +256,8 @@ export class Effects implements FxApi {
   private list: Fx[] = [];
   /** Whose screen this is and the hit feel, for the extra layer (set by Game). */
   layerHooks: FxLayerHooks | null = null;
+  /** Where a player is now (for zones that follow their caster); set by Game. */
+  posOf: ((id: number) => { x: number; z: number } | null) | null = null;
 
   constructor(private readonly scene: THREE.Scene) {}
 
@@ -298,6 +326,49 @@ export class Effects implements FxApi {
       this.add(spr, def.life, play);
       playLayer(this, this.layerHooks, name, spr, x, spr.position.y, z, size, def.life, by, hit);
     }
+  }
+
+  /**
+   * A lasting area (owner 2026-11-15: zones that restart every tick look like a sticker): the row loops for the whole
+   * `duration` with a fade in and out, its edge fades softly into the ground, and the extra layer (glow, ground light,
+   * particles) is played again lightly while it lasts. `follow` keeps it under that player.
+   */
+  zone(name: SkillEffect, x: number, z: number, size: number, duration: number, follow?: number): void {
+    const def = EFFECTS[name];
+    const tex = frameTexture(def.sheet);
+    if (!tex || duration <= 0) {
+      if (!tex) this.ring(x, z, size, '#ffe6a0', Math.min(duration, 1));
+      return;
+    }
+    // Rows drawn as a full loop use all 6 frames; the older rows (appear, …, fade) loop their middle four.
+    const [from, count] = def.loop ? [0, FRAMES] : [1, FRAMES - 2];
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex, alphaMap: softEdge(), transparent: true, alphaTest: 0.02, depthWrite: false, side: THREE.DoubleSide,
+      color: def.tint ?? '#ffffff', opacity: 0,
+    });
+    const mesh = this.decal(mat);
+    mesh.position.set(x, 0.08, z);
+    mesh.scale.setScalar(size);
+    const pos = { x, z };
+    let t = 0;
+    let layerT = 0;
+    this.add(mesh, duration, (_k, dt) => {
+      t += dt;
+      const p = follow !== undefined ? this.posOf?.(follow) : null;
+      if (p) {
+        pos.x = p.x;
+        pos.z = p.z;
+        mesh.position.set(p.x, 0.08, p.z);
+      }
+      showFrame(tex, def.sheet, def.row, from + (Math.floor(t * ZONE_FPS) % count));
+      mat.opacity = Math.min(1, t / ZONE_FADE_IN, (duration - t) / ZONE_FADE_OUT);
+      // The glow, ground light and particles, again every so often while it lasts.
+      layerT -= dt;
+      if (layerT <= 0 && duration - t > ZONE_FADE_OUT) {
+        layerT = ZONE_LAYER_EVERY;
+        playLayer(this, null, name, new THREE.Object3D(), pos.x, 0, pos.z, size, ZONE_LAYER_LIFE);
+      }
+    });
   }
 
   /** Hand-drawn art for a flying shot, or null when this colour of shot has none. */

@@ -63,6 +63,11 @@ export interface FxApi {
    * something: the caster's own screen then feels the hit (fxLayer.ts, owner 2026-11-15).
    */
   effect(name: SkillEffect, x: number, z: number, angle: number, size: number, by?: number, hit?: boolean): void;
+  /**
+   * A lasting area (fire on the ground, a buff circle…): one row of a skill sheet looping for `duration` seconds with a
+   * fade in and out and a soft edge, sent once when the skill is cast. `follow` = a player id it stays centred on.
+   */
+  zone(name: SkillEffect, x: number, z: number, size: number, duration: number, follow?: number): void;
 }
 
 export type SkillEffect = 'slash' | 'whirlwind' | 'charge' | 'quake' | 'explosion' | 'frost' | 'crater' | 'muzzle' | 'impact'
