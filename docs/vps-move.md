@@ -82,6 +82,8 @@
 10. **บ้าน: merge PR ที่ 2** (skill `/update-server`, `/ship` และเอกสาร เปลี่ยนเป็นสั่ง VPS ทาง SSH)
 11. **เก็บสำรองนอก VPS เป็นประจำ:** บนเครื่องบ้าน `npm run pull-backup` (ดึงไฟล์สำรองล่าสุดมาไว้ที่ `C:\Users\<คุณ>\MULTIVERSE-backups`) ทำทุกครั้งที่เปิดคอม หรือให้ Claude ทำตอน `/ship`
 
+12. **ปุ่ม Deploy ให้เพื่อน** (ถ้ายังไม่ได้ใส่ secret: [systems/server-ops.md](systems/server-ops.md) หัวข้อ "ปุ่ม Deploy") — GitHub → Actions → Deploy → `status` ต้องเห็น commit และ "เปิดอยู่"
+
 ## D. ย้ายกลับมาเครื่องบ้าน (ถ้า VPS มีปัญหา)
 
 1. **VPS: ปิดผ่าน countdown** — `npm run stop-server -- --seconds 120` → "server ปิดแล้ว"
@@ -92,4 +94,4 @@
 4. **บ้าน: วาง DB** — ย้าย `server\data\multiverse.db` เดิมไปเป็น `multiverse-before-move-home.db` · ลบ `multiverse.db-wal`/`-shm` ถ้ามี · คัด `multiverse-move-home.db` เป็น `server\data\multiverse.db`
 5. **บ้าน: คืนลิงก์** — เปลี่ยนชื่อ `tunnel-config.json.moved-to-vps` กลับเป็น `tunnel-config.json` (credentials ใน `.cloudflared` ที่บ้านยังอยู่)
 6. **บ้าน: เปิด** — `git checkout main && git pull --ff-only && npx vite build` → `npm run autostart -- -Install` (ขอสิทธิ์ admin) → `npm run autostart -- -Start` → `npm run logs` จนขึ้น "พร้อมแล้ว" → เช็ค `/` และ `/admin` = 200 + connector เดียว
-7. revert PR ที่ 2 (skill กลับมาสั่งเครื่องบ้าน)
+7. revert PR ที่ 2 (skill กลับมาสั่งเครื่องบ้าน) · ปุ่ม Deploy ใช้ไม่ได้จนกลับไป VPS (ลบ secret `VPS_DEPLOY_KEY` กันกดผิด)

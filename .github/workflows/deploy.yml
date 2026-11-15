@@ -1,0 +1,77 @@
+# "Deploy" button: puts the latest main on the live server (VPS) — for anyone with write access to the repo
+# when the owner is away. Actions → Deploy → Run workflow (branch: main) → action.
+#   deploy: typecheck + tests on main, then tools/deploy.sh on the VPS (DB backup, build, 120 s update countdown)
+#   status / logs: what the VPS is running, without changing anything
+# Secrets (Settings → Secrets and variables → Actions), set by the owner (docs/systems/server-ops.md, "ปุ่ม Deploy"):
+#   VPS_HOST         the VPS address
+#   VPS_KNOWN_HOSTS  output of: ssh-keyscan -t ed25519 <VPS address>
+#   VPS_DEPLOY_KEY   private key whose public half is locked to tools/deploy.sh on the VPS (it cannot open a shell)
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: deploy = เอา main ล่าสุดขึ้น server จริง · status / logs = ดูอย่างเดียว
+        type: choice
+        options: [deploy, status, logs]
+        default: deploy
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    if: github.ref == 'refs/heads/main' && inputs.action == 'deploy'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test
+
+  vps:
+    needs: check
+    # status/logs skip the checks; deploy only after they pass.
+    if: always() && github.ref == 'refs/heads/main' && (inputs.action != 'deploy' || needs.check.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: SSH key
+        env:
+          KEY: ${{ secrets.VPS_DEPLOY_KEY }}
+          KNOWN: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+      - name: ${{ inputs.action }}
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+          ACTION: ${{ inputs.action }}
+        run: |
+          CMD="$ACTION"
+          [ "$ACTION" = deploy ] && CMD="deploy $GITHUB_SHA"
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o IdentitiesOnly=yes -o ServerAliveInterval=30 "multiverse@$HOST" "$CMD"
+      - name: Check the link
+        if: inputs.action == 'deploy'
+        run: |
+          for p in / /admin; do
+            for i in 1 2 3 4 5 6; do
+              c=$(curl -s -o /dev/null -m 15 -w '%{http_code}' "https://play.multiverse-game.com$p") && [ "$c" = 200 ] && break
+              sleep 10
+            done
+            echo "$p → $c"; [ "$c" = 200 ]
+          done
+      - name: Remove key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

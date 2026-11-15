@@ -47,6 +47,20 @@
 - **สำรองนอกเครื่อง:** `npm run pull-backup` บนเครื่องบ้าน ดึงไฟล์สำรองล่าสุดที่เก่ากว่า 1 นาทีจาก `server/data/backups/` บน VPS ผ่าน scp → `<home>/MULTIVERSE-backups` (นอก repo, เปลี่ยนด้วย `BACKUP_PULL_DIR`) ตรวจ SHA-256 + `quick_check` เก็บ 30 ไฟล์ (`--keep N`) · ไม่ดึง `multiverse.db` ที่กำลังใช้ · ใช้ชื่อ SSH `multiverse-vps` จาก `~/.ssh/config` (`VPS_SSH`) ไม่เขียน IP ใน repo สาธารณะ
 - ซ้อมบน VPS จริงผ่านแล้ว 2026-11-15 (vps-move.md หัวข้อ B: ลิงก์ 200, port 2567 ปิดจากข้างนอก, restart/`systemctl stop`/รีบูต มีนับถอยหลัง+เซฟ และเปิดเองหลังบูต) แล้วล้างข้อมูลซ้อม
 
+## ปุ่ม Deploy: ให้เพื่อนเอาโค้ดขึ้น server จริงได้ยามฉุกเฉิน (เจ้าของเลือก 2026-11-15)
+
+ใช้ได้เมื่อ server จริงอยู่บน VPS แล้ว · เจ้าของยังเป็นหลัก (`/ship`, `/update-server`) ปุ่มนี้ไว้ตอนเจ้าของไม่ได้เปิดคอมหรือไม่ว่าง
+
+- **กด:** GitHub → Actions → **Deploy** → Run workflow (branch `main`) → action `deploy` (หรือ `status` / `logs` ดูอย่างเดียว) · กดได้ทุกคนที่มีสิทธิ์ write ใน repo (ตอนนี้ เจ้าของ + ioilLnwza)
+- **ทำอะไร** (`.github/workflows/deploy.yml`): typecheck + test ของ main ก่อน ไม่ผ่าน = ไม่ขึ้น → SSH ไป VPS รัน `tools/deploy.sh deploy <commit ที่ตรวจแล้ว>`: สำรอง DB (`backups/multiverse-before-deploy-…db` เก็บ 10) → pull → build ลง `dist-next` แล้วสลับ (build พัง = ถอยโค้ดกลับ เว็บไม่พัง) → รีสตาร์ทนับถอยหลัง 120 วิ ป้าย "อัปเดต" (dependency เปลี่ยน = ป้ายปิด 120 วิ + `npm ci`) → รอ server ตอบ → เช็คลิงก์ `/` และ `/admin` = 200
+- **ปลอดภัย:** key ของ GitHub ล็อกใน `authorized_keys` ของ user `multiverse` ให้รันได้แค่ `tools/deploy.sh` (`command="…",restrict`) เข้า shell / อ่าน DB / ไฟล์ tunnel ไม่ได้ · main ต้องตรงกับ commit ที่ตรวจแล้ว (มีคน merge เพิ่มระหว่างตรวจ = หยุด) · ทีละคน (`flock` คนที่สองถูกปฏิเสธ) · โค้ดบน VPS ถูกแก้ด้วยมือ = หยุด · หมายเหตุ: ใครที่ merge เข้า main ได้ก็แก้ `deploy.sh` ได้ จึงให้สิทธิ์ write เฉพาะคนที่ไว้ใจเอาโค้ดขึ้น server
+- เจ้าของสั่งเองผ่าน SSH ก็ใช้สคริปต์เดียวกัน: `ssh multiverse-vps "cd MULTIVERSE && tools/deploy.sh deploy <commit>"` (skill `/update-server`)
+- **ตั้งครั้งเดียว (เจ้าของ):** key อยู่ที่เครื่องบ้าน `~/.ssh/multiverse_github_deploy` (public half ลงใน VPS แล้ว) · ใส่ secret 3 ตัวด้วย `gh` ใน PowerShell:
+  `gh secret set VPS_HOST --body "<IP ของ VPS>"` ·
+  `ssh-keyscan -t ed25519 <IP ของ VPS> | gh secret set VPS_KNOWN_HOSTS` ·
+  `Get-Content -Raw $env:USERPROFILE\.ssh\multiverse_github_deploy | gh secret set VPS_DEPLOY_KEY`
+  แล้วกด Deploy → `status` ดูว่าใช้ได้ · ยกเลิกสิทธิ์: ลบบรรทัด `github-deploy` ใน `~/.ssh/authorized_keys` บน VPS (หรือลบ secret)
+
 ## สำรอง / กู้คืน DB
 
 - สำรอง DB: `server/data/backups/` (`VACUUM INTO`) อัตโนมัติทุก 6 ชม. เก็บ 28 ไฟล์ = 7 วัน (เจ้าของเลือก 2026-11-13, ชนิดไฟล์ยังชื่อ `daily` ให้ไฟล์เก่าหมุนรวมกัน), กดเองเก็บ 10, ก่อนลบเก็บ 20 (`BACKUP_KEEP`/`AUTO_MS` ใน `server/backup.ts`) · server นับจากไฟล์ล่าสุด รีสตาร์ทบ่อยก็ไม่สำรองถี่ขึ้น
