@@ -4,7 +4,7 @@
 
 ## 1. ไอคอนคริสตัลมิติ (`crystal.png`)
 
-ใช้แสดงยอดเงินและราคาบนการ์ด ต้องอ่านออกตอนเล็กแค่ 16–20 px ตัดเป็น 96×96
+ใช้แสดงยอดเงินและราคาบนการ์ด ต้องอ่านออกตอนเล็กแค่ 16–20 px ตัดเป็น 96×96 ปลายทาง `public/assets/sprites/ui/crystal.png`
 
 ```text
 16-bit SNES RPG currency icon, polished pixel art with a limited color palette, crisp dark outline, soft top-left lighting. A single item, centered, filling about 80% of the frame: a faceted hexagonal crystal shard standing upright, violet at the bottom fading to bright cyan at the top, with a thin glowing swirl like a small dimensional rift inside it and two tiny sparkles beside it. Simple, bold silhouette that stays readable at 16 pixels wide. No text, no border, no frame, no coin, no shadow on the ground. Solid flat pure magenta background (#FF00FF) with no gradient, and no magenta or pink anywhere on the crystal. Square image.
@@ -12,7 +12,7 @@
 
 ## 2. ไอคอนเมนู "แคชช็อป" (`ico_cashshop.png`)
 
-ปุ่มกลมแบบเดียวกับไอคอนมุมขวาบนอื่น **แนบ `public/assets/sprites/ui/ico_bag.png` และ `ico_daily.png` เป็นตัวอย่างสไตล์** ตัดเป็น 96×96 (เต็มกรอบเหมือนปุ่มอื่น)
+ปุ่มกลมแบบเดียวกับไอคอนมุมขวาบนอื่น **แนบ `public/assets/sprites/ui/ico_bag.png` และ `ico_daily.png` เป็นตัวอย่างสไตล์** ตัดเป็น 96×96 (เต็มกรอบเหมือนปุ่มอื่น) ปลายทาง `public/assets/sprites/ui/ico_cashshop.png`
 
 ```text
 Using the attached round HUD buttons as the exact style, size and colour reference, generate ONE matching round HUD menu button for an isometric action RPG, in fine-detail 16-bit SNES-era pixel art with crisp pixels and no blur. Same round badge as the references: a black forged iron rim and a thin tarnished aged-bronze inner ring around a dark recessed face, with one simple, bold, readable icon in the centre. Icon: a small merchant's shopping bag with a gold clasp, with a faceted violet-to-cyan crystal shard sticking out of its top and a tiny sparkle beside it (premium crystal shop). Icons use warm muted colours with clear dark outlines, and must stay readable at 40 pixels wide. The badge is centred in a square image with wide empty space around it, nothing touching the edges. Background ONE perfectly flat solid magenta (#FF00FF), no shadows on it. No letters, no numbers, no readable words, no logos. Do not use pink or magenta in the button.

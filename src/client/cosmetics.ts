@@ -11,6 +11,7 @@ import { cosHiddenKey, isCosHidden } from './cosTune';
 import { cosCardImage } from './cosmeticViews';
 import { orbItemLook, orbItemsVersion } from '../shared/orbItems';
 import { ORB_PALETTES } from './orbs';
+import { cashCatalogNow, cashVersion } from './cashData';
 
 type Tab = 'shop' | 'mine';
 
@@ -117,7 +118,7 @@ export class CosmeticsUI {
     if (this.mountBtn.textContent !== label) this.mountBtn.textContent = label;
     this.mountBtn.classList.toggle('on', me.mounted);
     if (!this.open) return;
-    const key = JSON.stringify([this.tab, this.slot, this.trying, me.cosmetics, this.g.backend.cosOwned, cosHiddenKey(), orbItemsVersion()]);
+    const key = JSON.stringify([this.tab, this.slot, this.trying, me.cosmetics, this.g.backend.cosOwned, cosHiddenKey(), orbItemsVersion(), cashVersion()]);
     if (key === this.drawn) return;
     this.drawn = key;
     this.draw();
@@ -164,6 +165,7 @@ export class CosmeticsUI {
       ),
     );
 
+    const onSale = new Set(cashCatalogNow().items.filter((e) => e.kind === 'cos').map((e) => e.ref));
     const list = COSMETICS.filter((c) => c.slot === this.slot && (this.tab === 'shop' ? !isCosHidden(c.id) : mine(c)));
     const cards = list.map((c) => {
       const card = el('div', 'cos-card');
@@ -183,7 +185,7 @@ export class CosmeticsUI {
             this.setTry(c.slot, tryingThis ? null : c.id);
             this.update();
           }, tryingThis ? 'on' : ''),
-          button('ซื้อในแคชช็อป', () => this.g.cashShop.toggle(true), 'cos-buy'),
+          ...(onSale.has(c.id) ? [button('ซื้อในแคชช็อป', () => this.g.cashShop.openCos(c.slot), 'cos-buy')] : []),
         );
       } else if (worn[c.slot] === c.id) {
         btns.append(button('ถอด', () => this.g.backend.cosWear(c.slot, null)));

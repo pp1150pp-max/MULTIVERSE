@@ -1837,6 +1837,9 @@ async function openAccount(id: number, note?: { text: string; ok: boolean; passw
       h('div', {}, 'รหัสผ่านชั่วคราว (แสดงครั้งเดียว — จดไว้ส่งให้ผู้เล่น):'),
       h('code', {}, note.password)));
   }
+  if (d.crystals !== null && d.crystals !== undefined) {
+    sections.push(h('div', { class: 'muted' }, `คริสตัลมิติ (แคชช็อป): ${d.crystals.toLocaleString()}`));
+  }
   // Tools
   const tools: Node[] = [];
   if (can('resetPassword') && !a.guest) {

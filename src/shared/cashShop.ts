@@ -10,6 +10,7 @@ import { COSMETICS, cosById } from './data/cosmetics';
 import { cosPrice, type CosShop } from './cosShop';
 import { STONE_NAME } from './data/stones';
 import type { StoneKind } from './types';
+import type { OrbItem } from './orbItems';
 
 export const CASH_SETTING = 'cash_shop';
 export const CURRENCY = 'คริสตัลมิติ';
@@ -298,4 +299,6 @@ export interface AdminCashShop {
   /** May save (the `cashShopEdit` switch). */
   canEdit: boolean;
   recent: CashPurchaseRow[];
+  /** The orb looks (cosmetics made in /admin), so the page lists them like the rest. */
+  orbs: OrbItem[];
 }

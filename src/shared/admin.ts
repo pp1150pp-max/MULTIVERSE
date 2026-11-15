@@ -381,6 +381,8 @@ export interface AdminAccountDetail {
   stash: { size: number; gold: number; items: (BagEntry | null)[] } | null;
   /** Cosmetic ids the account owns (src/shared/data/cosmetics.ts); null for a guest. */
   cosmetics: string[] | null;
+  /** The account's cash shop crystals (คริสตัลมิติ); null for a guest. Look only. */
+  crystals?: number | null;
   /** Cosmetic ids hidden from the in-game window (may still be given; marked on the sheet). */
   cosHidden?: string[];
   /** The orb looks in the shop (they are cosmetics of slot 'orb', made in /admin). */

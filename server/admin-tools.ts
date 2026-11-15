@@ -188,7 +188,7 @@ export async function ownerToolsApi(
       });
       const stash = world.liveStash(id) ?? db.savedStash(id);
       const body: AdminAccountDetail = {
-        account: row, characters, stash: row.guest || !stash ? null : stash, cosmetics: row.guest ? null : db.cosmeticsOwned(id), cosHidden: cosHiddenIds(db.cosShop()), orbItems: db.orbItems().items,
+        account: row, characters, stash: row.guest || !stash ? null : stash, cosmetics: row.guest ? null : db.cosmeticsOwned(id), crystals: row.guest ? null : db.crystals(id), cosHidden: cosHiddenIds(db.cosShop()), orbItems: db.orbItems().items,
       };
       send(res, 200, body);
       return true;

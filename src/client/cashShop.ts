@@ -117,6 +117,13 @@ export class CashShopUI {
     this.update();
   }
 
+  /** Opens on the ของแต่งตัว tab at `slot` (the cosmetics window's "ซื้อในแคชช็อป"). */
+  openCos(slot: CosSlot): void {
+    this.tab = 'cos';
+    this.sub.cos = slot;
+    this.toggle(true);
+  }
+
   /** Every frame: redraw when something shown changed (catalogue, crystals, owned cosmetics, the minute for timers). */
   update(): void {
     if (!this.open) return;

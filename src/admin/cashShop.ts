@@ -7,6 +7,7 @@ import {
   type AdminCashShop, type CashBadge, type CashItemCfg, type CashPackage, type CashShopCfg,
 } from '../shared/cashShop';
 import { COSMETICS, COS_SLOTS, COS_SLOT_NAME } from '../shared/data/cosmetics';
+import { registerOrbItems } from '../shared/orbItems';
 
 type Kids = (Node | string | null | undefined | false)[];
 type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, unknown>, ...kids: Kids) => HTMLElementTagNameMap[K];
@@ -53,6 +54,8 @@ export async function renderCashShop(view: HTMLElement, h: H, api: Api): Promise
   };
 
   const draw = (): void => {
+    // The orb looks are cosmetics too: list them (and name them in the history) like the rest.
+    registerOrbItems(st.orbs);
     const ro = !st.canEdit;
     const rows: Row[] = [];
     const open = h('input', { type: 'checkbox', disabled: ro }) as HTMLInputElement;

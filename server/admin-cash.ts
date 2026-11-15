@@ -14,7 +14,7 @@ import { cosById } from '../src/shared/data/cosmetics';
 const RECENT = 200;
 
 const state = (db: Db, world: GameWorld, a: Admin): AdminCashShop => ({
-  cfg: world.cash.cfg(), cosShop: db.cosShop(), canEdit: a.features.includes('cashShopEdit'), recent: db.cashRecent(RECENT),
+  cfg: world.cash.cfg(), cosShop: db.cosShop(), canEdit: a.features.includes('cashShopEdit'), recent: db.cashRecent(RECENT), orbs: db.orbItems().items,
 });
 
 const cut = (s: string) => (s.length > 1500 ? s.slice(0, 1500) + '…' : s);
