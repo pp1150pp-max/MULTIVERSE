@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { fxSheets, fxTex, type FxSheet } from './assets';
 import type { FxApi, SkillEffect } from '../shared/sim/types';
+import { playPixelFx } from './pixelFx';
 import { loopProps, playProps } from './zoneProps';
 import { playLayer, ShotLayer, type FxLayerHooks, type FxLayerHost } from './fxLayer';
 
@@ -308,6 +309,8 @@ export class Effects implements FxApi {
 
   /** Plays one row of a skill's animation sheet, once. */
   effect(name: SkillEffect, x: number, z: number, angle: number, size: number, by?: number, hit?: boolean, skill?: string): void {
+    // Trying code-made pixel effects on a few skills (pixelFx.ts): they play instead of everything below.
+    if (playPixelFx(this, skill, x, z, size)) return;
     // The standing layer of an area skill (zoneProps.ts), once per cast spot: a skill that plays two pictures at the
     // same place (Unleash: ring + quake) shouldn't double it.
     if (skill) {
@@ -351,6 +354,7 @@ export class Effects implements FxApi {
    * particles) is played again lightly while it lasts. `follow` keeps it under that player.
    */
   zone(name: SkillEffect, x: number, z: number, size: number, duration: number, follow?: number | null, skill?: string): void {
+    if (playPixelFx(this, skill, x, z, size, duration)) return;
     const def = EFFECTS[name];
     const tex = frameTexture(def.sheet);
     if (!tex || duration <= 0) {
