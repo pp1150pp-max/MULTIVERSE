@@ -10,7 +10,7 @@ const SHEET_ROWS: Record<FxSheet, number> = {
   sw_blade: 4, sw_gale: 4, sw_bulwark: 4,
 
   // Mage
-  mg_a: 6, mg_b: 6, mg_c: 6, mg_d: 3,
+  mg_a: 6, mg_b: 6, mg_c: 6, mg_d: 3, mg_e: 4, mg_f: 4, mg_g: 5,
   // Gunslinger
   gs_skill: 6, gs_gear: 6, gs_passive: 3,
 };
@@ -27,6 +27,8 @@ interface EffectDef {
   stand?: boolean;
   /** Multiplies the art's colours (a tinted copy of a row, e.g. the sword's dark-red Execute). */
   tint?: string;
+  /** The row is drawn as one seamless loop (all 6 frames at full strength), for zones; otherwise a zone loops frames 2–5. */
+  loop?: boolean;
 }
 
 const EFFECTS: Record<SkillEffect, EffectDef> = {
@@ -65,17 +67,19 @@ const EFFECTS: Record<SkillEffect, EffectDef> = {
   mg_lightning: { sheet: 'mg_a', row: 4, life: 0.35, height: 1.4, upright: true },
   mg_burst: { sheet: 'mg_a', row: 5, life: 0.5, height: 0.9, upright: true },
   mg_starhit: { sheet: 'mg_b', row: 0, life: 0.4, height: 0.9, upright: true },
-  mg_firefield: { sheet: 'mg_b', row: 1, life: 0.55, height: 'ground' },
+  mg_firefield: { sheet: 'mg_e', row: 0, life: 0.55, height: 'ground', loop: true },
   mg_flamewave: { sheet: 'mg_b', row: 2, life: 0.4, height: 'ground' },
-  mg_poison: { sheet: 'mg_b', row: 3, life: 1.1, height: 'ground' },
+  mg_poison: { sheet: 'mg_e', row: 1, life: 1.1, height: 'ground', loop: true },
   mg_ash: { sheet: 'mg_b', row: 4, life: 0.5, height: 'ground' },
-  mg_decay: { sheet: 'mg_b', row: 5, life: 1, height: 'ground' },
-  mg_shock: { sheet: 'mg_c', row: 0, life: 0.45, height: 'ground' },
-  mg_curse: { sheet: 'mg_c', row: 1, life: 0.9, height: 'ground' },
-  mg_vortex: { sheet: 'mg_c', row: 2, life: 0.3, height: 'ground' },
-  mg_empower: { sheet: 'mg_c', row: 3, life: 0.9, height: 'ground' },
-  mg_shield: { sheet: 'mg_c', row: 4, life: 1, height: 'ground' },
-  mg_timewarp: { sheet: 'mg_c', row: 5, life: 1, height: 'ground' },
+  mg_decay: { sheet: 'mg_e', row: 2, life: 1, height: 'ground', loop: true },
+  mg_shock: { sheet: 'mg_g', row: 0, life: 0.45, height: 'ground' },
+  mg_curse: { sheet: 'mg_f', row: 0, life: 0.9, height: 'ground', loop: true },
+  mg_vortex: { sheet: 'mg_e', row: 3, life: 0.3, height: 'ground', loop: true },
+  mg_empower: { sheet: 'mg_f', row: 1, life: 0.9, height: 'ground', loop: true },
+  mg_shield: { sheet: 'mg_f', row: 2, life: 1, height: 'ground', loop: true },
+  mg_timewarp: { sheet: 'mg_f', row: 3, life: 1, height: 'ground', loop: true },
+  // Frost Nova's own ring (round 2, top-down); the old `frost` row stays for Ice Cage's hit.
+  mg_frostnova: { sheet: 'mg_g', row: 1, life: 0.6, height: 'ground' },
   // Gunslinger (art_templates/skills/FX_GUNSLINGER.md). Lasting things (mine, drone, turret, smoke, burning) are
   // played again by the sim every tick, so their life is about one tick.
   // The aura and smoke are drawn already seen at an angle, so they face the camera at the feet instead of lying flat.
@@ -118,9 +122,9 @@ const SHOT_ART: Record<string, { sheet: FxSheet; row: number; scale: number }> =
 
 /** Mage passive auras under the feet (sheet mg_d), by worn passive id; everyone sees them (owner 2026-11-15). */
 const PASSIVE_AURA: Record<string, { sheet: FxSheet; row: number; size: number }> = {
-  mg_elementmastery: { sheet: 'mg_d', row: 0, size: 1.1 },
-  mg_manasource: { sheet: 'mg_d', row: 1, size: 1.1 },
-  mg_arcanepower: { sheet: 'mg_d', row: 2, size: 1.1 },
+  mg_elementmastery: { sheet: 'mg_g', row: 2, size: 1.1 },
+  mg_manasource: { sheet: 'mg_g', row: 3, size: 1.1 },
+  mg_arcanepower: { sheet: 'mg_g', row: 4, size: 1.1 },
 };
 
 /** A looping ground aura under a player for the passive they wear (null when that passive or its sheet has none). */
@@ -154,6 +158,30 @@ export class PassiveAura {
     this.mesh.geometry.dispose();
     (this.mesh.material as THREE.Material).dispose();
   }
+}
+
+/** Lasting zones: frames a second, fade in / out seconds, and how often their extra layer plays again (and for how long). */
+const ZONE_FPS = 8;
+const ZONE_FADE_IN = 0.25;
+const ZONE_FADE_OUT = 0.45;
+const ZONE_LAYER_EVERY = 0.45;
+const ZONE_LAYER_LIFE = 0.9;
+
+let softEdgeTex: THREE.Texture | null = null;
+/** Alpha mask for zones: solid in the middle, fading to nothing at the rim, so the art melts into the ground. */
+function softEdge(): THREE.Texture {
+  if (softEdgeTex) return softEdgeTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d')!;
+  const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grad.addColorStop(0, '#fff');
+  grad.addColorStop(0.62, '#fff');
+  grad.addColorStop(1, '#000');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  softEdgeTex = new THREE.CanvasTexture(c);
+  return softEdgeTex;
 }
 
 /** The on-screen angle of a world direction under the isometric camera. */
@@ -230,6 +258,8 @@ export class Effects implements FxApi {
   private list: Fx[] = [];
   /** Whose screen this is and the hit feel, for the extra layer (set by Game). */
   layerHooks: FxLayerHooks | null = null;
+  /** Where a player is now (for zones that follow their caster); set by Game. */
+  posOf: ((id: number) => { x: number; z: number } | null) | null = null;
 
   constructor(private readonly scene: THREE.Scene) {}
 
@@ -300,6 +330,49 @@ export class Effects implements FxApi {
     }
   }
 
+  /**
+   * A lasting area (owner 2026-11-15: zones that restart every tick look like a sticker): the row loops for the whole
+   * `duration` with a fade in and out, its edge fades softly into the ground, and the extra layer (glow, ground light,
+   * particles) is played again lightly while it lasts. `follow` keeps it under that player.
+   */
+  zone(name: SkillEffect, x: number, z: number, size: number, duration: number, follow?: number): void {
+    const def = EFFECTS[name];
+    const tex = frameTexture(def.sheet);
+    if (!tex || duration <= 0) {
+      if (!tex) this.ring(x, z, size, '#ffe6a0', Math.min(duration, 1));
+      return;
+    }
+    // Rows drawn as a full loop use all 6 frames; the older rows (appear, …, fade) loop their middle four.
+    const [from, count] = def.loop ? [0, FRAMES] : [1, FRAMES - 2];
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex, alphaMap: softEdge(), transparent: true, alphaTest: 0.02, depthWrite: false, side: THREE.DoubleSide,
+      color: def.tint ?? '#ffffff', opacity: 0,
+    });
+    const mesh = this.decal(mat);
+    mesh.position.set(x, 0.08, z);
+    mesh.scale.setScalar(size);
+    const pos = { x, z };
+    let t = 0;
+    let layerT = 0;
+    this.add(mesh, duration, (_k, dt) => {
+      t += dt;
+      const p = follow !== undefined ? this.posOf?.(follow) : null;
+      if (p) {
+        pos.x = p.x;
+        pos.z = p.z;
+        mesh.position.set(p.x, 0.08, p.z);
+      }
+      showFrame(tex, def.sheet, def.row, from + (Math.floor(t * ZONE_FPS) % count));
+      mat.opacity = Math.min(1, t / ZONE_FADE_IN, (duration - t) / ZONE_FADE_OUT);
+      // The glow, ground light and particles, again every so often while it lasts.
+      layerT -= dt;
+      if (layerT <= 0 && duration - t > ZONE_FADE_OUT) {
+        layerT = ZONE_LAYER_EVERY;
+        playLayer(this, null, name, new THREE.Object3D(), pos.x, 0, pos.z, size, ZONE_LAYER_LIFE);
+      }
+    });
+  }
+
   /** Hand-drawn art for a flying shot, or null when this colour of shot has none. */
   shotSprite(color: string, size: number): ShotSprite | null {
     const art = SHOT_ART[color];
@@ -318,6 +391,54 @@ export class Effects implements FxApi {
       m.opacity = 0.85 * (1 - k);
       mesh.scale.setScalar(0.8 + 0.3 * k);
     });
+  }
+
+  /**
+   * A crystal cluster standing on the ground (Crystal Spikes, owner 2026-11-15), drawn in code until it has art:
+   * it grows out of the ground, glows and bobs gently while it lasts, then sinks away. Faces are shaded light / dark so
+   * it reads as a solid gem from the isometric camera.
+   */
+  crystal(x: number, z: number, duration: number, color: string): void {
+    const g = new THREE.Group();
+    const base = new THREE.Color(color);
+    const shard = (h: number, r: number, ox: number, oz: number, tilt: number, turn: number): void => {
+      const geo = new THREE.OctahedronGeometry(1, 0).toNonIndexed();
+      geo.scale(r, h, r);
+      // Light on the faces turned up and toward the camera, dark on the rest.
+      const pos = geo.getAttribute('position');
+      const cols: number[] = [];
+      for (let i = 0; i < pos.count; i += 3) {
+        const cy = (pos.getY(i) + pos.getY(i + 1) + pos.getY(i + 2)) / 3;
+        const cx = (pos.getX(i) + pos.getX(i + 1) + pos.getX(i + 2)) / 3 + (pos.getZ(i) + pos.getZ(i + 1) + pos.getZ(i + 2)) / 3;
+        const c = base.clone().multiplyScalar(cy > 0 ? (cx > 0 ? 1.35 : 1) : cx > 0 ? 0.75 : 0.5);
+        for (let k = 0; k < 3; k++) cols.push(c.r, c.g, c.b);
+      }
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+      const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.95 }));
+      m.position.set(ox, h, oz);
+      m.rotation.set(tilt, turn, tilt * 0.6);
+      g.add(m);
+    };
+    shard(0.75, 0.22, 0, 0, 0, 0.4);
+    shard(0.45, 0.15, 0.28, 0.1, 0.45, 1.1);
+    shard(0.4, 0.14, -0.22, 0.18, -0.4, 2.2);
+    shard(0.32, 0.12, 0.05, -0.28, 0.35, 0.2);
+    const glow = this.glowSprite(color, 2.2, 0.55);
+    glow.position.y = 0.7;
+    g.add(glow);
+    g.position.set(x, 0, z);
+    g.scale.setScalar(0.01);
+    let t = 0;
+    this.add(g, duration, (_k, dt) => {
+      t += dt;
+      // Grows out in 0.2 s, sinks away in the last 0.3 s.
+      const s = Math.min(1, t / 0.2, (duration - t) / 0.3);
+      g.scale.setScalar(Math.max(0.01, s));
+      g.position.y = 0.05 * Math.sin(t * 3);
+      g.rotation.y = t * 0.6;
+      glow.material.opacity = 0.35 + 0.15 * Math.sin(t * 5);
+    });
+    this.ring(x, z, 1.4, color, 0.5);
   }
 
   ring(x: number, z: number, radius: number, color: string, life = 0.4): void {

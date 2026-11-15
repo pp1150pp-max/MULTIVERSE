@@ -210,9 +210,9 @@ function eventPos(ev: SimEvent): Vec2 | null {
   if (ev.t === 'shake' && ev.x !== undefined && ev.z !== undefined) return { x: ev.x, z: ev.z };
   if (ev.t === 'fx') {
     const a = ev.args as unknown[];
-    // puff/burst take (x, y, z), effect takes (name, x, z), the rest start with (x, z).
+    // puff/burst take (x, y, z), effect and zone take (name, x, z), the rest start with (x, z).
     if (ev.name === 'puff' || ev.name === 'burst') return { x: a[0] as number, z: a[2] as number };
-    if (ev.name === 'effect') return { x: a[1] as number, z: a[2] as number };
+    if (ev.name === 'effect' || ev.name === 'zone') return { x: a[1] as number, z: a[2] as number };
     return { x: a[0] as number, z: a[1] as number };
   }
   return null;

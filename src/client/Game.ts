@@ -183,6 +183,7 @@ export class Game {
       shake: (a) => this.shake(a),
       hitstop: (sec) => { this.hitstopT = Math.max(this.hitstopT, sec); },
     };
+    this.fx.posOf = (id) => this.backend.players.find((p) => p.id === id) ?? null;
     this.autoRing = new AutoRing(this.scene);
     this.lockRing = new AutoRing(this.scene, '#ff4a3a');
     this.skillRing = new AutoRing(this.scene, '#ffcf5a');

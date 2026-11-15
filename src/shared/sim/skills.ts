@@ -263,6 +263,10 @@ export function giveShield(sim: Sim, q: Player, amount: number, seconds: number)
   sim.text(q.x, q.topY, q.z, `โล่ ${hp}`, 'info', 1);
 }
 
+/** Seconds a cast circle (curse, buff) stays on the ground, and the poison mist's cloud. */
+const CIRCLE_ZONE = 1.6;
+const MIST_ZONE = 2.5;
+
 const FIRE = '#ff7a2a';
 const VENOM = '#9be05a';
 const FROST = '#7ab8ff';
@@ -298,7 +302,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       sim.addProjectile(p, { x: p.x, z: p.z, angle: ang, speed: 13, range: far, radius: 0.45, mult: dmg, color: '#ff7a2a', size: 1.1, explode: P('blast'), hit: { skill: sk } });
       return true;
     case 'frostnova':
-      sim.fx('effect', 'frost', p.x, p.z, 0, 4.8);
+      sim.fx('effect', 'mg_frostnova', p.x, p.z, 0, far);
       forCircle(sim, p.x, p.z, far, (m) => sim.hitMonster(p, m, dmg, { slow: P('slow') / 100, slowT: P('slowTime'), skill: sk }));
       return true;
     case 'meteor': {
@@ -426,9 +430,8 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const c = landing(p, aim, far);
       const r = P('radius');
       const ticks = Math.max(1, Math.round(P('duration')));
-      sim.fx('disc', c.x, c.z, r, FIRE, ticks);
+      sim.fx('zone', 'mg_firefield', c.x, c.z, r, ticks);
       tickFor(sim, p, 1, ticks, () => {
-        sim.fx('effect', 'mg_firefield', c.x, c.z, 0, r);
         forCircle(sim, c.x, c.z, r, (m) => {
           m.dotUntil = Math.max(m.dotUntil, sim.time + 1.1);
           sim.hitMonster(p, m, dmg, { skill: sk });
@@ -439,8 +442,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
     case 'mg_poisonmist': {
       const c = landing(p, aim, far);
       const r = P('radius');
-      sim.fx('disc', c.x, c.z, r, VENOM, 1.5);
-      sim.fx('effect', 'mg_poison', c.x, c.z, 0, r);
+      sim.fx('zone', 'mg_poison', c.x, c.z, r, MIST_ZONE);
       forCircle(sim, c.x, c.z, r, (m) => dot(sim, p, m, dmg, P('dotTime'), sk, VENOM));
       return true;
     }
@@ -465,8 +467,8 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const ticks = Math.max(1, Math.round(P('duration')));
       const ab = P('armorBreak') / 100;
       const abT = P('armorBreakTime');
+      sim.fx('zone', 'mg_decay', p.x, p.z, far, ticks, p.id);
       tickFor(sim, p, 1, ticks, () => {
-        sim.fx('effect', 'mg_decay', p.x, p.z, 0, far);
         forCircle(sim, p.x, p.z, far, (m) => {
           m.dotUntil = Math.max(m.dotUntil, sim.time + 1.1);
           sim.hitMonster(p, m, dmg, { armorBreak: ab, armorBreakT: abT, skill: sk });
@@ -479,7 +481,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const r = P('radius');
       const strikes = Math.round(P('strikes'));
       const every = P('every');
-      sim.fx('disc', c.x, c.z, r, '#8aa0c8', 0.3 + strikes * every);
+      sim.fx('ring', c.x, c.z, r, '#bfd0ff', 0.3 + strikes * every);
       tickFor(sim, p, every, strikes, () => {
         const inside = sim.monsters.filter((m) => m.alive && Math.hypot(m.x - c.x, m.z - c.z) <= r + m.radius);
         if (!inside.length) return;
@@ -495,10 +497,13 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const r = P('radius');
       const every = P('every');
       const shots = Math.max(1, Math.floor(P('duration') / every));
-      sim.fx('ring', c.x, c.z, 0.8, VENOM, shots * every);
+      // The crystal itself stands there the whole time (owner 2026-11-15: the spikes seemed to come from nowhere).
+      sim.fx('crystal', c.x, c.z, shots * every + 0.3, VENOM);
       tickFor(sim, p, every, shots, () => {
         const t = nearestTo(sim, c.x, c.z, r);
         if (!t) return;
+        // A flash on the crystal as each spike leaves it.
+        sim.fx('puff', c.x, 1.1, c.z, VENOM, 0.25, 1.4);
         sim.addProjectile(p, { x: c.x, z: c.z, angle: Math.atan2(t.z - c.z, t.x - c.x), speed: 18, range: r + 1, radius: 0.3, mult: dmg, color: VENOM, size: 0.6, kb: 1, hit: { skill: sk } });
       }, every);
       return true;
@@ -524,7 +529,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const poison = P('poison') * (base > 0 ? dmg / base : 1);
       const seedT = P('seedTime');
       const blast = P('seedBlast');
-      sim.fx('effect', 'mg_poison', c.x, c.z, 0, r);
+      sim.fx('zone', 'mg_poison', c.x, c.z, r, seedT);
       forCircle(sim, c.x, c.z, r, (m) => {
         dot(sim, p, m, poison, seedT, sk, VENOM);
         sim.schedule(seedT, () => {
@@ -541,11 +546,10 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const r = P('radius');
       const every = P('every');
       const hits = Math.max(1, Math.round(P('duration') / every));
-      sim.fx('disc', c.x, c.z, r, FIRE, hits * every + 0.2);
-      tickFor(sim, p, every, hits, (i) => {
+      sim.fx('zone', 'mg_firefield', c.x, c.z, r, hits * every + 0.2);
+      tickFor(sim, p, every, hits, () => {
         const s = spotIn(c.x, c.z, r * 0.8);
         sim.fx('burst', s.x, 2.5, s.z, FIRE, 8, 4);
-        if (i % 2 === 0) sim.fx('effect', 'mg_firefield', c.x, c.z, 0, r);
         forCircle(sim, c.x, c.z, r, (m) => {
           m.dotUntil = Math.max(m.dotUntil, sim.time + every + 0.1);
           sim.hitMonster(p, m, dmg, { skill: sk });
@@ -557,8 +561,8 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const ticks = Math.max(1, Math.round(P('duration')));
       const ab = P('armorBreak') / 100;
       const weak = P('weak') / 100;
+      sim.fx('zone', 'mg_decay', p.x, p.z, far, ticks, p.id);
       tickFor(sim, p, 1, ticks, () => {
-        sim.fx('effect', 'mg_decay', p.x, p.z, 0, far);
         // Statuses last a little past each tick, so they hold while the monster stays inside.
         forCircle(sim, p.x, p.z, far, (m) => {
           m.dotUntil = Math.max(m.dotUntil, sim.time + 1.1);
@@ -577,7 +581,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
     case 'mg_frailcurse': {
       const c = landing(p, aim, far);
       const r = P('radius');
-      sim.fx('effect', 'mg_curse', c.x, c.z, 0, r);
+      sim.fx('zone', 'mg_curse', c.x, c.z, r, CIRCLE_ZONE);
       forCircle(sim, c.x, c.z, r, (m) => sim.hitMonster(p, m, dmg, { armorBreak: P('armorBreak') / 100, armorBreakT: P('armorBreakTime'), skill: sk }));
       return true;
     }
@@ -592,10 +596,9 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const r = P('radius');
       const pullT = P('pullTime');
       const pull = P('pull');
-      sim.fx('disc', c.x, c.z, r, '#5a4a9a', pullT);
+      sim.fx('zone', 'mg_vortex', c.x, c.z, r, pullT);
       const step = 0.25;
       tickFor(sim, p, step, Math.max(1, Math.round(pullT / step)), () => {
-        sim.fx('effect', 'mg_vortex', c.x, c.z, 0, r);
         forCircle(sim, c.x, c.z, r, (m) => { if (movable(m)) m.knockback(c.x, c.z, -pull); });
       });
       sim.schedule(pullT, () => {
@@ -606,13 +609,13 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       return true;
     }
     case 'mg_sealveil':
-      sim.fx('effect', 'mg_curse', p.x, p.z, 0, far);
+      sim.fx('zone', 'mg_curse', p.x, p.z, far, CIRCLE_ZONE, p.id);
       forCircle(sim, p.x, p.z, far, (m) => sim.hitMonster(p, m, dmg, { weak: P('weak') / 100, weakT: P('weakTime'), skill: sk }));
       return true;
     case 'mg_empowerfield': {
       const mult = 1 + P('dmgBonus') / 100;
       const t = P('buffTime');
-      sim.fx('effect', 'mg_empower', p.x, p.z, 0, far);
+      sim.fx('zone', 'mg_empower', p.x, p.z, far, CIRCLE_ZONE, p.id);
       forPlayers(sim, p.x, p.z, far, (q) => {
         q.dmgMult = sim.time < q.dmgUntil ? Math.max(q.dmgMult, mult) : mult;
         q.dmgUntil = sim.time + t;
@@ -623,14 +626,14 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
     }
     case 'mg_manashield': {
       const t = P('buffTime');
-      sim.fx('effect', 'mg_shield', p.x, p.z, 0, far);
+      sim.fx('zone', 'mg_shield', p.x, p.z, far, CIRCLE_ZONE, p.id);
       forPlayers(sim, p.x, p.z, far, (q) => giveShield(sim, q, (q.maxHp * P('shieldPct')) / 100, t));
       return true;
     }
     case 'mg_timewarp': {
       const haste = P('haste') / 100;
       const hasteT = P('hasteTime');
-      sim.fx('effect', 'mg_timewarp', p.x, p.z, 0, far);
+      sim.fx('zone', 'mg_timewarp', p.x, p.z, far, CIRCLE_ZONE, p.id);
       forCircle(sim, p.x, p.z, far, (m) => sim.hitMonster(p, m, dmg, { slow: P('slow') / 100, slowT: P('slowTime'), skill: sk }));
       forPlayers(sim, p.x, p.z, far, (q) => {
         q.haste = sim.time < q.hasteUntil ? Math.max(q.haste, haste) : haste;
@@ -645,8 +648,8 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const ticks = Math.max(1, Math.round(P('duration')));
       const slow = P('slow') / 100;
       forPlayers(sim, c.x, c.z, far, (q) => giveShield(sim, q, (q.maxHp * P('shieldPct')) / 100, ticks));
+      sim.fx('zone', 'mg_shield', c.x, c.z, far, ticks);
       tickFor(sim, p, 1, ticks, () => {
-        sim.fx('effect', 'mg_shield', c.x, c.z, 0, far);
         forPlayers(sim, c.x, c.z, far, (q) => {
           const add = Math.min(q.stats.maxMp - q.mp, (q.stats.maxMp * P('mpPct')) / 100);
           if (add <= 0) return;

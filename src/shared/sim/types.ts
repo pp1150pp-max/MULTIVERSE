@@ -57,12 +57,19 @@ export interface FxApi {
   puff(x: number, y: number, z: number, color: string, life: number, size: number): void;
   burst(x: number, y: number, z: number, color: string, n?: number, speed?: number): void;
   levelUp(x: number, z: number): void;
+  /** A crystal standing on the ground for `duration` seconds (Crystal Spikes: where its spikes come from). */
+  crystal(x: number, z: number, duration: number, color: string): void;
   meteor(x: number, z: number, duration: number): void;
   /**
    * Hand-drawn skill animation. `size` is its half-width in world units. `by` = the caster's id and `hit` = it hit
    * something: the caster's own screen then feels the hit (fxLayer.ts, owner 2026-11-15).
    */
   effect(name: SkillEffect, x: number, z: number, angle: number, size: number, by?: number, hit?: boolean): void;
+  /**
+   * A lasting area (fire on the ground, a buff circle…): one row of a skill sheet looping for `duration` seconds with a
+   * fade in and out and a soft edge, sent once when the skill is cast. `follow` = a player id it stays centred on.
+   */
+  zone(name: SkillEffect, x: number, z: number, size: number, duration: number, follow?: number): void;
 }
 
 export type SkillEffect = 'slash' | 'whirlwind' | 'charge' | 'quake' | 'explosion' | 'frost' | 'crater' | 'muzzle' | 'impact'
@@ -73,7 +80,7 @@ export type SkillEffect = 'slash' | 'whirlwind' | 'charge' | 'quake' | 'explosio
   | 'sw_barrier' | 'sw_shout' | 'sw_crack' | 'sw_armorhit'
   // Mage skills (sheets mg_a / mg_b / mg_c, owner 2026-11-15)
   | 'mg_lightning' | 'mg_burst' | 'mg_starhit' | 'mg_firefield' | 'mg_flamewave' | 'mg_poison' | 'mg_ash' | 'mg_decay'
-  | 'mg_shock' | 'mg_curse' | 'mg_vortex' | 'mg_empower' | 'mg_shield' | 'mg_timewarp'
+  | 'mg_shock' | 'mg_curse' | 'mg_vortex' | 'mg_empower' | 'mg_shield' | 'mg_timewarp' | 'mg_frostnova'
   // Gunslinger
   | 'gs_aura_crit' | 'gs_aura_rapid' | 'gs_burn' | 'gs_smoke' | 'gs_mine' | 'gs_drone' | 'gs_turret' | 'gs_blast'
   | 'gs_hawkeye' | 'gs_trigger' | 'gs_special';

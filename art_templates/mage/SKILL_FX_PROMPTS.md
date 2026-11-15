@@ -103,6 +103,77 @@ Row 3, ARCANE POWER AURA: a thin violet-and-gold ring with small sharp violet cr
 tiny red sparks.
 ```
 
+## รอบ 2: พื้นที่ต่อเนื่อง (เจ้าของสั่ง 2026-11-15: ของเดิมดูเหมือนสติกเกอร์แปะพื้น)
+
+มี 3 แผ่น: `mg_e` (พื้นเพลิง หมอกพิษ สนามเสื่อมสลาย หลุมดำ) และ `mg_f` (คำสาป วงเวททอง วงโล่มานา นาฬิกาบิด) แผ่นละ 4 แถว และ `mg_g` 5 แถว (คลื่นผลัก วงน้ำแข็ง ออร่าพาสซีฟ 3 แบบ)
+- เกมจะวนเล่นทั้ง 6 เฟรมตลอดเวลาของสกิล และค่อย ๆ โผล่/จางเอง ภาพจึงไม่ต้องมีเฟรมโผล่หรือเฟรมจาง
+- เซฟเป็น `raw/mg_e.png` และ `raw/mg_f.png`
+- ตัดแบบกำหนดโหมดทีละแถว (อาร์กิวเมนต์ตัวที่ 4 ของ `tools/cut_fx_sheet.cjs`):
+  - `mg_e`: `default,default,default,strict` (ไฟ พิษ และสนามเสื่อมสลายใช้ default เพื่อลบขอบชมพู ส่วนหลุมดำสีม่วงใช้ strict)
+  - `mg_f`: `unmix,default,unmix,unmix` (ไส้วงสีม่วงโปร่งที่ GPT ระบายทับพื้นม่วงแดงจะกลายเป็นม่วงโปร่งแสง ไม่ใช่ก้อนม่วงทึบ)
+  - `mg_g`: `strict`
+
+ใช้กฎร่วมด้านบน (R = 4) แล้วต่อท้ายด้วยย่อหน้านี้ก่อนรายการแถว:
+
+```
+Every effect in this sheet is a lasting area on the ground seen from STRAIGHT ABOVE (top-down, a perfect circle, not
+an oval, no perspective), filling most of its cell. It must blend into any ground: the outer edge is NOT a hard
+outline, it breaks up into sparse scattered pixels, small bits and wisps that thin out toward the rim, so there is no
+visible border. Use small fine pixels with lots of small detail, no big chunky blobs. The 6 frames are one seamless
+loop: every frame is at full strength (no appearing or fading frames), only flames, smoke, sparks and swirls move
+a little each frame so frame 6 flows back into frame 1.
+```
+
+**`mg_e`**
+
+```
+Row 1, BURNING GROUND: small licking orange-yellow flames and glowing red-orange cracks spread over the circle, denser
+in the middle, thinning into scattered embers and tiny flames toward the rim, a few dark scorch specks.
+Row 2, POISON MIST: low swirling toxic green mist with darker green wisps and small bubbles, the mist thinning into
+separate small puffs and droplets toward the rim.
+Row 3, DECAY FIELD: a field of sickly yellow-green corrosion with crawling dark-green veins, small rising green motes
+and tiny crumbling dark specks, the veins and motes thinning out toward the rim.
+Row 4, GRAVITY WELL: a swirling violet-blue vortex spiralling into a small black center, thin spiral arms of violet
+light and small dust and pebbles along them, the arms breaking into scattered specks toward the rim.
+```
+
+**`mg_f`**
+
+```
+Row 1, CURSE SIGIL: a thin violet magic circle drawn on the ground with small glowing runes around its edge and a
+cracked shield rune in the middle, violet light flickering along the lines, a few violet sparks drifting around it.
+Row 2, GOLDEN EMPOWER CIRCLE: a thin golden rune circle with an eight-point star inside, small golden sparks and
+tiny upward light streaks rising from its lines.
+Row 3, MANA SHIELD CIRCLE: a thin light-blue magic circle with a faint hexagon pattern inside and small blue
+mana motes rising from it, the hexagons shimmering.
+Row 4, TIME WARP: a thin pale-violet clock-face circle with roman numerals, two clock hands turning a little each
+frame, and faint spiral streaks swirling around it.
+```
+
+**`mg_g` (R = 5): สกิลวงรอบตัวและออร่าพาสซีฟ** (เจ้าของเพิ่ม 2026-11-15)
+
+แถว 1–2 เล่นครั้งเดียว (โผล่ ขยาย จาง) ส่วนแถว 3–5 วนต่อเนื่อง เซฟเป็น `raw/mg_g.png` ตัดด้วยโหมด `strict`
+ใช้กฎร่วม (R = 5) แล้วต่อท้ายด้วยข้อความนี้:
+
+```
+Every effect in this sheet is on the ground seen from STRAIGHT ABOVE (top-down, a perfect circle, not an oval, no
+perspective) and blends into any ground: no hard outline, the outer edge breaks up into sparse scattered pixels and
+small bits. Use small fine pixels with lots of small detail, no big chunky blobs.
+Row 1, FORCE SHOCKWAVE, plays once: frame 1 a small bright pale-blue ring of air around an empty center, frames 2-4
+the ring expanding fast and getting thinner with white streaks and small pebbles flung outward, frame 5 a faint wide
+broken ring, frame 6 a few scattered specks.
+Row 2, FROST NOVA, plays once: frame 1 a small burst of white frost at the center, frames 2-4 a ring of sharp
+pale-blue ice crystals shooting outward from an empty center with frost mist, frame 5 the crystals cracking into
+small shards, frame 6 a few melting sparkles.
+Rows 3 to 5 are small auras under a character's feet, subtle, with an empty center, each a seamless loop (all
+frames at full strength, frame 6 flows back into frame 1), filling about two thirds of the cell:
+Row 3, ELEMENTAL MASTERY AURA: a thin faint ring with three small orbiting motes, one fire-orange, one ice-blue and
+one poison-green, circling around it.
+Row 4, MANA SOURCE AURA: a thin faint light-blue ring with small blue mana droplets slowly rising and sparkling.
+Row 5, ARCANE POWER AURA: a thin faint violet-and-gold ring with small sharp violet crystal shards pulsing around it
+and a few tiny red sparks.
+```
+
 ## แถวไหนใช้กับท่าไหน
 
 | แผ่น · แถว | เอฟเฟกต์ | ใช้กับ |
@@ -126,3 +197,14 @@ tiny red sparks.
 | mg_c · 5 | วงโล่มานา | โล่มานาหมู่, วงคืนพลัง |
 | mg_c · 6 | นาฬิกาบิด | บิดเบือนเวลา |
 | mg_d · 1–3 | ออร่าใต้เท้า | ชำนาญธาตุ, แหล่งมานา, พลังอาคม (ทุกคนเห็น) |
+| mg_e · 1 | พื้นเพลิง (รอบ 2) | พื้นเพลิง, ฝนเพลิง |
+| mg_e · 2 | หมอกพิษ (รอบ 2) | หมอกพิษอาคม, เมล็ดเวทระเบิด |
+| mg_e · 3 | สนามเสื่อมสลาย (รอบ 2) | วงแหวนสลาย, สนามเสื่อมสลาย |
+| mg_e · 4 | หลุมดำ (รอบ 2) | หลุมแรงโน้มถ่วง |
+| mg_f · 1 | อักขระคำสาป (รอบ 2) | คำสาปเปราะบาง, ม่านผนึกเวท |
+| mg_f · 2 | วงเวททอง (รอบ 2) | สนามเร่งอาคม |
+| mg_f · 3 | วงโล่มานา (รอบ 2) | โล่มานาหมู่, วงคืนพลัง |
+| mg_f · 4 | นาฬิกาบิด (รอบ 2) | บิดเบือนเวลา |
+| mg_g · 1 | คลื่นกระแทก (รอบ 2) | คลื่นผลัก |
+| mg_g · 2 | วงน้ำแข็ง (รอบ 2) | วงน้ำแข็ง |
+| mg_g · 3–5 | ออร่าใต้เท้า (รอบ 2) | ชำนาญธาตุ, แหล่งมานา, พลังอาคม |
