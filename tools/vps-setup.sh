@@ -87,10 +87,11 @@ usermod -aG systemd-journal "$APP_USER"   # journalctl -u multiverse without sud
 install -d -m 700 -o "$APP_USER" -g "$APP_USER" "$APP_HOME/.ssh"
 if [ -s /root/.ssh/authorized_keys ]; then
   touch "$APP_HOME/.ssh/authorized_keys"
-  # Add root's keys that the user does not have yet.
-  while IFS= read -r k; do
+  # Add root's keys that the user does not have yet (the last line may lack a newline: still read it).
+  while IFS= read -r k || [ -n "$k" ]; do
     if [ -n "$k" ] && ! grep -qxF "$k" "$APP_HOME/.ssh/authorized_keys"; then
       echo "$k" >> "$APP_HOME/.ssh/authorized_keys"
+      echo "  เพิ่ม key: ${k##* }"
     fi
   done < /root/.ssh/authorized_keys
   chown "$APP_USER:$APP_USER" "$APP_HOME/.ssh/authorized_keys"
