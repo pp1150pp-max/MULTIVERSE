@@ -1,6 +1,7 @@
 // The shared online world: one Sim per zone, driven by the input of the players in it. Walking
 // through a portal moves a player's session to the other zone's Sim. The server decides all combat,
 // loot and EXP; clients only move their own character, and the server checks those moves are possible.
+import { debuffMask } from '../src/shared/sim/debuffs';
 import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage, Server as HttpServer } from 'node:http';
 import { clientIp } from './clientIp';
@@ -1967,6 +1968,7 @@ export class GameWorld {
         x: r2(m.x), z: r2(m.z), fx: r2(m.faceX), fz: r2(m.faceZ), mv: m.moving,
         alive: m.alive, deadT: r2(m.deadT), hp: Math.round(m.hp),
         st: m.state, wind: m.windupT > 0, enr: m.enraged, y: r2(m.lift),
+        ...debuffField(m, sim.time, s.player.id),
         ...withLook<MonsterLook>(s.seenM, nextM, m.id, monsterLook(m, looks)),
       })),
       projectiles: sim.projectiles.filter(near).map((pr) => ({
@@ -2344,6 +2346,12 @@ type StaticMeKey = 'potSel' | 'lootFilter' | 'autoSettings' | 'stats' | 'skills'
 const STATIC_ME: readonly StaticMeKey[] = ['potSel', 'lootFilter', 'autoSettings', 'stats', 'skills', 'bossKills', 'quests', 'gearQuests', 'gearDone'];
 type PlayerLook = Pick<PlayerSnap, 'name' | 'cls' | 'lv' | 'maxHp' | 'aura' | 'orbs' | 'cos' | 'mnt' | 'toad' | 'psv'>;
 type MonsterLook = Pick<MonsterSnap, 'def' | 'lv' | 'mhp'>;
+
+/** A monster's debuffs for the snapshot, as this viewer sees them (nothing when it has none). */
+function debuffField(m: Monster, now: number, viewer: number): { db?: number } {
+  const db = debuffMask(m, now, viewer);
+  return db ? { db } : {};
+}
 /** A look bundle and its JSON (what the per-browser caches compare). */
 interface Look { look: PlayerLook | MonsterLook; json: string }
 type Looks = Map<Player | Monster, Look>;

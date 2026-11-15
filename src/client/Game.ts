@@ -801,7 +801,7 @@ export class Game {
     const vdt = this.hitstopT > 0 ? 0 : dt;
     this.hitstopT = Math.max(0, this.hitstopT - dt);
     for (const v of this.playerViews.values()) v.update(vdt, this.fx);
-    for (const v of this.monsterViews.values()) v.update(vdt);
+    for (const v of this.monsterViews.values()) v.update(vdt, this.fx);
     for (const v of this.projectileViews.values()) v.update();
     for (const v of this.lootViews.values()) v.update();
 

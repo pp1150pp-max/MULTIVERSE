@@ -1,3 +1,4 @@
+import { debuffIconsHtml, debuffsOn } from './debuffFx';
 import type { Game, Npc } from './Game';
 import type { Monster } from '../shared/sim/Monster';
 import type { Loot } from '../shared/sim/Loot';
@@ -18,7 +19,7 @@ import { isTouchMode } from './touch/device';
 import { rideScale, seatOf } from './cosmeticViews';
 
 interface Num { el: HTMLDivElement; x: number; y: number; z: number; t: number; life: number; height: number; dx: number; dy: number; pop: number }
-interface Plate { el: HTMLDivElement; fill: HTMLDivElement; title?: HTMLDivElement; name?: HTMLDivElement; cos?: string }
+interface Plate { el: HTMLDivElement; fill: HTMLDivElement; title?: HTMLDivElement; name?: HTMLDivElement; cos?: string; debuffs?: HTMLDivElement; mask?: number }
 
 /** DOM overlay for damage numbers, monster nameplates and loot labels. */
 /** Which row of the number sheet each kind of number uses. */
@@ -325,7 +326,9 @@ export class Floating {
 
     const seen = new Set<Monster>();
     for (const m of g.monsters) {
-      if (!m.alive || !(m === g.hovered || m.hp < m.maxHp || m.isBoss)) continue;
+      // A debuffed monster shows its plate too, for the debuff icons (owner 2026-11-15).
+      const shownDebuffs = debuffsOn() ? m.debuffs : 0;
+      if (!m.alive || !(m === g.hovered || m.hp < m.maxHp || m.isBoss || shownDebuffs)) continue;
       const s = g.toScreen(m.x, m.topY + 0.3, m.z);
       if (!s.on) continue;
       seen.add(m);
@@ -341,13 +344,19 @@ export class Floating {
         const fill = document.createElement('div');
         fill.className = 'pfill';
         bar.append(fill);
-        el.append(name, bar);
+        const debuffs = document.createElement('div');
+        debuffs.className = 'pdebuffs';
+        el.append(debuffs, name, bar);
         this.root.append(el);
-        pl = { el, fill };
+        pl = { el, fill, debuffs, mask: 0 };
         this.plates.set(m, pl);
       }
       pl.el.style.transform = `translate(${s.sx}px, ${s.sy}px) translate(-50%, -100%)`;
       pl.fill.style.width = `${(Math.max(0, m.hp) / m.maxHp) * 100}%`;
+      if (pl.debuffs && pl.mask !== shownDebuffs) {
+        pl.mask = shownDebuffs;
+        pl.debuffs.innerHTML = debuffIconsHtml(shownDebuffs);
+      }
       pl.el.classList.toggle('hostile', m.isHostile);
       // Grey name = too weak to give full EXP.
       pl.el.classList.toggle('trivial', m.level < g.player.level && expGapMult(g.player.level, m.level) < 1);

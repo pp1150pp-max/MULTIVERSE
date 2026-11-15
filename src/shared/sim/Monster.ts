@@ -49,6 +49,9 @@ export class Monster extends Unit {
   /** Burning / poisoned by a damage-over-time skill until this sim time (for passives that check statuses). */
   dotUntil = 0;
 
+  /** Its debuffs as the server last sent them (client only, sim/debuffs.ts); the server works them out from the fields above. */
+  debuffs = 0;
+
   /** True while it has any status from a player: stun, slow, armor break, attack down, burning/poison. */
   hasStatus(now: number): boolean {
     return this.stunT > 0 || this.slowT > 0 || now < this.armorBreakUntil || now < this.weakUntil || now < this.dotUntil;
