@@ -57,6 +57,8 @@ export interface FxApi {
   puff(x: number, y: number, z: number, color: string, life: number, size: number): void;
   burst(x: number, y: number, z: number, color: string, n?: number, speed?: number): void;
   levelUp(x: number, z: number): void;
+  /** A crystal standing on the ground for `duration` seconds (Crystal Spikes: where its spikes come from). */
+  crystal(x: number, z: number, duration: number, color: string): void;
   meteor(x: number, z: number, duration: number): void;
   /**
    * Hand-drawn skill animation. `size` is its half-width in world units. `by` = the caster's id and `hit` = it hit

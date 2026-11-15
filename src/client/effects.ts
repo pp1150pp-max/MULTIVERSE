@@ -393,6 +393,54 @@ export class Effects implements FxApi {
     });
   }
 
+  /**
+   * A crystal cluster standing on the ground (Crystal Spikes, owner 2026-11-15), drawn in code until it has art:
+   * it grows out of the ground, glows and bobs gently while it lasts, then sinks away. Faces are shaded light / dark so
+   * it reads as a solid gem from the isometric camera.
+   */
+  crystal(x: number, z: number, duration: number, color: string): void {
+    const g = new THREE.Group();
+    const base = new THREE.Color(color);
+    const shard = (h: number, r: number, ox: number, oz: number, tilt: number, turn: number): void => {
+      const geo = new THREE.OctahedronGeometry(1, 0).toNonIndexed();
+      geo.scale(r, h, r);
+      // Light on the faces turned up and toward the camera, dark on the rest.
+      const pos = geo.getAttribute('position');
+      const cols: number[] = [];
+      for (let i = 0; i < pos.count; i += 3) {
+        const cy = (pos.getY(i) + pos.getY(i + 1) + pos.getY(i + 2)) / 3;
+        const cx = (pos.getX(i) + pos.getX(i + 1) + pos.getX(i + 2)) / 3 + (pos.getZ(i) + pos.getZ(i + 1) + pos.getZ(i + 2)) / 3;
+        const c = base.clone().multiplyScalar(cy > 0 ? (cx > 0 ? 1.35 : 1) : cx > 0 ? 0.75 : 0.5);
+        for (let k = 0; k < 3; k++) cols.push(c.r, c.g, c.b);
+      }
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+      const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.95 }));
+      m.position.set(ox, h, oz);
+      m.rotation.set(tilt, turn, tilt * 0.6);
+      g.add(m);
+    };
+    shard(0.75, 0.22, 0, 0, 0, 0.4);
+    shard(0.45, 0.15, 0.28, 0.1, 0.45, 1.1);
+    shard(0.4, 0.14, -0.22, 0.18, -0.4, 2.2);
+    shard(0.32, 0.12, 0.05, -0.28, 0.35, 0.2);
+    const glow = this.glowSprite(color, 2.2, 0.55);
+    glow.position.y = 0.7;
+    g.add(glow);
+    g.position.set(x, 0, z);
+    g.scale.setScalar(0.01);
+    let t = 0;
+    this.add(g, duration, (_k, dt) => {
+      t += dt;
+      // Grows out in 0.2 s, sinks away in the last 0.3 s.
+      const s = Math.min(1, t / 0.2, (duration - t) / 0.3);
+      g.scale.setScalar(Math.max(0.01, s));
+      g.position.y = 0.05 * Math.sin(t * 3);
+      g.rotation.y = t * 0.6;
+      glow.material.opacity = 0.35 + 0.15 * Math.sin(t * 5);
+    });
+    this.ring(x, z, 1.4, color, 0.5);
+  }
+
   ring(x: number, z: number, radius: number, color: string, life = 0.4): void {
     const m = this.mat(color, 0.9, true, fxTex.ring);
     const mesh = this.decal(m);

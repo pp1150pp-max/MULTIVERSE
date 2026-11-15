@@ -497,10 +497,13 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const r = P('radius');
       const every = P('every');
       const shots = Math.max(1, Math.floor(P('duration') / every));
-      sim.fx('ring', c.x, c.z, 0.8, VENOM, shots * every);
+      // The crystal itself stands there the whole time (owner 2026-11-15: the spikes seemed to come from nowhere).
+      sim.fx('crystal', c.x, c.z, shots * every + 0.3, VENOM);
       tickFor(sim, p, every, shots, () => {
         const t = nearestTo(sim, c.x, c.z, r);
         if (!t) return;
+        // A flash on the crystal as each spike leaves it.
+        sim.fx('puff', c.x, 1.1, c.z, VENOM, 0.25, 1.4);
         sim.addProjectile(p, { x: c.x, z: c.z, angle: Math.atan2(t.z - c.z, t.x - c.x), speed: 18, range: r + 1, radius: 0.3, mult: dmg, color: VENOM, size: 0.6, kb: 1, hit: { skill: sk } });
       }, every);
       return true;
