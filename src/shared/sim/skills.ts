@@ -254,7 +254,7 @@ function spotIn(x: number, z: number, r: number): Vec2 {
 }
 
 /** A damage-absorbing shield on a player: the stronger one wins and the time refreshes. */
-function giveShield(sim: Sim, q: Player, amount: number, seconds: number): void {
+export function giveShield(sim: Sim, q: Player, amount: number, seconds: number): void {
   const hp = Math.round(amount);
   if (hp <= 0) return;
   q.shield = sim.time < q.shieldUntil ? Math.max(q.shield, hp) : hp;

@@ -101,9 +101,10 @@ for (const s of learn.filter((x) => x.kind !== 'passive' && x.dmg > 0)) {
   ok((m.target as Player | null) === p && p.takenUntil > sim.time && Math.abs(p.takenMult - 0.8) < 1e-9, 'Taunt: the monster turns on the player, damage taken ×0.8');
   castSkill(sim, p, sk('sw_guard'), { x: 0, z: 0 }, 1);
   ok(Math.abs(p.takenMult - 0.6) < 1e-9, 'Guard: the stronger cut wins (×0.6)');
-  const before = p.hp;
+  // Taunt and Guard also give a shield (owner 2026-11-15): the hit lands on it first.
+  const before = p.hp + p.shield;
   sim.hitPlayer(m, p, 1, {});
-  ok(p.hp < before, 'still takes (less) damage');
+  ok(p.hp + p.shield < before, 'still takes (less) damage');
 }
 
 {
@@ -142,11 +143,13 @@ for (const s of learn.filter((x) => x.kind !== 'passive' && x.dmg > 0)) {
   const far = sim.addPlayer({ ...newCharacterData('Far', 'mage'), level: 40 });
   far.x = p.x + 30;
   const def = q.stats.def;
+  // Plus 20% of the caster's own DEF (owner 2026-11-15).
+  const share = p.stats.def * 0.2;
   castSkill(sim, p, sk('sw_warcry'), { x: 0, z: 0 }, 1);
-  ok(Math.abs(q.stats.def - def * 1.3) < 1e-6 && q.dmgMult === 1.15 && q.dmgUntil > sim.time, 'War Cry: anyone in the circle (no party) gets +30% defense and +15% damage');
+  ok(Math.abs(q.stats.def - (def * 1.3 + share)) < 1e-6 && q.dmgMult === 1.15 && q.dmgUntil > sim.time, 'War Cry: anyone in the circle (no party) gets +30% defense and +15% damage');
   ok(far.statBuffs.length === 0 && far.dmgUntil === 0, 'War Cry: nobody outside the circle');
   castSkill(sim, p, sk('sw_warcry'), { x: 0, z: 0 }, 1);
-  ok(Math.abs(q.stats.def - def * 1.3) < 1e-6, 'recast does not stack on itself');
+  ok(Math.abs(q.stats.def - (def * 1.3 + share)) < 1e-6, 'recast does not stack on itself');
 }
 
 {
@@ -206,6 +209,52 @@ for (const s of learn.filter((x) => x.kind !== 'passive' && x.dmg > 0)) {
     if (!own && s.id !== 'sw_swordwave') missing.push(s.id);
   }
   ok(missing.length === 0, `every new sword skill plays a sword-line effect (missing: ${missing.join(', ') || 'none'})`);
+}
+
+{
+  // Bulwark scales with DEF and max HP (owner 2026-11-15, docs/plans/sword-bulwark-scaling.md).
+  const avgHit = (id: string, def: number, hp: number) => {
+    let n = 0;
+    for (let i = 0; i < 40; i++) {
+      const { sim, p, m } = arena();
+      p.stats.crit = 0;
+      p.stats.def = def;
+      p.stats.maxHp = p.hp = hp;
+      const before = m.hp;
+      castSkill(sim, p, sk(id), { x: m.x, z: m.z }, 1);
+      n += before - m.hp;
+    }
+    return n / 40;
+  };
+  const low = avgHit('earthquake', 10, 1000);
+  const high = avgHit('earthquake', 400, 20000);
+  ok(high > low * 1.5, `Earthquake hits harder with more DEF and HP (${Math.round(low)} → ${Math.round(high)})`);
+  ok(avgHit('sw_heavyslash', 400, 20000) < avgHit('sw_heavyslash', 10, 1000) * 1.15, 'Blade skills do not scale with DEF/HP');
+
+  const { sim, p, m } = arena();
+  p.stats.def = 200;
+  p.stats.maxHp = p.hp = 10000;
+  castSkill(sim, p, sk('sw_guard'), { x: 0, z: 0 }, 1);
+  ok(p.shield === 1200 && p.shieldUntil > sim.time, `Guard: shield = 10% max HP + DEF ×100% (${p.shield})`);
+  castSkill(sim, p, sk('sw_taunt'), { x: 0, z: 0 }, 1);
+  ok(p.shield === 1200, 'a smaller shield does not replace a bigger one');
+  const hp = p.hp;
+  sim.hitPlayer(m, p, 1, {});
+  ok(p.hp === hp && p.shield < 1200, 'the shield takes the hit first');
+
+  const t = arena();
+  t.p.stats.def = 200;
+  castSkill(t.sim, t.p, sk('sw_thorns'), { x: 0, z: 0 }, 1);
+  ok(t.p.reflectFlat === 100, `Thorn Armor: each reflect adds DEF ×50% (${t.p.reflectFlat})`);
+
+  const w = arena();
+  const q = w.sim.addPlayer({ ...newCharacterData('Friend', 'mage'), level: 40 });
+  q.x = w.p.x + 2;
+  q.z = w.p.z;
+  const qDef = q.stats.def;
+  const casterDef = w.p.stats.def;
+  castSkill(w.sim, w.p, sk('sw_warcry'), { x: 0, z: 0 }, 1);
+  ok(Math.abs(q.stats.def - (qDef * 1.3 + casterDef * 0.2)) < 1e-6, 'War Cry: +30% own DEF plus 20% of the caster DEF');
 }
 
 // ---------------------------------------------------------- passives
