@@ -9,6 +9,8 @@ export interface FxLayerConfig {
   enabled: boolean;
   /** Debuff icons over monsters' HP bars and their effects on the body (src/client/debuffFx.ts). */
   debuffs: boolean;
+  /** Code-made pixel effects (pixelfx) instead of the pictures on the skills that try them (src/client/pixelFx.ts). */
+  pixelfx: boolean;
   /** × the glow around the frames. */
   glow: number;
   /** × the light on the ground. */
@@ -46,7 +48,7 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
 
 /** The code's own numbers (a fresh copy). */
 export function codeFxLayer(): FxLayerConfig {
-  return { enabled: true, debuffs: true, glow: 1, ground: 1, particles: 1, shake: 1, hitstopMs: 60, crit: 1 };
+  return { enabled: true, debuffs: true, pixelfx: true, glow: 1, ground: 1, particles: 1, shake: 1, hitstopMs: 60, crit: 1 };
 }
 const CODE = codeFxLayer();
 
@@ -55,6 +57,7 @@ export function mergeFxLayer(t: FxLayerTuning | undefined): FxLayerConfig {
   if (!t) return c;
   if (t.enabled !== undefined) c.enabled = t.enabled;
   if (t.debuffs !== undefined) c.debuffs = t.debuffs;
+  if (t.pixelfx !== undefined) c.pixelfx = t.pixelfx;
   for (const k of FX_LAYER_NUMS) if (t[k] !== undefined) c[k] = t[k]!;
   return c;
 }
@@ -70,7 +73,7 @@ export function checkFxLayerTuning(x: unknown, strict: boolean): { tuning: FxLay
   if (x === undefined) return { tuning: undefined };
   if (!isObj(x)) return strict ? { error: 'ค่าเอฟเฟกต์สกิลไม่ถูกต้อง' } : { tuning: undefined };
   if (strict) {
-    const extra = Object.keys(x).find((k) => k !== 'enabled' && k !== 'debuffs' && !(FX_LAYER_NUMS as string[]).includes(k));
+    const extra = Object.keys(x).find((k) => k !== 'enabled' && k !== 'debuffs' && k !== 'pixelfx' && !(FX_LAYER_NUMS as string[]).includes(k));
     if (extra) return { error: `เอฟเฟกต์สกิล: ไม่รู้จักค่า "${extra.slice(0, 20)}"` };
   }
   const out: FxLayerTuning = {};
@@ -83,6 +86,11 @@ export function checkFxLayerTuning(x: unknown, strict: boolean): { tuning: FxLay
     if (typeof x.debuffs !== 'boolean') {
       if (strict) return { error: 'เอฟเฟกต์สกิล: เปิด/ปิด ดีบัฟบนมอน ไม่ถูกต้อง' };
     } else if (x.debuffs !== CODE.debuffs) out.debuffs = x.debuffs;
+  }
+  if (x.pixelfx !== undefined) {
+    if (typeof x.pixelfx !== 'boolean') {
+      if (strict) return { error: 'เอฟเฟกต์สกิล: เปิด/ปิด pixelfx ไม่ถูกต้อง' };
+    } else if (x.pixelfx !== CODE.pixelfx) out.pixelfx = x.pixelfx;
   }
   for (const k of FX_LAYER_NUMS) {
     const v = x[k];
@@ -101,6 +109,7 @@ export function checkFxLayerTuning(x: unknown, strict: boolean): { tuning: FxLay
 /** Audit lines of what differs between two configs. */
 export function fxLayerChanges(a: FxLayerConfig, b: FxLayerConfig): string[] {
   const out: string[] = [];
+  if (a.pixelfx !== b.pixelfx) out.push(`เอฟเฟกต์โค้ด pixelfx (พื้นเพลิง วงน้ำแข็ง ปฐพีแยก) ${a.pixelfx ? 'เปิด' : 'ปิด'} → ${b.pixelfx ? 'เปิด' : 'ปิด'}`);
   if (a.debuffs !== b.debuffs) out.push(`ดีบัฟบนตัวมอน (ไอคอน + เอฟเฟกต์) ${a.debuffs ? 'เปิด' : 'ปิด'} → ${b.debuffs ? 'เปิด' : 'ปิด'}`);
   if (a.enabled !== b.enabled) out.push(`เอฟเฟกต์สกิล (ชั้นเสริม) ${a.enabled ? 'เปิด' : 'ปิด'} → ${b.enabled ? 'เปิด' : 'ปิด'}`);
   for (const k of FX_LAYER_NUMS) if (a[k] !== b[k]) out.push(`เอฟเฟกต์สกิล ${FX_LAYER_NAME[k]} ${a[k]} → ${b[k]}`);

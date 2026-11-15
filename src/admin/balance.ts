@@ -620,11 +620,13 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     const num = (k: FxLayerNum, step: number) =>
       h('label', {}, FX_LAYER_NAME[k], numBox(() => a[k], (n) => { a[k] = n; }, ca[k], FX_LAYER_RANGE[k][0], FX_LAYER_RANGE[k][1], step, refresh));
     const on = h('input', { type: 'checkbox', checked: a.enabled, onchange: (e: Event) => { a.enabled = (e.target as HTMLInputElement).checked; refresh(); } });
+    const pix = h('input', { type: 'checkbox', checked: a.pixelfx, onchange: (e: Event) => { a.pixelfx = (e.target as HTMLInputElement).checked; refresh(); } });
     const deb = h('input', { type: 'checkbox', checked: a.debuffs, onchange: (e: Event) => { a.debuffs = (e.target as HTMLInputElement).checked; refresh(); } });
     fxCard.replaceChildren(
       h('h2', {}, 'เอฟเฟกต์สกิล (ชั้นเสริม)'),
       h('div', { class: 'muted' }, 'แสงเรือง แสงบนพื้น และอนุภาคที่เกมวาดทับภาพเอฟเฟกต์ของสกิล ส่วนจอสั่นกับภาพค้างเกิดเฉพาะจอของคนที่ร่าย และเฉพาะตอนที่ท่าโดนมอน · ค่าของแต่ละท่าอยู่ใน src/client/fxLayer.ts (FX_RECIPES) ค่าในการ์ดนี้คูณทุกท่า · มีผลกับทุกคนทันทีหลังบันทึก'),
       h('div', { class: 'row bal-line' }, h('label', {}, on, ' เปิดชั้นเสริม'), h('label', {}, deb, ' แสดงดีบัฟบนตัวมอน (ไอคอนเหนือหลอด HP + เอฟเฟกต์บนตัว)')),
+      h('div', { class: 'row bal-line' }, h('label', {}, pix, ' ลองเอฟเฟกต์โค้ด pixelfx แทนภาพ (พื้นเพลิง วงน้ำแข็ง ปฐพีแยก) ติ๊กออกเพื่อกลับไปดูภาพเดิมแล้วเทียบกัน')),
       h('div', { class: 'row bal-line' }, num('glow', 0.1), num('ground', 0.1), num('particles', 0.1)),
       h('div', { class: 'row bal-line' }, num('shake', 0.1), num('hitstopMs', 5), num('crit', 0.1)),
       h('div', { class: 'muted' }, 'ภาพค้างจริง = ค่านี้ × ความหนักของท่า (0–1) และไม่เกิน 120 ms · ตอนนี้เปิดชั้นเสริมให้พายุดาบท่าเดียวก่อน'),
