@@ -35,7 +35,7 @@
 - **log:** `server/data/logs/online-YYYY-MM-DD.log` วันละไฟล์ ทุกบรรทัดมีเวลา เก็บ 30 วัน (`LOG_KEEP_DAYS` ใน `server/logfile.ts`) · ดู: `npm run logs` (60 บรรทัดท้าย) · `npm run logs -- --follow` (ดูต่อเรื่อย ๆ) · `--lines N`
 - **กันเครื่องรีสตาร์ทเองตอนกลางวัน (เจ้าของตั้งเอง ไม่ใช่โค้ด):** Settings → Update & Security → Windows Update → *Change active hours* (ได้สูงสุด 18 ชม. เช่น 08:00–02:00) · *Pause updates* ช่วงที่มีคนเล่นเยอะ · Windows 10 Pro: `gpedit.msc` → Computer Configuration → Administrative Templates → Windows Components → Windows Update → *No auto-restart with logged on users for scheduled automatic updates installations* = Enabled (ใช้ได้เมื่อมีคนล็อกอินค้างไว้) · ถ้ายังรีสตาร์ทเอง task จะเปิด server ให้ใหม่ แต่ผู้เล่นหลุดโดยไม่มีนับถอยหลัง (เซฟอัตโนมัติล่าสุดยังอยู่)
 
-## VPS (Linux) — เตรียมย้าย (เจ้าของเลือก Vultr กรุงเทพ 2 vCPU / 4 GB, Ubuntu 24.04, 2026-11-14)
+## VPS (Linux) — เตรียมย้าย (Hostatom Cloud VPS SSD2 ในไทย 2 vCPU / 4 GB, Ubuntu 24.04, เช่า 2026-11-15)
 
 แผนวันย้าย เช็คลิสต์ และวิธีย้ายกลับ: [../vps-move.md](../vps-move.md) · จนกว่าจะย้ายจริง server จริงยังอยู่ที่เครื่อง Windows ตามหัวข้อด้านบน
 
@@ -45,7 +45,7 @@
 - คำสั่งเดิมใช้ได้ทั้งสองเครื่อง: `npm run autostart` (Windows → `tools/autostart.ps1` เหมือนเดิม · Linux → systemctl: สถานะ / `-Start` / `-Install` และ `-Uninstall` ต้อง root: `sudo node tools/autostart.mjs -Install`) · `npm run stop-server` · `npm run logs` (ไฟล์ log เดิมใน `server/data/logs/`, ถ้าตัวคุมเปิดไม่ขึ้นเลยดู `journalctl -u multiverse`)
 - `stop-server` อ่านไฟล์ control ไม่ได้เพราะสิทธิ์ (รันผิด user) = error exit 1 (ไม่ใช่ "ไม่มีอะไรต้องปิด" แบบเดิม)
 - **สำรองนอกเครื่อง:** `npm run pull-backup` บนเครื่องบ้าน ดึงไฟล์สำรองล่าสุดที่เก่ากว่า 1 นาทีจาก `server/data/backups/` บน VPS ผ่าน scp → `<home>/MULTIVERSE-backups` (นอก repo, เปลี่ยนด้วย `BACKUP_PULL_DIR`) ตรวจ SHA-256 + `quick_check` เก็บ 30 ไฟล์ (`--keep N`) · ไม่ดึง `multiverse.db` ที่กำลังใช้ · ใช้ชื่อ SSH `multiverse-vps` จาก `~/.ssh/config` (`VPS_SSH`) ไม่เขียน IP ใน repo สาธารณะ
-- ยังไม่ได้ทดสอบบน Linux จริง (CI รันแค่ build) ต้องซ้อมตาม vps-move.md หัวข้อ B ก่อนวันย้าย
+- ซ้อมบน VPS จริงผ่านแล้ว 2026-11-15 (vps-move.md หัวข้อ B: ลิงก์ 200, port 2567 ปิดจากข้างนอก, restart/`systemctl stop`/รีบูต มีนับถอยหลัง+เซฟ และเปิดเองหลังบูต) แล้วล้างข้อมูลซ้อม
 
 ## สำรอง / กู้คืน DB
 
