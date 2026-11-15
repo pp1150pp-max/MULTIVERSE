@@ -12,6 +12,7 @@ import { cashCatalogNow, cashStateNow, cashVersion } from './cashData';
 import { cosPicture } from './cosmetics';
 import { setTryOn } from './cosLook';
 import { stoneIcon } from './icons';
+import { imgUrl } from './img';
 
 type Tab = 'featured' | 'cos' | 'use' | 'stone';
 const TABS: [Tab, string][] = [['featured', 'แนะนำ'], ['cos', 'ของแต่งตัว'], ['use', 'ของใช้'], ['stone', 'หิน']];
@@ -19,8 +20,10 @@ const TABS: [Tab, string][] = [['featured', 'แนะนำ'], ['cos', 'ขอ�
 const USE_GROUPS: [string, string, string[]][] = [['scroll', 'ใบคูณ', ['exp_scroll', 'drop_scroll']], ['mega', 'โทรโข่ง', ['megaphone']]];
 const BOUND_KINDS = new Set(['exp_scroll', 'drop_scroll', 'megaphone']);
 
-/** The crystal mark (drawn with CSS until the painted icon arrives). */
-export const CRYSTAL_ICON = '<i class="cry-ico" aria-hidden="true"></i>';
+/** The crystal mark (art_templates/cashshop/raw/crystal.png, cut by tools/cut_cashshop.cjs). */
+export const CRYSTAL_ICON = `<img class="cry-ico" src="${imgUrl('assets/sprites/ui/crystal.png')}" alt="" draggable="false">`;
+/** Package pictures, small heap to treasure chest (ui/cash_pack_1..4). */
+const packPic = (tier: number) => `<img class="cash-pack-pic" src="${imgUrl(`assets/sprites/ui/cash_pack_${tier}.png`)}" alt="" draggable="false">`;
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -198,6 +201,11 @@ export class CashShopUI {
     }, sub && this.sub[sub] === id ? 'on' : '')));
 
     this.grid.replaceChildren(...list.map((e) => this.card(e, owned.has(e.ref), st.bought[e.id] ?? 0, now)));
+    if (this.tab === 'featured') {
+      const hero = el('div', 'cash-hero');
+      hero.append(el('div', 'cash-hero-title', 'ตลาดมิติ'), el('div', 'cash-hero-sub', `ของพิเศษจากพ่อค้าคริสตัล ซื้อด้วย${CURRENCY}`));
+      this.grid.prepend(hero);
+    }
     if (!list.length) {
       this.grid.append(el('div', 'cash-empty', this.tab === 'featured' ? 'ยังไม่มีสินค้าแนะนำ' : 'ยังไม่มีสินค้าในหมวดนี้'));
     }
@@ -205,15 +213,22 @@ export class CashShopUI {
   }
 
   private card(e: CashEntry, owned: boolean, bought: number, now: number): HTMLElement {
-    const card = el('div', 'cash-card');
     const badge = cashBadge(e);
-    if (badge) card.append(el('span', `cash-badge ${badge}`, CASH_BADGE_NAME[badge]));
-    card.append(entryPic(e), el('div', 'cash-name', entryName(e)));
-    const lim = e.kind === 'cos' ? (owned ? 'มีแล้ว' : 'ซื้อได้ครั้งเดียวต่อบัญชี')
+    // The crystal-trimmed card for featured and sale items, the bronze one for the rest.
+    const card = el('div', e.featured || badge === 'sale' ? 'cash-card hi' : 'cash-card');
+    const well = el('div', 'cash-well');
+    well.append(entryPic(e));
+    const info = el('div', 'cash-info');
+    const lim = e.kind === 'cos' ? (owned ? 'มีแล้ว' : 'ซื้อได้ครั้งเดียว')
       : e.limit !== undefined ? `ซื้อได้ ${fmt(bought)}/${fmt(e.limit)}` : 'ไม่จำกัดจำนวน';
-    card.append(el('div', owned && e.kind === 'cos' ? 'cash-lim own' : 'cash-lim', lim));
-    if (e.end !== undefined) card.append(el('div', 'cash-time', timeLeft(e.end - now)));
-    card.append(priceBar(e));
+    info.append(el('div', owned && e.kind === 'cos' ? 'cash-lim own' : 'cash-lim', lim));
+    if (e.end !== undefined) info.append(el('div', 'cash-time', timeLeft(e.end - now)));
+    card.append(well, el('div', 'cash-name', entryName(e)), info, priceBar(e));
+    if (badge) {
+      const rib = el('span', `cash-ribbon ${badge}`);
+      rib.append(el('b', '', CASH_BADGE_NAME[badge]));
+      card.append(rib);
+    }
     card.onclick = () => {
       this.hideTip();
       this.buying = { id: e.id, qty: 1, msg: '', ok: false, busy: false };
@@ -339,15 +354,18 @@ export class CashShopUI {
   }
 
   private drawPackages(): void {
-    const box = el('div', 'cash-dialog');
+    const box = el('div', 'cash-dialog wide');
     box.append(el('div', 'cash-name', `เติม${CURRENCY}`));
     const pk = cashCatalogNow().packages;
     if (!pk.length) box.append(el('div', 'cash-empty', `เติม${CURRENCY}ได้เร็วๆ นี้`));
     else {
       const list = el('div', 'cash-packs');
+      // Pictures by rank among the packages (fewest crystals = the small heap, most = the chest).
+      const order = pk.map((p) => p.crystals + p.bonus).sort((a, b) => a - b);
       for (const p of pk) {
         const card = el('div', 'cash-pack');
-        card.innerHTML = `<div class="cash-pack-n">${CRYSTAL_ICON}<b>${fmt(p.crystals)}</b></div>`
+        const tier = 1 + Math.min(3, Math.floor((order.indexOf(p.crystals + p.bonus) * 4) / pk.length));
+        card.innerHTML = packPic(tier) + `<div class="cash-pack-n">${CRYSTAL_ICON}<b>${fmt(p.crystals)}</b></div>`
           + (p.bonus ? `<div class="cash-pack-bonus">+ โบนัส ${fmt(p.bonus)}</div>` : '')
           + `<div class="cash-pack-baht">${fmt(p.baht)} บาท</div>`;
         card.append(button('เร็วๆ นี้', () => undefined, '', true));

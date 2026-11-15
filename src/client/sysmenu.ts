@@ -35,8 +35,8 @@ const FRIENDS_ICON = badge('friends');
 /** Daily login calendar: painted badge (art_templates/ui/raw/ico_daily.png, magenta keyed out, 96×96). */
 const DAILY_ICON = badge('daily');
 
-/** Cash shop: no painted badge yet (art_templates/cashshop/PROMPTS.md ico_cashshop): the blank one with a crystal glyph. */
-const CASH_ICON = badge('blank', '<i class="cry-ico"></i>');
+/** Cash shop: painted badge (art_templates/cashshop/raw/ico_cashshop.png, cut by tools/cut_cashshop.cjs). */
+const CASH_ICON = badge('cashshop');
 
 /** Skills have no painted badge yet: the blank one with a glyph. Swap for badge('skills') once ico_skills.png exists. */
 const SKILLS_ICON = badge('blank', '⚔');

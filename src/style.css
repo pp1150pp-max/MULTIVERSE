@@ -1376,66 +1376,149 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #cos-win .cos-btns { display: flex; flex-direction: column; gap: 4px; flex: none; }
 #cos-win .cos-btns button { font-size: 12px; padding: 3px 10px; }
 
-/* Cash shop (src/client/cashShop.ts): gold cards with a price bar, a corner badge, the crystal mark. */
-.cry-ico { display: inline-block; width: 12px; height: 15px; margin-right: 3px; vertical-align: -2px; clip-path: polygon(50% 0, 100% 28%, 100% 72%, 50% 100%, 0 72%, 0 28%); background: linear-gradient(160deg, #b8f4ff 0%, #5ad0ff 35%, #8a5aff 70%, #4a2a9a 100%); }
-.sys-ico .ico-glyph .cry-ico { width: 1.1em; height: 1.4em; margin: 0; vertical-align: middle; }
-#cash-win { left: 50%; top: 60px; transform: translateX(-50%); width: min(760px, 96vw); font-size: 13px; }
-#cash-win .cash-head-right { position: absolute; right: 22px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 6px; font-family: 'Kanit', sans-serif; font-weight: 400; }
-.sys-ico .ico-glyph:has(.cry-ico) { filter: none; }
-#cash-win .cash-balance { display: inline-flex; align-items: center; padding: 2px 10px; border: 1px solid #5a4ab0; border-radius: 10px; background: rgba(20, 16, 40, 0.8); color: #dfe8ff; }
-#cash-win .panel-head .cash-plus, #cash-win .panel-head .cash-plus:hover { position: static; transform: none; width: 22px; height: 22px; font-size: 15px; line-height: 1; border: 1px solid #8a7aff; border-radius: 50%; background: linear-gradient(#6a5ad0, #2e2470); color: #fff; }
-#cash-win .cash-banner { margin: 0 0 8px; padding: 4px 8px; border: 1px solid #8a6a2a; border-radius: 4px; background: rgba(90, 64, 16, 0.35); color: #ffd98a; text-align: center; font-size: 12px; }
+/* Cash shop (src/client/cashShop.ts) "ตลาดมิติ": painted parts from art_templates/cashshop (tools/cut_cashshop.cjs).
+   The window and dialog frames are 9-slice border images; cards are one picture with text laid on its plates. */
+.cry-ico { display: inline-block; width: 16px; height: 16px; margin-right: 3px; vertical-align: -3px; image-rendering: pixelated; }
+#cash-win {
+  left: 50%; top: 56px; transform: translateX(-50%); width: min(780px, 96vw); font-size: 13px; padding: 14px 12px 12px;
+  background: none; outline: 0; border-radius: 0; box-shadow: none; filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.75));
+  border: 30px solid transparent; border-image: url(/assets/sprites/ui/cash_frame.png) 96 fill / 64px / 0 stretch;
+}
+#cash-win::before, #cash-win::after { content: none; }
+#cash-win > .panel-head {
+  position: absolute; left: 0; right: 0; top: -20px; min-height: 26px; margin: 0; padding: 0;
+  background: none; border: 0; box-shadow: none; color: #2a1a08; font-size: 15px; letter-spacing: 1px;
+}
+#cash-win > .panel-head > button { right: -26px; }
+#cash-win .cash-head-right { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; font-family: 'Kanit', sans-serif; font-weight: 400; }
+#cash-win .cash-balance {
+  display: inline-flex; align-items: center; min-width: 104px; height: 30px; padding: 0 12px 0 7px; color: #e8f6ff; font-size: 13px;
+  background: url(/assets/sprites/ui/cash_balance.png) center / 100% 100% no-repeat;
+}
+#cash-win .cash-balance .cry-ico { width: 18px; height: 18px; margin-right: 6px; }
+#cash-win .panel-head .cash-plus, #cash-win .panel-head .cash-plus:hover {
+  position: static; transform: none; width: 28px; height: 28px; border: 0; border-radius: 0; font-size: 0; color: transparent;
+  background: url(/assets/sprites/ui/cash_plus.png) center / contain no-repeat;
+}
+#cash-win .panel-head .cash-plus:hover { filter: brightness(1.25); }
+#cash-win .ui-tabs { border-bottom: 0; gap: 4px; margin: 6px 0 8px; }
+#cash-win .ui-tab {
+  min-width: 92px; height: 30px; padding: 2px 14px 0; border: 0; border-radius: 0; color: #c8b890;
+  background: url(/assets/sprites/ui/cash_tab.png) center / 100% 100% no-repeat;
+}
+#cash-win .ui-tab.active { height: 34px; margin-top: -4px; color: #fff2cc; background-image: url(/assets/sprites/ui/cash_tab_on.png); }
+#cash-win .cash-banner { margin: 0 0 8px; padding: 4px 8px; border: 1px solid #4a2a9a; border-radius: 3px; background: rgba(40, 24, 90, 0.55); color: #cfe6ff; text-align: center; font-size: 12px; }
 #cash-win .cash-banner.hidden, #cash-win .cash-side.hidden, #cash-win .cash-modal.hidden, #cash-win .cash-tip.hidden { display: none; }
-#cash-win .cash-body { display: flex; gap: 10px; min-height: min(52vh, 360px); }
-#cash-win .cash-side { display: flex; flex-direction: column; gap: 4px; flex: none; width: 112px; }
-#cash-win .cash-side button { font-size: 12px; padding: 5px 6px; text-align: left; }
-#cash-win .cash-side button.on { color: var(--gold-hi); border-color: var(--gold-hi); background: rgba(120, 90, 30, 0.35); }
-#cash-win .cash-grid { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; align-content: start; max-height: min(60vh, 460px); overflow-y: auto; overscroll-behavior: contain; }
-#cash-win .cash-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px 0; border: 1px solid #b8862a; border-radius: 6px; background: linear-gradient(#5a4320, #2e2210); cursor: pointer; overflow: hidden; }
-#cash-win .cash-card:hover { border-color: var(--gold-hi); }
-#cash-win .cash-card .cos-pic, #cash-win .cash-stone { width: 72px; height: 56px; }
+#cash-win .cash-body { display: flex; gap: 10px; min-height: min(52vh, 380px); }
+#cash-win .cash-side { display: flex; flex-direction: column; gap: 5px; flex: none; width: 132px; }
+#cash-win .cash-side button {
+  height: 32px; padding: 0 8px 0 20px; border: 0; border-radius: 0; font-size: 11.5px; text-align: left; color: #c8b890; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: url(/assets/sprites/ui/cash_side.png) center / 100% 100% no-repeat;
+}
+#cash-win .cash-side button.on { color: #fff2cc; background-image: url(/assets/sprites/ui/cash_side_on.png); }
+#cash-win .cash-side button:hover, #cash-win .ui-tab:hover { filter: brightness(1.2); }
+#cash-win .cash-grid {
+  flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(126px, 1fr)); gap: 10px; align-content: start;
+  max-height: min(60vh, 470px); overflow-y: auto; overscroll-behavior: contain; padding: 4px 4px 4px 2px;
+}
+#cash-win .cash-hero {
+  grid-column: 1 / -1; height: 112px; display: flex; flex-direction: column; justify-content: center; padding-left: 18px;
+  background: url(/assets/sprites/ui/cash_banner.png) right center / cover no-repeat; border: 1px solid #4a3c28; image-rendering: pixelated;
+}
+#cash-win .cash-hero-title { font-family: 'Cinzel', 'Kanit', serif; font-size: 22px; font-weight: 800; color: #f2d58a; text-shadow: 0 2px 0 #000, 0 0 10px rgba(138, 90, 255, 0.6); }
+#cash-win .cash-hero-sub { font-size: 12px; color: #cfe6ff; text-shadow: 0 1px 0 #000; }
+/* A card: ui/cash_card(_hi).png 240×394; parts placed in % of it (well, nameplate, info, price plate). */
+#cash-win .cash-card {
+  position: relative; aspect-ratio: 240 / 394; cursor: pointer; image-rendering: pixelated;
+  background: url(/assets/sprites/ui/cash_card.png) center / 100% 100% no-repeat;
+}
+#cash-win .cash-card.hi { background-image: url(/assets/sprites/ui/cash_card_hi.png); }
+#cash-win .cash-card:hover { filter: brightness(1.15) drop-shadow(0 0 6px rgba(138, 90, 255, 0.55)); }
+#cash-win .cash-well { position: absolute; left: 13%; right: 14%; top: 12%; height: 42%; display: flex; align-items: center; justify-content: center; }
+#cash-win .cash-well .cos-pic { width: 90%; height: 80%; }
 #cash-win .cash-stone { display: flex; align-items: center; justify-content: center; }
-#cash-win .cash-stone img { width: 44px; height: 44px; image-rendering: pixelated; }
-#cash-win .cash-stone.big img { width: 64px; height: 64px; }
-#cash-win .cash-name { color: var(--gold-hi); font-weight: 600; text-align: center; }
-#cash-win .cash-lim, #cash-win .cash-time { font-size: 11px; color: var(--ink-dim); text-align: center; }
+#cash-win .cash-well .cash-stone img { width: 52px; height: 52px; image-rendering: pixelated; }
+#cash-win .cash-stone.big img { width: 64px; height: 64px; image-rendering: pixelated; }
+#cash-win .cash-card .cash-name {
+  position: absolute; left: 13%; right: 13%; top: 57.6%; height: 7%; display: flex; align-items: center; justify-content: center;
+  font-size: 10.5px; font-weight: 700; color: #2a1a08; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.2px;
+}
+#cash-win .cash-info { position: absolute; left: 12%; right: 12%; top: 69.5%; height: 15%; display: flex; flex-direction: column; justify-content: center; gap: 1px; }
+#cash-win .cash-lim, #cash-win .cash-time { font-size: 11px; color: #b9b09a; text-align: center; }
 #cash-win .cash-lim.own { color: #5dff8a; }
 #cash-win .cash-time { color: #ffb08a; }
-#cash-win .cash-price { align-self: stretch; margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 2px; padding: 4px 0; background: linear-gradient(#e0aa3e, #a87418); color: #2a1a06; }
-#cash-win .cash-price s { color: #6a4a1a; font-size: 11px; margin-right: 4px; }
-#cash-win .cash-card .cash-price { margin-top: 6px; }
-#cash-win .cash-badge { position: absolute; top: 4px; left: 4px; padding: 0 5px; border-radius: 3px; font-size: 10px; font-weight: 700; color: #fff; z-index: 1; }
-#cash-win .cash-badge.new { background: #2a9a5a; }
-#cash-win .cash-badge.hot { background: #c0402a; }
-#cash-win .cash-badge.sale { background: #8a3ad0; }
+#cash-win .cash-price { display: flex; align-items: center; justify-content: center; gap: 2px; color: #2a1a08; font-weight: 700; }
+#cash-win .cash-card .cash-price { position: absolute; left: 13%; right: 13%; top: 86%; height: 8.6%; font-size: 13px; }
+#cash-win .cash-price s { color: #5a3c14; font-size: 11px; font-weight: 400; margin-right: 3px; }
+#cash-win .cash-ribbon {
+  position: absolute; left: -5px; top: -6px; width: 25%; aspect-ratio: 96 / 103; z-index: 1; pointer-events: none;
+  background: center / 100% 100% no-repeat; image-rendering: pixelated;
+}
+#cash-win .cash-card .cash-ribbon { width: 52%; }
+#cash-win .cash-ribbon.new { background-image: url(/assets/sprites/ui/cash_ribbon_new.png); }
+#cash-win .cash-ribbon.hot { background-image: url(/assets/sprites/ui/cash_ribbon_hot.png); }
+#cash-win .cash-ribbon.sale { background-image: url(/assets/sprites/ui/cash_ribbon_sale.png); }
+#cash-win .cash-ribbon b {
+  position: absolute; left: 49%; top: 31%; transform: translate(-50%, -50%) rotate(-42deg); white-space: nowrap;
+  font-size: 11px; font-weight: 800; color: #fff; text-shadow: 0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000;
+}
 #cash-win .cash-empty { grid-column: 1 / -1; padding: 16px; text-align: center; color: var(--ink-dim); }
-#cash-win .cash-tip { position: absolute; z-index: 5; max-width: 220px; padding: 6px 8px; border: 1px solid var(--gold); border-radius: 4px; background: rgba(16, 12, 8, 0.95); font-size: 12px; pointer-events: none; }
+#cash-win .cash-tip { position: absolute; z-index: 5; max-width: 230px; padding: 7px 9px; border: 1px solid #6f5a32; border-radius: 3px; background: rgba(16, 12, 8, 0.96); font-size: 12px; pointer-events: none; box-shadow: 0 0 0 1px #000, 0 0 10px rgba(138, 90, 255, 0.35); }
 #cash-win .cash-tip div + div { color: var(--ink-dim); margin-top: 2px; }
-#cash-win .cash-modal { position: absolute; inset: 0; z-index: 6; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.55); }
-#cash-win .cash-dialog { width: min(360px, 92%); display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--gold); border-radius: 6px; background: #1c150c; }
-#cash-win .cash-dialog-top { display: flex; gap: 10px; align-items: center; }
-#cash-win .cash-dialog-top .cos-pic { width: 96px; height: 72px; }
+#cash-win .cash-modal { position: absolute; inset: -6px; z-index: 6; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.6); }
+#cash-win .cash-dialog {
+  width: min(380px, 94%); display: flex; flex-direction: column; gap: 9px; padding: 6px 4px 4px;
+  border: 24px solid transparent; border-image: url(/assets/sprites/ui/cash_dialog.png) 92 fill / 52px / 0 stretch; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.8));
+}
+#cash-win .cash-dialog.wide { width: min(560px, 96%); }
+#cash-win .cash-dialog > .cash-name { color: var(--gold-hi); font-weight: 700; font-size: 15px; text-align: center; }
+#cash-win .cash-dialog-top { display: flex; gap: 12px; align-items: center; }
+#cash-win .cash-dialog-top > .cos-pic, #cash-win .cash-dialog-top > .cash-stone {
+  width: 96px; height: 96px; flex: none; padding: 10px; object-fit: contain; background: url(/assets/sprites/ui/cash_well.png) center / 100% 100% no-repeat;
+}
 #cash-win .cash-dialog-info { flex: 1; min-width: 0; }
-#cash-win .cash-dialog-info .cash-name { text-align: left; }
+#cash-win .cash-dialog-info .cash-name { color: var(--gold-hi); font-weight: 700; text-align: left; font-size: 14px; }
 #cash-win .cash-desc, #cash-win .cash-note { font-size: 12px; color: var(--ink-dim); }
 #cash-win .cash-dialog-row { display: flex; align-items: center; gap: 8px; }
-#cash-win .cash-dialog-row button.on { color: var(--gold-hi); border-color: var(--gold-hi); }
-#cash-win .cash-total { display: flex; align-items: center; gap: 8px; }
-#cash-win .cash-total .cash-price { flex: 1; margin: 0; border-radius: 4px; }
+#cash-win .cash-total { display: flex; align-items: center; gap: 8px; color: var(--ink-dim); }
+#cash-win .cash-total .cash-price {
+  position: relative; flex: 1; height: 30px; font-size: 14px; border: solid transparent; border-width: 0 26px 0 30px;
+  border-image: url(/assets/sprites/ui/cash_price.png) 0 34 0 38 fill / 0 26px 0 30px / 0 stretch;
+}
+#cash-win .cash-total .cash-price .cry-ico { position: absolute; left: -25px; top: 6px; width: 18px; height: 18px; margin: 0; }
 #cash-win .cash-msg { font-size: 12px; color: #ffcf6a; }
 #cash-win .cash-msg.ok { color: #7ae8ff; }
 #cash-win .cash-dialog-btns { display: flex; gap: 8px; justify-content: flex-end; }
-#cash-win .cash-packs { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 6px; }
-#cash-win .cash-pack { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px; border: 1px solid #5a4ab0; border-radius: 6px; background: rgba(30, 24, 60, 0.6); }
+#cash-win .cash-dialog button {
+  min-width: 96px; height: 32px; padding: 0 14px; border: 0; border-radius: 0; color: #e8e2d0; box-shadow: none;
+  background: url(/assets/sprites/ui/cash_btn.png) center / 100% 100% no-repeat;
+}
+#cash-win .cash-dialog button.primary { color: #2a1a08; font-weight: 700; background-image: url(/assets/sprites/ui/cash_btn_main.png); }
+#cash-win .cash-dialog button.on { color: #7ae8ff; }
+#cash-win .cash-dialog button:hover:not(:disabled) { filter: brightness(1.2); }
+#cash-win .cash-dialog button:disabled { filter: grayscale(0.7) brightness(0.7); cursor: default; }
+#cash-win .cash-dialog > button { align-self: center; }
+#cash-win .cash-packs { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; }
+#cash-win .cash-pack {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 6px 8px; border: 1px solid #4a2a9a; border-radius: 3px;
+  background: radial-gradient(circle at 50% 30%, rgba(90, 208, 255, 0.18), rgba(20, 16, 40, 0.85) 70%);
+}
+#cash-win .cash-pack-pic { width: 72px; height: 72px; image-rendering: pixelated; }
+#cash-win .cash-pack-n { display: flex; align-items: center; color: #e8f6ff; font-size: 14px; }
+#cash-win .cash-pack-bonus { font-size: 11px; color: #5dff8a; }
+#cash-win .cash-pack-baht { font-size: 12px; color: var(--gold-hi); }
+#cash-win .cash-pack button { min-width: 80px; height: 28px; margin-top: 4px; }
 #cash-win.peek { display: none; }
 #cash-peek { position: absolute; left: 50%; bottom: 140px; transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--gold); border-radius: 6px; background: rgba(16, 12, 8, 0.92); font-size: 13px; pointer-events: auto; }
 #cash-peek.hidden { display: none; }
-#cash-win .cash-pack-bonus { font-size: 11px; color: #5dff8a; }
-#cash-win .cash-pack-baht { font-size: 12px; color: var(--gold-hi); }
 @media (max-width: 560px) {
+  #cash-win { padding: 12px 4px 6px; }
+  #cash-win > .panel-head { font-size: 13px; justify-content: flex-start; padding-left: 12px; }
   #cash-win .cash-body { flex-direction: column; }
   #cash-win .cash-side { flex-direction: row; flex-wrap: wrap; width: auto; }
-  #cash-win .cash-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
+  #cash-win .cash-side button { padding: 0 10px; }
+  #cash-win .cash-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+  #cash-win .cash-hero { height: 84px; }
 }
 #mount-btn { position: absolute; left: 50%; bottom: 128px; transform: translateX(-50%); padding: 4px 12px; font-size: 13px; }
 #mount-btn.on { color: var(--gold-hi); border-color: var(--gold-hi); }
