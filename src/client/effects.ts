@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { fxSheets, fxTex, type FxSheet } from './assets';
 import type { FxApi, SkillEffect } from '../shared/sim/types';
+import { playLayer, type FxLayerHooks } from './fxLayer';
 
 const FRAMES = 6;
 const SHEET_ROWS: Record<FxSheet, number> = {
@@ -221,6 +222,8 @@ function disposeObj(obj: THREE.Object3D): void {
 
 export class Effects implements FxApi {
   private list: Fx[] = [];
+  /** Whose screen this is and the hit feel, for the extra layer (set by Game). */
+  layerHooks: FxLayerHooks | null = null;
 
   constructor(private readonly scene: THREE.Scene) {}
 
@@ -263,7 +266,7 @@ export class Effects implements FxApi {
   }
 
   /** Plays one row of a skill's animation sheet, once. */
-  effect(name: SkillEffect, x: number, z: number, angle: number, size: number): void {
+  effect(name: SkillEffect, x: number, z: number, angle: number, size: number, by?: number, hit?: boolean): void {
     const def = EFFECTS[name];
     const tex = frameTexture(def.sheet);
     if (!tex) {
@@ -278,6 +281,7 @@ export class Effects implements FxApi {
       mesh.rotation.y = -angle;
       mesh.scale.setScalar(size);
       this.add(mesh, def.life, play);
+      playLayer(this, this.layerHooks, name, mesh, x, 0, z, size, def.life, by, hit);
     } else {
       const rotation = def.upright ? 0 : screenAngle(Math.cos(angle), Math.sin(angle));
       const mat = new THREE.SpriteMaterial({ map: tex, alphaTest: 0.5, transparent: false, rotation, color: def.tint ?? '#ffffff' });
@@ -286,6 +290,7 @@ export class Effects implements FxApi {
       spr.position.set(x, def.stand ? size * 0.9 : def.height, z);
       spr.scale.setScalar(size * 2);
       this.add(spr, def.life, play);
+      playLayer(this, this.layerHooks, name, spr, x, spr.position.y, z, size, def.life, by, hit);
     }
   }
 

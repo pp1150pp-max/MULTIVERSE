@@ -3,6 +3,7 @@
 // Edits a draft with a live preview (class stats at Lv1/10/50 with nothing worn, tier chances); saving
 // sends the whole draft, the server checks it, stores only what differs from the code, logs the change
 // and applies it to everyone online at once.
+import { FX_LAYER_NAME, FX_LAYER_RANGE, type FxLayerNum } from '../shared/fxLayerTuning';
 import {
   applyBalance, BALANCE_RANGE, balanceChanges, checkBalance, classStatsAt, skillMpCost, codeBalance, currentBalanceTuning, hasParts, mergeBalance, MONSTER_STAT_NAME,
   MONSTER_STATS, monsterBandOf, monsterMults, NO_MONSTER_MULT, STAT_MAX, STAT_PART_NAME, STAT_PARTS, STAT_TIER_PARTS, statTierTable, tierLabelsChange,
@@ -610,6 +611,25 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
+  // ---------------------------------------------------------- skill effects' extra layer (src/shared/fxLayerTuning.ts)
+  const fxCard = h('div', { class: 'card' });
+  const drawFx = (): void => {
+    const a = draft.fxLayer;
+    const ca = code.fxLayer;
+    const refresh = (): void => { updateSummary(); };
+    const num = (k: FxLayerNum, step: number) =>
+      h('label', {}, FX_LAYER_NAME[k], numBox(() => a[k], (n) => { a[k] = n; }, ca[k], FX_LAYER_RANGE[k][0], FX_LAYER_RANGE[k][1], step, refresh));
+    const on = h('input', { type: 'checkbox', checked: a.enabled, onchange: (e: Event) => { a.enabled = (e.target as HTMLInputElement).checked; refresh(); } });
+    fxCard.replaceChildren(
+      h('h2', {}, 'เอฟเฟกต์สกิล (ชั้นเสริม)'),
+      h('div', { class: 'muted' }, 'แสงเรือง แสงบนพื้น และอนุภาคที่เกมวาดทับภาพเอฟเฟกต์ของสกิล ส่วนจอสั่นกับภาพค้างเกิดเฉพาะจอของคนที่ร่าย และเฉพาะตอนที่ท่าโดนมอน · ค่าของแต่ละท่าอยู่ใน src/client/fxLayer.ts (FX_RECIPES) ค่าในการ์ดนี้คูณทุกท่า · มีผลกับทุกคนทันทีหลังบันทึก'),
+      h('div', { class: 'row bal-line' }, h('label', {}, on, ' เปิดชั้นเสริม')),
+      h('div', { class: 'row bal-line' }, num('glow', 0.1), num('ground', 0.1), num('particles', 0.1)),
+      h('div', { class: 'row bal-line' }, num('shake', 0.1), num('hitstopMs', 5), num('crit', 0.1)),
+      h('div', { class: 'muted' }, 'ภาพค้างจริง = ค่านี้ × ความหนักของท่า (0–1) และไม่เกิน 120 ms · ตอนนี้เปิดชั้นเสริมให้พายุดาบท่าเดียวก่อน'),
+    );
+  };
+
   // ---------------------------------------------------------- tutorial quest rewards (src/shared/tutorial.ts)
   const tutCard = h('div', { class: 'card' });
   /** Every potion and stone a reward may give, as select options (value = JSON of the line without count). */
@@ -733,6 +753,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawAuto();
     drawTut();
     drawSkills();
+    drawFx();
   };
   const save =async (body: { tuning: BalanceTuning } | { reset: true }, ask: string): Promise<void> => {
     if (!confirm(ask)) return;
@@ -776,11 +797,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         void save({ tuning: c.tuning }, `ใช้ค่าใหม่กับทั้งเซิร์ฟทันทีไหม?\n\n${changes.slice(0, 1200)}`);
       } }, '💾 บันทึกทั้งเซิร์ฟ'),
       h('button', { onclick: () => { draft = mergeBalance(saved); redraw(); msg.textContent = ''; } }, 'ยกเลิกที่ยังไม่บันทึก'),
-      h('button', { onclick: () => void save({ reset: true }, 'คืนทุกค่า (อาชีพ tier ตัวคูณมอน Auto Play รางวัลเควสสอนระบบ และระบบสกิล) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?') }, '↺ คืนค่าในโค้ด'),
+      h('button', { onclick: () => void save({ reset: true }, 'คืนทุกค่า (อาชีพ tier ตัวคูณมอน Auto Play รางวัลเควสสอนระบบ ระบบสกิล และเอฟเฟกต์สกิล) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?') }, '↺ คืนค่าในโค้ด'),
     ),
     msg,
   );
 
-  box.replaceChildren(classCard, regenCard, tierCard, previewCard, monsterCard, autoCard, tutCard, skillCard, bar);
+  box.replaceChildren(classCard, regenCard, tierCard, previewCard, monsterCard, autoCard, tutCard, skillCard, fxCard, bar);
   redraw();
 }

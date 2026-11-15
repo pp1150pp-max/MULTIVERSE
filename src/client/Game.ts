@@ -141,6 +141,8 @@ export class Game {
 
   private viewSize = 17;
   private readonly camTarget = new THREE.Vector3();
+  /** Seconds left of a hit's freeze (fxLayer.ts): effects and animation clocks stop, positions keep moving. */
+  private hitstopT = 0;
   private shakeT = 0;
   private shakeAmt = 0;
   private readonly sound = new GameAudio();
@@ -176,6 +178,11 @@ export class Game {
     this.world.bakeMap(this.renderer);
     this.input = new Input(this.renderer.domElement);
     this.fx = new Effects(this.scene);
+    this.fx.layerHooks = {
+      me: () => this.player.id,
+      shake: (a) => this.shake(a),
+      hitstop: (sec) => { this.hitstopT = Math.max(this.hitstopT, sec); },
+    };
     this.autoRing = new AutoRing(this.scene);
     this.lockRing = new AutoRing(this.scene, '#ff4a3a');
     this.skillRing = new AutoRing(this.scene, '#ffcf5a');
@@ -790,8 +797,11 @@ export class Game {
 
     this.syncViews();
     for (const ev of events) this.handleEvent(ev);
-    for (const v of this.playerViews.values()) v.update(dt, this.fx);
-    for (const v of this.monsterViews.values()) v.update(dt);
+    // A hit's freeze stops only the look (animation clocks and effects); positions still follow the server.
+    const vdt = this.hitstopT > 0 ? 0 : dt;
+    this.hitstopT = Math.max(0, this.hitstopT - dt);
+    for (const v of this.playerViews.values()) v.update(vdt, this.fx);
+    for (const v of this.monsterViews.values()) v.update(vdt);
     for (const v of this.projectileViews.values()) v.update();
     for (const v of this.lootViews.values()) v.update();
 
@@ -849,7 +859,7 @@ export class Game {
     if (locked) this.lockRing.show(locked.x, locked.z, locked.def.radius + 0.2);
     else this.lockRing.hide();
 
-    this.fx.update(dt);
+    this.fx.update(vdt);
     this.hazardViews.update(this.backend.hazards, this.backend.time);
     this.world.update(dt, p.x, p.z);
     this.updateCamera(dt);
