@@ -240,32 +240,49 @@ export class Sim {
   schedule(delay: number, fn: () => void): void {
     // Timers set while a player's skill runs stay that player's doing (their effects feel the hit on their screen).
     const by = this.caster;
-    this.timers.push({ at: this.time + delay, fn: by ? () => this.asCaster(by, fn) : fn });
+    const skill = this.casterSkill;
+    this.timers.push({ at: this.time + delay, fn: by ? () => this.asCaster(by, fn, skill ?? undefined) : fn });
   }
 
   /** Monsters hit so far (hitMonster that got past the arena and level checks); asCaster compares it. */
   private hitCount = 0;
   /** The player whose skill is running now (asCaster), or null. */
   private caster: Player | null = null;
+  /** The skill it is (for the client's standing layer of area skills, src/client/zoneProps.ts), or null. */
+  private casterSkill: string | null = null;
 
   /**
    * Runs `fn` as player `p`'s doing (a cast, a timer it set, its shot flying): the skill effects it plays carry `p`'s
    * id and whether it hit any monster, so the caster's own screen can feel the hit (src/client/fxLayer.ts).
    */
-  asCaster<T>(p: Player, fn: () => T): T {
+  asCaster<T>(p: Player, fn: () => T, skill?: string): T {
     const from = this.events.length;
     const hits = this.hitCount;
     const was = this.caster;
+    const wasSkill = this.casterSkill;
     this.caster = p;
+    this.casterSkill = skill ?? wasSkill;
     try {
       return fn();
     } finally {
+      const sk = this.casterSkill;
       this.caster = was;
+      this.casterSkill = wasSkill;
       const hit = this.hitCount > hits;
       for (let i = from; i < this.events.length; i++) {
         const e = this.events[i];
-        // Only the effects not tagged yet (an inner asCaster, or a skill that tags its own, came first).
-        if (e.t === 'fx' && e.name === 'effect' && e.args.length === 5) (e.args as unknown[]).push(p.id, hit);
+        if (e.t !== 'fx') continue;
+        const a = e.args as unknown[];
+        // Only what isn't tagged yet (an inner asCaster, or a skill that tags its own, came first).
+        if (e.name === 'effect') {
+          if (a.length === 5) a.push(p.id, hit);
+          // effect(name, x, z, angle, size, by, hit, skill)
+          if (a.length === 7 && sk) a.push(sk);
+        } else if (e.name === 'zone' && sk) {
+          // zone(name, x, z, size, duration, follow, skill)
+          while (a.length < 6) a.push(null);
+          if (a.length === 6) a.push(sk);
+        }
       }
     }
   }

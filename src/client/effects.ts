@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { fxSheets, fxTex, type FxSheet } from './assets';
 import type { FxApi, SkillEffect } from '../shared/sim/types';
+import { loopProps, playProps } from './zoneProps';
 import { playLayer, ShotLayer, type FxLayerHooks, type FxLayerHost } from './fxLayer';
 
 const FRAMES = 6;
@@ -13,6 +14,8 @@ const SHEET_ROWS: Record<FxSheet, number> = {
   mg_a: 6, mg_b: 6, mg_c: 6, mg_d: 3, mg_e: 4, mg_f: 4, mg_g: 5,
   // Gunslinger
   gs_skill: 6, gs_gear: 6, gs_passive: 3,
+  // Area skills' standing layer (zoneProps.ts)
+  ap_sw_a: 4, ap_sw_b: 4, ap_sw_c: 4, ap_mg_a: 4, ap_mg_b: 4, ap_mg_c: 4, ap_mg_d: 4, ap_mg_e: 4, ap_gs_a: 4,
 };
 
 interface EffectDef {
@@ -258,6 +261,8 @@ export class Effects implements FxApi {
   private list: Fx[] = [];
   /** Whose screen this is and the hit feel, for the extra layer (set by Game). */
   layerHooks: FxLayerHooks | null = null;
+  /** When and where each skill last scattered its standing pieces (see effect()). */
+  private readonly lastProps = new Map<string, { t: number; x: number; z: number }>();
   /** Where a player is now (for zones that follow their caster); set by Game. */
   posOf: ((id: number) => { x: number; z: number } | null) | null = null;
 
@@ -302,7 +307,17 @@ export class Effects implements FxApi {
   }
 
   /** Plays one row of a skill's animation sheet, once. */
-  effect(name: SkillEffect, x: number, z: number, angle: number, size: number, by?: number, hit?: boolean): void {
+  effect(name: SkillEffect, x: number, z: number, angle: number, size: number, by?: number, hit?: boolean, skill?: string): void {
+    // The standing layer of an area skill (zoneProps.ts), once per cast spot: a skill that plays two pictures at the
+    // same place (Unleash: ring + quake) shouldn't double it.
+    if (skill) {
+      const now = performance.now();
+      const last = this.lastProps.get(skill);
+      if (!last || now - last.t > 150 || Math.hypot(last.x - x, last.z - z) > 0.5) {
+        this.lastProps.set(skill, { t: now, x, z });
+        playProps(this, skill, x, z, angle, size, EFFECTS[name].life);
+      }
+    }
     const def = EFFECTS[name];
     const tex = frameTexture(def.sheet);
     if (!tex) {
@@ -335,7 +350,7 @@ export class Effects implements FxApi {
    * `duration` with a fade in and out, its edge fades softly into the ground, and the extra layer (glow, ground light,
    * particles) is played again lightly while it lasts. `follow` keeps it under that player.
    */
-  zone(name: SkillEffect, x: number, z: number, size: number, duration: number, follow?: number): void {
+  zone(name: SkillEffect, x: number, z: number, size: number, duration: number, follow?: number | null, skill?: string): void {
     const def = EFFECTS[name];
     const tex = frameTexture(def.sheet);
     if (!tex || duration <= 0) {
@@ -352,11 +367,13 @@ export class Effects implements FxApi {
     mesh.position.set(x, 0.08, z);
     mesh.scale.setScalar(size);
     const pos = { x, z };
+    // Its standing layer loops with it and follows it (zoneProps.ts).
+    loopProps(this, skill, pos, size, duration);
     let t = 0;
     let layerT = 0;
     this.add(mesh, duration, (_k, dt) => {
       t += dt;
-      const p = follow !== undefined ? this.posOf?.(follow) : null;
+      const p = follow != null ? this.posOf?.(follow) : null;
       if (p) {
         pos.x = p.x;
         pos.z = p.z;

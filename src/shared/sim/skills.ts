@@ -277,7 +277,7 @@ const FROST = '#7ab8ff';
  */
 export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1): boolean {
   // Everything the cast plays, now or later (timers, shots), is the caster's: see Sim.asCaster.
-  return sim.asCaster(p, () => cast(sim, p, sk, aim, rank));
+  return sim.asCaster(p, () => cast(sim, p, sk, aim, rank), sk.id);
 }
 
 function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boolean {
