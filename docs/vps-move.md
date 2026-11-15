@@ -38,6 +38,8 @@
 
 หมายเหตุ: หลังติดตั้ง ล็อกอิน SSH ด้วยรหัสผ่านถูกปิด (key เท่านั้น) ถ้าทำ key หาย ยังเข้าได้ทาง *View Console* ในหน้า Vultr ด้วยรหัส root ที่ Vultr ให้
 
+หมายเหตุ: ผู้ให้เช่าบางเจ้าใส่ key ของตัวเองไว้ใน root (เช่น `hostatom-admin-…`) สคริปต์คัดทุก key ของ root ให้ user `multiverse` และพิมพ์ชื่อ key ที่เพิ่ม ถ้าไม่อยากให้ key ของผู้ให้เช่าเข้า user นี้ได้ ให้เหลือเฉพาะ key ของเรา: `ssh multiverse-vps-root "grep ' <ชื่อ key ของเรา>$' /root/.ssh/authorized_keys > /home/multiverse/.ssh/authorized_keys"`
+
 ## B. ซ้อมบน VPS (ก่อนวันจริง ไม่แตะ server ที่บ้าน)
 
 ยังไม่คัด `tunnel-config.json` → ตัวคุมบน VPS เปิด **quick tunnel** (ลิงก์ `*.trycloudflare.com` สุ่ม คนละ tunnel กับ `multiverse` จึงไม่ชนกับที่บ้าน) · DB ว่างที่ server สร้างเอง · ได้ลองทาง systemd + cloudflared จริงทั้งหมด
