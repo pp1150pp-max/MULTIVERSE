@@ -615,6 +615,7 @@ export function buildMenu(launch: Launcher): void {
   const online = new OnlineMenu(launch, googleOn);
   if (GUEST_LOGIN_ENABLED) {
     const guest = new GuestMenu(launch, googleOn);
+    $('btn-mode-guest').removeAttribute('aria-disabled');
     $('btn-mode-guest').onclick = () => {
       show('guest');
       void guest.open();
