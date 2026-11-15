@@ -53,6 +53,7 @@ export const FX_RECIPES: Partial<Record<SkillEffect, FxRecipe>> = {
   // Mage
   explosion: { color: '#ff7a2a', glow: 1, ground: 1.6, particles: { kind: 'ember', n: 12 }, punch: true, heavy: 0.6 },
   frost: { color: '#9fd8ff', glow: 0.8, ground: 1.2, particles: { kind: 'shard', n: 12 }, punch: true, heavy: 0.5 },
+  mg_frostnova: { color: '#9fd8ff', glow: 0.8, ground: 1.2, particles: { kind: 'shard', n: 12 }, punch: true, heavy: 0.5 },
   mg_lightning: { color: '#bfe0ff', glow: 1.2, ground: 1, particles: { kind: 'spark', n: 10 }, punch: true, heavy: 0.5 },
   mg_burst: { color: '#c89aff', glow: 1, ground: 1.3, particles: { kind: 'star', n: 8 }, punch: true, heavy: 0.6 },
   mg_starhit: { color: '#ffe08a', glow: 1, ground: 1.4, particles: { kind: 'star', n: 7 }, punch: true, heavy: 0.45 },

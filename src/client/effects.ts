@@ -10,7 +10,7 @@ const SHEET_ROWS: Record<FxSheet, number> = {
   sw_blade: 4, sw_gale: 4, sw_bulwark: 4,
 
   // Mage
-  mg_a: 6, mg_b: 6, mg_c: 6, mg_d: 3,
+  mg_a: 6, mg_b: 6, mg_c: 6, mg_d: 3, mg_e: 4, mg_f: 4, mg_g: 5,
   // Gunslinger
   gs_skill: 6, gs_gear: 6, gs_passive: 3,
 };
@@ -67,17 +67,19 @@ const EFFECTS: Record<SkillEffect, EffectDef> = {
   mg_lightning: { sheet: 'mg_a', row: 4, life: 0.35, height: 1.4, upright: true },
   mg_burst: { sheet: 'mg_a', row: 5, life: 0.5, height: 0.9, upright: true },
   mg_starhit: { sheet: 'mg_b', row: 0, life: 0.4, height: 0.9, upright: true },
-  mg_firefield: { sheet: 'mg_b', row: 1, life: 0.55, height: 'ground' },
+  mg_firefield: { sheet: 'mg_e', row: 0, life: 0.55, height: 'ground', loop: true },
   mg_flamewave: { sheet: 'mg_b', row: 2, life: 0.4, height: 'ground' },
-  mg_poison: { sheet: 'mg_b', row: 3, life: 1.1, height: 'ground' },
+  mg_poison: { sheet: 'mg_e', row: 1, life: 1.1, height: 'ground', loop: true },
   mg_ash: { sheet: 'mg_b', row: 4, life: 0.5, height: 'ground' },
-  mg_decay: { sheet: 'mg_b', row: 5, life: 1, height: 'ground' },
-  mg_shock: { sheet: 'mg_c', row: 0, life: 0.45, height: 'ground' },
-  mg_curse: { sheet: 'mg_c', row: 1, life: 0.9, height: 'ground' },
-  mg_vortex: { sheet: 'mg_c', row: 2, life: 0.3, height: 'ground' },
-  mg_empower: { sheet: 'mg_c', row: 3, life: 0.9, height: 'ground' },
-  mg_shield: { sheet: 'mg_c', row: 4, life: 1, height: 'ground' },
-  mg_timewarp: { sheet: 'mg_c', row: 5, life: 1, height: 'ground' },
+  mg_decay: { sheet: 'mg_e', row: 2, life: 1, height: 'ground', loop: true },
+  mg_shock: { sheet: 'mg_g', row: 0, life: 0.45, height: 'ground' },
+  mg_curse: { sheet: 'mg_f', row: 0, life: 0.9, height: 'ground', loop: true },
+  mg_vortex: { sheet: 'mg_e', row: 3, life: 0.3, height: 'ground', loop: true },
+  mg_empower: { sheet: 'mg_f', row: 1, life: 0.9, height: 'ground', loop: true },
+  mg_shield: { sheet: 'mg_f', row: 2, life: 1, height: 'ground', loop: true },
+  mg_timewarp: { sheet: 'mg_f', row: 3, life: 1, height: 'ground', loop: true },
+  // Frost Nova's own ring (round 2, top-down); the old `frost` row stays for Ice Cage's hit.
+  mg_frostnova: { sheet: 'mg_g', row: 1, life: 0.6, height: 'ground' },
   // Gunslinger (art_templates/skills/FX_GUNSLINGER.md). Lasting things (mine, drone, turret, smoke, burning) are
   // played again by the sim every tick, so their life is about one tick.
   // The aura and smoke are drawn already seen at an angle, so they face the camera at the feet instead of lying flat.
@@ -120,9 +122,9 @@ const SHOT_ART: Record<string, { sheet: FxSheet; row: number; scale: number }> =
 
 /** Mage passive auras under the feet (sheet mg_d), by worn passive id; everyone sees them (owner 2026-11-15). */
 const PASSIVE_AURA: Record<string, { sheet: FxSheet; row: number; size: number }> = {
-  mg_elementmastery: { sheet: 'mg_d', row: 0, size: 1.1 },
-  mg_manasource: { sheet: 'mg_d', row: 1, size: 1.1 },
-  mg_arcanepower: { sheet: 'mg_d', row: 2, size: 1.1 },
+  mg_elementmastery: { sheet: 'mg_g', row: 2, size: 1.1 },
+  mg_manasource: { sheet: 'mg_g', row: 3, size: 1.1 },
+  mg_arcanepower: { sheet: 'mg_g', row: 4, size: 1.1 },
 };
 
 /** A looping ground aura under a player for the passive they wear (null when that passive or its sheet has none). */

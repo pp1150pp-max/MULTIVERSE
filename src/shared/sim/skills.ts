@@ -302,7 +302,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       sim.addProjectile(p, { x: p.x, z: p.z, angle: ang, speed: 13, range: far, radius: 0.45, mult: dmg, color: '#ff7a2a', size: 1.1, explode: P('blast'), hit: { skill: sk } });
       return true;
     case 'frostnova':
-      sim.fx('effect', 'frost', p.x, p.z, 0, 4.8);
+      sim.fx('effect', 'mg_frostnova', p.x, p.z, 0, far);
       forCircle(sim, p.x, p.z, far, (m) => sim.hitMonster(p, m, dmg, { slow: P('slow') / 100, slowT: P('slowTime'), skill: sk }));
       return true;
     case 'meteor': {

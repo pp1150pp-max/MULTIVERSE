@@ -1,65 +1,85 @@
 // Turns a ChatGPT effect sheet (strict grid of 6 frames per row on magenta) into a game fx sheet:
 // the background becomes transparent and the picture is resampled to 256 px cells, keeping the layout,
 // because the game cuts frames by equal cells (see SHEET_ROWS in src/client/effects.ts).
-//   PNGJS=<path to pngjs> node tools/cut_fx_sheet.cjs <raw.png> <rows> <out.png> [strict]
-// `strict`: for sheets with violet or purple effects (the default takes anything magenta-ish out and greys violet).
-// Only colours close to the sheet's own background (sampled at the top-left corner) go, edges fade by that distance.
+//   PNGJS=<path to pngjs> node tools/cut_fx_sheet.cjs <raw.png> <rows> <out.png> [mode]
+// mode = one mode for the whole sheet, or one per row separated by commas (e.g. "default,default,strict,unmix"):
+//   default: takes anything magenta-ish out and pulls tinted glows back to grey/gold (fire, poison, smoke). Greys violet.
+//   strict:  only colours close to the sheet's own background (sampled at the top-left corner) go; edges fade by that
+//            distance. For solid violet or purple art.
+//   unmix:   strict, and a see-through violet glow painted over the magenta (a purple pixel not far from the
+//            background) keeps its colour but becomes partly transparent, instead of a solid violet blob.
 const fs = require('fs');
 const { PNG } = require(process.env.PNGJS || 'pngjs');
 
-const [src, rowsArg, out, mode] = process.argv.slice(2);
-const STRICT = mode === 'strict';
+const [src, rowsArg, out, modeArg] = process.argv.slice(2);
 const ROWS = Number(rowsArg);
 const COLS = 6;
 const CELL = 256;
+const MODES = (modeArg || 'default').split(',');
+if (MODES.length !== 1 && MODES.length !== ROWS) throw new Error(`give 1 mode or ${ROWS} (one per row)`);
+if (MODES.some((m) => !['default', 'strict', 'unmix'].includes(m))) throw new Error('modes: default, strict, unmix');
 
 /** Solid background: bright and evenly red + blue, so warm sparks and grey smoke are left alone. */
 const isKey = (r, g, b) => r > 190 && b > 190 && g < 110 && Math.abs(r - b) < 60;
 
 const img = PNG.sync.read(fs.readFileSync(src));
 const { width: w, height: h, data } = img;
+const modeAt = (y) => MODES.length === 1 ? MODES[0] : MODES[Math.min(ROWS - 1, Math.floor((y * ROWS) / h))];
 const px = Buffer.from(data);
 const key = new Uint8Array(w * h);
 const bg = [data[0], data[1], data[2]];
 const dist = (p) => Math.hypot(data[p] - bg[0], data[p + 1] - bg[1], data[p + 2] - bg[2]);
 const NEAR = 70;
 const FAR = 150;
-for (let i = 0; i < w * h; i++) key[i] = STRICT ? (dist(i * 4) < NEAR ? 1 : 0) : isKey(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]) ? 1 : 0;
+/** unmix: farther than this from the background is solid art. */
+const SOLID = 215;
+for (let y = 0; y < h; y++) {
+  const strict = modeAt(y) !== 'default';
+  for (let x = 0; x < w; x++) {
+    const i = y * w + x, p = i * 4;
+    key[i] = strict ? (dist(p) < NEAR ? 1 : 0) : isKey(data[p], data[p + 1], data[p + 2]) ? 1 : 0;
+  }
+}
 // Blended pixels next to the background: fade them by how magenta they are and take the tint out.
 const R = 2;
-if (STRICT) for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-  const i = y * w + x, p = i * 4;
-  if (key[i]) { px[p + 3] = 0; continue; }
-  const d = dist(p);
-  if (d >= FAR) continue;
-  let edge = false;
-  for (let dy = -R; dy <= R && !edge; dy++) for (let dx = -R; dx <= R; dx++) {
-    const nx = x + dx, ny = y + dy;
-    if (nx >= 0 && ny >= 0 && nx < w && ny < h && key[ny * w + nx]) { edge = true; break; }
-  }
-  if (edge) px[p + 3] = Math.round(255 * (d - NEAR) / (FAR - NEAR));
-}
-else
-for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-  const i = y * w + x, p = i * 4;
-  if (key[i]) { px[p + 3] = 0; continue; }
-  let edge = false;
-  for (let dy = -R; dy <= R && !edge; dy++) for (let dx = -R; dx <= R; dx++) {
-    const nx = x + dx, ny = y + dy;
-    if (nx >= 0 && ny >= 0 && nx < w && ny < h && key[ny * w + nx]) { edge = true; break; }
-  }
-  const [r, g, b] = [data[p], data[p + 1], data[p + 2]];
-  const spill = Math.min(r, b) - g;
-  if (edge && spill > 30) {
-    px[p + 3] = Math.round(255 * Math.max(0, 1 - spill / 170));
-    px[p] = Math.min(r, g + 25);
-    px[p + 2] = Math.min(b, g + 25);
-  } else if (spill > 15) {
-    // Glows and smoke are see-through in the original, so magenta shows through them anywhere,
-    // not only at the edge: fade by how magenta the pixel is and pull it back to grey or gold.
-    px[p + 3] = Math.round(255 * Math.max(0, 1 - spill / 140));
-    px[p] = Math.min(r, g + 12);
-    px[p + 2] = Math.min(b, g + 6);
+for (let y = 0; y < h; y++) {
+  const mode = modeAt(y);
+  for (let x = 0; x < w; x++) {
+    const i = y * w + x, p = i * 4;
+    if (key[i]) { px[p + 3] = 0; continue; }
+    const [r, g, b] = [data[p], data[p + 1], data[p + 2]];
+    if (mode === 'unmix') {
+      // Purple-ish and not far from the background: a see-through glow over magenta.
+      const d = dist(p);
+      if (d < SOLID && r - g > 40 && b - g > 40) {
+        const al = Math.max(0.08, (d - NEAR) / (SOLID - NEAR));
+        // Keep its own violet (taking the magenta back out turns it muddy), only see-through.
+        px[p + 3] = Math.round(255 * al);
+      }
+      continue;
+    }
+    let edge = false;
+    for (let dy = -R; dy <= R && !edge; dy++) for (let dx = -R; dx <= R; dx++) {
+      const nx = x + dx, ny = y + dy;
+      if (nx >= 0 && ny >= 0 && nx < w && ny < h && key[ny * w + nx]) { edge = true; break; }
+    }
+    if (mode === 'strict') {
+      const d = dist(p);
+      if (edge && d < FAR) px[p + 3] = Math.round(255 * (d - NEAR) / (FAR - NEAR));
+      continue;
+    }
+    const spill = Math.min(r, b) - g;
+    if (edge && spill > 30) {
+      px[p + 3] = Math.round(255 * Math.max(0, 1 - spill / 170));
+      px[p] = Math.min(r, g + 25);
+      px[p + 2] = Math.min(b, g + 25);
+    } else if (spill > 15) {
+      // Glows and smoke are see-through in the original, so magenta shows through them anywhere,
+      // not only at the edge: fade by how magenta the pixel is and pull it back to grey or gold.
+      px[p + 3] = Math.round(255 * Math.max(0, 1 - spill / 140));
+      px[p] = Math.min(r, g + 12);
+      px[p + 2] = Math.min(b, g + 6);
+    }
   }
 }
 
