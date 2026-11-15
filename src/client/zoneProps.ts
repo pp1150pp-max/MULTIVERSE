@@ -106,7 +106,8 @@ export function loopProps(host: PropHost, skill: string | undefined, pos: { x: n
       s.position.set(pos.x + p.x, 0, pos.z + p.z);
       const g = Math.min(1, t / 0.3, (duration - t) / 0.4);
       s.scale.set(h * Math.max(0.001, g), h * Math.max(0.001, g), 1);
-      frame(tex, def, Math.floor(offset + t * fps) % FRAMES);
+      // The art grows in frame 1 and shrinks in frame 6: a lasting zone loops the full-size middle (frames 2–5).
+      frame(tex, def, 1 + (Math.floor(offset + t * fps) % (FRAMES - 2)));
     });
   }
 }
