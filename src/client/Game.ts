@@ -28,6 +28,7 @@ import { PartyUI } from './party';
 import { TradeUI } from './trade';
 import { FriendsUI } from './friends';
 import { CosmeticsUI } from './cosmetics';
+import { CashShopUI } from './cashShop';
 import { ChannelUI } from './channels';
 import { RoomUI } from './bossRoom';
 import { QuestUI } from './quests';
@@ -93,6 +94,7 @@ export class Game {
   readonly trade: TradeUI;
   readonly friends: FriendsUI;
   readonly cosmetics: CosmeticsUI;
+  readonly cashShop: CashShopUI;
   readonly channels: ChannelUI;
   readonly rooms: RoomUI;
   readonly quests: QuestUI;
@@ -206,6 +208,7 @@ export class Game {
     this.trade = new TradeUI(this);
     this.friends = new FriendsUI(this);
     this.cosmetics = new CosmeticsUI(this);
+    this.cashShop = new CashShopUI(this);
     this.channels = new ChannelUI(this);
     this.rooms = new RoomUI(this);
     this.quests = new QuestUI(this, () => this.hud.openDialog());
@@ -865,6 +868,7 @@ export class Game {
     this.world.update(dt, p.x, p.z);
     this.updateCamera(dt);
     this.cosmetics.update();
+    this.cashShop.update();
     this.floating.update(dt, this);
     this.hud.update(dt);
     this.touch.update();

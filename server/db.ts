@@ -12,6 +12,7 @@ import { cleanTutorial, type TutorialData } from '../src/shared/tutorial';
 import { cleanCosOwned } from '../src/shared/data/cosmetics';
 import { checkCosTuning, COS_TUNING_SETTING, type CosTuning } from '../src/shared/cosTuning';
 import { checkCosShop, COS_SHOP_SETTING, type CosShop } from '../src/shared/cosShop';
+import type { CashPurchaseRow } from '../src/shared/cashShop';
 import { checkOrbItems, ORB_ITEMS_SETTING, registerOrbItems, type OrbItems } from '../src/shared/orbItems';
 import { CARD_TUNING_SETTING, checkCardTuning, type CardTuning } from '../src/shared/cardTuning';
 import { BALANCE_SETTING, checkBalance, type BalanceTuning } from '../src/shared/balance';
@@ -356,6 +357,22 @@ export class Db {
     // Ban end time (BAN_FOREVER = permanent) and why; NULL = not banned.
     if (!cols.includes('ban_until')) this.db.exec('ALTER TABLE accounts ADD COLUMN ban_until INTEGER');
     if (!cols.includes('ban_reason')) this.db.exec('ALTER TABLE accounts ADD COLUMN ban_reason TEXT');
+    // Cash shop currency (คริสตัลมิติ, src/shared/cashShop.ts), per account. Old accounts start with 0.
+    if (!cols.includes('crystals')) this.db.exec('ALTER TABLE accounts ADD COLUMN crystals INTEGER NOT NULL DEFAULT 0');
+    // Every cash shop purchase (also what the per-account limits count).
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS cash_purchases (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        char_id INTEGER,
+        char_name TEXT NOT NULL,
+        item TEXT NOT NULL,
+        qty INTEGER NOT NULL,
+        price INTEGER NOT NULL,
+        at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS cash_purchases_account ON cash_purchases(account_id, item);
+    `);
     // Admin roles the owner changed or added on the Permissions tab. 'gm' gets a row only once changed;
     // 'owner' never has one. `features` = JSON of only what differs from FEATURE_ROLES (feature → on/off).
     this.db.exec(`
@@ -786,6 +803,46 @@ export class Db {
   revokeCosmetic(accountId: number, cosmeticId: string): boolean {
     const r = this.db.prepare('DELETE FROM account_cosmetics WHERE account_id = ? AND cosmetic_id = ?').run(accountId, cosmeticId);
     return Number(r.changes) > 0;
+  }
+
+  // ------------------------------------------------------------ cash shop (server/cashShop.ts)
+
+  /** The account's crystals (0 for an unknown account). */
+  crystals(accountId: number): number {
+    const r = this.db.prepare('SELECT crystals FROM accounts WHERE id = ?').get(accountId) as { crystals: number } | undefined;
+    return r ? Number(r.crystals) : 0;
+  }
+
+  /** Takes `n` crystals if the account has that many (one statement, so two buyers can't both spend them); false = not enough. */
+  crystalsSpend(accountId: number, n: number): boolean {
+    const r = this.db.prepare('UPDATE accounts SET crystals = crystals - ? WHERE id = ? AND crystals >= ?').run(n, accountId, n);
+    return Number(r.changes) > 0;
+  }
+
+  /** Sets an account's crystals (tests only: there is no way to get crystals yet). */
+  setCrystals(accountId: number, n: number): void {
+    this.db.prepare('UPDATE accounts SET crystals = ? WHERE id = ?').run(n, accountId);
+  }
+
+  /** How many of each item the account ever bought. */
+  cashBought(accountId: number): Record<string, number> {
+    const rows = this.db.prepare('SELECT item, SUM(qty) AS n FROM cash_purchases WHERE account_id = ? GROUP BY item').all(accountId) as { item: string; n: number }[];
+    return Object.fromEntries(rows.map((r) => [r.item, Number(r.n)]));
+  }
+
+  cashPurchaseAdd(p: { accountId: number; charId: number; charName: string; item: string; qty: number; price: number; at: number }): void {
+    this.db.prepare('INSERT INTO cash_purchases (account_id, char_id, char_name, item, qty, price, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(p.accountId, p.charId, p.charName, p.item, p.qty, p.price, p.at);
+  }
+
+  /** The newest purchases, for /admin. `price` = per piece. */
+  cashRecent(limit: number): CashPurchaseRow[] {
+    const rows = this.db.prepare(`SELECT p.id, p.account_id, COALESCE(a.username, '?') AS username, p.char_name, p.item, p.qty, p.price, p.at
+      FROM cash_purchases p LEFT JOIN accounts a ON a.id = p.account_id ORDER BY p.id DESC LIMIT ?`).all(limit) as Record<string, unknown>[];
+    return rows.map((r) => ({
+      id: Number(r.id), accountId: Number(r.account_id), username: String(r.username), charName: String(r.char_name),
+      item: String(r.item), qty: Number(r.qty), price: Number(r.price), at: Number(r.at),
+    }));
   }
 
   // ------------------------------------------------------------ stash (one per account)

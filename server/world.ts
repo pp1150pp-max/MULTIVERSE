@@ -49,6 +49,7 @@ import { CH_RESERVED, hasChannels, type ChannelsView } from '../src/shared/chann
 import { MEGAPHONE_EVERY_MS, megaphoneText, STONE_NAME, STONE_STACK } from '../src/shared/data/stones';
 import { COS_SLOTS, cosById, cosCodes } from '../src/shared/data/cosmetics';
 import { cosHiddenIds, mayPutOnCos } from '../src/shared/cosShop';
+import { CashShop } from './cashShop';
 import { orbItemsRegistered } from '../src/shared/orbItems';
 
 /** How often the world looks for the Thai calendar day turning over. */
@@ -60,6 +61,8 @@ const JOIN_TIMEOUT_MS = 10_000;
 const MARKET_EXPIRE_MS = 60_000;
 /** Fastest a session may send anything to the market (searches also face a per-account bucket, server/market-throttle.ts). */
 const MARKET_ACT_MS = 100;
+/** One cash shop purchase per this many ms per player. */
+const CASH_BUY_MS = 300;
 /** Delay before telling a player who just joined what sold or expired while away. */
 const MARKET_JOIN_NOTE_MS = 3000;
 const SKILL_KEYS: SkillSlot[] = ['q', 'e', 'r'];
@@ -139,6 +142,8 @@ interface Session {
   lastMarketAt: number;
   /** The same for the mailbox. */
   lastMailAt: number;
+  /** performance.now() of the last cash shop purchase (one per CASH_BUY_MS). */
+  lastCashAt: number;
   saveDue: number | null;
   /** Where the connection came from, for the owner's log only (never sent to anyone). */
   ip: string;
@@ -284,6 +289,8 @@ export class GameWorld {
   private readonly market: Market;
   readonly mail: Mail;
   readonly daily: Daily;
+  /** The cash shop (server/cashShop.ts). */
+  readonly cash: CashShop;
   /** The Thai calendar day last checked, to hand out the new day's reward to everyone online at midnight. */
   private dailyDay = thaiDate(Date.now()).key;
   /** Parties, keyed on character ids (in memory only: a restart ends them). */
@@ -322,6 +329,7 @@ export class GameWorld {
     this.market = new Market(db);
     this.mail = new Mail(db);
     this.daily = new Daily(db);
+    this.cash = new CashShop(db);
     setInterval(() => this.dailyRollover(), DAILY_CHECK_MS);
     this.reports = new Reports(db);
     this.parties = new Parties({
@@ -593,7 +601,7 @@ export class GameWorld {
     const s: Session = {
       ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId, sim, player,
       move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null, recall: false,
-      auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', lastTut: '', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', delta, lastMe: new Map(), seenP: new Map(), seenM: new Map(), outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, saveDue: null,
+      auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', lastTut: '', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', delta, lastMe: new Map(), seenP: new Map(), seenM: new Map(), outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, lastCashAt: -Infinity, saveDue: null,
       ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, deflate: ws.extensions.includes('permessage-deflate'), staff: !acc.guest && ['owner', 'gm'].includes(this.db.adminRole(acc.id) ?? ''), pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity, blockTrades: false,
@@ -613,7 +621,7 @@ export class GameWorld {
     if (!acc.guest) this.friendsJoined(s, accountWasOnline);
     // Back within the grace time (or a takeover): still in the party.
     player.partyId = this.parties.online(charId);
-    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), guest: acc.guest, orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning() });
+    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), guest: acc.guest, orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning(), cash: this.cash.catalog(), cashState: this.cash.state(acc.id, acc.guest) });
     this.broadcastSystem(`${player.name} เข้าสู่โลก`);
     // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
     if (!acc.guest) setTimeout(() => this.sessions.has(s) && (this.marketOnJoin(s), this.dailyCheck(s), this.mailNote(s, true)), MARKET_JOIN_NOTE_MS);
@@ -1005,6 +1013,9 @@ export class GameWorld {
         break;
       case 'megaphone':
         this.megaphone(s, m.text);
+        break;
+      case 'cashBuy':
+        this.cashBuy(s, m);
         break;
       case 'useBuff':
         // Sim.useBuffScroll ignores anything that isn't a buff scroll kind.
@@ -1481,6 +1492,34 @@ export class GameWorld {
   }
 
   /** The orb looks changed (already saved and registered by the admin API): everyone online gets the new list. */
+  /** The cash shop catalogue may have changed (its settings, or a cosmetic's price / hiding / an orb look): everyone gets it again. */
+  cashShopChanged(): void {
+    const cat = this.cash.catalog();
+    for (const s of this.sessions) this.send(s.ws, { t: 'cash', cat });
+  }
+
+  /**
+   * A cash shop purchase (server/cashShop.ts checks and does it). Afterwards every character of the account
+   * gets the new crystals and counts, and the new cosmetic or the mail notice.
+   */
+  private cashBuy(s: Session, m: { req?: unknown; id?: unknown; qty?: unknown; price?: unknown }): void {
+    const req = num(m.req, -1);
+    const now = performance.now();
+    if (now - s.lastCashAt < CASH_BUY_MS) return this.send(s.ws, { t: 'cashBuy', req, ok: false, msg: 'กดเร็วเกินไป ลองอีกครั้ง' });
+    s.lastCashAt = now;
+    const r = this.cash.buy({ accountId: s.accountId, guest: s.guest, charId: s.charId, charName: s.player.name, id: m.id, qty: m.qty, price: m.price });
+    this.send(s.ws, { t: 'cashBuy', req, ok: r.ok, msg: r.msg });
+    if (!r.ok) return;
+    console.log(`[cash] ${s.username} (${s.player.name}) bought ${String(m.id)} ×${String(m.qty)} at ${String(m.price)}`);
+    if (r.kind === 'cos') this.cosmeticsChanged(s.accountId);
+    const state = this.cash.state(s.accountId, false);
+    for (const o of this.sessions) {
+      if (o.accountId !== s.accountId) continue;
+      this.send(o.ws, { t: 'cashState', state });
+      if (r.kind === 'stone') this.mailNote(o);
+    }
+  }
+
   orbItemsChanged(): void {
     const items = [...orbItemsRegistered()];
     for (const s of this.sessions) this.send(s.ws, { t: 'orbItems', items });

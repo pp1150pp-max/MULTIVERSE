@@ -417,6 +417,8 @@ export async function ownerToolsApi(
       log(db, a, 'cos-shop', 'ของแต่งตัว ซ่อน/ราคา', changes.length > 1500 ? changes.slice(0, 1500) + '…' : changes);
       const hidden = cosHiddenIds(c.shop);
       if (hidden.join() !== cosHiddenIds(before).join()) world.cosHiddenChanged(hidden);
+      // Prices and hiding decide what the cash shop sells.
+      world.cashShopChanged();
     }
     send(res, 200, cosShopState(db, a));
     return true;
@@ -441,6 +443,7 @@ export async function ownerToolsApi(
       const changes = orbItemsChanges(before, c.items);
       log(db, a, 'orb-items', 'ลูกแก้วตีบวกในร้านค้า', changes.length > 1500 ? changes.slice(0, 1500) + '…' : changes);
       world.orbItemsChanged();
+      world.cashShopChanged();
     };
     // Changes the hidden / price entry of one piece (the shop settings are a separate setting).
     const setShop = (id: string, entry: { hidden?: true } | null): void => {
@@ -453,6 +456,7 @@ export async function ownerToolsApi(
       db.setCosShop(c);
       const hidden = cosHiddenIds(c);
       if (hidden.join() !== cosHiddenIds(shop).join()) world.cosHiddenChanged(hidden);
+      world.cashShopChanged();
     };
 
     if (body.add !== undefined) {

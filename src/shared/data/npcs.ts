@@ -1,8 +1,8 @@
 // Camp NPCs. Shared so the server can check that a player is standing next to the merchant
 // or blacksmith before it lets them trade.
-export type NpcId = 'seeker' | 'merchant' | 'blacksmith' | 'keeper' | 'broker' | 'stylist';
+export type NpcId = 'seeker' | 'merchant' | 'blacksmith' | 'keeper' | 'broker' | 'stylist' | 'crystal';
 
-export const NPC_IDS: NpcId[] = ['seeker', 'merchant', 'blacksmith', 'keeper', 'broker', 'stylist'];
+export const NPC_IDS: NpcId[] = ['seeker', 'merchant', 'blacksmith', 'keeper', 'broker', 'stylist', 'crystal'];
 
 /** icon + role are the badge floating over each NPC's head, so players can tell them apart. */
 export const NPC_INFO: Record<NpcId, { name: string; action: string; icon: string; role: string }> = {
@@ -13,6 +13,8 @@ export const NPC_INFO: Record<NpcId, { name: string; action: string; icon: strin
   broker: { name: 'นายหน้าตลาด', action: 'เปิดตลาดฝากขาย', icon: 'npc_market', role: 'ตลาดฝากขาย' },
   // Cosmetics shop (src/client/cosmetics.ts). Borrows the merchant's badge icon until its own is painted.
   stylist: { name: 'ช่างแต่งตัว', action: 'เปิดร้านแต่งตัว', icon: 'npc_shop', role: 'ร้านแต่งตัว' },
+  // Cash shop (src/client/cashShop.ts, owner 2026-11-15). Borrows the merchant's badge icon until its own is painted.
+  crystal: { name: 'พ่อค้าคริสตัล', action: 'เปิดแคชช็อป', icon: 'npc_shop', role: 'แคชช็อป' },
 };
 
 /** How close the player must stand to talk to an NPC. */

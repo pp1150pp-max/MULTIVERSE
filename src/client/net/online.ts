@@ -16,6 +16,7 @@ import { applyOrbLook } from '../orbs';
 import { checkCosTuning } from '../../shared/cosTuning';
 import { applyBalance, checkBalance } from '../../shared/balance';
 import { applyCosHidden, applyCosTuning } from '../cosTune';
+import { useCash, useCashState } from '../cashData';
 import { EQUIP_SLOTS } from '../../shared/types';
 import { cleanCosOwned, cosCodes, cosFromCodes, type CosSlot } from '../../shared/data/cosmetics';
 import { zoneById, type SpawnArea, type ZoneDef } from '../../shared/data/zones';
@@ -110,6 +111,8 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
         applyCosHidden(m.cosHidden);
         useOrbItems(m.orbItems);
         useBalance(m.balance);
+        useCash(m.cash);
+        useCashState(m.cashState);
       }
       if (m.t === 'snap' && you >= 0 && !settled) {
         settled = true;
@@ -225,6 +228,8 @@ export class OnlineBackend implements Backend {
   /** Something of yours sold or expired at the market. */
   onMarketNote: ((text: string, sub?: string) => void) | null = null;
   private mailReq = 0;
+  private cashReq = 0;
+  private readonly cashWait = new Map<number, (r: { ok: boolean; msg: string }) => void>();
   private readonly mailWait = new Map<number, (r: MailReply) => void>();
   private reportReq = 0;
   private readonly reportWait = new Map<number, (r: ReportReply) => void>();
@@ -475,6 +480,18 @@ export class OnlineBackend implements Backend {
       case 'orbItems':
         useOrbItems(m.items);
         break;
+      case 'cash':
+        useCash(m.cat);
+        break;
+      case 'cashState':
+        useCashState(m.state);
+        break;
+      case 'cashBuy': {
+        const done = this.cashWait.get(m.req);
+        this.cashWait.delete(m.req);
+        done?.({ ok: m.ok, msg: m.msg });
+        break;
+      }
       case 'orbLook':
         useOrbLook(m.look);
         break;
@@ -983,6 +1000,17 @@ export class OnlineBackend implements Backend {
       this.marketWait.set(req, resolve);
       setTimeout(() => {
         if (this.marketWait.delete(req)) resolve({ ok: false, msg: 'ตลาดไม่ตอบ ลองใหม่อีกครั้ง' });
+      }, 8000);
+    });
+  }
+
+  cashBuy(id: string, qty: number, price: number): Promise<{ ok: boolean; msg: string }> {
+    const req = ++this.cashReq;
+    this.send({ t: 'act', a: 'cashBuy', req, id, qty, price });
+    return new Promise((resolve) => {
+      this.cashWait.set(req, resolve);
+      setTimeout(() => {
+        if (this.cashWait.delete(req)) resolve({ ok: false, msg: 'แคชช็อปไม่ตอบ ลองใหม่อีกครั้ง' });
       }, 8000);
     });
   }

@@ -1358,16 +1358,16 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #cos-win .cos-grid { display: flex; flex-direction: column; gap: 6px; max-height: min(55vh, 420px); overflow-y: auto; }
 #cos-win .cos-card { display: flex; align-items: center; gap: 10px; padding: 6px; border: 1px solid #4a3c28; border-radius: 6px; background: rgba(0, 0, 0, 0.25); }
 #cos-win .cos-card.worn { border-color: var(--gold-hi); }
-#cos-win .cos-pic { width: 72px; height: 48px; flex: none; object-fit: contain; image-rendering: pixelated; }
-#cos-win .cos-pic-title { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-size: 9px; text-shadow: 0 0 2px #000; }
-#cos-win .cos-pic-title .cos-t { color: var(--c1); font-weight: 700; }
-#cos-win .cos-pic-title .cos-n { padding: 0 4px; border: 1px solid var(--c1); border-radius: 3px; background: linear-gradient(var(--c2), #000); color: #fff; }
-#cos-win .cos-pic-title .cos-b { padding: 0 5px; border: 1px solid var(--c1); border-radius: 6px; background: linear-gradient(var(--c2), #111); color: #fff; }
-#cos-win .cos-pic-orb { display: flex; align-items: center; justify-content: center; gap: 6px; }
-#cos-win .cos-pic-orb i { width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff 0 12%, var(--c1) 30%, var(--c2) 100%); box-shadow: 0 0 8px 2px var(--c3); }
-#cos-win .cos-pic-orb.crystal i { border-radius: 2px; transform: rotate(45deg) scale(0.85); }
-#cos-win .cos-pic-orb.star i { clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); box-shadow: none; }
-#cos-win .cos-pic-orb.flame i { border-radius: 50% 50% 50% 50% / 70% 70% 30% 30%; }
+:is(#cos-win, #cash-win) .cos-pic { width: 72px; height: 48px; flex: none; object-fit: contain; image-rendering: pixelated; }
+:is(#cos-win, #cash-win) .cos-pic-title { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-size: 9px; text-shadow: 0 0 2px #000; }
+:is(#cos-win, #cash-win) .cos-pic-title .cos-t { color: var(--c1); font-weight: 700; }
+:is(#cos-win, #cash-win) .cos-pic-title .cos-n { padding: 0 4px; border: 1px solid var(--c1); border-radius: 3px; background: linear-gradient(var(--c2), #000); color: #fff; }
+:is(#cos-win, #cash-win) .cos-pic-title .cos-b { padding: 0 5px; border: 1px solid var(--c1); border-radius: 6px; background: linear-gradient(var(--c2), #111); color: #fff; }
+:is(#cos-win, #cash-win) .cos-pic-orb { display: flex; align-items: center; justify-content: center; gap: 6px; }
+:is(#cos-win, #cash-win) .cos-pic-orb i { width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff 0 12%, var(--c1) 30%, var(--c2) 100%); box-shadow: 0 0 8px 2px var(--c3); }
+:is(#cos-win, #cash-win) .cos-pic-orb.crystal i { border-radius: 2px; transform: rotate(45deg) scale(0.85); }
+:is(#cos-win, #cash-win) .cos-pic-orb.star i { clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); box-shadow: none; }
+:is(#cos-win, #cash-win) .cos-pic-orb.flame i { border-radius: 50% 50% 50% 50% / 70% 70% 30% 30%; }
 #cos-win .cos-info { flex: 1; min-width: 0; }
 #cos-win .cos-name { color: var(--gold-hi); font-weight: 600; }
 #cos-win .cos-desc { font-size: 12px; color: var(--ink-dim); }
@@ -1375,6 +1375,65 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #cos-win .cos-tags .tag.on { color: #5dff8a; border-color: #2a8a4a; }
 #cos-win .cos-btns { display: flex; flex-direction: column; gap: 4px; flex: none; }
 #cos-win .cos-btns button { font-size: 12px; padding: 3px 10px; }
+
+/* Cash shop (src/client/cashShop.ts): gold cards with a price bar, a corner badge, the crystal mark. */
+.cry-ico { display: inline-block; width: 12px; height: 15px; margin-right: 3px; vertical-align: -2px; clip-path: polygon(50% 0, 100% 28%, 100% 72%, 50% 100%, 0 72%, 0 28%); background: linear-gradient(160deg, #b8f4ff 0%, #5ad0ff 35%, #8a5aff 70%, #4a2a9a 100%); }
+.sys-ico .ico-glyph .cry-ico { width: 1.1em; height: 1.4em; margin: 0; vertical-align: middle; }
+#cash-win { left: 50%; top: 60px; transform: translateX(-50%); width: min(760px, 96vw); font-size: 13px; }
+#cash-win .panel-head { display: flex; align-items: center; justify-content: space-between; }
+#cash-win .cash-head-right { display: flex; align-items: center; gap: 6px; }
+#cash-win .cash-balance { display: inline-flex; align-items: center; padding: 2px 10px; border: 1px solid #5a4ab0; border-radius: 10px; background: rgba(20, 16, 40, 0.8); color: #dfe8ff; }
+#cash-win .cash-plus { padding: 0 8px; font-weight: 700; }
+#cash-win .cash-banner { margin: 0 0 8px; padding: 4px 8px; border: 1px solid #8a6a2a; border-radius: 4px; background: rgba(90, 64, 16, 0.35); color: #ffd98a; text-align: center; font-size: 12px; }
+#cash-win .cash-banner.hidden, #cash-win .cash-side.hidden, #cash-win .cash-modal.hidden, #cash-win .cash-tip.hidden { display: none; }
+#cash-win .cash-body { display: flex; gap: 10px; min-height: 0; }
+#cash-win .cash-side { display: flex; flex-direction: column; gap: 4px; flex: none; width: 112px; }
+#cash-win .cash-side button { font-size: 12px; padding: 5px 6px; text-align: left; }
+#cash-win .cash-side button.on { color: var(--gold-hi); border-color: var(--gold-hi); background: rgba(120, 90, 30, 0.35); }
+#cash-win .cash-grid { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; align-content: start; max-height: min(60vh, 460px); overflow-y: auto; overscroll-behavior: contain; }
+#cash-win .cash-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px 0; border: 1px solid #b8862a; border-radius: 6px; background: linear-gradient(#5a4320, #2e2210); cursor: pointer; overflow: hidden; }
+#cash-win .cash-card:hover { border-color: var(--gold-hi); }
+#cash-win .cash-card .cos-pic, #cash-win .cash-stone { width: 72px; height: 56px; }
+#cash-win .cash-stone { display: flex; align-items: center; justify-content: center; }
+#cash-win .cash-stone img { width: 44px; height: 44px; image-rendering: pixelated; }
+#cash-win .cash-stone.big img { width: 64px; height: 64px; }
+#cash-win .cash-name { color: var(--gold-hi); font-weight: 600; text-align: center; }
+#cash-win .cash-lim, #cash-win .cash-time { font-size: 11px; color: var(--ink-dim); text-align: center; }
+#cash-win .cash-lim.own { color: #5dff8a; }
+#cash-win .cash-time { color: #ffb08a; }
+#cash-win .cash-price { align-self: stretch; margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 2px; padding: 4px 0; background: linear-gradient(#e0aa3e, #a87418); color: #2a1a06; }
+#cash-win .cash-price s { color: #6a4a1a; font-size: 11px; margin-right: 4px; }
+#cash-win .cash-card .cash-price { margin-top: 6px; }
+#cash-win .cash-badge { position: absolute; top: 4px; left: 4px; padding: 0 5px; border-radius: 3px; font-size: 10px; font-weight: 700; color: #fff; z-index: 1; }
+#cash-win .cash-badge.new { background: #2a9a5a; }
+#cash-win .cash-badge.hot { background: #c0402a; }
+#cash-win .cash-badge.sale { background: #8a3ad0; }
+#cash-win .cash-empty { grid-column: 1 / -1; padding: 16px; text-align: center; color: var(--ink-dim); }
+#cash-win .cash-tip { position: absolute; z-index: 5; max-width: 220px; padding: 6px 8px; border: 1px solid var(--gold); border-radius: 4px; background: rgba(16, 12, 8, 0.95); font-size: 12px; pointer-events: none; }
+#cash-win .cash-tip div + div { color: var(--ink-dim); margin-top: 2px; }
+#cash-win .cash-modal { position: absolute; inset: 0; z-index: 6; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.55); }
+#cash-win .cash-dialog { width: min(360px, 92%); display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--gold); border-radius: 6px; background: #1c150c; }
+#cash-win .cash-dialog-top { display: flex; gap: 10px; align-items: center; }
+#cash-win .cash-dialog-top .cos-pic { width: 96px; height: 72px; }
+#cash-win .cash-dialog-info { flex: 1; min-width: 0; }
+#cash-win .cash-dialog-info .cash-name { text-align: left; }
+#cash-win .cash-desc, #cash-win .cash-note { font-size: 12px; color: var(--ink-dim); }
+#cash-win .cash-dialog-row { display: flex; align-items: center; gap: 8px; }
+#cash-win .cash-dialog-row button.on { color: var(--gold-hi); border-color: var(--gold-hi); }
+#cash-win .cash-total { display: flex; align-items: center; gap: 8px; }
+#cash-win .cash-total .cash-price { flex: 1; margin: 0; border-radius: 4px; }
+#cash-win .cash-msg { font-size: 12px; color: #ffcf6a; }
+#cash-win .cash-msg.ok { color: #7ae8ff; }
+#cash-win .cash-dialog-btns { display: flex; gap: 8px; justify-content: flex-end; }
+#cash-win .cash-packs { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 6px; }
+#cash-win .cash-pack { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px; border: 1px solid #5a4ab0; border-radius: 6px; background: rgba(30, 24, 60, 0.6); }
+#cash-win .cash-pack-bonus { font-size: 11px; color: #5dff8a; }
+#cash-win .cash-pack-baht { font-size: 12px; color: var(--gold-hi); }
+@media (max-width: 560px) {
+  #cash-win .cash-body { flex-direction: column; }
+  #cash-win .cash-side { flex-direction: row; flex-wrap: wrap; width: auto; }
+  #cash-win .cash-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
+}
 #mount-btn { position: absolute; left: 50%; bottom: 128px; transform: translateX(-50%); padding: 4px 12px; font-size: 13px; }
 #mount-btn.on { color: var(--gold-hi); border-color: var(--gold-hi); }
 

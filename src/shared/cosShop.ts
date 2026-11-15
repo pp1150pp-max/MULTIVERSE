@@ -1,8 +1,8 @@
 // Per-cosmetic shop settings the owner sets in the /admin "จัดการของแต่งตัว" tab (owner 2026-11-13):
 // - hidden: not in the in-game "แต่งตัว" window and can't be put on again. Whoever wears it keeps it
 //   (and others still see it); it shows under "ของฉัน" only while worn, so it can be taken off.
-// - price in diamonds (เพชร): stored and shown in /admin only. There is no diamond currency and no buying
-//   yet; a later shop reads `cosPrice`. Players are never sent prices.
+// - price in crystals (คริสตัลมิติ, the cash shop currency, owner 2026-11-15; first called diamonds): what the
+//   cash shop (src/shared/cashShop.ts) sells the piece for. Unpriced pieces are not sold.
 //
 // Saved as overrides only (settings key `cos_shop`, cosmetic id → what differs from the code), like
 // cos_tuning: the code default is "shown, no price", so an old database with nothing saved shows every
@@ -12,7 +12,7 @@ import { COSMETICS, cosById } from './data/cosmetics';
 export interface CosShopEntry {
   /** Hidden from the cosmetics window (absent = shown). */
   hidden?: true;
-  /** Price in diamonds, a whole number COS_PRICE_MIN–COS_PRICE_MAX (absent = no price set). */
+  /** Price in crystals, a whole number COS_PRICE_MIN–COS_PRICE_MAX (absent = no price set). */
   price?: number;
 }
 
@@ -22,7 +22,7 @@ export type CosShop = Record<string, CosShopEntry>;
 /** Key in the server's settings table. */
 export const COS_SHOP_SETTING = 'cos_shop';
 
-/** Owner 2026-11-13: a whole number of diamonds 1–1,000,000; no price = not set (there is no "0 = free"). */
+/** Owner 2026-11-13: a whole number of crystals 1–1,000,000; no price = not set (there is no "0 = free"). */
 export const COS_PRICE_MIN = 1;
 export const COS_PRICE_MAX = 1_000_000;
 
@@ -60,7 +60,7 @@ export function checkCosShop(v: unknown, strict: boolean): { shop: CosShop; erro
     if (g.price !== undefined && g.price !== null) {
       const p = g.price;
       if (typeof p !== 'number' || !Number.isInteger(p) || p < COS_PRICE_MIN || p > COS_PRICE_MAX) {
-        if (strict) return { error: `${c.id}: ราคาต้องเป็นจำนวนเต็ม ${COS_PRICE_MIN}–${COS_PRICE_MAX.toLocaleString('en-US')} เพชร` };
+        if (strict) return { error: `${c.id}: ราคาต้องเป็นจำนวนเต็ม ${COS_PRICE_MIN}–${COS_PRICE_MAX.toLocaleString('en-US')} คริสตัลมิติ` };
       } else e.price = p;
     }
     if (e.hidden || e.price !== undefined) out[c.id] = e;
@@ -78,7 +78,7 @@ export function cosHiddenIds(shop: CosShop): string[] {
   return COSMETICS.filter((c) => shop[c.id]?.hidden).map((c) => c.id);
 }
 
-/** A cosmetic's price in diamonds, or undefined when none is set. For the shop to come. */
+/** A cosmetic's price in crystals, or undefined when none is set (not sold). */
 export function cosPrice(shop: CosShop, id: string): number | undefined {
   return shop[id]?.price;
 }
@@ -91,7 +91,7 @@ export function mayPutOnCos(id: string, wornInSlot: string | undefined, hidden: 
   return wornInSlot === id || !hidden.has(id);
 }
 
-/** Short text of what differs, for the audit log (e.g. "wings_bat: ซ่อน, pet_cat: ราคา — → 500 เพชร"). */
+/** Short text of what differs, for the audit log (e.g. "wings_bat: ซ่อน, pet_cat: ราคา — → 500 คริสตัลมิติ"). */
 export function cosShopChanges(before: CosShop, after: CosShop): string {
   const out: string[] = [];
   const price = (n: number | undefined) => (n === undefined ? '—' : `${n}`);
@@ -100,7 +100,7 @@ export function cosShopChanges(before: CosShop, after: CosShop): string {
     const b = after[c.id] ?? {};
     const parts: string[] = [];
     if (!!a.hidden !== !!b.hidden) parts.push(b.hidden ? 'ซ่อน' : 'แสดง');
-    if (a.price !== b.price) parts.push(`ราคา ${price(a.price)} → ${price(b.price)} เพชร`);
+    if (a.price !== b.price) parts.push(`ราคา ${price(a.price)} → ${price(b.price)} คริสตัลมิติ`);
     if (parts.length) out.push(`${c.id}: ${parts.join(' ')}`);
   }
   return out.join(', ');

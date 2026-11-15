@@ -259,6 +259,8 @@ export class Terrain {
     this.npcPos.keeper = { x: s.x - 5.8, z: s.z };
     // The stylist (cosmetics): beside the keeper, between the vault and the road to the left gate.
     this.npcPos.stylist = deg(202.5, 7.2);
+    // The crystal merchant (cash shop, owner 2026-11-15: beside the stylist): the stylist's mirror on the keeper's other side.
+    this.npcPos.crystal = deg(157.5, 7.2);
     at('town_vault', -8.8, 0, 3.2, 1.3);
 
     // Broken pillars either side of the roads (none at 22.5°, where the market booth stands), fallen houses and towers further out, two old trees.
