@@ -5,7 +5,6 @@
 // freeze. Each effect's recipe is below (keyed by the effect's name, as in the doc's tables); the server-wide
 // multipliers are on /admin (fxLayerTuning.ts). An effect with no recipe plays as before.
 import * as THREE from 'three';
-import { fxTex } from './assets';
 import { currentBalance } from '../shared/balance';
 import type { SkillEffect } from '../shared/sim/types';
 
@@ -181,9 +180,56 @@ const envelope = (k: number): number => (k < 0.15 ? k / 0.15 : (1 - (k - 0.15) /
 /** The on-screen angle of a world direction under the isometric camera (same as effects.ts). */
 const screenAngle = (dx: number, dz: number) => Math.atan2(-dx - dz, dx - dz);
 
+let softTex: THREE.Texture | null = null;
+/**
+ * A round light that fades smoothly to nothing at its rim (owner 2026-11-15: the stepped pixel glow looked like a flat
+ * pale disc on bright ground, e.g. snow).
+ */
+function soft(): THREE.Texture {
+  if (softTex) return softTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.25, 'rgba(255,255,255,0.7)');
+  grad.addColorStop(0.6, 'rgba(255,255,255,0.2)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  softTex = new THREE.CanvasTexture(c);
+  return softTex;
+}
+
+let columnTex: THREE.Texture | null = null;
+/** A column of light: bright at the bottom fading upward, soft at both sides (the height of an area effect). */
+function column(): THREE.Texture {
+  if (columnTex) return columnTex;
+  const c = document.createElement('canvas');
+  c.width = 32;
+  c.height = 128;
+  const g = c.getContext('2d')!;
+  const up = g.createLinearGradient(0, 128, 0, 0);
+  up.addColorStop(0, 'rgba(255,255,255,1)');
+  up.addColorStop(0.35, 'rgba(255,255,255,0.45)');
+  up.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = up;
+  g.fillRect(0, 0, 32, 128);
+  // Fade the sides: keep only the middle.
+  g.globalCompositeOperation = 'destination-in';
+  const side = g.createLinearGradient(0, 0, 32, 0);
+  side.addColorStop(0, 'rgba(0,0,0,0)');
+  side.addColorStop(0.5, 'rgba(0,0,0,1)');
+  side.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = side;
+  g.fillRect(0, 0, 32, 128);
+  columnTex = new THREE.CanvasTexture(c);
+  return columnTex;
+}
+
 function glowSprite(color: string, sx: number, sy = sx, additive = true): THREE.Sprite {
   const s = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: fxTex.glow, color, transparent: true, depthWrite: false, opacity: 0,
+    map: soft(), color, transparent: true, depthWrite: false, opacity: 0,
     blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
   }));
   s.scale.set(sx, sy, 1);
@@ -203,9 +249,10 @@ export function playLayer(
   if (!r || !cfg.enabled) return;
   const tail = life * TAIL;
 
-  // Glow around the frames.
+  // Glow around the frames. Art lying on the ground gets none: a camera-facing glow over a whole area read as a big
+  // flat pale disc (owner 2026-11-15); it gets the ground light and a column of light below instead.
   const glow = r.glow * cfg.glow;
-  if (glow > 0) {
+  if (glow > 0 && y > 0.1) {
     const s = glowSprite(r.color, size * 2.4);
     s.position.set(x, Math.max(y, 0.5), z);
     const m = s.material;
@@ -215,18 +262,38 @@ export function playLayer(
     });
   }
 
-  // Light on the ground.
+  // Light on the ground: soft, fading to nothing at the rim, smaller and fainter than the art so it reads as light
+  // on the ground, not as a disc.
   const ground = r.ground * cfg.ground;
   if (ground > 0) {
     const m = new THREE.MeshBasicMaterial({
-      map: fxTex.glow, color: r.color, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending,
+      map: soft(), color: r.color, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending,
     });
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), m);
     mesh.position.set(x, 0.04, z);
-    mesh.scale.setScalar(size * ground);
+    mesh.scale.setScalar(size * ground * 0.8);
     host.add(mesh, tail, (k) => {
-      m.opacity = 0.7 * envelope(k);
+      m.opacity = 0.4 * envelope(k);
     });
+  }
+
+  // Height for art lying on the ground (owner 2026-11-15: area skills looked flat, stuck on the floor): a column of
+  // light rising from it and motes floating up out of the whole area.
+  if (y <= 0.1 && glow > 0) {
+    const h = Math.min(4, 1.2 + size * 0.9);
+    const col = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: column(), color: r.color, transparent: true, depthWrite: false, opacity: 0, blending: THREE.AdditiveBlending,
+    }));
+    col.center.set(0.5, 0);
+    col.position.set(x, 0, z);
+    col.scale.set(Math.min(3, size * 1.2), h, 1);
+    const cm = col.material;
+    host.add(col, tail, (k) => {
+      cm.opacity = Math.min(0.8, 0.45 * glow) * envelope(k);
+      col.scale.y = h * (0.7 + 0.3 * Math.min(1, k * 4));
+    });
+    const motes = Math.round(Math.min(10, 2 + size * 1.5) * cfg.particles);
+    for (let i = 0; i < motes; i++) mote(host, r.color, x, z, size);
   }
 
   // A pop of size: 125 % at once, settling back over the first quarter.
@@ -249,6 +316,23 @@ export function playLayer(
     const stop = Math.min(HITSTOP_MAX, (r.heavy * cfg.hitstopMs) / 1000);
     if (stop > 0) hooks.hitstop(stop);
   }
+}
+
+/** A small light rising out of an area effect, from anywhere inside it. */
+function mote(host: FxLayerHost, color: string, x: number, z: number, size: number): void {
+  const a = Math.random() * Math.PI * 2;
+  const d = Math.sqrt(Math.random()) * size * 0.85;
+  const s = glowSprite(color, 0.22);
+  s.position.set(x + Math.cos(a) * d, 0.1, z + Math.sin(a) * d);
+  const rise = 1.6 + Math.random() * 1.6;
+  const m = s.material;
+  const delay = Math.random() * 0.3;
+  host.add(s, 0.9 + delay, (k, dt) => {
+    const t = k * (0.9 + delay);
+    if (t < delay) return;
+    s.position.y += rise * dt;
+    m.opacity = 0.9 * Math.sin(Math.PI * Math.min(1, (t - delay) / 0.9));
+  });
 }
 
 /** One particle of a kind, starting around the effect and moving every frame. */
