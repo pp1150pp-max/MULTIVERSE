@@ -74,6 +74,8 @@ export class CashShopUI {
   private readonly grid: HTMLElement;
   private readonly tip: HTMLElement;
   private readonly modal: HTMLElement;
+  /** Shown instead of the window while trying a cosmetic on, so the character can be seen. */
+  private readonly peekBar: HTMLElement;
   private tab: Tab = 'featured';
   private sub: Record<'cos' | 'use', string> = { cos: 'wings', use: 'scroll' };
   private drawn = '';
@@ -88,8 +90,10 @@ export class CashShopUI {
     const head = el('div', 'panel-head');
     this.balance = el('span', 'cash-balance');
     const right = el('span', 'cash-head-right');
-    right.append(this.balance, button('+', () => this.showPackages(true), 'cash-plus'), button('✕', () => this.toggle(false)));
-    head.append(el('span', '', 'แคชช็อป'), right);
+    const plus = button('+', () => this.showPackages(true), 'cash-plus');
+    plus.title = `เติม${CURRENCY}`;
+    right.append(this.balance, plus);
+    head.append(el('span', '', 'แคชช็อป'), right, button('✕', () => this.toggle(false)));
     this.tabsEl = el('div', 'ui-tabs');
     this.banner = el('div', 'cash-banner', 'ร้านยังไม่เปิดขาย ดูสินค้าได้อย่างเดียว');
     const body = el('div', 'cash-body');
@@ -103,6 +107,27 @@ export class CashShopUI {
     });
     this.win.append(head, this.tabsEl, this.banner, body, this.tip, this.modal);
     document.getElementById('hud')!.append(this.win);
+    this.peekBar = el('div', 'hidden');
+    this.peekBar.id = 'cash-peek';
+    document.getElementById('hud')!.append(this.peekBar);
+  }
+
+  /** Hides the window and shows the try-on bar (`name` = what is tried on), or the other way round (null). */
+  private setPeek(name: string | null): void {
+    this.win.classList.toggle('peek', !!name);
+    this.peekBar.classList.toggle('hidden', !name);
+    if (!name) return;
+    this.peekBar.replaceChildren(
+      el('span', '', `กำลังลองสวม ${name} (เห็นแค่คุณ)`),
+      button('กลับไปที่ร้าน', () => this.setPeek(null), 'primary'),
+      button('ถอดที่ลอง', () => {
+        this.trying = false;
+        setTryOn(null);
+        this.setPeek(null);
+        this.drawn = '';
+        this.update();
+      }),
+    );
   }
 
   get open(): boolean {
@@ -112,6 +137,7 @@ export class CashShopUI {
   toggle(force?: boolean): void {
     const show = force ?? !this.open;
     this.win.classList.toggle('hidden', !show);
+    this.setPeek(null);
     if (!show) this.closeModal();
     this.drawn = '';
     this.update();
@@ -226,6 +252,7 @@ export class CashShopUI {
       this.trying = false;
       setTryOn(null);
     }
+    this.setPeek(null);
     this.modal.classList.add('hidden');
   }
 
@@ -266,6 +293,8 @@ export class CashShopUI {
       row.append(button(this.trying ? 'ถอดที่ลอง' : 'ลองสวม', () => {
         this.trying = !this.trying;
         setTryOn(this.trying ? { [c.slot]: c.id } : null);
+        // The window covers the character: step aside while trying on (the bar brings it back).
+        if (this.trying) this.setPeek(c.name);
         this.drawn = '';
         this.update();
       }, this.trying ? 'on' : ''));

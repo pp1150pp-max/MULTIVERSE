@@ -1380,13 +1380,13 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 .cry-ico { display: inline-block; width: 12px; height: 15px; margin-right: 3px; vertical-align: -2px; clip-path: polygon(50% 0, 100% 28%, 100% 72%, 50% 100%, 0 72%, 0 28%); background: linear-gradient(160deg, #b8f4ff 0%, #5ad0ff 35%, #8a5aff 70%, #4a2a9a 100%); }
 .sys-ico .ico-glyph .cry-ico { width: 1.1em; height: 1.4em; margin: 0; vertical-align: middle; }
 #cash-win { left: 50%; top: 60px; transform: translateX(-50%); width: min(760px, 96vw); font-size: 13px; }
-#cash-win .panel-head { display: flex; align-items: center; justify-content: space-between; }
-#cash-win .cash-head-right { display: flex; align-items: center; gap: 6px; }
+#cash-win .cash-head-right { position: absolute; right: 22px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 6px; font-family: 'Kanit', sans-serif; font-weight: 400; }
+.sys-ico .ico-glyph:has(.cry-ico) { filter: none; }
 #cash-win .cash-balance { display: inline-flex; align-items: center; padding: 2px 10px; border: 1px solid #5a4ab0; border-radius: 10px; background: rgba(20, 16, 40, 0.8); color: #dfe8ff; }
-#cash-win .cash-plus { padding: 0 8px; font-weight: 700; }
+#cash-win .panel-head .cash-plus, #cash-win .panel-head .cash-plus:hover { position: static; transform: none; width: 22px; height: 22px; font-size: 15px; line-height: 1; border: 1px solid #8a7aff; border-radius: 50%; background: linear-gradient(#6a5ad0, #2e2470); color: #fff; }
 #cash-win .cash-banner { margin: 0 0 8px; padding: 4px 8px; border: 1px solid #8a6a2a; border-radius: 4px; background: rgba(90, 64, 16, 0.35); color: #ffd98a; text-align: center; font-size: 12px; }
 #cash-win .cash-banner.hidden, #cash-win .cash-side.hidden, #cash-win .cash-modal.hidden, #cash-win .cash-tip.hidden { display: none; }
-#cash-win .cash-body { display: flex; gap: 10px; min-height: 0; }
+#cash-win .cash-body { display: flex; gap: 10px; min-height: min(52vh, 360px); }
 #cash-win .cash-side { display: flex; flex-direction: column; gap: 4px; flex: none; width: 112px; }
 #cash-win .cash-side button { font-size: 12px; padding: 5px 6px; text-align: left; }
 #cash-win .cash-side button.on { color: var(--gold-hi); border-color: var(--gold-hi); background: rgba(120, 90, 30, 0.35); }
@@ -1427,6 +1427,9 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #cash-win .cash-dialog-btns { display: flex; gap: 8px; justify-content: flex-end; }
 #cash-win .cash-packs { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 6px; }
 #cash-win .cash-pack { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px; border: 1px solid #5a4ab0; border-radius: 6px; background: rgba(30, 24, 60, 0.6); }
+#cash-win.peek { display: none; }
+#cash-peek { position: absolute; left: 50%; bottom: 140px; transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--gold); border-radius: 6px; background: rgba(16, 12, 8, 0.92); font-size: 13px; pointer-events: auto; }
+#cash-peek.hidden { display: none; }
 #cash-win .cash-pack-bonus { font-size: 11px; color: #5dff8a; }
 #cash-win .cash-pack-baht { font-size: 12px; color: var(--gold-hi); }
 @media (max-width: 560px) {
