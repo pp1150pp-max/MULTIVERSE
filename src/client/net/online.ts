@@ -639,6 +639,7 @@ export class OnlineBackend implements Backend {
       m.windupT = ms.wind ? 1 : 0;
       m.enraged = ms.enr;
       m.lift = ms.y;
+      m.debuffs = ms.db ?? 0;
     }
     for (const [id, m] of this.monsterMap) {
       if (!seenM.has(id)) {

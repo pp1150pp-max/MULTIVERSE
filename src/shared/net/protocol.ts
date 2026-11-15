@@ -240,6 +240,8 @@ export interface MonsterSnap {
   st: 'idle' | 'chase' | 'return' | 'charge' | 'leap'; wind: boolean; enr: boolean;
   /** Height above the ground while jumping. */
   y: number;
+  /** Its debuffs as bits (sim/debuffs.ts), left out when none. */
+  db?: number;
 }
 
 export interface ProjectileSnap { id: number; x: number; z: number; vx: number; vz: number; color: string; size: number; art?: 'ice_shard' | 'snowball' | 'ember_bolt' }

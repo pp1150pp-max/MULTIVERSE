@@ -99,6 +99,8 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 
 .plate { text-align: center; font-size: 11px; text-shadow: 0 0 3px #000; }
 .plate .pname { color: #f2e6c8; margin-bottom: 2px; }
+.plate .pdebuffs { display: flex; justify-content: center; gap: 2px; margin-bottom: 2px; min-height: 0; }
+.plate .pdebuffs img { width: 16px; height: 16px; image-rendering: pixelated; }
 .plate.hostile .pname { color: #ff9a8a; }
 .plate .pbar { width: 54px; height: 5px; margin: 0 auto; background: #200; border: 1px solid #000; }
 .plate .pfill { height: 100%; background: #e04040; }

@@ -1,5 +1,6 @@
 // Sprites for simulation entities. Each view reads its entity every frame; the simulation never
 // touches Three.js, so the same entities can come from a local Sim or (later) the server.
+import { DebuffFx } from './debuffFx';
 import * as THREE from 'three';
 import type { Player } from '../shared/sim/Player';
 import type { Monster } from '../shared/sim/Monster';
@@ -280,16 +281,20 @@ export class PlayerView {
 
 export class MonsterView {
   readonly actor: SpriteActor;
+  /** Its debuffs' effects on the body (debuffFx.ts). */
+  private readonly debuffFx: DebuffFx;
 
   constructor(readonly m: Monster, private readonly scene: THREE.Scene) {
     this.actor = new SpriteActor(sheets[m.def.id], m.def.height, m.def.radius * 1.1);
+    this.debuffFx = new DebuffFx(this.actor.group);
     this.actor.face(m.faceX, m.faceZ);
     scene.add(this.actor.group);
-    this.update(0);
+    this.update(0, null);
   }
 
-  update(dt: number): void {
+  update(dt: number, fx: Effects | null): void {
     const m = this.m;
+    if (fx) this.debuffFx.update(dt, m, fx);
     const g = this.actor.group;
     g.position.x = m.x;
     g.position.z = m.z;
@@ -304,6 +309,7 @@ export class MonsterView {
   }
 
   dispose(): void {
+    this.debuffFx.dispose();
     this.scene.remove(this.actor.group);
     this.actor.dispose();
   }
