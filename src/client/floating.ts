@@ -7,6 +7,7 @@ import { itemName } from '../shared/data/enhance';
 import { expGapMult } from '../shared/formulas';
 import { iconImg } from './icons';
 import { imgUrl } from './img';
+import { fxConfig } from './fxLayer';
 import { questRows, seekerMark } from '../shared/quests';
 import { gearRows } from '../shared/gearQuests';
 import { tutMark, tutRows } from '../shared/tutorial';
@@ -119,7 +120,8 @@ export class Floating {
       height: !drawn ? 0 : cls === 'crit' ? 38 : 26,
       dx: drawn ? side * (8 + Math.random() * 14) : 0,
       dy: drawn ? Math.min(below, MAX_STACK) : cls === 'exp' ? -30 : 0,
-      pop: !drawn ? 0 : cls === 'crit' ? 0.8 : 0.3,
+      // Skill effect extra layer: critical numbers pop bigger (×critPop of the old pop).
+      pop: !drawn ? 0 : cls === 'crit' ? 0.8 * (fxConfig().on ? fxConfig().critPop : 1) : 0.3,
     });
     if (this.nums.length > MAX_NUMS) this.nums.shift()!.el.remove();
   }

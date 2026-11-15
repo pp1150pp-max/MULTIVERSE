@@ -47,7 +47,8 @@ export interface Actor {
   readonly height: number;
   face(dx: number, dz: number): void;
   update(dt: number, moving: boolean, fps?: number): void;
-  flash(): void;
+  /** Hit flash: red tint, or white (skill effect extra layer). */
+  flash(white?: boolean): void;
   setOpacity(o: number): void;
   /** One-shot animation; returns false when the actor has no such animation. */
   play(name: string, opts?: PlayOpts): boolean;
@@ -94,6 +95,7 @@ export class AnimatedActor implements Actor {
   private sx = 0;
   private sy = -1;
   private flashT = 0;
+  private flashWhite = false;
   private moving = false;
   private aimT = 0;
   /** A riding pose shown instead of idle / run while on a mount (see setRide). */
@@ -202,7 +204,9 @@ export class AnimatedActor implements Actor {
     if (this.flashT > 0) {
       this.flashT -= dt;
       const k = Math.max(0, this.flashT) / 0.15;
-      this.mat.color.setRGB(1, 1 - 0.65 * k, 1 - 0.65 * k);
+      // White: colours above 1 push the art toward white (the extra layer's hit flash); else the old red tint.
+      if (this.flashWhite) this.mat.color.setScalar(1 + 3 * k);
+      else this.mat.color.setRGB(1, 1 - 0.65 * k, 1 - 0.65 * k);
     }
   }
 
@@ -238,7 +242,8 @@ export class AnimatedActor implements Actor {
     }
   }
 
-  flash(): void {
+  flash(white = false): void {
+    this.flashWhite = white;
     this.flashT = 0.15;
   }
 

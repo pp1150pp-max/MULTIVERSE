@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { fxSheets, fxTex, type FxSheet } from './assets';
 import type { FxApi, SkillEffect } from '../shared/sim/types';
+import type { FxConfig } from '../shared/fxTuning';
+import { fxConfig, recipeOf, type FxRecipe, type HitFeel, type SparkKind } from './fxLayer';
+import { isTouchMode } from './touch/device';
 
 const FRAMES = 6;
 const SHEET_ROWS: Record<FxSheet, number> = {
@@ -202,6 +205,7 @@ interface Fx {
   t: number;
   life: number;
   tick?: (k: number, dt: number) => void;
+  end?: () => void;
 }
 
 const flat = (geo: THREE.BufferGeometry) => geo.rotateX(-Math.PI / 2);
@@ -219,14 +223,24 @@ function disposeObj(obj: THREE.Object3D): void {
   });
 }
 
+/** Most extra-layer particles alive at once (cheap on phones). */
+const maxParticles = (): number => (isTouchMode() ? 40 : 90);
+
+/** The extra layer's pop: comes in a little small, overshoots, settles (k = 0..1 of the effect's life). */
+function popScale(k: number): number {
+  if (k < 0.12) return 0.75 + (1.15 - 0.75) * (k / 0.12);
+  if (k < 0.3) return 1.15 - 0.15 * ((k - 0.12) / 0.18);
+  return 1;
+}
+
 export class Effects implements FxApi {
   private list: Fx[] = [];
 
   constructor(private readonly scene: THREE.Scene) {}
 
-  add(obj: THREE.Object3D, life: number, tick?: (k: number, dt: number) => void): void {
+  add(obj: THREE.Object3D, life: number, tick?: (k: number, dt: number) => void, end?: () => void): void {
     this.scene.add(obj);
-    this.list.push({ obj, t: 0, life, tick });
+    this.list.push({ obj, t: 0, life, tick, end });
   }
 
   update(dt: number): void {
@@ -237,6 +251,7 @@ export class Effects implements FxApi {
       if (fx.t >= fx.life) {
         this.scene.remove(fx.obj);
         disposeObj(fx.obj);
+        fx.end?.();
         this.list.splice(i, 1);
       }
     }
@@ -270,23 +285,158 @@ export class Effects implements FxApi {
       this.ring(x, z, size, '#ffe6a0');
       return;
     }
+    const r = recipeOf(name);
+    const cfg = fxConfig();
     showFrame(tex, def.sheet, def.row, 0);
-    const play = (k: number) => showFrame(tex, def.sheet, def.row, Math.min(FRAMES - 1, Math.floor(k * FRAMES)));
+    const show = (k: number) => showFrame(tex, def.sheet, def.row, Math.min(FRAMES - 1, Math.floor(k * FRAMES)));
+    // Extra layer: a glowing copy of the same frames (it shares the texture, so it animates with the art).
+    const halo = r && r.glow > 0 && cfg.glow > 0 ? r.glow * cfg.glow : 0;
+    const haloOp = Math.min(1, 0.55 * halo);
+    const pop = !!r?.pop;
     if (def.height === 'ground') {
-      const mesh = this.decal(new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.5, depthWrite: false, side: THREE.DoubleSide, color: def.tint ?? '#ffffff' }));
-      mesh.position.set(x, 0.09, z);
-      mesh.rotation.y = -angle;
-      mesh.scale.setScalar(size);
-      this.add(mesh, def.life, play);
+      const g = new THREE.Group();
+      g.add(this.decal(new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.5, depthWrite: false, side: THREE.DoubleSide, color: def.tint ?? '#ffffff' })));
+      let hm: THREE.MeshBasicMaterial | null = null;
+      if (halo) {
+        hm = new THREE.MeshBasicMaterial({ map: tex, color: r!.color, transparent: true, opacity: haloOp, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+        const h = this.decal(hm);
+        h.scale.setScalar(1.12);
+        h.position.y = 0.005;
+        g.add(h);
+      }
+      g.position.set(x, 0.09, z);
+      g.rotation.y = -angle;
+      g.scale.setScalar(size);
+      this.add(g, def.life, (k) => {
+        show(k);
+        if (pop) g.scale.setScalar(size * popScale(k));
+        if (hm) hm.opacity = haloOp * (1 - k * k);
+      });
     } else {
       const rotation = def.upright ? 0 : screenAngle(Math.cos(angle), Math.sin(angle));
-      const mat = new THREE.SpriteMaterial({ map: tex, alphaTest: 0.5, transparent: false, rotation, color: def.tint ?? '#ffffff' });
-      const spr = new THREE.Sprite(mat);
+      const g = new THREE.Group();
+      const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, alphaTest: 0.5, transparent: false, rotation, color: def.tint ?? '#ffffff' }));
+      g.add(spr);
+      let hm: THREE.SpriteMaterial | null = null;
+      let h: THREE.Sprite | null = null;
+      if (halo) {
+        hm = new THREE.SpriteMaterial({ map: tex, color: r!.color, rotation, transparent: true, opacity: haloOp, depthWrite: false, blending: THREE.AdditiveBlending });
+        h = new THREE.Sprite(hm);
+        g.add(h);
+      }
       // The sprite is size × 2 tall: centred at `size` its bottom edge is on the ground.
-      spr.position.set(x, def.stand ? size * 0.9 : def.height, z);
-      spr.scale.setScalar(size * 2);
-      this.add(spr, def.life, play);
+      const scale = (s: number) => {
+        spr.scale.setScalar(size * 2 * s);
+        h?.scale.setScalar(size * 2 * 1.15 * s);
+      };
+      scale(pop ? popScale(0) : 1);
+      g.position.set(x, def.stand ? size * 0.9 : def.height, z);
+      this.add(g, def.life, (k) => {
+        show(k);
+        if (pop) scale(popScale(k));
+        if (hm) hm.opacity = haloOp * (1 - k * k);
+      });
     }
+    if (r) this.layerExtras(name, r, cfg, x, z, size, def.life);
+  }
+
+  /** Set by the game: the caster-side hit feel (shake, hit-stop) of the extra layer. */
+  hitFeel: HitFeel | null = null;
+  private particles = 0;
+
+  /** The soft light, ground light and particles of the extra layer. */
+  private layerExtras(name: SkillEffect, r: FxRecipe, cfg: FxConfig, x: number, z: number, size: number, life: number): void {
+    if (r.glow > 0 && cfg.glow > 0) {
+      // A soft light behind the picture, brightest at the start.
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: fxTex.mist, color: r.color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
+      const base = size * 2.6;
+      const peak = Math.min(1, 0.7 * r.glow * cfg.glow);
+      s.position.set(x, Math.min(1.2, size * 0.5), z);
+      s.scale.setScalar(base);
+      this.add(s, life * 1.1, (k) => {
+        s.material.opacity = peak * (k < 0.15 ? k / 0.15 : 1 - (k - 0.15) / 0.85);
+        s.scale.setScalar(base * (0.85 + 0.3 * k));
+      });
+    }
+    if (r.ground > 0 && cfg.ground > 0) this.groundLight(x, z, size * r.ground, r.color, life * 1.8, cfg.ground);
+    if (r.sparks && cfg.particles > 0) {
+      const n = Math.round(r.sparks.n * cfg.particles * (isTouchMode() ? 0.5 : 1));
+      this.sparks(r.sparks.kind, x, z, size, r.color, n, r.sparks.speed);
+    }
+    this.hitFeel?.effect(name, x, z, size, r);
+  }
+
+  /** Light on the ground in the effect's colour that fades out. */
+  groundLight(x: number, z: number, radius: number, color: string, life: number, strength = 1): void {
+    const m = new THREE.MeshBasicMaterial({ map: fxTex.mist, color, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+    const mesh = this.decal(m);
+    mesh.position.set(x, 0.04, z);
+    mesh.scale.setScalar(radius);
+    const peak = Math.min(1, 0.85 * strength);
+    this.add(mesh, life, (k) => {
+      // Quick rise, slow fade.
+      m.opacity = peak * (k < 0.08 ? k / 0.08 : Math.pow(1 - (k - 0.08) / 0.92, 1.6));
+      mesh.scale.setScalar(radius * (0.9 + 0.2 * Math.sqrt(k)));
+    });
+  }
+
+  /** Particles thrown out of an effect: sparks (streaks), shards (heavy, fall), embers (rise), stars (twinkle), dust (low). */
+  sparks(kind: SparkKind, x: number, z: number, size: number, color: string, n: number, speed: number, y?: number): void {
+    n = Math.min(n, maxParticles() - this.particles);
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const v = speed * (0.5 + Math.random() * 0.8);
+      const vx = Math.cos(a) * v;
+      const vz = Math.sin(a) * v;
+      let vy = kind === 'ember' ? 1 + Math.random() * 2 : kind === 'dust' ? 0.5 + Math.random() : kind === 'star' ? 3 + Math.random() * 3 : 2 + Math.random() * 4;
+      const grav = kind === 'ember' ? -1.5 : kind === 'shard' ? 16 : kind === 'dust' ? 3 : 10;
+      const drag = kind === 'dust' ? 3 : kind === 'ember' ? 1.5 : 0.5;
+      const sz = kind === 'shard' ? 0.22 : kind === 'dust' ? 0.5 : kind === 'star' ? 0.4 : 0.26;
+      const dust = kind === 'dust';
+      const s = this.glowSprite(dust ? '#c8a070' : color, sz, dust ? 0.5 : 1);
+      if (dust) s.material.blending = THREE.NormalBlending;
+      const r0 = Math.random() * size * 0.4;
+      s.position.set(x + Math.cos(a) * r0, y ?? (dust ? 0.15 : 0.3 + Math.random() * 0.6), z + Math.sin(a) * r0);
+      const mat = s.material;
+      const op = mat.opacity;
+      const life = (kind === 'ember' ? 0.8 : dust ? 0.7 : 0.5) * (0.7 + Math.random() * 0.6);
+      this.particles++;
+      this.add(s, life, (k, dt) => {
+        const f = Math.exp(-drag * dt);
+        s.position.x += vx * dt * f;
+        s.position.z += vz * dt * f;
+        s.position.y = Math.max(0.05, s.position.y + vy * dt);
+        vy -= grav * dt;
+        if (kind === 'shard' || kind === 'spark') {
+          // Stretched along its way on screen: a streak.
+          mat.rotation = screenAngle(vx, vz);
+          s.scale.set(sz * 2.4 * (1 - 0.5 * k), sz * 0.6, 1);
+        } else if (kind === 'star') s.scale.setScalar(sz * (0.6 + 0.5 * Math.abs(Math.sin(k * 18))));
+        else if (dust) s.scale.setScalar(sz * (1 + k));
+        mat.opacity = op * (1 - k);
+      }, () => this.particles--);
+    }
+  }
+
+  /** Charge glow gathering on a caster as a layered skill is cast (the "wind-up" before the release). */
+  castGlow(x: number, z: number, color: string): void {
+    const cfg = fxConfig();
+    if (!cfg.on || cfg.glow <= 0) return;
+    const peak = Math.min(1, 0.8 * cfg.glow);
+    const s = this.glowSprite(color, 2.4, 0);
+    s.position.set(x, 1, z);
+    this.add(s, 0.3, (k) => {
+      s.material.opacity = peak * Math.sin(k * Math.PI);
+      s.scale.setScalar(2.4 * (1 - 0.6 * k));
+    });
+    const m = this.mat(color, 0, true, fxTex.ring);
+    const ring = this.decal(m);
+    ring.position.set(x, 0.06, z);
+    this.add(ring, 0.3, (k) => {
+      // Closes in on the caster.
+      ring.scale.setScalar(1.8 * (1 - k) + 0.3);
+      m.opacity = peak * Math.sin(k * Math.PI);
+    });
   }
 
   /** Hand-drawn art for a flying shot, or null when this colour of shot has none. */

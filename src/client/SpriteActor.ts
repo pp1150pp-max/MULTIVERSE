@@ -25,6 +25,7 @@ export class SpriteActor implements Actor {
   private flip = false;
   private animT = 0;
   private flashT = 0;
+  private flashWhite = false;
   private readonly shadow: THREE.Mesh;
 
   constructor(private readonly sheet: SheetInfo, public height: number, shadowRadius: number, private readonly cycle: readonly number[] = WALK) {
@@ -87,12 +88,15 @@ export class SpriteActor implements Actor {
     if (this.flashT > 0) {
       this.flashT -= dt;
       const k = Math.max(0, this.flashT) / 0.15;
-      this.mat.color.setRGB(1, 1 - 0.65 * k, 1 - 0.65 * k);
+      // White: colours above 1 push the art toward white (the extra layer's hit flash); else the old red tint.
+      if (this.flashWhite) this.mat.color.setScalar(1 + 3 * k);
+      else this.mat.color.setRGB(1, 1 - 0.65 * k, 1 - 0.65 * k);
     }
     this.applyUV();
   }
 
-  flash(): void {
+  flash(white = false): void {
+    this.flashWhite = white;
     this.flashT = 0.15;
   }
 

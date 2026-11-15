@@ -18,6 +18,7 @@ import { NO_BOOST, ZONES, type MonsterBoost } from '../shared/data/zones';
 import { SKILL_NUM_NAME, SKILL_RANGE, SKILL_VALUE_KEYS, SKILL_VALUE_NAME, SKILL_VALUE_RANGE, UNLOCK_TIERS } from '../shared/skillTuning';
 import { rankedCooldown, rankedDmg, rankedMp } from '../shared/skillBook';
 import { SKILL_REACH } from '../shared/data/skillRanges';
+import { FX_NUM_NAME, FX_RANGE } from '../shared/fxTuning';
 import { CLASSES, CLASS_IDS, isLearnable, KIND_NAME, LEARN_KINDS } from '../shared/data/classes';
 import { ITEM_BASES, itemRowKinds, rowRanges, TIER_BAND_NAME, TIER_BANDS, tierBandOf, tierChances, tierRanges } from '../shared/data/items';
 import { MAX_LEVEL } from '../shared/formulas';
@@ -610,6 +611,25 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
+  // ---------------------------------------------------------- skill effect extra layer (src/shared/fxTuning.ts)
+  const fxCard = h('div', { class: 'card' });
+  const drawFx = (): void => {
+    const f = draft.fx;
+    const cf = code.fx;
+    const refresh = (): void => { updateSummary(); };
+    const num = (k: keyof typeof FX_RANGE, step: number) =>
+      h('label', {}, FX_NUM_NAME[k], numBox(() => f[k], (n) => { f[k] = n; }, cf[k], FX_RANGE[k][0], FX_RANGE[k][1], step, refresh));
+    const on = h('input', { type: 'checkbox', checked: f.on, onchange: (e: Event) => { f.on = (e.target as HTMLInputElement).checked; refresh(); } });
+    fxCard.replaceChildren(
+      h('h2', {}, 'เอฟเฟกต์สกิล (ชั้นเสริม)'),
+      h('div', { class: 'muted' }, 'แสงเรือง แสงบนพื้น อนุภาค ภาพขยายเด้ง แสงชาร์จตอนร่าย และความรู้สึกตอนโดน (มอนกะพริบขาว ค้างภาพสั้น ๆ จอสั่น) · ตัวอย่าง 5 สกิล: ดาบพิพากษา พายุดาบ ดาวตก ลูกไฟ ยิงหัว · ภาพเท่านั้น ไม่เปลี่ยนกติกาเกม · บันทึกแล้วมีผลกับทุกคนทันที'),
+      h('div', { class: 'row bal-line' }, h('label', {}, on, ' เปิดชั้นเสริม (ปิด = หน้าตาแบบเดิมเพื่อเทียบ)')),
+      h('div', { class: 'row bal-line' }, num('glow', 0.1), num('ground', 0.1), num('particles', 0.1)),
+      h('div', { class: 'row bal-line' }, num('shake', 0.1), num('hitStopMs', 5), num('critPop', 0.1)),
+      h('div', { class: 'muted' }, '0 = ปิดส่วนนั้น · ค้างตอนโดน/จอสั่นเกิดเฉพาะจอของคนที่ร่ายสกิลเอง (คนอื่นเห็นแค่แสง) · มือถือใช้อนุภาคครึ่งเดียว'),
+    );
+  };
+
   // ---------------------------------------------------------- tutorial quest rewards (src/shared/tutorial.ts)
   const tutCard = h('div', { class: 'card' });
   /** Every potion and stone a reward may give, as select options (value = JSON of the line without count). */
@@ -733,6 +753,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawAuto();
     drawTut();
     drawSkills();
+    drawFx();
   };
   const save =async (body: { tuning: BalanceTuning } | { reset: true }, ask: string): Promise<void> => {
     if (!confirm(ask)) return;
@@ -776,11 +797,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         void save({ tuning: c.tuning }, `ใช้ค่าใหม่กับทั้งเซิร์ฟทันทีไหม?\n\n${changes.slice(0, 1200)}`);
       } }, '💾 บันทึกทั้งเซิร์ฟ'),
       h('button', { onclick: () => { draft = mergeBalance(saved); redraw(); msg.textContent = ''; } }, 'ยกเลิกที่ยังไม่บันทึก'),
-      h('button', { onclick: () => void save({ reset: true }, 'คืนทุกค่า (อาชีพ tier ตัวคูณมอน Auto Play รางวัลเควสสอนระบบ และระบบสกิล) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?') }, '↺ คืนค่าในโค้ด'),
+      h('button', { onclick: () => void save({ reset: true }, 'คืนทุกค่า (อาชีพ tier ตัวคูณมอน Auto Play รางวัลเควสสอนระบบ ระบบสกิล และเอฟเฟกต์สกิล) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?') }, '↺ คืนค่าในโค้ด'),
     ),
     msg,
   );
 
-  box.replaceChildren(classCard, regenCard, tierCard, previewCard, monsterCard, autoCard, tutCard, skillCard, bar);
+  box.replaceChildren(classCard, regenCard, tierCard, previewCard, monsterCard, autoCard, tutCard, skillCard, fxCard, bar);
   redraw();
 }

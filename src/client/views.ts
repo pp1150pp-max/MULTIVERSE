@@ -17,6 +17,8 @@ import { AnimatedActor, type Actor } from './AnimatedActor';
 import { animSets, decalTex, fxTex, sheets } from './assets';
 import { PassiveAura, type Effects, type ShotSprite } from './effects';
 import type { ProjectileLike } from './backend';
+import { fxConfig, SHOT_RECIPES } from './fxLayer';
+import { isTouchMode } from './touch/device';
 
 type AnimEvent = Extract<SimEvent, { t: 'anim' }>;
 
@@ -323,6 +325,8 @@ export class ProjectileView {
   private readonly art: boolean;
   private lastX: number;
   private lastZ: number;
+  /** Skill effect extra layer: a glow around the shot (and a trail in update), for the sample skills' shots. */
+  private glow: THREE.Sprite | null = null;
 
   constructor(readonly pr: ProjectileLike, private readonly scene: THREE.Scene, private readonly fx: Effects) {
     this.art = !!pr.o.art;
@@ -331,12 +335,23 @@ export class ProjectileView {
     this.lastX = pr.x;
     this.lastZ = pr.z;
     scene.add(this.sprite);
+    const layer = !pr.o.art && fxConfig().on ? SHOT_RECIPES[pr.o.color] : undefined;
+    if (layer && fxConfig().glow > 0) {
+      this.glow = fx.glowSprite(layer.color, pr.o.size * 2.2, Math.min(1, 0.7 * fxConfig().glow));
+      scene.add(this.glow);
+    }
     this.update();
   }
 
   update(): void {
     const pr = this.pr;
     this.sprite.position.set(pr.x, 0.85, pr.z);
+    if (this.glow) this.glow.position.set(pr.x, 0.85, pr.z);
+    const layer = !pr.o.art ? SHOT_RECIPES[pr.o.color] : undefined;
+    const cfg = fxConfig();
+    if (layer && cfg.on && cfg.particles > 0 && Math.random() < 0.6 * Math.min(1, cfg.particles) * (isTouchMode() ? 0.5 : 1)) {
+      this.fx.sparks(layer.trail, pr.x, pr.z, 0.3, layer.color, 1, 1.2, 0.85);
+    }
     if (this.art) {
       const dx = pr.x - this.lastX;
       const dz = pr.z - this.lastZ;
@@ -356,6 +371,10 @@ export class ProjectileView {
 
   dispose(): void {
     this.scene.remove(this.sprite);
+    if (this.glow) {
+      this.scene.remove(this.glow);
+      this.glow.material.dispose();
+    }
     if (this.shot) this.shot.dispose();
     else this.sprite.material.dispose();
   }

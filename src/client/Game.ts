@@ -44,6 +44,7 @@ import { endEntryLoading, flashZoneLoading, preloadLoadingArt } from './loadingS
 import { LootView, MonsterView, PlayerView, ProjectileView, ViewSet } from './views';
 import { isSoftwareRenderer } from '../shared/net/protocol';
 import { isTouchMode } from './touch/device';
+import { CAST_GLOW, HitFeel } from './fxLayer';
 import { TouchControls, TOUCH_ATTACK } from './touch/controls';
 import { TouchGestures } from './touch/gestures';
 
@@ -143,6 +144,8 @@ export class Game {
   private readonly camTarget = new THREE.Vector3();
   private shakeT = 0;
   private shakeAmt = 0;
+  /** Skill effect extra layer: my heavy hits shake, flash white and stop the picture briefly. */
+  private readonly hitFeel = new HitFeel((a) => this.shake(a));
   private readonly sound = new GameAudio();
   private readonly raycaster = new THREE.Raycaster();
   private readonly ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -176,6 +179,7 @@ export class Game {
     this.world.bakeMap(this.renderer);
     this.input = new Input(this.renderer.domElement);
     this.fx = new Effects(this.scene);
+    this.fx.hitFeel = this.hitFeel;
     this.autoRing = new AutoRing(this.scene);
     this.lockRing = new AutoRing(this.scene, '#ff4a3a');
     this.skillRing = new AutoRing(this.scene, '#ffcf5a');
@@ -459,10 +463,16 @@ export class Game {
         break;
       case 'flash':
         this.viewById(ev.id)?.actor.flash();
+        this.hitFeel.flash(ev.id);
         break;
       case 'anim': {
         const v = this.viewById(ev.id);
         if (v instanceof PlayerView) v.onAnim(ev);
+        // Extra layer: a charge glow on whoever casts one of the sample skills; my own casts get the hit feel.
+        if (ev.skill && CAST_GLOW[ev.skill] && v instanceof PlayerView) {
+          this.fx.castGlow(v.p.x, v.p.z, CAST_GLOW[ev.skill]);
+          if (ev.id === me) this.hitFeel.cast(ev.skill);
+        }
         break;
       }
       case 'item':
@@ -790,8 +800,15 @@ export class Game {
 
     this.syncViews();
     for (const ev of events) this.handleEvent(ev);
-    for (const v of this.playerViews.values()) v.update(dt, this.fx);
-    for (const v of this.monsterViews.values()) v.update(dt);
+    // Hit-stop (extra layer): the pictures hold still for a moment; the game itself keeps running.
+    const vdt = this.hitFeel.frame(dt, (id) => {
+      for (const v of this.monsterViews.values()) {
+        if (v.m.id === id) return { id, x: v.m.x, z: v.m.z, flashWhite: () => v.actor.flash(true) };
+      }
+      return undefined;
+    });
+    for (const v of this.playerViews.values()) v.update(vdt, this.fx);
+    for (const v of this.monsterViews.values()) v.update(vdt);
     for (const v of this.projectileViews.values()) v.update();
     for (const v of this.lootViews.values()) v.update();
 
@@ -849,7 +866,7 @@ export class Game {
     if (locked) this.lockRing.show(locked.x, locked.z, locked.def.radius + 0.2);
     else this.lockRing.hide();
 
-    this.fx.update(dt);
+    this.fx.update(vdt);
     this.hazardViews.update(this.backend.hazards, this.backend.time);
     this.world.update(dt, p.x, p.z);
     this.updateCamera(dt);
