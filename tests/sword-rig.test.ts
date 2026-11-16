@@ -137,7 +137,7 @@ const near = (a: number, b: number, eps = 1e-6) => Math.abs(a - b) < eps;
     }
     const rest = solveView(v, (p) => sizes[rigPartPath(view, p, 'dark', 'katana')]);
     const head = rest.get('head')!;
-    ok(head.y > 300 && head.y < 500, `${view}: the head sits at body height (${Math.round(head.y)} px)`);
+    ok(head.y > 220 && head.y < 450, `${view}: the head sits at body height (${Math.round(head.y)} px)`);
   }
 }
 
