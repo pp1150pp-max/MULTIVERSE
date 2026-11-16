@@ -105,8 +105,8 @@ function isTab(d, i) {
 }
 
 /**
- * Pieces whose joint tabs are turned dark grey, like the cloth under the armour, so a bent knee or elbow shows a
- * dark joint instead of a tan blob. The head keeps its neck, the swords and the cape have no tabs.
+ * Pieces whose joint tabs are cut away (owner 2026-11-16: the tabs looked like extra blobs at every joint). The
+ * pieces overlap at the joints instead (rig.json). The head keeps its neck, the swords and the cape have no tabs.
  */
 const TABBED = /^(torso|hips|upper_arm|forearm|hand|thigh|shin)/;
 
@@ -121,12 +121,7 @@ async function save(img, b, dir, name, scale) {
     const o = ((y - b.y0 + PAD) * w + (x - b.x0 + PAD)) * 4;
     img.d.copy(out, o, k * 4, k * 4 + 4);
     const fy = (y - b.y0) / bh;
-    if (tabbed && (fy < 0.34 || fy > 0.66) && isTab(out, o)) {
-      const lum = (out[o] + out[o + 1] + out[o + 2]) / 3;
-      out[o] = lum * 0.3;
-      out[o + 1] = lum * 0.28;
-      out[o + 2] = lum * 0.32;
-    }
+    if (tabbed && (fy < 0.34 || fy > 0.66) && isTab(out, o)) out[o + 3] = 0;
   }
   mkdirSync(join(OUT, dir), { recursive: true });
   const sw = Math.max(1, Math.round(w * scale));
