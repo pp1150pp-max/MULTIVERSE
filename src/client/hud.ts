@@ -1476,6 +1476,7 @@ export class Hud {
     }
     else if (id === 'broker') this.openMarket();
     else if (id === 'stylist') this.g.cosmetics.toggle(true, 'shop');
+    else if (id === 'crystal') this.g.cashShop.toggle(true);
     else this.openForge();
   }
 

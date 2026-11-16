@@ -1,5 +1,5 @@
 // The "จัดการของแต่งตัว" tab (owner 2026-11-13): one table of every cosmetic with
-// - shown / hidden in the in-game "แต่งตัว" window and its diamond price (not on sale yet)
+// - shown / hidden in the in-game "แต่งตัว" window and its crystal price (คริสตัลมิติ: what the cash shop sells it for)
 //   (switch cosManageEdit; src/shared/cosShop.ts, settings key cos_shop);
 // - one look value per piece, picked per kind (wings / mount / pet / aura: any field of the bench, view
 //   offsets too), typed per piece or added to every ticked piece at once (e.g. all wings 0.1 higher)
@@ -101,7 +101,7 @@ export async function renderCosManage(view: HTMLElement, h: H, api: Api, openOrb
   const table = h('table', {});
 
   const draw = (): void => {
-    table.replaceChildren(h('tr', {}, h('th', {}, ''), h('th', {}, 'ชิ้น'), h('th', {}, 'แสดงในเกม'), h('th', {}, 'ราคา (เพชร)'), h('th', {}, 'ค่าหน้าตา')));
+    table.replaceChildren(h('tr', {}, h('th', {}, ''), h('th', {}, 'ชิ้น'), h('th', {}, 'แสดงในเกม'), h('th', {}, 'ราคา (คริสตัลมิติ)'), h('th', {}, 'ค่าหน้าตา')));
     for (const slot of COS_SLOTS) {
       const pieces = COSMETICS.filter((x) => x.slot === slot);
       table.append(slot === 'orb' ? orbHead(pieces.map((c) => c.id)) : slotHead(slot, pieces.map((c) => c.id)));
@@ -336,7 +336,7 @@ export async function renderCosManage(view: HTMLElement, h: H, api: Api, openOrb
         const p = price[c.id].trim();
         if (p !== '') {
           const n = Number(p);
-          if (!Number.isInteger(n) || n < COS_PRICE_MIN || n > COS_PRICE_MAX) return { error: `${c.name}: ราคาต้องเป็นจำนวนเต็ม ${COS_PRICE_MIN}–${fmt(COS_PRICE_MAX)} เพชร (เว้นว่าง = ยังไม่ตั้งราคา)` };
+          if (!Number.isInteger(n) || n < COS_PRICE_MIN || n > COS_PRICE_MAX) return { error: `${c.name}: ราคาต้องเป็นจำนวนเต็ม ${COS_PRICE_MIN}–${fmt(COS_PRICE_MAX)} คริสตัลมิติ (เว้นว่าง = ยังไม่ตั้งราคา ไม่ขาย)` };
           e.price = n;
         }
         if (e.hidden || e.price !== undefined) raw[c.id] = e;
@@ -426,7 +426,7 @@ export async function renderCosManage(view: HTMLElement, h: H, api: Api, openOrb
     h('h2', {}, 'จัดการของแต่งตัว'),
     h('div', { class: 'muted' },
       'ชิ้นที่ซ่อน: ไม่โชว์ในหน้าต่าง "แต่งตัว" ของผู้เล่น (ทั้งแท็บร้านและของฉัน) และสวมใหม่ไม่ได้ · คนที่สวมอยู่แล้วใส่ต่อได้ คนอื่นยังเห็น (เห็นในของฉันเฉพาะตอนสวมอยู่ ถอดแล้วสวมกลับไม่ได้) · admin ยังให้ชิ้นที่ซ่อนแก่บัญชีได้ · '
-      + 'ราคาเป็นเพชร ยังไม่เปิดขาย ผู้เล่นไม่เห็น · ค่าหน้าตา: เลือกค่าที่แก้ที่หัวแต่ละชนิด (ค่าเดียวกับในแท่นทดลอง "ของแต่งตัว"/"ลูกแก้วตีบวก") พิมพ์รายชิ้น หรือติ๊กหลายชิ้นแล้ว "บวก/ลบ" ทีเดียว · '
+      + 'ราคาเป็นคริสตัลมิติ = ราคาในแคชช็อป (ชิ้นที่ซ่อนหรือไม่มีราคาไม่ขาย) ตั้งราคาลด/เวลา/ป้ายในแท็บ "แคชช็อป" · ค่าหน้าตา: เลือกค่าที่แก้ที่หัวแต่ละชนิด (ค่าเดียวกับในแท่นทดลอง "ของแต่งตัว"/"ลูกแก้วตีบวก") พิมพ์รายชิ้น หรือติ๊กหลายชิ้นแล้ว "บวก/ลบ" ทีเดียว · '
       + 'ช่องกรอบเหลือง = ต่างจากที่บันทึกไว้ (ยังไม่บันทึก) · เปลี่ยนค่าที่แก้ได้เรื่อย ๆ แล้วกดบันทึกครั้งเดียว'),
     !st.canEdit ? h('div', { class: 'muted' }, 'ซ่อน/ราคา และลูกแก้ว: ดูได้อย่างเดียว (ต้องมีสิทธิ์ "ซ่อน/ตั้งราคาของแต่งตัว")') : null,
     !st.canPaste ? h('div', { class: 'muted' }, 'ค่าหน้าตา (ปีก สัตว์ขี่ สัตว์เลี้ยง ออร่า): ดูได้อย่างเดียว (ต้องมีสิทธิ์ "บันทึกของแต่งตัวทั้งเซิร์ฟ")') : null,

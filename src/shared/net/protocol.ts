@@ -25,6 +25,7 @@ import type { TutorialData, TutStep } from '../tutorial';
 import type { RoomLobbyView, RoomSnap } from '../bossRoom';
 import type { ChannelsView } from '../channels';
 import type { CosSlot } from '../data/cosmetics';
+import type { CashCatalog, CashState } from '../cashShop';
 
 export const WS_PATH = '/ws';
 /** Server simulation rate and how often it sends snapshots. */
@@ -78,6 +79,8 @@ export type ActionMsg =
   | { t: 'act'; a: 'useBuff'; stone: BuffScroll }
   /** Announces `text` to the whole server with a megaphone from the bag (server checks length, Guest and the cooldown). */
   | { t: 'act'; a: 'megaphone'; text: string }
+  /** Cash shop: buy `qty` of item `id` at `price` crystals each, the price the buyer saw (src/shared/cashShop.ts; the server checks everything). Answered with `cashBuy`. */
+  | { t: 'act'; a: 'cashBuy'; req: number; id: string; qty: number; price: number }
   /** Daily login: show this month's calendar / make up an earlier missed day of this month (the server checks). */
   | { t: 'act'; a: 'daily' }
   | { t: 'act'; a: 'dailyMakeup'; day: number }
@@ -322,7 +325,13 @@ export interface SnapshotMsg {
 export type ServerMsg =
   /** `guest`: playing a guest character (no stash, deleted after a day offline). */
   /** `ch`: the channel of that zone (1 when it has none). */
-  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; guest?: boolean; orbLook?: OrbLook; cosTuning?: CosTuning; cosHidden?: string[]; orbItems?: OrbItem[]; balance?: BalanceTuning }
+  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; guest?: boolean; orbLook?: OrbLook; cosTuning?: CosTuning; cosHidden?: string[]; orbItems?: OrbItem[]; balance?: BalanceTuning; cash?: CashCatalog; cashState?: CashState }
+  /** The cash shop's catalogue changed (the owner saved /admin, or a cosmetic's price / hiding changed). */
+  | { t: 'cash'; cat: CashCatalog }
+  /** Your account's crystals and purchase counts changed (a purchase by any of its characters). */
+  | { t: 'cashState'; state: CashState }
+  /** The answer to `cashBuy`. */
+  | { t: 'cashBuy'; req: number; ok: boolean; msg: string }
   /** The owner changed the server-wide enhancement orb look (src/shared/orbLook.ts). */
   | { t: 'orbLook'; look: OrbLook }
   /** An admin changed the server-wide game balance (src/shared/balance.ts). */
