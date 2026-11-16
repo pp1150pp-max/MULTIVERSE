@@ -55,6 +55,10 @@ export interface Actor {
   /** Cancel any one-shot animation. */
   reset(): void;
   dispose(): void;
+  /** Riding pose instead of idle / run (actors with riding poses). */
+  setRide?(name: string | null): void;
+  /** Speed of the run cycle, 1 = as drawn (actors with a run cycle). */
+  setStride?(rate: number): void;
 }
 
 export interface PlayOpts {
@@ -240,6 +244,16 @@ export class AnimatedActor implements Actor {
 
   flash(): void {
     this.flashT = 0.15;
+  }
+
+  /** The animation shown on the last update (RigActor asks it to know when to hand over). */
+  get shownAnim(): string {
+    return this.shown;
+  }
+
+  /** Shows or hides the character picture, keeping the shadow (RigActor draws its own body). */
+  setSpriteVisible(v: boolean): void {
+    this.sprite.visible = v;
   }
 
   /** How fast the run/walk cycle plays, 1 = as drawn (its fps). */

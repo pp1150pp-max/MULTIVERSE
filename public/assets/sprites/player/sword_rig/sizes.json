@@ -1,0 +1,246 @@
+{
+ "front/head": {
+  "w": 136,
+  "h": 139
+ },
+ "front/torso": {
+  "w": 111,
+  "h": 140
+ },
+ "front/hips": {
+  "w": 121,
+  "h": 130
+ },
+ "front/upper_arm_l": {
+  "w": 52,
+  "h": 127
+ },
+ "front/upper_arm_r": {
+  "w": 51,
+  "h": 127
+ },
+ "front/forearm_l": {
+  "w": 46,
+  "h": 100
+ },
+ "front/forearm_r": {
+  "w": 45,
+  "h": 99
+ },
+ "front/hand_l": {
+  "w": 54,
+  "h": 85
+ },
+ "front/hand_r": {
+  "w": 56,
+  "h": 84
+ },
+ "front/thigh_l": {
+  "w": 47,
+  "h": 127
+ },
+ "front/thigh_r": {
+  "w": 47,
+  "h": 127
+ },
+ "front/shin_l": {
+  "w": 55,
+  "h": 127
+ },
+ "front/shin_r": {
+  "w": 55,
+  "h": 127
+ },
+ "front/sword_katana": {
+  "w": 52,
+  "h": 156
+ },
+ "back/head": {
+  "w": 130,
+  "h": 141
+ },
+ "back/torso": {
+  "w": 106,
+  "h": 139
+ },
+ "back/hips": {
+  "w": 121,
+  "h": 132
+ },
+ "back/upper_arm_l": {
+  "w": 55,
+  "h": 129
+ },
+ "back/upper_arm_r": {
+  "w": 53,
+  "h": 129
+ },
+ "back/forearm_l": {
+  "w": 51,
+  "h": 100
+ },
+ "back/forearm_r": {
+  "w": 47,
+  "h": 99
+ },
+ "back/hand_l": {
+  "w": 55,
+  "h": 87
+ },
+ "back/hand_r": {
+  "w": 58,
+  "h": 85
+ },
+ "back/thigh_l": {
+  "w": 48,
+  "h": 125
+ },
+ "back/thigh_r": {
+  "w": 47,
+  "h": 125
+ },
+ "back/shin_l": {
+  "w": 61,
+  "h": 128
+ },
+ "back/shin_r": {
+  "w": 57,
+  "h": 128
+ },
+ "back/sword_katana": {
+  "w": 52,
+  "h": 157
+ },
+ "front/cape_1": {
+  "w": 71,
+  "h": 68
+ },
+ "front/cape_2": {
+  "w": 81,
+  "h": 57
+ },
+ "front/cape_3": {
+  "w": 98,
+  "h": 59
+ },
+ "back/cape_1": {
+  "w": 111,
+  "h": 68
+ },
+ "back/cape_2": {
+  "w": 161,
+  "h": 60
+ },
+ "back/cape_3": {
+  "w": 202,
+  "h": 63
+ },
+ "weapons/katana": {
+  "w": 35,
+  "h": 154
+ },
+ "weapons/great": {
+  "w": 75,
+  "h": 201
+ },
+ "weapons/fire": {
+  "w": 43,
+  "h": 179
+ },
+ "front_silver/torso": {
+  "w": 125,
+  "h": 139
+ },
+ "front_silver/hips": {
+  "w": 131,
+  "h": 129
+ },
+ "front_silver/upper_arm_l": {
+  "w": 50,
+  "h": 127
+ },
+ "front_silver/upper_arm_r": {
+  "w": 49,
+  "h": 127
+ },
+ "front_silver/forearm_l": {
+  "w": 47,
+  "h": 99
+ },
+ "front_silver/forearm_r": {
+  "w": 46,
+  "h": 99
+ },
+ "front_silver/hand_l": {
+  "w": 55,
+  "h": 87
+ },
+ "front_silver/hand_r": {
+  "w": 57,
+  "h": 87
+ },
+ "front_silver/thigh_l": {
+  "w": 49,
+  "h": 126
+ },
+ "front_silver/thigh_r": {
+  "w": 49,
+  "h": 125
+ },
+ "front_silver/shin_l": {
+  "w": 57,
+  "h": 127
+ },
+ "front_silver/shin_r": {
+  "w": 56,
+  "h": 127
+ },
+ "back_silver/torso": {
+  "w": 116,
+  "h": 140
+ },
+ "back_silver/hips": {
+  "w": 125,
+  "h": 132
+ },
+ "back_silver/upper_arm_l": {
+  "w": 55,
+  "h": 130
+ },
+ "back_silver/upper_arm_r": {
+  "w": 54,
+  "h": 131
+ },
+ "back_silver/forearm_l": {
+  "w": 53,
+  "h": 100
+ },
+ "back_silver/forearm_r": {
+  "w": 48,
+  "h": 99
+ },
+ "back_silver/hand_l": {
+  "w": 56,
+  "h": 87
+ },
+ "back_silver/hand_r": {
+  "w": 59,
+  "h": 86
+ },
+ "back_silver/thigh_l": {
+  "w": 50,
+  "h": 125
+ },
+ "back_silver/thigh_r": {
+  "w": 49,
+  "h": 125
+ },
+ "back_silver/shin_l": {
+  "w": 62,
+  "h": 128
+ },
+ "back_silver/shin_r": {
+  "w": 60,
+  "h": 128
+ }
+}

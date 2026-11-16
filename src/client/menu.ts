@@ -1,5 +1,7 @@
 // Title menu: play as a guest, or log in / sign up. Either way the game runs on the server.
 import { loadGameAssets, loadMenuAssets, onAssetProgress, portraitSource } from './assets';
+import { loadSwordRig } from './rig/RigActor';
+import { paperSwordOn } from './rig/paperSwitch';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { MAX_CHARACTERS, PASSWORD_MIN, checkCharacterName, checkPassword, checkUsername, type CharacterSummary } from '../shared/api';
 import type { ClassId } from '../shared/types';
@@ -62,7 +64,9 @@ async function waitForGameAssets(classId: ClassId | null): Promise<void> {
     await Promise.all([loadGameAssets(), preloadHudImages((f) => {
       hud = f;
       show();
-    })]);
+    }),
+    // The papercraft sword knight trial: loaded only where its switch is on (a failed load keeps the old sprite).
+    paperSwordOn() ? loadSwordRig().catch((e) => console.warn('[sword rig]', e)) : null]);
   } finally {
     stop();
   }

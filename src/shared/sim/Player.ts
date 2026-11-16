@@ -360,6 +360,11 @@ export class Player extends Unit {
    * out from the gear, and the browser's mirrors take it from the snapshot like `aura`.
    */
   orbs: readonly number[] = [];
+  /**
+   * The worn weapon's and armour's item kinds as everyone sees them (PlayerSnap wpn / arm): the browser's copy of
+   * each player, for the papercraft sword rig's look. Not saved; the server's own players leave it empty.
+   */
+  seenGear: { wpn?: string; arm?: string } = {};
   /** Cosmetics worn. Saved; the server keeps it to what the account owns, mirrors take it from the snapshot. */
   cosmetics: CosWorn;
   /** Riding the worn mount (MOUNT_SPEED). Never saved. See Sim.toggleMount / Sim.tickMount. */
