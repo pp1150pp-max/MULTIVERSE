@@ -31,5 +31,5 @@
 | 1 ป่ามรกต | [MAP1_FOREST.md](MAP1_FOREST.md) | `raw/map1_forest/` | อยู่ในเกมแล้ว (รอเจ้าของลอง) |
 | 2 หนองน้ำหมอก | [MAP2_MARSH.md](MAP2_MARSH.md) | `raw/map2_marsh/` | อยู่ในเกมแล้ว (รอเจ้าของลอง) |
 | 3 ดินแดนหิมะ | [MAP3_SNOW.md](MAP3_SNOW.md) | `raw/map3_snow/` | รอเจน |
-| 4 เกาะภูเขาไฟ | — | `raw/map4_volcano/` | ยังไม่เขียน |
+| 4 เกาะภูเขาไฟ | [MAP4_VOLCANO.md](MAP4_VOLCANO.md) | `raw/map4_volcano/` | รอเจน |
 | เมืองศูนย์กลางมิติ | — | `raw/hub/` | ยังไม่เขียน |
