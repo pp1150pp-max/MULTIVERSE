@@ -101,7 +101,12 @@ export type FxEvent = { [K in FxName]: { t: 'fx'; name: K; args: Parameters<FxAp
  */
 export type SimEvent =
   | FxEvent
-  | { t: 'text'; x: number; y: number; z: number; text: string; cls: string; life?: number; to?: number }
+  /**
+   * Floating text. `by` = the player a damage number belongs to (who dealt it, or who took it) for the "only your own
+   * numbers" switch; `on` = the unit it's over, so hits on one target can merge into one number. Both optional (old
+   * events and non-damage texts have neither).
+   */
+  | { t: 'text'; x: number; y: number; z: number; text: string; cls: string; life?: number; to?: number; by?: number; on?: number }
   /** Screen shake: for one player (`to`), or for players near (x, z). Never the whole zone. */
   | { t: 'shake'; amount: number; to?: number; x?: number; z?: number }
   | { t: 'sfx'; name: SfxName; x: number; z: number; to?: number }

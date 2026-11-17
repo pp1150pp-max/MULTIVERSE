@@ -226,6 +226,11 @@ export class Sim {
     this.events.push({ t: 'text', x, y, z, text, cls, life, to });
   }
 
+  /** A damage number over `on`, belonging to player `by` (who dealt it, or who took it). */
+  private dmgText(u: { id: number; x: number; z: number; topY: number }, text: string, cls: string, by: number): void {
+    this.events.push({ t: 'text', x: u.x, y: u.topY, z: u.z, text, cls, by, on: u.id });
+  }
+
   /** Shakes the screen of one player (a skill's caster) or of the players near a spot (a boss). */
   shake(amount: number, who: { to: number } | { x: number; z: number }): void {
     this.events.push('to' in who ? { t: 'shake', amount, to: who.to } : { t: 'shake', amount, x: who.x, z: who.z });
@@ -387,7 +392,7 @@ export class Sim {
       }
     }
     this.events.push({ t: 'flash', id: m.id });
-    this.text(m.x, m.topY, m.z, crit ? `${dmg}!` : String(dmg), crit ? 'crit' : 'dmg');
+    this.dmgText(m, crit ? `${dmg}!` : String(dmg), crit ? 'crit' : 'dmg', p.id);
     if (crit) {
       this.sfx('crit', m.x, m.z);
       passiveOnCrit(this, p, m);
@@ -441,7 +446,7 @@ export class Sim {
     if (m.isBoss) m.resetRamp();
     this.events.push({ t: 'flash', id: p.id });
     this.anim(p.id, 'hit');
-    this.text(p.x, p.topY, p.z, `-${dmg}`, 'hurt');
+    this.dmgText(p, `-${dmg}`, 'hurt', p.id);
     // Sword Anchor: no stuns or knockback while it runs.
     const steady = this.time < p.steadyUntil;
     if (opts.stun && !steady) p.stunT = Math.max(p.stunT, opts.stun);
@@ -479,7 +484,7 @@ export class Sim {
     p.lastHurt = this.time;
     this.cancelReturnCast(p, 'โดนลาวา');
     this.events.push({ t: 'flash', id: p.id });
-    this.text(p.x, p.topY, p.z, `-${dmg}`, 'hurt');
+    this.dmgText(p, `-${dmg}`, 'hurt', p.id);
     this.fx('burst', p.x, 0.2, p.z, '#ff8a3a', 4, 2);
     if (p.hp <= 0) this.killPlayer(p);
   }

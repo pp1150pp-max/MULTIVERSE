@@ -1919,6 +1919,7 @@ export class GameWorld {
     this.last = now;
     const travels: { s: Session; zone: string; atCamp?: boolean; spot?: Vec2 }[] = [];
     let simMs = 0;
+    const ownNumsOnly = currentBalance().fxLayer.ownNumsOnly;
     for (const sim of [...this.channels.sims(), ...this.rooms.sims()]) {
       const t0 = performance.now();
       sim.step(dt, this.intentOf);
@@ -1945,9 +1946,12 @@ export class GameWorld {
         }
         const at = eventPos(ev);
         const to = 'to' in ev ? ev.to : undefined;
+        // "Only your own damage numbers" (/admin, effects card): others' hits aren't sent at all.
+        const own = ev.t === 'text' && ev.by !== undefined && ownNumsOnly ? ev.by : undefined;
         for (const s of this.sessions) {
           if (s.sim !== sim) continue;
           if (to !== undefined && to !== s.player.id) continue;
+          if (own !== undefined && own !== s.player.id) continue;
           if (at && Math.hypot(at.x - s.player.x, at.z - s.player.z) > INTEREST_RADIUS + 6) continue;
           s.outbox.push(ev);
         }

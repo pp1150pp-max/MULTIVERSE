@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { fxTex } from './assets';
+import { disposeShadow, shadowFade, shadowGeometry, sharedShadowMat } from './SpriteActor';
 
 /**
  * Facing rows an animation file may contain. `side`, `down_side` and `up_side` are mirrored for
@@ -87,7 +87,7 @@ export class AnimatedActor implements Actor {
   readonly height: number;
   private readonly sprite: THREE.Sprite;
   private readonly mat: THREE.SpriteMaterial;
-  private readonly shadowMat: THREE.MeshBasicMaterial;
+  private readonly shadow: THREE.Mesh;
   private readonly tex: Record<string, THREE.Texture> = {};
   private readonly m: CharManifest;
   private base = 'idle';
@@ -117,8 +117,9 @@ export class AnimatedActor implements Actor {
     this.height = this.m.height;
     this.sprite.scale.set(this.m.height * (this.m.frameWidth / this.m.frameHeight), this.m.height, 1);
 
-    this.shadowMat = new THREE.MeshBasicMaterial({ map: fxTex.shadow, transparent: true, depthWrite: false, opacity: 0.5 });
-    const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), this.shadowMat);
+    // One plane and (while fully shown) one material for every actor's shadow.
+    const shadow = new THREE.Mesh(shadowGeometry(), sharedShadowMat());
+    this.shadow = shadow;
     shadow.scale.set(shadowRadius * 2.2, 1, shadowRadius * 1.4);
     shadow.position.y = 0.02;
     this.group.add(shadow, this.sprite);
@@ -265,7 +266,7 @@ export class AnimatedActor implements Actor {
     this.mat.transparent = o < 1;
     this.mat.alphaTest = o < 1 ? 0.02 : 0.5;
     this.mat.opacity = o;
-    this.shadowMat.opacity = 0.5 * o;
+    shadowFade(this.shadow, o);
   }
 
   reset(): void {
@@ -276,6 +277,6 @@ export class AnimatedActor implements Actor {
   dispose(): void {
     for (const t of Object.values(this.tex)) t.dispose();
     this.mat.dispose();
-    this.shadowMat.dispose();
+    disposeShadow(this.shadow);
   }
 }
