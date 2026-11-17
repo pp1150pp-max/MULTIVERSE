@@ -88,8 +88,6 @@ const RECONNECT_TRY_MS = 8000;
  * still calls it open (a phone waking up often has such a socket): close it and reconnect.
  */
 const PING_DEAD_MS = 15_000;
-/** Close codes the server uses when it stops (1001) or restarts (1012): no retry, the kick message says why. */
-const NO_RETRY_CODES = new Set([WS_CLOSE_QUIT, 1001, 1012]);
 
 type WelcomeMsg = Extract<ServerMsg, { t: 'welcome' }>;
 
@@ -305,8 +303,11 @@ export class OnlineBackend implements Backend {
     }
     this.hiddenAt = null;
     this.visibleAt = performance.now();
-    // Back on screen (a phone was asleep): try now rather than wait for the next step.
-    if (this.retryTimer !== null) this.retryNow();
+    // Back on screen (a phone was asleep): try now with a fresh set of tries.
+    if (this.retryTimer !== null) {
+      this.tries = 0;
+      this.retryNow();
+    }
   };
   /** When the tab last came back on screen, and when the last message came in (the dead-connection check in sendPing). */
   private visibleAt = performance.now();
@@ -376,7 +377,9 @@ export class OnlineBackend implements Backend {
     this.pingsOut.clear();
     this.rtt = null;
     if (this.quitting) return;
-    if (this.kickMsg || NO_RETRY_CODES.has(code) || !this.login) return this.giveUp(this.kickMsg || 'หลุดการเชื่อมต่อจาก server');
+    // Every end the server means (logged in elsewhere, banned, kicked, server stopping) comes with a kick
+    // message first. Close codes alone say nothing: a proxy (the tunnel) may close with 1001 too.
+    if (this.kickMsg || !this.login) return this.giveUp(this.kickMsg || 'หลุดการเชื่อมต่อจาก server');
     this.tries = 0;
     this.downAt = performance.now();
     this.downInfo = {
@@ -387,7 +390,10 @@ export class OnlineBackend implements Backend {
   }
 
   private scheduleRetry(): void {
-    const wait = RECONNECT_WAIT_MS[this.tries];
+    let wait = RECONNECT_WAIT_MS[this.tries];
+    // A phone with its screen off: never give up while hidden (the server may still be farming for us);
+    // keep trying slowly, and coming back on screen starts afresh (onVisibility).
+    if (wait === undefined && document.hidden) wait = RECONNECT_WAIT_MS[RECONNECT_WAIT_MS.length - 1];
     if (wait === undefined) return this.giveUp('หลุดการเชื่อมต่อจาก server — ลองเชื่อมต่อใหม่หลายครั้งแล้วไม่สำเร็จ');
     this.onReconnecting?.(this.tries + 1);
     this.retryTimer = setTimeout(() => this.retryNow(), wait);
