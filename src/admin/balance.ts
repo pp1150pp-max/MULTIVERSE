@@ -640,6 +640,23 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     outs.forEach((f) => f());
   };
 
+  // ---------------------------------------------------------- blacksmith (forgeAuto: browser-side Auto enhance)
+  const forgeCard = h('div', { class: 'card' });
+  const drawForge = (): void => {
+    forgeCard.replaceChildren(
+      h('h2', {}, 'ตีบวก'),
+      h('div', { class: 'muted' },
+        'ตีบวก Auto: ปุ่มในหน้าต่างช่างตีเหล็ก (เมนูตีบวก) เลือกระดับเป้าหมายแล้วตีให้เองทีละครั้ง เร็วเท่ากดเอง (รอหลอดคูลดาวน์ + แสดงผลทุกครั้ง) · ' +
+        'หยุดเมื่อถึงเป้า / ทองหรือหินไม่พอ / หินกันระดับลดหมด (ถ้าติ๊กไว้) / กดหยุด / ปิดหน้าต่าง เดินห่าง เปลี่ยนของ ตาย เปลี่ยนแมพ หลุด · ' +
+        'server ตรวจทอง/หิน/คูลดาวน์ทุกครั้งเหมือนกดเอง (โอกาสและราคาไม่เปลี่ยน) · ปิด = ซ่อนปุ่ม และ Auto ที่กำลังตีอยู่หยุดทันที'),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.forgeAuto, onchange: (e: Event) => { draft.forgeAuto = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' เปิดใช้ตีบวก Auto'),
+      ),
+    );
+  };
+
   // ---------------------------------------------------------- Auto Play (src/shared/autoTuning.ts)
   const autoCard = h('div', { class: 'card' });
   const drawAuto = (): void => {
@@ -898,6 +915,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawTiers();
     drawMonsters();
     drawPotions();
+    drawForge();
     drawAuto();
     drawTut();
     drawSkills();
@@ -952,6 +970,6 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     msg,
   );
 
-  box.replaceChildren(classCard, regenCard, tierCard, previewCard, monsterCard, potionCard, autoCard, tutCard, skillCard, fxCard, rootCard, rigCard, bar);
+  box.replaceChildren(classCard, regenCard, tierCard, previewCard, monsterCard, potionCard, forgeCard, autoCard, tutCard, skillCard, fxCard, rootCard, rigCard, bar);
   redraw();
 }

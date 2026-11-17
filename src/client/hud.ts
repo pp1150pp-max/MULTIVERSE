@@ -141,6 +141,11 @@ function syncPots(box: HTMLElement, f: LootFilter): void {
 const PING_GOOD_MS = 100;
 const PING_OK_MS = 250;
 
+/** A running Auto enhance: the item, the level to stop at, and whether to use protection stones. */
+type ForgeAutoRun = { uid: string; target: number; protect: boolean };
+/** Auto enhance waits this long past the cooldown bar before the next attempt (the server's cooldown is tick-based). */
+const FORGE_AUTO_GAP_MS = 200;
+
 export class Hud {
   dialogOpen = false;
   private fullMap: FullMap;
@@ -179,6 +184,11 @@ export class Hud {
   private forgeProtect = false;
   /** The blacksmith's menu: enhance, or one of the rerolls. */
   private forgeMode: 'enhance' | RerollKind = 'enhance';
+  /**
+   * Auto enhance while it runs (owner 2026-11-18): the item, the level to stop at, and whether to use protection
+   * stones (taken from the tick box when it started). Browser side only: it sends the same enhance action as a click.
+   */
+  private forgeAuto: ForgeAutoRun | null = null;
   /** Lines of the item before its last reroll, shown next to the new ones until another item is picked. */
   private rerollPrev: { uid: string; lines: StatLine[] } | null = null;
 
@@ -608,11 +618,17 @@ export class Hud {
 
     // Blacksmith
     $('forge-close').onclick = () => this.closeForge();
-    $('forge-go').onclick = () => (this.forgeMode === 'enhance' ? this.enhance() : this.askReroll(this.forgeMode));
+    $('forge-go').onclick = () => {
+      if (this.forgeAuto) return;
+      if (this.forgeMode === 'enhance') void this.enhance();
+      else this.askReroll(this.forgeMode);
+    };
+    $('forge-auto-btn').onclick = () => (this.forgeAuto ? this.stopForgeAuto('กดหยุด') : this.startForgeAuto());
     $('forge-cancel').onclick = () => this.forgePlace(null);
     $('forge-menu').addEventListener('click', (e) => {
       const mode = (e.target as HTMLElement).closest<HTMLElement>('[data-mode]')?.dataset.mode as typeof this.forgeMode | undefined;
       if (!mode || mode === this.forgeMode) return;
+      this.stopForgeAuto('เปลี่ยนเมนู');
       this.forgeMode = mode;
       this.rerollPrev = null;
       this.forgeResult('', '');
@@ -1836,6 +1852,7 @@ export class Hud {
 
   private closeForge(): void {
     if (!this.forgeOpen) return;
+    this.stopForgeAuto('ปิดหน้าต่างช่างตีเหล็ก');
     this.forgeOpen = false;
     this.forgeSel = null;
     $('forge').classList.add('hidden');
@@ -1867,6 +1884,7 @@ export class Hud {
       return;
     }
     if (entry?.uid !== this.forgeSel) this.rerollPrev = null;
+    if (this.forgeAuto && entry?.uid !== this.forgeAuto.uid) this.stopForgeAuto('เปลี่ยนอุปกรณ์');
     this.forgeSel = entry?.uid ?? null;
     this.forgeResult('', '');
     this.renderForge();
@@ -1877,6 +1895,9 @@ export class Hud {
     const res = $('forge-result');
     res.className = cls;
     res.textContent = text;
+    // One line always (owner 2026-11-18): a long result shrinks to fit the stage instead of wrapping.
+    res.style.fontSize = '';
+    for (let size = 14; text && res.scrollWidth > res.clientWidth && size > 9; size--) res.style.fontSize = `${size - 1}px`;
     const stage = $('forge-stage');
     stage.classList.remove('flash-ok', 'flash-fail');
     if (cls) {
@@ -1886,6 +1907,8 @@ export class Hud {
   }
 
   private renderForge(): void {
+    // While an attempt runs, the snapshot may already carry the new level: hold it until the bar has filled.
+    if (this.enhancing) return;
     const p = this.g.player;
     const mode = this.forgeMode;
     for (const b of $('forge-menu').querySelectorAll<HTMLElement>('[data-mode]')) b.classList.toggle('active', b.dataset.mode === mode);
@@ -1923,6 +1946,7 @@ export class Hud {
       $('forge-cost').innerHTML = '';
       go.disabled = true;
       go.innerHTML = label;
+      this.renderForgeAuto(undefined, 'x');
       return;
     }
     const cur = plusOf(item);
@@ -1935,8 +1959,107 @@ export class Hud {
       ` · ${cur ? `+${cur} (โบนัส +${bonusPct(cur)}%)` : 'ยังไม่ตีบวก'}</div>` +
       `<div class="fi-lines">${this.forgeLines(item, mode)}</div>`;
     const why = mode === 'enhance' ? this.renderEnhanceCost(item) : this.renderRerollCost(item, mode);
-    go.disabled = !!why;
+    go.disabled = !!why || !!this.forgeAuto;
     go.innerHTML = why || label;
+    this.renderForgeAuto(item, why);
+  }
+
+  /** The Auto enhance controls: shown in the enhance menu with an item that can still go up, and the /admin switch on. */
+  private renderForgeAuto(item: Item | undefined, why: string): void {
+    const wrap = $('forge-auto');
+    const run = this.forgeAuto;
+    const show = currentBalance().forgeAuto && this.forgeMode === 'enhance' && !!item && (!!run || plusOf(item) < MAX_PLUS);
+    wrap.classList.toggle('hidden', !show);
+    if (!show || !item) return;
+    const sel = $<HTMLSelectElement>('forge-auto-target');
+    const from = Math.min(plusOf(item) + 1, MAX_PLUS);
+    const key = `${item.uid}:${from}`;
+    if (sel.dataset.key !== key) {
+      // Keep the player's pick for the same item; a new item starts at one level up.
+      const keep = sel.dataset.key?.startsWith(`${item.uid}:`) ? Number(sel.value) : 0;
+      sel.innerHTML = '';
+      for (let n = from; n <= MAX_PLUS; n++) sel.add(new Option(`ถึง +${n}`, String(n)));
+      sel.value = String(run ? Math.max(run.target, from) : keep >= from ? keep : from);
+      sel.dataset.key = key;
+    }
+    sel.disabled = !!run;
+    const btn = $<HTMLButtonElement>('forge-auto-btn');
+    btn.classList.toggle('running', !!run);
+    btn.textContent = run ? '■ หยุด' : '▶ Auto';
+    btn.disabled = !run && !!why;
+    btn.title = run ? `ตีบวก Auto ถึง +${run.target} · กดเพื่อหยุด` : 'ตีบวกให้เองทีละครั้งจนถึงระดับที่เลือก หรือจนทอง/หินหมด';
+  }
+
+  /** Starts Auto enhance on the item in the slot, up to the level picked beside the button. */
+  private startForgeAuto(): void {
+    const item = this.forgeItem();
+    if (!item || this.forgeAuto || !currentBalance().forgeAuto || this.forgeMode !== 'enhance') return;
+    const target = Math.min(MAX_PLUS, Math.max(plusOf(item) + 1, Number($<HTMLSelectElement>('forge-auto-target').value) || 0));
+    const run: ForgeAutoRun = { uid: item.uid, target, protect: this.forgeProtect };
+    const why = this.forgeAutoBlock(run);
+    if (why) {
+      this.log(`🔨 ตีบวก Auto เริ่มไม่ได้: ${why}`, '#ff8a6a');
+      return;
+    }
+    this.forgeAuto = run;
+    this.log(`🔨 เริ่มตีบวก Auto ${itemName(item)} → +${target}${run.protect ? ' (ใช้หินกันระดับลด)' : ''}`, '#c9a8ff');
+    if (!this.enhancing) this.renderForge();
+    void this.runForgeAuto(run);
+  }
+
+  /** Stops Auto enhance (if it runs) and says why in the chat log. */
+  private stopForgeAuto(why: string): void {
+    if (!this.forgeAuto) return;
+    this.forgeAuto = null;
+    this.log(`🔨 ตีบวก Auto หยุด: ${why}`, '#c9a8ff');
+    if (this.forgeOpen && !this.enhancing) this.renderForge();
+  }
+
+  /** Why Auto can't make another attempt now ('' = it can). The server checks it all again on every attempt. */
+  private forgeAutoBlock(run: ForgeAutoRun): string {
+    const p = this.g.player;
+    if (!currentBalance().forgeAuto) return 'ผู้ดูแลปิดตีบวก Auto';
+    if (!this.forgeOpen || this.forgeMode !== 'enhance') return 'ปิดหน้าต่างช่างตีเหล็ก';
+    if (!p.alive) return 'ตัวละครล้ม';
+    const item = this.forgeItem();
+    if (!item || item.uid !== run.uid) return 'ไม่พบอุปกรณ์ในช่องแล้ว';
+    if (plusOf(item) >= MAX_PLUS) return `ถึงระดับสูงสุด +${MAX_PLUS} แล้ว`;
+    if (plusOf(item) >= run.target) return `ถึง +${plusOf(item)} แล้ว`;
+    if (p.gold < enhanceCost(item)) return 'ทองไม่พอ';
+    if (p.stoneCount('enhance') < stonesNeeded(item)) return `${STONE_NAME.enhance}ไม่พอ`;
+    if (run.protect && dropsOnFail(item) && p.stoneCount('protect') < 1) return `${STONE_NAME.protect}หมด`;
+    return '';
+  }
+
+  /** The Auto loop: one attempt at a time, each waiting for the bar and its result like a click would. */
+  private async runForgeAuto(run: ForgeAutoRun): Promise<void> {
+    const wait = (ms: number) => new Promise<void>((done) => setTimeout(done, Math.max(0, ms)));
+    let missed = 0;
+    while (this.forgeAuto === run) {
+      while (this.enhancing || this.forgeCooling()) await wait(Math.max(50, this.forgeReadyAt - performance.now() + 20));
+      // A little past the bar, so the server's own cooldown (its tick and the ping) has surely ended too.
+      await wait(FORGE_AUTO_GAP_MS);
+      if (this.forgeAuto !== run) return;
+      const why = this.forgeAutoBlock(run);
+      if (why) {
+        this.stopForgeAuto(why);
+        return;
+      }
+      const got = await this.enhance(run.protect);
+      if (this.forgeAuto !== run) return;
+      if (got) {
+        missed = 0;
+        // Judge the target from the server's answer, not the snapshot (it may not have caught up yet).
+        if (plusOf(got) >= Math.min(run.target, MAX_PLUS)) {
+          this.stopForgeAuto(`ถึง +${plusOf(got)} แล้ว`);
+          return;
+        }
+      } else if (++missed >= 2) {
+        // No answer twice in a row (lost link, or the server turned it down): stop rather than keep firing.
+        this.stopForgeAuto('server ไม่ตอบรับ');
+        return;
+      }
+    }
   }
 
   /** The item's stat lines as they are now; after a reroll, what each line was before it. */
@@ -1985,14 +2108,15 @@ export class Hud {
     const canProtect = dropsOnFail(item);
     const haveProt = p.stoneCount('protect');
     if (haveProt < 1) this.forgeProtect = false;
-    const protect = canProtect && this.forgeProtect;
+    // While Auto runs, show the choice it started with (the box is locked then).
+    const protect = canProtect && (this.forgeAuto ? this.forgeAuto.protect : this.forgeProtect);
     $('forge-cost').innerHTML =
       `<div class="fc-rate"${rate < 1 ? ` title="ล้มแต่ละครั้ง โอกาสครั้งถัดไป +${pct(PITY_STEP)} จนกว่าจะสำเร็จ"` : ''}><span>โอกาสสำเร็จ +${cur} → +${cur + 1}</span><b class="${rate < 1 ? 'risky' : ''}">${hidden ? '??' : pct(rate)}</b>` +
       `${pityNote}</div>` +
       `<div class="fd-row"><span>ค่าตีบวก</span><b class="${p.gold < cost ? 'bad' : ''}">${cost.toLocaleString()} G</b></div>` +
       (need ? `<div class="fd-row"><span>${stoneIcon('enhance')} ${STONE_NAME.enhance}</span><b class="${haveEnh < need ? 'bad' : ''}">ใช้ ${need} / มี ${haveEnh}</b></div>` : '') +
       (canProtect
-        ? `<label class="fd-protect${haveProt < 1 ? ' off' : ''}"><input type="checkbox" id="forge-protect"${protect ? ' checked' : ''}${haveProt < 1 ? ' disabled' : ''}>` +
+        ? `<label class="fd-protect${haveProt < 1 ? ' off' : ''}"><input type="checkbox" id="forge-protect"${protect ? ' checked' : ''}${haveProt < 1 || this.forgeAuto ? ' disabled' : ''}>` +
           `${stoneIcon('protect')} ใช้${STONE_NAME.protect} (มี ${haveProt})</label>` +
           (protect
             ? '<div class="safe">ถ้าล้มเหลว เสียทองและหิน แต่ระดับเท่าเดิม</div>'
@@ -2054,10 +2178,11 @@ export class Hud {
     const before = (item.lines ?? []).map((l) => ({ ...l }));
     this.enhancing = true;
     this.startForgeCd();
-    const [out] = await Promise.all([this.g.backend.reroll(item.uid, kind), this.swingHammer()])
+    const [out] = await Promise.all([this.g.backend.reroll(item.uid, kind), this.swingHammer(), this.forgeCdDone()])
       .finally(() => (this.enhancing = false));
     if (!out) {
       this.forgeResult('fail', 'สุ่มไม่สำเร็จ');
+      this.renderForge();
       return;
     }
     this.rerollPrev = { uid: item.uid, lines: before };
@@ -2069,6 +2194,11 @@ export class Hud {
   /** True while the blacksmith cooldown (FORGE_CD) is running. */
   private forgeCooling(): boolean {
     return performance.now() < this.forgeReadyAt;
+  }
+
+  /** Resolves when the cooldown bar has drained: results wait for it (owner 2026-11-18: never before the bar is full). */
+  private forgeCdDone(): Promise<void> {
+    return new Promise((done) => setTimeout(done, Math.max(0, this.forgeReadyAt - performance.now())));
   }
 
   /** Starts the blacksmith cooldown: the action button shows a draining bar until it ends. */
@@ -2098,25 +2228,41 @@ export class Hud {
     }, ms));
   }
 
-  private async enhance(): Promise<void> {
-    if (!this.forgeSel || this.enhancing || this.forgeCooling()) return;
+  /**
+   * One enhance attempt on the item in the slot. `protectAuto` = Auto's protection choice (else the tick box).
+   * Returns the item as the server left it, false when it didn't answer (or refused), null when nothing was sent.
+   * Auto sends its protect choice as is: the snapshot may lag, and the server only uses a stone when a fail could drop.
+   */
+  private async enhance(protectAuto?: boolean): Promise<Item | false | null> {
+    if (!this.forgeSel || this.enhancing || this.forgeCooling()) return null;
     const sel = this.forgeItems().find((w) => w.uid === this.forgeSel);
-    const protect = !!sel && dropsOnFail(sel) && this.forgeProtect;
+    const protect = protectAuto ?? (!!sel && dropsOnFail(sel) && this.forgeProtect);
     this.enhancing = true;
     this.startForgeCd();
-    const [out] = await Promise.all([this.g.backend.enhance(this.forgeSel, protect), this.swingHammer()])
+    // The result waits for the hammer and for the cooldown bar to fill, whichever is later.
+    const [out] = await Promise.all([this.g.backend.enhance(this.forgeSel, protect), this.swingHammer(), this.forgeCdDone()])
       .finally(() => (this.enhancing = false));
-    if (!out) return;
+    if (!out) {
+      this.renderForge();
+      return false;
+    }
     const { result, item } = out;
+    // Short enough for one line on the narrow stage (owner 2026-11-18); forgeResult shrinks it if it still isn't.
     if (result === 'success') {
-      this.forgeResult('ok', `สำเร็จ! ${itemName(item)}`);
+      this.forgeResult('ok', `สำเร็จ! ระดับขึ้นเป็น +${plusOf(item)}`);
     } else {
       this.forgeResult('fail', result === 'drop' ? `ล้มเหลว! ระดับลดลงเหลือ +${plusOf(item)}`
-        : result === 'saved' ? `ล้มเหลว… หินกันระดับลดทำงาน ระดับยังเป็น +${plusOf(item)}`
+        : result === 'saved' ? `ล้มเหลว… หินกันระดับลด ยังเป็น +${plusOf(item)}`
         : 'ล้มเหลว… ระดับเท่าเดิม');
     }
     this.markInventory();
     this.renderForge();
+    return item;
+  }
+
+  /** True while the blacksmith window is open (Game skips your own overhead enhance text then: the window shows it). */
+  get forgeShown(): boolean {
+    return this.forgeOpen;
   }
 
   /** "สุ่มสเตตัส": which stats an extra line can become and the tier chances, for this item if one is placed. */
