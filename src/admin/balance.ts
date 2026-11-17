@@ -693,6 +693,9 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('label', {}, FX_LAYER_NAME[k], numBox(() => a[k], (n) => { a[k] = n; }, ca[k], FX_LAYER_RANGE[k][0], FX_LAYER_RANGE[k][1], step, refresh));
     const on = h('input', { type: 'checkbox', checked: a.enabled, onchange: (e: Event) => { a.enabled = (e.target as HTMLInputElement).checked; refresh(); } });
     const deb = h('input', { type: 'checkbox', checked: a.debuffs, onchange: (e: Event) => { a.debuffs = (e.target as HTMLInputElement).checked; refresh(); } });
+    const mergeOn = h('input', { type: 'checkbox', checked: a.mergeNums, onchange: (e: Event) => { a.mergeNums = (e.target as HTMLInputElement).checked; refresh(); } });
+    const ownOnly = h('input', { type: 'checkbox', checked: a.ownNumsOnly, onchange: (e: Event) => { a.ownNumsOnly = (e.target as HTMLInputElement).checked; refresh(); } });
+    const flag = (box: HTMLInputElement, changed: boolean, text: string) => h('label', { class: changed ? 'bal-changed' : '' }, box, text);
     fxCard.replaceChildren(
       h('h2', {}, 'เอฟเฟกต์สกิล (ชั้นเสริม)'),
       h('div', { class: 'muted' }, 'แสงเรือง แสงบนพื้น และอนุภาคที่เกมวาดทับภาพเอฟเฟกต์ของสกิล ส่วนจอสั่นกับภาพค้างเกิดเฉพาะจอของคนที่ร่าย และเฉพาะตอนที่ท่าโดนมอน · ค่าของแต่ละท่าอยู่ใน src/client/fxLayer.ts (FX_RECIPES) ค่าในการ์ดนี้คูณทุกท่า · มีผลกับทุกคนทันทีหลังบันทึก'),
@@ -700,6 +703,14 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'row bal-line' }, num('glow', 0.1), num('ground', 0.1), num('particles', 0.1)),
       h('div', { class: 'row bal-line' }, num('shake', 0.1), num('hitstopMs', 5), num('crit', 0.1)),
       h('div', { class: 'muted' }, 'ภาพค้างจริง = ค่านี้ × ความหนักของท่า (0–1) และไม่เกิน 120 ms · ตอนนี้เปิดชั้นเสริมให้พายุดาบท่าเดียวก่อน'),
+      h('h3', {}, 'ตัวเลขดาเมจ (ลดอาการกระตุกตอนมอนเยอะ)'),
+      h('div', { class: 'row bal-line' },
+        num('maxNums', 5),
+        flag(mergeOn, a.mergeNums !== ca.mergeNums, ' รวมเลขที่โดนพร้อมกัน'),
+        num('mergeSec', 0.05),
+        flag(ownOnly, a.ownNumsOnly !== ca.ownNumsOnly, ' เห็นเฉพาะเลขดาเมจของตัวเอง'),
+      ),
+      h('div', { class: 'muted' }, 'ตัวเลขบนจอสูงสุด: เกินแล้วอันเก่าสุดหาย (ค่าในโค้ด 40 เดิม 120) · รวมเลข: ดาเมจบนเป้าเดียวกันในช่วงเวลานี้รวมเป็นเลขเดียว (คริรวมกับคริ ธรรมดารวมกับธรรมดา เลขที่ตัวเองโดนก็รวม) · เห็นเฉพาะของตัวเอง: เห็นแค่ดาเมจที่ตัวเองตีและที่ตัวเองโดน (server ไม่ส่งของคนอื่นมาเลย) ข้อความอื่นยังเห็นเหมือนเดิม'),
     );
   };
 

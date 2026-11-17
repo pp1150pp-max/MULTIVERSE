@@ -18,8 +18,16 @@ import { shownCos } from './cosLook';
 import { isTouchMode } from './touch/device';
 import { rideScale, seatOf } from './cosmeticViews';
 
-interface Num { el: HTMLDivElement; x: number; y: number; z: number; t: number; life: number; height: number; dx: number; dy: number; pop: number }
-interface Plate { el: HTMLDivElement; fill: HTMLDivElement; title?: HTMLDivElement; name?: HTMLDivElement; cos?: string; debuffs?: HTMLDivElement; mask?: number }
+interface Num {
+  el: HTMLDivElement; x: number; y: number; z: number; t: number; life: number; height: number; dx: number; dy: number; pop: number;
+  /** Seconds since the pop last restarted (a merged hit pops it again). */
+  popT: number;
+  /** Merge key (target id + kind) and the number shown so far; key '' = never merges. */
+  key: string;
+  value: number;
+}
+/** Cached last-written values (w = fill width, f = class flags), so unchanged plates touch no styles. */
+interface Plate { el: HTMLDivElement; fill: HTMLDivElement; title?: HTMLDivElement; name?: HTMLDivElement; cos?: string; debuffs?: HTMLDivElement; mask?: number; w?: string; f?: number }
 
 /** DOM overlay for damage numbers, monster nameplates and loot labels. */
 /** Which row of the number sheet each kind of number uses. */
@@ -36,7 +44,6 @@ const GLYPH_WIDTH: Record<string, number> = {
 /** Hits this close together in time are treated as one burst and spread out. */
 const STACK_TIME = 0.35;
 const POP_TIME = 0.14;
-const MAX_NUMS = 120;
 /** Highest a stack of numbers climbs, in pixels. */
 const MAX_STACK = 110;
 /** How long a chat bubble stays over a head. */
@@ -61,6 +68,8 @@ export function countdown(seconds: number): string {
 
 export class Floating {
   private nums: Num[] = [];
+  /** Hidden number elements to reuse (creating and removing a div per hit costs more). */
+  private freeNums: HTMLDivElement[] = [];
   private plates = new Map<Monster, Plate>();
   private labels = new Map<Loot, HTMLDivElement>();
   private names = new Map<Player, Plate>();
@@ -96,17 +105,34 @@ export class Floating {
     for (const src of [GLYPH_SHEET, CRIT_BURST]) new Image().src = src;
   }
 
-  text(x: number, y: number, z: number, text: string, cls: string, life = 0.9): void {
-    const el = document.createElement('div');
-    el.className = `fnum ${cls}`;
+  /**
+   * A floating number or text. `on` = the unit it's over: with merging on (/admin effects card), a damage number on
+   * the same unit and of the same kind (crit with crit) within the merge window adds to the one already showing.
+   */
+  text(x: number, y: number, z: number, text: string, cls: string, life = 0.9, on?: number): void {
+    const fx = currentBalance().fxLayer;
     const row = GLYPH_ROW[cls];
     const drawn = row !== undefined && NUMBER.test(text);
+    const key = drawn && on !== undefined && fx.mergeNums && fx.mergeSec > 0 ? `${on}:${cls}` : '';
+    if (key) {
+      for (let i = this.nums.length - 1; i >= 0; i--) {
+        const n = this.nums[i];
+        if (n.key !== key || n.t >= fx.mergeSec) continue;
+        n.value += Math.abs(parseInt(text, 10));
+        n.el.innerHTML = glyphs(numText(n.value, text), row, cls === 'crit');
+        n.popT = 0;
+        return;
+      }
+    }
+    const el = this.freeNums.pop() ?? document.createElement('div');
+    el.className = `fnum ${cls}`;
+    el.style.display = '';
+    el.style.opacity = '';
     if (drawn) el.innerHTML = glyphs(text, row, cls === 'crit');
-    // Crit numbers' size, set on /admin with the skill effects' layer (owner 2026-11-15).
-    const critScale = currentBalance().fxLayer.crit;
-    if (cls === 'crit' && critScale !== 1) el.style.scale = String(critScale);
     else el.textContent = text;
-    this.root.append(el);
+    // Crit numbers' size, set on /admin with the skill effects' layer (owner 2026-11-15).
+    el.style.scale = cls === 'crit' && fx.crit !== 1 ? String(fx.crit) : '';
+    if (!el.isConnected) this.root.append(el);
     // Numbers landing on the same spot stack up and fan out, so a burst of hits stays readable.
     let below = 0;
     let count = 0;
@@ -120,13 +146,23 @@ export class Floating {
     }
     const side = count % 2 ? 1 : -1;
     this.nums.push({
-      el, x, y, z, t: 0, life,
+      el, x, y, z, t: 0, life, popT: 0, key, value: drawn ? Math.abs(parseInt(text, 10)) : 0,
       height: !drawn ? 0 : cls === 'crit' ? 38 : 26,
       dx: drawn ? side * (8 + Math.random() * 14) : 0,
       dy: drawn ? Math.min(below, MAX_STACK) : cls === 'exp' ? -30 : 0,
       pop: !drawn ? 0 : cls === 'crit' ? 0.8 : 0.3,
     });
-    if (this.nums.length > MAX_NUMS) this.nums.shift()!.el.remove();
+    // Past the cap (/admin, owner 2026-11-17) the oldest go.
+    const max = Math.max(1, Math.round(fx.maxNums));
+    while (this.nums.length > max) this.freeNum(this.nums.shift()!);
+  }
+
+  /** Hides a number and keeps its element for the next one (a few spare at most). */
+  private freeNum(n: Num): void {
+    if (this.freeNums.length < 40) {
+      n.el.style.display = 'none';
+      this.freeNums.push(n.el);
+    } else n.el.remove();
   }
 
   /** A chat bubble over a character (matched by name); a new one from the same name replaces the old. Plain text only. */
@@ -311,17 +347,20 @@ export class Floating {
     for (let i = this.nums.length - 1; i >= 0; i--) {
       const n = this.nums[i];
       n.t += dt;
+      n.popT += dt;
+      if (n.t >= n.life) {
+        this.freeNum(n);
+        this.nums.splice(i, 1);
+        continue;
+      }
       const s = g.toScreen(n.x, n.y, n.z);
       const k = n.t / n.life;
       // Jumps up fast then hangs in the air; a hit starts oversized and snaps down to size.
       const rise = 46 * (1 - (1 - k) * (1 - k));
-      const pop = 1 + n.pop * Math.max(0, 1 - n.t / POP_TIME);
-      n.el.style.transform = `translate(${s.sx + n.dx * k}px, ${s.sy - n.dy - rise}px) translate(-50%, -50%) scale(${pop})`;
-      n.el.style.opacity = String(1 - Math.max(0, (k - 0.6) / 0.4));
-      if (n.t >= n.life) {
-        n.el.remove();
-        this.nums.splice(i, 1);
-      }
+      const pop = 1 + n.pop * Math.max(0, 1 - n.popT / POP_TIME);
+      n.el.style.transform = `translate(${(s.sx + n.dx * k).toFixed(1)}px, ${(s.sy - n.dy - rise).toFixed(1)}px) translate(-50%, -50%) scale(${pop.toFixed(3)})`;
+      const fade = k > 0.6 ? (1 - (k - 0.6) / 0.4).toFixed(2) : '';
+      if (n.el.style.opacity !== fade) n.el.style.opacity = fade;
     }
 
     const seen = new Set<Monster>();
@@ -351,15 +390,20 @@ export class Floating {
         pl = { el, fill, debuffs, mask: 0 };
         this.plates.set(m, pl);
       }
-      pl.el.style.transform = `translate(${s.sx}px, ${s.sy}px) translate(-50%, -100%)`;
-      pl.fill.style.width = `${(Math.max(0, m.hp) / m.maxHp) * 100}%`;
+      pl.el.style.transform = `translate(${s.sx.toFixed(1)}px, ${s.sy.toFixed(1)}px) translate(-50%, -100%)`;
+      setWidth(pl, (Math.max(0, m.hp) / m.maxHp) * 100);
       if (pl.debuffs && pl.mask !== shownDebuffs) {
         pl.mask = shownDebuffs;
         pl.debuffs.innerHTML = debuffIconsHtml(shownDebuffs);
       }
-      pl.el.classList.toggle('hostile', m.isHostile);
       // Grey name = too weak to give full EXP.
-      pl.el.classList.toggle('trivial', m.level < g.player.level && expGapMult(g.player.level, m.level) < 1);
+      const trivial = m.level < g.player.level && expGapMult(g.player.level, m.level) < 1;
+      const flags = (m.isHostile ? 1 : 0) | (trivial ? 2 : 0);
+      if (pl.f !== flags) {
+        pl.f = flags;
+        pl.el.classList.toggle('hostile', m.isHostile);
+        pl.el.classList.toggle('trivial', trivial);
+      }
     }
     for (const [m, pl] of this.plates) {
       if (!seen.has(m)) {
@@ -415,9 +459,13 @@ export class Floating {
       // The name row, not firstChild: the (usually hidden) title row comes first in the plate.
       const label = `Lv.${p.level} ${p.name}${p.alive ? '' : ' 💀'}`;
       if (pl.name!.textContent !== label) pl.name!.textContent = label;
-      pl.el.classList.toggle('party', !!g.party.memberOf(p));
-      pl.el.style.transform = `translate(${s.sx}px, ${s.sy}px) translate(-50%, -100%)`;
-      pl.fill.style.width = `${(Math.max(0, p.hp) / Math.max(1, p.maxHp)) * 100}%`;
+      const party = g.party.memberOf(p) ? 1 : 0;
+      if (pl.f !== party) {
+        pl.f = party;
+        pl.el.classList.toggle('party', !!party);
+      }
+      pl.el.style.transform = `translate(${s.sx.toFixed(1)}px, ${s.sy.toFixed(1)}px) translate(-50%, -100%)`;
+      setWidth(pl, (Math.max(0, p.hp) / Math.max(1, p.maxHp)) * 100);
     }
     for (const [p, pl] of this.names) {
       if (!seenP.has(p)) {
@@ -471,6 +519,19 @@ function paintCos(el: HTMLElement, set: CosmeticDef | undefined): void {
   el.classList.toggle('cos', !!set);
   el.style.setProperty('--c1', set?.color ?? '');
   el.style.setProperty('--c2', set?.color2 ?? '');
+}
+
+/** A plate's HP fill width in %, written only when it changes (a tenth of a percent is the finest shown). */
+function setWidth(pl: Plate, pct: number): void {
+  const w = `${pct.toFixed(1)}%`;
+  if (pl.w === w) return;
+  pl.w = w;
+  pl.fill.style.width = w;
+}
+
+/** A merged damage total written like the hit it came from: "-123" for hurt, "123!" for a crit. */
+function numText(value: number, like: string): string {
+  return `${like.startsWith('-') ? '-' : like.startsWith('+') ? '+' : ''}${value}${like.endsWith('!') ? '!' : ''}`;
 }
 
 /** World height just over a character's head, where its nameplate and chat bubble go (higher on a mount). */

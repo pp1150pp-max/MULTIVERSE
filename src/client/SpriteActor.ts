@@ -12,6 +12,34 @@ const DIAGONAL_ROWS = 5;
 const WALK: readonly number[] = [0, 1, 2, 1];
 
 let shadowGeo: THREE.PlaneGeometry | null = null;
+let shadowMat: THREE.MeshBasicMaterial | null = null;
+
+/** The blob shadow's plane, one for every actor (each scales its own mesh). */
+export function shadowGeometry(): THREE.PlaneGeometry {
+  return (shadowGeo ??= new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2));
+}
+
+/** The blob shadow's material, shared while an actor is fully shown; a fading actor takes its own copy (shadowFade). */
+export function sharedShadowMat(): THREE.MeshBasicMaterial {
+  return (shadowMat ??= new THREE.MeshBasicMaterial({ map: fxTex.shadow, transparent: true, depthWrite: false, opacity: 0.5 }));
+}
+
+/** Sets a shadow's opacity for actor opacity `o`, giving the mesh its own material first; returns the material now on it. */
+export function shadowFade(shadow: THREE.Mesh, o: number): THREE.MeshBasicMaterial {
+  let mat = shadow.material as THREE.MeshBasicMaterial;
+  if (mat === shadowMat) {
+    if (o >= 1) return mat;
+    mat = mat.clone();
+    shadow.material = mat;
+  }
+  mat.opacity = 0.5 * o;
+  return mat;
+}
+
+/** Frees a shadow's own material (never the shared one). */
+export function disposeShadow(shadow: THREE.Mesh): void {
+  if (shadow.material !== shadowMat) (shadow.material as THREE.Material).dispose();
+}
 
 /** A camera-facing sprite standing on the ground (Ragnarok-style), with a blob shadow. */
 export class SpriteActor implements Actor {
@@ -19,7 +47,6 @@ export class SpriteActor implements Actor {
   readonly sprite: THREE.Sprite;
   private readonly mat: THREE.SpriteMaterial;
   private readonly tex: THREE.Texture;
-  private readonly shadowMat: THREE.MeshBasicMaterial;
   private row = ROW_FRONT;
   private frame = 0;
   private flip = false;
@@ -35,9 +62,7 @@ export class SpriteActor implements Actor {
     this.sprite.center.set(0.5, 0.02);
     this.sprite.scale.set(height * sheet.cellAspect, height, 1);
 
-    shadowGeo ??= new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
-    this.shadowMat = new THREE.MeshBasicMaterial({ map: fxTex.shadow, transparent: true, depthWrite: false, opacity: 0.5 });
-    const shadow = new THREE.Mesh(shadowGeo, this.shadowMat);
+    const shadow = new THREE.Mesh(shadowGeometry(), sharedShadowMat());
     this.shadow = shadow;
     shadow.scale.set(shadowRadius * 2.2, 1, shadowRadius * 1.4);
     shadow.position.y = 0.02;
@@ -117,7 +142,7 @@ export class SpriteActor implements Actor {
     this.mat.transparent = true;
     this.mat.alphaTest = 0.02;
     this.mat.opacity = o;
-    this.shadowMat.opacity = 0.5 * o;
+    shadowFade(this.shadow, o);
   }
 
   private applyUV(): void {
@@ -138,6 +163,6 @@ export class SpriteActor implements Actor {
   dispose(): void {
     this.tex.dispose();
     this.mat.dispose();
-    this.shadowMat.dispose();
+    disposeShadow(this.shadow);
   }
 }

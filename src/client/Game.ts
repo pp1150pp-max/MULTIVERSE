@@ -460,7 +460,7 @@ export class Game {
         (this.fx[ev.name] as (...a: unknown[]) => void).apply(this.fx, ev.args as unknown[]);
         break;
       case 'text':
-        this.floating.text(ev.x, ev.y, ev.z, ev.text, ev.cls, ev.life);
+        this.floating.text(ev.x, ev.y, ev.z, ev.text, ev.cls, ev.life, ev.on);
         break;
       case 'shake':
         this.shake(ev.amount);
