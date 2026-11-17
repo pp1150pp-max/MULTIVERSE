@@ -45,9 +45,9 @@ function whirl(withMonster: boolean): unknown[] {
 }
 {
   const a = whirl(true);
-  ok(a.length > 0 && a[5] === a[7] && a[6] === true, `Whirlwind that hits: caster id and hit = true (${JSON.stringify(a)})`);
+  ok(a.length > 0 && a[5] === a.at(-1) && a[6] === true && a[7] === 'whirlwind', `Whirlwind that hits: caster id and hit = true (${JSON.stringify(a)})`);
   const b = whirl(false);
-  ok(b.length > 0 && b[5] === b[7] && b[6] === false, `Whirlwind into the air: hit = false (${JSON.stringify(b)})`);
+  ok(b.length > 0 && b[5] === b.at(-1) && b[6] === false, `Whirlwind into the air: hit = false (${JSON.stringify(b)})`);
 }
 
 // Every skill's effects carry the caster, also when played later: a Fireball's blast (its shot flies first) and the
@@ -73,11 +73,11 @@ function later(cls: 'mage', id: string, name: string, withMonster: boolean): unk
 }
 {
   const a = later('mage', 'fireball', 'explosion', true);
-  ok(a.length === 8 && a[5] === a[7] && a[6] === true, `Fireball's blast: caster id, hit (${JSON.stringify(a)})`);
+  ok(a[5] === a.at(-1) && a[6] === true && a[7] === 'fireball', `Fireball's blast: caster id, hit (${JSON.stringify(a)})`);
   const b = later('mage', 'meteor', 'crater', true);
-  ok(b.length === 8 && b[5] === b[7] && b[6] === true, `Meteor's crater (a timer): caster id, hit (${JSON.stringify(b)})`);
+  ok(b[5] === b.at(-1) && b[6] === true && b[7] === 'meteor', `Meteor's crater (a timer): caster id, hit (${JSON.stringify(b)})`);
   const c = later('mage', 'meteor', 'crater', false);
-  ok(c.length === 8 && c[6] === false, `Meteor on nothing: hit = false (${JSON.stringify(c)})`);
+  ok(c[5] === c.at(-1) && c[6] === false, `Meteor on nothing: hit = false (${JSON.stringify(c)})`);
 }
 
 finish('fx-layer');
