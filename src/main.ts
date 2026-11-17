@@ -3,6 +3,7 @@ import './style.css';
 import './client/touch/device';
 import { assetSources, loadGameAssets, loadMenuAssets, usePaperMaps } from './client/assets';
 import { LOOK_PATH, type PublicLook } from './shared/paperArt';
+import { usePaperUi } from './client/img';
 import { CLASS_IDS } from './shared/data/classes';
 import { Game } from './client/Game';
 import { buildMenu, facePortrait } from './client/menu';
@@ -76,7 +77,10 @@ async function askPaperMaps(): Promise<boolean> {
 
 async function boot(): Promise<void> {
   // First of all: the game's load (started here or by entering the world) waits for this answer.
-  usePaperMaps(askPaperMaps());
+  const paper = askPaperMaps();
+  usePaperMaps(paper);
+  // The UI pictures switch when the answer comes (the menu's portraits and CSS frames included).
+  void paper.then((on) => on && usePaperUi());
   audioEngine.init();
   // The Login form needs no images, so it shows as soon as this code runs. The logo letters and
   // background (index.html / CSS) are already downloading; the class portraits (a few MB) come

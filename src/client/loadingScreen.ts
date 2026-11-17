@@ -2,6 +2,7 @@
 // bottom band. Shown while the game files download on entering the world, and briefly on every
 // zone change (owner 2026-11-10). Art: art_templates/loading/PROMPTS.md.
 import type { ClassId } from '../shared/types';
+import { imgUrl } from './img';
 
 const DIR = '/assets/sprites/ui/loading/';
 const CLASS_ART: Record<ClassId, string> = { sword: 'sword', mage: 'mage', gunslinger: 'gunslinger' };
@@ -40,7 +41,7 @@ let preloaded = false;
 export function preloadLoadingArt(): void {
   if (preloaded) return;
   preloaded = true;
-  for (const a of ALL_ART) new Image().src = `${DIR}${a}.webp`;
+  for (const a of ALL_ART) new Image().src = imgUrl(`${DIR}${a}.webp`);
 }
 
 const el = (): HTMLElement => document.getElementById('loading')!;
@@ -62,7 +63,7 @@ export function showLoading(classId: ClassId | null, label = 'กำลังโ
     `<div class="load-box"><div>${label} <span class="load-pct">0%</span></div>` +
     '<div class="load-bar"><i></i></div><p class="load-tip"></p></div>';
   root.querySelector('.load-tip')!.textContent = `เคล็ดลับ: ${pick(TIPS)}`;
-  root.style.backgroundImage = `url(${DIR}${pickArt(classId)}.webp)`;
+  root.style.backgroundImage = `url(${imgUrl(`${DIR}${pickArt(classId)}.webp`)})`;
   root.classList.add('load-art');
   root.classList.remove('hidden', 'load-out');
   const pct = root.querySelector<HTMLElement>('.load-pct')!;

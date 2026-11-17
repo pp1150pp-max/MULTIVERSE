@@ -78,6 +78,12 @@ async function keyed(f, bg) {
   for (let i = 0; i < data.length; i += 4) {
     const d = Math.hypot(data[i] - kr, data[i + 1] - kg, data[i + 2] - kb);
     data[i + 3] = d < 90 ? 0 : d > 170 ? 255 : Math.round(((d - 90) / 80) * 255);
+    // Pull the background's tint out of the edge (a green or magenta fringe): channels the key is full in may not
+    // stand far above the others.
+    if (d < 260) {
+      const lo = Math.min(...[0, 1, 2].filter((c) => !BG[bg][c]).map((c) => data[i + c]));
+      for (const c of [0, 1, 2]) if (BG[bg][c]) data[i + c] = Math.min(data[i + c], lo + 40);
+    }
   }
   return { w: info.width, h: info.height, d: data };
 }
