@@ -40,6 +40,10 @@ export const CODE_BOSS_SWITCH_SEC = 10;
 /** Ordinary monsters give up after this many seconds without a hit (owner 2026-11-17: off). */
 export const CODE_MOB_GIVE_UP_SEC = 0;
 export const CODE_MOB_RETURN_IGNORE_HITS = true;
+/** Boss room: the boss keeps its HP and waits when the whole group is down (owner 2026-11-17); off = it walks home and heals. */
+export const CODE_BOSS_WIPE_KEEP_HP = true;
+/** Seconds a boss-room group that is all down has to get someone up with a feather (owner: 5). */
+export const CODE_ROOM_WIPE_SECONDS = 5;
 
 /**
  * One class's numbers: Lv1 stats, added per level, final multipliers (gear included), damage to bosses, and how
@@ -129,6 +133,10 @@ export interface Balance {
   mobGiveUpSec: number;
   /** A monster walking home (leash / hurt after a fight) ignores hits: no turning back to chase (owner 2026-11-17); off = the old behaviour. */
   mobReturnIgnoreHits: boolean;
+  /** Boss room: when every player is down the boss keeps its HP and waits (no walking home, healing or reset); off = the old behaviour. */
+  bossWipeKeepHp: boolean;
+  /** Seconds a boss-room group that is all down has to revive someone before it has lost. */
+  roomWipeSec: number;
   /** Auto Play defaults, distances and switches (autoTuning.ts). */
   auto: AutoConfig;
   /** The skill effects' extra layer: glow, ground light, particles, hit feel (fxLayerTuning.ts). */
@@ -171,6 +179,10 @@ export interface BalanceTuning {
   mobGiveUpSec?: number;
   /** Walking-home monsters ignoring hits, when not the code's (on). */
   mobReturnIgnoreHits?: boolean;
+  /** Boss keeps its HP when the group is all down, when not the code's (on). */
+  bossWipeKeepHp?: boolean;
+  /** Wipe revive seconds, when not the code's. */
+  roomWipeSec?: number;
   /** Auto Play settings that differ from the code. */
   auto?: AutoTuning;
   /** Skill effect extra-layer numbers that differ from the code. */
@@ -202,6 +214,7 @@ export const BALANCE_RANGE = {
   mobPack: [1, 5],
   bossSwitchSec: [0, 120],
   mobGiveUpSec: [0, 120],
+  roomWipeSec: [3, 60],
 } as const satisfies Record<string, readonly [number, number]>;
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
@@ -235,6 +248,8 @@ export function codeBalance(): Balance {
     bossSwitchSec: CODE_BOSS_SWITCH_SEC,
     mobGiveUpSec: CODE_MOB_GIVE_UP_SEC,
     mobReturnIgnoreHits: CODE_MOB_RETURN_IGNORE_HITS,
+    bossWipeKeepHp: CODE_BOSS_WIPE_KEEP_HP,
+    roomWipeSec: CODE_ROOM_WIPE_SECONDS,
     auto: codeAuto(),
     fxLayer: codeFxLayer(),
     rigLook: codeRigLook(),
@@ -273,6 +288,8 @@ export function mergeBalance(t: BalanceTuning): Balance {
   }
   if (t.bossSwitchSec !== undefined) b.bossSwitchSec = t.bossSwitchSec;
   if (t.mobGiveUpSec !== undefined) b.mobGiveUpSec = t.mobGiveUpSec;
+  if (t.bossWipeKeepHp !== undefined) b.bossWipeKeepHp = t.bossWipeKeepHp;
+  if (t.roomWipeSec !== undefined) b.roomWipeSec = t.roomWipeSec;
   if (t.mobReturnIgnoreHits !== undefined) b.mobReturnIgnoreHits = t.mobReturnIgnoreHits;
   b.auto = mergeAuto(t.auto);
   b.fxLayer = mergeFxLayer(t.fxLayer);
@@ -408,7 +425,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'monsters', 'mobPack', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'monsters', 'mobPack', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'bossWipeKeepHp', 'roomWipeSec', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -485,7 +502,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   }
 
   // Single numbers
-  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec', range: readonly [number, number], what: string): string | null => {
+  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'roomWipeSec', range: readonly [number, number], what: string): string | null => {
     const n = num(o[key], range[0], range[1], what);
     if (typeof n === 'string') return n;
     if (n !== undefined && n !== CODE[key]) out[key] = n;
@@ -496,6 +513,13 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (x === undefined) return null;
     if (typeof x !== 'boolean') return strict ? 'สวิตช์มอนเดินกลับไม่สนการโจมตีต้องเป็นเปิด/ปิด' : null;
     if (x !== CODE.mobReturnIgnoreHits) out.mobReturnIgnoreHits = x;
+    return null;
+  };
+  const wipeKeep = (): string | null => {
+    const x = o.bossWipeKeepHp;
+    if (x === undefined) return null;
+    if (typeof x !== 'boolean') return strict ? 'สวิตช์บอสไม่ฟื้นเลือดตอนทีมตายหมดต้องเป็นเปิด/ปิด' : null;
+    if (x !== CODE.bossWipeKeepHp) out.bossWipeKeepHp = x;
     return null;
   };
   /** A tier array (5 numbers, T1 first): the array, undefined (missing / dropped), or an error to return. */
@@ -798,6 +822,8 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     one('bossSwitchSec', BALANCE_RANGE.bossSwitchSec, 'บอสเปลี่ยนเป้าหมายทุก (วินาที)') ??
     one('mobGiveUpSec', BALANCE_RANGE.mobGiveUpSec, 'มอนธรรมดาเลิกไล่เมื่อไม่โดนตี (วินาที)') ??
     returnIgnore() ??
+    wipeKeep() ??
+    one('roomWipeSec', BALANCE_RANGE.roomWipeSec, 'เวลาชุบตอนตายหมดทีม (วินาที)') ??
     auto() ??
     tutorial() ??
     skills() ??
@@ -891,6 +917,8 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.potions.swordBonus !== b.potions.swordBonus) out.push(`โบนัสยา HP นักดาบ +${a.potions.swordBonus}% → +${b.potions.swordBonus}%`);
   if (a.bossSwitchSec !== b.bossSwitchSec) out.push(`บอสเปลี่ยนเป้าหมายทุก ${a.bossSwitchSec || 'ปิด'} → ${b.bossSwitchSec || 'ปิด'} วิ`);
   if (a.mobGiveUpSec !== b.mobGiveUpSec) out.push(`มอนธรรมดาเลิกไล่เมื่อไม่โดนตี ${a.mobGiveUpSec || 'ไม่เลิก'} → ${b.mobGiveUpSec || 'ไม่เลิก'} วิ`);
+  if (a.bossWipeKeepHp !== b.bossWipeKeepHp) out.push(`บอสไม่ฟื้นเลือดตอนทีมตายหมด ${a.bossWipeKeepHp ? 'เปิด' : 'ปิด'} → ${b.bossWipeKeepHp ? 'เปิด' : 'ปิด'}`);
+  if (a.roomWipeSec !== b.roomWipeSec) out.push(`เวลาชุบตอนตายหมดทีม ${a.roomWipeSec} → ${b.roomWipeSec} วิ`);
   if (a.mobReturnIgnoreHits !== b.mobReturnIgnoreHits) out.push(`มอนเดินกลับบ้านไม่สนการโจมตี ${a.mobReturnIgnoreHits ? 'เปิด' : 'ปิด'} → ${b.mobReturnIgnoreHits ? 'เปิด' : 'ปิด'}`);
   out.push(...autoChanges(a.auto, b.auto));
   out.push(...tutorialChanges(a.tutorial, b.tutorial));

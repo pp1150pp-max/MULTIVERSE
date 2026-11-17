@@ -596,6 +596,12 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
           h('input', { type: 'checkbox', checked: draft.mobReturnIgnoreHits, onchange: (e: Event) => { draft.mobReturnIgnoreHits = (e.target as HTMLInputElement).checked; updateSummary(); } }),
           ' มอนเดินกลับบ้านไม่สนการโจมตี (ถูกตีระหว่างทางก็ไม่หันมาไล่ ยังโดนดาเมจและฟื้น HP ตามปกติ · ปิด = หันกลับมาไล่เหมือนเดิม)'),
       ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.bossWipeKeepHp, onchange: (e: Event) => { draft.bossWipeKeepHp = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' บอสไม่ฟื้นเลือดตอนทีมตายหมด (ห้องบอส: ทุกคนล้ม = บอสยืนรอ HP เท่าเดิม ไม่เดินกลับ/ไม่รีเซ็ต ชุบด้วยขนนกทันเวลาแล้วสู้ต่อ · ปิด = เดินกลับฟื้นเลือดเต็มเหมือนเดิม)'),
+        h('label', {}, 'เวลาชุบตอนตายหมดทีม (วินาที)', numBox(() => draft.roomWipeSec, (n) => { draft.roomWipeSec = n; }, code.roomWipeSec, ...BALANCE_RANGE.roomWipeSec, 1, updateSummary)),
+      ),
     );
     refresh();
   };
