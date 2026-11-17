@@ -30,6 +30,7 @@ const CHARS = {
   sword: { bg: 'magenta', anims: { ...BASE_ANIMS, attack: { fps: 24 }, attack_2: { fps: 24 }, attack_3: { fps: 24 } } },
   // A purple witch: drawn on green.
   mage: { bg: 'green', anims: { ...BASE_ANIMS, attack: { fps: 24 }, run_attack: { fps: 20, loop: true } } },
+  gunslinger: { bg: 'magenta', anims: { ...BASE_ANIMS, attack: { fps: 24 }, run_attack: { fps: 20, loop: true } } },
 };
 let ANIMS = CHARS.sword.anims;
 let BG = 'magenta';
