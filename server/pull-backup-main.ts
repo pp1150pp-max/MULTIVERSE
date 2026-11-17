@@ -11,7 +11,7 @@
 //      BACKUP_PULL_DIR (default <home>/MULTIVERSE-backups, outside the project so git never sees it).
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -21,8 +21,12 @@ const REMOTE_DIR = process.env.VPS_DIR ?? 'MULTIVERSE';
 const LOCAL_DIR = process.env.BACKUP_PULL_DIR ?? join(homedir(), 'MULTIVERSE-backups');
 const ki = process.argv.indexOf('--keep');
 const KEEP = ki >= 0 ? Math.max(1, Number(process.argv[ki + 1]) || 30) : 30;
-/** Live DB backups only (multiverse-<stamp>-<kind>.db), never dev.db's. */
-const NAME_RE = /^multiverse-\d{8}-\d{6}-\d{3}-[a-z-]+\.db$/;
+/**
+ * Live DB backups only, never dev.db's: the server's own (multiverse-<stamp>-<kind>.db) and the ones made
+ * before a deploy or by hand (multiverse-before-<what>-<stamp>.db). Safe characters only (the name goes
+ * into an ssh command line).
+ */
+const NAME_RE = /^multiverse-[A-Za-z0-9._-]+\.db$/;
 const SSH_OPTS = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15'];
 
 const ssh = (cmd: string): string => execFileSync('ssh', [...SSH_OPTS, HOST, cmd], { encoding: 'utf8' }).trim();
@@ -70,6 +74,12 @@ if (existsSync(dest)) {
   console.log(`เก็บแล้ว: ${dest} (SHA-256 ตรง, quick_check ok)`);
 }
 
-const old = readdirSync(LOCAL_DIR).filter((n) => NAME_RE.test(n)).sort().reverse().slice(KEEP);
+// Newest first by when they were copied here (the names have more than one shape, so not by name).
+const old = readdirSync(LOCAL_DIR)
+  .filter((n) => NAME_RE.test(n))
+  .map((n) => ({ n, t: statSync(join(LOCAL_DIR, n)).mtimeMs }))
+  .sort((a, b) => b.t - a.t)
+  .slice(KEEP)
+  .map((x) => x.n);
 for (const n of old) rmSync(join(LOCAL_DIR, n), { force: true });
 if (old.length) console.log(`ลบสำเนาเก่า ${old.length} ไฟล์ (เก็บล่าสุด ${KEEP})`);

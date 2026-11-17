@@ -591,6 +591,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         h('label', {}, 'บอสเปลี่ยนเป้าทุก (วินาที, 0 = ปิด)', numBox(() => draft.bossSwitchSec, (n) => { draft.bossSwitchSec = n; }, code.bossSwitchSec, ...BALANCE_RANGE.bossSwitchSec, 1, updateSummary)),
         h('label', {}, 'มอนธรรมดาเลิกไล่เมื่อไม่โดนตี (วินาที, 0 = ไม่เลิก)', numBox(() => draft.mobGiveUpSec, (n) => { draft.mobGiveUpSec = n; }, code.mobGiveUpSec, ...BALANCE_RANGE.mobGiveUpSec, 1, updateSummary)),
       ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.mobReturnIgnoreHits, onchange: (e: Event) => { draft.mobReturnIgnoreHits = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' มอนเดินกลับบ้านไม่สนการโจมตี (ถูกตีระหว่างทางก็ไม่หันมาไล่ ยังโดนดาเมจและฟื้น HP ตามปกติ · ปิด = หันกลับมาไล่เหมือนเดิม)'),
+      ),
     );
     refresh();
   };
