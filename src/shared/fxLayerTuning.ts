@@ -1,7 +1,7 @@
 // Server-wide numbers of the skill effects' extra layer (owner 2026-11-15, docs/systems/skill-fx-layer.md): the glow,
 // ground light and particles the game draws over a skill's hand-drawn frames, and the feel of a hit on the caster's
 // own screen (screen shake, a short freeze, bigger crit numbers), and how many damage numbers show (owner 2026-11-17:
-// cap, merging hits on one target, only your own). Each effect's own recipe is in src/client/fxLayer.ts;
+// cap, merging hits on one target, only your own) and how bullets move between snapshots (2026-11-18). Each effect's own recipe is in src/client/fxLayer.ts;
 // these multiply all of them. Tuned on /admin → ปรับสมดุล → "เอฟเฟกต์สกิล (ชั้นเสริม)", saved inside the balance
 // tuning (`BalanceTuning.fxLayer`), only what differs from the code.
 
@@ -30,6 +30,8 @@ export interface FxLayerConfig {
   mergeSec: number;
   /** Damage numbers only of your own hits and of hits on you (others' are not even sent). */
   ownNumsOnly: boolean;
+  /** Bullets fly on smoothly between snapshots instead of snapping back to the server's (older) spot (owner 2026-11-18). */
+  smoothShots: boolean;
 }
 
 export type FxLayerTuning = Partial<FxLayerConfig>;
@@ -57,20 +59,21 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   mergeSec: 'รวมเลขที่โดนในช่วง (วิ)',
 };
 
-const FX_LAYER_BOOLS = ['enabled', 'debuffs', 'mergeNums', 'ownNumsOnly'] as const;
+const FX_LAYER_BOOLS = ['enabled', 'debuffs', 'mergeNums', 'ownNumsOnly', 'smoothShots'] as const;
 type FxLayerBool = (typeof FX_LAYER_BOOLS)[number];
 const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
   enabled: 'เอฟเฟกต์สกิล (ชั้นเสริม)',
   debuffs: 'ดีบัฟบนตัวมอน (ไอคอน + เอฟเฟกต์)',
   mergeNums: 'รวมเลขดาเมจที่โดนพร้อมกัน',
   ownNumsOnly: 'เห็นเฉพาะเลขดาเมจของตัวเอง',
+  smoothShots: 'กระสุนบินลื่น (ไม่ดึงกลับตาม server)',
 };
 
 /** The code's own numbers (a fresh copy). */
 export function codeFxLayer(): FxLayerConfig {
   return {
     enabled: true, debuffs: true, glow: 1, ground: 1, particles: 1, shake: 1, hitstopMs: 60, crit: 1,
-    maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false,
+    maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true,
   };
 }
 const CODE = codeFxLayer();
