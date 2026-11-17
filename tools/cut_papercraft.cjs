@@ -25,6 +25,19 @@ const MAPS = {
     ['ground_pave.png', 'ground', { out: 'pave' }],
     ['ground_room.png', 'ground', { out: 'room_forest' }],
   ],
+  map2_marsh: [
+    // The 12th cell is a spare (the portal moved to the camp sheet).
+    ['props.png', 'props', { cols: 4, rows: 3, names: ['swamp_tree_0', 'swamp_tree_1', 'swamp_tree_2', 'willow', 'reeds_0', 'reeds_1', 'fern', 'mushrooms', 'mossrock_0', 'mossrock_1', 'swamp_stump'] }],
+    ['room_props.png', 'props', { cols: 4, rows: 2, names: ['pillar_0', 'wall', 'brazier', 'boulder', 'pillar_1', 'rubble', 'rune_stone', 'tree'].map((n) => `room_marsh_${n}`) }],
+    ['decor.png', 'atlas', { cols: 4, rows: 3, out: 'decor_marsh', place: 'bottom', fit: 'shared' }],
+    ['planks.png', 'planks', { out: 'marsh_planks', cols: 3, aspect: 2.9 / 5 }],
+    ['island_cliff.png', 'atlas', { cols: 4, rows: 2, out: 'island_cliff_marsh', place: 'top', fit: 'each' }],
+    ['island_slabs.png', 'atlas', { cols: 4, rows: 2, out: 'island_slabs_marsh', place: 'centre', fit: 'shared' }],
+    ['ground_marsh.png', 'ground', { out: 'marsh' }],
+    ['ground_mud.png', 'ground', { out: 'mud' }],
+    ['ground_water.png', 'ground', { out: 'water' }],
+    ['ground_room.png', 'ground', { out: 'room_marsh' }],
+  ],
 };
 
 async function readRaw(file) {
@@ -184,6 +197,24 @@ async function atlas(img, o, label) {
   await save(sheet, `props/${o.out}.png`);
 }
 
+/**
+ * Boardwalk pieces (world.ts PLANK_SHEET): one row of cells, each stretched over a board `aspect` wide for its length.
+ * The sheets come as long strips, so each cell takes a piece of its strip that already has that shape.
+ */
+async function planks(img, o, label) {
+  const [W, H] = await sizeOf(`props/${o.out}.png`);
+  const cw = W / o.cols;
+  const strips = cells(img, o.cols, 1, label);
+  const layers = [];
+  for (let i = 0; i < o.cols; i++) {
+    const [x0, y0, x1, y1] = strips[i];
+    const len = Math.min(y1 - y0, Math.round((x1 - x0) / o.aspect));
+    const top = Math.round(y0 + (y1 - y0 - len) / 2);
+    layers.push({ input: await crop(img, [x0, top, x1, top + len]).resize(Math.round(cw), H, { kernel: 'lanczos3', fit: 'fill' }).png().toBuffer(), left: Math.round(i * cw), top: 0 });
+  }
+  await save(sharp({ create: { width: W, height: H, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).composite(layers), `props/${o.out}.png`);
+}
+
 /** A repeating ground tile: shrunk to 1024 square, its edges blended into the opposite ones so it repeats without a seam. */
 async function ground(file, o) {
   const N = 1024;
@@ -226,6 +257,7 @@ async function main() {
     else {
       const img = key(await readRaw(src));
       if (kind === 'props') await props(img, o, file);
+      else if (kind === 'planks') await planks(img, o, file);
       else await atlas(img, o, file);
     }
   }

@@ -46,11 +46,15 @@ const PAPER_PROPS = new Set([
   'tree_0', 'tree_1', 'tree_2', 'stump_tall', 'bush_0', 'bush_1', 'bush_2', 'stump', 'rock_0', 'rock_1', 'rock_2', 'pebble_0', 'pebble_1',
   'decor_forest', 'island_cliff_forest', 'island_slabs_forest',
   ...['pillar_0', 'wall', 'brazier', 'boulder', 'pillar_1', 'rubble', 'rune_stone', 'tree'].map((n) => `room_forest_${n}`),
+  // Map 2 Misty Marsh
+  'swamp_tree_0', 'swamp_tree_1', 'swamp_tree_2', 'willow', 'reeds_0', 'reeds_1', 'fern', 'mushrooms', 'mossrock_0', 'mossrock_1', 'swamp_stump',
+  'decor_marsh', 'marsh_planks', 'island_cliff_marsh', 'island_slabs_marsh',
+  ...['pillar_0', 'wall', 'brazier', 'boulder', 'pillar_1', 'rubble', 'rune_stone', 'tree'].map((n) => `room_marsh_${n}`),
   // Every map's camp and island rim
   'tent', 'campfire', 'sign', 'portal', 'runestone', 'well', 'barrel', 'chest', 'cart', 'banner_red', 'flag', 'watchtower',
   'island_debris', 'island_cracks',
 ]);
-const PAPER_GROUND = new Set(['grass', 'dirt', 'pave', 'room_forest']);
+const PAPER_GROUND = new Set(['grass', 'dirt', 'pave', 'room_forest', 'marsh', 'mud', 'water', 'room_marsh']);
 let paperMaps = false;
 let paperAnswer: Promise<boolean> = Promise.resolve(false);
 
