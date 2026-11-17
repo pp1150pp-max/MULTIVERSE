@@ -54,12 +54,16 @@ const PAPER_PROPS = new Set([
   'snow_pine_0', 'snow_pine_1', 'snow_pine_2', 'frost_tree', 'snow_shrub_0', 'snow_shrub_1', 'frost_fern', 'snow_stump',
   'snow_rock_0', 'snow_rock_1', 'ice_crystal_0', 'ice_crystal_1', 'decor_snow', 'island_cliff_snow', 'island_slabs_snow',
   ...['pillar_0', 'wall', 'brazier', 'boulder', 'pillar_1', 'rubble', 'rune_stone', 'tree'].map((n) => `room_snow_${n}`),
+  // Map 4 Ashen Isle
+  'burnt_pillar_0', 'burnt_pillar_1', 'burnt_pillar_2', 'charred_tree', 'ash_shrub_0', 'ash_shrub_1', 'ember_fern', 'charred_stump',
+  'basalt_0', 'basalt_1', 'magma_crystal_0', 'magma_crystal_1', 'decor_volcano', 'island_cliff_volcano', 'island_slabs_volcano',
+  ...['pillar_0', 'wall', 'brazier', 'boulder', 'pillar_1', 'rubble', 'rune_stone', 'tree'].map((n) => `room_volcano_${n}`),
   // Every map's camp and island rim
   'tent', 'campfire', 'sign', 'portal', 'runestone', 'well', 'barrel', 'chest', 'cart', 'banner_red', 'flag', 'watchtower',
   'island_debris', 'island_cracks',
 ]);
 const PAPER_GROUND = new Set(['grass', 'dirt', 'pave', 'room_forest', 'marsh', 'mud', 'water', 'room_marsh',
-  'snow', 'snow_path', 'ice', 'room_snow']);
+  'snow', 'snow_path', 'ice', 'room_snow', 'ash_rock', 'ash_path', 'lava', 'room_volcano']);
 let paperMaps = false;
 let paperAnswer: Promise<boolean> = Promise.resolve(false);
 
