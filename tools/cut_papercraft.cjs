@@ -38,6 +38,29 @@ const MAPS = {
     ['ground_water.png', 'ground', { out: 'water' }],
     ['ground_room.png', 'ground', { out: 'room_marsh' }],
   ],
+  map3_snow: [
+    ['props.png', 'props', { cols: 4, rows: 3, names: ['snow_pine_0', 'snow_pine_1', 'snow_pine_2', 'frost_tree', 'snow_shrub_0', 'snow_shrub_1', 'frost_fern', 'snow_stump', 'snow_rock_0', 'snow_rock_1', 'ice_crystal_0', 'ice_crystal_1'] }],
+    ['room_props.png', 'props', { cols: 4, rows: 2, names: ['pillar_0', 'wall', 'brazier', 'boulder', 'pillar_1', 'rubble', 'rune_stone', 'tree'].map((n) => `room_snow_${n}`) }],
+    // Cells 6-8 lie flat on the ground (world.ts DECOR.snow.flat), so they sit in the middle of their cell.
+    ['decor.png', 'atlas', { cols: 4, rows: 3, out: 'decor_snow', place: 'bottom', fit: 'shared', flat: [6, 7, 8] }],
+    ['island_cliff.png', 'atlas', { cols: 4, rows: 2, out: 'island_cliff_snow', place: 'top', fit: 'each' }],
+    ['island_slabs.png', 'atlas', { cols: 4, rows: 2, out: 'island_slabs_snow', place: 'centre', fit: 'shared' }],
+    ['ground_snow.png', 'ground', { out: 'snow' }],
+    ['ground_snow_path.png', 'ground', { out: 'snow_path' }],
+    ['ground_ice.png', 'ground', { out: 'ice' }],
+    ['ground_room.png', 'ground', { out: 'room_snow' }],
+  ],
+  map4_volcano: [
+    ['props.png', 'props', { cols: 4, rows: 3, names: ['burnt_pillar_0', 'burnt_pillar_1', 'burnt_pillar_2', 'charred_tree', 'ash_shrub_0', 'ash_shrub_1', 'ember_fern', 'charred_stump', 'basalt_0', 'basalt_1', 'magma_crystal_0', 'magma_crystal_1'] }],
+    ['room_props.png', 'props', { cols: 4, rows: 2, names: ['pillar_0', 'wall', 'brazier', 'boulder', 'pillar_1', 'rubble', 'rune_stone', 'tree'].map((n) => `room_volcano_${n}`) }],
+    ['decor.png', 'atlas', { cols: 4, rows: 3, out: 'decor_volcano', place: 'bottom', fit: 'shared', flat: [6, 7, 8] }],
+    ['island_cliff.png', 'atlas', { cols: 4, rows: 2, out: 'island_cliff_volcano', place: 'top', fit: 'each' }],
+    ['island_slabs.png', 'atlas', { cols: 4, rows: 2, out: 'island_slabs_volcano', place: 'centre', fit: 'shared' }],
+    ['ground_ash_rock.png', 'ground', { out: 'ash_rock' }],
+    ['ground_ash_path.png', 'ground', { out: 'ash_path' }],
+    ['ground_lava.png', 'ground', { out: 'lava' }],
+    ['ground_room.png', 'ground', { out: 'room_volcano' }],
+  ],
 };
 
 async function readRaw(file) {
@@ -190,7 +213,8 @@ async function atlas(img, o, label) {
     const cx = (i % o.cols) * cw;
     const cy = Math.floor(i / o.cols) * ch;
     const left = Math.round(cx + (cw - w) / 2);
-    const top = Math.round(o.place === 'bottom' ? cy + ch - ch * pad - h : o.place === 'top' ? cy + ch * pad : cy + (ch - h) / 2);
+    const place = o.flat?.includes(i) ? 'centre' : o.place;
+    const top = Math.round(place === 'bottom' ? cy + ch - ch * pad - h : place === 'top' ? cy + ch * pad : cy + (ch - h) / 2);
     layers.push({ input: await crop(img, b).resize(w, h, { kernel: 'lanczos3' }).png().toBuffer(), left, top });
   }
   const sheet = sharp({ create: { width: W, height: H, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).composite(layers);
