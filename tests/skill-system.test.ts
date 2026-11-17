@@ -22,13 +22,13 @@ const sk = (id: string) => [...CLASSES.sword.skills, ...CLASSES.mage.skills, ...
   const c = codeSkills();
   ok(c.pointsPerLevel === 1 && c.lastPointLevel === 40 && c.maxRank === 10, '1 point a level up to Lv.40, max rank 10');
   ok(c.unlock.normal.join() === '1,3,6,9,12,16,20,25' && c.unlock.ult.join() === '5,10' && c.unlock.passive.join() === '10,20,30', 'unlock levels');
-  ok(c.freeRefundBelow === 21 && c.refundCost === 1000, 'refunds free under 21 points, then 1,000 G');
+  ok(c.freeRefundBelow === 32 && c.refundCost === 1000, 'refunds free under 32 points, then 1,000 G');
   ok(pointsEarned(1) === 1 && pointsEarned(40) === 40 && pointsEarned(50) === 40, 'points: Lv1 1, Lv40 40, Lv50 still 40');
   ok(unlockLevel(sk('fireball')) === 1 && unlockLevel(sk('meteor')) === 5 && unlockLevel(sk('headshot')) === 5, 'tier 0 normal at Lv1, tier 0 ultimate at Lv5');
   ok(Math.abs(rankedDmg(sk('fireball'), 10) / rankedDmg(sk('fireball'), 1) - 1.45) < 1e-9, 'damage +5% a rank: rank 10 = ×1.45');
   ok(rankedMp(sk('fireball'), 'mage', 1, 10) === 19 && rankedMp(sk('fireball'), 'mage', 40, 1) === skillMpCost(10, 'mage', 40), 'MP +10% a rank on top of the level formula');
   ok(Math.abs(rankedCooldown(sk('fireball'), 10) - 2.5 * 0.82) < 0.01, 'cooldown -2% a rank: rank 10 = ×0.82');
-  ok(refundPrice(20) === 0 && refundPrice(21) === 1000, 'refund free at Lv20 (20 points), 1,000 G at Lv21');
+  ok(refundPrice(31) === 0 && refundPrice(32) === 1000, 'refund free at Lv31 (31 points), 1,000 G at Lv32');
 }
 
 // ---------------------------------------------------------- old and bad saves
@@ -76,7 +76,7 @@ const sk = (id: string) => [...CLASSES.sword.skills, ...CLASSES.mage.skills, ...
   ok(!sim.wearSkill(p, 'q', 'frostnova') && !sim.refundSkill(p, 'fireball'), 'no wearing or refunds in combat');
   p.lastHurt = -99;
 
-  // Refund: Lv40 has 40 points (≥ 21): 1,000 G each.
+  // Refund: Lv40 has 40 points (≥ 32): 1,000 G each.
   p.gold = 500;
   ok(!sim.refundSkill(p, 'fireball') && p.skillBook.ranks.fireball === 10, 'not enough gold: refused');
   p.gold = 2500;
@@ -105,7 +105,7 @@ const sk = (id: string) => [...CLASSES.sword.skills, ...CLASSES.mage.skills, ...
   ok(sim.refundSkill(p, 'fireball', true) && p.skillBook.ranks.fireball === undefined && !p.skill('q') && p.gold === 1000, 'all 6 points back for 6,000 G: forgotten and taken off Q');
   ok(!sim.refundSkill(p, 'fireball', true), 'nothing left to take back');
   ok(!sim.resetSkills(p) && p.skillBook.ranks.frostnova === 1, 'reset of 2 points needs 2,000 G: refused with 1,000 G');
-  p.level = 15; // 15 points earned (< 21): free
+  p.level = 15; // 15 points earned (< 32): free
   ok(sim.resetSkills(p) && JSON.stringify(p.skillBook) === JSON.stringify({ ranks: {}, worn: {} }) && p.gold === 1000, 'Lv15: reset is free, every skill forgotten and taken off');
   ok(pointsLeft(p.level, p.skillBook) === 15, 'all 15 points are back');
   ok(!sim.resetSkills(p), 'nothing to reset');
