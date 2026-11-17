@@ -25,6 +25,10 @@ export const BALANCE_SETTING = 'balance';
 export const CODE_HP_REGEN_MULT = 0.4;
 /** Same for MP regen (owner: -75%, so skills lean on MP potions). */
 export const CODE_MP_REGEN_MULT = 0.25;
+/** Boss switches target every this many seconds (owner 2026-11-17); 0 = off. */
+export const CODE_BOSS_SWITCH_SEC = 10;
+/** Ordinary monsters give up after this many seconds without a hit (owner 2026-11-17: off). */
+export const CODE_MOB_GIVE_UP_SEC = 0;
 
 /**
  * One class's numbers: Lv1 stats, added per level, final multipliers (gear included), damage to bosses, and how
@@ -106,6 +110,10 @@ export interface Balance {
   monsters: MonsterTuning;
   /** Monsters per spawn spot ×, by map id (PACK_ZONES); a map left out is ×1. */
   mobPack: Record<string, number>;
+  /** Boss swaps to another player who hurt it after this many seconds on one target; 0 = never (owner 2026-11-17). */
+  bossSwitchSec: number;
+  /** Ordinary monsters stop chasing after this many seconds without being hit; 0 = they never give up (the leash still holds). */
+  mobGiveUpSec: number;
   /** Auto Play defaults, distances and switches (autoTuning.ts). */
   auto: AutoConfig;
   /** The skill effects' extra layer: glow, ground light, particles, hit feel (fxLayerTuning.ts). */
@@ -140,6 +148,10 @@ export interface BalanceTuning {
   monsters?: MonsterTuning;
   /** Monsters-per-spot multipliers that are not ×1, by map id. */
   mobPack?: Record<string, number>;
+  /** Boss target switch seconds, when not the code's. */
+  bossSwitchSec?: number;
+  /** Ordinary monsters' give-up seconds, when not the code's. */
+  mobGiveUpSec?: number;
   /** Auto Play settings that differ from the code. */
   auto?: AutoTuning;
   /** Skill effect extra-layer numbers that differ from the code. */
@@ -169,6 +181,8 @@ export const BALANCE_RANGE = {
   itemStatMult: [0.1, 10],
   monsterMult: [0.1, 10],
   mobPack: [1, 5],
+  bossSwitchSec: [0, 120],
+  mobGiveUpSec: [0, 120],
 } as const satisfies Record<string, readonly [number, number]>;
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
@@ -198,6 +212,8 @@ export function codeBalance(): Balance {
     itemStatMult: full(undefined, 1),
     monsters: {},
     mobPack: {},
+    bossSwitchSec: CODE_BOSS_SWITCH_SEC,
+    mobGiveUpSec: CODE_MOB_GIVE_UP_SEC,
     auto: codeAuto(),
     fxLayer: codeFxLayer(),
     rigLook: codeRigLook(),
@@ -230,6 +246,8 @@ export function mergeBalance(t: BalanceTuning): Balance {
   Object.assign(b.itemStatMult, t.itemStatMult);
   if (t.monsters) b.monsters = structuredClone(t.monsters);
   if (t.mobPack) b.mobPack = { ...t.mobPack };
+  if (t.bossSwitchSec !== undefined) b.bossSwitchSec = t.bossSwitchSec;
+  if (t.mobGiveUpSec !== undefined) b.mobGiveUpSec = t.mobGiveUpSec;
   b.auto = mergeAuto(t.auto);
   b.fxLayer = mergeFxLayer(t.fxLayer);
   b.rigLook = mergeRigLook(t.rigLook);
@@ -364,7 +382,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'monsters', 'mobPack', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'monsters', 'mobPack', 'bossSwitchSec', 'mobGiveUpSec', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -441,7 +459,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   }
 
   // Single numbers
-  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost', range: readonly [number, number], what: string): string | null => {
+  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec', range: readonly [number, number], what: string): string | null => {
     const n = num(o[key], range[0], range[1], what);
     if (typeof n === 'string') return n;
     if (n !== undefined && n !== CODE[key]) out[key] = n;
@@ -698,6 +716,8 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     itemMult() ??
     monsters() ??
     mobPack() ??
+    one('bossSwitchSec', BALANCE_RANGE.bossSwitchSec, 'บอสเปลี่ยนเป้าหมายทุก (วินาที)') ??
+    one('mobGiveUpSec', BALANCE_RANGE.mobGiveUpSec, 'มอนธรรมดาเลิกไล่เมื่อไม่โดนตี (วินาที)') ??
     auto() ??
     tutorial() ??
     skills() ??
@@ -779,6 +799,8 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
     const q = b.mobPack[z.id] ?? 1;
     if (p !== q) out.push(`มอนต่อจุด ${z.nameTh} ×${p} → ×${q}`);
   }
+  if (a.bossSwitchSec !== b.bossSwitchSec) out.push(`บอสเปลี่ยนเป้าหมายทุก ${a.bossSwitchSec || 'ปิด'} → ${b.bossSwitchSec || 'ปิด'} วิ`);
+  if (a.mobGiveUpSec !== b.mobGiveUpSec) out.push(`มอนธรรมดาเลิกไล่เมื่อไม่โดนตี ${a.mobGiveUpSec || 'ไม่เลิก'} → ${b.mobGiveUpSec || 'ไม่เลิก'} วิ`);
   out.push(...autoChanges(a.auto, b.auto));
   out.push(...tutorialChanges(a.tutorial, b.tutorial));
   out.push(...skillChanges(a.skills, b.skills));

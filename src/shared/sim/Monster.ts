@@ -5,7 +5,7 @@ import type { MonsterDef, ShotDef } from '../data/monsters';
 import { NO_BOOST, type MonsterBoost, type SpawnArea } from '../data/zones';
 import { VolcanoHeartBrain } from './volcanoHeart';
 import { SPELL_GAP, WitchSpells } from './bogWitch';
-import { monsterMults, NO_MONSTER_MULT, type MonsterMults } from '../balance';
+import { currentBalance, monsterMults, NO_MONSTER_MULT, type MonsterMults } from '../balance';
 
 const BOSS_RAMP_PER_SEC = 0.2;
 const BOSS_RAMP_MAX = 3;
@@ -59,6 +59,9 @@ export class Monster extends Unit {
   expReward = 0;
   state: State = 'idle';
   aggroT = 0;
+  /** Boss: who it was on at the last check, and for how long (seconds); a change of target restarts the count. */
+  private swTarget: Player | null = null;
+  private swT = 0;
   windupT = 0;
   enraged = false;
   deadT = 0;
@@ -203,6 +206,38 @@ export class Monster extends Unit {
   /** Walking speed before enrage, ramps and slows: the def's, times the zone's boost. */
   private get baseSpeed(): number { return this.def.speed * this.zoneSpeed * this.mult.speed; }
   get topY(): number { return this.def.height * 0.75; }
+  /** Seconds it keeps chasing after the last hit (Balance: ordinary monsters' give-up time; bosses never give up by time). */
+  private get aggroTime(): number {
+    return this.isBoss ? 12 : currentBalance().mobGiveUpSec || 12;
+  }
+  /** Ordinary monsters chase until the target dies or leaves / the leash, unless the give-up time is on. */
+  private get givesUp(): boolean {
+    return this.isBoss || currentBalance().mobGiveUpSec > 0;
+  }
+  /**
+   * Boss only (owner 2026-11-17): after N seconds on one target it picks, at random, another living player in the
+   * room who has hurt it. Only when it is free (not in a wind-up, charge, leap or stun); nobody else = keeps the target.
+   */
+  private switchTarget(dt: number, sim: Sim): void {
+    if (this.target !== this.swTarget) {
+      this.swTarget = this.target;
+      this.swT = 0;
+    }
+    const every = currentBalance().bossSwitchSec;
+    if (!this.isBoss || every <= 0 || !this.target) return;
+    this.swT += dt;
+    if (this.swT < every || this.state !== 'chase' || this.windupT > 0 || this.stunT > 0) return;
+    const others: Player[] = [];
+    for (const id of this.damageBy.keys()) {
+      const o = sim.players.find((x) => x.id === id);
+      if (o && o.alive && o !== this.target) others.push(o);
+    }
+    if (!others.length) return;
+    this.target = others[Math.floor(Math.random() * others.length)];
+    this.swTarget = this.target;
+    this.swT = 0;
+  }
+
   get isBoss(): boolean { return this.def.behavior === 'boss'; }
   get isHostile(): boolean {
     return this.alive && (this.state === 'chase' || this.state === 'charge' || this.state === 'leap' || this.windupT > 0);
@@ -212,14 +247,14 @@ export class Monster extends Unit {
   private get slamRadius(): number { return this.def.slamRadius ?? DEFAULT_SLAM_RADIUS; }
 
   onHit(sim: Sim, attacker: Player): void {
-    this.aggroT = 12;
+    this.aggroT = this.aggroTime;
     if (!this.target?.alive) this.target = attacker;
     if (this.state !== 'charge' && this.state !== 'leap') this.state = 'chase';
     if (this.def.behavior === 'skittish' && Math.random() < 0.4) this.fleeT = 1.2;
     if (this.def.pack) {
       for (const m of sim.monsters) {
         if (m !== this && m.alive && (m.def.packId ?? m.def.id) === (this.def.packId ?? this.def.id) && Math.hypot(m.x - this.x, m.z - this.z) < 9) {
-          m.aggroT = 12;
+          m.aggroT = m.aggroTime;
           m.state = 'chase';
           if (!m.target?.alive) m.target = attacker;
         }
@@ -231,7 +266,8 @@ export class Monster extends Unit {
   taunt(p: Player): void {
     if (!this.alive || this.state === 'return' || this.untargetable) return;
     this.target = p;
-    this.aggroT = 12;
+    this.swT = 0;
+    this.aggroT = this.aggroTime;
     if (this.state !== 'charge' && this.state !== 'leap') this.state = 'chase';
   }
 
@@ -321,6 +357,7 @@ export class Monster extends Unit {
 
     // Lose a dead target; aggressive monsters pick up whoever walks into range.
     if (this.target && !this.target.alive) this.target = null;
+    this.switchTarget(dt, sim);
     const b = this.def.behavior;
     if ((b === 'aggressive' || b === 'boss' || b === 'charger' || this.forceAggro) && this.state !== 'return') {
       const n = this.nearestPlayer(sim);
@@ -402,7 +439,7 @@ export class Monster extends Unit {
           spd *= 1.4;
         }
       } else {
-        const hostile = !!p && this.aggroT > 0;
+        const hostile = !!p && (this.aggroT > 0 || !this.givesUp);
 
         if (hostile && this.fleeT > 0) {
           mx = -dx / d;
@@ -588,7 +625,7 @@ export class Monster extends Unit {
     this.fallT = FALL_TIME;
     this.lift = JUMP_HEIGHT;
     this.target = target;
-    this.aggroT = target ? 12 : 0;
+    this.aggroT = target ? this.aggroTime : 0;
     this.state = target ? 'chase' : 'idle';
     this.rampT = 0;
     this.slamCd = 7 * (this.def.skillCd ?? 1);
