@@ -87,7 +87,7 @@ ok(!!checkCosTuning({ aura_star: { dz_at_front: 0.1 } }, true).error, 'an aura h
   ok(checkCosTuning({ wings_angel: { dy_front: 0.3, dy_at_frontLeft: 0.5 } }, true).tuning?.wings_angel?.dy_at_frontLeft === 0.5, 'a facing saved on its own wins over the old group value');
 }
 
-// Shop settings (the "จัดการของแต่งตัว" tab): hidden / diamond price per piece, overrides only.
+// Shop settings (the "จัดการของแต่งตัว" tab): hidden / crystal price per piece, overrides only.
 {
   const good = checkCosShop({ pet_cat: { price: 500 }, wings_bat: { hidden: true }, title_gold: { hidden: true, price: 1_000_000 }, aura_star: { hidden: false } }, true);
   ok(JSON.stringify(good.shop) === '{"wings_bat":{"hidden":true},"pet_cat":{"price":500},"title_gold":{"hidden":true,"price":1000000}}', `shop: kept in catalogue order, shown + no price not stored, titles too (${JSON.stringify(good.shop)})`);
@@ -99,7 +99,7 @@ ok(!!checkCosTuning({ aura_star: { dz_at_front: 0.1 } }, true).error, 'an aura h
   ok(JSON.stringify(checkCosShop({ pet_nope: { hidden: true }, pet_cat: { price: -1, hidden: true } }, false).shop) === '{"pet_cat":{"hidden":true}}', 'shop read back leniently: unknown and bad entries dropped, the rest kept');
   ok(JSON.stringify(checkCosShop({ pet_cat: { price: null } }, true).shop) === '{}', 'shop: an empty price = no price');
   ok(JSON.stringify(cosHiddenIds(good.shop!)) === '["wings_bat","title_gold"]' && cosPrice(good.shop!, 'pet_cat') === 500 && cosPrice(good.shop!, 'wings_bat') === undefined, 'hidden ids and price lookups');
-  ok(cosShopChanges({ pet_cat: { price: 500 } }, { pet_cat: { price: 600, hidden: true } }) === 'pet_cat: ซ่อน ราคา 500 → 600 เพชร', `shop audit text (${cosShopChanges({ pet_cat: { price: 500 } }, { pet_cat: { price: 600, hidden: true } })})`);
+  ok(cosShopChanges({ pet_cat: { price: 500 } }, { pet_cat: { price: 600, hidden: true } }) === 'pet_cat: ซ่อน ราคา 500 → 600 คริสตัลมิติ', `shop audit text (${cosShopChanges({ pet_cat: { price: 500 } }, { pet_cat: { price: 600, hidden: true } })})`);
   const hid = new Set(['wings_bat']);
   ok(!mayPutOnCos('wings_bat', undefined, hid) && !mayPutOnCos('wings_bat', 'wings_angel', hid), 'a hidden piece cannot be put on');
   ok(mayPutOnCos('wings_bat', 'wings_bat', hid) && mayPutOnCos('wings_angel', 'wings_bat', hid), 'the hidden piece already worn stays; a shown one can be put on');
@@ -278,11 +278,13 @@ async function run(): Promise<void> {
   const ownShop = await api('POST', '/admin/cos-shop', { shop }, tok.owner1);
   ok(ownShop.status === 200 && ownShop.data.canEdit === true && ownShop.data.shop.pet_cat?.price === 500, 'the owner saves hidden + price');
   ok(JSON.parse(settingRow(COS_SHOP_SETTING) ?? '{}').wings_bat?.hidden === true, 'saved in the settings table (cos_shop)');
-  ok(auditOf('cos-shop').length === 1 && auditOf('cos-shop')[0].includes('wings_bat: ซ่อน') && auditOf('cos-shop')[0].includes('pet_cat: ราคา — → 500 เพชร'), `shop change in the audit log (${auditOf('cos-shop')[0]})`);
+  ok(auditOf('cos-shop').length === 1 && auditOf('cos-shop')[0].includes('wings_bat: ซ่อน') && auditOf('cos-shop')[0].includes('pet_cat: ราคา — → 500 คริสตัลมิติ'), `shop change in the audit log (${auditOf('cos-shop')[0]})`);
   await sleep(300);
   const hid = p2.msgs.filter((m) => m.t === 'cosHidden');
   ok(hid.length === 1 && JSON.stringify(hid[0].ids) === '["wings_bat"]', 'players online get the hidden list at once');
-  ok(!JSON.stringify(p2.msgs.filter((m) => m.t !== 'snap')).includes('"price"'), 'prices are never sent to players');
+  // Prices reach players only as the cash shop catalogue (src/shared/cashShop.ts, owner 2026-11-15).
+  ok(!JSON.stringify(p2.msgs.filter((m) => m.t !== 'snap' && m.t !== 'cash' && m.t !== 'welcome')).includes('"price"'), 'prices are not sent outside the cash shop catalogue');
+  ok(p2.msgs.filter((m) => m.t === 'cash').at(-1)?.cat.items.some((i: any) => i.id === 'cos:pet_cat' && i.price === 500), 'the cash shop catalogue sells the priced piece');
   await api('POST', '/admin/cos-shop', { shop: { wings_bat: { hidden: true }, pet_cat: { price: 600 } } }, tok.owner1);
   await sleep(200);
   ok(auditOf('cos-shop').length === 2 && p2.msgs.filter((m) => m.t === 'cosHidden').length === 1, 'a price-only change is logged but sends nothing to players');

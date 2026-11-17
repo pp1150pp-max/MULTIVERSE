@@ -1,7 +1,7 @@
 import { PROP_SHEETS, type PropSheet } from './zonePropsTable';
 import * as THREE from 'three';
 import {
-  makeSheet, drawHuman, drawSlime, drawQuad, drawSeeker, drawMerchant, drawBlacksmith, drawKeeper, drawBroker, drawStylist, drawCosmetic, drawTree, drawBush, drawRock, drawStump,
+  makeSheet, drawHuman, drawSlime, drawQuad, drawSeeker, drawMerchant, drawBlacksmith, drawKeeper, drawBroker, drawStylist, drawCrystalMerchant, drawCosmetic, drawTree, drawBush, drawRock, drawStump,
   drawSnowPine, drawSnowRock, drawIceCrystal, drawIceShard, drawEmberBolt, drawBurntPillar, drawBasalt, drawMagmaCrystal, drawSnowball,
   drawTent, drawCampfire, drawSign, drawFence, drawRunestone, drawIcon, pixelCircle,
   drawWitchVial, drawWitchPool, drawWitchHand, drawWitchSigil, drawWitchCircle,
@@ -63,6 +63,7 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   keeper: sheet('npc/keeper.png', () => makeSheet(32, drawKeeper())),
   broker: sheet('npc/broker.png', () => makeSheet(32, drawBroker())),
   stylist: sheet('npc/stylist.png', () => makeSheet(32, drawStylist())),
+  crystal: sheet('npc/crystal_merchant.png', () => makeSheet(32, drawCrystalMerchant())),
   // Cosmetics with a body (wings, mounts, pets): 8-direction walk sheets like the monsters' (see cosmeticViews.ts).
   ...Object.fromEntries(COSMETICS.filter((c) => c.slot !== 'aura' && c.slot !== 'title' && c.slot !== 'orb').map((c) => [
     cosSheetKey(c.id), monster(`cosmetics/${c.id}.png`, () => makeSheet(c.slot === 'pet' ? 32 : 48, drawCosmetic(c))),

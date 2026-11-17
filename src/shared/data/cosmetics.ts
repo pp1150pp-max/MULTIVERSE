@@ -1,7 +1,7 @@
 // Cosmetics: looks only, no stats (the mount's walking speed is the one exception, see MOUNT_SPEED).
 // Owned per account (server table account_cosmetics), worn per character (CharacterData.cosmetics).
-// Never items: they don't go in the bag, stash, market, trade or mail. Not on sale yet (the shop only
-// shows them and lets you try them on); an admin gives them out from /admin.
+// Never items: they don't go in the bag, stash, market, trade or mail. Sold in the cash shop (src/shared/cashShop.ts);
+// an admin also gives them out from /admin.
 
 /**
  * Where a cosmetic is worn. A `title` is a set: a name frame and a chat bubble style (the title text is not shown for now).

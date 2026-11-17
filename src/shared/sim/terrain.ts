@@ -257,8 +257,11 @@ export class Terrain {
     this.npcPos.blacksmith = { x: s.x, z: s.z + 5.8 };
     at('town_forge', 0, 8.8, 3.6, 1.3);
     this.npcPos.keeper = { x: s.x - 5.8, z: s.z };
-    // The stylist (cosmetics): beside the keeper, between the vault and the road to the left gate.
-    this.npcPos.stylist = deg(202.5, 7.2);
+    // The crystal merchant (cash shop): beside the keeper, between the vault and the road to the left gate.
+    // Owner 2026-11-15: it takes the stylist's spot and the stylist is out of town for now (no position = not
+    // placed; the cosmetics window still opens from the menu). Bring the stylist back with
+    // `this.npcPos.stylist = deg(202.5, 7.2)` and give one of them another spot.
+    this.npcPos.crystal = deg(202.5, 7.2);
     at('town_vault', -8.8, 0, 3.2, 1.3);
 
     // Broken pillars either side of the roads (none at 22.5°, where the market booth stands), fallen houses and towers further out, two old trees.

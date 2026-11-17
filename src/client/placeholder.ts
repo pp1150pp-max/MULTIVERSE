@@ -452,6 +452,34 @@ export function drawStylist(): DrawFn {
   };
 }
 
+export function drawCrystalMerchant(): DrawFn {
+  // Placeholder until the real sprite: a merchant in a navy hooded robe with a floating violet-cyan crystal.
+  const skin = '#e8c09a';
+  return (ctx, view, f, s) => {
+    const bob = f === 0 ? 0 : 0.01;
+    rect(ctx, s, 0.41, 0.78, 0.07, 0.17, '#1c2236');
+    rect(ctx, s, 0.52, 0.78, 0.07, 0.17, '#1c2236');
+    rect(ctx, s, 0.33, 0.46 - bob, 0.34, 0.4, '#24305a');
+    rect(ctx, s, 0.33, 0.62 - bob, 0.34, 0.035, '#c8d0e0', null);
+    rect(ctx, s, 0.45, 0.64 - bob, 0.1, 0.06, '#3ad6ff', null);
+    const hy = 0.36 - bob;
+    ell(ctx, s, 0.5, hy, 0.13, 0.13, skin);
+    ell(ctx, s, 0.5, hy - 0.05, 0.17, 0.12, '#24305a');
+    if (view === 'back') ell(ctx, s, 0.5, hy, 0.16, 0.14, '#24305a');
+    else if (view === 'front') {
+      ell(ctx, s, 0.45, hy, 0.035, 0.03, '#ffd24a', null);
+      ell(ctx, s, 0.55, hy, 0.035, 0.03, '#ffd24a', null);
+      rect(ctx, s, 0.46, hy + 0.07, 0.08, 0.015, '#7a4030', null);
+    } else ell(ctx, s, 0.58, hy, 0.035, 0.03, '#ffd24a', null);
+    if (view !== 'back') {
+      const cx = view === 'side' ? 0.24 : 0.7;
+      const cy = 0.4 - bob * 3;
+      rect(ctx, s, cx - 0.035, cy - 0.06, 0.07, 0.12, '#9a6aff');
+      rect(ctx, s, cx - 0.02, cy - 0.06, 0.04, 0.05, '#7ae8ff', null);
+    }
+  };
+}
+
 export function drawBlacksmith(): DrawFn {
   // Broad smith with a leather apron, beard and a hammer.
   const skin = '#d9a77f';

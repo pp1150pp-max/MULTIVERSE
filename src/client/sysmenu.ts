@@ -35,13 +35,16 @@ const FRIENDS_ICON = badge('friends');
 /** Daily login calendar: painted badge (art_templates/ui/raw/ico_daily.png, magenta keyed out, 96×96). */
 const DAILY_ICON = badge('daily');
 
+/** Cash shop: painted badge (art_templates/cashshop/raw/ico_cashshop.png, cut by tools/cut_cashshop.cjs). */
+const CASH_ICON = badge('cashshop');
+
 /** Skills have no painted badge yet: the blank one with a glyph. Swap for badge('skills') once ico_skills.png exists. */
 const SKILLS_ICON = badge('blank', '⚔');
 
 /** Icon grid, 3 columns: [action, icon, label]. Only systems that exist; add a tile when a new one is built. */
 const MENU_ITEMS: [string, string, string][] = [
   ['bag', badge('bag'), 'กระเป๋า'], ['skills', SKILLS_ICON, 'สกิล'], ['party', PARTY_ICON, 'ปาร์ตี้'], ['friends', FRIENDS_ICON, 'เพื่อน'], ['trade', TRADE_ICON, 'เทรด'], ['daily', DAILY_ICON, 'ล็อกอินรายวัน'], ['map', badge('map'), 'แผนที่'],
-  ['cosmetics', badge('blank', '👑'), 'แต่งตัว'], ['autoset', badge('autoset'), 'ตั้งค่า Auto'], ['audio', badge('blank', '🔊'), 'เสียง'], ['help', badge('help'), 'วิธีเล่น'],
+  ['cosmetics', badge('blank', '👑'), 'แต่งตัว'], ['cashshop', CASH_ICON, 'แคชช็อป'], ['autoset', badge('autoset'), 'ตั้งค่า Auto'], ['audio', badge('blank', '🔊'), 'เสียง'], ['help', badge('help'), 'วิธีเล่น'],
   ['mail', MAIL_ICON, 'จดหมาย'], ['settings', badge('settings'), 'ตั้งค่า'],
   // Touch play only (hidden by CSS with a mouse), and only where the browser can do it (not iPhone Safari).
   ...(document.fullscreenEnabled ? [['fullscreen', badge('blank', '⛶'), 'เต็มจอ'] as [string, string, string]] : []),
@@ -50,7 +53,7 @@ const MENU_ITEMS: [string, string, string][] = [
 /** Top-right icon row: [button id, icon, label]. */
 const TOP_ICONS: [string, string, string][] = [
   ['top-auto', badge('auto'), 'AUTO: OFF'], ['top-bag', badge('bag'), 'กระเป๋า'], ['top-skills', SKILLS_ICON, 'สกิล'],
-  ['top-party', PARTY_ICON, 'ปาร์ตี้'], ['top-friends', FRIENDS_ICON, 'เพื่อน'], ['top-report', badge('blank', '🐞'), 'แจ้งปัญหา'], ['top-daily', DAILY_ICON, 'รายวัน'], ['top-map', badge('map'), 'แผนที่'], ['top-menu', badge('menu'), 'เมนู'],
+  ['top-party', PARTY_ICON, 'ปาร์ตี้'], ['top-friends', FRIENDS_ICON, 'เพื่อน'], ['top-report', badge('blank', '🐞'), 'แจ้งปัญหา'], ['top-daily', DAILY_ICON, 'รายวัน'], ['top-cashshop', CASH_ICON, 'แคชช็อป'], ['top-map', badge('map'), 'แผนที่'], ['top-menu', badge('menu'), 'เมนู'],
 ];
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -86,6 +89,7 @@ export class SystemMenu {
     if (!guest) $('top-report').onclick = () => g.report.toggle();
     if (!guest) $('top-friends').onclick = () => g.friends.toggle();
     if (!guest) $('top-daily').onclick = () => g.daily.toggle();
+    $('top-cashshop').onclick = () => g.cashShop.toggle();
     $('top-map').onclick = () => g.hud.toggleMap();
     $('top-menu').onclick = () => this.toggle();
 
@@ -219,6 +223,9 @@ export class SystemMenu {
       case 'cosmetics':
         this.toggle(false);
         return this.g.cosmetics.toggle(true);
+      case 'cashshop':
+        this.toggle(false);
+        return this.g.cashShop.toggle(true);
       case 'trade':
         this.toggle(false);
         return this.g.trade.toggleFind(true);

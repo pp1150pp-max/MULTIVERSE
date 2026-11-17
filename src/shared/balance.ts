@@ -9,6 +9,7 @@ import {
   CODE_BOSS_TIER_BOOST, CODE_RANGE_FLOOR, CODE_TIER_WEIGHT, CODE_TIER_WIDTH, setItemStatMult, setTierTables, TIER_BAND_NAME, TIER_BANDS, tierBandOf, type TierBand, type TierTableDef,
 } from './data/items';
 import { MONSTERS, type MonsterDef } from './data/monsters';
+import { ZONES } from './data/zones';
 import { checkFxLayerTuning, codeFxLayer, fxLayerChanges, mergeFxLayer, type FxLayerConfig, type FxLayerTuning } from './fxLayerTuning';
 import { autoChanges, checkAutoTuning, codeAuto, mergeAuto, type AutoConfig, type AutoTuning } from './autoTuning';
 import { checkTutorialTuning, codeTutorial, mergeTutorial, tutorialChanges, type TutorialConfig, type TutorialTuning } from './tutorial';
@@ -71,6 +72,16 @@ export const TUNABLE_MONSTERS: readonly MonsterDef[] = Object.values(MONSTERS)
 /** The level band a monster kind is tuned in (index into TIER_BANDS): by its lowest level. */
 export const monsterBandOf = (def: MonsterDef): number => tierBandOf(def.levels[0]);
 
+/**
+ * Monsters per spawn spot, by map (owner 2026-11-17): each spot keeps this many times its code count, as a pack
+ * at the same spot (the maps have no room for more spots). Decimals spread over the spots (×1.5 = every other
+ * spot one more). Bosses are never multiplied. Takes effect live: more = the extra ones come in on the spot's
+ * respawn timer, fewer = the extra ones are not replaced when they die.
+ */
+export const PACK_ZONES: readonly { id: string; nameTh: string }[] = Object.values(ZONES)
+  .filter((z) => z.spawns.length > 0)
+  .map((z) => ({ id: z.id, nameTh: z.nameTh }));
+
 /** Every tunable number, as the game uses it. Tier arrays are T1 first; widths and floor in %. */
 export interface Balance {
   classes: Record<ClassId, ClassBalance>;
@@ -92,6 +103,8 @@ export interface Balance {
   itemStatMult: Record<StatKey, number>;
   /** Ordinary monsters' multipliers that are not ×1 (none in code). */
   monsters: MonsterTuning;
+  /** Monsters per spawn spot ×, by map id (PACK_ZONES); a map left out is ×1. */
+  mobPack: Record<string, number>;
   /** Auto Play defaults, distances and switches (autoTuning.ts). */
   auto: AutoConfig;
   /** The skill effects' extra layer: glow, ground light, particles, hit feel (fxLayerTuning.ts). */
@@ -122,6 +135,8 @@ export interface BalanceTuning {
   itemStatMult?: Partial<Record<StatKey, number>>;
   /** Ordinary monsters' multipliers that are not ×1. */
   monsters?: MonsterTuning;
+  /** Monsters-per-spot multipliers that are not ×1, by map id. */
+  mobPack?: Record<string, number>;
   /** Auto Play settings that differ from the code. */
   auto?: AutoTuning;
   /** Skill effect extra-layer numbers that differ from the code. */
@@ -148,6 +163,7 @@ export const BALANCE_RANGE = {
   bossTierBoost: [0, 10],
   itemStatMult: [0.1, 10],
   monsterMult: [0.1, 10],
+  mobPack: [1, 5],
 } as const satisfies Record<string, readonly [number, number]>;
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
@@ -176,6 +192,7 @@ export function codeBalance(): Balance {
     bandTiers: {},
     itemStatMult: full(undefined, 1),
     monsters: {},
+    mobPack: {},
     auto: codeAuto(),
     fxLayer: codeFxLayer(),
     tutorial: codeTutorial(),
@@ -206,6 +223,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.bandTiers) b.bandTiers = structuredClone(t.bandTiers);
   Object.assign(b.itemStatMult, t.itemStatMult);
   if (t.monsters) b.monsters = structuredClone(t.monsters);
+  if (t.mobPack) b.mobPack = { ...t.mobPack };
   b.auto = mergeAuto(t.auto);
   b.fxLayer = mergeFxLayer(t.fxLayer);
   b.tutorial = mergeTutorial(t.tutorial);
@@ -282,6 +300,19 @@ export function monsterMults(def: MonsterDef, b: Balance = current): MonsterMult
 export const classBalance = (id: ClassId): ClassBalance => current.classes[id];
 
 /**
+ * How many monsters spawn spot number `index` of map `zoneId` keeps, `count` in the code: count × the map's
+ * multiplier, the fraction spread evenly over the spots by index (so ×1.5 gives every other spot one more).
+ */
+export function packCount(zoneId: string, count: number, index: number, b: Balance = current): number {
+  const m = b.mobPack[zoneId] ?? 1;
+  if (m === 1 || count <= 0) return count;
+  const want = count * m;
+  const whole = Math.floor(want);
+  // Golden-ratio spread: over any run of spots, the share that gets one more is close to the fraction.
+  return Math.max(1, whole + (((index * 0.6180339887) % 1) < want - whole ? 1 : 0));
+}
+
+/**
  * The MP a skill costs a character of this class at this level (owner 2026-11-13): the skill's `mp` in code
  * × (1 + k × (level − 1)), k = the class's % per level, rounded to the nearest whole MP. Free skills stay free.
  * Casting, the "enough MP?" checks, Auto and the HUD all use this.
@@ -326,7 +357,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'monsters', 'auto', 'tutorial', 'skills', 'fxLayer'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'monsters', 'mobPack', 'auto', 'tutorial', 'skills', 'fxLayer'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -593,6 +624,24 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (res.bands || res.types) out.monsters = res;
     return null;
   };
+  // Monsters per spawn spot, by map, in PACK_ZONES order.
+  const mobPack = (): string | null => {
+    const x = o.mobPack;
+    if (x === undefined) return null;
+    if (!isObj(x)) return strict ? 'จำนวนมอนต่อจุดไม่ถูกต้อง' : null;
+    if (strict) {
+      const extra = Object.keys(x).find((k) => !PACK_ZONES.some((z) => z.id === k));
+      if (extra) return `จำนวนมอนต่อจุด: ไม่รู้จักแมพ "${extra.slice(0, 30)}"`;
+    }
+    const res: Record<string, number> = {};
+    for (const z of PACK_ZONES) {
+      const n = num(x[z.id], ...BALANCE_RANGE.mobPack, `จำนวนมอนต่อจุด ${z.nameTh}`);
+      if (typeof n === 'string') return n;
+      if (n !== undefined && n !== 1) res[z.id] = n;
+    }
+    if (Object.keys(res).length) out.mobPack = res;
+    return null;
+  };
   // Level bands' own tier tables (all stats).
   const bandTiers = (): string | null => {
     const bands = bandTables(o.bandTiers, '');
@@ -635,6 +684,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     bandTiers() ??
     itemMult() ??
     monsters() ??
+    mobPack() ??
     auto() ??
     tutorial() ??
     skills() ??
@@ -710,6 +760,11 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   };
   for (const id of TIER_BANDS) mons(TIER_BAND_NAME[id], a.monsters.bands?.[id], b.monsters.bands?.[id]);
   for (const d of TUNABLE_MONSTERS) mons(d.nameTh, a.monsters.types?.[d.id], b.monsters.types?.[d.id]);
+  for (const z of PACK_ZONES) {
+    const p = a.mobPack[z.id] ?? 1;
+    const q = b.mobPack[z.id] ?? 1;
+    if (p !== q) out.push(`มอนต่อจุด ${z.nameTh} ×${p} → ×${q}`);
+  }
   out.push(...autoChanges(a.auto, b.auto));
   out.push(...tutorialChanges(a.tutorial, b.tutorial));
   out.push(...skillChanges(a.skills, b.skills));

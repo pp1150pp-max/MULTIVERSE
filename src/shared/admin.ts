@@ -175,7 +175,7 @@ export interface AdminSnapDelta { on: boolean; stats: SnapDeltaStats; clients: {
  * switch: the Permissions tab, the audit log, restarting / stopping the server, deleting accounts or
  * characters, and making someone owner (command line).
  */
-export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'googleLogin';
+export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'googleLogin' | 'cashShop' | 'cashShopEdit';
 
 /**
  * The defaults: which built-in role may use each tool (owner always has all). The owner can change
@@ -225,7 +225,7 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   cosPreview: ['owner', 'gm'],
   // Saving the server-wide cosmetic tuning from that tab (owner 2026-11-10: owner only).
   cosLook: ['owner'],
-  // The "จัดการของแต่งตัว" tab: every piece with hidden / shown and its diamond price (owner 2026-11-13: owner and GMs may look).
+  // The "จัดการของแต่งตัว" tab: every piece with hidden / shown and its crystal price (owner 2026-11-13: owner and GMs may look).
   cosManage: ['owner', 'gm'],
   // Saving hidden / shown and prices from that tab (owner 2026-11-13: owner only). Its look values save with cosLook.
   cosManageEdit: ['owner'],
@@ -247,6 +247,10 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   netDelta: ['owner', 'gm'],
   // The Google login card on the Server tab: switch it on/off, see and unlink linked accounts (owner 2026-11-15: owner only).
   googleLogin: ['owner'],
+  // The "แคชช็อป" tab: items, prices, packages and purchases (owner 2026-11-15: owner and GMs may look).
+  cashShop: ['owner', 'gm'],
+  // Saving it, opening / closing sales (owner only).
+  cashShopEdit: ['owner'],
 };
 
 export const ADMIN_FEATURES = Object.keys(FEATURE_ROLES) as AdminFeature[];
@@ -309,10 +313,12 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   googleLogin: { name: 'เข้าสู่ระบบด้วย Google', desc: 'แท็บ Server: เปิด/ปิดปุ่ม Google ที่หน้า Login ดูบัญชีที่ผูก Google และยกเลิกการผูก', group: 'ระบบ' },
   itemStatMult: { name: 'คอนเฟิร์มตัวคูณสเตตัสบนไอเทม', desc: 'แท็บ "ปรับสมดุล": คอนเฟิร์มตัวคูณค่าสเตตัสบนไอเทม คูณค่าของทุกชิ้นในเซิร์ฟจริง (สำรอง DB ให้ก่อน) · ทดลองดูตัวอย่างได้ด้วยสิทธิ์ "ปรับสมดุล"', group: 'ปรับเกม' },
   cosLook: { name: 'บันทึกของแต่งตัวทั้งเซิร์ฟ', desc: 'บันทึกค่าตำแหน่ง/หน้าตาของแต่งตัวที่ทุกคนเห็น (ต้องมี "ทดลองของแต่งตัว" ด้วย)', group: 'หน้าตา' },
-  cosManage: { name: 'ดูจัดการของแต่งตัว', desc: 'แท็บ "จัดการของแต่งตัว": ดูทุกชิ้นว่าซ่อน/แสดง ราคาเพชร และค่าหน้าตารายชิ้น', group: 'หน้าตา' },
-  cosManageEdit: { name: 'ซ่อน/ตั้งราคาของแต่งตัว', desc: 'บันทึกการซ่อน/แสดงรายชิ้นในหน้าต่าง "แต่งตัว" ของผู้เล่น และราคาเพชร (ต้องมี "ดูจัดการของแต่งตัว" ด้วย · แก้ค่าหน้าตาในแท็บนั้นใช้สิทธิ์ "บันทึกของแต่งตัวทั้งเซิร์ฟ" · แก้ชื่อ/หน้าตา/ลบลูกแก้วที่เพิ่มในร้านค้าก็ใช้สิทธิ์นี้)', group: 'หน้าตา' },
+  cosManage: { name: 'ดูจัดการของแต่งตัว', desc: 'แท็บ "จัดการของแต่งตัว": ดูทุกชิ้นว่าซ่อน/แสดง ราคาคริสตัลมิติ และค่าหน้าตารายชิ้น', group: 'หน้าตา' },
+  cosManageEdit: { name: 'ซ่อน/ตั้งราคาของแต่งตัว', desc: 'บันทึกการซ่อน/แสดงรายชิ้นในหน้าต่าง "แต่งตัว" ของผู้เล่น และราคาคริสตัลมิติ (ต้องมี "ดูจัดการของแต่งตัว" ด้วย · แก้ค่าหน้าตาในแท็บนั้นใช้สิทธิ์ "บันทึกของแต่งตัวทั้งเซิร์ฟ" · แก้ชื่อ/หน้าตา/ลบลูกแก้วที่เพิ่มในร้านค้าก็ใช้สิทธิ์นี้)', group: 'หน้าตา' },
   orbShopAdd: { name: 'เพิ่มลูกแก้วในร้านค้า', desc: 'ปุ่ม "เพิ่มในร้านค้า" ในแท็บ "ลูกแก้วตีบวก": เพิ่มหน้าตาที่ตั้งไว้เป็นของแต่งตัวชิ้นใหม่ (เริ่มแบบซ่อน ไม่มีราคา)', group: 'หน้าตา' },
   cardView: { name: 'ดูค่าการ์ด', desc: 'แท็บ "การ์ด": ดูผลของการ์ดทุกใบ เรทดรอป ราคา และเพดาน', group: 'ปรับเกม' },
+  cashShop: { name: 'ดูแคชช็อป', desc: 'แท็บ "แคชช็อป": ดูสินค้า ราคาคริสตัลมิติ แพ็กเกจเติม และประวัติการซื้อ', group: 'ปรับเกม' },
+  cashShopEdit: { name: 'แก้แคชช็อป', desc: 'เปิด/ปิดขาย และบันทึกสินค้า ราคา ราคาลด จำกัดต่อบัญชี ช่วงเวลา ป้าย แนะนำ แพ็กเกจ (รวมราคาของแต่งตัว) ต้องมี "ดูแคชช็อป" ด้วย', group: 'ปรับเกม' },
   cardTune: { name: 'แก้ค่าการ์ดทั้งเซิร์ฟ', desc: 'แก้และบันทึกค่าการ์ดที่ใช้ทั้งเซิร์ฟ (ต้องมี "ดูค่าการ์ด" ด้วย)', group: 'ปรับเกม' },
 };
 
@@ -375,6 +381,8 @@ export interface AdminAccountDetail {
   stash: { size: number; gold: number; items: (BagEntry | null)[] } | null;
   /** Cosmetic ids the account owns (src/shared/data/cosmetics.ts); null for a guest. */
   cosmetics: string[] | null;
+  /** The account's cash shop crystals (คริสตัลมิติ); null for a guest. Look only. */
+  crystals?: number | null;
   /** Cosmetic ids hidden from the in-game window (may still be given; marked on the sheet). */
   cosHidden?: string[];
   /** The orb looks in the shop (they are cosmetics of slot 'orb', made in /admin). */

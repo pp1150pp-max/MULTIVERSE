@@ -1,6 +1,6 @@
 // The cosmetics window ("แต่งตัว"), opened from the menu or at the stylist in town. Two tabs:
 // - ร้าน: every cosmetic, with try-on (shown on your own character, only to you; taken off when the
-//   window closes). Buying is not open yet (owner: no prices, a "เร็ว ๆ นี้" button).
+//   window closes). Buying is in the cash shop (src/client/cashShop.ts): the button opens it.
 // Pieces the owner hid in /admin (src/shared/cosShop.ts) aren't listed, except under ของฉัน while worn (to take off).
 // - ของฉัน: what the account owns (an admin gives them out), to wear or take off. The server checks it.
 // Also the mount button (Z) shown while a mount is worn.
@@ -11,6 +11,7 @@ import { cosHiddenKey, isCosHidden } from './cosTune';
 import { cosCardImage } from './cosmeticViews';
 import { orbItemLook, orbItemsVersion } from '../shared/orbItems';
 import { ORB_PALETTES } from './orbs';
+import { cashCatalogNow, cashVersion } from './cashData';
 
 type Tab = 'shop' | 'mine';
 
@@ -31,7 +32,7 @@ function button(label: string, onClick: () => void, cls = '', disabled = false):
 const picCache = new Map<string, string>();
 
 /** The card picture (made once): the front view of the real sheet or its placeholder; a title set as text. */
-function picture(c: CosmeticDef): HTMLElement {
+export function cosPicture(c: CosmeticDef): HTMLElement {
   if (c.slot === 'title') {
     const box = el('div', 'cos-pic cos-pic-title');
     box.style.setProperty('--c1', c.color);
@@ -117,7 +118,7 @@ export class CosmeticsUI {
     if (this.mountBtn.textContent !== label) this.mountBtn.textContent = label;
     this.mountBtn.classList.toggle('on', me.mounted);
     if (!this.open) return;
-    const key = JSON.stringify([this.tab, this.slot, this.trying, me.cosmetics, this.g.backend.cosOwned, cosHiddenKey(), orbItemsVersion()]);
+    const key = JSON.stringify([this.tab, this.slot, this.trying, me.cosmetics, this.g.backend.cosOwned, cosHiddenKey(), orbItemsVersion(), cashVersion()]);
     if (key === this.drawn) return;
     this.drawn = key;
     this.draw();
@@ -164,6 +165,7 @@ export class CosmeticsUI {
       ),
     );
 
+    const onSale = new Set(cashCatalogNow().items.filter((e) => e.kind === 'cos').map((e) => e.ref));
     const list = COSMETICS.filter((c) => c.slot === this.slot && (this.tab === 'shop' ? !isCosHidden(c.id) : mine(c)));
     const cards = list.map((c) => {
       const card = el('div', 'cos-card');
@@ -183,19 +185,19 @@ export class CosmeticsUI {
             this.setTry(c.slot, tryingThis ? null : c.id);
             this.update();
           }, tryingThis ? 'on' : ''),
-          button('เร็ว ๆ นี้', () => undefined, 'cos-buy', true),
+          ...(onSale.has(c.id) ? [button('ซื้อในแคชช็อป', () => this.g.cashShop.openCos(c.slot), 'cos-buy')] : []),
         );
       } else if (worn[c.slot] === c.id) {
         btns.append(button('ถอด', () => this.g.backend.cosWear(c.slot, null)));
       } else {
         btns.append(button('สวม', () => this.g.backend.cosWear(c.slot, c.id), 'primary'));
       }
-      card.append(picture(c), info, btns);
+      card.append(cosPicture(c), info, btns);
       return card;
     });
 
     const notes: HTMLElement[] = [];
-    if (this.tab === 'shop') notes.push(el('div', 'cos-note', 'ยังไม่เปิดขาย ลองสวมได้ (เห็นแค่คุณ ปิดหน้าต่างแล้วจะถอดออก)'));
+    if (this.tab === 'shop') notes.push(el('div', 'cos-note', 'ลองสวมได้ (เห็นแค่คุณ ปิดหน้าต่างแล้วจะถอดออก) · ซื้อได้ที่แคชช็อป'));
     else if (guest) notes.push(el('div', 'cos-note', 'Guest รับ Cosmetics ไม่ได้ สมัครสมาชิกเพื่อรับของ'));
     else if (!cards.length) notes.push(el('div', 'cos-note', `ยังไม่มี${COS_SLOT_NAME[this.slot]} ทุกตัวละครในบัญชีใช้ของที่ได้รับร่วมกัน`));
     if (this.slot === 'orb') notes.push(el('div', 'cos-note', 'ลูกแก้วตีบวก: เปลี่ยนหน้าตาลูกแก้วของคุณ ลูกแก้วมีเมื่อสวมของที่ตีบวก +7 ขึ้นไป (1 ชิ้น = 1 ลูก) ไม่มีของ +7 จะไม่เห็นลูกแก้ว'));

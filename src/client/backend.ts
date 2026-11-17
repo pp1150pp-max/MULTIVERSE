@@ -131,6 +131,9 @@ export interface Backend {
   /** Get on the worn mount, or off it. */
   toggleMount(): void;
 
+  /** Cash shop: buy `qty` of item `id` at `price` crystals each (the price shown; the server checks everything). Catalogue and crystals: src/client/cashData.ts. */
+  cashBuy(id: string, qty: number, price: number): Promise<{ ok: boolean; msg: string }>;
+
   // Stash (warehouse keeper). The stash itself is `me.stash`. `to` = target slot, or -1 for wherever it fits.
   stashPut(bagIndex: number, to: number): void;
   stashTake(stashIndex: number, to: number): void;
