@@ -1,7 +1,7 @@
 // Cuts a papercraft character's raw ChatGPT rows (art_templates/papercraft_chars/raw/<char>/<anim>_<dir>.png, one
-// direction per image, 8 frames in a row; see art_templates/papercraft_chars/SWORD.md) into the game's animation
+// direction per image, 8 frames in a row; see art_templates/papercraft_chars/SWORD.md, MAGE.md) into the game's animation
 // sheets: public/assets/sprites/paper/player/<char>/<anim>.png (a row per direction, a column per frame) and a
-// sprite.json. Usage: node tools/cut_paper_char.cjs sword [--measure]
+// sprite.json. Usage: node tools/cut_paper_char.cjs sword|mage [--measure]
 const path = require('path');
 const fs = require('fs');
 const sharp = require('sharp');
@@ -15,23 +15,42 @@ const CELL_H = 320;
 /** The standing body is this tall, feet this far above the cell's bottom (the old art's 200 px and 16 px). */
 const BODY_PX = 200;
 const FEET_PX = 16;
-/** Each pose's speed: twice the old 4-frame fps, so a cycle takes as long as before (ride sways slower). */
-const ANIMS = {
+/**
+ * Each class's poses and background. Speeds are twice the old 4-frame fps, so a cycle takes as long as before (ride
+ * sways slower); attacks are played over the attack's own duration anyway.
+ */
+const BASE_ANIMS = {
   idle: { fps: 10, loop: true },
   run: { fps: 20, loop: true },
-  attack: { fps: 24 },
-  attack_2: { fps: 24 },
-  attack_3: { fps: 24 },
   death: { fps: 14, dirs: ['side'] },
   ride: { fps: 8, loop: true },
   ride_board: { fps: 8, loop: true },
 };
+const CHARS = {
+  sword: { bg: 'magenta', anims: { ...BASE_ANIMS, attack: { fps: 24 }, attack_2: { fps: 24 }, attack_3: { fps: 24 } } },
+  // A purple witch: drawn on green.
+  mage: { bg: 'green', anims: { ...BASE_ANIMS, attack: { fps: 24 }, run_attack: { fps: 20, loop: true } } },
+};
+let ANIMS = CHARS.sword.anims;
+let BG = 'magenta';
 
 async function readKeyed(file) {
   const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const w = info.width;
   const h = info.height;
   const d = data;
+  if (BG === 'green') {
+    // Green out, a green fringe pulled back.
+    for (let i = 0; i < w * h * 4; i += 4) {
+      const over = d[i + 1] - Math.max(d[i], d[i + 2]);
+      if (over > 70) d[i + 3] = 0;
+      else {
+        d[i + 3] = 255;
+        if (over > 20) d[i + 1] = Math.max(d[i], d[i + 2]) + 18;
+      }
+    }
+    return { w, h, d };
+  }
   // Magenta out, a purple fringe pulled back (as in tools/cut_zone3.cjs).
   for (let i = 0; i < w * h * 4; i += 4) {
     const low = Math.min(d[i], d[i + 2]) - d[i + 1];
@@ -145,7 +164,8 @@ function alone(img, f) {
 async function main() {
   const char = process.argv[2];
   const measure = process.argv.includes('--measure');
-  if (!char) throw new Error('usage: node tools/cut_paper_char.cjs <char> [--measure]');
+  if (!CHARS[char]) throw new Error(`usage: node tools/cut_paper_char.cjs <${Object.keys(CHARS).join('|')}> [--measure]`);
+  ({ anims: ANIMS, bg: BG } = CHARS[char]);
   const RAW = path.join(ROOT, 'art_templates/papercraft_chars/raw', char);
   const OUT = path.join(ROOT, 'public/assets/sprites/paper/player', char);
   const load = async (anim, dir) => {
