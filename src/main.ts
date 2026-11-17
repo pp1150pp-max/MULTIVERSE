@@ -75,6 +75,8 @@ async function askPaperMaps(): Promise<boolean> {
 }
 
 async function boot(): Promise<void> {
+  // First of all: the game's load (started here or by entering the world) waits for this answer.
+  usePaperMaps(askPaperMaps());
   audioEngine.init();
   // The Login form needs no images, so it shows as soon as this code runs. The logo letters and
   // background (index.html / CSS) are already downloading; the class portraits (a few MB) come
@@ -85,7 +87,6 @@ async function boot(): Promise<void> {
   $('loading').classList.add('hidden');
   buildMenu(launch);
   await loadMenuAssets(CLASS_IDS);
-  usePaperMaps(await askPaperMaps());
   await loadGameAssets();
   const fromFile = Object.entries(assetSources).filter(([, v]) => v === 'file').map(([k]) => k);
   console.info(`[assets] ${fromFile.length} loaded from files:`, fromFile.join(', ') || '(none — using placeholders)');

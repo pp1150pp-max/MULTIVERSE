@@ -52,10 +52,14 @@ const PAPER_PROPS = new Set([
 ]);
 const PAPER_GROUND = new Set(['grass', 'dirt', 'pave', 'room_forest']);
 let paperMaps = false;
+let paperAnswer: Promise<boolean> = Promise.resolve(false);
 
-/** The server's art switch, set before loadGameAssets: true = the paper pictures wherever one exists. */
-export function usePaperMaps(on: boolean): void {
-  paperMaps = on;
+/**
+ * The server's art switch (true = the paper pictures wherever one exists), given as the pending answer so the game's
+ * load waits for it, however early it starts. Pages that never call this (the /admin previews) keep the old art.
+ */
+export function usePaperMaps(answer: Promise<boolean>): void {
+  paperAnswer = answer;
 }
 
 const sheet = (path: string, placeholder: () => HTMLCanvasElement): SheetSpec =>
@@ -550,6 +554,7 @@ export function portraitSource(key: string): PortraitSource | undefined {
 }
 
 async function loadAssets(): Promise<void> {
+  paperMaps = await paperAnswer;
   // Everything at once: the files don't depend on each other.
   await Promise.all([
     ...(['sword', 'mage', 'gun', 'gun_ult', 'enhance', 'sw_blade', 'sw_gale', 'sw_bulwark', 'mg_a', 'mg_b', 'mg_c', 'mg_d', 'mg_e', 'mg_f', 'mg_g'] as const).map((n) => loadFxSheet(n)),
