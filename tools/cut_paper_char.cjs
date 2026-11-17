@@ -130,6 +130,10 @@ function figures(img, label) {
     if (p.px.length < minKeep) continue;
     let best = 0;
     for (let i = 1; i < FRAMES; i++) if (Math.abs(big[i].cx - p.cx) < Math.abs(big[best].cx - p.cx)) best = i;
+    // A loose speck well away from the figure (a stray glow) is dropped; a dropped weapon is big enough to keep.
+    const b = big[best];
+    const gap = Math.max(b.x0 - p.x1, p.x0 - b.x1, b.y0 - p.y1, p.y0 - b.y1, 0);
+    if (gap > img.w / 60 && p.px.length < b.px.length * 0.02) continue;
     groups[best].push(...p.px);
   }
   return groups.map((px, i) => ({ ...withBox(img, px), cx: big[i].cx }));
@@ -147,6 +151,38 @@ function withBox(img, px) {
     if (y > y1) y1 = y;
   }
   return { px, x0, y0, x1: x1 + 1, y1: y1 + 1, cx: sx / Math.max(1, px.length) };
+}
+
+/**
+ * A figure's body area without its thin parts: the pixels whose whole square of side 2R+1 around them belongs to the
+ * figure (a staff, a blade or a scarf end narrower than that drops out). R grows with the picture's size.
+ */
+/** The figure's height without thin parts sticking up (a raised staff or sword): its foot to the top of its core. */
+function coreHeight(img, f) {
+  return f.y1 - f.y0 - coreArea(img, f, true);
+}
+
+function coreArea(img, f, topOnly = false) {
+  const w = f.x1 - f.x0;
+  const h = f.y1 - f.y0;
+  const R = Math.max(3, Math.round(img.w / 180));
+  const S = new Int32Array((w + 1) * (h + 1));
+  const mine = new Uint8Array(w * h);
+  for (const k of f.px) mine[(Math.floor(k / img.w) - f.y0) * w + (k % img.w) - f.x0] = 1;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    S[(y + 1) * (w + 1) + x + 1] = mine[y * w + x] + S[y * (w + 1) + x + 1] + S[(y + 1) * (w + 1) + x] - S[y * (w + 1) + x];
+  }
+  const full = (2 * R + 1) ** 2;
+  let n = 0;
+  for (let y = R; y < h - R; y++) for (let x = R; x < w - R; x++) {
+    const a = S[(y - R) * (w + 1) + x - R], b = S[(y - R) * (w + 1) + x + R + 1];
+    const c = S[(y + R + 1) * (w + 1) + x - R], d = S[(y + R + 1) * (w + 1) + x + R + 1];
+    if (d - b - c + a === full) {
+      if (topOnly) return Math.max(0, y - R);
+      n++;
+    }
+  }
+  return topOnly ? 0 : n;
 }
 
 /** One figure alone on a transparent crop (so a neighbour's sword tip isn't carried along). */
@@ -176,29 +212,26 @@ async function main() {
     return { img, figs: figures(img, path.basename(file)) };
   };
 
-  // The scale. ChatGPT draws the knight a little bigger or smaller in each picture, so each picture is measured by
-  // its median frame's height. A pose is about as much shorter than idle in every direction (a run crouches, a ride
-  // sits), so that ratio is the median over its 5 directions; each picture is then scaled so its body is BODY_PX at idle.
-  const medianH = (figs) => figs.map((f) => f.y1 - f.y0).sort((a, b) => a - b)[FRAMES >> 1];
-  const idleH = {};
+  // The scale. ChatGPT draws the character a little bigger or smaller in each picture (a run-and-cast row came out
+  // ~20% smaller than idle). Each direction's idle is scaled so its median frame is BODY_PX tall. A standing pose
+  // (run, attacks) is matched to its direction's idle by body height without thin parts sticking up (owner 2026-11-18:
+  // a raised staff made the cast look smaller than idle). Seated and lying poses (ride, death) can't be measured that
+  // way and keep their direction's idle scale.
+  const median = (xs) => [...xs].sort((a, b) => a - b)[xs.length >> 1];
+  const medianH = (figs) => median(figs.map((f) => f.y1 - f.y0));
+  const medianCore = (img, figs) => median(figs.map((f) => coreHeight(img, f)));
+  const STANDING = new Set(['run', 'attack', 'attack_2', 'attack_3', 'run_attack']);
+  const idleK = {};
+  const idleCore = {};
   for (const dir of DIRS) {
     const r = await load('idle', dir);
     if (!r) throw new Error(`missing idle_${dir}.png`);
-    idleH[dir] = medianH(r.figs);
+    idleK[dir] = BODY_PX / medianH(r.figs);
+    idleCore[dir] = medianCore(r.img, r.figs);
   }
-  const idleAll = Object.values(idleH).sort((a, b) => a - b)[2];
-  if (measure) console.log('idle heights', idleH);
-  const median = (xs) => [...xs].sort((a, b) => a - b)[xs.length >> 1];
   const loaded = {};
-  const poseRatio = {};
   for (const [anim, def] of Object.entries(ANIMS)) {
-    const ratios = [];
-    for (const dir of def.dirs ?? DIRS) {
-      const r = await load(anim, dir);
-      loaded[`${anim}_${dir}`] = r;
-      if (r) ratios.push(medianH(r.figs) / idleH[dir]);
-    }
-    poseRatio[anim] = ratios.length ? median(ratios) : 1;
+    for (const dir of def.dirs ?? DIRS) loaded[`${anim}_${dir}`] = await load(anim, dir);
   }
 
   const manifest = {
@@ -216,11 +249,10 @@ async function main() {
         missing = true;
         break;
       }
-      // This picture's idle-equivalent height: its own median over how much shorter this pose usually is. The death
-      // row (one picture, mostly lying down) uses the idle rows' middle height instead.
-      const own = medianH(r.figs);
-      const k = BODY_PX / (def.dirs ? idleAll : own / poseRatio[anim]);
-      if (measure) console.log(`${anim}_${dir}: median ${own}px, pose ratio ${poseRatio[anim].toFixed(2)}, scale ${k.toFixed(3)}`);
+      // Same body height as this direction's idle (the death row is side-on: the side idle's scale).
+      const own = STANDING.has(anim) ? medianCore(r.img, r.figs) : idleCore[dir];
+      const k = idleK[dir] * (idleCore[dir] / own);
+      if (measure) console.log(`${anim}_${dir}: body ${own}px (idle ${idleCore[dir]}), x${(k / idleK[dir]).toFixed(3)} of idle`);
       // The row's ground: the lowest foot of all its frames, so hops and falls keep their height above it.
       const ground = Math.max(...r.figs.map((f) => f.y1));
       for (let i = 0; i < FRAMES; i++) {

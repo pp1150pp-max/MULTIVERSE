@@ -30,30 +30,6 @@
       "frameHeight": 320,
       "feet": 0.05
     },
-    "attack": {
-      "file": "attack.png",
-      "frames": 8,
-      "fps": 24,
-      "frameWidth": 384,
-      "frameHeight": 320,
-      "feet": 0.05
-    },
-    "attack_2": {
-      "file": "attack_2.png",
-      "frames": 8,
-      "fps": 24,
-      "frameWidth": 384,
-      "frameHeight": 320,
-      "feet": 0.05
-    },
-    "attack_3": {
-      "file": "attack_3.png",
-      "frames": 8,
-      "fps": 24,
-      "frameWidth": 384,
-      "frameHeight": 320,
-      "feet": 0.05
-    },
     "death": {
       "file": "death.png",
       "frames": 8,
@@ -79,6 +55,30 @@
       "frames": 8,
       "fps": 8,
       "loop": true,
+      "frameWidth": 384,
+      "frameHeight": 320,
+      "feet": 0.05
+    },
+    "attack": {
+      "file": "attack.png",
+      "frames": 8,
+      "fps": 24,
+      "frameWidth": 384,
+      "frameHeight": 320,
+      "feet": 0.05
+    },
+    "attack_2": {
+      "file": "attack_2.png",
+      "frames": 8,
+      "fps": 24,
+      "frameWidth": 384,
+      "frameHeight": 320,
+      "feet": 0.05
+    },
+    "attack_3": {
+      "file": "attack_3.png",
+      "frames": 8,
+      "fps": 24,
       "frameWidth": 384,
       "frameHeight": 320,
       "feet": 0.05
