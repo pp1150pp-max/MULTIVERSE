@@ -39,7 +39,7 @@ Generate an image: one single horizontal row of the SAME gunslinger standing in 
 ข้อ 2–8 ขึ้นต้นด้วยข้อความกลางนี้ทุกภาพ แล้วต่อด้วย prompt ของท่านั้น และปิดท้ายด้วยบรรทัด `Direction:` จากตาราง
 
 ```
-Keep this EXACT gunslinger from the design sheet: same outfit, colours, proportions, size and papercraft style. Generate an image: ONE single horizontal row of exactly 8 frames of an animation, in 8 equal-width cells, the SAME gunslinger in every frame, all frames facing the SAME direction (given at the end). Head and body keep the same size in every frame, the boots on the same baseline unless the move says otherwise. Every figure fully inside its own cell with clear empty space around it, the long scarf and the pistol must never reach into the next cell, nothing touching or overlapping. No muzzle flash, no bullets, no smoke, no motion lines, no sparks, no dust, no effects. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no ground, no text, no labels, no numbers, no grid lines. Do not use pink, magenta or purple on the character.
+Keep this EXACT gunslinger from the design sheet: same outfit, colours, proportions, size and papercraft style. He has exactly two arms and holds exactly ONE pistol, always in the same hand, on the LEFT side of the picture in every frame and every view. Generate an image: ONE single horizontal row of exactly 8 frames of an animation, in 8 equal-width cells, the SAME gunslinger in every frame, all frames facing the SAME direction (given at the end). Head and body keep the same size in every frame, the boots on the same baseline unless the move says otherwise. Every figure fully inside its own cell with clear empty space around it, the long scarf and the pistol must never reach into the next cell, nothing touching or overlapping. No muzzle flash, no bullets, no smoke, no motion lines, no sparks, no dust, no effects. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no ground, no text, no labels, no numbers, no grid lines. Do not use pink, magenta or purple on the character.
 ```
 
 ## 2. ท่ายืน → `raw/gunslinger/idle_<มุม>.png` (5 ภาพ)
@@ -87,6 +87,24 @@ The move: standing on an invisible hoverboard (do NOT draw the board, only the g
 ```
 
 ---
+
+## 9. เจนใหม่ภาพที่ปืนสลับมือ มีปืน 2 กระบอก หรือมือ 3 ข้าง
+
+รอบแรก (2026-11-18) ภาพมุมหลังหลายภาพปืนสลับข้างกลางท่า บางเฟรมมีปืน 2 กระบอกหรือมือ 3 ข้าง
+ภาพส่วนใหญ่วาดปืนไว้ **ฝั่งซ้ายของภาพ** ทุกมุม จึงยึดตามนั้นทั้งชุด จะได้ไม่สลับข้างตอนเปลี่ยนท่า
+ภาพที่ผมเห็นว่าผิดแน่ ๆ: `run_up_side`, `attack_up`, `run_attack_up` ภาพอื่นที่คุณเห็นว่าผิดให้เจนใหม่แบบเดียวกัน
+
+เจนใหม่ด้วย prompt เดิมของท่านั้น แล้วต่อท้ายก่อนบรรทัด `Direction:` ด้วยประโยคนี้
+
+```
+VERY IMPORTANT: he has exactly TWO arms and TWO hands and holds exactly ONE pistol, in every frame. The pistol stays in the SAME hand in all 8 frames and is on the LEFT side of the picture in every frame (in a back view too); his other hand is empty. Never draw a second pistol, never move the pistol to the other hand.
+```
+
+สำหรับ `attack_up` และ `run_attack_up` (มุมหลัง ยิงออกห่างคนดู) ใช้ประโยคนี้แทน เพราะต้องยกปืนชี้เข้าไปในจอ
+
+```
+VERY IMPORTANT: he has exactly TWO arms and TWO hands and holds exactly ONE pistol, in every frame, in the hand on the LEFT side of the picture; he raises that arm and aims the pistol straight AWAY from the viewer, up into the screen. His other hand is empty. Never draw a second pistol, never move the pistol to the other hand.
+```
 
 ## สำหรับผม: ตัดเข้าเกม
 
