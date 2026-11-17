@@ -609,6 +609,7 @@ export class OnlineBackend implements Backend {
         setOrbs(p, ps.orbs);
         setCos(p, ps.cos);
         p.mounted = ps.mnt === 1;
+        p.seenGear = { ...(ps.wpn ? { wpn: ps.wpn } : {}), ...(ps.arm ? { arm: ps.arm } : {}) };
       }
       if (ps.dash) p.dashKind = ps.dash;
       if (p === this.me) {

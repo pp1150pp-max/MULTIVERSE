@@ -15,6 +15,10 @@ import { CosmeticRig, rideScale, ridePose } from './cosmeticViews';
 import { shownCos } from './cosLook';
 import { orbItemLook } from '../shared/orbItems';
 import { AnimatedActor, type Actor } from './AnimatedActor';
+import { RigActor, swordRigReady } from './rig/RigActor';
+import { paperSwordOn } from './rig/paperSwitch';
+import { rigLookOf } from '../shared/rigLookTuning';
+import { currentBalance } from '../shared/balance';
 import { animSets, decalTex, fxTex, sheets } from './assets';
 import { PassiveAura, type Effects, type ShotSprite } from './effects';
 import type { ProjectileLike } from './backend';
@@ -70,7 +74,10 @@ export class PlayerView {
 
   constructor(readonly p: Player, private readonly scene: THREE.Scene) {
     const anim = animSets[p.cls.id];
-    this.actor = anim ? new AnimatedActor(anim, 0.4) : new SpriteActor(sheets[p.cls.id], 1.9, 0.4);
+    const animated = anim ? new AnimatedActor(anim, 0.4) : null;
+    // The papercraft sword knight trial (rig/RigActor.ts): only in a browser with the switch on, once it has loaded.
+    const rig = animated && p.cls.id === 'sword' && paperSwordOn() ? swordRigReady() : null;
+    this.actor = rig && animated ? new RigActor(animated, rig) : (animated ?? new SpriteActor(sheets[p.cls.id], 1.9, 0.4));
     scene.add(this.actor.group);
     this.orbs = new OrbRing(scene, p.id * 3.7);
     this.cos = new CosmeticRig(scene);
@@ -88,7 +95,11 @@ export class PlayerView {
     this.actor.face(p.faceX, p.faceZ);
     if (p.isDashing && Math.random() < 0.7) fx.puff(p.x, 0.9, p.z, p.dashKind === 'charge' ? '#ffcf7a' : '#cfe8ff', 0.25, 1.1);
     this.matchStride(dt);
-    if (this.actor instanceof AnimatedActor) this.actor.setRide(ridePose(p));
+    this.actor.setRide?.(ridePose(p));
+    if (this.actor instanceof RigActor) {
+      const look = rigLookOf(currentBalance().rigLook, p.seenGear.wpn, p.seenGear.arm);
+      this.actor.setLook(look.armor, look.weapon);
+    }
     this.actor.update(dt, p.moving, p.isDashing ? 14 : undefined);
     this.updateAura(dt, fx);
     // Owner 2026-11-10: the orbs stay while dead (only the aura goes).
@@ -157,7 +168,7 @@ export class PlayerView {
     }
     this.lastX = p.x;
     this.lastZ = p.z;
-    if (this.actor instanceof AnimatedActor) {
+    if (this.actor.setStride) {
       this.actor.setStride(Math.min(STRIDE_MAX, Math.max(STRIDE_MIN, this.seenSpeed / STRIDE_SPEED)));
     }
   }

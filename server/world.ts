@@ -2383,7 +2383,7 @@ const SNAP_DELTA_KEY = 'snap_delta';
 /** PrivateSnap fields that hardly ever change: sent only when they did (snapshot delta). */
 type StaticMeKey = 'potSel' | 'lootFilter' | 'autoSettings' | 'stats' | 'skills' | 'bossKills' | 'quests' | 'gearQuests' | 'gearDone';
 const STATIC_ME: readonly StaticMeKey[] = ['potSel', 'lootFilter', 'autoSettings', 'stats', 'skills', 'bossKills', 'quests', 'gearQuests', 'gearDone'];
-type PlayerLook = Pick<PlayerSnap, 'name' | 'cls' | 'lv' | 'maxHp' | 'aura' | 'orbs' | 'cos' | 'mnt' | 'toad' | 'psv'>;
+type PlayerLook = Pick<PlayerSnap, 'name' | 'cls' | 'lv' | 'maxHp' | 'aura' | 'orbs' | 'cos' | 'mnt' | 'toad' | 'psv' | 'wpn' | 'arm'>;
 type MonsterLook = Pick<MonsterSnap, 'def' | 'lv' | 'mhp'>;
 
 /** A monster's debuffs for the snapshot, as this viewer sees them (nothing when it has none). */
@@ -2404,7 +2404,7 @@ function forgetSent(s: Session): void {
   s.seenM.clear();
 }
 
-/** A player's look bundle: name, class, level, max HP, aura, orbs, cosmetics, riding, toad, worn passive. */
+/** A player's look bundle: name, class, level, max HP, aura, orbs, cosmetics, riding, toad, worn passive, weapon and armour kinds. */
 function playerLook(o: Player, looks: Looks): Look {
   let l = looks.get(o);
   if (!l) {
@@ -2417,6 +2417,9 @@ function playerLook(o: Player, looks: Looks): Look {
       // Worked out by Player.recompute from the server's own copy of the gear (orbCodes clamps the levels).
       ...(o.orbs.length ? { orbs: o.orbs as number[] } : {}),
       ...cosSnap(o),
+      // The worn weapon and armour kinds: the papercraft sword rig draws the matching pieces (owner 2026-11-16).
+      ...(o.equipment.weapon ? { wpn: o.equipment.weapon.baseId } : {}),
+      ...(o.equipment.armor ? { arm: o.equipment.armor.baseId } : {}),
     };
     l = { look, json: JSON.stringify(look) };
     looks.set(o, l);

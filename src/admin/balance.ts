@@ -4,6 +4,7 @@
 // sends the whole draft, the server checks it, stores only what differs from the code, logs the change
 // and applies it to everyone online at once.
 import { FX_LAYER_NAME, FX_LAYER_RANGE, type FxLayerNum } from '../shared/fxLayerTuning';
+import { RIG_ARMOR_ITEMS, RIG_ARMOR_NAME, RIG_ARMORS, RIG_WEAPON_ITEMS, RIG_WEAPON_NAME, RIG_WEAPONS } from '../shared/rigLookTuning';
 import {
   applyBalance, BALANCE_RANGE, PACK_ZONES, packCount, balanceChanges, checkBalance, classStatsAt, skillMpCost, codeBalance, currentBalanceTuning, hasParts, mergeBalance, MONSTER_STAT_NAME,
   MONSTER_STATS, monsterBandOf, monsterMults, NO_MONSTER_MULT, STAT_MAX, STAT_PART_NAME, STAT_PARTS, STAT_TIER_PARTS, statTierTable, tierLabelsChange,
@@ -654,6 +655,27 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
+  // ---------------------------------------------------------- papercraft sword rig pictures (src/shared/rigLookTuning.ts)
+  const rigCard = h('div', { class: 'card' });
+  const drawRig = (): void => {
+    const r = draft.rigLook;
+    const cr = code.rigLook;
+    const itemName = (id: string): string => {
+      const b = ITEM_BASES.find((x) => x.id === id);
+      return `${b?.names.sword ?? b?.names.any ?? id} (Lv${b?.minLevel ?? '?'})`;
+    };
+    const row = <V extends string>(map: Record<string, V>, codeMap: Record<string, V>, id: string, values: readonly V[], names: Record<V, string>) =>
+      h('label', { class: map[id] !== codeMap[id] ? 'bal-changed' : '' }, `${itemName(id)} `,
+        h('select', { onchange: (e: Event) => { map[id] = (e.target as HTMLSelectElement).value as V; updateSummary(); drawRig(); } },
+          ...values.map((v) => h('option', { value: v, selected: map[id] === v }, names[v]))));
+    rigCard.replaceChildren(
+      h('h2', {}, 'นักดาบกระดาษ: ภาพอาวุธและเกราะ'),
+      h('div', { class: 'muted' }, 'ทดลองสไตล์กระดาษตัดแปะ: เลือกว่าไอเทมแต่ละชิ้นของนักดาบใช้ดาบและเกราะกระดาษแบบไหน (มีดาบ 3 แบบ เกราะ 2 แบบ) · ทุกคนเห็นตามที่อีกคนใส่จริง แต่จะเห็นนักดาบกระดาษเฉพาะเบราว์เซอร์ที่เปิดสวิตช์ในแท็บ หน้าตา → นักดาบกระดาษ'),
+      h('div', { class: 'row bal-line' }, ...RIG_WEAPON_ITEMS.map((id) => row(r.weapons, cr.weapons, id, RIG_WEAPONS, RIG_WEAPON_NAME))),
+      h('div', { class: 'row bal-line' }, ...RIG_ARMOR_ITEMS.map((id) => row(r.armors, cr.armors, id, RIG_ARMORS, RIG_ARMOR_NAME))),
+    );
+  };
+
   // ---------------------------------------------------------- tutorial quest rewards (src/shared/tutorial.ts)
   const tutCard = h('div', { class: 'card' });
   /** Every potion and stone a reward may give, as select options (value = JSON of the line without count). */
@@ -778,6 +800,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawTut();
     drawSkills();
     drawFx();
+    drawRig();
   };
   const save =async (body: { tuning: BalanceTuning } | { reset: true }, ask: string): Promise<void> => {
     if (!confirm(ask)) return;
@@ -826,6 +849,6 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     msg,
   );
 
-  box.replaceChildren(classCard, regenCard, tierCard, previewCard, monsterCard, autoCard, tutCard, skillCard, fxCard, bar);
+  box.replaceChildren(classCard, regenCard, tierCard, previewCard, monsterCard, autoCard, tutCard, skillCard, fxCard, rigCard, bar);
   redraw();
 }
