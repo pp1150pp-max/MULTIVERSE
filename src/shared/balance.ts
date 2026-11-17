@@ -29,6 +29,7 @@ export const CODE_MP_REGEN_MULT = 0.25;
 export const CODE_BOSS_SWITCH_SEC = 10;
 /** Ordinary monsters give up after this many seconds without a hit (owner 2026-11-17: off). */
 export const CODE_MOB_GIVE_UP_SEC = 0;
+export const CODE_MOB_RETURN_IGNORE_HITS = true;
 
 /**
  * One class's numbers: Lv1 stats, added per level, final multipliers (gear included), damage to bosses, and how
@@ -114,6 +115,8 @@ export interface Balance {
   bossSwitchSec: number;
   /** Ordinary monsters stop chasing after this many seconds without being hit; 0 = they never give up (the leash still holds). */
   mobGiveUpSec: number;
+  /** A monster walking home (leash / hurt after a fight) ignores hits: no turning back to chase (owner 2026-11-17); off = the old behaviour. */
+  mobReturnIgnoreHits: boolean;
   /** Auto Play defaults, distances and switches (autoTuning.ts). */
   auto: AutoConfig;
   /** The skill effects' extra layer: glow, ground light, particles, hit feel (fxLayerTuning.ts). */
@@ -152,6 +155,8 @@ export interface BalanceTuning {
   bossSwitchSec?: number;
   /** Ordinary monsters' give-up seconds, when not the code's. */
   mobGiveUpSec?: number;
+  /** Walking-home monsters ignoring hits, when not the code's (on). */
+  mobReturnIgnoreHits?: boolean;
   /** Auto Play settings that differ from the code. */
   auto?: AutoTuning;
   /** Skill effect extra-layer numbers that differ from the code. */
@@ -214,6 +219,7 @@ export function codeBalance(): Balance {
     mobPack: {},
     bossSwitchSec: CODE_BOSS_SWITCH_SEC,
     mobGiveUpSec: CODE_MOB_GIVE_UP_SEC,
+    mobReturnIgnoreHits: CODE_MOB_RETURN_IGNORE_HITS,
     auto: codeAuto(),
     fxLayer: codeFxLayer(),
     rigLook: codeRigLook(),
@@ -248,6 +254,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.mobPack) b.mobPack = { ...t.mobPack };
   if (t.bossSwitchSec !== undefined) b.bossSwitchSec = t.bossSwitchSec;
   if (t.mobGiveUpSec !== undefined) b.mobGiveUpSec = t.mobGiveUpSec;
+  if (t.mobReturnIgnoreHits !== undefined) b.mobReturnIgnoreHits = t.mobReturnIgnoreHits;
   b.auto = mergeAuto(t.auto);
   b.fxLayer = mergeFxLayer(t.fxLayer);
   b.rigLook = mergeRigLook(t.rigLook);
@@ -382,7 +389,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'monsters', 'mobPack', 'bossSwitchSec', 'mobGiveUpSec', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'monsters', 'mobPack', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -463,6 +470,13 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     const n = num(o[key], range[0], range[1], what);
     if (typeof n === 'string') return n;
     if (n !== undefined && n !== CODE[key]) out[key] = n;
+    return null;
+  };
+  const returnIgnore = (): string | null => {
+    const x = o.mobReturnIgnoreHits;
+    if (x === undefined) return null;
+    if (typeof x !== 'boolean') return strict ? 'สวิตช์มอนเดินกลับไม่สนการโจมตีต้องเป็นเปิด/ปิด' : null;
+    if (x !== CODE.mobReturnIgnoreHits) out.mobReturnIgnoreHits = x;
     return null;
   };
   /** A tier array (5 numbers, T1 first): the array, undefined (missing / dropped), or an error to return. */
@@ -718,6 +732,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     mobPack() ??
     one('bossSwitchSec', BALANCE_RANGE.bossSwitchSec, 'บอสเปลี่ยนเป้าหมายทุก (วินาที)') ??
     one('mobGiveUpSec', BALANCE_RANGE.mobGiveUpSec, 'มอนธรรมดาเลิกไล่เมื่อไม่โดนตี (วินาที)') ??
+    returnIgnore() ??
     auto() ??
     tutorial() ??
     skills() ??
@@ -801,6 +816,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   }
   if (a.bossSwitchSec !== b.bossSwitchSec) out.push(`บอสเปลี่ยนเป้าหมายทุก ${a.bossSwitchSec || 'ปิด'} → ${b.bossSwitchSec || 'ปิด'} วิ`);
   if (a.mobGiveUpSec !== b.mobGiveUpSec) out.push(`มอนธรรมดาเลิกไล่เมื่อไม่โดนตี ${a.mobGiveUpSec || 'ไม่เลิก'} → ${b.mobGiveUpSec || 'ไม่เลิก'} วิ`);
+  if (a.mobReturnIgnoreHits !== b.mobReturnIgnoreHits) out.push(`มอนเดินกลับบ้านไม่สนการโจมตี ${a.mobReturnIgnoreHits ? 'เปิด' : 'ปิด'} → ${b.mobReturnIgnoreHits ? 'เปิด' : 'ปิด'}`);
   out.push(...autoChanges(a.auto, b.auto));
   out.push(...tutorialChanges(a.tutorial, b.tutorial));
   out.push(...skillChanges(a.skills, b.skills));
