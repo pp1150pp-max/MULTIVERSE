@@ -18,7 +18,7 @@ import { pick, rand, randInt } from '../rng';
 import { splitExp } from '../party';
 import { CLASS_IDS, SLOT_KIND, WEAR_SLOTS, type WearSlot } from '../data/classes';
 import { emptySkillBook, learnable, learnBlock, pointsSpent, rankOf, refundPrice, unlearnOne, wear, wearBlock } from '../skillBook';
-import { classBalance, currentBalance } from '../balance';
+import { classBalance, currentBalance, packCount } from '../balance';
 import { COS_SLOT_NAME, cosById, MOUNT_CALM } from '../data/cosmetics';
 import {
   isBound, isBuffScroll, isItem, isPotion, isStack, isStone, RARITY_LABEL, sameStack, SLOT_LABEL, BLACKSMITH_STONES, BUFF_SCROLLS, type BagEntry, type BuffScroll, type Item, type StoneKind, type PotionKind, type PotionSize, type Rarity } from '../types';
@@ -118,7 +118,8 @@ function fillInto(src: (BagEntry | null)[], i: number, dst: (BagEntry | null)[])
   return true;
 }
 
-interface Spawner { area: SpawnArea; alive: number; queue: number[]; boss: boolean }
+/** `index`: the spot's place in the zone's spawn list (spreads the pack multiplier's fraction, see packCount). */
+interface Spawner { area: SpawnArea; alive: number; queue: number[]; boss: boolean; index: number }
 
 /** How close a player must be to a drop they clicked to pick it up (walking over others takes them at 0.8). */
 export const LOOT_CLICK_RANGE = 1.5;
@@ -156,14 +157,19 @@ export class Sim {
     this.keys = Math.max(1, Math.floor(opts.keys ?? 1));
     this.boost = this.keys > 1 ? { ...(zone.monsterBoost ?? NO_BOOST), keys: this.keys } : zone.monsterBoost;
     this.terrain = new Terrain(zone);
-    for (const area of zone.spawns) this.spawners.push({ area, alive: 0, queue: [], boss: false });
-    if (zone.boss) this.spawners.push({ area: zone.boss, alive: 0, queue: [], boss: true });
+    zone.spawns.forEach((area, index) => this.spawners.push({ area, alive: 0, queue: [], boss: false, index }));
+    if (zone.boss) this.spawners.push({ area: zone.boss, alive: 0, queue: [], boss: true, index: -1 });
     const delay = zone.boss ? opts.bossDelay ?? 0 : 0;
     if (delay > 0) this.bossAt = delay;
     for (const sp of this.spawners) {
       if (sp.boss && delay > 0) sp.queue.push(delay);
-      else for (let i = 0; i < sp.area.count; i++) this.spawnMonster(sp);
+      else for (let i = 0, n = this.wanted(sp); i < n; i++) this.spawnMonster(sp);
     }
+  }
+
+  /** How many monsters this spawner keeps: the code's count, ×the map's pack multiplier (/admin) unless it is a boss. */
+  private wanted(sp: Spawner): number {
+    return sp.boss || this.zone.roomOf ? sp.area.count : packCount(this.zone.id, sp.area.count, sp.index);
   }
 
   private newId(): number {
@@ -287,7 +293,9 @@ export class Sim {
     let z = sp.area.z;
     for (let tries = 0; tries < 12; tries++) {
       const a = r() * Math.PI * 2;
-      const d = Math.sqrt(r()) * sp.area.radius;
+      // A bigger pack spreads a little wider (up to twice the spot's radius).
+      const n = sp.boss ? 1 : this.wanted(sp) / Math.max(1, sp.area.count);
+      const d = Math.sqrt(r()) * sp.area.radius * Math.min(2, Math.sqrt(Math.max(1, n)));
       x = sp.area.x + Math.cos(a) * d;
       z = sp.area.z + Math.sin(a) * d;
       if (!this.terrain.isBlocked(x, z, def.radius)) break;
@@ -1732,8 +1740,15 @@ export class Sim {
     this.loots = this.loots.filter((l) => !l.dead);
 
     for (const sp of this.spawners) {
+      const want = this.wanted(sp);
+      // The pack multiplier went up (/admin): the extra monsters come in on the spot's respawn timer.
+      if (!this.zone.roomOf) {
+        while (sp.alive + sp.queue.length < want) sp.queue.push(this.time + rand(Math.random, sp.area.respawn[0], sp.area.respawn[1]));
+      }
       sp.queue.sort((a, b) => a - b);
-      while (sp.queue.length && sp.queue[0] <= this.time && sp.alive < sp.area.count) {
+      // It went down: the extra ones are simply not replaced.
+      if (sp.queue.length > Math.max(0, want - sp.alive)) sp.queue.length = Math.max(0, want - sp.alive);
+      while (sp.queue.length && sp.queue[0] <= this.time && sp.alive < want) {
         sp.queue.shift();
         this.spawnMonster(sp);
         if (sp.boss && this.bossAt !== null) this.bossArrives(sp.area);

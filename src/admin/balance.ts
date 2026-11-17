@@ -5,7 +5,7 @@
 // and applies it to everyone online at once.
 import { FX_LAYER_NAME, FX_LAYER_RANGE, type FxLayerNum } from '../shared/fxLayerTuning';
 import {
-  applyBalance, BALANCE_RANGE, balanceChanges, checkBalance, classStatsAt, skillMpCost, codeBalance, currentBalanceTuning, hasParts, mergeBalance, MONSTER_STAT_NAME,
+  applyBalance, BALANCE_RANGE, PACK_ZONES, packCount, balanceChanges, checkBalance, classStatsAt, skillMpCost, codeBalance, currentBalanceTuning, hasParts, mergeBalance, MONSTER_STAT_NAME,
   MONSTER_STATS, monsterBandOf, monsterMults, NO_MONSTER_MULT, STAT_MAX, STAT_PART_NAME, STAT_PARTS, STAT_TIER_PARTS, statTierTable, tierLabelsChange,
   tierSourceName, TUNABLE_MONSTERS, withItemStatMult,
   type Balance, type BalanceTuning, type MonsterMults, type MonsterStat, type StatPart, type TierParts,
@@ -559,6 +559,29 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('h3', {}, 'รายตัว'),
       h('div', { class: 'muted' }, 'แถว "ค่าจริง" = ค่าในโค้ด → หลังคูณทั้งสองชั้น ที่เลเวลต่ำสุดของชนิดนั้น รวมที่แมพเพิ่มให้แล้ว (ทองรวมตัวคูณดรอปทองของเกม, ตีเร็วแสดงเป็นวินาทีต่อครั้ง)'),
       h('div', { class: 'bal-scroll' }, h('table', { class: 'bal-table' }, head('มอน'), h('tbody', {}, ...kindRows))),
+      h('h3', {}, 'จำนวนมอนต่อจุดเกิด (ต่อแมพ)'),
+      h('div', { class: 'muted' },
+        `แต่ละจุดเกิดออกมอนเป็นฝูง ×เท่านี้ (แมพไม่มีที่ให้เพิ่มจุด) · ใส่ได้ ×${BALANCE_RANGE.mobPack[0]}–×${BALANCE_RANGE.mobPack[1]} ทศนิยมได้ (×1.5 = ครึ่งหนึ่งของจุดได้เพิ่ม 1 ตัว) · ไม่รวมบอส · ` +
+        'บันทึกแล้วมีผลทันที: เพิ่ม = ตัวที่เพิ่มทยอยเกิดตามเวลาเกิดใหม่ของจุด, ลด = ตัวที่เกินตายแล้วไม่เกิดใหม่ · มอน ×3 ที่ 100 คน server ยุ่งราว 1.6 เท่า เน็ตต่อคนราว 1.8 เท่า (load test 2026-11-17)'),
+      h('div', { class: 'bal-scroll' }, h('table', { class: 'bal-table' },
+        h('thead', {}, h('tr', {}, h('th', {}, 'แมพ'), h('th', {}, 'มอนต่อจุด ×'), h('th', {}, 'มอนทั้งแมพ (ต่อ CH)'))),
+        h('tbody', {}, ...PACK_ZONES.map((z) => {
+          const total = h('td', { class: 'bal-out' });
+          const spawns = ZONES[z.id].spawns;
+          const count = (b: Parameters<typeof packCount>[3]) => spawns.reduce((n, a, i) => n + packCount(z.id, a.count, i, b), 0);
+          const show = (): void => {
+            const before = count(code);
+            const after = count(draft);
+            total.textContent = before === after ? String(before) : `${before} → ${after}`;
+            total.classList.toggle('bal-changed', before !== after);
+          };
+          show();
+          const box = numBox(() => draft.mobPack[z.id] ?? 1, (n) => {
+            if (n === 1) delete draft.mobPack[z.id];
+            else draft.mobPack[z.id] = n;
+          }, 1, ...BALANCE_RANGE.mobPack, 0.1, () => { show(); updateSummary(); });
+          return h('tr', {}, h('td', {}, z.nameTh), h('td', {}, box), total);
+        })))),
     );
     refresh();
   };
