@@ -12,6 +12,7 @@ import { CODE_POTIONS, CODE_SWORD_POTION_BONUS, POTION_RANGE, type PotionNums } 
 import { MONSTERS, type MonsterDef } from './data/monsters';
 import { ZONES } from './data/zones';
 import { checkFxLayerTuning, codeFxLayer, fxLayerChanges, mergeFxLayer, type FxLayerConfig, type FxLayerTuning } from './fxLayerTuning';
+import { attackRootChanges, checkAttackRootTuning, codeAttackRoot, mergeAttackRoot, type AttackRootConfig, type AttackRootTuning } from './attackRootTuning';
 import { checkRigLookTuning, codeRigLook, mergeRigLook, rigLookChanges, type RigLookConfig, type RigLookTuning } from './rigLookTuning';
 import { autoChanges, checkAutoTuning, codeAuto, mergeAuto, type AutoConfig, type AutoTuning } from './autoTuning';
 import { checkTutorialTuning, codeTutorial, mergeTutorial, tutorialChanges, type TutorialConfig, type TutorialTuning } from './tutorial';
@@ -143,6 +144,8 @@ export interface Balance {
   fxLayer: FxLayerConfig;
   /** Which papercraft sword / armour each item shows on the sword rig (rigLookTuning.ts). */
   rigLook: RigLookConfig;
+  /** Stopping for a moment on each attack, per class (attackRootTuning.ts). */
+  attackRoot: AttackRootConfig;
   /** Tutorial quest rewards (tutorial.ts). */
   tutorial: TutorialConfig;
   /** Skill points, ranks, unlock levels, refunds and every learnable skill's numbers (skillTuning.ts). */
@@ -189,6 +192,8 @@ export interface BalanceTuning {
   fxLayer?: FxLayerTuning;
   /** Sword rig item pictures that differ from the code. */
   rigLook?: RigLookTuning;
+  /** Attack stop settings that differ from the code. */
+  attackRoot?: AttackRootTuning;
   /** Tutorial quest rewards that differ from the code. */
   tutorial?: TutorialTuning;
   /** Skill system settings that differ from the code. */
@@ -253,6 +258,7 @@ export function codeBalance(): Balance {
     auto: codeAuto(),
     fxLayer: codeFxLayer(),
     rigLook: codeRigLook(),
+    attackRoot: codeAttackRoot(),
     tutorial: codeTutorial(),
     skills: codeSkills(),
   };
@@ -294,6 +300,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   b.auto = mergeAuto(t.auto);
   b.fxLayer = mergeFxLayer(t.fxLayer);
   b.rigLook = mergeRigLook(t.rigLook);
+  b.attackRoot = mergeAttackRoot(t.attackRoot);
   b.tutorial = mergeTutorial(t.tutorial);
   b.skills = mergeSkills(t.skills);
   return b;
@@ -425,7 +432,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'monsters', 'mobPack', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'bossWipeKeepHp', 'roomWipeSec', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'monsters', 'mobPack', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'bossWipeKeepHp', 'roomWipeSec', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -800,6 +807,12 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (c.tuning) out.rigLook = c.tuning;
     return null;
   };
+  const attackRoot = (): string | null => {
+    const c = checkAttackRootTuning(o.attackRoot, strict);
+    if ('error' in c) return c.error;
+    if (c.tuning) out.attackRoot = c.tuning;
+    return null;
+  };
   const skills = (): string | null => {
     const c = checkSkillTuning(o.skills, strict);
     if ('error' in c) return c.error;
@@ -828,7 +841,8 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     tutorial() ??
     skills() ??
     fxLayer() ??
-    rigLook();
+    rigLook() ??
+    attackRoot();
   if (err) return { error: err };
   // Fixed key order.
   const ordered: BalanceTuning = {};
@@ -925,6 +939,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   out.push(...skillChanges(a.skills, b.skills));
   out.push(...fxLayerChanges(a.fxLayer, b.fxLayer));
   out.push(...rigLookChanges(a.rigLook, b.rigLook));
+  out.push(...attackRootChanges(a.attackRoot, b.attackRoot));
   return out.join(', ');
 }
 

@@ -4,6 +4,7 @@
 // sends the whole draft, the server checks it, stores only what differs from the code, logs the change
 // and applies it to everyone online at once.
 import { FX_LAYER_NAME, FX_LAYER_RANGE, type FxLayerNum } from '../shared/fxLayerTuning';
+import { ATTACK_ROOT_RANGE, NO_ATTACK_ROOT } from '../shared/attackRootTuning';
 import { RIG_ARMOR_ITEMS, RIG_ARMOR_NAME, RIG_ARMORS, RIG_WEAPON_ITEMS, RIG_WEAPON_NAME, RIG_WEAPONS } from '../shared/rigLookTuning';
 import {
   applyBalance, BALANCE_RANGE, PACK_ZONES, packCount, balanceChanges, checkBalance, classStatsAt, skillMpCost, codeBalance, currentBalanceTuning, hasParts, mergeBalance, MONSTER_STAT_NAME,
@@ -720,6 +721,37 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
+  // ---------------------------------------------------------- stopping on attacks (src/shared/attackRootTuning.ts)
+  const rootCard = h('div', { class: 'card' });
+  const drawRoot = (): void => {
+    const r = draft.attackRoot;
+    const cr = code.attackRoot;
+    const refresh = (): void => { updateSummary(); };
+    const skillName = (id: string): string => {
+      for (const c of Object.values(CLASSES)) {
+        const sk = c.skills.find((s) => s.id === id);
+        if (sk) return sk.nameTh;
+      }
+      return id;
+    };
+    rootCard.replaceChildren(
+      h('h2', {}, 'หยุดตอนโจมตี'),
+      h('div', { class: 'muted' }, 'ตีธรรมดาหรือใช้สกิลแล้วตัวละครยืนนิ่งสั้น ๆ (ยังหันตามเมาส์/เป้าได้) แล้ววิ่งต่อเองถ้ายังกดเดินอยู่ — แก้ภาพ "สไลด์" ตอนวิ่งแล้วตี · server ตัดสิน เบราว์เซอร์หยุดตามทันที · แดชระหว่างหยุดได้และยกเลิกการหยุด · ไม่เปลี่ยนคูลดาวน์ ดาเมจ ความเร็วโจมตี · มีผลกับทุกคนทันทีหลังบันทึก'),
+      h('div', { class: 'row bal-line' }, ...CLASS_IDS.map((id) => {
+        const c = r.classes[id];
+        const cc = cr.classes[id];
+        const on = h('input', { type: 'checkbox', checked: c.on, onchange: (e: Event) => { c.on = (e.target as HTMLInputElement).checked; refresh(); drawRoot(); } });
+        return h('div', {},
+          h('label', { class: c.on !== cc.on ? 'bal-changed' : '' }, on, ` ${CLASSES[id].nameTh} หยุดตอนโจมตี`),
+          h('label', {}, ' หยุดตอนตีธรรมดา (วิ) ', numBox(() => c.basicSec, (n) => { c.basicSec = n; }, cc.basicSec, ATTACK_ROOT_RANGE.basicSec[0], ATTACK_ROOT_RANGE.basicSec[1], 0.05, refresh)));
+      })),
+      h('div', { class: 'row bal-line' },
+        h('label', {}, '× เวลาหยุดตอนใช้สกิล (เทียบกับตีธรรมดา) ', numBox(() => r.skillMult, (n) => { r.skillMult = n; }, cr.skillMult, ATTACK_ROOT_RANGE.skillMult[0], ATTACK_ROOT_RANGE.skillMult[1], 0.1, refresh))),
+      h('div', { class: 'muted' }, 'ตีธรรมดาหยุดไม่นานกว่าท่าโจมตี (ท่ายาว 0.95 ÷ ความเร็วตี ไม่เกิน 0.5 วิ: ดาบ/เวท ~0.5 ปืน ~0.37 ตีเร็วขึ้นท่าก็สั้นลง) · สกิลหยุด = เวลาตีธรรมดาของอาชีพ × ตัวคูณ · 0 = ไม่หยุด'),
+      h('div', { class: 'muted' }, `สกิลที่ไม่หยุด (ท่าพุ่ง/กระโดดถอย/หายตัว และบัฟ): ${[...NO_ATTACK_ROOT].map(skillName).join(', ')} · สกิลที่ยืนเล็ง/ชาร์จเองอยู่แล้ว (ยิงหัว ยิงประณีต รางแม่เหล็ก เวทชาร์จ ปลดปล่อยพลัง) ใช้เวลาของสกิลนั้นแทน`),
+    );
+  };
+
   // ---------------------------------------------------------- papercraft sword rig pictures (src/shared/rigLookTuning.ts)
   const rigCard = h('div', { class: 'card' });
   const drawRig = (): void => {
@@ -866,6 +898,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawTut();
     drawSkills();
     drawFx();
+    drawRoot();
     drawRig();
   };
   const save =async (body: { tuning: BalanceTuning } | { reset: true }, ask: string): Promise<void> => {
@@ -910,11 +943,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         void save({ tuning: c.tuning }, `ใช้ค่าใหม่กับทั้งเซิร์ฟทันทีไหม?\n\n${changes.slice(0, 1200)}`);
       } }, '💾 บันทึกทั้งเซิร์ฟ'),
       h('button', { onclick: () => { draft = mergeBalance(saved); redraw(); msg.textContent = ''; } }, 'ยกเลิกที่ยังไม่บันทึก'),
-      h('button', { onclick: () => void save({ reset: true }, 'คืนทุกค่า (อาชีพ tier ตัวคูณมอน ยา Auto Play รางวัลเควสสอนระบบ ระบบสกิล และเอฟเฟกต์สกิล) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?') }, '↺ คืนค่าในโค้ด'),
+      h('button', { onclick: () => void save({ reset: true }, 'คืนทุกค่า (อาชีพ tier ตัวคูณมอน ยา Auto Play รางวัลเควสสอนระบบ ระบบสกิล เอฟเฟกต์สกิล และหยุดตอนโจมตี) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?') }, '↺ คืนค่าในโค้ด'),
     ),
     msg,
   );
 
-  box.replaceChildren(classCard, regenCard, tierCard, previewCard, monsterCard, potionCard, autoCard, tutCard, skillCard, fxCard, rigCard, bar);
+  box.replaceChildren(classCard, regenCard, tierCard, previewCard, monsterCard, potionCard, autoCard, tutCard, skillCard, fxCard, rootCard, rigCard, bar);
   redraw();
 }
