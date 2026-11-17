@@ -58,12 +58,16 @@ const PAPER_PROPS = new Set([
   'burnt_pillar_0', 'burnt_pillar_1', 'burnt_pillar_2', 'charred_tree', 'ash_shrub_0', 'ash_shrub_1', 'ember_fern', 'charred_stump',
   'basalt_0', 'basalt_1', 'magma_crystal_0', 'magma_crystal_1', 'decor_volcano', 'island_cliff_volcano', 'island_slabs_volcano',
   ...['pillar_0', 'wall', 'brazier', 'boulder', 'pillar_1', 'rubble', 'rune_stone', 'tree'].map((n) => `room_volcano_${n}`),
+  // The hub town and the boss summoners
+  'ruin_fountain', 'ruin_statue', 'ruin_pillar', 'ruin_house', 'ruin_tower', 'ruin_rubble', 'town_stall', 'town_forge', 'town_vault', 'town_market',
+  'town_wall_a', 'town_wall_a_broken', 'town_wall_b', 'town_wall_b_broken', 'town_wall_end',
+  'summoner_forest', 'summoner_marsh', 'summoner_snow', 'summoner_volcano',
   // Every map's camp and island rim
   'tent', 'campfire', 'sign', 'portal', 'runestone', 'well', 'barrel', 'chest', 'cart', 'banner_red', 'flag', 'watchtower',
   'island_debris', 'island_cracks',
 ]);
 const PAPER_GROUND = new Set(['grass', 'dirt', 'pave', 'room_forest', 'marsh', 'mud', 'water', 'room_marsh',
-  'snow', 'snow_path', 'ice', 'room_snow', 'ash_rock', 'ash_path', 'lava', 'room_volcano']);
+  'snow', 'snow_path', 'ice', 'room_snow', 'ash_rock', 'ash_path', 'lava', 'room_volcano', 'brick']);
 let paperMaps = false;
 let paperAnswer: Promise<boolean> = Promise.resolve(false);
 
