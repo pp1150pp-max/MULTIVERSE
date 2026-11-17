@@ -58,6 +58,11 @@ wait_ready() {
   return 1
 }
 
+# package.json's dependency fields at a commit, as one line of JSON (scripts and the rest left out).
+deps_of() {
+  git show "$1:package.json" | node -e 'let s="";process.stdin.on("data",(d)=>(s+=d)).on("end",()=>{const p=JSON.parse(s);console.log(JSON.stringify([p.dependencies,p.devDependencies,p.optionalDependencies,p.peerDependencies,p.overrides,p.engines]))})'
+}
+
 deploy() {
   local want="$1" old new running=0 deps=0
   [ -z "$(git status --porcelain)" ] || { echo "⚠ โค้ดบน VPS มีไฟล์ถูกแก้ (git status ไม่ว่าง) — หยุด ไม่ deploy"; git status --short; exit 4; }
@@ -66,7 +71,9 @@ deploy() {
   [[ "$new" == "$want"* ]] || { echo "⚠ main ล่าสุดคือ ${new:0:7} ไม่ใช่ $want (มีคน merge เพิ่มระหว่างตรวจ) — กด deploy ใหม่"; exit 5; }
   old="$(git rev-parse HEAD)"
   if systemctl is-active -q multiverse; then running=1; fi
-  if ! git diff --quiet "$old" "$new" -- package.json package-lock.json; then deps=1; fi
+  # Only real dependency changes need npm ci (and so a full stop): the lock file, or package.json's
+  # dependency fields. A new test in the "test" script is not one (it used to force a full stop every time).
+  if ! git diff --quiet "$old" "$new" -- package-lock.json || [ "$(deps_of "$old")" != "$(deps_of "$new")" ]; then deps=1; fi
   echo "จาก ${old:0:7} → ${new:0:7} · server $([ $running = 1 ] && echo เปิดอยู่ || echo ไม่ได้เปิด) · dependency $([ $deps = 1 ] && echo เปลี่ยน || echo ไม่เปลี่ยน)"
 
   # 1. Back up the DB (the server keeps writing; VACUUM INTO makes a consistent copy). Keep the last 10.
