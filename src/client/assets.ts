@@ -36,6 +36,28 @@ interface SheetSpec {
 }
 
 const BASE = 'assets/sprites/';
+
+/**
+ * Papercraft map art (src/shared/paperArt.ts, cut by tools/cut_papercraft.cjs): the props/ and ground/ files that have
+ * a paper version under sprites/paper/, same name and size. Each map adds its own as it is made.
+ */
+const PAPER_PROPS = new Set([
+  // Map 1 Emerald Forest
+  'tree_0', 'tree_1', 'tree_2', 'stump_tall', 'bush_0', 'bush_1', 'bush_2', 'stump', 'rock_0', 'rock_1', 'rock_2', 'pebble_0', 'pebble_1',
+  'decor_forest', 'island_cliff_forest', 'island_slabs_forest',
+  ...['pillar_0', 'wall', 'brazier', 'boulder', 'pillar_1', 'rubble', 'rune_stone', 'tree'].map((n) => `room_forest_${n}`),
+  // Every map's camp and island rim
+  'tent', 'campfire', 'sign', 'portal', 'runestone', 'well', 'barrel', 'chest', 'cart', 'banner_red', 'flag', 'watchtower',
+  'island_debris', 'island_cracks',
+]);
+const PAPER_GROUND = new Set(['grass', 'dirt', 'pave', 'room_forest']);
+let paperMaps = false;
+
+/** The server's art switch, set before loadGameAssets: true = the paper pictures wherever one exists. */
+export function usePaperMaps(on: boolean): void {
+  paperMaps = on;
+}
+
 const sheet = (path: string, placeholder: () => HTMLCanvasElement): SheetSpec =>
   ({ path: BASE + path, cols: 3, rows: 3, fileSideFaces: 'left', placeholder });
 /** Monster files: 3 frames across, and front, front diagonal, side, back diagonal, back down. */
@@ -323,7 +345,10 @@ export const groundTiles: Partial<Record<GroundTile, THREE.Texture>> = {};
 
 async function loadGroundTile(name: GroundTile): Promise<void> {
   try {
-    const tex = await loadTexture(`${BASE}ground/${name}.png`);
+    const old = `${BASE}ground/${name}.png`;
+    const tex = paperMaps && PAPER_GROUND.has(name)
+      ? await loadTexture(`${BASE}paper/ground/${name}.png`).catch(() => loadTexture(old))
+      : await loadTexture(old);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
     tex.magFilter = THREE.NearestFilter;
@@ -540,7 +565,9 @@ async function loadAssets(): Promise<void> {
       let sideFaces = spec.fileSideFaces;
       let rows = spec.rows;
       try {
-        tex = await loadTexture(spec.path).catch((e) => (spec.standIn ? loadTexture(spec.standIn) : Promise.reject(e)));
+        const paper = paperMaps && PAPER_PROPS.has(key) ? `${BASE}paper/props/${key}.png` : null;
+        tex = await (paper ? loadTexture(paper).catch(() => loadTexture(spec.path)) : loadTexture(spec.path))
+          .catch((e) => (spec.standIn ? loadTexture(spec.standIn) : Promise.reject(e)));
         assetSources[key] = 'file';
         rows = spec.fileRows ?? spec.rows;
       } catch {

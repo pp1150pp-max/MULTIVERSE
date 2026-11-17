@@ -1,7 +1,8 @@
 import './client/noBrowserMenu';
 import './style.css';
 import './client/touch/device';
-import { assetSources, loadGameAssets, loadMenuAssets } from './client/assets';
+import { assetSources, loadGameAssets, loadMenuAssets, usePaperMaps } from './client/assets';
+import { LOOK_PATH, type PublicLook } from './shared/paperArt';
 import { CLASS_IDS } from './shared/data/classes';
 import { Game } from './client/Game';
 import { buildMenu, facePortrait } from './client/menu';
@@ -62,6 +63,17 @@ function revealLogoWhenLoaded(): void {
   }
 }
 
+/** The server's map art switch (/admin → Server). No answer within 3 s, or an older server = the old art. */
+async function askPaperMaps(): Promise<boolean> {
+  try {
+    const res = await fetch(LOOK_PATH, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) return false;
+    return ((await res.json()) as Partial<PublicLook>).paperMaps === true;
+  } catch {
+    return false;
+  }
+}
+
 async function boot(): Promise<void> {
   audioEngine.init();
   // The Login form needs no images, so it shows as soon as this code runs. The logo letters and
@@ -73,6 +85,7 @@ async function boot(): Promise<void> {
   $('loading').classList.add('hidden');
   buildMenu(launch);
   await loadMenuAssets(CLASS_IDS);
+  usePaperMaps(await askPaperMaps());
   await loadGameAssets();
   const fromFile = Object.entries(assetSources).filter(([, v]) => v === 'file').map(([k]) => k);
   console.info(`[assets] ${fromFile.length} loaded from files:`, fromFile.join(', ') || '(none — using placeholders)');
