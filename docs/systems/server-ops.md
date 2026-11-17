@@ -122,7 +122,7 @@
 ## log สาเหตุที่หลุด (2026-11-17)
 
 ทุกครั้งที่ออกจากโลก `[world] user (ชื่อตัวละคร) left: <สาเหตุ>` (ดูด้วย `npm run logs`) · ใช้ดูว่าหลุดแบบไหนบ่อย:
-- `quit (left the game)` = กดออกเอง · `kicked (…)` = GM เตะ/แบน/บัญชีเปลี่ยน · `server restart/stop` = ปิด server
+- `quit (left the game)` = กดออกเอง · `page closed (tab closed / reload)` = ปิดแท็บ/เบราว์เซอร์/รีโหลด (ออกทันที Auto ไม่ฟาร์มต่อ) · `kicked (…)` = GM เตะ/แบน/บัญชีเปลี่ยน · `server restart/stop` = ปิด server
 - `takeover (logged in again)` = เข้าตัวเดิมจากที่อื่น/แท็บใหม่ · `taken back after farming N offline with Auto` = กลับมาเอาตัวที่ฟาร์มอยู่คืน
 - `drop (close 1006 …, last ping N s ago, tab hidden)` = เน็ตหลุด: close code (1006 = ขาดโดยไม่บอกลา เช่น เน็ตเปลี่ยน มือถือปิดจอ), ping ล่าสุดกี่วิก่อนหลุด, แท็บซ่อนอยู่หรือไม่ (จาก ping ล่าสุด)
 - `dropped (…) — Auto keeps farming up to 30 min` = หลุดแต่ Auto ฟาร์มต่อ · `Auto away ended: time up / Auto stopped / died / switched off in /admin / in a boss room, after N` = ฟาร์มจบ

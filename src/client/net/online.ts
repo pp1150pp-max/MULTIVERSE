@@ -25,7 +25,7 @@ import type { DailyView } from '../../shared/daily';
 import type { BuffScroll, EquipSlot, Item, PotionKind, PotionSize, Rarity, Vec2 } from '../../shared/types';
 import type { SkillSlot, WearSlot } from '../../shared/data/classes';
 import { cleanSkillBook } from '../../shared/skillBook';
-import { INPUT_HZ, PING_MS, WS_CLOSE_QUIT, WS_PATH, type ClientMsg, type RejoinInfo, type ServerMsg, type ShutdownMode, type SnapshotMsg } from '../../shared/net/protocol';
+import { INPUT_HZ, PING_MS, WS_CLOSE_PAGE_GONE, WS_CLOSE_QUIT, WS_CLOSE_STALE, WS_PATH, type ClientMsg, type RejoinInfo, type ServerMsg, type ShutdownMode, type SnapshotMsg } from '../../shared/net/protocol';
 import type { PartyFound, PartySnap } from '../../shared/party';
 import type { TradeView } from '../../shared/trade';
 import type { FriendsView } from '../../shared/friends';
@@ -312,6 +312,24 @@ export class OnlineBackend implements Backend {
   /** When the tab last came back on screen, and when the last message came in (the dead-connection check in sendPing). */
   private visibleAt = performance.now();
   private lastMsgAt = performance.now();
+  /**
+   * The page goes away for good (tab / browser closed, reload, another site; not a page kept to come
+   * back to, `persisted`): tell the server, so Auto doesn't farm on (owner 2026-11-17: closing the tab = leave at once).
+   */
+  private readonly onPageHide = (e: PageTransitionEvent) => {
+    if (e.persisted || this.quitting) return;
+    this.quitting = true;
+    clearInterval(this.pingTimer);
+    if (this.retryTimer !== null) clearTimeout(this.retryTimer);
+    if (this.trying) OnlineBackend.forget(this.trying);
+    const ws = this.ws;
+    ws.onclose = ws.onmessage = null;
+    try {
+      ws.close(WS_CLOSE_PAGE_GONE, 'page closed');
+    } catch {
+      // Already closing.
+    }
+  };
   /** The network came back (Wi-Fi ↔ 4G): try now rather than at the next step of the wait. */
   private readonly onNetOnline = () => {
     if (this.retryTimer !== null) this.retryNow();
@@ -346,6 +364,7 @@ export class OnlineBackend implements Backend {
     this.pingTimer = setInterval(() => this.sendPing(), PING_MS);
     document.addEventListener('visibilitychange', this.onVisibility);
     window.addEventListener('online', this.onNetOnline);
+    window.addEventListener('pagehide', this.onPageHide);
   }
 
   /** Makes `ws` the game's connection. */
@@ -513,7 +532,7 @@ export class OnlineBackend implements Backend {
     // on screen a moment (what queued up while the tab slept arrives first): a dead connection. Start over.
     if (!document.hidden && now0 - this.visibleAt > 3000 && now0 - this.lastMsgAt > PING_DEAD_MS) {
       OnlineBackend.forget(this.ws);
-      return this.dropped(4001, true);
+      return this.dropped(WS_CLOSE_STALE, true);
     }
     if (wait > 0 && wait < PING_GIVE_UP_MS) return;
     const now = performance.now();
@@ -548,6 +567,7 @@ export class OnlineBackend implements Backend {
     if (this.trying) OnlineBackend.forget(this.trying);
     document.removeEventListener('visibilitychange', this.onVisibility);
     window.removeEventListener('online', this.onNetOnline);
+    window.removeEventListener('pagehide', this.onPageHide);
     this.onDisconnect = null;
     // Leaving on purpose: the server takes us out of the party at once (a lost connection keeps the place a while).
     this.ws.close(WS_CLOSE_QUIT, 'quit');

@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
 import { finish, ok } from './check';
 import { checkAutoTuning, codeAuto, autoChanges, mergeAuto } from '../src/shared/autoTuning';
-import { WS_CLOSE_QUIT } from '../src/shared/net/protocol';
+import { WS_CLOSE_PAGE_GONE, WS_CLOSE_QUIT } from '../src/shared/net/protocol';
 
 // ---------------------------------------------------------- the /admin settings (no server needed)
 ok(codeAuto().offline === true && codeAuto().offlineMin === 30, 'code defaults: on, 30 minutes');
@@ -160,6 +160,17 @@ async function run(): Promise<void> {
   A3.ws.close(WS_CLOSE_QUIT, 'quit');
   await sleep(600);
   ok((await rowsOf('Ava')).length === 0 && /Ava\) left: quit/.test(log), 'leaving on purpose with Auto on: gone at once (log: quit)');
+
+  // ---------------------------------------------------------- closing the tab: gone at once too (owner 2026-11-17)
+  const A3b = await farm(a.tok, a.id);
+  A3b.ws.close(WS_CLOSE_PAGE_GONE, 'page closed');
+  await sleep(600);
+  ok((await rowsOf('Ava')).length === 0 && /Ava\) left: page closed \(tab closed \/ reload\), Auto was on/.test(log), 'closing the tab with Auto on: gone at once, no farming on (log: page closed)');
+  const A3c = joinWorld(a.tok, a.id);
+  await A3c.ready;
+  ok(A3c.welcome()?.zone === 'emerald_forest' && A3c.welcome()?.auto === true, 'a reload within 60 s: same map, Auto on again (counts as a drop, not a quit)');
+  A3c.ws.close(WS_CLOSE_QUIT, 'quit');
+  await sleep(400);
 
   // ---------------------------------------------------------- a guest who drops leaves as before
   const g = await api('POST', '/guest', { name: 'AwGuest', classId: 'sword' });

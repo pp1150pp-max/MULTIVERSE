@@ -18,7 +18,7 @@ import type { Monster } from '../src/shared/sim/Monster';
 import { AUTO_HINT_COLOR, autoBlocked, AutoPlay, type AutoWorld } from '../src/shared/sim/autoplay';
 import {
   CHAT_MAX, GPU_NAME_MAX, shutdownKick, type ShutdownMode, INTEREST_RADIUS, PING_MS, isSoftwareRenderer, SNAPSHOT_HZ, TICK_HZ, WS_PATH, r2,
-  type ClientMsg, type InputMsg, type ActionMsg, type PrivateSnap, type PlayerSnap, type MonsterSnap, type ServerMsg, type SnapshotMsg, WS_CLOSE_QUIT,
+  type ClientMsg, type InputMsg, type ActionMsg, type PrivateSnap, type PlayerSnap, type MonsterSnap, type ServerMsg, type SnapshotMsg, WS_CLOSE_PAGE_GONE, WS_CLOSE_QUIT,
 } from '../src/shared/net/protocol';
 import { EQUIP_SLOTS, RARITIES, type Vec2 } from '../src/shared/types';
 import type { SkillSlot } from '../src/shared/data/classes';
@@ -580,6 +580,9 @@ export class GameWorld {
       // Gone already (kicked, logged in elsewhere, server stopping): leave() ran and logged why.
       if (!session || !this.sessions.has(session)) return;
       if (code === WS_CLOSE_QUIT) return this.leave(session, 'quit', 'quit (left the game)');
+      // The page went away (tab / browser closed, reload): a drop as before (party place and spot kept
+      // a while), but Auto doesn't farm on: closing the tab = leave at once (owner 2026-11-17).
+      if (code === WS_CLOSE_PAGE_GONE) return this.leave(session, 'drop', `page closed (tab closed / reload)${session.auto ? ', Auto was on' : ''}`);
       // A dropped connection: why, as far as the server can tell (the browser says more when it comes back).
       const s = session;
       const now = performance.now();

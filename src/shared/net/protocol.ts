@@ -184,6 +184,14 @@ export type ActionMsg =
 
 /** Close code the browser uses when the player leaves on purpose (leaves the party at once, no grace time). */
 export const WS_CLOSE_QUIT = 4000;
+/**
+ * Close code the browser uses when the page itself goes away (tab or browser closed, reload, another
+ * site): like a dropped connection (party place and spot kept a while) but Auto does not farm on —
+ * the character leaves the world at once (owner 2026-11-17).
+ */
+export const WS_CLOSE_PAGE_GONE = 4001;
+/** Close code for "the browser closed it itself: no answer for too long". Only reported back in RejoinInfo, never sent. */
+export const WS_CLOSE_STALE = 4002;
 
 /**
  * Sent with `join` by a browser reconnecting on its own after its connection dropped: only for the
