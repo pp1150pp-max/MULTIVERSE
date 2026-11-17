@@ -11,7 +11,7 @@ import type { Hazard } from './volcanoHeart';
 import {
   ANNOUNCE_FROM, dropsOnFail, FORGE_CD, enhanceCost, itemName, MAX_PLUS, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
 } from '../data/enhance';
-import { entryName, potionName, POTION_STACK, POTIONS, stackLimit } from '../data/potions';
+import { entryName, potionName, POTION_STACK, potionPrice, stackLimit } from '../data/potions';
 import { BOSS_KEY, BOSS_QUEST_KEY, BOSS_STONE_CHANCE, BOUND_MSG, BUFF_LABEL, BUFF_MAX, BUFF_MULT, BUFF_TIME, fmtBuff, PHOENIX_PRICE, QUEST_KILLS, REVIVES_PER_KEY, STONE_STACK, KEY_DROP_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, RETURN_CAST, RETURN_SCROLL_PRICE, STONE_COLOR, STONE_NAME } from '../data/stones';
 import { NPC_INFO, NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { pick, rand, randInt } from '../rng';
@@ -1369,7 +1369,7 @@ export class Sim {
 
   buyPotion(p: Player, kind: PotionKind, size: PotionSize, n: number): boolean {
     if (!this.near(p, 'merchant') || n <= 0) return false;
-    const cost = POTIONS[kind][size].price * n;
+    const cost = potionPrice(kind, size) * n;
     if (p.gold < cost) {
       this.log('ทองไม่พอ', '#ff8a6a', p.id);
       return false;

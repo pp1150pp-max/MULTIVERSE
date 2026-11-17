@@ -10,7 +10,7 @@ import {
   MAX_PLUS, PITY_STEP, pityBonus, plusOf, rateFor, sellValue, STONE_FROM, stonesNeeded, successRate,
 } from '../shared/data/enhance';
 import {
-  entryName, POTION_SIZES, POTION_SIZE_LABEL, POTION_STACK, POTIONS, potionHeal, potionName, potionSellPrice, stackLimit,
+  entryName, POTION_SIZES, POTION_SIZE_LABEL, POTION_STACK, potionHeal, potionPrice, potionName, potionSellPrice, stackLimit,
 } from '../shared/data/potions';
 import { BUFF_LABEL, MONSTER_STONES, REROLL_STONE, RETURN_CAST, RETURN_SCROLL_PRICE, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_STACK, stoneSellPrice, stoneStackValue, stoneUnit, PHOENIX_PRICE } from '../shared/data/stones';
 import { lineRanges, rerollBlock, statRerollOdds } from '../shared/data/items';
@@ -520,7 +520,7 @@ export class Hud {
     const buyGrid = $('shop-buy');
     buyGrid.innerHTML = (['hp', 'mp'] as const).flatMap((k) => POTION_SIZES.map((s) =>
       `<div class="cell pot" data-buy="${k}:${s}" style="--rc:${POTION_COLOR[k]}">${potionIcon(k, s)}` +
-      `<span class="psize">${POTION_SIZE_LABEL[s]}</span><span class="cell-price">${POTIONS[k][s].price}</span></div>`,
+      `<span class="psize">${POTION_SIZE_LABEL[s]}</span><span class="cell-price">${potionPrice(k, s)}</span></div>`,
     )).join('') +
       // Phoenix feathers, for getting up again in a boss room, then the return scroll.
       `<div class="cell pot stone" data-phoenix style="--rc:${STONE_COLOR.phoenix}">${stoneIcon('phoenix')}<span class="cell-price">${PHOENIX_PRICE}</span></div>` +
@@ -1555,7 +1555,7 @@ export class Hud {
     this.renderSellRarity();
     $('shop-buy').querySelectorAll<HTMLElement>('[data-buy]').forEach((el) => {
       const [kind, size] = el.dataset.buy!.split(':') as [PotionKind, PotionSize];
-      el.classList.toggle('poor', p.gold < POTIONS[kind][size].price || p.potionRoom(kind, size) < 1);
+      el.classList.toggle('poor', p.gold < potionPrice(kind, size) || p.potionRoom(kind, size) < 1);
     });
     $('shop-buy').querySelector('[data-phoenix]')?.classList.toggle('poor', p.gold < PHOENIX_PRICE || p.stoneRoom('phoenix') < 1);
     $('shop-buy').querySelector('[data-buy-scroll]')?.classList.toggle('poor', p.gold < RETURN_SCROLL_PRICE || p.stoneRoom('return_scroll') < 1);
@@ -1576,7 +1576,7 @@ export class Hud {
   /** Tooltip for a potion on sale: what it does and what one or a stack costs. */
   private showShopPotionTip(kind: PotionKind, size: PotionSize, e: MouseEvent): void {
     const tip = $('tooltip');
-    const price = POTIONS[kind][size].price;
+    const price = potionPrice(kind, size);
     tip.innerHTML =
       `<div class="tt-name" style="color:${POTION_COLOR[kind]}">${potionName(kind, size)}</div>` +
       `<div class="tt-stats"><div>ฟื้น ${potionHeal(kind, size, this.g.player.cls.id)} ${kind.toUpperCase()} ต่อขวด</div></div>` +

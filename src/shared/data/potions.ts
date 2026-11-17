@@ -1,6 +1,7 @@
 // Potions: three sizes each of HP and MP. They live in the bag like gear, so carrying more
 // potions means less room for loot. Only the merchant sells them.
 import { isPotion, isStone, type BagEntry, type PotionKind, type PotionSize, type PotionStack, type Stack } from '../types';
+import { currentBalance } from '../balance';
 import { itemName } from './enhance';
 import { STONE_NAME, STONE_STACK, stoneStackValue } from './stones';
 
@@ -10,21 +11,25 @@ export const POTION_STACK = 10;
 
 export const POTION_SIZE_LABEL: Record<PotionSize, string> = { s: 'เล็ก', m: 'กลาง', l: 'ใหญ่' };
 
-/** How much one bottle restores, and the merchant's price. */
-export const POTIONS: Record<PotionKind, Record<PotionSize, { amount: number; price: number }>> = {
-  hp: { s: { amount: 40, price: 10 }, m: { amount: 100, price: 25 }, l: { amount: 250, price: 55 } },
-  mp: { s: { amount: 25, price: 10 }, m: { amount: 60, price: 25 }, l: { amount: 150, price: 55 } },
-};
+/** How much one bottle restores before any class bonus (the /admin balance tuning on top of the code). */
+export function potionAmount(kind: PotionKind, size: PotionSize): number {
+  return currentBalance().potions[kind][size].amount;
+}
 
-/** HP restored by one bottle for this class: swordsmen fight up close, so their HP potions heal 75% more. */
+/** The merchant's price for one bottle. */
+export function potionPrice(kind: PotionKind, size: PotionSize): number {
+  return currentBalance().potions[kind][size].price;
+}
+
+/** HP restored by one bottle for this class: swordsmen fight up close, so their HP potions heal more (code: 75%). */
 export function potionHeal(kind: PotionKind, size: PotionSize, cls: string): number {
-  const base = POTIONS[kind][size].amount;
-  return kind === 'hp' && cls === 'sword' ? Math.round(base * 1.75) : base;
+  const base = potionAmount(kind, size);
+  return kind === 'hp' && cls === 'sword' ? Math.round((base * (100 + currentBalance().potions.swordBonus)) / 100) : base;
 }
 
 /** The merchant buys potions back at half price. */
 export function potionSellPrice(kind: PotionKind, size: PotionSize): number {
-  return Math.floor(POTIONS[kind][size].price / 2);
+  return Math.floor(potionPrice(kind, size) / 2);
 }
 
 export function potionName(kind: PotionKind, size: PotionSize): string {
