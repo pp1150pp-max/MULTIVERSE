@@ -69,6 +69,11 @@ const PING_KEEP = 8;
  */
 const HIDDEN_KEEP = new Set<SimEvent['t']>(['inventory', 'stash', 'died', 'revived', 'save', 'travel', 'autoOff']);
 
+/** Smooth shots: most a snapshot's spot is pushed ahead (s), a gap that snaps at once (m), share of a smaller gap closed per snapshot. */
+const SHOT_LEAD_MAX = 0.25;
+const SHOT_SNAP = 3;
+const SHOT_NUDGE = 0.25;
+
 interface MirrorProjectile extends ProjectileLike {
   x: number;
   z: number;
@@ -885,15 +890,27 @@ export class OnlineBackend implements Backend {
     this.monsters = [...this.monsterMap.values()];
 
     // ---- projectiles (they fly straight, so keep them moving between snapshots)
+    // Smooth shots (owner 2026-11-18, /admin effects card): a snapshot is already half a round trip old, so the
+    // server's spot is pushed ahead by that much; a small gap is nudged, only a big one snaps. Snapping straight to
+    // the old spot pulled every bullet back 15×/s (Bullet Storm looked like it stuttered).
+    const smooth = currentBalance().fxLayer.smoothShots;
+    const lead = smooth ? Math.min(SHOT_LEAD_MAX, (this.rtt ?? 0) / 2000) : 0;
     const seenPr = new Set<number>();
     for (const ps of s.projectiles) {
       seenPr.add(ps.id);
       const pr = this.projMap.get(ps.id);
+      const tx = ps.x + ps.vx * lead;
+      const tz = ps.z + ps.vz * lead;
       if (pr) {
-        pr.x = ps.x;
-        pr.z = ps.z;
+        pr.vx = ps.vx;
+        pr.vz = ps.vz;
+        const ex = tx - pr.x;
+        const ez = tz - pr.z;
+        const k = !smooth || Math.hypot(ex, ez) > SHOT_SNAP ? 1 : SHOT_NUDGE;
+        pr.x += ex * k;
+        pr.z += ez * k;
       } else {
-        this.projMap.set(ps.id, { id: ps.id, x: ps.x, z: ps.z, vx: ps.vx, vz: ps.vz, o: { color: ps.color, size: ps.size, art: ps.art } });
+        this.projMap.set(ps.id, { id: ps.id, x: tx, z: tz, vx: ps.vx, vz: ps.vz, o: { color: ps.color, size: ps.size, art: ps.art } });
       }
     }
     for (const id of this.projMap.keys()) if (!seenPr.has(id)) this.projMap.delete(id);
