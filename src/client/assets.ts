@@ -68,6 +68,8 @@ const PAPER_PROPS = new Set([
 ]);
 const PAPER_GROUND = new Set(['grass', 'dirt', 'pave', 'room_forest', 'marsh', 'mud', 'water', 'room_marsh',
   'snow', 'snow_path', 'ice', 'room_snow', 'ash_rock', 'ash_path', 'lava', 'room_volcano', 'brick']);
+/** Classes with a paper animation set in sprites/paper/player/<class>/ (tools/cut_paper_char.cjs). */
+const PAPER_CHARS = new Set(['sword']);
 let paperMaps = false;
 let paperAnswer: Promise<boolean> = Promise.resolve(false);
 
@@ -324,14 +326,21 @@ function fxTexture(canvas: HTMLCanvasElement): THREE.CanvasTexture {
   return tex;
 }
 
-async function loadAnimSet(key: string, dir: string): Promise<void> {
+/** A character's animation set; with the paper switch on, its paper set (sprites/paper/…) when there is one. */
+async function loadCharSet(key: string, dir: string): Promise<void> {
+  if (paperMaps && PAPER_CHARS.has(key) && (await loadAnimSet(key, `${BASE}paper/${dir}`))) return;
+  await loadAnimSet(key, BASE + dir);
+}
+
+/** True when the set loaded (at least its idle animation). */
+async function loadAnimSet(key: string, dir: string): Promise<boolean> {
   let manifest: CharManifest;
   try {
     const res = await fetch(`${dir}/sprite.json`);
-    if (!res.ok) return;
+    if (!res.ok) return false;
     manifest = (await res.json()) as CharManifest;
   } catch {
-    return; // No folder yet (the dev server answers with index.html, which isn't JSON).
+    return false; // No folder yet (the dev server answers with index.html, which isn't JSON).
   }
   const textures: AnimSet['textures'] = {};
   await Promise.all(
@@ -352,11 +361,12 @@ async function loadAnimSet(key: string, dir: string): Promise<void> {
   );
   if (!textures.idle) {
     console.warn(`[assets] ${key}: sprite.json found but idle animation failed to load — using the simple sheet`);
-    return;
+    return false;
   }
   for (const name of Object.keys(manifest.animations)) if (!textures[name]) delete manifest.animations[name];
   animSets[key] = { manifest, textures };
   assetSources[`${key} (animations)`] = 'file';
+  return true;
 }
 
 /** Repeating ground textures. A zone falls back to its code-painted ground if one is missing. */
@@ -581,7 +591,7 @@ async function loadAssets(): Promise<void> {
     loadDecals(),
     ...(['grass', 'dirt', 'water', 'marsh', 'mud', 'pave', 'brick', 'snow', 'snow_path', 'ice', 'ash_rock', 'ash_path', 'lava',
       'room_forest', 'room_marsh', 'room_snow', 'room_volcano'] as const).map((n) => loadGroundTile(n)),
-    ...Object.entries(ANIM_SET_DIRS).map(([key, dir]) => loadAnimSet(key, BASE + dir)),
+    ...Object.entries(ANIM_SET_DIRS).map(([key, dir]) => loadCharSet(key, dir)),
     ...Object.entries(SHEET_SPECS).map(async ([key, spec]) => {
       let tex: THREE.Texture;
       let sideFaces = spec.fileSideFaces;

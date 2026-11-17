@@ -1,0 +1,87 @@
+{
+  "frameWidth": 256,
+  "frameHeight": 256,
+  "height": 2.4,
+  "feet": 0.0625,
+  "sideFaces": "left",
+  "directions": [
+    "down",
+    "down_side",
+    "side",
+    "up_side",
+    "up"
+  ],
+  "animations": {
+    "idle": {
+      "file": "idle.png",
+      "frames": 8,
+      "fps": 10,
+      "loop": true,
+      "frameWidth": 384,
+      "frameHeight": 320,
+      "feet": 0.05
+    },
+    "run": {
+      "file": "run.png",
+      "frames": 8,
+      "fps": 20,
+      "loop": true,
+      "frameWidth": 384,
+      "frameHeight": 320,
+      "feet": 0.05
+    },
+    "attack": {
+      "file": "attack.png",
+      "frames": 8,
+      "fps": 24,
+      "frameWidth": 384,
+      "frameHeight": 320,
+      "feet": 0.05
+    },
+    "attack_2": {
+      "file": "attack_2.png",
+      "frames": 8,
+      "fps": 24,
+      "frameWidth": 384,
+      "frameHeight": 320,
+      "feet": 0.05
+    },
+    "attack_3": {
+      "file": "attack_3.png",
+      "frames": 8,
+      "fps": 24,
+      "frameWidth": 384,
+      "frameHeight": 320,
+      "feet": 0.05
+    },
+    "death": {
+      "file": "death.png",
+      "frames": 8,
+      "fps": 14,
+      "directions": [
+        "side"
+      ],
+      "frameWidth": 384,
+      "frameHeight": 320,
+      "feet": 0.05
+    },
+    "ride": {
+      "file": "ride.png",
+      "frames": 8,
+      "fps": 8,
+      "loop": true,
+      "frameWidth": 384,
+      "frameHeight": 320,
+      "feet": 0.05
+    },
+    "ride_board": {
+      "file": "ride_board.png",
+      "frames": 8,
+      "fps": 8,
+      "loop": true,
+      "frameWidth": 384,
+      "frameHeight": 320,
+      "feet": 0.05
+    }
+  }
+}
