@@ -102,10 +102,10 @@ export class Floating {
     const row = GLYPH_ROW[cls];
     const drawn = row !== undefined && NUMBER.test(text);
     if (drawn) el.innerHTML = glyphs(text, row, cls === 'crit');
+    else el.textContent = text;
     // Crit numbers' size, set on /admin with the skill effects' layer (owner 2026-11-15).
     const critScale = currentBalance().fxLayer.crit;
     if (cls === 'crit' && critScale !== 1) el.style.scale = String(critScale);
-    else el.textContent = text;
     this.root.append(el);
     // Numbers landing on the same spot stack up and fan out, so a burst of hits stays readable.
     let below = 0;
