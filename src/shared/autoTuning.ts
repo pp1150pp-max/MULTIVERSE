@@ -48,6 +48,13 @@ export interface AutoConfig {
   /** "Balanced": a hostile monster this close counts as attacking. */
   threatDist: number;
   allow: Record<AutoAllow, boolean>;
+  /**
+   * Keep farming after a dropped connection (owner 2026-11-17): a non-guest whose connection drops
+   * while Auto is on stays in the world with Auto on for up to `offlineMin` minutes (server/world.ts).
+   */
+  offline: boolean;
+  /** Minutes Auto keeps farming after a dropped connection. */
+  offlineMin: number;
 }
 
 /** What is saved: only what differs from the code. */
@@ -57,18 +64,24 @@ export interface AutoTuning {
   nearDist?: number;
   threatDist?: number;
   allow?: Partial<Record<AutoAllow, boolean>>;
+  offline?: boolean;
+  offlineMin?: number;
 }
 
 export const AUTO_RANGE = {
   giveUpSec: [1, 30],
   nearDist: [1, 20],
   threatDist: [1, 15],
+  offlineMin: [1, 240],
 } as const satisfies Record<string, readonly [number, number]>;
 export const AUTO_NUM_NAME: Record<keyof typeof AUTO_RANGE, string> = {
   giveUpSec: 'Auto ข้ามของที่เก็บไม่ได้หลัง (วิ)',
   nearDist: 'Auto สมดุล: ระยะของใกล้ตัว',
   threatDist: 'Auto สมดุล: ระยะนับว่าโดนตี',
+  offlineMin: 'Auto ฟาร์มต่อหลังหลุดได้นาน (นาที)',
 };
+/** Name of the "keep farming after a dropped connection" switch. */
+export const AUTO_OFFLINE_NAME = 'Auto ฟาร์มต่อหลังหลุดการเชื่อมต่อ (ไม่ใช่ Guest)';
 const NUMS = Object.keys(AUTO_RANGE) as (keyof typeof AUTO_RANGE)[];
 
 /** The code's own Auto numbers (a fresh copy). */
@@ -79,6 +92,8 @@ export function codeAuto(): AutoConfig {
     nearDist: 5,
     threatDist: 3.5,
     allow: { lootFirst: true, othersLoot: true, scroll: true, skip: true },
+    offline: true,
+    offlineMin: 30,
   };
 }
 const CODE = codeAuto();
@@ -89,6 +104,7 @@ export function mergeAuto(t: AutoTuning | undefined): AutoConfig {
   Object.assign(c.defaults, t.defaults);
   for (const k of NUMS) if (t[k] !== undefined) c[k] = t[k]!;
   Object.assign(c.allow, t.allow);
+  if (t.offline !== undefined) c.offline = t.offline;
   return c;
 }
 
@@ -125,7 +141,7 @@ const round3 = (n: number) => Math.round(n * 1000) / 1000;
 export function checkAutoTuning(x: unknown, strict: boolean): { tuning: AutoTuning | undefined } | { error: string } {
   if (x === undefined) return { tuning: undefined };
   if (!isObj(x)) return strict ? { error: 'ค่า Auto ไม่ถูกต้อง' } : { tuning: undefined };
-  const TOP = ['defaults', ...NUMS, 'allow'];
+  const TOP = ['defaults', ...NUMS, 'allow', 'offline'];
   if (strict) {
     const extra = Object.keys(x).find((k) => !TOP.includes(k));
     if (extra) return { error: `Auto: ไม่รู้จักค่า "${extra.slice(0, 20)}"` };
@@ -186,6 +202,11 @@ export function checkAutoTuning(x: unknown, strict: boolean): { tuning: AutoTuni
       if (Object.keys(a).length) out.allow = a;
     }
   }
+  if (x.offline !== undefined) {
+    if (typeof x.offline !== 'boolean') {
+      if (strict) return { error: `${AUTO_OFFLINE_NAME} ต้องเป็นเปิด/ปิด` };
+    } else if (x.offline !== CODE.offline) out.offline = x.offline;
+  }
   return { tuning: Object.keys(out).length ? out : undefined };
 }
 
@@ -199,5 +220,6 @@ export function autoChanges(a: AutoConfig, b: AutoConfig): string[] {
   for (const k of AUTO_ALLOWS) {
     if (a.allow[k] !== b.allow[k]) out.push(`Auto ${AUTO_ALLOW_NAME[k]} ${a.allow[k] ? 'เปิด' : 'ปิด'} → ${b.allow[k] ? 'เปิด' : 'ปิด'}`);
   }
+  if (a.offline !== b.offline) out.push(`${AUTO_OFFLINE_NAME} ${a.offline ? 'เปิด' : 'ปิด'} → ${b.offline ? 'เปิด' : 'ปิด'}`);
   return out;
 }

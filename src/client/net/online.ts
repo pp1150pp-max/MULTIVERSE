@@ -25,7 +25,7 @@ import type { DailyView } from '../../shared/daily';
 import type { BuffScroll, EquipSlot, Item, PotionKind, PotionSize, Rarity, Vec2 } from '../../shared/types';
 import type { SkillSlot, WearSlot } from '../../shared/data/classes';
 import { cleanSkillBook } from '../../shared/skillBook';
-import { INPUT_HZ, PING_MS, WS_CLOSE_QUIT, WS_PATH, type ClientMsg, type ServerMsg, type ShutdownMode, type SnapshotMsg } from '../../shared/net/protocol';
+import { INPUT_HZ, PING_MS, WS_CLOSE_QUIT, WS_PATH, type ClientMsg, type RejoinInfo, type ServerMsg, type ShutdownMode, type SnapshotMsg } from '../../shared/net/protocol';
 import type { PartyFound, PartySnap } from '../../shared/party';
 import type { TradeView } from '../../shared/trade';
 import type { FriendsView } from '../../shared/friends';
@@ -75,6 +75,35 @@ interface MirrorProjectile extends ProjectileLike {
   vz: number;
 }
 
+/**
+ * Waits before each try to reconnect on its own after the connection dropped (owner 2026-11-17):
+ * about a minute in all, the time the server keeps the map, channel and spot. Then the
+ * "disconnected" screen with its button. A kick (logged in elsewhere, banned, server stopping) never retries.
+ */
+const RECONNECT_WAIT_MS = [1000, 2000, 4000, 8000, 15_000, 15_000, 15_000];
+/** One try gives up after this long without its first snapshot. */
+const RECONNECT_TRY_MS = 8000;
+/**
+ * A ping unanswered this long while the tab is visible = the connection is dead even if the browser
+ * still calls it open (a phone waking up often has such a socket): close it and reconnect.
+ */
+const PING_DEAD_MS = 15_000;
+/** Close codes the server uses when it stops (1001) or restarts (1012): no retry, the kick message says why. */
+const NO_RETRY_CODES = new Set([WS_CLOSE_QUIT, 1001, 1012]);
+
+type WelcomeMsg = Extract<ServerMsg, { t: 'welcome' }>;
+
+/** What the welcome message sets up for the whole game (on joining and on every reconnect). */
+function useWelcome(m: WelcomeMsg): void {
+  useOrbLook(m.orbLook);
+  useCosTuning(m.cosTuning);
+  applyCosHidden(m.cosHidden);
+  useOrbItems(m.orbItems);
+  useBalance(m.balance);
+  useCash(m.cash);
+  useCashState(m.cashState);
+}
+
 function wsUrl(): string {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   return `${proto}://${location.host}${WS_PATH}`;
@@ -88,6 +117,7 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
     let zone = '';
     let ch = 1;
     let guest = false;
+    let auto = false;
     let settled = false;
     const fail = (msg: string) => {
       if (settled) return;
@@ -106,18 +136,13 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
         zone = m.zone;
         ch = m.ch ?? 1;
         guest = m.guest === true;
-        useOrbLook(m.orbLook);
-        useCosTuning(m.cosTuning);
-        applyCosHidden(m.cosHidden);
-        useOrbItems(m.orbItems);
-        useBalance(m.balance);
-        useCash(m.cash);
-        useCashState(m.cashState);
+        auto = m.auto === true;
+        useWelcome(m);
       }
       if (m.t === 'snap' && you >= 0 && !settled) {
         settled = true;
         clearTimeout(timer);
-        resolve(new OnlineBackend(ws, you, zone, m, guest, ch));
+        resolve(new OnlineBackend(ws, you, zone, m, guest, ch, { token, characterId }, auto));
       }
     };
     ws.onerror = () => fail('เชื่อมต่อ server ไม่ได้');
@@ -167,6 +192,10 @@ export class OnlineBackend implements Backend {
   private partyReq = 0;
   private readonly partyWait = new Map<number, (list: PartyFound[]) => void>();
   onDisconnect: ((msg: string) => void) | null = null;
+  /** Reconnecting on its own: try `attempt` (1, 2, …) is coming; null = connected again. */
+  onReconnecting: ((attempt: number | null) => void) | null = null;
+  /** Auto was on when the server welcomed us (a character still farming, or back at its spot); see takeAutoResume. */
+  private autoResume: boolean;
   /** An announcement from the server's owner. */
   onAnnounce: ((text: string, from: string, direct: boolean, megaphone: boolean) => void) | null = null;
   /**
@@ -249,7 +278,17 @@ export class OnlineBackend implements Backend {
   private readonly pingsOut = new Map<number, number>();
   private pingId = 0;
   private lastPingAt = -Infinity;
-  private readonly pingTimer: ReturnType<typeof setInterval>;
+  private pingTimer: ReturnType<typeof setInterval>;
+  /** close() was called: leaving on purpose, never reconnect. */
+  private quitting = false;
+  /** While reconnecting: tries so far, when the connection dropped and how, the next try's timer, the socket being tried. */
+  private tries = 0;
+  private downAt = 0;
+  private downInfo: RejoinInfo = {};
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private trying: WebSocket | null = null;
+  /** performance.now() when the tab was last hidden (null = visible), for the reconnect log. */
+  private hiddenAt: number | null = document.hidden ? performance.now() : null;
   /** Frames drawn since the last ping, the longest one (ms), and whether the tab was hidden meanwhile. */
   private frames = 0;
   private maxFrame = 0;
@@ -259,11 +298,30 @@ export class OnlineBackend implements Backend {
   private readonly onVisibility = () => {
     // The game loop stops in a background tab; that gap isn't a frame.
     this.lastFrameAt = 0;
-    if (document.hidden) this.wasHidden = true;
+    if (document.hidden) {
+      this.wasHidden = true;
+      this.hiddenAt ??= performance.now();
+      return;
+    }
+    this.hiddenAt = null;
+    this.visibleAt = performance.now();
+    // Back on screen (a phone was asleep): try now rather than wait for the next step.
+    if (this.retryTimer !== null) this.retryNow();
+  };
+  /** When the tab last came back on screen, and when the last message came in (the dead-connection check in sendPing). */
+  private visibleAt = performance.now();
+  private lastMsgAt = performance.now();
+  /** The network came back (Wi-Fi ↔ 4G): try now rather than at the next step of the wait. */
+  private readonly onNetOnline = () => {
+    if (this.retryTimer !== null) this.retryNow();
   };
 
-  constructor(private readonly ws: WebSocket, private myId: number, zoneId: string, first: SnapshotMsg, guest: boolean, ch = 1) {
+  constructor(
+    private ws: WebSocket, private myId: number, zoneId: string, first: SnapshotMsg, guest: boolean, ch = 1,
+    private readonly login: { token: string; characterId: number } | null = null, auto = false,
+  ) {
     this.guest = guest;
+    this.autoResume = auto;
     this.channel = ch;
     this.zone = zoneById(zoneId);
     this.terrain = new Terrain(this.zone);
@@ -281,16 +339,128 @@ export class OnlineBackend implements Backend {
     this.playerMap.set(myId, this.me);
     this.epoch = first.me.epoch;
     this.applySnapshot(first);
-    ws.onmessage = (e) => this.onMessage(JSON.parse(e.data as string) as ServerMsg);
-    ws.onclose = () => {
-      clearInterval(this.pingTimer);
-      document.removeEventListener('visibilitychange', this.onVisibility);
-      this.onDisconnect?.(this.kickMsg || 'หลุดการเชื่อมต่อจาก server');
-    };
+    this.attach(ws);
     // A timer rather than the frame loop, so it keeps measuring (for the server's lag log) in a hidden tab.
     // The first one waits PING_MS: right now the game is still being built, which would delay the pong.
     this.pingTimer = setInterval(() => this.sendPing(), PING_MS);
     document.addEventListener('visibilitychange', this.onVisibility);
+    window.addEventListener('online', this.onNetOnline);
+  }
+
+  /** Makes `ws` the game's connection. */
+  private attach(ws: WebSocket): void {
+    this.ws = ws;
+    this.lastMsgAt = performance.now();
+    ws.onmessage = (e) => {
+      this.lastMsgAt = performance.now();
+      this.onMessage(JSON.parse(e.data as string) as ServerMsg);
+    };
+    ws.onclose = (e) => {
+      if (this.ws === ws) this.dropped(e.code, false);
+    };
+  }
+
+  /** Closes a socket without hearing from it again (an old one closing later must not count as a drop). */
+  private static forget(ws: WebSocket): void {
+    ws.onopen = ws.onmessage = ws.onerror = ws.onclose = null;
+    try {
+      ws.close();
+    } catch {
+      // Already closing.
+    }
+  }
+
+  /** The connection is gone (`stale` = we closed it ourselves: no pong for PING_DEAD_MS). Reconnect unless pointless. */
+  private dropped(code: number, stale: boolean): void {
+    clearInterval(this.pingTimer);
+    this.pingsOut.clear();
+    this.rtt = null;
+    if (this.quitting) return;
+    if (this.kickMsg || NO_RETRY_CODES.has(code) || !this.login) return this.giveUp(this.kickMsg || 'หลุดการเชื่อมต่อจาก server');
+    this.tries = 0;
+    this.downAt = performance.now();
+    this.downInfo = {
+      code, ...(stale ? { stale: true } : {}),
+      ...(this.hiddenAt !== null ? { hiddenMs: Math.round(performance.now() - this.hiddenAt) } : {}),
+    };
+    this.scheduleRetry();
+  }
+
+  private scheduleRetry(): void {
+    const wait = RECONNECT_WAIT_MS[this.tries];
+    if (wait === undefined) return this.giveUp('หลุดการเชื่อมต่อจาก server — ลองเชื่อมต่อใหม่หลายครั้งแล้วไม่สำเร็จ');
+    this.onReconnecting?.(this.tries + 1);
+    this.retryTimer = setTimeout(() => this.retryNow(), wait);
+  }
+
+  private retryNow(): void {
+    if (this.retryTimer !== null) clearTimeout(this.retryTimer);
+    this.retryTimer = null;
+    if (this.trying || this.quitting || !this.login) return;
+    const login = this.login;
+    this.tries++;
+    this.onReconnecting?.(this.tries);
+    const ws = new WebSocket(wsUrl());
+    this.trying = ws;
+    let welcome: WelcomeMsg | null = null;
+    const fail = (kick?: string) => {
+      if (this.trying !== ws) return;
+      clearTimeout(timer);
+      this.trying = null;
+      OnlineBackend.forget(ws);
+      if (kick) this.giveUp(kick);
+      else this.scheduleRetry();
+    };
+    const timer = setTimeout(() => fail(), RECONNECT_TRY_MS);
+    ws.onopen = () => {
+      const back: RejoinInfo = { ...this.downInfo, downMs: Math.round(performance.now() - this.downAt), tries: this.tries };
+      ws.send(JSON.stringify({ t: 'join', token: login.token, characterId: login.characterId, delta: 1, back } satisfies ClientMsg));
+    };
+    ws.onmessage = (e) => {
+      const m = JSON.parse(e.data as string) as ServerMsg;
+      // Refused (banned, server stopping, signed out…): trying again won't help.
+      if (m.t === 'kick') return fail(m.msg);
+      if (m.t === 'welcome') welcome = m;
+      if (m.t === 'snap' && welcome && this.trying === ws) {
+        clearTimeout(timer);
+        this.trying = null;
+        this.rejoined(ws, welcome, m);
+      }
+    };
+    ws.onerror = () => fail();
+    ws.onclose = () => fail();
+  }
+
+  /** Back in: a new session on the server, so everything is mirrored afresh (like a zone change). */
+  private rejoined(ws: WebSocket, w: WelcomeMsg, first: SnapshotMsg): void {
+    this.attach(ws);
+    useWelcome(w);
+    this.kickMsg = '';
+    const mine = first.players.find((p) => p.id === w.you);
+    this.changeZone(w.zone, w.ch ?? 1, w.you, mine?.x ?? this.me.x, mine?.z ?? this.me.z);
+    this.epoch = first.me.epoch;
+    this.applySnapshot(first);
+    this.pingTimer = setInterval(() => this.sendPing(), PING_MS);
+    // The old session's trade ended and a summoning lobby it led was called off on the server.
+    this.onTradeEnd?.(false, '');
+    this.onRoomLobby?.(null);
+    // The game screen picks this up with the zone change (changeZone above).
+    this.autoResume = w.auto === true;
+    this.onReconnecting?.(null);
+  }
+
+  takeAutoResume(): boolean {
+    const on = this.autoResume;
+    this.autoResume = false;
+    return on;
+  }
+
+  private giveUp(msg: string): void {
+    if (this.retryTimer !== null) clearTimeout(this.retryTimer);
+    this.retryTimer = null;
+    document.removeEventListener('visibilitychange', this.onVisibility);
+    window.removeEventListener('online', this.onNetOnline);
+    this.onDisconnect?.(msg);
   }
 
   get time(): number {
@@ -331,6 +501,14 @@ export class OnlineBackend implements Backend {
     // After PING_GIVE_UP_MS (e.g. the server dropped it as too fast) another goes out, but the old
     // one stays remembered: its late pong still counts, and the wait is reported meanwhile.
     const wait = this.pingWaiting();
+    const now0 = performance.now();
+    if (this.ws.readyState !== WebSocket.OPEN) return;
+    // Still "open" but nothing at all comes in (snapshots come many times a second) while we've been
+    // on screen a moment (what queued up while the tab slept arrives first): a dead connection. Start over.
+    if (!document.hidden && now0 - this.visibleAt > 3000 && now0 - this.lastMsgAt > PING_DEAD_MS) {
+      OnlineBackend.forget(this.ws);
+      return this.dropped(4001, true);
+    }
     if (wait > 0 && wait < PING_GIVE_UP_MS) return;
     const now = performance.now();
     // After the browser froze, timer calls it missed can come in a burst; the server would drop a
@@ -358,8 +536,12 @@ export class OnlineBackend implements Backend {
   }
 
   close(): void {
+    this.quitting = true;
     clearInterval(this.pingTimer);
+    if (this.retryTimer !== null) clearTimeout(this.retryTimer);
+    if (this.trying) OnlineBackend.forget(this.trying);
     document.removeEventListener('visibilitychange', this.onVisibility);
+    window.removeEventListener('online', this.onNetOnline);
     this.onDisconnect = null;
     // Leaving on purpose: the server takes us out of the party at once (a lost connection keeps the place a while).
     this.ws.close(WS_CLOSE_QUIT, 'quit');

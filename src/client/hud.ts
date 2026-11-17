@@ -2589,8 +2589,32 @@ export class Hud {
     this.pushLog(line, ANNOUNCE_MS * 3);
   }
 
+  /** Reconnecting on its own: try `attempt` is on its way; null = back in (the banner goes). */
+  showReconnecting(attempt: number | null): void {
+    let el = document.getElementById('reconnect-banner');
+    if (attempt === null) {
+      if (el) {
+        el.remove();
+        this.log('เชื่อมต่อใหม่สำเร็จ', '#9fd8ff');
+      }
+      return;
+    }
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'reconnect-banner';
+      $('hud').append(el);
+      this.log('หลุดการเชื่อมต่อ — กำลังเชื่อมต่อใหม่…', '#ff8a6a');
+    }
+    const big = document.createElement('div');
+    big.textContent = 'กำลังเชื่อมต่อใหม่…';
+    const small = document.createElement('small');
+    small.textContent = `ครั้งที่ ${attempt}${this.g.autoPlay && !this.g.backend.guest ? ' · Auto ยังฟาร์มต่อบน server' : ''}`;
+    el.replaceChildren(big, small);
+  }
+
   showDisconnect(msg: string): void {
     document.getElementById('shutdown-banner')?.remove();
+    document.getElementById('reconnect-banner')?.remove();
     $('disconnect-msg').textContent = msg;
     $('disconnect').classList.remove('hidden');
   }

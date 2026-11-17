@@ -236,6 +236,7 @@ export class Game {
   get time(): number { return this.backend.time; }
 
   start(): void {
+    this.resumeAuto();
     this.last = performance.now();
     requestAnimationFrame(this.loop);
   }
@@ -317,6 +318,14 @@ export class Game {
     if (this.autoPlay) this.autoAnchor = { x: this.player.x, z: this.player.z };
     this.backend.setAuto(this.autoPlay);
     this.hud.log(this.autoPlay ? 'เปิด Auto Play — โจมตีเองได้ตลอด · เดินเองเมื่อไหร่ Auto จะปิด' : offMsg, '#9fd8ff');
+  }
+
+  /** Auto as the server has it after joining / reconnecting (no message to the server: it is already so). */
+  private resumeAuto(): void {
+    this.autoPlay = this.backend.takeAutoResume();
+    if (!this.autoPlay) return;
+    this.autoAnchor = { x: this.player.x, z: this.player.z };
+    this.hud.log('Auto Play ยังเปิดอยู่ (ต่อจากก่อนหลุดการเชื่อมต่อ)', '#9fd8ff');
   }
 
   respawn(): void {
@@ -410,7 +419,8 @@ export class Game {
     this.placeNpcs();
     this.syncViews();
     this.camTarget.set(this.player.x, 0, this.player.z);
-    this.autoPlay = false;
+    // Off after a portal (the server turns it off too); still on after a reconnect if the server kept farming.
+    this.resumeAuto();
     this.hovered = null;
     this.lockId = null;
     this.hud.onZoneChanged();

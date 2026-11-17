@@ -185,12 +185,20 @@ export type ActionMsg =
 /** Close code the browser uses when the player leaves on purpose (leaves the party at once, no grace time). */
 export const WS_CLOSE_QUIT = 4000;
 
+/**
+ * Sent with `join` by a browser reconnecting on its own after its connection dropped: only for the
+ * server log (why do connections drop?). `code` = the close code the browser saw, `downMs` = how long
+ * it was cut off, `tries` = attempts so far, `hiddenMs` = how long the tab had been hidden when it
+ * dropped (absent = visible), `stale` = the browser closed it itself (no pong for too long).
+ */
+export interface RejoinInfo { code?: number; downMs?: number; tries?: number; hiddenMs?: number; stale?: boolean }
+
 export type ClientMsg =
   /**
    * `delta: 1` = this browser understands snapshots that leave out what it already has (see
    * PlayerSnap / MonsterSnap / PrivateSnap). Without it (a tab opened before the update) every snapshot is whole.
    */
-  | { t: 'join'; token: string; characterId: number; delta?: 1 }
+  | { t: 'join'; token: string; characterId: number; delta?: 1; back?: RejoinInfo }
   | InputMsg
   | ActionMsg
   /** `ch: 'party'` = to the party only; `ch: 'whisper'` = only to the online character named `to`. */
@@ -328,7 +336,7 @@ export interface SnapshotMsg {
 export type ServerMsg =
   /** `guest`: playing a guest character (no stash, deleted after a day offline). */
   /** `ch`: the channel of that zone (1 when it has none). */
-  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; guest?: boolean; orbLook?: OrbLook; cosTuning?: CosTuning; cosHidden?: string[]; orbItems?: OrbItem[]; balance?: BalanceTuning; cash?: CashCatalog; cashState?: CashState }
+  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; guest?: boolean; auto?: boolean; orbLook?: OrbLook; cosTuning?: CosTuning; cosHidden?: string[]; orbItems?: OrbItem[]; balance?: BalanceTuning; cash?: CashCatalog; cashState?: CashState }
   /** The cash shop's catalogue changed (the owner saved /admin, or a cosmetic's price / hiding changed). */
   | { t: 'cash'; cat: CashCatalog }
   /** Your account's crystals and purchase counts changed (a purchase by any of its characters). */

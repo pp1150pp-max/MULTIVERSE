@@ -49,6 +49,7 @@ function nameLine(m: PartyMemberSnap): HTMLElement {
   if (m.leader) line.append(el('span', 'party-ico leader', '♛'));
   line.append(el('b', '', m.name), el('span', 'party-lv', ` Lv.${m.lv} ${CLASSES[m.cls]?.name ?? ''}`));
   if (!m.online) line.append(el('span', 'party-off', ' ออฟไลน์'));
+  else if (m.away) line.append(el('span', 'party-off', ' หลุด · Auto'));
   return line;
 }
 

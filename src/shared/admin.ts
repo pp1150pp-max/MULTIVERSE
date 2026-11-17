@@ -89,6 +89,8 @@ export interface AdminOnlineRow {
   /** Longest frame since the last per-minute log line, ms. */
   maxFrame: number | null;
   hidden: boolean;
+  /** Disconnected, with Auto still farming (server/world.ts detach). */
+  away?: boolean;
   gpu: string | null;
   ip: string;
   /** How long this session has been in the game (since the join; zone changes don't reset it). */

@@ -709,7 +709,7 @@ function onlineRow(p: AdminOnlineRow): HTMLTableRowElement {
     cell(label, v === null ? '—' : `${fmt(v)}${unit}`, `num${v !== null && bad ? ' warn' : ''}`);
   const view = can('charView');
   return h('tr', { class: view ? 'click' : '', 'data-char': String(p.charId), onclick: view ? () => void openChar(p.charId) : null },
-    cell('ตัวละคร', p.name, 'head'),
+    cell('ตัวละคร', h('span', {}, p.name, p.away ? h('span', { class: 'tag', title: 'หลุดการเชื่อมต่อ Auto ยังฟาร์มต่อ' }, 'หลุด · Auto') : null), 'head'),
     cell('บัญชี', h('span', {}, p.username, p.guest ? h('span', { class: 'tag' }, 'Guest') : null)),
     cell('คลาส', className(p.classId)),
     cell('Lv', String(p.level), 'num'),
