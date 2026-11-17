@@ -28,8 +28,8 @@
 
 | แมพ | ไฟล์ | เซฟภาพที่ | สถานะ |
 |---|---|---|---|
-| 1 ป่ามรกต | [MAP1_FOREST.md](MAP1_FOREST.md) | `raw/map1_forest/` | เจนครบแล้ว กำลังใส่เข้าเกม |
-| 2 หนองน้ำหมอก | [MAP2_MARSH.md](MAP2_MARSH.md) | `raw/map2_marsh/` | รอเจน |
-| 3 ดินแดนหิมะ | — | `raw/map3_snow/` | ยังไม่เขียน |
+| 1 ป่ามรกต | [MAP1_FOREST.md](MAP1_FOREST.md) | `raw/map1_forest/` | อยู่ในเกมแล้ว (รอเจ้าของลอง) |
+| 2 หนองน้ำหมอก | [MAP2_MARSH.md](MAP2_MARSH.md) | `raw/map2_marsh/` | เจนครบแล้ว กำลังใส่เข้าเกม |
+| 3 ดินแดนหิมะ | [MAP3_SNOW.md](MAP3_SNOW.md) | `raw/map3_snow/` | รอเจน |
 | 4 เกาะภูเขาไฟ | — | `raw/map4_volcano/` | ยังไม่เขียน |
 | เมืองศูนย์กลางมิติ | — | `raw/hub/` | ยังไม่เขียน |
