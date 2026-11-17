@@ -20,6 +20,11 @@ export interface SheetInfo {
   /** Which way the "side" row faces in the image. The other side is mirrored. */
   sideFaces: 'left' | 'right';
   cellAspect: number;
+  /**
+   * A paper monster sheet (tools/cut_paper_monsters.cjs): columns 0-3 walk, 4-7 attack, and the picture drawn this
+   * much taller than the unit's height (its cell has room for the attack poses).
+   */
+  paper?: { walk: number; attack: number; scale: number };
 }
 
 interface SheetSpec {
@@ -582,6 +587,10 @@ export function portraitSource(key: string): PortraitSource | undefined {
 
 async function loadAssets(): Promise<void> {
   paperMaps = await paperAnswer;
+  // Paper monsters (tools/cut_paper_monsters.cjs): which ones exist, and how much taller each picture is drawn.
+  const paperMonsters: Record<string, { scale: number }> = paperMaps
+    ? await fetch(`${BASE}paper/monsters/meta.json`).then((r) => (r.ok ? r.json() : {})).catch(() => ({}))
+    : {};
   // Everything at once: the files don't depend on each other.
   await Promise.all([
     ...(['sword', 'mage', 'gun', 'gun_ult', 'enhance', 'sw_blade', 'sw_gale', 'sw_bulwark', 'mg_a', 'mg_b', 'mg_c', 'mg_d', 'mg_e', 'mg_f', 'mg_g'] as const).map((n) => loadFxSheet(n)),
@@ -596,10 +605,19 @@ async function loadAssets(): Promise<void> {
       let tex: THREE.Texture;
       let sideFaces = spec.fileSideFaces;
       let rows = spec.rows;
+      let cols = spec.cols;
+      let paperMonster: SheetInfo['paper'];
       try {
-        const paper = paperMaps && PAPER_PROPS.has(key) ? `${BASE}paper/props/${key}.png` : null;
-        tex = await (paper ? loadTexture(paper).catch(() => loadTexture(spec.path)) : loadTexture(spec.path))
-          .catch((e) => (spec.standIn ? loadTexture(spec.standIn) : Promise.reject(e)));
+        const monster = paperMonsters[key];
+        if (monster) {
+          tex = await loadTexture(`${BASE}paper/monsters/${key}.png`);
+          paperMonster = { walk: 4, attack: 4, scale: monster.scale };
+          cols = 8;
+        } else {
+          const paper = paperMaps && PAPER_PROPS.has(key) ? `${BASE}paper/props/${key}.png` : null;
+          tex = await (paper ? loadTexture(paper).catch(() => loadTexture(spec.path)) : loadTexture(spec.path))
+            .catch((e) => (spec.standIn ? loadTexture(spec.standIn) : Promise.reject(e)));
+        }
         assetSources[key] = 'file';
         rows = spec.fileRows ?? spec.rows;
       } catch {
@@ -617,10 +635,11 @@ async function loadAssets(): Promise<void> {
       }
       sheets[key] = {
         texture: tex,
-        cols: spec.cols,
+        cols,
         rows,
         sideFaces,
-        cellAspect: img.width / spec.cols / (img.height / rows),
+        cellAspect: img.width / cols / (img.height / rows),
+        ...(paperMonster ? { paper: paperMonster } : {}),
       };
     }),
   ]);

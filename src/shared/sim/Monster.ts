@@ -298,6 +298,14 @@ export class Monster extends Unit {
   }
 
   update(dt: number, sim: Sim): void {
+    const winding = this.windupT > 0;
+    this.step(dt, sim);
+    // A wind-up began: browsers with an attack animation for this monster play it, its strike landing as the wind-up
+    // ends (`duration` = the wind-up's seconds; SpriteActor.play). Owner 2026-11-17, papercraft monsters.
+    if (!winding && this.windupT > 0 && this.alive) sim.anim(this.id, 'attack', { duration: this.windupT });
+  }
+
+  private step(dt: number, sim: Sim): void {
     if (!this.alive) {
       this.deadT += dt;
       this.moving = false;
