@@ -718,6 +718,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     const deb = h('input', { type: 'checkbox', checked: a.debuffs, onchange: (e: Event) => { a.debuffs = (e.target as HTMLInputElement).checked; refresh(); } });
     const mergeOn = h('input', { type: 'checkbox', checked: a.mergeNums, onchange: (e: Event) => { a.mergeNums = (e.target as HTMLInputElement).checked; refresh(); } });
     const ownOnly = h('input', { type: 'checkbox', checked: a.ownNumsOnly, onchange: (e: Event) => { a.ownNumsOnly = (e.target as HTMLInputElement).checked; refresh(); } });
+    const smoothOn = h('input', { type: 'checkbox', checked: a.smoothShots, onchange: (e: Event) => { a.smoothShots = (e.target as HTMLInputElement).checked; refresh(); } });
     const flag = (box: HTMLInputElement, changed: boolean, text: string) => h('label', { class: changed ? 'bal-changed' : '' }, box, text);
     fxCard.replaceChildren(
       h('h2', {}, 'เอฟเฟกต์สกิล (ชั้นเสริม)'),
@@ -734,6 +735,9 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         flag(ownOnly, a.ownNumsOnly !== ca.ownNumsOnly, ' เห็นเฉพาะเลขดาเมจของตัวเอง'),
       ),
       h('div', { class: 'muted' }, 'ตัวเลขบนจอสูงสุด: เกินแล้วอันเก่าสุดหาย (ค่าในโค้ด 40 เดิม 120) · รวมเลข: ดาเมจบนเป้าเดียวกันในช่วงเวลานี้รวมเป็นเลขเดียว (คริรวมกับคริ ธรรมดารวมกับธรรมดา เลขที่ตัวเองโดนก็รวม) · เห็นเฉพาะของตัวเอง: เห็นแค่ดาเมจที่ตัวเองตีและที่ตัวเองโดน (server ไม่ส่งของคนอื่นมาเลย) ข้อความอื่นยังเห็นเหมือนเดิม'),
+      h('h3', {}, 'กระสุน'),
+      h('div', { class: 'row bal-line' }, flag(smoothOn, a.smoothShots !== ca.smoothShots, ' กระสุนบินลื่น (ไม่ดึงกลับตาม server)')),
+      h('div', { class: 'muted' }, 'เปิด (ค่าในโค้ด): เบราว์เซอร์ให้กระสุนบินต่อเอง ตำแหน่งจาก server ดันไปข้างหน้าครึ่งหนึ่งของปิง ห่างนิดหน่อยค่อย ๆ ขยับเข้า ห่างเกิน 3 หน่วยค่อยกระโดด · ปิด: แบบเดิม กระสุนกระโดดไปตำแหน่งของ server ทุกครั้งที่ข้อมูลมา (เห็นกระตุกตอนยิงเยอะ เช่น Bullet Storm) · เป็นแค่ภาพ ดาเมจยังตัดสินที่ server'),
     );
   };
 
