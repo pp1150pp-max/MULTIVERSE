@@ -44,7 +44,7 @@ export interface SkillConfig {
   maxRank: number;
   /** Level each tier unlocks at, per kind (owner: normal 1/3/6/9/12/16/20/25, ultimate 5/10, passive 10/20/30). */
   unlock: Record<LearnKind, number[]>;
-  /** Taking points back is free while the character has earned fewer points than this (owner: free up to 20). */
+  /** Taking points back is free while the character has earned fewer points than this (owner: free up to Lv.31, 2026-11-17; was up to 20). */
   freeRefundBelow: number;
   /** Gold per point taken back after that (owner: 1,000 G). */
   refundCost: number;
@@ -100,7 +100,7 @@ export function codeSkills(): SkillConfig {
     lastPointLevel: 40,
     maxRank: 10,
     unlock: { normal: [1, 3, 6, 9, 12, 16, 20, 25], ult: [5, 10], passive: [10, 20, 30] },
-    freeRefundBelow: 21,
+    freeRefundBelow: 32,
     refundCost: 1000,
     skills,
   };

@@ -583,6 +583,14 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
           }, 1, ...BALANCE_RANGE.mobPack, 0.1, () => { show(); updateSummary(); });
           return h('tr', {}, h('td', {}, z.nameTh), h('td', {}, box), total);
         })))),
+      h('h3', {}, 'การไล่เป้าหมาย'),
+      h('div', { class: 'muted' },
+        'บอส: อยู่กับเป้าเดิมครบกี่วินาทีแล้วสุ่มเปลี่ยนไปหาผู้เล่นที่เคยตีบอสตัวนี้ (ยังมีชีวิต อยู่ห้องเดียวกัน ไม่ใช่เป้าเดิม) · เปลี่ยนตอนบอสว่างเท่านั้น (ไม่ขัดท่าที่กำลังง้าง/พุ่ง/กระโดด) · ไม่มีคนอื่น = ไม่เปลี่ยน · 0 = ปิด · ' +
+        'มอนธรรมดา: ใส่เลขมากกว่า 0 = เลิกไล่เมื่อไม่โดนตีครบกี่วินาที แล้วเดินกลับบ้านฟื้น HP · 0 = ไม่เลิกไล่จนกว่าเป้าจะตาย/ออกแมพ/ถูกลากไกลเกินระยะวิ่งกลับ (ระยะนี้ยังทำงานเสมอ)'),
+      h('div', { class: 'row bal-line' },
+        h('label', {}, 'บอสเปลี่ยนเป้าทุก (วินาที, 0 = ปิด)', numBox(() => draft.bossSwitchSec, (n) => { draft.bossSwitchSec = n; }, code.bossSwitchSec, ...BALANCE_RANGE.bossSwitchSec, 1, updateSummary)),
+        h('label', {}, 'มอนธรรมดาเลิกไล่เมื่อไม่โดนตี (วินาที, 0 = ไม่เลิก)', numBox(() => draft.mobGiveUpSec, (n) => { draft.mobGiveUpSec = n; }, code.mobGiveUpSec, ...BALANCE_RANGE.mobGiveUpSec, 1, updateSummary)),
+      ),
     );
     refresh();
   };
