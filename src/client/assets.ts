@@ -1,3 +1,4 @@
+import { PROP_SHEETS, type PropSheet } from './zonePropsTable';
 import * as THREE from 'three';
 import {
   makeSheet, drawHuman, drawSlime, drawQuad, drawSeeker, drawMerchant, drawBlacksmith, drawKeeper, drawBroker, drawStylist, drawCrystalMerchant, drawCosmetic, drawTree, drawBush, drawRock, drawStump,
@@ -341,7 +342,9 @@ export type FxSheet = 'sword' | 'mage' | 'gun' | 'gun_ult' | 'enhance'
   // Mage skills and passive auras (owner 2026-11-15)
   | 'mg_a' | 'mg_b' | 'mg_c' | 'mg_d' | 'mg_e' | 'mg_f' | 'mg_g'
   // Gunslinger skills (art_templates/skills/FX_GUNSLINGER.md)
-  | 'gs_skill' | 'gs_gear' | 'gs_passive';
+  | 'gs_skill' | 'gs_gear' | 'gs_passive'
+  // Area skills' standing layer (zoneProps.ts, art_templates/skills/AOE_PROPS.md); missing ones just aren't drawn.
+  | PropSheet;
 export const fxSheets: Partial<Record<FxSheet, THREE.Texture>> = {};
 
 async function loadFxSheet(name: FxSheet): Promise<void> {
@@ -525,6 +528,7 @@ async function loadAssets(): Promise<void> {
   // Everything at once: the files don't depend on each other.
   await Promise.all([
     ...(['sword', 'mage', 'gun', 'gun_ult', 'enhance', 'sw_blade', 'sw_gale', 'sw_bulwark', 'mg_a', 'mg_b', 'mg_c', 'mg_d', 'mg_e', 'mg_f', 'mg_g'] as const).map((n) => loadFxSheet(n)),
+    ...PROP_SHEETS.map((n) => loadFxSheet(n)),
     // Gunslinger
     ...(['gs_skill', 'gs_gear', 'gs_passive'] as const).map((n) => loadFxSheet(n)),
     loadDecals(),

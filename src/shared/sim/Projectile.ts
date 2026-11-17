@@ -89,7 +89,7 @@ export class Projectile {
 
   update(dt: number): void {
     // A player's shot: its blast and hits are that player's doing (Sim.asCaster).
-    this.sim.asCaster(this.owner, () => this.fly(dt));
+    this.sim.asCaster(this.owner, () => this.fly(dt), this.o.hit?.skill?.id);
   }
 
   private fly(dt: number): void {
