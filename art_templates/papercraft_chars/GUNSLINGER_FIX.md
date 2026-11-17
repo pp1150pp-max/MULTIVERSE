@@ -67,3 +67,28 @@ VERY IMPORTANT: each knee has exactly ONE round knee plate, the same as in the d
 Direction: front view, facing the viewer.
 ```
 
+---
+
+# แก้ภาพที่เกือบดี (เจ้าของเลือก 2026-11-18)
+
+ถ้าเจนใหม่แล้วยังมีมือ 3 ข้าง หรือปืนไม่อยู่ในมือแค่บางเฟรม ให้ GPT **แก้ภาพเดิม** แทนการวาดใหม่ ท่าที่ดีอยู่แล้วจะได้ไม่เพี้ยน
+แนบภาพที่เกือบดีภาพเดียว เปลี่ยน `<เลข>` เป็นเลขเฟรมที่ผิด นับจากซ้ายไปขวาเริ่มที่ 1 (เช่น `2, 5 and 7`) แล้วเซฟทับไฟล์เดิม
+ถ้ายังไม่หาย ให้แก้ซ้ำทีละ 1–2 เฟรม จะได้ผลแม่นกว่าแก้ทีเดียวหลายเฟรม
+
+### มือเกิน (มือ 3 ข้าง)
+
+```
+Edit the attached image. Keep everything EXACTLY as it is: the same 8 frames, poses, positions, sizes, colours and the flat magenta background. Change ONLY frames <เลข> (counting from the left): the character has an extra third hand or arm there. Remove the extra hand/arm completely so he has exactly TWO arms and TWO hands, like the correct frames; fill the removed area with the coat or with the flat magenta background, whichever is behind it. Do not change any other frame.
+```
+
+### ปืนไม่อยู่ในมือ / มือถือด้ามเปล่า
+
+```
+Edit the attached image. Keep everything EXACTLY as it is: the same 8 frames, poses, positions, sizes, colours and the flat magenta background. Change ONLY frames <เลข> (counting from the left): there the hand that should hold the pistol is empty or grips nothing, or the pistol floats away from the hand. Put the SAME complete brass pistol as in the other frames firmly into that hand, the fingers wrapped around its grip, the pistol on the LEFT side of the picture like in the correct frames. Exactly one pistol per frame. Do not change any other frame.
+```
+
+### มีปืน 2 กระบอก
+
+```
+Edit the attached image. Keep everything EXACTLY as it is: the same 8 frames, poses, positions, sizes, colours and the flat magenta background. Change ONLY frames <เลข> (counting from the left): there he has two pistols. Keep only the pistol in the hand on the LEFT side of the picture and remove the other one completely; that other hand is empty and relaxed. Do not change any other frame.
+```
