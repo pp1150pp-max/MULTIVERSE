@@ -2036,7 +2036,7 @@ export class Hud {
     const wait = (ms: number) => new Promise<void>((done) => setTimeout(done, Math.max(0, ms)));
     let missed = 0;
     while (this.forgeAuto === run) {
-      while (this.enhancing || this.forgeCooling()) await wait(this.forgeReadyAt - performance.now() + 20);
+      while (this.enhancing || this.forgeCooling()) await wait(Math.max(50, this.forgeReadyAt - performance.now() + 20));
       // A little past the bar, so the server's own cooldown (its tick and the ping) has surely ended too.
       await wait(FORGE_AUTO_GAP_MS);
       if (this.forgeAuto !== run) return;
@@ -2047,8 +2047,14 @@ export class Hud {
       }
       const got = await this.enhance(run.protect);
       if (this.forgeAuto !== run) return;
-      if (got) missed = 0;
-      else if (++missed >= 2) {
+      if (got) {
+        missed = 0;
+        // Judge the target from the server's answer, not the snapshot (it may not have caught up yet).
+        if (plusOf(got) >= Math.min(run.target, MAX_PLUS)) {
+          this.stopForgeAuto(`ถึง +${plusOf(got)} แล้ว`);
+          return;
+        }
+      } else if (++missed >= 2) {
         // No answer twice in a row (lost link, or the server turned it down): stop rather than keep firing.
         this.stopForgeAuto('server ไม่ตอบรับ');
         return;
@@ -2224,12 +2230,13 @@ export class Hud {
 
   /**
    * One enhance attempt on the item in the slot. `protectAuto` = Auto's protection choice (else the tick box).
-   * Returns true when the server answered, false when it didn't (or refused), null when nothing was sent.
+   * Returns the item as the server left it, false when it didn't answer (or refused), null when nothing was sent.
+   * Auto sends its protect choice as is: the snapshot may lag, and the server only uses a stone when a fail could drop.
    */
-  private async enhance(protectAuto?: boolean): Promise<boolean | null> {
+  private async enhance(protectAuto?: boolean): Promise<Item | false | null> {
     if (!this.forgeSel || this.enhancing || this.forgeCooling()) return null;
     const sel = this.forgeItems().find((w) => w.uid === this.forgeSel);
-    const protect = !!sel && dropsOnFail(sel) && (protectAuto ?? this.forgeProtect);
+    const protect = protectAuto ?? (!!sel && dropsOnFail(sel) && this.forgeProtect);
     this.enhancing = true;
     this.startForgeCd();
     // The result waits for the hammer and for the cooldown bar to fill, whichever is later.
@@ -2250,7 +2257,7 @@ export class Hud {
     }
     this.markInventory();
     this.renderForge();
-    return true;
+    return item;
   }
 
   /** True while the blacksmith window is open (Game skips your own overhead enhance text then: the window shows it). */
