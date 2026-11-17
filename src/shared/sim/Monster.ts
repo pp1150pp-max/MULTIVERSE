@@ -246,6 +246,15 @@ export class Monster extends Unit {
   get untargetable(): boolean { return this.jumpOutT > 0 || this.fallT > 0; }
   private get slamRadius(): number { return this.def.slamRadius ?? DEFAULT_SLAM_RADIUS; }
 
+  /**
+   * A boss in a boss room whose whole group is down waits where it is with its HP (owner 2026-11-17), so a
+   * phoenix-feather revive within the wipe time meets the same fight. Balance switch `bossWipeKeepHp` (off = old behaviour).
+   */
+  holdsOnWipe(sim: Sim): boolean {
+    return this.isBoss && !!sim.zone.roomOf && !sim.cleared && sim.players.length > 0 && sim.players.every((p) => !p.alive) &&
+      currentBalance().bossWipeKeepHp;
+  }
+
   /** Walking home (leash or hurt after a fight): with the Balance switch on, hits no longer turn it around (owner 2026-11-17). */
   private get ignoresHits(): boolean {
     return this.state === 'return' && currentBalance().mobReturnIgnoreHits;
@@ -313,7 +322,7 @@ export class Monster extends Unit {
     if (this.def.spells) {
       this.spells ??= new WitchSpells();
       // Out of the fight: her pools and curses go and the next fight starts fresh.
-      if (this.state === 'return' || (this.state === 'idle' && !this.target)) this.spells.reset(sim);
+      if (!this.holdsOnWipe(sim) && (this.state === 'return' || (this.state === 'idle' && !this.target))) this.spells.reset(sim);
       // Before any early return below, so a stunned witch's pools still hurt and curses still land.
       this.spells.update(sim, this);
     }
@@ -364,6 +373,15 @@ export class Monster extends Unit {
 
     // Lose a dead target; aggressive monsters pick up whoever walks into range.
     if (this.target && !this.target.alive) this.target = null;
+    if (this.holdsOnWipe(sim)) {
+      // Whole boss-room group down: stand still, keep HP / enrage / damage shares, drop any wind-up (owner 2026-11-17).
+      this.windupT = 0;
+      this.aggroT = 0;
+      this.target = null;
+      this.state = 'idle';
+      this.wandering = false;
+      return;
+    }
     this.switchTarget(dt, sim);
     const b = this.def.behavior;
     if ((b === 'aggressive' || b === 'boss' || b === 'charger' || this.forceAggro) && this.state !== 'return') {
