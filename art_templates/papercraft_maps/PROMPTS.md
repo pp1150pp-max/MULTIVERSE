@@ -32,4 +32,4 @@
 | 2 หนองน้ำหมอก | [MAP2_MARSH.md](MAP2_MARSH.md) | `raw/map2_marsh/` | อยู่ในเกมแล้ว (รอเจ้าของลอง) |
 | 3 ดินแดนหิมะ | [MAP3_SNOW.md](MAP3_SNOW.md) | `raw/map3_snow/` | อยู่ในเกมแล้ว (รอเจ้าของลอง) |
 | 4 เกาะภูเขาไฟ | [MAP4_VOLCANO.md](MAP4_VOLCANO.md) | `raw/map4_volcano/` | รอเจน |
-| เมืองศูนย์กลางมิติ | — | `raw/hub/` | ยังไม่เขียน |
+| เมืองศูนย์กลางมิติ | [HUB.md](HUB.md) | `raw/hub/` | รอเจน |

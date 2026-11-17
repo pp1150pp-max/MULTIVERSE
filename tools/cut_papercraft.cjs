@@ -61,6 +61,13 @@ const MAPS = {
     ['ground_lava.png', 'ground', { out: 'lava' }],
     ['ground_room.png', 'ground', { out: 'room_volcano' }],
   ],
+  hub: [
+    ['town.png', 'props', { cols: 5, rows: 2, names: ['ruin_fountain', 'ruin_statue', 'ruin_pillar', 'ruin_house', 'ruin_tower', 'ruin_rubble', 'town_stall', 'town_forge', 'town_vault', 'town_market'] }],
+    // Walls are stretched to the old pictures' exact size: terrain.ts lines copies up by those pixel sizes. The 6th cell is a spare.
+    ['walls.png', 'props', { cols: 3, rows: 2, exact: true, names: ['town_wall_a', 'town_wall_a_broken', 'town_wall_end', 'town_wall_b', 'town_wall_b_broken'] }],
+    ['summoners.png', 'props', { cols: 2, rows: 2, names: ['summoner_forest', 'summoner_marsh', 'summoner_snow', 'summoner_volcano'] }],
+    ['ground_brick.png', 'ground', { out: 'brick' }],
+  ],
 };
 
 async function readRaw(file) {
@@ -179,10 +186,11 @@ async function save(pipeline, rel) {
 async function props(img, o, label) {
   const boxes = cells(img, o.cols, o.rows, label);
   const one = async (name, box) => {
-    const [, oldH] = await sizeOf(`props/${name}.png`);
+    const [oldW, oldH] = await sizeOf(`props/${name}.png`);
     const k = oldH / (box[3] - box[1]);
-    const w = Math.max(1, Math.round((box[2] - box[0]) * k));
-    await save(crop(img, box).resize(w, oldH, { kernel: 'lanczos3' }), `props/${name}.png`);
+    // `exact`: the old file's width too (pieces placed by their pixel size, like the town walls).
+    const w = o.exact ? oldW : Math.max(1, Math.round((box[2] - box[0]) * k));
+    await save(crop(img, box).resize(w, oldH, { kernel: 'lanczos3', fit: 'fill' }), `props/${name}.png`);
   };
   for (let i = 0; i < o.names.length; i++) await one(o.names[i], boxes[i]);
   for (const [name, i] of o.extra ?? []) await one(name, boxes[i]);
