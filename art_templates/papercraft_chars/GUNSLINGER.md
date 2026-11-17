@@ -92,18 +92,18 @@ The move: standing on an invisible hoverboard (do NOT draw the board, only the g
 
 รอบแรก (2026-11-18) ภาพมุมหลังหลายภาพปืนสลับข้างกลางท่า บางเฟรมมีปืน 2 กระบอกหรือมือ 3 ข้าง
 ภาพส่วนใหญ่วาดปืนไว้ **ฝั่งซ้ายของภาพ** ทุกมุม จึงยึดตามนั้นทั้งชุด จะได้ไม่สลับข้างตอนเปลี่ยนท่า
-ภาพที่ผมเห็นว่าผิดแน่ ๆ: `run_up_side`, `attack_up`, `run_attack_up` ภาพอื่นที่คุณเห็นว่าผิดให้เจนใหม่แบบเดียวกัน
+ภาพที่ผิดแน่ ๆ: `run_up_side` (สลับมือ ปืน 2 กระบอก), `run_up` (ปืนลอยไม่อยู่ในมือ), `attack_up` (สลับมือ ปืนไม่อยู่ในมือ), `run_attack_up` ภาพอื่นที่เห็นว่าผิดให้เจนใหม่แบบเดียวกัน
 
 เจนใหม่ด้วย prompt เดิมของท่านั้น แล้วต่อท้ายก่อนบรรทัด `Direction:` ด้วยประโยคนี้
 
 ```
-VERY IMPORTANT: he has exactly TWO arms and TWO hands and holds exactly ONE pistol, in every frame. The pistol stays in the SAME hand in all 8 frames and is on the LEFT side of the picture in every frame (in a back view too); his other hand is empty. Never draw a second pistol, never move the pistol to the other hand.
+VERY IMPORTANT: he has exactly TWO arms and TWO hands and holds exactly ONE pistol, in every frame. The pistol stays in the SAME hand in all 8 frames and is on the LEFT side of the picture in every frame (in a back view too); his other hand is empty. His fingers are wrapped tightly around the pistol grip in every frame, the pistol never floats beside the hand. Never draw a second pistol, never move the pistol to the other hand.
 ```
 
 สำหรับ `attack_up` และ `run_attack_up` (มุมหลัง ยิงออกห่างคนดู) ใช้ประโยคนี้แทน เพราะต้องยกปืนชี้เข้าไปในจอ
 
 ```
-VERY IMPORTANT: he has exactly TWO arms and TWO hands and holds exactly ONE pistol, in every frame, in the hand on the LEFT side of the picture; he raises that arm and aims the pistol straight AWAY from the viewer, up into the screen. His other hand is empty. Never draw a second pistol, never move the pistol to the other hand.
+VERY IMPORTANT: he has exactly TWO arms and TWO hands and holds exactly ONE pistol, in every frame, in the hand on the LEFT side of the picture; he raises that arm and aims the pistol straight AWAY from the viewer, up into the screen. His other hand is empty. His fingers are wrapped tightly around the pistol grip in every frame, the pistol never floats beside the hand. Never draw a second pistol, never move the pistol to the other hand.
 ```
 
 ## สำหรับผม: ตัดเข้าเกม
