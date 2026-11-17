@@ -30,7 +30,7 @@ const MAPS = {
     ['props.png', 'props', { cols: 4, rows: 3, names: ['swamp_tree_0', 'swamp_tree_1', 'swamp_tree_2', 'willow', 'reeds_0', 'reeds_1', 'fern', 'mushrooms', 'mossrock_0', 'mossrock_1', 'swamp_stump'] }],
     ['room_props.png', 'props', { cols: 4, rows: 2, names: ['pillar_0', 'wall', 'brazier', 'boulder', 'pillar_1', 'rubble', 'rune_stone', 'tree'].map((n) => `room_marsh_${n}`) }],
     ['decor.png', 'atlas', { cols: 4, rows: 3, out: 'decor_marsh', place: 'bottom', fit: 'shared' }],
-    ['planks.png', 'planks', { out: 'marsh_planks', cols: 3, aspect: 2.9 / 5 }],
+    ['planks.png', 'planks', { out: 'marsh_planks', cols: 3, aspect: 2.9 / 5, inner: [0.17, 0.83] }],
     ['island_cliff.png', 'atlas', { cols: 4, rows: 2, out: 'island_cliff_marsh', place: 'top', fit: 'each' }],
     ['island_slabs.png', 'atlas', { cols: 4, rows: 2, out: 'island_slabs_marsh', place: 'centre', fit: 'shared' }],
     ['ground_marsh.png', 'ground', { out: 'marsh' }],
@@ -239,7 +239,11 @@ async function planks(img, o, label) {
   const strips = cells(img, o.cols, 1, label);
   const layers = [];
   for (let i = 0; i < o.cols; i++) {
-    const [x0, y0, x1, y1] = strips[i];
+    // `inner`: keep only this middle part of the strip's width (owner 2026-11-17: the boards alone, no side rails or posts).
+    const [sx0, y0, sx1, y1] = strips[i];
+    const [a, b] = o.inner ?? [0, 1];
+    const x0 = Math.round(sx0 + (sx1 - sx0) * a);
+    const x1 = Math.round(sx0 + (sx1 - sx0) * b);
     const len = Math.min(y1 - y0, Math.round((x1 - x0) / o.aspect));
     const top = Math.round(y0 + (y1 - y0 - len) / 2);
     layers.push({ input: await crop(img, [x0, top, x1, top + len]).resize(Math.round(cw), H, { kernel: 'lanczos3', fit: 'fill' }).png().toBuffer(), left: Math.round(i * cw), top: 0 });
