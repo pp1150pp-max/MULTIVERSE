@@ -1031,6 +1031,14 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
   box-shadow: 0 0 24px rgba(255, 211, 74, 0.35);
 }
 @media (max-width: 700px) { #shutdown-banner { font-size: 20px; top: 18%; } }
+/* Reconnecting on its own after a dropped connection (src/client/net/online.ts): the game stays on screen. */
+#reconnect-banner {
+  position: absolute; left: 50%; top: 14%; transform: translateX(-50%); z-index: 6;
+  max-width: calc(100% - 32px); text-align: center; pointer-events: none;
+  padding: 8px 18px; border: 2px solid #9fd8ff; border-radius: 8px;
+  background: rgba(4, 18, 30, 0.88); color: #9fd8ff; font-size: 20px; font-weight: 600; text-shadow: 0 0 6px #000;
+}
+#reconnect-banner small { display: block; font-size: 13px; font-weight: 400; color: var(--ink-dim); }
 /* Owner's announcement: same frame as the restart warning, smaller text that may wrap, a bit lower. */
 #announce-banner { top: 24%; font-size: 22px; white-space: normal; overflow-wrap: anywhere; width: max-content; max-width: min(720px, calc(100% - 32px)); }
 #announce-banner .announce-head { font-size: 14px; opacity: 0.85; margin-bottom: 2px; }

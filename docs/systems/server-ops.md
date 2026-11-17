@@ -119,7 +119,17 @@
 - /admin แท็บ Server การ์ด "ลดขนาด snapshot" (สิทธิ์ `netDelta` owner+GM): สวิตช์เปิด/ปิดทั้งเซิร์ฟ มีผลทันที (เก็บใน settings `snap_delta` = `'0'` เมื่อปิด ค่าเริ่มต้นเปิด) ลง `admin_audit` · ตัวนับนับตั้งแต่ server เปิดหรือกดสวิตช์ครั้งล่าสุด: จำนวน snapshot, JSON ที่ส่ง/ที่ประหยัดได้ (ก่อนบีบอัด), จำนวนครั้งที่ส่งค่าของตัวเอง/ก้อนหน้าตาใหม่, ผู้เล่นออนไลน์ที่รองรับ/แท็บเก่า · ปิดไว้ = ส่งเต็มแบบเดิม ใช้ถ้าสงสัยว่าภาพในเกมเพี้ยน
 - เทสต์: `tests/snapshot-delta.test.ts`
 
+## log สาเหตุที่หลุด (2026-11-17)
+
+ทุกครั้งที่ออกจากโลก `[world] user (ชื่อตัวละคร) left: <สาเหตุ>` (ดูด้วย `npm run logs`) · ใช้ดูว่าหลุดแบบไหนบ่อย:
+- `quit (left the game)` = กดออกเอง · `page closed (tab closed / reload)` = ปิดแท็บ/เบราว์เซอร์/รีโหลด (ออกทันที Auto ไม่ฟาร์มต่อ) · `kicked (…)` = GM เตะ/แบน/บัญชีเปลี่ยน · `server restart/stop` = ปิด server
+- `takeover (logged in again)` = เข้าตัวเดิมจากที่อื่น/แท็บใหม่ · `taken back after farming N offline with Auto` = กลับมาเอาตัวที่ฟาร์มอยู่คืน
+- `drop (close 1006 …, last ping N s ago, tab hidden)` = เน็ตหลุด: close code (1006 = ขาดโดยไม่บอกลา เช่น เน็ตเปลี่ยน มือถือปิดจอ), ping ล่าสุดกี่วิก่อนหลุด, แท็บซ่อนอยู่หรือไม่ (จาก ping ล่าสุด)
+- `dropped (…) — Auto keeps farming up to 30 min` = หลุดแต่ Auto ฟาร์มต่อ · `Auto away ended: time up / Auto stopped / died / switched off in /admin / in a boss room, after N` = ฟาร์มจบ
+- เข้าใหม่เองหลังหลุด: บรรทัด `joined … — reconnected: browser saw close 1006, cut off 4 s, try 2, tab hidden 3 min before the drop` (เบราว์เซอร์รายงานเองตอนต่อใหม่ ใช้แยก "มือถือปิดจอ" กับ "เน็ตหลุดขณะเล่น") · `browser closed it (no pong)` = เบราว์เซอร์เห็น socket ค้างเลยปิดเอง · `back at the same spot · Auto on` = ได้ที่เดิม/Auto ต่อ
+- เทสต์: `tests/auto-away-server.test.ts` (ใช้ `AUTO_AWAY_TEST_MS` ย่อเวลาเฉพาะเทสต์)
+
 ## วัดภาระ server: log `[perf]` และสคริปต์บอท (2026-11-13)
 
-- server พิมพ์ `[perf]` 1 บรรทัด/นาทีเมื่อมีคนออนไลน์ (`server/perf.ts`): เวลาต่อรอบเกม (แยก sim/event/snapshot/เซฟ), รอบ/วิ, เวลาเซฟทุกคน, ความหน่วง event loop, % ยุ่ง, CPU, RAM, เน็ตขาออกจริงหลังบีบอัด · `PERF_LOG_MS` เปลี่ยนความถี่ · `PERF_JSON=1` เพิ่มบรรทัด `[perf-json]`
+- server พิมพ์ `[perf]` 1 บรรทัด/นาทีเมื่อมีคนออนไลน์ (`server/perf.ts`): จำนวนออนไลน์ (+ "N away with Auto" = หลุดแต่ Auto ฟาร์มต่อ), เวลาต่อรอบเกม (แยก sim/event/snapshot/เซฟ), รอบ/วิ, เวลาเซฟทุกคน, ความหน่วง event loop, % ยุ่ง, CPU, RAM, เน็ตขาออกจริงหลังบีบอัด · `PERF_LOG_MS` เปลี่ยนความถี่ · `PERF_JSON=1` เพิ่มบรรทัด `[perf-json]`
 - สคริปต์บอท `tools/load-test.ts` เปิด server ทดสอบเอง (port สุ่ม + DB ชั่วคราว) ไม่อยู่ใน `npm run test` · ผลวัดครั้งแรกและคำแนะนำเช่า server: [../load-test-2026-11-13.md](../load-test-2026-11-13.md)

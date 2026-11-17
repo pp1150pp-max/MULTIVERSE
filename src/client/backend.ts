@@ -95,6 +95,11 @@ export interface Backend {
   moveInBag(from: number, to: number): void;
   /** The server runs Auto Play, so it keeps going in a hidden tab. */
   setAuto(on: boolean): void;
+  /**
+   * Whether the server has Auto on for us right after joining or reconnecting (it may have farmed on
+   * while the connection was down): read once, by the game screen on start and on each zone change.
+   */
+  takeAutoResume(): boolean;
   setLootFilter(f: LootFilter): void;
   setAutoSettings(s: AutoSettings): void;
   /** Skill window: learn a skill or its next rank (one point), take one point back, wear a learned skill (null = take off). */

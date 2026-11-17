@@ -30,6 +30,8 @@ export interface PartyMemberSnap {
   maxMp: number;
   leader: boolean;
   online: boolean;
+  /** In the world but disconnected, Auto farming on (server/world.ts goAway): EXP and drops shared as usual. */
+  away?: boolean;
   /** Zone the member is in (offline: the last one). */
   zone: string;
   /** The channel of that zone (1 when it has none; offline: the last one). */

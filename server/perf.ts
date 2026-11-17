@@ -16,6 +16,8 @@ export interface PerfReport {
   /** Seconds the report covers. */
   secs: number;
   online: number;
+  /** Of those, characters whose connection dropped while Auto farms on (server/world.ts goAway). */
+  away: number;
   sims: number;
   monsters: number;
   ticksPerSec: number;
@@ -80,7 +82,7 @@ export class Perf {
   }
 
   /** The numbers since the last report, then starts over. `wireBytes` = bytes written to players' sockets meanwhile. */
-  report(online: number, sims: number, monsters: number, wireBytes: number): PerfReport {
+  report(online: number, sims: number, monsters: number, wireBytes: number, away = 0): PerfReport {
     const now = performance.now();
     const secs = Math.max(0.001, (now - this.from) / 1000);
     const elu = performance.eventLoopUtilization(this.elu);
@@ -91,7 +93,7 @@ export class Perf {
     const parts = {} as Record<TickPart, number>;
     for (const p of PARTS) parts[p] = n ? r1((this.partSum[p] / n) * 100) / 100 : 0;
     const out: PerfReport = {
-      secs: r1(secs), online, sims, monsters,
+      secs: r1(secs), online, away, sims, monsters,
       ticksPerSec: r1(n / secs),
       tickAvg: n ? Math.round((sorted.reduce((a, b) => a + b, 0) / n) * 100) / 100 : 0,
       tickP99: n ? r1(sorted[Math.min(n - 1, Math.floor(n * 0.99))]) : 0,
@@ -127,7 +129,7 @@ export class Perf {
   static log(r: PerfReport): void {
     const kb = (k: number) => (k >= 1000 ? `${r1(k / 1000)} Mbit/s` : `${k} kbit/s`);
     console.log(
-      `[perf] ${r.online} online · ${r.sims} maps/CH · ${r.monsters} monsters · tick avg ${r.tickAvg} ms p99 ${r.tickP99} max ${r.tickMax}` +
+      `[perf] ${r.online} online${r.away ? ` (${r.away} away with Auto)` : ''} · ${r.sims} maps/CH · ${r.monsters} monsters · tick avg ${r.tickAvg} ms p99 ${r.tickP99} max ${r.tickMax}` +
         ` (sim ${r.parts.sim} · events ${r.parts.events} · snapshots ${r.parts.snap} · saves ${r.parts.save}) · ${r.ticksPerSec} ticks/s` +
         ` · autosave max ${r.autosaveMax} ms · loop lag p99 ${r.lagP99} ms max ${r.lagMax} · busy ${Math.round(r.busy * 100)}% · CPU ${r.cpu}%` +
         ` · RAM ${r.rssMb} MB · out ${kb(r.wireKbps)} (JSON ${kb(r.jsonKbps)}, ${r.msgsPerSec} msg/s)${r.snapsSkipped ? ` · ${r.snapsSkipped} snapshots skipped` : ''}`,

@@ -9,7 +9,7 @@ import type { Db } from './db';
 import { Sim } from '../src/shared/sim/Sim';
 import { HUB_ID, lairExitSpot, ZONES } from '../src/shared/data/zones';
 import { cleanAutoSettings, roundBuffs, SORT_KEYS, type LootFilter, type Player } from '../src/shared/sim/Player';
-import { applyBalance, currentBalanceTuning, type BalanceTuning } from '../src/shared/balance';
+import { applyBalance, currentBalance, currentBalanceTuning, type BalanceTuning } from '../src/shared/balance';
 import { upgradeItem } from '../src/shared/data/items';
 import { POTION_SIZES } from '../src/shared/data/potions';
 import { REROLL_KINDS } from '../src/shared/data/reroll';
@@ -18,7 +18,7 @@ import type { Monster } from '../src/shared/sim/Monster';
 import { AUTO_HINT_COLOR, autoBlocked, AutoPlay, type AutoWorld } from '../src/shared/sim/autoplay';
 import {
   CHAT_MAX, GPU_NAME_MAX, shutdownKick, type ShutdownMode, INTEREST_RADIUS, PING_MS, isSoftwareRenderer, SNAPSHOT_HZ, TICK_HZ, WS_PATH, r2,
-  type ClientMsg, type InputMsg, type ActionMsg, type PrivateSnap, type PlayerSnap, type MonsterSnap, type ServerMsg, type SnapshotMsg, WS_CLOSE_QUIT,
+  type ClientMsg, type InputMsg, type ActionMsg, type PrivateSnap, type PlayerSnap, type MonsterSnap, type ServerMsg, type SnapshotMsg, WS_CLOSE_PAGE_GONE, WS_CLOSE_QUIT,
 } from '../src/shared/net/protocol';
 import { EQUIP_SLOTS, RARITIES, type Vec2 } from '../src/shared/types';
 import type { SkillSlot } from '../src/shared/data/classes';
@@ -45,7 +45,7 @@ import { PARTY_SEARCH_LIMIT, PARTY_SEARCH_MAX, type PartyFound, type PartySnap }
 import { BossRooms } from './bossRooms';
 import { Channels, FightClock, type Channel } from './channels';
 import { Perf, PERF_LOG_MS } from './perf';
-import { CH_RESERVED, hasChannels, type ChannelsView } from '../src/shared/channels';
+import { CH_RECONNECT_MS, CH_RESERVED, hasChannels, type ChannelsView } from '../src/shared/channels';
 import { MEGAPHONE_EVERY_MS, megaphoneText, STONE_NAME, STONE_STACK } from '../src/shared/data/stones';
 import { COS_SLOTS, cosById, cosCodes } from '../src/shared/data/cosmetics';
 import { cosHiddenIds, mayPutOnCos } from '../src/shared/cosShop';
@@ -199,9 +199,48 @@ interface Session {
   /** When this session last asked for the channel list, and last tried a switch (performance.now()), throttled apart. */
   lastChListAt: number;
   lastChAt: number;
+  /** Whether the latest ping said the tab was hidden (`hidden` above is reset every minute), for the drop log. */
+  pingHidden: boolean;
+  /**
+   * Date.now() when the connection dropped while Auto kept farming (owner 2026-11-17): the character
+   * stays in the world until Auto stops, it dies, the time is up or it logs in again (sweepAway). null = connected.
+   */
+  awayAt: number | null;
 }
 
-const num = (v: unknown, fallback = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
+/** Test-only: how long Auto farms on after a drop, in ms, instead of the minutes from /admin (tests/auto-away-server.test.ts). */
+const AWAY_TEST_MS = Number(process.env.AUTO_AWAY_TEST_MS) || 0;
+
+/** "12 s" / "3.5 min" for the connection log. */
+function fmtAgo(ms: number): string {
+  return ms < 90_000 ? `${Math.round(ms / 1000)} s` : `${Math.round(ms / 6000) / 10} min`;
+}
+
+/** What a close code means, for the connection log (1006 = cut off without a goodbye: the network, a sleeping phone…). */
+function closeCodeText(code: number): string {
+  const name: Record<number, string> = { 1000: 'normal', 1001: 'going away', 1005: 'no code', 1006: 'abnormal (no close frame)', 1011: 'error', 1012: 'restart' };
+  return `close ${code}${name[code] ? ` ${name[code]}` : ''}`;
+}
+
+/** The browser's own account of a reconnect (RejoinInfo), checked and shortened for one log line. */
+function rejoinText(b: unknown): string | null {
+  if (!b || typeof b !== 'object') return null;
+  const o = b as Record<string, unknown>;
+  const n = (v: unknown, hi: number) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= hi ? Math.round(v) : null);
+  const bits: string[] = [];
+  const code = n(o.code, 9999);
+  if (code !== null) bits.push(`browser saw close ${code}`);
+  const down = n(o.downMs, 86_400_000);
+  if (down !== null) bits.push(`cut off ${fmtAgo(down)}`);
+  const tries = n(o.tries, 1000);
+  if (tries !== null) bits.push(`try ${tries}`);
+  const hid = n(o.hiddenMs, 86_400_000);
+  bits.push(hid !== null ? `tab hidden ${fmtAgo(hid)} before the drop` : 'tab visible');
+  if (o.stale === true) bits.push('browser closed it (no pong)');
+  return bits.join(', ');
+}
+
+const num =(v: unknown, fallback = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
 const vec = (v: unknown): Vec2 | null => {
   if (!v || typeof v !== 'object') return null;
   const o = v as Record<string, unknown>;
@@ -279,6 +318,8 @@ export class GameWorld {
   private readonly byPlayer = new Map<Player, Session>();
   /** Account → when (Date.now()) its connection dropped or was taken over, for FRIEND_QUIET_MS. */
   private readonly friendDroppedAt = new Map<number, number>();
+  /** Auto that was on when a character dropped (or was taken over): it carries on if the character is back at the same spot (join). */
+  private readonly autoBack = new Map<number, { auto: AutoPlay; at: number }>();
   /**
    * One live stash per account with a character online, shared by all of them (the same object),
    * so nothing can be copied by having two characters open it.
@@ -391,10 +432,12 @@ export class GameWorld {
       changed: (accountId) => this.sendFriends(accountId),
     });
     setInterval(() => this.friendsTick(), 1000);
+    setInterval(() => this.sweepAway(), 1000);
     this.rooms = new BossRooms({
       actor: (charId) => {
         const s = this.sessionOfChar(charId);
-        return s && { charId, name: s.player.name, player: s.player, sim: s.sim };
+        // Away (disconnected, Auto farming on): not invited to a summoning, never pulled into a boss room.
+        return s && s.awayAt === null ? { charId, name: s.player.name, player: s.player, sim: s.sim } : undefined;
       },
       party: (charId) => {
         const party = this.parties.of(charId);
@@ -419,7 +462,7 @@ export class GameWorld {
       enter: (charIds, sim) => {
         for (const id of charIds) {
           const s = this.sessionOfChar(id);
-          if (s) this.travel(s, sim, true);
+          if (s && s.awayAt === null) this.travel(s, sim, true);
         }
       },
       toLair: (sim, p) => {
@@ -497,7 +540,7 @@ export class GameWorld {
     this.wireGone = 0;
     for (const s of this.sessions) wire += this.wireDelta(s.ws);
     const sims = [...this.channels.sims(), ...this.rooms.sims()];
-    const r = this.perf.report(this.sessions.size, sims.length, sims.reduce((n, sim) => n + sim.monsters.length, 0), wire);
+    const r = this.perf.report(this.sessions.size, sims.length, sims.reduce((n, sim) => n + sim.monsters.length, 0), wire, this.awayCount());
     if (this.sessions.size) Perf.log(r);
   }
 
@@ -518,7 +561,7 @@ export class GameWorld {
       if (!msg || typeof msg !== 'object') return;
       if (!session) {
         if (msg.t !== 'join') return;
-        session = this.join(ws, msg.token, msg.characterId, ip, msg.delta === 1);
+        session = this.join(ws, msg.token, msg.characterId, ip, msg.delta === 1, rejoinText(msg.back));
         clearTimeout(timeout);
         return;
       }
@@ -532,14 +575,29 @@ export class GameWorld {
         console.error('[world] bad message from', session.username, e);
       }
     });
-    ws.on('close', (code) => {
+    ws.on('close', (code, reason) => {
       clearTimeout(timeout);
-      if (session) this.leave(session, code === WS_CLOSE_QUIT ? 'quit' : 'drop');
+      // Gone already (kicked, logged in elsewhere, server stopping): leave() ran and logged why.
+      if (!session || !this.sessions.has(session)) return;
+      if (code === WS_CLOSE_QUIT) return this.leave(session, 'quit', 'quit (left the game)');
+      // The page went away (tab / browser closed, reload): a drop as before (party place and spot kept
+      // a while), but Auto doesn't farm on: closing the tab = leave at once (owner 2026-11-17).
+      if (code === WS_CLOSE_PAGE_GONE) return this.leave(session, 'drop', `page closed (tab closed / reload)${session.auto ? ', Auto was on' : ''}`);
+      // A dropped connection: why, as far as the server can tell (the browser says more when it comes back).
+      const s = session;
+      const now = performance.now();
+      const why = [closeCodeText(code)];
+      const text = reason.toString('utf8').replace(/[\p{Cc}\p{Cf}]/gu, '').slice(0, 60);
+      if (text) why.push(`"${text}"`);
+      why.push(s.lastPingAt > -Infinity ? `last ping ${fmtAgo(now - s.lastPingAt)} ago` : 'no ping yet');
+      if (s.pingHidden) why.push('tab hidden');
+      if (this.canAway(s)) this.goAway(s, why.join(', '));
+      else this.leave(s, 'drop', `drop (${why.join(', ')})`);
     });
     ws.on('error', () => ws.close());
   }
 
-  private join(ws: WebSocket, token: unknown, characterId: unknown, ip: string, delta = false): Session | null {
+  private join(ws: WebSocket, token: unknown, characterId: unknown, ip: string, delta = false, rejoin: string | null = null): Session | null {
     const acc = typeof token === 'string' ? this.db.sessionAccount(token) : undefined;
     const charId = num(characterId, -1);
     let data = acc ? this.db.loadCharacter(acc.id, charId) : undefined;
@@ -561,10 +619,12 @@ export class GameWorld {
     }
     // An account may play several of its characters at once (they share one live stash), but each
     // character only once: a new login with it takes over from the old one.
+    // That includes one still farming with Auto after its connection dropped (awayAt): it comes back
+    // here, at the same spot with Auto on (autoBack), without ever being in the world twice.
     for (const s of [...this.sessions]) {
       if (s.accountId === acc.id && s.charId === charId) {
         this.send(s.ws, { t: 'kick', msg: 'ตัวละครนี้เข้าเกมจากที่อื่น' });
-        this.leave(s, 'takeover');
+        this.leave(s, 'takeover', s.awayAt !== null ? `taken back after farming ${fmtAgo(Date.now() - s.awayAt)} offline with Auto` : 'takeover (logged in again)');
         s.ws.close();
         // leave() saved it just now: load that, not what was read above (up to 30 s older).
         data = this.db.loadCharacter(acc.id, charId) ?? data;
@@ -606,7 +666,13 @@ export class GameWorld {
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity, blockTrades: false,
       lastFriendAt: -Infinity, friendKey: '', lastCh: back?.channel.ch ?? 1, fight: new FightClock(Math.max(player.lastHurt, player.lastAttack)), lastChListAt: -Infinity, lastChAt: -Infinity,
+      pingHidden: false, awayAt: null,
     };
+    // Back at the same spot after a drop (or a login elsewhere) with Auto on: Auto carries on, from the
+    // same AutoPlay (its farm spot), and the welcome tells the browser so.
+    const autoBack = this.autoBack.get(charId);
+    this.autoBack.delete(charId);
+    if (back && autoBack && sim.zone.allowAutoPlay) s.auto = autoBack.auto;
     // Taken back (or never owned) while offline: off.
     this.keepToOwned(s);
     try {
@@ -621,16 +687,88 @@ export class GameWorld {
     if (!acc.guest) this.friendsJoined(s, accountWasOnline);
     // Back within the grace time (or a takeover): still in the party.
     player.partyId = this.parties.online(charId);
-    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), guest: acc.guest, orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning(), cash: this.cash.catalog(), cashState: this.cash.state(acc.id, acc.guest) });
+    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), guest: acc.guest, ...(s.auto ? { auto: true } : {}), orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning(), cash: this.cash.catalog(), cashState: this.cash.state(acc.id, acc.guest) });
     this.broadcastSystem(`${player.name} เข้าสู่โลก`);
     // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
     if (!acc.guest) setTimeout(() => this.sessions.has(s) && (this.marketOnJoin(s), this.dailyCheck(s), this.mailNote(s, true)), MARKET_JOIN_NOTE_MS);
-    console.log(`[world] ${acc.username} joined as ${player.name}${acc.guest ? ' (guest)' : ''} from ${ip}${s.deflate ? '' : ' (no compression)'} (${this.sessions.size} online)`);
+    const extra = [rejoin && `reconnected: ${rejoin}`, back && 'back at the same spot', s.auto && 'Auto on'].filter(Boolean).join(' · ');
+    console.log(`[world] ${acc.username} joined as ${player.name}${acc.guest ? ' (guest)' : ''} from ${ip}${s.deflate ? '' : ' (no compression)'}${extra ? ` — ${extra}` : ''} (${this.onlineText()})`);
     return s;
   }
 
-  private leave(s: Session, how: LeaveHow = 'quit'): void {
+  /** "5 online" or "5 online, 2 of them away with Auto" for the log. */
+  private onlineText(): string {
+    const away = this.awayCount();
+    return `${this.sessions.size} online${away ? `, ${away} of them away with Auto` : ''}`;
+  }
+
+  /** Characters in the world whose connection dropped while Auto farms on. */
+  awayCount(): number {
+    let n = 0;
+    for (const s of this.sessions) if (s.awayAt !== null) n++;
+    return n;
+  }
+
+  /**
+   * May this dropped connection keep farming (owner 2026-11-17)? Auto on, not a guest (no bot farms on
+   * throwaway accounts), alive, out of boss rooms, the /admin switch on and the server not stopping.
+   */
+  private canAway(s: Session): boolean {
+    return !!s.auto && !s.guest && currentBalance().auto.offline && !this.closing && s.player.alive
+      && s.sim.zone.allowAutoPlay && !this.rooms.sims().includes(s.sim);
+  }
+
+  /**
+   * The connection dropped with Auto on: the character stays in the world and Auto farms on, as if the
+   * player were there (EXP, drops and party shares as usual). Like a drop, the trade ends and a
+   * summoning it led gives its keys back; it is saved now and by the autosave. sweepAway ends it.
+   */
+  private goAway(s: Session, why: string): void {
+    this.trades.cancelChar(s.charId, `${s.player.name} หลุดการเชื่อมต่อ`);
+    this.rooms.gone(s.charId);
+    this.save(s);
+    this.wireGone += this.wireDelta(s.ws);
+    s.awayAt = Date.now();
+    s.outbox = [];
+    s.move = null;
+    s.basic = false;
+    s.skills = [];
+    console.log(`[world] ${s.username} (${s.player.name}) dropped (${why}) — Auto keeps farming up to ${fmtAgo(this.awayMs())} (${this.onlineText()})`);
+  }
+
+  /** How long a dropped connection may farm on (ms). */
+  private awayMs(): number {
+    return AWAY_TEST_MS || currentBalance().auto.offlineMin * 60_000;
+  }
+
+  /**
+   * Once a second: a character farming after its connection dropped leaves the world (saved, like a
+   * drop: the party place and the spot are kept CH_RECONNECT_MS more) once Auto stopped (an Auto option,
+   * walking into town, a scroll: after its cast), it died, the time is up or the /admin switch went off.
+   */
+  private sweepAway(): void {
+    const now = Date.now();
+    const cfg = currentBalance().auto;
+    for (const s of [...this.sessions]) {
+      if (s.awayAt === null) continue;
+      const p = s.player;
+      let why: string | null = null;
+      if (!p.alive) why = 'died';
+      else if (now - s.awayAt >= this.awayMs()) why = 'time up';
+      else if (!cfg.offline) why = 'switched off in /admin';
+      else if (this.rooms.sims().includes(s.sim)) why = 'in a boss room';
+      // Reading a return scroll (Auto's "scroll" option): wait for it, so it ends in town.
+      else if (!s.auto && p.castT <= 0) why = 'Auto stopped';
+      if (why) this.leave(s, 'drop', `Auto away ended: ${why}, after ${fmtAgo(now - s.awayAt)}`);
+    }
+    for (const [id, a] of this.autoBack) if (now - a.at > CH_RECONNECT_MS) this.autoBack.delete(id);
+  }
+
+  private leave(s: Session, how: LeaveHow = 'quit', note?: string): void {
     if (!this.sessions.has(s)) return;
+    // Auto was on and the character can come back to the same spot: it carries on then (join).
+    if (how !== 'quit' && s.auto && s.player.alive && !this.rooms.sims().includes(s.sim)) this.autoBack.set(s.charId, { auto: s.auto, at: Date.now() });
+    else this.autoBack.delete(s.charId);
     // Whatever the reason (quit, lost connection, a login from elsewhere): the trade ends, nothing moves.
     this.trades.cancelChar(s.charId, `${s.player.name} ออกจากเกม`);
     // Before saving: a summoning this character led gives its keys back now.
@@ -671,7 +809,7 @@ export class GameWorld {
     if (how === 'quit') this.friendDroppedAt.delete(s.accountId);
     else this.friendDroppedAt.set(s.accountId, Date.now());
     this.broadcastSystem(`${s.player.name} ออกจากเกม`);
-    console.log(`[world] ${s.username} left (${this.sessions.size} online)`);
+    console.log(`[world] ${s.username} (${s.player.name}) left: ${note ?? how} (${this.onlineText()})`);
   }
 
   /** Ends the game of whoever plays on this account (saving it first), e.g. before the account changes. */
@@ -679,7 +817,7 @@ export class GameWorld {
     for (const s of [...this.sessions]) {
       if (s.accountId !== accountId) continue;
       this.send(s.ws, { t: 'kick', msg });
-      this.leave(s);
+      this.leave(s, 'quit', `kicked (${msg})`);
       s.ws.close();
     }
   }
@@ -892,6 +1030,7 @@ export class GameWorld {
     }
     s.maxFrame = Math.max(s.maxFrame, maxFrame ?? 0);
     s.maxWait = Math.max(s.maxWait, wait ?? 0);
+    s.pingHidden = hidden;
     if (hidden) s.hidden = true;
 
     const lagging = rtt !== undefined && rtt > PING_WARN_MS;
@@ -926,7 +1065,7 @@ export class GameWorld {
   /** One log line a minute with each online player's average ping, frame rate and worst stall since the last one. */
   private logPings(): void {
     if (!this.sessions.size) return;
-    const parts = [...this.sessions].map((s) => {
+    const parts = [...this.sessions].filter((s) => s.awayAt === null).map((s) => {
       const bits = [s.rttCount ? fmtMs(s.rttSum / s.rttCount) : '—'];
       if (s.fpsCount) bits.push(`${Math.round(s.fpsSum / s.fpsCount)} fps`, `max frame ${fmtMs(s.maxFrame)}`);
       if (s.maxWait) bits.push(`no pong up to ${fmtMs(s.maxWait)}`);
@@ -1285,7 +1424,8 @@ export class GameWorld {
         if (typeof m.name !== 'string' || !m.name.trim() || m.name.length > 40) return;
         const name = m.name.trim().toLowerCase();
         const to = [...this.sessions].find((o) => o.player.name.toLowerCase() === name);
-        const refuses = !!to && (to.blockTrades || this.friends.blocks(to.accountId, s.accountId));
+        // Away (disconnected, Auto farming on) = treated as refusing: nobody is there to answer.
+        const refuses = !!to && (to.blockTrades || to.awayAt !== null || this.friends.blocks(to.accountId, s.accountId));
         err = this.trades.request(me, to && this.tradeActor(to), refuses);
         break;
       }
@@ -1325,7 +1465,7 @@ export class GameWorld {
           charId: m.charId, name: m.name, cls: m.cls, lv: p?.level ?? m.level,
           hp: p ? Math.round(Math.max(0, p.hp)) : 0, maxHp: Math.round(p?.maxHp ?? m.maxHp),
           mp: p ? Math.round(Math.max(0, p.mp)) : 0, maxMp: Math.round(p?.stats.maxMp ?? m.maxMp),
-          leader: i === 0, online: !!o, zone: o?.sim.zone.id ?? m.zone, ch: o ? this.chOf(o) : (m.ch ?? 1), pid: p?.id ?? -1,
+          leader: i === 0, online: !!o, ...(o?.awayAt != null ? { away: true } : {}), zone: o?.sim.zone.id ?? m.zone, ch: o ? this.chOf(o) : (m.ch ?? 1), pid: p?.id ?? -1,
           x: p ? r2(p.x) : 0, z: p ? r2(p.z) : 0,
         };
       }),
@@ -1828,7 +1968,11 @@ export class GameWorld {
     if (++this.tickN % Math.round(TICK_HZ / SNAPSHOT_HZ) === 0) {
       // Each player's / monster's look bundle is worked out once per round, not once per viewer.
       const looks: Looks = new Map();
-      for (const s of this.sessions) this.sendSnapshot(s, looks);
+      for (const s of this.sessions) {
+        // Away (connection dropped, Auto farming on): nobody to send to; what it would be told is dropped.
+        if (s.awayAt !== null) s.outbox = [];
+        else this.sendSnapshot(s, looks);
+      }
     }
     const tSave = performance.now();
     for (const s of this.sessions) {
@@ -2082,7 +2226,7 @@ export class GameWorld {
     const all = [...this.sessions];
     for (const s of all) {
       this.send(s.ws, { t: 'kick', msg: shutdownKick(mode) });
-      this.leave(s);
+      this.leave(s, 'quit', `server ${mode}${s.awayAt !== null ? ' (was away with Auto)' : ''}`);
       // 1012 = service restart, 1001 = going away.
       s.ws.close(mode === 'restart' ? 1012 : 1001, mode);
     }
@@ -2107,7 +2251,7 @@ export class GameWorld {
       rtt: s.lastRtt === null ? null : Math.round(s.lastRtt),
       fps: s.lastFps === null ? null : Math.round(s.lastFps),
       maxFrame: s.fpsCount ? Math.round(s.maxFrame) : null,
-      hidden: s.hidden, gpu: s.gpu, ip: s.ip, playedMs: Date.now() - s.joinedAt,
+      hidden: s.hidden, ...(s.awayAt !== null ? { away: true } : {}), gpu: s.gpu, ip: s.ip, playedMs: Date.now() - s.joinedAt,
     }));
     return { zones, players };
   }
@@ -2185,7 +2329,7 @@ export class GameWorld {
     const s = this.sessionOfChar(charId);
     if (!s) return false;
     this.send(s.ws, { t: 'kick', msg });
-    this.leave(s);
+    this.leave(s, 'quit', `kicked (${msg})`);
     s.ws.close();
     return true;
   }

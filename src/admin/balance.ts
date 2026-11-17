@@ -13,7 +13,7 @@ import {
 } from '../shared/balance';
 import { DROP_GOLD_MULT, type MonsterDef } from '../shared/data/monsters';
 import {
-  AUTO_ALLOW_NAME, AUTO_ALLOWS, AUTO_DEFAULT_NAME, AUTO_LOOT_ORDERS, AUTO_NUM_NAME, AUTO_OUT_ACTIONS, AUTO_RANGE, AUTO_TARGET_MODES, autoDefaultValueName,
+  AUTO_ALLOW_NAME, AUTO_ALLOWS, AUTO_OFFLINE_NAME, AUTO_DEFAULT_NAME, AUTO_LOOT_ORDERS, AUTO_NUM_NAME, AUTO_OUT_ACTIONS, AUTO_RANGE, AUTO_TARGET_MODES, autoDefaultValueName,
   type AutoAllow, type AutoDefaults,
 } from '../shared/autoTuning';
 import { NO_BOOST, ZONES, type MonsterBoost } from '../shared/data/zones';
@@ -640,6 +640,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'muted' }, 'ข้ามของ = เดินไปหาของชิ้นเดิมแล้วไม่เข้าใกล้ขึ้นเลยนานเท่านี้ (ติดสิ่งกีดขวาง/เก็บไม่ได้) จะเลิกสนใจชิ้นนั้น · ระยะ 2 ช่องหลังใช้กับลำดับ "สมดุล" (1 ช่องในแมพ = 50 px)'),
       h('div', { class: 'muted' }, 'สวิตช์ทั้งเซิร์ฟ (ติ๊กออก = ผู้เล่นเลือกไม่ได้ Auto ใช้แบบปลอดภัยแทน: เก็บของก่อน→สมดุล, ของคนอื่น→ของตัวเอง, ม้วน→หยุด Auto, ชนิดมอนที่ไม่ตี→ตีทุกชนิด)'),
       h('div', { class: 'row bal-line' }, ...AUTO_ALLOWS.map(allow)),
+      h('div', { class: 'row bal-line' },
+        h('label', {}, h('input', { type: 'checkbox', checked: a.offline, onchange: (e: Event) => { a.offline = (e.target as HTMLInputElement).checked; refresh(); } }), ` ${AUTO_OFFLINE_NAME}`),
+        num('offlineMin', 1),
+      ),
+      h('div', { class: 'muted' }, 'หลุดการเชื่อมต่อขณะเปิด Auto (ไม่ได้กดออกเกม): ตัวละครอยู่ในโลกต่อ Auto ฟาร์มเหมือนปกติ (EXP 50%) จนครบเวลา, Auto หยุดตามตัวเลือก (ยาหมด/กระเป๋าเต็ม/ม้วน) หรือตาย แล้วเซฟและออกจากโลก · เข้าเกมใหม่ = ได้ตัวที่กำลังฟาร์มคืน Auto ยังเปิด · ไม่รวม Guest และห้องบอส · ปิดสวิตช์ = คนที่ฟาร์มแบบหลุดอยู่ออกจากโลกทันที'),
     );
   };
 

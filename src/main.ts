@@ -35,6 +35,7 @@ function launch(backend: OnlineBackend): void {
   backend.onTrade = (view) => game.trade.show(view);
   backend.onTradeEnd = (ok) => game.trade.ended(ok);
   backend.onDisconnect = (msg) => game.hud.showDisconnect(msg);
+  backend.onReconnecting = (attempt) => game.hud.showReconnecting(attempt);
   backend.onShutdown = (mode, seconds, text) => game.hud.shutdownCountdown(mode, seconds, text);
   backend.onAnnounce = (text, from, direct, megaphone) => game.hud.announce(text, from, direct, megaphone);
   backend.onMarketNote = (text, sub) => game.hud.marketNote(text, sub);
