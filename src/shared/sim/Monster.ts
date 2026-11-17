@@ -246,14 +246,21 @@ export class Monster extends Unit {
   get untargetable(): boolean { return this.jumpOutT > 0 || this.fallT > 0; }
   private get slamRadius(): number { return this.def.slamRadius ?? DEFAULT_SLAM_RADIUS; }
 
+  /** Walking home (leash or hurt after a fight): with the Balance switch on, hits no longer turn it around (owner 2026-11-17). */
+  private get ignoresHits(): boolean {
+    return this.state === 'return' && currentBalance().mobReturnIgnoreHits;
+  }
+
   onHit(sim: Sim, attacker: Player): void {
+    // Still takes the damage (and heals on the way); only the aggro / pack wake-up is skipped.
+    if (this.ignoresHits) return;
     this.aggroT = this.aggroTime;
     if (!this.target?.alive) this.target = attacker;
     if (this.state !== 'charge' && this.state !== 'leap') this.state = 'chase';
     if (this.def.behavior === 'skittish' && Math.random() < 0.4) this.fleeT = 1.2;
     if (this.def.pack) {
       for (const m of sim.monsters) {
-        if (m !== this && m.alive && (m.def.packId ?? m.def.id) === (this.def.packId ?? this.def.id) && Math.hypot(m.x - this.x, m.z - this.z) < 9) {
+        if (m !== this && m.alive && !m.ignoresHits && (m.def.packId ?? m.def.id) === (this.def.packId ?? this.def.id) && Math.hypot(m.x - this.x, m.z - this.z) < 9) {
           m.aggroT = m.aggroTime;
           m.state = 'chase';
           if (!m.target?.alive) m.target = attacker;
