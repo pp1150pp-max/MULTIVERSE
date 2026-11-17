@@ -92,18 +92,43 @@ The move: standing on an invisible hoverboard (do NOT draw the board, only the g
 
 รอบแรก (2026-11-18) ภาพมุมหลังหลายภาพปืนสลับข้างกลางท่า บางเฟรมมีปืน 2 กระบอกหรือมือ 3 ข้าง
 ภาพส่วนใหญ่วาดปืนไว้ **ฝั่งซ้ายของภาพ** ทุกมุม จึงยึดตามนั้นทั้งชุด จะได้ไม่สลับข้างตอนเปลี่ยนท่า
-ภาพที่ผิดแน่ ๆ: `run_up_side` (สลับมือ ปืน 2 กระบอก), `run_up` (ปืนลอยไม่อยู่ในมือ), `attack_up` (สลับมือ ปืนไม่อยู่ในมือ), `run_attack_up` ภาพอื่นที่เห็นว่าผิดให้เจนใหม่แบบเดียวกัน
+### ภาพที่ต้องเจนใหม่ (เจ้าของตรวจเมื่อ 2026-11-18)
 
-เจนใหม่ด้วย prompt เดิมของท่านั้น แล้วต่อท้ายก่อนบรรทัด `Direction:` ด้วยประโยคนี้
+| ไฟล์ | ปัญหา | ต่อท้ายด้วย |
+|---|---|---|
+| `run_up_side` | ปืนสลับมือ ปืน 2 กระบอก | ประโยค A |
+| `run_up` | ปืนลอย ไม่อยู่ในมือ | ประโยค A |
+| `attack_up` | ปืนสลับข้าง ยกปืนขึ้นฟ้า ปืนไม่อยู่ในมือ | ประโยค B |
+| `run_attack_up` | หันหลังแต่เห็นปากกระบอกปืนหันมาหาคนดู | ประโยค B |
+| `death` | ปืนที่หล่นบนพื้นไม่มีด้าม | ประโยค C |
+| `ride_down` | สนับเข่ากลม ๆ ซ้อนกันหลายวง | ประโยค D |
+
+ภาพอื่นที่เห็นว่าผิดให้เจนใหม่แบบเดียวกัน แล้วเพิ่มลงตารางนี้ได้
+
+เจนใหม่ด้วย prompt เดิมของท่านั้น แล้วต่อท้ายก่อนบรรทัด `Direction:` ด้วยประโยคตามตาราง
+
+ประโยค A:
 
 ```
 VERY IMPORTANT: he has exactly TWO arms and TWO hands and holds exactly ONE pistol, in every frame. The pistol stays in the SAME hand in all 8 frames and is on the LEFT side of the picture in every frame (in a back view too); his other hand is empty. His fingers are wrapped tightly around the pistol grip in every frame, the pistol never floats beside the hand. Never draw a second pistol, never move the pistol to the other hand.
 ```
 
-สำหรับ `attack_up` และ `run_attack_up` (มุมหลัง ยิงออกห่างคนดู) ใช้ประโยคนี้แทน เพราะต้องยกปืนชี้เข้าไปในจอ
+ประโยค B (มุมหลัง ยิงออกห่างคนดู):
 
 ```
-VERY IMPORTANT: he has exactly TWO arms and TWO hands and holds exactly ONE pistol, in every frame, in the hand on the LEFT side of the picture; he raises that arm and aims the pistol straight AWAY from the viewer, up into the screen. His other hand is empty. His fingers are wrapped tightly around the pistol grip in every frame, the pistol never floats beside the hand. Never draw a second pistol, never move the pistol to the other hand.
+VERY IMPORTANT: he has exactly TWO arms and TWO hands and holds exactly ONE pistol, in every frame, in the hand on the LEFT side of the picture. Seen from BEHIND: he stretches that arm straight FORWARD at shoulder height, away from the viewer, so we see the back of his arm and the BACK of the pistol (its grip, hammer and rear end) just past his shoulder; the muzzle points away from us into the screen and is NOT visible. The pistol is never raised above the head and never points toward the viewer. His other hand is empty. His fingers are wrapped tightly around the pistol grip, the pistol never floats beside the hand. Never draw a second pistol, never move the pistol to the other hand.
+```
+
+ประโยค C (ท่าตาย):
+
+```
+VERY IMPORTANT: the pistol that falls out of his hand and lies on the ground is the SAME complete pistol he holds in the other pictures: barrel, cylinder AND its full wooden grip, never only a barrel. Only one pistol.
+```
+
+ประโยค D (ท่าขี่สัตว์ มุมหน้า):
+
+```
+VERY IMPORTANT: each knee has exactly ONE round knee plate, the same as in the design sheet; no extra stacked or overlapping round plates on the legs.
 ```
 
 ## สำหรับผม: ตัดเข้าเกม
