@@ -12,7 +12,7 @@ import { gatesPassedBy } from '../data/bossGates';
 import { cleanCosWorn, MOUNT_SPEED, type CosWorn } from '../data/cosmetics';
 import { auraTier, effectiveStats, orbCodes, plusOf, sellValue } from '../data/enhance';
 import { itemClass, starterWeapon, upgradeItem } from '../data/items';
-import { anyStackValue, potionHeal, POTIONS, POTION_SIZES, POTION_STACK, stackLimit } from '../data/potions';
+import { anyStackValue, potionHeal, potionPrice, POTION_SIZES, POTION_STACK, stackLimit } from '../data/potions';
 import { BOSS_QUEST_KEY, BUFF_MAX, QUEST_KILLS, STONE_STACK } from '../data/stones';
 import { cleanGearDone, cleanGearQuests } from '../gearQuests';
 import type { TutorialData } from '../tutorial';
@@ -206,7 +206,7 @@ export function sortEntries(list: readonly (BagEntry | null)[], key: SortKey, de
   );
   // Potions: HP before MP, then by size (by price when sorting by sell value).
   const potOrder = (['hp', 'mp'] as const).flatMap((k) => POTION_SIZES.map((s) => [k, s] as const));
-  if (key === 'value') potOrder.sort((a, b) => dir * (POTIONS[a[0]][a[1]].price - POTIONS[b[0]][b[1]].price));
+  if (key === 'value') potOrder.sort((a, b) => dir * (potionPrice(a[0], a[1]) - potionPrice(b[0], b[1])));
   const stacks: BagEntry[] = [];
   const bound = (b: boolean) => (b ? { bound: true as const } : {});
   for (const [k, s] of potOrder) {

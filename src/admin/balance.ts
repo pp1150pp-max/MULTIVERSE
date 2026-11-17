@@ -8,7 +8,7 @@ import { RIG_ARMOR_ITEMS, RIG_ARMOR_NAME, RIG_ARMORS, RIG_WEAPON_ITEMS, RIG_WEAP
 import {
   applyBalance, BALANCE_RANGE, PACK_ZONES, packCount, balanceChanges, checkBalance, classStatsAt, skillMpCost, codeBalance, currentBalanceTuning, hasParts, mergeBalance, MONSTER_STAT_NAME,
   MONSTER_STATS, monsterBandOf, monsterMults, NO_MONSTER_MULT, STAT_MAX, STAT_PART_NAME, STAT_PARTS, STAT_TIER_PARTS, statTierTable, tierLabelsChange,
-  tierSourceName, TUNABLE_MONSTERS, withItemStatMult,
+  tierSourceName, TUNABLE_MONSTERS, withItemStatMult, POTION_KINDS, POTION_RANGE,
   type Balance, type BalanceTuning, type MonsterMults, type MonsterStat, type StatPart, type TierParts,
 } from '../shared/balance';
 import { DROP_GOLD_MULT, type MonsterDef } from '../shared/data/monsters';
@@ -603,6 +603,36 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   // ---------------------------------------------------------- save bar
   const summary = h('div', { class: 'muted' });
   /** The draft as the server would store it, or a Thai error. */
+  // ---------------------------------------------------------- potions (owner 2026-11-17)
+  const potionCard = h('div', { class: 'card' });
+  const drawPotions = (): void => {
+    const pb = draft.potions;
+    const outs: (() => void)[] = [];
+    const refresh = (): void => { outs.forEach((f) => f()); updateSummary(); };
+    const rows = POTION_KINDS.flatMap((k) => POTION_SIZES.map((z) => {
+      const v = pb[k][z];
+      const cv = code.potions[k][z];
+      const out = h('td', { class: 'bal-out' });
+      outs.push(() => {
+        out.textContent = `ขายคืน ${Math.floor(v.price / 2).toLocaleString()} G` + (k === 'hp' ? ` · นักดาบฟื้น ${Math.round((v.amount * (100 + pb.swordBonus)) / 100).toLocaleString()}` : '');
+      });
+      return h('tr', {},
+        h('td', {}, potionName(k, z)),
+        h('td', {}, numBox(() => v.amount, (n) => { v.amount = Math.round(n); }, cv.amount, ...POTION_RANGE.amount, 1, refresh)),
+        h('td', {}, numBox(() => v.price, (n) => { v.price = Math.round(n); }, cv.price, ...POTION_RANGE.price, 1, refresh)),
+        out);
+    }));
+    potionCard.replaceChildren(
+      h('h2', {}, 'ยา'),
+      h('div', { class: 'muted' }, 'ฟื้นต่อขวด (HP/MP ตามชนิดยา) และราคาที่พ่อค้าขาย · พ่อค้ารับซื้อคืนครึ่งราคา (ปัดลง) · มีผลทันทีกับร้าน tooltip การกินยา และการเรียงตามมูลค่า · ของที่อยู่ในกระเป๋าแล้วใช้ค่าใหม่'),
+      h('div', { class: 'bal-scroll' }, h('table', { class: 'bal-table' },
+        h('thead', {}, h('tr', {}, h('th', {}, 'ยา'), h('th', {}, 'ฟื้น'), h('th', {}, 'ราคา (G)'), h('th', { class: 'bal-out' }, 'ได้จริง'))),
+        h('tbody', {}, ...rows))),
+      h('div', { class: 'row bal-line' }, h('label', {}, 'นักดาบฟื้นจากยา HP เพิ่ม (%)', numBox(() => pb.swordBonus, (n) => { pb.swordBonus = n; }, code.potions.swordBonus, ...POTION_RANGE.swordBonus, 5, refresh))),
+    );
+    outs.forEach((f) => f());
+  };
+
   // ---------------------------------------------------------- Auto Play (src/shared/autoTuning.ts)
   const autoCard = h('div', { class: 'card' });
   const drawAuto = (): void => {
@@ -814,6 +844,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawRegen();
     drawTiers();
     drawMonsters();
+    drawPotions();
     drawAuto();
     drawTut();
     drawSkills();
@@ -862,11 +893,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         void save({ tuning: c.tuning }, `ใช้ค่าใหม่กับทั้งเซิร์ฟทันทีไหม?\n\n${changes.slice(0, 1200)}`);
       } }, '💾 บันทึกทั้งเซิร์ฟ'),
       h('button', { onclick: () => { draft = mergeBalance(saved); redraw(); msg.textContent = ''; } }, 'ยกเลิกที่ยังไม่บันทึก'),
-      h('button', { onclick: () => void save({ reset: true }, 'คืนทุกค่า (อาชีพ tier ตัวคูณมอน Auto Play รางวัลเควสสอนระบบ ระบบสกิล และเอฟเฟกต์สกิล) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?') }, '↺ คืนค่าในโค้ด'),
+      h('button', { onclick: () => void save({ reset: true }, 'คืนทุกค่า (อาชีพ tier ตัวคูณมอน ยา Auto Play รางวัลเควสสอนระบบ ระบบสกิล และเอฟเฟกต์สกิล) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?') }, '↺ คืนค่าในโค้ด'),
     ),
     msg,
   );
 
-  box.replaceChildren(classCard, regenCard, tierCard, previewCard, monsterCard, autoCard, tutCard, skillCard, fxCard, rigCard, bar);
+  box.replaceChildren(classCard, regenCard, tierCard, previewCard, monsterCard, potionCard, autoCard, tutCard, skillCard, fxCard, rigCard, bar);
   redraw();
 }
