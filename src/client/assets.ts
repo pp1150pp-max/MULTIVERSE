@@ -74,7 +74,7 @@ const PAPER_PROPS = new Set([
 const PAPER_GROUND = new Set(['grass', 'dirt', 'pave', 'room_forest', 'marsh', 'mud', 'water', 'room_marsh',
   'snow', 'snow_path', 'ice', 'room_snow', 'ash_rock', 'ash_path', 'lava', 'room_volcano', 'brick']);
 /** Classes with a paper animation set in sprites/paper/player/<class>/ (tools/cut_paper_char.cjs). */
-const PAPER_CHARS = new Set(['sword']);
+const PAPER_CHARS = new Set(['sword', 'mage']);
 let paperMaps = false;
 let paperAnswer: Promise<boolean> = Promise.resolve(false);
 

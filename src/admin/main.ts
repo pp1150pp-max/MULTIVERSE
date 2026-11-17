@@ -2202,7 +2202,7 @@ function paperMapsCard(): HTMLElement {
   void api<AdminPaperMaps>('GET', '/admin/paper-maps').then(load, fail);
   return h('div', { class: 'card' }, h('h2', {}, 'ภาพกระดาษตัดแปะ (ทดลอง)'),
     h('div', { class: 'muted', style: 'margin:-6px 0 10px' },
-      'ตอนนี้มีภาพกระดาษของแมพ 1–4 ห้องบอส เมืองกลาง แท่นเรียกบอส ชุดแคมป์ ประตูมิติ ขอบเกาะ และนักดาบ · คลาสอื่น มอน NPC และ UI ยังเป็นภาพเดิม · ตำแหน่ง ขนาด และการชนของทุกอย่างเหมือนเดิม'),
+      'ตอนนี้มีภาพกระดาษของแมพ 1–4 ห้องบอส เมืองกลาง แท่นเรียกบอส ชุดแคมป์ ประตูมิติ ขอบเกาะ มอนสเตอร์ นักดาบ และจอมเวท · นักปืน NPC และ UI ยังเป็นภาพเดิม · ตำแหน่ง ขนาด และการชนของทุกอย่างเหมือนเดิม'),
     status, h('div', { class: 'row', style: 'align-items:center;margin-top:8px' }, h('span', { style: 'flex:1' }), toggle), msg);
 }
 
