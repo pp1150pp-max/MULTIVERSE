@@ -1,5 +1,7 @@
 /* Admin page: the game's dark iron and gold, plain and readable on a phone. */
 :root {
+  --top-h: 56px;
+  --side-w: 220px;
   --ink: #e8e2d0;
   --ink-dim: #a99f88;
   --gold: #c9a85a;
@@ -44,7 +46,9 @@ button {
 button:hover { border-color: var(--gold-hi); color: #fff; }
 button:disabled { opacity: 0.5; cursor: default; }
 button.primary { background: linear-gradient(#d0a23e, #8a6420); border-color: var(--gold-hi); color: #24170a; font-weight: 600; }
-button.danger { border-color: #a0453a; color: #ffb3a8; }
+button.danger { background: linear-gradient(#4a1f1a, #2a1210); border-color: #c0554a; color: #ffc4ba; }
+button.danger:hover { border-color: #ff7a6a; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--gold-hi); outline-offset: 1px; }
 button.small { min-height: 30px; padding: 4px 10px; font-size: 13px; }
 
 input, select {
@@ -60,26 +64,79 @@ input:focus, select:focus { outline: none; border-color: var(--gold); }
 /* ---------------------------------------------------------------- layout */
 
 .top {
-  position: sticky; top: 0; z-index: 5;
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  padding: 10px 16px;
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: 12px;
+  height: var(--top-h);
+  padding: 0 16px;
   background: linear-gradient(#211c15, #15120e);
   border-bottom: 1px solid var(--edge);
 }
-.brand { font-family: 'Cinzel', serif; font-weight: 800; color: var(--gold-hi); letter-spacing: 1px; font-size: 18px; }
+.brand { font-family: 'Cinzel', serif; font-weight: 800; color: var(--gold-hi); letter-spacing: 1px; font-size: 18px; white-space: nowrap; }
 .brand small { font-family: 'Kanit', sans-serif; font-weight: 400; color: var(--ink-dim); font-size: 13px; margin-left: 6px; letter-spacing: 0; }
-.who { margin-left: auto; color: var(--ink-dim); font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.who { margin-left: auto; color: var(--ink-dim); font-size: 13px; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 .role { border: 1px solid var(--gold); color: var(--gold-hi); border-radius: 10px; padding: 0 8px; font-size: 12px; }
+.menu-btn { display: none; font-size: 20px; padding: 4px 10px; min-height: 36px; }
 
-.tabs { display: flex; gap: 4px; padding: 10px 16px 0; overflow-x: auto; border-bottom: 1px solid var(--edge-dim); }
-.tabs button { border-radius: 4px 4px 0 0; border-bottom: none; white-space: nowrap; }
-.tabs button.on { background: var(--panel-2); border-color: var(--gold); color: var(--gold-hi); }
+/* Search box in the top bar: results drop below it. */
+.search { position: relative; flex: 0 1 420px; min-width: 0; }
+.search input { min-height: 36px; padding: 6px 14px; border-radius: 18px; border-color: var(--edge); }
+.search-list {
+  position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30;
+  max-height: 70vh; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--edge); border-radius: 8px; box-shadow: 0 8px 30px #000; padding: 4px;
+}
+.search-row {
+  display: flex; justify-content: space-between; gap: 12px; width: 100%; text-align: left;
+  background: none; border: none; box-shadow: none; border-radius: 6px; padding: 8px 10px; min-height: 0;
+}
+.search-row .muted { font-size: 12px; white-space: nowrap; }
+.search-row:hover, .search-row.at { background: var(--panel-2); color: var(--gold-hi); }
+.search-none { padding: 8px 10px; }
 
-main { padding: 16px; max-width: 1200px; margin: 0 auto; }
-.orb-bench { height: calc(100vh - 140px); min-height: 480px; border: 1px solid var(--edge-dim); border-radius: 6px; }
+/* Side menu: every category and tab at once (a drawer on a phone). */
+.layout { display: grid; grid-template-columns: var(--side-w) minmax(0, 1fr); align-items: start; }
+.side {
+  position: sticky; top: var(--top-h); height: calc(100vh - var(--top-h)); overflow-y: auto;
+  background: #14110d; border-right: 1px solid var(--edge-dim); padding: 8px 8px 24px;
+}
+.side-cat { margin-bottom: 6px; }
+.side-cat-name { font-size: 12px; color: var(--gold); letter-spacing: 0.5px; padding: 10px 10px 4px; }
+.side button {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  background: none; border: 1px solid transparent; box-shadow: none; border-radius: 6px;
+  padding: 6px 10px; min-height: 36px; font-size: 14px; color: var(--ink);
+}
+.side button:hover { background: #221d16; border-color: transparent; }
+.side button.on { background: linear-gradient(90deg, #3a2e17, #241f17); border-color: var(--edge); color: var(--gold-hi); }
+.side .ico { width: 20px; text-align: center; flex: none; }
+.side-shade { display: none; }
 
-.card { background: var(--panel); border: 1px solid var(--edge-dim); border-radius: 6px; padding: 14px; margin-bottom: 14px; }
+@media (max-width: 860px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .menu-btn { display: block; }
+  .side {
+    position: fixed; top: var(--top-h); left: 0; bottom: 0; height: auto; width: min(280px, 82vw); z-index: 25;
+    transform: translateX(-105%); transition: transform 0.18s ease; box-shadow: 4px 0 24px #000;
+  }
+  body.menu-open .side { transform: none; }
+  body.menu-open .side-shade { display: block; position: fixed; inset: var(--top-h) 0 0 0; z-index: 24; background: rgba(0, 0, 0, 0.55); }
+}
+@media (max-width: 600px) {
+  .top { gap: 8px; padding: 0 10px; }
+  .brand small, .who-name { display: none; }
+  .brand { font-size: 15px; }
+  .search { flex: 1 1 auto; }
+}
+@media (max-width: 480px) { .brand { display: none; } }
+
+main { padding: 18px 20px 40px; max-width: 1200px; width: 100%; margin: 0 auto; min-width: 0; }
+@media (max-width: 600px) { main { padding: 12px 10px 40px; } }
+.orb-bench { height: calc(100vh - var(--top-h) - 60px); min-height: 480px; border: 1px solid var(--edge-dim); border-radius: 6px; }
+
+.card { background: var(--panel); border: 1px solid var(--edge-dim); border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; scroll-margin-top: calc(var(--top-h) + 60px); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); }
+.card > h2:first-child { margin: -14px -16px 12px; padding: 10px 16px; font-size: 16px; font-weight: 600; color: var(--gold-hi); border-bottom: 1px solid var(--edge-dim); background: linear-gradient(#26211a, #1d1a15); border-radius: 8px 8px 0 0; }
 .card h2 { margin: 0 0 10px; font-size: 16px; font-weight: 600; color: var(--gold-hi); }
+.card h3 { scroll-margin-top: calc(var(--top-h) + 60px); }
 .muted { color: var(--ink-dim); font-size: 13px; }
 .msg { margin-top: 8px; min-height: 1.2em; font-size: 14px; }
 .msg.ok { color: var(--ok); }
@@ -130,7 +187,7 @@ td.ip { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space
 
 /* ---------------------------------------------------------------- character editor */
 
-.sheet-bg { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.65); z-index: 10; display: flex; justify-content: center; align-items: flex-start; overflow-y: auto; padding: 24px 12px; }
+.sheet-bg { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.65); z-index: 40; display: flex; justify-content: center; align-items: flex-start; overflow-y: auto; padding: 24px 12px; }
 .sheet { width: 100%; max-width: 560px; background: var(--panel); border: 1px solid var(--edge); border-radius: 8px; padding: 14px 16px 18px; box-shadow: 0 10px 40px #000; }
 .sheet-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
 .sheet-head h2 { margin: 0; color: var(--gold-hi); font-size: 19px; font-weight: 600; }
@@ -144,7 +201,6 @@ td.ip { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space
 
 .list-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #2a241b; }
 .list-item .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-@media (max-width: 420px) { .tabs { padding: 10px 8px 0; gap: 2px; } .tabs button { padding: 8px 9px; font-size: 14px; } }
 
 /* ---------------------------------------------------------------- users + owner tools */
 
@@ -249,7 +305,7 @@ details summary { cursor: pointer; margin-top: 8px; }
 td.changed, input.changed { background: #3a3110; }
 .card-num { margin-bottom: 6px; }
 .card-num-head { margin: 14px 0 6px; font-size: 14px; color: var(--gold); font-weight: 600; }
-.card-save { position: sticky; top: 0; z-index: 5; }
+.card-save { position: sticky; top: var(--top-h); z-index: 5; }
 .card-fx select { min-width: 150px; }
 /* Balance tab (classes and item tiers). */
 .bal-scroll { overflow-x: auto; margin: 8px 0; }
@@ -262,10 +318,6 @@ td.changed, input.changed { background: #3a3110; }
 .bal-num.bal-bad { border-color: var(--bad); }
 .bal-out { color: var(--gold-hi); text-align: right; }
 
-/* Two rows: categories, then that category's sub-tabs. Both scroll sideways on a phone instead of overflowing the page. */
-.tabs.subtabs { padding-top: 8px; background: var(--panel); }
-.tabs.cats button { font-weight: 600; }
-.tabs.subtabs button { font-size: 14px; }
 .card-thumb { display: block; width: 72px; height: 108px; object-fit: cover; border: 1px solid var(--edge-dim); border-radius: 4px; margin-bottom: 4px; cursor: zoom-in; image-rendering: pixelated; }
 .card-fx .row { flex-wrap: nowrap; }
 .card-art-view { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.8); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; cursor: zoom-out; color: var(--gold-hi); font-size: 18px; }
@@ -305,3 +357,42 @@ button.icell:hover { filter: brightness(1.3); }
 .cash-admin input[type="checkbox"] { width: auto; min-height: 0; transform: scale(1.2); }
 .cash-admin td input, .cash-admin td select { min-height: 30px; padding: 4px 6px; }
 .cash-admin .cash-open { display: flex; gap: 8px; align-items: center; margin: 10px 0; font-weight: 600; color: var(--gold); }
+
+/* ---------------------------------------------------------------- layout helpers (src/admin/ui.ts) */
+
+/* Long notes: one line until "อ่านต่อ". */
+.muted.clamp { display: -webkit-box; -webkit-line-clamp: 1; line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.muted.clamp.open { display: block; -webkit-line-clamp: unset; line-clamp: unset; }
+button.more { background: none; border: none; box-shadow: none; padding: 0; min-height: 0; color: var(--gold); font-size: 12px; margin: 0 0 6px; }
+button.more:hover { color: var(--gold-hi); text-decoration: underline; }
+
+/* A card the search jumped to. */
+.card.flash { animation: flash 1.6s ease-out; }
+@keyframes flash {
+  0%, 30% { border-color: var(--gold-hi); box-shadow: 0 0 0 2px var(--gold-hi), 0 0 24px rgba(242, 213, 138, 0.35); }
+  100% { border-color: var(--edge-dim); }
+}
+
+/* Balance tab: jump buttons, folding cards, a dot on cards edited since the last save, the save bar stuck to the bottom. */
+.toc {
+  position: sticky; top: var(--top-h); z-index: 6;
+  display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 0; margin: -6px 0 8px;
+  background: var(--bg); border-bottom: 1px solid var(--edge-dim);
+}
+@media (max-width: 600px) { .toc { flex-wrap: nowrap; overflow-x: auto; } .toc .chip { white-space: nowrap; } }
+.chip { min-height: 28px; padding: 2px 10px; border-radius: 14px; font-size: 13px; background: var(--panel-2); border-color: var(--edge-dim); box-shadow: none; }
+.chip.dirty { border-color: var(--gold-hi); color: var(--gold-hi); }
+.chip.dirty::before,
+.foldable > .card.dirty > h2::after { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ffd34a; margin-right: 6px; vertical-align: middle; }
+.foldable > .card.dirty > h2::after { margin: 0 0 0 8px; }
+.chip.ghost { background: none; border-style: dashed; color: var(--ink-dim); }
+.foldable > .card:not(.save-bar) > h2 { cursor: pointer; user-select: none; }
+.foldable > .card:not(.save-bar) > h2::before { content: '▾'; display: inline-block; width: 16px; color: var(--gold); transition: transform 0.15s; }
+.foldable > .card.folded > h2 { margin-bottom: -14px; border-bottom: none; border-radius: 8px; }
+.foldable > .card.folded > h2::before { transform: rotate(-90deg); }
+.foldable > .card.folded > :not(h2) { display: none !important; }
+.card.save-bar {
+  position: sticky; bottom: 0; z-index: 6; margin-bottom: 0;
+  border-color: var(--gold); background: linear-gradient(#2a2312, #1b1814); box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.6);
+}
+.card.save-bar > .muted { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

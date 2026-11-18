@@ -3,6 +3,7 @@
 // Edits a draft with a live preview (class stats at Lv1/10/50 with nothing worn, tier chances); saving
 // sends the whole draft, the server checks it, stores only what differs from the code, logs the change
 // and applies it to everyone online at once.
+import { foldable } from './ui';
 import { CIRCLE_FALLBACKS, FX_LAYER_NAME, FX_LAYER_RANGE, QUARKS_SKILLS, quarksKey, SKILL_FX_RANGE, type FxLayerNum, type QuarksSkill, type SkillFxTune } from '../shared/fxLayerTuning';
 import { circleDesign, drawInner, drawOuter } from '../client/circleDesigns';
 import { skillExtras } from '../client/skillExtras';
@@ -56,6 +57,7 @@ interface BalanceState { tuning: BalanceTuning }
 export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: (t: BalanceTuning) => void, canConfirmMult = false): Promise<void> {
   const box = h('div', {}, h('div', { class: 'muted' }, 'กำลังโหลด…'));
   view.append(box);
+  const fold = foldable(box);
   let saved: BalanceTuning;
   try {
     saved = (await api<BalanceState>('GET', '/admin/balance')).tuning;
@@ -998,6 +1000,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     const c = draftTuning();
     drawPreview();
     if (!c.tuning) {
+      box.dataset.clean = '';
       summary.textContent = `⚠ ${c.error}`;
       summary.className = 'msg bad';
       return;
@@ -1005,6 +1008,8 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     const changes = balanceChanges(saved, c.tuning);
     summary.className = 'muted';
     summary.textContent = changes ? `ยังไม่บันทึก: ${changes}` : 'ตรงกับที่บันทึกไว้';
+    box.dataset.clean = changes ? '' : '1';
+    if (!changes) fold.clearDirty();
   }
   const redraw = (): void => {
     drawClass();
@@ -1030,6 +1035,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       draft = mergeBalance(saved);
       onSaved(saved);
       redraw();
+      fold.clearDirty();
       msg.className = 'msg good';
       msg.textContent = 'บันทึกแล้ว ผู้เล่นที่ออนไลน์ได้ค่าใหม่ทันที';
     } catch (e) {
@@ -1037,8 +1043,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       msg.textContent = (e as Error).message;
     }
   };
-  const bar = h('div', { class: 'card' },
-    h('h2', {}, 'บันทึก'),
+  const bar = h('div', { class: 'card save-bar' },
     summary,
     h('div', { class: 'row bal-line' },
       h('button', { class: 'primary', onclick: () => {
@@ -1062,12 +1067,13 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         }
         void save({ tuning: c.tuning }, `ใช้ค่าใหม่กับทั้งเซิร์ฟทันทีไหม?\n\n${changes.slice(0, 1200)}`);
       } }, '💾 บันทึกทั้งเซิร์ฟ'),
-      h('button', { onclick: () => { draft = mergeBalance(saved); redraw(); msg.textContent = ''; } }, 'ยกเลิกที่ยังไม่บันทึก'),
+      h('button', { onclick: () => { draft = mergeBalance(saved); redraw(); fold.clearDirty(); msg.textContent = ''; } }, 'ยกเลิกที่ยังไม่บันทึก'),
       h('button', { onclick: () => void save({ reset: true }, 'คืนทุกค่า (อาชีพ tier ตัวคูณมอน ยา Auto Play รางวัลเควสสอนระบบ ระบบสกิล เอฟเฟกต์สกิล และหยุดตอนโจมตี) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?') }, '↺ คืนค่าในโค้ด'),
     ),
     msg,
   );
 
-  box.replaceChildren(classCard, regenCard, tierCard, previewCard, monsterCard, potionCard, forgeCard, autoCard, tutCard, skillCard, fxCard, circleCard, rootCard, rigCard, bar);
+  box.replaceChildren(fold.toc, classCard, regenCard, tierCard, previewCard, monsterCard, potionCard, forgeCard, autoCard, tutCard, skillCard, fxCard, circleCard, rootCard, rigCard, bar);
   redraw();
+  fold.refreshToc();
 }
