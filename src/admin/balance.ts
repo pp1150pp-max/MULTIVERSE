@@ -747,6 +747,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('select', { onchange: (e: Event) => { a[k] = Number((e.target as HTMLSelectElement).value); refresh(); drawFx(); } },
         ...GFX_LEVELS.map((t, i) => h('option', { value: String(i), selected: a[k] === i }, t)).reverse()));
     const gfxOn = h('input', { type: 'checkbox', checked: a.gfxMenu, onchange: (e: Event) => { a.gfxMenu = (e.target as HTMLInputElement).checked; refresh(); } });
+    const nearOn = h('input', { type: 'checkbox', checked: a.orbsNearBar, onchange: (e: Event) => { a.orbsNearBar = (e.target as HTMLInputElement).checked; refresh(); } });
     fxCard.replaceChildren(
       h('h2', {}, 'เอฟเฟกต์สกิล (ชั้นเสริม)'),
       h('div', { class: 'muted' }, 'แสงเรือง แสงบนพื้น และอนุภาคที่เกมวาดทับภาพเอฟเฟกต์ของสกิล ส่วนจอสั่นกับภาพค้างเกิดเฉพาะจอของคนที่ร่าย และเฉพาะตอนที่ท่าโดนมอน · ค่าของแต่ละท่าอยู่ใน src/client/fxLayer.ts (FX_RECIPES) ค่าในการ์ดนี้คูณทุกท่า · มีผลกับทุกคนทันทีหลังบันทึก'),
@@ -779,6 +780,9 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'row bal-line' }, num('paperPlate', 0.05), num('paperBubble', 0.05), num('paperFoot', 0.1)),
       h('div', { class: 'row bal-line' }, num('paperOrbLight', 0.01), num('paperOrbShade', 0.05)),
       h('div', { class: 'muted' }, 'มีผลเฉพาะตอนเปิดสวิตช์ภาพกระดาษ (แท็บ Server) · ขนาดออร่า/ความทึบ/ระยะรอยเท้ารายชิ้นอยู่ในแท็บของแต่งตัว · กรอบชื่อเปลี่ยนเมื่อมีคนสวม/ถอดหรือรีโหลด ลูกแก้วเปลี่ยนทันที'),
+      h('h3', {}, 'ตำแหน่งลูกแก้ว HP/MP'),
+      h('div', { class: 'row bal-line' }, flag(nearOn, a.orbsNearBar !== ca.orbsNearBar, ' ลูกแก้วชิดแถบสกิล (ปิด = มุมล่างซ้าย/ขวาของจอ)')),
+      h('div', { class: 'muted' }, 'เปิด (ค่าในโค้ด): บนจอคอมกว้าง ≥ 1000px ลูกแก้ว HP ชิดซ้ายของแถบสกิล MP ชิดขวา ดูเป็นแผงเดียวกัน (จอกว้าง ≥ 1850px แชทกับข้อความระบบลงมาที่มุมซ้ายล่าง) · จอแคบกว่านั้นและมือถือใช้มุมจอเหมือนเดิม (มือถือใช้แถบ HP/MP อยู่แล้ว) · ผู้เล่นที่เลือก "HP/MP: แถบ" ในเกมไม่ได้รับผล · มีผลกับทุกคนทันทีหลังบันทึก'),
       h('h3', {}, 'กระสุน'),
       h('div', { class: 'row bal-line' }, flag(smoothOn, a.smoothShots !== ca.smoothShots, ' กระสุนบินลื่น (ไม่ดึงกลับตาม server)')),
       h('div', { class: 'muted' }, 'เปิด (ค่าในโค้ด): เบราว์เซอร์ให้กระสุนบินต่อเอง ตำแหน่งจาก server ดันไปข้างหน้าครึ่งหนึ่งของปิง ห่างนิดหน่อยค่อย ๆ ขยับเข้า ห่างเกิน 3 หน่วยค่อยกระโดด · ปิด: แบบเดิม กระสุนกระโดดไปตำแหน่งของ server ทุกครั้งที่ข้อมูลมา (เห็นกระตุกตอนยิงเยอะ เช่น Bullet Storm) · เป็นแค่ภาพ ดาเมจยังตัดสินที่ server'),
