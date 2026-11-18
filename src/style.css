@@ -524,28 +524,32 @@ html.paper-ui .eq-ring2 { left: 61.5%; top: 37.2%; width: 6.6%; height: 4.4%; }
 .fashion-pager { position: absolute; right: 8.4%; top: 61%; height: 4.4%; display: flex; align-items: center; gap: 6px; z-index: 1; font-size: clamp(10px, calc(var(--inv-w) * 0.024), 13px); }
 .fashion-pager button { height: 100%; padding: 0 8px; }
 .fashion-pager.hidden { display: none; }
+/* The fashion page has its own window art (inventory_fashion.png, owner 2026-11-18, papercraft style): 6 frames with
+   name plates on top, 30 slots below. Positions are measured from that art (see the constants in fashionBag.ts). */
+#inventory.fashion .inv-window { background-image: url(/assets/sprites/ui/inventory_fashion.png); }
+#inventory.fashion .inv-title { left: 25.3%; top: 4.9%; width: 49.4%; height: 4.1%; }
+#inventory.fashion #inv-close { left: 89.3%; top: 4%; width: 9.3%; height: 6.2%; }
+#inventory.fashion .inv-foot { left: 31.2%; top: 91.8%; width: 35.8%; height: 3.5%; }
 #fashion-grid {
-  position: absolute; left: 8.6%; top: 66.6%; width: 83.1%; height: 19.7%;
-  display: none; grid-template-columns: repeat(10, 1fr); grid-template-rows: repeat(3, 1fr); column-gap: 0.89%; row-gap: 4.6%;
+  position: absolute; left: 6.4%; top: 67.1%; width: 87.4%; height: 20.3%;
+  display: none; grid-template-columns: repeat(10, 1fr); grid-template-rows: repeat(3, 1fr); column-gap: 0.6%; row-gap: 1.6%;
 }
-#fashion-worn {
-  position: absolute; left: 9%; top: 12%; width: 82%; height: 43%; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 4%;
-  padding: 2%; box-sizing: border-box; background: rgba(12, 9, 6, 0.88); border: 1px solid #6a5434; border-radius: 6px;
-}
+#fashion-worn { position: absolute; inset: 0; display: none; pointer-events: none; }
+#fashion-worn > * { position: absolute; box-sizing: border-box; }
+#fashion-worn .cell { pointer-events: auto; }
 #inventory.fashion #bag-grid, #inventory.fashion #equip-slots, #inventory.fashion .inv-sort { display: none; }
+#inventory.fashion #fashion-grid, #inventory.fashion #fashion-worn { display: block; }
 #inventory.fashion #fashion-grid { display: grid; }
-#inventory.fashion #fashion-worn { display: flex; }
-.fashion-head { font-family: 'Cinzel', 'Kanit', serif; font-weight: 600; font-size: clamp(11px, calc(var(--inv-w) * 0.028), 15px); color: var(--gold-hi); }
-.fashion-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4% 3%; width: 92%; }
-.fashion-slot { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
-.fashion-slot .cell { width: 100%; aspect-ratio: 3 / 2; height: auto; }
-.fashion-slot .cell.empty { background: rgba(8, 6, 4, 0.5); border: 1px dashed #5a4a30; }
-.fashion-slot-name { font-size: clamp(9px, calc(var(--inv-w) * 0.021), 12px); color: var(--ink-dim); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.fashion-note { font-size: clamp(9px, calc(var(--inv-w) * 0.021), 12px); color: var(--ink-dim); text-align: center; }
+.fashion-head, .fashion-slot-name { display: grid; place-items: center; color: #2a1a08; line-height: 1; white-space: nowrap; overflow: hidden; }
+.fashion-head { font-family: 'Cinzel', 'Kanit', serif; font-weight: 700; font-size: clamp(10px, calc(var(--inv-w) * 0.026), 15px); }
+.fashion-slot-name { font-weight: 600; font-size: clamp(8px, calc(var(--inv-w) * 0.019), 11px); }
+#fashion-worn .cell { width: auto; height: auto; background: none; border-color: transparent; }
+.fashion-note { display: grid; place-items: center; text-align: center; font-size: clamp(8px, calc(var(--inv-w) * 0.019), 12px); color: #d8c8a8; text-shadow: 0 1px 2px #000; line-height: 1.15; }
 #fashion-grid .cell { width: 100%; height: 100%; background: rgba(8, 6, 4, 0.35); border-color: transparent; overflow: hidden; }
 #fashion-grid .cell.empty { background: none; }
 :is(#fashion-grid, #fashion-worn) .cell:not(.empty) { border-color: var(--rc); }
-:is(#fashion-grid, #fashion-worn, #fashion-detail) .fashion-cell .cos-pic { width: 92%; height: 92%; }
+/* Pinned inside the slot: a % height doesn't resolve in the grid cell, so a square picture spilled out of a wide slot. */
+:is(#fashion-grid, #fashion-worn, #fashion-detail) .fashion-cell .cos-pic { position: absolute; left: 4%; top: 4%; width: 92%; height: 92%; box-sizing: border-box; }
 :is(#fashion-grid, #fashion-worn, #fashion-detail) .fashion-cell .cos-pic-orb { gap: 8%; }
 :is(#fashion-grid, #fashion-worn, #fashion-detail) .fashion-cell .cos-pic-orb i { width: 22%; height: auto; aspect-ratio: 1; }
 #fashion-grid .fashion-cell .cos-pic-title { font-size: 7px; }
