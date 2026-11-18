@@ -42,6 +42,8 @@ function toPaperUi(text: string): string {
 export function usePaperUi(): void {
   if (paperUi) return;
   paperUi = true;
+  // CSS that has to differ for the paper pictures (their slots sit elsewhere), e.g. the bag grid.
+  document.documentElement.classList.add('paper-ui');
   const fix = (rules: CSSRuleList): void => {
     for (const rule of Array.from(rules)) {
       if (rule instanceof CSSStyleRule) {
