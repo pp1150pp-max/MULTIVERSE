@@ -78,6 +78,10 @@ const MAPS = {
     // The three stalls again, seen from behind (they face the fountain, away from the camera): these replace the
     // first three cells of market.png, so this line comes after it.
     ['market_backs.png', 'props', { cols: 3, rows: 1, height: 256, names: ['mk_goods_stall', 'mk_auction_booth', 'mk_veg_stall'] }],
+    // Round 6b (owner 2026-11-19): each top wall's whole row of attached townhouses as one picture, sheared so its foot
+    // runs at the game's own slope for a world axis (World ISO_DIR), like the walls (HUB.md 7.5).
+    ['row_left_long.png', 'strip', { out: 'row_left_long', rise: true, width: 1600 }],
+    ['row_right_long.png', 'strip', { out: 'row_right_long', rise: false, width: 1600 }],
     // Low things along the bottom two walls (HUB.md 6): skipped until the sheet is there.
     ['town2_low.png', 'props', { cols: 4, rows: 2, height: 256, names: ['low_stall_a', 'low_stall_b', 'garden_bed', 'hedge_a', 'hedge_b', 'house_back_a', 'house_back_b', 'woodpile'] }],
     ['town2_props.png', 'props', { cols: 4, rows: 3, height: 256, names: ['town_fountain', 'quest_board', 'crystal_stall', 'lamp_post', 'bench_a', 'bench_b', 'planter', 'banner_pole', 'crates', 'barrels', 'flower_box', 'potted_tree'] }],
@@ -278,6 +282,35 @@ async function planks(img, o, label) {
   await save(sharp({ create: { width: W, height: H, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).composite(layers), `props/${o.out}.png`);
 }
 
+/**
+ * A long row seen along a world axis: its bottom edge is fitted with a straight line (the middle 70% of the columns)
+ * and the picture is sheared up or down until that line has the slope a world axis has on screen. The camera looks
+ * down ISO_DIR (1, 1.45, 1), so a world axis climbs sin(elevation) = 1.45 / √(1 + 1.45² + 1) ... per unit across.
+ * `rise`: the row climbs to the right (the top-left wall), else it falls.
+ */
+async function strip(img, o, label) {
+  const [x0, y0, x1, y1] = tight(img, [0, 0, img.w, img.h], label);
+  const xs = [];
+  const ys = [];
+  for (let x = Math.round(x0 + (x1 - x0) * 0.15); x < x0 + (x1 - x0) * 0.85; x++) {
+    for (let y = y1 - 1; y >= y0; y--) if (img.d[(y * img.w + x) * 4 + 3]) { xs.push(x); ys.push(y); break; }
+  }
+  const n = xs.length;
+  const mx = xs.reduce((a, b) => a + b, 0) / n;
+  const my = ys.reduce((a, b) => a + b, 0) / n;
+  let sxy = 0, sxx = 0;
+  for (let i = 0; i < n; i++) { sxy += (xs[i] - mx) * (ys[i] - my); sxx += (xs[i] - mx) ** 2; }
+  const slope = sxy / sxx;
+  const want = (o.rise ? -1 : 1) * Math.sin(Math.atan2(1.45, Math.SQRT2));
+  const k = want - slope;
+  console.log(`  ${label}: foot slope ${slope.toFixed(3)} → ${want.toFixed(3)}`);
+  const sheared = await crop(img, [x0, y0, x1, y1])
+    .affine([[1, 0], [k, 1]], { background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png().toBuffer();
+  const t = await sharp(sheared).trim({ threshold: 1 }).png().toBuffer();
+  await save(sharp(t).resize({ width: o.width, kernel: 'lanczos3' }), `props/${o.out}.png`);
+}
+
 /** A repeating ground tile: shrunk to 1024 square, its edges blended into the opposite ones so it repeats without a seam. */
 async function ground(file, o) {
   const N = 1024;
@@ -321,6 +354,7 @@ async function main() {
       const img = key(await readRaw(src), 40, o.bg);
       if (kind === 'props') await props(img, o, file);
       else if (kind === 'planks') await planks(img, o, file);
+      else if (kind === 'strip') await strip(img, o, file);
       else await atlas(img, o, file);
     }
   }

@@ -551,7 +551,7 @@ export class World {
     this.addPieces(mulberry32(terrain.zone.seed + 31));
 
     // Anything taller than a player can hide one, so it turns see-through too (not only trees and the town).
-    for (const p of this.props) this.addProp(p.key, p.x, p.z, p.height, p.fade || p.height >= FADE_MIN_HEIGHT, p.flip);
+    for (const p of this.props) this.addProp(p.key, p.x, p.z, p.height, !p.solid && (p.fade || p.height >= FADE_MIN_HEIGHT), p.flip);
     const fire = terrain.props.find((p) => p.key === 'campfire');
     if (fire) this.flames.push(this.glow(fire.x, 0.5, fire.z, '#ffa040', 0.55));
     // Each portal glows like the land it leads to; the way back to town glows gold.
