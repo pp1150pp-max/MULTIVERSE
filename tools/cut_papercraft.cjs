@@ -81,6 +81,10 @@ const MAPS = {
     // runs at the game's own slope for a world axis (World ISO_DIR), like the walls (HUB.md 7.5).
     ['row_left_long.png', 'strip', { out: 'row_left_long', rise: true, width: 1600 }],
     ['row_right_long.png', 'strip', { out: 'row_right_long', rise: false, width: 1600 }],
+    // Each seller's own half-ellipse of stalls (HUB.md 7.6): main stall from behind, a wing stall from the front and one
+    // from behind, a table, then four odds and ends.
+    ['market_left.png', 'props', { cols: 4, rows: 2, height: 256, names: ['ml_main_back', 'ml_wing_front', 'ml_wing_back', 'ml_table', 'ml_cart', 'ml_barrels', 'ml_sacks', 'ml_crates'] }],
+    ['market_right.png', 'props', { cols: 4, rows: 2, height: 256, names: ['mr_main_back', 'mr_wing_front', 'mr_wing_back', 'mr_table', 'mr_wagon', 'mr_strongbox', 'mr_chests', 'mr_rugs'] }],
     // Low things along the bottom two walls (HUB.md 6): skipped until the sheet is there.
     ['town2_low.png', 'props', { cols: 4, rows: 2, height: 256, names: ['low_stall_a', 'low_stall_b', 'garden_bed', 'hedge_a', 'hedge_b', 'house_back_a', 'house_back_b', 'woodpile'] }],
     ['town2_props.png', 'props', { cols: 4, rows: 3, height: 256, names: ['town_fountain', 'quest_board', 'crystal_stall', 'lamp_post', 'bench_a', 'bench_b', 'planter', 'banner_pole', 'crates', 'barrels', 'flower_box', 'potted_tree'] }],
