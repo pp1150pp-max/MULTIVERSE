@@ -121,18 +121,21 @@ const GOLD: [string, string] = ['#fff6c8', '#ffcf5a'];
 const RED: [string, string] = ['#ffd0c8', '#ff3a2a'];
 /** Sparks thrown forward along the swing (the emitter is turned to the effect's angle). */
 const fan = (n: number, speed: [number, number], c: [string, string], spread = 0.7, extra: Partial<Recipe> = {}): Recipe => ({
-  dir: true, tex: 'spark', life: iv(0.15, 0.32), speed: iv(...speed), size: cv(0.1), bursts: n, stretched: 0.06,
+  dir: true, tex: 'spark', life: iv(0.2, 0.4), speed: iv(...speed), size: iv(0.2, 0.34), bursts: n,
   shape: new ConeEmitter({ radius: 0.15, angle: spread, thickness: 1 }), behaviors: [grad([[c[0], 0], [c[1], 1]]), down(3)], ...extra,
 });
 /** Sparks flying out every way. */
-const spray = (n: number, speed: [number, number], c: [string, string], g = 3): Recipe => sparks(n, speed, c[0], c[1], g);
+const spray = (n: number, speed: [number, number], c: [string, string], g = 3): Recipe => ({
+  tex: 'spark', life: iv(0.3, 0.6), speed: iv(...speed), size: iv(0.18, 0.3), bursts: n, shape: new SphereEmitter({ radius: 0.2 }),
+  behaviors: [grad([[c[0], 0], [c[1], 1]]), down(g)],
+});
 /** Light motes lifting off the ground round a point: the glow of a buff. */
 const rise = (n: number, radius: number, c: [string, string], secs = 0.1): Recipe => ({
-  flat: true, duration: secs, life: iv(0.6, 1.1), speed: iv(0.3, 0.9), size: iv(0.08, 0.16), bursts: n,
+  flat: true, duration: secs, life: iv(0.6, 1.1), speed: iv(0.3, 0.9), size: iv(0.16, 0.28), bursts: n,
   shape: new CircleEmitter({ radius, thickness: 1 }), behaviors: [grad([[c[0], 0], [c[1], 1]]), up(1.2)],
 });
 const glowRing = (n: number, speed: [number, number], c: [string, string]): Recipe =>
-  ring(n, speed, [0.22, 0.4], [grad([[c[0], 0], [c[1], 1]]), shrink()], { tex: 'spark', stretched: 0.05 });
+  ring(n, speed, [0.3, 0.5], [grad([[c[0], 0], [c[1], 1]]), shrink()], { tex: 'spark' });
 const chip = (n: number, color: string): Recipe => ({ ...debris(n, color, [4, 8], 0.9), life: iv(0.4, 0.7), size: iv(0.1, 0.22) });
 
 export class QuarksFx {
@@ -493,17 +496,17 @@ export class QuarksFx {
     const SUN: [string, string] = ['#fff6c8', '#ffb020'];
     /** A ring of sparks on the circle's edge, lifting; scaled to the radius. */
     const rim = (n: number, c: [string, string], extra: Partial<Recipe> = {}): Recipe => ({
-      flat: true, tex: 'spark', life: iv(0.5, 0.9), speed: iv(0.2, 0.8), size: iv(0.1, 0.2), bursts: n,
+      flat: true, tex: 'spark', life: iv(0.5, 0.9), speed: iv(0.2, 0.8), size: iv(0.2, 0.34), bursts: n,
       shape: new CircleEmitter({ radius: 1, thickness: 0.12 }), behaviors: [grad([[c[0], 0], [c[1], 1]]), up(2), shrink()], ...extra,
     });
     /** Motes all over a radius-1 circle, lifting. */
     const motes = (n: number, c: [string, string]): Recipe => ({
-      flat: true, life: iv(0.7, 1.2), speed: iv(0.1, 0.5), size: iv(0.08, 0.16), bursts: n,
+      flat: true, life: iv(0.7, 1.2), speed: iv(0.1, 0.5), size: iv(0.16, 0.28), bursts: n,
       shape: new CircleEmitter({ radius: 1, thickness: 1 }), behaviors: [grad([[c[0], 0], [c[1], 1]]), up(1.2)],
     });
     /** A field that keeps going for as long as its zone lasts (Effects ends it): `rate` per second on a radius-1 circle. */
     const field = (rate: number, extra: Partial<Recipe>): Recipe => ({
-      flat: true, looping: true, duration: 60, life: iv(0.6, 1.2), speed: iv(0.2, 0.7), size: iv(0.08, 0.16), rate,
+      flat: true, looping: true, duration: 60, life: iv(0.6, 1.2), speed: iv(0.2, 0.7), size: iv(0.16, 0.28), rate,
       shape: new CircleEmitter({ radius: 1, thickness: 1 }), ...extra, behaviors: extra.behaviors ?? [],
     });
     const smokeFan = (n: number, c: QVector4, extra: Partial<Recipe> = {}): Recipe =>
