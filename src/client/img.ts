@@ -28,6 +28,8 @@ const PAPER_UI = new Set([
 const UI_PATH = /sprites\/(ui|icons)\/([a-z0-9_/]+)\.(png|webp)/g;
 
 let paperUi = false;
+/** Whether the paper UI is on (usePaperUi). */
+export const paperUiOn = (): boolean => paperUi;
 
 /** `sprites/ui|icons/x.png` → `sprites/paper/ui|icons/x.png` for every file in the text that has a paper version. */
 function toPaperUi(text: string): string {

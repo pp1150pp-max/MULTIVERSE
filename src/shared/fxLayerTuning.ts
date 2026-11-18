@@ -38,6 +38,14 @@ export interface FxLayerConfig {
   zoneCircles: boolean;
   /** × the magic circles' brightness. */
   circleGlow: number;
+  /** Paper art (owner 2026-11-18): × the size of a title set's name frame and of its chat bubble. */
+  paperPlate: number;
+  paperBubble: number;
+  /** Paper aura footprint length, × the aura's own step size (cosmetics tab). */
+  paperFoot: number;
+  /** Paper enhancement orbs: grey from which a part takes the accent colour (band, star), and the darkest shading. */
+  paperOrbLight: number;
+  paperOrbShade: number;
 }
 
 export type FxLayerTuning = Partial<FxLayerConfig>;
@@ -52,6 +60,11 @@ export const FX_LAYER_RANGE = {
   maxNums: [10, 200],
   mergeSec: [0, 1],
   circleGlow: [0, 3],
+  paperPlate: [0.5, 2],
+  paperBubble: [0.5, 2],
+  paperFoot: [0.3, 4],
+  paperOrbLight: [0.8, 1],
+  paperOrbShade: [0, 1],
 } as const satisfies Record<string, readonly [number, number]>;
 export type FxLayerNum = keyof typeof FX_LAYER_RANGE;
 export const FX_LAYER_NUMS = Object.keys(FX_LAYER_RANGE) as FxLayerNum[];
@@ -65,6 +78,11 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   maxNums: 'ตัวเลขบนจอสูงสุด',
   mergeSec: 'รวมเลขที่โดนในช่วง (วิ)',
   circleGlow: '× ความสว่างวงเวท',
+  paperPlate: '× ขนาดกรอบชื่อ',
+  paperBubble: '× ขนาดฟองแชท',
+  paperFoot: 'ขนาดรอยเท้าออร่า (× ขนาดรอยเท้าของชิ้น)',
+  paperOrbLight: 'ลูกแก้ว: ส่วนที่ขาวกว่านี้เป็นสีเน้น',
+  paperOrbShade: 'ลูกแก้ว: ความสว่างส่วนมืดสุด',
 };
 
 const FX_LAYER_BOOLS = ['enabled', 'debuffs', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'circles', 'zoneCircles'] as const;
@@ -84,6 +102,7 @@ export function codeFxLayer(): FxLayerConfig {
   return {
     enabled: true, debuffs: true, glow: 1, ground: 1, particles: 1, shake: 1, hitstopMs: 60, crit: 1,
     maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true, circles: true, zoneCircles: true, circleGlow: 1,
+    paperPlate: 1, paperBubble: 1, paperFoot: 1.6, paperOrbLight: 0.95, paperOrbShade: 0.15,
   };
 }
 const CODE = codeFxLayer();

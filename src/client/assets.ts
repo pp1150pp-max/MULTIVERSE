@@ -440,6 +440,34 @@ async function loadFxSheet(name: FxSheet): Promise<void> {
   }
 }
 
+/**
+ * Paper cosmetics drawn in code (tools/cut_paper_extras.cjs), loaded only with the paper switch on: per aura the ring
+ * laid under the character and one footprint, and the white enhancement-orb atlas the orbs are tinted from.
+ */
+export const paperTex: { auras: Record<string, { ring: THREE.Texture; foot: THREE.Texture }>; orbs?: THREE.Texture } = { auras: {} };
+
+async function loadPaperCosmetics(): Promise<void> {
+  const smooth = (t: THREE.Texture, srgb = true): THREE.Texture => {
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    t.magFilter = THREE.LinearFilter;
+    t.minFilter = THREE.LinearFilter;
+    t.generateMipmaps = false;
+    return t;
+  };
+  await Promise.all([
+    ...COSMETICS.filter((c) => c.slot === 'aura').map(async (c) => {
+      try {
+        const [ring, foot] = await Promise.all([loadTexture(`${BASE}paper/fx/${c.id}_ring.png`), loadTexture(`${BASE}paper/fx/${c.id}_foot.png`)]);
+        paperTex.auras[c.id] = { ring: smooth(ring), foot: smooth(foot) };
+      } catch {
+        // No paper picture: the old glow.
+      }
+    }),
+    // Raw greys: the orb shader reads them as they are in the file (like its code-made atlas).
+    loadTexture(`${BASE}paper/fx/orbs.png`).then((t) => { paperTex.orbs = smooth(t, false); }, () => undefined),
+  ]);
+}
+
 /** Ground decals laid flat under things. `death_crater` is colourless shade, so the map's ground shows through. */
 export const decalTex: { deathCrater?: THREE.Texture } = {};
 
@@ -617,6 +645,7 @@ async function loadAssets(): Promise<void> {
     // Gunslinger
     ...(['gs_skill', 'gs_gear', 'gs_passive'] as const).map((n) => loadFxSheet(n)),
     loadDecals(),
+    ...(paperMaps ? [loadPaperCosmetics()] : []),
     ...(['grass', 'dirt', 'water', 'marsh', 'mud', 'pave', 'brick', 'snow', 'snow_path', 'ice', 'ash_rock', 'ash_path', 'lava',
       'room_forest', 'room_marsh', 'room_snow', 'room_volcano'] as const).map((n) => loadGroundTile(n)),
     ...Object.entries(ANIM_SET_DIRS).map(([key, dir]) => loadCharSet(key, dir)),
