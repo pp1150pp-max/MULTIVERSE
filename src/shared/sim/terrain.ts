@@ -109,7 +109,7 @@ export const HUB_FOUNTAIN_RADIUS = 3.9;
 /** The hub's rows of townhouses: this deep from the wall in. */
 export const HUB_ROW_DEPTH = 3.4;
 /** Length of each row along its wall. */
-export const HUB_ROW_LENGTH = 32;
+export const HUB_ROW_LENGTH = 18;
 /** Width / height of each row's picture (sprites/paper/props, cut by tools/cut_papercraft.cjs hub). */
 const HUB_ROW_ASPECT: Record<string, number> = { row_left_long: 1600 / 1351, row_right_long: 1600 / 1440 };
 
@@ -286,42 +286,41 @@ export class Terrain {
     // Top-right wall (z = −R), the row along x: its near end is the top gate's (x = −L/2).
     strip('row_right_long', 0, -R + D / 2, true);
     const rightDoor = (f: number) => ({ x: s.x - L / 2 + f * L, z: s.z - R + D + 1.8 });
-    this.npcPos.crystal = leftDoor(0.41);
-    this.npcPos.keeper = leftDoor(0.55);
+    this.npcPos.crystal = leftDoor(0.3);
+    this.npcPos.keeper = leftDoor(0.62);
     this.npcPos.blacksmith = rightDoor(0.33);
     const guild = rightDoor(0.58);
     this.npcPos.seeker = { x: guild.x - 1, z: guild.z };
     at('quest_board', guild.x + 1.8 - s.x, guild.z + 0.6 - s.z, 3.6, 0.8);
 
-    // ---- The market, split either side of the road to the bottom gate: the stalls lie along their wall and face the
-    // fountain; their sellers stand in front of them, on the plaza side.
-    // Two rows of stalls along each bottom wall (owner 2026-11-19: the bottom looked empty), the seller at the front of
-    // the first row with room round them, the road to the bottom gate left open. `t` runs along the wall from the
-    // side gate's end (−) toward the bottom gate's (+), so both halves read the same way.
-    const market: [string, number, number, number, number][] = [
-      // Against the wall.
-      ['mk_handcart', -12.4, 2.6, 1.7, 1], ['barrels', -9.8, 2, 1.6, 0.8], ['SELLER', -6.6, 3, 3.4, 1.4],
-      ['mk_sacks', -3.2, 2.4, 1.6, 0.9], ['mk_veg_stall', 0, 3, 3.4, 1.4], ['mk_goods_stall', 3.6, 3, 3.4, 1.4],
-      ['crates', 6.6, 2.2, 1.6, 0.8], ['mk_veg_stall', 9.6, 3, 3.4, 1.4], ['mk_sacks', 12.2, 2.4, 1.4, 0.8],
-      // The second row, in front of it (narrower: the side roads cut the corners).
-      ['crates', -9.4, 6.4, 1.6, 0.8], ['mk_potion_table', -7, 7.2, 1.6, 1], ['potted_tree', 0.6, 7, 2.4, 0.6],
-      ['mk_tag_table', 3.2, 7.2, 1.6, 1], ['barrels', 6, 6.6, 1.6, 0.8], ['planter', 8.4, 6.6, 1.6, 0.7],
+    // ---- The market (owner 2026-11-19): the merchant on the bottom-left wall and the broker on the bottom-right, each
+    // in a half-ellipse of stalls open toward the fountain, the road to the bottom gate between them left clear.
+    // The stall pictures run along z and come as fronts (*_front, open toward +x, the camera's side) and backs (open
+    // toward −x); mirrored they run along x and open toward +z (fronts) or −z (backs). Every stall opens toward its
+    // seller, who stands in the middle facing the fountain.
+    // [key, mirrored, x, z, height, solid radius], around a seller at (0, 0) whose back is to the wall at +z.
+    const ring: [string, boolean, number, number, number, number][] = [
+      ['STALL', true, 0, 3.4, 3.4, 1.4], // behind them, against the wall, open toward −z (them and the fountain)
+      ['WING_A', false, -3.8, 1.2, 3.4, 1.4], // on their −x side, open toward +x (them)
+      ['WING_B', false, 3.8, 1.2, 3.4, 1.4], // on their +x side, open toward −x (them)
+      ['TABLE', false, -5.4, -1.6, 1.6, 0.9], ['CART', false, 5.4, -1.6, 1.7, 1],
+      ['barrels', false, -3.4, 4.4, 1.6, 0.8], ['mk_sacks', false, 3.4, 4.4, 1.6, 0.9],
     ];
-    const half = (side: 'X' | 'Z', sellerKey: string, extra: [string, number, number, number, number][]) => {
-      for (const [key0, t, d, h, c] of [...market, ...extra]) {
-        // Every stall here is a picture of its back: they all face the fountain (owner 2026-11-19).
-        const key = key0 === 'SELLER' ? sellerKey : key0;
-        // Bottom-right wall (x = +R): t along z from the right gate's end. Bottom-left wall (z = +R): t along x from
-        // the left gate's end. The pictures run along z; on the bottom-left wall they're mirrored.
-        const [x, z] = side === 'X' ? [R - d, t] : [t, R - d];
-        at(key, x, z, h, c, false, side === 'Z');
+    const stalls = (seller: Vec2, alongX: boolean, keys: Record<string, string>) => {
+      for (const [k, mirrored, u, v, h, c] of ring) {
+        const key = keys[k] ?? k;
+        // alongX: the seller's back is to the bottom-left wall (+z), so (u, v) is (x, z); otherwise to the bottom-right
+        // wall (+x): (u, v) turns into (z, x), and so does which way each picture runs (mirrored flips).
+        const [dx, dz] = alongX ? [u, v] : [v, u];
+        at(key, seller.x - s.x + dx, seller.z - s.z + dz, h, c, false, alongX ? mirrored : !mirrored && key.startsWith('mk_') && !/sacks|barrels/.test(key));
       }
     };
-    // The merchant's half, on the bottom-left wall (z = +R), and the broker's on the bottom-right (x = +R).
-    half('Z', 'mk_goods_stall', [['mk_wagon', -2.6, 7, 2.8, 1.4]]);
-    half('X', 'mk_auction_booth', [['mk_wagon', -2.6, 7, 2.8, 1.4]]);
-    this.npcPos.merchant = { x: s.x - 6.6, z: s.z + R - 5.6 };
-    this.npcPos.broker = { x: s.x + R - 5.6, z: s.z - 6.6 };
+    this.npcPos.merchant = { x: s.x, z: s.z + R - 6 };
+    stalls(this.npcPos.merchant, true, { STALL: 'mk_goods_stall', WING_A: 'mk_veg_front', WING_B: 'mk_veg_stall', TABLE: 'mk_potion_table', CART: 'mk_handcart' });
+    this.npcPos.broker = { x: s.x + R - 6, z: s.z };
+    // On the bottom-right wall the wings run along x: the one on the −z side opens toward +z (a mirrored front),
+    // the one on the +z side toward −z (a mirrored back); the booth behind runs along z, open toward −x (a back).
+    stalls(this.npcPos.broker, false, { STALL: 'mk_auction_booth', WING_A: 'mk_goods_front', WING_B: 'mk_goods_stall', TABLE: 'mk_tag_table', CART: 'mk_wagon' });
 
     // Round the plaza: a lamp post either side of each road where it comes in, a few benches and planters.
     for (const road of [45, 135, 225, 315]) {
@@ -333,7 +332,7 @@ export class Terrain {
     }
     for (const deg of [160, 290]) polar('planter', deg, HUB_PLAZA_RADIUS + 1.6, 1.6, 0.7);
     // The knight's statue beside the top road (to its right on screen).
-    polar('town_statue', 238, HUB_PLAZA_RADIUS + 2.2, 3.8, 0.8);
+    polar('town_statue', 212, HUB_PLAZA_RADIUS + 2.2, 3.8, 0.8);
 
     // The wall kit (tools/cut_hub.cjs): one scale for all pieces, U world units per pixel. Each wall
     // picture's foot runs at the camera's slope for a world axis, so copies line up end to end, one end
