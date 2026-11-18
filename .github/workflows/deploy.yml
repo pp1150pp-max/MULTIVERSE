@@ -52,13 +52,19 @@ jobs:
           KNOWN: ${{ secrets.VPS_KNOWN_HOSTS }}
         run: |
           install -d -m 700 ~/.ssh
-          printf '%s\n' "$KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
-          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          # Secrets set from Windows PowerShell can carry CR line ends (and a BOM): ssh rejects both.
+          clean() { printf '%s\n' "$1" | tr -d '\r' | sed '1s/^\xEF\xBB\xBF//'; }
+          clean "$KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          clean "$KNOWN" | grep -v '^#' > ~/.ssh/known_hosts || true
+          # Public facts only (fingerprints), to see what went wrong if the next step fails.
+          ssh-keygen -l -f ~/.ssh/known_hosts || echo "VPS_KNOWN_HOSTS อ่านไม่ได้ (ตั้งใหม่ด้วย ssh-keyscan)"
+          if ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null; then echo "deploy key อ่านได้"; else echo "VPS_DEPLOY_KEY อ่านไม่ได้"; fi
       - name: ${{ inputs.action }}
         env:
           HOST: ${{ secrets.VPS_HOST }}
           ACTION: ${{ inputs.action }}
         run: |
+          HOST=$(printf '%s' "$HOST" | tr -d '\r\n\t ')
           CMD="$ACTION"
           [ "$ACTION" = deploy ] && CMD="deploy $GITHUB_SHA"
           ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o IdentitiesOnly=yes -o ServerAliveInterval=30 "multiverse@$HOST" "$CMD"
