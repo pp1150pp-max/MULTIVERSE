@@ -117,6 +117,17 @@ interface Session {
   auto: AutoPlay | null;
   /** When the last input message arrived (a hidden browser tab stops sending them). */
   lastInputAt: number;
+  /**
+   * The clicked spot the browser is walking to (InputMsg.to, checked), with the epoch it was given in: once the
+   * inputs stop (hidden tab) the server walks there itself (Balance.walkHidden, intentOf). Null = none.
+   */
+  walkTo: Vec2 | null;
+  walkEpoch: number;
+  /** The server is walking the character to its clicked spot (the browser follows, as during Auto). */
+  serverWalk: boolean;
+  /** Where the server walk last made progress, and when (given up after WALK_STUCK_MS without). */
+  walkAnchor: Vec2;
+  walkAnchorAt: number;
   /** Position the client reported and the server accepted, applied on the next tick. */
   pendingPos: Vec2 | null;
   lastPosAt: number;
@@ -270,6 +281,9 @@ function serverMoves(p: Player): boolean {
 
 /** Input older than this is treated as "let go of everything" so a stalled client doesn't keep walking. */
 const INPUT_STALE_MS = 500;
+/** A server walk to a clicked spot (hidden tab) gives up when the character moved less than WALK_STUCK_DIST in this long (as src/client/walkTo.ts). */
+const WALK_STUCK_MS = 800;
+const WALK_STUCK_DIST = 0.1;
 /** The server log lists every online player's average ping this often. */
 const PING_LOG_MS = 60_000;
 /** A reported ping above this is logged right away, at most once per PING_WARN_EVERY_MS per player. */
@@ -662,7 +676,7 @@ export class GameWorld {
     const s: Session = {
       ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId, sim, player,
       move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null, recall: false,
-      auto: null, lastInputAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', lastTut: '', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', delta, lastMe: new Map(), seenP: new Map(), seenM: new Map(), outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, lastCashAt: -Infinity, saveDue: null,
+      auto: null, lastInputAt: 0, walkTo: null, walkEpoch: 0, serverWalk: false, walkAnchor: { x: 0, z: 0 }, walkAnchorAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', lastTut: '', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', delta, lastMe: new Map(), seenP: new Map(), seenM: new Map(), outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, lastCashAt: -Infinity, saveDue: null,
       ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, deflate: ws.extensions.includes('permessage-deflate'), staff: !acc.guest && ['owner', 'gm'].includes(this.db.adminRole(acc.id) ?? ''), pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity, blockTrades: false,
@@ -730,6 +744,7 @@ export class GameWorld {
     this.save(s);
     this.wireGone += this.wireDelta(s.ws);
     s.awayAt = Date.now();
+    this.endWalk(s);
     s.outbox = [];
     s.move = null;
     s.basic = false;
@@ -974,8 +989,14 @@ export class GameWorld {
     if (typeof m.seq === 'number' && Number.isSafeInteger(m.seq)) s.lastSeq = m.seq;
 
     const pos = vec(m.pos);
+    // Back from a hidden tab: an input without a position means the browser saw the server walking and now
+    // follows it (glides onto our position), so the walk ends here and the browser walks the rest itself.
+    // Until then its positions are from before (ignored below), so it isn't pulled back by them.
+    if (s.serverWalk && !pos) this.endWalk(s);
+    if (!s.serverWalk) this.takeWalkTo(s, m.to);
+
     const now = performance.now();
-    if (!pos || serverMoves(p) || s.auto) {
+    if (!pos || serverMoves(p) || s.auto || s.serverWalk) {
       s.lastPosAt = now;
       return;
     }
@@ -986,6 +1007,63 @@ export class GameWorld {
       s.pendingPos = pos;
       s.lastPosAt = now;
     }
+  }
+
+  /**
+   * Keeps the clicked spot the browser is walking to (InputMsg.to): finite numbers inside the map, moved
+   * out of anything solid the way the browser does it (Terrain.standSpot); anything else drops it.
+   */
+  private takeWalkTo(s: Session, to: unknown): void {
+    s.walkTo = null;
+    const v = vec(to);
+    if (!v) return;
+    const terrain = s.sim.terrain;
+    if (Math.abs(v.x) > terrain.bound || Math.abs(v.z) > terrain.bound) return;
+    const p = s.player;
+    const spot = terrain.standSpot(v.x, v.z, p.radius, p);
+    if (!spot) return;
+    s.walkTo = spot;
+    s.walkEpoch = s.epoch;
+  }
+
+  /** Ends a server walk to a clicked spot (hidden tab), and forgets the spot. */
+  private endWalk(s: Session): void {
+    s.walkTo = null;
+    if (!s.serverWalk) return;
+    s.serverWalk = false;
+    s.player.moveTarget = null;
+  }
+
+  /**
+   * Hidden tab (owner 2026-11-18): the inputs stopped while the player was walking to a clicked spot, so the
+   * server walks the rest of the way (Player.moveTarget, as Auto does: straight on, sliding round a single
+   * round obstacle). Only with a clicked spot: a stalled connection without one still stops the character.
+   * Ends on arriving, being stuck WALK_STUCK_MS, dying, a new map / warp / respawn (epoch), a trade,
+   * Auto, a dropped connection or the /admin switch. Returns the spot to start walking to on this tick.
+   */
+  private serverWalkTo(s: Session, fresh: boolean): Vec2 | null {
+    const p = s.player;
+    const can = currentBalance().walkHidden && p.alive && !s.auto && s.awayAt === null && s.walkEpoch === s.epoch && !this.trades.busy(s.charId);
+    const now = performance.now();
+    if (s.serverWalk) {
+      if (!can || !p.moveTarget) {
+        this.endWalk(s);
+        return null;
+      }
+      if (Math.hypot(p.x - s.walkAnchor.x, p.z - s.walkAnchor.z) > WALK_STUCK_DIST || p.atkRootT > 0) {
+        s.walkAnchor = { x: p.x, z: p.z };
+        s.walkAnchorAt = now;
+      } else if (now - s.walkAnchorAt > WALK_STUCK_MS) this.endWalk(s);
+      return null;
+    }
+    if (fresh || !s.walkTo) return null;
+    const to = s.walkTo;
+    s.walkTo = null;
+    if (!can) return null;
+    s.serverWalk = true;
+    s.walkAnchor = { x: p.x, z: p.z };
+    s.walkAnchorAt = now;
+    return to;
   }
 
   /**
@@ -1884,10 +1962,13 @@ export class GameWorld {
     if (!s) return IDLE_INTENT;
     const fresh = performance.now() - s.lastInputAt < INPUT_STALE_MS;
     let it: Intent = {
-      move: fresh ? s.move : null, moveTo: null, aim: s.aim,
+      // Walking to a clicked spot for a hidden tab: the browser's walk keys from before it saw that don't stop it.
+      move: fresh && !s.serverWalk ? s.move : null, moveTo: null, aim: s.aim,
       basic: fresh && s.basic, skills: fresh ? s.skills : [],
       dash: s.dash, potion: s.potion, pos: s.pendingPos, recall: s.recall,
     };
+    const walkTo = this.serverWalkTo(s, fresh);
+    if (walkTo) it.moveTo = walkTo;
     // Auto Play would walk and attack, which cancels the cast at once: using a scroll turns it off (owner).
     if (s.recall && s.auto) {
       s.auto = null;
@@ -2091,7 +2172,7 @@ export class GameWorld {
       ...(Object.keys(p.buffs).length ? { buffs: roundBuffs(p.buffs) } : {}),
       // Slowed (the Bog Witch's poison): the browser walks slower too, or its moves would be refused.
       ...(p.slowT > 0 && p.slowAmt > 0 ? { slow: p.slowAmt } : {}),
-      serverMoves: serverMoves(p) || !!s.auto, epoch: s.epoch, ack: s.lastSeq, buybackLeft: Math.round(p.buybackLeft),
+      serverMoves: serverMoves(p) || !!s.auto || s.serverWalk, epoch: s.epoch, ack: s.lastSeq, buybackLeft: Math.round(p.buybackLeft),
     };
     // Fields that hardly ever change: with delta on, only when they differ from what this browser last got.
     const delta = this.snapDelta && s.delta;
