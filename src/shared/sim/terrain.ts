@@ -308,10 +308,16 @@ export class Terrain {
     ];
     // `set`: the seller's pictures (tools/cut_papercraft.cjs hub, HUB.md 7.6), ml_* or mr_*; `props`: their four odds and ends.
     // Pictures drawn the other way round from the rest (market_right.png's booth), so they mirror the other way.
-    const DRAWN_TURNED = new Set(['mr_main_back']);
+    const DRAWN_TURNED = new Set<string>();
+    const BACKS: Record<string, Record<string, string>> = {
+      ml: { main_back: 'mk_goods_stall', wing_back: 'mk_veg_stall' },
+      mr: { main_back: 'mk_auction_booth', wing_back: 'mk_veg_stall' },
+    };
     const stalls = (seller: Vec2, alongX: boolean, set: string, props: string[]) => {
       for (const [slot, stall, mirrored, u, v, h, c] of ring) {
-        const key = slot.startsWith('P') ? `${set}_${props[Number(slot[1])]}` : `${set}_${slot}`;
+        // The stalls are the ones clearly seen from behind (market_backs.png): in the sellers' own sheets GPT drew the
+        // scalloped canopy edge toward the camera, so their "backs" read as fronts (owner 2026-11-19).
+        const key = slot.startsWith('P') ? `${set}_${props[Number(slot[1])]}` : stall ? BACKS[set][slot] : `${set}_${slot}`;
         // alongX: the seller's back is to the bottom-left wall (+z), so (u, v) is (x, z); otherwise to the bottom-right
         // wall (+x): (u, v) turns into (z, x), and the stalls' pictures turn with it (mirrored flips).
         const [dx, dz] = alongX ? [u, v] : [v, u];
