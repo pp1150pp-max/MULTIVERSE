@@ -322,13 +322,17 @@ export class Terrain {
     this.npcPos.broker = { x: s.x + R - 6, z: s.z };
     stalls(this.npcPos.broker, false, 'mr', ['wagon', 'strongbox', 'chests', 'rugs'], true);
 
-    // Round the plaza: a lamp post either side of each road where it comes in, a few benches and planters.
+    // Each gateway: a lamp post either side of the way through, just inside the wall (owner 2026-11-19), and a banner
+    // pole either side of the road a little further in.
+    const corner = R * Math.SQRT2;
     for (const road of [45, 135, 225, 315]) {
-      for (const side of [-1, 1]) polar('lamp_post', road + side * 8, HUB_PLAZA_RADIUS + 0.8, 3.8, 0.3);
-      // A banner pole either side of the road just inside the gateway.
       const a2 = rad(road);
       const ux = Math.cos(a2), uz = Math.sin(a2);
-      for (const side of [-1, 1]) at('banner_pole', ux * (R * Math.SQRT2 - 4) - uz * side * 3.2, uz * (R * Math.SQRT2 - 4) + ux * side * 3.2, 4, 0.3);
+      const pair = (key: string, along: number, side: number, h: number) => {
+        for (const sd of [-1, 1]) at(key, ux * along - uz * sd * side, uz * along + ux * sd * side, h, 0.3);
+      };
+      pair('lamp_post', corner - 3.7, 2.2, 3.8);
+      pair('banner_pole', corner - 6.7, 2.8, 4);
     }
     for (const deg of [176, 290]) polar('planter', deg, HUB_PLAZA_RADIUS + 1.6, 1.6, 0.7);
     // The knight's statue beside the top road (to its right on screen).
