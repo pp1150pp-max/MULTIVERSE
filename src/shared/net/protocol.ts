@@ -64,6 +64,11 @@ export interface InputMsg {
   potion: 'hp' | 'mp' | null;
   /** Start casting a return scroll. */
   recall?: boolean;
+  /**
+   * The clicked spot the client is walking to (left out = none). If the inputs stop (hidden tab) the
+   * server walks the rest of the way itself (Balance.walkHidden). Older clients never send it.
+   */
+  to?: Vec2;
 }
 
 export type ActionMsg =

@@ -173,6 +173,13 @@ export class PassiveAura {
   }
 }
 
+/**
+ * A zone's `size` is its radius, a magic circle's size the width of its picture, whose outer ring is drawn at 47% of
+ * it (magicCircles.ts): this width puts the outer ring on the skill's edge. It was the radius, so the circle showed
+ * half the skill's reach (owner 2026-11-18).
+ */
+const circleWidth = (radius: number): number => (radius * 2) / 0.94;
+
 /** Lasting zones: frames a second, fade in / out seconds, and how often their extra layer plays again (and for how long). */
 const ZONE_FPS = 8;
 const ZONE_FADE_IN = 0.25;
@@ -391,7 +398,7 @@ export class Effects implements FxApi {
     // A magic circle under the area while it lasts (magicCircles.ts), in the class's colour.
     const circleAt = new THREE.Group();
     circleAt.position.set(x, 0, z);
-    const circle = circlesOn() ? new MagicCircle(circleAt, size * 1.05) : null;
+    const circle = circlesOn() ? new MagicCircle(circleAt, circleWidth(size)) : null;
     if (circle) this.add(circleAt, duration, (k, dt) => {
       circle.set(duration - k * duration > ZONE_FADE_OUT ? zoneCircle(skill) : null);
       circle.update(dt);
@@ -421,7 +428,7 @@ export class Effects implements FxApi {
   private zoneCircle(x: number, z: number, size: number, duration: number, follow?: number | null, skill?: string): void {
     const at = new THREE.Group();
     at.position.set(x, 0, z);
-    const circle = new MagicCircle(at, size, true);
+    const circle = new MagicCircle(at, circleWidth(size), true);
     let t = 0;
     this.add(at, duration, (k, dt) => {
       t += dt;

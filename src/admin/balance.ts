@@ -705,6 +705,12 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         h('label', {}, h('input', { type: 'checkbox', checked: a.offline, onchange: (e: Event) => { a.offline = (e.target as HTMLInputElement).checked; refresh(); } }), ` ${AUTO_OFFLINE_NAME}`),
         num('offlineMin', 1),
       ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.walkHidden, onchange: (e: Event) => { draft.walkHidden = (e.target as HTMLInputElement).checked; refresh(); } }),
+          ' เดินต่อเมื่อสลับแท็บ'),
+      ),
+      h('div', { class: 'muted' }, 'เดินต่อเมื่อสลับแท็บ (ไม่ใช่ Auto): คลิกเดินไปจุดไกลแล้วสลับไปแท็บอื่น/พับจอ server พาเดินต่อจนถึงจุดที่คลิก (เดินตรงไป ไถลอ้อมของกลมชิ้นเดียวได้ ไม่หาทางอ้อมกำแพง ติดแทบไม่ขยับ 0.8 วิ = หยุด) · กลับมาที่แท็บ ตัวเลื่อนไปที่จริงแล้วเดินต่อเอง · ตาย/เปลี่ยนแมพ/วาร์ป/เทรด/หลุด = หยุด · ปิด = แบบเดิม สลับแท็บแล้วตัวหยุด'),
       h('div', { class: 'muted' }, 'หลุดการเชื่อมต่อขณะเปิด Auto (ไม่ได้กดออกเกม): ตัวละครอยู่ในโลกต่อ Auto ฟาร์มเหมือนปกติ (EXP 50%) จนครบเวลา, Auto หยุดตามตัวเลือก (ยาหมด/กระเป๋าเต็ม/ม้วน) หรือตาย แล้วเซฟและออกจากโลก · เข้าเกมใหม่ = ได้ตัวที่กำลังฟาร์มคืน Auto ยังเปิด · ไม่รวม Guest และห้องบอส · ปิดสวิตช์ = คนที่ฟาร์มแบบหลุดอยู่ออกจากโลกทันที'),
     );
   };
