@@ -429,8 +429,8 @@ export const ZONE_HUB: ZoneDef = {
   half: 69,
   seed: 20261108,
   start: { x: 0, z: 0 },
-  // Owner 2026-11-18: a little bigger than the old 17.6, for the shops against the wall.
-  safe: { x: 0, z: 0, half: 18 },
+  // Owner 2026-11-19: bigger than the old 17.6, for the rows of townhouses and the market along the walls.
+  safe: { x: 0, z: 0, half: 20 },
   npcs: true,
   // Top portal to bottom portal, with a bend or two so it isn't a ruler line.
   // Straight out through the gatehouse on each corner of the town, then on to that corner's portal.
