@@ -261,6 +261,10 @@ export class Sim {
   private caster: Player | null = null;
   /** The skill it is (for the client's standing layer of area skills, src/client/zoneProps.ts), or null. */
   private casterSkill: string | null = null;
+  /** The skill running now (a cast, its timers and shots), or null: what a debuff or buff it gives came from. */
+  get castingSkill(): string | null {
+    return this.casterSkill;
+  }
 
   /**
    * Runs `fn` as player `p`'s doing (a cast, a timer it set, its shot flying): the skill effects it plays carry `p`'s
@@ -416,6 +420,9 @@ export class Sim {
       m.weak = Math.min(0.95, Math.max(m.weak, opts.weak));
       m.weakUntil = this.time + (opts.weakT ?? 3);
     }
+    // Its magic circle shows the skill that debuffed it last.
+    const sk = opts.skill?.id ?? this.casterSkill;
+    if (sk && (opts.stun || opts.slow || opts.armorBreak || opts.weak)) m.debuffSkill = sk;
     m.onHit(this, p);
     if (m.hp <= 0) {
       this.killMonster(m);

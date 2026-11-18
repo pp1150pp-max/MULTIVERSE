@@ -51,6 +51,8 @@ export class Monster extends Unit {
 
   /** Its debuffs as the server last sent them (client only, sim/debuffs.ts); the server works them out from the fields above. */
   debuffs = 0;
+  /** The skill whose debuff it got last (server: set on the hit; client: as sent), for its magic circle. '' = none. */
+  debuffSkill = '';
 
   /** True while it has any status from a player: stun, slow, armor break, attack down, burning/poison. */
   hasStatus(now: number): boolean {
