@@ -88,6 +88,7 @@ export class FashionBag {
     this.box.classList.toggle('fashion', on);
     this.tabBag.classList.toggle('active', !on);
     this.tabFashion.classList.toggle('active', on);
+    if (!on) this.pager.classList.add('hidden');
     this.hideTip();
     if (!on) this.closeSheet();
     this.drawn = '';
