@@ -556,6 +556,8 @@ export interface PortraitSource {
   img: CanvasImageSource;
   cw: number;
   ch: number;
+  /** The square of the first cell to draw (x, y, side), when not the whole cell: the paper cells are wider, with room around. */
+  crop?: [number, number, number];
 }
 const portraitSources: Record<string, PortraitSource> = {};
 let menuLoad: Promise<void> | null = null;
@@ -570,13 +572,25 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 }
 
 async function loadPortrait(key: string): Promise<void> {
-  const dir = ANIM_SET_DIRS[key];
-  if (dir) {
+  const base = ANIM_SET_DIRS[key];
+  // With the art switch on, the menu's class pictures are the paper ones too (owner 2026-11-18). Waits for the server's
+  // answer; the cards fill in when it comes.
+  const paper = base && PAPER_CHARS.has(key) && (await paperAnswer);
+  for (const dir of paper ? [`paper/${base}`, base] : base ? [base] : []) {
     try {
       const res = await fetch(`${BASE}${dir}/sprite.json`);
       const m = (await res.json()) as CharManifest;
-      const img = await loadImage(`${BASE}${dir}/${m.animations.idle.file}`);
-      portraitSources[key] = { img, cw: m.frameWidth, ch: m.frameHeight };
+      const idle = m.animations.idle;
+      const img = await loadImage(`${BASE}${dir}/${idle.file}`);
+      const cw = idle.frameWidth ?? m.frameWidth;
+      const ch = idle.frameHeight ?? m.frameHeight;
+      // A cell bigger than the body's own (the paper cut: 384 × 320 around a 256 body): the 256 square standing on the
+      // cell's feet line, so the character fills the card as before instead of shrinking.
+      const side = Math.min(cw, ch, m.frameHeight);
+      const feet = idle.feet ?? m.feet;
+      const crop: [number, number, number] | undefined = side < cw || side < ch
+        ? [(cw - side) / 2, Math.max(0, ch * (1 - feet) - side * (1 - m.feet)), side] : undefined;
+      portraitSources[key] = { img, cw, ch, crop };
       return;
     } catch {
       // No full set: same fallback as the game, the simple sheet below.

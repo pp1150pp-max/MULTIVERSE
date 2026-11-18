@@ -35,7 +35,9 @@ export function portrait(key: string, size: number): HTMLCanvasElement {
     if (!src) return;
     const ctx = c.getContext('2d')!;
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(src.img, 0, 0, src.cw, src.ch, 0, 0, size, size);
+    const [sx, sy, side] = src.crop ?? [0, 0, 0];
+    if (src.crop) ctx.drawImage(src.img, sx, sy, side, side, 0, 0, size, size);
+    else ctx.drawImage(src.img, 0, 0, src.cw, src.ch, 0, 0, size, size);
   };
   // The menu shows before the portraits arrive on a slow link; they fill in when loaded.
   if (portraitSource(key)) draw();
