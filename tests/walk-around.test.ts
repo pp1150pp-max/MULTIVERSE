@@ -113,10 +113,14 @@ for (const [name, c, r] of [['blacksmith', t.npcPos.blacksmith!, 0.45], ['founta
     }
   }
   const mid = { x: (stall.x + barrel.x) / 2, z: (stall.z + barrel.z) / 2 };
-  // Walk into the gap from the town side.
-  const nx = mid.x - s.x;
-  const nz = mid.z - s.z;
+  // Walk into the gap square on, from whichever side is open.
+  let nx = -(barrel.z - stall.z);
+  let nz = barrel.x - stall.x;
   const l = Math.hypot(nx, nz);
+  if (t.isBlocked(mid.x - (nx / l) * 2, mid.z - (nz / l) * 2, p.radius)) {
+    nx = -nx;
+    nz = -nz;
+  }
   p.x = mid.x - (nx / l) * 2;
   p.z = mid.z - (nz / l) * 2;
   for (let f = 0; f < 120; f++) p.walkStep(nx / l, nz / l, Infinity, DT, t);
