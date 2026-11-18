@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { clearingRadius, lairOf, themeAt, zoneById } from '../shared/data/zones';
-import { QUADRANT_JITTER } from '../shared/sim/terrain';
+import { HUB_PLAZA_RADIUS, QUADRANT_JITTER } from '../shared/sim/terrain';
 import type { PropSpec, Terrain } from '../shared/sim/terrain';
 import type { ZoneTheme } from '../shared/data/zones';
 import { mulberry32, pick, rand, type Rng } from '../shared/rng';
@@ -121,6 +121,8 @@ const PLAYER_HALF_WIDTH = 0.35;
 /** World size of one decor atlas cell: 128 pixels at about the same density as the ground tiles. */
 const DECOR_CELL_UNITS = 1.33;
 /** Rotted boards laid over the wet stretches of a marsh trail: a row of separate pieces, seen from above. */
+/** The rebuilt hub town's paper pieces (Terrain.placeTown). */
+const TOWN2_PROP = /^(bld_|town_fountain$|quest_board$|crystal_stall$|lamp_post$|bench_|planter$|banner_pole$|crates$|barrels$|flower_box$|potted_tree$)/;
 const PLANK_SHEET = { key: 'marsh_planks', cols: 3, width: 2.9, length: 5 };
 const enum GroundId { Base, WaterEdge, Water }
 
@@ -140,6 +142,9 @@ const GROUND_FRAG = /* glsl */ `
   uniform float uHalf, uBound, uTileUnits, uTime, uBake, uFlow;
   // The hub's walled town (x, z, half): bricked up to a straight edge under its wall, not a wandering one.
   uniform vec3 uTown;
+  // The hub's round plaza around the fountain (radius; 0 = none), laid with uPlazaTex inside a ring of darker stones.
+  uniform float uPlaza;
+  uniform sampler2D uPlazaTex;
   #ifdef QUADS
   // The hub: uBase/uDirt are the top quarter's (x<0, z<0); 1 = right (x≥0, z<0), 2 = left (x<0, z≥0), 3 = bottom.
   uniform sampler2D uBase1, uBase2, uBase3, uDirt1, uDirt2, uDirt3;
@@ -230,6 +235,13 @@ const GROUND_FRAG = /* glsl */ `
     float laid = cover.g + lobes * 0.6 + relief(paveTex, uPave) * 1.0;
     if (uTown.z > 0.0) laid = max(abs(vWorld.x - uTown.x), abs(vWorld.y - uTown.y)) < uTown.z ? 1.0 : 0.0;
     col = mix(col, calm(paveTex, uPave, 0.9, 1.0, 1.0) * (1.0 + macro * 0.1), smoothstep(0.46, 0.54, laid));
+    if (uPlaza > 0.0) {
+      float pd = length(vWorld - uTown.xy);
+      vec3 plaza = calm(texture2D(uPlazaTex, tile).rgb, uPlazaTex, 0.95, 1.08, 1.0) * (1.0 + macro * 0.08);
+      col = mix(col, plaza, 1.0 - step(uPlaza, pd));
+      // A kerb of darker stones round the edge.
+      col *= 1.0 - 0.28 * (step(uPlaza - 0.45, pd) - step(uPlaza + 0.05, pd));
+    }
 
     // Pool shores wander instead of following the smooth shapes drawn in the mask.
     vec2 wander = (vec2(noise(vWorld * 1.3), noise(vWorld * 1.3 + 17.0)) - 0.5) * 0.5 / (2.0 * uHalf);
@@ -506,6 +518,8 @@ export class World {
         uFlow: { value: terrain.zone.iceLakes ? 0 : 1 },
         // Right up to the foot of the town wall.
         uTown: { value: new THREE.Vector3(terrain.zone.safe?.x ?? 0, terrain.zone.safe?.z ?? 0, terrain.zone.safe ? terrain.zone.safe.half - 0.2 : 0) },
+        uPlaza: { value: terrain.zone.npcs ? HUB_PLAZA_RADIUS : 0 },
+        uPlazaTex: { value: groundTiles.pave ?? tiles[3] },
       };
       quads.forEach(([base, dirt], i) => {
         this.groundUniforms![`uBase${i + 1}`] = { value: base };
@@ -537,7 +551,7 @@ export class World {
     this.addPieces(mulberry32(terrain.zone.seed + 31));
 
     // Anything taller than a player can hide one, so it turns see-through too (not only trees and the town).
-    for (const p of this.props) this.addProp(p.key, p.x, p.z, p.height, p.fade || p.height >= FADE_MIN_HEIGHT);
+    for (const p of this.props) this.addProp(p.key, p.x, p.z, p.height, p.fade || p.height >= FADE_MIN_HEIGHT, p.flip);
     const fire = terrain.props.find((p) => p.key === 'campfire');
     if (fire) this.flames.push(this.glow(fire.x, 0.5, fire.z, '#ffa040', 0.55));
     // Each portal glows like the land it leads to; the way back to town glows gold.
@@ -1250,7 +1264,7 @@ export class World {
     }
   }
 
-  private addProp(key: string, x: number, z: number, height: number, fade: boolean): void {
+  private addProp(key: string, x: number, z: number, height: number, fade: boolean, flip = false): void {
     const sh = sheets[key];
     let mat: THREE.SpriteMaterial;
     if (fade) {
@@ -1261,8 +1275,9 @@ export class World {
     }
     const spr = this.add(new THREE.Sprite(mat));
     const w = height * sh.cellAspect;
-    spr.center.set(0.5, 0.03);
-    spr.scale.set(w, height, 1);
+    // Sunk a little into the ground, except the rebuilt town's wide paper pieces, whose flat bottoms the ground would cut off.
+    spr.center.set(0.5, TOWN2_PROP.test(key) ? 0 : 0.03);
+    spr.scale.set(flip ? -w : w, height, 1);
     spr.position.set(x, 0, z);
     // Long town-wall pieces stand on a line, not a spot: a round shadow under each would only blot the ground.
     if (!key.startsWith('town_wall')) {

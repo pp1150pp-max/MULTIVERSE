@@ -292,6 +292,10 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   town_forge: ruin('town_forge', 'cart'),
   town_vault: ruin('town_vault', 'chest'),
   town_market: ruin('town_market', 'town_stall'),
+  // The rebuilt town (Terrain.placeTown): paper pictures only, whatever the art switch says (owner 2026-11-18).
+  ...Object.fromEntries(['bld_store', 'bld_market', 'bld_forge', 'bld_guild', 'bld_tailor', 'bld_vault', 'bld_house_a', 'bld_house_b',
+    'town_fountain', 'quest_board', 'crystal_stall', 'lamp_post', 'bench_a', 'bench_b', 'planter', 'banner_pole', 'crates', 'barrels',
+    'flower_box', 'potted_tree'].map((k) => [k, single(`paper/props/${k}.png`, () => drawRock(0))])),
 
   ...Object.fromEntries(MAP_ICONS.map((name) => [`map_${name}`, single(`icons/map_${name}.png`, () => drawIcon('coin'))])),
   icon_coin: single('icons/coin.png', () => drawIcon('coin')),
