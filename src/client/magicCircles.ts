@@ -12,11 +12,17 @@ const DEBUFF_COLOR: [number, string][] = [
   [DEBUFF_BIT.weak, '#b080ff'], [DEBUFF_BIT.armor, '#c8d0e0'], [DEBUFF_BIT.mark, '#ff4a5a'],
 ];
 const BUFF_COLOR: [number, string][] = [[BUFF_BIT.attack, '#ff7a40'], [BUFF_BIT.guard, '#ffd25a'], [BUFF_BIT.speed, '#5cffb0']];
-/** Area skills: by the effect's class sheet. */
-const ZONE_COLOR: [string, string][] = [['mg_', '#a68cff'], ['sw_', '#ffd25a'], ['gs_', '#ff9a40']];
+/** Area skills: by the effect (what it does), else by the class's sheet. */
+const ZONE_COLOR: [string, string][] = [
+  ['mg_firefield', '#ff7a2a'], ['mg_poison', '#7dff4a'], ['mg_decay', '#b0e04a'], ['mg_curse', '#c05aff'],
+  ['mg_vortex', '#9a5cff'], ['mg_timewarp', '#ffd25a'], ['mg_empower', '#ffc040'], ['mg_shield', '#5cc8ff'],
+  ['mg_', '#a68cff'], ['sw_', '#ffd25a'], ['gs_', '#ff9a40'],
+];
 const ZONE_DEFAULT = '#7fe0ff';
 
 export const circlesOn = (): boolean => currentBalance().fxLayer.circles && currentBalance().fxLayer.enabled;
+/** Lasting area skills drawn as a magic circle instead of their painted area and standing pieces (owner 2026-11-18). */
+export const zoneAsCircle = (): boolean => circlesOn() && currentBalance().fxLayer.zoneCircles;
 const glow = (): number => currentBalance().fxLayer.circleGlow;
 
 let tex: THREE.CanvasTexture | null = null;
@@ -76,6 +82,24 @@ function circleTexture(): THREE.CanvasTexture {
   return tex;
 }
 
+let disc: THREE.CanvasTexture | null = null;
+/** A soft disc, bright at the rim and faint in the middle: the inside of an area skill's circle. */
+function discTexture(): THREE.CanvasTexture {
+  if (disc) return disc;
+  const N = 128;
+  const c = document.createElement('canvas');
+  c.width = c.height = N;
+  const g = c.getContext('2d')!;
+  const grad = g.createRadialGradient(N / 2, N / 2, 0, N / 2, N / 2, N / 2);
+  grad.addColorStop(0, 'rgba(255,255,255,0.25)');
+  grad.addColorStop(0.85, 'rgba(255,255,255,0.6)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, N, N);
+  disc = new THREE.CanvasTexture(c);
+  return disc;
+}
+
 /** A circle lying on the ground, centred on its group's origin. */
 export class MagicCircle {
   readonly mesh: THREE.Mesh;
@@ -84,8 +108,12 @@ export class MagicCircle {
   /** 0..1, eases in and out as it turns on and off. */
   private shown = 0;
   private want = false;
+  /** An area skill's soft filled disc inside the circle (bold circles only). */
+  private fill: THREE.Mesh | null = null;
+  private fillMat: THREE.MeshBasicMaterial | null = null;
 
-  constructor(parent: THREE.Object3D, private size: number) {
+  /** `bold`: an area skill's circle, brighter and with a soft filled disc inside, as it stands alone. */
+  constructor(parent: THREE.Object3D, private size: number, private readonly bold = false) {
     geo ??= new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
     this.mat = new THREE.MeshBasicMaterial({
       map: circleTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0,
@@ -95,12 +123,22 @@ export class MagicCircle {
     this.mesh.renderOrder = -1;
     this.mesh.visible = false;
     parent.add(this.mesh);
+    if (bold) {
+      this.fillMat = new THREE.MeshBasicMaterial({ map: discTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 });
+      this.fill = new THREE.Mesh(geo, this.fillMat);
+      this.fill.position.y = -0.005;
+      this.fill.renderOrder = -2;
+      this.mesh.add(this.fill);
+    }
   }
 
   /** Turns it on in `color` (null = off). */
   set(color: string | null): void {
     this.want = color !== null && circlesOn();
-    if (color) this.mat.color.set(color);
+    if (color) {
+      this.mat.color.set(color);
+      this.fillMat?.color.set(color);
+    }
   }
 
   update(dt: number): void {
@@ -109,7 +147,8 @@ export class MagicCircle {
     this.mesh.visible = this.shown > 0;
     if (!this.mesh.visible) return;
     const breathe = 0.85 + 0.15 * Math.sin(this.t * 3);
-    this.mat.opacity = Math.min(1, 0.75 * glow()) * this.shown * breathe;
+    this.mat.opacity = Math.min(1, (this.bold ? 1 : 0.75) * glow()) * this.shown * breathe;
+    if (this.fill) this.fillMat!.opacity = Math.min(0.35, 0.22 * glow()) * this.shown;
     const s = this.size * (0.85 + 0.15 * this.shown);
     this.mesh.scale.set(s, 1, s);
     this.mesh.rotation.y = this.t * 0.6;
@@ -118,6 +157,7 @@ export class MagicCircle {
   dispose(): void {
     this.mesh.removeFromParent();
     this.mat.dispose();
+    this.fillMat?.dispose();
   }
 }
 
