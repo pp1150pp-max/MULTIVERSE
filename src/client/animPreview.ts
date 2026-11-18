@@ -9,6 +9,18 @@ import { AnimatedActor, strideRate, type Actor, type AnimSet } from './AnimatedA
 import { ISO_DIR } from './world';
 import { loadSwordRig, RigActor, type RigAssets } from './rig/RigActor';
 import { BASE_MOVE_SPEED } from '../shared/formulas';
+import { applyAnimTuning, currentAnimTuning, setAnimDirTune } from './animTune';
+import {
+  ANIM_ROWS, ANIM_TUNE_RANGE, animKey, checkAnimTuning, ROW_NAME as TUNE_ROW_NAME, sameAnimTuning, screenDirOf,
+  type AnimTuning, type DirTune, type ScreenDir,
+} from '../shared/animTuning';
+import type { AdminAnimLook } from '../shared/admin';
+
+/** How the bench reads and saves the server-wide fixes (the /admin page's API). */
+export interface AnimBenchIo {
+  load(): Promise<AdminAnimLook>;
+  save(t: AnimTuning | 'reset'): Promise<AdminAnimLook>;
+}
 
 const CSS = `
 .animp { display: flex; gap: 0; background: #10131a; color: #e8e4d8; font: 13px/1.4 system-ui, sans-serif; }
@@ -23,6 +35,9 @@ const CSS = `
 .animp button.on { background: #4a5a80; border-color: #8fa8e0; }
 .animp input[type=range] { width: 130px; }
 .animp .note { color: #9aa3b8; font-size: 11px; }
+.animp .cell-label.sel { outline: 2px solid #ffe066; }
+.animp .tune-sum { color: #ffe066; }
+.animp .saved { color: #8fd18f; } .animp .dirty { color: #ffb35c; } .animp .err { color: #ff7a7a; }
 .animp .cell-label { position: absolute; font-size: 11px; color: #e8ecf6; background: rgba(0,0,0,.5); padding: 1px 5px; border-radius: 3px; pointer-events: none; white-space: nowrap; }
 .animp .cell-mid { position: absolute; background: #10131a; display: flex; align-items: center; justify-content: center; text-align: center; color: #9aa3b8; font-size: 11px; padding: 6px; box-sizing: border-box; }
 @media (max-width: 720px) { .animp { flex-direction: column; } .animp .animp-panel { width: auto; border-right: 0; max-height: 45%; } }
@@ -73,7 +88,7 @@ interface Cell {
 }
 
 /** Mounts the bench in `root` and returns a function that stops it (renderer, frame loop, listeners). */
-export async function mountAnimPreview(root: HTMLElement): Promise<() => void> {
+export async function mountAnimPreview(root: HTMLElement, io?: AnimBenchIo): Promise<() => void> {
   if (!document.getElementById('animp-css')) document.head.append(h('style', { id: 'animp-css' }, CSS));
   root.classList.add('animp');
   root.style.height = 'min(82vh, 820px)';
@@ -103,6 +118,8 @@ export async function mountAnimPreview(root: HTMLElement): Promise<() => void> {
   const state = {
     cls: 'sword' as Cls, art: 'old' as Art, anim: 'run', speed: 1, move: BASE_MOVE_SPEED, zoom: 3.2,
     paused: false, ground: true, rideMove: true, line: true,
+    /** The facing being tuned: an index of DIRS. */
+    sel: 1,
   };
 
   // ---- one small scene per facing: a ground (texture + 1-unit grid) that slides, a fixed line along the run.
@@ -146,6 +163,9 @@ export async function mountAnimPreview(root: HTMLElement): Promise<() => void> {
   const mid = h('div', { class: 'cell-mid' }, 'ลูกศร = ทิศที่วิ่ง · เส้นเหลือง = แนววิ่ง · พื้นเลื่อนสวนเท้าตามความเร็ว ถ้าเท้าไถลบนพื้นแปลว่าก้าวไม่พอดี');
   viewEl.append(mid);
 
+  /** Redraws the per-facing fixes box (set up below, once the saved fixes have loaded). */
+  let drawTune = (): void => {};
+
   // ---- actors: rebuilt when the class or the art changes.
   let building = 0;
   const animsOf = (a: Actor) => ANIM_ORDER.filter((n) => (n === 'combo' ? a.has('attack_3') : a.has(n)));
@@ -171,6 +191,7 @@ export async function mountAnimPreview(root: HTMLElement): Promise<() => void> {
     else note.textContent = '';
     drawAnims();
     restart();
+    drawTune();
   };
 
   // ---- panel
@@ -189,7 +210,7 @@ export async function mountAnimPreview(root: HTMLElement): Promise<() => void> {
     const first = cells.find((c) => c?.actor)?.actor;
     const list = first ? animsOf(first) : ['idle'];
     if (!list.includes(state.anim)) state.anim = list.includes('run') ? 'run' : list[0];
-    animBox.replaceChildren(sel(list, ANIM_NAME, () => state.anim, (v) => { state.anim = v; restart(); }));
+    animBox.replaceChildren(sel(list, ANIM_NAME, () => state.anim, (v) => { state.anim = v; restart(); drawTune(); }));
   };
   const range = (min: number, max: number, step: number, get: () => number, set: (v: number) => void, fmt: (v: number) => string) => {
     const out = h('span', {}, fmt(get()));
@@ -245,6 +266,155 @@ export async function mountAnimPreview(root: HTMLElement): Promise<() => void> {
   );
   drawArt();
 
+  // ---- per-facing fixes (src/shared/animTuning.ts): tried out here at once, saved server-wide by the owner.
+  let saved: AnimTuning = {};
+  let canEdit = false;
+  if (io) {
+    try {
+      const r = await io.load();
+      saved = checkAnimTuning(r.tuning, false).tuning ?? {};
+      canEdit = r.canEdit;
+    } catch (e) {
+      saved = {};
+      note.textContent = `โหลดค่าที่บันทึกไว้ไม่สำเร็จ: ${(e as Error).message}`;
+    }
+  }
+  applyAnimTuning(saved);
+  const camR = new THREE.Vector3(Math.SQRT1_2, 0, -Math.SQRT1_2);
+  const camU = new THREE.Vector3().crossVectors(camR, ISO_DIR.clone().negate()).normalize();
+  /** How long a step of the world looks on screen at this facing, sideways = 1 (the camera looks down at ~46°). */
+  const screenFactor = (d: [number, number]) => {
+    const v = new THREE.Vector3(d[0], 0, d[1]).normalize();
+    return Math.hypot(v.dot(camR), v.dot(camU));
+  };
+  const cellDir = (i: number): ScreenDir => {
+    const d = DIRS[i]!;
+    return screenDirOf((d[0] - d[1]) * Math.SQRT1_2, (-d[0] - d[1]) * Math.SQRT1_2);
+  };
+  /** The tuning key of what is shown, or null when it can't be tuned as one animation (the combo). */
+  const tuneKey = (): string | null => (state.anim === 'combo' ? null : animKey(state.cls, state.art, state.anim));
+  const dirTune = (key: string, d: ScreenDir): DirTune => ({ ...currentAnimTuning()[key]?.[d] });
+  const tuneBox = h('div');
+  const saveOut = h('div', { class: 'note' });
+  const drawSaveState = (msg?: string, cls = '') => {
+    const dirty = !sameAnimTuning(currentAnimTuning(), saved);
+    saveOut.className = msg ? cls : dirty ? 'dirty' : 'saved';
+    saveOut.textContent = msg ?? (dirty ? 'มีค่าที่ยังไม่บันทึก (เห็นเฉพาะที่นี่)' : 'ตรงกับค่าที่บันทึกไว้ทั้งเซิร์ฟ');
+  };
+  const sumOf = (t: DirTune | undefined): string => {
+    if (!t) return '';
+    const out: string[] = [];
+    if (t.row) out.push(TUNE_ROW_NAME[t.row]);
+    if (t.flip !== undefined) out.push(t.flip ? 'พลิก' : 'ไม่พลิก');
+    if (t.rate !== undefined) out.push(`เร็ว×${t.rate}`);
+    if (t.x !== undefined || t.y !== undefined) out.push(`เลื่อน ${t.x ?? 0},${t.y ?? 0}`);
+    if (t.scale !== undefined) out.push(`ขนาด×${t.scale}`);
+    return out.join(' ');
+  };
+  const isMoving = () => state.anim === 'run' || state.anim === 'run_attack' || state.anim.startsWith('ride');
+  const shownAnims = () => {
+    const a = cells.find((c) => c?.actor)?.actor;
+    return a ? animsOf(a).filter((n) => n !== 'combo') : [];
+  };
+  drawTune = () => {
+    const key = tuneKey();
+    if (!key) {
+      tuneBox.replaceChildren(h('div', { class: 'note' }, 'คอมโบเล่นโจมตี 1–3 ต่อกัน: เลือกท่าโจมตีทีละท่าเพื่อปรับ'));
+      return;
+    }
+    const d = cellDir(state.sel);
+    const t = dirTune(key, d);
+    const setT = (next: DirTune) => {
+      setAnimDirTune(key, d, checkAnimTuning({ [key]: { [d]: next } }, false).tuning?.[key]?.[d]);
+      drawTune();
+      drawSaveState();
+    };
+    const rig = state.art === 'rig';
+    const set = shownSet;
+    const rows = (set?.manifest.animations[state.anim]?.directions ?? set?.manifest.directions ?? [])
+      .filter((r): r is (typeof ANIM_ROWS)[number] => (ANIM_ROWS as readonly string[]).includes(r));
+    const num = (field: keyof typeof ANIM_TUNE_RANGE, label: string, def: number) => {
+      const r = ANIM_TUNE_RANGE[field];
+      const cur = t[field] ?? def;
+      const out = h('span', {}, String(cur));
+      return h('div', { class: 'row' }, label, h('span', {}, h('input', {
+        type: 'range', min: String(r.min), max: String(r.max), step: String(r.step), value: String(cur),
+        oninput: (e: Event) => { out.textContent = (e.target as HTMLInputElement).value; },
+        onchange: (e: Event) => setT({ ...t, [field]: Number((e.target as HTMLInputElement).value) }),
+      }), ' ', out));
+    };
+    const moving = isMoving();
+    tuneBox.replaceChildren(
+      h('div', { class: 'row' }, `ทิศที่ปรับ ${DIR_ARROW[state.sel]}`, h('span', { class: 'note' }, 'คลิกช่องทางขวาเพื่อเลือกทิศ')),
+      ...(rig ? [h('div', { class: 'note' }, 'นักดาบกระดูกปรับได้แค่ความเร็ว (ท่าตาย/ขี่ใช้ภาพเดิม ปรับที่ "ภาพเดิม")')] : [
+        h('div', { class: 'row' }, 'แถวภาพ', h('select', {
+          onchange: (e: Event) => { const v = (e.target as HTMLSelectElement).value; setT({ ...t, row: v ? (v as DirTune['row']) : undefined }); },
+        }, h('option', { value: '', selected: !t.row }, 'อัตโนมัติ'), ...rows.map((r) => h('option', { value: r, selected: t.row === r }, TUNE_ROW_NAME[r])))),
+        h('div', { class: 'row' }, 'พลิกภาพ', h('select', {
+          onchange: (e: Event) => { const v = (e.target as HTMLSelectElement).value; setT({ ...t, flip: v === '' ? undefined : v === '1' }); },
+        }, h('option', { value: '', selected: t.flip === undefined }, 'อัตโนมัติ'), h('option', { value: '1', selected: t.flip === true }, 'พลิก'), h('option', { value: '0', selected: t.flip === false }, 'ไม่พลิก'))),
+      ]),
+      num('rate', moving ? 'ความเร็วก้าว ×' : 'ความเร็วเล่น ×', 1),
+      ...(rig ? [] : [num('x', 'เลื่อนขวา (หน่วย)', 0), num('y', 'เลื่อนขึ้น (หน่วย)', 0), num('scale', 'ขนาด ×', 1)]),
+      h('div', { class: 'row', style: 'flex-wrap: wrap; justify-content: flex-start' },
+        h('button', { onclick: () => setT({}) }, 'ล้างทิศนี้'),
+        h('button', {
+          onclick: () => {
+            for (const n of shownAnims()) setAnimDirTune(animKey(state.cls, state.art, n), d, Object.keys(t).length ? { ...t } : undefined);
+            drawTune();
+            drawSaveState();
+          },
+        }, 'ใช้ค่าทิศนี้กับทุกท่า'),
+        ...(moving ? [h('button', {
+          onclick: () => {
+            DIRS.forEach((w, i) => {
+              if (!w) return;
+              const dd = cellDir(i);
+              const f = Math.round(screenFactor(w) * 100) / 100;
+              setAnimDirTune(key, dd, checkAnimTuning({ [key]: { [dd]: { ...dirTune(key, dd), rate: f } } }, false).tuning?.[key]?.[dd]);
+            });
+            drawTune();
+            drawSaveState();
+          },
+        }, 'ตั้งความเร็วก้าวตามมุมกล้อง (ทุกทิศ)')] : []),
+      ),
+      ...(moving ? [h('div', { class: 'note' }, `บนจอ วิ่งขึ้น/ลงเห็นระยะแค่ ×${screenFactor([1, 1]).toFixed(2)} ของวิ่งด้านข้าง ทแยง ×${screenFactor([1, 0]).toFixed(2)} · ปุ่มมุมกล้องตั้งความเร็วก้าวตามนั้นให้เท้าไม่ไถล`)] : []),
+      ...(state.anim.startsWith('attack') ? [h('div', { class: 'note' }, 'ท่าโจมตี: เร็ว/ช้าลงแค่ภาพ จังหวะตีจริงในเกมเท่าเดิม')] : []),
+    );
+  };
+  const doSave = async (what: AnimTuning | 'reset') => {
+    if (!io) return;
+    try {
+      const r = await io.save(what);
+      saved = checkAnimTuning(r.tuning, false).tuning ?? {};
+      applyAnimTuning(saved);
+      drawTune();
+      drawSaveState('บันทึกแล้ว ทุกคนในเกมเห็นทันที', 'saved');
+    } catch (e) {
+      drawSaveState(`บันทึกไม่สำเร็จ: ${(e as Error).message}`, 'err');
+    }
+  };
+  panel.append(
+    h('h2', {}, 'ปรับค่าต่อทิศ'),
+    h('div', { class: 'note' }, `ค่าแยกต่อ อาชีพ × ภาพ × ท่า × ทิศ · ลองที่นี่เห็นทันทีเฉพาะหน้านี้ ${canEdit ? 'จนกว่าจะกด "บันทึกทั้งเซิร์ฟ"' : '(บันทึกทั้งเซิร์ฟได้เฉพาะเจ้าของ)'}`),
+    tuneBox,
+    h('div', { class: 'row', style: 'flex-wrap: wrap; justify-content: flex-start; margin-top: 8px' },
+      ...(canEdit ? [h('button', { onclick: () => void doSave(currentAnimTuning()) }, 'บันทึกทั้งเซิร์ฟ')] : []),
+      h('button', { onclick: () => { applyAnimTuning(saved); drawTune(); drawSaveState(); } }, 'กลับไปค่าที่บันทึกไว้'),
+      ...(canEdit ? [h('button', { onclick: () => { if (confirm('ล้างค่าที่ปรับทั้งหมดของทุกอาชีพ กลับไปตามโค้ด และบันทึกทั้งเซิร์ฟ?')) void doSave('reset'); } }, 'คืนค่าเริ่มต้นทั้งหมด')] : []),
+    ),
+    saveOut,
+  );
+  drawSaveState();
+  viewEl.addEventListener('click', (e) => {
+    const r = viewEl.getBoundingClientRect();
+    const i = Math.floor(((e.clientY - r.top) / r.height) * 3) * 3 + Math.floor(((e.clientX - r.left) / r.width) * 3);
+    if (DIRS[i]) {
+      state.sel = i;
+      drawTune();
+    }
+  });
+
   /** fps of what an AnimatedActor shows now, times the stride for the run cycle. */
   function setFps(a: AnimatedActor): number | null {
     const name = a.shownAnim;
@@ -291,7 +461,7 @@ export async function mountAnimPreview(root: HTMLElement): Promise<() => void> {
   let nextAt = 0;
   let comboStep = 0;
   function restart(): void {
-    void refreshSet();
+    void refreshSet().then(() => drawTune());
     for (const c of cells) c?.actor?.reset();
     nextAt = clock;
     comboStep = 0;
@@ -332,6 +502,7 @@ export async function mountAnimPreview(root: HTMLElement): Promise<() => void> {
     const moving = anim === 'run' || anim === 'run_attack' || (!!ride && state.rideMove);
     const rate = strideRate(state.move);
     strideOut.textContent = `จังหวะก้าววิ่ง ×${rate.toFixed(2)} ของที่วาด (เกมจำกัด ×0.6–×1.6)`;
+    const tunings = currentAnimTuning();
     for (const c of cells) {
       if (!c) continue;
       const a = c.actor;
@@ -347,9 +518,14 @@ export async function mountAnimPreview(root: HTMLElement): Promise<() => void> {
       a.setRide?.(ride);
       a.update(dt, moving);
       const d = a instanceof AnimatedActor ? a.drawnFrame : null;
-      c.label.textContent = d
-        ? `${c.arrow} ${ROW_NAME[d.dir] ?? d.dir}${d.flip ? ' (พลิก)' : ''} · เฟรม ${d.frame + 1}/${d.frames}`
-        : c.arrow;
+      const key = tuneKey();
+      const sum = key ? sumOf(tunings[key]?.[cellDir(cells.indexOf(c))]) : '';
+      const text = d ? `${c.arrow} ${ROW_NAME[d.dir] ?? d.dir}${d.flip ? ' (พลิก)' : ''} · เฟรม ${d.frame + 1}/${d.frames}` : c.arrow;
+      if (c.label.dataset.text !== text + sum) {
+        c.label.dataset.text = text + sum;
+        c.label.replaceChildren(text, ...(sum ? [h('span', { class: 'tune-sum' }, ` · ${sum}`)] : []));
+      }
+      c.label.classList.toggle('sel', cells.indexOf(c) === state.sel);
     }
     const fullH = viewEl.clientHeight;
     cells.forEach((c, i) => {

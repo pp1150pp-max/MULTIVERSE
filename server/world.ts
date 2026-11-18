@@ -26,6 +26,7 @@ import { cleanStash, type StashData } from '../src/shared/sim/stash';
 import type { AdminOnline, AdminOnlineRow, AdminSnapDelta, SnapDeltaStats } from '../src/shared/admin';
 import type { OrbLook } from '../src/shared/orbLook';
 import type { CosTuning } from '../src/shared/cosTuning';
+import type { AnimTuning } from '../src/shared/animTuning';
 import { banMessage } from '../src/shared/api';
 import { Market, type MarketNote } from './market';
 import { Daily } from './daily';
@@ -687,7 +688,7 @@ export class GameWorld {
     if (!acc.guest) this.friendsJoined(s, accountWasOnline);
     // Back within the grace time (or a takeover): still in the party.
     player.partyId = this.parties.online(charId);
-    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), guest: acc.guest, ...(s.auto ? { auto: true } : {}), orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning(), cash: this.cash.catalog(), cashState: this.cash.state(acc.id, acc.guest) });
+    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), guest: acc.guest, ...(s.auto ? { auto: true } : {}), orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), animTuning: this.db.animTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning(), cash: this.cash.catalog(), cashState: this.cash.state(acc.id, acc.guest) });
     this.broadcastSystem(`${player.name} เข้าสู่โลก`);
     // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
     if (!acc.guest) setTimeout(() => this.sessions.has(s) && (this.marketOnJoin(s), this.dailyCheck(s), this.mailNote(s, true)), MARKET_JOIN_NOTE_MS);
@@ -1623,6 +1624,11 @@ export class GameWorld {
   /** Sends the new server-wide cosmetic tuning to everyone online (already saved by the admin API). */
   cosTuningChanged(tuning: CosTuning): void {
     for (const s of this.sessions) this.send(s.ws, { t: 'cosTuning', tuning });
+  }
+
+  /** Sends the new server-wide per-facing animation fixes to everyone online (already saved by the admin API). */
+  animTuningChanged(tuning: AnimTuning): void {
+    for (const s of this.sessions) this.send(s.ws, { t: 'animTuning', tuning });
   }
 
   /** The owner hid / showed cosmetics (already saved by the admin API): used for wearing from now on and sent to everyone online. Nobody's worn piece comes off. */

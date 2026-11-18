@@ -387,7 +387,8 @@ async function fetchAnimSet(key: string, dir: string): Promise<AnimSet | null> {
     return null;
   }
   for (const name of Object.keys(manifest.animations)) if (!textures[name]) delete manifest.animations[name];
-  return { manifest, textures };
+  // Which per-facing fixes apply (src/shared/animTuning.ts): `class.old` or `class.paper`.
+  return { manifest, textures, tuneKey: `${key}.${dir.includes('paper/') ? 'paper' : 'old'}` };
 }
 
 /** Repeating ground textures. A zone falls back to its code-painted ground if one is missing. */

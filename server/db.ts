@@ -11,6 +11,7 @@ import { cleanStash, type StashData } from '../src/shared/sim/stash';
 import { cleanTutorial, type TutorialData } from '../src/shared/tutorial';
 import { cleanCosOwned } from '../src/shared/data/cosmetics';
 import { checkCosTuning, COS_TUNING_SETTING, type CosTuning } from '../src/shared/cosTuning';
+import { ANIM_TUNING_SETTING, checkAnimTuning, type AnimTuning } from '../src/shared/animTuning';
 import { checkCosShop, COS_SHOP_SETTING, type CosShop } from '../src/shared/cosShop';
 import type { CashPurchaseRow } from '../src/shared/cashShop';
 import { checkOrbItems, ORB_ITEMS_SETTING, registerOrbItems, type OrbItems } from '../src/shared/orbItems';
@@ -447,6 +448,22 @@ export class Db {
   /** Saves the server-wide cosmetic tuning (already clean; nothing changed is stored as no row). */
   setCosTuning(t: CosTuning): void {
     this.setSetting(COS_TUNING_SETTING, Object.keys(t).length ? JSON.stringify(t) : null);
+  }
+
+  /** The server-wide per-facing animation fixes (src/shared/animTuning.ts): only changes ({} until the owner saves some). */
+  animTuning(): AnimTuning {
+    const v = this.getSetting(ANIM_TUNING_SETTING);
+    if (v === null) return {};
+    try {
+      return checkAnimTuning(JSON.parse(v), false).tuning ?? {};
+    } catch {
+      return {};
+    }
+  }
+
+  /** Saves them (already clean; none = no row). */
+  setAnimTuning(t: AnimTuning): void {
+    this.setSetting(ANIM_TUNING_SETTING, Object.keys(t).length ? JSON.stringify(t) : null);
   }
 
   /** Per-cosmetic shop settings (hidden, diamond price): only what differs from the code ({} = all shown, no prices). */

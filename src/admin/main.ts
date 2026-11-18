@@ -15,7 +15,7 @@ import { registerOrbItems } from '../shared/orbItems';
 import { CARD_DEFAULTS, CARD_FX, CARD_FX_MAX, CARD_FX_NAME, CARD_GROUPS, CARD_GROUP_NAME, CARD_NUM_FIELDS, CARD_RARITY_NAME, cardArt, cardName, type CardFx, type CardGroup, type CardId } from '../shared/data/cards';
 import { CARD_FX_LIMIT, type CardTuning } from '../shared/cardTuning';
 import type {
-  AdminAccountDetail, AdminAccountsResponse, AdminCardTune, AdminCosLook, AdminFeature, AdminOrbItems, AdminOrbLook, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, SessionPage, SessionSort, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AdminShutdownText, AdminSnapDelta, AdminGoogle, AdminPaperMaps, AuditRow,
+  AdminAccountDetail, AdminAccountsResponse, AdminAnimLook, AdminCardTune, AdminCosLook, AdminFeature, AdminOrbItems, AdminOrbLook, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, SessionPage, SessionSort, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AdminShutdownText, AdminSnapDelta, AdminGoogle, AdminPaperMaps, AuditRow,
 } from '../shared/admin';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { applyBalance, checkBalance } from '../shared/balance';
@@ -438,7 +438,10 @@ async function renderAnim(): Promise<void> {
   try {
     const { mountAnimPreview } = await import('../client/animPreview');
     if (tab !== 'anim' || !box.isConnected) return;
-    const stop = await mountAnimPreview(box);
+    const stop = await mountAnimPreview(box, {
+      load: () => api<AdminAnimLook>('GET', '/admin/anim-look'),
+      save: (t) => api<AdminAnimLook>('POST', '/admin/anim-look', t === 'reset' ? { reset: true } : { tuning: t }),
+    });
     if (tab !== 'anim' || !box.isConnected) stop();
     else stopOrbs = stop;
   } catch (e) {
@@ -1584,7 +1587,7 @@ const ACTION_TH: Record<string, string> = {
   level: 'ตั้งเลเวล', gold: 'ทอง', items: 'เสกไอเทม', kick: 'เตะ', teleport: 'ย้ายโซน', grant: 'ให้สิทธิ์', revoke: 'ถอนสิทธิ์',
   server: 'Server', password: 'ตั้งรหัสผ่าน', ban: 'แบน', unban: 'ปลดแบน', broadcast: 'ประกาศ', backup: 'สำรองข้อมูล',
   'delete-account': 'ลบบัญชี', 'delete-character': 'ลบตัวละคร', 'chat-delete': 'ลบแชท',
-  'shutdown-text': 'ข้อความเตือนปิด server', 'snap-delta': 'ลดขนาด snapshot', 'google-login': 'เข้าสู่ระบบด้วย Google', 'google-unlink': 'ยกเลิกการผูก Google', 'orb-look': 'หน้าตาลูกแก้วตีบวก', 'cos-look': 'ค่าของแต่งตัว', 'cos-shop': 'ซ่อน/ราคาของแต่งตัว', 'cash-shop': 'แคชช็อป', 'orb-items': 'ลูกแก้วในร้านค้า', balance: 'ปรับสมดุล', daily: 'ล็อกอินรายวัน', mail: 'ส่งจดหมาย', mailRecall: 'ดึงจดหมายกลับ',
+  'shutdown-text': 'ข้อความเตือนปิด server', 'snap-delta': 'ลดขนาด snapshot', 'google-login': 'เข้าสู่ระบบด้วย Google', 'google-unlink': 'ยกเลิกการผูก Google', 'orb-look': 'หน้าตาลูกแก้วตีบวก', 'cos-look': 'ค่าของแต่งตัว', 'anim-look': 'ค่าท่าตัวละคร', 'cos-shop': 'ซ่อน/ราคาของแต่งตัว', 'cash-shop': 'แคชช็อป', 'orb-items': 'ลูกแก้วในร้านค้า', balance: 'ปรับสมดุล', daily: 'ล็อกอินรายวัน', mail: 'ส่งจดหมาย', mailRecall: 'ดึงจดหมายกลับ',
   'report-status': 'สถานะรายงาน', 'report-ban': 'ห้ามรายงาน', 'report-unban': 'ปลดห้ามรายงาน',
   'cosmetic-give': 'ให้ Cosmetics', 'cosmetic-take': 'ยึด Cosmetics คืน',
 };
