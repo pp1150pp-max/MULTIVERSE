@@ -105,10 +105,10 @@ export function restSpotNear(spots: readonly RestSpot[], p: { x: number; z: numb
 export const HUB_PLAZA_RADIUS = 8.5;
 /** The hub's fountain: drawn this tall (its benches about a person's size), solid out to this radius. */
 export const HUB_FOUNTAIN_HEIGHT = 9;
-export const HUB_FOUNTAIN_RADIUS = 2.8;
+export const HUB_FOUNTAIN_RADIUS = 3.2;
 /** The hub's NPC buildings: drawn this tall, a square footprint this wide (two side by side per top wall). */
-export const HUB_BUILDING_HEIGHT = 8.2;
-export const HUB_BUILDING_SIZE = 5.4;
+export const HUB_BUILDING_HEIGHT = 6.6;
+export const HUB_BUILDING_SIZE = 4.4;
 
 /** How far the hub's quarters wobble into each other (see themeAt). The props add their own scatter on top. */
 export const QUADRANT_JITTER = 6;
@@ -258,7 +258,11 @@ export class Terrain {
       at(key, Math.cos(rad(deg)) * r, Math.sin(rad(deg)) * r, height, collideR);
 
     // The plaza: the big fountain (benches round it are part of its picture), nothing else on it.
-    at('town_fountain', 0, 0, HUB_FOUNTAIN_HEIGHT, HUB_FOUNTAIN_RADIUS);
+    // Its picture stands on its nearest point to the camera (the front of the basin, half the picture's width out
+    // along +x +z), so the basin drawn and the solid circle are in the same place.
+    const fr = (HUB_FOUNTAIN_HEIGHT * (221 / 256)) / 2 / Math.SQRT2;
+    at('town_fountain', fr, fr, HUB_FOUNTAIN_HEIGHT, 0);
+    this.colliders.push({ x: s.x, z: s.z, r: HUB_FOUNTAIN_RADIUS });
     this.restSpots.push({ x: s.x, z: s.z, kind: 'fountain' });
 
     // ---- The NPC buildings (owner 2026-11-19): two whole buildings side by side against each top wall, fronts to the
@@ -272,10 +276,11 @@ export class Terrain {
       const [cx, cz] = alongX ? [t, -R + D / 2] : [-R + D / 2, t];
       at(key, cx + q, cz + q, HUB_BUILDING_HEIGHT, 0, true);
       for (const [ox, oz] of [[0, 0], [1.3, 1.3], [-1.3, -1.3], [1.3, -1.3], [-1.3, 1.3]]) {
-        this.colliders.push({ x: s.x + cx + ox, z: s.z + cz + oz, r: D / 2 - 0.6 });
+        this.colliders.push({ x: s.x + cx + ox * 0.8, z: s.z + cz + oz * 0.8, r: D / 2 - 0.5 });
       }
       // Where someone stands at its door: in front, toward the plaza.
-      return alongX ? { x: s.x + t, z: s.z - R + D + 1.6 } : { x: s.x - R + D + 1.6, z: s.z + t };
+      // Far enough out that they are drawn in front of the building (its picture stands D / 2 out from its front).
+      return alongX ? { x: s.x + t, z: s.z - R + D + D / 2 + 0.9 } : { x: s.x - R + D + D / 2 + 0.9, z: s.z + t };
     };
     const half = L / 2;
     this.npcPos.keeper = house('b3_vault', false, -half);
@@ -298,19 +303,20 @@ export class Terrain {
       ['P1', false, false, -5.8, 1, 1.6, 0.8], ['P2', false, false, -2.4, 5, 1.6, 0.9], ['P3', false, false, 2.4, 5, 1.6, 0.8],
     ];
     // `set`: the seller's pictures (tools/cut_papercraft.cjs hub, HUB.md 7.6), ml_* or mr_*; `props`: their four odds and ends.
-    const stalls = (seller: Vec2, alongX: boolean, set: string, props: string[]) => {
+    // `drawnTurned`: that set's stalls were drawn the other way round (market_right.png), so they mirror the other way.
+    const stalls = (seller: Vec2, alongX: boolean, set: string, props: string[], drawnTurned = false) => {
       for (const [slot, stall, mirrored, u, v, h, c] of ring) {
         const key = slot.startsWith('P') ? `${set}_${props[Number(slot[1])]}` : `${set}_${slot}`;
         // alongX: the seller's back is to the bottom-left wall (+z), so (u, v) is (x, z); otherwise to the bottom-right
         // wall (+x): (u, v) turns into (z, x), and the stalls' pictures turn with it (mirrored flips).
         const [dx, dz] = alongX ? [u, v] : [v, u];
-        at(key, seller.x - s.x + dx, seller.z - s.z + dz, h, c, false, stall && (alongX ? mirrored : !mirrored));
+        at(key, seller.x - s.x + dx, seller.z - s.z + dz, h, c, false, stall && (alongX ? mirrored : !mirrored) !== drawnTurned);
       }
     };
     this.npcPos.merchant = { x: s.x, z: s.z + R - 6 };
     stalls(this.npcPos.merchant, true, 'ml', ['cart', 'barrels', 'sacks', 'crates']);
     this.npcPos.broker = { x: s.x + R - 6, z: s.z };
-    stalls(this.npcPos.broker, false, 'mr', ['wagon', 'strongbox', 'chests', 'rugs']);
+    stalls(this.npcPos.broker, false, 'mr', ['wagon', 'strongbox', 'chests', 'rugs'], true);
 
     // Round the plaza: a lamp post either side of each road where it comes in, a few benches and planters.
     for (const road of [45, 135, 225, 315]) {
