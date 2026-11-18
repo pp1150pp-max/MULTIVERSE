@@ -1000,6 +1000,7 @@ export class OnlineBackend implements Backend {
       this.events.push({ t: 'stash', to: me.id });
     }
     this.serverMoves = pv.serverMoves;
+    me.shield = pv.shield ?? 0;
     me.slowAmt = pv.slow ?? 0;
     me.slowT = pv.slow ? 1 : 0;
     if (pv.epoch !== this.epoch) {

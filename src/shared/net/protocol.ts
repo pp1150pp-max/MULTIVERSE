@@ -296,6 +296,8 @@ export interface LootSnap {
  */
 export interface PrivateSnap {
   hp: number; mp: number; exp: number; level: number; gold: number;
+  /** What is left of a skill's damage-soaking shield (missing = none). */
+  shield?: number;
   potSel?: PotionSelect; lootFilter?: LootFilter; autoSettings?: AutoSettings; stats?: Stats;
   /** Gate bosses this character has killed (BOSS_GATES). */
   bossKills?: string[];

@@ -73,6 +73,9 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 .fnum.crit { color: #ffd34a; font-size: 36px; }
 .fnum.hurt { color: #ff5a5a; font-size: 27px; }
 .fnum.heal { color: #6cff7a; font-size: 25px; }
+/* Damage the shield took: the hurt digits turned blue. */
+.fnum.shield { color: #6ab8ff; font-size: 27px; }
+.fnum.shield .dg { filter: hue-rotate(205deg) brightness(1.15); }
 .fnum .dburst {
   /* Sized from the number, however many digits it has. */
   position: absolute; inset: -0.75em -0.55em;
@@ -345,6 +348,10 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
 .orb-wave { position: absolute; left: 0; right: 0; top: 0; height: calc(var(--orb) * 0.157); background-size: 100% 100%; mix-blend-mode: screen; }
 #orb-hp .orb-wave { background-image: url(/assets/sprites/ui/orb_hp_wave.png); }
 #orb-mp .orb-wave { background-image: url(/assets/sprites/ui/orb_mp_wave.png); }
+.orb-shield {
+  position: absolute; left: 0; right: 0; top: 60%; text-align: center; font-size: 14px; font-weight: 700; color: #7cc4ff; white-space: nowrap;
+  text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 2px 2px #000;
+}
 .orb-glass { position: absolute; inset: -3%; background: url(/assets/sprites/ui/orb_glass.png) center / 100% 100% no-repeat; }
 .orb-text {
   position: absolute; left: 0; right: 0; top: 46%; text-align: center; font-size: 13px; font-weight: 600; white-space: nowrap;

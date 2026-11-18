@@ -2171,6 +2171,7 @@ export class GameWorld {
       cd: p.cd, potCd: r2(p.potCd), restCd: r2(Math.max(0, p.restCd)), castT: p.castT > 0 ? r2(p.castT) : undefined,
       ...(Object.keys(p.buffs).length ? { buffs: roundBuffs(p.buffs) } : {}),
       // Slowed (the Bog Witch's poison): the browser walks slower too, or its moves would be refused.
+      ...(p.shield > 0 && s.sim.time < p.shieldUntil ? { shield: Math.ceil(p.shield) } : {}),
       ...(p.slowT > 0 && p.slowAmt > 0 ? { slow: p.slowAmt } : {}),
       serverMoves: serverMoves(p) || !!s.auto || s.serverWalk, epoch: s.epoch, ack: s.lastSeq, buybackLeft: Math.round(p.buybackLeft),
     };
