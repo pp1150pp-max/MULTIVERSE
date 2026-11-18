@@ -299,19 +299,23 @@ export class Terrain {
     const board = front('z', T - 2.8, 0.6);
     this.addProp('quest_board', board.x, board.z, 3.6, 0.8);
 
-    // The two bottom walls: low things that hide nobody (until their own pictures exist: art_templates/papercraft_maps/HUB.md 6).
+    // The two bottom walls: low things that hide nobody (art_templates/papercraft_maps/HUB.md 6). The hedges run
+    // along their wall: hedge_a along z (the bottom-right wall), hedge_b along x (the bottom-left one).
     const low: [string, number, number, number, number][] = [
-      ['cart', -8, 3.2, 2.4, 1], ['potted_tree', -3.4, 2, 2.6, 0.6], ['well', 0, 3, 2.6, 1.1], ['potted_tree', 3.4, 2, 2.6, 0.6], ['crates', 8, 2.4, 1.7, 0.8],
+      ['house_back_a', -10.5, 3, 4.4, 1.9], ['low_stall_a', -5.6, 3, 3.2, 1.3], ['garden_bed', -1, 2.6, 1.8, 1.3],
+      ['low_stall_b', 3.6, 3, 3.2, 1.3], ['house_back_b', 9.6, 3, 4.4, 1.9],
     ];
     for (const side of ['X', 'Z'] as const) {
       for (const [key, t, d, h, c] of low) {
-        const q = wall(side, t, d);
+        const q = wall(side, side === 'X' ? t : -t, d);
         this.addProp(key, q.x, q.z, h, c);
       }
-      for (const t of [-5.7, 5.7]) {
-        const q = wall(side, t, 2.2);
-        this.addProp('flower_box', q.x, q.z, 1.2, 0.7);
+      for (const t of [-7.9, 6.6]) {
+        const q = wall(side, side === 'X' ? t : -t, 1.4);
+        this.addProp(side === 'X' ? 'hedge_a' : 'hedge_b', q.x, q.z, 1.3, 0.8);
       }
+      const w = wall(side, side === 'X' ? 1.3 : -1.3, 6.2);
+      this.addProp('woodpile', w.x, w.z, 1.9, 0.9);
     }
 
     // Round the plaza: a lamp post either side of each road where it comes in, flowers a little further out.
@@ -328,7 +332,7 @@ export class Terrain {
       for (const side of [-1, 1]) at('banner_pole', ux * (R * Math.SQRT2 - 4) - uz * side * 3.2, uz * (R * Math.SQRT2 - 4) + ux * side * 3.2, 4, 0.3);
     }
     // The knight's statue beside the top road (to its right on screen, as in the concept).
-    polar('ruin_statue', 238, HUB_PLAZA_RADIUS + 2.2, 3.8, 0.8);
+    polar('town_statue', 238, HUB_PLAZA_RADIUS + 2.2, 3.8, 0.8);
     // Benches on the walk between the plaza and the bottom walls.
     for (const [deg, key] of [[22, 'bench_a'], [68, 'bench_b']] as const) polar(key, deg, HUB_PLAZA_RADIUS + 2.4, 1.5, 0.6);
     void r;
