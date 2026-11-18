@@ -54,7 +54,7 @@ Same papercraft style, same camera and the same rules (landscape 16:9 gameplay s
 **วิธีเจน**
 - เจนทั้ง 5 ภาพในแชทเดียวกัน
 - **เปิดแชทใหม่** แล้วแนบแค่ `raw/floor2_samples/T2_sky_pirates.png` ภาพเดียว
-  - **ห้ามแนบ `A1_heroes.png`** เพราะเป็นภาพพิกเซล GPT จะเอาสไตล์พิกเซลไปวาดทั้งภาพ (รอบแรก M0 ออกมาเป็นพิกเซลเพราะเหตุนี้)
+  - ไม่ต้องแนบภาพฮีโร่หรือภาพอื่น · กติกาเจ้าของ (2026-11-18): ภาพทั้งเกมใช้กระดาษตัดแปะเป็นสไตล์หลักสไตล์เดียว ห้ามแนบภาพพิกเซล หรือภาพที่ไม่แน่ใจว่าเป็นกระดาษ (รอบแรก M0 ออกมาเป็นพิกเซล)
 - ถ้ายังได้ภาพพิกเซล ให้พิมพ์ต่อว่า `Redo it as papercraft: cut paper layers, paper fibre texture, scissor-cut edges. Absolutely no pixel art.`
 - เซฟไว้ที่ `art_templates/papercraft_maps/raw/floor2_maps/` ตามชื่อไฟล์ของแต่ละข้อ (โฟลเดอร์ `raw/` ไม่ commit)
 
