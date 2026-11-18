@@ -34,6 +34,8 @@ export interface FxLayerConfig {
   smoothShots: boolean;
   /** Magic circles on the ground under debuffed monsters, buffed players and area skills (src/client/magicCircles.ts). */
   circles: boolean;
+  /** Lasting area skills shown as a magic circle only, instead of their painted area and standing pieces. */
+  zoneCircles: boolean;
   /** × the magic circles' brightness. */
   circleGlow: number;
 }
@@ -65,7 +67,7 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   circleGlow: '× ความสว่างวงเวท',
 };
 
-const FX_LAYER_BOOLS = ['enabled', 'debuffs', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'circles'] as const;
+const FX_LAYER_BOOLS = ['enabled', 'debuffs', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'circles', 'zoneCircles'] as const;
 type FxLayerBool = (typeof FX_LAYER_BOOLS)[number];
 const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
   enabled: 'เอฟเฟกต์สกิล (ชั้นเสริม)',
@@ -74,13 +76,14 @@ const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
   ownNumsOnly: 'เห็นเฉพาะเลขดาเมจของตัวเอง',
   smoothShots: 'กระสุนบินลื่น (ไม่ดึงกลับตาม server)',
   circles: 'วงเวทบนพื้น (บัฟ ดีบัฟ สกิลวงกว้าง)',
+  zoneCircles: 'สกิลวงกว้างเป็นวงเวทอย่างเดียว (แทนภาพพื้นที่)',
 };
 
 /** The code's own numbers (a fresh copy). */
 export function codeFxLayer(): FxLayerConfig {
   return {
     enabled: true, debuffs: true, glow: 1, ground: 1, particles: 1, shake: 1, hitstopMs: 60, crit: 1,
-    maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true, circles: true, circleGlow: 1,
+    maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true, circles: true, zoneCircles: true, circleGlow: 1,
   };
 }
 const CODE = codeFxLayer();

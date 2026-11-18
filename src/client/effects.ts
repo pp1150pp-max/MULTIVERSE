@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { circlesOn, MagicCircle, zoneColor } from './magicCircles';
+import { circlesOn, MagicCircle, zoneAsCircle, zoneColor } from './magicCircles';
 import { fxSheets, fxTex, type FxSheet } from './assets';
 import type { FxApi, SkillEffect } from '../shared/sim/types';
 import { loopProps, playProps } from './zoneProps';
@@ -352,6 +352,11 @@ export class Effects implements FxApi {
    * particles) is played again lightly while it lasts. `follow` keeps it under that player.
    */
   zone(name: SkillEffect, x: number, z: number, size: number, duration: number, follow?: number | null, skill?: string): void {
+    // Owner 2026-11-18: a lasting area is drawn as a magic circle only (no painted area, no standing pieces).
+    if (zoneAsCircle() && duration > 0) {
+      this.zoneCircle(name, x, z, size, duration, follow);
+      return;
+    }
     const def = EFFECTS[name];
     const tex = frameTexture(def.sheet);
     if (!tex || duration <= 0) {
@@ -398,6 +403,22 @@ export class Effects implements FxApi {
         layerT = ZONE_LAYER_EVERY;
         playLayer(this, null, name, new THREE.Object3D(), pos.x, 0, pos.z, size, ZONE_LAYER_LIFE);
       }
+    });
+  }
+
+  /** A lasting area as a magic circle (magicCircles.ts) in the skill's colour, following `follow` when given. */
+  private zoneCircle(name: SkillEffect, x: number, z: number, size: number, duration: number, follow?: number | null): void {
+    const at = new THREE.Group();
+    at.position.set(x, 0, z);
+    const circle = new MagicCircle(at, size, true);
+    let t = 0;
+    this.add(at, duration, (k, dt) => {
+      t += dt;
+      const p = follow != null ? this.posOf?.(follow) : null;
+      if (p) at.position.set(p.x, 0, p.z);
+      circle.set(duration - t > ZONE_FADE_OUT ? zoneColor(name) : null);
+      circle.update(dt);
+      if (k >= 1) circle.dispose();
     });
   }
 
