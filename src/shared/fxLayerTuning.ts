@@ -63,6 +63,8 @@ export interface FxLayerConfig extends Record<QuarksKey, boolean> {
   skills: Record<string, SkillFxTune>;
   /** The players' own graphics window (owner 2026-11-18, src/client/gfxPrefs.ts): shown in the in-game menu. */
   gfxMenu: boolean;
+  /** HP/MP orbs hug the skill bar on wide screens (owner 2026-11-18); off = the screen's bottom corners. */
+  orbsNearBar: boolean;
   /** Particle quality a player starts on (3 high, 2 medium, 1 low, 0 off), and the most anyone can pick. */
   gfxDefault: number;
   gfxMax: number;
@@ -155,7 +157,7 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   extrasK: '× ความแรงเอฟเฟกต์โค้ดของสกิล',
 };
 
-const BASE_BOOLS = ['enabled', 'debuffs', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'extras'] as const;
+const BASE_BOOLS = ['enabled', 'debuffs', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'orbsNearBar', 'extras'] as const;
 type FxLayerBool = (typeof BASE_BOOLS)[number] | QuarksKey;
 const FX_LAYER_BOOLS: readonly FxLayerBool[] = [...BASE_BOOLS, ...QUARKS_KEYS];
 const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
@@ -168,6 +170,7 @@ const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
   zoneCircles: 'สกิลวงกว้างเป็นวงเวทอย่างเดียว (แทนภาพพื้นที่)',
   quarks: 'อนุภาค three.quarks (ทดลอง)',
   gfxMenu: 'เมนูกราฟิกของผู้เล่น',
+  orbsNearBar: 'ลูกแก้ว HP/MP ชิดแถบสกิล (ปิด = มุมจอ)',
   ...(Object.fromEntries(QUARKS_SKILL_IDS.map((s) => [quarksKey(s), `three.quarks: ${QUARKS_SKILLS[s]}`])) as Record<QuarksKey, string>),
   extras: 'เอฟเฟกต์โค้ดของสกิล (ทับภาพเดิม)',
 };
@@ -178,7 +181,7 @@ export function codeFxLayer(): FxLayerConfig {
     enabled: true, debuffs: true, glow: 1, ground: 1, particles: 1, shake: 1, hitstopMs: 60, crit: 1,
     maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true, circles: true, zoneCircles: true, circleGlow: 1, quarks: false, quarksOthers: 0.5, quarksTouch: 0.5, quarksCap: 3000,
     paperPlate: 1, paperBubble: 1, paperFoot: 1.6, paperOrbLight: 0.95, paperOrbShade: 0.15,
-    gfxMenu: true, gfxDefault: 3, gfxMax: 3, gfxMid: 0.6, gfxLow: 0.3,
+    gfxMenu: true, orbsNearBar: true, gfxDefault: 3, gfxMax: 3, gfxMid: 0.6, gfxLow: 0.3,
     ...(Object.fromEntries(QUARKS_KEYS.map((k) => [k, true])) as Record<QuarksKey, boolean>),
     extras: true, extrasK: 1, skills: {},
   };

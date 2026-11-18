@@ -985,6 +985,7 @@ export class Hud {
     $('hp-text').textContent = hpText;
     $('mp-fill').style.width = mpShare;
     $('mp-text').textContent = mpText;
+    $('hud').classList.toggle('orbs-near', currentBalance().fxLayer.orbsNearBar); // /admin can flip it live
     $('orb-hp-fill').style.height = hpShare;
     $('orb-hp-text').textContent = hpText;
     $('orb-mp-fill').style.height = mpShare;
@@ -1090,6 +1091,7 @@ export class Hud {
     const hud = $('hud');
     hud.classList.toggle('hud-orbs', shown === 'orbs');
     hud.classList.toggle('hud-bars', shown === 'bars');
+    hud.classList.toggle('orbs-near', currentBalance().fxLayer.orbsNearBar);
     $('btn-hud-style').textContent = this.hudStyle === 'orbs' ? 'HP/MP: ลูกแก้ว' : 'HP/MP: แถบ';
   }
 

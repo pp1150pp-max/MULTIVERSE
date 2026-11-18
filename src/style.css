@@ -321,6 +321,18 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
    and the message log sit above it at every screen size instead of at fixed heights. */
 .hud-orbs #chat { bottom: calc(var(--orb) * 433 / 414 + 6px + env(safe-area-inset-bottom)); }
 .hud-orbs #log { bottom: calc(var(--orb) * 433 / 414 + 42px + env(safe-area-inset-bottom)); }
+/* Orbs hugging the skill bar (owner 2026-11-18, /admin fxLayer.orbsNearBar): on a wide screen the HP orb sits against the
+   bar's left edge and the MP orb against its right, as one panel. Narrower screens keep the corners. */
+@media (min-width: 1000px) {
+  .hud-orbs.orbs-near #hud-bottom { --bar-w: 560px; }
+  .hud-orbs.orbs-near #orb-hp { left: calc(50% - 280px - var(--orb)); bottom: max(4px, env(safe-area-inset-bottom)); }
+  .hud-orbs.orbs-near #orb-mp { right: calc(50% - 280px - var(--orb)); bottom: max(4px, env(safe-area-inset-bottom)); }
+}
+/* Wide enough that the chat box and log fit left of the HP orb: they drop back down to the corner. */
+@media (min-width: 1850px) {
+  .hud-orbs.orbs-near #chat { bottom: calc(6px + env(safe-area-inset-bottom)); }
+  .hud-orbs.orbs-near #log { bottom: calc(42px + env(safe-area-inset-bottom)); }
+}
 .bars { display: flex; flex-direction: column; gap: 0; margin-top: 2px; }
 .bar {
   position: relative; width: min(300px, 40vw); aspect-ratio: 1352 / 152;
