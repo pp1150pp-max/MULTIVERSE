@@ -21,7 +21,8 @@ import type { AdminShutdownText } from '../src/shared/admin';
 import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../src/shared/net/protocol';
 import { SHUTDOWN_TEXT_KEY } from './db';
 import { checkOrbLook, DEFAULT_ORB_LOOK, orbLookChanges, ORB_LOOK_RANGES, ORB_PALETTE_IDS, ORB_SHAPE_IDS, sameOrbLook } from '../src/shared/orbLook';
-import type { AdminCardTune, AdminCosLook, AdminCosShop, AdminOrbItems, AdminOrbLook } from '../src/shared/admin';
+import type { AdminAnimLook, AdminCardTune, AdminCosLook, AdminCosShop, AdminOrbItems, AdminOrbLook } from '../src/shared/admin';
+import { animTuningChanges, checkAnimTuning, sameAnimTuning } from '../src/shared/animTuning';
 import { applyCardTuning, cardTuningChanges, checkCardTuning, sameCardTuning } from '../src/shared/cardTuning';
 import { cardName } from '../src/shared/data/cards';
 import { checkCosTuning, cosTuningChanges, pasteCosTuning, sameCosTuning } from '../src/shared/cosTuning';
@@ -390,6 +391,29 @@ export async function ownerToolsApi(
       world.cosTuningChanged(c.tuning);
     }
     send(res, 200, cosLookState(db, true));
+    return true;
+  }
+
+  // ---------------------------------------------------------- per-facing animation fixes (server-wide, animTuning.ts)
+  if (method === 'GET' && path === '/api/admin/anim-look') {
+    const a = requireFeature(req, db, 'animPreview');
+    send(res, 200, { tuning: db.animTuning(), canEdit: a.features.includes('animTune') } satisfies AdminAnimLook);
+    return true;
+  }
+
+  if (method === 'POST' && path === '/api/admin/anim-look') {
+    const a = requireFeature(req, db, 'animTune');
+    const body = await readJson(req);
+    const before = db.animTuning();
+    const c = body.reset === true ? { tuning: {} } : checkAnimTuning(body.tuning, true);
+    if (!c.tuning) throw new HttpError(400, c.error ?? 'ค่าท่าตัวละครไม่ถูกต้อง');
+    if (!sameAnimTuning(before, c.tuning)) {
+      db.setAnimTuning(c.tuning);
+      const changes = (body.reset === true ? 'คืนค่าเริ่มต้น: ' : '') + animTuningChanges(before, c.tuning);
+      log(db, a, 'anim-look', 'ท่าตัวละคร ค่าทั้งเซิร์ฟ', changes.length > 1500 ? changes.slice(0, 1500) + '…' : changes);
+      world.animTuningChanged(c.tuning);
+    }
+    send(res, 200, { tuning: db.animTuning(), canEdit: true } satisfies AdminAnimLook);
     return true;
   }
 

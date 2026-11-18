@@ -11,6 +11,7 @@ import type { Actor, AnimatedActor, PlayOpts } from '../AnimatedActor';
 import { blendPose, parseRig, partCenter, partOf, samplePose, solveView, viewFor, type RigDef, type RigViewName, type Vec } from './rigMath';
 import { allRigParts, RIG_DIR, rigPartPath, type RigArmor, type RigWeapon } from './rigLook';
 import { RIG_DEFAULT_ARMOR, RIG_DEFAULT_WEAPON } from '../../shared/rigLookTuning';
+import { animTuneAt } from '../animTune';
 
 const BASE = 'assets/sprites/';
 const RAD = Math.PI / 180;
@@ -216,7 +217,7 @@ export class RigActor implements Actor {
     let snap: Snapshot;
     if (this.oneShot) {
       const o = this.oneShot;
-      o.t += dt;
+      o.t += dt * this.rate(o.name);
       if (o.t >= o.duration) {
         this.oneShot = null;
         this.startBlend();
@@ -233,7 +234,7 @@ export class RigActor implements Actor {
         this.startBlend();
       }
       const a = anims[this.base];
-      this.baseT += this.base === 'run' ? dt * this.stride : dt;
+      this.baseT += (this.base === 'run' ? dt * this.stride : dt) * this.rate(this.base);
       snap = samplePose(a, (this.baseT / a.duration) % 1);
       this.shownName = this.base;
     }
@@ -258,6 +259,11 @@ export class RigActor implements Actor {
       const k = Math.max(0, this.flashT) / 0.15;
       for (const p of this.pieces.get(this.view)!.values()) p.mat.color.setRGB(1, 1 - 0.65 * k, 1 - 0.65 * k);
     }
+  }
+
+  /** The owner's speed fix of this rig animation at this facing (src/shared/animTuning.ts, `sword.rig.*`). */
+  private rate(name: string): number {
+    return animTuneAt(`sword.rig.${name}`, this.sx, this.sy)?.rate ?? 1;
   }
 
   /** Which animation the rig drew last (the /admin bench shows it). */

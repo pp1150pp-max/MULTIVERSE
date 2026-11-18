@@ -15,7 +15,7 @@ import { registerOrbItems } from '../shared/orbItems';
 import { CARD_DEFAULTS, CARD_FX, CARD_FX_MAX, CARD_FX_NAME, CARD_GROUPS, CARD_GROUP_NAME, CARD_NUM_FIELDS, CARD_RARITY_NAME, cardArt, cardName, type CardFx, type CardGroup, type CardId } from '../shared/data/cards';
 import { CARD_FX_LIMIT, type CardTuning } from '../shared/cardTuning';
 import type {
-  AdminAccountDetail, AdminAccountsResponse, AdminCardTune, AdminCosLook, AdminFeature, AdminOrbItems, AdminOrbLook, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, SessionPage, SessionSort, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AdminShutdownText, AdminSnapDelta, AdminGoogle, AdminPaperMaps, AuditRow,
+  AdminAccountDetail, AdminAccountsResponse, AdminAnimLook, AdminCardTune, AdminCosLook, AdminFeature, AdminOrbItems, AdminOrbLook, AdminStats, BackupRow, ChatLogRow, PlaySessionRow, SessionPage, SessionSort, StatsPoint, StatsRange, AdminCharRow, AdminEditResult, AdminMe, AdminMeta, AdminOnline, AdminOnlineRow, AdminServerState, AdminShutdownText, AdminSnapDelta, AdminGoogle, AdminPaperMaps, AuditRow,
 } from '../shared/admin';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { applyBalance, checkBalance } from '../shared/balance';
@@ -152,7 +152,7 @@ const root = document.getElementById('admin')!;
 let me: AdminMe | null = null;
 let meta: AdminMeta | null = null;
 let online: AdminOnline | null = null;
-type Tab = 'online' | 'users' | 'stats' | 'sessions' | 'chat' | 'mail' | 'trades' | 'reports' | 'orbs' | 'cos' | 'cosManage' | 'rig' | 'cards' | 'balance' | 'daily' | 'cashShop' | 'roles' | 'audit' | 'broadcast' | 'server';
+type Tab = 'online' | 'users' | 'stats' | 'sessions' | 'chat' | 'mail' | 'trades' | 'reports' | 'orbs' | 'cos' | 'cosManage' | 'rig' | 'anim' | 'cards' | 'balance' | 'daily' | 'cashShop' | 'roles' | 'audit' | 'broadcast' | 'server';
 let tab: Tab = 'online';
 let timer = 0;
 
@@ -259,13 +259,13 @@ const CATEGORIES: { name: (typeof FEATURE_GROUPS)[number]; tabs: Tab[] }[] = [
   { name: 'ประวัติ', tabs: ['stats', 'sessions', 'chat', 'trades', 'audit'] },
   { name: 'สื่อสาร', tabs: ['mail', 'reports', 'broadcast'] },
   { name: 'ปรับเกม', tabs: ['balance', 'cards', 'daily', 'cashShop'] },
-  { name: 'หน้าตา', tabs: ['orbs', 'cos', 'cosManage', 'rig'] },
+  { name: 'หน้าตา', tabs: ['orbs', 'cos', 'cosManage', 'rig', 'anim'] },
   { name: 'ระบบ', tabs: ['server', 'roles'] },
 ];
 const TAB_LABEL: Record<Tab, string> = {
   online: 'ออนไลน์', users: 'ผู้ใช้และตัวละคร', stats: 'สถิติ', sessions: 'การเข้าเล่น', chat: 'แชท', trades: 'เทรด',
   audit: 'ประวัติ (audit)', mail: 'จดหมาย', reports: 'รายงาน', broadcast: 'ประกาศ', balance: 'ปรับสมดุล', cards: 'การ์ด', daily: 'ล็อกอินรายวัน', cashShop: 'แคชช็อป',
-  orbs: 'ลูกแก้วตีบวก', cos: 'ของแต่งตัว', cosManage: 'จัดการของแต่งตัว', rig: 'นักดาบกระดาษ', server: 'Server', roles: 'สิทธิ์',
+  orbs: 'ลูกแก้วตีบวก', cos: 'ของแต่งตัว', cosManage: 'จัดการของแต่งตัว', rig: 'นักดาบกระดาษ', anim: 'ท่าตัวละคร', server: 'Server', roles: 'สิทธิ์',
 };
 
 /** Whether the signed-in role may see a tab (the server checks again on every call). */
@@ -292,6 +292,7 @@ function tabAllowed(t: Tab): boolean {
     case 'cosManage': return f.includes('cosManage');
     // The papercraft sword trial bench: whoever may use the cosmetics bench (it changes nothing on the server).
     case 'rig': return f.includes('cosPreview');
+    case 'anim': return f.includes('animPreview');
     case 'server': return me.role === 'owner' || f.includes('backup') || f.includes('shutdownText') || f.includes('netDelta') || f.includes('googleLogin') || f.includes('paperMaps');
   }
 }
@@ -351,6 +352,7 @@ function setTab(t: Tab): void {
   else if (t === 'orbs') void renderOrbs();
   else if (t === 'cos') void renderCos();
   else if (t === 'rig') void renderRig();
+  else if (t === 'anim') void renderAnim();
   else if (t === 'balance') void renderBalance(view, h, api, (tuning) => applyBalance(tuning), can('itemStatMult'));
   else if (t === 'daily') void renderDaily(view, h, api);
   else if (t === 'cashShop') void renderCashShop(view, h, api);
@@ -423,6 +425,24 @@ async function renderRig(): Promise<void> {
     if (tab !== 'rig' || !box.isConnected) return;
     const stop = await mountRigPreview(box);
     if (tab !== 'rig' || !box.isConnected) stop();
+    else stopOrbs = stop;
+  } catch (e) {
+    box.textContent = `โหลดไม่สำเร็จ: ${(e as Error).message}`;
+  }
+}
+
+/** The character animation bench (src/client/animPreview.ts): every facing at once. Loaded only when this tab opens. */
+async function renderAnim(): Promise<void> {
+  const box = h('div', { class: 'orb-bench' }, 'กำลังโหลด…');
+  view.append(box);
+  try {
+    const { mountAnimPreview } = await import('../client/animPreview');
+    if (tab !== 'anim' || !box.isConnected) return;
+    const stop = await mountAnimPreview(box, {
+      load: () => api<AdminAnimLook>('GET', '/admin/anim-look'),
+      save: (t) => api<AdminAnimLook>('POST', '/admin/anim-look', t === 'reset' ? { reset: true } : { tuning: t }),
+    });
+    if (tab !== 'anim' || !box.isConnected) stop();
     else stopOrbs = stop;
   } catch (e) {
     box.textContent = `โหลดไม่สำเร็จ: ${(e as Error).message}`;
@@ -1567,7 +1587,7 @@ const ACTION_TH: Record<string, string> = {
   level: 'ตั้งเลเวล', gold: 'ทอง', items: 'เสกไอเทม', kick: 'เตะ', teleport: 'ย้ายโซน', grant: 'ให้สิทธิ์', revoke: 'ถอนสิทธิ์',
   server: 'Server', password: 'ตั้งรหัสผ่าน', ban: 'แบน', unban: 'ปลดแบน', broadcast: 'ประกาศ', backup: 'สำรองข้อมูล',
   'delete-account': 'ลบบัญชี', 'delete-character': 'ลบตัวละคร', 'chat-delete': 'ลบแชท',
-  'shutdown-text': 'ข้อความเตือนปิด server', 'snap-delta': 'ลดขนาด snapshot', 'google-login': 'เข้าสู่ระบบด้วย Google', 'google-unlink': 'ยกเลิกการผูก Google', 'orb-look': 'หน้าตาลูกแก้วตีบวก', 'cos-look': 'ค่าของแต่งตัว', 'cos-shop': 'ซ่อน/ราคาของแต่งตัว', 'cash-shop': 'แคชช็อป', 'orb-items': 'ลูกแก้วในร้านค้า', balance: 'ปรับสมดุล', daily: 'ล็อกอินรายวัน', mail: 'ส่งจดหมาย', mailRecall: 'ดึงจดหมายกลับ',
+  'shutdown-text': 'ข้อความเตือนปิด server', 'snap-delta': 'ลดขนาด snapshot', 'google-login': 'เข้าสู่ระบบด้วย Google', 'google-unlink': 'ยกเลิกการผูก Google', 'orb-look': 'หน้าตาลูกแก้วตีบวก', 'cos-look': 'ค่าของแต่งตัว', 'anim-look': 'ค่าท่าตัวละคร', 'cos-shop': 'ซ่อน/ราคาของแต่งตัว', 'cash-shop': 'แคชช็อป', 'orb-items': 'ลูกแก้วในร้านค้า', balance: 'ปรับสมดุล', daily: 'ล็อกอินรายวัน', mail: 'ส่งจดหมาย', mailRecall: 'ดึงจดหมายกลับ',
   'report-status': 'สถานะรายงาน', 'report-ban': 'ห้ามรายงาน', 'report-unban': 'ปลดห้ามรายงาน',
   'cosmetic-give': 'ให้ Cosmetics', 'cosmetic-take': 'ยึด Cosmetics คืน',
 };

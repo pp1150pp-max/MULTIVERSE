@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { disposeShadow, shadowFade, shadowGeometry, sharedShadowMat } from './SpriteActor';
+import { animTuneAt } from './animTune';
+import type { DirTune } from '../shared/animTuning';
 
 /**
  * Facing rows an animation file may contain. `side`, `down_side` and `up_side` are mirrored for
@@ -39,6 +41,8 @@ export interface CharManifest {
 export interface AnimSet {
   manifest: CharManifest;
   textures: Record<string, THREE.Texture>;
+  /** `class.art` of the per-facing fixes (src/shared/animTuning.ts) this set uses; none = never tuned. */
+  tuneKey?: string;
 }
 
 /** Common surface of SpriteActor and AnimatedActor so units can use either. */
@@ -76,6 +80,13 @@ const priorityOf = (name: string) => PRIORITY[name] ?? PRIORITY[name.split('_')[
 
 const S = Math.SQRT1_2;
 
+/** Move speed (units/s) at which the run cycle plays as drawn; slower or faster scales it, within MIN–MAX. */
+const STRIDE_SPEED = 5;
+const STRIDE_MIN = 0.6;
+const STRIDE_MAX = 1.6;
+/** The run-cycle rate (setStride) for a character seen moving at `speed` units/s: the game and the /admin bench. */
+export const strideRate = (speed: number): number => Math.min(STRIDE_MAX, Math.max(STRIDE_MIN, speed / STRIDE_SPEED));
+
 /** Optional looping animation shown instead of `run` while firing on the move. */
 const RUN_ATTACK = 'run_attack';
 /** Keeps the gun raised between shots so the arm doesn't flicker during continuous fire. */
@@ -90,6 +101,7 @@ export class AnimatedActor implements Actor {
   private readonly shadow: THREE.Mesh;
   private readonly tex: Record<string, THREE.Texture> = {};
   private readonly m: CharManifest;
+  private readonly tuneKey: string | undefined;
   private base = 'idle';
   private shown = '';
   private baseT = 0;
@@ -102,9 +114,11 @@ export class AnimatedActor implements Actor {
   private aimT = 0;
   /** A riding pose shown instead of idle / run while on a mount (see setRide). */
   private ride: string | null = null;
+  private drawn: { dir: Dir; flip: boolean; frame: number; frames: number } = { dir: 'down', flip: false, frame: 0, frames: 1 };
 
   constructor(set: AnimSet, shadowRadius: number) {
     this.m = set.manifest;
+    this.tuneKey = set.tuneKey;
     for (const [name, t] of Object.entries(set.textures)) {
       const c = t.clone();
       c.needsUpdate = true;
@@ -167,7 +181,7 @@ export class AnimatedActor implements Actor {
     if (this.oneShot) {
       const o = this.oneShot;
       const def = this.m.animations[o.name];
-      o.t += dt;
+      o.t += dt * (this.tune(o.name)?.rate ?? 1);
       frame = Math.floor(o.t * o.fps);
       if (frame >= def.frames) {
         if (o.hold) frame = def.frames - 1;
@@ -187,7 +201,7 @@ export class AnimatedActor implements Actor {
         if (!sameStride) this.baseT = 0;
       }
       // Legs keep pace with the ground actually covered (setStride); idle runs at its own speed.
-      this.baseT += this.base === 'idle' ? dt : dt * this.stride;
+      this.baseT += (this.base === 'idle' ? dt : dt * this.stride) * (this.tune(this.base)?.rate ?? 1);
       const def = this.m.animations[this.base] ?? Object.values(this.m.animations)[0];
       name = this.base in this.tex ? this.base : Object.keys(this.tex)[0];
       frame = this.ride && !moving ? 0 : Math.floor(this.baseT * def.fps) % def.frames;
@@ -196,13 +210,16 @@ export class AnimatedActor implements Actor {
     if (name !== this.shown) {
       this.shown = name;
       this.mat.map = this.tex[name];
-      // Keep world size per source pixel constant so differently-cut files line up.
-      const def = this.m.animations[name];
-      const unit = this.m.height / this.m.frameHeight;
-      this.sprite.scale.set((def.frameWidth ?? this.m.frameWidth) * unit, (def.frameHeight ?? this.m.frameHeight) * unit, 1);
-      this.sprite.center.set(0.5, def.feet ?? this.m.feet);
     }
-    this.applyUV(name, frame);
+    const tune = this.tune(name);
+    // Keep world size per source pixel constant so differently-cut files line up; then the facing's size and nudge.
+    const def = this.m.animations[name];
+    const unit = (this.m.height / this.m.frameHeight) * (tune?.scale ?? 1);
+    const w = (def.frameWidth ?? this.m.frameWidth) * unit;
+    const hh = (def.frameHeight ?? this.m.frameHeight) * unit;
+    this.sprite.scale.set(w, hh, 1);
+    this.sprite.center.set(0.5 - (tune?.x ?? 0) / w, (def.feet ?? this.m.feet) - (tune?.y ?? 0) / hh);
+    this.applyUV(name, frame, tune);
 
     if (this.flashT > 0) {
       this.flashT -= dt;
@@ -211,7 +228,12 @@ export class AnimatedActor implements Actor {
     }
   }
 
-  private applyUV(name: string, frame: number): void {
+  /** This facing's fixes of animation `name` (src/shared/animTuning.ts), if any. */
+  private tune(name: string): DirTune | undefined {
+    return this.tuneKey ? animTuneAt(`${this.tuneKey}.${name}`, this.sx, this.sy) : undefined;
+  }
+
+  private applyUV(name: string, frame: number, tune: DirTune | undefined): void {
     const def = this.m.animations[name];
     const dirs = def.directions ?? this.m.directions;
     // Screen angle of the facing: 0 = toward camera, 90 = sideways, 180 = away.
@@ -226,10 +248,13 @@ export class AnimatedActor implements Actor {
         row = i;
       }
     });
+    // The owner's pick of row for this facing, when this file has that row.
+    if (tune?.row && dirs.includes(tune.row)) row = dirs.indexOf(tune.row);
     const dir = dirs[row];
     const mirrorable = dir === 'side' || dir === 'down_side' || dir === 'up_side';
-    const flip = mirrorable && Math.abs(this.sx) > 0.05 && (this.m.sideFaces === 'right') !== this.sx > 0;
+    const flip = tune?.flip ?? (mirrorable && Math.abs(this.sx) > 0.05 && (this.m.sideFaces === 'right') !== this.sx > 0);
 
+    this.drawn = { dir, flip, frame, frames: def.frames };
     const t = this.tex[name];
     const w = 1 / def.frames;
     const h = 1 / dirs.length;
@@ -245,6 +270,11 @@ export class AnimatedActor implements Actor {
 
   flash(): void {
     this.flashT = 0.15;
+  }
+
+  /** Which picture row, mirrored or not, and which frame the last update drew (the /admin animation bench). */
+  get drawnFrame(): { dir: Dir; flip: boolean; frame: number; frames: number } {
+    return this.drawn;
   }
 
   /** The animation shown on the last update (RigActor asks it to know when to hand over). */

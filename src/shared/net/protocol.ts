@@ -11,6 +11,7 @@ import type { RerollKind } from '../data/reroll';
 import type { OrbLook } from '../orbLook';
 import type { OrbItem } from '../orbItems';
 import type { CosTuning } from '../cosTuning';
+import type { AnimTuning } from '../animTuning';
 import type { BalanceTuning } from '../balance';
 import type { DailyView } from '../daily';
 import type { StashData } from '../sim/stash';
@@ -346,7 +347,7 @@ export interface SnapshotMsg {
 export type ServerMsg =
   /** `guest`: playing a guest character (no stash, deleted after a day offline). */
   /** `ch`: the channel of that zone (1 when it has none). */
-  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; guest?: boolean; auto?: boolean; orbLook?: OrbLook; cosTuning?: CosTuning; cosHidden?: string[]; orbItems?: OrbItem[]; balance?: BalanceTuning; cash?: CashCatalog; cashState?: CashState }
+  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; guest?: boolean; auto?: boolean; orbLook?: OrbLook; cosTuning?: CosTuning; animTuning?: AnimTuning; cosHidden?: string[]; orbItems?: OrbItem[]; balance?: BalanceTuning; cash?: CashCatalog; cashState?: CashState }
   /** The cash shop's catalogue changed (the owner saved /admin, or a cosmetic's price / hiding changed). */
   | { t: 'cash'; cat: CashCatalog }
   /** Your account's crystals and purchase counts changed (a purchase by any of its characters). */
@@ -359,6 +360,8 @@ export type ServerMsg =
   | { t: 'balance'; tuning: BalanceTuning }
   /** The owner changed the server-wide cosmetic tuning (src/shared/cosTuning.ts). */
   | { t: 'cosTuning'; tuning: CosTuning }
+  /** The owner changed the server-wide per-facing animation fixes (src/shared/animTuning.ts). */
+  | { t: 'animTuning'; tuning: AnimTuning }
   /** The owner hid / showed cosmetics in the "แต่งตัว" window (src/shared/cosShop.ts): the hidden ids. Never prices. */
   | { t: 'cosHidden'; ids: string[] }
   /** The orb looks made in /admin changed (src/shared/orbItems.ts): the whole list. */

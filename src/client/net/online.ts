@@ -14,6 +14,8 @@ import { checkOrbLook } from '../../shared/orbLook';
 import { checkOrbItems, registerOrbItems } from '../../shared/orbItems';
 import { applyOrbLook } from '../orbs';
 import { checkCosTuning } from '../../shared/cosTuning';
+import { checkAnimTuning } from '../../shared/animTuning';
+import { applyAnimTuning } from '../animTune';
 import { applyBalance, checkBalance, currentBalance } from '../../shared/balance';
 import { attackRootTime } from '../../shared/attackRootTuning';
 import { applyCosHidden, applyCosTuning } from '../cosTune';
@@ -101,6 +103,7 @@ type WelcomeMsg = Extract<ServerMsg, { t: 'welcome' }>;
 function useWelcome(m: WelcomeMsg): void {
   useOrbLook(m.orbLook);
   useCosTuning(m.cosTuning);
+  useAnimTuning(m.animTuning);
   applyCosHidden(m.cosHidden);
   useOrbItems(m.orbItems);
   useBalance(m.balance);
@@ -692,6 +695,9 @@ export class OnlineBackend implements Backend {
         break;
       case 'cosTuning':
         useCosTuning(m.tuning);
+        break;
+      case 'animTuning':
+        useAnimTuning(m.tuning);
         break;
       case 'cosHidden':
         applyCosHidden(m.ids);
@@ -1368,6 +1374,11 @@ export class OnlineBackend implements Backend {
 /** The server-wide cosmetic tuning (missing from an older server = the code defaults). */
 function useCosTuning(v: unknown): void {
   applyCosTuning(v === undefined ? {} : checkCosTuning(v, false).tuning ?? {});
+}
+
+/** The server's per-facing animation fixes (src/shared/animTuning.ts), used by every character drawn from now on. */
+function useAnimTuning(v: unknown): void {
+  applyAnimTuning(checkAnimTuning(v, false).tuning ?? {});
 }
 
 /** The server's game balance (class stats, tier tables), so tooltips and the blacksmith's odds match it. */

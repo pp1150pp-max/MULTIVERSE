@@ -5,6 +5,7 @@ import type { ShutdownMode } from './net/protocol';
 import type { OrbLook } from './orbLook';
 import type { OrbItem, OrbItems } from './orbItems';
 import type { CosTuning } from './cosTuning';
+import type { AnimTuning } from './animTuning';
 import type { CosShop } from './cosShop';
 import type { CardTuning } from './cardTuning';
 import type { BalanceTuning } from './balance';
@@ -179,7 +180,7 @@ export interface AdminPaperMaps { on: boolean }
  * switch: the Permissions tab, the audit log, restarting / stopping the server, deleting accounts or
  * characters, and making someone owner (command line).
  */
-export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'paperMaps';
+export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'paperMaps' | 'animPreview' | 'animTune';
 
 /**
  * The defaults: which built-in role may use each tool (owner always has all). The owner can change
@@ -257,6 +258,10 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   cashShop: ['owner', 'gm'],
   // Saving it, opening / closing sales (owner only).
   cashShopEdit: ['owner'],
+  // The "ท่าตัวละคร" tab: every facing of every animation, tried out per facing (owner 2026-11-18: owner and GMs).
+  animPreview: ['owner', 'gm'],
+  // Saving those per-facing fixes server-wide (owner only).
+  animTune: ['owner'],
 };
 
 export const ADMIN_FEATURES = Object.keys(FEATURE_ROLES) as AdminFeature[];
@@ -318,6 +323,8 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   netDelta: { name: 'ลดขนาด snapshot', desc: 'แท็บ Server: สวิตช์ส่งค่าที่แทบไม่เปลี่ยนเฉพาะตอนเปลี่ยน (ลดเน็ตขาออก) และตัวนับ', group: 'ระบบ' },
   googleLogin: { name: 'เข้าสู่ระบบด้วย Google', desc: 'แท็บ Server: เปิด/ปิดปุ่ม Google ที่หน้า Login ดูบัญชีที่ผูก Google และยกเลิกการผูก', group: 'ระบบ' },
   paperMaps: { name: 'ภาพกระดาษ (ทดลอง)', desc: 'แท็บ Server: สลับภาพแมพและตัวละครระหว่างแบบเดิมกับแบบกระดาษตัดแปะ ทุกคนเห็นเหมือนกัน (มีผลตอนเปิดหน้าเกมใหม่)', group: 'หน้าตา' },
+  animPreview: { name: 'ดูท่าตัวละคร', desc: 'แท็บ "ท่าตัวละคร": ดูท่ายืน วิ่ง โจมตี ฯลฯ ของทุกอาชีพครบ 8 ทิศ บนพื้นเลื่อน ไม่เปลี่ยนอะไรในเกม (ปรับค่าต่อทิศได้ บันทึกต้องมีสวิตช์ animTune)', group: 'หน้าตา' },
+  animTune: { name: 'บันทึกค่าท่าตัวละคร', desc: 'แท็บ "ท่าตัวละคร": บันทึกค่าที่ปรับต่อทิศ (แถวภาพ พลิก ความเร็ว เลื่อน ขนาด) เป็นของทั้งเซิร์ฟ ทุกคนเห็นทันที', group: 'หน้าตา' },
   itemStatMult: { name: 'คอนเฟิร์มตัวคูณสเตตัสบนไอเทม', desc: 'แท็บ "ปรับสมดุล": คอนเฟิร์มตัวคูณค่าสเตตัสบนไอเทม คูณค่าของทุกชิ้นในเซิร์ฟจริง (สำรอง DB ให้ก่อน) · ทดลองดูตัวอย่างได้ด้วยสิทธิ์ "ปรับสมดุล"', group: 'ปรับเกม' },
   cosLook: { name: 'บันทึกของแต่งตัวทั้งเซิร์ฟ', desc: 'บันทึกค่าตำแหน่ง/หน้าตาของแต่งตัวที่ทุกคนเห็น (ต้องมี "ทดลองของแต่งตัว" ด้วย)', group: 'หน้าตา' },
   cosManage: { name: 'ดูจัดการของแต่งตัว', desc: 'แท็บ "จัดการของแต่งตัว": ดูทุกชิ้นว่าซ่อน/แสดง ราคาคริสตัลมิติ และค่าหน้าตารายชิ้น', group: 'หน้าตา' },
@@ -659,6 +666,13 @@ export interface AdminBalance {
   scaled?: { characters: number; stashes: number; listings: number };
   backup?: string;
   ms?: number;
+}
+
+/** GET/POST /api/admin/anim-look: the server-wide per-facing animation fixes (only changes, src/shared/animTuning.ts). */
+export interface AdminAnimLook {
+  tuning: AnimTuning;
+  /** May this admin save it (the `animTune` switch). */
+  canEdit: boolean;
 }
 
 /** GET/POST /api/admin/cos-look: the server-wide cosmetic tuning (only what differs from the code defaults). */
