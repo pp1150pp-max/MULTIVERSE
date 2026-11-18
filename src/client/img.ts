@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import { PAPER_ICONS } from './paperIcons';
 /**
  * The real URL of a sprite PNG under public/assets/sprites/. The build ships those PNGs as WebP
  * (see the webp plugin in vite.config.ts), so outside dev `.png` becomes `.webp`. Dev serves the PNGs as they are.
@@ -24,13 +25,14 @@ const PAPER_UI = new Set([
   'touch/icon_chat', 'touch/icon_dash', 'touch/icon_mount', 'touch/icon_talk',
   'loading/sword', 'loading/mage', 'loading/gunslinger', 'loading/portal_1', 'loading/portal_2',
 ]);
-const UI_PATH = /sprites\/ui\/([a-z0-9_/]+)\.(png|webp)/g;
+const UI_PATH = /sprites\/(ui|icons)\/([a-z0-9_/]+)\.(png|webp)/g;
 
 let paperUi = false;
 
-/** `sprites/ui/x.png` → `sprites/paper/ui/x.png` for every UI file in the text that has a paper version. */
+/** `sprites/ui|icons/x.png` → `sprites/paper/ui|icons/x.png` for every file in the text that has a paper version. */
 function toPaperUi(text: string): string {
-  return text.replace(UI_PATH, (all, name: string, ext: string) => (PAPER_UI.has(name) ? `sprites/paper/ui/${name}.${ext}` : all));
+  return text.replace(UI_PATH, (all, dir: string, name: string, ext: string) =>
+    ((dir === 'ui' ? PAPER_UI : PAPER_ICONS).has(name) ? `sprites/paper/${dir}/${name}.${ext}` : all));
 }
 
 /**
@@ -47,7 +49,7 @@ export function usePaperUi(): void {
         for (let i = 0; i < st.length; i++) {
           const prop = st[i];
           const v = st.getPropertyValue(prop);
-          if (v.includes('sprites/ui/')) {
+          if (v.includes('sprites/ui/') || v.includes('sprites/icons/')) {
             const nv = toPaperUi(v);
             if (nv !== v) st.setProperty(prop, nv, st.getPropertyPriority(prop));
           }
@@ -71,7 +73,7 @@ export function usePaperUi(): void {
     img.alt = '';
     logo.replaceChildren(img);
   }
-  for (const el of Array.from(document.querySelectorAll<HTMLImageElement>('img[src*="sprites/ui/"]'))) {
+  for (const el of Array.from(document.querySelectorAll<HTMLImageElement>('img[src*="sprites/ui/"], img[src*="sprites/icons/"]'))) {
     const v = el.getAttribute('src')!;
     const nv = toPaperUi(v);
     if (nv !== v) el.setAttribute('src', nv);
