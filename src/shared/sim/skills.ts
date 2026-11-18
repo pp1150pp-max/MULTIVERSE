@@ -178,8 +178,19 @@ const RAPID_GAP = 0.08;
 
 const aimAngle = (p: Player, aim: Vec2) => Math.atan2(aim.z - p.z, aim.x - p.x);
 
+/**
+ * A cue for the client's three.quarks particles (src/client/quarksHooks.ts ON_CUE) for what plays no picture: the basic
+ * attack and the dash. A burst of 0 particles (the old client draws nothing for it), tagged with the skill by
+ * asCaster; colour = the caster's class, speed = the angle. Only this one event is tagged, so nothing else about the
+ * swing or the dash changes.
+ */
+export function quarksCue(sim: Sim, p: Player, skill: string, ang: number): void {
+  sim.asCaster(p, () => sim.fx('burst', p.x, 0, p.z, p.cls.id, 0, ang), skill);
+}
+
 export function basicAttack(sim: Sim, p: Player, aim: Vec2): void {
   const ang = aimAngle(p, aim);
+  quarksCue(sim, p, p.cls.skills.find((s) => s.kind === 'basic')!.id, ang);
   passiveOnBasic(sim, p);
   switch (p.cls.id) {
     case 'sword': {

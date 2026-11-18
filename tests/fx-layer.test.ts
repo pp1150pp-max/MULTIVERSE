@@ -7,7 +7,9 @@ import { CLASSES } from '../src/shared/data/classes';
 import { ZONE_1 } from '../src/shared/data/zones';
 import { Sim } from '../src/shared/sim/Sim';
 import { newCharacterData } from '../src/shared/sim/Player';
-import { castSkill } from '../src/shared/sim/skills';
+import { basicAttack, castSkill } from '../src/shared/sim/skills';
+import { ON_CUE, ON_EFFECT } from '../src/client/quarksHooks';
+import { QUARKS_SKILLS } from '../src/shared/fxLayerTuning';
 import { codeFxLayer } from '../src/shared/fxLayerTuning';
 import { IDLE_INTENT } from '../src/shared/sim/types';
 import { circleDesign } from '../src/client/circleDesigns';
@@ -114,6 +116,50 @@ function later(cls: 'mage', id: string, name: string, withMonster: boolean): unk
   ok(b[5] === b.at(-1) && b[6] === true && b[7] === 'meteor', `Meteor's crater (a timer): caster id, hit (${JSON.stringify(b)})`);
   const c = later('mage', 'meteor', 'crater', false);
   ok(c[5] === c.at(-1) && c[6] === false, `Meteor on nothing: hit = false (${JSON.stringify(c)})`);
+}
+
+// three.quarks for every skill (owner 2026-11-19): every non-passive swordsman skill has a switch, and the Sim really
+// sends each picture the hook table names, tagged with its skill (a typo there would silently draw nothing).
+{
+  const sword = CLASSES.sword.skills.filter((s) => s.kind !== 'passive');
+  const noSwitch = sword.filter((s) => !(s.id in QUARKS_SKILLS)).map((s) => s.id);
+  ok(noSwitch.length === 0, `every swordsman skill has a qk switch (missing: ${noSwitch.join(', ')})`);
+  const noHook = sword.filter((s) => s.id !== 'dash' && !Object.values(ON_EFFECT).some((h) => h!.skill === s.id) && !Object.values(ON_CUE).some((h) => h.skill === s.id)).map((s) => s.id);
+  ok(noHook.length === 0, `every swordsman skill has a hook (missing: ${noHook.join(', ')})`);
+  ok(Object.values(ON_CUE).some((h) => h.skill === 'dash'), 'the sword dash has a cue');
+  for (const sk of sword) {
+    const wants = Object.entries(ON_EFFECT).filter(([, h]) => h!.skill === sk.id).map(([k]) => k.split('/')[1]);
+    if (!wants.length) continue;
+    const sim = new Sim(ZONE_1);
+    const m = sim.monsters.find((x) => !x.isBoss)!;
+    sim.monsters.length = 0;
+    sim.monsters.push(m);
+    m.x = 2;
+    m.z = 0;
+    m.hp = 1e9;
+    const p = sim.addPlayer({ ...newCharacterData('Sw', 'sword'), level: 40 });
+    p.x = 0;
+    p.z = 0;
+    const seen = new Set<string>();
+    const take = () => { for (const e of sim.drainEvents()) if (e.t === 'fx' && e.name === 'effect') { const a = e.args as unknown[]; if (a[7] === sk.id) seen.add(String(a[0])); } };
+    sim.drainEvents();
+    castSkill(sim, p, sk, { x: 2, z: 0 }, 1);
+    take();
+    for (let i = 0; i < 150; i++) { sim.step(1 / 30, () => IDLE_INTENT); take(); }
+    for (const w of wants) ok(seen.has(w), `${sk.id} plays ${w} tagged with itself (saw ${[...seen].join(',')})`);
+  }
+  // the basic attack and the dash send a cue: a burst of 0 tagged with the skill, colour = class, speed = angle
+  const sim = new Sim(ZONE_1);
+  const p = sim.addPlayer({ ...newCharacterData('Cue', 'sword'), level: 5 });
+  p.x = 0;
+  p.z = 0;
+  sim.drainEvents();
+  basicAttack(sim, p, { x: 3, z: 0 });
+  const cue = sim.drainEvents().find((e) => e.t === 'fx' && e.name === 'burst' && (e.args as unknown[])[7] === 'slash');
+  ok(!!cue && cue.t === 'fx' && (cue.args as unknown[])[4] === 0 && (cue.args as unknown[])[3] === 'sword', 'basic attack cue');
+  sim.step(1 / 30, () => ({ ...IDLE_INTENT, dash: true, move: { x: 1, z: 0 } }));
+  const dcue = sim.drainEvents().find((e) => e.t === 'fx' && e.name === 'burst' && (e.args as unknown[])[7] === 'dash');
+  ok(!!dcue && dcue.t === 'fx' && (dcue.args as unknown[])[4] === 0, 'dash cue');
 }
 
 finish('fx-layer');

@@ -97,6 +97,15 @@ export const QUARKS_SKILLS = {
   meteor: 'อุกกาบาต', fireball: 'ลูกไฟ', mg_starfall: 'ดาวตก', frostnova: 'วงน้ำแข็ง', mg_firerain: 'ฝนเพลิง',
   sw_judgement: 'ดาบพิพากษา', whirlwind: 'พายุดาบ', earthquake: 'ปฐพีแยก', sw_unleash: 'ปลดปล่อยพลัง',
   gs_rocketrain: 'ฝนจรวด', gs_explosive: 'กระสุนระเบิด', headshot: 'ยิงหัว', gs_cluster: 'ระเบิดลูกปราย',
+  // every class's dash is one skill id: one switch (the Swordsman's is drawn first, the others with their classes)
+  dash: 'แดช',
+  // Swordsman, the rest (owner 2026-11-19)
+  slash: 'ฟัน', sw_heavyslash: 'ฟันหนัก', sw_sunder: 'ฟันทำลายเกราะ', sw_swordwave: 'คลื่นดาบ', sw_execute: 'ประหาร',
+  sw_flurry: 'คมดาบต่อเนื่อง', sw_bladering: 'วงแหวนคมดาบ', sw_crush: 'ทุบทำลาย',
+  charge: 'พุ่งชน', sw_triple: 'คอมโบสามจังหวะ', sw_backstep: 'ถอยฟัน', sw_hunt: 'ไล่ล่า', sw_spindodge: 'หมุนตัวหลบ',
+  sw_bladedance: 'ระบำดาบ', sw_shadowstep: 'ก้าวเงา', sw_overdrive: 'เร่งเครื่อง', sw_shadowswap: 'เงาสลับร่าง', sw_thousandcuts: 'พันคมดาบ',
+  sw_armorbash: 'กระแทกเกราะ', sw_taunt: 'ยั่วยุ', sw_guard: 'ตั้งรับ', sw_shockwave: 'คลื่นสั่นสะเทือน', sw_thorns: 'เกราะสะท้อน',
+  sw_anchor: 'ปักหลัก', sw_warcry: 'ปลุกใจนักรบ', sw_cataclysm: 'ปฐพีถล่ม', sw_unbreakable: 'ราชันย์ไม่ล้ม',
 } as const;
 export type QuarksSkill = keyof typeof QUARKS_SKILLS;
 export type QuarksKey = `qk_${QuarksSkill}`;

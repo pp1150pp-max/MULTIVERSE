@@ -368,7 +368,7 @@ export class Effects implements FxApi {
       }
     }
     // three.quarks particles over the hand-drawn art of some skills (trial, docs/systems/skill-fx-layer.md).
-    if (skill) this.quarks?.onEffect(name, skill, x, z, size, by);
+    if (skill) this.quarks?.onEffect(name, skill, x, z, size, by, angle);
     const def = EFFECTS[name];
     const tex = frameTexture(def.sheet);
     if (!tex) {
@@ -619,7 +619,7 @@ export class Effects implements FxApi {
 
   burst(x: number, y: number, z: number, color: string, n = 8, speed = 4, by?: number, skill?: string): void {
     // a skill drawn in three.quarks instead (Fire Rain's falling fire)
-    if (skill && this.quarks?.onBurst(skill, x, z, by)) return;
+    if (skill && this.quarks?.onBurst(skill, x, z, by, n, speed, color)) return;
     for (let i = 0; i < n; i++) {
       const s = this.glowSprite(color, 0.35, 1);
       s.position.set(x, y, z);

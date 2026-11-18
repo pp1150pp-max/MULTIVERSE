@@ -18,6 +18,7 @@ import { currentBalance } from '../shared/balance';
 import { quarksKey, type QuarksSkill } from '../shared/fxLayerTuning';
 import type { SkillEffect } from '../shared/sim/types';
 import { gfxOthers, gfxParticles } from './gfxPrefs';
+import { cueKey, ON_CUE, ON_EFFECT, type QuarksHook } from './quarksHooks';
 
 // quarks.core has its own vector classes (same shape as three's); its behaviours want those
 const V3 = (x: number, y: number, z: number) => new QVector3(x, y, z);
@@ -71,9 +72,48 @@ interface Recipe {
   /** Particles at the start. */
   bursts?: number;
   shape?: EmitterShape;
+  /** Point the emitter's +Z (a cone's axis) along the effect's angle, plus `turn` (π = behind it). */
+  dir?: boolean;
+  turn?: number;
   stretched?: number;
   behaviors?: Behavior[];
 }
+
+const FIRE = () => grad([['#fff2c0', 0], ['#ffa030', 0.35], ['#d23a10', 1]]);
+const shrink = () => new SizeOverLife(curve(1, 0.9, 0.5, 0));
+const grow = () => new SizeOverLife(curve(0.6, 1.2, 1, 0.2));
+const puff = () => new SizeOverLife(curve(0.5, 1, 1.3, 1.5));
+const slow = () => new SpeedOverLife(curve(1, 0.5, 0.2, 0));
+const down = (g = 9) => new ApplyForce(V3(0, -1, 0), cv(g));
+const up = (g = 1.5) => new ApplyForce(V3(0, 1, 0), cv(g));
+const flash = (size: number, from: string, to: string, life = 0.16): Recipe =>
+  ({ life: cv(life), size: cv(size), bursts: 1, behaviors: [grad([[from, 0], [to, 1]], [[1, 0], [0, 1]])] });
+const smoke = (color: QVector4, n: number, size: [number, number], speed: [number, number], radius = 0.6): Recipe => ({
+  tex: 'smoke', additive: false, life: iv(0.9, 1.5), speed: iv(...speed), size: iv(...size), color, bursts: n,
+  shape: new SphereEmitter({ radius }), behaviors: [puff(), up(0.5), new RotationOverLife(iv(-0.6, 0.6)), fade()],
+});
+const sparks = (n: number, speed: [number, number], from: string, to: string, g = 9): Recipe => ({
+  tex: 'spark', life: iv(0.25, 0.6), speed: iv(...speed), size: cv(0.1), bursts: n, shape: new SphereEmitter({ radius: 0.2 }), stretched: 0.06,
+  behaviors: [grad([[from, 0], [to, 1]]), down(g)],
+});
+/** A ring running out along the ground (frost, shockwaves, dust). */
+const ring = (n: number, speed: [number, number], size: [number, number], behaviors: Behavior[], extra: Partial<Recipe> = {}): Recipe => ({
+  flat: true, life: iv(0.35, 0.6), speed: iv(...speed), size: iv(...size), bursts: n,
+  shape: new CircleEmitter({ radius: 0.4, thickness: 0.2 }), behaviors, ...extra,
+});
+/** A dust ring that slows and spreads. */
+const dust = (n: number, speed: [number, number], color: QVector4): Recipe =>
+  ring(n, speed, [1.4, 2.6], [puff(), slow(), fade()], { tex: 'smoke', additive: false, life: iv(0.9, 1.4), color });
+/** Heavy bits thrown up that fall back (rocks). */
+const debris = (n: number, color: string, speed: [number, number], spread = 0.6): Recipe => ({
+  flat: true, additive: false, life: iv(0.6, 1), speed: iv(...speed), size: iv(0.18, 0.4), bursts: n, color: rgba(color),
+  shape: new ConeEmitter({ radius: 1.2, angle: spread, thickness: 1 }), behaviors: [down(16), new RotationOverLife(iv(-6, 6))],
+});
+/** Embers floating up off the ground over `secs`. */
+const embers = (radius: number, secs: number, rate: number, from: string, to: string): Recipe => ({
+  flat: true, duration: secs, life: iv(0.6, 1.2), speed: iv(0.3, 1), size: iv(0.08, 0.16), rate,
+  shape: new CircleEmitter({ radius, thickness: 1 }), behaviors: [grad([[from, 0], [to, 1]]), up()],
+});
 
 export class QuarksFx {
   private readonly batch = new BatchedRenderer();
@@ -100,6 +140,7 @@ export class QuarksFx {
     };
     this.buildMeteor();
     this.buildMore();
+    this.buildSword();
   }
 
   private mat(tex: TexName, additive: boolean): THREE.MeshBasicMaterial {
@@ -133,6 +174,8 @@ export class QuarksFx {
     this.tpl.set(name, recipes.map((r) => {
       const s = this.system(r);
       s.emitter.userData.flat = !!r.flat;
+      s.emitter.userData.dir = !!r.dir;
+      s.emitter.userData.turn = r.turn ?? 0;
       return s;
     }));
   }
@@ -143,7 +186,7 @@ export class QuarksFx {
    * window (quality, and other players' particles: src/client/gfxPrefs.ts); another player's effect isn't drawn
    * at all while the screen is over quarksCap (docs/systems/skill-fx-layer.md).
    */
-  private play(name: string, x: number, y: number, z: number, by: number | undefined, parent: THREE.Object3D = this.scene): ParticleSystem[] {
+  private play(name: string, x: number, y: number, z: number, by: number | undefined, parent: THREE.Object3D = this.scene, yaw?: number): ParticleSystem[] {
     const cfg = currentBalance().fxLayer;
     const mine = this.isMine(by);
     if (!mine && this.live >= cfg.quarksCap) return [];
@@ -157,6 +200,7 @@ export class QuarksFx {
       }
       s.emitter.position.set(x, y, z);
       if (t.emitter.userData.flat) s.emitter.rotation.x = FLAT;
+      if (t.emitter.userData.dir && yaw !== undefined) s.emitter.rotation.y = Math.PI / 2 - (yaw + t.emitter.userData.turn);
       parent.add(s.emitter);
       this.batch.addSystem(s);
       return s;
@@ -242,9 +286,14 @@ export class QuarksFx {
    * A skill's effect (Effects.effect, tagged with its skill by Sim.asCaster): the three.quarks particles drawn over
    * its hand-drawn art. Which picture of which skill plays which template: ON_EFFECT below.
    */
-  onEffect(name: SkillEffect, skill: string, x: number, z: number, size: number, by?: number): void {
-    const hook = ON_EFFECT[`${skill}/${name}`];
-    if (hook && skillOn(hook.skill)) this.play(typeof hook.tpl === 'string' ? hook.tpl : hook.tpl(size), x, hook.y ?? 0.3, z, by);
+  onEffect(name: SkillEffect, skill: string, x: number, z: number, size: number, by?: number, angle = 0): void {
+    this.hook(ON_EFFECT[`${skill}/${name}` as keyof typeof ON_EFFECT], x, z, size, by, angle);
+  }
+
+  private hook(h: QuarksHook | undefined, x: number, z: number, size: number, by: number | undefined, angle: number): void {
+    if (!h || !skillOn(h.skill)) return;
+    const reach = h.fwd ?? 0;
+    this.play(typeof h.tpl === 'string' ? h.tpl : h.tpl(size), x + Math.cos(angle) * reach, h.y ?? 0.3, z + Math.sin(angle) * reach, by, undefined, angle);
   }
 
   /** A skill's warning circle (tagged by Sim.asCaster): Starfall's star falls during it, landing as its hit plays. */
@@ -252,50 +301,21 @@ export class QuarksFx {
     if (skill === 'mg_starfall' && skillOn('mg_starfall')) this.fall('starBall', x, z, duration, by, 9, 0.35);
   }
 
-  /** A skill's burst (Effects.burst): Fire Rain's falling fire. true = drawn here instead of the old sparks. */
-  onBurst(skill: string, x: number, z: number, by?: number): boolean {
+  /**
+   * A skill's burst (Effects.burst): Fire Rain's falling fire. true = drawn here instead of the old sparks. A burst of
+   * 0 is a cue for the basic attack or the dash (quarksCue in the Sim): colour = the caster's class, speed = the angle.
+   */
+  onBurst(skill: string, x: number, z: number, by?: number, n?: number, speed?: number, cls?: string): boolean {
+    if (n === 0) {
+      this.hook(ON_CUE[cueKey(skill, cls ?? '')], x, z, 1, by, speed ?? 0);
+      return true;
+    }
     if (skill !== 'mg_firerain' || !skillOn('mg_firerain')) return false;
     this.fall('fireDrop', x, z, 0.28, by, 7, 0.25, () => this.play('fireSplash', x, 0.3, z, by));
     return true;
   }
 
   private buildMore(): void {
-    const FIRE = () => grad([['#fff2c0', 0], ['#ffa030', 0.35], ['#d23a10', 1]]);
-    const shrink = () => new SizeOverLife(curve(1, 0.9, 0.5, 0));
-    const grow = () => new SizeOverLife(curve(0.6, 1.2, 1, 0.2));
-    const puff = () => new SizeOverLife(curve(0.5, 1, 1.3, 1.5));
-    const slow = () => new SpeedOverLife(curve(1, 0.5, 0.2, 0));
-    const down = (g = 9) => new ApplyForce(V3(0, -1, 0), cv(g));
-    const up = (g = 1.5) => new ApplyForce(V3(0, 1, 0), cv(g));
-    const flash = (size: number, from: string, to: string, life = 0.16): Recipe =>
-      ({ life: cv(life), size: cv(size), bursts: 1, behaviors: [grad([[from, 0], [to, 1]], [[1, 0], [0, 1]])] });
-    const smoke = (color: QVector4, n: number, size: [number, number], speed: [number, number], radius = 0.6): Recipe => ({
-      tex: 'smoke', additive: false, life: iv(0.9, 1.5), speed: iv(...speed), size: iv(...size), color, bursts: n,
-      shape: new SphereEmitter({ radius }), behaviors: [puff(), up(0.5), new RotationOverLife(iv(-0.6, 0.6)), fade()],
-    });
-    const sparks = (n: number, speed: [number, number], from: string, to: string, g = 9): Recipe => ({
-      tex: 'spark', life: iv(0.25, 0.6), speed: iv(...speed), size: cv(0.1), bursts: n, shape: new SphereEmitter({ radius: 0.2 }), stretched: 0.06,
-      behaviors: [grad([[from, 0], [to, 1]]), down(g)],
-    });
-    /** A ring running out along the ground (frost, shockwaves, dust). */
-    const ring = (n: number, speed: [number, number], size: [number, number], behaviors: Behavior[], extra: Partial<Recipe> = {}): Recipe => ({
-      flat: true, life: iv(0.35, 0.6), speed: iv(...speed), size: iv(...size), bursts: n,
-      shape: new CircleEmitter({ radius: 0.4, thickness: 0.2 }), behaviors, ...extra,
-    });
-    /** A dust ring that slows and spreads. */
-    const dust = (n: number, speed: [number, number], color: QVector4): Recipe =>
-      ring(n, speed, [1.4, 2.6], [puff(), slow(), fade()], { tex: 'smoke', additive: false, life: iv(0.9, 1.4), color });
-    /** Heavy bits thrown up that fall back (rocks). */
-    const debris = (n: number, color: string, speed: [number, number], spread = 0.6): Recipe => ({
-      flat: true, additive: false, life: iv(0.6, 1), speed: iv(...speed), size: iv(0.18, 0.4), bursts: n, color: rgba(color),
-      shape: new ConeEmitter({ radius: 1.2, angle: spread, thickness: 1 }), behaviors: [down(16), new RotationOverLife(iv(-6, 6))],
-    });
-    /** Embers floating up off the ground over `secs`. */
-    const embers = (radius: number, secs: number, rate: number, from: string, to: string): Recipe => ({
-      flat: true, duration: secs, life: iv(0.6, 1.2), speed: iv(0.3, 1), size: iv(0.08, 0.16), rate,
-      shape: new CircleEmitter({ radius, thickness: 1 }), behaviors: [grad([[from, 0], [to, 1]]), up()],
-    });
-
     // Fireball's blast: the Meteor's, smaller
     this.define('fireBlast', [
       flash(4.5, '#fff2c0', '#ffa030'),
@@ -385,22 +405,68 @@ export class QuarksFx {
       ring(14, [5, 7], [0.2, 0.35], [grad([['#ffd0c8', 0], ['#ff3a2a', 1]]), shrink()]),
     ]);
   }
-}
+  // ------------------------------------------------------------------ Swordsman: every skill (owner 2026-11-19)
+  // Light on purpose: the basic attack and the dashes are used all the time, buffs are a soft glow round the body.
+  private buildSword(): void {
+    const ORANGE: [string, string] = ['#fff2c0', '#ff7a4a'];
+    const CYAN: [string, string] = ['#ffffff', '#7ad8ff'];
+    const GOLD: [string, string] = ['#fff6c8', '#ffcf5a'];
+    const RED: [string, string] = ['#ffd0c8', '#ff3a2a'];
+    /** Sparks thrown forward along the swing (the emitter is turned to the effect's angle). */
+    const fan = (n: number, speed: [number, number], c: [string, string], spread = 0.7, extra: Partial<Recipe> = {}): Recipe => ({
+      dir: true, tex: 'spark', life: iv(0.15, 0.32), speed: iv(...speed), size: cv(0.1), bursts: n, stretched: 0.06,
+      shape: new ConeEmitter({ radius: 0.15, angle: spread, thickness: 1 }), behaviors: [grad([[c[0], 0], [c[1], 1]]), down(3)], ...extra,
+    });
+    /** Sparks flying out every way. */
+    const radial = (n: number, speed: [number, number], c: [string, string], g = 3): Recipe => sparks(n, speed, c[0], c[1], g);
+    /** Light motes lifting off the ground round a point: the glow of a buff. */
+    const rise = (n: number, radius: number, c: [string, string], secs = 0.1): Recipe => ({
+      flat: true, duration: secs, life: iv(0.6, 1.1), speed: iv(0.3, 0.9), size: iv(0.08, 0.16), bursts: n,
+      shape: new CircleEmitter({ radius, thickness: 1 }), behaviors: [grad([[c[0], 0], [c[1], 1]]), up(1.2)],
+    });
+    const glowRing = (n: number, speed: [number, number], c: [string, string]): Recipe =>
+      ring(n, speed, [0.22, 0.4], [grad([[c[0], 0], [c[1], 1]]), shrink()], { tex: 'spark', stretched: 0.05 });
+    const chip = (n: number, color: string): Recipe => ({ ...debris(n, color, [4, 8], 0.9), life: iv(0.4, 0.7), size: iv(0.1, 0.22) });
 
-/** A skill's picture (`skill/effect`) → the template drawn over it, at height `y` (0.3 if left out). */
-const ON_EFFECT: Record<string, { skill: QuarksSkill; tpl: string | ((size: number) => string); y?: number }> = {
-  'meteor/crater': { skill: 'meteor', tpl: 'meteorBlast', y: 0.4 },
-  'fireball/explosion': { skill: 'fireball', tpl: 'fireBlast', y: 0.6 },
-  'mg_starfall/mg_starhit': { skill: 'mg_starfall', tpl: 'starHit' },
-  'frostnova/mg_frostnova': { skill: 'frostnova', tpl: 'frostNova', y: 0.4 },
-  'sw_judgement/sw_bigsword': { skill: 'sw_judgement', tpl: 'judgement' },
-  'whirlwind/whirlwind': { skill: 'whirlwind', tpl: 'whirlwind', y: 0.8 },
-  'earthquake/quake': { skill: 'earthquake', tpl: 'quake' },
-  // Unleash plays a ring and a quake at the same spot: drawn on the ring only
-  'sw_unleash/sw_nova': { skill: 'sw_unleash', tpl: 'unleash', y: 0.5 },
-  'gs_rocketrain/gs_blast': { skill: 'gs_rocketrain', tpl: 'rocket' },
-  'gs_explosive/gs_blast': { skill: 'gs_explosive', tpl: 'blastBig', y: 0.5 },
-  'headshot/headshot_hit': { skill: 'headshot', tpl: 'headshot', y: 1 },
-  // the main blast (size 3) and the bomblets (1.5)
-  'gs_cluster/gs_blast': { skill: 'gs_cluster', tpl: (size) => (size >= 2.2 ? 'blastBig' : 'blastSmall'), y: 0.5 },
-};
+    // basic attack: a few sparks along the swing; the dash: a puff and sparks left behind
+    this.define('swSlashLite', [fan(5, [4, 8], ORANGE, 0.8, { life: iv(0.12, 0.25) })]);
+    this.define('swDash', [
+      { tex: 'smoke', additive: false, life: iv(0.4, 0.7), speed: iv(0.2, 0.8), size: iv(0.6, 1), bursts: 3, color: V4(0.62, 0.58, 0.5, 0.5),
+        shape: new SphereEmitter({ radius: 0.25 }), behaviors: [puff(), fade()] },
+      fan(4, [3, 6], CYAN, 0.5, { turn: Math.PI }),
+    ]);
+    // Blade line
+    this.define('swHeavy', [flash(2.8, '#fff2c0', '#ff7a4a', 0.14), fan(16, [6, 13], ORANGE, 0.75), chip(4, '#ffb070')]);
+    this.define('swShatter', [flash(2.4, '#ffffff', '#ffb05a', 0.12), chip(10, '#b8c4d0'), radial(10, [3, 8], ['#ffffff', '#ffb05a'], 9)]);
+    this.define('swWave', [flash(1.8, '#ffffff', '#9fe0ff', 0.12), fan(10, [8, 15], ['#ffffff', '#7ad8ff'], 0.35)]);
+    this.define('swExecute', [flash(3, '#ffe0d8', '#ff3a2a', 0.15), fan(18, [6, 13], RED, 0.8), radial(8, [2, 5], ['#ff8a7a', '#8a1010'], 6)]);
+    this.define('swFlurry', [fan(5, [4, 9], ORANGE, 0.8, { life: iv(0.12, 0.24) })]);
+    this.define('swBladeRing', [flash(3.2, '#fff2c0', '#ff7a4a', 0.14), glowRing(24, [7, 10], ORANGE)]);
+    this.define('swCrush', [flash(4.5, '#fff2c0', '#ff6a3a', 0.18), debris(16, '#7a6050', [6, 10]), dust(10, [4, 7], V4(0.45, 0.38, 0.32, 0.7)), radial(14, [5, 12], ['#ffffff', '#ffb35a'], 8)]);
+    // Gale line
+    this.define('swCharge', [fan(12, [8, 14], ORANGE, 0.45, { turn: Math.PI }), dust(6, [2, 4], V4(0.55, 0.5, 0.42, 0.55))]);
+    this.define('swTripleHit', [fan(5, [4, 9], CYAN, 0.8, { life: iv(0.12, 0.25) })]);
+    this.define('swWind', [flash(2.6, '#ffffff', '#9fe0ff', 0.14), glowRing(16, [5, 8], CYAN)]);
+    this.define('swWindSmall', [glowRing(8, [4, 6], CYAN)]);
+    this.define('swTrail', [fan(8, [5, 10], CYAN, 0.4, { turn: Math.PI })]);
+    this.define('swShadowTrail', [fan(10, [6, 12], ['#ffffff', '#8a7aff'], 0.4, { turn: Math.PI }), radial(6, [1, 3], ['#d0c8ff', '#5a3aff'], 1)]);
+    this.define('swOverdrive', [flash(2.6, '#ffffff', '#7ad8ff', 0.2), rise(16, 0.9, CYAN)]);
+    this.define('swXHit', [flash(2, '#ffffff', '#c8f0ff', 0.1), radial(8, [3, 8], ['#ffffff', '#9fe0ff'], 4)]);
+    this.define('swXTiny', [radial(4, [2, 5], ['#ffffff', '#9fe0ff'], 4)]);
+    // Bulwark line
+    this.define('swBash', [flash(2.6, '#fff6c8', '#ffcf5a', 0.13), fan(12, [5, 11], GOLD, 0.6), chip(5, '#b8a070')]);
+    this.define('swTaunt', [flash(3, '#ffe0d8', '#ff5a3a', 0.2), glowRing(24, [6, 9], RED)]);
+    this.define('swGuard', [flash(2.2, '#ffffff', '#ffe08a', 0.18), rise(14, 1.2, GOLD)]);
+    // a crack along the ground: sparks run both ways from its middle
+    this.define('swShock', [
+      fan(10, [0, 18], GOLD, 0.05, { life: iv(0.2, 0.32), size: cv(0.14) }),
+      fan(10, [0, 18], GOLD, 0.05, { life: iv(0.2, 0.32), size: cv(0.14), turn: Math.PI }),
+      fan(4, [0, 12], GOLD, 0.1, { tex: 'smoke', additive: false, stretched: undefined, size: iv(0.8, 1.4), life: iv(0.5, 0.8), color: V4(0.5, 0.42, 0.32, 0.55) }),
+    ]);
+    this.define('swThorns', [flash(2, '#ffe0c8', '#ff7a4a', 0.12), radial(18, [4, 9], ['#ffffff', '#ff6a3a'], 5), glowRing(10, [3, 5], RED)]);
+    this.define('swAnchor', [dust(8, [2, 4], V4(0.5, 0.42, 0.32, 0.6)), chip(8, '#8a7a5a'), rise(10, 1.2, GOLD)]);
+    this.define('swWarcry', [flash(3, '#fff6c8', '#ffcf5a', 0.2), glowRing(24, [6, 9], GOLD), rise(22, 4.5, GOLD)]);
+    this.define('swCata', [debris(14, '#8a6a4a', [4, 8], 0.8), dust(10, [4, 7], V4(0.5, 0.42, 0.32, 0.65)), glowRing(14, [6, 9], GOLD)]);
+    this.define('swKing', [flash(6, '#ffffff', '#ffe08a', 0.24), glowRing(30, [7, 11], GOLD), rise(30, 5, ['#ffffff', '#ffcf5a'], 1.2)]);
+  }
+}
