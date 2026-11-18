@@ -273,6 +273,19 @@ for (const cls of PAPER ? [] : CLASSES) {
   } else console.warn(`missing ${file}`);
 }
 
+// ---- papercraft NPCs (COS_PAPER=1; art_templates/papercraft_chars/raw/npc/<file>.png: 3 rows front / side / back
+// × 4 breathing frames, art_templates/papercraft_chars/NPC.md) → public/assets/sprites/paper/npc/, laid out like the
+// old ones (208px cells, body 200px tall) but 4 frames across.
+if (PAPER) {
+  const dir = path.join(ROOT, 'art_templates/papercraft_chars/raw/npc');
+  for (const f of fs.existsSync(dir) ? fs.readdirSync(dir).filter((x) => x.endsWith('.png')) : []) {
+    const src = key(read(path.join(dir, f)));
+    const grid = cells(src, 3, 4, 0.02, `npc ${f}`);
+    const front = grid[0][0];
+    save(layout(src, grid, 200 / (front.box[3] - front.box[1]), null, 208, 2), path.join(ROOT, 'public/assets/sprites/paper/npc', f));
+  }
+}
+
 // ---- single wings (art_templates/cosmetics/raw/<id>_one.png: ONE wing per cell, 5 rows × 3 frames). The game mirrors
 // it into the pair (src/client/cosmeticViews.ts, WingPair). Every cell puts the wing's root (the binding at its left
 // edge) at the cell's left edge, half way down, so the game can turn and mirror each frame around it. One scale for the

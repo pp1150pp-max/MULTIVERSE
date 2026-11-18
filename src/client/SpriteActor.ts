@@ -12,6 +12,8 @@ const DIAGONAL_ROWS = 5;
 const WALK: readonly number[] = [0, 1, 2, 1];
 /** A paper monster's strike frames after its wind-up: each shown this long. */
 const ATTACK_FRAME_SECS = 0.11;
+/** A paper NPC's breathing loop, frames per second. */
+const NPC_IDLE_FPS = 4;
 
 let shadowGeo: THREE.PlaneGeometry | null = null;
 let shadowMat: THREE.MeshBasicMaterial | null = null;
@@ -125,6 +127,10 @@ export class SpriteActor implements Actor {
     } else if (moving) {
       this.animT += dt * fps;
       this.frame = this.cycle[Math.floor(this.animT) % this.cycle.length];
+    } else if (this.sheet.idleFrames) {
+      // A paper NPC breathes while it stands: its frames in order, slowly.
+      this.animT += dt * NPC_IDLE_FPS;
+      this.frame = Math.floor(this.animT) % this.sheet.idleFrames;
     } else {
       this.animT = 0;
       this.frame = 0;

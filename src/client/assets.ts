@@ -25,6 +25,8 @@ export interface SheetInfo {
    * much taller than the unit's height (its cell has room for the attack poses).
    */
   paper?: { walk: number; attack: number; scale: number };
+  /** A paper NPC sheet: this many breathing frames across, looped while it stands (SpriteActor). */
+  idleFrames?: number;
 }
 
 interface SheetSpec {
@@ -607,9 +609,15 @@ async function loadAssets(): Promise<void> {
       let rows = spec.rows;
       let cols = spec.cols;
       let paperMonster: SheetInfo['paper'];
+      let idleFrames: number | undefined;
       try {
         const monster = paperMonsters[key];
-        if (monster) {
+        const npcPaper = paperMaps && spec.path.startsWith(`${BASE}npc/`) ? spec.path.replace(`${BASE}npc/`, `${BASE}paper/npc/`) : null;
+        if (npcPaper && (tex = await loadTexture(npcPaper).catch(() => null as unknown as THREE.Texture))) {
+          // Paper NPCs (art_templates/papercraft_chars/NPC.md): 3 views × 4 breathing frames.
+          cols = 4;
+          idleFrames = 4;
+        } else if (monster) {
           tex = await loadTexture(`${BASE}paper/monsters/${key}.png`);
           paperMonster = { walk: 4, attack: 4, scale: monster.scale };
           cols = 8;
@@ -645,6 +653,7 @@ async function loadAssets(): Promise<void> {
         sideFaces,
         cellAspect: img.width / cols / (img.height / rows),
         ...(paperMonster ? { paper: paperMonster } : {}),
+        ...(idleFrames ? { idleFrames } : {}),
       };
     }),
   ]);
