@@ -312,16 +312,17 @@ export class Terrain {
     // side gate's end (−) toward the bottom gate's (+), so both halves read the same way.
     const market: [string, number, number, number, number][] = [
       // Against the wall.
-      ['mk_handcart', -12.4, 2.6, 1.7, 1], ['barrels', -9.8, 2, 1.6, 0.8], ['mk_goods_stall', -6.6, 3, 3.4, 1.4],
-      ['mk_sacks', -3.2, 2.4, 1.6, 0.9], ['mk_veg_stall', 0, 3, 3.4, 1.4], ['low_stall_a', 3.6, 3, 3, 1.3],
-      ['crates', 6.6, 2.2, 1.6, 0.8], ['low_stall_b', 9.6, 3, 3, 1.3], ['mk_sacks', 12.2, 2.4, 1.4, 0.8],
+      ['mk_handcart', -12.4, 2.6, 1.7, 1], ['barrels', -9.8, 2, 1.6, 0.8], ['SELLER', -6.6, 3, 3.4, 1.4],
+      ['mk_sacks', -3.2, 2.4, 1.6, 0.9], ['mk_veg_stall', 0, 3, 3.4, 1.4], ['mk_goods_stall', 3.6, 3, 3.4, 1.4],
+      ['crates', 6.6, 2.2, 1.6, 0.8], ['mk_veg_stall', 9.6, 3, 3.4, 1.4], ['mk_sacks', 12.2, 2.4, 1.4, 0.8],
       // The second row, in front of it (narrower: the side roads cut the corners).
       ['crates', -9.4, 6.4, 1.6, 0.8], ['mk_potion_table', -7, 7.2, 1.6, 1], ['potted_tree', 0.6, 7, 2.4, 0.6],
       ['mk_tag_table', 3.2, 7.2, 1.6, 1], ['barrels', 6, 6.6, 1.6, 0.8], ['planter', 8.4, 6.6, 1.6, 0.7],
     ];
     const half = (side: 'X' | 'Z', sellerKey: string, extra: [string, number, number, number, number][]) => {
       for (const [key0, t, d, h, c] of [...market, ...extra]) {
-        const key = key0 === 'mk_goods_stall' ? sellerKey : key0;
+        // Every stall here is a picture of its back: they all face the fountain (owner 2026-11-19).
+        const key = key0 === 'SELLER' ? sellerKey : key0;
         // Bottom-right wall (x = +R): t along z from the right gate's end. Bottom-left wall (z = +R): t along x from
         // the left gate's end. The pictures run along z; on the bottom-left wall they're mirrored.
         const [x, z] = side === 'X' ? [R - d, t] : [t, R - d];
