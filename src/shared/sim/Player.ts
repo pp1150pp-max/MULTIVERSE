@@ -434,6 +434,8 @@ export class Player extends Unit {
   snareT = 0;
   /** Cursed into a toad by the Bog Witch (also stunned for as long). The client draws a toad instead. */
   toadT = 0;
+  /** Its skill buffs as the server last sent them (client only, sim/debuffs.ts BUFF_BIT). */
+  buffBits = 0;
   /** Share of damage dealt that heals the player, until sim time `lifestealUntil` (sword Q). */
   lifesteal = 0;
   lifestealUntil = -1;

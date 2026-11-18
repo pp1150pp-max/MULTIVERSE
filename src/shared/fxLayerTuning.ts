@@ -30,6 +30,10 @@ export interface FxLayerConfig {
   mergeSec: number;
   /** Damage numbers only of your own hits and of hits on you (others' are not even sent). */
   ownNumsOnly: boolean;
+  /** Magic circles on the ground under debuffed monsters, buffed players and area skills (src/client/magicCircles.ts). */
+  circles: boolean;
+  /** × the magic circles' brightness. */
+  circleGlow: number;
 }
 
 export type FxLayerTuning = Partial<FxLayerConfig>;
@@ -43,6 +47,7 @@ export const FX_LAYER_RANGE = {
   crit: [0.5, 2],
   maxNums: [10, 200],
   mergeSec: [0, 1],
+  circleGlow: [0, 3],
 } as const satisfies Record<string, readonly [number, number]>;
 export type FxLayerNum = keyof typeof FX_LAYER_RANGE;
 export const FX_LAYER_NUMS = Object.keys(FX_LAYER_RANGE) as FxLayerNum[];
@@ -55,22 +60,24 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   crit: '× ขนาดตัวเลขคริ',
   maxNums: 'ตัวเลขบนจอสูงสุด',
   mergeSec: 'รวมเลขที่โดนในช่วง (วิ)',
+  circleGlow: '× ความสว่างวงเวท',
 };
 
-const FX_LAYER_BOOLS = ['enabled', 'debuffs', 'mergeNums', 'ownNumsOnly'] as const;
+const FX_LAYER_BOOLS = ['enabled', 'debuffs', 'mergeNums', 'ownNumsOnly', 'circles'] as const;
 type FxLayerBool = (typeof FX_LAYER_BOOLS)[number];
 const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
   enabled: 'เอฟเฟกต์สกิล (ชั้นเสริม)',
   debuffs: 'ดีบัฟบนตัวมอน (ไอคอน + เอฟเฟกต์)',
   mergeNums: 'รวมเลขดาเมจที่โดนพร้อมกัน',
   ownNumsOnly: 'เห็นเฉพาะเลขดาเมจของตัวเอง',
+  circles: 'วงเวทบนพื้น (บัฟ ดีบัฟ สกิลวงกว้าง)',
 };
 
 /** The code's own numbers (a fresh copy). */
 export function codeFxLayer(): FxLayerConfig {
   return {
     enabled: true, debuffs: true, glow: 1, ground: 1, particles: 1, shake: 1, hitstopMs: 60, crit: 1,
-    maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false,
+    maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, circles: true, circleGlow: 1,
   };
 }
 const CODE = codeFxLayer();

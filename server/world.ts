@@ -1,7 +1,7 @@
 // The shared online world: one Sim per zone, driven by the input of the players in it. Walking
 // through a portal moves a player's session to the other zone's Sim. The server decides all combat,
 // loot and EXP; clients only move their own character, and the server checks those moves are possible.
-import { debuffMask } from '../src/shared/sim/debuffs';
+import { buffMask, debuffMask } from '../src/shared/sim/debuffs';
 import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage, Server as HttpServer } from 'node:http';
 import { clientIp } from './clientIp';
@@ -2148,6 +2148,7 @@ export class GameWorld {
         id: o.id,
         x: r2(o.x), z: r2(o.z), fx: r2(o.faceX), fz: r2(o.faceZ), mv: o.moving,
         alive: o.alive, hp: Math.round(o.hp), dash: o.isDashing ? o.dashKind : 0,
+        ...buffField(o, sim.time),
         ...withLook<PlayerLook>(s.seenP, nextP, o.id, playerLook(o, looks)),
       })),
       monsters: sim.monsters.filter(near).map((m): MonsterSnap => ({
@@ -2538,6 +2539,11 @@ type MonsterLook = Pick<MonsterSnap, 'def' | 'lv' | 'mhp'>;
 function debuffField(m: Monster, now: number, viewer: number): { db?: number } {
   const db = debuffMask(m, now, viewer);
   return db ? { db } : {};
+}
+/** A player's running skill buffs for the snapshot (nothing when none). */
+function buffField(p: Player, now: number): { bf?: number } {
+  const bf = p.alive ? buffMask(p, now) : 0;
+  return bf ? { bf } : {};
 }
 /** A look bundle and its JSON (what the per-browser caches compare). */
 interface Look { look: PlayerLook | MonsterLook; json: string }

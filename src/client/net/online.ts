@@ -808,6 +808,7 @@ export class OnlineBackend implements Backend {
       }
       p.alive = ps.alive;
       p.dashT = ps.dash ? 1 : 0;
+      p.buffBits = ps.bf ?? 0;
       if (look) {
         p.aura = ps.aura ?? 0;
         p.toadT = ps.toad ? 1 : 0;
