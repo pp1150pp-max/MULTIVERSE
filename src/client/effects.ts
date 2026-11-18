@@ -4,7 +4,11 @@ import { fxSheets, fxTex, type FxSheet } from './assets';
 import type { FxApi, SkillEffect } from '../shared/sim/types';
 import { loopProps, playProps } from './zoneProps';
 import { playLayer, ShotLayer, type FxLayerHooks, type FxLayerHost } from './fxLayer';
-import { QuarksFx, quarksOn } from './quarksFx';
+import type { QuarksFx } from './quarksFx';
+import { currentBalance } from '../shared/balance';
+
+/** The three.quarks trial's switch (fxLayer.quarks, under the extra layer's own switch). */
+const quarksOn = (): boolean => currentBalance().fxLayer.enabled && currentBalance().fxLayer.quarks;
 
 const FRAMES = 6;
 const SHEET_ROWS: Record<FxSheet, number> = {
@@ -276,10 +280,25 @@ export class Effects implements FxApi {
   /** Where a player is now (for zones that follow their caster); set by Game. */
   posOf: ((id: number) => { x: number; z: number } | null) | null = null;
 
-  /** three.quarks particles (trial, fxLayer.quarks): made the first time a skill that uses them plays. */
+  /**
+   * three.quarks particles (trial, fxLayer.quarks). The library is its own chunk, fetched only once the switch is
+   * on (players with it off never download it); until it has arrived, skills play their old look.
+   */
   private quarksFx: QuarksFx | null = null;
-  private get quarks(): QuarksFx {
-    return (this.quarksFx ??= new QuarksFx(this.scene, (by) => by === undefined || !this.layerHooks || by === this.layerHooks.me()));
+  /** Loading now, or (after a failed fetch) the time it may be tried again. */
+  private quarksLoading: true | number = 0;
+  private get quarks(): QuarksFx | null {
+    if (!quarksOn()) return null;
+    if (!this.quarksFx && this.quarksLoading !== true && performance.now() >= this.quarksLoading) {
+      this.quarksLoading = true;
+      import('./quarksFx').then((m) => {
+        this.quarksFx = new m.QuarksFx(this.scene, (by) => by === undefined || !this.layerHooks || by === this.layerHooks.me());
+      }).catch((e) => {
+        console.warn('three.quarks failed to load', e);
+        this.quarksLoading = performance.now() + 15000;
+      });
+    }
+    return this.quarksFx;
   }
 
   constructor(private readonly scene: THREE.Scene) {}
@@ -290,6 +309,8 @@ export class Effects implements FxApi {
   }
 
   update(dt: number): void {
+    // touching `quarks` starts the fetch as soon as the switch is on, so it is ready before the first cast
+    if (this.quarksFx || quarksOn()) this.quarks;
     this.quarksFx?.update(dt);
     for (let i = this.list.length - 1; i >= 0; i--) {
       const fx = this.list[i];
@@ -336,7 +357,7 @@ export class Effects implements FxApi {
       }
     }
     // The Meteor's blast in three.quarks, over its hand-drawn crater (trial, docs/systems/skill-fx-layer.md).
-    if (name === 'crater' && skill === 'meteor' && quarksOn()) this.quarks.meteorBlast(x, z, by);
+    if (name === 'crater' && skill === 'meteor') this.quarks?.meteorBlast(x, z, by);
     const def = EFFECTS[name];
     const tex = frameTexture(def.sheet);
     if (!tex) {
@@ -628,8 +649,9 @@ export class Effects implements FxApi {
 
   /** Visual only: a fireball falling onto (x, z) over `duration`. */
   meteor(x: number, z: number, duration: number, by?: number): void {
-    if (quarksOn()) {
-      this.quarks.meteorFall(x, z, duration, by);
+    const q = this.quarks;
+    if (q) {
+      q.meteorFall(x, z, duration, by);
       return;
     }
     const shot = this.shotSprite('#ff7a2a', 1.6);

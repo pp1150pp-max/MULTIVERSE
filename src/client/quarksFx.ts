@@ -14,8 +14,6 @@ import {
 } from 'three.quarks';
 import { currentBalance } from '../shared/balance';
 
-export const quarksOn = (): boolean => currentBalance().fxLayer.enabled && currentBalance().fxLayer.quarks;
-
 // quarks.core has its own vector classes (same shape as three's); its behaviours want those
 const V3 = (x: number, y: number, z: number) => new QVector3(x, y, z);
 const V4 = (x: number, y: number, z: number, w: number) => new QVector4(x, y, z, w);
