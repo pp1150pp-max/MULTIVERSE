@@ -523,7 +523,10 @@ function paintCos(el: HTMLElement, set: CosmeticDef | undefined): void {
   paintPaperFrame(el, set);
 }
 
-/** Screen pixels per file pixel of the paper frames: the name frame's body is about 24 px tall, the bubble's 36 px at least. */
+/**
+ * Screen pixels per file pixel of the paper frames: the name frame's body is about 24 px tall, the bubble's 36 px at least,
+ * × fxLayer.paperPlate / paperBubble (/admin → ปรับสมดุล → เอฟเฟกต์สกิล).
+ */
 const PAPER_FRAME_SCALE = { plate: 1 / 3, bubble: 0.3 };
 
 /**
@@ -539,7 +542,8 @@ function paintPaperFrame(el: HTMLElement, set: CosmeticDef | undefined): void {
     for (const k of ['border-image-source', 'border-image-slice', 'border-image-width', 'border-image-outset', 'min-width', 'min-height', '--pt', '--pb', '--mw', '--mth', '--mbh', '--ot', '--ob']) st.removeProperty(k);
     return;
   }
-  const s = PAPER_FRAME_SCALE[kind];
+  const fl = currentBalance().fxLayer;
+  const s = PAPER_FRAME_SCALE[kind] * (kind === 'plate' ? fl.paperPlate : fl.paperBubble);
   const px = (v: number): string => `${(v * s).toFixed(1)}px`;
   // Absolute: a relative url() in a custom property would resolve against the stylesheet.
   const url = (suffix: string): string => `url("${new URL(imgUrl(`assets/sprites/paper/ui/${set.id}_${kind}${suffix}.png`), location.href).href}")`;

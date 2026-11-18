@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { orbPlus, orbSlot } from '../shared/data/enhance';
 import { EQUIP_SLOTS } from '../shared/types';
 import { paperTex } from './assets';
+import { currentBalance } from '../shared/balance';
 import { DEFAULT_ORB_LOOK, ORB_PALETTE_IDS, ORB_PALETTE_NAME, ORB_SHAPE_IDS, ORB_SHAPE_NAME, type OrbLook, type OrbPaletteId, type OrbShapeId } from '../shared/orbLook';
 
 /** How an orb of one + level looks. Sizes are in world units (the player is about 1.9 tall). */
@@ -359,6 +360,9 @@ function pixelTex(c: HTMLCanvasElement): THREE.CanvasTexture {
 
 /** Drawing-buffer height in pixels, so point sizes can be given in world units (orthographic camera). */
 const screenH = { value: 1080 };
+/** Paper orbs' accent grey and darkest shading (/admin → ปรับสมดุล → เอฟเฟกต์สกิล, fxLayer.paperOrbLight / paperOrbShade). */
+const orbLight = { value: 0.95 };
+const orbShade = { value: 0.15 };
 const bufSize = new THREE.Vector2();
 
 // gl_PointSize from a world size: projectionMatrix[1][1] = 2 / (view height in world units).
@@ -384,7 +388,7 @@ function materials(): [THREE.ShaderMaterial, THREE.ShaderMaterial] {
   // With the paper switch on: the white paper orbs (tools/cut_paper_extras.cjs), tinted by their greys.
   const paper = paperTex.orbs;
   coreMat ??= new THREE.ShaderMaterial({
-    uniforms: { map: { value: paper ?? orbAtlas() }, uScreenH: screenH, uPaper: { value: paper ? 1 : 0 } },
+    uniforms: { map: { value: paper ?? orbAtlas() }, uScreenH: screenH, uPaper: { value: paper ? 1 : 0 }, uLight: orbLight, uShade: orbShade },
     vertexShader: `
       attribute vec3 color; attribute vec3 accent; attribute float size; attribute float detail;
       uniform float uScreenH;
@@ -396,7 +400,7 @@ function materials(): [THREE.ShaderMaterial, THREE.ShaderMaterial] {
       }`,
     fragmentShader: `
       uniform sampler2D map;
-      uniform float uPaper;
+      uniform float uPaper; uniform float uLight; uniform float uShade;
       varying vec3 vColor; varying vec3 vAccent; varying float vDetail;
       void main() {
         // vDetail = atlas cell: detail (column) + 4 × shape (row).
@@ -407,7 +411,7 @@ function materials(): [THREE.ShaderMaterial, THREE.ShaderMaterial] {
         if (uPaper > 0.5) {
           // Grey paper: the body colour shaded by its grey, the near-white cut-outs (band, star, rays) in the accent.
           float g = t.r;
-          vec3 p = mix(vColor * (0.15 + 0.95 * g), vAccent, smoothstep(0.95, 0.99, g));
+          vec3 p = mix(vColor * (uShade + 0.95 * g), vAccent, smoothstep(uLight, min(1.0, uLight + 0.04), g));
           gl_FragColor = vec4(p, 1.0);
           return;
         }
@@ -471,6 +475,9 @@ function points(cap: number, mat: THREE.ShaderMaterial, attrs: Record<string, nu
   pts.onBeforeRender = (renderer) => {
     renderer.getDrawingBufferSize(bufSize);
     screenH.value = bufSize.y;
+    const fl = currentBalance().fxLayer;
+    orbLight.value = fl.paperOrbLight;
+    orbShade.value = fl.paperOrbShade;
   };
   return pts;
 }

@@ -13,6 +13,7 @@ import type { Effects } from './effects';
 import { shownCos, shownRiding } from './cosLook';
 import { tuneBool, tuneNum as tunedValue } from './cosTune';
 import { cosById } from '../shared/data/cosmetics';
+import { currentBalance } from '../shared/balance';
 import { ISO_DIR } from './world';
 import { axisHiddenInDir, viewDirOf, viewOffKey, type Axis } from '../shared/cosTuning';
 
@@ -491,7 +492,7 @@ export class CosmeticRig {
         const fl = Math.hypot(p.faceX, p.faceZ) || 1;
         const sx = (p.faceZ / fl) * 0.18 * this.stepSide;
         const sz = (-p.faceX / fl) * 0.18 * this.stepSide;
-        if (paper) fx.footprint(p.x + sx, p.z + sz, Math.atan2(-p.faceX, -p.faceZ), paper.foot, tuneNum(id, 'stepSize') * 1.6, this.stepSide < 0, 1.1);
+        if (paper) fx.footprint(p.x + sx, p.z + sz, Math.atan2(-p.faceX, -p.faceZ), paper.foot, tuneNum(id, 'stepSize') * currentBalance().fxLayer.paperFoot, this.stepSide < 0, 1.1);
         else fx.puff(p.x + sx, 0.06, p.z + sz, au.color2, 1.1, tuneNum(id, 'stepSize'));
       }
     }
