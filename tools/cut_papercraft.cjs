@@ -83,7 +83,7 @@ const MAPS = {
     ['row_right_long.png', 'strip', { out: 'row_right_long', rise: false, width: 1600 }],
     // The four NPC buildings against the top walls (owner 2026-11-19, HUB.md 7.7): crystal shop and vault open to the
     // lower right, guild hall and forge to the lower left.
-    ['town3_buildings.png', 'props', { cols: 2, rows: 2, height: 384, clearRows: [578], names: ['b3_crystal', 'b3_vault', 'b3_guild', 'b3_forge'] }],
+    ['town3_buildings.png', 'props', { cols: 2, rows: 2, height: 384, erase: [[1040, 540, 1230, 640]], names: ['b3_crystal', 'b3_vault', 'b3_guild', 'b3_forge'] }],
     // Each seller's own half-ellipse of stalls (HUB.md 7.6): main stall from behind, a wing stall from the front and one
     // from behind, a table, then four odds and ends.
     ['market_left.png', 'props', { cols: 4, rows: 2, height: 256, names: ['ml_main_back', 'ml_wing_front', 'ml_wing_back', 'ml_table', 'ml_cart', 'ml_barrels', 'ml_sacks', 'ml_crates'] }],
@@ -220,8 +220,8 @@ async function save(pipeline, rel) {
 
 /** One file per cell, as tall as the old file of that name (the game sizes props by height). */
 async function props(img, o, label) {
-  // `clearRows`: blank a thin band at these heights first, where two rows' pieces touch (a puff of smoke on a roof).
-  for (const y0 of o.clearRows ?? []) for (let y = y0 - 4; y < y0 + 4; y++) for (let x = 0; x < img.w; x++) img.d[(y * img.w + x) * 4 + 3] = 0;
+  // `erase`: blank these boxes [x0, y0, x1, y1] first (the forge's puff of smoke, which reached up into the row above).
+  for (const [x0, y0, x1, y1] of o.erase ?? []) for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) img.d[(y * img.w + x) * 4 + 3] = 0;
   const boxes = cells(img, o.cols, o.rows, label);
   const one = async (name, box) => {
     // `height`: a new picture with no old file, cut to this many pixels tall.
