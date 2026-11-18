@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 // One magic circle per skill (owner 2026-11-18): every skill has its own design, drawn in code on a canvas. A design is
 // an element (its two colours), a middle picture (motif), and the ring style, rune style and spokes, which come from
 // the skill's id so no two skills match. The outer part (rings, runes, spokes) and the inner part (motif) are drawn
