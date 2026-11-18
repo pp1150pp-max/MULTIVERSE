@@ -20,6 +20,7 @@ import type {
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { applyBalance, checkBalance } from '../shared/balance';
 import { renderBalance } from './balance';
+import { headsOnPage, jumpTo, watchCards } from './ui';
 import { renderDaily } from './daily';
 import { renderCosManage } from './cosManage';
 import { renderCashShop } from './cashShop';
@@ -236,6 +237,7 @@ function showNoRights(): void {
 // ------------------------------------------------------------ main layout
 
 const view = h('main');
+watchCards(view);
 
 async function start(): Promise<void> {
   if (!token) return showLogin();
@@ -299,33 +301,178 @@ function tabAllowed(t: Tab): boolean {
 
 const catOf = (t: Tab) => CATEGORIES.find((c) => c.tabs.includes(t))!;
 
+/** An icon per tab in the side menu (looks only). */
+const TAB_ICON: Record<Tab, string> = {
+  online: '🟢', users: '👤', stats: '📈', sessions: '🕒', chat: '💬', trades: '🤝', audit: '📜', mail: '✉️', reports: '🚩',
+  broadcast: '📢', balance: '⚖️', cards: '🃏', daily: '📅', cashShop: '💎', orbs: '🔮', cos: '🪽', cosManage: '🧺', rig: '🗡️',
+  anim: '🏃', server: '🖥️', roles: '🔑',
+};
+
+/**
+ * What the search box finds besides tab names: each tab's cards by title (the jump looks for a heading
+ * that starts with it) and words people may type for them. Cards inside the open tab are also found live.
+ */
+const SEARCH_INDEX: { tab: Tab; title: string; words?: string }[] = [
+  { tab: 'online', title: 'ผู้เล่นออนไลน์', words: 'ping fps gpu ip เตะ ประกาศคนเดียว' },
+  { tab: 'users', title: 'ผู้ใช้ทั้งหมด', words: 'บัญชี ตัวละคร แบน รหัสผ่าน ทอง คลัง ไอเทม ค้นหา' },
+  { tab: 'stats', title: 'ผู้เล่นออนไลน์', words: 'กราฟ สถิติ' },
+  { tab: 'stats', title: 'สมัครสมาชิกต่อวัน' },
+  { tab: 'stats', title: 'เลเวลเฉลี่ย' },
+  { tab: 'stats', title: 'Ping เฉลี่ย' },
+  { tab: 'sessions', title: 'การเข้าเล่น', words: 'ip gpu เข้าออก' },
+  { tab: 'chat', title: 'บันทึกแชท', words: 'ลบแชท' },
+  { tab: 'trades', title: 'ประวัติการเทรด' },
+  { tab: 'audit', title: 'ประวัติการใช้สิทธิ์ผู้ดูแล', words: 'audit log' },
+  { tab: 'mail', title: 'ส่งจดหมาย', words: 'ของแนบ ดึงกลับ' },
+  { tab: 'mail', title: 'จดหมายที่ส่งแล้ว' },
+  { tab: 'reports', title: 'รายงานปัญหา', words: 'ข้อเสนอแนะ ห้ามรายงาน' },
+  { tab: 'broadcast', title: 'ประกาศถึงผู้เล่นทุกคน' },
+  { tab: 'balance', title: 'ค่าอาชีพ', words: 'สเตตัส hp mp นักดาบ เวท' },
+  { tab: 'balance', title: 'ตัวตัดฟื้นทั้งเกม', words: 'regen ฟื้น' },
+  { tab: 'balance', title: 'Tier T1–T5', words: 'tier ตัวคูณสเตตัส ไอเทม' },
+  { tab: 'balance', title: 'ตัวอย่างค่าจริงที่สุ่มได้' },
+  { tab: 'balance', title: 'มอนธรรมดา (ตัวคูณ)', words: 'มอน จุดเกิด เลิกไล่ กลับบ้าน บอส สลับเป้า ชุบ ห้องบอส' },
+  { tab: 'balance', title: 'ยา', words: 'potion hp mp' },
+  { tab: 'balance', title: 'ตีบวก', words: 'forge auto ช่างตีเหล็ก' },
+  { tab: 'balance', title: 'Auto Play', words: 'ออโต้ ฟาร์มต่อ หลุด walkhidden เดิน' },
+  { tab: 'balance', title: 'เอฟเฟกต์สกิล (ชั้นเสริม)', words: 'quarks อนุภาค กราฟิก เลขดาเมจ กระสุน จอสั่น' },
+  { tab: 'balance', title: 'วงเวทและเอฟเฟกต์โค้ดรายสกิล' },
+  { tab: 'balance', title: 'หยุดตอนโจมตี' },
+  { tab: 'balance', title: 'นักดาบกระดาษ: ภาพอาวุธและเกราะ' },
+  { tab: 'balance', title: 'เควสสอนระบบ: รางวัล', words: 'tutorial' },
+  { tab: 'balance', title: 'ระบบสกิล', words: 'แต้มสกิล แรงก์ คืนแต้ม คูลดาวน์' },
+  { tab: 'cards', title: 'การ์ด', words: 'เรทดรอป' },
+  { tab: 'cards', title: 'ตัวเลขของระบบการ์ด' },
+  { tab: 'daily', title: 'ของรางวัลล็อกอินรายวัน' },
+  { tab: 'cashShop', title: 'แคชช็อป', words: 'คริสตัลมิติ เปิดขาย แพ็กเกจ' },
+  { tab: 'cosManage', title: 'จัดการของแต่งตัว', words: 'ซ่อน ราคา ปีก สัตว์ขี่ สัตว์เลี้ยง ออร่า' },
+  { tab: 'roles', title: 'Role และเครื่องมือที่ใช้ได้', words: 'สิทธิ์ gm' },
+  { tab: 'roles', title: 'ผู้ดูแลตอนนี้' },
+  { tab: 'roles', title: 'ให้สิทธิ์ผู้ดูแล' },
+  { tab: 'server', title: 'รีสตาร์ท / ปิด server', words: 'restart countdown' },
+  { tab: 'server', title: 'ข้อความเตือนก่อนรีสตาร์ท' },
+  { tab: 'server', title: 'ลดขนาด snapshot', words: 'delta เน็ต' },
+  { tab: 'server', title: 'ภาพกระดาษตัดแปะ', words: 'paper' },
+  { tab: 'server', title: 'เข้าสู่ระบบด้วย Google' },
+  { tab: 'server', title: 'สำรองฐานข้อมูล', words: 'backup db' },
+];
+
+let sideNav: HTMLElement | null = null;
+let allowedTabs = new Set<Tab>();
+
 function renderShell(): void {
   if (!me) return;
   const cats = CATEGORIES.map((c) => ({ ...c, tabs: c.tabs.filter(tabAllowed) })).filter((c) => c.tabs.length);
   // A role without the tab that was open (or with no tabs at all) starts on its first one.
   if (!cats.length) cats.push({ name: 'ระบบ', tabs: ['server'] });
-  if (!cats.some((c) => c.tabs.includes(tab))) tab = cats[0].tabs[0];
-  const catBar = h('nav', { class: 'tabs cats' }, ...cats.map((c) =>
-    h('button', { 'data-cat': c.name, onclick: () => setTab(c.tabs.includes(tab) ? tab : (lastTab.get(c.name) ?? c.tabs[0])) }, c.name)));
-  subBar = h('nav', { class: 'tabs subtabs' });
   allowedTabs = new Set(cats.flatMap((c) => c.tabs));
+  // A link to a tab (/admin#balance) opens it, when this role may see it.
+  const fromHash = location.hash.slice(1) as Tab;
+  if (allowedTabs.has(fromHash)) tab = fromHash;
+  if (!allowedTabs.has(tab)) tab = cats[0].tabs[0];
+  sideNav = h('nav', { class: 'side' }, ...cats.map((c) => h('div', { class: 'side-cat' },
+    h('div', { class: 'side-cat-name' }, c.name),
+    ...c.tabs.map((id) => h('button', { 'data-tab': id, onclick: () => { closeMenu(); setTab(id); } },
+      h('span', { class: 'ico' }, TAB_ICON[id]), TAB_LABEL[id])))));
+  const shade = h('div', { class: 'side-shade', onclick: () => closeMenu() });
   root.replaceChildren(
     h('header', { class: 'top' },
+      h('button', { class: 'menu-btn', title: 'เมนู', onclick: () => document.body.classList.toggle('menu-open') }, '☰'),
       h('div', { class: 'brand' }, 'MULTIVERSE', h('small', {}, 'ผู้ดูแล')),
-      h('div', { class: 'who' }, me.username, h('span', { class: 'role' }, me.roleName),
+      searchBox(),
+      h('div', { class: 'who' }, h('span', { class: 'who-name' }, me.username), h('span', { class: 'role' }, me.roleName),
         h('button', { class: 'small', onclick: logout }, 'ออก')),
     ),
-    catBar,
-    subBar,
-    view,
+    h('div', { class: 'layout' }, sideNav, shade, view),
   );
   setTab(tab);
 }
 
-let subBar: HTMLElement | null = null;
-let allowedTabs = new Set<Tab>();
-/** The last sub-tab opened in each category, so coming back to a category reopens it. */
-const lastTab = new Map<string, Tab>();
+function closeMenu(): void {
+  document.body.classList.remove('menu-open');
+}
+
+/** The search box in the top bar: tabs, cards of every tab (SEARCH_INDEX), and anything written in the open tab. */
+function searchBox(): HTMLElement {
+  const input = h('input', { type: 'search', placeholder: '🔍 ค้นหา เช่น ยา บอส auto แบน', autocomplete: 'off' });
+  const list = h('div', { class: 'search-list hidden' });
+  let picks: (() => void)[] = [];
+  let at = 0;
+  const go = (t: Tab, title?: string): void => {
+    input.value = '';
+    list.classList.add('hidden');
+    input.blur();
+    closeMenu();
+    if (t !== tab || !title) setTab(t);
+    if (title) jumpTo(view, title);
+  };
+  const draw = (): void => {
+    const q = input.value.trim().toLowerCase();
+    picks = [];
+    if (!q) {
+      list.classList.add('hidden');
+      return;
+    }
+    const rows: HTMLElement[] = [];
+    const add = (label: string, where: string, fn: () => void): void => {
+      if (rows.length >= 14) return;
+      picks.push(fn);
+      // mousedown keeps the focus in the box, so its blur does not hide the list before the click lands.
+      rows.push(h('button', { type: 'button', class: 'search-row', onmousedown: (e: Event) => e.preventDefault(), onclick: fn },
+        h('span', {}, label), h('span', { class: 'muted' }, where)));
+    };
+    const has = (s: string) => s.toLowerCase().includes(q);
+    for (const t of allowedTabs) if (has(TAB_LABEL[t])) add(`${TAB_ICON[t]} ${TAB_LABEL[t]}`, catOf(t).name, () => go(t));
+    for (const head of headsOnPage(view, q)) add(head, `ในหน้านี้ (${TAB_LABEL[tab]})`, () => go(tab, head));
+    for (const e of SEARCH_INDEX) {
+      if (e.tab === tab) continue; // the live list above already covers the open tab
+      if (!allowedTabs.has(e.tab) || !(has(e.title) || (e.words && has(e.words)))) continue;
+      add(e.title, `${TAB_ICON[e.tab]} ${TAB_LABEL[e.tab]}`, () => go(e.tab, e.title));
+    }
+    if (!rows.length) rows.push(h('div', { class: 'muted search-none' }, 'ไม่พบ'));
+    at = 0;
+    list.replaceChildren(...rows);
+    list.querySelector('.search-row')?.classList.add('at');
+    list.classList.remove('hidden');
+  };
+  input.addEventListener('input', draw);
+  input.addEventListener('focus', draw);
+  input.addEventListener('blur', () => list.classList.add('hidden'));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      input.value = '';
+      draw();
+      input.blur();
+      return;
+    }
+    if (!picks.length) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      at = (at + (e.key === 'ArrowDown' ? 1 : picks.length - 1)) % picks.length;
+      list.querySelectorAll('.search-row').forEach((b, i) => b.classList.toggle('at', i === at));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      picks[at]?.();
+    }
+  });
+  return h('div', { class: 'search' }, input, list);
+}
+
+// "/" anywhere (not while typing) jumps to the search box.
+document.addEventListener('keydown', (e) => {
+  const el = e.target as HTMLElement;
+  if (e.key !== '/' || el.closest('input, textarea, select, [contenteditable]')) return;
+  const box = document.querySelector<HTMLInputElement>('.search input');
+  if (!box) return;
+  e.preventDefault();
+  box.focus();
+});
+
+// A pasted link to a tab or the browser's back button opens that tab.
+window.addEventListener('hashchange', () => {
+  const t = location.hash.slice(1) as Tab;
+  if (me && allowedTabs.has(t) && t !== tab) setTab(t);
+});
 
 function setTab(t: Tab): void {
   tab = t;
@@ -333,13 +480,11 @@ function setTab(t: Tab): void {
   stopOrbs?.();
   stopOrbs = null;
   void checkStale();
-  const cat = catOf(t);
-  lastTab.set(cat.name, t);
-  document.querySelectorAll<HTMLElement>('.cats button').forEach((b) => b.classList.toggle('on', b.dataset.cat === cat.name));
-  subBar?.replaceChildren(...cat.tabs.filter((id) => allowedTabs.has(id)).map((id) =>
-    h('button', { class: id === t ? 'on' : '', 'data-tab': id, onclick: () => setTab(id) }, TAB_LABEL[id])));
-  // On a phone a tab row scrolls: keep the chosen tab in view.
-  document.querySelectorAll<HTMLElement>('.tabs button.on').forEach((b) => b.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
+  if (location.hash !== `#${t}`) history.replaceState(null, '', `#${t}`);
+  sideNav?.querySelectorAll<HTMLElement>('button[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
+  sideNav?.querySelector<HTMLElement>('button.on')?.scrollIntoView({ block: 'nearest' });
+  document.title = `${TAB_LABEL[t]} · Multiverse Admin`;
+  window.scrollTo(0, 0);
   view.replaceChildren();
   if (t === 'online') renderOnline();
   else if (t === 'users') void renderUsers();
