@@ -10,6 +10,42 @@ import { newCharacterData } from '../src/shared/sim/Player';
 import { castSkill } from '../src/shared/sim/skills';
 import { codeFxLayer } from '../src/shared/fxLayerTuning';
 import { IDLE_INTENT } from '../src/shared/sim/types';
+import { circleDesign } from '../src/client/circleDesigns';
+import { CIRCLE_FALLBACKS } from '../src/shared/fxLayerTuning';
+
+// One magic circle per skill (owner 2026-11-18): every skill and fallback has a design, and no two are alike.
+{
+  const ids = [...new Set([...Object.values(CLASSES).flatMap((c) => c.skills.map((s) => s.id)), ...CIRCLE_FALLBACKS])];
+  const missing = ids.filter((id) => !circleDesign(id));
+  ok(missing.length === 0, `every skill has a circle (missing: ${missing.join(', ')})`);
+  const looks = ids.map((id) => { const d = circleDesign(id)!; return d && `${d.color}|${d.motif}|${d.rings}|${d.runes}|${d.spokes}`; });
+  ok(new Set(looks).size === looks.length, `no two circles alike (${looks.length})`);
+  // Per-skill settings: only differences kept, unknown skills and bad numbers refused.
+  const t = checkBalance({ fxLayer: { skills: { meteor: { size: 1.5, circle: true, speed: 1 }, frostnova: { extra: false }, sw_guard: {} } } }, true).tuning!;
+  ok(JSON.stringify(t) === '{"fxLayer":{"skills":{"meteor":{"size":1.5},"frostnova":{"extra":false}}}}', `per-skill differences only (${JSON.stringify(t)})`);
+  ok('error' in checkBalance({ fxLayer: { skills: { nosuch: { size: 2 } } } }, true), 'unknown skill refused');
+  ok('error' in checkBalance({ fxLayer: { skills: { meteor: { size: 9 } } } }, true), 'size out of range refused');
+  ok(mergeBalance(t).fxLayer.skills.meteor.size === 1.5, 'merged per-skill value');
+}
+
+// The skill a buff or debuff came from is kept for its circle (sent as PlayerSnap.bs / MonsterSnap.ds).
+{
+  const sim = new Sim(ZONE_1);
+  const m = sim.monsters.find((x) => !x.isBoss)!;
+  sim.monsters.length = 0;
+  sim.monsters.push(m);
+  m.x = 1;
+  m.z = 0;
+  m.hp = 1e7;
+  const p = sim.addPlayer({ ...newCharacterData('Guard', 'sword'), level: 40 });
+  p.x = 0;
+  p.z = 0;
+  castSkill(sim, p, CLASSES.sword.skills.find((s) => s.id === 'sw_guard')!, { x: 1, z: 0 }, 1);
+  ok(p.buffSkill === 'sw_guard', `buff source kept (${p.buffSkill})`);
+  castSkill(sim, p, CLASSES.sword.skills.find((s) => s.id === 'sw_sunder')!, { x: 1, z: 0 }, 1);
+  for (let i = 0; i < 30; i++) sim.step(1 / 30, () => IDLE_INTENT);
+  ok(m.debuffSkill === 'sw_sunder', `debuff source kept (${m.debuffSkill})`);
+}
 
 {
   const c = codeFxLayer();

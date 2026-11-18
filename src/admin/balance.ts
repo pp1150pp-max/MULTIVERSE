@@ -3,7 +3,9 @@
 // Edits a draft with a live preview (class stats at Lv1/10/50 with nothing worn, tier chances); saving
 // sends the whole draft, the server checks it, stores only what differs from the code, logs the change
 // and applies it to everyone online at once.
-import { FX_LAYER_NAME, FX_LAYER_RANGE, QUARKS_SKILLS, quarksKey, type FxLayerNum, type QuarksSkill } from '../shared/fxLayerTuning';
+import { CIRCLE_FALLBACKS, FX_LAYER_NAME, FX_LAYER_RANGE, QUARKS_SKILLS, quarksKey, SKILL_FX_RANGE, type FxLayerNum, type QuarksSkill, type SkillFxTune } from '../shared/fxLayerTuning';
+import { circleDesign, drawInner, drawOuter } from '../client/circleDesigns';
+import { skillExtras } from '../client/skillExtras';
 import { ATTACK_ROOT_RANGE, NO_ATTACK_ROOT } from '../shared/attackRootTuning';
 import { RIG_ARMOR_ITEMS, RIG_ARMOR_NAME, RIG_ARMORS, RIG_WEAPON_ITEMS, RIG_WEAPON_NAME, RIG_WEAPONS } from '../shared/rigLookTuning';
 import {
@@ -703,6 +705,12 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         h('label', {}, h('input', { type: 'checkbox', checked: a.offline, onchange: (e: Event) => { a.offline = (e.target as HTMLInputElement).checked; refresh(); } }), ` ${AUTO_OFFLINE_NAME}`),
         num('offlineMin', 1),
       ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.walkHidden, onchange: (e: Event) => { draft.walkHidden = (e.target as HTMLInputElement).checked; refresh(); } }),
+          ' เดินต่อเมื่อสลับแท็บ'),
+      ),
+      h('div', { class: 'muted' }, 'เดินต่อเมื่อสลับแท็บ (ไม่ใช่ Auto): คลิกเดินไปจุดไกลแล้วสลับไปแท็บอื่น/พับจอ server พาเดินต่อจนถึงจุดที่คลิก (เดินตรงไป ไถลอ้อมของกลมชิ้นเดียวได้ ไม่หาทางอ้อมกำแพง ติดแทบไม่ขยับ 0.8 วิ = หยุด) · กลับมาที่แท็บ ตัวเลื่อนไปที่จริงแล้วเดินต่อเอง · ตาย/เปลี่ยนแมพ/วาร์ป/เทรด/หลุด = หยุด · ปิด = แบบเดิม สลับแท็บแล้วตัวหยุด'),
       h('div', { class: 'muted' }, 'หลุดการเชื่อมต่อขณะเปิด Auto (ไม่ได้กดออกเกม): ตัวละครอยู่ในโลกต่อ Auto ฟาร์มเหมือนปกติ (EXP 50%) จนครบเวลา, Auto หยุดตามตัวเลือก (ยาหมด/กระเป๋าเต็ม/ม้วน) หรือตาย แล้วเซฟและออกจากโลก · เข้าเกมใหม่ = ได้ตัวที่กำลังฟาร์มคืน Auto ยังเปิด · ไม่รวม Guest และห้องบอส · ปิดสวิตช์ = คนที่ฟาร์มแบบหลุดอยู่ออกจากโลกทันที'),
     );
   };
@@ -772,6 +780,62 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('h3', {}, 'กระสุน'),
       h('div', { class: 'row bal-line' }, flag(smoothOn, a.smoothShots !== ca.smoothShots, ' กระสุนบินลื่น (ไม่ดึงกลับตาม server)')),
       h('div', { class: 'muted' }, 'เปิด (ค่าในโค้ด): เบราว์เซอร์ให้กระสุนบินต่อเอง ตำแหน่งจาก server ดันไปข้างหน้าครึ่งหนึ่งของปิง ห่างนิดหน่อยค่อย ๆ ขยับเข้า ห่างเกิน 3 หน่วยค่อยกระโดด · ปิด: แบบเดิม กระสุนกระโดดไปตำแหน่งของ server ทุกครั้งที่ข้อมูลมา (เห็นกระตุกตอนยิงเยอะ เช่น Bullet Storm) · เป็นแค่ภาพ ดาเมจยังตัดสินที่ server'),
+    );
+  };
+
+  // ---------------------------------------------------------- one magic circle and code effects per skill (owner 2026-11-18)
+  const circleCard = h('div', { class: 'card' });
+  const drawCircles = (): void => {
+    const a = draft.fxLayer;
+    const ca = code.fxLayer;
+    const refresh = (): void => { updateSummary(); };
+    const extrasOn = h('input', { type: 'checkbox', checked: a.extras, onchange: (e: Event) => { a.extras = (e.target as HTMLInputElement).checked; refresh(); } });
+    /** One skill's entry, made only once something differs (an empty entry is dropped on save). */
+    const ent = (id: string): SkillFxTune => (a.skills[id] ??= {});
+    const row = (id: string, name: string): HTMLElement => {
+      const d = circleDesign(id);
+      const pic = h('span', { class: 'circ-pic' });
+      if (d) {
+        for (const [part, speed] of [['outer', d.spin], ['inner', d.spin * d.inner]] as const) {
+          const c = document.createElement('canvas');
+          c.width = c.height = 96;
+          const g = c.getContext('2d')!;
+          (part === 'outer' ? drawOuter : drawInner)(g, 96, d);
+          // Tint the white picture in the skill's colour.
+          g.globalCompositeOperation = 'source-in';
+          g.fillStyle = part === 'outer' ? d.color : d.color2;
+          g.fillRect(0, 0, 96, 96);
+          c.style.animation = `circ-spin ${(Math.PI * 2 / Math.max(0.05, Math.abs(speed))).toFixed(1)}s linear infinite ${speed < 0 ? 'reverse' : 'normal'}`;
+          pic.append(c);
+        }
+      }
+      const t = a.skills[id] ?? {};
+      const box = (k: 'circle' | 'extra', text: string) => {
+        const inp = h('input', { type: 'checkbox', checked: t[k] !== false, onchange: (e: Event) => { ent(id)[k] = (e.target as HTMLInputElement).checked; refresh(); } });
+        return h('label', { class: t[k] === false ? 'bal-changed' : '' }, inp, text);
+      };
+      const num = (k: keyof typeof SKILL_FX_RANGE, label: string) =>
+        h('label', {}, label, numBox(() => a.skills[id]?.[k] ?? 1, (n) => { ent(id)[k] = n; }, 1, SKILL_FX_RANGE[k][0], SKILL_FX_RANGE[k][1], 0.1, refresh));
+      const fx = skillExtras(id);
+      return h('div', { class: 'row bal-line circ-row' }, pic, h('b', { style: 'min-width:120px' }, name),
+        box('circle', ' วงเวท'), num('size', '×ขนาด'), num('speed', '×หมุน'), num('bright', '×สว่าง'),
+        fx.length ? box('extra', ` เอฟเฟกต์ (${fx.join(', ')})`) : h('span', { class: 'muted' }, 'ไม่มีเอฟเฟกต์โค้ด'),
+        fx.length ? num('extraK', '×แรง') : h('span'));
+    };
+    const FALLBACK_NAME: Record<string, string> = {
+      buff_attack: 'บัฟโจมตี (ไม่รู้สกิล)', buff_guard: 'บัฟป้องกัน (ไม่รู้สกิล)', buff_speed: 'บัฟความเร็ว (ไม่รู้สกิล)',
+      debuff_stun: 'ดีบัฟสตัน', debuff_dot: 'ดีบัฟติดไฟ/พิษ', debuff_slow: 'ดีบัฟช้าลง', debuff_weak: 'ดีบัฟโจมตีลด',
+      debuff_armor: 'ดีบัฟเกราะแตก', debuff_mark: 'ดีบัฟมาร์ค', zone: 'พื้นที่ (ไม่รู้สกิล)',
+    };
+    circleCard.replaceChildren(
+      h('style', {}, '@keyframes circ-spin { to { transform: rotate(360deg); } } .circ-pic { position: relative; display: inline-block; width: 48px; height: 48px; flex: none; background: #0c0a14; border-radius: 50%; } .circ-pic canvas { position: absolute; inset: 0; width: 48px; height: 48px; } .circ-row { align-items: center; }'),
+      h('h2', {}, 'วงเวทและเอฟเฟกต์โค้ดรายสกิล'),
+      h('div', { class: 'muted' }, 'ทุกสกิลมีวงเวทไม่ซ้ำกัน (โชว์ใต้มอนที่โดนดีบัฟของสกิลนั้น ใต้ผู้เล่นที่ได้บัฟของสกิลนั้น และบนพื้นที่สกิลวงกว้าง) ภาพหมุนตัวอย่างอยู่หน้าชื่อ · เอฟเฟกต์โค้ดเล่นทับภาพเดิมตอนร่าย 1 ครั้งต่อจุด · ค่าในโค้ด: เปิด ×1 · มีผลกับทุกคนทันทีหลังบันทึก'),
+      h('div', { class: 'row bal-line' }, h('label', { class: a.extras !== ca.extras ? 'bal-changed' : '' }, extrasOn, ' เอฟเฟกต์โค้ดของสกิล (ทับภาพเดิม)'),
+        h('label', {}, FX_LAYER_NAME.extrasK, numBox(() => a.extrasK, (n) => { a.extrasK = n; }, ca.extrasK, FX_LAYER_RANGE.extrasK[0], FX_LAYER_RANGE.extrasK[1], 0.1, refresh))),
+      ...CLASS_IDS.flatMap((cid) => [h('h3', {}, CLASSES[cid].nameTh ?? cid), ...CLASSES[cid].skills.map((s) => row(s.id, s.nameTh))]),
+      h('h3', {}, 'วงเวทตอนไม่รู้ว่ามาจากสกิลไหน'),
+      ...CIRCLE_FALLBACKS.map((k) => row(k, FALLBACK_NAME[k] ?? k)),
     );
   };
 
@@ -953,6 +1017,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawTut();
     drawSkills();
     drawFx();
+    drawCircles();
     drawRoot();
     drawRig();
   };
@@ -1003,6 +1068,6 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     msg,
   );
 
-  box.replaceChildren(classCard, regenCard, tierCard, previewCard, monsterCard, potionCard, forgeCard, autoCard, tutCard, skillCard, fxCard, rootCard, rigCard, bar);
+  box.replaceChildren(classCard, regenCard, tierCard, previewCard, monsterCard, potionCard, forgeCard, autoCard, tutCard, skillCard, fxCard, circleCard, rootCard, rigCard, bar);
   redraw();
 }

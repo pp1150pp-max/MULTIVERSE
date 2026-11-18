@@ -9,6 +9,7 @@ import * as R from '../data/skillRanges';
 import { rankedDmg, skillParam, skillReach, skillValues } from '../skillBook';
 import { passiveOnBasic, passiveSkillScale } from '../passives';
 import { castSword } from './swordSkills';
+import { buffMask } from './debuffs';
 
 // ------------------------------------------------------------ Gunslinger's basic shot and its buffs
 
@@ -210,6 +211,7 @@ export function tickFor(sim: Sim, p: Player, every: number, times: number, fn: (
 export function dot(sim: Sim, p: Player, m: Monster, perTick: number, seconds: number, sk: SkillDef, color: string): void {
   const ticks = Math.max(1, Math.round(seconds));
   m.dotUntil = Math.max(m.dotUntil, sim.time + ticks);
+  m.debuffSkill = sk.id;
   tickFor(sim, p, 1, ticks, () => {
     if (!m.alive) return;
     sim.hitMonster(p, m, perTick, { skill: sk });
@@ -276,8 +278,14 @@ const FROST = '#7ab8ff';
  * the status times (stun, slow, armor break, guard, lifesteal) by the skill's growth on the balance tab.
  */
 export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1): boolean {
+  // Whoever gains a buff from this cast (the caster, the party) shows this skill's magic circle.
+  const before = sim.players.map((q) => buffMask(q, sim.time));
   // Everything the cast plays, now or later (timers, shots), is the caster's: see Sim.asCaster.
-  return sim.asCaster(p, () => cast(sim, p, sk, aim, rank), sk.id);
+  const ok = sim.asCaster(p, () => cast(sim, p, sk, aim, rank), sk.id);
+  sim.players.forEach((q, i) => {
+    if (buffMask(q, sim.time) & ~(before[i] ?? 0)) q.buffSkill = sk.id;
+  });
+  return ok;
 }
 
 function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boolean {
@@ -434,6 +442,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       tickFor(sim, p, 1, ticks, () => {
         forCircle(sim, c.x, c.z, r, (m) => {
           m.dotUntil = Math.max(m.dotUntil, sim.time + 1.1);
+          m.debuffSkill = sk.id;
           sim.hitMonster(p, m, dmg, { skill: sk });
         });
       });
@@ -471,6 +480,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       tickFor(sim, p, 1, ticks, () => {
         forCircle(sim, p.x, p.z, far, (m) => {
           m.dotUntil = Math.max(m.dotUntil, sim.time + 1.1);
+          m.debuffSkill = sk.id;
           sim.hitMonster(p, m, dmg, { armorBreak: ab, armorBreakT: abT, skill: sk });
         });
       });
@@ -566,6 +576,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
         // Statuses last a little past each tick, so they hold while the monster stays inside.
         forCircle(sim, p.x, p.z, far, (m) => {
           m.dotUntil = Math.max(m.dotUntil, sim.time + 1.1);
+          m.debuffSkill = sk.id;
           sim.hitMonster(p, m, dmg, { armorBreak: ab, armorBreakT: 1.2, weak, weakT: 1.2, skill: sk });
         });
       });
@@ -715,6 +726,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
         after: (m) => {
           m.markBy = p.id;
           m.markUntil = sim.time + time;
+          m.debuffSkill = sk.id;
           m.markCrit = crit;
           sim.fx('effect', 'reticle', m.x, m.z, 0, 1.2);
           sim.text(m.x, m.topY + 0.4, m.z, 'จุดตาย', 'info', 0.8);

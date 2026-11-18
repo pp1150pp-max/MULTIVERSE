@@ -7,7 +7,7 @@ import { Player, type AutoSettings, type CharacterData, type LootFilter, type So
 import { Monster } from '../../shared/sim/Monster';
 import { Loot } from '../../shared/sim/Loot';
 import type { Sim } from '../../shared/sim/Sim';
-import type { Intent, SimEvent } from '../../shared/sim/types';
+import { IDLE_INTENT, type Intent, type SimEvent } from '../../shared/sim/types';
 import { MONSTERS } from '../../shared/data/monsters';
 import { validOrbCode } from '../../shared/data/enhance';
 import { checkOrbLook } from '../../shared/orbLook';
@@ -255,6 +255,8 @@ export class OnlineBackend implements Backend {
   private readonly walkTarget = new WalkTarget();
   private sendT = 0;
   private seq = 0;
+  /** The aim of the last input message (the flush when the tab hides repeats it). */
+  private lastAim: Vec2 = { x: 0, z: 0 };
   /** Where we said we were in each input message still waiting for its snapshot. */
   private sent: { seq: number; x: number; z: number }[] = [];
   private pendingDash = false;
@@ -316,6 +318,9 @@ export class OnlineBackend implements Backend {
     if (document.hidden) {
       this.wasHidden = true;
       this.hiddenAt ??= performance.now();
+      // The frame loop stops now: tell the server where we are and where a click was taking us,
+      // so it walks the rest of the way (Balance.walkHidden).
+      if (this.me && this.ws?.readyState === WebSocket.OPEN) this.sendInput(null, { ...IDLE_INTENT, aim: this.lastAim }, false);
       return;
     }
     this.hiddenAt = null;
@@ -829,6 +834,7 @@ export class OnlineBackend implements Backend {
       p.alive = ps.alive;
       p.dashT = ps.dash ? 1 : 0;
       p.buffBits = ps.bf ?? 0;
+      p.buffSkill = ps.bs ?? '';
       if (look) {
         p.aura = ps.aura ?? 0;
         p.toadT = ps.toad ? 1 : 0;
@@ -887,6 +893,7 @@ export class OnlineBackend implements Backend {
       m.enraged = ms.enr;
       m.lift = ms.y;
       m.debuffs = ms.db ?? 0;
+      m.debuffSkill = ms.ds ?? '';
     }
     for (const [id, m] of this.monsterMap) {
       if (!seenM.has(id)) {
@@ -1103,25 +1110,38 @@ export class OnlineBackend implements Backend {
       // The server sees the attack keys only in this message, so the stop is guessed from here (after this frame's step,
       // as the server also lets the attack's own tick walk).
       if (!it.dash) this.predictAttackRoot(it);
-      const seq = ++this.seq;
-      // While the server moves us we only follow it, so there's no position of ours to report.
-      const ours = !this.serverMoves && !this.settling;
-      if (ours) {
-        this.sent.push({ seq, x: me.x, z: me.z });
-        if (this.sent.length > SENT_KEEP) this.sent.shift();
-      }
-      this.send({
-        t: 'input', pos: ours ? { x: me.x, z: me.z } : undefined, seq, move: moveDir, aim: it.aim, basic: it.basic, skills: it.skills,
-        dash: this.pendingDash, potion: this.pendingPotion, recall: this.pendingRecall || undefined,
-      });
-      this.pendingRecall = false;
-      this.pendingDash = false;
-      this.pendingPotion = null;
+      this.sendInput(moveDir, it, true);
     }
 
     const out = this.events;
     this.events = [];
     return out;
+  }
+
+  /**
+   * Sends one input message. `oneShots` false (the flush when the tab hides) leaves a pressed dash / potion /
+   * scroll for the next regular message. `to` = the clicked spot we're walking to, so the server can walk on
+   * by itself if our inputs stop (hidden tab); it drops any it had when `to` is left out.
+   */
+  private sendInput(moveDir: Vec2 | null, it: Intent, oneShots: boolean): void {
+    const me = this.me;
+    this.lastAim = it.aim;
+    const seq = ++this.seq;
+    // While the server moves us we only follow it, so there's no position of ours to report.
+    const ours = !this.serverMoves && !this.settling;
+    if (ours) {
+      this.sent.push({ seq, x: me.x, z: me.z });
+      if (this.sent.length > SENT_KEEP) this.sent.shift();
+    }
+    const to = me.alive && me.moveTarget ? { x: me.moveTarget.x, z: me.moveTarget.z } : undefined;
+    this.send({
+      t: 'input', pos: ours ? { x: me.x, z: me.z } : undefined, seq, move: moveDir, aim: it.aim, basic: it.basic, skills: it.skills,
+      dash: oneShots && this.pendingDash, potion: oneShots ? this.pendingPotion : null, recall: (oneShots && this.pendingRecall) || undefined, to,
+    });
+    if (!oneShots) return;
+    this.pendingRecall = false;
+    this.pendingDash = false;
+    this.pendingPotion = null;
   }
 
   /**

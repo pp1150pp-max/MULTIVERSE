@@ -37,6 +37,7 @@ import { playSound } from './audio/sfx';
 import { COIN_ICON, emptySlotIcon, FORGE_ICON, itemIcon, potionIcon, skillIcon, stoneIcon } from './icons';
 import { shutdownCancelled, shutdownWarning, type ShutdownMode } from '../shared/net/protocol';
 import { isTouchMode, onPointerModeChange } from './touch/device';
+import { FashionBag } from './fashionBag';
 import { imgUrl } from './img';
 
 /** Yellow, like the game's level-up lines. */
@@ -156,6 +157,8 @@ export class Hud {
   private pin: { zone: object; x: number; z: number } | null = null;
   private slotEls: { kind: SkillSlot | PotionKind; el: HTMLElement; cd: HTMLElement; extra: HTMLElement }[] = [];
   private invDirty = true;
+  /** The fashion page of the bag window (owned cosmetics). */
+  private fashion!: FashionBag;
   private bagOpen = false;
   /** Level the bag was last drawn for (gear above it is marked as locked). */
   private drawnLevel = 0;
@@ -262,6 +265,7 @@ export class Hud {
     for (const id of ['aset-range', 'aset-hp', 'aset-mp', 'aset-loot', 'aset-lootorder', 'aset-others', 'aset-nohp', 'aset-nomp', 'aset-bagfull', 'aset-target']) $(id).addEventListener('change', () => this.applyAutoSettings());
     $('btn-respawn').onclick = () => g.respawn();
     $('inv-close').onclick = () => this.toggleBag(false);
+    this.fashion = new FashionBag(g, () => this.hideTip());
     // Fold the bag's left panel away (and back); remembered in this browser only.
     const bagBox = $('inventory');
     const sideBtn = $('inv-side-toggle');
@@ -1062,6 +1066,7 @@ export class Hud {
       if (this.mapOpen) this.fullMap.draw(this.g, this.myPin());
     }
     if ((this.bagOpen || this.stashOpen) && this.invDirty) this.renderInventory();
+    if (this.bagOpen) this.fashion.update(this.shopOpen || this.stashOpen || this.forgeOpen || this.market.isOpen || this.g.trade.open);
   }
 
   /** HP and MP as orbs in the bottom corners, or long bars at the top. The player picks; each browser remembers it. */
@@ -1215,6 +1220,7 @@ export class Hud {
     if (!this.bagOpen) {
       this.hideTip();
       this.closeDetail();
+      this.fashion.reset();
     }
     this.invDirty = true;
   }

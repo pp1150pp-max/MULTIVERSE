@@ -481,6 +481,8 @@ html.paper-ui .eq-ring2 { left: 61.5%; top: 37.2%; width: 6.6%; height: 4.4%; }
 }
 /* The paper bag picture (sprites/paper/ui/inventory.png, 815×1086): its 30 slots sit lower and wider than the
    iron one's. Cells cover each painted slot's inside, measured from the picture (x 58–758, y 732–945). */
+/* The paper bag's gold / potion plate (981–1037 × 212–598 of 815×1086): the line in the middle of it. */
+.paper-ui .inv-foot { left: 27.5%; top: 90.7%; width: 45%; height: 4.4%; }
 .paper-ui #bag-grid { left: 7.12%; top: 67.4%; width: 86%; height: 19.7%; column-gap: 1.14%; row-gap: 3.7%; }
 .inv-foot { position: absolute; left: 30%; top: 89.6%; width: 40%; height: 4.4%; display: flex; justify-content: space-around; align-items: center; font-size: 13px; }
 .stat { display: flex; justify-content: space-between; font-size: 12px; padding: 1px 0; }
@@ -514,6 +516,46 @@ html.paper-ui .eq-ring2 { left: 61.5%; top: 37.2%; width: 6.6%; height: 4.4%; }
 .bag-filter { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: -2px 0 8px; font-size: 12px; color: var(--ink-dim); }
 .bag-filter label { display: flex; align-items: center; gap: 2px; cursor: pointer; }
 .bag-filter input { margin: 0; accent-color: var(--gold-hi); }
+/* Fashion bag (owned cosmetics): the "กระเป๋า" / "แฟชั่น" tabs sit left on the sort row; in fashion mode the
+   bag slots, equipment and sort bar make way for #fashion-grid (same painted slots) and the worn bar. */
+.inv-tabs { position: absolute; left: 8.6%; top: 61%; height: 4.4%; display: flex; gap: 3px; z-index: 1; }
+.inv-tabs .ui-tab { height: 100%; padding: 0 10px; font-size: clamp(10px, calc(var(--inv-w) * 0.024), 13px); border-bottom-color: var(--tab-edge-active); }
+.inv-tabs .ui-tab:disabled { opacity: 0.45; cursor: not-allowed; }
+.fashion-pager { position: absolute; right: 8.4%; top: 61%; height: 4.4%; display: flex; align-items: center; gap: 6px; z-index: 1; font-size: clamp(10px, calc(var(--inv-w) * 0.024), 13px); }
+.fashion-pager button { height: 100%; padding: 0 8px; }
+.fashion-pager.hidden { display: none; }
+/* The fashion page has its own window art (inventory_fashion.png, owner 2026-11-18, papercraft style): 6 frames with
+   name plates on top, 30 slots below. Positions are measured from that art (see the constants in fashionBag.ts). */
+#inventory.fashion .inv-window { background-image: url(/assets/sprites/ui/inventory_fashion.png); }
+#inventory.fashion .inv-title { left: 25.3%; top: 4.9%; width: 49.4%; height: 4.1%; }
+#inventory.fashion #inv-close { left: 89.3%; top: 4%; width: 9.3%; height: 6.2%; }
+#inventory.fashion .inv-foot { left: 31.2%; top: 91.8%; width: 35.8%; height: 3.5%; }
+#fashion-grid {
+  position: absolute; left: 7.12%; top: 67.5%; width: 86.01%; height: 19.61%;
+  display: none; grid-template-columns: repeat(10, 1fr); grid-template-rows: repeat(3, 1fr); column-gap: 1.14%; row-gap: 4.2%;
+}
+#fashion-worn { position: absolute; inset: 0; display: none; pointer-events: none; }
+#fashion-worn > * { position: absolute; box-sizing: border-box; }
+#fashion-worn .cell { pointer-events: auto; }
+#inventory.fashion #bag-grid, #inventory.fashion #equip-slots, #inventory.fashion .inv-sort { display: none; }
+#inventory.fashion #fashion-grid, #inventory.fashion #fashion-worn { display: block; }
+#inventory.fashion #fashion-grid { display: grid; }
+.fashion-head, .fashion-slot-name { display: grid; place-items: center; color: #2a1a08; line-height: 1; white-space: nowrap; overflow: hidden; }
+.fashion-head { font-family: 'Cinzel', 'Kanit', serif; font-weight: 700; font-size: clamp(10px, calc(var(--inv-w) * 0.026), 15px); }
+.fashion-slot-name { font-weight: 600; font-size: clamp(7px, calc(var(--inv-w) * 0.016), 10px); text-overflow: ellipsis; }
+#fashion-worn .cell { width: auto; height: auto; background: none; border-color: transparent; }
+.fashion-note { display: grid; place-items: center; text-align: center; font-size: clamp(8px, calc(var(--inv-w) * 0.019), 12px); color: #d8c8a8; text-shadow: 0 1px 2px #000; line-height: 1.15; }
+#fashion-grid .cell { width: 100%; height: 100%; background: rgba(8, 6, 4, 0.35); border-color: transparent; overflow: hidden; }
+#fashion-grid .cell.empty { background: none; }
+:is(#fashion-grid, #fashion-worn) .cell:not(.empty) { border-color: var(--rc); }
+/* Pinned inside the slot: a % height doesn't resolve in the grid cell, so a square picture spilled out of a wide slot. */
+:is(#fashion-grid, #fashion-worn, #fashion-detail) .fashion-cell .cos-pic { position: absolute; left: 4%; top: 4%; width: 92%; height: 92%; box-sizing: border-box; }
+:is(#fashion-grid, #fashion-worn, #fashion-detail) .fashion-cell .cos-pic-orb { gap: 8%; }
+:is(#fashion-grid, #fashion-worn, #fashion-detail) .fashion-cell .cos-pic-orb i { width: 22%; height: auto; aspect-ratio: 1; }
+#fashion-grid .fashion-cell .cos-pic-title { font-size: 7px; }
+:is(#fashion-grid, #fashion-worn) .cell.worn { outline: 2px solid var(--gold-hi); outline-offset: -2px; }
+#fashion-grid .cell.worn::after { content: '✓'; position: absolute; right: 2px; top: 0; font-size: 10px; color: var(--gold-hi); text-shadow: 0 0 2px #000; }
+#fashion-detail .idt-top > .cell { width: 72px; height: 56px; flex: none; }
 .bag-filter .pot-group { display: inline-flex; align-items: center; gap: 6px; }
 #aset-pots { flex-direction: column; align-items: flex-start; gap: 4px; margin: 6px 0 0; font-size: 13px; color: var(--ink); }
 .cell .gi { width: 82%; height: 82%; vertical-align: baseline; }
@@ -672,6 +714,8 @@ html.paper-ui .eq-ring2 { left: 61.5%; top: 37.2%; width: 6.6%; height: 4.4%; }
 #sell-rarity .n { color: var(--ink-dim); font-size: 11px; }
 .sell-checked { width: 100%; padding: 5px 8px; font-size: 13px; }
 .shop-foot { display: flex; justify-content: space-between; margin-top: 10px; font-size: 13px; }
+/* The bottom-right corner ornament (.panel::after) covered the end of the line: the potion count, the G (owner 2026-11-18). */
+.panel .shop-foot { padding-right: 40px; }
 #shop-gold { color: #f2c230; }
 .shop-timer { float: right; color: var(--ink-dim); font-size: 11px; }
 
@@ -1397,16 +1441,16 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #cos-win .cos-grid { display: flex; flex-direction: column; gap: 6px; max-height: min(55vh, 420px); overflow-y: auto; }
 #cos-win .cos-card { display: flex; align-items: center; gap: 10px; padding: 6px; border: 1px solid #4a3c28; border-radius: 6px; background: rgba(0, 0, 0, 0.25); }
 #cos-win .cos-card.worn { border-color: var(--gold-hi); }
-:is(#cos-win, #cash-win) .cos-pic { width: 72px; height: 48px; flex: none; object-fit: contain; image-rendering: pixelated; }
-:is(#cos-win, #cash-win) .cos-pic-title { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-size: 9px; text-shadow: 0 0 2px #000; }
-:is(#cos-win, #cash-win) .cos-pic-title .cos-t { color: var(--c1); font-weight: 700; }
-:is(#cos-win, #cash-win) .cos-pic-title .cos-n { padding: 0 4px; border: 1px solid var(--c1); border-radius: 3px; background: linear-gradient(var(--c2), #000); color: #fff; }
-:is(#cos-win, #cash-win) .cos-pic-title .cos-b { padding: 0 5px; border: 1px solid var(--c1); border-radius: 6px; background: linear-gradient(var(--c2), #111); color: #fff; }
-:is(#cos-win, #cash-win) .cos-pic-orb { display: flex; align-items: center; justify-content: center; gap: 6px; }
-:is(#cos-win, #cash-win) .cos-pic-orb i { width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff 0 12%, var(--c1) 30%, var(--c2) 100%); box-shadow: 0 0 8px 2px var(--c3); }
-:is(#cos-win, #cash-win) .cos-pic-orb.crystal i { border-radius: 2px; transform: rotate(45deg) scale(0.85); }
-:is(#cos-win, #cash-win) .cos-pic-orb.star i { clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); box-shadow: none; }
-:is(#cos-win, #cash-win) .cos-pic-orb.flame i { border-radius: 50% 50% 50% 50% / 70% 70% 30% 30%; }
+:is(#cos-win, #cash-win, #inventory, #fashion-detail) .cos-pic { width: 72px; height: 48px; flex: none; object-fit: contain; image-rendering: pixelated; }
+:is(#cos-win, #cash-win, #inventory, #fashion-detail) .cos-pic-title { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-size: 9px; text-shadow: 0 0 2px #000; }
+:is(#cos-win, #cash-win, #inventory, #fashion-detail) .cos-pic-title .cos-t { color: var(--c1); font-weight: 700; }
+:is(#cos-win, #cash-win, #inventory, #fashion-detail) .cos-pic-title .cos-n { padding: 0 4px; border: 1px solid var(--c1); border-radius: 3px; background: linear-gradient(var(--c2), #000); color: #fff; }
+:is(#cos-win, #cash-win, #inventory, #fashion-detail) .cos-pic-title .cos-b { padding: 0 5px; border: 1px solid var(--c1); border-radius: 6px; background: linear-gradient(var(--c2), #111); color: #fff; }
+:is(#cos-win, #cash-win, #inventory, #fashion-detail) .cos-pic-orb { display: flex; align-items: center; justify-content: center; gap: 6px; }
+:is(#cos-win, #cash-win, #inventory, #fashion-detail) .cos-pic-orb i { width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff 0 12%, var(--c1) 30%, var(--c2) 100%); box-shadow: 0 0 8px 2px var(--c3); }
+:is(#cos-win, #cash-win, #inventory, #fashion-detail) .cos-pic-orb.crystal i { border-radius: 2px; transform: rotate(45deg) scale(0.85); }
+:is(#cos-win, #cash-win, #inventory, #fashion-detail) .cos-pic-orb.star i { clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); box-shadow: none; }
+:is(#cos-win, #cash-win, #inventory, #fashion-detail) .cos-pic-orb.flame i { border-radius: 50% 50% 50% 50% / 70% 70% 30% 30%; }
 #cos-win .cos-info { flex: 1; min-width: 0; }
 #cos-win .cos-name { color: var(--gold-hi); font-weight: 600; }
 #cos-win .cos-desc { font-size: 12px; color: var(--ink-dim); }
@@ -1860,14 +1904,14 @@ input[type=range]:hover::-webkit-slider-thumb { background: var(--ctl-accent-hi)
 }
 
 /* Item detail sheet (touch): a tap on an item in the bag or a worn slot. */
-#item-detail { left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(380px, 94vw); max-height: 90dvh; overflow-y: auto; z-index: 6; overscroll-behavior: contain; }
-#item-detail .idt-top { display: flex; gap: 10px; align-items: flex-start; }
-#item-detail .idt-icon .cell { width: 56px; height: 56px; flex: none; }
-#item-detail .idt-info { flex: 1; min-width: 0; font-size: 13px; white-space: normal; }
-#item-detail .idt-info .tt-hint:empty { display: none; }
-#item-detail .idt-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 12px; }
-#item-detail .idt-acts button { min-height: 44px; font-size: 14px; }
-#item-detail .idt-acts button.primary { grid-column: 1 / -1; }
+:is(#item-detail, #fashion-detail) { left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(380px, 94vw); max-height: 90dvh; overflow-y: auto; z-index: 6; overscroll-behavior: contain; }
+:is(#item-detail, #fashion-detail) .idt-top { display: flex; gap: 10px; align-items: flex-start; }
+:is(#item-detail, #fashion-detail) .idt-icon .cell { width: 56px; height: 56px; flex: none; }
+:is(#item-detail, #fashion-detail) .idt-info { flex: 1; min-width: 0; font-size: 13px; white-space: normal; }
+:is(#item-detail, #fashion-detail) .idt-info .tt-hint:empty { display: none; }
+:is(#item-detail, #fashion-detail) .idt-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 12px; }
+:is(#item-detail, #fashion-detail) .idt-acts button { min-height: 44px; font-size: 14px; }
+:is(#item-detail, #fashion-detail) .idt-acts button.primary { grid-column: 1 / -1; }
 /* Long press = right click on touch: no text selection or iOS callout in the windows. */
 .touch-ui #hud .panel { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .touch-ui #hud .panel input, .touch-ui #hud .panel textarea { -webkit-user-select: text; user-select: text; }

@@ -64,6 +64,11 @@ export interface InputMsg {
   potion: 'hp' | 'mp' | null;
   /** Start casting a return scroll. */
   recall?: boolean;
+  /**
+   * The clicked spot the client is walking to (left out = none). If the inputs stop (hidden tab) the
+   * server walks the rest of the way itself (Balance.walkHidden). Older clients never send it.
+   */
+  to?: Vec2;
 }
 
 export type ActionMsg =
@@ -238,6 +243,8 @@ export interface PlayerSnap {
   dash: 'dash' | 'charge' | 0;
   /** Skill buffs running, as bits (sim/debuffs.ts BUFF_BIT), left out when none. */
   bf?: number;
+  /** With `bf`: the skill whose buff it got last (its magic circle). */
+  bs?: string;
   /** Enhancement aura tier 1–4 (missing = none). */
   aura?: number;
   /** Enhancement orbs, one per worn item at +7 or higher: `slot index * 16 + plus` (see orbCodes). Missing = none. */
@@ -267,6 +274,8 @@ export interface MonsterSnap {
   y: number;
   /** Its debuffs as bits (sim/debuffs.ts), left out when none. */
   db?: number;
+  /** With `db`: the skill whose debuff it got last (its magic circle). */
+  ds?: string;
 }
 
 export interface ProjectileSnap { id: number; x: number; z: number; vx: number; vz: number; color: string; size: number; art?: 'ice_shard' | 'snowball' | 'ember_bolt' }
