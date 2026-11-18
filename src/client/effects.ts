@@ -544,6 +544,26 @@ export class Effects implements FxApi {
     });
   }
 
+  /**
+   * A footprint picture (paper auras) lying on the ground, toes towards `angle` (rotation about Y: 0 = −Z),
+   * `size` long, mirrored for the other foot, fading out over `life` seconds.
+   */
+  footprint(x: number, z: number, angle: number, tex: THREE.Texture, size: number, mirror: boolean, life: number): void {
+    const img = tex.image as { width: number; height: number };
+    const geo = new THREE.PlaneGeometry(img.width / img.height, 1);
+    geo.rotateX(-Math.PI / 2);
+    // Both sides: the mirrored foot is flipped.
+    const m = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(geo, m);
+    mesh.position.set(x, 0.06, z);
+    mesh.rotation.y = angle;
+    mesh.scale.set(mirror ? -size : size, 1, size);
+    mesh.renderOrder = -1;
+    this.add(mesh, life, (k) => {
+      m.opacity = k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4;
+    });
+  }
+
   puff(x: number, y: number, z: number, color: string, life: number, size: number): void {
     const s = this.glowSprite(color, size, 0.8);
     s.position.set(x, y, z);

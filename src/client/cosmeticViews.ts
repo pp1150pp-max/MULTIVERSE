@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import type { Player } from '../shared/sim/Player';
 import type { CosmeticDef } from '../shared/data/cosmetics';
-import { assetSources, cosOneKey, cosSheetKey, fxTex, sheets } from './assets';
+import { assetSources, cosOneKey, cosSheetKey, fxTex, paperTex, sheets } from './assets';
 import { WingPair } from './wingPair';
 import { SpriteActor } from './SpriteActor';
 import type { Effects } from './effects';
@@ -196,7 +196,7 @@ export class CosmeticRig {
   private nearAlpha = 1;
   private readonly headClip = new THREE.Plane();
   private pet: (Piece & { x: number; z: number; fx: number; fz: number }) | null = null;
-  private aura: { id: string; m: THREE.Mesh } | null = null;
+  private aura: { id: string; m: THREE.Mesh; paper: boolean } | null = null;
   private clock = 0;
   private stepT = 0;
   private stepSide = 1;
@@ -448,24 +448,38 @@ export class CosmeticRig {
       this.aura = null;
     }
     if (au && !this.aura) {
-      const mat = new THREE.MeshBasicMaterial({
-        map: fxTex.glow, color: au.color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: tuneNum(au.id, 'alpha'),
-      });
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
-      mesh.rotation.x = -Math.PI / 2;
+      // Paper art (tools/cut_paper_extras.cjs): a ring picture laid on the ground facing the camera, in its own colours.
+      const paper = paperTex.auras[au.id];
+      let mesh: THREE.Mesh;
+      if (paper) {
+        const img = paper.ring.image as { width: number; height: number };
+        const geo = new THREE.PlaneGeometry(1, img.height / img.width);
+        geo.rotateX(-Math.PI / 2);
+        geo.rotateY(Math.PI / 4); // the picture's up = away from the camera
+        mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: paper.ring, transparent: true, depthWrite: false }));
+      } else {
+        const mat = new THREE.MeshBasicMaterial({
+          map: fxTex.glow, color: au.color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: tuneNum(au.id, 'alpha'),
+        });
+        mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+        mesh.rotation.x = -Math.PI / 2;
+      }
       mesh.renderOrder = -1;
       this.scene.add(mesh);
-      this.aura = { id: au.id, m: mesh };
+      this.aura = { id: au.id, m: mesh, paper: !!paper };
     }
     if (this.aura && au) {
       const id = au.id;
-      (this.aura.m.material as THREE.MeshBasicMaterial).opacity = tuneNum(id, 'alpha');
+      const paper = this.aura.paper ? paperTex.auras[id] : undefined;
+      // The paper ring is opaque art: the code's default alpha (0.55, made for the soft glow) shows it fully.
+      (this.aura.m.material as THREE.MeshBasicMaterial).opacity = paper ? Math.min(1, tuneNum(id, 'alpha') / 0.55) : tuneNum(id, 'alpha');
       const size = tuneNum(id, 'size') * (1 + Math.sin(this.clock * 2.5) * tuneNum(id, 'pulse'));
       const [ax, az] = screenShift(p, tuneNum(id, 'shift'));
       const vo = viewOff(p, id);
       const [ox, oz] = moveBy(vo, vo.x, 0);
       this.aura.m.position.set(p.x + ax + ox, 0.05, p.z + az + oz);
-      this.aura.m.scale.set(size, size, 1);
+      if (paper) this.aura.m.scale.setScalar(size);
+      else this.aura.m.scale.set(size, size, 1);
       if (Math.random() < tuneNum(id, 'sparks') * dt) {
         const ang = Math.random() * Math.PI * 2;
         fx.puff(p.x + Math.cos(ang) * 0.6, 0.3 + Math.random() * 1.2 + seat, p.z + Math.sin(ang) * 0.6, au.color, 0.8, tuneNum(id, 'sparkSize'));
@@ -477,7 +491,8 @@ export class CosmeticRig {
         const fl = Math.hypot(p.faceX, p.faceZ) || 1;
         const sx = (p.faceZ / fl) * 0.18 * this.stepSide;
         const sz = (-p.faceX / fl) * 0.18 * this.stepSide;
-        fx.puff(p.x + sx, 0.06, p.z + sz, au.color2, 1.1, tuneNum(id, 'stepSize'));
+        if (paper) fx.footprint(p.x + sx, p.z + sz, Math.atan2(-p.faceX, -p.faceZ), paper.foot, tuneNum(id, 'stepSize') * 1.6, this.stepSide < 0, 1.1);
+        else fx.puff(p.x + sx, 0.06, p.z + sz, au.color2, 1.1, tuneNum(id, 'stepSize'));
       }
     }
   }

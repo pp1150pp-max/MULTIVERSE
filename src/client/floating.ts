@@ -7,7 +7,8 @@ import { RARITY_COLOR } from '../shared/types';
 import { itemName } from '../shared/data/enhance';
 import { expGapMult } from '../shared/formulas';
 import { iconImg } from './icons';
-import { imgUrl } from './img';
+import { imgUrl, paperUiOn } from './img';
+import { PAPER_TITLES } from './paperTitles';
 import { questRows, seekerMark } from '../shared/quests';
 import { currentBalance } from '../shared/balance';
 import { gearRows } from '../shared/gearQuests';
@@ -519,6 +520,44 @@ function paintCos(el: HTMLElement, set: CosmeticDef | undefined): void {
   el.classList.toggle('cos', !!set);
   el.style.setProperty('--c1', set?.color ?? '');
   el.style.setProperty('--c2', set?.color2 ?? '');
+  paintPaperFrame(el, set);
+}
+
+/** Screen pixels per file pixel of the paper frames: the name frame's body is about 24 px tall, the bubble's 36 px at least. */
+const PAPER_FRAME_SCALE = { plate: 1 / 3, bubble: 0.3 };
+
+/**
+ * With the paper UI on, a title set's paper frame (tools/cut_paper_extras.cjs): the frame as a border-image that
+ * repeats its plain middle, and its top and bottom middles (crown, bubble tail) drawn over it (style.css .paper-title).
+ */
+function paintPaperFrame(el: HTMLElement, set: CosmeticDef | undefined): void {
+  const kind = el.classList.contains('chat-bubble') ? 'bubble' : 'plate';
+  const f = set && paperUiOn() ? PAPER_TITLES[set.id]?.[kind] : undefined;
+  el.classList.toggle('paper-title', !!f);
+  const st = el.style;
+  if (!f || !set) {
+    for (const k of ['border-image-source', 'border-image-slice', 'border-image-width', 'border-image-outset', 'min-width', 'min-height', '--pt', '--pb', '--mw', '--mth', '--mbh', '--ot', '--ob']) st.removeProperty(k);
+    return;
+  }
+  const s = PAPER_FRAME_SCALE[kind];
+  const px = (v: number): string => `${(v * s).toFixed(1)}px`;
+  // Absolute: a relative url() in a custom property would resolve against the stylesheet.
+  const url = (suffix: string): string => `url("${new URL(imgUrl(`assets/sprites/paper/ui/${set.id}_${kind}${suffix}.png`), location.href).href}")`;
+  const [sl, ou, mid] = [f.slice, f.outset, f.mid];
+  st.setProperty('border-image-source', url(''));
+  st.setProperty('border-image-slice', `${sl.join(' ')} fill`);
+  st.setProperty('border-image-width', sl.map(px).join(' '));
+  st.setProperty('border-image-outset', ou.map(px).join(' '));
+  // Never smaller than its corners and middle piece, or the browser shrinks the whole frame to fit.
+  st.setProperty('min-width', px(sl[1] + sl[3] - ou[1] - ou[3] + mid[0]));
+  st.setProperty('min-height', px(sl[0] + sl[2] - ou[0] - ou[2]));
+  st.setProperty('--pt', url('_t'));
+  st.setProperty('--pb', url('_b'));
+  st.setProperty('--mw', px(mid[0]));
+  st.setProperty('--mth', px(mid[1]));
+  st.setProperty('--mbh', px(mid[2]));
+  st.setProperty('--ot', px(ou[0]));
+  st.setProperty('--ob', px(ou[2]));
 }
 
 /** A plate's HP fill width in %, written only when it changes (a tenth of a percent is the finest shown). */

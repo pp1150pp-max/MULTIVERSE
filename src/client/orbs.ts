@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { orbPlus, orbSlot } from '../shared/data/enhance';
 import { EQUIP_SLOTS } from '../shared/types';
+import { paperTex } from './assets';
 import { DEFAULT_ORB_LOOK, ORB_PALETTE_IDS, ORB_PALETTE_NAME, ORB_SHAPE_IDS, ORB_SHAPE_NAME, type OrbLook, type OrbPaletteId, type OrbShapeId } from '../shared/orbLook';
 
 /** How an orb of one + level looks. Sizes are in world units (the player is about 1.9 tall). */
@@ -380,8 +381,10 @@ let coreMat: THREE.ShaderMaterial | null = null;
 let glowMat: THREE.ShaderMaterial | null = null;
 
 function materials(): [THREE.ShaderMaterial, THREE.ShaderMaterial] {
+  // With the paper switch on: the white paper orbs (tools/cut_paper_extras.cjs), tinted by their greys.
+  const paper = paperTex.orbs;
   coreMat ??= new THREE.ShaderMaterial({
-    uniforms: { map: { value: orbAtlas() }, uScreenH: screenH },
+    uniforms: { map: { value: paper ?? orbAtlas() }, uScreenH: screenH, uPaper: { value: paper ? 1 : 0 } },
     vertexShader: `
       attribute vec3 color; attribute vec3 accent; attribute float size; attribute float detail;
       uniform float uScreenH;
@@ -393,6 +396,7 @@ function materials(): [THREE.ShaderMaterial, THREE.ShaderMaterial] {
       }`,
     fragmentShader: `
       uniform sampler2D map;
+      uniform float uPaper;
       varying vec3 vColor; varying vec3 vAccent; varying float vDetail;
       void main() {
         // vDetail = atlas cell: detail (column) + 4 × shape (row).
@@ -400,6 +404,13 @@ function materials(): [THREE.ShaderMaterial, THREE.ShaderMaterial] {
         float row = floor((vDetail + 0.5) / 4.0);
         vec4 t = texture2D(map, vec2((gl_PointCoord.x + col) / 4.0, 1.0 - (gl_PointCoord.y + row) / ${ORB_SHAPES.length}.0));
         if (t.a < 0.5) discard;
+        if (uPaper > 0.5) {
+          // Grey paper: the body colour shaded by its grey, the near-white cut-outs (band, star, rays) in the accent.
+          float g = t.r;
+          vec3 p = mix(vColor * (0.15 + 0.95 * g), vAccent, smoothstep(0.9, 0.98, g));
+          gl_FragColor = vec4(p, 1.0);
+          return;
+        }
         vec3 c = vColor * (0.3 + 0.9 * t.r);
         c = mix(c, vAccent, t.b);
         c = mix(c, vec3(1.0), t.g);
