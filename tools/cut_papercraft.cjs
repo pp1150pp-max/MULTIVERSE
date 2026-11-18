@@ -75,6 +75,9 @@ const MAPS = {
     ['row_left.png', 'props', { cols: 3, rows: 2, height: 448, names: ['row_l_vault', 'row_l_crystal', 'row_l_house_a', 'row_l_house_b', 'row_l_house_c', 'row_l_shop'] }],
     ['row_right.png', 'props', { cols: 3, rows: 2, height: 448, names: ['row_r_guild', 'row_r_forge', 'row_r_house_a', 'row_r_house_b', 'row_r_house_c', 'row_r_shop'] }],
     ['market.png', 'props', { cols: 4, rows: 2, height: 256, names: ['mk_goods_stall', 'mk_auction_booth', 'mk_veg_stall', 'mk_wagon', 'mk_handcart', 'mk_sacks', 'mk_potion_table', 'mk_tag_table'] }],
+    // The three stalls again, seen from behind (they face the fountain, away from the camera): these replace the
+    // first three cells of market.png, so this line comes after it.
+    ['market_backs.png', 'props', { cols: 3, rows: 1, height: 256, names: ['mk_goods_stall', 'mk_auction_booth', 'mk_veg_stall'] }],
     // Low things along the bottom two walls (HUB.md 6): skipped until the sheet is there.
     ['town2_low.png', 'props', { cols: 4, rows: 2, height: 256, names: ['low_stall_a', 'low_stall_b', 'garden_bed', 'hedge_a', 'hedge_b', 'house_back_a', 'house_back_b', 'woodpile'] }],
     ['town2_props.png', 'props', { cols: 4, rows: 3, height: 256, names: ['town_fountain', 'quest_board', 'crystal_stall', 'lamp_post', 'bench_a', 'bench_b', 'planter', 'banner_pole', 'crates', 'barrels', 'flower_box', 'potted_tree'] }],
