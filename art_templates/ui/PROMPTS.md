@@ -50,6 +50,23 @@ layout are symmetrical, except that the necklace socket appears only on the righ
 readable words, no logos. Do not use pink, magenta or purple in the window.
 ```
 
+## `inventory_fashion.png` (หน้า "แฟชั่น" ของหน้าต่างกระเป๋า)
+
+แนบ `public/assets/sprites/ui/inventory.png` แล้วสั่งแก้ ภาพต้องขนาดและสัดส่วนเท่าเดิมทุกจุด (กรอบ ป้ายชื่อ ปุ่มปิด ตาราง 10×3 ป้ายเหรียญ) เปลี่ยนเฉพาะครึ่งบน ตอนตัดภาพทำแบบเดียวกับ `inventory.png`
+
+```
+Edit the attached inventory window. Keep exactly the same image size, style, colours, iron frame, title plate, close
+button, 10 x 3 item grid, coin plate and flat magenta (#FF00FF) background, all in exactly the same positions. Change ONLY
+the upper wall area: remove all the equipment sockets and rebuild it as a cosmetics wardrobe display with exactly 6 empty
+recessed display frames in a strict grid of 3 columns x 2 rows, centred in the wall, with equal gaps and none overlapping.
+Each frame is landscape, about 3 units wide and 2 units tall, with the same recessed iron and tarnished bronze frame style
+as the old sockets. Directly under each frame, a small blank narrow bronze name plate with a completely clear face. Above
+the two rows, centred under the title plate, one blank wide narrow plate for a heading. Behind the frames, the same dim
+weathered stone wall with faint carved reliefs of cosmic ruins and a faint arched alcove feel, low contrast so the items
+shown in the frames stay readable. All frames are empty. No items, no icons, no character, no readable words, no logos.
+Do not use pink, magenta or purple in the window.
+```
+
 ## `close.png` และ `corner.png`
 
 ตัดจากแผ่นเดียว พื้นหลังสีม่วงแดง
