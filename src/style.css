@@ -466,6 +466,9 @@ button.primary:hover { color: #000; filter: brightness(1.1); }
   position: absolute; left: 8.6%; top: 66.6%; width: 83.1%; height: 19.7%;
   display: grid; grid-template-columns: repeat(10, 1fr); grid-template-rows: repeat(3, 1fr); column-gap: 0.89%; row-gap: 4.6%;
 }
+/* The paper bag picture (sprites/paper/ui/inventory.png, 815×1086): its 30 slots sit lower and wider than the
+   iron one's. Cells cover each painted slot's inside, measured from the picture (x 58–758, y 732–945). */
+.paper-ui #bag-grid { left: 7.12%; top: 67.4%; width: 86%; height: 19.7%; column-gap: 1.14%; row-gap: 3.7%; }
 .inv-foot { position: absolute; left: 30%; top: 89.6%; width: 40%; height: 4.4%; display: flex; justify-content: space-around; align-items: center; font-size: 13px; }
 .stat { display: flex; justify-content: space-between; font-size: 12px; padding: 1px 0; }
 .stat b { color: var(--gold-hi); font-weight: 400; }
