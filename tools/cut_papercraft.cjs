@@ -67,6 +67,11 @@ const MAPS = {
     ['walls.png', 'props', { cols: 3, rows: 2, exact: true, names: ['town_wall_a', 'town_wall_a_broken', 'town_wall_end', 'town_wall_b', 'town_wall_b_broken'] }],
     ['summoners.png', 'props', { cols: 2, rows: 2, names: ['summoner_forest', 'summoner_marsh', 'summoner_snow', 'summoner_volcano'] }],
     ['ground_brick.png', 'ground', { out: 'brick' }],
+    // The rebuilt town (owner 2026-11-18, hub_redesign/HUB_REDESIGN.md): new pictures with no old file, so each gets a
+    // fixed height. Sheet B is on green (the tailor's cloth is pink).
+    ['town2_buildings_a.png', 'props', { cols: 2, rows: 2, height: 384, names: ['bld_store', 'bld_market', 'bld_forge', 'bld_guild'] }],
+    ['town2_buildings_b.png', 'props', { cols: 2, rows: 2, height: 384, bg: 'green', names: ['bld_tailor', 'bld_vault', 'bld_house_a', 'bld_house_b'] }],
+    ['town2_props.png', 'props', { cols: 4, rows: 3, height: 256, names: ['town_fountain', 'quest_board', 'crystal_stall', 'lamp_post', 'bench_a', 'bench_b', 'planter', 'banner_pole', 'crates', 'barrels', 'flower_box', 'potted_tree'] }],
   ],
 };
 
@@ -75,10 +80,22 @@ async function readRaw(file) {
   return { w: info.width, h: info.height, d: data };
 }
 
-/** Magenta becomes transparent and a purple fringe is pulled back (as in cut_zone3.cjs); specks are dropped. */
-function key(img, minSpeck = 40) {
+/**
+ * Magenta becomes transparent and a purple fringe is pulled back (as in cut_zone3.cjs); specks are dropped.
+ * `bg: 'green'`: the same for a pure green background, its green fringe pulled back.
+ */
+function key(img, minSpeck = 40, bg = 'magenta') {
   const { w, h, d } = img;
   for (let i = 0; i < w * h * 4; i += 4) {
+    if (bg === 'green') {
+      const over = d[i + 1] - Math.max(d[i], d[i + 2]);
+      if (over > 70) d[i + 3] = 0;
+      else {
+        d[i + 3] = 255;
+        if (over > 25) d[i + 1] = Math.max(d[i], d[i + 2]) + 22;
+      }
+      continue;
+    }
     const low = Math.min(d[i], d[i + 2]) - d[i + 1];
     if (low > 70 && Math.abs(d[i] - d[i + 2]) < 90) d[i + 3] = 0;
     else {
@@ -186,7 +203,8 @@ async function save(pipeline, rel) {
 async function props(img, o, label) {
   const boxes = cells(img, o.cols, o.rows, label);
   const one = async (name, box) => {
-    const [oldW, oldH] = await sizeOf(`props/${name}.png`);
+    // `height`: a new picture with no old file, cut to this many pixels tall.
+    const [oldW, oldH] = o.height ? [0, o.height] : await sizeOf(`props/${name}.png`);
     const k = oldH / (box[3] - box[1]);
     // `exact`: the old file's width too (pieces placed by their pixel size, like the town walls).
     const w = o.exact ? oldW : Math.max(1, Math.round((box[2] - box[0]) * k));
@@ -291,7 +309,7 @@ async function main() {
     console.log(file);
     if (kind === 'ground') await ground(src, o);
     else {
-      const img = key(await readRaw(src));
+      const img = key(await readRaw(src), 40, o.bg);
       if (kind === 'props') await props(img, o, file);
       else if (kind === 'planks') await planks(img, o, file);
       else await atlas(img, o, file);

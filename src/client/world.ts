@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { clearingRadius, lairOf, themeAt, zoneById } from '../shared/data/zones';
-import { QUADRANT_JITTER } from '../shared/sim/terrain';
+import { HUB_PLAZA_RADIUS, QUADRANT_JITTER } from '../shared/sim/terrain';
 import type { PropSpec, Terrain } from '../shared/sim/terrain';
 import type { ZoneTheme } from '../shared/data/zones';
 import { mulberry32, pick, rand, type Rng } from '../shared/rng';
@@ -140,6 +140,9 @@ const GROUND_FRAG = /* glsl */ `
   uniform float uHalf, uBound, uTileUnits, uTime, uBake, uFlow;
   // The hub's walled town (x, z, half): bricked up to a straight edge under its wall, not a wandering one.
   uniform vec3 uTown;
+  // The hub's round plaza around the fountain (radius; 0 = none), laid with uPlazaTex inside a ring of darker stones.
+  uniform float uPlaza;
+  uniform sampler2D uPlazaTex;
   #ifdef QUADS
   // The hub: uBase/uDirt are the top quarter's (x<0, z<0); 1 = right (x≥0, z<0), 2 = left (x<0, z≥0), 3 = bottom.
   uniform sampler2D uBase1, uBase2, uBase3, uDirt1, uDirt2, uDirt3;
@@ -230,6 +233,13 @@ const GROUND_FRAG = /* glsl */ `
     float laid = cover.g + lobes * 0.6 + relief(paveTex, uPave) * 1.0;
     if (uTown.z > 0.0) laid = max(abs(vWorld.x - uTown.x), abs(vWorld.y - uTown.y)) < uTown.z ? 1.0 : 0.0;
     col = mix(col, calm(paveTex, uPave, 0.9, 1.0, 1.0) * (1.0 + macro * 0.1), smoothstep(0.46, 0.54, laid));
+    if (uPlaza > 0.0) {
+      float pd = length(vWorld - uTown.xy);
+      vec3 plaza = calm(texture2D(uPlazaTex, tile).rgb, uPlazaTex, 0.95, 1.08, 1.0) * (1.0 + macro * 0.08);
+      col = mix(col, plaza, 1.0 - step(uPlaza, pd));
+      // A kerb of darker stones round the edge.
+      col *= 1.0 - 0.28 * (step(uPlaza - 0.45, pd) - step(uPlaza + 0.05, pd));
+    }
 
     // Pool shores wander instead of following the smooth shapes drawn in the mask.
     vec2 wander = (vec2(noise(vWorld * 1.3), noise(vWorld * 1.3 + 17.0)) - 0.5) * 0.5 / (2.0 * uHalf);
@@ -506,6 +516,8 @@ export class World {
         uFlow: { value: terrain.zone.iceLakes ? 0 : 1 },
         // Right up to the foot of the town wall.
         uTown: { value: new THREE.Vector3(terrain.zone.safe?.x ?? 0, terrain.zone.safe?.z ?? 0, terrain.zone.safe ? terrain.zone.safe.half - 0.2 : 0) },
+        uPlaza: { value: terrain.zone.npcs ? HUB_PLAZA_RADIUS : 0 },
+        uPlazaTex: { value: groundTiles.pave ?? tiles[3] },
       };
       quads.forEach(([base, dirt], i) => {
         this.groundUniforms![`uBase${i + 1}`] = { value: base };

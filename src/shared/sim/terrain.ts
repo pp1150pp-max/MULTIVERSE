@@ -100,6 +100,11 @@ export function restSpotNear(spots: readonly RestSpot[], p: { x: number; z: numb
   return best;
 }
 
+/** Radius of the hub's round plaza (World paints it; nothing stands on it but the fountain). */
+export const HUB_PLAZA_RADIUS = 8;
+/** The hub fountain's solid radius (its picture has benches round it). */
+export const HUB_FOUNTAIN_RADIUS = 2.7;
+
 /** How far the hub's quarters wobble into each other (see themeAt). The props add their own scatter on top. */
 export const QUADRANT_JITTER = 6;
 
@@ -226,63 +231,82 @@ export class Terrain {
   }
 
   /**
-   * The hub's town: the ruins of an old city inside a square wall. The wall pictures run along the
-   * world's two axes (on screen the town is a diamond), so the walls do too, one long straight run
-   * per side. The four roads leave along the diagonals, through an opening between two stone pillars
-   * on each corner (on screen the top, right, bottom and left of the diamond), straight on to the portals. The NPCs, their
-   * stalls and the fallen houses stand on the axes between the roads. Brick underfoot (World paints it).
-   * Until a ruin picture exists it borrows an older prop's (see assets.ts).
+   * The hub's town (owner 2026-11-18, hub_redesign/HUB_REDESIGN.md): a round plaza with the fountain in the middle,
+   * and four districts between the four roads, each with whole buildings and its townspeople standing at the edge of
+   * the plaza in front of them. On screen: top-left (−x) the market, top-right (−z) the forge, bottom-right (+x) the
+   * guild hall with the quest board, bottom-left (+z) the vault. The square wall runs round it all, with an open way
+   * through on each corner (top, right, bottom and left of the diamond), straight on to the portals. The buildings and
+   * props are paper pictures only (art_templates/papercraft_maps/HUB.md), whatever the art switch says.
    */
   private placeTown(r: Rng): void {
     const s = this.zone.start;
-    const R = this.zone.safe?.half ?? 17.6;
+    const R = this.zone.safe?.half ?? 20;
     const at = (key: string, dx: number, dz: number, height: number, collideR: number, fade = false) =>
       this.addProp(key, s.x + dx, s.z + dz, height, collideR, fade);
-    const polar = (key: string, deg: number, rad: number, height: number, collideR: number, fade = false) =>
-      at(key, Math.cos((deg * Math.PI) / 180) * rad, Math.sin((deg * Math.PI) / 180) * rad, height, collideR, fade);
+    const rad = (d: number) => (d * Math.PI) / 180;
+    const polar = (key: string, deg: number, r: number, height: number, collideR: number, fade = false) =>
+      at(key, Math.cos(rad(deg)) * r, Math.sin(rad(deg)) * r, height, collideR, fade);
+    const spot = (deg: number, r: number) => ({ x: s.x + Math.cos(rad(deg)) * r, z: s.z + Math.sin(rad(deg)) * r });
+    /** A whole building: drawn `height` tall, solid over its footprint (a few circles, colliders are round). */
+    const building = (key: string, deg: number, r: number, height: number) => {
+      polar(key, deg, r, height, 0, true);
+      const c = spot(deg, r);
+      for (const [ox, oz] of [[0, 0], [1.3, 1.3], [-1.3, -1.3], [1.3, -1.3], [-1.3, 1.3]]) {
+        this.colliders.push({ x: c.x + ox, z: c.z + oz, r: 1.6 });
+      }
+    };
 
-    at('ruin_fountain', 0, 0, 4.2, 1.7);
+    // The plaza: the fountain (benches round it are part of its picture) and nothing else on it.
+    at('town_fountain', 0, 0, 5.2, HUB_FOUNTAIN_RADIUS);
     this.restSpots.push({ x: s.x, z: s.z, kind: 'fountain' });
-    this.npcPos.seeker = { x: s.x, z: s.z - 5.8 };
-    at('ruin_statue', 0, -8.6, 3.8, 0.8);
-    // The merchant and the market broker share the +x side, turned apart so that on screen the
-    // merchant's stall sits up and to the right and the broker with his booth below it: neither
-    // stall covers the other's NPC and their name badges don't stack.
-    const deg = (d: number, rad: number) => ({ x: s.x + Math.cos((d * Math.PI) / 180) * rad, z: s.z + Math.sin((d * Math.PI) / 180) * rad });
-    this.npcPos.merchant = deg(-7.5, 5.8);
-    polar('town_stall', -7.5, 8.6, 3.4, 1.2);
-    polar('barrel', -15, 10.5, 0.9, 0.35);
-    this.npcPos.broker = deg(27.5, 8.8);
-    polar('town_market', 17.5, 11.6, 3.4, 1.2);
-    this.npcPos.blacksmith = { x: s.x, z: s.z + 5.8 };
-    at('town_forge', 0, 8.8, 3.6, 1.3);
-    this.npcPos.keeper = { x: s.x - 5.8, z: s.z };
-    // The crystal merchant (cash shop): beside the keeper, between the vault and the road to the left gate.
-    // Owner 2026-11-15: it takes the stylist's spot and the stylist is out of town for now (no position = not
-    // placed; the cosmetics window still opens from the menu). Bring the stylist back with
-    // `this.npcPos.stylist = deg(202.5, 7.2)` and give one of them another spot.
-    this.npcPos.crystal = deg(202.5, 7.2);
-    at('town_vault', -8.8, 0, 3.2, 1.3);
+    const NPC_R = HUB_PLAZA_RADIUS + 1.4;
 
-    // Broken pillars either side of the roads (none at 22.5°, where the market booth stands), fallen houses and towers further out, two old trees.
-    for (let a = 67.5; a < 360; a += 45) polar('ruin_pillar', a, 10.6, 3.4, 0.5, true);
-    for (const a of [0, 180]) polar('ruin_house', a, 13.6, 5.8, 2.1, true);
-    for (const a of [90, 270]) polar('ruin_tower', a, 13.6, 6.4, 1.8, true);
-    // Clear of the market booth (17.5°), so the tree doesn't hide it.
-    polar('tree_2', 337.5, 14.6, 6.2, 0.55, true);
-    polar('tree_2', 157.5, 14.6, 6.2, 0.55, true);
+    // Top-left (−x): the market. The merchant's store and the broker's market hall, the tailor's shop behind them
+    // (the stylist is out of town for now: owner 2026-11-18).
+    building('bld_store', 163, 14.2, 7.4);
+    building('bld_market', 197, 14.2, 7.4);
+    building('bld_tailor', 180, 17.4, 7);
+    this.npcPos.merchant = spot(168, NPC_R);
+    this.npcPos.broker = spot(192, NPC_R);
 
-    // Rubble where it fell: off the roads, clear of everything else.
-    let piles = 0;
-    for (let i = 0; i < 300 && piles < 10; i++) {
-      const x = s.x + rand(r, -R + 3, R - 3);
-      const z = s.z + rand(r, -R + 3, R - 3);
-      if (Math.hypot(x - s.x, z - s.z) < 5 || this.distToPath(x, z) < 3) continue;
-      if (this.colliders.some((c) => Math.hypot(c.x - x, c.z - z) < c.r + 2.2)) continue;
-      if (Object.values(this.npcPos).some((n) => n && Math.hypot(n.x - x, n.z - z) < 3)) continue;
-      this.addProp('ruin_rubble', x, z, rand(r, 1, 1.4), 0.6);
-      piles++;
+    // Top-right (−z): the forge, houses either side behind it.
+    building('bld_forge', 270, 14.2, 7.2);
+    building('bld_house_a', 248, 18, 7.6);
+    building('bld_house_b', 292, 18, 7.6);
+    this.npcPos.blacksmith = spot(270, NPC_R);
+
+    // Bottom-right (+x): the guild hall, The Seeker beside the quest board.
+    building('bld_guild', 0, 14.6, 8);
+    this.npcPos.seeker = spot(-8, NPC_R);
+    polar('quest_board', 14, HUB_PLAZA_RADIUS + 2.6, 3.4, 0.8);
+
+    // Bottom-left (+z): the vault, the crystal merchant at the crystal stall next to it.
+    building('bld_vault', 90, 14.4, 7.4);
+    this.npcPos.keeper = spot(80, NPC_R);
+    this.npcPos.crystal = spot(102, NPC_R);
+    polar('crystal_stall', 108, HUB_PLAZA_RADIUS + 3.4, 3.4, 1);
+
+    // Each road comes into the plaza between a pair of lamp posts, with flowers on both sides a little further out.
+    for (const road of [45, 135, 225, 315]) {
+      for (const side of [-1, 1]) {
+        polar('lamp_post', road + side * 11, HUB_PLAZA_RADIUS + 0.8, 3.6, 0.3);
+        polar('planter', road + side * 17, HUB_PLAZA_RADIUS + 3.2, 1.6, 0.7);
+      }
+      // A banner pole either side of the road just inside the gateway.
+      const a = rad(road);
+      const ux = Math.cos(a), uz = Math.sin(a);
+      for (const side of [-1, 1]) at('banner_pole', ux * 22 - uz * side * 3.2, uz * 22 + ux * side * 3.2, 4, 0.3);
     }
+    // The knight's statue by the top road, as in the concept.
+    polar('ruin_statue', 240, HUB_PLAZA_RADIUS + 3.6, 3.8, 0.8);
+
+    // Odds and ends behind the shops, against the wall.
+    const props: [string, number, number, number, number][] = [
+      ['crates', 150, 17.6, 1.7, 0.8], ['barrels', 210, 17.4, 1.6, 0.8], ['flower_box', 300, 13, 1.2, 0.7],
+      ['barrels', 258, 13.4, 1.6, 0.8], ['potted_tree', 30, 16.4, 2.6, 0.6], ['crates', 330, 16.4, 1.7, 0.8],
+      ['potted_tree', 60, 16.4, 2.6, 0.6], ['flower_box', 120, 16.6, 1.2, 0.7], ['crates', 22, 11.6, 1.7, 0.8],
+    ];
+    for (const [key, deg, r, h, c] of props) polar(key, deg, r, h, c);
 
     // The wall kit (tools/cut_hub.cjs): one scale for all pieces, U world units per pixel. Each wall
     // picture's foot runs at the camera's slope for a world axis, so copies line up end to end, one end
