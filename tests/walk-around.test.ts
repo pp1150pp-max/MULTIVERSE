@@ -3,6 +3,7 @@ import { ok, finish } from './check';
 import { ZONE_HUB } from '../src/shared/data/zones';
 import { NPC_IDS } from '../src/shared/data/npcs';
 import { Sim } from '../src/shared/sim/Sim';
+import { HUB_FOUNTAIN_RADIUS } from '../src/shared/sim/terrain';
 import { WalkTarget } from '../src/client/walkTo';
 import type { Vec2 } from '../src/shared/types';
 
@@ -55,8 +56,9 @@ function keyWalk(x: number, z: number, mx: number, mz: number, past: number): nu
 // ---- clicking right on an NPC, the forge, the vault or the fountain walks up beside it
 const things = [
   ...NPC_IDS.map((id) => ({ name: id, ...t.npcPos[id]! })),
-  { name: 'forge', x: s.x, z: s.z + 8.8 },
-  { name: 'vault', x: s.x - 8.8, z: s.z },
+  // The buildings behind the blacksmith and the keeper (Terrain.placeTown).
+  { name: 'forge', ...t.props.find((q) => q.key === 'bld_forge')! },
+  { name: 'vault', ...t.props.find((q) => q.key === 'bld_vault')! },
   { name: 'fountain', x: s.x, z: s.z },
 ];
 for (const th of things) {
@@ -88,7 +90,7 @@ for (const th of things) {
 }
 
 // ---- holding a key straight at something round goes round it, not into it
-for (const [name, c, r] of [['blacksmith', t.npcPos.blacksmith!, 0.45], ['fountain', s, 1.7]] as const) {
+for (const [name, c, r] of [['blacksmith', t.npcPos.blacksmith!, 0.45], ['fountain', s, HUB_FOUNTAIN_RADIUS]] as const) {
   const straight = (2 * (r + 2)) / p.moveSpeed;
   const took = keyWalk(c.x + r + 2, c.z, -1, 0, 2 * (r + 2));
   ok(took < straight * 1.6, `${name}: walked straight at its middle, gets past (${took.toFixed(2)} s, straight line ${straight.toFixed(2)} s)`);
@@ -96,9 +98,18 @@ for (const [name, c, r] of [['blacksmith', t.npcPos.blacksmith!, 0.45], ['founta
 
 // ---- pressed into a corner of two things: stays put, doesn't shake
 {
-  // The merchant's stall and the barrel beside it leave a gap narrower than a player.
-  const stall = t.colliders.find((c) => c.r === 1.2 && c.x > s.x && c.z < s.z)!;
-  const barrel = t.colliders.find((c) => c.r === 0.35)!;
+  // Two things in town that leave a gap narrower than a player (the first such pair, e.g. a lamp post and a planter).
+  const inTown = t.colliders.filter((c) => Math.max(Math.abs(c.x - s.x), Math.abs(c.z - s.z)) < 15);
+  let stall = inTown[0];
+  let barrel = inTown[1];
+  search: for (const a of inTown) for (const b of inTown) {
+    const gap = Math.hypot(a.x - b.x, a.z - b.z) - a.r - b.r;
+    if (a !== b && gap > 0.05 && gap < 2 * p.radius - 0.1) {
+      stall = a;
+      barrel = b;
+      break search;
+    }
+  }
   const mid = { x: (stall.x + barrel.x) / 2, z: (stall.z + barrel.z) / 2 };
   // Walk into the gap from the town side.
   const nx = mid.x - s.x;
