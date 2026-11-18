@@ -1,0 +1,247 @@
+[
+ {
+  "name": "ap_gs_a",
+  "cols": 6,
+  "rows": 4,
+  "bg": "green",
+  "frames": 18
+ },
+ {
+  "name": "ap_mg_a",
+  "cols": 6,
+  "rows": 4,
+  "bg": "green",
+  "frames": 24
+ },
+ {
+  "name": "ap_mg_b",
+  "cols": 6,
+  "rows": 4,
+  "bg": "cyan",
+  "frames": 24
+ },
+ {
+  "name": "ap_mg_c",
+  "cols": 6,
+  "rows": 4,
+  "bg": "cyan",
+  "frames": 24
+ },
+ {
+  "name": "ap_mg_d",
+  "cols": 6,
+  "rows": 4,
+  "bg": "green",
+  "frames": 24
+ },
+ {
+  "name": "ap_mg_e",
+  "cols": 6,
+  "rows": 4,
+  "bg": "green",
+  "frames": 24
+ },
+ {
+  "name": "ap_sw_a",
+  "cols": 6,
+  "rows": 4,
+  "bg": "cyan",
+  "frames": 24
+ },
+ {
+  "name": "ap_sw_b",
+  "cols": 6,
+  "rows": 4,
+  "bg": "green",
+  "frames": 24
+ },
+ {
+  "name": "ap_sw_c",
+  "cols": 6,
+  "rows": 4,
+  "bg": "cyan",
+  "frames": 18
+ },
+ {
+  "name": "ember_bolt",
+  "cols": 1,
+  "rows": 1,
+  "bg": "cyan",
+  "frames": 1
+ },
+ {
+  "name": "enhance",
+  "cols": 6,
+  "rows": 3,
+  "bg": "cyan",
+  "frames": 18
+ },
+ {
+  "name": "gs_gear",
+  "cols": 6,
+  "rows": 6,
+  "bg": "magenta",
+  "frames": 36
+ },
+ {
+  "name": "gs_passive",
+  "cols": 6,
+  "rows": 3,
+  "bg": "magenta",
+  "frames": 18
+ },
+ {
+  "name": "gs_skill",
+  "cols": 6,
+  "rows": 6,
+  "bg": "cyan",
+  "frames": 36
+ },
+ {
+  "name": "gun",
+  "cols": 6,
+  "rows": 4,
+  "bg": "green",
+  "frames": 24
+ },
+ {
+  "name": "gun_ult",
+  "cols": 6,
+  "rows": 3,
+  "bg": "cyan",
+  "frames": 18
+ },
+ {
+  "name": "ice_shard",
+  "cols": 1,
+  "rows": 1,
+  "bg": "magenta",
+  "frames": 1
+ },
+ {
+  "name": "mage",
+  "cols": 6,
+  "rows": 5,
+  "bg": "green",
+  "frames": 30
+ },
+ {
+  "name": "mg_a",
+  "cols": 6,
+  "rows": 6,
+  "bg": "magenta",
+  "frames": 36
+ },
+ {
+  "name": "mg_b",
+  "cols": 6,
+  "rows": 6,
+  "bg": "cyan",
+  "frames": 36
+ },
+ {
+  "name": "mg_c",
+  "cols": 6,
+  "rows": 6,
+  "bg": "green",
+  "frames": 36
+ },
+ {
+  "name": "mg_d",
+  "cols": 6,
+  "rows": 3,
+  "bg": "magenta",
+  "frames": 18
+ },
+ {
+  "name": "mg_e",
+  "cols": 6,
+  "rows": 4,
+  "bg": "cyan",
+  "frames": 24
+ },
+ {
+  "name": "mg_f",
+  "cols": 6,
+  "rows": 4,
+  "bg": "green",
+  "frames": 24
+ },
+ {
+  "name": "mg_g",
+  "cols": 6,
+  "rows": 5,
+  "bg": "magenta",
+  "frames": 30
+ },
+ {
+  "name": "snowball",
+  "cols": 1,
+  "rows": 1,
+  "bg": "magenta",
+  "frames": 1
+ },
+ {
+  "name": "sw_blade",
+  "cols": 6,
+  "rows": 4,
+  "bg": "cyan",
+  "frames": 24
+ },
+ {
+  "name": "sw_bulwark",
+  "cols": 6,
+  "rows": 4,
+  "bg": "cyan",
+  "frames": 24
+ },
+ {
+  "name": "sw_gale",
+  "cols": 6,
+  "rows": 4,
+  "bg": "green",
+  "frames": 24
+ },
+ {
+  "name": "sword",
+  "cols": 6,
+  "rows": 4,
+  "bg": "cyan",
+  "frames": 24
+ },
+ {
+  "name": "witch_circle",
+  "cols": 1,
+  "rows": 1,
+  "bg": "green",
+  "frames": 1
+ },
+ {
+  "name": "witch_hand",
+  "cols": 1,
+  "rows": 1,
+  "bg": "cyan",
+  "frames": 1
+ },
+ {
+  "name": "witch_pool",
+  "cols": 1,
+  "rows": 1,
+  "bg": "cyan",
+  "frames": 1
+ },
+ {
+  "name": "witch_sigil",
+  "cols": 1,
+  "rows": 1,
+  "bg": "green",
+  "frames": 1
+ },
+ {
+  "name": "witch_vial",
+  "cols": 1,
+  "rows": 1,
+  "bg": "cyan",
+  "frames": 1
+ }
+]
