@@ -531,8 +531,8 @@ html.paper-ui .eq-ring2 { left: 61.5%; top: 37.2%; width: 6.6%; height: 4.4%; }
 #inventory.fashion #inv-close { left: 89.3%; top: 4%; width: 9.3%; height: 6.2%; }
 #inventory.fashion .inv-foot { left: 31.2%; top: 91.8%; width: 35.8%; height: 3.5%; }
 #fashion-grid {
-  position: absolute; left: 6.4%; top: 67.1%; width: 87.4%; height: 20.3%;
-  display: none; grid-template-columns: repeat(10, 1fr); grid-template-rows: repeat(3, 1fr); column-gap: 0.6%; row-gap: 1.6%;
+  position: absolute; left: 7.12%; top: 67.5%; width: 86.01%; height: 19.61%;
+  display: none; grid-template-columns: repeat(10, 1fr); grid-template-rows: repeat(3, 1fr); column-gap: 1.14%; row-gap: 4.2%;
 }
 #fashion-worn { position: absolute; inset: 0; display: none; pointer-events: none; }
 #fashion-worn > * { position: absolute; box-sizing: border-box; }
@@ -542,7 +542,7 @@ html.paper-ui .eq-ring2 { left: 61.5%; top: 37.2%; width: 6.6%; height: 4.4%; }
 #inventory.fashion #fashion-grid { display: grid; }
 .fashion-head, .fashion-slot-name { display: grid; place-items: center; color: #2a1a08; line-height: 1; white-space: nowrap; overflow: hidden; }
 .fashion-head { font-family: 'Cinzel', 'Kanit', serif; font-weight: 700; font-size: clamp(10px, calc(var(--inv-w) * 0.026), 15px); }
-.fashion-slot-name { font-weight: 600; font-size: clamp(8px, calc(var(--inv-w) * 0.019), 11px); }
+.fashion-slot-name { font-weight: 600; font-size: clamp(7px, calc(var(--inv-w) * 0.016), 10px); text-overflow: ellipsis; }
 #fashion-worn .cell { width: auto; height: auto; background: none; border-color: transparent; }
 .fashion-note { display: grid; place-items: center; text-align: center; font-size: clamp(8px, calc(var(--inv-w) * 0.019), 12px); color: #d8c8a8; text-shadow: 0 1px 2px #000; line-height: 1.15; }
 #fashion-grid .cell { width: 100%; height: 100%; background: rgba(8, 6, 4, 0.35); border-color: transparent; overflow: hidden; }

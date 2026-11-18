@@ -25,13 +25,15 @@ const FRAME_Y = [243, 435];
 const FRAME_W = 190;
 const FRAME_H = 129;
 const FRAME_IN = 11;
-/** The name plate under each frame (left offset from its frame, top per row, size). */
-const PLATE_DX = 24;
+/** The flat face of the name plate under each frame, between its rivets (left offset from its frame, top per row, size). */
+const PLATE_DX = 49;
 const PLATE_Y = [388, 579];
-const PLATE_W = 146;
+const PLATE_W = 98;
 const PLATE_H = 21;
+/** Shorter names where COS_SLOT_NAME doesn't fit on a plate (owner 2026-11-18); the full name stays in the tooltip. */
+const PLATE_NAME: Partial<Record<CosSlot, string>> = { title: 'กรอบชื่อ/แชท' };
 /** The heading plate, and the line of help text under the frames: [left, top, width, height]. */
-const HEAD: Box = [222, 170, 380, 33];
+const HEAD: Box = [268, 172, 288, 30];
 const NOTE: Box = [90, 607, 635, 26];
 type Box = [number, number, number, number];
 
@@ -211,7 +213,7 @@ export class FashionBag {
       }
       parts.push(
         place(cell, [x + FRAME_IN, y + FRAME_IN, FRAME_W - FRAME_IN * 2, FRAME_H - FRAME_IN * 2]),
-        place(el('div', 'fashion-slot-name', COS_SLOT_NAME[s]), [x + PLATE_DX, PLATE_Y[Math.floor(i / 3)], PLATE_W, PLATE_H]),
+        place(el('div', 'fashion-slot-name', PLATE_NAME[s] ?? COS_SLOT_NAME[s]), [x + PLATE_DX, PLATE_Y[Math.floor(i / 3)], PLATE_W, PLATE_H]),
       );
     });
     this.note.textContent = this.g.backend.guest
