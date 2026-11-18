@@ -124,19 +124,25 @@ const SHOT_ART: Record<string, { sheet: FxSheet; row: number; scale: number }> =
   '#a0fff4': { sheet: 'gs_gear', row: 4, scale: 3.4 },
 };
 
-/** Mage passive auras under the feet (sheet mg_d), by worn passive id; everyone sees them (owner 2026-11-15). */
-const PASSIVE_AURA: Record<string, { sheet: FxSheet; row: number; size: number }> = {
-  mg_elementmastery: { sheet: 'mg_g', row: 2, size: 1.1 },
-  mg_manasource: { sheet: 'mg_g', row: 3, size: 1.1 },
-  mg_arcanepower: { sheet: 'mg_g', row: 4, size: 1.1 },
+/**
+ * Mage passive auras under the feet (sheet mg_g), by worn passive id; everyone sees them (owner 2026-11-15).
+ * `center`: where the art's middle is in its 256-px cell (measured over the row's frames), so it can be put
+ * under the feet: Arcane Power's is drawn high in its cell and showed up beside the character (owner 2026-11-18).
+ */
+const PASSIVE_AURA: Record<string, { sheet: FxSheet; row: number; size: number; center: [number, number] }> = {
+  mg_elementmastery: { sheet: 'mg_g', row: 2, size: 1.1, center: [131, 109] },
+  mg_manasource: { sheet: 'mg_g', row: 3, size: 1.1, center: [132, 93] },
+  mg_arcanepower: { sheet: 'mg_g', row: 4, size: 1.1, center: [129, 73] },
 };
+/** Pixels per frame cell of the fx sheets. */
+const FX_CELL = 256;
 
 /** A looping ground aura under a player for the passive they wear (null when that passive or its sheet has none). */
 export class PassiveAura {
   readonly mesh: THREE.Mesh;
   private t = 0;
 
-  private constructor(private readonly tex: THREE.Texture, private readonly art: { sheet: FxSheet; row: number; size: number }) {
+  private constructor(private readonly tex: THREE.Texture, private readonly art: { sheet: FxSheet; row: number; size: number; center: [number, number] }) {
     this.mesh = new THREE.Mesh(
       flat(new THREE.PlaneGeometry(2, 2)),
       new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.5, depthWrite: false, side: THREE.DoubleSide }),
@@ -154,7 +160,9 @@ export class PassiveAura {
   update(dt: number, x: number, z: number): void {
     this.t += dt;
     showFrame(this.tex, this.art.sheet, this.art.row, Math.floor(this.t * 8) % FRAMES);
-    this.mesh.position.set(x, 0.07, z);
+    // The plane lies flat: picture right = +x, picture down = +z, 2 × size wide. Slide it so the art's middle is under the feet.
+    const k = (2 * this.art.size) / FX_CELL;
+    this.mesh.position.set(x - (this.art.center[0] - FX_CELL / 2) * k, 0.07, z - (this.art.center[1] - FX_CELL / 2) * k);
   }
 
   dispose(): void {
