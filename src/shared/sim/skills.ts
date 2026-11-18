@@ -698,7 +698,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
         if (!p.alive) return;
         sim.addProjectile(p, {
           x: p.x, z: p.z, angle: ang, speed: 45, range: far, radius: 0.5, mult: dmg, color: '#ff6a5a', size: 1, kb: 6,
-          hit: { forceCrit: true },
+          hit: { forceCrit: true }, fxSkill: sk.id,
           hitFx: { name: 'headshot_hit', size: 1.3 },
         });
         sim.fx('effect', 'muzzle', p.x + Math.cos(ang) * 1.1, p.z + Math.sin(ang) * 1.1, ang, 1.1);
@@ -846,7 +846,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
 
     // Special Weapons line.
     case 'gs_explosive':
-      sim.addProjectile(p, shotFrom(p, ang, far, dmg, { speed: 22, radius: 0.4, color: '#7affe0', size: 0.8, explode: A('blast'), blastFx: 'gs_blast', specialFx: special }));
+      sim.addProjectile(p, shotFrom(p, ang, far, dmg, { speed: 22, radius: 0.4, color: '#7affe0', size: 0.8, explode: A('blast'), blastFx: 'gs_blast', specialFx: special, fxSkill: sk.id }));
       muzzle(sim, p, ang, 0.8);
       return true;
     case 'gs_incendiary': {

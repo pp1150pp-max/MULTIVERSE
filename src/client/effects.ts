@@ -6,9 +6,10 @@ import { loopProps, playProps } from './zoneProps';
 import { playLayer, ShotLayer, type FxLayerHooks, type FxLayerHost } from './fxLayer';
 import type { QuarksFx } from './quarksFx';
 import { currentBalance } from '../shared/balance';
+import { gfxQuality } from './gfxPrefs';
 
-/** The three.quarks trial's switch (fxLayer.quarks, under the extra layer's own switch). */
-const quarksOn = (): boolean => currentBalance().fxLayer.enabled && currentBalance().fxLayer.quarks;
+/** The three.quarks trial's switch (fxLayer.quarks, under the extra layer's own switch), and not "off" in the player's graphics window. */
+const quarksOn = (): boolean => currentBalance().fxLayer.enabled && currentBalance().fxLayer.quarks && gfxQuality() > 0;
 
 const FRAMES = 6;
 const SHEET_ROWS: Record<FxSheet, number> = {
@@ -356,8 +357,8 @@ export class Effects implements FxApi {
         playProps(this, skill, x, z, angle, size, EFFECTS[name].life);
       }
     }
-    // The Meteor's blast in three.quarks, over its hand-drawn crater (trial, docs/systems/skill-fx-layer.md).
-    if (name === 'crater' && skill === 'meteor') this.quarks?.meteorBlast(x, z, by);
+    // three.quarks particles over the hand-drawn art of some skills (trial, docs/systems/skill-fx-layer.md).
+    if (skill) this.quarks?.onEffect(name, skill, x, z, size, by);
     const def = EFFECTS[name];
     const tex = frameTexture(def.sheet);
     if (!tex) {
@@ -550,7 +551,8 @@ export class Effects implements FxApi {
   }
 
   /** Red warning circle that fills up until the hit lands. */
-  telegraph(x: number, z: number, radius: number, duration: number, color = '#ff3a2a'): void {
+  telegraph(x: number, z: number, radius: number, duration: number, color = '#ff3a2a', by?: number, skill?: string): void {
+    if (skill) this.quarks?.onTelegraph(skill, x, z, duration, by);
     const g = new THREE.Group();
     const edge = this.decal(this.mat(color, 0.7, false, fxTex.edge));
     const fill = this.decal(this.mat(color, 0.28, false, fxTex.disc));
@@ -605,7 +607,9 @@ export class Effects implements FxApi {
     });
   }
 
-  burst(x: number, y: number, z: number, color: string, n = 8, speed = 4): void {
+  burst(x: number, y: number, z: number, color: string, n = 8, speed = 4, by?: number, skill?: string): void {
+    // a skill drawn in three.quarks instead (Fire Rain's falling fire)
+    if (skill && this.quarks?.onBurst(skill, x, z, by)) return;
     for (let i = 0; i < n; i++) {
       const s = this.glowSprite(color, 0.35, 1);
       s.position.set(x, y, z);
@@ -649,11 +653,7 @@ export class Effects implements FxApi {
 
   /** Visual only: a fireball falling onto (x, z) over `duration`. */
   meteor(x: number, z: number, duration: number, by?: number): void {
-    const q = this.quarks;
-    if (q) {
-      q.meteorFall(x, z, duration, by);
-      return;
-    }
+    if (this.quarks?.meteorFall(x, z, duration, by)) return;
     const shot = this.shotSprite('#ff7a2a', 1.6);
     const s = shot?.sprite ?? this.glowSprite('#ff7a2a', 1.8);
     let last = 0;

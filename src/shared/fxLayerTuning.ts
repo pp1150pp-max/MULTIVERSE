@@ -5,7 +5,7 @@
 // these multiply all of them. Tuned on /admin → ปรับสมดุล → "เอฟเฟกต์สกิล (ชั้นเสริม)", saved inside the balance
 // tuning (`BalanceTuning.fxLayer`), only what differs from the code.
 
-export interface FxLayerConfig {
+export interface FxLayerConfig extends Record<QuarksKey, boolean> {
   /** The whole extra layer on or off. */
   enabled: boolean;
   /** Debuff icons over monsters' HP bars and their effects on the body (src/client/debuffFx.ts). */
@@ -54,7 +54,30 @@ export interface FxLayerConfig {
   /** Paper enhancement orbs: grey from which a part takes the accent colour (band, star), and the darkest shading. */
   paperOrbLight: number;
   paperOrbShade: number;
+  /** The players' own graphics window (owner 2026-11-18, src/client/gfxPrefs.ts): shown in the in-game menu. */
+  gfxMenu: boolean;
+  /** Particle quality a player starts on (3 high, 2 medium, 1 low, 0 off), and the most anyone can pick. */
+  gfxDefault: number;
+  gfxMax: number;
+  /** × particles of "medium" and "low". */
+  gfxMid: number;
+  gfxLow: number;
 }
+
+/**
+ * Skills drawn with three.quarks (owner 2026-11-18), each with its own switch `qk_<id>` (on in code: the main
+ * `quarks` switch is what turns the trial on). The client's recipes are in src/client/quarksFx.ts.
+ */
+export const QUARKS_SKILLS = {
+  meteor: 'อุกกาบาต', fireball: 'ลูกไฟ', mg_starfall: 'ดาวตก', frostnova: 'วงน้ำแข็ง', mg_firerain: 'ฝนเพลิง',
+  sw_judgement: 'ดาบพิพากษา', whirlwind: 'พายุดาบ', earthquake: 'ปฐพีแยก', sw_unleash: 'ปลดปล่อยพลัง',
+  gs_rocketrain: 'ฝนจรวด', gs_explosive: 'กระสุนระเบิด', headshot: 'ยิงหัว', gs_cluster: 'ระเบิดลูกปราย',
+} as const;
+export type QuarksSkill = keyof typeof QUARKS_SKILLS;
+export type QuarksKey = `qk_${QuarksSkill}`;
+export const QUARKS_SKILL_IDS = Object.keys(QUARKS_SKILLS) as QuarksSkill[];
+export const quarksKey = (s: QuarksSkill): QuarksKey => `qk_${s}`;
+const QUARKS_KEYS = QUARKS_SKILL_IDS.map(quarksKey);
 
 export type FxLayerTuning = Partial<FxLayerConfig>;
 
@@ -71,6 +94,10 @@ export const FX_LAYER_RANGE = {
   quarksOthers: [0, 1],
   quarksTouch: [0, 1],
   quarksCap: [0, 10000],
+  gfxDefault: [0, 3],
+  gfxMax: [0, 3],
+  gfxMid: [0, 1],
+  gfxLow: [0, 1],
   paperPlate: [0.5, 2],
   paperBubble: [0.5, 2],
   paperFoot: [0.3, 4],
@@ -92,6 +119,10 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   quarksOthers: 'three.quarks: × อนุภาคของคนอื่น',
   quarksTouch: 'three.quarks: × อนุภาคบนจอสัมผัส (มือถือ)',
   quarksCap: 'three.quarks: อนุภาคบนจอสูงสุด (เกินแล้วตัดของคนอื่น)',
+  gfxDefault: 'เมนูกราฟิก: คุณภาพเริ่มต้น (3 สูง 2 กลาง 1 ต่ำ 0 ปิด)',
+  gfxMax: 'เมนูกราฟิก: คุณภาพสูงสุดที่เลือกได้',
+  gfxMid: 'เมนูกราฟิก: × อนุภาคของ "กลาง"',
+  gfxLow: 'เมนูกราฟิก: × อนุภาคของ "ต่ำ"',
   paperPlate: '× ขนาดกรอบชื่อ',
   paperBubble: '× ขนาดฟองแชท',
   paperFoot: 'ขนาดรอยเท้าออร่า (× ขนาดรอยเท้าของชิ้น)',
@@ -99,8 +130,9 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   paperOrbShade: 'ลูกแก้ว: ความสว่างส่วนมืดสุด',
 };
 
-const FX_LAYER_BOOLS = ['enabled', 'debuffs', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'circles', 'zoneCircles', 'quarks'] as const;
-type FxLayerBool = (typeof FX_LAYER_BOOLS)[number];
+const BASE_BOOLS = ['enabled', 'debuffs', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'circles', 'zoneCircles', 'quarks', 'gfxMenu'] as const;
+type FxLayerBool = (typeof BASE_BOOLS)[number] | QuarksKey;
+const FX_LAYER_BOOLS: readonly FxLayerBool[] = [...BASE_BOOLS, ...QUARKS_KEYS];
 const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
   enabled: 'เอฟเฟกต์สกิล (ชั้นเสริม)',
   debuffs: 'ดีบัฟบนตัวมอน (ไอคอน + เอฟเฟกต์)',
@@ -110,6 +142,8 @@ const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
   circles: 'วงเวทบนพื้น (บัฟ ดีบัฟ สกิลวงกว้าง)',
   zoneCircles: 'สกิลวงกว้างเป็นวงเวทอย่างเดียว (แทนภาพพื้นที่)',
   quarks: 'อนุภาค three.quarks (ทดลอง)',
+  gfxMenu: 'เมนูกราฟิกของผู้เล่น',
+  ...(Object.fromEntries(QUARKS_SKILL_IDS.map((s) => [quarksKey(s), `three.quarks: ${QUARKS_SKILLS[s]}`])) as Record<QuarksKey, string>),
 };
 
 /** The code's own numbers (a fresh copy). */
@@ -118,6 +152,8 @@ export function codeFxLayer(): FxLayerConfig {
     enabled: true, debuffs: true, glow: 1, ground: 1, particles: 1, shake: 1, hitstopMs: 60, crit: 1,
     maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true, circles: true, zoneCircles: true, circleGlow: 1, quarks: false, quarksOthers: 0.5, quarksTouch: 0.5, quarksCap: 3000,
     paperPlate: 1, paperBubble: 1, paperFoot: 1.6, paperOrbLight: 0.95, paperOrbShade: 0.15,
+    gfxMenu: true, gfxDefault: 3, gfxMax: 3, gfxMid: 0.6, gfxLow: 0.3,
+    ...(Object.fromEntries(QUARKS_KEYS.map((k) => [k, true])) as Record<QuarksKey, boolean>),
   };
 }
 const CODE = codeFxLayer();
@@ -160,7 +196,7 @@ export function checkFxLayerTuning(x: unknown, strict: boolean): { tuning: FxLay
       if (strict) return { error: `เอฟเฟกต์สกิล "${FX_LAYER_NAME[k]}" ต้องอยู่ระหว่าง ${lo}–${hi}` };
       continue;
     }
-    const n = k === 'maxNums' || k === 'quarksCap' ? Math.round(v) : round3(v);
+    const n = k === 'maxNums' || k === 'quarksCap' || k === 'gfxDefault' || k === 'gfxMax' ? Math.round(v) : round3(v);
     if (n !== CODE[k]) out[k] = n;
   }
   return { tuning: Object.keys(out).length ? out : undefined };

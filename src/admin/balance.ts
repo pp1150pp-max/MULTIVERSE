@@ -3,7 +3,7 @@
 // Edits a draft with a live preview (class stats at Lv1/10/50 with nothing worn, tier chances); saving
 // sends the whole draft, the server checks it, stores only what differs from the code, logs the change
 // and applies it to everyone online at once.
-import { FX_LAYER_NAME, FX_LAYER_RANGE, type FxLayerNum } from '../shared/fxLayerTuning';
+import { FX_LAYER_NAME, FX_LAYER_RANGE, QUARKS_SKILLS, quarksKey, type FxLayerNum, type QuarksSkill } from '../shared/fxLayerTuning';
 import { ATTACK_ROOT_RANGE, NO_ATTACK_ROOT } from '../shared/attackRootTuning';
 import { RIG_ARMOR_ITEMS, RIG_ARMOR_NAME, RIG_ARMORS, RIG_WEAPON_ITEMS, RIG_WEAPON_NAME, RIG_WEAPONS } from '../shared/rigLookTuning';
 import {
@@ -724,6 +724,19 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     const zoneCirclesOn = h('input', { type: 'checkbox', checked: a.zoneCircles, onchange: (e: Event) => { a.zoneCircles = (e.target as HTMLInputElement).checked; refresh(); } });
     const quarksOn = h('input', { type: 'checkbox', checked: a.quarks, onchange: (e: Event) => { a.quarks = (e.target as HTMLInputElement).checked; refresh(); } });
     const flag = (box: HTMLInputElement, changed: boolean, text: string) => h('label', { class: changed ? 'bal-changed' : '' }, box, text);
+    // three.quarks: one switch per skill (QUARKS_SKILLS), grouped by class
+    const qkBox = (s: QuarksSkill) => {
+      const k = quarksKey(s);
+      const box = h('input', { type: 'checkbox', checked: a[k], onchange: (e: Event) => { a[k] = (e.target as HTMLInputElement).checked; refresh(); } });
+      return flag(box, a[k] !== ca[k], ` ${QUARKS_SKILLS[s]}`);
+    };
+    const qkRow = (title: string, ids: QuarksSkill[]) => h('div', { class: 'row bal-line' }, h('b', {}, title), ...ids.map(qkBox));
+    // the players' graphics window (src/client/gfxPrefs.ts)
+    const GFX_LEVELS = ['ปิด', 'ต่ำ', 'กลาง', 'สูง'];
+    const gfxPick = (k: 'gfxDefault' | 'gfxMax', label: string) => h('label', { class: a[k] !== ca[k] ? 'bal-changed' : '' }, label + ' ',
+      h('select', { onchange: (e: Event) => { a[k] = Number((e.target as HTMLSelectElement).value); refresh(); drawFx(); } },
+        ...GFX_LEVELS.map((t, i) => h('option', { value: String(i), selected: a[k] === i }, t)).reverse()));
+    const gfxOn = h('input', { type: 'checkbox', checked: a.gfxMenu, onchange: (e: Event) => { a.gfxMenu = (e.target as HTMLInputElement).checked; refresh(); } });
     fxCard.replaceChildren(
       h('h2', {}, 'เอฟเฟกต์สกิล (ชั้นเสริม)'),
       h('div', { class: 'muted' }, 'แสงเรือง แสงบนพื้น และอนุภาคที่เกมวาดทับภาพเอฟเฟกต์ของสกิล ส่วนจอสั่นกับภาพค้างเกิดเฉพาะจอของคนที่ร่าย และเฉพาะตอนที่ท่าโดนมอน · ค่าของแต่ละท่าอยู่ใน src/client/fxLayer.ts (FX_RECIPES) ค่าในการ์ดนี้คูณทุกท่า · มีผลกับทุกคนทันทีหลังบันทึก'),
@@ -735,8 +748,15 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('h3', {}, 'อนุภาค three.quarks (ทดลอง)'),
       h('div', { class: 'row bal-line' }, flag(quarksOn, a.quarks !== ca.quarks, ' ใช้ three.quarks วาดอนุภาคของสกิล')),
       h('div', { class: 'row bal-line' }, num('quarksOthers', 0.05), num('quarksTouch', 0.05), num('quarksCap', 100)),
-      h('div', { class: 'muted' }, 'ตอนนี้มีท่าเดียว: อุกกาบาตของเมจ (ลูกไฟที่ตกลงมา + ระเบิด ควัน ประกาย ถ่านไฟบนพื้นตอนตก) ภาพหลุมเดิมยังเล่นอยู่ใต้ · ปิด = แบบเดิมทุกอย่าง · มีผลกับทุกคนทันทีหลังบันทึก'),
+      h('div', { class: 'muted' }, 'สวิตช์ใหญ่นี้เปิด = ผู้เล่นโหลดไลบรารี three.quarks (~67 KB) แล้วท่าที่ติ๊กด้านล่างใช้อนุภาคใหม่ วาดทับภาพเดิมของท่า (อุกกาบาต ดาวตก ฝนเพลิง: ของที่ตกลงมาใช้อนุภาคแทนของเดิม) · ปิด = แบบเดิมทุกอย่าง ไม่โหลดไลบรารี · มีผลกับทุกคนทันทีหลังบันทึก'),
+      qkRow('เมจ:', ['meteor', 'fireball', 'mg_starfall', 'frostnova', 'mg_firerain']),
+      qkRow('นักดาบ:', ['sw_judgement', 'whirlwind', 'earthquake', 'sw_unleash']),
+      qkRow('มือปืน:', ['gs_rocketrain', 'gs_explosive', 'headshot', 'gs_cluster']),
       h('div', { class: 'muted' }, 'จำนวนอนุภาคจริง = ในโค้ด × "× อนุภาค" ด้านบน × "ของคนอื่น" (ถ้าไม่ใช่ท่าของเรา) × "จอสัมผัส" (ถ้าเล่นบนมือถือ/แท็บเล็ต) · ท่าของเราไม่ถูกลดด้วย "ของคนอื่น" และไม่ถูกตัด · บนจอเกิน "สูงสุด" = ท่าใหม่ของคนอื่นไม่วาดจนกว่าจะลดลง (0 = ไม่วาดของคนอื่นเลย)'),
+      h('h3', {}, 'เมนูกราฟิกของผู้เล่น'),
+      h('div', { class: 'row bal-line' }, flag(gfxOn, a.gfxMenu !== ca.gfxMenu, ' แสดงปุ่ม "กราฟิก" ในเมนูเกม'), gfxPick('gfxDefault', 'คุณภาพเริ่มต้น'), gfxPick('gfxMax', 'สูงสุดที่เลือกได้')),
+      h('div', { class: 'row bal-line' }, num('gfxMid', 0.05), num('gfxLow', 0.05)),
+      h('div', { class: 'muted' }, 'ผู้เล่นเลือกเองในเมนู → กราฟิก (เก็บในเครื่องผู้เล่น): คุณภาพอนุภาค สูง/กลาง/ต่ำ/ปิด, อนุภาคของคนอื่น เต็ม/ครึ่ง/ปิด, จอสั่น, ภาพค้างตอนโดน, เลขดาเมจเฉพาะของเรา · สูง = ตามค่าในการ์ดนี้ กลาง/ต่ำ = × ค่าด้านบน ปิด = ไม่ใช้ three.quarks และไม่มีอนุภาคชั้นเสริม (ภาพสกิลหลักยังอยู่) · คนที่ยังไม่เคยเลือกใช้ "คุณภาพเริ่มต้น" (เปลี่ยนแล้วมีผลกับเขาด้วย) · เลือกได้ไม่เกิน "สูงสุดที่เลือกได้" · ปิดปุ่ม = ทุกคนใช้ค่าเริ่มต้นและไม่สนค่าที่เคยเลือก · "เห็นเฉพาะเลขดาเมจของตัวเอง" ด้านล่างเปิดอยู่ = ผู้เล่นปิดเองไม่ได้'),
       h('h3', {}, 'ตัวเลขดาเมจ (ลดอาการกระตุกตอนมอนเยอะ)'),
       h('div', { class: 'row bal-line' },
         num('maxNums', 5),

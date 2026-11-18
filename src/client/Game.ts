@@ -47,6 +47,7 @@ import { isSoftwareRenderer } from '../shared/net/protocol';
 import { isTouchMode } from './touch/device';
 import { TouchControls, TOUCH_ATTACK } from './touch/controls';
 import { TouchGestures } from './touch/gestures';
+import { gfxOwnNumsOnly, gfxShakeOn } from './gfxPrefs';
 
 const S = Math.SQRT1_2;
 // Screen-space right / up projected onto the ground plane.
@@ -280,6 +281,7 @@ export class Game {
   }
 
   shake(amount: number): void {
+    if (!gfxShakeOn()) return; // the player's graphics window
     this.shakeAmt = Math.max(this.shakeAmt, amount);
     this.shakeT = 0.3;
   }
@@ -464,6 +466,9 @@ export class Game {
         // result (owner 2026-11-18): while that window is open it shows the result itself. Others still see it.
         if ((ev.cls === 'enh' || ev.cls === 'enhfail') && this.hud.forgeShown
           && Math.abs(ev.x - this.player.x) < 1 && Math.abs(ev.z - this.player.z) < 1) break;
+        // "Only my damage numbers" (graphics window), as the server's /admin switch: `by` = who dealt or took it.
+        // No `by` = not a damage number.
+        if (ev.by !== undefined && ev.by !== this.player.id && gfxOwnNumsOnly()) break;
         this.floating.text(ev.x, ev.y, ev.z, ev.text, ev.cls, ev.life, ev.on);
         break;
       case 'shake':

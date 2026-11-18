@@ -52,10 +52,12 @@ export interface FxApi {
   slash(x: number, z: number, angle: number, arc: number, radius: number, color: string): void;
   ring(x: number, z: number, radius: number, color: string, life?: number): void;
   disc(x: number, z: number, radius: number, color: string, life?: number): void;
-  telegraph(x: number, z: number, radius: number, duration: number, color?: string): void;
+  /** `by`, `skill`: tagged by Sim.asCaster when a colour is given (the client's three.quarks particles). */
+  telegraph(x: number, z: number, radius: number, duration: number, color?: string, by?: number, skill?: string): void;
   lineTelegraph(x: number, z: number, angle: number, length: number, width: number, duration: number): void;
   puff(x: number, y: number, z: number, color: string, life: number, size: number): void;
-  burst(x: number, y: number, z: number, color: string, n?: number, speed?: number): void;
+  /** `by`, `skill`: tagged by Sim.asCaster (the client's three.quarks particles draw some skills' bursts). */
+  burst(x: number, y: number, z: number, color: string, n?: number, speed?: number, by?: number, skill?: string): void;
   levelUp(x: number, z: number): void;
   /** A crystal standing on the ground for `duration` seconds (Crystal Spikes: where its spikes come from). */
   crystal(x: number, z: number, duration: number, color: string): void;

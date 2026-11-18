@@ -6,6 +6,7 @@
 // multipliers are on /admin (fxLayerTuning.ts). An effect with no recipe plays as before.
 import * as THREE from 'three';
 import { currentBalance } from '../shared/balance';
+import { gfxHitstopOn, gfxOthers, gfxParticles } from './gfxPrefs';
 import type { SkillEffect } from '../shared/sim/types';
 
 /** spark = thin streaks flying out · shard = heavy bits that fall · ember = rising sparks · star = twinkles · dust = low puffs. */
@@ -130,11 +131,12 @@ export class ShotLayer {
 
   /** Drops trail particles behind the shot as it flies (about 25 a second, × the particles setting). */
   update(dt: number): void {
-    const every = 0.04 / Math.max(0.05, currentBalance().fxLayer.particles);
+    const k = currentBalance().fxLayer.particles * gfxParticles();
+    const every = 0.04 / Math.max(0.05, k);
     this.t += dt;
     if (this.t < every) return;
     this.t = 0;
-    if (currentBalance().fxLayer.particles <= 0) return;
+    if (k <= 0) return;
     this.sprite.getWorldPosition(this.at);
     trail(this.host, this.look.tail, this.look.color, this.at);
   }
@@ -247,6 +249,8 @@ export function playLayer(
   const r = FX_RECIPES[name];
   const cfg = currentBalance().fxLayer;
   if (!r || !cfg.enabled) return;
+  // × the player's graphics window (src/client/gfxPrefs.ts): quality, and other players' particles
+  const pk = cfg.particles * gfxParticles() * (hooks && by !== undefined && by !== hooks.me() ? gfxOthers() : 1);
   const tail = life * TAIL;
 
   // Glow around the frames. Art lying on the ground gets none: a camera-facing glow over a whole area read as a big
@@ -292,7 +296,7 @@ export function playLayer(
       cm.opacity = Math.min(0.8, 0.45 * glow) * envelope(k);
       col.scale.y = h * (0.7 + 0.3 * Math.min(1, k * 4));
     });
-    const motes = Math.round(Math.min(10, 2 + size * 1.5) * cfg.particles);
+    const motes = Math.round(Math.min(10, 2 + size * 1.5) * pk);
     for (let i = 0; i < motes; i++) mote(host, r.color, x, z, size);
   }
 
@@ -305,7 +309,7 @@ export function playLayer(
   }
 
   if (r.particles) {
-    let n = Math.round(r.particles.n * cfg.particles);
+    let n = Math.round(r.particles.n * pk);
     if (TOUCH && r.particles.kind === 'dust') n = Math.ceil(n / 2);
     for (let i = 0; i < n; i++) particle(host, r.particles.kind, r.color, x, z, size);
   }
@@ -314,7 +318,7 @@ export function playLayer(
   if (hooks && hit && by !== undefined && by === hooks.me() && r.heavy > 0) {
     if (cfg.shake > 0) hooks.shake(0.5 * r.heavy * cfg.shake);
     const stop = Math.min(HITSTOP_MAX, (r.heavy * cfg.hitstopMs) / 1000);
-    if (stop > 0) hooks.hitstop(stop);
+    if (stop > 0 && gfxHitstopOn()) hooks.hitstop(stop);
   }
 }
 
