@@ -106,15 +106,16 @@ async function run(): Promise<void> {
   await C.ready;
   const terrain = new Terrain(ZONES[C.welcome().zone]);
   /** A spot `dist` away from where we stand with nothing in the way (so the straight walk gets there). */
+  // The hub's plaza is ringed with buildings (#337): shorten the walk (to 60%) when no full-length line is open.
   const clearSpot = (dist: number) => {
     const at = C.pos();
-    for (let a = 0; a < 32; a++) {
+    for (let d = dist; d >= dist * 0.6; d -= dist * 0.1) for (let a = 0; a < 32; a++) {
       const ang = (a / 32) * Math.PI * 2;
-      const to = { x: at.x + Math.cos(ang) * dist, z: at.z + Math.sin(ang) * dist };
+      const to = { x: at.x + Math.cos(ang) * d, z: at.z + Math.sin(ang) * d };
       let clear = true;
       for (let k = 1; k <= 40 && clear; k++) {
         const f = k / 40;
-        if (terrain.isBlocked(at.x + (to.x - at.x) * f, at.z + (to.z - at.z) * f, 1)) clear = false;
+        if (terrain.isBlocked(at.x + (to.x - at.x) * f, at.z + (to.z - at.z) * f, 0.6)) clear = false;
       }
       if (clear) return to;
     }
