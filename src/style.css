@@ -1872,7 +1872,7 @@ input[type=range]:hover::-webkit-slider-thumb { background: var(--ctl-accent-hi)
 #skills-win .sk-reset:disabled { opacity: 0.4; }
 #skills-win .sk-mapwrap { overflow: auto; max-height: calc(100vh - 190px); border: 1px solid #4a3e2a; border-radius: 4px; background: #0a0f24; }
 #skills-win .sk-map {
-  position: relative; margin: 0 auto;
+  position: absolute; left: 0; top: 0; transform-origin: 0 0;
   background:
     url(/assets/sprites/ui/skill_sky.png) center / cover no-repeat,
     radial-gradient(1px 1px at 23px 41px, #fff, transparent), radial-gradient(1px 1px at 97px 13px, #cfd8ff, transparent),
@@ -1881,6 +1881,13 @@ input[type=range]:hover::-webkit-slider-thumb { background: var(--ctl-accent-hi)
     radial-gradient(ellipse at 50% 50%, #1d2148 0%, #0a0f24 70%);
   background-size: cover, 200px 200px, 200px 200px, 200px 200px, 200px 200px, 200px 200px, 200px 200px, cover;
 }
+#skills-win .sk-mapwrap { display: flex; }
+#skills-win .sk-sizer { position: relative; flex: none; margin: auto; }
+#skills-win .sk-mapwrap.zoomable { touch-action: none; cursor: grab; overscroll-behavior: contain; }
+#skills-win .sk-mapwrap.panning { cursor: grabbing; user-select: none; }
+#skills-win .sk-zoom { position: absolute; right: 10px; top: 10px; z-index: 1; display: flex; flex-direction: column; gap: 4px; }
+#skills-win .sk-zoom button { width: 30px; height: 30px; padding: 0; font-size: 16px; line-height: 1; background: rgba(20, 16, 10, 0.85); }
+#skills-win .sk-zoom.hidden { display: none; }
 #skills-win .sk-lines { position: absolute; inset: 0; pointer-events: none; }
 #skills-win .sk-lines > line { stroke: var(--lc); stroke-opacity: 0.35; stroke-width: 1.5; }
 #skills-win .sk-lines > line.lit { stroke: #f2c14e; stroke-opacity: 1; stroke-width: 2.5; }

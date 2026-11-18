@@ -12,6 +12,7 @@ import {
   learnBlock, maxRank, pointsEarned, pointsLeft, pointsSpent, rankedCooldown, rankedDmg, rankedMp, rankOf, refundPrice, skillParamLines, skillReach, unlockLevel,
 } from '../shared/skillBook';
 import { reachText } from '../shared/data/skillRanges';
+import { currentBalance } from '../shared/balance';
 import { skillIcon } from './icons';
 import { constellation, PAD, SIZE } from './skillMap';
 
@@ -39,6 +40,16 @@ export class SkillWindow {
   private badge = -1;
   /** Scroll the map to its centre on the next draw (each time the window opens). */
   private centre = true;
+  /** The player's zoom on top of the fit-to-window size (1 = as it opens), the fit size, and the map's size in px. */
+  private uz = 1;
+  private fit = 1;
+  private mapW = 1;
+  private mapH = 1;
+  private readonly zoomBox: HTMLElement;
+  /** Pointers down on the map (pan with one, pinch with two) and whether the press became a drag (then its click is dropped). */
+  private readonly ptrs = new Map<number, { x: number; y: number }>();
+  private moved = false;
+  private startPt = { x: 0, y: 0 };
 
   constructor(private readonly g: Game) {
     this.win = el('div', 'panel hidden');
@@ -54,7 +65,16 @@ export class SkillWindow {
     this.reset = el('button', 'sk-reset', '↺ รีเซ็ตสกิลทั้งหมด');
     this.reset.dataset.reset = '1';
     const mapBox = el('div', 'sk-mapbox');
-    mapBox.append(this.wrap, this.reset);
+    this.zoomBox = el('div', 'sk-zoom');
+    const zbtns: [string, string, () => void][] = [['+', 'ซูมเข้า', () => this.zoomBy(1.25)], ['−', 'ซูมออก', () => this.zoomBy(0.8)], ['⤾', 'ขนาดเริ่มต้น', () => this.zoomReset()]];
+    for (const [t, tip, f] of zbtns) {
+      const b = el('button', '', t);
+      b.title = tip;
+      b.onclick = f;
+      this.zoomBox.append(b);
+    }
+    mapBox.append(this.wrap, this.zoomBox, this.reset);
+    this.initZoom();
     body.append(mapBox, this.detail);
     this.win.append(head, this.top, body,
       el('div', 'hint', 'คลิกดาวเพื่อดูรายละเอียด · ถึงเลเวลแล้วเรียนได้เลย (1 แต้มต่อแรงก์) · ใส่หรือเปลี่ยนสกิลได้เมื่อไม่ได้ต่อสู้'));
@@ -63,6 +83,7 @@ export class SkillWindow {
     window.addEventListener('resize', () => {
       this.drawn = '';
       this.centre = true;
+      this.uz = 1;
     });
     // The window is made draggable with the others (initDraggableWindows in Game, built right after this).
     document.getElementById('hud')!.append(this.win);
@@ -78,6 +99,7 @@ export class SkillWindow {
     if (show) {
       this.drawn = '';
       this.centre = true;
+      this.uz = 1;
       this.update();
     }
   }
@@ -168,11 +190,19 @@ export class SkillWindow {
     }).join('');
 
     const sl = this.wrap.scrollLeft, st = this.wrap.scrollTop;
-    this.wrap.innerHTML = `<div class="sk-map" style="width:${w}px;height:${h}px">${svg}${names}${nodes}</div>`;
+    const zoomOn = currentBalance().skills.mapZoom;
+    this.wrap.classList.toggle('zoomable', zoomOn);
+    this.zoomBox.classList.toggle('hidden', !zoomOn);
+    if (!zoomOn) this.uz = 1;
+    this.mapW = w;
+    this.mapH = h;
     // Shrink the whole map to fit the window (a desktop sees it all), but not below 70% (a phone scrolls instead).
     const maxH = parseFloat(getComputedStyle(this.wrap).maxHeight) || h;
-    const z = Math.max(0.7, Math.min(1, this.wrap.clientWidth / w, maxH / h));
-    (this.wrap.firstElementChild as HTMLElement).style.zoom = String(z);
+    this.fit = Math.max(0.7, Math.min(1, this.wrap.clientWidth / w, maxH / h));
+    // The frame keeps the size of the fit-to-window map: zooming only changes what is inside it, never the window.
+    this.wrap.style.height = `${Math.round(Math.min(maxH, h * this.fit))}px`;
+    const z = this.zoom();
+    this.wrap.innerHTML = `<div class="sk-sizer" style="width:${w * z}px;height:${h * z}px"><div class="sk-map" style="width:${w}px;height:${h}px;transform:scale(${z})">${svg}${names}${nodes}</div></div>`;
     if (this.centre) {
       this.centre = false;
       this.wrap.scrollLeft = ox * z - this.wrap.clientWidth / 2;
@@ -181,6 +211,107 @@ export class SkillWindow {
       this.wrap.scrollLeft = sl;
       this.wrap.scrollTop = st;
     }
+  }
+
+  /** The scale the map is drawn at: the fit size times the player's zoom, kept inside the /admin limits. */
+  private zoom(): number {
+    const cfg = currentBalance().skills;
+    return this.fit * Math.min(cfg.zoomMax / 100, Math.max(cfg.zoomMin / 100, this.uz));
+  }
+
+  /** Zooms to `uz` keeping the map point under the screen position (cx, cy) where it is (the wrap's centre when not given). */
+  private setZoom(uz: number, cx?: number, cy?: number): void {
+    const cfg = currentBalance().skills;
+    if (!cfg.mapZoom) return;
+    const sizer = this.wrap.firstElementChild as HTMLElement | null;
+    if (!sizer) return;
+    const wr = this.wrap.getBoundingClientRect();
+    const ax = cx ?? wr.left + wr.width / 2, ay = cy ?? wr.top + wr.height / 2;
+    const r0 = sizer.getBoundingClientRect();
+    const z0 = this.zoom();
+    const mx = (ax - r0.left) / z0, my = (ay - r0.top) / z0;
+    this.uz = Math.min(cfg.zoomMax / 100, Math.max(cfg.zoomMin / 100, uz));
+    const z = this.zoom();
+    sizer.style.width = `${this.mapW * z}px`;
+    sizer.style.height = `${this.mapH * z}px`;
+    (sizer.firstElementChild as HTMLElement).style.transform = `scale(${z})`;
+    const r1 = sizer.getBoundingClientRect();
+    this.wrap.scrollLeft += r1.left + mx * z - ax;
+    this.wrap.scrollTop += r1.top + my * z - ay;
+  }
+
+  private zoomBy(f: number, cx?: number, cy?: number): void {
+    this.setZoom(this.uz * f, cx, cy);
+  }
+
+  private zoomReset(): void {
+    this.uz = 1;
+    this.centre = true;
+    this.drawn = '';
+    this.update();
+  }
+
+  /** Mouse wheel zooms at the pointer, a drag pans, two fingers pinch. A press that moved is not a click on a star. */
+  private initZoom(): void {
+    const w = this.wrap;
+    const on = () => currentBalance().skills.mapZoom;
+    w.addEventListener('wheel', (e) => {
+      if (!on()) return;
+      e.preventDefault();
+      this.zoomBy(Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY);
+    }, { passive: false });
+    const pair = () => {
+      const [a, b] = [...this.ptrs.values()];
+      return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    };
+    let pinch = { d: 1, x: 0, y: 0 };
+    w.addEventListener('pointerdown', (e) => {
+      if (!on() || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      this.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (this.ptrs.size === 1) {
+        this.moved = false;
+        this.startPt = { x: e.clientX, y: e.clientY };
+      } else if (this.ptrs.size === 2) {
+        this.moved = true;
+        pinch = pair();
+      }
+    });
+    w.addEventListener('pointermove', (e) => {
+      const q = this.ptrs.get(e.pointerId);
+      if (!q) return;
+      const dx = e.clientX - q.x, dy = e.clientY - q.y;
+      q.x = e.clientX;
+      q.y = e.clientY;
+      if (this.ptrs.size === 2) {
+        const n = pair();
+        this.zoomBy(n.d / pinch.d, n.x, n.y);
+        w.scrollLeft -= n.x - pinch.x;
+        w.scrollTop -= n.y - pinch.y;
+        pinch = n;
+        return;
+      }
+      if (!this.moved && Math.hypot(e.clientX - this.startPt.x, e.clientY - this.startPt.y) < 6) return;
+      if (!this.moved) {
+        try { w.setPointerCapture(e.pointerId); } catch { /* the pointer is gone: panning still works */ }
+      }
+      this.moved = true;
+      w.classList.add('panning');
+      w.scrollLeft -= dx;
+      w.scrollTop -= dy;
+    });
+    const up = (e: PointerEvent) => {
+      this.ptrs.delete(e.pointerId);
+      if (!this.ptrs.size) w.classList.remove('panning');
+    };
+    w.addEventListener('pointerup', up);
+    w.addEventListener('pointercancel', up);
+    // A drag ends with a click on whatever is under the finger: drop it (capture, before the window's own handler).
+    w.addEventListener('click', (e) => {
+      if (!this.moved) return;
+      this.moved = false;
+      e.stopPropagation();
+      e.preventDefault();
+    }, true);
   }
 
   /** The details box: the chosen skill now and at its next rank, and its buttons. */
