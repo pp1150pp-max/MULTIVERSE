@@ -105,13 +105,10 @@ export function restSpotNear(spots: readonly RestSpot[], p: { x: number; z: numb
 export const HUB_PLAZA_RADIUS = 8.5;
 /** The hub's fountain: drawn this tall (its benches about a person's size), solid out to this radius. */
 export const HUB_FOUNTAIN_HEIGHT = 9;
-export const HUB_FOUNTAIN_RADIUS = 3.9;
-/** The hub's rows of townhouses: this deep from the wall in. */
-export const HUB_ROW_DEPTH = 3.4;
-/** Length of each row along its wall. */
-export const HUB_ROW_LENGTH = 18;
-/** Width / height of each row's picture (sprites/paper/props, cut by tools/cut_papercraft.cjs hub). */
-const HUB_ROW_ASPECT: Record<string, number> = { row_left_long: 1600 / 1351, row_right_long: 1600 / 1440 };
+export const HUB_FOUNTAIN_RADIUS = 2.8;
+/** The hub's NPC buildings: drawn this tall, a square footprint this wide (two side by side per top wall). */
+export const HUB_BUILDING_HEIGHT = 8.2;
+export const HUB_BUILDING_SIZE = 5.4;
 
 /** How far the hub's quarters wobble into each other (see themeAt). The props add their own scatter on top. */
 export const QUADRANT_JITTER = 6;
@@ -264,34 +261,27 @@ export class Terrain {
     at('town_fountain', 0, 0, HUB_FOUNTAIN_HEIGHT, HUB_FOUNTAIN_RADIUS);
     this.restSpots.push({ x: s.x, z: s.z, kind: 'fountain' });
 
-    // ---- The two rows of townhouses (owner 2026-11-19): each top wall's whole row is one picture of attached houses
-    // (tools/cut_papercraft.cjs hub, sheared so its foot runs at a world axis's slope on screen). The row is a box D
-    // deep against the wall and L long along it, so (L + D)/√2 wide on screen; the picture stands on the point straight
-    // below the box's middle on screen, level with its nearest corner. Doors along it: where each shop is in the
-    // picture, from the row's near end (the side gate's) to its far end (the top gate's).
-    const D = HUB_ROW_DEPTH;
-    const L = HUB_ROW_LENGTH;
+    // ---- The NPC buildings (owner 2026-11-19): two whole buildings side by side against each top wall, fronts to the
+    // fountain. Each is a box D deep and L long; its picture stands on the point straight below the box's middle on
+    // screen, level with its nearest corner. Top-left wall (x = −R): the vault (top-gate side) and the crystal shop;
+    // top-right wall (z = −R): the guild hall (top-gate side) and the forge.
+    const D = HUB_BUILDING_SIZE;
+    const L = HUB_BUILDING_SIZE;
     const q = (D + L) / 4;
-    const strip = (key: string, cx: number, cz: number, alongX: boolean) => {
-      // Never faded: it is as wide as the town, so someone is always near it.
-      at(key, cx + q, cz + q, ((L + D) / Math.SQRT2) / HUB_ROW_ASPECT[key], 0, false);
-      this.props[this.props.length - 1].solid = true;
-      for (let u = -L / 2 + 1; u <= L / 2 - 1; u += 1.4) {
-        this.colliders.push({ x: s.x + cx + (alongX ? u : 0), z: s.z + cz + (alongX ? 0 : u), r: D / 2 + 0.1 });
+    const house = (key: string, alongX: boolean, t: number): Vec2 => {
+      const [cx, cz] = alongX ? [t, -R + D / 2] : [-R + D / 2, t];
+      at(key, cx + q, cz + q, HUB_BUILDING_HEIGHT, 0, true);
+      for (const [ox, oz] of [[0, 0], [1.3, 1.3], [-1.3, -1.3], [1.3, -1.3], [-1.3, 1.3]]) {
+        this.colliders.push({ x: s.x + cx + ox, z: s.z + cz + oz, r: D / 2 - 0.6 });
       }
+      // Where someone stands at its door: in front, toward the plaza.
+      return alongX ? { x: s.x + t, z: s.z - R + D + 1.6 } : { x: s.x - R + D + 1.6, z: s.z + t };
     };
-    // Top-left wall (x = −R), the row along z: its near end is the left gate's (z = +L/2).
-    strip('row_left_long', -R + D / 2, 0, false);
-    const leftDoor = (f: number) => ({ x: s.x - R + D + 1.8, z: s.z + L / 2 - f * L });
-    // Top-right wall (z = −R), the row along x: its near end is the top gate's (x = −L/2).
-    strip('row_right_long', 0, -R + D / 2, true);
-    const rightDoor = (f: number) => ({ x: s.x - L / 2 + f * L, z: s.z - R + D + 1.8 });
-    this.npcPos.crystal = leftDoor(0.3);
-    this.npcPos.keeper = leftDoor(0.62);
-    this.npcPos.blacksmith = rightDoor(0.33);
-    const guild = rightDoor(0.58);
-    this.npcPos.seeker = { x: guild.x - 1, z: guild.z };
-    at('quest_board', guild.x + 1.8 - s.x, guild.z + 0.6 - s.z, 3.6, 0.8);
+    const half = L / 2;
+    this.npcPos.keeper = house('b3_vault', false, -half);
+    this.npcPos.crystal = house('b3_crystal', false, half);
+    this.npcPos.seeker = house('b3_guild', true, -half);
+    this.npcPos.blacksmith = house('b3_forge', true, half);
 
     // ---- The market (owner 2026-11-19): the merchant on the bottom-left wall and the broker on the bottom-right, each
     // in a half-ellipse of stalls open toward the fountain, the road to the bottom gate between them left clear.
@@ -299,12 +289,13 @@ export class Terrain {
     // toward −x); mirrored they run along x and open toward +z (fronts) or −z (backs). Every stall opens toward its
     // seller, who stands in the middle facing the fountain.
     // [slot, is a stall, mirrored, x, z, height, solid radius], around a seller at (0, 0) whose back is to the wall at +z.
+    // Every stall has its back to that wall and opens toward the plaza (owner 2026-11-19), set out in a half-ellipse
+    // round the seller: the main stall behind them, the second stall and the rest bending forward on either side.
     const ring: [string, boolean, boolean, number, number, number, number][] = [
-      ['main_back', true, true, 0, 3.4, 3.4, 1.4], // behind them, against the wall, open toward −z (them and the fountain)
-      ['wing_front', true, false, -3.8, 1.2, 3.4, 1.4], // on their −x side, open toward +x (them)
-      ['wing_back', true, false, 3.8, 1.2, 3.4, 1.4], // on their +x side, open toward −x (them)
-      ['table', false, false, -5.4, -1.6, 1.6, 0.9], ['P0', false, false, 5.4, -1.6, 1.9, 1],
-      ['P1', false, false, -3.6, 4.4, 1.6, 0.8], ['P2', false, false, 3.6, 4.4, 1.6, 0.9], ['P3', false, false, -6.2, 2.6, 1.6, 0.8],
+      ['main_back', true, true, 0, 3.4, 3.4, 1.4],
+      ['wing_back', true, true, 4.4, 2.4, 3.4, 1.4],
+      ['table', false, false, -4.4, 2.4, 1.6, 0.9], ['P0', false, false, 5.8, 1, 1.9, 1],
+      ['P1', false, false, -5.8, 1, 1.6, 0.8], ['P2', false, false, -2.4, 5, 1.6, 0.9], ['P3', false, false, 2.4, 5, 1.6, 0.8],
     ];
     // `set`: the seller's pictures (tools/cut_papercraft.cjs hub, HUB.md 7.6), ml_* or mr_*; `props`: their four odds and ends.
     const stalls = (seller: Vec2, alongX: boolean, set: string, props: string[]) => {

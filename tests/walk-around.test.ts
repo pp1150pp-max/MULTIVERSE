@@ -97,7 +97,8 @@ for (const [name, c, r] of [['blacksmith', t.npcPos.blacksmith!, 0.45], ['founta
 // ---- pressed into a corner of two things: stays put, doesn't shake
 {
   // Two things in town that leave a gap narrower than a player (the first such pair, e.g. a lamp post and a planter).
-  const inTown = t.colliders.filter((c) => Math.max(Math.abs(c.x - s.x), Math.abs(c.z - s.z)) < 15);
+  // Small things only: two buildings side by side against a wall leave a crack too, but it leads nowhere.
+  const inTown = t.colliders.filter((c) => c.r < 1.6 && Math.max(Math.abs(c.x - s.x), Math.abs(c.z - s.z)) < 15);
   let stall = inTown[0];
   let barrel = inTown[1];
   let best = Infinity;

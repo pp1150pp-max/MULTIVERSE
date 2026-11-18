@@ -297,7 +297,7 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
     // The town's statue and wall kit in paper too: the whole town is paper (owner 2026-11-19).
     // Round 6: the rows of townhouses and the market (HUB.md 7).
     ...['vault', 'crystal', 'house_a', 'house_b', 'house_c', 'shop'].flatMap((n) => [`row_l_${n}`, `row_r_${n === 'vault' ? 'guild' : n === 'crystal' ? 'forge' : n}`]),
-    'row_left_long', 'row_right_long',
+    'row_left_long', 'row_right_long', 'b3_crystal', 'b3_vault', 'b3_guild', 'b3_forge',
     'mk_goods_front', 'mk_auction_front', 'mk_veg_front',
     ...['main_back', 'wing_front', 'wing_back', 'table', 'cart', 'barrels', 'sacks', 'crates'].map((n) => `ml_${n}`),
     ...['main_back', 'wing_front', 'wing_back', 'table', 'wagon', 'strongbox', 'chests', 'rugs'].map((n) => `mr_${n}`),
