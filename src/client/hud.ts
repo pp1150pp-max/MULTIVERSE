@@ -982,7 +982,12 @@ export class Hud {
     const hpText = `${Math.ceil(Math.max(0, p.hp))} / ${Math.round(p.maxHp)}`;
     const mpText = `${Math.floor(p.mp)} / ${Math.round(p.stats.maxMp)}`;
     $('hp-fill').style.width = hpShare;
-    $('hp-text').textContent = hpText;
+    // What is left of a skill's shield, in blue next to the HP (shown only while there is one).
+    const shield = Math.ceil(p.shield);
+    $('hp-text').textContent = shield > 0 ? `${hpText}  · โล่ ${shield}` : hpText;
+    const orbShield = $('orb-hp-shield');
+    orbShield.classList.toggle('hidden', shield <= 0);
+    if (shield > 0) orbShield.textContent = `โล่ ${shield}`;
     $('mp-fill').style.width = mpShare;
     $('mp-text').textContent = mpText;
     $('hud').classList.toggle('orbs-near', currentBalance().fxLayer.orbsNearBar); // /admin can flip it live

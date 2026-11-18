@@ -32,7 +32,7 @@ interface Plate { el: HTMLDivElement; fill: HTMLDivElement; title?: HTMLDivEleme
 
 /** DOM overlay for damage numbers, monster nameplates and loot labels. */
 /** Which row of the number sheet each kind of number uses. */
-const GLYPH_ROW: Record<string, number> = { dmg: 0, crit: 1, hurt: 2, heal: 3 };
+const GLYPH_ROW: Record<string, number> = { dmg: 0, crit: 1, hurt: 2, heal: 3, shield: 2 };
 const NUMBER = /^[-+]?\d+!?$/;
 export const GLYPH_SHEET = imgUrl('assets/sprites/icons/digits.png');
 export const CRIT_BURST = imgUrl('assets/sprites/icons/crit_burst.png');

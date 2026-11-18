@@ -453,7 +453,8 @@ export class Sim {
       const soak = Math.min(p.shield, dmg);
       p.shield -= soak;
       dmg -= soak;
-      if (soak > 0) this.text(p.x, p.topY + 0.4, p.z, `โล่ -${soak}`, 'info', 0.6);
+      // The soaked part shows as a number like an HP hit (blue), so a hit the shield took in full is not mistaken for a miss.
+      if (soak > 0) this.dmgText(p, `-${soak}`, 'shield', p.id);
     }
     p.hp -= dmg;
     p.lastHurt = this.time;
@@ -462,7 +463,7 @@ export class Sim {
     if (m.isBoss) m.resetRamp();
     this.events.push({ t: 'flash', id: p.id });
     this.anim(p.id, 'hit');
-    this.dmgText(p, `-${dmg}`, 'hurt', p.id);
+    if (dmg > 0) this.dmgText(p, `-${dmg}`, 'hurt', p.id);
     // Sword Anchor: no stuns or knockback while it runs.
     const steady = this.time < p.steadyUntil;
     if (opts.stun && !steady) p.stunT = Math.max(p.stunT, opts.stun);
