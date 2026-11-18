@@ -20,6 +20,13 @@ export interface SheetInfo {
   /** Which way the "side" row faces in the image. The other side is mirrored. */
   sideFaces: 'left' | 'right';
   cellAspect: number;
+  /**
+   * A paper monster sheet (tools/cut_paper_monsters.cjs): columns 0-3 walk, 4-7 attack, and the picture drawn this
+   * much taller than the unit's height (its cell has room for the attack poses).
+   */
+  paper?: { walk: number; attack: number; scale: number };
+  /** A paper NPC sheet: this many breathing frames across, looped while it stands (SpriteActor). */
+  idleFrames?: number;
 }
 
 interface SheetSpec {
@@ -36,6 +43,51 @@ interface SheetSpec {
 }
 
 const BASE = 'assets/sprites/';
+
+/**
+ * Papercraft map art (src/shared/paperArt.ts, cut by tools/cut_papercraft.cjs): the props/ and ground/ files that have
+ * a paper version under sprites/paper/, same name and size. Each map adds its own as it is made.
+ */
+const PAPER_PROPS = new Set([
+  // Map 1 Emerald Forest
+  'tree_0', 'tree_1', 'tree_2', 'stump_tall', 'bush_0', 'bush_1', 'bush_2', 'stump', 'rock_0', 'rock_1', 'rock_2', 'pebble_0', 'pebble_1',
+  'decor_forest', 'island_cliff_forest', 'island_slabs_forest',
+  ...['pillar_0', 'wall', 'brazier', 'boulder', 'pillar_1', 'rubble', 'rune_stone', 'tree'].map((n) => `room_forest_${n}`),
+  // Map 2 Misty Marsh
+  'swamp_tree_0', 'swamp_tree_1', 'swamp_tree_2', 'willow', 'reeds_0', 'reeds_1', 'fern', 'mushrooms', 'mossrock_0', 'mossrock_1', 'swamp_stump',
+  'decor_marsh', 'marsh_planks', 'island_cliff_marsh', 'island_slabs_marsh',
+  ...['pillar_0', 'wall', 'brazier', 'boulder', 'pillar_1', 'rubble', 'rune_stone', 'tree'].map((n) => `room_marsh_${n}`),
+  // Map 3 Frost Reach
+  'snow_pine_0', 'snow_pine_1', 'snow_pine_2', 'frost_tree', 'snow_shrub_0', 'snow_shrub_1', 'frost_fern', 'snow_stump',
+  'snow_rock_0', 'snow_rock_1', 'ice_crystal_0', 'ice_crystal_1', 'decor_snow', 'island_cliff_snow', 'island_slabs_snow',
+  ...['pillar_0', 'wall', 'brazier', 'boulder', 'pillar_1', 'rubble', 'rune_stone', 'tree'].map((n) => `room_snow_${n}`),
+  // Map 4 Ashen Isle
+  'burnt_pillar_0', 'burnt_pillar_1', 'burnt_pillar_2', 'charred_tree', 'ash_shrub_0', 'ash_shrub_1', 'ember_fern', 'charred_stump',
+  'basalt_0', 'basalt_1', 'magma_crystal_0', 'magma_crystal_1', 'decor_volcano', 'island_cliff_volcano', 'island_slabs_volcano',
+  ...['pillar_0', 'wall', 'brazier', 'boulder', 'pillar_1', 'rubble', 'rune_stone', 'tree'].map((n) => `room_volcano_${n}`),
+  // The hub town and the boss summoners
+  'ruin_fountain', 'ruin_statue', 'ruin_pillar', 'ruin_house', 'ruin_tower', 'ruin_rubble', 'town_stall', 'town_forge', 'town_vault', 'town_market',
+  'town_wall_a', 'town_wall_a_broken', 'town_wall_b', 'town_wall_b_broken', 'town_wall_end',
+  'summoner_forest', 'summoner_marsh', 'summoner_snow', 'summoner_volcano',
+  // Every map's camp and island rim
+  'tent', 'campfire', 'sign', 'portal', 'runestone', 'well', 'barrel', 'chest', 'cart', 'banner_red', 'flag', 'watchtower',
+  'island_debris', 'island_cracks',
+]);
+const PAPER_GROUND = new Set(['grass', 'dirt', 'pave', 'room_forest', 'marsh', 'mud', 'water', 'room_marsh',
+  'snow', 'snow_path', 'ice', 'room_snow', 'ash_rock', 'ash_path', 'lava', 'room_volcano', 'brick']);
+/** Classes with a paper animation set in sprites/paper/player/<class>/ (tools/cut_paper_char.cjs). */
+const PAPER_CHARS = new Set(['sword', 'mage', 'gunslinger']);
+let paperMaps = false;
+let paperAnswer: Promise<boolean> = Promise.resolve(false);
+
+/**
+ * The server's art switch (true = the paper pictures wherever one exists), given as the pending answer so the game's
+ * load waits for it, however early it starts. Pages that never call this (the /admin previews) keep the old art.
+ */
+export function usePaperMaps(answer: Promise<boolean>): void {
+  paperAnswer = answer;
+}
+
 const sheet = (path: string, placeholder: () => HTMLCanvasElement): SheetSpec =>
   ({ path: BASE + path, cols: 3, rows: 3, fileSideFaces: 'left', placeholder });
 /** Monster files: 3 frames across, and front, front diagonal, side, back diagonal, back down. */
@@ -281,14 +333,21 @@ function fxTexture(canvas: HTMLCanvasElement): THREE.CanvasTexture {
   return tex;
 }
 
-async function loadAnimSet(key: string, dir: string): Promise<void> {
+/** A character's animation set; with the paper switch on, its paper set (sprites/paper/…) when there is one. */
+async function loadCharSet(key: string, dir: string): Promise<void> {
+  if (paperMaps && PAPER_CHARS.has(key) && (await loadAnimSet(key, `${BASE}paper/${dir}`))) return;
+  await loadAnimSet(key, BASE + dir);
+}
+
+/** True when the set loaded (at least its idle animation). */
+async function loadAnimSet(key: string, dir: string): Promise<boolean> {
   let manifest: CharManifest;
   try {
     const res = await fetch(`${dir}/sprite.json`);
-    if (!res.ok) return;
+    if (!res.ok) return false;
     manifest = (await res.json()) as CharManifest;
   } catch {
-    return; // No folder yet (the dev server answers with index.html, which isn't JSON).
+    return false; // No folder yet (the dev server answers with index.html, which isn't JSON).
   }
   const textures: AnimSet['textures'] = {};
   await Promise.all(
@@ -309,11 +368,12 @@ async function loadAnimSet(key: string, dir: string): Promise<void> {
   );
   if (!textures.idle) {
     console.warn(`[assets] ${key}: sprite.json found but idle animation failed to load — using the simple sheet`);
-    return;
+    return false;
   }
   for (const name of Object.keys(manifest.animations)) if (!textures[name]) delete manifest.animations[name];
   animSets[key] = { manifest, textures };
   assetSources[`${key} (animations)`] = 'file';
+  return true;
 }
 
 /** Repeating ground textures. A zone falls back to its code-painted ground if one is missing. */
@@ -323,7 +383,10 @@ export const groundTiles: Partial<Record<GroundTile, THREE.Texture>> = {};
 
 async function loadGroundTile(name: GroundTile): Promise<void> {
   try {
-    const tex = await loadTexture(`${BASE}ground/${name}.png`);
+    const old = `${BASE}ground/${name}.png`;
+    const tex = paperMaps && PAPER_GROUND.has(name)
+      ? await loadTexture(`${BASE}paper/ground/${name}.png`).catch(() => loadTexture(old))
+      : await loadTexture(old);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
     tex.magFilter = THREE.NearestFilter;
@@ -349,7 +412,9 @@ export const fxSheets: Partial<Record<FxSheet, THREE.Texture>> = {};
 
 async function loadFxSheet(name: FxSheet): Promise<void> {
   try {
-    const tex = await loadTexture(`${BASE}fx/${name}.png`);
+    const old = `${BASE}fx/${name}.png`;
+    // Papercraft effects (tools/cut_paper_fx.cjs), the old sheet when there is no paper one.
+    const tex = paperMaps ? await loadTexture(`${BASE}paper/fx/${name}.png`).catch(() => loadTexture(old)) : await loadTexture(old);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.magFilter = THREE.NearestFilter;
     tex.minFilter = THREE.LinearFilter;
@@ -525,6 +590,11 @@ export function portraitSource(key: string): PortraitSource | undefined {
 }
 
 async function loadAssets(): Promise<void> {
+  paperMaps = await paperAnswer;
+  // Paper monsters (tools/cut_paper_monsters.cjs): which ones exist, and how much taller each picture is drawn.
+  const paperMonsters: Record<string, { scale: number }> = paperMaps
+    ? await fetch(`${BASE}paper/monsters/meta.json`).then((r) => (r.ok ? r.json() : {})).catch(() => ({}))
+    : {};
   // Everything at once: the files don't depend on each other.
   await Promise.all([
     ...(['sword', 'mage', 'gun', 'gun_ult', 'enhance', 'sw_blade', 'sw_gale', 'sw_bulwark', 'mg_a', 'mg_b', 'mg_c', 'mg_d', 'mg_e', 'mg_f', 'mg_g'] as const).map((n) => loadFxSheet(n)),
@@ -534,13 +604,36 @@ async function loadAssets(): Promise<void> {
     loadDecals(),
     ...(['grass', 'dirt', 'water', 'marsh', 'mud', 'pave', 'brick', 'snow', 'snow_path', 'ice', 'ash_rock', 'ash_path', 'lava',
       'room_forest', 'room_marsh', 'room_snow', 'room_volcano'] as const).map((n) => loadGroundTile(n)),
-    ...Object.entries(ANIM_SET_DIRS).map(([key, dir]) => loadAnimSet(key, BASE + dir)),
+    ...Object.entries(ANIM_SET_DIRS).map(([key, dir]) => loadCharSet(key, dir)),
     ...Object.entries(SHEET_SPECS).map(async ([key, spec]) => {
       let tex: THREE.Texture;
       let sideFaces = spec.fileSideFaces;
       let rows = spec.rows;
+      let cols = spec.cols;
+      let paperMonster: SheetInfo['paper'];
+      let idleFrames: number | undefined;
       try {
-        tex = await loadTexture(spec.path).catch((e) => (spec.standIn ? loadTexture(spec.standIn) : Promise.reject(e)));
+        const monster = paperMonsters[key];
+        const npcPaper = paperMaps && spec.path.startsWith(`${BASE}npc/`) ? spec.path.replace(`${BASE}npc/`, `${BASE}paper/npc/`) : null;
+        if (npcPaper && (tex = await loadTexture(npcPaper).catch(() => null as unknown as THREE.Texture))) {
+          // Paper NPCs (art_templates/papercraft_chars/NPC.md): 3 views × 4 breathing frames.
+          cols = 4;
+          idleFrames = 4;
+        } else if (monster) {
+          tex = await loadTexture(`${BASE}paper/monsters/${key}.png`);
+          paperMonster = { walk: 4, attack: 4, scale: monster.scale };
+          cols = 8;
+        } else {
+          // Cosmetics (wings, mounts, pets, single wings: tools/cut_cosmetics.cjs with COS_PAPER=1) have a paper copy
+          // of the same name under sprites/paper/cosmetics/.
+          const paper = !paperMaps ? null
+            : PAPER_PROPS.has(key) ? `${BASE}paper/props/${key}.png`
+            : spec.path.startsWith(`${BASE}cosmetics/`) ? spec.path.replace(`${BASE}cosmetics/`, `${BASE}paper/cosmetics/`)
+            : spec.path.startsWith(`${BASE}fx/`) ? spec.path.replace(`${BASE}fx/`, `${BASE}paper/fx/`)
+            : null;
+          tex = await (paper ? loadTexture(paper).catch(() => loadTexture(spec.path)) : loadTexture(spec.path))
+            .catch((e) => (spec.standIn ? loadTexture(spec.standIn) : Promise.reject(e)));
+        }
         assetSources[key] = 'file';
         rows = spec.fileRows ?? spec.rows;
       } catch {
@@ -558,10 +651,12 @@ async function loadAssets(): Promise<void> {
       }
       sheets[key] = {
         texture: tex,
-        cols: spec.cols,
+        cols,
         rows,
         sideFaces,
-        cellAspect: img.width / spec.cols / (img.height / rows),
+        cellAspect: img.width / cols / (img.height / rows),
+        ...(paperMonster ? { paper: paperMonster } : {}),
+        ...(idleFrames ? { idleFrames } : {}),
       };
     }),
   ]);

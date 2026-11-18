@@ -15,6 +15,11 @@ const { PNG } = require(process.env.PNGJS || 'pngjs');
 
 const ROOT = path.join(__dirname, '..');
 const RAW_ROOT = process.argv[2] || ROOT;
+// Papercraft run (art_templates/papercraft_cosmetics/PROMPTS.md): COS_PAPER=1 reads art_templates/papercraft_cosmetics/raw
+// and writes public/assets/sprites/paper/cosmetics, cosmetics only (no riding poses, no stylist).
+const PAPER = !!process.env.COS_PAPER;
+const COS_RAW = process.env.COS_RAW_DIR ? process.env.COS_RAW_DIR : PAPER ? path.join(ROOT, 'art_templates/papercraft_cosmetics/raw') : path.join(RAW_ROOT, 'art_templates/cosmetics/raw');
+const COS_OUT = path.join(ROOT, PAPER ? 'public/assets/sprites/paper/cosmetics' : 'public/assets/sprites/cosmetics');
 
 /** Tallest figure in a cosmetic sheet after scaling, in px. */
 const COS_H = { wings: 120, mount: 140, pet: 84 };
@@ -220,21 +225,22 @@ function layout(src, grid, k, cellW, cellH, footPad) {
 
 // ---- cosmetics
 for (const id of COSMETICS) {
-  const file = path.join(RAW_ROOT, 'art_templates/cosmetics/raw', `${id}.png`);
+  const file = path.join(COS_RAW, `${id}.png`);
   if (!fs.existsSync(file)) {
     console.warn(`missing ${file}`);
     continue;
   }
-  const src = key(read(file));
+  let src;
+  try { src = key(read(file)); cells(src, 5, 3, 0.02, id); } catch (e) { console.warn(`! ${id}: ${e.message}, skipped`); continue; }
   // Pets: drop the little motion marks (well under a tenth of the body); wings/mounts keep detached bits like sparks.
   const grid = cells(src, 5, 3, id.startsWith('pet_') ? 0.1 : 0.02, id);
   const tallest = Math.max(...grid.flat().map((f) => f.box[3] - f.box[1]));
   const k = COS_H[id.split('_')[0]] / tallest;
-  save(layout(src, grid, k, null, null, 2), path.join(ROOT, 'public/assets/sprites/cosmetics', `${id}.png`));
+  save(layout(src, grid, k, null, null, 2), path.join(COS_OUT, `${id}.png`));
 }
 
 // ---- riding poses
-for (const cls of CLASSES) {
+for (const cls of PAPER ? [] : CLASSES) {
   const dir = path.join(ROOT, 'public/assets/sprites/player', cls);
   const manifestFile = path.join(dir, 'sprite.json');
   const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
@@ -259,7 +265,7 @@ for (const cls of CLASSES) {
 // like npc/merchant.png (tools/cut_npc.cjs): 208px cells, feet on row 205, body 200px tall.
 {
   const file = path.join(RAW_ROOT, 'art_templates/cosmetics/raw/stylist.png');
-  if (fs.existsSync(file)) {
+  if (PAPER) {} else if (fs.existsSync(file)) {
     const src = key(read(file));
     const grid = cells(src, 3, 3, 0.02, 'stylist');
     const front = grid[0][0];
@@ -267,12 +273,25 @@ for (const cls of CLASSES) {
   } else console.warn(`missing ${file}`);
 }
 
+// ---- papercraft NPCs (COS_PAPER=1; art_templates/papercraft_chars/raw/npc/<file>.png: 3 rows front / side / back
+// × 4 breathing frames, art_templates/papercraft_chars/NPC.md) → public/assets/sprites/paper/npc/, laid out like the
+// old ones (208px cells, body 200px tall) but 4 frames across.
+if (PAPER) {
+  const dir = path.join(ROOT, 'art_templates/papercraft_chars/raw/npc');
+  for (const f of fs.existsSync(dir) ? fs.readdirSync(dir).filter((x) => x.endsWith('.png')) : []) {
+    const src = key(read(path.join(dir, f)));
+    const grid = cells(src, 3, 4, 0.02, `npc ${f}`);
+    const front = grid[0][0];
+    save(layout(src, grid, 200 / (front.box[3] - front.box[1]), null, 208, 2), path.join(ROOT, 'public/assets/sprites/paper/npc', f));
+  }
+}
+
 // ---- single wings (art_templates/cosmetics/raw/<id>_one.png: ONE wing per cell, 5 rows × 3 frames). The game mirrors
 // it into the pair (src/client/cosmeticViews.ts, WingPair). Every cell puts the wing's root (the binding at its left
 // edge) at the cell's left edge, half way down, so the game can turn and mirror each frame around it. One scale for the
 // sheet: the front view's first frame 160 px tall, on the class sheets' scale (a body is 200 px).
 for (const id of COSMETICS.filter((c) => c.startsWith('wings_'))) {
-  const file = path.join(RAW_ROOT, 'art_templates/cosmetics/raw', `${id}_one.png`);
+  const file = path.join(COS_RAW, `${id}_one.png`);
   if (!fs.existsSync(file)) continue;
   const src = key(read(file));
   const grid = cells(src, 5, 3, 0.05, `${id}_one`);
@@ -299,5 +318,5 @@ for (const id of COSMETICS.filter((c) => c.startsWith('wings_'))) {
   grid.forEach((row, r) => row.forEach((f, c) => {
     place(src, f, k, dst, c * CW + 1, r * CH + Math.round(CH / 2 - (f.root[1] - f.box[1]) * k));
   }));
-  save(dst, path.join(ROOT, 'public/assets/sprites/cosmetics', `${id}_one.png`));
+  save(dst, path.join(COS_OUT, `${id}_one.png`));
 }

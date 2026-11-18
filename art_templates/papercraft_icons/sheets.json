@@ -1,0 +1,346 @@
+[
+ {
+  "name": "skill_1",
+  "icons": [
+   "skill_bolt",
+   "skill_charge",
+   "skill_dash",
+   "skill_earthquake",
+   "skill_fireball",
+   "skill_frostnova",
+   "skill_gs_aimedshot",
+   "skill_gs_bulletstorm",
+   "skill_gs_cluster",
+   "skill_gs_counter",
+   "skill_gs_deadeye",
+   "skill_gs_doubletap"
+  ],
+  "bg": "magenta"
+ },
+ {
+  "name": "skill_2",
+  "icons": [
+   "skill_gs_drone",
+   "skill_gs_explosive",
+   "skill_gs_finisher",
+   "skill_gs_hawkeye",
+   "skill_gs_hotrounds",
+   "skill_gs_incendiary",
+   "skill_gs_lockon",
+   "skill_gs_mine",
+   "skill_gs_overdrive",
+   "skill_gs_piercerounds",
+   "skill_gs_quickreload",
+   "skill_gs_railgun"
+  ],
+  "bg": "magenta"
+ },
+ {
+  "name": "skill_3",
+  "icons": [
+   "skill_gs_ricochet",
+   "skill_gs_rocketrain",
+   "skill_gs_seeker",
+   "skill_gs_shockrounds",
+   "skill_gs_smoke",
+   "skill_gs_sniperfocus",
+   "skill_gs_specialammo",
+   "skill_gs_splitshot",
+   "skill_gs_stackfire",
+   "skill_gs_triggerfinger",
+   "skill_gs_turret",
+   "skill_gs_weakspot"
+  ],
+  "bg": "magenta"
+ },
+ {
+  "name": "skill_4",
+  "icons": [
+   "skill_headshot",
+   "skill_meteor",
+   "skill_mg_arcanelance",
+   "skill_mg_arcanepower",
+   "skill_mg_chainlightning",
+   "skill_mg_chargedblast",
+   "skill_mg_crystalrain",
+   "skill_mg_crystalspikes",
+   "skill_mg_cursedash",
+   "skill_mg_decayfield",
+   "skill_mg_decayring",
+   "skill_mg_elementmastery"
+  ],
+  "bg": "green"
+ },
+ {
+  "name": "skill_5",
+  "icons": [
+   "skill_mg_empowerfield",
+   "skill_mg_firerain",
+   "skill_mg_flameground",
+   "skill_mg_flamewave",
+   "skill_mg_forcewave",
+   "skill_mg_frailcurse",
+   "skill_mg_gravitywell",
+   "skill_mg_hexseed",
+   "skill_mg_icecage",
+   "skill_mg_manaburst",
+   "skill_mg_manashield",
+   "skill_mg_manasource"
+  ],
+  "bg": "green"
+ },
+ {
+  "name": "skill_6",
+  "icons": [
+   "skill_mg_manawell",
+   "skill_mg_poisonmist",
+   "skill_mg_sealveil",
+   "skill_mg_searingmark",
+   "skill_mg_starfall",
+   "skill_mg_thunderstorm",
+   "skill_mg_timewarp",
+   "skill_mg_volatileorb",
+   "skill_pierce",
+   "skill_rapidfire",
+   "skill_shot",
+   "skill_slash"
+  ],
+  "bg": "magenta"
+ },
+ {
+  "name": "skill_7",
+  "icons": [
+   "skill_sw_anchor",
+   "skill_sw_armorbash",
+   "skill_sw_backstep",
+   "skill_sw_bladedance",
+   "skill_sw_bladering",
+   "skill_sw_cataclysm",
+   "skill_sw_crush",
+   "skill_sw_duelist",
+   "skill_sw_execute",
+   "skill_sw_flurry",
+   "skill_sw_guard",
+   "skill_sw_heavyslash"
+  ],
+  "bg": "green"
+ },
+ {
+  "name": "skill_8",
+  "icons": [
+   "skill_sw_hunt",
+   "skill_sw_ironhide",
+   "skill_sw_judgement",
+   "skill_sw_lightfeet",
+   "skill_sw_overdrive",
+   "skill_sw_shadowstep",
+   "skill_sw_shadowswap",
+   "skill_sw_shockwave",
+   "skill_sw_spindodge",
+   "skill_sw_sunder",
+   "skill_sw_swordwave",
+   "skill_sw_taunt"
+  ],
+  "bg": "green"
+ },
+ {
+  "name": "skill_9",
+  "icons": [
+   "skill_sw_thorns",
+   "skill_sw_thousandcuts",
+   "skill_sw_triple",
+   "skill_sw_unbreakable",
+   "skill_sw_unleash",
+   "skill_sw_warcry",
+   "skill_whirlwind"
+  ],
+  "bg": "magenta"
+ },
+ {
+  "name": "item_1",
+  "icons": [
+   "item_ash_hood",
+   "item_belt_1",
+   "item_belt_2",
+   "item_belt_3",
+   "item_belt_4",
+   "item_boots",
+   "item_cap",
+   "item_cinder_boots",
+   "item_frost_hood",
+   "item_glacier_gunslinger",
+   "item_glacier_mage",
+   "item_glacier_sword"
+  ],
+  "bg": "magenta"
+ },
+ {
+  "name": "item_2",
+  "icons": [
+   "item_gloves_1",
+   "item_gloves_2",
+   "item_gloves_3",
+   "item_gloves_4",
+   "item_helm",
+   "item_hood",
+   "item_leather_gunslinger",
+   "item_leather_mage",
+   "item_leather_sword",
+   "item_magma_plate_gunslinger",
+   "item_magma_plate_mage",
+   "item_magma_plate_sword"
+  ],
+  "bg": "magenta"
+ },
+ {
+  "name": "item_3",
+  "icons": [
+   "item_necklace_1",
+   "item_necklace_2",
+   "item_necklace_3",
+   "item_necklace_4",
+   "item_orb_1_mage",
+   "item_orb_3_mage",
+   "item_orb_4_mage",
+   "item_pouch_1_gunslinger",
+   "item_pouch_2_gunslinger",
+   "item_pouch_3_gunslinger",
+   "item_pouch_4_gunslinger",
+   "item_ring_copper"
+  ],
+  "bg": "green"
+ },
+ {
+  "name": "item_4",
+  "icons": [
+   "item_ring_ember",
+   "item_ring_frost",
+   "item_ring_jade",
+   "item_ring_wisp",
+   "item_sandals",
+   "item_scabbard_1_sword",
+   "item_scabbard_2_sword",
+   "item_scabbard_3_sword",
+   "item_scabbard_4_sword",
+   "item_scale_gunslinger",
+   "item_scale_mage",
+   "item_scale_sword"
+  ],
+  "bg": "magenta"
+ },
+ {
+  "name": "item_5",
+  "icons": [
+   "item_snowtreads",
+   "item_tome_2_mage",
+   "item_tunic_gunslinger",
+   "item_tunic_mage",
+   "item_tunic_sword",
+   "item_waders",
+   "item_weapon_1_gunslinger",
+   "item_weapon_1_mage",
+   "item_weapon_1_sword",
+   "item_weapon_2_gunslinger",
+   "item_weapon_2_mage",
+   "item_weapon_2_sword"
+  ],
+  "bg": "magenta"
+ },
+ {
+  "name": "item_6",
+  "icons": [
+   "item_weapon_3_gunslinger",
+   "item_weapon_3_mage",
+   "item_weapon_3_sword",
+   "item_weapon_4_gunslinger",
+   "item_weapon_4_mage",
+   "item_weapon_4_sword",
+   "item_weapon_5_gunslinger",
+   "item_weapon_5_mage",
+   "item_weapon_5_sword",
+   "item_weapon_6_gunslinger",
+   "item_weapon_6_mage",
+   "item_weapon_6_sword"
+  ],
+  "bg": "magenta"
+ },
+ {
+  "name": "item_7",
+  "icons": [
+   "item_weapon_7_gunslinger",
+   "item_weapon_7_mage",
+   "item_weapon_7_sword",
+   "item_weapon_8_gunslinger",
+   "item_weapon_8_mage",
+   "item_weapon_8_sword",
+   "item_weapon_9_gunslinger",
+   "item_weapon_9_mage",
+   "item_weapon_9_sword"
+  ],
+  "bg": "green"
+ },
+ {
+  "name": "misc_1",
+  "icons": [
+   "coin",
+   "potion_hp",
+   "potion_hp_l",
+   "potion_hp_m",
+   "potion_hp_s",
+   "potion_mp",
+   "potion_mp_l",
+   "potion_mp_m",
+   "potion_mp_s",
+   "stone_drop_scroll",
+   "stone_enhance",
+   "stone_exp_scroll"
+  ],
+  "bg": "magenta"
+ },
+ {
+  "name": "misc_2",
+  "icons": [
+   "stone_key_bear",
+   "stone_key_heart",
+   "stone_key_witch",
+   "stone_key_yeti",
+   "stone_megaphone",
+   "stone_phoenix",
+   "stone_protect",
+   "stone_reroll_stat",
+   "stone_reroll_values",
+   "stone_return_scroll"
+  ],
+  "bg": "green"
+ },
+ {
+  "name": "map_1",
+  "icons": [
+   "map_ally",
+   "map_blacksmith",
+   "map_boss",
+   "map_camp",
+   "map_fight",
+   "map_flag",
+   "map_keeper",
+   "map_market",
+   "map_merchant",
+   "map_player",
+   "map_portal",
+   "map_seeker"
+  ],
+  "bg": "green"
+ },
+ {
+  "name": "map_2",
+  "icons": [
+   "npc_cash",
+   "npc_forge",
+   "npc_market",
+   "npc_shop",
+   "npc_stash",
+   "npc_talk"
+  ],
+  "bg": "green"
+ }
+]

@@ -1,6 +1,7 @@
 // Sprites for simulation entities. Each view reads its entity every frame; the simulation never
 // touches Three.js, so the same entities can come from a local Sim or (later) the server.
 import { DebuffFx } from './debuffFx';
+import { buffColor, debuffColor, MagicCircle } from './magicCircles';
 import * as THREE from 'three';
 import type { Player } from '../shared/sim/Player';
 import type { Monster } from '../shared/sim/Monster';
@@ -71,6 +72,8 @@ export class PlayerView {
   /** The worn passive's aura under the feet, and which passive it was made for. */
   private passiveAura: PassiveAura | null = null;
   private passiveId: string | undefined;
+  /** A magic circle under the feet while a skill buff runs (magicCircles.ts). */
+  private readonly circle: MagicCircle;
 
   constructor(readonly p: Player, private readonly scene: THREE.Scene) {
     const anim = animSets[p.cls.id];
@@ -79,6 +82,7 @@ export class PlayerView {
     const rig = animated && p.cls.id === 'sword' && paperSwordOn() ? swordRigReady() : null;
     this.actor = rig && animated ? new RigActor(animated, rig) : (animated ?? new SpriteActor(sheets[p.cls.id], 1.9, 0.4));
     scene.add(this.actor.group);
+    this.circle = new MagicCircle(this.actor.group, 1.7);
     this.orbs = new OrbRing(scene, p.id * 3.7);
     this.cos = new CosmeticRig(scene);
     this.sync();
@@ -107,6 +111,8 @@ export class PlayerView {
     this.cos.update(dt, p, fx);
     this.updateToad(dt, fx);
     this.updatePassiveAura(dt);
+    this.circle.set(p.alive && p.toadT <= 0 ? buffColor(p.buffBits) : null);
+    this.circle.update(dt);
     this.sync();
   }
 
@@ -276,6 +282,7 @@ export class PlayerView {
   }
 
   dispose(): void {
+    this.circle.dispose();
     this.disposeAura();
     this.disposePassiveAura();
     if (this.toad) {
@@ -294,10 +301,13 @@ export class MonsterView {
   readonly actor: SpriteActor;
   /** Its debuffs' effects on the body (debuffFx.ts). */
   private readonly debuffFx: DebuffFx;
+  /** A magic circle under it while a debuff runs, tinted by the debuff (magicCircles.ts). */
+  private readonly circle: MagicCircle;
 
   constructor(readonly m: Monster, private readonly scene: THREE.Scene) {
     this.actor = new SpriteActor(sheets[m.def.id], m.def.height, m.def.radius * 1.1);
     this.debuffFx = new DebuffFx(this.actor.group);
+    this.circle = new MagicCircle(this.actor.group, Math.max(1.4, m.def.radius * 3));
     this.actor.face(m.faceX, m.faceZ);
     scene.add(this.actor.group);
     this.update(0, null);
@@ -306,6 +316,8 @@ export class MonsterView {
   update(dt: number, fx: Effects | null): void {
     const m = this.m;
     if (fx) this.debuffFx.update(dt, m, fx);
+    this.circle.set(m.alive ? debuffColor(m.debuffs) : null);
+    this.circle.update(dt);
     const g = this.actor.group;
     g.position.x = m.x;
     g.position.z = m.z;
@@ -320,6 +332,7 @@ export class MonsterView {
   }
 
   dispose(): void {
+    this.circle.dispose();
     this.debuffFx.dispose();
     this.scene.remove(this.actor.group);
     this.actor.dispose();

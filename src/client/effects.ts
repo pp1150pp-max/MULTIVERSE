@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { circlesOn, MagicCircle, zoneColor } from './magicCircles';
 import { fxSheets, fxTex, type FxSheet } from './assets';
 import type { FxApi, SkillEffect } from '../shared/sim/types';
 import { loopProps, playProps } from './zoneProps';
@@ -371,6 +372,15 @@ export class Effects implements FxApi {
     loopProps(this, skill, pos, size, duration);
     let t = 0;
     let layerT = 0;
+    // A magic circle under the area while it lasts (magicCircles.ts), in the class's colour.
+    const circleAt = new THREE.Group();
+    circleAt.position.set(x, 0, z);
+    const circle = circlesOn() ? new MagicCircle(circleAt, size * 1.05) : null;
+    if (circle) this.add(circleAt, duration, (k, dt) => {
+      circle.set(duration - k * duration > ZONE_FADE_OUT ? zoneColor(name) : null);
+      circle.update(dt);
+      if (k >= 1) circle.dispose();
+    });
     this.add(mesh, duration, (_k, dt) => {
       t += dt;
       const p = follow != null ? this.posOf?.(follow) : null;
@@ -378,6 +388,7 @@ export class Effects implements FxApi {
         pos.x = p.x;
         pos.z = p.z;
         mesh.position.set(p.x, 0.08, p.z);
+        circleAt.position.set(p.x, 0, p.z);
       }
       showFrame(tex, def.sheet, def.row, from + (Math.floor(t * ZONE_FPS) % count));
       mat.opacity = Math.min(1, t / ZONE_FADE_IN, (duration - t) / ZONE_FADE_OUT);

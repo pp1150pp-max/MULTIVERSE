@@ -1,0 +1,83 @@
+{
+  "green_slime": {
+    "scale": 1
+  },
+  "wild_rabbit": {
+    "scale": 1.025
+  },
+  "forest_fox": {
+    "scale": 1
+  },
+  "wild_boar": {
+    "scale": 1.008
+  },
+  "forest_wolf": {
+    "scale": 1
+  },
+  "forest_bear": {
+    "scale": 1.154
+  },
+  "bog_toad": {
+    "scale": 1.085
+  },
+  "marsh_leech": {
+    "scale": 1
+  },
+  "swamp_serpent": {
+    "scale": 1
+  },
+  "mire_ghoul": {
+    "scale": 1
+  },
+  "will_o_wisp": {
+    "scale": 1.268
+  },
+  "bog_witch": {
+    "scale": 1.307
+  },
+  "frost_penguin": {
+    "scale": 1.034
+  },
+  "tusk_seal": {
+    "scale": 1.12
+  },
+  "snow_owl": {
+    "scale": 1
+  },
+  "snow_sprite": {
+    "scale": 1
+  },
+  "snow_brawler": {
+    "scale": 1
+  },
+  "polar_bear": {
+    "scale": 1.067
+  },
+  "yeti_minion": {
+    "scale": 1.017
+  },
+  "yeti": {
+    "scale": 1.056
+  },
+  "ember_wisp": {
+    "scale": 1.274
+  },
+  "salamander": {
+    "scale": 1.142
+  },
+  "lava_bat": {
+    "scale": 1.271
+  },
+  "magma_golem": {
+    "scale": 1.017
+  },
+  "ash_mage": {
+    "scale": 1.091
+  },
+  "ash_knight": {
+    "scale": 1.088
+  },
+  "volcano_heart": {
+    "scale": 1.055
+  }
+}

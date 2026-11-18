@@ -720,6 +720,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     const mergeOn = h('input', { type: 'checkbox', checked: a.mergeNums, onchange: (e: Event) => { a.mergeNums = (e.target as HTMLInputElement).checked; refresh(); } });
     const ownOnly = h('input', { type: 'checkbox', checked: a.ownNumsOnly, onchange: (e: Event) => { a.ownNumsOnly = (e.target as HTMLInputElement).checked; refresh(); } });
     const smoothOn = h('input', { type: 'checkbox', checked: a.smoothShots, onchange: (e: Event) => { a.smoothShots = (e.target as HTMLInputElement).checked; refresh(); } });
+    const circlesOn = h('input', { type: 'checkbox', checked: a.circles, onchange: (e: Event) => { a.circles = (e.target as HTMLInputElement).checked; refresh(); } });
     const flag = (box: HTMLInputElement, changed: boolean, text: string) => h('label', { class: changed ? 'bal-changed' : '' }, box, text);
     fxCard.replaceChildren(
       h('h2', {}, 'เอฟเฟกต์สกิล (ชั้นเสริม)'),
@@ -727,6 +728,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'row bal-line' }, h('label', {}, on, ' เปิดชั้นเสริม'), h('label', {}, deb, ' แสดงดีบัฟบนตัวมอน (ไอคอนเหนือหลอด HP + เอฟเฟกต์บนตัว)')),
       h('div', { class: 'row bal-line' }, num('glow', 0.1), num('ground', 0.1), num('particles', 0.1)),
       h('div', { class: 'row bal-line' }, num('shake', 0.1), num('hitstopMs', 5), num('crit', 0.1)),
+      h('div', { class: 'row bal-line' }, flag(circlesOn, a.circles !== ca.circles, ' วงเวทบนพื้น (ใต้มอนติดดีบัฟ ใต้ผู้เล่นติดบัฟ และพื้นที่สกิลวงกว้าง)'), num('circleGlow', 0.1)),
       h('div', { class: 'muted' }, 'ภาพค้างจริง = ค่านี้ × ความหนักของท่า (0–1) และไม่เกิน 120 ms · ตอนนี้เปิดชั้นเสริมให้พายุดาบท่าเดียวก่อน'),
       h('h3', {}, 'ตัวเลขดาเมจ (ลดอาการกระตุกตอนมอนเยอะ)'),
       h('div', { class: 'row bal-line' },

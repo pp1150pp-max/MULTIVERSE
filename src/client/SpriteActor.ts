@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { fxTex, type SheetInfo } from './assets';
-import type { Actor } from './AnimatedActor';
+import type { Actor, PlayOpts } from './AnimatedActor';
 
 const S = Math.SQRT1_2;
 const ROW_FRONT = 0;
@@ -10,6 +10,10 @@ const ROW_BACK = 2;
 const DIAGONAL_ROWS = 5;
 /** Frame order while moving. Cosmetic sheets pass COS_CYCLE (rest, up, rest, down: a flap or a step each way). */
 const WALK: readonly number[] = [0, 1, 2, 1];
+/** A paper monster's strike frames after its wind-up: each shown this long. */
+const ATTACK_FRAME_SECS = 0.11;
+/** A paper NPC's breathing loop, frames per second. */
+const NPC_IDLE_FPS = 4;
 
 let shadowGeo: THREE.PlaneGeometry | null = null;
 let shadowMat: THREE.MeshBasicMaterial | null = null;
@@ -52,15 +56,21 @@ export class SpriteActor implements Actor {
   private flip = false;
   private animT = 0;
   private flashT = 0;
+  /** A paper monster's attack: seconds since it began (-1 = none) and its wind-up (see play). */
+  private attackT = -1;
+  private attackWind = 0;
+  private readonly cycle: readonly number[];
   private readonly shadow: THREE.Mesh;
 
-  constructor(private readonly sheet: SheetInfo, public height: number, shadowRadius: number, private readonly cycle: readonly number[] = WALK) {
+  constructor(private readonly sheet: SheetInfo, public height: number, shadowRadius: number, cycle: readonly number[] = WALK) {
+    // A paper monster walks through its 4 walk frames in order.
+    this.cycle = sheet.paper ? Array.from({ length: sheet.paper.walk }, (_, i) => i) : cycle;
     this.tex = sheet.texture.clone();
     this.tex.needsUpdate = true;
     this.mat = new THREE.SpriteMaterial({ map: this.tex, alphaTest: 0.5, transparent: false });
     this.sprite = new THREE.Sprite(this.mat);
     this.sprite.center.set(0.5, 0.02);
-    this.sprite.scale.set(height * sheet.cellAspect, height, 1);
+    this.setHeight(height);
 
     const shadow = new THREE.Mesh(shadowGeometry(), sharedShadowMat());
     this.shadow = shadow;
@@ -73,7 +83,8 @@ export class SpriteActor implements Actor {
   /** Changes the picture's world height (the cosmetics bench's size sliders). */
   setHeight(h: number): void {
     this.height = h;
-    this.sprite.scale.set(h * this.sheet.cellAspect, h, 1);
+    const drawn = h * (this.sheet.paper?.scale ?? 1);
+    this.sprite.scale.set(drawn * this.sheet.cellAspect, drawn, 1);
   }
 
   /** Raises the sprite off the ground, leaving its shadow behind. */
@@ -102,9 +113,24 @@ export class SpriteActor implements Actor {
   }
 
   update(dt: number, moving: boolean, fps = 9): void {
-    if (moving) {
+    const paper = this.sheet.paper;
+    if (paper && this.attackT >= 0) {
+      // The first attack frame (wind-up) while it winds up, then the rest quickly, the strike as the wind-up ends.
+      this.attackT += dt;
+      const after = this.attackT - this.attackWind;
+      const step = Math.floor(Math.max(0, after) / ATTACK_FRAME_SECS) + (after >= 0 ? 1 : 0);
+      if (step >= paper.attack) this.attackT = -1;
+      else this.frame = paper.walk + step;
+    }
+    if (this.attackT >= 0) {
+      // Showing an attack frame.
+    } else if (moving) {
       this.animT += dt * fps;
       this.frame = this.cycle[Math.floor(this.animT) % this.cycle.length];
+    } else if (this.sheet.idleFrames) {
+      // A paper NPC breathes while it stands: its frames in order, slowly.
+      this.animT += dt * NPC_IDLE_FPS;
+      this.frame = Math.floor(this.animT) % this.sheet.idleFrames;
     } else {
       this.animT = 0;
       this.frame = 0;
@@ -121,16 +147,24 @@ export class SpriteActor implements Actor {
     this.flashT = 0.15;
   }
 
-  // Simple sheets only have walk frames, so one-shot animations are no-ops.
-  play(): boolean {
-    return false;
+  /**
+   * Simple sheets only have walk frames, so one-shot animations are no-ops. A paper monster plays 'attack':
+   * `duration` = its wind-up's seconds (Monster.update sends it as the wind-up begins).
+   */
+  play(name: string, opts?: PlayOpts): boolean {
+    if (!this.has(name)) return false;
+    this.attackT = 0;
+    this.attackWind = Math.max(0, opts?.duration ?? 0.3);
+    return true;
   }
 
-  has(): boolean {
-    return false;
+  has(name: string): boolean {
+    return name === 'attack' && !!this.sheet.paper;
   }
 
-  reset(): void {}
+  reset(): void {
+    this.attackT = -1;
+  }
 
   /** Cuts the picture with world-space planes (the renderer has localClippingEnabled); null = whole. */
   setClip(planes: THREE.Plane[] | null): void {
