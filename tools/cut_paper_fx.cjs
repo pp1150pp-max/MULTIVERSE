@@ -125,33 +125,62 @@ async function cut(s) {
   const img = await keyed(src, s.bg);
   const old = await rgba(path.join(FX, `${s.name}.png`));
   const boxes = cellBoxes(old, s.cols, s.rows);
-  const op = (x, y) => img.d[(y * img.w + x) * 4 + 3] > 40;
-  const gap = Math.max(5, Math.round(img.w / 160));
-  let rowB = bands((y) => { for (let x = 0; x < img.w; x++) if (op(x, y)) return true; return false; }, img.h, s.rows, gap);
-  if (rowB.length !== s.rows) {
-    console.warn(`  ! ${s.name}: rows by spacing failed, equal rows`);
-    rowB = even(rowB[0]?.[0] ?? 0, rowB[rowB.length - 1]?.[1] ?? img.h, s.rows);
+  // ChatGPT keeps the reference's even spacing, but tall pieces (lightning, a mushroom cloud) reach into the next row,
+  // so gaps between lines don't find the rows. Instead every connected piece goes to the frame of the even grid (over
+  // the drawing's extent) its centre falls in, and each frame is the union of its pieces.
+  const { w, h, d } = img;
+  const label = new Int32Array(w * h).fill(-1);
+  const comps = [];
+  for (let s0 = 0; s0 < w * h; s0++) {
+    if (label[s0] >= 0 || d[s0 * 4 + 3] <= 40) continue;
+    const px = [], st = [s0];
+    label[s0] = comps.length;
+    let sx = 0, sy = 0;
+    while (st.length) {
+      const k = st.pop();
+      px.push(k);
+      const x = k % w, y = (k - x) / w;
+      sx += x; sy += y;
+      for (const t of [x > 0 ? k - 1 : -1, x < w - 1 ? k + 1 : -1, k >= w ? k - w : -1, k < w * (h - 1) ? k + w : -1]) {
+        if (t >= 0 && label[t] < 0 && d[t * 4 + 3] > 40) { label[t] = comps.length; st.push(t); }
+      }
+    }
+    comps.push({ px, cx: sx / px.length, cy: sy / px.length });
   }
-  const raw = sharp(img.d, { raw: { width: img.w, height: img.h, channels: 4 } });
+  const big = Math.max(1, ...comps.map((c) => c.px.length));
+  const kept = comps.filter((c) => c.px.length >= Math.max(12, big * 0.002));
+  let X0 = w, Y0 = h, X1 = 0, Y1 = 0;
+  for (const c of kept) for (const k of c.px) {
+    const x = k % w, y = (k - x) / w;
+    if (x < X0) X0 = x; if (x > X1) X1 = x; if (y < Y0) Y0 = y; if (y > Y1) Y1 = y;
+  }
+  // Only rows the old sheet uses (an empty last row isn't drawn).
+  const usedRows = Array.from({ length: s.rows }, (_, r) => r).filter((r) => boxes.slice(r * s.cols, r * s.cols + s.cols).some(Boolean));
+  const cellOf = (c) => {
+    const col = Math.min(s.cols - 1, Math.max(0, Math.floor(((c.cx - X0) / (X1 + 1 - X0)) * s.cols)));
+    const ri = Math.min(usedRows.length - 1, Math.max(0, Math.floor(((c.cy - Y0) / (Y1 + 1 - Y0)) * usedRows.length)));
+    return usedRows[ri] * s.cols + col;
+  };
+  const groups = Array.from({ length: s.rows * s.cols }, () => []);
+  for (const c of kept) groups[cellOf(c)].push(c);
   const layers = [];
-  for (let r = 0; r < s.rows; r++) {
-    const [y0, y1] = rowB[r];
-    let colB = bands((x) => { for (let y = y0; y < y1; y++) if (op(x, y)) return true; return false; }, img.w, s.cols, gap);
-    if (colB.length !== s.cols) {
-      console.warn(`  ! ${s.name} row ${r + 1}: frames by spacing failed, equal columns`);
-      colB = even(colB[0]?.[0] ?? 0, colB[colB.length - 1]?.[1] ?? img.w, s.cols);
+  for (let i = 0; i < groups.length; i++) {
+    const box = boxes[i];
+    if (!box || !groups[i].length) continue;
+    let x0 = w, y0 = h, x1 = 0, y1 = 0;
+    for (const c of groups[i]) for (const k of c.px) {
+      const x = k % w, y = (k - x) / w;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
     }
-    for (let c = 0; c < s.cols; c++) {
-      const box = boxes[r * s.cols + c];
-      if (!box) continue;
-      const [x0, x1] = colB[c];
-      let t = y1, b = y0;
-      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (op(x, y)) { if (y < t) t = y; if (y > b) b = y; }
-      if (b < t) continue;
-      const piece = await raw.clone().extract({ left: x0, top: t, width: x1 - x0, height: b + 1 - t })
-        .resize(box.w, box.h, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 }, kernel: 'lanczos3' }).png().toBuffer();
-      layers.push({ input: piece, left: box.x0, top: box.y0 });
+    const pw = x1 - x0 + 1, ph = y1 - y0 + 1;
+    const buf = Buffer.alloc(pw * ph * 4);
+    for (const c of groups[i]) for (const k of c.px) {
+      const x = (k % w) - x0, y = Math.floor(k / w) - y0;
+      d.copy(buf, (y * pw + x) * 4, k * 4, k * 4 + 4);
     }
+    const piece = await sharp(buf, { raw: { width: pw, height: ph, channels: 4 } })
+      .resize(box.w, box.h, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 }, kernel: 'lanczos3' }).png().toBuffer();
+    layers.push({ input: piece, left: box.x0, top: box.y0 });
   }
   fs.mkdirSync(OUT, { recursive: true });
   await sharp({ create: { width: old.w, height: old.h, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })

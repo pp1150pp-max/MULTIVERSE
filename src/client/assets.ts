@@ -412,7 +412,9 @@ export const fxSheets: Partial<Record<FxSheet, THREE.Texture>> = {};
 
 async function loadFxSheet(name: FxSheet): Promise<void> {
   try {
-    const tex = await loadTexture(`${BASE}fx/${name}.png`);
+    const old = `${BASE}fx/${name}.png`;
+    // Papercraft effects (tools/cut_paper_fx.cjs), the old sheet when there is no paper one.
+    const tex = paperMaps ? await loadTexture(`${BASE}paper/fx/${name}.png`).catch(() => loadTexture(old)) : await loadTexture(old);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.magFilter = THREE.NearestFilter;
     tex.minFilter = THREE.LinearFilter;
@@ -627,6 +629,7 @@ async function loadAssets(): Promise<void> {
           const paper = !paperMaps ? null
             : PAPER_PROPS.has(key) ? `${BASE}paper/props/${key}.png`
             : spec.path.startsWith(`${BASE}cosmetics/`) ? spec.path.replace(`${BASE}cosmetics/`, `${BASE}paper/cosmetics/`)
+            : spec.path.startsWith(`${BASE}fx/`) ? spec.path.replace(`${BASE}fx/`, `${BASE}paper/fx/`)
             : null;
           tex = await (paper ? loadTexture(paper).catch(() => loadTexture(spec.path)) : loadTexture(spec.path))
             .catch((e) => (spec.standIn ? loadTexture(spec.standIn) : Promise.reject(e)));
