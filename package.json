@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "three": "^0.170.0",
+    "three.quarks": "0.16.0",
     "ws": "^8.22.1"
   },
   "devDependencies": {

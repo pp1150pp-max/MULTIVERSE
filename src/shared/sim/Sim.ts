@@ -293,6 +293,15 @@ export class Sim {
           if (a.length === 5) a.push(p.id, hit);
           // effect(name, x, z, angle, size, by, hit, skill)
           if (a.length === 7 && sk) a.push(sk);
+        } else if (e.name === 'telegraph' && a.length === 5 && sk) {
+          // telegraph(x, z, radius, duration, color, by, skill): Starfall's star falls during its warning (quarksFx.ts)
+          a.push(p.id, sk);
+        } else if (e.name === 'burst' && a.length === 6 && sk) {
+          // burst(x, y, z, color, n, speed, by, skill): Fire Rain's falling fire in three.quarks (src/client/quarksFx.ts)
+          a.push(p.id, sk);
+        } else if (e.name === 'meteor' && a.length === 3) {
+          // meteor(x, z, duration, by): the client draws others' falling meteor lighter (src/client/quarksFx.ts)
+          a.push(p.id);
         } else if (e.name === 'zone' && sk) {
           // zone(name, x, z, size, duration, follow, skill)
           while (a.length < 6) a.push(null);

@@ -4,6 +4,8 @@
 import type { Game } from './Game';
 import { googleEnabled, logout } from './net/api';
 import { imgUrl } from './img';
+import { gfxMenuOn } from './gfxPrefs';
+import { toggleGfxPanel } from './gfxPanel';
 
 /** Read once by the title menu after the reload. */
 export const AFTER_EXIT_KEY = 'multiverse-after-exit';
@@ -44,7 +46,7 @@ const SKILLS_ICON = badge('blank', '⚔');
 /** Icon grid, 3 columns: [action, icon, label]. Only systems that exist; add a tile when a new one is built. */
 const MENU_ITEMS: [string, string, string][] = [
   ['bag', badge('bag'), 'กระเป๋า'], ['skills', SKILLS_ICON, 'สกิล'], ['party', PARTY_ICON, 'ปาร์ตี้'], ['friends', FRIENDS_ICON, 'เพื่อน'], ['trade', TRADE_ICON, 'เทรด'], ['daily', DAILY_ICON, 'ล็อกอินรายวัน'], ['map', badge('map'), 'แผนที่'],
-  ['cosmetics', badge('blank', '👑'), 'แต่งตัว'], ['cashshop', CASH_ICON, 'แคชช็อป'], ['autoset', badge('autoset'), 'ตั้งค่า Auto'], ['audio', badge('blank', '🔊'), 'เสียง'], ['help', badge('help'), 'วิธีเล่น'],
+  ['cosmetics', badge('blank', '👑'), 'แต่งตัว'], ['cashshop', CASH_ICON, 'แคชช็อป'], ['autoset', badge('autoset'), 'ตั้งค่า Auto'], ['audio', badge('blank', '🔊'), 'เสียง'], ['graphics', badge('blank', '🎨'), 'กราฟิก'], ['help', badge('help'), 'วิธีเล่น'],
   ['mail', MAIL_ICON, 'จดหมาย'], ['settings', badge('settings'), 'ตั้งค่า'],
   // Touch play only (hidden by CSS with a mouse), and only where the browser can do it (not iPhone Safari).
   ...(document.fullscreenEnabled ? [['fullscreen', badge('blank', '⛶'), 'เต็มจอ'] as [string, string, string]] : []),
@@ -193,6 +195,8 @@ export class SystemMenu {
   }
 
   private showView(v: string): void {
+    // the graphics window's tile only while /admin shows it (fxLayer.gfxMenu)
+    this.panel.querySelector('[data-act="graphics"]')?.classList.toggle('hidden', !gfxMenuOn());
     this.panel.querySelectorAll<HTMLElement>('.sys-view').forEach((el) => el.classList.toggle('hidden', el.dataset.view !== v));
     $('sys-hudstyle').textContent = $('btn-hud-style').textContent;
     $('sys-partyblock').textContent = `${this.g.party.block ? '☑' : '☐'} ไม่รับคำชวนปาร์ตี้`;
@@ -262,6 +266,9 @@ export class SystemMenu {
       case 'audio':
         this.toggle(false);
         return $('btn-audio')?.click();
+      case 'graphics':
+        this.toggle(false);
+        return toggleGfxPanel(true);
       case 'hudstyle':
         $('btn-hud-style').click();
         return void ($('sys-hudstyle').textContent = $('btn-hud-style').textContent);

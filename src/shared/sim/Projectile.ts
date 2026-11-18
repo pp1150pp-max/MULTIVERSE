@@ -31,6 +31,11 @@ export interface ProjOpts {
   blastFx?: SkillEffect;
   /** Also show the Special Ammo passive's ring on the blast (Gunslinger). */
   specialFx?: boolean;
+  /**
+   * Player shots: the skill its effects are tagged with when `hit.skill` is left out (that one also feeds damage
+   * passives). Visual only: the client's three.quarks particles (src/client/quarksFx.ts) pick the skill by it.
+   */
+  fxSkill?: string;
 }
 
 /** A monster's shot: flies straight until it hits a player or runs out of range, so it can be dodged. */
@@ -89,7 +94,7 @@ export class Projectile {
 
   update(dt: number): void {
     // A player's shot: its blast and hits are that player's doing (Sim.asCaster).
-    this.sim.asCaster(this.owner, () => this.fly(dt), this.o.hit?.skill?.id);
+    this.sim.asCaster(this.owner, () => this.fly(dt), this.o.fxSkill ?? this.o.hit?.skill?.id);
   }
 
   private fly(dt: number): void {

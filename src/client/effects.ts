@@ -5,6 +5,12 @@ import type { FxApi, SkillEffect } from '../shared/sim/types';
 import { loopProps, playProps } from './zoneProps';
 import { playSkillExtras } from './skillExtras';
 import { playLayer, ShotLayer, type FxLayerHooks, type FxLayerHost } from './fxLayer';
+import type { QuarksFx } from './quarksFx';
+import { currentBalance } from '../shared/balance';
+import { gfxQuality } from './gfxPrefs';
+
+/** The three.quarks trial's switch (fxLayer.quarks, under the extra layer's own switch), and not "off" in the player's graphics window. */
+const quarksOn = (): boolean => currentBalance().fxLayer.enabled && currentBalance().fxLayer.quarks && gfxQuality() > 0;
 
 const FRAMES = 6;
 const SHEET_ROWS: Record<FxSheet, number> = {
@@ -283,6 +289,27 @@ export class Effects implements FxApi {
   /** Where a player is now (for zones that follow their caster); set by Game. */
   posOf: ((id: number) => { x: number; z: number } | null) | null = null;
 
+  /**
+   * three.quarks particles (trial, fxLayer.quarks). The library is its own chunk, fetched only once the switch is
+   * on (players with it off never download it); until it has arrived, skills play their old look.
+   */
+  private quarksFx: QuarksFx | null = null;
+  /** Loading now, or (after a failed fetch) the time it may be tried again. */
+  private quarksLoading: true | number = 0;
+  private get quarks(): QuarksFx | null {
+    if (!quarksOn()) return null;
+    if (!this.quarksFx && this.quarksLoading !== true && performance.now() >= this.quarksLoading) {
+      this.quarksLoading = true;
+      import('./quarksFx').then((m) => {
+        this.quarksFx = new m.QuarksFx(this.scene, (by) => by === undefined || !this.layerHooks || by === this.layerHooks.me());
+      }).catch((e) => {
+        console.warn('three.quarks failed to load', e);
+        this.quarksLoading = performance.now() + 15000;
+      });
+    }
+    return this.quarksFx;
+  }
+
   constructor(private readonly scene: THREE.Scene) {}
 
   add(obj: THREE.Object3D, life: number, tick?: (k: number, dt: number) => void): void {
@@ -291,6 +318,9 @@ export class Effects implements FxApi {
   }
 
   update(dt: number): void {
+    // touching `quarks` starts the fetch as soon as the switch is on, so it is ready before the first cast
+    if (this.quarksFx || quarksOn()) this.quarks;
+    this.quarksFx?.update(dt);
     for (let i = this.list.length - 1; i >= 0; i--) {
       const fx = this.list[i];
       fx.t += dt;
@@ -337,6 +367,8 @@ export class Effects implements FxApi {
         playSkillExtras(this, skill, x, z, angle, size);
       }
     }
+    // three.quarks particles over the hand-drawn art of some skills (trial, docs/systems/skill-fx-layer.md).
+    if (skill) this.quarks?.onEffect(name, skill, x, z, size, by);
     const def = EFFECTS[name];
     const tex = frameTexture(def.sheet);
     if (!tex) {
@@ -529,7 +561,8 @@ export class Effects implements FxApi {
   }
 
   /** Red warning circle that fills up until the hit lands. */
-  telegraph(x: number, z: number, radius: number, duration: number, color = '#ff3a2a'): void {
+  telegraph(x: number, z: number, radius: number, duration: number, color = '#ff3a2a', by?: number, skill?: string): void {
+    if (skill) this.quarks?.onTelegraph(skill, x, z, duration, by);
     const g = new THREE.Group();
     const edge = this.decal(this.mat(color, 0.7, false, fxTex.edge));
     const fill = this.decal(this.mat(color, 0.28, false, fxTex.disc));
@@ -584,7 +617,9 @@ export class Effects implements FxApi {
     });
   }
 
-  burst(x: number, y: number, z: number, color: string, n = 8, speed = 4): void {
+  burst(x: number, y: number, z: number, color: string, n = 8, speed = 4, by?: number, skill?: string): void {
+    // a skill drawn in three.quarks instead (Fire Rain's falling fire)
+    if (skill && this.quarks?.onBurst(skill, x, z, by)) return;
     for (let i = 0; i < n; i++) {
       const s = this.glowSprite(color, 0.35, 1);
       s.position.set(x, y, z);
@@ -627,7 +662,8 @@ export class Effects implements FxApi {
   }
 
   /** Visual only: a fireball falling onto (x, z) over `duration`. */
-  meteor(x: number, z: number, duration: number): void {
+  meteor(x: number, z: number, duration: number, by?: number): void {
+    if (this.quarks?.meteorFall(x, z, duration, by)) return;
     const shot = this.shotSprite('#ff7a2a', 1.6);
     const s = shot?.sprite ?? this.glowSprite('#ff7a2a', 1.8);
     let last = 0;
