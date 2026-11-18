@@ -279,7 +279,7 @@ export class Effects implements FxApi {
   /** three.quarks particles (trial, fxLayer.quarks): made the first time a skill that uses them plays. */
   private quarksFx: QuarksFx | null = null;
   private get quarks(): QuarksFx {
-    return (this.quarksFx ??= new QuarksFx(this.scene));
+    return (this.quarksFx ??= new QuarksFx(this.scene, (by) => by === undefined || !this.layerHooks || by === this.layerHooks.me()));
   }
 
   constructor(private readonly scene: THREE.Scene) {}
@@ -336,7 +336,7 @@ export class Effects implements FxApi {
       }
     }
     // The Meteor's blast in three.quarks, over its hand-drawn crater (trial, docs/systems/skill-fx-layer.md).
-    if (name === 'crater' && skill === 'meteor' && quarksOn()) this.quarks.meteorBlast(x, z);
+    if (name === 'crater' && skill === 'meteor' && quarksOn()) this.quarks.meteorBlast(x, z, by);
     const def = EFFECTS[name];
     const tex = frameTexture(def.sheet);
     if (!tex) {
@@ -627,9 +627,9 @@ export class Effects implements FxApi {
   }
 
   /** Visual only: a fireball falling onto (x, z) over `duration`. */
-  meteor(x: number, z: number, duration: number): void {
+  meteor(x: number, z: number, duration: number, by?: number): void {
     if (quarksOn()) {
-      this.quarks.meteorFall(x, z, duration);
+      this.quarks.meteorFall(x, z, duration, by);
       return;
     }
     const shot = this.shotSprite('#ff7a2a', 1.6);

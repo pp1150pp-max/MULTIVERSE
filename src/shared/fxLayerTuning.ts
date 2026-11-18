@@ -40,6 +40,12 @@ export interface FxLayerConfig {
   circleGlow: number;
   /** Trial (owner 2026-11-18): skill particles drawn with three.quarks (src/client/quarksFx.ts), so far the Meteor only. */
   quarks: boolean;
+  /** three.quarks: × particles of other players' effects (your own are always full). */
+  quarksOthers: number;
+  /** three.quarks: × particles on touch screens (phones, tablets), on top of everything else. */
+  quarksTouch: number;
+  /** three.quarks: past this many particles on screen, other players' new effects are skipped (your own never are). */
+  quarksCap: number;
   /** Paper art (owner 2026-11-18): × the size of a title set's name frame and of its chat bubble. */
   paperPlate: number;
   paperBubble: number;
@@ -62,6 +68,9 @@ export const FX_LAYER_RANGE = {
   maxNums: [10, 200],
   mergeSec: [0, 1],
   circleGlow: [0, 3],
+  quarksOthers: [0, 1],
+  quarksTouch: [0, 1],
+  quarksCap: [0, 10000],
   paperPlate: [0.5, 2],
   paperBubble: [0.5, 2],
   paperFoot: [0.3, 4],
@@ -80,6 +89,9 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   maxNums: 'ตัวเลขบนจอสูงสุด',
   mergeSec: 'รวมเลขที่โดนในช่วง (วิ)',
   circleGlow: '× ความสว่างวงเวท',
+  quarksOthers: 'three.quarks: × อนุภาคของคนอื่น',
+  quarksTouch: 'three.quarks: × อนุภาคบนจอสัมผัส (มือถือ)',
+  quarksCap: 'three.quarks: อนุภาคบนจอสูงสุด (เกินแล้วตัดของคนอื่น)',
   paperPlate: '× ขนาดกรอบชื่อ',
   paperBubble: '× ขนาดฟองแชท',
   paperFoot: 'ขนาดรอยเท้าออร่า (× ขนาดรอยเท้าของชิ้น)',
@@ -104,7 +116,7 @@ const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
 export function codeFxLayer(): FxLayerConfig {
   return {
     enabled: true, debuffs: true, glow: 1, ground: 1, particles: 1, shake: 1, hitstopMs: 60, crit: 1,
-    maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true, circles: true, zoneCircles: true, circleGlow: 1, quarks: false,
+    maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true, circles: true, zoneCircles: true, circleGlow: 1, quarks: false, quarksOthers: 0.5, quarksTouch: 0.5, quarksCap: 3000,
     paperPlate: 1, paperBubble: 1, paperFoot: 1.6, paperOrbLight: 0.95, paperOrbShade: 0.15,
   };
 }
@@ -148,7 +160,7 @@ export function checkFxLayerTuning(x: unknown, strict: boolean): { tuning: FxLay
       if (strict) return { error: `เอฟเฟกต์สกิล "${FX_LAYER_NAME[k]}" ต้องอยู่ระหว่าง ${lo}–${hi}` };
       continue;
     }
-    const n = k === 'maxNums' ? Math.round(v) : round3(v);
+    const n = k === 'maxNums' || k === 'quarksCap' ? Math.round(v) : round3(v);
     if (n !== CODE[k]) out[k] = n;
   }
   return { tuning: Object.keys(out).length ? out : undefined };

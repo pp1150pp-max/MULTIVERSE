@@ -28,6 +28,8 @@ const fade = () => new ColorOverLife(new Gradient([[V3(1, 1, 1), 0], [V3(1, 1, 1
 const burst = (n: number, time = 0): BurstParameters => ({ time, count: cv(n), cycle: 1, interval: 0.01, probability: 1 });
 /** Turns an emitter's +Z (a circle's normal) to point up. */
 const FLAT = -Math.PI / 2;
+/** Phones and tablets (same test as fxLayer.ts): drawn with fxLayer.quarksTouch × the particles. */
+const TOUCH = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
 function canvasTex(size: number, draw: (g: CanvasRenderingContext2D, s: number) => void): THREE.Texture {
   const c = document.createElement('canvas');
@@ -74,8 +76,11 @@ export class QuarksFx {
   /** Templates by name; `play` clones one. */
   private readonly tpl = new Map<string, ParticleSystem[]>();
   private readonly moving: Array<{ obj: THREE.Object3D; t: number; life: number; tick: (k: number) => void; done?: () => void }> = [];
+  /** Particles on screen, counted once a frame in update(). */
+  private live = 0;
 
-  constructor(private readonly scene: THREE.Scene) {
+  /** `isMine(by)`: whether an effect cast by player `by` is this screen's player (undefined = not known: drawn as one's own). */
+  constructor(private readonly scene: THREE.Scene, private readonly isMine: (by: number | undefined) => boolean) {
     scene.add(this.batch);
     this.tex = {
       glow: canvasTex(64, (g, s) => radial(g, s / 2, s / 2, s / 2, [[0, 'rgba(255,255,255,1)'], [0.25, 'rgba(255,255,255,.75)'], [1, 'rgba(255,255,255,0)']])),
@@ -125,9 +130,16 @@ export class QuarksFx {
     }));
   }
 
-  /** Clones a template's systems at (x, y, z), or inside `parent` at its origin. × fxLayer.particles. */
-  private play(name: string, x: number, y: number, z: number, parent: THREE.Object3D = this.scene): ParticleSystem[] {
-    const k = currentBalance().fxLayer.particles;
+  /**
+   * Clones a template's systems at (x, y, z), or inside `parent` at its origin, cast by player `by`. Particles ×
+   * fxLayer.particles, × quarksOthers when it isn't ours, × quarksTouch on a touch screen; another player's effect
+   * isn't drawn at all while the screen is over quarksCap (docs/systems/skill-fx-layer.md).
+   */
+  private play(name: string, x: number, y: number, z: number, by: number | undefined, parent: THREE.Object3D = this.scene): ParticleSystem[] {
+    const cfg = currentBalance().fxLayer;
+    const mine = this.isMine(by);
+    if (!mine && this.live >= cfg.quarksCap) return [];
+    const k = cfg.particles * (mine ? 1 : cfg.quarksOthers) * (TOUCH ? cfg.quarksTouch : 1);
     if (k <= 0) return [];
     return (this.tpl.get(name) ?? []).map((t) => {
       const s = t.clone();
@@ -155,6 +167,9 @@ export class QuarksFx {
       }
     }
     this.batch.update(dt);
+    let n = 0;
+    for (const s of this.batch.systemToBatchIndex.keys()) n += s.particleNum;
+    this.live = n;
   }
 
   // ------------------------------------------------------------------ Meteor
@@ -180,10 +195,10 @@ export class QuarksFx {
   }
 
   /** The Meteor falling onto (x, z) over `duration` (same path as Effects.meteor). */
-  meteorFall(x: number, z: number, duration: number): void {
+  meteorFall(x: number, z: number, duration: number, by?: number): void {
     const ball = new THREE.Group();
     this.scene.add(ball);
-    const systems = this.play('meteorBall', 0, 0, 0, ball);
+    const systems = this.play('meteorBall', 0, 0, 0, by, ball);
     this.moving.push({
       obj: ball, t: 0, life: duration,
       tick: (k) => { const e = k * k; ball.position.set(x - 4 * (1 - e), 14 * (1 - e) + 0.4, z - 4 * (1 - e)); },
@@ -196,7 +211,7 @@ export class QuarksFx {
   }
 
   /** The Meteor's blast where it lands, over the hand-drawn crater. */
-  meteorBlast(x: number, z: number): void {
-    this.play('meteorBlast', x, 0.4, z);
+  meteorBlast(x: number, z: number, by?: number): void {
+    this.play('meteorBlast', x, 0.4, z, by);
   }
 }

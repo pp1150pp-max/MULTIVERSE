@@ -59,7 +59,8 @@ export interface FxApi {
   levelUp(x: number, z: number): void;
   /** A crystal standing on the ground for `duration` seconds (Crystal Spikes: where its spikes come from). */
   crystal(x: number, z: number, duration: number, color: string): void;
-  meteor(x: number, z: number, duration: number): void;
+  /** `by` = the caster's id (tagged by Sim.asCaster), so the client can draw other players' lighter. */
+  meteor(x: number, z: number, duration: number, by?: number): void;
   /**
    * Hand-drawn skill animation. `size` is its half-width in world units. `by` = the caster's id and `hit` = it hit
    * something: the caster's own screen then feels the hit (fxLayer.ts, owner 2026-11-15).
