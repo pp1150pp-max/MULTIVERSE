@@ -298,29 +298,28 @@ export class Terrain {
     // The stall pictures run along z and come as fronts (*_front, open toward +x, the camera's side) and backs (open
     // toward −x); mirrored they run along x and open toward +z (fronts) or −z (backs). Every stall opens toward its
     // seller, who stands in the middle facing the fountain.
-    // [key, mirrored, x, z, height, solid radius], around a seller at (0, 0) whose back is to the wall at +z.
-    const ring: [string, boolean, number, number, number, number][] = [
-      ['STALL', true, 0, 3.4, 3.4, 1.4], // behind them, against the wall, open toward −z (them and the fountain)
-      ['WING_A', false, -3.8, 1.2, 3.4, 1.4], // on their −x side, open toward +x (them)
-      ['WING_B', false, 3.8, 1.2, 3.4, 1.4], // on their +x side, open toward −x (them)
-      ['TABLE', false, -5.4, -1.6, 1.6, 0.9], ['CART', false, 5.4, -1.6, 1.7, 1],
-      ['barrels', false, -3.4, 4.4, 1.6, 0.8], ['mk_sacks', false, 3.4, 4.4, 1.6, 0.9],
+    // [slot, is a stall, mirrored, x, z, height, solid radius], around a seller at (0, 0) whose back is to the wall at +z.
+    const ring: [string, boolean, boolean, number, number, number, number][] = [
+      ['main_back', true, true, 0, 3.4, 3.4, 1.4], // behind them, against the wall, open toward −z (them and the fountain)
+      ['wing_front', true, false, -3.8, 1.2, 3.4, 1.4], // on their −x side, open toward +x (them)
+      ['wing_back', true, false, 3.8, 1.2, 3.4, 1.4], // on their +x side, open toward −x (them)
+      ['table', false, false, -5.4, -1.6, 1.6, 0.9], ['P0', false, false, 5.4, -1.6, 1.9, 1],
+      ['P1', false, false, -3.6, 4.4, 1.6, 0.8], ['P2', false, false, 3.6, 4.4, 1.6, 0.9], ['P3', false, false, -6.2, 2.6, 1.6, 0.8],
     ];
-    const stalls = (seller: Vec2, alongX: boolean, keys: Record<string, string>) => {
-      for (const [k, mirrored, u, v, h, c] of ring) {
-        const key = keys[k] ?? k;
+    // `set`: the seller's pictures (tools/cut_papercraft.cjs hub, HUB.md 7.6), ml_* or mr_*; `props`: their four odds and ends.
+    const stalls = (seller: Vec2, alongX: boolean, set: string, props: string[]) => {
+      for (const [slot, stall, mirrored, u, v, h, c] of ring) {
+        const key = slot.startsWith('P') ? `${set}_${props[Number(slot[1])]}` : `${set}_${slot}`;
         // alongX: the seller's back is to the bottom-left wall (+z), so (u, v) is (x, z); otherwise to the bottom-right
-        // wall (+x): (u, v) turns into (z, x), and so does which way each picture runs (mirrored flips).
+        // wall (+x): (u, v) turns into (z, x), and the stalls' pictures turn with it (mirrored flips).
         const [dx, dz] = alongX ? [u, v] : [v, u];
-        at(key, seller.x - s.x + dx, seller.z - s.z + dz, h, c, false, alongX ? mirrored : !mirrored && key.startsWith('mk_') && !/sacks|barrels/.test(key));
+        at(key, seller.x - s.x + dx, seller.z - s.z + dz, h, c, false, stall && (alongX ? mirrored : !mirrored));
       }
     };
     this.npcPos.merchant = { x: s.x, z: s.z + R - 6 };
-    stalls(this.npcPos.merchant, true, { STALL: 'mk_goods_stall', WING_A: 'mk_veg_front', WING_B: 'mk_veg_stall', TABLE: 'mk_potion_table', CART: 'mk_handcart' });
+    stalls(this.npcPos.merchant, true, 'ml', ['cart', 'barrels', 'sacks', 'crates']);
     this.npcPos.broker = { x: s.x + R - 6, z: s.z };
-    // On the bottom-right wall the wings run along x: the one on the −z side opens toward +z (a mirrored front),
-    // the one on the +z side toward −z (a mirrored back); the booth behind runs along z, open toward −x (a back).
-    stalls(this.npcPos.broker, false, { STALL: 'mk_auction_booth', WING_A: 'mk_goods_front', WING_B: 'mk_goods_stall', TABLE: 'mk_tag_table', CART: 'mk_wagon' });
+    stalls(this.npcPos.broker, false, 'mr', ['wagon', 'strongbox', 'chests', 'rugs']);
 
     // Round the plaza: a lamp post either side of each road where it comes in, a few benches and planters.
     for (const road of [45, 135, 225, 315]) {
@@ -330,7 +329,7 @@ export class Terrain {
       const ux = Math.cos(a2), uz = Math.sin(a2);
       for (const side of [-1, 1]) at('banner_pole', ux * (R * Math.SQRT2 - 4) - uz * side * 3.2, uz * (R * Math.SQRT2 - 4) + ux * side * 3.2, 4, 0.3);
     }
-    for (const deg of [160, 290]) polar('planter', deg, HUB_PLAZA_RADIUS + 1.6, 1.6, 0.7);
+    for (const deg of [176, 290]) polar('planter', deg, HUB_PLAZA_RADIUS + 1.6, 1.6, 0.7);
     // The knight's statue beside the top road (to its right on screen).
     polar('town_statue', 212, HUB_PLAZA_RADIUS + 2.2, 3.8, 0.8);
 
