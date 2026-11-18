@@ -307,20 +307,21 @@ export class Terrain {
       ['P1', false, false, -5.8, 1, 1.6, 0.8], ['P2', false, false, -2.4, 5, 1.6, 0.9], ['P3', false, false, 2.4, 5, 1.6, 0.8],
     ];
     // `set`: the seller's pictures (tools/cut_papercraft.cjs hub, HUB.md 7.6), ml_* or mr_*; `props`: their four odds and ends.
-    // `drawnTurned`: that set's stalls were drawn the other way round (market_right.png), so they mirror the other way.
-    const stalls = (seller: Vec2, alongX: boolean, set: string, props: string[], drawnTurned = false) => {
+    // Pictures drawn the other way round from the rest (market_right.png's booth), so they mirror the other way.
+    const DRAWN_TURNED = new Set(['mr_main_back']);
+    const stalls = (seller: Vec2, alongX: boolean, set: string, props: string[]) => {
       for (const [slot, stall, mirrored, u, v, h, c] of ring) {
         const key = slot.startsWith('P') ? `${set}_${props[Number(slot[1])]}` : `${set}_${slot}`;
         // alongX: the seller's back is to the bottom-left wall (+z), so (u, v) is (x, z); otherwise to the bottom-right
         // wall (+x): (u, v) turns into (z, x), and the stalls' pictures turn with it (mirrored flips).
         const [dx, dz] = alongX ? [u, v] : [v, u];
-        at(key, seller.x - s.x + dx, seller.z - s.z + dz, h, c, false, stall && (alongX ? mirrored : !mirrored) !== drawnTurned);
+        at(key, seller.x - s.x + dx, seller.z - s.z + dz, h, c, false, stall && (alongX ? mirrored : !mirrored) !== DRAWN_TURNED.has(key));
       }
     };
     this.npcPos.merchant = { x: s.x, z: s.z + R - 6 };
     stalls(this.npcPos.merchant, true, 'ml', ['cart', 'barrels', 'sacks', 'crates']);
     this.npcPos.broker = { x: s.x + R - 6, z: s.z };
-    stalls(this.npcPos.broker, false, 'mr', ['wagon', 'strongbox', 'chests', 'rugs'], true);
+    stalls(this.npcPos.broker, false, 'mr', ['wagon', 'strongbox', 'chests', 'rugs']);
 
     // Each gateway: a lamp post either side of the way through, just inside the wall (owner 2026-11-19), and a banner
     // pole either side of the road a little further in.
