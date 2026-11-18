@@ -372,7 +372,8 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
       r.className = 'row';
       const l = document.createElement('label');
       l.textContent = label;
-      r.append(l, input);
+      // a checkbox goes inside its label, in front of the text (same line, click the text to tick)
+      if (input instanceof HTMLInputElement && input.type === 'checkbox') { l.prepend(input, ' '); r.append(l); } else r.append(l, input);
       return add(parent, r);
     };
     const select = (opts: [string, string][], value: string, on: (v: string) => void) => {

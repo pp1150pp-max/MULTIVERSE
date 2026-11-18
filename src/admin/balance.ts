@@ -740,7 +740,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       const box = h('input', { type: 'checkbox', checked: a[k], onchange: (e: Event) => { a[k] = (e.target as HTMLInputElement).checked; refresh(); } });
       return flag(box, a[k] !== ca[k], ` ${QUARKS_SKILLS[s]}`);
     };
-    const qkRow = (title: string, ids: QuarksSkill[]) => h('div', { class: 'row bal-line' }, h('b', {}, title), ...ids.map(qkBox));
+    const qkRow = (title: string, ids: QuarksSkill[]) => h('div', { class: 'bal-group' }, h('b', {}, title), h('div', { class: 'row bal-line' }, ...ids.map(qkBox)));
     // the players' graphics window (src/client/gfxPrefs.ts)
     const GFX_LEVELS = ['ปิด', 'ต่ำ', 'กลาง', 'สูง'];
     const gfxPick = (k: 'gfxDefault' | 'gfxMax', label: string) => h('label', { class: a[k] !== ca[k] ? 'bal-changed' : '' }, label + ' ',
