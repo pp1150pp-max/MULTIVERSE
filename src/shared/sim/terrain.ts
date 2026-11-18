@@ -109,6 +109,8 @@ export const HUB_FOUNTAIN_RADIUS = 3.6;
 /** The hub's NPC buildings: drawn this tall, a square footprint this wide (two side by side per top wall). */
 export const HUB_BUILDING_HEIGHT = 6.6;
 export const HUB_BUILDING_SIZE = 4.4;
+/** Gap between the two buildings on a wall. */
+export const HUB_BUILDING_GAP = 3.4;
 
 /** How far the hub's quarters wobble into each other (see themeAt). The props add their own scatter on top. */
 export const QUADRANT_JITTER = 6;
@@ -283,7 +285,8 @@ export class Terrain {
       // Far enough out that they are drawn in front of the building (its picture stands D / 2 out from its front).
       return alongX ? { x: s.x + t, z: s.z - R + D + D / 2 + 0.9 } : { x: s.x - R + D + D / 2 + 0.9, z: s.z + t };
     };
-    const half = L / 2;
+    // Apart, with a gap between them (owner 2026-11-19).
+    const half = L / 2 + HUB_BUILDING_GAP / 2;
     this.npcPos.keeper = house('b3_vault', false, -half);
     this.npcPos.crystal = house('b3_crystal', false, half);
     this.npcPos.seeker = house('b3_guild', true, -half);
