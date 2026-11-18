@@ -346,7 +346,7 @@ export async function mountAnimPreview(root: HTMLElement, io?: AnimBenchIo): Pro
     const moving = isMoving();
     tuneBox.replaceChildren(
       h('div', { class: 'row' }, `ทิศที่ปรับ ${DIR_ARROW[state.sel]}`, h('span', { class: 'note' }, 'คลิกช่องทางขวาเพื่อเลือกทิศ')),
-      ...(rig ? [h('div', { class: 'note' }, 'นักดาบกระดูกปรับได้แค่ความเร็ว (ท่าตาย/ขี่ใช้ภาพเดิม ปรับที่ "ภาพเดิม")')] : [
+      ...(rig ? [h('div', { class: 'note' }, 'นักดาบกระดูกปรับได้แค่ความเร็ว (ท่าตาย/ขี่ของมันใช้ภาพนักดาบตามสวิตช์ภาพของเซิร์ฟ ปรับที่ "ภาพเดิม" หรือ "ภาพกระดาษ")')] : [
         h('div', { class: 'row' }, 'แถวภาพ', h('select', {
           onchange: (e: Event) => { const v = (e.target as HTMLSelectElement).value; setT({ ...t, row: v ? (v as DirTune['row']) : undefined }); },
         }, h('option', { value: '', selected: !t.row }, 'อัตโนมัติ'), ...rows.map((r) => h('option', { value: r, selected: t.row === r }, TUNE_ROW_NAME[r])))),
@@ -367,16 +367,19 @@ export async function mountAnimPreview(root: HTMLElement, io?: AnimBenchIo): Pro
         }, 'ใช้ค่าทิศนี้กับทุกท่า'),
         ...(moving ? [h('button', {
           onclick: () => {
-            DIRS.forEach((w, i) => {
+            // Every moving animation of this class and picture set at once: run and run_attack share one stride, so
+            // different speeds would make the legs jump when firing starts.
+            const keys = shownAnims().filter((n) => n === 'run' || n === 'run_attack' || n.startsWith('ride')).map((n) => animKey(state.cls, state.art, n));
+            for (const k of keys) DIRS.forEach((w, i) => {
               if (!w) return;
               const dd = cellDir(i);
               const f = Math.round(screenFactor(w) * 100) / 100;
-              setAnimDirTune(key, dd, checkAnimTuning({ [key]: { [dd]: { ...dirTune(key, dd), rate: f } } }, false).tuning?.[key]?.[dd]);
+              setAnimDirTune(k, dd, checkAnimTuning({ [k]: { [dd]: { ...dirTune(k, dd), rate: f } } }, false).tuning?.[k]?.[dd]);
             });
             drawTune();
             drawSaveState();
           },
-        }, 'ตั้งความเร็วก้าวตามมุมกล้อง (ทุกทิศ)')] : []),
+        }, 'ตั้งความเร็วก้าวตามมุมกล้อง (ทุกทิศ ทุกท่าที่เคลื่อนที่)')] : []),
       ),
       ...(moving ? [h('div', { class: 'note' }, `บนจอ วิ่งขึ้น/ลงเห็นระยะแค่ ×${screenFactor([1, 1]).toFixed(2)} ของวิ่งด้านข้าง ทแยง ×${screenFactor([1, 0]).toFixed(2)} · ปุ่มมุมกล้องตั้งความเร็วก้าวตามนั้นให้เท้าไม่ไถล`)] : []),
       ...(state.anim.startsWith('attack') ? [h('div', { class: 'note' }, 'ท่าโจมตี: เร็ว/ช้าลงแค่ภาพ จังหวะตีจริงในเกมเท่าเดิม')] : []),
