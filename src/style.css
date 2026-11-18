@@ -784,6 +784,8 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #forge-result {
   position: absolute; z-index: 2; left: 6px; right: 6px; top: 8px; text-align: center; font-weight: 700; font-size: 14px;
   text-shadow: 0 0 4px #000, 0 0 2px #000;
+  /* One line (owner 2026-11-18): hud.ts forgeResult shrinks the font to fit; past the smallest size it is cut with … */
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 #forge-result:empty { display: none; }
 #forge-result.ok { color: #6cff7a; }
@@ -836,6 +838,11 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 #forge-go.cooling { pointer-events: none; }
 #forge-go.cooling::after { content: ''; position: absolute; inset: 0; background: rgba(8, 8, 24, 0.55); transform-origin: right; animation: forge-cd var(--cd, 1s) linear forwards; }
 @keyframes forge-cd { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+/* Auto enhance (owner 2026-11-18): the target level and a start/stop button, between the two big buttons. */
+#forge-auto { display: flex; align-items: center; gap: 4px; flex: none; }
+#forge-auto select { height: 30px; font-size: 12px; }
+#forge-actions #forge-auto-btn { flex: none; min-height: 30px; padding: 3px 10px; font-size: 13px; border-radius: 15px; }
+#forge-auto-btn.running { background: linear-gradient(#c8902e, #7a5214); border-color: #ffd38a; color: #fff; }
 #forge-cancel { background: linear-gradient(#c8402e, #7a1c14); border: 2px solid #ff9a86; color: #fff; box-shadow: 0 0 0 2px #240c0a; }
 #forge-cancel:hover:not(:disabled) { filter: brightness(1.15); color: #fff; }
 #forge-actions button:disabled { filter: grayscale(0.7) brightness(0.7); opacity: 0.7; font-size: 14px; }

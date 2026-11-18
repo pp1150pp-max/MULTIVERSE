@@ -2021,6 +2021,9 @@ export class GameWorld {
     p.potCd = old.potCd;
     p.restCd = old.restCd;
     p.stash = old.stash;
+    // The account's tutorial (shared object, like the stash). Left out before 2026-11-18: every map change
+    // reset it to nothing done and the save below wrote that, so the steps (and their gold) could be taken again.
+    p.tut = old.tut;
     p.partyId = old.partyId;
     // Still riding after a portal or a channel switch; Sim.tickMount throws them off in a boss room.
     if (old.mounted) {

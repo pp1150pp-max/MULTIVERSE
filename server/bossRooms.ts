@@ -10,6 +10,7 @@
 // Everything is in memory (a restart sends everyone to town anyway and gives open lobbies' keys back).
 // Keyed on character ids, because a player's id inside a Sim changes whenever they change zone.
 import { Sim } from '../src/shared/sim/Sim';
+import { currentBalance } from '../src/shared/balance';
 import type { Player } from '../src/shared/sim/Player';
 import { BOSS_ROOMS, ZONES } from '../src/shared/data/zones';
 import { MONSTERS } from '../src/shared/data/monsters';
@@ -263,8 +264,9 @@ export class BossRooms {
     const down = !sim.cleared && sim.players.every((p) => !p.alive);
     if (!down) r.wipeAt = null;
     else if (r.wipeAt === null) {
-      r.wipeAt = t + ROOM_WIPE_SECONDS * 1000;
-      for (const p of sim.players) sim.log(`ทุกคนล้มหมด! ใช้ขนนกฟีนิกซ์ภายใน ${ROOM_WIPE_SECONDS} วินาที ไม่อย่างนั้นทีมจะแพ้`, '#ff6a5a', p.id);
+      const wipeSec = currentBalance().roomWipeSec;
+      r.wipeAt = t + wipeSec * 1000;
+      for (const p of sim.players) sim.log(`ทุกคนล้มหมด! ใช้ขนนกฟีนิกซ์ภายใน ${wipeSec} วินาที ไม่อย่างนั้นทีมจะแพ้`, '#ff6a5a', p.id);
     }
     const lost = down && r.wipeAt !== null && t >= r.wipeAt;
     if (lost) for (const p of sim.players) sim.log('ทีมพ่ายแพ้ — ออกไปที่แท่นเรียกบอส', '#ff6a5a', p.id);

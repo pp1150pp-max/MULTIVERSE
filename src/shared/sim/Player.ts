@@ -23,6 +23,7 @@ import {
 import type { LootKind } from './Loot';
 import { newStash, type StashData } from './stash';
 import { classBalance, currentBalance, finishStats } from '../balance';
+import { attackRootTime } from '../attackRootTuning';
 import { AUTO_DEFAULT_KEYS, AUTO_LOOT_ORDERS, AUTO_OUT_ACTIONS, AUTO_TARGET_MODES, type AutoDefaults, type AutoLootOrder, type AutoOutAction, type AutoTargetMode } from '../autoTuning';
 import { MONSTERS } from '../data/monsters';
 
@@ -31,6 +32,12 @@ export const COMBAT_LINGER = 5;
 /** Regen multiplier while out of combat. */
 export const OUT_OF_COMBAT_REGEN = 2.5;
 
+/**
+ * While stopped on an attack, a position the browser reports is taken only this close to where the stop began: the
+ * server's stop starts a little after the browser's (the round trip), so its first steps after its own stop ends may
+ * arrive while the server is still stopped. Refusing them all would leave the server behind and pull the player back.
+ */
+const ATTACK_ROOT_SLACK = 0.45;
 /** How quickly a character on ice gets to the speed it wants, per second. Lower is slipperier. */
 const ICE_GRIP = 1.5;
 /** A slide slower than this stops. */
@@ -432,6 +439,15 @@ export class Player extends Unit {
   rootT = 0;
   /** Held by the Bog Witch's mud hand: can still attack and cast, but not walk or dash. */
   snareT = 0;
+  /**
+   * Stopping for a moment on an attack (attackRootTuning.ts): no walking until it runs out, but turning, attacking,
+   * casting and dashing (which ends it) still work. A clicked walk carries on afterwards. Never saved.
+   */
+  atkRootT = 0;
+  /** Where the stop began: a reported position (online) is taken only this close to it while stopped. */
+  private atkRootX = 0;
+  private atkRootZ = 0;
+  private atkRootNew = false;
   /** Cursed into a toad by the Bog Witch (also stunned for as long). The client draws a toad instead. */
   toadT = 0;
   /** Its skill buffs as the server last sent them (client only, sim/debuffs.ts BUFF_BIT). */
@@ -927,6 +943,7 @@ export class Player extends Unit {
     this.dashKind = kind;
     this.chargeHit.clear();
     this.moveTarget = null;
+    this.atkRootT = 0;
     this.face(dx, dz);
     this.sim.anim(this.id, 'dash', { duration: time + 0.12 });
     passiveOnDash(this);
@@ -991,7 +1008,15 @@ export class Player extends Unit {
     }
   }
 
-  private attackAnimDuration(): number {
+  /** Starts (or lengthens) the stop on an attack: `skillId` null = the basic attack. */
+  private startAttackRoot(skillId: string | null): void {
+    const t = attackRootTime(currentBalance().attackRoot, this.cls.id, skillId, this.attackAnimDuration());
+    if (t <= 0) return;
+    if (this.atkRootT <= 0) this.atkRootNew = true;
+    this.atkRootT = Math.max(this.atkRootT, t);
+  }
+
+  attackAnimDuration(): number {
     return Math.min(0.5, 0.95 / this.attackRate);
   }
 
@@ -1061,6 +1086,7 @@ export class Player extends Unit {
     this.rootT = Math.max(0, this.rootT - dt);
     this.snareT = Math.max(0, this.snareT - dt);
     this.toadT = Math.max(0, this.toadT - dt);
+    this.atkRootT = Math.max(0, this.atkRootT - dt);
 
     const ooc = this.inCombat() ? 1 : OUT_OF_COMBAT_REGEN;
     this.hp = Math.min(this.maxHp, this.hp + this.stats.hpRegen * ooc * dt);
@@ -1100,6 +1126,8 @@ export class Player extends Unit {
     const aim = it.aim;
     this.aimX = aim.x - this.x;
     this.aimZ = aim.z - this.z;
+    // Stopped by an earlier attack (one started this tick still lets this tick's step through, as the browser does).
+    const rooted = this.atkRootT > 0;
 
     // Movement intent first so Dash uses the current walk direction.
     if (it.move || it.pos) this.moveTarget = null;
@@ -1162,6 +1190,8 @@ export class Player extends Unit {
         this.lastAttack = sim.time;
         passiveOnCast(this, sk);
         this.faceLockT = 0.3;
+        // Movement skills and buffs don't stop the player, nor do ones that already stand them still (Headshot...).
+        if (this.dashT <= 0 && this.rootT <= 0) this.startAttackRoot(sk.id);
       }
       if (this.dashT > 0 || this.rootT > 0) return;
     }
@@ -1173,10 +1203,15 @@ export class Player extends Unit {
       this.face(this.aimX, this.aimZ);
       sim.anim(this.id, 'attack', { duration: this.attackAnimDuration() });
       this.faceLockT = 0.25;
+      this.startAttackRoot(null);
     }
 
     let moving = mx !== 0 || mz !== 0;
-    if (it.pos && !snared) {
+    // Stopped: a reported position counts only near where the stop began (the browser stops too, a moment earlier).
+    const posOk = !!it.pos && !snared && (!rooted || Math.hypot(it.pos.x - this.atkRootX, it.pos.z - this.atkRootZ) <= ATTACK_ROOT_SLACK);
+    if (rooted && !posOk) {
+      moving = false;
+    } else if (it.pos && posOk) {
       // Online: the client already walked here (the server checked the distance).
       const dx = it.pos.x - this.x;
       const dz = it.pos.z - this.z;
@@ -1192,7 +1227,12 @@ export class Player extends Unit {
     } else {
       moving = this.walkStep(mx, mz, remaining, dt, sim.terrain);
     }
-    if (this.faceLockT > 0) this.face(this.aimX, this.aimZ);
+    if (this.atkRootNew) {
+      this.atkRootNew = false;
+      this.atkRootX = this.x;
+      this.atkRootZ = this.z;
+    }
+    if (this.faceLockT > 0 || this.atkRootT > 0) this.face(this.aimX, this.aimZ);
     else if (moving) this.face(mx, mz);
     this.moving = moving;
   }

@@ -14,12 +14,13 @@ import { checkOrbLook } from '../../shared/orbLook';
 import { checkOrbItems, registerOrbItems } from '../../shared/orbItems';
 import { applyOrbLook } from '../orbs';
 import { checkCosTuning } from '../../shared/cosTuning';
-import { applyBalance, checkBalance } from '../../shared/balance';
+import { applyBalance, checkBalance, currentBalance } from '../../shared/balance';
+import { attackRootTime } from '../../shared/attackRootTuning';
 import { applyCosHidden, applyCosTuning } from '../cosTune';
 import { useCash, useCashState } from '../cashData';
 import { EQUIP_SLOTS } from '../../shared/types';
 import { cleanCosOwned, cosCodes, cosFromCodes, type CosSlot } from '../../shared/data/cosmetics';
-import { zoneById, type SpawnArea, type ZoneDef } from '../../shared/data/zones';
+import { inSafeArea, zoneById, type SpawnArea, type ZoneDef } from '../../shared/data/zones';
 import type { NpcId } from '../../shared/data/npcs';
 import type { DailyView } from '../../shared/daily';
 import type { BuffScroll, EquipSlot, Item, PotionKind, PotionSize, Rarity, Vec2 } from '../../shared/types';
@@ -67,6 +68,11 @@ const PING_KEEP = 8;
  * notification nobody saw — dropped so it doesn't all pop at once when the player comes back.
  */
 const HIDDEN_KEEP = new Set<SimEvent['t']>(['inventory', 'stash', 'died', 'revived', 'save', 'travel', 'autoOff']);
+
+/** Smooth shots: most a snapshot's spot is pushed ahead (s), a gap that snaps at once (m), share of a smaller gap closed per snapshot. */
+const SHOT_LEAD_MAX = 0.25;
+const SHOT_SNAP = 3;
+const SHOT_NUDGE = 0.25;
 
 interface MirrorProjectile extends ProjectileLike {
   x: number;
@@ -235,6 +241,14 @@ export class OnlineBackend implements Backend {
   private settleT = 0;
   private epoch = 0;
   private faceLockT = 0;
+  /**
+   * Our guess of the server's stop on an attack (Player.atkRootT, attackRootTuning.ts), so we stand still with it
+   * instead of walking on and being pulled back. `atkT` mirrors the server's basic attack timer, `castLock` keeps a
+   * held skill key from counting again before the server's cooldown reaches us.
+   */
+  private atkRootT = 0;
+  private atkT = 0;
+  private readonly castLock = new Map<string, number>();
   private readonly walkTarget = new WalkTarget();
   private sendT = 0;
   private seq = 0;
@@ -877,15 +891,27 @@ export class OnlineBackend implements Backend {
     this.monsters = [...this.monsterMap.values()];
 
     // ---- projectiles (they fly straight, so keep them moving between snapshots)
+    // Smooth shots (owner 2026-11-18, /admin effects card): a snapshot is already half a round trip old, so the
+    // server's spot is pushed ahead by that much; a small gap is nudged, only a big one snaps. Snapping straight to
+    // the old spot pulled every bullet back 15×/s (Bullet Storm looked like it stuttered).
+    const smooth = currentBalance().fxLayer.smoothShots;
+    const lead = smooth ? Math.min(SHOT_LEAD_MAX, (this.rtt ?? 0) / 2000) : 0;
     const seenPr = new Set<number>();
     for (const ps of s.projectiles) {
       seenPr.add(ps.id);
       const pr = this.projMap.get(ps.id);
+      const tx = ps.x + ps.vx * lead;
+      const tz = ps.z + ps.vz * lead;
       if (pr) {
-        pr.x = ps.x;
-        pr.z = ps.z;
+        pr.vx = ps.vx;
+        pr.vz = ps.vz;
+        const ex = tx - pr.x;
+        const ez = tz - pr.z;
+        const k = !smooth || Math.hypot(ex, ez) > SHOT_SNAP ? 1 : SHOT_NUDGE;
+        pr.x += ex * k;
+        pr.z += ez * k;
       } else {
-        this.projMap.set(ps.id, { id: ps.id, x: ps.x, z: ps.z, vx: ps.vx, vz: ps.vz, o: { color: ps.color, size: ps.size, art: ps.art } });
+        this.projMap.set(ps.id, { id: ps.id, x: tx, z: tz, vx: ps.vx, vz: ps.vz, o: { color: ps.color, size: ps.size, art: ps.art } });
       }
     }
     for (const id of this.projMap.keys()) if (!seenPr.has(id)) this.projMap.delete(id);
@@ -1057,6 +1083,10 @@ export class OnlineBackend implements Backend {
     if (me.castT > 0) me.castT = Math.max(0, me.castT - dt);
 
     if (this.settling && !this.serverMoves) this.settle(dt);
+    this.atkT -= dt;
+    this.atkRootT = Math.max(0, this.atkRootT - dt);
+    // A dash ends the stop (Player.startDash) — at once here, the server dashes when the input gets there.
+    if (it.dash && (me.cd.dash ?? 0) <= 0 && me.snareT <= 0) this.atkRootT = 0;
     const moveDir = this.walk(dt, it);
 
     if (it.dash) this.pendingDash = true;
@@ -1064,6 +1094,9 @@ export class OnlineBackend implements Backend {
     this.sendT -= dt;
     if (this.sendT <= 0) {
       this.sendT = 1 / INPUT_HZ;
+      // The server sees the attack keys only in this message, so the stop is guessed from here (after this frame's step,
+      // as the server also lets the attack's own tick walk).
+      if (!it.dash) this.predictAttackRoot(it);
       const seq = ++this.seq;
       // While the server moves us we only follow it, so there's no position of ours to report.
       const ours = !this.serverMoves && !this.settling;
@@ -1083,6 +1116,31 @@ export class OnlineBackend implements Backend {
     const out = this.events;
     this.events = [];
     return out;
+  }
+
+  /**
+   * Starts our stop on an attack when the server will start one for the keys we're about to send (Player.update):
+   * a skill that is ready and affordable, or the basic attack once its timer is up; never in town. Guessing a stop
+   * the server doesn't make only stands us still a moment; missing one would walk us ahead of it.
+   */
+  private predictAttackRoot(it: Intent): void {
+    const me = this.me;
+    if (!me.alive || this.serverMoves || this.settling || inSafeArea(this.zone, me.x, me.z)) return;
+    const cfg = currentBalance().attackRoot;
+    const anim = me.attackAnimDuration();
+    const now = performance.now();
+    let t = 0;
+    for (const slot of it.skills) {
+      const sk = me.skill(slot);
+      if (!sk || (me.cd[sk.id] ?? 0) > 0 || (this.castLock.get(sk.id) ?? 0) > now || me.mp < me.skillMp(sk)) continue;
+      this.castLock.set(sk.id, now + Math.max(0.3, me.skillCooldown(sk)) * 1000);
+      t = Math.max(t, attackRootTime(cfg, me.cls.id, sk.id, anim));
+    }
+    if (it.basic && this.atkT <= 0) {
+      this.atkT = 1 / me.attackRate;
+      t = Math.max(t, attackRootTime(cfg, me.cls.id, null, anim));
+    }
+    this.atkRootT = Math.max(this.atkRootT, t);
   }
 
   /** Walks our character right away (the same rules as the simulation). Returns the walk direction. */
@@ -1108,13 +1166,15 @@ export class OnlineBackend implements Backend {
         mz = dz / remaining;
       }
     }
-    const walking = mx !== 0 || mz !== 0;
-    const moving = me.walkStep(mx, mz, remaining, dt, this.terrain);
-    this.walkTarget.check(me, dt);
+    // Stopped on an attack: stand (a clicked spot is kept, walking carries on when the stop ends) facing the aim.
+    const paused = this.atkRootT > 0;
+    const walking = !paused && (mx !== 0 || mz !== 0);
+    const moving = !paused && me.walkStep(mx, mz, remaining, dt, this.terrain);
+    if (!paused) this.walkTarget.check(me, dt);
     if (it.basic || it.skills.length) {
       this.faceLockT = 0.25;
     }
-    if (this.faceLockT > 0) me.face(it.aim.x - me.x, it.aim.z - me.z);
+    if (this.faceLockT > 0 || paused) me.face(it.aim.x - me.x, it.aim.z - me.z);
     else if (walking) me.face(mx, mz);
     me.moving = moving;
     return walking ? { x: mx, z: mz } : null;

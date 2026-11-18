@@ -460,6 +460,10 @@ export class Game {
         (this.fx[ev.name] as (...a: unknown[]) => void).apply(this.fx, ev.args as unknown[]);
         break;
       case 'text':
+        // Your own "+N สำเร็จ!" over the head would pop up mid-screen before the blacksmith window shows the
+        // result (owner 2026-11-18): while that window is open it shows the result itself. Others still see it.
+        if ((ev.cls === 'enh' || ev.cls === 'enhfail') && this.hud.forgeShown
+          && Math.abs(ev.x - this.player.x) < 1 && Math.abs(ev.z - this.player.z) < 1) break;
         this.floating.text(ev.x, ev.y, ev.z, ev.text, ev.cls, ev.life, ev.on);
         break;
       case 'shake':

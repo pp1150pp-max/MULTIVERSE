@@ -114,6 +114,12 @@ export class VolcanoHeartBrain {
     this.resolve(sim, m, t);
 
     if (!players.length) {
+      // Boss-room group all down: keep the fight as it is for a revive (Balance bossWipeKeepHp).
+      if (m.holdsOnWipe(sim)) {
+        this.idleT = 0;
+        m.state = 'idle';
+        return;
+      }
       this.idleT += dt;
       // Hit at all counts as a fight, so its HP (raised per player) always comes back down.
       const engaged = this.fighting || m.damageBy.size > 0;
