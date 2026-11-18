@@ -3,7 +3,7 @@ import { ok, finish } from './check';
 import { ZONE_HUB } from '../src/shared/data/zones';
 import { NPC_IDS } from '../src/shared/data/npcs';
 import { Sim } from '../src/shared/sim/Sim';
-import { HUB_FOUNTAIN_RADIUS, HUB_ROW_DEPTH } from '../src/shared/sim/terrain';
+import { HUB_FOUNTAIN_RADIUS } from '../src/shared/sim/terrain';
 import { WalkTarget } from '../src/client/walkTo';
 import type { Vec2 } from '../src/shared/types';
 
@@ -53,12 +53,9 @@ function keyWalk(x: number, z: number, mx: number, mz: number, past: number): nu
   return Infinity;
 }
 
-// ---- clicking right on an NPC, the forge, the vault or the fountain walks up beside it
+// ---- clicking right on an NPC or the fountain walks up beside it
 const things = [
   ...NPC_IDS.map((id) => ({ name: id, ...t.npcPos[id]!, out: 3.5 })),
-  // The buildings behind the blacksmith and the keeper (Terrain.placeTown).
-  { name: 'forge', ...t.props.find((q) => q.key === 'row_r_forge')!, out: HUB_ROW_DEPTH + 3 },
-  { name: 'vault', ...t.props.find((q) => q.key === 'row_l_vault')!, out: HUB_ROW_DEPTH + 3 },
   { name: 'fountain', x: s.x, z: s.z, out: HUB_FOUNTAIN_RADIUS + 1.5 },
 ];
 for (const th of things) {

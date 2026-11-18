@@ -7,7 +7,7 @@ import type { Vec2 } from '../types';
 
 export interface Collider { x: number; z: number; r: number }
 /** One prop to draw. `fade` = turns see-through when the player walks behind it. */
-export interface PropSpec { key: string; x: number; z: number; height: number; fade: boolean; /** Drawn mirrored. */ flip?: boolean }
+export interface PropSpec { key: string; x: number; z: number; height: number; fade: boolean; /** Drawn mirrored. */ flip?: boolean; /** Never faded, however tall (World fades tall props near the player). */ solid?: boolean }
 type Seg = [number, number, number, number];
 
 /** Prop keys each theme scatters around. Every key needs an entry in the client's SHEET_SPECS. */
@@ -106,16 +106,12 @@ export const HUB_PLAZA_RADIUS = 8.5;
 /** The hub's fountain: drawn this tall (its benches about a person's size), solid out to this radius. */
 export const HUB_FOUNTAIN_HEIGHT = 9;
 export const HUB_FOUNTAIN_RADIUS = 3.9;
-/** The hub's rows of townhouses: drawn this tall, this deep from the wall in. */
-export const HUB_ROW_HEIGHT = 9.5;
+/** The hub's rows of townhouses: this deep from the wall in. */
 export const HUB_ROW_DEPTH = 3.4;
-/** Houses in a row overlap their neighbours a little, so no sky shows between them. */
-const ROW_OVERLAP = 0.78;
-/** Width / height of each townhouse picture (sprites/paper/props, cut by tools/cut_papercraft.cjs hub). */
-const ROW_ASPECT: Record<string, number> = {
-  row_l_vault: 347 / 448, row_l_crystal: 379 / 448, row_l_house_a: 283 / 448, row_l_house_b: 338 / 448, row_l_house_c: 341 / 448, row_l_shop: 367 / 448,
-  row_r_guild: 446 / 448, row_r_forge: 348 / 448, row_r_house_a: 282 / 448, row_r_house_b: 367 / 448, row_r_house_c: 271 / 448, row_r_shop: 361 / 448,
-};
+/** Length of each row along its wall. */
+export const HUB_ROW_LENGTH = 32;
+/** Width / height of each row's picture (sprites/paper/props, cut by tools/cut_papercraft.cjs hub). */
+const HUB_ROW_ASPECT: Record<string, number> = { row_left_long: 1600 / 1351, row_right_long: 1600 / 1440 };
 
 /** How far the hub's quarters wobble into each other (see themeAt). The props add their own scatter on top. */
 export const QUADRANT_JITTER = 6;
@@ -268,42 +264,34 @@ export class Terrain {
     at('town_fountain', 0, 0, HUB_FOUNTAIN_HEIGHT, HUB_FOUNTAIN_RADIUS);
     this.restSpots.push({ x: s.x, z: s.z, kind: 'fountain' });
 
-    // ---- The two rows of townhouses. A row runs along its wall from the top gateway's side to the other gateway's,
-    // stopping short of both corners so the roads stay open. Each house is a box D deep against the wall, L long
-    // along it, L from its picture's width (a box L by D is (L + D)/√2 wide on screen). The picture stands on the
-    // point straight below the box's middle on screen, level with its nearest corner.
+    // ---- The two rows of townhouses (owner 2026-11-19): each top wall's whole row is one picture of attached houses
+    // (tools/cut_papercraft.cjs hub, sheared so its foot runs at a world axis's slope on screen). The row is a box D
+    // deep against the wall and L long along it, so (L + D)/√2 wide on screen; the picture stands on the point straight
+    // below the box's middle on screen, level with its nearest corner. Doors along it: where each shop is in the
+    // picture, from the row's near end (the side gate's) to its far end (the top gate's).
     const D = HUB_ROW_DEPTH;
-    const H = HUB_ROW_HEIGHT;
-    const doors: Record<string, Vec2> = {};
-    const row = (side: 'left' | 'right', keys: string[]) => {
-      const lens = keys.map((k) => H * (ROW_ASPECT[k] ?? 0.75) * Math.SQRT2 * ROW_OVERLAP - D);
-      const total = lens.reduce((x, y) => x + y, 0);
-      let t = -total / 2;
-      keys.forEach((key, i) => {
-        const L = lens[i];
-        const mid = t + L / 2;
-        t += L;
-        // side 'left': the wall at x = −R, the row along z; 'right': the wall at z = −R, the row along x.
-        const [cx, cz] = side === 'left' ? [-R + D / 2, mid] : [mid, -R + D / 2];
-        const q = (D + L) / 4;
-        at(key, cx + q, cz + q, H, 0, true);
-        for (let u = -L / 2 + D / 2; u <= L / 2 - D / 2 + 0.01; u += Math.max(0.8, (L - D) / Math.max(1, Math.round((L - D) / 1.4)))) {
-          const [ox, oz] = side === 'left' ? [0, u] : [u, 0];
-          this.colliders.push({ x: s.x + cx + ox, z: s.z + cz + oz, r: D / 2 + 0.1 });
-        }
-        // Where someone stands at its door: in front, toward the plaza.
-        doors[key] = side === 'left' ? { x: s.x - R + D + 1.8, z: s.z + mid } : { x: s.x + mid, z: s.z - R + D + 1.8 };
-      });
+    const L = HUB_ROW_LENGTH;
+    const q = (D + L) / 4;
+    const strip = (key: string, cx: number, cz: number, alongX: boolean) => {
+      // Never faded: it is as wide as the town, so someone is always near it.
+      at(key, cx + q, cz + q, ((L + D) / Math.SQRT2) / HUB_ROW_ASPECT[key], 0, false);
+      this.props[this.props.length - 1].solid = true;
+      for (let u = -L / 2 + 1; u <= L / 2 - 1; u += 1.4) {
+        this.colliders.push({ x: s.x + cx + (alongX ? u : 0), z: s.z + cz + (alongX ? 0 : u), r: D / 2 + 0.1 });
+      }
     };
-    // Top-left wall, from the top gate's end to the left gate's.
-    row('left', ['row_l_house_c', 'row_l_house_a', 'row_l_shop', 'row_l_vault', 'row_l_crystal', 'row_l_house_b', 'row_l_house_a']);
-    // Top-right wall, from the top gate's end to the right gate's.
-    row('right', ['row_r_house_b', 'row_r_house_a', 'row_r_forge', 'row_r_house_c', 'row_r_guild', 'row_r_house_b', 'row_r_shop']);
-    this.npcPos.keeper = doors.row_l_vault;
-    this.npcPos.crystal = doors.row_l_crystal;
-    this.npcPos.blacksmith = doors.row_r_forge;
-    this.npcPos.seeker = { x: doors.row_r_guild.x - 1.2, z: doors.row_r_guild.z };
-    at('quest_board', doors.row_r_guild.x + 2 - s.x, doors.row_r_guild.z + 0.6 - s.z, 3.6, 0.8);
+    // Top-left wall (x = −R), the row along z: its near end is the left gate's (z = +L/2).
+    strip('row_left_long', -R + D / 2, 0, false);
+    const leftDoor = (f: number) => ({ x: s.x - R + D + 1.8, z: s.z + L / 2 - f * L });
+    // Top-right wall (z = −R), the row along x: its near end is the top gate's (x = −L/2).
+    strip('row_right_long', 0, -R + D / 2, true);
+    const rightDoor = (f: number) => ({ x: s.x - L / 2 + f * L, z: s.z - R + D + 1.8 });
+    this.npcPos.crystal = leftDoor(0.41);
+    this.npcPos.keeper = leftDoor(0.55);
+    this.npcPos.blacksmith = rightDoor(0.33);
+    const guild = rightDoor(0.58);
+    this.npcPos.seeker = { x: guild.x - 1, z: guild.z };
+    at('quest_board', guild.x + 1.8 - s.x, guild.z + 0.6 - s.z, 3.6, 0.8);
 
     // ---- The market, split either side of the road to the bottom gate: the stalls lie along their wall and face the
     // fountain; their sellers stand in front of them, on the plaza side.
