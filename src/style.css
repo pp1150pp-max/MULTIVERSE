@@ -1378,7 +1378,7 @@ button:disabled { opacity: 0.45; cursor: default; border-color: var(--panel-edge
 .chat-bubble.cos { background: linear-gradient(var(--c2), #111); color: #fff; border: 2px solid var(--c1); box-shadow: 0 0 6px var(--c1); }
 /* Paper title frames (floating.ts paintPaperFrame): the frame is a border-image set inline, the top and bottom middle
    pieces (crown, bubble tail) are drawn over it, under the text. */
-.plate .pname.cos.paper-title, .chat-bubble.cos.paper-title { box-sizing: border-box; isolation: isolate; border: 1px solid transparent; border-radius: 0; background: none; box-shadow: none; }
+.plate .pname.cos.paper-title, .chat-bubble.cos.paper-title { box-sizing: border-box; isolation: isolate; border: 1px solid transparent; border-image-repeat: round stretch; border-radius: 0; background: none; box-shadow: none; }
 .plate .pname.cos.paper-title { position: relative; padding: 3px 14px; text-shadow: 0 1px 2px #000; }
 .chat-bubble.cos.paper-title { padding: 7px 18px; color: #2a1c10; }
 .paper-title::before, .paper-title::after { content: ''; position: absolute; left: 50%; width: var(--mw); transform: translateX(-50%); background-size: 100% 100%; z-index: -1; pointer-events: none; }

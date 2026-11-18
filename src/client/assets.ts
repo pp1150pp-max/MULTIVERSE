@@ -447,8 +447,8 @@ async function loadFxSheet(name: FxSheet): Promise<void> {
 export const paperTex: { auras: Record<string, { ring: THREE.Texture; foot: THREE.Texture }>; orbs?: THREE.Texture } = { auras: {} };
 
 async function loadPaperCosmetics(): Promise<void> {
-  const smooth = (t: THREE.Texture): THREE.Texture => {
-    t.colorSpace = THREE.SRGBColorSpace;
+  const smooth = (t: THREE.Texture, srgb = true): THREE.Texture => {
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
     t.magFilter = THREE.LinearFilter;
     t.minFilter = THREE.LinearFilter;
     t.generateMipmaps = false;
@@ -463,7 +463,8 @@ async function loadPaperCosmetics(): Promise<void> {
         // No paper picture: the old glow.
       }
     }),
-    loadTexture(`${BASE}paper/fx/orbs.png`).then((t) => { paperTex.orbs = smooth(t); }, () => undefined),
+    // Raw greys: the orb shader reads them as they are in the file (like its code-made atlas).
+    loadTexture(`${BASE}paper/fx/orbs.png`).then((t) => { paperTex.orbs = smooth(t, false); }, () => undefined),
   ]);
 }
 

@@ -407,7 +407,7 @@ function materials(): [THREE.ShaderMaterial, THREE.ShaderMaterial] {
         if (uPaper > 0.5) {
           // Grey paper: the body colour shaded by its grey, the near-white cut-outs (band, star, rays) in the accent.
           float g = t.r;
-          vec3 p = mix(vColor * (0.15 + 0.95 * g), vAccent, smoothstep(0.9, 0.98, g));
+          vec3 p = mix(vColor * (0.15 + 0.95 * g), vAccent, smoothstep(0.95, 0.99, g));
           gl_FragColor = vec4(p, 1.0);
           return;
         }
