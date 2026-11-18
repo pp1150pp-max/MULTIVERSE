@@ -199,6 +199,8 @@ export class SkillWindow {
     // Shrink the whole map to fit the window (a desktop sees it all), but not below 70% (a phone scrolls instead).
     const maxH = parseFloat(getComputedStyle(this.wrap).maxHeight) || h;
     this.fit = Math.max(0.7, Math.min(1, this.wrap.clientWidth / w, maxH / h));
+    // The frame keeps the size of the fit-to-window map: zooming only changes what is inside it, never the window.
+    this.wrap.style.height = `${Math.round(Math.min(maxH, h * this.fit))}px`;
     const z = this.zoom();
     this.wrap.innerHTML = `<div class="sk-sizer" style="width:${w * z}px;height:${h * z}px"><div class="sk-map" style="width:${w}px;height:${h}px;transform:scale(${z})">${svg}${names}${nodes}</div></div>`;
     if (this.centre) {
