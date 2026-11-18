@@ -74,9 +74,8 @@ const MAPS = {
     // Round 6 (owner 2026-11-19, HUB.md 7): attached townhouses for the two top walls, and the bottom market.
     ['row_left.png', 'props', { cols: 3, rows: 2, height: 448, names: ['row_l_vault', 'row_l_crystal', 'row_l_house_a', 'row_l_house_b', 'row_l_house_c', 'row_l_shop'] }],
     ['row_right.png', 'props', { cols: 3, rows: 2, height: 448, names: ['row_r_guild', 'row_r_forge', 'row_r_house_a', 'row_r_house_b', 'row_r_house_c', 'row_r_shop'] }],
-    ['market.png', 'props', { cols: 4, rows: 2, height: 256, names: ['mk_goods_stall', 'mk_auction_booth', 'mk_veg_stall', 'mk_wagon', 'mk_handcart', 'mk_sacks', 'mk_potion_table', 'mk_tag_table'] }],
-    // The three stalls again, seen from behind (they face the fountain, away from the camera): these replace the
-    // first three cells of market.png, so this line comes after it.
+    ['market.png', 'props', { cols: 4, rows: 2, height: 256, names: ['mk_goods_front', 'mk_auction_front', 'mk_veg_front', 'mk_wagon', 'mk_handcart', 'mk_sacks', 'mk_potion_table', 'mk_tag_table'] }],
+    // The three stalls again, seen from behind (facing away from the camera); market.png has their fronts (*_front).
     ['market_backs.png', 'props', { cols: 3, rows: 1, height: 256, names: ['mk_goods_stall', 'mk_auction_booth', 'mk_veg_stall'] }],
     // Round 6b (owner 2026-11-19): each top wall's whole row of attached townhouses as one picture, sheared so its foot
     // runs at the game's own slope for a world axis (World ISO_DIR), like the walls (HUB.md 7.5).
