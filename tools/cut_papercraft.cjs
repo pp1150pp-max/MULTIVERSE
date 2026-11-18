@@ -71,6 +71,8 @@ const MAPS = {
     // fixed height. Sheet B is on green (the tailor's cloth is pink).
     ['town2_buildings_a.png', 'props', { cols: 2, rows: 2, height: 384, names: ['bld_store', 'bld_market', 'bld_forge', 'bld_guild'] }],
     ['town2_buildings_b.png', 'props', { cols: 2, rows: 2, height: 384, bg: 'green', names: ['bld_tailor', 'bld_vault', 'bld_house_a', 'bld_house_b'] }],
+    // Low things along the bottom two walls (HUB.md 6): skipped until the sheet is there.
+    ['town2_low.png', 'props', { cols: 4, rows: 2, height: 256, names: ['low_stall_a', 'low_stall_b', 'garden_bed', 'hedge_a', 'hedge_b', 'house_back_a', 'house_back_b', 'woodpile'] }],
     ['town2_props.png', 'props', { cols: 4, rows: 3, height: 256, names: ['town_fountain', 'quest_board', 'crystal_stall', 'lamp_post', 'bench_a', 'bench_b', 'planter', 'banner_pole', 'crates', 'barrels', 'flower_box', 'potted_tree'] }],
   ],
 };

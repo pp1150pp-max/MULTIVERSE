@@ -7,7 +7,7 @@ import type { Vec2 } from '../types';
 
 export interface Collider { x: number; z: number; r: number }
 /** One prop to draw. `fade` = turns see-through when the player walks behind it. */
-export interface PropSpec { key: string; x: number; z: number; height: number; fade: boolean }
+export interface PropSpec { key: string; x: number; z: number; height: number; fade: boolean; /** Drawn mirrored. */ flip?: boolean }
 type Seg = [number, number, number, number];
 
 /** Prop keys each theme scatters around. Every key needs an entry in the client's SHEET_SPECS. */
@@ -83,7 +83,8 @@ export const SUMMONER_RANGE = 3.5;
 /** Where players can rest: the hub's fountain and each zone camp's campfire. See Sim.rest. */
 export interface RestSpot { x: number; z: number; kind: 'fountain' | 'campfire' }
 /** How close a player must stand to rest (the fountain is wide; a campfire as close as to an NPC), and how long until they can again. */
-export const REST_RANGE: Record<RestSpot['kind'], number> = { fountain: 4.5, campfire: 3 };
+// The fountain grew with the rebuilt town (owner 2026-11-18: 4.5 → 6.5, so you can rest beside its benches).
+export const REST_RANGE: Record<RestSpot['kind'], number> = { fountain: 6.5, campfire: 3 };
 export const REST_CD = 30;
 
 /** The rest spot a player at (x, z) can use, if any (the nearest in range). */
@@ -101,9 +102,14 @@ export function restSpotNear(spots: readonly RestSpot[], p: { x: number; z: numb
 }
 
 /** Radius of the hub's round plaza (World paints it; nothing stands on it but the fountain). */
-export const HUB_PLAZA_RADIUS = 8;
-/** The hub fountain's solid radius (its picture has benches round it). */
-export const HUB_FOUNTAIN_RADIUS = 2.7;
+export const HUB_PLAZA_RADIUS = 8.5;
+/** The hub's fountain: drawn this tall (its benches about a person's size), solid out to this radius. */
+export const HUB_FOUNTAIN_HEIGHT = 9;
+export const HUB_FOUNTAIN_RADIUS = 3.9;
+/** The hub's shops: drawn this tall, their middles this far in from the wall and this far apart along it. */
+export const HUB_BUILDING_HEIGHT = 8.6;
+export const HUB_BUILDING_IN = 4;
+export const HUB_BUILDING_STEP = 6.8;
 
 /** How far the hub's quarters wobble into each other (see themeAt). The props add their own scatter on top. */
 export const QUADRANT_JITTER = 6;
@@ -189,7 +195,8 @@ export class Terrain {
   standSpot(x: number, z: number, r: number, from: { x: number; z: number }): { x: number; z: number } | null {
     const d = Math.hypot(from.x - x, from.z - z) || 1;
     const u = { x: x + ((from.x - x) / d) * 0.01, z: z + ((from.z - z) / d) * 0.01, radius: r };
-    for (let i = 0; i < 4 && this.isBlocked(u.x, u.z, r - 0.01); i++) this.resolve(u);
+    // Up to 8 pushes: a big building with an NPC at its door can take more than a few.
+    for (let i = 0; i < 8 && this.isBlocked(u.x, u.z, r - 0.01); i++) this.resolve(u);
     return this.isBlocked(u.x, u.z, r - 0.01) ? null : { x: u.x, z: u.z };
   }
 
@@ -231,82 +238,100 @@ export class Terrain {
   }
 
   /**
-   * The hub's town (owner 2026-11-18, hub_redesign/HUB_REDESIGN.md): a round plaza with the fountain in the middle,
-   * and four districts between the four roads, each with whole buildings and its townspeople standing at the edge of
-   * the plaza in front of them. On screen: top-left (−x) the market, top-right (−z) the forge, bottom-right (+x) the
-   * guild hall with the quest board, bottom-left (+z) the vault. The square wall runs round it all, with an open way
-   * through on each corner (top, right, bottom and left of the diamond), straight on to the portals. The buildings and
-   * props are paper pictures only (art_templates/papercraft_maps/HUB.md), whatever the art switch says.
+   * The hub's town (owner 2026-11-18, round 2, hub_redesign/HUB_REDESIGN.md): a big fountain on a round plaza in the
+   * middle, and the shops against the wall, facing it. Only the two walls at the top of the screen have buildings with
+   * people at their doors (a building against a bottom wall would turn its back to the camera and hide whoever stands
+   * in front of it): top-left (x = −R) the general store, the market hall and the vault, top-right (z = −R) the
+   * tailor's, the forge and the guild hall. The two bottom walls get low things that hide nobody: stalls, gardens,
+   * carts. The square wall runs round it all, with an open way through on each corner, straight on to the portals.
+   * The buildings and props are paper pictures only (art_templates/papercraft_maps/HUB.md), whatever the art switch says.
    */
   private placeTown(r: Rng): void {
     const s = this.zone.start;
-    const R = this.zone.safe?.half ?? 20;
+    const R = this.zone.safe?.half ?? 18;
     const at = (key: string, dx: number, dz: number, height: number, collideR: number, fade = false) =>
       this.addProp(key, s.x + dx, s.z + dz, height, collideR, fade);
     const rad = (d: number) => (d * Math.PI) / 180;
     const polar = (key: string, deg: number, r: number, height: number, collideR: number, fade = false) =>
       at(key, Math.cos(rad(deg)) * r, Math.sin(rad(deg)) * r, height, collideR, fade);
-    const spot = (deg: number, r: number) => ({ x: s.x + Math.cos(rad(deg)) * r, z: s.z + Math.sin(rad(deg)) * r });
-    /** A whole building: drawn `height` tall, solid over its footprint (a few circles, colliders are round). */
-    const building = (key: string, deg: number, r: number, height: number) => {
-      polar(key, deg, r, height, 0, true);
-      const c = spot(deg, r);
-      for (const [ox, oz] of [[0, 0], [1.3, 1.3], [-1.3, -1.3], [1.3, -1.3], [-1.3, 1.3]]) {
-        this.colliders.push({ x: c.x + ox, z: c.z + oz, r: 1.6 });
+    // A spot against a wall: `side` 'x' = the top-left wall (x = −R), 'z' = the top-right one (z = −R), 'X' and 'Z'
+    // the bottom-right (x = +R) and bottom-left (z = +R) ones; `t` along the wall, `d` in from it.
+    const wall = (side: 'x' | 'z' | 'X' | 'Z', t: number, d: number) => {
+      const n = R - d;
+      const [x, z] = side === 'x' ? [-n, t] : side === 'z' ? [t, -n] : side === 'X' ? [n, t] : [t, n];
+      return { x: s.x + x, z: s.z + z };
+    };
+    /** A whole building against a top wall: solid over its footprint (round colliders), mirrored when `flip`. */
+    const building = (key: string, side: 'x' | 'z', t: number, flip = false) => {
+      const c = wall(side, t, HUB_BUILDING_IN);
+      this.addProp(key, c.x, c.z, HUB_BUILDING_HEIGHT, 0, true);
+      if (flip) this.props[this.props.length - 1].flip = true;
+      for (const [ox, oz] of [[0, 0], [1.4, 1.4], [-1.4, -1.4], [1.4, -1.4], [-1.4, 1.4]]) {
+        this.colliders.push({ x: c.x + ox, z: c.z + oz, r: 1.7 });
       }
     };
+    // In front of a building, toward the plaza.
+    const front = (side: 'x' | 'z', t: number, extra = 0) => wall(side, t, HUB_BUILDING_IN + 4.8 + extra);
 
-    // The plaza: the fountain (benches round it are part of its picture) and nothing else on it.
-    at('town_fountain', 0, 0, 5.2, HUB_FOUNTAIN_RADIUS);
+    // The plaza: the big fountain (benches round it are part of its picture), nothing else on it.
+    at('town_fountain', 0, 0, HUB_FOUNTAIN_HEIGHT, HUB_FOUNTAIN_RADIUS);
     this.restSpots.push({ x: s.x, z: s.z, kind: 'fountain' });
-    const NPC_R = HUB_PLAZA_RADIUS + 1.4;
 
-    // Top-left (−x): the market. The merchant's store and the broker's market hall, the tailor's shop behind them
-    // (the stylist is out of town for now: owner 2026-11-18).
-    building('bld_store', 163, 14.2, 7.4);
-    building('bld_market', 197, 14.2, 7.4);
-    building('bld_tailor', 180, 17.4, 7);
-    this.npcPos.merchant = spot(168, NPC_R);
-    this.npcPos.broker = spot(192, NPC_R);
+    const T = HUB_BUILDING_STEP;
+    // Top-left wall: general store, market hall, vault (doors on their lower-right walls, toward the plaza).
+    building('bld_store', 'x', -T);
+    building('bld_market', 'x', 0);
+    building('bld_vault', 'x', T);
+    this.npcPos.merchant = front('x', -T);
+    this.npcPos.broker = front('x', 0);
+    this.npcPos.keeper = front('x', T);
+    this.npcPos.crystal = front('x', T + 2.6, 0.6);
+    const stall = front('x', T + 4.6, 1.8);
+    this.addProp('crystal_stall', stall.x, stall.z, 3.4, 0.9);
 
-    // Top-right (−z): the forge, houses either side behind it.
-    building('bld_forge', 270, 14.2, 7.2);
-    building('bld_house_a', 248, 18, 7.6);
-    building('bld_house_b', 292, 18, 7.6);
-    this.npcPos.blacksmith = spot(270, NPC_R);
+    // Top-right wall: the tailor's (mirrored so its door faces the plaza; the stylist is out of town for now,
+    // owner 2026-11-18), the forge, the guild hall with the quest board.
+    building('bld_tailor', 'z', -T, true);
+    building('bld_forge', 'z', 0);
+    building('bld_guild', 'z', T);
+    this.npcPos.blacksmith = front('z', 0);
+    this.npcPos.seeker = front('z', T);
+    const board = front('z', T - 2.8, 0.6);
+    this.addProp('quest_board', board.x, board.z, 3.6, 0.8);
 
-    // Bottom-right (+x): the guild hall, The Seeker beside the quest board.
-    building('bld_guild', 0, 14.6, 8);
-    this.npcPos.seeker = spot(-8, NPC_R);
-    polar('quest_board', 14, HUB_PLAZA_RADIUS + 2.6, 3.4, 0.8);
+    // The two bottom walls: low things that hide nobody (until their own pictures exist: art_templates/papercraft_maps/HUB.md 6).
+    const low: [string, number, number, number, number][] = [
+      ['cart', -8, 3.2, 2.4, 1], ['potted_tree', -3.4, 2, 2.6, 0.6], ['well', 0, 3, 2.6, 1.1], ['potted_tree', 3.4, 2, 2.6, 0.6], ['crates', 8, 2.4, 1.7, 0.8],
+    ];
+    for (const side of ['X', 'Z'] as const) {
+      for (const [key, t, d, h, c] of low) {
+        const q = wall(side, t, d);
+        this.addProp(key, q.x, q.z, h, c);
+      }
+      for (const t of [-5.7, 5.7]) {
+        const q = wall(side, t, 2.2);
+        this.addProp('flower_box', q.x, q.z, 1.2, 0.7);
+      }
+    }
 
-    // Bottom-left (+z): the vault, the crystal merchant at the crystal stall next to it.
-    building('bld_vault', 90, 14.4, 7.4);
-    this.npcPos.keeper = spot(80, NPC_R);
-    this.npcPos.crystal = spot(102, NPC_R);
-    polar('crystal_stall', 108, HUB_PLAZA_RADIUS + 3.4, 3.4, 1);
-
-    // Each road comes into the plaza between a pair of lamp posts, with flowers on both sides a little further out.
+    // Round the plaza: a lamp post either side of each road where it comes in, flowers a little further out.
     for (const road of [45, 135, 225, 315]) {
       for (const side of [-1, 1]) {
-        polar('lamp_post', road + side * 11, HUB_PLAZA_RADIUS + 0.8, 3.6, 0.3);
-        polar('planter', road + side * 17, HUB_PLAZA_RADIUS + 3.2, 1.6, 0.7);
+        polar('lamp_post', road + side * 8, HUB_PLAZA_RADIUS + 0.8, 3.8, 0.3);
+        // Not in front of the shops (the top walls' side of the plaza), where the townspeople stand.
+        const deg = (((road + side * 22) % 360) + 360) % 360;
+        if (deg < 157 || deg > 293) polar('planter', deg, HUB_PLAZA_RADIUS + 1.4, 1.6, 0.7);
       }
       // A banner pole either side of the road just inside the gateway.
       const a = rad(road);
       const ux = Math.cos(a), uz = Math.sin(a);
-      for (const side of [-1, 1]) at('banner_pole', ux * 22 - uz * side * 3.2, uz * 22 + ux * side * 3.2, 4, 0.3);
+      for (const side of [-1, 1]) at('banner_pole', ux * (R * Math.SQRT2 - 4) - uz * side * 3.2, uz * (R * Math.SQRT2 - 4) + ux * side * 3.2, 4, 0.3);
     }
-    // The knight's statue by the top road, as in the concept.
-    polar('ruin_statue', 240, HUB_PLAZA_RADIUS + 3.6, 3.8, 0.8);
-
-    // Odds and ends behind the shops, against the wall.
-    const props: [string, number, number, number, number][] = [
-      ['crates', 150, 17.6, 1.7, 0.8], ['barrels', 210, 17.4, 1.6, 0.8], ['flower_box', 300, 13, 1.2, 0.7],
-      ['barrels', 258, 13.4, 1.6, 0.8], ['potted_tree', 30, 16.4, 2.6, 0.6], ['crates', 330, 16.4, 1.7, 0.8],
-      ['potted_tree', 60, 16.4, 2.6, 0.6], ['flower_box', 120, 16.6, 1.2, 0.7], ['crates', 22, 11.6, 1.7, 0.8],
-    ];
-    for (const [key, deg, r, h, c] of props) polar(key, deg, r, h, c);
+    // The knight's statue beside the top road (to its right on screen, as in the concept).
+    polar('ruin_statue', 238, HUB_PLAZA_RADIUS + 2.2, 3.8, 0.8);
+    // Benches on the walk between the plaza and the bottom walls.
+    for (const [deg, key] of [[22, 'bench_a'], [68, 'bench_b']] as const) polar(key, deg, HUB_PLAZA_RADIUS + 2.4, 1.5, 0.6);
+    void r;
 
     // The wall kit (tools/cut_hub.cjs): one scale for all pieces, U world units per pixel. Each wall
     // picture's foot runs at the camera's slope for a world axis, so copies line up end to end, one end

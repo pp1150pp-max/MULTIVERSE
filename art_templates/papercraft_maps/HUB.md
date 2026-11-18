@@ -96,3 +96,19 @@ Row 3: a stack of three wooden crates; a group of three wooden barrels; a long w
 Each object has crisp clean outer edges with no glow or halo around it. Background ONE perfectly flat solid magenta (#FF00FF) everywhere, no gradient, no paper texture on the background, no ground patches, no cast shadows on the background, no text, no letters, no labels, no grid lines. Do not use pink, magenta or purple on any object.
 ```
 
+
+## 6. ของเตี้ยริมกำแพงด้านล่าง → `raw/hub/town2_low.png` (4×2 พื้นม่วงแดง)
+
+กำแพง 2 ด้านล่างของจออยู่ใกล้กล้อง ถ้าวางของสูงจะบังผู้เล่นกับ NPC จึงต้องเป็นของเตี้ยทั้งหมด ระหว่างรอภาพ เกมใช้เกวียน บ่อน้ำ ลัง และกระถางต้นไม้แทนไปก่อน
+แนบ 2 ภาพเหมือนข้อ 5 คือภาพแนวคิดเมือง และ `raw/ref/A7_hub.png` ถ้าเจนในแชทเดิมที่ทำข้อ 5 ไว้ ก็ไม่ต้องแนบซ้ำ
+ลำดับช่อง: `low_stall_a` `low_stall_b` `garden_bed` `hedge_a` / `hedge_b` `house_back_a` `house_back_b` `woodpile`
+
+```
+Same town as before, in EXACTLY the same papercraft style as the buildings and props you made for it: layered cut paper and card, visible paper fibre, slightly uneven scissor-cut edges, small drop shadows between the paper layers INSIDE each object. VERY IMPORTANT CAMERA: 2D isometric 3/4 view from above at about 35 degrees, as in classic isometric RPGs, each object's base sitting on an imaginary diamond-shaped ground footprint. NOT a flat front view. Light from the upper left. These objects stand along the bottom edge of the town, close to the camera, so EVERY object must be LOW and WIDE: no taller than a person, except the two house backs, which are low single-storey. Same sandstone, pale grey brick, dark timber, red and blue roofs, gold trim and blue-and-gold star banners as the town.
+
+Generate an image: a prop sheet with exactly 8 separate objects in a 4 columns x 2 rows grid, generous empty space between them, each fully inside its own cell, nothing touching or overlapping.
+Row 1: a low open market stall with a cream-and-teal striped cloth canopy on four short posts, a counter of bread loaves, cheese wheels and jars; a low open flower stall with a red-and-cream canopy, buckets of white, yellow and red flowers; a small vegetable garden bed with a low wooden border, rows of cabbages and carrots, a little scarecrow-free wooden sign; a low trimmed green hedge with small white flowers, running diagonally from lower left to upper right.
+Row 2: the same hedge running diagonally from upper left to lower right; the BACK of a small single-storey cottage seen from behind: a plain back wall with one small glowing window, a red tiled roof sloping toward the camera, a stone chimney, NO door; the BACK of a small stone storehouse seen from behind: a plain stone wall, a blue-slate roof sloping toward the camera, a small barred vent, NO door; a neat stack of firewood logs with a wooden wheelbarrow beside it.
+
+Each object has crisp clean outer edges with no glow or halo around it. Background ONE perfectly flat solid magenta (#FF00FF) everywhere, no gradient, no paper texture on the background, no ground patches, no grass around the bases, no cast shadows on the background, no text, no letters, no labels, no grid lines. Do not use pink, magenta or purple on any object.
+```

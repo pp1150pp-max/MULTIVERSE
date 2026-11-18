@@ -121,6 +121,8 @@ const PLAYER_HALF_WIDTH = 0.35;
 /** World size of one decor atlas cell: 128 pixels at about the same density as the ground tiles. */
 const DECOR_CELL_UNITS = 1.33;
 /** Rotted boards laid over the wet stretches of a marsh trail: a row of separate pieces, seen from above. */
+/** The rebuilt hub town's paper pieces (Terrain.placeTown). */
+const TOWN2_PROP = /^(bld_|town_fountain$|quest_board$|crystal_stall$|lamp_post$|bench_|planter$|banner_pole$|crates$|barrels$|flower_box$|potted_tree$)/;
 const PLANK_SHEET = { key: 'marsh_planks', cols: 3, width: 2.9, length: 5 };
 const enum GroundId { Base, WaterEdge, Water }
 
@@ -549,7 +551,7 @@ export class World {
     this.addPieces(mulberry32(terrain.zone.seed + 31));
 
     // Anything taller than a player can hide one, so it turns see-through too (not only trees and the town).
-    for (const p of this.props) this.addProp(p.key, p.x, p.z, p.height, p.fade || p.height >= FADE_MIN_HEIGHT);
+    for (const p of this.props) this.addProp(p.key, p.x, p.z, p.height, p.fade || p.height >= FADE_MIN_HEIGHT, p.flip);
     const fire = terrain.props.find((p) => p.key === 'campfire');
     if (fire) this.flames.push(this.glow(fire.x, 0.5, fire.z, '#ffa040', 0.55));
     // Each portal glows like the land it leads to; the way back to town glows gold.
@@ -1262,7 +1264,7 @@ export class World {
     }
   }
 
-  private addProp(key: string, x: number, z: number, height: number, fade: boolean): void {
+  private addProp(key: string, x: number, z: number, height: number, fade: boolean, flip = false): void {
     const sh = sheets[key];
     let mat: THREE.SpriteMaterial;
     if (fade) {
@@ -1273,8 +1275,9 @@ export class World {
     }
     const spr = this.add(new THREE.Sprite(mat));
     const w = height * sh.cellAspect;
-    spr.center.set(0.5, 0.03);
-    spr.scale.set(w, height, 1);
+    // Sunk a little into the ground, except the rebuilt town's wide paper pieces, whose flat bottoms the ground would cut off.
+    spr.center.set(0.5, TOWN2_PROP.test(key) ? 0 : 0.03);
+    spr.scale.set(flip ? -w : w, height, 1);
     spr.position.set(x, 0, z);
     // Long town-wall pieces stand on a line, not a spot: a round shadow under each would only blot the ground.
     if (!key.startsWith('town_wall')) {

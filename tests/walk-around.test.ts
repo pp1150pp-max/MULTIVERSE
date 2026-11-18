@@ -3,7 +3,7 @@ import { ok, finish } from './check';
 import { ZONE_HUB } from '../src/shared/data/zones';
 import { NPC_IDS } from '../src/shared/data/npcs';
 import { Sim } from '../src/shared/sim/Sim';
-import { HUB_FOUNTAIN_RADIUS } from '../src/shared/sim/terrain';
+import { HUB_BUILDING_IN, HUB_FOUNTAIN_RADIUS } from '../src/shared/sim/terrain';
 import { WalkTarget } from '../src/client/walkTo';
 import type { Vec2 } from '../src/shared/types';
 
@@ -55,20 +55,21 @@ function keyWalk(x: number, z: number, mx: number, mz: number, past: number): nu
 
 // ---- clicking right on an NPC, the forge, the vault or the fountain walks up beside it
 const things = [
-  ...NPC_IDS.map((id) => ({ name: id, ...t.npcPos[id]! })),
+  ...NPC_IDS.map((id) => ({ name: id, ...t.npcPos[id]!, out: 3.5 })),
   // The buildings behind the blacksmith and the keeper (Terrain.placeTown).
-  { name: 'forge', ...t.props.find((q) => q.key === 'bld_forge')! },
-  { name: 'vault', ...t.props.find((q) => q.key === 'bld_vault')! },
-  { name: 'fountain', x: s.x, z: s.z },
+  { name: 'forge', ...t.props.find((q) => q.key === 'bld_forge')!, out: HUB_BUILDING_IN + 2 },
+  { name: 'vault', ...t.props.find((q) => q.key === 'bld_vault')!, out: HUB_BUILDING_IN + 2 },
+  { name: 'fountain', x: s.x, z: s.z, out: HUB_FOUNTAIN_RADIUS + 1.5 },
 ];
 for (const th of things) {
   let worst = 0;
   let tried = 0;
   for (let a = 0; a < 16; a++) {
     const ang = (a / 16) * Math.PI * 2;
-    const x = th.x + Math.cos(ang) * 3.5;
-    const z = th.z + Math.sin(ang) * 3.5;
-    if (t.isBlocked(x, z, p.radius)) continue;
+    const x = th.x + Math.cos(ang) * th.out;
+    const z = th.z + Math.sin(ang) * th.out;
+    // Only from inside the town: behind a building against the wall is outside it.
+    if (t.isBlocked(x, z, p.radius) || Math.max(Math.abs(x - s.x), Math.abs(z - s.z)) > ZONE_HUB.safe!.half - 1) continue;
     tried++;
     const spot = t.standSpot(th.x, th.z, p.radius, { x, z });
     if (!spot || t.isBlocked(spot.x, spot.z, p.radius - 0.01)) worst = Infinity;
@@ -102,12 +103,13 @@ for (const [name, c, r] of [['blacksmith', t.npcPos.blacksmith!, 0.45], ['founta
   const inTown = t.colliders.filter((c) => Math.max(Math.abs(c.x - s.x), Math.abs(c.z - s.z)) < 15);
   let stall = inTown[0];
   let barrel = inTown[1];
-  search: for (const a of inTown) for (const b of inTown) {
+  let best = Infinity;
+  for (const a of inTown) for (const b of inTown) {
     const gap = Math.hypot(a.x - b.x, a.z - b.z) - a.r - b.r;
-    if (a !== b && gap > 0.05 && gap < 2 * p.radius - 0.1) {
+    if (a !== b && gap > 0.05 && gap < 2 * p.radius - 0.1 && gap < best) {
+      best = gap;
       stall = a;
       barrel = b;
-      break search;
     }
   }
   const mid = { x: (stall.x + barrel.x) / 2, z: (stall.z + barrel.z) / 2 };
