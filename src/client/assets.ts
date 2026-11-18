@@ -273,8 +273,6 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   watchtower: prop('watchtower', drawFence),
   ruin_fountain: ruin('ruin_fountain', 'well'),
   // The town wall kit: pieces that line up end to end (see tools/cut_hub.cjs and Terrain.placeTown).
-  ...Object.fromEntries(['town_wall_a', 'town_wall_a_broken', 'town_wall_b', 'town_wall_b_broken', 'town_wall_end']
-    .map((k) => [k, ruin(k, null)])),
   ruin_pillar: ruin('ruin_pillar', 'runestone'),
   ruin_house: ruin('ruin_house', 'tent'),
   ruin_tower: ruin('ruin_tower', 'watchtower'),
@@ -295,7 +293,10 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   // The rebuilt town (Terrain.placeTown): paper pictures only, whatever the art switch says (owner 2026-11-18).
   ...Object.fromEntries(['bld_store', 'bld_market', 'bld_forge', 'bld_guild', 'bld_tailor', 'bld_vault', 'bld_house_a', 'bld_house_b',
     'town_fountain', 'quest_board', 'crystal_stall', 'lamp_post', 'bench_a', 'bench_b', 'planter', 'banner_pole', 'crates', 'barrels',
-    'flower_box', 'potted_tree'].map((k) => [k, single(`paper/props/${k}.png`, () => drawRock(0))])),
+    'flower_box', 'potted_tree', 'low_stall_a', 'low_stall_b', 'garden_bed', 'hedge_a', 'hedge_b', 'house_back_a', 'house_back_b', 'woodpile',
+    // The town's statue and wall kit in paper too: the whole town is paper (owner 2026-11-19).
+    'town_statue', 'town_wall_a', 'town_wall_a_broken', 'town_wall_b', 'town_wall_b_broken', 'town_wall_end',
+  ].map((k) => [k, single(`paper/props/${k === 'town_statue' ? 'ruin_statue' : k}.png`, () => drawRock(0))])),
 
   ...Object.fromEntries(MAP_ICONS.map((name) => [`map_${name}`, single(`icons/map_${name}.png`, () => drawIcon('coin'))])),
   icon_coin: single('icons/coin.png', () => drawIcon('coin')),
