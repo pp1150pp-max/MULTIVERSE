@@ -97,6 +97,29 @@ export const QUARKS_SKILLS = {
   meteor: 'อุกกาบาต', fireball: 'ลูกไฟ', mg_starfall: 'ดาวตก', frostnova: 'วงน้ำแข็ง', mg_firerain: 'ฝนเพลิง',
   sw_judgement: 'ดาบพิพากษา', whirlwind: 'พายุดาบ', earthquake: 'ปฐพีแยก', sw_unleash: 'ปลดปล่อยพลัง',
   gs_rocketrain: 'ฝนจรวด', gs_explosive: 'กระสุนระเบิด', headshot: 'ยิงหัว', gs_cluster: 'ระเบิดลูกปราย',
+  // every class's dash is one skill id: one switch (the Swordsman's is drawn first, the others with their classes)
+  dash: 'แดช',
+  // Swordsman, the rest (owner 2026-11-19)
+  slash: 'ฟัน', sw_heavyslash: 'ฟันหนัก', sw_sunder: 'ฟันทำลายเกราะ', sw_swordwave: 'คลื่นดาบ', sw_execute: 'ประหาร',
+  sw_flurry: 'คมดาบต่อเนื่อง', sw_bladering: 'วงแหวนคมดาบ', sw_crush: 'ทุบทำลาย',
+  charge: 'พุ่งชน', sw_triple: 'คอมโบสามจังหวะ', sw_backstep: 'ถอยฟัน', sw_hunt: 'ไล่ล่า', sw_spindodge: 'หมุนตัวหลบ',
+  sw_bladedance: 'ระบำดาบ', sw_shadowstep: 'ก้าวเงา', sw_overdrive: 'เร่งเครื่อง', sw_shadowswap: 'เงาสลับร่าง', sw_thousandcuts: 'พันคมดาบ',
+  sw_armorbash: 'กระแทกเกราะ', sw_taunt: 'ยั่วยุ', sw_guard: 'ตั้งรับ', sw_shockwave: 'คลื่นสั่นสะเทือน', sw_thorns: 'เกราะสะท้อน',
+  // Mage, the rest (owner 2026-11-19; the dash is the one `dash` above)
+  bolt: 'ลูกเวท', mg_arcanelance: 'หอกอาร์เคน', mg_chainlightning: 'สายฟ้าฟาด', mg_manaburst: 'ระเบิดมานา', mg_flamewave: 'คลื่นเพลิง',
+  mg_volatileorb: 'ลูกแก้วระเบิด', mg_crystalrain: 'ฝนผลึก', mg_chargedblast: 'เวทชาร์จ',
+  mg_flameground: 'พื้นเพลิง', mg_poisonmist: 'หมอกพิษอาคม', mg_searingmark: 'ตราเผาผลาญ', mg_decayring: 'วงแหวนสลาย', mg_thunderstorm: 'พายุสายฟ้า',
+  mg_crystalspikes: 'หนามผลึก', mg_cursedash: 'เถ้าถ่านคำสาป', mg_hexseed: 'เมล็ดเวทระเบิด', mg_decayfield: 'สนามเสื่อมสลาย',
+  mg_forcewave: 'คลื่นผลัก', mg_frailcurse: 'คำสาปเปราะบาง', mg_icecage: 'กรงน้ำแข็ง', mg_gravitywell: 'หลุมแรงโน้มถ่วง', mg_sealveil: 'ม่านผนึกเวท',
+  mg_empowerfield: 'สนามเร่งอาคม', mg_manashield: 'โล่มานาหมู่', mg_timewarp: 'บิดเบือนเวลา', mg_manawell: 'วงคืนพลัง',
+  // Gunslinger, the rest (owner 2026-11-19; the dash is the one `dash` above)
+  shot: 'ยิงเร็ว', pierce: 'กระสุนเจาะเกราะ', gs_deadeye: 'เล็งจุดตาย', gs_aimedshot: 'ยิงประณีต', gs_ricochet: 'กระสุนสะท้อน', gs_counter: 'ยิงสวนกลับ',
+  gs_weakspot: 'เจาะจุดอ่อน', gs_finisher: 'ยิงปิดฉาก', gs_lockon: 'ล็อกเป้า', gs_sniperfocus: 'โฟกัสสไนเปอร์',
+  rapidfire: 'ยิงรัว', gs_hotrounds: 'กระสุนร้อน', gs_quickreload: 'รีโหลดฉับไว', gs_doubletap: 'ยิงสองนัด', gs_shockrounds: 'กระสุนช็อต',
+  gs_stackfire: 'ยิงย้ำเป้า', gs_splitshot: 'กระสุนแยก', gs_piercerounds: 'กระสุนทะลวง', gs_overdrive: 'โอเวอร์ไดรฟ์', gs_bulletstorm: 'พายุลูกกระสุน',
+  gs_incendiary: 'กระสุนเพลิง', gs_mine: 'กับระเบิด', gs_smoke: 'ระเบิดควัน', gs_railgun: 'กระสุนรางแม่เหล็ก', gs_drone: 'โดรนสนับสนุน',
+  gs_seeker: 'จรวดติดตาม', gs_turret: 'ป้อมปืนพกพา',
+  sw_anchor: 'ปักหลัก', sw_warcry: 'ปลุกใจนักรบ', sw_cataclysm: 'ปฐพีถล่ม', sw_unbreakable: 'ราชันย์ไม่ล้ม',
 } as const;
 export type QuarksSkill = keyof typeof QUARKS_SKILLS;
 export type QuarksKey = `qk_${QuarksSkill}`;

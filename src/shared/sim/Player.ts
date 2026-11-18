@@ -3,7 +3,7 @@ import type { Sim } from './Sim';
 import type { Monster } from './Monster';
 import type { Terrain } from './terrain';
 import type { Intent, SkillEffect } from './types';
-import { castSkill, basicAttack, emptyGunBuffs, type GunBuffs } from './skills';
+import { castSkill, basicAttack, quarksCue, emptyGunBuffs, type GunBuffs } from './skills';
 import { passiveDashCdMult, passiveOnCast, passiveOnDash, passiveOnKill, passiveStats } from '../passives';
 import { CLASSES, type ClassDef, type SkillDef, type SkillSlot } from '../data/classes';
 import { cleanSkillBook, rankedCooldown, rankedMp, rankOf, skillParam, type SkillBook } from '../skillBook';
@@ -1163,6 +1163,7 @@ export class Player extends Unit {
       const dashSkill = this.skill('dash')!;
       const [dx, dz] = mx || mz ? [mx, mz] : [this.aimX, this.aimZ];
       this.startDash(dx, dz, 4.8, 0.18, 'dash');
+      quarksCue(sim, this, 'dash', Math.atan2(dz, dx));
       this.cd.dash = dashSkill.cooldown * passiveDashCdMult(this);
       return;
     }

@@ -304,9 +304,10 @@ export class Sim {
           // meteor(x, z, duration, by): the client draws others' falling meteor lighter (src/client/quarksFx.ts)
           a.push(p.id);
         } else if (e.name === 'zone' && sk) {
-          // zone(name, x, z, size, duration, follow, skill)
+          // zone(name, x, z, size, duration, follow, skill, by)
           while (a.length < 6) a.push(null);
           if (a.length === 6) a.push(sk);
+          if (a.length === 7) a.push(p.id);
         }
       }
     }

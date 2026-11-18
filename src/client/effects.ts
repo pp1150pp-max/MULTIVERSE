@@ -368,7 +368,7 @@ export class Effects implements FxApi {
       }
     }
     // three.quarks particles over the hand-drawn art of some skills (trial, docs/systems/skill-fx-layer.md).
-    if (skill) this.quarks?.onEffect(name, skill, x, z, size, by);
+    if (skill) this.quarks?.onEffect(name, skill, x, z, size, by, angle);
     const def = EFFECTS[name];
     const tex = frameTexture(def.sheet);
     if (!tex) {
@@ -401,7 +401,8 @@ export class Effects implements FxApi {
    * `duration` with a fade in and out, its edge fades softly into the ground, and the extra layer (glow, ground light,
    * particles) is played again lightly while it lasts. `follow` keeps it under that player.
    */
-  zone(name: SkillEffect, x: number, z: number, size: number, duration: number, follow?: number | null, skill?: string): void {
+  zone(name: SkillEffect, x: number, z: number, size: number, duration: number, follow?: number | null, skill?: string, by?: number): void {
+    if (skill) this.quarks?.onZone(name, skill, x, z, size, duration, follow, by);
     // Owner 2026-11-18: a lasting area is drawn as a magic circle only (no painted area, no standing pieces).
     if (zoneAsCircle() && duration > 0) {
       this.zoneCircle(x, z, size, duration, follow, skill);
@@ -619,7 +620,7 @@ export class Effects implements FxApi {
 
   burst(x: number, y: number, z: number, color: string, n = 8, speed = 4, by?: number, skill?: string): void {
     // a skill drawn in three.quarks instead (Fire Rain's falling fire)
-    if (skill && this.quarks?.onBurst(skill, x, z, by)) return;
+    if (skill && this.quarks?.onBurst(skill, x, z, by, n, speed, color)) return;
     for (let i = 0; i < n; i++) {
       const s = this.glowSprite(color, 0.35, 1);
       s.position.set(x, y, z);
