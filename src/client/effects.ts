@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { circlesOn, MagicCircle, zoneAsCircle, zoneColor } from './magicCircles';
+import { circlesOn, MagicCircle, zoneAsCircle, zoneCircle } from './magicCircles';
 import { fxSheets, fxTex, type FxSheet } from './assets';
 import type { FxApi, SkillEffect } from '../shared/sim/types';
 import { loopProps, playProps } from './zoneProps';
+import { playSkillExtras } from './skillExtras';
 import { playLayer, ShotLayer, type FxLayerHooks, type FxLayerHost } from './fxLayer';
 
 const FRAMES = 6;
@@ -325,6 +326,8 @@ export class Effects implements FxApi {
       if (!last || now - last.t > 150 || Math.hypot(last.x - x, last.z - z) > 0.5) {
         this.lastProps.set(skill, { t: now, x, z });
         playProps(this, skill, x, z, angle, size, EFFECTS[name].life);
+        // The skill's own code effects over its painted frames (skillExtras.ts).
+        playSkillExtras(this, skill, x, z, angle, size);
       }
     }
     const def = EFFECTS[name];
@@ -362,7 +365,7 @@ export class Effects implements FxApi {
   zone(name: SkillEffect, x: number, z: number, size: number, duration: number, follow?: number | null, skill?: string): void {
     // Owner 2026-11-18: a lasting area is drawn as a magic circle only (no painted area, no standing pieces).
     if (zoneAsCircle() && duration > 0) {
-      this.zoneCircle(name, x, z, size, duration, follow);
+      this.zoneCircle(x, z, size, duration, follow, skill);
       return;
     }
     const def = EFFECTS[name];
@@ -390,7 +393,7 @@ export class Effects implements FxApi {
     circleAt.position.set(x, 0, z);
     const circle = circlesOn() ? new MagicCircle(circleAt, size * 1.05) : null;
     if (circle) this.add(circleAt, duration, (k, dt) => {
-      circle.set(duration - k * duration > ZONE_FADE_OUT ? zoneColor(name) : null);
+      circle.set(duration - k * duration > ZONE_FADE_OUT ? zoneCircle(skill) : null);
       circle.update(dt);
       if (k >= 1) circle.dispose();
     });
@@ -415,7 +418,7 @@ export class Effects implements FxApi {
   }
 
   /** A lasting area as a magic circle (magicCircles.ts) in the skill's colour, following `follow` when given. */
-  private zoneCircle(name: SkillEffect, x: number, z: number, size: number, duration: number, follow?: number | null): void {
+  private zoneCircle(x: number, z: number, size: number, duration: number, follow?: number | null, skill?: string): void {
     const at = new THREE.Group();
     at.position.set(x, 0, z);
     const circle = new MagicCircle(at, size, true);
@@ -424,7 +427,7 @@ export class Effects implements FxApi {
       t += dt;
       const p = follow != null ? this.posOf?.(follow) : null;
       if (p) at.position.set(p.x, 0, p.z);
-      circle.set(duration - t > ZONE_FADE_OUT ? zoneColor(name) : null);
+      circle.set(duration - t > ZONE_FADE_OUT ? zoneCircle(skill) : null);
       circle.update(dt);
       if (k >= 1) circle.dispose();
     });

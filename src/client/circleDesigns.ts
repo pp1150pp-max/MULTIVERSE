@@ -59,7 +59,7 @@ export interface CircleDesign {
 /** Every skill: [element, motif]. Ring/rune/spoke styles come from the id (made unique below). */
 const SKILLS: Record<string, [Element, Motif]> = {
   // Basic attacks
-  slash: ['steel', 'claw'], shot: ['tech', 'bullet'], bolt: ['arcane', 'atom'],
+  slash: ['steel', 'claw'], shot: ['tech', 'bullet'], bolt: ['arcane', 'atom'], dash: ['wind', 'propeller'],
   // Mage
   fireball: ['fire', 'flame'], mg_arcanelance: ['arcane', 'arrow'], mg_chainlightning: ['lightning', 'chain'],
   mg_manaburst: ['mana', 'star8'], mg_flamewave: ['fire', 'wave'], mg_volatileorb: ['arcane', 'sun'],
@@ -144,6 +144,8 @@ const DESIGNS = buildDesigns();
 /** The design of a skill (or a fallback key: buff_attack, debuff_stun, zone, …), or undefined. */
 export const circleDesign = (key: string | null | undefined): CircleDesign | undefined => (key ? DESIGNS.get(key) : undefined);
 export const skillCircleIds = (): string[] => Object.keys(SKILLS);
+/** A skill's element (its colours and code effects), or undefined. */
+export const skillElement = (id: string): Element | undefined => SKILLS[id]?.[0];
 
 // ------------------------------------------------------------ drawing
 

@@ -1,7 +1,7 @@
 // Sprites for simulation entities. Each view reads its entity every frame; the simulation never
 // touches Three.js, so the same entities can come from a local Sim or (later) the server.
 import { DebuffFx } from './debuffFx';
-import { buffColor, debuffColor, MagicCircle } from './magicCircles';
+import { buffCircle, debuffCircle, MagicCircle } from './magicCircles';
 import * as THREE from 'three';
 import type { Player } from '../shared/sim/Player';
 import type { Monster } from '../shared/sim/Monster';
@@ -107,7 +107,7 @@ export class PlayerView {
     this.cos.update(dt, p, fx);
     this.updateToad(dt, fx);
     this.updatePassiveAura(dt);
-    this.circle.set(p.alive && p.toadT <= 0 ? buffColor(p.buffBits) : null);
+    this.circle.set(p.alive && p.toadT <= 0 ? buffCircle(p.buffBits, p.buffSkill) : null);
     this.circle.update(dt);
     this.sync();
   }
@@ -312,7 +312,7 @@ export class MonsterView {
   update(dt: number, fx: Effects | null): void {
     const m = this.m;
     if (fx) this.debuffFx.update(dt, m, fx);
-    this.circle.set(m.alive ? debuffColor(m.debuffs) : null);
+    this.circle.set(m.alive ? debuffCircle(m.debuffs, m.debuffSkill) : null);
     this.circle.update(dt);
     const g = this.actor.group;
     g.position.x = m.x;
