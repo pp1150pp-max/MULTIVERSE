@@ -614,7 +614,12 @@ async function loadAssets(): Promise<void> {
           paperMonster = { walk: 4, attack: 4, scale: monster.scale };
           cols = 8;
         } else {
-          const paper = paperMaps && PAPER_PROPS.has(key) ? `${BASE}paper/props/${key}.png` : null;
+          // Cosmetics (wings, mounts, pets, single wings: tools/cut_cosmetics.cjs with COS_PAPER=1) have a paper copy
+          // of the same name under sprites/paper/cosmetics/.
+          const paper = !paperMaps ? null
+            : PAPER_PROPS.has(key) ? `${BASE}paper/props/${key}.png`
+            : spec.path.startsWith(`${BASE}cosmetics/`) ? spec.path.replace(`${BASE}cosmetics/`, `${BASE}paper/cosmetics/`)
+            : null;
           tex = await (paper ? loadTexture(paper).catch(() => loadTexture(spec.path)) : loadTexture(spec.path))
             .catch((e) => (spec.standIn ? loadTexture(spec.standIn) : Promise.reject(e)));
         }

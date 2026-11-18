@@ -18,7 +18,7 @@ const PAPER_UI = new Set([
   'crystal', 'cash_pack_1', 'cash_pack_2', 'cash_pack_3', 'cash_pack_4',
   'cash_frame', 'cash_dialog', 'cash_card', 'cash_card_hi', 'cash_well', 'cash_check', 'cash_plus', 'cash_btn', 'cash_btn_main',
   'cash_balance', 'cash_price', 'cash_tab', 'cash_tab_on', 'cash_side', 'cash_side_on', 'cash_divider',
-  'cash_ribbon_hot', 'cash_ribbon_new', 'cash_ribbon_sale', 'cash_banner', 'inventory',
+  'cash_ribbon_hot', 'cash_ribbon_new', 'cash_ribbon_sale', 'cash_banner', 'inventory', 'login_bg',
   'portrait_sword', 'portrait_mage', 'portrait_gunslinger',
   'touch/btn_attack', 'touch/stick_base', 'touch/btn_skill', 'touch/stick_knob',
   'touch/icon_chat', 'touch/icon_dash', 'touch/icon_mount', 'touch/icon_talk',
@@ -62,6 +62,14 @@ export function usePaperUi(): void {
     } catch {
       // A stylesheet from another origin (fonts): nothing of ours in it.
     }
+  }
+  // The paper logo is one picture of the whole word (owner 2026-11-18), not a picture per letter.
+  const logo = document.querySelector<HTMLElement>('.logo');
+  if (logo) {
+    const img = document.createElement('img');
+    img.src = (import.meta.env.DEV ? 'assets/sprites/paper/ui/logo.png' : 'assets/sprites/paper/ui/logo.webp');
+    img.alt = '';
+    logo.replaceChildren(img);
   }
   for (const el of Array.from(document.querySelectorAll<HTMLImageElement>('img[src*="sprites/ui/"]'))) {
     const v = el.getAttribute('src')!;
