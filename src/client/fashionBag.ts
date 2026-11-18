@@ -11,9 +11,40 @@ import { cosPicture } from './cosmetics';
 import { cosHiddenKey, isCosHidden } from './cosTune';
 import { orbItemsVersion } from '../shared/orbItems';
 import { isTouchMode } from './touch/device';
+import { imgUrl } from './img';
 
 /** Painted bag slots per page. */
 const PAGE = 30;
+
+// Where things are painted on inventory_fashion.png, in pixels of its 815 x 1086 (turned into % so they scale).
+const ART_W = 815;
+const ART_H = 1086;
+/** Left edge of each frame column, top of each frame row, frame size, and how far in the slot starts. */
+const FRAME_X = [97, 313, 529];
+const FRAME_Y = [243, 435];
+const FRAME_W = 190;
+const FRAME_H = 129;
+const FRAME_IN = 11;
+/** The flat face of the name plate under each frame, between its rivets (left offset from its frame, top per row, size). */
+const PLATE_DX = 49;
+const PLATE_Y = [388, 579];
+const PLATE_W = 98;
+const PLATE_H = 21;
+/** Shorter names where COS_SLOT_NAME doesn't fit on a plate (owner 2026-11-18); the full name stays in the tooltip. */
+const PLATE_NAME: Partial<Record<CosSlot, string>> = { title: 'กรอบชื่อ/แชท' };
+/** The heading plate, and the line of help text under the frames: [left, top, width, height]. */
+const HEAD: Box = [268, 172, 288, 30];
+const NOTE: Box = [90, 607, 635, 26];
+type Box = [number, number, number, number];
+
+/** Puts an element on the painted window at a box measured in art pixels. */
+function place<T extends HTMLElement>(e: T, [x, y, w, h]: Box): T {
+  e.style.left = `${(x / ART_W) * 100}%`;
+  e.style.top = `${(y / ART_H) * 100}%`;
+  e.style.width = `${(w / ART_W) * 100}%`;
+  e.style.height = `${(h / ART_H) * 100}%`;
+  return e;
+}
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -33,12 +64,18 @@ export class FashionBag {
   private readonly grid: HTMLElement;
   private readonly worn: HTMLElement;
   private readonly note: HTMLElement;
+  private readonly title: HTMLElement;
+  private readonly bagTitle: string;
   private sheet: HTMLElement | null = null;
   private sheetId = '';
 
   constructor(private readonly g: Game, private readonly hideTip: () => void) {
     this.box = document.getElementById('inventory')!;
     const win = this.box.querySelector<HTMLElement>('.inv-window')!;
+    this.title = win.querySelector<HTMLElement>('.inv-title')!;
+    this.bagTitle = this.title.textContent ?? '';
+    // The fashion page's window art (CSS swaps it in); fetched now so it doesn't show up late.
+    new Image().src = imgUrl('assets/sprites/ui/inventory_fashion.png');
 
     const tabs = el('div', 'inv-tabs');
     this.tabBag = el('button', 'ui-tab active', 'กระเป๋า');
@@ -89,6 +126,7 @@ export class FashionBag {
     this.tabBag.classList.toggle('active', !on);
     this.tabFashion.classList.toggle('active', on);
     if (!on) this.pager.classList.add('hidden');
+    this.title.textContent = on ? 'กระเป๋าแฟชั่น' : this.bagTitle;
     this.hideTip();
     if (!on) this.closeSheet();
     this.drawn = '';
@@ -161,22 +199,23 @@ export class FashionBag {
       this.pager.replaceChildren(prev, el('span', '', `${this.page + 1} / ${pages}`), next);
     }
 
-    // Worn bar over the equipment area.
-    const slots = COS_SLOTS.map((s) => {
+    // What is worn, on the six painted frames of inventory_fashion.png (3 x 2), each with its name plate.
+    const parts: HTMLElement[] = [place(el('div', 'fashion-head', 'ของแต่งตัวที่สวมอยู่'), HEAD)];
+    COS_SLOTS.forEach((s, i) => {
       const c = cosById(worn[s]);
-      const box = el('div', 'fashion-slot');
+      const x = FRAME_X[i % 3];
+      const y = FRAME_Y[Math.floor(i / 3)];
       const cell = el('div', c ? 'cell fashion-cell worn' : 'cell empty');
       if (c) {
         cell.dataset.wornSlot = s;
         cell.style.setProperty('--rc', c.color);
         cell.append(cosPicture(c).cloneNode(true));
       }
-      box.append(cell, el('div', 'fashion-slot-name', COS_SLOT_NAME[s]));
-      return box;
+      parts.push(
+        place(cell, [x + FRAME_IN, y + FRAME_IN, FRAME_W - FRAME_IN * 2, FRAME_H - FRAME_IN * 2]),
+        place(el('div', 'fashion-slot-name', PLATE_NAME[s] ?? COS_SLOT_NAME[s]), [x + PLATE_DX, PLATE_Y[Math.floor(i / 3)], PLATE_W, PLATE_H]),
+      );
     });
-    const head = el('div', 'fashion-head', 'ของแต่งตัวที่สวมอยู่');
-    const row = el('div', 'fashion-slots');
-    row.append(...slots);
     this.note.textContent = this.g.backend.guest
       ? 'Guest รับ Cosmetics ไม่ได้ สมัครสมาชิกเพื่อรับของ'
       : !list.length
@@ -184,7 +223,7 @@ export class FashionBag {
         : isTouchMode()
           ? 'แตะของเพื่อสวม / ถอด · ไม่มีค่าสถานะ'
           : 'คลิกของในกระเป๋าเพื่อสวม / ถอด · คลิกช่องด้านบนเพื่อถอด · ไม่มีค่าสถานะ';
-    this.worn.replaceChildren(head, row, this.note);
+    this.worn.replaceChildren(...parts, place(this.note, NOTE));
 
     if (this.sheet && !this.sheet.classList.contains('hidden')) {
       const c = cosById(this.sheetId);
