@@ -48,6 +48,11 @@ export interface SkillConfig {
   freeRefundBelow: number;
   /** Gold per point taken back after that (owner: 1,000 G). */
   refundCost: number;
+  /** The skill map can be zoomed and panned (owner 2026-11-19). Off = the fixed fit-to-window map. */
+  mapZoom: boolean;
+  /** Zoom limits of the skill map in % of the fit-to-window size (100 = the size it opens at). */
+  zoomMin: number;
+  zoomMax: number;
   /** Per learnable skill id. */
   skills: Record<string, SkillValues>;
 }
@@ -60,6 +65,9 @@ export interface SkillTuning {
   unlock?: Partial<Record<LearnKind, number[]>>;
   freeRefundBelow?: number;
   refundCost?: number;
+  mapZoom?: boolean;
+  zoomMin?: number;
+  zoomMax?: number;
   skills?: Record<string, SkillValuesTuning>;
 }
 /** One skill's saved differences. */
@@ -71,6 +79,8 @@ export const SKILL_RANGE = {
   maxRank: [1, 20],
   freeRefundBelow: [0, 1000],
   refundCost: [0, 100_000_000],
+  zoomMin: [20, 100],
+  zoomMax: [100, 500],
 } as const satisfies Record<string, readonly [number, number]>;
 export const SKILL_NUM_NAME: Record<keyof typeof SKILL_RANGE, string> = {
   pointsPerLevel: 'แต้มสกิลต่อเลเวล',
@@ -78,6 +88,8 @@ export const SKILL_NUM_NAME: Record<keyof typeof SKILL_RANGE, string> = {
   maxRank: 'แรงก์สูงสุด',
   freeRefundBelow: 'คืนแต้มฟรีเมื่อแต้มรวมน้อยกว่า',
   refundCost: 'ค่าคืนแต้ม (G ต่อแต้ม)',
+  zoomMin: 'ซูมผังต่ำสุด (%)',
+  zoomMax: 'ซูมผังสูงสุด (%)',
 };
 const NUMS = Object.keys(SKILL_RANGE) as (keyof typeof SKILL_RANGE)[];
 
@@ -102,6 +114,9 @@ export function codeSkills(): SkillConfig {
     unlock: { normal: [1, 3, 6, 9, 12, 16, 20, 25], ult: [5, 10], passive: [10, 20, 30] },
     freeRefundBelow: 32,
     refundCost: 1000,
+    mapZoom: true,
+    zoomMin: 50,
+    zoomMax: 250,
     skills,
   };
 }
@@ -111,6 +126,7 @@ export function mergeSkills(t: SkillTuning | undefined): SkillConfig {
   const c = codeSkills();
   if (!t) return c;
   for (const k of NUMS) if (t[k] !== undefined) c[k] = t[k]!;
+  if (typeof t.mapZoom === 'boolean') c.mapZoom = t.mapZoom;
   for (const k of LEARN_KINDS) if (t.unlock?.[k]) c.unlock[k] = [...t.unlock[k]!];
   for (const [id, v] of Object.entries(t.skills ?? {})) {
     const one = c.skills[id];
@@ -124,7 +140,7 @@ export function mergeSkills(t: SkillTuning | undefined): SkillConfig {
 
 const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
-const whole = new Set<string>(['pointsPerLevel', 'lastPointLevel', 'maxRank', 'freeRefundBelow', 'refundCost']);
+const whole = new Set<string>(['pointsPerLevel', 'lastPointLevel', 'maxRank', 'freeRefundBelow', 'refundCost', 'zoomMin', 'zoomMax']);
 const skillName = (id: string): string => LEARNABLE_SKILLS.find((x) => x.sk.id === id)?.sk.nameTh ?? id;
 const skillDef = (id: string) => LEARNABLE_SKILLS.find((x) => x.sk.id === id)?.sk;
 
@@ -136,7 +152,7 @@ const skillDef = (id: string) => LEARNABLE_SKILLS.find((x) => x.sk.id === id)?.s
 export function checkSkillTuning(x: unknown, strict: boolean): { tuning: SkillTuning | undefined } | { error: string } {
   if (x === undefined) return { tuning: undefined };
   if (!isObj(x)) return strict ? { error: 'ค่าสกิลไม่ถูกต้อง' } : { tuning: undefined };
-  const TOP = [...NUMS, 'unlock', 'skills'];
+  const TOP = [...NUMS, 'mapZoom', 'unlock', 'skills'];
   if (strict) {
     const extra = Object.keys(x).find((k) => !TOP.includes(k));
     if (extra) return { error: `สกิล: ไม่รู้จักค่า "${extra.slice(0, 20)}"` };
@@ -151,6 +167,11 @@ export function checkSkillTuning(x: unknown, strict: boolean): { tuning: SkillTu
       continue;
     }
     if (v !== CODE[k]) out[k] = v;
+  }
+  if (x.mapZoom !== undefined) {
+    if (typeof x.mapZoom !== 'boolean') {
+      if (strict) return { error: 'สวิตช์ซูมผังสกิลไม่ถูกต้อง' };
+    } else if (x.mapZoom !== CODE.mapZoom) out.mapZoom = x.mapZoom;
   }
   if (x.unlock !== undefined) {
     if (!isObj(x.unlock)) {
@@ -238,6 +259,7 @@ export function checkSkillTuning(x: unknown, strict: boolean): { tuning: SkillTu
 export function skillChanges(a: SkillConfig, b: SkillConfig): string[] {
   const out: string[] = [];
   for (const k of NUMS) if (a[k] !== b[k]) out.push(`${SKILL_NUM_NAME[k]} ${a[k]} → ${b[k]}`);
+  if (a.mapZoom !== b.mapZoom) out.push(`ซูมผังสกิล ${a.mapZoom ? 'เปิด' : 'ปิด'} → ${b.mapZoom ? 'เปิด' : 'ปิด'}`);
   for (const k of LEARN_KINDS) {
     if (a.unlock[k].join() !== b.unlock[k].join()) out.push(`เลเวลปลดล็อก${KIND_NAME[k]} ${a.unlock[k].join('/')} → ${b.unlock[k].join('/')}`);
   }
