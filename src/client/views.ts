@@ -15,7 +15,7 @@ import { OrbRing } from './orbs';
 import { CosmeticRig, rideScale, ridePose } from './cosmeticViews';
 import { shownCos } from './cosLook';
 import { orbItemLook } from '../shared/orbItems';
-import { AnimatedActor, type Actor } from './AnimatedActor';
+import { AnimatedActor, strideRate, type Actor } from './AnimatedActor';
 import { RigActor, swordRigReady } from './rig/RigActor';
 import { paperSwordOn } from './rig/paperSwitch';
 import { rigLookOf } from '../shared/rigLookTuning';
@@ -46,10 +46,6 @@ const AURA: { color: string; size: number; sparks: number }[] = [
   { color: '#ffd34a', size: 2.7, sparks: 12 },
 ];
 
-/** Move speed (units/s) at which the run cycle plays as drawn; slower or faster scales it, within MIN–MAX. */
-const STRIDE_SPEED = 5;
-const STRIDE_MIN = 0.6;
-const STRIDE_MAX = 1.6;
 
 export class PlayerView {
   readonly actor: Actor;
@@ -175,7 +171,7 @@ export class PlayerView {
     this.lastX = p.x;
     this.lastZ = p.z;
     if (this.actor.setStride) {
-      this.actor.setStride(Math.min(STRIDE_MAX, Math.max(STRIDE_MIN, this.seenSpeed / STRIDE_SPEED)));
+      this.actor.setStride(strideRate(this.seenSpeed));
     }
   }
 

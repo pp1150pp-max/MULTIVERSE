@@ -179,7 +179,7 @@ export interface AdminPaperMaps { on: boolean }
  * switch: the Permissions tab, the audit log, restarting / stopping the server, deleting accounts or
  * characters, and making someone owner (command line).
  */
-export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'paperMaps';
+export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'paperMaps' | 'animPreview';
 
 /**
  * The defaults: which built-in role may use each tool (owner always has all). The owner can change
@@ -253,6 +253,7 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   googleLogin: ['owner'],
   // The papercraft map art switch on the Server tab (owner 2026-11-17: everyone sees the same art, so owner only).
   paperMaps: ['owner'],
+  animPreview: ['owner', 'gm'],
   // The "แคชช็อป" tab: items, prices, packages and purchases (owner 2026-11-15: owner and GMs may look).
   cashShop: ['owner', 'gm'],
   // Saving it, opening / closing sales (owner only).
@@ -318,6 +319,7 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   netDelta: { name: 'ลดขนาด snapshot', desc: 'แท็บ Server: สวิตช์ส่งค่าที่แทบไม่เปลี่ยนเฉพาะตอนเปลี่ยน (ลดเน็ตขาออก) และตัวนับ', group: 'ระบบ' },
   googleLogin: { name: 'เข้าสู่ระบบด้วย Google', desc: 'แท็บ Server: เปิด/ปิดปุ่ม Google ที่หน้า Login ดูบัญชีที่ผูก Google และยกเลิกการผูก', group: 'ระบบ' },
   paperMaps: { name: 'ภาพกระดาษ (ทดลอง)', desc: 'แท็บ Server: สลับภาพแมพและตัวละครระหว่างแบบเดิมกับแบบกระดาษตัดแปะ ทุกคนเห็นเหมือนกัน (มีผลตอนเปิดหน้าเกมใหม่)', group: 'หน้าตา' },
+  animPreview: { name: 'ดูท่าตัวละคร', desc: 'แท็บ "ท่าตัวละคร": ดูท่ายืน วิ่ง โจมตี ฯลฯ ของทุกอาชีพครบ 8 ทิศ บนพื้นเลื่อน ไม่เปลี่ยนอะไรในเกม', group: 'หน้าตา' },
   itemStatMult: { name: 'คอนเฟิร์มตัวคูณสเตตัสบนไอเทม', desc: 'แท็บ "ปรับสมดุล": คอนเฟิร์มตัวคูณค่าสเตตัสบนไอเทม คูณค่าของทุกชิ้นในเซิร์ฟจริง (สำรอง DB ให้ก่อน) · ทดลองดูตัวอย่างได้ด้วยสิทธิ์ "ปรับสมดุล"', group: 'ปรับเกม' },
   cosLook: { name: 'บันทึกของแต่งตัวทั้งเซิร์ฟ', desc: 'บันทึกค่าตำแหน่ง/หน้าตาของแต่งตัวที่ทุกคนเห็น (ต้องมี "ทดลองของแต่งตัว" ด้วย)', group: 'หน้าตา' },
   cosManage: { name: 'ดูจัดการของแต่งตัว', desc: 'แท็บ "จัดการของแต่งตัว": ดูทุกชิ้นว่าซ่อน/แสดง ราคาคริสตัลมิติ และค่าหน้าตารายชิ้น', group: 'หน้าตา' },

@@ -341,13 +341,29 @@ async function loadCharSet(key: string, dir: string): Promise<void> {
 
 /** True when the set loaded (at least its idle animation). */
 async function loadAnimSet(key: string, dir: string): Promise<boolean> {
+  const set = await fetchAnimSet(key, dir);
+  if (!set) return false;
+  animSets[key] = set;
+  assetSources[`${key} (animations)`] = 'file';
+  return true;
+}
+
+/**
+ * A character's animation set from `sprites/<dir>` (e.g. `player/sword` or `paper/player/sword`) without touching
+ * the game's own sets: the /admin animation bench shows the old and the paper pictures side by side.
+ */
+export function loadCharAnimSet(key: string, dir: string): Promise<AnimSet | null> {
+  return fetchAnimSet(key, BASE + dir);
+}
+
+async function fetchAnimSet(key: string, dir: string): Promise<AnimSet | null> {
   let manifest: CharManifest;
   try {
     const res = await fetch(`${dir}/sprite.json`);
-    if (!res.ok) return false;
+    if (!res.ok) return null;
     manifest = (await res.json()) as CharManifest;
   } catch {
-    return false; // No folder yet (the dev server answers with index.html, which isn't JSON).
+    return null; // No folder yet (the dev server answers with index.html, which isn't JSON).
   }
   const textures: AnimSet['textures'] = {};
   await Promise.all(
@@ -368,12 +384,10 @@ async function loadAnimSet(key: string, dir: string): Promise<boolean> {
   );
   if (!textures.idle) {
     console.warn(`[assets] ${key}: sprite.json found but idle animation failed to load — using the simple sheet`);
-    return false;
+    return null;
   }
   for (const name of Object.keys(manifest.animations)) if (!textures[name]) delete manifest.animations[name];
-  animSets[key] = { manifest, textures };
-  assetSources[`${key} (animations)`] = 'file';
-  return true;
+  return { manifest, textures };
 }
 
 /** Repeating ground textures. A zone falls back to its code-painted ground if one is missing. */

@@ -152,7 +152,7 @@ const root = document.getElementById('admin')!;
 let me: AdminMe | null = null;
 let meta: AdminMeta | null = null;
 let online: AdminOnline | null = null;
-type Tab = 'online' | 'users' | 'stats' | 'sessions' | 'chat' | 'mail' | 'trades' | 'reports' | 'orbs' | 'cos' | 'cosManage' | 'rig' | 'cards' | 'balance' | 'daily' | 'cashShop' | 'roles' | 'audit' | 'broadcast' | 'server';
+type Tab = 'online' | 'users' | 'stats' | 'sessions' | 'chat' | 'mail' | 'trades' | 'reports' | 'orbs' | 'cos' | 'cosManage' | 'rig' | 'anim' | 'cards' | 'balance' | 'daily' | 'cashShop' | 'roles' | 'audit' | 'broadcast' | 'server';
 let tab: Tab = 'online';
 let timer = 0;
 
@@ -259,13 +259,13 @@ const CATEGORIES: { name: (typeof FEATURE_GROUPS)[number]; tabs: Tab[] }[] = [
   { name: 'ประวัติ', tabs: ['stats', 'sessions', 'chat', 'trades', 'audit'] },
   { name: 'สื่อสาร', tabs: ['mail', 'reports', 'broadcast'] },
   { name: 'ปรับเกม', tabs: ['balance', 'cards', 'daily', 'cashShop'] },
-  { name: 'หน้าตา', tabs: ['orbs', 'cos', 'cosManage', 'rig'] },
+  { name: 'หน้าตา', tabs: ['orbs', 'cos', 'cosManage', 'rig', 'anim'] },
   { name: 'ระบบ', tabs: ['server', 'roles'] },
 ];
 const TAB_LABEL: Record<Tab, string> = {
   online: 'ออนไลน์', users: 'ผู้ใช้และตัวละคร', stats: 'สถิติ', sessions: 'การเข้าเล่น', chat: 'แชท', trades: 'เทรด',
   audit: 'ประวัติ (audit)', mail: 'จดหมาย', reports: 'รายงาน', broadcast: 'ประกาศ', balance: 'ปรับสมดุล', cards: 'การ์ด', daily: 'ล็อกอินรายวัน', cashShop: 'แคชช็อป',
-  orbs: 'ลูกแก้วตีบวก', cos: 'ของแต่งตัว', cosManage: 'จัดการของแต่งตัว', rig: 'นักดาบกระดาษ', server: 'Server', roles: 'สิทธิ์',
+  orbs: 'ลูกแก้วตีบวก', cos: 'ของแต่งตัว', cosManage: 'จัดการของแต่งตัว', rig: 'นักดาบกระดาษ', anim: 'ท่าตัวละคร', server: 'Server', roles: 'สิทธิ์',
 };
 
 /** Whether the signed-in role may see a tab (the server checks again on every call). */
@@ -292,6 +292,7 @@ function tabAllowed(t: Tab): boolean {
     case 'cosManage': return f.includes('cosManage');
     // The papercraft sword trial bench: whoever may use the cosmetics bench (it changes nothing on the server).
     case 'rig': return f.includes('cosPreview');
+    case 'anim': return f.includes('animPreview');
     case 'server': return me.role === 'owner' || f.includes('backup') || f.includes('shutdownText') || f.includes('netDelta') || f.includes('googleLogin') || f.includes('paperMaps');
   }
 }
@@ -351,6 +352,7 @@ function setTab(t: Tab): void {
   else if (t === 'orbs') void renderOrbs();
   else if (t === 'cos') void renderCos();
   else if (t === 'rig') void renderRig();
+  else if (t === 'anim') void renderAnim();
   else if (t === 'balance') void renderBalance(view, h, api, (tuning) => applyBalance(tuning), can('itemStatMult'));
   else if (t === 'daily') void renderDaily(view, h, api);
   else if (t === 'cashShop') void renderCashShop(view, h, api);
@@ -423,6 +425,21 @@ async function renderRig(): Promise<void> {
     if (tab !== 'rig' || !box.isConnected) return;
     const stop = await mountRigPreview(box);
     if (tab !== 'rig' || !box.isConnected) stop();
+    else stopOrbs = stop;
+  } catch (e) {
+    box.textContent = `โหลดไม่สำเร็จ: ${(e as Error).message}`;
+  }
+}
+
+/** The character animation bench (src/client/animPreview.ts): every facing at once. Loaded only when this tab opens. */
+async function renderAnim(): Promise<void> {
+  const box = h('div', { class: 'orb-bench' }, 'กำลังโหลด…');
+  view.append(box);
+  try {
+    const { mountAnimPreview } = await import('../client/animPreview');
+    if (tab !== 'anim' || !box.isConnected) return;
+    const stop = await mountAnimPreview(box);
+    if (tab !== 'anim' || !box.isConnected) stop();
     else stopOrbs = stop;
   } catch (e) {
     box.textContent = `โหลดไม่สำเร็จ: ${(e as Error).message}`;

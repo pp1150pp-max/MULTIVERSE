@@ -76,6 +76,13 @@ const priorityOf = (name: string) => PRIORITY[name] ?? PRIORITY[name.split('_')[
 
 const S = Math.SQRT1_2;
 
+/** Move speed (units/s) at which the run cycle plays as drawn; slower or faster scales it, within MIN–MAX. */
+const STRIDE_SPEED = 5;
+const STRIDE_MIN = 0.6;
+const STRIDE_MAX = 1.6;
+/** The run-cycle rate (setStride) for a character seen moving at `speed` units/s: the game and the /admin bench. */
+export const strideRate = (speed: number): number => Math.min(STRIDE_MAX, Math.max(STRIDE_MIN, speed / STRIDE_SPEED));
+
 /** Optional looping animation shown instead of `run` while firing on the move. */
 const RUN_ATTACK = 'run_attack';
 /** Keeps the gun raised between shots so the arm doesn't flicker during continuous fire. */
@@ -102,6 +109,7 @@ export class AnimatedActor implements Actor {
   private aimT = 0;
   /** A riding pose shown instead of idle / run while on a mount (see setRide). */
   private ride: string | null = null;
+  private drawn: { dir: Dir; flip: boolean; frame: number; frames: number } = { dir: 'down', flip: false, frame: 0, frames: 1 };
 
   constructor(set: AnimSet, shadowRadius: number) {
     this.m = set.manifest;
@@ -230,6 +238,7 @@ export class AnimatedActor implements Actor {
     const mirrorable = dir === 'side' || dir === 'down_side' || dir === 'up_side';
     const flip = mirrorable && Math.abs(this.sx) > 0.05 && (this.m.sideFaces === 'right') !== this.sx > 0;
 
+    this.drawn = { dir, flip, frame, frames: def.frames };
     const t = this.tex[name];
     const w = 1 / def.frames;
     const h = 1 / dirs.length;
@@ -245,6 +254,11 @@ export class AnimatedActor implements Actor {
 
   flash(): void {
     this.flashT = 0.15;
+  }
+
+  /** Which picture row, mirrored or not, and which frame the last update drew (the /admin animation bench). */
+  get drawnFrame(): { dir: Dir; flip: boolean; frame: number; frames: number } {
+    return this.drawn;
   }
 
   /** The animation shown on the last update (RigActor asks it to know when to hand over). */
