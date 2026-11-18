@@ -12,6 +12,12 @@ export interface QuarksHook {
   y?: number;
   /** Move the emitter this far along the effect's angle first (a swing's reach). */
   fwd?: number;
+  /** Same, in multiples of the picture's size (-1 = back to where a cone's picture starts: its size is half its reach). */
+  fwdSize?: number;
+  /** Scale the template (drawn on a circle of radius 1) by the picture's size: its radius. */
+  scale?: boolean;
+  /** A zone's field: keeps going as long as the zone does (not for a zone that follows a player). */
+  timed?: boolean;
 }
 
 /**
@@ -64,6 +70,42 @@ export const ON_EFFECT: Partial<Record<`${QuarksSkill}/${SkillEffect}`, QuarksHo
   'sw_warcry/sw_shout': { skill: 'sw_warcry', tpl: 'swWarcry', y: 0.5 },
   'sw_cataclysm/quake': { skill: 'sw_cataclysm', tpl: 'swCata' },
   'sw_unbreakable/sw_shout': { skill: 'sw_unbreakable', tpl: 'swKing', y: 0.5 },
+
+  // ---- Mage. Line 0
+  'mg_chainlightning/mg_lightning': { skill: 'mg_chainlightning', tpl: 'mgChain', y: 1 },
+  'mg_manaburst/mg_burst': { skill: 'mg_manaburst', tpl: 'mgBurst', y: 0.4, scale: true },
+  'mg_flamewave/mg_flamewave': { skill: 'mg_flamewave', tpl: 'mgFlameWave', y: 0.8, fwdSize: -1 },
+  'mg_volatileorb/explosion': { skill: 'mg_volatileorb', tpl: 'mgOrbBlast', y: 0.6 },
+  'mg_crystalrain/mg_starhit': { skill: 'mg_crystalrain', tpl: 'mgCrystalHit' },
+  'mg_chargedblast/mg_burst': { skill: 'mg_chargedblast', tpl: 'mgCharged', y: 0.4, scale: true },
+  // Line 1
+  'mg_searingmark/mg_curse': { skill: 'mg_searingmark', tpl: 'mgMark', y: 1 },
+  'mg_thunderstorm/mg_lightning': { skill: 'mg_thunderstorm', tpl: 'mgZap', y: 1 },
+  'mg_cursedash/mg_ash': { skill: 'mg_cursedash', tpl: 'mgAsh', y: 0.8, fwdSize: -1 },
+  'mg_hexseed/explosion': { skill: 'mg_hexseed', tpl: 'mgHexBlast', y: 0.5 },
+  // Line 2
+  'mg_forcewave/mg_shock': { skill: 'mg_forcewave', tpl: 'mgShock', y: 0.4 },
+  'mg_icecage/frost': { skill: 'mg_icecage', tpl: 'mgIceHit', y: 0.9 },
+  'mg_gravitywell/mg_burst': { skill: 'mg_gravitywell', tpl: 'mgBurst', y: 0.4, scale: true },
+};
+
+/**
+ * A skill's zone (a lasting area, Effects.zone) → the template. `timed` = a field that goes on for the zone's
+ * duration; the others play once when the zone starts (a zone that follows a player never gets a timed one).
+ */
+export const ON_ZONE: Partial<Record<`${QuarksSkill}/${SkillEffect}`, QuarksHook>> = {
+  'mg_flameground/mg_firefield': { skill: 'mg_flameground', tpl: 'mgFireField', y: 0.2, scale: true, timed: true },
+  'mg_poisonmist/mg_poison': { skill: 'mg_poisonmist', tpl: 'mgMist', y: 0.3, scale: true, timed: true },
+  'mg_decayring/mg_decay': { skill: 'mg_decayring', tpl: 'mgDecayRing', y: 0.3, scale: true },
+  'mg_hexseed/mg_poison': { skill: 'mg_hexseed', tpl: 'mgMist', y: 0.3, scale: true, timed: true },
+  'mg_decayfield/mg_decay': { skill: 'mg_decayfield', tpl: 'mgDecayField', y: 0.3, scale: true },
+  'mg_frailcurse/mg_curse': { skill: 'mg_frailcurse', tpl: 'mgFrail', y: 0.3, scale: true },
+  'mg_gravitywell/mg_vortex': { skill: 'mg_gravitywell', tpl: 'mgVortex', y: 0.3, scale: true, timed: true },
+  'mg_sealveil/mg_curse': { skill: 'mg_sealveil', tpl: 'mgVeil', y: 0.3, scale: true },
+  'mg_empowerfield/mg_empower': { skill: 'mg_empowerfield', tpl: 'mgEmpower', y: 0.3, scale: true },
+  'mg_manashield/mg_shield': { skill: 'mg_manashield', tpl: 'mgShield', y: 0.3, scale: true },
+  'mg_timewarp/mg_timewarp': { skill: 'mg_timewarp', tpl: 'mgTimewarp', y: 0.3, scale: true },
+  'mg_manawell/mg_shield': { skill: 'mg_manawell', tpl: 'mgManaWell', y: 0.3, scale: true, timed: true },
 };
 
 /**
@@ -74,6 +116,11 @@ export const ON_EFFECT: Partial<Record<`${QuarksSkill}/${SkillEffect}`, QuarksHo
 export const ON_CUE: Record<string, QuarksHook> = {
   'slash': { skill: 'slash', tpl: 'swSlashLite', y: 0.9, fwd: 1.5 },
   'dash/sword': { skill: 'dash', tpl: 'swDash', y: 0.3 },
+  'bolt': { skill: 'bolt', tpl: 'mgBolt', y: 1, fwd: 0.9 },
+  'dash/mage': { skill: 'dash', tpl: 'mgDash', y: 0.3 },
+  // no picture of their own: the Sim sends a cue where they land (quarksCue)
+  'mg_arcanelance': { skill: 'mg_arcanelance', tpl: 'mgLance', y: 1, fwd: 1 },
+  'mg_crystalspikes': { skill: 'mg_crystalspikes', tpl: 'mgSpikes', y: 0.8 },
 };
 
 export const cueKey = (skill: string, cls: string): string => (skill === 'dash' ? `dash/${cls}` : skill);

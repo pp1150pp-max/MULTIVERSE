@@ -105,6 +105,13 @@ export const QUARKS_SKILLS = {
   charge: 'พุ่งชน', sw_triple: 'คอมโบสามจังหวะ', sw_backstep: 'ถอยฟัน', sw_hunt: 'ไล่ล่า', sw_spindodge: 'หมุนตัวหลบ',
   sw_bladedance: 'ระบำดาบ', sw_shadowstep: 'ก้าวเงา', sw_overdrive: 'เร่งเครื่อง', sw_shadowswap: 'เงาสลับร่าง', sw_thousandcuts: 'พันคมดาบ',
   sw_armorbash: 'กระแทกเกราะ', sw_taunt: 'ยั่วยุ', sw_guard: 'ตั้งรับ', sw_shockwave: 'คลื่นสั่นสะเทือน', sw_thorns: 'เกราะสะท้อน',
+  // Mage, the rest (owner 2026-11-19; the dash is the one `dash` above)
+  bolt: 'ลูกเวท', mg_arcanelance: 'หอกอาร์เคน', mg_chainlightning: 'สายฟ้าฟาด', mg_manaburst: 'ระเบิดมานา', mg_flamewave: 'คลื่นเพลิง',
+  mg_volatileorb: 'ลูกแก้วระเบิด', mg_crystalrain: 'ฝนผลึก', mg_chargedblast: 'เวทชาร์จ',
+  mg_flameground: 'พื้นเพลิง', mg_poisonmist: 'หมอกพิษอาคม', mg_searingmark: 'ตราเผาผลาญ', mg_decayring: 'วงแหวนสลาย', mg_thunderstorm: 'พายุสายฟ้า',
+  mg_crystalspikes: 'หนามผลึก', mg_cursedash: 'เถ้าถ่านคำสาป', mg_hexseed: 'เมล็ดเวทระเบิด', mg_decayfield: 'สนามเสื่อมสลาย',
+  mg_forcewave: 'คลื่นผลัก', mg_frailcurse: 'คำสาปเปราะบาง', mg_icecage: 'กรงน้ำแข็ง', mg_gravitywell: 'หลุมแรงโน้มถ่วง', mg_sealveil: 'ม่านผนึกเวท',
+  mg_empowerfield: 'สนามเร่งอาคม', mg_manashield: 'โล่มานาหมู่', mg_timewarp: 'บิดเบือนเวลา', mg_manawell: 'วงคืนพลัง',
   sw_anchor: 'ปักหลัก', sw_warcry: 'ปลุกใจนักรบ', sw_cataclysm: 'ปฐพีถล่ม', sw_unbreakable: 'ราชันย์ไม่ล้ม',
 } as const;
 export type QuarksSkill = keyof typeof QUARKS_SKILLS;

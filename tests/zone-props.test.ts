@@ -43,7 +43,7 @@ function tagOf(cls: 'sword' | 'mage', id: string, fxName: 'effect' | 'zone', nam
   const a = tagOf('sword', 'earthquake', 'effect', 'quake');
   ok(a[7] === 'earthquake', `effect carries its skill (${JSON.stringify(a)})`);
   const b = tagOf('mage', 'mg_flameground', 'zone', 'mg_firefield');
-  ok(b.length === 7 && b[6] === 'mg_flameground' && b[5] === null, `zone carries its skill, follow padded (${JSON.stringify(b)})`);
+  ok(b.length === 8 && b[6] === 'mg_flameground' && b[5] === null && typeof b[7] === 'number', `zone carries its skill, follow padded, caster id (${JSON.stringify(b)})`);
   const c = tagOf('mage', 'mg_decayring', 'zone', 'mg_decay');
   ok(c[6] === 'mg_decayring' && typeof c[5] === 'number', `following zone keeps its caster and gets its skill (${JSON.stringify(c)})`);
   const d = tagOf('mage', 'meteor', 'effect', 'crater');

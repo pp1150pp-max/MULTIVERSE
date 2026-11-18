@@ -184,8 +184,8 @@ const aimAngle = (p: Player, aim: Vec2) => Math.atan2(aim.z - p.z, aim.x - p.x);
  * asCaster; colour = the caster's class, speed = the angle. Only this one event is tagged, so nothing else about the
  * swing or the dash changes.
  */
-export function quarksCue(sim: Sim, p: Player, skill: string, ang: number): void {
-  sim.asCaster(p, () => sim.fx('burst', p.x, 0, p.z, p.cls.id, 0, ang), skill);
+export function quarksCue(sim: Sim, p: Player, skill: string, ang: number, x = p.x, z = p.z): void {
+  sim.asCaster(p, () => sim.fx('burst', x, 0, z, p.cls.id, 0, ang), skill);
 }
 
 export function basicAttack(sim: Sim, p: Player, aim: Vec2): void {
@@ -347,6 +347,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
 
     // Mage line 1: burst damage
     case 'mg_arcanelance':
+      quarksCue(sim, p, sk.id, ang);
       sim.addProjectile(p, { x: p.x, z: p.z, angle: ang, speed: 22, range: far, radius: 0.5, mult: dmg, color: '#ffb06a', size: 1, pierce: true, kb: 2, hit: { skill: sk } });
       return true;
     case 'mg_chainlightning': {
@@ -471,7 +472,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const delay = P('delay');
       // The shot itself does no damage: it brands the first monster, which blows up later.
       sim.addProjectile(p, {
-        x: p.x, z: p.z, angle: ang, speed: 20, range: far, radius: 0.4, mult: 0, color: VENOM, size: 0.7,
+        x: p.x, z: p.z, angle: ang, speed: 20, range: far, radius: 0.4, mult: 0, color: VENOM, size: 0.7, fxSkill: sk.id,
         after: (m) => {
           sim.fx('effect', 'mg_curse', m.x, m.z, 0, 1);
           sim.schedule(delay, () => {
@@ -518,6 +519,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const r = P('radius');
       const every = P('every');
       const shots = Math.max(1, Math.floor(P('duration') / every));
+      quarksCue(sim, p, sk.id, 0, c.x, c.z);
       // The crystal itself stands there the whole time (owner 2026-11-15: the spikes seemed to come from nowhere).
       sim.fx('crystal', c.x, c.z, shots * every + 0.3, VENOM);
       tickFor(sim, p, every, shots, () => {

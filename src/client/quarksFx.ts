@@ -18,7 +18,7 @@ import { currentBalance } from '../shared/balance';
 import { quarksKey, type QuarksSkill } from '../shared/fxLayerTuning';
 import type { SkillEffect } from '../shared/sim/types';
 import { gfxOthers, gfxParticles } from './gfxPrefs';
-import { cueKey, ON_CUE, ON_EFFECT, type QuarksHook } from './quarksHooks';
+import { cueKey, ON_CUE, ON_EFFECT, ON_ZONE, type QuarksHook } from './quarksHooks';
 
 // quarks.core has its own vector classes (same shape as three's); its behaviours want those
 const V3 = (x: number, y: number, z: number) => new QVector3(x, y, z);
@@ -115,6 +115,26 @@ const embers = (radius: number, secs: number, rate: number, from: string, to: st
   shape: new CircleEmitter({ radius, thickness: 1 }), behaviors: [grad([[from, 0], [to, 1]]), up()],
 });
 
+const ORANGE: [string, string] = ['#fff2c0', '#ff7a4a'];
+const CYAN: [string, string] = ['#ffffff', '#7ad8ff'];
+const GOLD: [string, string] = ['#fff6c8', '#ffcf5a'];
+const RED: [string, string] = ['#ffd0c8', '#ff3a2a'];
+/** Sparks thrown forward along the swing (the emitter is turned to the effect's angle). */
+const fan = (n: number, speed: [number, number], c: [string, string], spread = 0.7, extra: Partial<Recipe> = {}): Recipe => ({
+  dir: true, tex: 'spark', life: iv(0.15, 0.32), speed: iv(...speed), size: cv(0.1), bursts: n, stretched: 0.06,
+  shape: new ConeEmitter({ radius: 0.15, angle: spread, thickness: 1 }), behaviors: [grad([[c[0], 0], [c[1], 1]]), down(3)], ...extra,
+});
+/** Sparks flying out every way. */
+const spray = (n: number, speed: [number, number], c: [string, string], g = 3): Recipe => sparks(n, speed, c[0], c[1], g);
+/** Light motes lifting off the ground round a point: the glow of a buff. */
+const rise = (n: number, radius: number, c: [string, string], secs = 0.1): Recipe => ({
+  flat: true, duration: secs, life: iv(0.6, 1.1), speed: iv(0.3, 0.9), size: iv(0.08, 0.16), bursts: n,
+  shape: new CircleEmitter({ radius, thickness: 1 }), behaviors: [grad([[c[0], 0], [c[1], 1]]), up(1.2)],
+});
+const glowRing = (n: number, speed: [number, number], c: [string, string]): Recipe =>
+  ring(n, speed, [0.22, 0.4], [grad([[c[0], 0], [c[1], 1]]), shrink()], { tex: 'spark', stretched: 0.05 });
+const chip = (n: number, color: string): Recipe => ({ ...debris(n, color, [4, 8], 0.9), life: iv(0.4, 0.7), size: iv(0.1, 0.22) });
+
 export class QuarksFx {
   private readonly batch = new BatchedRenderer();
   private readonly tex: Record<TexName, THREE.Texture>;
@@ -141,6 +161,7 @@ export class QuarksFx {
     this.buildMeteor();
     this.buildMore();
     this.buildSword();
+    this.buildMage();
   }
 
   private mat(tex: TexName, additive: boolean): THREE.MeshBasicMaterial {
@@ -186,7 +207,7 @@ export class QuarksFx {
    * window (quality, and other players' particles: src/client/gfxPrefs.ts); another player's effect isn't drawn
    * at all while the screen is over quarksCap (docs/systems/skill-fx-layer.md).
    */
-  private play(name: string, x: number, y: number, z: number, by: number | undefined, parent: THREE.Object3D = this.scene, yaw?: number): ParticleSystem[] {
+  private play(name: string, x: number, y: number, z: number, by: number | undefined, parent: THREE.Object3D = this.scene, yaw?: number, scale?: number): ParticleSystem[] {
     const cfg = currentBalance().fxLayer;
     const mine = this.isMine(by);
     if (!mine && this.live >= cfg.quarksCap) return [];
@@ -201,6 +222,7 @@ export class QuarksFx {
       s.emitter.position.set(x, y, z);
       if (t.emitter.userData.flat) s.emitter.rotation.x = FLAT;
       if (t.emitter.userData.dir && yaw !== undefined) s.emitter.rotation.y = Math.PI / 2 - (yaw + t.emitter.userData.turn);
+      if (scale !== undefined) s.emitter.scale.setScalar(scale);
       parent.add(s.emitter);
       this.batch.addSystem(s);
       return s;
@@ -290,10 +312,19 @@ export class QuarksFx {
     this.hook(ON_EFFECT[`${skill}/${name}` as keyof typeof ON_EFFECT], x, z, size, by, angle);
   }
 
-  private hook(h: QuarksHook | undefined, x: number, z: number, size: number, by: number | undefined, angle: number): void {
+  private hook(h: QuarksHook | undefined, x: number, z: number, size: number, by: number | undefined, angle: number, secs = 0): void {
     if (!h || !skillOn(h.skill)) return;
-    const reach = h.fwd ?? 0;
-    this.play(typeof h.tpl === 'string' ? h.tpl : h.tpl(size), x + Math.cos(angle) * reach, h.y ?? 0.3, z + Math.sin(angle) * reach, by, undefined, angle);
+    const reach = (h.fwd ?? 0) + (h.fwdSize ?? 0) * size;
+    const name = typeof h.tpl === 'string' ? h.tpl : h.tpl(size);
+    const systems = this.play(name, x + Math.cos(angle) * reach, h.y ?? 0.3, z + Math.sin(angle) * reach, by, undefined, angle, h.scale ? size : undefined);
+    // a field that lasts as long as its zone: stop making particles then, the last ones fade out on their own
+    if (h.timed && systems.length) this.moving.push({ obj: new THREE.Object3D(), t: 0, life: secs, tick: () => {}, done: () => { for (const s of systems) s.endEmit(); } });
+  }
+
+  /** A zone (Effects.zone): a lasting area. `follow` = it stays on a player, so it only gets the one-shot templates. */
+  onZone(name: SkillEffect, skill: string, x: number, z: number, size: number, duration: number, follow: number | null | undefined, by?: number): void {
+    const h = ON_ZONE[`${skill}/${name}` as keyof typeof ON_ZONE];
+    if (h && !(h.timed && follow != null)) this.hook(h, x, z, size, by, 0, duration);
   }
 
   /** A skill's warning circle (tagged by Sim.asCaster): Starfall's star falls during it, landing as its hit plays. */
@@ -408,26 +439,6 @@ export class QuarksFx {
   // ------------------------------------------------------------------ Swordsman: every skill (owner 2026-11-19)
   // Light on purpose: the basic attack and the dashes are used all the time, buffs are a soft glow round the body.
   private buildSword(): void {
-    const ORANGE: [string, string] = ['#fff2c0', '#ff7a4a'];
-    const CYAN: [string, string] = ['#ffffff', '#7ad8ff'];
-    const GOLD: [string, string] = ['#fff6c8', '#ffcf5a'];
-    const RED: [string, string] = ['#ffd0c8', '#ff3a2a'];
-    /** Sparks thrown forward along the swing (the emitter is turned to the effect's angle). */
-    const fan = (n: number, speed: [number, number], c: [string, string], spread = 0.7, extra: Partial<Recipe> = {}): Recipe => ({
-      dir: true, tex: 'spark', life: iv(0.15, 0.32), speed: iv(...speed), size: cv(0.1), bursts: n, stretched: 0.06,
-      shape: new ConeEmitter({ radius: 0.15, angle: spread, thickness: 1 }), behaviors: [grad([[c[0], 0], [c[1], 1]]), down(3)], ...extra,
-    });
-    /** Sparks flying out every way. */
-    const radial = (n: number, speed: [number, number], c: [string, string], g = 3): Recipe => sparks(n, speed, c[0], c[1], g);
-    /** Light motes lifting off the ground round a point: the glow of a buff. */
-    const rise = (n: number, radius: number, c: [string, string], secs = 0.1): Recipe => ({
-      flat: true, duration: secs, life: iv(0.6, 1.1), speed: iv(0.3, 0.9), size: iv(0.08, 0.16), bursts: n,
-      shape: new CircleEmitter({ radius, thickness: 1 }), behaviors: [grad([[c[0], 0], [c[1], 1]]), up(1.2)],
-    });
-    const glowRing = (n: number, speed: [number, number], c: [string, string]): Recipe =>
-      ring(n, speed, [0.22, 0.4], [grad([[c[0], 0], [c[1], 1]]), shrink()], { tex: 'spark', stretched: 0.05 });
-    const chip = (n: number, color: string): Recipe => ({ ...debris(n, color, [4, 8], 0.9), life: iv(0.4, 0.7), size: iv(0.1, 0.22) });
-
     // basic attack: a few sparks along the swing; the dash: a puff and sparks left behind
     this.define('swSlashLite', [fan(5, [4, 8], ORANGE, 0.8, { life: iv(0.12, 0.25) })]);
     this.define('swDash', [
@@ -437,22 +448,22 @@ export class QuarksFx {
     ]);
     // Blade line
     this.define('swHeavy', [flash(2.8, '#fff2c0', '#ff7a4a', 0.14), fan(16, [6, 13], ORANGE, 0.75), chip(4, '#ffb070')]);
-    this.define('swShatter', [flash(2.4, '#ffffff', '#ffb05a', 0.12), chip(10, '#b8c4d0'), radial(10, [3, 8], ['#ffffff', '#ffb05a'], 9)]);
+    this.define('swShatter', [flash(2.4, '#ffffff', '#ffb05a', 0.12), chip(10, '#b8c4d0'), spray(10, [3, 8], ['#ffffff', '#ffb05a'], 9)]);
     this.define('swWave', [flash(1.8, '#ffffff', '#9fe0ff', 0.12), fan(10, [8, 15], ['#ffffff', '#7ad8ff'], 0.35)]);
-    this.define('swExecute', [flash(3, '#ffe0d8', '#ff3a2a', 0.15), fan(18, [6, 13], RED, 0.8), radial(8, [2, 5], ['#ff8a7a', '#8a1010'], 6)]);
+    this.define('swExecute', [flash(3, '#ffe0d8', '#ff3a2a', 0.15), fan(18, [6, 13], RED, 0.8), spray(8, [2, 5], ['#ff8a7a', '#8a1010'], 6)]);
     this.define('swFlurry', [fan(5, [4, 9], ORANGE, 0.8, { life: iv(0.12, 0.24) })]);
     this.define('swBladeRing', [flash(3.2, '#fff2c0', '#ff7a4a', 0.14), glowRing(24, [7, 10], ORANGE)]);
-    this.define('swCrush', [flash(4.5, '#fff2c0', '#ff6a3a', 0.18), debris(16, '#7a6050', [6, 10]), dust(10, [4, 7], V4(0.45, 0.38, 0.32, 0.7)), radial(14, [5, 12], ['#ffffff', '#ffb35a'], 8)]);
+    this.define('swCrush', [flash(4.5, '#fff2c0', '#ff6a3a', 0.18), debris(16, '#7a6050', [6, 10]), dust(10, [4, 7], V4(0.45, 0.38, 0.32, 0.7)), spray(14, [5, 12], ['#ffffff', '#ffb35a'], 8)]);
     // Gale line
     this.define('swCharge', [fan(12, [8, 14], ORANGE, 0.45, { turn: Math.PI }), dust(6, [2, 4], V4(0.55, 0.5, 0.42, 0.55))]);
     this.define('swTripleHit', [fan(5, [4, 9], CYAN, 0.8, { life: iv(0.12, 0.25) })]);
     this.define('swWind', [flash(2.6, '#ffffff', '#9fe0ff', 0.14), glowRing(16, [5, 8], CYAN)]);
     this.define('swWindSmall', [glowRing(8, [4, 6], CYAN)]);
     this.define('swTrail', [fan(8, [5, 10], CYAN, 0.4, { turn: Math.PI })]);
-    this.define('swShadowTrail', [fan(10, [6, 12], ['#ffffff', '#8a7aff'], 0.4, { turn: Math.PI }), radial(6, [1, 3], ['#d0c8ff', '#5a3aff'], 1)]);
+    this.define('swShadowTrail', [fan(10, [6, 12], ['#ffffff', '#8a7aff'], 0.4, { turn: Math.PI }), spray(6, [1, 3], ['#d0c8ff', '#5a3aff'], 1)]);
     this.define('swOverdrive', [flash(2.6, '#ffffff', '#7ad8ff', 0.2), rise(16, 0.9, CYAN)]);
-    this.define('swXHit', [flash(2, '#ffffff', '#c8f0ff', 0.1), radial(8, [3, 8], ['#ffffff', '#9fe0ff'], 4)]);
-    this.define('swXTiny', [radial(4, [2, 5], ['#ffffff', '#9fe0ff'], 4)]);
+    this.define('swXHit', [flash(2, '#ffffff', '#c8f0ff', 0.1), spray(8, [3, 8], ['#ffffff', '#9fe0ff'], 4)]);
+    this.define('swXTiny', [spray(4, [2, 5], ['#ffffff', '#9fe0ff'], 4)]);
     // Bulwark line
     this.define('swBash', [flash(2.6, '#fff6c8', '#ffcf5a', 0.13), fan(12, [5, 11], GOLD, 0.6), chip(5, '#b8a070')]);
     this.define('swTaunt', [flash(3, '#ffe0d8', '#ff5a3a', 0.2), glowRing(24, [6, 9], RED)]);
@@ -463,10 +474,91 @@ export class QuarksFx {
       fan(10, [0, 18], GOLD, 0.05, { life: iv(0.2, 0.32), size: cv(0.14), turn: Math.PI }),
       fan(4, [0, 12], GOLD, 0.1, { tex: 'smoke', additive: false, stretched: undefined, size: iv(0.8, 1.4), life: iv(0.5, 0.8), color: V4(0.5, 0.42, 0.32, 0.55) }),
     ]);
-    this.define('swThorns', [flash(2, '#ffe0c8', '#ff7a4a', 0.12), radial(18, [4, 9], ['#ffffff', '#ff6a3a'], 5), glowRing(10, [3, 5], RED)]);
+    this.define('swThorns', [flash(2, '#ffe0c8', '#ff7a4a', 0.12), spray(18, [4, 9], ['#ffffff', '#ff6a3a'], 5), glowRing(10, [3, 5], RED)]);
     this.define('swAnchor', [dust(8, [2, 4], V4(0.5, 0.42, 0.32, 0.6)), chip(8, '#8a7a5a'), rise(10, 1.2, GOLD)]);
     this.define('swWarcry', [flash(3, '#fff6c8', '#ffcf5a', 0.2), glowRing(24, [6, 9], GOLD), rise(22, 4.5, GOLD)]);
     this.define('swCata', [debris(14, '#8a6a4a', [4, 8], 0.8), dust(10, [4, 7], V4(0.5, 0.42, 0.32, 0.65)), glowRing(14, [6, 9], GOLD)]);
     this.define('swKing', [flash(6, '#ffffff', '#ffe08a', 0.24), glowRing(30, [7, 11], GOLD), rise(30, 5, ['#ffffff', '#ffcf5a'], 1.2)]);
+  }
+  // ------------------------------------------------------------------ Mage: every skill (owner 2026-11-19)
+  // Templates meant to be scaled to a skill's radius (`scale` in the hook) are drawn on a circle of radius 1.
+  private buildMage(): void {
+    const FIRE2: [string, string] = ['#fff2c0', '#ff6a20'];
+    const ARCANE: [string, string] = ['#fff0d0', '#ffb06a'];
+    const BOLT: [string, string] = ['#ffffff', '#9fb8ff'];
+    const VENOM2: [string, string] = ['#e0ffc0', '#4a8a10'];
+    const FROST2: [string, string] = ['#ffffff', '#7ab8ff'];
+    const CURSE: [string, string] = ['#f0d0ff', '#8a40ff'];
+    const SUN: [string, string] = ['#fff6c8', '#ffb020'];
+    /** A ring of sparks on the circle's edge, lifting; scaled to the radius. */
+    const rim = (n: number, c: [string, string], extra: Partial<Recipe> = {}): Recipe => ({
+      flat: true, tex: 'spark', life: iv(0.5, 0.9), speed: iv(0.2, 0.8), size: iv(0.1, 0.2), bursts: n,
+      shape: new CircleEmitter({ radius: 1, thickness: 0.12 }), behaviors: [grad([[c[0], 0], [c[1], 1]]), up(2), shrink()], ...extra,
+    });
+    /** Motes all over a radius-1 circle, lifting. */
+    const motes = (n: number, c: [string, string]): Recipe => ({
+      flat: true, life: iv(0.7, 1.2), speed: iv(0.1, 0.5), size: iv(0.08, 0.16), bursts: n,
+      shape: new CircleEmitter({ radius: 1, thickness: 1 }), behaviors: [grad([[c[0], 0], [c[1], 1]]), up(1.2)],
+    });
+    /** A field that keeps going for as long as its zone lasts (Effects ends it): `rate` per second on a radius-1 circle. */
+    const field = (rate: number, extra: Partial<Recipe>): Recipe => ({
+      flat: true, looping: true, duration: 60, life: iv(0.6, 1.2), speed: iv(0.2, 0.7), size: iv(0.08, 0.16), rate,
+      shape: new CircleEmitter({ radius: 1, thickness: 1 }), ...extra, behaviors: extra.behaviors ?? [],
+    });
+    const smokeFan = (n: number, c: QVector4, extra: Partial<Recipe> = {}): Recipe =>
+      fan(n, [1.5, 4], ['#ffffff', '#ffffff'], 0.7, { tex: 'smoke', additive: false, stretched: undefined, size: iv(0.8, 1.5), life: iv(0.6, 1), color: c, behaviors: [puff(), fade()], ...extra });
+
+    // basic attack and dash
+    this.define('mgBolt', [fan(3, [3, 6], ['#ffffff', '#9fd8ff'], 0.5, { life: iv(0.1, 0.2) })]);
+    this.define('mgDash', [
+      { tex: 'smoke', additive: false, life: iv(0.4, 0.7), speed: iv(0.2, 0.8), size: iv(0.6, 1), bursts: 3, color: V4(0.7, 0.65, 0.9, 0.45),
+        shape: new SphereEmitter({ radius: 0.25 }), behaviors: [puff(), fade()] },
+      fan(5, [3, 6], ['#ffffff', '#b090ff'], 0.5, { turn: Math.PI }),
+    ]);
+    // Line 0: burst damage
+    this.define('mgLance', [flash(2, '#fff0d0', '#ffb06a', 0.12), fan(14, [10, 20], ARCANE, 0.15, { life: iv(0.15, 0.3) })]);
+    this.define('mgChain', [flash(2, '#ffffff', '#bfe0ff', 0.1), spray(10, [3, 8], BOLT, 2)]);
+    this.define('mgBurst', [flash(4, '#fff0d0', '#ff8a3a', 0.16), rim(30, FIRE2), motes(14, FIRE2)]);
+    this.define('mgFlameWave', [
+      flash(2.4, '#fff2c0', '#ff6a20', 0.14), fan(22, [5, 11], FIRE2, 0.7),
+      fan(10, [3, 8], FIRE2, 0.7, { tex: 'glow', stretched: undefined, size: iv(0.5, 1), life: iv(0.3, 0.55), behaviors: [FIRE(), shrink()] }),
+    ]);
+    this.define('mgOrbBlast', [
+      flash(6, '#fff2c0', '#ff8a3a', 0.18),
+      { life: iv(0.35, 0.65), speed: iv(1, 5), size: iv(1, 2), bursts: 30, shape: new SphereEmitter({ radius: 0.3 }), behaviors: [FIRE(), grow(), new RotationOverLife(iv(-2, 2))] },
+      sparks(20, [5, 13], '#ffffff', '#ff9a4a'),
+      smoke(V4(0.25, 0.22, 0.24, 0.7), 8, [1.4, 2.4], [0.4, 1.2]),
+    ]);
+    this.define('mgCrystalHit', [flash(1.6, '#ffffff', '#ffd0a0', 0.1), spray(6, [2, 5], ['#ffffff', '#ffd0a0'], 6)]);
+    this.define('mgCharged', [flash(8, '#ffffff', '#ff8a3a', 0.22), rim(44, FIRE2), spray(26, [6, 14], ['#ffffff', '#ff9a4a'], 5)]);
+    // Line 1: damage over time
+    this.define('mgFireField', [field(34, { life: iv(0.7, 1.3), behaviors: [grad([['#ffe080', 0], ['#ff4010', 1]]), up(1.5)] })]);
+    this.define('mgMist', [
+      field(8, { tex: 'smoke', additive: false, life: iv(1.2, 2), size: iv(1.2, 2), color: V4(0.45, 0.8, 0.25, 0.4), behaviors: [puff(), fade()] }),
+      field(16, { behaviors: [grad([['#e0ffc0', 0], ['#4a8a10', 1]]), up(0.8)] }),
+    ]);
+    this.define('mgMark', [spray(6, [1, 3], RED, 0), flash(1.4, '#ffd0c8', '#ff3a2a', 0.12)]);
+    this.define('mgDecayRing', [rim(26, VENOM2), motes(18, VENOM2)]);
+    this.define('mgZap', [flash(2.6, '#ffffff', '#bfd0ff', 0.1), spray(10, [4, 9], BOLT, 2)]);
+    this.define('mgSpikes', [flash(1.8, '#e0ffc0', '#9be05a', 0.12), spray(8, [2, 5], VENOM2, 5)]);
+    this.define('mgAsh', [
+      fan(16, [4, 10], ['#d8d0d8', '#403040'], 0.75), fan(10, [2, 6], ['#ffd070', '#ff4010'], 0.8),
+      smokeFan(6, V4(0.3, 0.25, 0.3, 0.55)),
+    ]);
+    this.define('mgHexBlast', [flash(3, '#e0ffc0', '#9be05a', 0.14), spray(14, [3, 8], VENOM2, 6), smoke(V4(0.3, 0.45, 0.2, 0.6), 5, [1.2, 2], [0.3, 1])]);
+    this.define('mgDecayField', [rim(40, VENOM2), motes(26, VENOM2), dust(8, [2, 4], V4(0.3, 0.45, 0.2, 0.5))]);
+    // Line 2: control and buffs
+    this.define('mgShock', [flash(3, '#ffffff', '#9fd8ff', 0.16), glowRing(26, [7, 10], FROST2)]);
+    this.define('mgFrail', [rim(24, CURSE), motes(12, CURSE)]);
+    this.define('mgIceHit', [flash(2.2, '#ffffff', '#9fd8ff', 0.12), spray(12, [3, 8], FROST2, 8)]);
+    this.define('mgVortex', [field(40, {
+      life: cv(0.8), speed: cv(0), size: iv(0.1, 0.2), shape: new CircleEmitter({ radius: 1, thickness: 0.3 }),
+      behaviors: [grad([['#f0d0ff', 0], ['#7a30ff', 1]]), new OrbitOverLife(cv(5), V3(0, 0, 1)), new SizeOverLife(curve(1, 0.9, 0.5, 0))],
+    })]);
+    this.define('mgVeil', [rim(22, CURSE), motes(10, CURSE)]);
+    this.define('mgEmpower', [rim(22, SUN), motes(14, SUN)]);
+    this.define('mgShield', [rim(22, FROST2), motes(12, FROST2)]);
+    this.define('mgTimewarp', [rim(28, ['#ffffff', '#6a8aff']), motes(14, ['#d0d8ff', '#6a50ff'])]);
+    this.define('mgManaWell', [field(26, { behaviors: [grad([['#ffffff', 0], ['#5a9aff', 1]]), up(1.4)] })]);
   }
 }

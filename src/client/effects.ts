@@ -401,7 +401,8 @@ export class Effects implements FxApi {
    * `duration` with a fade in and out, its edge fades softly into the ground, and the extra layer (glow, ground light,
    * particles) is played again lightly while it lasts. `follow` keeps it under that player.
    */
-  zone(name: SkillEffect, x: number, z: number, size: number, duration: number, follow?: number | null, skill?: string): void {
+  zone(name: SkillEffect, x: number, z: number, size: number, duration: number, follow?: number | null, skill?: string, by?: number): void {
+    if (skill) this.quarks?.onZone(name, skill, x, z, size, duration, follow, by);
     // Owner 2026-11-18: a lasting area is drawn as a magic circle only (no painted area, no standing pieces).
     if (zoneAsCircle() && duration > 0) {
       this.zoneCircle(x, z, size, duration, follow, skill);

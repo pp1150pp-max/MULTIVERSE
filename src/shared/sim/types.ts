@@ -73,7 +73,7 @@ export interface FxApi {
    * fade in and out and a soft edge, sent once when the skill is cast. `follow` = a player id it stays centred on.
    */
   /** `follow` may come as null over the wire; `skill` = the skill that made it (its standing layer, zoneProps.ts). */
-  zone(name: SkillEffect, x: number, z: number, size: number, duration: number, follow?: number | null, skill?: string): void;
+  zone(name: SkillEffect, x: number, z: number, size: number, duration: number, follow?: number | null, skill?: string, by?: number): void;
 }
 
 export type SkillEffect = 'slash' | 'whirlwind' | 'charge' | 'quake' | 'explosion' | 'frost' | 'crater' | 'muzzle' | 'impact'
