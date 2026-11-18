@@ -481,6 +481,8 @@ html.paper-ui .eq-ring2 { left: 61.5%; top: 37.2%; width: 6.6%; height: 4.4%; }
 }
 /* The paper bag picture (sprites/paper/ui/inventory.png, 815×1086): its 30 slots sit lower and wider than the
    iron one's. Cells cover each painted slot's inside, measured from the picture (x 58–758, y 732–945). */
+/* The paper bag's gold / potion plate (981–1037 × 212–598 of 815×1086): the line in the middle of it. */
+.paper-ui .inv-foot { left: 27.5%; top: 90.7%; width: 45%; height: 4.4%; }
 .paper-ui #bag-grid { left: 7.12%; top: 67.4%; width: 86%; height: 19.7%; column-gap: 1.14%; row-gap: 3.7%; }
 .inv-foot { position: absolute; left: 30%; top: 89.6%; width: 40%; height: 4.4%; display: flex; justify-content: space-around; align-items: center; font-size: 13px; }
 .stat { display: flex; justify-content: space-between; font-size: 12px; padding: 1px 0; }
@@ -672,6 +674,8 @@ html.paper-ui .eq-ring2 { left: 61.5%; top: 37.2%; width: 6.6%; height: 4.4%; }
 #sell-rarity .n { color: var(--ink-dim); font-size: 11px; }
 .sell-checked { width: 100%; padding: 5px 8px; font-size: 13px; }
 .shop-foot { display: flex; justify-content: space-between; margin-top: 10px; font-size: 13px; }
+/* The bottom-right corner ornament (.panel::after) covered the end of the line: the potion count, the G (owner 2026-11-18). */
+.panel .shop-foot { padding-right: 40px; }
 #shop-gold { color: #f2c230; }
 .shop-timer { float: right; color: var(--ink-dim); font-size: 11px; }
 
