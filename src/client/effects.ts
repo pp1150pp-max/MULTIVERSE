@@ -4,6 +4,7 @@ import { fxSheets, fxTex, type FxSheet } from './assets';
 import type { FxApi, SkillEffect } from '../shared/sim/types';
 import { loopProps, playProps } from './zoneProps';
 import { playLayer, ShotLayer, type FxLayerHooks, type FxLayerHost } from './fxLayer';
+import { QuarksFx, quarksOn } from './quarksFx';
 
 const FRAMES = 6;
 const SHEET_ROWS: Record<FxSheet, number> = {
@@ -275,6 +276,12 @@ export class Effects implements FxApi {
   /** Where a player is now (for zones that follow their caster); set by Game. */
   posOf: ((id: number) => { x: number; z: number } | null) | null = null;
 
+  /** three.quarks particles (trial, fxLayer.quarks): made the first time a skill that uses them plays. */
+  private quarksFx: QuarksFx | null = null;
+  private get quarks(): QuarksFx {
+    return (this.quarksFx ??= new QuarksFx(this.scene));
+  }
+
   constructor(private readonly scene: THREE.Scene) {}
 
   add(obj: THREE.Object3D, life: number, tick?: (k: number, dt: number) => void): void {
@@ -283,6 +290,7 @@ export class Effects implements FxApi {
   }
 
   update(dt: number): void {
+    this.quarksFx?.update(dt);
     for (let i = this.list.length - 1; i >= 0; i--) {
       const fx = this.list[i];
       fx.t += dt;
@@ -327,6 +335,8 @@ export class Effects implements FxApi {
         playProps(this, skill, x, z, angle, size, EFFECTS[name].life);
       }
     }
+    // The Meteor's blast in three.quarks, over its hand-drawn crater (trial, docs/systems/skill-fx-layer.md).
+    if (name === 'crater' && skill === 'meteor' && quarksOn()) this.quarks.meteorBlast(x, z);
     const def = EFFECTS[name];
     const tex = frameTexture(def.sheet);
     if (!tex) {
@@ -618,6 +628,10 @@ export class Effects implements FxApi {
 
   /** Visual only: a fireball falling onto (x, z) over `duration`. */
   meteor(x: number, z: number, duration: number): void {
+    if (quarksOn()) {
+      this.quarks.meteorFall(x, z, duration);
+      return;
+    }
     const shot = this.shotSprite('#ff7a2a', 1.6);
     const s = shot?.sprite ?? this.glowSprite('#ff7a2a', 1.8);
     let last = 0;

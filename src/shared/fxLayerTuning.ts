@@ -38,6 +38,8 @@ export interface FxLayerConfig {
   zoneCircles: boolean;
   /** × the magic circles' brightness. */
   circleGlow: number;
+  /** Trial (owner 2026-11-18): skill particles drawn with three.quarks (src/client/quarksFx.ts), so far the Meteor only. */
+  quarks: boolean;
   /** Paper art (owner 2026-11-18): × the size of a title set's name frame and of its chat bubble. */
   paperPlate: number;
   paperBubble: number;
@@ -85,7 +87,7 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   paperOrbShade: 'ลูกแก้ว: ความสว่างส่วนมืดสุด',
 };
 
-const FX_LAYER_BOOLS = ['enabled', 'debuffs', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'circles', 'zoneCircles'] as const;
+const FX_LAYER_BOOLS = ['enabled', 'debuffs', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'circles', 'zoneCircles', 'quarks'] as const;
 type FxLayerBool = (typeof FX_LAYER_BOOLS)[number];
 const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
   enabled: 'เอฟเฟกต์สกิล (ชั้นเสริม)',
@@ -95,13 +97,14 @@ const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
   smoothShots: 'กระสุนบินลื่น (ไม่ดึงกลับตาม server)',
   circles: 'วงเวทบนพื้น (บัฟ ดีบัฟ สกิลวงกว้าง)',
   zoneCircles: 'สกิลวงกว้างเป็นวงเวทอย่างเดียว (แทนภาพพื้นที่)',
+  quarks: 'อนุภาค three.quarks (ทดลอง)',
 };
 
 /** The code's own numbers (a fresh copy). */
 export function codeFxLayer(): FxLayerConfig {
   return {
     enabled: true, debuffs: true, glow: 1, ground: 1, particles: 1, shake: 1, hitstopMs: 60, crit: 1,
-    maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true, circles: true, zoneCircles: true, circleGlow: 1,
+    maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true, circles: true, zoneCircles: true, circleGlow: 1, quarks: false,
     paperPlate: 1, paperBubble: 1, paperFoot: 1.6, paperOrbLight: 0.95, paperOrbShade: 0.15,
   };
 }
