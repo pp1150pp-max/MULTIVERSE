@@ -122,7 +122,7 @@ const PLAYER_HALF_WIDTH = 0.35;
 const DECOR_CELL_UNITS = 1.33;
 /** Rotted boards laid over the wet stretches of a marsh trail: a row of separate pieces, seen from above. */
 /** The rebuilt hub town's paper pieces (Terrain.placeTown). */
-const TOWN2_PROP = /^(bld_|town_fountain$|quest_board$|crystal_stall$|lamp_post$|bench_|planter$|banner_pole$|crates$|barrels$|flower_box$|potted_tree$)/;
+const TOWN2_PROP = /^(bld_|town_fountain$|quest_board$|crystal_stall$|lamp_post$|bench_|planter$|banner_pole$|crates$|barrels$|flower_box$|potted_tree$|low_stall_|garden_bed$|hedge_|house_back_|woodpile$|town_statue$)/;
 const PLANK_SHEET = { key: 'marsh_planks', cols: 3, width: 2.9, length: 5 };
 const enum GroundId { Base, WaterEdge, Water }
 
