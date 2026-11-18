@@ -2545,14 +2545,14 @@ type PlayerLook = Pick<PlayerSnap, 'name' | 'cls' | 'lv' | 'maxHp' | 'aura' | 'o
 type MonsterLook = Pick<MonsterSnap, 'def' | 'lv' | 'mhp'>;
 
 /** A monster's debuffs for the snapshot, as this viewer sees them (nothing when it has none). */
-function debuffField(m: Monster, now: number, viewer: number): { db?: number } {
+function debuffField(m: Monster, now: number, viewer: number): { db?: number; ds?: string } {
   const db = debuffMask(m, now, viewer);
-  return db ? { db } : {};
+  return db ? (m.debuffSkill ? { db, ds: m.debuffSkill } : { db }) : {};
 }
 /** A player's running skill buffs for the snapshot (nothing when none). */
-function buffField(p: Player, now: number): { bf?: number } {
+function buffField(p: Player, now: number): { bf?: number; bs?: string } {
   const bf = p.alive ? buffMask(p, now) : 0;
-  return bf ? { bf } : {};
+  return bf ? (p.buffSkill ? { bf, bs: p.buffSkill } : { bf }) : {};
 }
 /** A look bundle and its JSON (what the per-browser caches compare). */
 interface Look { look: PlayerLook | MonsterLook; json: string }

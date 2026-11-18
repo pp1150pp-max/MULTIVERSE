@@ -452,6 +452,8 @@ export class Player extends Unit {
   toadT = 0;
   /** Its skill buffs as the server last sent them (client only, sim/debuffs.ts BUFF_BIT). */
   buffBits = 0;
+  /** The skill whose buff it got last (server: set by the cast; client: as sent), for its magic circle. '' = none. */
+  buffSkill = '';
   /** Share of damage dealt that heals the player, until sim time `lifestealUntil` (sword Q). */
   lifesteal = 0;
   lifestealUntil = -1;

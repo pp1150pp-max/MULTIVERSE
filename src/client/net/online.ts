@@ -829,6 +829,7 @@ export class OnlineBackend implements Backend {
       p.alive = ps.alive;
       p.dashT = ps.dash ? 1 : 0;
       p.buffBits = ps.bf ?? 0;
+      p.buffSkill = ps.bs ?? '';
       if (look) {
         p.aura = ps.aura ?? 0;
         p.toadT = ps.toad ? 1 : 0;
@@ -887,6 +888,7 @@ export class OnlineBackend implements Backend {
       m.enraged = ms.enr;
       m.lift = ms.y;
       m.debuffs = ms.db ?? 0;
+      m.debuffSkill = ms.ds ?? '';
     }
     for (const [id, m] of this.monsterMap) {
       if (!seenM.has(id)) {
