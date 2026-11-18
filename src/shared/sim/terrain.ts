@@ -105,7 +105,7 @@ export function restSpotNear(spots: readonly RestSpot[], p: { x: number; z: numb
 export const HUB_PLAZA_RADIUS = 8.5;
 /** The hub's fountain: drawn this tall (its benches about a person's size), solid out to this radius. */
 export const HUB_FOUNTAIN_HEIGHT = 9;
-export const HUB_FOUNTAIN_RADIUS = 3.2;
+export const HUB_FOUNTAIN_RADIUS = 3.6;
 /** The hub's NPC buildings: drawn this tall, a square footprint this wide (two side by side per top wall). */
 export const HUB_BUILDING_HEIGHT = 6.6;
 export const HUB_BUILDING_SIZE = 4.4;
@@ -258,9 +258,10 @@ export class Terrain {
       at(key, Math.cos(rad(deg)) * r, Math.sin(rad(deg)) * r, height, collideR);
 
     // The plaza: the big fountain (benches round it are part of its picture), nothing else on it.
-    // Its picture stands on its nearest point to the camera (the front of the basin, half the picture's width out
-    // along +x +z), so the basin drawn and the solid circle are in the same place.
-    const fr = (HUB_FOUNTAIN_HEIGHT * (221 / 256)) / 2 / Math.SQRT2;
+    // In its picture (256 px tall) the middle of the fountain's round foot is 49 px above the bottom edge, where the
+    // picture stands. A step toward the camera on the ground moves a point down the screen by sin(elevation) = 0.716
+    // of it, so the picture stands that far out along +x +z for its middle to land on the plaza's middle.
+    const fr = ((HUB_FOUNTAIN_HEIGHT * 49) / 256 / 0.716) / Math.SQRT2;
     at('town_fountain', fr, fr, HUB_FOUNTAIN_HEIGHT, 0);
     this.colliders.push({ x: s.x, z: s.z, r: HUB_FOUNTAIN_RADIUS });
     this.restSpots.push({ x: s.x, z: s.z, kind: 'fountain' });
