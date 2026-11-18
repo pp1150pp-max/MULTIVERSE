@@ -736,6 +736,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const crit = P('markCrit');
       const time = P('markTime');
       sim.addProjectile(p, shotFrom(p, ang, far, dmg, {
+        fxSkill: sk.id,
         after: (m) => {
           m.markBy = p.id;
           m.markUntil = sim.time + time;
@@ -878,7 +879,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const burn = P('burn') * sc.dmg;
       const ticks = Math.max(1, Math.round(P('burnTime')));
       sim.addProjectile(p, shotFrom(p, ang, far, dmg, {
-        color: '#ff8a3a', size: 0.6,
+        color: '#ff8a3a', size: 0.6, fxSkill: sk.id,
         after: (m) => repeat(sim, 1, ticks, () => {
           if (!m.alive || !live(sim, p)) return false;
           sim.fx('effect', 'gs_burn', m.x, m.z, 0, 0.6);
@@ -952,7 +953,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
         const range = m ? Math.min(far, Math.hypot(m.x - p.x, m.z - p.z)) : far;
         sim.schedule(i * 0.08, () => {
           if (!p.alive) return;
-          sim.addProjectile(p, shotFrom(p, a, range, dmg, { speed: 20, radius: 0.4, color: '#6affc8', size: 0.7, explode: r, blastFx: 'gs_blast', specialFx: special }));
+          sim.addProjectile(p, shotFrom(p, a, range, dmg, { speed: 20, radius: 0.4, color: '#6affc8', size: 0.7, explode: r, blastFx: 'gs_blast', specialFx: special, fxSkill: sk.id }));
         });
       }
       muzzle(sim, p, ang, 0.8);

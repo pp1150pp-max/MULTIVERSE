@@ -162,6 +162,7 @@ export class QuarksFx {
     this.buildMore();
     this.buildSword();
     this.buildMage();
+    this.buildGun();
   }
 
   private mat(tex: TexName, additive: boolean): THREE.MeshBasicMaterial {
@@ -560,5 +561,52 @@ export class QuarksFx {
     this.define('mgShield', [rim(22, FROST2), motes(12, FROST2)]);
     this.define('mgTimewarp', [rim(28, ['#ffffff', '#6a8aff']), motes(14, ['#d0d8ff', '#6a50ff'])]);
     this.define('mgManaWell', [field(26, { behaviors: [grad([['#ffffff', 0], ['#5a9aff', 1]]), up(1.4)] })]);
+  }
+  // ------------------------------------------------------------------ Gunslinger: every skill (owner 2026-11-19)
+  // Muzzle sparks for the shooting skills (their `muzzle` picture, tagged with the skill), glows for the buffs.
+  private buildGun(): void {
+    const muz = (name: string, c: [string, string], n: number, flashSize: number, speed: [number, number] = [5, 11], spread = 0.35): void =>
+      this.define(name, [flash(flashSize, '#ffffff', c[1], 0.08), fan(n, speed, c, spread, { life: iv(0.08, 0.2) })]);
+    muz('gsShot', ['#fff6c8', '#ffe08a'], 3, 0.9);
+    muz('gsRapid', ['#fff6c8', '#ffc85a'], 2, 0.7);
+    muz('gsPierce', ['#ffffff', '#7affe0'], 8, 1.6);
+    muz('gsDeadeye', ['#ffffff', '#ff5a6a'], 8, 1.4);
+    muz('gsAimed', ['#ffffff', '#ffd080'], 12, 2.2, [8, 16], 0.2);
+    muz('gsRicochet', ['#ffffff', '#9fd8ff'], 7, 1.3);
+    muz('gsCounter', ['#ffffff', '#ff8a5a'], 10, 1.8);
+    muz('gsWeak', ['#ffffff', '#ff5a8a'], 8, 1.5);
+    muz('gsFinisher', ['#ffffff', '#ff3a3a'], 12, 2);
+    muz('gsLock', ['#ffffff', '#7affe0'], 3, 0.9);
+    muz('gsIncend', ['#fff2c0', '#ff8a3a'], 8, 1.5);
+    muz('gsRail', ['#ffffff', '#7ac8ff'], 18, 3, [12, 24], 0.12);
+    muz('gsSeeker', ['#ffffff', '#6affc8'], 8, 1.5);
+    muz('gsTurret', ['#ffffff', '#7affe0'], 2, 0.6);
+    muz('gsDroneShot', ['#ffffff', '#7affe0'], 2, 0.5);
+    this.define('gsDash', [
+      { tex: 'smoke', additive: false, life: iv(0.4, 0.7), speed: iv(0.2, 0.8), size: iv(0.6, 1), bursts: 3, color: V4(0.62, 0.58, 0.5, 0.5),
+        shape: new SphereEmitter({ radius: 0.25 }), behaviors: [puff(), fade()] },
+      fan(4, [3, 6], ['#ffffff', '#ffd080'], 0.5, { turn: Math.PI }),
+    ]);
+    // a mark or a lock on a target
+    this.define('gsMark', [flash(1.6, '#ffffff', '#ff5a6a', 0.12), glowRing(10, [3, 5], ['#ffd0c8', '#ff3a2a']), spray(5, [1, 3], ['#ffd0c8', '#ff3a2a'], 1)]);
+    // a flame licking at a burning target
+    this.define('gsBurn', [{ life: iv(0.3, 0.5), speed: iv(0.2, 0.8), size: iv(0.3, 0.6), bursts: 5, shape: new SphereEmitter({ radius: 0.2 }), behaviors: [FIRE(), shrink(), up(2)] }]);
+    // smoke thrown down: puffs over a radius-1 circle (scaled to the grenade's radius)
+    this.define('gsSmoke', [{
+      tex: 'smoke', additive: false, flat: true, life: iv(0.8, 1.4), speed: iv(0.2, 0.6), size: iv(1.2, 2), bursts: 6, color: V4(0.6, 0.65, 0.66, 0.45),
+      shape: new CircleEmitter({ radius: 1, thickness: 1 }), behaviors: [puff(), fade(), up(0.3)],
+    }]);
+    this.define('gsAuraCrit', [flash(2.6, '#ffffff', '#ff5a4a', 0.2), rise(16, 0.9, ['#fff0d0', '#ff5a4a'])]);
+    // the Rapid Fire buffs, each its own colour (the ultimates bigger)
+    const aura = (name: string, c: [string, string], n = 14, size = 2.4): void => this.define(name, [flash(size, '#ffffff', c[1], 0.2), rise(n, 0.9, c)]);
+    aura('gsAuraHot', ['#fff2c0', '#ff6a20']);
+    aura('gsAuraReload', ['#ffffff', '#7ad8ff']);
+    aura('gsAuraDouble', ['#fff6c8', '#ffcf5a']);
+    aura('gsAuraShock', ['#ffffff', '#6a8aff']);
+    aura('gsAuraStack', ['#ffe0c0', '#ff8a3a']);
+    aura('gsAuraSplit', ['#e0ffd0', '#5aff8a']);
+    aura('gsAuraPierce', ['#ffffff', '#7affe0']);
+    aura('gsAuraDrive', ['#ffe0ff', '#ff4aff'], 22, 3.2);
+    aura('gsAuraStorm', ['#fff6c8', '#ff5a3a'], 22, 3.2);
   }
 }

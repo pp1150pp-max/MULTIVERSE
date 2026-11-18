@@ -121,7 +121,7 @@ function later(cls: 'mage', id: string, name: string, withMonster: boolean): unk
 // three.quarks for every skill (owner 2026-11-19): every non-passive skill of the classes done so far has a switch and a
 // hook, and the Sim really sends each picture / zone / cue the hook table names, tagged with its skill (a typo there
 // would silently draw nothing).
-for (const cls of ['sword', 'mage'] as const) {
+for (const cls of ['sword', 'mage', 'gunslinger'] as const) {
   const list = CLASSES[cls].skills.filter((s) => s.kind !== 'passive');
   const noSwitch = list.filter((s) => !(s.id in QUARKS_SKILLS)).map((s) => s.id);
   ok(noSwitch.length === 0, `every ${cls} skill has a qk switch (missing: ${noSwitch.join(', ')})`);
@@ -142,9 +142,9 @@ for (const cls of ['sword', 'mage'] as const) {
     const m = sim.monsters.find((x) => !x.isBoss)!;
     sim.monsters.length = 0;
     sim.monsters.push(m);
-    m.x = 2;
+    m.x = sk.id === 'gs_mine' ? 0.6 : 2; // a mine goes off only when one steps close
     m.z = 0;
-    m.hp = 1e9;
+    (m as unknown as { baseHp: number }).baseHp = m.hp = 1e9; // big enough to outlive a burn
     const p = sim.addPlayer({ ...newCharacterData('Sw', cls), level: 40 });
     p.x = 0;
     p.z = 0;
@@ -165,7 +165,7 @@ for (const cls of ['sword', 'mage'] as const) {
     for (const [kind, name] of wants) ok(seen.has(`${kind}:${name}`), `${sk.id} plays ${kind} ${name} tagged with itself (saw ${[...seen].join(',')})`);
   }
 }
-for (const cls of ['sword', 'mage'] as const) {
+for (const cls of ['sword', 'mage', 'gunslinger'] as const) {
   // the basic attack and the dash send a cue: a burst of 0 tagged with the skill, colour = class, speed = angle
   const sim = new Sim(ZONE_1);
   const p = sim.addPlayer({ ...newCharacterData('Cue', cls), level: 5 });
