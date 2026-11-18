@@ -77,8 +77,17 @@ const run = (sim: Sim, seconds: number) => {
   for (const s of MAGE.filter((x) => x.kind !== 'passive')) {
     const { sim, p, mobs } = arena();
     const aim = { x: mobs[0].x, z: mobs[0].z };
-    const cast = castSkill(sim, p, s, aim, 1);
-    run(sim, 12);
+    // Starfall drops its stars at random spots in a wide circle, so a clump can be missed by chance:
+    // pin the dice to 0 (every star lands dead centre, on the pack) for this skill only.
+    const realRandom = Math.random;
+    if (s.id === 'mg_starfall') Math.random = () => 0;
+    let cast: boolean;
+    try {
+      cast = castSkill(sim, p, s, aim, 1);
+      run(sim, 12);
+    } finally {
+      Math.random = realRandom;
+    }
     if (BUFFS.has(s.id)) ok(cast && hpLost(mobs) === 0, `${s.id}: cast, no damage (a buff)`);
     else ok(cast && hpLost(mobs) > 0, `${s.id}: cast and hurt the pack (${Math.round(hpLost(mobs))})`);
   }
