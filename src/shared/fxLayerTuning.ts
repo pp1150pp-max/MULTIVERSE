@@ -14,6 +14,8 @@ export interface FxLayerConfig extends Record<QuarksKey, boolean> {
   debuffs: boolean;
   /** Our own skill buffs as icons under our HP and MP bars, with a clock wipe for the time left (src/client/floating.ts). */
   buffIcons: boolean;
+  /** The same icons in a row over the skill bar (owner 2026-11-19). */
+  barBuffIcons: boolean;
   /** × the glow around the frames. */
   glow: number;
   /** × the light on the ground. */
@@ -182,13 +184,14 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   extrasK: '× ความแรงเอฟเฟกต์โค้ดของสกิล',
 };
 
-const BASE_BOOLS = ['enabled', 'debuffs', 'buffIcons', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'orbsNearBar', 'extras'] as const;
+const BASE_BOOLS = ['enabled', 'debuffs', 'buffIcons', 'barBuffIcons', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'orbsNearBar', 'extras'] as const;
 type FxLayerBool = (typeof BASE_BOOLS)[number] | QuarksKey;
 const FX_LAYER_BOOLS: readonly FxLayerBool[] = [...BASE_BOOLS, ...QUARKS_KEYS];
 const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
   enabled: 'เอฟเฟกต์สกิล (ชั้นเสริม)',
   debuffs: 'ดีบัฟบนตัวมอน (ไอคอน + เอฟเฟกต์)',
   buffIcons: 'ไอคอนบัพสกิลใต้หลอด HP/MP ของตัวเอง',
+  barBuffIcons: 'ไอคอนบัพสกิลเหนือกรอบสกิล',
   mergeNums: 'รวมเลขดาเมจที่โดนพร้อมกัน',
   ownNumsOnly: 'เห็นเฉพาะเลขดาเมจของตัวเอง',
   smoothShots: 'กระสุนบินลื่น (ไม่ดึงกลับตาม server)',
@@ -204,7 +207,7 @@ const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
 /** The code's own numbers (a fresh copy). */
 export function codeFxLayer(): FxLayerConfig {
   return {
-    enabled: true, debuffs: true, buffIcons: true, glow: 1, ground: 1, particles: 1, shake: 1, hitstopMs: 60, crit: 1,
+    enabled: true, debuffs: true, buffIcons: true, barBuffIcons: true, glow: 1, ground: 1, particles: 1, shake: 1, hitstopMs: 60, crit: 1,
     maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true, circles: true, zoneCircles: true, circleGlow: 1, quarks: false, quarksOthers: 0.5, quarksTouch: 0.5, quarksCap: 3000,
     paperPlate: 1, paperBubble: 1, paperFoot: 1.6, paperOrbLight: 0.95, paperOrbShade: 0.15,
     gfxMenu: true, orbsNearBar: true, gfxDefault: 3, gfxMax: 3, gfxMid: 0.6, gfxLow: 0.3,
