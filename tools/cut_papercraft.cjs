@@ -83,7 +83,10 @@ const MAPS = {
     ['row_right_long.png', 'strip', { out: 'row_right_long', rise: false, width: 1600 }],
     // The four NPC buildings against the top walls (owner 2026-11-19, HUB.md 7.7): crystal shop and vault open to the
     // lower right, guild hall and forge to the lower left.
-    ['town3_buildings.png', 'props', { cols: 2, rows: 2, height: 384, erase: [[1040, 540, 1230, 640]], names: ['b3_crystal', 'b3_vault', 'b3_guild', 'b3_forge'] }],
+    ['town3_buildings.png', 'props', { cols: 2, rows: 2, height: 384, erase: [[1040, 540, 1230, 640]],
+      // The wall-facing side sheared a little steeper, to the game's slope (owner 2026-11-19): the top-left wall's pair
+      // climbs to the right, the top-right wall's falls.
+      shear: { b3_crystal: -0.2, b3_vault: -0.2, b3_guild: 0.2, b3_forge: 0.2 }, names: ['b3_crystal', 'b3_vault', 'b3_guild', 'b3_forge'] }],
     // Each seller's own half-ellipse of stalls (HUB.md 7.6): main stall from behind, a wing stall from the front and one
     // from behind, a table, then four odds and ends.
     ['market_left.png', 'props', { cols: 4, rows: 2, height: 256, names: ['ml_main_back', 'ml_wing_front', 'ml_wing_back', 'ml_table', 'ml_cart', 'ml_barrels', 'ml_sacks', 'ml_crates'] }],
@@ -226,6 +229,14 @@ async function props(img, o, label) {
   const one = async (name, box) => {
     // `slope`: a long piece lying along a world axis, drawn a little flatter than the game sees it: sheared so its
     // foot climbs at the game's slope (as strip() does for whole rows, but at most a little, so it isn't stretched).
+    if (o.shear?.[name] !== undefined) {
+      const buf = await crop(img, box).png().toBuffer();
+      const sheared = await sharp(buf).affine([[1, 0], [o.shear[name], 1]], { background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+      const t = await sharp(sheared).trim({ threshold: 1 }).png().toBuffer();
+      const m = await sharp(t).metadata();
+      await save(sharp(t).resize(Math.max(1, Math.round(m.width * (o.height / m.height))), o.height, { kernel: 'lanczos3', fit: 'fill' }), `props/${name}.png`);
+      return;
+    }
     if (o.slope) {
       const buf = await crop(img, box).png().toBuffer();
       const { data, info } = await sharp(buf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
