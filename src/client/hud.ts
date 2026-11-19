@@ -2,7 +2,7 @@ import { SPACE_COLOUR } from './island';
 import { placeLabel } from '../shared/channels';
 import type { Game } from './Game';
 import { NPC_USE_RANGE, type NpcId } from '../shared/data/npcs';
-import type { SkillSlot } from '../shared/data/classes';
+import { LEARNABLE_SKILLS, type SkillSlot } from '../shared/data/classes';
 import { reachRadius, reachText } from '../shared/data/skillRanges';
 import { rankedDmg, skillParamLines, skillReach } from '../shared/skillBook';
 import {
@@ -204,6 +204,16 @@ export class Hud {
   private whisperWith = '';
 
   constructor(private readonly g: Game) {
+    // The skill-buff icons over the skill bar (owner 2026-11-19): point at one for that skill's details and time left.
+    const barBuffs = $('bar-buffs');
+    const buffTip = (e: MouseEvent) => {
+      const cell = (e.target as HTMLElement).closest<HTMLElement>('.vbuff');
+      if (cell?.dataset.skill) this.showBuffTip(cell.dataset.skill, e);
+      else this.hideTip();
+    };
+    barBuffs.addEventListener('mouseover', buffTip);
+    barBuffs.addEventListener('mousemove', buffTip);
+    barBuffs.addEventListener('mouseleave', () => this.hideTip());
     this.market = new MarketWindow(g, this);
     $('hud').classList.remove('hidden');
     this.mm = $<HTMLCanvasElement>('minimap').getContext('2d')!;
@@ -923,6 +933,29 @@ export class Hud {
   }
 
   /** Tooltip for a skill-bar button (skill or potion); desktop only. Skills also ring their reach on the ground. */
+  /** Tooltip of a skill buff running on us: the skill (rank and numbers when it is one of ours) and the time left. */
+  private showBuffTip(id: string, e: MouseEvent): void {
+    if (isTouchMode()) return;
+    const p = this.g.player;
+    const tip = $('tooltip');
+    const sk = LEARNABLE_SKILLS.find((x) => x.sk.id === id)?.sk;
+    const buff = p.shownBuffs.find((b) => b.id === id);
+    if (!sk || !buff) {
+      this.hideTip();
+      return;
+    }
+    const left = Math.max(0, buff.left - (performance.now() / 1000 - p.shownBuffsAt));
+    // A party member's buff: its numbers depend on their rank, which we don't know, so only its description.
+    const rank = p.skillRank(sk);
+    const lines = rank > 0 ? skillParamLines(sk, rank).map((l) => `<div><span class="tt-val">${l}</span></div>`).join('') : '';
+    tip.innerHTML =
+      `<div class="tt-name">${sk.name} (${sk.nameTh})</div>` +
+      `<div class="tt-sub">บัพที่ได้รับ${rank > 0 ? ` · แรงก์ ${rank}` : ''}</div>` +
+      `<div class="tt-stats"><div>${sk.desc}</div>${lines}</div>` +
+      `<div class="tt-hint">เหลือ ${left.toFixed(1)} วิ (จาก ${buff.total.toFixed(1)} วิ)</div>`;
+    this.placeTip(tip, e);
+  }
+
   private showSkillTip(kind: SkillSlot | PotionKind, key: string, e: MouseEvent): void {
     if (isTouchMode()) return;
     const p = this.g.player;

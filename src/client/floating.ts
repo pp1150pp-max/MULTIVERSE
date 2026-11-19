@@ -614,7 +614,7 @@ function headY(p: Player): number {
  */
 function paintBuffRow(row: HTMLElement, list: readonly { id: string; left: number; total: number }[], sig: string, at: number): string {
   const next = list.map((b) => b.id).join(',');
-  if (next !== sig) row.innerHTML = list.map((b) => `<div class="vbuff">${skillIcon(b.id)}<i></i></div>`).join('');
+  if (next !== sig) row.innerHTML = list.map((b) => `<div class="vbuff" data-skill="${b.id}">${skillIcon(b.id)}<i></i></div>`).join('');
   if (!list.length) return next;
   const gone = performance.now() / 1000 - at;
   list.forEach((b, i) => {
