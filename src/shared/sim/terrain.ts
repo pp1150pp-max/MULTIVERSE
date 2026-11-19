@@ -302,10 +302,12 @@ export class Terrain {
     // round the seller: the main stall behind them, the second stall and the rest bending forward on either side.
     const ring: [string, boolean, boolean, number, number, number, number][] = [
       // Mirrored the other way from along the wall: the stalls stand ACROSS it, short end to the wall (owner 2026-11-19).
-      ['main_back', true, false, 0, 3.4, 3.4, 1.4],
+      // Drawn taller than the other props: their pictures were sheared to the wall's slope, which made each box taller
+      // (tools/cut_papercraft.cjs 'slope'), so at 3.4 they looked squeezed thin (owner 2026-11-19).
+      ['main_back', true, false, 0, 3.6, 4.4, 1.6],
       // In one line with the main stall, along the wall (owner 2026-11-19).
-      ['wing_back', true, false, 4.6, 3.4, 3.4, 1.4],
-      ['table', false, false, -4.6, 3.4, 1.6, 0.9], ['P0', false, false, 5.8, 1, 1.9, 1],
+      ['wing_back', true, false, 5, 3.6, 4.4, 1.6],
+      ['table', false, false, -5, 3.6, 1.6, 0.9], ['P0', false, false, 5.8, 1, 1.9, 1],
       ['P1', false, false, -5.8, 1, 1.6, 0.8], ['P2', false, false, -2.4, 5, 1.6, 0.9], ['P3', false, false, 2.4, 5, 1.6, 0.8],
     ];
     // `set`: the seller's pictures (tools/cut_papercraft.cjs hub, HUB.md 7.6), ml_* or mr_*; `props`: their four odds and ends.
