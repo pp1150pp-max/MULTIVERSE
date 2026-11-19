@@ -1,6 +1,6 @@
 import { STAT_KEYS, type StatKey, type Stats } from './types';
 
-export const MAX_LEVEL = 50;
+export const MAX_LEVEL = 80;
 export const BASE_MOVE_SPEED = 3.5;
 
 /**
@@ -16,7 +16,7 @@ function expBandMult(level: number): number {
 
 /**
  * Extra owner-set ramp on top of expBandMult (2026-11-09): ×1 up to Lv 19, rising linearly to ×2 at Lv 30,
- * then linearly to ×3 at Lv 49.
+ * then linearly to ×3 at Lv 49 and on at the same slope (owner 2026-11-19: Lv 50–80 keep this formula, ~×4.6 at 79).
  */
 function expRampMult(level: number): number {
   if (level < 20) return 1;
@@ -24,10 +24,25 @@ function expRampMult(level: number): number {
   return 2 + (level - 30) / 19;
 }
 
-/** EXP needed to go from `level` to `level + 1`. Steep on purpose so players move on to higher zones. */
-export function expToNext(level: number): number {
+/**
+ * The /admin "ปรับสมดุล" tab's EXP multiplier per 10 levels (owner 2026-11-19), in TIER_BANDS order:
+ * index 0 = Lv 1–10, 1 = Lv 11–20 … Missing = ×1. Set by src/shared/balance.ts (applyBalance).
+ */
+let EXP_TUNE: readonly number[] = [];
+export function setExpTune(m: readonly number[]): void {
+  EXP_TUNE = [...m];
+}
+/** Which EXP multiplier (10 levels each) a level uses. */
+export const expBandIndex = (level: number): number => Math.max(0, Math.floor((level - 1) / 10));
+
+/**
+ * EXP needed to go from `level` to `level + 1`. Steep on purpose so players move on to higher zones.
+ * `tune` = the per-10-levels multipliers (default: the ones in force; the /admin preview passes its draft).
+ */
+export function expToNext(level: number, tune: readonly number[] = EXP_TUNE): number {
   const base = Math.floor(30 * Math.pow(level, 2.1)) + 40;
-  return Math.floor(base * expBandMult(level) * expRampMult(level));
+  const m = tune[expBandIndex(level)] ?? 1;
+  return Math.max(1, Math.floor(base * expBandMult(level) * expRampMult(level) * m));
 }
 
 /** Auto Play earns this share of every EXP gain (own kills and party shares alike). */

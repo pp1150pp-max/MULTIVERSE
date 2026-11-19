@@ -621,11 +621,27 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const c = landing(p, aim, far);
       const r = P('radius');
       const pullT = P('pullTime');
-      const pull = P('pull');
+      // Pull speed (m/s) grows with rank: +pullRank % per rank above 1 (rank 10 ≈ instant). hold = 1 pins them at the centre.
+      const pull = P('pull') * (1 + (P('pullRank') / 100) * Math.max(0, rank - 1));
+      const hold = P('hold') >= 0.5;
       sim.fx('zone', 'mg_vortex', c.x, c.z, r, pullT);
-      const step = 0.25;
+      const step = hold ? 0.05 : 0.25;
       tickFor(sim, p, step, Math.max(1, Math.round(pullT / step)), () => {
-        forCircle(sim, c.x, c.z, r, (m) => { if (movable(m)) m.knockback(c.x, c.z, -pull); });
+        forCircle(sim, c.x, c.z, r, (m) => {
+          if (!movable(m)) return;
+          if (!hold) { m.knockback(c.x, c.z, -pull); return; }
+          // Held: walk to a spot near the centre (spread by id so they do not stack) and stay until the blast.
+          m.pinnedUntil = Math.max(m.pinnedUntil, sim.time + step * 2);
+          m.kbx = m.kbz = 0;
+          const a = m.id * 2.399963;
+          const tx = c.x + Math.cos(a) * 0.9 * (0.3 + 0.7 * ((m.id * 7) % 10) / 10);
+          const tz = c.z + Math.sin(a) * 0.9 * (0.3 + 0.7 * ((m.id * 7) % 10) / 10);
+          const dx = tx - m.x;
+          const dz = tz - m.z;
+          const d = Math.hypot(dx, dz);
+          const mv = Math.min(d, pull * step);
+          if (d > 1e-4) { m.x += (dx / d) * mv; m.z += (dz / d) * mv; sim.terrain.resolve(m); }
+        });
       });
       sim.schedule(pullT, () => {
         if (!live(sim, p)) return;
@@ -936,6 +952,8 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
     case 'gs_drone': {
       // Hovers by the player's shoulder and shoots the nearest monster within reach.
       const every = Math.max(0.1, P('every'));
+      // One drone on the client for the whole life (src/client/effects.ts drone()), flying after the caster.
+      sim.fx('drone', p.id, every * Math.floor(P('life') / every));
       repeat(sim, every, Math.floor(P('life') / every), () => {
         if (!live(sim, p)) return false;
         const dx = p.x + 0.8;
@@ -944,6 +962,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
         const m = nearest(sim, dx, dz, far);
         if (!m) return;
         const a = Math.atan2(m.z - dz, m.x - dx);
+        sim.fx('drone', p.id, 0, a);
         sim.addProjectile(p, shotFrom(p, a, far + 2, dmg, { x: dx, z: dz, color: '#7affe0', size: 0.4, kb: 1 }));
       });
       return true;

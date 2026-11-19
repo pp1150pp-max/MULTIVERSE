@@ -1,6 +1,6 @@
 // The /admin "ปรับสมดุล" tab: every class's stats and the item tier tables: central, per stat and per item-level band,
 // with a preview of the real numbers an item rolls (src/shared/balance.ts).
-// Edits a draft with a live preview (class stats at Lv1/10/50 with nothing worn, tier chances); saving
+// Edits a draft with a live preview (class stats at Lv1/10/50/80 with nothing worn, tier chances); saving
 // sends the whole draft, the server checks it, stores only what differs from the code, logs the change
 // and applies it to everyone online at once.
 import { foldable } from './ui';
@@ -10,7 +10,7 @@ import { skillExtras } from '../client/skillExtras';
 import { ATTACK_ROOT_RANGE, NO_ATTACK_ROOT } from '../shared/attackRootTuning';
 import { RIG_ARMOR_ITEMS, RIG_ARMOR_NAME, RIG_ARMORS, RIG_WEAPON_ITEMS, RIG_WEAPON_NAME, RIG_WEAPONS } from '../shared/rigLookTuning';
 import {
-  applyBalance, BALANCE_RANGE, PACK_ZONES, packCount, balanceChanges, checkBalance, classStatsAt, skillMpCost, codeBalance, currentBalanceTuning, hasParts, mergeBalance, MONSTER_STAT_NAME,
+  applyBalance, BALANCE_RANGE, expTuneOf, PACK_ZONES, packCount, balanceChanges, checkBalance, classStatsAt, skillMpCost, codeBalance, currentBalanceTuning, hasParts, mergeBalance, MONSTER_STAT_NAME,
   MONSTER_STATS, monsterBandOf, monsterMults, NO_MONSTER_MULT, STAT_MAX, STAT_PART_NAME, STAT_PARTS, STAT_TIER_PARTS, statTierTable, tierLabelsChange,
   tierSourceName, TUNABLE_MONSTERS, withItemStatMult, POTION_KINDS, POTION_RANGE,
   type Balance, type BalanceTuning, type MonsterMults, type MonsterStat, type StatPart, type TierParts,
@@ -23,7 +23,7 @@ import {
 import { NO_BOOST, ZONES, type MonsterBoost } from '../shared/data/zones';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { ITEM_BASES, itemRowKinds, rowRanges, TIER_BAND_NAME, TIER_BANDS, tierBandOf, tierChances, tierRanges } from '../shared/data/items';
-import { MAX_LEVEL } from '../shared/formulas';
+import { expToNext, MAX_LEVEL } from '../shared/formulas';
 import { ITEM_ONLY_STATS, RARITIES, RARITY_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, type ClassId, type Rarity, type StatKey } from '../shared/types';
 import { TUT_ACCEPT_GOLD, TUT_COUNT_MAX, TUT_GOLD_MAX, TUT_LINES_MAX, TUT_REWARD_KEYS, TUT_REWARD_NAME, TUT_STONES, tutRewardText, type TutRewardKey } from '../shared/tutorial';
 import type { MailAttachItem } from '../shared/mail';
@@ -34,9 +34,9 @@ type Kids = (Node | string | null | undefined | false)[];
 type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, unknown>, ...kids: Kids) => HTMLElementTagNameMap[K];
 type Api = <T>(method: string, path: string, body?: unknown) => Promise<T>;
 
-const PREVIEW_LEVELS = [1, 10, 50];
+const PREVIEW_LEVELS = [1, 10, 50, 80];
 /** Levels shown in the skill MP preview. */
-const MP_COST_LEVELS = [1, 20, 40, 50];
+const MP_COST_LEVELS = [1, 20, 40, 50, 80];
 /** Stats shown with one decimal (the % ones and regen); the rest are whole numbers in the game. */
 const DECIMAL = new Set<StatKey>(['crit', 'critDmg', 'atkSpeed', 'moveSpeed', 'hpRegen', 'mpRegen', 'cdr', 'buffDur', 'armorPen']);
 /** Stats a class has (the item-only mods are left out of the class table). */
@@ -640,6 +640,40 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   const summary = h('div', { class: 'muted' });
   /** The draft as the server would store it, or a Thai error. */
   // ---------------------------------------------------------- potions (owner 2026-11-17)
+  // ---------------------------------------------------------- EXP needed to level, × per 10 levels
+  const expCard = h('div', { class: 'card' });
+  const drawExp = (): void => {
+    const codeTune = expTuneOf(code);
+    const fmt = (n: number) => n.toLocaleString();
+    const rows = TIER_BANDS.map((id, i) => {
+      const first = i * 10 + 1;
+      const last = Math.min(MAX_LEVEL - 1, first + 9);
+      const out = h('td', { class: 'bal-out' });
+      const show = (): void => {
+        const tune = expTuneOf(draft);
+        const before = `${fmt(expToNext(first, codeTune))} … ${fmt(expToNext(last, codeTune))}`;
+        const after = `${fmt(expToNext(first, tune))} … ${fmt(expToNext(last, tune))}`;
+        out.textContent = before === after ? before : `${before} → ${after}`;
+        out.classList.toggle('bal-changed', before !== after);
+      };
+      show();
+      const box = numBox(() => draft.expMult[id] ?? 1, (n) => {
+        if (n === 1) delete draft.expMult[id];
+        else draft.expMult[id] = n;
+      }, 1, ...BALANCE_RANGE.expMult, 0.05, () => { show(); updateSummary(); });
+      return h('tr', {}, h('td', {}, TIER_BAND_NAME[id]), h('td', {}, box), out);
+    });
+    expCard.replaceChildren(
+      h('h2', {}, `EXP ที่ต้องใช้อัปเลเวล (เพดาน Lv.${MAX_LEVEL})`),
+      h('div', { class: 'muted' },
+        `คูณ EXP ที่ต้องใช้อัปเลเวลตามสูตรในโค้ด แยกทีละ 10 เลเวล · ใส่ได้ ×${BALANCE_RANGE.expMult[0]}–×${BALANCE_RANGE.expMult[1]} (×2 = ต้องเก็บ EXP มากขึ้น 2 เท่า) · ` +
+        'มีผลทันทีกับหลอด EXP ทุกคน (EXP ที่มีอยู่ไม่เปลี่ยน ลดตัวคูณจนเกินหลอด = เลเวลอัปตอนได้ EXP ครั้งถัดไป) · โทษตายเสีย 10% ของหลอดตามค่าใหม่'),
+      h('div', { class: 'bal-scroll' }, h('table', { class: 'bal-table' },
+        h('thead', {}, h('tr', {}, h('th', {}, 'ช่วงเลเวล'), h('th', {}, 'EXP ×'), h('th', { class: 'bal-out' }, 'EXP ต่อเลเวล (ต้นช่วง … ท้ายช่วง)'))),
+        h('tbody', {}, ...rows))),
+    );
+  };
+
   const potionCard = h('div', { class: 'card' });
   const drawPotions = (): void => {
     const pb = draft.potions;
@@ -765,6 +799,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     const mergeOn = h('input', { type: 'checkbox', checked: a.mergeNums, onchange: (e: Event) => { a.mergeNums = (e.target as HTMLInputElement).checked; refresh(); } });
     const ownOnly = h('input', { type: 'checkbox', checked: a.ownNumsOnly, onchange: (e: Event) => { a.ownNumsOnly = (e.target as HTMLInputElement).checked; refresh(); } });
     const smoothOn = h('input', { type: 'checkbox', checked: a.smoothShots, onchange: (e: Event) => { a.smoothShots = (e.target as HTMLInputElement).checked; refresh(); } });
+    const droneOn = h('input', { type: 'checkbox', checked: a.droneFollow, onchange: (e: Event) => { a.droneFollow = (e.target as HTMLInputElement).checked; refresh(); } });
     const circlesOn = h('input', { type: 'checkbox', checked: a.circles, onchange: (e: Event) => { a.circles = (e.target as HTMLInputElement).checked; refresh(); } });
     const zoneCirclesOn = h('input', { type: 'checkbox', checked: a.zoneCircles, onchange: (e: Event) => { a.zoneCircles = (e.target as HTMLInputElement).checked; refresh(); } });
     const quarksOn = h('input', { type: 'checkbox', checked: a.quarks, onchange: (e: Event) => { a.quarks = (e.target as HTMLInputElement).checked; refresh(); } });
@@ -819,6 +854,9 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('h3', {}, 'กระสุน'),
       h('div', { class: 'row bal-line' }, flag(smoothOn, a.smoothShots !== ca.smoothShots, ' กระสุนบินลื่น (ไม่ดึงกลับตาม server)')),
       h('div', { class: 'muted' }, 'เปิด (ค่าในโค้ด): เบราว์เซอร์ให้กระสุนบินต่อเอง ตำแหน่งจาก server ดันไปข้างหน้าครึ่งหนึ่งของปิง ห่างนิดหน่อยค่อย ๆ ขยับเข้า ห่างเกิน 3 หน่วยค่อยกระโดด · ปิด: แบบเดิม กระสุนกระโดดไปตำแหน่งของ server ทุกครั้งที่ข้อมูลมา (เห็นกระตุกตอนยิงเยอะ เช่น Bullet Storm) · เป็นแค่ภาพ ดาเมจยังตัดสินที่ server'),
+      h('h3', {}, 'โดรนสนับสนุน (มือปืน)'),
+      h('div', { class: 'row bal-line' }, flag(droneOn, a.droneFollow !== ca.droneFollow, ' โดรนบินตามลื่น'), num('droneSpeed', 0.5), num('droneDist', 0.1)),
+      h('div', { class: 'muted' }, 'เปิด (ค่าในโค้ด): โดรนเป็นตัวเดียวตลอดอายุสกิล บินตามหลังไหล่ตัวละครเหมือนสัตว์เลี้ยง ลอยขึ้นลงเบา ๆ หันไปทางมอนตอนยิง หมดเวลา/ตาย/เปลี่ยนแมพแล้วหายไป · ปิด: แบบเดิม วาดภาพโดรนใหม่ที่ไหล่ทุกนัด · ความเร็วตามยิ่งมากยิ่งติดตัว ระยะห่าง 1 = ตำแหน่งที่ server ใช้ปล่อยกระสุน · เป็นแค่ภาพ ดาเมจ/ระยะ/จังหวะยิงตัดสินที่ server'),
     );
   };
 
@@ -1004,6 +1042,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawAffix();
     drawTiers();
     drawMonsters();
+    drawExp();
     drawPotions();
     drawForge();
     drawAuto();
@@ -1055,12 +1094,12 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         void save({ tuning: c.tuning, part: 'rest' }, `ใช้ค่าใหม่กับทั้งเซิร์ฟทันทีไหม?\n\n${changes.slice(0, 1200)}`);
       } }, '💾 บันทึกทั้งเซิร์ฟ'),
       h('button', { onclick: () => { draft = mergeBalance(saved); redraw(); fold.clearDirty(); msg.textContent = ''; } }, 'ยกเลิกที่ยังไม่บันทึก'),
-      h('button', { onclick: () => void save({ reset: true, part: 'rest' }, 'คืนทุกค่าในแท็บนี้ (อาชีพ tier ตัวคูณมอน ยา Auto Play รางวัลเควสสอนระบบ เอฟเฟกต์สกิล และหยุดตอนโจมตี) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?\n(ค่าในแท็บระบบสกิลไม่เปลี่ยน มีปุ่มคืนค่าของตัวเอง)') }, '↺ คืนค่าในโค้ด'),
+      h('button', { onclick: () => void save({ reset: true, part: 'rest' }, 'คืนทุกค่าในแท็บนี้ (อาชีพ tier ตัวคูณมอน ตัวคูณ EXP ยา Auto Play รางวัลเควสสอนระบบ เอฟเฟกต์สกิล และหยุดตอนโจมตี) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?\n(ค่าในแท็บระบบสกิลไม่เปลี่ยน มีปุ่มคืนค่าของตัวเอง)') }, '↺ คืนค่าในโค้ด'),
     ),
     msg,
   );
 
-  box.replaceChildren(fold.toc, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, potionCard, forgeCard, autoCard, tutCard, fxCard, circleCard, rootCard, rigCard, bar);
+  box.replaceChildren(fold.toc, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, forgeCard, autoCard, tutCard, fxCard, circleCard, rootCard, rigCard, bar);
   redraw();
   fold.refreshToc();
 }

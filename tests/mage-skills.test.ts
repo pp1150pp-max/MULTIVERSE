@@ -169,6 +169,30 @@ const run = (sim: Sim, seconds: number) => {
   ok(Math.hypot(m.x - c.x, m.z - c.z) < d0 - 0.3, 'gravity well pulls a monster toward its centre');
 }
 {
+  // Gravity Well holds monsters at the centre until the blast; higher rank gets there faster; bosses are not pulled.
+  const reach = (rank: number): number => {
+    const { sim, p, mobs } = arena();
+    const m = mobs[0];
+    const c = { x: m.x + 3, z: m.z };
+    castSkill(sim, p, sk('mg_gravitywell'), c, rank);
+    let t = 0;
+    while (t < 1.4 && Math.hypot(m.x - c.x, m.z - c.z) > 1.1) { sim.step(0.05); t += 0.05; }
+    const arrived = t;
+    run(sim, 1.4 - t);
+    ok(Math.hypot(m.x - c.x, m.z - c.z) <= 1.1, `rank ${rank}: held at the centre until the blast`);
+    return arrived;
+  };
+  const t1 = reach(1);
+  const t10 = reach(10);
+  ok(t10 < t1 && t10 <= 0.2, `higher rank reaches the centre faster (${t1.toFixed(2)}s → ${t10.toFixed(2)}s)`);
+  const { sim, p, mobs } = arena();
+  const m = mobs[0];
+  const c = { x: m.x + 3, z: m.z };
+  castSkill(sim, p, sk('mg_gravitywell'), c, 1);
+  run(sim, 1.6);
+  ok(m.pinnedUntil <= sim.time, 'pin ends after the blast');
+}
+{
   // Dying or leaving the zone stops the caster's zones.
   const { sim, p, mobs } = arena();
   castSkill(sim, p, sk('mg_firerain'), { x: mobs[0].x, z: mobs[0].z }, 1);

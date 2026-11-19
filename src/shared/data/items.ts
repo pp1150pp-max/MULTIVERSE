@@ -230,13 +230,16 @@ function tableOf(d: TierTableDef): TierTable {
 }
 
 /**
- * Item-level bands a tier table can differ in (owner 2026-11-11: fixed, one per farm map, plus 41–50).
- * An item uses the band of its own level.
+ * Item-level bands a tier table can differ in (owner 2026-11-11: fixed, one per farm map; 2026-11-19: on to
+ * Lv 80 for floor 2). An item uses the band of its own level. The /admin monster and EXP multipliers use them too.
  */
-export const TIER_BANDS = ['1-10', '11-20', '21-30', '31-40', '41-50'] as const;
+export const TIER_BANDS = ['1-10', '11-20', '21-30', '31-40', '41-50', '51-60', '61-70', '71-80'] as const;
 export type TierBand = (typeof TIER_BANDS)[number];
-export const TIER_BAND_NAME: Record<TierBand, string> = { '1-10': 'Lv1–10', '11-20': 'Lv11–20', '21-30': 'Lv21–30', '31-40': 'Lv31–40', '41-50': 'Lv41–50' };
-/** The band (index into TIER_BANDS) of an item level; below 1 counts as the first, above 50 as the last. */
+export const TIER_BAND_NAME: Record<TierBand, string> = {
+  '1-10': 'Lv1–10', '11-20': 'Lv11–20', '21-30': 'Lv21–30', '31-40': 'Lv31–40',
+  '41-50': 'Lv41–50', '51-60': 'Lv51–60', '61-70': 'Lv61–70', '71-80': 'Lv71–80',
+};
+/** The band (index into TIER_BANDS) of an item level; below 1 counts as the first, above 80 as the last. */
 export const tierBandOf = (level: number): number => Math.min(TIER_BANDS.length - 1, Math.max(0, Math.floor((level - 1) / 10)));
 
 /** Which table a stat at a band uses, filled in whole (src/shared/balance.ts); `stat` null = the band's table for stats without their own. */

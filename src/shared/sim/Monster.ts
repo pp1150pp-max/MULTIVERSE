@@ -60,6 +60,8 @@ export class Monster extends Unit {
   }
   expReward = 0;
   state: State = 'idle';
+  /** Gravity Well: until this sim time the monster is held where the well put it (no walking, chasing or wind-ups). */
+  pinnedUntil = 0;
   aggroT = 0;
   /** Boss: who it was on at the last check, and for how long (seconds); a change of target restarts the count. */
   private swTarget: Player | null = null;
@@ -409,7 +411,7 @@ export class Monster extends Unit {
     let mz = 0;
     let spd = this.baseSpeed;
 
-    if (this.stunT > 0) {
+    if (this.stunT > 0 || sim.time < this.pinnedUntil) {
       this.windupT = 0;
       if (this.state === 'charge') this.state = 'chase';
       return;
