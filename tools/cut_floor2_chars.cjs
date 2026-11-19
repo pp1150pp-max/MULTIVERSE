@@ -3,12 +3,11 @@
 //   monsters  raw/floor2_m*/monsters/<id>_<move>.png (5 rows × 4 frames each) → monsters/<id>.png: the 5 rows, the moves
 //             side by side 4 columns each (the first move, walking or idling, in 0-3, then the rest in order), and
 //             meta.json { moves } so the game knows which columns are which
-//   npc       raw/floor2_hub/npc/<id>.png (3 rows × 4 frames) → npc/<id>.png, rows 208 tall like floor 1's paper NPCs
-//   portrait  raw/floor2_hub/portrait/<id>.png → ui/portrait_<id>.png 256×256 (dark backdrop kept)
 //   keys      raw/floor2_m*/key_*.png → icons/stone_key_<boss>.png 96×96
 //   sets      papercraft_icons/raw/floor2/set_*.png (7 × 2) → icons/item_set_<set>_<piece>.png 96×96, emblem icons/set_<set>.png
 // Every background is measured from the sheet's border (tools/paper_key.cjs). Ghosts keep their see-through parts.
-// Usage: node tools/cut_floor2_chars.cjs [monsters|npc|portrait|keys|sets ...] [--only id,id]
+// (The harbour town's NPCs and portraits are cut by its own PR, feature/harbor-town.)
+// Usage: node tools/cut_floor2_chars.cjs [monsters|keys|sets ...] [--only id,id]
 const path = require('path');
 const fs = require('fs');
 const sharp = require('sharp');
@@ -52,7 +51,6 @@ const MONSTERS = {
   kraken_tentacle: { map: 'floor2_m4', moves: ['idle', 'slam'] },
   kraken: { map: 'floor2_m4', boss: true, moves: ['idle', 'arm_slam', 'arm_cut', 'ink', 'dive'], ref: { dive: 'first' } },
 };
-const NPCS = ['supply_merchant', 'dock_keeper', 'shipwright', 'harbor_broker', 'navigator', 'smuggler'];
 const KEYS = { crab: 'floor2_m1/key_crab_claw.png', captain: 'floor2_m2/key_treasure_compass.png', ghost: 'floor2_m3/key_ghost_bell.png', kraken: 'floor2_m4/key_kraken_eye.png' };
 /** Raw sheet → set id in src/shared/data/sets.ts. Cells in the order of FLOOR2_SETS.md. */
 const SETS = { set_beach: 'beach', set_pirate: 'pirate', set_ghost: 'ghost_sailor', set_sea_king: 'sea_king' };
@@ -251,24 +249,6 @@ async function monster(id, meta) {
   meta[id] = { moves: m.moves };
 }
 
-async function npc(id) {
-  const img = await read(path.join(RAW, 'floor2_hub/npc', `${id}.png`));
-  const { bg, green } = keyBg(img, { soft: true });
-  const g = grid(img, 3, 4, `npc ${id}`);
-  // Floor 1's paper NPCs: 3 rows of 208 px.
-  const k = (208 - 1) / 1.05 / Math.max(...g.flat().map(H));
-  const { pipeline } = await sheet([{ g, k, img }], 3, 4);
-  console.log(`npc ${id} (${green ? 'green' : 'magenta'} ${bg.join(',')})`);
-  const buf = await pipeline.png().toBuffer();
-  const meta = await sharp(buf).metadata();
-  // Exactly 208 per row, like keeper.png.
-  await save(sharp(buf).resize(meta.width, 624, { fit: 'fill', kernel: 'lanczos3' }), `npc/${id}.png`);
-}
-
-async function portrait(id) {
-  await save(sharp(path.join(RAW, 'floor2_hub/portrait', `${id}.png`)).resize(256, 256, { fit: 'cover', kernel: 'lanczos3' }), `ui/portrait_${id}.png`);
-}
-
 /** One icon: the piece fitted into ICON_ART px, centred on a transparent ICON square. */
 async function icon(img, f, rel) {
   const a = alone(img, f);
@@ -359,7 +339,7 @@ async function main() {
   const args = process.argv.slice(2);
   const oi = args.indexOf('--only');
   const only = oi >= 0 ? new Set(args.splice(oi, 2)[1].split(',')) : null;
-  const want = args.length ? args : ['monsters', 'npc', 'portrait', 'keys', 'sets'];
+  const want = args.length ? args : ['monsters', 'keys', 'sets'];
   const pick = (ids) => (only ? ids.filter((i) => only.has(i)) : ids);
   // A bad sheet is reported and skipped, so one run lists every problem.
   const failed = [];
@@ -374,8 +354,6 @@ async function main() {
     await each(pick(Object.keys(MONSTERS)), (id) => monster(id, meta));
     fs.writeFileSync(metaFile, JSON.stringify(meta, null, 2) + '\n');
   }
-  if (want.includes('npc')) await each(pick(NPCS), npc);
-  if (want.includes('portrait')) await each(pick(NPCS), portrait);
   if (want.includes('keys')) await each(pick(Object.keys(KEYS)), keyIcon);
   if (want.includes('sets')) await each(pick(Object.keys(SETS)), setSheet);
   if (failed.length) {

@@ -1,7 +1,7 @@
 // Cuts the papercraft map sheets in art_templates/papercraft_maps/raw/<map>/ into the game's paper sprite files,
 // public/assets/sprites/paper/{props,ground}/, with the same names and sizes as the old art they stand in for
 // (see art_templates/papercraft_maps/PROMPTS.md). Usage: node tools/cut_papercraft.cjs map1_forest
-// (floor 2: floor2_hub, floor2_m1 … floor2_m4)
+// (floor 2: floor2_m1 … floor2_m4)
 const path = require('path');
 const fs = require('fs');
 const sharp = require('sharp');
@@ -99,20 +99,8 @@ const MAPS = {
   // Floor 2 (art_templates/papercraft_maps/FLOOR2_*.md). New pictures with no old file: props get a fixed height
   // (`share`: one scale for the whole sheet, its tallest piece that tall, for pieces that must match each other),
   // atlases floor 1's sizes. Names that clashed with floor 1 or between maps were renamed (owner 2026-11-19).
-  // The background is measured from each sheet's border, so green and off-magenta sheets key the same way.
-  floor2_hub: [
-    ['buildings_a.png', 'props', { cols: 2, rows: 2, height: 384, names: ['bld_supply', 'bld_broker', 'bld_shipforge', 'bld_warehouse'] }],
-    ['buildings_b.png', 'props', { cols: 2, rows: 2, height: 384, names: ['bld_smuggler', 'bld_lighthouse', 'bld_shipyard', 'moored_dinghy'] }],
-    ['props.png', 'props', { cols: 4, rows: 3, height: 256, names: ['wheel_fountain', 'brass_globe', 'harbor_lamp', 'harbor_flagpole', 'dock_bench_a', 'dock_bench_b', 'bunting_post', 'cask_stack', 'cargo_crates', 'sacks', 'hawser_coil', 'palm_pot'] }],
-    // The two pier directions must keep the same width and thickness: one scale for the sheet.
-    ['docks.png', 'props', { cols: 4, rows: 2, share: 256, names: ['dock_a', 'dock_b', 'dock_end', 'bollard', 'rail_a', 'rail_b', 'edge_a', 'edge_b'] }],
-    ['ships.png', 'props', { cols: 2, rows: 2, height: 384, names: ['ship_red', 'ship_blue', 'ship_green', 'ship_white'] }],
-    ['water.png', 'props', { cols: 3, rows: 2, share: 256, names: ['falls_a', 'falls_b', 'foam_post', 'wave', 'float_barrel', 'gull_post'] }],
-    ['portals.png', 'props', { cols: 3, rows: 1, height: 256, names: ['portal_dock', 'portal_return', 'portal_floor2'] }],
-    ['ground_plank.png', 'ground', { out: 'plank' }],
-    ['ground_plaza.png', 'ground', { out: 'plaza' }],
-    ['ground_water.png', 'ground', { out: 'harbor_water' }],
-  ],
+  // The background is measured from each sheet's border, so green and off-magenta sheets key the same way. The harbour
+  // town (raw/floor2_hub) is cut by its own PR (feature/harbor-town).
   floor2_m1: [
     ['props.png', 'props', { cols: 4, rows: 3, height: 256, names: ['coconut_palm_0', 'coconut_palm_1', 'coconut_palm_2', 'wreck_hull', 'torn_sail_mast', 'sea_rock_0', 'sea_rock_1', 'rock_pillar', 'hibiscus', 'tropical_fern', 'giant_clam', 'broken_ladder'] }],
     ['camp.png', 'props', { cols: 4, rows: 3, height: 256, names: ['treasure_chest', 'wreck_crates', 'salvage_barrel', 'brass_lantern', 'plank_pile', 'stuck_anchor', 'beached_rowboat', 'old_cannon', 'driftwood_sign', 'skull_flag', 'tide_pool', 'coin_pile'] }],
