@@ -200,7 +200,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
       { id: 'mg_icecage', kind: 'normal', line: 2, tier: 3, anim: 'q', name: 'Ice Cage', nameTh: 'กรงน้ำแข็ง', desc: 'ยิงก้อนน้ำแข็ง ตรึงศัตรูตัวแรกนิ่งสนิท (บอสโดน 30%)', dmg: 1.6, mp: 18, cooldown: 10,
         params: { stun: sec(2.5, 'ตรึง') } },
       { id: 'mg_gravitywell', kind: 'normal', line: 2, tier: 4, anim: 'e', name: 'Gravity Well', nameTh: 'หลุมแรงโน้มถ่วง', desc: 'หลุมที่เมาส์ดูดศัตรูเข้ากลาง แล้วยุบระเบิด (ไม่ดูดบอส)', dmg: 2, mp: 22, cooldown: 12,
-        params: { radius: metres(4.5, 'รัศมีวง'), pullTime: num(1.5, 'เวลาดูด', 'วิ', 0.25, 5), pull: num(6, 'แรงดูด', '', 1, 20) } },
+        params: { radius: metres(4.5, 'รัศมีวง'), pullTime: num(1.5, 'เวลาดูด', 'วิ', 0.25, 5), pull: num(6, 'แรงดูด (ม./วิ)', 'ม./วิ', 1, 60), pullRank: num(60, 'แรงดูดเพิ่มต่อแรงก์', '%', 0, 500), hold: num(1, 'ตรึงกลางจนระเบิด (1=เปิด 0=ปิด)', '', 0, 1) } },
       { id: 'mg_sealveil', kind: 'normal', line: 2, tier: 5, anim: 'e', name: 'Sealing Veil', nameTh: 'ม่านผนึกเวท', desc: 'ม่านรอบตัว ศัตรูที่โดนพลังโจมตีลดลง', dmg: 1, mp: 20, cooldown: 12,
         params: { weak: pctP(30, 'ลดพลังโจมตี'), weakTime: sec(6, 'เวลาลดพลังโจมตี') } },
       { id: 'mg_empowerfield', kind: 'normal', line: 2, tier: 6, anim: 'e', name: 'Empowering Field', nameTh: 'สนามเร่งอาคม', desc: 'ตัวเองและผู้เล่นทุกคนในวงรอบตัว ทำดาเมจแรงขึ้น', dmg: 0, mp: 28, cooldown: 20,
