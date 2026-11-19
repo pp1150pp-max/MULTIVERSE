@@ -37,6 +37,8 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 const r1 = (v: number) => Math.round(v * 10) / 10;
 const GOLD = '#f2c230';
 const ERR = '#ff8a6a';
+/** Wait before asking again when the server's 0.1 s flood guard (MARKET_ACT_MS) turned a call away without a message. */
+const FLOOD_RETRY_MS = 150;
 
 export class MarketWindow {
   isOpen = false;
@@ -240,11 +242,13 @@ export class MarketWindow {
     if (!this.isOpen) return;
     const r = await this.call({ a: 'mktSearch', q: this.query(page) });
     if (!r.ok) {
-      this.say(r.msg ?? '', ERR);
-      // Asked too fast (the server says so): try again once the bucket has refilled a little.
+      // The flood guard says nothing: keep the last message (e.g. "ซื้อ … แล้ว") on screen.
+      if (r.msg) this.say(r.msg, ERR);
+      // No message = the server's 0.1 s flood guard (e.g. a search right after a buy on a fast connection): try again
+      // almost at once. The search limit's own message: wait for the bucket to refill a little.
       if (!r.msg || r.msg === MARKET_THROTTLE_MSG) {
         if (this.searchTimer) clearTimeout(this.searchTimer);
-        this.searchTimer = setTimeout(() => this.search(page), 1500);
+        this.searchTimer = setTimeout(() => this.search(page), r.msg ? 1500 : FLOOD_RETRY_MS);
       }
       return;
     }
@@ -273,7 +277,12 @@ export class MarketWindow {
     if (this.busy) return false;
     this.busy = true;
     try {
-      const r = await this.call(c);
+      let r = await this.call(c);
+      // Turned away by the flood guard (sent right after another market call): once more, a moment later.
+      if (!r.ok && !r.msg) {
+        await new Promise((ok) => setTimeout(ok, FLOOD_RETRY_MS));
+        r = await this.call(c);
+      }
       if (!r.ok && !r.msg) return false;
       this.say(r.msg ?? '', r.ok ? GOLD : ERR);
       if (r.msg) this.host.log(r.msg, r.ok ? GOLD : ERR);
@@ -305,7 +314,14 @@ export class MarketWindow {
       `<br><small>ทองคงเหลือหลังซื้อ ${(this.g.player.gold - row.price).toLocaleString()} G</small>`,
       'ซื้อ',
       async () => {
-        await this.act({ a: 'mktBuy', id, price: row.price });
+        this.say('กำลังซื้อ…');
+        const ok = await this.act({ a: 'mktBuy', id, price: row.price });
+        // Bought: take the row off the list now, without waiting for the new search (owner 2026-11-20: buying felt slow).
+        if (ok) {
+          this.rows = this.rows.filter((r) => r.id !== id);
+          this.total = Math.max(0, this.total - 1);
+          this.renderList();
+        }
         this.search(this.page);
       },
     );
