@@ -53,6 +53,13 @@ export interface SkillConfig {
   /** Zoom limits of the skill map in % of the fit-to-window size (100 = the size it opens at). */
   zoomMin: number;
   zoomMax: number;
+  /** Land Mine charges (owner 2026-11-19): at most `mineMax` stacks, stack N is gained at rank `mineRanks[N-1]`. */
+  mineMax: number;
+  mineRanks: number[];
+  /** Seconds between two mines laid back to back. */
+  mineGap: number;
+  /** Laying a mine does not hold the player still (the attack-root stop skips it). */
+  mineNoRoot: boolean;
   /** Per learnable skill id. */
   skills: Record<string, SkillValues>;
 }
@@ -68,10 +75,19 @@ export interface SkillTuning {
   mapZoom?: boolean;
   zoomMin?: number;
   zoomMax?: number;
+  mineMax?: number;
+  mineRanks?: number[];
+  mineGap?: number;
+  mineNoRoot?: boolean;
   skills?: Record<string, SkillValuesTuning>;
 }
 /** One skill's saved differences. */
 export type SkillValuesTuning = Partial<Record<SkillNum, number>> & { params?: Record<string, number> };
+
+/** How many stacks the Land Mine can be set up to hold. */
+export const MINE_RANK_SLOTS = 5;
+/** Skills that keep charges instead of one cooldown (the browser and Sim treat them the same way). */
+export const CHARGE_SKILLS: ReadonlySet<string> = new Set(['gs_mine']);
 
 export const SKILL_RANGE = {
   pointsPerLevel: [0, 10],
@@ -81,6 +97,8 @@ export const SKILL_RANGE = {
   refundCost: [0, 100_000_000],
   zoomMin: [20, 100],
   zoomMax: [100, 500],
+  mineMax: [1, MINE_RANK_SLOTS],
+  mineGap: [0, 10],
 } as const satisfies Record<string, readonly [number, number]>;
 export const SKILL_NUM_NAME: Record<keyof typeof SKILL_RANGE, string> = {
   pointsPerLevel: 'แต้มสกิลต่อเลเวล',
@@ -90,6 +108,8 @@ export const SKILL_NUM_NAME: Record<keyof typeof SKILL_RANGE, string> = {
   refundCost: 'ค่าคืนแต้ม (G ต่อแต้ม)',
   zoomMin: 'ซูมผังต่ำสุด (%)',
   zoomMax: 'ซูมผังสูงสุด (%)',
+  mineMax: 'กับระเบิด: สแตคสูงสุด',
+  mineGap: 'กับระเบิด: หน่วงวางติด (วิ)',
 };
 const NUMS = Object.keys(SKILL_RANGE) as (keyof typeof SKILL_RANGE)[];
 
@@ -117,16 +137,38 @@ export function codeSkills(): SkillConfig {
     mapZoom: true,
     zoomMin: 50,
     zoomMax: 250,
+    mineMax: 3,
+    mineRanks: [1, 5, 10, 10, 10],
+    mineGap: 0.3,
+    mineNoRoot: true,
     skills,
   };
 }
 const CODE = codeSkills();
+
+/**
+ * Stacks a charge skill holds at this rank (0 = not a charge skill, or rank 0): stack N counts once the rank reaches
+ * `mineRanks[N-1]`, up to `mineMax`. Owner 2026-11-19: rank 1 = 1, rank 5 = 2, rank 10 = 3.
+ */
+export function chargeMax(cfg: SkillConfig, skillId: string, rank: number): number {
+  if (!CHARGE_SKILLS.has(skillId) || rank < 1) return 0;
+  let n = 0;
+  for (let i = 0; i < Math.min(cfg.mineMax, cfg.mineRanks.length); i++) if (rank >= cfg.mineRanks[i]) n++;
+  return Math.max(1, n);
+}
+
+/** True when this skill must not hold the player still on cast (Land Mine with its switch on). */
+export function skipsAttackRoot(cfg: SkillConfig, skillId: string): boolean {
+  return skillId === 'gs_mine' && cfg.mineNoRoot;
+}
 
 export function mergeSkills(t: SkillTuning | undefined): SkillConfig {
   const c = codeSkills();
   if (!t) return c;
   for (const k of NUMS) if (t[k] !== undefined) c[k] = t[k]!;
   if (typeof t.mapZoom === 'boolean') c.mapZoom = t.mapZoom;
+  if (typeof t.mineNoRoot === 'boolean') c.mineNoRoot = t.mineNoRoot;
+  if (t.mineRanks) c.mineRanks = [...t.mineRanks];
   for (const k of LEARN_KINDS) if (t.unlock?.[k]) c.unlock[k] = [...t.unlock[k]!];
   for (const [id, v] of Object.entries(t.skills ?? {})) {
     const one = c.skills[id];
@@ -140,7 +182,7 @@ export function mergeSkills(t: SkillTuning | undefined): SkillConfig {
 
 const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
-const whole = new Set<string>(['pointsPerLevel', 'lastPointLevel', 'maxRank', 'freeRefundBelow', 'refundCost', 'zoomMin', 'zoomMax']);
+const whole = new Set<string>(['pointsPerLevel', 'lastPointLevel', 'maxRank', 'freeRefundBelow', 'refundCost', 'zoomMin', 'zoomMax', 'mineMax']);
 const skillName = (id: string): string => LEARNABLE_SKILLS.find((x) => x.sk.id === id)?.sk.nameTh ?? id;
 const skillDef = (id: string) => LEARNABLE_SKILLS.find((x) => x.sk.id === id)?.sk;
 
@@ -152,7 +194,7 @@ const skillDef = (id: string) => LEARNABLE_SKILLS.find((x) => x.sk.id === id)?.s
 export function checkSkillTuning(x: unknown, strict: boolean): { tuning: SkillTuning | undefined } | { error: string } {
   if (x === undefined) return { tuning: undefined };
   if (!isObj(x)) return strict ? { error: 'ค่าสกิลไม่ถูกต้อง' } : { tuning: undefined };
-  const TOP = [...NUMS, 'mapZoom', 'unlock', 'skills'];
+  const TOP = [...NUMS, 'mapZoom', 'mineNoRoot', 'mineRanks', 'unlock', 'skills'];
   if (strict) {
     const extra = Object.keys(x).find((k) => !TOP.includes(k));
     if (extra) return { error: `สกิล: ไม่รู้จักค่า "${extra.slice(0, 20)}"` };
@@ -172,6 +214,19 @@ export function checkSkillTuning(x: unknown, strict: boolean): { tuning: SkillTu
     if (typeof x.mapZoom !== 'boolean') {
       if (strict) return { error: 'สวิตช์ซูมผังสกิลไม่ถูกต้อง' };
     } else if (x.mapZoom !== CODE.mapZoom) out.mapZoom = x.mapZoom;
+  }
+  if (x.mineNoRoot !== undefined) {
+    if (typeof x.mineNoRoot !== 'boolean') {
+      if (strict) return { error: 'สวิตช์กับระเบิดวางไม่ชะงักไม่ถูกต้อง' };
+    } else if (x.mineNoRoot !== CODE.mineNoRoot) out.mineNoRoot = x.mineNoRoot;
+  }
+  if (x.mineRanks !== undefined) {
+    const v = x.mineRanks;
+    const ok = Array.isArray(v) && v.length === MINE_RANK_SLOTS &&
+      v.every((n, i) => typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= 20 && (i === 0 || n >= (v[i - 1] as number)));
+    if (!ok) {
+      if (strict) return { error: `กับระเบิด: แรงก์ที่ได้สแตคต้องเป็น ${MINE_RANK_SLOTS} ค่า 1–20 เรียงจากน้อยไปมาก` };
+    } else if ((v as number[]).join() !== CODE.mineRanks.join()) out.mineRanks = [...(v as number[])];
   }
   if (x.unlock !== undefined) {
     if (!isObj(x.unlock)) {
@@ -260,6 +315,8 @@ export function skillChanges(a: SkillConfig, b: SkillConfig): string[] {
   const out: string[] = [];
   for (const k of NUMS) if (a[k] !== b[k]) out.push(`${SKILL_NUM_NAME[k]} ${a[k]} → ${b[k]}`);
   if (a.mapZoom !== b.mapZoom) out.push(`ซูมผังสกิล ${a.mapZoom ? 'เปิด' : 'ปิด'} → ${b.mapZoom ? 'เปิด' : 'ปิด'}`);
+  if (a.mineNoRoot !== b.mineNoRoot) out.push(`กับระเบิดวางไม่ชะงัก ${a.mineNoRoot ? 'เปิด' : 'ปิด'} → ${b.mineNoRoot ? 'เปิด' : 'ปิด'}`);
+  if (a.mineRanks.join() !== b.mineRanks.join()) out.push(`กับระเบิดแรงก์ที่ได้สแตค ${a.mineRanks.join('/')} → ${b.mineRanks.join('/')}`);
   for (const k of LEARN_KINDS) {
     if (a.unlock[k].join() !== b.unlock[k].join()) out.push(`เลเวลปลดล็อก${KIND_NAME[k]} ${a.unlock[k].join('/')} → ${b.unlock[k].join('/')}`);
   }

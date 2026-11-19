@@ -2110,6 +2110,7 @@ export class GameWorld {
     p.hp = Math.min(old.hp, p.maxHp);
     p.mp = Math.min(old.mp, p.stats.maxMp);
     p.cd = { ...old.cd };
+    p.charges = { ...old.charges };
     p.potCd = old.potCd;
     p.restCd = old.restCd;
     p.stash = old.stash;
@@ -2174,7 +2175,7 @@ export class GameWorld {
     const inv = JSON.stringify([p.equipment, p.bag, p.buyback]);
     const me: PrivateSnap = {
       hp: r2(p.hp), mp: r2(p.mp), exp: p.exp, level: p.level, gold: p.gold,
-      cd: p.cd, potCd: r2(p.potCd), restCd: r2(Math.max(0, p.restCd)), castT: p.castT > 0 ? r2(p.castT) : undefined,
+      cd: p.cd, ...(Object.keys(p.charges).length ? { ch: p.charges } : {}), potCd: r2(p.potCd), restCd: r2(Math.max(0, p.restCd)), castT: p.castT > 0 ? r2(p.castT) : undefined,
       ...(Object.keys(p.buffs).length ? { buffs: roundBuffs(p.buffs) } : {}),
       ...skillBuffField(p, s.sim.time),
       // Slowed (the Bog Witch's poison): the browser walks slower too, or its moves would be refused.

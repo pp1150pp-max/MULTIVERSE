@@ -310,6 +310,8 @@ export interface PrivateSnap {
   tut?: TutorialData;
   /** Cooldown left by skill id ('dash' for the dash). */
   cd: Record<string, number>; potCd: number; restCd: number;
+  /** Charges held by skills that keep stacks (Land Mine); left out when all are full. */
+  ch?: Record<string, number>;
   /** Skills learned and worn. */
   skills?: SkillBook;
   /** Seconds left on a return-scroll cast (left out when not casting). */

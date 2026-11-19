@@ -915,11 +915,18 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const radius = far * sc.area;
       const stun = P('stun');
       const step = 0.2;
+      // At most as many lie on the ground as the stack count; laying one more makes the oldest vanish (owner 2026-11-19).
+      const mine = { gone: false };
+      p.mines = p.mines.filter((o) => !o.gone);
+      p.mines.push(mine);
+      const cap = Math.max(1, p.chargeMax(sk));
+      while (p.mines.length > cap) p.mines.shift()!.gone = true;
       sim.fx('effect', 'gs_mine', x, z, 0, 0.6);
       repeat(sim, step, Math.round(P('life') / step), (i) => {
-        if (!live(sim, p)) return false;
+        if (mine.gone || !live(sim, p)) return false;
         if (i % 5 === 4) sim.fx('effect', 'gs_mine', x, z, 0, 0.6);
         if (!nearest(sim, x, z, trigger)) return;
+        mine.gone = true;
         blast(sim, p, x, z, radius, dmg, { stun, kb: 4 }, special);
         sim.shake(0.3, { to: p.id });
         return false;

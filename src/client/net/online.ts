@@ -18,6 +18,7 @@ import { checkAnimTuning } from '../../shared/animTuning';
 import { applyAnimTuning } from '../animTune';
 import { applyBalance, checkBalance, currentBalance } from '../../shared/balance';
 import { attackRootTime } from '../../shared/attackRootTuning';
+import { skipsAttackRoot } from '../../shared/skillTuning';
 import { applyCosHidden, applyCosTuning } from '../cosTune';
 import { useCash, useCashState } from '../cashData';
 import { EQUIP_SLOTS } from '../../shared/types';
@@ -771,6 +772,7 @@ export class OnlineBackend implements Backend {
     me.mp = old.mp;
     me.stats = old.stats;
     me.cd = old.cd;
+    me.charges = old.charges;
     me.potCd = old.potCd;
     me.restCd = old.restCd;
     me.x = x;
@@ -985,6 +987,7 @@ export class OnlineBackend implements Backend {
     }
     if (pv.stats) me.stats = pv.stats;
     me.cd = { ...pv.cd };
+    me.charges = pv.ch ? { ...pv.ch } : {};
     if (pv.skills) me.skillBook = cleanSkillBook(me.cls.id, pv.skills);
     me.potCd = pv.potCd;
     me.restCd = pv.restCd ?? 0;
@@ -1095,6 +1098,7 @@ export class OnlineBackend implements Backend {
     for (const l of this.loots) l.t += dt;
     const me = this.me;
     for (const key of Object.keys(me.cd)) me.cd[key] = Math.max(0, me.cd[key] - dt);
+    me.tickCharges();
     me.potCd -= dt;
     me.restCd -= dt;
     if (me.castT > 0) me.castT = Math.max(0, me.castT - dt);
@@ -1162,8 +1166,10 @@ export class OnlineBackend implements Backend {
     let t = 0;
     for (const slot of it.skills) {
       const sk = me.skill(slot);
-      if (!sk || (me.cd[sk.id] ?? 0) > 0 || (this.castLock.get(sk.id) ?? 0) > now || me.mp < me.skillMp(sk)) continue;
-      this.castLock.set(sk.id, now + Math.max(0.3, me.skillCooldown(sk)) * 1000);
+      if (!sk || !me.skillReady(sk) || (this.castLock.get(sk.id) ?? 0) > now || me.mp < me.skillMp(sk)) continue;
+      // A charge skill is locked for the gap only (the next charge may be ready by then); the Land Mine never holds us still.
+      this.castLock.set(sk.id, now + Math.max(0.3, me.chargeMax(sk) ? currentBalance().skills.mineGap : me.skillCooldown(sk)) * 1000);
+      if (skipsAttackRoot(currentBalance().skills, sk.id)) continue;
       t = Math.max(t, attackRootTime(cfg, me.cls.id, sk.id, anim));
     }
     if (it.basic && this.atkT <= 0) {

@@ -13,6 +13,7 @@ import {
 } from '../shared/skillBook';
 import { reachText } from '../shared/data/skillRanges';
 import { currentBalance } from '../shared/balance';
+import { chargeMax } from '../shared/skillTuning';
 import { skillIcon } from './icons';
 import { constellation, PAD, SIZE } from './skillMap';
 
@@ -330,6 +331,7 @@ export class SkillWindow {
       sk.kind !== 'passive' && sk.dmg > 0 ? `ดาเมจ ${Math.round(rankedDmg(sk, r) * 100)}% ATK` : '',
       sk.mp ? `MP ${rankedMp(sk, p.cls.id, p.level, r)}` : '',
       sk.cooldown ? `คูลดาวน์ ${r2(rankedCooldown(sk, r))} วิ${cut > 0 && sk.kind !== 'basic' && sk.kind !== 'dash' ? ` (ของที่ใส่ลดเหลือ ${r2(rankedCooldown(sk, r) * (1 - cut))} วิ)` : ''}` : '',
+      chargeMax(currentBalance().skills, sk.id, r) ? `เก็บได้ ${chargeMax(currentBalance().skills, sk.id, r)} อัน (คืนทีละอัน)` : '',
       ...skillParamLines(sk, r),
     ].filter(Boolean).join(' · ');
     const reach = skillReach(sk);

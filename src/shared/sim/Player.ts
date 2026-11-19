@@ -23,6 +23,7 @@ import {
 import type { LootKind } from './Loot';
 import { newStash, type StashData } from './stash';
 import { classBalance, currentBalance, finishStats } from '../balance';
+import { CHARGE_SKILLS, chargeMax, skipsAttackRoot } from '../skillTuning';
 import { attackRootTime } from '../attackRootTuning';
 import { AUTO_DEFAULT_KEYS, AUTO_LOOT_ORDERS, AUTO_OUT_ACTIONS, AUTO_TARGET_MODES, type AutoDefaults, type AutoLootOrder, type AutoOutAction, type AutoTargetMode } from '../autoTuning';
 import { MONSTERS } from '../data/monsters';
@@ -381,6 +382,13 @@ export class Player extends Unit {
   stats: Stats = emptyStats();
   /** Seconds of cooldown left, by skill id ('dash' for the dash): kept on the skill, so taking it off and on again doesn't reset it. */
   cd: Record<string, number> = {};
+  /**
+   * Charges held by skills that keep stacks (Land Mine, see chargeMax); a skill missing here is full. Not saved. While
+   * a skill is short of its max, `cd[id]` is the time until the next charge; the gap between two casts is `cd[id + ':gap']`.
+   */
+  charges: Record<string, number> = {};
+  /** Land mines lying on the ground (oldest first); one past the stack count makes the oldest vanish. Not saved. */
+  mines: { gone: boolean }[] = [];
   /** Skills learned and worn. Saved; changed only through Sim.learnSkill / refundSkill / wearSkill. */
   skillBook: SkillBook;
   /** Damage multiplier of the Charge running now (set when it is cast, by its rank). */
@@ -617,6 +625,56 @@ export class Player extends Unit {
    * Full cooldown of this skill at its rank, cut by the "ลดคูลดาวน์สกิล %" item stat (owner 2026-11-19: Q/E/R,
    * not the basic attack or the dash; at most the /admin cap).
    */
+  /** Most charges this skill holds at its rank (0 = a plain cooldown skill). */
+  chargeMax(sk: SkillDef): number {
+    return chargeMax(currentBalance().skills, sk.id, this.skillRank(sk));
+  }
+
+  /** Charges held right now (only meaningful when chargeMax > 0). */
+  chargesOf(sk: SkillDef): number {
+    const max = this.chargeMax(sk);
+    return Math.min(max, this.charges[sk.id] ?? max);
+  }
+
+  /** Whether the skill can be cast as far as its cooldown goes (a charge skill: a charge in hand and the gap passed). */
+  skillReady(sk: SkillDef): boolean {
+    if (!this.chargeMax(sk)) return (this.cd[sk.id] ?? 0) <= 0;
+    return this.chargesOf(sk) > 0 && (this.cd[sk.id + ':gap'] ?? 0) <= 0;
+  }
+
+  /** The cast spent a charge (starts the recharge when it was full) and starts the gap. */
+  useCharge(sk: SkillDef): void {
+    const max = this.chargeMax(sk);
+    if (!max) {
+      this.cd[sk.id] = this.skillCooldown(sk);
+      return;
+    }
+    const had = this.chargesOf(sk);
+    this.charges[sk.id] = had - 1;
+    if (had >= max || !((this.cd[sk.id] ?? 0) > 0)) this.cd[sk.id] = this.skillCooldown(sk);
+    this.cd[sk.id + ':gap'] = currentBalance().skills.mineGap;
+  }
+
+  /** Runs after the cooldowns tick: a finished recharge gives a charge back and starts the next one while still short. */
+  tickCharges(): void {
+    for (const sk of this.cls.skills) {
+      if (!CHARGE_SKILLS.has(sk.id)) continue;
+      const max = this.chargeMax(sk);
+      if (!max) continue;
+      let have = this.chargesOf(sk);
+      if (have >= max) {
+        delete this.charges[sk.id];
+        continue;
+      }
+      if (!((this.cd[sk.id] ?? 0) > 0)) {
+        have++;
+        this.cd[sk.id] = have < max ? this.skillCooldown(sk) : 0;
+      }
+      if (have >= max) delete this.charges[sk.id];
+      else this.charges[sk.id] = have;
+    }
+  }
+
   skillCooldown(sk: SkillDef): number {
     if (sk.kind === 'basic' || sk.kind === 'dash') return sk.cooldown;
     const cut = Math.min(Math.max(0, this.stats.cdr ?? 0), currentBalance().cdrCap) / 100;
@@ -1100,6 +1158,7 @@ export class Player extends Unit {
     }
     const cdStep = sim.time < this.hasteUntil ? dt * (1 + this.haste) : dt;
     for (const k of Object.keys(this.cd)) this.cd[k] = Math.max(0, this.cd[k] - (k === 'dash' ? dt : cdStep));
+    this.tickCharges();
     this.atkT -= dt;
     this.potCd -= dt;
     this.restCd -= dt;
@@ -1191,7 +1250,7 @@ export class Player extends Unit {
     const peaceful = sim.inSafe(this);
     for (const slot of peaceful ? [] : it.skills) {
       const sk = this.skill(slot);
-      if (!sk || (this.cd[sk.id] ?? 0) > 0) continue;
+      if (!sk || !this.skillReady(sk)) continue;
       const cost = this.skillMp(sk);
       if (this.mp < cost) {
         if (sim.time > this.noMpMsgT) {
@@ -1208,12 +1267,12 @@ export class Player extends Unit {
         // The skill's own class animation (skill_q/e/r), whichever slot it sits in.
         sim.anim(this.id, `skill_${sk.anim ?? slot}`, this.rootT > 0 ? { skill: sk.id } : { duration: this.attackAnimDuration(), fallback: 'attack', skill: sk.id });
         this.mp -= cost;
-        this.cd[sk.id] = this.skillCooldown(sk);
+        this.useCharge(sk);
         this.lastAttack = sim.time;
         passiveOnCast(this, sk);
         this.faceLockT = 0.3;
         // Movement skills and buffs don't stop the player, nor do ones that already stand them still (Headshot...).
-        if (this.dashT <= 0 && this.rootT <= 0) this.startAttackRoot(sk.id);
+        if (this.dashT <= 0 && this.rootT <= 0 && !skipsAttackRoot(currentBalance().skills, sk.id)) this.startAttackRoot(sk.id);
       }
       if (this.dashT > 0 || this.rootT > 0) return;
     }
