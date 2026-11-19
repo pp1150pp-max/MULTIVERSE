@@ -616,6 +616,11 @@ html.paper-ui .eq-ring2 { left: 61.5%; top: 37.2%; width: 6.6%; height: 4.4%; }
 .tier.t5 { background: var(--tier5); }
 .tt-range { color: var(--ink-dim); font-size: 10px; }
 .tt-enh { color: #ffd34a; font-size: 12px; margin-top: 2px; }
+/* Item set: name (pieces worn) and the bonus steps, lit once reached. */
+.tt-set { margin-top: 4px; font-size: 12px; }
+.tt-set-name { color: #7fe0c8; }
+.tt-set-steps { color: var(--ink-dim); font-size: 11px; }
+.tt-set-steps .on { color: #7fe0c8; font-weight: 600; }
 /* Side-by-side compare with the equipped item: stat | equipped | this one | change. */
 .tt-cmp { margin-top: 6px; padding-top: 4px; border-top: 1px solid var(--panel-edge); font-size: 11px; }
 .tt-cmp-title { color: var(--ink-dim); margin-bottom: 2px; }

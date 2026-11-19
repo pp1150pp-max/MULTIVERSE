@@ -2,6 +2,7 @@ import {
   RARITIES, STAT_KEYS, type ClassId, type EquipSlot, type Item, type Rarity, type SlotId, type StatKey, type StatLine, type Stats, type StatTier,
 } from '../types';
 import { mulberry32, pick, type Rng } from '../rng';
+import type { SetId } from './sets';
 
 interface BaseItem {
   id: string;
@@ -9,6 +10,8 @@ interface BaseItem {
   names: Partial<Record<ClassId | 'any', string>>;
   main: Partial<Stats>;
   minLevel: number;
+  /** The item set this kind belongs to (data/sets.ts). Set pieces come with the floor-2 maps. */
+  set?: SetId;
 }
 
 const BASES: BaseItem[] = [
@@ -104,6 +107,11 @@ export function itemClass(item: Item): ClassId | null {
   if (!base || base.names.any) return null;
   const hit = (Object.entries(base.names) as [ClassId, string][]).find(([, name]) => item.name.endsWith(name));
   return hit ? hit[0] : null;
+}
+
+/** The set an item belongs to (from its kind, so saves need nothing new), or null. */
+export function itemSet(item: Item): SetId | null {
+  return BASES.find((b) => b.id === item.baseId)?.set ?? null;
 }
 
 /** The picture of a slot's first item, as this class sees it. */

@@ -14,6 +14,7 @@ import { ZONES } from './data/zones';
 import { checkFxLayerTuning, codeFxLayer, fxLayerChanges, mergeFxLayer, type FxLayerConfig, type FxLayerTuning } from './fxLayerTuning';
 import { checkMenuLayoutTuning, codeMenuLayout, mergeMenuLayout, menuLayoutChanges, type MenuLayoutConfig, type MenuLayoutTuning } from './menuLayout';
 import { attackRootChanges, checkAttackRootTuning, codeAttackRoot, mergeAttackRoot, type AttackRootConfig, type AttackRootTuning } from './attackRootTuning';
+import { checkSetTuning, codeSets, mergeSets, setChanges, type SetConfig, type SetTuning } from './data/sets';
 import { checkRigLookTuning, codeRigLook, mergeRigLook, rigLookChanges, type RigLookConfig, type RigLookTuning } from './rigLookTuning';
 import { autoChanges, checkAutoTuning, codeAuto, mergeAuto, type AutoConfig, type AutoTuning } from './autoTuning';
 import { checkTutorialTuning, codeTutorial, mergeTutorial, tutorialChanges, type TutorialConfig, type TutorialTuning } from './tutorial';
@@ -170,6 +171,8 @@ export interface Balance {
   menuLayout: MenuLayoutConfig;
   /** Tutorial quest rewards (tutorial.ts). */
   tutorial: TutorialConfig;
+  /** Item sets: server-wide switch and each set's bonus steps (data/sets.ts). */
+  sets: SetConfig;
   /** Skill points, ranks, unlock levels, refunds and every learnable skill's numbers (skillTuning.ts). */
   skills: SkillConfig;
 }
@@ -230,6 +233,8 @@ export interface BalanceTuning {
   menuLayout?: MenuLayoutTuning;
   /** Tutorial quest rewards that differ from the code. */
   tutorial?: TutorialTuning;
+  /** Item set settings that differ from the code. */
+  sets?: SetTuning;
   /** Skill system settings that differ from the code. */
   skills?: SkillTuning;
 }
@@ -304,6 +309,7 @@ export function codeBalance(): Balance {
     attackRoot: codeAttackRoot(),
     menuLayout: codeMenuLayout(),
     tutorial: codeTutorial(),
+    sets: codeSets(),
     skills: codeSkills(),
   };
 }
@@ -352,6 +358,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   b.attackRoot = mergeAttackRoot(t.attackRoot);
   b.menuLayout = mergeMenuLayout(t.menuLayout);
   b.tutorial = mergeTutorial(t.tutorial);
+  b.sets = mergeSets(t.sets);
   b.skills = mergeSkills(t.skills);
   return b;
 }
@@ -487,7 +494,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'forgeAuto', 'walkHidden', 'bossWipeKeepHp', 'roomWipeSec', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'menuLayout'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'forgeAuto', 'walkHidden', 'bossWipeKeepHp', 'roomWipeSec', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'menuLayout', 'sets'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -919,6 +926,12 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (c.tuning) out.attackRoot = c.tuning;
     return null;
   };
+  const sets = (): string | null => {
+    const c = checkSetTuning(o.sets, strict);
+    if ('error' in c) return c.error;
+    if (c.tuning) out.sets = c.tuning;
+    return null;
+  };
   const menuLayout = (): string | null => {
     const c = checkMenuLayoutTuning(o.menuLayout, strict);
     if ('error' in c) return c.error;
@@ -960,7 +973,8 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     fxLayer() ??
     rigLook() ??
     attackRoot() ??
-    menuLayout();
+    menuLayout() ??
+    sets();
   if (err) return { error: err };
   // Fixed key order.
   const ordered: BalanceTuning = {};
@@ -1070,6 +1084,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   out.push(...rigLookChanges(a.rigLook, b.rigLook));
   out.push(...attackRootChanges(a.attackRoot, b.attackRoot));
   out.push(...menuLayoutChanges(a.menuLayout, b.menuLayout));
+  out.push(...setChanges(a.sets, b.sets));
   return out.join(', ');
 }
 

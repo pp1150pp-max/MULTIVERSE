@@ -29,6 +29,7 @@ import { TUT_ACCEPT_GOLD, TUT_COUNT_MAX, TUT_GOLD_MAX, TUT_LINES_MAX, TUT_REWARD
 import type { MailAttachItem } from '../shared/mail';
 import { POTION_SIZES, potionName } from '../shared/data/potions';
 import { STONE_NAME } from '../shared/data/stones';
+import { CODE_SET_STEPS, SET_IDS, SET_MAX_PIECES, SET_NAME } from '../shared/data/sets';
 
 type Kids = (Node | string | null | undefined | false)[];
 type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, unknown>, ...kids: Kids) => HTMLElementTagNameMap[K];
@@ -720,6 +721,30 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
+  // ---------------------------------------------------------- item sets (src/shared/data/sets.ts)
+  const setCard = h('div', { class: 'card' });
+  const drawSets = (): void => {
+    const sc = draft.sets;
+    const rows = SET_IDS.map((id) => h('tr', {},
+      h('td', {}, SET_NAME[id]),
+      ...CODE_SET_STEPS.map((_, i) => h('td', {}, numBox(() => sc.steps[id][i], (n) => { sc.steps[id][i] = n; }, code.sets.steps[id][i], 1, SET_MAX_PIECES, 1, updateSummary)))));
+    setCard.replaceChildren(
+      h('h2', {}, 'เซ็ตไอเทม'),
+      h('div', { class: 'muted' },
+        `ชิ้นเซ็ตนับทุกช่องที่ใส่ (แหวน 2 วงนับ 2 ชิ้น) สูงสุด ${SET_MAX_PIECES} ชิ้น · หน้ารายละเอียดไอเทมแสดง "ชื่อเซ็ต (ใส่อยู่/${SET_MAX_PIECES})" และขั้นโบนัส · ` +
+        'ยังไม่คิดโบนัส (ค่าโบนัสต่อขั้นจะมาทีหลัง) · ยังไม่มีชิ้นเซ็ตในเกม (มากับแมพชั้น 2) · ปิด = ไม่แสดงเซ็ตบนไอเทม'),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: sc.on, onchange: (e: Event) => { sc.on = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' เปิดระบบเซ็ตไอเทม'),
+      ),
+      h('table', { class: 'bal-table' },
+        h('thead', {}, h('tr', {}, h('th', {}, 'เซ็ต'), ...CODE_SET_STEPS.map((_, i) => h('th', {}, `ขั้น ${i + 1} (ชิ้น)`)))),
+        h('tbody', {}, ...rows)),
+      h('div', { class: 'muted' }, `แต่ละขั้นต้องมากกว่าขั้นก่อน (1–${SET_MAX_PIECES}) · ค่าในโค้ด ${CODE_SET_STEPS.join(' / ')}`),
+    );
+  };
+
   // ---------------------------------------------------------- Auto Play (src/shared/autoTuning.ts)
   const autoCard = h('div', { class: 'card' });
   const drawAuto = (): void => {
@@ -1041,6 +1066,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawExp();
     drawPotions();
     drawForge();
+    drawSets();
     drawAuto();
     drawTut();
     drawFx();
@@ -1090,12 +1116,12 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         void save({ tuning: c.tuning, part: 'rest' }, `ใช้ค่าใหม่กับทั้งเซิร์ฟทันทีไหม?\n\n${changes.slice(0, 1200)}`);
       } }, '💾 บันทึกทั้งเซิร์ฟ'),
       h('button', { onclick: () => { draft = mergeBalance(saved); redraw(); fold.clearDirty(); msg.textContent = ''; } }, 'ยกเลิกที่ยังไม่บันทึก'),
-      h('button', { onclick: () => void save({ reset: true, part: 'rest' }, 'คืนทุกค่าในแท็บนี้ (อาชีพ tier ตัวคูณมอน ตัวคูณ EXP ยา Auto Play รางวัลเควสสอนระบบ เอฟเฟกต์สกิล และหยุดตอนโจมตี) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?\n(ค่าในแท็บระบบสกิลไม่เปลี่ยน มีปุ่มคืนค่าของตัวเอง)') }, '↺ คืนค่าในโค้ด'),
+      h('button', { onclick: () => void save({ reset: true, part: 'rest' }, 'คืนทุกค่าในแท็บนี้ (อาชีพ tier ตัวคูณมอน ตัวคูณ EXP ยา เซ็ตไอเทม Auto Play รางวัลเควสสอนระบบ เอฟเฟกต์สกิล และหยุดตอนโจมตี) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?\n(ค่าในแท็บระบบสกิลไม่เปลี่ยน มีปุ่มคืนค่าของตัวเอง)') }, '↺ คืนค่าในโค้ด'),
     ),
     msg,
   );
 
-  box.replaceChildren(fold.toc, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, forgeCard, autoCard, tutCard, fxCard, circleCard, rootCard, rigCard, bar);
+  box.replaceChildren(fold.toc, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, forgeCard, setCard, autoCard, tutCard, fxCard, circleCard, rootCard, rigCard, bar);
   redraw();
   fold.refreshToc();
 }
