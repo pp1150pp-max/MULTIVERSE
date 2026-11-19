@@ -269,7 +269,8 @@ export class Floating {
 
   /** World height the badge over a rest spot is pinned to: above the fountain's statue, or the campfire's flames. */
   static restBadgeY(kind: RestSpot['kind']): number {
-    return kind === 'fountain' ? 4.4 : 1.9;
+    // The fountain's sits on its basin, over the water (owner 2026-11-19), not up by the statue.
+    return kind === 'fountain' ? 2.2 : 1.9;
   }
 
   /** Badge over the fountain and each campfire: that resting there restores HP/MP, and when it can be used again. */
