@@ -495,6 +495,24 @@ async function run(): Promise<void> {
   ok(near(lastSnap(p1.msgs).me.stats.maxHp, hp0), 'the player is back to the code stats');
   ok(lastInv(p1.msgs)?.equipment?.weapon?.tierK === undefined, 'and the code labels');
   ok(auditCount() === 2, 'the reset is in the audit log');
+
+  // The skills tab and the balance tab save their own part (owner 2026-11-19): each keeps the other's saved numbers.
+  const both = { hpRegenMult: 0.5, skills: { maxRank: 12 } };
+  ok((await api('POST', '/admin/balance', { tuning: both, part: 'nope' }, tok.owner1)).status === 400, 'an unknown part is refused');
+  await api('POST', '/admin/balance', { tuning: both }, tok.owner1);
+  const sk = await api('POST', '/admin/balance', { tuning: { hpRegenMult: 2, skills: { maxRank: 15 } }, part: 'skills' }, tok.owner1);
+  ok(sk.data.tuning.skills?.maxRank === 15 && sk.data.tuning.hpRegenMult === 0.5, 'part skills: only the skills change');
+  const rest = await api('POST', '/admin/balance', { tuning: { hpRegenMult: 0.8 }, part: 'rest' }, tok.owner1);
+  ok(rest.data.tuning.hpRegenMult === 0.8 && rest.data.tuning.skills?.maxRank === 15, 'part rest: the skills stay as saved');
+  const n0 = auditCount();
+  const rsk = await api('POST', '/admin/balance', { reset: true, part: 'skills' }, tok.owner1);
+  ok(rsk.data.tuning.skills === undefined && rsk.data.tuning.hpRegenMult === 0.8, 'reset of the skills keeps the rest');
+  ok(auditCount() === n0 + 1 && dbRead((db) => (db.prepare("SELECT details FROM admin_audit WHERE action = 'balance' ORDER BY id DESC LIMIT 1").get() as { details: string }).details).includes('ระบบสกิล'), 'the skills reset is logged as such');
+  await api('POST', '/admin/balance', { tuning: { skills: { maxRank: 12 } }, part: 'skills' }, tok.owner1);
+  const rr = await api('POST', '/admin/balance', { reset: true, part: 'rest' }, tok.owner1);
+  ok(rr.data.tuning.hpRegenMult === undefined && rr.data.tuning.skills?.maxRank === 12, 'reset of the rest keeps the skills');
+  await api('POST', '/admin/balance', { reset: true }, tok.owner1);
+  ok(settingRow() === null, 'a full reset still clears everything');
   p1.ws.close();
 
   // Item stat multipliers: owner only, scales every item in play and saved, backs up first.

@@ -21,10 +21,7 @@ import {
   type AutoAllow, type AutoDefaults,
 } from '../shared/autoTuning';
 import { NO_BOOST, ZONES, type MonsterBoost } from '../shared/data/zones';
-import { SKILL_NUM_NAME, SKILL_RANGE, SKILL_VALUE_KEYS, SKILL_VALUE_NAME, SKILL_VALUE_RANGE, UNLOCK_TIERS } from '../shared/skillTuning';
-import { rankedCooldown, rankedDmg, rankedMp } from '../shared/skillBook';
-import { SKILL_REACH } from '../shared/data/skillRanges';
-import { CLASSES, CLASS_IDS, isLearnable, KIND_NAME, LEARN_KINDS } from '../shared/data/classes';
+import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { ITEM_BASES, itemRowKinds, rowRanges, TIER_BAND_NAME, TIER_BANDS, tierBandOf, tierChances, tierRanges } from '../shared/data/items';
 import { MAX_LEVEL } from '../shared/formulas';
 import { RARITIES, RARITY_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, type ClassId, type Rarity, type StatKey } from '../shared/types';
@@ -38,8 +35,6 @@ type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, 
 type Api = <T>(method: string, path: string, body?: unknown) => Promise<T>;
 
 const PREVIEW_LEVELS = [1, 10, 50];
-/** Units of skill numbers that are counts (step 1 on the skill table). */
-const COUNT_UNITS = new Set(['นัด', 'ลูก', 'ครั้ง', 'ชั้น', '°']);
 /** Levels shown in the skill MP preview. */
 const MP_COST_LEVELS = [1, 20, 40, 50];
 /** Stats shown with one decimal (the % ones and regen); the rest are whole numbers in the game. */
@@ -944,62 +939,8 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
-  // ---------------------------------------------------------- skills (src/shared/skillTuning.ts, owner 2026-11-14)
-  const skillCard = h('div', { class: 'card' });
-  let skillCls: ClassId = 'sword';
-  const drawSkills = (): void => {
-    const sc = draft.skills;
-    const cs = code.skills;
-    const outs: (() => void)[] = [];
-    const refresh = (): void => { outs.forEach((f) => f()); updateSummary(); };
-    const num = (k: keyof typeof SKILL_RANGE, step: number) =>
-      h('label', {}, `${SKILL_NUM_NAME[k]} `, numBox(() => sc[k], (n) => { sc[k] = n; }, cs[k], SKILL_RANGE[k][0], SKILL_RANGE[k][1], step, refresh));
-    // Unlock levels: one box per tier, e.g. ปลดล็อกสกิลธรรมดา [1][3][6]...
-    const unlockRows = LEARN_KINDS.map((k) => h('div', { class: 'row bal-line' },
-      h('span', {}, `เลเวลปลดล็อก${KIND_NAME[k]} (ลำดับที่ 1–${UNLOCK_TIERS[k]}) `),
-      ...sc.unlock[k].map((_, i) => numBox(() => sc.unlock[k][i], (n) => { sc.unlock[k][i] = n; }, cs.unlock[k][i], 1, MAX_LEVEL, 1, refresh))));
-    const tabs = h('div', { class: 'subtabs' }, ...CLASS_IDS.map((id) =>
-      h('button', { class: id === skillCls ? 'on' : '', onclick: () => { skillCls = id; drawSkills(); } }, CLASSES[id].nameTh)));
-    const c = CLASSES[skillCls];
-    const rows = c.skills.filter(isLearnable).map((sk) => {
-      const v = sc.skills[sk.id];
-      const cv = cs.skills[sk.id];
-      const out = h('td', { class: 'bal-out' });
-      const top = sc.maxRank;
-      const show2 = (n: number) => Math.round(n * 100) / 100;
-      outs.push(() => {
-        out.textContent = `ดาเมจ ${Math.round(rankedDmg(sk, 1, draft) * 100)}%→${Math.round(rankedDmg(sk, top, draft) * 100)}% · ` +
-          `MP Lv1 ${rankedMp(sk, skillCls, 1, 1, draft)} / Lv${sc.lastPointLevel} r${top} ${rankedMp(sk, skillCls, sc.lastPointLevel, top, draft)} · ` +
-          `CD ${show2(rankedCooldown(sk, 1, draft))}→${show2(rankedCooldown(sk, top, draft))} วิ`;
-      });
-      const line = sk.line !== undefined ? c.lines[sk.line].nameTh : '';
-      return h('tr', {},
-        h('td', {}, `${sk.nameTh} (${KIND_NAME[sk.kind as 'normal']}${line ? ` · ${line}` : ''})`),
-        // Buffs and passives reach nothing: no reach box.
-        ...SKILL_VALUE_KEYS.map((k) => h('td', {}, k === 'reach' && !SKILL_REACH[sk.id] ? '—' : numBox(() => v[k], (n) => { v[k] = n; }, cv[k], SKILL_VALUE_RANGE[k][0], SKILL_VALUE_RANGE[k][1], k === 'dmg' || k === 'reach' ? 0.05 : k === 'cooldown' ? 0.5 : 1, refresh))),
-        // The skill's own numbers (stun, slow, shots...): * ones grow with เวลาสถานะ/ผลพาสซีฟ %/แรงก์, † ones (extra damage) with ดาเมจ %/แรงก์.
-        h('td', {}, ...Object.entries(sk.params ?? {}).map(([pk, d]) => h('label', { class: 'bal-param' },
-          `${d.nameTh}${d.status ? '*' : d.dmg ? '†' : ''} `, numBox(() => v.params[pk], (n) => { v.params[pk] = n; }, cv.params[pk], d.lo, d.hi, COUNT_UNITS.has(d.unit) ? 1 : 0.05, refresh), ` ${d.unit}`))),
-        out);
-    });
-    skillCard.replaceChildren(
-      h('h2', {}, 'ระบบสกิล'),
-      h('div', { class: 'muted' }, 'แต้มสกิล = เลเวล (ไม่เกินเลเวลที่ตั้ง) × แต้มต่อเลเวล · เรียนสกิล = แรงก์ 1 ใช้ 1 แต้ม อัปแรงก์ละ 1 แต้ม · คืนแต้มฟรีเมื่อแต้มรวมน้อยกว่าที่ตั้ง หลังจากนั้นเสียทองต่อแต้ม'),
-      h('div', { class: 'row bal-line' }, num('pointsPerLevel', 1), num('lastPointLevel', 1), num('maxRank', 1)),
-      h('div', { class: 'row bal-line' }, num('freeRefundBelow', 1), num('refundCost', 100)),
-      h('div', { class: 'row bal-line' },
-        h('label', {}, h('input', { type: 'checkbox', checked: sc.mapZoom, onchange: (e: Event) => { sc.mapZoom = (e.target as HTMLInputElement).checked; refresh(); } }), ' ผังสกิลซูม/เลื่อนได้ (ล้อเมาส์ ปุ่ม +/− นิ้วถ่าง)'),
-        num('zoomMin', 5), num('zoomMax', 10)),
-      h('div', { class: 'muted' }, 'ซูมคิดเป็น % ของขนาดที่ผังเปิดมาพอดีกรอบ (100 = ขนาดเริ่มต้น) · ปิดสวิตช์ = ผังพอดีกรอบแบบเดิม ไม่ซูม'),
-      ...unlockRows,
-      h('div', { class: 'muted' }, 'ค่ารายสกิล: % ต่อแรงก์คิดจากแรงก์ 1 (เช่น ดาเมจ 5% → แรงก์ 10 = ×1.45) · คูลดาวน์ %/แรงก์ ติดลบ = สั้นลง · MP คูณต่อจาก MP สกิล/เลเวลของอาชีพ · เวลาสถานะ = สตัน ช้า ลดเกราะ ไม่รับดาเมจ ดูดเลือด · ระยะ/รัศมี = ระยะยิง/พุ่ง หรือรัศมีรอบตัว (วงระเบิด/วงตกอยู่ในค่าพิเศษ)'),
-      tabs,
-      h('div', { class: 'bal-scroll' }, h('table', { class: 'bal-table' },
-        h('thead', {}, h('tr', {}, h('th', {}, 'สกิล'), ...SKILL_VALUE_KEYS.map((k) => h('th', {}, SKILL_VALUE_NAME[k])), h('th', {}, 'ค่าพิเศษ (* = โตตามเวลาสถานะ/ผลพาสซีฟ)'), h('th', { class: 'bal-out' }, 'ได้จริง (แรงก์ 1 → สูงสุด)'))),
-        h('tbody', {}, ...rows))),
-    );
-    outs.forEach((f) => f());
-  };
+  // The skill system's card is its own tab now (src/admin/skills.ts, owner 2026-11-19): this tab saves with
+  // `part: 'rest'`, so the server keeps the skills as they are saved there.
 
   const draftTuning = (): ReturnType<typeof checkBalance> => checkBalance(draft, true);
   function updateSummary(): void {
@@ -1026,13 +967,12 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawForge();
     drawAuto();
     drawTut();
-    drawSkills();
     drawFx();
     drawCircles();
     drawRoot();
     drawRig();
   };
-  const save =async (body: { tuning: BalanceTuning } | { reset: true }, ask: string): Promise<void> => {
+  const save = async (body: { tuning: BalanceTuning; part: 'rest' } | { reset: true; part: 'rest' }, ask: string): Promise<void> => {
     if (!confirm(ask)) return;
     msg.className = 'msg';
     msg.textContent = 'กำลังบันทึก…';
@@ -1071,15 +1011,15 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
           msg.textContent = 'ไม่มีอะไรเปลี่ยน';
           return;
         }
-        void save({ tuning: c.tuning }, `ใช้ค่าใหม่กับทั้งเซิร์ฟทันทีไหม?\n\n${changes.slice(0, 1200)}`);
+        void save({ tuning: c.tuning, part: 'rest' }, `ใช้ค่าใหม่กับทั้งเซิร์ฟทันทีไหม?\n\n${changes.slice(0, 1200)}`);
       } }, '💾 บันทึกทั้งเซิร์ฟ'),
       h('button', { onclick: () => { draft = mergeBalance(saved); redraw(); fold.clearDirty(); msg.textContent = ''; } }, 'ยกเลิกที่ยังไม่บันทึก'),
-      h('button', { onclick: () => void save({ reset: true }, 'คืนทุกค่า (อาชีพ tier ตัวคูณมอน ยา Auto Play รางวัลเควสสอนระบบ ระบบสกิล เอฟเฟกต์สกิล และหยุดตอนโจมตี) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?') }, '↺ คืนค่าในโค้ด'),
+      h('button', { onclick: () => void save({ reset: true, part: 'rest' }, 'คืนทุกค่าในแท็บนี้ (อาชีพ tier ตัวคูณมอน ยา Auto Play รางวัลเควสสอนระบบ เอฟเฟกต์สกิล และหยุดตอนโจมตี) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?\n(ค่าในแท็บระบบสกิลไม่เปลี่ยน มีปุ่มคืนค่าของตัวเอง)') }, '↺ คืนค่าในโค้ด'),
     ),
     msg,
   );
 
-  box.replaceChildren(fold.toc, classCard, regenCard, tierCard, previewCard, monsterCard, potionCard, forgeCard, autoCard, tutCard, skillCard, fxCard, circleCard, rootCard, rigCard, bar);
+  box.replaceChildren(fold.toc, classCard, regenCard, tierCard, previewCard, monsterCard, potionCard, forgeCard, autoCard, tutCard, fxCard, circleCard, rootCard, rigCard, bar);
   redraw();
   fold.refreshToc();
 }
