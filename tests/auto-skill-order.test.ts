@@ -47,4 +47,32 @@ ok(def(undefined), 'old saves with no order get Q, E, R');
 ok(def(['q', 'q', 'e']) && def(['q', 'e']) && def(['q', 'e', 'x']) && def('qer') && def(['q', 'e', 'r', 'r']), 'bad orders fall back to Q, E, R');
 ok(same(cleanAutoSettings({ order: ['e', 'r', 'q'] }).order, ['e', 'r', 'q']), 'a valid order is kept');
 
+// Mage circle-around-me skills (owner 2026-11-19): cast only with a monster inside the circle, else the next skill goes.
+{
+  const MAGE = 'mage' as const;
+  const p = sim.addPlayer({ name: 'M', classId: MAGE, level: 30, exp: 0, gold: 0, equipment: {}, bag: [], skills: oldSkills(MAGE) });
+  const mk = (gap: number, order: AutoSkill[]): string[] => {
+    p.x = mob.x + gap;
+    p.z = mob.z;
+    p.autoSettings = cleanAutoSettings({ ...DEFAULT_AUTO_SETTINGS, order, skills: { q: true, e: true, r: true } });
+    p.mp = 9999;
+    p.cd = {};
+    const auto = new AutoPlay();
+    auto.start(p.x, p.z);
+    return auto.intent({ player: p, monsters: [mob], loots: [], time: 1, zone: ZONE_1 }, IDLE_INTENT).skills;
+  };
+  // Find a slot whose worn skill is a circle around the caster (the legacy mage's frost nova), if any.
+  const selfSlot = (['q', 'e', 'r'] as AutoSkill[]).find((s) => p.skill(s)?.id === 'frostnova');
+  if (selfSlot) {
+    const others = (['q', 'e', 'r'] as AutoSkill[]).filter((s) => s !== selfSlot);
+    const order = [selfSlot, ...others];
+    ok(same(mk(1, order), [selfSlot]), 'mage: monster inside the circle → circle skill cast');
+    ok(!mk(7, order).includes(selfSlot), 'mage: monster in basic reach but outside the circle → circle skill skipped');
+    ok(mk(7, order).length === 1, 'mage: next skill in the order goes instead');
+  } else {
+    ok(true, 'legacy mage has no circle skill worn (skipped)');
+  }
+  sim.removePlayer(p);
+}
+
 finish('auto-skill-order');
