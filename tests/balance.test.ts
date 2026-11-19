@@ -251,7 +251,7 @@ const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
   ok(JSON.stringify(t) === '{"statTiers":{"moveSpeed":{"floor":30,"bands":{"41-50":{"weight":[1,1,1,1,1]}}}},"bandTiers":{"1-10":{"bossBoost":0},"31-40":{"floor":20}}}',
     'band tables kept in TIER_BANDS order, a stat\'s bands after its own parts');
   for (const [what, x] of [
-    ['unknown band', { bandTiers: { '51-60': { floor: 20 } } }],
+    ['unknown band', { bandTiers: { '81-90': { floor: 20 } } }],
     ['unknown band of a stat', { statTiers: { atk: { bands: { '0-9': { floor: 20 } } } } }],
     ['band floor 2%', { bandTiers: { '11-20': { floor: 2 } } }],
     ['stat band widths not 100', { statTiers: { atk: { bands: { '11-20': { width: [50, 50, 50, 50, 50] } } } } }],
@@ -259,7 +259,7 @@ const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
   ] as const) {
     ok(!!checkBalance(x, true).error, `refused: ${what}`);
   }
-  ok(JSON.stringify(checkBalance({ bandTiers: { '51-60': { floor: 20 }, '11-20': { floor: 2, bossBoost: 3 } } }, false).tuning) === '{"bandTiers":{"11-20":{"bossBoost":3}}}', 'band tables read back leniently');
+  ok(JSON.stringify(checkBalance({ bandTiers: { '81-90': { floor: 20 }, '11-20': { floor: 2, bossBoost: 3 } } }, false).tuning) === '{"bandTiers":{"11-20":{"bossBoost":3}}}', 'band tables read back leniently');
   ok(balanceChanges({}, { bandTiers: { '31-40': { floor: 20 } } }).includes('Lv31–40 ค่าต่ำสุด ไม่ได้ตั้ง → 20%'), 'audit text names the band');
   ok(tierLabelsChange({}, { bandTiers: { '31-40': { floor: 20 } } }) && tierLabelsChange({}, { statTiers: { atk: { bands: { '1-10': { width: [40, 30, 15, 10, 5] } } } } }), 'band widths/floor change labels');
 

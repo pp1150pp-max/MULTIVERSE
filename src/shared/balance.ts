@@ -18,7 +18,7 @@ import { checkRigLookTuning, codeRigLook, mergeRigLook, rigLookChanges, type Rig
 import { autoChanges, checkAutoTuning, codeAuto, mergeAuto, type AutoConfig, type AutoTuning } from './autoTuning';
 import { checkTutorialTuning, codeTutorial, mergeTutorial, tutorialChanges, type TutorialConfig, type TutorialTuning } from './tutorial';
 import { checkSkillTuning, codeSkills, mergeSkills, skillChanges, type SkillConfig, type SkillTuning } from './skillTuning';
-import { addInto, emptyStats } from './formulas';
+import { addInto, emptyStats, setExpTune } from './formulas';
 import { STAT_KEYS, STAT_LABEL, type ClassId, type PotionKind, type PotionSize, type StatKey, type Stats } from './types';
 
 /** Key in the server's settings table. */
@@ -140,6 +140,8 @@ export interface Balance {
   monsters: MonsterTuning;
   /** Monsters per spawn spot ×, by map id (PACK_ZONES); a map left out is ×1. */
   mobPack: Record<string, number>;
+  /** EXP needed to level × this, per 10 levels (owner 2026-11-19); a band left out is ×1. */
+  expMult: Partial<Record<TierBand, number>>;
   /** Potion heal amounts, prices and the swordsman's bonus (owner 2026-11-17). */
   potions: PotionBalance;
   /** Boss swaps to another player who hurt it after this many seconds on one target; 0 = never (owner 2026-11-17). */
@@ -198,6 +200,8 @@ export interface BalanceTuning {
   monsters?: MonsterTuning;
   /** Monsters-per-spot multipliers that are not ×1, by map id. */
   mobPack?: Record<string, number>;
+  /** EXP multipliers per 10 levels that are not ×1. */
+  expMult?: Partial<Record<TierBand, number>>;
   /** Potion numbers that differ from the code. */
   potions?: PotionTuning;
   /** Boss target switch seconds, when not the code's. */
@@ -250,6 +254,7 @@ export const BALANCE_RANGE = {
   cdrCap: [0, 95],
   monsterMult: [0.1, 10],
   mobPack: [1, 5],
+  expMult: [0.1, 10],
   bossSwitchSec: [0, 120],
   mobGiveUpSec: [0, 120],
   roomWipeSec: [3, 60],
@@ -284,6 +289,7 @@ export function codeBalance(): Balance {
     cdrCap: CODE_CDR_CAP,
     monsters: {},
     mobPack: {},
+    expMult: {},
     potions: codePotions(),
     bossSwitchSec: CODE_BOSS_SWITCH_SEC,
     mobGiveUpSec: CODE_MOB_GIVE_UP_SEC,
@@ -328,6 +334,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.cdrCap !== undefined) b.cdrCap = t.cdrCap;
   if (t.monsters) b.monsters = structuredClone(t.monsters);
   if (t.mobPack) b.mobPack = { ...t.mobPack };
+  if (t.expMult) b.expMult = { ...t.expMult };
   if (t.potions) {
     for (const k of POTION_KINDS) for (const z of POTION_SIZE_LIST) Object.assign(b.potions[k][z], t.potions[k]?.[z]);
     if (t.potions.swordBonus !== undefined) b.potions.swordBonus = t.potions.swordBonus;
@@ -360,7 +367,11 @@ export function applyBalance(t: BalanceTuning): void {
   setTierTables((stat, band) => statTierTable(b, stat, band));
   setItemStatMult(b.itemStatMult);
   setAffixWeights(b.affixWeight);
+  setExpTune(expTuneOf(b));
 }
+
+/** A balance's EXP multipliers as expToNext takes them (TIER_BANDS order, ×1 where not set). */
+export const expTuneOf = (b: Pick<Balance, 'expMult'>): number[] => TIER_BANDS.map((id) => b.expMult[id] ?? 1);
 
 /** The tables a stat at a band takes parts from, first first (see TierParts); null stat / band = any. */
 function tierChain(b: Balance, stat: StatKey | null, band: number | null): TierParts[] {
@@ -476,7 +487,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'forgeAuto', 'walkHidden', 'bossWipeKeepHp', 'roomWipeSec', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'menuLayout'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'forgeAuto', 'walkHidden', 'bossWipeKeepHp', 'roomWipeSec', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'menuLayout'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -808,6 +819,24 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (Object.keys(res).length) out.mobPack = res;
     return null;
   };
+  // EXP needed to level ×, per 10 levels, in TIER_BANDS order.
+  const expMult = (): string | null => {
+    const x = o.expMult;
+    if (x === undefined) return null;
+    if (!isObj(x)) return strict ? 'ตัวคูณ EXP ไม่ถูกต้อง' : null;
+    if (strict) {
+      const extra = Object.keys(x).find((k) => !(TIER_BANDS as readonly string[]).includes(k));
+      if (extra) return `ตัวคูณ EXP: ไม่รู้จักช่วงเลเวล "${extra.slice(0, 20)}"`;
+    }
+    const res: Partial<Record<TierBand, number>> = {};
+    for (const id of TIER_BANDS) {
+      const n = num(x[id], ...BALANCE_RANGE.expMult, `ตัวคูณ EXP ${TIER_BAND_NAME[id]}`);
+      if (typeof n === 'string') return n;
+      if (n !== undefined && n !== 1) res[id] = n;
+    }
+    if (Object.keys(res).length) out.expMult = res;
+    return null;
+  };
   // Potions: only numbers that differ from the code are kept.
   const potions = (): string | null => {
     const x = o.potions;
@@ -916,6 +945,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     one('cdrCap', BALANCE_RANGE.cdrCap, 'ลดคูลดาวน์ได้สูงสุด %') ??
     monsters() ??
     mobPack() ??
+    expMult() ??
     potions() ??
     one('bossSwitchSec', BALANCE_RANGE.bossSwitchSec, 'บอสเปลี่ยนเป้าหมายทุก (วินาที)') ??
     one('mobGiveUpSec', BALANCE_RANGE.mobGiveUpSec, 'มอนธรรมดาเลิกไล่เมื่อไม่โดนตี (วินาที)') ??
@@ -1010,6 +1040,11 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
     const p = a.mobPack[z.id] ?? 1;
     const q = b.mobPack[z.id] ?? 1;
     if (p !== q) out.push(`มอนต่อจุด ${z.nameTh} ×${p} → ×${q}`);
+  }
+  for (const id of TIER_BANDS) {
+    const p = a.expMult[id] ?? 1;
+    const q = b.expMult[id] ?? 1;
+    if (p !== q) out.push(`EXP ที่ต้องใช้ ${TIER_BAND_NAME[id]} ×${p} → ×${q}`);
   }
   for (const k of POTION_KINDS) {
     for (const z of POTION_SIZE_LIST) {

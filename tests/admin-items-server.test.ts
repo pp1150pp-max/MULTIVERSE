@@ -12,6 +12,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { ADMIN_PITY_MAX, entrySig } from '../src/shared/admin';
 import { itemNames, roundStat, rowRanges } from '../src/shared/data/items';
 import { MAX_PLUS } from '../src/shared/data/enhance';
+import { MAX_LEVEL } from '../src/shared/formulas';
 import { finish, ok } from './check';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -146,7 +147,7 @@ async function run(): Promise<void> {
     [{ rarity: 'mythic' }, 400, 'unknown rarity'],
     [{ classId: 'ninja' }, 400, 'unknown class'],
     [{ level: 3 }, 400, 'level under the kind\'s minimum'],
-    [{ level: 51 }, 400, 'level over the max'],
+    [{ level: MAX_LEVEL + 1 }, 400, 'level over the max'],
     [{ plus: MAX_PLUS + 1 }, 400, 'plus over the max'],
     [{ pity: ADMIN_PITY_MAX + 1 }, 400, 'pity over the max'],
     [{ pity: -1 }, 400, 'negative pity'],
