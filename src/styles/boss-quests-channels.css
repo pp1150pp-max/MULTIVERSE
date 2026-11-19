@@ -1,0 +1,64 @@
+/* ---------------------------------------------------------------- boss rooms (src/client/bossRoom.ts)
+   Plain on purpose: each part has its own id (#room-win, #room-lobby, #room-go, #room-start …) for painted art later. */
+#room-win { left: 50%; top: 90px; transform: translateX(-50%); width: min(340px, 92vw); font-size: 13px; }
+#room-win .room-body { display: flex; flex-direction: column; gap: 8px; }
+#room-win .room-title { font-size: 15px; color: #ff9a8a; }
+#room-win .room-key { display: flex; align-items: center; gap: 6px; }
+#room-win .room-key .gi { width: 24px; height: 24px; }
+#room-win .room-pick { display: flex; align-items: center; gap: 8px; }
+#room-win .room-pick button { width: 30px; }
+#room-win .room-num { min-width: 36px; text-align: center; font-size: 16px; color: #ffd34a; }
+.room-note { font-size: 11px; color: var(--ink-dim); }
+/* Reminder before going in: phoenix feathers and potions carried (none = red). */
+.room-pack { font-size: 11px; color: #ffd8a0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 4px 0; }
+.room-pack span { display: inline-flex; align-items: center; gap: 3px; }
+.room-pack .gi { width: 18px; height: 18px; }
+.room-pack .room-pack-none { color: #ff6a5a; }
+#room-lobby { right: 16px; top: 170px; width: min(260px, 90vw); font-size: 13px; pointer-events: auto; }
+#room-lobby .room-members { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
+#room-lobby .room-member { display: flex; justify-content: space-between; }
+#room-lobby .room-member.yes b { color: #5dff8a; }
+#room-lobby .room-member.no b { color: #ff7a6a; }
+#room-lobby .room-member.wait b { color: var(--ink-dim); font-weight: 400; }
+#room-invites { position: absolute; left: 50%; top: 200px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; pointer-events: auto; z-index: 20; }
+.room-invite { border-color: #ff9a6a; max-width: min(360px, 92vw); }
+#room-line { position: absolute; left: 50%; top: 56px; transform: translateX(-50%); padding: 4px 12px; font-size: 13px; color: #ffcf8a; background: rgba(14, 10, 6, 0.8); border: 1px solid rgba(201, 168, 90, 0.55); border-radius: 12px; pointer-events: none; white-space: nowrap; }
+
+/* The Seeker's key quests (src/client/quests.ts) and the bound mark on quest keys. */
+#quest-win { left: 50%; top: 90px; transform: translateX(-50%); width: min(380px, 92vw); font-size: 13px; }
+#quest-win .quest-body { display: flex; flex-direction: column; gap: 8px; }
+#quest-win .quest-intro { font-size: 12px; color: var(--ink-dim); }
+#quest-win .quest-row { display: flex; align-items: center; gap: 8px; justify-content: space-between; padding: 6px; border: 1px solid rgba(201, 168, 90, 0.35); border-radius: 3px; }
+#quest-win .quest-row.done, #quest-win .quest-row.locked { opacity: 0.55; }
+#quest-win .quest-text .gi { width: 22px; height: 22px; vertical-align: middle; }
+#quest-win .quest-sub { font-size: 11px; color: var(--ink-dim); margin-top: 2px; }
+#quest-win .quest-head { margin-top: 2px; font-size: 12px; font-weight: 700; color: var(--gold-hi); border-bottom: 1px solid rgba(201, 168, 90, 0.35); padding-bottom: 2px; }
+/* Tutorial quest talk window at an NPC (src/client/tutorial.ts): same look as The Seeker's. */
+#tut-win { left: 50%; top: 90px; transform: translateX(-50%); width: min(380px, 92vw); font-size: 13px; }
+#tut-win .quest-body { display: flex; flex-direction: column; gap: 8px; }
+#tut-win .quest-intro { font-size: 12px; color: var(--ink-dim); }
+#tut-win .quest-sub { font-size: 11px; color: var(--ink-dim); }
+#tut-win .quest-head { margin-top: 2px; font-size: 12px; font-weight: 700; color: var(--gold-hi); border-bottom: 1px solid rgba(201, 168, 90, 0.35); padding-bottom: 2px; }
+#tut-win .tut-tasks { display: flex; flex-direction: column; gap: 2px; padding: 6px; border: 1px solid rgba(201, 168, 90, 0.35); border-radius: 3px; }
+#tut-win .tut-task.got { color: #8fe08a; }
+#tut-win .tut-warn { color: #ffcf6a; }
+.gi-bound { position: relative; display: inline-block; }
+.gi-bound::after { content: '🔒'; position: absolute; right: -2px; bottom: -2px; font-size: 10px; }
+
+/* Channels (src/client/channels.ts): "map · CH n" under the minimap opens the channel window. */
+#hud-ch { margin-top: -4px; padding: 2px 8px; font-size: 12px; line-height: 16px; color: #9fffd8; background: rgba(0, 0, 0, 0.55); border: 1px solid #4a4030; border-radius: 3px; white-space: nowrap; pointer-events: auto; cursor: pointer; text-shadow: 0 0 3px #000; }
+#hud-ch:hover { border-color: var(--gold-hi); }
+#hud-ch.hidden { display: none; }
+#channels-win { right: 210px; top: 80px; width: min(300px, 92vw); font-size: 13px; }
+#channels-win .ch-body { display: flex; flex-direction: column; gap: 6px; }
+#channels-win .ch-list { display: flex; flex-direction: column; gap: 4px; max-height: min(50vh, 360px); overflow-y: auto; }
+.ch-row { display: flex; align-items: center; gap: 8px; padding: 5px 8px; background: rgba(0, 0, 0, 0.3); border: 1px solid #4a4030; border-radius: 3px; }
+.ch-row.here { border-color: #5fd36a; }
+.ch-row .ch-n { flex: 1; color: var(--ink-dim); font-size: 12px; }
+.ch-wait { color: #ffcf6a; }
+.party-place { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ink-dim); }
+.ch-join { padding: 1px 6px; font-size: 11px; }
+@media (max-height: 560px) {
+  #hud-ch { margin-top: 0; }
+}
+

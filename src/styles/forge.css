@@ -1,0 +1,166 @@
+/* ---------------------------------------------------------------- blacksmith
+   Menu (left) · item slot on a magic circle (middle) · the placed item's current info (right) · two big buttons · gold/stones.
+   Plain CSS for now: each part has its own id so a painted frame can replace the look later (like the bag window).
+   No max-height or scrolling (owner). Its width leaves room for the bag beside it (the bag's own width formula). */
+#forge {
+  left: 12px; top: 120px; padding: 14px 14px 10px;
+  width: clamp(420px, calc(100vw - min(560px, 96vw, calc((100vh - 8px) * 0.75)) - 28px), 720px);
+  width: clamp(420px, calc(100vw - min(560px, 96vw, calc((100dvh - 8px) * 0.75)) - 28px), 720px);
+  --fg-violet: #8a5cff; --fg-violet-hi: #c9a8ff;
+}
+/* Below the HP and MP bars when there is room; on a short screen it moves up over them rather than off the bottom. */
+.hud-bars #forge { top: clamp(4px, calc(100vh - 440px), 216px); }
+.hud-bars #forge { top: clamp(4px, calc(100dvh - 440px), 216px); }
+#forge .panel-head { margin-bottom: 10px; }
+#forge .tier { white-space: nowrap; }
+#forge-body { display: grid; grid-template-columns: minmax(88px, 0.7fr) minmax(124px, 0.95fr) minmax(220px, 2.1fr); gap: 8px; min-height: var(--forge-body-h, 268px); }
+
+#forge-menu { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+#forge-menu [data-mode] { padding: 8px 6px; font-size: 13px; line-height: 1.2; text-align: center; background: linear-gradient(#2b241b, #17130e); }
+#forge-menu [data-mode].active {
+  border-color: var(--gold-hi); color: var(--gold-hi); background: linear-gradient(#4a3618, #2a1e0e);
+  box-shadow: inset 0 0 10px rgba(255, 200, 90, 0.25), 0 0 6px rgba(255, 200, 90, 0.25);
+}
+#forge-desc { margin-top: 4px; font-size: 11px; line-height: 1.45; color: var(--ink-dim); }
+#forge .forge-link { margin-top: auto; padding: 3px 4px; font-size: 11px; background: none; border: 1px dashed #5a4a30; color: var(--ink-dim); }
+#forge .forge-link:hover { color: var(--gold-hi); border-color: var(--gold-hi); }
+
+#forge-stage {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-width: 0;
+  border: 1px solid #3a2f48; border-radius: 6px; overflow: hidden;
+  background: radial-gradient(circle at 50% 45%, #3b2266 0%, #1d1430 55%, #110d18 100%);
+}
+#forge-circle {
+  position: absolute; left: 50%; top: 45%; width: min(92%, 200px); aspect-ratio: 1; transform: translate(-50%, -50%);
+  border-radius: 50%; pointer-events: none; opacity: 0.8;
+  background:
+    radial-gradient(circle, transparent 58%, rgba(201, 168, 255, 0.6) 59%, transparent 60.5%, transparent 68%, rgba(201, 168, 255, 0.45) 69%, transparent 70.5%),
+    repeating-conic-gradient(rgba(201, 168, 255, 0.4) 0 3deg, transparent 3deg 20deg);
+  -webkit-mask: radial-gradient(circle, transparent 60%, #000 61%, #000 68%, transparent 69%);
+  mask: radial-gradient(circle, transparent 60%, #000 61%, #000 68%, transparent 69%);
+  animation: forge-spin 40s linear infinite;
+}
+#forge-circle::after {
+  content: ''; position: absolute; inset: 0; border-radius: 50%;
+  border: 1px solid rgba(201, 168, 255, 0.5); box-shadow: 0 0 16px rgba(138, 92, 255, 0.5), inset 0 0 16px rgba(138, 92, 255, 0.4);
+}
+@keyframes forge-spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+/* Hammer strike over the slot while an enhance or reroll runs: row 1 of fx/enhance.png, 6 frames. */
+#forge-hammer {
+  position: absolute; left: 50%; top: 45%; z-index: 2; width: 128px; height: 128px; transform: translate(-50%, -88%);
+  pointer-events: none; visibility: hidden; image-rendering: pixelated;
+  background: url(/assets/sprites/fx/enhance.png) 0 0 / 600% 300% no-repeat;
+}
+#forge-hammer.swing { visibility: visible; animation: forge-hammer var(--swing, 0.6s) steps(6) forwards; }
+@keyframes forge-hammer { from { background-position-x: 0%; } to { background-position-x: 120%; } }
+#forge-slot {
+  position: relative; z-index: 1; width: 84px; height: 150px; display: grid; place-items: center;
+  border: 3px solid #7a6a9a; border-radius: 6px; background: linear-gradient(#2c1d4a, #160f26);
+  box-shadow: 0 0 0 2px #0c0914, 0 0 18px rgba(138, 92, 255, 0.55), inset 0 0 14px rgba(0, 0, 0, 0.6);
+}
+#forge-slot:not(.filled)::after { content: '+'; font-size: 34px; line-height: 1; color: rgba(201, 168, 255, 0.35); }
+#forge-slot.filled { border-color: var(--rc); box-shadow: 0 0 0 2px #0c0914, 0 0 22px color-mix(in srgb, var(--rc) 60%, transparent), inset 0 0 16px color-mix(in srgb, var(--rc) 30%, transparent); }
+#forge-slot .gi { width: 92%; height: 92%; object-fit: contain; image-rendering: pixelated; }
+#forge-slot .iplus { position: absolute; left: 4px; top: 2px; font-size: 13px; font-weight: 700; color: #ffd36a; text-shadow: 0 0 3px #000; }
+#forge-slot.drop-target { outline: 2px solid var(--gold-hi); outline-offset: 3px; }
+#forge-drop-hint {
+  position: relative; z-index: 1; max-width: 94%; padding: 3px 10px; font-size: 12px; line-height: 1.35; text-align: center;
+  background: rgba(16, 11, 24, 0.85); border: 1px solid #6a5a3a; border-radius: 10px; color: var(--ink);
+}
+#forge-drop-hint small { display: block; font-size: 10px; color: var(--ink-dim); }
+#forge-result {
+  position: absolute; z-index: 2; left: 6px; right: 6px; top: 8px; text-align: center; font-weight: 700; font-size: 14px;
+  text-shadow: 0 0 4px #000, 0 0 2px #000;
+  /* One line (owner 2026-11-18): hud.ts forgeResult shrinks the font to fit; past the smallest size it is cut with … */
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#forge-result:empty { display: none; }
+#forge-result.ok { color: #6cff7a; }
+#forge-result.fail { color: #ff8a7a; }
+#forge-stage.flash-ok #forge-slot { animation: forge-flash-ok 0.9s ease-out; }
+#forge-stage.flash-fail #forge-slot { animation: forge-flash-fail 0.9s ease-out; }
+@keyframes forge-flash-ok { 0% { box-shadow: 0 0 0 2px #0c0914, 0 0 50px 16px rgba(108, 255, 122, 0.9); } }
+@keyframes forge-flash-fail {
+  0% { box-shadow: 0 0 0 2px #0c0914, 0 0 50px 16px rgba(255, 90, 80, 0.9); }
+  20% { transform: translateX(-4px); } 40% { transform: translateX(4px); } 60% { transform: translateX(-2px); }
+}
+
+#forge-info {
+  display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 8px 10px; font-size: 12px;
+  background: #15110c; border: 1px solid #4a3a20; border-radius: 6px; box-shadow: inset 0 0 0 1px #0a0806;
+}
+#forge-item .fi-empty { color: var(--ink-dim); text-align: center; padding: 24px 0; }
+#forge-item .fi-name { font-weight: 600; font-size: 14px; line-height: 1.25; }
+#forge-item .fi-meta { color: var(--ink-dim); font-size: 11px; margin-bottom: 4px; }
+#forge-info .fd-line { display: flex; justify-content: space-between; flex-wrap: wrap; column-gap: 6px; padding: 1px 0; }
+#forge-info .fd-line .was { color: var(--ink-dim); font-size: 10px; white-space: nowrap; }
+#forge-info .fd-line .up, #forge-info .fd-line .down { font-weight: 600; white-space: nowrap; }
+#forge-info .fd-line .up { color: #6cff7a; }
+#forge-info .fd-line .down { color: #ff6a6a; }
+#forge-info .fd-line.fixed { opacity: 0.6; }
+#forge-cost { border-top: 1px solid #4a3a20; padding-top: 6px; }
+#forge-cost:empty { display: none; }
+#forge-cost .fc-rate { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; column-gap: 6px; color: var(--ink-dim); font-size: 11px; cursor: help; }
+#forge-cost .fc-rate small { flex-basis: 100%; text-align: right; }
+#forge-cost .fc-rate b { font-family: 'Cinzel', 'Kanit', serif; font-size: 22px; line-height: 1.1; color: #e8dcff; text-shadow: 0 0 10px var(--fg-violet); }
+#forge-cost .fc-rate b.risky { color: #ffd0a0; text-shadow: 0 0 10px #c0502a; }
+#forge-cost .fc-max { color: #6cff7a; text-align: center; }
+#forge-info .fd-row { display: flex; justify-content: space-between; gap: 6px; padding: 1px 0; }
+#forge-info .fd-row b { font-weight: 400; color: var(--gold-hi); white-space: nowrap; }
+#forge-info .bad, #forge-info .fd-row b.bad { color: #ff6a6a; }
+#forge-info .warn { color: #ffb070; font-size: 11px; margin-top: 2px; }
+#forge-info .safe { color: var(--ink-dim); font-size: 11px; margin-top: 2px; }
+#forge-info .pity { color: #9fd8ff; font-size: 10px; }
+#forge-info .fd-protect { display: flex; align-items: center; gap: 4px; margin-top: 4px; cursor: pointer; color: #9fe6ff; }
+#forge-info .fd-protect.off { color: var(--ink-dim); cursor: default; }
+#forge-info .gi { width: 16px; height: 16px; vertical-align: middle; image-rendering: pixelated; }
+
+#forge-actions { display: flex; justify-content: space-between; gap: 16px; margin-top: 12px; }
+#forge-actions button { flex: 1; max-width: 240px; min-height: 42px; padding: 6px 10px; font-size: 16px; font-weight: 600; border-radius: 22px; }
+#forge-actions .gi { width: 22px; height: 22px; vertical-align: middle; image-rendering: pixelated; }
+#forge-go { background: linear-gradient(#5a6cff, #2a2f9a); border: 2px solid #a8b4ff; color: #fff; box-shadow: 0 0 0 2px #0c0c24, 0 0 12px rgba(90, 108, 255, 0.5); }
+#forge-go:hover:not(:disabled) { filter: brightness(1.15); color: #fff; }
+/* Blacksmith cooldown (FORGE_CD): a dark bar drains from the button, which ignores clicks until it is gone. */
+#forge-go { position: relative; overflow: hidden; }
+#forge-go.cooling { pointer-events: none; }
+#forge-go.cooling::after { content: ''; position: absolute; inset: 0; background: rgba(8, 8, 24, 0.55); transform-origin: right; animation: forge-cd var(--cd, 1s) linear forwards; }
+@keyframes forge-cd { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+/* Auto enhance (owner 2026-11-18): the target level and a start/stop button, between the two big buttons. */
+#forge-auto { display: flex; align-items: center; gap: 4px; flex: none; }
+#forge-auto select { height: 30px; font-size: 12px; }
+#forge-actions #forge-auto-btn { flex: none; min-height: 30px; padding: 3px 10px; font-size: 13px; border-radius: 15px; }
+#forge-auto-btn.running { background: linear-gradient(#c8902e, #7a5214); border-color: #ffd38a; color: #fff; }
+#forge-cancel { background: linear-gradient(#c8402e, #7a1c14); border: 2px solid #ff9a86; color: #fff; box-shadow: 0 0 0 2px #240c0a; }
+#forge-cancel:hover:not(:disabled) { filter: brightness(1.15); color: #fff; }
+#forge-actions button:disabled { filter: grayscale(0.7) brightness(0.7); opacity: 0.7; font-size: 14px; }
+
+#forge-foot {
+  display: flex; justify-content: center; align-items: center; gap: 14px; width: fit-content; margin: 8px auto 0; padding: 3px 14px;
+  font-size: 12px; background: rgba(10, 7, 4, 0.7); border: 1px solid #6a5a3a; border-radius: 12px;
+}
+#forge-foot .ff-gold { color: #f2c230; }
+#forge-foot .gi { width: 16px; height: 16px; vertical-align: middle; image-rendering: pixelated; }
+
+#forge-rates {
+  position: absolute; z-index: 3; left: 10px; right: 10px; top: 52px; bottom: 10px; padding: 8px 10px; font-size: 11px;
+  background: #15110c; border: 1px solid #6a5a3a; border-radius: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7); overflow-y: auto;
+}
+#forge-rates .forge-rates-head { display: flex; justify-content: space-between; align-items: center; color: var(--gold-hi); font-size: 12px; }
+#forge-rates .forge-rates-head button { padding: 0 8px; font-size: 12px; }
+#forge-table table { width: 100%; border-collapse: collapse; margin-top: 2px; }
+#forge-table td, #forge-table th { padding: 0 4px; line-height: 1.3; text-align: center; border-bottom: 1px solid #2a2418; font-weight: 400; }
+#forge-table th { color: var(--gold); }
+#forge-table .hint { margin-top: 3px; font-size: 10px; }
+#forge-table .odds-sub { margin-top: 4px; color: var(--gold-hi); font-size: 11px; text-align: left; }
+#forge-table .odds-stats td:first-child { text-align: left; }
+#forge-table .odds-stats tr.off td { color: #6a6252; }
+
+#confirm { left: 50%; top: 40%; transform: translate(-50%, -50%); width: min(340px, 90vw); z-index: 6; text-align: center; }
+#confirm-text { font-size: 14px; margin-bottom: 12px; line-height: 1.5; }
+.confirm-btns { display: flex; gap: 8px; justify-content: center; }
+#amount { left: 50%; top: 40%; transform: translate(-50%, -50%); width: min(340px, 90vw); z-index: 7; text-align: center; }
+#amount-text { font-size: 14px; margin-bottom: 12px; line-height: 1.5; }
+.amount-row { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+.amount-row input[type=range] { flex: 1; }
+.amount-row input[type=number] { width: 64px; }
+
