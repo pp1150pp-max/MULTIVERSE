@@ -284,7 +284,9 @@ export class Terrain {
       }
       // Where someone stands at its door: in front, toward the plaza.
       // Far enough out that they are drawn in front of the building (its picture stands D / 2 out from its front).
-      return alongX ? { x: s.x + t, z: s.z - R + D + D / 2 + 0.9 } : { x: s.x - R + D + D / 2 + 0.9, z: s.z + t };
+      // Pulled toward the middle of the wall, off the roads to the corner gates (owner 2026-11-19: they blocked the way).
+      const dt = t * 0.6;
+      return alongX ? { x: s.x + dt, z: s.z - R + D + D / 2 + 0.9 } : { x: s.x - R + D + D / 2 + 0.9, z: s.z + dt };
     };
     // Apart, with a gap between them (owner 2026-11-19).
     const half = L / 2 + HUB_BUILDING_GAP / 2;
