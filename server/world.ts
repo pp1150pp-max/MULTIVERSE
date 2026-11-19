@@ -261,7 +261,7 @@ const vec = (v: unknown): Vec2 | null => {
 };
 
 /** Where an event happens, so far-away effects aren't sent to everyone. */
-function eventPos(ev: SimEvent): Vec2 | null {
+function eventPos(ev: SimEvent, sim: Sim): Vec2 | null {
   if (ev.t === 'text' || ev.t === 'banner' || ev.t === 'sfx') return { x: ev.x, z: ev.z };
   if (ev.t === 'shake' && ev.x !== undefined && ev.z !== undefined) return { x: ev.x, z: ev.z };
   if (ev.t === 'fx') {
@@ -269,6 +269,11 @@ function eventPos(ev: SimEvent): Vec2 | null {
     // puff/burst take (x, y, z), effect and zone take (name, x, z), the rest start with (x, z).
     if (ev.name === 'puff' || ev.name === 'burst') return { x: a[0] as number, z: a[2] as number };
     if (ev.name === 'effect' || ev.name === 'zone') return { x: a[1] as number, z: a[2] as number };
+    // drone(by, …): where its owner is (the drone flies after them)
+    if (ev.name === 'drone') {
+      const o = sim.players.find((q) => q.id === a[0]);
+      return o ? { x: o.x, z: o.z } : null;
+    }
     return { x: a[0] as number, z: a[1] as number };
   }
   return null;
@@ -2031,7 +2036,7 @@ export class GameWorld {
           const s = this.sessionById(sim, ev.id);
           if (s) s.epoch++;
         }
-        const at = eventPos(ev);
+        const at = eventPos(ev, sim);
         const to = 'to' in ev ? ev.to : undefined;
         // "Only your own damage numbers" (/admin, effects card): others' hits aren't sent at all.
         const own = ev.t === 'text' && ev.by !== undefined && ownNumsOnly ? ev.by : undefined;
