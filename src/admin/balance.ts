@@ -169,6 +169,10 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'row bal-line' }, ...boxes),
       h('div', { class: 'row bal-line' },
         h('label', {}, 'ลดคูลดาวน์สกิลได้สูงสุด %', numBox(() => draft.cdrCap, (n) => { draft.cdrCap = n; }, code.cdrCap, ...BALANCE_RANGE.cdrCap, 1, refresh))),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.buffDurSummons, onchange: (e: Event) => { draft.buffDurSummons = (e.target as HTMLInputElement).checked; refresh(); } }),
+          ' "เพิ่มเวลาบัฟ %" นับ summon ด้วย (ป้อมปืน โดรนสนับสนุน กับระเบิด อยู่นานขึ้นตาม %) · ปิด = นับแค่บัฟ')),
       h('div', { class: 'muted' }, 'สเตตัส "ลดคูลดาวน์สกิล %" จากของทุกชิ้นบวกกัน แล้วคูลดาวน์ Q/E/R × (1 − รวม%) ไม่เกินค่านี้ (ตีธรรมดาและแดชไม่ลด) · "เพิ่มเวลาบัฟ %" = เวลาบัฟที่สกิลให้ตัวเอง/ทีม × (1 + รวม%) · "เจาะเกราะ %" = DEF มอนที่ใช้คิดดาเมจ × (1 − รวม%) ต่อจากลดเกราะของสกิล'),
     );
     showChances();

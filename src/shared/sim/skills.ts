@@ -926,7 +926,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const cap = Math.max(1, p.chargeMax(sk));
       while (p.mines.length > cap) p.mines.shift()!.gone = true;
       sim.fx('effect', 'gs_mine', x, z, 0, 0.6);
-      repeat(sim, step, Math.round(P('life') / step), (i) => {
+      repeat(sim, step, Math.round(p.summonTime(P('life')) / step), (i) => {
         if (mine.gone || !live(sim, p)) return false;
         if (i % 5 === 4) sim.fx('effect', 'gs_mine', x, z, 0, 0.6);
         if (!nearest(sim, x, z, trigger)) return;
@@ -956,9 +956,10 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
     case 'gs_drone': {
       // Hovers by the player's shoulder and shoots the nearest monster within reach.
       const every = Math.max(0.1, P('every'));
+      const life = p.summonTime(P('life'));
       // One drone on the client for the whole life (src/client/effects.ts drone()), flying after the caster.
-      sim.fx('drone', p.id, every * Math.floor(P('life') / every));
-      repeat(sim, every, Math.floor(P('life') / every), () => {
+      sim.fx('drone', p.id, every * Math.floor(life / every));
+      repeat(sim, every, Math.floor(life / every), () => {
         if (!live(sim, p)) return false;
         const dx = p.x + 0.8;
         const dz = p.z - 0.8;
@@ -1036,9 +1037,10 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const x = p.x;
       const z = p.z;
       const every = Math.max(0.1, P('every'));
+      const life = p.summonTime(P('life'));
       const showEvery = Math.max(1, Math.round(1 / every));
       sim.fx('effect', 'gs_turret', x, z, 0, 0.7);
-      repeat(sim, every, Math.floor(P('life') / every), (i) => {
+      repeat(sim, every, Math.floor(life / every), (i) => {
         if (!live(sim, p)) return false;
         if (i % showEvery === 0) sim.fx('effect', 'gs_turret', x, z, 0, 0.7);
         const m = nearest(sim, x, z, far);
