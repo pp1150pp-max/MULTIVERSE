@@ -161,7 +161,8 @@ for (const cls of ['sword', 'mage', 'gunslinger'] as const) {
     sim.drainEvents();
     castSkill(sim, p, sk, { x: 2, z: 0 }, 1);
     take();
-    for (let i = 0; i < 300; i++) { sim.step(1 / 30, () => IDLE_INTENT); take(); }
+    // 11 s: Hex Seed bursts when its 10 s seed runs out.
+    for (let i = 0; i < 330; i++) { sim.step(1 / 30, () => IDLE_INTENT); take(); }
     for (const [kind, name] of wants) ok(seen.has(`${kind}:${name}`), `${sk.id} plays ${kind} ${name} tagged with itself (saw ${[...seen].join(',')})`);
   }
 }

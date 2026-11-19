@@ -28,6 +28,7 @@ import {
   type AutoSettings, type CharacterData, type LootFilter, type SortKey,
 } from './Player';
 import { Monster } from './Monster';
+import { dropHexSeeds, noteHexHit, tickHexSeeds, type HexSeed } from './hexSeed';
 import { EnemyShot, Projectile, type ProjOpts } from './Projectile';
 import { Loot, LOOT_PRIORITY_TIME, type LootKind } from './Loot';
 import { nextRowPrice, STASH_GOLD_MAX, STASH_ROW } from './stash';
@@ -132,6 +133,8 @@ export class Sim {
   readonly terrain: Terrain;
   players: Player[] = [];
   monsters: Monster[] = [];
+  /** Mage Hex Seeds in this world's monsters (sim/hexSeed.ts). */
+  hexSeeds: HexSeed[] = [];
   projectiles: (Projectile | EnemyShot)[] = [];
   loots: Loot[] = [];
   time = 0;
@@ -208,6 +211,7 @@ export class Sim {
   removePlayer(p: Player): void {
     this.players = this.players.filter((x) => x !== p);
     for (const m of this.monsters) if (m.target === p) m.calm();
+    dropHexSeeds(this, p);
   }
 
   // ------------------------------------------------------------ events
@@ -399,6 +403,7 @@ export class Sim {
     // Overkill doesn't count: shares and lifesteal use the HP actually taken.
     const dealt = Math.min(dmg, Math.max(0, m.hp));
     m.damageBy.set(p.id, m.damageBy.get(p.id)! + dealt);
+    if (this.hexSeeds.length) noteHexHit(this, p, m, dealt, opts.skill?.id ?? this.casterSkill);
     m.hp -= dmg;
     if (this.time < p.lifestealUntil && p.hp < p.maxHp) {
       // Whole HP only: near full the gap to max is fractional (regen), so floor the capped amount too.
@@ -1774,6 +1779,8 @@ export class Sim {
     for (const m of this.monsters) m.update(dt, this);
     this.separateMonsters();
     if (this.zone.safe) this.keepOutOfSafe(this.zone.safe);
+    // Before dead monsters leave the list: a seed whose host died bursts and jumps.
+    tickHexSeeds(this);
     this.monsters = this.monsters.filter((m) => !m.gone && (m.alive || m.deadT <= 0.9));
     this.tickVanished(dt);
 
