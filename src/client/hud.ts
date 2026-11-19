@@ -21,6 +21,7 @@ import { isBulkSellable } from '../shared/sim/Sim';
 import { nextRowPrice, STASH_MAX, STASH_ROW, STASH_ROW_PRICES, STASH_START } from '../shared/sim/stash';
 import { MONSTERS } from '../shared/data/monsters';
 import { currentBalance } from '../shared/balance';
+import { SET_MAX_PIECES, setInfo } from '../shared/data/sets';
 import { AUTO_DEFAULT_KEYS, AUTO_LOOT_ORDER_NAME, AUTO_LOOT_ORDERS, AUTO_OUT_ACTION_NAME, AUTO_OUT_ACTIONS, AUTO_TARGET_MODES, AUTO_TARGET_NAME } from '../shared/autoTuning';
 import { ZONE_1 } from '../shared/data/zones';
 import { expToNext } from '../shared/formulas';
@@ -2553,6 +2554,7 @@ export class Hud {
       `<div class="tt-name" style="color:${RARITY_COLOR[item.rarity]}">${itemName(item)}</div>` +
       `<div class="tt-sub">${RARITY_LABEL[item.rarity]} · ${SLOT_LABEL[item.slot]} · iLv.${item.level}${plusOf(item) ? ` · ตีบวก +${plusOf(item)}` : ''}</div>` +
       `<div class="tt-stats">${lines || '<div>—</div>'}</div>` +
+      setHtml(item, p.equipment) +
       (p.equipBlock(item) ? `<div class="tt-req">${p.equipBlock(item)}</div>` : '') +
       `<div class="tt-hint">${hint}</div><div class="tt-val">ขายให้พ่อค้าได้ ${sellValue(item)} G</div>`;
     this.placeTip(tip, e);
@@ -2855,4 +2857,12 @@ export class Hud {
       this.log(`ภารกิจ: ฝึกฝนในป่ามรกต แล้วปราบ ${boss.name}`, '#ffd34a');
     }
   }
+}
+
+/** An item's set line for its tooltip: "ชุดโจรสลัด (2/9)" then each bonus step, lit once that many pieces are worn. */
+function setHtml(item: Item, equipment: Partial<Record<EquipSlot, Item>>): string {
+  const s = setInfo(item, equipment, currentBalance().sets);
+  if (!s) return '';
+  const steps = s.steps.map((n) => `<span class="${s.pieces >= n ? 'on' : ''}">${n} ชิ้น</span>`).join(' · ');
+  return `<div class="tt-set"><div class="tt-set-name">${s.name} (${s.pieces}/${SET_MAX_PIECES})</div><div class="tt-set-steps">โบนัสเซ็ต: ${steps}</div></div>`;
 }

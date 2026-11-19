@@ -4,7 +4,8 @@
 // (server/admin-items.ts) checks every value; this page is only a view.
 // Icons are built here from itemArt (src/client/icons.ts would pull the game's 3D code into this page).
 import { ADMIN_ITEM_ROWS_MAX, ADMIN_PITY_MAX, adminRowInfo, entrySig, type AdminItemPlace, type AdminItemRow, type AdminMeta } from '../shared/admin';
-import { itemArt, itemClass, itemNames, roundStat, rowRanges } from '../shared/data/items';
+import { itemArt, itemClass, itemNames, itemSet, roundStat, rowRanges } from '../shared/data/items';
+import { SET_NAME } from '../shared/data/sets';
 import { enhanceBonus, itemName, plusOf, sellValue } from '../shared/data/enhance';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { POTION_SIZE_LABEL, potionName, potionSellPrice, stackLimit } from '../shared/data/potions';
@@ -120,11 +121,13 @@ function gearInfo(h: H, it: Item): HTMLElement {
   const bonusText = (Object.keys(bonus) as (keyof typeof bonus)[]).filter((k) => bonus[k]).map((k) => `+${Math.round((bonus[k] ?? 0) * 10) / 10} ${STAT_LABEL[k]}`).join(' · ');
   const totals = (Object.keys(it.stats) as (keyof typeof it.stats)[]).map((k) => h('div', {}, `+${fmtNum(it.stats[k] ?? 0)} ${STAT_LABEL[k]}`));
   const cls = itemClass(it);
+  const set = itemSet(it);
   return h('div', { class: 'tt' },
     h('div', { class: 'tt-name', style: `color:${RARITY_COLOR[it.rarity]}` }, itemName(it)),
     h('div', { class: 'tt-sub' }, `${RARITY_LABEL[it.rarity]} · ${SLOT_LABEL[it.slot]} · iLv.${it.level}${plusOf(it) ? ` · ตีบวก +${plusOf(it)}` : ''}`),
     h('div', { class: 'tt-stats' }, ...(it.lines?.length ? it.lines.map((l) => lineEl(h, l)) : totals.length ? totals : [h('div', {}, '—')])),
     bonusText ? h('div', { class: 'tt-enh' }, `ตีบวก: ${bonusText}`) : null,
+    set ? h('div', { class: 'tt-set' }, `เซ็ต: ${SET_NAME[set]}`) : null,
     h('div', { class: 'tt-meta' }, `${cls ? `ใส่ได้เฉพาะสาย ${CLASSES[cls].nameTh}` : 'ทุกอาชีพ'} · pity ${it.pity ?? 0} · ขายได้ ${sellValue(it).toLocaleString()} G`),
     h('div', { class: 'tt-meta muted' }, `uid ${it.uid} · ชนิด ${it.baseId}`),
   );
