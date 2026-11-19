@@ -7,7 +7,8 @@ import type { IncomingMessage, Server as HttpServer } from 'node:http';
 import { clientIp } from './clientIp';
 import type { Db } from './db';
 import { Sim } from '../src/shared/sim/Sim';
-import { HUB_ID, lairExitSpot, ZONES } from '../src/shared/data/zones';
+import { hubOf, lairExitSpot, ZONES } from '../src/shared/data/zones';
+import { loginHub } from '../src/shared/floors';
 import { cleanAutoSettings, roundBuffs, SORT_KEYS, type LootFilter, type Player } from '../src/shared/sim/Player';
 import { applyBalance, currentBalance, currentBalanceTuning, type BalanceTuning } from '../src/shared/balance';
 import { upgradeItem } from '../src/shared/data/items';
@@ -488,7 +489,7 @@ export class GameWorld {
         if (!p.alive) return sim.respawn(p);
         const spot = lairExitSpot(sim.zone);
         if (spot) this.travel(s, spot.field, false, spot);
-        else this.travel(s, HUB_ID, true);
+        else this.travel(s, hubOf(sim.zone).id, true);
       },
       refund: (charId, key, n) => this.refundKeys(charId, key, n),
       save: (charId) => {
@@ -645,10 +646,11 @@ export class GameWorld {
         data = this.db.loadCharacter(acc.id, charId) ?? data;
       }
     }
-    // Everyone comes into the game in the hub's town, whichever zone they logged out in, except a
-    // dropped connection (or a login elsewhere) back within CH_RECONNECT_MS: that goes back where it was.
+    // Everyone comes into the game in the town of the floor they logged out on (owner 2026-11-19, floor
+    // 1's when the way up is shut for them now: loginHub), except a dropped connection (or a login
+    // elsewhere) back within CH_RECONNECT_MS: that goes back where it was.
     const back = this.channels.returning(charId);
-    const sim = (back?.channel ?? this.channels.place(HUB_ID)!).sim;
+    const sim = (back?.channel ?? this.channels.place(loginHub(data).id)!).sim;
     const player = sim.addPlayer(data);
     if (back) {
       player.x = back.x;

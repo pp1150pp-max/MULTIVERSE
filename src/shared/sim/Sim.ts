@@ -1,6 +1,6 @@
 // The game rules, with no rendering. The game server runs one of these per zone. Whoever drives it calls step() every frame and reads drainEvents()
 // to show effects, damage numbers and messages.
-import { HUB_ID, NO_BOOST, ZONES, inSafeArea, type MonsterBoost, type SafeArea, type ZoneDef, type SpawnArea } from '../data/zones';
+import { hubOf, isHub, NO_BOOST, ZONES, inSafeArea, type MonsterBoost, type SafeArea, type ZoneDef, type SpawnArea } from '../data/zones';
 import { DROP_GOLD_MULT, MONSTERS } from '../data/monsters';
 import { AUTO_EXP_MULT, expGapMult, expToNext, mitigate, MAX_LEVEL, MISS_GAP, outLevelled } from '../formulas';
 import { blockingGate, BOSS_GATE_IDS } from '../data/bossGates';
@@ -33,6 +33,7 @@ import { Loot, LOOT_PRIORITY_TIME, type LootKind } from './Loot';
 import { nextRowPrice, STASH_GOLD_MAX, STASH_ROW } from './stash';
 import { splitInto } from './split';
 import { questRows } from '../quests';
+import { portalLock } from '../floors';
 import { GEAR_KILLS, GEAR_PART_NAME, gearReward, gearRow } from '../gearQuests';
 import { TUT_ACCEPT_GOLD, TUT_ACCEPT_STONES, TUT_NPC, TUT_STEPS, TUT_STEP_NAME, TUT_TASKS, TUT_TASK_NAME, tutRows, tutTurnInReward, type TutStep, type TutTask } from '../tutorial';
 import { putAll, type MailAttach } from '../mail';
@@ -866,9 +867,11 @@ export class Sim {
     this.inventoryChanged(p);
     this.events.push({ t: 'save', to: p.id });
     this.fx('burst', p.x, 1, p.z, STONE_COLOR.return_scroll, 22, 4);
-    this.log(`ใช้${STONE_NAME.return_scroll} — กลับศูนย์กลางมิติ`, STONE_COLOR.return_scroll, p.id);
-    if (this.zone.id !== HUB_ID) {
-      this.events.push({ t: 'travel', to: p.id, zone: HUB_ID, atCamp: true });
+    // Back to the town of the floor they're on (plan 4.3).
+    const hub = hubOf(this.zone);
+    this.log(`ใช้${STONE_NAME.return_scroll} — กลับ${hub.nameTh}`, STONE_COLOR.return_scroll, p.id);
+    if (this.zone.id !== hub.id) {
+      this.events.push({ t: 'travel', to: p.id, zone: hub.id, atCamp: true });
       return;
     }
     ({ x: p.x, z: p.z } = this.spawnPoint());
@@ -894,9 +897,10 @@ export class Sim {
     const lair = lairExitSpot(this.zone);
     this.log(`ฟื้นคืนชีพที่${lair ? 'แท่นเรียกบอส' : 'เมือง'} (เสีย EXP ${penalty})`, '#ff9a6a', p.id);
     this.events.push({ t: 'save', to: p.id });
-    // Out in a zone, the town is in the hub. Queued after `revived`, so the browser gets both in order.
+    // Out in a zone, the town is that floor's hub. Queued after `revived`, so the browser gets both in order.
+    const hub = hubOf(this.zone);
     if (lair) this.events.push({ t: 'travel', to: p.id, zone: lair.field, spot: { x: lair.x, z: lair.z } });
-    else if (this.zone.id !== HUB_ID) this.events.push({ t: 'travel', to: p.id, zone: HUB_ID, atCamp: true });
+    else if (this.zone.id !== hub.id) this.events.push({ t: 'travel', to: p.id, zone: hub.id, atCamp: true });
   }
 
   /** EXP this player really gets from `n`: half while Auto Play is on, then doubled by an EXP scroll. */
@@ -935,7 +939,8 @@ export class Sim {
 
   /** The map a monster comes from (by its level), also when it stands in the hub. */
   private homeOf(def: { levels: [number, number] }): ZoneDef | undefined {
-    return Object.values(ZONES).find((z) => z.id !== HUB_ID && def.levels[0] >= z.levels[0] && def.levels[0] <= z.levels[1]);
+    // Not a town: a floor's hub spans the whole floor's levels.
+    return Object.values(ZONES).find((z) => !isHub(z) && def.levels[0] >= z.levels[0] && def.levels[0] <= z.levels[1]);
   }
 
   /** Quests The Seeker can give this player now: a boss of a map they have reached, not yet beaten, not taken, no key held. */
@@ -1842,6 +1847,21 @@ export class Sim {
           p.portalMsgAt = this.time;
           this.log(`ประตูสู่ ${dest.name} ยังไม่เปิดให้คุณ — ต้อง Lv.${pt.minLevel} ขึ้นไป`, '#ff9a6a', p.id);
           this.text(p.x, p.topY, p.z, `ต้อง Lv.${pt.minLevel}`, 'info', 1);
+        }
+        continue;
+      }
+      // A way opened by a quest (plan 4.2), with its two /admin switches.
+      const lock = portalLock(p.unlocks, pt.requires);
+      if (lock) {
+        if (this.time - p.portalMsgAt > 3) {
+          p.portalMsgAt = this.time;
+          if (lock === 'closed') {
+            this.log(`ประตูสู่ ${dest.name} ปิดอยู่ชั่วคราว`, '#ff9a6a', p.id);
+            this.text(p.x, p.topY, p.z, 'ประตูปิดอยู่', 'info', 1);
+          } else {
+            this.log(`ประตูสู่ ${dest.name} ยังไม่เปิดให้คุณ — ไปคุยกับ The Seeker ก่อน`, '#ff9a6a', p.id);
+            this.text(p.x, p.topY, p.z, 'คุยกับ The Seeker ก่อน', 'info', 1);
+          }
         }
         continue;
       }
