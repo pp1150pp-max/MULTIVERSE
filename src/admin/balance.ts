@@ -775,7 +775,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         h('label', { title: 'ค่าในโค้ด: เปิด' }, h('input', { type: 'checkbox', checked: a.aoeGuard, onchange: (e: Event) => { a.aoeGuard = (e.target as HTMLInputElement).checked; refresh(); } }), ` ${AUTO_AOE_GUARD_NAME}`),
         num('aoeMargin', 0.1),
       ),
-      h('div', { class: 'muted' }, 'สกิลวงรอบตัว (เช่น ประจุระเบิดของนักเวท): Auto ข้ามสกิลนั้นถ้าไม่มีมอนอยู่ในวง (รัศมีสกิล + ขนาดตัวมอน + ระยะเผื่อ) แล้วใช้สกิลถัดไปในลำดับแทน · ปิดสวิตช์ = แบบเดิม กดเมื่อเป้าอยู่ในระยะตี'),
+      h('div', { class: 'muted' }, 'ทุกอาชีพ: Auto กดสกิลเมื่อสกิลนั้นถึงจริงเท่านั้น (ระยะสกิลตามที่ปรับ + ขนาดตัวมอน + ระยะเผื่อ) · วงรอบตัว = มีมอนในวง · ยิง/พุ่ง/ฟันด้านหน้า = เป้าอยู่ในระยะสกิล (ยิงระเบิดบวกวงระเบิด) · ตกที่จุด = ระยะร่าย + วงตก · บัฟ/สกิลวงที่ไม่มีดาเมจ กดตามเดิม · ไม่ถึง = ข้ามไปสกิลถัดไปในลำดับ ไม่มีสกิลไหนถึง = ตีธรรมดาต่อ (ไม่เดินเข้าไปเพิ่ม) · ปิดสวิตช์ = แบบเดิม กดทันทีที่ตีธรรมดาถึง'),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
           h('input', { type: 'checkbox', checked: draft.walkHidden, onchange: (e: Event) => { draft.walkHidden = (e.target as HTMLInputElement).checked; refresh(); } }),
