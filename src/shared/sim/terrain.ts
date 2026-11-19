@@ -311,7 +311,8 @@ export class Terrain {
     // Pictures drawn the other way round from the rest (market_right.png's booth), so they mirror the other way.
     const DRAWN_TURNED = new Set<string>();
     const BACKS: Record<string, Record<string, string>> = {
-      ml: { main_back: 'mk_goods_stall', wing_back: 'mk_veg_stall' },
+      // The merchant's side shows the stalls' fronts: across the bottom-left wall the backs faced the wrong way (owner 2026-11-19).
+      ml: { main_back: 'mk_goods_front', wing_back: 'mk_veg_front' },
       mr: { main_back: 'mk_auction_booth', wing_back: 'mk_veg_stall' },
     };
     const stalls = (seller: Vec2, alongX: boolean, set: string, props: string[]) => {
