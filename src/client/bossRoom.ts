@@ -43,6 +43,8 @@ export class RoomUI {
   /** The leader's lobby, and when its countdown ends (performance.now()). */
   private readonly lobbyBox: HTMLElement;
   private lobbyUntil = 0;
+  /** Hidden with Esc while the lobby still runs (owner 2026-11-19): only hides, never cancels; the altar (T / click) shows it again. */
+  private lobbyHidden = false;
   private lobbyCount: HTMLElement | null = null;
   /** The start button while members are still answering, and when their time runs out (performance.now()). */
   private lobbyStart: HTMLButtonElement | null = null;
@@ -104,6 +106,10 @@ export class RoomUI {
   toggle(force?: boolean): void {
     const show = (force ?? !this.open) && !!this.summoner;
     this.win.classList.toggle('hidden', !show);
+    if (show && this.lobbyHidden) {
+      this.lobbyHidden = false;
+      if (this.lobbyBox.childElementCount) this.lobbyBox.classList.remove('hidden');
+    }
     if (show) this.render();
   }
 
@@ -167,8 +173,16 @@ export class RoomUI {
 
   // ------------------------------------------------------------ the leader's lobby
 
+  /** Esc: hides the leader's lobby without cancelling the room. */
+  hideLobby(): void {
+    if (this.lobbyBox.classList.contains('hidden')) return;
+    this.lobbyBox.classList.add('hidden');
+    this.lobbyHidden = true;
+  }
+
   lobby(view: RoomLobbyView | null): void {
-    this.lobbyBox.classList.toggle('hidden', !view);
+    if (!view) this.lobbyHidden = false;
+    this.lobbyBox.classList.toggle('hidden', !view || this.lobbyHidden);
     this.lobbyBox.replaceChildren();
     this.lobbyCount = null;
     this.lobbyStart = null;
