@@ -216,21 +216,18 @@ export class Floating {
    */
   private drawMyBuffs(me: Player): void {
     const v = this.vitals;
-    const list = currentBalance().fxLayer.buffIcons ? me.shownBuffs : [];
-    const sig = list.map((b) => b.id).join(',');
-    if (sig !== v.buffSig) {
-      v.buffSig = sig;
-      v.buffs.innerHTML = list.map((b) => `<div class="vbuff">${skillIcon(b.id)}<i></i></div>`).join('');
-    }
-    if (!list.length) return;
-    const gone = performance.now() / 1000 - me.shownBuffsAt;
-    list.forEach((b, i) => {
-      const left = Math.max(0, b.left - gone);
-      const done = b.total > 0 ? 1 - left / b.total : 1;
-      const cell = v.buffs.children[i] as HTMLElement | undefined;
-      cell?.style.setProperty('--gone', `${Math.min(360, Math.max(0, done * 360)).toFixed(1)}deg`);
-    });
+    v.buffSig = paintBuffRow(v.buffs, currentBalance().fxLayer.buffIcons ? me.shownBuffs : [], v.buffSig, me.shownBuffsAt);
   }
+
+  /** The same buff icons over the skill bar (owner 2026-11-19), shown while we are alive, wherever the camera is. */
+  private drawBarBuffs(me: Player): void {
+    this.barBuffs ??= document.getElementById('bar-buffs') as HTMLDivElement | null;
+    if (!this.barBuffs) return;
+    const on = me.alive && currentBalance().fxLayer.barBuffIcons;
+    this.barBuffSig = paintBuffRow(this.barBuffs, on ? me.shownBuffs : [], this.barBuffSig, me.shownBuffsAt);
+  }
+  private barBuffs: HTMLDivElement | null = null;
+  private barBuffSig = '';
 
   /** Your own title set over your head (title and framed name), while you wear one or try one on. */
   private updateMyTitle(g: Game): void {
@@ -451,6 +448,7 @@ export class Floating {
       this.vitals.mp.style.width = `${(Math.max(0, me.mp) / Math.max(1, me.stats.maxMp)) * 100}%`;
       this.drawMyBuffs(me);
     }
+    this.drawBarBuffs(me);
 
     this.updateMyTitle(g);
 
@@ -608,4 +606,21 @@ function numText(value: number, like: string): string {
 /** World height just over a character's head, where its nameplate and chat bubble go (higher on a mount). */
 function headY(p: Player): number {
   return p.topY * rideScale(p) + 0.35 + seatOf(p);
+}
+
+/**
+ * Paints a row of skill-buff icons (each darkening clockwise like a clock as its time runs out) and returns the row's
+ * new signature. `at` = when the seconds in `list` came from the server; we count down from then.
+ */
+function paintBuffRow(row: HTMLElement, list: readonly { id: string; left: number; total: number }[], sig: string, at: number): string {
+  const next = list.map((b) => b.id).join(',');
+  if (next !== sig) row.innerHTML = list.map((b) => `<div class="vbuff">${skillIcon(b.id)}<i></i></div>`).join('');
+  if (!list.length) return next;
+  const gone = performance.now() / 1000 - at;
+  list.forEach((b, i) => {
+    const left = Math.max(0, b.left - gone);
+    const done = b.total > 0 ? 1 - left / b.total : 1;
+    (row.children[i] as HTMLElement | undefined)?.style.setProperty('--gone', `${Math.min(360, Math.max(0, done * 360)).toFixed(1)}deg`);
+  });
+  return next;
 }
