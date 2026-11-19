@@ -324,7 +324,9 @@ export class Terrain {
         // alongX: the seller's back is to the bottom-left wall (+z), so (u, v) is (x, z); otherwise to the bottom-right
         // wall (+x): (u, v) turns into (z, x), and the stalls' pictures turn with it (mirrored flips).
         const [dx, dz] = alongX ? [u, v] : [v, u];
-        at(key, seller.x - s.x + dx, seller.z - s.z + dz, h, c, false, stall && ((alongX ? mirrored : !mirrored) !== DRAWN_TURNED.has(key)) !== turn);
+        // Owner 2026-11-19, from the screen: the broker's stalls as drawn, the merchant's mirrored.
+        at(key, seller.x - s.x + dx, seller.z - s.z + dz, h, c, false, stall && turn);
+        void mirrored;
       }
     };
     this.npcPos.merchant = { x: s.x, z: s.z + R - 6 };

@@ -76,7 +76,7 @@ const MAPS = {
     ['row_right.png', 'props', { cols: 3, rows: 2, height: 448, names: ['row_r_guild', 'row_r_forge', 'row_r_house_a', 'row_r_house_b', 'row_r_house_c', 'row_r_shop'] }],
     ['market.png', 'props', { cols: 4, rows: 2, height: 256, names: ['mk_goods_front', 'mk_auction_front', 'mk_veg_front', 'mk_wagon', 'mk_handcart', 'mk_sacks', 'mk_potion_table', 'mk_tag_table'] }],
     // The three stalls again, seen from behind (facing away from the camera); market.png has their fronts (*_front).
-    ['market_backs.png', 'props', { cols: 3, rows: 1, height: 256, names: ['mk_goods_stall', 'mk_auction_booth', 'mk_veg_stall'] }],
+    ['market_backs.png', 'props', { cols: 3, rows: 1, height: 256, slope: true, names: ['mk_goods_stall', 'mk_auction_booth', 'mk_veg_stall'] }],
     // Round 6b (owner 2026-11-19): each top wall's whole row of attached townhouses as one picture, sheared so its foot
     // runs at the game's own slope for a world axis (World ISO_DIR), like the walls (HUB.md 7.5).
     ['row_left_long.png', 'strip', { out: 'row_left_long', rise: true, width: 1600 }],
@@ -224,6 +224,31 @@ async function props(img, o, label) {
   for (const [x0, y0, x1, y1] of o.erase ?? []) for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) img.d[(y * img.w + x) * 4 + 3] = 0;
   const boxes = cells(img, o.cols, o.rows, label);
   const one = async (name, box) => {
+    // `slope`: a long piece lying along a world axis, drawn a little flatter than the game sees it: sheared so its
+    // foot climbs at the game's slope (as strip() does for whole rows, but at most a little, so it isn't stretched).
+    if (o.slope) {
+      const buf = await crop(img, box).png().toBuffer();
+      const { data, info } = await sharp(buf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      const xs = [];
+      const ys = [];
+      for (let x = Math.round(info.width * 0.2); x < info.width * 0.8; x++) {
+        for (let y = info.height - 1; y >= 0; y--) if (data[(y * info.width + x) * 4 + 3]) { xs.push(x); ys.push(y); break; }
+      }
+      const mx = xs.reduce((a, b) => a + b, 0) / xs.length;
+      const my = ys.reduce((a, b) => a + b, 0) / ys.length;
+      let sxy = 0;
+      let sxx = 0;
+      for (let i = 0; i < xs.length; i++) { sxy += (xs[i] - mx) * (ys[i] - my); sxx += (xs[i] - mx) ** 2; }
+      const slope = sxy / sxx;
+      const want = (slope > 0 ? 1 : -1) * Math.sin(Math.atan2(1.45, Math.SQRT2));
+      const k = Math.max(-0.3, Math.min(0.3, want - slope));
+      console.log(`  ${name}: foot slope ${slope.toFixed(3)}, sheared by ${k.toFixed(3)}`);
+      const sheared = await sharp(buf).affine([[1, 0], [k, 1]], { background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+      const t = await sharp(sheared).trim({ threshold: 1 }).png().toBuffer();
+      const m = await sharp(t).metadata();
+      await save(sharp(t).resize(Math.max(1, Math.round(m.width * (o.height / m.height))), o.height, { kernel: 'lanczos3', fit: 'fill' }), `props/${name}.png`);
+      return;
+    }
     // `height`: a new picture with no old file, cut to this many pixels tall.
     const [oldW, oldH] = o.height ? [0, o.height] : await sizeOf(`props/${name}.png`);
     const k = oldH / (box[3] - box[1]);
