@@ -301,8 +301,9 @@ export class Terrain {
     // Every stall has its back to that wall and opens toward the plaza (owner 2026-11-19), set out in a half-ellipse
     // round the seller: the main stall behind them, the second stall and the rest bending forward on either side.
     const ring: [string, boolean, boolean, number, number, number, number][] = [
-      ['main_back', true, true, 0, 3.4, 3.4, 1.4],
-      ['wing_back', true, true, 4.4, 2.4, 3.4, 1.4],
+      // Mirrored the other way from along the wall: the stalls stand ACROSS it, short end to the wall (owner 2026-11-19).
+      ['main_back', true, false, 0, 3.4, 3.4, 1.4],
+      ['wing_back', true, false, 4.4, 2.4, 3.4, 1.4],
       ['table', false, false, -4.4, 2.4, 1.6, 0.9], ['P0', false, false, 5.8, 1, 1.9, 1],
       ['P1', false, false, -5.8, 1, 1.6, 0.8], ['P2', false, false, -2.4, 5, 1.6, 0.9], ['P3', false, false, 2.4, 5, 1.6, 0.8],
     ];
