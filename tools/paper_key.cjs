@@ -105,9 +105,12 @@ function dropSpecks(img, minSpeck) {
   }
 }
 
-/** Files under public/assets/sprites that git already tracks: floor 2 output must never overwrite one. */
+/**
+ * Floor 1's sprites (what origin/main has under public/assets/sprites): floor 2 output must never overwrite one.
+ * Floor 2's own files may be re-cut. (Once floor 2 is merged into main, its files will be listed here too.)
+ */
 function trackedSprites(root) {
-  const out = execSync('git ls-files public/assets/sprites', { cwd: root, encoding: 'utf8' });
+  const out = execSync('git ls-tree -r --name-only origin/main public/assets/sprites', { cwd: root, encoding: 'utf8' });
   return new Set(out.split('\n').filter(Boolean).map((f) => path.resolve(root, f)));
 }
 
