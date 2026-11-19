@@ -855,7 +855,8 @@ export class Game {
     const prompt = this.hud.dialogOpen ? null
       : near ? `${near.name} — ${key}เพื่อ${near.action}`
       : summ ? `แท่นเรียก${bossShortName(MONSTERS[summ.boss].nameTh)} — ${key}เพื่อใส่กุญแจ`
-      : rest ? (restIn > 0 ? `${restName} — พักได้อีกใน ${restIn} วิ` : `${restName} — ${key}เพื่อฟื้น HP/MP ให้เต็ม`)
+      // No prompt line at the hub's fountain (owner 2026-11-19): its "ฟื้นพลัง" badge says it already. Campfires keep theirs.
+      : rest && rest.kind !== 'fountain' ? (restIn > 0 ? `${restName} — พักได้อีกใน ${restIn} วิ` : `${restName} — ${key}เพื่อฟื้น HP/MP ให้เต็ม`)
       : null;
     this.talkReady = !!near && !this.hud.dialogOpen;
     this.floating.npcBadges(this, this.npcs);
