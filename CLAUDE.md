@@ -43,6 +43,7 @@ npm run logs       # log ของ server จริง (server/data/logs/) · --
   - อัปเดต server หลัง merge: ใช้ skill `/update-server` · merge ทุก PR ที่พร้อมแล้วขึ้น server ในคำสั่งเดียว: `/ship` · รายละเอียด countdown, Ctrl+C, ข้อความเตือน, สำรอง/กู้คืน DB: [docs/systems/server-ops.md](docs/systems/server-ops.md)
 - **ขณะที่ server ของเจ้าของเปิดให้เพื่อนเล่นอยู่ อย่า build ทับ `dist/`** (`npm run build` ก็เขียนลง `dist/`) ให้ใช้ `npm run typecheck` และ `npx vite build --outDir <โฟลเดอร์อื่น>` แทน · เช็คว่ามีโปรแกรมใช้ port 2567 อยู่หรือไม่
 - ทดสอบสร้างบัญชี/Guest ให้ทำกับ server ของ `npm run dev` (port 2568, DB `server/data/dev.db`) เท่านั้น อย่าสร้างบน server ตัวจริง (port 2567) · Vite ส่งต่อ `/api` และ WebSocket `/ws` ให้ (`vite.config.ts`)
+- **ทุก dev/server ทดสอบในเครื่อง (ทุก DB ชั่วคราว ทุก port) ต้องมีบัญชี `admin` รหัส `admin` เป็น role `owner` ให้เจ้าของล็อกอินลองได้ทันที** (เจ้าของ 2026-11-19): เปิด server แล้ว `POST /api/register` `{"username":"admin","password":"admin"}` แล้ว `UPDATE accounts SET admin_role='owner' WHERE username='admin'` ใน DB ทดสอบนั้น (node:sqlite) · บอกเจ้าของทุกครั้งที่เปิด dev ค้างให้ลอง · **ห้ามสร้างบน server จริง (VPS / port 2567) เด็ดขาด**
 
 ## เทสต์
 
