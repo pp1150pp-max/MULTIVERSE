@@ -745,6 +745,25 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
+  // ---------------------------------------------------------- floor gates (src/shared/floors.ts, plan 4.2)
+  const floorCard = h('div', { class: 'card' });
+  const drawFloor = (): void => {
+    const box = (key: 'floorGateOpen' | 'floorGateQuest', label: string): HTMLElement =>
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft[key], onchange: (e: Event) => { draft[key] = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ` ${label}`));
+    floorCard.replaceChildren(
+      h('h2', {}, 'ทางขึ้นชั้น 2'),
+      h('div', { class: 'muted' },
+        'ใช้กับประตูที่ต้องทำเควสก่อน (ประตูไปชั้น 2 ที่เมืองศูนย์กลางมิติ ยังไม่มีจนกว่าเมืองท่าเรือจะเข้าเกม) · ' +
+        'ปิด "เปิดประตู" = ไม่มีใครผ่านได้ แม้ทำเควสแล้ว (เข้าเกมใหม่ไปเกิดที่เมืองชั้น 1) · ' +
+        'ปิด "ต้องทำเควส" = ใครก็ผ่านได้ ยังต้องถึงเลเวลขั้นต่ำของประตู · ตัวที่อยู่ชั้น 2 อยู่แล้วไม่ถูกย้ายออก'),
+      box('floorGateOpen', 'เปิดประตูที่ต้องทำเควส'),
+      box('floorGateQuest', 'ต้องทำเควสก่อนผ่านประตู'),
+    );
+  };
+
   // ---------------------------------------------------------- Auto Play (src/shared/autoTuning.ts)
   const autoCard = h('div', { class: 'card' });
   const drawAuto = (): void => {
@@ -1067,6 +1086,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawPotions();
     drawForge();
     drawSets();
+    drawFloor();
     drawAuto();
     drawTut();
     drawFx();
@@ -1121,7 +1141,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     msg,
   );
 
-  box.replaceChildren(fold.toc, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, forgeCard, setCard, autoCard, tutCard, fxCard, circleCard, rootCard, rigCard, bar);
+  box.replaceChildren(fold.toc, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, forgeCard, setCard, floorCard, autoCard, tutCard, fxCard, circleCard, rootCard, rigCard, bar);
   redraw();
   fold.refreshToc();
 }

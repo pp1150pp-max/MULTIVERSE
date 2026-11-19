@@ -12,8 +12,14 @@ export interface SpawnArea {
   boost?: MonsterBoost;
 }
 
-/** The town in the middle that every zone's portal leads back to. */
+/** Floor 1's town, in the middle of the first island: every floor-1 zone's portal leads back to it. */
 export const HUB_ID = 'nexus_city';
+
+/**
+ * Each floor's town (docs/plans/FLOOR2_PLAN.md 4.3): where its return scroll, death and login go.
+ * A floor left out (its town not built yet) falls back to floor 1's.
+ */
+export const FLOOR_HUBS: Record<number, string> = { 1: HUB_ID };
 
 /** Walking into it moves the player to another zone. */
 export interface PortalDef {
@@ -22,6 +28,11 @@ export interface PortalDef {
   z: number;
   /** Players below this level are turned away. */
   minLevel: number;
+  /**
+   * An unlock the player must have (Player.unlocks, e.g. floorUnlock(2) from The Seeker's quest) on top
+   * of minLevel. See portalLock in src/shared/floors.ts and its two /admin switches. None = level only.
+   */
+  requires?: string;
 }
 
 /** An ellipse of slippery ice. */
@@ -49,6 +60,8 @@ export interface ZoneDef {
   nameTh: string;
   subtitle: string;
   levels: [number, number];
+  /** Which floor of the world it is on (floor 2 = the cloud sea, Lv41–80). Missing = 1. */
+  floor?: number;
   theme: ZoneTheme;
   /** Open world allows Auto Play; rare-loot dungeons will set this false. */
   allowAutoPlay: boolean;
@@ -495,6 +508,7 @@ function bossRoom(field: ZoneDef): ZoneDef {
     // No portal: the leave button (Sim.leaveRoom) puts you by this map's summoner (lairExitSpot).
     portals: [],
     roomOf: field.id,
+    floor: field.floor,
     arenaRadius: field.arenaRadius,
     bossSolid: lair.boss === 'volcano_heart' ? 1.5 : undefined,
     monsterBoost: field.monsterBoost,
@@ -521,6 +535,21 @@ export const BOSS_ROOMS: Record<string, ZoneDef> = Object.fromEntries(
   [ZONE_1, ZONE_2, ZONE_3, ZONE_4].map((z) => [z.id, bossRoom(z)]),
 );
 const ROOMS_BY_ID: Record<string, ZoneDef> = Object.fromEntries(Object.values(BOSS_ROOMS).map((r) => [r.id, r]));
+
+/** The floor a zone is on (a boss room: its map's). */
+export function floorOf(zone: ZoneDef): number {
+  return zone.floor ?? 1;
+}
+
+/** Whether this zone is a floor's town (FLOOR_HUBS). */
+export function isHub(zone: ZoneDef): boolean {
+  return Object.values(FLOOR_HUBS).includes(zone.id);
+}
+
+/** The town of the floor this zone is on; floor 1's while that floor has none. */
+export function hubOf(zone: ZoneDef): ZoneDef {
+  return ZONES[FLOOR_HUBS[floorOf(zone)]] ?? ZONE_HUB;
+}
 
 /** Unknown or missing zone ids land in the hub. Boss rooms count too (the browser draws them). */
 export function zoneById(id: string | undefined): ZoneDef {

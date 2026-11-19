@@ -1,6 +1,6 @@
 // Rules of the hub town (Nexus City) and how the four zones hang off it, on real Sims with no server.
 import { ok, finish } from './check';
-import { HUB_ID, ZONES, ZONE_HUB, inSafeArea } from '../src/shared/data/zones';
+import { HUB_ID, ZONES, ZONE_HUB, floorOf, inSafeArea, isHub } from '../src/shared/data/zones';
 import { MONSTERS } from '../src/shared/data/monsters';
 import { NPC_IDS } from '../src/shared/data/npcs';
 import { Sim } from '../src/shared/sim/Sim';
@@ -10,7 +10,8 @@ import { IDLE_INTENT } from '../src/shared/sim/types';
 const hero = (level = 40) => ({ name: 'T', classId: 'sword' as const, level, exp: 0, gold: 0, equipment: {}, bag: [] });
 const TICK = 1 / 30;
 const safe = ZONE_HUB.safe!;
-const fields = Object.values(ZONES).filter((z) => z.id !== HUB_ID);
+// Floor 1's farm maps (floor 2 has its own town and maps).
+const fields = Object.values(ZONES).filter((z) => !isHub(z) && floorOf(z) === 1);
 
 // ---- layout: one portal per hub corner, and each zone's camp on the far side from where you walk in
 {

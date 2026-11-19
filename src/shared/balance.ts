@@ -47,6 +47,10 @@ export const CODE_MOB_RETURN_IGNORE_HITS = true;
 export const CODE_FORGE_AUTO = true;
 /** Click-to-walk carries on when the browser tab is hidden: the server walks the rest of the way (owner 2026-11-18: on). */
 export const CODE_WALK_HIDDEN = true;
+/** Portals that need an unlock (PortalDef.requires, e.g. the way up to floor 2) let anyone through who has it (owner 2026-11-19: on); off = closed to everyone. */
+export const CODE_FLOOR_GATE_OPEN = true;
+/** Those portals check the unlock (The Seeker's quest) (owner 2026-11-19: on); off = anyone at minLevel walks through. */
+export const CODE_FLOOR_GATE_QUEST = true;
 /** Boss room: the boss keeps its HP and waits when the whole group is down (owner 2026-11-17); off = it walks home and heals. */
 export const CODE_BOSS_WIPE_KEEP_HP = true;
 /** Seconds a boss-room group that is all down has to get someone up with a feather (owner: 5). */
@@ -155,6 +159,10 @@ export interface Balance {
   forgeAuto: boolean;
   /** A clicked walk goes on while the tab is hidden (server walks to the spot); off = the character stops as before. */
   walkHidden: boolean;
+  /** Portals with an unlock (PortalDef.requires) open at all; off = closed to everyone (src/shared/floors.ts). */
+  floorGateOpen: boolean;
+  /** Those portals need the unlock (quest done); off = level only. */
+  floorGateQuest: boolean;
   /** Boss room: when every player is down the boss keeps its HP and waits (no walking home, healing or reset); off = the old behaviour. */
   bossWipeKeepHp: boolean;
   /** Seconds a boss-room group that is all down has to revive someone before it has lost. */
@@ -217,6 +225,10 @@ export interface BalanceTuning {
   forgeAuto?: boolean;
   /** Walking on in a hidden tab, when not the code's (on). */
   walkHidden?: boolean;
+  /** Unlock portals open, when not the code's (on). */
+  floorGateOpen?: boolean;
+  /** Unlock portals check the quest, when not the code's (on). */
+  floorGateQuest?: boolean;
   /** Boss keeps its HP when the group is all down, when not the code's (on). */
   bossWipeKeepHp?: boolean;
   /** Wipe revive seconds, when not the code's. */
@@ -301,6 +313,8 @@ export function codeBalance(): Balance {
     mobReturnIgnoreHits: CODE_MOB_RETURN_IGNORE_HITS,
     forgeAuto: CODE_FORGE_AUTO,
     walkHidden: CODE_WALK_HIDDEN,
+    floorGateOpen: CODE_FLOOR_GATE_OPEN,
+    floorGateQuest: CODE_FLOOR_GATE_QUEST,
     bossWipeKeepHp: CODE_BOSS_WIPE_KEEP_HP,
     roomWipeSec: CODE_ROOM_WIPE_SECONDS,
     auto: codeAuto(),
@@ -352,6 +366,8 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.mobReturnIgnoreHits !== undefined) b.mobReturnIgnoreHits = t.mobReturnIgnoreHits;
   if (t.forgeAuto !== undefined) b.forgeAuto = t.forgeAuto;
   if (t.walkHidden !== undefined) b.walkHidden = t.walkHidden;
+  if (t.floorGateOpen !== undefined) b.floorGateOpen = t.floorGateOpen;
+  if (t.floorGateQuest !== undefined) b.floorGateQuest = t.floorGateQuest;
   b.auto = mergeAuto(t.auto);
   b.fxLayer = mergeFxLayer(t.fxLayer);
   b.rigLook = mergeRigLook(t.rigLook);
@@ -494,7 +510,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'forgeAuto', 'walkHidden', 'bossWipeKeepHp', 'roomWipeSec', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'menuLayout', 'sets'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'forgeAuto', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'bossWipeKeepHp', 'roomWipeSec', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'menuLayout', 'sets'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -598,6 +614,15 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (x !== CODE.walkHidden) out.walkHidden = x;
     return null;
   };
+  const flag = (key: 'floorGateOpen' | 'floorGateQuest', name: string) => (): string | null => {
+    const x = o[key];
+    if (x === undefined) return null;
+    if (typeof x !== 'boolean') return strict ? `สวิตช์${name}ต้องเป็นเปิด/ปิด` : null;
+    if (x !== CODE[key]) out[key] = x;
+    return null;
+  };
+  const gateOpen = flag('floorGateOpen', 'เปิดประตูที่ต้องทำเควส');
+  const gateQuest = flag('floorGateQuest', 'ต้องทำเควสก่อนผ่านประตู');
   const wipeKeep = (): string | null => {
     const x = o.bossWipeKeepHp;
     if (x === undefined) return null;
@@ -965,6 +990,8 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     returnIgnore() ??
     forgeAuto() ??
     walkHidden() ??
+    gateOpen() ??
+    gateQuest() ??
     wipeKeep() ??
     one('roomWipeSec', BALANCE_RANGE.roomWipeSec, 'เวลาชุบตอนตายหมดทีม (วินาที)') ??
     auto() ??
@@ -1076,6 +1103,8 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.roomWipeSec !== b.roomWipeSec) out.push(`เวลาชุบตอนตายหมดทีม ${a.roomWipeSec} → ${b.roomWipeSec} วิ`);
   if (a.forgeAuto !== b.forgeAuto) out.push(`ตีบวก Auto ${a.forgeAuto ? 'เปิด' : 'ปิด'} → ${b.forgeAuto ? 'เปิด' : 'ปิด'}`);
   if (a.walkHidden !== b.walkHidden) out.push(`เดินต่อเมื่อสลับแท็บ ${a.walkHidden ? 'เปิด' : 'ปิด'} → ${b.walkHidden ? 'เปิด' : 'ปิด'}`);
+  if (a.floorGateOpen !== b.floorGateOpen) out.push(`ประตูที่ต้องทำเควส (ทางขึ้นชั้น 2) ${a.floorGateOpen ? 'เปิด' : 'ปิด'} → ${b.floorGateOpen ? 'เปิด' : 'ปิด'}`);
+  if (a.floorGateQuest !== b.floorGateQuest) out.push(`ต้องทำเควสก่อนผ่านประตู ${a.floorGateQuest ? 'เปิด' : 'ปิด'} → ${b.floorGateQuest ? 'เปิด' : 'ปิด'}`);
   if (a.mobReturnIgnoreHits !== b.mobReturnIgnoreHits) out.push(`มอนเดินกลับบ้านไม่สนการโจมตี ${a.mobReturnIgnoreHits ? 'เปิด' : 'ปิด'} → ${b.mobReturnIgnoreHits ? 'เปิด' : 'ปิด'}`);
   out.push(...autoChanges(a.auto, b.auto));
   out.push(...tutorialChanges(a.tutorial, b.tutorial));
