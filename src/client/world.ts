@@ -507,6 +507,8 @@ export class World {
       const mask = new THREE.CanvasTexture(paintHarborMask(this.half, terrain.zone.start.x, terrain.zone.start.z));
       mask.colorSpace = THREE.NoColorSpace;
       mask.flipY = false;
+      // Linear both ways (no mipmaps: a mipmapped filter without them leaves the texture unreadable), soft rims.
+      mask.minFilter = mask.magFilter = THREE.LinearFilter;
       mask.generateMipmaps = false;
       this.groundTex = mask;
       this.groundUniforms = harborUniforms(mask, this.half);

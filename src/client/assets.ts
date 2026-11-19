@@ -81,6 +81,8 @@ const HARBOR_PROPS = [
   'hb_edge_a', 'hb_edge_b', 'hb_ship_red', 'hb_ship_blue', 'hb_ship_green', 'hb_ship_white', 'hb_falls_a', 'hb_falls_b', 'hb_foam_post',
   'hb_wave', 'hb_float_barrel', 'hb_gull_post', 'hb_portal_dock', 'hb_portal_return', 'hb_portal_floor2',
 ];
+/** The harbour's NPC sheets and the navigator's (SHEET_SPECS keys): paper only. */
+const PAPER_ONLY_NPC = new Set(['hb_supply_merchant', 'hb_dock_keeper', 'hb_shipwright', 'hb_harbor_broker', 'hb_smuggler', 'navigator']);
 const PAPER_GROUND = new Set(['grass', 'dirt', 'pave', 'room_forest', 'marsh', 'mud', 'water', 'room_marsh',
   'snow', 'snow_path', 'ice', 'room_snow', 'ash_rock', 'ash_path', 'lava', 'room_volcano', 'brick',
   // Floor 2's harbour town (tools/cut_papercraft.cjs floor2_hub): paper only.
@@ -709,7 +711,8 @@ async function loadAssets(): Promise<void> {
       let idleFrames: number | undefined;
       try {
         const monster = paperMonsters[key];
-        const npcPaper = paperMaps && spec.path.startsWith(`${BASE}npc/`) ? spec.path.replace(`${BASE}npc/`, `${BASE}paper/npc/`) : null;
+        // Floor 2's NPC sheets exist only as paper: from sprites/paper/npc/ whatever the art switch says.
+        const npcPaper = (paperMaps || PAPER_ONLY_NPC.has(key)) && spec.path.startsWith(`${BASE}npc/`) ? spec.path.replace(`${BASE}npc/`, `${BASE}paper/npc/`) : null;
         if (npcPaper && (tex = await loadTexture(npcPaper).catch(() => null as unknown as THREE.Texture))) {
           // Paper NPCs (art_templates/papercraft_chars/NPC.md): 3 views × 4 breathing frames.
           cols = 4;
