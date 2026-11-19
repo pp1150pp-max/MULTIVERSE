@@ -9,7 +9,8 @@ const near = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol;
 
 // ---- in general
 const gen = statRerollOdds();
-ok(gen.stats.length === 10 && gen.stats.every((s) => near(s.chance, 0.1, 1e-9)), '10 stats, 10% each');
+// 13 since the cooldown / buff time / armor pierce mods (owner 2026-11-19), equally weighted in code.
+ok(gen.stats.length === 13 && gen.stats.every((s) => near(s.chance, 1 / 13, 1e-9)), '13 stats, 1/13 each');
 ok(gen.tiers.map((t) => Math.round(t * 100)).join() === '3,9,18,30,40', 'T1–T5: 3 / 9 / 18 / 30 / 40 %');
 ok(near(sum(gen.tiers), 1, 1e-9), 'tiers add up to 100%');
 
