@@ -41,7 +41,7 @@ const mk = (id: string, lv?: number) => new Monster(1, MONSTERS[id], lv ?? MONST
     ['under ×0.1', { types: { wild_boar: { atk: 0.05 } } }],
     ['zero', { types: { wild_boar: { gold: 0 } } }],
     ['unknown stat', { types: { wild_boar: { luck: 2 } } }],
-    ['unknown band', { bands: { '51-60': { hp: 2 } } }],
+    ['unknown band', { bands: { '81-90': { hp: 2 } } }],
     ['unknown monster', { types: { dragon: { hp: 2 } } }],
     ['a boss', { types: { yeti: { hp: 2 } } }],
     ['unknown part', { kinds: {} }],

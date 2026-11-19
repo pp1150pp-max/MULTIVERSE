@@ -995,7 +995,7 @@ export class Hud {
     $('orb-hp-text').textContent = hpText;
     $('orb-mp-fill').style.height = mpShare;
     $('orb-mp-text').textContent = mpText;
-    $('exp-fill').style.width = `${(p.exp / need) * 100}%`;
+    $('exp-fill').style.width = `${Math.min(1, p.exp / need) * 100}%`; // /admin can lower the EXP needed below what is held
     const gate = blockingGate(p.level, p.bossKills);
     $('exp-text').textContent = gate ? `EXP เต็ม — ต้องลงบอส ${gate.nameTh}` : `EXP ${((p.exp / need) * 100).toFixed(1)}%`;
     $('expbar').title = gate ? `ต้องลงบอส ${gate.nameTh} ก่อนถึงจะเลเวลเกิน ${gate.level} ได้ (EXP ที่เกินจะหายไป)` : '';
