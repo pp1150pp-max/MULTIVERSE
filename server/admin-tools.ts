@@ -29,11 +29,12 @@ import { checkCosTuning, cosTuningChanges, pasteCosTuning, sameCosTuning } from 
 import { checkCosShop, cosHiddenIds, cosShopChanges, sameCosShop } from '../src/shared/cosShop';
 import { checkOrbItems, checkOrbName, orbItemId, orbItemsChanges, ORB_ITEM_MAX, type OrbItems } from '../src/shared/orbItems';
 import { COS_SLOT_NAME, cosById } from '../src/shared/data/cosmetics';
-import { balanceChanges, checkBalance, currentBalanceTuning, sameBalance, withItemStatMult } from '../src/shared/balance';
+import { balanceChanges, checkBalance, currentBalance, currentBalanceTuning, sameBalance, withItemStatMult, withMenuLayout } from '../src/shared/balance';
+import { checkMenuLayoutTuning } from '../src/shared/menuLayout';
 import { upgradeItem } from '../src/shared/data/items';
 import { searchStats } from '../src/shared/sim/market';
 import type { Item, StoneStack } from '../src/shared/types';
-import type { AdminBalance, AdminPaperMaps } from '../src/shared/admin';
+import type { AdminBalance, AdminMenuLayout, AdminPaperMaps } from '../src/shared/admin';
 import { PAPER_MAPS_SETTING } from '../src/shared/paperArt';
 import { DAILY_DEFAULT } from '../src/shared/daily';
 import { STONE_NAME } from '../src/shared/data/stones';
@@ -600,7 +601,8 @@ export async function ownerToolsApi(
     if (!c.tuning) throw new HttpError(400, c.error);
     const before = currentBalanceTuning();
     // The item stat multipliers are never changed here (not even by the reset): only the owner's confirm below does.
-    const next = withItemStatMult(c.tuning, before.itemStatMult);
+    // The menu layout has its own save below (its own switch), so this one never changes it either.
+    const next = withMenuLayout(withItemStatMult(c.tuning, before.itemStatMult), before.menuLayout);
     if (!sameBalance(before, next)) {
       db.setBalance(next);
       const changes = balanceChanges(before, next);
@@ -608,6 +610,31 @@ export async function ownerToolsApi(
       world.balanceChanged(next);
     }
     send(res, 200, { tuning: currentBalanceTuning() } satisfies AdminBalance);
+    return true;
+  }
+
+  // Menu window / top icon row layout: saved inside the balance tuning, but with its own switches.
+  if (method === 'GET' && path === '/api/admin/menu-layout') {
+    const a = requireFeature(req, db, 'menuLayout');
+    send(res, 200, { layout: currentBalance().menuLayout, canEdit: a.features.includes('menuLayoutEdit') } satisfies AdminMenuLayout);
+    return true;
+  }
+
+  if (method === 'POST' && path === '/api/admin/menu-layout') {
+    const a = requireFeature(req, db, 'menuLayoutEdit');
+    const body = await readJson(req);
+    // `reset: true` = back to the code; otherwise `layout` is { menu, top } (both whole lists).
+    const c = body.reset === true ? { tuning: undefined } : checkMenuLayoutTuning(body.layout, true);
+    if ('error' in c) throw new HttpError(400, c.error);
+    const before = currentBalanceTuning();
+    const next = withMenuLayout(before, c.tuning);
+    if (!sameBalance(before, next)) {
+      db.setBalance(next);
+      const changes = balanceChanges(before, next);
+      log(db, a, 'menu-layout', 'จัดเมนูเกม ทั้งเซิร์ฟ', (body.reset === true ? 'คืนค่าในโค้ด: ' : '') + changes);
+      world.balanceChanged(next);
+    }
+    send(res, 200, { layout: currentBalance().menuLayout, canEdit: true } satisfies AdminMenuLayout);
     return true;
   }
 
