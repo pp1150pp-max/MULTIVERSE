@@ -458,3 +458,14 @@ button.more:hover { color: var(--gold-hi); text-decoration: underline; }
   .skm-body { grid-template-columns: 1fr; }
   .skm-wrap { height: 55vh; }
 }
+/* จัดเมนูเกม tab (src/admin/menuLayout.ts) */
+.ml-lists { display: flex; flex-wrap: wrap; gap: 12px; }
+.ml-card { flex: 1 1 280px; min-width: 0; }
+.ml-row { display: flex; align-items: center; gap: 6px; padding: 4px 6px; margin-top: 4px; border: 1px solid var(--line, #444); border-radius: 6px; }
+.ml-row[draggable="true"] { cursor: grab; }
+.ml-row .ml-name { flex: 1; min-width: 0; }
+.ml-row button { padding: 2px 8px; min-width: 32px; }
+.ml-locked { opacity: 0.7; }
+.ml-spare { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.ml-spare > b, .ml-spare > .muted { flex: 1 0 100%; }
+.ml-chip { display: flex; align-items: center; gap: 6px; }

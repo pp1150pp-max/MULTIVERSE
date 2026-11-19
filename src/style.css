@@ -1941,3 +1941,6 @@ input[type=range]:hover::-webkit-slider-thumb { background: var(--ctl-accent-hi)
 /* Long press = right click on touch: no text selection or iOS callout in the windows. */
 .touch-ui #hud .panel { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .touch-ui #hud .panel input, .touch-ui #hud .panel textarea { -webkit-user-select: text; user-select: text; }
+
+/* A button the owner put in the top icon row also shows in the menu window on touch (the row is hidden there): /admin → จัดเมนูเกม. */
+body:not(.touch-ui) #sys-menu .sys-tile.touch-extra { display: none; }

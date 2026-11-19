@@ -23,6 +23,7 @@ import { renderBalance } from './balance';
 import { renderSkills } from './skills';
 import { headsOnPage, jumpTo, watchCards } from './ui';
 import { renderDaily } from './daily';
+import { renderMenuLayout } from './menuLayout';
 import { renderCosManage } from './cosManage';
 import { renderCashShop } from './cashShop';
 import { equipEntries, itemGrid, listEntries, type ItemCtx } from './items';
@@ -154,7 +155,7 @@ const root = document.getElementById('admin')!;
 let me: AdminMe | null = null;
 let meta: AdminMeta | null = null;
 let online: AdminOnline | null = null;
-type Tab = 'online' | 'users' | 'stats' | 'sessions' | 'chat' | 'mail' | 'trades' | 'reports' | 'orbs' | 'cos' | 'cosManage' | 'rig' | 'anim' | 'cards' | 'balance' | 'skills' | 'daily' | 'cashShop' | 'roles' | 'audit' | 'broadcast' | 'server';
+type Tab = 'online' | 'users' | 'stats' | 'sessions' | 'chat' | 'mail' | 'trades' | 'reports' | 'orbs' | 'cos' | 'cosManage' | 'rig' | 'anim' | 'cards' | 'balance' | 'skills' | 'menuLayout' | 'daily' | 'cashShop' | 'roles' | 'audit' | 'broadcast' | 'server';
 let tab: Tab = 'online';
 let timer = 0;
 
@@ -261,13 +262,13 @@ const CATEGORIES: { name: (typeof FEATURE_GROUPS)[number]; tabs: Tab[] }[] = [
   { name: 'ผู้เล่น', tabs: ['online', 'users'] },
   { name: 'ประวัติ', tabs: ['stats', 'sessions', 'chat', 'trades', 'audit'] },
   { name: 'สื่อสาร', tabs: ['mail', 'reports', 'broadcast'] },
-  { name: 'ปรับเกม', tabs: ['balance', 'skills', 'cards', 'daily', 'cashShop'] },
+  { name: 'ปรับเกม', tabs: ['balance', 'skills', 'cards', 'daily', 'cashShop', 'menuLayout'] },
   { name: 'หน้าตา', tabs: ['orbs', 'cos', 'cosManage', 'rig', 'anim'] },
   { name: 'ระบบ', tabs: ['server', 'roles'] },
 ];
 const TAB_LABEL: Record<Tab, string> = {
   online: 'ออนไลน์', users: 'ผู้ใช้และตัวละคร', stats: 'สถิติ', sessions: 'การเข้าเล่น', chat: 'แชท', trades: 'เทรด',
-  audit: 'ประวัติ (audit)', mail: 'จดหมาย', reports: 'รายงาน', broadcast: 'ประกาศ', balance: 'ปรับสมดุล', skills: 'ระบบสกิล', cards: 'การ์ด', daily: 'ล็อกอินรายวัน', cashShop: 'แคชช็อป',
+  audit: 'ประวัติ (audit)', mail: 'จดหมาย', reports: 'รายงาน', broadcast: 'ประกาศ', balance: 'ปรับสมดุล', skills: 'ระบบสกิล', cards: 'การ์ด', daily: 'ล็อกอินรายวัน', cashShop: 'แคชช็อป', menuLayout: 'จัดเมนูเกม',
   orbs: 'ลูกแก้วตีบวก', cos: 'ของแต่งตัว', cosManage: 'จัดการของแต่งตัว', rig: 'นักดาบกระดาษ', anim: 'ท่าตัวละคร', server: 'Server', roles: 'สิทธิ์',
 };
 
@@ -290,6 +291,7 @@ function tabAllowed(t: Tab): boolean {
     case 'balance': case 'skills': return f.includes('balance');
     case 'daily': return f.includes('daily');
     case 'cashShop': return f.includes('cashShop');
+    case 'menuLayout': return f.includes('menuLayout');
     case 'cards': return f.includes('cardView');
     case 'orbs': return f.includes('orbPreview');
     case 'cos': return f.includes('cosPreview');
@@ -306,7 +308,7 @@ const catOf = (t: Tab) => CATEGORIES.find((c) => c.tabs.includes(t))!;
 /** An icon per tab in the side menu (looks only). */
 const TAB_ICON: Record<Tab, string> = {
   online: '🟢', users: '👤', stats: '📈', sessions: '🕒', chat: '💬', trades: '🤝', audit: '📜', mail: '✉️', reports: '🚩',
-  broadcast: '📢', balance: '⚖️', skills: '✨', cards: '🃏', daily: '📅', cashShop: '💎', orbs: '🔮', cos: '🪽', cosManage: '🧺', rig: '🗡️',
+  broadcast: '📢', balance: '⚖️', skills: '✨', cards: '🃏', daily: '📅', cashShop: '💎', menuLayout: '🧭', orbs: '🔮', cos: '🪽', cosManage: '🧺', rig: '🗡️',
   anim: '🏃', server: '🖥️', roles: '🔑',
 };
 
@@ -344,6 +346,7 @@ const SEARCH_INDEX: { tab: Tab; title: string; words?: string }[] = [
   { tab: 'balance', title: 'เควสสอนระบบ: รางวัล', words: 'tutorial' },
   { tab: 'skills', title: 'ระบบสกิล: ค่ารวม', words: 'แต้มสกิล แรงก์ คืนแต้ม ปลดล็อก ซูมผัง' },
   { tab: 'skills', title: 'ค่ารายสกิล', words: 'สกิล ดาเมจ คูลดาวน์ mp ระยะ ผังดาว' },
+  { tab: 'menuLayout', title: 'จัดเมนูเกม', words: 'ปุ่ม ลำดับ ซ่อน ย้าย ไอคอน มุมขวาบน หน้าต่างเมนู ตั้งค่า' },
   { tab: 'cards', title: 'การ์ด', words: 'เรทดรอป' },
   { tab: 'cards', title: 'ตัวเลขของระบบการ์ด' },
   { tab: 'daily', title: 'ของรางวัลล็อกอินรายวัน' },
@@ -505,6 +508,7 @@ function setTab(t: Tab): void {
   else if (t === 'skills') void renderSkills(view, h, api, (tuning) => applyBalance(tuning));
   else if (t === 'daily') void renderDaily(view, h, api);
   else if (t === 'cashShop') void renderCashShop(view, h, api);
+  else if (t === 'menuLayout') void renderMenuLayout(view, h, api, () => undefined);
   else if (t === 'cosManage') void renderCosManage(view, h, api, allowedTabs.has('orbs') ? (id) => { orbOpenId = id; setTab('orbs'); } : null);
   else if (t === 'roles') void renderRoles();
   else if (t === 'audit') void renderAudit();
@@ -1736,7 +1740,7 @@ const ACTION_TH: Record<string, string> = {
   level: 'ตั้งเลเวล', gold: 'ทอง', items: 'เสกไอเทม', kick: 'เตะ', teleport: 'ย้ายโซน', grant: 'ให้สิทธิ์', revoke: 'ถอนสิทธิ์',
   server: 'Server', password: 'ตั้งรหัสผ่าน', ban: 'แบน', unban: 'ปลดแบน', broadcast: 'ประกาศ', backup: 'สำรองข้อมูล',
   'delete-account': 'ลบบัญชี', 'delete-character': 'ลบตัวละคร', 'chat-delete': 'ลบแชท',
-  'shutdown-text': 'ข้อความเตือนปิด server', 'snap-delta': 'ลดขนาด snapshot', 'google-login': 'เข้าสู่ระบบด้วย Google', 'google-unlink': 'ยกเลิกการผูก Google', 'orb-look': 'หน้าตาลูกแก้วตีบวก', 'cos-look': 'ค่าของแต่งตัว', 'anim-look': 'ค่าท่าตัวละคร', 'cos-shop': 'ซ่อน/ราคาของแต่งตัว', 'cash-shop': 'แคชช็อป', 'orb-items': 'ลูกแก้วในร้านค้า', balance: 'ปรับสมดุล', daily: 'ล็อกอินรายวัน', mail: 'ส่งจดหมาย', mailRecall: 'ดึงจดหมายกลับ',
+  'shutdown-text': 'ข้อความเตือนปิด server', 'snap-delta': 'ลดขนาด snapshot', 'google-login': 'เข้าสู่ระบบด้วย Google', 'google-unlink': 'ยกเลิกการผูก Google', 'orb-look': 'หน้าตาลูกแก้วตีบวก', 'cos-look': 'ค่าของแต่งตัว', 'anim-look': 'ค่าท่าตัวละคร', 'cos-shop': 'ซ่อน/ราคาของแต่งตัว', 'cash-shop': 'แคชช็อป', 'orb-items': 'ลูกแก้วในร้านค้า', balance: 'ปรับสมดุล', 'menu-layout': 'จัดเมนูเกม', daily: 'ล็อกอินรายวัน', mail: 'ส่งจดหมาย', mailRecall: 'ดึงจดหมายกลับ',
   'report-status': 'สถานะรายงาน', 'report-ban': 'ห้ามรายงาน', 'report-unban': 'ปลดห้ามรายงาน',
   'cosmetic-give': 'ให้ Cosmetics', 'cosmetic-take': 'ยึด Cosmetics คืน',
 };
