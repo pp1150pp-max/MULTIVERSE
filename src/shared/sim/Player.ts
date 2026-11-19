@@ -454,6 +454,14 @@ export class Player extends Unit {
   buffBits = 0;
   /** The skill whose buff it got last (server: set by the cast; client: as sent), for its magic circle. '' = none. */
   buffSkill = '';
+  /**
+   * Skill buffs running, by skill id: when each ends (sim time) and how long it was given (server: set by the cast,
+   * see castSkill). The owner sees them as icons under their HP and MP bars (owner 2026-11-19).
+   */
+  skillBuffs: Record<string, { until: number; total: number }> = {};
+  /** Client only: our own skill buffs as the server last sent them (seconds left and given), and when that came. */
+  shownBuffs: { id: string; left: number; total: number }[] = [];
+  shownBuffsAt = 0;
   /** Share of damage dealt that heals the player, until sim time `lifestealUntil` (sword Q). */
   lifesteal = 0;
   lifestealUntil = -1;
@@ -994,6 +1002,7 @@ export class Player extends Unit {
     this.gun = emptyGunBuffs();
     this.shield = 0;
     this.shieldUntil = this.takenUntil = this.dmgUntil = this.hasteUntil = this.reflectUntil = this.steadyUntil = 0;
+    this.skillBuffs = {};
     if (this.statBuffs.length) {
       this.statBuffs = [];
       this.recompute();

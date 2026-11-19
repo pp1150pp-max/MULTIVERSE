@@ -316,6 +316,8 @@ export interface PrivateSnap {
   castT?: number;
   /** Buff scrolls running: seconds of play left on each (left out when none). */
   buffs?: Buffs;
+  /** Skill buffs running on us: [skill id, seconds left, seconds given] (left out when none). */
+  sb?: [string, number, number][];
   /** Share of move speed taken away by a slow right now (missing = none). */
   slow?: number;
   /** True while the server moves the character (dash, knockback, stun, dead, Auto Play) — follow its position. */

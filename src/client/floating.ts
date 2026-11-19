@@ -6,7 +6,7 @@ import type { Player } from '../shared/sim/Player';
 import { RARITY_COLOR } from '../shared/types';
 import { itemName } from '../shared/data/enhance';
 import { expGapMult } from '../shared/formulas';
-import { iconImg } from './icons';
+import { iconImg, skillIcon } from './icons';
 import { imgUrl, paperUiOn } from './img';
 import { PAPER_TITLES } from './paperTitles';
 import { questRows, seekerMark } from '../shared/quests';
@@ -81,7 +81,7 @@ export class Floating {
   private bossTimerEl: HTMLDivElement;
   private badges = new Map<Npc, HTMLDivElement>();
   private readonly restEls: HTMLDivElement[] = [];
-  private vitals: { el: HTMLDivElement; hp: HTMLDivElement; mp: HTMLDivElement };
+  private vitals: { el: HTMLDivElement; hp: HTMLDivElement; mp: HTMLDivElement; buffs: HTMLDivElement; buffSig: string };
 
   constructor(private readonly root: HTMLElement) {
     this.prompt = document.createElement('div');
@@ -100,7 +100,11 @@ export class Floating {
       vitals.append(track);
       return fill;
     };
-    this.vitals = { el: vitals, hp: bar('hp'), mp: bar('mp') };
+    // Skill buffs on us, under the bars: the skill's icon, darkened clockwise like a clock as its time runs out.
+    const buffs = document.createElement('div');
+    buffs.className = 'vbuffs';
+    this.vitals = { el: vitals, hp: bar('hp'), mp: bar('mp'), buffs, buffSig: '' };
+    vitals.append(buffs);
     root.append(vitals);
     // Fetched up front, so the first hit doesn't show an empty number.
     for (const src of [GLYPH_SHEET, CRIT_BURST]) new Image().src = src;
@@ -204,6 +208,28 @@ export class Floating {
       const lift = p === g.player ? 14 + extra : 32;
       b.el.style.transform = `translate(${s.sx}px, ${s.sy - lift}px) translate(-50%, -100%)`;
     }
+  }
+
+  /**
+   * Our skill buffs under our HP and MP bars (owner 2026-11-19): each skill's own icon, darkening clockwise from 12
+   * o'clock like a clock as its time runs out. The server sends seconds left; we count down between snapshots.
+   */
+  private drawMyBuffs(me: Player): void {
+    const v = this.vitals;
+    const list = currentBalance().fxLayer.buffIcons ? me.shownBuffs : [];
+    const sig = list.map((b) => b.id).join(',');
+    if (sig !== v.buffSig) {
+      v.buffSig = sig;
+      v.buffs.innerHTML = list.map((b) => `<div class="vbuff">${skillIcon(b.id)}<i></i></div>`).join('');
+    }
+    if (!list.length) return;
+    const gone = performance.now() / 1000 - me.shownBuffsAt;
+    list.forEach((b, i) => {
+      const left = Math.max(0, b.left - gone);
+      const done = b.total > 0 ? 1 - left / b.total : 1;
+      const cell = v.buffs.children[i] as HTMLElement | undefined;
+      cell?.style.setProperty('--gone', `${Math.min(360, Math.max(0, done * 360)).toFixed(1)}deg`);
+    });
   }
 
   /** Your own title set over your head (title and framed name), while you wear one or try one on. */
@@ -423,6 +449,7 @@ export class Floating {
       this.vitals.el.style.transform = `translate(${feet.sx}px, ${feet.sy}px) translate(-50%, 6px)`;
       this.vitals.hp.style.width = `${(Math.max(0, me.hp) / Math.max(1, me.maxHp)) * 100}%`;
       this.vitals.mp.style.width = `${(Math.max(0, me.mp) / Math.max(1, me.stats.maxMp)) * 100}%`;
+      this.drawMyBuffs(me);
     }
 
     this.updateMyTitle(g);

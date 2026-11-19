@@ -9,7 +9,7 @@ import * as R from '../data/skillRanges';
 import { rankedDmg, skillParam, skillReach, skillValues } from '../skillBook';
 import { passiveOnBasic, passiveSkillScale } from '../passives';
 import { castSword } from './swordSkills';
-import { buffMask } from './debuffs';
+import { buffEnds, buffMask, noteSkillBuffs } from './debuffs';
 
 // ------------------------------------------------------------ Gunslinger's basic shot and its buffs
 
@@ -291,10 +291,12 @@ const FROST = '#7ab8ff';
 export function castSkill(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank = 1): boolean {
   // Whoever gains a buff from this cast (the caster, the party) shows this skill's magic circle.
   const before = sim.players.map((q) => buffMask(q, sim.time));
+  const ends = sim.players.map((q) => buffEnds(q));
   // Everything the cast plays, now or later (timers, shots), is the caster's: see Sim.asCaster.
   const ok = sim.asCaster(p, () => cast(sim, p, sk, aim, rank), sk.id);
   sim.players.forEach((q, i) => {
     if (buffMask(q, sim.time) & ~(before[i] ?? 0)) q.buffSkill = sk.id;
+    noteSkillBuffs(q, sk.id, ends[i] ?? {}, sim.time);
   });
   return ok;
 }

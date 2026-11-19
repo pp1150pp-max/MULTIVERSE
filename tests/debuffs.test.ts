@@ -4,7 +4,10 @@ import { ok, finish } from './check';
 import { checkBalance, balanceChanges } from '../src/shared/balance';
 import { ZONE_1 } from '../src/shared/data/zones';
 import { Sim } from '../src/shared/sim/Sim';
-import { DEBUFF_BIT, debuffMask, hasDebuff } from '../src/shared/sim/debuffs';
+import { DEBUFF_BIT, debuffMask, hasDebuff, runningSkillBuffs } from '../src/shared/sim/debuffs';
+import { CLASSES } from '../src/shared/data/classes';
+import { newCharacterData } from '../src/shared/sim/Player';
+import { castSkill } from '../src/shared/sim/skills';
 
 const sim = new Sim(ZONE_1);
 const m = sim.monsters.find((x) => !x.isBoss)!;
@@ -30,5 +33,22 @@ const t = checkBalance({ fxLayer: { debuffs: false } }, true).tuning!;
 ok(JSON.stringify(t) === '{"fxLayer":{"debuffs":false}}', `switch stored (${JSON.stringify(t)})`);
 ok(balanceChanges({}, t) === 'ดีบัฟบนตัวมอน (ไอคอน + เอฟเฟกต์) เปิด → ปิด', `audit (${balanceChanges({}, t)})`);
 ok(checkBalance({ fxLayer: { debuffs: 1 } }, true).error !== undefined, 'strict refuses a non-boolean');
+
+// Skill buffs under the owner's HP and MP bars (owner 2026-11-19): each buff cast is noted by skill id with its time.
+{
+  const gs = sim.addPlayer({ ...newCharacterData('Gun', 'gunslinger'), level: 40 });
+  const skill = (id: string) => CLASSES.gunslinger.skills.find((s) => s.id === id)!;
+  ok(runningSkillBuffs(gs, sim.time).length === 0, 'no skill buffs at first');
+  castSkill(sim, gs, skill('gs_sniperfocus'), { x: 1, z: 0 }, 1);
+  castSkill(sim, gs, skill('gs_hotrounds'), { x: 1, z: 0 }, 1);
+  const sb = runningSkillBuffs(gs, sim.time);
+  ok(sb.length === 2 && sb.some(([id]) => id === 'gs_sniperfocus') && sb.some(([id]) => id === 'gs_hotrounds'), `both buff skills listed (${JSON.stringify(sb)})`);
+  ok(sb.every(([, left, total]) => left > 0 && left === total), 'seconds left = seconds given right after the cast');
+  const longest = Math.max(...sb.map(([, , t]) => t));
+  ok(runningSkillBuffs(gs, sim.time + longest + 0.1).length === 0, 'they drop once their time is up');
+  castSkill(sim, gs, skill('gs_sniperfocus'), { x: 1, z: 0 }, 1);
+  gs.clearSkillBuffs();
+  ok(runningSkillBuffs(gs, sim.time).length === 0, 'death clears them');
+}
 
 finish('debuffs');

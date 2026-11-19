@@ -1,7 +1,7 @@
 // The shared online world: one Sim per zone, driven by the input of the players in it. Walking
 // through a portal moves a player's session to the other zone's Sim. The server decides all combat,
 // loot and EXP; clients only move their own character, and the server checks those moves are possible.
-import { buffMask, debuffMask } from '../src/shared/sim/debuffs';
+import { buffMask, debuffMask, runningSkillBuffs } from '../src/shared/sim/debuffs';
 import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage, Server as HttpServer } from 'node:http';
 import { clientIp } from './clientIp';
@@ -2170,6 +2170,7 @@ export class GameWorld {
       hp: r2(p.hp), mp: r2(p.mp), exp: p.exp, level: p.level, gold: p.gold,
       cd: p.cd, potCd: r2(p.potCd), restCd: r2(Math.max(0, p.restCd)), castT: p.castT > 0 ? r2(p.castT) : undefined,
       ...(Object.keys(p.buffs).length ? { buffs: roundBuffs(p.buffs) } : {}),
+      ...skillBuffField(p, s.sim.time),
       // Slowed (the Bog Witch's poison): the browser walks slower too, or its moves would be refused.
       ...(p.shield > 0 && s.sim.time < p.shieldUntil ? { shield: Math.ceil(p.shield) } : {}),
       ...(p.slowT > 0 && p.slowAmt > 0 ? { slow: p.slowAmt } : {}),
@@ -2635,6 +2636,11 @@ function debuffField(m: Monster, now: number, viewer: number): { db?: number; ds
 function buffField(p: Player, now: number): { bf?: number; bs?: string } {
   const bf = p.alive ? buffMask(p, now) : 0;
   return bf ? (p.buffSkill ? { bf, bs: p.buffSkill } : { bf }) : {};
+}
+/** Our own skill buffs running, for the private part of the snapshot (nothing when none). */
+function skillBuffField(p: Player, now: number): { sb?: [string, number, number][] } {
+  const sb = p.alive ? runningSkillBuffs(p, now) : [];
+  return sb.length ? { sb } : {};
 }
 /** A look bundle and its JSON (what the per-browser caches compare). */
 interface Look { look: PlayerLook | MonsterLook; json: string }

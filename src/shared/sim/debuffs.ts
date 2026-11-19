@@ -49,3 +49,36 @@ export function buffMask(p: Player, now: number): number {
   }
   return n;
 }
+
+/**
+ * When each of a player's skill buffs ends (sim time), by a key for what kind it is. castSkill compares it before and
+ * after a cast: whatever got a later end came from that skill (its icon under the owner's HP and MP bars).
+ */
+export function buffEnds(p: Player): Record<string, number> {
+  const g = p.gun;
+  const e: Record<string, number> = {
+    shield: p.shieldUntil, taken: p.takenUntil, dmg: p.dmgUntil, haste: p.hasteUntil, reflect: p.reflectUntil,
+    steady: p.steadyUntil, lifesteal: p.lifestealUntil, shock: g.shock.until, stack: g.stack.until, split: g.split.until,
+    pierce: g.pierceUntil, storm: g.storm.until,
+  };
+  for (const [id, h] of Object.entries(g.onHit)) e[`hit:${id}`] = h.until;
+  for (const b of p.statBuffs) e[`stat:${b.id}`] = b.until;
+  return e;
+}
+
+/** Notes on `p` the buffs a cast of `skill` just gave it (`before` = its buffEnds from before the cast). */
+export function noteSkillBuffs(p: Player, skill: string, before: Record<string, number>, now: number): void {
+  let until = 0;
+  for (const [k, t] of Object.entries(buffEnds(p))) if (t > now && t > (before[k] ?? 0) + 1e-6) until = Math.max(until, t);
+  if (until > 0) p.skillBuffs[skill] = { until, total: until - now };
+}
+
+/** A player's skill buffs still running (for the snapshot): [skill id, seconds left, seconds given]. Drops ended ones. */
+export function runningSkillBuffs(p: Player, now: number): [string, number, number][] {
+  const out: [string, number, number][] = [];
+  for (const [id, b] of Object.entries(p.skillBuffs)) {
+    if (b.until <= now) delete p.skillBuffs[id];
+    else out.push([id, Math.round((b.until - now) * 10) / 10, Math.round(b.total * 10) / 10]);
+  }
+  return out;
+}
