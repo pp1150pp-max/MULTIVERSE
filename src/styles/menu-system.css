@@ -1,0 +1,180 @@
+/* ---------------------------------------------------------------- menu: modes / online */
+
+.btn-back { background: transparent !important; border-color: transparent !important; color: var(--ink-dim) !important; }
+.btn-back:hover { color: #fff !important; }
+.class-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-bottom: 18px; text-align: left; }
+
+.online-box { max-width: 760px; margin: 0 auto; text-align: left; background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 10px; padding: 18px 22px; }
+.logon-box { max-width: 460px; padding: 0; overflow: hidden; border-width: 2px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7); }
+.online-box h2 { font-family: 'Cinzel', 'Kanit', serif; color: var(--gold-hi); margin: 0 0 12px; font-size: 20px; }
+.online-box h3 { color: var(--gold); font-weight: 400; margin: 14px 0 8px; font-size: 15px; }
+.online-box .menu-buttons { justify-content: flex-start; margin-top: 12px; }
+.online-box .name-row { justify-content: flex-start; }
+.form-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.form-row label { width: 80px; color: var(--ink-dim); font-size: 14px; }
+.form-row input, .online-box .name-row input {
+  flex: 1; font-family: inherit; font-size: 15px; padding: 7px 10px; color: var(--ink);
+  background: #15110c; border: 1px solid var(--panel-edge); border-radius: 4px;
+}
+.form-row input:focus, .name-row input:focus { outline: none; border-color: var(--gold-hi); }
+.form-error { min-height: 20px; color: #ff8a7a; font-size: 13px; }
+/* Register: rule hints under each field, ticked live while typing. */
+#register-box .form-row label { width: 104px; }
+.form-field { margin-bottom: 10px; }
+.form-field .form-row { margin-bottom: 4px; }
+.rules { list-style: none; margin: 0 0 0 114px; padding: 0; font-size: 12px; color: var(--ink-dim); }
+.rules li::before { content: '•'; display: inline-block; width: 16px; text-align: center; }
+.rules li.ok { color: #8fd98a; }
+.rules li.ok::before { content: '✔'; }
+.rules li.bad { color: #ff8a7a; }
+.rules li.bad::before { content: '✖'; }
+.pass-wrap { flex: 1; display: flex; position: relative; }
+.pass-wrap input { padding-right: 38px; min-width: 0; }
+.pass-eye {
+  position: absolute; right: 3px; top: 50%; transform: translateY(-50%); padding: 2px 6px; font-size: 15px; line-height: 1;
+  background: none; border: none; box-shadow: none; opacity: 0.55; cursor: pointer;
+}
+.pass-eye:hover, .pass-eye.on { opacity: 1; background: none; }
+.logon-check { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0 4px; font-size: 13px; color: var(--ink); cursor: pointer; }
+.logon-check input { margin-top: 3px; accent-color: var(--gold); }
+#register-box .logon-actions { margin-top: 4px; }
+#btn-register-submit:disabled { opacity: 0.45; cursor: not-allowed; }
+.char-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.char-head span { font-size: 13px; color: var(--ink-dim); }
+.char-head b { color: var(--ink); font-weight: 600; }
+.char-head button { margin-left: 8px; padding: 3px 10px; font-size: 12px; }
+#char-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.char-slot {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 8px 10px;
+  border: 1px solid #3a2f20; border-radius: 8px; background: #1a160f; cursor: pointer; min-height: 168px; justify-content: center;
+}
+.char-slot:hover { border-color: var(--panel-edge); }
+.char-slot.selected { border-color: var(--gold-hi); box-shadow: 0 0 18px rgba(242, 213, 138, 0.25); }
+.char-slot img { width: 80px; height: 80px; border-radius: 4px; object-fit: cover; }
+.char-slot .cname { font-weight: 600; }
+.char-slot .cmeta { font-size: 12px; color: var(--ink-dim); }
+.char-slot.empty { color: var(--ink-dim); border-style: dashed; font-size: 14px; }
+.char-slot .cdel { position: absolute; top: 4px; right: 4px; padding: 0 7px; font-size: 12px; background: transparent; border-color: transparent; color: #8a7a6a; }
+.char-slot .cdel:hover { color: #ff8a7a; border-color: #6b2a1a; }
+.char-slot .cdel.armed { color: #fff; background: #8a2a1a; border-color: #ff8a7a; }
+#btn-enter-world:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ---------------------------------------------------------------- online */
+
+.plate.ally .pname { color: #9fe0ff; }
+.plate.ally .pfill { background: #3ec05a; }
+.loot-label.locked { opacity: 0.55; }
+#chat { position: absolute; left: max(12px, env(safe-area-inset-left)); bottom: calc(152px + env(safe-area-inset-bottom)); width: min(420px, 45vw); pointer-events: auto; }
+#chat input {
+  width: 100%; font-family: inherit; font-size: 14px; padding: 6px 10px; color: var(--ink);
+  background: rgba(12, 10, 8, 0.9); border: 1px solid var(--gold); border-radius: 4px; outline: none;
+}
+.log-line.chat { color: #ffffff; }
+.log-line.chat b { color: #9fe0ff; font-weight: 600; }
+.log-line.system { color: #b9b09a; font-style: italic; }
+#hud-online { margin-top: 2px; font-size: 12px; color: #9fe0ff; text-shadow: 0 0 3px #000; }
+/* Owner/GM only: everyone online in the server. */
+#hud-online-all { margin-top: 1px; font-size: 12px; color: #ffd76a; text-shadow: 0 0 3px #000; }
+/* Buff scrolls running: icon + time left, under the online line. */
+#hud-buffs { display: flex; gap: 6px; margin-top: 4px; }
+#hud-buffs:empty { display: none; }
+#hud-buffs .buff { display: flex; align-items: center; gap: 3px; padding: 1px 6px 1px 2px; border-radius: 10px; background: rgba(10, 8, 6, 0.7); border: 1px solid var(--bc); font-size: 12px; color: #f2ead8; text-shadow: 0 0 3px #000; pointer-events: auto; }
+#hud-buffs .buff .gi { width: 20px; height: 20px; }
+/* Quest tracker under the online line: dark panel, bronze edge, cream and gold text. Folds away. */
+#quest-tracker {
+  margin-top: 6px; width: 236px; pointer-events: auto;
+  background: rgba(20, 16, 10, 0.78); border: 1px solid var(--panel-edge); border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+#quest-tracker.folded { width: auto; display: inline-block; }
+#quest-tracker .qt-head {
+  display: block; width: 100%; text-align: left; padding: 4px 10px; font-size: 13px; font-weight: 600;
+  color: var(--gold-hi); background: none; border: none; box-shadow: none; border-radius: 0; cursor: pointer;
+}
+#quest-tracker:not(.folded) .qt-head { border-bottom: 1px solid rgba(160, 120, 60, 0.45); }
+#quest-tracker .qt-arrow { display: inline-block; width: 10px; color: var(--gold); }
+#quest-tracker .qt-ready-dot { color: #ffd83a; font-weight: 900; text-shadow: 1px 1px 0 #000; }
+#quest-tracker .qt-row { padding: 5px 10px 6px; cursor: pointer; }
+#quest-tracker .qt-row + .qt-row { border-top: 1px solid rgba(160, 120, 60, 0.25); }
+#quest-tracker .qt-row:hover { background: rgba(242, 194, 48, 0.08); }
+#quest-tracker .qt-name { font-size: 13px; color: #f2e6c8; }
+#quest-tracker .qt-goal { font-size: 11px; color: var(--ink-dim); margin-top: 1px; }
+#quest-tracker .qt-bar { height: 4px; margin-top: 4px; background: #2a2418; border: 1px solid #4a3e2a; border-radius: 2px; overflow: hidden; }
+#quest-tracker .qt-bar > div { height: 100%; background: linear-gradient(#e8c060, #a87a2a); }
+#quest-tracker .qt-row.ready .qt-name, #quest-tracker .qt-row.ready .qt-goal { color: #ffd34a; }
+#quest-tracker .qt-row.ready .qt-bar > div { background: linear-gradient(#fff0a0, #f2c230); box-shadow: 0 0 6px #f2c230; }
+@media (max-width: 700px) and (orientation: portrait) {
+  #quest-tracker { width: 190px; }
+  #quest-tracker .qt-head { font-size: 12px; padding: 3px 8px; }
+  #quest-tracker .qt-row { padding: 4px 8px 5px; }
+  #quest-tracker .qt-name { font-size: 12px; }
+  #quest-tracker .qt-goal { font-size: 10px; }
+}
+#hud-guest { margin-top: 2px; font-size: 12px; color: #ffcf6a; text-shadow: 0 0 3px #000; }
+.hint.guest-move { color: #ffcf6a; }
+#disconnect { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(0, 0, 0, 0.75); pointer-events: auto; z-index: 7; }
+#disconnect h2 { font-family: 'Cinzel', 'Kanit', serif; color: #ffcf9a; margin: 0; font-size: 30px; }
+#disconnect p { color: var(--ink-dim); margin: 0; }
+
+/* In-game system menu (Esc / ☰) and the leave countdown. */
+#sys-menu { left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(340px, 92vw); }
+#sys-menu .sys-view.sys-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+#sys-menu .sys-tile { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; font-size: 13px; }
+#sys-menu .sys-tile:disabled { opacity: 0.4; cursor: default; }
+#sys-menu .sys-ico { position: relative; width: 56px; height: 56px; display: block; font-size: 56px; }
+#sys-menu .sys-view { display: flex; flex-direction: column; gap: 6px; }
+#sys-menu .sys-view.hidden { display: none; }
+#sys-menu .sys-view button { width: 100%; padding: 7px 10px; font-size: 14px; }
+#sys-menu .sys-sep { height: 1px; background: var(--panel-edge); margin: 4px 0; }
+#sys-menu .sys-note { font-size: 11px; color: var(--ink-dim); text-align: center; white-space: normal; line-height: 1.4; }
+#exit-countdown {
+  position: absolute; left: 50%; top: 28%; transform: translateX(-50%); padding: 8px 16px;
+  background: rgba(10, 7, 4, 0.85); border: 1px solid var(--panel-edge); border-radius: 6px;
+  color: #ffcf6a; font-size: 14px; pointer-events: none; white-space: nowrap;
+}
+#exit-countdown.hidden { display: none; }
+
+/* Help, HP/MP style and sound live in the system menu (Esc / ☰); their HUD buttons stay in the DOM
+   (the menu and the H key drive them) but are hidden so the column clears the MP orb on short screens. */
+#btn-help, #btn-hud-style, #btn-audio { display: none; }
+@media (max-height: 560px) {
+  #minimap { width: 128px; height: 128px; }
+  #minimap-wrap { width: 128px; height: 128px; margin-bottom: 4px; }
+  .mm-btn { width: 18px; height: 18px; font-size: 12px; }
+  #mm-search { left: 119px; top: 72px; font-size: 10px; }
+  #mm-plus { left: 105px; top: 98px; }
+  #mm-minus { left: 80px; top: 116px; }
+  /* No room for another line above the MP orb: sit on the minimap's bottom-right corner instead. */
+  #hud-ping { position: absolute; top: 112px; right: 2px; margin: 0; padding: 0 4px; border-radius: 3px; background: rgba(0, 0, 0, 0.6); }
+  #hud { --orb: min(190px, 20vw, 32vh); }
+}
+
+/* Server stopping/restarting: stays up and ticks down until the connection closes. */
+#shutdown-banner, #announce-banner {
+  position: absolute; left: 50%; top: 14%; transform: translateX(-50%); z-index: 6;
+  max-width: calc(100% - 32px); text-align: center; pointer-events: none;
+  padding: 10px 22px; border: 2px solid #ffd34a; border-radius: 8px;
+  background: rgba(30, 20, 4, 0.88); color: #ffd34a;
+  font-size: 30px; font-weight: 600; text-shadow: 0 0 6px #000, 2px 2px 0 #000;
+  box-shadow: 0 0 24px rgba(255, 211, 74, 0.35);
+}
+@media (max-width: 700px) { #shutdown-banner { font-size: 20px; top: 18%; } }
+/* Reconnecting on its own after a dropped connection (src/client/net/online.ts): the game stays on screen. */
+#reconnect-banner {
+  position: absolute; left: 50%; top: 14%; transform: translateX(-50%); z-index: 6;
+  max-width: calc(100% - 32px); text-align: center; pointer-events: none;
+  padding: 8px 18px; border: 2px solid #9fd8ff; border-radius: 8px;
+  background: rgba(4, 18, 30, 0.88); color: #9fd8ff; font-size: 20px; font-weight: 600; text-shadow: 0 0 6px #000;
+}
+#reconnect-banner small { display: block; font-size: 13px; font-weight: 400; color: var(--ink-dim); }
+/* Owner's announcement: same frame as the restart warning, smaller text that may wrap, a bit lower. */
+#announce-banner { top: 24%; font-size: 22px; white-space: normal; overflow-wrap: anywhere; width: max-content; max-width: min(720px, calc(100% - 32px)); }
+#announce-banner .announce-head { font-size: 14px; opacity: 0.85; margin-bottom: 2px; }
+#announce-banner .announce-from { font-size: 14px; opacity: 0.85; margin-top: 4px; text-align: right; }
+#announce-banner.megaphone .announce-head { color: #ffb347; }
+@media (max-width: 700px) { #announce-banner { font-size: 17px; top: 26%; } }
+
+/* Window title bars: drag to move, double-click to put back (src/client/dragwindow.ts). */
+.drag-handle { cursor: move; touch-action: none; user-select: none; }
+.drag-handle button { cursor: pointer; }
+

@@ -119,6 +119,8 @@ src/client/      ← ฝั่งแสดงผล: Three.js, HUD และ inp
   net/online.ts      OnlineBackend: ต่อ server, จำลองโลกตาม snapshot, เดินตัวเองทันที
   menu.ts            หน้าเมนู: แผง Login, Guest Login, login/สมัคร, เลือก/สร้าง/ลบตัวละคร
   net/api.ts         เรียก API ของ server
+  ../style.css + ../styles/*.css  CSS ทั้งเกม: style.css มีแต่ @import เรียงตามลำดับ cascade เดิม (ไฟล์หลังทับไฟล์ก่อน) · เพิ่ม CSS ใหม่ลงไฟล์ของหน้าต่างนั้นใน src/styles/ (ถ้ากฎต้องทับของที่อื่น ให้ดูลำดับใน style.css)
+  ../style.css + ../styles/*.css  CSS ทั้งเกม: style.css มีแต่ @import เรียงตามลำดับ cascade เดิม (ไฟล์หลังทับไฟล์ก่อน) · เพิ่ม CSS ใหม่ลงไฟล์ของหน้าต่างนั้นใน src/styles/
   views.ts           สไปรต์ของผู้เล่น/มอน/กระสุน/ของดรอป ที่อ่านค่าจาก Sim ทุกเฟรม
   world.ts           วาดพื้นและพร็อพตามตำแหน่งจาก terrain
   audio/             เสียงสังเคราะห์ด้วย Web Audio: engine (มิกเซอร์ + ค่าตั้งเสียง), sfx, music, panel, gameAudio (จับคู่ SimEvent กับเสียง)
