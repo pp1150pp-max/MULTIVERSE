@@ -454,7 +454,7 @@ export class Terrain {
       const z = rand(r, -B + 2, B - 2);
       if (this.distToPath(x, z) < 3.2) continue;
       if (near(x, z, s, 11) || (b && near(x, z, b, clearingRadius(zone))) || zone.portals.some((p) => near(x, z, p, 5))) continue;
-      if (safe && Math.max(Math.abs(x - safe.x), Math.abs(z - safe.z)) < safe.half + 4) continue;
+      if (safe && Math.max(Math.abs(x - safe.x), Math.abs(z - safe.z)) < safe.half + 7) continue; // Trees and rocks keep off the town wall (owner 2026-11-19: 4 was too close).
       // Single monsters (the hub's) still get a little room to stand in.
       if (zone.spawns.some((sp) => near(x, z, sp, sp.radius <= 1 ? 3 : sp.radius * 0.55))) continue;
       if ([...(zone.iceLakes ?? []), ...(zone.lavaPools ?? [])].some((l) => Math.hypot((x - l.x) / (l.rx + 2), (z - l.z) / (l.rz + 2)) < 1)) continue;
