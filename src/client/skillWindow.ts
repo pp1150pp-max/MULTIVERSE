@@ -17,6 +17,8 @@ import { chargeMax } from '../shared/skillTuning';
 import { skillIcon } from './icons';
 import { constellation, PAD, SIZE } from './skillMap';
 
+/** Refund clicks this soon after a + click are ignored (rapid clicking that runs past rank 10). */
+const REFUND_AFTER_LEARN_MS = 700;
 const SLOT_LABEL: Record<WearSlot, string> = { q: 'Q', e: 'E', r: 'R', passive: 'พาสซีฟ' };
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''): HTMLElementTagNameMap[K] {
@@ -339,9 +341,13 @@ export class SkillWindow {
     const block = learnBlock(p.cls.id, p.level, p.skillBook, sk.id);
     const slots = WEAR_SLOTS.filter((s) => SLOT_KIND[s] === sk.kind);
     const wornOn = slots.find((s) => p.skillBook.worn[s] === sk.id);
+    // Row 1 never moves or changes size (owner 2026-11-20: clicking + fast past rank 10 hit − คืนแต้ม): both buttons are always
+    // there, disabled when they can't be used, and the row sits above the values that grow or shrink with the rank.
+    const full = rank >= maxRank();
+    const main =
+      `<button data-learn="${sk.id}" ${block || full ? 'disabled' : ''}>${full ? 'แรงก์สูงสุดแล้ว' : `${rank ? '+ อัปแรงก์' : '+ เรียน'} (1 แต้ม)`}</button>` +
+      `<button data-refund="${sk.id}" ${rank ? '' : 'disabled'}>− คืนแต้ม</button>`;
     const btns =
-      `<button data-learn="${sk.id}" ${block ? 'disabled' : ''}>${rank ? '+ อัปแรงก์' : '+ เรียน'} (1 แต้ม)</button>` +
-      (rank ? `<button data-refund="${sk.id}">− คืนแต้ม</button>` : '') +
       (rank > 1 ? `<button data-refund-all="${sk.id}">คืนแต้มสกิลนี้ทั้งหมด (${p.skillBook.ranks[sk.id]} แต้ม)</button>` : '') +
       (rank ? slots.map((s) => `<button data-wear="${s}" data-id="${sk.id}" class="${wornOn === s ? 'on' : ''}">${wornOn === s ? 'ถอดจาก' : 'ใส่'}${s === 'passive' ? 'ช่องพาสซีฟ' : `ช่อง ${SLOT_LABEL[s]}`}</button>`).join('') : '');
     this.detail.innerHTML =
@@ -349,10 +355,11 @@ export class SkillWindow {
       `<span class="sk-dsub">${KIND_NAME[sk.kind as 'normal']}${line} · ปลด Lv.${unlockLevel(sk)}${reach ? ` · ${reachText(reach)}` : ''}</span></span></div>` +
       `<div class="sk-desc">${sk.desc}</div>` +
       `<div class="sk-dval">แรงก์ <b>${rank}</b> / ${maxRank()}</div>` +
+      `<div class="sk-dbtns sk-dmain">${main}</div>` +
+      (block && !full ? `<div class="sk-dwhy">${block}</div>` : '') +
       (rank ? `<div class="sk-dval">ตอนนี้: <span class="tt-val">${at(rank)}</span></div>` : '') +
       (rank < maxRank() ? `<div class="sk-dval">${rank ? `แรงก์ ${rank + 1}` : 'เมื่อเรียน (แรงก์ 1)'}: <span class="tt-val">${at(rank + 1)}</span></div>` : '') +
-      `<div class="sk-dbtns">${btns}</div>` +
-      (block && rank < maxRank() ? `<div class="sk-dwhy">${block}</div>` : '');
+      (btns ? `<div class="sk-dbtns">${btns}</div>` : '');
   }
 
   /** " ราคา 3,000 G" for taking back n points now, or " (ฟรี)". */
@@ -361,12 +368,20 @@ export class SkillWindow {
     return price ? ` ราคา ${price.toLocaleString()} G` : ' (ฟรี)';
   }
 
+  /** performance.now() of the last + เรียน / อัปแรงก์ click. */
+  private learnAt = -Infinity;
+
   private onClick(e: MouseEvent): void {
     const t = e.target as HTMLElement;
     const b = this.g.backend;
     const p = this.g.player;
     const learn = t.closest<HTMLElement>('[data-learn]');
-    if (learn) return b.learnSkill(learn.dataset.learn!);
+    if (learn) {
+      this.learnAt = performance.now();
+      return b.learnSkill(learn.dataset.learn!);
+    }
+    // Fast clicks on + right before: not a refund (a stray click must never take a point back).
+    if (performance.now() - this.learnAt < REFUND_AFTER_LEARN_MS && t.closest('[data-refund], [data-refund-all], [data-reset]')) return;
     // Every point of one skill, or of all skills: always asked first, with the gold it costs (owner 2026-11-15).
     const refundAll = t.closest<HTMLElement>('[data-refund-all]');
     if (refundAll) {

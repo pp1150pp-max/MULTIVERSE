@@ -9,6 +9,7 @@ import * as R from '../data/skillRanges';
 import { rankedDmg, skillParam, skillReach, skillValues } from '../skillBook';
 import { passiveOnBasic, passiveSkillScale } from '../passives';
 import { castSword } from './swordSkills';
+import { castHexSeed } from './hexSeed';
 import { buffEnds, buffMask, noteSkillBuffs } from './debuffs';
 
 // ------------------------------------------------------------ Gunslinger's basic shot and its buffs
@@ -517,20 +518,58 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       return true;
     }
     case 'mg_crystalspikes': {
+      // Venom crystal (owner 2026-11-20): every `pulse` s it adds a poison stack (up to maxStacks) to every monster in
+      // the circle and refreshes its poison; each stack hurts `dmg` × ATK a second, in or out of the circle, until its
+      // poison runs out. When the crystal's time is up it shatters: whatever poison it left still to tick lands at once.
       const c = landing(p, aim, far);
       const r = P('radius');
-      const every = P('every');
-      const shots = Math.max(1, Math.floor(P('duration') / every));
+      const every = P('pulse');
+      const pulses = Math.max(1, Math.floor(P('life') / every + 1e-6));
+      const life = pulses * every;
+      const maxStacks = Math.max(1, Math.round(P('maxStacks')));
+      const poisonLife = P('poisonLife');
+      // Per monster: stacks, poison end, and how far its ticks have been paid.
+      const venom = new Map<Monster, { n: number; until: number; paid: number }>();
       quarksCue(sim, p, sk.id, 0, c.x, c.z);
       // The crystal itself stands there the whole time (owner 2026-11-15: the spikes seemed to come from nowhere).
-      sim.fx('crystal', c.x, c.z, shots * every + 0.3, VENOM);
-      tickFor(sim, p, every, shots, () => {
-        const t = nearestTo(sim, c.x, c.z, r);
-        if (!t) return;
-        // A flash on the crystal as each spike leaves it.
-        sim.fx('puff', c.x, 1.1, c.z, VENOM, 0.25, 1.4);
-        sim.addProjectile(p, { x: c.x, z: c.z, angle: Math.atan2(t.z - c.z, t.x - c.x), speed: 18, range: r + 1, radius: 0.3, mult: dmg, color: VENOM, size: 0.6, kb: 1, hit: { skill: sk } });
-      }, every);
+      sim.fx('crystal', c.x, c.z, life + 0.3, VENOM);
+      tickFor(sim, p, every, pulses, () => {
+        sim.fx('ring', c.x, c.z, r, VENOM, 0.45);
+        sim.fx('puff', c.x, 1.1, c.z, VENOM, 0.3, 1.6);
+        forCircle(sim, c.x, c.z, r, (m) => {
+          const v = venom.get(m) ?? { n: 0, until: 0, paid: sim.time };
+          v.n = Math.min(maxStacks, v.n + 1);
+          v.until = sim.time + poisonLife;
+          venom.set(m, v);
+          m.dotUntil = Math.max(m.dotUntil, v.until);
+          m.debuffSkill = sk.id;
+        });
+        // Each poisoned monster takes its stacks up to the next pulse (or until its poison ends).
+        for (const [m, v] of venom) {
+          // (A hair's breadth of float left over is no tick: every hit does at least 1.)
+          if (!m.alive || !sim.monsters.includes(m) || v.until <= sim.time + 1e-6) {
+            venom.delete(m);
+            continue;
+          }
+          const span = Math.min(every, v.until - sim.time);
+          v.paid = sim.time + span;
+          sim.hitMonster(p, m, v.n * dmg * span, { skill: sk });
+          sim.fx('puff', m.x, 0.9, m.z, VENOM, 0.5, 0.4 + 0.12 * v.n);
+        }
+      });
+      sim.schedule(life, () => {
+        if (!live(sim, p)) return;
+        sim.fx('effect', 'mg_burst', c.x, c.z, 0, Math.min(r, 2.5));
+        quarksCue(sim, p, sk.id, 0, c.x, c.z);
+        for (const [m, v] of venom) {
+          const left = v.until - v.paid > 1e-6 ? v.n * dmg * (v.until - v.paid) : 0;
+          if (m.alive && sim.monsters.includes(m) && left > 0) {
+            sim.fx('burst', m.x, 1, m.z, VENOM, 8, 3);
+            sim.hitMonster(p, m, left, { skill: sk });
+          }
+        }
+        venom.clear();
+      });
       return true;
     }
     case 'mg_cursedash': {
@@ -547,24 +586,12 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       return true;
     }
     case 'mg_hexseed': {
+      // Stored-damage seed that jumps on its host's death (owner 2026-11-20): sim/hexSeed.ts.
       const c = landing(p, aim, far);
-      const r = P('radius');
-      const base = skillValues(sk).dmg;
-      // The poison grows with rank like the blast does.
-      const poison = P('poison') * (base > 0 ? dmg / base : 1);
-      const seedT = P('seedTime');
-      const blast = P('seedBlast');
-      sim.fx('zone', 'mg_poison', c.x, c.z, r, seedT);
-      forCircle(sim, c.x, c.z, r, (m) => {
-        dot(sim, p, m, poison, seedT, sk, VENOM);
-        sim.schedule(seedT, () => {
-          if (!live(sim, p)) return;
-          // Bursts where the seed is now, even if its carrier just died.
-          sim.fx('effect', 'explosion', m.x, m.z, 0, blast);
-          forCircle(sim, m.x, m.z, blast, (t) => sim.hitMonster(p, t, dmg, { kb: 2, fromX: m.x, fromZ: m.z, skill: sk }));
-        });
+      return castHexSeed(sim, p, c.x, c.z, P('radius'), {
+        sk, base: dmg, life: P('seedLife'), burst: P('burst'), jump: P('jump'), carry: P('carry') / 100,
+        maxSeeds: Math.max(1, Math.round(P('maxSeeds'))), cap: P('cap'), bossShare: P('bossPct') / 100,
       });
-      return true;
     }
     case 'mg_firerain': {
       const c = landing(p, aim, far);
@@ -926,7 +953,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const cap = Math.max(1, p.chargeMax(sk));
       while (p.mines.length > cap) p.mines.shift()!.gone = true;
       sim.fx('effect', 'gs_mine', x, z, 0, 0.6);
-      repeat(sim, step, Math.round(P('life') / step), (i) => {
+      repeat(sim, step, Math.round(p.summonTime(P('life')) / step), (i) => {
         if (mine.gone || !live(sim, p)) return false;
         if (i % 5 === 4) sim.fx('effect', 'gs_mine', x, z, 0, 0.6);
         if (!nearest(sim, x, z, trigger)) return;
@@ -956,9 +983,10 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
     case 'gs_drone': {
       // Hovers by the player's shoulder and shoots the nearest monster within reach.
       const every = Math.max(0.1, P('every'));
+      const life = p.summonTime(P('life'));
       // One drone on the client for the whole life (src/client/effects.ts drone()), flying after the caster.
-      sim.fx('drone', p.id, every * Math.floor(P('life') / every));
-      repeat(sim, every, Math.floor(P('life') / every), () => {
+      sim.fx('drone', p.id, every * Math.floor(life / every));
+      repeat(sim, every, Math.floor(life / every), () => {
         if (!live(sim, p)) return false;
         const dx = p.x + 0.8;
         const dz = p.z - 0.8;
@@ -1036,9 +1064,10 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const x = p.x;
       const z = p.z;
       const every = Math.max(0.1, P('every'));
+      const life = p.summonTime(P('life'));
       const showEvery = Math.max(1, Math.round(1 / every));
       sim.fx('effect', 'gs_turret', x, z, 0, 0.7);
-      repeat(sim, every, Math.floor(P('life') / every), (i) => {
+      repeat(sim, every, Math.floor(life / every), (i) => {
         if (!live(sim, p)) return false;
         if (i % showEvery === 0) sim.fx('effect', 'gs_turret', x, z, 0, 0.7);
         const m = nearest(sim, x, z, far);
