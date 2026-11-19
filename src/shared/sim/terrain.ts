@@ -107,7 +107,8 @@ export const HUB_PLAZA_RADIUS = 8.5;
 export const HUB_FOUNTAIN_HEIGHT = 9;
 export const HUB_FOUNTAIN_RADIUS = 3.6;
 /** The hub's NPC buildings: drawn this tall, a square footprint this wide (two side by side per top wall). */
-export const HUB_BUILDING_HEIGHT = 6.6;
+// 6.6 before their pictures were sheared to the wall's slope, which made each picture's box taller.
+export const HUB_BUILDING_HEIGHT = 7.9;
 export const HUB_BUILDING_SIZE = 4.4;
 /** Gap between the two buildings on a wall. */
 export const HUB_BUILDING_GAP = 3.4;
