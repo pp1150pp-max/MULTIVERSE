@@ -2,6 +2,10 @@
 // the server get exactly the same trees, rocks and camp.
 import { arenaRadius, clearingRadius, lairOf, lavaAt, themeAt, type Lair, type ZoneDef, type ZoneTheme } from '../data/zones';
 import { NPC_IDS, type NpcId } from '../data/npcs';
+import {
+  HARBOR_BOATS, HARBOR_CORNERS, HARBOR_DECKS, HARBOR_GARDEN, HARBOR_LIGHTHOUSE, HARBOR_MAIN, HARBOR_PIER, HARBOR_PLAZA_RADIUS,
+  HARBOR_SHIPYARD, insideDeck, onDeck,
+} from '../data/harbor';
 import { mulberry32, pick, rand, type Rng } from '../rng';
 import type { Vec2 } from '../types';
 
@@ -138,10 +142,12 @@ export class Terrain {
     for (const line of [zone.path, ...zone.branches]) {
       for (let i = 1; i < line.length; i++) this.segs.push([line[i - 1][0], line[i - 1][1], line[i][0], line[i][1]]);
     }
-    this.placeProps(mulberry32(zone.seed + 1));
+    if (zone.town === 'harbor') this.placeHarbor(mulberry32(zone.seed + 1));
+    else this.placeProps(mulberry32(zone.seed + 1));
     for (const id of NPC_IDS) {
       const n = this.npcPos[id];
-      if (n) this.colliders.push({ ...n, r: 0.45 });
+      // The navigator in nexus_city is seen only by some players (src/client/Game.ts): no invisible wall for the rest.
+      if (n && !(id === 'navigator' && zone.town !== 'harbor')) this.colliders.push({ ...n, r: 0.45 });
     }
   }
 
@@ -165,6 +171,8 @@ export class Terrain {
     if (Math.abs(x) > this.bound || Math.abs(z) > this.bound) return true;
     // A boss room: nobody walks out of the arena (owner).
     if (this.roomEdge !== null && Math.hypot(x, z) + r > this.roomEdge) return true;
+    // The harbour: off the planks is water (its edges' colliders keep walkers on; this turns clicks and spots away).
+    if (this.zone.town === 'harbor' && !onDeck(x - this.zone.start.x, z - this.zone.start.z, -0.3)) return true;
     return this.colliders.some((c) => Math.hypot(c.x - x, c.z - z) < c.r + r);
   }
 
@@ -365,6 +373,12 @@ export class Terrain {
     // The knight's statue on the plaza's edge where the top road comes in, the road parting round it (owner 2026-11-19:
     // beside the road it stood behind the vault).
     polar('town_statue', 225, HUB_PLAZA_RADIUS + 1, 3.8, 0.8);
+    // Floor 2's navigator (owner 2026-11-19): beside the knight's statue, on The Seeker's side of the top road, off it.
+    {
+      const a = rad(225);
+      const r0 = HUB_PLAZA_RADIUS + 1;
+      this.npcPos.navigator = { x: s.x + Math.cos(a) * r0 + 2.4 * Math.SQRT1_2, z: s.z + Math.sin(a) * r0 - 2.4 * Math.SQRT1_2 };
+    }
 
     // The wall kit (tools/cut_hub.cjs): one scale for all pieces, U world units per pixel. Each wall
     // picture's foot runs at the camera's slope for a world axis, so copies line up end to end, one end
@@ -400,6 +414,165 @@ export class Terrain {
           this.colliders.push({ x, z, r: 0.6 });
         }
       }
+    }
+  }
+
+  /**
+   * Floor 2's harbour town (src/shared/data/harbor.ts, FLOOR2_HUB.md, art M0b_harbor_docks): the plank platforms
+   * are shut in by a chain of colliders along every edge that isn't inside another platform (the water can't be
+   * walked on, owner 2026-11-19); the ship's-wheel fountain on the plaza; the six shops round the main platform
+   * laid out like nexus_city's (stores on the top two edges, the market on the bottom two); a ship moored by each
+   * pier's end; the lighthouse, the shipyard, a garden and a boat landing on the side platforms.
+   */
+  private placeHarbor(r: Rng): void {
+    const s = this.zone.start;
+    const at = (key: string, x: number, z: number, height: number, collideR = 0, fade = false, flip = false) => {
+      this.addProp(key, s.x + x, s.z + z, height, collideR, fade);
+      if (flip) this.props[this.props.length - 1].flip = true;
+    };
+
+    // ---- the water's edge: a collider every 0.8 along each platform edge, a little outside it, except where the
+    // edge runs inside another platform (a pier or bridge joining). Mooring posts stand along the open edges.
+    const STEP = 0.8;
+    const OUT = 0.55;
+    for (const deck of HARBOR_DECKS) {
+      const mx = deck.reduce((t, p) => t + p[0], 0) / deck.length;
+      const mz = deck.reduce((t, p) => t + p[1], 0) / deck.length;
+      for (let i = 0; i < deck.length; i++) {
+        const [ax, az] = deck[i];
+        const [bx, bz] = deck[(i + 1) % deck.length];
+        const len = Math.hypot(bx - ax, bz - az);
+        // Outward normal: away from the polygon's middle.
+        let nx = -(bz - az) / len;
+        let nz = (bx - ax) / len;
+        if (nx * ((ax + bx) / 2 - mx) + nz * ((az + bz) / 2 - mz) < 0) {
+          nx = -nx;
+          nz = -nz;
+        }
+        let sincePost = 2;
+        for (let t = 0; t <= len; t += STEP) {
+          const ex = ax + ((bx - ax) * t) / len;
+          const ez = az + ((bz - az) * t) / len;
+          // Open: just past the edge is still a platform.
+          if (HARBOR_DECKS.some((d) => d !== deck && insideDeck(d, ex + nx * 0.9, ez + nz * 0.9))) {
+            sincePost = 2;
+            continue;
+          }
+          this.colliders.push({ x: s.x + ex + nx * OUT, z: s.z + ez + nz * OUT, r: 0.6 });
+          sincePost += STEP;
+          if (sincePost >= 4.8 && t > 1 && t < len - 1) {
+            at('hb_bollard', ex + nx * 0.15, ez + nz * 0.15, 1.05);
+            sincePost = 0;
+          }
+        }
+      }
+    }
+
+    // ---- the plaza: the ship's-wheel fountain (its picture stands on its round foot, as in placeTown).
+    const FOUNTAIN_H = 6.2;
+    const fr = ((FOUNTAIN_H * 40) / 256 / 0.716) / Math.SQRT2;
+    at('hb_wheel_fountain', fr, fr, FOUNTAIN_H);
+    this.colliders.push({ x: s.x, z: s.z, r: 2.7 });
+    this.restSpots.push({ x: s.x, z: s.z, kind: 'fountain' });
+    // Lamps round the plaza, benches facing the fountain, banners: all off the four roads to the piers (45°, 135° …).
+    const rad = (d: number) => (d * Math.PI) / 180;
+    const polar = (key: string, deg: number, d: number, h: number, c = 0) => at(key, Math.cos(rad(deg)) * d, Math.sin(rad(deg)) * d, h, c);
+    for (const deg of [20, 70, 110, 160, 200, 250, 290, 340]) polar('hb_lamp_post', deg, HARBOR_PLAZA_RADIUS + 0.4, 3.6, 0.3);
+    for (const deg of [0, 90, 180, 270]) polar(deg % 180 ? 'hb_bench_a' : 'hb_bench_b', deg, HARBOR_PLAZA_RADIUS - 2.4, 1.3, 0.7);
+    for (const deg of [65, 115, 245, 295]) polar('hb_banner_pole', deg, HARBOR_PLAZA_RADIUS + 2.2, 4, 0.3);
+
+    // ---- the shops: each a building against its edge of the main platform with its keeper in front, toward the
+    // plaza (like nexus_city: stores on the two top edges, the market on the two bottom ones). The picture stands on
+    // the point below the middle of its square footprint on screen, as in placeTown.
+    const D = HUB_BUILDING_SIZE;
+    const q = D / 2;
+    const E = HARBOR_MAIN;
+    const shop = (key: string, h: number, alongX: boolean, side: number, t: number): Vec2 => {
+      const [cx, cz] = alongX ? [t, side * (E - D / 2 - 0.4)] : [side * (E - D / 2 - 0.4), t];
+      at(key, cx + q, cz + q, h, 0, true);
+      for (const [ox, oz] of [[0, 0], [1.2, 1.2], [-1.2, -1.2], [1.2, -1.2], [-1.2, 1.2]]) {
+        this.colliders.push({ x: s.x + cx + ox, z: s.z + cz + oz, r: D / 2 - 0.6 });
+      }
+      const front = E - D - 1.6;
+      return alongX ? { x: s.x + t * 0.75, z: s.z + side * front } : { x: s.x + side * front, z: s.z + t * 0.75 };
+    };
+    // Top-left edge (x = −E): the warehouse (stash) and the smuggler's stall; top-right (z = −E): the forge.
+    this.npcPos.keeper = shop('hb_warehouse', HUB_BUILDING_HEIGHT, false, -1, -5);
+    this.npcPos.crystal = shop('hb_smuggler', HUB_BUILDING_HEIGHT * 0.95, false, -1, 5.5);
+    this.npcPos.blacksmith = shop('hb_forge', HUB_BUILDING_HEIGHT, true, -1, 5);
+    // The navigator (The Seeker's role here) by the brass globe on the top-right edge, toward the lighthouse.
+    at('hb_brass_globe', -6.2, -E + 2.2, 2.6, 0.9);
+    this.npcPos.seeker = { x: s.x - 4.2, z: s.z - E + 4.6 };
+    // Bottom-left edge (z = +E): the ship's supply shop; bottom-right (x = +E): the broker's office.
+    this.npcPos.merchant = shop('hb_supply', HUB_BUILDING_HEIGHT, true, 1, -4.5);
+    this.npcPos.broker = shop('hb_broker', HUB_BUILDING_HEIGHT, false, 1, 4.5);
+    // Goods about the shops.
+    at('hb_barrels', -E + 2, -E + 7.5, 1.5, 0.8);
+    at('hb_crates', -E + 2.2, 12.2, 1.6, 0.8);
+    at('hb_sacks', -11, E - 2, 1.2, 0.7);
+    at('hb_crates', 2.5, E - 2.2, 1.5, 0.7);
+    at('hb_rope_coil', E - 2.2, -3.5, 0.9, 0.6);
+    at('hb_barrels', E - 2, 12, 1.4, 0.7);
+    at('hb_rope_coil', 11.5, -E + 2.2, 0.9, 0.6);
+    // A palm in a tub and a bunting post either side of each pier's mouth on the main platform.
+    for (const [sx, sz] of HARBOR_CORNERS) {
+      const [px, pz] = [sx * (E - 3.5), sz * (E - 3.5)];
+      at('hb_palm_pot', px + sz * 3.6, pz - sx * 3.6, 3, 0.7);
+      at('hb_bunting_post', px - sz * 3.6, pz + sx * 3.6, 2.6, 0.3);
+    }
+
+    // ---- the piers: lamps either side, and a ship moored on the water beside each end.
+    const SHIPS = ['hb_ship_green', 'hb_ship_blue', 'hb_ship_white', 'hb_ship_red'];
+    HARBOR_CORNERS.forEach(([sx, sz], i) => {
+      const ux = sx * Math.SQRT1_2;
+      const uz = sz * Math.SQRT1_2;
+      for (const along of [30, 46]) {
+        for (const side of [-1, 1]) at('hb_lamp_post', ux * along - uz * side * 2.4, uz * along + ux * side * 2.4, 3.2, 0.3);
+      }
+      const side = i % 2 ? 1 : -1;
+      at(SHIPS[i], sx * HARBOR_PIER - uz * side * 9.5, sz * HARBOR_PIER + ux * side * 9.5, 9, 0, true, side > 0);
+    });
+
+    // ---- the side platforms.
+    {
+      const [cx, cz] = HARBOR_LIGHTHOUSE;
+      at('hb_lighthouse', cx - 2.5, cz - 1, 12, 0, true);
+      this.colliders.push({ x: s.x + cx - 4, z: s.z + cz - 2.5, r: 3.2 });
+      at('hb_barrels', cx + 4.5, cz + 4.5, 1.4, 0.7);
+    }
+    {
+      const [cx, cz] = HARBOR_SHIPYARD;
+      at('hb_shipyard', cx + 1.5, cz + 0.5, 6.5, 0, true);
+      this.colliders.push({ x: s.x + cx, z: s.z + cz, r: 3.6 });
+      at('hb_crates', cx - 5, cz - 5, 1.5, 0.7);
+      at('hb_rope_coil', cx - 5, cz + 5, 0.9, 0.6);
+    }
+    {
+      const [cx, cz] = HARBOR_GARDEN;
+      at('hb_palm_pot', cx - 2, cz - 2, 3.4, 0.7);
+      at('hb_palm_pot', cx + 1, cz + 2.5, 3, 0.7);
+      at('hb_bench_b', cx + 2.5, cz - 1.5, 1.3, 0.7);
+      at('hb_bunting_post', cx - 3.5, cz + 3, 2.6, 0.3);
+    }
+    {
+      const [cx, cz] = HARBOR_BOATS;
+      at('hb_rowboat', cx + 1, cz + 9.5, 3.4);
+      at('hb_sacks', cx - 3, cz + 3, 1.2, 0.7);
+      at('hb_bench_a', cx + 3, cz - 2, 1.3, 0.7);
+    }
+
+    // ---- the portals: walk-through, no collider.
+    for (const p of this.zone.portals) at(p.prop ?? 'portal', p.x - s.x, p.z - s.z, p.prop === 'hb_portal_return' ? 5.6 : 5);
+
+    // ---- on the water: gulls on posts and a few floating barrels, clear of the platforms and of each other.
+    let placed = 0;
+    for (let i = 0; i < 400 && placed < 14; i++) {
+      const x = rand(r, -this.bound + 3, this.bound - 3);
+      const z = rand(r, -this.bound + 3, this.bound - 3);
+      if (HARBOR_DECKS.some((d) => insideDeck(d, x, z, -3))) continue;
+      if (this.props.some((p) => Math.hypot(p.x - x, p.z - z) < 6)) continue;
+      at(placed % 3 ? 'hb_float_barrel' : 'hb_gull_post', x, z, placed % 3 ? 1.1 : 2.2);
+      placed++;
     }
   }
 

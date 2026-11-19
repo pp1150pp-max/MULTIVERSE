@@ -1,6 +1,6 @@
 // Resting at the hub's fountain and the zone camps' campfires: HP/MP full, a shared 30 s cooldown.
 import { ok, finish } from './check';
-import { ZONES, ZONE_HUB } from '../src/shared/data/zones';
+import { ZONES, ZONE_HUB, isHub } from '../src/shared/data/zones';
 import { Sim } from '../src/shared/sim/Sim';
 import { REST_CD, REST_RANGE } from '../src/shared/sim/terrain';
 
@@ -11,7 +11,7 @@ const TICK = 1 / 30;
 for (const zone of Object.values(ZONES)) {
   const sim = new Sim(zone);
   const spots = sim.terrain.restSpots;
-  ok(spots.length === 1 && spots[0].kind === (zone === ZONE_HUB ? 'fountain' : 'campfire'), `${zone.id}: one ${spots[0]?.kind}`);
+  ok(spots.length === 1 && spots[0].kind === (isHub(zone) ? 'fountain' : 'campfire'), `${zone.id}: one ${spots[0]?.kind}`);
   const r = spots[0];
   // Somewhere to stand next to it.
   let free = false;
@@ -20,7 +20,7 @@ for (const zone of Object.values(ZONES)) {
     free = !sim.terrain.isBlocked(r.x + Math.cos(a) * d, r.z + Math.sin(a) * d, 0.4);
   }
   ok(free, `${zone.id}: room to stand by it`);
-  if (zone !== ZONE_HUB) {
+  if (!isHub(zone)) {
     // The campfire is off the way in: not between the portal and where the path heads into the zone.
     const back = zone.portals[0];
     const arrived = sim.addPlayer(hero(), ZONE_HUB.id);

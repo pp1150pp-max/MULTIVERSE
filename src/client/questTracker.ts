@@ -6,7 +6,7 @@ import { QUEST_KILLS, STONE_NAME } from '../shared/data/stones';
 import { questRows } from '../shared/quests';
 import { GEAR_KILLS, GEAR_PART_NAME, gearRows } from '../shared/gearQuests';
 import { TUT_STEP_NAME, TUT_TASK_NAME, TUT_TASKS, tutRows } from '../shared/tutorial';
-import { NPC_INFO } from '../shared/data/npcs';
+import { npcLook } from '../shared/data/npcs';
 
 const FOLD_KEY = 'multiverse-quest-tracker-folded';
 
@@ -56,7 +56,7 @@ export class QuestTracker {
     const rows = [
       ...tutRows(this.g.player.tut, this.g.player.name).map((r) => {
         const left = TUT_TASKS[r.step].filter((k) => !r.got.includes(k));
-        const goal = r.state === 'ready' ? `ครบแล้ว — กลับไปหา${NPC_INFO[r.npc].name}` : `ยังเหลือ: ${left.map((k) => TUT_TASK_NAME[k]).join(' · ')}`;
+        const goal = r.state === 'ready' ? `ครบแล้ว — กลับไปหา${npcLook(r.npc, this.g.backend.zone.town).name}` : `ยังเหลือ: ${left.map((k) => TUT_TASK_NAME[k]).join(' · ')}`;
         return { id: `tut:${r.step}`, name: `สอนระบบ · ${TUT_STEP_NAME[r.step]}`, goal, state: r.state as string, kills: r.got.length, max: TUT_TASKS[r.step].length };
       }),
       ...questRows(this.g.player).map((r) => ({ id: r.boss, name: STONE_NAME[r.key], goal: `${hunt(r.map, r.state, r.kills)}/${QUEST_KILLS}`, state: r.state as string, kills: r.kills, max: QUEST_KILLS })),

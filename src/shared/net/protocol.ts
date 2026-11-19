@@ -175,6 +175,10 @@ export type ActionMsg =
   // Tutorial quests (Sim.tutAccept / tutTurnIn, src/shared/tutorial.ts): `step` is a tutorial step id.
   | { t: 'act'; a: 'tutAccept'; step: TutStep }
   | { t: 'act'; a: 'tutTurnIn'; step: TutStep }
+  // The navigator in nexus_city (Sim.floorTurnIn / floorTravel, src/shared/floorGate.ts): hand in the quest that
+  // opens floor 2, and be taken up to the harbour.
+  | { t: 'act'; a: 'floorTurnIn' }
+  | { t: 'act'; a: 'floorTravel' }
   /** Buy `n` phoenix feathers from the merchant. */
   | { t: 'act'; a: 'buyPhoenix'; n: number }
   /** Dead in a boss room: get up where you fell, for one phoenix feather. */
@@ -301,6 +305,8 @@ export interface PrivateSnap {
   potSel?: PotionSelect; lootFilter?: LootFilter; autoSettings?: AutoSettings; stats?: Stats;
   /** Gate bosses this character has killed (BOSS_GATES). */
   bossKills?: string[];
+  /** Ways opened by quests (Player.unlocks, e.g. 'floor2'). */
+  unlocks?: string[];
   /** The Seeker's key quests taken: boss id → kills so far. */
   quests?: Record<string, number>;
   /** The Seeker's gear quests taken (quest id → kills so far) and handed in. */

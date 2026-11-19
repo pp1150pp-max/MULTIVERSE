@@ -220,6 +220,9 @@ export interface Backend {
   /** Tutorial quests: take / hand in a step at its NPC (the server checks the distance and the state). */
   tutAccept(step: TutStep): void;
   tutTurnIn(step: TutStep): void;
+  /** The navigator (src/shared/floorGate.ts): hand in the floor-2 quest / be taken up to the harbour. The server checks it all. */
+  floorTurnIn(): void;
+  floorTravel(): void;
   buyPhoenix(n: number): void;
   /** Dead in a boss room: get up here for one phoenix feather. */
   roomRevive(): void;

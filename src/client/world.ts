@@ -1,11 +1,12 @@
 import * as THREE from 'three';
-import { clearingRadius, lairOf, themeAt, zoneById } from '../shared/data/zones';
+import { clearingRadius, floorOf, lairOf, themeAt, zoneById, ZONES } from '../shared/data/zones';
 import { HUB_PLAZA_RADIUS, QUADRANT_JITTER } from '../shared/sim/terrain';
 import type { PropSpec, Terrain } from '../shared/sim/terrain';
 import type { ZoneTheme } from '../shared/data/zones';
 import { mulberry32, pick, rand, type Rng } from '../shared/rng';
 import { assetSources, fxTex, groundTiles, sheets, type GroundTile } from './assets';
-import { closeBias, IslandOutline, paintSpace, PieceBatch } from './island';
+import { closeBias, IslandOutline, paintSky, paintSpace, PieceBatch } from './island';
+import { HARBOR_FRAG, harborUniforms, paintHarborMask } from './harborGround';
 
 /** World units covered by one repeat of a ground tile: about the same pixel size as the sprites. */
 const TILE_UNITS = 10.4;
@@ -462,6 +463,8 @@ export class World {
   /** The props actually drawn: the rim forest has gaps in it, and nothing stands out over space. */
   private readonly props: PropSpec[];
   private readonly spaceTex: THREE.CanvasTexture;
+  /** The repeating picture behind the land: space (floor 1) or the cloud sea (floor 2). */
+  private readonly backdrop: HTMLCanvasElement;
   private readonly pieceUniforms: Record<string, THREE.IUniform>;
 
   constructor(private readonly scene: THREE.Scene, private readonly terrain: Terrain) {
@@ -470,7 +473,9 @@ export class World {
     this.pal = PALETTES[terrain.zone.theme];
     this.outline = new IslandOutline(this.half, this.bound, terrain.zone.seed + 21);
     this.props = this.visibleProps(mulberry32(terrain.zone.seed + 23));
-    this.spaceTex = new THREE.CanvasTexture(paintSpace());
+    // Floor 1 floats in space; floor 2 on the cloud sea (FLOOR2_SKY.md: the owner's tile once it exists).
+    this.backdrop = floorOf(terrain.zone) >= 2 ? paintSky(groundTiles.sky_day?.image as CanvasImageSource | undefined) : paintSpace();
+    this.spaceTex = new THREE.CanvasTexture(this.backdrop);
     this.spaceTex.colorSpace = THREE.SRGBColorSpace;
     this.spaceTex.wrapS = this.spaceTex.wrapT = THREE.RepeatWrapping;
     this.spaceTex.magFilter = this.spaceTex.minFilter = THREE.NearestFilter;
@@ -496,7 +501,18 @@ export class World {
     if (terrain.zone.npcs) tiles[3] = groundTiles.brick ?? groundTiles.pave;
     // A boss room's arena is laid with its own flagstones.
     if (terrain.zone.roomOf) tiles[3] = groundTiles[`room_${terrain.zone.theme}`] ?? tiles[3];
-    if (tiles.every(Boolean) && quads.flat().every(Boolean)) {
+    const harbor = terrain.zone.town === 'harbor';
+    if (harbor) {
+      // Floor 2's harbour (harborGround.ts): water with the plank platforms over it, not the island's ground.
+      const mask = new THREE.CanvasTexture(paintHarborMask(this.half, terrain.zone.start.x, terrain.zone.start.z));
+      mask.colorSpace = THREE.NoColorSpace;
+      mask.flipY = false;
+      // Linear both ways (no mipmaps: a mipmapped filter without them leaves the texture unreadable), soft rims.
+      mask.minFilter = mask.magFilter = THREE.LinearFilter;
+      mask.generateMipmaps = false;
+      this.groundTex = mask;
+      this.groundUniforms = harborUniforms(mask, this.half);
+    } else if (tiles.every(Boolean) && quads.flat().every(Boolean)) {
       const mask = new THREE.CanvasTexture(this.paintMask());
       mask.colorSpace = THREE.NoColorSpace;
       mask.flipY = false;
@@ -539,7 +555,9 @@ export class World {
     this.maskCtx = null;
     this.groundMesh = this.add(new THREE.Mesh(
       this.ownGeo(this.outline.groundGeometry()),
-      this.own(this.groundUniforms
+      this.own(harbor
+        ? new THREE.ShaderMaterial({ uniforms: this.groundUniforms!, vertexShader: GROUND_VERT, fragmentShader: HARBOR_FRAG, side: THREE.DoubleSide })
+        : this.groundUniforms
         ? new THREE.ShaderMaterial({
           uniforms: this.groundUniforms, vertexShader: GROUND_VERT, fragmentShader: GROUND_FRAG, side: THREE.DoubleSide,
           defines: quads.length ? { QUADS: '' } : {},
@@ -547,10 +565,13 @@ export class World {
         : new THREE.MeshBasicMaterial({ map: this.groundTex, side: THREE.DoubleSide })),
     ));
 
-    this.addCliffs(mulberry32(terrain.zone.seed + 27));
-    this.addShoreTufts(mulberry32(terrain.zone.seed + 28));
-    this.addCracks(mulberry32(terrain.zone.seed + 29));
-    this.addPieces(mulberry32(terrain.zone.seed + 31));
+    // The harbour's water has no rocky rim, grass tufts, cracks or drifting rocks.
+    if (!harbor) {
+      this.addCliffs(mulberry32(terrain.zone.seed + 27));
+      this.addShoreTufts(mulberry32(terrain.zone.seed + 28));
+      this.addCracks(mulberry32(terrain.zone.seed + 29));
+      this.addPieces(mulberry32(terrain.zone.seed + 31));
+    }
 
     // Anything taller than a player can hide one, so it turns see-through too (not only trees and the town).
     for (const p of this.props) this.addProp(p.key, p.x, p.z, p.height, !p.solid && (p.fade || p.height >= FADE_MIN_HEIGHT), p.flip);
@@ -558,12 +579,14 @@ export class World {
     if (fire) this.flames.push(this.glow(fire.x, 0.5, fire.z, '#ffa040', 0.55));
     // Each portal glows like the land it leads to; the way back to town glows gold.
     for (const p of terrain.zone.portals) {
+      // Shut (a harbour pier whose map isn't built yet): no glow.
+      if (p.soonName && !ZONES[p.to]) continue;
       const to = zoneById(p.to);
       this.portals.push(this.glow(p.x, 1.5, p.z, to?.npcs ? '#ffd98a' : PALETTES[to?.theme ?? terrain.zone.theme].portalGlow, 0.5));
     }
     // The fountain glows like a portal, so it reads as something to use (campfires have their flame).
     for (const r of terrain.restSpots) if (r.kind === 'fountain') this.portals.push(this.glow(r.x, 2, r.z, '#8fdcff', 0.45));
-    this.addFog(mulberry32(terrain.zone.seed + 7));
+    if (!harbor) this.addFog(mulberry32(terrain.zone.seed + 7));
     if (terrain.zone.theme === 'snow') this.addSnow(mulberry32(terrain.zone.seed + 41));
     if (terrain.zone.theme === 'volcano') {
       this.addSnow(mulberry32(terrain.zone.seed + 41), { color: '#b8aca2', size: 2, opacity: 0.55, speed: [0.25, 0.7] });
@@ -579,7 +602,7 @@ export class World {
         this.lavaGlows.push(mat);
       }
     }
-    if (this.groundUniforms) {
+    if (this.groundUniforms && !harbor) {
       this.addDecor(mulberry32(terrain.zone.seed + 11));
       if (terrain.zone.theme === 'marsh') this.addPlanks(mulberry32(terrain.zone.seed + 13));
     }
@@ -661,7 +684,7 @@ export class World {
     const H = this.half;
     const s = this.mapScale;
 
-    ctx.fillStyle = ctx.createPattern(paintSpace(), 'repeat')!;
+    ctx.fillStyle = ctx.createPattern(this.backdrop, 'repeat')!;
     ctx.fillRect(0, 0, MAP_SIZE, MAP_SIZE);
     this.bakeMapPieces(ctx);
 
@@ -736,7 +759,7 @@ export class World {
 
   /** Rocks and star shards drifting around the island on the map picture. */
   private bakeMapPieces(ctx: CanvasRenderingContext2D): void {
-    if (assetSources.island_debris !== 'file') return;
+    if (assetSources.island_debris !== 'file' || this.zone.town === 'harbor') return;
     const image = sheets.island_debris.texture.image as HTMLImageElement;
     const cw = image.width / 4;
     const ch = image.height / 3;
@@ -1224,7 +1247,7 @@ export class World {
     this.pieceUniforms.uTime.value = this.t;
     this.updateSnow(dt, px, pz);
     // Space slides past far slower than the land, as if very far behind it.
-    const tile = paintSpace().width * SPACE_PIXEL;
+    const tile = this.backdrop.width * SPACE_PIXEL;
     this.spaceTex.repeat.set(window.innerWidth / tile, window.innerHeight / tile);
     this.spaceTex.offset.set(((px - pz) * S * SPACE_DRIFT) / tile, (-(px + pz) * S * SPACE_DRIFT) / tile);
     for (const f of this.fadeables) {

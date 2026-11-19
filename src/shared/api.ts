@@ -52,7 +52,11 @@ export const GUEST_TTL_HOURS = 24;
 export const GUEST_PER_IP_HOUR = 5;
 
 /** One row on the character select screen. */
-export interface CharacterSummary { id: number; name: string; classId: ClassId; level: number }
+export interface CharacterSummary {
+  id: number; name: string; classId: ClassId; level: number;
+  /** The floor its next login lands on (src/shared/floors.ts loginHub), for the loading pictures. Missing = 1. */
+  floor?: number;
+}
 export interface CreateCharacterRequest { name: string; classId: ClassId }
 
 /** Why a banned account can't play: shown at login and when joining. `until` = BAN_FOREVER is permanent. */

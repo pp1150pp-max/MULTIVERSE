@@ -6,6 +6,8 @@
 
 บอสชั้น 2 (ยังไม่มีในเกม) จองประตูเลเวลไว้แล้วใน `BOSS_GATES` ด้วย id `cannon_crab` (Lv50) `pegleg_captain` (60) `ghost_captain` (70) `kraken` (80) PR แมพต้องสร้างมอนบอสด้วย id นี้ ประตูถึงจะเริ่มบล็อก ([world-and-ui.md](world-and-ui.md))
 
+- **เควสกุญแจของแต่ละชั้น** (เจ้าของ 2026-11-19): The Seeker ใน `nexus_city` ให้/รับเฉพาะเควสของแมพชั้น 1 · นักเดินเรือแห่งมิติใน `harbor_town` ให้เฉพาะของชั้น 2 (แบบเดียวกัน) ดู [world-and-ui.md](world-and-ui.md) หัวข้อท่าเรือมิติ
+
 ## กุญแจ (Artifact)
 
 - กุญแจมี 4 แบบ ได้แก่ อุ้งเท้าหมี ลูกแก้วแม่มดหนอง เขี้ยวเยติ และแกนหัวใจลาวา (`BOSS_KEYS` ใน `src/shared/types.ts`, ชื่ออยู่ใน `src/shared/data/stones.ts`)

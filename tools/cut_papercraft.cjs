@@ -1,6 +1,7 @@
 // Cuts the papercraft map sheets in art_templates/papercraft_maps/raw/<map>/ into the game's paper sprite files,
 // public/assets/sprites/paper/{props,ground}/, with the same names and sizes as the old art they stand in for
 // (see art_templates/papercraft_maps/PROMPTS.md). Usage: node tools/cut_papercraft.cjs map1_forest
+// [PAPER_RAW=<raw folder>] node tools/cut_papercraft.cjs floor2_hub
 const path = require('path');
 const fs = require('fs');
 const sharp = require('sharp');
@@ -12,7 +13,7 @@ const OUT = path.join(ROOT, 'public/assets/sprites/paper');
 /** Every map's sheets: [raw file, kind, options]. */
 const MAPS = {
   map1_forest: [
-    ['props.png', 'props', { cols: 4, rows: 3, names: ['tree_0', 'tree_1', 'tree_2', 'stump_tall', 'bush_0', 'bush_1', 'bush_2', 'stump', 'rock_0', 'rock_1', 'rock_2', 'pebble_0'], extra: [['pebble_1', 9]] }],
+    ['props.png', 'props', { blobs: true, cols: 4, rows: 3, names: ['tree_0', 'tree_1', 'tree_2', 'stump_tall', 'bush_0', 'bush_1', 'bush_2', 'stump', 'rock_0', 'rock_1', 'rock_2', 'pebble_0'], extra: [['pebble_1', 9]] }],
     ['camp.png', 'props', { cols: 4, rows: 3, names: ['tent', 'campfire', 'sign', 'portal', 'runestone', 'well', 'barrel', 'chest', 'cart', 'banner_red', 'flag', 'watchtower'] }],
     ['room_props.png', 'props', { cols: 4, rows: 2, names: ['pillar_0', 'wall', 'brazier', 'boulder', 'pillar_1', 'rubble', 'rune_stone', 'tree'].map((n) => `room_forest_${n}`) }],
     ['decor.png', 'atlas', { cols: 4, rows: 3, out: 'decor_forest', cell: [128, 128], place: 'bottom', fit: 'shared' }],
@@ -93,6 +94,22 @@ const MAPS = {
     // Low things along the bottom two walls (HUB.md 6): skipped until the sheet is there.
     ['town2_low.png', 'props', { cols: 4, rows: 2, height: 256, names: ['low_stall_a', 'low_stall_b', 'garden_bed', 'hedge_a', 'hedge_b', 'house_back_a', 'house_back_b', 'woodpile'] }],
     ['town2_props.png', 'props', { cols: 4, rows: 3, height: 256, names: ['town_fountain', 'quest_board', 'crystal_stall', 'lamp_post', 'bench_a', 'bench_b', 'planter', 'banner_pole', 'crates', 'barrels', 'flower_box', 'potted_tree'] }],
+  ],
+  // Floor 2's harbour town (art_templates/papercraft_maps/FLOOR2_HUB.md). Every piece is prefixed hb_ (the hub's
+  // lamp_post, crates … keep their names). New pictures, so each sheet gets a fixed height.
+  floor2_hub: [
+    ['ground_plank.png', 'ground', { out: 'harbor_plank' }],
+    ['ground_plaza.png', 'ground', { out: 'harbor_plaza' }],
+    ['ground_water.png', 'ground', { out: 'harbor_water' }],
+    ['buildings_a.png', 'props', { blobs: true, cols: 2, rows: 2, height: 384, names: ['hb_supply', 'hb_broker', 'hb_forge', 'hb_warehouse'] }],
+    ['buildings_b.png', 'props', { blobs: true, cols: 2, rows: 2, height: 448, bg: 'green', names: ['hb_smuggler', 'hb_lighthouse', 'hb_shipyard', 'hb_rowboat'] }],
+    ['props.png', 'props', { cols: 4, rows: 3, height: 256, names: ['hb_wheel_fountain', 'hb_brass_globe', 'hb_lamp_post', 'hb_banner_pole', 'hb_bench_a', 'hb_bench_b', 'hb_bunting_post', 'hb_barrels', 'hb_crates', 'hb_sacks', 'hb_rope_coil', 'hb_palm_pot'] }],
+    ['docks.png', 'props', { blobs: true, cols: 4, rows: 2, height: 256, names: ['hb_dock_a', 'hb_dock_b', 'hb_dock_end', 'hb_bollard', 'hb_rail_a', 'hb_rail_b', 'hb_edge_a', 'hb_edge_b'] }],
+    ['ships.png', 'props', { blobs: true, cols: 2, rows: 2, height: 384, names: ['hb_ship_red', 'hb_ship_blue', 'hb_ship_green', 'hb_ship_white'] }],
+    ['water.png', 'props', { blobs: true, cols: 3, rows: 2, height: 256, names: ['hb_falls_a', 'hb_falls_b', 'hb_foam_post', 'hb_wave', 'hb_float_barrel', 'hb_gull_post'] }],
+    ['portals.png', 'props', { blobs: true, cols: 3, rows: 1, height: 384, names: ['hb_portal_dock', 'hb_portal_return', 'hb_portal_floor2'] }],
+    // The six NPCs' dialogue portraits (FLOOR2_HUB.md 10): 256 square, under sprites/paper/ui/npc/.
+    ...['supply_merchant', 'dock_keeper', 'shipwright', 'harbor_broker', 'navigator', 'smuggler'].map((n) => [`portrait/${n}.png`, 'portrait', { out: n }]),
   ],
 };
 
@@ -221,11 +238,70 @@ async function save(pipeline, rel) {
 }
 
 /** One file per cell, as tall as the old file of that name (the game sizes props by height). */
+/**
+ * The sheet's pieces as connected blobs, for sheets whose rows or columns overlap (a tall roof reaching past the
+ * next row's foot), where cells() can't find clear bands. The n biggest blobs are the pieces, read in grid order
+ * (rows by their middle, then left to right); every smaller blob joins the piece whose box (grown by 24 px) holds its
+ * middle, else is dropped. Each piece comes back as its own copy of the sheet holding only its pixels, with its box.
+ */
+function blobs(img, n, cols, label) {
+  const { w, h, d } = img;
+  const lab = new Int32Array(w * h).fill(-1);
+  const comps = [];
+  for (let s0 = 0; s0 < w * h; s0++) {
+    if (lab[s0] >= 0 || !d[s0 * 4 + 3]) continue;
+    const id = comps.length;
+    const c = { id, n: 0, x0: w, y0: h, x1: 0, y1: 0, px: [] };
+    const st = [s0];
+    lab[s0] = id;
+    while (st.length) {
+      const k = st.pop();
+      c.px.push(k);
+      c.n++;
+      const x = k % w, y = (k - x) / w;
+      if (x < c.x0) c.x0 = x; if (x >= c.x1) c.x1 = x + 1; if (y < c.y0) c.y0 = y; if (y >= c.y1) c.y1 = y + 1;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const xx = x + dx, yy = y + dy;
+        if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+        const t = yy * w + xx;
+        if (lab[t] < 0 && d[t * 4 + 3]) { lab[t] = id; st.push(t); }
+      }
+    }
+    comps.push(c);
+  }
+  const big = [...comps].sort((a, b) => b.n - a.n).slice(0, n);
+  if (big.length < n) throw new Error(`${label}: found ${big.length} blobs, wanted ${n}`);
+  // Grid order: sort by middle y, cut into rows of `cols`, each row by middle x.
+  big.sort((a, b) => (a.y0 + a.y1) - (b.y0 + b.y1));
+  const ordered = [];
+  for (let i = 0; i < n; i += cols) ordered.push(...big.slice(i, i + cols).sort((a, b) => (a.x0 + a.x1) - (b.x0 + b.x1)));
+  const pieces = ordered.map((c) => ({ comps: [c] }));
+  for (const c of comps) {
+    if (big.includes(c)) continue;
+    const mx = (c.x0 + c.x1) / 2, my = (c.y0 + c.y1) / 2;
+    const home = pieces.find((p) => { const b = p.comps[0]; return mx > b.x0 - 24 && mx < b.x1 + 24 && my > b.y0 - 24 && my < b.y1 + 24; });
+    if (home) home.comps.push(c);
+  }
+  return pieces.map((p) => {
+    const one = { w, h, d: Buffer.alloc(d.length) };
+    let x0 = w, y0 = h, x1 = 0, y1 = 0;
+    for (const c of p.comps) {
+      for (const k of c.px) d.copy(one.d, k * 4, k * 4, k * 4 + 4);
+      x0 = Math.min(x0, c.x0); y0 = Math.min(y0, c.y0); x1 = Math.max(x1, c.x1); y1 = Math.max(y1, c.y1);
+    }
+    return { img: one, box: [x0, y0, x1, y1] };
+  });
+}
+
 async function props(img, o, label) {
   // `erase`: blank these boxes [x0, y0, x1, y1] first (the forge's puff of smoke, which reached up into the row above).
   for (const [x0, y0, x1, y1] of o.erase ?? []) for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) img.d[(y * img.w + x) * 4 + 3] = 0;
-  const boxes = cells(img, o.cols, o.rows, label);
-  const one = async (name, box) => {
+  // `blobs`: pieces found as connected blobs (see blobs()), each cut from its own copy of the sheet.
+  const pieces = o.blobs ? blobs(img, o.names.length, o.cols, label) : null;
+  const boxes = pieces ? pieces.map((p) => p.box) : cells(img, o.cols, o.rows, label);
+  const sheetImg = img;
+  const one = async (name, box, i) => {
+    const img = pieces ? pieces[i].img : sheetImg;
     // `slope`: a long piece lying along a world axis, drawn a little flatter than the game sees it: sheared so its
     // foot climbs at the game's slope (as strip() does for whole rows, but at most a little, so it isn't stretched).
     if (o.shear?.[name] !== undefined) {
@@ -266,8 +342,8 @@ async function props(img, o, label) {
     const w = o.exact ? oldW : Math.max(1, Math.round((box[2] - box[0]) * k));
     await save(crop(img, box).resize(w, oldH, { kernel: 'lanczos3', fit: 'fill' }), `props/${name}.png`);
   };
-  for (let i = 0; i < o.names.length; i++) await one(o.names[i], boxes[i]);
-  for (const [name, i] of o.extra ?? []) await one(name, boxes[i]);
+  for (let i = 0; i < o.names.length; i++) await one(o.names[i], boxes[i], i);
+  for (const [name, i] of o.extra ?? []) await one(name, boxes[i], i);
 }
 
 /**
@@ -380,11 +456,17 @@ async function ground(file, o) {
   await save(sharp(out, { raw: { width: N, height: N, channels: 3 } }), `ground/${o.out}.png`);
 }
 
+/** A dialogue portrait: shrunk to 256 square under sprites/paper/ui/npc/. */
+async function portrait(file, o) {
+  await save(sharp(file).removeAlpha().resize(256, 256, { kernel: 'lanczos3', fit: 'cover' }), `ui/npc/${o.out}.png`);
+}
+
 async function main() {
   const map = process.argv[2];
   const specs = MAPS[map];
   if (!specs) throw new Error(`usage: node tools/cut_papercraft.cjs <${Object.keys(MAPS).join('|')}>`);
-  const RAW = path.join(ROOT, 'art_templates/papercraft_maps/raw', map);
+  // PAPER_RAW=<folder>: the raw sheets are somewhere else (another checkout's raw/, which git doesn't carry).
+  const RAW = process.env.PAPER_RAW || path.join(ROOT, 'art_templates/papercraft_maps/raw', map);
   for (const [file, kind, o] of specs) {
     const src = path.join(RAW, file);
     if (!fs.existsSync(src)) {
@@ -393,6 +475,7 @@ async function main() {
     }
     console.log(file);
     if (kind === 'ground') await ground(src, o);
+    else if (kind === 'portrait') await portrait(src, o);
     else {
       const img = key(await readRaw(src), 40, o.bg);
       if (kind === 'props') await props(img, o, file);
