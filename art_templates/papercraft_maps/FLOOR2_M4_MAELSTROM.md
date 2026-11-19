@@ -6,7 +6,7 @@
 
 ## วิธีเจน
 
-- เจนแยกเป็น 3 แชท: **ก.** ฉากแมพ (ข้อ 1–7) **ข.** มอนกับบอส (ข้อ 8–9) **ค.** เอฟเฟกต์กับไอคอนกุญแจ (ข้อ 10–11)
+- เจนแยกเป็น 3 แชท: **ก.** ฉากแมพ (ข้อ 1, 3–7 ส่วนน้ำวนข้อ 2 อยู่อีกไฟล์) **ข.** มอนกับบอส (ข้อ 8–9) **ค.** เอฟเฟกต์กับไอคอนกุญแจ (ข้อ 10–11)
 - แต่ละแชท**เปิดใหม่** แล้วแนบ `art_templates/papercraft_maps/raw/floor2_maps/M4_kraken_maelstrom.webp` ภาพเดียว
   - **ห้ามแนบภาพพิกเซล** ทุกภาพในเกมใช้กระดาษตัดแปะสไตล์เดียว (กติกาเจ้าของ 2026-11-18) ถ้าแนบภาพอื่นด้วย ต้องเป็นภาพกระดาษเท่านั้น
 - ภาพแรกของแต่ละแชท ให้ขึ้นต้นด้วยประโยคเปิดนี้ก่อน prompt ของข้อนั้น:
@@ -42,41 +42,9 @@ Generate a SQUARE image (1:1): one seamless repeating ground tile texture that f
 | `ground_wet_planks.png` | `A storm-soaked wooden pier: narrow dark wet paper planks of deep brown and grey-brown card, all running the same direction, staggered joints, a few iron nail dots and thin glossy wet streaks, calm and even.` |
 | `ground_rough_sea.png` | `Rough stormy sea water: small layered paper wave crests in close shades of deep navy, dark teal and blue-grey with a few small white paper foam flecks, calm and even in density.` |
 
-## 2. น้ำวน 4 วง → `whirlpool_ring_1.png` … `whirlpool_ring_3.png`, `whirlpool_core.png`, `whirlpool_rim.png` (4×2 **พื้นเขียว**)
+## 2. น้ำวน → แยกไว้ที่ `FLOOR2_M4_WHIRLPOOL.md`
 
-**เจ้าของสั่ง (2026-11-19):**
-- น้ำวนอยู่**กลางแมพ** กินพื้นที่ราว**ครึ่งหนึ่งของความกว้างแมพ** คือราว 1/4 ของพื้นที่ทั้งแมพ ผู้เล่นสู้กันรอบ ๆ น้ำวน
-- **ผู้เล่นเดินเข้าน้ำวนไม่ได้** มีแค่หนวดคราเคน (`kraken_tentacle`) โผล่อยู่รอบขอบน้ำวน
-- น้ำวนต้อง**หมุนเหมือนน้ำวนจริง** จึงแยกเป็นกระดาษ 4 ชั้นซ้อนกัน เกมหมุนแต่ละชั้นด้วยความเร็วต่างกัน วงในหมุนเร็ว วงนอกหมุนช้า ให้ดูเหมือนน้ำถูกดูดลงไปตรงกลาง
-
-ภาพเดี่ยวรอบแรก (`whirlpool.png` วงกลมภาพเดียว) เลิกใช้แล้ว
-
-ทุกชั้นวาดจาก**ด้านบนตรง ๆ** ให้เกมบีบเข้ากับมุมกล้องเอง แต่ละวงเจนเป็นภาพแยกขนาดจัตุรัส ตัววงต้องเต็มภาพพอดีขอบ ช่องกลางวงกับมุมทั้งสี่ใช้พื้นม่วงแดง เกมจะย่อแต่ละวงให้ซ้อนกันเอง
-ขอบของทุกวงเป็นรอยฉีกกระดาษไม่เรียบ วงที่อยู่ข้างในจะซ้อนทับขอบวงนอกเล็กน้อย จึงไม่เห็นรอยต่อตอนหมุน
-
-| ชั้น | ไฟล์ | ขนาดในเกม (เทียบความกว้างน้ำวน) | หมุน |
-|---|---|---|---|
-| นอกสุด | `whirlpool_ring_1.png` | 100% | ช้าสุด |
-| กลาง | `whirlpool_ring_2.png` | ราว 75% | ปานกลาง |
-| ใน | `whirlpool_ring_3.png` | ราว 50% | เร็ว |
-| รูกลาง | `whirlpool_core.png` | ราว 28% | เร็วสุด |
-
-ข้อความกลาง (ใช้ทุกวง) แล้วต่อท้ายด้วยบรรทัดของวงนั้น:
-```
-Same papercraft style, NOT pixel art. Generate a SQUARE image (1:1): ONE single flat layer of a giant whirlpool, seen STRAIGHT FROM ABOVE, made of layered cut paper with visible fibre and small drop shadows between the paper layers, like the whirlpool in the attached map. The layer is a perfect circle that fills the image edge to edge. Its outer edge is a slightly uneven torn paper edge with a thin soft drop shadow, so it looks like a separate sheet of paper lying on top of another. The spiral bands swirl clockwise and are spread evenly all the way around, so the layer looks right when it is rotated. No tentacles, no objects, no text. The four corners outside the circle are ONE perfectly flat solid magenta (#FF00FF), no shadows on the background. Do not use pink, magenta or purple in the water.
-```
-
-| ไฟล์ | บรรทัดต่อท้าย |
-|---|---|
-| `whirlpool_ring_1.png` | `This is the OUTERMOST ring: a wide ring of bright turquoise water with lots of white curling paper foam and wave crests along its outer edge, the spiral bands only gently curved. The middle of the ring is an EMPTY hole about 70% of the image width, filled with flat solid magenta (#FF00FF), its torn inner edge with turquoise water.` |
-| `whirlpool_ring_2.png` | `This is the MIDDLE ring: a ring of turquoise and teal water with tighter spiral bands and a few white foam flecks. The middle of the ring is an EMPTY hole about 65% of the image width, filled with flat solid magenta (#FF00FF), its torn inner edge darker teal.` |
-| `whirlpool_ring_3.png` | `This is the INNER ring: a ring of dark teal and deep blue water with tight, strongly curved spiral bands, only a few small foam flecks. The middle of the ring is an EMPTY hole about 55% of the image width, filled with flat solid magenta (#FF00FF), its torn inner edge deep navy.` |
-| `whirlpool_core.png` | `This is the CENTRE: a full disc with no hole, deep navy blue water with very tight spiral bands twisting down into a black-blue pit in the middle, as if the water is being sucked down.` |
-
-`whirlpool_rim.png`:
-```
-Same papercraft style, NOT pixel art, the same isometric camera, light from the upper left. Generate an image: exactly 8 separate pieces of crashing wave foam in a 4 columns x 2 rows grid, generous empty space, each fully inside its own cell, nothing touching. Each piece is a curling turquoise and white paper wave crest with foam and a few flying drops, as along the rim of the whirlpool in the attached map, all about the same size, each a different shape, some curling left and some curling right. Crisp clean edges. Background ONE perfectly flat solid pure bright green (#00FF00) everywhere, no gradient, no water surface, no cast shadows, no text, no labels, no grid lines. Do not use bright green anywhere on the waves.
-```
+เจ้าของสั่ง (2026-11-19) ให้แยก prompt น้ำวนเป็นไฟล์ของมันเอง: น้ำวนกระดาษ 4 ชั้นที่หมุนคนละความเร็ว และคลื่นรอบขอบ
 
 ## 3. ของใหญ่ → `props.png` (4×3 **พื้นเขียว**)
 
@@ -119,7 +87,7 @@ Same papercraft style and rules, NOT pixel art. Generate an image: exactly 8 sep
 
 ## 6. พื้นห้องบอส → `ground_room.png`
 
-ห้องบอสคราเคนจะมีน้ำวนกลางลานแบบเดียวกับแมพหรือไม่ ยังไม่ตัดสิน (แผนข้อ 12) ถ้ามี ใช้น้ำวน 4 วงของข้อ 2 วางทับได้เลย
+ห้องบอสคราเคนจะมีน้ำวนกลางลานแบบเดียวกับแมพหรือไม่ ยังไม่ตัดสิน (แผนข้อ 12) ถ้ามี ใช้น้ำวน 4 ชั้นจาก `FLOOR2_M4_WHIRLPOOL.md` วางทับได้เลย
 
 ```
 Generate a SQUARE image (1:1): one seamless repeating ground tile texture that fills the whole image edge to edge, in the same papercraft style, made of small cut pieces of card and paper with visible fibre. NOT pixel art. Viewed from straight above with no perspective. No focal point, no vignette, no borders, no lighting gradient, left edge matches right edge and top edge matches bottom edge, no text, no grid lines. LOW contrast, 4 to 5 close shades only, nothing bright, nothing near black. This is the floor of the kraken's arena: a ring of dark wet slate rock around a great whirlpool, small rough flagstone scraps in deep blue-grey and indigo-grey with thin streaks of white sea foam and glossy wet highlights, calm and even.
@@ -247,8 +215,6 @@ Now one item icon for this game, in EXACTLY the papercraft style of the attached
 | ไฟล์ดิบ | ชิ้น |
 |---|---|
 | `ground_storm_rock.png` `ground_wet_planks.png` `ground_rough_sea.png` `ground_room.png` | ภาพพื้นปูซ้ำ 1024×1024 แบบ `ground/*` ของชั้น 1 (`ground_rough_sea` เป็นน้ำ เดินไม่ได้) |
-| `whirlpool_ring_1..3.png` `whirlpool_core.png` | น้ำวน 4 ชั้น ตัดม่วงแดง (มุมและรูกลาง) ออก ย่อให้ซ้อนกันตามตารางในข้อ 2 เกมหมุนแต่ละชั้นคนละความเร็ว (วงในเร็วกว่า) แล้วบีบตามมุมกล้อง · น้ำวนกว้างราวครึ่งแมพ อยู่กลางแมพ |
-| `whirlpool_rim.png` (พื้นเขียว) | `rim_0` … `rim_7` คลื่นรอบขอบน้ำวน |
 | `props.png` (พื้นเขียว) | `storm_rock_0` `storm_rock_1` `storm_rock_2` `wreck_0` / `wreck_1` `broken_mast` `coral_0` `coral_1` / `kraken_flag` `lamp_post` `rope_post` `anchor` |
 | `decor.png` (พื้นเขียว) | atlas `decor_maelstrom` ช่องละ 128 แบบ `decor_forest` |
 | `island_cliff.png` `island_slabs.png` (พื้นเขียว) | `island_cliff_maelstrom` `island_slabs_maelstrom` แบบชั้น 1 |
@@ -257,6 +223,7 @@ Now one item icon for this game, in EXACTLY the papercraft style of the attached
 | `fx.png` | `fx_shark_fin` `fx_bubble` `fx_bubble_trap` `fx_sword_wave` / `fx_ink_blob` `fx_ink_splat` `fx_suction` `fx_slam_splash` |
 | `key_kraken_eye.png` (พื้นเขียว) | ไอคอนกุญแจ 96×96 แบบไอคอนกุญแจชั้น 1 |
 
+- ภาพน้ำวนกับคลื่นขอบ ดูวิธีใส่เข้าเกมใน `FLOOR2_M4_WHIRLPOOL.md`
 - ราชาโจรสลัดผีโปร่งแสง ตอนตัดภาพต้องเก็บความโปร่งแสงไว้แบบมอนผีแมพ 3
 - `tools/cut_papercraft.cjs` ยังไม่มีชุดของแมพนี้ ต้องเพิ่มตอนทำ PR `feature/floor2-map4` และต้องรองรับแผ่นพื้นเขียว
 - ชื่อชิ้นข้างบนเป็นชื่อที่เสนอ เปลี่ยนได้ตอนใส่เข้าเกม
