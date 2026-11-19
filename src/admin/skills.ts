@@ -336,7 +336,8 @@ export async function renderSkills(view: HTMLElement, h: H, api: Api, onSaved: (
     drawMap();
     const w = wrap.clientWidth, hh = wrap.clientHeight;
     if (w && hh) {
-      zoom = Math.min(1, Math.max(ZOOM_MIN, Math.min(w / mapW, hh / mapH)));
+      // A phone keeps stars big enough for a finger (as the game does: not below 70%) and scrolls instead.
+      zoom = Math.min(1, Math.max(w < 500 ? 0.7 : ZOOM_MIN, Math.min(w / mapW, hh / mapH)));
       drawMap();
     }
     centre();
