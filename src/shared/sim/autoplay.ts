@@ -5,7 +5,7 @@ import type { Loot } from './Loot';
 import { MONSTERS } from '../data/monsters';
 import { inBossArena, inSafeArea, lavaAt, type ZoneDef } from '../data/zones';
 import { currentBalance } from '../balance';
-import { skillReach } from '../skillBook';
+import { skillReach, skillValues } from '../skillBook';
 import type { AutoConfig, AutoOutAction } from '../autoTuning';
 
 /** What the bot needs to see. The server builds one per player. */
@@ -320,27 +320,45 @@ export class AutoPlay {
     return out;
   }
 
-  /** Whether Auto may cast this skill now: switched on in the settings, off cooldown, and enough MP. */
+  /** Whether Auto may cast this skill now: switched on in the settings, off cooldown, enough MP, and it reaches (inReach). */
   private ready(g: AutoWorld, slot: AutoSkill): boolean {
     const p = g.player;
     const sk = p.skill(slot);
-    return !!sk && p.autoSettings.skills[slot] && p.skillReady(sk) && p.mp >= p.skillMp(sk) + 5 && this.aoeHasTarget(g, slot);
+    return !!sk && p.autoSettings.skills[slot] && p.skillReady(sk) && p.mp >= p.skillMp(sk) + 5 && this.inReach(g, slot);
   }
 
   /**
-   * A mage skill that hits a circle around the caster is cast only with a monster inside that circle (owner 2026-11-19),
-   * so Auto doesn't waste mana and cooldown on an empty ring. Same hit rule as the skill (radius + the monster's own
-   * size) plus the `aoeMargin` setting. Other skills and classes are not checked.
+   * Auto casts a skill only when it would reach (owner 2026-11-19 for the mage's circles, every class and kind
+   * 2026-11-20): before, any skill went as soon as the basic attack reached, so a short skill whiffed on a monster
+   * standing at basic range. Same hit rules as the skill itself (sim/skills.ts: its tuned reach + the monster's own
+   * size), plus the `aoeMargin` setting:
+   * - circle around the player: any monster inside it;
+   * - cone / dash: the target within its range;
+   * - shot: the target within its range (+ the blast at the end);
+   * - landing circle: the target within its cast range + the circle.
+   * Skills with no reach, and circles that do no damage (buffs, auras), cast as before. Switch `aoeGuard` off = old way.
    */
-  private aoeHasTarget(g: AutoWorld, slot: AutoSkill): boolean {
+  private inReach(g: AutoWorld, slot: AutoSkill): boolean {
     const p = g.player;
     const sk = p.skill(slot);
     const cfg = currentBalance().auto;
-    if (!sk || !cfg.aoeGuard || p.cls.id !== 'mage') return true;
+    if (!sk || !cfg.aoeGuard) return true;
     const reach = skillReach(sk);
-    if (reach?.kind !== 'self') return true;
-    const r = reach.radius + cfg.aoeMargin;
-    return g.monsters.some((m) => m.alive && Math.hypot(m.x - p.x, m.z - p.z) <= r + m.radius);
+    if (!reach) return true;
+    const margin = cfg.aoeMargin;
+    if (reach.kind === 'self') {
+      if (skillValues(sk).dmg <= 0) return true;
+      return g.monsters.some((m) => m.alive && Math.hypot(m.x - p.x, m.z - p.z) <= reach.radius + m.radius + margin);
+    }
+    const t = this.target;
+    if (!t || !t.alive) return true;
+    const far = Math.hypot(t.x - p.x, t.z - p.z) - t.radius - margin;
+    switch (reach.kind) {
+      case 'cone':
+      case 'dash': return far <= reach.range;
+      case 'shot': return far <= reach.range + (reach.blast ?? 0);
+      case 'point': return far <= reach.range + reach.radius;
+    }
   }
 
   private tryCast(g: AutoWorld, out: Intent, slot: AutoSkill): void {
@@ -349,7 +367,7 @@ export class AutoPlay {
 
   /**
    * In reach of the target: cast one skill, the highest in the player's order that is switched on and ready
-   * (so when the first is cooling down, or is a circle around the player with no monster in it, the next one goes).
+   * (so when the first is cooling down, or would not reach the target, the next one goes).
    * Nothing extra when the player cast one by hand this frame.
    */
   private castByOrder(g: AutoWorld, out: Intent): void {
