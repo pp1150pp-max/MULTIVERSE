@@ -1931,6 +1931,7 @@ input[type=range]:hover::-webkit-slider-thumb { background: var(--ctl-accent-hi)
 #skills-win .sk-desc, #skills-win .sk-dval { margin-bottom: 4px; }
 #skills-win .sk-dbtns { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 #skills-win .sk-dbtns button { padding: 3px 8px; font-size: 11px; }
+#skills-win .sk-dmain button { min-width: 120px; }
 #skills-win .sk-dbtns button.on { border-color: var(--gold-hi); color: var(--gold-hi); }
 #skills-win .sk-dwhy { margin-top: 4px; color: var(--ink-dim); font-size: 11px; }
 .skill.empty .icon { background: rgba(0, 0, 0, 0.35); }
