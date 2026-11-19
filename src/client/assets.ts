@@ -73,8 +73,18 @@ const PAPER_PROPS = new Set([
   'tent', 'campfire', 'sign', 'portal', 'runestone', 'well', 'barrel', 'chest', 'cart', 'banner_red', 'flag', 'watchtower',
   'island_debris', 'island_cracks',
 ]);
+/** Floor 2's harbour town pieces (FLOOR2_HUB.md), cut to sprites/paper/props/hb_*.png. */
+const HARBOR_PROPS = [
+  'hb_supply', 'hb_broker', 'hb_forge', 'hb_warehouse', 'hb_smuggler', 'hb_lighthouse', 'hb_shipyard', 'hb_rowboat',
+  'hb_wheel_fountain', 'hb_brass_globe', 'hb_lamp_post', 'hb_banner_pole', 'hb_bench_a', 'hb_bench_b', 'hb_bunting_post', 'hb_barrels',
+  'hb_crates', 'hb_sacks', 'hb_rope_coil', 'hb_palm_pot', 'hb_dock_a', 'hb_dock_b', 'hb_dock_end', 'hb_bollard', 'hb_rail_a', 'hb_rail_b',
+  'hb_edge_a', 'hb_edge_b', 'hb_ship_red', 'hb_ship_blue', 'hb_ship_green', 'hb_ship_white', 'hb_falls_a', 'hb_falls_b', 'hb_foam_post',
+  'hb_wave', 'hb_float_barrel', 'hb_gull_post', 'hb_portal_dock', 'hb_portal_return', 'hb_portal_floor2',
+];
 const PAPER_GROUND = new Set(['grass', 'dirt', 'pave', 'room_forest', 'marsh', 'mud', 'water', 'room_marsh',
-  'snow', 'snow_path', 'ice', 'room_snow', 'ash_rock', 'ash_path', 'lava', 'room_volcano', 'brick']);
+  'snow', 'snow_path', 'ice', 'room_snow', 'ash_rock', 'ash_path', 'lava', 'room_volcano', 'brick',
+  // Floor 2's harbour town (tools/cut_papercraft.cjs floor2_hub): paper only.
+  'harbor_plank', 'harbor_plaza', 'harbor_water', 'sky_day']);
 /** Classes with a paper animation set in sprites/paper/player/<class>/ (tools/cut_paper_char.cjs). */
 const PAPER_CHARS = new Set(['sword', 'mage', 'gunslinger']);
 let paperMaps = false;
@@ -304,6 +314,15 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
     'mk_goods_stall', 'mk_auction_booth', 'mk_veg_stall', 'mk_wagon', 'mk_handcart', 'mk_sacks', 'mk_potion_table', 'mk_tag_table',
     'town_statue', 'town_wall_a', 'town_wall_a_broken', 'town_wall_b', 'town_wall_b_broken', 'town_wall_end',
   ].map((k) => [k, single(`paper/props/${k === 'town_statue' ? 'ruin_statue' : k}.png`, () => drawRock(0))])),
+  // Floor 2's harbour town (Terrain.placeHarbor, tools/cut_papercraft.cjs floor2_hub): paper pictures only.
+  ...Object.fromEntries(HARBOR_PROPS.map((k) => [k, single(`paper/props/${k}.png`, () => drawRock(0))])),
+  // The harbour's NPCs and the navigator (also in nexus_city): paper sheets (src/shared/data/npcs.ts npcLook).
+  hb_supply_merchant: sheet('npc/supply_merchant.png', () => makeSheet(32, drawMerchant())),
+  hb_dock_keeper: sheet('npc/dock_keeper.png', () => makeSheet(32, drawKeeper())),
+  hb_shipwright: sheet('npc/shipwright.png', () => makeSheet(32, drawBlacksmith())),
+  hb_harbor_broker: sheet('npc/harbor_broker.png', () => makeSheet(32, drawBroker())),
+  hb_smuggler: sheet('npc/smuggler.png', () => makeSheet(32, drawCrystalMerchant())),
+  navigator: sheet('npc/navigator.png', () => makeSheet(32, drawSeeker())),
 
   ...Object.fromEntries(MAP_ICONS.map((name) => [`map_${name}`, single(`icons/map_${name}.png`, () => drawIcon('coin'))])),
   icon_coin: single('icons/coin.png', () => drawIcon('coin')),
@@ -405,12 +424,17 @@ async function fetchAnimSet(key: string, dir: string): Promise<AnimSet | null> {
 
 /** Repeating ground textures. A zone falls back to its code-painted ground if one is missing. */
 export type GroundTile = 'grass' | 'dirt' | 'water' | 'marsh' | 'mud' | 'pave' | 'brick' | 'snow' | 'snow_path' | 'ice' | 'ash_rock' | 'ash_path' | 'lava'
-  | 'room_forest' | 'room_marsh' | 'room_snow' | 'room_volcano';
+  | 'room_forest' | 'room_marsh' | 'room_snow' | 'room_volcano' | 'harbor_plank' | 'harbor_plaza' | 'harbor_water'
+  // Floor 2's cloud-sea backdrop (FLOOR2_SKY.md), once the owner has made it; until then island.ts paintSky.
+  | 'sky_day';
 export const groundTiles: Partial<Record<GroundTile, THREE.Texture>> = {};
+
+/** Ground tiles that exist only as paper (floor 2's): loaded from sprites/paper/ground/ whatever the art switch says. */
+const PAPER_ONLY_GROUND = new Set<string>(['harbor_plank', 'harbor_plaza', 'harbor_water', 'sky_day']);
 
 async function loadGroundTile(name: GroundTile): Promise<void> {
   try {
-    const old = `${BASE}ground/${name}.png`;
+    const old = PAPER_ONLY_GROUND.has(name) ? `${BASE}paper/ground/${name}.png` : `${BASE}ground/${name}.png`;
     const tex = paperMaps && PAPER_GROUND.has(name)
       ? await loadTexture(`${BASE}paper/ground/${name}.png`).catch(() => loadTexture(old))
       : await loadTexture(old);
@@ -421,7 +445,8 @@ async function loadGroundTile(name: GroundTile): Promise<void> {
     tex.anisotropy = 4;
     groundTiles[name] = tex;
   } catch {
-    console.warn(`[assets] missing ground tile "${name}"`);
+    // The cloud-sea tile isn't made yet (FLOOR2_SKY.md): island.ts paints a stand-in, nothing to warn about.
+    if (name !== 'sky_day') console.warn(`[assets] missing ground tile "${name}"`);
   }
 }
 
@@ -673,7 +698,7 @@ async function loadAssets(): Promise<void> {
     loadDecals(),
     ...(paperMaps ? [loadPaperCosmetics()] : []),
     ...(['grass', 'dirt', 'water', 'marsh', 'mud', 'pave', 'brick', 'snow', 'snow_path', 'ice', 'ash_rock', 'ash_path', 'lava',
-      'room_forest', 'room_marsh', 'room_snow', 'room_volcano'] as const).map((n) => loadGroundTile(n)),
+      'room_forest', 'room_marsh', 'room_snow', 'room_volcano', 'harbor_plank', 'harbor_plaza', 'harbor_water', 'sky_day'] as const).map((n) => loadGroundTile(n)),
     ...Object.entries(ANIM_SET_DIRS).map(([key, dir]) => loadCharSet(key, dir)),
     ...Object.entries(SHEET_SPECS).map(async ([key, spec]) => {
       let tex: THREE.Texture;

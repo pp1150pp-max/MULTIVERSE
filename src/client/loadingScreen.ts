@@ -7,6 +7,12 @@ import { imgUrl } from './img';
 const DIR = '/assets/sprites/ui/loading/';
 const CLASS_ART: Record<ClassId, string> = { sword: 'sword', mage: 'mage', gunslinger: 'gunslinger' };
 const ALL_ART = ['portal_1', 'portal_2', 'sword', 'mage', 'gunslinger'];
+/**
+ * Floor 2's own pictures (owner 2026-11-19, FLOOR2_PLAN.md 10): only while going to a floor-2 map. Papercraft only,
+ * under sprites/paper/ui/loading/ whatever the paper switch says.
+ */
+const FLOOR2_DIR = '/assets/sprites/paper/ui/loading/';
+const FLOOR2_ART = ['floor2_1', 'floor2_2'];
 
 /** How long the zone-change screen stays up, then how long it fades out (ms). */
 const ZONE_HOLD = 3000;
@@ -29,6 +35,12 @@ const TIPS = [
 
 const pick = <T>(list: readonly T[]): T => list[Math.floor(Math.random() * list.length)];
 
+/** The picture's URL: on floor 2 one of its own two; else half the time the player's own class, else another. */
+function artUrl(classId: ClassId | null, floor: number): string {
+  if (floor >= 2) return `${FLOOR2_DIR}${pick(FLOOR2_ART)}.webp`;
+  return `${DIR}${pickArt(classId)}.webp`;
+}
+
 /** Half the time the player's own class, otherwise one of the other four pictures. */
 function pickArt(classId: ClassId | null): string {
   const own = classId ? CLASS_ART[classId] : null;
@@ -42,6 +54,7 @@ export function preloadLoadingArt(): void {
   if (preloaded) return;
   preloaded = true;
   for (const a of ALL_ART) new Image().src = imgUrl(`${DIR}${a}.webp`);
+  for (const a of FLOOR2_ART) new Image().src = imgUrl(`${FLOOR2_DIR}${a}.webp`);
 }
 
 const el = (): HTMLElement => document.getElementById('loading')!;
@@ -55,7 +68,7 @@ export interface LoadingScreen {
 }
 
 /** Puts the loading screen up with a fresh picture and tip. */
-export function showLoading(classId: ClassId | null, label = 'กำลังโหลดภาพในเกม…'): LoadingScreen {
+export function showLoading(classId: ClassId | null, label = 'กำลังโหลดภาพในเกม…', floor = 1): LoadingScreen {
   clearTimeout(fadeTimer);
   clearTimeout(hideTimer);
   const root = el();
@@ -63,7 +76,7 @@ export function showLoading(classId: ClassId | null, label = 'กำลังโ
     `<div class="load-box"><div>${label} <span class="load-pct">0%</span></div>` +
     '<div class="load-bar"><i></i></div><p class="load-tip"></p></div>';
   root.querySelector('.load-tip')!.textContent = `เคล็ดลับ: ${pick(TIPS)}`;
-  root.style.backgroundImage = `url(${imgUrl(`${DIR}${pickArt(classId)}.webp`)})`;
+  root.style.backgroundImage = `url(${imgUrl(artUrl(classId, floor))})`;
   root.classList.add('load-art');
   root.classList.remove('hidden', 'load-out');
   const pct = root.querySelector<HTMLElement>('.load-pct')!;
@@ -84,8 +97,8 @@ export function showLoading(classId: ClassId | null, label = 'กำลังโ
  * Zone change: the new map is already built underneath, so the screen only covers the swap:
  * the bar runs to full, then the screen fades away.
  */
-export function flashZoneLoading(classId: ClassId): void {
-  const screen = showLoading(classId, 'กำลังเดินทาง…');
+export function flashZoneLoading(classId: ClassId, floor = 1): void {
+  const screen = showLoading(classId, 'กำลังเดินทาง…', floor);
   el().querySelector('.load-pct')?.remove();
   // Let the empty bar paint first so its CSS transition runs across the hold.
   requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -104,8 +117,8 @@ export function flashZoneLoading(classId: ClassId): void {
 let entry: LoadingScreen | null = null;
 
 /** Puts up the first-entry screen; it stays until endEntryLoading (or cancelEntryLoading on a failure). */
-export function beginEntryLoading(classId: ClassId | null): LoadingScreen {
-  entry = showLoading(classId);
+export function beginEntryLoading(classId: ClassId | null, floor = 1): LoadingScreen {
+  entry = showLoading(classId, undefined, floor);
   return entry;
 }
 

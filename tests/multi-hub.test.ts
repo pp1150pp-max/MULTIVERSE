@@ -1,8 +1,8 @@
 // Floors and their towns (docs/plans/FLOOR2_PLAN.md 4.2, 4.3): the return scroll, death, boss rooms and
 // login go to the town of the floor you're on; portals can need a quest unlock, with two /admin switches.
-// Floor 2 isn't built yet (PR #3), so a made-up floor-2 town and map are registered here.
+// Floor 2's town is the harbour (PR #3); its maps aren't built yet, so a made-up floor-2 map is registered here.
 import { finish, ok } from './check';
-import { BOSS_ROOMS, FLOOR_HUBS, HUB_ID, ZONES, ZONE_HUB, floorOf, hubOf, isHub, zoneById, type ZoneDef } from '../src/shared/data/zones';
+import { BOSS_ROOMS, HUB_ID, ZONES, ZONE_HARBOR, ZONE_HUB, floorOf, hubOf, isHub, zoneById, type ZoneDef } from '../src/shared/data/zones';
 import { applyBalance, checkBalance, balanceChanges, currentBalance } from '../src/shared/balance';
 import { floorUnlock, loginHub, portalLock } from '../src/shared/floors';
 import { MONSTERS } from '../src/shared/data/monsters';
@@ -18,10 +18,11 @@ const hero = (extra: Record<string, unknown> = {}) => ({ name: 'F', classId: 'sw
 const OPEN = { floorGateOpen: true, floorGateQuest: true };
 
 // ---- floor 1 stays as it was
-ok(Object.values(ZONES).every((z) => floorOf(z) === 1), 'every zone today is on floor 1');
-ok(Object.values(ZONES).every((z) => hubOf(z).id === HUB_ID), 'floor 1: every zone\'s town is nexus_city');
+const FLOOR1 = Object.values(ZONES).filter((z) => floorOf(z) === 1);
+ok(FLOOR1.length === 5 && Object.values(ZONES).filter((z) => floorOf(z) === 2).map((z) => z.id).join() === 'harbor_town', 'floor 1: the five zones; floor 2: the harbour');
+ok(FLOOR1.every((z) => hubOf(z).id === HUB_ID), 'floor 1: every zone\'s town is nexus_city');
 ok(Object.values(BOSS_ROOMS).every((r) => hubOf(r).id === HUB_ID), 'floor 1 boss rooms: nexus_city too');
-ok(isHub(ZONE_HUB) && Object.values(ZONES).filter(isHub).length === 1, 'only nexus_city is a town');
+ok(isHub(ZONE_HUB) && isHub(ZONE_HARBOR) && Object.values(ZONES).filter(isHub).length === 2, 'the towns: nexus_city and the harbour');
 ok(loginHub({ zone: 'emerald_forest' }).id === HUB_ID && loginHub({}).id === HUB_ID && loginHub({ zone: 'nope' }).id === HUB_ID, 'login: floor 1 → nexus_city (also missing/unknown zone)');
 
 // ---- switches: code defaults, check, audit text
@@ -42,15 +43,13 @@ ok(portalLock([], 'floor2', { floorGateOpen: true, floorGateQuest: false }) === 
 ok(portalLock([], undefined, { floorGateOpen: false, floorGateQuest: true }) === null, 'gate switch leaves ordinary portals alone');
 
 // ---- a floor without its town falls back to floor 1's
-const FIELD: ZoneDef = { ...ZONES.emerald_forest, id: 'test_beach', floor: 2, levels: [41, 50] };
-ok(hubOf(FIELD).id === HUB_ID, 'floor 2 before its town exists → nexus_city');
+ok(hubOf({ ...ZONES.emerald_forest, floor: 3 }).id === HUB_ID, 'floor 3 (no town yet) → nexus_city');
 
-// ---- register a made-up floor 2
-const HARBOR: ZoneDef = { ...ZONE_HUB, id: 'test_harbor', floor: 2, levels: [41, 80], spawns: [], portals: [{ to: HUB_ID, x: 0, z: -30, minLevel: 0 }] };
+// ---- floor 2: the real harbour and a made-up map
+const HARBOR = ZONE_HARBOR;
+const FIELD: ZoneDef = { ...ZONES.emerald_forest, id: 'test_beach', floor: 2, levels: [41, 50] };
 FIELD.portals = [{ to: HARBOR.id, x: 49.5, z: 49.5, minLevel: 0 }];
-ZONES[HARBOR.id] = HARBOR;
 ZONES[FIELD.id] = FIELD;
-FLOOR_HUBS[2] = HARBOR.id;
 
 ok(hubOf(FIELD).id === HARBOR.id && hubOf(HARBOR).id === HARBOR.id, 'floor 2 → its own town');
 ok(isHub(HARBOR) && !isHub(FIELD), 'the harbor counts as a town, its map does not');
@@ -118,7 +117,7 @@ ok(loginHub({ zone: 'emerald_forest', unlocks: ['floor2'] }, OPEN).id === HUB_ID
     return { travel: evs.some((e) => e.t === 'travel' && e.zone === HARBOR.id), log: evs.filter((e) => e.t === 'log').map((e) => (e as { msg: string }).msg).join(' ') };
   };
   let r = tryGate({});
-  ok(!r.travel && r.log.includes('The Seeker'), 'no quest: turned away, told to see The Seeker');
+  ok(!r.travel && r.log.includes('นักเดินเรือ'), 'no quest: turned away, told to see the navigator');
   r = tryGate({ unlocks: ['floor2'] });
   ok(r.travel, 'quest done: walks through');
   r = tryGate({ unlocks: ['floor2'], level: 30 });

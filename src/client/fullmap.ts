@@ -9,7 +9,7 @@ import type { MapIcon } from './mapIconNames';
 
 const S = Math.SQRT1_2;
 // The market broker borrows the merchant's marker until icons/map_market.png is painted.
-export const NPC_MAP_ICON: Record<NpcId, MapIcon> = { seeker: 'seeker', merchant: 'merchant', blacksmith: 'blacksmith', keeper: 'keeper', broker: 'market', stylist: 'merchant', crystal: 'merchant' };
+export const NPC_MAP_ICON: Record<NpcId, MapIcon> = { seeker: 'seeker', merchant: 'merchant', blacksmith: 'blacksmith', keeper: 'keeper', broker: 'market', stylist: 'merchant', crystal: 'merchant', navigator: 'seeker' };
 
 /** How a monster's level compares with the player's, as a colour for its spawn area and label. */
 function dangerColour(monsterLevel: number, playerLevel: number): string {
@@ -120,7 +120,7 @@ export class FullMap {
       else dot(m.x, m.z, 2.8, '#f2a640');
     }
     for (const r of g.backend.terrain.restSpots) icon('camp', r.x, r.z, 20);
-    for (const n of g.npcs) icon(NPC_MAP_ICON[n.id], n.x, n.z, 22);
+    for (const n of g.shownNpcs) icon(NPC_MAP_ICON[n.id], n.x, n.z, 22);
     for (const p of g.backend.players) if (p !== me && !g.party.memberOf(p)) icon('ally', p.x, p.z, 24, facingAngle(p.faceX, p.faceZ));
     // Party members on this map, wherever they are.
     for (const m of g.party.mapMates()) partyDot(ctx, ...at(m.x, m.z), 7 * px);
@@ -170,12 +170,14 @@ export class FullMap {
     }
     for (const pt of zone.portals) {
       const to = zoneById(pt.to);
+      // A harbour pier whose map isn't in the game yet: named, and marked shut.
+      const name = pt.soonName ? `${pt.soonName} (ยังไม่เปิด)` : to.nameTh;
       const [sx, sy] = at(pt.x, pt.z);
       icon('portal', pt.x, pt.z, 26);
       const lv = pt.minLevel > 0 ? ` (Lv.${pt.minLevel}+)` : '';
       // Toward the middle of the map, so a portal near the left or right edge keeps its label on screen.
       const side = sx > c + 40 * px ? -1 : sx < c - 40 * px ? 1 : 0;
-      label(sx + side * 92 * px, sy + (side ? 0 : (sy < c ? 30 : -30) * px), `วาปไป ${to?.nameTh ?? pt.to}${lv}`, '#e0c8ff', { step: sy < c ? 1 : -1 });
+      label(sx + side * 92 * px, sy + (side ? 0 : (sy < c ? 30 : -30) * px), `วาปไป ${name}${lv}`, '#e0c8ff', { step: sy < c ? 1 : -1 });
     }
 
     // Two areas of the same monster close together get one label, so the text doesn't pile up.

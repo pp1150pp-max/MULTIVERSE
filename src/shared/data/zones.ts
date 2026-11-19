@@ -1,4 +1,5 @@
 import { mulberry32 } from '../rng';
+import { HARBOR_CORNERS, HARBOR_ID, HARBOR_PIER, HARBOR_RETURN } from './harbor';
 
 export interface SpawnArea {
   monster: string;
@@ -19,7 +20,7 @@ export const HUB_ID = 'nexus_city';
  * Each floor's town (docs/plans/FLOOR2_PLAN.md 4.3): where its return scroll, death and login go.
  * A floor left out (its town not built yet) falls back to floor 1's.
  */
-export const FLOOR_HUBS: Record<number, string> = { 1: HUB_ID };
+export const FLOOR_HUBS: Record<number, string> = { 1: HUB_ID, 2: HARBOR_ID };
 
 /** Walking into it moves the player to another zone. */
 export interface PortalDef {
@@ -33,6 +34,13 @@ export interface PortalDef {
    * of minLevel. See portalLock in src/shared/floors.ts and its two /admin switches. None = level only.
    */
   requires?: string;
+  /**
+   * The place it will lead to, for a portal whose map isn't in the game yet (`to` not in ZONES): it stays shut and
+   * says so ("ยังไม่เปิด"). The harbour's four piers (owner 2026-11-19); each map's PR brings its zone and opens it.
+   */
+  soonName?: string;
+  /** Its picture, when not the usual 'portal' (the harbour's ship's-wheel and lighthouse gates). */
+  prop?: string;
 }
 
 /** An ellipse of slippery ice. */
@@ -88,6 +96,8 @@ export interface ZoneDef {
   safe?: SafeArea;
   /** The camp NPCs stand around `start` (only the hub has them). */
   npcs?: boolean;
+  /** Which town it is, when not nexus_city's walled ruin: 'harbor' = floor 2's plank harbour (data/harbor.ts). */
+  town?: 'harbor';
   /**
    * Draws each quarter of the map with another zone's theme, blended where they meet.
    * Order: [x<0 z<0 (top of the screen), x≥0 z<0 (right), x<0 z≥0 (left), x≥0 z≥0 (bottom)].
@@ -456,8 +466,50 @@ export const ZONE_HUB: ZoneDef = {
   portals: HUB_CORNERS.map(([sx, sz, zone]) => ({ to: zone.id, x: sx * HUB_PORTAL, z: sz * HUB_PORTAL, minLevel: 0 })),
 };
 
+/** Where each harbour pier leads (top, right, left, bottom of the screen), by plan 2; none of them built yet. */
+const HARBOR_PIERS: [string, string][] = [
+  ['shipwreck_beach', 'หาดเรือแตก'],
+  ['smugglers_cove', 'อ่าวลักลอบ'],
+  ['ghost_ship_graveyard', 'สุสานเรือผี'],
+  ['kraken_maelstrom', 'วังวนกลางทะเล'],
+];
+
+/**
+ * Floor 2's town (plan 3, art M0b_harbor_docks): a safe harbour of plank platforms on the cloud sea, no monsters,
+ * a pier to each corner whose portal leads to that corner's map (shut until the map exists) and the way back to
+ * floor 1 beside the lighthouse. Players get here from nexus_city through the navigator (src/shared/floors.ts).
+ */
+export const ZONE_HARBOR: ZoneDef = {
+  id: HARBOR_ID,
+  name: 'Dimensional Harbour',
+  nameTh: 'ท่าเรือมิติ',
+  subtitle: 'เมืองท่าไม้กลางทะเลเมฆ ปลอดภัยจากมอนสเตอร์ ท่าเรือทั้งสี่ทิศพาไปสู่ดินแดนของชั้นสอง',
+  levels: [41, 80],
+  floor: 2,
+  // Its own look (town: 'harbor'); the theme only picks the colours of the map frame and the like.
+  theme: 'forest',
+  town: 'harbor',
+  allowAutoPlay: false,
+  half: 60,
+  seed: 20261119,
+  start: { x: 0, z: 0 },
+  // The whole town is safe (the platforms reach out to the piers' ends).
+  safe: { x: 0, z: 0, half: 56 },
+  npcs: true,
+  path: [],
+  branches: [],
+  spawns: [],
+  portals: [
+    ...HARBOR_CORNERS.map(([sx, sz], i) => ({
+      to: HARBOR_PIERS[i][0], soonName: HARBOR_PIERS[i][1], x: sx * HARBOR_PIER, z: sz * HARBOR_PIER, minLevel: 0, prop: 'hb_portal_dock',
+    })),
+    { to: HUB_ID, x: HARBOR_RETURN.x, z: HARBOR_RETURN.z, minLevel: 0, prop: 'hb_portal_return' },
+  ],
+};
+
 export const ZONES: Record<string, ZoneDef> = {
   [ZONE_HUB.id]: ZONE_HUB,
+  [ZONE_HARBOR.id]: ZONE_HARBOR,
   [ZONE_1.id]: ZONE_1,
   [ZONE_2.id]: ZONE_2,
   [ZONE_3.id]: ZONE_3,

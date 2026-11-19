@@ -1403,6 +1403,13 @@ export class GameWorld {
       case 'tutTurnIn':
         if (TUT_STEPS.includes(m.step)) this.tutTurnIn(s, m.step);
         break;
+      case 'floorTurnIn':
+        this.floorTurnIn(s);
+        break;
+      case 'floorTravel':
+        // Sim.floorTravel checks the distance to the navigator and that the way is open for this character.
+        sim.floorTravel(p);
+        break;
       case 'reroll': {
         // Sim.reroll checks the NPC distance, ownership, the item's lines and gold itself.
         const kind = REROLL_KINDS.includes(m.kind) ? m.kind : null;
@@ -1919,6 +1926,41 @@ export class GameWorld {
     this.mailNote(s);
   }
 
+  /**
+   * Hands in the navigator's quest (src/shared/floorGate.ts): Sim opens the way up, then its reward is mailed to
+   * this character (bound) in the same transaction as the save, so it is given exactly once. Guests have no
+   * mailbox, so they can't hand it in (owner 2026-11-19) until they sign up.
+   */
+  private floorTurnIn(s: Session): void {
+    if (s.guest) {
+      this.send(s.ws, { t: 'chat', name: '', text: `${GUEST_MAIL_MSG} — เควสเปิดทางขึ้นชั้น 2 ส่งรางวัลทางจดหมาย` });
+      return;
+    }
+    const got = s.sim.floorTurnIn(s.player);
+    if (!got) return;
+    const now = Date.now();
+    try {
+      this.db.transaction(() => {
+        if (hasAttach(got.reward)) {
+          const id = this.db.mailSendInsert({
+            senderId: null, senderName: 'นักเดินเรือแห่งมิติ', target: `${s.player.name} (เควสเปิดทางชั้น 2)`,
+            title: 'รางวัลเควสเปิดทางขึ้นชั้น 2',
+            body: `${describeAttach(got.reward).join('\n')}\nของทุกชิ้นผูกกับตัวละครนี้ (ขาย ฝากคลัง เทรด หรือลงตลาดไม่ได้)`,
+            attach: JSON.stringify(got.reward), hasAttach: true, at: now, expiresAt: now + MAIL_MS,
+          });
+          this.db.mailBoxAdd(id, s.accountId, s.charId);
+        }
+        this.db.writeCharacterAndStash(s.charId, s.player.toData(), s.accountId, s.player.stash);
+      });
+    } catch (e) {
+      got.undo();
+      console.error('[floor2] handing in the quest failed for', s.player.name, e);
+      this.send(s.ws, { t: 'chat', name: '', text: 'ส่งภารกิจไม่สำเร็จ ลองใหม่อีกครั้ง' });
+      return;
+    }
+    this.mailNote(s);
+  }
+
   /** Mail was sent or pulled back: every character online hears about new mail, and with `always` gets its badge refreshed. */
   mailArrived(always = false): void {
     for (const s of this.sessions) this.mailNote(s, always);
@@ -2184,7 +2226,7 @@ export class GameWorld {
     const st = this.deltaStats;
     const statics: Pick<PrivateSnap, StaticMeKey> = {
       potSel: p.potSel, lootFilter: p.lootFilter, autoSettings: p.autoSettings, stats: p.stats, skills: p.skillBook,
-      bossKills: p.bossKills, quests: p.quests, gearQuests: p.gearQuests, gearDone: p.gearDone,
+      bossKills: p.bossKills, unlocks: p.unlocks, quests: p.quests, gearQuests: p.gearQuests, gearDone: p.gearDone,
     };
     for (const k of STATIC_ME) {
       if (!delta) {
@@ -2624,8 +2666,8 @@ export class GameWorld {
 /** The settings row of the snapshot delta switch: '0' = off, missing = on (the default). */
 const SNAP_DELTA_KEY = 'snap_delta';
 /** PrivateSnap fields that hardly ever change: sent only when they did (snapshot delta). */
-type StaticMeKey = 'potSel' | 'lootFilter' | 'autoSettings' | 'stats' | 'skills' | 'bossKills' | 'quests' | 'gearQuests' | 'gearDone';
-const STATIC_ME: readonly StaticMeKey[] = ['potSel', 'lootFilter', 'autoSettings', 'stats', 'skills', 'bossKills', 'quests', 'gearQuests', 'gearDone'];
+type StaticMeKey = 'potSel' | 'lootFilter' | 'autoSettings' | 'stats' | 'skills' | 'bossKills' | 'unlocks' | 'quests' | 'gearQuests' | 'gearDone';
+const STATIC_ME: readonly StaticMeKey[] = ['potSel', 'lootFilter', 'autoSettings', 'stats', 'skills', 'bossKills', 'unlocks', 'quests', 'gearQuests', 'gearDone'];
 type PlayerLook = Pick<PlayerSnap, 'name' | 'cls' | 'lv' | 'maxHp' | 'aura' | 'orbs' | 'cos' | 'mnt' | 'toad' | 'psv' | 'wpn' | 'arm'>;
 type MonsterLook = Pick<MonsterSnap, 'def' | 'lv' | 'mhp'>;
 

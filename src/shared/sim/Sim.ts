@@ -13,7 +13,7 @@ import {
 } from '../data/enhance';
 import { entryName, potionName, POTION_STACK, potionPrice, stackLimit } from '../data/potions';
 import { BOSS_KEY, BOSS_QUEST_KEY, BOSS_STONE_CHANCE, BOUND_MSG, BUFF_LABEL, BUFF_MAX, BUFF_MULT, BUFF_TIME, fmtBuff, PHOENIX_PRICE, QUEST_KILLS, REVIVES_PER_KEY, STONE_STACK, KEY_DROP_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, RETURN_CAST, RETURN_SCROLL_PRICE, STONE_COLOR, STONE_NAME } from '../data/stones';
-import { NPC_INFO, NPC_USE_RANGE, type NpcId } from '../data/npcs';
+import { NPC_USE_RANGE, npcLook, type NpcId } from '../data/npcs';
 import { pick, rand, randInt } from '../rng';
 import { splitExp } from '../party';
 import { CLASS_IDS, SLOT_KIND, WEAR_SLOTS, type WearSlot } from '../data/classes';
@@ -34,6 +34,8 @@ import { nextRowPrice, STASH_GOLD_MAX, STASH_ROW } from './stash';
 import { splitInto } from './split';
 import { questRows } from '../quests';
 import { portalLock } from '../floors';
+import { FLOOR2_UNLOCK, floorGateReward, navState } from '../floorGate';
+import { HARBOR_ID } from '../data/harbor';
 import { GEAR_KILLS, GEAR_PART_NAME, gearReward, gearRow } from '../gearQuests';
 import { TUT_ACCEPT_GOLD, TUT_ACCEPT_STONES, TUT_NPC, TUT_STEPS, TUT_STEP_NAME, TUT_TASKS, TUT_TASK_NAME, tutRows, tutTurnInReward, type TutStep, type TutTask } from '../tutorial';
 import { putAll, type MailAttach } from '../mail';
@@ -192,7 +194,15 @@ export class Sim {
     const p = new Player(this.newId(), this, data);
     p.zone = this.zone.id;
     const back = fromZone ? this.zone.portals.find((pt) => pt.to === fromZone) : undefined;
-    if (back) {
+    // Down from floor 2 (no portal here leads there): beside the navigator who took them up (owner 2026-11-19).
+    const guide = !back && fromZone && ZONES[fromZone] && (ZONES[fromZone].floor ?? 1) !== (this.zone.floor ?? 1) ? this.terrain.npcPos.navigator : undefined;
+    if (guide) {
+      const s = this.zone.start;
+      const d = Math.hypot(guide.x - s.x, guide.z - s.z) || 1;
+      p.x = guide.x + ((s.x - guide.x) / d) * 2;
+      p.z = guide.z + ((s.z - guide.z) / d) * 2;
+      p.face(guide.x - p.x, guide.z - p.z);
+    } else if (back) {
       // A few steps from the portal toward the middle of the map.
       const d = Math.hypot(back.x, back.z) || 1;
       p.x = back.x - (back.x / d) * 3.5;
@@ -945,7 +955,7 @@ export class Sim {
 
   /** Quests The Seeker can give this player now: a boss of a map they have reached, not yet beaten, not taken, no key held. */
   questOffers(p: Player): string[] {
-    return questRows(p).filter((r) => r.state === 'offer').map((r) => r.boss);
+    return questRows(p).filter((r) => r.state === 'offer' && this.ownFloor(r.map)).map((r) => r.boss);
   }
 
   questAccept(p: Player, boss: string): boolean {
@@ -957,9 +967,18 @@ export class Sim {
     return true;
   }
 
+  /**
+   * Whether a quest's map is on this town's floor: each floor's quest giver (The Seeker in nexus_city, the navigator
+   * in the harbour, owner 2026-11-19) gives and takes his own floor's quests only.
+   */
+  private ownFloor(map: ZoneDef): boolean {
+    return (map.floor ?? 1) === (this.zone.floor ?? 1);
+  }
+
   questTurnIn(p: Player, boss: string): boolean {
     const key = BOSS_QUEST_KEY[boss];
-    if (!key || !this.near(p, 'seeker') || (p.quests[boss] ?? -1) < QUEST_KILLS) return false;
+    const map = Object.values(ZONES).find((z) => z.lair?.boss === boss);
+    if (!key || !map || !this.ownFloor(map) || !this.near(p, 'seeker') || (p.quests[boss] ?? -1) < QUEST_KILLS) return false;
     if (!p.addStones(key, 1)) {
       this.log('กระเป๋าเต็ม — เคลียร์ช่องว่าง 1 ช่องก่อนรับกุญแจ', '#ff8a6a', p.id);
       return false;
@@ -988,11 +1007,40 @@ export class Sim {
     }
   }
 
+  // ------------------------------------------------------------ the way up to floor 2 (src/shared/floorGate.ts)
+
+  /**
+   * Hands in the navigator's quest (talking to him once it is offered): opens the way up for this character and
+   * returns the reward the server mails (bound), or null when it can't be handed in. `undo` takes the unlock back
+   * if the mail can't be written.
+   */
+  floorTurnIn(p: Player): { reward: MailAttach; undo: () => void } | null {
+    if (!this.near(p, 'navigator') || navState(p, currentBalance()) !== 'offer') return null;
+    p.unlocks.push(FLOOR2_UNLOCK);
+    this.log('เปิดทางขึ้นชั้น 2 ทะเลเมฆแล้ว! รางวัลส่งไปที่กล่องจดหมาย', '#ffd34a', p.id);
+    this.sfx('trade', p.x, p.z, p.id);
+    this.events.push({ t: 'save', to: p.id });
+    return {
+      reward: floorGateReward(currentBalance().floorGate),
+      undo: () => {
+        p.unlocks = p.unlocks.filter((u) => u !== FLOOR2_UNLOCK);
+      },
+    };
+  }
+
+  /** The navigator takes a player up to the harbour (they come out beside the lighthouse's gate back). */
+  floorTravel(p: Player): boolean {
+    if (!this.near(p, 'navigator') || navState(p, currentBalance()) !== 'go' || this.zone.town === 'harbor') return false;
+    this.fx('burst', p.x, 1.4, p.z, '#6affd0', 18, 3);
+    this.events.push({ t: 'travel', to: p.id, zone: HARBOR_ID });
+    return true;
+  }
+
   // ------------------------------------------------------------ The Seeker's gear quests (src/shared/gearQuests.ts)
 
   gearAccept(p: Player, id: string): boolean {
     const r = gearRow(p, id);
-    if (!r || r.state !== 'offer' || !this.near(p, 'seeker')) return false;
+    if (!r || r.state !== 'offer' || !this.ownFloor(r.map) || !this.near(p, 'seeker')) return false;
     p.gearQuests[id] = 0;
     this.log(`รับภารกิจ: ล่ามอนสเตอร์ใน${r.map.nameTh} ${GEAR_KILLS} ตัว แล้วกลับมาหา The Seeker เพื่อรับ${GEAR_PART_NAME[r.part]}`, '#ffd34a', p.id);
     this.events.push({ t: 'save', to: p.id });
@@ -1001,7 +1049,7 @@ export class Sim {
 
   gearTurnIn(p: Player, id: string): boolean {
     const r = gearRow(p, id);
-    if (!r || r.state !== 'ready' || !this.near(p, 'seeker')) return false;
+    if (!r || r.state !== 'ready' || !this.ownFloor(r.map) || !this.near(p, 'seeker')) return false;
     const items = gearReward(r.map, r.part, p.cls.id, p.level);
     const free = p.bag.filter((e) => e === null).length;
     if (free < items.length) {
@@ -1098,7 +1146,7 @@ export class Sim {
     if (!cur || cur.by !== p.name || !TUT_TASKS[cur.step].includes(task) || cur.got.includes(task)) return false;
     cur.got.push(task);
     const left = TUT_TASKS[cur.step].filter((k) => !cur.got.includes(k)).length;
-    this.log(left ? `ภารกิจสอนระบบ: ${TUT_TASK_NAME[task]} ✓ (เหลืออีก ${left})` : `ภารกิจสอนระบบ ${TUT_STEP_NAME[cur.step]} ครบแล้ว — กลับไปส่งที่${NPC_INFO[TUT_NPC[cur.step]].name}`, '#ffd34a', p.id);
+    this.log(left ? `ภารกิจสอนระบบ: ${TUT_TASK_NAME[task]} ✓ (เหลืออีก ${left})` : `ภารกิจสอนระบบ ${TUT_STEP_NAME[cur.step]} ครบแล้ว — กลับไปส่งที่${npcLook(TUT_NPC[cur.step], this.zone.town).name}`, '#ffd34a', p.id);
     this.events.push({ t: 'save', to: p.id });
     return true;
   }
@@ -1841,7 +1889,15 @@ export class Sim {
       }
       if (!p.portalReady) continue;
       const dest = ZONES[pt.to];
-      if (!dest) continue;
+      if (!dest) {
+        // A pier whose map isn't in the game yet (the harbour, owner 2026-11-19): shut, and it says so.
+        if (pt.soonName && this.time - p.portalMsgAt > 3) {
+          p.portalMsgAt = this.time;
+          this.log(`ท่าเรือไป${pt.soonName}ยังไม่เปิด`, '#ff9a6a', p.id);
+          this.text(p.x, p.topY, p.z, 'ยังไม่เปิด', 'info', 1);
+        }
+        continue;
+      }
       if (p.level < pt.minLevel) {
         if (this.time - p.portalMsgAt > 3) {
           p.portalMsgAt = this.time;
@@ -1859,8 +1915,8 @@ export class Sim {
             this.log(`ประตูสู่ ${dest.name} ปิดอยู่ชั่วคราว`, '#ff9a6a', p.id);
             this.text(p.x, p.topY, p.z, 'ประตูปิดอยู่', 'info', 1);
           } else {
-            this.log(`ประตูสู่ ${dest.name} ยังไม่เปิดให้คุณ — ไปคุยกับ The Seeker ก่อน`, '#ff9a6a', p.id);
-            this.text(p.x, p.topY, p.z, 'คุยกับ The Seeker ก่อน', 'info', 1);
+            this.log(`ประตูสู่ ${dest.name} ยังไม่เปิดให้คุณ — ไปคุยกับนักเดินเรือแห่งมิติก่อน`, '#ff9a6a', p.id);
+            this.text(p.x, p.topY, p.z, 'คุยกับนักเดินเรือก่อน', 'info', 1);
           }
         }
         continue;

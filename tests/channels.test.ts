@@ -30,7 +30,7 @@ const empty = (c: Channel) => {
 {
   const C = new Channels(Object.values(ZONES), () => 0);
   ok(Object.values(ZONES).filter(hasChannels).every((z) => C.channels(z.id).length === 0) && C.channels(ZONE_HUB.id).length === 1, 'farm maps start with no channel running (no Sim), the hub with its one');
-  ok(C.sims().length === 1, 'free channels cost nothing: only the hub has a Sim');
+  ok(C.sims().length === Object.values(ZONES).filter((z) => !hasChannels(z)).length, 'free channels cost nothing: only the towns have a Sim');
   const ch1 = C.place(ZONE_1.id)!;
   ok(ch1.ch === 1 && C.get(ZONE_1.id, 1) === ch1, 'entering an empty map: CH 1 opens');
   fill(ch1, CH_SOLO_CAP - 1);

@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import { HazardViews } from './hazards';
-import { inBossArena } from '../shared/data/zones';
+import { floorOf, inBossArena } from '../shared/data/zones';
 import { autoBlocked } from '../shared/sim/autoplay';
 import type { Vec2 } from '../shared/types';
 import type { ZoneDef } from '../shared/data/zones';
-import { NPC_IDS, NPC_INFO, NPC_TALK_RANGE, type NpcId } from '../shared/data/npcs';
+import { NPC_IDS, NPC_TALK_RANGE, npcLook, type NpcId } from '../shared/data/npcs';
+import { navState } from '../shared/floorGate';
+import { currentBalance } from '../shared/balance';
 import type { Player } from '../shared/sim/Player';
 import type { Monster } from '../shared/sim/Monster';
 import type { Loot } from '../shared/sim/Loot';
@@ -34,6 +36,7 @@ import { RoomUI } from './bossRoom';
 import { QuestUI } from './quests';
 import { QuestTracker } from './questTracker';
 import { TutorialUI } from './tutorial';
+import { NavigatorUI } from './navigator';
 import { bossShortName } from '../shared/bossRoom';
 import { MailUI } from './mail';
 import { ReportUI } from './report';
@@ -71,7 +74,7 @@ type ClickGoal =
   | { kind: 'rest'; x: number; z: number }
   | { kind: 'summoner'; x: number; z: number };
 
-export interface Npc { id: NpcId; name: string; action: string; icon: string; role: string; x: number; z: number; actor: SpriteActor }
+export interface Npc { id: NpcId; name: string; action: string; icon: string; role: string; portrait?: string; x: number; z: number; actor: SpriteActor }
 
 /**
  * Draws the world and handles input, camera and HUD. The world itself comes from the server
@@ -101,6 +104,8 @@ export class Game {
   readonly quests: QuestUI;
   readonly questTracker: QuestTracker;
   readonly tutorial: TutorialUI;
+  /** The navigator's window in nexus_city (the way up to floor 2). */
+  readonly navigator: NavigatorUI;
   readonly mailUI: MailUI;
   readonly report: ReportUI;
   readonly megaphone: MegaphoneUI;
@@ -215,6 +220,7 @@ export class Game {
     this.quests = new QuestUI(this, () => this.hud.openDialog());
     this.questTracker = new QuestTracker(this);
     this.tutorial = new TutorialUI(this, (id) => this.hud.openNpcWindow(id));
+    this.navigator = new NavigatorUI(this);
     this.mailUI = new MailUI(this);
     this.report = new ReportUI(this);
     this.megaphone = new MegaphoneUI(this);
@@ -400,17 +406,29 @@ export class Game {
     for (const id of NPC_IDS) {
       const pos = this.backend.terrain.npcPos[id];
       if (!pos) continue;
-      const actor = new SpriteActor(sheets[id], 1.95, 0.4);
+      // The harbour's NPCs have their own names and pictures (npcLook).
+      const look = npcLook(id, this.backend.zone.town);
+      const actor = new SpriteActor(sheets[look.sheet] ?? sheets[id], 1.95, 0.4);
       actor.group.position.set(pos.x, 0, pos.z);
       actor.face(-1, -1);
       this.scene.add(actor.group);
-      this.npcs.push({ id, ...NPC_INFO[id], x: pos.x, z: pos.z, actor });
+      this.npcs.push({ id, name: look.name, action: look.action, icon: look.icon, role: look.role, portrait: look.portrait, x: pos.x, z: pos.z, actor });
     }
+  }
+
+  /**
+   * The NPCs this player sees: the navigator in nexus_city only for whoever may go up to floor 2 (owner 2026-11-19,
+   * src/shared/floorGate.ts navState); everyone else stands for all.
+   */
+  get shownNpcs(): Npc[] {
+    if (this.backend.zone.town === 'harbor') return this.npcs;
+    const nav = navState(this.player, currentBalance()) !== 'locked';
+    return nav ? this.npcs : this.npcs.filter((n) => n.id !== 'navigator');
   }
 
   /** The backend moved us to another zone: redraw the map, camp and everything in it. */
   private changeZone(): void {
-    flashZoneLoading(this.player.cls.id);
+    flashZoneLoading(this.player.cls.id, floorOf(this.backend.zone));
     this.mapRoute = [];
     this.goal = null;
     this.world.dispose();
@@ -733,7 +751,7 @@ export class Game {
     for (const l of this.backend.loots) {
       if (!l.dead && l.canTake(this.player, this.backend.time)) consider({ kind: 'loot', id: l.id, x: l.x, z: l.z }, 0.2, Math.max(16, 0.5 * pxPerUnit));
     }
-    for (const n of this.npcs) consider({ kind: 'npc', id: n.id, x: n.x, z: n.z }, 1, Math.max(22, 0.9 * pxPerUnit));
+    for (const n of this.shownNpcs) consider({ kind: 'npc', id: n.id, x: n.x, z: n.z }, 1, Math.max(22, 0.9 * pxPerUnit));
     for (const s of this.backend.terrain.restSpots) consider({ kind: 'rest', x: s.x, z: s.z }, 0.6, Math.max(22, (s.kind === 'fountain' ? 2.2 : 0.9) * pxPerUnit));
     const sm = this.backend.terrain.summoner;
     if (sm) consider({ kind: 'summoner', x: sm.x, z: sm.z }, 1.4, Math.max(22, 1.2 * pxPerUnit));
@@ -833,7 +851,9 @@ export class Game {
     // Camp NPCs: face the player, show a talk prompt for the nearest one in range.
     let near: Npc | null = null;
     let nearD = NPC_TALK_RANGE;
-    for (const n of this.npcs) {
+    const shown = this.shownNpcs;
+    for (const n of this.npcs) n.actor.group.visible = shown.includes(n);
+    for (const n of shown) {
       n.actor.face(p.x - n.x, p.z - n.z);
       n.actor.update(dt, false);
       const d = Math.hypot(p.x - n.x, p.z - n.z);
@@ -859,7 +879,7 @@ export class Game {
       : rest && rest.kind !== 'fountain' ? (restIn > 0 ? `${restName} — พักได้อีกใน ${restIn} วิ` : `${restName} — ${key}เพื่อฟื้น HP/MP ให้เต็ม`)
       : null;
     this.talkReady = !!near && !this.hud.dialogOpen;
-    this.floating.npcBadges(this, this.npcs);
+    this.floating.npcBadges(this, shown);
     this.floating.restBadges(this, spots, restIn);
     if (near) this.floating.npcPrompt(this, near.x, 3.7, near.z, prompt);
     else if (summ) this.floating.npcPrompt(this, summ.x, SUMMONER_HEIGHT + 0.6, summ.z, prompt);
@@ -902,6 +922,7 @@ export class Game {
     this.quests.update();
     this.questTracker.update();
     this.tutorial.update();
+    this.navigator.update();
   }
 
   private updateCamera(dt: number): void {

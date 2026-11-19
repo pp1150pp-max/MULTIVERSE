@@ -1162,7 +1162,7 @@ export class Hud {
     if (boss) icon('boss', boss.x, boss.z, 20);
     for (const pt of g.backend.zone.portals) icon('portal', pt.x, pt.z, 18);
     for (const r of g.backend.terrain.restSpots) icon('camp', r.x, r.z, 14);
-    for (const n of g.npcs) icon(NPC_MAP_ICON[n.id], n.x, n.z, 15);
+    for (const n of g.shownNpcs) icon(NPC_MAP_ICON[n.id], n.x, n.z, 15);
     for (const o of g.backend.players) {
       if (o !== p && !g.party.memberOf(o)) drawMapIcon(ctx, 'ally', ...toMM(o.x, o.z), 16, facingAngle(o.faceX, o.faceZ));
     }
@@ -1202,7 +1202,7 @@ export class Hud {
     }
     // Town NPCs and gates beyond the minimap's reach: a small icon on the rim, pointing their way.
     for (const pt of g.backend.zone.portals) drawEdgeMarker(ctx, c, rim, ...toMM(pt.x, pt.z), (x, y, s) => drawMapIcon(ctx, 'portal', x, y, s));
-    for (const n of g.npcs) drawEdgeMarker(ctx, c, rim, ...toMM(n.x, n.z), (x, y, s) => drawMapIcon(ctx, NPC_MAP_ICON[n.id], x, y, s));
+    for (const n of g.shownNpcs) drawEdgeMarker(ctx, c, rim, ...toMM(n.x, n.z), (x, y, s) => drawMapIcon(ctx, NPC_MAP_ICON[n.id], x, y, s));
     drawMapIcon(ctx, 'player', c, c, 22, facingAngle(p.faceX, p.faceZ));
     ctx.restore();
     // A two-tone gold rim.
@@ -1486,11 +1486,12 @@ export class Hud {
     this.g.cosmetics.toggle(false);
     if (this.dialogOpen) this.closeDialog();
     this.g.tutorial.close();
+    this.g.navigator.close();
   }
 
   talkTo(id: NpcId): void {
     // A tutorial step to take or hand in here: talk about it first (that window has a button on to the NPC's own).
-    if (id !== 'seeker' && this.g.tutorial.wants(id)) return this.g.tutorial.show(id);
+    if (id !== 'seeker' && id !== 'navigator' && this.g.tutorial.wants(id)) return this.g.tutorial.show(id);
     this.openNpcWindow(id);
   }
 
@@ -1498,6 +1499,7 @@ export class Hud {
   openNpcWindow(id: NpcId): void {
     // His key quests; his story is a button in that window.
     if (id === 'seeker') this.g.quests.toggle(true);
+    else if (id === 'navigator') this.g.navigator.show();
     else if (id === 'merchant') this.openShop();
     else if (id === 'keeper') {
       // The server refuses guests' stash actions too; this just says why up front.

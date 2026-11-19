@@ -361,3 +361,46 @@ export function closeBias(r: Rng, near: number, far: number): number {
   return near + (far - near) * t * t;
 }
 
+
+const SKY_BANDS = ['#7fc4e4', '#94d0ea', '#aedcef', '#c8e7f3', '#dcefF6', '#eef6fa', '#ffffff'];
+let skyTile: HTMLCanvasElement | null = null;
+
+/**
+ * Floor 2's backdrop, the cloud sea (art_templates/papercraft_maps/FLOOR2_SKY.md): the owner's paper tile
+ * `sky` (sprites/paper/ground/sky_day.png) when it is there, else a stand-in painted here: soft white cloud
+ * banks over pale sky blue, repeating in both directions. Same size as the space tile, so it drifts the same way.
+ */
+export function paintSky(sky?: CanvasImageSource): HTMLCanvasElement {
+  if (skyTile && !sky) return skyTile;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = SPACE_TILE;
+  const ctx = cv.getContext('2d')!;
+  if (sky) {
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(sky, 0, 0, SPACE_TILE, SPACE_TILE);
+    return (skyTile = cv);
+  }
+  const r = mulberry32(20261119);
+  const big = tileNoise(r, 3);
+  const midN = tileNoise(r, 7);
+  const small = tileNoise(r, 17);
+  const bands = SKY_BANDS.map((c) => new THREE.Color(c).convertLinearToSRGB());
+  const image = ctx.createImageData(SPACE_TILE, SPACE_TILE);
+  for (let y = 0; y < SPACE_TILE; y++) {
+    for (let x = 0; x < SPACE_TILE; x++) {
+      const u = x / SPACE_TILE;
+      const v = y / SPACE_TILE;
+      const n = big(u, v) * 0.5 + midN(u, v) * 0.32 + small(u, v) * 0.18;
+      // Flat steps like cut paper layers, not a smooth blur.
+      const level = Math.max(0, Math.min(1, (n - 0.3) * 2.2)) * (bands.length - 1);
+      const c = bands[Math.min(bands.length - 1, Math.floor(level))];
+      const i = (y * SPACE_TILE + x) * 4;
+      image.data[i] = c.r * 255;
+      image.data[i + 1] = c.g * 255;
+      image.data[i + 2] = c.b * 255;
+      image.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+  return (skyTile = cv);
+}

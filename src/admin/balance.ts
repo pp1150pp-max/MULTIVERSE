@@ -25,6 +25,7 @@ import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { ITEM_BASES, itemRowKinds, rowRanges, TIER_BAND_NAME, TIER_BANDS, tierBandOf, tierChances, tierRanges } from '../shared/data/items';
 import { expToNext, MAX_LEVEL } from '../shared/formulas';
 import { ITEM_ONLY_STATS, RARITIES, RARITY_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, type ClassId, type Rarity, type StatKey } from '../shared/types';
+import { FLOOR_GATE_LEVEL_MAX, FLOOR_GATE_LEVEL_MIN } from '../shared/floorGate';
 import { TUT_ACCEPT_GOLD, TUT_COUNT_MAX, TUT_GOLD_MAX, TUT_LINES_MAX, TUT_REWARD_KEYS, TUT_REWARD_NAME, TUT_STONES, tutRewardText, type TutRewardKey } from '../shared/tutorial';
 import type { MailAttachItem } from '../shared/mail';
 import { POTION_SIZES, potionName } from '../shared/data/potions';
@@ -753,14 +754,24 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         h('label', { title: 'ค่าในโค้ด: เปิด' },
           h('input', { type: 'checkbox', checked: draft[key], onchange: (e: Event) => { draft[key] = (e.target as HTMLInputElement).checked; updateSummary(); } }),
           ` ${label}`));
+    const fg = draft.floorGate;
+    const cg = code.floorGate;
     floorCard.replaceChildren(
       h('h2', {}, 'ทางขึ้นชั้น 2'),
       h('div', { class: 'muted' },
-        'ใช้กับประตูที่ต้องทำเควสก่อน (ประตูไปชั้น 2 ที่เมืองศูนย์กลางมิติ ยังไม่มีจนกว่าเมืองท่าเรือจะเข้าเกม) · ' +
-        'ปิด "เปิดประตู" = ไม่มีใครผ่านได้ แม้ทำเควสแล้ว (เข้าเกมใหม่ไปเกิดที่เมืองชั้น 1) · ' +
-        'ปิด "ต้องทำเควส" = ใครก็ผ่านได้ ยังต้องถึงเลเวลขั้นต่ำของประตู · ตัวที่อยู่ชั้น 2 อยู่แล้วไม่ถูกย้ายออก'),
-      box('floorGateOpen', 'เปิดประตูที่ต้องทำเควส'),
-      box('floorGateQuest', 'ต้องทำเควสก่อนผ่านประตู'),
+        'ขึ้นชั้น 2 ผ่านนักเดินเรือแห่งมิติข้างรูปปั้นอัศวินในเมืองศูนย์กลางมิติ (เห็นเฉพาะตัวที่ถึงเงื่อนไข) คุยครั้งแรก = ส่งเควส เปิดทาง + รางวัลทางจดหมาย (ผูกตัว ครั้งเดียวต่อตัวละคร Guest ส่งไม่ได้) แล้วพาไปท่าเรือมิติ · ' +
+        'ปิด "เปิดทาง" = ไม่มีใครขึ้นได้ แม้ทำเควสแล้ว (เข้าเกมใหม่ไปเกิดที่เมืองชั้น 1) · ' +
+        'ปิด "ต้องทำเควส" = ถึงเลเวลขั้นต่ำก็ขึ้นได้เลย ไม่ต้องปราบบอส ไม่ได้รางวัล · ตัวที่อยู่ชั้น 2 อยู่แล้วไม่ถูกย้ายออก'),
+      box('floorGateOpen', 'เปิดทางขึ้นชั้น 2'),
+      box('floorGateQuest', 'ต้องทำเควสก่อนขึ้น'),
+      h('div', { class: 'row bal-line' },
+        h('label', {}, 'เลเวลขั้นต่ำ ', numBox(() => fg.minLevel, (n) => { fg.minLevel = n; }, cg.minLevel, FLOOR_GATE_LEVEL_MIN, FLOOR_GATE_LEVEL_MAX, 1, () => updateSummary())),
+        h('span', { class: 'muted' }, ` ค่าในโค้ด ${cg.minLevel}`)),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: `ค่าในโค้ด: ${cg.needBoss ? 'เปิด' : 'ปิด'}` },
+          h('input', { type: 'checkbox', checked: fg.needBoss, onchange: (e: Event) => { fg.needBoss = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' ต้องเคยปราบหัวใจภูเขาไฟ')),
+      floorRewardBox(),
     );
   };
 
@@ -1018,6 +1029,39 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   ];
   const lineKey = (x: TutLine | MailAttachItem): string =>
     x.kind === 'potion' ? `p:${x.potion}:${x.size}` : x.kind === 'stone' ? `s:${x.stone}` : 'e';
+  /** The floor-2 quest's reward (ทางขึ้นชั้น 2 card), edited like a tutorial reward. */
+  function floorRewardBox(): HTMLElement {
+    const r = draft.floorGate.reward;
+    const cr = code.floorGate.reward;
+    const refresh = (): void => {
+      updateSummary();
+      drawFloor();
+    };
+    const lines = r.items.map((it, i) => {
+      const sel = h('select', {
+        onchange: (e: Event) => {
+          const pick = tutKinds[(e.target as HTMLSelectElement).selectedIndex];
+          r.items[i] = { ...pick.line, count: it.count } as MailAttachItem;
+          refresh();
+        },
+      }, ...tutKinds.map((o) => h('option', { selected: lineKey(o.line) === lineKey(it) }, o.label)));
+      const count = numBox(() => it.count, (n) => { it.count = n; }, it.count, 1, TUT_COUNT_MAX, 1, () => updateSummary());
+      const del = h('button', { onclick: () => { r.items.splice(i, 1); refresh(); } }, '✕');
+      return h('div', { class: 'row bal-line' }, sel, ' × ', count, del);
+    });
+    const add = h('button', {
+      disabled: r.items.length >= TUT_LINES_MAX,
+      onclick: () => { r.items.push({ ...tutKinds[0].line, count: 1 } as MailAttachItem); refresh(); },
+    }, '+ เพิ่มของ');
+    const changed = JSON.stringify(r) !== JSON.stringify(cr);
+    return h('div', { class: changed ? 'bal-changed' : '', style: 'margin:6px 0;padding:6px;border:1px solid #444;border-radius:4px' },
+      h('b', {}, 'รางวัลเควสเปิดทาง'),
+      h('div', { class: 'muted' }, `ค่าในโค้ด: ${tutRewardText(cr)} · ส่งทางจดหมาย ของทุกชิ้นผูกตัวละคร`),
+      h('div', { class: 'row bal-line' }, h('label', {}, 'ทอง (G) ', numBox(() => r.gold, (n) => { r.gold = n; }, cr.gold, 0, TUT_GOLD_MAX, 100, () => updateSummary()))),
+      ...lines,
+      add,
+    );
+  }
   const drawTut = (): void => {
     const refresh = (): void => {
       updateSummary();

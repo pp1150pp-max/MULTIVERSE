@@ -5,6 +5,8 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { upgradeCharacter, type CharacterData } from '../src/shared/sim/Player';
 import { GUEST_TTL_HOURS, type CharacterSummary } from '../src/shared/api';
+import { loginHub } from '../src/shared/floors';
+import { floorOf } from '../src/shared/data/zones';
 import type { ClassId } from '../src/shared/types';
 import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../src/shared/net/protocol';
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
@@ -766,7 +768,7 @@ export class Db {
 
   private summary(r: CharacterRow): CharacterSummary {
     const d = JSON.parse(r.data) as CharacterData;
-    return { id: r.id, name: r.name, classId: r.class_id as ClassId, level: d.level };
+    return { id: r.id, name: r.name, classId: r.class_id as ClassId, level: d.level, floor: floorOf(loginHub(d)) };
   }
 
   listCharacters(accountId: number): CharacterSummary[] {
