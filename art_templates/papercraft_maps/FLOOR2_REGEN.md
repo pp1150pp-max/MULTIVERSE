@@ -83,6 +83,43 @@ The circle is cut off by the image edges. Redo it so the WHOLE circle fits insid
 
 ---
 
+## รอบ 2: ปูยักษ์อีก 2 ท่า → `raw/floor2_m1/monsters/`
+
+ภาพ 4 ภาพของรอบแรกตัดได้แล้ว ยกเว้นปูยักษ์ เพราะพอได้ท่า claw ใหม่ ก็เจอว่าอีก 2 ท่าช่องผิดด้วย (2026-11-20)
+
+| ไฟล์ | ปัญหา |
+|---|---|
+| `giant_crab_cannon.png` | ได้ตาราง 5×5 |
+| `giant_crab_shell.png` | ได้ 4 แถว × 5 ช่อง และสลับแกน (แถวเป็นเฟรม ช่องเป็นมุม) |
+
+ใช้แชท 1 เดิมต่อได้เลย หรือเปิดแชทใหม่แล้วแนบ M1 กับประโยคเปิดเหมือนแชท 1
+
+### 5. `giant_crab_cannon.png`
+
+```
+Now a monster of this Shipwreck Beach, in EXACTLY the papercraft style of the attached map and its creatures: layered cut coloured paper and card, visible paper fibre, slightly uneven scissor-cut edges, small drop shadows between paper layers, creatures built from flat paper pieces joined at the joints like paper puppets, warm soft light from the upper left. NOT pixel art.
+Generate an image: a sprite sheet as a strict grid of 5 rows x 4 columns, 20 figures, the SAME monster in every cell, identical size and colours. Each row is one facing direction, top to bottom: row 1 front facing the viewer; row 2 three-quarter front turned toward the LEFT; row 3 side profile facing LEFT; row 4 three-quarter back turned toward the LEFT (we mostly see its back); row 5 back view. Each column is one frame of the move, left to right. Body keeps the same size in every frame, standing on the same baseline in every cell (flying ones hover at the same height). Every figure fully inside its own cell with clear empty space around it, nothing touching or overlapping. No effects, no motion lines, no dust, no sparks, no projectiles. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no ground, no text, no labels, no numbers, no grid lines. Do not use pink, magenta or purple on the monster.
+The move: a 4-frame cannon shot: frame 1 crouching and tilting the shell so the cannon points up into the air; frame 2 bracing; frame 3 the whole body jolting back from the recoil; frame 4 settling back to its normal pose. No smoke, no flash, no cannonball.
+The monster: the Giant Cannon Crab, a large imposing boss about three times the height of a hero: a huge red-orange crab with thick armoured legs, one enormous claw and one smaller claw, stalk eyes with fierce brows, its wide barnacle-covered shell carrying an old bronze ship's cannon mounted on top like a turret, a little seaweed and a starfish stuck to the shell.
+```
+
+### 6. `giant_crab_shell.png`
+
+```
+Now a monster of this Shipwreck Beach, in EXACTLY the papercraft style of the attached map and its creatures: layered cut coloured paper and card, visible paper fibre, slightly uneven scissor-cut edges, small drop shadows between paper layers, creatures built from flat paper pieces joined at the joints like paper puppets, warm soft light from the upper left. NOT pixel art.
+Generate an image: a sprite sheet as a strict grid of 5 rows x 4 columns, 20 figures, the SAME monster in every cell, identical size and colours. Each row is one facing direction, top to bottom: row 1 front facing the viewer; row 2 three-quarter front turned toward the LEFT; row 3 side profile facing LEFT; row 4 three-quarter back turned toward the LEFT (we mostly see its back); row 5 back view. Each column is one frame of the move, left to right. Body keeps the same size in every frame, standing on the same baseline in every cell (flying ones hover at the same height). Every figure fully inside its own cell with clear empty space around it, nothing touching or overlapping. No effects, no motion lines, no dust, no sparks, no projectiles. Background ONE perfectly flat solid magenta (#FF00FF), no shadows, no ground, no text, no labels, no numbers, no grid lines. Do not use pink, magenta or purple on the monster.
+The move: a 4-frame hide in the shell: frame 1 normal pose; frame 2 pulling the legs and claws in; frame 3 fully hidden inside the shell, only the shell and cannon showing; frame 4 eyes peeking out from under the shell.
+The monster: the Giant Cannon Crab, a large imposing boss about three times the height of a hero: a huge red-orange crab with thick armoured legs, one enormous claw and one smaller claw, stalk eyes with fierce brows, its wide barnacle-covered shell carrying an old bronze ship's cannon mounted on top like a turret, a little seaweed and a starfish stuck to the shell.
+```
+
+ถ้าตารางยังผิด ให้พิมพ์ต่อว่า:
+
+```
+Wrong grid. Redo it as EXACTLY 5 rows and EXACTLY 4 columns: 20 figures, no more, no fewer. Each ROW is one facing direction (row 1 front ... row 5 back view) and each COLUMN is one frame of the move.
+```
+
+---
+
 ## สำหรับคนใส่เข้าเกม
 
 ได้ภาพใหม่ครบแล้ว ให้ตัดด้วยคำสั่งเหล่านี้ (ใน worktree ที่มี `raw/` ชุดชั้น 2):

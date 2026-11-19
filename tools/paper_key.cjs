@@ -52,6 +52,12 @@ function keyBg(img, { soft = false, ghost = false, minSpeck = 40 } = {}) {
     }
     let a = m <= 0 ? 1 : 1 - m / full;
     a = ghost ? (a < 0.1 ? 0 : a) : Math.min(1, Math.max(0, (a - 0.3) / 0.4));
+    // A cast shadow ChatGPT drew anyway is the background's hue, only darker: gone too (not for see-through art).
+    // (Magenta: almost no green, red and blue both well up. Green: almost no red or blue.)
+    const peak = green ? d[i + 1] : Math.max(d[i], d[i + 2]);
+    const off = green ? Math.max(d[i], d[i + 2]) : d[i + 1];
+    const pair = green ? peak : Math.min(d[i], d[i + 2]);
+    if (!ghost && m > 0 && peak > 40 && off <= peak * 0.06 && pair >= peak * 0.5) a = 0;
     if (a > 0 && a < 1) {
       const ac = ghost ? Math.max(0.05, Math.min(a, (full - m) / (full - artLean))) : a;
       for (let c = 0; c < 3; c++) d[i + c] = Math.max(0, Math.min(255, Math.round((d[i + c] - (1 - ac) * bg[c]) / ac)));

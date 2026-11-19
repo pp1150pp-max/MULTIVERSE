@@ -203,5 +203,17 @@
       "bell",
       "vanish"
     ]
+  },
+  "shock_eel": {
+    "moves": [
+      "walk",
+      "attack"
+    ]
+  },
+  "spike_turtle": {
+    "moves": [
+      "walk",
+      "attack"
+    ]
   }
 }
