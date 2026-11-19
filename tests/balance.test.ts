@@ -175,7 +175,8 @@ const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
   ok(JSON.stringify(rowRanges('weapon_3', 'rare', 10, [...stats])) === before, 'a stat\'s own chances do not move any range');
   ok(near(tierChances('moveSpeed', 1)[0], 1) && near(tierChances('atk', 1)[0], 0.03), 'the stat uses its own chances, the others the central ones');
   ok(near(tierChances('moveSpeed', 1, true)[0], 1) && tierChances('atk', 1, true)[0] > 0.03, 'boss boost per stat (own 0, central 1.5)');
-  ok(near(statRerollOdds().tiers[0], 0.9 * 0.03 + 0.1 * 1), 'the blacksmith row is every stat\'s chances together');
+  // 13 extra stats equally likely (owner 2026-11-19): moveSpeed is 1/13 of the row.
+  ok(near(statRerollOdds().tiers[0], (12 / 13) * 0.03 + (1 / 13) * 1), 'the blacksmith row is every stat\'s chances together');
   const drops = Array.from({ length: 400 }, (_, i) => rollItem(mulberry32(500 + i), 20, 'mage', 1.5)).flatMap((it) => it.lines ?? []);
   const move = drops.filter((l) => l.stat === 'moveSpeed');
   ok(move.length > 10 && move.every((l) => l.tier === 1), `real drops: every moveSpeed line rolls T1 (${move.length} lines)`);
