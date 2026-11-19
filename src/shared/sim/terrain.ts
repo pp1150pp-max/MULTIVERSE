@@ -309,14 +309,14 @@ export class Terrain {
     ];
     // `set`: the seller's pictures (tools/cut_papercraft.cjs hub, HUB.md 7.6), ml_* or mr_*; `props`: their four odds and ends.
     // Pictures drawn the other way round from the rest (market_right.png's booth), so they mirror the other way.
-    // Mirrored once more, as the owner asked (2026-11-19): the merchant's stalls.
-    const DRAWN_TURNED = new Set<string>(['mk_goods_front', 'mk_veg_front']);
+    const DRAWN_TURNED = new Set<string>();
     const BACKS: Record<string, Record<string, string>> = {
-      // The merchant's side shows the stalls' fronts: across the bottom-left wall the backs faced the wrong way (owner 2026-11-19).
-      ml: { main_back: 'mk_goods_front', wing_back: 'mk_veg_front' },
+      ml: { main_back: 'mk_goods_stall', wing_back: 'mk_veg_stall' },
       mr: { main_back: 'mk_auction_booth', wing_back: 'mk_veg_stall' },
     };
-    const stalls = (seller: Vec2, alongX: boolean, set: string, props: string[]) => {
+    // `turn`: mirror that seller's stalls once more (the merchant's: owner 2026-11-19, fronts to the fountain and backs
+    // to their wall, so from the camera, which is on the wall's side, we see their backs).
+    const stalls = (seller: Vec2, alongX: boolean, set: string, props: string[], turn = false) => {
       for (const [slot, stall, mirrored, u, v, h, c] of ring) {
         // The stalls are the ones clearly seen from behind (market_backs.png): in the sellers' own sheets GPT drew the
         // scalloped canopy edge toward the camera, so their "backs" read as fronts (owner 2026-11-19).
@@ -324,11 +324,11 @@ export class Terrain {
         // alongX: the seller's back is to the bottom-left wall (+z), so (u, v) is (x, z); otherwise to the bottom-right
         // wall (+x): (u, v) turns into (z, x), and the stalls' pictures turn with it (mirrored flips).
         const [dx, dz] = alongX ? [u, v] : [v, u];
-        at(key, seller.x - s.x + dx, seller.z - s.z + dz, h, c, false, stall && (alongX ? mirrored : !mirrored) !== DRAWN_TURNED.has(key));
+        at(key, seller.x - s.x + dx, seller.z - s.z + dz, h, c, false, stall && ((alongX ? mirrored : !mirrored) !== DRAWN_TURNED.has(key)) !== turn);
       }
     };
     this.npcPos.merchant = { x: s.x, z: s.z + R - 6 };
-    stalls(this.npcPos.merchant, true, 'ml', ['cart', 'barrels', 'sacks', 'crates']);
+    stalls(this.npcPos.merchant, true, 'ml', ['cart', 'barrels', 'sacks', 'crates'], true);
     this.npcPos.broker = { x: s.x + R - 6, z: s.z };
     stalls(this.npcPos.broker, false, 'mr', ['wagon', 'strongbox', 'chests', 'rugs']);
 
