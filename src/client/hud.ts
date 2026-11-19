@@ -1522,6 +1522,11 @@ export class Hud {
     this.g.daily.toggle(false);
     this.g.friends.toggle(false);
     this.g.cosmetics.toggle(false);
+    this.g.quests.toggle(false);
+    this.g.cashShop.toggle(false);
+    this.g.channels.toggle(false);
+    this.g.rooms.toggle(false);
+    this.g.rooms.hideLobby();
     if (this.dialogOpen) this.closeDialog();
     this.g.tutorial.close();
   }
