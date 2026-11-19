@@ -55,6 +55,11 @@ export interface AutoConfig {
   offline: boolean;
   /** Minutes Auto keeps farming after a dropped connection. */
   offlineMin: number;
+  /**
+   * Nothing to fight in the circle (owner 2026-11-19): true = go back to the spot where Auto was switched on and
+   * stand still there; false = the old way, walk to a monster spawn spot inside the circle.
+   */
+  homeWait: boolean;
 }
 
 /** What is saved: only what differs from the code. */
@@ -66,6 +71,7 @@ export interface AutoTuning {
   allow?: Partial<Record<AutoAllow, boolean>>;
   offline?: boolean;
   offlineMin?: number;
+  homeWait?: boolean;
 }
 
 export const AUTO_RANGE = {
@@ -82,6 +88,8 @@ export const AUTO_NUM_NAME: Record<keyof typeof AUTO_RANGE, string> = {
 };
 /** Name of the "keep farming after a dropped connection" switch. */
 export const AUTO_OFFLINE_NAME = 'Auto ฟาร์มต่อหลังหลุดการเชื่อมต่อ (ไม่ใช่ Guest)';
+/** Name of the "no monster in the circle = wait at the Auto start spot" switch. */
+export const AUTO_HOME_WAIT_NAME = 'ไม่มีมอนในวง = กลับไปรอที่จุดกด Auto';
 const NUMS = Object.keys(AUTO_RANGE) as (keyof typeof AUTO_RANGE)[];
 
 /** The code's own Auto numbers (a fresh copy). */
@@ -94,6 +102,7 @@ export function codeAuto(): AutoConfig {
     allow: { lootFirst: true, othersLoot: true, scroll: true, skip: true },
     offline: true,
     offlineMin: 30,
+    homeWait: true,
   };
 }
 const CODE = codeAuto();
@@ -105,6 +114,7 @@ export function mergeAuto(t: AutoTuning | undefined): AutoConfig {
   for (const k of NUMS) if (t[k] !== undefined) c[k] = t[k]!;
   Object.assign(c.allow, t.allow);
   if (t.offline !== undefined) c.offline = t.offline;
+  if (t.homeWait !== undefined) c.homeWait = t.homeWait;
   return c;
 }
 
@@ -141,7 +151,7 @@ const round3 = (n: number) => Math.round(n * 1000) / 1000;
 export function checkAutoTuning(x: unknown, strict: boolean): { tuning: AutoTuning | undefined } | { error: string } {
   if (x === undefined) return { tuning: undefined };
   if (!isObj(x)) return strict ? { error: 'ค่า Auto ไม่ถูกต้อง' } : { tuning: undefined };
-  const TOP = ['defaults', ...NUMS, 'allow', 'offline'];
+  const TOP = ['defaults', ...NUMS, 'allow', 'offline', 'homeWait'];
   if (strict) {
     const extra = Object.keys(x).find((k) => !TOP.includes(k));
     if (extra) return { error: `Auto: ไม่รู้จักค่า "${extra.slice(0, 20)}"` };
@@ -207,6 +217,11 @@ export function checkAutoTuning(x: unknown, strict: boolean): { tuning: AutoTuni
       if (strict) return { error: `${AUTO_OFFLINE_NAME} ต้องเป็นเปิด/ปิด` };
     } else if (x.offline !== CODE.offline) out.offline = x.offline;
   }
+  if (x.homeWait !== undefined) {
+    if (typeof x.homeWait !== 'boolean') {
+      if (strict) return { error: `${AUTO_HOME_WAIT_NAME} ต้องเป็นเปิด/ปิด` };
+    } else if (x.homeWait !== CODE.homeWait) out.homeWait = x.homeWait;
+  }
   return { tuning: Object.keys(out).length ? out : undefined };
 }
 
@@ -221,5 +236,6 @@ export function autoChanges(a: AutoConfig, b: AutoConfig): string[] {
     if (a.allow[k] !== b.allow[k]) out.push(`Auto ${AUTO_ALLOW_NAME[k]} ${a.allow[k] ? 'เปิด' : 'ปิด'} → ${b.allow[k] ? 'เปิด' : 'ปิด'}`);
   }
   if (a.offline !== b.offline) out.push(`${AUTO_OFFLINE_NAME} ${a.offline ? 'เปิด' : 'ปิด'} → ${b.offline ? 'เปิด' : 'ปิด'}`);
+  if (a.homeWait !== b.homeWait) out.push(`${AUTO_HOME_WAIT_NAME} ${a.homeWait ? 'เปิด' : 'ปิด'} → ${b.homeWait ? 'เปิด' : 'ปิด'}`);
   return out;
 }

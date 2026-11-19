@@ -17,7 +17,7 @@ import {
 } from '../shared/balance';
 import { DROP_GOLD_MULT, type MonsterDef } from '../shared/data/monsters';
 import {
-  AUTO_ALLOW_NAME, AUTO_ALLOWS, AUTO_OFFLINE_NAME, AUTO_DEFAULT_NAME, AUTO_LOOT_ORDERS, AUTO_NUM_NAME, AUTO_OUT_ACTIONS, AUTO_RANGE, AUTO_TARGET_MODES, autoDefaultValueName,
+  AUTO_ALLOW_NAME, AUTO_ALLOWS, AUTO_HOME_WAIT_NAME, AUTO_OFFLINE_NAME, AUTO_DEFAULT_NAME, AUTO_LOOT_ORDERS, AUTO_NUM_NAME, AUTO_OUT_ACTIONS, AUTO_RANGE, AUTO_TARGET_MODES, autoDefaultValueName,
   type AutoAllow, type AutoDefaults,
 } from '../shared/autoTuning';
 import { NO_BOOST, ZONES, type MonsterBoost } from '../shared/data/zones';
@@ -701,6 +701,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'row bal-line' },
         h('label', {}, h('input', { type: 'checkbox', checked: a.offline, onchange: (e: Event) => { a.offline = (e.target as HTMLInputElement).checked; refresh(); } }), ` ${AUTO_OFFLINE_NAME}`),
         num('offlineMin', 1),
+      ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด · ปิด = วิ่งไปรอที่จุดเกิดมอนในวง (แบบเดิม)' },
+          h('input', { type: 'checkbox', checked: a.homeWait, onchange: (e: Event) => { a.homeWait = (e.target as HTMLInputElement).checked; refresh(); } }),
+          ` ${AUTO_HOME_WAIT_NAME}`),
       ),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
