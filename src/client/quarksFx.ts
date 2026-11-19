@@ -555,9 +555,10 @@ export class QuarksFx {
     this.define('mgShock', [flash(3, '#ffffff', '#9fd8ff', 0.16), glowRing(26, [7, 10], FROST2)]);
     this.define('mgFrail', [rim(24, CURSE), motes(12, CURSE)]);
     this.define('mgIceHit', [flash(2.2, '#ffffff', '#9fd8ff', 0.12), spray(12, [3, 8], FROST2, 8)]);
-    this.define('mgVortex', [field(40, {
-      life: cv(0.8), speed: cv(0), size: iv(0.1, 0.2), shape: new CircleEmitter({ radius: 1, thickness: 0.3 }),
-      behaviors: [grad([['#f0d0ff', 0], ['#7a30ff', 1]]), new OrbitOverLife(cv(5), V3(0, 0, 1)), new SizeOverLife(curve(1, 0.9, 0.5, 0))],
+    // Gravity Well: motes born on the rim spiral in to the centre (local space, so it scales with the circle's radius).
+    this.define('mgVortex', [field(70, {
+      worldSpace: false, life: iv(0.55, 0.7), speed: cv(-1.5), size: iv(0.12, 0.22), shape: new CircleEmitter({ radius: 1, thickness: 0.12 }),
+      behaviors: [grad([['#f0d0ff', 0], ['#7a30ff', 1]]), new OrbitOverLife(cv(6), V3(0, 0, 1)), new SizeOverLife(curve(0.6, 1, 0.7, 0.1))],
     })]);
     this.define('mgVeil', [rim(22, CURSE), motes(10, CURSE)]);
     this.define('mgEmpower', [rim(22, SUN), motes(14, SUN)]);
