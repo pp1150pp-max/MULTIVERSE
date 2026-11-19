@@ -29,7 +29,7 @@ import { checkCosTuning, cosTuningChanges, pasteCosTuning, sameCosTuning } from 
 import { checkCosShop, cosHiddenIds, cosShopChanges, sameCosShop } from '../src/shared/cosShop';
 import { checkOrbItems, checkOrbName, orbItemId, orbItemsChanges, ORB_ITEM_MAX, type OrbItems } from '../src/shared/orbItems';
 import { COS_SLOT_NAME, cosById } from '../src/shared/data/cosmetics';
-import { balanceChanges, checkBalance, currentBalanceTuning, sameBalance, withItemStatMult } from '../src/shared/balance';
+import { balanceChanges, checkBalance, currentBalanceTuning, sameBalance, withItemStatMult, type BalanceTuning } from '../src/shared/balance';
 import { upgradeItem } from '../src/shared/data/items';
 import { searchStats } from '../src/shared/sim/market';
 import type { Item, StoneStack } from '../src/shared/types';
@@ -596,15 +596,24 @@ export async function ownerToolsApi(
     const a = requireFeature(req, db, 'balance');
     const body = await readJson(req);
     // `reset: true` = everything back to the code; otherwise `tuning` is the whole new set of changes.
-    const c = body.reset === true ? { tuning: {} } : checkBalance(body.tuning, true);
+    // `part` (owner 2026-11-19, the skills tab is its own page): 'skills' = only the skills come from the body (or the
+    // code on a reset) and the rest stays as saved; 'rest' = the other way round. No part = the whole tuning, as before.
+    const part = body.part;
+    if (part !== undefined && part !== 'skills' && part !== 'rest') throw new HttpError(400, 'part ไม่ถูกต้อง');
+    const c = body.reset === true ? { tuning: {} as BalanceTuning } : checkBalance(body.tuning, true);
     if (!c.tuning) throw new HttpError(400, c.error);
     const before = currentBalanceTuning();
+    const { skills: bodySkills, ...bodyRest } = c.tuning;
+    const { skills: savedSkills, ...savedRest } = before;
+    const merged: BalanceTuning = part === 'skills' ? { ...savedRest, ...(bodySkills ? { skills: bodySkills } : {}) }
+      : part === 'rest' ? { ...bodyRest, ...(savedSkills ? { skills: savedSkills } : {}) }
+      : c.tuning;
     // The item stat multipliers are never changed here (not even by the reset): only the owner's confirm below does.
-    const next = withItemStatMult(c.tuning, before.itemStatMult);
+    const next = withItemStatMult(merged, before.itemStatMult);
     if (!sameBalance(before, next)) {
       db.setBalance(next);
       const changes = balanceChanges(before, next);
-      log(db, a, 'balance', 'ปรับสมดุล ทั้งเซิร์ฟ', (body.reset === true ? 'คืนค่าในโค้ด: ' : '') + (changes.length > 1500 ? changes.slice(0, 1500) + '…' : changes));
+      log(db, a, 'balance', part === 'skills' ? 'ระบบสกิล ทั้งเซิร์ฟ' : 'ปรับสมดุล ทั้งเซิร์ฟ', (body.reset === true ? (part === 'skills' ? 'คืนค่าในโค้ด (ระบบสกิล): ' : part === 'rest' ? 'คืนค่าในโค้ด (ยกเว้นระบบสกิล): ' : 'คืนค่าในโค้ด: ') : '') + (changes.length > 1500 ? changes.slice(0, 1500) + '…' : changes));
       world.balanceChanged(next);
     }
     send(res, 200, { tuning: currentBalanceTuning() } satisfies AdminBalance);
