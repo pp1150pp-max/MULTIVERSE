@@ -207,8 +207,8 @@ export const CLASSES: Record<ClassId, ClassDef> = {
         params: { dmgBonus: { v: 20, nameTh: 'ดาเมจเพิ่ม', unit: '%', lo: 0, hi: 300 }, buffTime: sec(8, 'เวลาบัฟ') } },
       { id: 'mg_manashield', kind: 'normal', line: 2, tier: 7, anim: 'e', name: 'Mana Shield', nameTh: 'โล่มานาหมู่', desc: 'ตัวเองและผู้เล่นทุกคนในวงรอบตัวได้โล่ดูดซับดาเมจ (ตาม HP สูงสุดของแต่ละคน)', dmg: 0, mp: 30, cooldown: 22,
         params: { shieldPct: pctP(15, 'โล่ (% HP สูงสุด)'), buffTime: sec(6, 'เวลาโล่') } },
-      { id: 'mg_timewarp', kind: 'ult', line: 2, tier: 0, anim: 'r', name: 'Time Warp', nameTh: 'บิดเบือนเวลา', desc: 'ศัตรูรอบตัวช้าลงมาก และคูลดาวน์สกิลของผู้เล่นทุกคนในวงเดินเร็วขึ้น', dmg: 1.5, mp: 40, cooldown: 20,
-        params: { slow: pctP(60, 'ช้าลง'), slowTime: sec(5, 'เวลาช้าลง'), haste: { v: 50, nameTh: 'คูลดาวน์เร็วขึ้น', unit: '%', lo: 0, hi: 300 }, hasteTime: sec(5, 'เวลาคูลดาวน์เร็วขึ้น') } },
+      { id: 'mg_timewarp', kind: 'ult', line: 2, tier: 0, anim: 'r', name: 'Time Warp', nameTh: 'บิดเบือนเวลา', desc: 'ศัตรูรอบตัวช้าลงมาก และคูลดาวน์ที่เหลือของสกิล Q/E/R ของผู้เล่นทุกคนในวงลดลงทันที (ไม่รวมบิดเบือนเวลา)', dmg: 1.5, mp: 40, cooldown: 20,
+        params: { slow: pctP(60, 'ช้าลง'), slowTime: sec(5, 'เวลาช้าลง'), cdCut: { v: 50, nameTh: 'ลดคูลดาวน์ที่เหลือทันที', unit: '%', lo: 0, hi: 100, status: true } } },
       { id: 'mg_manawell', kind: 'ult', line: 2, tier: 1, anim: 'r', name: 'Mana Well', nameTh: 'วงคืนพลัง', desc: 'วางวงเวทใต้เท้า ผู้เล่นในวงฟื้น MP ทุกวิและได้โล่ ศัตรูในวงช้าลง', dmg: 0, mp: 0, cooldown: 40,
         params: { duration: num(8, 'อยู่นาน', 'วิ', 1, 30), mpPct: num(4, 'ฟื้น MP ต่อวิ (% MP สูงสุด)', '%', 0, 50), shieldPct: pctP(10, 'โล่ (% HP สูงสุด)'), slow: pctP(30, 'ช้าลง') } },
       // ---- Passives (one worn)
