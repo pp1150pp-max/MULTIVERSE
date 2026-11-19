@@ -276,8 +276,10 @@ export class Terrain {
     const D = HUB_BUILDING_SIZE;
     const L = HUB_BUILDING_SIZE;
     const q = (D + L) / 4;
+    const houseBoxes: [number, number, number, number][] = [];
     const house = (key: string, alongX: boolean, t: number): Vec2 => {
       const [cx, cz] = alongX ? [t, -R + D / 2] : [-R + D / 2, t];
+      houseBoxes.push([cx - D / 2, cz - D / 2, cx + D / 2, cz + D / 2]);
       at(key, cx + q, cz + q, HUB_BUILDING_HEIGHT, 0, true);
       for (const [ox, oz] of [[0, 0], [1.3, 1.3], [-1.3, -1.3], [1.3, -1.3], [-1.3, 1.3]]) {
         this.colliders.push({ x: s.x + cx + ox * 0.8, z: s.z + cz + oz * 0.8, r: D / 2 - 0.5 });
@@ -346,15 +348,23 @@ export class Terrain {
     for (const road of [45, 135, 225, 315]) {
       const a2 = rad(road);
       const ux = Math.cos(a2), uz = Math.sin(a2);
+      // Not in front of the NPC buildings (owner 2026-11-19: they hid the banners): a pole whose spot is within reach of
+      // a building's footprint is left out.
+      const nearHouse = (x: number, z: number) => houseBoxes.some(([x0, z0, x1, z1]) => x > x0 - 2.5 && x < x1 + 2.5 && z > z0 - 2.5 && z < z1 + 2.5);
       const pair = (key: string, along: number, side: number, h: number) => {
-        for (const sd of [-1, 1]) at(key, ux * along - uz * sd * side, uz * along + ux * sd * side, h, 0.3);
+        for (const sd of [-1, 1]) {
+          const x = ux * along - uz * sd * side;
+          const z = uz * along + ux * sd * side;
+          if (!nearHouse(x, z)) at(key, x, z, h, 0.3);
+        }
       };
       pair('lamp_post', corner - 3.7, 2.2, 3.8);
       pair('banner_pole', corner - 6.7, 2.8, 4);
     }
     for (const deg of [176, 290]) polar('planter', deg, HUB_PLAZA_RADIUS + 1.6, 1.6, 0.7);
-    // The knight's statue beside the top road (to its right on screen).
-    polar('town_statue', 212, HUB_PLAZA_RADIUS + 2.2, 3.8, 0.8);
+    // The knight's statue on the plaza's edge where the top road comes in, the road parting round it (owner 2026-11-19:
+    // beside the road it stood behind the vault).
+    polar('town_statue', 225, HUB_PLAZA_RADIUS + 1, 3.8, 0.8);
 
     // The wall kit (tools/cut_hub.cjs): one scale for all pieces, U world units per pixel. Each wall
     // picture's foot runs at the camera's slope for a world axis, so copies line up end to end, one end
