@@ -74,6 +74,11 @@ export interface FxApi {
    */
   /** `follow` may come as null over the wire; `skill` = the skill that made it (its standing layer, zoneProps.ts). */
   zone(name: SkillEffect, x: number, z: number, size: number, duration: number, follow?: number | null, skill?: string, by?: number): void;
+  /**
+   * The Gunslinger's Support Drone (owner 2026-11-19): `duration` > 0 = it appears and flies after player `by` for that
+   * long; `duration` 0 with an `angle` = it just fired that way (it turns and kicks back). One message per cast / shot.
+   */
+  drone(by: number, duration: number, angle?: number): void;
 }
 
 export type SkillEffect = 'slash' | 'whirlwind' | 'charge' | 'quake' | 'explosion' | 'frost' | 'crater' | 'muzzle' | 'impact'
