@@ -17,6 +17,16 @@ export function clientIp(req: IncomingMessage): string {
   return first?.trim() ? clean(first) : remote;
 }
 
+/**
+ * Which Cloudflare data center the player came in through (the 3-letter code at the end of CF-Ray, e.g. BKK, SIN),
+ * so the owner can see whose route goes abroad. Null when not through the tunnel.
+ */
+export function cfEdge(req: IncomingMessage): string | null {
+  if (!LOOPBACK.has(req.socket.remoteAddress ?? "")) return null;
+  const m = /-([A-Za-z]{3})$/.exec(String(req.headers["cf-ray"] ?? "").trim());
+  return m ? m[1].toUpperCase() : null;
+}
+
 /** Headers are whatever the sender wrote: keep them short and on one line in the log. */
 function clean(s: string): string {
   return s.replace(/[\p{Cc}\p{Cf}\s]/gu, '').slice(0, 64);
