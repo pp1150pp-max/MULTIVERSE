@@ -324,10 +324,12 @@ export class SkillWindow {
     }
     const rank = rankOf(p.skillBook, sk.id);
     const r2 = (n: number) => Math.round(n * 100) / 100;
+    // The "ลดคูลดาวน์สกิล %" item stat, as Player.skillCooldown uses it.
+    const cut = Math.min(Math.max(0, p.stats.cdr ?? 0), currentBalance().cdrCap) / 100;
     const at = (r: number): string => [
       sk.kind !== 'passive' && sk.dmg > 0 ? `ดาเมจ ${Math.round(rankedDmg(sk, r) * 100)}% ATK` : '',
       sk.mp ? `MP ${rankedMp(sk, p.cls.id, p.level, r)}` : '',
-      sk.cooldown ? `คูลดาวน์ ${r2(rankedCooldown(sk, r))} วิ` : '',
+      sk.cooldown ? `คูลดาวน์ ${r2(rankedCooldown(sk, r))} วิ${cut > 0 && sk.kind !== 'basic' && sk.kind !== 'dash' ? ` (ของที่ใส่ลดเหลือ ${r2(rankedCooldown(sk, r) * (1 - cut))} วิ)` : ''}` : '',
       ...skillParamLines(sk, r),
     ].filter(Boolean).join(' · ');
     const reach = skillReach(sk);

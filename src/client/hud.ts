@@ -2349,7 +2349,7 @@ export class Hud {
       return offered.has(i) ? cell.replace('class="cell ', 'class="cell trade-offered ') : cell;
     }).join('');
     const fmt = (k: StatKey, v: number) =>
-      k === 'hpRegen' || k === 'mpRegen' ? v.toFixed(1) : String(Math.round(v));
+      k === 'hpRegen' || k === 'mpRegen' || k === 'cdr' || k === 'buffDur' || k === 'armorPen' ? v.toFixed(1) : String(Math.round(v));
     $('stat-list').innerHTML = STAT_KEYS.map((k) =>
       `<div class="stat"><span>${STAT_LABEL[k]}</span><b>${fmt(k, p.stats[k])}</b></div>`,
     ).join('');

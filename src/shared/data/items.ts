@@ -124,7 +124,46 @@ const AFFIXES: { stat: StatKey; min: number; max: number; per: number }[] = [
   { stat: 'moveSpeed', min: 2, max: 6, per: 0.1 },
   { stat: 'hpRegen', min: 0.5, max: 1.5, per: 0.1 },
   { stat: 'mpRegen', min: 0.5, max: 1.5, per: 0.1 },
+  // Owner 2026-11-19: grow with item level and rarity like the rest; a legendary Lv40 T1 tops out at 3.0%.
+  { stat: 'cdr', min: 0.3, max: 0.6, per: 0.0112 },
+  { stat: 'buffDur', min: 0.3, max: 0.6, per: 0.0112 },
+  { stat: 'armorPen', min: 0.3, max: 0.6, per: 0.0112 },
 ];
+
+/**
+ * How likely each stat is when an extra line is rolled (drops and the blacksmith's "สุ่มสเตตัส"), relative
+ * to the others. Code: 1 each (owner 2026-11-19); the /admin "ปรับสมดุล" tab can change them
+ * (src/shared/balance.ts calls setAffixWeights). Missing = 1.
+ */
+let AFFIX_WEIGHT: Partial<Record<StatKey, number>> = {};
+export const affixWeight = (stat: StatKey): number => AFFIX_WEIGHT[stat] ?? 1;
+/** Uses these extra-line weights from now on (already checked by src/shared/balance.ts). */
+export function setAffixWeights(w: Partial<Record<StatKey, number>>): void {
+  AFFIX_WEIGHT = { ...w };
+}
+
+/**
+ * Each stat's chance (0..1, same order) when one extra line is picked from `pool` by affixWeight. Stats
+ * weighted 0 never come up, unless every one in the pool is 0: then all are equally likely.
+ */
+function affixChances(pool: readonly { stat: StatKey }[]): number[] {
+  const w = pool.map((a) => Math.max(0, affixWeight(a.stat)));
+  const total = w.reduce((x, y) => x + y, 0);
+  return total > 0 ? w.map((x) => x / total) : pool.map(() => 1 / pool.length);
+}
+
+/** Index into `pool` of an extra line picked by affixWeight. */
+function pickAffix(pool: readonly { stat: StatKey }[], r: Rng): number {
+  const c = affixChances(pool);
+  let roll = r();
+  for (let i = 0; i < c.length; i++) {
+    roll -= c[i];
+    if (roll < 0 && c[i] > 0) return i;
+  }
+  // Rounding left a sliver: the last stat that can come up.
+  for (let i = c.length - 1; i >= 0; i--) if (c[i] > 0) return i;
+  return 0;
+}
 
 /** Extra stats rolled from rarity are this part of the AFFIXES table (owner 2026-11-08: damage stats halved). */
 const EXTRA_SCALE: Partial<Record<StatKey, number>> = { atk: 0.5, atkSpeed: 0.5, crit: 0.5, critDmg: 0.5 };
@@ -339,7 +378,7 @@ export function rollTier(stat: StatKey, level: number, r: Rng, boss = false): St
 }
 
 /** Stats stored with one decimal (regen and the % stats); the rest are whole numbers. */
-const DECIMAL: ReadonlySet<StatKey> = new Set<StatKey>(['hpRegen', 'mpRegen', 'crit', 'critDmg', 'atkSpeed', 'moveSpeed']);
+const DECIMAL: ReadonlySet<StatKey> = new Set<StatKey>(['hpRegen', 'mpRegen', 'crit', 'critDmg', 'atkSpeed', 'moveSpeed', 'cdr', 'buffDur', 'armorPen']);
 
 /** The smallest step a stat's value moves in (0.1 for decimal stats, else 1). */
 export const statStep = (k: StatKey): number => (DECIMAL.has(k) ? 0.1 : 1);
@@ -430,7 +469,7 @@ function build(base: BaseItem, rarity: Rarity, level: number, cls: ClassId, r: R
   let n = AFFIX_COUNT[rarity] + (base.slot === 'ring' ? 1 : 0);
   const pool = [...AFFIXES];
   while (n-- > 0 && pool.length) {
-    const a = pool.splice(Math.floor(r() * pool.length), 1)[0];
+    const a = pool.splice(pickAffix(pool, r), 1)[0];
     lines.push(rollLine(a.stat, level, ...rowRange(base, rarity, level, a.stat, 'extra'), r, tierBoost));
   }
   const stats = sumLines(lines);
@@ -660,7 +699,7 @@ export function rerollStat(item: Item, r: Rng = Math.random): number {
     at = extras[Math.floor(r() * extras.length)];
     const taken = new Set(extras.filter((i) => i !== at).map((i) => lines[i].stat));
     const pool = AFFIXES.filter((a) => !taken.has(a.stat));
-    const stat = pool[Math.floor(r() * pool.length)].stat;
+    const stat = pool[pickAffix(pool, r)].stat;
     lines[at] = rollLine(stat, item.level, ...rowRange(base, item.rarity, item.level, stat, 'extra'), r);
   } else {
     at = Math.floor(r() * lines.length);
@@ -690,7 +729,7 @@ export function statRerollOdds(item?: Item | null): StatRerollOdds {
   const lines = item?.lines;
   let mainOnly = false;
   if (!ranges || !lines) {
-    for (const a of AFFIXES) add(a.stat, 1 / AFFIXES.length);
+    affixChances(AFFIXES).forEach((c, i) => add(AFFIXES[i].stat, c));
   } else {
     const extras = ranges.map((x, i) => (x.main ? -1 : i)).filter((i) => i >= 0);
     if (!extras.length) {
@@ -702,7 +741,7 @@ export function statRerollOdds(item?: Item | null): StatRerollOdds {
     for (const at of extras) {
       const taken = new Set(extras.filter((i) => i !== at).map((i) => lines[i].stat));
       const pool = AFFIXES.filter((a) => !taken.has(a.stat));
-      for (const a of pool) add(a.stat, 1 / extras.length / pool.length);
+      affixChances(pool).forEach((c, i) => add(pool[i].stat, c / extras.length));
     }
   }
   // Each stat rolls its tier from its own table (owner 2026-11-11): one row of all of them together.

@@ -6,7 +6,7 @@
 // and on every save, and sends them to every browser so tooltips and the blacksmith's odds match.
 import { CLASSES, CLASS_IDS, MP_COST_PER_LEVEL } from './data/classes';
 import {
-  CODE_BOSS_TIER_BOOST, CODE_RANGE_FLOOR, CODE_TIER_WEIGHT, CODE_TIER_WIDTH, setItemStatMult, setTierTables, TIER_BAND_NAME, TIER_BANDS, tierBandOf, type TierBand, type TierTableDef,
+  CODE_BOSS_TIER_BOOST, CODE_RANGE_FLOOR, setAffixWeights, CODE_TIER_WEIGHT, CODE_TIER_WIDTH, setItemStatMult, setTierTables, TIER_BAND_NAME, TIER_BANDS, tierBandOf, type TierBand, type TierTableDef,
 } from './data/items';
 import { CODE_POTIONS, CODE_SWORD_POTION_BONUS, POTION_RANGE, type PotionNums } from './data/potionTable';
 import { MONSTERS, type MonsterDef } from './data/monsters';
@@ -50,6 +50,11 @@ export const CODE_WALK_HIDDEN = true;
 export const CODE_BOSS_WIPE_KEEP_HP = true;
 /** Seconds a boss-room group that is all down has to get someone up with a feather (owner: 5). */
 export const CODE_ROOM_WIPE_SECONDS = 5;
+/**
+ * Most a character's skill cooldowns can be cut by the "ลดคูลดาวน์สกิล %" item stat, in % (owner 2026-11-19:
+ * no cap on the total from items, but a safety stop at 75% in case the multipliers are set high).
+ */
+export const CODE_CDR_CAP = 75;
 
 /**
  * One class's numbers: Lv1 stats, added per level, final multipliers (gear included), damage to bosses, and how
@@ -127,6 +132,10 @@ export interface Balance {
    * item, see server/admin-tools.ts); the normal save keeps them as they are.
    */
   itemStatMult: Record<StatKey, number>;
+  /** How likely each stat is as an extra line on items, relative to the others (owner 2026-11-19: 1 each in code). */
+  affixWeight: Record<StatKey, number>;
+  /** Most the "ลดคูลดาวน์สกิล %" stat can cut a skill's cooldown, in %. */
+  cdrCap: number;
   /** Ordinary monsters' multipliers that are not ×1 (none in code). */
   monsters: MonsterTuning;
   /** Monsters per spawn spot ×, by map id (PACK_ZONES); a map left out is ×1. */
@@ -181,6 +190,10 @@ export interface BalanceTuning {
   bandTiers?: Partial<Record<TierBand, TierParts>>;
   /** Item stat multipliers that are not ×1. */
   itemStatMult?: Partial<Record<StatKey, number>>;
+  /** Extra-line weights that are not 1. */
+  affixWeight?: Partial<Record<StatKey, number>>;
+  /** Cooldown cut cap %, when not the code's. */
+  cdrCap?: number;
   /** Ordinary monsters' multipliers that are not ×1. */
   monsters?: MonsterTuning;
   /** Monsters-per-spot multipliers that are not ×1, by map id. */
@@ -220,6 +233,7 @@ export interface BalanceTuning {
 /** Highest Lv1 / per-level value of each stat (owner 2026-11-11); the lowest is 0. */
 export const STAT_MAX: Record<StatKey, number> = {
   maxHp: 100000, maxMp: 100000, atk: 10000, def: 10000, crit: 100, critDmg: 1000, atkSpeed: 300, moveSpeed: 300, hpRegen: 1000, mpRegen: 1000,
+  cdr: 100, buffDur: 300, armorPen: 100,
 };
 /** Ranges of the other numbers (owner 2026-11-11), both ends allowed. */
 export const BALANCE_RANGE = {
@@ -232,6 +246,8 @@ export const BALANCE_RANGE = {
   rangeFloor: [5, 95],
   bossTierBoost: [0, 10],
   itemStatMult: [0.1, 10],
+  affixWeight: [0, 100],
+  cdrCap: [0, 95],
   monsterMult: [0.1, 10],
   mobPack: [1, 5],
   bossSwitchSec: [0, 120],
@@ -264,6 +280,8 @@ export function codeBalance(): Balance {
     statTiers: {},
     bandTiers: {},
     itemStatMult: full(undefined, 1),
+    affixWeight: full(undefined, 1),
+    cdrCap: CODE_CDR_CAP,
     monsters: {},
     mobPack: {},
     potions: codePotions(),
@@ -306,6 +324,8 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.statTiers) b.statTiers = structuredClone(t.statTiers);
   if (t.bandTiers) b.bandTiers = structuredClone(t.bandTiers);
   Object.assign(b.itemStatMult, t.itemStatMult);
+  Object.assign(b.affixWeight, t.affixWeight);
+  if (t.cdrCap !== undefined) b.cdrCap = t.cdrCap;
   if (t.monsters) b.monsters = structuredClone(t.monsters);
   if (t.mobPack) b.mobPack = { ...t.mobPack };
   if (t.potions) {
@@ -339,6 +359,7 @@ export function applyBalance(t: BalanceTuning): void {
   const b = current;
   setTierTables((stat, band) => statTierTable(b, stat, band));
   setItemStatMult(b.itemStatMult);
+  setAffixWeights(b.affixWeight);
 }
 
 /** The tables a stat at a band takes parts from, first first (see TierParts); null stat / band = any. */
@@ -455,7 +476,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'monsters', 'mobPack', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'forgeAuto', 'walkHidden', 'bossWipeKeepHp', 'roomWipeSec', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'menuLayout'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'forgeAuto', 'walkHidden', 'bossWipeKeepHp', 'roomWipeSec', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'menuLayout'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -532,7 +553,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   }
 
   // Single numbers
-  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'roomWipeSec', range: readonly [number, number], what: string): string | null => {
+  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'roomWipeSec' | 'cdrCap', range: readonly [number, number], what: string): string | null => {
     const n = num(o[key], range[0], range[1], what);
     if (typeof n === 'string') return n;
     if (n !== undefined && n !== CODE[key]) out[key] = n;
@@ -682,6 +703,25 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
       if (n !== undefined && n !== 1) res[k] = n;
     }
     if (Object.keys(res).length) out.itemStatMult = res;
+    return null;
+  };
+  // Extra-line weights: only those not 1 are kept, in STAT_KEYS order.
+  const affixWeight = (): string | null => {
+    const x = o.affixWeight;
+    if (x === undefined) return null;
+    if (!isObj(x)) return strict ? 'น้ำหนักสุ่มสเตตัสเสริมไม่ถูกต้อง' : null;
+    if (strict) {
+      const extra = Object.keys(x).find((k) => !(STAT_KEYS as readonly string[]).includes(k));
+      if (extra) return `น้ำหนักสุ่มสเตตัสเสริม: ไม่รู้จักสเตตัส "${extra.slice(0, 20)}"`;
+    }
+    const res: Partial<Record<StatKey, number>> = {};
+    for (const k of STAT_KEYS) {
+      const n = num(x[k], ...BALANCE_RANGE.affixWeight, `น้ำหนักสุ่ม${STAT_LABEL[k]}`);
+      if (typeof n === 'string') return n;
+      if (n !== undefined && n !== 1) res[k] = n;
+    }
+    if (STAT_KEYS.every((k) => (res[k] ?? 1) === 0)) return strict ? 'น้ำหนักสุ่มสเตตัสเสริมต้องมีอย่างน้อย 1 ตัวที่มากกว่า 0' : null;
+    if (Object.keys(res).length) out.affixWeight = res;
     return null;
   };
   /** One set of monster multipliers (only those not ×1, in MONSTER_STATS order), or an error; `what` names whose. */
@@ -872,6 +912,8 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     statTiers() ??
     bandTiers() ??
     itemMult() ??
+    affixWeight() ??
+    one('cdrCap', BALANCE_RANGE.cdrCap, 'ลดคูลดาวน์ได้สูงสุด %') ??
     monsters() ??
     mobPack() ??
     potions() ??
@@ -951,6 +993,10 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   for (const k of STAT_KEYS) {
     if (a.itemStatMult[k] !== b.itemStatMult[k]) out.push(`ตัวคูณ${STAT_LABEL[k]}บนไอเทม ×${a.itemStatMult[k]} → ×${b.itemStatMult[k]}`);
   }
+  for (const k of STAT_KEYS) {
+    if (a.affixWeight[k] !== b.affixWeight[k]) out.push(`น้ำหนักสุ่ม${STAT_LABEL[k]} ${a.affixWeight[k]} → ${b.affixWeight[k]}`);
+  }
+  if (a.cdrCap !== b.cdrCap) out.push(`ลดคูลดาวน์ได้สูงสุด ${a.cdrCap}% → ${b.cdrCap}%`);
   const mons = (what: string, x: Partial<MonsterMults> | undefined, y: Partial<MonsterMults> | undefined): void => {
     for (const k of MONSTER_STATS) {
       const p = x?.[k] ?? 1;

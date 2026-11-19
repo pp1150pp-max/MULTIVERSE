@@ -91,7 +91,7 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
       // Set first so the spin's own hits heal too.
       // Heals for a share of all damage dealt for a few seconds (recasting restarts the timer).
       p.lifesteal = P('lifesteal') / 100;
-      p.lifestealUntil = sim.time + P('lifestealTime');
+      p.lifestealUntil = sim.time + p.buffTime(P('lifestealTime'));
       {
         let hits = 0;
         forCircle(sim, p.x, p.z, far, (m) => {
@@ -232,7 +232,7 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
       return true;
     case 'sw_hunt':
       hitDash(p, ang, far, 0.25, dmg, 3, false);
-      p.addStatBuff('sw_hunt', P('buffTime'), { atkSpeed: P('atkSpeed') });
+      p.addStatBuff('sw_hunt', p.buffTime(P('buffTime')), { atkSpeed: P('atkSpeed') });
       sim.fx('effect', 'sw_streak', p.x + Math.cos(ang), p.z + Math.sin(ang), ang, 1.6);
       sim.fx('effect', 'sw_aura', p.x, p.z, 0, 0.9);
       return true;
@@ -274,12 +274,12 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
         sim.fx('burst', p.x, 1, p.z, '#8a7aff', 10, 3);
         sim.fx('effect', 'sw_windring', p.x, p.z, ang, r * 1.05);
         forCircle(sim, p.x, p.z, r, (m) => sim.hitMonster(p, m, dmg, { kb: 3 }));
-        p.addStatBuff('sw_shadowstep', P('buffTime'), { crit: P('crit') });
+        p.addStatBuff('sw_shadowstep', p.buffTime(P('buffTime')), { crit: P('crit') });
       });
       return true;
     }
     case 'sw_overdrive':
-      p.addStatBuff('sw_overdrive', P('buffTime'), { atkSpeed: P('atkSpeed'), moveSpeed: P('moveSpeed') });
+      p.addStatBuff('sw_overdrive', p.buffTime(P('buffTime')), { atkSpeed: P('atkSpeed'), moveSpeed: P('moveSpeed') });
       sim.fx('effect', 'sw_aura', p.x, p.z, 0, 1);
       sim.fx('burst', p.x, 1, p.z, color, 12, 3);
       sim.text(p.x, p.topY + 0.4, p.z, 'เร่งเครื่อง!', 'info', 0.8);
@@ -355,15 +355,15 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
         m.taunt(p);
         sim.text(m.x, m.topY + 0.4, m.z, '!', 'crit', 0.6);
       });
-      p.addTakenMult(1 - P('less') / 100, P('buffTime'));
-      shield(P('buffTime'));
+      p.addTakenMult(1 - P('less') / 100, p.buffTime(P('buffTime')));
+      shield(p.buffTime(P('buffTime')));
       sim.fx('effect', 'sw_shout', p.x, p.z, 0, far);
       return true;
     case 'sw_guard':
-      p.addTakenMult(1 - P('less') / 100, P('buffTime'));
-      shield(P('buffTime'));
+      p.addTakenMult(1 - P('less') / 100, p.buffTime(P('buffTime')));
+      shield(p.buffTime(P('buffTime')));
       sim.fx('effect', 'sw_barrier', p.x, p.z, 0, 1);
-      sim.fx('ring', p.x, p.z, 1.3, color, P('buffTime'));
+      sim.fx('ring', p.x, p.z, 1.3, color, p.buffTime(P('buffTime')));
       sim.text(p.x, p.topY + 0.4, p.z, 'ตั้งรับ', 'info', 0.8);
       return true;
     case 'sw_shockwave': {
@@ -375,25 +375,25 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
     }
     case 'sw_thorns':
       p.reflect = P('reflect') / 100;
-      p.reflectUntil = sim.time + P('buffTime');
+      p.reflectUntil = sim.time + p.buffTime(P('buffTime'));
       p.reflectFlat = (p.stats.def * P('reflectDef')) / 100;
-      p.addTakenMult(1 - P('less') / 100, P('buffTime'));
+      p.addTakenMult(1 - P('less') / 100, p.buffTime(P('buffTime')));
       sim.fx('effect', 'sw_armorhit', p.x, p.z, 0, 1);
-      sim.fx('ring', p.x, p.z, 1.3, '#ff8a5a', P('buffTime'));
+      sim.fx('ring', p.x, p.z, 1.3, '#ff8a5a', p.buffTime(P('buffTime')));
       sim.text(p.x, p.topY + 0.4, p.z, 'เกราะสะท้อน', 'info', 0.8);
       return true;
     case 'sw_anchor':
-      p.addTakenMult(1 - P('less') / 100, P('buffTime'));
-      p.steadyUntil = sim.time + P('buffTime');
-      shield(P('buffTime'));
-      p.addStatBuff('sw_anchor', P('buffTime'), { moveSpeed: -P('moveSlow') });
+      p.addTakenMult(1 - P('less') / 100, p.buffTime(P('buffTime')));
+      p.steadyUntil = sim.time + p.buffTime(P('buffTime'));
+      shield(p.buffTime(P('buffTime')));
+      p.addStatBuff('sw_anchor', p.buffTime(P('buffTime')), { moveSpeed: -P('moveSlow') });
       sim.fx('effect', 'quake', p.x, p.z, 0, 1.6);
       sim.fx('effect', 'sw_barrier', p.x, p.z, 0, 1);
-      sim.fx('ring', p.x, p.z, 1.3, color, P('buffTime'));
+      sim.fx('ring', p.x, p.z, 1.3, color, p.buffTime(P('buffTime')));
       return true;
     case 'sw_warcry': {
       // Everyone standing in the circle, party or not (owner 2026-11-14).
-      const t = P('buffTime');
+      const t = p.buffTime(P('buffTime'));
       // Everyone also gets a share of the caster's own DEF, without this buff (owner 2026-11-15).
       p.statBuffs = p.statBuffs.filter((b) => b.id !== 'sw_warcry');
       p.recompute();
@@ -427,7 +427,7 @@ export function castSword(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, c: CastC
       return true;
     }
     case 'sw_unbreakable': {
-      const t = P('buffTime');
+      const t = p.buffTime(P('buffTime'));
       forCircle(sim, p.x, p.z, far, (m) => m.taunt(p));
       p.addTakenMult(1 - P('less') / 100, t);
       shield(t);

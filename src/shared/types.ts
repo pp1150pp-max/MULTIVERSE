@@ -44,6 +44,8 @@ export const RARITY_LABEL: Record<Rarity, string> = {
 
 export const STAT_KEYS = [
   'maxHp', 'maxMp', 'atk', 'def', 'crit', 'critDmg', 'atkSpeed', 'moveSpeed', 'hpRegen', 'mpRegen',
+  // Item-only mods (owner 2026-11-19): skill cooldown cut, own skill buffs last longer, monster DEF ignored.
+  'cdr', 'buffDur', 'armorPen',
 ] as const;
 export type StatKey = (typeof STAT_KEYS)[number];
 export type Stats = Record<StatKey, number>;
@@ -58,7 +60,12 @@ export const STAT_LABEL: Record<StatKey, string> = {
   moveSpeed: 'ความเร็วเคลื่อนที่ %',
   hpRegen: 'ฟื้น HP / วิ',
   mpRegen: 'ฟื้น MP / วิ',
+  cdr: 'ลดคูลดาวน์สกิล %',
+  buffDur: 'เพิ่มเวลาบัฟ %',
+  armorPen: 'เจาะเกราะ %',
 };
+/** Stats only items give (owner 2026-11-19): classes have none of them, so the class tables on /admin leave them out. */
+export const ITEM_ONLY_STATS: readonly StatKey[] = ['cdr', 'buffDur', 'armorPen'];
 
 export interface Item {
   uid: string;
