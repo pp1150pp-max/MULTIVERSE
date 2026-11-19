@@ -1,13 +1,14 @@
 # เมืองท่าเรือมิติ (`harbor_town`) เมืองกลางชั้น 2
 
-แผนอยู่ใน `docs/plans/FLOOR2_PLAN.md` หัวข้อ 3 และ 10 ส่วนหน้าตาเมืองยึดภาพ `M0_harbor_town` ที่เจ้าของยืนยันแล้ว
-เมืองนี้**ไม่มีทุ่งมอน** (เจ้าของ 2026-11-19) ทั้ง 4 ทิศรอบเมืองเป็นท่าเรือ และปลายท่าแต่ละท่าเป็นจุดวาร์ปไปแมพฟาร์ม
+แผนอยู่ใน `docs/plans/FLOOR2_PLAN.md` หัวข้อ 3 และ 10 ส่วนหน้าตาเมืองยึดภาพ `M0b_harbor_docks` ที่เจ้าของยืนยันแล้ว (2026-11-19) ภาพ `M0_harbor_town` ผังแรกที่เป็นเกาะหินเลิกใช้แล้ว
+**ทั้งเมืองสร้างบนท่าไม้**: แพไม้กระดานหลายแผ่นบนเสาในน้ำ ระหว่างแพเป็นน้ำ เชื่อมด้วยสะพานไม้กับราวเชือก ไม่มีเกาะหิน ไม่มีกำแพงหิน
+เมืองนี้**ไม่มีทุ่งมอน** ทั้ง 4 ทิศ (บน ขวา ซ้าย ล่าง) เป็นท่าเรือยาว ปลายท่าแต่ละท่าเป็นจุดวาร์ปไปแมพฟาร์ม ประตูกลับชั้น 1 อยู่ข้างหอประภาคารมุมขวาบน
 
 ## วิธีเจน
 
-- **เปิดแชทใหม่** แล้วแนบ `art_templates/papercraft_maps/raw/floor2_maps/M0_harbor_town.webp` ภาพเดียว
+- **เปิดแชทใหม่** แล้วแนบ `art_templates/papercraft_maps/raw/floor2_maps/M0b_harbor_docks.webp` ภาพเดียว
   - **ห้ามแนบภาพพิกเซล** ทุกภาพในเกมใช้กระดาษตัดแปะสไตล์เดียว (กติกาเจ้าของ 2026-11-18) ถ้าแนบภาพอื่นด้วย ต้องเป็นภาพกระดาษเท่านั้น
-- เจนทุกข้อต่อกันในแชทเดียว จะได้สไตล์ตรงกัน ถ้าแชทยาวจนสไตล์เริ่มเพี้ยน ให้เปิดแชทใหม่ แนบ M0 อีกครั้ง แล้วใช้ประโยคเปิดเหมือนเดิม
+- เจนทุกข้อต่อกันในแชทเดียว จะได้สไตล์ตรงกัน ถ้าแชทยาวจนสไตล์เริ่มเพี้ยน ให้เปิดแชทใหม่ แนบ M0b อีกครั้ง แล้วใช้ประโยคเปิดเหมือนเดิม
 - ภาพแรกของแชท ให้ขึ้นต้นด้วยประโยคเปิดนี้ก่อน prompt ของข้อนั้น:
 
 ```
@@ -18,11 +19,11 @@ The attached image is the approved concept of my game's harbour town. Use EXACTL
 - เซฟไฟล์ดิบใน `art_templates/papercraft_maps/raw/floor2_hub/` ตามชื่อไฟล์ของแต่ละข้อ (โฟลเดอร์ `raw/` ไม่ commit · ห้าม `git add raw/`)
 - ลำดับช่องอ่านจากซ้ายไปขวา แถวบนลงล่าง (`/` คือขึ้นแถวใหม่)
 
-หน้าตาเมือง: ท่าเรือไม้กับหินบนเกาะลอยกลางทะเลเมฆ น้ำสีฟ้าเทอร์ควอยซ์ไหลตกขอบเกาะลงไปในเมฆ ไม้สีน้ำตาลอุ่น หินสีทรายกับเทาอ่อน ทองเหลือง ธงสีแดง น้ำเงิน ทอง เถาไม้กับดอกไม้ ต้นมะพร้าว สดใส มีชีวิตชีวา
+หน้าตาเมือง: เมืองท่าไม้ลอยบนน้ำทะเลเมฆสีฟ้าเทอร์ควอยซ์ น้ำไหลตกขอบเมืองลงไปในเมฆ ไม้สีน้ำตาลอุ่น หินสีทรายกับเทาอ่อนเฉพาะประภาคารและซุ้มประตู ทองเหลือง ธงสีแดง น้ำเงิน ทอง เถาไม้กับดอกไม้ ต้นมะพร้าว สดใส มีชีวิตชีวา
 
 ---
 
-## 1. พื้นปูซ้ำ 2 ภาพ → `ground_plank.png`, `ground_cobble.png`
+## 1. พื้นปูซ้ำ 3 ภาพ → `ground_plank.png`, `ground_plaza.png`, `ground_water.png`
 
 เจนทีละภาพ ขึ้นต้นด้วยข้อความกลาง แล้วต่อท้ายด้วยข้อความในตาราง
 เกมเอาภาพพื้นมาปูต่อกันซ้ำ ๆ ถ้ามีชิ้นใหญ่หรือชิ้นที่สะดุดตา จะเห็นลายซ้ำทั้งเมือง จึงต้องเป็นลายละเอียดที่สีใกล้กันทั้งภาพ
@@ -34,7 +35,8 @@ Generate a SQUARE image (1:1): one seamless repeating ground tile texture that f
 | ไฟล์ | ข้อความต่อท้าย |
 |---|---|
 | `ground_plank.png` | `Weathered wooden dock planks like the piers in the attached town: narrow parallel paper planks of warm honey and light brown card, all running the same direction, staggered joints, tiny nail dots and faint wood grain, calm and even.` |
-| `ground_cobble.png` | `The paving of the town square in the attached image: small rounded cobblestones of warm sandstone, pale peach and light grey card, laid in gentle curved rows, thin paper grout lines, a few tiny worn stones, calm and even.` |
+| `ground_plaza.png` | `The deck of the round central plaza in the attached image: short wide paper planks of warm pinkish tan and light honey card laid like small bricks in staggered rows, thin dark seams, a few tiny nail dots, calm and even.` |
+| `ground_water.png` | `The turquoise sea between the wooden platforms in the attached image: many small layered paper ripples and tiny curled wave crests in close shades of turquoise and soft sky blue with a few small white paper foam flecks, calm and even.` |
 
 ## 2. อาคาร A → `buildings_a.png` (2×2 พื้นม่วงแดง)
 
@@ -49,7 +51,7 @@ Row 1:
 - Harbour broker's office: a small timber office with a dark wood frame and a teal roof, a large wooden notice board covered in pinned paper notices beside the door, a lantern, a small chest and a little brass scale on a table outside. Its front and notice board face the LOWER-RIGHT.
 Row 2:
 - Shipyard forge: stone walls, a blue-slate roof, a stone chimney with a small puff of smoke, an open front showing a glowing orange furnace, an anvil, a big iron anchor and racks of tools outside. Its open front is on the LOWER-LEFT wall.
-- Harbour warehouse: a sturdy pale grey stone storehouse with a blue-slate roof, a big arched wooden double door bound with brass, two small glowing arched windows, a wall lantern, stacked crates and a barrel by the door. Its door is on the LOWER-LEFT wall.
+- Harbour warehouse: a big wooden boathouse with a rounded blue-slate roof, a wide arched wooden double door bound with brass, a wall lantern, stacked crates and a barrel by the door. Its door is on the LOWER-RIGHT wall.
 
 Each object has crisp clean outer edges with no glow or halo around it. Background ONE perfectly flat solid magenta (#FF00FF) everywhere, no gradient, no paper texture on the background, no ground patches, no cast shadows on the background, no text, no letters, no labels, no grid lines. Do not use pink, magenta or purple on any object.
 ```
@@ -57,7 +59,7 @@ Each object has crisp clean outer edges with no glow or halo around it. Backgrou
 ## 3. อาคาร B → `buildings_b.png` (2×2 **พื้นเขียว**)
 
 ชุดนี้ใช้พื้นเขียว เพราะเต็นท์พ่อค้าของเถื่อนเป็นผ้าสีม่วง ตอนตัดภาพต้องลบพื้นเขียวแทนพื้นม่วงแดง
-ลำดับช่อง: `bld_smuggler` `bld_navigator` / `bld_shipyard` `bld_stairs`
+ลำดับช่อง: `bld_smuggler` `bld_lighthouse` / `bld_shipyard` `rowboat`
 
 ```
 More buildings of the same harbour town from the attached concept, same papercraft style, NOT pixel art, the same isometric 3/4 camera from above at about 35 degrees (roof and the lower-left and lower-right walls visible, base on an imaginary diamond-shaped ground footprint, NOT a flat front view), light from the upper left, the SAME scale as the buildings before.
@@ -65,10 +67,10 @@ More buildings of the same harbour town from the attached concept, same papercra
 Generate an image: a prop sheet with exactly 4 separate objects in a 2 columns x 2 rows grid, generous empty space between them, each fully inside its own cell, nothing touching or overlapping.
 Row 1:
 - Smuggler's stall: a shady market tent with a deep purple and dark plum cloth canopy trimmed with gold tassels and hanging gold beads, a counter of glowing pink and violet crystals, small bottles and a locked chest, crates stacked behind it, a small hanging lantern. Its open front faces the LOWER-RIGHT.
-- Navigator's desk: a raised wooden platform with a big desk covered in an unrolled sea chart, a large brass globe on a stand beside it, a brass telescope on a tripod, rolled maps in a barrel, a small lantern. It faces the LOWER-RIGHT.
+- Lighthouse: a round tower of pale sandstone blocks with a red roof and a glowing lantern room on top, small glowing windows, a wooden navigator's deck with a railing built around it halfway up, reached by wooden stairs, a large brass globe on a stand and a brass telescope on the deck, rolled maps in a barrel.
 Row 2:
 - Shipyard: a ship under construction, a long bare wooden hull frame with curved ribs resting on wooden supports, a tall wooden crane with a rope and pulley, a ladder, stacked planks and a tool chest. The hull runs diagonally from lower left to upper right.
-- Grand staircase: a wide stone staircase of sandstone steps climbing from lower right up to upper left, with low stone side walls, two red banners with a gold star on poles at its foot, a few potted flowers. The top step ends in a flat empty stone landing.
+- Rowing boat: a small wooden rowing boat with two oars resting inside, a coil of rope and a small crate in it, the hull running diagonally from lower left to upper right. The hull ends cleanly at the waterline: no water, no waves.
 
 Each object has crisp clean outer edges with no glow or halo around it. Background ONE perfectly flat solid pure bright green (#00FF00) everywhere, no gradient, no paper texture on the background, no ground patches, no grass around the bases, no cast shadows on the background, no text, no letters, no labels, no grid lines. Do not use bright green anywhere on the objects; any leaves or ivy must be a dull dark olive green.
 ```
@@ -88,28 +90,29 @@ Row 3: a stack of three wooden cargo crates; a pile of cloth sacks of flour and 
 Each object has crisp clean outer edges with no glow or halo around it. Background ONE perfectly flat solid magenta (#FF00FF) everywhere, no gradient, no paper texture on the background, no ground patches, no cast shadows on the background, no text, no letters, no labels, no grid lines. Do not use pink, magenta or purple on any object.
 ```
 
-## 5. ท่าเทียบเรือ → `docks.png` (3×2 พื้นม่วงแดง)
+## 5. ท่าเรือและขอบแพ → `docks.png` (4×2 พื้นม่วงแดง)
 
+ทั้งเมืองเป็นแพไม้ ชิ้นชุดนี้จึงใช้ทั้งท่าเรือ 4 ทิศและขอบแพทุกแผ่น ส่วนราวเชือกใช้กั้นขอบแพแทนกำแพงเมือง
 ท่าเรือในเกมต่อกันเป็นแนวยาว ชิ้นสะพานไม้ 2 ทิศต้องกว้างและหนาเท่ากัน
-ลำดับช่อง: `dock_a` `dock_b` `dock_end` / `bollard` `rail_a` `rail_b`
+ลำดับช่อง: `dock_a` `dock_b` `dock_end` `bollard` / `rail_a` `rail_b` `edge_a` `edge_b`
 
 ```
-Same harbour town, same papercraft style, NOT pixel art, the same isometric 3/4 camera from above at about 35 degrees, light from the upper left. Now the wooden piers that stick out from each side of the floating island, like the four piers in the corners of the attached concept.
+Same harbour town, same papercraft style, NOT pixel art, the same isometric 3/4 camera from above at about 35 degrees, light from the upper left. The whole town is built on wooden plank platforms standing on posts in the water. Now the wooden piers that stick out in four directions in the attached concept, and the edges of the platforms.
 
-Generate an image: a prop sheet with exactly 6 separate objects in a 3 columns x 2 rows grid, generous empty space between them, each fully inside its own cell, nothing touching or overlapping.
-Row 1: a straight section of wooden pier, plank deck on thick wooden posts, running diagonally from LOWER LEFT to UPPER RIGHT; the same pier section running diagonally from UPPER LEFT to LOWER RIGHT, identical width, thickness and plank colour; the square end platform of a pier with four thick mooring posts at its corners, two posts topped with small glowing lanterns.
-Row 2: a short thick wooden mooring post with a loop of rope tied around it; a low rope railing, thick rope hanging in curves between short wooden posts, running diagonally from LOWER LEFT to UPPER RIGHT; the same rope railing running diagonally from UPPER LEFT to LOWER RIGHT.
+Generate an image: a prop sheet with exactly 8 separate objects in a 4 columns x 2 rows grid, generous empty space between them, each fully inside its own cell, nothing touching or overlapping.
+Row 1: a straight section of wooden pier, plank deck on thick wooden posts, running diagonally from LOWER LEFT to UPPER RIGHT; the same pier section running diagonally from UPPER LEFT to LOWER RIGHT, identical width, thickness and plank colour; the square end platform of a pier with four thick mooring posts at its corners, two posts topped with small glowing lanterns; a short thick wooden mooring post with a loop of rope tied around it.
+Row 2: a low rope railing, thick rope hanging in curves between short wooden posts, running diagonally from LOWER LEFT to UPPER RIGHT; the same rope railing running diagonally from UPPER LEFT to LOWER RIGHT; the side edge of a plank platform, the ends of the deck planks with a row of thick wooden posts underneath, running diagonally from LOWER LEFT to UPPER RIGHT; the same platform edge running diagonally from UPPER LEFT to LOWER RIGHT.
 
 The posts end cleanly at the bottom: no water, no waves, no reflections. Each object has crisp clean outer edges with no glow or halo around it. Background ONE perfectly flat solid magenta (#FF00FF) everywhere, no gradient, no paper texture on the background, no cast shadows on the background, no text, no letters, no labels, no grid lines. Do not use pink, magenta or purple on any object.
 ```
 
 ## 6. เรือจอด 4 ลำ → `ships.png` (2×2 พื้นม่วงแดง)
 
-เรือจอดข้างท่าทั้ง 4 มุม ลำละมุม
+เรือจอดข้างปลายท่าทั้ง 4 ทิศ ทิศละลำ
 ลำดับช่อง: `ship_red` `ship_blue` / `ship_green` `ship_white`
 
 ```
-Same harbour town, same papercraft style, NOT pixel art, the same isometric 3/4 camera from above at about 35 degrees, light from the upper left. Now the four moored sailing ships from the corners of the attached concept, all the SAME size: wooden pirate ships with two masts, rope rigging, a small crow's nest, round portholes, a carved bow, patched paper sails.
+Same harbour town, same papercraft style, NOT pixel art, the same isometric 3/4 camera from above at about 35 degrees, light from the upper left. Now the four moored sailing ships at the ends of the four piers in the attached concept, all the SAME size: wooden pirate ships with two masts, rope rigging, a small crow's nest, round portholes, a carved bow, patched paper sails.
 
 Generate an image: exactly 4 separate ships in a 2 columns x 2 rows grid, generous empty space between them, each fully inside its own cell, nothing touching or overlapping. Every hull runs diagonally from lower left to upper right.
 Row 1: a ship with deep red sails painted with two crossed white cutlasses; a ship with deep navy blue sails painted with a gold compass star.
@@ -118,25 +121,25 @@ Row 2: a ship with olive green sails painted with a gold star; a ship with cream
 The hulls end cleanly at the waterline: no water, no waves, no reflections, no splashes. Each object has crisp clean outer edges with no glow or halo around it. Background ONE perfectly flat solid magenta (#FF00FF) everywhere, no gradient, no paper texture on the background, no cast shadows on the background, no text, no letters, no labels, no grid lines. Do not use pink, magenta or purple on any object.
 ```
 
-## 7. กำแพงเมือง → `walls.png` (3×2 พื้นม่วงแดง)
+## 7. น้ำรอบแพ → `water.png` (3×2 พื้นม่วงแดง)
 
-กำแพงในเกมวางต่อกันเป็นแถวยาว ทุกชิ้นต้องสูงและหนาเท่ากัน มีเสาสี่เหลี่ยมที่ปลายทั้งสองข้าง
-ลำดับช่อง: `wall_a` `wall_b` `wall_end` / `wall_a_ivy` `wall_b_ivy` `wall_end_lamp`
+เมืองนี้ไม่มีกำแพงหิน (ขอบแพกั้นด้วยราวเชือกในข้อ 5) ข้อนี้จึงเป็นของที่อยู่บนน้ำและขอบเมือง
+ลำดับช่อง: `falls_a` `falls_b` `foam_post` / `wave` `float_barrel` `gull_post`
 
 ```
-Same harbour town, same papercraft style, NOT pixel art, the same isometric 3/4 camera from above at about 35 degrees, light from the upper left. Now the low town wall that runs along the edge of the floating island in the attached concept: a waist-high wall of sandstone and pale grey stone blocks with a flat stone top, a square stone pillar at both ends of every section.
+Same harbour town, same papercraft style, NOT pixel art, the same isometric 3/4 camera from above at about 35 degrees, light from the upper left. Now small water details around the wooden platforms of the attached concept.
 
 Generate an image: exactly 6 separate objects in a 3 columns x 2 rows grid, generous empty space between them, each fully inside its own cell, nothing touching or overlapping.
-Row 1: a straight wall section running diagonally from LOWER LEFT to UPPER RIGHT; a straight wall section running diagonally from UPPER LEFT to LOWER RIGHT; a single square end pillar.
-Row 2: the first wall again with the IDENTICAL outline, now with dark olive paper ivy and a few small white flowers hanging over it; the second wall again with the IDENTICAL outline and the same ivy and flowers; the square end pillar topped with a small glowing brass lantern.
+Row 1: a short wide waterfall of layered turquoise and white paper pouring down over an edge, the edge running diagonally from LOWER LEFT to UPPER RIGHT, the falling water fading into small white paper clouds at the bottom; the same waterfall with its edge running diagonally from UPPER LEFT to LOWER RIGHT; a flat ring of white paper foam and small ripples, seen from above, as if around a post standing in water.
+Row 2: a small curled turquoise wave crest with white paper foam; a single wooden barrel floating, half sunk, with a ring of small ripples around it; a short wooden post sticking out of the water with a white seagull standing on top.
 
-Every wall the same height, thickness and length. Each object has crisp clean outer edges with no glow or halo around it. Background ONE perfectly flat solid magenta (#FF00FF) everywhere, no gradient, no paper texture on the background, no ground patches, no cast shadows on the background, no text, no letters, no labels, no grid lines. Do not use pink, magenta or purple on any object.
+Each object has crisp clean outer edges with no glow or halo around it. Background ONE perfectly flat solid magenta (#FF00FF) everywhere, no gradient, no paper texture on the background, no cast shadows on the background, no text, no letters, no labels, no grid lines. Do not use pink, magenta or purple on any object.
 ```
 
 ## 8. ประตูมิติ 3 แบบ → `portals.png` (3×1 พื้นม่วงแดง)
 
-- `portal_dock` ประตูปลายท่าเรือ ใช้ภาพเดียวกันทั้ง 4 มุม พาไปแมพฟาร์ม 4 ทิศ
-- `portal_return` ซุ้มประตูกลับชั้น 1 วางบนลานบนสุดของบันได (`bld_stairs`)
+- `portal_dock` ประตูปลายท่าเรือ ใช้ภาพเดียวกันทั้ง 4 ทิศ พาไปแมพฟาร์ม
+- `portal_return` ซุ้มประตูกลับชั้น 1 วางข้างหอประภาคาร (`bld_lighthouse`) มุมขวาบน
 - `portal_floor2` ประตูใหม่ใน `nexus_city` พาขึ้นชั้น 2 ต้องเข้ากับเมืองชั้น 1 (หินทราย อิฐเทาอ่อน ตะไคร่ ทองซีดกับน้ำเงินซีด) แต่มีของจากท่าเรือให้รู้ว่าไปทะเลเมฆ
   - ถ้าเปิดแชทใหม่เพื่อเจนชิ้นนี้ ให้แนบภาพเมืองชั้น 1 แบบกระดาษเพิ่มได้ (ภาพกระดาษเท่านั้น ห้ามภาพพิกเซล)
 
@@ -146,8 +149,8 @@ Every wall the same height, thickness and length. Each object has crisp clean ou
 Same papercraft style, NOT pixel art, the same isometric 3/4 camera from above at about 35 degrees, light from the upper left. Now three magic portals, each about twice the height of a hero, with a swirling glowing blue-turquoise magic vortex inside made of layered spiral paper.
 
 Generate an image: exactly 3 separate objects in ONE row of 3 columns, generous empty space between them, each fully inside its own cell, nothing touching or overlapping.
-1: the pier portal from the corners of the attached concept: a huge golden ship's wheel standing upright on a small wooden plank base, the swirling blue vortex filling the ring inside the wheel, a small glowing lantern on a post at each side.
-2: the grand return gate from the top of the stairs in the attached concept: an ornate stone archway with a golden frame and a gold star crest on top, the swirling blue vortex inside the arch, a red banner with a gold star hanging on each side.
+1: the pier portal from the ends of the four piers in the attached concept: a huge golden ship's wheel standing upright on a small wooden plank base, the swirling blue vortex filling the ring inside the wheel, a small glowing lantern on a post at each side.
+2: the return gate beside the lighthouse in the top right of the attached concept: an ornate stone archway with a golden frame and a gold star crest on top, the swirling blue vortex inside the arch, a red banner with a gold star hanging on each side.
 3: a gate for a DIFFERENT town, an ancient ruined city of weathered warm sandstone and pale grey brick with paper moss and small vines: a tall broken stone archway with faded gold and old blue trim, a golden ship's wheel and an anchor carved into its keystone, the swirling vortex inside showing turquoise sea water and small white paper clouds, a few small paper seagulls flying around the arch.
 
 Each object has crisp clean outer edges with no glow or halo outside the portal frame. Background ONE perfectly flat solid magenta (#FF00FF) everywhere, no gradient, no paper texture on the background, no ground patches, no cast shadows on the background, no text, no letters, no labels, no grid lines. Do not use pink, magenta or purple on any object.
@@ -160,7 +163,7 @@ Each object has crisp clean outer edges with no glow or halo outside the portal 
 ใช้รูปแบบเดียวกับ `art_templates/papercraft_chars/NPC.md`: ยืนหายใจ 4 เฟรม 3 มุม (หน้า ข้างหันซ้าย หลัง) ตัวละ 1 ภาพ ตาราง 3 แถว × 4 เฟรม
 NPC ชั้น 2 ทำหน้าที่เดียวกับ NPC ชั้น 1 (ตารางในแผนหัวข้อ 3) ชื่อในตารางยังเป็นร่าง
 
-- เจนในแชทเดิมต่อจากข้อ 1–8 ได้เลย ถ้าเปิดแชทใหม่ ให้แนบ M0 แล้วใช้ประโยคเปิดเหมือนด้านบน
+- เจนในแชทเดิมต่อจากข้อ 1–8 ได้เลย ถ้าเปิดแชทใหม่ ให้แนบ M0b แล้วใช้ประโยคเปิดเหมือนด้านบน
 - ไม่ต้องแนบภาพ NPC ชั้น 1 (ภาพเก่าเป็นพิกเซล)
 - prompt = **ข้อความกลาง** + **บรรทัดท้าย** ของ NPC ตัวนั้นจากตาราง
 - พื้นหลัง: ตัวที่มีสีม่วงใช้พื้นเขียว ที่เหลือใช้ม่วงแดง ตามช่อง "พื้นหลัง" ในตาราง
@@ -210,13 +213,13 @@ Using the attached papercraft sprite sheet as the exact reference for this perso
 
 | ไฟล์ดิบ | ชิ้น |
 |---|---|
-| `ground_plank.png` `ground_cobble.png` | ภาพพื้นปูซ้ำ 1024×1024 แบบ `ground/*` ของชั้น 1 |
+| `ground_plank.png` `ground_plaza.png` `ground_water.png` | ภาพพื้นปูซ้ำ 1024×1024 แบบ `ground/*` ของชั้น 1 (น้ำเป็นพื้นที่เดินไม่ได้) |
 | `buildings_a.png` | `bld_supply` `bld_broker` / `bld_forge` `bld_warehouse` |
-| `buildings_b.png` (พื้นเขียว) | `bld_smuggler` `bld_navigator` / `bld_shipyard` `bld_stairs` |
+| `buildings_b.png` (พื้นเขียว) | `bld_smuggler` `bld_lighthouse` / `bld_shipyard` `rowboat` |
 | `props.png` | `wheel_fountain` `brass_globe` `lamp_post` `banner_pole` / `bench_a` `bench_b` `bunting_post` `barrels` / `crates` `sacks` `rope_coil` `palm_pot` |
-| `docks.png` | `dock_a` `dock_b` `dock_end` / `bollard` `rail_a` `rail_b` |
+| `docks.png` | `dock_a` `dock_b` `dock_end` `bollard` / `rail_a` `rail_b` `edge_a` `edge_b` |
 | `ships.png` | `ship_red` `ship_blue` / `ship_green` `ship_white` |
-| `walls.png` | `wall_a` `wall_b` `wall_end` / `wall_a_ivy` `wall_b_ivy` `wall_end_lamp` |
+| `water.png` | `falls_a` `falls_b` `foam_post` / `wave` `float_barrel` `gull_post` |
 | `portals.png` | `portal_dock` `portal_return` `portal_floor2` |
 | `npc/*.png` (พื้นเขียวเฉพาะ `smuggler`) | แผ่น 3 แถว × 4 เฟรม สูงเท่า NPC กระดาษชั้น 1 |
 | `portrait/*.png` | ย่อเป็น 256×256 แบบ portrait ผู้เล่น |
