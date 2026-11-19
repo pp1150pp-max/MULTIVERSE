@@ -944,13 +944,16 @@ export class Hud {
       return;
     }
     const reach = skillReach(sk);
-    const remain = p.cd[sk.id] ?? 0;
+    const stacks = p.chargeMax(sk);
+    const held = p.chargesOf(sk);
+    const remain = stacks ? (held < stacks ? p.cd[sk.id] ?? 0 : 0) : p.cd[sk.id] ?? 0;
     const rank = p.skillRank(sk);
     const full = p.skillCooldown(sk);
     const stats = [
       sk.kind === 'normal' || sk.kind === 'ult' ? `<div>แรงก์ <span class="tt-val">${rank}</span>${sk.dmg > 0 ? ` · ดาเมจ <span class="tt-val">${Math.round(rankedDmg(sk, rank) * 100)}% ATK</span>` : ''}</div>` : '',
       sk.mp ? `<div>MP <span class="tt-val">${p.skillMp(sk)}</span></div>` : '',
-      full ? `<div>คูลดาวน์ <span class="tt-val">${full} วิ</span></div>` : '',
+      full ? `<div>คูลดาวน์ <span class="tt-val">${full} วิ${stacks ? ' ต่อ 1 อัน' : ''}</span></div>` : '',
+      stacks ? `<div>เก็บได้ <span class="tt-val">${held} / ${stacks} อัน</span></div>` : '',
       ...skillParamLines(sk, Math.max(1, rank)).map((l) => `<div><span class="tt-val">${l}</span></div>`),
       reach ? `<div><span class="tt-val">${reachText(reach)}</span></div>` : '',
     ].join('');
@@ -1036,9 +1039,12 @@ export class Hud {
         continue;
       }
       const full = p.skillCooldown(sk);
-      const remain = p.cd[sk.id] ?? 0;
+      const stacks = p.chargeMax(sk);
+      const held = p.chargesOf(sk);
+      // A charge skill shows the charges left on the icon and the wheel of the one coming back.
+      const remain = stacks ? (held < stacks ? p.cd[sk.id] ?? 0 : 0) : p.cd[sk.id] ?? 0;
       s.cd.style.height = full ? `${(remain / full) * 100}%` : '0%';
-      s.extra.textContent = remain > 0 ? remain.toFixed(1) : '';
+      s.extra.textContent = stacks ? `×${held}${held === 0 && remain > 0 ? ` ${remain.toFixed(1)}` : ''}` : remain > 0 ? remain.toFixed(1) : '';
       s.el.classList.toggle('nomp', p.mp < p.skillMp(sk));
     }
 

@@ -324,7 +324,7 @@ export class AutoPlay {
   private ready(g: AutoWorld, slot: AutoSkill): boolean {
     const p = g.player;
     const sk = p.skill(slot);
-    return !!sk && p.autoSettings.skills[slot] && (p.cd[sk.id] ?? 0) <= 0 && p.mp >= p.skillMp(sk) + 5 && this.aoeHasTarget(g, slot);
+    return !!sk && p.autoSettings.skills[slot] && p.skillReady(sk) && p.mp >= p.skillMp(sk) + 5 && this.aoeHasTarget(g, slot);
   }
 
   /**

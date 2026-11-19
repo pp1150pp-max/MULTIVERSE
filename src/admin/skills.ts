@@ -99,6 +99,13 @@ export async function renderSkills(view: HTMLElement, h: H, api: Api, onSaved: (
         num('zoomMin', 5), num('zoomMax', 10)),
       h('div', { class: 'muted' }, 'ซูมคิดเป็น % ของขนาดที่ผังเปิดมาพอดีกรอบ (100 = ขนาดเริ่มต้น) · ปิดสวิตช์ = ผังในเกมพอดีกรอบแบบเดิม ไม่ซูม (ผังในหน้านี้ซูมได้เสมอ)'),
       ...unlockRows,
+      h('h3', {}, 'กับระเบิดของมือปืน: สแตค (เก็บได้หลายอัน คืนทีละอัน)'),
+      h('div', { class: 'muted' }, 'ใช้แล้วนับคูลดาวน์ของสกิล (รวมแรงก์และมอดลดคูลดาวน์) คืน 1 อัน จบแล้วถ้ายังไม่เต็มนับอันถัดไปต่อ · กับระเบิดบนพื้นพร้อมกันได้เท่าจำนวนสแตคสูงสุดที่ได้ตามแรงก์ วางเกินอันเก่าสุดหาย · สแตคที่ N ได้เมื่อแรงก์ถึงค่าที่ตั้ง (นับเฉพาะ N ไม่เกิน "สแตคสูงสุด")'),
+      h('div', { class: 'row bal-line' }, num('mineMax', 1), num('mineGap', 0.1),
+        h('label', {}, h('input', { type: 'checkbox', checked: sc.mineNoRoot, onchange: (e: Event) => { sc.mineNoRoot = (e.target as HTMLInputElement).checked; updateSummary(); } }), ' วางไม่ชะงัก (ไม่หยุดเดินตอนวาง)')),
+      h('div', { class: 'row bal-line' },
+        h('span', {}, 'แรงก์ที่ได้สแตคที่ 1–5 '),
+        ...sc.mineRanks.map((_, i) => numBox(`mr.${i}`, `แรงก์ที่ได้สแตคที่ ${i + 1}`, () => sc.mineRanks[i], (n) => { sc.mineRanks[i] = n; }, cs.mineRanks[i], 1, 20, 1, refresh))),
     );
   };
 
