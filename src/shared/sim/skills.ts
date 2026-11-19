@@ -929,6 +929,8 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
     case 'gs_drone': {
       // Hovers by the player's shoulder and shoots the nearest monster within reach.
       const every = Math.max(0.1, P('every'));
+      // One drone on the client for the whole life (src/client/effects.ts drone()), flying after the caster.
+      sim.fx('drone', p.id, every * Math.floor(P('life') / every));
       repeat(sim, every, Math.floor(P('life') / every), () => {
         if (!live(sim, p)) return false;
         const dx = p.x + 0.8;
@@ -937,6 +939,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
         const m = nearest(sim, dx, dz, far);
         if (!m) return;
         const a = Math.atan2(m.z - dz, m.x - dx);
+        sim.fx('drone', p.id, 0, a);
         sim.addProjectile(p, shotFrom(p, a, far + 2, dmg, { x: dx, z: dz, color: '#7affe0', size: 0.4, kb: 1 }));
       });
       return true;

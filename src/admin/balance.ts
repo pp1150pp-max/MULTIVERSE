@@ -799,6 +799,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     const mergeOn = h('input', { type: 'checkbox', checked: a.mergeNums, onchange: (e: Event) => { a.mergeNums = (e.target as HTMLInputElement).checked; refresh(); } });
     const ownOnly = h('input', { type: 'checkbox', checked: a.ownNumsOnly, onchange: (e: Event) => { a.ownNumsOnly = (e.target as HTMLInputElement).checked; refresh(); } });
     const smoothOn = h('input', { type: 'checkbox', checked: a.smoothShots, onchange: (e: Event) => { a.smoothShots = (e.target as HTMLInputElement).checked; refresh(); } });
+    const droneOn = h('input', { type: 'checkbox', checked: a.droneFollow, onchange: (e: Event) => { a.droneFollow = (e.target as HTMLInputElement).checked; refresh(); } });
     const circlesOn = h('input', { type: 'checkbox', checked: a.circles, onchange: (e: Event) => { a.circles = (e.target as HTMLInputElement).checked; refresh(); } });
     const zoneCirclesOn = h('input', { type: 'checkbox', checked: a.zoneCircles, onchange: (e: Event) => { a.zoneCircles = (e.target as HTMLInputElement).checked; refresh(); } });
     const quarksOn = h('input', { type: 'checkbox', checked: a.quarks, onchange: (e: Event) => { a.quarks = (e.target as HTMLInputElement).checked; refresh(); } });
@@ -853,6 +854,9 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('h3', {}, 'กระสุน'),
       h('div', { class: 'row bal-line' }, flag(smoothOn, a.smoothShots !== ca.smoothShots, ' กระสุนบินลื่น (ไม่ดึงกลับตาม server)')),
       h('div', { class: 'muted' }, 'เปิด (ค่าในโค้ด): เบราว์เซอร์ให้กระสุนบินต่อเอง ตำแหน่งจาก server ดันไปข้างหน้าครึ่งหนึ่งของปิง ห่างนิดหน่อยค่อย ๆ ขยับเข้า ห่างเกิน 3 หน่วยค่อยกระโดด · ปิด: แบบเดิม กระสุนกระโดดไปตำแหน่งของ server ทุกครั้งที่ข้อมูลมา (เห็นกระตุกตอนยิงเยอะ เช่น Bullet Storm) · เป็นแค่ภาพ ดาเมจยังตัดสินที่ server'),
+      h('h3', {}, 'โดรนสนับสนุน (มือปืน)'),
+      h('div', { class: 'row bal-line' }, flag(droneOn, a.droneFollow !== ca.droneFollow, ' โดรนบินตามลื่น'), num('droneSpeed', 0.5), num('droneDist', 0.1)),
+      h('div', { class: 'muted' }, 'เปิด (ค่าในโค้ด): โดรนเป็นตัวเดียวตลอดอายุสกิล บินตามหลังไหล่ตัวละครเหมือนสัตว์เลี้ยง ลอยขึ้นลงเบา ๆ หันไปทางมอนตอนยิง หมดเวลา/ตาย/เปลี่ยนแมพแล้วหายไป · ปิด: แบบเดิม วาดภาพโดรนใหม่ที่ไหล่ทุกนัด · ความเร็วตามยิ่งมากยิ่งติดตัว ระยะห่าง 1 = ตำแหน่งที่ server ใช้ปล่อยกระสุน · เป็นแค่ภาพ ดาเมจ/ระยะ/จังหวะยิงตัดสินที่ server'),
     );
   };
 
