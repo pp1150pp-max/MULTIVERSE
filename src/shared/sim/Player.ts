@@ -686,6 +686,11 @@ export class Player extends Unit {
     return seconds * (1 + Math.max(0, this.stats.buffDur ?? 0) / 100);
   }
 
+  /** How long this player's summon stays (turret, drone, land mine): buffTime when the buffDurSummons switch is on. */
+  summonTime(seconds: number): number {
+    return currentBalance().buffDurSummons ? this.buffTime(seconds) : seconds;
+  }
+
   /** Hurt or attacked within the last few seconds (no swapping skills then). */
   inCombat(): boolean {
     return this.sim.time - Math.max(this.lastHurt, this.lastAttack) <= COMBAT_LINGER;
