@@ -961,6 +961,8 @@ export class OnlineBackend implements Backend {
     me.hp = pv.hp;
     me.mp = pv.mp;
     me.exp = pv.exp;
+    me.shownBuffs = (pv.sb ?? []).map(([id, left, total]) => ({ id, left, total }));
+    me.shownBuffsAt = performance.now() / 1000;
     if (pv.bossKills) me.bossKills = pv.bossKills;
     if (pv.quests) me.quests = pv.quests;
     if (pv.gearQuests) me.gearQuests = pv.gearQuests;
