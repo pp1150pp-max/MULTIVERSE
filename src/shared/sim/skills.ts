@@ -673,14 +673,18 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       return true;
     }
     case 'mg_timewarp': {
-      const haste = P('haste') / 100;
-      const hasteT = p.buffTime(P('hasteTime'));
+      // The cooldowns still running on Q/E/R skills drop at once (not Time Warp itself, the dash, basic attack or potions).
+      const cutPct = Math.min(100, P('cdCut')); // grows with rank like other status numbers, never past 100%
+      const cut = cutPct / 100;
       sim.fx('zone', 'mg_timewarp', p.x, p.z, far, CIRCLE_ZONE, p.id);
       forCircle(sim, p.x, p.z, far, (m) => sim.hitMonster(p, m, dmg, { slow: P('slow') / 100, slowT: P('slowTime'), skill: sk }));
       forPlayers(sim, p.x, p.z, far, (q) => {
-        q.haste = sim.time < q.hasteUntil ? Math.max(q.haste, haste) : haste;
-        q.hasteUntil = sim.time + hasteT;
-        sim.text(q.x, q.topY, q.z, 'คูลดาวน์เร็วขึ้น', 'info', 1);
+        for (const s of q.cls.skills) {
+          if ((s.kind !== 'normal' && s.kind !== 'ult') || s.id === 'mg_timewarp') continue;
+          const left = q.cd[s.id] ?? 0;
+          if (left > 0) q.cd[s.id] = left * (1 - cut);
+        }
+        sim.text(q.x, q.topY, q.z, `คูลดาวน์ -${Math.round(cutPct)}%`, 'info', 1);
       });
       return true;
     }
