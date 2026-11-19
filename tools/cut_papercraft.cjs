@@ -71,6 +71,25 @@ const MAPS = {
     // fixed height. Sheet B is on green (the tailor's cloth is pink).
     ['town2_buildings_a.png', 'props', { cols: 2, rows: 2, height: 384, names: ['bld_store', 'bld_market', 'bld_forge', 'bld_guild'] }],
     ['town2_buildings_b.png', 'props', { cols: 2, rows: 2, height: 384, bg: 'green', names: ['bld_tailor', 'bld_vault', 'bld_house_a', 'bld_house_b'] }],
+    // Round 6 (owner 2026-11-19, HUB.md 7): attached townhouses for the two top walls, and the bottom market.
+    ['row_left.png', 'props', { cols: 3, rows: 2, height: 448, names: ['row_l_vault', 'row_l_crystal', 'row_l_house_a', 'row_l_house_b', 'row_l_house_c', 'row_l_shop'] }],
+    ['row_right.png', 'props', { cols: 3, rows: 2, height: 448, names: ['row_r_guild', 'row_r_forge', 'row_r_house_a', 'row_r_house_b', 'row_r_house_c', 'row_r_shop'] }],
+    ['market.png', 'props', { cols: 4, rows: 2, height: 256, names: ['mk_goods_front', 'mk_auction_front', 'mk_veg_front', 'mk_wagon', 'mk_handcart', 'mk_sacks', 'mk_potion_table', 'mk_tag_table'] }],
+    // The three stalls again, seen from behind (facing away from the camera); market.png has their fronts (*_front).
+    ['market_backs.png', 'props', { cols: 3, rows: 1, height: 256, slope: true, names: ['mk_goods_stall', 'mk_auction_booth', 'mk_veg_stall'] }],
+    // Round 6b (owner 2026-11-19): each top wall's whole row of attached townhouses as one picture, sheared so its foot
+    // runs at the game's own slope for a world axis (World ISO_DIR), like the walls (HUB.md 7.5).
+    ['row_left_long.png', 'strip', { out: 'row_left_long', rise: true, width: 1600 }],
+    ['row_right_long.png', 'strip', { out: 'row_right_long', rise: false, width: 1600 }],
+    // The four NPC buildings against the top walls (owner 2026-11-19, HUB.md 7.7): crystal shop and vault open to the
+    // lower right, guild hall and forge to the lower left.
+    ['town3_buildings.png', 'props', { cols: 2, rows: 2, height: 384,
+      // The forge's puff of smoke reaches up between the vault and the row above it: blanked before cutting.
+      erase: [[1070, 555, 1215, 645], [0, 589, 1305, 598]], names: ['b3_crystal', 'b3_vault', 'b3_guild', 'b3_forge'] }],
+    // Each seller's own half-ellipse of stalls (HUB.md 7.6): main stall from behind, a wing stall from the front and one
+    // from behind, a table, then four odds and ends.
+    ['market_left.png', 'props', { cols: 4, rows: 2, height: 256, names: ['ml_main_back', 'ml_wing_front', 'ml_wing_back', 'ml_table', 'ml_cart', 'ml_barrels', 'ml_sacks', 'ml_crates'] }],
+    ['market_right.png', 'props', { cols: 4, rows: 2, height: 256, names: ['mr_main_back', 'mr_wing_front', 'mr_wing_back', 'mr_table', 'mr_wagon', 'mr_strongbox', 'mr_chests', 'mr_rugs'] }],
     // Low things along the bottom two walls (HUB.md 6): skipped until the sheet is there.
     ['town2_low.png', 'props', { cols: 4, rows: 2, height: 256, names: ['low_stall_a', 'low_stall_b', 'garden_bed', 'hedge_a', 'hedge_b', 'house_back_a', 'house_back_b', 'woodpile'] }],
     ['town2_props.png', 'props', { cols: 4, rows: 3, height: 256, names: ['town_fountain', 'quest_board', 'crystal_stall', 'lamp_post', 'bench_a', 'bench_b', 'planter', 'banner_pole', 'crates', 'barrels', 'flower_box', 'potted_tree'] }],
@@ -203,8 +222,43 @@ async function save(pipeline, rel) {
 
 /** One file per cell, as tall as the old file of that name (the game sizes props by height). */
 async function props(img, o, label) {
+  // `erase`: blank these boxes [x0, y0, x1, y1] first (the forge's puff of smoke, which reached up into the row above).
+  for (const [x0, y0, x1, y1] of o.erase ?? []) for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) img.d[(y * img.w + x) * 4 + 3] = 0;
   const boxes = cells(img, o.cols, o.rows, label);
   const one = async (name, box) => {
+    // `slope`: a long piece lying along a world axis, drawn a little flatter than the game sees it: sheared so its
+    // foot climbs at the game's slope (as strip() does for whole rows, but at most a little, so it isn't stretched).
+    if (o.shear?.[name] !== undefined) {
+      const buf = await crop(img, box).png().toBuffer();
+      const sheared = await sharp(buf).affine([[1, 0], [o.shear[name], 1]], { background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+      const t = await sharp(sheared).trim({ threshold: 1 }).png().toBuffer();
+      const m = await sharp(t).metadata();
+      await save(sharp(t).resize(Math.max(1, Math.round(m.width * (o.height / m.height))), o.height, { kernel: 'lanczos3', fit: 'fill' }), `props/${name}.png`);
+      return;
+    }
+    if (o.slope) {
+      const buf = await crop(img, box).png().toBuffer();
+      const { data, info } = await sharp(buf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      const xs = [];
+      const ys = [];
+      for (let x = Math.round(info.width * 0.2); x < info.width * 0.8; x++) {
+        for (let y = info.height - 1; y >= 0; y--) if (data[(y * info.width + x) * 4 + 3]) { xs.push(x); ys.push(y); break; }
+      }
+      const mx = xs.reduce((a, b) => a + b, 0) / xs.length;
+      const my = ys.reduce((a, b) => a + b, 0) / ys.length;
+      let sxy = 0;
+      let sxx = 0;
+      for (let i = 0; i < xs.length; i++) { sxy += (xs[i] - mx) * (ys[i] - my); sxx += (xs[i] - mx) ** 2; }
+      const slope = sxy / sxx;
+      const want = (slope > 0 ? 1 : -1) * Math.sin(Math.atan2(1.45, Math.SQRT2));
+      const k = Math.max(-0.3, Math.min(0.3, want - slope));
+      console.log(`  ${name}: foot slope ${slope.toFixed(3)}, sheared by ${k.toFixed(3)}`);
+      const sheared = await sharp(buf).affine([[1, 0], [k, 1]], { background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+      const t = await sharp(sheared).trim({ threshold: 1 }).png().toBuffer();
+      const m = await sharp(t).metadata();
+      await save(sharp(t).resize(Math.max(1, Math.round(m.width * (o.height / m.height))), o.height, { kernel: 'lanczos3', fit: 'fill' }), `props/${name}.png`);
+      return;
+    }
     // `height`: a new picture with no old file, cut to this many pixels tall.
     const [oldW, oldH] = o.height ? [0, o.height] : await sizeOf(`props/${name}.png`);
     const k = oldH / (box[3] - box[1]);
@@ -271,6 +325,35 @@ async function planks(img, o, label) {
   await save(sharp({ create: { width: W, height: H, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).composite(layers), `props/${o.out}.png`);
 }
 
+/**
+ * A long row seen along a world axis: its bottom edge is fitted with a straight line (the middle 70% of the columns)
+ * and the picture is sheared up or down until that line has the slope a world axis has on screen. The camera looks
+ * down ISO_DIR (1, 1.45, 1), so a world axis climbs sin(elevation) = 1.45 / √(1 + 1.45² + 1) ... per unit across.
+ * `rise`: the row climbs to the right (the top-left wall), else it falls.
+ */
+async function strip(img, o, label) {
+  const [x0, y0, x1, y1] = tight(img, [0, 0, img.w, img.h], label);
+  const xs = [];
+  const ys = [];
+  for (let x = Math.round(x0 + (x1 - x0) * 0.15); x < x0 + (x1 - x0) * 0.85; x++) {
+    for (let y = y1 - 1; y >= y0; y--) if (img.d[(y * img.w + x) * 4 + 3]) { xs.push(x); ys.push(y); break; }
+  }
+  const n = xs.length;
+  const mx = xs.reduce((a, b) => a + b, 0) / n;
+  const my = ys.reduce((a, b) => a + b, 0) / n;
+  let sxy = 0, sxx = 0;
+  for (let i = 0; i < n; i++) { sxy += (xs[i] - mx) * (ys[i] - my); sxx += (xs[i] - mx) ** 2; }
+  const slope = sxy / sxx;
+  const want = (o.rise ? -1 : 1) * Math.sin(Math.atan2(1.45, Math.SQRT2));
+  const k = want - slope;
+  console.log(`  ${label}: foot slope ${slope.toFixed(3)} → ${want.toFixed(3)}`);
+  const sheared = await crop(img, [x0, y0, x1, y1])
+    .affine([[1, 0], [k, 1]], { background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png().toBuffer();
+  const t = await sharp(sheared).trim({ threshold: 1 }).png().toBuffer();
+  await save(sharp(t).resize({ width: o.width, kernel: 'lanczos3' }), `props/${o.out}.png`);
+}
+
 /** A repeating ground tile: shrunk to 1024 square, its edges blended into the opposite ones so it repeats without a seam. */
 async function ground(file, o) {
   const N = 1024;
@@ -314,6 +397,7 @@ async function main() {
       const img = key(await readRaw(src), 40, o.bg);
       if (kind === 'props') await props(img, o, file);
       else if (kind === 'planks') await planks(img, o, file);
+      else if (kind === 'strip') await strip(img, o, file);
       else await atlas(img, o, file);
     }
   }

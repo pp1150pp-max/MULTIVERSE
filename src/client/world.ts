@@ -122,7 +122,7 @@ const PLAYER_HALF_WIDTH = 0.35;
 const DECOR_CELL_UNITS = 1.33;
 /** Rotted boards laid over the wet stretches of a marsh trail: a row of separate pieces, seen from above. */
 /** The rebuilt hub town's paper pieces (Terrain.placeTown). */
-const TOWN2_PROP = /^(bld_|town_fountain$|quest_board$|crystal_stall$|lamp_post$|bench_|planter$|banner_pole$|crates$|barrels$|flower_box$|potted_tree$|low_stall_|garden_bed$|hedge_|house_back_|woodpile$|town_statue$)/;
+const TOWN2_PROP = /^(bld_|town_fountain$|quest_board$|crystal_stall$|lamp_post$|bench_|planter$|banner_pole$|crates$|barrels$|flower_box$|potted_tree$|low_stall_|garden_bed$|hedge_|house_back_|woodpile$|town_statue$|row_|mk_|ml_|mr_|b3_)/;
 const PLANK_SHEET = { key: 'marsh_planks', cols: 3, width: 2.9, length: 5 };
 const enum GroundId { Base, WaterEdge, Water }
 
@@ -442,6 +442,8 @@ export class World {
   private readonly ownMats: THREE.Material[] = [];
   private readonly ownGeos: THREE.BufferGeometry[] = [];
   private readonly sharedMats = new Map<string, THREE.SpriteMaterial>();
+  /** Mirrored copies of prop textures (addProp's `flip`), by key. */
+  private readonly flipped = new Map<string, THREE.Texture>();
   private readonly shadowGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
   private readonly shadowMat: THREE.MeshBasicMaterial;
   private readonly groundTex: THREE.CanvasTexture;
@@ -551,7 +553,7 @@ export class World {
     this.addPieces(mulberry32(terrain.zone.seed + 31));
 
     // Anything taller than a player can hide one, so it turns see-through too (not only trees and the town).
-    for (const p of this.props) this.addProp(p.key, p.x, p.z, p.height, p.fade || p.height >= FADE_MIN_HEIGHT, p.flip);
+    for (const p of this.props) this.addProp(p.key, p.x, p.z, p.height, !p.solid && (p.fade || p.height >= FADE_MIN_HEIGHT), p.flip);
     const fire = terrain.props.find((p) => p.key === 'campfire');
     if (fire) this.flames.push(this.glow(fire.x, 0.5, fire.z, '#ffa040', 0.55));
     // Each portal glows like the land it leads to; the way back to town glows gold.
@@ -1207,6 +1209,7 @@ export class World {
     for (const m of this.ownMats) m.dispose();
     for (const g of this.ownGeos) g.dispose();
     for (const m of this.sharedMats.values()) m.dispose();
+    for (const t of this.flipped.values()) t.dispose();
     this.shadowGeo.dispose();
     this.shadowMat.dispose();
     this.groundTex.dispose();
@@ -1266,18 +1269,29 @@ export class World {
 
   private addProp(key: string, x: number, z: number, height: number, fade: boolean, flip = false): void {
     const sh = sheets[key];
+    // Mirrored pictures: a Sprite ignores a negative scale (its shader takes the scale's length), so the texture itself
+    // is turned, a copy sharing the same image, read right to left.
+    let map = sh.texture;
+    if (flip) {
+      map = this.flipped.get(key) ?? sh.texture.clone();
+      map.repeat.x = -1;
+      map.offset.x = 1;
+      map.needsUpdate = true;
+      this.flipped.set(key, map);
+    }
     let mat: THREE.SpriteMaterial;
     if (fade) {
-      mat = this.own(new THREE.SpriteMaterial({ map: sh.texture, alphaTest: 0.5, transparent: true }));
+      mat = this.own(new THREE.SpriteMaterial({ map, alphaTest: 0.5, transparent: true }));
     } else {
-      mat = this.sharedMats.get(key) ?? new THREE.SpriteMaterial({ map: sh.texture, alphaTest: 0.5, transparent: false });
-      this.sharedMats.set(key, mat);
+      const mk = flip ? key + ':flip' : key;
+      mat = this.sharedMats.get(mk) ?? new THREE.SpriteMaterial({ map, alphaTest: 0.5, transparent: false });
+      this.sharedMats.set(mk, mat);
     }
     const spr = this.add(new THREE.Sprite(mat));
     const w = height * sh.cellAspect;
     // Sunk a little into the ground, except the rebuilt town's wide paper pieces, whose flat bottoms the ground would cut off.
     spr.center.set(0.5, TOWN2_PROP.test(key) ? 0 : 0.03);
-    spr.scale.set(flip ? -w : w, height, 1);
+    spr.scale.set(w, height, 1);
     spr.position.set(x, 0, z);
     // Long town-wall pieces stand on a line, not a spot: a round shadow under each would only blot the ground.
     if (!key.startsWith('town_wall')) {

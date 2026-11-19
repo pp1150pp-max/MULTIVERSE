@@ -295,6 +295,13 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
     'town_fountain', 'quest_board', 'crystal_stall', 'lamp_post', 'bench_a', 'bench_b', 'planter', 'banner_pole', 'crates', 'barrels',
     'flower_box', 'potted_tree', 'low_stall_a', 'low_stall_b', 'garden_bed', 'hedge_a', 'hedge_b', 'house_back_a', 'house_back_b', 'woodpile',
     // The town's statue and wall kit in paper too: the whole town is paper (owner 2026-11-19).
+    // Round 6: the rows of townhouses and the market (HUB.md 7).
+    ...['vault', 'crystal', 'house_a', 'house_b', 'house_c', 'shop'].flatMap((n) => [`row_l_${n}`, `row_r_${n === 'vault' ? 'guild' : n === 'crystal' ? 'forge' : n}`]),
+    'row_left_long', 'row_right_long', 'b3_crystal', 'b3_vault', 'b3_guild', 'b3_forge',
+    'mk_goods_front', 'mk_auction_front', 'mk_veg_front',
+    ...['main_back', 'wing_front', 'wing_back', 'table', 'cart', 'barrels', 'sacks', 'crates'].map((n) => `ml_${n}`),
+    ...['main_back', 'wing_front', 'wing_back', 'table', 'wagon', 'strongbox', 'chests', 'rugs'].map((n) => `mr_${n}`),
+    'mk_goods_stall', 'mk_auction_booth', 'mk_veg_stall', 'mk_wagon', 'mk_handcart', 'mk_sacks', 'mk_potion_table', 'mk_tag_table',
     'town_statue', 'town_wall_a', 'town_wall_a_broken', 'town_wall_b', 'town_wall_b_broken', 'town_wall_end',
   ].map((k) => [k, single(`paper/props/${k === 'town_statue' ? 'ruin_statue' : k}.png`, () => drawRock(0))])),
 

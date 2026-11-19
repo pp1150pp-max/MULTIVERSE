@@ -111,3 +111,79 @@ Row 2: the same hedge running diagonally from upper left to lower right; the BAC
 
 Each object has crisp clean outer edges with no glow or halo around it. Background ONE perfectly flat solid magenta (#FF00FF) everywhere, no gradient, no paper texture on the background, no ground patches, no grass around the bases, no cast shadows on the background, no text, no letters, no labels, no grid lines. Do not use pink, magenta or purple on any object.
 ```
+
+## 7. เมืองผังรอบ 6 (เจ้าของ 2026-11-19): ตึกแถวด้านบน ตลาดด้านล่าง
+
+แนบภาพแนวคิดรอบ 6 (`hub_concept_v6.png` เก็บไว้นอก repo ใน `D:/Claude/Game/hub_redesign/`) และ `raw/ref/A7_hub.png` ตัดด้วย `node tools/cut_papercraft.cjs hub`
+บ้านทุกหลังวางเฉียงขนานกำแพง ติดกันเป็นตึกแถว ของในตลาดก็ขนานกำแพง
+
+### 7.1 ตึกแถวกำแพงบนซ้าย → `row_left.png` (3×2 พื้นม่วงแดง)
+
+หน้าร้านหันไป**ขวาล่าง** (ทางน้ำพุ) ผนังข้างของทุกหลังตัดตรง เพื่อให้วางต่อกันได้ไม่มีช่อง
+
+ลำดับช่อง: `row_l_vault` `row_l_crystal` `row_l_house_a` / `row_l_house_b` `row_l_house_c` `row_l_shop`
+
+```
+Use the first attached image (my game's town) for the design, colours and details, and draw in EXACTLY the papercraft style of the second attached image: layered cut paper and card, visible paper fibre, slightly uneven scissor-cut edges, small drop shadows between the paper layers INSIDE each object. VERY IMPORTANT CAMERA: 2D isometric 3/4 view from above at about 35 degrees, as in classic isometric RPGs: we see the roof and two walls, the lower-left wall and the lower-right wall, and each building's base sits on an imaginary diamond-shaped ground footprint. NOT a flat front view. Light from the upper left.
+
+These are MODULAR TOWNHOUSES for one continuous row of attached buildings, like an old-town street front: in the game they are placed side by side, touching, along a wall that runs diagonally from the upper left to the lower right of the screen. The front of every building runs EXACTLY PARALLEL to that diagonal wall, so its base edges follow the same isometric diagonal lines as the wall, never square to the screen and never at another angle. When the buildings are lined up they must read as ONE ATTACHED ROW with no gaps, like terraced houses. So EVERY building: has its FRONT (door, shop window, sign, awning) on the LOWER-RIGHT wall; has the SAME depth and the SAME width of ground footprint; and has its two side walls cut off straight and flat (plain shared party walls, no windows, nothing sticking out sideways) so the next building can stand right against it with no gap. Two to three storeys, varied roof heights and colours (red, teal and blue tiles), timber frames, warm sandstone and pale grey brick, flower boxes, glowing windows, chimneys.
+
+Generate an image: a sheet with exactly 6 separate buildings in a 3 columns x 2 rows grid, generous empty space between them, each fully inside its own cell, nothing touching or overlapping.
+Row 1: a sturdy pale stone bank / vault with a teal roof, gold trim and a round iron vault door with a gold wheel on its front; a small crystal shop with a navy-and-silver star awning and a big window glittering with glowing blue crystals; a narrow three-storey townhouse with a red roof and a balcony.
+Row 2: a two-storey townhouse with a teal roof and flower boxes; a three-storey townhouse with a blue roof and a small dormer; a shop with a red-and-cream striped awning and shelves of colourful books and bolts of cloth in its window.
+
+Each object has crisp clean outer edges with no glow or halo around it. Background ONE perfectly flat solid magenta (#FF00FF) everywhere, no gradient, no paper texture on the background, no ground patches, no grass around the bases, no cast shadows on the background, no text, no letters, no labels, no grid lines. Do not use pink, magenta or purple on any object.
+```
+
+---
+
+### 7.2 ตึกแถวกำแพงบนขวา → `row_right.png` (3×2 พื้นม่วงแดง)
+
+หน้าร้านหันไป**ซ้ายล่าง** (ทางน้ำพุ) ผนังข้างตัดตรงเหมือนชุดที่ 1
+
+ลำดับช่อง: `row_r_guild` `row_r_forge` `row_r_house_a` / `row_r_house_b` `row_r_house_c` `row_r_shop`
+
+```
+Same town, same papercraft style and same camera as before (2D isometric 3/4 view from above at about 35 degrees, light from the upper left, we see the roof and the lower-left and lower-right walls).
+
+These are MODULAR TOWNHOUSES for one continuous row of attached buildings along a wall that runs diagonally from the upper RIGHT to the lower LEFT of the screen. The front of every building runs EXACTLY PARALLEL to that diagonal wall, so its base edges follow the same isometric diagonal lines as the wall, never square to the screen and never at another angle. When the buildings are lined up they must read as ONE ATTACHED ROW with no gaps, like terraced houses. So EVERY building: has its FRONT (door, shop window, sign, awning) on the LOWER-LEFT wall; has the SAME depth and the SAME width of ground footprint; and has its two side walls cut off straight and flat (plain shared party walls, no windows, nothing sticking out sideways) so the next building can stand right against it with no gap. Two to three storeys, varied roof heights and colours (red, teal and blue tiles), timber frames, warm sandstone and pale grey brick, flower boxes, glowing windows, chimneys.
+
+Generate an image: a sheet with exactly 6 separate buildings in a 3 columns x 2 rows grid, generous empty space between them, each fully inside its own cell, nothing touching or overlapping.
+Row 1: an adventurers' guild hall with a blue-slate roof, gold trim and a blue banner with a gold star over its arched double door; a stone blacksmith's forge with a tall smoking chimney, an open front showing a glowing orange furnace, and a hanging sign with crossed hammers; a narrow three-storey townhouse with a blue roof and a balcony.
+Row 2: a two-storey townhouse with a red roof and flower boxes; a three-storey townhouse with a teal roof and a small dormer; a shop with a green-and-cream striped awning and baskets of goods in its window.
+
+Each object has crisp clean outer edges with no glow or halo around it. Background ONE perfectly flat solid magenta (#FF00FF) everywhere, no gradient, no paper texture on the background, no ground patches, no grass around the bases, no cast shadows on the background, no text, no letters, no labels, no grid lines. Do not use pink, magenta or purple on any object.
+```
+
+---
+
+### 7.3 ของในตลาดล่าง → `market.png` (4×2 พื้นม่วงแดง)
+
+ของชุดนี้เตี้ยทุกชิ้น และไม่ทำทั่งตีเหล็กแยก เพราะทั่งอยู่ในภาพโรงตีเหล็กแล้ว
+
+ลำดับช่อง: `mk_goods_stall` `mk_auction_booth` `mk_veg_stall` `mk_wagon` / `mk_handcart` `mk_sacks` `mk_potion_table` `mk_tag_table`
+
+```
+Same town, same papercraft style and same camera as before (2D isometric 3/4 view from above at about 35 degrees, light from the upper left, each object's base on an imaginary diamond-shaped ground footprint). These stand in the open-air market near the camera, so every object is LOW and WIDE, no taller than a person, and each one's long side runs diagonally along an isometric ground axis, PARALLEL to the town walls (which run diagonally on screen), never square to the screen and never at a random angle. Draw each stall, booth, table and cart with its counter or long side running from the lower left to the upper right of the screen, like the bottom-right town wall.
+
+Generate an image: a prop sheet with exactly 8 separate objects in a 4 columns x 2 rows grid, generous empty space between them, each fully inside its own cell, nothing touching or overlapping.
+Row 1: the travelling merchant's general goods stall, a wooden counter under a red-and-cream striped canopy, crowded with potion bottles, rope coils, lanterns, pots and bags; the market broker's dark-wood auction booth with a large notice board of pinned listings, a weighing scale and a small strongbox on its counter; a vegetable and fruit stall with a green-and-cream canopy, crates of apples, cabbages, carrots and pumpkins; a covered market wagon with a cream canvas roof, loaded with crates.
+Row 2: a small wooden hand cart with sacks; a pile of grain sacks and baskets; a low wooden table with rows of coloured potion bottles and a lantern; a low wooden table of wrapped goods and boxes with small price tags.
+
+Each object has crisp clean outer edges with no glow or halo around it. Background ONE perfectly flat solid magenta (#FF00FF) everywhere, no gradient, no paper texture on the background, no ground patches, no cast shadows on the background, no text, no letters, no labels, no grid lines. Do not use pink, magenta or purple on any object.
+```
+
+### 7.4 แผงตลาด 3 แผงแบบหันเข้าน้ำพุ (เห็นด้านหลังแผง) → `market_backs.png` (3×1)
+
+ลำดับช่อง: `mk_goods_stall` `mk_auction_booth` `mk_veg_stall` (มาแทน 3 ช่องแรกของ `market.png`)
+
+```
+Redraw the first three stalls of the attached market sheet (the merchant's goods stall with the red-and-cream canopy, the broker's auction booth with the notice board, and the vegetable stall with the green-and-cream canopy) in EXACTLY the same papercraft style, colours, size and camera (2D isometric 3/4 view from above at about 35 degrees, light from the upper left), but TURNED AROUND so that each stall faces AWAY from the camera, toward the UPPER-LEFT.
+
+That means: the counter, the goods on display, the notice board's pinned papers and the open side of each stall are on the far UPPER-LEFT side, facing away from us; what we see is the stall's plain BACK on the LOWER-RIGHT wall (wooden back boards, a few crates, sacks and a barrel stacked behind it, the back of the notice board, the back of the canopy sloping down toward the far side) and its narrow side on the LOWER-LEFT. We can still glimpse some of the goods over the top of the back boards and under the canopy, so each stall is recognisable. Each stall's long side runs diagonally from the lower left to the upper right of the screen, parallel to the isometric ground axis, never square to the screen. Keep them LOW, no taller than a person.
+
+Generate an image: exactly 3 separate stalls in a 3 columns x 1 row grid, generous empty space between them, each fully inside its own cell, nothing touching or overlapping. Left: the merchant's goods stall seen from behind. Middle: the broker's auction booth seen from behind. Right: the vegetable stall seen from behind.
+
+Each object has crisp clean outer edges with no glow or halo around it. Background ONE perfectly flat solid magenta (#FF00FF) everywhere, no gradient, no paper texture on the background, no ground patches, no cast shadows on the background, no text, no letters, no labels, no grid lines. Do not use pink, magenta or purple on any object.
+```
+

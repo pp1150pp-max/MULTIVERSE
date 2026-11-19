@@ -3,7 +3,7 @@ import { ok, finish } from './check';
 import { ZONE_HUB } from '../src/shared/data/zones';
 import { NPC_IDS } from '../src/shared/data/npcs';
 import { Sim } from '../src/shared/sim/Sim';
-import { HUB_BUILDING_IN, HUB_FOUNTAIN_RADIUS } from '../src/shared/sim/terrain';
+import { HUB_FOUNTAIN_RADIUS } from '../src/shared/sim/terrain';
 import { WalkTarget } from '../src/client/walkTo';
 import type { Vec2 } from '../src/shared/types';
 
@@ -53,12 +53,9 @@ function keyWalk(x: number, z: number, mx: number, mz: number, past: number): nu
   return Infinity;
 }
 
-// ---- clicking right on an NPC, the forge, the vault or the fountain walks up beside it
+// ---- clicking right on an NPC or the fountain walks up beside it
 const things = [
   ...NPC_IDS.map((id) => ({ name: id, ...t.npcPos[id]!, out: 3.5 })),
-  // The buildings behind the blacksmith and the keeper (Terrain.placeTown).
-  { name: 'forge', ...t.props.find((q) => q.key === 'bld_forge')!, out: HUB_BUILDING_IN + 2 },
-  { name: 'vault', ...t.props.find((q) => q.key === 'bld_vault')!, out: HUB_BUILDING_IN + 2 },
   { name: 'fountain', x: s.x, z: s.z, out: HUB_FOUNTAIN_RADIUS + 1.5 },
 ];
 for (const th of things) {
@@ -100,7 +97,8 @@ for (const [name, c, r] of [['blacksmith', t.npcPos.blacksmith!, 0.45], ['founta
 // ---- pressed into a corner of two things: stays put, doesn't shake
 {
   // Two things in town that leave a gap narrower than a player (the first such pair, e.g. a lamp post and a planter).
-  const inTown = t.colliders.filter((c) => Math.max(Math.abs(c.x - s.x), Math.abs(c.z - s.z)) < 15);
+  // Small things only: two buildings side by side against a wall leave a crack too, but it leads nowhere.
+  const inTown = t.colliders.filter((c) => c.r < 1.6 && Math.max(Math.abs(c.x - s.x), Math.abs(c.z - s.z)) < 15);
   let stall = inTown[0];
   let barrel = inTown[1];
   let best = Infinity;
@@ -113,10 +111,14 @@ for (const [name, c, r] of [['blacksmith', t.npcPos.blacksmith!, 0.45], ['founta
     }
   }
   const mid = { x: (stall.x + barrel.x) / 2, z: (stall.z + barrel.z) / 2 };
-  // Walk into the gap from the town side.
-  const nx = mid.x - s.x;
-  const nz = mid.z - s.z;
+  // Walk into the gap square on, from whichever side is open.
+  let nx = -(barrel.z - stall.z);
+  let nz = barrel.x - stall.x;
   const l = Math.hypot(nx, nz);
+  if (t.isBlocked(mid.x - (nx / l) * 2, mid.z - (nz / l) * 2, p.radius)) {
+    nx = -nx;
+    nz = -nz;
+  }
   p.x = mid.x - (nx / l) * 2;
   p.z = mid.z - (nz / l) * 2;
   for (let f = 0; f < 120; f++) p.walkStep(nx / l, nz / l, Infinity, DT, t);

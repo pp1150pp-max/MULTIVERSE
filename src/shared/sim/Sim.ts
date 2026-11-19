@@ -45,7 +45,7 @@ import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type S
 const MINION_POUNCE_WINDUP = 0.35;
 /** Hub spawn: random distance from the fountain centre, between these (fountain blocks ~1.7, rest range 4.5). */
 // Outside the fountain and its benches (HUB_FOUNTAIN_RADIUS), within its rest range (REST_RANGE.fountain).
-const HUB_SPAWN_RING: [number, number] = [4.6, 6.2];
+const HUB_SPAWN_RING: [number, number] = [4.4, 6.1];
 /** Drops land where a player of this radius could stand (Player.radius), so they can always be picked up. */
 const LOOT_STAND_R = 0.4;
 /** A vanished boss gives up on its fight when no living player has been this close for VANISH_GIVE_UP seconds. */
