@@ -638,7 +638,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       return true;
     case 'mg_empowerfield': {
       const mult = 1 + P('dmgBonus') / 100;
-      const t = P('buffTime');
+      const t = p.buffTime(P('buffTime'));
       sim.fx('zone', 'mg_empower', p.x, p.z, far, CIRCLE_ZONE, p.id);
       forPlayers(sim, p.x, p.z, far, (q) => {
         q.dmgMult = sim.time < q.dmgUntil ? Math.max(q.dmgMult, mult) : mult;
@@ -649,14 +649,14 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       return true;
     }
     case 'mg_manashield': {
-      const t = P('buffTime');
+      const t = p.buffTime(P('buffTime'));
       sim.fx('zone', 'mg_shield', p.x, p.z, far, CIRCLE_ZONE, p.id);
       forPlayers(sim, p.x, p.z, far, (q) => giveShield(sim, q, (q.maxHp * P('shieldPct')) / 100, t));
       return true;
     }
     case 'mg_timewarp': {
       const haste = P('haste') / 100;
-      const hasteT = P('hasteTime');
+      const hasteT = p.buffTime(P('hasteTime'));
       sim.fx('zone', 'mg_timewarp', p.x, p.z, far, CIRCLE_ZONE, p.id);
       forCircle(sim, p.x, p.z, far, (m) => sim.hitMonster(p, m, dmg, { slow: P('slow') / 100, slowT: P('slowTime'), skill: sk }));
       forPlayers(sim, p.x, p.z, far, (q) => {
@@ -819,17 +819,17 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       return true;
     }
     case 'gs_sniperfocus':
-      p.addStatBuff(sk.id, P('time'), { crit: P('crit'), critDmg: P('critDmg') });
+      p.addStatBuff(sk.id, p.buffTime(P('time')), { crit: P('crit'), critDmg: P('critDmg') });
       buffFx(sim, p, 'gs_aura_crit');
       return true;
 
     // Rapid Fire line: buffs for the basic shot.
     case 'gs_hotrounds':
-      p.gun.onHit[sk.id] = { until: sim.time + P('time'), add: P('onHit') * sc.dmg };
+      p.gun.onHit[sk.id] = { until: sim.time + p.buffTime(P('time')), add: P('onHit') * sc.dmg };
       buffFx(sim, p, 'gs_aura_rapid');
       return true;
     case 'gs_quickreload':
-      p.addStatBuff(sk.id, P('time'), { atkSpeed: P('atkSpeed') });
+      p.addStatBuff(sk.id, p.buffTime(P('time')), { atkSpeed: P('atkSpeed') });
       buffFx(sim, p, 'gs_aura_rapid');
       return true;
     case 'gs_doubletap':
@@ -837,36 +837,36 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       buffFx(sim, p, 'gs_aura_rapid');
       return true;
     case 'gs_shockrounds': {
-      const until = sim.time + P('time');
+      const until = sim.time + p.buffTime(P('time'));
       p.gun.onHit[sk.id] = { until, add: P('onHit') * sc.dmg };
       p.gun.shock = { until, slow: P('slow') / 100, slowT: P('slowTime') };
       buffFx(sim, p, 'gs_aura_rapid');
       return true;
     }
     case 'gs_stackfire':
-      p.gun.stack = { until: sim.time + P('time'), per: P('perStack') * sc.dmg, max: Math.round(P('maxStacks')), target: 0, n: 0 };
+      p.gun.stack = { until: sim.time + p.buffTime(P('time')), per: P('perStack') * sc.dmg, max: Math.round(P('maxStacks')), target: 0, n: 0 };
       buffFx(sim, p, 'gs_aura_rapid');
       return true;
     case 'gs_splitshot':
-      p.gun.split = { until: sim.time + P('time'), n: Math.round(P('bullets')), arc: (P('arc') * Math.PI) / 180, side: P('side') / 100 };
+      p.gun.split = { until: sim.time + p.buffTime(P('time')), n: Math.round(P('bullets')), arc: (P('arc') * Math.PI) / 180, side: P('side') / 100 };
       buffFx(sim, p, 'gs_aura_rapid');
       return true;
     case 'gs_piercerounds': {
-      const until = sim.time + P('time');
+      const until = sim.time + p.buffTime(P('time'));
       p.gun.onHit[sk.id] = { until, add: P('onHit') * sc.dmg };
       p.gun.pierceUntil = until;
       buffFx(sim, p, 'gs_aura_rapid');
       return true;
     }
     case 'gs_overdrive': {
-      const time = P('time');
+      const time = p.buffTime(P('time'));
       p.addStatBuff(sk.id, time, { atkSpeed: P('atkSpeed'), moveSpeed: P('moveSpeed') });
       p.gun.onHit[sk.id] = { until: sim.time + time, add: P('onHit') * sc.dmg };
       buffFx(sim, p, 'gs_aura_rapid');
       return true;
     }
     case 'gs_bulletstorm':
-      p.gun.storm = { until: sim.time + P('time'), n: Math.round(P('pellets')), arc: (P('arc') * Math.PI) / 180, mult: dmg };
+      p.gun.storm = { until: sim.time + p.buffTime(P('time')), n: Math.round(P('pellets')), arc: (P('arc') * Math.PI) / 180, mult: dmg };
       buffFx(sim, p, 'gs_aura_rapid');
       return true;
 
