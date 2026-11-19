@@ -17,14 +17,14 @@ import {
 } from '../shared/balance';
 import { DROP_GOLD_MULT, type MonsterDef } from '../shared/data/monsters';
 import {
-  AUTO_ALLOW_NAME, AUTO_ALLOWS, AUTO_HOME_WAIT_NAME, AUTO_OFFLINE_NAME, AUTO_DEFAULT_NAME, AUTO_LOOT_ORDERS, AUTO_NUM_NAME, AUTO_OUT_ACTIONS, AUTO_RANGE, AUTO_TARGET_MODES, autoDefaultValueName,
+  AUTO_ALLOW_NAME, AUTO_ALLOWS, AUTO_HOME_WAIT_NAME, AUTO_OFFLINE_NAME, AUTO_AOE_GUARD_NAME, AUTO_DEFAULT_NAME, AUTO_LOOT_ORDERS, AUTO_NUM_NAME, AUTO_OUT_ACTIONS, AUTO_RANGE, AUTO_TARGET_MODES, autoDefaultValueName,
   type AutoAllow, type AutoDefaults,
 } from '../shared/autoTuning';
 import { NO_BOOST, ZONES, type MonsterBoost } from '../shared/data/zones';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { ITEM_BASES, itemRowKinds, rowRanges, TIER_BAND_NAME, TIER_BANDS, tierBandOf, tierChances, tierRanges } from '../shared/data/items';
 import { MAX_LEVEL } from '../shared/formulas';
-import { RARITIES, RARITY_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, type ClassId, type Rarity, type StatKey } from '../shared/types';
+import { ITEM_ONLY_STATS, RARITIES, RARITY_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, type ClassId, type Rarity, type StatKey } from '../shared/types';
 import { TUT_ACCEPT_GOLD, TUT_COUNT_MAX, TUT_GOLD_MAX, TUT_LINES_MAX, TUT_REWARD_KEYS, TUT_REWARD_NAME, TUT_STONES, tutRewardText, type TutRewardKey } from '../shared/tutorial';
 import type { MailAttachItem } from '../shared/mail';
 import { POTION_SIZES, potionName } from '../shared/data/potions';
@@ -38,7 +38,9 @@ const PREVIEW_LEVELS = [1, 10, 50];
 /** Levels shown in the skill MP preview. */
 const MP_COST_LEVELS = [1, 20, 40, 50];
 /** Stats shown with one decimal (the % ones and regen); the rest are whole numbers in the game. */
-const DECIMAL = new Set<StatKey>(['crit', 'critDmg', 'atkSpeed', 'moveSpeed', 'hpRegen', 'mpRegen']);
+const DECIMAL = new Set<StatKey>(['crit', 'critDmg', 'atkSpeed', 'moveSpeed', 'hpRegen', 'mpRegen', 'cdr', 'buffDur', 'armorPen']);
+/** Stats a class has (the item-only mods are left out of the class table). */
+const CLASS_STATS = STAT_KEYS.filter((k) => !ITEM_ONLY_STATS.includes(k));
 const show = (k: StatKey, v: number): string => (DECIMAL.has(k) ? (Math.round(v * 10) / 10).toString() : Math.round(v).toLocaleString());
 const pct = (n: number): string => `${(Math.round(n * 1000) / 10).toString()}%`;
 
@@ -94,13 +96,13 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     const mpCostOut = h('div', { class: 'muted' });
     const refresh = (): void => {
       const at = PREVIEW_LEVELS.map((lv) => classStatsAt(cls, lv, draft));
-      for (const k of STAT_KEYS) previewCells.get(k)!.forEach((td, i) => { td.textContent = show(k, at[i][k]); });
+      for (const k of CLASS_STATS) previewCells.get(k)!.forEach((td, i) => { td.textContent = show(k, at[i][k]); });
       // Real MP of each paid skill at a few levels, e.g. "ลูกไฟ Lv1 10 → Lv40 22 → Lv50 25".
       mpCostOut.replaceChildren(...CLASSES[cls].skills.filter((sk) => sk.mp > 0).map((sk) =>
         h('div', {}, `${sk.nameTh} ${MP_COST_LEVELS.map((lv) => `Lv${lv} ${skillMpCost(sk.mp, cls, lv, draft)}`).join(' → ')}`)));
       updateSummary();
     };
-    const rows = STAT_KEYS.map((k) => {
+    const rows = CLASS_STATS.map((k) => {
       const cells = PREVIEW_LEVELS.map(() => h('td', { class: 'bal-out' }));
       previewCells.set(k, cells);
       const inputs = STAT_PARTS.map((part: StatPart) => {
@@ -142,6 +144,34 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         h('label', {}, 'ตัวคูณฟื้น MP', numBox(() => draft.mpRegenMult, (n) => { draft.mpRegenMult = n; }, code.mpRegenMult, ...BALANCE_RANGE.regenMult, 0.05, refresh)),
       ),
     );
+  };
+
+  // ---------------------------------------------------------- extra lines: weights, cooldown cut cap
+  const affixCard = h('div', { class: 'card' });
+  const drawAffix = (): void => {
+    const refresh = (): void => { updateSummary(); };
+    const total = (): number => STAT_KEYS.reduce((a, k) => a + Math.max(0, draft.affixWeight[k]), 0);
+    const chanceOut = new Map<StatKey, HTMLElement>();
+    const showChances = (): void => {
+      const t = total();
+      for (const k of STAT_KEYS) chanceOut.get(k)!.textContent = t > 0 ? pct(Math.max(0, draft.affixWeight[k]) / t) : '-';
+    };
+    const boxes = STAT_KEYS.map((k) => {
+      const out = h('span', { class: 'muted' });
+      chanceOut.set(k, out);
+      return h('label', {}, `${STAT_LABEL[k]}`,
+        numBox(() => draft.affixWeight[k], (n) => { draft.affixWeight[k] = n; }, code.affixWeight[k], ...BALANCE_RANGE.affixWeight, 0.1, () => { showChances(); refresh(); }),
+        out);
+    });
+    affixCard.replaceChildren(
+      h('h2', {}, 'สเตตัสเสริม: น้ำหนักสุ่ม · ลดคูลดาวน์สูงสุด'),
+      h('div', { class: 'muted' }, 'น้ำหนักสุ่ม = โอกาสที่บรรทัดเสริม 1 บรรทัดจะได้สเตตัสนั้น เทียบกับตัวอื่น (ค่าในโค้ด 1 ทุกตัว = เท่ากัน, 0 = ไม่ออก) ใช้กับดรอปและ "สุ่มสเตตัส" ที่ช่างตีเหล็ก · % ข้างช่อง = โอกาสต่อบรรทัดเมื่อยังไม่มีสเตตัสอื่นบนของ · มีผลกับของใหม่เท่านั้น'),
+      h('div', { class: 'row bal-line' }, ...boxes),
+      h('div', { class: 'row bal-line' },
+        h('label', {}, 'ลดคูลดาวน์สกิลได้สูงสุด %', numBox(() => draft.cdrCap, (n) => { draft.cdrCap = n; }, code.cdrCap, ...BALANCE_RANGE.cdrCap, 1, refresh))),
+      h('div', { class: 'muted' }, 'สเตตัส "ลดคูลดาวน์สกิล %" จากของทุกชิ้นบวกกัน แล้วคูลดาวน์ Q/E/R × (1 − รวม%) ไม่เกินค่านี้ (ตีธรรมดาและแดชไม่ลด) · "เพิ่มเวลาบัฟ %" = เวลาบัฟที่สกิลให้ตัวเอง/ทีม × (1 + รวม%) · "เจาะเกราะ %" = DEF มอนที่ใช้คิดดาเมจ × (1 − รวม%) ต่อจากลดเกราะของสกิล'),
+    );
+    showChances();
   };
 
   // ---------------------------------------------------------- tiers
@@ -708,6 +738,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
           ` ${AUTO_HOME_WAIT_NAME}`),
       ),
       h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' }, h('input', { type: 'checkbox', checked: a.aoeGuard, onchange: (e: Event) => { a.aoeGuard = (e.target as HTMLInputElement).checked; refresh(); } }), ` ${AUTO_AOE_GUARD_NAME}`),
+        num('aoeMargin', 0.1),
+      ),
+      h('div', { class: 'muted' }, 'สกิลวงรอบตัว (เช่น ประจุระเบิดของนักเวท): Auto ข้ามสกิลนั้นถ้าไม่มีมอนอยู่ในวง (รัศมีสกิล + ขนาดตัวมอน + ระยะเผื่อ) แล้วใช้สกิลถัดไปในลำดับแทน · ปิดสวิตช์ = แบบเดิม กดเมื่อเป้าอยู่ในระยะตี'),
+      h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
           h('input', { type: 'checkbox', checked: draft.walkHidden, onchange: (e: Event) => { draft.walkHidden = (e.target as HTMLInputElement).checked; refresh(); } }),
           ' เดินต่อเมื่อสลับแท็บ'),
@@ -966,6 +1001,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   const redraw = (): void => {
     drawClass();
     drawRegen();
+    drawAffix();
     drawTiers();
     drawMonsters();
     drawPotions();
@@ -1024,7 +1060,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     msg,
   );
 
-  box.replaceChildren(fold.toc, classCard, regenCard, tierCard, previewCard, monsterCard, potionCard, forgeCard, autoCard, tutCard, fxCard, circleCard, rootCard, rigCard, bar);
+  box.replaceChildren(fold.toc, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, potionCard, forgeCard, autoCard, tutCard, fxCard, circleCard, rootCard, rigCard, bar);
   redraw();
   fold.refreshToc();
 }

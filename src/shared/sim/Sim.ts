@@ -386,7 +386,9 @@ export class Sim {
     const crit = opts.forceCrit || Math.random() * 100 < p.stats.crit + (opts.critBonus ?? 0) + marked;
     if (crit) raw *= 1 + p.stats.critDmg / 100;
     if (opts.maxMult) raw = Math.min(raw, p.stats.atk * opts.maxMult);
-    const def = this.time < m.armorBreakUntil ? m.defense * (1 - m.armorBreak) : m.defense;
+    // Armor break from skills, then the attacker's "เจาะเกราะ %" item stat (owner 2026-11-19), both cut DEF.
+    const pen = 1 - Math.min(100, Math.max(0, p.stats.armorPen ?? 0)) / 100;
+    const def = (this.time < m.armorBreakUntil ? m.defense * (1 - m.armorBreak) : m.defense) * pen;
     const under = m.isBoss && m.level - p.level > BOSS_LEVEL_GAP;
     const bossMult = m.isBoss ? classBalance(p.cls.id).bossDmgMult : 1;
     const dmg = Math.max(1, Math.round(mitigate(raw, def) * bossMult * (under ? BOSS_UNDERLEVEL_MULT : 1)));

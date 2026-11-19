@@ -5,6 +5,7 @@ import type { Loot } from './Loot';
 import { MONSTERS } from '../data/monsters';
 import { inBossArena, inSafeArea, lavaAt, type ZoneDef } from '../data/zones';
 import { currentBalance } from '../balance';
+import { skillReach } from '../skillBook';
 import type { AutoConfig, AutoOutAction } from '../autoTuning';
 
 /** What the bot needs to see. The server builds one per player. */
@@ -315,27 +316,45 @@ export class AutoPlay {
     // In reach: stop. The walk target set above is the monster's spot and would carry ranged classes into its face.
     out.moveTo = { x: p.x, z: p.z };
     out.basic = true;
-    this.castByOrder(p, out);
+    this.castByOrder(g, out);
     return out;
   }
 
   /** Whether Auto may cast this skill now: switched on in the settings, off cooldown, and enough MP. */
-  private ready(p: Player, slot: AutoSkill): boolean {
+  private ready(g: AutoWorld, slot: AutoSkill): boolean {
+    const p = g.player;
     const sk = p.skill(slot);
-    return !!sk && p.autoSettings.skills[slot] && (p.cd[sk.id] ?? 0) <= 0 && p.mp >= p.skillMp(sk) + 5;
+    return !!sk && p.autoSettings.skills[slot] && (p.cd[sk.id] ?? 0) <= 0 && p.mp >= p.skillMp(sk) + 5 && this.aoeHasTarget(g, slot);
+  }
+
+  /**
+   * A mage skill that hits a circle around the caster is cast only with a monster inside that circle (owner 2026-11-19),
+   * so Auto doesn't waste mana and cooldown on an empty ring. Same hit rule as the skill (radius + the monster's own
+   * size) plus the `aoeMargin` setting. Other skills and classes are not checked.
+   */
+  private aoeHasTarget(g: AutoWorld, slot: AutoSkill): boolean {
+    const p = g.player;
+    const sk = p.skill(slot);
+    const cfg = currentBalance().auto;
+    if (!sk || !cfg.aoeGuard || p.cls.id !== 'mage') return true;
+    const reach = skillReach(sk);
+    if (reach?.kind !== 'self') return true;
+    const r = reach.radius + cfg.aoeMargin;
+    return g.monsters.some((m) => m.alive && Math.hypot(m.x - p.x, m.z - p.z) <= r + m.radius);
   }
 
   private tryCast(g: AutoWorld, out: Intent, slot: AutoSkill): void {
-    if (this.ready(g.player, slot) && !out.skills.includes(slot)) out.skills.push(slot);
+    if (this.ready(g, slot) && !out.skills.includes(slot)) out.skills.push(slot);
   }
 
   /**
    * In reach of the target: cast one skill, the highest in the player's order that is switched on and ready
-   * (so when the first is cooling down, the next one goes). Nothing extra when the player cast one by hand this frame.
+   * (so when the first is cooling down, or is a circle around the player with no monster in it, the next one goes).
+   * Nothing extra when the player cast one by hand this frame.
    */
-  private castByOrder(p: Player, out: Intent): void {
+  private castByOrder(g: AutoWorld, out: Intent): void {
     if (out.skills.length) return;
-    const slot = p.autoSettings.order.find((s) => this.ready(p, s));
+    const slot = g.player.autoSettings.order.find((s) => this.ready(g, s));
     if (slot) out.skills.push(slot);
   }
 

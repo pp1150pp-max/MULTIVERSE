@@ -613,9 +613,19 @@ export class Player extends Unit {
     return rankedMp(sk, this.cls.id, this.level, Math.max(1, this.skillRank(sk)));
   }
 
-  /** Full cooldown of this skill at its rank. */
+  /**
+   * Full cooldown of this skill at its rank, cut by the "ลดคูลดาวน์สกิล %" item stat (owner 2026-11-19: Q/E/R,
+   * not the basic attack or the dash; at most the /admin cap).
+   */
   skillCooldown(sk: SkillDef): number {
-    return sk.kind === 'basic' || sk.kind === 'dash' ? sk.cooldown : rankedCooldown(sk, Math.max(1, this.skillRank(sk)));
+    if (sk.kind === 'basic' || sk.kind === 'dash') return sk.cooldown;
+    const cut = Math.min(Math.max(0, this.stats.cdr ?? 0), currentBalance().cdrCap) / 100;
+    return Math.round(rankedCooldown(sk, Math.max(1, this.skillRank(sk))) * (1 - cut) * 100) / 100;
+  }
+
+  /** How long a buff this player's skill gives lasts: `seconds` × (1 + the "เพิ่มเวลาบัฟ %" item stat). */
+  buffTime(seconds: number): number {
+    return seconds * (1 + Math.max(0, this.stats.buffDur ?? 0) / 100);
   }
 
   /** Hurt or attacked within the last few seconds (no swapping skills then). */

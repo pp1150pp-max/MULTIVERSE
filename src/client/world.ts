@@ -1294,7 +1294,9 @@ export class World {
     spr.scale.set(w, height, 1);
     spr.position.set(x, 0, z);
     // Long town-wall pieces stand on a line, not a spot: a round shadow under each would only blot the ground.
-    if (!key.startsWith('town_wall')) {
+    // Nor under the hub town's buildings, stalls and fountain: their pictures stand on their nearest corner, not their
+    // middle, so a round shadow there floated off to one side (owner 2026-11-19).
+    if (!key.startsWith('town_wall') && !/^(b3_|row_|mk_|ml_|mr_|town_fountain$)/.test(key)) {
       const sd = this.add(new THREE.Mesh(this.shadowGeo, this.shadowMat));
       // Turn the oval to the camera's 45 degrees so it lies flat across the screen (its long side
       // along CAM_RIGHT), and nudge it away from the camera so it sits under the base, not in front.

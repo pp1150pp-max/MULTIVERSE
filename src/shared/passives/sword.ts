@@ -27,7 +27,7 @@ export const SWORD_PASSIVES: Record<string, PassiveHooks> = {
   // Light Feet: after any dash (plain or a skill's), more damage for a few seconds; the plain dash comes back sooner.
   sw_lightfeet: {
     onDash(p, v) {
-      lightFeetUntil.set(p, p.simTime() + v('time'));
+      lightFeetUntil.set(p, p.simTime() + p.buffTime(v('time')));
       if (showEvery(p, 1)) p.effectAt('sw_aura', p.x, p.z, 0, 0.8);
     },
     dealMult(p, _m, v) {
