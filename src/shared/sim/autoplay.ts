@@ -45,6 +45,11 @@ const OUT_WHY = { noHp: 'ยา HP หมด', noMp: 'ยา MP หมด', bagF
 const IDLE_HINT_EMPTY = 3;
 const IDLE_HINT_WAITING = 15;
 const IDLE_HINT_EVERY = 30;
+/** Waiting at the Auto start spot: counts as arrived within HOME_ARRIVE, walks back only past HOME_LEAVE (no jitter);
+ *  gives up walking home after HOME_STUCK_SEC without getting closer. */
+const HOME_ARRIVE = 1;
+const HOME_LEAVE = 2.5;
+const HOME_STUCK_SEC = 3;
 export const AUTO_HINT_COLOR = '#ffb36a';
 /** Auto fights monsters of any level; one this many levels above the player gets a warning. */
 export const AUTO_LEVEL_WARN = 10;
@@ -61,6 +66,9 @@ export class AutoPlay {
   private roam: { x: number; z: number } | null = null;
   /** Centre of the farming circle: where Auto was switched on. */
   private anchor: { x: number; z: number } | null = null;
+  /** Waiting at the anchor (see homePoint). */
+  private homeArrived = false;
+  private homeProgress: { bestD: number; since: number } | null = null;
 
   private idleSince: number | null = null;
   private hintAt = -Infinity;
@@ -124,6 +132,8 @@ export class AutoPlay {
     this.target = null;
     this.roam = null;
     this.chase = null;
+    this.homeArrived = false;
+    this.homeProgress = null;
   }
 
   /** A monster after this player right now (not one walking back home). */
@@ -292,6 +302,7 @@ export class AutoPlay {
     }
     this.idleSince = null;
     this.roam = null;
+    this.homeProgress = null;
     this.noteLevelGap(g, target);
 
     const d = dist(target);
@@ -375,8 +386,31 @@ export class AutoPlay {
     return best;
   }
 
+  /**
+   * Nothing to fight (owner 2026-11-19): go back to the spot where Auto was switched on and stand still there.
+   * A spot that can't be used (boss arena, lava) or that Auto can't get closer to (no progress for HOME_STUCK_SEC,
+   * e.g. a wall) means waiting where it is. Once within HOME_ARRIVE it stands still, so it never jitters.
+   */
+  private homePoint(g: AutoWorld): { x: number; z: number } {
+    const p = g.player;
+    const home = this.anchor ?? { x: p.x, z: p.z };
+    const here = { x: p.x, z: p.z };
+    const d = Math.hypot(home.x - p.x, home.z - p.z);
+    if (inBossArena(g.zone, home.x, home.z) || lavaAt(g.zone, home.x, home.z)) return here;
+    if (d <= (this.homeArrived ? HOME_LEAVE : HOME_ARRIVE)) {
+      this.homeArrived = true;
+      this.homeProgress = null;
+      return here;
+    }
+    this.homeArrived = false;
+    if (!this.homeProgress || d < this.homeProgress.bestD - 0.25) this.homeProgress = { bestD: d, since: g.time };
+    else if (g.time - this.homeProgress.since > HOME_STUCK_SEC) return here;
+    return home;
+  }
+
   /** Nothing to fight: walk somewhere else inside the circle, preferring spawn spots for this level. */
   private roamPoint(g: AutoWorld): { x: number; z: number } {
+    if (currentBalance().auto.homeWait) return this.homePoint(g);
     const p = g.player;
     const anchor = this.anchor ?? { x: p.x, z: p.z };
     const R = this.radius(p);

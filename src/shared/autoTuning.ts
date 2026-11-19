@@ -56,6 +56,11 @@ export interface AutoConfig {
   /** Minutes Auto keeps farming after a dropped connection. */
   offlineMin: number;
   /**
+   * Nothing to fight in the circle (owner 2026-11-19): true = go back to the spot where Auto was switched on and
+   * stand still there; false = the old way, walk to a monster spawn spot inside the circle.
+   */
+  homeWait: boolean;
+  /**
    * Auto won't cast a skill that hits a circle around the player (e.g. the mage's Charged Blast) unless a monster
    * is inside that circle (owner 2026-11-19); it casts the next skill in the order instead.
    */
@@ -73,6 +78,7 @@ export interface AutoTuning {
   allow?: Partial<Record<AutoAllow, boolean>>;
   offline?: boolean;
   offlineMin?: number;
+  homeWait?: boolean;
   aoeGuard?: boolean;
   aoeMargin?: number;
 }
@@ -95,6 +101,8 @@ export const AUTO_NUM_NAME: Record<keyof typeof AUTO_RANGE, string> = {
 /** Name of the "only cast a circle-around-me skill with a monster inside" switch. */
 export const AUTO_AOE_GUARD_NAME = 'Auto ใช้สกิลวงรอบตัวเมื่อมีมอนในวงเท่านั้น';
 export const AUTO_OFFLINE_NAME = 'Auto ฟาร์มต่อหลังหลุดการเชื่อมต่อ (ไม่ใช่ Guest)';
+/** Name of the "no monster in the circle = wait at the Auto start spot" switch. */
+export const AUTO_HOME_WAIT_NAME = 'ไม่มีมอนในวง = กลับไปรอที่จุดกด Auto';
 const NUMS = Object.keys(AUTO_RANGE) as (keyof typeof AUTO_RANGE)[];
 
 /** The code's own Auto numbers (a fresh copy). */
@@ -107,6 +115,7 @@ export function codeAuto(): AutoConfig {
     allow: { lootFirst: true, othersLoot: true, scroll: true, skip: true },
     offline: true,
     offlineMin: 30,
+    homeWait: true,
     aoeGuard: true,
     aoeMargin: 0.5,
   };
@@ -120,6 +129,7 @@ export function mergeAuto(t: AutoTuning | undefined): AutoConfig {
   for (const k of NUMS) if (t[k] !== undefined) c[k] = t[k]!;
   Object.assign(c.allow, t.allow);
   if (t.offline !== undefined) c.offline = t.offline;
+  if (t.homeWait !== undefined) c.homeWait = t.homeWait;
   if (t.aoeGuard !== undefined) c.aoeGuard = t.aoeGuard;
   return c;
 }
@@ -157,7 +167,7 @@ const round3 = (n: number) => Math.round(n * 1000) / 1000;
 export function checkAutoTuning(x: unknown, strict: boolean): { tuning: AutoTuning | undefined } | { error: string } {
   if (x === undefined) return { tuning: undefined };
   if (!isObj(x)) return strict ? { error: 'ค่า Auto ไม่ถูกต้อง' } : { tuning: undefined };
-  const TOP = ['defaults', ...NUMS, 'allow', 'offline', 'aoeGuard'];
+  const TOP = ['defaults', ...NUMS, 'allow', 'offline', 'homeWait', 'aoeGuard'];
   if (strict) {
     const extra = Object.keys(x).find((k) => !TOP.includes(k));
     if (extra) return { error: `Auto: ไม่รู้จักค่า "${extra.slice(0, 20)}"` };
@@ -223,6 +233,11 @@ export function checkAutoTuning(x: unknown, strict: boolean): { tuning: AutoTuni
       if (strict) return { error: `${AUTO_OFFLINE_NAME} ต้องเป็นเปิด/ปิด` };
     } else if (x.offline !== CODE.offline) out.offline = x.offline;
   }
+  if (x.homeWait !== undefined) {
+    if (typeof x.homeWait !== 'boolean') {
+      if (strict) return { error: `${AUTO_HOME_WAIT_NAME} ต้องเป็นเปิด/ปิด` };
+    } else if (x.homeWait !== CODE.homeWait) out.homeWait = x.homeWait;
+  }
   if (x.aoeGuard !== undefined) {
     if (typeof x.aoeGuard !== 'boolean') {
       if (strict) return { error: `${AUTO_AOE_GUARD_NAME} ต้องเป็นเปิด/ปิด` };
@@ -242,6 +257,7 @@ export function autoChanges(a: AutoConfig, b: AutoConfig): string[] {
     if (a.allow[k] !== b.allow[k]) out.push(`Auto ${AUTO_ALLOW_NAME[k]} ${a.allow[k] ? 'เปิด' : 'ปิด'} → ${b.allow[k] ? 'เปิด' : 'ปิด'}`);
   }
   if (a.offline !== b.offline) out.push(`${AUTO_OFFLINE_NAME} ${a.offline ? 'เปิด' : 'ปิด'} → ${b.offline ? 'เปิด' : 'ปิด'}`);
+  if (a.homeWait !== b.homeWait) out.push(`${AUTO_HOME_WAIT_NAME} ${a.homeWait ? 'เปิด' : 'ปิด'} → ${b.homeWait ? 'เปิด' : 'ปิด'}`);
   if (a.aoeGuard !== b.aoeGuard) out.push(`${AUTO_AOE_GUARD_NAME} ${a.aoeGuard ? 'เปิด' : 'ปิด'} → ${b.aoeGuard ? 'เปิด' : 'ปิด'}`);
   return out;
 }
