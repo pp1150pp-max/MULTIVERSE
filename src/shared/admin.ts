@@ -95,6 +95,8 @@ export interface AdminOnlineRow {
   away?: boolean;
   gpu: string | null;
   ip: string;
+  /** Cloudflare data center the player came in through (e.g. BKK, SIN); null when direct. */
+  edge?: string | null;
   /** How long this session has been in the game (since the join; zone changes don't reset it). */
   playedMs: number;
 }

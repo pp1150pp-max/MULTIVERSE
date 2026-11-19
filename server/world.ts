@@ -4,7 +4,7 @@
 import { buffMask, debuffMask, runningSkillBuffs } from '../src/shared/sim/debuffs';
 import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage, Server as HttpServer } from 'node:http';
-import { clientIp } from './clientIp';
+import { cfEdge, clientIp } from './clientIp';
 import type { Db } from './db';
 import { Sim } from '../src/shared/sim/Sim';
 import { HUB_ID, lairExitSpot, ZONES } from '../src/shared/data/zones';
@@ -159,6 +159,8 @@ interface Session {
   saveDue: number | null;
   /** Where the connection came from, for the owner's log only (never sent to anyone). */
   ip: string;
+  /** Cloudflare data center the connection came in through (cfEdge), null when direct. */
+  edge: string | null;
   /** What the client reported with its pings since the last per-minute log line (see onPing). */
   lastPingAt: number;
   rttSum: number;
@@ -566,6 +568,7 @@ export class GameWorld {
 
   private onConnection(ws: WebSocket, req: IncomingMessage): void {
     const ip = clientIp(req);
+    const edge = cfEdge(req);
     let session: Session | null = null;
     const timeout = setTimeout(() => {
       if (!session) ws.close();
@@ -581,7 +584,7 @@ export class GameWorld {
       if (!msg || typeof msg !== 'object') return;
       if (!session) {
         if (msg.t !== 'join') return;
-        session = this.join(ws, msg.token, msg.characterId, ip, msg.delta === 1, rejoinText(msg.back));
+        session = this.join(ws, msg.token, msg.characterId, ip, msg.delta === 1, rejoinText(msg.back), edge);
         clearTimeout(timeout);
         return;
       }
@@ -617,7 +620,7 @@ export class GameWorld {
     ws.on('error', () => ws.close());
   }
 
-  private join(ws: WebSocket, token: unknown, characterId: unknown, ip: string, delta = false, rejoin: string | null = null): Session | null {
+  private join(ws: WebSocket, token: unknown, characterId: unknown, ip: string, delta = false, rejoin: string | null = null, edge: string | null = null): Session | null {
     const acc = typeof token === 'string' ? this.db.sessionAccount(token) : undefined;
     const charId = num(characterId, -1);
     let data = acc ? this.db.loadCharacter(acc.id, charId) : undefined;
@@ -682,7 +685,7 @@ export class GameWorld {
       ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId, sim, player,
       move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null, recall: false,
       auto: null, lastInputAt: 0, walkTo: null, walkEpoch: 0, serverWalk: false, walkAnchor: { x: 0, z: 0 }, walkAnchorAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', lastTut: '', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', delta, lastMe: new Map(), seenP: new Map(), seenM: new Map(), outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, lastCashAt: -Infinity, saveDue: null,
-      ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, deflate: ws.extensions.includes('permessage-deflate'), staff: !acc.guest && ['owner', 'gm'].includes(this.db.adminRole(acc.id) ?? ''), pongAt: null, slowSnapAt: -Infinity,
+      ip, edge, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, deflate: ws.extensions.includes('permessage-deflate'), staff: !acc.guest && ['owner', 'gm'].includes(this.db.adminRole(acc.id) ?? ''), pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity, blockTrades: false,
       lastFriendAt: -Infinity, friendKey: '', lastCh: back?.channel.ch ?? 1, fight: new FightClock(Math.max(player.lastHurt, player.lastAttack)), lastChListAt: -Infinity, lastChAt: -Infinity,
@@ -712,7 +715,7 @@ export class GameWorld {
     // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
     if (!acc.guest) setTimeout(() => this.sessions.has(s) && (this.marketOnJoin(s), this.dailyCheck(s), this.mailNote(s, true)), MARKET_JOIN_NOTE_MS);
     const extra = [rejoin && `reconnected: ${rejoin}`, back && 'back at the same spot', s.auto && 'Auto on'].filter(Boolean).join(' · ');
-    console.log(`[world] ${acc.username} joined as ${player.name}${acc.guest ? ' (guest)' : ''} from ${ip}${s.deflate ? '' : ' (no compression)'}${extra ? ` — ${extra}` : ''} (${this.onlineText()})`);
+    console.log(`[world] ${acc.username} joined as ${player.name}${acc.guest ? ' (guest)' : ''} from ${ip}${edge ? ` via Cloudflare ${edge}` : ''}${s.deflate ? '' : ' (no compression)'}${extra ? ` — ${extra}` : ''} (${this.onlineText()})`);
     return s;
   }
 
@@ -1151,6 +1154,7 @@ export class GameWorld {
     if (!this.sessions.size) return;
     const parts = [...this.sessions].filter((s) => s.awayAt === null).map((s) => {
       const bits = [s.rttCount ? fmtMs(s.rttSum / s.rttCount) : '—'];
+      if (s.edge) bits.push(`via ${s.edge}`);
       if (s.fpsCount) bits.push(`${Math.round(s.fpsSum / s.fpsCount)} fps`, `max frame ${fmtMs(s.maxFrame)}`);
       if (s.maxWait) bits.push(`no pong up to ${fmtMs(s.maxWait)}`);
       if (s.skipped) bits.push(`${s.skipped} snapshots skipped (slow download)`);
@@ -2353,7 +2357,7 @@ export class GameWorld {
       rtt: s.lastRtt === null ? null : Math.round(s.lastRtt),
       fps: s.lastFps === null ? null : Math.round(s.lastFps),
       maxFrame: s.fpsCount ? Math.round(s.maxFrame) : null,
-      hidden: s.hidden, ...(s.awayAt !== null ? { away: true } : {}), gpu: s.gpu, ip: s.ip, playedMs: Date.now() - s.joinedAt,
+      hidden: s.hidden, ...(s.awayAt !== null ? { away: true } : {}), gpu: s.gpu, ip: s.ip, edge: s.edge, playedMs: Date.now() - s.joinedAt,
     }));
     return { zones, players };
   }
