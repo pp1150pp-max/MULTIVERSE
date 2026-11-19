@@ -309,7 +309,8 @@ export class Terrain {
     ];
     // `set`: the seller's pictures (tools/cut_papercraft.cjs hub, HUB.md 7.6), ml_* or mr_*; `props`: their four odds and ends.
     // Pictures drawn the other way round from the rest (market_right.png's booth), so they mirror the other way.
-    const DRAWN_TURNED = new Set<string>();
+    // Mirrored once more, as the owner asked (2026-11-19): the merchant's stalls.
+    const DRAWN_TURNED = new Set<string>(['mk_goods_front', 'mk_veg_front']);
     const BACKS: Record<string, Record<string, string>> = {
       // The merchant's side shows the stalls' fronts: across the bottom-left wall the backs faced the wrong way (owner 2026-11-19).
       ml: { main_back: 'mk_goods_front', wing_back: 'mk_veg_front' },
