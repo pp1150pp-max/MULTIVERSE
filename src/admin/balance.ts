@@ -17,7 +17,7 @@ import {
 } from '../shared/balance';
 import { DROP_GOLD_MULT, type MonsterDef } from '../shared/data/monsters';
 import {
-  AUTO_ALLOW_NAME, AUTO_ALLOWS, AUTO_OFFLINE_NAME, AUTO_DEFAULT_NAME, AUTO_LOOT_ORDERS, AUTO_NUM_NAME, AUTO_OUT_ACTIONS, AUTO_RANGE, AUTO_TARGET_MODES, autoDefaultValueName,
+  AUTO_ALLOW_NAME, AUTO_ALLOWS, AUTO_OFFLINE_NAME, AUTO_AOE_GUARD_NAME, AUTO_DEFAULT_NAME, AUTO_LOOT_ORDERS, AUTO_NUM_NAME, AUTO_OUT_ACTIONS, AUTO_RANGE, AUTO_TARGET_MODES, autoDefaultValueName,
   type AutoAllow, type AutoDefaults,
 } from '../shared/autoTuning';
 import { NO_BOOST, ZONES, type MonsterBoost } from '../shared/data/zones';
@@ -732,6 +732,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         h('label', {}, h('input', { type: 'checkbox', checked: a.offline, onchange: (e: Event) => { a.offline = (e.target as HTMLInputElement).checked; refresh(); } }), ` ${AUTO_OFFLINE_NAME}`),
         num('offlineMin', 1),
       ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' }, h('input', { type: 'checkbox', checked: a.aoeGuard, onchange: (e: Event) => { a.aoeGuard = (e.target as HTMLInputElement).checked; refresh(); } }), ` ${AUTO_AOE_GUARD_NAME}`),
+        num('aoeMargin', 0.1),
+      ),
+      h('div', { class: 'muted' }, 'สกิลวงรอบตัว (เช่น ประจุระเบิดของนักเวท): Auto ข้ามสกิลนั้นถ้าไม่มีมอนอยู่ในวง (รัศมีสกิล + ขนาดตัวมอน + ระยะเผื่อ) แล้วใช้สกิลถัดไปในลำดับแทน · ปิดสวิตช์ = แบบเดิม กดเมื่อเป้าอยู่ในระยะตี'),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
           h('input', { type: 'checkbox', checked: draft.walkHidden, onchange: (e: Event) => { draft.walkHidden = (e.target as HTMLInputElement).checked; refresh(); } }),
