@@ -2139,6 +2139,7 @@ export class GameWorld {
     s.epoch++;
     s.lastInv = '';
     s.lastStash = '';
+    s.lastTut = '';
     // The browser starts the new zone with empty lists: everything goes again.
     forgetSent(s);
     // Waking up in town after dying in a zone: the old zone's `revived` and its EXP-loss line must

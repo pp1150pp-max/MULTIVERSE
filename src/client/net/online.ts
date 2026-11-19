@@ -777,6 +777,7 @@ export class OnlineBackend implements Backend {
     me.z = z;
     me.face(-x, -z);
     me.partyId = old.partyId;
+    me.tut = old.tut; // the new mirror starts with nothing done; the server only resends it when it changes
     this.me = me;
     this.myId = you;
     this.sent = [];
