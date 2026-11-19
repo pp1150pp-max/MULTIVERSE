@@ -6,7 +6,7 @@
 
 ## วิธีเจน
 
-- เจนแยกเป็น 3 แชท: **ก.** ฉากแมพ (ข้อ 1–6) **ข.** มอนกับบอส (ข้อ 7–9) **ค.** เอฟเฟกต์กับไอคอนกุญแจ (ข้อ 10–11)
+- เจนแยกเป็น 3 แชท: **ก.** ฉากแมพ (ข้อ 1–6) **ข.** มอนกับบอส (ข้อ 7–9 ส่วนนักโทษในเรืออยู่ `FLOOR2_M2_PRISONER.md`) **ค.** เอฟเฟกต์กับไอคอนกุญแจ (ข้อ 10–11)
 - แต่ละแชท**เปิดใหม่** แล้วแนบ `art_templates/papercraft_maps/raw/floor2_maps/M2_smugglers_cove.webp` ภาพเดียว
   - **ห้ามแนบภาพพิกเซล** ทุกภาพในเกมใช้กระดาษตัดแปะสไตล์เดียว (กติกาเจ้าของ 2026-11-18) ถ้าแนบภาพอื่นด้วย ต้องเป็นภาพกระดาษเท่านั้น
 - ภาพแรกของแต่ละแชท ให้ขึ้นต้นด้วยประโยคเปิดนี้ก่อน prompt ของข้อนั้น:
@@ -145,18 +145,16 @@ Generate an image: a sprite sheet as a strict grid of 5 rows x 4 columns, 20 fig
 
 | ตัว | บรรทัดหน้าตา |
 |---|---|
-| `prisoner` นักโทษในเรือ (ตัวแรกของแมพ) | `The monster: the ship's prisoner, a scruffy stocky man with stubble and an angry face, a torn black-and-white striped prisoner shirt, ragged brown trousers, barefoot, a heavy iron shackle on one ankle.` |
 | `cutlass_pirate` โจรสลัดดาบโค้ง | `The monster: the cutlass pirate, a fierce bearded pirate with a red bandana, an eye patch, a red coat over a white shirt, a wide belt and boots, holding a curved steel cutlass, as in the attached map.` |
 | `shotgunner` มือปืนลูกซอง | `The monster: the shotgun pirate, a burly pirate with a black bandana and a thick black beard, a cream shirt and a brown leather vest, a powder pouch on the belt, holding a short wide-barrelled blunderbuss, as in the attached map.` |
 | `keg_prisoner` นักโทษถังดินปืน | `The monster: the powder-keg prisoner, a wild-eyed prisoner in a black-and-white striped shirt carrying a big red gunpowder barrel painted with a white skull on his back with a chain, as in the attached map.` |
+
+**นักโทษในเรือ (`prisoner`) แยกไว้ที่ `FLOOR2_M2_PRISONER.md`** (เจ้าของสั่ง 2026-11-19) ทั้งหน้าตาและ 3 ท่า
 
 ### ภาพของแต่ละตัว
 
 | ไฟล์ | บรรทัดท่า |
 |---|---|
-| `prisoner_walk.png` | `The move: a slow heavy 4-frame walking loop in the direction it faces, dragging a big black iron ball on a chain behind him from the ankle shackle, so frame 4 leads into frame 1. The iron ball and chain are part of the character in every frame.` |
-| `prisoner_throw.png` | `The move: a 4-frame throw toward the direction it faces: frame 1 lifting the iron ball off the ground with both hands, the chain hanging; frame 2 swinging it back over his shoulder; frame 3 hurling it forward, arms fully stretched; frame 4 recovering, hands empty, the broken chain end dangling from the ankle shackle.` |
-| `prisoner_run.png` | `The move: a fast 4-frame running loop in the direction it faces, leaning forward angrily with fists up, the iron ball gone, only a short broken chain end swinging from the ankle shackle, so frame 4 leads into frame 1.` |
 | `cutlass_pirate_walk.png` | บรรทัดเดิน |
 | `cutlass_pirate_combo.png` | `The move: a 4-frame three-hit sword combo toward the direction it faces: frame 1 a slash from right to left; frame 2 a slash back from left to right; frame 3 a short lunge forward with an overhead chop at full reach; frame 4 recovering back to its normal pose.` |
 | `shotgunner_walk.png` | บรรทัดเดิน |
