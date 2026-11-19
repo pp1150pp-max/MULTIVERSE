@@ -145,10 +145,14 @@ Generate an image: a sprite sheet as a strict grid of 5 rows x 4 columns, 20 fig
 
 | ตัว | บรรทัดหน้าตา |
 |---|---|
-| `prisoner` นักโทษในเรือ (ตัวแรกของแมพ) | `The monster: the ship's prisoner, a scruffy stocky man with stubble and an angry face, a torn black-and-white striped prisoner shirt, ragged brown trousers, barefoot, a heavy iron shackle on one ankle.` |
+| `prisoner` นักโทษในเรือ (ตัวแรกของแมพ) | `The monster: the ship's prisoner, a scruffy stocky man with stubble and an angry face, ALWAYS wearing a dark-brown-and-cream striped cloth bandana tied at the back of his head with two short loose ends, messy brown hair showing under it at the sides, NO cap and NO hat, a torn dark-brown-and-cream striped prisoner shirt, ragged dark brown trousers with holes, barefoot, a heavy iron shackle on one ankle. Keep EXACTLY the same head, bandana and outfit as the attached prisoner sheet.` |
 | `cutlass_pirate` โจรสลัดดาบโค้ง | `The monster: the cutlass pirate, a fierce bearded pirate with a red bandana, an eye patch, a red coat over a white shirt, a wide belt and boots, holding a curved steel cutlass, as in the attached map.` |
 | `shotgunner` มือปืนลูกซอง | `The monster: the shotgun pirate, a burly pirate with a black bandana and a thick black beard, a cream shirt and a brown leather vest, a powder pouch on the belt, holding a short wide-barrelled blunderbuss, as in the attached map.` |
 | `keg_prisoner` นักโทษถังดินปืน | `The monster: the powder-keg prisoner, a wild-eyed prisoner in a black-and-white striped shirt carrying a big red gunpowder barrel painted with a white skull on his back with a chain, as in the attached map.` |
+
+**นักโทษในเรือ (เจ้าของ 2026-11-19):** รอบแรกได้ 3 แผ่นที่หัวไม่ตรงกัน (ไม่มีหมวก / ผ้าโพกหัว / หมวกไหมพรม) เจ้าของเลือก**ผ้าโพกหัวลายทางแบบแผ่นโยน**
+- เก็บ `prisoner_throw.png` ไว้เป็นแบบ แล้วเจน `prisoner_walk.png` กับ `prisoner_run.png` ใหม่
+- **ทุกครั้งที่เจนแผ่นของนักโทษ ให้แนบ `prisoner_throw.png` ไปด้วย** (นอกจากภาพ M2) บรรทัดหน้าตาเขียนให้ยึดหน้าตาจากแผ่นที่แนบแล้ว
 
 ### ภาพของแต่ละตัว
 
