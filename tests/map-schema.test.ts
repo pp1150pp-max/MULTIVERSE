@@ -93,4 +93,14 @@ for (const junk of [null, undefined, 5, {}, { schema: 1 }, { ...base(), props: '
   ok(!threw && list.length > 0, `garbage input does not throw (${JSON.stringify(junk)?.slice(0, 30)})`);
 }
 
+// extra colliders (PR 2) and the two relaxed checks
+m = base(); m.colliders = [{ x: 30, z: 30, r: 2 }];
+ok(validateMap(m, ctx).length === 0 && isPointBlocked(m, 31, 30) && !isPointBlocked(m, 33, 30), 'extra collider blocks and validates');
+m = base(); m.colliders = [{ x: 30, z: 30, r: 0 }, { x: 999, z: 0, r: 1 }];
+ok(has(m, 'range') && has(m, 'out_of_bounds'), 'bad extra colliders are reported');
+m = base(); m.lair = { boss: 'forest_bear', x: -15, z: -6 };
+ok(!has(m, 'in_collision'), 'lair may stand on its own solid');
+m = base(); m.zone.start = { x: -15, z: -6 };
+ok(validateMap(m, ctx).every(i => i.severity === 'warn' && i.code === 'in_collision'), 'start inside collision is only a warning');
+
 finish('map-schema');
