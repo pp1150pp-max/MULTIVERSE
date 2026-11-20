@@ -27,6 +27,8 @@ export interface MapPath { id: string; w: number; pts: Pt[] }
 export interface MapWater { kind: 'ice' | 'lava'; x: number; z: number; rx: number; rz: number }
 /** A closed polygon the player cannot enter (its inside is blocked). */
 export interface MapBlocker { id: string; pts: Pt[] }
+/** A solid circle that no prop owns (the hub's fountain, wall line and house footprints). Drawn as nothing. */
+export interface MapCollider { x: number; z: number; r: number }
 export interface MapNpc { id: string; x: number; z: number }
 export interface MapRest { kind: 'fountain' | 'campfire'; x: number; z: number }
 export interface MapPortal { to: string; x: number; z: number; minLevel: number }
@@ -49,6 +51,8 @@ export interface MapData {
   water: MapWater[];
   props: MapProp[];
   blockers: MapBlocker[];
+  /** Extra solid circles that belong to no prop. Absent = none. Added in PR 2 so the hub bakes exactly (owner OK 2026-11-20). */
+  colliders?: MapCollider[];
   walkable: { half: number };
   npcs: MapNpc[];
   rest: MapRest[];
@@ -139,6 +143,7 @@ export function isPointBlocked(map: MapData, x: number, z: number): boolean {
   if (Math.abs(x) > h || Math.abs(z) > h) return true;
   for (const p of map.props) if (pointInPropSolid(p, x, z)) return true;
   for (const b of map.blockers) if (pointInPolygon(b.pts, x, z)) return true;
+  if (map.colliders) for (const c of map.colliders) if ((x - c.x) ** 2 + (z - c.z) ** 2 <= c.r * c.r) return true;
   return false;
 }
 
@@ -150,7 +155,7 @@ export function validateMap(map: MapData, ctx: MapValidateCtx): MapIssue[] {
   const err = (code: MapIssueCode, message: string, kind?: MapIssue['kind'], id?: string) =>
     out.push({ severity: 'error', code, kind, id, message });
   try {
-    validateInner(map, ctx, err);
+    validateInner(map, ctx, err, (code, message, kind, id) => out.push({ severity: 'warn', code, kind, id, message }));
   } catch (e) {
     err('schema', `map is malformed: ${e instanceof Error ? e.message : String(e)}`);
   }
@@ -159,7 +164,7 @@ export function validateMap(map: MapData, ctx: MapValidateCtx): MapIssue[] {
 
 type Err = (code: MapIssueCode, message: string, kind?: MapIssue['kind'], id?: string) => void;
 
-function validateInner(map: MapData, ctx: MapValidateCtx, err: Err): void {
+function validateInner(map: MapData, ctx: MapValidateCtx, err: Err, warn: Err): void {
   if (!map || typeof map !== 'object') return err('schema', 'map is not an object');
   if (map.schema !== MAP_SCHEMA_VERSION) return err('schema', `schema must be ${MAP_SCHEMA_VERSION}, got ${String(map.schema)}`);
   const need = (k: string, v: unknown, isArr = true) => {
@@ -234,6 +239,14 @@ function validateInner(map: MapData, ctx: MapValidateCtx, err: Err): void {
     }
   }
 
+  // extra colliders
+  if (map.colliders !== undefined && !Array.isArray(map.colliders)) err('schema', '"colliders" must be an array');
+  else (map.colliders ?? []).forEach((c, i) => {
+    if (!c || !fin(c.x) || !fin(c.z)) return err('range', `colliders[${i}] needs finite x and z`);
+    if (Math.abs(c.x) > half || Math.abs(c.z) > half) err('out_of_bounds', `colliders[${i}] is outside the map frame`);
+    range(c.r, 0.05, 50, `colliders[${i}] r`, undefined);
+  });
+
   // paths / water
   for (const p of map.paths) {
     range(p.w, 0.5, 30, `path "${p.id}" w`, 'path', p.id);
@@ -292,7 +305,9 @@ function validateInner(map: MapData, ctx: MapValidateCtx, err: Err): void {
   });
   if (map.lair) {
     if (mons && !mons.has(map.lair.boss)) err('bad_ref', `lair boss "${map.lair.boss}" is unknown`, 'lair');
-    placed('lair', 'lair', map.lair.x, map.lair.z, 'lair');
+    // The lair is where the boss summoner stands, solid itself, so it is only checked against the frame (not "in collision").
+    if (!fin(map.lair.x) || !fin(map.lair.z)) err('range', 'lair needs finite x and z', 'lair', 'lair');
+    else if (!inWalk(map.lair.x, map.lair.z)) err('out_of_bounds', 'lair is outside the walkable frame', 'lair', 'lair');
   }
 
   // reachability: BFS on a grid from zone.start; every portal must be reachable
@@ -306,8 +321,19 @@ function validateInner(map: MapData, ctx: MapValidateCtx, err: Err): void {
   for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) blocked[r * n + c] = isPointBlocked(map, cx(c), cx(r)) ? 1 : 0;
   const seen = new Uint8Array(n * n);
   const queue: number[] = [];
-  const s0 = toIdx(z.start.z) * n + toIdx(z.start.x);
-  if (blocked[s0]) { err('in_collision', 'zone.start stands inside collision', 'zone'); return; }
+  let s0 = toIdx(z.start.z) * n + toIdx(z.start.x);
+  if (blocked[s0]) {
+    // The hub's start is the middle of its fountain (players are pushed out of it): warn, and walk from the nearest free cell.
+    let best = -1, bestD = Infinity;
+    for (let k = 0; k < n * n; k++) {
+      if (blocked[k]) continue;
+      const d = (cx(k % n) - z.start.x) ** 2 + (cx((k / n) | 0) - z.start.z) ** 2;
+      if (d < bestD) { bestD = d; best = k; }
+    }
+    if (best < 0) { err('in_collision', 'zone.start stands inside collision and there is no free ground', 'zone'); return; }
+    warn('in_collision', 'zone.start stands inside collision (reachability is checked from the nearest free spot)', 'zone');
+    s0 = best;
+  }
   seen[s0] = 1; queue.push(s0);
   for (let q = 0; q < queue.length; q++) {
     const cur = queue[q], r = (cur / n) | 0, c = cur % n;
