@@ -1,13 +1,35 @@
-// The /admin "แมพ" tab (docs/plans/map-editor.md). For now only the switch "ใช้แมพจาก DB"; the editor itself comes in PR 6.
-// The switch is stored with the balance settings (BalanceTuning.mapFromDb), so it uses the same permission, audit and
-// "only what differs from the code" storage as the balance tab.
+// The /admin "แมพ" tab (docs/plans/map-editor.md): the map editor (permission mapEdit, src/admin/mapEditor/) and the switch
+// "ใช้แมพจาก DB". The switch is stored with the balance settings (BalanceTuning.mapFromDb), so it uses the same permission,
+// audit and "only what differs from the code" storage as the balance tab.
+import { mountMapEditor } from './mapEditor/mount';
 import { CODE_MAP_FROM_DB, mergeBalance, type BalanceTuning } from '../shared/balance';
 
 type Kids = (Node | string | null | undefined | false)[];
 type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, unknown>, ...kids: Kids) => HTMLElementTagNameMap[K];
 type Api = <T>(method: string, path: string, body?: unknown) => Promise<T>;
 
-export async function renderMaps(view: HTMLElement, h: H, api: Api, onSaved: (tuning: BalanceTuning) => void): Promise<void> {
+/** What the signed-in role may do here: the switch needs balance, the editor needs mapEdit. */
+export interface MapsPerms { balance: boolean; mapEdit: boolean }
+
+/** Stops the editor's key listeners and saves its last edits when the tab is left (the page calls the old one before drawing a new tab). */
+let stopEditor: (() => void) | null = null;
+
+export async function renderMaps(view: HTMLElement, h: H, api: Api, onSaved: (tuning: BalanceTuning) => void, perms: MapsPerms): Promise<void> {
+  stopEditor?.();
+  stopEditor = null;
+  const editorBox = h('div', { class: 'card me-card' });
+  const switchBox = h('div', { class: 'card' });
+  view.replaceChildren(
+    h('h2', {}, 'แมพ'),
+    ...(perms.mapEdit ? [editorBox] : []),
+    ...(perms.balance ? [switchBox] : []),
+    ...(!perms.mapEdit && !perms.balance ? [h('div', { class: 'msg bad' }, 'ไม่มีสิทธิ์ในหน้านี้')] : []),
+  );
+  if (perms.mapEdit) stopEditor = mountMapEditor(editorBox, h, api);
+  if (perms.balance) await renderSwitch(switchBox, h, api, onSaved);
+}
+
+async function renderSwitch(view: HTMLElement, h: H, api: Api, onSaved: (tuning: BalanceTuning) => void): Promise<void> {
   view.replaceChildren(h('div', { class: 'muted' }, 'กำลังโหลด…'));
   let saved: BalanceTuning;
   try {
@@ -38,9 +60,6 @@ export async function renderMaps(view: HTMLElement, h: H, api: Api, onSaved: (tu
     }
   } }, '💾 บันทึก');
   view.replaceChildren(
-    h('h2', {}, 'แมพ'),
-    h('div', { class: 'muted' },
-      'ตัวแก้แมพ (ลากวางอาคาร ของประดับ NPC ประตู จุดเกิดมอน) จะมาในขั้นต่อไป ตอนนี้เกมอ่านแมพชั้น 1 ทั้ง 5 ใบจากไฟล์ JSON ที่มากับเกม (src/shared/data/maps) แทนการสุ่มในโค้ด หน้าตาและการชนเหมือนเดิม'),
     h('h3', {}, 'ที่มาของแมพ'),
     h('div', { class: 'row bal-line' },
       h('label', { title: 'ค่าในโค้ด: เปิด' }, box,
