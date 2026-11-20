@@ -490,11 +490,11 @@ export const ZONE_HARBOR: ZoneDef = {
   theme: 'forest',
   town: 'harbor',
   allowAutoPlay: false,
-  half: 60,
+  half: 35,
   seed: 20261119,
   start: { x: 0, z: 0 },
   // The whole town is safe (the platforms reach out to the piers' ends).
-  safe: { x: 0, z: 0, half: 56 },
+  safe: { x: 0, z: 0, half: 34 },
   npcs: true,
   path: [],
   branches: [],

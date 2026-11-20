@@ -373,11 +373,11 @@ export class Terrain {
     // The knight's statue on the plaza's edge where the top road comes in, the road parting round it (owner 2026-11-19:
     // beside the road it stood behind the vault).
     polar('town_statue', 225, HUB_PLAZA_RADIUS + 1, 3.8, 0.8);
-    // Floor 2's navigator (owner 2026-11-19): beside the knight's statue, on The Seeker's side of the top road, off it.
+    // Floor 2's navigator: in front of the fountain, on the camera's side (owner 2026-11-20: beside the statue his
+    // badge covered The Seeker's).
     {
-      const a = rad(225);
-      const r0 = HUB_PLAZA_RADIUS + 1;
-      this.npcPos.navigator = { x: s.x + Math.cos(a) * r0 + 2.4 * Math.SQRT1_2, z: s.z + Math.sin(a) * r0 - 2.4 * Math.SQRT1_2 };
+      const d = HUB_FOUNTAIN_RADIUS + 1.6;
+      this.npcPos.navigator = { x: s.x + d * Math.SQRT1_2, z: s.z + d * Math.SQRT1_2 };
     }
 
     // The wall kit (tools/cut_hub.cjs): one scale for all pieces, U world units per pixel. Each wall
@@ -461,7 +461,8 @@ export class Terrain {
           this.colliders.push({ x: s.x + ex + nx * OUT, z: s.z + ez + nz * OUT, r: 0.6 });
           sincePost += STEP;
           if (sincePost >= 4.8 && t > 1 && t < len - 1) {
-            at('hb_bollard', ex + nx * 0.15, ez + nz * 0.15, 1.05);
+            // On the planks just inside the edge (owner 2026-11-20: they stood out over the water).
+            at('hb_bollard', ex - nx * 0.7, ez - nz * 0.7, 1.05);
             sincePost = 0;
           }
         }
@@ -488,12 +489,15 @@ export class Terrain {
     const q = D / 2;
     const E = HARBOR_MAIN;
     const shop = (key: string, h: number, alongX: boolean, side: number, t: number): Vec2 => {
-      const [cx, cz] = alongX ? [t, side * (E - D / 2 - 0.4)] : [side * (E - D / 2 - 0.4), t];
+      // On the two bottom edges (toward the camera) the picture stands out past its footprint's near corner, so those
+      // buildings stand further in (owner 2026-11-20: they hung out over the water).
+      const back = side > 0 ? E - D / 2 - 2.6 : E - D / 2 - 0.4;
+      const [cx, cz] = alongX ? [t, side * back] : [side * back, t];
       at(key, cx + q, cz + q, h, 0, true);
       for (const [ox, oz] of [[0, 0], [1.2, 1.2], [-1.2, -1.2], [1.2, -1.2], [-1.2, 1.2]]) {
         this.colliders.push({ x: s.x + cx + ox, z: s.z + cz + oz, r: D / 2 - 0.6 });
       }
-      const front = E - D - 1.6;
+      const front = back - D / 2 - 1.3;
       return alongX ? { x: s.x + t * 0.75, z: s.z + side * front } : { x: s.x + side * front, z: s.z + t * 0.75 };
     };
     // Top-left edge (x = −E): the warehouse (stash) and the smuggler's stall; top-right (z = −E): the forge.
@@ -514,11 +518,11 @@ export class Terrain {
     at('hb_rope_coil', E - 2.2, -3.5, 0.9, 0.6);
     at('hb_barrels', E - 2, 12, 1.4, 0.7);
     at('hb_rope_coil', 11.5, -E + 2.2, 0.9, 0.6);
-    // A palm in a tub and a bunting post either side of each pier's mouth on the main platform.
+    // A palm in a tub and a bunting post either side of each pier's mouth, on the main platform along its two edges
+    // (owner 2026-11-20: they stood out over the water).
     for (const [sx, sz] of HARBOR_CORNERS) {
-      const [px, pz] = [sx * (E - 3.5), sz * (E - 3.5)];
-      at('hb_palm_pot', px + sz * 3.6, pz - sx * 3.6, 3, 0.7);
-      at('hb_bunting_post', px - sz * 3.6, pz + sx * 3.6, 2.6, 0.3);
+      at('hb_palm_pot', sx * (E - 1.8), sz * (E - 7), 3, 0.7);
+      at('hb_bunting_post', sx * (E - 7), sz * (E - 1.8), 2.6, 0.3);
     }
 
     // ---- the piers: lamps either side, and a ship moored on the water beside each end.
@@ -526,39 +530,38 @@ export class Terrain {
     HARBOR_CORNERS.forEach(([sx, sz], i) => {
       const ux = sx * Math.SQRT1_2;
       const uz = sz * Math.SQRT1_2;
-      for (const along of [30, 46]) {
+      for (const along of [25]) {
         for (const side of [-1, 1]) at('hb_lamp_post', ux * along - uz * side * 2.4, uz * along + ux * side * 2.4, 3.2, 0.3);
       }
       const side = i % 2 ? 1 : -1;
-      at(SHIPS[i], sx * HARBOR_PIER - uz * side * 9.5, sz * HARBOR_PIER + ux * side * 9.5, 9, 0, true, side > 0);
+      at(SHIPS[i], sx * HARBOR_PIER - uz * side * 8.5, sz * HARBOR_PIER + ux * side * 8.5, 8, 0, true, side > 0);
     });
 
     // ---- the side platforms.
     {
       const [cx, cz] = HARBOR_LIGHTHOUSE;
-      at('hb_lighthouse', cx - 2.5, cz - 1, 12, 0, true);
-      this.colliders.push({ x: s.x + cx - 4, z: s.z + cz - 2.5, r: 3.2 });
-      at('hb_barrels', cx + 4.5, cz + 4.5, 1.4, 0.7);
+      at('hb_lighthouse', cx - 1.2, cz + 0.2, 10, 0, true);
+      this.colliders.push({ x: s.x + cx - 2.4, z: s.z + cz - 1.2, r: 2.2 });
+      at('hb_barrels', cx + 3, cz + 3, 1.3, 0.6);
     }
     {
       const [cx, cz] = HARBOR_SHIPYARD;
-      at('hb_shipyard', cx + 1.5, cz + 0.5, 6.5, 0, true);
-      this.colliders.push({ x: s.x + cx, z: s.z + cz, r: 3.6 });
-      at('hb_crates', cx - 5, cz - 5, 1.5, 0.7);
-      at('hb_rope_coil', cx - 5, cz + 5, 0.9, 0.6);
+      at('hb_shipyard', cx + 1.2, cz + 0.4, 5.5, 0, true);
+      this.colliders.push({ x: s.x + cx + 0.5, z: s.z + cz, r: 2.6 });
+      at('hb_crates', cx - 3.2, cz - 3.4, 1.4, 0.6);
+      at('hb_rope_coil', cx - 3.2, cz + 3.4, 0.9, 0.5);
     }
     {
       const [cx, cz] = HARBOR_GARDEN;
-      at('hb_palm_pot', cx - 2, cz - 2, 3.4, 0.7);
-      at('hb_palm_pot', cx + 1, cz + 2.5, 3, 0.7);
-      at('hb_bench_b', cx + 2.5, cz - 1.5, 1.3, 0.7);
-      at('hb_bunting_post', cx - 3.5, cz + 3, 2.6, 0.3);
+      at('hb_palm_pot', cx - 1.8, cz - 1.8, 3.2, 0.6);
+      at('hb_bench_b', cx + 1.5, cz + 1.8, 1.3, 0.6);
+      at('hb_bunting_post', cx - 2.6, cz + 2.4, 2.6, 0.3);
     }
     {
       const [cx, cz] = HARBOR_BOATS;
-      at('hb_rowboat', cx + 1, cz + 9.5, 3.4);
-      at('hb_sacks', cx - 3, cz + 3, 1.2, 0.7);
-      at('hb_bench_a', cx + 3, cz - 2, 1.3, 0.7);
+      at('hb_rowboat', cx + 1, cz + 6.5, 3.2);
+      at('hb_sacks', cx - 2.4, cz + 2.2, 1.2, 0.6);
+      at('hb_bench_a', cx + 2.2, cz - 1.4, 1.3, 0.6);
     }
 
     // ---- the portals: walk-through, no collider.
@@ -566,11 +569,11 @@ export class Terrain {
 
     // ---- on the water: gulls on posts and a few floating barrels, clear of the platforms and of each other.
     let placed = 0;
-    for (let i = 0; i < 400 && placed < 14; i++) {
+    for (let i = 0; i < 400 && placed < 7; i++) {
       const x = rand(r, -this.bound + 3, this.bound - 3);
       const z = rand(r, -this.bound + 3, this.bound - 3);
       if (HARBOR_DECKS.some((d) => insideDeck(d, x, z, -3))) continue;
-      if (this.props.some((p) => Math.hypot(p.x - x, p.z - z) < 6)) continue;
+      if (this.props.some((p) => Math.hypot(p.x - x, p.z - z) < 5)) continue;
       at(placed % 3 ? 'hb_float_barrel' : 'hb_gull_post', x, z, placed % 3 ? 1.1 : 2.2);
       placed++;
     }
