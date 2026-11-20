@@ -5,6 +5,7 @@ import type { Loot } from './Loot';
 import { MONSTERS } from '../data/monsters';
 import { inBossArena, inSafeArea, lavaAt, type ZoneDef } from '../data/zones';
 import { currentBalance } from '../balance';
+import { SKILL_REACH } from '../data/skillRanges';
 import { skillReach, skillValues } from '../skillBook';
 import type { AutoConfig, AutoOutAction } from '../autoTuning';
 
@@ -34,6 +35,16 @@ export const AUTO_BOSS_MSG = 'ปิด Auto Play — บอสต้องส�
 export const AUTO_TOWN_MSG = 'ใช้ Auto Play ในเมืองไม่ได้ — ออกไปนอกเมืองก่อน';
 
 const RANGE: Record<string, number> = { sword: 1.9, mage: 8.5, gunslinger: 9 };
+
+/** Tuned basic-attack reach ÷ its code reach (1 when untuned), for Auto's standing distance. */
+function basicReachScale(p: Player): number {
+  const sk = p.skill('basic');
+  if (!sk) return 1;
+  const now = skillReach(sk);
+  const code = SKILL_REACH[sk.id];
+  const r = (x: typeof now) => (x && x.kind !== 'self' ? x.range : 0);
+  return r(now) > 0 && r(code) > 0 ? r(now) / r(code) : 1;
+}
 /** A drop counts as "got closer" (resetting the give-up timer) only when Auto is this much nearer than before. */
 const LOOT_PROGRESS = 0.25;
 /** Monsters farther than this are never targeted (nor hold up "fight first" looting). */
@@ -306,7 +317,8 @@ export class AutoPlay {
     this.noteLevelGap(g, target);
 
     const d = dist(target);
-    const range = RANGE[p.cls.id] ?? 2;
+    // The basic attack's reach is tuned on /admin (owner 2026-11-20): Auto stands at the same share of it as in code.
+    const range = (RANGE[p.cls.id] ?? 2) * basicReachScale(p);
     out.aim = { x: target.x, z: target.z };
     if (d > range) {
       out.moveTo = { x: target.x, z: target.z };

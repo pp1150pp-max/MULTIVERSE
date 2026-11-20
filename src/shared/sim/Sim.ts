@@ -28,6 +28,7 @@ import {
   type AutoSettings, type CharacterData, type LootFilter, type SortKey,
 } from './Player';
 import { Monster } from './Monster';
+import { withExtras } from './extraEffects';
 import { dropHexSeeds, noteHexHit, tickHexSeeds, type HexSeed } from './hexSeed';
 import { EnemyShot, Projectile, type ProjOpts } from './Projectile';
 import { Loot, LOOT_PRIORITY_TIME, type LootKind } from './Loot';
@@ -318,6 +319,10 @@ export class Sim {
   }
 
   addProjectile(owner: Player, o: ProjOpts): void {
+    // A shot made by a skill (its cast, a timer, its turret or drone) keeps that skill for its extra effects when it
+    // lands later in the plain update loop (own copy of `hit`: one object may be shared by several shots).
+    const src = o.hit?.src ?? this.casterSkill;
+    if (src && !o.hit?.src) o = { ...o, hit: { ...o.hit, src } };
     this.projectiles.push(new Projectile(this.newId(), this, owner, o));
   }
 
@@ -419,6 +424,9 @@ export class Sim {
       this.sfx('crit', m.x, m.z);
       passiveOnCrit(this, p, m);
     }
+    // Extra effects the owner added to this skill on /admin, merged in (the stronger wins): sim/extraEffects.ts.
+    const src = opts.src ?? opts.skill?.id ?? this.casterSkill;
+    if (src && !opts.noExtra) opts = withExtras(this, p, m, src, opts);
     if (opts.kb && !m.isBoss) m.knockback(opts.fromX ?? p.x, opts.fromZ ?? p.z, opts.kb);
     if (opts.stun && !m.def.pattern) m.stunT = Math.max(m.stunT, m.isBoss ? opts.stun * 0.3 : opts.stun);
     if (opts.slow) {

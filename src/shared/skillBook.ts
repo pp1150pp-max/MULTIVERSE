@@ -7,7 +7,7 @@ import { currentBalance, skillMpCost, type Balance } from './balance';
 import {
   CLASSES, isLearnable, KIND_NAME, SLOT_KIND, WEAR_SLOTS, type LearnKind, type SkillDef, type WearSlot,
 } from './data/classes';
-import type { SkillConfig, SkillValues } from './skillTuning';
+import { extraText, skillExtras, type SkillConfig, type SkillValues } from './skillTuning';
 import { reachRadius, SKILL_REACH, type SkillReach } from './data/skillRanges';
 import type { ClassId } from './types';
 
@@ -206,7 +206,8 @@ export function skillParam(sk: SkillDef, key: string, rank?: number, b?: Balance
  */
 export function skillReach(sk: SkillDef, b?: Balance): SkillReach | undefined {
   const base = SKILL_REACH[sk.id];
-  if (!base || !isLearnable(sk)) return base;
+  // Basic attacks are tuned too (damage and reach, owner 2026-11-20); the dash keeps its code reach.
+  if (!base || !(isLearnable(sk) || sk.kind === 'basic')) return base;
   const v = skillValues(sk, b);
   switch (base.kind) {
     case 'self': return { kind: 'self', radius: v.reach };
@@ -222,5 +223,7 @@ export function skillParamLines(sk: SkillDef, rank: number, b?: Balance): string
   const r2 = (n: number) => Math.round(n * 100) / 100;
   return Object.entries(sk.params ?? {})
     .filter(([k]) => k !== 'blast' && k !== 'radius')
-    .map(([k, d]) => `${d.nameTh} ${r2(skillParam(sk, k, rank, b))} ${d.unit}`);
+    .map(([k, d]) => `${d.nameTh} ${r2(skillParam(sk, k, rank, b))} ${d.unit}`)
+    // Extra effects the owner added on /admin (owner 2026-11-20), e.g. "เพิ่ม: สตัน 0.5 วิ (มอนธรรมดา)".
+    .concat(skillExtras(cfgOf(b), sk.id).map((e) => `เพิ่ม: ${extraText(e)}`));
 }

@@ -4,7 +4,10 @@
 // keeps everything else as it is saved there, stores only what differs from the code and logs it (admin_audit).
 import { foldable } from './ui';
 import { checkBalance, codeBalance, balanceChanges, mergeBalance, type Balance, type BalanceTuning } from '../shared/balance';
-import { SKILL_NUM_NAME, SKILL_RANGE, SKILL_VALUE_KEYS, SKILL_VALUE_NAME, SKILL_VALUE_RANGE, UNLOCK_TIERS, type SkillValues } from '../shared/skillTuning';
+import {
+  BASIC_RATE_RANGE, BASIC_SKILLS, BASIC_VALUE_KEYS, EXTRA_DEF, EXTRA_KINDS, EXTRA_TARGET_NAME, EXTRA_TARGETS, MAX_EXTRAS, newExtra, SKILL_NUM_NAME, SKILL_RANGE,
+  SKILL_VALUE_KEYS, SKILL_VALUE_NAME, SKILL_VALUE_RANGE, UNLOCK_TIERS, type ExtraEffect, type ExtraKind, type ExtraTarget, type SkillValues,
+} from '../shared/skillTuning';
 import { rankedCooldown, rankedDmg, rankedMp } from '../shared/skillBook';
 import { SKILL_REACH } from '../shared/data/skillRanges';
 import { CLASSES, CLASS_IDS, isLearnable, KIND_NAME, LEARN_KINDS, type SkillDef } from '../shared/data/classes';
@@ -26,8 +29,19 @@ const ZOOM_MAX = 3;
 interface BalanceState { tuning: BalanceTuning }
 
 const learnable = (c: ClassId): SkillDef[] => CLASSES[c].skills.filter(isLearnable);
+/** The class's basic attack (tuned on this tab too, owner 2026-11-20). */
+const basicOf = (c: ClassId): SkillDef => BASIC_SKILLS.find((b) => b.cls === c)!.sk;
+/** Learnable skills and the basic attack: everything with numbers on this tab. */
+const tunable = (c: ClassId): SkillDef[] => [basicOf(c), ...learnable(c)];
 const sameValues = (a: SkillValues, b: SkillValues): boolean =>
   SKILL_VALUE_KEYS.every((k) => a[k] === b[k]) && Object.keys(b.params).every((k) => a.params[k] === b.params[k]);
+/** A skill's numbers, its extra effects and (a basic attack) its speed are the same in both balances. */
+const sameSkill = (a: Balance, b: Balance, id: string): boolean => {
+  const basic = BASIC_SKILLS.find((x) => x.sk.id === id);
+  return sameValues(a.skills.skills[id], b.skills.skills[id]) &&
+    JSON.stringify(a.skills.effects[id] ?? []) === JSON.stringify(b.skills.effects[id] ?? []) &&
+    (!basic || a.skills.basicRate[basic.cls] === b.skills.basicRate[basic.cls]);
+};
 
 export async function renderSkills(view: HTMLElement, h: H, api: Api, onSaved: (t: BalanceTuning) => void): Promise<void> {
   const box = h('div', {}, h('div', { class: 'muted' }, 'กำลังโหลด…'));
@@ -99,6 +113,9 @@ export async function renderSkills(view: HTMLElement, h: H, api: Api, onSaved: (
         num('zoomMin', 5), num('zoomMax', 10)),
       h('div', { class: 'muted' }, 'ซูมคิดเป็น % ของขนาดที่ผังเปิดมาพอดีกรอบ (100 = ขนาดเริ่มต้น) · ปิดสวิตช์ = ผังในเกมพอดีกรอบแบบเดิม ไม่ซูม (ผังในหน้านี้ซูมได้เสมอ)'),
       ...unlockRows,
+      h('h3', {}, 'เอฟเฟกต์พิเศษ (เพิ่มเองในค่ารายสกิล)'),
+      h('div', { class: 'muted' }, 'สตันจากเอฟเฟกต์พิเศษ: มอนตัวเดิมโดนสตันซ้ำจากสกิลเดิมได้เมื่อพ้นเวลานี้นับจากสตันครั้งก่อน (กันสกิลที่ตีหลายครั้ง/ทุกวิสตันค้าง) · 0 = สตันทุกครั้งที่โดน'),
+      h('div', { class: 'row bal-line' }, num('extraStunGap', 0.5)),
       h('h3', {}, 'กับระเบิดของมือปืน: สแตค (เก็บได้หลายอัน คืนทีละอัน)'),
       h('div', { class: 'muted' }, 'ใช้แล้วนับคูลดาวน์ของสกิล (รวมแรงก์และมอดลดคูลดาวน์) คืน 1 อัน จบแล้วถ้ายังไม่เต็มนับอันถัดไปต่อ · กับระเบิดบนพื้นพร้อมกันได้เท่าจำนวนสแตคสูงสุดที่ได้ตามแรงก์ วางเกินอันเก่าสุดหาย · สแตคที่ N ได้เมื่อแรงก์ถึงค่าที่ตั้ง (นับเฉพาะ N ไม่เกิน "สแตคสูงสุด")'),
       h('div', { class: 'row bal-line' }, num('mineMax', 1), num('mineGap', 0.1),
@@ -115,18 +132,19 @@ export async function renderSkills(view: HTMLElement, h: H, api: Api, onSaved: (
   const panel = h('div', { class: 'skm-panel' });
   const found = h('div', { class: 'skm-found' });
   const changedList = h('div', { class: 'skm-found' });
+  let basicBtn: HTMLButtonElement | null = null;
   let zoom = 1;
   let mapW = 1, mapH = 1, ox = 0, oy = 0;
 
   const skillById = (id: string): { sk: SkillDef; c: ClassId } | undefined => {
     for (const c of CLASS_IDS) {
-      const sk = learnable(c).find((s) => s.id === id);
+      const sk = tunable(c).find((s) => s.id === id);
       if (sk) return { sk, c };
     }
     return undefined;
   };
-  const differsFromCode = (id: string): boolean => !sameValues(draft.skills.skills[id], code.skills.skills[id]);
-  const unsaved = (id: string): boolean => !sameValues(draft.skills.skills[id], savedB.skills.skills[id]);
+  const differsFromCode = (id: string): boolean => !sameSkill(draft, code, id);
+  const unsaved = (id: string): boolean => !sameSkill(draft, savedB, id);
   const pick = (c: ClassId, id: string): void => {
     const newCls = c !== cls;
     cls = c;
@@ -154,7 +172,9 @@ export async function renderSkills(view: HTMLElement, h: H, api: Api, onSaved: (
       found.append(h('span', { class: 'muted' }, hits.length ? 'พบ: ' : 'ไม่พบสกิลชื่อนี้'),
         ...hits.slice(0, 30).map(({ c, sk }) => h('button', { class: `chip${sk.id === sel ? ' on' : ''}`, onclick: () => pick(c, sk.id) }, `${sk.nameTh} (${CLASSES[c].nameTh})`)));
     }
-    const changed = CLASS_IDS.flatMap((c) => learnable(c).filter((sk) => differsFromCode(sk.id)).map((sk) => ({ c, sk })));
+    const changed = CLASS_IDS.flatMap((c) => tunable(c).filter((sk) => differsFromCode(sk.id)).map((sk) => ({ c, sk })));
+    basicBtn?.classList.toggle('on', basicOf(cls).id === sel);
+    basicBtn?.classList.toggle('dirty', unsaved(basicOf(cls).id));
     changedList.replaceChildren(...(changed.length
       ? [h('span', { class: 'muted' }, `แก้ต่างจากโค้ด ${changed.length} สกิล: `),
         ...changed.map(({ c, sk }) => h('button', { class: `chip${unsaved(sk.id) ? ' dirty' : ''}`, onclick: () => pick(c, sk.id) }, `${sk.nameTh} (${CLASSES[c].nameTh})`))]
@@ -268,6 +288,10 @@ export async function renderSkills(view: HTMLElement, h: H, api: Api, onSaved: (
   /** The picked skill's numbers (all the boxes the old table had) and what they give at rank 1 → the top rank. */
   function drawPanel(): void {
     const c = CLASSES[cls];
+    if (sel === basicOf(cls).id) {
+      drawBasicPanel();
+      return;
+    }
     const sk = learnable(cls).find((s) => s.id === sel);
     if (!sk) {
       panel.replaceChildren(h('div', { class: 'muted' }, 'คลิกดาวบนผังเพื่อแก้ค่าของสกิลนั้น · ดาวขอบทอง = แก้ต่างจากค่าในโค้ด · จุดส้ม = ยังไม่บันทึก'));
@@ -295,11 +319,7 @@ export async function renderSkills(view: HTMLElement, h: H, api: Api, onSaved: (
     const params = Object.entries(sk.params ?? {}).map(([pk, d]) => h('label', { class: 'skm-field' },
       h('span', {}, `${d.nameTh}${d.status ? ' *' : d.dmg ? ' †' : ''} (${d.unit})`),
       numBox(`s.${sk.id}.p.${pk}`, `${sk.nameTh} ${d.nameTh}`, () => v.params[pk], (n) => { v.params[pk] = n; }, cv.params[pk], d.lo, d.hi, COUNT_UNITS.has(d.unit) ? 1 : 0.05, refresh)));
-    const backBtn = h('button', { type: 'button', class: 'small', onclick: () => {
-      draft.skills.skills[sk.id] = structuredClone(cv);
-      for (const k of [...bad.keys()]) if (k.startsWith(`s.${sk.id}.`)) bad.delete(k);
-      drawPanel(); markStars(); updateSummary();
-    } }, '↺ สกิลนี้กลับเป็นค่าในโค้ด');
+    const backBtn = h('button', { type: 'button', class: 'small', onclick: () => resetSkill(sk.id) }, '↺ สกิลนี้กลับเป็นค่าในโค้ด');
     backBtn.disabled = !differsFromCode(sk.id);
     panel.replaceChildren(...[
       h('h3', {}, sk.nameTh),
@@ -310,9 +330,102 @@ export async function renderSkills(view: HTMLElement, h: H, api: Api, onSaved: (
       params.length ? h('div', { class: 'skm-fields' }, ...params) : null,
       h('div', { class: 'skm-sub' }, 'ได้จริง (แรงก์ 1 → สูงสุด)'),
       out,
+      sk.kind === 'passive' ? null : extrasBox(sk),
       h('div', { class: 'row' }, backBtn),
     ].filter((x): x is HTMLDivElement | HTMLHeadingElement => !!x));
     showOut();
+  }
+
+  /** Puts a skill (and, for a basic attack, its speed) back to the code's numbers and no extra effects. */
+  function resetSkill(id: string): void {
+    draft.skills.skills[id] = structuredClone(code.skills.skills[id]);
+    delete draft.skills.effects[id];
+    const basic = BASIC_SKILLS.find((x) => x.sk.id === id);
+    if (basic) draft.skills.basicRate[basic.cls] = code.skills.basicRate[basic.cls];
+    for (const k of [...bad.keys()]) if (k.startsWith(`s.${id}.`) || k.startsWith(`fx.${id}.`) || k === `rate.${id}`) bad.delete(k);
+    drawPanel(); markStars(); updateSummary();
+  }
+
+  /** The class's basic attack: damage, reach, attacks a second and its extra effects (owner 2026-11-20). */
+  function drawBasicPanel(): void {
+    const sk = basicOf(cls);
+    const v = draft.skills.skills[sk.id];
+    const cv = code.skills.skills[sk.id];
+    const out = h('div', { class: 'skm-out' });
+    const showOut = (): void => {
+      out.replaceChildren(h('div', {}, `ดาเมจ ${Math.round(v.dmg * 100)}% ATK · ${draft.skills.basicRate[cls]} ครั้ง/วิ (ก่อนบวกความเร็วโจมตีจากของ) · ระยะ ${v.reach} ม.`));
+    };
+    const refresh = (): void => { showOut(); markStars(); updateSummary(); };
+    const fields = BASIC_VALUE_KEYS.map((k) => h('label', { class: 'skm-field' }, h('span', {}, SKILL_VALUE_NAME[k]),
+      numBox(`s.${sk.id}.${k}`, `${sk.nameTh} ${SKILL_VALUE_NAME[k]}`, () => v[k], (n) => { v[k] = n; }, cv[k], SKILL_VALUE_RANGE[k][0], SKILL_VALUE_RANGE[k][1], 0.05, refresh)));
+    fields.push(h('label', { class: 'skm-field' }, h('span', {}, 'ตีต่อวิ (ครั้ง)'),
+      numBox(`rate.${sk.id}`, `${sk.nameTh} ตีต่อวิ`, () => draft.skills.basicRate[cls], (n) => { draft.skills.basicRate[cls] = n; }, code.skills.basicRate[cls], BASIC_RATE_RANGE[0], BASIC_RATE_RANGE[1], 0.1, refresh)));
+    const backBtn = h('button', { type: 'button', class: 'small', onclick: () => resetSkill(sk.id) }, '↺ ตีธรรมดานี้กลับเป็นค่าในโค้ด');
+    backBtn.disabled = !differsFromCode(sk.id);
+    panel.replaceChildren(
+      h('h3', {}, `ตีธรรมดา: ${sk.nameTh}`),
+      h('div', { class: 'muted' }, `${sk.name} · ตีธรรมดาของ${CLASSES[cls].nameTh} (ไม่มีแรงก์ MP คูลดาวน์)`),
+      h('div', { class: 'skm-desc' }, sk.desc),
+      h('div', { class: 'skm-fields' }, ...fields),
+      h('div', { class: 'muted' }, 'ระยะ = ระยะฟัน (นักดาบ) / ระยะยิง (เมจ มือปืน) · Auto Play ยืนห่างตามสัดส่วนระยะที่ตั้ง · ตีต่อวิ คูณกับ "ความเร็วโจมตี %" ของตัวละครอีกที'),
+      out,
+      extrasBox(sk),
+      h('div', { class: 'row' }, backBtn),
+    );
+    showOut();
+  }
+
+  /** "เอฟเฟกต์พิเศษ": the extra effects of a skill or basic attack (add, kind, numbers, target, remove). */
+  function extrasBox(sk: SkillDef): HTMLElement {
+    const id = sk.id;
+    const list = (): ExtraEffect[] => (draft.skills.effects[id] ??= []);
+    const box = h('div', { class: 'skm-extras' });
+    const changed = (): void => {
+      if (!list().length) delete draft.skills.effects[id];
+      markStars(); updateSummary();
+    };
+    const redrawBox = (): void => {
+      // Boxes of removed / re-typed rows must not stay "bad".
+      for (const k of [...bad.keys()]) if (k.startsWith(`fx.${id}.`)) bad.delete(k);
+      box.replaceChildren(...build());
+      changed();
+    };
+    const build = (): HTMLElement[] => {
+      const rows = (draft.skills.effects[id] ?? []).map((e, i) => {
+        const d = EXTRA_DEF[e.k];
+        const kind = h('select', { onchange: (ev: Event) => {
+          list()[i] = newExtra((ev.target as HTMLSelectElement).value as ExtraKind, e.to);
+          redrawBox();
+        } }, ...EXTRA_KINDS.map((k) => h('option', { value: k, selected: k === e.k }, EXTRA_DEF[k].nameTh)));
+        const who = h('select', { onchange: (ev: Event) => {
+          e.to = (ev.target as HTMLSelectElement).value as ExtraTarget;
+          changed();
+        } }, ...EXTRA_TARGETS.map((t) => h('option', { value: t, selected: t === e.to }, EXTRA_TARGET_NAME[t])));
+        const vBox = numBox(`fx.${id}.${i}.v`, `${sk.nameTh} ${d.nameTh}`, () => e.v, (n) => { e.v = n; }, NaN, d.v.lo, d.v.hi, d.v.step, changed);
+        const tBox = d.t ? numBox(`fx.${id}.${i}.t`, `${sk.nameTh} ${d.nameTh} เวลา`, () => e.t, (n) => { e.t = n; }, NaN, d.t.lo, d.t.hi, d.t.step, changed) : null;
+        const del = h('button', { type: 'button', class: 'small', title: 'ลบเอฟเฟกต์นี้', onclick: () => { list().splice(i, 1); redrawBox(); } }, '✕');
+        return h('div', { class: 'row bal-line skm-extra' }, kind,
+          h('label', {}, `${d.v.nameTh} `, vBox, ` ${d.v.unit}`),
+          tBox ? h('label', {}, `${d.t!.nameTh} `, tBox, ' วิ') : null,
+          h('label', {}, 'ใช้กับ ', who), del);
+      });
+      const pickKind = h('select', {}, ...EXTRA_KINDS.map((k) => h('option', { value: k }, EXTRA_DEF[k].nameTh)));
+      const full = (draft.skills.effects[id]?.length ?? 0) >= MAX_EXTRAS;
+      const add = h('button', { type: 'button', class: 'small', onclick: () => {
+        if (list().length >= MAX_EXTRAS) return;
+        list().push(newExtra(pickKind.value as ExtraKind));
+        redrawBox();
+      } }, '+ เพิ่ม');
+      add.disabled = full;
+      return [
+        h('div', { class: 'skm-sub' }, `เอฟเฟกต์พิเศษ (เพิ่มเอง ไม่เกิน ${MAX_EXTRAS} อัน)`),
+        h('div', { class: 'muted' }, 'ติดทุกครั้งที่สกิลนี้โดน (ทุกลูก ทุกวิ ของที่วางไว้ด้วย) เพิ่มจากที่สกิลทำอยู่แล้ว · ซ้ำกับของสกิลเอง = เอาค่าที่แรงกว่า · ไม่โตตามแรงก์ · บอส: สตันเหลือ 30% บอสที่มีท่าพิเศษไม่ติดสตัน ผลักบอสไม่ได้ (กติกาเดิม) · ไฟ/พิษไม่ซ้อนกันเอง โดนซ้ำ = นับเวลาใหม่'),
+        ...rows,
+        h('div', { class: 'row bal-line' }, pickKind, add, full ? h('span', { class: 'muted' }, 'ครบแล้ว') : null),
+      ];
+    };
+    box.replaceChildren(...build());
+    return box;
   }
 
   const drawMapCard = (): void => {
@@ -325,10 +438,13 @@ export async function renderSkills(view: HTMLElement, h: H, api: Api, onSaved: (
       h('button', { type: 'button', title: 'ซูมเข้า', onclick: () => applyZoom(zoom * 1.25) }, '+'),
       h('button', { type: 'button', title: 'ซูมออก', onclick: () => applyZoom(zoom * 0.8) }, '−'),
       h('button', { type: 'button', title: 'ขนาดเริ่มต้น', onclick: fitMap }, '⤾'));
+    const b = basicOf(cls);
+    basicBtn = h('button', { class: 'chip', onclick: () => pick(cls, b.id) }, `⚔ ตีธรรมดา: ${b.nameTh} (ดาเมจ ระยะ ความเร็ว เอฟเฟกต์พิเศษ)`);
     mapCard.replaceChildren(
       h('h2', {}, 'ค่ารายสกิล'),
       h('div', { class: 'muted' }, 'ค่ารายสกิล: % ต่อแรงก์คิดจากแรงก์ 1 (เช่น ดาเมจ 5% → แรงก์ 10 = ×1.45) · คูลดาวน์ %/แรงก์ ติดลบ = สั้นลง · MP คูณต่อจาก MP สกิล/เลเวลของอาชีพ · เวลาสถานะ = สตัน ช้า ลดเกราะ ไม่รับดาเมจ ดูดเลือด · ระยะ/รัศมี = ระยะยิง/พุ่ง หรือรัศมีรอบตัว (วงระเบิด/วงตกอยู่ในค่าพิเศษ)'),
       tabs,
+      h('div', { class: 'skm-found' }, basicBtn),
       search,
       found,
       h('div', { class: 'skm-body' }, h('div', { class: 'skm-box' }, wrap, zoomBtns), panel),
