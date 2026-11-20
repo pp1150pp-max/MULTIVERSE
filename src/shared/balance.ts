@@ -56,6 +56,12 @@ export const CODE_WALK_HIDDEN = true;
 export const CODE_BOSS_WIPE_KEEP_HP = true;
 /** Seconds a boss-room group that is all down has to get someone up with a feather (owner: 5). */
 export const CODE_ROOM_WIPE_SECONDS = 5;
+/** Seconds between entering a boss room and its boss appearing (owner 2026-11-20: 13, was 5). */
+export const CODE_ROOM_BOSS_DELAY = 13;
+/** No damage for a moment after getting up with a phoenix feather in a boss room (owner 2026-11-20: on). */
+export const CODE_REVIVE_GUARD = true;
+/** How long that lasts, in seconds (owner: 5); attacking, a skill, a buff or a dash ends it at once. */
+export const CODE_REVIVE_GUARD_SEC = 5;
 /**
  * Most a character's skill cooldowns can be cut by the "ลดคูลดาวน์สกิล %" item stat, in % (owner 2026-11-19:
  * no cap on the total from items, but a safety stop at 75% in case the multipliers are set high).
@@ -170,6 +176,12 @@ export interface Balance {
   bossWipeKeepHp: boolean;
   /** Seconds a boss-room group that is all down has to revive someone before it has lost. */
   roomWipeSec: number;
+  /** Seconds a boss room counts down before its boss appears. */
+  roomBossDelay: number;
+  /** Untouchable (no damage or boss effects, blinking) for a moment after a phoenix-feather revive in a boss room. */
+  reviveGuard: boolean;
+  /** How long that lasts; any attack, skill, buff or dash ends it early. */
+  reviveGuardSec: number;
   /** Auto Play defaults, distances and switches (autoTuning.ts). */
   auto: AutoConfig;
   /** The skill effects' extra layer: glow, ground light, particles, hit feel (fxLayerTuning.ts). */
@@ -235,6 +247,12 @@ export interface BalanceTuning {
   bossWipeKeepHp?: boolean;
   /** Wipe revive seconds, when not the code's. */
   roomWipeSec?: number;
+  /** Boss countdown seconds, when not the code's. */
+  roomBossDelay?: number;
+  /** Phoenix-feather revive guard, when not the code's (on). */
+  reviveGuard?: boolean;
+  /** Its seconds, when not the code's. */
+  reviveGuardSec?: number;
   /** Auto Play settings that differ from the code. */
   auto?: AutoTuning;
   /** Skill effect extra-layer numbers that differ from the code. */
@@ -275,6 +293,8 @@ export const BALANCE_RANGE = {
   bossSwitchSec: [0, 120],
   mobGiveUpSec: [0, 120],
   roomWipeSec: [3, 60],
+  roomBossDelay: [0, 60],
+  reviveGuardSec: [1, 30],
 } as const satisfies Record<string, readonly [number, number]>;
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
@@ -318,6 +338,9 @@ export function codeBalance(): Balance {
     walkHidden: CODE_WALK_HIDDEN,
     bossWipeKeepHp: CODE_BOSS_WIPE_KEEP_HP,
     roomWipeSec: CODE_ROOM_WIPE_SECONDS,
+    roomBossDelay: CODE_ROOM_BOSS_DELAY,
+    reviveGuard: CODE_REVIVE_GUARD,
+    reviveGuardSec: CODE_REVIVE_GUARD_SEC,
     auto: codeAuto(),
     fxLayer: codeFxLayer(),
     rigLook: codeRigLook(),
@@ -363,6 +386,9 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.mobGiveUpSec !== undefined) b.mobGiveUpSec = t.mobGiveUpSec;
   if (t.bossWipeKeepHp !== undefined) b.bossWipeKeepHp = t.bossWipeKeepHp;
   if (t.roomWipeSec !== undefined) b.roomWipeSec = t.roomWipeSec;
+  if (t.roomBossDelay !== undefined) b.roomBossDelay = t.roomBossDelay;
+  if (t.reviveGuard !== undefined) b.reviveGuard = t.reviveGuard;
+  if (t.reviveGuardSec !== undefined) b.reviveGuardSec = t.reviveGuardSec;
   if (t.mobReturnIgnoreHits !== undefined) b.mobReturnIgnoreHits = t.mobReturnIgnoreHits;
   if (t.mobDropOnSafe !== undefined) b.mobDropOnSafe = t.mobDropOnSafe;
   if (t.mapFromDb !== undefined) b.mapFromDb = t.mapFromDb;
@@ -510,7 +536,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'walkHidden', 'bossWipeKeepHp', 'roomWipeSec', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'menuLayout'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'walkHidden', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'reviveGuard', 'reviveGuardSec', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'menuLayout'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -587,7 +613,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   }
 
   // Single numbers
-  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'roomWipeSec' | 'cdrCap', range: readonly [number, number], what: string): string | null => {
+  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'roomWipeSec' | 'roomBossDelay' | 'reviveGuardSec' | 'cdrCap', range: readonly [number, number], what: string): string | null => {
     const n = num(o[key], range[0], range[1], what);
     if (typeof n === 'string') return n;
     if (n !== undefined && n !== CODE[key]) out[key] = n;
@@ -640,6 +666,13 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (x === undefined) return null;
     if (typeof x !== 'boolean') return strict ? 'สวิตช์บอสไม่ฟื้นเลือดตอนทีมตายหมดต้องเป็นเปิด/ปิด' : null;
     if (x !== CODE.bossWipeKeepHp) out.bossWipeKeepHp = x;
+    return null;
+  };
+  const reviveGuard = (): string | null => {
+    const x = o.reviveGuard;
+    if (x === undefined) return null;
+    if (typeof x !== 'boolean') return strict ? 'สวิตช์อมตะหลังชุบด้วยขนนกฟีนิกซ์ต้องเป็นเปิด/ปิด' : null;
+    if (x !== CODE.reviveGuard) out.reviveGuard = x;
     return null;
   };
   /** A tier array (5 numbers, T1 first): the array, undefined (missing / dropped), or an error to return. */
@@ -1001,6 +1034,9 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     walkHidden() ??
     wipeKeep() ??
     one('roomWipeSec', BALANCE_RANGE.roomWipeSec, 'เวลาชุบตอนตายหมดทีม (วินาที)') ??
+    one('roomBossDelay', BALANCE_RANGE.roomBossDelay, 'นับถอยหลังก่อนบอสเกิด (วินาที)') ??
+    reviveGuard() ??
+    one('reviveGuardSec', BALANCE_RANGE.reviveGuardSec, 'อมตะหลังชุบด้วยขนนกฟีนิกซ์ (วินาที)') ??
     auto() ??
     tutorial() ??
     skills() ??
@@ -1107,6 +1143,9 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.mobGiveUpSec !== b.mobGiveUpSec) out.push(`มอนธรรมดาเลิกไล่เมื่อไม่โดนตี ${a.mobGiveUpSec || 'ไม่เลิก'} → ${b.mobGiveUpSec || 'ไม่เลิก'} วิ`);
   if (a.bossWipeKeepHp !== b.bossWipeKeepHp) out.push(`บอสไม่ฟื้นเลือดตอนทีมตายหมด ${a.bossWipeKeepHp ? 'เปิด' : 'ปิด'} → ${b.bossWipeKeepHp ? 'เปิด' : 'ปิด'}`);
   if (a.roomWipeSec !== b.roomWipeSec) out.push(`เวลาชุบตอนตายหมดทีม ${a.roomWipeSec} → ${b.roomWipeSec} วิ`);
+  if (a.roomBossDelay !== b.roomBossDelay) out.push(`นับถอยหลังก่อนบอสเกิด ${a.roomBossDelay} → ${b.roomBossDelay} วิ`);
+  if (a.reviveGuard !== b.reviveGuard) out.push(`อมตะหลังชุบด้วยขนนกฟีนิกซ์ ${a.reviveGuard ? 'เปิด' : 'ปิด'} → ${b.reviveGuard ? 'เปิด' : 'ปิด'}`);
+  if (a.reviveGuardSec !== b.reviveGuardSec) out.push(`เวลาอมตะหลังชุบ ${a.reviveGuardSec} → ${b.reviveGuardSec} วิ`);
   if (a.forgeAuto !== b.forgeAuto) out.push(`ตีบวก Auto ${a.forgeAuto ? 'เปิด' : 'ปิด'} → ${b.forgeAuto ? 'เปิด' : 'ปิด'}`);
   if (a.walkHidden !== b.walkHidden) out.push(`เดินต่อเมื่อสลับแท็บ ${a.walkHidden ? 'เปิด' : 'ปิด'} → ${b.walkHidden ? 'เปิด' : 'ปิด'}`);
   if (a.buffDurSummons !== b.buffDurSummons) out.push(`เพิ่มเวลาบัฟนับ summon (ป้อมปืน โดรน กับระเบิด) ${a.buffDurSummons ? 'เปิด' : 'ปิด'} → ${b.buffDurSummons ? 'เปิด' : 'ปิด'}`);

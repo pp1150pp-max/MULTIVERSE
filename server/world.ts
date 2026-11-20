@@ -2368,6 +2368,7 @@ export class GameWorld {
         x: r2(o.x), z: r2(o.z), fx: r2(o.faceX), fz: r2(o.faceZ), mv: o.moving,
         alive: o.alive, hp: Math.round(o.hp), dash: o.isDashing ? o.dashKind : 0,
         ...buffField(o, sim.time),
+        ...(o.alive && o.guardT > 0 ? { gd: 1 as const } : {}),
         ...withLook<PlayerLook>(s.seenP, nextP, o.id, playerLook(o, looks)),
       })),
       monsters: sim.monsters.filter(near).map((m): MonsterSnap => ({

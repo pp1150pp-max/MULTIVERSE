@@ -459,7 +459,7 @@ export class Sim {
 
   hitPlayer(m: Monster, p: Player, mult: number, opts: HitOpts): void {
     if (!p.alive || this.inSafe(p)) return;
-    if (p.invulnT > 0) {
+    if (p.invulnT > 0 || p.guardT > 0) {
       this.text(p.x, p.topY, p.z, 'MISS', 'info', 0.6);
       return;
     }
@@ -513,7 +513,7 @@ export class Sim {
     p.lavaT -= dt;
     if (p.lavaT > 0) return;
     p.lavaT = LAVA_TICK;
-    if (p.invulnT > 0) return;
+    if (p.invulnT > 0 || p.guardT > 0) return;
     const dmg = Math.max(1, Math.round(p.maxHp * LAVA_BURN));
     p.hp -= dmg;
     p.lastHurt = this.time;
@@ -722,6 +722,7 @@ export class Sim {
     p.moving = false;
     p.castT = 0;
     p.mounted = false;
+    p.guardT = 0;
     // Skill buffs end with death.
     p.clearSkillBuffs();
     this.events.push({ t: 'died', id: p.id });
@@ -899,6 +900,7 @@ export class Sim {
     p.hp = p.maxHp;
     p.mp = p.stats.maxMp;
     p.stunT = 0;
+    p.guardT = 0;
     p.kbx = p.kbz = 0;
     ({ x: p.x, z: p.z } = this.spawnPoint());
     p.moveTarget = null;
@@ -1469,6 +1471,9 @@ export class Sim {
     p.mp = Math.round(p.stats.maxMp / 2);
     p.stunT = 0;
     p.kbx = p.kbz = 0;
+    // Untouchable for a moment, until it attacks or uses a skill (owner 2026-11-20).
+    const bal = currentBalance();
+    p.guardT = bal.reviveGuard ? bal.reviveGuardSec : 0;
     this.fx('burst', p.x, 1, p.z, '#ff9a3a', 24, 4);
     this.events.push({ t: 'revived', id: p.id });
     this.log(`ใช้${STONE_NAME.phoenix} ฟื้นขึ้นมา (ชุบได้อีก ${this.revivesLeft(p)} ครั้ง)`, '#ff9a3a', p.id);
