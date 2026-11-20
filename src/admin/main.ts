@@ -11,6 +11,7 @@ import { renderSkills } from './skills';
 import { headsOnPage, jumpTo, watchCards } from './ui';
 import { renderDaily } from './daily';
 import { renderMenuLayout } from './menuLayout';
+import { renderMaps } from './maps';
 import { renderCosManage } from './cosManage';
 import { renderCashShop } from './cashShop';
 import { ADMIN_TOKEN, h, read, store, token, setToken, hooks, ApiError, api, root, me, setMe, setMeta, type Tab, tab, setCurrentTab, view, stopRefresh, closeSheet, can } from './core';
@@ -161,13 +162,13 @@ const CATEGORIES: { name: (typeof FEATURE_GROUPS)[number]; tabs: Tab[] }[] = [
   { name: 'ผู้เล่น', tabs: ['online', 'users'] },
   { name: 'ประวัติ', tabs: ['stats', 'sessions', 'chat', 'trades', 'audit'] },
   { name: 'สื่อสาร', tabs: ['mail', 'reports', 'broadcast'] },
-  { name: 'ปรับเกม', tabs: ['balance', 'skills', 'cards', 'daily', 'cashShop', 'menuLayout'] },
+  { name: 'ปรับเกม', tabs: ['balance', 'skills', 'cards', 'daily', 'cashShop', 'menuLayout', 'maps'] },
   { name: 'หน้าตา', tabs: ['orbs', 'cos', 'cosManage', 'rig', 'anim'] },
   { name: 'ระบบ', tabs: ['server', 'roles'] },
 ];
 const TAB_LABEL: Record<Tab, string> = {
   online: 'ออนไลน์', users: 'ผู้ใช้และตัวละคร', stats: 'สถิติ', sessions: 'การเข้าเล่น', chat: 'แชท', trades: 'เทรด',
-  audit: 'ประวัติ (audit)', mail: 'จดหมาย', reports: 'รายงาน', broadcast: 'ประกาศ', balance: 'ปรับสมดุล', skills: 'ระบบสกิล', cards: 'การ์ด', daily: 'ล็อกอินรายวัน', cashShop: 'แคชช็อป', menuLayout: 'จัดเมนูเกม',
+  audit: 'ประวัติ (audit)', mail: 'จดหมาย', reports: 'รายงาน', broadcast: 'ประกาศ', balance: 'ปรับสมดุล', skills: 'ระบบสกิล', cards: 'การ์ด', daily: 'ล็อกอินรายวัน', cashShop: 'แคชช็อป', menuLayout: 'จัดเมนูเกม', maps: 'แมพ',
   orbs: 'ลูกแก้วตีบวก', cos: 'ของแต่งตัว', cosManage: 'จัดการของแต่งตัว', rig: 'นักดาบกระดาษ', anim: 'ท่าตัวละคร', server: 'Server', roles: 'สิทธิ์',
 };
 
@@ -187,7 +188,7 @@ function tabAllowed(t: Tab): boolean {
     case 'reports': return f.includes('reports');
     case 'broadcast': return f.includes('broadcast');
     // The skill system's page uses the same switch as the balance tab (owner 2026-11-19).
-    case 'balance': case 'skills': return f.includes('balance');
+    case 'balance': case 'skills': case 'maps': return f.includes('balance');
     case 'daily': return f.includes('daily');
     case 'cashShop': return f.includes('cashShop');
     case 'menuLayout': return f.includes('menuLayout');
@@ -207,7 +208,7 @@ const catOf = (t: Tab) => CATEGORIES.find((c) => c.tabs.includes(t))!;
 /** An icon per tab in the side menu (looks only). */
 const TAB_ICON: Record<Tab, string> = {
   online: '🟢', users: '👤', stats: '📈', sessions: '🕒', chat: '💬', trades: '🤝', audit: '📜', mail: '✉️', reports: '🚩',
-  broadcast: '📢', balance: '⚖️', skills: '✨', cards: '🃏', daily: '📅', cashShop: '💎', menuLayout: '🧭', orbs: '🔮', cos: '🪽', cosManage: '🧺', rig: '🗡️',
+  broadcast: '📢', balance: '⚖️', skills: '✨', cards: '🃏', daily: '📅', cashShop: '💎', menuLayout: '🧭', maps: '🗺️', orbs: '🔮', cos: '🪽', cosManage: '🧺', rig: '🗡️',
   anim: '🏃', server: '🖥️', roles: '🔑',
 };
 
@@ -245,6 +246,7 @@ const SEARCH_INDEX: { tab: Tab; title: string; words?: string }[] = [
   { tab: 'balance', title: 'เควสสอนระบบ: รางวัล', words: 'tutorial' },
   { tab: 'skills', title: 'ระบบสกิล: ค่ารวม', words: 'แต้มสกิล แรงก์ คืนแต้ม ปลดล็อก ซูมผัง' },
   { tab: 'skills', title: 'ค่ารายสกิล', words: 'สกิล ดาเมจ คูลดาวน์ mp ระยะ ผังดาว' },
+  { tab: 'maps', title: 'แมพ: ใช้แมพจาก DB', words: 'แมพ json แก้แมพ ตัวแก้แมพ เผยแพร่ ฉุกเฉิน' },
   { tab: 'menuLayout', title: 'จัดเมนูเกม', words: 'ปุ่ม ลำดับ ซ่อน ย้าย ไอคอน มุมขวาบน หน้าต่างเมนู ตั้งค่า' },
   { tab: 'cards', title: 'การ์ด', words: 'เรทดรอป' },
   { tab: 'cards', title: 'ตัวเลขของระบบการ์ด' },
@@ -407,6 +409,7 @@ function setTab(t: Tab): void {
   else if (t === 'daily') void renderDaily(view, h, api);
   else if (t === 'cashShop') void renderCashShop(view, h, api);
   else if (t === 'menuLayout') void renderMenuLayout(view, h, api, () => undefined);
+  else if (t === 'maps') void renderMaps(view, h, api, (tuning) => applyBalance(tuning));
   else if (t === 'cosManage') void renderCosManage(view, h, api, allowedTabs.has('orbs') ? (id) => { setOrbOpenId(id); setTab('orbs'); } : null);
   else if (t === 'roles') void renderRoles();
   else if (t === 'audit') void renderAudit();
