@@ -22,7 +22,6 @@ import { adminApi } from './admin';
 import { googleApi } from './google-api';
 import { Backups } from './backup';
 import { HISTORY_DAYS } from '../src/shared/admin';
-import { LOOK_PATH, PAPER_MAPS_SETTING, type PublicLook } from '../src/shared/paperArt';
 import { controlFilePath, CTRL_C_WINDOW_MS, DoublePress, isLocalControl, STOP_PATH, type ControlFile } from './control';
 import { createInterface } from 'node:readline';
 import { RESTART_EXIT_CODE, SHUTDOWN_SECONDS, SHUTDOWN_SECONDS_MAX, shutdownSeconds, shutdownWarning, type ShutdownMode } from '../src/shared/net/protocol';
@@ -118,11 +117,6 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string): Pro
   }
 
   if (await googleApi(req, res, path, { db, world, startSession })) return;
-
-  // Which art the game loads (src/shared/paperArt.ts), read before login.
-  if (method === 'GET' && path === LOOK_PATH) {
-    return send(res, 200, { paperMaps: db.getSetting(PAPER_MAPS_SETTING) === '1' } satisfies PublicLook);
-  }
 
   if (method === 'POST' && path === '/api/register') {
     const ip = clientIp(req);

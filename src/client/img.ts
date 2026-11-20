@@ -4,7 +4,7 @@ import { PAPER_ICONS } from './paperIcons';
  * The real URL of a sprite PNG under public/assets/sprites/. The build ships those PNGs as WebP
  * (see the webp plugin in vite.config.ts), so outside dev `.png` becomes `.webp`. Dev serves the PNGs as they are.
  * Every sprite path written in TS goes through this; index.html and CSS are rewritten by the plugin.
- * With the papercraft switch on (src/shared/paperArt.ts), UI pictures that have a paper version come from sprites/paper/ui/.
+ * On the game page (papercraft is the only art style), UI pictures that have a paper version come from sprites/paper/ui/.
  */
 export const imgUrl = (path: string): string => {
   const p = paperUi ? toPaperUi(path) : path;
@@ -39,7 +39,7 @@ function toPaperUi(text: string): string {
 
 /**
  * Turns the paper UI on: later imgUrl calls, the stylesheets' rules and the images already on the page all switch.
- * Called once, when the server's answer arrives (main.ts), so the login form never waits for it.
+ * Called once by the game page at boot (main.ts).
  */
 export function usePaperUi(): void {
   if (paperUi) return;
