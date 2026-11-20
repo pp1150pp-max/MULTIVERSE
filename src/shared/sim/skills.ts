@@ -322,7 +322,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
   const A = (key: string): number => P(key) * sc.area;
   /** Blasts made bigger by the worn passive (Gunslinger Special Ammo) show its ring. */
   const special = sc.area > 1;
-  const reach = skillReach(sk);
+  const reach = skillReach(sk, undefined, rank);
   const far = reach ? (reach.kind === 'self' ? reach.radius : reach.range) : 0;
   // The Swordsman's 30 skills: sim/swordSkills.ts.
   const sword = castSword(sim, p, sk, aim, { ang, dmg, P, far });
@@ -409,7 +409,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       return true;
     }
     case 'mg_volatileorb':
-      sim.addProjectile(p, { x: p.x, z: p.z, angle: ang, speed: 8, range: far, radius: 0.6, mult: dmg, color: '#ff9a4a', size: 1.6, explode: P('blast'), hit: { skill: sk } });
+      sim.addProjectile(p, { x: p.x, z: p.z, angle: ang, speed: 8, range: far, radius: 0.6, mult: dmg, color: '#ff9a4a', size: 1.6, explode: P('blast'), carry: P('carry') >= 1 ? P('carryWidth') : 0, hit: { skill: sk } });
       return true;
     case 'mg_crystalrain': {
       const c = landing(p, aim, far);
@@ -445,8 +445,14 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const r = P('radius');
       const sr = P('starRadius');
       const warn = 0.35;
-      tickFor(sim, p, P('gap'), Math.round(P('stars')), () => {
-        const s = spotIn(c.x, c.z, r);
+      // Each star falls on a living monster inside the big circle (owner 2026-11-20): nearest the centre first, then
+      // round the pack, so a crowd is hit evenly and one monster takes them all. Nobody there = a random spot.
+      tickFor(sim, p, P('gap'), Math.round(P('stars')), (i) => {
+        const inside = sim.monsters
+          .filter((m) => m.alive && !m.untargetable && Math.hypot(m.x - c.x, m.z - c.z) - m.radius <= r)
+          .sort((a, b) => Math.hypot(a.x - c.x, a.z - c.z) - Math.hypot(b.x - c.x, b.z - c.z));
+        const t = inside.length ? inside[i % inside.length] : undefined;
+        const s = t ? { x: t.x, z: t.z } : spotIn(c.x, c.z, r);
         sim.fx('telegraph', s.x, s.z, sr, warn, '#ffe08a');
         sim.schedule(warn, () => {
           if (!live(sim, p)) return;

@@ -20,6 +20,8 @@ import type { HitOpts } from './types';
 import { currentBalance } from '../balance';
 import { skillExtras } from '../skillTuning';
 
+/** Launch speed of a knockback per metre it should travel (Unit.tickStatus decays it by exp(-10t)). */
+const KB_PER_METRE = 10;
 const BURN_COLOR = '#ff9a3a';
 
 /** The hit's options with this skill's extra effects merged in (the same object when the skill has none). */
@@ -58,7 +60,9 @@ export function withExtras(sim: Sim, p: Player, m: Monster, src: string, opts: H
         break;
       }
       case 'kb':
-        o.kb = Math.max(o.kb ?? 0, e.v);
+        // The box is in metres, but a knockback is a launch speed that dies away (Unit.knockback: exp(-10t)), so it
+        // travels speed / 10 metres: launch at v × 10 to really move v metres.
+        o.kb = Math.max(o.kb ?? 0, e.v * KB_PER_METRE);
         break;
       case 'dot':
         burn(sim, p, m, src, e.v, e.t);
