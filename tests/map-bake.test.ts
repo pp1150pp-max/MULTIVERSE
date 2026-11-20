@@ -1,9 +1,9 @@
 // The baked floor-1 maps (src/shared/data/maps/*.json, made by tools/bake_maps.ts) must equal what the old generators
-// build, value for value (docs/plans/map-editor.md 1.1). Nothing reads the JSON yet; this is the safety net for PR 3.
+// build, value for value (docs/plans/map-editor.md 1.1). PR 3 reads them (see map-terrain.test.ts); this compares them with the generators.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ok, finish } from './check';
-import { ZONES } from '../src/shared/data/zones';
+import { ZONES, GENERATED_ZONES } from '../src/shared/data/zones';
 import { MONSTERS } from '../src/shared/data/monsters';
 import { NPC_IDS } from '../src/shared/data/npcs';
 import { Terrain } from '../src/shared/sim/terrain';
@@ -18,8 +18,8 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 for (const id of FLOOR1_IDS) {
   const file = readFileSync(join(MAPS_DIR, `${id}.json`), 'utf8');
   const map = JSON.parse(file) as MapData;
-  const zone = ZONES[id];
-  const old = new Terrain(zone);
+  const zone = GENERATED_ZONES[id];
+  const old = new Terrain(zone, null);
 
   ok(file === bakedText(bakeZone(zone)), `${id}: re-baking gives the very same file`);
   const all = validateMap(map, { propKeys: Object.keys(SHEET_SPECS), zoneIds: Object.keys(ZONES), monsterIds: Object.keys(MONSTERS) });

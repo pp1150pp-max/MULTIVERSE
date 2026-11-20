@@ -11,7 +11,7 @@ const TICK = 1 / 30;
 for (const zone of Object.values(ZONES)) {
   const sim = new Sim(zone);
   const spots = sim.terrain.restSpots;
-  ok(spots.length === 1 && spots[0].kind === (zone === ZONE_HUB ? 'fountain' : 'campfire'), `${zone.id}: one ${spots[0]?.kind}`);
+  ok(spots.length === 1 && spots[0].kind === (zone.id === ZONE_HUB.id ? 'fountain' : 'campfire'), `${zone.id}: one ${spots[0]?.kind}`);
   const r = spots[0];
   // Somewhere to stand next to it.
   let free = false;
@@ -20,7 +20,7 @@ for (const zone of Object.values(ZONES)) {
     free = !sim.terrain.isBlocked(r.x + Math.cos(a) * d, r.z + Math.sin(a) * d, 0.4);
   }
   ok(free, `${zone.id}: room to stand by it`);
-  if (zone !== ZONE_HUB) {
+  if (zone.id !== ZONE_HUB.id) {
     // The campfire is off the way in: not between the portal and where the path heads into the zone.
     const back = zone.portals[0];
     const arrived = sim.addPlayer(hero(), ZONE_HUB.id);

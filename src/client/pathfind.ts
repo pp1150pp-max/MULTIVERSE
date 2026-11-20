@@ -1,4 +1,4 @@
-import type { Terrain } from '../shared/sim/terrain';
+import { boxHit, polyHit, type Terrain } from '../shared/sim/terrain';
 import type { Vec2 } from '../shared/types';
 
 /** Grid cell size in world units. */
@@ -32,6 +32,27 @@ class WalkGrid {
           const [x, z] = this.world(gx, gz);
           if (Math.hypot(c.x - x, c.z - z) < r) this.blocked[gz * this.n + gx] = 1;
         }
+      }
+    }
+    // Turned boxes and blocker polygons (map files): stamp every cell within CLEARANCE of one.
+    for (const b of terrain.boxes) {
+      const r = Math.hypot(b.w, b.d) / 2 + CLEARANCE;
+      this.stampBox(b.x - r, b.z - r, b.x + r, b.z + r, (x, z) => boxHit(b, x, z, CLEARANCE));
+    }
+    for (const poly of terrain.blockers) {
+      const xs = poly.map((p) => p[0]);
+      const zs = poly.map((p) => p[1]);
+      this.stampBox(Math.min(...xs) - CLEARANCE, Math.min(...zs) - CLEARANCE, Math.max(...xs) + CLEARANCE, Math.max(...zs) + CLEARANCE, (x, z) => polyHit(poly, x, z, CLEARANCE));
+    }
+  }
+
+  private stampBox(minX: number, minZ: number, maxX: number, maxZ: number, hit: (x: number, z: number) => boolean): void {
+    const [x0, z0] = this.cell(minX, minZ);
+    const [x1, z1] = this.cell(maxX, maxZ);
+    for (let gz = z0; gz <= z1; gz++) {
+      for (let gx = x0; gx <= x1; gx++) {
+        const [x, z] = this.world(gx, gz);
+        if (hit(x, z)) this.blocked[gz * this.n + gx] = 1;
       }
     }
   }

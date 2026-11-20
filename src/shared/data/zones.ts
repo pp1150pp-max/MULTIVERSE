@@ -1,4 +1,6 @@
 import { mulberry32 } from '../rng';
+import { MapRegistry } from '../mapRegistry';
+import type { MapData } from '../mapSchema';
 
 export interface SpawnArea {
   monster: string;
@@ -443,13 +445,49 @@ export const ZONE_HUB: ZoneDef = {
   portals: HUB_CORNERS.map(([sx, sz, zone]) => ({ to: zone.id, x: sx * HUB_PORTAL, z: sz * HUB_PORTAL, minLevel: 0 })),
 };
 
-export const ZONES: Record<string, ZoneDef> = {
+/** The floor-1 zones as the generators above make them. Only tools/bake_maps.ts and the bake test read these. */
+export const GENERATED_ZONES: Record<string, ZoneDef> = {
   [ZONE_HUB.id]: ZONE_HUB,
   [ZONE_1.id]: ZONE_1,
   [ZONE_2.id]: ZONE_2,
   [ZONE_3.id]: ZONE_3,
   [ZONE_4.id]: ZONE_4,
 };
+
+/**
+ * A zone with its layout (size, start, safe square, paths, lakes, spawns, portals, boss summoner) read from its map file.
+ * Names, levels, stats and the monster boost stay in code; each spawn keeps its boost by position.
+ */
+export function zoneWithMap(zone: ZoneDef, map: MapData): ZoneDef {
+  const [main, ...rest] = map.paths;
+  const water = (kind: 'ice' | 'lava') => map.water.filter((w) => w.kind === kind).map(({ x, z, rx, rz }) => ({ x, z, rx, rz }));
+  const ice = water('ice');
+  const lava = water('lava');
+  return {
+    ...zone,
+    half: map.zone.half,
+    start: { ...map.zone.start },
+    safe: map.zone.safe ? { ...map.zone.safe } : undefined,
+    path: main ? main.pts.map(([x, z]) => [x, z] as [number, number]) : [],
+    branches: rest.map((b) => b.pts.map(([x, z]) => [x, z] as [number, number])),
+    iceLakes: zone.iceLakes || ice.length ? ice : undefined,
+    lavaPools: zone.lavaPools || lava.length ? lava : undefined,
+    spawns: map.spawns.map((s, i) => {
+      const boost = zone.spawns[i]?.boost;
+      return { monster: s.monster, x: s.x, z: s.z, radius: s.radius, count: s.count, respawn: [s.respawn[0], s.respawn[1]], ...(boost ? { boost } : {}) };
+    }),
+    portals: map.portals.map((p) => ({ ...p })),
+    lair: map.lair ? { ...map.lair } : undefined,
+  };
+}
+
+/** The zones the game runs: the generated ones with their layout read from the map files (MapRegistry). */
+export const ZONES: Record<string, ZoneDef> = Object.fromEntries(
+  Object.entries(GENERATED_ZONES).map(([id, z]) => {
+    const map = MapRegistry.get(id);
+    return [id, map ? zoneWithMap(z, map) : z];
+  }),
+);
 
 /** Each boss's body radius in its room (the Volcano Heart is a rock that never moves). */
 const BOSS_RADIUS: Record<string, number> = { forest_bear: 1, bog_witch: 1, yeti: 1, volcano_heart: 0 };
