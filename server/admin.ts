@@ -32,7 +32,7 @@ import { ZONES, zoneById } from '../src/shared/data/zones';
 import { hasChannels, placeLabel } from '../src/shared/channels';
 import { ITEM_BASES, makeItem } from '../src/shared/data/items';
 import { CLASS_IDS } from '../src/shared/data/classes';
-import { MAX_PLUS } from '../src/shared/data/enhance';
+import { PLUS_CAP } from '../src/shared/data/enhance';
 import { RARITIES, RARITY_LABEL, STAT_LABEL, type BagEntry, type Item } from '../src/shared/types';
 import { checkUsername } from '../src/shared/api';
 
@@ -146,7 +146,7 @@ export async function adminApi(
   if (method === 'GET' && path === '/api/admin/meta') {
     requireAdmin(req, db);
     const meta: AdminMeta = {
-      maxLevel: MAX_LEVEL, maxPlus: MAX_PLUS, goldMax: ADMIN_GOLD_MAX, itemsMax: ADMIN_ITEMS_MAX,
+      maxLevel: MAX_LEVEL, maxPlus: PLUS_CAP, goldMax: ADMIN_GOLD_MAX, itemsMax: ADMIN_ITEMS_MAX,
       zones: Object.values(ZONES).map((z) => ({ id: z.id, nameTh: z.nameTh, levels: z.levels })),
       bases: ITEM_BASES.map((b) => ({ id: b.id, slot: b.slot, names: b.names, minLevel: b.minLevel })),
       rarities: RARITIES,
@@ -287,7 +287,7 @@ function editCharacter(db: Db, world: GameWorld, a: Admin, charId: number, what:
       if (!base) throw new HttpError(400, 'ไม่มีไอเทมชนิดนี้');
       const rarity = RARITIES.find((r) => r === body.rarity);
       if (!rarity) throw new HttpError(400, 'ระดับความหายากไม่ถูกต้อง');
-      const plus = int(body.plus ?? 0, 0, MAX_PLUS, 'ระดับตีบวก');
+      const plus = int(body.plus ?? 0, 0, PLUS_CAP, 'ระดับตีบวก');
       const count = int(body.count ?? 1, 1, ADMIN_ITEMS_MAX, 'จำนวนชิ้น');
       const asked = int(body.level ?? d.level, 1, MAX_LEVEL, 'เลเวลไอเทม');
       // An item type never drops below its own minimum level, so a spawned one doesn't either.

@@ -13,7 +13,7 @@ import type { MenuLayoutConfig } from './menuLayout';
 import { ITEM_BASES, itemNames, makeItem, roundStat, rowRanges, stampTier, statStep, tierOf } from './data/items';
 import { CLASS_IDS } from './data/classes';
 import { MAX_LEVEL } from './formulas';
-import { MAX_PLUS } from './data/enhance';
+import { PLUS_CAP } from './data/enhance';
 import { entryName, POTION_SIZES, potionName, stackLimit } from './data/potions';
 import { STONE_NAME } from './data/stones';
 
@@ -615,7 +615,7 @@ export function editGear(old: Item, body: Record<string, unknown>): Item | strin
   if (!cls) return 'อาชีพไม่ถูกต้อง';
   const whole = (v: unknown, lo: number, hi: number): v is number => typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi;
   if (!whole(body.level, base.minLevel, MAX_LEVEL)) return `เลเวลไอเทมต้องเป็น ${base.minLevel}–${MAX_LEVEL} (ขั้นต่ำของชนิดนี้ Lv.${base.minLevel})`;
-  if (!whole(body.plus, 0, MAX_PLUS)) return `ระดับตีบวกต้องเป็น 0–${MAX_PLUS}`;
+  if (!whole(body.plus, 0, PLUS_CAP)) return `ระดับตีบวกต้องเป็น 0–${PLUS_CAP}`;
   if (!whole(body.pity, 0, ADMIN_PITY_MAX)) return `pity ต้องเป็น 0–${ADMIN_PITY_MAX}`;
   const item = customItem(base.id, rarity, body.level, cls, body.name, body.lines);
   if (typeof item === 'string') return item;

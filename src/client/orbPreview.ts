@@ -12,7 +12,7 @@ import { DEFAULT_ORB_LOOK, sameOrbLook, type OrbLook } from '../shared/orbLook';
 import type { AdminOrbItems } from '../shared/admin';
 import { Player } from '../shared/sim/Player';
 import type { Sim } from '../shared/sim/Sim';
-import { auraTier, orbCodes, ORB_MIN_PLUS } from '../shared/data/enhance';
+import { auraTier, orbCodes, orbMinPlus, PLUS_CAP } from '../shared/data/enhance';
 import { CLASS_IDS } from '../shared/data/classes';
 import { BASE_MOVE_SPEED } from '../shared/formulas';
 import { EQUIP_SLOTS, EQUIP_SLOT_LABEL, type ClassId, type EquipSlot, type Item } from '../shared/types';
@@ -480,7 +480,7 @@ export async function mountOrbPreview(root: HTMLElement, note: string, server?: 
 
     h('h2', 'ระดับตีบวกของแต่ละช่อง');
     const lvOpts: [string, string][] = [['0', '—']];
-    for (let p = ORB_MIN_PLUS; p <= 15; p++) lvOpts.push([String(p), `+${p}`]);
+    for (let p = Math.min(PLUS_CAP, orbMinPlus()); p <= PLUS_CAP; p++) lvOpts.push([String(p), `+${p}`]);
     for (const s of EQUIP_SLOTS) {
       row(EQUIP_SLOT_LABEL[s], select(lvOpts, String(levels[s]), (v) => {
         levels[s] = Number(v);
@@ -501,7 +501,7 @@ export async function mountOrbPreview(root: HTMLElement, note: string, server?: 
 
     h('h2', 'กำหนดจำนวนลูกแก้ว');
     const lvPick: [string, string][] = [['0', 'สุ่ม (ตามช่วงด้านล่าง)']];
-    for (let p = ORB_MIN_PLUS; p <= 15; p++) lvPick.push([String(p), `+${p} ทุกลูก`]);
+    for (let p = Math.min(PLUS_CAP, orbMinPlus()); p <= PLUS_CAP; p++) lvPick.push([String(p), `+${p} ทุกลูก`]);
     row('จำนวนลูก', numberBox(0, EQUIP_SLOTS.length, state.count, (v) => { state.count = v; }));
     row('ระดับ', select(lvPick, String(state.countLv), (v) => { state.countLv = Number(v); }));
     button('ใส่ตามนี้', () => {
@@ -515,8 +515,8 @@ export async function mountOrbPreview(root: HTMLElement, note: string, server?: 
     h('h2', 'สุ่มจำนวนและระดับ (ต่ำสุด–สูงสุด)');
     row('จำนวนลูก ต่ำสุด', numberBox(0, EQUIP_SLOTS.length, state.countMin, (v) => { state.countMin = v; }));
     row('จำนวนลูก สูงสุด', numberBox(0, EQUIP_SLOTS.length, state.countMax, (v) => { state.countMax = v; }));
-    row('ระดับ ต่ำสุด (+)', numberBox(ORB_MIN_PLUS, 15, state.lvMin, (v) => { state.lvMin = v; }));
-    row('ระดับ สูงสุด (+)', numberBox(ORB_MIN_PLUS, 15, state.lvMax, (v) => { state.lvMax = v; }));
+    row('ระดับ ต่ำสุด (+)', numberBox(Math.min(PLUS_CAP, orbMinPlus()), PLUS_CAP, state.lvMin, (v) => { state.lvMin = v; }));
+    row('ระดับ สูงสุด (+)', numberBox(Math.min(PLUS_CAP, orbMinPlus()), PLUS_CAP, state.lvMax, (v) => { state.lvMax = v; }));
     button('🎲 สุ่มจำนวน+ระดับ', () => {
       const n = randInt(Math.min(state.countMin, state.countMax), Math.max(state.countMin, state.countMax));
       const lo = Math.min(state.lvMin, state.lvMax);
