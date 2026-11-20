@@ -34,8 +34,7 @@ import { checkMenuLayoutTuning } from '../src/shared/menuLayout';
 import { upgradeItem } from '../src/shared/data/items';
 import { searchStats } from '../src/shared/sim/market';
 import type { Item, StoneStack } from '../src/shared/types';
-import type { AdminBalance, AdminMenuLayout, AdminPaperMaps } from '../src/shared/admin';
-import { PAPER_MAPS_SETTING } from '../src/shared/paperArt';
+import type { AdminBalance, AdminMenuLayout } from '../src/shared/admin';
 import { DAILY_DEFAULT } from '../src/shared/daily';
 import { STONE_NAME } from '../src/shared/data/stones';
 
@@ -706,25 +705,6 @@ export async function ownerToolsApi(
       log(db, a, 'snap-delta', 'ลดขนาด snapshot', body.on ? 'เปิด' : 'ปิด (ส่ง snapshot เต็มทุกครั้ง)');
     }
     send(res, 200, world.snapDeltaState());
-    return true;
-  }
-
-  // ---------------------------------------------------------- papercraft map art (Server tab, src/shared/paperArt.ts)
-  if (method === 'GET' && path === '/api/admin/paper-maps') {
-    requireFeature(req, db, 'paperMaps');
-    send(res, 200, { on: db.getSetting(PAPER_MAPS_SETTING) === '1' } satisfies AdminPaperMaps);
-    return true;
-  }
-
-  if (method === 'POST' && path === '/api/admin/paper-maps') {
-    const a = requireFeature(req, db, 'paperMaps');
-    const body = await readJson(req);
-    if (typeof body.on !== 'boolean') throw new HttpError(400, 'ค่าเปิด/ปิดไม่ถูกต้อง');
-    if (body.on !== (db.getSetting(PAPER_MAPS_SETTING) === '1')) {
-      db.setSetting(PAPER_MAPS_SETTING, body.on ? '1' : null);
-      log(db, a, 'paper-maps', 'ภาพแมพกระดาษ', body.on ? 'เปิด (ภาพกระดาษตัดแปะ)' : 'ปิด (ภาพเดิม)');
-    }
-    send(res, 200, { on: body.on } satisfies AdminPaperMaps);
     return true;
   }
 
