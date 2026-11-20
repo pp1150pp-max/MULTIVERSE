@@ -188,7 +188,9 @@ function tabAllowed(t: Tab): boolean {
     case 'reports': return f.includes('reports');
     case 'broadcast': return f.includes('broadcast');
     // The skill system's page uses the same switch as the balance tab (owner 2026-11-19).
-    case 'balance': case 'skills': case 'maps': return f.includes('balance');
+    case 'balance': case 'skills': return f.includes('balance');
+    // The map tab: the editor (mapEdit) and the switch "ใช้แมพจาก DB" (balance).
+    case 'maps': return f.includes('mapEdit') || f.includes('balance');
     case 'daily': return f.includes('daily');
     case 'cashShop': return f.includes('cashShop');
     case 'menuLayout': return f.includes('menuLayout');
@@ -246,7 +248,8 @@ const SEARCH_INDEX: { tab: Tab; title: string; words?: string }[] = [
   { tab: 'balance', title: 'เควสสอนระบบ: รางวัล', words: 'tutorial' },
   { tab: 'skills', title: 'ระบบสกิล: ค่ารวม', words: 'แต้มสกิล แรงก์ คืนแต้ม ปลดล็อก ซูมผัง' },
   { tab: 'skills', title: 'ค่ารายสกิล', words: 'สกิล ดาเมจ คูลดาวน์ mp ระยะ ผังดาว' },
-  { tab: 'maps', title: 'แมพ: ใช้แมพจาก DB', words: 'แมพ json แก้แมพ ตัวแก้แมพ เผยแพร่ ฉุกเฉิน' },
+  { tab: 'maps', title: 'ตัวแก้แมพ', words: 'แมพ แก้แมพ วางบ้าน ลากวาง หมุน ร่าง เผยแพร่ undo snap คลังภาพ' },
+  { tab: 'maps', title: 'แมพ: ใช้แมพจาก DB', words: 'แมพ json ใช้แมพจาก db ฉุกเฉิน' },
   { tab: 'menuLayout', title: 'จัดเมนูเกม', words: 'ปุ่ม ลำดับ ซ่อน ย้าย ไอคอน มุมขวาบน หน้าต่างเมนู ตั้งค่า' },
   { tab: 'cards', title: 'การ์ด', words: 'เรทดรอป' },
   { tab: 'cards', title: 'ตัวเลขของระบบการ์ด' },
@@ -409,7 +412,7 @@ function setTab(t: Tab): void {
   else if (t === 'daily') void renderDaily(view, h, api);
   else if (t === 'cashShop') void renderCashShop(view, h, api);
   else if (t === 'menuLayout') void renderMenuLayout(view, h, api, () => undefined);
-  else if (t === 'maps') void renderMaps(view, h, api, (tuning) => applyBalance(tuning));
+  else if (t === 'maps') void renderMaps(view, h, api, (tuning) => applyBalance(tuning), { balance: can('balance'), mapEdit: can('mapEdit') });
   else if (t === 'cosManage') void renderCosManage(view, h, api, allowedTabs.has('orbs') ? (id) => { setOrbOpenId(id); setTab('orbs'); } : null);
   else if (t === 'roles') void renderRoles();
   else if (t === 'audit') void renderAudit();

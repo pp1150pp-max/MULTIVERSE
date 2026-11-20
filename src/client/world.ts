@@ -5,6 +5,7 @@ import type { PropSpec, Terrain } from '../shared/sim/terrain';
 import type { ZoneTheme } from '../shared/data/zones';
 import { mulberry32, pick, rand, type Rng } from '../shared/rng';
 import { assetSources, fxTex, groundTiles, sheets, type GroundTile } from './assets';
+import { CAM_RIGHT_RAW, ISO_RAW, TOWN2_PROP_RE } from '../shared/isoProjection';
 import { closeBias, IslandOutline, paintSpace, PieceBatch } from './island';
 
 /** World units covered by one repeat of a ground tile: about the same pixel size as the sprites. */
@@ -32,10 +33,10 @@ const SNOW_BOX = 46;
 const SNOW_HEIGHT = 16;
 
 /** Camera sits along this direction from its target: 45° yaw, ~47° pitch. */
-export const ISO_DIR = new THREE.Vector3(1, 1.45, 1).normalize();
+export const ISO_DIR = new THREE.Vector3(...ISO_RAW).normalize();
 
 /** The camera's right and up, for quads drawn facing it. */
-const CAM_RIGHT = new THREE.Vector3(Math.SQRT1_2, 0, -Math.SQRT1_2);
+const CAM_RIGHT = new THREE.Vector3(...CAM_RIGHT_RAW);
 const CAM_UP = new THREE.Vector3().crossVectors(CAM_RIGHT, ISO_DIR.clone().negate()).normalize();
 
 /** Screen pixels per pixel of the space picture, and how many of them it slides per world unit walked. */
@@ -122,7 +123,7 @@ const PLAYER_HALF_WIDTH = 0.35;
 const DECOR_CELL_UNITS = 1.33;
 /** Rotted boards laid over the wet stretches of a marsh trail: a row of separate pieces, seen from above. */
 /** The rebuilt hub town's paper pieces (Terrain.placeTown). */
-const TOWN2_PROP = /^(bld_|town_fountain$|quest_board$|crystal_stall$|lamp_post$|bench_|planter$|banner_pole$|crates$|barrels$|flower_box$|potted_tree$|low_stall_|garden_bed$|hedge_|house_back_|woodpile$|town_statue$|row_|mk_|ml_|mr_|b3_)/;
+const TOWN2_PROP = TOWN2_PROP_RE;
 const PLANK_SHEET = { key: 'marsh_planks', cols: 3, width: 2.9, length: 5 };
 const enum GroundId { Base, WaterEdge, Water }
 

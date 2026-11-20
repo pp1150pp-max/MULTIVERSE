@@ -15,6 +15,7 @@ import type { Db } from './db';
 import { HttpError, readJson, send } from './http';
 import { log, requireFeature, type Admin } from './admin';
 import { applyMaps, checkMap, isMapZone, parseMap, publishedRevs } from './maps-live';
+import { diffMaps, type MapDiff } from '../src/shared/mapDiff';
 import { MapRegistry } from '../src/shared/mapRegistry';
 import { currentBalance } from '../src/shared/balance';
 import type { MapData, MapIssue } from '../src/shared/mapSchema';
@@ -23,38 +24,7 @@ import type { MapData, MapIssue } from '../src/shared/mapSchema';
 const MAP_BODY_MAX = 2 * 1024 * 1024;
 const NOTE_MAX = 200;
 
-export interface MapDiff { added: number; removed: number; changed: number }
-
 const jsonOf = (v: unknown): string => JSON.stringify(v);
-
-/** What changed between two layouts, counting pieces: things with an id by id, the rest by place in their list. */
-export function diffMaps(a: MapData | undefined, b: MapData): MapDiff {
-  const out: MapDiff = { added: 0, removed: 0, changed: 0 };
-  const lists = ['props', 'blockers', 'npcs', 'paths', 'water', 'rest', 'portals', 'spawns', 'colliders'] as const;
-  for (const k of lists) {
-    const x = (a?.[k] ?? []) as { id?: string }[];
-    const y = (Array.isArray(b[k]) ? b[k] : []) as { id?: string }[];
-    if (x.length && y.length && x[0].id !== undefined && y[0].id !== undefined) {
-      const old = new Map(x.map((p) => [p.id, p]));
-      for (const p of y) {
-        const o = old.get(p.id);
-        if (!o) out.added++;
-        else {
-          if (jsonOf(o) !== jsonOf(p)) out.changed++;
-          old.delete(p.id);
-        }
-      }
-      out.removed += old.size;
-    } else {
-      const n = Math.min(x.length, y.length);
-      for (let i = 0; i < n; i++) if (jsonOf(x[i]) !== jsonOf(y[i])) out.changed++;
-      if (y.length > n) out.added += y.length - n;
-      if (x.length > n) out.removed += x.length - n;
-    }
-  }
-  if (a && (jsonOf(a.zone) !== jsonOf(b.zone) || jsonOf(a.walkable) !== jsonOf(b.walkable) || jsonOf(a.lair) !== jsonOf(b.lair))) out.changed++;
-  return out;
-}
 
 const diffText = (d: MapDiff): string => `เพิ่ม ${d.added} · ลบ ${d.removed} · แก้ ${d.changed} ชิ้น`;
 const errorsOf = (issues: MapIssue[]): MapIssue[] => issues.filter((i) => i.severity === 'error');
