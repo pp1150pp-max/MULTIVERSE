@@ -182,7 +182,7 @@ export interface AdminSnapDelta { on: boolean; stats: SnapDeltaStats; clients: {
  * switch: the Permissions tab, the audit log, restarting / stopping the server, deleting accounts or
  * characters, and making someone owner (command line).
  */
-export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'animPreview' | 'animTune' | 'menuLayout' | 'menuLayoutEdit';
+export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'animPreview' | 'animTune' | 'menuLayout' | 'menuLayoutEdit' | 'mapEdit' | 'mapRollback' | 'mapExport';
 
 /**
  * The defaults: which built-in role may use each tool (owner always has all). The owner can change
@@ -267,6 +267,10 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   menuLayout: ['owner', 'gm'],
   // Saving it, server-wide, live for everyone online (owner only, like the other server-wide look tabs).
   menuLayoutEdit: ['owner'],
+  // The map editor (docs/plans/map-editor.md): save drafts and publish; going back to an older revision and exporting a map into the repo are owner-only until the owner hands them out.
+  mapEdit: ['owner', 'gm'],
+  mapRollback: ['owner'],
+  mapExport: ['owner'],
 };
 
 export const ADMIN_FEATURES = Object.keys(FEATURE_ROLES) as AdminFeature[];
@@ -339,6 +343,9 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   cardView: { name: 'ดูค่าการ์ด', desc: 'แท็บ "การ์ด": ดูผลของการ์ดทุกใบ เรทดรอป ราคา และเพดาน', group: 'ปรับเกม' },
   cashShop: { name: 'ดูแคชช็อป', desc: 'แท็บ "แคชช็อป": ดูสินค้า ราคาคริสตัลมิติ แพ็กเกจเติม และประวัติการซื้อ', group: 'ปรับเกม' },
   cashShopEdit: { name: 'แก้แคชช็อป', desc: 'เปิด/ปิดขาย และบันทึกสินค้า ราคา ราคาลด จำกัดต่อบัญชี ช่วงเวลา ป้าย แนะนำ แพ็กเกจ (รวมราคาของแต่งตัว) ต้องมี "ดูแคชช็อป" ด้วย', group: 'ปรับเกม' },
+  mapEdit: { name: 'แก้แมพ', desc: 'ตัวแก้แมพ: ดูรายการแมพ/ร่าง/revision บันทึกร่าง และเผยแพร่แมพ (ห้องใหม่ใช้ทันที ห้องที่มีคนอยู่ใช้ตอนผู้เล่นเข้าแมพครั้งถัดไป) ลง audit ทุกครั้ง', group: 'ปรับเกม' },
+  mapRollback: { name: 'ย้อนแมพกลับ revision เก่า', desc: 'ย้อนแมพไปใช้ revision ก่อนหน้า (ต้องมี "แก้แมพ" ด้วย) เผยแพร่เป็น revision ใหม่ทันที', group: 'ปรับเกม' },
+  mapExport: { name: 'ส่งออกแมพเข้า repo', desc: 'ดึง JSON ของแมพที่เผยแพร่แล้วไปเป็นไฟล์ค่าตั้งต้นใน repo (ต้องมี "แก้แมพ" ด้วย)', group: 'ปรับเกม' },
   cardTune: { name: 'แก้ค่าการ์ดทั้งเซิร์ฟ', desc: 'แก้และบันทึกค่าการ์ดที่ใช้ทั้งเซิร์ฟ (ต้องมี "ดูค่าการ์ด" ด้วย)', group: 'ปรับเกม' },
 };
 

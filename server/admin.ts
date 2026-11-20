@@ -17,6 +17,7 @@ import { tradeAdminApi } from './admin-trade';
 import { reportsAdminApi } from './admin-reports';
 import { rolesAdminApi } from './admin-roles';
 import { itemsAdminApi } from './admin-items';
+import { mapsAdminApi } from './admin-maps';
 import type { Backups } from './backup';
 import { currentBalanceTuning } from '../src/shared/balance';
 import {
@@ -134,6 +135,7 @@ export async function adminApi(
   if (await reportsAdminApi(req, res, path, method, db)) return;
   if (await rolesAdminApi(req, res, path, method, url, db)) return;
   if (await itemsAdminApi(req, res, path, method, db, world)) return;
+  if (await mapsAdminApi(req, res, path, method, db)) return;
 
   if (method === 'GET' && path === '/api/admin/me') {
     const a = requireAdmin(req, db);

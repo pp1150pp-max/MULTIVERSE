@@ -489,6 +489,17 @@ export const ZONES: Record<string, ZoneDef> = Object.fromEntries(
   }),
 );
 
+/**
+ * Rebuilds a floor-1 zone from what MapRegistry holds now (a published layout from the DB, or the bundled file).
+ * Existing Sims keep the ZoneDef they were made with; only Terrains and Sims made afterwards see the new one.
+ */
+export function refreshZone(id: string): void {
+  const base = GENERATED_ZONES[id];
+  if (!base) return;
+  const map = MapRegistry.get(id);
+  ZONES[id] = map ? zoneWithMap(base, map) : base;
+}
+
 /** Each boss's body radius in its room (the Volcano Heart is a rock that never moves). */
 const BOSS_RADIUS: Record<string, number> = { forest_bear: 1, bog_witch: 1, yeti: 1, volcano_heart: 0 };
 const BOSS_ROOM_NAME: Record<string, [string, string]> = {

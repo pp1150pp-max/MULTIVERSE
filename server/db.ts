@@ -89,6 +89,10 @@ export interface MarketInsert {
 }
 /** The account behind a login token. Guests are temporary accounts that can't log in with a password. */
 export interface SessionAccount { id: number; username: string; guest: boolean }
+/** One row of map_layouts. */
+export interface MapLayoutRow { id: number; zoneId: string; rev: number; json: string; status: 'draft' | 'published'; author: string; note: string; updatedAt: number; bytes?: number }
+/** How many published revisions of one map are kept (older ones are deleted when a new one is published). */
+export const MAP_KEEP_REVS = 20;
 
 /** Guests nobody has played for this long are deleted, character and all. */
 export const GUEST_TTL_MS = GUEST_TTL_HOURS * 60 * 60 * 1000;
@@ -179,6 +183,20 @@ export class Db {
         value TEXT NOT NULL,
         updated_at INTEGER NOT NULL
       );
+      -- Map layouts the owner edits in /admin (docs/plans/map-editor.md): at most one 'draft' row per map (saved over and over),
+      -- and a new 'published' row for every publish (rev 1, 2, …; the newest MAP_KEEP_REVS are kept). No published row = the JSON that ships with the game.
+      CREATE TABLE IF NOT EXISTS map_layouts (
+        id INTEGER PRIMARY KEY,
+        zone_id TEXT NOT NULL,
+        rev INTEGER NOT NULL,
+        json TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('draft', 'published')),
+        author TEXT NOT NULL,
+        note TEXT NOT NULL DEFAULT '',
+        updated_at INTEGER NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS map_layouts_draft ON map_layouts(zone_id) WHERE status = 'draft';
+      CREATE UNIQUE INDEX IF NOT EXISTS map_layouts_rev ON map_layouts(zone_id, rev) WHERE status = 'published';
       -- Consignment market (market broker), see server/market.ts: one row per listing, kept as history
       -- after it is collected. status: 'active' | 'sold' | 'expired' | 'cancelled'. A finished listing
       -- whose claimed_at is NULL waits in the seller's claim box (the gold if sold, else the item).
@@ -413,6 +431,67 @@ export class Db {
   setSetting(key: string, value: string | null): void {
     if (value === null) this.db.prepare('DELETE FROM settings WHERE key = ?').run(key);
     else this.db.prepare('INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at').run(key, value, Date.now());
+  }
+
+  // ------------------------------------------------------------ map layouts (server/admin-maps.ts)
+
+  /** A zone's draft: `rev` is the published revision it was started from. */
+  mapDraft(zoneId: string): MapLayoutRow | undefined {
+    return this.mapRow(this.db.prepare("SELECT * FROM map_layouts WHERE zone_id = ? AND status = 'draft'").get(zoneId));
+  }
+
+  /** The newest published layout of a zone, or the one with this revision. */
+  mapPublished(zoneId: string, rev?: number): MapLayoutRow | undefined {
+    return this.mapRow(rev === undefined
+      ? this.db.prepare("SELECT * FROM map_layouts WHERE zone_id = ? AND status = 'published' ORDER BY rev DESC LIMIT 1").get(zoneId)
+      : this.db.prepare("SELECT * FROM map_layouts WHERE zone_id = ? AND status = 'published' AND rev = ?").get(zoneId, rev));
+  }
+
+  /** The newest published layout of every zone that has one. */
+  publishedMaps(): MapLayoutRow[] {
+    const rows = this.db.prepare(`SELECT m.* FROM map_layouts m
+      WHERE m.status = 'published' AND m.rev = (SELECT MAX(rev) FROM map_layouts WHERE zone_id = m.zone_id AND status = 'published')`).all();
+    return rows.map((r) => this.mapRow(r)!);
+  }
+
+  /** The published revisions of a zone, newest first (without their JSON). */
+  mapRevisions(zoneId: string): Omit<MapLayoutRow, 'json'>[] {
+    const rows = this.db.prepare("SELECT id, zone_id, rev, status, author, note, updated_at, length(json) AS bytes FROM map_layouts WHERE zone_id = ? AND status = 'published' ORDER BY rev DESC").all(zoneId) as
+      { id: number; zone_id: string; rev: number; status: 'published'; author: string; note: string; updated_at: number; bytes: number }[];
+    return rows.map((r) => ({ id: r.id, zoneId: r.zone_id, rev: r.rev, status: r.status, author: r.author, note: r.note, updatedAt: r.updated_at, bytes: r.bytes }));
+  }
+
+  /** Saves a zone's draft over the old one. `baseRev` = the published revision it was edited from. */
+  saveMapDraft(zoneId: string, baseRev: number, json: string, author: string, note: string): void {
+    this.db.prepare(`INSERT INTO map_layouts (zone_id, rev, json, status, author, note, updated_at) VALUES (?, ?, ?, 'draft', ?, ?, ?)
+      ON CONFLICT(zone_id) WHERE status = 'draft' DO UPDATE SET rev = excluded.rev, json = excluded.json, author = excluded.author, note = excluded.note, updated_at = excluded.updated_at`)
+      .run(zoneId, baseRev, json, author, note, Date.now());
+  }
+
+  /**
+   * Adds the next published revision of a zone (the JSON must already carry that number, see nextMapRev) and drops the
+   * oldest ones beyond MAP_KEEP_REVS. Returns the new revision.
+   */
+  publishMap(zoneId: string, mapOf: (rev: number) => string, author: string, note: string, bundledRev = 0): number {
+    return this.transaction(() => {
+      const rev = this.nextMapRev(zoneId, bundledRev);
+      this.db.prepare("INSERT INTO map_layouts (zone_id, rev, json, status, author, note, updated_at) VALUES (?, ?, ?, 'published', ?, ?, ?)")
+        .run(zoneId, rev, mapOf(rev), author, note, Date.now());
+      this.db.prepare(`DELETE FROM map_layouts WHERE zone_id = ? AND status = 'published'
+        AND rev NOT IN (SELECT rev FROM map_layouts WHERE zone_id = ? AND status = 'published' ORDER BY rev DESC LIMIT ?)`).run(zoneId, zoneId, MAP_KEEP_REVS);
+      return rev;
+    });
+  }
+
+  /** The revision the next publish of a zone gets: above every published one and above the rev inside the JSON that ships with the game (`atLeast`), so a rev names one layout only. */
+  nextMapRev(zoneId: string, atLeast = 0): number {
+    const r = this.db.prepare("SELECT MAX(rev) AS m FROM map_layouts WHERE zone_id = ? AND status = 'published'").get(zoneId) as { m: number | null };
+    return Math.max(r.m ?? 0, atLeast) + 1;
+  }
+
+  private mapRow(r: unknown): MapLayoutRow | undefined {
+    const x = r as { id: number; zone_id: string; rev: number; json: string; status: 'draft' | 'published'; author: string; note: string; updated_at: number } | undefined;
+    return x && { id: x.id, zoneId: x.zone_id, rev: x.rev, json: x.json, status: x.status, author: x.author, note: x.note, updatedAt: x.updated_at };
   }
 
   /** The countdown texts players see before a restart / shutdown (owner's wording, else the default). */

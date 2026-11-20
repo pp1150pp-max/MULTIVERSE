@@ -73,6 +73,11 @@ export class Channels {
     /** Wall clock in ms (tests pass a fake one). */
     private readonly now: () => number = Date.now,
     private readonly makeSim: (zone: ZoneDef) => Sim = (zone) => new Sim(zone),
+    /**
+     * The zone as it is now (a published map layout changes ZONES while channels run). A channel keeps the ZoneDef it
+     * was opened with; every channel opened afterwards takes this one. Default: the zone as given.
+     */
+    private readonly fresh: (zone: ZoneDef) => ZoneDef = (zone) => zone,
   ) {
     for (const zone of zones) {
       this.byZone.set(zone.id, []);
@@ -153,7 +158,7 @@ export class Channels {
     if (!list || !zone) return undefined;
     if (!hasChannels(zone)) return list[0];
     const lead = opts.leader && this.bySim.get(opts.leader);
-    if (lead && lead.zone === zone && this.count(lead) < CH_PARTY_CAP) return lead;
+    if (lead && lead.zone.id === zone.id && this.count(lead) < CH_PARTY_CAP) return lead;
     const pref = opts.prefer !== undefined ? list.find((c) => c.ch === opts.prefer) : undefined;
     if (pref && this.count(pref) < CH_SOLO_CAP) return pref;
     let best: Channel | undefined;
@@ -172,7 +177,7 @@ export class Channels {
    */
   switchError(alive: boolean, from: Channel | undefined, to: Channel | undefined, cap: number, calmLeft: number): string | null {
     if (!from || !hasChannels(from.zone)) return 'แมพนี้ไม่มีแชนแนล';
-    if (!to || to.zone !== from.zone) return 'ไม่มีแชนแนลนี้ในแมพนี้';
+    if (!to || to.zone.id !== from.zone.id) return 'ไม่มีแชนแนลนี้ในแมพนี้';
     if (to === from) return `คุณอยู่ CH ${to.ch} อยู่แล้ว`;
     if (!alive) return 'ย้ายแชนแนลตอนตายไม่ได้';
     if (calmLeft > 0) return `ยังอยู่ในการต่อสู้ — ย้ายแชนแนลได้อีกใน ${Math.ceil(calmLeft)} วินาที`;
@@ -191,7 +196,15 @@ export class Channels {
     const closed: Channel[] = [];
     for (const [zoneId, list] of this.byZone) {
       for (const c of [...list]) {
-        if (!hasChannels(c.zone) || this.count(c) > 0 || held.has(`${zoneId}|${c.ch}`)) continue;
+        if (this.count(c) > 0 || held.has(`${zoneId}|${c.ch}`)) continue;
+        if (!hasChannels(c.zone)) {
+          // The hub's only channel stays, but an empty one made before a map was published is made again with the new layout.
+          if (this.fresh(c.zone) !== c.zone) {
+            this.close(c);
+            this.open(c.zone, c.ch);
+          }
+          continue;
+        }
         this.close(c);
         closed.push(c);
       }
@@ -245,7 +258,8 @@ export class Channels {
   }
 
   /** Opens channel `ch` of a zone (default: the lowest number not in use). */
-  private open(zone: ZoneDef, ch?: number): Channel {
+  private open(oldZone: ZoneDef, ch?: number): Channel {
+    const zone = this.fresh(oldZone);
     const list = this.byZone.get(zone.id)!;
     let n = ch ?? 1;
     if (ch === undefined) while (list.some((c) => c.ch === n)) n++;

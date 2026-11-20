@@ -43,6 +43,7 @@ import type { MailCall, MailReply } from '../../shared/mail';
 import { WalkTarget } from '../walkTo';
 import type { ReportReply } from '../../shared/reports';
 import type { TutStep } from '../../shared/tutorial';
+import { ensureMap, mapIsCurrent } from '../mapSync';
 
 /** Mirrors never run game logic, so they don't need a simulation behind them. */
 const NO_SIM = null as unknown as Sim;
@@ -127,6 +128,8 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
     let guest = false;
     let auto = false;
     let settled = false;
+    // The layout revision of the map we start in must be here before the Terrain is built (OnlineBackend's constructor).
+    let mapReady: Promise<void> = Promise.resolve();
     const fail = (msg: string) => {
       if (settled) return;
       settled = true;
@@ -136,8 +139,14 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
     };
     const timer = setTimeout(() => fail('server ไม่ตอบกลับ ลองใหม่อีกครั้ง'), 10_000);
     ws.onopen = () => ws.send(JSON.stringify({ t: 'join', token, characterId, delta: 1 } satisfies ClientMsg));
+    // Messages that come while the map layout of our first zone is fetched wait here and go to the backend once it exists.
+    let waiting: ServerMsg[] | null = null;
     ws.onmessage = (e) => {
       const m = JSON.parse(e.data as string) as ServerMsg;
+      if (waiting) {
+        waiting.push(m);
+        return;
+      }
       if (m.t === 'kick') return fail(m.msg);
       if (m.t === 'welcome') {
         you = m.you;
@@ -146,11 +155,17 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
         guest = m.guest === true;
         auto = m.auto === true;
         useWelcome(m);
+        mapReady = ensureMap(m.zone, m.map);
       }
       if (m.t === 'snap' && you >= 0 && !settled) {
         settled = true;
         clearTimeout(timer);
-        resolve(new OnlineBackend(ws, you, zone, m, guest, ch, { token, characterId }, auto));
+        const queue: ServerMsg[] = (waiting = []);
+        void mapReady.then(() => {
+          const backend = new OnlineBackend(ws, you, zone, m, guest, ch, { token, characterId }, auto);
+          for (const x of queue) backend.receive(x);
+          resolve(backend);
+        });
       }
     };
     ws.onerror = () => fail('เชื่อมต่อ server ไม่ได้');
@@ -396,11 +411,31 @@ export class OnlineBackend implements Backend {
     this.lastMsgAt = performance.now();
     ws.onmessage = (e) => {
       this.lastMsgAt = performance.now();
-      this.onMessage(JSON.parse(e.data as string) as ServerMsg);
+      this.receive(JSON.parse(e.data as string) as ServerMsg);
     };
     ws.onclose = (e) => {
       if (this.ws === ws) this.dropped(e.code, false);
     };
+  }
+
+  /** Messages held back while the layout of the zone we are moving to loads (see receive). */
+  private held: ServerMsg[] | null = null;
+
+  /** Hands a server message to onMessage, but a move to a zone whose map revision we do not have waits for it, and everything after it waits too. */
+  receive(m: ServerMsg): void {
+    if (this.held) {
+      this.held.push(m);
+      return;
+    }
+    if (m.t === 'zone' && !mapIsCurrent(m.zone, m.map)) {
+      const held: ServerMsg[] = (this.held = [m]);
+      void ensureMap(m.zone, m.map).then(() => {
+        this.held = null;
+        for (const x of held) this.receive(x);
+      });
+      return;
+    }
+    this.onMessage(m);
   }
 
   /** Closes a socket without hearing from it again (an old one closing later must not count as a drop). */
@@ -451,6 +486,7 @@ export class OnlineBackend implements Backend {
     const ws = new WebSocket(wsUrl());
     this.trying = ws;
     let welcome: WelcomeMsg | null = null;
+    let mapReady: Promise<void> = Promise.resolve();
     const fail = (kick?: string) => {
       if (this.trying !== ws) return;
       clearTimeout(timer);
@@ -464,15 +500,29 @@ export class OnlineBackend implements Backend {
       const back: RejoinInfo = { ...this.downInfo, downMs: Math.round(performance.now() - this.downAt), tries: this.tries };
       ws.send(JSON.stringify({ t: 'join', token: login.token, characterId: login.characterId, delta: 1, back } satisfies ClientMsg));
     };
+    let waiting: ServerMsg[] | null = null;
     ws.onmessage = (e) => {
       const m = JSON.parse(e.data as string) as ServerMsg;
+      if (waiting) {
+        waiting.push(m);
+        return;
+      }
       // Refused (banned, server stopping, signed out…): trying again won't help.
       if (m.t === 'kick') return fail(m.msg);
-      if (m.t === 'welcome') welcome = m;
+      if (m.t === 'welcome') {
+        welcome = m;
+        mapReady = ensureMap(m.zone, m.map);
+      }
       if (m.t === 'snap' && welcome && this.trying === ws) {
         clearTimeout(timer);
-        this.trying = null;
-        this.rejoined(ws, welcome, m);
+        const w = welcome;
+        const queue: ServerMsg[] = (waiting = []);
+        void mapReady.then(() => {
+          if (this.trying !== ws) return;
+          this.trying = null;
+          this.rejoined(ws, w, m);
+          for (const x of queue) this.receive(x);
+        });
       }
     };
     ws.onerror = () => fail();

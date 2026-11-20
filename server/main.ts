@@ -19,6 +19,8 @@ import { newCharacterData } from '../src/shared/sim/Player';
 import { GameWorld } from './world';
 import { bearer, HttpError, readJson, send, str } from './http';
 import { adminApi } from './admin';
+import { mapsPublicApi } from './admin-maps';
+import { applyMaps } from './maps-live';
 import { googleApi } from './google-api';
 import { Backups } from './backup';
 import { HISTORY_DAYS } from '../src/shared/admin';
@@ -56,6 +58,8 @@ const db = new Db(DB_FILE);
 applyCardTuning(db.cardTuning());
 // The saved game balance (admin "ปรับสมดุล" tab) before any character, stash or listing is read.
 applyBalance(db.balance());
+// The published map layouts (admin map editor) replace the bundled JSON before any room is made (unless the switch is off).
+applyMaps(db);
 const backups = new Backups(db, DB_FILE);
 const limiter = new AttemptLimiter();
 /** Brake on making guests: each new guest counts as one "attempt" for its address. */
@@ -115,6 +119,9 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string): Pro
     if (!isLocalControl(req, CONTROL_TOKEN)) throw new HttpError(403, 'Forbidden');
     return send(res, 200, { mode: stopMode });
   }
+
+  // The browser reads these before it loads pictures (src/client/mapSync.ts).
+  if (mapsPublicApi(res, path, method, new URL(req.url ?? '/', 'http://localhost'), db)) return;
 
   if (await googleApi(req, res, path, { db, world, startSession })) return;
 

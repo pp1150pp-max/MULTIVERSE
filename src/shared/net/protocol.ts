@@ -362,7 +362,7 @@ export interface SnapshotMsg {
 export type ServerMsg =
   /** `guest`: playing a guest character (no stash, deleted after a day offline). */
   /** `ch`: the channel of that zone (1 when it has none). */
-  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; guest?: boolean; auto?: boolean; orbLook?: OrbLook; cosTuning?: CosTuning; animTuning?: AnimTuning; cosHidden?: string[]; orbItems?: OrbItem[]; balance?: BalanceTuning; cash?: CashCatalog; cashState?: CashState }
+  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; map?: number; guest?: boolean; auto?: boolean; orbLook?: OrbLook; cosTuning?: CosTuning; animTuning?: AnimTuning; cosHidden?: string[]; orbItems?: OrbItem[]; balance?: BalanceTuning; cash?: CashCatalog; cashState?: CashState }
   /** The cash shop's catalogue changed (the owner saved /admin, or a cosmetic's price / hiding changed). */
   | { t: 'cash'; cat: CashCatalog }
   /** Your account's crystals and purchase counts changed (a purchase by any of its characters). */
@@ -385,7 +385,7 @@ export type ServerMsg =
    * You walked through a portal (or switched channel): you are now `you` in zone `zone`, channel `ch`,
    * standing at x/z. Snapshots from there follow.
    */
-  | { t: 'zone'; zone: string; ch?: number; you: number; x: number; z: number }
+  | { t: 'zone'; zone: string; ch?: number; map?: number; you: number; x: number; z: number }
   /** The channel window's list (answer to `chList`). */
   | { t: 'channels'; view: ChannelsView }
   | SnapshotMsg

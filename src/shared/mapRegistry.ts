@@ -17,7 +17,7 @@ const BUNDLED: Record<string, MapData> = Object.fromEntries(
 
 /** Layouts that replace the bundled ones (empty in PR 3: nothing sets them yet). */
 const override = new Map<string, MapData>();
-/** /admin "ใช้แมพจาก DB" (PR 5). Off = always the bundled JSON, the emergency way out. Does nothing while `override` is empty. */
+/** /admin "ใช้แมพจาก DB" (balance.mapFromDb). Off = always the bundled JSON, the emergency way out. Does nothing while `override` is empty. */
 let useOverrides = true;
 
 export const MapRegistry = {

@@ -176,6 +176,8 @@ export class Terrain {
   readonly summoner: Lair | null;
   /** In a boss room: how far from the boss (the middle) anyone may walk. Null elsewhere. */
   readonly roomEdge: number | null;
+  /** The `rev` of the map file this was built from (0 = the bundled one, or the old generators). The server tells the browser so it builds the same. */
+  readonly mapRev: number;
   private readonly segs: Seg[] = [];
 
   /**
@@ -184,6 +186,7 @@ export class Terrain {
    */
   constructor(readonly zone: ZoneDef, map: MapData | null | undefined = MapRegistry.get(zone.id)) {
     this.half = zone.half;
+    this.mapRev = map ? map.rev : 0;
     this.bound = map ? map.walkable.half : zone.half - 8;
     this.summoner = zone.lair ?? null;
     this.roomEdge = zone.roomOf ? arenaRadius(zone) + ROOM_EDGE : null;
