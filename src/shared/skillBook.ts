@@ -5,7 +5,7 @@
 // (skillTuning.ts) so the /admin page tunes them.
 import { currentBalance, skillMpCost, type Balance } from './balance';
 import {
-  CLASSES, isLearnable, KIND_NAME, SLOT_KIND, WEAR_SLOTS, type LearnKind, type SkillDef, type WearSlot,
+  CLASSES, isLearnable, KIND_NAME, SLOT_KIND, WEAR_SLOTS, type LearnKind, type SkillDef, type SkillParam, type WearSlot,
 } from './data/classes';
 import { extraText, skillExtras, type SkillConfig, type SkillValues } from './skillTuning';
 import { reachRadius, SKILL_REACH, type SkillReach } from './data/skillRanges';
@@ -149,6 +149,7 @@ export function skillValues(sk: SkillDef, b?: Balance): SkillValues {
   return cfgOf(b).skills[sk.id] ?? {
     dmg: sk.dmg, dmgPerRank: 0, mp: sk.mp, mpPerRank: 0, cooldown: sk.cooldown, cdPerRank: 0, statusPerRank: 0, reach: reach ? reachRadius(reach) : 0,
     params: Object.fromEntries(Object.entries(sk.params ?? {}).map(([k, v]) => [k, v.v])),
+    paramsPerRank: {},
   };
 }
 
@@ -192,19 +193,31 @@ export function rankedMp(sk: SkillDef, cls: ClassId, level: number, rank: number
  * the skill's status %/rank. 0 if the skill has no such number.
  */
 export function skillParam(sk: SkillDef, key: string, rank?: number, b?: Balance): number {
-  const v = skillValues(sk, b).params[key] ?? sk.params?.[key]?.v ?? 0;
+  const vals = skillValues(sk, b);
+  const v = vals.params[key] ?? sk.params?.[key]?.v ?? 0;
   if (rank === undefined) return v;
-  if (sk.params?.[key]?.status) return v * statusScale(sk, rank, b);
-  if (sk.params?.[key]?.dmg) return v * dmgGrowth(sk, rank, b);
-  return v;
+  const d = sk.params?.[key];
+  let out = v;
+  if (d?.status) out = v * statusScale(sk, rank, b);
+  else if (d?.dmg) out = v * dmgGrowth(sk, rank, b);
+  // The owner's "+ per rank" (2026-11-20) comes on top of the % growth: base (grown) + perRank × (rank − 1),
+  // kept inside the number's min/max, whole for a count (stars, strikes, bullets).
+  const per = vals.paramsPerRank?.[key] ?? 0;
+  if (!d || per === 0) return out;
+  out = Math.min(d.hi, Math.max(d.lo, out + per * Math.max(0, rank - 1)));
+  return isCountParam(d) ? Math.round(out) : Math.round(out * 1000) / 1000;
 }
+
+/** Units that stay decimal even when the code value is whole (anything else with a whole code value is a count). */
+const DECIMAL_UNITS = new Set(['วิ', '%', 'ม.', 'ม./วิ', '°', 'องศา', '×ATK', '×', 'เท่า', 'G', '']);
+export const isCountParam = (d: SkillParam): boolean => Number.isInteger(d.v) && !DECIMAL_UNITS.has(d.unit);
 
 /**
  * How the skill reaches, as tuned: its range (or radius around the player) from the balance, an explosion's or a
  * landing circle's size from its `blast` / `radius` numbers. The hits, the tooltips, the ground ring and touch
  * aiming all use it, so they always agree.
  */
-export function skillReach(sk: SkillDef, b?: Balance): SkillReach | undefined {
+export function skillReach(sk: SkillDef, b?: Balance, rank?: number): SkillReach | undefined {
   const base = SKILL_REACH[sk.id];
   // Basic attacks are tuned too (damage and reach, owner 2026-11-20); the dash keeps its code reach.
   if (!base || !(isLearnable(sk) || sk.kind === 'basic')) return base;
@@ -213,8 +226,8 @@ export function skillReach(sk: SkillDef, b?: Balance): SkillReach | undefined {
     case 'self': return { kind: 'self', radius: v.reach };
     case 'cone': return { kind: 'cone', range: v.reach };
     case 'dash': return { kind: 'dash', range: v.reach };
-    case 'shot': return base.blast !== undefined ? { kind: 'shot', range: v.reach, blast: skillParam(sk, 'blast', undefined, b) } : { kind: 'shot', range: v.reach };
-    case 'point': return { kind: 'point', range: v.reach, radius: skillParam(sk, 'radius', undefined, b) };
+    case 'shot': return base.blast !== undefined ? { kind: 'shot', range: v.reach, blast: skillParam(sk, 'blast', rank, b) } : { kind: 'shot', range: v.reach };
+    case 'point': return { kind: 'point', range: v.reach, radius: skillParam(sk, 'radius', rank, b) };
   }
 }
 

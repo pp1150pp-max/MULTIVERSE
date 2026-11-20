@@ -167,7 +167,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
         params: { charge: num(0.8, 'เวลาชาร์จ (ยืนนิ่ง)', 'วิ', 0, 3) } },
       { id: 'meteor', kind: 'ult', line: 0, tier: 0, anim: 'r', name: 'Meteor', nameTh: 'อุกกาบาต', desc: 'เรียกอุกกาบาตลงตำแหน่งเมาส์ และสตันสั้นๆ', dmg: 4.5, mp: 35, cooldown: 14,
         params: { radius: metres(3.5, 'รัศมีวงตก'), stun: sec(0.8, 'สตัน') } },
-      { id: 'mg_starfall', kind: 'ult', line: 0, tier: 1, anim: 'r', name: 'Starfall', nameTh: 'ดาวตก', desc: 'ดาวเวทตกสุ่มทั่ววงใหญ่ทีละดวง (ดาเมจต่อดวง)', dmg: 2, mp: 55, cooldown: 25,
+      { id: 'mg_starfall', kind: 'ult', line: 0, tier: 1, anim: 'r', name: 'Starfall', nameTh: 'ดาวตก', desc: 'ดาวเวทตกใส่มอนในวงใหญ่ทีละดวง วนทีละตัวจากตัวใกล้กลางวงก่อน (ไม่มีมอนในวง = ตกสุ่ม) (ดาเมจต่อดวง)', dmg: 2, mp: 55, cooldown: 25,
         params: { radius: metres(6, 'รัศมีวงใหญ่'), stars: num(8, 'จำนวนดวง', 'ดวง', 1, 30), starRadius: metres(1.8, 'วงดวงละ'), gap: num(0.25, 'ห่างดวงละ', 'วิ', 0.05, 2) } },
       // ---- Line 2: damage over time
       { id: 'mg_flameground', kind: 'normal', line: 1, tier: 0, anim: 'e', name: 'Flame Ground', nameTh: 'พื้นเพลิง', desc: 'วางพื้นไฟที่เมาส์ ศัตรูที่ยืนในวงโดนทุกวิ (ดาเมจต่อวิ)', dmg: 0.6, mp: 12, cooldown: 5,

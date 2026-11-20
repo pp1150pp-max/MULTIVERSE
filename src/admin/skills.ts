@@ -6,9 +6,9 @@ import { foldable } from './ui';
 import { checkBalance, codeBalance, balanceChanges, mergeBalance, type Balance, type BalanceTuning } from '../shared/balance';
 import {
   BASIC_RATE_RANGE, BASIC_SKILLS, BASIC_VALUE_KEYS, EXTRA_DEF, EXTRA_KINDS, EXTRA_TARGET_NAME, EXTRA_TARGETS, MAX_EXTRAS, newExtra, SKILL_NUM_NAME, SKILL_RANGE,
-  SKILL_VALUE_KEYS, SKILL_VALUE_NAME, SKILL_VALUE_RANGE, UNLOCK_TIERS, type ExtraEffect, type ExtraKind, type ExtraTarget, type SkillValues,
+  SKILL_VALUE_KEYS, SKILL_VALUE_NAME, SKILL_VALUE_RANGE, perRankLimit, UNLOCK_TIERS, type ExtraEffect, type ExtraKind, type ExtraTarget, type SkillValues,
 } from '../shared/skillTuning';
-import { rankedCooldown, rankedDmg, rankedMp } from '../shared/skillBook';
+import { isCountParam, rankedCooldown, rankedDmg, rankedMp, skillParam } from '../shared/skillBook';
 import { SKILL_REACH } from '../shared/data/skillRanges';
 import { CLASSES, CLASS_IDS, isLearnable, KIND_NAME, LEARN_KINDS, type SkillDef } from '../shared/data/classes';
 import { MAX_LEVEL } from '../shared/formulas';
@@ -34,7 +34,7 @@ const basicOf = (c: ClassId): SkillDef => BASIC_SKILLS.find((b) => b.cls === c)!
 /** Learnable skills and the basic attack: everything with numbers on this tab. */
 const tunable = (c: ClassId): SkillDef[] => [basicOf(c), ...learnable(c)];
 const sameValues = (a: SkillValues, b: SkillValues): boolean =>
-  SKILL_VALUE_KEYS.every((k) => a[k] === b[k]) && Object.keys(b.params).every((k) => a.params[k] === b.params[k]);
+  SKILL_VALUE_KEYS.every((k) => a[k] === b[k]) && Object.keys(b.params).every((k) => a.params[k] === b.params[k] && (a.paramsPerRank[k] ?? 0) === (b.paramsPerRank[k] ?? 0));
 /** A skill's numbers, its extra effects and (a basic attack) its speed are the same in both balances. */
 const sameSkill = (a: Balance, b: Balance, id: string): boolean => {
   const basic = BASIC_SKILLS.find((x) => x.sk.id === id);
@@ -309,16 +309,35 @@ export async function renderSkills(view: HTMLElement, h: H, api: Api, onSaved: (
         h('div', {}, `คูลดาวน์ ${r2(rankedCooldown(sk, 1, draft))} → ${r2(rankedCooldown(sk, top, draft))} วิ`),
       );
     };
-    const refresh = (): void => { showOut(); markStars(); updateSummary(); };
+    /** Previews of each own number at rank 1 / 5 / 10 (they follow the boxes). */
+    const previews: (() => void)[] = [];
+    const refresh = (): void => { showOut(); previews.forEach((f) => f()); markStars(); updateSummary(); };
     const line = sk.line !== undefined ? c.lines[sk.line] : undefined;
     const fields = SKILL_VALUE_KEYS.map((k) => h('label', { class: 'skm-field' }, h('span', {}, SKILL_VALUE_NAME[k]),
       // Buffs and passives reach nothing: no reach box.
       k === 'reach' && !SKILL_REACH[sk.id] ? h('span', { class: 'muted' }, '—')
         : numBox(`s.${sk.id}.${k}`, `${sk.nameTh} ${SKILL_VALUE_NAME[k]}`, () => v[k], (n) => { v[k] = n; }, cv[k], SKILL_VALUE_RANGE[k][0], SKILL_VALUE_RANGE[k][1], k === 'dmg' || k === 'reach' ? 0.05 : k === 'cooldown' ? 0.5 : 1, refresh)));
     // The skill's own numbers (stun, slow, shots...): * grow with เวลาสถานะ/ผลพาสซีฟ %/แรงก์, † (extra damage) with ดาเมจ %/แรงก์.
-    const params = Object.entries(sk.params ?? {}).map(([pk, d]) => h('label', { class: 'skm-field' },
-      h('span', {}, `${d.nameTh}${d.status ? ' *' : d.dmg ? ' †' : ''} (${d.unit})`),
-      numBox(`s.${sk.id}.p.${pk}`, `${sk.nameTh} ${d.nameTh}`, () => v.params[pk], (n) => { v.params[pk] = n; }, cv.params[pk], d.lo, d.hi, COUNT_UNITS.has(d.unit) ? 1 : 0.05, refresh)));
+    // "+ ต่อแรงก์" (owner 2026-11-20): added to the number for each rank above 1, in its own unit, on top of the * / † growth.
+    const params = Object.entries(sk.params ?? {}).map(([pk, d]) => {
+      const lim = perRankLimit(d);
+      const prev = h('span', { class: 'muted' });
+      const upd = (): void => {
+        const at = (r: number) => r2(skillParam(sk, pk, r, draft));
+        prev.textContent = `แรงก์ 1 = ${at(1)} · 5 = ${at(5)} · ${top} = ${at(top)} ${d.unit}`;
+      };
+      previews.push(upd);
+      upd();
+      const step = COUNT_UNITS.has(d.unit) || isCountParam(d) ? 1 : 0.05;
+      return h('div', { class: 'skm-field', style: 'flex-direction:column;align-items:stretch;gap:2px' },
+        h('label', { class: 'skm-field' },
+          h('span', {}, `${d.nameTh}${d.status ? ' *' : d.dmg ? ' †' : ''} (${d.unit})`),
+          numBox(`s.${sk.id}.p.${pk}`, `${sk.nameTh} ${d.nameTh}`, () => v.params[pk], (n) => { v.params[pk] = n; }, cv.params[pk], d.lo, d.hi, step, refresh)),
+        h('label', { class: 'skm-field' },
+          h('span', {}, '+ ต่อแรงก์'),
+          numBox(`s.${sk.id}.pr.${pk}`, `${sk.nameTh} ${d.nameTh} + ต่อแรงก์`, () => v.paramsPerRank[pk] ?? 0, (n) => { v.paramsPerRank[pk] = n; }, 0, -lim, lim, step === 1 ? 1 : 0.01, refresh)),
+        prev);
+    });
     const backBtn = h('button', { type: 'button', class: 'small', onclick: () => resetSkill(sk.id) }, '↺ สกิลนี้กลับเป็นค่าในโค้ด');
     backBtn.disabled = !differsFromCode(sk.id);
     panel.replaceChildren(...[
@@ -326,7 +345,7 @@ export async function renderSkills(view: HTMLElement, h: H, api: Api, onSaved: (
       h('div', { class: 'muted' }, `${sk.name} · ${KIND_NAME[sk.kind as 'normal']}`, line ? h('span', { style: `color:${line.color}` }, ` · ${line.nameTh}`) : null),
       h('div', { class: 'skm-desc' }, sk.desc),
       h('div', { class: 'skm-fields' }, ...fields),
-      params.length ? h('div', { class: 'skm-sub' }, 'ค่าพิเศษ (* = โตตามเวลาสถานะ/ผลพาสซีฟ · † = โตตามดาเมจ)') : null,
+      params.length ? h('div', { class: 'skm-sub' }, 'ค่าพิเศษ (* = โตตามเวลาสถานะ/ผลพาสซีฟ % · † = โตตามดาเมจ % · "+ ต่อแรงก์" บวกเพิ่มต่อแรงก์ในหน่วยของค่านั้น ซ้อนกับ * † ได้ · ค่าจำนวนนับปัดเป็นจำนวนเต็ม · ไม่เกินช่วงต่ำสุด/สูงสุดของค่านั้น)') : null,
       params.length ? h('div', { class: 'skm-fields' }, ...params) : null,
       h('div', { class: 'skm-sub' }, 'ได้จริง (แรงก์ 1 → สูงสุด)'),
       out,

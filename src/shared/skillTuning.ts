@@ -26,9 +26,11 @@ export interface SkillValues {
   reach: number;
   /** The skill's own numbers (SkillDef.params): stun seconds, slow %, shots... */
   params: Record<string, number>;
+  /** Added to each own number per rank above 1, in the number's own unit (owner 2026-11-20; code 0). See skillParam. */
+  paramsPerRank: Record<string, number>;
 }
 /** The plain numbers of SkillValues (params are checked against each skill's own list). */
-export type SkillNum = Exclude<keyof SkillValues, 'params'>;
+export type SkillNum = Exclude<keyof SkillValues, 'params' | 'paramsPerRank'>;
 export const SKILL_VALUE_KEYS: readonly SkillNum[] = ['dmg', 'dmgPerRank', 'mp', 'mpPerRank', 'cooldown', 'cdPerRank', 'statusPerRank', 'reach'];
 export const SKILL_VALUE_NAME: Record<SkillNum, string> = {
   dmg: 'ดาเมจ ×ATK', dmgPerRank: 'ดาเมจ %/แรงก์', mp: 'MP', mpPerRank: 'MP %/แรงก์', cooldown: 'คูลดาวน์ วิ', cdPerRank: 'คูลดาวน์ %/แรงก์', statusPerRank: 'เวลาสถานะ/ผลพาสซีฟ %/แรงก์', reach: 'ระยะ/รัศมี ม.',
@@ -166,7 +168,7 @@ export interface SkillTuning {
   effects?: Record<string, ExtraEffect[]>;
 }
 /** One skill's saved differences. */
-export type SkillValuesTuning = Partial<Record<SkillNum, number>> & { params?: Record<string, number> };
+export type SkillValuesTuning = Partial<Record<SkillNum, number>> & { params?: Record<string, number>; paramsPerRank?: Record<string, number> };
 
 /** How many stacks the Land Mine can be set up to hold. */
 export const MINE_RANK_SLOTS = 5;
@@ -211,12 +213,13 @@ export function codeSkills(): SkillConfig {
       dmg: sk.dmg, dmgPerRank: DMG_PER_RANK, mp: sk.mp, mpPerRank: MP_PER_RANK, cooldown: sk.cooldown, cdPerRank: CD_PER_RANK, statusPerRank: STATUS_PER_RANK,
       reach: reach ? reachRadius(reach) : 0,
       params: Object.fromEntries(Object.entries(sk.params ?? {}).map(([k, v]) => [k, v.v])),
+      paramsPerRank: Object.fromEntries(Object.keys(sk.params ?? {}).map((k) => [k, 0])),
     };
   }
   // Basic attacks: damage and reach only, no MP, cooldown or growth per rank.
   for (const { sk } of BASIC_SKILLS) {
     const reach = SKILL_REACH[sk.id];
-    skills[sk.id] = { dmg: sk.dmg, dmgPerRank: 0, mp: 0, mpPerRank: 0, cooldown: 0, cdPerRank: 0, statusPerRank: 0, reach: reach ? reachRadius(reach) : 0, params: {} };
+    skills[sk.id] = { dmg: sk.dmg, dmgPerRank: 0, mp: 0, mpPerRank: 0, cooldown: 0, cdPerRank: 0, statusPerRank: 0, reach: reach ? reachRadius(reach) : 0, params: {}, paramsPerRank: {} };
   }
   return {
     pointsPerLevel: 1,
@@ -267,9 +270,10 @@ export function mergeSkills(t: SkillTuning | undefined): SkillConfig {
   for (const [id, v] of Object.entries(t.skills ?? {})) {
     const one = c.skills[id];
     if (!one) continue;
-    const { params, ...nums } = v;
+    const { params, paramsPerRank, ...nums } = v;
     Object.assign(one, nums);
     Object.assign(one.params, params);
+    Object.assign(one.paramsPerRank, paramsPerRank);
   }
   for (const id of CLASS_IDS) if (t.basicRate?.[id] !== undefined) c.basicRate[id] = t.basicRate[id]!;
   // A copy: the /admin page edits its draft in place.
@@ -290,6 +294,10 @@ const skillName = (id: string): string => {
   if (b) return `${b.sk.nameTh} (ตีธรรมดา${CLASSES[b.cls].nameTh})`;
   return LEARNABLE_SKILLS.find((x) => x.sk.id === id)?.sk.nameTh ?? id;
 };
+/** The most a param can change per rank in /admin: its span / 9 (so rank 10 can cross the whole range). */
+export function perRankLimit(d: { lo: number; hi: number }): number {
+  return round3((d.hi - d.lo) / 9);
+}
 const skillDef = (id: string) => LEARNABLE_SKILLS.find((x) => x.sk.id === id)?.sk ?? BASIC_SKILLS.find((x) => x.sk.id === id)?.sk;
 
 /** Checks one skill's extra effect list: the clean list, or a Thai error (strict) / null (dropped). */
@@ -399,7 +407,7 @@ export function checkSkillTuning(x: unknown, strict: boolean): { tuning: SkillTu
           continue;
         }
         if (strict) {
-          const extra = Object.keys(g).find((k) => k !== 'params' && !(SKILL_VALUE_KEYS as readonly string[]).includes(k));
+          const extra = Object.keys(g).find((k) => k !== 'params' && k !== 'paramsPerRank' && !(SKILL_VALUE_KEYS as readonly string[]).includes(k));
           if (extra) return { error: `สกิล ${skillName(id)}: ไม่รู้จัก "${extra.slice(0, 20)}"` };
         }
         const one: SkillValuesTuning = {};
@@ -442,6 +450,29 @@ export function checkSkillTuning(x: unknown, strict: boolean): { tuning: SkillTu
               if (n !== code.params[pk]) ps[pk] = n;
             }
             if (Object.keys(ps).length) one.params = ps;
+          }
+        }
+        if (g.paramsPerRank !== undefined) {
+          const defs = skillDef(id)?.params ?? {};
+          if (!isObj(g.paramsPerRank)) {
+            if (strict) return { error: `สกิล ${skillName(id)}: ค่าเพิ่มต่อแรงก์ไม่ถูกต้อง` };
+          } else {
+            const ps: Record<string, number> = {};
+            for (const [pk, pv] of Object.entries(g.paramsPerRank)) {
+              const d = defs[pk];
+              if (!d) {
+                if (strict) return { error: `สกิล ${skillName(id)}: ไม่รู้จัก "${pk.slice(0, 20)}"` };
+                continue;
+              }
+              const lim = perRankLimit(d);
+              if (typeof pv !== 'number' || !Number.isFinite(pv) || pv < -lim || pv > lim) {
+                if (strict) return { error: `สกิล ${skillName(id)} ${d.nameTh} + ต่อแรงก์ ต้องอยู่ระหว่าง ${-lim} ถึง ${lim} ${d.unit}` };
+                continue;
+              }
+              const n = round3(pv);
+              if (n !== 0) ps[pk] = n;
+            }
+            if (Object.keys(ps).length) one.paramsPerRank = ps;
           }
         }
         if (Object.keys(one).length) s[id] = one;
@@ -509,6 +540,9 @@ export function skillChanges(a: SkillConfig, b: SkillConfig): string[] {
       const x = a.skills[id].params[pk];
       const y = b.skills[id]?.params[pk];
       if (x !== y) out.push(`สกิล ${skillName(id)} ${d.nameTh} ${x} → ${y} ${d.unit}`);
+      const px = a.skills[id].paramsPerRank[pk] ?? 0;
+      const py = b.skills[id]?.paramsPerRank[pk] ?? 0;
+      if (px !== py) out.push(`สกิล ${skillName(id)} ${d.nameTh} + ต่อแรงก์ ${px} → ${py} ${d.unit}`);
     }
   }
   for (const c of CLASS_IDS) if (a.basicRate[c] !== b.basicRate[c]) out.push(`ความเร็วตีธรรมดา${CLASSES[c].nameTh} ${a.basicRate[c]} → ${b.basicRate[c]} ครั้ง/วิ`);
