@@ -45,7 +45,7 @@ interface SheetSpec {
 const BASE = 'assets/sprites/';
 
 /**
- * Papercraft map art (src/shared/paperArt.ts, cut by tools/cut_papercraft.cjs): the props/ and ground/ files that have
+ * Papercraft map art (the game page's only style, usePaperArt; cut by tools/cut_papercraft.cjs): the props/ and ground/ files that have
  * a paper version under sprites/paper/, same name and size. Each map adds its own as it is made.
  */
 const PAPER_PROPS = new Set([
@@ -78,14 +78,13 @@ const PAPER_GROUND = new Set(['grass', 'dirt', 'pave', 'room_forest', 'marsh', '
 /** Classes with a paper animation set in sprites/paper/player/<class>/ (tools/cut_paper_char.cjs). */
 const PAPER_CHARS = new Set(['sword', 'mage', 'gunslinger']);
 let paperMaps = false;
-let paperAnswer: Promise<boolean> = Promise.resolve(false);
 
 /**
- * The server's art switch (true = the paper pictures wherever one exists), given as the pending answer so the game's
- * load waits for it, however early it starts. Pages that never call this (the /admin previews) keep the old art.
+ * The game's art is papercraft (owner 2026-11-20: the only style, no switch): the paper pictures wherever one exists.
+ * Called by the game page before anything loads. Pages that never call it (the /admin previews) keep the old art.
  */
-export function usePaperMaps(answer: Promise<boolean>): void {
-  paperAnswer = answer;
+export function usePaperArt(): void {
+  paperMaps = true;
 }
 
 const sheet = (path: string, placeholder: () => HTMLCanvasElement): SheetSpec =>
@@ -613,9 +612,8 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 
 async function loadPortrait(key: string): Promise<void> {
   const base = ANIM_SET_DIRS[key];
-  // With the art switch on, the menu's class pictures are the paper ones too (owner 2026-11-18). Waits for the server's
-  // answer; the cards fill in when it comes.
-  const paper = base && PAPER_CHARS.has(key) && (await paperAnswer);
+  // The menu's class pictures are the paper ones too (owner 2026-11-18).
+  const paper = base && PAPER_CHARS.has(key) && paperMaps;
   for (const dir of paper ? [`paper/${base}`, base] : base ? [base] : []) {
     try {
       const res = await fetch(`${BASE}${dir}/sprite.json`);
@@ -659,7 +657,6 @@ export function portraitSource(key: string): PortraitSource | undefined {
 }
 
 async function loadAssets(): Promise<void> {
-  paperMaps = await paperAnswer;
   // Paper monsters (tools/cut_paper_monsters.cjs): which ones exist, and how much taller each picture is drawn.
   const paperMonsters: Record<string, { scale: number }> = paperMaps
     ? await fetch(`${BASE}paper/monsters/meta.json`).then((r) => (r.ok ? r.json() : {})).catch(() => ({}))
