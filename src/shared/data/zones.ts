@@ -500,6 +500,12 @@ export function refreshZone(id: string): void {
   ZONES[id] = map ? zoneWithMap(base, map) : base;
 }
 
+/** The zone as it would be with this layout, for a private preview room (a draft). Undefined for a zone without a generated base. */
+export function zoneWithLayout(id: string, map: MapData): ZoneDef | undefined {
+  const base = GENERATED_ZONES[id];
+  return base ? zoneWithMap(base, map) : undefined;
+}
+
 /** Each boss's body radius in its room (the Volcano Heart is a rock that never moves). */
 const BOSS_RADIUS: Record<string, number> = { forest_bear: 1, bog_witch: 1, yeti: 1, volcano_heart: 0 };
 const BOSS_ROOM_NAME: Record<string, [string, string]> = {

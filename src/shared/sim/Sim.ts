@@ -40,6 +40,7 @@ import { TUT_ACCEPT_GOLD, TUT_ACCEPT_STONES, TUT_NPC, TUT_STEPS, TUT_STEP_NAME, 
 import { putAll, type MailAttach } from '../mail';
 import { RARITY_COLOR } from '../types';
 import { passiveOnCrit, passiveDealMult, passiveTakenMult } from '../passives';
+import type { MapData } from '../mapSchema';
 import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type SfxName, type SimEvent } from './types';
 
 /** Gear of this rarity that "sell all" may take: never potions or enhanced items. */
@@ -158,10 +159,10 @@ export class Sim {
   bossAt: number | null = null;
 
   /** `bossDelay`: seconds before the boss appears (a boss room's countdown, owner 2026-11-12). */
-  constructor(readonly zone: ZoneDef, opts: { keys?: number; bossDelay?: number } = {}) {
+  constructor(readonly zone: ZoneDef, opts: { keys?: number; bossDelay?: number; map?: MapData } = {}) {
     this.keys = Math.max(1, Math.floor(opts.keys ?? 1));
     this.boost = this.keys > 1 ? { ...(zone.monsterBoost ?? NO_BOOST), keys: this.keys } : zone.monsterBoost;
-    this.terrain = new Terrain(zone);
+    this.terrain = opts.map ? new Terrain(zone, opts.map) : new Terrain(zone);
     zone.spawns.forEach((area, index) => this.spawners.push({ area, alive: 0, queue: [], boss: false, index }));
     if (zone.boss) this.spawners.push({ area: zone.boss, alive: 0, queue: [], boss: true, index: -1 });
     const delay = zone.boss ? opts.bossDelay ?? 0 : 0;

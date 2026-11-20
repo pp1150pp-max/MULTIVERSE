@@ -17,6 +17,7 @@ import { log, requireFeature, type Admin } from './admin';
 import { applyMaps, checkMap, isMapZone, parseMap, publishedRevs } from './maps-live';
 import { diffMaps, type MapDiff } from '../src/shared/mapDiff';
 import { MapRegistry } from '../src/shared/mapRegistry';
+import { bakedText } from '../src/shared/mapText';
 import { currentBalance } from '../src/shared/balance';
 import type { MapData, MapIssue } from '../src/shared/mapSchema';
 
@@ -156,7 +157,9 @@ export async function mapsAdminApi(req: IncomingMessage, res: ServerResponse, pa
     zoneParam(id);
     const row = db.mapPublished(id);
     if (!row) throw new HttpError(404, 'แมพนี้ยังไม่เคยเผยแพร่ (ใช้ไฟล์ใน repo อยู่แล้ว)');
-    send(res, 200, { rev: row.rev, file: `src/shared/data/maps/${id}.json`, json: row.json });
+    const map = parseMap(row.json);
+    // `text` is the file exactly as the bake tool writes it (one line per list item), ready to save at `file`; `json` is the stored text as before.
+    send(res, 200, { rev: row.rev, file: `src/shared/data/maps/${id}.json`, json: row.json, ...(map ? { text: bakedText(map) } : {}) });
     return true;
   }
 

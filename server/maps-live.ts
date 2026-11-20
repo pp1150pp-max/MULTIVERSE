@@ -50,6 +50,20 @@ export function applyMaps(db: Db): void {
   for (const id of MapRegistry.ids()) refreshZone(id);
 }
 
+/**
+ * The layout a map-editor preview room is built from (docs/plans/map-editor.md 2.3): the saved draft, else the newest published
+ * one, else the bundled one, the same order as GET /api/admin/maps/:id/draft. Undefined when the zone has none or the layout
+ * fails the check (a broken draft is never run).
+ */
+export function previewLayout(db: Db, id: string): MapData | undefined {
+  if (!isMapZone(id)) return undefined;
+  const draft = db.mapDraft(id);
+  const pub = db.mapPublished(id);
+  const map = (draft && parseMap(draft.json)) ?? (pub && parseMap(pub.json)) ?? MapRegistry.bundled(id);
+  if (!map || map.id !== id || checkMap(map).some((i) => i.severity === 'error')) return undefined;
+  return map;
+}
+
 /** The revisions of every zone that the browsers may fetch: {zoneId: rev}. Empty when the switch is off (they use their bundled JSON). */
 export function publishedRevs(db: Db): Record<string, number> {
   if (!currentBalance().mapFromDb) return {};
