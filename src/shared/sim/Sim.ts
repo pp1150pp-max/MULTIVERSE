@@ -210,7 +210,7 @@ export class Sim {
 
   removePlayer(p: Player): void {
     this.players = this.players.filter((x) => x !== p);
-    for (const m of this.monsters) if (m.target === p) m.calm();
+    for (const m of this.monsters) if (m.target === p) m.dropTarget();
     dropHexSeeds(this, p);
   }
 
@@ -878,7 +878,7 @@ export class Sim {
     }
     ({ x: p.x, z: p.z } = this.spawnPoint());
     p.moveTarget = null;
-    for (const m of this.monsters) if (m.target === p) m.calm();
+    for (const m of this.monsters) if (m.target === p) m.dropTarget();
     this.events.push({ t: 'warped', id: p.id });
   }
 
@@ -893,7 +893,7 @@ export class Sim {
     p.kbx = p.kbz = 0;
     ({ x: p.x, z: p.z } = this.spawnPoint());
     p.moveTarget = null;
-    for (const m of this.monsters) if (m.target === p) m.calm();
+    for (const m of this.monsters) if (m.target === p) m.dropTarget();
     this.events.push({ t: 'revived', id: p.id });
     // In a boss room, getting up means coming out by the summoner of its map (owner 2026-11-12).
     const lair = lairExitSpot(this.zone);
@@ -1863,7 +1863,7 @@ export class Sim {
   private keepOutOfSafe(safe: SafeArea): void {
     for (const m of this.monsters) {
       if (!m.alive) continue;
-      if (m.target && this.inSafe(m.target)) m.calm();
+      if (m.target && this.inSafe(m.target)) m.dropTarget();
       const dx = m.x - safe.x;
       const dz = m.z - safe.z;
       const min = safe.half + m.radius;
