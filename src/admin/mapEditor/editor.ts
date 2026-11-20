@@ -34,6 +34,8 @@ export interface Tool {
   /** Return true when the key was used. */
   key?(ed: Editor, e: KeyboardEvent): boolean;
   drawOverlay?(ed: Editor, g: CanvasRenderingContext2D): void;
+  /** The properties box while this tool is picked (a new tool shows its own fields here: a door's target, a spawn's monster). Return null for the default prop box. */
+  inspector?(ed: Editor): HTMLElement | null;
   cursor?(ed: Editor, e: EdPointer): string | undefined;
 }
 export interface Layer {

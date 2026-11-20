@@ -3,7 +3,7 @@
 import { imgUrl } from '../../client/img';
 import propCatalog from '../../shared/data/propCatalog.json';
 
-export interface PropEntry { key: string; category: string; paper: boolean; size: [number, number] | null; h: number; solid: { r: number } | null }
+export interface PropEntry { key: string; category: string; inSheetSpecs: boolean; paper: boolean; size: [number, number] | null; h: number; solid: { r: number } | null }
 export const CATALOG = propCatalog as unknown as { faceSets: { base: string; front: string | null; back: string | null }[]; props: PropEntry[] };
 const BY_KEY = new Map(CATALOG.props.map((p) => [p.key, p]));
 export const catalogEntry = (key: string): PropEntry | undefined => BY_KEY.get(key);

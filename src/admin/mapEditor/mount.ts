@@ -58,6 +58,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api): () => void {
   const undoBtn = h('button', { title: 'ย้อนกลับ (Ctrl+Z)', onclick: () => ed?.undo() }, '↶ ย้อน');
   const redoBtn = h('button', { title: 'ทำซ้ำ (Ctrl+Y)', onclick: () => ed?.redo() }, '↷ ทำซ้ำ');
   const publishBtn = h('button', { class: 'primary', onclick: () => void publish() }, '🚀 เผยแพร่');
+  const latestBtn = h('button', { title: 'ทิ้งร่างที่บันทึกไว้ แล้วโหลดฉบับที่เผยแพร่ล่าสุดมาแก้ต่อ', onclick: () => void loadLatest() }, '↩ โหลดที่เผยแพร่ล่าสุด');
   const fitBtn = h('button', { title: 'ดูทั้งแมพ', onclick: () => ed?.fit() }, '⛶ ทั้งแมพ');
   const diffText = h('span', { class: 'muted me-diff' });
   const issueBox = h('div', { class: 'me-issues' });
@@ -69,11 +70,11 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api): () => void {
   const palette = h('div', { class: 'me-palette' });
   const search = h('input', { type: 'search', placeholder: 'ค้นหาภาพ…', oninput: () => renderPalette() });
   const catSel = h('select', { onchange: () => renderPalette() }, h('option', { value: '' }, 'ทุกหมวด'),
-    ...[...new Set(CATALOG.props.filter((p) => p.paper).map((p) => p.category))].map((c) => h('option', { value: c }, c)));
+    ...[...new Set(CATALOG.props.filter((p) => p.paper && p.inSheetSpecs).map((p) => p.category))].map((c) => h('option', { value: c }, c)));
   const paletteCount = h('span', { class: 'muted' });
 
   const root = h('div', { class: 'me' },
-    h('div', { class: 'me-top' }, mapSel, undoBtn, redoBtn, fitBtn, status, diffText, publishBtn),
+    h('div', { class: 'me-top' }, mapSel, undoBtn, redoBtn, fitBtn, latestBtn, status, diffText, publishBtn),
     h('div', { class: 'me-body' },
       h('div', { class: 'me-left' }, h('h4', {}, 'เครื่องมือ'), toolBox, toolHint, h('h4', {}, 'ตัวช่วยวาง'), optBox, h('h4', {}, 'เลเยอร์'), layerBox, h('h4', {}, 'ข้อผิดพลาดจากการตรวจ'), issueBox),
       h('div', { class: 'me-center' }, canvas),
@@ -165,6 +166,26 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api): () => void {
       setStatus(`เผยแพร่ไม่สำเร็จ: ${errText(e)}`, 'bad');
     } finally {
       refreshTop();
+    }
+  }
+
+  /** Drops the saved draft and loads the newest published layout (or the bundled file when none was published yet). */
+  async function loadLatest(): Promise<void> {
+    if (!ed) return;
+    const row = rows.find((r) => r.id === current);
+    const from = row?.publishedRev != null ? `rev ${row.publishedRev} ที่เผยแพร่ล่าสุด` : 'ไฟล์ที่มากับเกม (ยังไม่เคยเผยแพร่)';
+    if (!confirm(`ทิ้งการแก้ที่ยังไม่เผยแพร่ของแมพนี้ แล้วโหลด ${from} มาแทน?\n\nร่างที่บันทึกไว้จะถูกเขียนทับ`)) return;
+    try {
+      let map: MapData | undefined;
+      if (row?.publishedRev != null) map = (await api<{ map?: MapData }>('GET', `/admin/maps/${current}/revisions/${row.publishedRev}`)).map;
+      else map = structuredClone((await import('../../shared/mapRegistry')).MapRegistry.bundled(current));
+      if (!map) throw new Error('ไม่พบข้อมูล');
+      ed.setMap(map);
+      diff = { added: 0, removed: 0, changed: 0 };
+      scheduleSave(); // the draft now holds exactly this
+      setStatus(`โหลด ${from} แล้ว (ร่างถูกเขียนทับ)`, 'warn');
+    } catch (err) {
+      setStatus(`โหลดไม่สำเร็จ: ${errText(err)}`, 'bad');
     }
   }
 
@@ -276,6 +297,8 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api): () => void {
   function renderInspector(rebuild: boolean): void {
     if (!ed) return;
     const e = ed;
+    const custom = e.tool.inspector?.(e);
+    if (custom) { inspKey = ''; inspector.replaceChildren(custom); return; }
     const sel = e.selectedProps();
     const key = [...e.selection].sort().join(',');
     if (!rebuild && key === inspKey && sel.length) { syncInspector(sel); return; }
@@ -338,7 +361,8 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api): () => void {
         field('x', 'x', first.x, (p, n) => ({ ...p, x: n }), 0.5, undefined, multi),
         field('z', 'z', first.z, (p, n) => ({ ...p, z: n }), 0.5, undefined, multi),
         field('h', 'สูง (h)', first.h, (p, n) => ({ ...p, h: Math.max(0.1, n) }), 0.1, 0.1)),
-      h('div', { class: 'me-rot' }, rotNum, rotRange),
+      h('div', { class: 'me-rot' }, rotNum, rotRange,
+        h('div', { class: 'muted me-hint' }, 'หมุนได้อิสระ 360° ภาพกระดาษเป็นภาพแบน จึงแค่เอียงบนจอ (บ้านใหญ่ที่หมุนมากจะดูเหมือนสติกเกอร์เอียง) ส่วน collision หมุนตามจริง เหมาะกับกำแพง รั้ว สะพาน ป้าย')),
       h('div', { class: 'row' },
         h('label', {}, flip, ' กลับซ้าย-ขวา'),
         h('label', { title: 'จางเมื่อตัวละครเดินอยู่ข้างหลัง' }, fade, ' จางเมื่อบัง')),
@@ -381,7 +405,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api): () => void {
   function renderPalette(): void {
     const q = search.value.trim().toLowerCase();
     const cat = catSel.value;
-    const list = CATALOG.props.filter((p) => p.paper && (!cat || p.category === cat) && (!q || p.key.toLowerCase().includes(q)));
+    const list = CATALOG.props.filter((p) => p.paper && p.inSheetSpecs && (!cat || p.category === cat) && (!q || p.key.toLowerCase().includes(q)));
     paletteCount.textContent = `(${list.length})`;
     palette.replaceChildren(...list.map((p) => {
       const img = h('img', { src: propUrl(p.key), alt: p.key, loading: 'lazy', decoding: 'async', draggable: true,

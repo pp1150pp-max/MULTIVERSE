@@ -117,4 +117,14 @@ const prop = (o: Partial<MapProp>): MapProp => ({ id: 'a', key: 'k', x: 3, z: -2
   ok(d.added === 1 && d.removed === 1 && d.changed === 1, `diff counts added/removed/changed (${JSON.stringify(d)})`);
 }
 
+{
+  // Loose colliders have no ids: deleting 5 from the middle of the list counts as 5 removed, not every later circle as changed.
+  const hub = MapRegistry.bundled('nexus_city')!;
+  const cut = { ...hub, colliders: [...hub.colliders!.slice(0, 40), ...hub.colliders!.slice(45)] };
+  const d = diffMaps(hub, cut);
+  ok(d.removed === 5 && d.added === 0 && d.changed === 0, `deleting 5 colliders from the middle counts 5 removed (${JSON.stringify(d)})`);
+  const nudged = { ...hub, colliders: hub.colliders!.map((c, i) => (i === 10 ? { ...c, x: c.x + 1 } : c)) };
+  ok(diffMaps(hub, nudged).changed === 1, 'one nudged collider counts as 1 changed');
+}
+
 finish('map-editor');
