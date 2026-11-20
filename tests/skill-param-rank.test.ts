@@ -71,8 +71,9 @@ function stars(sim: Sim, p: Player, aim: { x: number; z: number }, rank = 1): { 
   mobs[1].x = c.x + 2.5;
   mobs[1].z = c.z;
   mobs[2].x = c.x;
-  mobs[2].z = c.z + 4;
-  const at = stars(sim, p, c);
+  mobs[2].z = c.z + 2;
+  // The mouse is far away on the other side: the stars still find the monsters around the player.
+  const at = stars(sim, p, { x: p.x - 20, z: p.z });
   ok(at.length === 8, `8 stars (${at.length})`);
   ok(at.every((s) => s.d < 0.5), 'every star is aimed at a monster');
   const hit = mobs.map((_, i) => at.filter((s) => s.m === i).length);
@@ -86,9 +87,8 @@ function stars(sim: Sim, p: Player, aim: { x: number; z: number }, rank = 1): { 
 {
   // Nobody in the circle: random spots inside it, as before.
   const { sim, p } = arena(0);
-  const c = { x: p.x + 5, z: p.z };
-  const at = stars(sim, p, c);
-  ok(at.length === 8 && at.every((s) => Math.hypot(s.x - c.x, s.z - c.z) <= 6 + 1e-6), 'empty circle: 8 stars at random spots inside the big circle');
+  const at = stars(sim, p, { x: p.x + 5, z: p.z });
+  ok(at.length === 8 && at.every((s) => Math.hypot(s.x - p.x, s.z - p.z) <= 6 + 1e-6), 'nobody around: 8 stars at random spots within 6 m of the player');
   ok(new Set(at.map((s) => s.x.toFixed(3))).size > 1, 'the random spots differ');
 }
 
@@ -136,7 +136,7 @@ function stars(sim: Sim, p: Player, aim: { x: number; z: number }, rank = 1): { 
   ok(checkBalance({ skills: { skills: { mg_starfall: { paramsPerRank: { stars: 'a' } } } } }, true).error !== undefined, 'refused: not a number');
   const z = checkBalance({ skills: { skills: { mg_starfall: { paramsPerRank: { stars: 0 } } } } }, true);
   ok(!z.error && !z.tuning?.skills, 'zero per rank = the code value: nothing saved');
-  ok(JSON.stringify(codeBalance().skills.skills.mg_starfall.paramsPerRank) === '{"radius":0,"stars":0,"starRadius":0,"gap":0}', 'code per-rank is 0 for every param');
+  ok(JSON.stringify(codeBalance().skills.skills.mg_starfall.paramsPerRank) === '{"stars":0,"starRadius":0,"gap":0}', 'code per-rank is 0 for every param');
 }
 
 // ---------------------------------------------------------- extra knockback moves the metres typed (Volatile Orb, owner report)

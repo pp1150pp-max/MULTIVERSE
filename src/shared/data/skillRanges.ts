@@ -44,7 +44,7 @@ export const SKILL_REACH: Record<string, SkillReach> = {
   mg_volatileorb: { kind: 'shot', range: 11, blast: 3.8 },
   mg_crystalrain: { kind: 'point', range: 11, radius: 3.2 },
   mg_chargedblast: { kind: 'self', radius: 6 },
-  mg_starfall: { kind: 'point', range: 12, radius: 6 },
+  mg_starfall: { kind: 'self', radius: 6 },
   mg_flameground: { kind: 'point', range: 10, radius: 2.8 },
   mg_poisonmist: { kind: 'point', range: 10, radius: 3 },
   mg_searingmark: { kind: 'shot', range: 12, blast: 3 },

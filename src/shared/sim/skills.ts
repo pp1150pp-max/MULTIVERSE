@@ -441,18 +441,18 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       return true;
     }
     case 'mg_starfall': {
-      const c = landing(p, aim, far);
-      const r = P('radius');
+      // Around the caster, not the mouse (owner 2026-11-20): the radius is the skill's reach.
+      const r = far;
       const sr = P('starRadius');
       const warn = 0.35;
-      // Each star falls on a living monster inside the big circle (owner 2026-11-20): nearest the centre first, then
-      // round the pack, so a crowd is hit evenly and one monster takes them all. Nobody there = a random spot.
+      // Each star falls on a living monster around the caster: nearest the caster first, then round the pack, so a
+      // crowd is hit evenly and one monster takes them all. Nobody there = a random spot around the caster.
       tickFor(sim, p, P('gap'), Math.round(P('stars')), (i) => {
         const inside = sim.monsters
-          .filter((m) => m.alive && !m.untargetable && Math.hypot(m.x - c.x, m.z - c.z) - m.radius <= r)
-          .sort((a, b) => Math.hypot(a.x - c.x, a.z - c.z) - Math.hypot(b.x - c.x, b.z - c.z));
+          .filter((m) => m.alive && !m.untargetable && Math.hypot(m.x - p.x, m.z - p.z) - m.radius <= r)
+          .sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z));
         const t = inside.length ? inside[i % inside.length] : undefined;
-        const s = t ? { x: t.x, z: t.z } : spotIn(c.x, c.z, r);
+        const s = t ? { x: t.x, z: t.z } : spotIn(p.x, p.z, r);
         sim.fx('telegraph', s.x, s.z, sr, warn, '#ffe08a');
         sim.schedule(warn, () => {
           if (!live(sim, p)) return;
