@@ -13,7 +13,7 @@
 | `src/shared/data/maps/<zoneId>.json` | ค่าตั้งต้นที่ build เข้าเกม ผ่านเทสต์/CI อยู่ใน git | commit ผ่าน PR (หรือปุ่ม "ส่งออกเข้า repo") |
 | ตาราง `map_layouts` ใน DB | ร่าง (draft) และแมพที่เผยแพร่ (published) ที่เจ้าของแก้ใน `/admin` | ตัวแก้แมพ |
 
-ไม่ถูกเก็บใน JSON (ยังอยู่ในโค้ดเหมือนเดิม): ชื่อ/เลเวล/สถิติของโซน, ค่าบูสต์มอน (`boost`), ห้องบอส (สร้างจากแมพแม่ด้วย `bossRoom()` ใน `zones.ts` จึงตามแมพแม่โดยอัตโนมัติ), ภาพที่เป็นแค่ shader พื้น (หมอก หิมะ หน้าผา ยังคำนวณจาก path/theme/lake)
+ไม่ถูกเก็บใน JSON (ยังอยู่ในโค้ดเหมือนเดิม): ชื่อ/เลเวล/สถิติของโซน, ค่าบูสต์มอน (`boost`), บอส/วงสนาม/ขนาดและธีมของห้องบอส (ยังสร้างด้วย `bossRoom()` ใน `zones.ts` ไฟล์ห้องบอสเก็บเฉพาะของประดับ collision และจุดเกิด ดูหัวข้อ 12), ภาพที่เป็นแค่ shader พื้น (หมอก หิมะ หน้าผา ยังคำนวณจาก path/theme/lake)
 
 ## 2. รูปแบบ JSON (`src/shared/mapSchema.ts`)
 
@@ -34,6 +34,7 @@
 | `portals` | ประตู `{to, x, z, minLevel}` |
 | `spawns` | จุดเกิดมอน `{monster, x, z, radius, count, respawn: [min, max]}` |
 | `lair` | ที่เรียกบอส `{boss, x, z}` (ถ้าแมพมีบอส) |
+| `room` | (เฉพาะห้องบอส) `{of, arena, boss}` ค่าที่ล็อก ดูหัวข้อ 12 |
 
 `validateMap(map, ctx)` (ใช้ทั้งตัวแก้ server และเทสต์ ไม่ throw แม้ข้อมูลพัง) แบ่ง error/warn: รูปแบบ/ช่วงค่า, id ซ้ำ, `key` ภาพที่ไม่มีใน `SHEET_SPECS`, ชิ้น/NPC/ประตู/จุดเกิดนอกกรอบ, NPC/ประตู/จุดเกิดยืนใน collision, polygon พัง, อ้างโซน/มอน/บอสที่ไม่มี, และ **ประตูเดินไม่ถึงจากจุดเริ่ม** (BFS บนตาราง 1 หน่วย) · จุดเริ่มที่ยืนใน collision (กลางน้ำพุของเมืองกลาง) เป็นแค่คำเตือน
 
@@ -53,8 +54,8 @@ node --import tsx tools/bake_maps.ts
 
 ตัวถือ layout ของแต่ละโซน ใช้ร่วมกัน server/เบราว์เซอร์
 - `get(id)` = layout ที่เกมใช้ตอนนี้: ค่า override (จาก DB) ถ้ามีและสวิตช์เปิด ไม่งั้นใช้ JSON ที่ bundle มา
-- `bundled(id)` = JSON ที่มากับเกมเสมอ · `ids()` = 5 แมพ · `set()`/`clear()` = ใส่/ถอน override · `setUseOverrides()` = สวิตช์
-- `Terrain` ถูกสร้างจาก `MapRegistry.get(zone.id)` · ห้องบอสไม่มีไฟล์ของตัวเอง
+- `bundled(id)` = JSON ที่มากับเกมเสมอ · `ids()` = 5 แมพ + ห้องบอส 4 ห้อง (เรียงห้องบอสต่อท้ายแมพแม่) · `set()`/`clear()` = ใส่/ถอน override · `setUseOverrides()` = สวิตช์
+- `Terrain` ถูกสร้างจาก `MapRegistry.get(zone.id)` · ห้องบอสชั้น 1 มีไฟล์ของตัวเอง `<field>_room` (หัวข้อ 12)
 - `refreshZone(id)` (`zones.ts`) สร้าง `ZONES[id]` ใหม่จาก layout ปัจจุบัน (path, ทะเลสาบ, จุดเกิด, ประตู, ที่เรียกบอส) · **ค่า `boost` ของมอนผูกกับ "ลำดับที่" ของจุดเกิดใน layout** (`zone.spawns[i].boost`) ถ้าเพิ่ม/ลบ/สลับลำดับจุดเกิดใน `spawns` บูสต์ของจุดหลังจากนั้นอาจเลื่อนตามไปด้วย ให้เช็คก่อนเผยแพร่แมพที่มีบูสต์
 
 ## 5. แคตตาล็อกภาพ (`propCatalog.json`, `tools/build_prop_catalog.ts`)
@@ -113,7 +114,7 @@ node --import tsx tools/build_prop_catalog.ts
 - **ห้อง/แชนแนลที่เปิดใหม่ = ใช้ทันที**
 - **ห้องที่มีคนอยู่ = ใช้ตอนผู้เล่นเข้าแมพนั้นครั้งถัดไป** ห้องเดิมถือ `ZoneDef`/`Terrain` ที่สร้างไว้ ไม่เปลี่ยนใต้เท้าคนที่ยืนอยู่ จึงไม่มีบ้านงอกทับตัวละคร
 - เมืองกลางที่ว่างคน `Channels.sweep` สร้างใหม่ด้วย layout ใหม่
-- ห้องบอสที่เปิดอยู่ไม่เปลี่ยน ห้องบอสที่เปิดใหม่ใช้ layout ใหม่ของแมพแม่
+- ห้องบอสที่เปิดอยู่ไม่เปลี่ยน ห้องบอสที่เปิดใหม่ (`BossRooms.startRun` อ่าน `BOSS_ROOMS[field]` ตอนสร้างห้อง) ใช้ layout ที่เผยแพร่ของห้องนั้นเอง (`<field>_room`) ถ้ามี ไม่มีใช้ไฟล์ใน repo
 - **ไม่มีปุ่ม "เผยแพร่แล้วรีสตาร์ตทันที"** (ตัวเลือกในแผน ยังไม่ทำ) ถ้าอยากให้ทุกคนเห็นพร้อมกันให้ใช้ `npm run stop-server -- --restart` ตามขั้นตอนใน [server-ops.md](server-ops.md)
 
 ## 8. วิธีใช้ตัวแก้ (แท็บ "แมพ" ใน `/admin`)
@@ -176,7 +177,7 @@ node --import tsx tools/build_prop_catalog.ts
 ## 10. ข้อจำกัดที่รู้
 
 - **ภาพกระดาษเป็นภาพแบนหันเข้ากล้อง** การหมุนจึงเป็นแค่เอียงภาพบนจอ ไม่ใช่เห็นด้านข้างของบ้านจริง มุมเล็กดูปกติ บ้านใหญ่ที่หมุนมากดูเหมือนสติกเกอร์เอียง · collision และเงาหมุนตามจริง เหมาะกับกำแพง รั้ว สะพาน ป้าย
-- **ชั้น 2 ยังไม่รองรับ** (ดูด้านล่าง) · `floor` ใน schema มีไว้แล้ว แต่ `MapRegistry` มีแค่ 5 แมพของชั้น 1
+- **ชั้น 2 ยังไม่รองรับ** (ดูด้านล่าง) · `floor` ใน schema มีไว้แล้ว แต่ `MapRegistry` มีแค่ 5 แมพของชั้น 1 + ห้องบอสชั้น 1 อีก 4 ห้อง
 - ทางเดิน (`paths`) เป็นภาพพื้น ไม่กั้นการเดิน · กรอบเดินได้เป็นสี่เหลี่ยมจัตุรัสด้วย `walkable.half` ตัวเดียว (ยังไม่มี polygon) และตัวแก้ยังไม่มีช่องแก้ค่านี้ ใช้ polygon "ขอบเขต" แทน
 - NPC เพิ่ม/ลบจากตัวแก้ไม่ได้ (ย้ายได้) · จุดพักและที่เรียกบอสย้ายได้เท่านั้น
 - ค่า `boost` ของมอนผูกกับลำดับจุดเกิด (หัวข้อ 4)
@@ -193,4 +194,18 @@ node --import tsx tools/build_prop_catalog.ts
 - เครื่องมือเพิ่ม/ลบ NPC และการแก้ `walkable` เป็น polygon
 - เขียน audit ตอนส่งออกและตอนทดลองเดิน
 
-ไฟล์โค้ดหลัก: `src/shared/mapSchema.ts`, `mapRegistry.ts`, `mapDiff.ts`, `mapText.ts` · `server/admin-maps.ts`, `maps-live.ts`, `db.ts` · `src/admin/maps.ts`, `src/admin/mapEditor/*` · `src/client/mapSync.ts`, `mapPreview.ts` · `tools/bake_maps.ts`, `build_prop_catalog.ts` · เทสต์ `tests/map-*.test.ts`, `prop-catalog.test.ts`
+## 12. ห้องบอสชั้น 1 ในตัวแก้ (เจ้าของสั่ง 2026-11-21)
+
+ห้องบอส 4 ห้อง (`emerald_forest_room`, `misty_marsh_room`, `frost_reach_room`, `ashen_isle_room`) อยู่ในรายการแมพของตัวแก้ ใต้แมพแม่ ใช้ endpoint/DB/สิทธิ์ `mapEdit` ชุดเดิม โดยใช้ id ของห้อง (`<field>_room`) เป็น `zone_id`
+
+**ไฟล์:** `src/shared/data/maps/<field>_room.json` อบด้วย `tools/bake_maps.ts` (`BOSS_ROOM_IDS`) จาก `GENERATED_ROOMS` ใน `zones.ts` (ผลของ `bossRoom()` ล้วน) ตาม schema เดิม ฟิลด์เดิมความหมายเดิม เพิ่มฟิลด์เสริม `room: {of, arena, boss: {monster, x, z, radius}}` ที่บอกว่าเป็นห้องบอสและเก็บค่าที่ล็อก (ไฟล์ที่ไม่มี `room` อ่านได้เหมือนเดิมทุกอย่าง) · `paths`/`water`/`portals`/`spawns`/`npcs`/`rest` เป็น `[]` · ห้องภูเขาไฟมีวง collision พิเศษหนึ่งวง (ก้อนหินกลางห้อง `bossSolid`) อยู่ใน `colliders` และล็อกไว้ · `tests/map-bake.test.ts` เทียบทุกค่ากับ generator เดิม (`seed` ของห้อง = seed ฟาร์ม+500 อยู่ในโค้ด ไม่อยู่ในไฟล์ ใช้ตอนอบครั้งเดียว)
+
+**อ่านจาก registry:** `Terrain` ของห้องอ่าน `MapRegistry.get('<field>_room')` เหมือนแมพอื่น ลำดับเดิม (DB published → JSON ใน repo, สวิตช์ "ใช้แมพจาก DB") · `zones.ts`: `roomWithMap()` เอาเฉพาะ `zone.start` (จุดเกิดผู้เล่น) จากไฟล์ ที่เหลือ (ขนาด ธีม seed บอส สนาม สถิติ) มาจาก `bossRoom()` · `refreshZone(id)` ทำงานกับ id ห้องด้วย (server `applyMaps`, client `mapSync`/`mapPreview`) · ห้องที่มีคนอยู่ไม่เปลี่ยนกลางคัน ห้องที่เปิดใหม่ใช้ของใหม่
+
+**ล็อก** (`validateMap()` บังคับทั้งตอนบันทึกร่าง เผยแพร่ ย้อนกลับ และโหลด DB — ร่างที่ผิดเก็บได้แต่เผยแพร่ไม่ได้, แถวที่เผยแพร่แล้วผิดถูกข้าม): ต้องเท่ากับไฟล์ที่มากับเกม (`ctx.baseline`): `id`, `floor`, `zone.half`, `zone.theme`, `walkable.half`, บล็อก `room` (ตำแหน่งบอส รัศมีสนาม), `colliders` · ต้องไม่มี `portals`/`spawns`/`npcs`/`rest`/`paths`/`water`/`lair`/`safe`/`quadrants` · **จุดเกิดผู้เล่น** คือ `zone.start − (2, 2)` (`Sim.spawnPoint`; `zone.start` เองอยู่นอกวงสนามตามสูตรเดิม ตัวแก้ลากหมุดที่จุดเกิดจริงแล้วเขียน `start` กลับให้) ต้องอยู่ในวงสนาม (`arena + 1` หัก 0.5) และไม่อยู่ใน collision/ใน polygon · ต้องมีช่องว่างที่เดินจากจุดเกิดไปถึงระยะ 4 หน่วยจากบอสได้ (BFS บนตาราง นับวงสนามเป็นกำแพง) ไม่งั้น `unreachable` · ข้อความผิดพลาดรหัส `locked` = ไปแตะของที่ล็อก
+
+**ในตัวแก้:** เลือก "ห้องบอส · …" ในรายการ (ย่อหน้าใต้ฟาร์มแม่) · เครื่องมือเหลือ เลือก/ย้าย, วางของ, ขอบเขต (polygon), จุดเกิดผู้เล่น (หมุดเขียว) · ซ่อนเครื่องมือประตู/NPC/จุดเกิดมอน/ทางเดิน/ทะเลสาบ · เลเยอร์ "แนวช่วยดู" วาดวงสนามบอส (เหลืองประ) ขอบที่เดินออกไม่ได้ (แดง) และบอส (ล็อก ลากไม่ได้)
+
+**ทดลองเดิน (`?previewMap=<field>_room`):** เข้าห้องส่วนตัวของร่างได้เหมือนแมพอื่น แต่ **ไม่มีบอส** (เจ้าของเลือก 2026-11-21: พรีวิวไม่ใช่รอบห้องบอสจริง ไม่มีปุ่มออก/นับแพ้) เดินดูของประดับ collision และจุดเกิดได้ · รอบห้องบอสจริงดูได้ด้วยกุญแจที่แท่นเรียกบอสของฟาร์มแม่
+
+ไฟล์โค้ดหลัก: `src/shared/mapSchema.ts`, `mapRegistry.ts`, `mapDiff.ts`, `mapText.ts` · `server/admin-maps.ts`, `maps-live.ts`, `db.ts` · `src/admin/maps.ts`, `src/admin/mapEditor/*` · `src/client/mapSync.ts`, `mapPreview.ts` · `tools/bake_maps.ts`, `build_prop_catalog.ts` · เทสต์ `tests/map-*.test.ts` (รวม `map-boss-room.test.ts`), `prop-catalog.test.ts`

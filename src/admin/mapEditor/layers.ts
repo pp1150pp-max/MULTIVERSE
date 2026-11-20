@@ -1,5 +1,5 @@
 // What the editor canvas draws (each a Layer in editor.ts). Simple colours for the ground: the real shader stays in the game.
-import type { MapTheme } from '../../shared/mapSchema';
+import { ROOM_EDGE, roomSpawnOf, type MapTheme } from '../../shared/mapSchema';
 import { catalogEntry, spriteOf } from './sprites';
 import type { Editor, Layer } from './editor';
 
@@ -123,6 +123,33 @@ const markers: Layer = {
   },
 };
 
+/** Boss rooms only: what is fixed in code, shown as a guide that cannot be dragged (the arena, its edge, the boss) and the pin for where players appear. */
+const roomGuide: Layer = {
+  id: 'roomGuide', label: 'แนวช่วยดู: สนามบอส / จุดเกิดผู้เล่น', order: 35,
+  draw(ed, g) {
+    const room = ed.map.room;
+    if (!room) return;
+    const circle = (r: number): [number, number][] => Array.from({ length: 72 }, (_, i) => [room.boss.x + Math.cos((i / 72) * Math.PI * 2) * r, room.boss.z + Math.sin((i / 72) * Math.PI * 2) * r]);
+    g.lineWidth = 1.5;
+    g.setLineDash([7, 5]);
+    g.strokeStyle = 'rgba(255,210,74,0.9)';
+    ed.path(g, circle(room.arena)); g.stroke();
+    g.setLineDash([]);
+    g.strokeStyle = 'rgba(255,90,90,0.9)';
+    ed.path(g, circle(room.arena + ROOM_EDGE)); g.stroke();
+    const dot = (x: number, z: number, color: string, label: string): void => {
+      const [px, py] = ed.toScreen(x, z);
+      g.fillStyle = color;
+      g.beginPath(); g.arc(px, py, 6, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = '#000'; g.lineWidth = 1; g.stroke();
+      g.fillStyle = '#fff'; g.font = '11px sans-serif'; g.fillText(label, px + 9, py + 4);
+    };
+    dot(room.boss.x, room.boss.z, '#e05050', `บอส ${room.boss.monster} (ล็อก)`);
+    const s = roomSpawnOf(ed.map.zone.start);
+    dot(s.x, s.z, '#4cd06a', 'จุดเกิดผู้เล่น');
+  },
+};
+
 /** The circles and boxes the player bumps into, see-through red. */
 const collision: Layer = {
   id: 'collision', label: 'วง/กล่อง collision', order: 40,
@@ -193,4 +220,4 @@ const ghost: Layer = {
   },
 };
 
-export const CORE_LAYERS: Layer[] = [ground, grid, props, markers, collision, blockers, selection, ghost];
+export const CORE_LAYERS: Layer[] = [ground, grid, props, markers, roomGuide, collision, blockers, selection, ghost];
