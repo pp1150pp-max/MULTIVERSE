@@ -1,6 +1,6 @@
 // Direct game connection (owner 2026-11-20, docs/systems/server-ops.md "ต่อตรง"): players' WebSocket may skip
 // the Cloudflare tunnel and come straight to the VPS through a DNS-only hostname (lower ping). Caddy on the
-// VPS takes TLS on 443 for that hostname and passes only /ws to DIRECT_PORT on 127.0.0.1 (tools/Caddyfile).
+// VPS takes TLS on 443 for that hostname and passes only /ws to DIRECT_PORT on 127.0.0.1 (tools/vps-direct-setup.sh writes the Caddyfile).
 // That port is a listener of its own, so a connection is known to be direct by where it arrived — never by
 // a header a player could write — and the CF-* headers are never trusted there.
 import type { IncomingMessage } from 'node:http';

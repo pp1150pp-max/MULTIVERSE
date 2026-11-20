@@ -126,7 +126,7 @@
 - ทางแก้: เฉพาะการเชื่อมต่อตอนเล่น (WebSocket `/ws`) ต่อตรงไปที่ VPS ผ่านชื่อแยก `ws.multiverse-game.com` (A record แบบ **DNS only / เมฆสีเทา**) ส่วนหน้าเว็บ, `/api`, login, /admin ยังผ่าน Cloudflare เหมือนเดิม
 - **เจ้าของยอมรับ (2026-11-20): IP ของ VPS เปิดเผยถาวร** (อยู่ในประวัติ DNS ลบ record ทีหลังก็ซ่อนคืนไม่ได้) · สวิตช์ใน /admin พาผู้เล่นกลับไปทาง Cloudflare ได้ทันที แต่ไม่ได้กัน DDoS ที่ยิง IP ตรง ๆ
 - ค่าเริ่มต้นในโค้ด **ปิด** · การยืนยันตัวไม่ใช้ cookie (token ส่งในข้อความ `join`) จึงต่อข้ามชื่อได้
-- **VPS:** Caddy รับ TLS (Let's Encrypt ต่ออายุเอง) ที่ 443 ส่งต่อเฉพาะ `/ws` ไปที่ `127.0.0.1:2569` (port ต่อตรงของ server: env `DIRECT_WS_PORT` ค่าเริ่มต้น 2569 เฉพาะเมื่อ server ใช้ port 2567, 0 = ไม่เปิด) path อื่นตอบ 404 · ตั้งด้วย `tools/vps-direct-setup.sh` (root, รันซ้ำได้, ไม่แตะเกม) ใช้ `tools/Caddyfile.direct` · ufw เปิด 80 (ขอ/ต่ออายุใบรับรอง) + 443
+- **VPS:** Caddy รับ TLS (Let's Encrypt ต่ออายุเอง) ที่ 443 ส่งต่อเฉพาะ `/ws` ไปที่ `127.0.0.1:2569` (port ต่อตรงของ server: env `DIRECT_WS_PORT` ค่าเริ่มต้น 2569 เฉพาะเมื่อ server ใช้ port 2567, 0 = ไม่เปิด) path อื่นตอบ 404 · ตั้งด้วย `tools/vps-direct-setup.sh` (root, รันซ้ำได้, ไม่แตะเกม, Caddyfile อยู่ในสคริปต์) **คัดจากเครื่องบ้านด้วย scp แบบ vps-setup.sh ห้ามรันจาก `~multiverse/MULTIVERSE`** (user ของเกมและทุก deploy แก้ไฟล์ตรงนั้นได้ root ห้ามรัน) · ufw เปิด 80 (ขอ/ต่ออายุใบรับรอง) + 443
 - **ปลอดภัย:**
   - port ต่อตรงเป็นตัวฟังแยก: รู้ว่า "ต่อตรง" จากที่ที่เข้ามา ไม่ใช่จาก header · บนทางนี้ไม่เชื่อ `CF-*` เลย IP = รายการสุดท้ายของ `X-Forwarded-For` ที่ Caddy ใส่เอง (`server/direct.ts`)
   - ปฏิเสธก่อน upgrade (เบราว์เซอร์ถอยไปทาง Cloudflare ทันที): สวิตช์ปิด (403), หน้าเว็บ (Origin) ไม่ใช่โดเมนเดียวกับ hostname (403), IP เดียวต่อตรงเกินเพดาน (429)
@@ -137,10 +137,10 @@
 - **ขั้นตอนเปิดครั้งแรก (ทีละขั้น ตามที่เจ้าของอนุญาต):**
   1. merge + deploy (สวิตช์ยังปิด ไม่มีอะไรเปลี่ยนสำหรับผู้เล่น) → การ์ดใน /admin ต้องบอก port 2569
   2. เจ้าของ: Cloudflare → DNS → Add record: Type `A`, Name `ws`, IPv4 = IP ของ VPS, Proxy status **DNS only** (เมฆสีเทา)
-  3. root บน VPS: `bash ~multiverse/MULTIVERSE/tools/vps-direct-setup.sh` → รอ "certificate obtained" ใน `journalctl -u caddy` · `curl -sI https://ws.multiverse-game.com/` ได้ 404
+  3. จากเครื่องบ้าน (โค้ดที่ merge แล้ว): `scp tools/vps-direct-setup.sh root@<IP VPS>:` แล้ว `ssh root@<IP VPS> bash vps-direct-setup.sh` → รอ "certificate obtained" ใน `journalctl -u caddy` · `curl -sI https://ws.multiverse-game.com/` ได้ 404
   4. เปิดสวิตช์ใน /admin → ดู `[ping] average…` เทียบก่อน/หลัง (และต้องไม่มี `no compression`)
   - ถ้า Hostatom มี firewall ภายนอกของเขาเอง ต้องเปิด 80/443 ที่นั่นด้วย
-- **ฉุกเฉิน (โดนยิง/มีปัญหา):** ปิดสวิตช์ใน /admin (ทุกคนกลับไปผ่าน Cloudflare) แล้ว root: `bash ~multiverse/MULTIVERSE/tools/vps-direct-setup.sh off` (ปิด 80/443 + หยุด Caddy) · เปิดคืน: `… on` · ถามผู้ให้บริการ VPS เรื่องกัน DDoS
+- **ฉุกเฉิน (โดนยิง/มีปัญหา):** ปิดสวิตช์ใน /admin (ทุกคนกลับไปผ่าน Cloudflare) แล้ว `ssh root@<IP VPS> bash vps-direct-setup.sh off` (ปิด 80/443 + หยุด Caddy, สคริปต์ที่คัดไว้ใน home ของ root) · เปิดคืน: `… on` · ถามผู้ให้บริการ VPS เรื่องกัน DDoS
 - เทสต์: `tests/direct-ws.test.ts`
 
 ## log สาเหตุที่หลุด (2026-11-17)

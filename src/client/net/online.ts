@@ -176,8 +176,9 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
           });
         }
       };
-      ws.onerror = () => (directBroke(), fail('เชื่อมต่อ server ไม่ได้'));
-      ws.onclose = () => (directBroke(), fail('การเชื่อมต่อถูกปิด'));
+      // Only while joining: once in the game, a drop is a drop (attach() takes these over).
+      ws.onerror = () => (!settled && directBroke(), fail('เชื่อมต่อ server ไม่ได้'));
+      ws.onclose = () => (!settled && directBroke(), fail('การเชื่อมต่อถูกปิด'));
     };
     openGameSocket(att).then(start, () => fail('เชื่อมต่อ server ไม่ได้'));
   });
@@ -426,6 +427,8 @@ export class OnlineBackend implements Backend {
     ws.onclose = (e) => {
       if (this.ws === ws) this.dropped(e.code, false);
     };
+    // The joining code's handler would count a later network drop as a failed direct road.
+    ws.onerror = null;
   }
 
   /** Messages held back while the layout of the zone we are moving to loads (see receive). */
@@ -541,7 +544,7 @@ export class OnlineBackend implements Backend {
       }
     };
     ws.onerror = ws.onclose = () => {
-      directBroke();
+      if (this.trying === att) directBroke();
       fail();
     };
   }
