@@ -106,6 +106,7 @@ export class PlayerView {
     this.orbs.update(this.clock, p.x, p.z, p.orbs, true, orbItemLook(shownCos(p, 'orb')?.id) ?? null);
     this.cos.update(dt, p, fx);
     this.updateToad(dt, fx);
+    this.updateGuardBlink();
     this.updatePassiveAura(dt);
     this.circle.set(p.alive && p.toadT <= 0 ? buffCircle(p.buffBits, p.buffSkill) : null);
     this.circle.update(dt);
@@ -155,6 +156,14 @@ export class PlayerView {
     this.toad.group.position.set(p.x, 0, p.z);
     this.toad.face(p.faceX, p.faceZ);
     this.toad.update(dt, false, 6);
+  }
+
+  /** Untouchable after a phoenix-feather revive: the character blinks (owner 2026-11-20), everyone sees it. */
+  private updateGuardBlink(): void {
+    const p = this.p;
+    const toad = p.alive && p.toadT > 0;
+    const off = p.alive && p.guardT > 0 && Math.floor(this.clock * 8) % 2 === 0;
+    this.actor.group.visible = !toad && !off;
   }
 
   /**

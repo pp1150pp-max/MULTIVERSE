@@ -641,6 +641,15 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
           ' บอสไม่ฟื้นเลือดตอนทีมตายหมด (ห้องบอส: ทุกคนล้ม = บอสยืนรอ HP เท่าเดิม ไม่เดินกลับ/ไม่รีเซ็ต ชุบด้วยขนนกทันเวลาแล้วสู้ต่อ · ปิด = เดินกลับฟื้นเลือดเต็มเหมือนเดิม)'),
         h('label', {}, 'เวลาชุบตอนตายหมดทีม (วินาที)', numBox(() => draft.roomWipeSec, (n) => { draft.roomWipeSec = n; }, code.roomWipeSec, ...BALANCE_RANGE.roomWipeSec, 1, updateSummary)),
       ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: `ค่าในโค้ด: ${code.roomBossDelay} วิ` }, 'นับถอยหลังก่อนบอสเกิด (วินาที, 0 = เกิดทันที · ใช้กับห้องที่เปิดใหม่)', numBox(() => draft.roomBossDelay, (n) => { draft.roomBossDelay = n; }, code.roomBossDelay, ...BALANCE_RANGE.roomBossDelay, 1, updateSummary)),
+      ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.reviveGuard, onchange: (e: Event) => { draft.reviveGuard = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' อมตะหลังชุบด้วยขนนกฟีนิกซ์ (ห้องบอส: ไม่โดนดาเมจ/สตัน/ผลัก/ติดโคลน/ช้า/คางคก ตัวกะพริบให้ทุกคนเห็น · หายทันทีเมื่อตีธรรมดา ใช้สกิล บัฟ หรือแดช · เดินและกินยาไม่หาย)'),
+        h('label', {}, 'เวลาอมตะ (วินาที)', numBox(() => draft.reviveGuardSec, (n) => { draft.reviveGuardSec = n; }, code.reviveGuardSec, ...BALANCE_RANGE.reviveGuardSec, 1, updateSummary)),
+      ),
     );
     refresh();
   };

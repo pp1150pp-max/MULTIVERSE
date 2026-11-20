@@ -18,7 +18,7 @@ import { BOSS_KEY, BOSS_QUEST_KEY, STONE_NAME } from '../src/shared/data/stones'
 import { SUMMONER_RANGE } from '../src/shared/sim/terrain';
 import type { BossKey, StoneKind } from '../src/shared/types';
 import {
-  bossShortName, ROOM_BOSS_DELAY, ROOM_END_SECONDS, ROOM_INVITE_SECONDS, ROOM_KEYS_MAX, ROOM_LOBBY_SECONDS, ROOM_WIPE_SECONDS,
+  bossShortName, ROOM_END_SECONDS, ROOM_INVITE_SECONDS, ROOM_KEYS_MAX, ROOM_LOBBY_SECONDS, ROOM_WIPE_SECONDS,
   type RoomAnswer, type RoomLobbyView, type RoomSnap,
 } from '../src/shared/bossRoom';
 
@@ -283,7 +283,7 @@ export class BossRooms {
     const used = new Set([...this.runs.values()].filter((r) => r.sim.zone.id === room.id).map((r) => r.channel));
     let channel = 1;
     while (used.has(channel)) channel++;
-    const sim = new Sim(room, { keys, bossDelay: ROOM_BOSS_DELAY });
+    const sim = new Sim(room, { keys, bossDelay: currentBalance().roomBossDelay });
     this.runs.set(sim, { sim, boss, keys, channel, endAt: null, wipeAt: null });
     this.host.enter(charIds, sim);
     const bossName = bossShortName(MONSTERS[boss].nameTh);
