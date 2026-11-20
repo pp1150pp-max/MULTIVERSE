@@ -212,7 +212,7 @@ export type ClientMsg =
    * `delta: 1` = this browser understands snapshots that leave out what it already has (see
    * PlayerSnap / MonsterSnap / PrivateSnap). Without it (a tab opened before the update) every snapshot is whole.
    */
-  | { t: 'join'; token: string; characterId: number; delta?: 1; back?: RejoinInfo }
+  | { t: 'join'; token: string; characterId: number; delta?: 1; back?: RejoinInfo; previewMap?: string }
   | InputMsg
   | ActionMsg
   /** `ch: 'party'` = to the party only; `ch: 'whisper'` = only to the online character named `to`. */
@@ -362,7 +362,7 @@ export interface SnapshotMsg {
 export type ServerMsg =
   /** `guest`: playing a guest character (no stash, deleted after a day offline). */
   /** `ch`: the channel of that zone (1 when it has none). */
-  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; map?: number; guest?: boolean; auto?: boolean; orbLook?: OrbLook; cosTuning?: CosTuning; animTuning?: AnimTuning; cosHidden?: string[]; orbItems?: OrbItem[]; balance?: BalanceTuning; cash?: CashCatalog; cashState?: CashState }
+  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; map?: number; guest?: boolean; auto?: boolean; preview?: boolean; orbLook?: OrbLook; cosTuning?: CosTuning; animTuning?: AnimTuning; cosHidden?: string[]; orbItems?: OrbItem[]; balance?: BalanceTuning; cash?: CashCatalog; cashState?: CashState }
   /** The cash shop's catalogue changed (the owner saved /admin, or a cosmetic's price / hiding changed). */
   | { t: 'cash'; cat: CashCatalog }
   /** Your account's crystals and purchase counts changed (a purchase by any of its characters). */

@@ -44,6 +44,7 @@ import { WalkTarget } from '../walkTo';
 import type { ReportReply } from '../../shared/reports';
 import type { TutStep } from '../../shared/tutorial';
 import { ensureMap, mapIsCurrent } from '../mapSync';
+import { activePreview, loadPreviewDraft, previewParam, settlePreview } from '../mapPreview';
 
 /** Mirrors never run game logic, so they don't need a simulation behind them. */
 const NO_SIM = null as unknown as Sim;
@@ -138,7 +139,14 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
       ws.close();
     };
     const timer = setTimeout(() => fail('server ไม่ตอบกลับ ลองใหม่อีกครั้ง'), 10_000);
-    ws.onopen = () => ws.send(JSON.stringify({ t: 'join', token, characterId, delta: 1 } satisfies ClientMsg));
+    // ?previewMap=<zone>: the owner's draft of that map goes in first (a refusal or a failure = the normal game).
+    const wanted = previewParam();
+    const draftReady = wanted ? loadPreviewDraft(wanted, token) : Promise.resolve(null);
+    let previewId: string | null = null;
+    ws.onopen = () => void draftReady.then((id) => {
+      previewId = id;
+      ws.send(JSON.stringify({ t: 'join', token, characterId, delta: 1, ...(id ? { previewMap: id } : {}) } satisfies ClientMsg));
+    });
     // Messages that come while the map layout of our first zone is fetched wait here and go to the backend once it exists.
     let waiting: ServerMsg[] | null = null;
     ws.onmessage = (e) => {
@@ -155,7 +163,8 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
         guest = m.guest === true;
         auto = m.auto === true;
         useWelcome(m);
-        mapReady = ensureMap(m.zone, m.map);
+        settlePreview(previewId, m.preview === true);
+        mapReady = m.preview ? Promise.resolve() : ensureMap(m.zone, m.map);
       }
       if (m.t === 'snap' && you >= 0 && !settled) {
         settled = true;
@@ -498,7 +507,7 @@ export class OnlineBackend implements Backend {
     const timer = setTimeout(() => fail(), RECONNECT_TRY_MS);
     ws.onopen = () => {
       const back: RejoinInfo = { ...this.downInfo, downMs: Math.round(performance.now() - this.downAt), tries: this.tries };
-      ws.send(JSON.stringify({ t: 'join', token: login.token, characterId: login.characterId, delta: 1, back } satisfies ClientMsg));
+      ws.send(JSON.stringify({ t: 'join', token: login.token, characterId: login.characterId, delta: 1, back, ...(activePreview() ? { previewMap: activePreview() as string } : {}) } satisfies ClientMsg));
     };
     let waiting: ServerMsg[] | null = null;
     ws.onmessage = (e) => {

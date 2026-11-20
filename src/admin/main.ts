@@ -412,7 +412,7 @@ function setTab(t: Tab): void {
   else if (t === 'daily') void renderDaily(view, h, api);
   else if (t === 'cashShop') void renderCashShop(view, h, api);
   else if (t === 'menuLayout') void renderMenuLayout(view, h, api, () => undefined);
-  else if (t === 'maps') void renderMaps(view, h, api, (tuning) => applyBalance(tuning), { balance: can('balance'), mapEdit: can('mapEdit') });
+  else if (t === 'maps') void renderMaps(view, h, api, (tuning) => applyBalance(tuning), { balance: can('balance'), mapEdit: can('mapEdit'), mapRollback: can('mapRollback'), mapExport: can('mapExport') });
   else if (t === 'cosManage') void renderCosManage(view, h, api, allowedTabs.has('orbs') ? (id) => { setOrbOpenId(id); setTab('orbs'); } : null);
   else if (t === 'roles') void renderRoles();
   else if (t === 'audit') void renderAudit();

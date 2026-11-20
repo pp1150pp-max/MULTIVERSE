@@ -9,6 +9,7 @@
 //
 // Not baked: monster boosts (`SpawnArea.boost`, from the zone's monsterBoost, stays in code), zone names/levels/stats,
 // boss rooms (built from the field map by bossRoom()).
+import { bakedText } from '../src/shared/mapText';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -98,15 +99,7 @@ export function bakeZone(zone: ZoneDef): MapData {
   return map;
 }
 
-/** The exact text of a baked file. */
-export function bakedText(map: MapData): string {
-  // One line per list item (git diffs stay readable), everything else compact.
-  const rows = Object.entries(map).map(([k, v]) => {
-    const body = Array.isArray(v) && v.length ? `[\n${v.map((x) => '  ' + JSON.stringify(x)).join(',\n')}\n ]` : JSON.stringify(v);
-    return ` ${JSON.stringify(k)}: ${body}`;
-  });
-  return `{\n${rows.join(',\n')}\n}\n`;
-}
+export { bakedText };
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   mkdirSync(MAPS_DIR, { recursive: true });

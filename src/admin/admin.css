@@ -528,3 +528,5 @@ button.more:hover { color: var(--gold-hi); text-decoration: underline; }
   .me-left, .me-right { max-height: 460px; }
 }
 @media (max-width: 640px) { .me-body { grid-template-columns: 1fr; grid-template-areas: "canvas" "left" "right"; } }
+.me-revbox { margin-top: 12px; }
+.me-revs { max-height: 220px; overflow: auto; margin-bottom: 6px; }

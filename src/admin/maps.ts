@@ -9,7 +9,7 @@ type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, 
 type Api = <T>(method: string, path: string, body?: unknown) => Promise<T>;
 
 /** What the signed-in role may do here: the switch needs balance, the editor needs mapEdit. */
-export interface MapsPerms { balance: boolean; mapEdit: boolean }
+export interface MapsPerms { balance: boolean; mapEdit: boolean; mapRollback?: boolean; mapExport?: boolean }
 
 /** Stops the editor's key listeners and saves its last edits when the tab is left (the page calls the old one before drawing a new tab). */
 let stopEditor: (() => void) | null = null;
@@ -25,7 +25,7 @@ export async function renderMaps(view: HTMLElement, h: H, api: Api, onSaved: (tu
     ...(perms.balance ? [switchBox] : []),
     ...(!perms.mapEdit && !perms.balance ? [h('div', { class: 'msg bad' }, 'ไม่มีสิทธิ์ในหน้านี้')] : []),
   );
-  if (perms.mapEdit) stopEditor = mountMapEditor(editorBox, h, api);
+  if (perms.mapEdit) stopEditor = mountMapEditor(editorBox, h, api, { rollback: !!perms.mapRollback, export: !!perms.mapExport });
   if (perms.balance) await renderSwitch(switchBox, h, api, onSaved);
 }
 

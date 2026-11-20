@@ -11,6 +11,7 @@ import { CATALOG, propUrl } from './sprites';
 import { pinTool, spawnTool } from './pointTools';
 import { blockerTool, lakeTool, pathTool } from './shapeTools';
 import { pick } from './history';
+import { mountRevisions, type RevisionPerms } from './revisions';
 import { transformProps, normDeg, centroid } from './geom';
 
 type Kids = (Node | string | null | undefined | false)[];
@@ -44,7 +45,7 @@ function variantsOf(key: string): string[] {
 }
 
 /** Builds the editor into `host`. Returns a function that stops its listeners. */
-export function mountMapEditor(host: HTMLElement, h: H, api: Api): () => void {
+export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: RevisionPerms = { rollback: false, export: false }): () => void {
   // -------------------------------------------------------------- state
   let ed: Editor | null = null;
   let current = '';
@@ -67,6 +68,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api): () => void {
   const latestBtn = h('button', { title: 'ทิ้งร่างที่บันทึกไว้ แล้วโหลดฉบับที่เผยแพร่ล่าสุดมาแก้ต่อ', onclick: () => void loadLatest() }, '↩ โหลดที่เผยแพร่ล่าสุด');
   const checkBtn = h('button', { title: 'ตรวจแมพ: ชิ้นอยู่ใน collision, ประตูเดินไม่ถึง, key ภาพไม่มี, อยู่นอกกรอบ ฯลฯ แล้วคลิกรายการเพื่อกระโดดไปชิ้นนั้น', onclick: () => checkNow() }, '🔍 ตรวจแมพ');
   const solidBtn = h('button', { title: 'โชว์/ซ่อนวง/กล่อง collision ของทุกชิ้น (ตรวจบ้านทับธง)', onclick: () => { if (!ed) return; ed.opts.showSolid = !ed.opts.showSolid; ed.requestDraw(); renderOptions(); refreshTop(); } }, '⭕ วง collision');
+  const previewBtn = h('button', { title: 'เปิดเกมแท็บใหม่ เดินในร่างที่บันทึกไว้ (ห้องส่วนตัวของคุณ ไม่กระทบผู้เล่นจริง ไม่เซฟตัวละคร)', onclick: () => void tryWalk() }, '🎮 ทดลองเดิน');
   const fitBtn = h('button', { title: 'ดูทั้งแมพ', onclick: () => ed?.fit() }, '⛶ ทั้งแมพ');
   const diffText = h('span', { class: 'muted me-diff' });
   const issueBox = h('div', { class: 'me-issues' });
@@ -81,8 +83,9 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api): () => void {
     ...[...new Set(CATALOG.props.filter((p) => p.paper && p.inSheetSpecs).map((p) => p.category))].map((c) => h('option', { value: c }, c)));
   const paletteCount = h('span', { class: 'muted' });
 
+  const revBox = h('div', { class: 'me-revbox' });
   const root = h('div', { class: 'me' },
-    h('div', { class: 'me-top' }, mapSel, undoBtn, redoBtn, checkBtn, solidBtn, fitBtn, latestBtn, status, diffText, publishBtn),
+    h('div', { class: 'me-top' }, mapSel, undoBtn, redoBtn, checkBtn, solidBtn, fitBtn, previewBtn, latestBtn, status, diffText, publishBtn),
     h('div', { class: 'me-body' },
       h('div', { class: 'me-left' }, h('h4', {}, 'เครื่องมือ'), toolBox, toolHint, h('h4', {}, 'ตัวช่วยวาง'), optBox, h('h4', {}, 'เลเยอร์'), layerBox, h('h4', {}, 'ข้อผิดพลาดจากการตรวจ'), issueBox),
       h('div', { class: 'me-center' }, canvas),
@@ -90,8 +93,14 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api): () => void {
         h('h4', {}, 'คุณสมบัติ'), inspector,
         h('h4', {}, 'คลังภาพกระดาษ ', paletteCount),
         h('div', { class: 'me-palette-bar' }, search, catSel), palette)),
+    revBox,
   );
   host.replaceChildren(root);
+
+  const reloadRevs = mountRevisions(revBox, h, api, perms, () => current, (rev) => {
+    if (ed) setStatus(`ย้อนกลับแล้ว เผยแพร่เป็น rev ${rev} · ร่างในตัวแก้ยังเป็นของเดิม (กด "โหลดที่เผยแพร่ล่าสุด" ถ้าจะเริ่มจากฉบับนี้)`, 'warn');
+    void refreshRows();
+  });
 
   // -------------------------------------------------------------- status and saving
   function setStatus(text: string, cls = ''): void {
@@ -106,6 +115,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api): () => void {
     undoBtn.title = ed?.history.undoLabel ? `ย้อนกลับ: ${ed.history.undoLabel} (Ctrl+Z)` : 'ย้อนกลับ (Ctrl+Z)';
     redoBtn.title = ed?.history.redoLabel ? `ทำซ้ำ: ${ed.history.redoLabel} (Ctrl+Y)` : 'ทำซ้ำ (Ctrl+Y)';
     publishBtn.disabled = !ed || saving;
+    previewBtn.disabled = !ed || saving;
     checkBtn.disabled = !ed;
     solidBtn.disabled = !ed;
     solidBtn.className = ed?.opts.showSolid ? 'on' : '';
@@ -117,6 +127,20 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api): () => void {
     setStatus('มีการแก้ไข รอบันทึกร่าง…', 'warn');
     window.clearTimeout(timer);
     timer = window.setTimeout(() => void save(), SAVE_DELAY_MS);
+  }
+
+  /** "ทดลองเดิน": saves what is on screen, then opens the game in a new tab that runs the saved draft (the server builds a private room for it). */
+  async function tryWalk(): Promise<void> {
+    if (!ed || !current) return;
+    dirty = true; // the server holds exactly what is on the screen
+    if (!(await save())) return;
+    while (saving) await new Promise((r) => setTimeout(r, 100));
+    if (issues.some((i) => i.severity === 'error')) {
+      setStatus('ร่างยังไม่ผ่านการตรวจ ทดลองเดินไม่ได้ ดูข้อผิดพลาดด้านซ้าย', 'bad');
+      return;
+    }
+    window.open(`${location.origin}/?previewMap=${encodeURIComponent(current)}`, '_blank');
+    setStatus('เปิดเกมแท็บใหม่แล้ว · เข้าสู่ระบบด้วยบัญชีเดิม เลือกตัวละคร แล้วเข้าเกม จะอยู่ในห้องพรีวิวส่วนตัวของแมพนี้', 'good');
   }
 
   /** Saves the draft (one request at a time; edits made meanwhile go in the next one). */
@@ -173,6 +197,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api): () => void {
       diff = { added: 0, removed: 0, changed: 0 };
       setStatus(`เผยแพร่แล้ว rev ${r.rev} · ${clock()}`, 'good');
       await refreshRows();
+      void reloadRevs();
     } catch (e) {
       setStatus(`เผยแพร่ไม่สำเร็จ: ${errText(e)}`, 'bad');
     } finally {
@@ -274,6 +299,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api): () => void {
       renderIssues();
       renderInspector(true);
       refreshTop();
+      void reloadRevs();
     } catch (e) {
       setStatus(`โหลดไม่สำเร็จ: ${errText(e)}`, 'bad');
     }

@@ -7,8 +7,9 @@ import type { IncomingMessage, Server as HttpServer } from 'node:http';
 import { cfEdge, clientIp } from './clientIp';
 import type { Db } from './db';
 import { Sim } from '../src/shared/sim/Sim';
-import { HUB_ID, lairExitSpot, ZONES } from '../src/shared/data/zones';
-import { applyMaps } from './maps-live';
+import type { MapData } from '../src/shared/mapSchema';
+import { HUB_ID, lairExitSpot, ZONES, zoneWithLayout, type ZoneDef } from '../src/shared/data/zones';
+import { applyMaps, previewLayout } from './maps-live';
 import { cleanAutoSettings, roundBuffs, SORT_KEYS, type LootFilter, type Player } from '../src/shared/sim/Player';
 import { applyBalance, currentBalance, currentBalanceTuning, type BalanceTuning } from '../src/shared/balance';
 import { upgradeItem } from '../src/shared/data/items';
@@ -221,6 +222,11 @@ interface Session {
    * stays in the world until Auto stops, it dies, the time is up or it logs in again (sweepAway). null = connected.
    */
   awayAt: number | null;
+  /**
+   * A map-editor preview (docs/plans/map-editor.md 2.3): this session plays a copy of the character in its own private Sim built from
+   * the draft layout. Nothing of it is saved, it has no stash, trades, chat or shop, it meets no other player, and it never leaves the Sim.
+   */
+  preview: boolean;
 }
 
 /** Test-only: how long Auto farms on after a drop, in ms, instead of the minutes from /admin (tests/auto-away-server.test.ts). */
@@ -338,6 +344,8 @@ export class GameWorld {
   /** Every open map's Sims, one per channel (server/channels.ts). */
   readonly channels = new Channels(Object.values(ZONES), Date.now, undefined, (z) => ZONES[z.id] ?? z);
   private readonly sessions = new Set<Session>();
+  /** The private Sims of map-editor previews (one per preview session), ticked with the others. */
+  private readonly previews = new Set<Sim>();
   private readonly byPlayer = new Map<Player, Session>();
   /** Account → when (Date.now()) its connection dropped or was taken over, for FRIEND_QUIET_MS. */
   private readonly friendDroppedAt = new Map<number, number>();
@@ -562,7 +570,7 @@ export class GameWorld {
     let wire = this.wireGone;
     this.wireGone = 0;
     for (const s of this.sessions) wire += this.wireDelta(s.ws);
-    const sims = [...this.channels.sims(), ...this.rooms.sims()];
+    const sims = this.allSims();
     const r = this.perf.report(this.sessions.size, sims.length, sims.reduce((n, sim) => n + sim.monsters.length, 0), wire, this.awayCount());
     if (this.sessions.size) Perf.log(r);
   }
@@ -585,12 +593,13 @@ export class GameWorld {
       if (!msg || typeof msg !== 'object') return;
       if (!session) {
         if (msg.t !== 'join') return;
-        session = this.join(ws, msg.token, msg.characterId, ip, msg.delta === 1, rejoinText(msg.back), edge);
+        session = this.join(ws, msg.token, msg.characterId, ip, msg.delta === 1, rejoinText(msg.back), edge, msg.previewMap);
         clearTimeout(timeout);
         return;
       }
       try {
         if (msg.t === 'input') this.onInput(session, msg);
+        else if (session.preview && (msg.t === 'chat' || (msg.t === 'act' && msg.a !== 'respawn'))) return; // a preview only walks and fights
         else if (msg.t === 'act') this.onAction(session, msg);
         else if (msg.t === 'chat') this.onChat(session, msg.text, msg.ch, msg.to);
         else if (msg.t === 'ping') this.onPing(session, msg);
@@ -621,7 +630,7 @@ export class GameWorld {
     ws.on('error', () => ws.close());
   }
 
-  private join(ws: WebSocket, token: unknown, characterId: unknown, ip: string, delta = false, rejoin: string | null = null, edge: string | null = null): Session | null {
+  private join(ws: WebSocket, token: unknown, characterId: unknown, ip: string, delta = false, rejoin: string | null = null, edge: string | null = null, previewMap?: unknown): Session | null {
     const acc = typeof token === 'string' ? this.db.sessionAccount(token) : undefined;
     const charId = num(characterId, -1);
     let data = acc ? this.db.loadCharacter(acc.id, charId) : undefined;
@@ -641,11 +650,13 @@ export class GameWorld {
       ws.close();
       return null;
     }
+    // A map-editor preview (anyone with the mapEdit tool; everyone else just joins normally): a copy of the character in its own Sim.
+    const pv = this.previewOf(acc, previewMap);
     // An account may play several of its characters at once (they share one live stash), but each
     // character only once: a new login with it takes over from the old one.
     // That includes one still farming with Auto after its connection dropped (awayAt): it comes back
     // here, at the same spot with Auto on (autoBack), without ever being in the world twice.
-    for (const s of [...this.sessions]) {
+    for (const s of pv ? [] : [...this.sessions]) {
       if (s.accountId === acc.id && s.charId === charId) {
         this.send(s.ws, { t: 'kick', msg: 'ตัวละครนี้เข้าเกมจากที่อื่น' });
         this.leave(s, 'takeover', s.awayAt !== null ? `taken back after farming ${fmtAgo(Date.now() - s.awayAt)} offline with Auto` : 'takeover (logged in again)');
@@ -656,15 +667,18 @@ export class GameWorld {
     }
     // Everyone comes into the game in the hub's town, whichever zone they logged out in, except a
     // dropped connection (or a login elsewhere) back within CH_RECONNECT_MS: that goes back where it was.
-    const back = this.channels.returning(charId);
-    const sim = (back?.channel ?? this.channels.place(HUB_ID)!).sim;
+    const back = pv ? undefined : this.channels.returning(charId);
+    const sim = pv ? new Sim(pv.zone, { map: pv.map }) : (back?.channel ?? this.channels.place(HUB_ID)!).sim;
+    if (pv) this.previews.add(sim);
     const player = sim.addPlayer(data);
     if (back) {
       player.x = back.x;
       player.z = back.z;
     }
-    this.db.touchOnline(acc.id);
-    if (acc.guest) {
+    if (!pv) this.db.touchOnline(acc.id);
+    if (pv) {
+      player.stash = cleanStash(null); // never the live stash: nothing done here may reach the account
+    } else if (acc.guest) {
       // Guests can't use the stash (onAction refuses it); this empty one is never saved.
       player.stash = cleanStash(null);
     } else {
@@ -676,15 +690,15 @@ export class GameWorld {
       player.stash = stash;
     }
     // Guests too: a guest who signs up keeps the account, and with it what it has done.
-    let tut = this.tuts.get(acc.id);
+    let tut = pv ? this.db.loadTutorial(acc.id) : this.tuts.get(acc.id);
     if (!tut) {
       tut = this.db.loadTutorial(acc.id);
       this.tuts.set(acc.id, tut);
     }
     player.tut = tut;
     const s: Session = {
-      ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId, sim, player,
-      move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null, recall: false,
+      ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId: pv ? -(charId + 1) : charId, sim, player,
+      preview: !!pv, move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null, recall: false,
       auto: null, lastInputAt: 0, walkTo: null, walkEpoch: 0, serverWalk: false, walkAnchor: { x: 0, z: 0 }, walkAnchorAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', lastTut: '', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', delta, lastMe: new Map(), seenP: new Map(), seenM: new Map(), outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, lastCashAt: -Infinity, saveDue: null,
       ip, edge, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, deflate: ws.extensions.includes('permessage-deflate'), staff: !acc.guest && ['owner', 'gm'].includes(this.db.adminRole(acc.id) ?? ''), pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
@@ -694,12 +708,12 @@ export class GameWorld {
     };
     // Back at the same spot after a drop (or a login elsewhere) with Auto on: Auto carries on, from the
     // same AutoPlay (its farm spot), and the welcome tells the browser so.
-    const autoBack = this.autoBack.get(charId);
+    const autoBack = pv ? undefined : this.autoBack.get(charId);
     this.autoBack.delete(charId);
     if (back && autoBack && sim.zone.allowAutoPlay) s.auto = autoBack.auto;
     // Taken back (or never owned) while offline: off.
     this.keepToOwned(s);
-    try {
+    if (!pv) try {
       s.playRow = this.db.startPlaySession({ accountId: acc.id, username: acc.username, guest: acc.guest, charId, charName: player.name, ip });
     } catch (e) {
       console.error('[world] recording the play session failed', e);
@@ -708,16 +722,26 @@ export class GameWorld {
     this.sessions.add(s);
     this.byPlayer.set(player, s);
     s.friendKey = this.friendKeyOf(s);
-    if (!acc.guest) this.friendsJoined(s, accountWasOnline);
+    if (!acc.guest && !pv) this.friendsJoined(s, accountWasOnline);
     // Back within the grace time (or a takeover): still in the party.
-    player.partyId = this.parties.online(charId);
-    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), map: sim.terrain.mapRev, guest: acc.guest, ...(s.auto ? { auto: true } : {}), orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), animTuning: this.db.animTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning(), cash: this.cash.catalog(), cashState: this.cash.state(acc.id, acc.guest) });
-    this.broadcastSystem(`${player.name} เข้าสู่โลก`);
+    player.partyId = pv ? null : this.parties.online(charId);
+    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), map: sim.terrain.mapRev, guest: acc.guest, ...(s.auto ? { auto: true } : {}), ...(pv ? { preview: true } : {}), orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), animTuning: this.db.animTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning(), cash: this.cash.catalog(), cashState: this.cash.state(acc.id, acc.guest) });
+    if (!pv) this.broadcastSystem(`${player.name} เข้าสู่โลก`);
     // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
-    if (!acc.guest) setTimeout(() => this.sessions.has(s) && (this.marketOnJoin(s), this.dailyCheck(s), this.mailNote(s, true)), MARKET_JOIN_NOTE_MS);
+    if (!acc.guest && !pv) setTimeout(() => this.sessions.has(s) && (this.marketOnJoin(s), this.dailyCheck(s), this.mailNote(s, true)), MARKET_JOIN_NOTE_MS);
     const extra = [rejoin && `reconnected: ${rejoin}`, back && 'back at the same spot', s.auto && 'Auto on'].filter(Boolean).join(' · ');
     console.log(`[world] ${acc.username} joined as ${player.name}${acc.guest ? ' (guest)' : ''} from ${ip}${edge ? ` via Cloudflare ${edge}` : ''}${s.deflate ? '' : ' (no compression)'}${extra ? ` — ${extra}` : ''} (${this.onlineText()})`);
     return s;
+  }
+
+  /** The room for a map-editor preview, when this account may open one (a staff role with the mapEdit tool) and the zone's layout passes the check. */
+  private previewOf(acc: { id: number; guest: boolean }, id: unknown): { zone: ZoneDef; map: MapData } | null {
+    if (typeof id !== 'string' || acc.guest) return null;
+    const role = this.db.adminRole(acc.id);
+    if (!role || !this.db.roleFeatures(role).includes('mapEdit')) return null;
+    const map = previewLayout(this.db, id);
+    const zone = map && zoneWithLayout(id, map);
+    return map && zone ? { zone, map } : null;
   }
 
   /** "5 online" or "5 online, 2 of them away with Auto" for the log. */
@@ -789,8 +813,23 @@ export class GameWorld {
     for (const [id, a] of this.autoBack) if (now - a.at > CH_RECONNECT_MS) this.autoBack.delete(id);
   }
 
+  /** Every running Sim: the channels, the boss rooms and the map-editor previews. */
+  private allSims(): Sim[] {
+    return [...this.channels.sims(), ...this.rooms.sims(), ...this.previews];
+  }
+
   private leave(s: Session, how: LeaveHow = 'quit', note?: string): void {
     if (!this.sessions.has(s)) return;
+    if (s.preview) {
+      // A preview copy: nothing to save, no party, play row or friends, and no way back (the owner opens the preview again).
+      this.sessions.delete(s);
+      this.byPlayer.delete(s.player);
+      s.sim.removePlayer(s.player);
+      this.previews.delete(s.sim);
+      this.wireGone += this.wireDelta(s.ws);
+      console.log(`[world] ${s.username} left the map preview of ${s.sim.zone.id}: ${note ?? how} (${this.onlineText()})`);
+      return;
+    }
     // Auto was on and the character can come back to the same spot: it carries on then (join).
     if (how !== 'quit' && s.auto && s.player.alive && !this.rooms.sims().includes(s.sim)) this.autoBack.set(s.charId, { auto: s.auto, at: Date.now() });
     else this.autoBack.delete(s.charId);
@@ -1770,7 +1809,7 @@ export class GameWorld {
     applyBalance(tuning);
     applyMaps(this.db); // the "ใช้แมพจาก DB" switch: rooms made from now on follow it
 
-    for (const sim of [...this.channels.sims(), ...this.rooms.sims()]) {
+    for (const sim of this.allSims()) {
       for (const p of sim.players) {
         for (const it of Object.values(p.equipment)) upgradeItem(it);
         for (const e of p.bag) upgradeItem(e);
@@ -2019,7 +2058,7 @@ export class GameWorld {
     const travels: { s: Session; zone: string; atCamp?: boolean; spot?: Vec2 }[] = [];
     let simMs = 0;
     const ownNumsOnly = currentBalance().fxLayer.ownNumsOnly;
-    for (const sim of [...this.channels.sims(), ...this.rooms.sims()]) {
+    for (const sim of this.allSims()) {
       const t0 = performance.now();
       sim.step(dt, this.intentOf);
       simMs += performance.now() - t0;
@@ -2099,6 +2138,7 @@ export class GameWorld {
    * exact channel or boss room. `spot` puts the character there (a channel switch keeps where it stood).
    */
   private travel(s: Session, to: string | Sim, atCamp = false, spot?: Vec2): void {
+    if (s.preview) return; // a map preview stays in its own room (the portals do nothing)
     const dest = typeof to === 'string' ? this.channels.place(to, { leader: this.leaderSim(s), prefer: s.lastCh })?.sim : to;
     if (!dest || dest === s.sim || !this.sessions.has(s)) return;
     this.trades.cancelChar(s.charId, `${s.player.name} เปลี่ยนแมพ`);
@@ -2596,6 +2636,7 @@ export class GameWorld {
 
   private save(s: Session): void {
     s.saveDue = null;
+    if (s.preview) return; // a copy of the character: never written back
     try {
       // The account's tutorial goes with the character, so a step's gold and the step taken never come apart.
       this.db.transaction(() => {
