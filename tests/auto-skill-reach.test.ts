@@ -83,9 +83,17 @@ ok(skills(frame('mage', { q: 'mg_flamewave' }, far)) === 'q', 'switch off: Flame
 ok(skills(frame('mage', { e: 'frostnova' }, far)) === 'e', 'switch off: Frost Nova cast with nothing in the circle (old way)');
 applyBalance({});
 
-// A bigger margin lets the wave go a little earlier.
+// The margin is taken off the reach (owner 2026-11-20): just inside the cone's edge, but not by the margin → held.
+{
+  const edge = 6 + R - MARGIN / 2;
+  ok(skills(frame('mage', { q: 'mg_flamewave' }, edge)) === '', `monster ${(MARGIN / 2).toFixed(2)} m inside the cone's edge: held (margin ${MARGIN} m)`);
+  ok(skills(frame('mage', { q: 'mg_flamewave' }, 6 + R + MARGIN / 2)) === '', 'monster just outside the cone (the old bug spot): not cast');
+  ok(skills(frame('mage', { q: 'mg_flamewave' }, 6 + R - MARGIN - 0.05)) === 'q', 'monster inside by the margin: cast');
+}
+// A bigger margin waits for the monster to come in deeper.
 applyBalance(checkBalance({ auto: { aoeMargin: 3 } }, true).tuning!);
-ok(skills(frame('mage', { q: 'mg_flamewave' }, far)) === 'q', 'margin 3 m: Flame Wave cast at the same spot');
+ok(skills(frame('mage', { q: 'mg_flamewave' }, 4)) === '', 'margin 3 m: Flame Wave held at 4 m');
+ok(skills(frame('mage', { q: 'mg_flamewave' }, 2.5)) === 'q', 'margin 3 m: Flame Wave cast at 2.5 m');
 applyBalance({});
 
 finish('auto-skill-reach');

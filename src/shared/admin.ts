@@ -174,7 +174,6 @@ export interface SnapDeltaStats {
  */
 export interface AdminSnapDelta { on: boolean; stats: SnapDeltaStats; clients: { delta: number; full: number } }
 /** The papercraft map art switch (owner 2026-11-17, art_templates/papercraft_maps): on = every player's game loads the paper pictures. */
-export interface AdminPaperMaps { on: boolean }
 
 // ------------------------------------------------------------ owner tools (users, bans, broadcast, backups…)
 
@@ -183,7 +182,7 @@ export interface AdminPaperMaps { on: boolean }
  * switch: the Permissions tab, the audit log, restarting / stopping the server, deleting accounts or
  * characters, and making someone owner (command line).
  */
-export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'paperMaps' | 'animPreview' | 'animTune' | 'menuLayout' | 'menuLayoutEdit';
+export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'animPreview' | 'animTune' | 'menuLayout' | 'menuLayoutEdit';
 
 /**
  * The defaults: which built-in role may use each tool (owner always has all). The owner can change
@@ -256,7 +255,6 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   // The Google login card on the Server tab: switch it on/off, see and unlink linked accounts (owner 2026-11-15: owner only).
   googleLogin: ['owner'],
   // The papercraft map art switch on the Server tab (owner 2026-11-17: everyone sees the same art, so owner only).
-  paperMaps: ['owner'],
   // The "แคชช็อป" tab: items, prices, packages and purchases (owner 2026-11-15: owner and GMs may look).
   cashShop: ['owner', 'gm'],
   // Saving it, opening / closing sales (owner only).
@@ -329,7 +327,6 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   daily: { name: 'ล็อกอินรายวัน', desc: 'แท็บ "ล็อกอินรายวัน": แก้ของรางวัลแต่ละวันของปฏิทิน (มีผลกับของที่ส่งหลังบันทึก)', group: 'ปรับเกม' },
   netDelta: { name: 'ลดขนาด snapshot', desc: 'แท็บ Server: สวิตช์ส่งค่าที่แทบไม่เปลี่ยนเฉพาะตอนเปลี่ยน (ลดเน็ตขาออก) และตัวนับ', group: 'ระบบ' },
   googleLogin: { name: 'เข้าสู่ระบบด้วย Google', desc: 'แท็บ Server: เปิด/ปิดปุ่ม Google ที่หน้า Login ดูบัญชีที่ผูก Google และยกเลิกการผูก', group: 'ระบบ' },
-  paperMaps: { name: 'ภาพกระดาษ (ทดลอง)', desc: 'แท็บ Server: สลับภาพแมพและตัวละครระหว่างแบบเดิมกับแบบกระดาษตัดแปะ ทุกคนเห็นเหมือนกัน (มีผลตอนเปิดหน้าเกมใหม่)', group: 'หน้าตา' },
   animPreview: { name: 'ดูท่าตัวละคร', desc: 'แท็บ "ท่าตัวละคร": ดูท่ายืน วิ่ง โจมตี ฯลฯ ของทุกอาชีพครบ 8 ทิศ บนพื้นเลื่อน ไม่เปลี่ยนอะไรในเกม (ปรับค่าต่อทิศได้ บันทึกต้องมีสวิตช์ animTune)', group: 'หน้าตา' },
   animTune: { name: 'บันทึกค่าท่าตัวละคร', desc: 'แท็บ "ท่าตัวละคร": บันทึกค่าที่ปรับต่อทิศ (แถวภาพ พลิก ความเร็ว เลื่อน ขนาด) เป็นของทั้งเซิร์ฟ ทุกคนเห็นทันที', group: 'หน้าตา' },
   menuLayout: { name: 'ดูจัดเมนูเกม', desc: 'แท็บ "จัดเมนูเกม": ดูว่าหน้าต่างเมนูและแถวไอคอนมุมขวาบนมีปุ่มอะไร ลำดับไหน (ลองจัดได้ แต่บันทึกต้องมีสวิตช์ "บันทึกจัดเมนูเกม")', group: 'ปรับเกม' },

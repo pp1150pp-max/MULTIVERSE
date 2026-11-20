@@ -302,11 +302,32 @@ export class Monster extends Unit {
     if (this.state !== 'return') this.state = 'idle';
   }
 
-  /** Nearest living player, for monsters that attack on sight. */
+  /**
+   * Its target is gone (stepped into the safe area, left the map or channel, respawned in town): ordinary monsters
+   * drop it at once and walk home, healing on the way, instead of standing where they are (owner 2026-11-20).
+   * Bosses, and the Balance switch off, keep the old `calm()`.
+   */
+  dropTarget(): void {
+    if (this.isBoss || !currentBalance().mobDropOnSafe) {
+      this.calm();
+      return;
+    }
+    const inAir = this.state === 'leap';
+    this.aggroT = 0;
+    this.windupT = 0;
+    this.target = null;
+    if (!inAir) {
+      this.lift = 0;
+      this.state = 'return';
+    }
+  }
+
+  /** Nearest living player, for monsters that attack on sight (players in the safe area are not prey while the Balance switch is on). */
   private nearestPlayer(sim: Sim): { p: Player; d: number } | null {
     let best: { p: Player; d: number } | null = null;
+    const skipSafe = !this.isBoss && currentBalance().mobDropOnSafe;
     for (const p of sim.players) {
-      if (!p.alive) continue;
+      if (!p.alive || (skipSafe && sim.inSafe(p))) continue;
       const d = Math.hypot(p.x - this.x, p.z - this.z);
       if (!best || d < best.d) best = { p, d };
     }
@@ -387,7 +408,13 @@ export class Monster extends Unit {
     this.fleeT -= dt;
 
     // Lose a dead target; aggressive monsters pick up whoever walks into range.
-    if (this.target && !this.target.alive) this.target = null;
+    if (this.target && !this.target.alive) {
+      this.target = null;
+      if (!this.isBoss && currentBalance().mobDropOnSafe && this.state === 'chase') {
+        this.aggroT = 0;
+        this.state = 'return';
+      }
+    }
     if (this.holdsOnWipe(sim)) {
       // Whole boss-room group down: stand still, keep HP / enrage / damage shares, drop any wind-up (owner 2026-11-17).
       this.windupT = 0;

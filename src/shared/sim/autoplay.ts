@@ -343,7 +343,8 @@ export class AutoPlay {
    * Auto casts a skill only when it would reach (owner 2026-11-19 for the mage's circles, every class and kind
    * 2026-11-20): before, any skill went as soon as the basic attack reached, so a short skill whiffed on a monster
    * standing at basic range. Same hit rules as the skill itself (sim/skills.ts: its tuned reach + the monster's own
-   * size), plus the `aoeMargin` setting:
+   * size), less the `aoeMargin` safety distance (owner 2026-11-20: it used to be added, so a Flame Wave went with the
+   * monster up to 0.5 m beyond its cone and missed):
    * - circle around the player: any monster inside it;
    * - cone / dash: the target within its range;
    * - shot: the target within its range (+ the blast at the end);
@@ -360,11 +361,12 @@ export class AutoPlay {
     const margin = cfg.aoeMargin;
     if (reach.kind === 'self') {
       if (skillValues(sk).dmg <= 0) return true;
-      return g.monsters.some((m) => m.alive && Math.hypot(m.x - p.x, m.z - p.z) <= reach.radius + m.radius + margin);
+      return g.monsters.some((m) => m.alive && Math.hypot(m.x - p.x, m.z - p.z) + margin <= reach.radius + m.radius);
     }
+    // A skill aimed at the target needs one.
     const t = this.target;
-    if (!t || !t.alive) return true;
-    const far = Math.hypot(t.x - p.x, t.z - p.z) - t.radius - margin;
+    if (!t || !t.alive) return false;
+    const far = Math.hypot(t.x - p.x, t.z - p.z) - t.radius + margin;
     switch (reach.kind) {
       case 'cone':
       case 'dash': return far <= reach.range;

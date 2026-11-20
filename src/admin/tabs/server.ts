@@ -1,4 +1,4 @@
-import { type AdminServerState, type AdminShutdownText, type AdminSnapDelta, type AdminGoogle, type AdminPaperMaps } from '../../shared/admin';
+import { type AdminServerState, type AdminShutdownText, type AdminSnapDelta, type AdminGoogle } from '../../shared/admin';
 import { checkShutdownText, countdownTime, SHUTDOWN_CHOICES, SHUTDOWN_SECONDS, SHUTDOWN_TEXT_MAX, SHUTDOWN_TIME_TOKEN, shutdownWarning, type ShutdownMode } from '../../shared/net/protocol';
 import { h, api, fmt, time, me, view, can } from '../core';
 import { backupCard } from './backups';
@@ -10,7 +10,6 @@ export async function renderServer(): Promise<void> {
   const restart = me?.role === 'owner' ? renderRestart() : null;
   if (can('shutdownText')) view.append(shutdownTextCard());
   if (can('netDelta')) view.append(snapDeltaCard());
-  if (can('paperMaps')) view.append(paperMapsCard());
   if (can('googleLogin')) view.append(googleCard());
   if (can('backup')) view.append(backupCard());
   await restart;
@@ -200,41 +199,6 @@ function snapDeltaCard(): HTMLElement {
     h('div', { class: 'muted', style: 'margin:-6px 0 10px' },
       'ค่าที่แทบไม่เปลี่ยน (ตัวกรองของ ตั้งค่า Auto สเตตัส สกิล เควส · ชื่อ/คลาส/ของแต่งตัวของผู้เล่นอื่น · ชนิด/เลเวลมอน) ส่งเฉพาะตอนเปลี่ยน · เข้าเกม/เปลี่ยนแมพ/CH ได้ครบเสมอ · ปิดไว้ = ส่งเต็มทุกครั้งแบบเดิม (ใช้ถ้าสงสัยว่าภาพในเกมเพี้ยน)'),
     status, numbers, h('div', { class: 'row', style: 'align-items:center;margin-top:8px' }, refresh, h('span', { style: 'flex:1' }), toggle), msg);
-}
-
-/** The papercraft map art switch (src/shared/paperArt.ts): which pictures every player's game loads. */
-function paperMapsCard(): HTMLElement {
-  const msg = h('div', { class: 'msg' });
-  const status = h('div', { style: 'margin-bottom:8px' }, 'กำลังโหลด…');
-  const toggle = h('button', { class: 'primary' }, '…');
-  let state: AdminPaperMaps | null = null;
-  const load = (st: AdminPaperMaps) => {
-    state = st;
-    status.textContent = st.on ? 'สถานะ: เปิดอยู่ — ภาพกระดาษตัดแปะ' : 'สถานะ: ปิดอยู่ — ภาพเดิม';
-    toggle.textContent = st.on ? 'ปิด (กลับเป็นภาพเดิม)' : 'เปิดภาพกระดาษ';
-  };
-  const fail = (e: Error) => {
-    msg.className = 'msg bad';
-    msg.textContent = e.message;
-  };
-  toggle.onclick = async () => {
-    if (!state) return;
-    toggle.disabled = true;
-    try {
-      load(await api<AdminPaperMaps>('POST', '/admin/paper-maps', { on: !state.on }));
-      msg.className = 'msg ok';
-      msg.textContent = 'บันทึกแล้ว — ทุกคนจะเห็นตอนเปิดหน้าเกมใหม่ (คนที่อยู่ในเกมตอนนี้ยังเห็นภาพเดิมจนกว่าจะรีเฟรช)';
-    } catch (e) {
-      fail(e as Error);
-    } finally {
-      toggle.disabled = false;
-    }
-  };
-  void api<AdminPaperMaps>('GET', '/admin/paper-maps').then(load, fail);
-  return h('div', { class: 'card' }, h('h2', {}, 'ภาพกระดาษตัดแปะ (ทดลอง)'),
-    h('div', { class: 'muted', style: 'margin:-6px 0 10px' },
-      'ตอนนี้มีภาพกระดาษของแมพ 1–4 ห้องบอส เมืองกลาง แท่นเรียกบอส ชุดแคมป์ ประตูมิติ ขอบเกาะ มอนสเตอร์ และตัวละครทั้ง 3 คลาส · NPC และ UI ยังเป็นภาพเดิม · ตำแหน่ง ขนาด และการชนของทุกอย่างเหมือนเดิม'),
-    status, h('div', { class: 'row', style: 'align-items:center;margin-top:8px' }, h('span', { style: 'flex:1' }), toggle), msg);
 }
 
 function shutdownTextCard(): HTMLElement {

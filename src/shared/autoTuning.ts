@@ -66,7 +66,7 @@ export interface AutoConfig {
    * (owner 2026-11-20); otherwise the next skill in the order goes. Off = cast as soon as the basic attack reaches.
    */
   aoeGuard: boolean;
-  /** Extra metres added to a skill's reach for that check (the player and the monster keep moving a little). */
+  /** Safety metres taken off a skill's reach for that check, so the monster is well inside it (owner 2026-11-20; it used to be added). */
   aoeMargin: number;
 }
 
@@ -96,7 +96,7 @@ export const AUTO_NUM_NAME: Record<keyof typeof AUTO_RANGE, string> = {
   nearDist: 'Auto สมดุล: ระยะของใกล้ตัว',
   threatDist: 'Auto สมดุล: ระยะนับว่าโดนตี',
   offlineMin: 'Auto ฟาร์มต่อหลังหลุดได้นาน (นาที)',
-  aoeMargin: 'Auto ระยะสกิล: เผื่อระยะเพิ่ม (ม.)',
+  aoeMargin: 'Auto ระยะสกิล: หักระยะเผื่อพลาด (ม.)',
 };
 /** Name of the "keep farming after a dropped connection" switch. */
 /** Name of the "only cast a skill that reaches" switch (key `aoeGuard`, kept from the mage-only version). */
