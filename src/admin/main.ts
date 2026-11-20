@@ -201,7 +201,7 @@ function tabAllowed(t: Tab): boolean {
     // The papercraft sword trial bench: whoever may use the cosmetics bench (it changes nothing on the server).
     case 'rig': return f.includes('cosPreview');
     case 'anim': return f.includes('animPreview');
-    case 'server': return me.role === 'owner' || f.includes('backup') || f.includes('shutdownText') || f.includes('netDelta') || f.includes('googleLogin');
+    case 'server': return me.role === 'owner' || f.includes('backup') || f.includes('shutdownText') || f.includes('netDelta') || f.includes('directWs') || f.includes('googleLogin');
   }
 }
 

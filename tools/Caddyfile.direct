@@ -1,0 +1,21 @@
+# Caddy for the direct game connection (docs/systems/server-ops.md "ต่อตรง", server/direct.ts).
+# tools/vps-direct-setup.sh fills in @HOST@ and @PORT@ and writes /etc/caddy/Caddyfile.
+#
+# TLS (Let's Encrypt, renewed by Caddy itself) on 443 for the DNS-only hostname; only the WebSocket path /ws
+# goes on, to the game server's direct port on 127.0.0.1 (a listener of its own: what arrives there is
+# "direct"). Everything else is 404: login, /api and /admin stay behind Cloudflare on the main hostname.
+@HOST@ {
+	@ws path /ws
+	handle @ws {
+		reverse_proxy 127.0.0.1:@PORT@ {
+			# The server takes the player's address from the last X-Forwarded-For entry: set it to the
+			# address Caddy saw (whatever the player sent is dropped). CF-* headers mean nothing here.
+			header_up X-Forwarded-For {remote_host}
+			header_up -Cf-Connecting-Ip
+			header_up -Cf-Ray
+		}
+	}
+	handle {
+		respond 404
+	}
+}

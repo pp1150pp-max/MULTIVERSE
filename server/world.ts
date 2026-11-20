@@ -5,6 +5,7 @@ import { buffMask, debuffMask, runningSkillBuffs } from '../src/shared/sim/debuf
 import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage, Server as HttpServer } from 'node:http';
 import { cfEdge, clientIp } from './clientIp';
+import { directIp, directOriginOk, directSettings, saveDirectSettings, type DirectSettings } from './direct';
 import type { Db } from './db';
 import { Sim } from '../src/shared/sim/Sim';
 import type { MapData } from '../src/shared/mapSchema';
@@ -25,7 +26,8 @@ import {
 import { EQUIP_SLOTS, RARITIES, type Vec2 } from '../src/shared/types';
 import type { SkillSlot } from '../src/shared/data/classes';
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
-import type { AdminOnline, AdminOnlineRow, AdminSnapDelta, SnapDeltaStats } from '../src/shared/admin';
+import type { AdminDirectWs, AdminOnline, AdminOnlineRow, AdminSnapDelta, SnapDeltaStats } from '../src/shared/admin';
+import { DIRECT_WS_HOST_DEFAULT, DIRECT_WS_IP_MAX_DEFAULT } from '../src/shared/admin';
 import type { OrbLook } from '../src/shared/orbLook';
 import type { CosTuning } from '../src/shared/cosTuning';
 import type { AnimTuning } from '../src/shared/animTuning';
@@ -161,7 +163,7 @@ interface Session {
   saveDue: number | null;
   /** Where the connection came from, for the owner's log only (never sent to anyone). */
   ip: string;
-  /** Cloudflare data center the connection came in through (cfEdge), null when direct. */
+  /** Cloudflare data center the connection came in through (cfEdge), 'direct' = past Cloudflare (server/direct.ts), null = neither (home network). */
   edge: string | null;
   /** What the client reported with its pings since the last per-minute log line (see onPing). */
   lastPingAt: number;
@@ -389,8 +391,15 @@ export class GameWorld {
   /** Cosmetics hidden from the in-game window (src/shared/cosShop.ts): can't be put on again, the worn ones stay. */
   private cosHidden: Set<string>;
 
+  /** Direct connections (server/direct.ts): settings, the local port Caddy passes to (0 = none), open ones per address, refusals. */
+  private direct: DirectSettings;
+  private directPort = 0;
+  private readonly directPerIp = new Map<string, number>();
+  private directRefused = { off: 0, origin: 0, perIp: 0 };
+
   constructor(private readonly db: Db, http: HttpServer) {
     this.snapDelta = db.getSetting(SNAP_DELTA_KEY) !== '0';
+    this.direct = directSettings(db);
     this.cosHidden = new Set(cosHiddenIds(db.cosShop()));
     const wss = new WebSocketServer({ server: http, path: WS_PATH, maxPayload: 16 * 1024, perMessageDeflate: WS_DEFLATE });
     wss.on('connection', (ws, req) => this.onConnection(ws, req));
@@ -575,9 +584,71 @@ export class GameWorld {
     if (this.sessions.size) Perf.log(r);
   }
 
-  private onConnection(ws: WebSocket, req: IncomingMessage): void {
-    const ip = clientIp(req);
-    const edge = cfEdge(req);
+  /**
+   * The direct road (server/direct.ts): `http` listens on 127.0.0.1:`port`, which only Caddy reaches. Refused
+   * before the upgrade (so the browser falls back to the tunnel at once) when the switch is off, the page is
+   * not on our domain, or one address already has ipMax direct connections.
+   */
+  attachDirect(http: HttpServer, port: number): void {
+    this.directPort = port;
+    const wss = new WebSocketServer({
+      server: http, path: WS_PATH, maxPayload: 16 * 1024, perMessageDeflate: WS_DEFLATE,
+      verifyClient: (info: { req: IncomingMessage }, done: (ok: boolean, code?: number) => void) => {
+        const d = this.direct;
+        if (!d.on) return this.directRefused.off++, done(false, 403);
+        if (!directOriginOk(info.req.headers.origin, d.host)) return this.directRefused.origin++, done(false, 403);
+        if ((this.directPerIp.get(directIp(info.req)) ?? 0) >= d.ipMax) return this.directRefused.perIp++, done(false, 429);
+        done(true);
+      },
+    });
+    wss.on('connection', (ws, req) => {
+      const ip = directIp(req);
+      this.directPerIp.set(ip, (this.directPerIp.get(ip) ?? 0) + 1);
+      ws.on('close', () => {
+        const n = (this.directPerIp.get(ip) ?? 1) - 1;
+        if (n > 0) this.directPerIp.set(ip, n);
+        else this.directPerIp.delete(ip);
+      });
+      this.onConnection(ws, req, true);
+    });
+  }
+
+  /** The direct connection card (admin Server tab). */
+  directState(canEditHost: boolean): AdminDirectWs {
+    let direct = 0;
+    for (const s of this.sessions) if (s.edge === 'direct') direct++;
+    return {
+      ...this.direct, defaults: { host: DIRECT_WS_HOST_DEFAULT, ipMax: DIRECT_WS_IP_MAX_DEFAULT },
+      available: this.directPort > 0, port: this.directPort, canEditHost,
+      clients: { direct, tunnel: this.sessions.size - direct }, refused: { ...this.directRefused },
+    };
+  }
+
+  /** Where a browser may connect directly (GET /api/net-route); null = only through the tunnel. */
+  directUrl(): string | null {
+    return this.direct.on && this.directPort > 0 ? `wss://${this.direct.host}${WS_PATH}` : null;
+  }
+
+  /**
+   * New direct settings. Switched off (or moved to another hostname): everyone connected directly is
+   * dropped (not kicked), so their browser reconnects at once — through the tunnel, or to the new name.
+   */
+  setDirect(next: DirectSettings): number {
+    const cut = this.direct.on && (!next.on || next.host !== this.direct.host);
+    this.direct = next;
+    saveDirectSettings(this.db, next);
+    let n = 0;
+    if (cut) for (const s of this.sessions) if (s.edge === 'direct') {
+      s.ws.close(WS_CLOSE_DIRECT_OFF, 'direct off');
+      n++;
+    }
+    return n;
+  }
+
+  private onConnection(ws: WebSocket, req: IncomingMessage, direct = false): void {
+    // Direct: never the CF-* headers (anyone may write them on that road), only what Caddy added.
+    const ip = direct ? directIp(req) : clientIp(req);
+    const edge = direct ? 'direct' : cfEdge(req);
     let session: Session | null = null;
     const timeout = setTimeout(() => {
       if (!session) ws.close();
@@ -730,7 +801,7 @@ export class GameWorld {
     // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
     if (!acc.guest && !pv) setTimeout(() => this.sessions.has(s) && (this.marketOnJoin(s), this.dailyCheck(s), this.mailNote(s, true)), MARKET_JOIN_NOTE_MS);
     const extra = [rejoin && `reconnected: ${rejoin}`, back && 'back at the same spot', s.auto && 'Auto on'].filter(Boolean).join(' · ');
-    console.log(`[world] ${acc.username} joined as ${player.name}${acc.guest ? ' (guest)' : ''} from ${ip}${edge ? ` via Cloudflare ${edge}` : ''}${s.deflate ? '' : ' (no compression)'}${extra ? ` — ${extra}` : ''} (${this.onlineText()})`);
+    console.log(`[world] ${acc.username} joined as ${player.name}${acc.guest ? ' (guest)' : ''} from ${ip}${edge === 'direct' ? ' direct (past Cloudflare)' : edge ? ` via Cloudflare ${edge}` : ''}${s.deflate ? '' : ' (no compression)'}${extra ? ` — ${extra}` : ''} (${this.onlineText()})`);
     return s;
   }
 
@@ -2682,6 +2753,8 @@ export class GameWorld {
 /** A player's cosmetics for the snapshot (left out when none). */
 /** The settings row of the snapshot delta switch: '0' = off, missing = on (the default). */
 const SNAP_DELTA_KEY = 'snap_delta';
+/** Close code for direct connections when the direct switch goes off: a plain drop, the browser reconnects (through the tunnel). */
+const WS_CLOSE_DIRECT_OFF = 4100;
 /** PrivateSnap fields that hardly ever change: sent only when they did (snapshot delta). */
 type StaticMeKey = 'potSel' | 'lootFilter' | 'autoSettings' | 'stats' | 'skills' | 'bossKills' | 'quests' | 'gearQuests' | 'gearDone';
 const STATIC_ME: readonly StaticMeKey[] = ['potSel', 'lootFilter', 'autoSettings', 'stats', 'skills', 'bossKills', 'quests', 'gearQuests', 'gearDone'];
