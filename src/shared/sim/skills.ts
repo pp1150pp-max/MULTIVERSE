@@ -409,7 +409,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       return true;
     }
     case 'mg_volatileorb':
-      sim.addProjectile(p, { x: p.x, z: p.z, angle: ang, speed: 8, range: far, radius: 0.6, mult: dmg, color: '#ff9a4a', size: 1.6, explode: P('blast'), hit: { skill: sk } });
+      sim.addProjectile(p, { x: p.x, z: p.z, angle: ang, speed: 8, range: far, radius: 0.6, mult: dmg, color: '#ff9a4a', size: 1.6, explode: P('blast'), carry: P('carry') >= 1 ? P('carryWidth') : 0, hit: { skill: sk } });
       return true;
     case 'mg_crystalrain': {
       const c = landing(p, aim, far);

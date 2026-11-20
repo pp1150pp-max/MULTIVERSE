@@ -9,7 +9,7 @@ import type { Monster } from '../src/shared/sim/Monster';
 import type { Player } from '../src/shared/sim/Player';
 import { newCharacterData } from '../src/shared/sim/Player';
 import { castSkill } from '../src/shared/sim/skills';
-import { skillParam, skillParamLines } from '../src/shared/skillBook';
+import { skillParam, skillParamLines, skillReach } from '../src/shared/skillBook';
 
 const sk = (id: string): SkillDef => CLASSES.mage.skills.find((s) => s.id === id)!;
 const star = sk('mg_starfall');
@@ -153,6 +153,30 @@ function stars(sim: Sim, p: Player, aim: { x: number; z: number }, rank = 1): { 
   const peak = { v: 0 };
   for (let i = 0; i < 40; i++) { sim.step(0.05); peak.v = Math.max(peak.v, Math.abs(m.x - x0)); }
   ok(peak.v > 8 && peak.v < 13, `kb 10 m moves about 10 m (${peak.v.toFixed(2)})`);
+  applyBalance({});
+}
+
+// ---------------------------------------------------------- Volatile Orb sweeps normal monsters along and goes off at the end
+{
+  const orb = sk('mg_volatileorb');
+  const far = skillReach(orb)!.kind === 'shot' ? (skillReach(orb) as { range: number }).range : 0;
+  const shoot = (carryOn: boolean): { moved: number; dmg: number } => {
+    applyBalance(carryOn ? {} : { skills: { skills: { mg_volatileorb: { params: { carry: 0 } } } } });
+    const { sim, p, mobs } = arena(1);
+    const m = mobs[0];
+    m.x = p.x + 3;
+    m.z = p.z;
+    const x0 = m.x;
+    castSkill(sim, p, orb, { x: p.x + far, z: p.z }, 1);
+    let moved = 0;
+    for (let t = 0; t < 4 && m.damageBy.size === 0; t += 0.05) { sim.step(0.05); moved = Math.max(moved, m.x - x0); }
+    return { moved, dmg: [...m.damageBy.values()].reduce((a, b) => a + b, 0) };
+  };
+  const on = shoot(true);
+  ok(far > 6 && on.moved > far - 5, `orb sweeps a monster along toward the end of its range (moved ${on.moved.toFixed(1)} of ${far})`);
+  ok(on.dmg > 0, 'and the monster is hit by the blast');
+  const off = shoot(false);
+  ok(off.moved < 2, `switch off: it goes off at the first monster as before (moved ${off.moved.toFixed(1)})`);
   applyBalance({});
 }
 
