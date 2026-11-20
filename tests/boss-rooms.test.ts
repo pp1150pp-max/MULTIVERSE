@@ -172,7 +172,7 @@ const rooms2 = new BossRooms({
   toLair: (sim, p) => {
     const a = [...chars.values()].find((x) => x.player === p)!;
     const spot = lairExitSpot(sim.zone)!;
-    move(a, ZONES[spot.field] === ZONE_1 ? field : hub);
+    move(a, spot.field === ZONE_1.id ? field : hub);
     a.player.x = spot.x;
     a.player.z = spot.z;
     if (!a.player.alive) {

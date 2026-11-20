@@ -553,7 +553,7 @@ export class World {
     this.addPieces(mulberry32(terrain.zone.seed + 31));
 
     // Anything taller than a player can hide one, so it turns see-through too (not only trees and the town).
-    for (const p of this.props) this.addProp(p.key, p.x, p.z, p.height, !p.solid && (p.fade || p.height >= FADE_MIN_HEIGHT), p.flip);
+    for (const p of this.props) this.addProp(p.key, p.x, p.z, p.height, !p.solid && (p.fade || p.height >= FADE_MIN_HEIGHT), p.flip, p.rot);
     const fire = terrain.props.find((p) => p.key === 'campfire');
     if (fire) this.flames.push(this.glow(fire.x, 0.5, fire.z, '#ffa040', 0.55));
     // Each portal glows like the land it leads to; the way back to town glows gold.
@@ -1267,7 +1267,11 @@ export class World {
     }
   }
 
-  private addProp(key: string, x: number, z: number, height: number, fade: boolean, flip = false): void {
+  /**
+   * `rot` = degrees from the map file (positive turns x toward z, clockwise on screen). The flat picture tilts on screen about
+   * the point it stands on, and its shadow turns with it. Collision turns with the same angle (Terrain). 0 draws as ever.
+   */
+  private addProp(key: string, x: number, z: number, height: number, fade: boolean, flip = false, rot = 0): void {
     const sh = sheets[key];
     // Mirrored pictures: a Sprite ignores a negative scale (its shader takes the scale's length), so the texture itself
     // is turned, a copy sharing the same image, read right to left.
@@ -1280,8 +1284,9 @@ export class World {
       this.flipped.set(key, map);
     }
     let mat: THREE.SpriteMaterial;
-    if (fade) {
-      mat = this.own(new THREE.SpriteMaterial({ map, alphaTest: 0.5, transparent: true }));
+    if (fade || rot) {
+      // Fading and turned pieces get their own material (opacity / rotation live on the material).
+      mat = this.own(new THREE.SpriteMaterial({ map, alphaTest: 0.5, transparent: fade, rotation: -(rot * Math.PI) / 180 }));
     } else {
       const mk = flip ? key + ':flip' : key;
       mat = this.sharedMats.get(mk) ?? new THREE.SpriteMaterial({ map, alphaTest: 0.5, transparent: false });
@@ -1300,7 +1305,7 @@ export class World {
       const sd = this.add(new THREE.Mesh(this.shadowGeo, this.shadowMat));
       // Turn the oval to the camera's 45 degrees so it lies flat across the screen (its long side
       // along CAM_RIGHT), and nudge it away from the camera so it sits under the base, not in front.
-      sd.rotation.y = Math.PI / 4;
+      sd.rotation.y = Math.PI / 4 - (rot * Math.PI) / 180;
       sd.scale.set(w * 0.8, 1, w * 0.45);
       const back = w * 0.1 * Math.SQRT1_2;
       sd.position.set(x - back, 0.015, z - back);
