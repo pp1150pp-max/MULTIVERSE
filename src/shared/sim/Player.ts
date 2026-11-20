@@ -394,7 +394,7 @@ export class Player extends Unit {
   /** Damage multiplier of the Charge running now (set when it is cast, by its rank). */
   chargeMult = 0;
   potCd = 0;
-  /** Sim time of the last blacksmith action (enhance or reroll), for FORGE_CD. Not saved. */
+  /** Sim time of the last blacksmith action (enhance or reroll), for forgeCd(). Not saved. */
   forgeAt = -Infinity;
   /** Seconds until the fountain or a campfire can restore this player again (Sim.rest). */
   restCd = 0;

@@ -17,6 +17,7 @@ import { attackRootChanges, checkAttackRootTuning, codeAttackRoot, mergeAttackRo
 import { checkRigLookTuning, codeRigLook, mergeRigLook, rigLookChanges, type RigLookConfig, type RigLookTuning } from './rigLookTuning';
 import { autoChanges, checkAutoTuning, codeAuto, mergeAuto, type AutoConfig, type AutoTuning } from './autoTuning';
 import { checkTutorialTuning, codeTutorial, mergeTutorial, tutorialChanges, type TutorialConfig, type TutorialTuning } from './tutorial';
+import { checkForgeTuning, codeForge, forgeChanges, mergeForge, type ForgeConfig, type ForgeTuning } from './forgeTuning';
 import { checkSkillTuning, codeSkills, mergeSkills, skillChanges, type SkillConfig, type SkillTuning } from './skillTuning';
 import { addInto, emptyStats, setExpTune } from './formulas';
 import { STAT_KEYS, STAT_LABEL, type ClassId, type PotionKind, type PotionSize, type StatKey, type Stats } from './types';
@@ -170,6 +171,8 @@ export interface Balance {
   buffDurSummons: boolean;
   /** Blacksmith Auto enhance button shown (owner 2026-11-18); off = hidden and a running Auto stops. Browser side only. */
   forgeAuto: boolean;
+  /** Blacksmith enhancement numbers: rates, costs, pity, drop/stone/announce levels, max, cooldown, orbs, aura (forgeTuning.ts). */
+  forge: ForgeConfig;
   /** A clicked walk goes on while the tab is hidden (server walks to the spot); off = the character stops as before. */
   walkHidden: boolean;
   /** Boss room: when every player is down the boss keeps its HP and waits (no walking home, healing or reset); off = the old behaviour. */
@@ -241,6 +244,8 @@ export interface BalanceTuning {
   buffDurSummons?: boolean;
   /** Blacksmith Auto enhance, when not the code's (on). */
   forgeAuto?: boolean;
+  /** Blacksmith enhancement numbers that differ from the code. */
+  forge?: ForgeTuning;
   /** Walking on in a hidden tab, when not the code's (on). */
   walkHidden?: boolean;
   /** Boss keeps its HP when the group is all down, when not the code's (on). */
@@ -335,6 +340,7 @@ export function codeBalance(): Balance {
     mapFromDb: CODE_MAP_FROM_DB,
     buffDurSummons: CODE_BUFF_DUR_SUMMONS,
     forgeAuto: CODE_FORGE_AUTO,
+    forge: codeForge(),
     walkHidden: CODE_WALK_HIDDEN,
     bossWipeKeepHp: CODE_BOSS_WIPE_KEEP_HP,
     roomWipeSec: CODE_ROOM_WIPE_SECONDS,
@@ -394,6 +400,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.mapFromDb !== undefined) b.mapFromDb = t.mapFromDb;
   if (t.buffDurSummons !== undefined) b.buffDurSummons = t.buffDurSummons;
   if (t.forgeAuto !== undefined) b.forgeAuto = t.forgeAuto;
+  b.forge = mergeForge(t.forge);
   if (t.walkHidden !== undefined) b.walkHidden = t.walkHidden;
   b.auto = mergeAuto(t.auto);
   b.fxLayer = mergeFxLayer(t.fxLayer);
@@ -536,7 +543,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'walkHidden', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'reviveGuard', 'reviveGuardSec', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'menuLayout'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'forge', 'walkHidden', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'reviveGuard', 'reviveGuardSec', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'menuLayout'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -1002,6 +1009,12 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (c.tuning) out.menuLayout = c.tuning;
     return null;
   };
+  const forge = (): string | null => {
+    const c = checkForgeTuning(o.forge, strict);
+    if ('error' in c) return c.error;
+    if (c.tuning) out.forge = c.tuning;
+    return null;
+  };
   const skills = (): string | null => {
     const c = checkSkillTuning(o.skills, strict);
     if ('error' in c) return c.error;
@@ -1031,6 +1044,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     mapFromDb() ??
     buffDurSummons() ??
     forgeAuto() ??
+    forge() ??
     walkHidden() ??
     wipeKeep() ??
     one('roomWipeSec', BALANCE_RANGE.roomWipeSec, 'เวลาชุบตอนตายหมดทีม (วินาที)') ??
@@ -1146,6 +1160,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.roomBossDelay !== b.roomBossDelay) out.push(`นับถอยหลังก่อนบอสเกิด ${a.roomBossDelay} → ${b.roomBossDelay} วิ`);
   if (a.reviveGuard !== b.reviveGuard) out.push(`อมตะหลังชุบด้วยขนนกฟีนิกซ์ ${a.reviveGuard ? 'เปิด' : 'ปิด'} → ${b.reviveGuard ? 'เปิด' : 'ปิด'}`);
   if (a.reviveGuardSec !== b.reviveGuardSec) out.push(`เวลาอมตะหลังชุบ ${a.reviveGuardSec} → ${b.reviveGuardSec} วิ`);
+  out.push(...forgeChanges(a.forge, b.forge));
   if (a.forgeAuto !== b.forgeAuto) out.push(`ตีบวก Auto ${a.forgeAuto ? 'เปิด' : 'ปิด'} → ${b.forgeAuto ? 'เปิด' : 'ปิด'}`);
   if (a.walkHidden !== b.walkHidden) out.push(`เดินต่อเมื่อสลับแท็บ ${a.walkHidden ? 'เปิด' : 'ปิด'} → ${b.walkHidden ? 'เปิด' : 'ปิด'}`);
   if (a.buffDurSummons !== b.buffDurSummons) out.push(`เพิ่มเวลาบัฟนับ summon (ป้อมปืน โดรน กับระเบิด) ${a.buffDurSummons ? 'เปิด' : 'ปิด'} → ${b.buffDurSummons ? 'เปิด' : 'ปิด'}`);

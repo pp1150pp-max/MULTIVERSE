@@ -11,7 +11,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { ADMIN_GOLD_MAX, ADMIN_ITEMS_MAX, BROADCAST_EVERY_MS, FEATURE_ROLES, HISTORY_DAYS } from '../src/shared/admin';
 import { Db } from '../server/db';
 import { MAX_LEVEL } from '../src/shared/formulas';
-import { MAX_PLUS } from '../src/shared/data/enhance';
+import { PLUS_CAP } from '../src/shared/data/enhance';
 import { finish, ok } from './check';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -167,7 +167,7 @@ async function run(): Promise<void> {
   ok((await edit('items', { baseId: 'weapon_1', rarity: 'rare', count: ADMIN_ITEMS_MAX + 1 })).status === 400, 'too many items refused');
   ok((await edit('items', { baseId: 'nope', rarity: 'rare' })).status === 400, 'unknown item refused');
   ok((await edit('items', { baseId: 'weapon_1', rarity: 'mythic' })).status === 400, 'unknown rarity refused');
-  ok((await edit('items', { baseId: 'weapon_1', rarity: 'rare', plus: MAX_PLUS + 1 })).status === 400, 'plus over the max refused');
+  ok((await edit('items', { baseId: 'weapon_1', rarity: 'rare', plus: PLUS_CAP + 1 })).status === 400, 'plus over the max refused');
   ok((await edit('teleport', { zone: 'nowhere' })).status === 400, 'unknown zone refused');
   // Potions and stones: every field checked.
   const badStacks: [unknown, string][] = [

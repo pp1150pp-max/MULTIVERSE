@@ -9,7 +9,7 @@ import { REROLL_NAME, rerollCost, type RerollKind } from '../data/reroll';
 import { inBossArena, lairExitSpot, LAVA_BURN, LAVA_TICK } from '../data/zones';
 import type { Hazard } from './volcanoHeart';
 import {
-  ANNOUNCE_FROM, dropsOnFail, FORGE_CD, enhanceCost, itemName, MAX_PLUS, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
+  announceFrom, dropsOnFail, forgeCd, enhanceCost, itemName, maxPlus, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
 } from '../data/enhance';
 import { entryName, potionName, POTION_STACK, potionPrice, stackLimit } from '../data/potions';
 import { BOSS_KEY, BOSS_QUEST_KEY, BOSS_STONE_CHANCE, BOUND_MSG, BUFF_LABEL, BUFF_MAX, BUFF_MULT, BUFF_TIME, fmtBuff, PHOENIX_PRICE, QUEST_KILLS, REVIVES_PER_KEY, STONE_STACK, KEY_DROP_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, RETURN_CAST, RETURN_SCROLL_PRICE, STONE_COLOR, STONE_NAME } from '../data/stones';
@@ -1699,10 +1699,10 @@ export class Sim {
    */
   enhance(p: Player, uid: string, protect: boolean): { result: EnhanceResult; item: Item } | null {
     if (!this.near(p, 'blacksmith')) return null;
-    if (this.time < p.forgeAt + FORGE_CD) return null;
+    if (this.time < p.forgeAt + forgeCd()) return null;
     const worn = Object.values(p.equipment).find((w) => w?.uid === uid);
     const item = worn ?? p.bag.find((w): w is Item => isItem(w) && w.uid === uid);
-    if (!item || plusOf(item) >= MAX_PLUS) return null;
+    if (!item || plusOf(item) >= maxPlus()) return null;
     const cost = enhanceCost(item);
     const stones = stonesNeeded(item);
     const useProtect = protect && dropsOnFail(item);
@@ -1719,7 +1719,7 @@ export class Sim {
       this.fx('effect', 'enhance_ok', p.x, p.z, 0, 1.3);
       this.fx('burst', p.x, 1.2, p.z, '#ffd34a', 14, 3);
       this.text(p.x, p.topY + 0.6, p.z, `+${plusOf(item)} สำเร็จ!`, 'enh', 1.6);
-      if (plusOf(item) >= ANNOUNCE_FROM) {
+      if (plusOf(item) >= announceFrom()) {
         this.events.push({ t: 'announce', text: `🔨 ${p.name} ตี${SLOT_LABEL[item.slot]} ${item.name} เป็น +${plusOf(item)} สำเร็จ!` });
       }
     } else {
@@ -1740,7 +1740,7 @@ export class Sim {
    */
   reroll(p: Player, uid: string, kind: RerollKind): Item | null {
     if (!this.near(p, 'blacksmith')) return null;
-    if (this.time < p.forgeAt + FORGE_CD) return null;
+    if (this.time < p.forgeAt + forgeCd()) return null;
     const worn = Object.values(p.equipment).find((w) => w?.uid === uid);
     const item = worn ?? p.bag.find((w): w is Item => isItem(w) && w.uid === uid);
     if (!item || !lineRanges(item)) return null;

@@ -1,30 +1,25 @@
 // Gear enhancement (ตีบวก) at the blacksmith. Pure rules, no rendering — the server runs it.
 // Owner decisions 2026-11-06: every slot, max +15, bonus = % of every stat line on the item.
+// Every number is tunable in /admin (forgeTuning.ts); the code values are in codeForge().
 import { EQUIP_SLOTS, type EquipSlot, type Item, type StatKey, type Stats } from '../types';
 import type { Rng } from '../rng';
+import { currentBalance } from '../balance';
+import { PLUS_CAP, PLUS_NEVER, type ForgeConfig } from '../forgeTuning';
 
-export const MAX_PLUS = 15;
-/** Attempts that aim for this level or higher lose one + level when they fail (unless protected). */
-export const DROP_ON_FAIL_FROM = 7;
-/** Attempts that aim for this level or higher also use enhancement stones. */
-export const STONE_FROM = 11;
-/** Enhancement stones used per attempt from STONE_FROM up (owner: 1). */
-export const ENHANCE_STONES_PER_TRY = 1;
-/** Each failed attempt adds this to the item's next success chance, until it succeeds (owner: +1%). */
-export const PITY_STEP = 0.01;
+/** The /admin-tuned enhancement numbers in use (forgeTuning.ts, owner 2026-11-20: every number tunable). */
+export const forgeConfig = (): ForgeConfig => currentBalance().forge;
+export { PLUS_CAP, PLUS_NEVER };
+/** Highest level the blacksmith enhances to now. Gear already above it (after the owner lowers it) keeps its level. */
+export const maxPlus = (): number => forgeConfig().maxPlus;
+/** Seconds between two blacksmith actions (enhance or reroll) by the same player. */
+export const forgeCd = (): number => forgeConfig().cd;
 /** Reaching this level or higher is announced to the whole server. */
-export const ANNOUNCE_FROM = 10;
-/** Seconds between two blacksmith actions (enhance or reroll) by the same player (owner: 1). */
-export const FORGE_CD = 1;
+export const announceFrom = (): number => forgeConfig().announceFrom;
+/** Each failed attempt adds this to the item's next success chance (0..1), until it succeeds. */
+export const pityStep = (): number => forgeConfig().pity / 100;
+/** Each worn item at this + level or higher gets an orb circling its wearer (owner 2026-11-10: +7). */
+export const orbMinPlus = (): number => forgeConfig().orbMin;
 
-/** Bonus % of each stat line gained by reaching this level (index = + level). +5 = 20%, +10 = 45%, +15 = 95%. */
-const STEP_PCT = [0, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 10, 10, 10, 10, 10];
-/** Total bonus % at each + level. */
-const TOTAL_PCT = STEP_PCT.map((_, i) => STEP_PCT.slice(0, i + 1).reduce((a, b) => a + b, 0));
-/** Chance to succeed when trying to reach this + level. Owner 2026-11-08: +1..+4 100%, +5..+7 40%, +8..+9 20%, +10 10%; +11..+15 unchanged. */
-const SUCCESS = [1, 1, 1, 1, 1, 0.4, 0.4, 0.4, 0.2, 0.2, 0.1, 0.15, 0.1, 0.05, 0.025, 0.01];
-/** Cost multiplier for reaching this + level (times the item's base cost). */
-const COST_MULT = [0, 1, 2, 3, 4, 5, 7, 9, 12, 15, 20, 30, 40, 55, 75, 100];
 /** Stats shown as whole numbers; the rest (%, regen) keep one decimal. */
 const WHOLE: ReadonlySet<StatKey> = new Set<StatKey>(['maxHp', 'maxMp', 'atk', 'def']);
 
@@ -32,7 +27,7 @@ const WHOLE: ReadonlySet<StatKey> = new Set<StatKey>(['maxHp', 'maxMp', 'atk', '
 export type EnhanceResult = 'success' | 'fail' | 'drop' | 'saved';
 
 export const plusOf = (item: Item): number => item.plus ?? 0;
-export const canEnhance = (item: Item): boolean => plusOf(item) < MAX_PLUS;
+export const canEnhance = (item: Item): boolean => plusOf(item) < maxPlus();
 
 export function itemName(item: Item): string {
   const p = plusOf(item);
@@ -41,7 +36,11 @@ export function itemName(item: Item): string {
 
 /** Total bonus percent at this + level. */
 export function bonusPct(plus: number): number {
-  return TOTAL_PCT[Math.max(0, Math.min(MAX_PLUS, plus))];
+  const step = forgeConfig().bonusStep;
+  const top = Math.max(0, Math.min(PLUS_CAP, plus));
+  let sum = 0;
+  for (let i = 1; i <= top; i++) sum += step[i];
+  return Math.round(sum * 1000) / 1000;
 }
 
 function roundStat(k: StatKey, v: number): number {
@@ -70,12 +69,12 @@ export function effectiveStats(item: Item, plus = plusOf(item)): Partial<Stats> 
 
 /** The table chance to reach the next level, before pity. */
 export function baseRate(item: Item): number {
-  return SUCCESS[Math.min(MAX_PLUS, plusOf(item) + 1)];
+  return rateFor(Math.min(PLUS_CAP, plusOf(item) + 1));
 }
 
 /** Extra chance from earlier fails on this item. */
 export function pityBonus(item: Item): number {
-  return baseRate(item) >= 1 ? 0 : Math.max(0, item.pity ?? 0) * PITY_STEP;
+  return baseRate(item) >= 1 ? 0 : Math.max(0, item.pity ?? 0) * pityStep();
 }
 
 export function successRate(item: Item): number {
@@ -84,20 +83,24 @@ export function successRate(item: Item): number {
 
 /** Rate table for the forge's help panel (index = target level). */
 export function rateFor(target: number): number {
-  return SUCCESS[target] ?? 0;
+  const r = forgeConfig().rate[target];
+  return r === undefined ? 0 : r / 100;
 }
 
 export function enhanceCost(item: Item): number {
-  return Math.round((15 + item.level * 6) * COST_MULT[Math.min(MAX_PLUS, plusOf(item) + 1)]);
+  const f = forgeConfig();
+  return Math.round((f.costBase + item.level * f.costPerLevel) * f.costMult[Math.min(PLUS_CAP, plusOf(item) + 1)]);
 }
 
 export function dropsOnFail(item: Item): boolean {
-  return plusOf(item) + 1 >= DROP_ON_FAIL_FROM;
+  // Never below +0 (the owner may set the drop level to +1).
+  return plusOf(item) > 0 && plusOf(item) + 1 >= forgeConfig().dropFrom;
 }
 
 /** Enhancement stones the next attempt needs. */
 export function stonesNeeded(item: Item): number {
-  return plusOf(item) + 1 >= STONE_FROM ? ENHANCE_STONES_PER_TRY : 0;
+  const f = forgeConfig();
+  return plusOf(item) + 1 >= f.stoneFrom ? f.stonesPerTry : 0;
 }
 
 /**
@@ -118,24 +121,22 @@ export function rollEnhance(item: Item, r: Rng, protect: boolean): EnhanceResult
   return 'drop';
 }
 
-/** Aura tier shown around a character for this + level: 0 none, 1 = +7, 2 = +10, 3 = +13, 4 = +15. */
+/** Aura tier shown around a character for this + level: 0 none, then 1..4 from the tuned levels (code +7/+10/+13/+15). */
 export function auraTier(plus: number): number {
-  return plus >= 15 ? 4 : plus >= 13 ? 3 : plus >= 10 ? 2 : plus >= 7 ? 1 : 0;
+  return forgeConfig().aura.filter((from) => plus >= from).length;
 }
 
-/** Each worn item at this + level or higher gets an orb circling its wearer (owner 2026-11-10). */
-export const ORB_MIN_PLUS = 7;
-
 /**
- * The enhancement orbs a character shows: one per worn item at ORB_MIN_PLUS or higher, in EQUIP_SLOTS
+ * The enhancement orbs a character shows: one per worn item at orbMinPlus() or higher, in EQUIP_SLOTS
  * order, each packed as `slot index * 16 + plus` (so the browser knows the slot as well as the level).
  */
 export function orbCodes(equipment: Partial<Record<EquipSlot, Item>>): number[] {
   const out: number[] = [];
+  const min = orbMinPlus();
   EQUIP_SLOTS.forEach((slot, i) => {
     const it = equipment[slot];
-    const p = it ? Math.min(MAX_PLUS, plusOf(it)) : 0;
-    if (p >= ORB_MIN_PLUS) out.push(i * 16 + p);
+    const p = it ? Math.min(PLUS_CAP, plusOf(it)) : 0;
+    if (p > 0 && p >= min) out.push(i * 16 + p);
   });
   return out;
 }
@@ -144,13 +145,13 @@ export function orbCodes(equipment: Partial<Record<EquipSlot, Item>>): number[] 
 export const orbSlot = (code: number): number => code >> 4;
 export const orbPlus = (code: number): number => code & 15;
 
-/** True when `code` is a well-formed orb code (a real slot, a level from ORB_MIN_PLUS to MAX_PLUS). */
+/** True when `code` is a well-formed orb code (a real slot, a level 1..PLUS_CAP; the server picks which levels show). */
 export function validOrbCode(code: unknown): code is number {
   return typeof code === 'number' && Number.isInteger(code) && orbSlot(code) < EQUIP_SLOTS.length
-    && orbPlus(code) >= ORB_MIN_PLUS && orbPlus(code) <= MAX_PLUS && code >= 0;
+    && orbPlus(code) >= 1 && orbPlus(code) <= PLUS_CAP && code >= 0;
 }
 
-/** What the merchant pays. Enhanced gear is worth more. */
+/** What the merchant pays. Enhanced gear is worth more (code: +50% per level). */
 export function sellValue(item: Item): number {
-  return Math.round(item.value * (1 + 0.5 * plusOf(item)));
+  return Math.round(item.value * (1 + (forgeConfig().sellPerPlus / 100) * plusOf(item)));
 }

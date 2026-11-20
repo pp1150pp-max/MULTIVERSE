@@ -1,7 +1,7 @@
 import type { Game } from '../Game';
 import {
-  bonusPct, DROP_ON_FAIL_FROM, dropsOnFail, FORGE_CD, effectiveStats, enhanceCost, ENHANCE_STONES_PER_TRY, itemName,
-  MAX_PLUS, PITY_STEP, pityBonus, plusOf, rateFor, STONE_FROM, stonesNeeded, successRate,
+  bonusPct, dropsOnFail, forgeCd, forgeConfig, effectiveStats, enhanceCost, itemName,
+  maxPlus, pityStep, pityBonus, plusOf, rateFor, stonesNeeded, successRate,
 } from '../../shared/data/enhance';
 import { REROLL_STONE, STONE_NAME } from '../../shared/data/stones';
 import { lineRanges, rerollBlock, statRerollOdds } from '../../shared/data/items';
@@ -11,8 +11,6 @@ import { isItem, EQUIP_SLOTS, RARITY_COLOR, SLOT_LABEL, STAT_LABEL, type BagEntr
 import { COIN_ICON, FORGE_ICON, itemIcon, stoneIcon } from '../icons';
 import { $, fmtNum, lineHtml } from './hudShared';
 
-/** Enhance tries whose target level is this or higher show "??" instead of the success chance (display only). */
-const HIDDEN_RATE_FROM = 11;
 
 /** The blacksmith menu's one-line description of each system (left column, under the menu). */
 const FORGE_DESC: Record<'enhance' | RerollKind, string> = {
@@ -42,7 +40,7 @@ export class ForgeWindow {
   private forgeOpen = false;
   private forgeSel: string | null = null;
   private enhancing = false;
-  /** performance.now() when the next blacksmith action may be sent (FORGE_CD after the last one). */
+  /** performance.now() when the next blacksmith action may be sent (forgeCd() after the last one). */
   private forgeReadyAt = 0;
   /** Use a protection stone on attempts that can drop the level (the forge's tick box; off until ticked). */
   private forgeProtect = false;
@@ -224,17 +222,17 @@ export class ForgeWindow {
   private renderForgeAuto(item: Item | undefined, why: string): void {
     const wrap = $('forge-auto');
     const run = this.forgeAuto;
-    const show = currentBalance().forgeAuto && this.forgeMode === 'enhance' && !!item && (!!run || plusOf(item) < MAX_PLUS);
+    const show = currentBalance().forgeAuto && this.forgeMode === 'enhance' && !!item && (!!run || plusOf(item) < maxPlus());
     wrap.classList.toggle('hidden', !show);
     if (!show || !item) return;
     const sel = $<HTMLSelectElement>('forge-auto-target');
-    const from = Math.min(plusOf(item) + 1, MAX_PLUS);
+    const from = Math.min(plusOf(item) + 1, maxPlus());
     const key = `${item.uid}:${from}`;
     if (sel.dataset.key !== key) {
       // Keep the player's pick for the same item; a new item starts at one level up.
       const keep = sel.dataset.key?.startsWith(`${item.uid}:`) ? Number(sel.value) : 0;
       sel.innerHTML = '';
-      for (let n = from; n <= MAX_PLUS; n++) sel.add(new Option(`ถึง +${n}`, String(n)));
+      for (let n = from; n <= maxPlus(); n++) sel.add(new Option(`ถึง +${n}`, String(n)));
       sel.value = String(run ? Math.max(run.target, from) : keep >= from ? keep : from);
       sel.dataset.key = key;
     }
@@ -250,7 +248,7 @@ export class ForgeWindow {
   private startForgeAuto(): void {
     const item = this.forgeItem();
     if (!item || this.forgeAuto || !currentBalance().forgeAuto || this.forgeMode !== 'enhance') return;
-    const target = Math.min(MAX_PLUS, Math.max(plusOf(item) + 1, Number($<HTMLSelectElement>('forge-auto-target').value) || 0));
+    const target = Math.min(maxPlus(), Math.max(plusOf(item) + 1, Number($<HTMLSelectElement>('forge-auto-target').value) || 0));
     const run: ForgeAutoRun = { uid: item.uid, target, protect: this.forgeProtect };
     const why = this.forgeAutoBlock(run);
     if (why) {
@@ -279,7 +277,7 @@ export class ForgeWindow {
     if (!p.alive) return 'ตัวละครล้ม';
     const item = this.forgeItem();
     if (!item || item.uid !== run.uid) return 'ไม่พบอุปกรณ์ในช่องแล้ว';
-    if (plusOf(item) >= MAX_PLUS) return `ถึงระดับสูงสุด +${MAX_PLUS} แล้ว`;
+    if (plusOf(item) >= maxPlus()) return `ถึงระดับสูงสุด +${maxPlus()} แล้ว`;
     if (plusOf(item) >= run.target) return `ถึง +${plusOf(item)} แล้ว`;
     if (p.gold < enhanceCost(item)) return 'ทองไม่พอ';
     if (p.stoneCount('enhance') < stonesNeeded(item)) return `${STONE_NAME.enhance}ไม่พอ`;
@@ -306,7 +304,7 @@ export class ForgeWindow {
       if (got) {
         missed = 0;
         // Judge the target from the server's answer, not the snapshot (it may not have caught up yet).
-        if (plusOf(got) >= Math.min(run.target, MAX_PLUS)) {
+        if (plusOf(got) >= Math.min(run.target, maxPlus())) {
           this.stopForgeAuto(`ถึง +${plusOf(got)} แล้ว`);
           return;
         }
@@ -347,15 +345,15 @@ export class ForgeWindow {
   private renderEnhanceCost(item: Item): string {
     const p = this.g.player;
     const cur = plusOf(item);
-    if (cur >= MAX_PLUS) {
-      $('forge-cost').innerHTML = `<div class="fc-max">ตีบวกถึงระดับสูงสุด +${MAX_PLUS} แล้ว</div>`;
+    if (cur >= maxPlus()) {
+      $('forge-cost').innerHTML = `<div class="fc-max">ตีบวกถึงระดับสูงสุด +${maxPlus()} แล้ว</div>`;
       return 'ระดับสูงสุดแล้ว';
     }
     const cost = enhanceCost(item);
     const rate = successRate(item);
     const pity = pityBonus(item);
-    const pct = (v: number) => `${Math.round(v * 1000) / 10}%`;
-    const hidden = cur + 1 >= HIDDEN_RATE_FROM;
+    const pct = (v: number) => `${Math.round(v * 10000) / 100}%`;
+    const hidden = cur + 1 >= forgeConfig().hiddenFrom;
     const pityNote = pity <= 0 ? ''
       : hidden ? `<small class="pity">ล้มมาแล้ว ${item.pity} ครั้ง (โอกาสเพิ่มขึ้น)</small>`
       : `<small class="pity">รวม +${pct(pity)} จากล้ม ${item.pity} ครั้ง</small>`;
@@ -367,7 +365,7 @@ export class ForgeWindow {
     // While Auto runs, show the choice it started with (the box is locked then).
     const protect = canProtect && (this.forgeAuto ? this.forgeAuto.protect : this.forgeProtect);
     $('forge-cost').innerHTML =
-      `<div class="fc-rate"${rate < 1 ? ` title="ล้มแต่ละครั้ง โอกาสครั้งถัดไป +${pct(PITY_STEP)} จนกว่าจะสำเร็จ"` : ''}><span>โอกาสสำเร็จ +${cur} → +${cur + 1}</span><b class="${rate < 1 ? 'risky' : ''}">${hidden ? '??' : pct(rate)}</b>` +
+      `<div class="fc-rate"${rate < 1 ? ` title="ล้มแต่ละครั้ง โอกาสครั้งถัดไป +${pct(pityStep())} จนกว่าจะสำเร็จ"` : ''}><span>โอกาสสำเร็จ +${cur} → +${cur + 1}</span><b class="${rate < 1 ? 'risky' : ''}">${hidden ? '??' : pct(rate)}</b>` +
       `${pityNote}</div>` +
       `<div class="fd-row"><span>ค่าตีบวก</span><b class="${p.gold < cost ? 'bad' : ''}">${cost.toLocaleString()} G</b></div>` +
       (need ? `<div class="fd-row"><span>${stoneIcon('enhance')} ${STONE_NAME.enhance}</span><b class="${haveEnh < need ? 'bad' : ''}">ใช้ ${need} / มี ${haveEnh}</b></div>` : '') +
@@ -442,7 +440,7 @@ export class ForgeWindow {
     this.renderForge();
   }
 
-  /** True while the blacksmith cooldown (FORGE_CD) is running. */
+  /** True while the blacksmith cooldown (forgeCd()) is running. */
   private forgeCooling(): boolean {
     return performance.now() < this.forgeReadyAt;
   }
@@ -454,15 +452,16 @@ export class ForgeWindow {
 
   /** Starts the blacksmith cooldown: the action button shows a draining bar until it ends. */
   private startForgeCd(): void {
-    this.forgeReadyAt = performance.now() + FORGE_CD * 1000;
+    const cd = forgeCd();
+    this.forgeReadyAt = performance.now() + cd * 1000;
     const go = $('forge-go');
-    go.style.setProperty('--cd', `${FORGE_CD}s`);
+    go.style.setProperty('--cd', `${cd}s`);
     go.classList.remove('cooling');
     void go.offsetWidth; // restart the bar
     go.classList.add('cooling');
     setTimeout(() => {
       if (!this.forgeCooling()) go.classList.remove('cooling');
-    }, FORGE_CD * 1000 + 20);
+    }, cd * 1000 + 20);
   }
 
   /** Swings the hammer over the forge slot; resolves when it has struck, so the result shows after the hit. */
@@ -538,13 +537,15 @@ export class ForgeWindow {
 
   private rateTable(): string {
     let html = '<table><tr><th>บวก</th><th>สำเร็จ</th><th>ถ้าล้ม</th><th>หินตีบวก</th><th>โบนัสรวม</th></tr>';
-    for (let t = 1; t <= MAX_PLUS; t++) {
-      const fail = rateFor(t) >= 1 ? '—' : t >= DROP_ON_FAIL_FROM ? 'ระดับ −1' : 'เสียแค่ทอง';
-      html += `<tr><td>+${t}</td><td>${t >= HIDDEN_RATE_FROM ? '??' : `${Math.round(rateFor(t) * 1000) / 10}%`}</td><td>${fail}</td>` +
-        `<td>${t >= STONE_FROM ? ENHANCE_STONES_PER_TRY : '—'}</td><td>+${bonusPct(t)}%</td></tr>`;
+    const f = forgeConfig();
+    for (let t = 1; t <= maxPlus(); t++) {
+      const fail = rateFor(t) >= 1 ? '—' : t >= f.dropFrom ? 'ระดับ −1' : 'เสียแค่ทอง';
+      html += `<tr><td>+${t}</td><td>${t >= f.hiddenFrom ? '??' : `${Math.round(rateFor(t) * 10000) / 100}%`}</td><td>${fail}</td>` +
+        `<td>${t >= f.stoneFrom && f.stonesPerTry > 0 ? f.stonesPerTry : '—'}</td><td>+${bonusPct(t)}%</td></tr>`;
     }
     return html + '</table><div class="hint">ตีบวกได้ทุกช่อง (อาวุธ หมวก เกราะ รองเท้า แหวน) · โบนัสเป็น % ของทุกค่าบนชิ้นนั้น' +
-      ` · ล้มแต่ละครั้งเพิ่มโอกาส +${Math.round(PITY_STEP * 100)}% จนกว่าจะสำเร็จ` +
-      ` · ${STONE_NAME.protect}กันระดับลด, ${STONE_NAME.enhance}ใช้ตั้งแต่ +${STONE_FROM} — ดรอปจากบอสเท่านั้น</div>`;
+      (f.pity > 0 ? ` · ล้มแต่ละครั้งเพิ่มโอกาส +${f.pity}% จนกว่าจะสำเร็จ` : '') +
+      ` · ${STONE_NAME.protect}กันระดับลด` +
+      (f.stoneFrom <= maxPlus() && f.stonesPerTry > 0 ? `, ${STONE_NAME.enhance}ใช้ตั้งแต่ +${f.stoneFrom}` : '') + ' — ดรอปจากบอสเท่านั้น</div>';
   }
 }
