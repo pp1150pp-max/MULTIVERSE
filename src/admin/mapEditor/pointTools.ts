@@ -2,7 +2,7 @@
 // Each is one `Tool` added with `ed.addTool`; every change is one command of the PR 6 stack (ed.exec / live + commitLive).
 import { MONSTERS } from '../../shared/data/monsters';
 import { ZONES } from '../../shared/data/zones';
-import type { MapData, MapSpawn } from '../../shared/mapSchema';
+import { ROOM_SPAWN_OFFSET, roomSpawnOf, type MapData, type MapSpawn } from '../../shared/mapSchema';
 import type { EdPointer, Editor, Tool } from './editor';
 import { pick, type MapPatch } from './history';
 import { btn, el, note, numField, selectField } from './ui';
@@ -251,6 +251,55 @@ export function spawnTool(): Tool {
           numField('เกิดใหม่ช้าสุด (วิ)', s.respawn[1], (n) => setSpawn(ed, i, 'แก้เวลาเกิดใหม่', (q) => ({ ...q, respawn: [Math.min(q.respawn[0], Math.max(1, n)), Math.max(1, n)] })), 1, 1, 3600)),
         btn('🗑 ลบจุดเกิดนี้ (Delete)', () => { ed.exec('ลบจุดเกิดมอน', { spawns: ed.map.spawns.filter((_, k) => k !== i) }); ed.select([]); }));
       return box;
+    },
+  };
+}
+
+// ---------------------------------------------------------------- boss rooms: where players appear
+
+/**
+ * The only point a boss room lets you move besides props and blockers: where players stand when they come in (docs/plans/map-editor.md,
+ * boss rooms). The file keeps `zone.start`, which lies ROOM_SPAWN_OFFSET further out than the spot (Sim.spawnPoint), so the pin and the
+ * numbers here are the spot itself and the tool writes `start` back. validateMap() keeps the spot inside the arena and out of collision.
+ */
+export function playerStartTool(): Tool {
+  let drag: { before: MapPatch; moved: boolean } | null = null;
+  const spotOf = (m: MapData) => roomSpawnOf(m.zone.start);
+  const moved = (m: MapData, x: number, z: number): MapPatch => ({ zone: { ...m.zone, start: { x: round3(x + ROOM_SPAWN_OFFSET), z: round3(z + ROOM_SPAWN_OFFSET) } } });
+  const onPin = (ed: Editor, px: number, py: number): boolean => {
+    const s = spotOf(ed.map);
+    const [sx, sy] = ed.toScreen(s.x, s.z);
+    return Math.hypot(px - sx, py - sy) <= HIT_PX + 4;
+  };
+  return {
+    id: 'startpin',
+    label: 'จุดเกิดผู้เล่น',
+    icon: '🧍',
+    hint: 'ลากหมุดเขียว = ที่ที่ผู้เล่นยืนตอนเข้าห้องบอส (Alt = ปิด snap) · ต้องอยู่ในวงสนามบอส ไม่ทับของที่ชน และเดินไปถึงบอสได้ · ตำแหน่งบอส วงสนาม และขนาดห้องล็อกไว้ แก้ไม่ได้',
+    pointerDown(ed, e) {
+      if (!onPin(ed, e.px, e.py)) return;
+      drag = { before: pick(ed.map, ['zone']), moved: false };
+    },
+    pointerMove(ed, e) {
+      if (!drag) return;
+      const [x, z] = gridSnap(ed, e.x, e.z, e.alt);
+      drag.moved = true;
+      ed.live(moved({ ...ed.map, ...drag.before } as MapData, x, z));
+    },
+    pointerUp(ed) {
+      const d = drag;
+      drag = null;
+      if (d?.moved) ed.commitLive('ย้ายจุดเกิดผู้เล่น', d.before);
+    },
+    cursor: (ed, e) => (onPin(ed, e.px, e.py) ? 'move' : undefined),
+    inspector(ed) {
+      const s = spotOf(ed.map);
+      return el('div', { class: 'me-inspector' },
+        el('div', { class: 'me-title' }, 'จุดเกิดผู้เล่น (ห้องบอส)'),
+        el('div', { class: 'me-grid2' },
+          numField('x', s.x, (n) => ed.exec('ย้ายจุดเกิดผู้เล่น', moved(ed.map, n, s.z)), 0.5),
+          numField('z', s.z, (n) => ed.exec('ย้ายจุดเกิดผู้เล่น', moved(ed.map, s.x, n)), 0.5)),
+        note('ตำแหน่งบอส รัศมีสนาม และขนาดห้องเป็นค่าในโค้ด แก้ในตัวแก้ไม่ได้ · วงเหลืองประ = สนามบอส (Auto/บอสใช้) · วงแดง = ขอบที่ผู้เล่นเดินออกไม่ได้'));
     },
   };
 }

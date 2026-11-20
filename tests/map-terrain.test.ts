@@ -2,12 +2,12 @@
 // 1) Terrain from JSON == Terrain from the old generators (props, colliders, NPCs, rest spots, spawns, portals, bounds).
 // 2) Turned solid boxes and blocker polygons collide (isBlocked / resolve) and the client's pathfinder walks round them.
 import { ok, finish } from './check';
-import { ZONES, GENERATED_ZONES } from '../src/shared/data/zones';
+import { ZONES, GENERATED_ZONES, GENERATED_ROOMS, BOSS_ROOMS } from '../src/shared/data/zones';
 import { Terrain, boxHit } from '../src/shared/sim/terrain';
 import { MapRegistry } from '../src/shared/mapRegistry';
 import { pointInPropSolid, type MapData, type MapProp } from '../src/shared/mapSchema';
 import { findPath } from '../src/client/pathfind';
-import { FLOOR1_IDS } from '../tools/bake_maps';
+import { FLOOR1_IDS, BOSS_ROOM_IDS } from '../tools/bake_maps';
 import { mergeBalance, checkBalance, balanceChanges } from '../src/shared/balance';
 
 // Stable text of a value: keys sorted, undefined dropped.
@@ -16,13 +16,17 @@ const canon = (v: unknown): string =>
 const cmp = (a: { x: number; z: number; r: number }, b: { x: number; z: number; r: number }) => a.x - b.x || a.z - b.z || a.r - b.r;
 
 // ---------------------------------------------------------------- 1) JSON == generators
-for (const id of FLOOR1_IDS) {
-  const gen = new Terrain(GENERATED_ZONES[id], null);
-  const json = new Terrain(ZONES[id]);
-  ok(canon(ZONES[id]) === canon(GENERATED_ZONES[id]), `${id}: ZONES (layout from JSON) equals the generated zone, spawns (${ZONES[id].spawns.length}) and portals (${ZONES[id].portals.length}) included`);
+// The floor-1 maps and, with them, the four boss rooms (their zone is BOSS_ROOMS[field], their Terrain reads `<field>_room.json`).
+const live = (id: string) => (GENERATED_ROOMS[id] ? BOSS_ROOMS[GENERATED_ROOMS[id].roomOf!] : ZONES[id]);
+for (const id of [...FLOOR1_IDS, ...BOSS_ROOM_IDS]) {
+  const generated = GENERATED_ZONES[id] ?? GENERATED_ROOMS[id];
+  const gen = new Terrain(generated, null);
+  const json = new Terrain(live(id));
+  ok(canon(live(id)) === canon(generated), `${id}: the zone the game runs (layout from JSON) equals the generated zone, spawns (${live(id).spawns.length}) and portals (${live(id).portals.length}) included`);
   ok(canon(json.props) === canon(gen.props), `${id}: props (${gen.props.length}) equal, in order`);
   ok(canon([...json.colliders].sort(cmp)) === canon([...gen.colliders].sort(cmp)), `${id}: colliders (${gen.colliders.length}) equal as a set`);
   ok(json.boxes.length === 0 && json.blockers.length === 0, `${id}: no boxes or blockers yet`);
+  ok(json.roomEdge === gen.roomEdge && json.mapRev === 0, `${id}: room edge equal, built from rev 0`);
   ok(canon(json.npcPos) === canon(gen.npcPos), `${id}: npcPos equal`);
   ok(canon(json.restSpots) === canon(gen.restSpots), `${id}: restSpots equal`);
   ok(canon(json.pathSegments) === canon(gen.pathSegments), `${id}: path segments equal`);
@@ -143,7 +147,7 @@ for (const rot of [0, 30, 45, 90, 135, 200, 271.5]) {
   MapRegistry.setUseOverrides(true);
   MapRegistry.clear('emerald_forest');
   ok(new Terrain(ZONES.emerald_forest).props.length === base.props.length && MapRegistry.get('emerald_forest') === MapRegistry.bundled('emerald_forest'), 'clear: back to the bundled JSON');
-  ok(MapRegistry.get('emerald_forest_room') === undefined, 'boss rooms have no map file (generated from the field map)');
+  ok(MapRegistry.get('emerald_forest_room')?.room?.of === 'emerald_forest', 'boss rooms have a map file with a room block');
 }
 
 {

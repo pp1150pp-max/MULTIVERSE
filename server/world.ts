@@ -811,7 +811,9 @@ export class GameWorld {
     const role = this.db.adminRole(acc.id);
     if (!role || !this.db.roleFeatures(role).includes('mapEdit')) return null;
     const map = previewLayout(this.db, id);
-    const zone = map && zoneWithLayout(id, map);
+    const layout = map && zoneWithLayout(id, map);
+    // A boss room is walked without its boss (owner 2026-11-21): a preview is no BossRooms run, nothing would end it or call a wipe.
+    const zone = layout?.roomOf ? { ...layout, boss: undefined } : layout;
     return map && zone ? { zone, map } : null;
   }
 

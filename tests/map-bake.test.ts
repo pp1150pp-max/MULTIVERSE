@@ -3,26 +3,27 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ok, finish } from './check';
-import { ZONES, GENERATED_ZONES } from '../src/shared/data/zones';
+import { ZONES, GENERATED_ZONES, GENERATED_ROOMS, arenaRadius } from '../src/shared/data/zones';
 import { MONSTERS } from '../src/shared/data/monsters';
 import { NPC_IDS } from '../src/shared/data/npcs';
 import { Terrain } from '../src/shared/sim/terrain';
 import { validateMap, type MapData } from '../src/shared/mapSchema';
 import { SHEET_SPECS } from '../src/client/assets';
-import { FLOOR1_IDS, MAPS_DIR, bakeZone, bakedText } from '../tools/bake_maps';
+import { BAKED_IDS, MAPS_DIR, bakeZone, bakedText, generatedZone } from '../tools/bake_maps';
 
 const NPC_COLLIDER_R = 0.45; // Terrain's constructor gives every NPC one
 const cmpXZR = (a: { x: number; z: number; r: number }, b: { x: number; z: number; r: number }) => a.x - b.x || a.z - b.z || a.r - b.r;
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
-for (const id of FLOOR1_IDS) {
+for (const id of BAKED_IDS) {
   const file = readFileSync(join(MAPS_DIR, `${id}.json`), 'utf8');
   const map = JSON.parse(file) as MapData;
-  const zone = GENERATED_ZONES[id];
+  const zone = generatedZone(id);
+  const isRoom = !!GENERATED_ROOMS[id];
   const old = new Terrain(zone, null);
 
   ok(file === bakedText(bakeZone(zone)), `${id}: re-baking gives the very same file`);
-  const all = validateMap(map, { propKeys: Object.keys(SHEET_SPECS), zoneIds: Object.keys(ZONES), monsterIds: Object.keys(MONSTERS) });
+  const all = validateMap(map, { propKeys: Object.keys(SHEET_SPECS), zoneIds: Object.keys(ZONES), monsterIds: Object.keys(MONSTERS), baseline: map });
   const issues = all.filter((i) => i.severity === 'error');
   ok(issues.length === 0, `${id}: passes validateMap${issues.length ? ' ' + JSON.stringify(issues.slice(0, 5)) : ''}`);
   // The only thing allowed to be a warning: the hub's start is the middle of its fountain.
@@ -52,7 +53,13 @@ for (const id of FLOOR1_IDS) {
   ok(same(map.lair, zone.lair), `${id}: lair equal`);
   ok(map.zone.half === zone.half && map.walkable.half === old.bound && map.zone.theme === zone.theme
     && same(map.zone.quadrants, zone.quadrants) && same(map.zone.start, zone.start) && same(map.zone.safe, zone.safe), `${id}: zone, walkable, safe, quadrants equal`);
-  ok(same(map.paths.map((p) => p.pts), [zone.path, ...zone.branches]), `${id}: paths equal`);
+  ok(same(map.paths.map((p) => p.pts), [zone.path, ...zone.branches].filter((pts) => pts.length)), `${id}: paths equal`);
+  if (isRoom) {
+    // Boss room: the room block is exactly what the code builds, and the file has nothing a room must not have.
+    ok(same(map.room, { of: zone.roomOf, arena: arenaRadius(zone), boss: { monster: zone.boss!.monster, x: zone.boss!.x, z: zone.boss!.z, radius: zone.boss!.radius } }), `${id}: room block (boss, arena) equals the code`);
+    ok(map.paths.length === 0 && map.portals.length === 0 && map.spawns.length === 0 && map.npcs.length === 0 && map.rest.length === 0 && map.water.length === 0 && !map.lair, `${id}: no paths, doors, spawns, NPCs, rest spots, water or lair`);
+    ok(map.zone.half === zone.half && same(map.zone.start, zone.start), `${id}: half and player start equal the generated room`);
+  } else ok(!map.room, `${id}: not a room`);
   ok(same(map.water.filter((w) => w.kind === 'ice').map(({ kind, ...r }) => r), zone.iceLakes ?? [])
     && same(map.water.filter((w) => w.kind === 'lava').map(({ kind, ...r }) => r), zone.lavaPools ?? []), `${id}: ice lakes and lava pools equal`);
 }
