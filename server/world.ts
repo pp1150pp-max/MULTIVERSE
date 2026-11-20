@@ -2625,6 +2625,12 @@ export class GameWorld {
     return changed;
   }
 
+  /** An admin gave or took crystals: every online character of the account gets the new total. */
+  crystalsChanged(accountId: number): void {
+    const state = this.cash.state(accountId, false);
+    for (const s of this.sessions) if (s.accountId === accountId && !s.guest) this.send(s.ws, { t: 'cashState', state });
+  }
+
   /** An admin gave or took back a cosmetic: every online character of the account gets the new list (and loses what was taken). */
   cosmeticsChanged(accountId: number): void {
     for (const s of this.sessions) {

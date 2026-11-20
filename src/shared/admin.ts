@@ -44,6 +44,8 @@ export const BUILTIN_ROLE_NAME: Record<string, string> = { owner: 'Owner', gm: '
 // Limits per admin action (change them here).
 /** Most gold one action may give or take. */
 export const ADMIN_GOLD_MAX = 1_000_000;
+/** Most crystals one action may give or take. */
+export const ADMIN_CRYSTAL_MAX = 1_000_000;
 /** Most items one action may spawn. */
 export const ADMIN_ITEMS_MAX = 10;
 /** Most stat rows an item with chosen stats may have (one per stat in the game; repeats allowed). */
@@ -182,7 +184,7 @@ export interface AdminSnapDelta { on: boolean; stats: SnapDeltaStats; clients: {
  * switch: the Permissions tab, the audit log, restarting / stopping the server, deleting accounts or
  * characters, and making someone owner (command line).
  */
-export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'animPreview' | 'animTune' | 'menuLayout' | 'menuLayoutEdit' | 'mapEdit' | 'mapRollback' | 'mapExport';
+export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'crystalGrant' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'animPreview' | 'animTune' | 'menuLayout' | 'menuLayoutEdit' | 'mapEdit' | 'mapRollback' | 'mapExport';
 
 /**
  * The defaults: which built-in role may use each tool (owner always has all). The owner can change
@@ -228,6 +230,8 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   reportBan: ['owner'],
   // Giving / taking back cosmetics on an account's sheet (owner only for now).
   cosmetics: ['owner'],
+  // Giving / taking crystals on an account's sheet (owner 2026-11-20, like giving gold; owner only to start with).
+  crystalGrant: ['owner'],
   // The cosmetics test bench tab "ของแต่งตัว" (owner 2026-11-10: owner and GMs). Only looks; changes nothing in the game.
   cosPreview: ['owner', 'gm'],
   // Saving the server-wide cosmetic tuning from that tab (owner 2026-11-10: owner only).
@@ -307,6 +311,7 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   kick: { name: 'เตะออกจากเกม', desc: 'เตะตัวละครที่ออนไลน์อยู่ออกจากเกม', group: 'ผู้เล่น' },
   teleport: { name: 'ย้ายโซน', desc: 'ย้ายตัวละครไปแคมป์ของโซนที่เลือก', group: 'ผู้เล่น' },
   channelWarp: { name: 'วาร์ปเลือก CH', desc: 'ตอนย้ายโซน เลือก CH ได้ เข้าได้แม้ห้องเต็ม', group: 'ผู้เล่น' },
+  crystalGrant: { name: 'ให้/ลดคริสตัลมิติ', desc: 'ในหน้าบัญชี: ให้หรือลดคริสตัลมิติ (เงินแคชช็อป) ของบัญชี', group: 'ผู้เล่น' },
   cosmetics: { name: 'ให้/ถอนของแต่งตัว', desc: 'ให้หรือถอนของแต่งตัวในหน้าบัญชี', group: 'ผู้เล่น' },
   itemEdit: { name: 'แก้ไอเทมของผู้เล่น', desc: 'ในหน้าบัญชี: แก้ชนิด ความหายาก เลเวล อาชีพ ชื่อ ตีบวก pity สเตตัสทุกบรรทัด จำนวนยา/หิน หรือลบไอเทม ที่สวม/กระเป๋า/คลัง (ต้องมี "ผู้ใช้ทั้งหมด" ด้วย)', group: 'ผู้เล่น' },
   staffTarget: { name: 'จัดการบัญชีทีมงานคนอื่น', desc: 'แบน รีเซ็ตรหัส แก้ตัวละครของบัญชีที่มีสิทธิ์ผู้ดูแล (ไม่มี = ทำได้แค่ผู้เล่นธรรมดาและตัวเอง) · บัญชี owner แตะไม่ได้เสมอ', group: 'ผู้เล่น' },

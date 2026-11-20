@@ -1,4 +1,4 @@
-import { BAN_DURATIONS, BAN_REASON_MAX, type AdminAccountDetail, type AdminAccountsResponse } from '../../shared/admin';
+import { ADMIN_CRYSTAL_MAX, BAN_DURATIONS, BAN_REASON_MAX, type AdminAccountDetail, type AdminAccountsResponse } from '../../shared/admin';
 import { MAX_CHARACTERS } from '../../shared/api';
 import { entryName } from '../../shared/data/potions';
 import { COSMETICS, COS_SLOTS, COS_SLOT_NAME } from '../../shared/data/cosmetics';
@@ -163,6 +163,25 @@ export async function openAccount(id: number, note?: { text: string; ok: boolean
   }
   if (d.crystals !== null && d.crystals !== undefined) {
     sections.push(h('div', { class: 'muted' }, `คริสตัลมิติ (แคชช็อป): ${d.crystals.toLocaleString()}`));
+    if (can('crystalGrant')) {
+      // Give (+) or take (−) crystals, like the gold tool on a character.
+      const amount = h('input', { type: 'number', min: '1', max: String(ADMIN_CRYSTAL_MAX), placeholder: 'จำนวน', style: 'width:110px' });
+      const send = (sign: 1 | -1) => async () => {
+        const n = Math.floor(Number(amount.value));
+        if (!Number.isFinite(n) || n < 1 || n > ADMIN_CRYSTAL_MAX) return fail(new Error(`ใส่จำนวน 1–${ADMIN_CRYSTAL_MAX.toLocaleString()}`));
+        if (sign < 0 && !confirm(`ลดคริสตัลมิติ ${n.toLocaleString()} จาก ${display}?`)) return;
+        try {
+          after((await api<{ msg: string }>('POST', `/admin/accounts/${id}/crystals`, { delta: sign * n })).msg);
+        } catch (e) {
+          fail(e);
+        }
+      };
+      const give = h('button', { class: 'primary' }, 'ให้คริสตัล');
+      give.onclick = send(1);
+      const take = h('button', { class: 'danger' }, 'ลดคริสตัล');
+      take.onclick = send(-1);
+      sections.push(h('div', { class: 'row' }, h('label', {}, 'เสกคริสตัลมิติ', amount), give, take));
+    }
   }
   // Tools
   const tools: Node[] = [];
