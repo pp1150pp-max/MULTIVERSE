@@ -373,11 +373,11 @@ export class Terrain {
     // The knight's statue on the plaza's edge where the top road comes in, the road parting round it (owner 2026-11-19:
     // beside the road it stood behind the vault).
     polar('town_statue', 225, HUB_PLAZA_RADIUS + 1, 3.8, 0.8);
-    // Floor 2's navigator (owner 2026-11-19): beside the knight's statue, on The Seeker's side of the top road, off it.
+    // Floor 2's navigator: in front of the fountain, on the camera's side (owner 2026-11-20: beside the statue his
+    // badge covered The Seeker's).
     {
-      const a = rad(225);
-      const r0 = HUB_PLAZA_RADIUS + 1;
-      this.npcPos.navigator = { x: s.x + Math.cos(a) * r0 + 2.4 * Math.SQRT1_2, z: s.z + Math.sin(a) * r0 - 2.4 * Math.SQRT1_2 };
+      const d = HUB_FOUNTAIN_RADIUS + 1.6;
+      this.npcPos.navigator = { x: s.x + d * Math.SQRT1_2, z: s.z + d * Math.SQRT1_2 };
     }
 
     // The wall kit (tools/cut_hub.cjs): one scale for all pieces, U world units per pixel. Each wall

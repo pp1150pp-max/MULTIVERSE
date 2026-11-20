@@ -194,13 +194,14 @@ export class Sim {
     const p = new Player(this.newId(), this, data);
     p.zone = this.zone.id;
     const back = fromZone ? this.zone.portals.find((pt) => pt.to === fromZone) : undefined;
-    // Down from floor 2 (no portal here leads there): beside the navigator who took them up (owner 2026-11-19).
+    // Down from floor 2 (no portal here leads there): beside the navigator who took them up (owner 2026-11-19), a
+    // couple of steps out from the middle (he stands in front of the fountain).
     const guide = !back && fromZone && ZONES[fromZone] && (ZONES[fromZone].floor ?? 1) !== (this.zone.floor ?? 1) ? this.terrain.npcPos.navigator : undefined;
     if (guide) {
       const s = this.zone.start;
       const d = Math.hypot(guide.x - s.x, guide.z - s.z) || 1;
-      p.x = guide.x + ((s.x - guide.x) / d) * 2;
-      p.z = guide.z + ((s.z - guide.z) / d) * 2;
+      p.x = guide.x + ((guide.x - s.x) / d) * 2;
+      p.z = guide.z + ((guide.z - s.z) / d) * 2;
       p.face(guide.x - p.x, guide.z - p.z);
     } else if (back) {
       // A few steps from the portal toward the middle of the map.

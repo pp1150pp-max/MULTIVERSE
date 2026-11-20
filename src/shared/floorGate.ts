@@ -1,5 +1,5 @@
 // The way up to floor 2 (docs/plans/FLOOR2_PLAN.md 4.1–4.2, owner 2026-11-19): the navigator of the dimensions
-// stands in nexus_city beside the knight's statue, seen only by characters who may go up (Lv40 and the Volcano Heart
+// stands in nexus_city in front of the fountain, seen only by characters who may go up (Lv40 and the Volcano Heart
 // beaten). Talking to him the first time is the quest: it opens the way (Player.unlocks 'floor2') and mails a reward,
 // bound, once per character (Guests can't hand it in: no mailbox). After that he takes them to the harbour.
 // One place for the rules, so his window, the server and the NPC's visibility never disagree. /admin: the
