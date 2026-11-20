@@ -292,7 +292,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api): () => void {
     placeBrush = place;
     e.onChange = () => { scheduleSave(); renderInspector(false); };
     e.onSelect = () => renderInspector(true);
-    e.onTool = () => renderTools();
+    e.onTool = () => { renderTools(); renderInspector(true); };
     e.onHistory = () => refreshTop();
     renderTools();
     renderOptions();
@@ -314,7 +314,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api): () => void {
     if (!ed) return;
     const e = ed;
     const box = (label: string, get: () => boolean, set: (v: boolean) => void, title = ''): HTMLElement =>
-      h('label', { title }, h('input', { type: 'checkbox', checked: get(), onchange: (ev: Event) => { set((ev.target as HTMLInputElement).checked); e.requestDraw(); } }), ` ${label}`);
+      h('label', { title }, h('input', { type: 'checkbox', checked: get(), onchange: (ev: Event) => { set((ev.target as HTMLInputElement).checked); e.requestDraw(); refreshTop(); } }), ` ${label}`);
     optBox.replaceChildren(
       box('Snap เข้ากริด', () => e.opts.snap, (v) => { e.opts.snap = v; }, 'ถือ Alt ค้างตอนลาก = ปิดชั่วคราว'),
       h('label', {}, 'ขนาดช่อง ', h('select', { onchange: (ev: Event) => { e.opts.grid = Number((ev.target as HTMLSelectElement).value) as 0.5 | 1 | 2; e.requestDraw(); } },
