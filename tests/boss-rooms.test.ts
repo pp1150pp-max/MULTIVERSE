@@ -1,6 +1,7 @@
 // Boss rooms: the room maps, the key multiplier, the shut portal, and the summoning lobby (server/bossRooms.ts)
 // driven through a stand-in for the world (real Sims, a fake clock, no sockets).
 import { ok, finish } from './check';
+import { applyBalance } from '../src/shared/balance';
 import { BOSS_ROOMS, LAIR_EXIT_RADIUS, ZONES, ZONE_1, ZONE_HUB, arenaRadius, inBossArena, lairExitSpot } from '../src/shared/data/zones';
 import { MONSTERS } from '../src/shared/data/monsters';
 import { Sim } from '../src/shared/sim/Sim';
@@ -203,7 +204,11 @@ const lastSaid = (id: number) => said.filter(([c]) => c === id).at(-1)?.[1] ?? '
   ok(!!run && run.channel === 1 && run.keys === 3 && a.sim.keys === 3, 'in the room: channel 1, ×3');
   ok(a.player.stoneCount('key_bear') === 2, 'the 3 keys are gone');
   add(2, 'Other', 1);
+  // The countdown comes from /admin (owner 2026-11-20), for rooms opened after the change.
+  applyBalance({ roomBossDelay: 7 });
   rooms2.open(2, 1);
+  applyBalance({});
+  ok(chars.get(2)!.sim.bossAt === 7 && a.sim.bossAt === ROOM_BOSS_DELAY, 'the countdown follows the /admin seconds');
   ok(rooms2.run(chars.get(2)!.sim)?.channel === 2 && chars.get(2)!.sim !== a.sim, 'the next group gets its own copy, channel 2');
   ok(rooms2.snap(a.sim, a.player)?.channel === 1 && rooms2.snap(field, a.player) === undefined, 'snapshots carry the room');
 }

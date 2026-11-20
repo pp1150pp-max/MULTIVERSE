@@ -458,6 +458,12 @@ export class Player extends Unit {
   private atkRootNew = false;
   /** Cursed into a toad by the Bog Witch (also stunned for as long). The client draws a toad instead. */
   toadT = 0;
+  /**
+   * Seconds left untouchable after getting up with a phoenix feather in a boss room (owner 2026-11-20): no damage
+   * and no boss effects, and everyone sees the character blink. Attacking, a skill (buffs too) or a dash ends it;
+   * walking and potions don't. In the browser: 1 while the server says so.
+   */
+  guardT = 0;
   /** Its skill buffs as the server last sent them (client only, sim/debuffs.ts BUFF_BIT). */
   buffBits = 0;
   /** The skill whose buff it got last (server: set by the cast; client: as sent), for its magic circle. '' = none. */
@@ -1172,6 +1178,7 @@ export class Player extends Unit {
     this.rootT = Math.max(0, this.rootT - dt);
     this.snareT = Math.max(0, this.snareT - dt);
     this.toadT = Math.max(0, this.toadT - dt);
+    this.guardT = Math.max(0, this.guardT - dt);
     this.atkRootT = Math.max(0, this.atkRootT - dt);
 
     const ooc = this.inCombat() ? 1 : OUT_OF_COMBAT_REGEN;
@@ -1249,6 +1256,7 @@ export class Player extends Unit {
       this.startDash(dx, dz, 4.8, 0.18, 'dash');
       quarksCue(sim, this, 'dash', Math.atan2(dz, dx));
       this.cd.dash = dashSkill.cooldown * passiveDashCdMult(this);
+      this.guardT = 0;
       return;
     }
 
@@ -1274,6 +1282,7 @@ export class Player extends Unit {
         sim.anim(this.id, `skill_${sk.anim ?? slot}`, this.rootT > 0 ? { skill: sk.id } : { duration: this.attackAnimDuration(), fallback: 'attack', skill: sk.id });
         this.mp -= cost;
         this.useCharge(sk);
+        this.guardT = 0;
         this.lastAttack = sim.time;
         passiveOnCast(this, sk);
         this.faceLockT = 0.3;
@@ -1286,6 +1295,7 @@ export class Player extends Unit {
     if (it.basic && this.atkT <= 0 && !peaceful) {
       this.atkT = 1 / this.attackRate;
       this.lastAttack = sim.time;
+      this.guardT = 0;
       basicAttack(sim, this, aim);
       this.face(this.aimX, this.aimZ);
       sim.anim(this.id, 'attack', { duration: this.attackAnimDuration() });

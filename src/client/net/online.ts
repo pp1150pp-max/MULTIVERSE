@@ -908,6 +908,7 @@ export class OnlineBackend implements Backend {
       p.dashT = ps.dash ? 1 : 0;
       p.buffBits = ps.bf ?? 0;
       p.buffSkill = ps.bs ?? '';
+      p.guardT = ps.gd ? 1 : 0;
       if (look) {
         p.aura = ps.aura ?? 0;
         p.toadT = ps.toad ? 1 : 0;

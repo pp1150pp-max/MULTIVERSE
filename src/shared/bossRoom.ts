@@ -8,8 +8,11 @@ export const ROOM_KEYS_MAX = 10;
 export const ROOM_INVITE_SECONDS = 30;
 /** Seconds the leader has to press start before the summoning is called off and the keys given back. */
 export const ROOM_LOBBY_SECONDS = 60;
-/** Seconds between entering a boss room and its boss appearing, counted down on screen (owner 2026-11-12). */
-export const ROOM_BOSS_DELAY = 5;
+/**
+ * Seconds between entering a boss room and its boss appearing, counted down on screen (owner 2026-11-12;
+ * 2026-11-20: 13, was 5). The code's value: rooms use `BalanceConfig.roomBossDelay`, which /admin can change.
+ */
+export const ROOM_BOSS_DELAY = 13;
 /** Seconds after the boss dies before everyone is sent out by the summoner (owner: 90). */
 export const ROOM_END_SECONDS = 90;
 /** Seconds a group that is all down has to get someone up with a phoenix feather before it has lost (owner: 5). */
