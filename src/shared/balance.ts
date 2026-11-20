@@ -42,6 +42,8 @@ export const CODE_BOSS_SWITCH_SEC = 10;
 /** Ordinary monsters give up after this many seconds without a hit (owner 2026-11-17: off). */
 export const CODE_MOB_GIVE_UP_SEC = 0;
 export const CODE_MOB_RETURN_IGNORE_HITS = true;
+/** Ordinary monsters drop a target that is in a safe area / left / died at once and walk home (owner 2026-11-20). */
+export const CODE_MOB_DROP_ON_SAFE = true;
 /** The "เพิ่มเวลาบัฟ %" item stat also lengthens summons: turret, drone, land mine (owner 2026-11-19). */
 export const CODE_BUFF_DUR_SUMMONS = true;
 /** Blacksmith: the Auto button that enhances again and again up to a chosen level (owner 2026-11-18: on). */
@@ -152,6 +154,8 @@ export interface Balance {
   mobGiveUpSec: number;
   /** A monster walking home (leash / hurt after a fight) ignores hits: no turning back to chase (owner 2026-11-17); off = the old behaviour. */
   mobReturnIgnoreHits: boolean;
+  /** A monster chasing a player who steps into the town / safe area (or leaves, or dies) drops it at once and walks home (owner 2026-11-20); off = the old behaviour. */
+  mobDropOnSafe: boolean;
   /** "เพิ่มเวลาบัฟ %" counts for summons too (turret, drone, land mine lifetime); off = only buffs. */
   buffDurSummons: boolean;
   /** Blacksmith Auto enhance button shown (owner 2026-11-18); off = hidden and a running Auto stops. Browser side only. */
@@ -214,6 +218,7 @@ export interface BalanceTuning {
   mobGiveUpSec?: number;
   /** Walking-home monsters ignoring hits, when not the code's (on). */
   mobReturnIgnoreHits?: boolean;
+  mobDropOnSafe?: boolean;
   /** Buff-time stat on summons, when not the code's (on). */
   buffDurSummons?: boolean;
   /** Blacksmith Auto enhance, when not the code's (on). */
@@ -300,6 +305,7 @@ export function codeBalance(): Balance {
     bossSwitchSec: CODE_BOSS_SWITCH_SEC,
     mobGiveUpSec: CODE_MOB_GIVE_UP_SEC,
     mobReturnIgnoreHits: CODE_MOB_RETURN_IGNORE_HITS,
+    mobDropOnSafe: CODE_MOB_DROP_ON_SAFE,
     buffDurSummons: CODE_BUFF_DUR_SUMMONS,
     forgeAuto: CODE_FORGE_AUTO,
     walkHidden: CODE_WALK_HIDDEN,
@@ -351,6 +357,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.bossWipeKeepHp !== undefined) b.bossWipeKeepHp = t.bossWipeKeepHp;
   if (t.roomWipeSec !== undefined) b.roomWipeSec = t.roomWipeSec;
   if (t.mobReturnIgnoreHits !== undefined) b.mobReturnIgnoreHits = t.mobReturnIgnoreHits;
+  if (t.mobDropOnSafe !== undefined) b.mobDropOnSafe = t.mobDropOnSafe;
   if (t.buffDurSummons !== undefined) b.buffDurSummons = t.buffDurSummons;
   if (t.forgeAuto !== undefined) b.forgeAuto = t.forgeAuto;
   if (t.walkHidden !== undefined) b.walkHidden = t.walkHidden;
@@ -495,7 +502,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'buffDurSummons', 'forgeAuto', 'walkHidden', 'bossWipeKeepHp', 'roomWipeSec', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'menuLayout'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'buffDurSummons', 'forgeAuto', 'walkHidden', 'bossWipeKeepHp', 'roomWipeSec', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'menuLayout'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -583,6 +590,13 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (x === undefined) return null;
     if (typeof x !== 'boolean') return strict ? 'สวิตช์มอนเดินกลับไม่สนการโจมตีต้องเป็นเปิด/ปิด' : null;
     if (x !== CODE.mobReturnIgnoreHits) out.mobReturnIgnoreHits = x;
+    return null;
+  };
+  const dropOnSafe = (): string | null => {
+    const x = o.mobDropOnSafe;
+    if (x === undefined) return null;
+    if (typeof x !== 'boolean') return strict ? 'สวิตช์มอนเลิกไล่เมื่อผู้เล่นเข้าเมืองต้องเป็นเปิด/ปิด' : null;
+    if (x !== CODE.mobDropOnSafe) out.mobDropOnSafe = x;
     return null;
   };
   const buffDurSummons = (): string | null => {
@@ -965,6 +979,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     one('bossSwitchSec', BALANCE_RANGE.bossSwitchSec, 'บอสเปลี่ยนเป้าหมายทุก (วินาที)') ??
     one('mobGiveUpSec', BALANCE_RANGE.mobGiveUpSec, 'มอนธรรมดาเลิกไล่เมื่อไม่โดนตี (วินาที)') ??
     returnIgnore() ??
+    dropOnSafe() ??
     buffDurSummons() ??
     forgeAuto() ??
     walkHidden() ??
@@ -1079,6 +1094,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.forgeAuto !== b.forgeAuto) out.push(`ตีบวก Auto ${a.forgeAuto ? 'เปิด' : 'ปิด'} → ${b.forgeAuto ? 'เปิด' : 'ปิด'}`);
   if (a.walkHidden !== b.walkHidden) out.push(`เดินต่อเมื่อสลับแท็บ ${a.walkHidden ? 'เปิด' : 'ปิด'} → ${b.walkHidden ? 'เปิด' : 'ปิด'}`);
   if (a.buffDurSummons !== b.buffDurSummons) out.push(`เพิ่มเวลาบัฟนับ summon (ป้อมปืน โดรน กับระเบิด) ${a.buffDurSummons ? 'เปิด' : 'ปิด'} → ${b.buffDurSummons ? 'เปิด' : 'ปิด'}`);
+  if (a.mobDropOnSafe !== b.mobDropOnSafe) out.push(`มอนเลิกไล่เมื่อผู้เล่นเข้าเมือง/safe zone ${a.mobDropOnSafe ? 'เปิด' : 'ปิด'} → ${b.mobDropOnSafe ? 'เปิด' : 'ปิด'}`);
   if (a.mobReturnIgnoreHits !== b.mobReturnIgnoreHits) out.push(`มอนเดินกลับบ้านไม่สนการโจมตี ${a.mobReturnIgnoreHits ? 'เปิด' : 'ปิด'} → ${b.mobReturnIgnoreHits ? 'เปิด' : 'ปิด'}`);
   out.push(...autoChanges(a.auto, b.auto));
   out.push(...tutorialChanges(a.tutorial, b.tutorial));

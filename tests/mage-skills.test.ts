@@ -212,6 +212,8 @@ const run = (sim: Sim, seconds: number) => {
 }
 {
   // Dying or leaving the zone stops the caster's zones.
+  // Switch off: a monster that walks home resets its damage shares, which this check reads (the walk-home rule has its own test).
+  applyBalance({ mobDropOnSafe: false });
   const { sim, p, mobs } = arena();
   castSkill(sim, p, sk('mg_firerain'), { x: mobs[0].x, z: mobs[0].z }, 1);
   run(sim, 0.6);
@@ -219,6 +221,7 @@ const run = (sim: Sim, seconds: number) => {
   const lost = hpLost(mobs);
   run(sim, 6);
   ok(hpLost(mobs) === lost, 'fire rain stops when the caster leaves');
+  applyBalance({});
 }
 
 // ---------------------------------------------------------- passives
