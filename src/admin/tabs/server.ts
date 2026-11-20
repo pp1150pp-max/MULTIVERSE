@@ -1,4 +1,4 @@
-import { type AdminServerState, type AdminShutdownText, type AdminSnapDelta, type AdminGoogle } from '../../shared/admin';
+import { type AdminServerState, type AdminShutdownText, type AdminSnapDelta, type AdminGoogle, type AdminDirectWs, DIRECT_WS_IP_MAX_RANGE } from '../../shared/admin';
 import { checkShutdownText, countdownTime, SHUTDOWN_CHOICES, SHUTDOWN_SECONDS, SHUTDOWN_TEXT_MAX, SHUTDOWN_TIME_TOKEN, shutdownWarning, type ShutdownMode } from '../../shared/net/protocol';
 import { h, api, fmt, time, me, view, can } from '../core';
 import { backupCard } from './backups';
@@ -9,6 +9,7 @@ export async function renderServer(): Promise<void> {
   // Restart / shut down first: it is what the owner comes here for in a hurry (the backup list is long).
   const restart = me?.role === 'owner' ? renderRestart() : null;
   if (can('shutdownText')) view.append(shutdownTextCard());
+  if (can('directWs')) view.append(directWsCard());
   if (can('netDelta')) view.append(snapDeltaCard());
   if (can('googleLogin')) view.append(googleCard());
   if (can('backup')) view.append(backupCard());
@@ -151,6 +152,67 @@ function googleCard(): HTMLElement {
     h('div', { class: 'muted', style: 'margin:-6px 0 10px' },
       'ปุ่ม "เข้าสู่ระบบด้วย Google" ที่หน้า Login · ผู้เล่นผูก Google กับบัญชีเดิมได้ที่หน้าเลือกตัวละคร/เมนูระบบ (รหัสผ่านเดิมยังใช้ได้) · Guest บันทึกตัวละครเป็นบัญชี Google ได้ · เก็บแค่รหัสบัญชี Google อีเมล และชื่อ'),
     status, h('div', { class: 'row', style: 'margin:8px 0' }, toggle), msg, list);
+}
+
+/** Direct connection past Cloudflare (server/direct.ts): switch, hostname (owner), cap per address, who is on which road. */
+function directWsCard(): HTMLElement {
+  const msg = h('div', { class: 'msg' });
+  const status = h('div', { style: 'margin-bottom:8px' });
+  const numbers = h('div', { class: 'muted', style: 'line-height:1.7' });
+  const toggle = h('button', { class: 'primary' }, '…');
+  const host = h('input', { type: 'text', maxLength: 100, style: 'width:240px' }) as HTMLInputElement;
+  const ipMax = h('input', { type: 'number', min: String(DIRECT_WS_IP_MAX_RANGE[0]), max: String(DIRECT_WS_IP_MAX_RANGE[1]), style: 'width:80px' }) as HTMLInputElement;
+  const save = h('button', { class: 'small' }, 'บันทึกค่า');
+  const refresh = h('button', { class: 'small' }, 'รีเฟรชตัวเลข');
+  let state: AdminDirectWs | null = null;
+  const load = (st: AdminDirectWs) => {
+    state = st;
+    status.textContent = !st.available
+      ? 'server นี้ไม่ได้เปิด port ต่อตรง — เปิดสวิตช์ไว้ก็ยังเข้าผ่าน Cloudflare ทุกคน'
+      : st.on ? `สถานะ: เปิดอยู่ — เกมต่อตรงไปที่ wss://${st.host}/ws (ต่อไม่ได้ใน 2.5 วิ = ผ่าน Cloudflare เอง)` : 'สถานะ: ปิดอยู่ — ทุกคนเข้าผ่าน Cloudflare (แบบเดิม)';
+    toggle.textContent = st.on ? 'ปิด (ทุกคนผ่าน Cloudflare)' : 'เปิดต่อตรง';
+    host.value = st.host;
+    host.disabled = !st.canEditHost;
+    host.title = st.canEditHost ? `ค่าในโค้ด ${st.defaults.host}` : 'แก้ได้เฉพาะ owner';
+    ipMax.value = String(st.ipMax);
+    const r = st.refused;
+    numbers.replaceChildren(
+      h('div', {}, `ผู้เล่นออนไลน์ตอนนี้: ต่อตรง ${fmt(st.clients.direct)} คน · ผ่าน Cloudflare ${fmt(st.clients.tunnel)} คน`),
+      h('div', {}, `ปฏิเสธการต่อตรงตั้งแต่ server เปิด: สวิตช์ปิด ${fmt(r.off)} · หน้าเว็บไม่ใช่ของเรา ${fmt(r.origin)} · เกินเพดานต่อ IP ${fmt(r.perIp)}`),
+      h('div', {}, `port ภายในที่ Caddy ส่งต่อมา: ${st.port || 'ไม่มี'} · ค่าในโค้ด: ปิด, ${st.defaults.host}, ${st.defaults.ipMax} ต่อ IP`),
+    );
+  };
+  const fail = (e: Error) => {
+    msg.className = 'msg bad';
+    msg.textContent = e.message;
+  };
+  const post = async (on: boolean) => {
+    if (!state) return;
+    toggle.disabled = save.disabled = true;
+    try {
+      const body: Record<string, unknown> = { on, ipMax: Number(ipMax.value) };
+      if (state.canEditHost) body.host = host.value;
+      load(await api<AdminDirectWs>('POST', '/admin/direct-ws', body));
+      msg.className = 'msg ok';
+      msg.textContent = 'บันทึกแล้ว — มีผลทันที (ปิด/เปลี่ยนชื่อ = คนที่ต่อตรงอยู่หลุดแล้วต่อใหม่เองภายในไม่กี่วิ)';
+    } catch (e) {
+      fail(e as Error);
+    } finally {
+      toggle.disabled = save.disabled = false;
+    }
+  };
+  toggle.onclick = () => void (state && post(!state.on));
+  save.onclick = () => void (state && post(state.on));
+  const reload = () => void api<AdminDirectWs>('GET', '/admin/direct-ws').then(load, fail);
+  refresh.onclick = reload;
+  reload();
+  return h('div', { class: 'card' }, h('h2', {}, 'ต่อตรง (ลดปิง)'),
+    h('div', { class: 'muted', style: 'margin:-6px 0 10px' },
+      'การเชื่อมต่อตอนเล่นวิ่งตรงไปที่ VPS ไม่อ้อมผ่าน Cloudflare (หน้าเว็บ/login ยังผ่าน Cloudflare) · ถ้าโดนยิง/มีปัญหา กดปิดได้ทันที ทุกคนกลับไปผ่าน Cloudflare เอง · ดูผลที่บรรทัด [ping] ใน log (via direct เทียบกับ via BKK/SIN)'),
+    status, numbers,
+    h('div', { class: 'row', style: 'align-items:center;margin-top:8px;gap:8px;flex-wrap:wrap' },
+      h('label', {}, 'hostname ', host), h('label', {}, 'เพดานต่อ IP ', ipMax), save),
+    h('div', { class: 'row', style: 'align-items:center;margin-top:8px' }, refresh, h('span', { style: 'flex:1' }), toggle), msg);
 }
 
 function snapDeltaCard(): HTMLElement {

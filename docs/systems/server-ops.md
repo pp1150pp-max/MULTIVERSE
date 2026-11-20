@@ -120,6 +120,29 @@
 - /admin แท็บ Server การ์ด "ลดขนาด snapshot" (สิทธิ์ `netDelta` owner+GM): สวิตช์เปิด/ปิดทั้งเซิร์ฟ มีผลทันที (เก็บใน settings `snap_delta` = `'0'` เมื่อปิด ค่าเริ่มต้นเปิด) ลง `admin_audit` · ตัวนับนับตั้งแต่ server เปิดหรือกดสวิตช์ครั้งล่าสุด: จำนวน snapshot, JSON ที่ส่ง/ที่ประหยัดได้ (ก่อนบีบอัด), จำนวนครั้งที่ส่งค่าของตัวเอง/ก้อนหน้าตาใหม่, ผู้เล่นออนไลน์ที่รองรับ/แท็บเก่า · ปิดไว้ = ส่งเต็มแบบเดิม ใช้ถ้าสงสัยว่าภาพในเกมเพี้ยน
 - เทสต์: `tests/snapshot-delta.test.ts`
 
+## เน็ตช้า: ต่อตรงไปที่ VPS ไม่ผ่าน Cloudflare — "ต่อตรง (ลดปิง)" (เจ้าของเลือก 2026-11-20)
+
+- ปัญหา: ผ่าน Cloudflare tunnel ผู้เล่นไทยได้ 68–110 ms (BKK) บางครั้งโดนส่งไป SIN 150–330 ms ทั้งที่ VPS อยู่ไทย
+- ทางแก้: เฉพาะการเชื่อมต่อตอนเล่น (WebSocket `/ws`) ต่อตรงไปที่ VPS ผ่านชื่อแยก `ws.multiverse-game.com` (A record แบบ **DNS only / เมฆสีเทา**) ส่วนหน้าเว็บ, `/api`, login, /admin ยังผ่าน Cloudflare เหมือนเดิม
+- **เจ้าของยอมรับ (2026-11-20): IP ของ VPS เปิดเผยถาวร** (อยู่ในประวัติ DNS ลบ record ทีหลังก็ซ่อนคืนไม่ได้) · สวิตช์ใน /admin พาผู้เล่นกลับไปทาง Cloudflare ได้ทันที แต่ไม่ได้กัน DDoS ที่ยิง IP ตรง ๆ
+- ค่าเริ่มต้นในโค้ด **ปิด** · การยืนยันตัวไม่ใช้ cookie (token ส่งในข้อความ `join`) จึงต่อข้ามชื่อได้
+- **VPS:** Caddy รับ TLS (Let's Encrypt ต่ออายุเอง) ที่ 443 ส่งต่อเฉพาะ `/ws` ไปที่ `127.0.0.1:2569` (port ต่อตรงของ server: env `DIRECT_WS_PORT` ค่าเริ่มต้น 2569 เฉพาะเมื่อ server ใช้ port 2567, 0 = ไม่เปิด) path อื่นตอบ 404 · ตั้งด้วย `tools/vps-direct-setup.sh` (root, รันซ้ำได้, ไม่แตะเกม, Caddyfile อยู่ในสคริปต์) **คัดจากเครื่องบ้านด้วย scp แบบ vps-setup.sh ห้ามรันจาก `~multiverse/MULTIVERSE`** (user ของเกมและทุก deploy แก้ไฟล์ตรงนั้นได้ root ห้ามรัน) · ufw เปิด 80 (ขอ/ต่ออายุใบรับรอง) + 443
+- **ปลอดภัย:**
+  - port ต่อตรงเป็นตัวฟังแยก: รู้ว่า "ต่อตรง" จากที่ที่เข้ามา ไม่ใช่จาก header · บนทางนี้ไม่เชื่อ `CF-*` เลย IP = รายการสุดท้ายของ `X-Forwarded-For` ที่ Caddy ใส่เอง (`server/direct.ts`)
+  - ปฏิเสธก่อน upgrade (เบราว์เซอร์ถอยไปทาง Cloudflare ทันที): สวิตช์ปิด (403), หน้าเว็บ (Origin) ไม่ใช่โดเมนเดียวกับ hostname (403), IP เดียวต่อตรงเกินเพดาน (429)
+  - เบราว์เซอร์ส่ง token ไปเฉพาะ `wss://<ชื่อ>/ws` ที่เป็นชื่อย่อยของโดเมนเดียวกับหน้าเว็บ บนหน้า https เท่านั้น (`src/client/net/route.ts`) · ชื่อ hostname แก้ได้เฉพาะ owner
+- **เบราว์เซอร์** (`src/client/net/route.ts`): ก่อนต่อทุกครั้ง (รวมต่อใหม่) ถาม `GET /api/net-route` (ผ่าน Cloudflare) → ได้ URL ต่อตรงหรือ null · ลองต่อตรงก่อน ไม่เปิดใน 2.5 วิ / error / หลุดก่อนเข้าเกม = ใช้ `/ws` ผ่าน Cloudflare และไม่ลองต่อตรงอีก 10 นาทีในแท็บนั้น · โดนเตะ (`kick`) ไม่ถอย (เหมือนเดิม) · console บอก `[net] connected direct / through Cloudflare`
+- **/admin แท็บ Server การ์ด "ต่อตรง (ลดปิง)"** (สิทธิ์ `directWs` owner+GM): สวิตช์เปิด/ปิด, เพดานต่อ IP (ค่าในโค้ด 40, 1–500 · ร้านเน็ตใช้ IP เดียวกันหลายคน), hostname (เฉพาะ owner) · settings เก็บเฉพาะที่ต่าง (`direct_ws`, `direct_ws_host`, `direct_ws_ip_max`) · ลง `admin_audit` (`direct-ws`) · ปิดหรือเปลี่ยนชื่อ = ตัดคนที่ต่อตรงอยู่ด้วย close 4100 (ไม่ใช่เตะ) เบราว์เซอร์ต่อใหม่เองภายในไม่กี่วิ (Auto ฟาร์มต่อระหว่างนั้นตามกติกาหลุด) · ตัวนับ: คนต่อตรง/ผ่าน Cloudflare ตอนนี้, ที่ถูกปฏิเสธแยกสาเหตุ · ถ้า server ไม่มี port ต่อตรง การ์ดบอก
+- **log:** ตอนเข้าเกม `from <IP> direct (past Cloudflare)` · `[ping] average…` มี `via direct` (เทียบกับ `via BKK`/`via SIN` ก่อนเปิด) · แท็บผู้เล่นออนไลน์โชว์ `direct` ต่อท้าย IP
+- **ขั้นตอนเปิดครั้งแรก (ทีละขั้น ตามที่เจ้าของอนุญาต):**
+  1. merge + deploy (สวิตช์ยังปิด ไม่มีอะไรเปลี่ยนสำหรับผู้เล่น) → การ์ดใน /admin ต้องบอก port 2569
+  2. เจ้าของ: Cloudflare → DNS → Add record: Type `A`, Name `ws`, IPv4 = IP ของ VPS, Proxy status **DNS only** (เมฆสีเทา)
+  3. จากเครื่องบ้าน (โค้ดที่ merge แล้ว): `scp tools/vps-direct-setup.sh root@<IP VPS>:` แล้ว `ssh root@<IP VPS> bash vps-direct-setup.sh` → รอ "certificate obtained" ใน `journalctl -u caddy` · `curl -sI https://ws.multiverse-game.com/` ได้ 404
+  4. เปิดสวิตช์ใน /admin → ดู `[ping] average…` เทียบก่อน/หลัง (และต้องไม่มี `no compression`)
+  - ถ้า Hostatom มี firewall ภายนอกของเขาเอง ต้องเปิด 80/443 ที่นั่นด้วย
+- **ฉุกเฉิน (โดนยิง/มีปัญหา):** ปิดสวิตช์ใน /admin (ทุกคนกลับไปผ่าน Cloudflare) แล้ว `ssh root@<IP VPS> bash vps-direct-setup.sh off` (ปิด 80/443 + หยุด Caddy, สคริปต์ที่คัดไว้ใน home ของ root) · เปิดคืน: `… on` · ถามผู้ให้บริการ VPS เรื่องกัน DDoS
+- เทสต์: `tests/direct-ws.test.ts`
+
 ## log สาเหตุที่หลุด (2026-11-17)
 
 ทุกครั้งที่ออกจากโลก `[world] user (ชื่อตัวละคร) left: <สาเหตุ>` (ดูด้วย `npm run logs`) · ใช้ดูว่าหลุดแบบไหนบ่อย:

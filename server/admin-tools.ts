@@ -20,6 +20,8 @@ import { BAG_SIZE } from '../src/shared/sim/Player';
 import type { AdminShutdownText } from '../src/shared/admin';
 import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../src/shared/net/protocol';
 import { SHUTDOWN_TEXT_KEY } from './db';
+import { checkDirectHost } from './direct';
+import { DIRECT_WS_IP_MAX_RANGE } from '../src/shared/admin';
 import { checkOrbLook, DEFAULT_ORB_LOOK, orbLookChanges, ORB_LOOK_RANGES, ORB_PALETTE_IDS, ORB_SHAPE_IDS, sameOrbLook } from '../src/shared/orbLook';
 import type { AdminAnimLook, AdminCardTune, AdminCosLook, AdminCosShop, AdminOrbItems, AdminOrbLook } from '../src/shared/admin';
 import { animTuningChanges, checkAnimTuning, sameAnimTuning } from '../src/shared/animTuning';
@@ -723,6 +725,44 @@ export async function ownerToolsApi(
       log(db, a, 'snap-delta', 'ลดขนาด snapshot', body.on ? 'เปิด' : 'ปิด (ส่ง snapshot เต็มทุกครั้ง)');
     }
     send(res, 200, world.snapDeltaState());
+    return true;
+  }
+
+  // ---------------------------------------------------------- direct connection (Server tab, server/direct.ts)
+  if (method === 'GET' && path === '/api/admin/direct-ws') {
+    const a = requireFeature(req, db, 'directWs');
+    send(res, 200, world.directState(a.role === 'owner'));
+    return true;
+  }
+
+  if (method === 'POST' && path === '/api/admin/direct-ws') {
+    const a = requireFeature(req, db, 'directWs');
+    const owner = a.role === 'owner';
+    const body = await readJson(req);
+    const before = world.directState(owner);
+    if (typeof body.on !== 'boolean') throw new HttpError(400, 'ค่าเปิด/ปิดไม่ถูกต้อง');
+    const ipMax = body.ipMax;
+    if (typeof ipMax !== 'number' || !Number.isInteger(ipMax) || ipMax < DIRECT_WS_IP_MAX_RANGE[0] || ipMax > DIRECT_WS_IP_MAX_RANGE[1]) {
+      throw new HttpError(400, `เพดานต่อ IP ต้องเป็น ${DIRECT_WS_IP_MAX_RANGE[0]}–${DIRECT_WS_IP_MAX_RANGE[1]}`);
+    }
+    let host = before.host;
+    if (body.host !== undefined && body.host !== before.host) {
+      // The login token goes to this hostname: only the owner may point it elsewhere.
+      if (!owner) throw new HttpError(403, 'แก้ชื่อ hostname ได้เฉพาะ owner');
+      if (typeof body.host !== 'string') throw new HttpError(400, 'ชื่อ hostname ไม่ถูกต้อง');
+      host = body.host.trim().toLowerCase();
+      const bad = checkDirectHost(host);
+      if (bad) throw new HttpError(400, `ชื่อ hostname ไม่ถูกต้อง: ${bad}`);
+    }
+    const changes: string[] = [];
+    if (body.on !== before.on) changes.push(body.on ? 'เปิด' : 'ปิด');
+    if (host !== before.host) changes.push(`hostname ${before.host} → ${host}`);
+    if (ipMax !== before.ipMax) changes.push(`เพดานต่อ IP ${before.ipMax} → ${ipMax}`);
+    if (changes.length) {
+      const cut = world.setDirect({ on: body.on, host, ipMax });
+      log(db, a, 'direct-ws', 'ต่อตรง (ลดปิง)', `${changes.join(' · ')}${cut ? ` · ตัดคนที่ต่อตรงอยู่ ${cut} คน (ต่อใหม่เอง)` : ''}`);
+    }
+    send(res, 200, world.directState(owner));
     return true;
   }
 

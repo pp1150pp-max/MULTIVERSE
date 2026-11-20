@@ -175,6 +175,23 @@ export interface SnapDeltaStats {
  * browsers opened before the update, which get whole snapshots whatever the switch says. Saving sends `{ on }`.
  */
 export interface AdminSnapDelta { on: boolean; stats: SnapDeltaStats; clients: { delta: number; full: number } }
+/** Direct game connection (server/direct.ts): the hostname players' browsers connect to straight, past Cloudflare. */
+export const DIRECT_WS_HOST_DEFAULT = 'ws.multiverse-game.com';
+/** Direct connections at once from one address (a net café shares one); more = refused (they come through the tunnel). */
+export const DIRECT_WS_IP_MAX_DEFAULT = 40;
+export const DIRECT_WS_IP_MAX_RANGE: readonly [number, number] = [1, 500];
+/**
+ * The direct connection card (Server tab). `available` = this server has the local port Caddy passes to
+ * (`port`, 0 = none). `clients` = online players by road; `refused` = direct connections turned away since start
+ * (switch off, wrong page, too many from one address). Saving sends `{ on, ipMax, host? }` (host: owner only).
+ */
+export interface AdminDirectWs {
+  on: boolean; host: string; ipMax: number;
+  defaults: { host: string; ipMax: number };
+  available: boolean; port: number; canEditHost: boolean;
+  clients: { direct: number; tunnel: number };
+  refused: { off: number; origin: number; perIp: number };
+}
 /** The papercraft map art switch (owner 2026-11-17, art_templates/papercraft_maps): on = every player's game loads the paper pictures. */
 
 // ------------------------------------------------------------ owner tools (users, bans, broadcast, backups…)
@@ -184,7 +201,7 @@ export interface AdminSnapDelta { on: boolean; stats: SnapDeltaStats; clients: {
  * switch: the Permissions tab, the audit log, restarting / stopping the server, deleting accounts or
  * characters, and making someone owner (command line).
  */
-export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'crystalGrant' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'animPreview' | 'animTune' | 'menuLayout' | 'menuLayoutEdit' | 'mapEdit' | 'mapRollback' | 'mapExport';
+export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'crystalGrant' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'directWs' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'animPreview' | 'animTune' | 'menuLayout' | 'menuLayoutEdit' | 'mapEdit' | 'mapRollback' | 'mapExport';
 
 /**
  * The defaults: which built-in role may use each tool (owner always has all). The owner can change
@@ -256,6 +273,8 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   daily: ['owner'],
   // The snapshot delta switch on the Server tab (owner 2026-11-14: owner and GMs).
   netDelta: ['owner', 'gm'],
+  // The direct connection card on the Server tab (owner 2026-11-20: owner and GMs switch it; only the owner changes the hostname).
+  directWs: ['owner', 'gm'],
   // The Google login card on the Server tab: switch it on/off, see and unlink linked accounts (owner 2026-11-15: owner only).
   googleLogin: ['owner'],
   // The papercraft map art switch on the Server tab (owner 2026-11-17: everyone sees the same art, so owner only).
@@ -334,6 +353,7 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   cosPreview: { name: 'ทดลองของแต่งตัว', desc: 'แท็บ "ของแต่งตัว": ลองตำแหน่ง/หน้าตาปีก สัตว์ขี่ สัตว์เลี้ยง ออร่า ไม่เปลี่ยนอะไรในเกม', group: 'หน้าตา' },
   balance: { name: 'ปรับสมดุล (อาชีพ, tier)', desc: 'แท็บ "ปรับสมดุล": แก้ค่าสเตตัสอาชีพ ตัวคูณ ตัวตัดฟื้น และตาราง tier T1–T5 ของทั้งเซิร์ฟ มีผลทันที', group: 'ปรับเกม' },
   daily: { name: 'ล็อกอินรายวัน', desc: 'แท็บ "ล็อกอินรายวัน": แก้ของรางวัลแต่ละวันของปฏิทิน (มีผลกับของที่ส่งหลังบันทึก)', group: 'ปรับเกม' },
+  directWs: { name: 'ต่อตรง (ลดปิง)', desc: 'แท็บ Server: เปิด/ปิดให้เกมต่อตรงไปที่ VPS ไม่ผ่าน Cloudflare และเพดานการเชื่อมต่อต่อ IP (ชื่อ hostname แก้ได้เฉพาะ owner)', group: 'ระบบ' },
   netDelta: { name: 'ลดขนาด snapshot', desc: 'แท็บ Server: สวิตช์ส่งค่าที่แทบไม่เปลี่ยนเฉพาะตอนเปลี่ยน (ลดเน็ตขาออก) และตัวนับ', group: 'ระบบ' },
   googleLogin: { name: 'เข้าสู่ระบบด้วย Google', desc: 'แท็บ Server: เปิด/ปิดปุ่ม Google ที่หน้า Login ดูบัญชีที่ผูก Google และยกเลิกการผูก', group: 'ระบบ' },
   animPreview: { name: 'ดูท่าตัวละคร', desc: 'แท็บ "ท่าตัวละคร": ดูท่ายืน วิ่ง โจมตี ฯลฯ ของทุกอาชีพครบ 8 ทิศ บนพื้นเลื่อน ไม่เปลี่ยนอะไรในเกม (ปรับค่าต่อทิศได้ บันทึกต้องมีสวิตช์ animTune)', group: 'หน้าตา' },

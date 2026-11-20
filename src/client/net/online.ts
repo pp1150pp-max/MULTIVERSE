@@ -29,7 +29,8 @@ import type { DailyView } from '../../shared/daily';
 import type { BuffScroll, EquipSlot, Item, PotionKind, PotionSize, Rarity, Vec2 } from '../../shared/types';
 import type { SkillSlot, WearSlot } from '../../shared/data/classes';
 import { cleanSkillBook } from '../../shared/skillBook';
-import { INPUT_HZ, PING_MS, WS_CLOSE_PAGE_GONE, WS_CLOSE_QUIT, WS_CLOSE_STALE, WS_PATH, type ClientMsg, type RejoinInfo, type ServerMsg, type ShutdownMode, type SnapshotMsg } from '../../shared/net/protocol';
+import { DIRECT_OPEN_MS, directBroke, openGameSocket, SocketAttempt } from './route';
+import { INPUT_HZ, PING_MS, WS_CLOSE_PAGE_GONE, WS_CLOSE_QUIT, WS_CLOSE_STALE, type ClientMsg, type RejoinInfo, type ServerMsg, type ShutdownMode, type SnapshotMsg } from '../../shared/net/protocol';
 import type { PartyFound, PartySnap } from '../../shared/party';
 import type { TradeView } from '../../shared/trade';
 import type { FriendsView } from '../../shared/friends';
@@ -114,15 +115,10 @@ function useWelcome(m: WelcomeMsg): void {
   useCashState(m.cashState);
 }
 
-function wsUrl(): string {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  return `${proto}://${location.host}${WS_PATH}`;
-}
-
-/** Opens the connection, joins with the chosen character and resolves once the first snapshot arrives. */
+/** Opens the connection (direct or through the tunnel: route.ts), joins with the chosen character and resolves once the first snapshot arrives. */
 export function connectOnline(token: string, characterId: number): Promise<OnlineBackend> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(wsUrl());
+    const att = new SocketAttempt();
     let you = -1;
     let zone = '';
     let ch = 1;
@@ -136,49 +132,55 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
       settled = true;
       clearTimeout(timer);
       reject(new Error(msg));
-      ws.close();
+      att.cancel();
     };
-    const timer = setTimeout(() => fail('server ไม่ตอบกลับ ลองใหม่อีกครั้ง'), 10_000);
+    // The direct try may take DIRECT_OPEN_MS before the tunnel is tried.
+    const timer = setTimeout(() => fail('server ไม่ตอบกลับ ลองใหม่อีกครั้ง'), 10_000 + DIRECT_OPEN_MS);
     // ?previewMap=<zone>: the owner's draft of that map goes in first (a refusal or a failure = the normal game).
     const wanted = previewParam();
     const draftReady = wanted ? loadPreviewDraft(wanted, token) : Promise.resolve(null);
     let previewId: string | null = null;
-    ws.onopen = () => void draftReady.then((id) => {
-      previewId = id;
-      ws.send(JSON.stringify({ t: 'join', token, characterId, delta: 1, ...(id ? { previewMap: id } : {}) } satisfies ClientMsg));
-    });
     // Messages that come while the map layout of our first zone is fetched wait here and go to the backend once it exists.
     let waiting: ServerMsg[] | null = null;
-    ws.onmessage = (e) => {
-      const m = JSON.parse(e.data as string) as ServerMsg;
-      if (waiting) {
-        waiting.push(m);
-        return;
-      }
-      if (m.t === 'kick') return fail(m.msg);
-      if (m.t === 'welcome') {
-        you = m.you;
-        zone = m.zone;
-        ch = m.ch ?? 1;
-        guest = m.guest === true;
-        auto = m.auto === true;
-        useWelcome(m);
-        settlePreview(previewId, m.preview === true);
-        mapReady = m.preview ? Promise.resolve() : ensureMap(m.zone, m.map);
-      }
-      if (m.t === 'snap' && you >= 0 && !settled) {
-        settled = true;
-        clearTimeout(timer);
-        const queue: ServerMsg[] = (waiting = []);
-        void mapReady.then(() => {
-          const backend = new OnlineBackend(ws, you, zone, m, guest, ch, { token, characterId }, auto);
-          for (const x of queue) backend.receive(x);
-          resolve(backend);
-        });
-      }
+    const start = (ws: WebSocket) => {
+      void draftReady.then((id) => {
+        if (settled) return;
+        previewId = id;
+        ws.send(JSON.stringify({ t: 'join', token, characterId, delta: 1, ...(id ? { previewMap: id } : {}) } satisfies ClientMsg));
+      });
+      ws.onmessage = (e) => {
+        const m = JSON.parse(e.data as string) as ServerMsg;
+        if (waiting) {
+          waiting.push(m);
+          return;
+        }
+        if (m.t === 'kick') return fail(m.msg);
+        if (m.t === 'welcome') {
+          you = m.you;
+          zone = m.zone;
+          ch = m.ch ?? 1;
+          guest = m.guest === true;
+          auto = m.auto === true;
+          useWelcome(m);
+          settlePreview(previewId, m.preview === true);
+          mapReady = m.preview ? Promise.resolve() : ensureMap(m.zone, m.map);
+        }
+        if (m.t === 'snap' && you >= 0 && !settled) {
+          settled = true;
+          clearTimeout(timer);
+          const queue: ServerMsg[] = (waiting = []);
+          void mapReady.then(() => {
+            const backend = new OnlineBackend(ws, you, zone, m, guest, ch, { token, characterId }, auto);
+            for (const x of queue) backend.receive(x);
+            resolve(backend);
+          });
+        }
+      };
+      // Only while joining: once in the game, a drop is a drop (attach() takes these over).
+      ws.onerror = () => (!settled && directBroke(), fail('เชื่อมต่อ server ไม่ได้'));
+      ws.onclose = () => (!settled && directBroke(), fail('การเชื่อมต่อถูกปิด'));
     };
-    ws.onerror = () => fail('เชื่อมต่อ server ไม่ได้');
-    ws.onclose = () => fail('การเชื่อมต่อถูกปิด');
+    openGameSocket(att).then(start, () => fail('เชื่อมต่อ server ไม่ได้'));
   });
 }
 
@@ -328,7 +330,7 @@ export class OnlineBackend implements Backend {
   private downAt = 0;
   private downInfo: RejoinInfo = {};
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
-  private trying: WebSocket | null = null;
+  private trying: SocketAttempt | null = null;
   /** performance.now() when the tab was last hidden (null = visible), for the reconnect log. */
   private hiddenAt: number | null = document.hidden ? performance.now() : null;
   /** Frames drawn since the last ping, the longest one (ms), and whether the tab was hidden meanwhile. */
@@ -368,7 +370,7 @@ export class OnlineBackend implements Backend {
     this.quitting = true;
     clearInterval(this.pingTimer);
     if (this.retryTimer !== null) clearTimeout(this.retryTimer);
-    if (this.trying) OnlineBackend.forget(this.trying);
+    this.trying?.cancel();
     const ws = this.ws;
     ws.onclose = ws.onmessage = null;
     try {
@@ -425,6 +427,8 @@ export class OnlineBackend implements Backend {
     ws.onclose = (e) => {
       if (this.ws === ws) this.dropped(e.code, false);
     };
+    // The joining code's handler would count a later network drop as a failed direct road.
+    ws.onerror = null;
   }
 
   /** Messages held back while the layout of the zone we are moving to loads (see receive). */
@@ -489,26 +493,31 @@ export class OnlineBackend implements Backend {
     if (this.retryTimer !== null) clearTimeout(this.retryTimer);
     this.retryTimer = null;
     if (this.trying || this.quitting || !this.login) return;
-    const login = this.login;
     this.tries++;
     this.onReconnecting?.(this.tries);
-    const ws = new WebSocket(wsUrl());
-    this.trying = ws;
-    let welcome: WelcomeMsg | null = null;
-    let mapReady: Promise<void> = Promise.resolve();
+    const att = new SocketAttempt();
+    this.trying = att;
     const fail = (kick?: string) => {
-      if (this.trying !== ws) return;
+      if (this.trying !== att) return;
       clearTimeout(timer);
       this.trying = null;
-      OnlineBackend.forget(ws);
+      att.cancel();
       if (kick) this.giveUp(kick);
       else this.scheduleRetry();
     };
-    const timer = setTimeout(() => fail(), RECONNECT_TRY_MS);
-    ws.onopen = () => {
-      const back: RejoinInfo = { ...this.downInfo, downMs: Math.round(performance.now() - this.downAt), tries: this.tries };
-      ws.send(JSON.stringify({ t: 'join', token: login.token, characterId: login.characterId, delta: 1, back, ...(activePreview() ? { previewMap: activePreview() as string } : {}) } satisfies ClientMsg));
-    };
+    // The direct try (route.ts) may take DIRECT_OPEN_MS before the tunnel is tried.
+    const timer = setTimeout(() => fail(), RECONNECT_TRY_MS + DIRECT_OPEN_MS);
+    openGameSocket(att).then((ws) => this.trying === att && this.retryOpen(att, ws, fail, () => clearTimeout(timer)), () => fail());
+  }
+
+  /** A reconnect try's socket is open: join again, and take over once the first snapshot is in. */
+  private retryOpen(att: SocketAttempt, ws: WebSocket, fail: (kick?: string) => void, stopTimer: () => void): void {
+    const login = this.login;
+    if (!login) return fail();
+    let welcome: WelcomeMsg | null = null;
+    let mapReady: Promise<void> = Promise.resolve();
+    const back: RejoinInfo = { ...this.downInfo, downMs: Math.round(performance.now() - this.downAt), tries: this.tries };
+    ws.send(JSON.stringify({ t: 'join', token: login.token, characterId: login.characterId, delta: 1, back, ...(activePreview() ? { previewMap: activePreview() as string } : {}) } satisfies ClientMsg));
     let waiting: ServerMsg[] | null = null;
     ws.onmessage = (e) => {
       const m = JSON.parse(e.data as string) as ServerMsg;
@@ -522,20 +531,22 @@ export class OnlineBackend implements Backend {
         welcome = m;
         mapReady = ensureMap(m.zone, m.map);
       }
-      if (m.t === 'snap' && welcome && this.trying === ws) {
-        clearTimeout(timer);
+      if (m.t === 'snap' && welcome && this.trying === att) {
+        stopTimer();
         const w = welcome;
         const queue: ServerMsg[] = (waiting = []);
         void mapReady.then(() => {
-          if (this.trying !== ws) return;
+          if (this.trying !== att) return;
           this.trying = null;
           this.rejoined(ws, w, m);
           for (const x of queue) this.receive(x);
         });
       }
     };
-    ws.onerror = () => fail();
-    ws.onclose = () => fail();
+    ws.onerror = ws.onclose = () => {
+      if (this.trying === att) directBroke();
+      fail();
+    };
   }
 
   /** Back in: a new session on the server, so everything is mirrored afresh (like a zone change). */
@@ -646,7 +657,7 @@ export class OnlineBackend implements Backend {
     this.quitting = true;
     clearInterval(this.pingTimer);
     if (this.retryTimer !== null) clearTimeout(this.retryTimer);
-    if (this.trying) OnlineBackend.forget(this.trying);
+    this.trying?.cancel();
     document.removeEventListener('visibilitychange', this.onVisibility);
     window.removeEventListener('online', this.onNetOnline);
     window.removeEventListener('pagehide', this.onPageHide);
