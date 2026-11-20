@@ -125,3 +125,48 @@ export function transformProps(map: Pick<MapData, 'props' | 'colliders'>, ids: R
   });
   return { props, colliders };
 }
+
+// ---------------------------------------------------------------- polylines (PR 7: blockers, paths)
+
+/** Distance from (x, z) to the segment a–b, and the nearest point on it. */
+export function nearOnSegment(a: Pt, b: Pt, x: number, z: number): { d: number; pt: Pt } {
+  const dx = b[0] - a[0], dz = b[1] - a[1];
+  const len2 = dx * dx + dz * dz;
+  const t = len2 < 1e-12 ? 0 : Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / len2));
+  const pt: Pt = [a[0] + dx * t, a[1] + dz * t];
+  return { d: Math.hypot(x - pt[0], z - pt[1]), pt };
+}
+
+/** The segment of a polyline/polygon nearest (x, z): `i` is the index of its first point (the last segment of a closed one wraps). */
+export function nearestSegment(pts: readonly Pt[], closed: boolean, x: number, z: number): { i: number; d: number; pt: Pt } | null {
+  let best: { i: number; d: number; pt: Pt } | null = null;
+  const n = closed ? pts.length : pts.length - 1;
+  for (let i = 0; i < n; i++) {
+    const r = nearOnSegment(pts[i], pts[(i + 1) % pts.length], x, z);
+    if (!best || r.d < best.d) best = { i, ...r };
+  }
+  return best;
+}
+
+/** The middle of a polygon's points. */
+export function centroid(pts: readonly Pt[]): Pt {
+  let sx = 0, sz = 0;
+  for (const [x, z] of pts) { sx += x; sz += z; }
+  return [sx / Math.max(1, pts.length), sz / Math.max(1, pts.length)];
+}
+
+/** `pts` turned by `deg` about `about` (the same sense as a prop's rot). */
+export function rotatePts(pts: readonly Pt[], about: Pt, deg: number): Pt[] {
+  return pts.map(([x, z]) => {
+    const [tx, tz] = turn(x - about[0], z - about[1], deg);
+    return [round3(about[0] + tx), round3(about[1] + tz)] as Pt;
+  });
+}
+
+/** A new id `<prefix><n>` that none of `ids` uses. */
+export function nextId(prefix: string, ids: readonly string[]): string {
+  const used = new Set(ids);
+  let n = ids.length + 1;
+  while (used.has(`${prefix}${n}`)) n++;
+  return `${prefix}${n}`;
+}
