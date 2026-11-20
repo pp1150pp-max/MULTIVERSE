@@ -77,3 +77,9 @@
     - "นานเท่าไร" ของคนที่กำลังเล่นนับถึงตอนนี้ · ค่าว่าง (ไม่ทราบ, ไม่มี GPU/Ping/FPS รวมถึง Ping/FPS ของคนที่ยังเล่นอยู่ซึ่งยังไม่ลง DB) อยู่ท้ายตารางเสมอทั้งเรียงขึ้นและลง
     - API `GET /api/admin/sessions?sort=&dir=&page=&size=&q=&from=&to=&account=` คืน `{ rows, total, page, size }` (`SessionPage`) · server ตรวจทุกค่า ผิด = 400 · คอลัมน์เรียงมาจาก whitelist `SESSION_SORTS` (`sessionSortSql` ใน `server/db.ts`) ไม่เอาค่าจาก client ใส่ SQL · หน้าเกินจำนวน = หน้าสุดท้าย
     - ตารางกลายเป็นการ์ดเมื่อกล่องแคบกว่า 700px (มือถือ และในหน้าบัญชี) ด้วย container query
+
+### สิทธิ์ตัวแก้แมพ (PR 5 ของ [map-editor.md](../plans/map-editor.md))
+
+- สวิตช์ `mapEdit` (owner+GM ตั้งต้น): ดูรายการแมพ/ร่าง/revision, บันทึกร่าง, เผยแพร่ · `mapRollback` และ `mapExport` (owner ตั้งต้น, ใช้ต้องมี `mapEdit` ด้วย): ย้อนกลับไป revision เก่า และส่งออก JSON ที่เผยแพร่เข้า repo · ปรับต่อ role ได้ที่แท็บสิทธิ์
+- API `/api/admin/maps` (`server/admin-maps.ts`), ตาราง `map_layouts` (ร่าง 1 แถวต่อแมพ, เผยแพร่เพิ่มแถวใหม่ เก็บ 20 revision) · ลง `admin_audit`: `map-draft`, `map-publish`, `map-rollback` (ใคร แมพไหน rev ไหน เพิ่ม/ลบ/แก้กี่ชิ้น)
+- เผยแพร่แล้วห้องใหม่ใช้ทันที ห้องที่มีคนอยู่ไม่เปลี่ยนใต้เท้า (ใช้ตอนห้องว่างแล้วเปิดใหม่) **เมืองกลาง (ห้องเดียว ไม่เคยว่างเมื่อมีคนเล่น) จะเปลี่ยนเมื่อห้องว่างหรือรีสตาร์ต server** (เจ้าของเลือก 2026-11-20) · สวิตช์ "ใช้แมพจาก DB" ปิด = ห้องที่เปิดใหม่ใช้ JSON ใน repo

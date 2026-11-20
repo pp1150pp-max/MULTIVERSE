@@ -158,7 +158,7 @@ export interface Balance {
   mobReturnIgnoreHits: boolean;
   /** A monster chasing a player who steps into the town / safe area (or leaves, or dies) drops it at once and walks home (owner 2026-11-20); off = the old behaviour. */
   mobDropOnSafe: boolean;
-  /** "ใช้แมพจาก DB": on = published map layouts in the DB replace the bundled JSON (PR 5); off = always the bundled JSON, the emergency way out. No effect yet. */
+  /** "ใช้แมพจาก DB": on = published map layouts in the DB replace the bundled JSON (PR 5); off = always the bundled JSON, the emergency way out. Rooms made after the change follow it (server/maps-live.ts). */
   mapFromDb: boolean;
   /** "เพิ่มเวลาบัฟ %" counts for summons too (turret, drone, land mine lifetime); off = only buffs. */
   buffDurSummons: boolean;

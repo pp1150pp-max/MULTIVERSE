@@ -14,12 +14,13 @@ export function send(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
-export async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
+/** `max` bytes of body (default 16 KB; the map editor sends whole layouts). */
+export async function readJson(req: IncomingMessage, max = MAX_BODY): Promise<Record<string, unknown>> {
   let size = 0;
   const chunks: Buffer[] = [];
   for await (const c of req) {
     size += (c as Buffer).length;
-    if (size > MAX_BODY) throw new HttpError(413, 'ข้อมูลที่ส่งมาใหญ่เกินไป');
+    if (size > max) throw new HttpError(413, 'ข้อมูลที่ส่งมาใหญ่เกินไป');
     chunks.push(c as Buffer);
   }
   try {

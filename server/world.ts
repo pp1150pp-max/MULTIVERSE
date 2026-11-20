@@ -8,6 +8,7 @@ import { cfEdge, clientIp } from './clientIp';
 import type { Db } from './db';
 import { Sim } from '../src/shared/sim/Sim';
 import { HUB_ID, lairExitSpot, ZONES } from '../src/shared/data/zones';
+import { applyMaps } from './maps-live';
 import { cleanAutoSettings, roundBuffs, SORT_KEYS, type LootFilter, type Player } from '../src/shared/sim/Player';
 import { applyBalance, currentBalance, currentBalanceTuning, type BalanceTuning } from '../src/shared/balance';
 import { upgradeItem } from '../src/shared/data/items';
@@ -335,7 +336,7 @@ const clamp = (v: unknown, max: number): number | undefined =>
 
 export class GameWorld {
   /** Every open map's Sims, one per channel (server/channels.ts). */
-  readonly channels = new Channels(Object.values(ZONES));
+  readonly channels = new Channels(Object.values(ZONES), Date.now, undefined, (z) => ZONES[z.id] ?? z);
   private readonly sessions = new Set<Session>();
   private readonly byPlayer = new Map<Player, Session>();
   /** Account → when (Date.now()) its connection dropped or was taken over, for FRIEND_QUIET_MS. */
@@ -710,7 +711,7 @@ export class GameWorld {
     if (!acc.guest) this.friendsJoined(s, accountWasOnline);
     // Back within the grace time (or a takeover): still in the party.
     player.partyId = this.parties.online(charId);
-    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), guest: acc.guest, ...(s.auto ? { auto: true } : {}), orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), animTuning: this.db.animTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning(), cash: this.cash.catalog(), cashState: this.cash.state(acc.id, acc.guest) });
+    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), map: sim.terrain.mapRev, guest: acc.guest, ...(s.auto ? { auto: true } : {}), orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), animTuning: this.db.animTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning(), cash: this.cash.catalog(), cashState: this.cash.state(acc.id, acc.guest) });
     this.broadcastSystem(`${player.name} เข้าสู่โลก`);
     // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
     if (!acc.guest) setTimeout(() => this.sessions.has(s) && (this.marketOnJoin(s), this.dailyCheck(s), this.mailNote(s, true)), MARKET_JOIN_NOTE_MS);
@@ -1767,6 +1768,8 @@ export class GameWorld {
    */
   balanceChanged(tuning: BalanceTuning): void {
     applyBalance(tuning);
+    applyMaps(this.db); // the "ใช้แมพจาก DB" switch: rooms made from now on follow it
+
     for (const sim of [...this.channels.sims(), ...this.rooms.sims()]) {
       for (const p of sim.players) {
         for (const it of Object.values(p.equipment)) upgradeItem(it);
@@ -2154,7 +2157,7 @@ export class GameWorld {
       if (ev.t === 'log' && ev.to === old.id) return [{ ...ev, to: p.id }];
       return [];
     });
-    this.send(s.ws, { t: 'zone', zone: dest.zone.id, ch: this.chOf(s), you: p.id, x: r2(p.x), z: r2(p.z) });
+    this.send(s.ws, { t: 'zone', zone: dest.zone.id, ch: this.chOf(s), map: dest.terrain.mapRev, you: p.id, x: r2(p.x), z: r2(p.z) });
     this.save(s);
     console.log(`[world] ${s.username} → ${dest.zone.name}${chan && hasChannels(chan.zone) ? ` CH ${chan.ch}` : ''}`);
   }
@@ -2524,7 +2527,7 @@ export class GameWorld {
         (!s.guest && !o.guest && this.db.areFriends(s.accountId, o.accountId))
       );
       if (!o || !mate) return tell('ไปห้องเดียวกันได้เฉพาะเพื่อนหรือคนในปาร์ตี้ที่ออนไลน์อยู่');
-      if (o.sim.zone !== s.sim.zone) return tell(`${o.player.name} อยู่คนละแมพกับคุณ`);
+      if (o.sim.zone.id !== s.sim.zone.id) return tell(`${o.player.name} อยู่คนละแมพกับคุณ`);
       target = this.channels.of(o.sim);
     } else return;
     const cap = target ? this.channels.capFor(target, this.leaderSim(s)) : 0;

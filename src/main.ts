@@ -8,6 +8,7 @@ import { Game } from './client/Game';
 import { buildMenu, facePortrait } from './client/menu';
 import type { OnlineBackend } from './client/net/online';
 import { audioEngine } from './client/audio/engine';
+import { loadPublishedMaps } from './client/mapSync';
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -76,7 +77,8 @@ async function boot(): Promise<void> {
   revealLogoWhenLoaded();
   $('loading').classList.add('hidden');
   buildMenu(launch);
-  await loadMenuAssets(CLASS_IDS);
+  // The published map layouts (admin map editor) come with the portraits, before the game's pictures; failing or slow = the JSON in the bundle.
+  await Promise.all([loadMenuAssets(CLASS_IDS), loadPublishedMaps()]);
   await loadGameAssets();
   const fromFile = Object.entries(assetSources).filter(([, v]) => v === 'file').map(([k]) => k);
   console.info(`[assets] ${fromFile.length} loaded from files:`, fromFile.join(', ') || '(none — using placeholders)');
