@@ -139,4 +139,21 @@ function stars(sim: Sim, p: Player, aim: { x: number; z: number }, rank = 1): { 
   ok(JSON.stringify(codeBalance().skills.skills.mg_starfall.paramsPerRank) === '{"radius":0,"stars":0,"starRadius":0,"gap":0}', 'code per-rank is 0 for every param');
 }
 
+// ---------------------------------------------------------- extra knockback moves the metres typed (Volatile Orb, owner report)
+{
+  const t = checkBalance({ skills: { effects: { mg_volatileorb: [{ k: 'kb', to: 'mob', v: 10, t: 0 }] } } }, true);
+  ok(!t.error, `kb effect accepted (${t.error ?? ''})`);
+  applyBalance(t.tuning!);
+  const { sim, p, mobs } = arena(1);
+  const m = mobs[0];
+  m.x = p.x + 5;
+  m.z = p.z;
+  const x0 = m.x;
+  sim.hitMonster(p, m, 1, { skill: sk('mg_volatileorb'), kb: 4, fromX: p.x, fromZ: p.z });
+  const peak = { v: 0 };
+  for (let i = 0; i < 40; i++) { sim.step(0.05); peak.v = Math.max(peak.v, Math.abs(m.x - x0)); }
+  ok(peak.v > 8 && peak.v < 13, `kb 10 m moves about 10 m (${peak.v.toFixed(2)})`);
+  applyBalance({});
+}
+
 finish('skill-param-rank');
