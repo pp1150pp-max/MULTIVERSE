@@ -12,7 +12,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ZONES, type ZoneDef } from '../src/shared/data/zones';
+import { GENERATED_ZONES, type ZoneDef } from '../src/shared/data/zones';
 import { NPC_IDS } from '../src/shared/data/npcs';
 import { Terrain } from '../src/shared/sim/terrain';
 import { MAP_SCHEMA_VERSION, type MapData, type MapProp, type MapCollider, type MapNpc } from '../src/shared/mapSchema';
@@ -38,7 +38,7 @@ function buildTerrain(zone: ZoneDef): { terrain: Terrain; owner: Map<number, num
     if (this.colliders.length > before) owner.set(this.colliders.length - 1, this.props.length - 1);
   };
   try {
-    return { terrain: new Terrain(zone), owner };
+    return { terrain: new Terrain(zone, null), owner };
   } finally {
     proto.addProp = original;
   }
@@ -111,7 +111,7 @@ export function bakedText(map: MapData): string {
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   mkdirSync(MAPS_DIR, { recursive: true });
   for (const id of FLOOR1_IDS) {
-    const map = bakeZone(ZONES[id]);
+    const map = bakeZone(GENERATED_ZONES[id]);
     writeFileSync(join(MAPS_DIR, `${id}.json`), bakedText(map));
     console.log(`${id}: ${map.props.length} props, ${(map.colliders ?? []).length} extra colliders, ${map.spawns.length} spawns`);
   }

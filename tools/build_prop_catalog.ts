@@ -102,7 +102,7 @@ function observeTerrain(): Map<string, Seen> {
     orig.call(this, key, x, z, height, collideR, fade);
   };
   try {
-    for (const z of [...Object.values(ZONES), ...Object.values(BOSS_ROOMS)]) new Terrain(z);
+    for (const z of [...Object.values(ZONES), ...Object.values(BOSS_ROOMS)]) new Terrain(z, null);
   } finally {
     proto.addProp = orig;
   }
