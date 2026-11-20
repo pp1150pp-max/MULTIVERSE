@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { ok, finish } from './check';
 import { CAM_RIGHT_RAW, CAM_UP_RAW, ISO, ISO_RAW, camToGround, depthOf, groundToCam } from '../src/shared/isoProjection';
 import { History, HISTORY_DEPTH, pick } from '../src/admin/mapEditor/history';
-import { followersOf, halfExtent, normDeg, snapPoint, solidOutline, transformProps } from '../src/admin/mapEditor/geom';
+import { centroid, followersOf, halfExtent, nearestSegment, nextId, normDeg, rotatePts, snapPoint, solidOutline, transformProps } from '../src/admin/mapEditor/geom';
 import { pointInPropSolid, type MapData, type MapProp } from '../src/shared/mapSchema';
 import { diffMaps } from '../src/shared/mapDiff';
 import { MapRegistry } from '../src/shared/mapRegistry';
@@ -125,6 +125,23 @@ const prop = (o: Partial<MapProp>): MapProp => ({ id: 'a', key: 'k', x: 3, z: -2
   ok(d.removed === 5 && d.added === 0 && d.changed === 0, `deleting 5 colliders from the middle counts 5 removed (${JSON.stringify(d)})`);
   const nudged = { ...hub, colliders: hub.colliders!.map((c, i) => (i === 10 ? { ...c, x: c.x + 1 } : c)) };
   ok(diffMaps(hub, nudged).changed === 1, 'one nudged collider counts as 1 changed');
+}
+
+// ---- PR 7: polylines
+{
+  const sq: [number, number][] = [[0, 0], [10, 0], [10, 10], [0, 10]];
+  const c = centroid(sq);
+  ok(c[0] === 5 && c[1] === 5, 'centroid of a square');
+  const r = rotatePts(sq, c, 90);
+  ok(r.every(([x, z]) => Math.abs(x - 5) <= 5.001 && Math.abs(z - 5) <= 5.001) && Math.abs(r[0][0] - 10) < 1e-3 && Math.abs(r[0][1]) < 1e-3, 'rotating a square 90° about its middle keeps it a square (corner 0,0 -> 10,0)');
+  const back = rotatePts(rotatePts(sq, c, 37), c, -37);
+  ok(back.every(([x, z], k) => Math.abs(x - sq[k][0]) < 2e-3 && Math.abs(z - sq[k][1]) < 2e-3), 'rotate then rotate back returns the points');
+  const seg = nearestSegment(sq, true, 5, -1);
+  ok(!!seg && seg.i === 0 && Math.abs(seg.d - 1) < 1e-9 && seg.pt[0] === 5, 'nearest segment of a closed polygon (top edge)');
+  const wrap = nearestSegment(sq, true, -1, 5);
+  ok(!!wrap && wrap.i === 3, 'the closing segment wraps to point 0');
+  ok(nearestSegment(sq, false, -1, 5)!.i !== 3, 'an open line has no closing segment');
+  ok(nextId('b', ['b1', 'b2']) === 'b3' && nextId('b', ['b2']) === 'b3' && nextId('b', []) === 'b1', 'nextId picks an unused id');
 }
 
 finish('map-editor');

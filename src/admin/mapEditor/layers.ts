@@ -101,7 +101,7 @@ export function drawPiece(ed: Editor, g: CanvasRenderingContext2D, key: string, 
 
 /** Read-only markers of what PR 7's tools will edit: NPCs, doors, rest spots, monster spawns, the lair. */
 const markers: Layer = {
-  id: 'markers', label: 'NPC / ประตู / จุดเกิด', order: 30,
+  id: 'markers', label: 'NPC / ประตู / จุดเกิด', order: 30, pickable: true,
   draw(ed, g) {
     const m = ed.map;
     const dot = (x: number, z: number, color: string, label: string): void => {
@@ -142,8 +142,16 @@ const collision: Layer = {
       const pts: [number, number][] = Array.from({ length: 24 }, (_, i) => [c.x + Math.cos((i / 24) * Math.PI * 2) * c.r, c.z + Math.sin((i / 24) * Math.PI * 2) * c.r]);
       ed.path(g, pts); g.fill(); g.stroke();
     }
-    g.fillStyle = 'rgba(200,0,200,0.25)';
-    g.strokeStyle = 'rgba(255,80,255,0.9)';
+  },
+};
+
+/** The blocker polygons (PR 7): see-through red like the other collision, but shown even when the circles are hidden. */
+const blockers: Layer = {
+  id: 'blockers', label: 'ขอบเขต (polygon)', order: 41, pickable: true,
+  draw(ed, g) {
+    g.fillStyle = 'rgba(230,50,50,0.28)';
+    g.strokeStyle = 'rgba(255,90,90,0.9)';
+    g.lineWidth = 1.5;
     for (const b of ed.map.blockers) { ed.path(g, b.pts); g.fill(); g.stroke(); }
   },
 };
@@ -185,4 +193,4 @@ const ghost: Layer = {
   },
 };
 
-export const CORE_LAYERS: Layer[] = [ground, grid, props, markers, collision, selection, ghost];
+export const CORE_LAYERS: Layer[] = [ground, grid, props, markers, collision, blockers, selection, ghost];

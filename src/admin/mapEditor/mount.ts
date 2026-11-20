@@ -1,13 +1,17 @@
 // The map editor page inside the /admin "แมพ" tab: the panels round the canvas (docs/plans/map-editor.md 2.1) and the
 // load / autosave / publish flow against the /api/admin/maps routes (PR 5). The canvas itself is editor.ts.
-import type { MapData, MapIssue, MapProp } from '../../shared/mapSchema';
+import { validateMap, type MapData, type MapIssue, type MapProp } from '../../shared/mapSchema';
+import { MONSTERS } from '../../shared/data/monsters';
+import { ZONES } from '../../shared/data/zones';
 import type { MapDiff } from '../../shared/mapDiff';
 import { Editor } from './editor';
 import { CORE_LAYERS } from './layers';
 import { dropPoint, placePiece, placeTool, selectTool, deleteSelected, duplicateSelected } from './tools';
 import { CATALOG, propUrl } from './sprites';
+import { pinTool, spawnTool } from './pointTools';
+import { blockerTool, lakeTool, pathTool } from './shapeTools';
 import { pick } from './history';
-import { transformProps, normDeg } from './geom';
+import { transformProps, normDeg, centroid } from './geom';
 
 type Kids = (Node | string | null | undefined | false)[];
 export type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, unknown>, ...kids: Kids) => HTMLElementTagNameMap[K];
@@ -22,6 +26,8 @@ const MAP_NAMES: Record<string, string> = {
   frost_reach: 'ฟาร์ม 3 · Frost Reach', ashen_isle: 'ฟาร์ม 4 · Ashen Isle',
 };
 const SAVE_DELAY_MS = 1000;
+/** The sprite keys a map may use (same list as the server's check). */
+const PROP_KEYS = CATALOG.props.filter((p) => p.inSheetSpecs).map((p) => p.key);
 const num = (v: string, d: number): number => { const n = Number(v); return Number.isFinite(n) ? n : d; };
 const round3 = (n: number): number => Math.round(n * 1000) / 1000;
 /** replaceChildren that skips the empty slots (null / false) a conditional child leaves. */
@@ -59,6 +65,8 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api): () => void {
   const redoBtn = h('button', { title: 'ทำซ้ำ (Ctrl+Y)', onclick: () => ed?.redo() }, '↷ ทำซ้ำ');
   const publishBtn = h('button', { class: 'primary', onclick: () => void publish() }, '🚀 เผยแพร่');
   const latestBtn = h('button', { title: 'ทิ้งร่างที่บันทึกไว้ แล้วโหลดฉบับที่เผยแพร่ล่าสุดมาแก้ต่อ', onclick: () => void loadLatest() }, '↩ โหลดที่เผยแพร่ล่าสุด');
+  const checkBtn = h('button', { title: 'ตรวจแมพ: ชิ้นอยู่ใน collision, ประตูเดินไม่ถึง, key ภาพไม่มี, อยู่นอกกรอบ ฯลฯ แล้วคลิกรายการเพื่อกระโดดไปชิ้นนั้น', onclick: () => checkNow() }, '🔍 ตรวจแมพ');
+  const solidBtn = h('button', { title: 'โชว์/ซ่อนวง/กล่อง collision ของทุกชิ้น (ตรวจบ้านทับธง)', onclick: () => { if (!ed) return; ed.opts.showSolid = !ed.opts.showSolid; ed.requestDraw(); renderOptions(); refreshTop(); } }, '⭕ วง collision');
   const fitBtn = h('button', { title: 'ดูทั้งแมพ', onclick: () => ed?.fit() }, '⛶ ทั้งแมพ');
   const diffText = h('span', { class: 'muted me-diff' });
   const issueBox = h('div', { class: 'me-issues' });
@@ -74,7 +82,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api): () => void {
   const paletteCount = h('span', { class: 'muted' });
 
   const root = h('div', { class: 'me' },
-    h('div', { class: 'me-top' }, mapSel, undoBtn, redoBtn, fitBtn, latestBtn, status, diffText, publishBtn),
+    h('div', { class: 'me-top' }, mapSel, undoBtn, redoBtn, checkBtn, solidBtn, fitBtn, latestBtn, status, diffText, publishBtn),
     h('div', { class: 'me-body' },
       h('div', { class: 'me-left' }, h('h4', {}, 'เครื่องมือ'), toolBox, toolHint, h('h4', {}, 'ตัวช่วยวาง'), optBox, h('h4', {}, 'เลเยอร์'), layerBox, h('h4', {}, 'ข้อผิดพลาดจากการตรวจ'), issueBox),
       h('div', { class: 'me-center' }, canvas),
@@ -98,6 +106,9 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api): () => void {
     undoBtn.title = ed?.history.undoLabel ? `ย้อนกลับ: ${ed.history.undoLabel} (Ctrl+Z)` : 'ย้อนกลับ (Ctrl+Z)';
     redoBtn.title = ed?.history.redoLabel ? `ทำซ้ำ: ${ed.history.redoLabel} (Ctrl+Y)` : 'ทำซ้ำ (Ctrl+Y)';
     publishBtn.disabled = !ed || saving;
+    checkBtn.disabled = !ed;
+    solidBtn.disabled = !ed;
+    solidBtn.className = ed?.opts.showSolid ? 'on' : '';
     diffText.textContent = diff ? `ต่างจากที่เผยแพร่: เพิ่ม ${diff.added} · ลบ ${diff.removed} · แก้ ${diff.changed} ชิ้น` : '';
   }
 
@@ -195,11 +206,42 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api): () => void {
       class: `me-issue ${i.severity}`,
       title: i.message,
       onclick: () => {
-        if (!ed || i.kind !== 'prop' || !i.id) return;
-        const p = ed.map.props.find((q) => q.id === i.id);
-        if (p) { ed.select([p.id]); ed.centerOn(p.x, p.z); }
+        if (ed) jumpTo(ed, i);
       },
     }, `${i.severity === 'error' ? '⛔' : '⚠️'} ${i.message}`)), ...(issues.length > 40 ? [h('div', { class: 'muted' }, `…อีก ${issues.length - 40} ข้อ`)] : []));
+  }
+
+  /** Runs validateMap on what is on screen (the same rules the server applies before a publish) and lists the problems. */
+  function checkNow(): void {
+    if (!ed) return;
+    issues = validateMap(ed.map, { propKeys: PROP_KEYS, zoneIds: Object.keys(ZONES), monsterIds: Object.keys(MONSTERS) });
+    renderIssues();
+    const errs = issues.filter((i) => i.severity === 'error').length;
+    const warns = issues.length - errs;
+    setStatus(issues.length ? `ตรวจแมพแล้ว: ข้อผิดพลาด ${errs} · คำเตือน ${warns} (คลิกรายการด้านซ้ายเพื่อไปที่ชิ้นนั้น)` : 'ตรวจแมพแล้ว: ไม่พบปัญหา', errs ? 'bad' : 'good');
+  }
+
+  /** Selects the piece an issue is about (switching to the tool that edits it) and centres the view on it. */
+  function jumpTo(e: Editor, i: MapIssue): void {
+    if (!i.id) return;
+    const m = e.map;
+    let tool = '', key = '', at: [number, number] | undefined;
+    switch (i.kind) {
+      case 'prop': { const p = m.props.find((q) => q.id === i.id); if (p) { e.setTool('select'); e.select([p.id]); e.centerOn(p.x, p.z); } return; }
+      case 'blocker': { const b = m.blockers.find((q) => q.id === i.id); if (b) { tool = 'blocker'; key = `blocker:${b.id}`; at = centroid(b.pts); } break; }
+      case 'path': { const p = m.paths.find((q) => q.id === i.id); if (p) { tool = 'path'; key = `path:${p.id}`; at = p.pts[0]; } break; }
+      case 'water': { const w = m.water[Number(i.id)]; if (w) { tool = 'lake'; key = `water:${i.id}`; at = [w.x, w.z]; } break; }
+      case 'npc': { const n = m.npcs.find((q) => q.id === i.id); if (n) { tool = 'pins'; key = `npc:${n.id}`; at = [n.x, n.z]; } break; }
+      case 'portal': { const p = m.portals[Number(i.id)]; if (p) { tool = 'pins'; key = `portal:${i.id}`; at = [p.x, p.z]; } break; }
+      case 'rest': { const r = m.rest[Number(i.id)]; if (r) { tool = 'pins'; key = `rest:${i.id}`; at = [r.x, r.z]; } break; }
+      case 'lair': if (m.lair) { tool = 'pins'; key = 'lair:lair'; at = [m.lair.x, m.lair.z]; } break;
+      case 'spawn': { const s = m.spawns[Number(i.id)]; if (s) { tool = 'spawns'; key = `spawn:${i.id}`; at = [s.x, s.z]; } break; }
+      default: return;
+    }
+    if (!tool || !at) return;
+    e.setTool(tool);
+    e.select([key]);
+    e.centerOn(at[0], at[1]);
   }
 
   // -------------------------------------------------------------- loading
@@ -246,6 +288,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api): () => void {
     const place = placeTool();
     e.addTool(selectTool());
     e.addTool(place);
+    for (const t of [pinTool(), spawnTool(), blockerTool(), pathTool(), lakeTool()]) e.addTool(t);
     placeBrush = place;
     e.onChange = () => { scheduleSave(); renderInspector(false); };
     e.onSelect = () => renderInspector(true);
