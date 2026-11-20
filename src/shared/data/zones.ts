@@ -494,6 +494,15 @@ export const ZONES: Record<string, ZoneDef> = Object.fromEntries(
  * Existing Sims keep the ZoneDef they were made with; only Terrains and Sims made afterwards see the new one.
  */
 export function refreshZone(id: string): void {
+  const room = GENERATED_ROOMS[id];
+  if (room) {
+    // A boss room: rooms already running keep their zone and Terrain; the next one made takes this (BossRooms.startRun reads BOSS_ROOMS then).
+    const map = MapRegistry.get(id);
+    const z = map ? roomWithMap(room, map) : room;
+    BOSS_ROOMS[room.roomOf!] = z;
+    ROOMS_BY_ID[id] = z;
+    return;
+  }
   const base = GENERATED_ZONES[id];
   if (!base) return;
   const map = MapRegistry.get(id);
@@ -502,6 +511,8 @@ export function refreshZone(id: string): void {
 
 /** The zone as it would be with this layout, for a private preview room (a draft). Undefined for a zone without a generated base. */
 export function zoneWithLayout(id: string, map: MapData): ZoneDef | undefined {
+  const room = GENERATED_ROOMS[id];
+  if (room) return roomWithMap(room, map);
   const base = GENERATED_ZONES[id];
   return base ? zoneWithMap(base, map) : undefined;
 }
@@ -571,9 +582,28 @@ export function lairExitSpot(room: ZoneDef, r: () => number = Math.random): { fi
   return { field: field.id, x: lair.x + Math.cos(a) * LAIR_EXIT_RADIUS, z: lair.z + Math.sin(a) * LAIR_EXIT_RADIUS };
 }
 
-/** Boss rooms, by the id of the map whose summoner opens them. Not in ZONES: the server makes one Sim per group. */
+/** The boss rooms as bossRoom() makes them, by room id. Only tools/bake_maps.ts and the bake test read these. */
+export const GENERATED_ROOMS: Record<string, ZoneDef> = Object.fromEntries(
+  [ZONE_1, ZONE_2, ZONE_3, ZONE_4].map((z) => {
+    const r = bossRoom(z);
+    return [r.id, r];
+  }),
+);
+
+/**
+ * A boss room with its map file's say: where players appear (`start`). Everything else (size, theme, boss, arena, stats) stays in code;
+ * validateMap() refuses a room file that differs there. Props and collision come through Terrain, which reads MapRegistry by zone id.
+ */
+export function roomWithMap(room: ZoneDef, map: MapData): ZoneDef {
+  return { ...room, start: { ...map.zone.start } };
+}
+
+/** Boss rooms, by the id of the map whose summoner opens them. Not in ZONES: the server makes one Sim per group. refreshZone() swaps entries. */
 export const BOSS_ROOMS: Record<string, ZoneDef> = Object.fromEntries(
-  [ZONE_1, ZONE_2, ZONE_3, ZONE_4].map((z) => [z.id, bossRoom(z)]),
+  Object.values(GENERATED_ROOMS).map((r) => {
+    const map = MapRegistry.get(r.id);
+    return [r.roomOf!, map ? roomWithMap(r, map) : r];
+  }),
 );
 const ROOMS_BY_ID: Record<string, ZoneDef> = Object.fromEntries(Object.values(BOSS_ROOMS).map((r) => [r.id, r]));
 

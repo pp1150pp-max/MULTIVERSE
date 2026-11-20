@@ -121,7 +121,8 @@ async function run(): Promise<void> {
     ok((await api(m, p, b, plain.token)).status === 403, `normal player → 403 on ${m} ${p}`);
   }
   const list = (await api('GET', '/admin/maps', undefined, gm.token)).data;
-  ok(list.maps.length === 5 && list.fromDb === true && list.maps.every((m: any) => m.publishedRev === null && m.draft === null), 'gm sees the 5 floor-1 maps, nothing published or drafted');
+  ok(list.maps.length === 9 && list.fromDb === true && list.maps.every((m: any) => m.publishedRev === null && m.draft === null), 'gm sees the 5 floor-1 maps and their 4 boss rooms, nothing published or drafted');
+  ok(list.maps.filter((m: any) => m.of).map((m: any) => `${m.id}<${m.of}`).join() === 'emerald_forest_room<emerald_forest,misty_marsh_room<misty_marsh,frost_reach_room<frost_reach,ashen_isle_room<ashen_isle', 'each boss room is listed right after its field and says which field it belongs to');
   ok((await api('GET', '/admin/maps/nope/draft', undefined, owner.token)).status === 404, 'unknown map → 404');
 
   // ---------------------------------------------------------- drafts are checked again on the server
@@ -137,6 +138,23 @@ async function run(): Promise<void> {
   ok((await api('PUT', '/admin/maps/nexus_city/draft', { map: [] }, gm.token)).status === 400, 'garbage instead of a map is refused');
   ok((await api('POST', '/admin/maps/misty_marsh/publish', {}, gm.token)).status === 400, 'publishing with no draft is refused');
 
+  // ---------------------------------------------------------- boss rooms: same endpoints, the locks are checked on the server
+  const room = (await api('GET', '/admin/maps/frost_reach_room/draft', undefined, gm.token)).data;
+  ok(room.source === 'bundled' && room.map?.room?.of === 'frost_reach' && room.issues.length === 0, 'a boss room opens from its bundled file with no issues');
+  const lockedRoom: MapData = JSON.parse(JSON.stringify(room.map));
+  lockedRoom.room!.boss.x = 4;
+  lockedRoom.portals = [{ to: 'nexus_city', x: 1, z: 1, minLevel: 0 }];
+  const putLocked = await api('PUT', '/admin/maps/frost_reach_room/draft', { map: lockedRoom }, gm.token);
+  ok(putLocked.status === 200 && putLocked.data.issues.filter((i: any) => i.code === 'locked' && i.severity === 'error').length >= 2, 'a room draft that moves the boss or adds a door is kept, with locked errors');
+  const pubLocked = await api('POST', '/admin/maps/frost_reach_room/publish', {}, gm.token);
+  ok(pubLocked.status === 400, 'and it cannot be published');
+  const goodRoom: MapData = JSON.parse(JSON.stringify(room.map));
+  goodRoom.props[0].x += 0.5;
+  await api('PUT', '/admin/maps/frost_reach_room/draft', { map: goodRoom }, gm.token);
+  const pubRoom = await api('POST', '/admin/maps/frost_reach_room/publish', {}, gm.token);
+  ok(pubRoom.status === 200 && pubRoom.data.rev === 1 && (await api('GET', '/maps/frost_reach_room?rev=1')).data.room?.arena === goodRoom.room!.arena, 'moving a prop in a room publishes as rev 1 and the browser can fetch it');
+  ok(JSON.stringify((await api('GET', '/maps')).data) === '{"frost_reach_room":1}', 'GET /api/maps lists the room by its zone id');
+
   // ---------------------------------------------------------- a player is in the hub before anything is published
   const pa = joinWorld(plain.token, plain.char);
   await pa.ready;
@@ -151,7 +169,7 @@ async function run(): Promise<void> {
   ok(draftBack.source === 'draft' && draftBack.map.props[0].x === moved.props[0].x, 'the draft comes back as saved');
   const pub1 = await api('POST', '/admin/maps/nexus_city/publish', { note: 'ครั้งแรก' }, gm.token);
   ok(pub1.status === 200 && pub1.data.rev === 1 && pub1.data.diff.changed === 1, 'gm publishes: rev 1');
-  ok(JSON.stringify((await api('GET', '/maps')).data) === '{"nexus_city":1}', 'GET /api/maps says {nexus_city: 1}');
+  ok(Object.entries((await api('GET', '/maps')).data).sort().join(';') === 'frost_reach_room,1;nexus_city,1', 'GET /api/maps says {frost_reach_room: 1, nexus_city: 1}');
   const got1 = await api('GET', '/maps/nexus_city?rev=1');
   ok(got1.status === 200 && got1.data.rev === 1 && got1.data.props[0].x === moved.props[0].x, 'GET /api/maps/nexus_city?rev=1 gives the published layout, rev inside');
   ok((await api('GET', '/maps/nexus_city')).data.rev === 1, 'without ?rev it gives the newest');

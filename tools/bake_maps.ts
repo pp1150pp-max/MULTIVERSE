@@ -7,19 +7,27 @@
 // files yet (PR 3 does). Same code, same seeds, so the output is identical on every run; tests/map-bake.test.ts
 // checks that and compares every value with a fresh Terrain.
 //
-// Not baked: monster boosts (`SpawnArea.boost`, from the zone's monsterBoost, stays in code), zone names/levels/stats,
-// boss rooms (built from the field map by bossRoom()).
+// Also bakes the four floor-1 boss rooms (<field>_room.json, GENERATED_ROOMS) with a `room` block that marks them and the values the
+// editor may not change (boss, arena); validateMap() compares them with the bundled file.
+//
+// Not baked: monster boosts (`SpawnArea.boost`, from the zone's monsterBoost, stays in code), zone names/levels/stats, the boss's stats.
 import { bakedText } from '../src/shared/mapText';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { GENERATED_ZONES, type ZoneDef } from '../src/shared/data/zones';
+import { GENERATED_ROOMS, GENERATED_ZONES, arenaRadius, type ZoneDef } from '../src/shared/data/zones';
 import { NPC_IDS } from '../src/shared/data/npcs';
 import { Terrain } from '../src/shared/sim/terrain';
 import { MAP_SCHEMA_VERSION, type MapData, type MapProp, type MapCollider, type MapNpc } from '../src/shared/mapSchema';
 
 /** The floor-1 maps, hub first. */
 export const FLOOR1_IDS = ['nexus_city', 'emerald_forest', 'misty_marsh', 'frost_reach', 'ashen_isle'];
+/** The floor-1 boss rooms (ZoneDef.id of GENERATED_ROOMS), each next to its field. */
+export const BOSS_ROOM_IDS = FLOOR1_IDS.filter((id) => GENERATED_ZONES[id].lair).map((id) => `${id}_room`);
+/** Every map file the bake writes: the maps, then the rooms. */
+export const BAKED_IDS = [...FLOOR1_IDS, ...BOSS_ROOM_IDS];
+/** The generator's zone for a baked map id (a map or a boss room). */
+export const generatedZone = (id: string): ZoneDef => GENERATED_ZONES[id] ?? GENERATED_ROOMS[id];
 
 /** Trail width per theme: a copy of TRAIL_WIDTH in src/client/world.ts (which can't be imported without three). */
 const TRAIL_WIDTH = { forest: 4.2, marsh: 3.6, snow: 3.8, volcano: 3.8 } as const;
@@ -84,7 +92,8 @@ export function bakeZone(zone: ZoneDef): MapData {
       start: { x: zone.start.x, z: zone.start.z },
       ...(zone.safe ? { safe: { x: zone.safe.x, z: zone.safe.z, half: zone.safe.half } } : {}),
     },
-    paths: [zone.path, ...zone.branches].map((pts, i) => ({ id: i === 0 ? 'main' : `branch${i}`, w, pts: pts.map(([x, z]) => [x, z] as [number, number]) })),
+    // A boss room has no path (its "path" is one empty list): bake none instead of a path without points.
+    paths: [zone.path, ...zone.branches].filter((pts) => pts.length > 0).map((pts, i) => ({ id: i === 0 ? 'main' : `branch${i}`, w, pts: pts.map(([x, z]) => [x, z] as [number, number]) })),
     water,
     props,
     blockers: [],
@@ -96,6 +105,9 @@ export function bakeZone(zone: ZoneDef): MapData {
     spawns: zone.spawns.map((s) => ({ monster: s.monster, x: s.x, z: s.z, radius: s.radius, count: s.count, respawn: [s.respawn[0], s.respawn[1]] as [number, number] })),
   };
   if (zone.lair) map.lair = { boss: zone.lair.boss, x: zone.lair.x, z: zone.lair.z };
+  if (zone.roomOf && zone.boss) {
+    map.room = { of: zone.roomOf, arena: arenaRadius(zone), boss: { monster: zone.boss.monster, x: zone.boss.x, z: zone.boss.z, radius: zone.boss.radius } };
+  }
   return map;
 }
 
@@ -103,8 +115,8 @@ export { bakedText };
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   mkdirSync(MAPS_DIR, { recursive: true });
-  for (const id of FLOOR1_IDS) {
-    const map = bakeZone(GENERATED_ZONES[id]);
+  for (const id of BAKED_IDS) {
+    const map = bakeZone(generatedZone(id));
     writeFileSync(join(MAPS_DIR, `${id}.json`), bakedText(map));
     console.log(`${id}: ${map.props.length} props, ${(map.colliders ?? []).length} extra colliders, ${map.spawns.length} spawns`);
   }

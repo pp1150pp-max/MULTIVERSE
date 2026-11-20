@@ -62,7 +62,7 @@ export async function mapsAdminApi(req: IncomingMessage, res: ServerResponse, pa
       const pub = db.mapPublished(id);
       const draft = db.mapDraft(id);
       return {
-        id, bundledRev: MapRegistry.bundled(id)?.rev ?? 0, publishedRev: pub?.rev ?? null, publishedAt: pub?.updatedAt ?? null,
+        id, of: MapRegistry.bundled(id)?.room?.of ?? null, bundledRev: MapRegistry.bundled(id)?.rev ?? 0, publishedRev: pub?.rev ?? null, publishedAt: pub?.updatedAt ?? null,
         draft: draft ? { baseRev: draft.rev, author: draft.author, note: draft.note, updatedAt: draft.updatedAt } : null,
       };
     });

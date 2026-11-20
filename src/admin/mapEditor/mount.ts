@@ -1,6 +1,7 @@
 // The map editor page inside the /admin "แมพ" tab: the panels round the canvas (docs/plans/map-editor.md 2.1) and the
 // load / autosave / publish flow against the /api/admin/maps routes (PR 5). The canvas itself is editor.ts.
 import { validateMap, type MapData, type MapIssue, type MapProp } from '../../shared/mapSchema';
+import { MapRegistry } from '../../shared/mapRegistry';
 import { MONSTERS } from '../../shared/data/monsters';
 import { ZONES } from '../../shared/data/zones';
 import type { MapDiff } from '../../shared/mapDiff';
@@ -8,7 +9,8 @@ import { Editor } from './editor';
 import { CORE_LAYERS } from './layers';
 import { dropPoint, placePiece, placeTool, selectTool, deleteSelected, duplicateSelected } from './tools';
 import { CATALOG, propUrl } from './sprites';
-import { pinTool, spawnTool } from './pointTools';
+import { pinTool, playerStartTool, spawnTool } from './pointTools';
+import type { Tool } from './editor';
 import { blockerTool, lakeTool, pathTool } from './shapeTools';
 import { pick } from './history';
 import { mountRevisions, type RevisionPerms } from './revisions';
@@ -18,14 +20,18 @@ type Kids = (Node | string | null | undefined | false)[];
 export type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, unknown>, ...kids: Kids) => HTMLElementTagNameMap[K];
 export type Api = <T>(method: string, path: string, body?: unknown) => Promise<T>;
 
-interface MapRow { id: string; bundledRev: number; publishedRev: number | null; publishedAt: number | null; draft: { baseRev: number; author: string; updatedAt: number } | null }
+interface MapRow { id: string; /** The field a boss room belongs to (null for a map). */ of: string | null; bundledRev: number; publishedRev: number | null; publishedAt: number | null; draft: { baseRev: number; author: string; updatedAt: number } | null }
 interface DraftReply { map?: MapData; source: 'draft' | 'published' | 'bundled'; baseRev: number; publishedRev: number | null; issues: MapIssue[] }
 interface SaveReply { ok: boolean; issues: MapIssue[]; diff: MapDiff }
 
 const MAP_NAMES: Record<string, string> = {
   nexus_city: 'เมืองกลาง (Nexus City)', emerald_forest: 'ฟาร์ม 1 · Emerald Forest', misty_marsh: 'ฟาร์ม 2 · Misty Marsh',
   frost_reach: 'ฟาร์ม 3 · Frost Reach', ashen_isle: 'ฟาร์ม 4 · Ashen Isle',
+  emerald_forest_room: 'ห้องบอส · รังหมีป่า', misty_marsh_room: 'ห้องบอส · กระท่อมแม่มดหนอง',
+  frost_reach_room: 'ห้องบอส · ถ้ำเยติ', ashen_isle_room: 'ห้องบอส · แกนกลางภูเขาไฟ',
 };
+/** In a boss room these tools make no sense (no doors, monster spawns, NPCs, paths or lakes there): only pieces, borders and the spawn pin stay. */
+const ROOM_TOOLS = new Set(['select', 'place', 'blocker', 'startpin']);
 const SAVE_DELAY_MS = 1000;
 /** The sprite keys a map may use (same list as the server's check). */
 const PROP_KEYS = CATALOG.props.filter((p) => p.inSheetSpecs).map((p) => p.key);
@@ -239,7 +245,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
   /** Runs validateMap on what is on screen (the same rules the server applies before a publish) and lists the problems. */
   function checkNow(): void {
     if (!ed) return;
-    issues = validateMap(ed.map, { propKeys: PROP_KEYS, zoneIds: Object.keys(ZONES), monsterIds: Object.keys(MONSTERS) });
+    issues = validateMap(ed.map, { propKeys: PROP_KEYS, zoneIds: Object.keys(ZONES), monsterIds: Object.keys(MONSTERS), baseline: MapRegistry.bundled(current) });
     renderIssues();
     const errs = issues.filter((i) => i.severity === 'error').length;
     const warns = issues.length - errs;
@@ -257,6 +263,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
       case 'path': { const p = m.paths.find((q) => q.id === i.id); if (p) { tool = 'path'; key = `path:${p.id}`; at = p.pts[0]; } break; }
       case 'water': { const w = m.water[Number(i.id)]; if (w) { tool = 'lake'; key = `water:${i.id}`; at = [w.x, w.z]; } break; }
       case 'npc': { const n = m.npcs.find((q) => q.id === i.id); if (n) { tool = 'pins'; key = `npc:${n.id}`; at = [n.x, n.z]; } break; }
+      case 'zone': if (m.room) { tool = 'startpin'; key = ''; at = [m.zone.start.x - 2, m.zone.start.z - 2]; } break;
       case 'portal': { const p = m.portals[Number(i.id)]; if (p) { tool = 'pins'; key = `portal:${i.id}`; at = [p.x, p.z]; } break; }
       case 'rest': { const r = m.rest[Number(i.id)]; if (r) { tool = 'pins'; key = `rest:${i.id}`; at = [r.x, r.z]; } break; }
       case 'lair': if (m.lair) { tool = 'pins'; key = 'lair:lair'; at = [m.lair.x, m.lair.z]; } break;
@@ -265,7 +272,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
     }
     if (!tool || !at) return;
     e.setTool(tool);
-    e.select([key]);
+    e.select(key ? [key] : []);
     e.centerOn(at[0], at[1]);
   }
 
@@ -276,7 +283,8 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
     const keep = current;
     mapSel.replaceChildren(...rows.map((m) => {
       const note = m.draft ? ' · มีร่าง' : m.publishedRev !== null ? ` · เผยแพร่ rev ${m.publishedRev}` : '';
-      return h('option', { value: m.id, selected: m.id === keep }, `${MAP_NAMES[m.id] ?? m.id}${note}`);
+      // A boss room sits right under its field (the registry lists it next to it).
+      return h('option', { value: m.id, selected: m.id === keep }, `${m.of ? '   └ ' : ''}${MAP_NAMES[m.id] ?? m.id}${note}`);
     }));
   }
 
@@ -294,6 +302,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
       diff = null;
       dirty = false;
       if (!ed) startEditor(r.map); else ed.setMap(r.map);
+      applyToolSet(r.map);
       const src = r.source === 'draft' ? 'ร่างที่บันทึกไว้' : r.source === 'published' ? `ที่เผยแพร่ล่าสุด (rev ${r.publishedRev})` : 'ไฟล์ที่มากับเกม';
       setStatus(`โหลด${src}แล้ว · ${r.map.props.length} ชิ้น`);
       renderIssues();
@@ -314,7 +323,8 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
     const place = placeTool();
     e.addTool(selectTool());
     e.addTool(place);
-    for (const t of [pinTool(), spawnTool(), blockerTool(), pathTool(), lakeTool()]) e.addTool(t);
+    for (const t of [pinTool(), spawnTool(), blockerTool(), pathTool(), lakeTool(), playerStartTool()]) e.addTool(t);
+    allTools = [...e.tools];
     placeBrush = place;
     e.onChange = () => { scheduleSave(); renderInspector(false); };
     e.onSelect = () => renderInspector(true);
@@ -327,6 +337,22 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
     wireDrop();
   }
   let placeBrush: ReturnType<typeof placeTool> | null = null;
+  let allTools: Tool[] = [];
+
+  /** Boss rooms get only the tools that can change something there; every other map gets all but the room's spawn pin. */
+  function applyToolSet(map: MapData): void {
+    if (!ed) return;
+    const room = !!map.room;
+    ed.tools.splice(0, ed.tools.length, ...allTools.filter((t) => (room ? ROOM_TOOLS.has(t.id) : t.id !== 'startpin')));
+    if (!ed.tools.includes(ed.tool)) {
+      ed.tool.deactivate?.(ed);
+      ed.tool = ed.tools[0];
+      ed.tool.activate?.(ed);
+    }
+    renderTools();
+    renderLayers();
+    renderInspector(true);
+  }
 
   function renderTools(): void {
     if (!ed) return;
@@ -354,7 +380,8 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
   function renderLayers(): void {
     if (!ed) return;
     const e = ed;
-    layerBox.replaceChildren(...e.layers.filter((l) => !['selection', 'ghost'].includes(l.id)).map((l) => h('div', { class: 'me-layer' },
+    const hidden = e.map.room ? ['selection', 'ghost', 'markers'] : ['selection', 'ghost', 'roomGuide'];
+    layerBox.replaceChildren(...e.layers.filter((l) => !hidden.includes(l.id)).map((l) => h('div', { class: 'me-layer' },
       h('label', {}, h('input', { type: 'checkbox', checked: e.layerState[l.id].visible, onchange: (ev: Event) => { e.layerState[l.id].visible = (ev.target as HTMLInputElement).checked; e.requestDraw(); } }), ` ${l.label}`),
       l.pickable ? h('label', { title: 'ล็อก = เลือก/ลากไม่ได้' }, h('input', { type: 'checkbox', checked: e.layerState[l.id].locked, onchange: (ev: Event) => { e.layerState[l.id].locked = (ev.target as HTMLInputElement).checked; if (e.layerState[l.id].locked) e.select([]); } }), ' 🔒') : null)));
   }

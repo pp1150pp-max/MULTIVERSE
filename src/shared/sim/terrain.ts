@@ -5,7 +5,7 @@ import { NPC_IDS, type NpcId } from '../data/npcs';
 import { mulberry32, pick, rand, type Rng } from '../rng';
 import type { Vec2 } from '../types';
 import { MapRegistry } from '../mapRegistry';
-import { pointInPolygon, type MapData, type Pt } from '../mapSchema';
+import { pointInPolygon, ROOM_EDGE, type MapData, type Pt } from '../mapSchema';
 
 export interface Collider { x: number; z: number; r: number }
 /**
@@ -119,8 +119,8 @@ export const SUMMONER_PROP: Record<ZoneTheme, string> = {
 };
 export const SUMMONER_HEIGHT = 3.6;
 export const SUMMONER_SOLID = 1.2;
-/** A boss room's walkable circle reaches this far past its arena (inside the ring of pillars). */
-export const ROOM_EDGE = 1;
+/** A boss room's walkable circle reaches this far past its arena (inside the ring of pillars). Defined in mapSchema: the validator checks it too. */
+export { ROOM_EDGE };
 /** How close a player must stand to the summoner to put keys in (the server checks it). */
 export const SUMMONER_RANGE = 3.5;
 

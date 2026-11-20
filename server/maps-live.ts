@@ -18,7 +18,8 @@ const PROP_KEYS = (propCatalog as { props: { key: string; inSheetSpecs: boolean 
 
 /** validateMap with the same context everywhere on the server. */
 export function checkMap(map: MapData): MapIssue[] {
-  return validateMap(map, { propKeys: PROP_KEYS, zoneIds: Object.keys(ZONES), monsterIds: Object.keys(MONSTERS) });
+  // `baseline` = the bundled file: a boss room may not change what it locks (boss, arena, size) from it.
+  return validateMap(map, { propKeys: PROP_KEYS, zoneIds: Object.keys(ZONES), monsterIds: Object.keys(MONSTERS), baseline: MapRegistry.bundled(map?.id) });
 }
 
 /** A map from stored JSON, or undefined when it does not parse. */
@@ -31,7 +32,7 @@ export function parseMap(json: string): MapData | undefined {
   }
 }
 
-/** Is this zone one the map editor / MapRegistry knows (has a bundled layout)? */
+/** Is this zone one the map editor / MapRegistry knows (has a bundled layout)? Floor-1 boss rooms are, under `<field>_room`. */
 export const isMapZone = (id: string): boolean => MapRegistry.ids().includes(id);
 
 /** Loads the published layouts and the switch into MapRegistry and rebuilds the zones. A layout that fails the check is skipped (the bundled one stays). */

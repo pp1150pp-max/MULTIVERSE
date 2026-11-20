@@ -4,6 +4,18 @@
 
 export const MAP_SCHEMA_VERSION = 1;
 
+/** A boss room's walkable circle reaches this far past its arena (Terrain.isBlocked). */
+export const ROOM_EDGE = 1;
+/** Players of a room appear this far in x and z from `zone.start` (Sim.spawnPoint), so `start` itself lies outside the arena. */
+export const ROOM_SPAWN_OFFSET = 2;
+/** Radius of a player's body, for the room checks. */
+const PLAYER_R = 0.5;
+/** A free spot this close to the boss counts as reaching it (melee range, with the Volcano Heart's rock in between). */
+const BOSS_REACH = 4;
+
+/** Where players of a boss room stand when they come in (Sim.spawnPoint). */
+export const roomSpawnOf = (start: { x: number; z: number }): { x: number; z: number } => ({ x: start.x - ROOM_SPAWN_OFFSET, z: start.z - ROOM_SPAWN_OFFSET });
+
 export type MapTheme = 'forest' | 'marsh' | 'snow' | 'volcano';
 export type Pt = [number, number]; // [x, z] in world units
 
@@ -34,6 +46,17 @@ export interface MapRest { kind: 'fountain' | 'campfire'; x: number; z: number }
 export interface MapPortal { to: string; x: number; z: number; minLevel: number }
 export interface MapSpawn { monster: string; x: number; z: number; radius: number; count: number; respawn: [number, number] }
 export interface MapLair { boss: string; x: number; z: number }
+/**
+ * Marks a boss room (docs/plans/map-editor.md, boss rooms added 2026-11-21). Everything in it is locked: validateMap() compares it
+ * with the bundled file, so only props, blockers/colliders and `zone.start` (where players appear) can change.
+ */
+export interface MapRoom {
+  /** The field map whose summoner opens this room. */
+  of: string;
+  /** Arena radius: the ring of stones; nobody walks past it (+ROOM_EDGE). */
+  arena: number;
+  boss: { monster: string; x: number; z: number; radius: number };
+}
 
 export interface MapData {
   schema: 1;
@@ -59,6 +82,8 @@ export interface MapData {
   portals: MapPortal[];
   spawns: MapSpawn[];
   lair?: MapLair;
+  /** Only boss rooms have it. Absent on every other map. */
+  room?: MapRoom;
 }
 
 export interface MapValidateCtx {
@@ -69,11 +94,16 @@ export interface MapValidateCtx {
   monsterIds?: Iterable<string>;
   /** BFS grid cell size in world units (default 1). */
   cell?: number;
+  /**
+   * The bundled file of this map (MapRegistry.bundled). A boss room is compared with it: what the editor must not change
+   * (id, floor, half, theme, walkable frame, the `room` block) has to equal it. Without it only the shape of a room is checked.
+   */
+  baseline?: MapData;
 }
 
 export type MapIssueCode =
   | 'schema' | 'range' | 'dup_id' | 'bad_key' | 'bad_ref' | 'out_of_bounds'
-  | 'polygon' | 'in_collision' | 'unreachable';
+  | 'polygon' | 'in_collision' | 'unreachable' | 'locked';
 
 export interface MapIssue {
   severity: 'error' | 'warn';
@@ -310,6 +340,9 @@ function validateInner(map: MapData, ctx: MapValidateCtx, err: Err, warn: Err): 
     else if (!inWalk(map.lair.x, map.lair.z)) err('out_of_bounds', 'lair is outside the walkable frame', 'lair', 'lair');
   }
 
+  if (map.room) validateRoom(map, ctx, err, whalf);
+  else if (ctx.baseline?.room) err('locked', 'แมพนี้เป็นห้องบอส ต้องมีบล็อก room ตามไฟล์เดิม', 'zone');
+
   // reachability: BFS on a grid from zone.start; every portal must be reachable
   if (!z.start || !fin(z.start.x) || !fin(z.start.z) || !wOk) return;
   const cell = ctx.cell && ctx.cell > 0 ? ctx.cell : 1;
@@ -318,10 +351,15 @@ function validateInner(map: MapData, ctx: MapValidateCtx, err: Err, warn: Err): 
   const cx = (i: number) => -whalf + (i + 0.5) * cell;
   const toIdx = (v: number) => Math.min(n - 1, Math.max(0, Math.floor((v + whalf) / cell)));
   const blocked = new Uint8Array(n * n);
-  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) blocked[r * n + c] = isPointBlocked(map, cx(c), cx(r)) ? 1 : 0;
+  const room = map.room;
+  // A boss room is walked from where players appear, and nobody leaves its arena (Terrain.isBlocked).
+  const from = room ? roomSpawnOf(z.start) : z.start;
+  const roomEdge = room && fin(room.arena) ? room.arena + ROOM_EDGE - PLAYER_R : Infinity;
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) blocked[r * n + c] = isPointBlocked(map, cx(c), cx(r)) || Math.hypot(cx(c), cx(r)) > roomEdge ? 1 : 0;
   const seen = new Uint8Array(n * n);
   const queue: number[] = [];
-  let s0 = toIdx(z.start.z) * n + toIdx(z.start.x);
+  let s0 = toIdx(from.z) * n + toIdx(from.x);
+  if (blocked[s0] && room) return; // the spawn spot is reported as a room error
   if (blocked[s0]) {
     // The hub's start is the middle of its fountain (players are pushed out of it): warn, and walk from the nearest free cell.
     let best = -1, bestD = Infinity;
@@ -349,4 +387,40 @@ function validateInner(map: MapData, ctx: MapValidateCtx, err: Err, warn: Err): 
     if (!inWalk(p.x, p.z) || isPointBlocked(map, p.x, p.z)) return; // already reported
     if (!seen[toIdx(p.z) * n + toIdx(p.x)]) err('unreachable', `portal ${i} (to ${p.to}) cannot be reached from the start point`, 'portal', String(i));
   });
+  if (room && room.boss && fin(room.boss.x) && fin(room.boss.z)) {
+    let near = false;
+    for (let k = 0; k < n * n && !near; k++) near = !!seen[k] && Math.hypot(cx(k % n) - room.boss.x, cx((k / n) | 0) - room.boss.z) <= BOSS_REACH;
+    if (!near) err('unreachable', 'เดินจากจุดเกิดไปถึงบอสไม่ได้ (ของ/collision ปิดทางจนเข้าไปตีบอสไม่ถึง)', 'zone');
+  }
+}
+
+/** What a boss room may and may not be (see MapRoom): everything but props, blockers, extra colliders and the spawn spot is locked. */
+function validateRoom(map: MapData, ctx: MapValidateCtx, err: Err, whalf: number): void {
+  const r = map.room;
+  if (!r || typeof r !== 'object' || typeof r.of !== 'string' || !fin(r.arena) || !r.boss || typeof r.boss.monster !== 'string'
+    || !fin(r.boss.x) || !fin(r.boss.z) || !fin(r.boss.radius)) return err('schema', '"room" is missing or malformed', 'zone');
+  const locked = (what: string, kind?: MapIssue['kind']): void => err('locked', `ห้องบอสแก้ ${what} ไม่ได้`, kind ?? 'zone');
+  if (map.lair) locked('ที่เรียกบอส (lair)', 'lair');
+  if (map.zone.quadrants || map.zone.safe) locked('เขตปลอดภัย/ควอดแรนท์');
+  const lists: [string, unknown[], MapIssue['kind']][] = [['ประตู', map.portals, 'portal'], ['จุดเกิดมอน', map.spawns, 'spawn'], ['NPC', map.npcs, 'npc'],
+    ['จุดพัก', map.rest, 'rest'], ['ทางเดิน', map.paths, 'path'], ['ทะเลสาบ/ลาวา', map.water, 'water']];
+  for (const [name, list, kind] of lists) if (list.length) err('locked', `ห้องบอสห้ามมี${name} (ลบออก)`, kind);
+  const b = ctx.baseline;
+  if (b) {
+    const same = (x: unknown, y: unknown): boolean => JSON.stringify(x) === JSON.stringify(y);
+    if (!b.room) err('locked', 'ไฟล์เดิมของแมพนี้ไม่ใช่ห้องบอส', 'zone');
+    else {
+      if (!same(r, b.room)) locked('ข้อมูลห้อง (ตำแหน่งบอส รัศมีสนาม ฟาร์มต้นทาง)');
+      if (map.id !== b.id || map.floor !== b.floor) locked('id/ชั้น');
+      if (map.zone.half !== b.zone.half || map.zone.theme !== b.zone.theme) locked('ขนาดแมพ/ธีม (half, theme)');
+      if (map.walkable.half !== b.walkable.half) locked('กรอบเดินได้ (walkable)', 'walkable');
+      // The extra circles belong to no prop and have no tool: the Volcano Heart's rock is one.
+      if (!same(map.colliders ?? [], b.colliders ?? [])) locked('วง collision พิเศษ (เช่นก้อนหินกลางห้องภูเขาไฟ)');
+    }
+  }
+  // Where players appear: inside the arena, not in collision.
+  const s = fin(map.zone.start?.x) && fin(map.zone.start?.z) ? roomSpawnOf(map.zone.start) : null;
+  if (!s) return;
+  if (Math.hypot(s.x, s.z) + PLAYER_R > r.arena + ROOM_EDGE) err('out_of_bounds', 'จุดเกิดผู้เล่นอยู่นอกสนามบอส (ต้องอยู่ในวงสนาม)', 'zone');
+  else if (Math.abs(s.x) > whalf || Math.abs(s.z) > whalf || isPointBlocked(map, s.x, s.z)) err('in_collision', 'จุดเกิดผู้เล่นอยู่ในของที่ชน (collision) หรือนอกกรอบเดินได้', 'zone');
 }

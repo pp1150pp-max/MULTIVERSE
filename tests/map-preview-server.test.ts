@@ -77,6 +77,7 @@ function joinWorld(token: string, characterId: number, previewMap?: string) {
     ready,
     welcome: () => msgs.find((m) => m.t === 'welcome'),
     kicked: () => msgs.some((m) => m.t === 'kick'),
+    snap: () => msgs.find((m) => m.t === 'snap'),
     send: (m: unknown) => ws.send(JSON.stringify(m)),
     quit: async () => {
       ws.close(WS_CLOSE_QUIT);
@@ -150,6 +151,24 @@ async function run(): Promise<void> {
   await gi.ready;
   ok(gi.welcome()?.zone === 'nexus_city' && !gi.welcome()?.preview, 'a zone that has no map is ignored');
   await gi.quit();
+
+  // ---------------------------------------------------------- a boss room preview: walk the room, no boss (owner 2026-11-21)
+  const roomMap: MapData = (await api('GET', '/admin/maps/misty_marsh_room/draft', undefined, owner.token)).data.map;
+  ok(roomMap?.room?.of === 'misty_marsh', 'the boss room of the marsh opens in the editor');
+  ok((await api('PUT', '/admin/maps/misty_marsh_room/draft', { map: roomMap }, owner.token)).status === 200, 'owner saves a draft of the room');
+  const rp = joinWorld(owner.token, owner.char, 'misty_marsh_room');
+  await rp.ready;
+  ok(rp.welcome()?.preview === true && rp.welcome()?.zone === 'misty_marsh_room', 'owner with ?previewMap of a boss room is put in a private preview of the room');
+  ok((rp.snap()?.monsters ?? []).length === 0, 'with no boss in it (a preview is no BossRooms run: nothing would end or lose it)');
+  await rp.quit();
+  const rLocked = structuredClone(roomMap);
+  rLocked.room!.boss.x = 6;
+  await api('PUT', '/admin/maps/misty_marsh_room/draft', { map: rLocked }, owner.token);
+  const rl = joinWorld(owner.token, owner.char, 'misty_marsh_room');
+  await rl.ready;
+  ok(!rl.welcome()?.preview && rl.welcome()?.zone === 'nexus_city', 'a room draft that breaks a lock is never run (normal game instead)');
+  await rl.quit();
+  await api('PUT', '/admin/maps/misty_marsh_room/draft', { map: roomMap }, owner.token);
 
   // ---------------------------------------------------------- a draft with errors is never run
   const broken = structuredClone(forest);
