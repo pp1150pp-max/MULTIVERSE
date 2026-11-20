@@ -52,15 +52,18 @@ export const HARBOR_FRAG = /* glsl */ `
     float onDeck = smoothstep(0.45, 0.55, m.r);
     float shade = smoothstep(0.0, 0.45, m.r) * (1.0 - onDeck);
     water *= 1.0 - shade * 0.45;
+    // Pulled toward warm honey and lifted (owner 2026-11-20: the tile alone read too dark beside the buildings).
+    plank = mix(plank, vec3(0.92, 0.72, 0.48), 0.45) * 1.12;
+    plaza = mix(plaza, vec3(0.95, 0.80, 0.62), 0.35) * 1.08;
     float rim = 1.0 - smoothstep(0.55, 0.9, m.r);
-    plank *= 1.0 - rim * 0.35;
+    plank *= 1.0 - rim * 0.2;
     float onPlaza = smoothstep(0.4, 0.6, m.g);
     vec3 deck = mix(plank, plaza, onPlaza);
     // A ring of darker boards round the plaza.
     deck *= 1.0 - (smoothstep(0.2, 0.5, m.g) - smoothstep(0.5, 0.8, m.g)) * 0.3;
     vec3 c = mix(water, deck, onDeck);
     // The island's own shore fade (IslandOutline's aEdge) is kept: the water thins out at the rim of the world.
-    gl_FragColor = vec4(c * (0.82 + 0.18 * (1.0 - vEdge)), 1.0);
+    gl_FragColor = vec4(c * mix(0.82 + 0.18 * (1.0 - vEdge), 1.0, onDeck), 1.0);
   }
 `;
 
