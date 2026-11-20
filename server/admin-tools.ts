@@ -14,7 +14,7 @@ import {
   type AdminAccountDetail, type AdminAccountRow, type AdminAccountsResponse, type AdminCharDetail, type AdminFeature,
 } from '../src/shared/admin';
 import { banMessage } from '../src/shared/api';
-import { HISTORY_PAGE, type AdminStats, type StatsPoint, type StatsRange } from '../src/shared/admin';
+import { ADMIN_CRYSTAL_MAX, HISTORY_PAGE, type AdminStats, type StatsPoint, type StatsRange } from '../src/shared/admin';
 import { SESSION_PAGE_SIZES, SESSION_SEARCH_MAX, SESSION_SORTS, type SessionPage, type SessionQuery, type SessionSort } from '../src/shared/admin';
 import { BAG_SIZE } from '../src/shared/sim/Player';
 import type { AdminShutdownText } from '../src/shared/admin';
@@ -173,7 +173,7 @@ export async function ownerToolsApi(
     return true;
   }
 
-  const acc = /^\/api\/admin\/accounts\/(\d{1,12})(?:\/(password|ban|unban|cosmetics))?$/.exec(path);
+  const acc = /^\/api\/admin\/accounts\/(\d{1,12})(?:\/(password|ban|unban|cosmetics|crystals))?$/.exec(path);
   if (acc) {
     const id = Number(acc[1]);
     const action = acc[2];
@@ -220,6 +220,24 @@ export async function ownerToolsApi(
       }
       log(db, a, give ? 'cosmetic-give' : 'cosmetic-take', `${row.username} (#${id})`, `${COS_SLOT_NAME[c.slot]}: ${c.name}`);
       send(res, 200, { msg: give ? `ให้ ${c.name} แก่ ${row.username} แล้ว${mailNote}` : `ยึด ${c.name} คืนจาก ${row.username} แล้ว` });
+      return true;
+    }
+
+    if (method === 'POST' && action === 'crystals') {
+      const a = requireFeature(req, db, 'crystalGrant');
+      const row = accountRow(db, world, id);
+      if (row.guest) throw new HttpError(400, 'Guest ไม่มีคริสตัลมิติ');
+      const body = await readJson(req);
+      const delta = body.delta;
+      if (typeof delta !== 'number' || !Number.isInteger(delta) || delta === 0 || Math.abs(delta) > ADMIN_CRYSTAL_MAX) {
+        throw new HttpError(400, `จำนวนคริสตัลต้องเป็นเลขเต็ม ไม่ใช่ 0 และไม่เกิน ${ADMIN_CRYSTAL_MAX.toLocaleString()}`);
+      }
+      const before = db.crystals(id);
+      const after = db.crystalsAdd(id, delta);
+      if (after === null) throw new HttpError(400, `คริสตัลไม่พอที่จะลด (มี ${before.toLocaleString()})`);
+      world.crystalsChanged(id);
+      log(db, a, delta > 0 ? 'crystal-give' : 'crystal-take', `${row.username} (#${id})`, `${before} → ${after} (${delta > 0 ? '+' : ''}${delta})`);
+      send(res, 200, { msg: `${delta > 0 ? 'ให้' : 'ลด'}คริสตัลมิติ ${Math.abs(delta).toLocaleString()} แก่ ${row.username} (เหลือ ${after.toLocaleString()})` });
       return true;
     }
 

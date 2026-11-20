@@ -920,6 +920,12 @@ export class Db {
     this.db.prepare('UPDATE accounts SET crystals = ? WHERE id = ?').run(n, accountId);
   }
 
+  /** Adds `delta` (negative = take) to an account's crystals, never below 0; returns the new total, or null if the account is unknown or has too few to take. */
+  crystalsAdd(accountId: number, delta: number): number | null {
+    const r = this.db.prepare('UPDATE accounts SET crystals = crystals + ? WHERE id = ? AND crystals + ? >= 0').run(delta, accountId, delta);
+    return Number(r.changes) > 0 ? this.crystals(accountId) : null;
+  }
+
   /** How many of each item the account ever bought. */
   cashBought(accountId: number): Record<string, number> {
     const rows = this.db.prepare('SELECT item, SUM(qty) AS n FROM cash_purchases WHERE account_id = ? GROUP BY item').all(accountId) as { item: string; n: number }[];

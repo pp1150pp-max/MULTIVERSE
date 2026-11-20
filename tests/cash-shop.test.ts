@@ -250,6 +250,19 @@ async function run(): Promise<void> {
   const hist = (await api('GET', '/admin/cash-shop', undefined, ownerTok)).data.recent as any[];
   ok(hist.length === 2 && hist.some((p) => p.item === 'stone:enhance' && p.qty === 2 && p.price === 90 && p.username === 'cashbuyer'), `purchase history (${hist.length})`);
 
+  // ---- the owner gives / takes crystals on the account sheet (feature crystalGrant)
+  const before = crystals();
+  const give = await api('POST', `/admin/accounts/${accId}/crystals`, { delta: 300 }, ownerTok);
+  ok(give.status === 200 && crystals() === before + 300, `owner gives 300 crystals (${give.status} ${give.data.error ?? ''})`);
+  const take = await api('POST', `/admin/accounts/${accId}/crystals`, { delta: -50 }, ownerTok);
+  ok(take.status === 200 && crystals() === before + 250, 'owner takes 50 crystals');
+  ok((await api('POST', `/admin/accounts/${accId}/crystals`, { delta: -(before + 251) }, ownerTok)).status === 400 && crystals() === before + 250, 'taking more than the account has: refused, unchanged');
+  ok((await api('POST', `/admin/accounts/${accId}/crystals`, { delta: 0 }, ownerTok)).status === 400, 'zero refused');
+  ok((await api('POST', `/admin/accounts/${accId}/crystals`, { delta: 1.5 }, ownerTok)).status === 400, 'fraction refused');
+  ok((await api('POST', `/admin/accounts/${accId}/crystals`, { delta: 1_000_001 }, ownerTok)).status === 400, 'over the limit refused');
+  ok((await api('POST', `/admin/accounts/${accId}/crystals`, { delta: 10 }, tok)).status === 403, 'a player cannot');
+  setCrystals(before);
+
   // ---- claiming the mail gives unbound stones
   const claim = await A.mail({ a: 'mailClaim', id: m.id });
   ok(claim?.ok, `claimed (${claim?.msg})`);
