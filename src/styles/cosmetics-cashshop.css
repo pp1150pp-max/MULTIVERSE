@@ -66,7 +66,7 @@
 #cash-win .panel-head .cash-plus:hover { filter: brightness(1.25); }
 #cash-win .ui-tabs { border-bottom: 0; gap: 4px; margin: 6px 0 8px; }
 #cash-win .ui-tab {
-  min-width: 92px; height: 30px; padding: 2px 14px 0; border: 0; border-radius: 0; color: #c8b890;
+  min-width: 92px; height: 30px; padding: 2px 14px 0; border: 0; border-radius: 0; box-shadow: none; color: #c8b890;
   background: url(/assets/sprites/ui/cash_tab.png) center / 100% 100% no-repeat;
 }
 #cash-win .ui-tab.active { height: 34px; margin-top: -4px; color: #fff2cc; background-image: url(/assets/sprites/ui/cash_tab_on.png); }
@@ -75,7 +75,7 @@
 #cash-win .cash-body { display: flex; gap: 10px; min-height: min(52vh, 380px); }
 #cash-win .cash-side { display: flex; flex-direction: column; gap: 5px; flex: none; width: 132px; }
 #cash-win .cash-side button {
-  height: 32px; padding: 0 8px 0 20px; border: 0; border-radius: 0; font-size: 11.5px; text-align: left; color: #c8b890; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  height: 32px; padding: 0 8px 0 20px; border: 0; border-radius: 0; box-shadow: none; font-size: 11.5px; text-align: left; color: #c8b890; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   background: url(/assets/sprites/ui/cash_side.png) center / 100% 100% no-repeat;
 }
 #cash-win .cash-side button.on { padding-left: 38px; color: #fff2cc; background-image: url(/assets/sprites/ui/cash_side_on.png); }
