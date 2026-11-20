@@ -757,6 +757,8 @@ export class Hud {
     const full = p.skillCooldown(sk);
     const stats = [
       sk.kind === 'normal' || sk.kind === 'ult' ? `<div>แรงก์ <span class="tt-val">${rank}</span>${sk.dmg > 0 ? ` · ดาเมจ <span class="tt-val">${Math.round(rankedDmg(sk, rank) * 100)}% ATK</span>` : ''}</div>` : '',
+      // The basic attack's damage and speed (tuned on /admin, owner 2026-11-20).
+      sk.kind === 'basic' ? `<div>ดาเมจ <span class="tt-val">${Math.round(rankedDmg(sk, 1) * 100)}% ATK</span> · <span class="tt-val">${Math.round(p.attackRate * 100) / 100} ครั้ง/วิ</span></div>` : '',
       sk.mp ? `<div>MP <span class="tt-val">${p.skillMp(sk)}</span></div>` : '',
       full ? `<div>คูลดาวน์ <span class="tt-val">${full} วิ${stacks ? ' ต่อ 1 อัน' : ''}</span></div>` : '',
       stacks ? `<div>เก็บได้ <span class="tt-val">${held} / ${stacks} อัน</span></div>` : '',

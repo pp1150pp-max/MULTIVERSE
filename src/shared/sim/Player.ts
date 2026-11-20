@@ -596,7 +596,8 @@ export class Player extends Unit {
   get moveSpeed(): number {
     return BASE_MOVE_SPEED * (1 + this.stats.moveSpeed / 100) * this.speedMult() * (this.mounted ? MOUNT_SPEED : 1);
   }
-  get attackRate(): number { return this.cls.attackRate * (1 + this.stats.atkSpeed / 100); }
+  /** Basic attacks a second: the class's rate as tuned on /admin (owner 2026-11-20) × the attack speed stat. */
+  get attackRate(): number { return (currentBalance().skills.basicRate[this.cls.id] ?? this.cls.attackRate) * (1 + this.stats.atkSpeed / 100); }
   get isDashing(): boolean { return this.dashT > 0; }
 
   /** Angle (radians, world x/z) the player is aiming at right now. */

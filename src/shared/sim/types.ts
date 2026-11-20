@@ -45,6 +45,14 @@ export interface HitOpts {
   weakT?: number;
   /** The skill this hit comes from (passives can check its line); missing = basic attack or other. */
   skill?: SkillDef;
+  /**
+   * Whose extra effects (/admin, sim/extraEffects.ts) this hit gives: a skill id or a basic attack id. Missing = `skill`,
+   * else the skill running now (Sim.castingSkill). Only picks the extra effects: passives, visuals and debuff circles
+   * do not read it.
+   */
+  src?: string;
+  /** This hit gives no extra effects (the ticks of an extra burn, so they don't feed themselves). */
+  noExtra?: boolean;
 }
 
 /** Visual effects the renderer knows how to draw. The client's Effects class implements this. */

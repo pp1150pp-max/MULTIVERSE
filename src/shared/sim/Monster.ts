@@ -48,6 +48,9 @@ export class Monster extends Unit {
   weakUntil = 0;
   /** Burning / poisoned by a damage-over-time skill until this sim time (for passives that check statuses). */
   dotUntil = 0;
+  /** Extra effects (sim/extraEffects.ts): when an extra stun from each skill last began, and running extra burns. */
+  extraStunAt = new Map<string, number>();
+  extraDots = new Map<string, { until: number; mult: number }>();
 
   /** Its debuffs as the server last sent them (client only, sim/debuffs.ts); the server works them out from the fields above. */
   debuffs = 0;

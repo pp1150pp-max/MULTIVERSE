@@ -44,12 +44,16 @@ export const emptyGunBuffs = (): GunBuffs => ({
 
 const DOUBLE_GAP = 0.08;
 
-function gunBasic(sim: Sim, p: Player, ang: number): void {
+function gunBasic(sim: Sim, p: Player, ang: number, sk: SkillDef): void {
   const g = p.gun;
   const t = sim.time;
+  // Tuned on /admin (owner 2026-11-20): the basic shot's damage and range; its id carries the extra effects.
+  const base = rankedDmg(sk, 1);
+  const reach = skillReach(sk);
+  const range = reach?.kind === 'shot' ? reach.range : R.SHOT_RANGE;
   let onHit = 0;
   for (const b of Object.values(g.onHit)) if (b.until > t) onHit += b.add;
-  const hit: HitOpts = {};
+  const hit: HitOpts = { src: sk.id };
   if (g.shock.until > t) {
     hit.slow = g.shock.slow;
     hit.slowT = g.shock.slowT;
@@ -67,15 +71,15 @@ function gunBasic(sim: Sim, p: Player, ang: number): void {
     }
     : undefined;
   // The bullets of one shot: [angle offset, damage × ATK].
-  let bullets: [number, number][] = [[0, 1 + onHit]];
+  let bullets: [number, number][] = [[0, base + onHit]];
   if (g.storm.until > t) bullets = fan(g.storm.n, g.storm.arc).map((a) => [a, g.storm.mult + onHit]);
-  else if (g.split.until > t) bullets = fan(g.split.n, g.split.arc).map((a) => [a, (1 + onHit) * (a === 0 ? 1 : g.split.side)]);
+  else if (g.split.until > t) bullets = fan(g.split.n, g.split.arc).map((a) => [a, (base + onHit) * (a === 0 ? 1 : g.split.side)]);
   const buffed = onHit > 0 || bullets.length > 1 || g.pierceUntil > t || !!stack || hit.slow !== undefined;
   const fire = (scale: number, a0: number): void => {
     const spread = (Math.random() - 0.5) * 0.06;
     for (const [off, mult] of bullets) {
       sim.addProjectile(p, {
-        x: p.x, z: p.z, angle: a0 + off + spread, speed: 26, range: R.SHOT_RANGE, radius: 0.3, mult: mult * scale,
+        x: p.x, z: p.z, angle: a0 + off + spread, speed: 26, range, radius: 0.3, mult: mult * scale,
         color: buffed ? '#ffb040' : '#ffe08a', size: 0.45, kb: 1, pierce: g.pierceUntil > t, hit, bonus,
       });
     }
@@ -191,21 +195,26 @@ export function quarksCue(sim: Sim, p: Player, skill: string, ang: number, x = p
 
 export function basicAttack(sim: Sim, p: Player, aim: Vec2): void {
   const ang = aimAngle(p, aim);
-  quarksCue(sim, p, p.cls.skills.find((s) => s.kind === 'basic')!.id, ang);
+  const sk = p.cls.skills.find((s) => s.kind === 'basic')!;
+  quarksCue(sim, p, sk.id, ang);
   passiveOnBasic(sim, p);
+  // Damage and reach as tuned on /admin (owner 2026-11-20); `src` carries the basic attack's extra effects.
+  const dmg = rankedDmg(sk, 1);
+  const reach = skillReach(sk);
+  const far = reach && reach.kind !== 'self' ? reach.range : 0;
   switch (p.cls.id) {
     case 'sword': {
-      const range = R.SLASH_RANGE;
+      const range = far || R.SLASH_RANGE;
       const arc = Math.PI * 0.75;
       sim.fx('effect', 'slash', p.x + Math.cos(ang) * range * 0.55, p.z + Math.sin(ang) * range * 0.55, ang, range * 0.8);
-      forCone(sim, p.x, p.z, ang, arc, range, (m) => sim.hitMonster(p, m, 1, { kb: 3 }));
+      forCone(sim, p.x, p.z, ang, arc, range, (m) => sim.hitMonster(p, m, dmg, { kb: 3, src: sk.id }));
       break;
     }
     case 'mage':
-      sim.addProjectile(p, { x: p.x, z: p.z, angle: ang, speed: 16, range: R.BOLT_RANGE, radius: 0.35, mult: 1, color: '#9fd8ff', size: 0.7 });
+      sim.addProjectile(p, { x: p.x, z: p.z, angle: ang, speed: 16, range: far || R.BOLT_RANGE, radius: 0.35, mult: dmg, color: '#9fd8ff', size: 0.7, hit: { src: sk.id } });
       break;
     case 'gunslinger':
-      gunBasic(sim, p, ang);
+      gunBasic(sim, p, ang, sk);
       break;
   }
 }
