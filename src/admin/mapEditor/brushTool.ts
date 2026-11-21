@@ -38,12 +38,14 @@ export function brushTool(refresh: () => void): BrushTool {
 
   const kinds = (): ScatterKind[] => [...keys].map((k) => { const e = catalogEntry(k); return { key: k, h: e?.h ?? 2, r: e?.solid?.r ?? 0 }; });
   const opts = (): ScatterOpts => ({ radius: st.radius, density: DENSITY[st.density]?.[0] ?? 4, hMin: Math.min(st.hMin, st.hMax), hMax: Math.max(st.hMin, st.hMax), flip: st.flip, rotate: st.rotate, avoidPaths: st.avoidPaths });
-  const blocked = (ed: Editor): boolean => ed.isLocked('props') || ed.layerState.props?.visible === false;
+  /** Nothing to do: the pieces' layer is locked/hidden, or no kinds are picked where kinds are needed. */
+  const blocked = (ed: Editor): boolean => ed.isLocked('props') || ed.layerState.props?.visible === false
+    || (!keys.size && (st.mode === 'paint' || st.eraseOnlyPicked));
 
   function dab(ed: Editor, x: number, z: number): void {
     if (!stroke) return;
     if (st.mode === 'erase') {
-      const r = eraseInCircle(ed.map, x, z, st.radius, st.eraseOnlyPicked && keys.size ? keys : null);
+      const r = eraseInCircle(ed.map, x, z, st.radius, st.eraseOnlyPicked ? keys : null);
       if (!r.removed) return;
       stroke.count += r.removed;
       ed.live(r.colliders === ed.map.colliders ? { props: r.props } : { props: r.props, colliders: r.colliders });
@@ -69,7 +71,6 @@ export function brushTool(refresh: () => void): BrushTool {
     deactivate(ed) { hover = null; if (stroke) { ed.commitLive('โปรย', stroke.before); stroke = null; } ed.requestDraw(); },
     pointerDown(ed, e) {
       if (blocked(ed)) return;
-      if (st.mode === 'paint' && !keys.size) return;
       stroke = { before: pick(ed.map, ['props', 'colliders']), last: [e.x, e.z], count: 0, newId: idMaker(ed.map) };
       dab(ed, e.x, e.z);
     },
@@ -106,7 +107,7 @@ export function brushTool(refresh: () => void): BrushTool {
       g.fill();
       g.strokeStyle = erase ? '#ff6a6a' : '#5fe08a';
       g.lineWidth = 1.5;
-      g.setLineDash(blocked(ed) || (!erase && !keys.size) ? [4, 4] : []);
+      g.setLineDash(blocked(ed) ? [4, 4] : []);
       g.stroke();
     },
     cursor: () => 'crosshair',
@@ -145,7 +146,8 @@ export function brushTool(refresh: () => void): BrushTool {
         picked.length
           ? el('div', { class: 'me-brush-keys' }, ...picked.map((k) => el('button', { class: 'me-item on', title: `${k} · คลิกเพื่อเอาออก`, onclick: () => t.toggle(k) },
             el('img', { src: propUrl(k), alt: k, loading: 'lazy' }), el('span', {}, k))))
-          : note(st.mode === 'paint' ? 'ยังไม่ได้เลือก คลิกภาพในคลังด้านล่าง (เลือกได้หลายภาพ แปรงสุ่มจากภาพที่เลือก)' : 'ยังไม่ได้เลือก (ยางลบลบทุกชิ้นในวง)'),
+          : note(st.mode === 'paint' ? 'ยังไม่ได้เลือก คลิกภาพในคลังด้านล่าง (เลือกได้หลายภาพ แปรงสุ่มจากภาพที่เลือก)'
+            : st.eraseOnlyPicked ? 'ยังไม่ได้เลือกภาพ ยางลบจึงยังไม่ลบอะไร (ปิด "ลบเฉพาะภาพที่เลือกไว้" = ลบทุกชิ้นในวง)' : 'ยังไม่ได้เลือก (ยางลบลบทุกชิ้นในวง)'),
         picked.length ? btn('ล้างภาพที่เลือก', () => { keys.clear(); save(); refresh(); }) : null,
       );
     },
