@@ -19,7 +19,10 @@ const empty = (c: Channel) => {
 
 // ---------------------------------------------------------------- which maps
 {
-  ok([ZONE_1, ZONE_2].every(hasChannels) && Object.values(ZONES).filter(hasChannels).length === 4, 'the 4 farm maps have channels');
+  // Every farm map has channels (4 on floor 1 + the floor-2 beach), towns and boss rooms don't.
+  const farms = Object.values(ZONES).filter((z) => !!z.lair);
+  ok([ZONE_1, ZONE_2].every(hasChannels) && farms.length === 5 && Object.values(ZONES).filter(hasChannels).length === farms.length
+    && farms.every(hasChannels), 'every farm map has channels');
   ok(!hasChannels(ZONE_HUB), 'the hub does not (yet)');
   ok(Object.values(BOSS_ROOMS).every((r) => !hasChannels(r)), 'boss rooms do not (they have their own rooms)');
   ok(placeLabel(ZONE_1, 2) === 'ป่ามรกต · CH 2' && placeLabel(ZONE_HUB, 1) === ZONE_HUB.nameTh, 'label: "ป่ามรกต · CH 2", the hub just its name');
