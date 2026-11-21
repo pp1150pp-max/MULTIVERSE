@@ -74,3 +74,39 @@ Edit the attached sprite sheet of a pair of character wings (5 rows x 3 columns:
 - ของในร้านเงินสด: ตัดแบบเดียวกับ `tools/cut_cosmetics.cjs` (ตาราง 5×3) ลง `sprites/paper/cosmetics/` แล้วให้สวิตช์ภาพกระดาษเลือกใช้
 - โลโก้: ตัดพื้นหลังออก แล้วตอนเปิดสวิตช์ให้ `.logo` ใน `index.html` ใช้ภาพเดียวแทนตัวอักษร 9 ภาพ
 - พื้นหลัง Login: ย่อเป็น 1672×941 เท่าของเดิม
+
+---
+
+## 5. ปีกข้างเดียว เจนใหม่ (2026-11-21) → `wings_<ชื่อ>_one.png`
+
+ภาพชุดเดิมแถว 2–4 (มุมเฉียง/ข้าง) วาดโคนปีกไว้ด้านขวา เกมต้องการโคนปีกที่ **ขอบซ้ายของทุกช่อง** ปีกเลยกลับด้าน/ไขว้ ชุดนี้เจนใหม่ให้โคนอยู่ซ้ายทุกช่อง
+
+**วิธีทำ:** เปิดแชทใหม่ต่อ 1 ปีก แนบภาพปีกคู่กระดาษของปีกนั้น `public/assets/sprites/paper/cosmetics/wings_<ชื่อ>.png` เป็นต้นแบบ แล้ววาง prompt กลาง + บรรทัดของปีกนั้น
+เซฟเป็น `art_templates/papercraft_cosmetics/raw/wings_<ชื่อ>_one.png`
+
+### prompt กลาง
+
+```
+Using the attached picture only as the reference for the wing's look and colours, make a NEW sprite sheet of ONE single wing in papercraft style (layered cut paper with soft paper shadows, same style as the attached), 5 rows x 3 columns on a 3:5 tall canvas, every cell the same size, the wing centred vertically in its cell.
+EVERY cell: only ONE wing. Its ROOT (where it joins the back, a small rounded joint) touches the LEFT edge of the cell at half the cell's height, and the wing spreads out to the RIGHT from there. Never put the root on the right side.
+Rows (the same wing seen from 5 angles, the body would be on the left, outside the picture):
+1. seen from behind/front, flat and fully open, spreading right and slightly up;
+2. turned a little away from the viewer: same wing a bit narrower;
+3. seen from the side: the wing swept BACK and slightly UP from the root, feathers trailing to the right;
+4. turned a little more away: narrower again, still swept to the right;
+5. same as row 1.
+Columns = 3 flap frames: 1 rest, 2 raised higher, 3 lowered. Same size and same root point in all three.
+No body, no second wing, no text, no shadow on the background.
+```
+
+### บรรทัดของแต่ละปีก (ต่อท้าย prompt กลาง)
+
+| ไฟล์ | บรรทัดที่ต่อท้าย |
+|---|---|
+| `wings_angel_one.png` | `White feathered angel wing of layered white and cream paper feathers with a soft gold edge. Background ONE perfectly flat solid magenta (#FF00FF); do not use pink, magenta or purple on the wing.` |
+| `wings_bat_one.png` | `Dark purple leathery bat wing with crimson membrane and small claws at the joints. Background ONE perfectly flat solid pure bright green (#00FF00); do not use bright green on the wing.` |
+| `wings_phoenix_one.png` | `Phoenix wing of layered orange and golden paper flame feathers with bright tips. Background ONE perfectly flat solid magenta (#FF00FF); do not use pink, magenta or purple on the wing.` |
+| `wings_butterfly_one.png` | `Emerald-green butterfly wing of thin layered tissue paper with pale mint patterns. Background ONE perfectly flat solid magenta (#FF00FF); do not use pink, magenta or purple on the wing.` |
+| `wings_mech_one.png` | `Mechanical wing of dark steel-grey card plates with glowing cyan paper lines. Background ONE perfectly flat solid magenta (#FF00FF); do not use pink, magenta or purple on the wing.` |
+
+**สำหรับผม:** ตัดด้วย `tools/cut_cosmetics.cjs` (ตาราง 5×3, โคนที่ขอบซ้ายกลางช่อง) ลง `public/assets/sprites/paper/cosmetics/`
