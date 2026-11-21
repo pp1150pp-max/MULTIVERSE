@@ -10,14 +10,17 @@ export const HARBOR_ID = 'harbor_town';
 export type Deck = [number, number][];
 
 /** Half the size of the square main platform the plaza and the shops stand on. */
-export const HARBOR_MAIN = 16;
+export const HARBOR_MAIN = 17;
 /** The round plaza in the middle of the main platform, around the ship's-wheel fountain. */
-export const HARBOR_PLAZA_RADIUS = 8.5;
-/** How far out each pier's portal stands on each axis (the four corners, like nexus_city's). */
-export const HARBOR_PIER = 46;
+export const HARBOR_PLAZA_RADIUS = 8;
+/**
+ * How far out each pier's portal stands on each axis (the four corners, like nexus_city's). Owner 2026-11-20: the
+ * town about half its first size, the portals not out at the very edge of the map.
+ */
+export const HARBOR_PIER = 23;
 /** Half the width of a pier, and half the size of its end platform. */
 const PIER_HALF = 3;
-const PIER_END = 4.5;
+const PIER_END = 3.5;
 
 const square = (cx: number, cz: number, h: number): Deck => [[cx - h, cz - h], [cx + h, cz - h], [cx + h, cz + h], [cx - h, cz + h]];
 
@@ -33,10 +36,10 @@ function strip(ax: number, az: number, bx: number, bz: number, half: number): De
 export const HARBOR_CORNERS: [number, number][] = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
 
 /** The side platforms: [centre x, centre z, half size]. The lighthouse's is up-right on screen (−z). */
-export const HARBOR_LIGHTHOUSE: [number, number, number] = [0, -32, 8];
-export const HARBOR_SHIPYARD: [number, number, number] = [32, 0, 8];
-export const HARBOR_GARDEN: [number, number, number] = [-30, 0, 6];
-export const HARBOR_BOATS: [number, number, number] = [0, 30, 6];
+export const HARBOR_LIGHTHOUSE: [number, number, number] = [0, -22, 5];
+export const HARBOR_SHIPYARD: [number, number, number] = [22, 0, 5];
+export const HARBOR_GARDEN: [number, number, number] = [-21, 0, 4];
+export const HARBOR_BOATS: [number, number, number] = [0, 21, 4];
 
 /** Every platform, pier and bridge. Edges that lie inside another one are open (Terrain.placeHarbor). */
 export const HARBOR_DECKS: Deck[] = [
@@ -72,4 +75,4 @@ export function insideDeck(d: Deck, x: number, z: number, margin = 0): boolean {
 }
 
 /** Where the way back to floor 1 stands: on the lighthouse platform, beside the lighthouse. */
-export const HARBOR_RETURN = { x: HARBOR_LIGHTHOUSE[0] + 4, z: HARBOR_LIGHTHOUSE[1] - 3 };
+export const HARBOR_RETURN = { x: HARBOR_LIGHTHOUSE[0] + 2.8, z: HARBOR_LIGHTHOUSE[1] - 2 };
