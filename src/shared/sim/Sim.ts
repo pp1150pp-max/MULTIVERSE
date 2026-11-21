@@ -41,6 +41,7 @@ import { putAll, type MailAttach } from '../mail';
 import { RARITY_COLOR } from '../types';
 import { passiveOnCrit, passiveDealMult, passiveTakenMult } from '../passives';
 import type { MapData } from '../mapSchema';
+import { waveCount, waveStats, type WaveConfig } from '../waveGame';
 import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type SfxName, type SimEvent } from './types';
 
 /** Gear of this rarity that "sell all" may take: never potions or enhanced items. */
@@ -157,13 +158,24 @@ export class Sim {
   cleared = false;
   /** A boss room with a countdown: sim time its boss appears (null once it has, or with no countdown). */
   bossAt: number | null = null;
+  /**
+   * Minigame "รอดมอนเป็นระลอก" (opts.waves, src/shared/waveGame.ts): the run's numbers (fixed when it opened), the wave on now
+   * (0 = counting down), when the next one comes (sim time, null while one is being fought), the ids of its monsters still
+   * counted, and whether the last wave fell. Null on every other Sim.
+   */
+  readonly waveRun: { cfg: WaveConfig; wave: number; nextAt: number | null; ids: Set<number>; won: boolean } | null = null;
+  /** Where getting up / leaving takes a player from this Sim (a wave run: back out by the door they came through). */
+  private readonly exitTo: { field: string; x: number; z: number } | undefined;
 
   /** `bossDelay`: seconds before the boss appears (a boss room's countdown, owner 2026-11-12). */
-  constructor(readonly zone: ZoneDef, opts: { keys?: number; bossDelay?: number; map?: MapData } = {}) {
+  constructor(readonly zone: ZoneDef, opts: { keys?: number; bossDelay?: number; map?: MapData; waves?: WaveConfig; exit?: { field: string; x: number; z: number } } = {}) {
     this.keys = Math.max(1, Math.floor(opts.keys ?? 1));
     this.boost = this.keys > 1 ? { ...(zone.monsterBoost ?? NO_BOOST), keys: this.keys } : zone.monsterBoost;
     this.terrain = opts.map ? new Terrain(zone, opts.map) : new Terrain(zone);
-    zone.spawns.forEach((area, index) => this.spawners.push({ area, alive: 0, queue: [], boss: false, index }));
+    this.exitTo = opts.exit;
+    // A wave run brings its own monsters, in waves: the map's ordinary spawn rings stay empty.
+    if (opts.waves && zone.waves) this.waveRun = { cfg: { ...opts.waves }, wave: 0, nextAt: opts.waves.countdown, ids: new Set(), won: false };
+    else zone.spawns.forEach((area, index) => this.spawners.push({ area, alive: 0, queue: [], boss: false, index }));
     if (zone.boss) this.spawners.push({ area: zone.boss, alive: 0, queue: [], boss: true, index: -1 });
     const delay = zone.boss ? opts.bossDelay ?? 0 : 0;
     if (delay > 0) this.bossAt = delay;
@@ -636,7 +648,8 @@ export class Sim {
     m.spells?.reset(this);
     if (!m.summoned) {
       this.shareExp(m);
-      this.dropLoot(m);
+      // Wave monsters give EXP but no loot (owner 2026-11-21: not a farm).
+      if (!this.waveRun?.ids.has(m.id)) this.dropLoot(m);
       if (!m.isBoss) {
         this.questProgress(m);
         this.gearProgress(m);
@@ -906,9 +919,9 @@ export class Sim {
     p.moveTarget = null;
     for (const m of this.monsters) if (m.target === p) m.dropTarget();
     this.events.push({ t: 'revived', id: p.id });
-    // In a boss room, getting up means coming out by the summoner of its map (owner 2026-11-12).
-    const lair = lairExitSpot(this.zone);
-    this.log(`ฟื้นคืนชีพที่${lair ? 'แท่นเรียกบอส' : 'เมือง'} (เสีย EXP ${penalty})`, '#ff9a6a', p.id);
+    // In a boss room, getting up means coming out by the summoner of its map (owner 2026-11-12); in a wave run, by its door.
+    const lair = this.exitTo ?? lairExitSpot(this.zone);
+    this.log(`ฟื้นคืนชีพที่${this.exitTo ? 'หน้าประตู' : lair ? 'แท่นเรียกบอส' : 'เมือง'} (เสีย EXP ${penalty})`, '#ff9a6a', p.id);
     this.events.push({ t: 'save', to: p.id });
     // Out in a zone, the town is in the hub. Queued after `revived`, so the browser gets both in order.
     if (lair) this.events.push({ t: 'travel', to: p.id, zone: lair.field, spot: { x: lair.x, z: lair.z } });
@@ -1454,13 +1467,13 @@ export class Sim {
 
   /** How many more times this player may get up here: 3 per key put in, less those used (0 outside rooms). */
   revivesLeft(p: Player): number {
-    if (!this.zone.roomOf) return 0;
+    if (!this.zone.roomOf && !this.waveRun) return 0;
     return Math.max(0, REVIVES_PER_KEY * this.keys - (this.revivesUsed.get(p.name) ?? 0));
   }
 
   /** Gets up where they fell with half HP and MP, for one phoenix feather (owner). */
   reviveHere(p: Player): boolean {
-    if (p.alive || !this.zone.roomOf || this.revivesLeft(p) <= 0) return false;
+    if (p.alive || (!this.zone.roomOf && !this.waveRun) || this.revivesLeft(p) <= 0) return false;
     if (!p.takeStones('phoenix', 1)) {
       this.log(`ไม่มี${STONE_NAME.phoenix} — ซื้อได้ที่พ่อค้าในเมือง`, '#ff8a6a', p.id);
       return false;
@@ -1818,6 +1831,85 @@ export class Sim {
         if (sp.boss && this.bossAt !== null) this.bossArrives(sp.area);
       }
     }
+    if (this.waveRun) this.tickWaves();
+  }
+
+  // ------------------------------------------------------------ minigame "รอดมอนเป็นระลอก"
+
+  /** Monsters of the wave on now still standing. */
+  waveLeft(): number {
+    const w = this.waveRun;
+    if (!w) return 0;
+    let n = 0;
+    for (const m of this.monsters) if (m.alive && w.ids.has(m.id)) n++;
+    return n;
+  }
+
+  private tickWaves(): void {
+    const w = this.waveRun!;
+    if (w.won || !this.players.length) return;
+    if (w.nextAt !== null) {
+      if (this.time >= w.nextAt) {
+        w.nextAt = null;
+        this.startWave(w.wave + 1);
+      }
+      return;
+    }
+    if (w.wave === 0 || this.waveLeft() > 0) return;
+    // The wave fell: gold for it to everyone in the room (alive or not), then a rest or the win.
+    w.ids.clear();
+    const gold = w.cfg.goldPerWave * w.wave;
+    for (const p of this.players) {
+      if (gold > 0) p.gold += gold;
+      this.events.push({ t: 'save', to: p.id });
+    }
+    this.log(`✔ ผ่านระลอก ${w.wave}/${w.cfg.waves}${gold > 0 ? ` · ได้ ${gold.toLocaleString()} G` : ''}`, '#ffcf5a');
+    if (w.wave < w.cfg.waves) {
+      w.nextAt = this.time + w.cfg.rest;
+      return;
+    }
+    w.won = true;
+    this.cleared = true;
+    for (const p of this.players) {
+      if (w.cfg.bonusGold > 0) p.gold += w.cfg.bonusGold;
+      if (w.cfg.bonusExp > 0) this.addExp(p, w.cfg.bonusExp);
+      this.events.push({ t: 'save', to: p.id });
+    }
+    this.log(`🏆 รอดครบ ${w.cfg.waves} ระลอก! โบนัส ${w.cfg.bonusGold.toLocaleString()} G + ${w.cfg.bonusExp.toLocaleString()} EXP`, '#ffcf5a');
+    const s = this.zone.start;
+    this.events.push({ t: 'banner', text: 'รอดครบทุกระลอก!', sub: this.zone.nameTh, x: s.x, z: s.z });
+  }
+
+  /** Wave `n` comes out of the map's wave spots (none drawn: around the start), each monster of a random picked kind. */
+  private startWave(n: number): void {
+    const w = this.waveRun!;
+    const z = this.zone.waves!;
+    w.wave = n;
+    const kinds = z.monsters.filter((id) => MONSTERS[id] && MONSTERS[id].behavior !== 'boss');
+    if (!kinds.length) kinds.push('green_slime');
+    const spots = z.spots.length ? z.spots : [{ x: this.zone.start.x, z: this.zone.start.z, radius: 8 }];
+    // Every wave monster goes for any player on the map, stronger each wave.
+    const boost: MonsterBoost = { stats: waveStats(w.cfg, n), speed: 1, aggro: 60 };
+    const count = waveCount(w.cfg, n);
+    const r = Math.random;
+    for (let i = 0; i < count; i++) {
+      const spot = spots[i % spots.length];
+      const def = MONSTERS[pick(r, kinds)];
+      const area: SpawnArea = { monster: def.id, x: spot.x, z: spot.z, radius: Math.max(0.5, spot.radius), count: 1, respawn: [3600, 3600] };
+      let x = spot.x, zz = spot.z;
+      for (let t = 0; t < 12; t++) {
+        const a = r() * Math.PI * 2, d = Math.sqrt(r()) * area.radius;
+        x = spot.x + Math.cos(a) * d;
+        zz = spot.z + Math.sin(a) * d;
+        if (!this.terrain.isBlocked(x, zz, def.radius)) break;
+      }
+      const m = new Monster(this.newId(), def, randInt(r, def.levels[0], def.levels[1]), area, x, zz, boost);
+      this.monsters.push(m);
+      w.ids.add(m.id);
+      this.fx('burst', x, 1, zz, '#ff9a3a', 10, 2);
+    }
+    const s = spots[0];
+    this.events.push({ t: 'banner', text: `ระลอก ${n}/${w.cfg.waves}`, sub: `มอน ${count} ตัว`, x: s.x, z: s.z });
   }
 
   /** The countdown ran out: the boss rises in the middle of the arena. */
@@ -1836,6 +1928,12 @@ export class Sim {
    * dead, from anywhere in the room. Comes out by the map's summoner. Returns why not, or null when on the way.
    */
   leaveRoom(p: Player): string | null {
+    if (this.waveRun && this.exitTo) {
+      // A wave run may be left at any time (its button), alive.
+      if (!p.alive) return 'ตายอยู่';
+      this.events.push({ t: 'travel', to: p.id, zone: this.exitTo.field, spot: { x: this.exitTo.x, z: this.exitTo.z } });
+      return null;
+    }
     const spot = lairExitSpot(this.zone);
     if (!this.zone.roomOf || !spot) return 'ไม่ได้อยู่ในห้องบอส';
     if (!p.alive) return 'ตายอยู่';

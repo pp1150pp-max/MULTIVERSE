@@ -94,6 +94,8 @@ export interface ZoneDef {
   monsterBoost?: MonsterBoost;
   /** Made in the map editor with "＋ แมพใหม่" (src/shared/customZones.ts), not in this file. */
   custom?: boolean;
+  /** Minigame "รอดมอนเป็นระลอก" (src/shared/waveGame.ts): entering gives the group its own run; these are what the waves use. */
+  waves?: { monsters: string[]; spots: { x: number; z: number; radius: number }[] };
 }
 
 /** A map's boss summoner: put keys in it to open the boss's room. */

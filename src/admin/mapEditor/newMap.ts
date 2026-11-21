@@ -1,7 +1,8 @@
 // "＋ แมพใหม่" (tool mapCreate) and the settings card of a map made with it (owner 2026-11-21): copy a map, start from an empty floor,
 // or import a JSON file; then name, floor, recommended levels, safe zone, channels, Auto Play. The server checks everything again
 // (server/admin-maps.ts). A new map is a draft until it is published; players reach it through a door placed in another map.
-import { EMPTY_HALF, NAME_MAX, type CustomZoneDef } from '../../shared/customZones';
+import { EMPTY_HALF, NAME_MAX, WAVE_MONSTER_IDS, WAVE_MONSTERS_MAX, type CustomZoneDef } from '../../shared/customZones';
+import { MONSTERS } from '../../shared/data/monsters';
 import type { Api, H } from './mount';
 
 export interface CustomInfo { def: CustomZoneDef | null; status: 'live' | 'hidden' }
@@ -19,6 +20,18 @@ function defFields(h: H, d: Partial<CustomZoneDef>): { el: HTMLElement; read(): 
   const safe = h('input', { type: 'checkbox', checked: d.safe ?? false });
   const channels = h('input', { type: 'checkbox', checked: d.channels ?? false });
   const autoPlay = h('input', { type: 'checkbox', checked: d.autoPlay ?? true });
+  // Minigame: none, or "รอดมอนเป็นระลอก" with the monsters its waves use (owner 2026-11-21).
+  const minigame = h('select', {}, h('option', { value: '' }, 'ไม่มี (แมพธรรมดา)'), h('option', { value: 'waves', selected: d.minigame === 'waves' }, 'รอดมอนเป็นระลอก'));
+  const picked = new Set(d.waveMonsters ?? []);
+  const monBox = h('div', { class: 'me-wave-mons' }, ...WAVE_MONSTER_IDS()
+    .sort((a, b) => MONSTERS[a].levels[0] - MONSTERS[b].levels[0])
+    .map((id) => h('label', { title: id }, h('input', { type: 'checkbox', value: id, checked: picked.has(id) }), ` ${MONSTERS[id].nameTh} (Lv.${MONSTERS[id].levels[0]})`)));
+  const waveRow = h('div', {},
+    h('div', { class: 'muted me-hint' }, `มอนที่ใช้ในระลอก (สุ่มจากที่ติ๊ก ไม่เกิน ${WAVE_MONSTERS_MAX} ชนิด · ไม่ติ๊กเลย = สไลม์เขียว) · วางจุดที่มอนโผล่ด้วยเครื่องมือ 🌀 จุดเกิดระลอก · จำนวนระลอก/มอน/รางวัล ตั้งที่การ์ด "มินิเกม: รอดมอนเป็นระลอก" ใต้ตัวแก้ (ทั้งเซิร์ฟ)`),
+    monBox);
+  const showWave = (): void => { waveRow.style.display = minigame.value === 'waves' ? '' : 'none'; };
+  minigame.addEventListener('change', showWave);
+  showWave();
   return {
     el: h('div', { class: 'me-newmap-fields' },
       h('label', {}, 'ชื่อแมพ (ไทย) ', nameTh),
@@ -30,10 +43,16 @@ function defFields(h: H, d: Partial<CustomZoneDef>): { el: HTMLElement; read(): 
         h('label', { title: 'ทั้งแมพ (หรือในกำแพงเมืองถ้าคัดลอกเมืองกลาง) ตีกันไม่ได้ มอนเข้าไม่ได้ · ระวัง: ถ้าทั้งแมพปลอดภัย จุดเกิดมอนในแมพจะไม่มีมอนให้ตี (มอนถูกดันออก)' }, safe, ' เขตปลอดภัย'),
         h('label', { title: 'แบ่งเป็น CH 1–10 แบบแมพฟาร์ม · ไม่ติ๊ก = ทุกคนอยู่ห้องเดียวกัน' }, channels, ' แชนแนล'),
         h('label', {}, autoPlay, ' ใช้ Auto Play ได้')),
+      h('label', { title: 'มินิเกม: เข้าแมพนี้ทางประตู = ได้ห้องของกลุ่มตัวเอง (ไม่มี Auto ไม่มีแชนแนล)' }, 'มินิเกม ', minigame),
+      waveRow,
     ),
     read: () => ({
       nameTh: nameTh.value.trim(), name: name.value.trim(), floor: int(floor.value, 1),
       levels: [int(lo.value, 1), int(hi.value, 10)], safe: safe.checked, channels: channels.checked, autoPlay: autoPlay.checked,
+      ...(minigame.value === 'waves' ? {
+        minigame: 'waves' as const,
+        waveMonsters: [...monBox.querySelectorAll<HTMLInputElement>('input:checked')].map((i) => i.value).slice(0, WAVE_MONSTERS_MAX),
+      } : {}),
     }),
   };
 }

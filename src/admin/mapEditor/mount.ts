@@ -19,6 +19,7 @@ import { compareOverlay } from './compare';
 import { brushTool, type BrushTool } from './brushTool';
 import { customSettings, newMapForm, type CustomInfo } from './newMap';
 import { setDoorTargets } from './pointTools';
+import { waveSpotLayer, waveSpotTool } from './waveTool';
 
 type Kids = (Node | string | null | undefined | false)[];
 export type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, unknown>, ...kids: Kids) => HTMLElementTagNameMap[K];
@@ -316,6 +317,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
       case 'rest': { const r = m.rest[Number(i.id)]; if (r) { tool = 'pins'; key = `rest:${i.id}`; at = [r.x, r.z]; } break; }
       case 'lair': if (m.lair) { tool = 'pins'; key = 'lair:lair'; at = [m.lair.x, m.lair.z]; } break;
       case 'spawn': { const s = m.spawns[Number(i.id)]; if (s) { tool = 'spawns'; key = `spawn:${i.id}`; at = [s.x, s.z]; } break; }
+      case 'wave': { const w = m.waveSpots?.[Number(i.id)]; if (w) { tool = 'wavespot'; key = `wave:${i.id}`; at = [w.x, w.z]; } break; }
       default: return;
     }
     if (!tool || !at) return;
@@ -375,12 +377,13 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
     e.layerState.decor = { visible: false, locked: false }; // a sample, off until asked for
     for (const l of CORE_LAYERS) e.addLayer(l);
     e.addLayer(overlay.layer);
+    e.addLayer(waveSpotLayer);
     const place = placeTool();
     e.addTool(selectTool());
     e.addTool(place);
     scatterBrush = brushTool(() => { renderInspector(true); renderPalette(); });
     e.addTool(scatterBrush);
-    for (const t of [pinTool(), spawnTool(), blockerTool(), pathTool(), lakeTool(), playerStartTool()]) e.addTool(t);
+    for (const t of [pinTool(), spawnTool(), blockerTool(), pathTool(), lakeTool(), waveSpotTool(), playerStartTool()]) e.addTool(t);
     allTools = [...e.tools];
     placeBrush = place;
     e.onChange = () => { scheduleSave(); renderInspector(false); };
@@ -401,7 +404,9 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
   function applyToolSet(map: MapData): void {
     if (!ed) return;
     const room = !!map.room;
-    ed.tools.splice(0, ed.tools.length, ...allTools.filter((t) => (room ? ROOM_TOOLS.has(t.id) : t.id !== 'startpin')));
+    // Wave spots (minigame) only on maps made with "＋ แมพใหม่".
+    const custom = !!rows.find((r) => r.id === map.id)?.custom;
+    ed.tools.splice(0, ed.tools.length, ...allTools.filter((t) => (room ? ROOM_TOOLS.has(t.id) : t.id !== 'startpin' && (t.id !== 'wavespot' || custom))));
     if (!ed.tools.includes(ed.tool)) {
       ed.tool.deactivate?.(ed);
       ed.tool = ed.tools[0];

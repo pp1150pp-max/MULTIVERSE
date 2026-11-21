@@ -1,6 +1,7 @@
 // WebSocket messages between the browser and the game server (JSON). The server runs the
 // simulation; clients send their input and get snapshots of what is near them plus SimEvents.
 import type { SkillSlot, WearSlot } from '../data/classes';
+import type { WaveSnap } from '../waveGame';
 import type { SkillBook } from '../skillBook';
 import type { BagEntry, BuffScroll, ClassId, EquipSlot, Item, PotionKind, PotionSize, Rarity, Stats, Vec2 } from '../types';
 import type { LootKind } from '../sim/Loot';
@@ -356,6 +357,8 @@ export interface SnapshotMsg {
   hazards?: Hazard[];
   /** The boss room you are in (left out elsewhere). */
   room?: RoomSnap;
+  /** In a "รอดมอนเป็นระลอก" run (src/shared/waveGame.ts). */
+  waves?: WaveSnap;
   /** Your party, every member wherever they are (left out when you are in none). */
   party?: PartySnap;
   events: SimEvent[];

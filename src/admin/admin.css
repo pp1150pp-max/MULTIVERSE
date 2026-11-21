@@ -539,3 +539,4 @@ button.more:hover { color: var(--gold-hi); text-decoration: underline; }
 .me-newmap-fields { display: flex; flex-direction: column; gap: 6px; }
 .me-newmap-fields input[type="text"] { min-width: 240px; }
 .me-newmap-fields input[type="number"] { width: 64px; }
+.me-wave-mons { display: flex; flex-wrap: wrap; gap: 2px 12px; max-height: 160px; overflow: auto; font-size: 12px; }
