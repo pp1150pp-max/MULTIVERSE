@@ -16,6 +16,7 @@ import { checkMenuLayoutTuning, codeMenuLayout, mergeMenuLayout, menuLayoutChang
 import { attackRootChanges, checkAttackRootTuning, codeAttackRoot, mergeAttackRoot, type AttackRootConfig, type AttackRootTuning } from './attackRootTuning';
 import { checkRigLookTuning, codeRigLook, mergeRigLook, rigLookChanges, type RigLookConfig, type RigLookTuning } from './rigLookTuning';
 import { autoChanges, checkAutoTuning, codeAuto, mergeAuto, type AutoConfig, type AutoTuning } from './autoTuning';
+import { checkWaveTuning, codeWaves, mergeWaves, waveChanges, type WaveConfig, type WaveTuning } from './waveGame';
 import { checkTutorialTuning, codeTutorial, mergeTutorial, tutorialChanges, type TutorialConfig, type TutorialTuning } from './tutorial';
 import { checkForgeTuning, codeForge, forgeChanges, mergeForge, type ForgeConfig, type ForgeTuning } from './forgeTuning';
 import { checkSkillTuning, codeSkills, mergeSkills, skillChanges, type SkillConfig, type SkillTuning } from './skillTuning';
@@ -187,6 +188,8 @@ export interface Balance {
   reviveGuardSec: number;
   /** Auto Play defaults, distances and switches (autoTuning.ts). */
   auto: AutoConfig;
+  /** Minigame "รอดมอนเป็นระลอก" (waveGame.ts). */
+  waves: WaveConfig;
   /** The skill effects' extra layer: glow, ground light, particles, hit feel (fxLayerTuning.ts). */
   fxLayer: FxLayerConfig;
   /** Which papercraft sword / armour each item shows on the sword rig (rigLookTuning.ts). */
@@ -260,6 +263,8 @@ export interface BalanceTuning {
   reviveGuardSec?: number;
   /** Auto Play settings that differ from the code. */
   auto?: AutoTuning;
+  /** Wave minigame numbers that differ from the code. */
+  waves?: WaveTuning;
   /** Skill effect extra-layer numbers that differ from the code. */
   fxLayer?: FxLayerTuning;
   /** Sword rig item pictures that differ from the code. */
@@ -348,6 +353,7 @@ export function codeBalance(): Balance {
     reviveGuard: CODE_REVIVE_GUARD,
     reviveGuardSec: CODE_REVIVE_GUARD_SEC,
     auto: codeAuto(),
+    waves: codeWaves(),
     fxLayer: codeFxLayer(),
     rigLook: codeRigLook(),
     attackRoot: codeAttackRoot(),
@@ -403,6 +409,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   b.forge = mergeForge(t.forge);
   if (t.walkHidden !== undefined) b.walkHidden = t.walkHidden;
   b.auto = mergeAuto(t.auto);
+  b.waves = mergeWaves(t.waves);
   b.fxLayer = mergeFxLayer(t.fxLayer);
   b.rigLook = mergeRigLook(t.rigLook);
   b.attackRoot = mergeAttackRoot(t.attackRoot);
@@ -543,7 +550,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'forge', 'walkHidden', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'reviveGuard', 'reviveGuardSec', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'menuLayout'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'forge', 'walkHidden', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'menuLayout'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -979,6 +986,12 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (c.tuning) out.auto = c.tuning;
     return null;
   };
+  const waves = (): string | null => {
+    const c = checkWaveTuning(o.waves, strict);
+    if ('error' in c) return c.error;
+    if (c.tuning) out.waves = c.tuning;
+    return null;
+  };
   const tutorial = (): string | null => {
     const c = checkTutorialTuning(o.tutorial, strict);
     if ('error' in c) return c.error;
@@ -1052,6 +1065,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     reviveGuard() ??
     one('reviveGuardSec', BALANCE_RANGE.reviveGuardSec, 'อมตะหลังชุบด้วยขนนกฟีนิกซ์ (วินาที)') ??
     auto() ??
+    waves() ??
     tutorial() ??
     skills() ??
     fxLayer() ??
@@ -1168,6 +1182,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.mapFromDb !== b.mapFromDb) out.push(`ใช้แมพจาก DB ${a.mapFromDb ? 'เปิด' : 'ปิด'} → ${b.mapFromDb ? 'เปิด' : 'ปิด'}`);
   if (a.mobReturnIgnoreHits !== b.mobReturnIgnoreHits) out.push(`มอนเดินกลับบ้านไม่สนการโจมตี ${a.mobReturnIgnoreHits ? 'เปิด' : 'ปิด'} → ${b.mobReturnIgnoreHits ? 'เปิด' : 'ปิด'}`);
   out.push(...autoChanges(a.auto, b.auto));
+  out.push(...waveChanges(a.waves, b.waves));
   out.push(...tutorialChanges(a.tutorial, b.tutorial));
   out.push(...skillChanges(a.skills, b.skills));
   out.push(...fxLayerChanges(a.fxLayer, b.fxLayer));

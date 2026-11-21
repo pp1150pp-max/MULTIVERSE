@@ -201,7 +201,7 @@ export interface AdminDirectWs {
  * switch: the Permissions tab, the audit log, restarting / stopping the server, deleting accounts or
  * characters, and making someone owner (command line).
  */
-export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'crystalGrant' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'directWs' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'animPreview' | 'animTune' | 'menuLayout' | 'menuLayoutEdit' | 'mapEdit' | 'mapRollback' | 'mapExport';
+export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'crystalGrant' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'directWs' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'animPreview' | 'animTune' | 'menuLayout' | 'menuLayoutEdit' | 'mapEdit' | 'mapRollback' | 'mapExport' | 'mapCreate' | 'mapDelete';
 
 /**
  * The defaults: which built-in role may use each tool (owner always has all). The owner can change
@@ -294,6 +294,8 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   mapEdit: ['owner', 'gm'],
   mapRollback: ['owner'],
   mapExport: ['owner'],
+  mapCreate: ['owner', 'gm'],
+  mapDelete: ['owner', 'gm'],
 };
 
 export const ADMIN_FEATURES = Object.keys(FEATURE_ROLES) as AdminFeature[];
@@ -371,6 +373,8 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   mapEdit: { name: 'แก้แมพ', desc: 'ตัวแก้แมพ: ดูรายการแมพ/ร่าง/revision บันทึกร่าง และเผยแพร่แมพ (ห้องใหม่ใช้ทันที ห้องที่มีคนอยู่ใช้ตอนผู้เล่นเข้าแมพครั้งถัดไป) ลง audit ทุกครั้ง', group: 'ปรับเกม' },
   mapRollback: { name: 'ย้อนแมพกลับ revision เก่า', desc: 'ย้อนแมพไปใช้ revision ก่อนหน้า (ต้องมี "แก้แมพ" ด้วย) เผยแพร่เป็น revision ใหม่ทันที', group: 'ปรับเกม' },
   mapExport: { name: 'ส่งออกแมพเข้า repo', desc: 'ดึง JSON ของแมพที่เผยแพร่แล้วไปเป็นไฟล์ค่าตั้งต้นใน repo (ต้องมี "แก้แมพ" ด้วย)', group: 'ปรับเกม' },
+  mapCreate: { name: 'สร้างแมพใหม่', desc: 'ปุ่ม "＋ แมพใหม่" (คัดลอกแมพเดิม / พื้นเปล่า / นำเข้าไฟล์ JSON) แก้ชื่อ ชั้น เลเวล เขตปลอดภัย แชนแนล ของแมพที่สร้างเอง และซ่อน/แสดงแมพนั้น (ต้องมี "แก้แมพ" ด้วย) ลง audit', group: 'ปรับเกม' },
+  mapDelete: { name: 'ลบแมพที่สร้างเอง', desc: 'ลบแมพที่สร้างด้วย "＋ แมพใหม่" ถาวร พร้อมร่างและประวัติทั้งหมด (แมพที่มากับเกมลบไม่ได้, ลบไม่ได้ถ้ายังมีประตูจากแมพอื่นชี้มา) ผู้เล่นที่อยู่ในแมพนั้นย้ายไปเมืองกลาง (ต้องมี "แก้แมพ" ด้วย) ลง audit', group: 'ปรับเกม' },
   cardTune: { name: 'แก้ค่าการ์ดทั้งเซิร์ฟ', desc: 'แก้และบันทึกค่าการ์ดที่ใช้ทั้งเซิร์ฟ (ต้องมี "ดูค่าการ์ด" ด้วย)', group: 'ปรับเกม' },
 };
 

@@ -10,6 +10,7 @@ import type { Intent, SimEvent } from '../shared/sim/types';
 import type { ZoneDef } from '../shared/data/zones';
 import type { Hazard } from '../shared/sim/volcanoHeart';
 import type { NpcId } from '../shared/data/npcs';
+import type { WaveSnap } from '../shared/waveGame';
 import type { EnhanceResult } from '../shared/data/enhance';
 import type { TutStep } from '../shared/tutorial';
 import type { RerollKind } from '../shared/data/reroll';
@@ -52,6 +53,8 @@ export interface Backend {
   readonly hazards: readonly Hazard[];
   /** The boss room you are in (null elsewhere); `leaveIn` counts down locally once the boss is dead. */
   readonly room: RoomSnap | null;
+  /** The "รอดมอนเป็นระลอก" run you are in (null elsewhere); its seconds count down locally between snapshots. */
+  readonly waves: WaveSnap | null;
   /** Simulation clock (seconds). */
   readonly time: number;
   /** Players in your map and channel right now, you included. */

@@ -17,6 +17,8 @@ export interface EditorOptions {
   edges: boolean;
   showSolid: boolean;
   showGrid: boolean;
+  /** Draw the ground with the game's tiles (groundArt.ts); off = plain colours. */
+  realGround: boolean;
 }
 export interface EdPointer { px: number; py: number; x: number; z: number; shift: boolean; alt: boolean; ctrl: boolean; button: number }
 
@@ -57,7 +59,7 @@ export class Editor {
   readonly history: History;
   selection = new Set<string>();
   view: View = { cx: 0, cz: 0, scale: 10 };
-  opts: EditorOptions = { snap: true, grid: 1, edges: true, showSolid: true, showGrid: true };
+  opts: EditorOptions = { snap: true, grid: 1, edges: true, showSolid: true, showGrid: true, realGround: true };
   readonly tools: Tool[] = [];
   readonly layers: Layer[] = [];
   layerState: Record<string, { visible: boolean; locked: boolean }> = {};

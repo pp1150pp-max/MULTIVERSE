@@ -3,23 +3,18 @@ import { clearingRadius, lairOf, themeAt, zoneById } from '../shared/data/zones'
 import { HUB_PLAZA_RADIUS, QUADRANT_JITTER } from '../shared/sim/terrain';
 import type { PropSpec, Terrain } from '../shared/sim/terrain';
 import type { ZoneTheme } from '../shared/data/zones';
+import { CAMP_RADIUS, DECOR, DECOR_CELL_UNITS, THEME_TILES, TILE_UNITS, TRAIL_WIDTH, type DecorSpot } from '../shared/groundLook';
 import { mulberry32, pick, rand, type Rng } from '../shared/rng';
 import { assetSources, fxTex, groundTiles, sheets, type GroundTile } from './assets';
 import { CAM_RIGHT_RAW, ISO_RAW, TOWN2_PROP_RE } from '../shared/isoProjection';
 import { closeBias, IslandOutline, paintSpace, PieceBatch } from './island';
 
-/** World units covered by one repeat of a ground tile: about the same pixel size as the sprites. */
-const TILE_UNITS = 10.4;
 /** Size of the picture the maps are cut from, and of the ground rendered for it. */
 const MAP_SIZE = 1400;
 const MAP_GROUND_SIZE = 1024;
 /** Trees and buildings are drawn smaller than life on the map; anything shorter is left out as clutter. */
 const MAP_PROP_SCALE = 0.7;
 const MAP_MIN_PROP = 2;
-/** Bare ground around the camp at a zone's start. */
-const CAMP_RADIUS = 7;
-/** How wide each theme's roads are worn into the grass. */
-const TRAIL_WIDTH: Record<ZoneTheme, number> = { forest: 4.2, marsh: 3.6, snow: 3.8, volcano: 3.8 };
 /** Pictures of the broken land around each theme's island. */
 const ISLAND_ART: Record<ZoneTheme, { cliff: string; slabs: string }> = {
   forest: { cliff: 'island_cliff_forest', slabs: 'island_slabs_forest' },
@@ -53,74 +48,13 @@ const CLIFF_LAYERS = [
   { width: [7.5, 10], inset: 2.2, y: -0.05, step: [1.6, 2.4] },
 ];
 
-/** Where a small ground detail belongs. */
-type DecorSpot = 'verge' | 'field' | 'road' | 'shore' | 'water';
 
-/**
- * Small details with no collision, one atlas per theme (a grid read left to right, top to bottom).
- * Each spot lists the cells that grow there, repeated to make some more common.
- */
-const DECOR: Record<ZoneTheme, { key: string; cols: number; rows: number; spots: Record<DecorSpot, number[]>; flat?: number[] }> = {
-  forest: {
-    key: 'decor_forest',
-    cols: 4,
-    rows: 3,
-    spots: {
-      verge: [0, 0, 0, 1, 1, 6, 7],
-      field: [0, 0, 1, 2, 2, 3, 4, 5, 6, 9, 10, 11],
-      road: [8, 8, 10],
-      shore: [],
-      water: [],
-    },
-  },
-  marsh: {
-    key: 'decor_marsh',
-    cols: 4,
-    rows: 3,
-    spots: {
-      verge: [0, 0, 0, 1, 10, 11],
-      field: [0, 0, 1, 2, 3, 4, 5, 9, 10, 11],
-      road: [8, 8, 11],
-      shore: [1, 1, 10, 10, 2, 9],
-      water: [6, 6, 7],
-    },
-    flat: [8],
-  },
-  snow: {
-    key: 'decor_snow',
-    cols: 4,
-    rows: 3,
-    spots: {
-      verge: [0, 0, 0, 1, 10, 11],
-      field: [0, 0, 1, 2, 3, 4, 5, 9, 10, 11],
-      road: [8, 8, 11],
-      shore: [1, 1, 10, 10, 2, 9],
-      water: [6, 6, 7],
-    },
-    flat: [6, 7, 8],
-  },
-  volcano: {
-    key: 'decor_volcano',
-    cols: 4,
-    rows: 3,
-    spots: {
-      verge: [0, 0, 0, 1, 10, 11],
-      field: [0, 0, 1, 2, 3, 4, 5, 9, 10, 11],
-      road: [8, 8, 11],
-      shore: [6, 7, 2, 9],
-      water: [],
-    },
-    flat: [6, 7, 8],
-  },
-};
 /** Props at least this tall turn see-through when the player walks behind them. */
 const FADE_MIN_HEIGHT = 1.6;
 /** How much of a prop still shows while the player stands behind it. */
 const FADE_OPACITY = 0.3;
 /** About half a player's width on screen, in world units, for the see-through test. */
 const PLAYER_HALF_WIDTH = 0.35;
-/** World size of one decor atlas cell: 128 pixels at about the same density as the ground tiles. */
-const DECOR_CELL_UNITS = 1.33;
 /** Rotted boards laid over the wet stretches of a marsh trail: a row of separate pieces, seen from above. */
 /** The rebuilt hub town's paper pieces (Terrain.placeTown). */
 const TOWN2_PROP = TOWN2_PROP_RE;
@@ -318,7 +252,7 @@ interface GroundPalette {
 
 const PALETTES: Record<ZoneTheme, GroundPalette> = {
   forest: {
-    tiles: { base: 'grass', dirt: 'dirt' },
+    tiles: THEME_TILES.forest,
     background: '#16301a',
     mapEdge: '#a8c070',
     mapRoad: ['rgba(206, 170, 112, 0.6)', 'rgba(240, 214, 160, 0.55)'],
@@ -344,7 +278,7 @@ const PALETTES: Record<ZoneTheme, GroundPalette> = {
     portalGlow: '#6affd0',
   },
   marsh: {
-    tiles: { base: 'marsh', dirt: 'mud' },
+    tiles: THEME_TILES.marsh,
     background: '#121c19',
     mapEdge: '#8a9460',
     mapRoad: ['rgba(150, 122, 84, 0.65)', 'rgba(214, 186, 138, 0.5)'],
@@ -371,7 +305,7 @@ const PALETTES: Record<ZoneTheme, GroundPalette> = {
   },
   // A muted blue-grey rather than white, so characters and damage numbers stay readable.
   snow: {
-    tiles: { base: 'snow', dirt: 'snow_path', water: 'ice', pave: 'snow_path' },
+    tiles: THEME_TILES.snow,
     background: '#101824',
     mapEdge: '#a9c4d8',
     mapRoad: ['rgba(92, 112, 132, 0.65)', 'rgba(196, 214, 228, 0.5)'],
@@ -398,7 +332,7 @@ const PALETTES: Record<ZoneTheme, GroundPalette> = {
   },
   // Dark, but lifted well off black, so characters stay the brightest thing on screen.
   volcano: {
-    tiles: { base: 'ash_rock', dirt: 'ash_path', water: 'lava', pave: 'ash_path' },
+    tiles: THEME_TILES.volcano,
     background: '#140d0e',
     mapEdge: '#c0764a',
     mapRoad: ['rgba(70, 58, 54, 0.7)', 'rgba(190, 160, 140, 0.5)'],

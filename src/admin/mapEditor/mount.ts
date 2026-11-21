@@ -15,12 +15,22 @@ import { blockerTool, lakeTool, pathTool } from './shapeTools';
 import { pick } from './history';
 import { mountRevisions, type RevisionPerms } from './revisions';
 import { transformProps, normDeg, centroid } from './geom';
+import { compareOverlay } from './compare';
+import { brushTool, type BrushTool } from './brushTool';
+import { customSettings, newMapForm, type CustomInfo } from './newMap';
+import { setDoorTargets } from './pointTools';
+import { waveSpotLayer, waveSpotTool } from './waveTool';
 
 type Kids = (Node | string | null | undefined | false)[];
 export type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, unknown>, ...kids: Kids) => HTMLElementTagNameMap[K];
 export type Api = <T>(method: string, path: string, body?: unknown) => Promise<T>;
 
-interface MapRow { id: string; /** The field a boss room belongs to (null for a map). */ of: string | null; bundledRev: number; publishedRev: number | null; publishedAt: number | null; draft: { baseRev: number; author: string; updatedAt: number } | null }
+interface MapRow {
+  id: string; /** The field a boss room belongs to (null for a map). */ of: string | null; bundledRev: number; publishedRev: number | null; publishedAt: number | null;
+  draft: { baseRev: number; author: string; updatedAt: number } | null;
+  /** Made with "＋ แมพใหม่": its settings and whether it is hidden. */
+  custom?: CustomInfo;
+}
 interface DraftReply { map?: MapData; source: 'draft' | 'published' | 'bundled'; baseRev: number; publishedRev: number | null; issues: MapIssue[] }
 interface SaveReply { ok: boolean; issues: MapIssue[]; diff: MapDiff }
 
@@ -31,7 +41,7 @@ const MAP_NAMES: Record<string, string> = {
   frost_reach_room: 'ห้องบอส · ถ้ำเยติ', ashen_isle_room: 'ห้องบอส · แกนกลางภูเขาไฟ',
 };
 /** In a boss room these tools make no sense (no doors, monster spawns, NPCs, paths or lakes there): only pieces, borders and the spawn pin stay. */
-const ROOM_TOOLS = new Set(['select', 'place', 'blocker', 'startpin']);
+const ROOM_TOOLS = new Set(['select', 'place', 'scatter', 'blocker', 'startpin']);
 const SAVE_DELAY_MS = 1000;
 /** The sprite keys a map may use (same list as the server's check). */
 const PROP_KEYS = CATALOG.props.filter((p) => p.inSheetSpecs).map((p) => p.key);
@@ -63,6 +73,9 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
   let issues: MapIssue[] = [];
   let diff: MapDiff | null = null;
   let disposed = false;
+  /** A map's name for the list and the boxes (an editor-made map: its own Thai name). */
+  const nameOf = (id: string): string => MAP_NAMES[id] ?? rows.find((r) => r.id === id)?.custom?.def?.nameTh ?? id;
+  const customIds = (): string[] => rows.filter((r) => r.custom).map((r) => r.id);
 
   // -------------------------------------------------------------- DOM
   const canvas = h('canvas', { class: 'me-canvas', tabindex: '0' });
@@ -76,6 +89,23 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
   const solidBtn = h('button', { title: 'โชว์/ซ่อนวง/กล่อง collision ของทุกชิ้น (ตรวจบ้านทับธง)', onclick: () => { if (!ed) return; ed.opts.showSolid = !ed.opts.showSolid; ed.requestDraw(); renderOptions(); refreshTop(); } }, '⭕ วง collision');
   const previewBtn = h('button', { title: 'เปิดเกมแท็บใหม่ เดินในร่างที่บันทึกไว้ (ห้องส่วนตัวของคุณ ไม่กระทบผู้เล่นจริง ไม่เซฟตัวละคร)', onclick: () => void tryWalk() }, '🎮 ทดลองเดิน');
   const fitBtn = h('button', { title: 'ดูทั้งแมพ', onclick: () => ed?.fit() }, '⛶ ทั้งแมพ');
+  const newBox = h('div', { class: 'me-newbox' });
+  const setBox = h('div', { class: 'me-setbox' });
+  const newBtn = h('button', { title: 'สร้างแมพใหม่: คัดลอกแมพเดิม / พื้นเปล่า / นำเข้าไฟล์ JSON', onclick: () => toggleNew() }, '＋ แมพใหม่');
+  function toggleNew(): void {
+    if (newBox.childElementCount) { newBox.replaceChildren(); return; }
+    const sources = rows.map((r): [string, string] => [r.id, `${r.of ? '   └ ' : r.custom ? '★ ' : ''}${nameOf(r.id)}`]);
+    newBox.replaceChildren(newMapForm(h, api, sources, (id) => { newBox.replaceChildren(); void refreshRows().then(() => loadMap(id)); }, () => newBox.replaceChildren()));
+  }
+  /** The settings card under the editor, for a map made with "＋ แมพใหม่" (nothing for the game's own maps). */
+  function renderSettings(): void {
+    const row = rows.find((r) => r.id === current);
+    if (!row?.custom) { setBox.replaceChildren(); return; }
+    setBox.replaceChildren(customSettings(h, api, row.id, row.custom, row.publishedRev !== null, { create: !!perms.create, del: !!perms.del },
+      () => void refreshRows(),
+      () => { void refreshRows().then(() => loadMap(rows[0]?.id ?? '')); },
+      ed?.map.id === row.id ? ed.map.spawns.length : 0));
+  }
   const diffText = h('span', { class: 'muted me-diff' });
   const issueBox = h('div', { class: 'me-issues' });
   const toolBox = h('div', { class: 'me-tools' });
@@ -90,8 +120,9 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
   const paletteCount = h('span', { class: 'muted' });
 
   const revBox = h('div', { class: 'me-revbox' });
+  const overlay = compareOverlay();
   const root = h('div', { class: 'me' },
-    h('div', { class: 'me-top' }, mapSel, undoBtn, redoBtn, checkBtn, solidBtn, fitBtn, previewBtn, latestBtn, status, diffText, publishBtn),
+    h('div', { class: 'me-top' }, mapSel, ...(perms.create ? [newBtn] : []), undoBtn, redoBtn, checkBtn, solidBtn, fitBtn, previewBtn, latestBtn, status, diffText, publishBtn),
     h('div', { class: 'me-body' },
       h('div', { class: 'me-left' }, h('h4', {}, 'เครื่องมือ'), toolBox, toolHint, h('h4', {}, 'ตัวช่วยวาง'), optBox, h('h4', {}, 'เลเยอร์'), layerBox, h('h4', {}, 'ข้อผิดพลาดจากการตรวจ'), issueBox),
       h('div', { class: 'me-center' }, canvas),
@@ -99,6 +130,8 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
         h('h4', {}, 'คุณสมบัติ'), inspector,
         h('h4', {}, 'คลังภาพกระดาษ ', paletteCount),
         h('div', { class: 'me-palette-bar' }, search, catSel), palette)),
+    newBox,
+    setBox,
     revBox,
   );
   host.replaceChildren(root);
@@ -106,6 +139,17 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
   const reloadRevs = mountRevisions(revBox, h, api, perms, () => current, (rev) => {
     if (ed) setStatus(`ย้อนกลับแล้ว เผยแพร่เป็น rev ${rev} · ร่างในตัวแก้ยังเป็นของเดิม (กด "โหลดที่เผยแพร่ล่าสุด" ถ้าจะเริ่มจากฉบับนี้)`, 'warn');
     void refreshRows();
+  }, {
+    draft: () => ed?.map ?? null,
+    bundled: () => MapRegistry.bundled(current),
+    show: (s) => { if (ed) overlay.set(ed, s); },
+    jump: (it) => {
+      if (!ed) return;
+      const at = it.to ?? it.from;
+      if (it.list === 'props' && it.kind !== 'removed' && ed.map.props.some((p) => p.id === it.id)) { ed.setTool('select'); ed.select([it.id]); }
+      if (at) { if (ed.view.scale < 12) ed.view.scale = 16; ed.centerOn(at[0], at[1]); }
+      canvas.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    },
   });
 
   // -------------------------------------------------------------- status and saving
@@ -199,7 +243,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
       const stale = live != null && live > (ed.map.rev ?? 0)
         ? `⚠️ ร่างนี้ทำจาก rev ${ed.map.rev} แต่ตอนนี้ใช้ rev ${live} อยู่ (มีคนเผยแพร่หลังคุณเริ่มแก้) เผยแพร่ร่างนี้จะทับงานในฉบับใหม่ ชิ้นที่ "ลบ" ด้านล่างรวมของที่เขาเพิ่มด้วย\n\n` : '';
       const d = diff;
-      const text = `${stale}เผยแพร่แมพ "${MAP_NAMES[current] ?? current}"?\n\n${d ? `เพิ่ม ${d.added} · ลบ ${d.removed} · แก้ ${d.changed} ชิ้น` : 'ไม่มีข้อมูลสรุปการเปลี่ยน'}\n\nห้องที่เปิดใหม่ใช้ทันที ห้องที่มีคนอยู่ใช้ตอนผู้เล่นเข้าแมพนี้ครั้งถัดไป`;
+      const text = `${stale}เผยแพร่แมพ "${nameOf(current)}"?\n\n${d ? `เพิ่ม ${d.added} · ลบ ${d.removed} · แก้ ${d.changed} ชิ้น` : 'ไม่มีข้อมูลสรุปการเปลี่ยน'}\n\nห้องที่เปิดใหม่ใช้ทันที ห้องที่มีคนอยู่ใช้ตอนผู้เล่นเข้าแมพนี้ครั้งถัดไป`;
       if (!confirm(text)) return;
       setStatus('กำลังเผยแพร่…');
       const r = await api<{ rev: number }>('POST', `/admin/maps/${current}/publish`, {});
@@ -250,7 +294,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
   /** Runs validateMap on what is on screen (the same rules the server applies before a publish) and lists the problems. */
   function checkNow(): void {
     if (!ed) return;
-    issues = validateMap(ed.map, { propKeys: PROP_KEYS, zoneIds: Object.keys(ZONES), monsterIds: Object.keys(MONSTERS), baseline: MapRegistry.bundled(current) });
+    issues = validateMap(ed.map, { propKeys: PROP_KEYS, zoneIds: [...Object.keys(ZONES), ...customIds()], monsterIds: Object.keys(MONSTERS), baseline: MapRegistry.bundled(current) });
     renderIssues();
     const errs = issues.filter((i) => i.severity === 'error').length;
     const warns = issues.length - errs;
@@ -273,6 +317,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
       case 'rest': { const r = m.rest[Number(i.id)]; if (r) { tool = 'pins'; key = `rest:${i.id}`; at = [r.x, r.z]; } break; }
       case 'lair': if (m.lair) { tool = 'pins'; key = 'lair:lair'; at = [m.lair.x, m.lair.z]; } break;
       case 'spawn': { const s = m.spawns[Number(i.id)]; if (s) { tool = 'spawns'; key = `spawn:${i.id}`; at = [s.x, s.z]; } break; }
+      case 'wave': { const w = m.waveSpots?.[Number(i.id)]; if (w) { tool = 'wavespot'; key = `wave:${i.id}`; at = [w.x, w.z]; } break; }
       default: return;
     }
     if (!tool || !at) return;
@@ -287,10 +332,13 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
     rows = r.maps;
     const keep = current;
     mapSel.replaceChildren(...rows.map((m) => {
-      const note = m.draft ? ' · มีร่าง' : m.publishedRev !== null ? ` · เผยแพร่ rev ${m.publishedRev}` : '';
+      const note = (m.custom?.status === 'hidden' ? ' · ซ่อนอยู่' : '') + (m.draft ? ' · มีร่าง' : m.publishedRev !== null ? ` · เผยแพร่ rev ${m.publishedRev}` : m.custom ? ' · ยังไม่เผยแพร่' : '');
       // A boss room sits right under its field (the registry lists it next to it).
-      return h('option', { value: m.id, selected: m.id === keep }, `${m.of ? '   └ ' : ''}${MAP_NAMES[m.id] ?? m.id}${note}`);
+      return h('option', { value: m.id, selected: m.id === keep }, `${m.of ? '   └ ' : m.custom ? '★ ' : ''}${nameOf(m.id)}${note}`);
     }));
+    // Doors may lead to the maps made in the editor too.
+    setDoorTargets(rows.filter((m) => m.custom).map((m): [string, string] => [m.id, `★ ${nameOf(m.id)} (${m.id})`]));
+    renderSettings();
   }
 
   async function loadMap(id: string): Promise<void> {
@@ -314,6 +362,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
       renderIssues();
       renderInspector(true);
       refreshTop();
+      renderSettings();
       void reloadRevs();
     } catch (e) {
       setStatus(`โหลดไม่สำเร็จ: ${errText(e)}`, 'bad');
@@ -325,16 +374,21 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
     const e = new Editor(canvas, map);
     ed = e;
     (canvas as HTMLCanvasElement & { editor?: Editor }).editor = e; // a handle for checking the page from the console
+    e.layerState.decor = { visible: false, locked: false }; // a sample, off until asked for
     for (const l of CORE_LAYERS) e.addLayer(l);
+    e.addLayer(overlay.layer);
+    e.addLayer(waveSpotLayer);
     const place = placeTool();
     e.addTool(selectTool());
     e.addTool(place);
-    for (const t of [pinTool(), spawnTool(), blockerTool(), pathTool(), lakeTool(), playerStartTool()]) e.addTool(t);
+    scatterBrush = brushTool(() => { renderInspector(true); renderPalette(); });
+    e.addTool(scatterBrush);
+    for (const t of [pinTool(), spawnTool(), blockerTool(), pathTool(), lakeTool(), waveSpotTool(), playerStartTool()]) e.addTool(t);
     allTools = [...e.tools];
     placeBrush = place;
     e.onChange = () => { scheduleSave(); renderInspector(false); };
     e.onSelect = () => renderInspector(true);
-    e.onTool = () => { renderTools(); renderInspector(true); };
+    e.onTool = () => { renderTools(); renderInspector(true); renderPalette(); };
     e.onHistory = () => refreshTop();
     renderTools();
     renderOptions();
@@ -343,13 +397,16 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
     wireDrop();
   }
   let placeBrush: ReturnType<typeof placeTool> | null = null;
+  let scatterBrush: BrushTool | null = null;
   let allTools: Tool[] = [];
 
   /** Boss rooms get only the tools that can change something there; every other map gets all but the room's spawn pin. */
   function applyToolSet(map: MapData): void {
     if (!ed) return;
     const room = !!map.room;
-    ed.tools.splice(0, ed.tools.length, ...allTools.filter((t) => (room ? ROOM_TOOLS.has(t.id) : t.id !== 'startpin')));
+    // Wave spots (minigame) only on maps made with "＋ แมพใหม่".
+    const custom = !!rows.find((r) => r.id === map.id)?.custom;
+    ed.tools.splice(0, ed.tools.length, ...allTools.filter((t) => (room ? ROOM_TOOLS.has(t.id) : t.id !== 'startpin' && (t.id !== 'wavespot' || custom))));
     if (!ed.tools.includes(ed.tool)) {
       ed.tool.deactivate?.(ed);
       ed.tool = ed.tools[0];
@@ -380,13 +437,14 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
       box('ชิดขอบชิ้นข้างเคียง', () => e.opts.edges, (v) => { e.opts.edges = v; }),
       box('โชว์วง/กล่อง collision', () => e.opts.showSolid, (v) => { e.opts.showSolid = v; }),
       box('โชว์กริด', () => e.opts.showGrid, (v) => { e.opts.showGrid = v; }),
+      box('พื้นแบบในเกม', () => e.opts.realGround, (v) => { e.opts.realGround = v; }, 'ปูพื้นด้วยภาพพื้นจริงของเกม (หญ้า ทาง อิฐ น้ำแข็ง ลาวา) ปิด = สีเรียบแบบเดิม'),
     );
   }
 
   function renderLayers(): void {
     if (!ed) return;
     const e = ed;
-    const hidden = e.map.room ? ['selection', 'ghost', 'markers'] : ['selection', 'ghost', 'roomGuide'];
+    const hidden = e.map.room ? ['selection', 'ghost', 'markers', 'compare'] : ['selection', 'ghost', 'roomGuide', 'compare'];
     layerBox.replaceChildren(...e.layers.filter((l) => !hidden.includes(l.id)).map((l) => h('div', { class: 'me-layer' },
       h('label', {}, h('input', { type: 'checkbox', checked: e.layerState[l.id].visible, onchange: (ev: Event) => { e.layerState[l.id].visible = (ev.target as HTMLInputElement).checked; e.requestDraw(); } }), ` ${l.label}`),
       l.pickable ? h('label', { title: 'ล็อก = เลือก/ลากไม่ได้' }, h('input', { type: 'checkbox', checked: e.layerState[l.id].locked, onchange: (ev: Event) => { e.layerState[l.id].locked = (ev.target as HTMLInputElement).checked; if (e.layerState[l.id].locked) e.select([]); } }), ' 🔒') : null)));
@@ -504,6 +562,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
   }
 
   // -------------------------------------------------------------- palette
+  const scattering = (): boolean => !!scatterBrush && ed?.tool === scatterBrush;
   function renderPalette(): void {
     const q = search.value.trim().toLowerCase();
     const cat = catSel.value;
@@ -514,8 +573,13 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
         ondragstart: (ev: DragEvent) => { dragKey = p.key; ev.dataTransfer?.setData('text/plain', p.key); if (ev.dataTransfer) ev.dataTransfer.effectAllowed = 'copy'; },
         ondragend: () => { dragKey = null; if (ed) { ed.ghost = null; ed.requestDraw(); } } });
       return h('button', {
-        class: `me-item${placeBrush?.brush === p.key ? ' on' : ''}`, title: `${p.key} · ${p.category}`,
-        onclick: () => { if (!ed || !placeBrush) return; placeBrush.brush = p.key; ed.setTool('place'); renderPalette(); },
+        class: `me-item${(scattering() ? scatterBrush!.keys.has(p.key) : placeBrush?.brush === p.key) ? ' on' : ''}`, title: `${p.key} · ${p.category}${scattering() ? ' · คลิก = เลือก/เอาออกจากแปรง' : ''}`,
+        onclick: () => {
+          if (!ed) return;
+          if (scattering()) { scatterBrush!.toggle(p.key); return; } // the brush picks several kinds
+          if (!placeBrush) return;
+          placeBrush.brush = p.key; ed.setTool('place'); renderPalette();
+        },
       }, img, h('span', {}, p.key));
     }));
   }

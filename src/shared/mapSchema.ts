@@ -81,6 +81,11 @@ export interface MapData {
   rest: MapRest[];
   portals: MapPortal[];
   spawns: MapSpawn[];
+  /**
+   * Minigame "รอดมอนเป็นระลอก" (src/shared/waveGame.ts): where the waves' monsters come out, on a map made in the editor whose
+   * settings pick that minigame. Absent = none (every other map, every file made before 2026-11-21).
+   */
+  waveSpots?: { x: number; z: number; radius: number }[];
   lair?: MapLair;
   /** Only boss rooms have it. Absent on every other map. */
   room?: MapRoom;
@@ -109,7 +114,7 @@ export interface MapIssue {
   severity: 'error' | 'warn';
   code: MapIssueCode;
   /** Which collection and id the issue is about, so the editor can jump to it. */
-  kind?: 'zone' | 'prop' | 'blocker' | 'path' | 'water' | 'npc' | 'rest' | 'portal' | 'spawn' | 'lair' | 'walkable';
+  kind?: 'zone' | 'prop' | 'blocker' | 'path' | 'water' | 'npc' | 'rest' | 'portal' | 'spawn' | 'lair' | 'walkable' | 'wave';
   id?: string;
   message: string;
 }
@@ -326,6 +331,17 @@ function validateInner(map: MapData, ctx: MapValidateCtx, err: Err, warn: Err): 
       err('range', `spawn ${i} respawn must be [min, max] seconds with 0 < min ≤ max ≤ 3600`, 'spawn', id);
     placed('spawn', id, s.x, s.z, `spawn ${i} (${s.monster})`);
   });
+  if (map.waveSpots !== undefined) {
+    if (!Array.isArray(map.waveSpots)) err('schema', '"waveSpots" must be a list', 'wave');
+    else {
+      if (map.waveSpots.length > 30) err('range', 'จุดเกิดระลอกได้ไม่เกิน 30 จุด', 'wave');
+      map.waveSpots.forEach((w, i) => {
+        const id = String(i);
+        range(w?.radius, 0, 30, `wave spot ${i} radius`, 'wave', id);
+        placed('wave', id, w?.x, w?.z, `จุดเกิดระลอก ${i + 1}`);
+      });
+    }
+  }
   map.portals.forEach((p, i) => {
     const id = String(i);
     if (zones && !zones.has(p.to)) err('bad_ref', `portal ${i} leads to unknown zone "${p.to}"`, 'portal', id);
@@ -403,7 +419,7 @@ function validateRoom(map: MapData, ctx: MapValidateCtx, err: Err, whalf: number
   if (map.lair) locked('ที่เรียกบอส (lair)', 'lair');
   if (map.zone.quadrants || map.zone.safe) locked('เขตปลอดภัย/ควอดแรนท์');
   const lists: [string, unknown[], MapIssue['kind']][] = [['ประตู', map.portals, 'portal'], ['จุดเกิดมอน', map.spawns, 'spawn'], ['NPC', map.npcs, 'npc'],
-    ['จุดพัก', map.rest, 'rest'], ['ทางเดิน', map.paths, 'path'], ['ทะเลสาบ/ลาวา', map.water, 'water']];
+    ['จุดพัก', map.rest, 'rest'], ['ทางเดิน', map.paths, 'path'], ['ทะเลสาบ/ลาวา', map.water, 'water'], ['จุดเกิดระลอก', map.waveSpots ?? [], 'wave']];
   for (const [name, list, kind] of lists) if (list.length) err('locked', `ห้องบอสห้ามมี${name} (ลบออก)`, kind);
   const b = ctx.baseline;
   if (b) {

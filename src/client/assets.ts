@@ -1,4 +1,5 @@
 import { PROP_SHEETS, type PropSheet } from './zonePropsTable';
+import type { GroundTileName } from '../shared/groundLook';
 import * as THREE from 'three';
 import {
   makeSheet, drawHuman, drawSlime, drawQuad, drawSeeker, drawMerchant, drawBlacksmith, drawKeeper, drawBroker, drawStylist, drawCrystalMerchant, drawCosmetic, drawTree, drawBush, drawRock, drawStump,
@@ -403,8 +404,7 @@ async function fetchAnimSet(key: string, dir: string): Promise<AnimSet | null> {
 }
 
 /** Repeating ground textures. A zone falls back to its code-painted ground if one is missing. */
-export type GroundTile = 'grass' | 'dirt' | 'water' | 'marsh' | 'mud' | 'pave' | 'brick' | 'snow' | 'snow_path' | 'ice' | 'ash_rock' | 'ash_path' | 'lava'
-  | 'room_forest' | 'room_marsh' | 'room_snow' | 'room_volcano';
+export type GroundTile = GroundTileName;
 export const groundTiles: Partial<Record<GroundTile, THREE.Texture>> = {};
 
 async function loadGroundTile(name: GroundTile): Promise<void> {
