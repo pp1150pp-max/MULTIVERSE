@@ -3,6 +3,7 @@ import { placeLabel } from '../shared/channels';
 import type { Game } from './Game';
 import { NPC_USE_RANGE, type NpcId } from '../shared/data/npcs';
 import { LEARNABLE_SKILLS, type SkillSlot } from '../shared/data/classes';
+import { keyLabel, keyOf, onKeysChange } from './keybinds';
 import { reachRadius, reachText } from '../shared/data/skillRanges';
 import { rankedDmg, skillParamLines, skillReach } from '../shared/skillBook';
 import { effectiveStats, enhanceBonus, itemName, plusOf, sellValue } from '../shared/data/enhance';
@@ -66,7 +67,8 @@ function loadHudStyle(): HudStyle {
   }
 }
 
-const KEY_LABEL: Record<SkillSlot, string> = { basic: 'LMB', q: 'Q', e: 'E', r: 'R', dash: 'SPACE' };
+/** The label on each skill-bar button: the mouse for the basic attack, else the key the player has it on (keybinds.ts). */
+const keyFor = (slot: SkillSlot | 'hp' | 'mp'): string => (slot === 'basic' ? 'LMB' : keyLabel(keyOf(slot)));
 const POTION_CD = 1.5;
 
 /** What the chat box starts with to whisper someone (quoted when the name has a space). */
@@ -166,6 +168,7 @@ export class Hud {
     $('hud-online').classList.toggle('hidden', !g.backend.online);
     $('hud-guest').classList.toggle('hidden', !g.backend.guest);
     this.buildSkillbar();
+    onKeysChange(() => this.buildSkillbar());
 
     $('btn-auto').onclick = () => g.toggleAuto();
     $('btn-bag').onclick = () => this.toggleBag();
@@ -699,10 +702,10 @@ export class Hud {
     // Basic attack, the three loadout slots (their icons follow the skill worn, see update) and the dash.
     for (const slot of ['basic', 'q', 'e', 'r', 'dash'] as const) {
       const sk = this.g.player.skill(slot);
-      add(slot, sk ? skillIcon(sk.id) : '', KEY_LABEL[slot]);
+      add(slot, sk ? skillIcon(sk.id) : '', keyFor(slot));
     }
-    add('hp', potionIcon('hp'), '1');
-    add('mp', potionIcon('mp'), '2');
+    add('hp', potionIcon('hp'), keyFor('hp'));
+    add('mp', potionIcon('mp'), keyFor('mp'));
   }
 
   /** Tooltip for a skill-bar button (skill or potion); desktop only. Skills also ring their reach on the ground. */
