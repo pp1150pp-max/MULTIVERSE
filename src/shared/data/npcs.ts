@@ -40,7 +40,7 @@ const HARBOR_NPC: Partial<Record<NpcId, Pick<NpcLook, 'name' | 'sheet' | 'portra
   blacksmith: { name: 'ช่างเหล็กอู่ต่อเรือ', sheet: 'hb_shipwright', portrait: 'shipwright' },
   broker: { name: 'นายหน้าท่าเรือ', sheet: 'hb_harbor_broker', portrait: 'harbor_broker' },
   seeker: { name: 'นักเดินเรือแห่งมิติ', sheet: 'navigator', portrait: 'navigator', role: 'คุย / เควส' },
-  crystal: { name: 'พ่อค้าของเถื่อน', sheet: 'hb_smuggler', portrait: 'smuggler' },
+  crystal: { name: 'พ่อค้าของเถื่อน', sheet: 'hb_smuggler_npc', portrait: 'smuggler' },
 };
 
 /** An NPC as it stands in this town (`town` = ZoneDef.town). */

@@ -11,6 +11,9 @@ import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { WS_CLOSE_QUIT } from '../src/shared/net/protocol';
 import type { MapData } from '../src/shared/mapSchema';
+import { ZONES } from '../src/shared/data/zones';
+import { onDeck } from '../src/shared/data/harbor';
+import { Terrain } from '../src/shared/sim/terrain';
 import { finish, ok } from './check';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -257,6 +260,29 @@ async function run(): Promise<void> {
   await pe.ready;
   ok(pe.welcome()?.map === 4, 'and a new room uses the newest again');
   await pe.quit();
+
+  // ---------------------------------------------------------- floor 2 (PR 9): the harbour, the beach and the crab's room edit like the rest
+  // (as the owner: gm lost mapEdit above)
+  for (const id of ['harbor_town', 'shipwreck_beach', 'shipwreck_beach_room']) {
+    const d = (await api('GET', `/admin/maps/${id}/draft`, undefined, owner.token)).data;
+    ok(d.source === 'bundled' && d.map?.id === id && d.map.floor === 2 && d.issues.every((i: any) => i.severity === 'warn'), `${id}: opens from its bundled file (floor 2), no errors`);
+    const edited: MapData = JSON.parse(JSON.stringify(d.map));
+    edited.props[0].x += 0.5;
+    const put = await api('PUT', `/admin/maps/${id}/draft`, { map: edited }, owner.token);
+    ok(put.status === 200 && put.data.issues.every((i: any) => i.severity === 'warn') && put.data.diff.changed === 1, `${id}: moving a prop saves as a draft`);
+    const pub = await api('POST', `/admin/maps/${id}/publish`, {}, owner.token);
+    ok(pub.status === 200 && pub.data.rev === 1, `${id}: and publishes as rev 1`);
+  }
+  // The planks stay in code: a harbour built from the published layout still keeps everyone out of the water.
+  const harbor = (await api('GET', '/maps/harbor_town?rev=1')).data as MapData;
+  const t = new Terrain(ZONES.harbor_town, harbor);
+  let water: [number, number] | null = null;
+  for (let x = -t.bound + 1; x < t.bound && !water; x += 0.5) for (let z = -t.bound + 1; z < t.bound && !water; z += 0.5) if (!onDeck(x, z, -1)) water = [x, z]; // a step off every deck
+  // Every sample point is blocked or free just as in the harbour the generator builds (one prop moved half a step aside).
+  const gen = new Terrain(ZONES.harbor_town, null);
+  let differ = 0;
+  for (let x = -t.bound; x <= t.bound; x += 0.7) for (let z = -t.bound; z <= t.bound; z += 0.7) if (t.isBlocked(x, z, 0.3) !== gen.isBlocked(x, z, 0.3)) differ++;
+  ok(t.mapRev === 1 && !!water && t.isBlocked(water[0], water[1], 0.3) && differ < 10, `the published harbour (rev 1): water at ${water} is blocked, ${differ} sample points differ from the generator`);
 }
 
 try {

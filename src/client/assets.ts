@@ -96,7 +96,7 @@ const BEACH_PROPS = [
 /** Floor 2's move effects (sim/beachMoves.ts, cannonCrab.ts: Sim fx 'sprite' and the crab's cannonballs), paper only. */
 const BEACH_FX = ['fx_cannonball', 'fx_warn_ring', 'fx_chain_bolt', 'fx_shock', 'fx_spike_burst', 'fx_shell_guard'];
 /** The harbour's NPC sheets and the navigator's (SHEET_SPECS keys): paper only. */
-const PAPER_ONLY_NPC = new Set(['hb_supply_merchant', 'hb_dock_keeper', 'hb_shipwright', 'hb_harbor_broker', 'hb_smuggler', 'navigator']);
+const PAPER_ONLY_NPC = new Set(['hb_supply_merchant', 'hb_dock_keeper', 'hb_shipwright', 'hb_harbor_broker', 'hb_smuggler_npc', 'navigator']);
 const PAPER_GROUND = new Set(['grass', 'dirt', 'pave', 'room_forest', 'marsh', 'mud', 'water', 'room_marsh',
   'snow', 'snow_path', 'ice', 'room_snow', 'ash_rock', 'ash_path', 'lava', 'room_volcano', 'brick',
   // Floor 2's harbour town (tools/cut_papercraft.cjs floor2_hub): paper only.
@@ -350,7 +350,8 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   hb_dock_keeper: sheet('npc/dock_keeper.png', () => makeSheet(32, drawKeeper())),
   hb_shipwright: sheet('npc/shipwright.png', () => makeSheet(32, drawBlacksmith())),
   hb_harbor_broker: sheet('npc/harbor_broker.png', () => makeSheet(32, drawBroker())),
-  hb_smuggler: sheet('npc/smuggler.png', () => makeSheet(32, drawCrystalMerchant())),
+  // Its own key: 'hb_smuggler' is the smuggler's shop building (HARBOR_PROPS), which this sheet used to cover.
+  hb_smuggler_npc: sheet('npc/smuggler.png', () => makeSheet(32, drawCrystalMerchant())),
   navigator: sheet('npc/navigator.png', () => makeSheet(32, drawSeeker())),
 
   ...Object.fromEntries(MAP_ICONS.map((name) => [`map_${name}`, single(`icons/map_${name}.png`, () => drawIcon('coin'))])),
