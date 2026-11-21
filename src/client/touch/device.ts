@@ -7,6 +7,8 @@
 // While in touch mode <body> has the class `touch-ui`; CSS and the touch controls key off that.
 // Also blocks the browser's own pinch zoom on the page (Safari ignores user-scalable=no).
 
+import { isBoundKey } from '../keybinds';
+
 export type PointerMode = 'mouse' | 'touch';
 
 /** Mouse moves in a row (with no touch in between) before switching to mouse mode, so the odd stray
@@ -92,7 +94,7 @@ window.addEventListener('pointermove', (e) => {
 }, true);
 
 window.addEventListener('keydown', (e) => {
-  if (GAME_KEYS.has(e.code) && !isTyping(e.target)) setMode('mouse');
+  if ((GAME_KEYS.has(e.code) || isBoundKey(e.code)) && !isTyping(e.target)) setMode('mouse');
 }, true);
 
 // Safari's own pinch zoom (it ignores user-scalable=no in the viewport tag).

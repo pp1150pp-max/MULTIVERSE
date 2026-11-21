@@ -6,6 +6,7 @@ import { googleEnabled, logout } from './net/api';
 import { imgUrl } from './img';
 import { gfxMenuOn } from './gfxPrefs';
 import { toggleGfxPanel } from './gfxPanel';
+import { toggleKeybindPanel } from './keybindPanel';
 import { currentBalance } from '../shared/balance';
 import { codeMenuLayout, menuEntry, type MenuLayoutConfig } from '../shared/menuLayout';
 
@@ -93,6 +94,7 @@ export class SystemMenu {
       <div class="sys-view hidden" data-view="settings">
         <button data-act="hudstyle" id="sys-hudstyle"></button>
         <button data-act="partyblock" id="sys-partyblock"></button>
+        <button data-act="keybinds" id="sys-keybinds">ตั้งค่าปุ่ม</button>
         ${guest ? '' : '<button data-act="tradeblock" id="sys-tradeblock"></button>'}
         <div class="sys-sep"></div>
         <button data-act="google" id="sys-google" class="hidden">${guest ? 'บันทึกตัวละครด้วย Google' : 'ผูกบัญชี Google'}</button>
@@ -220,6 +222,8 @@ export class SystemMenu {
     this.applyGfxTile();
     this.panel.querySelectorAll<HTMLElement>('.sys-view').forEach((el) => el.classList.toggle('hidden', el.dataset.view !== v));
     $('sys-hudstyle').textContent = $('btn-hud-style').textContent;
+    // The /admin switch can change while playing: shown only while players may set their own keys.
+    document.getElementById('sys-keybinds')?.classList.toggle('hidden', !currentBalance().fxLayer.keyRebind);
     $('sys-partyblock').textContent = `${this.g.party.block ? '☑' : '☐'} ไม่รับคำชวนปาร์ตี้`;
     const tb = document.getElementById('sys-tradeblock');
     if (tb) tb.textContent = `${this.g.trade.block ? '☑' : '☐'} ไม่รับคำขอเทรด`;
@@ -292,6 +296,9 @@ export class SystemMenu {
         return $('btn-auto-set').click();
       case 'settings':
         return this.showView('settings');
+      case 'keybinds':
+        this.toggle(false);
+        return toggleKeybindPanel(true);
       case 'back':
         return this.showView('main');
       case 'help':
