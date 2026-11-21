@@ -8,6 +8,7 @@ import { playLayer, ShotLayer, type FxLayerHooks, type FxLayerHost } from './fxL
 import type { QuarksFx } from './quarksFx';
 import { currentBalance } from '../shared/balance';
 import { gfxQuality } from './gfxPrefs';
+import { ISO } from '../shared/isoProjection';
 import { bossFxOn, bossFxSpot, isBossEffect, isBossMelee, playBossExtras } from './bossFx';
 
 /** The three.quarks trial's switch (fxLayer.quarks, under the extra layer's own switch), and not "off" in the player's graphics window. */
@@ -44,11 +45,19 @@ interface EffectDef {
    * drawn seen at an angle), put on the effect's spot; missing = the cell's bottom edge on the ground.
    */
   ground?: number;
+  /**
+   * Pushed this far away from the camera along its line of sight: the same spot on screen (the camera is
+   * orthographic), but drawn behind whoever stands there (owner 2026-11-21: boss skills go behind the boss).
+   */
+  behind?: number;
   /** Multiplies the art's colours (a tinted copy of a row, e.g. the sword's dark-red Execute). */
   tint?: string;
   /** The row is drawn as one seamless loop (all 6 frames at full strength), for zones; otherwise a zone loops frames 2–5. */
   loop?: boolean;
 }
+
+/** How far a boss's standing skill picture is pushed behind it (world units, about a big boss's depth). */
+const BOSS_BEHIND = 4;
 
 const EFFECTS: Record<SkillEffect, EffectDef> = {
   slash: { sheet: 'sword', row: 0, life: 0.22, height: 'ground' },
@@ -119,14 +128,14 @@ const EFFECTS: Record<SkillEffect, EffectDef> = {
   boss_bear_slam: { sheet: 'boss_bear', row: 1, life: 0.75, height: 'ground' },
   boss_bear_roar: { sheet: 'boss_bear', row: 2, life: 0.7, height: 'ground' },
   boss_witch_swipe: { sheet: 'boss_witch', row: 0, life: 0.38, height: 1.2 },
-  boss_witch_slam: { sheet: 'boss_witch', row: 1, life: 0.85, height: 0, upright: true, stand: true, ground: 0.63 },
-  boss_witch_frenzy: { sheet: 'boss_witch', row: 2, life: 0.9, height: 0, upright: true, stand: true, ground: 0.7 },
+  boss_witch_slam: { sheet: 'boss_witch', row: 1, life: 0.85, height: 0, upright: true, stand: true, ground: 0.63, behind: BOSS_BEHIND },
+  boss_witch_frenzy: { sheet: 'boss_witch', row: 2, life: 0.9, height: 0, upright: true, stand: true, ground: 0.7, behind: BOSS_BEHIND },
   boss_yeti_hit: { sheet: 'boss_yeti', row: 0, life: 0.38, height: 0.7, upright: true },
-  boss_yeti_slam: { sheet: 'boss_yeti', row: 1, life: 0.8, height: 0, upright: true, stand: true, ground: 0.55 },
-  boss_yeti_snow: { sheet: 'boss_yeti', row: 2, life: 0.75, height: 0, upright: true, stand: true, ground: 0.72 },
+  boss_yeti_slam: { sheet: 'boss_yeti', row: 1, life: 0.8, height: 0, upright: true, stand: true, ground: 0.55, behind: BOSS_BEHIND },
+  boss_yeti_snow: { sheet: 'boss_yeti', row: 2, life: 0.75, height: 0, upright: true, stand: true, ground: 0.72, behind: BOSS_BEHIND },
   boss_yeti_blizzard: { sheet: 'boss_yeti', row: 3, life: 0.9, height: 'ground' },
-  boss_heart_impact: { sheet: 'boss_heart', row: 1, life: 0.6, height: 0, upright: true, stand: true, ground: 0.75 },
-  boss_heart_blast: { sheet: 'boss_heart', row: 4, life: 1, height: 0, upright: true, stand: true, ground: 0.8 },
+  boss_heart_impact: { sheet: 'boss_heart', row: 1, life: 0.6, height: 0, upright: true, stand: true, ground: 0.75, behind: BOSS_BEHIND },
+  boss_heart_blast: { sheet: 'boss_heart', row: 4, life: 1, height: 0, upright: true, stand: true, ground: 0.8, behind: BOSS_BEHIND },
 };
 
 /** Flying shots, looked up by the colour the simulation gives each projectile. */
@@ -507,6 +516,7 @@ export class Effects implements FxApi {
       // The sprite is size × 2 tall: centred at `size` its bottom edge is on the ground.
       // `ground`: the point that far down the picture (2 × size tall) goes on the ground.
       spr.position.set(x, def.stand ? (def.ground !== undefined ? size * (2 * def.ground - 1) : size * 0.9) : def.height, z);
+      if (def.behind) spr.position.add(new THREE.Vector3(-ISO[0], -ISO[1], -ISO[2]).multiplyScalar(def.behind));
       spr.scale.setScalar(size * 2);
       this.add(spr, def.life, play);
       playLayer(this, this.layerHooks, name, spr, x, spr.position.y, z, size, def.life, by, hit);
