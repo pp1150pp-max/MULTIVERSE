@@ -38,7 +38,8 @@
 }
 .fnum.enhfail { color: #b8bcc4; font-size: 24px; animation: enh-shake 0.4s linear; }
 @keyframes enh-pop { from { scale: 0.3; } 60% { scale: 1.25; } to { scale: 1; } }
-@keyframes enh-shake { 0%, 100% { translate: 0; } 25% { translate: -4px 0; } 75% { translate: 4px 0; } }
+/* margin, not translate: floating.ts positions the text with `translate`. */
+@keyframes enh-shake { 0%, 100% { margin-left: 0; } 25% { margin-left: -4px; } 75% { margin-left: 4px; } }
 
 .plate { text-align: center; font-size: 11px; text-shadow: 0 0 3px #000; }
 .plate .pname { color: #f2e6c8; margin-bottom: 2px; }
