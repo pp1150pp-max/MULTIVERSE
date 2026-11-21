@@ -76,8 +76,6 @@ const PAPER_PROPS = new Set([
 ]);
 const PAPER_GROUND = new Set(['grass', 'dirt', 'pave', 'room_forest', 'marsh', 'mud', 'water', 'room_marsh',
   'snow', 'snow_path', 'ice', 'room_snow', 'ash_rock', 'ash_path', 'lava', 'room_volcano', 'brick']);
-/** Classes with a paper animation set in sprites/paper/player/<class>/ (tools/cut_paper_char.cjs). */
-const PAPER_CHARS = new Set(['sword', 'mage', 'gunslinger']);
 let paperMaps = false;
 
 /**
@@ -319,9 +317,10 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
  * CharManifest) plus one PNG per animation. Missing folder = fall back to the simple 3×3 sheet.
  */
 const ANIM_SET_DIRS: Record<string, string> = {
-  sword: 'player/sword',
-  mage: 'player/mage',
-  gunslinger: 'player/gunslinger',
+  // Paper sets (tools/cut_paper_char.cjs); the old pixel sets were removed (owner 2026-11-22).
+  sword: 'paper/player/sword',
+  mage: 'paper/player/mage',
+  gunslinger: 'paper/player/gunslinger',
 };
 
 export const sheets: Record<string, SheetInfo> = {};
@@ -345,9 +344,8 @@ function fxTexture(canvas: HTMLCanvasElement): THREE.CanvasTexture {
   return tex;
 }
 
-/** A character's animation set; with the paper switch on, its paper set (sprites/paper/…) when there is one. */
+/** A character's animation set (sprites/paper/player/<class>). */
 async function loadCharSet(key: string, dir: string): Promise<void> {
-  if (paperMaps && PAPER_CHARS.has(key) && (await loadAnimSet(key, `${BASE}paper/${dir}`))) return;
   await loadAnimSet(key, BASE + dir);
 }
 
@@ -361,8 +359,8 @@ async function loadAnimSet(key: string, dir: string): Promise<boolean> {
 }
 
 /**
- * A character's animation set from `sprites/<dir>` (e.g. `player/sword` or `paper/player/sword`) without touching
- * the game's own sets: the /admin animation bench shows the old and the paper pictures side by side.
+ * A character's animation set from `sprites/<dir>` (e.g. `paper/player/sword`) without touching
+ * the game's own sets: the /admin animation bench loads its own copies.
  */
 export function loadCharAnimSet(key: string, dir: string): Promise<AnimSet | null> {
   return fetchAnimSet(key, BASE + dir);
@@ -615,9 +613,7 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 
 async function loadPortrait(key: string): Promise<void> {
   const base = ANIM_SET_DIRS[key];
-  // The menu's class pictures are the paper ones too (owner 2026-11-18).
-  const paper = base && PAPER_CHARS.has(key) && paperMaps;
-  for (const dir of paper ? [`paper/${base}`, base] : base ? [base] : []) {
+  for (const dir of base ? [base] : []) {
     try {
       const res = await fetch(`${BASE}${dir}/sprite.json`);
       const m = (await res.json()) as CharManifest;

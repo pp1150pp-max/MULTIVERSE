@@ -116,7 +116,7 @@ export async function mountAnimPreview(root: HTMLElement, io?: AnimBenchIo): Pro
   camera.lookAt(target);
 
   const state = {
-    cls: 'sword' as Cls, art: 'old' as Art, anim: 'run', speed: 1, move: BASE_MOVE_SPEED, zoom: 3.2,
+    cls: 'sword' as Cls, art: 'paper' as Art, anim: 'run', speed: 1, move: BASE_MOVE_SPEED, zoom: 3.2,
     paused: false, ground: true, rideMove: true, line: true,
     /** The facing being tuned: an index of DIRS. */
     sel: 1,
@@ -201,8 +201,8 @@ export async function mountAnimPreview(root: HTMLElement, io?: AnimBenchIo): Pro
   const note = h('div', { class: 'note' });
   const artBox = h('span');
   const drawArt = () => {
-    const arts: Art[] = state.cls === 'sword' ? ['old', 'paper', 'rig'] : ['old', 'paper'];
-    if (!arts.includes(state.art)) state.art = 'old';
+    const arts: Art[] = state.cls === 'sword' ? ['paper', 'rig'] : ['paper'];
+    if (!arts.includes(state.art)) state.art = 'paper';
     artBox.replaceChildren(sel(arts, ART_NAME, () => state.art, (v) => { state.art = v; void rebuild(); }));
   };
   const animBox = h('span');
