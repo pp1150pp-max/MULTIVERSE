@@ -100,7 +100,14 @@ export type SkillEffect = 'slash' | 'whirlwind' | 'charge' | 'quake' | 'explosio
   | 'mg_shock' | 'mg_curse' | 'mg_vortex' | 'mg_empower' | 'mg_shield' | 'mg_timewarp' | 'mg_frostnova'
   // Gunslinger
   | 'gs_aura_crit' | 'gs_aura_rapid' | 'gs_burn' | 'gs_smoke' | 'gs_mine' | 'gs_drone' | 'gs_turret' | 'gs_blast'
-  | 'gs_hawkeye' | 'gs_trigger' | 'gs_special';
+  | 'gs_hawkeye' | 'gs_trigger' | 'gs_special'
+  // Bosses' skills (owner 2026-11-21, sheets boss_bear / boss_witch / boss_yeti / boss_heart, art_templates/papercraft_fx/BOSS_FX.md)
+  | BossEffect;
+/** A boss skill's painted effect; the client adds its code effects on top (src/client/bossFx.ts). */
+export type BossEffect = 'boss_bear_claw' | 'boss_bear_slam' | 'boss_bear_roar'
+  | 'boss_witch_swipe' | 'boss_witch_slam' | 'boss_witch_frenzy'
+  | 'boss_yeti_hit' | 'boss_yeti_slam' | 'boss_yeti_snow' | 'boss_yeti_blizzard'
+  | 'boss_heart_impact' | 'boss_heart_blast';
 export type FxName = keyof FxApi;
 /** One-shot sounds with no matching visual event. The client's audio code decides how each one sounds. */
 export type SfxName =

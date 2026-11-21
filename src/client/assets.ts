@@ -432,6 +432,8 @@ export type FxSheet = 'sword' | 'mage' | 'gun' | 'gun_ult' | 'enhance'
   | 'mg_a' | 'mg_b' | 'mg_c' | 'mg_d' | 'mg_e' | 'mg_f' | 'mg_g'
   // Gunslinger skills (art_templates/skills/FX_GUNSLINGER.md)
   | 'gs_skill' | 'gs_gear' | 'gs_passive'
+  // Bosses' skills (owner 2026-11-21, tools/cut_boss_fx.cjs): papercraft only, there is no old sheet.
+  | 'boss_bear' | 'boss_witch' | 'boss_yeti' | 'boss_heart'
   // Area skills' standing layer (zoneProps.ts, art_templates/skills/AOE_PROPS.md); missing ones just aren't drawn.
   | PropSheet;
 export const fxSheets: Partial<Record<FxSheet, THREE.Texture>> = {};
@@ -667,6 +669,7 @@ async function loadAssets(): Promise<void> {
     ...PROP_SHEETS.map((n) => loadFxSheet(n)),
     // Gunslinger
     ...(['gs_skill', 'gs_gear', 'gs_passive'] as const).map((n) => loadFxSheet(n)),
+    ...(['boss_bear', 'boss_witch', 'boss_yeti', 'boss_heart'] as const).map((n) => loadFxSheet(n)),
     loadDecals(),
     ...(paperMaps ? [loadPaperCosmetics()] : []),
     ...(['grass', 'dirt', 'water', 'marsh', 'mud', 'pave', 'brick', 'snow', 'snow_path', 'ice', 'ash_rock', 'ash_path', 'lava',

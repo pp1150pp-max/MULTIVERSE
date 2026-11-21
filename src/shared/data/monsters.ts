@@ -1,3 +1,5 @@
+import type { BossEffect } from '../sim/types';
+
 export type Behavior = 'passive' | 'skittish' | 'aggressive' | 'charger' | 'boss';
 
 /** A straight shot at the player. */
@@ -73,6 +75,11 @@ export interface MonsterDef {
   spells?: 'witch';
   /** Fights by a scripted attack pattern and never moves (see sim/volcanoHeart.ts). */
   pattern?: 'volcano_heart';
+  /**
+   * Bosses: the painted effect each of its skills plays (owner 2026-11-21, src/client/bossFx.ts): its hit (sent at
+   * the boss with its facing and reach), ground slam, enrage, jumping off / landing, and where its minions appear.
+   */
+  fx?: { melee?: BossEffect; slam?: BossEffect; enrage?: BossEffect; jump?: BossEffect; summon?: BossEffect };
   itemChance: number;
   potionChance: number;
 }
@@ -116,7 +123,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'forest_bear', name: 'Forest Bear', nameTh: 'หมี (Mini Boss)', levels: [10, 10],
     hp: 2366, atk: 42, def: 14, speed: 2.03, exp: 600, gold: [80, 140],
     aggroRange: 9, attackRange: 1.9, attackCooldown: 1.8, height: 3.3, radius: 1.2,
-    behavior: 'boss', summon: { monster: 'forest_wolf', count: 4 }, itemChance: 1, potionChance: 1,
+    behavior: 'boss', summon: { monster: 'forest_wolf', count: 4 },
+    fx: { melee: 'boss_bear_claw', slam: 'boss_bear_slam', enrage: 'boss_bear_roar' },
+    itemChance: 1, potionChance: 1,
   },
 
   // Zone 2 — Misty Marsh
@@ -154,7 +163,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'bog_witch', name: 'Bog Witch', nameTh: 'แม่มดหนอง (Boss)', levels: [20, 20],
     hp: 14872, atk: 124.5, def: 24, speed: 2.1, exp: 3000, gold: [220, 360],
     aggroRange: 9, attackRange: 2.0, attackCooldown: 1.7, height: 3.6, radius: 1.1,
-    behavior: 'boss', frenzy: { speed: 3, skill: 0.5 }, spells: 'witch', itemChance: 1, potionChance: 1,
+    behavior: 'boss', frenzy: { speed: 3, skill: 0.5 }, spells: 'witch',
+    fx: { melee: 'boss_witch_swipe', slam: 'boss_witch_slam', enrage: 'boss_witch_frenzy' },
+    itemChance: 1, potionChance: 1,
   },
 
   // Zone 3 — Frost Reach
@@ -201,6 +212,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     hp: 42500, atk: 320, def: 34, speed: 2.2, exp: 7000, gold: [550, 900],
     aggroRange: 9, attackRange: 2.1, attackCooldown: 1.8, height: 3.9, radius: 1.25,
     behavior: 'boss', summon: { monster: 'yeti_minion', count: 3, vanish: true }, enrageAt: 0.3, enrageRamp: true, slamRadius: 5.5, skillCd: 0.5,
+    fx: { melee: 'boss_yeti_hit', slam: 'boss_yeti_slam', enrage: 'boss_yeti_snow', jump: 'boss_yeti_snow', summon: 'boss_yeti_blizzard' },
     bossLoot: { items: 6, epics: 1 },
     thrown: { art: 'snowball', speed: 9, range: 10, mult: 1.3, radius: 0.6, size: 1.5, color: '#e6f2fb', minRange: 5, cooldown: 5 },
     itemChance: 1, potionChance: 1,
