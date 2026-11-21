@@ -52,6 +52,9 @@ const CLIFF_LAYERS = [
 
 /** Props at least this tall turn see-through when the player walks behind them. */
 const FADE_MIN_HEIGHT = 1.6;
+/** Props' depth tie-break: this many distinct steps of this size toward the camera (see World.addProp). */
+const PROP_DEPTH_STEPS = 64;
+const PROP_DEPTH_STEP = 0.0005;
 /** How much of a prop still shows while the player stands behind it. */
 const FADE_OPACITY = 0.3;
 /** About half a player's width on screen, in world units, for the see-through test. */
@@ -380,6 +383,8 @@ export class World {
   private readonly sharedMats = new Map<string, THREE.SpriteMaterial>();
   /** Mirrored copies of prop textures (addProp's `flip`), by key. */
   private readonly flipped = new Map<string, THREE.Texture>();
+  /** Counts the props drawn, for their depth tie-break (see addProp). */
+  private propSeq = 0;
   private readonly shadowGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
   private readonly shadowMat: THREE.MeshBasicMaterial;
   private readonly groundTex: THREE.CanvasTexture;
@@ -1233,6 +1238,10 @@ export class World {
     spr.center.set(0.5, TOWN2_PROP.test(key) ? 0 : 0.03);
     spr.scale.set(w, height, 1);
     spr.position.set(x, 0, z);
+    // Two pieces placed (almost) on the same spot came out at the same depth, and the GPU drew one or the other
+    // frame by frame: they flickered (owner 2026-11-21). A tiny, different step toward the camera for each piece
+    // (along the view, so nothing moves on screen; at most ~0.03 world units) keeps their order fixed.
+    spr.position.addScaledVector(ISO_DIR, (this.propSeq++ % PROP_DEPTH_STEPS) * PROP_DEPTH_STEP);
     // Long town-wall pieces stand on a line, not a spot: a round shadow under each would only blot the ground.
     // Nor under the hub town's buildings, stalls and fountain: their pictures stand on their nearest corner, not their
     // middle, so a round shadow there floated off to one side (owner 2026-11-19).
