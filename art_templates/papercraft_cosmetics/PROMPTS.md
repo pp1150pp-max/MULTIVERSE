@@ -110,3 +110,34 @@ No body, no second wing, no text, no shadow on the background.
 | `wings_mech_one.png` | `Mechanical wing of dark steel-grey card plates with glowing cyan paper lines. Background ONE perfectly flat solid magenta (#FF00FF); do not use pink, magenta or purple on the wing.` |
 
 **สำหรับผม:** ตัดด้วย `tools/cut_cosmetics.cjs` (ตาราง 5×3, โคนที่ขอบซ้ายกลางช่อง) ลง `public/assets/sprites/paper/cosmetics/`
+
+---
+
+## 6. ปีกข้างเดียว เจนรอบ 3 ให้หน้าตาเหมือนเดิม (2026-11-21) → `wings_<ชื่อ>_one.png`
+
+รอบที่ 5 โคนปีกถูกแล้ว แต่หน้าตาปีกเปลี่ยนไปจากเดิม รอบนี้แนบ **2 ภาพ** ให้ GPT ลอก "หน้าตา" จากภาพเก่า และ "ท่า/ตำแหน่ง" จากภาพใหม่
+
+**วิธีทำ:** เปิดแชทใหม่ต่อ 1 ปีก แนบ 2 ภาพตามลำดับนี้
+1. ภาพเก่า (หน้าตาที่ต้องการ): `art_templates/papercraft_cosmetics/ref/wings_<ชื่อ>_one_OLD.png`
+2. ภาพใหม่ (ตำแหน่งโคนปีกที่ถูก): `art_templates/papercraft_cosmetics/raw/wings_<ชื่อ>_one.png` (ไฟล์ที่เพิ่งเจนรอบที่แล้ว)
+
+วาง prompt กลาง + บรรทัดพื้นหลังของปีกนั้น เซฟทับ `art_templates/papercraft_cosmetics/raw/wings_<ชื่อ>_one.png`
+
+### prompt กลาง
+
+```
+I attach 2 sprite sheets of the same single character wing, both 5 rows x 3 columns.
+IMAGE 1 = the CORRECT LOOK. Copy the wing design from image 1 exactly: the same shape and outline, the same number and shape of feathers / plates / membrane parts, the same colours, the same details and patterns, the same papercraft style (layered cut paper with soft paper shadows), the same size. Do not invent a new design, do not simplify, do not add anything.
+IMAGE 2 = the CORRECT LAYOUT. Copy from image 2 only the placement and pose of each cell: canvas 3:5 tall, 5 rows x 3 columns, every cell the same size, ONE wing per cell, its ROOT (where it joins the back) touching the LEFT edge of the cell at half the cell's height, the wing spreading to the RIGHT. In row 3 (side view) the wing is swept back and slightly up, like image 2. Never put the root on the right side.
+Rows: 1 front, 2 slightly turned, 3 side, 4 more turned, 5 back (same as row 1). Columns = 3 flap frames: 1 rest, 2 raised, 3 lowered, same root point in all three.
+The result must look like the wing from image 1, only placed like image 2. No body, no second wing, no text, no shadow on the background.
+```
+
+### บรรทัดพื้นหลัง (ต่อท้าย prompt กลาง)
+
+| ไฟล์ | บรรทัดที่ต่อท้าย |
+|---|---|
+| `wings_angel_one.png` / `wings_phoenix_one.png` / `wings_butterfly_one.png` / `wings_mech_one.png` | `Background ONE perfectly flat solid magenta (#FF00FF); do not use pink, magenta or purple on the wing.` |
+| `wings_bat_one.png` | `Background ONE perfectly flat solid pure bright green (#00FF00); do not use bright green on the wing.` |
+
+**สำหรับผม:** ตัดด้วย `tools/cut_cosmetics.cjs` เหมือนข้อ 5
