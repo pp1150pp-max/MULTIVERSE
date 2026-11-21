@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { circlesOn, MagicCircle, zoneAsCircle, zoneCircle } from './magicCircles';
 import { fxSheets, fxTex, type FxSheet } from './assets';
+import { cloneShared } from './texShare';
 import type { FxApi, SkillEffect } from '../shared/sim/types';
 import { loopProps, playProps } from './zoneProps';
 import { playSkillExtras } from './skillExtras';
@@ -216,8 +217,7 @@ const screenAngle = (dx: number, dz: number) => Math.atan2(-dx - dz, dx - dz);
 function frameTexture(sheet: FxSheet): THREE.Texture | null {
   const base = fxSheets[sheet];
   if (!base) return null;
-  const tex = base.clone();
-  tex.needsUpdate = true;
+  const tex = cloneShared(base);
   tex.userData.effectFrame = true;
   return tex;
 }

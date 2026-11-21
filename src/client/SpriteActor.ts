@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { fxTex, type SheetInfo } from './assets';
 import type { Actor, PlayOpts } from './AnimatedActor';
+import { cloneShared } from './texShare';
 
 const S = Math.SQRT1_2;
 const ROW_FRONT = 0;
@@ -65,8 +66,7 @@ export class SpriteActor implements Actor {
   constructor(private readonly sheet: SheetInfo, public height: number, shadowRadius: number, cycle: readonly number[] = WALK) {
     // A paper monster walks through its 4 walk frames in order.
     this.cycle = sheet.paper ? Array.from({ length: sheet.paper.walk }, (_, i) => i) : cycle;
-    this.tex = sheet.texture.clone();
-    this.tex.needsUpdate = true;
+    this.tex = cloneShared(sheet.texture);
     this.mat = new THREE.SpriteMaterial({ map: this.tex, alphaTest: 0.5, transparent: false });
     this.sprite = new THREE.Sprite(this.mat);
     this.sprite.center.set(0.5, 0.02);
