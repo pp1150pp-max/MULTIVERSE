@@ -9,6 +9,7 @@
 // ZoneDef into ZONES (customZoneHook below). A map that is hidden or deleted drops out of ZONES: saves that name it land in the hub.
 import { customZoneHook, type ZoneDef } from './data/zones';
 import { MAP_SCHEMA_VERSION, roomSpawnOf, type MapData, type MapTheme } from './mapSchema';
+import { MONSTERS } from './data/monsters';
 
 export interface CustomZoneDef {
   /** `c_<letters, digits, _>`, chosen by the server when the map is made; never reused while the map exists. */
@@ -23,9 +24,17 @@ export interface CustomZoneDef {
   safe: boolean;
   /** Split into channels (CH 1–10) like the farm maps. */
   channels: boolean;
-  /** Auto Play allowed. */
+  /** Auto Play allowed (never in a minigame run). */
   autoPlay: boolean;
+  /** A minigame on this map (src/shared/waveGame.ts); absent = a plain map. */
+  minigame?: 'waves';
+  /** "รอดมอนเป็นระลอก": the monsters the waves are made of (picked at random per monster). */
+  waveMonsters?: string[];
 }
+
+/** Monsters a wave may use: every monster that is not a boss. */
+export const WAVE_MONSTER_IDS = (): string[] => Object.values(MONSTERS).filter((m) => m.behavior !== 'boss').map((m) => m.id);
+export const WAVE_MONSTERS_MAX = 10;
 
 export const CUSTOM_ID_RE = /^c_[a-z0-9_]{1,30}$/;
 export const NAME_MAX = 40;
@@ -46,7 +55,17 @@ export function cleanCustomDef(raw: unknown, id: string): { def: CustomZoneDef }
   const lv = Array.isArray(r.levels) ? r.levels : [];
   const lo = int(lv[0], 1, 80), hi = int(lv[1], 1, 80);
   if (lo === null || hi === null || lo > hi) return { error: 'ช่วงเลเวลต้องเป็น 1–80 และต่ำสุดไม่เกินสูงสุด' };
-  return { def: { id, name, nameTh, floor, levels: [lo, hi], safe: r.safe === true, channels: r.channels === true, autoPlay: r.autoPlay !== false } };
+  const def: CustomZoneDef = { id, name, nameTh, floor, levels: [lo, hi], safe: r.safe === true, channels: r.channels === true, autoPlay: r.autoPlay !== false };
+  if (r.minigame !== undefined && r.minigame !== null && r.minigame !== '') {
+    if (r.minigame !== 'waves') return { error: 'มินิเกมไม่ถูกต้อง' };
+    const ok = new Set(WAVE_MONSTER_IDS());
+    const mons = Array.isArray(r.waveMonsters) ? [...new Set(r.waveMonsters)] : [];
+    if (mons.some((m) => typeof m !== 'string' || !ok.has(m))) return { error: 'มีชนิดมอนที่ใช้ในระลอกไม่ได้' };
+    if (mons.length > WAVE_MONSTERS_MAX) return { error: `เลือกมอนได้ไม่เกิน ${WAVE_MONSTERS_MAX} ชนิด` };
+    def.minigame = 'waves';
+    def.waveMonsters = mons as string[];
+  }
+  return { def };
 }
 
 // ------------------------------------------------------------------ the first layout of a new map
@@ -97,8 +116,8 @@ export function zoneFromCustom(def: CustomZoneDef, map: MapData): ZoneDef {
     subtitle: '',
     levels: [def.levels[0], def.levels[1]],
     theme: map.zone.theme,
-    allowAutoPlay: def.autoPlay,
-    ...(def.channels ? { channels: true } : {}),
+    allowAutoPlay: def.autoPlay && !def.minigame,
+    ...(def.channels && !def.minigame ? { channels: true } : {}),
     half: map.zone.half,
     seed: seedOf(def.id),
     start: { ...map.zone.start },
@@ -111,6 +130,7 @@ export function zoneFromCustom(def: CustomZoneDef, map: MapData): ZoneDef {
     ...(map.zone.quadrants ? { quadrants: [...map.zone.quadrants] as ZoneDef['quadrants'] } : {}),
     ...(ice.length ? { iceLakes: ice } : {}),
     ...(lava.length ? { lavaPools: lava } : {}),
+    ...(def.minigame === 'waves' ? { waves: { monsters: [...(def.waveMonsters ?? [])], spots: (map.waveSpots ?? []).map((w) => ({ ...w })) } } : {}),
     custom: true,
   };
 }

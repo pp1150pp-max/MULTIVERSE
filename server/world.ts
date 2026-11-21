@@ -11,6 +11,8 @@ import { Sim } from '../src/shared/sim/Sim';
 import type { MapData } from '../src/shared/mapSchema';
 import { HUB_ID, lairExitSpot, ZONES, zoneWithLayout, type ZoneDef } from '../src/shared/data/zones';
 import { applyMaps, previewLayout } from './maps-live';
+import { WaveRooms, type WaveExit } from './waveRooms';
+import { PORTAL_RANGE } from '../src/shared/sim/terrain';
 import { cleanAutoSettings, roundBuffs, SORT_KEYS, type LootFilter, type Player } from '../src/shared/sim/Player';
 import { applyBalance, currentBalance, currentBalanceTuning, type BalanceTuning } from '../src/shared/balance';
 import { upgradeItem } from '../src/shared/data/items';
@@ -375,6 +377,14 @@ export class GameWorld {
   readonly friends: Friends;
   /** Boss summoning lobbies and the boss rooms' Sims (in memory only). */
   readonly rooms: BossRooms;
+  /** Minigame "รอดมอนเป็นระลอก": a run per group (server/waveRooms.ts). */
+  readonly waveRooms = new WaveRooms((sim, p, exit) => {
+    const s = this.byPlayer.get(p);
+    if (!s || s.sim !== sim) return;
+    // The dead get up by the door (Sim.respawn, whose exit is that door); the living walk out there.
+    if (!p.alive) return sim.respawn(p);
+    this.travel(s, exit.field, false, { x: exit.x, z: exit.z });
+  });
   private readonly reports: Reports;
   /** Set while the server counts down to stopping: no new players may join. */
   private closing: ShutdownMode | null = null;
@@ -522,6 +532,7 @@ export class GameWorld {
       },
     });
     setInterval(() => this.rooms.tick(), 250);
+    setInterval(() => this.waveRooms.tick(), 250);
     this.expireMarket();
     setInterval(() => this.expireMarket(), MARKET_EXPIRE_MS);
   }
@@ -836,7 +847,7 @@ export class GameWorld {
    */
   private canAway(s: Session): boolean {
     return !!s.auto && !s.guest && currentBalance().auto.offline && !this.closing && s.player.alive
-      && s.sim.zone.allowAutoPlay && !this.rooms.sims().includes(s.sim);
+      && s.sim.zone.allowAutoPlay && !this.rooms.sims().includes(s.sim) && !this.waveRooms.has(s.sim);
   }
 
   /**
@@ -879,6 +890,7 @@ export class GameWorld {
       else if (now - s.awayAt >= this.awayMs()) why = 'time up';
       else if (!cfg.offline) why = 'switched off in /admin';
       else if (this.rooms.sims().includes(s.sim)) why = 'in a boss room';
+      else if (this.waveRooms.has(s.sim)) why = 'in a minigame';
       // Reading a return scroll (Auto's "scroll" option): wait for it, so it ends in town.
       else if (!s.auto && p.castT <= 0) why = 'Auto stopped';
       if (why) this.leave(s, 'drop', `Auto away ended: ${why}, after ${fmtAgo(now - s.awayAt)}`);
@@ -888,7 +900,7 @@ export class GameWorld {
 
   /** Every running Sim: the channels, the boss rooms and the map-editor previews. */
   private allSims(): Sim[] {
-    return [...this.channels.sims(), ...this.rooms.sims(), ...this.previews];
+    return [...this.channels.sims(), ...this.rooms.sims(), ...this.waveRooms.sims(), ...this.previews];
   }
 
   private leave(s: Session, how: LeaveHow = 'quit', note?: string): void {
@@ -904,7 +916,7 @@ export class GameWorld {
       return;
     }
     // Auto was on and the character can come back to the same spot: it carries on then (join).
-    if (how !== 'quit' && s.auto && s.player.alive && !this.rooms.sims().includes(s.sim)) this.autoBack.set(s.charId, { auto: s.auto, at: Date.now() });
+    if (how !== 'quit' && s.auto && s.player.alive && !this.rooms.sims().includes(s.sim) && !this.waveRooms.has(s.sim)) this.autoBack.set(s.charId, { auto: s.auto, at: Date.now() });
     else this.autoBack.delete(s.charId);
     // Whatever the reason (quit, lost connection, a login from elsewhere): the trade ends, nothing moves.
     this.trades.cancelChar(s.charId, `${s.player.name} ออกจากเกม`);
@@ -2212,6 +2224,9 @@ export class GameWorld {
    */
   private travel(s: Session, to: string | Sim, atCamp = false, spot?: Vec2): void {
     if (s.preview) return; // a map preview stays in its own room (the portals do nothing)
+    // A minigame map: not a channel of it, a run of its own for the group.
+    const wz = typeof to === 'string' ? ZONES[to] : undefined;
+    if (wz?.waves) return this.enterWaves(s, wz);
     const dest = typeof to === 'string' ? this.channels.place(to, { leader: this.leaderSim(s), prefer: s.lastCh })?.sim : to;
     if (!dest || dest === s.sim || !this.sessions.has(s)) return;
     this.trades.cancelChar(s.charId, `${s.player.name} เปลี่ยนแมพ`);
@@ -2386,6 +2401,7 @@ export class GameWorld {
       })),
       ...(sim.hazards.length && sim.zone.boss && near(sim.zone.boss) ? { hazards: sim.hazards } : {}),
       room: this.rooms.snap(sim, p),
+      waves: this.waveRooms.snap(sim, p),
       loots: sim.loots.filter(near).map((l) => ({
         id: l.id, x: r2(l.x), z: r2(l.z), fromX: r2(l.fromX), fromZ: r2(l.fromZ), t: r2(l.t),
         kind: l.kind, dropped: l.dropped, owner: l.owner, ownerUntil: r2(l.ownerUntil),
@@ -2593,6 +2609,50 @@ export class GameWorld {
     }
     this.channels.dropZone(zoneId);
     return n;
+  }
+
+  /**
+   * Walking into a "รอดมอนเป็นระลอก" map: a party member whose party is already playing it joins that run; otherwise a new run opens
+   * for this player and the party members standing on the same map (alive, not away, runs left today). Everyone comes back out by the door.
+   */
+  private enterWaves(s: Session, zone: ZoneDef): void {
+    const tell = (x: Session, text: string): void => this.send(x.ws, { t: 'chat', name: '', text });
+    const cfg = currentBalance().waves;
+    if (!cfg.on) return tell(s, `มินิเกม "${zone.nameTh}" ปิดอยู่ตอนนี้`);
+    if (this.waveRooms.has(s.sim) || this.rooms.sims().includes(s.sim)) return;
+    if (this.waveRooms.runsLeft(s.charId) <= 0) return tell(s, `วันนี้เล่น "${zone.nameTh}" ครบ ${cfg.dailyLimit} รอบแล้ว`);
+    const party = this.parties.of(s.charId);
+    const partyId = party ? party.id : null;
+    const join = this.waveRooms.partyRun(zone.id, partyId);
+    if (join) {
+      this.waveRooms.joined(s.charId);
+      this.travel(s, join, true);
+      tell(s, `เข้าร่วมมินิเกม "${zone.nameTh}" กับปาร์ตี้`);
+      return;
+    }
+    const group = [s];
+    for (const m of party?.members ?? []) {
+      if (m.charId === s.charId) continue;
+      const o = this.sessionOfChar(m.charId);
+      if (o && o.awayAt === null && o.sim === s.sim && o.player.alive && this.waveRooms.runsLeft(o.charId) > 0) group.push(o);
+    }
+    const { sim, channel } = this.waveRooms.open(zone, group.map((g) => g.charId), this.waveExit(s, zone.id), partyId);
+    for (const g of group) {
+      this.travel(g, sim, true);
+      tell(g, `เข้าสู่มินิเกม "${zone.nameTh}" (ห้อง ${channel}) — รอดให้ครบ ${cfg.waves} ระลอก!`);
+    }
+  }
+
+  /** Where a wave run sends its players back: just outside the door they took (off its trigger ring, toward the map's start). */
+  private waveExit(s: Session, zoneId: string): WaveExit {
+    const zone = s.sim.zone;
+    const { x, z } = s.player;
+    const door = zone.portals.filter((p) => p.to === zoneId).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))[0];
+    if (!door) return { field: zone.id, x, z };
+    const dx = zone.start.x - door.x, dz = zone.start.z - door.z;
+    const d = Math.hypot(dx, dz) || 1;
+    const k = PORTAL_RANGE + 2.5;
+    return { field: zone.id, x: door.x + (dx / d) * k, z: door.z + (dz / d) * k };
   }
 
   /** The zone and channel an online character is in (for the admin page), or undefined. */

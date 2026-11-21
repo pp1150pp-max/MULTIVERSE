@@ -40,6 +40,7 @@ import type { RerollKind } from '../../shared/data/reroll';
 import type { Hazard } from '../../shared/sim/volcanoHeart';
 import type { MarketCall, MarketReply } from '../../shared/sim/market';
 import type { RoomLobbyView, RoomSnap } from '../../shared/bossRoom';
+import type { WaveSnap } from '../../shared/waveGame';
 import type { MailCall, MailReply } from '../../shared/mail';
 import { WalkTarget } from '../walkTo';
 import type { ReportReply } from '../../shared/reports';
@@ -249,6 +250,15 @@ export class OnlineBackend implements Backend {
   /** From the last snapshot; `leaveIn` is counted down locally in between (see room). */
   private roomSnap: RoomSnap | null = null;
   private roomAt = 0;
+  private waveSnap: WaveSnap | null = null;
+
+  get waves(): WaveSnap | null {
+    const w = this.waveSnap;
+    if (!w) return w;
+    const gone = (performance.now() - this.roomAt) / 1000;
+    const less = (v: number | undefined): number | undefined => (v === undefined ? undefined : Math.max(0, v - gone));
+    return { ...w, nextIn: less(w.nextIn), wonIn: less(w.wonIn), wipeIn: less(w.wipeIn) };
+  }
 
   get room(): RoomSnap | null {
     const r = this.roomSnap;
@@ -874,6 +884,7 @@ export class OnlineBackend implements Backend {
     this.onlineCount = s.online ?? null;
     this.hazards = s.hazards ?? [];
     this.roomSnap = s.room ?? null;
+    this.waveSnap = s.waves ?? null;
     this.roomAt = performance.now();
     this.party = s.party ?? null;
     this.me.partyId = this.party?.id ?? null;
