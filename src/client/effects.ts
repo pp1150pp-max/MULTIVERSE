@@ -39,6 +39,11 @@ interface EffectDef {
   upright?: boolean;
   /** Standing on the ground whatever its size (art drawn at the bottom of its cell: a dome, a sword stuck in the ground). */
   stand?: boolean;
+  /**
+   * With `stand`: how far down its cell (0 top … 1 bottom) the art's ground centre is (a ring of roots or spikes
+   * drawn seen at an angle), put on the effect's spot; missing = the cell's bottom edge on the ground.
+   */
+  ground?: number;
   /** Multiplies the art's colours (a tinted copy of a row, e.g. the sword's dark-red Execute). */
   tint?: string;
   /** The row is drawn as one seamless loop (all 6 frames at full strength), for zones; otherwise a zone loops frames 2–5. */
@@ -108,19 +113,20 @@ const EFFECTS: Record<SkillEffect, EffectDef> = {
   gs_hawkeye: { sheet: 'gs_passive', row: 0, life: 0.45, height: 2.2, upright: true },
   gs_trigger: { sheet: 'gs_passive', row: 1, life: 0.3, height: 0.95, upright: true },
   gs_special: { sheet: 'gs_passive', row: 2, life: 0.5, height: 'ground' },
-  // Bosses' skills (owner 2026-11-21). `size` is the skill's radius; the ones drawn seen at an angle stand on the ground.
+  // Bosses' skills (owner 2026-11-21). `size` is the skill's radius; the ones drawn seen at an angle stand on the ground,
+  // their ground centre (measured on the cut sheets) on the skill's spot: the witch's roots floated above her slam's circle.
   boss_bear_claw: { sheet: 'boss_bear', row: 0, life: 0.32, height: 1.1, upright: true },
   boss_bear_slam: { sheet: 'boss_bear', row: 1, life: 0.75, height: 'ground' },
   boss_bear_roar: { sheet: 'boss_bear', row: 2, life: 0.7, height: 'ground' },
   boss_witch_swipe: { sheet: 'boss_witch', row: 0, life: 0.38, height: 1.2 },
-  boss_witch_slam: { sheet: 'boss_witch', row: 1, life: 0.85, height: 0, upright: true, stand: true },
-  boss_witch_frenzy: { sheet: 'boss_witch', row: 2, life: 0.9, height: 0, upright: true, stand: true },
+  boss_witch_slam: { sheet: 'boss_witch', row: 1, life: 0.85, height: 0, upright: true, stand: true, ground: 0.63 },
+  boss_witch_frenzy: { sheet: 'boss_witch', row: 2, life: 0.9, height: 0, upright: true, stand: true, ground: 0.7 },
   boss_yeti_hit: { sheet: 'boss_yeti', row: 0, life: 0.38, height: 0.7, upright: true },
-  boss_yeti_slam: { sheet: 'boss_yeti', row: 1, life: 0.8, height: 0, upright: true, stand: true },
-  boss_yeti_snow: { sheet: 'boss_yeti', row: 2, life: 0.75, height: 0, upright: true, stand: true },
+  boss_yeti_slam: { sheet: 'boss_yeti', row: 1, life: 0.8, height: 0, upright: true, stand: true, ground: 0.55 },
+  boss_yeti_snow: { sheet: 'boss_yeti', row: 2, life: 0.75, height: 0, upright: true, stand: true, ground: 0.72 },
   boss_yeti_blizzard: { sheet: 'boss_yeti', row: 3, life: 0.9, height: 'ground' },
-  boss_heart_impact: { sheet: 'boss_heart', row: 1, life: 0.6, height: 0, upright: true, stand: true },
-  boss_heart_blast: { sheet: 'boss_heart', row: 4, life: 1, height: 0, upright: true, stand: true },
+  boss_heart_impact: { sheet: 'boss_heart', row: 1, life: 0.6, height: 0, upright: true, stand: true, ground: 0.75 },
+  boss_heart_blast: { sheet: 'boss_heart', row: 4, life: 1, height: 0, upright: true, stand: true, ground: 0.8 },
 };
 
 /** Flying shots, looked up by the colour the simulation gives each projectile. */
@@ -499,7 +505,8 @@ export class Effects implements FxApi {
       const mat = new THREE.SpriteMaterial({ map: tex, alphaTest: 0.5, transparent: false, rotation, color: def.tint ?? '#ffffff' });
       const spr = new THREE.Sprite(mat);
       // The sprite is size × 2 tall: centred at `size` its bottom edge is on the ground.
-      spr.position.set(x, def.stand ? size * 0.9 : def.height, z);
+      // `ground`: the point that far down the picture (2 × size tall) goes on the ground.
+      spr.position.set(x, def.stand ? (def.ground !== undefined ? size * (2 * def.ground - 1) : size * 0.9) : def.height, z);
       spr.scale.setScalar(size * 2);
       this.add(spr, def.life, play);
       playLayer(this, this.layerHooks, name, spr, x, spr.position.y, z, size, def.life, by, hit);
