@@ -12,5 +12,7 @@ export const CODE_POTIONS: Record<PotionKind, Record<PotionSize, PotionNums>> = 
 };
 /** Swordsmen's HP potions heal this many % more (owner 2026-11-09). */
 export const CODE_SWORD_POTION_BONUS = 75;
-/** Ranges the /admin card accepts. */
-export const POTION_RANGE = { amount: [1, 1000000], price: [0, 10000000], swordBonus: [0, 1000] } as const;
+/** Dropped potions grow with the monster's level (owner 2026-11-21): from this level medium, from this level large. */
+export const CODE_POTION_DROP = { dropM: 21, dropL: 41 } as const;
+/** Ranges the /admin card accepts (a drop level of 81 = never, the cap is 80). */
+export const POTION_RANGE = { amount: [1, 1000000], price: [0, 10000000], swordBonus: [0, 1000], dropLevel: [1, 81] } as const;

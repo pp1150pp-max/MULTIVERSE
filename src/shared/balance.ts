@@ -8,7 +8,7 @@ import { CLASSES, CLASS_IDS, MP_COST_PER_LEVEL } from './data/classes';
 import {
   CODE_BOSS_TIER_BOOST, CODE_RANGE_FLOOR, setAffixWeights, CODE_TIER_WEIGHT, CODE_TIER_WIDTH, setItemStatMult, setTierTables, TIER_BAND_NAME, TIER_BANDS, tierBandOf, type TierBand, type TierTableDef,
 } from './data/items';
-import { CODE_POTIONS, CODE_SWORD_POTION_BONUS, POTION_RANGE, type PotionNums } from './data/potionTable';
+import { CODE_POTIONS, CODE_POTION_DROP, CODE_SWORD_POTION_BONUS, POTION_RANGE, type PotionNums } from './data/potionTable';
 import { MONSTERS, type MonsterDef } from './data/monsters';
 import { ZONES } from './data/zones';
 import { checkFxLayerTuning, codeFxLayer, fxLayerChanges, mergeFxLayer, type FxLayerConfig, type FxLayerTuning } from './fxLayerTuning';
@@ -28,11 +28,11 @@ export const BALANCE_SETTING = 'balance';
 
 export const POTION_KINDS: readonly PotionKind[] = ['hp', 'mp'];
 export const POTION_SIZE_LIST: readonly PotionSize[] = ['s', 'm', 'l'];
-/** Potions in use: heal amount and price of each bottle, and the swordsman's HP-potion bonus in %. */
-export interface PotionBalance { hp: Record<PotionSize, PotionNums>; mp: Record<PotionSize, PotionNums>; swordBonus: number }
+/** Potions in use: heal amount and price of each bottle, the swordsman's HP-potion bonus in %, and the monster levels from which drops are medium / large. */
+export interface PotionBalance { hp: Record<PotionSize, PotionNums>; mp: Record<PotionSize, PotionNums>; swordBonus: number; dropM: number; dropL: number }
 /** Potion changes saved: only the numbers that differ from the code. */
-export interface PotionTuning { hp?: Partial<Record<PotionSize, Partial<PotionNums>>>; mp?: Partial<Record<PotionSize, Partial<PotionNums>>>; swordBonus?: number }
-const codePotions = (): PotionBalance => ({ hp: structuredClone(CODE_POTIONS.hp), mp: structuredClone(CODE_POTIONS.mp), swordBonus: CODE_SWORD_POTION_BONUS });
+export interface PotionTuning { hp?: Partial<Record<PotionSize, Partial<PotionNums>>>; mp?: Partial<Record<PotionSize, Partial<PotionNums>>>; swordBonus?: number; dropM?: number; dropL?: number }
+const codePotions = (): PotionBalance => ({ hp: structuredClone(CODE_POTIONS.hp), mp: structuredClone(CODE_POTIONS.mp), swordBonus: CODE_SWORD_POTION_BONUS, ...CODE_POTION_DROP });
 export { POTION_RANGE };
 
 /** Share of the HP regen stat that actually applies (owner: -60%). */
@@ -393,6 +393,8 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.potions) {
     for (const k of POTION_KINDS) for (const z of POTION_SIZE_LIST) Object.assign(b.potions[k][z], t.potions[k]?.[z]);
     if (t.potions.swordBonus !== undefined) b.potions.swordBonus = t.potions.swordBonus;
+    if (t.potions.dropM !== undefined) b.potions.dropM = t.potions.dropM;
+    if (t.potions.dropL !== undefined) b.potions.dropL = t.potions.dropL;
   }
   if (t.bossSwitchSec !== undefined) b.bossSwitchSec = t.bossSwitchSec;
   if (t.mobGiveUpSec !== undefined) b.mobGiveUpSec = t.mobGiveUpSec;
@@ -934,7 +936,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (x === undefined) return null;
     if (!isObj(x)) return strict ? 'ค่ายาไม่ถูกต้อง' : null;
     if (strict) {
-      const extra = Object.keys(x).find((k) => k !== 'hp' && k !== 'mp' && k !== 'swordBonus');
+      const extra = Object.keys(x).find((k) => k !== 'hp' && k !== 'mp' && k !== 'swordBonus' && k !== 'dropM' && k !== 'dropL');
       if (extra) return `ยา: ไม่รู้จักค่า "${extra.slice(0, 30)}"`;
     }
     const res: PotionTuning = {};
@@ -970,6 +972,11 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     const sb = num(x.swordBonus, ...POTION_RANGE.swordBonus, 'โบนัสยา HP นักดาบ (%)');
     if (typeof sb === 'string') return sb;
     if (sb !== undefined && sb !== CODE_SWORD_POTION_BONUS) res.swordBonus = sb;
+    for (const [f, label] of [['dropM', 'ยากลาง'], ['dropL', 'ยาใหญ่']] as const) {
+      const lv = num(x[f], ...POTION_RANGE.dropLevel, `มอนดรอป${label}ตั้งแต่เลเวล`);
+      if (typeof lv === 'string') return lv;
+      if (lv !== undefined && Math.round(lv) !== CODE_POTION_DROP[f]) res[f] = Math.round(lv);
+    }
     if (Object.keys(res).length) out.potions = res;
     return null;
   };
@@ -1167,6 +1174,8 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
     }
   }
   if (a.potions.swordBonus !== b.potions.swordBonus) out.push(`โบนัสยา HP นักดาบ +${a.potions.swordBonus}% → +${b.potions.swordBonus}%`);
+  if (a.potions.dropM !== b.potions.dropM) out.push(`มอนดรอปยากลางตั้งแต่ Lv ${a.potions.dropM} → ${b.potions.dropM}`);
+  if (a.potions.dropL !== b.potions.dropL) out.push(`มอนดรอปยาใหญ่ตั้งแต่ Lv ${a.potions.dropL} → ${b.potions.dropL}`);
   if (a.bossSwitchSec !== b.bossSwitchSec) out.push(`บอสเปลี่ยนเป้าหมายทุก ${a.bossSwitchSec || 'ปิด'} → ${b.bossSwitchSec || 'ปิด'} วิ`);
   if (a.mobGiveUpSec !== b.mobGiveUpSec) out.push(`มอนธรรมดาเลิกไล่เมื่อไม่โดนตี ${a.mobGiveUpSec || 'ไม่เลิก'} → ${b.mobGiveUpSec || 'ไม่เลิก'} วิ`);
   if (a.bossWipeKeepHp !== b.bossWipeKeepHp) out.push(`บอสไม่ฟื้นเลือดตอนทีมตายหมด ${a.bossWipeKeepHp ? 'เปิด' : 'ปิด'} → ${b.bossWipeKeepHp ? 'เปิด' : 'ปิด'}`);
