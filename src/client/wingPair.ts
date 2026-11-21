@@ -34,8 +34,8 @@ function viewParts(view: number, tilt: number, squeeze: number): WingPart[] {
       { row: 0, x: 14, y: 0, mirror: false, squeeze: 1, tilt, front: false },
     ];
     case 2: return [
-      { row: 2, x: 32, y: -2, mirror: false, squeeze: 1, tilt: 0, front: false, shade: 0.7 },
-      { row: 2, x: 22, y: 10, mirror: false, squeeze: 1, tilt: 0, front: true },
+      { row: 2, x: 20, y: -2, mirror: false, squeeze: 1, tilt: 0, front: false, shade: 0.7 },
+      { row: 2, x: 10, y: 10, mirror: false, squeeze: 1, tilt: 0, front: true },
     ];
     case 3: return [
       { row: 4, x: 16, y: 30, mirror: false, squeeze, tilt: -tilt, front: true, order: 0 },
