@@ -14,6 +14,7 @@ import { ISO_DIR, World } from './world';
 import { restSpotNear, SUMMONER_HEIGHT, SUMMONER_RANGE } from '../shared/sim/terrain';
 import { Input } from './input';
 import { AimGuide, Effects } from './effects';
+import { setTexShareRenderer } from './texShare';
 import { Floating, countdown } from './floating';
 import { MONSTERS } from '../shared/data/monsters';
 import { Hud } from './hud';
@@ -169,6 +170,7 @@ export class Game {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    setTexShareRenderer(this.renderer);
     // A mount seen on the front diagonal is cut in two around its rider (cosmeticViews.ts).
     this.renderer.localClippingEnabled = true;
     container.prepend(this.renderer.domElement);

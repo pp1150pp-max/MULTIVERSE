@@ -8,6 +8,7 @@ import { mulberry32, pick, rand, type Rng } from '../shared/rng';
 import { assetSources, fxTex, groundTiles, sheets, type GroundTile } from './assets';
 import { CAM_RIGHT_RAW, ISO_RAW, TOWN2_PROP_RE } from '../shared/isoProjection';
 import { closeBias, IslandOutline, paintSpace, PieceBatch } from './island';
+import { cloneShared } from './texShare';
 
 /** Size of the picture the maps are cut from, and of the ground rendered for it. */
 const MAP_SIZE = 1400;
@@ -1212,10 +1213,9 @@ export class World {
     // is turned, a copy sharing the same image, read right to left.
     let map = sh.texture;
     if (flip) {
-      map = this.flipped.get(key) ?? sh.texture.clone();
+      map = this.flipped.get(key) ?? cloneShared(sh.texture);
       map.repeat.x = -1;
       map.offset.x = 1;
-      map.needsUpdate = true;
       this.flipped.set(key, map);
     }
     let mat: THREE.SpriteMaterial;
