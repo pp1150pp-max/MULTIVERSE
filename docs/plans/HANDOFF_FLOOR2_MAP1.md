@@ -1,6 +1,6 @@
 # ส่งต่องาน: ชั้น 2 PR #4 `feature/floor2-map1` (หาดเรือแตก)
 
-เขียน 2026-11-21 · ย้ายไปทำต่อในบัญชีอื่น · branch `feature/floor2-map1` (push แล้ว) ฐาน `origin/floor2` · **ยังไม่ได้เปิด PR**
+เขียน 2026-11-21 · branch `feature/floor2-map1` ฐาน `origin/floor2` · **PR #411** (https://github.com/pp1150pp-max/MULTIVERSE/pull/411) รอเจ้าของสั่ง merge
 
 ## กติกาที่ต้องทำตาม
 - PR เปิดเข้า `floor2` (`--base floor2`) **ห้ามเข้า main** ห้ามขึ้น server · เจ้าของต้องยืนยัน merge เอง แล้ว squash merge · `gh project item-add 1 --owner pp1150pp-max --url <PR>`
@@ -23,18 +23,17 @@
 - เทสต์ใหม่ `tests/floor2-map1.test.ts` (ผ่านหมด) + แก้ `harbor`, `volcano-zone`, `boss-hp`
 - อัปเดต docs: `world-and-ui.md`, `boss-rooms.md`, `balance.md`, `CLAUDE.md`, แผนข้อ 11/12
 
-## ค้าง (ทำต่อตามลำดับ)
-1. **เทสต์เดิม 5 ไฟล์ยังล้ม** เพราะนับว่ามีแมพ/บอส/กุญแจ 4 อัน หรือใช้ตัว Lv40 ตีบอส Lv50 (โดน MISS ตามกฎช่องว่างเลเวล):
-   - `tests/boss-keys.test.ts` "hub monsters drop all four keys"
-   - `tests/quest-marks.test.ts` "one row per boss"
-   - `tests/channels.test.ts` "the 4 farm maps have channels"
-   - `tests/multi-hub.test.ts` 3 ข้อ (นับแมพชั้น 1/2, ห้องบอสชั้น 1, "Lv45 monster belongs to the floor-2 map")
-   - `tests/cosmetics-server.test.ts` "riding: a 3.2 step…" — อาจ flaky ไม่เกี่ยวกับงานนี้ ลองรันซ้ำก่อน
-   - ส่วนใหญ่แก้ที่เทสต์ (กรองชั้น 1 หรือใช้ `Object.keys(...).length`) **อย่าแก้กติกาเกมให้เทสต์ผ่าน**
-2. `npm run typecheck` (ผ่านแล้วตอน commit) + `npm run test` ให้ผ่านทั้งหมด
-3. ลอง `npm run dev` อ่านหน้าเป็นข้อความ: dev ของ worktree นี้ตั้งไว้ใน `D:\Claude\Game\.claude\launch.json` ชื่อ `map1-server` (2694, DB `server/data/dev-map1.db`) + `map1-dev` (5404) · สร้าง Guest `BeachTest` แล้ว ต้องแก้ DB ให้ Lv45 + `unlocks: ['floor2']` ถึงจะเข้าแมพได้ (ปิดแท็บก่อนแก้ DB) · ยังไม่ได้เข้าแมพจริงเลย
-4. เปิด PR: `"C:/Program Files/GitHub CLI/gh.exe" pr create --base floor2 --assignee ioilLnwza` (path เต็ม รันนอก sandbox) → รอ CI → ให้เจ้าของยืนยัน merge → squash → การ์ดคันบัง
-5. เขียนโน้ตส่งต่อให้ PR #5 แมพ 2 (ด้านล่าง)
+## อัปเดต 2026-11-21: เปิด PR #411 แล้ว (เข้า `floor2`)
+- รวม `origin/floor2` (#385) เข้ามาแล้ว ชนแค่ `CLAUDE.md` 1 บรรทัด
+- แก้เทสต์เดิม 4 ไฟล์ที่นับตายตัวว่ามี 4 อัน: `boss-keys` (เมืองชั้น 1 ดรอปเฉพาะกุญแจชั้น 1), `channels` (แมพฟาร์มทุกแมพมี CH), `quest-marks` (5 แถว), `multi-hub` (ชั้น 2 = ท่าเรือ+หาด, ห้องปูยักษ์กลับท่าเรือ, มอน Lv45 อยู่หาด) แก้ที่เทสต์อย่างเดียว ไม่แตะกติกาเกม
+- `typecheck` ผ่าน · `test` ผ่านทั้งหมด ยกเว้น `cosmetics-server` "riding: a 3.2 step…" ที่ล้มเป็นบางครั้งเพราะขึ้นกับเวลา (branch นี้ล้ม 1/9, `floor2` เดิม 0/10 และ PR นี้ไม่แตะเมืองชั้น 1)
+- ยังไม่ได้เข้าแมพจริงบนจอ เจ้าของจะลองเองบน `floor2`
+
+## ค้าง (หลัง #411 merge)
+1. **PR ภาพแมพ 1:** ภาพตัดแล้วอยู่บน `art/floor2-cut` (worktree `.claude/worktrees/floor2-art-cut`, **ยังไม่ push**, แตกจาก main และมีภาพแมพ 1–4 + ไอคอนเซ็ต ทั้งชุด) ต้องถามเจ้าของก่อนว่าจะให้ภาพเข้า `floor2` หรือ main
+2. **ภาพบอสปูยักษ์ยังไม่ได้ตัด:** ภาพดิบ 4 ท่าใน `floor2-art-cut/art_templates/papercraft_maps/raw/floor2_m1/monsters/giant_crab_{walk,claw,cannon,shell}.png` ครบและเป็นตาราง 5×4 ถูกแล้ว (เช็ก 2026-11-21) ตัดด้วย `node tools/cut_floor2_chars.cjs monsters --only giant_crab` แล้วผูกชื่อ `giant_crab` → `cannon_crab` และให้ตัวโหลดรองรับ 4 ท่า (ดูข้อภาพบอสด้านล่าง)
+3. แมพ 1 เป็น JSON ของตัวแก้แมพ: รอ PR 9 หลัง `floor2` เข้า main (`docs/plans/map-editor.md`)
+4. dev ลองเล่นของ worktree นี้: `D:\Claude\Game\.claude\launch.json` ชื่อ `map1-server` (2694, DB `server/data/dev-map1.db`) + `map1-dev` (5404) · Guest `BeachTest` ต้องแก้ DB ให้ Lv45 + `unlocks: ['floor2']` (ปิดแท็บก่อนแก้ DB)
 
 ## สำหรับ PR #5 (แมพ 2 อ่าวลักลอบ) และ PR ภาพ
 - เพิ่มแมพ: ใส่ใน `ZONES` + `bossRoom` list + `BOSS_RADIUS` + `BOSS_ROOM_NAME` (ขาด = เกมโหลดไม่ขึ้น) + ธีมใหม่ในทุก `Record<ZoneTheme,…>` (`THEME_PROPS`, `SUMMONER_PROP`, `TRAIL_WIDTH`, `ISLAND_ART`, `DECOR`, `PALETTES`)
