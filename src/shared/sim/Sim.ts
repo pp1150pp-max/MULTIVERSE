@@ -1904,6 +1904,7 @@ export class Sim {
         if (!this.terrain.isBlocked(x, zz, def.radius)) break;
       }
       const m = new Monster(this.newId(), def, randInt(r, def.levels[0], def.levels[1]), area, x, zz, boost);
+      m.hunter = true;
       this.monsters.push(m);
       w.ids.add(m.id);
       this.fx('burst', x, 1, zz, '#ff9a3a', 10, 2);
