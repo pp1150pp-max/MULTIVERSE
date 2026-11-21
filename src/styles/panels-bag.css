@@ -3,6 +3,7 @@
 .panel {
   position: absolute; background: var(--panel); border: 3px solid #4a4640; outline: 1px solid var(--panel-edge); outline-offset: -6px; border-radius: 4px;
   box-shadow: 0 0 0 1px #000, 0 8px 30px rgba(0, 0, 0, 0.7); padding: 16px;
+  isolation: isolate; /* own stacking context: child z-index (forge slot, hammer...) can't leak above another window */
 }
 /* Broken-star ornaments on two corners; the other two are left clear for the close button and content. */
 .panel::before, .panel::after {
