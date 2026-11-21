@@ -45,6 +45,8 @@ export interface HitOpts {
   weakT?: number;
   /** The skill this hit comes from (passives can check its line); missing = basic attack or other. */
   skill?: SkillDef;
+  /** Damage bounced back (the sword's Thorn Armor): a spike turtle doesn't bounce it again (no endless loop). */
+  reflected?: boolean;
 }
 
 /** Visual effects the renderer knows how to draw. The client's Effects class implements this. */
@@ -74,6 +76,13 @@ export interface FxApi {
    */
   /** `follow` may come as null over the wire; `skill` = the skill that made it (its standing layer, zoneProps.ts). */
   zone(name: SkillEffect, x: number, z: number, size: number, duration: number, follow?: number | null, skill?: string, by?: number): void;
+  /**
+   * A paper effect picture (a SHEET_SPECS key such as fx_shell_guard, fx_shock) standing at (x, z) for `life` seconds,
+   * `size` its half-width; `follow` = a unit id it stays on (floor 2's monster moves, sim/beachMoves.ts).
+   */
+  sprite(key: string, x: number, z: number, size: number, life: number, follow?: number | null): void;
+  /** A lightning bolt from one spot to another (the shock eel's chain), fading over `life` seconds. */
+  bolt(x1: number, z1: number, x2: number, z2: number, life: number): void;
 }
 
 export type SkillEffect = 'slash' | 'whirlwind' | 'charge' | 'quake' | 'explosion' | 'frost' | 'crater' | 'muzzle' | 'impact'

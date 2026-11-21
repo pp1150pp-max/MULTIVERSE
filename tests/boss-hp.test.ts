@@ -5,7 +5,7 @@ import { BOSS_ROOMS, ZONES } from '../src/shared/data/zones';
 import { Sim } from '../src/shared/sim/Sim';
 import type { Monster } from '../src/shared/sim/Monster';
 
-const hero = (name: string) => ({ name, classId: 'sword' as const, level: 40, exp: 0, gold: 0, equipment: {}, bag: [] });
+const hero = (name: string, level = 40) => ({ name, classId: 'sword' as const, level, exp: 0, gold: 0, equipment: {}, bag: [] });
 const TICK = 1 / 30;
 
 let rooms = 0;
@@ -15,7 +15,7 @@ for (const zone of Object.values(BOSS_ROOMS)) {
   const m = sim.monsters.find((x) => x.def.id === zone.boss!.monster) as Monster;
   const base = m.maxHp;
   const [a, b, c] = ['A', 'B', 'C'].map((n) => {
-    const p = sim.addPlayer(hero(n));
+    const p = sim.addPlayer(hero(n, Math.max(40, zone.levels[1])));
     // Next to the boss (inside the Volcano Heart's arena), and too tough to die during the test.
     p.x = m.x + 3;
     p.z = m.z;
@@ -47,7 +47,7 @@ for (const zone of Object.values(BOSS_ROOMS)) {
   ok(m.maxHp === base && m.hp === base && m.damageBy.size === 0, `${name}: with nobody fighting it goes back to normal, full HP`);
 }
 
-ok(rooms === 4, 'every boss room checked');
+ok(rooms === Object.keys(BOSS_ROOMS).length && rooms >= 5, 'every boss room checked (floor 1 and floor 2)');
 
 // Normal monsters never scale.
 {

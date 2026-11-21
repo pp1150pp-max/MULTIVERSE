@@ -19,13 +19,14 @@ const MAP_MIN_PROP = 2;
 /** Bare ground around the camp at a zone's start. */
 const CAMP_RADIUS = 7;
 /** How wide each theme's roads are worn into the grass. */
-const TRAIL_WIDTH: Record<ZoneTheme, number> = { forest: 4.2, marsh: 3.6, snow: 3.8, volcano: 3.8 };
+const TRAIL_WIDTH: Record<ZoneTheme, number> = { forest: 4.2, marsh: 3.6, snow: 3.8, volcano: 3.8, beach: 3.8 };
 /** Pictures of the broken land around each theme's island. */
 const ISLAND_ART: Record<ZoneTheme, { cliff: string; slabs: string }> = {
   forest: { cliff: 'island_cliff_forest', slabs: 'island_slabs_forest' },
   marsh: { cliff: 'island_cliff_marsh', slabs: 'island_slabs_marsh' },
   snow: { cliff: 'island_cliff_snow', slabs: 'island_slabs_snow' },
   volcano: { cliff: 'island_cliff_volcano', slabs: 'island_slabs_volcano' },
+  beach: { cliff: 'island_cliff_beach', slabs: 'island_slabs_beach' },
 };
 /** Light snowfall: how many flakes hang around the player, inside a box this many units across. */
 const SNOW_FLAKES = 240;
@@ -111,6 +112,20 @@ const DECOR: Record<ZoneTheme, { key: string; cols: number; rows: number; spots:
       water: [],
     },
     flat: [6, 7, 8],
+  },
+  // FLOOR2_M1_BEACH.md 4: shells, starfish / pebbles, seaweed, driftwood, beach grass / hibiscus, crab hole, coins, a plank.
+  beach: {
+    key: 'decor_beach',
+    cols: 4,
+    rows: 3,
+    spots: {
+      verge: [7, 7, 7, 0, 1, 8],
+      field: [0, 0, 1, 1, 2, 3, 4, 5, 6, 7, 9, 10],
+      road: [11, 11, 4],
+      shore: [5, 5, 2, 3, 0, 6],
+      water: [],
+    },
+    flat: [2, 3, 9, 10],
   },
 };
 /** Props at least this tall turn see-through when the player walks behind them. */
@@ -422,6 +437,33 @@ const PALETTES: Record<ZoneTheme, GroundPalette> = {
     pools: 0,
     fog: 10,
     portalGlow: '#ffb06a',
+  },
+  // Warm cream sand, salvaged planks for the roads and turquoise tide pools (FLOOR2_M1_BEACH.md).
+  beach: {
+    tiles: { base: 'sand', dirt: 'wreck', water: 'shallow', pave: 'wreck' },
+    background: '#cfe6f2',
+    mapEdge: '#f2e2b6',
+    mapRoad: ['rgba(120, 96, 70, 0.6)', 'rgba(214, 190, 150, 0.55)'],
+    base: '#e8d6a6',
+    patchDark: ['#e0cc98', '#dcc792', '#e3cf9c'],
+    patchLight: ['#efdfb2', '#f2e4ba', '#ecdbad'],
+    specks: ['#d6c08a', '#f4e8c4', '#cdb67e', '#f7eccc', '#dac590', '#c9ad78'],
+    tuft: ['#9aa860', '#c8d080'],
+    clearing: ['#d8c290', '#dcc794', '#d2bc88'],
+    clearingRim: ['#c8b07c', '#cdb582'],
+    clearingStone: '#bfa676',
+    path: [
+      [4.6, ['#6e5640', '#735a43']],
+      [3.9, ['#8a7058', '#907660', '#846b53']],
+      [2.8, ['#9c826a', '#a28870', '#967c64', '#9c826a']],
+    ],
+    pathDetail: { kind: 'planks', colors: ['#5a4634', '#b09070'] },
+    flowers: ['#e8402e', '#ff7a5a', '#f6f0e0'],
+    flowerCore: '#f2c24a',
+    edge: 'rgba(40,60,70,0.35)',
+    pools: 26,
+    fog: 0,
+    portalGlow: '#6ae8ff',
   },
 };
 

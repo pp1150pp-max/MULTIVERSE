@@ -19,9 +19,10 @@ const OPEN = { floorGateOpen: true, floorGateQuest: true };
 
 // ---- floor 1 stays as it was
 const FLOOR1 = Object.values(ZONES).filter((z) => floorOf(z) === 1);
-ok(FLOOR1.length === 5 && Object.values(ZONES).filter((z) => floorOf(z) === 2).map((z) => z.id).join() === 'harbor_town', 'floor 1: the five zones; floor 2: the harbour');
+ok(FLOOR1.length === 5 && Object.values(ZONES).filter((z) => floorOf(z) === 2).map((z) => z.id).sort().join() === 'harbor_town,shipwreck_beach', 'floor 1: the five zones; floor 2: the harbour and the beach');
 ok(FLOOR1.every((z) => hubOf(z).id === HUB_ID), 'floor 1: every zone\'s town is nexus_city');
-ok(Object.values(BOSS_ROOMS).every((r) => hubOf(r).id === HUB_ID), 'floor 1 boss rooms: nexus_city too');
+ok(FLOOR1.every((z) => !BOSS_ROOMS[z.id] || hubOf(BOSS_ROOMS[z.id]).id === HUB_ID), 'floor 1 boss rooms: nexus_city too');
+ok(hubOf(BOSS_ROOMS.shipwreck_beach).id === 'harbor_town', 'the floor-2 crab lair: the harbour');
 ok(isHub(ZONE_HUB) && isHub(ZONE_HARBOR) && Object.values(ZONES).filter(isHub).length === 2, 'the towns: nexus_city and the harbour');
 ok(loginHub({ zone: 'emerald_forest' }).id === HUB_ID && loginHub({}).id === HUB_ID && loginHub({ zone: 'nope' }).id === HUB_ID, 'login: floor 1 → nexus_city (also missing/unknown zone)');
 
@@ -143,7 +144,8 @@ ok(loginHub({ zone: 'emerald_forest', unlocks: ['floor2'] }, OPEN).id === HUB_ID
 // ---- monsters of floor 2 find a floor-2 home map, never the harbor
 {
   const sim = new Sim(ZONE_HUB) as unknown as { homeOf(d: { levels: [number, number] }): ZoneDef | undefined };
-  ok(sim.homeOf({ levels: [45, 45] })?.id === FIELD.id, 'a Lv45 monster belongs to the floor-2 map');
+  // The real beach (Lv41–50) is listed before the made-up test map, so it is the home.
+  ok(sim.homeOf({ levels: [45, 45] })?.id === 'shipwreck_beach', 'a Lv45 monster belongs to the floor-2 map');
   ok(sim.homeOf(MONSTERS[Object.keys(MONSTERS)[0]])?.id !== HARBOR.id, 'a floor-1 monster never belongs to the harbor');
 }
 

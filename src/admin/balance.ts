@@ -31,6 +31,7 @@ import type { MailAttachItem } from '../shared/mail';
 import { POTION_SIZES, potionName } from '../shared/data/potions';
 import { STONE_NAME } from '../shared/data/stones';
 import { CODE_SET_STEPS, SET_IDS, SET_MAX_PIECES, SET_NAME } from '../shared/data/sets';
+import { MOVE_GROUPS } from '../shared/moveTuning';
 
 type Kids = (Node | string | null | undefined | false)[];
 type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, unknown>, ...kids: Kids) => HTMLElementTagNameMap[K];
@@ -775,6 +776,23 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
+  // ---------------------------------------------------------- floor 2 monster moves (src/shared/moveTuning.ts, plan 5)
+  const moveCard = h('div', { class: 'card' });
+  const drawMoves = (): void => {
+    const groups = MOVE_GROUPS.map((g) => h('div', { class: 'bal-line' },
+      h('h3', {}, g.title),
+      ...g.params.map((q) => h('div', { class: 'row bal-line' },
+        h('label', {}, `${q.label} `, numBox(() => draft.moves[q.key], (n) => { draft.moves[q.key] = n; }, q.code, q.min, q.max, q.step, () => updateSummary())),
+        h('span', { class: 'muted' }, ` ${q.unit ?? ''} · ค่าในโค้ด ${q.code}`)))));
+    moveCard.replaceChildren(
+      h('h2', {}, 'ท่ามอนชั้น 2'),
+      h('div', { class: 'muted' },
+        'ค่าท่าใหม่ของมอนและบอสชั้น 2 (แมพ 1 หาดเรือแตก) มีผลทันทีหลังบันทึก · ×ATK = คูณพลังโจมตีของมอน (บอสในห้องคูณตามจำนวนกุญแจด้วย) · ' +
+        'ค่า HP/ATK/DEF ของมอนธรรมดาปรับในการ์ดตัวคูณมอน · นางนวลขโมยทองจริง ตีตกภายในเวลาบินหนีได้คืนคนที่โดนขโมย ไม่ทัน = ทองหาย'),
+      ...groups,
+    );
+  };
+
   // ---------------------------------------------------------- Auto Play (src/shared/autoTuning.ts)
   const autoCard = h('div', { class: 'card' });
   const drawAuto = (): void => {
@@ -1131,6 +1149,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawForge();
     drawSets();
     drawFloor();
+    drawMoves();
     drawAuto();
     drawTut();
     drawFx();
@@ -1185,7 +1204,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     msg,
   );
 
-  box.replaceChildren(fold.toc, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, forgeCard, setCard, floorCard, autoCard, tutCard, fxCard, circleCard, rootCard, rigCard, bar);
+  box.replaceChildren(fold.toc, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, forgeCard, setCard, floorCard, moveCard, autoCard, tutCard, fxCard, circleCard, rootCard, rigCard, bar);
   redraw();
   fold.refreshToc();
 }
