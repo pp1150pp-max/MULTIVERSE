@@ -144,22 +144,21 @@ The result must look like the wing from image 1, only placed like image 2. No bo
 
 ---
 
-## 7. ปีกข้างเดียว เจนรอบ 4: แกนสั้น + มุมข้างสั้นลง (2026-11-21) → `wings_<ชื่อ>_one.png`
+## 7. ปีกข้างเดียว เจนรอบ 4: ทรงตามปีกชุดก่อนเปลี่ยนเป็นกระดาษ (2026-11-21) → `wings_<ชื่อ>_one.png`
 
-รอบ 3 หน้าตาเหมือนเดิมแล้ว แต่มีแกน/ก้านยาวจากโคนก่อนถึงขนปีก ในเกมเลยดูลอยห่างจากหลัง และตอนวิ่ง (มุมข้าง) ปีกยาวเกิน
-รอบนี้ให้ขนปีกเริ่มชิดโคนเลย และแถวมุมข้าง/เฉียงสั้นลง
+รอบ 3 มีแกนยาวจากโคนก่อนถึงขนปีก ในเกมเลยดูลอยห่างจากหลัง และตอนวิ่งปีกยาวเกิน
+รอบนี้ลอกรูปทรง ท่า และความยาวจากปีกชุดก่อนเปลี่ยนเป็นกระดาษ (โคนซ้ายทุกช่อง แกนสั้น มุมข้างพับเก็บ) แล้ววาดเป็นกระดาษตัดแปะ
 
-**วิธีทำ:** เปิดแชทใหม่ต่อ 1 ปีก แนบ 1 ภาพ คือภาพรอบ 3 ที่เพิ่งเจน `art_templates/papercraft_cosmetics/raw/wings_<ชื่อ>_one.png`
-วาง prompt กลาง + บรรทัดพื้นหลังของปีกนั้น (ตารางในข้อ 6) เซฟทับไฟล์เดิมที่ `art_templates/papercraft_cosmetics/raw/wings_<ชื่อ>_one.png`
+**วิธีทำ:** เปิดแชทใหม่ต่อ 1 ปีก แนบ 1 ภาพ: `art_templates/papercraft_cosmetics/ref/wings_<ชื่อ>_one_PIXEL.png`
+วาง prompt กลาง + บรรทัดพื้นหลังของปีกนั้น (ตารางในข้อ 6) เซฟทับ `art_templates/papercraft_cosmetics/raw/wings_<ชื่อ>_one.png`
 
 ### prompt กลาง
 
 ```
-Edit the attached sprite sheet (5 rows x 3 columns, ONE single wing per cell). Keep the wing's look exactly the same: same design, same feathers / plates / membrane, same colours, same details, same papercraft style, same background colour. Keep the 5 x 3 layout and every cell the same size.
-Change only these 2 things:
-1. NO LONG ARM. Remove the long bar / stick / bone / strut between the root and the feathers. The wing's root joint stays a SMALL rounded joint touching the LEFT edge of the cell at half the cell's height, and the feathers (or membrane, or plates) must start RIGHT AT that joint, with no gap and no long stem before them. The wing should look attached directly to the shoulder.
-2. SHORTER IN ROWS 2, 3 and 4 (the turned and side views used while running): the wing is more folded and compact, about 60% as long as in row 1, still swept back and slightly up from the root to the right.
-Rows 1 and 5 keep their full open size (only the long arm removed). Columns stay 3 flap frames (rest, raised, lowered) with the same root point. Never put the root on the right side. No body, no second wing, no text, no shadow on the background.
+Redraw the attached sprite sheet in papercraft style: layered cut paper with soft paper shadows and slightly visible paper edges, clean and colourful, NOT pixel art. It is ONE single character wing, 5 rows x 3 columns (5 views x 3 flap frames).
+Keep EVERYTHING else exactly like the attached picture: the same wing design, shape, outline and colours, the same pose and angle in every cell, the same size and the same length of the wing in each row (rows 2, 3 and 4 stay short and folded like the attached), and the same position in each cell. The layout must match cell by cell, on a 3:5 tall canvas with every cell the same size.
+The wing's ROOT is a SMALL joint at the LEFT edge of every cell at half the cell's height, and the feathers (or membrane, or plates) start RIGHT AT that joint, with no long arm or stick before them, exactly like the attached. Never put the root on the right side.
+No body, no second wing, no text, no shadow on the background.
 ```
 
 **สำหรับผม:** ตัดด้วย `tools/cut_cosmetics.cjs` เหมือนข้อ 5
