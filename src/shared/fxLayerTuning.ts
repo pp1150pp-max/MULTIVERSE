@@ -224,7 +224,7 @@ const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
   orbsNearBar: 'ลูกแก้ว HP/MP ชิดแถบสกิล (ปิด = มุมจอ)',
   ...(Object.fromEntries(QUARKS_SKILL_IDS.map((s) => [quarksKey(s), `three.quarks: ${QUARKS_SKILLS[s]}`])) as Record<QuarksKey, string>),
   extras: 'เอฟเฟกต์โค้ดของสกิล (ทับภาพเดิม)',
-  bossFx: 'ภาพเอฟเฟกต์สกิลบอส (ปิด = แบบเดิม)',
+  bossFx: 'ภาพเอฟเฟกต์สกิลบอส (ปิด = ภาพแบบเดิม ท่าตีตอนร่ายยังเล่น)',
   bossExtras: 'เอฟเฟกต์โค้ดของสกิลบอส (ทับภาพ)',
 };
 

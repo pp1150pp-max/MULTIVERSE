@@ -1000,7 +1000,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('h3', {}, 'สกิลบอส (หมี แม่มด เยติ หัวใจภูเขาไฟ)'),
       h('div', { class: 'row bal-line' },
         h('label', { class: a.bossFx !== ca.bossFx ? 'bal-changed' : '' },
-          h('input', { type: 'checkbox', checked: a.bossFx, onchange: (e: Event) => { a.bossFx = (e.target as HTMLInputElement).checked; refresh(); } }), ' ภาพเอฟเฟกต์สกิลบอส (ปิด = แบบเดิม)'),
+          h('input', { type: 'checkbox', checked: a.bossFx, onchange: (e: Event) => { a.bossFx = (e.target as HTMLInputElement).checked; refresh(); } }), ' ภาพเอฟเฟกต์สกิลบอส (ปิด = ภาพแบบเดิม ท่าตีตอนร่ายยังเล่น)'),
         h('label', { class: a.bossExtras !== ca.bossExtras ? 'bal-changed' : '' },
           h('input', { type: 'checkbox', checked: a.bossExtras, onchange: (e: Event) => { a.bossExtras = (e.target as HTMLInputElement).checked; refresh(); } }), ' เอฟเฟกต์โค้ดทับภาพ'),
         h('label', {}, FX_LAYER_NAME.bossExtrasK, numBox(() => a.bossExtrasK, (n) => { a.bossExtrasK = n; }, ca.bossExtrasK, FX_LAYER_RANGE.bossExtrasK[0], FX_LAYER_RANGE.bossExtrasK[1], 0.1, refresh))),
