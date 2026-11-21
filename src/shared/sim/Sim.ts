@@ -557,6 +557,7 @@ export class Sim {
       z: m.z,
     });
     this.shake(0.3, m);
+    if (m.def.fx?.enrage) this.fx('effect', m.def.fx.enrage, m.x, m.z, 0, Math.max(2.5, m.radius * 2.5));
     if (m.def.summon && !m.def.summon.vanish) this.summonMinions(m, m.def.summon.monster, m.def.summon.count);
   }
 
@@ -634,6 +635,7 @@ export class Sim {
       this.monsters.push(m);
       minions.push(m);
       this.fx('burst', x, 0.3, z, '#9fd98a', 10, 4);
+      if (boss.def.fx?.summon) this.fx('effect', boss.def.fx.summon, x, z, 0, 1.6);
     }
     this.log(`${boss.def.name} เรียก${def.nameTh} ${count} ตัวมาช่วย!`, '#ff9a6a');
     return minions;

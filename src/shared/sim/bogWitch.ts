@@ -162,6 +162,8 @@ export class WitchSpells {
     if (!near.length) return false;
     const spell = ORDER[this.next % ORDER.length];
     this.next++;
+    // She raises her lantern to cast (her attack frames; the spells keep their own pictures, owner 2026-11-21).
+    sim.anim(m.id, 'attack', { duration: 0.35 });
     const t = sim.time;
     if (spell === 'vial') {
       // One at each player, landing on their head however they run.

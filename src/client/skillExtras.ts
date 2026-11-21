@@ -139,7 +139,15 @@ export function playSkillExtras(fx: Effects, id: string, x: number, z: number, a
   if (k <= 0) return;
   const list = skillExtras(id);
   if (!list.length) return;
-  const el = skillElement(id) ?? 'arcane';
+  playExtras(fx, list, skillElement(id) ?? 'arcane', k, x, z, angle, size, id);
+}
+
+/**
+ * Plays a list of code effects in element `el`'s colours at strength `k` (also the bosses' skills, bossFx.ts).
+ * `circleId`: whose magic circle a 'runes' flashes (none = no runes).
+ */
+export function playExtras(fx: Effects, list: readonly Extra[], el: Element, k: number, x: number, z: number, angle: number, size: number, circleId?: string): void {
+  const id = circleId ?? '';
   const [c1, c2] = ELEMENT_COLOR[el];
   const r = Math.max(0.8, size);
   let bolts = 0;
@@ -226,7 +234,7 @@ export function playSkillExtras(fx: Effects, id: string, x: number, z: number, a
         }
         break;
       case 'runes': {
-        if (!circleDesign(id)) break;
+        if (!id || !circleDesign(id)) break;
         const at = new THREE.Group();
         at.position.set(x, 0.01, z);
         const circle = new MagicCircle(at, r * 2, true);

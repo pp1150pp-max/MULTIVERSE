@@ -379,6 +379,7 @@ export class Monster extends Unit {
       this.lift = up * up * JUMP_HEIGHT;
       if (this.fallT <= 0) {
         this.lift = 0;
+        if (this.def.fx?.jump) sim.fx('effect', this.def.fx.jump, this.x, this.z, 0, this.radius * 2.2);
         this.windKind = 'slam';
         this.resolveWindup(sim, 0);
       }
@@ -694,6 +695,7 @@ export class Monster extends Unit {
     this.windupT = 0;
     this.jumpOutT = JUMP_OUT_TIME;
     sim.fx('burst', this.x, 0.3, this.z, '#dcecf7', 16, 5);
+    if (this.def.fx?.jump) sim.fx('effect', this.def.fx.jump, this.x, this.z, 0, this.radius * 2.2);
     sim.shake(0.3, this);
   }
 
@@ -737,12 +739,15 @@ export class Monster extends Unit {
       this.fire(sim, this.def.shot);
     } else if (this.windKind === 'melee') {
       const ang = Math.atan2(this.faceZ, this.faceX);
-      sim.fx('slash', this.x, this.z, ang, Math.PI * 0.6, this.attackRange + 0.6, '#ff8a6a');
+      // A boss's own claw / lantern / ice hit (bossFx.ts), sent from where it stands; others the plain slash.
+      if (this.def.fx?.melee) sim.fx('effect', this.def.fx.melee, this.x, this.z, ang, this.attackRange);
+      else sim.fx('slash', this.x, this.z, ang, Math.PI * 0.6, this.attackRange + 0.6, '#ff8a6a');
       if (p?.alive && d <= this.attackRange + p.radius + 0.5) sim.hitPlayer(this, p, 1, {});
     } else if (this.windKind === 'slam') {
       const radius = this.slamRadius;
       sim.fx('ring', this.x, this.z, radius, '#ffb070', 0.45);
       sim.fx('burst', this.x, 0.3, this.z, '#c9a27a', 14, 6);
+      if (this.def.fx?.slam) sim.fx('effect', this.def.fx.slam, this.x, this.z, 0, radius);
       sim.shake(0.45, this);
       sim.sfx('boss_slam', this.x, this.z);
       for (const pl of sim.players) {

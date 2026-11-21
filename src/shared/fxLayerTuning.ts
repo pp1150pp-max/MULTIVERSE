@@ -70,6 +70,10 @@ export interface FxLayerConfig extends Record<QuarksKey, boolean> {
   /** Each skill's extra effects drawn in code over its painted frames (src/client/skillExtras.ts), and × their strength. */
   extras: boolean;
   extrasK: number;
+  /** Bosses' skills (owner 2026-11-21): their painted effects (sheets boss_*), and the code effects on top, × strength (src/client/bossFx.ts). */
+  bossFx: boolean;
+  bossExtras: boolean;
+  bossExtrasK: number;
   /** Per skill (or circle fallback key, CIRCLE_FALLBACKS): only what differs from on / ×1 (owner 2026-11-18). */
   skills: Record<string, SkillFxTune>;
   /** The players' own graphics window (owner 2026-11-18, src/client/gfxPrefs.ts): shown in the in-game menu. */
@@ -165,6 +169,7 @@ export const FX_LAYER_RANGE = {
   paperOrbLight: [0.8, 1],
   paperOrbShade: [0, 1],
   extrasK: [0, 3],
+  bossExtrasK: [0, 3],
   droneSpeed: [1, 20],
   droneDist: [0.3, 3],
 } as const satisfies Record<string, readonly [number, number]>;
@@ -193,11 +198,12 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   paperOrbLight: 'ลูกแก้ว: ส่วนที่ขาวกว่านี้เป็นสีเน้น',
   paperOrbShade: 'ลูกแก้ว: ความสว่างส่วนมืดสุด',
   extrasK: '× ความแรงเอฟเฟกต์โค้ดของสกิล',
+  bossExtrasK: '× ความแรงเอฟเฟกต์โค้ดของสกิลบอส',
   droneSpeed: 'โดรน: ความเร็วตามตัว (ต่อวิ ยิ่งมากยิ่งติด)',
   droneDist: 'โดรน: × ระยะห่างจากตัวละคร',
 };
 
-const BASE_BOOLS = ['enabled', 'debuffs', 'guardGlow', 'buffIcons', 'barBuffIcons', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'droneFollow', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'keyRebind', 'orbsNearBar', 'extras'] as const;
+const BASE_BOOLS = ['enabled', 'debuffs', 'guardGlow', 'buffIcons', 'barBuffIcons', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'droneFollow', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'keyRebind', 'orbsNearBar', 'extras', 'bossFx', 'bossExtras'] as const;
 type FxLayerBool = (typeof BASE_BOOLS)[number] | QuarksKey;
 const FX_LAYER_BOOLS: readonly FxLayerBool[] = [...BASE_BOOLS, ...QUARKS_KEYS];
 const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
@@ -218,6 +224,8 @@ const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
   orbsNearBar: 'ลูกแก้ว HP/MP ชิดแถบสกิล (ปิด = มุมจอ)',
   ...(Object.fromEntries(QUARKS_SKILL_IDS.map((s) => [quarksKey(s), `three.quarks: ${QUARKS_SKILLS[s]}`])) as Record<QuarksKey, string>),
   extras: 'เอฟเฟกต์โค้ดของสกิล (ทับภาพเดิม)',
+  bossFx: 'ภาพเอฟเฟกต์สกิลบอส (ปิด = ภาพแบบเดิม ท่าตีตอนร่ายยังเล่น)',
+  bossExtras: 'เอฟเฟกต์โค้ดของสกิลบอส (ทับภาพ)',
 };
 
 /** The code's own numbers (a fresh copy). */
@@ -228,7 +236,7 @@ export function codeFxLayer(): FxLayerConfig {
     paperPlate: 1, paperBubble: 1, paperFoot: 1.6, paperOrbLight: 0.95, paperOrbShade: 0.15,
     gfxMenu: true, keyRebind: true, orbsNearBar: true, gfxDefault: 3, gfxMax: 3, gfxMid: 0.6, gfxLow: 0.3,
     ...(Object.fromEntries(QUARKS_KEYS.map((k) => [k, true])) as Record<QuarksKey, boolean>),
-    extras: true, extrasK: 1, skills: {},
+    extras: true, extrasK: 1, bossFx: true, bossExtras: true, bossExtrasK: 1, skills: {},
   };
 }
 const CODE = codeFxLayer();
