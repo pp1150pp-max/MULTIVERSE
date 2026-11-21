@@ -118,12 +118,12 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   crystal: sheet('npc/crystal_merchant.png', () => makeSheet(32, drawCrystalMerchant())),
   // Cosmetics with a body (wings, mounts, pets): 8-direction walk sheets like the monsters' (see cosmeticViews.ts).
   ...Object.fromEntries(COSMETICS.filter((c) => c.slot !== 'aura' && c.slot !== 'title' && c.slot !== 'orb').map((c) => [
-    cosSheetKey(c.id), monster(`cosmetics/${c.id}.png`, () => makeSheet(c.slot === 'pet' ? 32 : 48, drawCosmetic(c))),
+    cosSheetKey(c.id), monster(`paper/cosmetics/${c.id}.png`, () => makeSheet(c.slot === 'pet' ? 32 : 48, drawCosmetic(c))),
   ])),
   // Wings from ONE wing picture, mirrored into the pair (wingPair.ts). Used only when the file exists
   // (assetSources 'file'); otherwise the pair sheet above is drawn as before.
   ...Object.fromEntries(COSMETICS.filter((c) => c.slot === 'wings').map((c) => [
-    cosOneKey(c.id), { path: `${BASE}cosmetics/${c.id}_one.png`, cols: 3, rows: 5, fileSideFaces: 'left' as const, placeholder: () => document.createElement('canvas') },
+    cosOneKey(c.id), { path: `${BASE}paper/cosmetics/${c.id}_one.png`, cols: 3, rows: 5, fileSideFaces: 'left' as const, placeholder: () => document.createElement('canvas') },
   ])),
 
   green_slime: monster('monsters/green_slime.png', () => makeSheet(32, drawSlime(['#6cc25a', '#4a9a3e', '#c8f0b0']))),
@@ -454,7 +454,7 @@ async function loadFxSheet(name: FxSheet): Promise<void> {
 }
 
 /**
- * Paper cosmetics drawn in code (tools/cut_paper_extras.cjs), loaded only with the paper switch on: per aura the ring
+ * Paper cosmetics drawn in code (tools/cut_paper_extras.cjs), per aura the ring
  * laid under the character and one footprint, and the white enhancement-orb atlas the orbs are tinted from.
  */
 export const paperTex: { auras: Record<string, { ring: THREE.Texture; foot: THREE.Texture }>; orbs?: THREE.Texture } = { auras: {} };
@@ -476,8 +476,9 @@ async function loadPaperCosmetics(): Promise<void> {
         // No paper picture: the old glow.
       }
     }),
-    // Raw greys: the orb shader reads them as they are in the file (like its code-made atlas).
-    loadTexture(`${BASE}paper/fx/orbs.png`).then((t) => { paperTex.orbs = smooth(t, false); }, () => undefined),
+    // Raw greys: the orb shader reads them as they are in the file (like its code-made atlas). Game page only:
+    // the /admin orb bench keeps the code-made atlas.
+    ...(paperMaps ? [loadTexture(`${BASE}paper/fx/orbs.png`).then((t) => { paperTex.orbs = smooth(t, false); }, () => undefined)] : []),
   ]);
 }
 
@@ -671,7 +672,7 @@ async function loadAssets(): Promise<void> {
     ...(['gs_skill', 'gs_gear', 'gs_passive'] as const).map((n) => loadFxSheet(n)),
     ...(['boss_bear', 'boss_witch', 'boss_yeti', 'boss_heart'] as const).map((n) => loadFxSheet(n)),
     loadDecals(),
-    ...(paperMaps ? [loadPaperCosmetics()] : []),
+    loadPaperCosmetics(),
     ...(['grass', 'dirt', 'water', 'marsh', 'mud', 'pave', 'brick', 'snow', 'snow_path', 'ice', 'ash_rock', 'ash_path', 'lava',
       'room_forest', 'room_marsh', 'room_snow', 'room_volcano'] as const).map((n) => loadGroundTile(n)),
     ...Object.entries(ANIM_SET_DIRS).map(([key, dir]) => loadCharSet(key, dir)),
@@ -694,11 +695,8 @@ async function loadAssets(): Promise<void> {
           paperMonster = { walk: 4, attack: 4, scale: monster.scale };
           cols = 8;
         } else {
-          // Cosmetics (wings, mounts, pets, single wings: tools/cut_cosmetics.cjs with COS_PAPER=1) have a paper copy
-          // of the same name under sprites/paper/cosmetics/.
           const paper = !paperMaps ? null
             : PAPER_PROPS.has(key) ? `${BASE}paper/props/${key}.png`
-            : spec.path.startsWith(`${BASE}cosmetics/`) ? spec.path.replace(`${BASE}cosmetics/`, `${BASE}paper/cosmetics/`)
             : spec.path.startsWith(`${BASE}fx/`) ? spec.path.replace(`${BASE}fx/`, `${BASE}paper/fx/`)
             : null;
           tex = await (paper ? loadTexture(paper).catch(() => loadTexture(spec.path)) : loadTexture(spec.path))
