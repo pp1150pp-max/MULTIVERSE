@@ -184,6 +184,14 @@ export const HUB_BUILDING_GAP = 3.4;
 /** How far the hub's quarters wobble into each other (see themeAt). The props add their own scatter on top. */
 export const QUADRANT_JITTER = 6;
 
+/**
+ * Whether an NPC standing in this zone is solid (Terrain pushes an r 0.45 collider for it). The navigator in nexus_city is seen only by
+ * some players (src/client/Game.ts): no invisible wall for the rest. tools/bake_maps.ts uses this to tell those colliders apart.
+ */
+export function npcHasCollider(id: NpcId, zone: ZoneDef): boolean {
+  return !(id === 'navigator' && zone.town !== 'harbor');
+}
+
 export class Terrain {
   readonly half: number;
   readonly bound: number;
@@ -222,8 +230,7 @@ export class Terrain {
     else this.placeProps(mulberry32(zone.seed + 1));
     for (const id of NPC_IDS) {
       const n = this.npcPos[id];
-      // The navigator in nexus_city is seen only by some players (src/client/Game.ts): no invisible wall for the rest.
-      if (n && !(id === 'navigator' && zone.town !== 'harbor')) this.colliders.push({ ...n, r: 0.45 });
+      if (n && npcHasCollider(id, zone)) this.colliders.push({ ...n, r: 0.45 });
     }
   }
 

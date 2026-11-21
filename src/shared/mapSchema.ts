@@ -45,7 +45,18 @@ export interface MapBlocker { id: string; pts: Pt[] }
 export interface MapCollider { x: number; z: number; r: number }
 export interface MapNpc { id: string; x: number; z: number }
 export interface MapRest { kind: 'fountain' | 'campfire'; x: number; z: number }
-export interface MapPortal { to: string; x: number; z: number; minLevel: number }
+export interface MapPortal {
+  to: string;
+  x: number;
+  z: number;
+  minLevel: number;
+  /** An unlock the player must have on top of minLevel (PortalDef.requires, the way up a floor). */
+  requires?: string;
+  /** The place it will lead to while `to` is not in the game yet: it stays shut and says so (the harbour's piers, PortalDef.soonName). */
+  soonName?: string;
+  /** Its picture, when not the usual 'portal' (PortalDef.prop: the harbour's dock and lighthouse gates). */
+  prop?: string;
+}
 export interface MapSpawn { monster: string; x: number; z: number; radius: number; count: number; respawn: [number, number] }
 export interface MapLair { boss: string; x: number; z: number }
 /**
@@ -346,7 +357,7 @@ function validateInner(map: MapData, ctx: MapValidateCtx, err: Err, warn: Err): 
   }
   map.portals.forEach((p, i) => {
     const id = String(i);
-    if (zones && !zones.has(p.to)) err('bad_ref', `portal ${i} leads to unknown zone "${p.to}"`, 'portal', id);
+    if (zones && !zones.has(p.to) && !p.soonName) err('bad_ref', `portal ${i} leads to unknown zone "${p.to}"`, 'portal', id);
     if (typeof p.to !== 'string' || !p.to) err('schema', `portal ${i} has no target`, 'portal', id);
     if (!Number.isInteger(p.minLevel) || p.minLevel < 0 || p.minLevel > 200) err('range', `portal ${i} minLevel ${p.minLevel} must be an integer 0–200`, 'portal', id);
     placed('portal', id, p.x, p.z, `portal ${i} (to ${p.to})`);

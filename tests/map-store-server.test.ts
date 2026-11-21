@@ -121,8 +121,8 @@ async function run(): Promise<void> {
     ok((await api(m, p, b, plain.token)).status === 403, `normal player → 403 on ${m} ${p}`);
   }
   const list = (await api('GET', '/admin/maps', undefined, gm.token)).data;
-  ok(list.maps.length === 9 && list.fromDb === true && list.maps.every((m: any) => m.publishedRev === null && m.draft === null), 'gm sees the 5 floor-1 maps and their 4 boss rooms, nothing published or drafted');
-  ok(list.maps.filter((m: any) => m.of).map((m: any) => `${m.id}<${m.of}`).join() === 'emerald_forest_room<emerald_forest,misty_marsh_room<misty_marsh,frost_reach_room<frost_reach,ashen_isle_room<ashen_isle', 'each boss room is listed right after its field and says which field it belongs to');
+  ok(list.maps.length === 12 && list.fromDb === true && list.maps.every((m: any) => m.publishedRev === null && m.draft === null), 'gm sees the 7 maps of floor 1 and 2 and their 5 boss rooms, nothing published or drafted');
+  ok(list.maps.filter((m: any) => m.of).map((m: any) => `${m.id}<${m.of}`).join() === 'emerald_forest_room<emerald_forest,misty_marsh_room<misty_marsh,frost_reach_room<frost_reach,ashen_isle_room<ashen_isle,shipwreck_beach_room<shipwreck_beach', 'each boss room is listed right after its field and says which field it belongs to');
   ok((await api('GET', '/admin/maps/nope/draft', undefined, owner.token)).status === 404, 'unknown map → 404');
 
   // ---------------------------------------------------------- drafts are checked again on the server

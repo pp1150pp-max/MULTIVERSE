@@ -1,4 +1,4 @@
-// Bakes the floor-1 maps into JSON (docs/plans/map-editor.md, section 1.1, PR 2).
+// Bakes the floor-1 and floor-2 maps into JSON (docs/plans/map-editor.md, section 1.1, PR 2).
 //
 //   node --import tsx tools/bake_maps.ts
 //
@@ -17,20 +17,22 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GENERATED_ROOMS, GENERATED_ZONES, arenaRadius, type ZoneDef } from '../src/shared/data/zones';
 import { NPC_IDS } from '../src/shared/data/npcs';
-import { Terrain } from '../src/shared/sim/terrain';
+import { npcHasCollider, Terrain } from '../src/shared/sim/terrain';
+import { TRAIL_WIDTH } from '../src/shared/groundLook';
 import { MAP_SCHEMA_VERSION, type MapData, type MapProp, type MapCollider, type MapNpc } from '../src/shared/mapSchema';
 
 /** The floor-1 maps, hub first. */
 export const FLOOR1_IDS = ['nexus_city', 'emerald_forest', 'misty_marsh', 'frost_reach', 'ashen_isle'];
-/** The floor-1 boss rooms (ZoneDef.id of GENERATED_ROOMS), each next to its field. */
-export const BOSS_ROOM_IDS = FLOOR1_IDS.filter((id) => GENERATED_ZONES[id].lair).map((id) => `${id}_room`);
+/** The floor-2 maps, its town first (the harbour, then Shipwreck Beach). */
+export const FLOOR2_IDS = ['harbor_town', 'shipwreck_beach'];
+/** Every map (not boss rooms), floor by floor. */
+export const MAP_IDS = [...FLOOR1_IDS, ...FLOOR2_IDS];
+/** The boss rooms (ZoneDef.id of GENERATED_ROOMS), each next to its field. */
+export const BOSS_ROOM_IDS = MAP_IDS.filter((id) => GENERATED_ZONES[id].lair).map((id) => `${id}_room`);
 /** Every map file the bake writes: the maps, then the rooms. */
-export const BAKED_IDS = [...FLOOR1_IDS, ...BOSS_ROOM_IDS];
+export const BAKED_IDS = [...MAP_IDS, ...BOSS_ROOM_IDS];
 /** The generator's zone for a baked map id (a map or a boss room). */
 export const generatedZone = (id: string): ZoneDef => GENERATED_ZONES[id] ?? GENERATED_ROOMS[id];
-
-/** Trail width per theme: a copy of TRAIL_WIDTH in src/client/world.ts (which can't be imported without three). */
-const TRAIL_WIDTH = { forest: 4.2, marsh: 3.6, snow: 3.8, volcano: 3.8 } as const;
 
 export const MAPS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'shared', 'data', 'maps');
 
@@ -65,14 +67,17 @@ export function bakeZone(zone: ZoneDef): MapData {
     return prop;
   });
 
-  // Colliders no prop pushed: the town's own (fountain, house footprints, wall line). The NPCs' (r 0.45) are the very last
-  // ones, pushed by the constructor; they are not stored, the NPC list gives them back.
+  // Colliders no prop pushed: the town's own (fountain, house footprints, wall line, the harbour's water edge). The NPCs' (r 0.45)
+  // are the very last ones, pushed by the constructor for each solid NPC (npcHasCollider); not stored, the NPC list gives them back.
   const npcs: MapNpc[] = [];
+  let npcSolids = 0;
   for (const id of NPC_IDS) {
     const n = t.npcPos[id];
-    if (n) npcs.push({ id, x: n.x, z: n.z });
+    if (!n) continue;
+    npcs.push({ id, x: n.x, z: n.z });
+    if (npcHasCollider(id, zone)) npcSolids++;
   }
-  const own = t.colliders.slice(0, t.colliders.length - npcs.length);
+  const own = t.colliders.slice(0, t.colliders.length - npcSolids);
   const colliders: MapCollider[] = own.filter((_, i) => !owner.has(i)).map((c) => ({ x: c.x, z: c.z, r: c.r }));
 
   const water: MapData['water'] = [
@@ -83,7 +88,7 @@ export function bakeZone(zone: ZoneDef): MapData {
   const map: MapData = {
     schema: MAP_SCHEMA_VERSION,
     id: zone.id,
-    floor: 1,
+    floor: zone.floor ?? 1,
     rev: 0,
     zone: {
       half: zone.half,
@@ -101,7 +106,10 @@ export function bakeZone(zone: ZoneDef): MapData {
     walkable: { half: t.bound },
     npcs,
     rest: t.restSpots.map((r) => ({ kind: r.kind, x: r.x, z: r.z })),
-    portals: zone.portals.map((p) => ({ to: p.to, x: p.x, z: p.z, minLevel: p.minLevel })),
+    portals: zone.portals.map((p) => ({
+      to: p.to, x: p.x, z: p.z, minLevel: p.minLevel,
+      ...(p.requires ? { requires: p.requires } : {}), ...(p.soonName ? { soonName: p.soonName } : {}), ...(p.prop ? { prop: p.prop } : {}),
+    })),
     spawns: zone.spawns.map((s) => ({ monster: s.monster, x: s.x, z: s.z, radius: s.radius, count: s.count, respawn: [s.respawn[0], s.respawn[1]] as [number, number] })),
   };
   if (zone.lair) map.lair = { boss: zone.lair.boss, x: zone.lair.x, z: zone.lair.z };

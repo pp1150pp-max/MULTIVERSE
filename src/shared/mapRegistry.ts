@@ -14,9 +14,12 @@ import emerald_forest_room from './data/maps/emerald_forest_room.json';
 import misty_marsh_room from './data/maps/misty_marsh_room.json';
 import frost_reach_room from './data/maps/frost_reach_room.json';
 import ashen_isle_room from './data/maps/ashen_isle_room.json';
+import harbor_town from './data/maps/harbor_town.json';
+import shipwreck_beach from './data/maps/shipwreck_beach.json';
+import shipwreck_beach_room from './data/maps/shipwreck_beach_room.json';
 
 const BUNDLED: Record<string, MapData> = Object.fromEntries(
-  ([nexus_city, emerald_forest, emerald_forest_room, misty_marsh, misty_marsh_room, frost_reach, frost_reach_room, ashen_isle, ashen_isle_room] as unknown as MapData[]).map((m) => [m.id, m]),
+  ([nexus_city, emerald_forest, emerald_forest_room, misty_marsh, misty_marsh_room, frost_reach, frost_reach_room, ashen_isle, ashen_isle_room, harbor_town, shipwreck_beach, shipwreck_beach_room] as unknown as MapData[]).map((m) => [m.id, m]),
 );
 
 /** Layouts that replace the bundled ones (empty in PR 3: nothing sets them yet). */
@@ -30,7 +33,7 @@ const custom = new Map<string, MapData>();
 let useOverrides = true;
 
 export const MapRegistry = {
-  /** The layout for a zone or floor-1 boss room (id `<field>_room`), or undefined when it has none. */
+  /** The layout for a zone or boss room (id `<field>_room`), or undefined when it has none. */
   get(zoneId: string): MapData | undefined {
     return (useOverrides ? override.get(zoneId) : undefined) ?? BUNDLED[zoneId] ?? custom.get(zoneId);
   },
