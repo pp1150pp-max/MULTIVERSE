@@ -13,16 +13,18 @@ import { Db, type SessionAccount } from './db';
 import { AttemptLimiter, hashPassword, newToken, SESSION_MS, verifyPassword } from './auth';
 import {
   banMessage, checkCharacterName, checkPassword, checkUsername, GUEST_PER_IP_HOUR, isClassId, MAX_CHARACTERS,
-  type AuthResponse, type CharacterSummary, type GuestResponse, type MeResponse,
+  NET_ROUTE_PATH, type NetRouteResponse, type AuthResponse, type CharacterSummary, type GuestResponse, type MeResponse,
 } from '../src/shared/api';
 import { newCharacterData } from '../src/shared/sim/Player';
 import { GameWorld } from './world';
 import { bearer, HttpError, readJson, send, str } from './http';
 import { adminApi } from './admin';
+import { mapsPublicApi } from './admin-maps';
+import { applyMaps } from './maps-live';
 import { googleApi } from './google-api';
+import { directPort } from './direct';
 import { Backups } from './backup';
 import { HISTORY_DAYS } from '../src/shared/admin';
-import { LOOK_PATH, PAPER_MAPS_SETTING, type PublicLook } from '../src/shared/paperArt';
 import { controlFilePath, CTRL_C_WINDOW_MS, DoublePress, isLocalControl, STOP_PATH, type ControlFile } from './control';
 import { createInterface } from 'node:readline';
 import { RESTART_EXIT_CODE, SHUTDOWN_SECONDS, SHUTDOWN_SECONDS_MAX, shutdownSeconds, shutdownWarning, type ShutdownMode } from '../src/shared/net/protocol';
@@ -57,6 +59,8 @@ const db = new Db(DB_FILE);
 applyCardTuning(db.cardTuning());
 // The saved game balance (admin "ปรับสมดุล" tab) before any character, stash or listing is read.
 applyBalance(db.balance());
+// The published map layouts (admin map editor) replace the bundled JSON before any room is made (unless the switch is off).
+applyMaps(db);
 const backups = new Backups(db, DB_FILE);
 const limiter = new AttemptLimiter();
 /** Brake on making guests: each new guest counts as one "attempt" for its address. */
@@ -117,12 +121,13 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string): Pro
     return send(res, 200, { mode: stopMode });
   }
 
+  // The browser reads these before it loads pictures (src/client/mapSync.ts).
+  if (mapsPublicApi(res, path, method, new URL(req.url ?? '/', 'http://localhost'), db)) return;
+
   if (await googleApi(req, res, path, { db, world, startSession })) return;
 
-  // Which art the game loads (src/shared/paperArt.ts), read before login.
-  if (method === 'GET' && path === LOOK_PATH) {
-    return send(res, 200, { paperMaps: db.getSetting(PAPER_MAPS_SETTING) === '1' } satisfies PublicLook);
-  }
+  // Where the game connection may go past Cloudflare (src/client/net/route.ts), asked before every (re)connect.
+  if (method === 'GET' && path === `/api${NET_ROUTE_PATH}`) return send(res, 200, { direct: world.directUrl() } satisfies NetRouteResponse);
 
   if (method === 'POST' && path === '/api/register') {
     const ip = clientIp(req);
@@ -336,6 +341,17 @@ const server = createServer(async (req, res) => {
 });
 
 const world = new GameWorld(db, server);
+
+// Direct game connections (server/direct.ts): Caddy passes wss://<direct hostname>/ws here. Only the WebSocket
+// upgrade on /ws is answered; every other request gets a 404 (login and /admin stay behind Cloudflare).
+const DIRECT_PORT = directPort(PORT);
+if (DIRECT_PORT > 0) {
+  const direct = createServer((_req, res) => {
+    res.writeHead(404).end();
+  });
+  direct.on('error', (e) => console.error(`[direct] port ${DIRECT_PORT} ใช้ไม่ได้ — ต่อตรงปิดอยู่ (${(e as Error).message})`));
+  direct.listen(DIRECT_PORT, '127.0.0.1', () => world.attachDirect(direct, DIRECT_PORT));
+}
 cleanupGuests();
 setInterval(cleanupGuests, CLEANUP_MS);
 backups.startDaily();

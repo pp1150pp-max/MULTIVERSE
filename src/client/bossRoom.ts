@@ -43,6 +43,8 @@ export class RoomUI {
   /** The leader's lobby, and when its countdown ends (performance.now()). */
   private readonly lobbyBox: HTMLElement;
   private lobbyUntil = 0;
+  /** Hidden with Esc while the lobby still runs (owner 2026-11-19): only hides, never cancels; the altar (T / click) shows it again. */
+  private lobbyHidden = false;
   private lobbyCount: HTMLElement | null = null;
   /** The start button while members are still answering, and when their time runs out (performance.now()). */
   private lobbyStart: HTMLButtonElement | null = null;
@@ -104,6 +106,10 @@ export class RoomUI {
   toggle(force?: boolean): void {
     const show = (force ?? !this.open) && !!this.summoner;
     this.win.classList.toggle('hidden', !show);
+    if (show && this.lobbyHidden) {
+      this.lobbyHidden = false;
+      if (this.lobbyBox.childElementCount) this.lobbyBox.classList.remove('hidden');
+    }
     if (show) this.render();
   }
 
@@ -167,8 +173,16 @@ export class RoomUI {
 
   // ------------------------------------------------------------ the leader's lobby
 
+  /** Esc: hides the leader's lobby without cancelling the room. */
+  hideLobby(): void {
+    if (this.lobbyBox.classList.contains('hidden')) return;
+    this.lobbyBox.classList.add('hidden');
+    this.lobbyHidden = true;
+  }
+
   lobby(view: RoomLobbyView | null): void {
-    this.lobbyBox.classList.toggle('hidden', !view);
+    if (!view) this.lobbyHidden = false;
+    this.lobbyBox.classList.toggle('hidden', !view || this.lobbyHidden);
     this.lobbyBox.replaceChildren();
     this.lobbyCount = null;
     this.lobbyStart = null;
@@ -233,15 +247,19 @@ export class RoomUI {
   /** The leave button: in a boss room whose boss is dead, alive. Shows how long until everyone is sent out. */
   private updateExit(): void {
     const r = this.g.backend.room;
-    const show = !!r && r.leaveIn !== undefined && this.g.player.alive;
+    const w = this.g.backend.waves;
+    // A wave run may be left at any time, alive (owner 2026-11-21).
+    const show = ((!!r && r.leaveIn !== undefined) || !!w) && this.g.player.alive;
     this.exitBtn.classList.toggle('hidden', !show);
     if (!show) return;
-    const label = `ออกจากห้องบอส (ออกอัตโนมัติใน ${Math.ceil(r.leaveIn!)} วิ)`;
+    const label = w
+      ? (w.wonIn !== undefined ? `ออกจากมินิเกม (ออกอัตโนมัติใน ${Math.ceil(w.wonIn)} วิ)` : 'ออกจากมินิเกม')
+      : `ออกจากห้องบอส (ออกอัตโนมัติใน ${Math.ceil(r!.leaveIn!)} วิ)`;
     if (this.exitBtn.textContent !== label) this.exitBtn.textContent = label;
   }
 
   private updateCountdown(): void {
-    const left = this.g.backend.room?.bossIn;
+    const left = this.g.backend.room?.bossIn ?? this.g.backend.waves?.nextIn;
     const n = left === undefined ? 0 : Math.ceil(left);
     if (n === this.drawnCount) return;
     this.drawnCount = n;
@@ -257,10 +275,10 @@ export class RoomUI {
   /** Dead in a boss room: the death screen offers getting up here with a phoenix feather. */
   private updateRevive(): void {
     const btn = $<HTMLButtonElement>('btn-revive');
-    const r = this.g.backend.room;
+    const r = this.g.backend.room ?? this.g.backend.waves;
     const have = this.g.player.stoneCount('phoenix');
     const show = !!r && !this.g.player.alive;
-    const respawn = r ? 'ฟื้นคืนชีพที่แท่นเรียกบอส' : 'ฟื้นคืนชีพที่เมือง';
+    const respawn = this.g.backend.waves ? 'ฟื้นคืนชีพหน้าประตู (ออกจากมินิเกม)' : r ? 'ฟื้นคืนชีพที่แท่นเรียกบอส' : 'ฟื้นคืนชีพที่เมือง';
     const rb = $('btn-respawn');
     if (rb.textContent !== respawn) rb.textContent = respawn;
     btn.classList.toggle('hidden', !show);
@@ -287,11 +305,17 @@ export class RoomUI {
     const s = this.g.backend.terrain.summoner;
     if (this.open && (!s || Math.hypot(this.g.player.x - s.x, this.g.player.z - s.z) > 6)) this.toggle(false);
     const r = this.g.backend.room;
+    const w = this.g.backend.waves;
     const text = r
       ? `${bossShortName(MONSTERS[r.boss]?.nameTh ?? r.boss)} ×${r.keys} · ห้อง ${r.channel} · ❤ ${r.revives}` +
         (r.wipeIn !== undefined ? ` · ทุกคนล้มหมด! ชุบภายใน ${Math.ceil(r.wipeIn)} วิ` : '') +
         (r.leaveIn !== undefined ? ` · ออกไปที่แท่นเรียกบอสใน ${Math.ceil(r.leaveIn)} วิ` : '')
-      : '';
+      : w
+        ? (w.wave === 0 ? `เตรียมตัว · ${w.of} ระลอก` : `ระลอก ${w.wave}/${w.of} · มอนเหลือ ${w.left} ตัว`) + ` · ❤ ${w.revives}` +
+          (w.nextIn !== undefined && w.wave > 0 ? ` · ระลอกถัดไปใน ${Math.ceil(w.nextIn)} วิ` : '') +
+          (w.wipeIn !== undefined ? ` · ทุกคนล้มหมด! ชุบภายใน ${Math.ceil(w.wipeIn)} วิ` : '') +
+          (w.wonIn !== undefined ? ` · รอดครบทุกระลอก! ออกใน ${Math.ceil(w.wonIn)} วิ` : '')
+        : '';
     this.updateRevive();
     this.updateCountdown();
     this.updateExit();

@@ -261,6 +261,20 @@ export class ShotSprite {
   }
 }
 
+/** One Support Drone in flight (Effects.drone). */
+interface DroneState {
+  x: number;
+  z: number;
+  /** Recoil of the last shot (1 → 0) and the lean toward it. */
+  kick: number;
+  tilt: number;
+  /** Seconds since it appeared, when it starts to leave, and how long its owner has been missing. */
+  t: number;
+  end: number;
+  gone: number;
+  stop(): void;
+}
+
 interface Fx {
   obj: THREE.Object3D;
   t: number;
@@ -290,7 +304,7 @@ export class Effects implements FxApi {
   /** When and where each skill last scattered its standing pieces (see effect()). */
   private readonly lastProps = new Map<string, { t: number; x: number; z: number }>();
   /** Where a player is now (for zones that follow their caster); set by Game. */
-  posOf: ((id: number) => { x: number; z: number } | null) | null = null;
+  posOf: ((id: number) => { x: number; z: number; alive?: boolean } | null) | null = null;
 
   /**
    * three.quarks particles (trial, fxLayer.quarks). The library is its own chunk, fetched only once the switch is
@@ -356,8 +370,78 @@ export class Effects implements FxApi {
     return s;
   }
 
+  /**
+   * The Gunslinger's Support Drone (owner 2026-11-19): one sprite for the whole life of the skill, flying after its owner
+   * the way a pet follows (cosmeticViews.ts): eases toward a spot by the owner's shoulder, bobs, tilts toward a shot.
+   * `duration` > 0 = appear; 0 with an angle = it fired. It fades out when time is up or its owner is gone / dead / on
+   * another map. Off (fxLayer.droneFollow) = nothing here; effect() draws the old picture per shot.
+   */
+  drone(by: number, duration: number, angle?: number): void {
+    const cfg = currentBalance().fxLayer;
+    if (!cfg.droneFollow) return;
+    if (duration <= 0) {
+      const d = this.drones.get(by);
+      if (d && angle !== undefined) {
+        d.kick = 1;
+        // screen-right of the shot's direction (see screenAngle): tilt that way
+        d.tilt = Math.max(-1, Math.min(1, (Math.cos(angle) - Math.sin(angle)) * 0.7)) * 0.4;
+      }
+      return;
+    }
+    const owner = this.posOf?.(by);
+    const def = EFFECTS.gs_drone;
+    const tex = frameTexture(def.sheet);
+    if (!owner || !tex) return;
+    this.drones.get(by)?.stop();
+    showFrame(tex, def.sheet, def.row, 1);
+    const mat = new THREE.SpriteMaterial({ map: tex, alphaTest: 0.5, transparent: true, opacity: 0 });
+    const spr = new THREE.Sprite(mat);
+    spr.scale.setScalar(0.9);
+    const st: DroneState = { x: owner.x + 0.8, z: owner.z - 0.8, kick: 0, tilt: 0, stop: () => { st.end = Math.min(st.end, st.t); }, t: 0, end: duration, gone: 0 };
+    this.drones.set(by, st);
+    spr.position.set(st.x, 1.7, st.z);
+    this.add(spr, 1e9, (_k, dt) => {
+      st.t += dt;
+      const o = this.posOf?.(by);
+      // dead or gone (left the map: its id may even belong to someone else now) = leave; a moment of grace for a snapshot gap
+      st.gone = o && o.alive !== false ? 0 : st.gone + dt;
+      if (st.gone > 0.4) st.end = Math.min(st.end, st.t);
+      if (o) {
+        const dist = cfg.droneDist;
+        const tx = o.x + 0.8 * dist;
+        const tz = o.z - 0.8 * dist;
+        if (Math.hypot(tx - st.x, tz - st.z) > 12) { st.x = tx; st.z = tz; }
+        else {
+          const k = 1 - Math.exp(-cfg.droneSpeed * dt);
+          st.x += (tx - st.x) * k;
+          st.z += (tz - st.z) * k;
+        }
+      }
+      st.kick = Math.max(0, st.kick - dt * 6);
+      st.tilt *= Math.exp(-dt * 5);
+      spr.position.set(st.x, 1.7 + Math.sin(st.t * 3.2) * 0.12 + st.kick * 0.08, st.z);
+      mat.rotation = st.tilt;
+      showFrame(tex, def.sheet, def.row, 1 + (Math.floor(st.t * 12) % (FRAMES - 2)));
+      mat.opacity = Math.max(0, Math.min(1, st.t / 0.25, (st.end - st.t) / 0.3 + 1));
+      if (st.t >= st.end + 0.3) {
+        // faded out: the list drops it after this tick
+        if (this.drones.get(by) === st) this.drones.delete(by);
+        fx.life = fx.t;
+      }
+    });
+    const fx = this.list[this.list.length - 1];
+  }
+
+  private readonly drones = new Map<number, DroneState>();
+
   /** Plays one row of a skill's animation sheet, once. */
   effect(name: SkillEffect, x: number, z: number, angle: number, size: number, by?: number, hit?: boolean, skill?: string): void {
+    // The drone flies on its own (drone()): its shot's flash goes at the drone, and the shoulder picture is not drawn.
+    const drone = name === 'gs_drone' && by !== undefined && currentBalance().fxLayer.droneFollow ? this.drones.get(by) : undefined;
+    if (drone) {
+      x = drone.x;
+      z = drone.z;
+    }
     // The standing layer of an area skill (zoneProps.ts), once per cast spot: a skill that plays two pictures at the
     // same place (Unleash: ring + quake) shouldn't double it.
     if (skill) {
@@ -372,6 +456,7 @@ export class Effects implements FxApi {
     }
     // three.quarks particles over the hand-drawn art of some skills (trial, docs/systems/skill-fx-layer.md).
     if (skill) this.quarks?.onEffect(name, skill, x, z, size, by, angle);
+    if (drone) return;
     const def = EFFECTS[name];
     const tex = frameTexture(def.sheet);
     if (!tex) {

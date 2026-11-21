@@ -10,7 +10,7 @@ import { inBossArena, lairExitSpot, LAVA_BURN, LAVA_TICK } from '../data/zones';
 import type { Hazard } from './volcanoHeart';
 import { stealReturn, thornsReflect } from './beachMoves';
 import {
-  ANNOUNCE_FROM, dropsOnFail, FORGE_CD, enhanceCost, itemName, MAX_PLUS, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
+  announceFrom, dropsOnFail, forgeCd, enhanceCost, itemName, maxPlus, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
 } from '../data/enhance';
 import { entryName, potionName, POTION_STACK, potionPrice, stackLimit } from '../data/potions';
 import { BOSS_KEY, BOSS_QUEST_KEY, BOSS_STONE_CHANCE, BOUND_MSG, BUFF_LABEL, BUFF_MAX, BUFF_MULT, BUFF_TIME, fmtBuff, PHOENIX_PRICE, QUEST_KILLS, REVIVES_PER_KEY, STONE_STACK, KEY_DROP_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, RETURN_CAST, RETURN_SCROLL_PRICE, STONE_COLOR, STONE_NAME } from '../data/stones';
@@ -29,6 +29,8 @@ import {
   type AutoSettings, type CharacterData, type LootFilter, type SortKey,
 } from './Player';
 import { Monster } from './Monster';
+import { withExtras } from './extraEffects';
+import { dropHexSeeds, noteHexHit, tickHexSeeds, type HexSeed } from './hexSeed';
 import { EnemyShot, Projectile, type ProjOpts } from './Projectile';
 import { Loot, LOOT_PRIORITY_TIME, type LootKind } from './Loot';
 import { nextRowPrice, STASH_GOLD_MAX, STASH_ROW } from './stash';
@@ -42,6 +44,8 @@ import { TUT_ACCEPT_GOLD, TUT_ACCEPT_STONES, TUT_NPC, TUT_STEPS, TUT_STEP_NAME, 
 import { putAll, type MailAttach } from '../mail';
 import { RARITY_COLOR } from '../types';
 import { passiveOnCrit, passiveDealMult, passiveTakenMult } from '../passives';
+import type { MapData } from '../mapSchema';
+import { waveCount, waveStats, type WaveConfig } from '../waveGame';
 import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type SfxName, type SimEvent } from './types';
 
 /** Gear of this rarity that "sell all" may take: never potions or enhanced items. */
@@ -136,6 +140,8 @@ export class Sim {
   readonly terrain: Terrain;
   players: Player[] = [];
   monsters: Monster[] = [];
+  /** Mage Hex Seeds in this world's monsters (sim/hexSeed.ts). */
+  hexSeeds: HexSeed[] = [];
   projectiles: (Projectile | EnemyShot)[] = [];
   loots: Loot[] = [];
   time = 0;
@@ -156,13 +162,24 @@ export class Sim {
   cleared = false;
   /** A boss room with a countdown: sim time its boss appears (null once it has, or with no countdown). */
   bossAt: number | null = null;
+  /**
+   * Minigame "รอดมอนเป็นระลอก" (opts.waves, src/shared/waveGame.ts): the run's numbers (fixed when it opened), the wave on now
+   * (0 = counting down), when the next one comes (sim time, null while one is being fought), the ids of its monsters still
+   * counted, and whether the last wave fell. Null on every other Sim.
+   */
+  readonly waveRun: { cfg: WaveConfig; wave: number; nextAt: number | null; ids: Set<number>; won: boolean } | null = null;
+  /** Where getting up / leaving takes a player from this Sim (a wave run: back out by the door they came through). */
+  private readonly exitTo: { field: string; x: number; z: number } | undefined;
 
   /** `bossDelay`: seconds before the boss appears (a boss room's countdown, owner 2026-11-12). */
-  constructor(readonly zone: ZoneDef, opts: { keys?: number; bossDelay?: number } = {}) {
+  constructor(readonly zone: ZoneDef, opts: { keys?: number; bossDelay?: number; map?: MapData; waves?: WaveConfig; exit?: { field: string; x: number; z: number } } = {}) {
     this.keys = Math.max(1, Math.floor(opts.keys ?? 1));
     this.boost = this.keys > 1 ? { ...(zone.monsterBoost ?? NO_BOOST), keys: this.keys } : zone.monsterBoost;
-    this.terrain = new Terrain(zone);
-    zone.spawns.forEach((area, index) => this.spawners.push({ area, alive: 0, queue: [], boss: false, index }));
+    this.terrain = opts.map ? new Terrain(zone, opts.map) : new Terrain(zone);
+    this.exitTo = opts.exit;
+    // A wave run brings its own monsters, in waves: the map's ordinary spawn rings stay empty.
+    if (opts.waves && zone.waves) this.waveRun = { cfg: { ...opts.waves }, wave: 0, nextAt: opts.waves.countdown, ids: new Set(), won: false };
+    else zone.spawns.forEach((area, index) => this.spawners.push({ area, alive: 0, queue: [], boss: false, index }));
     if (zone.boss) this.spawners.push({ area: zone.boss, alive: 0, queue: [], boss: true, index: -1 });
     const delay = zone.boss ? opts.bossDelay ?? 0 : 0;
     if (delay > 0) this.bossAt = delay;
@@ -220,7 +237,8 @@ export class Sim {
 
   removePlayer(p: Player): void {
     this.players = this.players.filter((x) => x !== p);
-    for (const m of this.monsters) if (m.target === p) m.calm();
+    for (const m of this.monsters) if (m.target === p) m.dropTarget();
+    dropHexSeeds(this, p);
   }
 
   // ------------------------------------------------------------ events
@@ -332,6 +350,10 @@ export class Sim {
   }
 
   addProjectile(owner: Player, o: ProjOpts): void {
+    // A shot made by a skill (its cast, a timer, its turret or drone) keeps that skill for its extra effects when it
+    // lands later in the plain update loop (own copy of `hit`: one object may be shared by several shots).
+    const src = o.hit?.src ?? this.casterSkill;
+    if (src && !o.hit?.src) o = { ...o, hit: { ...o.hit, src } };
     this.projectiles.push(new Projectile(this.newId(), this, owner, o));
   }
 
@@ -419,6 +441,7 @@ export class Sim {
     // Overkill doesn't count: shares and lifesteal use the HP actually taken.
     const dealt = Math.min(dmg, Math.max(0, m.hp));
     m.damageBy.set(p.id, m.damageBy.get(p.id)! + dealt);
+    if (this.hexSeeds.length) noteHexHit(this, p, m, dealt, opts.skill?.id ?? this.casterSkill);
     m.hp -= dmg;
     if (this.time < p.lifestealUntil && p.hp < p.maxHp) {
       // Whole HP only: near full the gap to max is fractional (regen), so floor the capped amount too.
@@ -434,6 +457,9 @@ export class Sim {
       this.sfx('crit', m.x, m.z);
       passiveOnCrit(this, p, m);
     }
+    // Extra effects the owner added to this skill on /admin, merged in (the stronger wins): sim/extraEffects.ts.
+    const src = opts.src ?? opts.skill?.id ?? this.casterSkill;
+    if (src && !opts.noExtra) opts = withExtras(this, p, m, src, opts);
     if (opts.kb && !m.isBoss) m.knockback(opts.fromX ?? p.x, opts.fromZ ?? p.z, opts.kb);
     if (opts.stun && !m.def.pattern) m.stunT = Math.max(m.stunT, m.isBoss ? opts.stun * 0.3 : opts.stun);
     if (opts.slow) {
@@ -467,7 +493,7 @@ export class Sim {
 
   hitPlayer(m: Monster, p: Player, mult: number, opts: HitOpts): void {
     if (!p.alive || this.inSafe(p)) return;
-    if (p.invulnT > 0) {
+    if (p.invulnT > 0 || p.guardT > 0) {
       this.text(p.x, p.topY, p.z, 'MISS', 'info', 0.6);
       return;
     }
@@ -544,7 +570,7 @@ export class Sim {
     p.lavaT -= dt;
     if (p.lavaT > 0) return;
     p.lavaT = LAVA_TICK;
-    if (p.invulnT > 0) return;
+    if (p.invulnT > 0 || p.guardT > 0) return;
     const dmg = Math.max(1, Math.round(p.maxHp * LAVA_BURN));
     p.hp -= dmg;
     p.lastHurt = this.time;
@@ -670,7 +696,8 @@ export class Sim {
     stealReturn(this, m);
     if (!m.summoned) {
       this.shareExp(m);
-      this.dropLoot(m);
+      // Wave monsters give EXP but no loot (owner 2026-11-21: not a farm).
+      if (!this.waveRun?.ids.has(m.id)) this.dropLoot(m);
       if (!m.isBoss) {
         this.questProgress(m);
         this.gearProgress(m);
@@ -756,6 +783,7 @@ export class Sim {
     p.moving = false;
     p.castT = 0;
     p.mounted = false;
+    p.guardT = 0;
     // Skill buffs end with death.
     p.clearSkillBuffs();
     this.events.push({ t: 'died', id: p.id });
@@ -923,7 +951,7 @@ export class Sim {
     }
     ({ x: p.x, z: p.z } = this.spawnPoint());
     p.moveTarget = null;
-    for (const m of this.monsters) if (m.target === p) m.calm();
+    for (const m of this.monsters) if (m.target === p) m.dropTarget();
     this.events.push({ t: 'warped', id: p.id });
   }
 
@@ -935,14 +963,15 @@ export class Sim {
     p.hp = p.maxHp;
     p.mp = p.stats.maxMp;
     p.stunT = 0;
+    p.guardT = 0;
     p.kbx = p.kbz = 0;
     ({ x: p.x, z: p.z } = this.spawnPoint());
     p.moveTarget = null;
-    for (const m of this.monsters) if (m.target === p) m.calm();
+    for (const m of this.monsters) if (m.target === p) m.dropTarget();
     this.events.push({ t: 'revived', id: p.id });
-    // In a boss room, getting up means coming out by the summoner of its map (owner 2026-11-12).
-    const lair = lairExitSpot(this.zone);
-    this.log(`ฟื้นคืนชีพที่${lair ? 'แท่นเรียกบอส' : 'เมือง'} (เสีย EXP ${penalty})`, '#ff9a6a', p.id);
+    // In a boss room, getting up means coming out by the summoner of its map (owner 2026-11-12); in a wave run, by its door.
+    const lair = this.exitTo ?? lairExitSpot(this.zone);
+    this.log(`ฟื้นคืนชีพที่${this.exitTo ? 'หน้าประตู' : lair ? 'แท่นเรียกบอส' : 'เมือง'} (เสีย EXP ${penalty})`, '#ff9a6a', p.id);
     this.events.push({ t: 'save', to: p.id });
     // Out in a zone, the town is that floor's hub. Queued after `revived`, so the browser gets both in order.
     const hub = hubOf(this.zone);
@@ -1528,13 +1557,13 @@ export class Sim {
 
   /** How many more times this player may get up here: 3 per key put in, less those used (0 outside rooms). */
   revivesLeft(p: Player): number {
-    if (!this.zone.roomOf) return 0;
+    if (!this.zone.roomOf && !this.waveRun) return 0;
     return Math.max(0, REVIVES_PER_KEY * this.keys - (this.revivesUsed.get(p.name) ?? 0));
   }
 
   /** Gets up where they fell with half HP and MP, for one phoenix feather (owner). */
   reviveHere(p: Player): boolean {
-    if (p.alive || !this.zone.roomOf || this.revivesLeft(p) <= 0) return false;
+    if (p.alive || (!this.zone.roomOf && !this.waveRun) || this.revivesLeft(p) <= 0) return false;
     if (!p.takeStones('phoenix', 1)) {
       this.log(`ไม่มี${STONE_NAME.phoenix} — ซื้อได้ที่พ่อค้าในเมือง`, '#ff8a6a', p.id);
       return false;
@@ -1545,6 +1574,9 @@ export class Sim {
     p.mp = Math.round(p.stats.maxMp / 2);
     p.stunT = 0;
     p.kbx = p.kbz = 0;
+    // Untouchable for a moment, until it attacks or uses a skill (owner 2026-11-20).
+    const bal = currentBalance();
+    p.guardT = bal.reviveGuard ? bal.reviveGuardSec : 0;
     this.fx('burst', p.x, 1, p.z, '#ff9a3a', 24, 4);
     this.events.push({ t: 'revived', id: p.id });
     this.log(`ใช้${STONE_NAME.phoenix} ฟื้นขึ้นมา (ชุบได้อีก ${this.revivesLeft(p)} ครั้ง)`, '#ff9a3a', p.id);
@@ -1770,10 +1802,10 @@ export class Sim {
    */
   enhance(p: Player, uid: string, protect: boolean): { result: EnhanceResult; item: Item } | null {
     if (!this.near(p, 'blacksmith')) return null;
-    if (this.time < p.forgeAt + FORGE_CD) return null;
+    if (this.time < p.forgeAt + forgeCd()) return null;
     const worn = Object.values(p.equipment).find((w) => w?.uid === uid);
     const item = worn ?? p.bag.find((w): w is Item => isItem(w) && w.uid === uid);
-    if (!item || plusOf(item) >= MAX_PLUS) return null;
+    if (!item || plusOf(item) >= maxPlus()) return null;
     const cost = enhanceCost(item);
     const stones = stonesNeeded(item);
     const useProtect = protect && dropsOnFail(item);
@@ -1790,7 +1822,7 @@ export class Sim {
       this.fx('effect', 'enhance_ok', p.x, p.z, 0, 1.3);
       this.fx('burst', p.x, 1.2, p.z, '#ffd34a', 14, 3);
       this.text(p.x, p.topY + 0.6, p.z, `+${plusOf(item)} สำเร็จ!`, 'enh', 1.6);
-      if (plusOf(item) >= ANNOUNCE_FROM) {
+      if (plusOf(item) >= announceFrom()) {
         this.events.push({ t: 'announce', text: `🔨 ${p.name} ตี${SLOT_LABEL[item.slot]} ${item.name} เป็น +${plusOf(item)} สำเร็จ!` });
       }
     } else {
@@ -1811,7 +1843,7 @@ export class Sim {
    */
   reroll(p: Player, uid: string, kind: RerollKind): Item | null {
     if (!this.near(p, 'blacksmith')) return null;
-    if (this.time < p.forgeAt + FORGE_CD) return null;
+    if (this.time < p.forgeAt + forgeCd()) return null;
     const worn = Object.values(p.equipment).find((w) => w?.uid === uid);
     const item = worn ?? p.bag.find((w): w is Item => isItem(w) && w.uid === uid);
     if (!item || !lineRanges(item)) return null;
@@ -1864,6 +1896,8 @@ export class Sim {
     for (const m of this.monsters) m.update(dt, this);
     this.separateMonsters();
     if (this.zone.safe) this.keepOutOfSafe(this.zone.safe);
+    // Before dead monsters leave the list: a seed whose host died bursts and jumps.
+    tickHexSeeds(this);
     this.monsters = this.monsters.filter((m) => !m.gone && (m.alive || m.deadT <= 0.9));
     this.tickVanished(dt);
 
@@ -1887,6 +1921,85 @@ export class Sim {
         if (sp.boss && this.bossAt !== null) this.bossArrives(sp.area);
       }
     }
+    if (this.waveRun) this.tickWaves();
+  }
+
+  // ------------------------------------------------------------ minigame "รอดมอนเป็นระลอก"
+
+  /** Monsters of the wave on now still standing. */
+  waveLeft(): number {
+    const w = this.waveRun;
+    if (!w) return 0;
+    let n = 0;
+    for (const m of this.monsters) if (m.alive && w.ids.has(m.id)) n++;
+    return n;
+  }
+
+  private tickWaves(): void {
+    const w = this.waveRun!;
+    if (w.won || !this.players.length) return;
+    if (w.nextAt !== null) {
+      if (this.time >= w.nextAt) {
+        w.nextAt = null;
+        this.startWave(w.wave + 1);
+      }
+      return;
+    }
+    if (w.wave === 0 || this.waveLeft() > 0) return;
+    // The wave fell: gold for it to everyone in the room (alive or not), then a rest or the win.
+    w.ids.clear();
+    const gold = w.cfg.goldPerWave * w.wave;
+    for (const p of this.players) {
+      if (gold > 0) p.gold += gold;
+      this.events.push({ t: 'save', to: p.id });
+    }
+    this.log(`✔ ผ่านระลอก ${w.wave}/${w.cfg.waves}${gold > 0 ? ` · ได้ ${gold.toLocaleString()} G` : ''}`, '#ffcf5a');
+    if (w.wave < w.cfg.waves) {
+      w.nextAt = this.time + w.cfg.rest;
+      return;
+    }
+    w.won = true;
+    this.cleared = true;
+    for (const p of this.players) {
+      if (w.cfg.bonusGold > 0) p.gold += w.cfg.bonusGold;
+      if (w.cfg.bonusExp > 0) this.addExp(p, w.cfg.bonusExp);
+      this.events.push({ t: 'save', to: p.id });
+    }
+    this.log(`🏆 รอดครบ ${w.cfg.waves} ระลอก! โบนัส ${w.cfg.bonusGold.toLocaleString()} G + ${w.cfg.bonusExp.toLocaleString()} EXP`, '#ffcf5a');
+    const s = this.zone.start;
+    this.events.push({ t: 'banner', text: 'รอดครบทุกระลอก!', sub: this.zone.nameTh, x: s.x, z: s.z });
+  }
+
+  /** Wave `n` comes out of the map's wave spots (none drawn: around the start), each monster of a random picked kind. */
+  private startWave(n: number): void {
+    const w = this.waveRun!;
+    const z = this.zone.waves!;
+    w.wave = n;
+    const kinds = z.monsters.filter((id) => MONSTERS[id] && MONSTERS[id].behavior !== 'boss');
+    if (!kinds.length) kinds.push('green_slime');
+    const spots = z.spots.length ? z.spots : [{ x: this.zone.start.x, z: this.zone.start.z, radius: 8 }];
+    // Every wave monster goes for any player on the map, stronger each wave.
+    const boost: MonsterBoost = { stats: waveStats(w.cfg, n), speed: 1, aggro: 60 };
+    const count = waveCount(w.cfg, n);
+    const r = Math.random;
+    for (let i = 0; i < count; i++) {
+      const spot = spots[i % spots.length];
+      const def = MONSTERS[pick(r, kinds)];
+      const area: SpawnArea = { monster: def.id, x: spot.x, z: spot.z, radius: Math.max(0.5, spot.radius), count: 1, respawn: [3600, 3600] };
+      let x = spot.x, zz = spot.z;
+      for (let t = 0; t < 12; t++) {
+        const a = r() * Math.PI * 2, d = Math.sqrt(r()) * area.radius;
+        x = spot.x + Math.cos(a) * d;
+        zz = spot.z + Math.sin(a) * d;
+        if (!this.terrain.isBlocked(x, zz, def.radius)) break;
+      }
+      const m = new Monster(this.newId(), def, randInt(r, def.levels[0], def.levels[1]), area, x, zz, boost);
+      this.monsters.push(m);
+      w.ids.add(m.id);
+      this.fx('burst', x, 1, zz, '#ff9a3a', 10, 2);
+    }
+    const s = spots[0];
+    this.events.push({ t: 'banner', text: `ระลอก ${n}/${w.cfg.waves}`, sub: `มอน ${count} ตัว`, x: s.x, z: s.z });
   }
 
   /** The countdown ran out: the boss rises in the middle of the arena. */
@@ -1905,6 +2018,12 @@ export class Sim {
    * dead, from anywhere in the room. Comes out by the map's summoner. Returns why not, or null when on the way.
    */
   leaveRoom(p: Player): string | null {
+    if (this.waveRun && this.exitTo) {
+      // A wave run may be left at any time (its button), alive.
+      if (!p.alive) return 'ตายอยู่';
+      this.events.push({ t: 'travel', to: p.id, zone: this.exitTo.field, spot: { x: this.exitTo.x, z: this.exitTo.z } });
+      return null;
+    }
     const spot = lairExitSpot(this.zone);
     if (!this.zone.roomOf || !spot) return 'ไม่ได้อยู่ในห้องบอส';
     if (!p.alive) return 'ตายอยู่';
@@ -1969,7 +2088,7 @@ export class Sim {
   private keepOutOfSafe(safe: SafeArea): void {
     for (const m of this.monsters) {
       if (!m.alive) continue;
-      if (m.target && this.inSafe(m.target)) m.calm();
+      if (m.target && this.inSafe(m.target)) m.dropTarget();
       const dx = m.x - safe.x;
       const dz = m.z - safe.z;
       const min = safe.half + m.radius;

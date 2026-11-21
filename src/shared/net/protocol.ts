@@ -1,6 +1,7 @@
 // WebSocket messages between the browser and the game server (JSON). The server runs the
 // simulation; clients send their input and get snapshots of what is near them plus SimEvents.
 import type { SkillSlot, WearSlot } from '../data/classes';
+import type { WaveSnap } from '../waveGame';
 import type { SkillBook } from '../skillBook';
 import type { BagEntry, BuffScroll, ClassId, EquipSlot, Item, PotionKind, PotionSize, Rarity, Stats, Vec2 } from '../types';
 import type { LootKind } from '../sim/Loot';
@@ -216,7 +217,7 @@ export type ClientMsg =
    * `delta: 1` = this browser understands snapshots that leave out what it already has (see
    * PlayerSnap / MonsterSnap / PrivateSnap). Without it (a tab opened before the update) every snapshot is whole.
    */
-  | { t: 'join'; token: string; characterId: number; delta?: 1; back?: RejoinInfo }
+  | { t: 'join'; token: string; characterId: number; delta?: 1; back?: RejoinInfo; previewMap?: string }
   | InputMsg
   | ActionMsg
   /** `ch: 'party'` = to the party only; `ch: 'whisper'` = only to the online character named `to`. */
@@ -249,6 +250,8 @@ export interface PlayerSnap {
   bf?: number;
   /** With `bf`: the skill whose buff it got last (its magic circle). */
   bs?: string;
+  /** Untouchable after a phoenix-feather revive: drawn blinking (missing = not). */
+  gd?: 1;
   /** Enhancement aura tier 1–4 (missing = none). */
   aura?: number;
   /** Enhancement orbs, one per worn item at +7 or higher: `slot index * 16 + plus` (see orbCodes). Missing = none. */
@@ -316,6 +319,8 @@ export interface PrivateSnap {
   tut?: TutorialData;
   /** Cooldown left by skill id ('dash' for the dash). */
   cd: Record<string, number>; potCd: number; restCd: number;
+  /** Charges held by skills that keep stacks (Land Mine); left out when all are full. */
+  ch?: Record<string, number>;
   /** Skills learned and worn. */
   skills?: SkillBook;
   /** Seconds left on a return-scroll cast (left out when not casting). */
@@ -358,6 +363,8 @@ export interface SnapshotMsg {
   hazards?: Hazard[];
   /** The boss room you are in (left out elsewhere). */
   room?: RoomSnap;
+  /** In a "รอดมอนเป็นระลอก" run (src/shared/waveGame.ts). */
+  waves?: WaveSnap;
   /** Your party, every member wherever they are (left out when you are in none). */
   party?: PartySnap;
   events: SimEvent[];
@@ -366,7 +373,7 @@ export interface SnapshotMsg {
 export type ServerMsg =
   /** `guest`: playing a guest character (no stash, deleted after a day offline). */
   /** `ch`: the channel of that zone (1 when it has none). */
-  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; guest?: boolean; auto?: boolean; orbLook?: OrbLook; cosTuning?: CosTuning; animTuning?: AnimTuning; cosHidden?: string[]; orbItems?: OrbItem[]; balance?: BalanceTuning; cash?: CashCatalog; cashState?: CashState }
+  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; map?: number; guest?: boolean; auto?: boolean; preview?: boolean; orbLook?: OrbLook; cosTuning?: CosTuning; animTuning?: AnimTuning; cosHidden?: string[]; orbItems?: OrbItem[]; balance?: BalanceTuning; cash?: CashCatalog; cashState?: CashState }
   /** The cash shop's catalogue changed (the owner saved /admin, or a cosmetic's price / hiding changed). */
   | { t: 'cash'; cat: CashCatalog }
   /** Your account's crystals and purchase counts changed (a purchase by any of its characters). */
@@ -389,7 +396,7 @@ export type ServerMsg =
    * You walked through a portal (or switched channel): you are now `you` in zone `zone`, channel `ch`,
    * standing at x/z. Snapshots from there follow.
    */
-  | { t: 'zone'; zone: string; ch?: number; you: number; x: number; z: number }
+  | { t: 'zone'; zone: string; ch?: number; map?: number; you: number; x: number; z: number }
   /** The channel window's list (answer to `chList`). */
   | { t: 'channels'; view: ChannelsView }
   | SnapshotMsg

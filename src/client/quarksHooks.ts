@@ -129,7 +129,6 @@ export const ON_ZONE: Partial<Record<`${QuarksSkill}/${SkillEffect}`, QuarksHook
   'mg_flameground/mg_firefield': { skill: 'mg_flameground', tpl: 'mgFireField', y: 0.2, scale: true, timed: true },
   'mg_poisonmist/mg_poison': { skill: 'mg_poisonmist', tpl: 'mgMist', y: 0.3, scale: true, timed: true },
   'mg_decayring/mg_decay': { skill: 'mg_decayring', tpl: 'mgDecayRing', y: 0.3, scale: true },
-  'mg_hexseed/mg_poison': { skill: 'mg_hexseed', tpl: 'mgMist', y: 0.3, scale: true, timed: true },
   'mg_decayfield/mg_decay': { skill: 'mg_decayfield', tpl: 'mgDecayField', y: 0.3, scale: true },
   'mg_frailcurse/mg_curse': { skill: 'mg_frailcurse', tpl: 'mgFrail', y: 0.3, scale: true },
   'mg_gravitywell/mg_vortex': { skill: 'mg_gravitywell', tpl: 'mgVortex', y: 0.3, scale: true, timed: true },

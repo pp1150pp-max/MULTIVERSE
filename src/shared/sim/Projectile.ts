@@ -15,6 +15,12 @@ export interface ProjOpts {
   size: number;
   /** > 0 = explodes in this radius instead of hitting a single target. */
   explode?: number;
+  /**
+   * Player shots that explode (Volatile Orb, owner 2026-11-20): > 0 = the orb does not go off on the first normal monster
+   * it meets. Normal monsters within this many metres of its edge are swept along with it and go off with it at the
+   * end of its range. A boss (or a scripted-pattern monster) still stops it at once.
+   */
+  carry?: number;
   pierce?: boolean;
   kb?: number;
   /** Extra hit options for a single-target shot (crit, armor break, ...). */
@@ -84,6 +90,8 @@ export class Projectile {
   private readonly dz: number;
   private traveled = 0;
   private readonly hit = new Set<Monster>();
+  /** Monsters swept along by a carrying orb. */
+  private readonly carried = new Set<Monster>();
 
   constructor(readonly id: number, private readonly sim: Sim, private readonly owner: Player, readonly o: ProjOpts) {
     this.x = o.x;
@@ -104,9 +112,28 @@ export class Projectile {
     this.x += this.dx * step;
     this.z += this.dz * step;
     this.traveled += step;
+    const carry = this.o.explode ? (this.o.carry ?? 0) : 0;
+    if (carry > 0) {
+      // Swept monsters move with the orb and stand still on their own feet meanwhile.
+      for (const m of this.carried) {
+        if (!m.alive) {
+          this.carried.delete(m);
+          continue;
+        }
+        m.x += this.dx * step;
+        m.z += this.dz * step;
+        sim.terrain.resolve(m);
+        m.pinnedUntil = Math.max(m.pinnedUntil, sim.time + 0.2);
+      }
+    }
 
     for (const m of sim.monsters) {
       if (!m.alive || this.hit.has(m)) continue;
+      if (carry > 0 && !m.isBoss && !m.def.pattern) {
+        if (this.carried.has(m)) continue;
+        if (Math.hypot(m.x - this.x, m.z - this.z) < this.o.radius + carry + m.radius) this.carried.add(m);
+        continue;
+      }
       if (Math.hypot(m.x - this.x, m.z - this.z) < this.o.radius + m.radius) {
         if (this.o.pierce) {
           this.hit.add(m);

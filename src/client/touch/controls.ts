@@ -319,9 +319,11 @@ export class TouchControls {
         s.el.classList.toggle('empty', !sk);
       }
       const full = sk ? p.skillCooldown(sk) : 0;
-      const remain = sk ? p.cd[sk.id] ?? 0 : 0;
+      const stacks = sk ? p.chargeMax(sk) : 0;
+      const held = sk && stacks ? p.chargesOf(sk) : 0;
+      const remain = sk ? (stacks ? (held < stacks ? p.cd[sk.id] ?? 0 : 0) : p.cd[sk.id] ?? 0) : 0;
       s.cd.style.height = full ? `${(remain / full) * 100}%` : '0%';
-      const txt = remain > 0 && full > 1 ? remain.toFixed(remain < 10 ? 1 : 0) : '';
+      const txt = stacks ? `×${held}` : remain > 0 && full > 1 ? remain.toFixed(remain < 10 ? 1 : 0) : '';
       if (s.num.textContent !== txt) s.num.textContent = txt;
       s.el.classList.toggle('nomp', !!sk && p.mp < p.skillMp(sk));
     }

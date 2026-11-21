@@ -165,6 +165,12 @@ function setup(cls: ClassId, mods: Partial<Stats>, plus = 0): { sim: Sim; p: Pla
   castSkill(g2.sim, g2.p, reload, { x: 1, z: 0 }, 1);
   const tg = (s: { sim: Sim; p: Player }) => s.p.statBuffs.find((x) => x.id === 'gs_quickreload')!.until - s.sim.time;
   ok(near(tg(g2), tg(g1) * 1.3), 'gunslinger Quick Reload +30%');
+  // Summons (turret, drone, land mine) last longer too, unless the buffDurSummons switch is off.
+  ok(near(g2.p.summonTime(10), 13) && near(g1.p.summonTime(10), 10), 'summon life +30%');
+  applyBalance({ buffDurSummons: false });
+  ok(near(g2.p.summonTime(10), 10), 'switch off: summons not lengthened');
+  applyBalance({});
+  ok(JSON.stringify(checkBalance({ buffDurSummons: true }, true).tuning) === '{}' && checkBalance({ buffDurSummons: 1 }, true).error !== undefined, 'summon switch: code value not saved, non-boolean refused');
 }
 
 // Armor pierce

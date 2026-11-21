@@ -4,11 +4,16 @@
 import { buffMask, debuffMask, runningSkillBuffs } from '../src/shared/sim/debuffs';
 import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage, Server as HttpServer } from 'node:http';
-import { clientIp } from './clientIp';
+import { cfEdge, clientIp } from './clientIp';
+import { directIp, directOriginOk, directSettings, saveDirectSettings, type DirectSettings } from './direct';
 import type { Db } from './db';
 import { Sim } from '../src/shared/sim/Sim';
-import { hubOf, lairExitSpot, ZONES } from '../src/shared/data/zones';
+import type { MapData } from '../src/shared/mapSchema';
+import { HUB_ID, hubOf, lairExitSpot, ZONES, zoneWithLayout, type ZoneDef } from '../src/shared/data/zones';
 import { loginHub } from '../src/shared/floors';
+import { applyMaps, previewLayout } from './maps-live';
+import { WaveRooms, type WaveExit } from './waveRooms';
+import { PORTAL_RANGE } from '../src/shared/sim/terrain';
 import { cleanAutoSettings, roundBuffs, SORT_KEYS, type LootFilter, type Player } from '../src/shared/sim/Player';
 import { applyBalance, currentBalance, currentBalanceTuning, type BalanceTuning } from '../src/shared/balance';
 import { upgradeItem } from '../src/shared/data/items';
@@ -24,7 +29,8 @@ import {
 import { EQUIP_SLOTS, RARITIES, type Vec2 } from '../src/shared/types';
 import type { SkillSlot } from '../src/shared/data/classes';
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
-import type { AdminOnline, AdminOnlineRow, AdminSnapDelta, SnapDeltaStats } from '../src/shared/admin';
+import type { AdminDirectWs, AdminOnline, AdminOnlineRow, AdminSnapDelta, SnapDeltaStats } from '../src/shared/admin';
+import { DIRECT_WS_HOST_DEFAULT, DIRECT_WS_IP_MAX_DEFAULT } from '../src/shared/admin';
 import type { OrbLook } from '../src/shared/orbLook';
 import type { CosTuning } from '../src/shared/cosTuning';
 import type { AnimTuning } from '../src/shared/animTuning';
@@ -160,6 +166,8 @@ interface Session {
   saveDue: number | null;
   /** Where the connection came from, for the owner's log only (never sent to anyone). */
   ip: string;
+  /** Cloudflare data center the connection came in through (cfEdge), 'direct' = past Cloudflare (server/direct.ts), null = neither (home network). */
+  edge: string | null;
   /** What the client reported with its pings since the last per-minute log line (see onPing). */
   lastPingAt: number;
   rttSum: number;
@@ -219,6 +227,11 @@ interface Session {
    * stays in the world until Auto stops, it dies, the time is up or it logs in again (sweepAway). null = connected.
    */
   awayAt: number | null;
+  /**
+   * A map-editor preview (docs/plans/map-editor.md 2.3): this session plays a copy of the character in its own private Sim built from
+   * the draft layout. Nothing of it is saved, it has no stash, trades, chat or shop, it meets no other player, and it never leaves the Sim.
+   */
+  preview: boolean;
 }
 
 /** Test-only: how long Auto farms on after a drop, in ms, instead of the minutes from /admin (tests/auto-away-server.test.ts). */
@@ -262,7 +275,7 @@ const vec = (v: unknown): Vec2 | null => {
 };
 
 /** Where an event happens, so far-away effects aren't sent to everyone. */
-function eventPos(ev: SimEvent): Vec2 | null {
+function eventPos(ev: SimEvent, sim: Sim): Vec2 | null {
   if (ev.t === 'text' || ev.t === 'banner' || ev.t === 'sfx') return { x: ev.x, z: ev.z };
   if (ev.t === 'shake' && ev.x !== undefined && ev.z !== undefined) return { x: ev.x, z: ev.z };
   if (ev.t === 'fx') {
@@ -270,6 +283,11 @@ function eventPos(ev: SimEvent): Vec2 | null {
     // puff/burst take (x, y, z), effect and zone take (name, x, z), the rest start with (x, z).
     if (ev.name === 'puff' || ev.name === 'burst') return { x: a[0] as number, z: a[2] as number };
     if (ev.name === 'effect' || ev.name === 'zone') return { x: a[1] as number, z: a[2] as number };
+    // drone(by, …): where its owner is (the drone flies after them)
+    if (ev.name === 'drone') {
+      const o = sim.players.find((q) => q.id === a[0]);
+      return o ? { x: o.x, z: o.z } : null;
+    }
     return { x: a[0] as number, z: a[1] as number };
   }
   return null;
@@ -329,8 +347,10 @@ const clamp = (v: unknown, max: number): number | undefined =>
 
 export class GameWorld {
   /** Every open map's Sims, one per channel (server/channels.ts). */
-  readonly channels = new Channels(Object.values(ZONES));
+  readonly channels = new Channels(Object.values(ZONES), Date.now, undefined, (z) => ZONES[z.id] ?? z, (id) => ZONES[id]);
   private readonly sessions = new Set<Session>();
+  /** The private Sims of map-editor previews (one per preview session), ticked with the others. */
+  private readonly previews = new Set<Sim>();
   private readonly byPlayer = new Map<Player, Session>();
   /** Account → when (Date.now()) its connection dropped or was taken over, for FRIEND_QUIET_MS. */
   private readonly friendDroppedAt = new Map<number, number>();
@@ -358,6 +378,14 @@ export class GameWorld {
   readonly friends: Friends;
   /** Boss summoning lobbies and the boss rooms' Sims (in memory only). */
   readonly rooms: BossRooms;
+  /** Minigame "รอดมอนเป็นระลอก": a run per group (server/waveRooms.ts). */
+  readonly waveRooms = new WaveRooms((sim, p, exit) => {
+    const s = this.byPlayer.get(p);
+    if (!s || s.sim !== sim) return;
+    // The dead get up by the door (Sim.respawn, whose exit is that door); the living walk out there.
+    if (!p.alive) return sim.respawn(p);
+    this.travel(s, exit.field, false, { x: exit.x, z: exit.z });
+  });
   private readonly reports: Reports;
   /** Set while the server counts down to stopping: no new players may join. */
   private closing: ShutdownMode | null = null;
@@ -374,8 +402,15 @@ export class GameWorld {
   /** Cosmetics hidden from the in-game window (src/shared/cosShop.ts): can't be put on again, the worn ones stay. */
   private cosHidden: Set<string>;
 
+  /** Direct connections (server/direct.ts): settings, the local port Caddy passes to (0 = none), open ones per address, refusals. */
+  private direct: DirectSettings;
+  private directPort = 0;
+  private readonly directPerIp = new Map<string, number>();
+  private directRefused = { off: 0, origin: 0, perIp: 0 };
+
   constructor(private readonly db: Db, http: HttpServer) {
     this.snapDelta = db.getSetting(SNAP_DELTA_KEY) !== '0';
+    this.direct = directSettings(db);
     this.cosHidden = new Set(cosHiddenIds(db.cosShop()));
     const wss = new WebSocketServer({ server: http, path: WS_PATH, maxPayload: 16 * 1024, perMessageDeflate: WS_DEFLATE });
     wss.on('connection', (ws, req) => this.onConnection(ws, req));
@@ -498,6 +533,7 @@ export class GameWorld {
       },
     });
     setInterval(() => this.rooms.tick(), 250);
+    setInterval(() => this.waveRooms.tick(), 250);
     this.expireMarket();
     setInterval(() => this.expireMarket(), MARKET_EXPIRE_MS);
   }
@@ -555,13 +591,76 @@ export class GameWorld {
     let wire = this.wireGone;
     this.wireGone = 0;
     for (const s of this.sessions) wire += this.wireDelta(s.ws);
-    const sims = [...this.channels.sims(), ...this.rooms.sims()];
+    const sims = this.allSims();
     const r = this.perf.report(this.sessions.size, sims.length, sims.reduce((n, sim) => n + sim.monsters.length, 0), wire, this.awayCount());
     if (this.sessions.size) Perf.log(r);
   }
 
-  private onConnection(ws: WebSocket, req: IncomingMessage): void {
-    const ip = clientIp(req);
+  /**
+   * The direct road (server/direct.ts): `http` listens on 127.0.0.1:`port`, which only Caddy reaches. Refused
+   * before the upgrade (so the browser falls back to the tunnel at once) when the switch is off, the page is
+   * not on our domain, or one address already has ipMax direct connections.
+   */
+  attachDirect(http: HttpServer, port: number): void {
+    this.directPort = port;
+    const wss = new WebSocketServer({
+      server: http, path: WS_PATH, maxPayload: 16 * 1024, perMessageDeflate: WS_DEFLATE,
+      verifyClient: (info: { req: IncomingMessage }, done: (ok: boolean, code?: number) => void) => {
+        const d = this.direct;
+        if (!d.on) return this.directRefused.off++, done(false, 403);
+        if (!directOriginOk(info.req.headers.origin, d.host)) return this.directRefused.origin++, done(false, 403);
+        if ((this.directPerIp.get(directIp(info.req)) ?? 0) >= d.ipMax) return this.directRefused.perIp++, done(false, 429);
+        done(true);
+      },
+    });
+    wss.on('connection', (ws, req) => {
+      const ip = directIp(req);
+      this.directPerIp.set(ip, (this.directPerIp.get(ip) ?? 0) + 1);
+      ws.on('close', () => {
+        const n = (this.directPerIp.get(ip) ?? 1) - 1;
+        if (n > 0) this.directPerIp.set(ip, n);
+        else this.directPerIp.delete(ip);
+      });
+      this.onConnection(ws, req, true);
+    });
+  }
+
+  /** The direct connection card (admin Server tab). */
+  directState(canEditHost: boolean): AdminDirectWs {
+    let direct = 0;
+    for (const s of this.sessions) if (s.edge === 'direct') direct++;
+    return {
+      ...this.direct, defaults: { host: DIRECT_WS_HOST_DEFAULT, ipMax: DIRECT_WS_IP_MAX_DEFAULT },
+      available: this.directPort > 0, port: this.directPort, canEditHost,
+      clients: { direct, tunnel: this.sessions.size - direct }, refused: { ...this.directRefused },
+    };
+  }
+
+  /** Where a browser may connect directly (GET /api/net-route); null = only through the tunnel. */
+  directUrl(): string | null {
+    return this.direct.on && this.directPort > 0 ? `wss://${this.direct.host}${WS_PATH}` : null;
+  }
+
+  /**
+   * New direct settings. Switched off (or moved to another hostname): everyone connected directly is
+   * dropped (not kicked), so their browser reconnects at once — through the tunnel, or to the new name.
+   */
+  setDirect(next: DirectSettings): number {
+    const cut = this.direct.on && (!next.on || next.host !== this.direct.host);
+    this.direct = next;
+    saveDirectSettings(this.db, next);
+    let n = 0;
+    if (cut) for (const s of this.sessions) if (s.edge === 'direct') {
+      s.ws.close(WS_CLOSE_DIRECT_OFF, 'direct off');
+      n++;
+    }
+    return n;
+  }
+
+  private onConnection(ws: WebSocket, req: IncomingMessage, direct = false): void {
+    // Direct: never the CF-* headers (anyone may write them on that road), only what Caddy added.
+    const ip = direct ? directIp(req) : clientIp(req);
+    const edge = direct ? 'direct' : cfEdge(req);
     let session: Session | null = null;
     const timeout = setTimeout(() => {
       if (!session) ws.close();
@@ -577,12 +676,13 @@ export class GameWorld {
       if (!msg || typeof msg !== 'object') return;
       if (!session) {
         if (msg.t !== 'join') return;
-        session = this.join(ws, msg.token, msg.characterId, ip, msg.delta === 1, rejoinText(msg.back));
+        session = this.join(ws, msg.token, msg.characterId, ip, msg.delta === 1, rejoinText(msg.back), edge, msg.previewMap);
         clearTimeout(timeout);
         return;
       }
       try {
         if (msg.t === 'input') this.onInput(session, msg);
+        else if (session.preview && (msg.t === 'chat' || (msg.t === 'act' && msg.a !== 'respawn'))) return; // a preview only walks and fights
         else if (msg.t === 'act') this.onAction(session, msg);
         else if (msg.t === 'chat') this.onChat(session, msg.text, msg.ch, msg.to);
         else if (msg.t === 'ping') this.onPing(session, msg);
@@ -613,7 +713,7 @@ export class GameWorld {
     ws.on('error', () => ws.close());
   }
 
-  private join(ws: WebSocket, token: unknown, characterId: unknown, ip: string, delta = false, rejoin: string | null = null): Session | null {
+  private join(ws: WebSocket, token: unknown, characterId: unknown, ip: string, delta = false, rejoin: string | null = null, edge: string | null = null, previewMap?: unknown): Session | null {
     const acc = typeof token === 'string' ? this.db.sessionAccount(token) : undefined;
     const charId = num(characterId, -1);
     let data = acc ? this.db.loadCharacter(acc.id, charId) : undefined;
@@ -633,11 +733,13 @@ export class GameWorld {
       ws.close();
       return null;
     }
+    // A map-editor preview (anyone with the mapEdit tool; everyone else just joins normally): a copy of the character in its own Sim.
+    const pv = this.previewOf(acc, previewMap);
     // An account may play several of its characters at once (they share one live stash), but each
     // character only once: a new login with it takes over from the old one.
     // That includes one still farming with Auto after its connection dropped (awayAt): it comes back
     // here, at the same spot with Auto on (autoBack), without ever being in the world twice.
-    for (const s of [...this.sessions]) {
+    for (const s of pv ? [] : [...this.sessions]) {
       if (s.accountId === acc.id && s.charId === charId) {
         this.send(s.ws, { t: 'kick', msg: 'ตัวละครนี้เข้าเกมจากที่อื่น' });
         this.leave(s, 'takeover', s.awayAt !== null ? `taken back after farming ${fmtAgo(Date.now() - s.awayAt)} offline with Auto` : 'takeover (logged in again)');
@@ -649,15 +751,18 @@ export class GameWorld {
     // Everyone comes into the game in the town of the floor they logged out on (owner 2026-11-19, floor
     // 1's when the way up is shut for them now: loginHub), except a dropped connection (or a login
     // elsewhere) back within CH_RECONNECT_MS: that goes back where it was.
-    const back = this.channels.returning(charId);
-    const sim = (back?.channel ?? this.channels.place(loginHub(data).id)!).sim;
+    const back = pv ? undefined : this.channels.returning(charId);
+    const sim = pv ? new Sim(pv.zone, { map: pv.map }) : (back?.channel ?? this.channels.place(loginHub(data).id)!).sim;
+    if (pv) this.previews.add(sim);
     const player = sim.addPlayer(data);
     if (back) {
       player.x = back.x;
       player.z = back.z;
     }
-    this.db.touchOnline(acc.id);
-    if (acc.guest) {
+    if (!pv) this.db.touchOnline(acc.id);
+    if (pv) {
+      player.stash = cleanStash(null); // never the live stash: nothing done here may reach the account
+    } else if (acc.guest) {
       // Guests can't use the stash (onAction refuses it); this empty one is never saved.
       player.stash = cleanStash(null);
     } else {
@@ -669,17 +774,17 @@ export class GameWorld {
       player.stash = stash;
     }
     // Guests too: a guest who signs up keeps the account, and with it what it has done.
-    let tut = this.tuts.get(acc.id);
+    let tut = pv ? this.db.loadTutorial(acc.id) : this.tuts.get(acc.id);
     if (!tut) {
       tut = this.db.loadTutorial(acc.id);
       this.tuts.set(acc.id, tut);
     }
     player.tut = tut;
     const s: Session = {
-      ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId, sim, player,
-      move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null, recall: false,
+      ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId: pv ? -(charId + 1) : charId, sim, player,
+      preview: !!pv, move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null, recall: false,
       auto: null, lastInputAt: 0, walkTo: null, walkEpoch: 0, serverWalk: false, walkAnchor: { x: 0, z: 0 }, walkAnchorAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', lastTut: '', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', delta, lastMe: new Map(), seenP: new Map(), seenM: new Map(), outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, lastCashAt: -Infinity, saveDue: null,
-      ip, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, deflate: ws.extensions.includes('permessage-deflate'), staff: !acc.guest && ['owner', 'gm'].includes(this.db.adminRole(acc.id) ?? ''), pongAt: null, slowSnapAt: -Infinity,
+      ip, edge, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, deflate: ws.extensions.includes('permessage-deflate'), staff: !acc.guest && ['owner', 'gm'].includes(this.db.adminRole(acc.id) ?? ''), pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity, blockTrades: false,
       lastFriendAt: -Infinity, friendKey: '', lastCh: back?.channel.ch ?? 1, fight: new FightClock(Math.max(player.lastHurt, player.lastAttack)), lastChListAt: -Infinity, lastChAt: -Infinity,
@@ -687,12 +792,12 @@ export class GameWorld {
     };
     // Back at the same spot after a drop (or a login elsewhere) with Auto on: Auto carries on, from the
     // same AutoPlay (its farm spot), and the welcome tells the browser so.
-    const autoBack = this.autoBack.get(charId);
+    const autoBack = pv ? undefined : this.autoBack.get(charId);
     this.autoBack.delete(charId);
     if (back && autoBack && sim.zone.allowAutoPlay) s.auto = autoBack.auto;
     // Taken back (or never owned) while offline: off.
     this.keepToOwned(s);
-    try {
+    if (!pv) try {
       s.playRow = this.db.startPlaySession({ accountId: acc.id, username: acc.username, guest: acc.guest, charId, charName: player.name, ip });
     } catch (e) {
       console.error('[world] recording the play session failed', e);
@@ -701,16 +806,28 @@ export class GameWorld {
     this.sessions.add(s);
     this.byPlayer.set(player, s);
     s.friendKey = this.friendKeyOf(s);
-    if (!acc.guest) this.friendsJoined(s, accountWasOnline);
+    if (!acc.guest && !pv) this.friendsJoined(s, accountWasOnline);
     // Back within the grace time (or a takeover): still in the party.
-    player.partyId = this.parties.online(charId);
-    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), guest: acc.guest, ...(s.auto ? { auto: true } : {}), orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), animTuning: this.db.animTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning(), cash: this.cash.catalog(), cashState: this.cash.state(acc.id, acc.guest) });
-    this.broadcastSystem(`${player.name} เข้าสู่โลก`);
+    player.partyId = pv ? null : this.parties.online(charId);
+    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), map: sim.terrain.mapRev, guest: acc.guest, ...(s.auto ? { auto: true } : {}), ...(pv ? { preview: true } : {}), orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), animTuning: this.db.animTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning(), cash: this.cash.catalog(), cashState: this.cash.state(acc.id, acc.guest) });
+    if (!pv) this.broadcastSystem(`${player.name} เข้าสู่โลก`);
     // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
-    if (!acc.guest) setTimeout(() => this.sessions.has(s) && (this.marketOnJoin(s), this.dailyCheck(s), this.mailNote(s, true)), MARKET_JOIN_NOTE_MS);
+    if (!acc.guest && !pv) setTimeout(() => this.sessions.has(s) && (this.marketOnJoin(s), this.dailyCheck(s), this.mailNote(s, true)), MARKET_JOIN_NOTE_MS);
     const extra = [rejoin && `reconnected: ${rejoin}`, back && 'back at the same spot', s.auto && 'Auto on'].filter(Boolean).join(' · ');
-    console.log(`[world] ${acc.username} joined as ${player.name}${acc.guest ? ' (guest)' : ''} from ${ip}${s.deflate ? '' : ' (no compression)'}${extra ? ` — ${extra}` : ''} (${this.onlineText()})`);
+    console.log(`[world] ${acc.username} joined as ${player.name}${acc.guest ? ' (guest)' : ''} from ${ip}${edge === 'direct' ? ' direct (past Cloudflare)' : edge ? ` via Cloudflare ${edge}` : ''}${s.deflate ? '' : ' (no compression)'}${extra ? ` — ${extra}` : ''} (${this.onlineText()})`);
     return s;
+  }
+
+  /** The room for a map-editor preview, when this account may open one (a staff role with the mapEdit tool) and the zone's layout passes the check. */
+  private previewOf(acc: { id: number; guest: boolean }, id: unknown): { zone: ZoneDef; map: MapData } | null {
+    if (typeof id !== 'string' || acc.guest) return null;
+    const role = this.db.adminRole(acc.id);
+    if (!role || !this.db.roleFeatures(role).includes('mapEdit')) return null;
+    const map = previewLayout(this.db, id);
+    const layout = map && zoneWithLayout(id, map);
+    // A boss room is walked without its boss (owner 2026-11-21): a preview is no BossRooms run, nothing would end it or call a wipe.
+    const zone = layout?.roomOf ? { ...layout, boss: undefined } : layout;
+    return map && zone ? { zone, map } : null;
   }
 
   /** "5 online" or "5 online, 2 of them away with Auto" for the log. */
@@ -732,7 +849,7 @@ export class GameWorld {
    */
   private canAway(s: Session): boolean {
     return !!s.auto && !s.guest && currentBalance().auto.offline && !this.closing && s.player.alive
-      && s.sim.zone.allowAutoPlay && !this.rooms.sims().includes(s.sim);
+      && s.sim.zone.allowAutoPlay && !this.rooms.sims().includes(s.sim) && !this.waveRooms.has(s.sim);
   }
 
   /**
@@ -775,6 +892,7 @@ export class GameWorld {
       else if (now - s.awayAt >= this.awayMs()) why = 'time up';
       else if (!cfg.offline) why = 'switched off in /admin';
       else if (this.rooms.sims().includes(s.sim)) why = 'in a boss room';
+      else if (this.waveRooms.has(s.sim)) why = 'in a minigame';
       // Reading a return scroll (Auto's "scroll" option): wait for it, so it ends in town.
       else if (!s.auto && p.castT <= 0) why = 'Auto stopped';
       if (why) this.leave(s, 'drop', `Auto away ended: ${why}, after ${fmtAgo(now - s.awayAt)}`);
@@ -782,10 +900,25 @@ export class GameWorld {
     for (const [id, a] of this.autoBack) if (now - a.at > CH_RECONNECT_MS) this.autoBack.delete(id);
   }
 
+  /** Every running Sim: the channels, the boss rooms and the map-editor previews. */
+  private allSims(): Sim[] {
+    return [...this.channels.sims(), ...this.rooms.sims(), ...this.waveRooms.sims(), ...this.previews];
+  }
+
   private leave(s: Session, how: LeaveHow = 'quit', note?: string): void {
     if (!this.sessions.has(s)) return;
+    if (s.preview) {
+      // A preview copy: nothing to save, no party, play row or friends, and no way back (the owner opens the preview again).
+      this.sessions.delete(s);
+      this.byPlayer.delete(s.player);
+      s.sim.removePlayer(s.player);
+      this.previews.delete(s.sim);
+      this.wireGone += this.wireDelta(s.ws);
+      console.log(`[world] ${s.username} left the map preview of ${s.sim.zone.id}: ${note ?? how} (${this.onlineText()})`);
+      return;
+    }
     // Auto was on and the character can come back to the same spot: it carries on then (join).
-    if (how !== 'quit' && s.auto && s.player.alive && !this.rooms.sims().includes(s.sim)) this.autoBack.set(s.charId, { auto: s.auto, at: Date.now() });
+    if (how !== 'quit' && s.auto && s.player.alive && !this.rooms.sims().includes(s.sim) && !this.waveRooms.has(s.sim)) this.autoBack.set(s.charId, { auto: s.auto, at: Date.now() });
     else this.autoBack.delete(s.charId);
     // Whatever the reason (quit, lost connection, a login from elsewhere): the trade ends, nothing moves.
     this.trades.cancelChar(s.charId, `${s.player.name} ออกจากเกม`);
@@ -1148,6 +1281,7 @@ export class GameWorld {
     if (!this.sessions.size) return;
     const parts = [...this.sessions].filter((s) => s.awayAt === null).map((s) => {
       const bits = [s.rttCount ? fmtMs(s.rttSum / s.rttCount) : '—'];
+      if (s.edge) bits.push(`via ${s.edge}`);
       if (s.fpsCount) bits.push(`${Math.round(s.fpsSum / s.fpsCount)} fps`, `max frame ${fmtMs(s.maxFrame)}`);
       if (s.maxWait) bits.push(`no pong up to ${fmtMs(s.maxWait)}`);
       if (s.skipped) bits.push(`${s.skipped} snapshots skipped (slow download)`);
@@ -1767,7 +1901,9 @@ export class GameWorld {
    */
   balanceChanged(tuning: BalanceTuning): void {
     applyBalance(tuning);
-    for (const sim of [...this.channels.sims(), ...this.rooms.sims()]) {
+    applyMaps(this.db); // the "ใช้แมพจาก DB" switch: rooms made from now on follow it
+
+    for (const sim of this.allSims()) {
       for (const p of sim.players) {
         for (const it of Object.values(p.equipment)) upgradeItem(it);
         for (const e of p.bag) upgradeItem(e);
@@ -2051,7 +2187,7 @@ export class GameWorld {
     const travels: { s: Session; zone: string; atCamp?: boolean; spot?: Vec2 }[] = [];
     let simMs = 0;
     const ownNumsOnly = currentBalance().fxLayer.ownNumsOnly;
-    for (const sim of [...this.channels.sims(), ...this.rooms.sims()]) {
+    for (const sim of this.allSims()) {
       const t0 = performance.now();
       sim.step(dt, this.intentOf);
       simMs += performance.now() - t0;
@@ -2075,7 +2211,7 @@ export class GameWorld {
           const s = this.sessionById(sim, ev.id);
           if (s) s.epoch++;
         }
-        const at = eventPos(ev);
+        const at = eventPos(ev, sim);
         const to = 'to' in ev ? ev.to : undefined;
         // "Only your own damage numbers" (/admin, effects card): others' hits aren't sent at all.
         const own = ev.t === 'text' && ev.by !== undefined && ownNumsOnly ? ev.by : undefined;
@@ -2131,6 +2267,10 @@ export class GameWorld {
    * exact channel or boss room. `spot` puts the character there (a channel switch keeps where it stood).
    */
   private travel(s: Session, to: string | Sim, atCamp = false, spot?: Vec2): void {
+    if (s.preview) return; // a map preview stays in its own room (the portals do nothing)
+    // A minigame map: not a channel of it, a run of its own for the group.
+    const wz = typeof to === 'string' ? ZONES[to] : undefined;
+    if (wz?.waves) return this.enterWaves(s, wz);
     const dest = typeof to === 'string' ? this.channels.place(to, { leader: this.leaderSim(s), prefer: s.lastCh })?.sim : to;
     if (!dest || dest === s.sim || !this.sessions.has(s)) return;
     this.trades.cancelChar(s.charId, `${s.player.name} เปลี่ยนแมพ`);
@@ -2149,6 +2289,7 @@ export class GameWorld {
     p.hp = Math.min(old.hp, p.maxHp);
     p.mp = Math.min(old.mp, p.stats.maxMp);
     p.cd = { ...old.cd };
+    p.charges = { ...old.charges };
     p.potCd = old.potCd;
     p.restCd = old.restCd;
     p.stash = old.stash;
@@ -2178,6 +2319,7 @@ export class GameWorld {
     s.epoch++;
     s.lastInv = '';
     s.lastStash = '';
+    s.lastTut = '';
     // The browser starts the new zone with empty lists: everything goes again.
     forgetSent(s);
     // Waking up in town after dying in a zone: the old zone's `revived` and its EXP-loss line must
@@ -2187,7 +2329,7 @@ export class GameWorld {
       if (ev.t === 'log' && ev.to === old.id) return [{ ...ev, to: p.id }];
       return [];
     });
-    this.send(s.ws, { t: 'zone', zone: dest.zone.id, ch: this.chOf(s), you: p.id, x: r2(p.x), z: r2(p.z) });
+    this.send(s.ws, { t: 'zone', zone: dest.zone.id, ch: this.chOf(s), map: dest.terrain.mapRev, you: p.id, x: r2(p.x), z: r2(p.z) });
     this.save(s);
     console.log(`[world] ${s.username} → ${dest.zone.name}${chan && hasChannels(chan.zone) ? ` CH ${chan.ch}` : ''}`);
   }
@@ -2212,7 +2354,7 @@ export class GameWorld {
     const inv = JSON.stringify([p.equipment, p.bag, p.buyback]);
     const me: PrivateSnap = {
       hp: r2(p.hp), mp: r2(p.mp), exp: p.exp, level: p.level, gold: p.gold,
-      cd: p.cd, potCd: r2(p.potCd), restCd: r2(Math.max(0, p.restCd)), castT: p.castT > 0 ? r2(p.castT) : undefined,
+      cd: p.cd, ...(Object.keys(p.charges).length ? { ch: p.charges } : {}), potCd: r2(p.potCd), restCd: r2(Math.max(0, p.restCd)), castT: p.castT > 0 ? r2(p.castT) : undefined,
       ...(Object.keys(p.buffs).length ? { buffs: roundBuffs(p.buffs) } : {}),
       ...skillBuffField(p, s.sim.time),
       // Slowed (the Bog Witch's poison): the browser walks slower too, or its moves would be refused.
@@ -2285,6 +2427,7 @@ export class GameWorld {
         x: r2(o.x), z: r2(o.z), fx: r2(o.faceX), fz: r2(o.faceZ), mv: o.moving,
         alive: o.alive, hp: Math.round(o.hp), dash: o.isDashing ? o.dashKind : 0,
         ...buffField(o, sim.time),
+        ...(o.alive && o.guardT > 0 ? { gd: 1 as const } : {}),
         ...withLook<PlayerLook>(s.seenP, nextP, o.id, playerLook(o, looks)),
       })),
       monsters: sim.monsters.filter(near).map((m): MonsterSnap => ({
@@ -2302,6 +2445,7 @@ export class GameWorld {
       })),
       ...(sim.hazards.length && sim.zone.boss && near(sim.zone.boss) ? { hazards: sim.hazards } : {}),
       room: this.rooms.snap(sim, p),
+      waves: this.waveRooms.snap(sim, p),
       loots: sim.loots.filter(near).map((l) => ({
         id: l.id, x: r2(l.x), z: r2(l.z), fromX: r2(l.fromX), fromZ: r2(l.fromZ), t: r2(l.t),
         kind: l.kind, dropped: l.dropped, owner: l.owner, ownerUntil: r2(l.ownerUntil),
@@ -2392,7 +2536,7 @@ export class GameWorld {
       rtt: s.lastRtt === null ? null : Math.round(s.lastRtt),
       fps: s.lastFps === null ? null : Math.round(s.lastFps),
       maxFrame: s.fpsCount ? Math.round(s.maxFrame) : null,
-      hidden: s.hidden, ...(s.awayAt !== null ? { away: true } : {}), gpu: s.gpu, ip: s.ip, playedMs: Date.now() - s.joinedAt,
+      hidden: s.hidden, ...(s.awayAt !== null ? { away: true } : {}), gpu: s.gpu, ip: s.ip, edge: s.edge, playedMs: Date.now() - s.joinedAt,
     }));
     return { zones, players };
   }
@@ -2495,6 +2639,66 @@ export class GameWorld {
     return null;
   }
 
+  /**
+   * A map taken out of the game (hidden or deleted in the map editor): everyone in it goes to the hub's camp at once, then its
+   * channels close. Returns how many players were moved. Map previews are private rooms and are left alone.
+   */
+  closeZone(zoneId: string, why: string): number {
+    let n = 0;
+    for (const s of [...this.sessions]) {
+      if (s.preview || s.sim.zone.id !== zoneId) continue;
+      this.travel(s, HUB_ID, true);
+      this.send(s.ws, { t: 'chat', name: '', text: why });
+      n++;
+    }
+    this.channels.dropZone(zoneId);
+    return n;
+  }
+
+  /**
+   * Walking into a "รอดมอนเป็นระลอก" map: a party member whose party is already playing it joins that run; otherwise a new run opens
+   * for this player and the party members standing on the same map (alive, not away, runs left today). Everyone comes back out by the door.
+   */
+  private enterWaves(s: Session, zone: ZoneDef): void {
+    const tell = (x: Session, text: string): void => this.send(x.ws, { t: 'chat', name: '', text });
+    const cfg = currentBalance().waves;
+    if (!cfg.on) return tell(s, `มินิเกม "${zone.nameTh}" ปิดอยู่ตอนนี้`);
+    if (this.waveRooms.has(s.sim) || this.rooms.sims().includes(s.sim)) return;
+    if (this.waveRooms.runsLeft(s.charId) <= 0) return tell(s, `วันนี้เล่น "${zone.nameTh}" ครบ ${cfg.dailyLimit} รอบแล้ว`);
+    const party = this.parties.of(s.charId);
+    const partyId = party ? party.id : null;
+    const join = this.waveRooms.partyRun(zone.id, partyId);
+    if (join) {
+      this.waveRooms.joined(s.charId);
+      this.travel(s, join, true);
+      tell(s, `เข้าร่วมมินิเกม "${zone.nameTh}" กับปาร์ตี้`);
+      return;
+    }
+    const group = [s];
+    for (const m of party?.members ?? []) {
+      if (m.charId === s.charId) continue;
+      const o = this.sessionOfChar(m.charId);
+      if (o && o.awayAt === null && o.sim === s.sim && o.player.alive && this.waveRooms.runsLeft(o.charId) > 0) group.push(o);
+    }
+    const { sim, channel } = this.waveRooms.open(zone, group.map((g) => g.charId), this.waveExit(s, zone.id), partyId);
+    for (const g of group) {
+      this.travel(g, sim, true);
+      tell(g, `เข้าสู่มินิเกม "${zone.nameTh}" (ห้อง ${channel}) — รอดให้ครบ ${cfg.waves} ระลอก!`);
+    }
+  }
+
+  /** Where a wave run sends its players back: just outside the door they took (off its trigger ring, toward the map's start). */
+  private waveExit(s: Session, zoneId: string): WaveExit {
+    const zone = s.sim.zone;
+    const { x, z } = s.player;
+    const door = zone.portals.filter((p) => p.to === zoneId).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))[0];
+    if (!door) return { field: zone.id, x, z };
+    const dx = zone.start.x - door.x, dz = zone.start.z - door.z;
+    const d = Math.hypot(dx, dz) || 1;
+    const k = PORTAL_RANGE + 2.5;
+    return { field: zone.id, x: door.x + (dx / d) * k, z: door.z + (dz / d) * k };
+  }
+
   /** The zone and channel an online character is in (for the admin page), or undefined. */
   placeOf(charId: number): { zone: string; ch: number } | undefined {
     const s = this.sessionOfChar(charId);
@@ -2557,7 +2761,7 @@ export class GameWorld {
         (!s.guest && !o.guest && this.db.areFriends(s.accountId, o.accountId))
       );
       if (!o || !mate) return tell('ไปห้องเดียวกันได้เฉพาะเพื่อนหรือคนในปาร์ตี้ที่ออนไลน์อยู่');
-      if (o.sim.zone !== s.sim.zone) return tell(`${o.player.name} อยู่คนละแมพกับคุณ`);
+      if (o.sim.zone.id !== s.sim.zone.id) return tell(`${o.player.name} อยู่คนละแมพกับคุณ`);
       target = this.channels.of(o.sim);
     } else return;
     const cap = target ? this.channels.capFor(target, this.leaderSim(s)) : 0;
@@ -2615,6 +2819,12 @@ export class GameWorld {
     return changed;
   }
 
+  /** An admin gave or took crystals: every online character of the account gets the new total. */
+  crystalsChanged(accountId: number): void {
+    const state = this.cash.state(accountId, false);
+    for (const s of this.sessions) if (s.accountId === accountId && !s.guest) this.send(s.ws, { t: 'cashState', state });
+  }
+
   /** An admin gave or took back a cosmetic: every online character of the account gets the new list (and loses what was taken). */
   cosmeticsChanged(accountId: number): void {
     for (const s of this.sessions) {
@@ -2626,6 +2836,7 @@ export class GameWorld {
 
   private save(s: Session): void {
     s.saveDue = null;
+    if (s.preview) return; // a copy of the character: never written back
     try {
       // The account's tutorial goes with the character, so a step's gold and the step taken never come apart.
       this.db.transaction(() => {
@@ -2665,6 +2876,8 @@ export class GameWorld {
 /** A player's cosmetics for the snapshot (left out when none). */
 /** The settings row of the snapshot delta switch: '0' = off, missing = on (the default). */
 const SNAP_DELTA_KEY = 'snap_delta';
+/** Close code for direct connections when the direct switch goes off: a plain drop, the browser reconnects (through the tunnel). */
+const WS_CLOSE_DIRECT_OFF = 4100;
 /** PrivateSnap fields that hardly ever change: sent only when they did (snapshot delta). */
 type StaticMeKey = 'potSel' | 'lootFilter' | 'autoSettings' | 'stats' | 'skills' | 'bossKills' | 'unlocks' | 'quests' | 'gearQuests' | 'gearDone';
 const STATIC_ME: readonly StaticMeKey[] = ['potSel', 'lootFilter', 'autoSettings', 'stats', 'skills', 'bossKills', 'unlocks', 'quests', 'gearQuests', 'gearDone'];

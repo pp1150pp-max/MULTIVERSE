@@ -11,7 +11,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { ADMIN_GOLD_MAX, ADMIN_ITEMS_MAX, BROADCAST_EVERY_MS, FEATURE_ROLES, HISTORY_DAYS } from '../src/shared/admin';
 import { Db } from '../server/db';
 import { MAX_LEVEL } from '../src/shared/formulas';
-import { MAX_PLUS } from '../src/shared/data/enhance';
+import { PLUS_CAP } from '../src/shared/data/enhance';
 import { finish, ok } from './check';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -167,7 +167,7 @@ async function run(): Promise<void> {
   ok((await edit('items', { baseId: 'weapon_1', rarity: 'rare', count: ADMIN_ITEMS_MAX + 1 })).status === 400, 'too many items refused');
   ok((await edit('items', { baseId: 'nope', rarity: 'rare' })).status === 400, 'unknown item refused');
   ok((await edit('items', { baseId: 'weapon_1', rarity: 'mythic' })).status === 400, 'unknown rarity refused');
-  ok((await edit('items', { baseId: 'weapon_1', rarity: 'rare', plus: MAX_PLUS + 1 })).status === 400, 'plus over the max refused');
+  ok((await edit('items', { baseId: 'weapon_1', rarity: 'rare', plus: PLUS_CAP + 1 })).status === 400, 'plus over the max refused');
   ok((await edit('teleport', { zone: 'nowhere' })).status === 400, 'unknown zone refused');
   // Potions and stones: every field checked.
   const badStacks: [unknown, string][] = [
@@ -338,7 +338,7 @@ async function run(): Promise<void> {
   const ownerId = (await api('GET', '/admin/accounts', undefined, ownerTok)).data.rows.find((r: any) => r.username === 'owner1').accountId;
   ok((await api('GET', '/admin/me', undefined, ownerTok)).data.features.length === Object.keys(FEATURE_ROLES).length, 'owner has every owner tool');
   ok(JSON.stringify((await api('GET', '/admin/me', undefined, gmTok)).data.features) === JSON.stringify(GM_DEFAULT), 'GM has only its FEATURE_ROLES tools (the base tools, broadcast, orb bench, channel warp, reports, cosmetics bench, card view, balance tab)');
-  ok(GM_DEFAULT.join() === 'online,charView,charEdit,kick,teleport,broadcast,orbPreview,channelWarp,reports,cosPreview,cosManage,orbShopAdd,cardView,balance,itemEdit,netDelta,cashShop,animPreview,menuLayout', `GM defaults: the base tools plus what the owner gave GMs since (card view, balance and item edit 2026-11-11, snapshot delta 2026-11-14, cash shop view 2026-11-15, animation bench 2026-11-18, menu layout view 2026-11-19) (${GM_DEFAULT.join()})`);
+  ok(GM_DEFAULT.join() === 'online,charView,charEdit,kick,teleport,broadcast,orbPreview,channelWarp,reports,cosPreview,cosManage,orbShopAdd,cardView,balance,itemEdit,netDelta,directWs,cashShop,animPreview,menuLayout,mapEdit,mapCreate,mapDelete', `GM defaults: the base tools plus what the owner gave GMs since (card view, balance and item edit 2026-11-11, snapshot delta 2026-11-14, direct connection switch 2026-11-20, cash shop view 2026-11-15, animation bench 2026-11-18, menu layout view 2026-11-19, map editor 2026-11-20, new maps + deleting them 2026-11-21) (${GM_DEFAULT.join()})`);
   const trades = await api('GET', '/admin/trades', undefined, ownerTok);
   ok(trades.status === 200 && Array.isArray(trades.data) && (await api('GET', '/admin/trades?q=x%25', undefined, ownerTok)).status === 200, 'owner reads the trade log (and a search with odd characters is fine)');
   const gmDenied: [string, string, unknown?][] = [

@@ -14,12 +14,14 @@ import {
   type AdminAccountDetail, type AdminAccountRow, type AdminAccountsResponse, type AdminCharDetail, type AdminFeature,
 } from '../src/shared/admin';
 import { banMessage } from '../src/shared/api';
-import { HISTORY_PAGE, type AdminStats, type StatsPoint, type StatsRange } from '../src/shared/admin';
+import { ADMIN_CRYSTAL_MAX, HISTORY_PAGE, type AdminStats, type StatsPoint, type StatsRange } from '../src/shared/admin';
 import { SESSION_PAGE_SIZES, SESSION_SEARCH_MAX, SESSION_SORTS, type SessionPage, type SessionQuery, type SessionSort } from '../src/shared/admin';
 import { BAG_SIZE } from '../src/shared/sim/Player';
 import type { AdminShutdownText } from '../src/shared/admin';
 import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../src/shared/net/protocol';
 import { SHUTDOWN_TEXT_KEY } from './db';
+import { checkDirectHost } from './direct';
+import { DIRECT_WS_IP_MAX_RANGE } from '../src/shared/admin';
 import { checkOrbLook, DEFAULT_ORB_LOOK, orbLookChanges, ORB_LOOK_RANGES, ORB_PALETTE_IDS, ORB_SHAPE_IDS, sameOrbLook } from '../src/shared/orbLook';
 import type { AdminAnimLook, AdminCardTune, AdminCosLook, AdminCosShop, AdminOrbItems, AdminOrbLook } from '../src/shared/admin';
 import { animTuningChanges, checkAnimTuning, sameAnimTuning } from '../src/shared/animTuning';
@@ -34,8 +36,7 @@ import { checkMenuLayoutTuning } from '../src/shared/menuLayout';
 import { upgradeItem } from '../src/shared/data/items';
 import { searchStats } from '../src/shared/sim/market';
 import type { Item, StoneStack } from '../src/shared/types';
-import type { AdminBalance, AdminMenuLayout, AdminPaperMaps } from '../src/shared/admin';
-import { PAPER_MAPS_SETTING } from '../src/shared/paperArt';
+import type { AdminBalance, AdminMenuLayout } from '../src/shared/admin';
 import { DAILY_DEFAULT } from '../src/shared/daily';
 import { STONE_NAME } from '../src/shared/data/stones';
 
@@ -174,7 +175,7 @@ export async function ownerToolsApi(
     return true;
   }
 
-  const acc = /^\/api\/admin\/accounts\/(\d{1,12})(?:\/(password|ban|unban|cosmetics))?$/.exec(path);
+  const acc = /^\/api\/admin\/accounts\/(\d{1,12})(?:\/(password|ban|unban|cosmetics|crystals))?$/.exec(path);
   if (acc) {
     const id = Number(acc[1]);
     const action = acc[2];
@@ -221,6 +222,24 @@ export async function ownerToolsApi(
       }
       log(db, a, give ? 'cosmetic-give' : 'cosmetic-take', `${row.username} (#${id})`, `${COS_SLOT_NAME[c.slot]}: ${c.name}`);
       send(res, 200, { msg: give ? `ให้ ${c.name} แก่ ${row.username} แล้ว${mailNote}` : `ยึด ${c.name} คืนจาก ${row.username} แล้ว` });
+      return true;
+    }
+
+    if (method === 'POST' && action === 'crystals') {
+      const a = requireFeature(req, db, 'crystalGrant');
+      const row = accountRow(db, world, id);
+      if (row.guest) throw new HttpError(400, 'Guest ไม่มีคริสตัลมิติ');
+      const body = await readJson(req);
+      const delta = body.delta;
+      if (typeof delta !== 'number' || !Number.isInteger(delta) || delta === 0 || Math.abs(delta) > ADMIN_CRYSTAL_MAX) {
+        throw new HttpError(400, `จำนวนคริสตัลต้องเป็นเลขเต็ม ไม่ใช่ 0 และไม่เกิน ${ADMIN_CRYSTAL_MAX.toLocaleString()}`);
+      }
+      const before = db.crystals(id);
+      const after = db.crystalsAdd(id, delta);
+      if (after === null) throw new HttpError(400, `คริสตัลไม่พอที่จะลด (มี ${before.toLocaleString()})`);
+      world.crystalsChanged(id);
+      log(db, a, delta > 0 ? 'crystal-give' : 'crystal-take', `${row.username} (#${id})`, `${before} → ${after} (${delta > 0 ? '+' : ''}${delta})`);
+      send(res, 200, { msg: `${delta > 0 ? 'ให้' : 'ลด'}คริสตัลมิติ ${Math.abs(delta).toLocaleString()} แก่ ${row.username} (เหลือ ${after.toLocaleString()})` });
       return true;
     }
 
@@ -709,22 +728,41 @@ export async function ownerToolsApi(
     return true;
   }
 
-  // ---------------------------------------------------------- papercraft map art (Server tab, src/shared/paperArt.ts)
-  if (method === 'GET' && path === '/api/admin/paper-maps') {
-    requireFeature(req, db, 'paperMaps');
-    send(res, 200, { on: db.getSetting(PAPER_MAPS_SETTING) === '1' } satisfies AdminPaperMaps);
+  // ---------------------------------------------------------- direct connection (Server tab, server/direct.ts)
+  if (method === 'GET' && path === '/api/admin/direct-ws') {
+    const a = requireFeature(req, db, 'directWs');
+    send(res, 200, world.directState(a.role === 'owner'));
     return true;
   }
 
-  if (method === 'POST' && path === '/api/admin/paper-maps') {
-    const a = requireFeature(req, db, 'paperMaps');
+  if (method === 'POST' && path === '/api/admin/direct-ws') {
+    const a = requireFeature(req, db, 'directWs');
+    const owner = a.role === 'owner';
     const body = await readJson(req);
+    const before = world.directState(owner);
     if (typeof body.on !== 'boolean') throw new HttpError(400, 'ค่าเปิด/ปิดไม่ถูกต้อง');
-    if (body.on !== (db.getSetting(PAPER_MAPS_SETTING) === '1')) {
-      db.setSetting(PAPER_MAPS_SETTING, body.on ? '1' : null);
-      log(db, a, 'paper-maps', 'ภาพแมพกระดาษ', body.on ? 'เปิด (ภาพกระดาษตัดแปะ)' : 'ปิด (ภาพเดิม)');
+    const ipMax = body.ipMax;
+    if (typeof ipMax !== 'number' || !Number.isInteger(ipMax) || ipMax < DIRECT_WS_IP_MAX_RANGE[0] || ipMax > DIRECT_WS_IP_MAX_RANGE[1]) {
+      throw new HttpError(400, `เพดานต่อ IP ต้องเป็น ${DIRECT_WS_IP_MAX_RANGE[0]}–${DIRECT_WS_IP_MAX_RANGE[1]}`);
     }
-    send(res, 200, { on: body.on } satisfies AdminPaperMaps);
+    let host = before.host;
+    if (body.host !== undefined && body.host !== before.host) {
+      // The login token goes to this hostname: only the owner may point it elsewhere.
+      if (!owner) throw new HttpError(403, 'แก้ชื่อ hostname ได้เฉพาะ owner');
+      if (typeof body.host !== 'string') throw new HttpError(400, 'ชื่อ hostname ไม่ถูกต้อง');
+      host = body.host.trim().toLowerCase();
+      const bad = checkDirectHost(host);
+      if (bad) throw new HttpError(400, `ชื่อ hostname ไม่ถูกต้อง: ${bad}`);
+    }
+    const changes: string[] = [];
+    if (body.on !== before.on) changes.push(body.on ? 'เปิด' : 'ปิด');
+    if (host !== before.host) changes.push(`hostname ${before.host} → ${host}`);
+    if (ipMax !== before.ipMax) changes.push(`เพดานต่อ IP ${before.ipMax} → ${ipMax}`);
+    if (changes.length) {
+      const cut = world.setDirect({ on: body.on, host, ipMax });
+      log(db, a, 'direct-ws', 'ต่อตรง (ลดปิง)', `${changes.join(' · ')}${cut ? ` · ตัดคนที่ต่อตรงอยู่ ${cut} คน (ต่อใหม่เอง)` : ''}`);
+    }
+    send(res, 200, world.directState(owner));
     return true;
   }
 

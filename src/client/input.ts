@@ -1,3 +1,5 @@
+import { gameKey, onKeysChange } from './keybinds';
+
 const isTyping = (e: Event) => {
   const t = e.target as HTMLElement | null;
   return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA');
@@ -22,11 +24,19 @@ export class Input {
   constructor(canvas: HTMLCanvasElement) {
     window.addEventListener('keydown', (e) => {
       if (isTyping(e)) return;
-      if (!e.repeat) this.pressedSet.add(e.code);
-      this.keys.add(e.code);
-      if (e.code === 'Space' || e.code === 'Tab') e.preventDefault();
+      // The player's own keys (keybinds.ts): the game hears the default key of the action this key is bound to.
+      const code = gameKey(e.code);
+      if (code === 'Space' || code === 'Tab' || e.code === 'Space' || e.code === 'Tab') e.preventDefault();
+      if (!code) return;
+      if (!e.repeat) this.pressedSet.add(code);
+      this.keys.add(code);
     });
-    window.addEventListener('keyup', (e) => this.keys.delete(e.code));
+    window.addEventListener('keyup', (e) => {
+      const code = gameKey(e.code);
+      if (code) this.keys.delete(code);
+    });
+    // Keys moved while one was held: let go of everything, or the old key could stay down.
+    onKeysChange(() => this.releaseAll());
     window.addEventListener('blur', () => this.releaseAll());
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) this.releaseAll();

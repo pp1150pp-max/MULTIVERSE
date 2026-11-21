@@ -231,7 +231,7 @@ function alone(kind: string, x = 0, z = 0): { sim: Sim; m: Monster } {
   b.moves['crab.hpMult'] = 2;
   const c = checkBalance(b, true);
   ok('tuning' in c && c.tuning?.moves?.['steal.max'] === 900 && Object.keys(c.tuning?.moves ?? {}).length === 2, 'saved: only what differs');
-  ok(balanceChanges(mergeBalance({}), b).includes('ขโมยได้สูงสุดต่อครั้ง 500 → 900'), 'and in the audit line');
+  ok(balanceChanges({}, { moves: b.moves }).includes('ขโมยได้สูงสุดต่อครั้ง 500 → 900'), 'and in the audit line');
   const bad = mergeBalance({});
   bad.moves['chain.jumps'] = 99;
   ok('error' in checkBalance(bad, true), 'out of range is refused');

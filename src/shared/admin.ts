@@ -13,7 +13,7 @@ import type { MenuLayoutConfig } from './menuLayout';
 import { ITEM_BASES, itemNames, makeItem, roundStat, rowRanges, stampTier, statStep, tierOf } from './data/items';
 import { CLASS_IDS } from './data/classes';
 import { MAX_LEVEL } from './formulas';
-import { MAX_PLUS } from './data/enhance';
+import { PLUS_CAP } from './data/enhance';
 import { entryName, POTION_SIZES, potionName, stackLimit } from './data/potions';
 import { STONE_NAME } from './data/stones';
 
@@ -44,6 +44,8 @@ export const BUILTIN_ROLE_NAME: Record<string, string> = { owner: 'Owner', gm: '
 // Limits per admin action (change them here).
 /** Most gold one action may give or take. */
 export const ADMIN_GOLD_MAX = 1_000_000;
+/** Most crystals one action may give or take. */
+export const ADMIN_CRYSTAL_MAX = 1_000_000;
 /** Most items one action may spawn. */
 export const ADMIN_ITEMS_MAX = 10;
 /** Most stat rows an item with chosen stats may have (one per stat in the game; repeats allowed). */
@@ -95,6 +97,8 @@ export interface AdminOnlineRow {
   away?: boolean;
   gpu: string | null;
   ip: string;
+  /** Cloudflare data center the player came in through (e.g. BKK, SIN); null when direct. */
+  edge?: string | null;
   /** How long this session has been in the game (since the join; zone changes don't reset it). */
   playedMs: number;
 }
@@ -171,8 +175,24 @@ export interface SnapDeltaStats {
  * browsers opened before the update, which get whole snapshots whatever the switch says. Saving sends `{ on }`.
  */
 export interface AdminSnapDelta { on: boolean; stats: SnapDeltaStats; clients: { delta: number; full: number } }
+/** Direct game connection (server/direct.ts): the hostname players' browsers connect to straight, past Cloudflare. */
+export const DIRECT_WS_HOST_DEFAULT = 'ws.multiverse-game.com';
+/** Direct connections at once from one address (a net café shares one); more = refused (they come through the tunnel). */
+export const DIRECT_WS_IP_MAX_DEFAULT = 40;
+export const DIRECT_WS_IP_MAX_RANGE: readonly [number, number] = [1, 500];
+/**
+ * The direct connection card (Server tab). `available` = this server has the local port Caddy passes to
+ * (`port`, 0 = none). `clients` = online players by road; `refused` = direct connections turned away since start
+ * (switch off, wrong page, too many from one address). Saving sends `{ on, ipMax, host? }` (host: owner only).
+ */
+export interface AdminDirectWs {
+  on: boolean; host: string; ipMax: number;
+  defaults: { host: string; ipMax: number };
+  available: boolean; port: number; canEditHost: boolean;
+  clients: { direct: number; tunnel: number };
+  refused: { off: number; origin: number; perIp: number };
+}
 /** The papercraft map art switch (owner 2026-11-17, art_templates/papercraft_maps): on = every player's game loads the paper pictures. */
-export interface AdminPaperMaps { on: boolean }
 
 // ------------------------------------------------------------ owner tools (users, bans, broadcast, backups…)
 
@@ -181,7 +201,7 @@ export interface AdminPaperMaps { on: boolean }
  * switch: the Permissions tab, the audit log, restarting / stopping the server, deleting accounts or
  * characters, and making someone owner (command line).
  */
-export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'paperMaps' | 'animPreview' | 'animTune' | 'menuLayout' | 'menuLayoutEdit';
+export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'crystalGrant' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'directWs' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'animPreview' | 'animTune' | 'menuLayout' | 'menuLayoutEdit' | 'mapEdit' | 'mapRollback' | 'mapExport' | 'mapCreate' | 'mapDelete';
 
 /**
  * The defaults: which built-in role may use each tool (owner always has all). The owner can change
@@ -227,6 +247,8 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   reportBan: ['owner'],
   // Giving / taking back cosmetics on an account's sheet (owner only for now).
   cosmetics: ['owner'],
+  // Giving / taking crystals on an account's sheet (owner 2026-11-20, like giving gold; owner only to start with).
+  crystalGrant: ['owner'],
   // The cosmetics test bench tab "ของแต่งตัว" (owner 2026-11-10: owner and GMs). Only looks; changes nothing in the game.
   cosPreview: ['owner', 'gm'],
   // Saving the server-wide cosmetic tuning from that tab (owner 2026-11-10: owner only).
@@ -251,10 +273,11 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   daily: ['owner'],
   // The snapshot delta switch on the Server tab (owner 2026-11-14: owner and GMs).
   netDelta: ['owner', 'gm'],
+  // The direct connection card on the Server tab (owner 2026-11-20: owner and GMs switch it; only the owner changes the hostname).
+  directWs: ['owner', 'gm'],
   // The Google login card on the Server tab: switch it on/off, see and unlink linked accounts (owner 2026-11-15: owner only).
   googleLogin: ['owner'],
   // The papercraft map art switch on the Server tab (owner 2026-11-17: everyone sees the same art, so owner only).
-  paperMaps: ['owner'],
   // The "แคชช็อป" tab: items, prices, packages and purchases (owner 2026-11-15: owner and GMs may look).
   cashShop: ['owner', 'gm'],
   // Saving it, opening / closing sales (owner only).
@@ -267,6 +290,12 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   menuLayout: ['owner', 'gm'],
   // Saving it, server-wide, live for everyone online (owner only, like the other server-wide look tabs).
   menuLayoutEdit: ['owner'],
+  // The map editor (docs/plans/map-editor.md): save drafts and publish; going back to an older revision and exporting a map into the repo are owner-only until the owner hands them out.
+  mapEdit: ['owner', 'gm'],
+  mapRollback: ['owner'],
+  mapExport: ['owner'],
+  mapCreate: ['owner', 'gm'],
+  mapDelete: ['owner', 'gm'],
 };
 
 export const ADMIN_FEATURES = Object.keys(FEATURE_ROLES) as AdminFeature[];
@@ -303,6 +332,7 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   kick: { name: 'เตะออกจากเกม', desc: 'เตะตัวละครที่ออนไลน์อยู่ออกจากเกม', group: 'ผู้เล่น' },
   teleport: { name: 'ย้ายโซน', desc: 'ย้ายตัวละครไปแคมป์ของโซนที่เลือก', group: 'ผู้เล่น' },
   channelWarp: { name: 'วาร์ปเลือก CH', desc: 'ตอนย้ายโซน เลือก CH ได้ เข้าได้แม้ห้องเต็ม', group: 'ผู้เล่น' },
+  crystalGrant: { name: 'ให้/ลดคริสตัลมิติ', desc: 'ในหน้าบัญชี: ให้หรือลดคริสตัลมิติ (เงินแคชช็อป) ของบัญชี', group: 'ผู้เล่น' },
   cosmetics: { name: 'ให้/ถอนของแต่งตัว', desc: 'ให้หรือถอนของแต่งตัวในหน้าบัญชี', group: 'ผู้เล่น' },
   itemEdit: { name: 'แก้ไอเทมของผู้เล่น', desc: 'ในหน้าบัญชี: แก้ชนิด ความหายาก เลเวล อาชีพ ชื่อ ตีบวก pity สเตตัสทุกบรรทัด จำนวนยา/หิน หรือลบไอเทม ที่สวม/กระเป๋า/คลัง (ต้องมี "ผู้ใช้ทั้งหมด" ด้วย)', group: 'ผู้เล่น' },
   staffTarget: { name: 'จัดการบัญชีทีมงานคนอื่น', desc: 'แบน รีเซ็ตรหัส แก้ตัวละครของบัญชีที่มีสิทธิ์ผู้ดูแล (ไม่มี = ทำได้แค่ผู้เล่นธรรมดาและตัวเอง) · บัญชี owner แตะไม่ได้เสมอ', group: 'ผู้เล่น' },
@@ -325,9 +355,9 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   cosPreview: { name: 'ทดลองของแต่งตัว', desc: 'แท็บ "ของแต่งตัว": ลองตำแหน่ง/หน้าตาปีก สัตว์ขี่ สัตว์เลี้ยง ออร่า ไม่เปลี่ยนอะไรในเกม', group: 'หน้าตา' },
   balance: { name: 'ปรับสมดุล (อาชีพ, tier)', desc: 'แท็บ "ปรับสมดุล": แก้ค่าสเตตัสอาชีพ ตัวคูณ ตัวตัดฟื้น และตาราง tier T1–T5 ของทั้งเซิร์ฟ มีผลทันที', group: 'ปรับเกม' },
   daily: { name: 'ล็อกอินรายวัน', desc: 'แท็บ "ล็อกอินรายวัน": แก้ของรางวัลแต่ละวันของปฏิทิน (มีผลกับของที่ส่งหลังบันทึก)', group: 'ปรับเกม' },
+  directWs: { name: 'ต่อตรง (ลดปิง)', desc: 'แท็บ Server: เปิด/ปิดให้เกมต่อตรงไปที่ VPS ไม่ผ่าน Cloudflare และเพดานการเชื่อมต่อต่อ IP (ชื่อ hostname แก้ได้เฉพาะ owner)', group: 'ระบบ' },
   netDelta: { name: 'ลดขนาด snapshot', desc: 'แท็บ Server: สวิตช์ส่งค่าที่แทบไม่เปลี่ยนเฉพาะตอนเปลี่ยน (ลดเน็ตขาออก) และตัวนับ', group: 'ระบบ' },
   googleLogin: { name: 'เข้าสู่ระบบด้วย Google', desc: 'แท็บ Server: เปิด/ปิดปุ่ม Google ที่หน้า Login ดูบัญชีที่ผูก Google และยกเลิกการผูก', group: 'ระบบ' },
-  paperMaps: { name: 'ภาพกระดาษ (ทดลอง)', desc: 'แท็บ Server: สลับภาพแมพและตัวละครระหว่างแบบเดิมกับแบบกระดาษตัดแปะ ทุกคนเห็นเหมือนกัน (มีผลตอนเปิดหน้าเกมใหม่)', group: 'หน้าตา' },
   animPreview: { name: 'ดูท่าตัวละคร', desc: 'แท็บ "ท่าตัวละคร": ดูท่ายืน วิ่ง โจมตี ฯลฯ ของทุกอาชีพครบ 8 ทิศ บนพื้นเลื่อน ไม่เปลี่ยนอะไรในเกม (ปรับค่าต่อทิศได้ บันทึกต้องมีสวิตช์ animTune)', group: 'หน้าตา' },
   animTune: { name: 'บันทึกค่าท่าตัวละคร', desc: 'แท็บ "ท่าตัวละคร": บันทึกค่าที่ปรับต่อทิศ (แถวภาพ พลิก ความเร็ว เลื่อน ขนาด) เป็นของทั้งเซิร์ฟ ทุกคนเห็นทันที', group: 'หน้าตา' },
   menuLayout: { name: 'ดูจัดเมนูเกม', desc: 'แท็บ "จัดเมนูเกม": ดูว่าหน้าต่างเมนูและแถวไอคอนมุมขวาบนมีปุ่มอะไร ลำดับไหน (ลองจัดได้ แต่บันทึกต้องมีสวิตช์ "บันทึกจัดเมนูเกม")', group: 'ปรับเกม' },
@@ -340,6 +370,11 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   cardView: { name: 'ดูค่าการ์ด', desc: 'แท็บ "การ์ด": ดูผลของการ์ดทุกใบ เรทดรอป ราคา และเพดาน', group: 'ปรับเกม' },
   cashShop: { name: 'ดูแคชช็อป', desc: 'แท็บ "แคชช็อป": ดูสินค้า ราคาคริสตัลมิติ แพ็กเกจเติม และประวัติการซื้อ', group: 'ปรับเกม' },
   cashShopEdit: { name: 'แก้แคชช็อป', desc: 'เปิด/ปิดขาย และบันทึกสินค้า ราคา ราคาลด จำกัดต่อบัญชี ช่วงเวลา ป้าย แนะนำ แพ็กเกจ (รวมราคาของแต่งตัว) ต้องมี "ดูแคชช็อป" ด้วย', group: 'ปรับเกม' },
+  mapEdit: { name: 'แก้แมพ', desc: 'ตัวแก้แมพ: ดูรายการแมพ/ร่าง/revision บันทึกร่าง และเผยแพร่แมพ (ห้องใหม่ใช้ทันที ห้องที่มีคนอยู่ใช้ตอนผู้เล่นเข้าแมพครั้งถัดไป) ลง audit ทุกครั้ง', group: 'ปรับเกม' },
+  mapRollback: { name: 'ย้อนแมพกลับ revision เก่า', desc: 'ย้อนแมพไปใช้ revision ก่อนหน้า (ต้องมี "แก้แมพ" ด้วย) เผยแพร่เป็น revision ใหม่ทันที', group: 'ปรับเกม' },
+  mapExport: { name: 'ส่งออกแมพเข้า repo', desc: 'ดึง JSON ของแมพที่เผยแพร่แล้วไปเป็นไฟล์ค่าตั้งต้นใน repo (ต้องมี "แก้แมพ" ด้วย)', group: 'ปรับเกม' },
+  mapCreate: { name: 'สร้างแมพใหม่', desc: 'ปุ่ม "＋ แมพใหม่" (คัดลอกแมพเดิม / พื้นเปล่า / นำเข้าไฟล์ JSON) แก้ชื่อ ชั้น เลเวล เขตปลอดภัย แชนแนล ของแมพที่สร้างเอง และซ่อน/แสดงแมพนั้น (ต้องมี "แก้แมพ" ด้วย) ลง audit', group: 'ปรับเกม' },
+  mapDelete: { name: 'ลบแมพที่สร้างเอง', desc: 'ลบแมพที่สร้างด้วย "＋ แมพใหม่" ถาวร พร้อมร่างและประวัติทั้งหมด (แมพที่มากับเกมลบไม่ได้, ลบไม่ได้ถ้ายังมีประตูจากแมพอื่นชี้มา) ผู้เล่นที่อยู่ในแมพนั้นย้ายไปเมืองกลาง (ต้องมี "แก้แมพ" ด้วย) ลง audit', group: 'ปรับเกม' },
   cardTune: { name: 'แก้ค่าการ์ดทั้งเซิร์ฟ', desc: 'แก้และบันทึกค่าการ์ดที่ใช้ทั้งเซิร์ฟ (ต้องมี "ดูค่าการ์ด" ด้วย)', group: 'ปรับเกม' },
 };
 
@@ -584,7 +619,7 @@ export function editGear(old: Item, body: Record<string, unknown>): Item | strin
   if (!cls) return 'อาชีพไม่ถูกต้อง';
   const whole = (v: unknown, lo: number, hi: number): v is number => typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi;
   if (!whole(body.level, base.minLevel, MAX_LEVEL)) return `เลเวลไอเทมต้องเป็น ${base.minLevel}–${MAX_LEVEL} (ขั้นต่ำของชนิดนี้ Lv.${base.minLevel})`;
-  if (!whole(body.plus, 0, MAX_PLUS)) return `ระดับตีบวกต้องเป็น 0–${MAX_PLUS}`;
+  if (!whole(body.plus, 0, PLUS_CAP)) return `ระดับตีบวกต้องเป็น 0–${PLUS_CAP}`;
   if (!whole(body.pity, 0, ADMIN_PITY_MAX)) return `pity ต้องเป็น 0–${ADMIN_PITY_MAX}`;
   const item = customItem(base.id, rarity, body.level, cls, body.name, body.lines);
   if (typeof item === 'string') return item;

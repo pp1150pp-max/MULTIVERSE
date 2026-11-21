@@ -18,6 +18,7 @@ import { checkAnimTuning } from '../../shared/animTuning';
 import { applyAnimTuning } from '../animTune';
 import { applyBalance, checkBalance, currentBalance } from '../../shared/balance';
 import { attackRootTime } from '../../shared/attackRootTuning';
+import { skipsAttackRoot } from '../../shared/skillTuning';
 import { applyCosHidden, applyCosTuning } from '../cosTune';
 import { useCash, useCashState } from '../cashData';
 import { EQUIP_SLOTS } from '../../shared/types';
@@ -28,7 +29,8 @@ import type { DailyView } from '../../shared/daily';
 import type { BuffScroll, EquipSlot, Item, PotionKind, PotionSize, Rarity, Vec2 } from '../../shared/types';
 import type { SkillSlot, WearSlot } from '../../shared/data/classes';
 import { cleanSkillBook } from '../../shared/skillBook';
-import { INPUT_HZ, PING_MS, WS_CLOSE_PAGE_GONE, WS_CLOSE_QUIT, WS_CLOSE_STALE, WS_PATH, type ClientMsg, type RejoinInfo, type ServerMsg, type ShutdownMode, type SnapshotMsg } from '../../shared/net/protocol';
+import { DIRECT_OPEN_MS, directBroke, openGameSocket, SocketAttempt } from './route';
+import { INPUT_HZ, PING_MS, WS_CLOSE_PAGE_GONE, WS_CLOSE_QUIT, WS_CLOSE_STALE, type ClientMsg, type RejoinInfo, type ServerMsg, type ShutdownMode, type SnapshotMsg } from '../../shared/net/protocol';
 import type { PartyFound, PartySnap } from '../../shared/party';
 import type { TradeView } from '../../shared/trade';
 import type { FriendsView } from '../../shared/friends';
@@ -38,10 +40,13 @@ import type { RerollKind } from '../../shared/data/reroll';
 import type { Hazard } from '../../shared/sim/volcanoHeart';
 import type { MarketCall, MarketReply } from '../../shared/sim/market';
 import type { RoomLobbyView, RoomSnap } from '../../shared/bossRoom';
+import type { WaveSnap } from '../../shared/waveGame';
 import type { MailCall, MailReply } from '../../shared/mail';
 import { WalkTarget } from '../walkTo';
 import type { ReportReply } from '../../shared/reports';
 import type { TutStep } from '../../shared/tutorial';
+import { ensureMap, mapIsCurrent } from '../mapSync';
+import { activePreview, loadPreviewDraft, previewParam, settlePreview } from '../mapPreview';
 
 /** Mirrors never run game logic, so they don't need a simulation behind them. */
 const NO_SIM = null as unknown as Sim;
@@ -111,49 +116,72 @@ function useWelcome(m: WelcomeMsg): void {
   useCashState(m.cashState);
 }
 
-function wsUrl(): string {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  return `${proto}://${location.host}${WS_PATH}`;
-}
-
-/** Opens the connection, joins with the chosen character and resolves once the first snapshot arrives. */
+/** Opens the connection (direct or through the tunnel: route.ts), joins with the chosen character and resolves once the first snapshot arrives. */
 export function connectOnline(token: string, characterId: number): Promise<OnlineBackend> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(wsUrl());
+    const att = new SocketAttempt();
     let you = -1;
     let zone = '';
     let ch = 1;
     let guest = false;
     let auto = false;
     let settled = false;
+    // The layout revision of the map we start in must be here before the Terrain is built (OnlineBackend's constructor).
+    let mapReady: Promise<void> = Promise.resolve();
     const fail = (msg: string) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       reject(new Error(msg));
-      ws.close();
+      att.cancel();
     };
-    const timer = setTimeout(() => fail('server ไม่ตอบกลับ ลองใหม่อีกครั้ง'), 10_000);
-    ws.onopen = () => ws.send(JSON.stringify({ t: 'join', token, characterId, delta: 1 } satisfies ClientMsg));
-    ws.onmessage = (e) => {
-      const m = JSON.parse(e.data as string) as ServerMsg;
-      if (m.t === 'kick') return fail(m.msg);
-      if (m.t === 'welcome') {
-        you = m.you;
-        zone = m.zone;
-        ch = m.ch ?? 1;
-        guest = m.guest === true;
-        auto = m.auto === true;
-        useWelcome(m);
-      }
-      if (m.t === 'snap' && you >= 0 && !settled) {
-        settled = true;
-        clearTimeout(timer);
-        resolve(new OnlineBackend(ws, you, zone, m, guest, ch, { token, characterId }, auto));
-      }
+    // The direct try may take DIRECT_OPEN_MS before the tunnel is tried.
+    const timer = setTimeout(() => fail('server ไม่ตอบกลับ ลองใหม่อีกครั้ง'), 10_000 + DIRECT_OPEN_MS);
+    // ?previewMap=<zone>: the owner's draft of that map goes in first (a refusal or a failure = the normal game).
+    const wanted = previewParam();
+    const draftReady = wanted ? loadPreviewDraft(wanted, token) : Promise.resolve(null);
+    let previewId: string | null = null;
+    // Messages that come while the map layout of our first zone is fetched wait here and go to the backend once it exists.
+    let waiting: ServerMsg[] | null = null;
+    const start = (ws: WebSocket) => {
+      void draftReady.then((id) => {
+        if (settled) return;
+        previewId = id;
+        ws.send(JSON.stringify({ t: 'join', token, characterId, delta: 1, ...(id ? { previewMap: id } : {}) } satisfies ClientMsg));
+      });
+      ws.onmessage = (e) => {
+        const m = JSON.parse(e.data as string) as ServerMsg;
+        if (waiting) {
+          waiting.push(m);
+          return;
+        }
+        if (m.t === 'kick') return fail(m.msg);
+        if (m.t === 'welcome') {
+          you = m.you;
+          zone = m.zone;
+          ch = m.ch ?? 1;
+          guest = m.guest === true;
+          auto = m.auto === true;
+          useWelcome(m);
+          settlePreview(previewId, m.preview === true);
+          mapReady = m.preview ? Promise.resolve() : ensureMap(m.zone, m.map);
+        }
+        if (m.t === 'snap' && you >= 0 && !settled) {
+          settled = true;
+          clearTimeout(timer);
+          const queue: ServerMsg[] = (waiting = []);
+          void mapReady.then(() => {
+            const backend = new OnlineBackend(ws, you, zone, m, guest, ch, { token, characterId }, auto);
+            for (const x of queue) backend.receive(x);
+            resolve(backend);
+          });
+        }
+      };
+      // Only while joining: once in the game, a drop is a drop (attach() takes these over).
+      ws.onerror = () => (!settled && directBroke(), fail('เชื่อมต่อ server ไม่ได้'));
+      ws.onclose = () => (!settled && directBroke(), fail('การเชื่อมต่อถูกปิด'));
     };
-    ws.onerror = () => fail('เชื่อมต่อ server ไม่ได้');
-    ws.onclose = () => fail('การเชื่อมต่อถูกปิด');
+    openGameSocket(att).then(start, () => fail('เชื่อมต่อ server ไม่ได้'));
   });
 }
 
@@ -222,6 +250,15 @@ export class OnlineBackend implements Backend {
   /** From the last snapshot; `leaveIn` is counted down locally in between (see room). */
   private roomSnap: RoomSnap | null = null;
   private roomAt = 0;
+  private waveSnap: WaveSnap | null = null;
+
+  get waves(): WaveSnap | null {
+    const w = this.waveSnap;
+    if (!w) return w;
+    const gone = (performance.now() - this.roomAt) / 1000;
+    const less = (v: number | undefined): number | undefined => (v === undefined ? undefined : Math.max(0, v - gone));
+    return { ...w, nextIn: less(w.nextIn), wonIn: less(w.wonIn), wipeIn: less(w.wipeIn) };
+  }
 
   get room(): RoomSnap | null {
     const r = this.roomSnap;
@@ -303,7 +340,7 @@ export class OnlineBackend implements Backend {
   private downAt = 0;
   private downInfo: RejoinInfo = {};
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
-  private trying: WebSocket | null = null;
+  private trying: SocketAttempt | null = null;
   /** performance.now() when the tab was last hidden (null = visible), for the reconnect log. */
   private hiddenAt: number | null = document.hidden ? performance.now() : null;
   /** Frames drawn since the last ping, the longest one (ms), and whether the tab was hidden meanwhile. */
@@ -343,7 +380,7 @@ export class OnlineBackend implements Backend {
     this.quitting = true;
     clearInterval(this.pingTimer);
     if (this.retryTimer !== null) clearTimeout(this.retryTimer);
-    if (this.trying) OnlineBackend.forget(this.trying);
+    this.trying?.cancel();
     const ws = this.ws;
     ws.onclose = ws.onmessage = null;
     try {
@@ -395,11 +432,33 @@ export class OnlineBackend implements Backend {
     this.lastMsgAt = performance.now();
     ws.onmessage = (e) => {
       this.lastMsgAt = performance.now();
-      this.onMessage(JSON.parse(e.data as string) as ServerMsg);
+      this.receive(JSON.parse(e.data as string) as ServerMsg);
     };
     ws.onclose = (e) => {
       if (this.ws === ws) this.dropped(e.code, false);
     };
+    // The joining code's handler would count a later network drop as a failed direct road.
+    ws.onerror = null;
+  }
+
+  /** Messages held back while the layout of the zone we are moving to loads (see receive). */
+  private held: ServerMsg[] | null = null;
+
+  /** Hands a server message to onMessage, but a move to a zone whose map revision we do not have waits for it, and everything after it waits too. */
+  receive(m: ServerMsg): void {
+    if (this.held) {
+      this.held.push(m);
+      return;
+    }
+    if (m.t === 'zone' && !mapIsCurrent(m.zone, m.map)) {
+      const held: ServerMsg[] = (this.held = [m]);
+      void ensureMap(m.zone, m.map).then(() => {
+        this.held = null;
+        for (const x of held) this.receive(x);
+      });
+      return;
+    }
+    this.onMessage(m);
   }
 
   /** Closes a socket without hearing from it again (an old one closing later must not count as a drop). */
@@ -444,38 +503,60 @@ export class OnlineBackend implements Backend {
     if (this.retryTimer !== null) clearTimeout(this.retryTimer);
     this.retryTimer = null;
     if (this.trying || this.quitting || !this.login) return;
-    const login = this.login;
     this.tries++;
     this.onReconnecting?.(this.tries);
-    const ws = new WebSocket(wsUrl());
-    this.trying = ws;
-    let welcome: WelcomeMsg | null = null;
+    const att = new SocketAttempt();
+    this.trying = att;
     const fail = (kick?: string) => {
-      if (this.trying !== ws) return;
+      if (this.trying !== att) return;
       clearTimeout(timer);
       this.trying = null;
-      OnlineBackend.forget(ws);
+      att.cancel();
       if (kick) this.giveUp(kick);
       else this.scheduleRetry();
     };
-    const timer = setTimeout(() => fail(), RECONNECT_TRY_MS);
-    ws.onopen = () => {
-      const back: RejoinInfo = { ...this.downInfo, downMs: Math.round(performance.now() - this.downAt), tries: this.tries };
-      ws.send(JSON.stringify({ t: 'join', token: login.token, characterId: login.characterId, delta: 1, back } satisfies ClientMsg));
-    };
+    // The direct try (route.ts) may take DIRECT_OPEN_MS before the tunnel is tried.
+    const timer = setTimeout(() => fail(), RECONNECT_TRY_MS + DIRECT_OPEN_MS);
+    openGameSocket(att).then((ws) => this.trying === att && this.retryOpen(att, ws, fail, () => clearTimeout(timer)), () => fail());
+  }
+
+  /** A reconnect try's socket is open: join again, and take over once the first snapshot is in. */
+  private retryOpen(att: SocketAttempt, ws: WebSocket, fail: (kick?: string) => void, stopTimer: () => void): void {
+    const login = this.login;
+    if (!login) return fail();
+    let welcome: WelcomeMsg | null = null;
+    let mapReady: Promise<void> = Promise.resolve();
+    const back: RejoinInfo = { ...this.downInfo, downMs: Math.round(performance.now() - this.downAt), tries: this.tries };
+    ws.send(JSON.stringify({ t: 'join', token: login.token, characterId: login.characterId, delta: 1, back, ...(activePreview() ? { previewMap: activePreview() as string } : {}) } satisfies ClientMsg));
+    let waiting: ServerMsg[] | null = null;
     ws.onmessage = (e) => {
       const m = JSON.parse(e.data as string) as ServerMsg;
+      if (waiting) {
+        waiting.push(m);
+        return;
+      }
       // Refused (banned, server stopping, signed out…): trying again won't help.
       if (m.t === 'kick') return fail(m.msg);
-      if (m.t === 'welcome') welcome = m;
-      if (m.t === 'snap' && welcome && this.trying === ws) {
-        clearTimeout(timer);
-        this.trying = null;
-        this.rejoined(ws, welcome, m);
+      if (m.t === 'welcome') {
+        welcome = m;
+        mapReady = ensureMap(m.zone, m.map);
+      }
+      if (m.t === 'snap' && welcome && this.trying === att) {
+        stopTimer();
+        const w = welcome;
+        const queue: ServerMsg[] = (waiting = []);
+        void mapReady.then(() => {
+          if (this.trying !== att) return;
+          this.trying = null;
+          this.rejoined(ws, w, m);
+          for (const x of queue) this.receive(x);
+        });
       }
     };
-    ws.onerror = () => fail();
-    ws.onclose = () => fail();
+    ws.onerror = ws.onclose = () => {
+      if (this.trying === att) directBroke();
+      fail();
+    };
   }
 
   /** Back in: a new session on the server, so everything is mirrored afresh (like a zone change). */
@@ -586,7 +667,7 @@ export class OnlineBackend implements Backend {
     this.quitting = true;
     clearInterval(this.pingTimer);
     if (this.retryTimer !== null) clearTimeout(this.retryTimer);
-    if (this.trying) OnlineBackend.forget(this.trying);
+    this.trying?.cancel();
     document.removeEventListener('visibilitychange', this.onVisibility);
     window.removeEventListener('online', this.onNetOnline);
     window.removeEventListener('pagehide', this.onPageHide);
@@ -771,12 +852,14 @@ export class OnlineBackend implements Backend {
     me.mp = old.mp;
     me.stats = old.stats;
     me.cd = old.cd;
+    me.charges = old.charges;
     me.potCd = old.potCd;
     me.restCd = old.restCd;
     me.x = x;
     me.z = z;
     me.face(-x, -z);
     me.partyId = old.partyId;
+    me.tut = old.tut; // the new mirror starts with nothing done; the server only resends it when it changes
     this.me = me;
     this.myId = you;
     this.sent = [];
@@ -801,6 +884,7 @@ export class OnlineBackend implements Backend {
     this.onlineCount = s.online ?? null;
     this.hazards = s.hazards ?? [];
     this.roomSnap = s.room ?? null;
+    this.waveSnap = s.waves ?? null;
     this.roomAt = performance.now();
     this.party = s.party ?? null;
     this.me.partyId = this.party?.id ?? null;
@@ -835,6 +919,7 @@ export class OnlineBackend implements Backend {
       p.dashT = ps.dash ? 1 : 0;
       p.buffBits = ps.bf ?? 0;
       p.buffSkill = ps.bs ?? '';
+      p.guardT = ps.gd ? 1 : 0;
       if (look) {
         p.aura = ps.aura ?? 0;
         p.toadT = ps.toad ? 1 : 0;
@@ -985,6 +1070,7 @@ export class OnlineBackend implements Backend {
     }
     if (pv.stats) me.stats = pv.stats;
     me.cd = { ...pv.cd };
+    me.charges = pv.ch ? { ...pv.ch } : {};
     if (pv.skills) me.skillBook = cleanSkillBook(me.cls.id, pv.skills);
     me.potCd = pv.potCd;
     me.restCd = pv.restCd ?? 0;
@@ -1095,6 +1181,7 @@ export class OnlineBackend implements Backend {
     for (const l of this.loots) l.t += dt;
     const me = this.me;
     for (const key of Object.keys(me.cd)) me.cd[key] = Math.max(0, me.cd[key] - dt);
+    me.tickCharges();
     me.potCd -= dt;
     me.restCd -= dt;
     if (me.castT > 0) me.castT = Math.max(0, me.castT - dt);
@@ -1162,8 +1249,10 @@ export class OnlineBackend implements Backend {
     let t = 0;
     for (const slot of it.skills) {
       const sk = me.skill(slot);
-      if (!sk || (me.cd[sk.id] ?? 0) > 0 || (this.castLock.get(sk.id) ?? 0) > now || me.mp < me.skillMp(sk)) continue;
-      this.castLock.set(sk.id, now + Math.max(0.3, me.skillCooldown(sk)) * 1000);
+      if (!sk || !me.skillReady(sk) || (this.castLock.get(sk.id) ?? 0) > now || me.mp < me.skillMp(sk)) continue;
+      // A charge skill is locked for the gap only (the next charge may be ready by then); the Land Mine never holds us still.
+      this.castLock.set(sk.id, now + Math.max(0.3, me.chargeMax(sk) ? currentBalance().skills.mineGap : me.skillCooldown(sk)) * 1000);
+      if (skipsAttackRoot(currentBalance().skills, sk.id)) continue;
       t = Math.max(t, attackRootTime(cfg, me.cls.id, sk.id, anim));
     }
     if (it.basic && this.atkT <= 0) {

@@ -9,6 +9,7 @@ import * as R from '../data/skillRanges';
 import { rankedDmg, skillParam, skillReach, skillValues } from '../skillBook';
 import { passiveOnBasic, passiveSkillScale } from '../passives';
 import { castSword } from './swordSkills';
+import { castHexSeed } from './hexSeed';
 import { buffEnds, buffMask, noteSkillBuffs } from './debuffs';
 
 // ------------------------------------------------------------ Gunslinger's basic shot and its buffs
@@ -43,12 +44,16 @@ export const emptyGunBuffs = (): GunBuffs => ({
 
 const DOUBLE_GAP = 0.08;
 
-function gunBasic(sim: Sim, p: Player, ang: number): void {
+function gunBasic(sim: Sim, p: Player, ang: number, sk: SkillDef): void {
   const g = p.gun;
   const t = sim.time;
+  // Tuned on /admin (owner 2026-11-20): the basic shot's damage and range; its id carries the extra effects.
+  const base = rankedDmg(sk, 1);
+  const reach = skillReach(sk);
+  const range = reach?.kind === 'shot' ? reach.range : R.SHOT_RANGE;
   let onHit = 0;
   for (const b of Object.values(g.onHit)) if (b.until > t) onHit += b.add;
-  const hit: HitOpts = {};
+  const hit: HitOpts = { src: sk.id };
   if (g.shock.until > t) {
     hit.slow = g.shock.slow;
     hit.slowT = g.shock.slowT;
@@ -66,15 +71,15 @@ function gunBasic(sim: Sim, p: Player, ang: number): void {
     }
     : undefined;
   // The bullets of one shot: [angle offset, damage × ATK].
-  let bullets: [number, number][] = [[0, 1 + onHit]];
+  let bullets: [number, number][] = [[0, base + onHit]];
   if (g.storm.until > t) bullets = fan(g.storm.n, g.storm.arc).map((a) => [a, g.storm.mult + onHit]);
-  else if (g.split.until > t) bullets = fan(g.split.n, g.split.arc).map((a) => [a, (1 + onHit) * (a === 0 ? 1 : g.split.side)]);
+  else if (g.split.until > t) bullets = fan(g.split.n, g.split.arc).map((a) => [a, (base + onHit) * (a === 0 ? 1 : g.split.side)]);
   const buffed = onHit > 0 || bullets.length > 1 || g.pierceUntil > t || !!stack || hit.slow !== undefined;
   const fire = (scale: number, a0: number): void => {
     const spread = (Math.random() - 0.5) * 0.06;
     for (const [off, mult] of bullets) {
       sim.addProjectile(p, {
-        x: p.x, z: p.z, angle: a0 + off + spread, speed: 26, range: R.SHOT_RANGE, radius: 0.3, mult: mult * scale,
+        x: p.x, z: p.z, angle: a0 + off + spread, speed: 26, range, radius: 0.3, mult: mult * scale,
         color: buffed ? '#ffb040' : '#ffe08a', size: 0.45, kb: 1, pierce: g.pierceUntil > t, hit, bonus,
       });
     }
@@ -190,21 +195,26 @@ export function quarksCue(sim: Sim, p: Player, skill: string, ang: number, x = p
 
 export function basicAttack(sim: Sim, p: Player, aim: Vec2): void {
   const ang = aimAngle(p, aim);
-  quarksCue(sim, p, p.cls.skills.find((s) => s.kind === 'basic')!.id, ang);
+  const sk = p.cls.skills.find((s) => s.kind === 'basic')!;
+  quarksCue(sim, p, sk.id, ang);
   passiveOnBasic(sim, p);
+  // Damage and reach as tuned on /admin (owner 2026-11-20); `src` carries the basic attack's extra effects.
+  const dmg = rankedDmg(sk, 1);
+  const reach = skillReach(sk);
+  const far = reach && reach.kind !== 'self' ? reach.range : 0;
   switch (p.cls.id) {
     case 'sword': {
-      const range = R.SLASH_RANGE;
+      const range = far || R.SLASH_RANGE;
       const arc = Math.PI * 0.75;
       sim.fx('effect', 'slash', p.x + Math.cos(ang) * range * 0.55, p.z + Math.sin(ang) * range * 0.55, ang, range * 0.8);
-      forCone(sim, p.x, p.z, ang, arc, range, (m) => sim.hitMonster(p, m, 1, { kb: 3 }));
+      forCone(sim, p.x, p.z, ang, arc, range, (m) => sim.hitMonster(p, m, dmg, { kb: 3, src: sk.id }));
       break;
     }
     case 'mage':
-      sim.addProjectile(p, { x: p.x, z: p.z, angle: ang, speed: 16, range: R.BOLT_RANGE, radius: 0.35, mult: 1, color: '#9fd8ff', size: 0.7 });
+      sim.addProjectile(p, { x: p.x, z: p.z, angle: ang, speed: 16, range: far || R.BOLT_RANGE, radius: 0.35, mult: dmg, color: '#9fd8ff', size: 0.7, hit: { src: sk.id } });
       break;
     case 'gunslinger':
-      gunBasic(sim, p, ang);
+      gunBasic(sim, p, ang, sk);
       break;
   }
 }
@@ -312,7 +322,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
   const A = (key: string): number => P(key) * sc.area;
   /** Blasts made bigger by the worn passive (Gunslinger Special Ammo) show its ring. */
   const special = sc.area > 1;
-  const reach = skillReach(sk);
+  const reach = skillReach(sk, undefined, rank);
   const far = reach ? (reach.kind === 'self' ? reach.radius : reach.range) : 0;
   // The Swordsman's 30 skills: sim/swordSkills.ts.
   const sword = castSword(sim, p, sk, aim, { ang, dmg, P, far });
@@ -399,7 +409,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       return true;
     }
     case 'mg_volatileorb':
-      sim.addProjectile(p, { x: p.x, z: p.z, angle: ang, speed: 8, range: far, radius: 0.6, mult: dmg, color: '#ff9a4a', size: 1.6, explode: P('blast'), hit: { skill: sk } });
+      sim.addProjectile(p, { x: p.x, z: p.z, angle: ang, speed: 8, range: far, radius: 0.6, mult: dmg, color: '#ff9a4a', size: 1.6, explode: P('blast'), carry: P('carry') >= 1 ? P('carryWidth') : 0, hit: { skill: sk } });
       return true;
     case 'mg_crystalrain': {
       const c = landing(p, aim, far);
@@ -435,8 +445,14 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const r = P('radius');
       const sr = P('starRadius');
       const warn = 0.35;
-      tickFor(sim, p, P('gap'), Math.round(P('stars')), () => {
-        const s = spotIn(c.x, c.z, r);
+      // Each star falls on a living monster inside the big circle (owner 2026-11-20): nearest the centre first, then
+      // round the pack, so a crowd is hit evenly and one monster takes them all. Nobody there = a random spot.
+      tickFor(sim, p, P('gap'), Math.round(P('stars')), (i) => {
+        const inside = sim.monsters
+          .filter((m) => m.alive && !m.untargetable && Math.hypot(m.x - c.x, m.z - c.z) - m.radius <= r)
+          .sort((a, b) => Math.hypot(a.x - c.x, a.z - c.z) - Math.hypot(b.x - c.x, b.z - c.z));
+        const t = inside.length ? inside[i % inside.length] : undefined;
+        const s = t ? { x: t.x, z: t.z } : spotIn(c.x, c.z, r);
         sim.fx('telegraph', s.x, s.z, sr, warn, '#ffe08a');
         sim.schedule(warn, () => {
           if (!live(sim, p)) return;
@@ -517,20 +533,58 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       return true;
     }
     case 'mg_crystalspikes': {
+      // Venom crystal (owner 2026-11-20): every `pulse` s it adds a poison stack (up to maxStacks) to every monster in
+      // the circle and refreshes its poison; each stack hurts `dmg` × ATK a second, in or out of the circle, until its
+      // poison runs out. When the crystal's time is up it shatters: whatever poison it left still to tick lands at once.
       const c = landing(p, aim, far);
       const r = P('radius');
-      const every = P('every');
-      const shots = Math.max(1, Math.floor(P('duration') / every));
+      const every = P('pulse');
+      const pulses = Math.max(1, Math.floor(P('life') / every + 1e-6));
+      const life = pulses * every;
+      const maxStacks = Math.max(1, Math.round(P('maxStacks')));
+      const poisonLife = P('poisonLife');
+      // Per monster: stacks, poison end, and how far its ticks have been paid.
+      const venom = new Map<Monster, { n: number; until: number; paid: number }>();
       quarksCue(sim, p, sk.id, 0, c.x, c.z);
       // The crystal itself stands there the whole time (owner 2026-11-15: the spikes seemed to come from nowhere).
-      sim.fx('crystal', c.x, c.z, shots * every + 0.3, VENOM);
-      tickFor(sim, p, every, shots, () => {
-        const t = nearestTo(sim, c.x, c.z, r);
-        if (!t) return;
-        // A flash on the crystal as each spike leaves it.
-        sim.fx('puff', c.x, 1.1, c.z, VENOM, 0.25, 1.4);
-        sim.addProjectile(p, { x: c.x, z: c.z, angle: Math.atan2(t.z - c.z, t.x - c.x), speed: 18, range: r + 1, radius: 0.3, mult: dmg, color: VENOM, size: 0.6, kb: 1, hit: { skill: sk } });
-      }, every);
+      sim.fx('crystal', c.x, c.z, life + 0.3, VENOM);
+      tickFor(sim, p, every, pulses, () => {
+        sim.fx('ring', c.x, c.z, r, VENOM, 0.45);
+        sim.fx('puff', c.x, 1.1, c.z, VENOM, 0.3, 1.6);
+        forCircle(sim, c.x, c.z, r, (m) => {
+          const v = venom.get(m) ?? { n: 0, until: 0, paid: sim.time };
+          v.n = Math.min(maxStacks, v.n + 1);
+          v.until = sim.time + poisonLife;
+          venom.set(m, v);
+          m.dotUntil = Math.max(m.dotUntil, v.until);
+          m.debuffSkill = sk.id;
+        });
+        // Each poisoned monster takes its stacks up to the next pulse (or until its poison ends).
+        for (const [m, v] of venom) {
+          // (A hair's breadth of float left over is no tick: every hit does at least 1.)
+          if (!m.alive || !sim.monsters.includes(m) || v.until <= sim.time + 1e-6) {
+            venom.delete(m);
+            continue;
+          }
+          const span = Math.min(every, v.until - sim.time);
+          v.paid = sim.time + span;
+          sim.hitMonster(p, m, v.n * dmg * span, { skill: sk });
+          sim.fx('puff', m.x, 0.9, m.z, VENOM, 0.5, 0.4 + 0.12 * v.n);
+        }
+      });
+      sim.schedule(life, () => {
+        if (!live(sim, p)) return;
+        sim.fx('effect', 'mg_burst', c.x, c.z, 0, Math.min(r, 2.5));
+        quarksCue(sim, p, sk.id, 0, c.x, c.z);
+        for (const [m, v] of venom) {
+          const left = v.until - v.paid > 1e-6 ? v.n * dmg * (v.until - v.paid) : 0;
+          if (m.alive && sim.monsters.includes(m) && left > 0) {
+            sim.fx('burst', m.x, 1, m.z, VENOM, 8, 3);
+            sim.hitMonster(p, m, left, { skill: sk });
+          }
+        }
+        venom.clear();
+      });
       return true;
     }
     case 'mg_cursedash': {
@@ -547,24 +601,12 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       return true;
     }
     case 'mg_hexseed': {
+      // Stored-damage seed that jumps on its host's death (owner 2026-11-20): sim/hexSeed.ts.
       const c = landing(p, aim, far);
-      const r = P('radius');
-      const base = skillValues(sk).dmg;
-      // The poison grows with rank like the blast does.
-      const poison = P('poison') * (base > 0 ? dmg / base : 1);
-      const seedT = P('seedTime');
-      const blast = P('seedBlast');
-      sim.fx('zone', 'mg_poison', c.x, c.z, r, seedT);
-      forCircle(sim, c.x, c.z, r, (m) => {
-        dot(sim, p, m, poison, seedT, sk, VENOM);
-        sim.schedule(seedT, () => {
-          if (!live(sim, p)) return;
-          // Bursts where the seed is now, even if its carrier just died.
-          sim.fx('effect', 'explosion', m.x, m.z, 0, blast);
-          forCircle(sim, m.x, m.z, blast, (t) => sim.hitMonster(p, t, dmg, { kb: 2, fromX: m.x, fromZ: m.z, skill: sk }));
-        });
+      return castHexSeed(sim, p, c.x, c.z, P('radius'), {
+        sk, base: dmg, life: P('seedLife'), burst: P('burst'), jump: P('jump'), carry: P('carry') / 100,
+        maxSeeds: Math.max(1, Math.round(P('maxSeeds'))), cap: P('cap'), bossShare: P('bossPct') / 100,
       });
-      return true;
     }
     case 'mg_firerain': {
       const c = landing(p, aim, far);
@@ -621,11 +663,27 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const c = landing(p, aim, far);
       const r = P('radius');
       const pullT = P('pullTime');
-      const pull = P('pull');
+      // Pull speed (m/s) grows with rank: +pullRank % per rank above 1 (rank 10 ≈ instant). hold = 1 pins them at the centre.
+      const pull = P('pull') * (1 + (P('pullRank') / 100) * Math.max(0, rank - 1));
+      const hold = P('hold') >= 0.5;
       sim.fx('zone', 'mg_vortex', c.x, c.z, r, pullT);
-      const step = 0.25;
+      const step = hold ? 0.05 : 0.25;
       tickFor(sim, p, step, Math.max(1, Math.round(pullT / step)), () => {
-        forCircle(sim, c.x, c.z, r, (m) => { if (movable(m)) m.knockback(c.x, c.z, -pull); });
+        forCircle(sim, c.x, c.z, r, (m) => {
+          if (!movable(m)) return;
+          if (!hold) { m.knockback(c.x, c.z, -pull); return; }
+          // Held: walk to a spot near the centre (spread by id so they do not stack) and stay until the blast.
+          m.pinnedUntil = Math.max(m.pinnedUntil, sim.time + step * 2);
+          m.kbx = m.kbz = 0;
+          const a = m.id * 2.399963;
+          const tx = c.x + Math.cos(a) * 0.9 * (0.3 + 0.7 * ((m.id * 7) % 10) / 10);
+          const tz = c.z + Math.sin(a) * 0.9 * (0.3 + 0.7 * ((m.id * 7) % 10) / 10);
+          const dx = tx - m.x;
+          const dz = tz - m.z;
+          const d = Math.hypot(dx, dz);
+          const mv = Math.min(d, pull * step);
+          if (d > 1e-4) { m.x += (dx / d) * mv; m.z += (dz / d) * mv; sim.terrain.resolve(m); }
+        });
       });
       sim.schedule(pullT, () => {
         if (!live(sim, p)) return;
@@ -657,14 +715,18 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       return true;
     }
     case 'mg_timewarp': {
-      const haste = P('haste') / 100;
-      const hasteT = p.buffTime(P('hasteTime'));
+      // The cooldowns still running on Q/E/R skills drop at once (not Time Warp itself, the dash, basic attack or potions).
+      const cutPct = Math.min(100, P('cdCut')); // grows with rank like other status numbers, never past 100%
+      const cut = cutPct / 100;
       sim.fx('zone', 'mg_timewarp', p.x, p.z, far, CIRCLE_ZONE, p.id);
       forCircle(sim, p.x, p.z, far, (m) => sim.hitMonster(p, m, dmg, { slow: P('slow') / 100, slowT: P('slowTime'), skill: sk }));
       forPlayers(sim, p.x, p.z, far, (q) => {
-        q.haste = sim.time < q.hasteUntil ? Math.max(q.haste, haste) : haste;
-        q.hasteUntil = sim.time + hasteT;
-        sim.text(q.x, q.topY, q.z, 'คูลดาวน์เร็วขึ้น', 'info', 1);
+        for (const s of q.cls.skills) {
+          if ((s.kind !== 'normal' && s.kind !== 'ult') || s.id === 'mg_timewarp') continue;
+          const left = q.cd[s.id] ?? 0;
+          if (left > 0) q.cd[s.id] = left * (1 - cut);
+        }
+        sim.text(q.x, q.topY, q.z, `คูลดาวน์ -${Math.round(cutPct)}%`, 'info', 1);
       });
       return true;
     }
@@ -899,11 +961,18 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const radius = far * sc.area;
       const stun = P('stun');
       const step = 0.2;
+      // At most as many lie on the ground as the stack count; laying one more makes the oldest vanish (owner 2026-11-19).
+      const mine = { gone: false };
+      p.mines = p.mines.filter((o) => !o.gone);
+      p.mines.push(mine);
+      const cap = Math.max(1, p.chargeMax(sk));
+      while (p.mines.length > cap) p.mines.shift()!.gone = true;
       sim.fx('effect', 'gs_mine', x, z, 0, 0.6);
-      repeat(sim, step, Math.round(P('life') / step), (i) => {
-        if (!live(sim, p)) return false;
+      repeat(sim, step, Math.round(p.summonTime(P('life')) / step), (i) => {
+        if (mine.gone || !live(sim, p)) return false;
         if (i % 5 === 4) sim.fx('effect', 'gs_mine', x, z, 0, 0.6);
         if (!nearest(sim, x, z, trigger)) return;
+        mine.gone = true;
         blast(sim, p, x, z, radius, dmg, { stun, kb: 4 }, special);
         sim.shake(0.3, { to: p.id });
         return false;
@@ -929,7 +998,10 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
     case 'gs_drone': {
       // Hovers by the player's shoulder and shoots the nearest monster within reach.
       const every = Math.max(0.1, P('every'));
-      repeat(sim, every, Math.floor(P('life') / every), () => {
+      const life = p.summonTime(P('life'));
+      // One drone on the client for the whole life (src/client/effects.ts drone()), flying after the caster.
+      sim.fx('drone', p.id, every * Math.floor(life / every));
+      repeat(sim, every, Math.floor(life / every), () => {
         if (!live(sim, p)) return false;
         const dx = p.x + 0.8;
         const dz = p.z - 0.8;
@@ -937,6 +1009,7 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
         const m = nearest(sim, dx, dz, far);
         if (!m) return;
         const a = Math.atan2(m.z - dz, m.x - dx);
+        sim.fx('drone', p.id, 0, a);
         sim.addProjectile(p, shotFrom(p, a, far + 2, dmg, { x: dx, z: dz, color: '#7affe0', size: 0.4, kb: 1 }));
       });
       return true;
@@ -1006,9 +1079,10 @@ function cast(sim: Sim, p: Player, sk: SkillDef, aim: Vec2, rank: number): boole
       const x = p.x;
       const z = p.z;
       const every = Math.max(0.1, P('every'));
+      const life = p.summonTime(P('life'));
       const showEvery = Math.max(1, Math.round(1 / every));
       sim.fx('effect', 'gs_turret', x, z, 0, 0.7);
-      repeat(sim, every, Math.floor(P('life') / every), (i) => {
+      repeat(sim, every, Math.floor(life / every), (i) => {
         if (!live(sim, p)) return false;
         if (i % showEvery === 0) sim.fx('effect', 'gs_turret', x, z, 0, 0.7);
         const m = nearest(sim, x, z, far);

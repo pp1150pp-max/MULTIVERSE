@@ -1,14 +1,14 @@
 import './client/noBrowserMenu';
 import './style.css';
 import './client/touch/device';
-import { assetSources, loadGameAssets, loadMenuAssets, usePaperMaps } from './client/assets';
-import { LOOK_PATH, type PublicLook } from './shared/paperArt';
+import { assetSources, loadGameAssets, loadMenuAssets, usePaperArt } from './client/assets';
 import { usePaperUi } from './client/img';
 import { CLASS_IDS } from './shared/data/classes';
 import { Game } from './client/Game';
 import { buildMenu, facePortrait } from './client/menu';
 import type { OnlineBackend } from './client/net/online';
 import { audioEngine } from './client/audio/engine';
+import { loadPublishedMaps } from './client/mapSync';
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -64,23 +64,10 @@ function revealLogoWhenLoaded(): void {
   }
 }
 
-/** The server's map art switch (/admin → Server). No answer within 3 s, or an older server = the old art. */
-async function askPaperMaps(): Promise<boolean> {
-  try {
-    const res = await fetch(LOOK_PATH, { signal: AbortSignal.timeout(3000) });
-    if (!res.ok) return false;
-    return ((await res.json()) as Partial<PublicLook>).paperMaps === true;
-  } catch {
-    return false;
-  }
-}
-
 async function boot(): Promise<void> {
-  // First of all: the game's load (started here or by entering the world) waits for this answer.
-  const paper = askPaperMaps();
-  usePaperMaps(paper);
-  // The UI pictures switch when the answer comes (the menu's portraits and CSS frames included).
-  void paper.then((on) => on && usePaperUi());
+  // Papercraft art everywhere (maps, characters, NPCs, monsters, UI), set before anything loads.
+  usePaperArt();
+  usePaperUi();
   audioEngine.init();
   // The Login form needs no images, so it shows as soon as this code runs. The logo letters and
   // background (index.html / CSS) are already downloading; the class portraits (a few MB) come
@@ -90,7 +77,8 @@ async function boot(): Promise<void> {
   revealLogoWhenLoaded();
   $('loading').classList.add('hidden');
   buildMenu(launch);
-  await loadMenuAssets(CLASS_IDS);
+  // The published map layouts (admin map editor) come with the portraits, before the game's pictures; failing or slow = the JSON in the bundle.
+  await Promise.all([loadMenuAssets(CLASS_IDS), loadPublishedMaps()]);
   await loadGameAssets();
   const fromFile = Object.entries(assetSources).filter(([, v]) => v === 'file').map(([k]) => k);
   console.info(`[assets] ${fromFile.length} loaded from files:`, fromFile.join(', ') || '(none — using placeholders)');

@@ -10,6 +10,7 @@ import { makeOffer } from '../src/shared/trade';
 import { BOUND_MSG, QUEST_KILLS } from '../src/shared/data/stones';
 import { BossRooms, type RoomActor } from '../server/bossRooms';
 import type { Monster } from '../src/shared/sim/Monster';
+import { ROOM_BOSS_DELAY } from '../src/shared/bossRoom';
 
 const hero = (name: string, level: number) => ({ ...newCharacterData(name, 'sword'), level });
 const priv = (s: Sim) => s as unknown as { killMonster(m: Monster): void };
@@ -128,7 +129,7 @@ ok(!hub.questTurnIn(p, 'forest_bear'), 'nothing to hand in yet');
   });
   ok(rooms.open(1, 7, true) === null, 'opened with the quest key');
   const room = actor.sim;
-  for (let i = 0; i < 6 * 30; i++) room.step(1 / 30);
+  for (let i = 0; i < (ROOM_BOSS_DELAY + 1) * 30; i++) room.step(1 / 30);
   ok(room.zone === BOSS_ROOMS.emerald_forest && room.keys === 1, 'always ×1, whatever was asked');
   const me = actor.player;
   ok(me.stoneCount('qkey_bear') === 1, 'the key is still there');

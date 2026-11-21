@@ -47,6 +47,14 @@ export interface HitOpts {
   skill?: SkillDef;
   /** Damage bounced back (the sword's Thorn Armor): a spike turtle doesn't bounce it again (no endless loop). */
   reflected?: boolean;
+  /**
+   * Whose extra effects (/admin, sim/extraEffects.ts) this hit gives: a skill id or a basic attack id. Missing = `skill`,
+   * else the skill running now (Sim.castingSkill). Only picks the extra effects: passives, visuals and debuff circles
+   * do not read it.
+   */
+  src?: string;
+  /** This hit gives no extra effects (the ticks of an extra burn, so they don't feed themselves). */
+  noExtra?: boolean;
 }
 
 /** Visual effects the renderer knows how to draw. The client's Effects class implements this. */
@@ -83,6 +91,11 @@ export interface FxApi {
   sprite(key: string, x: number, z: number, size: number, life: number, follow?: number | null): void;
   /** A lightning bolt from one spot to another (the shock eel's chain), fading over `life` seconds. */
   bolt(x1: number, z1: number, x2: number, z2: number, life: number): void;
+  /**
+   * The Gunslinger's Support Drone (owner 2026-11-19): `duration` > 0 = it appears and flies after player `by` for that
+   * long; `duration` 0 with an `angle` = it just fired that way (it turns and kicks back). One message per cast / shot.
+   */
+  drone(by: number, duration: number, angle?: number): void;
 }
 
 export type SkillEffect = 'slash' | 'whirlwind' | 'charge' | 'quake' | 'explosion' | 'frost' | 'crater' | 'muzzle' | 'impact'

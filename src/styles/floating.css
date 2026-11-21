@@ -1,0 +1,124 @@
+/* ---------------------------------------------------------------- floating layer */
+
+#float-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 2; }
+#float-layer > * { position: absolute; left: 0; top: 0; white-space: nowrap; will-change: transform; }
+
+.fnum {
+  display: flex; align-items: center; font-weight: 700; font-size: 15px;
+  text-shadow: -1px -1px 0 #1a0f08, 1px -1px 0 #1a0f08, -1px 1px 0 #1a0f08, 1px 1px 0 #1a0f08, 0 2px 0 #1a0f08;
+}
+/* Numbers drawn from the sheet are sized by font size; each piece is one em tall. */
+.fnum .dg { position: relative; display: block; height: 1em; }
+.fnum.dmg { color: #fff; font-size: 24px; }
+.fnum.crit { color: #ffd34a; font-size: 36px; }
+.fnum.hurt { color: #ff5a5a; font-size: 27px; }
+.fnum.heal { color: #6cff7a; font-size: 25px; }
+/* Damage the shield took: the hurt digits turned blue. */
+.fnum.shield { color: #6ab8ff; font-size: 27px; }
+.fnum.shield .dg { filter: hue-rotate(205deg) brightness(1.15); }
+.fnum .dburst {
+  /* Sized from the number, however many digits it has. */
+  position: absolute; inset: -0.75em -0.55em;
+  background: center / 100% 100% no-repeat; animation: crit-burst 0.55s ease-out forwards;
+}
+@keyframes crit-burst {
+  from { transform: scale(0.6) rotate(-10deg); opacity: 1; }
+  55% { transform: scale(1) rotate(0deg); opacity: 1; }
+  to { transform: scale(1.12) rotate(3deg); opacity: 0; }
+}
+.fnum.mana { color: #7fb0ff; }
+.fnum.gold { color: #f2c230; font-size: 14px; }
+.fnum.info { color: #e0e0e0; font-size: 13px; }
+.fnum.lvl { color: #ffe27a; font-family: 'Cinzel', serif; font-size: 26px; font-weight: 800; }
+/* Blacksmith result over the head: a big gold "+N สำเร็จ!" that pops in, or a dull grey fail. */
+.fnum.enh {
+  color: #ffe27a; font-family: 'Cinzel', serif; font-size: 34px; font-weight: 800;
+  text-shadow: -2px -2px 0 #3a1c04, 2px -2px 0 #3a1c04, -2px 2px 0 #3a1c04, 2px 2px 0 #3a1c04, 0 3px 0 #3a1c04, 0 0 14px rgba(255, 196, 64, 0.9);
+  animation: enh-pop 0.45s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+.fnum.enhfail { color: #b8bcc4; font-size: 24px; animation: enh-shake 0.4s linear; }
+@keyframes enh-pop { from { scale: 0.3; } 60% { scale: 1.25; } to { scale: 1; } }
+/* margin, not translate: floating.ts positions the text with `translate`. */
+@keyframes enh-shake { 0%, 100% { margin-left: 0; } 25% { margin-left: -4px; } 75% { margin-left: 4px; } }
+
+.plate { text-align: center; font-size: 11px; text-shadow: 0 0 3px #000; }
+.plate .pname { color: #f2e6c8; margin-bottom: 2px; }
+.plate .pdebuffs { display: flex; justify-content: center; gap: 2px; margin-bottom: 2px; min-height: 0; }
+.plate .pdebuffs img { width: 16px; height: 16px; image-rendering: pixelated; }
+.plate.hostile .pname { color: #ff9a8a; }
+.plate .pbar { width: 54px; height: 5px; margin: 0 auto; background: #200; border: 1px solid #000; }
+.plate .pfill { height: 100%; background: #e04040; }
+.plate.boss .pname { color: #ffb070; font-size: 13px; font-weight: 600; }
+.plate.boss .pbar { width: 90px; }
+.vitals { width: 46px; padding: 1px; background: #15110d; border: 1px solid #5a4a30; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
+.vbar { height: 4px; background: #2a2018; }
+.vbar + .vbar { height: 3px; margin-top: 1px; }
+.vbar > div { height: 100%; }
+.vbar.hp > div { background: linear-gradient(#ff6a5a, #c8281e); }
+.vbar.mp > div { background: linear-gradient(#5ac0ff, #1f62c8); }
+/* Our skill buffs under the bars: the skill's icon, a dark clock wipe over it as its time runs out (floating.ts). */
+.vbuffs { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 2px; display: flex; gap: 2px; }
+.vbuffs:empty { display: none; }
+/* The same icons in a row over the skill bar, bigger (floating.ts drawBarBuffs). On touch the bar sits at the top, so the row goes under it. */
+#bar-buffs { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 4px; display: flex; gap: 4px; pointer-events: auto; }
+#bar-buffs:empty { display: none; }
+#bar-buffs .vbuff { width: 28px; height: 28px; border-width: 2px; border-radius: 3px; }
+body.touch-ui #bar-buffs { bottom: auto; top: 100%; margin: 4px 0 0; }
+.vbuff { position: relative; width: 16px; height: 16px; border: 1px solid #5a4a30; background: #15110d; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
+.vbuff > img { display: block; width: 100%; height: 100%; }
+.vbuff > i { position: absolute; inset: 0; background: conic-gradient(rgba(0, 0, 0, 0.65) 0 var(--gone, 0deg), transparent 0); }
+
+.loot-label { font-size: 12px; text-shadow: 0 0 3px #000, 1px 1px 0 #000; }
+
+.banner {
+  position: absolute; left: 50%; top: 26%; transform: translateX(-50%); text-align: center;
+  pointer-events: none; white-space: nowrap; animation: banner 2.6s ease-out forwards;
+  text-shadow: 0 0 8px #000, 2px 2px 0 #000;
+}
+.banner-text { font-size: 46px; font-weight: 800; letter-spacing: 1px; }
+.banner-sub { font-size: 18px; color: #f2e6c8; margin-top: 4px; }
+@keyframes banner {
+  0% { opacity: 0; transform: translateX(-50%) scale(1.6); }
+  12% { opacity: 1; transform: translateX(-50%) scale(1); }
+  75% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.npc-badge { text-align: center; white-space: nowrap; }
+.npc-bob { animation: npc-bob 1.6s ease-in-out infinite; }
+.npc-role {
+  display: inline-block; font-size: 13px; padding: 2px 8px; border-radius: 10px;
+  background: rgba(20, 16, 10, 0.82); border: 1px solid var(--npc-c, var(--gold)); color: var(--npc-c, var(--gold-hi));
+}
+.npc-name { font-size: 11px; color: #f2e6c8; margin-top: 2px; text-shadow: 0 0 3px #000, 1px 1px 0 #000; }
+/* Gold or items wait in the claim box at the market broker. */
+.npc-badge.alert .npc-name::after { content: ' !'; color: #ffd34a; font-weight: 600; }
+.npc-badge.alert .npc-role { box-shadow: 0 0 8px #f2c230; }
+.rest-badge .npc-role { box-shadow: 0 0 8px #6cff9a; }
+.rest-badge.waiting { opacity: 0.6; }
+.rest-badge.waiting .npc-role { box-shadow: none; }
+.npc-seeker { --npc-c: #fff3c0; }
+.npc-merchant { --npc-c: #7fe07a; }
+.npc-blacksmith { --npc-c: #ff9a4a; }
+.npc-keeper { --npc-c: #8ab8ff; }
+@keyframes npc-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+/* Quest giver: ! = a quest to take, ? = one ready to hand in. Drawn with type: thick yellow, hard black pixel outline. */
+.npc-mark {
+  font: 900 30px/1 'Arial Black', Impact, sans-serif; color: #ffd83a; margin-bottom: 2px;
+  text-shadow: 2px 0 0 #000, -2px 0 0 #000, 0 2px 0 #000, 0 -2px 0 #000, 2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000, 0 4px 0 #7a5a00;
+  animation: npc-mark-bounce 1s ease-in-out infinite;
+}
+.npc-mark.turn-in { color: #ffe866; }
+@keyframes npc-mark-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+
+/* Countdown over an empty boss lair. */
+.boss-timer {
+  font-size: 14px; font-weight: bold; padding: 4px 10px; border-radius: 3px;
+  background: rgba(30, 10, 8, 0.82); border: 1px solid #ff7a5a; color: #ffd0b8; text-shadow: 0 0 3px #000;
+}
+
+.npc-prompt {
+  font-size: 12px; padding: 3px 8px; border-radius: 3px;
+  background: rgba(20, 16, 10, 0.8); border: 1px solid var(--gold); color: var(--gold-hi);
+}
+
