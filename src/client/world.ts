@@ -793,7 +793,13 @@ export class World {
       uvs.push(u0, v1 - 0.5, u0 + 0.25, v1 - 0.5, u0 + 0.25, v1, u0, v1);
       placed++;
     }
-    if (positions.length) this.addQuads('island_cracks', positions, uvs);
+    if (!positions.length) return;
+    const mesh = this.addQuads('island_cracks', positions, uvs);
+    // All cracks lie at one height, so where two overlap the GPU picked either one, frame by frame as the camera
+    // moved: they swapped places while walking (owner 2026-11-21). Not writing depth and drawn after the ground,
+    // they paint in the order placed, later ones over earlier ones, always the same.
+    (mesh.material as THREE.MeshBasicMaterial).depthWrite = false;
+    mesh.renderOrder = 1;
   }
 
   /** Rocks, star shards and slabs of land coming away from the island, and crumbs falling off it. */
@@ -913,7 +919,7 @@ export class World {
   }
 
   /** Adds many quads from one atlas as a single mesh, so hundreds of details cost one draw call. */
-  private addQuads(key: string, positions: number[], uvs: number[]): void {
+  private addQuads(key: string, positions: number[], uvs: number[]): THREE.Mesh {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
@@ -927,6 +933,7 @@ export class World {
     mesh.frustumCulled = false;
     this.ownGeos.push(geo);
     this.add(mesh);
+    return mesh;
   }
 
   /** Grass tufts, flowers, stones and the like, in clumps along roads, clearings and pool shores. */
