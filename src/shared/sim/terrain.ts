@@ -26,6 +26,8 @@ interface ThemeProps {
   ringRock: [string, number];
   /** Camp decor (well, barrels, cart, …) and pebbles along the paths. */
   campDecor: boolean;
+  /** Extras drawn bigger than a rock, as [height, collider radius] (the beach's wrecks and treasure). */
+  extraSize?: Record<string, [number, number]>;
 }
 
 const THEME_PROPS: Record<ZoneTheme, ThemeProps> = {
@@ -66,6 +68,23 @@ const THEME_PROPS: Record<ZoneTheme, ThemeProps> = {
     ringRock: ['basalt_1', 2.2],
     campDecor: false,
   },
+  // Floor 2's Shipwreck Beach (FLOOR2_M1_BEACH.md, cut by tools/cut_papercraft.cjs floor2_m1).
+  beach: {
+    trees: ['coconut_palm_0', 'coconut_palm_1', 'coconut_palm_2'],
+    bushes: ['hibiscus', 'tropical_fern'],
+    rocks: ['sea_rock_0', 'sea_rock_1'],
+    stump: 'plank_pile',
+    tallStump: 'rock_pillar',
+    extra: ['giant_clam', 'broken_ladder', 'wreck_crates', 'salvage_barrel', 'stuck_anchor', 'old_cannon', 'tide_pool', 'coin_pile',
+      'treasure_chest', 'wreck_hull', 'torn_sail_mast', 'beached_rowboat', 'skull_flag', 'brass_lantern'],
+    extraSize: {
+      wreck_hull: [4, 1.6], torn_sail_mast: [4.5, 0.5], beached_rowboat: [1.4, 0.9], skull_flag: [2.6, 0.2], stuck_anchor: [2, 0.4],
+      old_cannon: [1.3, 0.6], brass_lantern: [1.4, 0.2], broken_ladder: [1.8, 0.4], giant_clam: [1.2, 0.6], treasure_chest: [1.1, 0.5],
+      wreck_crates: [1.3, 0.6], salvage_barrel: [1, 0.4], tide_pool: [0.5, 0], coin_pile: [0.5, 0],
+    },
+    ringRock: ['sea_rock_1', 2.2],
+    campDecor: false,
+  },
 };
 
 /** How close a player has to walk to a portal to use it. */
@@ -76,6 +95,7 @@ export const SUMMONER_PROP: Record<ZoneTheme, string> = {
   marsh: 'summoner_marsh',
   snow: 'summoner_snow',
   volcano: 'summoner_volcano',
+  beach: 'summoner_crab',
 };
 export const SUMMONER_HEIGHT = 3.6;
 export const SUMMONER_SOLID = 1.2;
@@ -227,6 +247,15 @@ export class Terrain {
     }
     u.x = Math.max(-this.bound, Math.min(this.bound, u.x));
     u.z = Math.max(-this.bound, Math.min(this.bound, u.z));
+    // A boss room: nothing is pushed out past its edge either (a knockback, the Giant Cannon Crab's fling).
+    if (this.roomEdge !== null) {
+      const max = Math.max(0, this.roomEdge - u.radius);
+      const d = Math.hypot(u.x, u.z);
+      if (d > max) {
+        u.x *= max / d;
+        u.z *= max / d;
+      }
+    }
   }
 
   private addProp(key: string, x: number, z: number, height: number, collideR: number, fade = false): void {
@@ -649,7 +678,11 @@ export class Terrain {
       if (roll < 0.55) this.addTree(r, x, z);
       else if (roll < 0.8) this.addProp(pick(r, set.bushes), x, z, rand(r, 0.9, 1.3), 0);
       else if (roll < (set.extra.length ? 0.9 : 0.93)) this.addProp(pick(r, set.rocks), x, z, rand(r, 0.7, 1.1), 0.5);
-      else if (roll < 0.95 && set.extra.length) this.addProp(pick(r, set.extra), x, z, rand(r, 0.8, 1.1), 0);
+      else if (roll < 0.95 && set.extra.length) {
+        const key = pick(r, set.extra);
+        const size = set.extraSize?.[key];
+        this.addProp(key, x, z, size ? size[0] * rand(r, 0.9, 1.1) : rand(r, 0.8, 1.1), size?.[1] ?? 0);
+      }
       else if (set.tallStump && roll >= 0.97) this.addProp(set.tallStump, x, z, 1.3, 0.5);
       else this.addProp(set.stump, x, z, 0.8, 0.4);
       placed++;

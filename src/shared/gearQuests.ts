@@ -3,7 +3,7 @@
 // gear made for the player's class and level, green on the first two maps, blue after. Not bound to the
 // character, and a player above a map can still take its quests. One place for the rules, so his window,
 // the quest tracker, the ! / ? over his head and Sim never disagree.
-import { ZONES, type ZoneDef } from './data/zones';
+import { floorOf, ZONES, type ZoneDef } from './data/zones';
 import { ITEM_BASES, makeItem } from './data/items';
 import type { ClassId, Item, Rarity, SlotId } from './types';
 
@@ -24,9 +24,12 @@ const SLOT_NAME: Record<SlotId, string> = {
   weapon: 'อาวุธ', offhand: 'มือรอง', helmet: 'หมวก', armor: 'เกราะ', gloves: 'ถุงมือ', belt: 'เข็มขัด', boots: 'รองเท้า', necklace: 'สร้อย', ring: 'แหวน',
 } as Record<SlotId, string>;
 
-/** Farm maps in order (the ones with a boss lair, so never the hub or a boss room). */
+/**
+ * Farm maps in order (the ones with a boss lair, so never the hub or a boss room). Floor 1 only: floor 2's gear quests
+ * wait until there is floor-2 gear (owner 2026-11-20, plan 12.6).
+ */
 export function gearMaps(): ZoneDef[] {
-  return Object.values(ZONES).filter((z) => z.lair).sort((a, b) => a.levels[0] - b.levels[0]);
+  return Object.values(ZONES).filter((z) => z.lair && floorOf(z) === 1).sort((a, b) => a.levels[0] - b.levels[0]);
 }
 
 /** Rarity of a map's quest gear (owner: maps 1–2 green, 3–4 blue; never above blue). */

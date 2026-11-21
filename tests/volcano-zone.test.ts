@@ -192,7 +192,7 @@ for (const zone of Object.values(BOSS_ROOMS)) {
   boss.state = 'chase';
   ok(autoBlocked(zone, sim.monsters, p), `${zone.id}: no Auto while a boss hunts you`);
 }
-ok(rooms === 4, 'every boss room checked');
+ok(rooms === Object.keys(BOSS_ROOMS).length && rooms >= 5, 'every boss room checked (floor 1 and floor 2)');
 for (const zone of Object.values(ZONES)) {
   if (!zone.lair) continue;
   const sim = new Sim(zone);

@@ -7,6 +7,7 @@ import type { Monster } from './Monster';
 import type { Player } from './Player';
 import type { Sim } from './Sim';
 import type { WitchHazard } from './bogWitch';
+import type { CrabHazard } from './cannonCrab';
 
 export interface HazardBase {
   id: number;
@@ -24,8 +25,8 @@ export interface RingHazard extends HazardBase { k: 'ring'; speed: number; width
 export interface BeamsHazard extends HazardBase { k: 'beams'; a0: number; spin: number; n: number; len: number; width: number; end: number }
 /** Burns the whole clearing except a few small circles. */
 export interface BlastHazard extends HazardBase { k: 'blast'; r: number; safe: { x: number; z: number }[]; safeR: number }
-/** Every boss ground attack: the Volcano Heart's and the Bog Witch's (see bogWitch.ts). */
-export type Hazard = MeteorHazard | RingHazard | BeamsHazard | BlastHazard | WitchHazard;
+/** Every boss ground attack: the Volcano Heart's, the Bog Witch's (bogWitch.ts) and the Giant Cannon Crab's (cannonCrab.ts). */
+export type Hazard = MeteorHazard | RingHazard | BeamsHazard | BlastHazard | WitchHazard | CrabHazard;
 
 /** Attack sizes and damage (times the boss's ATK). */
 export const METEOR = { radius: 2, count: 5, every: 0.6, mult: 1.4 };

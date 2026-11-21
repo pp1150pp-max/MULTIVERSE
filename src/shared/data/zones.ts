@@ -52,7 +52,7 @@ export interface IceLake {
 }
 
 /** Which prop set and ground palette a zone is drawn with. */
-export type ZoneTheme = 'forest' | 'marsh' | 'snow' | 'volcano';
+export type ZoneTheme = 'forest' | 'marsh' | 'snow' | 'volcano' | 'beach';
 
 /** An ellipse of lava: walkable, but it burns whoever stands in it. */
 export interface LavaPool {
@@ -466,6 +466,42 @@ export const ZONE_HUB: ZoneDef = {
   portals: HUB_CORNERS.map(([sx, sz, zone]) => ({ to: zone.id, x: sx * HUB_PORTAL, z: sz * HUB_PORTAL, minLevel: 0 })),
 };
 
+// Floor 2, map 1 (plan 2, 5.1): reached from the harbour's top pier, so the camp is at the bottom like the forest's.
+export const ZONE_BEACH: ZoneDef = scatterZone({
+  id: 'shipwreck_beach',
+  name: 'Shipwreck Beach',
+  nameTh: 'หาดเรือแตก',
+  subtitle: 'หาดทรายบนเกาะลอยกลางทะเลเมฆ ซากเรือโจรสลัดเกยตื้น สมบัติกระจัดกระจาย และปูยักษ์ที่แบกปืนใหญ่ไว้บนกระดอง',
+  levels: [41, 50],
+  floor: 2,
+  theme: 'beach',
+  // Owner 2026-11-20: Ashen Isle's boost, the monsters' own numbers carry the step up.
+  monsterBoost: { stats: 7, tough: 0.5, mobTough: 0.7, speed: 1.25, skill: 1.25, aggro: 7 },
+  allowAutoPlay: true,
+  channels: true,
+  half: 64,
+  seed: 20261120,
+  start: { x: 44, z: 44 },
+  path: [[52, 52], [44, 44], [32, 28], [18, 22], [6, 10], [-6, 4], [-14, -10], [-24, -20], [-32, -34], [-42, -42]],
+  branches: [
+    [[32, 28], [40, 12]],
+    [[18, 22], [6, 36]],
+    [[6, 10], [16, -6]],
+    [[-6, 4], [-22, 14]],
+    [[-14, -10], [-4, -26]],
+  ],
+  spawns: [],
+  lair: { boss: 'cannon_crab', x: -42, z: -42 },
+  // Room for the crab's sidesteps and its cannon barrage.
+  arenaRadius: 14,
+  portals: [{ to: HARBOR_ID, x: 49.5, z: 49.5, minLevel: 0 }],
+}, [
+  { group: [['hermit_crab', 1]], count: 12, respawn: [8, 12] },
+  { group: [['thief_gull', 1]], count: 10, respawn: [10, 14] },
+  { group: [['shock_eel', 1]], count: 9, respawn: [10, 14] },
+  { group: [['spike_turtle', 1]], count: 8, respawn: [14, 20] },
+]);
+
 /** Where each harbour pier leads (top, right, left, bottom of the screen), by plan 2; none of them built yet. */
 const HARBOR_PIERS: [string, string][] = [
   ['shipwreck_beach', 'หาดเรือแตก'],
@@ -514,15 +550,17 @@ export const ZONES: Record<string, ZoneDef> = {
   [ZONE_2.id]: ZONE_2,
   [ZONE_3.id]: ZONE_3,
   [ZONE_4.id]: ZONE_4,
+  [ZONE_BEACH.id]: ZONE_BEACH,
 };
 
 /** Each boss's body radius in its room (the Volcano Heart is a rock that never moves). */
-const BOSS_RADIUS: Record<string, number> = { forest_bear: 1, bog_witch: 1, yeti: 1, volcano_heart: 0 };
+const BOSS_RADIUS: Record<string, number> = { forest_bear: 1, bog_witch: 1, yeti: 1, volcano_heart: 0, cannon_crab: 1 };
 const BOSS_ROOM_NAME: Record<string, [string, string]> = {
   forest_bear: ["Bear's Den", 'รังหมีป่า'],
   bog_witch: ["Bog Witch's Lair", 'กระท่อมแม่มดหนอง'],
   yeti: ["Yeti's Cave", 'ถ้ำเยติ'],
   volcano_heart: ['Heart of the Volcano', 'แกนกลางภูเขาไฟ'],
+  cannon_crab: ["Giant Crab's Den", 'รังปูยักษ์'],
 };
 
 /**
@@ -584,7 +622,7 @@ export function lairExitSpot(room: ZoneDef, r: () => number = Math.random): { fi
 
 /** Boss rooms, by the id of the map whose summoner opens them. Not in ZONES: the server makes one Sim per group. */
 export const BOSS_ROOMS: Record<string, ZoneDef> = Object.fromEntries(
-  [ZONE_1, ZONE_2, ZONE_3, ZONE_4].map((z) => [z.id, bossRoom(z)]),
+  [ZONE_1, ZONE_2, ZONE_3, ZONE_4, ZONE_BEACH].map((z) => [z.id, bossRoom(z)]),
 );
 const ROOMS_BY_ID: Record<string, ZoneDef> = Object.fromEntries(Object.values(BOSS_ROOMS).map((r) => [r.id, r]));
 

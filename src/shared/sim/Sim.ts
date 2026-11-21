@@ -8,6 +8,7 @@ import { lineRanges, rerollStat, rerollValues, rollItem } from '../data/items';
 import { REROLL_NAME, rerollCost, type RerollKind } from '../data/reroll';
 import { inBossArena, lairExitSpot, LAVA_BURN, LAVA_TICK } from '../data/zones';
 import type { Hazard } from './volcanoHeart';
+import { stealReturn, thornsReflect } from './beachMoves';
 import {
   ANNOUNCE_FROM, dropsOnFail, FORGE_CD, enhanceCost, itemName, MAX_PLUS, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
 } from '../data/enhance';
@@ -252,6 +253,11 @@ export class Sim {
     this.events.push({ t: 'sfx', name, x, z, to });
   }
 
+  /** Big text across the middle of the screen for the players near (x, z) (a boss's phase). */
+  banner(text: string, sub: string, x: number, z: number): void {
+    this.events.push({ t: 'banner', text, sub, x, z });
+  }
+
   log(msg: string, color?: string, to?: number): void {
     this.events.push({ t: 'log', msg, color, to });
   }
@@ -402,7 +408,9 @@ export class Sim {
     const def = (this.time < m.armorBreakUntil ? m.defense * (1 - m.armorBreak) : m.defense) * pen;
     const under = m.isBoss && m.level - p.level > BOSS_LEVEL_GAP;
     const bossMult = m.isBoss ? classBalance(p.cls.id).bossDmgMult : 1;
-    const dmg = Math.max(1, Math.round(mitigate(raw, def) * bossMult * (under ? BOSS_UNDERLEVEL_MULT : 1)));
+    // Hiding in a shell (hermit crab, the Giant Cannon Crab's low-HP hide): less damage for a moment (sim/beachMoves.ts).
+    const guarded = this.time < m.guardUntil ? 1 - m.guard : 1;
+    const dmg = Math.max(1, Math.round(mitigate(raw, def) * bossMult * (under ? BOSS_UNDERLEVEL_MULT : 1) * guarded));
     if (!m.damageBy.has(p.id)) {
       m.damageBy.set(p.id, 0);
       m.addFighter(m.damageBy.size);
@@ -448,6 +456,8 @@ export class Sim {
     const sk = opts.skill?.id ?? this.casterSkill;
     if (sk && (opts.stun || opts.slow || opts.armorBreak || opts.weak)) m.debuffSkill = sk;
     m.onHit(this, p);
+    // A spike turtle bounces part of a close hit back (never a hit that was itself bounced back, see opts.reflected).
+    if (m.def.move === 'thorns' && !opts.reflected) thornsReflect(this, m, p, dealt);
     if (m.hp <= 0) {
       this.killMonster(m);
       p.onKill(m);
@@ -487,9 +497,32 @@ export class Sim {
     if (this.time < p.reflectUntil && p.reflect > 0 && dmg > 0 && m.alive && p.stats.atk > 0) {
       this.fx('effect', 'sw_armorhit', m.x, m.z, 0, 0.9);
       const back = (dmg * p.reflect + p.reflectFlat) / p.stats.atk;
-      this.hitMonster(p, m, back, { maxMult: back });
+      this.hitMonster(p, m, back, { maxMult: back, reflected: true });
     }
     if (p.hp <= 0) this.killPlayer(p);
+  }
+
+  /**
+   * Damage set by a move, not by the monster's attack (a spike turtle's thorns): no defense, no reflect back. Shields
+   * still take it first, and it stops potions and the return scroll like any hit.
+   */
+  hurtPlayer(m: Monster, p: Player, amount: number): void {
+    if (!p.alive || this.inSafe(p) || p.invulnT > 0) return;
+    let dmg = Math.max(0, Math.round(amount));
+    if (p.shield > 0 && this.time < p.shieldUntil) {
+      const soak = Math.min(p.shield, dmg);
+      p.shield -= soak;
+      dmg -= soak;
+      if (soak > 0) this.dmgText(p, `-${soak}`, 'shield', p.id);
+    }
+    p.hp -= dmg;
+    p.lastHurt = this.time;
+    p.interruptPotions();
+    this.cancelReturnCast(p, 'โดนโจมตี');
+    this.events.push({ t: 'flash', id: p.id });
+    if (dmg > 0) this.dmgText(p, `-${dmg}`, 'hurt', p.id);
+    if (p.hp <= 0) this.killPlayer(p);
+    void m;
   }
 
   /** The Volcano Heart reached a faster phase (1 = below half HP, 2 = below 30%). */
@@ -629,8 +662,11 @@ export class Sim {
     m.deadT = 0;
     m.hp = 0;
     this.sfx(m.isBoss ? 'boss_die' : 'monster_die', m.x, m.z);
-    if (m.def.pattern || m.def.spells) this.hazards = [];
+    if (m.def.pattern || m.def.spells || m.def.brain) this.hazards = [];
     m.spells?.reset(this);
+    m.crab?.reset(this);
+    // A gull shot down with stolen gold: it goes back (sim/beachMoves.ts).
+    stealReturn(this, m);
     if (!m.summoned) {
       this.shareExp(m);
       this.dropLoot(m);

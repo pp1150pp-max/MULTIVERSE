@@ -1,7 +1,8 @@
 // Draws the boss ground attacks the server lists in its snapshots. Everything is worked out from the
 // hazard's own numbers and the server's clock, so every player sees the same thing at the same time.
 import * as THREE from 'three';
-import { fxTex, sheets } from './assets';
+import { assetSources, fxTex, sheets } from './assets';
+import type { ShellHazard } from '../shared/sim/cannonCrab';
 import type { GraspHazard, HexHazard, PoolHazard, VialHazard } from '../shared/sim/bogWitch';
 import { beamAngleAt, ringRadiusAt, type BeamsHazard, type BlastHazard, type Hazard, type MeteorHazard, type RingHazard } from '../shared/sim/volcanoHeart';
 
@@ -297,7 +298,43 @@ function hexView(h: HexHazard): View {
   };
 }
 
+// ---- The Giant Cannon Crab's cannonballs (shared/sim/cannonCrab.ts): a warning ring on the ground, a ball in an arc.
+
+/** Its paper picture (fx_cannonball, fx_warn_ring) once cut, else null (the plain warning and a dark glow instead). */
+const paperFx = (key: string): THREE.Texture | null => (assetSources[key] === 'file' ? sheets[key]?.texture ?? null : null);
+
+function shellView(h: ShellHazard): View {
+  const group = new THREE.Group();
+  group.position.set(h.x, Y, h.z);
+  const ringTex = paperFx('fx_warn_ring');
+  const fill = landing(group, h.r, WARN);
+  if (ringTex) {
+    const ring = decal(mat('#ffffff', 0.9, ringTex));
+    ring.scale.setScalar(h.r);
+    ring.position.y = 0.01;
+    group.add(ring);
+  }
+  const ballTex = paperFx('fx_cannonball');
+  const ball = new THREE.Sprite(new THREE.SpriteMaterial(ballTex
+    ? { map: ballTex, transparent: true, depthWrite: false }
+    : { map: fxTex.glow, color: '#3a3430', transparent: true, depthWrite: false }));
+  ball.scale.setScalar(ballTex ? 1.1 : 1.4);
+  group.add(ball);
+  return {
+    group,
+    update(t) {
+      const k = Math.min(1, Math.max(0, (t - h.start) / (h.hit - h.start)));
+      fill(k);
+      // Fired up from the crab, falling onto the circle.
+      ball.visible = t < h.hit;
+      ball.position.set((h.fromX - h.x) * (1 - k), 1 + Math.sin(Math.PI * k) * 7 * (1 - k * 0.6), (h.fromZ - h.z) * (1 - k));
+      ball.material.rotation = t * 6;
+    },
+  };
+}
+
 const MAKE: { [K in Hazard['k']]: (h: Extract<Hazard, { k: K }>) => View } = {
+  shell: shellView,
   meteor: meteorView, ring: ringView, beams: beamsView, blast: blastView,
   vial: vialView, pool: poolView, grasp: graspView, hex: hexView,
 };

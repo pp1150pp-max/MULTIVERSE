@@ -19,6 +19,7 @@ import { checkRigLookTuning, codeRigLook, mergeRigLook, rigLookChanges, type Rig
 import { autoChanges, checkAutoTuning, codeAuto, mergeAuto, type AutoConfig, type AutoTuning } from './autoTuning';
 import { checkFloorGateTuning, codeFloorGate, floorGateChanges, mergeFloorGate, type FloorGateConfig, type FloorGateTuning } from './floorGate';
 import { checkTutorialTuning, codeTutorial, mergeTutorial, tutorialChanges, type TutorialConfig, type TutorialTuning } from './tutorial';
+import { checkMoveTuning, codeMoves, mergeMoves, moveChanges, type MoveConfig, type MoveTuning } from './moveTuning';
 import { checkSkillTuning, codeSkills, mergeSkills, skillChanges, type SkillConfig, type SkillTuning } from './skillTuning';
 import { addInto, emptyStats, setExpTune } from './formulas';
 import { STAT_KEYS, STAT_LABEL, type ClassId, type PotionKind, type PotionSize, type StatKey, type Stats } from './types';
@@ -186,6 +187,8 @@ export interface Balance {
   sets: SetConfig;
   /** Skill points, ranks, unlock levels, refunds and every learnable skill's numbers (skillTuning.ts). */
   skills: SkillConfig;
+  /** Floor 2's new monster and boss moves (moveTuning.ts). */
+  moves: MoveConfig;
 }
 
 /** What is saved: only what differs from the code. Tier arrays are saved whole when any entry differs. */
@@ -254,6 +257,8 @@ export interface BalanceTuning {
   sets?: SetTuning;
   /** Skill system settings that differ from the code. */
   skills?: SkillTuning;
+  /** Floor 2 move numbers that differ from the code. */
+  moves?: MoveTuning;
 }
 
 /** Highest Lv1 / per-level value of each stat (owner 2026-11-11); the lowest is 0. */
@@ -331,6 +336,7 @@ export function codeBalance(): Balance {
     tutorial: codeTutorial(),
     sets: codeSets(),
     skills: codeSkills(),
+    moves: codeMoves(),
   };
 }
 
@@ -383,6 +389,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   b.tutorial = mergeTutorial(t.tutorial);
   b.sets = mergeSets(t.sets);
   b.skills = mergeSkills(t.skills);
+  b.moves = mergeMoves(t.moves);
   return b;
 }
 
@@ -517,7 +524,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'forgeAuto', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'bossWipeKeepHp', 'roomWipeSec', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'menuLayout', 'sets'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'forgeAuto', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'bossWipeKeepHp', 'roomWipeSec', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'menuLayout', 'sets', 'moves'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -970,6 +977,12 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (c.tuning) out.sets = c.tuning;
     return null;
   };
+  const moves = (): string | null => {
+    const c = checkMoveTuning(o.moves, strict);
+    if ('error' in c) return c.error;
+    if (c.tuning) out.moves = c.tuning;
+    return null;
+  };
   const menuLayout = (): string | null => {
     const c = checkMenuLayoutTuning(o.menuLayout, strict);
     if ('error' in c) return c.error;
@@ -1015,7 +1028,8 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     rigLook() ??
     attackRoot() ??
     menuLayout() ??
-    sets();
+    sets() ??
+    moves();
   if (err) return { error: err };
   // Fixed key order.
   const ordered: BalanceTuning = {};
@@ -1129,6 +1143,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   out.push(...attackRootChanges(a.attackRoot, b.attackRoot));
   out.push(...menuLayoutChanges(a.menuLayout, b.menuLayout));
   out.push(...setChanges(a.sets, b.sets));
+  out.push(...moveChanges(a.moves, b.moves));
   return out.join(', ');
 }
 
