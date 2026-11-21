@@ -325,6 +325,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
     const e = new Editor(canvas, map);
     ed = e;
     (canvas as HTMLCanvasElement & { editor?: Editor }).editor = e; // a handle for checking the page from the console
+    e.layerState.decor = { visible: false, locked: false }; // a sample, off until asked for
     for (const l of CORE_LAYERS) e.addLayer(l);
     const place = placeTool();
     e.addTool(selectTool());
@@ -380,6 +381,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
       box('ชิดขอบชิ้นข้างเคียง', () => e.opts.edges, (v) => { e.opts.edges = v; }),
       box('โชว์วง/กล่อง collision', () => e.opts.showSolid, (v) => { e.opts.showSolid = v; }),
       box('โชว์กริด', () => e.opts.showGrid, (v) => { e.opts.showGrid = v; }),
+      box('พื้นแบบในเกม', () => e.opts.realGround, (v) => { e.opts.realGround = v; }, 'ปูพื้นด้วยภาพพื้นจริงของเกม (หญ้า ทาง อิฐ น้ำแข็ง ลาวา) ปิด = สีเรียบแบบเดิม'),
     );
   }
 

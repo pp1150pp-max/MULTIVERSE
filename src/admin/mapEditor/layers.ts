@@ -1,7 +1,8 @@
-// What the editor canvas draws (each a Layer in editor.ts). Simple colours for the ground: the real shader stays in the game.
+// What the editor canvas draws (each a Layer in editor.ts). The ground is the game's tiles (groundArt.ts) or, switched off, plain colours.
 import { ROOM_EDGE, roomSpawnOf, type MapTheme } from '../../shared/mapSchema';
 import { catalogEntry, spriteOf } from './sprites';
 import type { Editor, Layer } from './editor';
+import { decorLayer, drawRealGround } from './groundArt';
 
 const GROUND: Record<MapTheme, string> = { forest: '#4f7a3f', marsh: '#566a43', snow: '#cfdbe3', volcano: '#4b3a34' };
 const PATH_COLOR = 'rgba(196,166,112,0.85)';
@@ -11,6 +12,24 @@ const ground: Layer = {
   id: 'ground', label: 'พื้น', order: 0,
   draw(ed, g) {
     const { zone, walkable } = ed.map;
+    const h = zone.half;
+    if (!(ed.opts.realGround && drawRealGround(ed, g))) plainGround(ed, g);
+    // The frame the player may walk in, and the edge of the map.
+    g.setLineDash([6, 5]);
+    g.strokeStyle = 'rgba(255,255,255,0.35)';
+    g.lineWidth = 1;
+    ed.path(g, [[-walkable.half, -walkable.half], [walkable.half, -walkable.half], [walkable.half, walkable.half], [-walkable.half, walkable.half]]);
+    g.stroke();
+    g.setLineDash([]);
+    g.strokeStyle = 'rgba(0,0,0,0.6)';
+    ed.path(g, [[-h, -h], [h, -h], [h, h], [-h, h]]);
+    g.stroke();
+  },
+};
+
+/** The plain colours (the "พื้นแบบในเกม" switch off, or while the ground tiles load). */
+function plainGround(ed: Editor, g: CanvasRenderingContext2D): void {
+    const { zone } = ed.map;
     const h = zone.half;
     const quarter = (x0: number, z0: number, x1: number, z1: number, theme: MapTheme): void => {
       ed.path(g, [[x0, z0], [x1, z0], [x1, z1], [x0, z1]]);
@@ -38,18 +57,7 @@ const ground: Layer = {
       g.fillStyle = w.kind === 'ice' ? 'rgba(150,200,235,0.8)' : 'rgba(230,90,30,0.85)';
       g.fill();
     }
-    // The frame the player may walk in, and the edge of the map.
-    g.setLineDash([6, 5]);
-    g.strokeStyle = 'rgba(255,255,255,0.35)';
-    g.lineWidth = 1;
-    ed.path(g, [[-walkable.half, -walkable.half], [walkable.half, -walkable.half], [walkable.half, walkable.half], [-walkable.half, walkable.half]]);
-    g.stroke();
-    g.setLineDash([]);
-    g.strokeStyle = 'rgba(0,0,0,0.6)';
-    ed.path(g, [[-h, -h], [h, -h], [h, h], [-h, h]]);
-    g.stroke();
-  },
-};
+}
 
 const grid: Layer = {
   id: 'grid', label: 'กริด', order: 10,
@@ -220,4 +228,4 @@ const ghost: Layer = {
   },
 };
 
-export const CORE_LAYERS: Layer[] = [ground, grid, props, markers, roomGuide, collision, blockers, selection, ghost];
+export const CORE_LAYERS: Layer[] = [ground, decorLayer, grid, props, markers, roomGuide, collision, blockers, selection, ghost];
