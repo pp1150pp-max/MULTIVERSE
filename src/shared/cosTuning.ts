@@ -32,7 +32,7 @@ export const COS_TUNE_FIELDS: Record<TunedSlot, Record<string, TuneField>> = {
     overBack: bool('หันหลังให้กล้อง: ปีกวาดทับหลัง (ปิด = หลังตัวเสมอ)'),
     // The near wing drawn over the body (a copy of the wings cut at the body's middle, #211).
     // Wings from a single-wing picture, mirrored into the pair (owner 2026-11-12, wingPair.ts). Used when
-    // public/assets/sprites/cosmetics/<id>_one.png exists; the fields above are for the old pair picture.
+    // public/assets/sprites/paper/cosmetics/<id>_one.png exists; the fields above are for the old pair picture.
     oneSize: num(0.3, 2.5, 0.01, 'ปีกข้างเดียว: ขนาด (คูณ)'),
     oneBack: num(0, 2.5, 0.01, 'ปีกข้างเดียว: ความสูงโคนปีก ตอนยืน'),
     oneBackSeat: num(0, 2.5, 0.01, 'ปีกข้างเดียว: ความสูงโคนปีก ตอนนั่งขี่ (จากอาน)'),

@@ -1,6 +1,6 @@
 // Cosmetics on a character in the world: wings, a mount under it, a pet that follows it, and a ground
 // aura with footprints. Wings, mounts and pets are 8-direction walk sheets like the monsters'
-// (public/assets/sprites/cosmetics/<id>.png: 3 frames × 5 rows front, front diagonal, side, back diagonal,
+// (public/assets/sprites/paper/cosmetics/<id>.png: 3 frames × 5 rows front, front diagonal, side, back diagonal,
 // back, the other three directions mirrored); until a file exists its placeholder is drawn in code
 // (placeholder.ts drawCosmetic, see SHEET_SPECS in assets.ts).
 import * as THREE from 'three';
