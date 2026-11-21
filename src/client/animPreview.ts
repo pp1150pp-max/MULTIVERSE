@@ -98,10 +98,10 @@ export async function mountAnimPreview(root: HTMLElement, io?: AnimBenchIo): Pro
 
   await loadGameAssets();
   const sets = new Map<string, Promise<AnimSet | null>>();
-  const setOf = (cls: Cls, paper: boolean) => {
-    const key = `${cls}:${paper ? 'paper' : 'old'}`;
-    if (!sets.has(key)) sets.set(key, loadCharAnimSet(cls, paper ? `paper/player/${cls}` : `player/${cls}`));
-    return sets.get(key)!;
+  // The paper sheets are the only class art left (the old sprites/player/<class> were removed); the rig builds on them like the game.
+  const setOf = (cls: Cls) => {
+    if (!sets.has(cls)) sets.set(cls, loadCharAnimSet(cls, `paper/player/${cls}`));
+    return sets.get(cls)!;
   };
   let rigAssets: RigAssets | null = null;
 
@@ -171,8 +171,7 @@ export async function mountAnimPreview(root: HTMLElement, io?: AnimBenchIo): Pro
   const animsOf = (a: Actor) => ANIM_ORDER.filter((n) => (n === 'combo' ? a.has('attack_3') : a.has(n)));
   const rebuild = async () => {
     const my = ++building;
-    const paper = state.art === 'paper';
-    const set = await setOf(state.cls, paper);
+    const set = await setOf(state.cls);
     if (state.art === 'rig' && !rigAssets) rigAssets = await loadSwordRig();
     if (my !== building) return;
     for (const c of cells) {
@@ -430,7 +429,7 @@ export async function mountAnimPreview(root: HTMLElement, io?: AnimBenchIo): Pro
   let shownSet: AnimSet | null = null;
   const cellsSet = () => shownSet;
   const refreshSet = async () => {
-    shownSet = await setOf(state.cls, state.art === 'paper');
+    shownSet = await setOf(state.cls);
   };
 
   // ---- layout: a 3×3 grid of square-ish cells
