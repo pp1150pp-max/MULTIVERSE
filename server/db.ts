@@ -91,6 +91,8 @@ export interface MarketInsert {
 export interface SessionAccount { id: number; username: string; guest: boolean }
 /** One row of map_layouts. */
 export interface MapLayoutRow { id: number; zoneId: string; rev: number; json: string; status: 'draft' | 'published'; author: string; note: string; updatedAt: number; bytes?: number }
+/** One row of custom_zones: a map made in the editor. */
+export interface CustomZoneRow { id: string; def: string; status: 'live' | 'hidden'; author: string; createdAt: number; updatedAt: number }
 /** How many published revisions of one map are kept (older ones are deleted when a new one is published). */
 export const MAP_KEEP_REVS = 20;
 
@@ -197,6 +199,16 @@ export class Db {
       );
       CREATE UNIQUE INDEX IF NOT EXISTS map_layouts_draft ON map_layouts(zone_id) WHERE status = 'draft';
       CREATE UNIQUE INDEX IF NOT EXISTS map_layouts_rev ON map_layouts(zone_id, rev) WHERE status = 'published';
+      -- Maps made in the map editor with "＋ แมพใหม่" (src/shared/customZones.ts): their settings (CustomZoneDef JSON). Their layouts
+      -- are in map_layouts under the same id. 'hidden' = kept but out of the game. Deleting one deletes its map_layouts rows too.
+      CREATE TABLE IF NOT EXISTS custom_zones (
+        id TEXT PRIMARY KEY,
+        def TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('live', 'hidden')),
+        author TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
       -- Consignment market (market broker), see server/market.ts: one row per listing, kept as history
       -- after it is collected. status: 'active' | 'sold' | 'expired' | 'cancelled'. A finished listing
       -- whose claimed_at is NULL waits in the seller's claim box (the gold if sold, else the item).
@@ -487,6 +499,40 @@ export class Db {
   nextMapRev(zoneId: string, atLeast = 0): number {
     const r = this.db.prepare("SELECT MAX(rev) AS m FROM map_layouts WHERE zone_id = ? AND status = 'published'").get(zoneId) as { m: number | null };
     return Math.max(r.m ?? 0, atLeast) + 1;
+  }
+
+  // ------------------------------------------------------------ maps made in the editor (custom_zones)
+
+  customZones(): CustomZoneRow[] {
+    return (this.db.prepare('SELECT * FROM custom_zones ORDER BY created_at').all() as { id: string; def: string; status: 'live' | 'hidden'; author: string; created_at: number; updated_at: number }[])
+      .map((r) => ({ id: r.id, def: r.def, status: r.status, author: r.author, createdAt: r.created_at, updatedAt: r.updated_at }));
+  }
+
+  customZone(id: string): CustomZoneRow | undefined {
+    return this.customZones().find((r) => r.id === id);
+  }
+
+  /** A new editor-made map: its settings and its first draft, in one go. */
+  createCustomZone(id: string, def: string, draftJson: string, author: string): void {
+    this.transaction(() => {
+      const t = Date.now();
+      this.db.prepare("INSERT INTO custom_zones (id, def, status, author, created_at, updated_at) VALUES (?, ?, 'live', ?, ?, ?)").run(id, def, author, t, t);
+      this.saveMapDraft(id, 0, draftJson, author, 'สร้างแมพใหม่');
+    });
+  }
+
+  updateCustomZone(id: string, fields: { def?: string; status?: 'live' | 'hidden' }): void {
+    const row = this.customZone(id);
+    if (!row) return;
+    this.db.prepare('UPDATE custom_zones SET def = ?, status = ?, updated_at = ? WHERE id = ?').run(fields.def ?? row.def, fields.status ?? row.status, Date.now(), id);
+  }
+
+  /** Deletes an editor-made map for good: its settings, draft and every published revision. */
+  deleteCustomZone(id: string): void {
+    this.transaction(() => {
+      this.db.prepare('DELETE FROM map_layouts WHERE zone_id = ?').run(id);
+      this.db.prepare('DELETE FROM custom_zones WHERE id = ?').run(id);
+    });
   }
 
   private mapRow(r: unknown): MapLayoutRow | undefined {

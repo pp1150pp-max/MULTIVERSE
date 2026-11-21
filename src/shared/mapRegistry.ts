@@ -21,20 +21,37 @@ const BUNDLED: Record<string, MapData> = Object.fromEntries(
 
 /** Layouts that replace the bundled ones (empty in PR 3: nothing sets them yet). */
 const override = new Map<string, MapData>();
+/**
+ * Maps made in the editor with "＋ แมพใหม่" (src/shared/customZones.ts): they have no bundled JSON, only a published layout in the DB.
+ * Not touched by the "ใช้แมพจาก DB" switch (there is no file to fall back to); a hidden or deleted one is simply not here.
+ */
+const custom = new Map<string, MapData>();
 /** /admin "ใช้แมพจาก DB" (balance.mapFromDb). Off = always the bundled JSON, the emergency way out. Does nothing while `override` is empty. */
 let useOverrides = true;
 
 export const MapRegistry = {
   /** The layout for a zone or floor-1 boss room (id `<field>_room`), or undefined when it has none. */
   get(zoneId: string): MapData | undefined {
-    return (useOverrides ? override.get(zoneId) : undefined) ?? BUNDLED[zoneId];
+    return (useOverrides ? override.get(zoneId) : undefined) ?? BUNDLED[zoneId] ?? custom.get(zoneId);
   },
   /** The JSON that ships with the game, whatever the switch says. */
   bundled(zoneId: string): MapData | undefined {
     return BUNDLED[zoneId];
   },
+  /** The bundled maps, then the editor-made maps the game runs now. */
   ids(): string[] {
-    return Object.keys(BUNDLED);
+    return [...Object.keys(BUNDLED), ...custom.keys()];
+  },
+  /** An editor-made map (published, not hidden) for the game to run. */
+  setCustom(map: MapData): void {
+    custom.set(map.id, map);
+  },
+  removeCustom(zoneId?: string): void {
+    if (zoneId) custom.delete(zoneId);
+    else custom.clear();
+  },
+  isCustom(zoneId: string): boolean {
+    return custom.has(zoneId);
   },
   /** Replace a zone's layout (PR 5 and later). Takes effect for Terrains built afterwards. */
   set(map: MapData): void {

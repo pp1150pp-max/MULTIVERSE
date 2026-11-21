@@ -30,7 +30,11 @@ interface Pin { key: string; kind: PinKind; id: string; x: number; z: number; la
 const PIN_COLOR: Record<PinKind, string> = { npc: '#4ac0e8', portal: '#b070f0', rest: '#e8c040', lair: '#e05050' };
 
 /** Zones a door may lead to: the maps themselves (boss rooms are reached by the boss summoner, not by a door). */
-const DOOR_TARGETS: [string, string][] = Object.values(ZONES).filter((z) => !z.roomOf).map((z) => [z.id, `${z.nameTh} (${z.id})`]);
+/** Where a door may lead: the game's maps, then (set by the page from its map list) the maps made in the editor. */
+let DOOR_TARGETS: [string, string][] = Object.values(ZONES).filter((z) => !z.roomOf).map((z) => [z.id, `${z.nameTh} (${z.id})`]);
+export function setDoorTargets(extra: [string, string][]): void {
+  DOOR_TARGETS = [...Object.values(ZONES).filter((z) => !z.roomOf && !z.custom).map((z): [string, string] => [z.id, `${z.nameTh} (${z.id})`]), ...extra];
+}
 
 function pinsOf(m: MapData): Pin[] {
   const out: Pin[] = [];

@@ -135,7 +135,7 @@ export async function adminApi(
   if (await reportsAdminApi(req, res, path, method, db)) return;
   if (await rolesAdminApi(req, res, path, method, url, db)) return;
   if (await itemsAdminApi(req, res, path, method, db, world)) return;
-  if (await mapsAdminApi(req, res, path, method, db)) return;
+  if (await mapsAdminApi(req, res, path, method, db, world)) return;
 
   if (method === 'GET' && path === '/api/admin/me') {
     const a = requireAdmin(req, db);
