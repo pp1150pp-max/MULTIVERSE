@@ -21,7 +21,7 @@ import { paperSwordOn } from './rig/paperSwitch';
 import { rigLookOf } from '../shared/rigLookTuning';
 import { currentBalance } from '../shared/balance';
 import { animSets, decalTex, fxTex, sheets } from './assets';
-import { PassiveAura, type Effects, type ShotSprite } from './effects';
+import { BOSS_ORDER, PassiveAura, type Effects, type ShotSprite } from './effects';
 import type { ProjectileLike } from './backend';
 
 type AnimEvent = Extract<SimEvent, { t: 'anim' }>;
@@ -342,6 +342,8 @@ export class MonsterView {
 
   constructor(readonly m: Monster, private readonly scene: THREE.Scene) {
     this.actor = new SpriteActor(sheets[m.def.id], m.def.height, m.def.radius * 1.1);
+    // Over its own skill pictures (Effects: `under`), which go after the ground layer.
+    if (m.isBoss) this.actor.sprite.renderOrder = BOSS_ORDER;
     this.debuffFx = new DebuffFx(this.actor.group);
     this.circle = new MagicCircle(this.actor.group, Math.max(1.4, m.def.radius * 3));
     this.actor.face(m.faceX, m.faceZ);

@@ -35,6 +35,16 @@ async function cut(name, rows) {
       d[i + 2] = Math.min(d[i + 2], d[i + 1] + 60);
     }
   }
+  // Magenta left on the edges of grey smoke, rock and mud (red and blue both above green) turns it pink: take
+  // it off. Fire (blue below green), ice (red below green) and white are untouched.
+  for (let i = 0; i < d.length; i += 4) {
+    if (!d[i + 3]) continue;
+    const m = Math.min(d[i], d[i + 2]) - d[i + 1];
+    if (m > 0 && Math.abs(d[i] - d[i + 2]) < 70) {
+      d[i] -= m;
+      d[i + 2] -= m;
+    }
+  }
   if (name === 'witch') {
     const rowH = h / rows;
     for (const [a, b] of LANTERN) {
