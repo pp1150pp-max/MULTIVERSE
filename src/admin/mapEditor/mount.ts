@@ -16,6 +16,7 @@ import { pick } from './history';
 import { mountRevisions, type RevisionPerms } from './revisions';
 import { transformProps, normDeg, centroid } from './geom';
 import { compareOverlay } from './compare';
+import { brushTool, type BrushTool } from './brushTool';
 
 type Kids = (Node | string | null | undefined | false)[];
 export type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, unknown>, ...kids: Kids) => HTMLElementTagNameMap[K];
@@ -32,7 +33,7 @@ const MAP_NAMES: Record<string, string> = {
   frost_reach_room: 'ห้องบอส · ถ้ำเยติ', ashen_isle_room: 'ห้องบอส · แกนกลางภูเขาไฟ',
 };
 /** In a boss room these tools make no sense (no doors, monster spawns, NPCs, paths or lakes there): only pieces, borders and the spawn pin stay. */
-const ROOM_TOOLS = new Set(['select', 'place', 'blocker', 'startpin']);
+const ROOM_TOOLS = new Set(['select', 'place', 'scatter', 'blocker', 'startpin']);
 const SAVE_DELAY_MS = 1000;
 /** The sprite keys a map may use (same list as the server's check). */
 const PROP_KEYS = CATALOG.props.filter((p) => p.inSheetSpecs).map((p) => p.key);
@@ -344,12 +345,14 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
     const place = placeTool();
     e.addTool(selectTool());
     e.addTool(place);
+    scatterBrush = brushTool(() => { renderInspector(true); renderPalette(); });
+    e.addTool(scatterBrush);
     for (const t of [pinTool(), spawnTool(), blockerTool(), pathTool(), lakeTool(), playerStartTool()]) e.addTool(t);
     allTools = [...e.tools];
     placeBrush = place;
     e.onChange = () => { scheduleSave(); renderInspector(false); };
     e.onSelect = () => renderInspector(true);
-    e.onTool = () => { renderTools(); renderInspector(true); };
+    e.onTool = () => { renderTools(); renderInspector(true); renderPalette(); };
     e.onHistory = () => refreshTop();
     renderTools();
     renderOptions();
@@ -358,6 +361,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
     wireDrop();
   }
   let placeBrush: ReturnType<typeof placeTool> | null = null;
+  let scatterBrush: BrushTool | null = null;
   let allTools: Tool[] = [];
 
   /** Boss rooms get only the tools that can change something there; every other map gets all but the room's spawn pin. */
@@ -520,6 +524,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
   }
 
   // -------------------------------------------------------------- palette
+  const scattering = (): boolean => !!scatterBrush && ed?.tool === scatterBrush;
   function renderPalette(): void {
     const q = search.value.trim().toLowerCase();
     const cat = catSel.value;
@@ -530,8 +535,13 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
         ondragstart: (ev: DragEvent) => { dragKey = p.key; ev.dataTransfer?.setData('text/plain', p.key); if (ev.dataTransfer) ev.dataTransfer.effectAllowed = 'copy'; },
         ondragend: () => { dragKey = null; if (ed) { ed.ghost = null; ed.requestDraw(); } } });
       return h('button', {
-        class: `me-item${placeBrush?.brush === p.key ? ' on' : ''}`, title: `${p.key} · ${p.category}`,
-        onclick: () => { if (!ed || !placeBrush) return; placeBrush.brush = p.key; ed.setTool('place'); renderPalette(); },
+        class: `me-item${(scattering() ? scatterBrush!.keys.has(p.key) : placeBrush?.brush === p.key) ? ' on' : ''}`, title: `${p.key} · ${p.category}${scattering() ? ' · คลิก = เลือก/เอาออกจากแปรง' : ''}`,
+        onclick: () => {
+          if (!ed) return;
+          if (scattering()) { scatterBrush!.toggle(p.key); return; } // the brush picks several kinds
+          if (!placeBrush) return;
+          placeBrush.brush = p.key; ed.setTool('place'); renderPalette();
+        },
       }, img, h('span', {}, p.key));
     }));
   }
