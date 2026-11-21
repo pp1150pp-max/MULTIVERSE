@@ -530,3 +530,6 @@ button.more:hover { color: var(--gold-hi); text-decoration: underline; }
 @media (max-width: 640px) { .me-body { grid-template-columns: 1fr; grid-template-areas: "canvas" "left" "right"; } }
 .me-revbox { margin-top: 12px; }
 .me-revs { max-height: 220px; overflow: auto; margin-bottom: 6px; }
+.me-cmp-list { max-height: 260px; overflow: auto; display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
+.me-cmp-item { text-align: left; white-space: normal; font-size: 12px; padding: 3px 6px; min-height: 0; }
+.me-cmp-item.on { outline: 1px solid var(--accent, #6cf); }

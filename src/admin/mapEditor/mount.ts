@@ -15,6 +15,7 @@ import { blockerTool, lakeTool, pathTool } from './shapeTools';
 import { pick } from './history';
 import { mountRevisions, type RevisionPerms } from './revisions';
 import { transformProps, normDeg, centroid } from './geom';
+import { compareOverlay } from './compare';
 
 type Kids = (Node | string | null | undefined | false)[];
 export type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, unknown>, ...kids: Kids) => HTMLElementTagNameMap[K];
@@ -90,6 +91,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
   const paletteCount = h('span', { class: 'muted' });
 
   const revBox = h('div', { class: 'me-revbox' });
+  const overlay = compareOverlay();
   const root = h('div', { class: 'me' },
     h('div', { class: 'me-top' }, mapSel, undoBtn, redoBtn, checkBtn, solidBtn, fitBtn, previewBtn, latestBtn, status, diffText, publishBtn),
     h('div', { class: 'me-body' },
@@ -106,6 +108,17 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
   const reloadRevs = mountRevisions(revBox, h, api, perms, () => current, (rev) => {
     if (ed) setStatus(`ย้อนกลับแล้ว เผยแพร่เป็น rev ${rev} · ร่างในตัวแก้ยังเป็นของเดิม (กด "โหลดที่เผยแพร่ล่าสุด" ถ้าจะเริ่มจากฉบับนี้)`, 'warn');
     void refreshRows();
+  }, {
+    draft: () => ed?.map ?? null,
+    bundled: () => MapRegistry.bundled(current),
+    show: (s) => { if (ed) overlay.set(ed, s); },
+    jump: (it) => {
+      if (!ed) return;
+      const at = it.to ?? it.from;
+      if (it.list === 'props' && it.kind !== 'removed' && ed.map.props.some((p) => p.id === it.id)) { ed.setTool('select'); ed.select([it.id]); }
+      if (at) { if (ed.view.scale < 12) ed.view.scale = 16; ed.centerOn(at[0], at[1]); }
+      canvas.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    },
   });
 
   // -------------------------------------------------------------- status and saving
@@ -327,6 +340,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
     (canvas as HTMLCanvasElement & { editor?: Editor }).editor = e; // a handle for checking the page from the console
     e.layerState.decor = { visible: false, locked: false }; // a sample, off until asked for
     for (const l of CORE_LAYERS) e.addLayer(l);
+    e.addLayer(overlay.layer);
     const place = placeTool();
     e.addTool(selectTool());
     e.addTool(place);
@@ -388,7 +402,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
   function renderLayers(): void {
     if (!ed) return;
     const e = ed;
-    const hidden = e.map.room ? ['selection', 'ghost', 'markers'] : ['selection', 'ghost', 'roomGuide'];
+    const hidden = e.map.room ? ['selection', 'ghost', 'markers', 'compare'] : ['selection', 'ghost', 'roomGuide', 'compare'];
     layerBox.replaceChildren(...e.layers.filter((l) => !hidden.includes(l.id)).map((l) => h('div', { class: 'me-layer' },
       h('label', {}, h('input', { type: 'checkbox', checked: e.layerState[l.id].visible, onchange: (ev: Event) => { e.layerState[l.id].visible = (ev.target as HTMLInputElement).checked; e.requestDraw(); } }), ` ${l.label}`),
       l.pickable ? h('label', { title: 'ล็อก = เลือก/ลากไม่ได้' }, h('input', { type: 'checkbox', checked: e.layerState[l.id].locked, onchange: (ev: Event) => { e.layerState[l.id].locked = (ev.target as HTMLInputElement).checked; if (e.layerState[l.id].locked) e.select([]); } }), ' 🔒') : null)));
