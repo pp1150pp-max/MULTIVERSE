@@ -47,6 +47,9 @@ const AURA: { color: string; size: number; sparks: number }[] = [
 ];
 
 
+/** The gold of the light around a player who just got up with a phoenix feather. */
+const GUARD_GOLD = '#ffd04a';
+
 export class PlayerView {
   readonly actor: Actor;
   private aura: THREE.Mesh | null = null;
@@ -70,6 +73,8 @@ export class PlayerView {
   private passiveId: string | undefined;
   /** A magic circle under the feet while a skill buff runs (magicCircles.ts). */
   private readonly circle: MagicCircle;
+  /** Gold light around the body while untouchable after a phoenix-feather revive (made on first use). */
+  private guardGlow: THREE.Sprite | null = null;
 
   constructor(readonly p: Player, private readonly scene: THREE.Scene) {
     const anim = animSets[p.cls.id];
@@ -106,7 +111,7 @@ export class PlayerView {
     this.orbs.update(this.clock, p.x, p.z, p.orbs, true, orbItemLook(shownCos(p, 'orb')?.id) ?? null);
     this.cos.update(dt, p, fx);
     this.updateToad(dt, fx);
-    this.updateGuardBlink();
+    this.updateGuardBlink(dt, fx);
     this.updatePassiveAura(dt);
     this.circle.set(p.alive && p.toadT <= 0 ? buffCircle(p.buffBits, p.buffSkill) : null);
     this.circle.update(dt);
@@ -158,12 +163,34 @@ export class PlayerView {
     this.toad.update(dt, false, 6);
   }
 
-  /** Untouchable after a phoenix-feather revive: the character blinks (owner 2026-11-20), everyone sees it. */
-  private updateGuardBlink(): void {
+  /**
+   * Untouchable after a phoenix-feather revive, everyone sees it: a gold light glowing around the body with gold sparks
+   * rising (owner 2026-11-21, /admin fxLayer.guardGlow). Off = the character blinks instead (owner 2026-11-20).
+   */
+  private updateGuardBlink(dt: number, fx: Effects): void {
     const p = this.p;
     const toad = p.alive && p.toadT > 0;
-    const off = p.alive && p.guardT > 0 && Math.floor(this.clock * 8) % 2 === 0;
+    const guard = p.alive && p.guardT > 0 && !toad;
+    const glow = guard && currentBalance().fxLayer.guardGlow;
+    const off = guard && !glow && Math.floor(this.clock * 8) % 2 === 0;
     this.actor.group.visible = !toad && !off;
+    if (glow && !this.guardGlow) {
+      this.guardGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: fxTex.glow, color: GUARD_GOLD, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.6,
+      }));
+      this.scene.add(this.guardGlow);
+    }
+    if (!this.guardGlow) return;
+    this.guardGlow.visible = glow;
+    if (!glow) return;
+    const pulse = Math.sin(this.clock * 4);
+    this.guardGlow.position.set(p.x, p.topY * 0.5, p.z);
+    this.guardGlow.scale.set(2.3 + pulse * 0.15, 2.9 + pulse * 0.15, 1);
+    this.guardGlow.material.opacity = 0.5 + pulse * 0.12;
+    if (Math.random() < 10 * dt) {
+      const ang = Math.random() * Math.PI * 2;
+      fx.puff(p.x + Math.cos(ang) * 0.45, 0.3 + Math.random() * 1.2, p.z + Math.sin(ang) * 0.45, GUARD_GOLD, 0.7, 0.3);
+    }
   }
 
   /**
@@ -289,6 +316,10 @@ export class PlayerView {
   dispose(): void {
     this.circle.dispose();
     this.disposeAura();
+    if (this.guardGlow) {
+      this.scene.remove(this.guardGlow);
+      this.guardGlow.material.dispose();
+    }
     this.disposePassiveAura();
     if (this.toad) {
       this.scene.remove(this.toad.group);
