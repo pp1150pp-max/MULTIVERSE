@@ -194,8 +194,12 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
         setStatus('แมพยังไม่ผ่านการตรวจ เผยแพร่ไม่ได้ ดูข้อผิดพลาดด้านซ้าย', 'bad');
         return;
       }
+      await refreshRows(); // is the draft still based on the newest published revision?
+      const live = rows.find((r) => r.id === current)?.publishedRev;
+      const stale = live != null && live > (ed.map.rev ?? 0)
+        ? `⚠️ ร่างนี้ทำจาก rev ${ed.map.rev} แต่ตอนนี้ใช้ rev ${live} อยู่ (มีคนเผยแพร่หลังคุณเริ่มแก้) เผยแพร่ร่างนี้จะทับงานในฉบับใหม่ ชิ้นที่ "ลบ" ด้านล่างรวมของที่เขาเพิ่มด้วย\n\n` : '';
       const d = diff;
-      const text = `เผยแพร่แมพ "${MAP_NAMES[current] ?? current}"?\n\n${d ? `เพิ่ม ${d.added} · ลบ ${d.removed} · แก้ ${d.changed} ชิ้น` : 'ไม่มีข้อมูลสรุปการเปลี่ยน'}\n\nห้องที่เปิดใหม่ใช้ทันที ห้องที่มีคนอยู่ใช้ตอนผู้เล่นเข้าแมพนี้ครั้งถัดไป`;
+      const text = `${stale}เผยแพร่แมพ "${MAP_NAMES[current] ?? current}"?\n\n${d ? `เพิ่ม ${d.added} · ลบ ${d.removed} · แก้ ${d.changed} ชิ้น` : 'ไม่มีข้อมูลสรุปการเปลี่ยน'}\n\nห้องที่เปิดใหม่ใช้ทันที ห้องที่มีคนอยู่ใช้ตอนผู้เล่นเข้าแมพนี้ครั้งถัดไป`;
       if (!confirm(text)) return;
       setStatus('กำลังเผยแพร่…');
       const r = await api<{ rev: number }>('POST', `/admin/maps/${current}/publish`, {});
@@ -214,6 +218,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
   /** Drops the saved draft and loads the newest published layout (or the bundled file when none was published yet). */
   async function loadLatest(): Promise<void> {
     if (!ed) return;
+    try { await refreshRows(); } catch (err) { setStatus(`โหลดรายการแมพไม่สำเร็จ: ${errText(err)}`, 'bad'); return; } // others may have published since the page opened
     const row = rows.find((r) => r.id === current);
     const from = row?.publishedRev != null ? `rev ${row.publishedRev} ที่เผยแพร่ล่าสุด` : 'ไฟล์ที่มากับเกม (ยังไม่เคยเผยแพร่)';
     if (!confirm(`ทิ้งการแก้ที่ยังไม่เผยแพร่ของแมพนี้ แล้วโหลด ${from} มาแทน?\n\nร่างที่บันทึกไว้จะถูกเขียนทับ`)) return;
@@ -304,7 +309,8 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
       if (!ed) startEditor(r.map); else ed.setMap(r.map);
       applyToolSet(r.map);
       const src = r.source === 'draft' ? 'ร่างที่บันทึกไว้' : r.source === 'published' ? `ที่เผยแพร่ล่าสุด (rev ${r.publishedRev})` : 'ไฟล์ที่มากับเกม';
-      setStatus(`โหลด${src}แล้ว · ${r.map.props.length} ชิ้น`);
+      if (r.source === 'draft' && r.publishedRev !== null && r.baseRev < r.publishedRev) setStatus(`ร่างนี้ทำจาก rev ${r.baseRev} แต่มีการเผยแพร่ rev ${r.publishedRev} แล้ว · กด "↩ โหลดที่เผยแพร่ล่าสุด" ถ้าจะเริ่มจากฉบับที่ใช้อยู่ (ถ้าเผยแพร่ร่างนี้ ของที่เพิ่มในฉบับใหม่จะหาย)`, 'warn');
+      else setStatus(`โหลด${src}แล้ว · ${r.map.props.length} ชิ้น`);
       renderIssues();
       renderInspector(true);
       refreshTop();
