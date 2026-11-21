@@ -75,4 +75,18 @@ const tr = evs.find((e) => e.t === 'travel') as { zone: string; spot?: { x: numb
 ok(tr?.zone === 'nexus_city' && tr.spot?.x === 3 && tr.spot?.z === 4, 'getting up takes you out by the door');
 ok(sim2.leaveRoom(q) === null, 'the leave button works at any time');
 
+// Wave monsters hunt the player: a player far from the spots (past the old 22-unit leash) is chased, nobody walks home (bug 2026-11-21).
+{
+  const sim3 = new Sim(zone, { waves: { ...cfg, countdown: 0 }, exit });
+  const h = sim3.addPlayer({ name: 'H', classId: 'sword', level: 1, exp: 0, gold: 0, equipment: {}, bag: [] });
+  h.stats.maxHp = h.hp = 1e9;
+  h.x = 0; h.z = 30;
+  for (let t = 0; t < 0.2; t += TICK) sim3.step(TICK);
+  const mons = sim3.monsters.filter((m) => m.alive);
+  const d0 = mons.map((m) => Math.hypot(m.x - h.x, m.z - h.z));
+  for (let t = 0; t < 6; t += TICK) { h.x = 0; h.z = 30; sim3.step(TICK); }
+  const d1 = mons.map((m) => Math.hypot(m.x - h.x, m.z - h.z));
+  ok(mons.length > 0 && mons.every((m, i) => d1[i] < d0[i] - 3 && m.target === h && (m as unknown as { state: string }).state !== 'return'), `wave monsters chase a far player and never walk home (${d0.map(Math.round)} → ${d1.map(Math.round)})`);
+}
+
 finish('wave-game');
