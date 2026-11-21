@@ -230,7 +230,7 @@ function oldItem(): Item {
   p.addStones('reroll_values', 1);
   p.addStones('reroll_stat', 1);
   const gold = p.gold;
-  // Skip the 1 s blacksmith cooldown (FORGE_CD) so each call is judged on its own merits.
+  // Skip the 1 s blacksmith cooldown (forgeCd()) so each call is judged on its own merits.
   const reroll = (uid: string, kind: 'values' | 'stat') => ((p.forgeAt = -Infinity), sim.reroll(p, uid, kind));
   ok(reroll(item.uid, 'values') === item && p.gold === gold - rerollCost(item, 'values'), 'reroll values: done next to the blacksmith, gold taken');
   ok(reroll(item.uid, 'stat') === item && linesValid(item, 'sim'), 'reroll stat on a bag item');

@@ -161,7 +161,8 @@ for (const cls of ['sword', 'mage', 'gunslinger'] as const) {
     sim.drainEvents();
     castSkill(sim, p, sk, { x: 2, z: 0 }, 1);
     take();
-    for (let i = 0; i < 300; i++) { sim.step(1 / 30, () => IDLE_INTENT); take(); }
+    // 11 s: Hex Seed bursts when its 10 s seed runs out.
+    for (let i = 0; i < 330; i++) { sim.step(1 / 30, () => IDLE_INTENT); take(); }
     for (const [kind, name] of wants) ok(seen.has(`${kind}:${name}`), `${sk.id} plays ${kind} ${name} tagged with itself (saw ${[...seen].join(',')})`);
   }
 }
@@ -179,6 +180,29 @@ for (const cls of ['sword', 'mage', 'gunslinger'] as const) {
   sim.step(1 / 30, () => ({ ...IDLE_INTENT, dash: true, move: { x: 1, z: 0 } }));
   const dcue = sim.drainEvents().find((e) => e.t === 'fx' && e.name === 'burst' && (e.args as unknown[])[7] === 'dash');
   ok(!!dcue && dcue.t === 'fx' && (dcue.args as unknown[])[4] === 0 && (dcue.args as unknown[])[3] === cls, `${cls} dash cue`);
+}
+
+// Support Drone (owner 2026-11-19): one "drone" message per cast (owner id + life) and one per shot (angle), no position stream.
+{
+  const sim = new Sim(ZONE_1);
+  const m = sim.monsters.find((x) => !x.isBoss)!;
+  sim.monsters.length = 0;
+  sim.monsters.push(m);
+  m.x = 3;
+  m.z = 0;
+  m.hp = 1e9;
+  const p = sim.addPlayer({ ...newCharacterData('Drone', 'gunslinger'), level: 40 });
+  p.x = 0;
+  p.z = 0;
+  p.mp = p.stats.maxMp;
+  castSkill(sim, p, CLASSES.gunslinger.skills.find((s) => s.id === 'gs_drone')!, { x: 3, z: 0 }, 1);
+  const msgs: unknown[][] = [];
+  for (let i = 0; i < 150; i++) {
+    sim.step(1 / 30, () => IDLE_INTENT);
+    for (const e of sim.drainEvents()) if (e.t === 'fx' && e.name === 'drone') msgs.push(e.args as unknown[]);
+  }
+  ok(msgs.length >= 2 && msgs[0][0] === p.id && (msgs[0][1] as number) > 0 && msgs[0].length === 2, `drone appears once with its life (${JSON.stringify(msgs[0])})`);
+  ok(msgs.slice(1).every((a) => a[0] === p.id && a[1] === 0 && typeof a[2] === 'number'), 'each shot is (owner, 0, angle)');
 }
 
 finish('fx-layer');

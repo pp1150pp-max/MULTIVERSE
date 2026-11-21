@@ -1,0 +1,60 @@
+:root {
+  --ink: #e8e2d0;
+  --ink-dim: #b9b09a;
+  --gold: #c9a85a;
+  --gold-hi: #f2d58a;
+  --panel: rgba(20, 18, 16, 0.95);
+  --panel-edge: #8f7238;
+  --hp: #d8323c;
+  --mp: #3a7bff;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #0d140c;
+  color: var(--ink);
+  font-family: 'Kanit', system-ui, sans-serif;
+  user-select: none;
+  /* Phones and tablets: the page never scrolls, bounces, pull-to-refreshes, or shows the long-press
+     callout / tap flash (mobile plan 5.2, 5.8). Nothing changes with a mouse. */
+  position: fixed; inset: 0;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+input, textarea { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+/* Touch: no double-tap zoom or 300ms delay on buttons; the game canvas takes every gesture itself. */
+button { touch-action: manipulation; }
+#app > canvas { touch-action: none; }
+/* Lists that scroll keep the scroll to themselves instead of passing it on to the page. */
+.inv-side, #log.open, #menu, #loading, #forge-rates, #market .ui-tab-body, .party-results, #mail-win .mail-list,
+#mail-win .mail-text, #trade-find-results, #friends-win .friends-list, #channels-win .ch-list, #cos-win .cos-grid { overscroll-behavior: contain; }
+
+body.cursor-attack canvas { cursor: crosshair; }
+body.cursor-use canvas { cursor: pointer; }
+
+#app { position: fixed; inset: 0; }
+#app > canvas { display: block; position: absolute; inset: 0; }
+
+.hidden { display: none !important; }
+
+button {
+  font-family: inherit;
+  color: var(--ink);
+  background: linear-gradient(#3a342c, #1e1a15);
+  border: 1px solid #8f7238;
+  box-shadow: inset 0 0 0 1px #0d0a07, 0 1px 0 #000;
+  border-radius: 3px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+button:hover { border-color: var(--gold-hi); color: #fff; }
+button.primary { background: linear-gradient(#d0a23e, #8a6420); border-color: var(--gold-hi); color: #24170a; font-weight: 600; }
+button.primary:hover { color: #000; filter: brightness(1.1); }
+

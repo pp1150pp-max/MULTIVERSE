@@ -73,6 +73,9 @@ export function banMessage(until: number, reason: string): string {
 export const GOOGLE_LOGIN_SETTING = 'google_login';
 /** Whether the Login page shows the Google button (switched on and the client file in place). */
 export interface GoogleConfigResponse { enabled: boolean }
+/** GET /api + this: where the game connection may go directly (src/client/net/route.ts); null = only through the tunnel. */
+export const NET_ROUTE_PATH = '/net-route';
+export interface NetRouteResponse { direct: string | null }
 /** login: log in or make an account (a guest on this browser moves into a new one) · link: add Google to the logged-in account · upgrade: the guest becomes a Google account. */
 export interface GoogleStartRequest { mode: 'login' | 'link' | 'upgrade'; guestToken?: string }
 export interface GoogleStartResponse { url: string }

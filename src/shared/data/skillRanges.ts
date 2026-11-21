@@ -50,7 +50,7 @@ export const SKILL_REACH: Record<string, SkillReach> = {
   mg_searingmark: { kind: 'shot', range: 12, blast: 3 },
   mg_decayring: { kind: 'self', radius: 3.5 },
   mg_thunderstorm: { kind: 'point', range: 11, radius: 5 },
-  mg_crystalspikes: { kind: 'point', range: 9, radius: 7 },
+  mg_crystalspikes: { kind: 'point', range: 9, radius: 4 },
   mg_cursedash: { kind: 'cone', range: 6 },
   mg_hexseed: { kind: 'point', range: 10, radius: 3.5 },
   mg_firerain: { kind: 'point', range: 12, radius: 5 },

@@ -2,56 +2,48 @@ import { SPACE_COLOUR } from './island';
 import { placeLabel } from '../shared/channels';
 import type { Game } from './Game';
 import { NPC_USE_RANGE, type NpcId } from '../shared/data/npcs';
-import type { SkillSlot } from '../shared/data/classes';
+import { LEARNABLE_SKILLS, type SkillSlot } from '../shared/data/classes';
+import { keyLabel, keyOf, onKeysChange } from './keybinds';
 import { reachRadius, reachText } from '../shared/data/skillRanges';
 import { rankedDmg, skillParamLines, skillReach } from '../shared/skillBook';
+import { effectiveStats, enhanceBonus, itemName, plusOf, sellValue } from '../shared/data/enhance';
 import {
-  bonusPct, DROP_ON_FAIL_FROM, dropsOnFail, FORGE_CD, effectiveStats, enhanceBonus, enhanceCost, ENHANCE_STONES_PER_TRY, itemName,
-  MAX_PLUS, PITY_STEP, pityBonus, plusOf, rateFor, sellValue, STONE_FROM, stonesNeeded, successRate,
-} from '../shared/data/enhance';
-import {
-  entryName, POTION_SIZES, POTION_SIZE_LABEL, POTION_STACK, potionHeal, potionPrice, potionName, potionSellPrice, stackLimit,
+  entryName, POTION_SIZE_LABEL, POTION_STACK, potionHeal, potionName, potionSellPrice, stackLimit,
 } from '../shared/data/potions';
-import { BUFF_LABEL, MONSTER_STONES, REROLL_STONE, RETURN_CAST, RETURN_SCROLL_PRICE, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_STACK, stoneSellPrice, stoneStackValue, stoneUnit, PHOENIX_PRICE } from '../shared/data/stones';
-import { lineRanges, rerollBlock, statRerollOdds } from '../shared/data/items';
-import { REROLL_NAME, rerollCost, type RerollKind } from '../shared/data/reroll';
-import { FullMap } from './fullmap';
-import { AUTO_PX_PER_UNIT, AUTO_RANGE_MAX, AUTO_RANGE_MIN, buybackPrice, cleanAutoSettings, lootPots, type AutoSkill, type Buffs, type LootFilter, type SortKey } from '../shared/sim/Player';
-import { isBulkSellable } from '../shared/sim/Sim';
-import { nextRowPrice, STASH_MAX, STASH_ROW, STASH_ROW_PRICES, STASH_START } from '../shared/sim/stash';
+import { BUFF_LABEL, MONSTER_STONES, RETURN_CAST, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_STACK, stoneSellPrice, stoneUnit } from '../shared/data/stones';
+import { lootPots, type Buffs, type LootFilter, type SortKey } from '../shared/sim/Player';
 import { MONSTERS } from '../shared/data/monsters';
 import { currentBalance } from '../shared/balance';
 import { SET_MAX_PIECES, setInfo } from '../shared/data/sets';
-import { AUTO_DEFAULT_KEYS, AUTO_LOOT_ORDER_NAME, AUTO_LOOT_ORDERS, AUTO_OUT_ACTION_NAME, AUTO_OUT_ACTIONS, AUTO_TARGET_MODES, AUTO_TARGET_NAME } from '../shared/autoTuning';
 import { ZONE_1 } from '../shared/data/zones';
 import { expToNext } from '../shared/formulas';
 import { blockingGate } from '../shared/data/bossGates';
 import {
   BUFF_SCROLLS, isBossKey, isBound, isBoundKind, isBuffScroll, isConsumable, isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
-  type BagEntry, type Item, type StatLine, type PotionKind, type PotionSize, type PotionStack, type Rarity, type StoneStack, type StoneKind, type EquipSlot, type StatKey,
+  type BagEntry, type Item, type PotionKind, type PotionStack, type StoneStack, type EquipSlot, type StatKey,
 } from '../shared/types';
 import { drawEdgeMarker, drawMapIcon, drawPin, facingAngle, partyDot } from './mapIcons';
 import type { MapIcon } from './mapIconNames';
 import { NPC_MAP_ICON } from './fullmap';
 import { MarketWindow } from './market';
 import { playSound } from './audio/sfx';
-import { COIN_ICON, emptySlotIcon, FORGE_ICON, itemIcon, potionIcon, skillIcon, stoneIcon } from './icons';
+import { COIN_ICON, emptySlotIcon, itemIcon, potionIcon, skillIcon, stoneIcon } from './icons';
 import { shutdownCancelled, shutdownWarning, type ShutdownMode } from '../shared/net/protocol';
 import { isTouchMode, onPointerModeChange } from './touch/device';
 import { FashionBag } from './fashionBag';
 import { imgUrl } from './img';
+import { $, entryColor, lineHtml, POTION_COLOR, potionTotals, potToggles, readPots, syncPots } from './ui/hudShared';
+import { ForgeWindow } from './ui/forge';
+import { ShopWindow } from './ui/shop';
+import { StashWindow } from './ui/stash';
+import { AutoSettingsWindow } from './ui/autoSettings';
+import { MapWindow } from './ui/mapWindow';
+import { ItemDetail } from './ui/itemDetail';
 
 /** Yellow, like the game's level-up lines. */
 const SHUTDOWN_COLOR = '#ffd34a';
 /** How long an owner's announcement banner stays up. */
 const ANNOUNCE_MS = 10_000;
-/** Enhance tries whose target level is this or higher show "??" instead of the success chance (display only). */
-const HIDDEN_RATE_FROM = 11;
-
-const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-
-/** What the touch detail sheet shows: a bag slot, a stash slot or a worn item. */
-type DetailAt = { bag: number } | { stash: number } | { slot: EquipSlot };
 
 /** Lines of chat and messages kept for scrolling back (with the chat open); while playing only the newest 9 show (style.css). */
 const LOG_KEEP = 50;
@@ -76,37 +68,12 @@ function loadHudStyle(): HudStyle {
   }
 }
 
-const KEY_LABEL: Record<SkillSlot, string> = { basic: 'LMB', q: 'Q', e: 'E', r: 'R', dash: 'SPACE' };
+/** The label on each skill-bar button: the mouse for the basic attack, else the key the player has it on (keybinds.ts). */
+const keyFor = (slot: SkillSlot | 'hp' | 'mp'): string => (slot === 'basic' ? 'LMB' : keyLabel(keyOf(slot)));
 const POTION_CD = 1.5;
-/** The blacksmith menu's one-line description of each system (left column, under the menu). */
-const FORGE_DESC: Record<'enhance' | RerollKind, string> = {
-  enhance: 'เพิ่มระดับ +N ทุกค่าบนชิ้นนั้นแรงขึ้นเป็น % · ยิ่งบวกสูง ยิ่งเสี่ยง',
-  values: 'สุ่มค่าตัวเลขใหม่ทุกบรรทัด tier เท่าเดิม',
-  stat: 'สุ่มสเตตัสเสริม 1 บรรทัด เป็นชนิดใหม่ พร้อม tier และค่าใหม่',
-};
-const fmtNum = (v: number) => String(Math.round(v * 10) / 10);
 
 /** What the chat box starts with to whisper someone (quoted when the name has a space). */
 export const whisperPrefix = (name: string): string => `/w ${name.includes(' ') ? `"${name}"` : name} `;
-const SELL_RARITY_KEY = 'multiverse-sell-rarities';
-/** Which rarities the merchant's "sell ticked" boxes had ticked last time (this browser only). */
-function loadSellRarities(): Rarity[] {
-  try {
-    const v: unknown = JSON.parse(localStorage.getItem(SELL_RARITY_KEY) ?? '[]');
-    return Array.isArray(v) ? RARITIES.filter((r) => v.includes(r)) : [];
-  } catch {
-    return [];
-  }
-}
-function saveSellRarities(rs: Rarity[]): void {
-  try {
-    localStorage.setItem(SELL_RARITY_KEY, JSON.stringify(rs));
-  } catch {
-    // Storage blocked: the ticks just won't be remembered.
-  }
-}
-
-const POTION_COLOR: Record<PotionKind, string> = { hp: '#e8323c', mp: '#3a7bff' };
 
 const SEEKER_LINES = [
   'ในที่สุดเจ้าก็ตื่นแล้ว… เจ้าคือผู้รอดชีวิตจากโลกที่ถูก The Devourer กลืนกิน',
@@ -117,45 +84,14 @@ const SEEKER_LINES = [
   'จงเริ่มฝึกฝนที่ป่ามรกต ผ่านประตูมุมบนของเมือง ลึกเข้าไปในป่ามีหมีใหญ่ที่ถูกพลังนั้นครอบงำ หากเจ้าปราบมันได้ เราจะได้เบาะแสแรกของ The Origin',
 ];
 
-/** Six checkboxes: HP small/medium/large, MP small/medium/large. */
-function potToggles(): string {
-  return (['hp', 'mp'] as const).map((k) =>
-    `<span class="pot-group">ยา ${k.toUpperCase()}` +
-    POTION_SIZES.map((sz) => `<label><input type="checkbox" data-pot="${k}" data-size="${sz}">${POTION_SIZE_LABEL[sz]}</label>`).join('') +
-    '</span>',
-  ).join('');
-}
-
-function readPots(box: HTMLElement): LootFilter['pots'] {
-  const pick = (k: 'hp' | 'mp') =>
-    POTION_SIZES.filter((sz) => box.querySelector<HTMLInputElement>(`[data-pot="${k}"][data-size="${sz}"]`)?.checked);
-  return { hp: pick('hp'), mp: pick('mp') };
-}
-
-function syncPots(box: HTMLElement, f: LootFilter): void {
-  const pots = lootPots(f);
-  for (const cb of box.querySelectorAll<HTMLInputElement>('[data-pot]')) {
-    cb.checked = pots[cb.dataset.pot as 'hp' | 'mp'].includes(cb.dataset.size as 's' | 'm' | 'l');
-  }
-}
-
 /** Ping colours: green below PING_GOOD_MS, yellow below PING_OK_MS, red from there on. */
 const PING_GOOD_MS = 100;
 const PING_OK_MS = 250;
 
-/** A running Auto enhance: the item, the level to stop at, and whether to use protection stones. */
-type ForgeAutoRun = { uid: string; target: number; protect: boolean };
-/** Auto enhance waits this long past the cooldown bar before the next attempt (the server's cooldown is tick-based). */
-const FORGE_AUTO_GAP_MS = 200;
-
 export class Hud {
   dialogOpen = false;
-  private fullMap: FullMap;
-  private mapOpen = false;
   /** Index into MINIMAP_ZOOMS. */
   private mmZoom = 1;
-  /** The player's own map pin. Only for the zone object it was placed in, so a new visit starts clean. Never saved. */
-  private pin: { zone: object; x: number; z: number } | null = null;
   private slotEls: { kind: SkillSlot | PotionKind; el: HTMLElement; cd: HTMLElement; extra: HTMLElement }[] = [];
   private invDirty = true;
   /** The fashion page of the bag window (owned cosmetics). */
@@ -169,34 +105,21 @@ export class Hud {
   private drag: { src: 'bag' | 'stash' | 'equip'; i: number; x: number; y: number; ghost: HTMLElement | null } | null = null;
   /** True right after a drag ends, so the click that follows mouseup does nothing. */
   private justDragged = false;
-  /** Item uids last drawn in the buyback grid, so it is only rebuilt when the list changes. */
-  private buybackKey = '';
   private mmT = 0;
   private readonly mm: CanvasRenderingContext2D;
   private dialogIdx = 0;
-  private shopOpen = false;
-  private stashOpen = false;
-  private forgeOpen = false;
-  private forgeSel: string | null = null;
   private confirmYes: (() => void) | null = null;
   /** Set while the amount dialog (stack split / partial sell) is open. */
   private amountDone: ((n: number) => void) | null = null;
-  private enhancing = false;
-  /** performance.now() when the next blacksmith action may be sent (FORGE_CD after the last one). */
-  private forgeReadyAt = 0;
-  /** Use a protection stone on attempts that can drop the level (the forge's tick box; off until ticked). */
-  private forgeProtect = false;
-  /** The blacksmith's menu: enhance, or one of the rerolls. */
-  private forgeMode: 'enhance' | RerollKind = 'enhance';
-  /**
-   * Auto enhance while it runs (owner 2026-11-18): the item, the level to stop at, and whether to use protection
-   * stones (taken from the tick box when it started). Browser side only: it sends the same enhance action as a click.
-   */
-  private forgeAuto: ForgeAutoRun | null = null;
-  /** Lines of the item before its last reroll, shown next to the new ones until another item is picked. */
-  private rerollPrev: { uid: string; lines: StatLine[] } | null = null;
 
   private readonly market: MarketWindow;
+  /** NPC windows and other windows split out of this file (src/client/ui/). */
+  private readonly forge: ForgeWindow;
+  private readonly shop: ShopWindow;
+  private readonly stash: StashWindow;
+  private readonly autoSet: AutoSettingsWindow;
+  private readonly map: MapWindow;
+  private readonly detail: ItemDetail;
   /** The chat history tab picked last ('all', 'chat', 'system', 'party' or 'whisper'). */
   private chatTab = 'all';
   /** Who whispered you last ("/r" answers them). */
@@ -205,7 +128,23 @@ export class Hud {
   private whisperWith = '';
 
   constructor(private readonly g: Game) {
+    // The skill-buff icons over the skill bar (owner 2026-11-19): point at one for that skill's details and time left.
+    const barBuffs = $('bar-buffs');
+    const buffTip = (e: MouseEvent) => {
+      const cell = (e.target as HTMLElement).closest<HTMLElement>('.vbuff');
+      if (cell?.dataset.skill) this.showBuffTip(cell.dataset.skill, e);
+      else this.hideTip();
+    };
+    barBuffs.addEventListener('mouseover', buffTip);
+    barBuffs.addEventListener('mousemove', buffTip);
+    barBuffs.addEventListener('mouseleave', () => this.hideTip());
     this.market = new MarketWindow(g, this);
+    this.shop = new ShopWindow(g, this);
+    this.stash = new StashWindow(g, this);
+    this.forge = new ForgeWindow(g, this);
+    this.autoSet = new AutoSettingsWindow(g);
+    this.map = new MapWindow(g);
+    this.detail = new ItemDetail(g, this, { forge: this.forge, shop: this.shop, stash: this.stash, market: this.market });
     $('hud').classList.remove('hidden');
     this.mm = $<HTMLCanvasElement>('minimap').getContext('2d')!;
     this.hudStyle = loadHudStyle();
@@ -214,7 +153,6 @@ export class Hud {
     // Big enough to show up late on first opening the bag, so it's fetched now.
     new Image().src = imgUrl('assets/sprites/ui/inventory.png');
     $('btn-hud-style').onclick = () => this.setHudStyle(this.hudStyle === 'orbs' ? 'bars' : 'orbs');
-    this.fullMap = new FullMap($<HTMLCanvasElement>('fullmap-canvas'));
     try {
       const saved = Number(localStorage.getItem(MINIMAP_ZOOM_KEY));
       if (Number.isInteger(saved) && saved >= 0 && saved < MINIMAP_ZOOMS.length) this.mmZoom = saved;
@@ -226,44 +164,16 @@ export class Hud {
     $('mm-search').onclick = () => this.toggleMap(true);
     $('mm-plus').onclick = () => this.setMinimapZoom(this.mmZoom + 1);
     $('mm-minus').onclick = () => this.setMinimapZoom(this.mmZoom - 1);
-    $('fullmap-close').onclick = () => this.toggleMap(false);
-    $('fullmap-canvas').addEventListener('click', (e) => {
-      const to = this.fullMap.toWorld(e.clientX, e.clientY);
-      // The map stays open so you can watch the route; M, Esc or ✕ close it.
-      this.g.walkTo(to.x, to.z);
-    });
-    // Right-click: put the pin there; right-click the pin itself to take it off.
-    $('fullmap-canvas').addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      const pin = this.myPin();
-      if (pin && this.fullMap.onPin(e.clientX, e.clientY, pin)) {
-        this.pin = null;
-      } else {
-        const to = this.fullMap.toWorld(e.clientX, e.clientY);
-        const h = this.g.world.half;
-        if (Math.abs(to.x) > h || Math.abs(to.z) > h) return;
-        this.pin = { zone: this.g.backend.zone, x: to.x, z: to.z };
-      }
-      this.syncPinUi();
-      this.fullMap.draw(this.g, this.myPin());
-    });
-    $('fullmap-clearpin').onclick = () => {
-      this.pin = null;
-      this.syncPinUi();
-      this.fullMap.draw(this.g, null);
-    };
     $('hud-name').textContent = g.player.name;
     this.showZoneName();
     $('hud-online').classList.toggle('hidden', !g.backend.online);
     $('hud-guest').classList.toggle('hidden', !g.backend.guest);
     this.buildSkillbar();
+    onKeysChange(() => this.buildSkillbar());
 
     $('btn-auto').onclick = () => g.toggleAuto();
     $('btn-bag').onclick = () => this.toggleBag();
     $('btn-help').onclick = () => this.toggleHelp();
-    $('btn-auto-set').onclick = () => this.toggleAutoSettings();
-    $('auto-set-close').onclick = () => this.toggleAutoSettings(false);
-    for (const id of ['aset-range', 'aset-hp', 'aset-mp', 'aset-loot', 'aset-lootorder', 'aset-others', 'aset-nohp', 'aset-nomp', 'aset-bagfull', 'aset-target']) $(id).addEventListener('change', () => this.applyAutoSettings());
     $('btn-respawn').onclick = () => g.respawn();
     $('inv-close').onclick = () => this.toggleBag(false);
     this.fashion = new FashionBag(g, () => this.hideTip());
@@ -332,33 +242,6 @@ export class Hud {
     });
     chat.addEventListener('blur', () => this.closeChat());
 
-    const bb = $('buyback-grid');
-    bb.addEventListener('click', (e) => {
-      const el = (e.target as HTMLElement).closest<HTMLElement>('[data-bb]');
-      const i = el ? Number(el.dataset.bb) : -1;
-      const entry = g.player.buyback[i];
-      if (!entry) return;
-      const price = buybackPrice(entry);
-      if (g.player.gold < price) {
-        this.log(`ทองไม่พอ — ต้องใช้ ${price.toLocaleString()} G`, '#ff8a6a');
-        return;
-      }
-      if (!g.player.hasBagSpace()) {
-        this.log('กระเป๋าเต็ม', '#ff8a6a');
-        return;
-      }
-      g.backend.buyBack(i, entry.item.uid);
-      this.hideTip();
-      this.afterTrade();
-    });
-    bb.addEventListener('mousemove', (e) => {
-      const el = (e.target as HTMLElement).closest<HTMLElement>('[data-bb]');
-      const entry = el ? g.player.buyback[Number(el.dataset.bb)] : undefined;
-      if (entry) this.showTip(entry.item, e, `คลิก: ซื้อคืน ${buybackPrice(entry).toLocaleString()} G`);
-      else this.hideTip();
-    });
-    bb.addEventListener('mouseleave', () => this.hideTip());
-
     const bag = $('bag-grid');
     this.setupDrag(bag, 'bag');
     this.setupDragEnd();
@@ -368,7 +251,7 @@ export class Hud {
       const i = this.cellIndex(e);
       if (i < 0 || !g.player.bag[i]) return;
       e.stopImmediatePropagation();
-      this.openDetail({ bag: i });
+      this.detail.openDetail({ bag: i });
     }, true);
     bag.addEventListener('click', (e) => {
       if (this.justDragged) return;
@@ -387,9 +270,9 @@ export class Hud {
         return;
       }
       // At the blacksmith a click on gear puts it in the forge's slot instead of wearing it.
-      if (this.forgeOpen && isItem(entry)) {
+      if (this.forge.isOpen && isItem(entry)) {
         this.hideTip();
-        this.forgePlace(entry);
+        this.forge.forgePlace(entry);
         return;
       }
       const block = isItem(entry) ? g.player.equipBlock(entry) : null;
@@ -412,7 +295,7 @@ export class Hud {
         g.trade.offer(i);
         return;
       }
-      if (this.stashOpen) {
+      if (this.stash.isOpen) {
         g.backend.stashPut(i, -1);
         this.markInventory();
         return;
@@ -421,9 +304,9 @@ export class Hud {
         this.market.bagRightClick(i);
         return;
       }
-      const name = `<b style="color:${this.entryColor(item)}">${entryName(item)}</b>`;
-      if (this.shopOpen) {
-        this.sellFromBag(i);
+      const name = `<b style="color:${entryColor(item)}">${entryName(item)}</b>`;
+      if (this.shop.isOpen) {
+        this.shop.sellFromBag(i);
         return;
       }
       const dropAsk = () => this.askDrop(i);
@@ -439,7 +322,7 @@ export class Hud {
       if (this.drag?.ghost || isTouchMode()) return;
       const i = this.cellIndex(e);
       const item = i >= 0 ? g.player.bag[i] : null;
-      const right = this.stashOpen ? 'ฝากเข้าคลัง' : this.market.isOpen ? 'เลือกมาลงขายในตลาด' : this.shopOpen ? (isStack(item) ? 'ขายทั้งช่อง' : 'ขาย') : 'วางลงพื้น';
+      const right = this.stash.isOpen ? 'ฝากเข้าคลัง' : this.market.isOpen ? 'เลือกมาลงขายในตลาด' : this.shop.isOpen ? (isStack(item) ? 'ขายทั้งช่อง' : 'ขาย') : 'วางลงพื้น';
       const split = item && isStack(item) && item.count > 1 ? ' · Shift+ลาก: แบ่งกอง' : '';
       if (g.trade.open && item) {
         const part = isStack(item) && item.count > 1 ? ' · Shift+ลากไปที่หน้าต่างเทรด: เสนอบางส่วน' : '';
@@ -450,7 +333,7 @@ export class Hud {
       else if (isStone(item)) this.showStoneTip(item, e, `${item.stone === 'return_scroll' ? 'คลิกซ้าย / ปุ่ม G: ใช้ · ' : isBuffScroll(item.stone) || item.stone === 'megaphone' ? 'คลิกซ้าย: ใช้ · ' : ''}คลิกขวา: ${right}${split}`);
       else if (item) {
         const both = item.slot === 'ring' && g.player.equipment.ring && g.player.equipment.ring2;
-        if (this.forgeOpen) this.showTip(item, e, `คลิกซ้าย / ลาก: วางที่ช่างตีเหล็ก · คลิกขวา: ${right}`);
+        if (this.forge.isOpen) this.showTip(item, e, `คลิกซ้าย / ลาก: วางที่ช่างตีเหล็ก · คลิกขวา: ${right}`);
         else this.showTip(item, e, `คลิกซ้าย: สวมใส่${both ? ' (แทนแหวน 1 · ลากไปช่องแหวน 2 เพื่อแทนวงนั้น)' : ''} · คลิกขวา: ${right}`);
       }
       else this.hideTip();
@@ -492,7 +375,7 @@ export class Hud {
     // Worn gear can only be dragged to the blacksmith's slot, so dragging starts only while it is open.
     eq.addEventListener('mousedown', (e) => {
       const slot = eqSlot(e);
-      if (e.button !== 0 || !this.forgeOpen || !slot || !g.player.equipment[slot]) return;
+      if (e.button !== 0 || !this.forge.isOpen || !slot || !g.player.equipment[slot]) return;
       e.preventDefault();
       this.drag = { src: 'equip', i: EQUIP_SLOTS.indexOf(slot), x: e.clientX, y: e.clientY, ghost: null };
     });
@@ -501,16 +384,16 @@ export class Hud {
       const slot = eqSlot(e);
       if (!slot || !g.player.equipment[slot]) return;
       e.stopImmediatePropagation();
-      this.openDetail({ slot });
+      this.detail.openDetail({ slot });
     }, true);
     eq.addEventListener('click', (e) => {
       if (this.justDragged) return;
       const slot = eqSlot(e);
       if (!slot) return;
       this.hideTip();
-      if (this.forgeOpen) {
+      if (this.forge.isOpen) {
         const item = g.player.equipment[slot];
-        if (item) this.forgePlace(item);
+        if (item) this.forge.forgePlace(item);
         return;
       }
       g.backend.unequip(slot);
@@ -520,67 +403,11 @@ export class Hud {
       if (this.drag?.ghost || isTouchMode()) return;
       const slot = eqSlot(e);
       const item = slot ? g.player.equipment[slot] : undefined;
-      if (item) this.showTip(item, e, this.forgeOpen ? 'คลิก / ลาก: วางที่ช่างตีเหล็ก' : 'คลิก: ถอดเก็บเข้ากระเป๋า');
+      if (item) this.showTip(item, e, this.forge.isOpen ? 'คลิก / ลาก: วางที่ช่างตีเหล็ก' : 'คลิก: ถอดเก็บเข้ากระเป๋า');
       else this.hideTip();
     });
     eq.addEventListener('mouseleave', () => this.hideTip());
 
-    // Merchant
-    $('shop-close').onclick = () => this.closeShop();
-    $('shop-tabs').addEventListener('click', (e) => {
-      const t = (e.target as HTMLElement).closest<HTMLElement>('[data-tab]');
-      if (t) this.setShopTab(t.dataset.tab as 'buy' | 'buyback');
-    });
-    // Buy tab: a grid of potion icons. Click buys one, right click (or shift click) buys a stack.
-    const buyGrid = $('shop-buy');
-    buyGrid.innerHTML = (['hp', 'mp'] as const).flatMap((k) => POTION_SIZES.map((s) =>
-      `<div class="cell pot" data-buy="${k}:${s}" style="--rc:${POTION_COLOR[k]}">${potionIcon(k, s)}` +
-      `<span class="psize">${POTION_SIZE_LABEL[s]}</span><span class="cell-price">${potionPrice(k, s)}</span></div>`,
-    )).join('') +
-      // Phoenix feathers, for getting up again in a boss room, then the return scroll.
-      `<div class="cell pot stone" data-phoenix style="--rc:${STONE_COLOR.phoenix}">${stoneIcon('phoenix')}<span class="cell-price">${PHOENIX_PRICE}</span></div>` +
-      `<div class="cell pot stone" data-buy-scroll style="--rc:${STONE_COLOR.return_scroll}">${stoneIcon('return_scroll')}` +
-      `<span class="cell-price">${RETURN_SCROLL_PRICE}</span></div>`;
-    const phoenixCell = (e: Event) => !!(e.target as HTMLElement).closest('[data-phoenix]');
-    const buyCell = (e: Event): [PotionKind, PotionSize] | null => {
-      const el = (e.target as HTMLElement).closest<HTMLElement>('[data-buy]');
-      return el ? (el.dataset.buy!.split(':') as [PotionKind, PotionSize]) : null;
-    };
-    const scrollCell = (e: Event): boolean => !!(e.target as HTMLElement).closest('[data-buy-scroll]');
-    buyGrid.addEventListener('click', (e) => {
-      if (phoenixCell(e)) return this.g.backend.buyPhoenix(e.shiftKey ? STONE_STACK : 1);
-      if (scrollCell(e)) return this.buyReturnScroll(e.shiftKey ? STONE_STACK : 1);
-      const c = buyCell(e);
-      if (c) this.buyPotion(c[0], c[1], e.shiftKey ? POTION_STACK : 1);
-    });
-    buyGrid.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      if (phoenixCell(e)) return this.g.backend.buyPhoenix(STONE_STACK);
-      if (scrollCell(e)) return this.buyReturnScroll(STONE_STACK);
-      const c = buyCell(e);
-      if (c) this.buyPotion(c[0], c[1], POTION_STACK);
-    });
-    buyGrid.addEventListener('mousemove', (e) => {
-      if (phoenixCell(e)) return this.showStoneTip({ stone: 'phoenix', count: 1 }, e, `คลิก: ซื้อ 1 · คลิกขวา: ซื้อ ${STONE_STACK} (อันละ ${PHOENIX_PRICE.toLocaleString()} G)`);
-      if (scrollCell(e)) return this.showShopScrollTip(e);
-      const c = buyCell(e);
-      if (c) this.showShopPotionTip(c[0], c[1], e);
-      else this.hideTip();
-    });
-    buyGrid.addEventListener('mouseleave', () => this.hideTip());
-    // Sell by rarity: tick the rarities, then one button sells them all. The ticks are remembered in this browser.
-    const ticked = loadSellRarities();
-    $('sell-rarity').innerHTML = RARITIES.map((r) =>
-      `<label style="color:${RARITY_COLOR[r]}"><input type="checkbox" data-sell="${r}"${ticked.includes(r) ? ' checked' : ''}>` +
-      `${RARITY_LABEL[r]} <span class="n" data-sell-n="${r}"></span></label>`).join('');
-    $('sell-rarity').addEventListener('change', () => {
-      saveSellRarities(this.checkedSellRarities());
-      this.renderShopMoney();
-    });
-    $('sell-checked').onclick = () => this.sellChecked();
-
-    // Warehouse keeper (stash)
-    $('stash-close').onclick = () => this.closeStash();
     const sg = $('stash-grid');
     this.setupDrag(sg, 'stash');
     sg.addEventListener('contextmenu', (e) => {
@@ -592,10 +419,10 @@ export class Hud {
       this.markInventory();
     });
     sg.addEventListener('click', (e) => {
-      if ((e.target as HTMLElement).closest('[data-buyrow]')) return this.buyStashRow();
+      if ((e.target as HTMLElement).closest('[data-buyrow]')) return this.stash.buyStashRow();
       if (!isTouchMode() || this.justDragged) return;
       const i = this.stashIndex(e);
-      if (i >= 0 && g.player.stash.items[i]) this.openDetail({ stash: i });
+      if (i >= 0 && g.player.stash.items[i]) this.detail.openDetail({ stash: i });
     });
     sg.addEventListener('mousemove', (e) => {
       if (this.drag?.ghost) return;
@@ -608,47 +435,6 @@ export class Hud {
       else this.hideTip();
     });
     sg.addEventListener('mouseleave', () => this.hideTip());
-    $('stash-deposit').onclick = () => this.stashGold(1);
-    $('stash-withdraw').onclick = () => this.stashGold(-1);
-    $('stash-deposit-all').onclick = () => this.stashGold(1, true);
-    $('stash-withdraw-all').onclick = () => this.stashGold(-1, true);
-    $('stash-gold-amt').addEventListener('keydown', (e) => e.stopPropagation());
-    const sortChoice = (): [SortKey, boolean] =>
-      [$<HTMLSelectElement>('sort-key').value as SortKey, $('sort-dir').dataset.desc === '1'];
-    $('stash-sort-go').onclick = () => {
-      g.backend.stashSort(...sortChoice());
-      this.hideTip();
-      this.markInventory();
-    };
-
-    // Blacksmith
-    $('forge-close').onclick = () => this.closeForge();
-    $('forge-go').onclick = () => {
-      if (this.forgeAuto) return;
-      if (this.forgeMode === 'enhance') void this.enhance();
-      else this.askReroll(this.forgeMode);
-    };
-    $('forge-auto-btn').onclick = () => (this.forgeAuto ? this.stopForgeAuto('กดหยุด') : this.startForgeAuto());
-    $('forge-cancel').onclick = () => this.forgePlace(null);
-    $('forge-menu').addEventListener('click', (e) => {
-      const mode = (e.target as HTMLElement).closest<HTMLElement>('[data-mode]')?.dataset.mode as typeof this.forgeMode | undefined;
-      if (!mode || mode === this.forgeMode) return;
-      this.stopForgeAuto('เปลี่ยนเมนู');
-      this.forgeMode = mode;
-      this.rerollPrev = null;
-      this.forgeResult('', '');
-      $('forge-rates').classList.add('hidden');
-      this.renderForge();
-    });
-    $('forge-rates-btn').onclick = () => $('forge-rates').classList.toggle('hidden');
-    $('forge-rates-close').onclick = () => $('forge-rates').classList.add('hidden');
-    const fslot = $('forge-slot');
-    fslot.addEventListener('mousemove', (e) => {
-      const item = this.forgeItem();
-      if (item) this.showTip(item, e, 'ลากชิ้นอื่นมาวางเพื่อเปลี่ยน · ปุ่ม "นำออก" เพื่อเอาออก');
-      else this.hideTip();
-    });
-    fslot.addEventListener('mouseleave', () => this.hideTip());
 
     $('confirm-yes').onclick = () => {
       const fn = this.confirmYes;
@@ -771,17 +557,17 @@ export class Hud {
       setTimeout(() => (this.justDragged = false), 0);
       const target = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
       const cell = target?.closest<HTMLElement>('#bag-grid [data-i]');
-      const stashCell = this.stashOpen ? target?.closest<HTMLElement>('#stash-grid [data-s]') : null;
+      const stashCell = this.stash.isOpen ? target?.closest<HTMLElement>('#stash-grid [data-s]') : null;
       // Gear dropped anywhere on the blacksmith's window goes into its slot (worn gear stays worn).
-      const forge = this.forgeOpen && d.src !== 'stash' ? target?.closest('#forge') : null;
+      const forge = this.forge.isOpen && d.src !== 'stash' ? target?.closest('#forge') : null;
       if (d.src === 'equip') {
         const worn = this.dragList('equip')[d.i];
-        if (forge && worn) this.forgePlace(worn);
+        if (forge && worn) this.forge.forgePlace(worn);
         return;
       }
       if (forge) {
         const entry = g.player.bag[d.i];
-        if (entry) this.forgePlace(entry);
+        if (entry) this.forge.forgePlace(entry);
         return;
       }
       // While trading, dropping a bag item on the trade window offers it (Shift: part of a stack).
@@ -789,7 +575,7 @@ export class Hud {
         const entry = g.player.bag[d.i];
         if (!entry) return;
         if (e.shiftKey && isStack(entry) && entry.count > 1) {
-          const name = `<b style="color:${this.entryColor(entry)}">${entryName(entry)}</b>`;
+          const name = `<b style="color:${entryColor(entry)}">${entryName(entry)}</b>`;
           this.askAmount(`เสนอ ${name} กี่${isPotion(entry) ? 'ขวด' : 'ก้อน'}?`, entry.count, entry.count, (n) => g.trade.offer(d.i, n));
         } else g.trade.offer(d.i);
         return;
@@ -813,15 +599,15 @@ export class Hud {
       if (!item) return;
       const socket = target?.closest<HTMLElement>('#equip-slots [data-slot]');
       const quick = target?.closest<HTMLElement>('.skill-hp, .skill-mp');
-      const shop = this.shopOpen ? target?.closest<HTMLElement>('#shop') : null;
+      const shop = this.shop.isOpen ? target?.closest<HTMLElement>('#shop') : null;
       if (socket) {
         this.equipByDrag(d.i, socket.dataset.slot as EquipSlot);
       } else if (stashCell) {
         g.backend.stashPut(d.i, Number(stashCell.dataset.s));
-      } else if (this.stashOpen && target?.closest('#stash')) {
+      } else if (this.stash.isOpen && target?.closest('#stash')) {
         g.backend.stashPut(d.i, -1);
       } else if (shop) {
-        this.sellFromBag(d.i);
+        this.shop.sellFromBag(d.i);
       } else if (cell) {
         const to = Number(cell.dataset.i);
         if (to !== d.i) g.backend.moveInBag(d.i, to);
@@ -835,7 +621,7 @@ export class Hud {
         }
       } else if (target === g.renderer.domElement) {
         g.dropFromBag(d.i);
-        if (this.forgeOpen) this.renderForge();
+        if (this.forge.isOpen) this.forge.renderForge();
       }
       this.markInventory();
     });
@@ -845,7 +631,7 @@ export class Hud {
    * Shift+drag of a stack (2 or more) onto a bag/stash slot that is empty or holds the same stack with room:
    * opens the amount dialog and moves that many. Returns false (normal drag rules apply) when it doesn't fit that.
    */
-  private splitDrag(from: 'bag' | 'stash', i: number, cell: HTMLElement | null | undefined, stashCell: HTMLElement | null | undefined): boolean {
+  splitDrag(from: 'bag' | 'stash', i: number, cell: HTMLElement | null | undefined, stashCell: HTMLElement | null | undefined): boolean {
     const to: 'bag' | 'stash' | null = stashCell ? 'stash' : cell ? 'bag' : null;
     const j = stashCell ? Number(stashCell.dataset.s) : cell ? Number(cell.dataset.i) : -1;
     if (!to || (from === to && i === j)) return false;
@@ -858,7 +644,7 @@ export class Hud {
       max =Math.min(max, stackLimit(b) - b.count);
     }
     if (max < 1) return false;
-    const name = `<b style="color:${this.entryColor(a)}">${entryName(a)}</b>`;
+    const name = `<b style="color:${entryColor(a)}">${entryName(a)}</b>`;
     this.askAmount(`ย้าย ${name} กี่${isPotion(a) ? 'ขวด' : 'ก้อน'}?`, max, Math.min(max, Math.ceil(a.count / 2)), (n) => {
       if (from === 'bag' && to === 'bag') this.g.backend.splitInBag(i, j, n);
       else this.g.backend.stashSplit(from, i, to, j, n);
@@ -872,15 +658,15 @@ export class Hud {
     document.querySelector('.drop-target')?.classList.remove('drop-target');
     if (x < 0) return;
     const t = document.elementFromPoint(x, y) as HTMLElement | null;
-    if (this.forgeOpen && this.drag?.src !== 'stash' && t?.closest('#forge')) {
+    if (this.forge.isOpen && this.drag?.src !== 'stash' && t?.closest('#forge')) {
       $('forge-slot').classList.add('drop-target');
       return;
     }
     if (this.drag?.src === 'equip') return;
     let sel = '#bag-grid [data-i], .skill-hp, .skill-mp';
     if (this.drag?.src === 'stash') sel = '#stash-grid [data-s], #bag-grid [data-i], #inventory .inv-window';
-    else if (this.stashOpen) sel += ', #stash-grid [data-s], #stash';
-    else if (this.shopOpen) sel += ', #shop';
+    else if (this.stash.isOpen) sel += ', #stash-grid [data-s], #stash';
+    else if (this.shop.isOpen) sel += ', #shop';
     const el = t?.closest<HTMLElement>(sel);
     el?.classList.add('drop-target');
   }
@@ -917,13 +703,36 @@ export class Hud {
     // Basic attack, the three loadout slots (their icons follow the skill worn, see update) and the dash.
     for (const slot of ['basic', 'q', 'e', 'r', 'dash'] as const) {
       const sk = this.g.player.skill(slot);
-      add(slot, sk ? skillIcon(sk.id) : '', KEY_LABEL[slot]);
+      add(slot, sk ? skillIcon(sk.id) : '', keyFor(slot));
     }
-    add('hp', potionIcon('hp'), '1');
-    add('mp', potionIcon('mp'), '2');
+    add('hp', potionIcon('hp'), keyFor('hp'));
+    add('mp', potionIcon('mp'), keyFor('mp'));
   }
 
   /** Tooltip for a skill-bar button (skill or potion); desktop only. Skills also ring their reach on the ground. */
+  /** Tooltip of a skill buff running on us: the skill (rank and numbers when it is one of ours) and the time left. */
+  private showBuffTip(id: string, e: MouseEvent): void {
+    if (isTouchMode()) return;
+    const p = this.g.player;
+    const tip = $('tooltip');
+    const sk = LEARNABLE_SKILLS.find((x) => x.sk.id === id)?.sk;
+    const buff = p.shownBuffs.find((b) => b.id === id);
+    if (!sk || !buff) {
+      this.hideTip();
+      return;
+    }
+    const left = Math.max(0, buff.left - (performance.now() / 1000 - p.shownBuffsAt));
+    // A party member's buff: its numbers depend on their rank, which we don't know, so only its description.
+    const rank = p.skillRank(sk);
+    const lines = rank > 0 ? skillParamLines(sk, rank).map((l) => `<div><span class="tt-val">${l}</span></div>`).join('') : '';
+    tip.innerHTML =
+      `<div class="tt-name">${sk.name} (${sk.nameTh})</div>` +
+      `<div class="tt-sub">บัพที่ได้รับ${rank > 0 ? ` · แรงก์ ${rank}` : ''}</div>` +
+      `<div class="tt-stats"><div>${sk.desc}</div>${lines}</div>` +
+      `<div class="tt-hint">เหลือ ${left.toFixed(1)} วิ (จาก ${buff.total.toFixed(1)} วิ)</div>`;
+    this.placeTip(tip, e);
+  }
+
   private showSkillTip(kind: SkillSlot | PotionKind, key: string, e: MouseEvent): void {
     if (isTouchMode()) return;
     const p = this.g.player;
@@ -945,13 +754,18 @@ export class Hud {
       return;
     }
     const reach = skillReach(sk);
-    const remain = p.cd[sk.id] ?? 0;
+    const stacks = p.chargeMax(sk);
+    const held = p.chargesOf(sk);
+    const remain = stacks ? (held < stacks ? p.cd[sk.id] ?? 0 : 0) : p.cd[sk.id] ?? 0;
     const rank = p.skillRank(sk);
     const full = p.skillCooldown(sk);
     const stats = [
       sk.kind === 'normal' || sk.kind === 'ult' ? `<div>แรงก์ <span class="tt-val">${rank}</span>${sk.dmg > 0 ? ` · ดาเมจ <span class="tt-val">${Math.round(rankedDmg(sk, rank) * 100)}% ATK</span>` : ''}</div>` : '',
+      // The basic attack's damage and speed (tuned on /admin, owner 2026-11-20).
+      sk.kind === 'basic' ? `<div>ดาเมจ <span class="tt-val">${Math.round(rankedDmg(sk, 1) * 100)}% ATK</span> · <span class="tt-val">${Math.round(p.attackRate * 100) / 100} ครั้ง/วิ</span></div>` : '',
       sk.mp ? `<div>MP <span class="tt-val">${p.skillMp(sk)}</span></div>` : '',
-      full ? `<div>คูลดาวน์ <span class="tt-val">${full} วิ</span></div>` : '',
+      full ? `<div>คูลดาวน์ <span class="tt-val">${full} วิ${stacks ? ' ต่อ 1 อัน' : ''}</span></div>` : '',
+      stacks ? `<div>เก็บได้ <span class="tt-val">${held} / ${stacks} อัน</span></div>` : '',
       ...skillParamLines(sk, Math.max(1, rank)).map((l) => `<div><span class="tt-val">${l}</span></div>`),
       reach ? `<div><span class="tt-val">${reachText(reach)}</span></div>` : '',
     ].join('');
@@ -1037,9 +851,12 @@ export class Hud {
         continue;
       }
       const full = p.skillCooldown(sk);
-      const remain = p.cd[sk.id] ?? 0;
+      const stacks = p.chargeMax(sk);
+      const held = p.chargesOf(sk);
+      // A charge skill shows the charges left on the icon and the wheel of the one coming back.
+      const remain = stacks ? (held < stacks ? p.cd[sk.id] ?? 0 : 0) : p.cd[sk.id] ?? 0;
       s.cd.style.height = full ? `${(remain / full) * 100}%` : '0%';
-      s.extra.textContent = remain > 0 ? remain.toFixed(1) : '';
+      s.extra.textContent = stacks ? `×${held}${held === 0 && remain > 0 ? ` ${remain.toFixed(1)}` : ''}` : remain > 0 ? remain.toFixed(1) : '';
       s.el.classList.toggle('nomp', p.mp < p.skillMp(sk));
     }
 
@@ -1055,25 +872,25 @@ export class Hud {
       $('boss-fill').style.width = `${(boss.hp / boss.maxHp) * 100}%`;
     }
 
-    if (this.shopOpen) {
-      if (this.g.npcDistance('merchant') > NPC_USE_RANGE || !p.alive) this.closeShop();
-      else this.renderShopMoney();
+    if (this.shop.isOpen) {
+      if (this.g.npcDistance('merchant') > NPC_USE_RANGE || !p.alive) this.shop.closeShop();
+      else this.shop.renderShopMoney();
     }
-    if (this.forgeOpen && (this.g.npcDistance('blacksmith') > NPC_USE_RANGE || !p.alive)) this.closeForge();
+    if (this.forge.isOpen && (this.g.npcDistance('blacksmith') > NPC_USE_RANGE || !p.alive)) this.forge.closeForge();
     this.market.update();
-    if (this.stashOpen) {
-      if (this.g.npcDistance('keeper') > NPC_USE_RANGE || !p.alive) this.closeStash();
-      else this.renderStashMoney();
+    if (this.stash.isOpen) {
+      if (this.g.npcDistance('keeper') > NPC_USE_RANGE || !p.alive) this.stash.closeStash();
+      else this.stash.renderStashMoney();
     }
 
     this.mmT -= dt;
     if (this.mmT <= 0) {
       this.mmT = 0.1;
       this.drawMinimap();
-      if (this.mapOpen) this.fullMap.draw(this.g, this.myPin());
+      this.map.redraw();
     }
-    if ((this.bagOpen || this.stashOpen) && this.invDirty) this.renderInventory();
-    if (this.bagOpen) this.fashion.update(this.shopOpen || this.stashOpen || this.forgeOpen || this.market.isOpen || this.g.trade.open);
+    if ((this.bagOpen || this.stash.isOpen) && this.invDirty) this.renderInventory();
+    if (this.bagOpen) this.fashion.update(this.shop.isOpen || this.stash.isOpen || this.forge.isOpen || this.market.isOpen || this.g.trade.open);
   }
 
   /** HP and MP as orbs in the bottom corners, or long bars at the top. The player picks; each browser remembers it. */
@@ -1194,7 +1011,7 @@ export class Hud {
       if (Math.hypot(ex - c, ey - c) <= rim - 8) drawMapIcon(ctx, 'flag', ex, ey, 18);
       else drawEdgeMarker(ctx, c, rim, ex, ey, (x, y, s) => drawMapIcon(ctx, 'flag', x, y, s));
     }
-    const pin = this.myPin();
+    const pin = this.map.myPin();
     if (pin) {
       const [px, py] = toMM(pin.x, pin.z);
       if (Math.hypot(px - c, py - c) <= rim - 8) drawPin(ctx, px, py, 20);
@@ -1219,7 +1036,7 @@ export class Hud {
 
   markInventory(): void {
     this.invDirty = true;
-    if (this.forgeOpen) this.renderForge();
+    if (this.forge.isOpen) this.forge.renderForge();
   }
 
   toggleBag(force?: boolean): void {
@@ -1227,7 +1044,7 @@ export class Hud {
     $('inventory').classList.toggle('hidden', !this.bagOpen);
     if (!this.bagOpen) {
       this.hideTip();
-      this.closeDetail();
+      this.detail.closeDetail();
       this.fashion.reset();
     }
     this.invDirty = true;
@@ -1250,17 +1067,6 @@ export class Hud {
     syncPots($('aset-pots'), this.g.player.lootFilter);
   }
 
-  // ------------------------------------------------------------ full map
-
-  /** The pin placed in the zone the player is in now, if any. */
-  private myPin(): { x: number; z: number } | null {
-    return this.pin && this.pin.zone === this.g.backend.zone ? this.pin : null;
-  }
-
-  private syncPinUi(): void {
-    $('fullmap-clearpin').classList.toggle('hidden', !this.myPin());
-  }
-
   private setMinimapZoom(i: number): void {
     this.mmZoom = Math.max(0, Math.min(MINIMAP_ZOOMS.length - 1, i));
     this.syncMinimapZoom();
@@ -1276,179 +1082,21 @@ export class Hud {
     $<HTMLButtonElement>('mm-minus').disabled = this.mmZoom <= 0;
   }
 
+  // ------------------------------------------------------------ full map (ui/mapWindow.ts)
+
   toggleMap(force?: boolean): void {
-    this.mapOpen = force ?? !this.mapOpen;
-    $('fullmap').classList.toggle('hidden', !this.mapOpen);
-    if (!this.mapOpen) return;
-    const z = this.g.backend.zone;
-    $('fullmap-title').textContent = `แผนที่ — ${z.nameTh} (Lv.${z.levels[0]}-${z.levels[1]})`;
-    $('fullmap-hint').textContent = this.g.backend.online
-      ? 'คลิกซ้ายเพื่อเดินไป · คลิกขวาเพื่อปักหมุด (คลิกขวาที่หมุดเพื่อลบ) · กด M หรือ Esc เพื่อปิด · ออนไลน์จะเห็นจุดมอน/ผู้เล่นเฉพาะที่อยู่ใกล้ตัว'
-      : 'คลิกซ้ายเพื่อเดินไป · คลิกขวาเพื่อปักหมุด (คลิกขวาที่หมุดเพื่อลบ) · กด M หรือ Esc เพื่อปิด';
-    this.syncPinUi();
-    this.fullMap.draw(this.g, this.myPin());
+    this.map.toggleMap(force);
   }
 
-  // ------------------------------------------------------------ auto settings
+  // ------------------------------------------------------------ auto settings (ui/autoSettings.ts)
 
   toggleAutoSettings(force?: boolean): void {
-    const el = $('auto-settings');
-    const open = force ?? el.classList.contains('hidden');
-    el.classList.toggle('hidden', !open);
-    if (open) this.fillAutoSettings();
+    this.autoSet.toggleAutoSettings(force);
   }
 
   /** The range being typed while the settings window is open (clamped), else null. */
   autoRangePreview(): number | null {
-    if ($('auto-settings').classList.contains('hidden')) return null;
-    const v = Number($<HTMLInputElement>('aset-range').value);
-    if (!Number.isFinite(v) || v <= 0) return this.g.player.autoSettings.range;
-    return Math.max(AUTO_RANGE_MIN, Math.min(AUTO_RANGE_MAX, v));
-  }
-
-  /** Put the player's current settings into the form. */
-  private fillAutoSettings(): void {
-    const p = this.g.player;
-    const s = p.autoSettings;
-    $<HTMLInputElement>('aset-range').min = String(AUTO_RANGE_MIN);
-    $<HTMLInputElement>('aset-range').max = String(AUTO_RANGE_MAX);
-    $<HTMLInputElement>('aset-range').value = String(s.range);
-    $('aset-range-hint').textContent = `${AUTO_RANGE_MIN}–${AUTO_RANGE_MAX} px · ${AUTO_PX_PER_UNIT} px = 1 ช่องในแมพ`;
-    $<HTMLInputElement>('aset-hp').value = String(s.hpPct);
-    $<HTMLInputElement>('aset-mp').value = String(s.mpPct);
-    $<HTMLInputElement>('aset-loot').checked = s.loot;
-    // Options the server switched off (admin) can't be chosen; Auto uses the safe one for them.
-    const allow = currentBalance().auto.allow;
-    const off = ' (ปิดโดยผู้ดูแล)';
-    const fillSelect = (id: string, opts: [string, string, boolean][], value: string) => {
-      const sel = $<HTMLSelectElement>(id);
-      sel.innerHTML = '';
-      for (const [v, label, ok] of opts) sel.add(new Option(ok ? label : label + off, v));
-      for (const [i, [, , ok]] of opts.entries()) sel.options[i].disabled = !ok;
-      sel.value = value;
-    };
-    fillSelect('aset-lootorder', AUTO_LOOT_ORDERS.map((k) => [k, AUTO_LOOT_ORDER_NAME[k], k !== 'loot' || allow.lootFirst]), s.lootOrder);
-    $('aset-lootorder-hint').textContent = {
-      fight: 'ตีมอนที่ตีเราอยู่ให้หมดก่อน แล้วค่อยเก็บของ',
-      balanced: 'ของใกล้ตัวเก็บแม้กำลังสู้ ของไกลเก็บตอนไม่มีมอนใกล้',
-      loot: 'เห็นของในวงเดินไปเก็บทันที แม้มอนกำลังตี',
-    }[s.lootOrder];
-    fillSelect('aset-others', [['1', 'เก็บของคนอื่นด้วย', allow.othersLoot], ['0', 'เก็บเฉพาะของตัวเอง', true]], s.othersLoot ? '1' : '0');
-    const outOpts = AUTO_OUT_ACTIONS.map((k): [string, string, boolean] => [k, AUTO_OUT_ACTION_NAME[k], k !== 'scroll' || allow.scroll]);
-    fillSelect('aset-nohp', outOpts, s.noHp);
-    fillSelect('aset-nomp', outOpts, s.noMp);
-    fillSelect('aset-bagfull', outOpts, s.bagFull);
-    fillSelect('aset-target', AUTO_TARGET_MODES.map((k) => [k, AUTO_TARGET_NAME[k], true]), s.target);
-    // Monster kinds of this map: unticked = Auto leaves them alone.
-    const kinds = [...new Set(this.g.zone.spawns.map((sp) => sp.monster))].filter((id) => MONSTERS[id] && MONSTERS[id].behavior !== 'boss');
-    $('aset-skip-wrap').classList.toggle('hidden', !kinds.length || !allow.skip);
-    const skipBox = $('aset-skip');
-    skipBox.innerHTML = '';
-    for (const id of kinds) {
-      const label = document.createElement('label');
-      label.className = 'aset-check';
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.dataset.monster = id;
-      cb.checked = !s.skip.includes(id);
-      cb.addEventListener('change', () => this.applyAutoSettings());
-      label.append(cb, ` ${MONSTERS[id].nameTh}`);
-      skipBox.append(label);
-    }
-    syncPots($('aset-pots'), p.lootFilter);
-    const box = $('aset-skills');
-    box.innerHTML = '';
-    s.order.forEach((slot, i) => {
-      const sk = p.skill(slot);
-      const row = document.createElement('div');
-      row.className = 'aset-skill';
-      row.dataset.slot = slot;
-      row.innerHTML =
-        `<span class="aset-rank">${i + 1}</span>` +
-        `<span class="aset-grab" title="ลากเพื่อสลับลำดับ">${sk ? skillIcon(sk.id) : ''}<b class="aset-key">${slot.toUpperCase()}</b>` +
-        `<span class="aset-name">${sk?.nameTh ?? sk?.name ?? '-'}</span></span>` +
-        `<button class="aset-move" data-dir="-1" title="เลื่อนขึ้น"${i === 0 ? ' disabled' : ''}>▲</button>` +
-        `<button class="aset-move" data-dir="1" title="เลื่อนลง"${i === s.order.length - 1 ? ' disabled' : ''}>▼</button>`;
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.title = 'ให้ Auto ใช้สกิลนี้';
-      cb.checked = s.skills[slot];
-      cb.addEventListener('change', () => this.applyAutoSettings());
-      row.append(cb);
-      for (const b of row.querySelectorAll<HTMLButtonElement>('.aset-move')) {
-        b.onclick = () => {
-          const sib = Number(b.dataset.dir) < 0 ? row.previousElementSibling : row.nextElementSibling?.nextElementSibling ?? null;
-          if (Number(b.dataset.dir) < 0 && !sib) return;
-          box.insertBefore(row, sib);
-          this.applyAutoSettings();
-        };
-      }
-      this.dragAutoSkill(box, row, row.querySelector<HTMLElement>('.aset-grab')!);
-      box.append(row);
-    });
-  }
-
-  /** Drag a skill row by its icon and name to a new place in the order (mouse or finger). */
-  private dragAutoSkill(box: HTMLElement, row: HTMLElement, grab: HTMLElement): void {
-    grab.addEventListener('pointerdown', (e) => {
-      if (e.button !== 0) return;
-      e.preventDefault();
-      const start = [...box.children].indexOf(row);
-      const id = e.pointerId;
-      row.classList.add('dragging');
-      // Listen on window, not with pointer capture: moving the row in the DOM drops capture in Chromium.
-      const move = (ev: PointerEvent) => {
-        if (ev.pointerId !== id) return;
-        // The row goes before the first other row whose middle is below the pointer.
-        const rest = [...box.children].filter((c) => c !== row) as HTMLElement[];
-        const before = rest.find((c) => { const r = c.getBoundingClientRect(); return ev.clientY < r.top + r.height / 2; }) ?? null;
-        if (before === row.nextElementSibling) return;
-        box.insertBefore(row, before);
-        box.querySelectorAll('.aset-rank').forEach((r, i) => { r.textContent = String(i + 1); });
-      };
-      const end = (ev: PointerEvent) => {
-        if (ev.pointerId !== id) return;
-        window.removeEventListener('pointermove', move);
-        window.removeEventListener('pointerup', end);
-        window.removeEventListener('pointercancel', end);
-        row.classList.remove('dragging');
-        if ([...box.children].indexOf(row) !== start) this.applyAutoSettings();
-      };
-      window.addEventListener('pointermove', move);
-      window.addEventListener('pointerup', end);
-      window.addEventListener('pointercancel', end);
-    });
-  }
-
-  /** Read the form, clamp it, send it, then show the clamped values. */
-  private applyAutoSettings(): void {
-    const num = (id: string) => Number($<HTMLInputElement>(id).value);
-    const skills = { ...this.g.player.autoSettings.skills };
-    const order: AutoSkill[] = [];
-    for (const row of $('aset-skills').querySelectorAll<HTMLElement>('.aset-skill')) {
-      const slot = row.dataset.slot as AutoSkill;
-      order.push(slot);
-      skills[slot] = row.querySelector<HTMLInputElement>('input[type=checkbox]')!.checked;
-    }
-    const cur = this.g.player.autoSettings;
-    const val = (id: string) => $<HTMLSelectElement>(id).value;
-    // Kinds skipped on other maps stay skipped; this map's follow the ticks.
-    const boxes = [...$('aset-skip').querySelectorAll<HTMLInputElement>('input[data-monster]')];
-    const here = new Set(boxes.map((b) => b.dataset.monster!));
-    const skip = [...cur.skip.filter((id) => !here.has(id)), ...boxes.filter((b) => !b.checked).map((b) => b.dataset.monster!)];
-    const opts = {
-      lootOrder: val('aset-lootorder'), othersLoot: val('aset-others') === '1',
-      noHp: val('aset-nohp'), noMp: val('aset-nomp'), bagFull: val('aset-bagfull'), target: val('aset-target'),
-    };
-    // An option the player changes is theirs from now on; the others keep following the server's default.
-    const optsSet = AUTO_DEFAULT_KEYS.filter((k) => cur.optsSet?.includes(k) || opts[k] !== cur[k]);
-    const s = cleanAutoSettings({
-      range: num('aset-range'), hpPct: num('aset-hp'), mpPct: num('aset-mp'), skills, order, loot: $<HTMLInputElement>('aset-loot').checked,
-      rangeSet: cur.rangeSet || num('aset-range') !== cur.range,
-      ...opts, optsSet, skip,
-    });
-    this.g.backend.setAutoSettings(s);
-    this.fillAutoSettings();
+    return this.autoSet.autoRangePreview();
   }
 
   /** Anything Esc would close: a window, the chat box or an NPC conversation (the system menu aside). */
@@ -1465,16 +1113,16 @@ export class Hud {
   closePanels(): void {
     if (this.amountDone) return this.closeAmount();
     if (this.confirmYes) return this.closeConfirm();
-    if (this.detail) return this.closeDetail();
+    if (this.detail.isOpen) return this.detail.closeDetail();
     this.closeChat();
     this.toggleAutoSettings(false);
     this.toggleMap(false);
     this.toggleBag(false);
     this.toggleHelp(false);
     this.g.skillWin.toggle(false);
-    this.closeShop();
-    this.closeStash();
-    this.closeForge();
+    this.shop.closeShop();
+    this.stash.closeStash();
+    this.forge.closeForge();
     this.market.close();
     this.g.party.toggle(false);
     this.g.trade.toggleFind(false);
@@ -1484,6 +1132,11 @@ export class Hud {
     this.g.daily.toggle(false);
     this.g.friends.toggle(false);
     this.g.cosmetics.toggle(false);
+    this.g.quests.toggle(false);
+    this.g.cashShop.toggle(false);
+    this.g.channels.toggle(false);
+    this.g.rooms.toggle(false);
+    this.g.rooms.hideLobby();
     if (this.dialogOpen) this.closeDialog();
     this.g.tutorial.close();
     this.g.navigator.close();
@@ -1521,7 +1174,7 @@ export class Hud {
     $('confirm').classList.remove('hidden');
   }
 
-  private closeConfirm(): void {
+  closeConfirm(): void {
     this.confirmYes = null;
     $('confirm').classList.add('hidden');
   }
@@ -1544,13 +1197,13 @@ export class Hud {
     $('amount').classList.add('hidden');
   }
 
-  // ------------------------------------------------------------ merchant
+  // ------------------------------------------------------------ NPC windows (ui/shop.ts, ui/stash.ts, ui/forge.ts)
 
   /** Market broker: the window lives in market.ts. Guests may look but not trade (the server refuses it too). */
   private openMarket(): void {
-    this.closeShop();
-    this.closeForge();
-    this.closeStash();
+    this.shop.closeShop();
+    this.forge.closeForge();
+    this.stash.closeStash();
     this.market.open();
   }
 
@@ -1563,759 +1216,31 @@ export class Hud {
 
   private openShop(): void {
     this.market.close();
-    this.closeForge();
-    this.closeStash();
-    this.shopOpen = true;
-    $('shop').classList.remove('hidden');
-    this.toggleBag(true);
-    this.renderShopMoney();
+    this.forge.closeForge();
+    this.stash.closeStash();
+    this.shop.openShop();
   }
-
-  private closeShop(): void {
-    if (!this.shopOpen) return;
-    this.shopOpen = false;
-    $('shop').classList.add('hidden');
-    this.closeConfirm();
-    this.markInventory();
-  }
-
-  private renderShopMoney(): void {
-    const p = this.g.player;
-    $('shop-gold').innerHTML = `${COIN_ICON} ${p.gold.toLocaleString()} G`;
-    $('shop-pots').innerHTML = this.potionTotals();
-    this.renderBuyback();
-    this.renderSellRarity();
-    $('shop-buy').querySelectorAll<HTMLElement>('[data-buy]').forEach((el) => {
-      const [kind, size] = el.dataset.buy!.split(':') as [PotionKind, PotionSize];
-      el.classList.toggle('poor', p.gold < potionPrice(kind, size) || p.potionRoom(kind, size) < 1);
-    });
-    $('shop-buy').querySelector('[data-phoenix]')?.classList.toggle('poor', p.gold < PHOENIX_PRICE || p.stoneRoom('phoenix') < 1);
-    $('shop-buy').querySelector('[data-buy-scroll]')?.classList.toggle('poor', p.gold < RETURN_SCROLL_PRICE || p.stoneRoom('return_scroll') < 1);
-  }
-
-  private potionTotals(): string {
-    const p = this.g.player;
-    return `${potionIcon('hp')} ${p.potionCount('hp')} &nbsp; ${potionIcon('mp')} ${p.potionCount('mp')}`;
-  }
-
-  /** Switches the merchant window between buying potions and buying back sold items. */
-  private setShopTab(tab: 'buy' | 'buyback'): void {
-    $('shop-tabs').querySelectorAll<HTMLElement>('[data-tab]').forEach((t) => t.classList.toggle('active', t.dataset.tab === tab));
-    $('shop').querySelectorAll<HTMLElement>('[data-pane]').forEach((b) => b.classList.toggle('hidden', b.dataset.pane !== tab));
-    this.hideTip();
-  }
-
-  /** Tooltip for a potion on sale: what it does and what one or a stack costs. */
-  private showShopPotionTip(kind: PotionKind, size: PotionSize, e: MouseEvent): void {
-    const tip = $('tooltip');
-    const price = potionPrice(kind, size);
-    tip.innerHTML =
-      `<div class="tt-name" style="color:${POTION_COLOR[kind]}">${potionName(kind, size)}</div>` +
-      `<div class="tt-stats"><div>ฟื้น ${potionHeal(kind, size, this.g.player.cls.id)} ${kind.toUpperCase()} ต่อขวด</div></div>` +
-      `<div class="tt-hint">คลิก: ซื้อ 1 (${price} G) · คลิกขวา: ซื้อ ${POTION_STACK} (${price * POTION_STACK} G)</div>` +
-      `<div class="tt-val">มีอยู่ ${this.g.player.potionCount(kind, size)} ขวด</div>`;
-    this.placeTip(tip, e);
-  }
-
-  /** Tooltip for the return scroll on sale. */
-  private showShopScrollTip(e: MouseEvent): void {
-    const tip = $('tooltip');
-    const k = 'return_scroll';
-    tip.innerHTML =
-      `<div class="tt-name" style="color:${STONE_COLOR[k]}">${STONE_NAME[k]}</div>` +
-      `<div class="tt-stats"><div>${STONE_DESC[k]}</div></div>` +
-      `<div class="tt-hint">คลิก: ซื้อ 1 (${RETURN_SCROLL_PRICE} G) · คลิกขวา: ซื้อ ${STONE_STACK} (${(RETURN_SCROLL_PRICE * STONE_STACK).toLocaleString()} G)</div>` +
-      `<div class="tt-val">มีอยู่ ${this.g.player.stoneCount(k)} ม้วน</div>`;
-    this.placeTip(tip, e);
-  }
-
-  private buyReturnScroll(n: number): void {
-    this.g.backend.buyReturnScroll(n);
-    this.afterTrade();
-  }
-
-  /** Sells bag slot `i` to the merchant, asking first for a potion stack or an enhanced (+N) item. */
-  private sellFromBag(i: number): void {
-    const g = this.g;
-    const item = g.player.bag[i];
-    if (!item || !this.shopOpen) return;
-    const name = `<b style="color:${this.entryColor(item)}">${entryName(item)}</b>`;
-    const sell = () => {
-      if (g.player.bag[i] !== item) return;
-      g.backend.sell(i);
-      this.afterTrade();
-    };
-    // A stack of 2+: ask how many to sell (the whole stack is the default).
-    if (isStack(item) && item.count > 1) {
-      const each = isPotion(item) ? potionSellPrice(item.potion, item.size) : stoneSellPrice(item.stone);
-      const unit = isPotion(item) ? 'ขวด' : stoneUnit(item.stone);
-      this.askAmount(
-        `ขาย ${name} กี่${unit}?<br><small>${unit}ละ ${each.toLocaleString()} G${isStone(item) ? ' · ซื้อคืนไม่ได้' : ''}</small>`,
-        item.count, item.count,
-        (n) => {
-          if (g.player.bag[i] !== item || item.count < n) return;
-          g.backend.sell(i, n >= item.count ? undefined : n);
-          this.afterTrade();
-        },
-      );
-      return;
-    }
-    if (isPotion(item)) {
-      sell();
-      return;
-    }
-    if (isStone(item)) {
-      // Boss-only stones: always ask, they are hard to get back.
-      this.confirm(`ขาย ${name}?<br><small>ได้ ${stoneStackValue(item).toLocaleString()} G (${stoneUnit(item.stone)}ละ ${stoneSellPrice(item.stone).toLocaleString()} G) · ซื้อคืนไม่ได้</small>`, 'ขาย', sell);
-      return;
-    }
-    if ((item.plus ?? 0) > 0) {
-      const v = sellValue(item);
-      this.confirm(
-        `ขาย ${name}?<br><small>ของชิ้นนี้ตีบวกแล้ว · ได้ ${v.toLocaleString()} G · ซื้อคืนได้ ${buybackPrice({ item, paid: v }).toLocaleString()} G ภายใน 30 นาที</small>`,
-        'ขาย', sell,
-      );
-      return;
-    }
-    sell();
-  }
-
-  /** Redraws the buyback grid when the list changes; the timer and affordability every frame. */
-  private renderBuyback(): void {
-    const p = this.g.player;
-    const key = p.buyback.map((e) => e.item.uid).join(',');
-    const grid = $('buyback-grid');
-    if (key !== this.buybackKey) {
-      this.buybackKey = key;
-      grid.innerHTML = p.buyback.length
-        ? p.buyback.map((e, i) => this.itemCell(e.item, `data-bb="${i}"`)).join('')
-        : '<div class="empty-note">ยังไม่มีของที่ขายไป</div>';
-      grid.querySelectorAll<HTMLElement>('[data-bb]').forEach((el) => {
-        const e = p.buyback[Number(el.dataset.bb)];
-        el.insertAdjacentHTML('beforeend', `<span class="cell-price">${buybackPrice(e).toLocaleString()}</span>`);
-      });
-    }
-    grid.querySelectorAll<HTMLElement>('[data-bb]').forEach((el) => {
-      const e = p.buyback[Number(el.dataset.bb)];
-      el.classList.toggle('poor', !e || p.gold < buybackPrice(e));
-    });
-    $('buyback-count').textContent = p.buyback.length ? `(${p.buyback.length})` : '';
-    const s = Math.max(0, Math.ceil(p.buybackLeft));
-    $('buyback-timer').textContent = `รีเซตใน ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-  }
-
-  private buyPotion(kind: PotionKind, size: PotionSize, n: number): void {
-    this.g.backend.buyPotion(kind, size, n);
-    this.afterTrade();
-  }
-
-  private checkedSellRarities(): Rarity[] {
-    return [...$('sell-rarity').querySelectorAll<HTMLInputElement>('input[data-sell]')]
-      .filter((c) => c.checked)
-      .map((c) => c.dataset.sell as Rarity);
-  }
-
-  /** Bag items the "sell ticked" button would sell (enhanced items never). */
-  private checkedSellItems(): Item[] {
-    const rs = this.checkedSellRarities();
-    return this.g.player.bag.filter((e): e is Item => rs.some((r) => isBulkSellable(e, r)));
-  }
-
-  /** Item counts next to each tick box, and what the sell button would do. */
-  private renderSellRarity(): void {
-    const bag = this.g.player.bag;
-    for (const r of RARITIES) {
-      const n = bag.filter((e) => isBulkSellable(e, r)).length;
-      const el = $('sell-rarity').querySelector<HTMLElement>(`[data-sell-n="${r}"]`);
-      if (el) el.textContent = `(${n})`;
-    }
-    const items = this.checkedSellItems();
-    const total = items.reduce((s, it) => s + sellValue(it), 0);
-    const btn = $<HTMLButtonElement>('sell-checked');
-    btn.disabled = !items.length;
-    btn.textContent = items.length ? `ขายที่เลือก ${items.length} ชิ้น · ${total.toLocaleString()} G` : 'ขายที่เลือก';
-  }
-
-  private sellChecked(): void {
-    const rs = this.checkedSellRarities();
-    const items = this.checkedSellItems();
-    if (!rs.length) {
-      this.log('ติ๊กเลือกระดับที่จะขายก่อน', '#b9b09a');
-      return;
-    }
-    if (!items.length) {
-      this.log('ไม่มีของระดับที่เลือกในกระเป๋า (ของที่ตีบวกแล้วจะไม่ถูกขาย)', '#b9b09a');
-      return;
-    }
-    const total = items.reduce((s, it) => s + sellValue(it), 0);
-    const labels = rs.map((r) => `<b style="color:${RARITY_COLOR[r]}">${RARITY_LABEL[r]}</b>`).join(', ');
-    this.confirm(`ขายของระดับ ${labels} ทั้งหมด ${items.length} ชิ้น?<br><small>ได้ ${total.toLocaleString()} G · ของที่ตีบวกแล้วจะไม่ถูกขาย · ซื้อคืนได้ภายใน 30 นาที</small>`, 'ขายทั้งหมด', () => {
-      const bag = this.g.player.bag;
-      for (const r of rs) if (bag.some((e) => isBulkSellable(e, r))) this.g.backend.sellAllOfRarity(r);
-      this.afterTrade();
-    });
-  }
-
-  /** The trade itself (and its log line / save) happens in the simulation; just refresh the panels. */
-  private afterTrade(): void {
-    this.markInventory();
-    this.renderShopMoney();
-  }
-
-  // ------------------------------------------------------------ warehouse keeper (stash)
 
   private openStash(): void {
-    this.closeShop();
-    this.closeForge();
+    this.shop.closeShop();
+    this.forge.closeForge();
     this.market.close();
-    this.stashOpen = true;
-    $('stash').classList.remove('hidden');
-    this.toggleBag(true);
-    this.markInventory();
-    this.renderStash();
+    this.stash.openStash();
   }
-
-  private closeStash(): void {
-    if (!this.stashOpen) return;
-    this.stashOpen = false;
-    $('stash').classList.add('hidden');
-    this.closeConfirm();
-    this.hideTip();
-    this.markInventory();
-  }
-
-  /** Bought slots, then one locked bar per row not bought yet (only the next one can be bought). */
-  private renderStash(): void {
-    const st = this.g.player.stash;
-    let html = st.items.map((it, i) => this.itemCell(it, `data-s="${i}"`)).join('');
-    for (let size = st.size; size < STASH_MAX; size += STASH_ROW) {
-      const price = STASH_ROW_PRICES[(size - STASH_START) / STASH_ROW];
-      const next = size === st.size;
-      html += `<div class="stash-row-lock">🔒 แถวที่ ${size / STASH_ROW + 1} (+${STASH_ROW} ช่อง)` +
-        `<button ${next ? 'data-buyrow' : 'disabled title="ซื้อแถวก่อนหน้าก่อน"'}>ซื้อ ${price.toLocaleString()} G</button></div>`;
-    }
-    $('stash-grid').innerHTML = html;
-    $('stash-size').textContent = `ใช้ไป ${st.items.filter(Boolean).length} / ${st.size} ช่อง`;
-    this.renderStashMoney();
-  }
-
-  private renderStashMoney(): void {
-    const p = this.g.player;
-    $('stash-gold-in').textContent = `${p.stash.gold.toLocaleString()} G`;
-    $('stash-gold-carry').innerHTML = `ถืออยู่ ${COIN_ICON} ${p.gold.toLocaleString()} G`;
-  }
-
-  private buyStashRow(): void {
-    const p = this.g.player;
-    const price = nextRowPrice(p.stash);
-    if (price === null) return;
-    if (p.gold < price) {
-      this.log(`ทองไม่พอ — ต้องใช้ ${price.toLocaleString()} G`, '#ff8a6a');
-      return;
-    }
-    this.confirm(
-      `ขยายคลังอีก ${STASH_ROW} ช่อง (${p.stash.size} → ${p.stash.size + STASH_ROW})?<br><small>จ่าย ${price.toLocaleString()} G · ใช้ได้ทุกตัวละครในบัญชี</small>`,
-      `จ่าย ${price.toLocaleString()} G`,
-      () => {
-        this.g.backend.stashBuyRow();
-        this.markInventory();
-      },
-    );
-  }
-
-  /** dir 1 = deposit the typed amount, -1 = withdraw it. `all` = every coin carried / stored instead. */
-  private stashGold(dir: 1 | -1, all = false): void {
-    const input = $<HTMLInputElement>('stash-gold-amt');
-    const p = this.g.player;
-    const amount = all ? (dir > 0 ? p.gold : p.stash.gold) : Math.floor(Number(input.value));
-    if (all && amount <= 0) {
-      this.log(dir > 0 ? 'ไม่มีทองติดตัว' : 'ไม่มีทองในคลัง', '#b9b09a');
-      return;
-    }
-    if (!(amount > 0)) {
-      this.log('ใส่จำนวนทองก่อน', '#b9b09a');
-      return;
-    }
-    if (dir > 0 && amount > p.gold) {
-      this.log(`ทองที่ถืออยู่ไม่พอ (มี ${p.gold.toLocaleString()} G)`, '#ff8a6a');
-      return;
-    }
-    if (dir < 0 && amount > p.stash.gold) {
-      this.log(`ทองในคลังไม่พอ (มี ${p.stash.gold.toLocaleString()} G)`, '#ff8a6a');
-      return;
-    }
-    this.g.backend.stashGold(dir * amount);
-    input.value = '';
-    this.markInventory();
-  }
-
-  // ------------------------------------------------------------ blacksmith
 
   private openForge(): void {
-    this.closeShop();
-    this.closeStash();
+    this.shop.closeShop();
+    this.stash.closeStash();
     this.market.close();
-    this.forgeOpen = true;
-    // Owner: the slot starts empty and the bag opens beside it, ready to drag from.
-    this.forgeSel = null;
-    this.rerollPrev = null;
-    this.forgeResult('', '');
-    $('forge-rates').classList.add('hidden');
-    $('forge').classList.remove('hidden');
-    this.toggleBag(true);
-    this.renderForge();
-  }
-
-  private closeForge(): void {
-    if (!this.forgeOpen) return;
-    this.stopForgeAuto('ปิดหน้าต่างช่างตีเหล็ก');
-    this.forgeOpen = false;
-    this.forgeSel = null;
-    $('forge').classList.add('hidden');
-    this.closeConfirm();
-    this.markInventory();
-  }
-
-  /** Everything the blacksmith can work on: worn gear (weapon first), then gear in the bag. */
-  private forgeItems(): Item[] {
-    const p = this.g.player;
-    const list: Item[] = [];
-    for (const slot of EQUIP_SLOTS) {
-      const it = p.equipment[slot];
-      if (it) list.push(it);
-    }
-    for (const it of p.bag) if (isItem(it)) list.push(it);
-    return list;
-  }
-
-  /** The item in the forge's slot, if it is still worn or in the bag. */
-  private forgeItem(): Item | undefined {
-    return this.forgeSel ? this.forgeItems().find((w) => w.uid === this.forgeSel) : undefined;
-  }
-
-  /** Puts gear in the forge's slot (null empties it). Potions and stones are turned away. */
-  private forgePlace(entry: BagEntry | null): void {
-    if (entry && !isItem(entry)) {
-      this.log('ช่างตีเหล็กรับเฉพาะอุปกรณ์สวมใส่ (ไม่รับยาและหิน)', '#ff8a6a');
-      return;
-    }
-    if (entry?.uid !== this.forgeSel) this.rerollPrev = null;
-    if (this.forgeAuto && entry?.uid !== this.forgeAuto.uid) this.stopForgeAuto('เปลี่ยนอุปกรณ์');
-    this.forgeSel = entry?.uid ?? null;
-    this.forgeResult('', '');
-    this.renderForge();
-  }
-
-  /** The result that shows over the slot after an attempt (cls: ok / fail, '' clears it). */
-  private forgeResult(cls: '' | 'ok' | 'fail', text: string): void {
-    const res = $('forge-result');
-    res.className = cls;
-    res.textContent = text;
-    // One line always (owner 2026-11-18): a long result shrinks to fit the stage instead of wrapping.
-    res.style.fontSize = '';
-    for (let size = 14; text && res.scrollWidth > res.clientWidth && size > 9; size--) res.style.fontSize = `${size - 1}px`;
-    const stage = $('forge-stage');
-    stage.classList.remove('flash-ok', 'flash-fail');
-    if (cls) {
-      void stage.offsetWidth; // restart the flash
-      stage.classList.add(`flash-${cls}`);
-    }
-  }
-
-  private renderForge(): void {
-    // While an attempt runs, the snapshot may already carry the new level: hold it until the bar has filled.
-    if (this.enhancing) return;
-    const p = this.g.player;
-    const mode = this.forgeMode;
-    for (const b of $('forge-menu').querySelectorAll<HTMLElement>('[data-mode]')) b.classList.toggle('active', b.dataset.mode === mode);
-    $('forge-desc').textContent = FORGE_DESC[mode];
-    // Odds table: enhance rates, or what "สุ่มสเตตัส" can give (for the item placed, if any).
-    const hasRates = mode === 'enhance' || mode === 'stat';
-    $('forge-rates-btn').classList.toggle('hidden', !hasRates);
-    if (!hasRates) $('forge-rates').classList.add('hidden');
-
-    const item = this.forgeItem();
-    if (!item) this.forgeSel = null; // sold, dropped or stored since
-    if (hasRates) {
-      const btn = mode === 'enhance' ? 'ตารางโอกาสสำเร็จ' : 'ตารางโอกาส';
-      const title = mode === 'enhance' ? 'ตารางโอกาสสำเร็จ / โบนัส' : 'ตารางโอกาส — สุ่มสเตตัส';
-      const table = mode === 'enhance' ? this.rateTable() : this.statOddsTable(item);
-      if ($('forge-rates-btn').textContent !== btn) $('forge-rates-btn').textContent = btn;
-      if ($('forge-rates-title').textContent !== title) $('forge-rates-title').textContent = title;
-      if ($('forge-table').innerHTML !== table) $('forge-table').innerHTML = table;
-    }
-    const stones: StoneKind[] = mode === 'enhance' ? ['enhance', 'protect'] : [REROLL_STONE[mode]];
-    $('forge-foot').innerHTML = `<span class="ff-gold">${COIN_ICON} ${p.gold.toLocaleString()} G</span>` +
-      stones.map((s) => `<span class="ff-stone" title="${STONE_NAME[s]}">${stoneIcon(s)} ${STONE_NAME[s]} ${p.stoneCount(s)}</span>`).join('');
-
-    const slot = $('forge-slot');
-    const go = $<HTMLButtonElement>('forge-go');
-    $<HTMLButtonElement>('forge-cancel').disabled = !item;
-    slot.className = item ? 'filled' : '';
-    if (item) slot.style.setProperty('--rc', RARITY_COLOR[item.rarity]);
-    else slot.style.removeProperty('--rc');
-    const label = `${FORGE_ICON} ${mode === 'enhance' ? 'ตีบวก' : REROLL_NAME[mode]}`;
-    if (!item) {
-      slot.innerHTML = '';
-      $('forge-drop-hint').innerHTML = 'ลากอุปกรณ์มาวางที่นี่<small>หรือคลิกอุปกรณ์ในกระเป๋า / ที่สวมอยู่</small>';
-      $('forge-item').innerHTML = '<div class="fi-empty">ยังไม่ได้วางอุปกรณ์</div>';
-      $('forge-cost').innerHTML = '';
-      go.disabled = true;
-      go.innerHTML = label;
-      this.renderForgeAuto(undefined, 'x');
-      return;
-    }
-    const cur = plusOf(item);
-    slot.innerHTML = itemIcon(item) + (cur ? `<span class="iplus">+${cur}</span>` : '');
-    $('forge-drop-hint').innerHTML = `<span style="color:${RARITY_COLOR[item.rarity]}">${itemName(item)}</span>`;
-    const worn = Object.values(p.equipment).includes(item);
-    $('forge-item').innerHTML =
-      `<div class="fi-name" style="color:${RARITY_COLOR[item.rarity]}">${itemName(item)}</div>` +
-      `<div class="fi-meta">${SLOT_LABEL[item.slot]} · ${worn ? 'สวมใส่อยู่' : 'ในกระเป๋า'} · iLv.${item.level}` +
-      ` · ${cur ? `+${cur} (โบนัส +${bonusPct(cur)}%)` : 'ยังไม่ตีบวก'}</div>` +
-      `<div class="fi-lines">${this.forgeLines(item, mode)}</div>`;
-    const why = mode === 'enhance' ? this.renderEnhanceCost(item) : this.renderRerollCost(item, mode);
-    go.disabled = !!why || !!this.forgeAuto;
-    go.innerHTML = why || label;
-    this.renderForgeAuto(item, why);
-  }
-
-  /** The Auto enhance controls: shown in the enhance menu with an item that can still go up, and the /admin switch on. */
-  private renderForgeAuto(item: Item | undefined, why: string): void {
-    const wrap = $('forge-auto');
-    const run = this.forgeAuto;
-    const show = currentBalance().forgeAuto && this.forgeMode === 'enhance' && !!item && (!!run || plusOf(item) < MAX_PLUS);
-    wrap.classList.toggle('hidden', !show);
-    if (!show || !item) return;
-    const sel = $<HTMLSelectElement>('forge-auto-target');
-    const from = Math.min(plusOf(item) + 1, MAX_PLUS);
-    const key = `${item.uid}:${from}`;
-    if (sel.dataset.key !== key) {
-      // Keep the player's pick for the same item; a new item starts at one level up.
-      const keep = sel.dataset.key?.startsWith(`${item.uid}:`) ? Number(sel.value) : 0;
-      sel.innerHTML = '';
-      for (let n = from; n <= MAX_PLUS; n++) sel.add(new Option(`ถึง +${n}`, String(n)));
-      sel.value = String(run ? Math.max(run.target, from) : keep >= from ? keep : from);
-      sel.dataset.key = key;
-    }
-    sel.disabled = !!run;
-    const btn = $<HTMLButtonElement>('forge-auto-btn');
-    btn.classList.toggle('running', !!run);
-    btn.textContent = run ? '■ หยุด' : '▶ Auto';
-    btn.disabled = !run && !!why;
-    btn.title = run ? `ตีบวก Auto ถึง +${run.target} · กดเพื่อหยุด` : 'ตีบวกให้เองทีละครั้งจนถึงระดับที่เลือก หรือจนทอง/หินหมด';
-  }
-
-  /** Starts Auto enhance on the item in the slot, up to the level picked beside the button. */
-  private startForgeAuto(): void {
-    const item = this.forgeItem();
-    if (!item || this.forgeAuto || !currentBalance().forgeAuto || this.forgeMode !== 'enhance') return;
-    const target = Math.min(MAX_PLUS, Math.max(plusOf(item) + 1, Number($<HTMLSelectElement>('forge-auto-target').value) || 0));
-    const run: ForgeAutoRun = { uid: item.uid, target, protect: this.forgeProtect };
-    const why = this.forgeAutoBlock(run);
-    if (why) {
-      this.log(`🔨 ตีบวก Auto เริ่มไม่ได้: ${why}`, '#ff8a6a');
-      return;
-    }
-    this.forgeAuto = run;
-    this.log(`🔨 เริ่มตีบวก Auto ${itemName(item)} → +${target}${run.protect ? ' (ใช้หินกันระดับลด)' : ''}`, '#c9a8ff');
-    if (!this.enhancing) this.renderForge();
-    void this.runForgeAuto(run);
-  }
-
-  /** Stops Auto enhance (if it runs) and says why in the chat log. */
-  private stopForgeAuto(why: string): void {
-    if (!this.forgeAuto) return;
-    this.forgeAuto = null;
-    this.log(`🔨 ตีบวก Auto หยุด: ${why}`, '#c9a8ff');
-    if (this.forgeOpen && !this.enhancing) this.renderForge();
-  }
-
-  /** Why Auto can't make another attempt now ('' = it can). The server checks it all again on every attempt. */
-  private forgeAutoBlock(run: ForgeAutoRun): string {
-    const p = this.g.player;
-    if (!currentBalance().forgeAuto) return 'ผู้ดูแลปิดตีบวก Auto';
-    if (!this.forgeOpen || this.forgeMode !== 'enhance') return 'ปิดหน้าต่างช่างตีเหล็ก';
-    if (!p.alive) return 'ตัวละครล้ม';
-    const item = this.forgeItem();
-    if (!item || item.uid !== run.uid) return 'ไม่พบอุปกรณ์ในช่องแล้ว';
-    if (plusOf(item) >= MAX_PLUS) return `ถึงระดับสูงสุด +${MAX_PLUS} แล้ว`;
-    if (plusOf(item) >= run.target) return `ถึง +${plusOf(item)} แล้ว`;
-    if (p.gold < enhanceCost(item)) return 'ทองไม่พอ';
-    if (p.stoneCount('enhance') < stonesNeeded(item)) return `${STONE_NAME.enhance}ไม่พอ`;
-    if (run.protect && dropsOnFail(item) && p.stoneCount('protect') < 1) return `${STONE_NAME.protect}หมด`;
-    return '';
-  }
-
-  /** The Auto loop: one attempt at a time, each waiting for the bar and its result like a click would. */
-  private async runForgeAuto(run: ForgeAutoRun): Promise<void> {
-    const wait = (ms: number) => new Promise<void>((done) => setTimeout(done, Math.max(0, ms)));
-    let missed = 0;
-    while (this.forgeAuto === run) {
-      while (this.enhancing || this.forgeCooling()) await wait(Math.max(50, this.forgeReadyAt - performance.now() + 20));
-      // A little past the bar, so the server's own cooldown (its tick and the ping) has surely ended too.
-      await wait(FORGE_AUTO_GAP_MS);
-      if (this.forgeAuto !== run) return;
-      const why = this.forgeAutoBlock(run);
-      if (why) {
-        this.stopForgeAuto(why);
-        return;
-      }
-      const got = await this.enhance(run.protect);
-      if (this.forgeAuto !== run) return;
-      if (got) {
-        missed = 0;
-        // Judge the target from the server's answer, not the snapshot (it may not have caught up yet).
-        if (plusOf(got) >= Math.min(run.target, MAX_PLUS)) {
-          this.stopForgeAuto(`ถึง +${plusOf(got)} แล้ว`);
-          return;
-        }
-      } else if (++missed >= 2) {
-        // No answer twice in a row (lost link, or the server turned it down): stop rather than keep firing.
-        this.stopForgeAuto('server ไม่ตอบรับ');
-        return;
-      }
-    }
-  }
-
-  /** The item's stat lines as they are now; after a reroll, what each line was before it. */
-  private forgeLines(item: Item, mode: 'enhance' | RerollKind): string {
-    const r1 = (v: number) => fmtNum(Math.round(v * 10) / 10);
-    if (!item.lines?.length) {
-      // Items from before tiers: totals only.
-      const stats = effectiveStats(item);
-      return (Object.keys(stats) as StatKey[]).map((k) => `<div class="fd-line">+${r1(stats[k] ?? 0)} ${STAT_LABEL[k]}</div>`).join('');
-    }
-    const ranges = lineRanges(item);
-    const hasExtra = !!ranges?.some((r) => !r.main);
-    const prev = mode !== 'enhance' && this.rerollPrev?.uid === item.uid ? this.rerollPrev.lines : null;
-    return item.lines.map((l, i) => {
-      const fixed = mode === 'stat' && hasExtra && !!ranges?.[i]?.main;
-      const was = prev?.[i];
-      const changed = was && (was.stat !== l.stat || was.value !== l.value || was.tier !== l.tier);
-      const note = fixed ? '<span class="was">หลัก ไม่เปลี่ยน</span>'
-        : changed && was.stat !== l.stat ? `<span class="was">เดิม +${fmtNum(was.value)} ${STAT_LABEL[was.stat]}</span>`
-        // Same stat: how much it moved, green up or red down.
-        : changed && was.value !== l.value ? `<span class="${l.value > was.value ? 'up' : 'down'}">${l.value > was.value ? '+' : '−'}${fmtNum(Math.abs(l.value - was.value))}</span>`
-        : changed ? '<span class="was">เท่าเดิม</span>'
-        : prev ? '<span class="was">เท่าเดิม</span>' : '';
-      return `<div class="fd-line${fixed ? ' fixed' : ''}"><span>${this.lineHtml(l)}</span>${note}</div>`;
-    }).join('');
-  }
-
-  /** Enhance: success chance, cost, stones and the protection tick box. Returns why it can't be done ('' = it can). */
-  private renderEnhanceCost(item: Item): string {
-    const p = this.g.player;
-    const cur = plusOf(item);
-    if (cur >= MAX_PLUS) {
-      $('forge-cost').innerHTML = `<div class="fc-max">ตีบวกถึงระดับสูงสุด +${MAX_PLUS} แล้ว</div>`;
-      return 'ระดับสูงสุดแล้ว';
-    }
-    const cost = enhanceCost(item);
-    const rate = successRate(item);
-    const pity = pityBonus(item);
-    const pct = (v: number) => `${Math.round(v * 1000) / 10}%`;
-    const hidden = cur + 1 >= HIDDEN_RATE_FROM;
-    const pityNote = pity <= 0 ? ''
-      : hidden ? `<small class="pity">ล้มมาแล้ว ${item.pity} ครั้ง (โอกาสเพิ่มขึ้น)</small>`
-      : `<small class="pity">รวม +${pct(pity)} จากล้ม ${item.pity} ครั้ง</small>`;
-    const need = stonesNeeded(item);
-    const haveEnh = p.stoneCount('enhance');
-    const canProtect = dropsOnFail(item);
-    const haveProt = p.stoneCount('protect');
-    if (haveProt < 1) this.forgeProtect = false;
-    // While Auto runs, show the choice it started with (the box is locked then).
-    const protect = canProtect && (this.forgeAuto ? this.forgeAuto.protect : this.forgeProtect);
-    $('forge-cost').innerHTML =
-      `<div class="fc-rate"${rate < 1 ? ` title="ล้มแต่ละครั้ง โอกาสครั้งถัดไป +${pct(PITY_STEP)} จนกว่าจะสำเร็จ"` : ''}><span>โอกาสสำเร็จ +${cur} → +${cur + 1}</span><b class="${rate < 1 ? 'risky' : ''}">${hidden ? '??' : pct(rate)}</b>` +
-      `${pityNote}</div>` +
-      `<div class="fd-row"><span>ค่าตีบวก</span><b class="${p.gold < cost ? 'bad' : ''}">${cost.toLocaleString()} G</b></div>` +
-      (need ? `<div class="fd-row"><span>${stoneIcon('enhance')} ${STONE_NAME.enhance}</span><b class="${haveEnh < need ? 'bad' : ''}">ใช้ ${need} / มี ${haveEnh}</b></div>` : '') +
-      (canProtect
-        ? `<label class="fd-protect${haveProt < 1 ? ' off' : ''}"><input type="checkbox" id="forge-protect"${protect ? ' checked' : ''}${haveProt < 1 || this.forgeAuto ? ' disabled' : ''}>` +
-          `${stoneIcon('protect')} ใช้${STONE_NAME.protect} (มี ${haveProt})</label>` +
-          (protect
-            ? '<div class="safe">ถ้าล้มเหลว เสียทองและหิน แต่ระดับเท่าเดิม</div>'
-            : `<div class="warn">⚠ ถ้าล้มเหลว ระดับลดเหลือ +${cur - 1}</div>`)
-        : `<div class="safe">${rate >= 1 ? 'สำเร็จแน่นอน' : 'ถ้าล้มเหลว เสียแค่ทอง ระดับเท่าเดิม'}</div>`);
-    (document.getElementById('forge-protect') as HTMLInputElement | null)?.addEventListener('change', (e) => {
-      this.forgeProtect = (e.target as HTMLInputElement).checked;
-      this.renderForge();
-    });
-    return p.gold < cost ? 'ทองไม่พอ' : haveEnh < need ? `${STONE_NAME.enhance}ไม่พอ` : '';
-  }
-
-  /** The reroll menus: what gets rerolled, the stone and the cost. Returns why it can't be done ('' = it can). */
-  private renderRerollCost(item: Item, kind: RerollKind): string {
-    const p = this.g.player;
-    const block = rerollBlock(item);
-    const ranges = lineRanges(item);
-    if (block || !ranges || !item.lines) {
-      $('forge-cost').innerHTML = `<div class="bad">${block ?? ''}</div>`;
-      return 'สุ่มไม่ได้';
-    }
-    const hasExtra = ranges.some((r) => !r.main);
-    const what = kind === 'values'
-      ? 'ทุกบรรทัดได้ค่าใหม่ในช่วงของ tier เดิม'
-      : hasExtra
-        ? 'สุ่ม 1 บรรทัดจากสเตตัสเสริม · สเตตัสหลักไม่เปลี่ยน'
-        : 'ไม่มีสเตตัสเสริม: สุ่ม tier และค่าใหม่ให้สเตตัสหลัก 1 บรรทัด (ชนิดเดิม)';
-    const cost = rerollCost(item, kind);
-    const stone = REROLL_STONE[kind];
-    const have = p.stoneCount(stone);
-    $('forge-cost').innerHTML =
-      `<div class="safe">${what}${plusOf(item) ? ` · ระดับ +${plusOf(item)} ยังอยู่` : ''}</div>` +
-      `<div class="fd-row"><span>${stoneIcon(stone)} ${STONE_NAME[stone]}</span><b class="${have < 1 ? 'bad' : ''}">ใช้ 1 / มี ${have}</b></div>` +
-      `<div class="fd-row"><span>ค่าบริการ</span><b class="${p.gold < cost ? 'bad' : ''}">${cost.toLocaleString()} G</b></div>`;
-    return have < 1 ? `ไม่มี${STONE_NAME[stone]}` : p.gold < cost ? 'ทองไม่พอ' : '';
-  }
-
-  /** One line as the blacksmith shows it: value, stat, tier and the tier's range. */
-  private lineHtml(l: StatLine): string {
-    return `+${fmtNum(l.value)} ${STAT_LABEL[l.stat]} <span class="tier t${l.tier}">T${l.tier}: ${fmtNum(l.min)}–${fmtNum(l.max)}</span>`;
-  }
-
-  /** Asks first (the old values are gone for good), then rerolls the selected item. */
-  private askReroll(kind: RerollKind): void {
-    const item = this.forgeItems().find((w) => w.uid === this.forgeSel);
-    const ranges = item && lineRanges(item);
-    if (!item || !ranges || !item.lines || this.enhancing || this.forgeCooling()) return;
-    const over = item.lines.some((l) => l.value > l.max);
-    this.confirm(
-      `${REROLL_NAME[kind]} ${itemName(item)}?<br><small>ค่าบริการ ${rerollCost(item, kind).toLocaleString()} G + ${STONE_NAME[REROLL_STONE[kind]]} 1 ก้อน · ค่าเดิมจะหายไป ย้อนคืนไม่ได้` +
-      `${over ? '<br>⚠ มีสเตตัสที่เกินช่วงปกติ จะกลับเข้าช่วงปกติ' : ''}</small>`,
-      REROLL_NAME[kind],
-      () => void this.reroll(item, kind),
-    );
-  }
-
-  private async reroll(item: Item, kind: RerollKind): Promise<void> {
-    if (this.enhancing || this.forgeCooling()) return;
-    const before = (item.lines ?? []).map((l) => ({ ...l }));
-    this.enhancing = true;
-    this.startForgeCd();
-    const [out] = await Promise.all([this.g.backend.reroll(item.uid, kind), this.swingHammer(), this.forgeCdDone()])
-      .finally(() => (this.enhancing = false));
-    if (!out) {
-      this.forgeResult('fail', 'สุ่มไม่สำเร็จ');
-      this.renderForge();
-      return;
-    }
-    this.rerollPrev = { uid: item.uid, lines: before };
-    this.forgeResult('ok', `${REROLL_NAME[kind]}แล้ว`);
-    this.markInventory();
-    this.renderForge();
-  }
-
-  /** True while the blacksmith cooldown (FORGE_CD) is running. */
-  private forgeCooling(): boolean {
-    return performance.now() < this.forgeReadyAt;
-  }
-
-  /** Resolves when the cooldown bar has drained: results wait for it (owner 2026-11-18: never before the bar is full). */
-  private forgeCdDone(): Promise<void> {
-    return new Promise((done) => setTimeout(done, Math.max(0, this.forgeReadyAt - performance.now())));
-  }
-
-  /** Starts the blacksmith cooldown: the action button shows a draining bar until it ends. */
-  private startForgeCd(): void {
-    this.forgeReadyAt = performance.now() + FORGE_CD * 1000;
-    const go = $('forge-go');
-    go.style.setProperty('--cd', `${FORGE_CD}s`);
-    go.classList.remove('cooling');
-    void go.offsetWidth; // restart the bar
-    go.classList.add('cooling');
-    setTimeout(() => {
-      if (!this.forgeCooling()) go.classList.remove('cooling');
-    }, FORGE_CD * 1000 + 20);
-  }
-
-  /** Swings the hammer over the forge slot; resolves when it has struck, so the result shows after the hit. */
-  private swingHammer(): Promise<void> {
-    const ms = 600;
-    const el = $('forge-hammer');
-    el.style.setProperty('--swing', `${ms}ms`);
-    el.classList.remove('swing');
-    void el.offsetWidth; // restart the animation
-    el.classList.add('swing');
-    return new Promise((done) => setTimeout(() => {
-      el.classList.remove('swing');
-      done();
-    }, ms));
-  }
-
-  /**
-   * One enhance attempt on the item in the slot. `protectAuto` = Auto's protection choice (else the tick box).
-   * Returns the item as the server left it, false when it didn't answer (or refused), null when nothing was sent.
-   * Auto sends its protect choice as is: the snapshot may lag, and the server only uses a stone when a fail could drop.
-   */
-  private async enhance(protectAuto?: boolean): Promise<Item | false | null> {
-    if (!this.forgeSel || this.enhancing || this.forgeCooling()) return null;
-    const sel = this.forgeItems().find((w) => w.uid === this.forgeSel);
-    const protect = protectAuto ?? (!!sel && dropsOnFail(sel) && this.forgeProtect);
-    this.enhancing = true;
-    this.startForgeCd();
-    // The result waits for the hammer and for the cooldown bar to fill, whichever is later.
-    const [out] = await Promise.all([this.g.backend.enhance(this.forgeSel, protect), this.swingHammer(), this.forgeCdDone()])
-      .finally(() => (this.enhancing = false));
-    if (!out) {
-      this.renderForge();
-      return false;
-    }
-    const { result, item } = out;
-    // Short enough for one line on the narrow stage (owner 2026-11-18); forgeResult shrinks it if it still isn't.
-    if (result === 'success') {
-      this.forgeResult('ok', `สำเร็จ! ระดับขึ้นเป็น +${plusOf(item)}`);
-    } else {
-      this.forgeResult('fail', result === 'drop' ? `ล้มเหลว! ระดับลดลงเหลือ +${plusOf(item)}`
-        : result === 'saved' ? `ล้มเหลว… หินกันระดับลด ยังเป็น +${plusOf(item)}`
-        : 'ล้มเหลว… ระดับเท่าเดิม');
-    }
-    this.markInventory();
-    this.renderForge();
-    return item;
+    this.forge.openForge();
   }
 
   /** True while the blacksmith window is open (Game skips your own overhead enhance text then: the window shows it). */
   get forgeShown(): boolean {
-    return this.forgeOpen;
+    return this.forge.forgeShown;
   }
 
-  /** "สุ่มสเตตัส": which stats an extra line can become and the tier chances, for this item if one is placed. */
-  private statOddsTable(item: Item | undefined): string {
-    const odds = statRerollOdds(item);
-    const pct = (c: number) => `${Math.round(c * 1000) / 10}%`;
-    const forItem = !!item && !!lineRanges(item);
-    let html = `<div class="odds-sub">${odds.mainOnly ? 'สเตตัสหลักที่อาจถูกสุ่ม' : 'ชนิดสเตตัสที่อาจได้'}${forItem ? ' (ชิ้นนี้)' : ''}</div>` +
-      '<table class="odds-stats"><tr><th>สเตตัส</th><th>โอกาส</th></tr>';
-    for (const s of odds.stats) {
-      html += `<tr class="${s.chance > 0 ? '' : 'off'}"><td>${STAT_LABEL[s.stat]}</td><td>${s.chance > 0 ? pct(s.chance) : 'ซ้ำบรรทัดอื่น'}</td></tr>`;
-    }
-    html += '</table><div class="odds-sub">โอกาสได้แต่ละ tier</div><table><tr>' +
-      odds.tiers.map((_, i) => `<th><span class="tier t${i + 1}">T${i + 1}</span></th>`).join('') + '</tr><tr>' +
-      odds.tiers.map((c) => `<td>${pct(c)}</td>`).join('') + '</tr></table>';
-    const note = odds.mainOnly
-      ? 'ชิ้นนี้ไม่มีสเตตัสเสริม: สุ่มแค่ tier และค่าของสเตตัสหลัก 1 บรรทัด ชนิดไม่เปลี่ยน'
-      : 'สุ่มเปลี่ยนสเตตัสเสริม 1 บรรทัด ทุกบรรทัดมีโอกาสเท่ากัน · ไม่ซ้ำกับสเตตัสเสริมบรรทัดอื่น · สเตตัสหลักไม่เปลี่ยน' +
-        (forItem ? '' : ' · วางอุปกรณ์เพื่อดูโอกาสของชิ้นนั้น');
-    return html + `<div class="hint">${note}</div>`;
-  }
-
-  private rateTable(): string {
-    let html = '<table><tr><th>บวก</th><th>สำเร็จ</th><th>ถ้าล้ม</th><th>หินตีบวก</th><th>โบนัสรวม</th></tr>';
-    for (let t = 1; t <= MAX_PLUS; t++) {
-      const fail = rateFor(t) >= 1 ? '—' : t >= DROP_ON_FAIL_FROM ? 'ระดับ −1' : 'เสียแค่ทอง';
-      html += `<tr><td>+${t}</td><td>${t >= HIDDEN_RATE_FROM ? '??' : `${Math.round(rateFor(t) * 1000) / 10}%`}</td><td>${fail}</td>` +
-        `<td>${t >= STONE_FROM ? ENHANCE_STONES_PER_TRY : '—'}</td><td>+${bonusPct(t)}%</td></tr>`;
-    }
-    return html + '</table><div class="hint">ตีบวกได้ทุกช่อง (อาวุธ หมวก เกราะ รองเท้า แหวน) · โบนัสเป็น % ของทุกค่าบนชิ้นนั้น' +
-      ` · ล้มแต่ละครั้งเพิ่มโอกาส +${Math.round(PITY_STEP * 100)}% จนกว่าจะสำเร็จ` +
-      ` · ${STONE_NAME.protect}กันระดับลด, ${STONE_NAME.enhance}ใช้ตั้งแต่ +${STONE_FROM} — ดรอปจากบอสเท่านั้น</div>`;
-  }
-
-  private entryColor(e: BagEntry): string {
-    return isPotion(e) ? POTION_COLOR[e.potion] : isStone(e) ? STONE_COLOR[e.stone] : RARITY_COLOR[e.rarity];
-  }
+  // ------------------------------------------------------------ bag
 
   itemCell(item: BagEntry | null | undefined, attrs: string, placeholder = '', selected = false): string {
     if (!item) return `<div class="cell empty" ${attrs}>${placeholder}</div>`;
@@ -2357,24 +1282,24 @@ export class Hud {
       `<div class="stat"><span>${STAT_LABEL[k]}</span><b>${fmt(k, p.stats[k])}</b></div>`,
     ).join('');
     $('inv-gold').innerHTML = `${COIN_ICON} ${p.gold.toLocaleString()} G`;
-    $('inv-pots').innerHTML = this.potionTotals();
+    $('inv-pots').innerHTML = potionTotals(this.g.player);
     const lf = $('loot-filter');
     for (const r of RARITIES) lf.querySelector<HTMLInputElement>(`[data-rarity="${r}"]`)!.checked = p.lootFilter.rarities.includes(r);
     syncPots(lf, p.lootFilter);
-    if (this.stashOpen) this.renderStash();
+    if (this.stash.isOpen) this.stash.renderStash();
     $('bag-hint').textContent = this.g.trade.open
       ? 'กำลังเทรด: คลิกของเพื่อเสนอ · ลากไปที่หน้าต่างเทรดก็ได้ (Shift+ลาก = เสนอบางส่วนของกองยา/หิน) · ของที่เสนออยู่มีกรอบเขียว'
       : this.market.isOpen
       ? this.market.bagHint
-      : this.stashOpen
+      : this.stash.isOpen
       ? 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = ฝากเข้าคลัง · ลากไปวางในคลังได้'
-      : this.shopOpen
+      : this.shop.isOpen
       ? 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = ขายให้พ่อค้า · คลิกช่องสวมใส่ = ถอด'
       : 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = วางลงพื้น · คลิกช่องสวมใส่ = ถอด · ขายของได้ที่พ่อค้าเท่านั้น';
   }
 
   /** Dropping a bag item on a socket wears it there; a ring replaces the ring of that socket. */
-  private equipByDrag(i: number, slot: EquipSlot): void {
+  equipByDrag(i: number, slot: EquipSlot): void {
     const g = this.g;
     const item = g.player.bag[i];
     if (!isItem(item)) return;
@@ -2384,17 +1309,11 @@ export class Hud {
     else g.backend.equip(i, slot);
   }
 
-  // ------------------------------------------------------------ item detail (touch)
-
-  /** What the open detail sheet shows: a bag slot or a worn item. */
-  private detail: DetailAt | null = null;
-  private detailEl: HTMLElement | null = null;
-
   /** Ask before dropping a bag item on the ground. */
-  private askDrop(i: number): void {
+  askDrop(i: number): void {
     const item = this.g.player.bag[i];
     if (!item) return;
-    const name = `<b style="color:${this.entryColor(item)}">${entryName(item)}</b>`;
+    const name = `<b style="color:${entryColor(item)}">${entryName(item)}</b>`;
     this.confirm(
       `วาง ${name} ลงบนพื้น?<br><small>เก็บคืนได้ภายใน 60 วินาที · ถ้าจะขาย ให้ไปหาพ่อค้าที่เมือง</small>`,
       'วางลงพื้น',
@@ -2402,108 +1321,10 @@ export class Hud {
         if (this.g.player.bag[i] !== item) return;
         this.g.dropFromBag(i);
         this.markInventory();
-        if (this.forgeOpen) this.renderForge();
+        if (this.forge.isOpen) this.forge.renderForge();
       },
     );
   }
-
-  /**
-   * Touch only: the item's details with a button for each thing that can be done with it right now.
-   * Wear / use and drop are always there; sell, store, list, forge and trade show while that window is open.
-   */
-  private openDetail(at: DetailAt): void {
-    const g = this.g;
-    const p = g.player;
-    const entry = 'bag' in at ? p.bag[at.bag] : 'stash' in at ? p.stash.items[at.stash] : p.equipment[at.slot];
-    if (!entry) return this.closeDetail();
-    if (!this.detailEl) {
-      const el = document.createElement('div');
-      el.id = 'item-detail';
-      el.className = 'panel hidden';
-      el.innerHTML = '<div class="panel-head"><span>รายละเอียดไอเทม</span><button data-close>✕</button></div>' +
-        '<div class="idt-top"></div><div class="idt-acts"></div>';
-      el.querySelector('[data-close]')!.addEventListener('click', () => this.closeDetail());
-      $('hud').append(el);
-      this.detailEl = el;
-    }
-    this.detail = at;
-    // The tooltip builders write into #tooltip: borrow that HTML for the sheet.
-    this.showEntryTip(entry, new MouseEvent('mousemove'), '');
-    const info = $('tooltip').innerHTML;
-    this.hideTip();
-    const cell = 'bag' in at
-      ? $('bag-grid').querySelector<HTMLElement>(`[data-i="${at.bag}"]`)
-      : 'stash' in at
-        ? $('stash-grid').querySelector<HTMLElement>(`[data-s="${at.stash}"]`)
-        : $('equip-slots').querySelector<HTMLElement>(`[data-slot="${at.slot}"]`);
-    const icon = cell?.cloneNode(true) as HTMLElement | undefined;
-    icon?.removeAttribute('data-i');
-    icon?.removeAttribute('data-s');
-    icon?.removeAttribute('data-slot');
-    icon?.classList.remove('sel', 'dragging');
-    this.detailEl.querySelector('.idt-top')!.innerHTML = `<div class="idt-icon">${icon?.outerHTML ?? ''}</div><div class="idt-info">${info}</div>`;
-
-    const acts: { label: string; run: () => void; main?: boolean; off?: boolean }[] = [];
-    if ('stash' in at) {
-      const i = at.stash;
-      acts.push({ label: 'ย้ายเข้ากระเป๋า', run: () => g.backend.stashTake(i, -1), main: true });
-    } else if ('slot' in at) {
-      const slot = at.slot;
-      if (this.forgeOpen) acts.push({ label: 'วางที่ช่างตีเหล็ก', run: () => this.forgePlace(entry), main: true });
-      else acts.push({ label: 'ถอด', run: () => g.backend.unequip(slot), main: true });
-    } else {
-      const i = at.bag;
-      if (g.trade.open) acts.push({ label: 'เสนอในการเทรด', run: () => g.trade.offer(i), main: true });
-      else if (this.forgeOpen && isItem(entry)) acts.push({ label: 'วางที่ช่างตีเหล็ก', run: () => this.forgePlace(entry), main: true });
-      else if (isItem(entry)) {
-        const block = p.equipBlock(entry);
-        const places = wornPlaces(entry.slot);
-        if (block) acts.push({ label: `สวมใส่ไม่ได้ — ${block}`, run: () => undefined, main: true, off: true });
-        else if (places.length > 1) {
-          for (const place of places) acts.push({ label: `ใส่ช่อง${EQUIP_SLOT_LABEL[place]}`, run: () => this.equipByDrag(i, place), main: true });
-        } else acts.push({ label: 'สวมใส่', run: () => g.backend.equip(i), main: true });
-      } else if (isPotion(entry)) {
-        acts.push({ label: `ใช้กับปุ่มยา ${entry.potion === 'hp' ? 1 : 2}`, run: () => g.backend.equip(i), main: true });
-      } else if (isStone(entry)) {
-        const st = entry.stone;
-        if (st === 'return_scroll') acts.push({ label: 'ใช้', run: () => g.useReturnScroll(), main: true });
-        else if (isBuffScroll(st)) acts.push({ label: 'ใช้', run: () => g.backend.useBuffScroll(st), main: true });
-        else if (st === 'megaphone') acts.push({ label: 'ใช้', run: () => g.megaphone.toggle(true), main: true });
-      }
-      if (this.shopOpen) acts.push({ label: isStack(entry) ? 'ขายทั้งช่อง' : 'ขาย', run: () => this.sellFromBag(i) });
-      if (this.stashOpen) acts.push({ label: 'ฝากเข้าคลัง', run: () => g.backend.stashPut(i, -1) });
-      if (this.market.isOpen) acts.push({ label: 'ลงขายในตลาด', run: () => this.market.bagRightClick(i) });
-      if (isStack(entry) && entry.count > 1) {
-        const free = p.bag.findIndex((x) => !x);
-        acts.push({
-          label: free < 0 ? 'แบ่งกองไม่ได้ — กระเป๋าเต็ม' : 'แบ่งกอง',
-          run: () => this.splitDrag('bag', i, $('bag-grid').querySelector<HTMLElement>(`[data-i="${free}"]`), null),
-          off: free < 0,
-        });
-      }
-      acts.push({ label: 'วางลงพื้น', run: () => this.askDrop(i) });
-    }
-    const box = this.detailEl.querySelector<HTMLElement>('.idt-acts')!;
-    box.replaceChildren(...acts.map((a) => {
-      const b = document.createElement('button');
-      b.textContent = a.label;
-      if (a.main) b.classList.add('primary');
-      b.disabled = !!a.off;
-      b.onclick = () => {
-        this.closeDetail();
-        a.run();
-        this.markInventory();
-      };
-      return b;
-    }));
-    this.detailEl.classList.remove('hidden');
-  }
-
-  private closeDetail(): void {
-    this.detail = null;
-    this.detailEl?.classList.add('hidden');
-  }
-
   /** The tooltip for any bag entry (gear, potion or stone). */
   showEntryTip(entry: BagEntry, e: MouseEvent, hint: string): void {
     if (isPotion(entry)) this.showPotionTip(entry, e, hint);
@@ -2527,7 +1348,7 @@ export class Hud {
     let lines: string;
     if (item.lines?.length) {
       // Each rolled line with its tier (T1 best) and that tier's range at this item level.
-      lines = item.lines.map((l) => `<div class="tt-line">${this.lineHtml(l)}</div>`).join('');
+      lines = item.lines.map((l) => `<div class="tt-line">${lineHtml(l)}</div>`).join('');
       const bonus = enhanceBonus(item);
       const bonusText = (Object.keys(bonus) as StatKey[]).filter((k) => bonus[k]).map((k) => `+${r1(bonus[k] ?? 0)} ${STAT_LABEL[k]}`).join(' · ');
       if (bonusText) lines += `<div class="tt-enh">ตีบวก: ${bonusText}</div>`;
@@ -2562,7 +1383,7 @@ export class Hud {
     this.placeTip(tip, e);
   }
 
-  private showPotionTip(s: PotionStack, e: MouseEvent, hint: string): void {
+  showPotionTip(s: PotionStack, e: MouseEvent, hint: string): void {
     const tip = $('tooltip');
     const quick = this.g.player.potSel[s.potion] === s.size;
     tip.innerHTML =
@@ -2607,7 +1428,7 @@ export class Hud {
     this.placeTip(tip, e);
   }
 
-  private placeTip(tip: HTMLElement, e: MouseEvent): void {
+  placeTip(tip: HTMLElement, e: MouseEvent): void {
     // Touch: never pop up. iOS drops a tap's click when the tap's hover changes the page, so every
     // tooltip on a tappable cell (shop, stash, market, trade, forge) would eat the tap.
     if (isTouchMode()) {

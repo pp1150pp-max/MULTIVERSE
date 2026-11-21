@@ -19,7 +19,8 @@ const run = (sim: Sim, secs: number) => {
 
 // ---- the town
 {
-  ok(ZONES[HARBOR_ID] === ZONE_HARBOR && isHub(ZONE_HARBOR) && hubOf(ZONE_HARBOR) === ZONE_HARBOR, 'harbor_town is floor 2\'s town');
+  // ZONES holds the harbour with its layout read from harbor_town.json (zoneWithMap): a copy of ZONE_HARBOR, not the same object.
+  ok(ZONES[HARBOR_ID]?.id === ZONE_HARBOR.id && isHub(ZONE_HARBOR) && hubOf(ZONE_HARBOR) === ZONES[HARBOR_ID], 'harbor_town is floor 2\'s town');
   ok(!ZONE_HARBOR.allowAutoPlay && ZONE_HARBOR.spawns.length === 0, 'no monsters, no Auto');
   const sim = new Sim(ZONE_HARBOR);
   const t = sim.terrain;

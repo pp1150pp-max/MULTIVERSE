@@ -8,6 +8,7 @@ import { CIRCLE_FALLBACKS, FX_LAYER_NAME, FX_LAYER_RANGE, QUARKS_SKILLS, quarksK
 import { circleDesign, drawInner, drawOuter } from '../client/circleDesigns';
 import { skillExtras } from '../client/skillExtras';
 import { ATTACK_ROOT_RANGE, NO_ATTACK_ROOT } from '../shared/attackRootTuning';
+import { FORGE_RANGE, PLUS_CAP, PLUS_NEVER } from '../shared/forgeTuning';
 import { RIG_ARMOR_ITEMS, RIG_ARMOR_NAME, RIG_ARMORS, RIG_WEAPON_ITEMS, RIG_WEAPON_NAME, RIG_WEAPONS } from '../shared/rigLookTuning';
 import {
   applyBalance, BALANCE_RANGE, expTuneOf, PACK_ZONES, packCount, balanceChanges, checkBalance, classStatsAt, skillMpCost, codeBalance, currentBalanceTuning, hasParts, mergeBalance, MONSTER_STAT_NAME,
@@ -172,6 +173,10 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'row bal-line' }, ...boxes),
       h('div', { class: 'row bal-line' },
         h('label', {}, 'ลดคูลดาวน์สกิลได้สูงสุด %', numBox(() => draft.cdrCap, (n) => { draft.cdrCap = n; }, code.cdrCap, ...BALANCE_RANGE.cdrCap, 1, refresh))),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.buffDurSummons, onchange: (e: Event) => { draft.buffDurSummons = (e.target as HTMLInputElement).checked; refresh(); } }),
+          ' "เพิ่มเวลาบัฟ %" นับ summon ด้วย (ป้อมปืน โดรนสนับสนุน กับระเบิด อยู่นานขึ้นตาม %) · ปิด = นับแค่บัฟ')),
       h('div', { class: 'muted' }, 'สเตตัส "ลดคูลดาวน์สกิล %" จากของทุกชิ้นบวกกัน แล้วคูลดาวน์ Q/E/R × (1 − รวม%) ไม่เกินค่านี้ (ตีธรรมดาและแดชไม่ลด) · "เพิ่มเวลาบัฟ %" = เวลาบัฟที่สกิลให้ตัวเอง/ทีม × (1 + รวม%) · "เจาะเกราะ %" = DEF มอนที่ใช้คิดดาเมจ × (1 − รวม%) ต่อจากลดเกราะของสกิล'),
     );
     showChances();
@@ -631,9 +636,23 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       ),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.mobDropOnSafe, onchange: (e: Event) => { draft.mobDropOnSafe = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' มอนเลิกไล่เมื่อผู้เล่นเข้าเมือง/safe zone (ทิ้งเป้าทันทีแล้วเดินกลับจุดเกิดของตัวเอง ไม่ไล่ซ้ำตราบที่ผู้เล่นอยู่ในเมือง · ผู้เล่นออกแมพหรือตายก็เดินกลับเช่นกัน · บอสไม่เกี่ยว · ปิด = พฤติกรรมเดิม)'),
+      ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
           h('input', { type: 'checkbox', checked: draft.bossWipeKeepHp, onchange: (e: Event) => { draft.bossWipeKeepHp = (e.target as HTMLInputElement).checked; updateSummary(); } }),
           ' บอสไม่ฟื้นเลือดตอนทีมตายหมด (ห้องบอส: ทุกคนล้ม = บอสยืนรอ HP เท่าเดิม ไม่เดินกลับ/ไม่รีเซ็ต ชุบด้วยขนนกทันเวลาแล้วสู้ต่อ · ปิด = เดินกลับฟื้นเลือดเต็มเหมือนเดิม)'),
         h('label', {}, 'เวลาชุบตอนตายหมดทีม (วินาที)', numBox(() => draft.roomWipeSec, (n) => { draft.roomWipeSec = n; }, code.roomWipeSec, ...BALANCE_RANGE.roomWipeSec, 1, updateSummary)),
+      ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: `ค่าในโค้ด: ${code.roomBossDelay} วิ` }, 'นับถอยหลังก่อนบอสเกิด (วินาที, 0 = เกิดทันที · ใช้กับห้องที่เปิดใหม่)', numBox(() => draft.roomBossDelay, (n) => { draft.roomBossDelay = n; }, code.roomBossDelay, ...BALANCE_RANGE.roomBossDelay, 1, updateSummary)),
+      ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.reviveGuard, onchange: (e: Event) => { draft.reviveGuard = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' อมตะหลังชุบด้วยขนนกฟีนิกซ์ (ห้องบอส: ไม่โดนดาเมจ/สตัน/ผลัก/ติดโคลน/ช้า/คางคก ตัวกะพริบให้ทุกคนเห็น · หายทันทีเมื่อตีธรรมดา ใช้สกิล บัฟ หรือแดช · เดินและกินยาไม่หาย)'),
+        h('label', {}, 'เวลาอมตะ (วินาที)', numBox(() => draft.reviveGuardSec, (n) => { draft.reviveGuardSec = n; }, code.reviveGuardSec, ...BALANCE_RANGE.reviveGuardSec, 1, updateSummary)),
       ),
     );
     refresh();
@@ -709,8 +728,74 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   // ---------------------------------------------------------- blacksmith (forgeAuto: browser-side Auto enhance)
   const forgeCard = h('div', { class: 'card' });
   const drawForge = (): void => {
+    const f = draft.forge;
+    const cf = code.forge;
+    const outs: (() => void)[] = [];
+    const refresh = (): void => { outs.forEach((fn) => fn()); updateSummary(); };
+    const COST_LEVELS = [1, 40, 80];
+    const cost = (lv: number, t: number) => Math.round((f.costBase + lv * f.costPerLevel) * f.costMult[t]);
+    const rows: HTMLTableRowElement[] = [];
+    for (let t = 1; t <= PLUS_CAP; t++) {
+      const out = h('td', { class: 'bal-out' });
+      outs.push(() => {
+        let sum = 0;
+        for (let i = 1; i <= t; i++) sum += f.bonusStep[i];
+        const notes = [
+          `โบนัสรวม +${Math.round(sum * 1000) / 1000}%`,
+          `ราคา ${COST_LEVELS.map((lv) => `Lv${lv} ${cost(lv, t).toLocaleString()}`).join(' / ')} G`,
+          t > f.maxPlus ? 'เกินเพดาน (ตีไม่ได้)' : '',
+          t >= f.dropFrom ? 'ล้ม = ระดับ −1' : '',
+          t >= f.stoneFrom && f.stonesPerTry > 0 ? `หิน ${f.stonesPerTry}` : '',
+          t >= f.hiddenFrom ? 'ผู้เล่นเห็น ??' : '',
+        ].filter(Boolean);
+        out.textContent = notes.join(' · ');
+      });
+      rows.push(h('tr', {},
+        h('td', {}, `+${t}`),
+        h('td', {}, numBox(() => f.rate[t], (n) => { f.rate[t] = Math.round(n * 100) / 100; }, cf.rate[t], ...FORGE_RANGE.rate, 0.5, refresh)),
+        h('td', {}, numBox(() => f.costMult[t], (n) => { f.costMult[t] = n; }, cf.costMult[t], ...FORGE_RANGE.costMult, 1, refresh)),
+        h('td', {}, numBox(() => f.bonusStep[t], (n) => { f.bonusStep[t] = n; }, cf.bonusStep[t], ...FORGE_RANGE.bonusStep, 1, refresh)),
+        out));
+    }
+    type FNum = 'costBase' | 'costPerLevel' | 'pity' | 'dropFrom' | 'stoneFrom' | 'stonesPerTry' | 'announceFrom' | 'maxPlus' | 'cd' | 'orbMin' | 'sellPerPlus' | 'hiddenFrom';
+    const num = (k: FNum, label: string, range: readonly [number, number], step: number, whole: boolean) =>
+      h('label', {}, label, numBox(() => f[k], (n) => { f[k] = whole ? Math.round(n) : n; }, cf[k], range[0], range[1], step, refresh));
+    const never = `${PLUS_NEVER} = ไม่มี`;
+    const aura = f.aura.map((_, i) => numBox(() => f.aura[i], (n) => {
+      f.aura[i] = Math.round(n);
+    }, cf.aura[i], ...FORGE_RANGE.from, 1, refresh));
+    const auraNote = h('span', { class: 'muted' });
+    outs.push(() => {
+      const ok = f.aura.every((n, i) => i === 0 || n >= f.aura[i - 1]);
+      auraNote.textContent = ok ? '' : ' ⚠ ต้องเรียงจากน้อยไปมาก (server จะไม่รับ)';
+    });
     forgeCard.replaceChildren(
       h('h2', {}, 'ตีบวก'),
+      h('div', { class: 'muted' },
+        'โอกาส ราคา โบนัส และกติกาตีบวกทั้งหมด (เจ้าของ 2026-11-20) · มีผลทันทีทั้ง server และหน้าต่างช่างตีเหล็ก · ' +
+        `ราคา = (ราคาพื้นฐาน + เลเวลไอเทม × ราคาเพิ่มต่อเลเวล) × ตัวคูณของระดับเป้าหมาย · ล้มแต่ละครั้งได้ pity เพิ่มจนกว่าจะสำเร็จ · ` +
+        `ระดับ "เริ่ม…" ใส่ ${never} · ลดเพดานแล้ว ของที่ตีเกินไปแล้วคงระดับ/โบนัส/ลูกแก้วเดิม แค่ตีต่อไม่ได้ (เพดานสูงสุด +${PLUS_CAP}) · ` +
+        'แก้โบนัส % = ค่าสเตตัสของของที่ตีแล้วทุกชิ้นเปลี่ยนทันที'),
+      h('div', { class: 'bal-scroll' }, h('table', { class: 'bal-table' },
+        h('thead', {}, h('tr', {}, h('th', {}, 'ระดับเป้าหมาย'), h('th', {}, 'โอกาสสำเร็จ %'), h('th', {}, 'ตัวคูณราคา'), h('th', {}, 'โบนัส % ที่ได้เพิ่ม'), h('th', { class: 'bal-out' }, 'ได้จริง'))),
+        h('tbody', {}, ...rows))),
+      h('div', { class: 'row bal-line' },
+        num('costBase', 'ราคาพื้นฐาน (G) ', FORGE_RANGE.costBase, 1, true),
+        num('costPerLevel', 'ราคาเพิ่มต่อเลเวลไอเทม (G) ', FORGE_RANGE.costPerLevel, 1, false),
+        num('pity', 'pity ต่อครั้งที่ล้ม (%) ', FORGE_RANGE.pity, 0.5, false),
+        num('maxPlus', 'ระดับสูงสุด (+) ', FORGE_RANGE.maxPlus, 1, true),
+        num('cd', 'คูลดาวน์ช่างตีเหล็ก (วิ, ตีบวก+สุ่ม) ', FORGE_RANGE.cd, 0.1, false)),
+      h('div', { class: 'row bal-line' },
+        num('dropFrom', 'ระดับเริ่มตกเมื่อล้ม (+) ', FORGE_RANGE.from, 1, true),
+        num('stoneFrom', 'ระดับเริ่มใช้หินตีบวก (+) ', FORGE_RANGE.from, 1, true),
+        num('stonesPerTry', 'หินตีบวกต่อครั้ง ', FORGE_RANGE.stonesPerTry, 1, true),
+        num('announceFrom', 'ระดับเริ่มประกาศทั้งเซิร์ฟ (+) ', FORGE_RANGE.from, 1, true),
+        num('hiddenFrom', 'ระดับเริ่มซ่อนโอกาสเป็น ?? (+) ', FORGE_RANGE.from, 1, true)),
+      h('div', { class: 'row bal-line' },
+        num('orbMin', 'ระดับเริ่มมีลูกแก้ว (+) ', FORGE_RANGE.from, 1, true),
+        h('label', {}, 'ออร่าขั้น 1–4 เริ่มที่ (+) ', ...aura, auraNote),
+        num('sellPerPlus', 'ราคาขายให้พ่อค้าเพิ่มต่อระดับ (%) ', FORGE_RANGE.sellPerPlus, 5, false)),
+      h('h3', {}, 'ตีบวก Auto'),
       h('div', { class: 'muted' },
         'ตีบวก Auto: ปุ่มในหน้าต่างช่างตีเหล็ก (เมนูตีบวก) เลือกระดับเป้าหมายแล้วตีให้เองทีละครั้ง เร็วเท่ากดเอง (รอหลอดคูลดาวน์ + แสดงผลทุกครั้ง) · ' +
         'หยุดเมื่อถึงเป้า / ทองหรือหินไม่พอ / หินกันระดับลดหมด (ถ้าติ๊กไว้) / กดหยุด / ปิดหน้าต่าง เดินห่าง เปลี่ยนของ ตาย เปลี่ยนแมพ หลุด · ' +
@@ -721,6 +806,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
           ' เปิดใช้ตีบวก Auto'),
       ),
     );
+    outs.forEach((fn) => fn());
   };
 
   // ---------------------------------------------------------- item sets (src/shared/data/sets.ts)
@@ -848,7 +934,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         h('label', { title: 'ค่าในโค้ด: เปิด' }, h('input', { type: 'checkbox', checked: a.aoeGuard, onchange: (e: Event) => { a.aoeGuard = (e.target as HTMLInputElement).checked; refresh(); } }), ` ${AUTO_AOE_GUARD_NAME}`),
         num('aoeMargin', 0.1),
       ),
-      h('div', { class: 'muted' }, 'สกิลวงรอบตัว (เช่น ประจุระเบิดของนักเวท): Auto ข้ามสกิลนั้นถ้าไม่มีมอนอยู่ในวง (รัศมีสกิล + ขนาดตัวมอน + ระยะเผื่อ) แล้วใช้สกิลถัดไปในลำดับแทน · ปิดสวิตช์ = แบบเดิม กดเมื่อเป้าอยู่ในระยะตี'),
+      h('div', { class: 'muted' }, 'ทุกอาชีพ: Auto กดสกิลเมื่อสกิลนั้นถึงจริงเท่านั้น (ระยะสกิลตามที่ปรับ + ขนาดตัวมอน − ระยะเผื่อพลาด: มอนต้องเข้ามาลึกกว่าขอบสกิลเท่านี้ กันวืด ยิ่งมากยิ่งกดช้า) · วงรอบตัว = มีมอนในวง · ยิง/พุ่ง/ฟันด้านหน้า = เป้าอยู่ในระยะสกิล (ยิงระเบิดบวกวงระเบิด) · ตกที่จุด = ระยะร่าย + วงตก · บัฟ/สกิลวงที่ไม่มีดาเมจ กดตามเดิม · ไม่ถึง = ข้ามไปสกิลถัดไปในลำดับ ไม่มีสกิลไหนถึง = ตีธรรมดาต่อ (ไม่เดินเข้าไปเพิ่ม) · ปิดสวิตช์ = แบบเดิม กดทันทีที่ตีธรรมดาถึง'),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
           h('input', { type: 'checkbox', checked: draft.walkHidden, onchange: (e: Event) => { draft.walkHidden = (e.target as HTMLInputElement).checked; refresh(); } }),
@@ -872,6 +958,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     const mergeOn = h('input', { type: 'checkbox', checked: a.mergeNums, onchange: (e: Event) => { a.mergeNums = (e.target as HTMLInputElement).checked; refresh(); } });
     const ownOnly = h('input', { type: 'checkbox', checked: a.ownNumsOnly, onchange: (e: Event) => { a.ownNumsOnly = (e.target as HTMLInputElement).checked; refresh(); } });
     const smoothOn = h('input', { type: 'checkbox', checked: a.smoothShots, onchange: (e: Event) => { a.smoothShots = (e.target as HTMLInputElement).checked; refresh(); } });
+    const droneOn = h('input', { type: 'checkbox', checked: a.droneFollow, onchange: (e: Event) => { a.droneFollow = (e.target as HTMLInputElement).checked; refresh(); } });
     const circlesOn = h('input', { type: 'checkbox', checked: a.circles, onchange: (e: Event) => { a.circles = (e.target as HTMLInputElement).checked; refresh(); } });
     const zoneCirclesOn = h('input', { type: 'checkbox', checked: a.zoneCircles, onchange: (e: Event) => { a.zoneCircles = (e.target as HTMLInputElement).checked; refresh(); } });
     const quarksOn = h('input', { type: 'checkbox', checked: a.quarks, onchange: (e: Event) => { a.quarks = (e.target as HTMLInputElement).checked; refresh(); } });
@@ -926,6 +1013,9 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('h3', {}, 'กระสุน'),
       h('div', { class: 'row bal-line' }, flag(smoothOn, a.smoothShots !== ca.smoothShots, ' กระสุนบินลื่น (ไม่ดึงกลับตาม server)')),
       h('div', { class: 'muted' }, 'เปิด (ค่าในโค้ด): เบราว์เซอร์ให้กระสุนบินต่อเอง ตำแหน่งจาก server ดันไปข้างหน้าครึ่งหนึ่งของปิง ห่างนิดหน่อยค่อย ๆ ขยับเข้า ห่างเกิน 3 หน่วยค่อยกระโดด · ปิด: แบบเดิม กระสุนกระโดดไปตำแหน่งของ server ทุกครั้งที่ข้อมูลมา (เห็นกระตุกตอนยิงเยอะ เช่น Bullet Storm) · เป็นแค่ภาพ ดาเมจยังตัดสินที่ server'),
+      h('h3', {}, 'โดรนสนับสนุน (มือปืน)'),
+      h('div', { class: 'row bal-line' }, flag(droneOn, a.droneFollow !== ca.droneFollow, ' โดรนบินตามลื่น'), num('droneSpeed', 0.5), num('droneDist', 0.1)),
+      h('div', { class: 'muted' }, 'เปิด (ค่าในโค้ด): โดรนเป็นตัวเดียวตลอดอายุสกิล บินตามหลังไหล่ตัวละครเหมือนสัตว์เลี้ยง ลอยขึ้นลงเบา ๆ หันไปทางมอนตอนยิง หมดเวลา/ตาย/เปลี่ยนแมพแล้วหายไป · ปิด: แบบเดิม วาดภาพโดรนใหม่ที่ไหล่ทุกนัด · ความเร็วตามยิ่งมากยิ่งติดตัว ระยะห่าง 1 = ตำแหน่งที่ server ใช้ปล่อยกระสุน · เป็นแค่ภาพ ดาเมจ/ระยะ/จังหวะยิงตัดสินที่ server'),
     );
   };
 

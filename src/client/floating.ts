@@ -387,7 +387,11 @@ export class Floating {
       // Jumps up fast then hangs in the air; a hit starts oversized and snaps down to size.
       const rise = 46 * (1 - (1 - k) * (1 - k));
       const pop = 1 + n.pop * Math.max(0, 1 - n.popT / POP_TIME);
-      n.el.style.transform = `translate(${(s.sx + n.dx * k).toFixed(1)}px, ${(s.sy - n.dy - rise).toFixed(1)}px) translate(-50%, -50%) scale(${pop.toFixed(3)})`;
+      // Position goes in `translate`, not `transform`: the CSS pop animations (enh-pop, the crit size) use the
+      // `scale` property, which applies outside `transform` and would scale the position too, flinging the text
+      // in from the top-left corner (the +N over another player's head slid in from the left).
+      n.el.style.translate = `${(s.sx + n.dx * k).toFixed(1)}px ${(s.sy - n.dy - rise).toFixed(1)}px`;
+      n.el.style.transform = `translate(-50%, -50%) scale(${pop.toFixed(3)})`;
       const fade = k > 0.6 ? (1 - (k - 0.6) / 0.4).toFixed(2) : '';
       if (n.el.style.opacity !== fade) n.el.style.opacity = fade;
     }
@@ -618,7 +622,7 @@ function headY(p: Player): number {
  */
 function paintBuffRow(row: HTMLElement, list: readonly { id: string; left: number; total: number }[], sig: string, at: number): string {
   const next = list.map((b) => b.id).join(',');
-  if (next !== sig) row.innerHTML = list.map((b) => `<div class="vbuff">${skillIcon(b.id)}<i></i></div>`).join('');
+  if (next !== sig) row.innerHTML = list.map((b) => `<div class="vbuff" data-skill="${b.id}">${skillIcon(b.id)}<i></i></div>`).join('');
   if (!list.length) return next;
   const gone = performance.now() / 1000 - at;
   list.forEach((b, i) => {

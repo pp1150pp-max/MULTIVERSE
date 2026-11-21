@@ -1,0 +1,73 @@
+// The baked maps of floor 1 and 2 (src/shared/data/maps/*.json, made by tools/bake_maps.ts) must equal what the old generators
+// build, value for value (docs/plans/map-editor.md 1.1). PR 3 reads them (see map-terrain.test.ts); this compares them with the generators.
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { ok, finish } from './check';
+import { ZONES, GENERATED_ROOMS, arenaRadius, isHub } from '../src/shared/data/zones';
+import { MONSTERS } from '../src/shared/data/monsters';
+import { NPC_IDS, type NpcId } from '../src/shared/data/npcs';
+import { npcHasCollider, Terrain } from '../src/shared/sim/terrain';
+import { validateMap, type MapData } from '../src/shared/mapSchema';
+import { SHEET_SPECS } from '../src/client/assets';
+import { BAKED_IDS, MAPS_DIR, bakeZone, bakedText, generatedZone } from '../tools/bake_maps';
+
+const NPC_COLLIDER_R = 0.45; // Terrain's constructor gives every solid NPC one (npcHasCollider)
+const cmpXZR = (a: { x: number; z: number; r: number }, b: { x: number; z: number; r: number }) => a.x - b.x || a.z - b.z || a.r - b.r;
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+for (const id of BAKED_IDS) {
+  const file = readFileSync(join(MAPS_DIR, `${id}.json`), 'utf8');
+  const map = JSON.parse(file) as MapData;
+  const zone = generatedZone(id);
+  const isRoom = !!GENERATED_ROOMS[id];
+  const old = new Terrain(zone, null);
+
+  ok(file === bakedText(bakeZone(zone)), `${id}: re-baking gives the very same file`);
+  const all = validateMap(map, { propKeys: Object.keys(SHEET_SPECS), zoneIds: Object.keys(ZONES), monsterIds: Object.keys(MONSTERS), baseline: map });
+  const issues = all.filter((i) => i.severity === 'error');
+  ok(issues.length === 0, `${id}: passes validateMap${issues.length ? ' ' + JSON.stringify(issues.slice(0, 5)) : ''}`);
+  // The only thing allowed to be a warning: a floor's town starts in the middle of its fountain (nexus_city's, the harbour's ship's wheel).
+  ok(all.every((i) => i.severity === 'error' || (isHub(zone) && i.code === 'in_collision' && i.kind === 'zone')), `${id}: no unexpected warnings`);
+  const floor = zone.floor ?? 1;
+  ok(map.rev === 0 && map.floor === floor && map.props.every((p) => p.rot === 0), `${id}: rev 0, floor ${floor}, every rot 0`);
+
+  // props: same order, every field
+  ok(same(map.props.map((p) => ({ key: p.key, x: p.x, z: p.z, height: p.h, fade: p.fade, flip: p.flip })),
+    old.props.map((p) => ({ key: p.key, x: p.x, z: p.z, height: p.height, fade: p.fade, flip: !!p.flip }))), `${id}: props (${old.props.length}) equal`);
+  ok(new Set(map.props.map((p) => p.id)).size === map.props.length, `${id}: prop ids unique`);
+
+  // colliders: what the JSON gives (solid props + extras + one per NPC) as the same set as the old list
+  const fromJson = [
+    ...map.props.filter((p) => p.solid).map((p) => ({ x: p.x, z: p.z, r: (p.solid as { r: number }).r })),
+    ...(map.colliders ?? []),
+    ...map.npcs.filter((n) => npcHasCollider(n.id as NpcId, zone)).map((n) => ({ x: n.x, z: n.z, r: NPC_COLLIDER_R })),
+  ].sort(cmpXZR);
+  ok(map.props.every((p) => !p.solid || 'r' in p.solid), `${id}: baked solids are circles`);
+  ok(same(fromJson, [...old.colliders].sort(cmpXZR)), `${id}: colliders (${old.colliders.length}) equal`);
+
+  // spawns, portals, npcs, rest spots, lair, zone, paths, water
+  ok(same(map.spawns, zone.spawns.map((s) => ({ monster: s.monster, x: s.x, z: s.z, radius: s.radius, count: s.count, respawn: s.respawn }))), `${id}: spawns (${zone.spawns.length}) equal`);
+  // The optional fields (the way up a floor, the harbour's piers) only when set, as the bake writes them.
+  const portalOf = (p: (typeof zone.portals)[number]) => ({
+    to: p.to, x: p.x, z: p.z, minLevel: p.minLevel,
+    ...(p.requires ? { requires: p.requires } : {}), ...(p.soonName ? { soonName: p.soonName } : {}), ...(p.prop ? { prop: p.prop } : {}),
+  });
+  ok(same(map.portals, zone.portals.map(portalOf)), `${id}: portals equal`);
+  const npcOld = NPC_IDS.filter((n) => old.npcPos[n]).map((n) => ({ id: n, x: old.npcPos[n]!.x, z: old.npcPos[n]!.z }));
+  ok(same(map.npcs, npcOld), `${id}: npcPos (${npcOld.length}) equal`);
+  ok(same(map.rest, old.restSpots.map((r) => ({ kind: r.kind, x: r.x, z: r.z }))), `${id}: restSpots equal`);
+  ok(same(map.lair, zone.lair), `${id}: lair equal`);
+  ok(map.zone.half === zone.half && map.walkable.half === old.bound && map.zone.theme === zone.theme
+    && same(map.zone.quadrants, zone.quadrants) && same(map.zone.start, zone.start) && same(map.zone.safe, zone.safe), `${id}: zone, walkable, safe, quadrants equal`);
+  ok(same(map.paths.map((p) => p.pts), [zone.path, ...zone.branches].filter((pts) => pts.length)), `${id}: paths equal`);
+  if (isRoom) {
+    // Boss room: the room block is exactly what the code builds, and the file has nothing a room must not have.
+    ok(same(map.room, { of: zone.roomOf, arena: arenaRadius(zone), boss: { monster: zone.boss!.monster, x: zone.boss!.x, z: zone.boss!.z, radius: zone.boss!.radius } }), `${id}: room block (boss, arena) equals the code`);
+    ok(map.paths.length === 0 && map.portals.length === 0 && map.spawns.length === 0 && map.npcs.length === 0 && map.rest.length === 0 && map.water.length === 0 && !map.lair, `${id}: no paths, doors, spawns, NPCs, rest spots, water or lair`);
+    ok(map.zone.half === zone.half && same(map.zone.start, zone.start), `${id}: half and player start equal the generated room`);
+  } else ok(!map.room, `${id}: not a room`);
+  ok(same(map.water.filter((w) => w.kind === 'ice').map(({ kind, ...r }) => r), zone.iceLakes ?? [])
+    && same(map.water.filter((w) => w.kind === 'lava').map(({ kind, ...r }) => r), zone.lavaPools ?? []), `${id}: ice lakes and lava pools equal`);
+}
+
+finish('map-bake');

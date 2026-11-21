@@ -24,6 +24,7 @@ import {
 import type { LootKind } from './Loot';
 import { newStash, type StashData } from './stash';
 import { classBalance, currentBalance, finishStats } from '../balance';
+import { CHARGE_SKILLS, chargeMax, skipsAttackRoot } from '../skillTuning';
 import { attackRootTime } from '../attackRootTuning';
 import { AUTO_DEFAULT_KEYS, AUTO_LOOT_ORDERS, AUTO_OUT_ACTIONS, AUTO_TARGET_MODES, type AutoDefaults, type AutoLootOrder, type AutoOutAction, type AutoTargetMode } from '../autoTuning';
 import { MONSTERS } from '../data/monsters';
@@ -384,12 +385,19 @@ export class Player extends Unit {
   stats: Stats = emptyStats();
   /** Seconds of cooldown left, by skill id ('dash' for the dash): kept on the skill, so taking it off and on again doesn't reset it. */
   cd: Record<string, number> = {};
+  /**
+   * Charges held by skills that keep stacks (Land Mine, see chargeMax); a skill missing here is full. Not saved. While
+   * a skill is short of its max, `cd[id]` is the time until the next charge; the gap between two casts is `cd[id + ':gap']`.
+   */
+  charges: Record<string, number> = {};
+  /** Land mines lying on the ground (oldest first); one past the stack count makes the oldest vanish. Not saved. */
+  mines: { gone: boolean }[] = [];
   /** Skills learned and worn. Saved; changed only through Sim.learnSkill / refundSkill / wearSkill. */
   skillBook: SkillBook;
   /** Damage multiplier of the Charge running now (set when it is cast, by its rank). */
   chargeMult = 0;
   potCd = 0;
-  /** Sim time of the last blacksmith action (enhance or reroll), for FORGE_CD. Not saved. */
+  /** Sim time of the last blacksmith action (enhance or reroll), for forgeCd(). Not saved. */
   forgeAt = -Infinity;
   /** Seconds until the fountain or a campfire can restore this player again (Sim.rest). */
   restCd = 0;
@@ -455,6 +463,12 @@ export class Player extends Unit {
   private atkRootNew = false;
   /** Cursed into a toad by the Bog Witch (also stunned for as long). The client draws a toad instead. */
   toadT = 0;
+  /**
+   * Seconds left untouchable after getting up with a phoenix feather in a boss room (owner 2026-11-20): no damage
+   * and no boss effects, and everyone sees the character blink. Attacking, a skill (buffs too) or a dash ends it;
+   * walking and potions don't. In the browser: 1 while the server says so.
+   */
+  guardT = 0;
   /** Its skill buffs as the server last sent them (client only, sim/debuffs.ts BUFF_BIT). */
   buffBits = 0;
   /** The skill whose buff it got last (server: set by the cast; client: as sent), for its magic circle. '' = none. */
@@ -594,7 +608,8 @@ export class Player extends Unit {
   get moveSpeed(): number {
     return BASE_MOVE_SPEED * (1 + this.stats.moveSpeed / 100) * this.speedMult() * (this.mounted ? MOUNT_SPEED : 1);
   }
-  get attackRate(): number { return this.cls.attackRate * (1 + this.stats.atkSpeed / 100); }
+  /** Basic attacks a second: the class's rate as tuned on /admin (owner 2026-11-20) × the attack speed stat. */
+  get attackRate(): number { return (currentBalance().skills.basicRate[this.cls.id] ?? this.cls.attackRate) * (1 + this.stats.atkSpeed / 100); }
   get isDashing(): boolean { return this.dashT > 0; }
 
   /** Angle (radians, world x/z) the player is aiming at right now. */
@@ -623,6 +638,56 @@ export class Player extends Unit {
    * Full cooldown of this skill at its rank, cut by the "ลดคูลดาวน์สกิล %" item stat (owner 2026-11-19: Q/E/R,
    * not the basic attack or the dash; at most the /admin cap).
    */
+  /** Most charges this skill holds at its rank (0 = a plain cooldown skill). */
+  chargeMax(sk: SkillDef): number {
+    return chargeMax(currentBalance().skills, sk.id, this.skillRank(sk));
+  }
+
+  /** Charges held right now (only meaningful when chargeMax > 0). */
+  chargesOf(sk: SkillDef): number {
+    const max = this.chargeMax(sk);
+    return Math.min(max, this.charges[sk.id] ?? max);
+  }
+
+  /** Whether the skill can be cast as far as its cooldown goes (a charge skill: a charge in hand and the gap passed). */
+  skillReady(sk: SkillDef): boolean {
+    if (!this.chargeMax(sk)) return (this.cd[sk.id] ?? 0) <= 0;
+    return this.chargesOf(sk) > 0 && (this.cd[sk.id + ':gap'] ?? 0) <= 0;
+  }
+
+  /** The cast spent a charge (starts the recharge when it was full) and starts the gap. */
+  useCharge(sk: SkillDef): void {
+    const max = this.chargeMax(sk);
+    if (!max) {
+      this.cd[sk.id] = this.skillCooldown(sk);
+      return;
+    }
+    const had = this.chargesOf(sk);
+    this.charges[sk.id] = had - 1;
+    if (had >= max || !((this.cd[sk.id] ?? 0) > 0)) this.cd[sk.id] = this.skillCooldown(sk);
+    this.cd[sk.id + ':gap'] = currentBalance().skills.mineGap;
+  }
+
+  /** Runs after the cooldowns tick: a finished recharge gives a charge back and starts the next one while still short. */
+  tickCharges(): void {
+    for (const sk of this.cls.skills) {
+      if (!CHARGE_SKILLS.has(sk.id)) continue;
+      const max = this.chargeMax(sk);
+      if (!max) continue;
+      let have = this.chargesOf(sk);
+      if (have >= max) {
+        delete this.charges[sk.id];
+        continue;
+      }
+      if (!((this.cd[sk.id] ?? 0) > 0)) {
+        have++;
+        this.cd[sk.id] = have < max ? this.skillCooldown(sk) : 0;
+      }
+      if (have >= max) delete this.charges[sk.id];
+      else this.charges[sk.id] = have;
+    }
+  }
+
   skillCooldown(sk: SkillDef): number {
     if (sk.kind === 'basic' || sk.kind === 'dash') return sk.cooldown;
     const cut = Math.min(Math.max(0, this.stats.cdr ?? 0), currentBalance().cdrCap) / 100;
@@ -632,6 +697,11 @@ export class Player extends Unit {
   /** How long a buff this player's skill gives lasts: `seconds` × (1 + the "เพิ่มเวลาบัฟ %" item stat). */
   buffTime(seconds: number): number {
     return seconds * (1 + Math.max(0, this.stats.buffDur ?? 0) / 100);
+  }
+
+  /** How long this player's summon stays (turret, drone, land mine): buffTime when the buffDurSummons switch is on. */
+  summonTime(seconds: number): number {
+    return currentBalance().buffDurSummons ? this.buffTime(seconds) : seconds;
   }
 
   /** Hurt or attacked within the last few seconds (no swapping skills then). */
@@ -1107,6 +1177,7 @@ export class Player extends Unit {
     }
     const cdStep = sim.time < this.hasteUntil ? dt * (1 + this.haste) : dt;
     for (const k of Object.keys(this.cd)) this.cd[k] = Math.max(0, this.cd[k] - (k === 'dash' ? dt : cdStep));
+    this.tickCharges();
     this.atkT -= dt;
     this.potCd -= dt;
     this.restCd -= dt;
@@ -1114,6 +1185,7 @@ export class Player extends Unit {
     this.rootT = Math.max(0, this.rootT - dt);
     this.snareT = Math.max(0, this.snareT - dt);
     this.toadT = Math.max(0, this.toadT - dt);
+    this.guardT = Math.max(0, this.guardT - dt);
     this.atkRootT = Math.max(0, this.atkRootT - dt);
 
     const ooc = this.inCombat() ? 1 : OUT_OF_COMBAT_REGEN;
@@ -1191,6 +1263,7 @@ export class Player extends Unit {
       this.startDash(dx, dz, 4.8, 0.18, 'dash');
       quarksCue(sim, this, 'dash', Math.atan2(dz, dx));
       this.cd.dash = dashSkill.cooldown * passiveDashCdMult(this);
+      this.guardT = 0;
       return;
     }
 
@@ -1198,7 +1271,7 @@ export class Player extends Unit {
     const peaceful = sim.inSafe(this);
     for (const slot of peaceful ? [] : it.skills) {
       const sk = this.skill(slot);
-      if (!sk || (this.cd[sk.id] ?? 0) > 0) continue;
+      if (!sk || !this.skillReady(sk)) continue;
       const cost = this.skillMp(sk);
       if (this.mp < cost) {
         if (sim.time > this.noMpMsgT) {
@@ -1215,12 +1288,13 @@ export class Player extends Unit {
         // The skill's own class animation (skill_q/e/r), whichever slot it sits in.
         sim.anim(this.id, `skill_${sk.anim ?? slot}`, this.rootT > 0 ? { skill: sk.id } : { duration: this.attackAnimDuration(), fallback: 'attack', skill: sk.id });
         this.mp -= cost;
-        this.cd[sk.id] = this.skillCooldown(sk);
+        this.useCharge(sk);
+        this.guardT = 0;
         this.lastAttack = sim.time;
         passiveOnCast(this, sk);
         this.faceLockT = 0.3;
         // Movement skills and buffs don't stop the player, nor do ones that already stand them still (Headshot...).
-        if (this.dashT <= 0 && this.rootT <= 0) this.startAttackRoot(sk.id);
+        if (this.dashT <= 0 && this.rootT <= 0 && !skipsAttackRoot(currentBalance().skills, sk.id)) this.startAttackRoot(sk.id);
       }
       if (this.dashT > 0 || this.rootT > 0) return;
     }
@@ -1228,6 +1302,7 @@ export class Player extends Unit {
     if (it.basic && this.atkT <= 0 && !peaceful) {
       this.atkT = 1 / this.attackRate;
       this.lastAttack = sim.time;
+      this.guardT = 0;
       basicAttack(sim, this, aim);
       this.face(this.aimX, this.aimZ);
       sim.anim(this.id, 'attack', { duration: this.attackAnimDuration() });

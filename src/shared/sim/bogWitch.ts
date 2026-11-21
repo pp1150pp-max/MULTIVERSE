@@ -110,7 +110,7 @@ export class WitchSpells {
         }
         case 'pool':
           for (const p of sim.players) {
-            if (!p.alive || Math.hypot(p.x - h.x, p.z - h.z) > h.r + p.radius) continue;
+            if (!p.alive || p.guardT > 0 || Math.hypot(p.x - h.x, p.z - h.z) > h.r + p.radius) continue;
             // Slowed while standing in it (and a moment after stepping out).
             p.slowAmt = Math.max(p.slowT > 0 ? p.slowAmt : 0, VIAL.slow);
             p.slowT = Math.max(p.slowT, VIAL.slowFor);
@@ -127,7 +127,7 @@ export class WitchSpells {
             for (const p of sim.players) {
               if (!p.alive || a.cast?.has(p.id) || Math.hypot(p.x - h.x, p.z - h.z) > h.r + p.radius) continue;
               a.cast?.add(p.id);
-              const hurt = p.invulnT <= 0 && !sim.inSafe(p);
+              const hurt = p.invulnT <= 0 && p.guardT <= 0 && !sim.inSafe(p);
               sim.hitPlayer(m, p, GRASP.mult, {});
               if (hurt && p.alive) {
                 p.snareT = Math.max(p.snareT, GRASP.hold);
@@ -138,7 +138,7 @@ export class WitchSpells {
           return t < h.end;
         case 'hex': {
           const p = player(h.pid);
-          if (p && p.invulnT <= 0 && !sim.inSafe(p) && Math.hypot(p.x - h.x, p.z - h.z) <= h.r) {
+          if (p && p.invulnT <= 0 && p.guardT <= 0 && !sim.inSafe(p) && Math.hypot(p.x - h.x, p.z - h.z) <= h.r) {
             p.stunT = Math.max(p.stunT, HEX.toad);
             p.toadT = Math.max(p.toadT, HEX.toad);
             p.interruptPotions();

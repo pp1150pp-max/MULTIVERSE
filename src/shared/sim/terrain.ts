@@ -8,10 +8,54 @@ import {
 } from '../data/harbor';
 import { mulberry32, pick, rand, type Rng } from '../rng';
 import type { Vec2 } from '../types';
+import { MapRegistry } from '../mapRegistry';
+import { pointInPolygon, ROOM_EDGE, type MapData, type Pt } from '../mapSchema';
 
 export interface Collider { x: number; z: number; r: number }
+/**
+ * A solid box turned by `rot` degrees about its middle (x, z): `w` across along x and `d` deep along z before the turn.
+ * The angle is the one in map files (src/shared/mapSchema.ts): the box's own axes are the world axes turned by rot.
+ */
+export interface BoxCollider { x: number; z: number; w: number; d: number; rot: number }
+function toLocal(b: BoxCollider, x: number, z: number): [number, number] {
+  const a = (-b.rot * Math.PI) / 180;
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  const dx = x - b.x;
+  const dz = z - b.z;
+  return [dx * c - dz * s, dx * s + dz * c];
+}
+/** Is a circle (x, z, r) touching the box? Same `<` rule as the circle colliders. */
+export function boxHit(b: BoxCollider, x: number, z: number, r: number): boolean {
+  const [lx, lz] = toLocal(b, x, z);
+  if (Math.abs(lx) <= b.w / 2 && Math.abs(lz) <= b.d / 2) return true;
+  const cx = Math.max(-b.w / 2, Math.min(b.w / 2, lx));
+  const cz = Math.max(-b.d / 2, Math.min(b.d / 2, lz));
+  return (lx - cx) ** 2 + (lz - cz) ** 2 < r * r;
+}
+function nearestOnPoly(poly: readonly Pt[], x: number, z: number): { px: number; pz: number; d: number } {
+  let best = { px: poly[0][0], pz: poly[0][1], d: Infinity };
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [ax, az] = poly[j];
+    const [bx, bz] = poly[i];
+    const vx = bx - ax;
+    const vz = bz - az;
+    const len2 = vx * vx + vz * vz;
+    const t = len2 ? Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / len2)) : 0;
+    const px = ax + vx * t;
+    const pz = az + vz * t;
+    const d = Math.hypot(x - px, z - pz);
+    if (d < best.d) best = { px, pz, d };
+  }
+  return best;
+}
+/** Is a circle touching a closed polygon (its inside is solid)? */
+export function polyHit(poly: readonly Pt[], x: number, z: number, r: number): boolean {
+  if (pointInPolygon(poly, x, z)) return true;
+  return r > 0 && nearestOnPoly(poly, x, z).d < r;
+}
 /** One prop to draw. `fade` = turns see-through when the player walks behind it. */
-export interface PropSpec { key: string; x: number; z: number; height: number; fade: boolean; /** Drawn mirrored. */ flip?: boolean; /** Never faded, however tall (World fades tall props near the player). */ solid?: boolean }
+export interface PropSpec { key: string; /** Degrees (as in map files): turns the picture and its shadow about the point it stands on. Absent = 0. */ rot?: number; x: number; z: number; height: number; fade: boolean; /** Drawn mirrored. */ flip?: boolean; /** Never faded, however tall (World fades tall props near the player). */ solid?: boolean }
 type Seg = [number, number, number, number];
 
 /** Prop keys each theme scatters around. Every key needs an entry in the client's SHEET_SPECS. */
@@ -99,8 +143,8 @@ export const SUMMONER_PROP: Record<ZoneTheme, string> = {
 };
 export const SUMMONER_HEIGHT = 3.6;
 export const SUMMONER_SOLID = 1.2;
-/** A boss room's walkable circle reaches this far past its arena (inside the ring of pillars). */
-export const ROOM_EDGE = 1;
+/** A boss room's walkable circle reaches this far past its arena (inside the ring of pillars). Defined in mapSchema: the validator checks it too. */
+export { ROOM_EDGE };
 /** How close a player must stand to the summoner to put keys in (the server checks it). */
 export const SUMMONER_RANGE = 3.5;
 
@@ -140,10 +184,22 @@ export const HUB_BUILDING_GAP = 3.4;
 /** How far the hub's quarters wobble into each other (see themeAt). The props add their own scatter on top. */
 export const QUADRANT_JITTER = 6;
 
+/**
+ * Whether an NPC standing in this zone is solid (Terrain pushes an r 0.45 collider for it). The navigator in nexus_city is seen only by
+ * some players (src/client/Game.ts): no invisible wall for the rest. tools/bake_maps.ts uses this to tell those colliders apart.
+ */
+export function npcHasCollider(id: NpcId, zone: ZoneDef): boolean {
+  return !(id === 'navigator' && zone.town !== 'harbor');
+}
+
 export class Terrain {
   readonly half: number;
   readonly bound: number;
   readonly colliders: Collider[] = [];
+  /** Solid boxes (a prop's `solid: {w, d}` turned by its `rot`). Only maps that have them. */
+  readonly boxes: BoxCollider[] = [];
+  /** Closed polygons nobody can enter (a map's `blockers`). */
+  readonly blockers: Pt[][] = [];
   readonly props: PropSpec[] = [];
   /** Only zones with `npcs` (the hub) have any. */
   readonly npcPos: Partial<Record<NpcId, Vec2>> = {};
@@ -152,23 +208,48 @@ export class Terrain {
   readonly summoner: Lair | null;
   /** In a boss room: how far from the boss (the middle) anyone may walk. Null elsewhere. */
   readonly roomEdge: number | null;
+  /** The `rev` of the map file this was built from (0 = the bundled one, or the old generators). The server tells the browser so it builds the same. */
+  readonly mapRev: number;
   private readonly segs: Seg[] = [];
 
-  constructor(readonly zone: ZoneDef) {
+  /**
+   * `map` = the layout to build from (default: the zone's, from MapRegistry; boss rooms have none). `null` runs the old
+   * seeded generators instead: that is only for tools/bake_maps.ts and the tests that check the files against it.
+   */
+  constructor(readonly zone: ZoneDef, map: MapData | null | undefined = MapRegistry.get(zone.id)) {
     this.half = zone.half;
-    this.bound = zone.half - 8;
+    this.mapRev = map ? map.rev : 0;
+    this.bound = map ? map.walkable.half : zone.half - 8;
     this.summoner = zone.lair ?? null;
     this.roomEdge = zone.roomOf ? arenaRadius(zone) + ROOM_EDGE : null;
-    for (const line of [zone.path, ...zone.branches]) {
+    for (const line of map ? map.paths.map((p) => p.pts) : [zone.path, ...zone.branches]) {
       for (let i = 1; i < line.length; i++) this.segs.push([line[i - 1][0], line[i - 1][1], line[i][0], line[i][1]]);
     }
-    if (zone.town === 'harbor') this.placeHarbor(mulberry32(zone.seed + 1));
+    if (map) this.loadMap(map);
+    else if (zone.town === 'harbor') this.placeHarbor(mulberry32(zone.seed + 1));
     else this.placeProps(mulberry32(zone.seed + 1));
     for (const id of NPC_IDS) {
       const n = this.npcPos[id];
-      // The navigator in nexus_city is seen only by some players (src/client/Game.ts): no invisible wall for the rest.
-      if (n && !(id === 'navigator' && zone.town !== 'harbor')) this.colliders.push({ ...n, r: 0.45 });
+      if (n && npcHasCollider(id, zone)) this.colliders.push({ ...n, r: 0.45 });
     }
+  }
+
+  /** Terrain from a layout file: the props, colliders, NPCs and rest spots the generators made when it was baked. */
+  private loadMap(map: MapData): void {
+    for (const p of map.props) {
+      const spec: PropSpec = { key: p.key, x: p.x, z: p.z, height: p.h, fade: p.fade };
+      if (p.flip) spec.flip = true;
+      if (p.rot) spec.rot = p.rot;
+      this.props.push(spec);
+      const s = p.solid;
+      if (!s) continue;
+      if ('r' in s) this.colliders.push({ x: p.x, z: p.z, r: s.r });
+      else this.boxes.push({ x: p.x, z: p.z, w: s.w, d: s.d, rot: p.rot });
+    }
+    for (const c of map.colliders ?? []) this.colliders.push({ x: c.x, z: c.z, r: c.r });
+    for (const b of map.blockers) this.blockers.push(b.pts.map(([x, z]) => [x, z] as Pt));
+    for (const n of map.npcs) this.npcPos[n.id as NpcId] = { x: n.x, z: n.z };
+    for (const r of map.rest) this.restSpots.push({ x: r.x, z: r.z, kind: r.kind });
   }
 
   get pathSegments(): readonly Seg[] {
@@ -192,8 +273,10 @@ export class Terrain {
     // A boss room: nobody walks out of the arena (owner).
     if (this.roomEdge !== null && Math.hypot(x, z) + r > this.roomEdge) return true;
     // The harbour: off the planks is water (its edges' colliders keep walkers on; this turns clicks and spots away).
-    if (this.zone.town === 'harbor' && !onDeck(x - this.zone.start.x, z - this.zone.start.z, -0.3)) return true;
-    return this.colliders.some((c) => Math.hypot(c.x - x, c.z - z) < c.r + r);
+    // The decks are laid round the map's middle (HARBOR_DECKS), not round `start`, so moving the spawn in the editor doesn't move the water.
+    if (this.zone.town === 'harbor' && !onDeck(x, z, -0.3)) return true;
+    if (this.colliders.some((c) => Math.hypot(c.x - x, c.z - z) < c.r + r)) return true;
+    return this.boxes.some((b) => boxHit(b, x, z, r)) || this.blockers.some((b) => polyHit(b, x, z, r));
   }
 
   /** Frozen lake underfoot? Players slide here (see Player.walkStep). */
@@ -214,6 +297,9 @@ export class Terrain {
       if (hit) return null;
       hit = c;
     }
+    // Pressed against a box or a blocker too: that is a wall, not something round to walk around.
+    const rr = u.radius + 0.01;
+    if (this.boxes.some((b) => boxHit(b, u.x, u.z, rr)) || this.blockers.some((b) => polyHit(b, u.x, u.z, rr))) return null;
     return hit;
   }
 
@@ -245,6 +331,8 @@ export class Terrain {
         u.z += dz * push;
       }
     }
+    for (const b of this.boxes) this.pushOutOfBox(u, b);
+    for (const poly of this.blockers) this.pushOutOfPoly(u, poly);
     u.x = Math.max(-this.bound, Math.min(this.bound, u.x));
     u.z = Math.max(-this.bound, Math.min(this.bound, u.z));
     // A boss room: nothing is pushed out past its edge either (a knockback, the Giant Cannon Crab's fling).
@@ -255,6 +343,51 @@ export class Terrain {
         u.x *= max / d;
         u.z *= max / d;
       }
+    }
+  }
+
+  private pushOutOfBox(u: { x: number; z: number; radius: number }, b: BoxCollider): void {
+    if (!boxHit(b, u.x, u.z, u.radius)) return;
+    const [lx, lz] = toLocal(b, u.x, u.z);
+    const hw = b.w / 2;
+    const hd = b.d / 2;
+    let tx: number;
+    let tz: number;
+    if (Math.abs(lx) <= hw && Math.abs(lz) <= hd) {
+      // The middle of the circle is inside: out through the nearest face.
+      if (hw - Math.abs(lx) < hd - Math.abs(lz)) { tx = (lx < 0 ? -1 : 1) * (hw + u.radius); tz = lz; }
+      else { tx = lx; tz = (lz < 0 ? -1 : 1) * (hd + u.radius); }
+    } else {
+      const cx = Math.max(-hw, Math.min(hw, lx));
+      const cz = Math.max(-hd, Math.min(hd, lz));
+      const d = Math.hypot(lx - cx, lz - cz) || 0.001;
+      tx = cx + ((lx - cx) / d) * u.radius;
+      tz = cz + ((lz - cz) / d) * u.radius;
+    }
+    // The push, back in world axes (the inverse of toLocal).
+    const a = (-b.rot * Math.PI) / 180;
+    const c = Math.cos(a);
+    const s = Math.sin(a);
+    const ddx = tx - lx;
+    const ddz = tz - lz;
+    u.x += ddx * c + ddz * s;
+    u.z += -ddx * s + ddz * c;
+  }
+
+  private pushOutOfPoly(u: { x: number; z: number; radius: number }, poly: readonly Pt[]): void {
+    const inside = pointInPolygon(poly, u.x, u.z);
+    const n = nearestOnPoly(poly, u.x, u.z);
+    if (!inside && n.d >= u.radius) return;
+    const d = n.d || 0.001;
+    // Outside: straight away from the edge until r clear. Inside: out through the nearest edge and r past it.
+    if (inside) {
+      const k = (d + u.radius) / d;
+      u.x += (n.px - u.x) * k;
+      u.z += (n.pz - u.z) * k;
+    } else {
+      const k = (u.radius - d) / d;
+      u.x += (u.x - n.px) * k;
+      u.z += (u.z - n.pz) * k;
     }
   }
 

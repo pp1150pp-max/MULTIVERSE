@@ -2,7 +2,7 @@
 // the server, and the bag rules for claiming attachments. Pure rules, no DOM.
 import { ADMIN_GOLD_MAX, ADMIN_ITEMS_MAX, adminStack, addStackToBag, adminStackName, type AdminStack } from './admin';
 import { ITEM_BASES, makeItem } from './data/items';
-import { MAX_PLUS } from './data/enhance';
+import { PLUS_CAP } from './data/enhance';
 import { MAX_LEVEL } from './formulas';
 import { RARITIES, RARITY_LABEL, isPotion, type BagEntry, type ClassId, type Item, type Rarity } from './types';
 
@@ -57,7 +57,7 @@ export function cleanAttach(raw: unknown): MailAttach | string {
       const rarity = RARITIES.find((q) => q === x.rarity);
       if (!rarity) return 'ระดับความหายากไม่ถูกต้อง';
       const plus = x.plus ?? 0;
-      if (typeof plus !== 'number' || !Number.isInteger(plus) || plus < 0 || plus > MAX_PLUS) return `ระดับตีบวกต้องเป็น 0–${MAX_PLUS}`;
+      if (typeof plus !== 'number' || !Number.isInteger(plus) || plus < 0 || plus > PLUS_CAP) return `ระดับตีบวกต้องเป็น 0–${PLUS_CAP}`;
       const level = x.level;
       if (level !== undefined && (typeof level !== 'number' || !Number.isInteger(level) || level < 1 || level > MAX_LEVEL)) return `เลเวลไอเทมต้องเป็น 1–${MAX_LEVEL}`;
       items.push({ kind: 'equip', baseId: base.id, rarity, plus, ...(level !== undefined ? { level } : {}), count });

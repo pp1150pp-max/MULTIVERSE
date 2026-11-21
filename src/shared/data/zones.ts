@@ -1,5 +1,7 @@
 import { mulberry32 } from '../rng';
 import { HARBOR_CORNERS, HARBOR_ID, HARBOR_PIER, HARBOR_RETURN } from './harbor';
+import { MapRegistry } from '../mapRegistry';
+import type { MapData } from '../mapSchema';
 
 export interface SpawnArea {
   monster: string;
@@ -113,6 +115,10 @@ export interface ZoneDef {
   bossSolid?: number;
   /** Makes every monster here (bosses and summons too) stronger than its MonsterDef; none = as defined. */
   monsterBoost?: MonsterBoost;
+  /** Made in the map editor with "＋ แมพใหม่" (src/shared/customZones.ts), not in this file. */
+  custom?: boolean;
+  /** Minigame "รอดมอนเป็นระลอก" (src/shared/waveGame.ts): entering gives the group its own run; these are what the waves use. */
+  waves?: { monsters: string[]; spots: { x: number; z: number; radius: number }[] };
 }
 
 /** A map's boss summoner: put keys in it to open the boss's room. */
@@ -543,7 +549,8 @@ export const ZONE_HARBOR: ZoneDef = {
   ],
 };
 
-export const ZONES: Record<string, ZoneDef> = {
+/** The floor-1 zones as the generators above make them. Only tools/bake_maps.ts and the bake test read these. */
+export const GENERATED_ZONES: Record<string, ZoneDef> = {
   [ZONE_HUB.id]: ZONE_HUB,
   [ZONE_HARBOR.id]: ZONE_HARBOR,
   [ZONE_1.id]: ZONE_1,
@@ -552,6 +559,82 @@ export const ZONES: Record<string, ZoneDef> = {
   [ZONE_4.id]: ZONE_4,
   [ZONE_BEACH.id]: ZONE_BEACH,
 };
+
+/**
+ * A zone with its layout (size, start, safe square, paths, lakes, spawns, portals, boss summoner) read from its map file.
+ * Names, levels, stats and the monster boost stay in code; each spawn keeps its boost by position.
+ */
+export function zoneWithMap(zone: ZoneDef, map: MapData): ZoneDef {
+  const [main, ...rest] = map.paths;
+  const water = (kind: 'ice' | 'lava') => map.water.filter((w) => w.kind === kind).map(({ x, z, rx, rz }) => ({ x, z, rx, rz }));
+  const ice = water('ice');
+  const lava = water('lava');
+  return {
+    ...zone,
+    half: map.zone.half,
+    start: { ...map.zone.start },
+    safe: map.zone.safe ? { ...map.zone.safe } : undefined,
+    path: main ? main.pts.map(([x, z]) => [x, z] as [number, number]) : [],
+    branches: rest.map((b) => b.pts.map(([x, z]) => [x, z] as [number, number])),
+    iceLakes: zone.iceLakes || ice.length ? ice : undefined,
+    lavaPools: zone.lavaPools || lava.length ? lava : undefined,
+    spawns: map.spawns.map((s, i) => {
+      const boost = zone.spawns[i]?.boost;
+      return { monster: s.monster, x: s.x, z: s.z, radius: s.radius, count: s.count, respawn: [s.respawn[0], s.respawn[1]], ...(boost ? { boost } : {}) };
+    }),
+    portals: map.portals.map((p) => ({ ...p })),
+    lair: map.lair ? { ...map.lair } : undefined,
+  };
+}
+
+/** The zones the game runs: the generated ones with their layout read from the map files (MapRegistry). */
+export const ZONES: Record<string, ZoneDef> = Object.fromEntries(
+  Object.entries(GENERATED_ZONES).map(([id, z]) => {
+    const map = MapRegistry.get(id);
+    return [id, map ? zoneWithMap(z, map) : z];
+  }),
+);
+
+/**
+ * Maps made in the editor (src/shared/customZones.ts sets this when it loads): builds the ZoneDef of such a map from its layout,
+ * undefined for an id that is not one. A hook, so this file does not import that one (it imports this).
+ */
+export const customZoneHook: { build: ((id: string, map: MapData) => ZoneDef | undefined) | null } = { build: null };
+
+/**
+ * Rebuilds a floor-1 zone from what MapRegistry holds now (a published layout from the DB, or the bundled file).
+ * Existing Sims keep the ZoneDef they were made with; only Terrains and Sims made afterwards see the new one.
+ */
+export function refreshZone(id: string): void {
+  const room = GENERATED_ROOMS[id];
+  if (room) {
+    // A boss room: rooms already running keep their zone and Terrain; the next one made takes this (BossRooms.startRun reads BOSS_ROOMS then).
+    const map = MapRegistry.get(id);
+    const z = map ? roomWithMap(room, map) : room;
+    BOSS_ROOMS[room.roomOf!] = z;
+    ROOMS_BY_ID[id] = z;
+    return;
+  }
+  const base = GENERATED_ZONES[id];
+  if (!base) {
+    // An editor-made map: in the game only while MapRegistry holds a layout for it (published, not hidden).
+    const map = MapRegistry.get(id);
+    const z = map && customZoneHook.build?.(id, map);
+    if (z) ZONES[id] = z;
+    else if (ZONES[id]?.custom) delete ZONES[id];
+    return;
+  }
+  const map = MapRegistry.get(id);
+  ZONES[id] = map ? zoneWithMap(base, map) : base;
+}
+
+/** The zone as it would be with this layout, for a private preview room (a draft). Undefined for a zone without a generated base. */
+export function zoneWithLayout(id: string, map: MapData): ZoneDef | undefined {
+  const room = GENERATED_ROOMS[id];
+  if (room) return roomWithMap(room, map);
+  const base = GENERATED_ZONES[id];
+  return base ? zoneWithMap(base, map) : customZoneHook.build?.(id, map);
+}
 
 /** Each boss's body radius in its room (the Volcano Heart is a rock that never moves). */
 const BOSS_RADIUS: Record<string, number> = { forest_bear: 1, bog_witch: 1, yeti: 1, volcano_heart: 0, cannon_crab: 1 };
@@ -620,9 +703,28 @@ export function lairExitSpot(room: ZoneDef, r: () => number = Math.random): { fi
   return { field: field.id, x: lair.x + Math.cos(a) * LAIR_EXIT_RADIUS, z: lair.z + Math.sin(a) * LAIR_EXIT_RADIUS };
 }
 
-/** Boss rooms, by the id of the map whose summoner opens them. Not in ZONES: the server makes one Sim per group. */
+/** The boss rooms as bossRoom() makes them, by room id. Only tools/bake_maps.ts and the bake test read these. */
+export const GENERATED_ROOMS: Record<string, ZoneDef> = Object.fromEntries(
+  [ZONE_1, ZONE_2, ZONE_3, ZONE_4, ZONE_BEACH].map((z) => {
+    const r = bossRoom(z);
+    return [r.id, r];
+  }),
+);
+
+/**
+ * A boss room with its map file's say: where players appear (`start`). Everything else (size, theme, boss, arena, stats) stays in code;
+ * validateMap() refuses a room file that differs there. Props and collision come through Terrain, which reads MapRegistry by zone id.
+ */
+export function roomWithMap(room: ZoneDef, map: MapData): ZoneDef {
+  return { ...room, start: { ...map.zone.start } };
+}
+
+/** Boss rooms, by the id of the map whose summoner opens them. Not in ZONES: the server makes one Sim per group. refreshZone() swaps entries. */
 export const BOSS_ROOMS: Record<string, ZoneDef> = Object.fromEntries(
-  [ZONE_1, ZONE_2, ZONE_3, ZONE_4, ZONE_BEACH].map((z) => [z.id, bossRoom(z)]),
+  Object.values(GENERATED_ROOMS).map((r) => {
+    const map = MapRegistry.get(r.id);
+    return [r.roomOf!, map ? roomWithMap(r, map) : r];
+  }),
 );
 const ROOMS_BY_ID: Record<string, ZoneDef> = Object.fromEntries(Object.values(BOSS_ROOMS).map((r) => [r.id, r]));
 

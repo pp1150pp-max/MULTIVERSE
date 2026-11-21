@@ -1,4 +1,5 @@
 import { PROP_SHEETS, type PropSheet } from './zonePropsTable';
+import type { GroundTileName } from '../shared/groundLook';
 import * as THREE from 'three';
 import {
   makeSheet, drawHuman, drawSlime, drawQuad, drawSeeker, drawMerchant, drawBlacksmith, drawKeeper, drawBroker, drawStylist, drawCrystalMerchant, drawCosmetic, drawTree, drawBush, drawRock, drawStump,
@@ -45,7 +46,7 @@ interface SheetSpec {
 const BASE = 'assets/sprites/';
 
 /**
- * Papercraft map art (src/shared/paperArt.ts, cut by tools/cut_papercraft.cjs): the props/ and ground/ files that have
+ * Papercraft map art (the game page's only style, usePaperArt; cut by tools/cut_papercraft.cjs): the props/ and ground/ files that have
  * a paper version under sprites/paper/, same name and size. Each map adds its own as it is made.
  */
 const PAPER_PROPS = new Set([
@@ -95,7 +96,7 @@ const BEACH_PROPS = [
 /** Floor 2's move effects (sim/beachMoves.ts, cannonCrab.ts: Sim fx 'sprite' and the crab's cannonballs), paper only. */
 const BEACH_FX = ['fx_cannonball', 'fx_warn_ring', 'fx_chain_bolt', 'fx_shock', 'fx_spike_burst', 'fx_shell_guard'];
 /** The harbour's NPC sheets and the navigator's (SHEET_SPECS keys): paper only. */
-const PAPER_ONLY_NPC = new Set(['hb_supply_merchant', 'hb_dock_keeper', 'hb_shipwright', 'hb_harbor_broker', 'hb_smuggler', 'navigator']);
+const PAPER_ONLY_NPC = new Set(['hb_supply_merchant', 'hb_dock_keeper', 'hb_shipwright', 'hb_harbor_broker', 'hb_smuggler_npc', 'navigator']);
 const PAPER_GROUND = new Set(['grass', 'dirt', 'pave', 'room_forest', 'marsh', 'mud', 'water', 'room_marsh',
   'snow', 'snow_path', 'ice', 'room_snow', 'ash_rock', 'ash_path', 'lava', 'room_volcano', 'brick',
   // Floor 2's harbour town (tools/cut_papercraft.cjs floor2_hub): paper only.
@@ -103,14 +104,13 @@ const PAPER_GROUND = new Set(['grass', 'dirt', 'pave', 'room_forest', 'marsh', '
 /** Classes with a paper animation set in sprites/paper/player/<class>/ (tools/cut_paper_char.cjs). */
 const PAPER_CHARS = new Set(['sword', 'mage', 'gunslinger']);
 let paperMaps = false;
-let paperAnswer: Promise<boolean> = Promise.resolve(false);
 
 /**
- * The server's art switch (true = the paper pictures wherever one exists), given as the pending answer so the game's
- * load waits for it, however early it starts. Pages that never call this (the /admin previews) keep the old art.
+ * The game's art is papercraft (owner 2026-11-20: the only style, no switch): the paper pictures wherever one exists.
+ * Called by the game page before anything loads. Pages that never call it (the /admin previews) keep the old art.
  */
-export function usePaperMaps(answer: Promise<boolean>): void {
-  paperAnswer = answer;
+export function usePaperArt(): void {
+  paperMaps = true;
 }
 
 const sheet = (path: string, placeholder: () => HTMLCanvasElement): SheetSpec =>
@@ -350,7 +350,8 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   hb_dock_keeper: sheet('npc/dock_keeper.png', () => makeSheet(32, drawKeeper())),
   hb_shipwright: sheet('npc/shipwright.png', () => makeSheet(32, drawBlacksmith())),
   hb_harbor_broker: sheet('npc/harbor_broker.png', () => makeSheet(32, drawBroker())),
-  hb_smuggler: sheet('npc/smuggler.png', () => makeSheet(32, drawCrystalMerchant())),
+  // Its own key: 'hb_smuggler' is the smuggler's shop building (HARBOR_PROPS), which this sheet used to cover.
+  hb_smuggler_npc: sheet('npc/smuggler.png', () => makeSheet(32, drawCrystalMerchant())),
   navigator: sheet('npc/navigator.png', () => makeSheet(32, drawSeeker())),
 
   ...Object.fromEntries(MAP_ICONS.map((name) => [`map_${name}`, single(`icons/map_${name}.png`, () => drawIcon('coin'))])),
@@ -452,12 +453,7 @@ async function fetchAnimSet(key: string, dir: string): Promise<AnimSet | null> {
 }
 
 /** Repeating ground textures. A zone falls back to its code-painted ground if one is missing. */
-export type GroundTile = 'grass' | 'dirt' | 'water' | 'marsh' | 'mud' | 'pave' | 'brick' | 'snow' | 'snow_path' | 'ice' | 'ash_rock' | 'ash_path' | 'lava'
-  | 'room_forest' | 'room_marsh' | 'room_snow' | 'room_volcano' | 'harbor_plank' | 'harbor_plaza' | 'harbor_water'
-  // Floor 2's Shipwreck Beach (paper only).
-  | 'sand' | 'wreck' | 'shallow' | 'room_beach'
-  // Floor 2's cloud-sea backdrop (FLOOR2_SKY.md), once the owner has made it; until then island.ts paintSky.
-  | 'sky_day';
+export type GroundTile = GroundTileName;
 export const groundTiles: Partial<Record<GroundTile, THREE.Texture>> = {};
 
 /** Ground tiles that exist only as paper (floor 2's): loaded from sprites/paper/ground/ whatever the art switch says. */
@@ -669,9 +665,8 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 
 async function loadPortrait(key: string): Promise<void> {
   const base = ANIM_SET_DIRS[key];
-  // With the art switch on, the menu's class pictures are the paper ones too (owner 2026-11-18). Waits for the server's
-  // answer; the cards fill in when it comes.
-  const paper = base && PAPER_CHARS.has(key) && (await paperAnswer);
+  // The menu's class pictures are the paper ones too (owner 2026-11-18).
+  const paper = base && PAPER_CHARS.has(key) && paperMaps;
   for (const dir of paper ? [`paper/${base}`, base] : base ? [base] : []) {
     try {
       const res = await fetch(`${BASE}${dir}/sprite.json`);
@@ -715,7 +710,6 @@ export function portraitSource(key: string): PortraitSource | undefined {
 }
 
 async function loadAssets(): Promise<void> {
-  paperMaps = await paperAnswer;
   // Paper monsters (tools/cut_paper_monsters.cjs): which ones exist, and how much taller each picture is drawn.
   const paperMonsters: Record<string, { scale: number }> = paperMaps
     ? await fetch(`${BASE}paper/monsters/meta.json`).then((r) => (r.ok ? r.json() : {})).catch(() => ({}))

@@ -5,7 +5,8 @@ import type { Loot } from './Loot';
 import { MONSTERS } from '../data/monsters';
 import { inBossArena, inSafeArea, lavaAt, type ZoneDef } from '../data/zones';
 import { currentBalance } from '../balance';
-import { skillReach } from '../skillBook';
+import { SKILL_REACH } from '../data/skillRanges';
+import { skillReach, skillValues } from '../skillBook';
 import type { AutoConfig, AutoOutAction } from '../autoTuning';
 
 /** What the bot needs to see. The server builds one per player. */
@@ -34,6 +35,16 @@ export const AUTO_BOSS_MSG = 'ปิด Auto Play — บอสต้องส�
 export const AUTO_TOWN_MSG = 'ใช้ Auto Play ในเมืองไม่ได้ — ออกไปนอกเมืองก่อน';
 
 const RANGE: Record<string, number> = { sword: 1.9, mage: 8.5, gunslinger: 9 };
+
+/** Tuned basic-attack reach ÷ its code reach (1 when untuned), for Auto's standing distance. */
+function basicReachScale(p: Player): number {
+  const sk = p.skill('basic');
+  if (!sk) return 1;
+  const now = skillReach(sk);
+  const code = SKILL_REACH[sk.id];
+  const r = (x: typeof now) => (x && x.kind !== 'self' ? x.range : 0);
+  return r(now) > 0 && r(code) > 0 ? r(now) / r(code) : 1;
+}
 /** A drop counts as "got closer" (resetting the give-up timer) only when Auto is this much nearer than before. */
 const LOOT_PROGRESS = 0.25;
 /** Monsters farther than this are never targeted (nor hold up "fight first" looting). */
@@ -306,7 +317,8 @@ export class AutoPlay {
     this.noteLevelGap(g, target);
 
     const d = dist(target);
-    const range = RANGE[p.cls.id] ?? 2;
+    // The basic attack's reach is tuned on /admin (owner 2026-11-20): Auto stands at the same share of it as in code.
+    const range = (RANGE[p.cls.id] ?? 2) * basicReachScale(p);
     out.aim = { x: target.x, z: target.z };
     if (d > range) {
       out.moveTo = { x: target.x, z: target.z };
@@ -320,27 +332,47 @@ export class AutoPlay {
     return out;
   }
 
-  /** Whether Auto may cast this skill now: switched on in the settings, off cooldown, and enough MP. */
+  /** Whether Auto may cast this skill now: switched on in the settings, off cooldown, enough MP, and it reaches (inReach). */
   private ready(g: AutoWorld, slot: AutoSkill): boolean {
     const p = g.player;
     const sk = p.skill(slot);
-    return !!sk && p.autoSettings.skills[slot] && (p.cd[sk.id] ?? 0) <= 0 && p.mp >= p.skillMp(sk) + 5 && this.aoeHasTarget(g, slot);
+    return !!sk && p.autoSettings.skills[slot] && p.skillReady(sk) && p.mp >= p.skillMp(sk) + 5 && this.inReach(g, slot);
   }
 
   /**
-   * A mage skill that hits a circle around the caster is cast only with a monster inside that circle (owner 2026-11-19),
-   * so Auto doesn't waste mana and cooldown on an empty ring. Same hit rule as the skill (radius + the monster's own
-   * size) plus the `aoeMargin` setting. Other skills and classes are not checked.
+   * Auto casts a skill only when it would reach (owner 2026-11-19 for the mage's circles, every class and kind
+   * 2026-11-20): before, any skill went as soon as the basic attack reached, so a short skill whiffed on a monster
+   * standing at basic range. Same hit rules as the skill itself (sim/skills.ts: its tuned reach + the monster's own
+   * size), less the `aoeMargin` safety distance (owner 2026-11-20: it used to be added, so a Flame Wave went with the
+   * monster up to 0.5 m beyond its cone and missed):
+   * - circle around the player: any monster inside it;
+   * - cone / dash: the target within its range;
+   * - shot: the target within its range (+ the blast at the end);
+   * - landing circle: the target within its cast range + the circle.
+   * Skills with no reach, and circles that do no damage (buffs, auras), cast as before. Switch `aoeGuard` off = old way.
    */
-  private aoeHasTarget(g: AutoWorld, slot: AutoSkill): boolean {
+  private inReach(g: AutoWorld, slot: AutoSkill): boolean {
     const p = g.player;
     const sk = p.skill(slot);
     const cfg = currentBalance().auto;
-    if (!sk || !cfg.aoeGuard || p.cls.id !== 'mage') return true;
+    if (!sk || !cfg.aoeGuard) return true;
     const reach = skillReach(sk);
-    if (reach?.kind !== 'self') return true;
-    const r = reach.radius + cfg.aoeMargin;
-    return g.monsters.some((m) => m.alive && Math.hypot(m.x - p.x, m.z - p.z) <= r + m.radius);
+    if (!reach) return true;
+    const margin = cfg.aoeMargin;
+    if (reach.kind === 'self') {
+      if (skillValues(sk).dmg <= 0) return true;
+      return g.monsters.some((m) => m.alive && Math.hypot(m.x - p.x, m.z - p.z) + margin <= reach.radius + m.radius);
+    }
+    // A skill aimed at the target needs one.
+    const t = this.target;
+    if (!t || !t.alive) return false;
+    const far = Math.hypot(t.x - p.x, t.z - p.z) - t.radius + margin;
+    switch (reach.kind) {
+      case 'cone':
+      case 'dash': return far <= reach.range;
+      case 'shot': return far <= reach.range + (reach.blast ?? 0);
+      case 'point': return far <= reach.range + reach.radius;
+    }
   }
 
   private tryCast(g: AutoWorld, out: Intent, slot: AutoSkill): void {
@@ -349,7 +381,7 @@ export class AutoPlay {
 
   /**
    * In reach of the target: cast one skill, the highest in the player's order that is switched on and ready
-   * (so when the first is cooling down, or is a circle around the player with no monster in it, the next one goes).
+   * (so when the first is cooling down, or would not reach the target, the next one goes).
    * Nothing extra when the player cast one by hand this frame.
    */
   private castByOrder(g: AutoWorld, out: Intent): void {

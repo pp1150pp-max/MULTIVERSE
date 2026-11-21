@@ -12,6 +12,8 @@ export interface FxLayerConfig extends Record<QuarksKey, boolean> {
   enabled: boolean;
   /** Debuff icons over monsters' HP bars and their effects on the body (src/client/debuffFx.ts). */
   debuffs: boolean;
+  /** Gold light around a player untouchable after a phoenix revive (off = the character blinks, src/client/views.ts). */
+  guardGlow: boolean;
   /** Our own skill buffs as icons under our HP and MP bars, with a clock wipe for the time left (src/client/floating.ts). */
   buffIcons: boolean;
   /** The same icons in a row over the skill bar (owner 2026-11-19). */
@@ -38,6 +40,11 @@ export interface FxLayerConfig extends Record<QuarksKey, boolean> {
   ownNumsOnly: boolean;
   /** Bullets fly on smoothly between snapshots instead of snapping back to the server's (older) spot (owner 2026-11-18). */
   smoothShots: boolean;
+  /** The Gunslinger's Support Drone is one drone flying after its owner (owner 2026-11-19); off = a picture drawn again at the shoulder each shot. */
+  droneFollow: boolean;
+  /** How fast the drone catches up with its owner (per second, higher = tighter) and × its distance from the owner. */
+  droneSpeed: number;
+  droneDist: number;
   /** Magic circles on the ground under debuffed monsters, buffed players and area skills (src/client/magicCircles.ts). */
   circles: boolean;
   /** Lasting area skills shown as a magic circle only, instead of their painted area and standing pieces. */
@@ -67,6 +74,8 @@ export interface FxLayerConfig extends Record<QuarksKey, boolean> {
   skills: Record<string, SkillFxTune>;
   /** The players' own graphics window (owner 2026-11-18, src/client/gfxPrefs.ts): shown in the in-game menu. */
   gfxMenu: boolean;
+  /** Players can move game actions to their own keys (เมนู → ตั้งค่า → ตั้งค่าปุ่ม, src/client/keybinds.ts). Off = the code's keys. */
+  keyRebind: boolean;
   /** HP/MP orbs hug the skill bar on wide screens (owner 2026-11-18); off = the screen's bottom corners. */
   orbsNearBar: boolean;
   /** Particle quality a player starts on (3 high, 2 medium, 1 low, 0 off), and the most anyone can pick. */
@@ -156,6 +165,8 @@ export const FX_LAYER_RANGE = {
   paperOrbLight: [0.8, 1],
   paperOrbShade: [0, 1],
   extrasK: [0, 3],
+  droneSpeed: [1, 20],
+  droneDist: [0.3, 3],
 } as const satisfies Record<string, readonly [number, number]>;
 export type FxLayerNum = keyof typeof FX_LAYER_RANGE;
 export const FX_LAYER_NUMS = Object.keys(FX_LAYER_RANGE) as FxLayerNum[];
@@ -182,23 +193,28 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   paperOrbLight: 'ลูกแก้ว: ส่วนที่ขาวกว่านี้เป็นสีเน้น',
   paperOrbShade: 'ลูกแก้ว: ความสว่างส่วนมืดสุด',
   extrasK: '× ความแรงเอฟเฟกต์โค้ดของสกิล',
+  droneSpeed: 'โดรน: ความเร็วตามตัว (ต่อวิ ยิ่งมากยิ่งติด)',
+  droneDist: 'โดรน: × ระยะห่างจากตัวละคร',
 };
 
-const BASE_BOOLS = ['enabled', 'debuffs', 'buffIcons', 'barBuffIcons', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'orbsNearBar', 'extras'] as const;
+const BASE_BOOLS = ['enabled', 'debuffs', 'guardGlow', 'buffIcons', 'barBuffIcons', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'droneFollow', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'keyRebind', 'orbsNearBar', 'extras'] as const;
 type FxLayerBool = (typeof BASE_BOOLS)[number] | QuarksKey;
 const FX_LAYER_BOOLS: readonly FxLayerBool[] = [...BASE_BOOLS, ...QUARKS_KEYS];
 const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
   enabled: 'เอฟเฟกต์สกิล (ชั้นเสริม)',
   debuffs: 'ดีบัฟบนตัวมอน (ไอคอน + เอฟเฟกต์)',
+  guardGlow: 'แสงทองรอบตัวตอนอมตะหลังชุบ (ปิด = กะพริบ)',
   buffIcons: 'ไอคอนบัพสกิลใต้หลอด HP/MP ของตัวเอง',
   barBuffIcons: 'ไอคอนบัพสกิลเหนือกรอบสกิล',
   mergeNums: 'รวมเลขดาเมจที่โดนพร้อมกัน',
   ownNumsOnly: 'เห็นเฉพาะเลขดาเมจของตัวเอง',
   smoothShots: 'กระสุนบินลื่น (ไม่ดึงกลับตาม server)',
+  droneFollow: 'โดรนบินตามลื่น (ปิด = วาดภาพโดรนใหม่ที่ไหล่ทุกนัดแบบเดิม)',
   circles: 'วงเวทบนพื้น (บัฟ ดีบัฟ สกิลวงกว้าง)',
   zoneCircles: 'สกิลวงกว้างเป็นวงเวทอย่างเดียว (แทนภาพพื้นที่)',
   quarks: 'อนุภาค three.quarks (ทดลอง)',
   gfxMenu: 'เมนูกราฟิกของผู้เล่น',
+  keyRebind: 'ให้ผู้เล่นตั้งปุ่มเอง (เมนู › ตั้งค่า › ตั้งค่าปุ่ม)',
   orbsNearBar: 'ลูกแก้ว HP/MP ชิดแถบสกิล (ปิด = มุมจอ)',
   ...(Object.fromEntries(QUARKS_SKILL_IDS.map((s) => [quarksKey(s), `three.quarks: ${QUARKS_SKILLS[s]}`])) as Record<QuarksKey, string>),
   extras: 'เอฟเฟกต์โค้ดของสกิล (ทับภาพเดิม)',
@@ -207,10 +223,10 @@ const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
 /** The code's own numbers (a fresh copy). */
 export function codeFxLayer(): FxLayerConfig {
   return {
-    enabled: true, debuffs: true, buffIcons: true, barBuffIcons: true, glow: 1, ground: 1, particles: 1, shake: 1, hitstopMs: 60, crit: 1,
-    maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true, circles: true, zoneCircles: true, circleGlow: 1, quarks: false, quarksOthers: 0.5, quarksTouch: 0.5, quarksCap: 3000,
+    enabled: true, debuffs: true, guardGlow: true, buffIcons: true, barBuffIcons: true, glow: 1, ground: 1, particles: 1, shake: 1, hitstopMs: 60, crit: 1,
+    maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true, droneFollow: true, droneSpeed: 7, droneDist: 1, circles: true, zoneCircles: true, circleGlow: 1, quarks: false, quarksOthers: 0.5, quarksTouch: 0.5, quarksCap: 3000,
     paperPlate: 1, paperBubble: 1, paperFoot: 1.6, paperOrbLight: 0.95, paperOrbShade: 0.15,
-    gfxMenu: true, orbsNearBar: true, gfxDefault: 3, gfxMax: 3, gfxMid: 0.6, gfxLow: 0.3,
+    gfxMenu: true, keyRebind: true, orbsNearBar: true, gfxDefault: 3, gfxMax: 3, gfxMid: 0.6, gfxLow: 0.3,
     ...(Object.fromEntries(QUARKS_KEYS.map((k) => [k, true])) as Record<QuarksKey, boolean>),
     extras: true, extrasK: 1, skills: {},
   };

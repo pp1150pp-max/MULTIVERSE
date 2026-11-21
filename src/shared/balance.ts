@@ -20,6 +20,8 @@ import { autoChanges, checkAutoTuning, codeAuto, mergeAuto, type AutoConfig, typ
 import { checkFloorGateTuning, codeFloorGate, floorGateChanges, mergeFloorGate, type FloorGateConfig, type FloorGateTuning } from './floorGate';
 import { checkTutorialTuning, codeTutorial, mergeTutorial, tutorialChanges, type TutorialConfig, type TutorialTuning } from './tutorial';
 import { checkMoveTuning, codeMoves, mergeMoves, moveChanges, type MoveConfig, type MoveTuning } from './moveTuning';
+import { checkWaveTuning, codeWaves, mergeWaves, waveChanges, type WaveConfig, type WaveTuning } from './waveGame';
+import { checkForgeTuning, codeForge, forgeChanges, mergeForge, type ForgeConfig, type ForgeTuning } from './forgeTuning';
 import { checkSkillTuning, codeSkills, mergeSkills, skillChanges, type SkillConfig, type SkillTuning } from './skillTuning';
 import { addInto, emptyStats, setExpTune } from './formulas';
 import { STAT_KEYS, STAT_LABEL, type ClassId, type PotionKind, type PotionSize, type StatKey, type Stats } from './types';
@@ -45,6 +47,12 @@ export const CODE_BOSS_SWITCH_SEC = 10;
 /** Ordinary monsters give up after this many seconds without a hit (owner 2026-11-17: off). */
 export const CODE_MOB_GIVE_UP_SEC = 0;
 export const CODE_MOB_RETURN_IGNORE_HITS = true;
+/** Ordinary monsters drop a target that is in a safe area / left / died at once and walk home (owner 2026-11-20). */
+export const CODE_MOB_DROP_ON_SAFE = true;
+/** Maps come from the DB's published layouts when there are any (docs/plans/map-editor.md 3.1); off = always the JSON in the bundle. Nothing publishes to the DB before PR 5. */
+export const CODE_MAP_FROM_DB = true;
+/** The "เพิ่มเวลาบัฟ %" item stat also lengthens summons: turret, drone, land mine (owner 2026-11-19). */
+export const CODE_BUFF_DUR_SUMMONS = true;
 /** Blacksmith: the Auto button that enhances again and again up to a chosen level (owner 2026-11-18: on). */
 export const CODE_FORGE_AUTO = true;
 /** Click-to-walk carries on when the browser tab is hidden: the server walks the rest of the way (owner 2026-11-18: on). */
@@ -57,6 +65,12 @@ export const CODE_FLOOR_GATE_QUEST = true;
 export const CODE_BOSS_WIPE_KEEP_HP = true;
 /** Seconds a boss-room group that is all down has to get someone up with a feather (owner: 5). */
 export const CODE_ROOM_WIPE_SECONDS = 5;
+/** Seconds between entering a boss room and its boss appearing (owner 2026-11-20: 13, was 5). */
+export const CODE_ROOM_BOSS_DELAY = 13;
+/** No damage for a moment after getting up with a phoenix feather in a boss room (owner 2026-11-20: on). */
+export const CODE_REVIVE_GUARD = true;
+/** How long that lasts, in seconds (owner: 5); attacking, a skill, a buff or a dash ends it at once. */
+export const CODE_REVIVE_GUARD_SEC = 5;
 /**
  * Most a character's skill cooldowns can be cut by the "ลดคูลดาวน์สกิล %" item stat, in % (owner 2026-11-19:
  * no cap on the total from items, but a safety stop at 75% in case the multipliers are set high).
@@ -157,8 +171,16 @@ export interface Balance {
   mobGiveUpSec: number;
   /** A monster walking home (leash / hurt after a fight) ignores hits: no turning back to chase (owner 2026-11-17); off = the old behaviour. */
   mobReturnIgnoreHits: boolean;
+  /** A monster chasing a player who steps into the town / safe area (or leaves, or dies) drops it at once and walks home (owner 2026-11-20); off = the old behaviour. */
+  mobDropOnSafe: boolean;
+  /** "ใช้แมพจาก DB": on = published map layouts in the DB replace the bundled JSON (PR 5); off = always the bundled JSON, the emergency way out. Rooms made after the change follow it (server/maps-live.ts). */
+  mapFromDb: boolean;
+  /** "เพิ่มเวลาบัฟ %" counts for summons too (turret, drone, land mine lifetime); off = only buffs. */
+  buffDurSummons: boolean;
   /** Blacksmith Auto enhance button shown (owner 2026-11-18); off = hidden and a running Auto stops. Browser side only. */
   forgeAuto: boolean;
+  /** Blacksmith enhancement numbers: rates, costs, pity, drop/stone/announce levels, max, cooldown, orbs, aura (forgeTuning.ts). */
+  forge: ForgeConfig;
   /** A clicked walk goes on while the tab is hidden (server walks to the spot); off = the character stops as before. */
   walkHidden: boolean;
   /** Portals with an unlock (PortalDef.requires) open at all; off = closed to everyone (src/shared/floors.ts). */
@@ -171,8 +193,16 @@ export interface Balance {
   bossWipeKeepHp: boolean;
   /** Seconds a boss-room group that is all down has to revive someone before it has lost. */
   roomWipeSec: number;
+  /** Seconds a boss room counts down before its boss appears. */
+  roomBossDelay: number;
+  /** Untouchable (no damage or boss effects, blinking) for a moment after a phoenix-feather revive in a boss room. */
+  reviveGuard: boolean;
+  /** How long that lasts; any attack, skill, buff or dash ends it early. */
+  reviveGuardSec: number;
   /** Auto Play defaults, distances and switches (autoTuning.ts). */
   auto: AutoConfig;
+  /** Minigame "รอดมอนเป็นระลอก" (waveGame.ts). */
+  waves: WaveConfig;
   /** The skill effects' extra layer: glow, ground light, particles, hit feel (fxLayerTuning.ts). */
   fxLayer: FxLayerConfig;
   /** Which papercraft sword / armour each item shows on the sword rig (rigLookTuning.ts). */
@@ -227,8 +257,15 @@ export interface BalanceTuning {
   mobGiveUpSec?: number;
   /** Walking-home monsters ignoring hits, when not the code's (on). */
   mobReturnIgnoreHits?: boolean;
+  mobDropOnSafe?: boolean;
+  /** Maps from the DB, when not the code's (on). */
+  mapFromDb?: boolean;
+  /** Buff-time stat on summons, when not the code's (on). */
+  buffDurSummons?: boolean;
   /** Blacksmith Auto enhance, when not the code's (on). */
   forgeAuto?: boolean;
+  /** Blacksmith enhancement numbers that differ from the code. */
+  forge?: ForgeTuning;
   /** Walking on in a hidden tab, when not the code's (on). */
   walkHidden?: boolean;
   /** Unlock portals open, when not the code's (on). */
@@ -241,8 +278,16 @@ export interface BalanceTuning {
   bossWipeKeepHp?: boolean;
   /** Wipe revive seconds, when not the code's. */
   roomWipeSec?: number;
+  /** Boss countdown seconds, when not the code's. */
+  roomBossDelay?: number;
+  /** Phoenix-feather revive guard, when not the code's (on). */
+  reviveGuard?: boolean;
+  /** Its seconds, when not the code's. */
+  reviveGuardSec?: number;
   /** Auto Play settings that differ from the code. */
   auto?: AutoTuning;
+  /** Wave minigame numbers that differ from the code. */
+  waves?: WaveTuning;
   /** Skill effect extra-layer numbers that differ from the code. */
   fxLayer?: FxLayerTuning;
   /** Sword rig item pictures that differ from the code. */
@@ -285,6 +330,8 @@ export const BALANCE_RANGE = {
   bossSwitchSec: [0, 120],
   mobGiveUpSec: [0, 120],
   roomWipeSec: [3, 60],
+  roomBossDelay: [0, 60],
+  reviveGuardSec: [1, 30],
 } as const satisfies Record<string, readonly [number, number]>;
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
@@ -321,14 +368,22 @@ export function codeBalance(): Balance {
     bossSwitchSec: CODE_BOSS_SWITCH_SEC,
     mobGiveUpSec: CODE_MOB_GIVE_UP_SEC,
     mobReturnIgnoreHits: CODE_MOB_RETURN_IGNORE_HITS,
+    mobDropOnSafe: CODE_MOB_DROP_ON_SAFE,
+    mapFromDb: CODE_MAP_FROM_DB,
+    buffDurSummons: CODE_BUFF_DUR_SUMMONS,
     forgeAuto: CODE_FORGE_AUTO,
+    forge: codeForge(),
     walkHidden: CODE_WALK_HIDDEN,
     floorGateOpen: CODE_FLOOR_GATE_OPEN,
     floorGateQuest: CODE_FLOOR_GATE_QUEST,
     floorGate: codeFloorGate(),
     bossWipeKeepHp: CODE_BOSS_WIPE_KEEP_HP,
     roomWipeSec: CODE_ROOM_WIPE_SECONDS,
+    roomBossDelay: CODE_ROOM_BOSS_DELAY,
+    reviveGuard: CODE_REVIVE_GUARD,
+    reviveGuardSec: CODE_REVIVE_GUARD_SEC,
     auto: codeAuto(),
+    waves: codeWaves(),
     fxLayer: codeFxLayer(),
     rigLook: codeRigLook(),
     attackRoot: codeAttackRoot(),
@@ -375,13 +430,21 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.mobGiveUpSec !== undefined) b.mobGiveUpSec = t.mobGiveUpSec;
   if (t.bossWipeKeepHp !== undefined) b.bossWipeKeepHp = t.bossWipeKeepHp;
   if (t.roomWipeSec !== undefined) b.roomWipeSec = t.roomWipeSec;
+  if (t.roomBossDelay !== undefined) b.roomBossDelay = t.roomBossDelay;
+  if (t.reviveGuard !== undefined) b.reviveGuard = t.reviveGuard;
+  if (t.reviveGuardSec !== undefined) b.reviveGuardSec = t.reviveGuardSec;
   if (t.mobReturnIgnoreHits !== undefined) b.mobReturnIgnoreHits = t.mobReturnIgnoreHits;
+  if (t.mobDropOnSafe !== undefined) b.mobDropOnSafe = t.mobDropOnSafe;
+  if (t.mapFromDb !== undefined) b.mapFromDb = t.mapFromDb;
+  if (t.buffDurSummons !== undefined) b.buffDurSummons = t.buffDurSummons;
   if (t.forgeAuto !== undefined) b.forgeAuto = t.forgeAuto;
+  b.forge = mergeForge(t.forge);
   if (t.walkHidden !== undefined) b.walkHidden = t.walkHidden;
   if (t.floorGateOpen !== undefined) b.floorGateOpen = t.floorGateOpen;
   if (t.floorGateQuest !== undefined) b.floorGateQuest = t.floorGateQuest;
   b.floorGate = mergeFloorGate(t.floorGate);
   b.auto = mergeAuto(t.auto);
+  b.waves = mergeWaves(t.waves);
   b.fxLayer = mergeFxLayer(t.fxLayer);
   b.rigLook = mergeRigLook(t.rigLook);
   b.attackRoot = mergeAttackRoot(t.attackRoot);
@@ -524,7 +587,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'forgeAuto', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'bossWipeKeepHp', 'roomWipeSec', 'auto', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'menuLayout', 'sets', 'moves'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'menuLayout', 'sets', 'moves'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -601,7 +664,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   }
 
   // Single numbers
-  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'roomWipeSec' | 'cdrCap', range: readonly [number, number], what: string): string | null => {
+  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'roomWipeSec' | 'roomBossDelay' | 'reviveGuardSec' | 'cdrCap', range: readonly [number, number], what: string): string | null => {
     const n = num(o[key], range[0], range[1], what);
     if (typeof n === 'string') return n;
     if (n !== undefined && n !== CODE[key]) out[key] = n;
@@ -612,6 +675,27 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (x === undefined) return null;
     if (typeof x !== 'boolean') return strict ? 'สวิตช์มอนเดินกลับไม่สนการโจมตีต้องเป็นเปิด/ปิด' : null;
     if (x !== CODE.mobReturnIgnoreHits) out.mobReturnIgnoreHits = x;
+    return null;
+  };
+  const dropOnSafe = (): string | null => {
+    const x = o.mobDropOnSafe;
+    if (x === undefined) return null;
+    if (typeof x !== 'boolean') return strict ? 'สวิตช์มอนเลิกไล่เมื่อผู้เล่นเข้าเมืองต้องเป็นเปิด/ปิด' : null;
+    if (x !== CODE.mobDropOnSafe) out.mobDropOnSafe = x;
+    return null;
+  };
+  const mapFromDb = (): string | null => {
+    const x = o.mapFromDb;
+    if (x === undefined) return null;
+    if (typeof x !== 'boolean') return strict ? 'สวิตช์ใช้แมพจาก DB ต้องเป็นเปิด/ปิด' : null;
+    if (x !== CODE.mapFromDb) out.mapFromDb = x;
+    return null;
+  };
+  const buffDurSummons = (): string | null => {
+    const x = o.buffDurSummons;
+    if (x === undefined) return null;
+    if (typeof x !== 'boolean') return strict ? 'สวิตช์เวลาบัฟนับ summon ต้องเป็นเปิด/ปิด' : null;
+    if (x !== CODE.buffDurSummons) out.buffDurSummons = x;
     return null;
   };
   const forgeAuto = (): string | null => {
@@ -642,6 +726,13 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (x === undefined) return null;
     if (typeof x !== 'boolean') return strict ? 'สวิตช์บอสไม่ฟื้นเลือดตอนทีมตายหมดต้องเป็นเปิด/ปิด' : null;
     if (x !== CODE.bossWipeKeepHp) out.bossWipeKeepHp = x;
+    return null;
+  };
+  const reviveGuard = (): string | null => {
+    const x = o.reviveGuard;
+    if (x === undefined) return null;
+    if (typeof x !== 'boolean') return strict ? 'สวิตช์อมตะหลังชุบด้วยขนนกฟีนิกซ์ต้องเป็นเปิด/ปิด' : null;
+    if (x !== CODE.reviveGuard) out.reviveGuard = x;
     return null;
   };
   /** A tier array (5 numbers, T1 first): the array, undefined (missing / dropped), or an error to return. */
@@ -947,6 +1038,12 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (c.tuning) out.floorGate = c.tuning;
     return null;
   };
+  const waves = (): string | null => {
+    const c = checkWaveTuning(o.waves, strict);
+    if ('error' in c) return c.error;
+    if (c.tuning) out.waves = c.tuning;
+    return null;
+  };
   const tutorial = (): string | null => {
     const c = checkTutorialTuning(o.tutorial, strict);
     if ('error' in c) return c.error;
@@ -989,6 +1086,12 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (c.tuning) out.menuLayout = c.tuning;
     return null;
   };
+  const forge = (): string | null => {
+    const c = checkForgeTuning(o.forge, strict);
+    if ('error' in c) return c.error;
+    if (c.tuning) out.forge = c.tuning;
+    return null;
+  };
   const skills = (): string | null => {
     const c = checkSkillTuning(o.skills, strict);
     if ('error' in c) return c.error;
@@ -1014,14 +1117,22 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     one('bossSwitchSec', BALANCE_RANGE.bossSwitchSec, 'บอสเปลี่ยนเป้าหมายทุก (วินาที)') ??
     one('mobGiveUpSec', BALANCE_RANGE.mobGiveUpSec, 'มอนธรรมดาเลิกไล่เมื่อไม่โดนตี (วินาที)') ??
     returnIgnore() ??
+    dropOnSafe() ??
+    mapFromDb() ??
+    buffDurSummons() ??
     forgeAuto() ??
+    forge() ??
     walkHidden() ??
     gateOpen() ??
     gateQuest() ??
     floorGate() ??
     wipeKeep() ??
     one('roomWipeSec', BALANCE_RANGE.roomWipeSec, 'เวลาชุบตอนตายหมดทีม (วินาที)') ??
+    one('roomBossDelay', BALANCE_RANGE.roomBossDelay, 'นับถอยหลังก่อนบอสเกิด (วินาที)') ??
+    reviveGuard() ??
+    one('reviveGuardSec', BALANCE_RANGE.reviveGuardSec, 'อมตะหลังชุบด้วยขนนกฟีนิกซ์ (วินาที)') ??
     auto() ??
+    waves() ??
     tutorial() ??
     skills() ??
     fxLayer() ??
@@ -1129,13 +1240,21 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.mobGiveUpSec !== b.mobGiveUpSec) out.push(`มอนธรรมดาเลิกไล่เมื่อไม่โดนตี ${a.mobGiveUpSec || 'ไม่เลิก'} → ${b.mobGiveUpSec || 'ไม่เลิก'} วิ`);
   if (a.bossWipeKeepHp !== b.bossWipeKeepHp) out.push(`บอสไม่ฟื้นเลือดตอนทีมตายหมด ${a.bossWipeKeepHp ? 'เปิด' : 'ปิด'} → ${b.bossWipeKeepHp ? 'เปิด' : 'ปิด'}`);
   if (a.roomWipeSec !== b.roomWipeSec) out.push(`เวลาชุบตอนตายหมดทีม ${a.roomWipeSec} → ${b.roomWipeSec} วิ`);
+  if (a.roomBossDelay !== b.roomBossDelay) out.push(`นับถอยหลังก่อนบอสเกิด ${a.roomBossDelay} → ${b.roomBossDelay} วิ`);
+  if (a.reviveGuard !== b.reviveGuard) out.push(`อมตะหลังชุบด้วยขนนกฟีนิกซ์ ${a.reviveGuard ? 'เปิด' : 'ปิด'} → ${b.reviveGuard ? 'เปิด' : 'ปิด'}`);
+  if (a.reviveGuardSec !== b.reviveGuardSec) out.push(`เวลาอมตะหลังชุบ ${a.reviveGuardSec} → ${b.reviveGuardSec} วิ`);
+  out.push(...forgeChanges(a.forge, b.forge));
   if (a.forgeAuto !== b.forgeAuto) out.push(`ตีบวก Auto ${a.forgeAuto ? 'เปิด' : 'ปิด'} → ${b.forgeAuto ? 'เปิด' : 'ปิด'}`);
   if (a.walkHidden !== b.walkHidden) out.push(`เดินต่อเมื่อสลับแท็บ ${a.walkHidden ? 'เปิด' : 'ปิด'} → ${b.walkHidden ? 'เปิด' : 'ปิด'}`);
   if (a.floorGateOpen !== b.floorGateOpen) out.push(`ประตูที่ต้องทำเควส (ทางขึ้นชั้น 2) ${a.floorGateOpen ? 'เปิด' : 'ปิด'} → ${b.floorGateOpen ? 'เปิด' : 'ปิด'}`);
   if (a.floorGateQuest !== b.floorGateQuest) out.push(`ต้องทำเควสก่อนผ่านประตู ${a.floorGateQuest ? 'เปิด' : 'ปิด'} → ${b.floorGateQuest ? 'เปิด' : 'ปิด'}`);
+  if (a.buffDurSummons !== b.buffDurSummons) out.push(`เพิ่มเวลาบัฟนับ summon (ป้อมปืน โดรน กับระเบิด) ${a.buffDurSummons ? 'เปิด' : 'ปิด'} → ${b.buffDurSummons ? 'เปิด' : 'ปิด'}`);
+  if (a.mobDropOnSafe !== b.mobDropOnSafe) out.push(`มอนเลิกไล่เมื่อผู้เล่นเข้าเมือง/safe zone ${a.mobDropOnSafe ? 'เปิด' : 'ปิด'} → ${b.mobDropOnSafe ? 'เปิด' : 'ปิด'}`);
+  if (a.mapFromDb !== b.mapFromDb) out.push(`ใช้แมพจาก DB ${a.mapFromDb ? 'เปิด' : 'ปิด'} → ${b.mapFromDb ? 'เปิด' : 'ปิด'}`);
   if (a.mobReturnIgnoreHits !== b.mobReturnIgnoreHits) out.push(`มอนเดินกลับบ้านไม่สนการโจมตี ${a.mobReturnIgnoreHits ? 'เปิด' : 'ปิด'} → ${b.mobReturnIgnoreHits ? 'เปิด' : 'ปิด'}`);
   out.push(...floorGateChanges(a.floorGate, b.floorGate));
   out.push(...autoChanges(a.auto, b.auto));
+  out.push(...waveChanges(a.waves, b.waves));
   out.push(...tutorialChanges(a.tutorial, b.tutorial));
   out.push(...skillChanges(a.skills, b.skills));
   out.push(...fxLayerChanges(a.fxLayer, b.fxLayer));

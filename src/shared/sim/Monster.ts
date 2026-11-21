@@ -50,6 +50,9 @@ export class Monster extends Unit {
   weakUntil = 0;
   /** Burning / poisoned by a damage-over-time skill until this sim time (for passives that check statuses). */
   dotUntil = 0;
+  /** Extra effects (sim/extraEffects.ts): when an extra stun from each skill last began, and running extra burns. */
+  extraStunAt = new Map<string, number>();
+  extraDots = new Map<string, { until: number; mult: number }>();
 
   /** Its debuffs as the server last sent them (client only, sim/debuffs.ts); the server works them out from the fields above. */
   debuffs = 0;
@@ -62,6 +65,8 @@ export class Monster extends Unit {
   }
   expReward = 0;
   state: State = 'idle';
+  /** Gravity Well: until this sim time the monster is held where the well put it (no walking, chasing or wind-ups). */
+  pinnedUntil = 0;
   aggroT = 0;
   /** Boss: who it was on at the last check, and for how long (seconds); a change of target restarts the count. */
   private swTarget: Player | null = null;
@@ -328,11 +333,32 @@ export class Monster extends Unit {
     if (this.state !== 'return') this.state = 'idle';
   }
 
-  /** Nearest living player, for monsters that attack on sight. */
+  /**
+   * Its target is gone (stepped into the safe area, left the map or channel, respawned in town): ordinary monsters
+   * drop it at once and walk home, healing on the way, instead of standing where they are (owner 2026-11-20).
+   * Bosses, and the Balance switch off, keep the old `calm()`.
+   */
+  dropTarget(): void {
+    if (this.isBoss || !currentBalance().mobDropOnSafe) {
+      this.calm();
+      return;
+    }
+    const inAir = this.state === 'leap';
+    this.aggroT = 0;
+    this.windupT = 0;
+    this.target = null;
+    if (!inAir) {
+      this.lift = 0;
+      this.state = 'return';
+    }
+  }
+
+  /** Nearest living player, for monsters that attack on sight (players in the safe area are not prey while the Balance switch is on). */
   private nearestPlayer(sim: Sim): { p: Player; d: number } | null {
     let best: { p: Player; d: number } | null = null;
+    const skipSafe = !this.isBoss && currentBalance().mobDropOnSafe;
     for (const p of sim.players) {
-      if (!p.alive) continue;
+      if (!p.alive || (skipSafe && sim.inSafe(p))) continue;
       const d = Math.hypot(p.x - this.x, p.z - this.z);
       if (!best || d < best.d) best = { p, d };
     }
@@ -422,7 +448,13 @@ export class Monster extends Unit {
     this.fleeT -= dt;
 
     // Lose a dead target; aggressive monsters pick up whoever walks into range.
-    if (this.target && !this.target.alive) this.target = null;
+    if (this.target && !this.target.alive) {
+      this.target = null;
+      if (!this.isBoss && currentBalance().mobDropOnSafe && this.state === 'chase') {
+        this.aggroT = 0;
+        this.state = 'return';
+      }
+    }
     if (this.holdsOnWipe(sim)) {
       // Whole boss-room group down: stand still, keep HP / enrage / damage shares, drop any wind-up (owner 2026-11-17).
       this.windupT = 0;
@@ -449,7 +481,7 @@ export class Monster extends Unit {
     let mz = 0;
     let spd = this.baseSpeed;
 
-    if (this.stunT > 0) {
+    if (this.stunT > 0 || sim.time < this.pinnedUntil) {
       this.windupT = 0;
       if (this.state === 'charge') this.state = 'chase';
       return;

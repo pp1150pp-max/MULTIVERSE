@@ -84,6 +84,13 @@ const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
     ['floor 2%', { rangeFloor: 2 }],
     ['boss boost 11', { bossTierBoost: 11 }],
     ['not an object', 'x'],
+    ['forge rate over 100%', { forge: { rate: { 5: 150 } } }],
+    ['forge level 16 in a table', { forge: { costMult: { 16: 5 } } }],
+    ['forge max above +15', { forge: { maxPlus: 16 } }],
+    ['forge drop level not whole', { forge: { dropFrom: 7.5 } }],
+    ['forge cooldown too short', { forge: { cd: 0.1 } }],
+    ['forge aura out of order', { forge: { aura: [10, 7, 13, 15] } }],
+    ['forge unknown key', { forge: { luck: 1 } }],
   ] as const) {
     ok(!!checkBalance(t, true).error, `refused: ${what}`);
   }
@@ -439,6 +446,13 @@ async function run(): Promise<void> {
     ['widths', { tierWidth: [50, 50, 50, 50, 50] }],
     ['own table of an unknown stat', { statTiers: { luck: { floor: 20 } } }],
     ['not an object', 'x'],
+    ['forge rate over 100%', { forge: { rate: { 5: 150 } } }],
+    ['forge level 16 in a table', { forge: { costMult: { 16: 5 } } }],
+    ['forge max above +15', { forge: { maxPlus: 16 } }],
+    ['forge drop level not whole', { forge: { dropFrom: 7.5 } }],
+    ['forge cooldown too short', { forge: { cd: 0.1 } }],
+    ['forge aura out of order', { forge: { aura: [10, 7, 13, 15] } }],
+    ['forge unknown key', { forge: { luck: 1 } }],
   ] as const) {
     ok((await api('POST', '/admin/balance', { tuning }, tok.owner1)).status === 400, `bad ${what} refused`);
   }

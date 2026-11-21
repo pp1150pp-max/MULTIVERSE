@@ -1,0 +1,57 @@
+/* Daily login calendar: 7 columns, one cell per day with its reward. */
+/* No scrollbars (owner): the width follows the screen height too, so up to 6 weeks of cells always fit. */
+#daily-win { left: 50%; top: 8px; transform: translateX(-50%); width: min(460px, calc(100vw - 32px), calc((100vh - 250px) * 7 / 6 + 60px)); font-size: 12px; }
+#daily-win .daily-note, #daily-win .daily-foot { margin: 6px 8px; color: var(--ink-dim); font-size: 11px; }
+#daily-win .daily-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 0 8px; }
+#daily-win .daily-wd { text-align: center; color: var(--gold); font-size: 11px; }
+#daily-win .daily-cell { position: relative; aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid #4a3e2a; border-radius: 4px; background: rgba(20, 16, 10, 0.75); }
+#daily-win .daily-cell.blank { border: none; background: none; }
+#daily-win .daily-cell .gi { width: 60%; height: 60%; }
+#daily-win .daily-num { position: absolute; top: 1px; left: 3px; font-size: 10px; color: var(--ink-dim); }
+#daily-win .daily-count { position: absolute; bottom: 1px; right: 3px; font-size: 10px; color: #f2ead8; text-shadow: 0 0 2px #000; }
+#daily-win .daily-cell.got, #daily-win .daily-cell.madeUp { border-color: #6aa84f; }
+#daily-win .daily-cell.got .gi, #daily-win .daily-cell.madeUp .gi { opacity: 0.55; }
+#daily-win .daily-mark { position: absolute; inset: auto 0 35% 0; text-align: center; color: #9fe0a0; font-weight: 700; font-size: 12px; text-shadow: 0 0 3px #000; }
+#daily-win .daily-cell.madeUp .daily-mark { font-size: 9px; }
+#daily-win .daily-cell.missed { opacity: 0.45; cursor: pointer; }
+#daily-win .daily-cell.missed:hover, #daily-win .daily-cell.picked { opacity: 1; border-color: var(--gold); }
+#daily-win .daily-cell.is-today { border-color: var(--gold); box-shadow: 0 0 6px var(--gold); }
+#daily-win .daily-btns { display: flex; gap: 6px; justify-content: center; margin: 4px 8px 8px; }
+/* Short screens (a phone on its side): calendar on the left sized by the height, text and buttons on the right. */
+@media (max-height: 520px) {
+  #daily-win {
+    width: min(calc(100vw - 32px), 680px); padding: 10px 12px; display: grid; column-gap: 10px; align-content: start;
+    grid-template-columns: calc((100vh - 96px) / 6.4 * 7) 1fr; grid-template-areas: 'head head' 'grid note' 'grid foot' 'grid btns';
+  }
+  #daily-win .panel-head { grid-area: head; margin-bottom: 8px; }
+  #daily-win .daily-grid { grid-area: grid; padding: 0; gap: 2px; }
+  #daily-win .daily-note { grid-area: note; }
+  #daily-win .daily-foot { grid-area: foot; }
+  #daily-win .daily-btns { grid-area: btns; flex-direction: column; align-items: stretch; }
+  #daily-win .daily-num, #daily-win .daily-count { font-size: 9px; }
+}
+#megaphone-win { left: 50%; top: 80px; transform: translateX(-50%); width: min(400px, 92vw); font-size: 13px; }
+#megaphone-win .mega-body { display: flex; flex-direction: column; gap: 6px; }
+#megaphone-win textarea { resize: none; padding: 4px 6px; font: inherit; }
+#megaphone-win .mega-count { text-align: right; font-size: 11px; color: var(--ink-dim); }
+#megaphone-win .mega-note { font-size: 11px; color: var(--ink-dim); }
+#friends-win { left: 50%; top: 80px; transform: translateX(-50%); width: min(420px, 92vw); font-size: 13px; }
+#friends-win .friends-body { display: flex; flex-direction: column; gap: 6px; }
+#friends-win .friends-add { display: flex; gap: 6px; }
+#friends-win .friends-add input { flex: 1; min-width: 0; padding: 4px 6px; }
+#friends-win .friends-list { display: flex; flex-direction: column; gap: 4px; max-height: min(50vh, 360px); overflow-y: auto; }
+#friends-win .friends-sub { margin-top: 4px; font-size: 12px; color: var(--gold-hi); }
+#friends-win .friends-empty { color: var(--ink-dim); text-align: center; padding: 8px 0; }
+.friend-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 8px; background: rgba(0, 0, 0, 0.3); border: 1px solid #4a4030; border-radius: 3px; }
+.friend-row.offline .friend-info { opacity: 0.6; }
+.friend-info { min-width: 0; }
+.friend-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.friend-lv { font-size: 11px; color: var(--gold-hi); }
+.friend-sub { font-size: 11px; color: var(--ink-dim); }
+.friend-dot { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; background: #6a6258; vertical-align: middle; }
+.friend-dot.on { background: #5dff8a; box-shadow: 0 0 4px #5dff8a; }
+.friend-btns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 3px; flex-shrink: 0; }
+.friend-btns button { padding: 2px 7px; font-size: 12px; }
+.friend-btns button:disabled { opacity: 0.4; cursor: default; }
+.friend-btns .friend-remove { color: #ff9a8a; }
+

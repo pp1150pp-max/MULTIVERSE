@@ -12,7 +12,7 @@ import type { Player } from '../src/shared/sim/Player';
 import { newCharacterData } from '../src/shared/sim/Player';
 import { castSkill } from '../src/shared/sim/skills';
 import { cleanSkillBook, skillParam, skillReach, unlockLevel } from '../src/shared/skillBook';
-import { codeSkills } from '../src/shared/skillTuning';
+import { checkSkillTuning, codeSkills } from '../src/shared/skillTuning';
 import { passiveDealMult } from '../src/shared/passives';
 
 const MAGE = CLASSES.mage.skills.filter(isLearnable);
@@ -149,10 +149,28 @@ const run = (sim: Sim, seconds: number) => {
   far.x = p.x + 20; far.z = p.z;
   castSkill(sim, p, sk('mg_empowerfield'), p, 1);
   ok(p.dmgMult === 1.2 && near.dmgMult === 1.2 && near.dmgUntil > sim.time && far.dmgUntil === 0, 'empowering field: caster and the player in the circle, not the one outside');
+  // Time Warp: remaining Q/E/R cooldowns of the caster and everyone in the circle drop 50% at once.
+  const swordQ = near.cls.skills.find((s) => s.kind === 'normal')!;
+  p.cd.fireball = 10; p.cd.frostnova = 8; p.cd.meteor = 20; p.cd.dash = 4; p.potCd = 6;
+  near.cd[swordQ.id] = 10; near.cd.dash = 4;
+  far.cd[swordQ.id] = 10;
+  p.cd.mg_timewarp = 0;
+  const mob0 = sim.monsters.find((m) => m.alive && !m.isBoss && Math.hypot(m.x - p.x, m.z - p.z) < 7)!;
   castSkill(sim, p, sk('mg_timewarp'), p, 1);
-  near.cd.x = 5;
-  sim.step(1);
-  ok(Math.abs(near.cd.x - 3.5) < 0.01, `time warp: cooldowns run 1.5× (${near.cd.x})`);
+  ok(p.cd.fireball === 5 && p.cd.frostnova === 4 && p.cd.meteor === 10, `time warp: caster's Q/E/R cooldowns halved (${p.cd.fireball}/${p.cd.frostnova}/${p.cd.meteor})`);
+  ok(near.cd[swordQ.id] === 5, 'time warp: a friend in the circle is halved too');
+  ok(far.cd[swordQ.id] === 10, 'time warp: a player outside the circle is untouched');
+  ok(p.cd.dash === 4 && near.cd.dash === 4 && p.potCd === 6, 'time warp: dash and potion cooldowns untouched');
+  ok(p.cd.mg_timewarp === 0 || p.cd.mg_timewarp === undefined, 'time warp: casting it set no extra cooldown beyond the normal one');
+  ok(p.hasteUntil === 0 && near.hasteUntil === 0, 'time warp: no haste buff any more');
+  ok(mob0.slowT > 0, `time warp: monsters in the circle are still slowed (${mob0.slowT})`);
+  // Old owner settings (haste / hasteTime) are dropped on load, never an error.
+  const old = checkSkillTuning({ skills: { mg_timewarp: { params: { haste: 80, hasteTime: 9, slow: 40 } } } }, false);
+  ok('tuning' in old && JSON.stringify(old.tuning) === JSON.stringify({ skills: { mg_timewarp: { params: { slow: 40 } } } }), 'old haste/hasteTime settings dropped, others kept');
+  // Another Time Warp (a friend's) is not shortened either.
+  p.cd.mg_timewarp = 12;
+  castSkill(sim, p, sk('mg_timewarp'), p, 1);
+  ok(p.cd.mg_timewarp === 12, 'time warp: its own cooldown is not cut');
   near.mp = 0;
   castSkill(sim, p, sk('mg_manawell'), p, 1);
   run(sim, 1.2);
@@ -169,7 +187,33 @@ const run = (sim: Sim, seconds: number) => {
   ok(Math.hypot(m.x - c.x, m.z - c.z) < d0 - 0.3, 'gravity well pulls a monster toward its centre');
 }
 {
+  // Gravity Well holds monsters at the centre until the blast; higher rank gets there faster; bosses are not pulled.
+  const reach = (rank: number): number => {
+    const { sim, p, mobs } = arena();
+    const m = mobs[0];
+    const c = { x: m.x + 3, z: m.z };
+    castSkill(sim, p, sk('mg_gravitywell'), c, rank);
+    let t = 0;
+    while (t < 1.4 && Math.hypot(m.x - c.x, m.z - c.z) > 1.1) { sim.step(0.05); t += 0.05; }
+    const arrived = t;
+    run(sim, 1.4 - t);
+    ok(Math.hypot(m.x - c.x, m.z - c.z) <= 1.1, `rank ${rank}: held at the centre until the blast`);
+    return arrived;
+  };
+  const t1 = reach(1);
+  const t10 = reach(10);
+  ok(t10 < t1 && t10 <= 0.2, `higher rank reaches the centre faster (${t1.toFixed(2)}s → ${t10.toFixed(2)}s)`);
+  const { sim, p, mobs } = arena();
+  const m = mobs[0];
+  const c = { x: m.x + 3, z: m.z };
+  castSkill(sim, p, sk('mg_gravitywell'), c, 1);
+  run(sim, 1.6);
+  ok(m.pinnedUntil <= sim.time, 'pin ends after the blast');
+}
+{
   // Dying or leaving the zone stops the caster's zones.
+  // Switch off: a monster that walks home resets its damage shares, which this check reads (the walk-home rule has its own test).
+  applyBalance({ mobDropOnSafe: false });
   const { sim, p, mobs } = arena();
   castSkill(sim, p, sk('mg_firerain'), { x: mobs[0].x, z: mobs[0].z }, 1);
   run(sim, 0.6);
@@ -177,6 +221,7 @@ const run = (sim: Sim, seconds: number) => {
   const lost = hpLost(mobs);
   run(sim, 6);
   ok(hpLost(mobs) === lost, 'fire rain stops when the caster leaves');
+  applyBalance({});
 }
 
 // ---------------------------------------------------------- passives
