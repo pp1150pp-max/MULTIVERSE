@@ -92,6 +92,8 @@ export interface ZoneDef {
   bossSolid?: number;
   /** Makes every monster here (bosses and summons too) stronger than its MonsterDef; none = as defined. */
   monsterBoost?: MonsterBoost;
+  /** Made in the map editor with "＋ แมพใหม่" (src/shared/customZones.ts), not in this file. */
+  custom?: boolean;
 }
 
 /** A map's boss summoner: put keys in it to open the boss's room. */
@@ -490,6 +492,12 @@ export const ZONES: Record<string, ZoneDef> = Object.fromEntries(
 );
 
 /**
+ * Maps made in the editor (src/shared/customZones.ts sets this when it loads): builds the ZoneDef of such a map from its layout,
+ * undefined for an id that is not one. A hook, so this file does not import that one (it imports this).
+ */
+export const customZoneHook: { build: ((id: string, map: MapData) => ZoneDef | undefined) | null } = { build: null };
+
+/**
  * Rebuilds a floor-1 zone from what MapRegistry holds now (a published layout from the DB, or the bundled file).
  * Existing Sims keep the ZoneDef they were made with; only Terrains and Sims made afterwards see the new one.
  */
@@ -504,7 +512,14 @@ export function refreshZone(id: string): void {
     return;
   }
   const base = GENERATED_ZONES[id];
-  if (!base) return;
+  if (!base) {
+    // An editor-made map: in the game only while MapRegistry holds a layout for it (published, not hidden).
+    const map = MapRegistry.get(id);
+    const z = map && customZoneHook.build?.(id, map);
+    if (z) ZONES[id] = z;
+    else if (ZONES[id]?.custom) delete ZONES[id];
+    return;
+  }
   const map = MapRegistry.get(id);
   ZONES[id] = map ? zoneWithMap(base, map) : base;
 }
@@ -514,7 +529,7 @@ export function zoneWithLayout(id: string, map: MapData): ZoneDef | undefined {
   const room = GENERATED_ROOMS[id];
   if (room) return roomWithMap(room, map);
   const base = GENERATED_ZONES[id];
-  return base ? zoneWithMap(base, map) : undefined;
+  return base ? zoneWithMap(base, map) : customZoneHook.build?.(id, map);
 }
 
 /** Each boss's body radius in its room (the Volcano Heart is a rock that never moves). */

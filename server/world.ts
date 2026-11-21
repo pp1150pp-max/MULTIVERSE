@@ -344,7 +344,7 @@ const clamp = (v: unknown, max: number): number | undefined =>
 
 export class GameWorld {
   /** Every open map's Sims, one per channel (server/channels.ts). */
-  readonly channels = new Channels(Object.values(ZONES), Date.now, undefined, (z) => ZONES[z.id] ?? z);
+  readonly channels = new Channels(Object.values(ZONES), Date.now, undefined, (z) => ZONES[z.id] ?? z, (id) => ZONES[id]);
   private readonly sessions = new Set<Session>();
   /** The private Sims of map-editor previews (one per preview session), ticked with the others. */
   private readonly previews = new Set<Sim>();
@@ -2577,6 +2577,22 @@ export class GameWorld {
     if (c.sim === s.sim) return `อยู่ที่ CH ${ch} อยู่แล้ว`;
     this.travel(s, c.sim, true);
     return null;
+  }
+
+  /**
+   * A map taken out of the game (hidden or deleted in the map editor): everyone in it goes to the hub's camp at once, then its
+   * channels close. Returns how many players were moved. Map previews are private rooms and are left alone.
+   */
+  closeZone(zoneId: string, why: string): number {
+    let n = 0;
+    for (const s of [...this.sessions]) {
+      if (s.preview || s.sim.zone.id !== zoneId) continue;
+      this.travel(s, HUB_ID, true);
+      this.send(s.ws, { t: 'chat', name: '', text: why });
+      n++;
+    }
+    this.channels.dropZone(zoneId);
+    return n;
   }
 
   /** The zone and channel an online character is in (for the admin page), or undefined. */

@@ -535,3 +535,7 @@ button.more:hover { color: var(--gold-hi); text-decoration: underline; }
 .me-cmp-item.on { outline: 1px solid var(--accent, #6cf); }
 .me-brush-keys { display: flex; flex-wrap: wrap; gap: 4px; max-height: 180px; overflow: auto; margin: 4px 0; }
 .me-brush-keys .me-item { width: 72px; }
+.me-newmap, .me-mapset { margin-top: 12px; padding: 10px; border: 1px solid var(--line, #444); border-radius: 6px; display: flex; flex-direction: column; gap: 6px; }
+.me-newmap-fields { display: flex; flex-direction: column; gap: 6px; }
+.me-newmap-fields input[type="text"] { min-width: 240px; }
+.me-newmap-fields input[type="number"] { width: 64px; }

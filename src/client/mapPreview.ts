@@ -7,6 +7,7 @@
 import { refreshZone } from '../shared/data/zones';
 import { MapRegistry } from '../shared/mapRegistry';
 import type { MapData, MapIssue } from '../shared/mapSchema';
+import { putCustomDef, type CustomZoneDef } from '../shared/customZones';
 
 /** The zone named by ?previewMap, or null (a zone id is lowercase letters, digits and underscore). */
 export function previewParam(): string | null {
@@ -27,12 +28,13 @@ export async function loadPreviewDraft(id: string, token: string): Promise<strin
   try {
     const r = await fetch(`/api/admin/maps/${id}/draft`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(6000) });
     if (!r.ok) return null; // no mapEdit tool, or not a map: play normally
-    const body = (await r.json()) as { map?: MapData; issues?: MapIssue[] };
+    const body = (await r.json()) as { map?: MapData; issues?: MapIssue[]; custom?: CustomZoneDef };
     if (!body.map || body.map.id !== id) return null;
     if ((body.issues ?? []).some((i) => i.severity === 'error')) {
       alert('ร่างของแมพนี้ยังไม่ผ่านการตรวจ ทดลองเดินไม่ได้ กลับไปแก้ในตัวแก้แมพก่อน');
       return null;
     }
+    if (body.custom?.id === id) putCustomDef(body.custom); // a map made in the editor: its settings build the zone
     MapRegistry.set(body.map);
     refreshZone(id);
     return id;

@@ -10,9 +10,9 @@ import { DIFF_COLOR, DIFF_WORD, type CompareState } from './compare';
 
 interface RevRow { rev: number; author: string; note: string; updatedAt: number; bytes?: number }
 interface RevsReply { revisions: RevRow[]; bundledRev: number }
-interface ExportReply { rev: number; file: string; json: string; text?: string }
+interface ExportReply { rev: number; file: string; json: string; text?: string; custom?: boolean }
 
-export interface RevisionPerms { rollback: boolean; export: boolean }
+export interface RevisionPerms { rollback: boolean; export: boolean; /** "＋ แมพใหม่" and an editor-made map's settings / hide (mapCreate). */ create?: boolean; /** Deleting an editor-made map (mapDelete). */ del?: boolean }
 /** What the compare part needs from the page: the draft on screen, the bundled file, and the canvas overlay. */
 export interface CompareHooks {
   draft(): MapData | null;
@@ -52,7 +52,9 @@ export function mountRevisions(box: HTMLElement, h: H, api: Api, perms: Revision
       try {
         const r = await api<ExportReply>('GET', `/admin/maps/${id}/export`);
         downloadText(`${id}.json`, r.text ?? r.json);
-        say(`ดาวน์โหลด ${id}.json (rev ${r.rev}) แล้ว · วางที่ ${r.file} แล้ว commit`, 'good');
+        say(r.custom
+          ? `ดาวน์โหลด ${id}.json (rev ${r.rev}) แล้ว · แมพที่สร้างเองไม่มีไฟล์ใน repo เก็บไว้เป็นไฟล์สำรองได้ (สร้างกลับด้วย "＋ แมพใหม่ › นำเข้าไฟล์ JSON")`
+          : `ดาวน์โหลด ${id}.json (rev ${r.rev}) แล้ว · วางที่ ${r.file} แล้ว commit`, 'good');
       } catch (e) {
         say(errText(e), 'bad');
       }
