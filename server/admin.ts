@@ -22,7 +22,7 @@ import type { Backups } from './backup';
 import { currentBalanceTuning } from '../src/shared/balance';
 import {
   ADMIN_AUDIT_PAGE, ADMIN_GOLD_MAX, ADMIN_NO_RIGHTS, ADMIN_ITEMS_MAX, ADMIN_SEARCH_MAX,
-  addStackToBag, adminStack, adminStackName, customItem, OWNER_ROLE, type AdminFeature, type AdminCharRow, type AdminEditResult, type AdminMe, type AdminMeta, type AdminRole, type AdminServerState,
+  addStackToBag, buildGearSet, adminStack, adminStackName, customItem, OWNER_ROLE, type AdminFeature, type AdminCharRow, type AdminEditResult, type AdminMe, type AdminMeta, type AdminRole, type AdminServerState,
 } from '../src/shared/admin';
 import { countdownTime, SHUTDOWN_SECONDS, SHUTDOWN_SECONDS_MAX, shutdownCancelled, shutdownSeconds, type ShutdownMode } from '../src/shared/net/protocol';
 import { BAG_SIZE, type CharacterData, type Player } from '../src/shared/sim/Player';
@@ -176,10 +176,11 @@ export async function adminApi(
     return send(res, 200, charRow(c, world.livePlayer(c.id)));
   }
 
-  const edit = /^\/api\/admin\/characters\/(\d{1,12})\/(level|gold|items|kick|teleport)$/.exec(path);
+  const edit = /^\/api\/admin\/characters\/(\d{1,12})\/(level|gold|items|itemset|kick|teleport)$/.exec(path);
   if (method === 'POST' && edit) {
     const tool: AdminFeature = edit[2] === 'kick' ? 'kick' : edit[2] === 'teleport' ? 'teleport' : 'charEdit';
     const a = requireFeature(req, db, tool);
+    if (edit[2] === 'itemset') requireFeature(req, db, 'spawnSet');
     const body = await readJson(req);
     return send(res, 200, editCharacter(db, world, a, Number(edit[1]), edit[2], body));
   }
@@ -318,6 +319,21 @@ function editCharacter(db: Db, world: GameWorld, a: Admin, charId: number, what:
       msg = (n < count ? `ใส่ได้ ${n}/${count} ชิ้น — กระเป๋าเต็ม (${label})` : `เสกให้ ${n} ชิ้น: ${label}`) + (adjusted ? ` · ${adjusted}` : '');
       tell = `GM มอบไอเทม ${label} × ${n}`;
       log(db, a, 'items', target, `${label} × ${n}${n < count ? ` (ขอ ${count}, กระเป๋าเต็ม)` : ''}${adjusted ? ` · ${adjusted}` : ''}${custom ? ' · กำหนดสเตตัส' : ''}${rows}`);
+      break;
+    }
+    case 'itemset': {
+      const own = live ? live.cls.id : c.data.classId;
+      const classId = body.classId === undefined ? own : CLASS_IDS.find((k) => k === body.classId);
+      if (!classId) throw new HttpError(400, 'อาชีพไม่ถูกต้อง');
+      const set = buildGearSet(body, classId);
+      if (typeof set === 'string') throw new HttpError(400, set);
+      const free = freeSlots(d.bag);
+      if (free < set.items.length) throw new HttpError(400, `กระเป๋าว่างไม่พอ: เซตนี้ ${set.items.length} ชิ้น ต้องว่างอย่างน้อย ${set.items.length} ช่อง (ตอนนี้ว่าง ${free})`);
+      for (const item of set.items) d.bag[d.bag.indexOf(null)] = item;
+      const label = `เซต ${RARITY_LABEL[set.rarity]} T${set.tier} Lv.${set.level}${set.plus ? ` +${set.plus}` : ''} (${classId})`;
+      msg = `เสกให้ ${set.items.length} ชิ้น: ${label}${set.skipped.length ? ` · ไม่มีชนิดที่เลเวลนี้: ${set.skipped.join(', ')}` : ''}`;
+      tell = `GM มอบ${label} × ${set.items.length}`;
+      log(db, a, 'items', target, `${label} × ${set.items.length}: ${set.items.map((i) => i.name).join(', ')}${set.skipped.length ? ` · ข้าม ${set.skipped.join(', ')}` : ''}`);
       break;
     }
     case 'kick': {
