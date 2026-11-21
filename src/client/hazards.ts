@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { fxSheets, fxTex, sheets } from './assets';
 import { bossFxOn } from './bossFx';
+import { cloneShared } from './texShare';
 import type { GraspHazard, HexHazard, PoolHazard, VialHazard } from '../shared/sim/bogWitch';
 import { beamAngleAt, ringRadiusAt, type BeamsHazard, type BlastHazard, type Hazard, type MeteorHazard, type RingHazard } from '../shared/sim/volcanoHeart';
 
@@ -70,8 +71,8 @@ const WAVE_STEP = 1.5;
 function heartTex(): THREE.Texture | null {
   const base = fxSheets.boss_heart;
   if (!base || !bossFxOn()) return null;
-  const tex = base.clone();
-  tex.needsUpdate = true;
+  // The same GPU picture with its own frame (texShare.ts: a plain clone sends the whole sheet to the GPU again).
+  const tex = cloneShared(base);
   tex.userData.ownFrame = true;
   return tex;
 }

@@ -718,6 +718,9 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         h('thead', {}, h('tr', {}, h('th', {}, 'ยา'), h('th', {}, 'ฟื้น'), h('th', {}, 'ราคา (G)'), h('th', { class: 'bal-out' }, 'ได้จริง'))),
         h('tbody', {}, ...rows))),
       h('div', { class: 'row bal-line' }, h('label', {}, 'นักดาบฟื้นจากยา HP เพิ่ม (%)', numBox(() => pb.swordBonus, (n) => { pb.swordBonus = n; }, code.potions.swordBonus, ...POTION_RANGE.swordBonus, 5, refresh))),
+      h('div', { class: 'muted' }, 'ยาที่มอนดรอป (ทั้งมอนธรรมดาและบอส) ขนาดตามเลเวลของมอน: ต่ำกว่าเลเวลยากลาง = ยาเล็ก · 81 = ไม่ดรอปขนาดนั้น'),
+      h('div', { class: 'row bal-line' }, h('label', {}, 'ดรอปยากลางตั้งแต่ Lv', numBox(() => pb.dropM, (n) => { pb.dropM = Math.round(n); }, code.potions.dropM, ...POTION_RANGE.dropLevel, 1, refresh))),
+      h('div', { class: 'row bal-line' }, h('label', {}, 'ดรอปยาใหญ่ตั้งแต่ Lv', numBox(() => pb.dropL, (n) => { pb.dropL = Math.round(n); }, code.potions.dropL, ...POTION_RANGE.dropLevel, 1, refresh))),
     );
     outs.forEach((f) => f());
   };

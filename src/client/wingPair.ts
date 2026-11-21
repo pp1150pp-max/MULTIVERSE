@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import type { SheetInfo } from './assets';
 import { ISO_DIR } from './world';
+import { cloneShared } from './texShare';
 
 /** World units per pixel of the class sheets (sprite.json: 256 px cells, 2.4 units tall). */
 export const PX = 2.4 / 256;
@@ -74,8 +75,7 @@ export class WingPair {
   constructor(private readonly scene: THREE.Scene, private readonly sheet: SheetInfo) {
     // Two wings, plus the front diagonal's near wing again (cut past the arm).
     for (let i = 0; i < 3; i++) {
-      const tex = sheet.texture.clone();
-      tex.needsUpdate = true;
+      const tex = cloneShared(sheet.texture);
       tex.repeat.set(1 / sheet.cols, 1 / sheet.rows);
       const mat = new THREE.SpriteMaterial({ map: tex, alphaTest: 0.5, transparent: false });
       const sprite = new THREE.Sprite(mat);

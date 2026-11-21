@@ -1,6 +1,6 @@
 // Admin page (/admin): roles, limits and the shapes of the /api/admin requests, shared by the page
 // and the server. The server checks the role and every value on each call; the page is only a view.
-import { isPotion, isStack, isStone, RARITIES, RARITY_LABEL, sameStack, STAT_KEYS, STAT_LABEL, STONE_KINDS, type BagEntry, type PotionKind, type PotionStack, type StoneStack, type ClassId, type EquipSlot, type Item, type Rarity, type SlotId, type StatKey, type StatLine } from './types';
+import { isPotion, isStack, isStone, RARITIES, RARITY_LABEL, sameStack, SLOTS, STAT_KEYS, STAT_LABEL, STONE_KINDS, type BagEntry, type PotionKind, type PotionStack, type StoneStack, type ClassId, type EquipSlot, type Item, type Rarity, type SlotId, type StatKey, type StatLine } from './types';
 import type { ShutdownMode } from './net/protocol';
 import type { OrbLook } from './orbLook';
 import type { OrbItem, OrbItems } from './orbItems';
@@ -10,7 +10,7 @@ import type { CosShop } from './cosShop';
 import type { CardTuning } from './cardTuning';
 import type { BalanceTuning } from './balance';
 import type { MenuLayoutConfig } from './menuLayout';
-import { ITEM_BASES, itemNames, makeItem, roundStat, rowRanges, stampTier, statStep, tierOf } from './data/items';
+import { ITEM_BASES, itemNames, makeItem, roundStat, rowRanges, stampTier, statStep, tierOf, tierRanges } from './data/items';
 import { CLASS_IDS } from './data/classes';
 import { MAX_LEVEL } from './formulas';
 import { PLUS_CAP } from './data/enhance';
@@ -201,7 +201,7 @@ export interface AdminDirectWs {
  * switch: the Permissions tab, the audit log, restarting / stopping the server, deleting accounts or
  * characters, and making someone owner (command line).
  */
-export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'crystalGrant' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'directWs' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'animPreview' | 'animTune' | 'menuLayout' | 'menuLayoutEdit' | 'mapEdit' | 'mapRollback' | 'mapExport' | 'mapCreate' | 'mapDelete';
+export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'crystalGrant' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'directWs' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'animPreview' | 'animTune' | 'menuLayout' | 'menuLayoutEdit' | 'mapEdit' | 'mapRollback' | 'mapExport' | 'mapCreate' | 'mapDelete' | 'spawnSet';
 
 /**
  * The defaults: which built-in role may use each tool (owner always has all). The owner can change
@@ -296,6 +296,8 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   mapExport: ['owner'],
   mapCreate: ['owner', 'gm'],
   mapDelete: ['owner', 'gm'],
+  // Spawning a whole set (every wear slot) at one rarity / tier / level / +N into the bag (owner 2026-11-21: owner and GMs).
+  spawnSet: ['owner', 'gm'],
 };
 
 export const ADMIN_FEATURES = Object.keys(FEATURE_ROLES) as AdminFeature[];
@@ -328,6 +330,7 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   online: { name: 'ดูผู้เล่นออนไลน์', desc: 'แท็บ "ออนไลน์": ใครเล่นอยู่ แมพ/CH ping FPS GPU และ IP', group: 'ผู้เล่น' },
   charView: { name: 'ค้นหา/ดูตัวละคร', desc: 'ช่องค้นหาตัวละครในแท็บ "ผู้ใช้และตัวละคร" และเปิดดูตัวละคร (เลเวล ทอง โซน)', group: 'ผู้เล่น' },
   charEdit: { name: 'แก้ตัวละคร', desc: 'ตั้งเลเวล/EXP ให้-หักทอง เสกไอเทม ยา หิน (ต้องมี "ค้นหา/ดูตัวละคร" ด้วย)', group: 'ผู้เล่น' },
+  spawnSet: { name: 'เสกของเป็นเซตทุกชิ้น', desc: 'ในหน้าตัวละคร: เสกอุปกรณ์ทุกช่องสวมใส่ครั้งเดียว เลือกความหายาก tier เลเวล ระดับตีบวก อาชีพ (ต้องมี "แก้ตัวละคร" ด้วย)', group: 'ผู้เล่น' },
   customItem: { name: 'เสกไอเทมกำหนดสเตตัสเอง', desc: 'เลือกสเตตัสทีละแถวตอนเสกอุปกรณ์ (ไม่มี = สุ่มแบบของดรอป)', group: 'ผู้เล่น' },
   kick: { name: 'เตะออกจากเกม', desc: 'เตะตัวละครที่ออนไลน์อยู่ออกจากเกม', group: 'ผู้เล่น' },
   teleport: { name: 'ย้ายโซน', desc: 'ย้ายตัวละครไปแคมป์ของโซนที่เลือก', group: 'ผู้เล่น' },
@@ -576,6 +579,48 @@ export function customItem(baseId: string, rarity: Rarity, level: number, cls: C
   item.stats = {};
   for (const l of lines) item.stats[l.stat] = roundStat(l.stat, (item.stats[l.stat] ?? 0) + l.value);
   return item;
+}
+
+/** Pieces in a full set: one per wear slot, rings twice. */
+export const ADMIN_SET_SIZE = 10;
+
+/**
+ * A full set (every wear slot, two rings) for this class: per slot the best kind the level allows, at
+ * `rarity`, every stat row in the middle of tier `tier`, +`plus`. `skipped` lists slots with no kind
+ * yet at that level (the bag then needs fewer free slots). Checks every value; a Thai error otherwise.
+ */
+export function buildGearSet(body: Record<string, unknown>, cls: ClassId): { items: Item[]; skipped: SlotId[]; level: number; rarity: Rarity; tier: number; plus: number } | string {
+  const rarity = RARITIES.find((r) => r === body.rarity);
+  if (!rarity) return 'ระดับความหายากไม่ถูกต้อง';
+  const whole = (v: unknown, lo: number, hi: number): v is number => typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi;
+  if (!whole(body.level, 1, MAX_LEVEL)) return `เลเวลไอเทมต้องเป็น 1–${MAX_LEVEL}`;
+  if (!whole(body.tier, 1, 5)) return 'tier ต้องเป็น 1–5';
+  if (!whole(body.plus, 0, PLUS_CAP)) return `ระดับตีบวกต้องเป็น 0–${PLUS_CAP}`;
+  const level: number = body.level, tier: number = body.tier, plus: number = body.plus;
+  const items: Item[] = [];
+  const skipped: SlotId[] = [];
+  for (const slot of SLOTS) {
+    const base = ITEM_BASES.filter((b) => b.slot === slot && b.minLevel <= level && (b.names.any || b.names[cls])).sort((x, y) => y.minLevel - x.minLevel)[0];
+    if (!base) { skipped.push(slot); continue; }
+    for (let k = 0; k < (slot === 'ring' ? 2 : 1); k++) {
+      const rolled = makeItem(base.id, rarity, level, cls);
+      if (!rolled) return 'ไม่มีไอเทมชนิดนี้';
+      const stats = (rolled.lines ?? []).map((l) => l.stat);
+      const ranges = rowRanges(base.id, rarity, level, stats);
+      if (!ranges) return 'ไม่มีไอเทมชนิดนี้';
+      const rows = stats.map((stat, i) => {
+        const t = tierRanges(stat, level, ranges[i].lo, ranges[i].hi)[tier - 1];
+        const mid = roundStat(stat, (t.min + t.max) / 2);
+        return { stat, value: tierOf(stat, level, mid, ranges[i].lo, ranges[i].hi).tier === tier ? mid : t.min };
+      });
+      const item = customItem(base.id, rarity, level, cls, rolled.name, rows);
+      if (typeof item === 'string') return item;
+      if (plus > 0) item.plus = plus;
+      items.push(item);
+    }
+  }
+  if (!items.length) return 'ไม่มีอุปกรณ์ที่เลเวลนี้';
+  return { items, skipped, level, rarity, tier, plus };
 }
 
 /** What the editor shows for row `i` of these stats at this value: its normal range, cap and tier. */

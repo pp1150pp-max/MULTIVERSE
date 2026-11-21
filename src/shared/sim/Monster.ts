@@ -245,6 +245,9 @@ export class Monster extends Unit {
     this.swT = 0;
   }
 
+  /** A wave monster (minigame "รอดมอนเป็นระลอก"): always hunts the nearest living player, never walks home, never gives up. */
+  hunter = false;
+
   get isBoss(): boolean { return this.def.behavior === 'boss'; }
   get isHostile(): boolean {
     return this.alive && (this.state === 'chase' || this.state === 'charge' || this.state === 'leap' || this.windupT > 0);
@@ -308,6 +311,7 @@ export class Monster extends Unit {
    * Bosses, and the Balance switch off, keep the old `calm()`.
    */
   dropTarget(): void {
+    if (this.hunter) { this.target = null; this.state = 'idle'; return; }
     if (this.isBoss || !currentBalance().mobDropOnSafe) {
       this.calm();
       return;
@@ -426,6 +430,13 @@ export class Monster extends Unit {
       return;
     }
     this.switchTarget(dt, sim);
+    if (this.hunter) {
+      // Wave monsters: the nearest living player, always (owner 2026-11-21: they wandered instead of chasing).
+      const n = this.nearestPlayer(sim);
+      this.target = n ? n.p : null;
+      this.aggroT = Math.max(this.aggroT, 4);
+      if (this.state === 'return') this.state = 'idle';
+    }
     const b = this.def.behavior;
     if ((b === 'aggressive' || b === 'boss' || b === 'charger' || this.forceAggro) && this.state !== 'return') {
       const n = this.nearestPlayer(sim);
@@ -486,7 +497,7 @@ export class Monster extends Unit {
       }
     } else {
       const leash = Math.hypot(this.x - this.area.x, this.z - this.area.z);
-      if (this.state !== 'return' && leash > (this.isBoss ? 18 : 22)) {
+      if (!this.hunter && this.state !== 'return' && leash > (this.isBoss ? 18 : 22)) {
         this.state = 'return';
         this.aggroT = 0;
         this.target = null;
@@ -559,7 +570,7 @@ export class Monster extends Unit {
             mz = dz / d;
             spd = this.chaseSpeed();
           }
-        } else if (this.hp < this.maxHp || this.enraged) {
+        } else if (!this.hunter && (this.hp < this.maxHp || this.enraged)) {
           // The fight is over (everyone died, left or stopped hitting it) but it is still hurt:
           // walk home like a leashed monster, healing on the way, then reset fully (HP, enrage, damage shares).
           this.state = 'return';

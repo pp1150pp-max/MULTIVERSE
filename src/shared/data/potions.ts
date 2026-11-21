@@ -27,6 +27,12 @@ export function potionHeal(kind: PotionKind, size: PotionSize, cls: string): num
   return kind === 'hp' && cls === 'sword' ? Math.round((base * (100 + currentBalance().potions.swordBonus)) / 100) : base;
 }
 
+/** Size of a potion a monster of this level drops: small, medium from `dropM`, large from `dropL` (/admin card "ยา"). */
+export function dropPotionSize(level: number): PotionSize {
+  const { dropM, dropL } = currentBalance().potions;
+  return level >= dropL ? 'l' : level >= dropM ? 'm' : 's';
+}
+
 /** The merchant buys potions back at half price. */
 export function potionSellPrice(kind: PotionKind, size: PotionSize): number {
   return Math.floor(potionPrice(kind, size) / 2);

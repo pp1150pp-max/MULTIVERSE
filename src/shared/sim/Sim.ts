@@ -11,7 +11,7 @@ import type { Hazard } from './volcanoHeart';
 import {
   announceFrom, dropsOnFail, forgeCd, enhanceCost, itemName, maxPlus, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
 } from '../data/enhance';
-import { entryName, potionName, POTION_STACK, potionPrice, stackLimit } from '../data/potions';
+import { dropPotionSize, entryName, potionName, POTION_STACK, potionPrice, stackLimit } from '../data/potions';
 import { BOSS_KEY, BOSS_QUEST_KEY, BOSS_STONE_CHANCE, BOUND_MSG, BUFF_LABEL, BUFF_MAX, BUFF_MULT, BUFF_TIME, fmtBuff, PHOENIX_PRICE, QUEST_KILLS, REVIVES_PER_KEY, STONE_STACK, KEY_DROP_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, RETURN_CAST, RETURN_SCROLL_PRICE, STONE_COLOR, STONE_NAME } from '../data/stones';
 import { NPC_INFO, NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { pick, rand, randInt } from '../rng';
@@ -1167,8 +1167,8 @@ export class Sim {
         const n = loot?.items ?? randInt(r, 2, 3);
         for (let i = 0; i < n; i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 1.5, band) }, owner, party);
         for (let i = 0; i < (loot?.epics ?? 0); i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 1.5, band, 'epic') }, owner, party);
-        this.spawnLoot(m, { type: 'potion', pot: 'hp', size: 's', count: DROP_POTION_MULT }, owner, party);
-        this.spawnLoot(m, { type: 'potion', pot: 'mp', size: 's', count: DROP_POTION_MULT }, owner, party);
+        this.spawnLoot(m, { type: 'potion', pot: 'hp', size: dropPotionSize(m.level), count: DROP_POTION_MULT }, owner, party);
+        this.spawnLoot(m, { type: 'potion', pot: 'mp', size: dropPotionSize(m.level), count: DROP_POTION_MULT }, owner, party);
         // Every blacksmith stone kind can drop from a boss, each rolled on its own.
         for (const stone of BLACKSMITH_STONES) {
           if (chance(loot?.stoneChance ?? BOSS_STONE_CHANCE)) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner, party);
@@ -1177,7 +1177,7 @@ export class Sim {
       return;
     }
     if (chance(d.itemChance)) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 0, band) }, owner, party);
-    if (chance(d.potionChance * DROP_POTION_MULT)) this.spawnLoot(m, { type: 'potion', pot: r() < 0.6 ? 'hp' : 'mp', size: 's', count: 1 }, owner, party);
+    if (chance(d.potionChance * DROP_POTION_MULT)) this.spawnLoot(m, { type: 'potion', pot: r() < 0.6 ? 'hp' : 'mp', size: dropPotionSize(m.level), count: 1 }, owner, party);
     // Reroll stones, rarely, from monsters that drop items at all (not summoned minions).
     if (d.itemChance > 0) {
       for (const stone of MONSTER_STONES) {
@@ -1906,6 +1906,7 @@ export class Sim {
         if (!this.terrain.isBlocked(x, zz, def.radius)) break;
       }
       const m = new Monster(this.newId(), def, randInt(r, def.levels[0], def.levels[1]), area, x, zz, boost);
+      m.hunter = true;
       this.monsters.push(m);
       w.ids.add(m.id);
       this.fx('burst', x, 1, zz, '#ff9a3a', 10, 2);
