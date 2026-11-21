@@ -27,7 +27,7 @@ function defFields(h: H, d: Partial<CustomZoneDef>): { el: HTMLElement; read(): 
         h('label', {}, 'ชั้น ', floor),
         h('label', { title: 'เลเวลแนะนำ แสดงเหมือนแมพอื่น · เลเวลขั้นต่ำที่เข้าได้ตั้งที่ประตูแต่ละบาน' }, 'เลเวลแนะนำ ', lo, ' – ', hi)),
       h('div', { class: 'row' },
-        h('label', { title: 'ทั้งแมพ (หรือในกำแพงเมืองถ้าคัดลอกเมืองกลาง) ตีกันไม่ได้ มอนเข้าไม่ได้' }, safe, ' เขตปลอดภัย'),
+        h('label', { title: 'ทั้งแมพ (หรือในกำแพงเมืองถ้าคัดลอกเมืองกลาง) ตีกันไม่ได้ มอนเข้าไม่ได้ · ระวัง: ถ้าทั้งแมพปลอดภัย จุดเกิดมอนในแมพจะไม่มีมอนให้ตี (มอนถูกดันออก)' }, safe, ' เขตปลอดภัย'),
         h('label', { title: 'แบ่งเป็น CH 1–10 แบบแมพฟาร์ม · ไม่ติ๊ก = ทุกคนอยู่ห้องเดียวกัน' }, channels, ' แชนแนล'),
         h('label', {}, autoPlay, ' ใช้ Auto Play ได้')),
     ),
@@ -97,7 +97,7 @@ export function newMapForm(h: H, api: Api, sources: [string, string][], onCreate
 }
 
 /** The settings card of an editor-made map: its fields, hide / show, delete. `onChanged` reloads the page's list. */
-export function customSettings(h: H, api: Api, id: string, info: CustomInfo, published: boolean, perms: { create: boolean; del: boolean }, onChanged: () => void, onDeleted: () => void): HTMLElement {
+export function customSettings(h: H, api: Api, id: string, info: CustomInfo, published: boolean, perms: { create: boolean; del: boolean }, onChanged: () => void, onDeleted: () => void, spawns = 0): HTMLElement {
   const msg = h('div', { class: 'msg' });
   const say = (t: string, cls = ''): void => { msg.className = `msg ${cls}`; msg.textContent = t; };
   const d = info.def ?? { id, name: '', nameTh: id, floor: 1, levels: [1, 10] as [number, number], safe: false, channels: false, autoPlay: true };
@@ -137,6 +137,7 @@ export function customSettings(h: H, api: Api, id: string, info: CustomInfo, pub
   return h('div', { class: 'me-mapset' },
     h('h4', {}, `⚙️ ตั้งค่าแมพ (สร้างเอง · ${id})`),
     h('div', { class: 'muted' }, `สถานะ: ${state}`),
+    d.safe && spawns > 0 ? h('div', { class: 'msg bad' }, `⚠️ แมพนี้เป็นเขตปลอดภัยทั้งแมพ แต่มีจุดเกิดมอน ${spawns} จุด มอนจะถูกดันออกนอกเขต (ไม่มีมอนให้ตี) ถ้าต้องการให้มีมอน ให้ปิด "เขตปลอดภัย"`) : null,
     fields.el,
     h('div', { class: 'row' }, save, hide, del),
     !perms.create ? h('div', { class: 'muted me-hint' }, 'ต้องมีสิทธิ์ "สร้างแมพใหม่" เพื่อแก้ค่า/ซ่อน') : null,

@@ -146,7 +146,9 @@ export async function mapsAdminApi(req: IncomingMessage, res: ServerResponse, pa
       how = `พื้นเปล่า ${theme} ครึ่งกว้าง ${Math.round(half)}`;
     } else if (body.mode === 'import') {
       const src = body.map as MapData | undefined;
-      if (!src || typeof src !== 'object' || Array.isArray(src) || !src.zone || !Array.isArray(src.props)) throw new HttpError(400, 'ไฟล์นี้ไม่ใช่แมพ (JSON ของตัวแก้แมพ)');
+      const fin = (v: unknown): boolean => typeof v === 'number' && Number.isFinite(v);
+      if (!src || typeof src !== 'object' || Array.isArray(src) || !src.zone || typeof src.zone !== 'object' || !Array.isArray(src.props)
+        || !src.zone.start || !fin(src.zone.start.x) || !fin(src.zone.start.z)) throw new HttpError(400, 'ไฟล์นี้ไม่ใช่แมพ (JSON ของตัวแก้แมพ)');
       map = copyMap(src, id, def.floor);
       how = 'นำเข้าไฟล์ JSON';
     } else throw new HttpError(400, 'วิธีสร้างไม่ถูกต้อง');

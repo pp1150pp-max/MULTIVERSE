@@ -102,7 +102,8 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
     if (!row?.custom) { setBox.replaceChildren(); return; }
     setBox.replaceChildren(customSettings(h, api, row.id, row.custom, row.publishedRev !== null, { create: !!perms.create, del: !!perms.del },
       () => void refreshRows(),
-      () => { void refreshRows().then(() => loadMap(rows[0]?.id ?? '')); }));
+      () => { void refreshRows().then(() => loadMap(rows[0]?.id ?? '')); },
+      ed?.map.id === row.id ? ed.map.spawns.length : 0));
   }
   const diffText = h('span', { class: 'muted me-diff' });
   const issueBox = h('div', { class: 'me-issues' });
