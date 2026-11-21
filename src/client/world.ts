@@ -52,6 +52,15 @@ const CLIFF_LAYERS = [
 
 /** Props at least this tall turn see-through when the player walks behind them. */
 const FADE_MIN_HEIGHT = 1.6;
+/** Props' depth tie-break: this many distinct steps of this size toward the camera (see World.addProp). */
+const PROP_DEPTH_STEPS = 64;
+const PROP_DEPTH_STEP = 0.0005;
+/**
+ * Pieces lying flat at one height (cracks, plank runs) that overlap: the GPU picked either one frame by frame as the
+ * camera moved, so they swapped places while walking (owner 2026-11-21). Each piece sits this step above the last
+ * (cycling, at most ~0.05 units: unseen), so the order holds and they still hide under nothing laid lower.
+ */
+const flatStep = (i: number) => (i % 48) * 0.001;
 /** How much of a prop still shows while the player stands behind it. */
 const FADE_OPACITY = 0.3;
 /** About half a player's width on screen, in world units, for the see-through test. */
@@ -380,6 +389,8 @@ export class World {
   private readonly sharedMats = new Map<string, THREE.SpriteMaterial>();
   /** Mirrored copies of prop textures (addProp's `flip`), by key. */
   private readonly flipped = new Map<string, THREE.Texture>();
+  /** Counts the props drawn, for their depth tie-break (see addProp). */
+  private propSeq = 0;
   private readonly shadowGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
   private readonly shadowMat: THREE.MeshBasicMaterial;
   private readonly groundTex: THREE.CanvasTexture;
@@ -776,11 +787,12 @@ export class World {
       const a = r() * Math.PI * 2;
       const cx = Math.cos(a) * size * 0.5;
       const cz = Math.sin(a) * size * 0.5;
+      const y = 0.015 + flatStep(placed);
       positions.push(
-        x - cx - cz, 0.015, z - cz + cx,
-        x + cx - cz, 0.015, z + cz + cx,
-        x + cx + cz, 0.015, z + cz - cx,
-        x - cx + cz, 0.015, z - cz - cx,
+        x - cx - cz, y, z - cz + cx,
+        x + cx - cz, y, z + cz + cx,
+        x + cx + cz, y, z + cz - cx,
+        x - cx + cz, y, z - cz - cx,
       );
       const cell = (r() * 8) | 0;
       const u0 = (cell % 4) / 4;
@@ -1030,6 +1042,7 @@ export class World {
     const boss = lairOf(this.zone);
     const positions: number[] = [];
     const uvs: number[] = [];
+    let runs = 0;
     for (const [ax, az, bx, bz] of this.segs) {
       const dist = Math.hypot(bx - ax, bz - az);
       for (let t = rand(r, 3, 8); t < dist - 3; t += rand(r, 11, 20)) {
@@ -1040,10 +1053,12 @@ export class World {
         const a = Math.atan2(bz - az, bx - ax) + rand(r, -0.12, 0.12);
         const along = [Math.cos(a), Math.sin(a)];
         const across = [-along[1], along[0]];
+        // A hair above the flat decor (0.01), and each run a step above the last (see flatStep).
+        const y = 0.012 + flatStep(runs++);
         const hw = (width / 2) * rand(r, 0.9, 1.05);
         const hl = (length / 2) * rand(r, 0.8, 1.2);
         for (const [sa, sb] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
-          positions.push(x + across[0] * hw * sa + along[0] * hl * sb, 0.01, z + across[1] * hw * sa + along[1] * hl * sb);
+          positions.push(x + across[0] * hw * sa + along[0] * hl * sb, y, z + across[1] * hw * sa + along[1] * hl * sb);
         }
         const cell = (r() * cols) | 0;
         uvs.push(cell / cols, 1, (cell + 1) / cols, 1, (cell + 1) / cols, 0, cell / cols, 0);
@@ -1233,6 +1248,10 @@ export class World {
     spr.center.set(0.5, TOWN2_PROP.test(key) ? 0 : 0.03);
     spr.scale.set(w, height, 1);
     spr.position.set(x, 0, z);
+    // Two pieces placed (almost) on the same spot came out at the same depth, and the GPU drew one or the other
+    // frame by frame: they flickered (owner 2026-11-21). A tiny, different step toward the camera for each piece
+    // (along the view, so nothing moves on screen; at most ~0.03 world units) keeps their order fixed.
+    spr.position.addScaledVector(ISO_DIR, (this.propSeq++ % PROP_DEPTH_STEPS) * PROP_DEPTH_STEP);
     // Long town-wall pieces stand on a line, not a spot: a round shadow under each would only blot the ground.
     // Nor under the hub town's buildings, stalls and fountain: their pictures stand on their nearest corner, not their
     // middle, so a round shadow there floated off to one side (owner 2026-11-19).

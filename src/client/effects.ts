@@ -504,7 +504,9 @@ export class Effects implements FxApi {
     const play = (k: number) => showFrame(tex, def.sheet, def.row, Math.min(FRAMES - 1, Math.floor(k * FRAMES)));
     if (def.height === 'ground') {
       const mesh = this.decal(new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.5, depthWrite: false, side: THREE.DoubleSide, color: def.tint ?? '#ffffff' }));
-      mesh.position.set(x, 0.09, z);
+      // The sword's slash lies at its height, not on the ground (fxLayer.slashLift): the arc then sits around the body the
+      // same way whichever way the swing goes.
+      mesh.position.set(x, name === 'slash' ? Math.max(0.09, currentBalance().fxLayer.slashLift) : 0.09, z);
       mesh.rotation.y = -angle;
       mesh.scale.setScalar(size);
       this.add(mesh, def.life, play);
