@@ -794,12 +794,7 @@ export class World {
       placed++;
     }
     if (!positions.length) return;
-    const mesh = this.addQuads('island_cracks', positions, uvs);
-    // All cracks lie at one height, so where two overlap the GPU picked either one, frame by frame as the camera
-    // moved: they swapped places while walking (owner 2026-11-21). Not writing depth and drawn after the ground,
-    // they paint in the order placed, later ones over earlier ones, always the same.
-    (mesh.material as THREE.MeshBasicMaterial).depthWrite = false;
-    mesh.renderOrder = 1;
+    this.layFlat(this.addQuads('island_cracks', positions, uvs));
   }
 
   /** Rocks, star shards and slabs of land coming away from the island, and crumbs falling off it. */
@@ -916,6 +911,16 @@ export class World {
     }
     ctx.putImageData(image, 0, 0);
     return out;
+  }
+
+  /**
+   * For pieces lying flat at one height that overlap each other (cracks, plank runs at trail junctions): the GPU
+   * picked either one frame by frame as the camera moved, so they swapped places while walking (owner 2026-11-21).
+   * Not writing depth and drawn after the ground, they paint in the order placed, later ones over earlier ones.
+   */
+  private layFlat(mesh: THREE.Mesh): void {
+    (mesh.material as THREE.MeshBasicMaterial).depthWrite = false;
+    mesh.renderOrder = 1;
   }
 
   /** Adds many quads from one atlas as a single mesh, so hundreds of details cost one draw call. */
@@ -1055,13 +1060,14 @@ export class World {
         const hw = (width / 2) * rand(r, 0.9, 1.05);
         const hl = (length / 2) * rand(r, 0.8, 1.2);
         for (const [sa, sb] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
-          positions.push(x + across[0] * hw * sa + along[0] * hl * sb, 0.01, z + across[1] * hw * sa + along[1] * hl * sb);
+          positions.push(x + across[0] * hw * sa + along[0] * hl * sb, 0.012, z + across[1] * hw * sa + along[1] * hl * sb);
         }
         const cell = (r() * cols) | 0;
         uvs.push(cell / cols, 1, (cell + 1) / cols, 1, (cell + 1) / cols, 0, cell / cols, 0);
       }
     }
-    if (positions.length) this.addQuads(key, positions, uvs);
+    // A hair above the flat decor (0.01) so footprints on the trail never fight them.
+    if (positions.length) this.layFlat(this.addQuads(key, positions, uvs));
   }
 
   /** Big soft mist blobs drifting slowly over the zone. */
