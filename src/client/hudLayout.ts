@@ -48,6 +48,7 @@ export async function loadHudPreview(token: string): Promise<void> {
 }
 
 function showBanner(isDraft: boolean): void {
+  document.getElementById('hud-preview-banner')?.remove();
   const b = document.createElement('div');
   b.id = 'hud-preview-banner';
   b.textContent = isDraft ? 'ทดลองร่าง "จัดหน้าจอเกม" (เห็นเฉพาะคุณ) — ปิดแท็บนี้เพื่อจบ' : 'ไม่มีร่าง "จัดหน้าจอเกม": แสดงค่าที่เผยแพร่อยู่';

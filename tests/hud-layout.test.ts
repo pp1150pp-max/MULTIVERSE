@@ -3,7 +3,7 @@
 // with a throwaway database: a player can't read it, GM can draft and publish, the draft is not live until published, publish
 // reaches players online, the balance tab and the menu-layout tab leave the published layout alone, reset = the code.
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -25,6 +25,12 @@ const code = codeHudLayout();
 ok(JSON.stringify(mergeBalance({}).hudLayout) === JSON.stringify(code), 'the balance carries the code layout (nothing moved)');
 ok(new Set(HUD_PARTS.map((p) => p.id)).size === HUD_PARTS.length, 'part ids are unique');
 ok(HUD_PARTS.every((p) => p.box.desktop || p.box.touch), 'every part is on some screen');
+{
+  // Every id must be a real element (index.html, or set in the client code), or moving it would silently do nothing.
+  const files = [join(ROOT, 'index.html'), ...readdirSync(join(ROOT, 'src/client'), { recursive: true, encoding: 'utf8' }).filter((f) => f.endsWith('.ts')).map((f) => join(ROOT, 'src/client', f))];
+  const text = files.map((f) => readFileSync(f, 'utf8')).join('\n');
+  for (const p of HUD_PARTS) ok(text.includes(`id="${p.id}"`) || text.includes(`id = '${p.id}'`) || text.includes(`'${p.id}')`) || text.includes(`id=\"${p.id}\"`), `#${p.id} exists in the game page`);
+}
 const moved = { desktop: { 'minimap-wrap': { x: -10, y: 5, s: 1.2 }, log: { hide: true }, inventory: { x: -20 } }, touch: { 'tc-stick': { s: 1.3 } } };
 const t = checkBalance({ hudLayout: moved }, true).tuning!;
 ok(JSON.stringify(t.hudLayout) === JSON.stringify(moved), 'a moved / resized / hidden layout is stored as it is');

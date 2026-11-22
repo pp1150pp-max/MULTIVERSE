@@ -81,18 +81,25 @@ export async function renderHudLayout(view: HTMLElement, h: H, api: Api): Promis
     frame.replaceChildren(...parts().map((p) => {
       const [bx, by, bw, bh] = p.box[device]!;
       const v = pos(p.id);
-      const s = v.s ?? 1;
       // Scale around the part's origin corner, like the game does.
       const ox = p.origin.includes('right') ? 1 : p.origin.includes('left') ? 0 : 0.5;
       const oy = p.origin.includes('bottom') ? 1 : p.origin.includes('top') ? 0 : 0.5;
-      const left = bx + (v.x ?? 0) + bw * (1 - s) * ox;
-      const top = by + (v.y ?? 0) + bh * (1 - s) * oy;
+      const place = (el: HTMLElement, q: HudPos): void => {
+        const s = q.s ?? 1;
+        el.style.left = `${bx + (q.x ?? 0) + bw * (1 - s) * ox}%`;
+        el.style.top = `${by + (q.y ?? 0) + bh * (1 - s) * oy}%`;
+        el.style.width = `${bw * s}%`;
+        el.style.height = `${bh * s}%`;
+      };
       const el = h('div', {
         class: `hl-box${p.kind === 'window' ? ' hl-win' : ''}${v.hide ? ' hl-off' : ''}${selected === p.id ? ' hl-sel' : ''}${draft[device][p.id] ? ' hl-changed' : ''}`,
-        style: `left:${left}%;top:${top}%;width:${bw * s}%;height:${bh * s}%`,
         title: p.label,
       }, h('span', {}, p.label + (v.hide ? ' (ซ่อน)' : '')));
-      const grip = h('div', { class: 'hl-grip', title: 'ลากเพื่อย่อ/ขยาย' });
+      place(el, v);
+      // The grip sits on the corner away from the anchor, so the box grows towards the pointer.
+      const gx = ox === 1 ? 'left' : 'right';
+      const gy = oy === 1 ? 'top' : 'bottom';
+      const grip = h('div', { class: `hl-grip hl-grip-${gy}-${gx}`, title: 'ลากเพื่อย่อ/ขยาย' });
       if (can) el.append(grip);
       el.onpointerdown = (e) => {
         if (e.button !== 0) return;
@@ -102,8 +109,13 @@ export async function renderHudLayout(view: HTMLElement, h: H, api: Api): Promis
         const fr = frame.getBoundingClientRect();
         const start = { x: e.clientX, y: e.clientY, p: { ...pos(p.id) } };
         if (!can) return draw();
-        el.setPointerCapture(e.pointerId);
+        try {
+          el.setPointerCapture(e.pointerId);
+        } catch {
+          /* pointer already gone */
+        }
         el.classList.add('hl-sel');
+        // Only this box moves while dragging (redrawing the frame would drop the pointer capture); the rest redraws on release.
         el.onpointermove = (m) => {
           const dx = ((m.clientX - start.x) / fr.width) * 100;
           const dy = ((m.clientY - start.y) / fr.height) * 100;
@@ -118,13 +130,17 @@ export async function renderHudLayout(view: HTMLElement, h: H, api: Api): Promis
             n.y = Math.max(-HUD_RANGE.move, Math.min(HUD_RANGE.move, (start.p.y ?? 0) + dy));
           }
           setPos(p.id, n);
-          drawFrame();
+          place(el, pos(p.id));
           drawStatus();
         };
-        el.onpointerup = () => {
+        const end = (): void => {
           el.onpointermove = null;
+          el.onpointerup = null;
+          el.onpointercancel = null;
           draw();
         };
+        el.onpointerup = end;
+        el.onpointercancel = end;
       };
       return el;
     }));

@@ -550,7 +550,11 @@ button.more:hover { color: var(--gold-hi); text-decoration: underline; }
 .hl-box.hl-changed { border-color: #f2c230; }
 .hl-box.hl-off { opacity: 0.35; border-style: dotted; }
 .hl-box.hl-sel { outline: 2px solid #ffd83a; z-index: 2; background: rgba(255, 216, 58, 0.22); }
-.hl-grip { position: absolute; right: 0; bottom: 0; width: 12px; height: 12px; background: #f2c230; cursor: nwse-resize; border-top-left-radius: 4px; }
+.hl-grip { position: absolute; width: 12px; height: 12px; background: #f2c230; }
+.hl-grip-bottom-right { right: 0; bottom: 0; cursor: nwse-resize; }
+.hl-grip-bottom-left { left: 0; bottom: 0; cursor: nesw-resize; }
+.hl-grip-top-right { right: 0; top: 0; cursor: nesw-resize; }
+.hl-grip-top-left { left: 0; top: 0; cursor: nwse-resize; }
 .hl-list { flex: 1 1 360px; min-width: 0; max-height: 640px; overflow-y: auto; }
 .hl-head, .hl-row { display: grid; grid-template-columns: minmax(0, 1fr) 62px 62px 62px 36px 34px; gap: 4px; align-items: center; padding: 3px 4px; }
 .hl-head { font-weight: bold; position: sticky; top: 0; background: var(--bg, #15110c); }
