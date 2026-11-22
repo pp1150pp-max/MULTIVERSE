@@ -3,6 +3,7 @@
 // - aura: its paper ring (sprites/paper/fx/<id>_ring.png) with two of its footprints inside.
 // - title set: its real name frame around "ชื่อตัวละคร" over its chat bubble saying "สวัสดี!", drawn 9-slice like
 //   floating.ts paintPaperFrame (corners and middle pieces whole, the plain edges repeated).
+import { t } from './i18n';
 import type { CosmeticDef } from '../shared/data/cosmetics';
 import { imgUrl, paperUiOn } from './img';
 import { PAPER_TITLES, type PaperFrame } from './paperTitles';
@@ -124,10 +125,10 @@ async function titleCard(id: string): Promise<string> {
   g.shadowBlur = 6;
   g.shadowOffsetY = 3;
   g.fillStyle = '#fff';
-  g.fillText('ชื่อตัวละคร', cv.width / 2, midY(pf, 0));
+  g.fillText(t('ชื่อตัวละคร'), cv.width / 2, midY(pf, 0));
   g.shadowColor = 'transparent';
   g.font = bubbleFont;
   g.fillStyle = '#2a1c10';
-  g.fillText('สวัสดี!', cv.width / 2, midY(bf, by));
+  g.fillText(t('สวัสดี!'), cv.width / 2, midY(bf, by));
   return cv.toDataURL();
 }

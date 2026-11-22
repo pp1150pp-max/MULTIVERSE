@@ -177,3 +177,19 @@ export function addLangButton(): void {
   langButtonShown(englishAllowed());
   drawLangButton();
 }
+
+// ------------------------------------------------------------------ player-written text
+
+/** Marks an element as players' own words (names, chat, mail): the translator never touches it. */
+export function noTranslate<T extends HTMLElement>(e: T): T {
+  e.translate = false;
+  return e;
+}
+
+/** What a player said, as a span the translator leaves alone. */
+export function said(text: string): HTMLSpanElement {
+  const s = document.createElement('span');
+  s.translate = false;
+  s.textContent = text;
+  return s;
+}

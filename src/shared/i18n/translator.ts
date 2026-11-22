@@ -70,6 +70,8 @@ export class Translator {
     if (cached !== undefined) return cached;
     const key = normKey(text);
     let out = this.lookup(key, 0);
+    // "Whirlwind (พายุดาบ)" (English and Thai name side by side) would read "Whirlwind (Whirlwind)".
+    if (out !== null) out = out.replace(/^(.+) \(\1\)$/s, '$1');
     if (out !== null) {
       const lead = text.match(/^\s*/)![0];
       const trail = text.slice(lead.length).match(/\s*$/)![0];

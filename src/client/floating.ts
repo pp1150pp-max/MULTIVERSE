@@ -175,6 +175,7 @@ export class Floating {
     this.bubbles.get(name)?.el.remove();
     const el = document.createElement('div');
     el.className = `chat-bubble${party ? ' party' : ''}`;
+    el.translate = false; // what a player typed: never translated (src/client/i18n.ts)
     el.textContent = text;
     el.style.display = 'none';
     // Past this width the message wraps; the frame grows taller (/admin → ปรับสมดุล → เอฟเฟกต์สกิล → ภาพกระดาษ).
@@ -246,6 +247,7 @@ export class Floating {
       title.className = 'cos-title';
       const name = document.createElement('div');
       name.className = 'pname';
+      name.translate = false; // a player's own name: never translated (src/client/i18n.ts)
       el.append(title, name);
       this.root.append(el);
       this.myTitle = { el, fill: name, title };
@@ -471,6 +473,7 @@ export class Floating {
         el.className = 'plate ally';
         const name = document.createElement('div');
         name.className = 'pname';
+        name.translate = false; // a player's own name: never translated (src/client/i18n.ts)
         const bar = document.createElement('div');
         bar.className = 'pbar';
         const fill = document.createElement('div');
