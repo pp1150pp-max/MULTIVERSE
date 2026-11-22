@@ -8,6 +8,7 @@ import { gfxMenuOn } from './gfxPrefs';
 import { toggleGfxPanel } from './gfxPanel';
 import { toggleKeybindPanel } from './keybindPanel';
 import { currentBalance } from '../shared/balance';
+import { newsButtonOn } from './news';
 import { codeMenuLayout, menuEntry, type MenuLayoutConfig } from '../shared/menuLayout';
 
 /** Read once by the title menu after the reload. */
@@ -50,7 +51,7 @@ const SKILLS_ICON = badge('blank', '⚔');
 const ICONS: Record<string, string> = {
   bag: badge('bag'), skills: SKILLS_ICON, party: PARTY_ICON, friends: FRIENDS_ICON, trade: TRADE_ICON, daily: DAILY_ICON, map: badge('map'),
   cosmetics: badge('blank', '👑'), cashshop: CASH_ICON, autoset: badge('autoset'), audio: badge('blank', '🔊'), graphics: badge('blank', '🎨'),
-  help: badge('help'), mail: MAIL_ICON, report: badge('blank', '🐞'), fullscreen: badge('blank', '⛶'), settings: badge('settings'),
+  help: badge('help'), news: badge('blank', '📰'), mail: MAIL_ICON, report: badge('blank', '🐞'), fullscreen: badge('blank', '⛶'), settings: badge('settings'),
   auto: badge('auto'), menu: badge('menu'),
 };
 /** The top row's own short name where it differs from the menu's. */
@@ -140,13 +141,18 @@ export class SystemMenu {
     }
   }
 
+  /** Draws the buttons again (the news switch changed). */
+  rebuild(): void {
+    this.build();
+  }
+
   /** Draws the top row and the menu grid from the balance's layout (again whenever the server sends a new one). */
   private build(): void {
     const lay = currentBalance().menuLayout;
     this.drawn = lay;
     const guest = this.g.backend.guest;
     // No เต็มจอ where the browser can't do it (iPhone Safari); none of mail / report / trade / friends / daily for a guest.
-    const ok = (id: string) => !(guest && GUEST_NO.has(id)) && !(id === 'fullscreen' && !document.fullscreenEnabled);
+    const ok = (id: string) => !(guest && GUEST_NO.has(id)) && !(id === 'fullscreen' && !document.fullscreenEnabled) && !(id === 'news' && !newsButtonOn());
     const label = (id: string) => menuEntry(id)?.label ?? id;
     const tile = (id: string, extra = '') =>
       `<button class="sys-tile${extra}" data-act="${id}"><span class="sys-ico">${ICONS[id] ?? ''}</span><span class="sys-label">${label(id)}</span><i class="badge hidden" data-badge="${label(id)}"></i></button>`;
@@ -240,6 +246,7 @@ export class SystemMenu {
       case 'friends': return g.friends.toggle();
       case 'report': return g.report.toggle();
       case 'daily': return g.daily.toggle();
+      case 'news': return g.news.toggle();
       case 'cashshop': return g.cashShop.toggle();
       case 'map': return g.hud.toggleMap();
       case 'menu': return this.toggle();
@@ -285,6 +292,9 @@ export class SystemMenu {
       case 'daily':
         this.toggle(false);
         return this.g.daily.toggle(true);
+      case 'news':
+        this.toggle(false);
+        return this.g.news.toggle(true);
       case 'report':
         this.toggle(false);
         return this.g.report.toggle(true);

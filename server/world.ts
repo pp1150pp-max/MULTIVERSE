@@ -59,6 +59,7 @@ import { cosHiddenIds, mayPutOnCos } from '../src/shared/cosShop';
 import { setBoxHiddenCos } from '../src/shared/mysteryBox';
 import { CashShop } from './cashShop';
 import { Topup } from './topup';
+import type { NewsView } from '../src/shared/news';
 import { orbItemsRegistered } from '../src/shared/orbItems';
 
 /** How often the world looks for the Thai calendar day turning over. */
@@ -823,6 +824,8 @@ export class GameWorld {
     this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), map: sim.terrain.mapRev, guest: acc.guest, ...(s.auto ? { auto: true } : {}), ...(pv ? { preview: true } : {}), orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), animTuning: this.db.animTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning(), cash: this.cash.catalog(), cashState: this.cash.state(acc.id, acc.guest), topup: this.topup.view(acc.id, acc.guest) });
     if (!pv) this.broadcastSystem(`${player.name} เข้าสู่โลก`);
     // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
+    // The update notes (everyone, guests too), after the same moment as the notices below.
+    if (!pv) setTimeout(() => this.sessions.has(s) && this.send(s.ws, { t: 'news', v: this.newsView() }), MARKET_JOIN_NOTE_MS);
     if (!acc.guest && !pv) setTimeout(() => this.sessions.has(s) && (this.marketOnJoin(s), this.dailyCheck(s), this.mailNote(s, true), refunded && this.send(s.ws, { t: 'chat', name: '', text: `ได้รับคริสตัลมิติคืนจากช่วง Close Beta ${refunded.toLocaleString('en-US')} (รวมโบนัส)` })), MARKET_JOIN_NOTE_MS);
     const extra = [rejoin && `reconnected: ${rejoin}`, back && 'back at the same spot', s.auto && 'Auto on'].filter(Boolean).join(' · ');
     console.log(`[world] ${acc.username} joined as ${player.name}${acc.guest ? ' (guest)' : ''} from ${ip}${edge === 'direct' ? ' direct (past Cloudflare)' : edge ? ` via Cloudflare ${edge}` : ''}${s.deflate ? '' : ' (no compression)'}${extra ? ` — ${extra}` : ''} (${this.onlineText()})`);
@@ -2846,6 +2849,27 @@ export class GameWorld {
       this.send(s.ws, { t: 'topup', v });
       if (note) this.send(s.ws, { t: 'chat', name: '', text: note });
     }
+  }
+
+  /** What the "มีอะไรใหม่" window shows (src/shared/news.ts): the switches and the newest visible notes. */
+  newsView(): NewsView {
+    return { ...this.db.newsSwitches(), notes: this.db.newsVisible() };
+  }
+
+  private newsSeenRev: string | null = null;
+
+  /**
+   * Tells everyone online when the notes or their switches changed since the last look (also when another process wrote the DB:
+   * tools/add-news.ts at /ship). Called every few seconds by main.ts and straight after an /admin change.
+   */
+  newsPoll(): void {
+    const rev = this.db.newsRev();
+    // First look: take the current value (players joining get the notes with their own message).
+    if (this.newsSeenRev === null) this.newsSeenRev = rev;
+    if (rev === this.newsSeenRev) return;
+    this.newsSeenRev = rev;
+    const v = this.newsView();
+    for (const s of this.sessions) if (!s.preview) this.send(s.ws, { t: 'news', v });
   }
 
   /** The top-up settings changed in /admin: everyone gets their state again. */

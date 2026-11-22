@@ -12,6 +12,7 @@ import { bearer, HttpError, readJson, send, str } from './http';
 import { ownerToolsApi } from './admin-tools';
 import { googleAdminApi } from './google-api';
 import { mailAdminApi } from './admin-mail';
+import { newsAdminApi } from './admin-news';
 import { cashAdminApi } from './admin-cash';
 import { topupAdminApi } from './admin-topup';
 import { tradeAdminApi } from './admin-trade';
@@ -131,6 +132,7 @@ export async function adminApi(
   if (await ownerToolsApi(req, res, path, method, url, db, world, backups)) return;
   if (await googleAdminApi(req, res, path, db)) return;
   if (await mailAdminApi(req, res, path, method, db, world)) return;
+  if (await newsAdminApi(req, res, path, method, db, world)) return;
   if (await cashAdminApi(req, res, path, method, db, world)) return;
   if (await topupAdminApi(req, res, path, method, db, world)) return;
   if (tradeAdminApi(req, res, path, method, db)) return;

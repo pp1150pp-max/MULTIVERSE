@@ -15,6 +15,7 @@ import type { CosTuning } from '../cosTuning';
 import type { AnimTuning } from '../animTuning';
 import type { BalanceTuning } from '../balance';
 import type { DailyView } from '../daily';
+import type { NewsView } from '../news';
 import type { StashData } from '../sim/stash';
 import type { Hazard } from '../sim/volcanoHeart';
 import type { MarketCall, MarketReply } from '../sim/market';
@@ -383,6 +384,8 @@ export type ServerMsg =
   | { t: 'cashState'; state: CashState }
   /** The answer to `cashBuy`. */
   | { t: 'cashBuy'; req: number; ok: boolean; msg: string }
+  /** The "มีอะไรใหม่" notes and switches: sent a moment after joining (guests too) and whenever they change. */
+  | { t: 'news'; v: NewsView }
   /** This account's top-up state changed (a request made / cancelled / confirmed / rejected, or the owner changed the settings). */
   | { t: 'topup'; v: TopupView }
   /** The answer to `topupNew` / `topupCancel`. */

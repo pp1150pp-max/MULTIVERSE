@@ -34,6 +34,7 @@ export const MENU_ENTRIES: readonly MenuEntryDef[] = [
   { id: 'audio', label: 'เสียง' },
   { id: 'graphics', label: 'กราฟิก' },
   { id: 'help', label: 'วิธีเล่น' },
+  { id: 'news', label: 'มีอะไรใหม่' },
   { id: 'mail', label: 'จดหมาย' },
   { id: 'report', label: 'แจ้งปัญหา' },
   { id: 'fullscreen', label: 'เต็มจอ', only: 'menu', why: 'ใช้เฉพาะจอสัมผัส (ซ่อนเองเมื่อใช้เมาส์) จึงอยู่ได้แค่ในหน้าต่างเมนู' },
@@ -57,16 +58,30 @@ export type MenuLayoutTuning = Partial<MenuLayoutConfig>;
 /** The code's own layout (a fresh copy). */
 export function codeMenuLayout(): MenuLayoutConfig {
   return {
-    menu: ['bag', 'skills', 'party', 'friends', 'trade', 'daily', 'map', 'cosmetics', 'cashshop', 'autoset', 'audio', 'graphics', 'help', 'mail', 'fullscreen', 'settings'],
+    menu: ['bag', 'skills', 'party', 'friends', 'trade', 'daily', 'map', 'cosmetics', 'cashshop', 'autoset', 'audio', 'graphics', 'help', 'news', 'mail', 'fullscreen', 'settings'],
     top: ['auto', 'bag', 'skills', 'party', 'friends', 'report', 'daily', 'cashshop', 'map', 'menu'],
   };
 }
 const CODE = codeMenuLayout();
 
+/**
+ * Buttons added after /admin layouts were first saved: a saved layout that lists them in neither place gets them in the
+ * menu window (just before ตั้งค่า), or the button would never show on a server whose owner had arranged the menu.
+ * Move one to the top row to put it there; hide it with its own switch, not by leaving it out.
+ */
+const ADDED_LATER = ['news'];
+
 export function mergeMenuLayout(t: MenuLayoutTuning | undefined): MenuLayoutConfig {
   const c = codeMenuLayout();
   if (t?.menu) c.menu = [...t.menu];
   if (t?.top) c.top = [...t.top];
+  if (t?.menu || t?.top) {
+    for (const id of ADDED_LATER) {
+      if (c.menu.includes(id) || c.top.includes(id)) continue;
+      const at = c.menu.indexOf('settings');
+      c.menu.splice(at < 0 ? c.menu.length : at, 0, id);
+    }
+  }
   return c;
 }
 

@@ -354,6 +354,9 @@ if (DIRECT_PORT > 0) {
 }
 cleanupGuests();
 setInterval(cleanupGuests, CLEANUP_MS);
+// "มีอะไรใหม่": a note added by tools/add-news.ts (another process) reaches players online within a few seconds.
+world.newsPoll();
+setInterval(() => world.newsPoll(), 5000).unref();
 backups.startDaily();
 
 // History for the admin page's graphs: who is online, once a minute (STATS_SAMPLE_MS only for tests),
