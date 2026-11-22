@@ -201,7 +201,7 @@ export interface AdminDirectWs {
  * switch: the Permissions tab, the audit log, restarting / stopping the server, deleting accounts or
  * characters, and making someone owner (command line).
  */
-export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'crystalGrant' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'directWs' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'animPreview' | 'animTune' | 'menuLayout' | 'menuLayoutEdit' | 'mapEdit' | 'mapRollback' | 'mapExport' | 'mapCreate' | 'mapDelete' | 'spawnSet';
+export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'crystalGrant' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'directWs' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'topup' | 'topupConfirm' | 'animPreview' | 'animTune' | 'menuLayout' | 'menuLayoutEdit' | 'mapEdit' | 'mapRollback' | 'mapExport' | 'mapCreate' | 'mapDelete' | 'spawnSet';
 
 /**
  * The defaults: which built-in role may use each tool (owner always has all). The owner can change
@@ -282,6 +282,11 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   cashShop: ['owner', 'gm'],
   // Saving it, opening / closing sales (owner only).
   cashShopEdit: ['owner'],
+  // The "เติมเงิน" tab: PromptPay top-up requests and their history (owner 2026-11-22: owner and GMs may look; the number shows masked to GMs).
+  topup: ['owner', 'gm'],
+  // Confirming / rejecting / reversing a top-up request (owner 2026-11-22: owner only, it is their bank account).
+  // The PromptPay number, the on/off switch and the close beta refund are owner-only for good (no switch).
+  topupConfirm: ['owner'],
   // The "ท่าตัวละคร" tab: every facing of every animation, tried out per facing (owner 2026-11-18: owner and GMs).
   animPreview: ['owner', 'gm'],
   // Saving those per-facing fixes server-wide (owner only).
@@ -373,6 +378,8 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   cardView: { name: 'ดูค่าการ์ด', desc: 'แท็บ "การ์ด": ดูผลของการ์ดทุกใบ เรทดรอป ราคา และเพดาน', group: 'ปรับเกม' },
   cashShop: { name: 'ดูแคชช็อป', desc: 'แท็บ "แคชช็อป": ดูสินค้า ราคาคริสตัลมิติ แพ็กเกจเติม และประวัติการซื้อ', group: 'ปรับเกม' },
   cashShopEdit: { name: 'แก้แคชช็อป', desc: 'เปิด/ปิดขาย และบันทึกสินค้า ราคา ราคาลด จำกัดต่อบัญชี ช่วงเวลา ป้าย แนะนำ แพ็กเกจ (รวมราคาของแต่งตัว) ต้องมี "ดูแคชช็อป" ด้วย', group: 'ปรับเกม' },
+  topup: { name: 'ดูการเติมเงิน', desc: 'แท็บ "เติมเงิน": คำขอเติมคริสตัลผ่านพร้อมเพย์ ยอดที่ต้องโอน และประวัติ (เลขพร้อมเพย์เห็นแค่ 4 ตัวท้าย)', group: 'ปรับเกม' },
+  topupConfirm: { name: 'ยืนยันการเติมเงิน', desc: 'กดยืนยัน (คริสตัลเข้าบัญชีทันที) ปฏิเสธ และย้อนรายการที่ยืนยันผิด · ยืนยันเมื่อเห็นยอดเข้าในแอปธนาคารเท่านั้น ห้ามเชื่อสลิป · ต้องมี "ดูการเติมเงิน" ด้วย', group: 'ปรับเกม' },
   mapEdit: { name: 'แก้แมพ', desc: 'ตัวแก้แมพ: ดูรายการแมพ/ร่าง/revision บันทึกร่าง และเผยแพร่แมพ (ห้องใหม่ใช้ทันที ห้องที่มีคนอยู่ใช้ตอนผู้เล่นเข้าแมพครั้งถัดไป) ลง audit ทุกครั้ง', group: 'ปรับเกม' },
   mapRollback: { name: 'ย้อนแมพกลับ revision เก่า', desc: 'ย้อนแมพไปใช้ revision ก่อนหน้า (ต้องมี "แก้แมพ" ด้วย) เผยแพร่เป็น revision ใหม่ทันที', group: 'ปรับเกม' },
   mapExport: { name: 'ส่งออกแมพเข้า repo', desc: 'ดึง JSON ของแมพที่เผยแพร่แล้วไปเป็นไฟล์ค่าตั้งต้นใน repo (ต้องมี "แก้แมพ" ด้วย)', group: 'ปรับเกม' },

@@ -94,7 +94,7 @@ export async function renderCashShop(view: HTMLElement, h: H, api: Api): Promise
       table.append(group(`ของแต่งตัว: ${COS_SLOT_NAME[slot]}`), ...list.map((c) => row(cosItemId(c.id), c.id)));
     }
 
-    // Packages: crystals + bonus for baht, shown "เร็วๆ นี้" (no real-money top-up yet).
+    // Packages: crystals + bonus for baht; players top up with them by PromptPay once the "เติมเงิน" tab opened it.
     const packs: CashPackage[] = st.cfg.packages.map((p) => ({ ...p }));
     const packBox = h('div', {});
     const drawPacks = (): void => {
@@ -186,10 +186,10 @@ export async function renderCashShop(view: HTMLElement, h: H, api: Api): Promise
     box.replaceChildren(
       h('div', { class: 'card cash-admin' },
         h('h2', {}, 'แคชช็อป'),
-        h('div', { class: 'muted' }, `ซื้อด้วย${CURRENCY} (เก็บต่อบัญชี) · ยังไม่มีระบบเติมเงิน ผู้เล่นยังไม่มีทางได้${CURRENCY} · ของแต่งตัวเข้าบัญชีทันที ใบคูณ/โทรโข่ง/หินส่งเข้าจดหมาย (หินไม่ผูก ใบคูณ/โทรโข่งผูกตัวละครที่กดรับ) · ช่องราคาของแต่งตัวคือราคาเดียวกับแท็บ "จัดการของแต่งตัว" เว้นว่าง = ไม่ขาย · ราคาลดต้องต่ำกว่าราคาเต็ม ป้าย "ลดราคา" ขึ้นเอง · เวลาเว้นว่าง = ไม่จำกัด`),
+        h('div', { class: 'muted' }, `ซื้อด้วย${CURRENCY} (เก็บต่อบัญชี) · ผู้เล่นได้${CURRENCY}จากการเติมผ่านพร้อมเพย์ (แท็บ "เติมเงิน") หรือ owner เสกให้ · ของแต่งตัวเข้าบัญชีทันที ใบคูณ/โทรโข่ง/หินส่งเข้าจดหมาย (หินไม่ผูก ใบคูณ/โทรโข่งผูกตัวละครที่กดรับ) · ช่องราคาของแต่งตัวคือราคาเดียวกับแท็บ "จัดการของแต่งตัว" เว้นว่าง = ไม่ขาย · ราคาลดต้องต่ำกว่าราคาเต็ม ป้าย "ลดราคา" ขึ้นเอง · เวลาเว้นว่าง = ไม่จำกัด`),
         h('label', { class: 'cash-open' }, open, 'เปิดขาย (ปิด = ผู้เล่นดูสินค้าได้แต่ซื้อไม่ได้)'),
         h('div', { style: 'overflow-x:auto' }, table),
-        h('h3', {}, 'แพ็กเกจเติมคริสตัล (แสดงเป็น "เร็วๆ นี้")'), packBox,
+        h('h3', {}, 'แพ็กเกจเติมคริสตัล (กดเติมได้เมื่อเปิดการเติมในแท็บ "เติมเงิน" ไม่งั้นแสดง "เร็วๆ นี้")'), packBox,
         h('div', { style: 'display:flex;gap:8px;margin-top:8px' },
           ro ? h('span', { class: 'muted' }, 'ดูได้อย่างเดียว (ต้องมีสิทธิ์ "แก้แคชช็อป")') : h('button', { class: 'primary', onclick: () => void save() }, 'บันทึก'),
           h('button', { onclick: () => void reload() }, 'โหลดค่าของเซิร์ฟใหม่')),

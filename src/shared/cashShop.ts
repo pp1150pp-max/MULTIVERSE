@@ -1,5 +1,5 @@
 // The cash shop (แคชช็อป, owner 2026-11-15, docs/systems/cash-shop.md): things bought with the top-up
-// currency "คริสตัลมิติ" (crystals), kept per account. No real-money top-up yet: until the owner presses
+// currency "คริสตัลมิติ" (crystals), kept per account, topped up by PromptPay (src/shared/topup.ts). Until the owner presses
 // "เปิดขาย" in /admin players can only look.
 //
 // What is sold: cosmetics (their price is the one set on the "จัดการของแต่งตัว" tab, src/shared/cosShop.ts,
@@ -52,7 +52,7 @@ export interface CashItemCfg {
   featured?: true;
 }
 
-/** A top-up package shown in the "เร็วๆ นี้" window (nothing can be bought with it yet). */
+/** A top-up package: what a PromptPay top-up gives for its baht (src/shared/topup.ts). */
 export interface CashPackage { crystals: number; bonus: number; baht: number }
 
 export interface CashShopCfg {

@@ -20,7 +20,7 @@ import { applyBalance, checkBalance, currentBalance } from '../../shared/balance
 import { attackRootTime } from '../../shared/attackRootTuning';
 import { skipsAttackRoot } from '../../shared/skillTuning';
 import { applyCosHidden, applyCosTuning } from '../cosTune';
-import { useCash, useCashState } from '../cashData';
+import { useCash, useCashState, useTopup } from '../cashData';
 import { EQUIP_SLOTS } from '../../shared/types';
 import { cleanCosOwned, cosCodes, cosFromCodes, type CosSlot } from '../../shared/data/cosmetics';
 import { inSafeArea, zoneById, type SpawnArea, type ZoneDef } from '../../shared/data/zones';
@@ -114,6 +114,7 @@ function useWelcome(m: WelcomeMsg): void {
   useBalance(m.balance);
   useCash(m.cash);
   useCashState(m.cashState);
+  useTopup(m.topup);
 }
 
 /** Opens the connection (direct or through the tunnel: route.ts), joins with the chosen character and resolves once the first snapshot arrives. */
@@ -800,6 +801,10 @@ export class OnlineBackend implements Backend {
       case 'cashState':
         useCashState(m.state);
         break;
+      case 'topup':
+        useTopup(m.v);
+        break;
+      case 'topupRes':
       case 'cashBuy': {
         const done = this.cashWait.get(m.req);
         this.cashWait.delete(m.req);
@@ -1395,6 +1400,23 @@ export class OnlineBackend implements Backend {
   cashBuy(id: string, qty: number, price: number): Promise<{ ok: boolean; msg: string }> {
     const req = ++this.cashReq;
     this.send({ t: 'act', a: 'cashBuy', req, id, qty, price });
+    return this.cashAnswer(req);
+  }
+
+  topupNew(p: { crystals: number; bonus: number; baht: number }): Promise<{ ok: boolean; msg: string }> {
+    const req = ++this.cashReq;
+    this.send({ t: 'act', a: 'topupNew', req, crystals: p.crystals, bonus: p.bonus, baht: p.baht });
+    return this.cashAnswer(req);
+  }
+
+  topupCancel(id: number): Promise<{ ok: boolean; msg: string }> {
+    const req = ++this.cashReq;
+    this.send({ t: 'act', a: 'topupCancel', req, id });
+    return this.cashAnswer(req);
+  }
+
+  /** Waits for the answer (`cashBuy` / `topupRes`) to request `req`. */
+  private cashAnswer(req: number): Promise<{ ok: boolean; msg: string }> {
     return new Promise((resolve) => {
       this.cashWait.set(req, resolve);
       setTimeout(() => {

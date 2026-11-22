@@ -28,6 +28,7 @@ import type { RoomLobbyView, RoomSnap } from '../bossRoom';
 import type { ChannelsView } from '../channels';
 import type { CosSlot } from '../data/cosmetics';
 import type { CashCatalog, CashState } from '../cashShop';
+import type { TopupView } from '../topup';
 
 export const WS_PATH = '/ws';
 /** Server simulation rate and how often it sends snapshots. */
@@ -88,6 +89,10 @@ export type ActionMsg =
   | { t: 'act'; a: 'megaphone'; text: string }
   /** Cash shop: buy `qty` of item `id` at `price` crystals each, the price the buyer saw (src/shared/cashShop.ts; the server checks everything). Answered with `cashBuy`. */
   | { t: 'act'; a: 'cashBuy'; req: number; id: string; qty: number; price: number }
+  /** Top-up by PromptPay: ask for a cash shop package as the player saw it (src/shared/topup.ts; the server checks it is on sale now). Answered with `topupRes`. */
+  | { t: 'act'; a: 'topupNew'; req: number; crystals: number; bonus: number; baht: number }
+  /** Cancel this account's open top-up request `id`. Answered with `topupRes`. */
+  | { t: 'act'; a: 'topupCancel'; req: number; id: number }
   /** Daily login: show this month's calendar / make up an earlier missed day of this month (the server checks). */
   | { t: 'act'; a: 'daily' }
   | { t: 'act'; a: 'dailyMakeup'; day: number }
@@ -367,13 +372,17 @@ export interface SnapshotMsg {
 export type ServerMsg =
   /** `guest`: playing a guest character (no stash, deleted after a day offline). */
   /** `ch`: the channel of that zone (1 when it has none). */
-  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; map?: number; guest?: boolean; auto?: boolean; preview?: boolean; orbLook?: OrbLook; cosTuning?: CosTuning; animTuning?: AnimTuning; cosHidden?: string[]; orbItems?: OrbItem[]; balance?: BalanceTuning; cash?: CashCatalog; cashState?: CashState }
+  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; map?: number; guest?: boolean; auto?: boolean; preview?: boolean; orbLook?: OrbLook; cosTuning?: CosTuning; animTuning?: AnimTuning; cosHidden?: string[]; orbItems?: OrbItem[]; balance?: BalanceTuning; cash?: CashCatalog; cashState?: CashState; topup?: TopupView }
   /** The cash shop's catalogue changed (the owner saved /admin, or a cosmetic's price / hiding changed). */
   | { t: 'cash'; cat: CashCatalog }
   /** Your account's crystals and purchase counts changed (a purchase by any of its characters). */
   | { t: 'cashState'; state: CashState }
   /** The answer to `cashBuy`. */
   | { t: 'cashBuy'; req: number; ok: boolean; msg: string }
+  /** This account's top-up state changed (a request made / cancelled / confirmed / rejected, or the owner changed the settings). */
+  | { t: 'topup'; v: TopupView }
+  /** The answer to `topupNew` / `topupCancel`. */
+  | { t: 'topupRes'; req: number; ok: boolean; msg: string }
   /** The owner changed the server-wide enhancement orb look (src/shared/orbLook.ts). */
   | { t: 'orbLook'; look: OrbLook }
   /** An admin changed the server-wide game balance (src/shared/balance.ts). */
