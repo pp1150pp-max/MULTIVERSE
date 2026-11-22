@@ -21,19 +21,19 @@ function clamp(el: HTMLElement): void {
 function reset(el: HTMLElement): void {
   if (!el.dataset.moved) return;
   delete el.dataset.moved;
-  for (const p of ['left', 'top', 'right', 'bottom', 'transform']) el.style.removeProperty(p);
+  for (const p of ['left', 'top', 'right', 'bottom', 'transform', 'translate']) el.style.removeProperty(p);
 }
 
 /** Make `win` draggable by `handle` (its title bar). Buttons, inputs and selects inside the handle still click. */
 export function makeDraggable(win: HTMLElement, handle: HTMLElement): void {
   handle.classList.add('drag-handle');
-  let drag: { id: number; x: number; y: number; dx: number; dy: number } | null = null;
+  let drag: { id: number; x: number; y: number; dx: number; dy: number; ox: number; oy: number } | null = null;
 
   handle.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 || (e.target as HTMLElement).closest('button, input, select, textarea')) return;
     e.preventDefault(); // no text selection while dragging
     const r = win.getBoundingClientRect();
-    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: e.clientX - r.left, dy: e.clientY - r.top };
+    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: e.clientX - r.left, dy: e.clientY - r.top, ox: 0, oy: 0 };
     try {
       handle.setPointerCapture(e.pointerId); // keep following the pointer even off the bar
     } catch {
@@ -51,9 +51,17 @@ export function makeDraggable(win: HTMLElement, handle: HTMLElement): void {
       win.style.right = 'auto';
       win.style.bottom = 'auto';
       win.style.transform = 'none';
+      // The /admin "จัดหน้าจอเกม" offset (CSS translate) drops while moved; its size (CSS scale) stays, so measure how far
+      // the drawn box sits from left/top and take that off, or the window would jump under the pointer.
+      win.style.translate = 'none';
+      win.style.left = `${e.clientX - drag.dx - pr.left}px`;
+      win.style.top = `${e.clientY - drag.dy - pr.top}px`;
+      const r = win.getBoundingClientRect();
+      drag.ox = r.left - (parseFloat(win.style.left) + pr.left);
+      drag.oy = r.top - (parseFloat(win.style.top) + pr.top);
     }
-    win.style.left = `${e.clientX - drag.dx - pr.left}px`;
-    win.style.top = `${e.clientY - drag.dy - pr.top}px`;
+    win.style.left = `${e.clientX - drag.dx - pr.left - drag.ox}px`;
+    win.style.top = `${e.clientY - drag.dy - pr.top - drag.oy}px`;
     clamp(win);
   });
   const end = (e: PointerEvent): void => {

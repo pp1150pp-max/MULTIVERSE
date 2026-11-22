@@ -9,6 +9,7 @@ const ACTION_TH: Record<string, string> = {
   'delete-account': 'ลบบัญชี', 'delete-character': 'ลบตัวละคร', 'chat-delete': 'ลบแชท',
   'shutdown-text': 'ข้อความเตือนปิด server', 'snap-delta': 'ลดขนาด snapshot', 'direct-ws': 'ต่อตรง (ลดปิง)', 'google-login': 'เข้าสู่ระบบด้วย Google', 'google-unlink': 'ยกเลิกการผูก Google', 'orb-look': 'หน้าตาลูกแก้วตีบวก', 'cos-look': 'ค่าของแต่งตัว', 'anim-look': 'ค่าท่าตัวละคร', 'cos-shop': 'ซ่อน/ราคาของแต่งตัว', 'cash-shop': 'แคชช็อป', 'orb-items': 'ลูกแก้วในร้านค้า', balance: 'ปรับสมดุล', 'menu-layout': 'จัดเมนูเกม', daily: 'ล็อกอินรายวัน', mail: 'ส่งจดหมาย', mailRecall: 'ดึงจดหมายกลับ',
   'report-status': 'สถานะรายงาน', 'report-ban': 'ห้ามรายงาน', 'report-unban': 'ปลดห้ามรายงาน',
+  'hud-draft': 'จัดหน้าจอเกม (ร่าง)', 'hud-publish': 'เผยแพร่จัดหน้าจอเกม', 'hud-reset': 'คืนค่าจัดหน้าจอเกม',
   'cosmetic-give': 'ให้ Cosmetics', 'cosmetic-take': 'ยึด Cosmetics คืน', 'crystal-give': 'ให้คริสตัลมิติ', 'crystal-take': 'ลดคริสตัลมิติ',
 };
 
