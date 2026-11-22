@@ -10,6 +10,7 @@ import type { CosShop } from './cosShop';
 import type { CardTuning } from './cardTuning';
 import type { BalanceTuning } from './balance';
 import type { MenuLayoutConfig } from './menuLayout';
+import type { HudLayoutConfig } from './hudLayout';
 import { ITEM_BASES, itemNames, makeItem, roundStat, rowRanges, stampTier, statStep, tierOf, tierRanges } from './data/items';
 import { CLASS_IDS } from './data/classes';
 import { MAX_LEVEL } from './formulas';
@@ -201,7 +202,7 @@ export interface AdminDirectWs {
  * switch: the Permissions tab, the audit log, restarting / stopping the server, deleting accounts or
  * characters, and making someone owner (command line).
  */
-export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'crystalGrant' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'directWs' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'topup' | 'topupConfirm' | 'animPreview' | 'animTune' | 'menuLayout' | 'menuLayoutEdit' | 'mapEdit' | 'mapRollback' | 'mapExport' | 'mapCreate' | 'mapDelete' | 'spawnSet' | 'mysteryBox' | 'mysteryBoxEdit' | 'news' | 'newsEdit';
+export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'crystalGrant' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'directWs' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'topup' | 'topupConfirm' | 'animPreview' | 'animTune' | 'menuLayout' | 'menuLayoutEdit' | 'hudLayout' | 'hudLayoutEdit' | 'mapEdit' | 'mapRollback' | 'mapExport' | 'mapCreate' | 'mapDelete' | 'spawnSet' | 'mysteryBox' | 'mysteryBoxEdit' | 'news' | 'newsEdit';
 
 /**
  * The defaults: which built-in role may use each tool (owner always has all). The owner can change
@@ -300,6 +301,9 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   menuLayout: ['owner', 'gm'],
   // Saving it, server-wide, live for everyone online (owner only, like the other server-wide look tabs).
   menuLayoutEdit: ['owner'],
+  // The "จัดหน้าจอเกม" tab (owner 2026-11-22: owner and GMs may look, save drafts and publish).
+  hudLayout: ['owner', 'gm'],
+  hudLayoutEdit: ['owner', 'gm'],
   // The map editor (docs/plans/map-editor.md): save drafts and publish; going back to an older revision and exporting a map into the repo are owner-only until the owner hands them out.
   mapEdit: ['owner', 'gm'],
   mapRollback: ['owner'],
@@ -379,6 +383,8 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   animTune: { name: 'บันทึกค่าท่าตัวละคร', desc: 'แท็บ "ท่าตัวละคร": บันทึกค่าที่ปรับต่อทิศ (แถวภาพ พลิก ความเร็ว เลื่อน ขนาด) เป็นของทั้งเซิร์ฟ ทุกคนเห็นทันที', group: 'หน้าตา' },
   menuLayout: { name: 'ดูจัดเมนูเกม', desc: 'แท็บ "จัดเมนูเกม": ดูว่าหน้าต่างเมนูและแถวไอคอนมุมขวาบนมีปุ่มอะไร ลำดับไหน (ลองจัดได้ แต่บันทึกต้องมีสวิตช์ "บันทึกจัดเมนูเกม")', group: 'ปรับเกม' },
   menuLayoutEdit: { name: 'บันทึกจัดเมนูเกม', desc: 'แท็บ "จัดเมนูเกม": บันทึกลำดับ/ซ่อน/ย้ายปุ่มระหว่างหน้าต่างเมนูกับแถวไอคอนมุมขวาบน มีผลกับผู้เล่นที่ออนไลน์ทันที', group: 'ปรับเกม' },
+  hudLayout: { name: 'ดูจัดหน้าจอเกม', desc: 'แท็บ "จัดหน้าจอเกม": ดูตำแหน่ง/ขนาด/การซ่อนของ HUD และหน้าต่างในเกม และทดลองร่างในเกม (เฉพาะตัวเอง)', group: 'ปรับเกม' },
+  hudLayoutEdit: { name: 'แก้จัดหน้าจอเกม', desc: 'แท็บ "จัดหน้าจอเกม": บันทึกร่าง เผยแพร่ให้ผู้เล่นทุกคน และคืนค่าในโค้ด (มีผลกับผู้เล่นที่ออนไลน์ทันที)', group: 'ปรับเกม' },
   itemStatMult: { name: 'คอนเฟิร์มตัวคูณสเตตัสบนไอเทม', desc: 'แท็บ "ปรับสมดุล": คอนเฟิร์มตัวคูณค่าสเตตัสบนไอเทม คูณค่าของทุกชิ้นในเซิร์ฟจริง (สำรอง DB ให้ก่อน) · ทดลองดูตัวอย่างได้ด้วยสิทธิ์ "ปรับสมดุล"', group: 'ปรับเกม' },
   cosLook: { name: 'บันทึกของแต่งตัวทั้งเซิร์ฟ', desc: 'บันทึกค่าตำแหน่ง/หน้าตาของแต่งตัวที่ทุกคนเห็น (ต้องมี "ทดลองของแต่งตัว" ด้วย)', group: 'หน้าตา' },
   cosManage: { name: 'ดูจัดการของแต่งตัว', desc: 'แท็บ "จัดการของแต่งตัว": ดูทุกชิ้นว่าซ่อน/แสดง ราคาคริสตัลมิติ และค่าหน้าตารายชิ้น', group: 'หน้าตา' },
@@ -769,6 +775,19 @@ export interface AdminBalance {
   scaled?: { characters: number; stashes: number; listings: number };
   backup?: string;
   ms?: number;
+}
+
+/** GET/POST /api/admin/hud-layout: the HUD / window layout (src/shared/hudLayout.ts), published and draft. */
+export interface AdminHudLayout {
+  /** What players see now (only the changed parts). */
+  published: HudLayoutConfig;
+  /** The saved draft, or null when there is none. */
+  draft: HudLayoutConfig | null;
+  /** Who saved the draft, and when (ms). */
+  draftBy?: string;
+  draftAt?: number;
+  /** May this admin save / publish (the `hudLayoutEdit` switch). */
+  canEdit: boolean;
 }
 
 /** GET/POST /api/admin/menu-layout: the menu window / top icon row layout (src/shared/menuLayout.ts). */

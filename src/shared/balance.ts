@@ -13,6 +13,7 @@ import { MONSTERS, type MonsterDef } from './data/monsters';
 import { ZONES } from './data/zones';
 import { checkFxLayerTuning, codeFxLayer, fxLayerChanges, mergeFxLayer, type FxLayerConfig, type FxLayerTuning } from './fxLayerTuning';
 import { checkMenuLayoutTuning, codeMenuLayout, mergeMenuLayout, menuLayoutChanges, type MenuLayoutConfig, type MenuLayoutTuning } from './menuLayout';
+import { checkHudLayoutTuning, codeHudLayout, hudLayoutChanges, mergeHudLayout, type HudLayoutConfig, type HudLayoutTuning } from './hudLayout';
 import { audioChanges, checkAudioTuning, codeAudio, mergeAudio, type AudioConfig, type AudioTuning } from './audioTuning';
 import { attackRootChanges, checkAttackRootTuning, codeAttackRoot, mergeAttackRoot, type AttackRootConfig, type AttackRootTuning } from './attackRootTuning';
 import { checkRigLookTuning, codeRigLook, mergeRigLook, rigLookChanges, type RigLookConfig, type RigLookTuning } from './rigLookTuning';
@@ -205,6 +206,8 @@ export interface Balance {
   audio: AudioConfig;
   /** Which buttons the menu window and the top-right icon row show, in what order (menuLayout.ts). */
   menuLayout: MenuLayoutConfig;
+  /** Where the HUD parts and windows sit, their size and which are hidden, per device (hudLayout.ts). Only the changed parts. */
+  hudLayout: HudLayoutConfig;
   /** Tutorial quest rewards (tutorial.ts). */
   tutorial: TutorialConfig;
   /** Skill points, ranks, unlock levels, refunds and every learnable skill's numbers (skillTuning.ts). */
@@ -283,6 +286,8 @@ export interface BalanceTuning {
   audio?: AudioTuning;
   /** Menu / icon row lists that differ from the code. */
   menuLayout?: MenuLayoutTuning;
+  /** HUD parts / windows moved, resized or hidden (the published "จัดหน้าจอเกม"). */
+  hudLayout?: HudLayoutTuning;
   /** Tutorial quest rewards that differ from the code. */
   tutorial?: TutorialTuning;
   /** Skill system settings that differ from the code. */
@@ -370,6 +375,7 @@ export function codeBalance(): Balance {
     attackRoot: codeAttackRoot(),
     audio: codeAudio(),
     menuLayout: codeMenuLayout(),
+    hudLayout: codeHudLayout(),
     tutorial: codeTutorial(),
     skills: codeSkills(),
   };
@@ -430,6 +436,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   b.attackRoot = mergeAttackRoot(t.attackRoot);
   b.audio = mergeAudio(t.audio);
   b.menuLayout = mergeMenuLayout(t.menuLayout);
+  b.hudLayout = mergeHudLayout(t.hudLayout);
   b.tutorial = mergeTutorial(t.tutorial);
   b.skills = mergeSkills(t.skills);
   return b;
@@ -566,7 +573,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'forge', 'walkHidden', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'forge', 'walkHidden', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'hudLayout'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -1056,6 +1063,12 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (c.tuning) out.menuLayout = c.tuning;
     return null;
   };
+  const hudLayout = (): string | null => {
+    const c = checkHudLayoutTuning(o.hudLayout, strict);
+    if ('error' in c) return c.error;
+    if (c.tuning) out.hudLayout = c.tuning;
+    return null;
+  };
   const forge = (): string | null => {
     const c = checkForgeTuning(o.forge, strict);
     if ('error' in c) return c.error;
@@ -1107,7 +1120,8 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     rigLook() ??
     attackRoot() ??
     audio() ??
-    menuLayout();
+    menuLayout() ??
+    hudLayout();
   if (err) return { error: err };
   // Fixed key order.
   const ordered: BalanceTuning = {};
@@ -1229,6 +1243,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   out.push(...attackRootChanges(a.attackRoot, b.attackRoot));
   out.push(...audioChanges(a.audio, b.audio));
   out.push(...menuLayoutChanges(a.menuLayout, b.menuLayout));
+  out.push(...hudLayoutChanges(a.hudLayout, b.hudLayout));
   return out.join(', ');
 }
 
@@ -1245,4 +1260,10 @@ export function withItemStatMult(t: BalanceTuning, mult: BalanceTuning['itemStat
 export function withMenuLayout(t: BalanceTuning, layout: BalanceTuning['menuLayout']): BalanceTuning {
   const { menuLayout: _, ...rest } = t;
   return checkBalance(layout ? { ...rest, menuLayout: layout } : rest, false).tuning ?? {};
+}
+
+/** The same tuning with another HUD layout (`layout`, already clean): every other save keeps the published layout with this. */
+export function withHudLayout(t: BalanceTuning, layout: BalanceTuning['hudLayout']): BalanceTuning {
+  const { hudLayout: _, ...rest } = t;
+  return checkBalance(layout ? { ...rest, hudLayout: layout } : rest, false).tuning ?? {};
 }
