@@ -93,7 +93,7 @@ export function foldable(box: HTMLElement): { toc: HTMLElement; refreshToc: () =
   };
   box.addEventListener('input', markDirty);
   box.addEventListener('change', markDirty);
-  const cards = (): HTMLElement[] => [...box.querySelectorAll<HTMLElement>(':scope > .card:not(.save-bar)')];
+  const cards = (): HTMLElement[] => [...box.querySelectorAll<HTMLElement>(':scope > .card:not(.save-bar):not(.cat-hide)')];
   function refreshToc(): void {
     toc.replaceChildren(...cards().map((c) => {
       const title = c.querySelector(':scope > h2')?.textContent?.trim() ?? '';

@@ -420,6 +420,13 @@ button.more:hover { color: var(--gold-hi); text-decoration: underline; }
 .chip.dirty::before,
 .foldable > .card.dirty > h2::after { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ffd34a; margin-right: 6px; vertical-align: middle; }
 .foldable > .card.dirty > h2::after { margin: 0 0 0 8px; }
+.cat-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.cat-bar { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip.active { background: var(--gold); border-color: var(--gold-hi); color: #1b1814; font-weight: 600; }
+.bal-search { flex: 1 1 200px; min-width: 160px; max-width: 320px; }
+.foldable > .card.cat-hide { display: none !important; }
+.bal-nohit { padding: 16px 4px; }
+@media (max-width: 600px) { .cat-bar { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; } .cat-bar .chip { white-space: nowrap; } }
 .chip.ghost { background: none; border-style: dashed; color: var(--ink-dim); }
 .foldable > .card:not(.save-bar) > h2 { cursor: pointer; user-select: none; }
 .foldable > .card:not(.save-bar) > h2::before { content: '▾'; display: inline-block; width: 16px; color: var(--gold); transition: transform 0.15s; }
