@@ -670,6 +670,7 @@ export class Sim {
       this.log(`🏆 ปราบ ${m.def.name} สำเร็จ!`, '#ffcf5a');
       this.shake(0.4, m);
       if (this.zone.roomOf) this.cleared = true;
+      this.terrain.releaseBossSolid();
     }
   }
 
@@ -1255,6 +1256,9 @@ export class Sim {
     if (gold > 0) this.spawnLoot(m, { type: 'gold', amount: gold }, owner, party);
     if (m.isBoss) {
       const loot = d.bossLoot;
+      // In a boss room the whole drop is collected first, then spread over the arena by its size.
+      const spread = !!this.zone.roomOf && currentBalance().bossLootSpread;
+      if (spread) this.lootQueue = [];
       for (let k = 0; k < times; k++) {
         const n = loot?.items ?? randInt(r, 2, 3);
         for (let i = 0; i < n; i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 1.5, band) }, owner, party);
@@ -1268,6 +1272,7 @@ export class Sim {
         // Mystery box (owner 2026-11-22): once per key, while the owner has it switched on in /admin.
         if (box.enabled && chance(box.bossPct / 100)) this.spawnLoot(m, { type: 'stone', stone: 'mystery_box', count: 1 }, owner, party);
       }
+      if (spread) this.flushSpreadLoot(m, owner, party);
       return;
     }
     if (chance(d.itemChance)) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 0, band) }, owner, party);
@@ -1284,8 +1289,55 @@ export class Sim {
     }
   }
 
+  /** A boss room boss's drop while it is being rolled: placed together by flushSpreadLoot. */
+  private lootQueue: LootKind[] | null = null;
+
   private spawnLoot(m: Monster, kind: LootKind, owner?: number, ownerParty: number | null = null): void {
+    if (this.lootQueue) {
+      this.lootQueue.push(kind);
+      return;
+    }
     const [x, z] = this.lootSpot(m.x, m.z, 0.5 + Math.random() * (m.isBoss ? 2 : 1));
+    this.pushLoot(m, kind, x, z, owner, ownerParty);
+  }
+
+  /**
+   * Places the queued boss drop on a sunflower spiral around the boss (even spacing, no piles): the
+   * radius is base + k x sqrt(pieces), capped (BalanceConfig.bossLoot*). A spot nobody could stand on
+   * moves in towards the boss along its own direction, then falls back to lootSpot. Who may pick up
+   * and when is untouched (owner / ownerParty / ownerUntil as for any drop).
+   */
+  private flushSpreadLoot(m: Monster, owner: number | undefined, party: number | null): void {
+    const kinds = this.lootQueue ?? [];
+    this.lootQueue = null;
+    const n = kinds.length;
+    if (!n) return;
+    const bal = currentBalance();
+    const R = Math.min(bal.bossLootMax, bal.bossLootBase + bal.bossLootK * Math.sqrt(n));
+    // Shuffle so the rare pieces do not all land in the middle.
+    for (let i = n - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [kinds[i], kinds[j]] = [kinds[j], kinds[i]];
+    }
+    const a0 = Math.random() * Math.PI * 2;
+    for (let i = 0; i < n; i++) {
+      const a = a0 + i * 2.399963229728653;
+      let r = Math.max(0.5, R * Math.sqrt((i + 0.5) / n));
+      let spot: [number, number] | null = null;
+      for (; r >= 0.5; r -= 0.4) {
+        const lx = m.x + Math.cos(a) * r;
+        const lz = m.z + Math.sin(a) * r;
+        if (!this.terrain.isBlocked(lx, lz, LOOT_STAND_R)) {
+          spot = [lx, lz];
+          break;
+        }
+      }
+      spot ??= this.lootSpot(m.x, m.z, 0.5);
+      this.pushLoot(m, kinds[i], spot[0], spot[1], owner, party);
+    }
+  }
+
+  private pushLoot(m: Monster, kind: LootKind, x: number, z: number, owner: number | undefined, ownerParty: number | null): void {
     this.loots.push(new Loot(this.newId(), x, z, m.x, m.z, kind, {
       owner, ownerParty, ownerUntil: this.time + LOOT_PRIORITY_TIME, forever: !!this.zone.roomOf,
     }));
@@ -2020,7 +2072,7 @@ export class Sim {
     this.fx('burst', area.x, 1.5, area.z, '#ffcf5a', 30, 6);
     this.shake(0.4, area);
     this.sfx('boss_slam', area.x, area.z);
-    this.sfx('boss_arrive', area.x, area.z);
+    this.sfx('boss_appear', area.x, area.z);
   }
 
   /**

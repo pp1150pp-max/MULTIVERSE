@@ -653,6 +653,22 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       ),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.heartBlastRandom, onchange: (e: Event) => { draft.heartBlastRandom = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' หัวใจภูเขาไฟ ระเบิดใหญ่: สุ่มจุดปลอดภัยทั่วลาน (ห่างผู้เล่นทุกคน แต่ทุกคนมีจุดที่วิ่งถึงทัน · ปิด = วงรอบบอสแบบเดิม)'),
+        h('label', {}, 'จำนวนจุด', numBox(() => draft.heartBlastSpots, (n) => { draft.heartBlastSpots = Math.round(n); }, code.heartBlastSpots, ...BALANCE_RANGE.heartBlastSpots, 1, updateSummary)),
+        h('label', {}, 'ห่างผู้เล่นขั้นต่ำ', numBox(() => draft.heartBlastMinDist, (n) => { draft.heartBlastMinDist = n; }, code.heartBlastMinDist, ...BALANCE_RANGE.heartBlastMinDist, 1, updateSummary)),
+        h('label', { title: 'ส่วนของ (ความเร็ววิ่ง × เวลาเตือน) ที่นับว่าวิ่งทัน' }, 'ค่าเผื่อวิ่งทัน', numBox(() => draft.heartBlastReach, (n) => { draft.heartBlastReach = n; }, code.heartBlastReach, ...BALANCE_RANGE.heartBlastReach, 0.05, updateSummary)),
+      ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.bossLootSpread, onchange: (e: Event) => { draft.bossLootSpread = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' กระจายของดรอปบอส (ห้องบอส: ของวางกระจายทั่วลาน ยิ่งชิ้นเยอะยิ่งกว้าง รัศมี = ฐาน + ตัวคูณ×√จำนวนชิ้น ไม่เกินสูงสุด · สิทธิ์เก็บ/จำนวน/โอกาสดรอปไม่เปลี่ยน · ปิด = วางใกล้ตัวบอสเหมือนเดิม)'),
+        h('label', {}, 'รัศมีฐาน', numBox(() => draft.bossLootBase, (n) => { draft.bossLootBase = n; }, code.bossLootBase, ...BALANCE_RANGE.bossLootBase, 0.5, updateSummary)),
+        h('label', {}, 'ตัวคูณต่อ √จำนวน', numBox(() => draft.bossLootK, (n) => { draft.bossLootK = n; }, code.bossLootK, ...BALANCE_RANGE.bossLootK, 0.1, updateSummary)),
+        h('label', {}, 'รัศมีสูงสุด', numBox(() => draft.bossLootMax, (n) => { draft.bossLootMax = n; }, code.bossLootMax, ...BALANCE_RANGE.bossLootMax, 0.5, updateSummary)),
+      ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
           h('input', { type: 'checkbox', checked: draft.reviveGuard, onchange: (e: Event) => { draft.reviveGuard = (e.target as HTMLInputElement).checked; updateSummary(); } }),
           ' อมตะหลังชุบด้วยขนนกฟีนิกซ์ (ห้องบอส: ไม่โดนดาเมจ/สตัน/ผลัก/ติดโคลน/ช้า/คางคก ตัวกะพริบให้ทุกคนเห็น · หายทันทีเมื่อตีธรรมดา ใช้สกิล บัฟ หรือแดช · เดินและกินยาไม่หาย)'),
         h('label', {}, 'เวลาอมตะ (วินาที)', numBox(() => draft.reviveGuardSec, (n) => { draft.reviveGuardSec = n; }, code.reviveGuardSec, ...BALANCE_RANGE.reviveGuardSec, 1, updateSummary)),
@@ -882,6 +898,12 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
           ' เดินต่อเมื่อสลับแท็บ'),
       ),
       h('div', { class: 'muted' }, 'เดินต่อเมื่อสลับแท็บ (ไม่ใช่ Auto): คลิกเดินไปจุดไกลแล้วสลับไปแท็บอื่น/พับจอ server พาเดินต่อจนถึงจุดที่คลิก (เดินตรงไป ไถลอ้อมของกลมชิ้นเดียวได้ ไม่หาทางอ้อมกำแพง ติดแทบไม่ขยับ 0.8 วิ = หยุด) · กลับมาที่แท็บ ตัวเลื่อนไปที่จริงแล้วเดินต่อเอง · ตาย/เปลี่ยนแมพ/วาร์ป/เทรด/หลุด = หยุด · ปิด = แบบเดิม สลับแท็บแล้วตัวหยุด'),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.shopNoEquip, onchange: (e: Event) => { draft.shopNoEquip = (e.target as HTMLInputElement).checked; refresh(); } }),
+          ' ห้ามถอด/สวมขณะเปิดร้านพ่อค้า'),
+      ),
+      h('div', { class: 'muted' }, 'ห้ามถอด/สวมขณะเปิดร้านพ่อค้า: ตอนหน้าต่างร้านพ่อค้าเปิด คลิก/ลาก/ปุ่มในรายละเอียดที่จะสวมหรือถอดอุปกรณ์ (และของแต่งตัวในกระเป๋าแฟชั่น) ไม่ทำงาน ขึ้นข้อความ "ปิดร้านก่อน" กันกดขายผิด · หน้าต่างอื่น (ช่างตีเหล็ก คลัง ตลาด) ไม่โดน · ยาที่เลือกให้ปุ่มด่วนไม่โดน · กันกดผิดฝั่งเบราว์เซอร์เท่านั้น (server ไม่รู้ว่าหน้าต่างร้านเปิดอยู่) · ปิด = ถอด/สวมได้ตามเดิม'),
       h('div', { class: 'muted' }, 'หลุดการเชื่อมต่อขณะเปิด Auto (ไม่ได้กดออกเกม): ตัวละครอยู่ในโลกต่อ Auto ฟาร์มเหมือนปกติ (EXP 50%) จนครบเวลา, Auto หยุดตามตัวเลือก (ยาหมด/กระเป๋าเต็ม/ม้วน) หรือตาย แล้วเซฟและออกจากโลก · เข้าเกมใหม่ = ได้ตัวที่กำลังฟาร์มคืน Auto ยังเปิด · ไม่รวม Guest และห้องบอส · ปิดสวิตช์ = คนที่ฟาร์มแบบหลุดอยู่ออกจากโลกทันที'),
     );
   };
@@ -1073,7 +1095,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
           h('label', { class: c.on !== cc.on ? 'bal-changed' : '' }, on, ` เสียง${SFX_GROUP_NAME[g]}`),
           h('label', {}, ' × ความดัง ', numBox(() => c.gain, (n) => { c.gain = n; }, cc.gain, AUDIO_GAIN_RANGE[0], AUDIO_GAIN_RANGE[1], 0.1, refresh)));
       }),
-      h('div', { class: 'muted' }, 'สกิลผู้เล่น = ตีธรรมดา พุ่งหลบ ทุกสกิล และเสียงตอนสกิลลง · บอส = ตีธรรมดา ท่าสกิล เข้าเฟส/คลั่ง บอสปรากฏ บอสตาย · มอน = มอนโดนตี คริติคอล มอนตาย · ตัวละครและไอเทม = เจ็บ ตาย ฟื้น เลเวลอัป วาร์ป เก็บของ ดื่มยา ซื้อขาย ตีบวก · หน้าต่างและปุ่ม = คลิกปุ่ม'),
+      h('div', { class: 'muted' }, 'สกิลผู้เล่น = ตีธรรมดา พุ่งหลบ ทุกสกิล และเสียงตอนสกิลลง · บอส = ตีธรรมดา ท่าสกิล เข้าเฟส/คลั่ง บอสปรากฏ นับถอยหลังบอสเกิด บอสตาย · มอน = มอนโดนตี คริติคอล มอนตาย มอนเง้าตีเรา มอนเห็นเรา · ตัวละครและไอเทม = เจ็บ ตาย ฟื้น เลเวลอัป วาร์ป ฝีเท้า เก็บของ ของดรอปตามความหายาก ดื่มยา ซื้อขาย ตีบวก แคชช็อป เปิดกล่องสุ่ม · หน้าต่างและการแจ้งเตือน = คลิกปุ่ม เปิด/ปิดหน้าต่าง แชท จดหมาย คำเชิญ เควสสำเร็จ · บรรยากาศแมพ = นก กบ ลม ลาวา เสียงเมือง (สุ่มเป็นระยะ)'),
     );
   };
 

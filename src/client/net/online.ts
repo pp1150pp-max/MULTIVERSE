@@ -47,6 +47,7 @@ import { WalkTarget } from '../walkTo';
 import type { ReportReply } from '../../shared/reports';
 import type { TutStep } from '../../shared/tutorial';
 import { ensureMap, mapIsCurrent } from '../mapSync';
+import { playSound } from '../audio/sfx';
 import { activePreview, loadPreviewDraft, previewParam, settlePreview } from '../mapPreview';
 import { hudPreviewParam, loadHudPreview } from '../hudLayout';
 
@@ -690,6 +691,7 @@ export class OnlineBackend implements Backend {
         this.applySnapshot(m);
         break;
       case 'chat':
+        if (m.name !== this.me?.name) playSound(m.ch === 'whisper' || m.ch === 'party' ? 'notify_whisper' : 'notify_chat');
         this.onChat?.(m.name, m.text, m.ch === 'party' || m.ch === 'whisper' ? m.ch : undefined, typeof m.to === 'string' ? m.to : undefined);
         break;
       case 'friends':
@@ -700,12 +702,14 @@ export class OnlineBackend implements Backend {
         this.onChannels?.(m.view);
         break;
       case 'partyInvite':
+        playSound('notify_invite');
         this.onPartyInvite?.(m.party, m.from, m.seconds);
         break;
       case 'partyInviteGone':
         this.onPartyInviteGone?.(m.party);
         break;
       case 'roomInvite':
+        playSound('notify_invite');
         this.onRoomInvite?.(m.id, m.from, m.boss, m.keys, m.seconds);
         break;
       case 'roomInviteGone':
@@ -715,6 +719,7 @@ export class OnlineBackend implements Backend {
         this.onRoomLobby?.(m.view);
         break;
       case 'tradeRequest':
+        playSound('notify_invite');
         this.onTradeRequest?.(m.from, m.name, m.seconds);
         break;
       case 'tradeRequestGone':
@@ -779,6 +784,7 @@ export class OnlineBackend implements Backend {
         this.onNews?.(m.v);
         break;
       case 'mailNote':
+        if (m.fresh > 0) playSound('notify_mail');
         this.mailUnread = m.unread;
         this.onMailNote?.(m.unread, m.fresh);
         break;
@@ -983,6 +989,7 @@ export class OnlineBackend implements Backend {
       m.faceZ = ms.fz;
       m.moving = ms.mv;
       m.alive = ms.alive;
+      if (!ms.alive && m.isBoss) this.terrain.releaseBossSolid(); // its rock is gone on the server too
       m.deadT = ms.deadT;
       if (ms.mhp) m.syncMaxHp(ms.mhp);
       m.hp = ms.hp;

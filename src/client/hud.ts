@@ -266,7 +266,10 @@ export class Hud {
         if (entry.stone === 'return_scroll') g.useReturnScroll();
         else if (isBuffScroll(entry.stone)) g.backend.useBuffScroll(entry.stone);
         else if (entry.stone === 'megaphone') g.megaphone.toggle(true);
-        else if (entry.stone === 'mystery_box') g.backend.openBox(i, false);
+        else if (entry.stone === 'mystery_box') {
+          g.backend.openBox(i, false);
+          playSound('box_open');
+        }
         else if (isOrbStone(entry.stone)) g.backend.useOrbItem(i);
         return;
       }
@@ -276,6 +279,7 @@ export class Hud {
         this.forge.forgePlace(entry);
         return;
       }
+      if (isItem(entry) && this.shop.blocksEquip()) return;
       const block = isItem(entry) ? g.player.equipBlock(entry) : null;
       if (block && isItem(entry)) {
         this.log(`ใส่ ${itemName(entry)} ไม่ได้ — ${block}`, '#ff8a6a');
@@ -313,6 +317,7 @@ export class Hud {
       // A mystery box: right click opens the whole stack (owner 2026-11-22).
       if (isStone(item) && item.stone === 'mystery_box') {
         g.backend.openBox(i, true);
+        playSound('box_open');
         return;
       }
       const dropAsk = () => this.askDrop(i);
@@ -403,6 +408,7 @@ export class Hud {
         if (item) this.forge.forgePlace(item);
         return;
       }
+      if (this.shop.blocksEquip()) return;
       g.backend.unequip(slot);
       this.markInventory();
     });
@@ -1304,11 +1310,16 @@ export class Hud {
       : 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = วางลงพื้น · คลิกช่องสวมใส่ = ถอด · ขายของได้ที่พ่อค้าเท่านั้น';
   }
 
+  /** Fashion bag: true (with a log line) when the merchant window is open and wearing is refused. */
+  shopBlocksEquip(): boolean {
+    return this.shop.blocksEquip();
+  }
+
   /** Dropping a bag item on a socket wears it there; a ring replaces the ring of that socket. */
   equipByDrag(i: number, slot: EquipSlot): void {
     const g = this.g;
     const item = g.player.bag[i];
-    if (!isItem(item)) return;
+    if (!isItem(item) || this.shop.blocksEquip()) return;
     const block = g.player.equipBlock(item);
     if (block) this.log(`ใส่ ${itemName(item)} ไม่ได้ — ${block}`, '#ff8a6a');
     else if (!wornPlaces(item.slot).includes(slot)) this.log(`${itemName(item)} ใส่ช่อง${EQUIP_SLOT_LABEL[slot]}ไม่ได้`, '#ff8a6a');
