@@ -111,7 +111,7 @@ export function setMeta(v: AdminMeta | null): void {
 export function setOnline(v: AdminOnline | null): void {
   online = v;
 }
-export type Tab = 'online' | 'users' | 'stats' | 'sessions' | 'chat' | 'mail' | 'trades' | 'reports' | 'orbs' | 'cos' | 'cosManage' | 'rig' | 'anim' | 'cards' | 'balance' | 'skills' | 'menuLayout' | 'maps' | 'daily' | 'cashShop' | 'topup' | 'roles' | 'audit' | 'broadcast' | 'server';
+export type Tab = 'online' | 'users' | 'stats' | 'sessions' | 'chat' | 'mail' | 'trades' | 'reports' | 'orbs' | 'cos' | 'cosManage' | 'rig' | 'anim' | 'cards' | 'balance' | 'skills' | 'menuLayout' | 'maps' | 'daily' | 'mysteryBox' | 'cashShop' | 'topup' | 'roles' | 'audit' | 'broadcast' | 'server';
 export let tab: Tab = 'online';
 export function setCurrentTab(t: Tab): void {
   tab = t;

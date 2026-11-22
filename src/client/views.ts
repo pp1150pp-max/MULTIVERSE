@@ -441,7 +441,7 @@ export class LootView {
       : k.type === 'potion' ? `icon_potion_${k.pot}`
       : k.type === 'stone' ? `icon_stone_${k.stone}`
       : itemArt(k.item);
-    this.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: sheets[key].texture, alphaTest: 0.5, transparent: true }));
+    this.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: (sheets[key] ?? sheets.icon_stone_mystery_box).texture, alphaTest: 0.5, transparent: true }));
     const size = k.type === 'item' ? 0.85 : 0.55;
     this.sprite.scale.set(size, size, 1);
     // Drawn after the glow, so the rarity light sits behind the picture instead of washing it out.

@@ -233,7 +233,7 @@ export class OnlineBackend implements Backend {
   /** Auto was on when the server welcomed us (a character still farming, or back at its spot); see takeAutoResume. */
   private autoResume: boolean;
   /** An announcement from the server's owner. */
-  onAnnounce: ((text: string, from: string, direct: boolean, megaphone: boolean) => void) | null = null;
+  onAnnounce: ((text: string, from: string, direct: boolean, megaphone: boolean, box: boolean) => void) | null = null;
   /**
    * The server stops or restarts in `seconds` (sent once a second); null = cancelled. `text` is the
    * line to show, with the time filled in by the server (the owner's wording); absent = the default.
@@ -815,7 +815,7 @@ export class OnlineBackend implements Backend {
         useOrbLook(m.look);
         break;
       case 'announce':
-        this.onAnnounce?.(m.text, m.from, m.direct, !!m.megaphone);
+        this.onAnnounce?.(m.text, m.from, m.direct, !!m.megaphone, !!m.box);
         break;
       case 'shutdownCancel':
         this.onShutdown?.(m.mode, null);
@@ -1317,6 +1317,8 @@ export class OnlineBackend implements Backend {
   toggleMount(): void { this.send({ t: 'act', a: 'mount' }); }
   useReturnScroll(): void { this.pendingRecall = true; }
   useBuffScroll(kind: BuffScroll): void { this.send({ t: 'act', a: 'useBuff', stone: kind }); }
+  openBox(slot: number, all: boolean): void { this.send({ t: 'act', a: 'openBox', slot, all }); }
+  useOrbItem(slot: number): void { this.send({ t: 'act', a: 'useOrbItem', slot }); }
   useMegaphone(text: string): void { this.send({ t: 'act', a: 'megaphone', text }); }
   dailyOpen(): void { this.send({ t: 'act', a: 'daily' }); }
   dailyMakeup(day: number): void { this.send({ t: 'act', a: 'dailyMakeup', day }); }

@@ -18,7 +18,7 @@ import { ZONE_1 } from '../shared/data/zones';
 import { expToNext } from '../shared/formulas';
 import { blockingGate } from '../shared/data/bossGates';
 import {
-  BUFF_SCROLLS, isBossKey, isBound, isBoundKind, isBuffScroll, isConsumable, isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
+  BUFF_SCROLLS, isBossKey, isBound, isBoundKind, isBuffScroll, isConsumable, isOrbStone, isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
   type BagEntry, type Item, type PotionKind, type PotionStack, type StoneStack, type EquipSlot, type StatKey,
 } from '../shared/types';
 import { drawEdgeMarker, drawMapIcon, drawPin, facingAngle, partyDot } from './mapIcons';
@@ -266,6 +266,8 @@ export class Hud {
         if (entry.stone === 'return_scroll') g.useReturnScroll();
         else if (isBuffScroll(entry.stone)) g.backend.useBuffScroll(entry.stone);
         else if (entry.stone === 'megaphone') g.megaphone.toggle(true);
+        else if (entry.stone === 'mystery_box') g.backend.openBox(i, false);
+        else if (isOrbStone(entry.stone)) g.backend.useOrbItem(i);
         return;
       }
       // At the blacksmith a click on gear puts it in the forge's slot instead of wearing it.
@@ -308,6 +310,11 @@ export class Hud {
         this.shop.sellFromBag(i);
         return;
       }
+      // A mystery box: right click opens the whole stack (owner 2026-11-22).
+      if (isStone(item) && item.stone === 'mystery_box') {
+        g.backend.openBox(i, true);
+        return;
+      }
       const dropAsk = () => this.askDrop(i);
       // Standing at the market broker: offer to list it or search for the same kind (the menu also has "drop").
       if (g.backend.npcDistance('broker') <= NPC_USE_RANGE) {
@@ -329,7 +336,8 @@ export class Hud {
         return;
       }
       if (isPotion(item)) this.showPotionTip(item, e, `คลิกซ้าย: ใช้กับปุ่มด่วน · คลิกขวา: ${right}${split}`);
-      else if (isStone(item)) this.showStoneTip(item, e, `${item.stone === 'return_scroll' ? 'คลิกซ้าย / ปุ่ม G: ใช้ · ' : isBuffScroll(item.stone) || item.stone === 'megaphone' ? 'คลิกซ้าย: ใช้ · ' : ''}คลิกขวา: ${right}${split}`);
+      else if (isStone(item) && item.stone === 'mystery_box' && !this.stash.isOpen && !this.market.isOpen && !this.shop.isOpen) this.showStoneTip(item, e, `คลิกซ้าย: เปิด 1 กล่อง · คลิกขวา: เปิดทั้งกอง${split}`);
+      else if (isStone(item)) this.showStoneTip(item, e, `${item.stone === 'return_scroll' ? 'คลิกซ้าย / ปุ่ม G: ใช้ · ' : isBuffScroll(item.stone) || item.stone === 'megaphone' || item.stone === 'mystery_box' || isOrbStone(item.stone) ? 'คลิกซ้าย: ใช้ · ' : ''}คลิกขวา: ${right}${split}`);
       else if (item) {
         const both = item.slot === 'ring' && g.player.equipment.ring && g.player.equipment.ring2;
         if (this.forge.isOpen) this.showTip(item, e, `คลิกซ้าย / ลาก: วางที่ช่างตีเหล็ก · คลิกขวา: ${right}`);
@@ -1539,10 +1547,15 @@ export class Hud {
    * An announcement: a banner for a while (like the restart warning) and a chat line. From the server's
    * owner, or (`megaphone`) from a player's megaphone: same frame, its own heading and the character's name.
    */
-  announce(text: string, from: string, direct: boolean, megaphone = false): void {
+  announce(text: string, from: string, direct: boolean, megaphone = false, box = false): void {
     const wait = this.adminBannerUntil - performance.now();
-    if (megaphone && wait > 0) {
-      window.setTimeout(() => this.announce(text, from, direct, true), wait + 50);
+    // Players' banners (megaphone, mystery box prize) wait for the owner's instead of covering it.
+    if ((megaphone || box) && wait > 0) {
+      window.setTimeout(() => this.announce(text, from, direct, megaphone, box), wait + 50);
+      return;
+    }
+    if (box) {
+      this.boxBanner(text);
       return;
     }
     if (!megaphone) this.adminBannerUntil = performance.now() + ANNOUNCE_MS;
@@ -1566,6 +1579,27 @@ export class Hud {
     line.className = 'log-line';
     line.style.color = megaphone ? STONE_COLOR.megaphone : SHUTDOWN_COLOR;
     line.textContent = megaphone ? `📣 ${from}: ${text}` : direct ? `📢 ข้อความจาก ${from} ถึงคุณ: ${text}` : `📢 ประกาศ: ${text} — ${from}`;
+    this.pushLog(line, ANNOUNCE_MS * 3);
+  }
+
+  /** A mystery box prize for the whole server (owner 2026-11-22): the announcement banner with its own heading and no sender. */
+  private boxBanner(text: string): void {
+    document.getElementById('announce-banner')?.remove();
+    const el = document.createElement('div');
+    el.id = 'announce-banner';
+    el.classList.add('megaphone');
+    const head = document.createElement('div');
+    head.className = 'announce-head';
+    head.textContent = '🎁 กล่องปริศนา';
+    const body = document.createElement('div');
+    body.textContent = text;
+    el.append(head, body);
+    $('hud').append(el);
+    setTimeout(() => el.remove(), ANNOUNCE_MS);
+    const line = document.createElement('div');
+    line.className = 'log-line';
+    line.style.color = STONE_COLOR.mystery_box;
+    line.textContent = text;
     this.pushLog(line, ANNOUNCE_MS * 3);
   }
 

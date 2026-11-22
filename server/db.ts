@@ -16,6 +16,7 @@ import { checkCosShop, COS_SHOP_SETTING, type CosShop } from '../src/shared/cosS
 import type { CashPurchaseRow } from '../src/shared/cashShop';
 import type { TopupRow, TopupStatus } from '../src/shared/topup';
 import { checkOrbItems, ORB_ITEMS_SETTING, registerOrbItems, type OrbItems } from '../src/shared/orbItems';
+import { cleanBoxOverrides, MYSTERY_BOX_SETTING, setBoxConfig, type BoxOverrides } from '../src/shared/mysteryBox';
 import { CARD_TUNING_SETTING, checkCardTuning, type CardTuning } from '../src/shared/cardTuning';
 import { BALANCE_SETTING, checkBalance, type BalanceTuning } from '../src/shared/balance';
 import { checkOrbLook, DEFAULT_ORB_LOOK, ORB_LOOK_SETTING, sameOrbLook, type OrbLook } from '../src/shared/orbLook';
@@ -461,6 +462,26 @@ export class Db {
     // The orb looks made in /admin are cosmetics too: put them in the list before anything reads owned or
     // worn cosmetics, hidden pieces or prices (those drop ids they don't know).
     registerOrbItems(this.orbItems().items);
+    // The owner's mystery box table (src/shared/mysteryBox.ts): in use from the start.
+    setBoxConfig(this.boxOverrides());
+  }
+
+  /** The owner's mystery box changes (only what differs from the code; a bad stored value = none). */
+  boxOverrides(): BoxOverrides {
+    const v = this.getSetting(MYSTERY_BOX_SETTING);
+    if (!v) return {};
+    try {
+      const o = cleanBoxOverrides(JSON.parse(v));
+      return typeof o === 'string' ? {} : o;
+    } catch {
+      return {};
+    }
+  }
+
+  /** Saves the owner's mystery box changes and puts them in use. */
+  setBoxOverrides(o: BoxOverrides): void {
+    this.setSetting(MYSTERY_BOX_SETTING, Object.keys(o).length ? JSON.stringify(o) : null);
+    setBoxConfig(o);
   }
 
   close(): void {

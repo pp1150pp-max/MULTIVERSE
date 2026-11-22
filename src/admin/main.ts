@@ -10,6 +10,7 @@ import { renderBalance } from './balance';
 import { renderSkills } from './skills';
 import { headsOnPage, jumpTo, watchCards } from './ui';
 import { renderDaily } from './daily';
+import { renderMysteryBox } from './mysteryBox';
 import { renderMenuLayout } from './menuLayout';
 import { renderMaps } from './maps';
 import { renderCosManage } from './cosManage';
@@ -163,13 +164,13 @@ const CATEGORIES: { name: (typeof FEATURE_GROUPS)[number]; tabs: Tab[] }[] = [
   { name: 'ผู้เล่น', tabs: ['online', 'users'] },
   { name: 'ประวัติ', tabs: ['stats', 'sessions', 'chat', 'trades', 'audit'] },
   { name: 'สื่อสาร', tabs: ['mail', 'reports', 'broadcast'] },
-  { name: 'ปรับเกม', tabs: ['balance', 'skills', 'cards', 'daily', 'cashShop', 'topup', 'menuLayout', 'maps'] },
+  { name: 'ปรับเกม', tabs: ['balance', 'skills', 'cards', 'daily', 'mysteryBox', 'cashShop', 'topup', 'menuLayout', 'maps'] },
   { name: 'หน้าตา', tabs: ['orbs', 'cos', 'cosManage', 'rig', 'anim'] },
   { name: 'ระบบ', tabs: ['server', 'roles'] },
 ];
 const TAB_LABEL: Record<Tab, string> = {
   online: 'ออนไลน์', users: 'ผู้ใช้และตัวละคร', stats: 'สถิติ', sessions: 'การเข้าเล่น', chat: 'แชท', trades: 'เทรด',
-  audit: 'ประวัติ (audit)', mail: 'จดหมาย', reports: 'รายงาน', broadcast: 'ประกาศ', balance: 'ปรับสมดุล', skills: 'ระบบสกิล', cards: 'การ์ด', daily: 'ล็อกอินรายวัน', cashShop: 'แคชช็อป', topup: 'เติมเงิน', menuLayout: 'จัดเมนูเกม', maps: 'แมพ',
+  audit: 'ประวัติ (audit)', mail: 'จดหมาย', reports: 'รายงาน', broadcast: 'ประกาศ', balance: 'ปรับสมดุล', skills: 'ระบบสกิล', cards: 'การ์ด', daily: 'ล็อกอินรายวัน', mysteryBox: 'กล่องปริศนา', cashShop: 'แคชช็อป', topup: 'เติมเงิน', menuLayout: 'จัดเมนูเกม', maps: 'แมพ',
   orbs: 'ลูกแก้วตีบวก', cos: 'ของแต่งตัว', cosManage: 'จัดการของแต่งตัว', rig: 'นักดาบกระดาษ', anim: 'ท่าตัวละคร', server: 'Server', roles: 'สิทธิ์',
 };
 
@@ -193,6 +194,7 @@ function tabAllowed(t: Tab): boolean {
     // The map tab: the editor (mapEdit) and the switch "ใช้แมพจาก DB" (balance).
     case 'maps': return f.includes('mapEdit') || f.includes('balance');
     case 'daily': return f.includes('daily');
+    case 'mysteryBox': return f.includes('mysteryBox');
     case 'cashShop': return f.includes('cashShop');
     case 'topup': return f.includes('topup');
     case 'menuLayout': return f.includes('menuLayout');
@@ -212,7 +214,7 @@ const catOf = (t: Tab) => CATEGORIES.find((c) => c.tabs.includes(t))!;
 /** An icon per tab in the side menu (looks only). */
 const TAB_ICON: Record<Tab, string> = {
   online: '🟢', users: '👤', stats: '📈', sessions: '🕒', chat: '💬', trades: '🤝', audit: '📜', mail: '✉️', reports: '🚩',
-  broadcast: '📢', balance: '⚖️', skills: '✨', cards: '🃏', daily: '📅', cashShop: '💎', topup: '💳', menuLayout: '🧭', maps: '🗺️', orbs: '🔮', cos: '🪽', cosManage: '🧺', rig: '🗡️',
+  broadcast: '📢', balance: '⚖️', skills: '✨', cards: '🃏', daily: '📅', mysteryBox: '🎁', cashShop: '💎', topup: '💳', menuLayout: '🧭', maps: '🗺️', orbs: '🔮', cos: '🪽', cosManage: '🧺', rig: '🗡️',
   anim: '🏃', server: '🖥️', roles: '🔑',
 };
 
@@ -256,6 +258,7 @@ const SEARCH_INDEX: { tab: Tab; title: string; words?: string }[] = [
   { tab: 'cards', title: 'การ์ด', words: 'เรทดรอป' },
   { tab: 'cards', title: 'ตัวเลขของระบบการ์ด' },
   { tab: 'daily', title: 'ของรางวัลล็อกอินรายวัน' },
+  { tab: 'mysteryBox', title: 'กล่องปริศนา', words: 'กล่อง สุ่ม โอกาส ดรอป ลูกแก้ว ประกาศ' },
   { tab: 'cashShop', title: 'แคชช็อป', words: 'คริสตัลมิติ เปิดขาย แพ็กเกจ' },
   { tab: 'topup', title: 'เติมเงิน', words: 'พร้อมเพย์ QR ยืนยัน โอน คืนเพชร close beta' },
   { tab: 'cosManage', title: 'จัดการของแต่งตัว', words: 'ซ่อน ราคา ปีก สัตว์ขี่ สัตว์เลี้ยง ออร่า' },
@@ -413,6 +416,7 @@ function setTab(t: Tab): void {
   else if (t === 'balance') void renderBalance(view, h, api, (tuning) => applyBalance(tuning), can('itemStatMult'));
   else if (t === 'skills') void renderSkills(view, h, api, (tuning) => applyBalance(tuning));
   else if (t === 'daily') void renderDaily(view, h, api);
+  else if (t === 'mysteryBox') void renderMysteryBox(view, h, api);
   else if (t === 'cashShop') void renderCashShop(view, h, api);
   else if (t === 'topup') void renderTopup(view, h, api);
   else if (t === 'menuLayout') void renderMenuLayout(view, h, api, () => undefined);

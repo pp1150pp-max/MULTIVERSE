@@ -9,6 +9,7 @@ import {
   type CashCatalog, type CashShopCfg, type CashState,
 } from '../src/shared/cashShop';
 import { cosById } from '../src/shared/data/cosmetics';
+import { boxNow } from '../src/shared/mysteryBox';
 import { STONE_NAME } from '../src/shared/data/stones';
 import { MAIL_MS, type MailAttach } from '../src/shared/mail';
 
@@ -42,7 +43,7 @@ export class CashShop {
 
   /** What players are sent now. */
   catalog(): CashCatalog {
-    return cashCatalog(this.cfg(), this.db.cosShop(), this.now());
+    return cashCatalog(this.cfg(), this.db.cosShop(), this.now(), !boxNow().orbsInShop);
   }
 
   state(accountId: number, guest: boolean): CashState {

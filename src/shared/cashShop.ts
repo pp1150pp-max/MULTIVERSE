@@ -235,6 +235,8 @@ export interface CashEntry {
   end?: number;
   badge?: CashBadge;
   featured: boolean;
+  /** An orb that comes only from the mystery box now (owner 2026-11-22): listed to look at, shows "เปิดได้จากกล่องปริศนา", can't be bought. */
+  fromBox?: true;
 }
 
 /** What players are sent: the items on sale or coming (not ended), and the packages. */
@@ -245,7 +247,7 @@ export interface CashCatalog { open: boolean; items: CashEntry[]; packages: Cash
  * no price are left out. Items that start later are listed with `start` (shown once it comes; the server
  * checks the time again when buying).
  */
-export function cashCatalog(cfg: CashShopCfg, cosShop: CosShop, now: number): CashCatalog {
+export function cashCatalog(cfg: CashShopCfg, cosShop: CosShop, now: number, orbsFromBox = false): CashCatalog {
   const items: CashEntry[] = [];
   for (const id of cashItemIds()) {
     const c = cfg.items[id] ?? {};
@@ -255,6 +257,11 @@ export function cashCatalog(cfg: CashShopCfg, cosShop: CosShop, now: number): Ca
     let limit = c.limit;
     if (r.kind === 'cos') {
       if (cosShop[r.ref]?.hidden) continue;
+      // Orbs come from the mystery box instead (src/shared/mysteryBox.ts): shown without a price, never sold.
+      if (orbsFromBox && cosById(r.ref)?.slot === 'orb') {
+        items.push({ id, kind: 'cos', ref: r.ref, price: 0, now: 0, limit: 1, ...(c.badge ? { badge: c.badge } : {}), featured: !!c.featured, fromBox: true });
+        continue;
+      }
       price = cosPrice(cosShop, r.ref);
       limit = 1;
     } else price = c.price ?? CASH_STONE_PRICE[r.ref];
@@ -289,6 +296,7 @@ export function cashBuyError(
   if (!e) return 'สินค้านี้ไม่มีขายแล้ว';
   if (e.start !== undefined && e.start > now) return 'สินค้านี้ยังไม่เริ่มขาย';
   if (e.end !== undefined && e.end <= now) return 'สินค้านี้หมดเวลาขายแล้ว';
+  if (e.fromBox) return 'ลูกแก้วนี้เปิดได้จากกล่องปริศนาเท่านั้น';
   const maxQty = e.kind === 'cos' ? 1 : CASH_QTY_MAX;
   if (!isInt(qty, 1, maxQty)) return `ซื้อได้ครั้งละ 1–${maxQty} ชิ้น`;
   if (price !== e.now) return 'ราคาเปลี่ยนแล้ว เปิดดูใหม่อีกครั้ง';
