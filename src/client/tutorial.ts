@@ -97,8 +97,12 @@ export class TutorialUI {
         this.body.append(el('div', 'quest-sub tut-warn', 'Guest ไม่มีกล่องจดหมาย — สมัครสมาชิกก่อนจึงจะส่งภารกิจได้ (ตัวละครนี้จะย้ายไปอยู่ในบัญชีใหม่)'));
       }
       if (r.state === 'offer' || r.state === 'ready') {
-        const btn = el('button', 'primary', r.state === 'offer' ? 'รับภารกิจ' : 'ส่งภารกิจ');
+        const btn = el('button', r.state === 'offer' ? 'quest-accept' : 'quest-turnin', r.state === 'offer' ? '! รับภารกิจ' : '? ส่งภารกิจ');
         btn.onclick = () => (r.state === 'offer' ? this.g.backend.tutAccept(r.step) : this.g.backend.tutTurnIn(r.step));
+        this.body.append(btn);
+      } else if (r.state === 'going') {
+        const btn = el('button', 'quest-progress', `กำลังทำ ${r.got.length}/${TUT_TASKS[r.step].length}`);
+        btn.disabled = true;
         this.body.append(btn);
       }
     }
