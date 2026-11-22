@@ -2020,7 +2020,7 @@ export class Sim {
     this.fx('burst', area.x, 1.5, area.z, '#ffcf5a', 30, 6);
     this.shake(0.4, area);
     this.sfx('boss_slam', area.x, area.z);
-    this.sfx('boss_arrive', area.x, area.z);
+    this.sfx('boss_appear', area.x, area.z);
   }
 
   /**

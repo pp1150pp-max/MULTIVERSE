@@ -15,6 +15,7 @@ import { cosPicture } from './cosmetics';
 import { setTryOn } from './cosLook';
 import { stoneIcon } from './icons';
 import { imgUrl } from './img';
+import { playSound } from './audio/sfx';
 
 type Tab = 'featured' | 'cos' | 'use' | 'stone';
 const TABS: [Tab, string][] = [['featured', 'แนะนำ'], ['cos', 'ของแต่งตัว'], ['use', 'ของใช้'], ['stone', 'หิน']];
@@ -384,6 +385,7 @@ export class CashShopUI {
     b.busy = false;
     b.ok = r.ok;
     b.msg = r.msg;
+    if (r.ok) playSound('cash_buy');
     this.g.hud.log(r.msg, r.ok ? '#7ae8ff' : '#ffcf6a');
     this.drawn = '';
     this.update();

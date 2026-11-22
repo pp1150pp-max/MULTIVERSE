@@ -3,7 +3,7 @@
 // (`BalanceTuning.audio`), only what differs from the code. Each player also has their own slider per group
 // (src/client/audio/engine.ts); the two multiply.
 
-export const SFX_GROUPS = ['skill', 'boss', 'monster', 'player', 'ui'] as const;
+export const SFX_GROUPS = ['skill', 'boss', 'monster', 'player', 'ui', 'ambient'] as const;
 export type SfxGroup = (typeof SFX_GROUPS)[number];
 
 export const SFX_GROUP_NAME: Record<SfxGroup, string> = {
@@ -11,7 +11,8 @@ export const SFX_GROUP_NAME: Record<SfxGroup, string> = {
   boss: 'บอส',
   monster: 'มอน',
   player: 'ตัวละครและไอเทม',
-  ui: 'หน้าต่างและปุ่ม',
+  ui: 'หน้าต่างและการแจ้งเตือน',
+  ambient: 'บรรยากาศแมพ',
 };
 
 export interface AudioGroup {

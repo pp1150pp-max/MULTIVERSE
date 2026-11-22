@@ -4,6 +4,7 @@ import { currentBalance } from '../../shared/balance';
 import type { SfxName } from '../../shared/sim/types';
 import { BOSS_SOUNDS } from './bossSounds';
 import { audioEngine } from './engine';
+import { EXTRA_SOUNDS } from './extraSounds';
 import { IMPACT_SOUNDS, SKILL_SOUNDS } from './skillSounds';
 
 type SkillSound =
@@ -13,7 +14,7 @@ type SkillSound =
   | 'dash';
 type WorldSound = 'explosion' | 'crater' | 'impact' | 'hit' | 'hurt' | 'level_up' | 'death' | 'revive' | 'portal' | 'ui_click';
 type BaseSound = SfxName | SkillSound | WorldSound;
-export type SoundName = BaseSound | keyof typeof SKILL_SOUNDS | keyof typeof IMPACT_SOUNDS | keyof typeof BOSS_SOUNDS;
+export type SoundName = BaseSound | keyof typeof SKILL_SOUNDS | keyof typeof IMPACT_SOUNDS | keyof typeof BOSS_SOUNDS | keyof typeof EXTRA_SOUNDS;
 
 /** Sounds playing at once. Past this, combat sounds are dropped; `always` sounds still play. */
 const MAX_VOICES = 24;
@@ -34,7 +35,7 @@ const GROUP_OF: Record<BaseSound, SfxGroup> = {
   shot: 'skill', rapidfire: 'skill', pierce: 'skill', headshot: 'skill', dash: 'skill', headshot_fire: 'skill',
   explosion: 'skill', crater: 'skill', impact: 'skill',
   hit: 'monster', crit: 'monster', monster_die: 'monster',
-  boss_die: 'boss', boss_slam: 'boss', boss_arrive: 'boss',
+  boss_die: 'boss', boss_slam: 'boss', boss_arrive: 'boss', boss_appear: 'boss',
   witch_cast: 'boss', witch_vial: 'boss', witch_grasp: 'boss', witch_hex: 'boss',
   heart_meteor: 'boss', heart_ring: 'boss', heart_beam: 'boss', heart_charge: 'boss', heart_phase: 'boss',
   hurt: 'player', death: 'player', revive: 'player', level_up: 'player', portal: 'player',
@@ -269,7 +270,18 @@ const BASE: Record<BaseSound, Omit<Sound, 'group'>> = {
       s.noise(800, 80, 0.5, 0.6, 0, 0.6, 'lowpass');
     },
   },
-  // A boss arrives, or one without a roar of its own goes into a rage.
+  // A boss rises in its room, or a field boss comes back: a low horn and a drum roll.
+  boss_appear: {
+    gap: 800,
+    always: true,
+    make: (s) => {
+      for (let i = 0; i < 6; i++) s.tone('triangle', 90, 60, 0.12, 0.3, i * 0.07);
+      s.tone('sawtooth', 110, 110, 1.0, 0.14, 0.45);
+      s.tone('sawtooth', 165, 165, 1.0, 0.1, 0.45);
+      s.tone('sawtooth', 220, 208, 1.0, 0.08, 0.45);
+    },
+  },
+  // A boss without a roar of its own goes into a rage.
   boss_arrive: {
     gap: 800,
     always: true,
@@ -464,6 +476,7 @@ const SOUNDS = {
   ...SKILL_SOUNDS,
   ...IMPACT_SOUNDS,
   ...BOSS_SOUNDS,
+  ...EXTRA_SOUNDS,
 } as Record<SoundName, Sound>;
 
 /** The group's level: the player's own slider × /admin's loudness (0 when /admin switched it off). */

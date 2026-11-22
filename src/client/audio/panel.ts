@@ -5,7 +5,7 @@ import { audioEngine } from './engine';
 import { playSound, type SoundName } from './sfx';
 
 /** What each group's slider plays when let go, so its new level can be heard. */
-const GROUP_PREVIEW: Record<SfxGroup, SoundName> = { skill: 'slash', boss: 'boss_slam', monster: 'monster_die', player: 'pickup_item', ui: 'ui_click' };
+const GROUP_PREVIEW: Record<SfxGroup, SoundName> = { skill: 'slash', boss: 'boss_slam', monster: 'monster_die', player: 'pickup_item', ui: 'notify_mail', ambient: 'amb_bird' };
 
 const CSS = `
 #audio-panel { right: 168px; top: 56px; width: min(260px, 92vw); font-size: 13px; z-index: 5; }
