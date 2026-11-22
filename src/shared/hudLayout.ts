@@ -83,7 +83,27 @@ export const HUD_PARTS: readonly HudPartDef[] = [
 ];
 
 const DEF = new Map(HUD_PARTS.map((p) => [p.id, p]));
-export const hudPart = (id: string): HudPartDef | undefined => DEF.get(id);
+
+/**
+ * An admin's floating shortcut button (menuLayout.ts `custom` with `free`), part id `hud-btn-<c…>`. It sits at the top left
+ * corner of the screen in the code, so its x / y are simply where it is; it shows on a device only while the published
+ * layout has an entry for it there (an entry equal to the code is kept, it means "placed at the corner"). A part whose
+ * button was deleted since is harmless (no such element) and dropped by /admin on the next save.
+ */
+export const FREE_BTN_RE = /^hud-btn-(c\d{1,3})$/;
+const FREE_BTN_MAX = 20;
+export const isFreeBtnPart = (id: string): boolean => FREE_BTN_RE.test(id);
+/** Where a newly placed floating button goes (right side, under the quest tracker), in % of the screen. */
+export const FREE_BTN_START: Record<HudDevice, { x: number; y: number }> = { desktop: { x: 92, y: 50 }, touch: { x: 2, y: 56 } };
+const freePart = (id: string): HudPartDef | undefined => {
+  const m = FREE_BTN_RE.exec(id);
+  if (!m) return undefined;
+  return { id, label: `ปุ่มลัด ${m[1]}`, kind: 'hud', origin: 'top left', box: { desktop: [0, 0, 4.5, 8], touch: [0, 0, 7, 13] } };
+};
+export const hudPart = (id: string): HudPartDef | undefined => DEF.get(id) ?? freePart(id);
+/** The floating-button part ids found in one device's layout, sorted (c2 before c10). */
+const freeIds = (...devs: (Record<string, unknown> | undefined)[]): string[] =>
+  [...new Set(devs.flatMap((d) => Object.keys(d ?? {}).filter(isFreeBtnPart)))].sort((a, b) => Number(a.slice(9)) - Number(b.slice(9)));
 
 /** One part's change from the code: moved by x% of the screen width / y% of its height, scale s, hidden. Missing = unchanged. */
 export interface HudPos {
@@ -151,7 +171,8 @@ function checkPos(d: HudDevice, id: string, v: unknown, strict: boolean): HudPos
       if (strict) return `"${part.label}" ${part.why ?? 'ซ่อนไม่ได้'}`;
     } else out.hide = true;
   }
-  return Object.keys(out).length ? out : undefined;
+  // A floating button's entry is kept even when empty: it means "placed here on this device".
+  return Object.keys(out).length || isFreeBtnPart(id) ? out : undefined;
 }
 
 /**
@@ -180,7 +201,12 @@ export function checkHudLayoutTuning(x: unknown, strict: boolean): { tuning: Hud
       if (unknown) return { error: `จัดหน้าจอเกม: ไม่รู้จักส่วน "${unknown.slice(0, 30)}"` };
     }
     const dev: Record<string, HudPos> = {};
-    for (const p of HUD_PARTS) {
+    const free = freeIds(parts);
+    if (free.length > FREE_BTN_MAX) {
+      if (strict) return { error: `จัดหน้าจอเกม: ปุ่มลัดวางอิสระได้ไม่เกิน ${FREE_BTN_MAX} ปุ่ม` };
+      free.length = FREE_BTN_MAX;
+    }
+    for (const p of [...HUD_PARTS, ...free.map((id) => hudPart(id)!)]) {
       if (parts[p.id] === undefined) continue;
       const c = checkPos(d, p.id, parts[p.id], strict);
       if (typeof c === 'string') {
@@ -210,9 +236,10 @@ export function hudLayoutChanges(a: HudLayoutTuning | undefined, b: HudLayoutTun
     const ad = a?.[d] ?? {};
     const bd = b?.[d] ?? {};
     const parts: string[] = [];
-    for (const p of HUD_PARTS) {
+    for (const p of [...HUD_PARTS, ...freeIds(ad, bd).map((id) => hudPart(id)!)]) {
       if (JSON.stringify(ad[p.id] ?? null) === JSON.stringify(bd[p.id] ?? null)) continue;
-      parts.push(`${p.label}: ${fmt(ad[p.id])} → ${fmt(bd[p.id])}`);
+      const show = (v: HudPos | undefined): string => (isFreeBtnPart(p.id) ? (v ? `วางที่ ${v.x ?? 0}%,${v.y ?? 0}%${v.s ? ` ขนาด ${Math.round(v.s * 100)}%` : ''}${v.hide ? ' (ซ่อน)' : ''}` : 'ไม่วาง') : fmt(v));
+      parts.push(`${p.label}: ${show(ad[p.id])} → ${show(bd[p.id])}`);
     }
     if (parts.length) out.push(`จัดหน้าจอเกม ${HUD_DEVICE_NAME[d]}: ${parts.join(' · ')}`);
   }
@@ -224,10 +251,12 @@ export function hudLayoutCss(cfg: HudLayoutConfig): string {
   const rules: string[] = [];
   for (const d of HUD_DEVICES) {
     const scope = d === 'touch' ? 'body.touch-ui' : 'body:not(.touch-ui)';
-    for (const p of HUD_PARTS) {
+    for (const p of [...HUD_PARTS, ...freeIds(cfg[d]).map((id) => hudPart(id)!)]) {
       const v = cfg[d]?.[p.id];
       if (!v) continue;
       const sel = `${scope} #${p.id}`;
+      // A floating button is hidden by the game's stylesheet until it has a place on this device.
+      if (isFreeBtnPart(p.id) && !v.hide) rules.push(`${sel} { display: flex; }`);
       const decl: string[] = [];
       if (v.x || v.y) decl.push(`translate: ${v.x ?? 0}vw ${v.y ?? 0}vh`);
       if (v.s && v.s !== 1) decl.push(`scale: ${v.s}`, `transform-origin: ${p.origin}`);
