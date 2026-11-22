@@ -114,7 +114,10 @@ export type SfxName =
   | 'crit' | 'monster_die' | 'boss_die' | 'boss_slam'
   | 'pickup_gold' | 'pickup_item' | 'pickup_potion' | 'drink'
   | 'trade' | 'enhance_ok' | 'enhance_fail'
-  | 'headshot_fire';
+  | 'headshot_fire'
+  // Bosses (owner 2026-11-22, docs/systems/audio.md)
+  | 'boss_arrive' | 'witch_cast' | 'witch_vial' | 'witch_grasp' | 'witch_hex'
+  | 'heart_meteor' | 'heart_ring' | 'heart_beam' | 'heart_charge' | 'heart_phase';
 
 export type FxEvent = { [K in FxName]: { t: 'fx'; name: K; args: Parameters<FxApi[K]> } }[FxName];
 

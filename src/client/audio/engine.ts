@@ -1,5 +1,6 @@
 // Owns the AudioContext, the mixer and the saved volume settings. Browsers only allow sound after a
 // user gesture, so the context is created on the first click or key press.
+import { SFX_GROUPS, type SfxGroup } from '../../shared/audioTuning';
 
 export interface AudioSettings {
   /** 0..1 */
@@ -7,10 +8,13 @@ export interface AudioSettings {
   /** 0..1 */
   sfx: number;
   muted: boolean;
+  /** 0..1 per sound group, on top of `sfx` (owner 2026-11-22). */
+  groups: Record<SfxGroup, number>;
 }
 
 const KEY = 'multiverse-audio-v1';
-const DEFAULTS: AudioSettings = { music: 0.5, sfx: 0.7, muted: false };
+const fullGroups = (): Record<SfxGroup, number> => Object.fromEntries(SFX_GROUPS.map((g) => [g, 1])) as Record<SfxGroup, number>;
+const DEFAULTS = (): AudioSettings => ({ music: 0.5, sfx: 0.7, muted: false, groups: fullGroups() });
 /** Keeps the music under the effects when both sliders sit at the same position. */
 const MUSIC_HEADROOM = 0.6;
 const CLICKABLE = 'button, .class-card, .char-slot, .cell';
@@ -21,9 +25,12 @@ const unit = (v: unknown, fallback: number): number =>
 function loadSettings(): AudioSettings {
   try {
     const d = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<AudioSettings>;
-    return { music: unit(d.music, DEFAULTS.music), sfx: unit(d.sfx, DEFAULTS.sfx), muted: d.muted === true };
+    const def = DEFAULTS();
+    const groups = fullGroups();
+    for (const g of SFX_GROUPS) groups[g] = unit(d.groups?.[g], 1);
+    return { music: unit(d.music, def.music), sfx: unit(d.sfx, def.sfx), muted: d.muted === true, groups };
   } catch {
-    return { ...DEFAULTS };
+    return DEFAULTS();
   }
 }
 

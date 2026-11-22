@@ -202,7 +202,10 @@ export class VolcanoHeartBrain {
         fn: () => {
           const targets = sim.players.filter((p) => this.inArena(sim, m, p)).slice(0, MAX_METEOR_TARGETS);
           // It heaves each volley up (its attack frames, owner 2026-11-21).
-          if (targets.length) sim.anim(m.id, 'attack', { duration: 0.25 });
+          if (targets.length) {
+            sim.anim(m.id, 'attack', { duration: 0.25 });
+            sim.sfx('heart_meteor', m.x, m.z);
+          }
           for (const p of targets) {
             this.add(sim, { id: sim.nextHazardId(), k: 'meteor', x: p.x, z: p.z, start: sim.time, hit: sim.time + ph.meteorWarn, r: METEOR.radius * this.growth(sim.time) });
           }
@@ -223,6 +226,7 @@ export class VolcanoHeartBrain {
           // Each wave's gaps sit halfway between the last one's, so standing still never works twice.
           const gaps = Array.from({ length: RING.gaps }, (_, g) => base + g * step + (i * step) / 2);
           sim.anim(m.id, 'attack', { duration: ph.ringWarn });
+          sim.sfx('heart_ring', m.x, m.z);
           this.add(sim, {
             id: sim.nextHazardId(), k: 'ring', x: m.x, z: m.z, start: sim.time, hit: sim.time + ph.ringWarn,
             speed: RING.speed, width: RING.width * this.growth(sim.time), maxR, gaps, gapArc: RING.gapArc,
@@ -236,6 +240,7 @@ export class VolcanoHeartBrain {
   private startBeams(sim: Sim, m: Monster, t: number, ph: HeartPhase): number {
     const hit = t + ph.beamWarn;
     sim.anim(m.id, 'attack', { duration: ph.beamWarn });
+    sim.sfx('heart_beam', m.x, m.z);
     this.add(sim, {
       id: sim.nextHazardId(), k: 'beams', x: m.x, z: m.z, start: t, hit, end: hit + BEAMS.duration,
       a0: Math.random() * Math.PI * 2, spin: ph.beamSpin * (Math.random() < 0.5 ? -1 : 1),
@@ -246,6 +251,7 @@ export class VolcanoHeartBrain {
 
   private startBlast(sim: Sim, m: Monster, t: number, ph: HeartPhase): number {
     sim.anim(m.id, 'attack', { duration: ph.blastWarn });
+    sim.sfx('heart_charge', m.x, m.z);
     const a0 = Math.random() * Math.PI * 2;
     const safe = Array.from({ length: BLAST.spots }, (_, i) => {
       const a = a0 + (i * Math.PI * 2) / BLAST.spots;
@@ -276,7 +282,6 @@ export class VolcanoHeartBrain {
     sim.fx('ring', h.x, h.z, h.r, '#ffb070', 0.4);
     sim.fx('burst', h.x, 0.3, h.z, '#ff8a3a', 10, 4);
     sim.fx('effect', 'boss_heart_impact', h.x, h.z, 0, h.r * 1.1);
-    sim.sfx('boss_slam', h.x, h.z);
     for (const p of sim.players) {
       if (this.inArena(sim, m, p) && Math.hypot(p.x - h.x, p.z - h.z) <= h.r + p.radius) sim.hitPlayer(m, p, METEOR.mult * this.growth(sim.time), { maxHpShare: HEART_HP_SHARE });
     }
@@ -321,7 +326,6 @@ export class VolcanoHeartBrain {
     sim.fx('burst', h.x, 0.5, h.z, '#ffb070', 30, 9);
     sim.fx('effect', 'boss_heart_blast', h.x, h.z, 0, Math.min(7, h.r * 0.55));
     sim.shake(0.6, h);
-    sim.sfx('boss_slam', h.x, h.z);
     for (const p of sim.players) {
       if (!this.inArena(sim, m, p) || Math.hypot(p.x - h.x, p.z - h.z) > h.r) continue;
       if (h.safe.some((s) => Math.hypot(p.x - s.x, p.z - s.z) <= h.safeR)) continue;

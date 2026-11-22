@@ -514,6 +514,7 @@ export class Sim {
     const sub = phase >= 2 ? 'ท่าเร็วขึ้นอีกขั้น เตือนสั้นลง' : 'ท่าเร็วขึ้น และซ้อนกันได้ 2 ชุด';
     this.log(`${text} ${sub}`, '#ff6a5a');
     this.events.push({ t: 'banner', text, sub, x: m.x, z: m.z });
+    this.sfx('heart_phase', m.x, m.z);
     this.shake(0.4, m);
   }
 
@@ -558,6 +559,7 @@ export class Sim {
       z: m.z,
     });
     this.shake(0.3, m);
+    if (!m.def.fx?.enrage) this.sfx('boss_arrive', m.x, m.z);
     if (m.def.fx?.enrage) this.fx('effect', m.def.fx.enrage, m.x, m.z, 0, Math.max(2.5, m.radius * 2.5));
     if (m.def.summon && !m.def.summon.vanish) this.summonMinions(m, m.def.summon.monster, m.def.summon.count);
   }
@@ -2018,6 +2020,7 @@ export class Sim {
     this.fx('burst', area.x, 1.5, area.z, '#ffcf5a', 30, 6);
     this.shake(0.4, area);
     this.sfx('boss_slam', area.x, area.z);
+    this.sfx('boss_arrive', area.x, area.z);
   }
 
   /**
