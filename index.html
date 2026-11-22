@@ -284,6 +284,10 @@
           <div class="hint">⚠ ขณะเปิด Auto จะได้ EXP แค่ 50%</div>
           <div class="aset-title">ให้ Auto ใช้สกิล</div>
           <div id="aset-skills"></div>
+          <label class="aset-check"><input id="aset-skillsonly" type="checkbox" /> ใช้สกิลอย่างเดียว (ไม่ตีธรรมดา ยืนรอสกิล)</label>
+          <label class="aset-row">เว้นระหว่างสกิล
+            <span><input id="aset-skillgap" type="number" min="0" max="2" step="0.1" /> วิ</span></label>
+          <div class="hint">0 = กดสกิลถัดไปทันที</div>
           <label class="aset-check"><input id="aset-loot" type="checkbox" /> เก็บของอัตโนมัติ</label>
           <label class="aset-row">ลำดับเก็บของ <select id="aset-lootorder"></select></label>
           <div class="hint" id="aset-lootorder-hint"></div>

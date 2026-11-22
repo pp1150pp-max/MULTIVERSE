@@ -100,6 +100,12 @@ export interface AutoSettings {
   target: AutoTargetMode;
   /** Monster kinds (MONSTERS ids) Auto doesn't attack, unless one attacks the player. */
   skip: string[];
+  /** Skills only: no basic attack, stand and wait for a skill (follows the server default until picked, see optsSet). */
+  skillsOnly: boolean;
+  /** Seconds between two skills Auto casts (0 = no wait). */
+  skillGap: number;
+  /** True once the player has set the gap themselves. Without it, the server default (/admin) applies. */
+  skillGapSet?: boolean;
 }
 export type AutoSkill = 'q' | 'e' | 'r';
 export const AUTO_SKILLS: readonly AutoSkill[] = ['q', 'e', 'r'];
@@ -113,7 +119,10 @@ export const AUTO_SKIP_MAX = 60;
 export const DEFAULT_AUTO_SETTINGS: AutoSettings = {
   range: 750, hpPct: 45, mpPct: 15, skills: { q: true, e: true, r: true }, order: [...AUTO_SKILLS], loot: true,
   lootOrder: 'fight', othersLoot: true, noHp: 'fight', noMp: 'fight', bagFull: 'fight', target: 'attacker', skip: [],
+  skillsOnly: false, skillGap: 0.3,
 };
+/** Longest gap a player may set between Auto's skills (seconds). */
+export const AUTO_SKILL_GAP_MAX = 2;
 
 /** Monster kinds from a save or a client: known, not bosses, each once. */
 function cleanAutoSkip(raw: unknown): string[] {
@@ -142,7 +151,9 @@ export function cleanAutoSettings(raw: unknown): AutoSettings {
     typeof v === 'number' && Number.isFinite(v) ? Math.round(Math.max(lo, Math.min(hi, v))) : def;
   const sk = (r.skills ?? {}) as Partial<AutoSettings['skills']>;
   // Options the player hasn't picked take the server's defaults (tunable on /admin).
-  const ad = currentBalance().auto.defaults;
+  const auto = currentBalance().auto;
+  const ad = auto.defaults;
+  const gapSet = r.skillGapSet === true && typeof r.skillGap === 'number' && Number.isFinite(r.skillGap);
   const pick = <T,>(v: unknown, ok: readonly T[], def: T): T => (ok.includes(v as T) ? (v as T) : def);
   const own = AUTO_DEFAULT_KEYS.filter((k) => Array.isArray(r.optsSet) && r.optsSet.includes(k));
   const mine = (k: keyof AutoDefaults) => own.includes(k);
@@ -166,6 +177,9 @@ export function cleanAutoSettings(raw: unknown): AutoSettings {
     bagFull: mine('bagFull') ? pick(r.bagFull, AUTO_OUT_ACTIONS, ad.bagFull) : ad.bagFull,
     target: mine('target') ? pick(r.target, AUTO_TARGET_MODES, ad.target) : ad.target,
     skip: cleanAutoSkip(r.skip),
+    skillsOnly: mine('skillsOnly') && typeof r.skillsOnly === 'boolean' ? r.skillsOnly : ad.skillsOnly,
+    skillGap: gapSet ? Math.round(Math.max(0, Math.min(AUTO_SKILL_GAP_MAX, r.skillGap!)) * 10) / 10 : auto.skillGap,
+    skillGapSet: gapSet,
   };
 }
 
