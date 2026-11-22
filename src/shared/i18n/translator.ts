@@ -71,7 +71,8 @@ export class Translator {
     const key = normKey(text);
     let out = this.lookup(key, 0);
     // "Whirlwind (พายุดาบ)" (English and Thai name side by side) would read "Whirlwind (Whirlwind)".
-    if (out !== null) out = out.replace(/^(.+) \(\1\)$/s, '$1');
+    // …and "Nexus City · เมืองศูนย์กลางมิติ" would read "Nexus City · Nexus City".
+    if (out !== null) out = out.replace(/^(.+) \(\1\)$/s, '$1').replace(/^([^·]+?) · \1(?=$| )/, '$1');
     if (out !== null) {
       const lead = text.match(/^\s*/)![0];
       const trail = text.slice(lead.length).match(/\s*$/)![0];
@@ -97,7 +98,9 @@ export class Translator {
       const vals = new Map<string, string>();
       t.names.forEach((name, i) => {
         const v = m[i + 1];
-        vals.set(name, hasThai(v) ? (this.lookup(normKey(v), depth + 1) ?? v) : v);
+        const en = hasThai(v) ? this.lookup(normKey(v), depth + 1) : null;
+        // Keep the spaces the caught part had around it ("{0} คน{1}" with {1} = " · กด Enter…").
+        vals.set(name, en === null ? v : v.match(/^\s*/)![0] + en + v.match(/\s*$/)![0]);
       });
       return t.en.replace(PLACEHOLDER, (all, name: string) => vals.get(name) ?? all);
     }

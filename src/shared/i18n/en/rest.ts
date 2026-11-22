@@ -123,6 +123,11 @@ export const EN_REST: Record<string, string> = {
 
   // ---- sound, rest, megaphone
   'เพลงประกอบ': 'Music',
+  'สกิลผู้เล่น': 'Player skills',
+  'มอน': 'Monsters',
+  'ตัวละครและไอเทม': 'Character and items',
+  'หน้าต่างและการแจ้งเตือน': 'Windows and alerts',
+  'บรรยากาศแมพ': 'Map ambience',
   'เอฟเฟกต์': 'Effects',
   '{0} เสียง': '{0} volume',
   '🔊 เปิดเสียง': '🔊 Sound on',
