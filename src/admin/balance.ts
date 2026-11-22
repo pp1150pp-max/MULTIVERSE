@@ -939,6 +939,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('select', { onchange: (e: Event) => { a[k] = Number((e.target as HTMLSelectElement).value); refresh(); drawFx(); } },
         ...GFX_LEVELS.map((t, i) => h('option', { value: String(i), selected: a[k] === i }, t)).reverse()));
     const gfxOn = h('input', { type: 'checkbox', checked: a.gfxMenu, onchange: (e: Event) => { a.gfxMenu = (e.target as HTMLInputElement).checked; refresh(); } });
+    const enhSmoothOn = h('input', { type: 'checkbox', checked: a.enhAuraSmooth, onchange: (e: Event) => { a.enhAuraSmooth = (e.target as HTMLInputElement).checked; refresh(); } });
     const nearOn = h('input', { type: 'checkbox', checked: a.orbsNearBar, onchange: (e: Event) => { a.orbsNearBar = (e.target as HTMLInputElement).checked; refresh(); } });
     fxCard.replaceChildren(
       h('h2', {}, 'เอฟเฟกต์สกิล (ชั้นเสริม)'),
@@ -973,6 +974,9 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'row bal-line' }, num('plateMaxW', 10), num('platePadY', 1), num('platePadX', 1)),
       h('div', { class: 'row bal-line' }, num('bubbleMaxW', 10), num('bubblePadY', 1), num('bubblePadX', 1)),
       h('div', { class: 'muted' }, 'มีผลเฉพาะตอนเปิดสวิตช์ภาพกระดาษ (แท็บ Server) · ขนาดออร่า/ความทึบ/ระยะรอยเท้ารายชิ้นอยู่ในแท็บของแต่งตัว · กรอบชื่อ/ฟองแชทยืดตามความยาวข้อความเอง (9 ช่อง ซ้ำขอบเรียบ มุมและลายกลางไม่ถูกบีบ) ความกว้างสุดใช้กับชื่อ/ฟองธรรมดาด้วย ขอบในใช้กับกรอบกระดาษ · กรอบชื่อเปลี่ยนเมื่อมีคนสวม/ถอดหรือรีโหลด ลูกแก้วเปลี่ยนทันที'),
+      h('h3', {}, 'ออร่าตีบวกใต้เท้า (+7/+10/+13/+15)'),
+      h('div', { class: 'row bal-line' }, flag(enhSmoothOn, a.enhAuraSmooth !== ca.enhAuraSmooth, ' ขอบนุ่ม (ไม่กะพริบ)'), num('enhAuraPulse', 0.01), num('enhAuraBreath', 0.01), num('enhAuraSpeed', 0.5)),
+      h('div', { class: 'muted' }, 'ขอบนุ่ม เปิด (ค่าในโค้ด): ภาพแสงกรองแบบนุ่ม ขอบไม่กระโดดตอนหดขยาย · ปิด = ขอบพิกเซลแบบเดิม ซึ่งกะพริบตอนหดขยาย ยิ่ง +13/+15 (ใหญ่และสว่าง) ยิ่งเห็นชัด · หดขยาย 0.08 = ขนาด ±8% (ค่าเดิม) ยิ่งน้อยยิ่งนิ่ง · สว่างหรี่ 0 = ความสว่างคงที่ (ค่าเดิม) ใส่ 0.1–0.2 ให้หายใจด้วยความสว่างแทนขนาดได้ · ความเร็ว 3 = รอบละราว 2 วินาที · ประกายที่ลอยขึ้นจากออร่ายังเหมือนเดิม · มีผลกับทุกคนทันทีหลังบันทึก'),
       h('h3', {}, 'ตำแหน่งลูกแก้ว HP/MP'),
       h('div', { class: 'row bal-line' }, flag(nearOn, a.orbsNearBar !== ca.orbsNearBar, ' ลูกแก้วชิดแถบสกิล (ปิด = มุมล่างซ้าย/ขวาของจอ)')),
       h('div', { class: 'muted' }, 'เปิด (ค่าในโค้ด): บนจอคอมกว้าง ≥ 1000px ลูกแก้ว HP ชิดซ้ายของแถบสกิล MP ชิดขวา ดูเป็นแผงเดียวกัน (จอกว้าง ≥ 1850px แชทกับข้อความระบบลงมาที่มุมซ้ายล่าง) · จอแคบกว่านั้นและมือถือใช้มุมจอเหมือนเดิม (มือถือใช้แถบ HP/MP อยู่แล้ว) · ผู้เล่นที่เลือก "HP/MP: แถบ" ในเกมไม่ได้รับผล · มีผลกับทุกคนทันทีหลังบันทึก'),
