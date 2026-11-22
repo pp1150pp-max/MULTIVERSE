@@ -7,7 +7,7 @@ import {
   checkTopup, closedTopup, pickAmount, promptPayPayload, TOPUP_REFUND_SETTING, TOPUP_SETTING, topupNewError, topupToStore,
   type TopupCfg, type TopupRow, type TopupView,
 } from '../src/shared/topup';
-import type { CashPackage } from '../src/shared/cashShop';
+import { packageKey, type CashPackage } from '../src/shared/cashShop';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -40,12 +40,13 @@ export class Topup {
     const c = this.cfg();
     if (guest) return { ...closedTopup(), notice: c.notice };
     this.db.topupExpire(this.now());
+    const used = this.db.topupUsedKeys(accountId);
     const pending = this.db.topupPending(accountId).map((r) => ({
-      id: r.id, crystals: r.crystals, bonus: r.bonus, baht: r.baht, amount: r.amount, expiresAt: r.expiresAt,
+      id: r.id, crystals: r.crystals, bonus: r.bonus, first: used.has(packageKey(r)) ? 0 : r.first, baht: r.baht, amount: r.amount, expiresAt: r.expiresAt,
       // An open request keeps its QR even if the owner switched top-up off since (they may confirm it).
       qr: c.promptpay ? promptPayPayload(c.promptpay, r.amount) : '',
     }));
-    return { open: this.live(c), notice: c.notice, pending, maxPending: c.maxPending };
+    return { open: this.live(c), notice: c.notice, pending, maxPending: c.maxPending, used: [...used] };
   }
 
   /** A player asks for a package; every value from the browser is checked here. */
@@ -56,11 +57,12 @@ export class Topup {
     if (err) return { ok: false, msg: err };
     if (this.db.topupCountSince(b.accountId, now - DAY) >= c.perDay) return { ok: false, msg: `ขอเติมได้ไม่เกิน ${c.perDay} ครั้งต่อวัน ลองใหม่ภายหลัง` };
     const baht = b.baht as number;
+    const pkg = b.packages.find((x) => x.crystals === b.crystals && x.bonus === b.bonus && x.baht === baht)!;
     const amount = pickAmount(baht, this.db.topupOpenAmounts());
     if (amount === null) return { ok: false, msg: 'มีคนขอเติมยอดนี้อยู่มาก ลองใหม่ภายหลัง' };
     this.db.topupInsert({
       accountId: b.accountId, username: b.username, charName: b.charName, crystals: b.crystals as number, bonus: b.bonus as number,
-      baht, amount, at: now, expiresAt: now + c.expireHours * 60 * 60 * 1000,
+      first: pkg.first ?? 0, baht, amount, at: now, expiresAt: now + c.expireHours * 60 * 60 * 1000,
     });
     return { ok: true, msg: 'สร้างคำขอเติมแล้ว สแกน QR แล้วโอนตามยอดที่แสดง' };
   }
@@ -79,8 +81,13 @@ export class Topup {
       if (!this.db.topupSetStatus(id, ['pending', 'expired', 'cancelled'], 'confirmed', by, this.now(), true)) {
         return { ok: false as const, msg: 'คำขอนี้ยืนยัน/ปฏิเสธไปแล้ว หรือไม่มีอยู่' };
       }
-      const row = this.db.topupGet(id)!;
-      if (this.db.crystalsAdd(row.accountId, row.crystals + row.bonus) === null) throw new Error('topup confirm: account missing');
+      let row = this.db.topupGet(id)!;
+      // First-purchase bonus only if the account has no other confirmed top-up of this package (counted at confirm, owner 2026-11-22).
+      if (row.first && this.db.topupUsedKeys(row.accountId, id).has(packageKey(row))) {
+        this.db.topupNoFirst(id);
+        row = { ...row, first: 0 };
+      }
+      if (this.db.crystalsAdd(row.accountId, row.crystals + row.bonus + row.first) === null) throw new Error('topup confirm: account missing');
       return { ok: true as const, row };
     });
   }
@@ -100,7 +107,7 @@ export class Topup {
     return this.db.transaction(() => {
       if (!this.db.topupSetStatus(id, ['confirmed'], 'reversed', by, this.now())) return { ok: false as const, msg: 'คำขอนี้ไม่ได้อยู่ในสถานะยืนยันแล้ว' };
       const row = this.db.topupGet(id)!;
-      const n = row.crystals + row.bonus;
+      const n = row.crystals + row.bonus + row.first;
       if (this.db.crystalsAdd(row.accountId, -n) === null) {
         const have = this.db.crystals(row.accountId);
         throw new ReverseShort(`ย้อนไม่ได้: ผู้เล่นใช้คริสตัลไปแล้ว เหลือ ${have.toLocaleString('en-US')} จาก ${n.toLocaleString('en-US')}`);

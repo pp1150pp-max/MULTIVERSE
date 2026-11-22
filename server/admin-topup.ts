@@ -25,7 +25,7 @@ function state(db: Db, world: GameWorld, a: Admin): AdminTopup {
   };
 }
 
-const what = (r: TopupRow) => `#${r.id} ยอด ${bahtText(r.amount)} บาท · ${r.crystals.toLocaleString('en-US')}+${r.bonus.toLocaleString('en-US')} คริสตัล (${r.charName})`;
+const what = (r: TopupRow) => `#${r.id} ยอด ${bahtText(r.amount)} บาท · ${r.crystals.toLocaleString('en-US')}+${r.bonus.toLocaleString('en-US')}${r.first ? ` +ครั้งแรก ${r.first.toLocaleString('en-US')}` : ''} คริสตัล (${r.charName})`;
 
 /** Handles the top-up routes; returns false for any other path. */
 export async function topupAdminApi(
@@ -87,7 +87,7 @@ export async function topupAdminApi(
   }
   if (!r.ok) throw new HttpError(409, r.msg);
   const row = r.row;
-  const n = (row.crystals + row.bonus).toLocaleString('en-US');
+  const n = (row.crystals + row.bonus + row.first).toLocaleString('en-US');
   log(db, a, `topup-${op}`, row.username, what(row));
   if (op !== 'reject') world.crystalsChanged(row.accountId);
   world.topupChanged(row.accountId, op === 'confirm'

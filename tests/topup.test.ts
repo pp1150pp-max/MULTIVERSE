@@ -14,7 +14,8 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { finish, ok } from './check';
-import { bahtText, checkTopup, crc16, pickAmount, promptPayId, promptPayPayload, topupNewError } from '../src/shared/topup';
+import { bahtText, checkTopup, crc16, firstBonus, pickAmount, promptPayId, promptPayPayload, topupNewError } from '../src/shared/topup';
+import { cashCatalog, checkCashShop, pctPrice } from '../src/shared/cashShop';
 
 // ------------------------------------------------------------ pure checks
 
@@ -41,11 +42,26 @@ import { bahtText, checkTopup, crc16, pickAmount, promptPayId, promptPayPayload,
   ok(!!checkTopup({ promptpay: '12' }, true).error, 'bad number refused');
   ok(!!checkTopup({ expireHours: 0 }, true).error && !!checkTopup({ colour: 1 }, true).error, 'bad hours / unknown field refused');
   ok(checkTopup({ expireHours: 0, maxPending: 3 }, false).value?.maxPending === 3, 'lenient read keeps the good parts');
-  const v = { open: true, notice: '', pending: [], maxPending: 1 };
+  const v = { open: true, notice: '', pending: [], maxPending: 1, used: [] as string[] };
   const pk = [{ crystals: 100, bonus: 10, baht: 35 }];
   ok(topupNewError(v, pk, { crystals: 100, bonus: 10, baht: 35 }, false) === null, 'a listed package is fine');
   ok(topupNewError(v, pk, { crystals: 100, bonus: 99, baht: 35 }, false) !== null, 'a changed package refused');
   ok(topupNewError(v, pk, { crystals: 100, bonus: 10, baht: 35 }, true) !== null, 'guests refused');
+  // First-purchase bonus per package (owner 2026-11-22).
+  ok(firstBonus(v, { crystals: 100, bonus: 10, baht: 35, first: 20 }) === 20 && firstBonus({ ...v, used: ['35:100'] }, { crystals: 100, bonus: 10, baht: 35, first: 20 }) === 0, 'first bonus until the package was bought');
+  ok(checkCashShop({ packages: [{ crystals: 100, bonus: 0, baht: 35, first: 50 }] }, true, {}).value?.packages[0].first === 50, 'package first bonus kept');
+  ok(checkCashShop({ packages: [{ crystals: 100, bonus: 0, baht: 35, first: 0 }] }, true, {}).value?.packages[0].first === undefined, 'first 0 not stored');
+  ok(!!checkCashShop({ packages: [{ crystals: 100, bonus: 0, baht: 35, first: -1 }] }, true, {}).error, 'negative first refused');
+  ok(!!checkCashShop({ packages: [{ crystals: 100, bonus: 0, baht: 35 }, { crystals: 100, bonus: 5, baht: 35 }] }, true, {}).error, 'two packages with the same baht + crystals refused');
+  // Percent sale on cash shop items.
+  ok(pctPrice(100, 20) === 80 && pctPrice(150, 15) === 127 && pctPrice(2, 99) === 1 && pctPrice(5, 1) === 4, 'percent price: rounded down, at least 1, below full');
+  ok(checkCashShop({ items: { 'stone:enhance': { pct: 20 } } }, true, {}).value?.items['stone:enhance']?.pct === 20, 'percent sale kept');
+  ok(!!checkCashShop({ items: { 'stone:enhance': { pct: 100 } } }, true, {}).error && !!checkCashShop({ items: { 'stone:enhance': { pct: 0 } } }, true, {}).error, 'percent outside 1–99 refused');
+  ok(!!checkCashShop({ items: { 'stone:enhance': { pct: 20, sale: 50 } } }, true, {}).error, 'price sale and percent together refused');
+  ok(!!checkCashShop({ items: { 'cos:wings_angel': { pct: 20 } } }, true, {}).error, 'percent on an unpriced cosmetic refused');
+  const pcat = cashCatalog(checkCashShop({ open: true, items: { 'stone:enhance': { pct: 25 }, 'cos:wings_angel': { pct: 10 } } }, true, { wings_angel: { price: 120 } }).value!, { wings_angel: { price: 150 } }, Date.now());
+  ok(pcat.items.find((i) => i.id === 'stone:enhance')?.now === 75 && pcat.items.find((i) => i.id === 'stone:enhance')?.pct === 25, 'catalogue: 25% off 100 = 75');
+  ok(pcat.items.find((i) => i.id === 'cos:wings_angel')?.now === 135, 'percent follows the cosmetic price when it changes (150 → 135)');
 }
 
 // ------------------------------------------------------------ the real server
@@ -162,7 +178,7 @@ async function run(): Promise<void> {
   // A package on the cash shop tab (the shop itself may stay closed).
   const cs = await api('GET', '/admin/cash-shop', undefined, ownerTok);
   const pkg = { crystals: 100, bonus: 10, baht: 35 };
-  ok((await api('POST', '/admin/cash-shop', { cfg: { open: false, items: {}, packages: [pkg] }, base: { cfg: cs.data.cfg, cosShop: cs.data.cosShop } }, ownerTok)).status === 200, 'package saved');
+  ok((await api('POST', '/admin/cash-shop', { cfg: { open: false, items: {}, packages: [{ ...pkg, first: 20 }] }, base: { cfg: cs.data.cfg, cosShop: cs.data.cosShop } }, ownerTok)).status === 200, 'package saved');
 
   // ---- admin routes
   const t0 = await api('GET', '/admin/topup', undefined, ownerTok);
@@ -203,7 +219,7 @@ async function run(): Promise<void> {
   ok(r.ok, `A asks (${r.msg})`);
   await sleep(150);
   const pa = A.view().pending[0];
-  ok(pa && pa.amount > 3500 && pa.amount < 3600 && pa.crystals === 100 && pa.bonus === 10, `A has an open request (${JSON.stringify(pa)})`);
+  ok(pa && pa.amount > 3500 && pa.amount < 3600 && pa.crystals === 100 && pa.bonus === 10 && pa.first === 20, `A has an open request (${JSON.stringify(pa)})`);
   ok(pa.qr.includes('01130066899999999') && pa.qr.includes(`54${String(bahtText(pa.amount).length).padStart(2, '0')}${bahtText(pa.amount)}`) && crc16(pa.qr.slice(0, -4)).toString(16).toUpperCase().padStart(4, '0') === pa.qr.slice(-4), 'its QR: the number, the exact amount, a good CRC');
   r = await A.ask(pkg);
   ok(!r.ok && r.msg.includes('รอยืนยัน'), `a second open request refused (${r.msg})`);
@@ -217,11 +233,11 @@ async function run(): Promise<void> {
   ok((await api('POST', `/admin/topup/${pa.id}/confirm`, {}, gmTok)).status === 403, 'a GM cannot confirm');
   ok((await api('POST', `/admin/topup/${pa.id}/confirm`, {}, tokA)).status === 403, 'a player cannot confirm');
   const c1 = await api('POST', `/admin/topup/${pa.id}/confirm`, {}, ownerTok);
-  ok(c1.status === 200 && crystals('payera') === 110, `owner confirms: 110 crystals (${c1.status} ${crystals('payera')})`);
-  ok((await api('POST', `/admin/topup/${pa.id}/confirm`, {}, ownerTok)).status === 409 && crystals('payera') === 110, 'confirming twice: 409, nothing more');
+  ok(c1.status === 200 && crystals('payera') === 130, `owner confirms: 100 + 10 bonus + 20 first = 130 (${c1.status} ${crystals('payera')})`);
+  ok((await api('POST', `/admin/topup/${pa.id}/confirm`, {}, ownerTok)).status === 409 && crystals('payera') === 130, 'confirming twice: 409, nothing more');
   ok((await api('POST', `/admin/topup/${pa.id}/reject`, {}, ownerTok)).status === 409, 'rejecting a confirmed one: 409');
   await sleep(200);
-  ok(A.crystals() === 110 && A.view().pending.length === 0, 'A sees the crystals and no open request');
+  ok(A.crystals() === 130 && A.view().pending.length === 0 && A.view().used.includes('35:100'), 'A sees the crystals, no open request, the package used');
   ok(A.msgs.some((m) => m.t === 'chat' && String(m.text).includes('เติมคริสตัลมิติสำเร็จ')), 'A is told');
 
   // ---- B cancels, but had paid: the owner can still confirm it
@@ -229,25 +245,26 @@ async function run(): Promise<void> {
   ok(r.ok, `B cancels (${r.msg})`);
   r = await A.cancel(pb.id);
   ok(!r.ok, 'A cannot cancel B\'s request');
-  ok((await api('POST', `/admin/topup/${pb.id}/confirm`, {}, ownerTok)).status === 200 && crystals('payerb') === 110, 'a cancelled request is still confirmable');
+  ok((await api('POST', `/admin/topup/${pb.id}/confirm`, {}, ownerTok)).status === 200 && crystals('payerb') === 130, 'a cancelled request is still confirmable (with its first bonus)');
 
   // ---- expired, then rejected
   r = await A.ask(pkg);
   ok(r.ok, `A asks again (${r.msg})`);
   await sleep(150);
   const pa2 = A.view().pending[0];
+  ok(pa2.first === 0, 'second request of the same package: no first bonus offered');
   db.prepare('UPDATE topups SET expires_at = ? WHERE id = ?').run(Date.now() - 1000, pa2.id);
   const list = await api('GET', '/admin/topup', undefined, ownerTok);
   ok(list.data.rows.find((x: any) => x.id === pa2.id)?.status === 'expired', 'an old open request shows expired');
   ok((await api('POST', `/admin/topup/${pa2.id}/reject`, {}, ownerTok)).status === 200, 'expired: rejected');
   ok((await api('POST', `/admin/topup/${pa2.id}/reject`, {}, ownerTok)).status === 409, 'rejecting twice: 409');
-  ok(crystals('payera') === 110, 'reject gives nothing');
+  ok(crystals('payera') === 130, 'reject gives nothing');
 
   // ---- reverse
   setCrystals('payerb', 50);
   const rv = await api('POST', `/admin/topup/${pb.id}/reverse`, {}, ownerTok);
   ok(rv.status === 409 && crystals('payerb') === 50 && (db.prepare('SELECT status FROM topups WHERE id = ?').get(pb.id) as { status: string }).status === 'confirmed', `reverse with crystals already spent: refused, unchanged (${rv.data.error})`);
-  setCrystals('payerb', 110);
+  setCrystals('payerb', 130);
   ok((await api('POST', `/admin/topup/${pb.id}/reverse`, {}, ownerTok)).status === 200 && crystals('payerb') === 0, 'reverse takes the crystals back');
   ok((await api('POST', `/admin/topup/${pb.id}/reverse`, {}, ownerTok)).status === 409 && crystals('payerb') === 0, 'reversing twice: 409');
   const acts = (db.prepare("SELECT action FROM admin_audit WHERE action LIKE 'topup-%'").all() as { action: string }[]).map((x) => x.action);
@@ -273,18 +290,27 @@ async function run(): Promise<void> {
   const B2 = joinWorld(tokB, idB);
   await Promise.all([A2.ready, B2.ready]);
   await sleep(200);
-  ok(crystals('payera') === 110 && A2.crystals() === 110, `A gets 110 back (${crystals('payera')})`);
+  ok(crystals('payera') === 130 && A2.crystals() === 130, `A gets 130 back, first bonus included (${crystals('payera')})`);
   ok(crystals('payerb') === 0, `B: reversed one and the one after the switch not refunded (${crystals('payerb')})`);
   await A2.close();
   await B2.close();
   const A3 = joinWorld(tokA, idA);
   await A3.ready;
   await sleep(200);
-  ok(crystals('payera') === 110, 'only once per account');
+  ok(crystals('payera') === 130, 'only once per account');
   const rf = db.prepare("SELECT COUNT(*) AS n FROM admin_audit WHERE action = 'topup-refund'").get() as { n: number };
   ok(Number(rf.n) === 1, 'refund in the audit once');
   await A3.close();
   await G.close();
+  // First bonus is decided at confirm: two requests of one package both offering it, only the first confirmed gets it.
+  const gmAcc = acc('topgm');
+  const ins = db.prepare(`INSERT INTO topups (account_id, username, char_name, crystals, bonus, first_bonus, baht, amount, status, created_at, expires_at)
+    VALUES (?, 'topgm', '-', 100, 10, 20, 35, ?, 'cancelled', ?, ?)`);
+  const g1 = Number(ins.run(gmAcc, 3501, Date.now(), Date.now()).lastInsertRowid);
+  const g2 = Number(ins.run(gmAcc, 3502, Date.now(), Date.now()).lastInsertRowid);
+  ok((await api('POST', `/admin/topup/${g1}/confirm`, {}, ownerTok)).status === 200 && crystals('topgm') === 130, 'first confirm: with first bonus');
+  const c2 = await api('POST', `/admin/topup/${g2}/confirm`, {}, ownerTok);
+  ok(c2.status === 200 && crystals('topgm') === 240 && c2.data.rows.find((x: any) => x.id === g2)?.first === 0, `second confirm of the package: no first bonus (${crystals('topgm')})`);
   ok(!out.includes('899999999'), 'the PromptPay number never in the server output');
   db.close();
 }

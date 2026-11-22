@@ -435,6 +435,10 @@ export class Db {
         at INTEGER NOT NULL
       );
     `);
+    // First-purchase bonus of the package (offered when asked; set to 0 at confirm if the account already had that package).
+    if (!(this.db.prepare('PRAGMA table_info(topups)').all() as { name: string }[]).some((c) => c.name === 'first_bonus')) {
+      this.db.exec('ALTER TABLE topups ADD COLUMN first_bonus INTEGER NOT NULL DEFAULT 0');
+    }
     // Admin roles the owner changed or added on the Permissions tab. 'gm' gets a row only once changed;
     // 'owner' never has one. `features` = JSON of only what differs from FEATURE_ROLES (feature → on/off).
     this.db.exec(`
@@ -1042,9 +1046,9 @@ export class Db {
     return Number((this.db.prepare('SELECT COUNT(*) AS n FROM topups WHERE account_id = ? AND created_at >= ?').get(accountId, since) as { n: number }).n);
   }
 
-  topupInsert(r: { accountId: number; username: string; charName: string; crystals: number; bonus: number; baht: number; amount: number; at: number; expiresAt: number }): number {
-    const x = this.db.prepare(`INSERT INTO topups (account_id, username, char_name, crystals, bonus, baht, amount, status, created_at, expires_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`).run(r.accountId, r.username, r.charName, r.crystals, r.bonus, r.baht, r.amount, r.at, r.expiresAt);
+  topupInsert(r: { accountId: number; username: string; charName: string; crystals: number; bonus: number; first: number; baht: number; amount: number; at: number; expiresAt: number }): number {
+    const x = this.db.prepare(`INSERT INTO topups (account_id, username, char_name, crystals, bonus, first_bonus, baht, amount, status, created_at, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`).run(r.accountId, r.username, r.charName, r.crystals, r.bonus, r.first, r.baht, r.amount, r.at, r.expiresAt);
     return Number(x.lastInsertRowid);
   }
 
@@ -1052,7 +1056,7 @@ export class Db {
     const n = (v: unknown) => (v === null || v === undefined ? null : Number(v));
     return {
       id: Number(r.id), accountId: Number(r.account_id), username: String(r.username), charName: String(r.char_name),
-      crystals: Number(r.crystals), bonus: Number(r.bonus), baht: Number(r.baht), amount: Number(r.amount), status: String(r.status) as TopupStatus,
+      crystals: Number(r.crystals), bonus: Number(r.bonus), first: Number(r.first_bonus ?? 0), baht: Number(r.baht), amount: Number(r.amount), status: String(r.status) as TopupStatus,
       createdAt: Number(r.created_at), expiresAt: Number(r.expires_at), decidedAt: n(r.decided_at), decidedBy: r.decided_by === null ? null : String(r.decided_by),
       confirmedAt: n(r.confirmed_at),
     };
@@ -1083,15 +1087,26 @@ export class Db {
     return Number(r.changes) === 1;
   }
 
+  /** The packages (`packageKey`) the account has a confirmed top-up of, other than request `except`. */
+  topupUsedKeys(accountId: number, except = -1): Set<string> {
+    const rows = this.db.prepare("SELECT DISTINCT baht, crystals FROM topups WHERE account_id = ? AND status = 'confirmed' AND id != ?").all(accountId, except) as { baht: number; crystals: number }[];
+    return new Set(rows.map((r) => `${Number(r.baht)}:${Number(r.crystals)}`));
+  }
+
+  /** A confirm found the first-purchase bonus already used: the request gives none. */
+  topupNoFirst(id: number): void {
+    this.db.prepare('UPDATE topups SET first_bonus = 0 WHERE id = ?').run(id);
+  }
+
   /** Every confirmed top-up: how many, money in satang, crystals with bonus. */
   topupTotals(): { count: number; amount: number; crystals: number } {
-    const r = this.db.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS b, COALESCE(SUM(crystals + bonus), 0) AS c FROM topups WHERE status = 'confirmed'").get() as Record<string, number>;
+    const r = this.db.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS b, COALESCE(SUM(crystals + bonus + first_bonus), 0) AS c FROM topups WHERE status = 'confirmed'").get() as Record<string, number>;
     return { count: Number(r.n), amount: Number(r.b), crystals: Number(r.c) };
   }
 
   /** Crystals with bonus the account got from top-ups confirmed up to `until` and not reversed. */
   topupRefundDue(accountId: number, until: number): number {
-    const r = this.db.prepare("SELECT COALESCE(SUM(crystals + bonus), 0) AS c FROM topups WHERE account_id = ? AND status = 'confirmed' AND confirmed_at <= ?").get(accountId, until) as { c: number };
+    const r = this.db.prepare("SELECT COALESCE(SUM(crystals + bonus + first_bonus), 0) AS c FROM topups WHERE account_id = ? AND status = 'confirmed' AND confirmed_at <= ?").get(accountId, until) as { c: number };
     return Number(r.c);
   }
 

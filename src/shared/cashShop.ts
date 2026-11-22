@@ -42,6 +42,8 @@ export interface CashItemCfg {
   price?: number;
   /** Sale price, below the full price. */
   sale?: number;
+  /** Or a sale in percent off the full price (1–99; owner 2026-11-22), never both. Follows the full price when it changes. */
+  pct?: number;
   /** Most one account may ever buy (stones; a cosmetic is always once). */
   limit?: number;
   /** On sale from / until (ms since 1970; the admin page types Thai time). */
@@ -52,8 +54,18 @@ export interface CashItemCfg {
   featured?: true;
 }
 
-/** A top-up package: what a PromptPay top-up gives for its baht (src/shared/topup.ts). */
-export interface CashPackage { crystals: number; bonus: number; baht: number }
+/**
+ * A top-up package: what a PromptPay top-up gives for its baht (src/shared/topup.ts). `first` = extra
+ * crystals the first time an account tops up with this package (owner 2026-11-22; a package is known by
+ * its baht + crystals, `packageKey`).
+ */
+export interface CashPackage { crystals: number; bonus: number; baht: number; first?: number }
+
+/** Which package a top-up was (changing a package's baht or crystals makes it a new one for "ครั้งแรก"). */
+export const packageKey = (p: { baht: number; crystals: number }): string => `${p.baht}:${p.crystals}`;
+
+/** Sale price for `pct` percent off `full` (rounded down, at least 1, below the full price). */
+export const pctPrice = (full: number, pct: number): number => Math.max(1, Math.min(full - 1, Math.floor((full * (100 - pct)) / 100)));
 
 export interface CashShopCfg {
   /** Players may buy (otherwise look only). */
@@ -127,11 +139,15 @@ export function checkCashShop(v: unknown, strict: boolean, cosShop: CosShop): Ch
   if (strict && pk.length > CASH_PACKAGES_MAX) return { error: `แพ็กเกจมีได้ไม่เกิน ${CASH_PACKAGES_MAX} แบบ` };
   for (const [i, p] of pk.slice(0, CASH_PACKAGES_MAX).entries()) {
     const x = (p && typeof p === 'object' ? p : {}) as Record<string, unknown>;
-    if (isInt(x.crystals, 1, CASH_PRICE_MAX) && isInt(x.bonus, 0, CASH_PRICE_MAX) && isInt(x.baht, 1, CASH_BAHT_MAX)
-      && !(strict && Object.keys(x).some((k) => !['crystals', 'bonus', 'baht'].includes(k)))) {
-      out.packages.push({ crystals: x.crystals, bonus: x.bonus, baht: x.baht });
+    const first = x.first === undefined || x.first === null ? 0 : x.first;
+    if (isInt(x.crystals, 1, CASH_PRICE_MAX) && isInt(x.bonus, 0, CASH_PRICE_MAX) && isInt(x.baht, 1, CASH_BAHT_MAX) && isInt(first, 0, CASH_PRICE_MAX)
+      && !(strict && Object.keys(x).some((k) => !['crystals', 'bonus', 'baht', 'first'].includes(k)))) {
+      if (strict && out.packages.some((q) => packageKey(q) === packageKey({ baht: x.baht as number, crystals: x.crystals as number }))) {
+        return { error: `แพ็กเกจที่ ${i + 1}: ราคาและจำนวนคริสตัลซ้ำกับแพ็กอื่น` };
+      }
+      out.packages.push({ crystals: x.crystals, bonus: x.bonus, baht: x.baht, ...(first ? { first } : {}) });
     } else if (strict) {
-      return { error: `แพ็กเกจที่ ${i + 1}: คริสตัล 1–${CASH_PRICE_MAX.toLocaleString('en-US')} โบนัส 0 ขึ้นไป ราคา 1–${CASH_BAHT_MAX.toLocaleString('en-US')} บาท (จำนวนเต็ม)` };
+      return { error: `แพ็กเกจที่ ${i + 1}: คริสตัล 1–${CASH_PRICE_MAX.toLocaleString('en-US')} โบนัส/ครั้งแรก 0 ขึ้นไป ราคา 1–${CASH_BAHT_MAX.toLocaleString('en-US')} บาท (จำนวนเต็ม)` };
     }
   }
   return { value: out };
@@ -143,7 +159,7 @@ function checkCashItem(id: string, v: unknown, strict: boolean, cosShop: CosShop
   if (!v || typeof v !== 'object' || Array.isArray(v)) return bad('ค่าไม่ถูกต้อง');
   const g = v as Record<string, unknown>;
   const ref = cashRef(id)!;
-  const keys = ['off', 'price', 'sale', 'limit', 'start', 'end', 'badge', 'featured'];
+  const keys = ['off', 'price', 'sale', 'pct', 'limit', 'start', 'end', 'badge', 'featured'];
   if (strict) {
     const extra = Object.keys(g).find((k) => !keys.includes(k));
     if (extra) return bad(`ไม่รู้จักค่า "${extra.slice(0, 20)}"`);
@@ -170,6 +186,14 @@ function checkCashItem(id: string, v: unknown, strict: boolean, cosShop: CosShop
     else if (full === undefined) { if (strict) return bad('ยังไม่มีราคาเต็ม ตั้งราคาลดไม่ได้'); }
     else if (g.sale >= full) { if (strict) return bad(`ราคาลดต้องน้อยกว่าราคาเต็ม (${full})`); }
     else e.sale = g.sale;
+  }
+  if (opt('pct') !== undefined) {
+    const full = ref.kind === 'cos' ? cosPrice(cosShop, ref.ref) : (e.price ?? CASH_STONE_PRICE[ref.ref]);
+    if (!isInt(g.pct, 1, 99)) { if (strict) return bad('ลด % ต้องเป็นจำนวนเต็ม 1–99'); }
+    else if (e.sale !== undefined) { if (strict) return bad('ใส่ราคาลดได้แบบเดียว (ราคา หรือ %)'); }
+    else if (full === undefined) { if (strict) return bad('ยังไม่มีราคาเต็ม ตั้งราคาลดไม่ได้'); }
+    else if (full < 2) { if (strict) return bad('ราคาเต็ม 1 ลดไม่ได้'); }
+    else e.pct = g.pct;
   }
   for (const k of ['start', 'end'] as const) {
     if (opt(k) === undefined) continue;
@@ -203,6 +227,8 @@ export interface CashEntry {
   /** Full price, and the price now (the sale price, or the full one). */
   price: number;
   now: number;
+  /** The sale was set in percent (shown as "-20%"). */
+  pct?: number;
   /** Most one account may buy (cosmetics: 1). */
   limit?: number;
   start?: number;
@@ -233,9 +259,10 @@ export function cashCatalog(cfg: CashShopCfg, cosShop: CosShop, now: number): Ca
       limit = 1;
     } else price = c.price ?? CASH_STONE_PRICE[r.ref];
     if (price === undefined) continue;
-    const sale = c.sale !== undefined && c.sale < price ? c.sale : undefined;
+    const pct = c.pct !== undefined && price >= 2 ? c.pct : undefined;
+    const sale = pct !== undefined ? pctPrice(price, pct) : c.sale !== undefined && c.sale < price ? c.sale : undefined;
     items.push({
-      id, kind: r.kind, ref: r.ref, price, now: sale ?? price,
+      id, kind: r.kind, ref: r.ref, price, now: sale ?? price, ...(pct !== undefined ? { pct } : {}),
       ...(limit !== undefined ? { limit } : {}), ...(c.start !== undefined && c.start > now ? { start: c.start } : {}),
       ...(c.end !== undefined ? { end: c.end } : {}), ...(c.badge ? { badge: c.badge } : {}), featured: !!c.featured,
     });
@@ -283,7 +310,7 @@ export function cashShopChanges(before: CashShopCfg, after: CashShopCfg): string
     if (show(before.items[id]) !== show(after.items[id])) out.push(`${id}: ${show(before.items[id])} → ${show(after.items[id])}`);
   }
   if (JSON.stringify(before.packages) !== JSON.stringify(after.packages)) {
-    out.push(`แพ็กเกจ: ${after.packages.map((p) => `${p.crystals}+${p.bonus}=${p.baht}฿`).join(' ') || 'ไม่มี'}`);
+    out.push(`แพ็กเกจ: ${after.packages.map((p) => `${p.crystals}+${p.bonus}${p.first ? ` (ครั้งแรก+${p.first})` : ''}=${p.baht}฿`).join(' ') || 'ไม่มี'}`);
   }
   return out.join(', ');
 }
