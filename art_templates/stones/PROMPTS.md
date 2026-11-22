@@ -40,3 +40,11 @@ Item:
 | `stone_exp_scroll.png` | ใบคูณ EXP 100% | `a rolled parchment scroll tied with a green ribbon and a gold wax seal stamped with an upward arrow, one end slightly unrolled to show a glowing emerald-green rune, with soft green magical sparkles around it` |
 | `stone_drop_scroll.png` | ใบคูณดรอป 100% | `a rolled parchment scroll tied with a purple ribbon and a gold wax seal stamped with a small treasure chest, one end slightly unrolled to show a glowing amber-gold rune, with a few tiny gold coins and sparkles floating around it` |
 | `stone_megaphone.png` | โทรโข่ง | `a handheld brass megaphone horn with a worn leather grip and riveted bronze bands, pointing to the right, with three small curved sound-wave lines coming out of the wide end` |
+
+## กล่องปริศนา (ดรอปจากมอนและบอส)
+
+ใช้ส่วนสไตล์เดียวกับด้านบน เซฟที่ `art_templates/stones/raw/` แล้วตัดด้วยคำสั่งเดียวกัน
+
+| ไฟล์ | ของ | คำอธิบาย |
+|---|---|---|
+| `stone_mystery_box.png` | กล่องปริศนา | `a small ornate treasure box made of dark purple wood with gold corner trims and a gold clasp, a large glowing golden question mark emblem on the front, the lid slightly lifted with soft rainbow-colored light and tiny sparkles spilling out from the gap` |
