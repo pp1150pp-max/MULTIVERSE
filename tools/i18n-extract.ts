@@ -31,8 +31,9 @@ function files(dir: string): string[] {
 
 /** One rendered text = one key: cut at HTML tags and entities' neighbours, keep the Thai pieces. */
 function pieces(s: string): string[] {
-  return s
-    .split(/<[^>]*>/)
+  // Attributes the page shows (title="…" inside an HTML string) are texts of their own.
+  const attrs = [...s.matchAll(/\b(?:title|placeholder|aria-label|alt)="([^"]*)"/g)].map((m) => m[1]!);
+  return [...s.split(/<[^>]*>/), ...attrs]
     .map((p) => p.replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&'))
     .map((p) => {
       // Placeholders renumbered from 0 in each piece.
