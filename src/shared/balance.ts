@@ -55,6 +55,8 @@ export const CODE_BUFF_DUR_SUMMONS = true;
 export const CODE_FORGE_AUTO = true;
 /** Click-to-walk carries on when the browser tab is hidden: the server walks the rest of the way (owner 2026-11-18: on). */
 export const CODE_WALK_HIDDEN = true;
+/** Wearing/taking off gear is refused (browser side) while the merchant's window is open, so a click meant to wear cannot sell (owner 2026-11-22). */
+export const CODE_SHOP_NO_EQUIP = true;
 /** The hub town split into channels like the farm maps (owner 2026-11-22); off = one room as before. */
 export const CODE_HUB_CHANNELS = true;
 /** Boss room: the boss keeps its HP and waits when the whole group is down (owner 2026-11-17); off = it walks home and heals. */
@@ -70,6 +72,11 @@ export const CODE_HEART_BLAST_MIN_DIST = 6;
 export const CODE_HEART_BLAST_REACH = 0.7;
 /** Seconds between entering a boss room and its boss appearing (owner 2026-11-20: 13, was 5). */
 export const CODE_ROOM_BOSS_DELAY = 13;
+/** Boss-room boss drops spread over the arena, wider the more pieces drop (owner 2026-11-22: on). Radius = base + k x sqrt(pieces), capped. */
+export const CODE_BOSS_LOOT_SPREAD = true;
+export const CODE_BOSS_LOOT_BASE = 2.5;
+export const CODE_BOSS_LOOT_K = 0.8;
+export const CODE_BOSS_LOOT_MAX = 12;
 /** No damage for a moment after getting up with a phoenix feather in a boss room (owner 2026-11-20: on). */
 export const CODE_REVIVE_GUARD = true;
 /** How long that lasts, in seconds (owner: 5); attacking, a skill, a buff or a dash ends it at once. */
@@ -186,6 +193,8 @@ export interface Balance {
   forge: ForgeConfig;
   /** A clicked walk goes on while the tab is hidden (server walks to the spot); off = the character stops as before. */
   walkHidden: boolean;
+  /** No wearing/taking off gear (or fashion items) while the merchant window is open. Browser side only. */
+  shopNoEquip: boolean;
   /** The hub town (nexus_city) split into channels CH 1–10 like the farm maps; off = one room (CH 1). Used on the next entry into town. */
   hubChannels: boolean;
   /** Boss room: when every player is down the boss keeps its HP and waits (no walking home, healing or reset); off = the old behaviour. */
@@ -199,6 +208,12 @@ export interface Balance {
   heartBlastSpots: number;
   heartBlastMinDist: number;
   heartBlastReach: number;
+  /** A boss-room boss spreads its drops over the arena (off = the old 0.5-2.5 scatter). */
+  bossLootSpread: boolean;
+  /** Spread radius for one piece, the extra per square root of the piece count, and the cap (world units). */
+  bossLootBase: number;
+  bossLootK: number;
+  bossLootMax: number;
   /** Untouchable (no damage or boss effects, blinking) for a moment after a phoenix-feather revive in a boss room. */
   reviveGuard: boolean;
   /** How long that lasts; any attack, skill, buff or dash ends it early. */
@@ -270,6 +285,8 @@ export interface BalanceTuning {
   forge?: ForgeTuning;
   /** Walking on in a hidden tab, when not the code's (on). */
   walkHidden?: boolean;
+  /** No wear/take off while the merchant window is open, when not the code's (on). */
+  shopNoEquip?: boolean;
   /** Hub split into channels, when not the code's (on). */
   hubChannels?: boolean;
   /** Boss keeps its HP when the group is all down, when not the code's (on). */
@@ -282,6 +299,10 @@ export interface BalanceTuning {
   heartBlastSpots?: number;
   heartBlastMinDist?: number;
   heartBlastReach?: number;
+  bossLootSpread?: boolean;
+  bossLootBase?: number;
+  bossLootK?: number;
+  bossLootMax?: number;
   /** Phoenix-feather revive guard, when not the code's (on). */
   reviveGuard?: boolean;
   /** Its seconds, when not the code's. */
@@ -333,6 +354,9 @@ export const BALANCE_RANGE = {
   heartBlastSpots: [1, 12],
   heartBlastMinDist: [0, 20],
   heartBlastReach: [0.3, 1],
+  bossLootBase: [0.5, 10],
+  bossLootK: [0, 5],
+  bossLootMax: [1, 30],
   reviveGuardSec: [1, 30],
 } as const satisfies Record<string, readonly [number, number]>;
 
@@ -376,6 +400,7 @@ export function codeBalance(): Balance {
     forgeAuto: CODE_FORGE_AUTO,
     forge: codeForge(),
     walkHidden: CODE_WALK_HIDDEN,
+    shopNoEquip: CODE_SHOP_NO_EQUIP,
     hubChannels: CODE_HUB_CHANNELS,
     bossWipeKeepHp: CODE_BOSS_WIPE_KEEP_HP,
     roomWipeSec: CODE_ROOM_WIPE_SECONDS,
@@ -384,6 +409,10 @@ export function codeBalance(): Balance {
     heartBlastSpots: CODE_HEART_BLAST_SPOTS,
     heartBlastMinDist: CODE_HEART_BLAST_MIN_DIST,
     heartBlastReach: CODE_HEART_BLAST_REACH,
+    bossLootSpread: CODE_BOSS_LOOT_SPREAD,
+    bossLootBase: CODE_BOSS_LOOT_BASE,
+    bossLootK: CODE_BOSS_LOOT_K,
+    bossLootMax: CODE_BOSS_LOOT_MAX,
     reviveGuard: CODE_REVIVE_GUARD,
     reviveGuardSec: CODE_REVIVE_GUARD_SEC,
     auto: codeAuto(),
@@ -440,6 +469,10 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.heartBlastSpots !== undefined) b.heartBlastSpots = t.heartBlastSpots;
   if (t.heartBlastMinDist !== undefined) b.heartBlastMinDist = t.heartBlastMinDist;
   if (t.heartBlastReach !== undefined) b.heartBlastReach = t.heartBlastReach;
+  if (t.bossLootSpread !== undefined) b.bossLootSpread = t.bossLootSpread;
+  if (t.bossLootBase !== undefined) b.bossLootBase = t.bossLootBase;
+  if (t.bossLootK !== undefined) b.bossLootK = t.bossLootK;
+  if (t.bossLootMax !== undefined) b.bossLootMax = t.bossLootMax;
   if (t.reviveGuard !== undefined) b.reviveGuard = t.reviveGuard;
   if (t.reviveGuardSec !== undefined) b.reviveGuardSec = t.reviveGuardSec;
   if (t.mobReturnIgnoreHits !== undefined) b.mobReturnIgnoreHits = t.mobReturnIgnoreHits;
@@ -449,6 +482,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.forgeAuto !== undefined) b.forgeAuto = t.forgeAuto;
   b.forge = mergeForge(t.forge);
   if (t.walkHidden !== undefined) b.walkHidden = t.walkHidden;
+  if (t.shopNoEquip !== undefined) b.shopNoEquip = t.shopNoEquip;
   if (t.hubChannels !== undefined) b.hubChannels = t.hubChannels;
   b.auto = mergeAuto(t.auto);
   b.waves = mergeWaves(t.waves);
@@ -593,7 +627,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'forge', 'walkHidden', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'forge', 'walkHidden', 'shopNoEquip', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -670,7 +704,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   }
 
   // Single numbers
-  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'roomWipeSec' | 'roomBossDelay' | 'heartBlastSpots' | 'heartBlastMinDist' | 'heartBlastReach' | 'reviveGuardSec' | 'cdrCap', range: readonly [number, number], what: string): string | null => {
+  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'roomWipeSec' | 'roomBossDelay' | 'bossLootBase' | 'bossLootK' | 'bossLootMax' | 'reviveGuardSec' | 'cdrCap' | 'heartBlastSpots' | 'heartBlastMinDist' | 'heartBlastReach', range: readonly [number, number], what: string): string | null => {
     const n = num(o[key], range[0], range[1], what);
     if (typeof n === 'string') return n;
     if (n !== undefined && n !== CODE[key]) out[key] = n;
@@ -718,6 +752,13 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (x !== CODE.walkHidden) out.walkHidden = x;
     return null;
   };
+  const shopNoEquip = (): string | null => {
+    const x = o.shopNoEquip;
+    if (x === undefined) return null;
+    if (typeof x !== 'boolean') return strict ? 'สวิตช์ห้ามถอด/สวมขณะเปิดร้านต้องเป็นเปิด/ปิด' : null;
+    if (x !== CODE.shopNoEquip) out.shopNoEquip = x;
+    return null;
+  };
   const hubChannels = (): string | null => {
     const x = o.hubChannels;
     if (x === undefined) return null;
@@ -737,6 +778,13 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (x === undefined) return null;
     if (typeof x !== 'boolean') return strict ? 'สวิตช์จุดปลอดภัยสุ่มทั่วลานต้องเป็นเปิด/ปิด' : null;
     if (x !== CODE.heartBlastRandom) out.heartBlastRandom = x;
+    return null;
+  };
+  const bossLootSpread = (): string | null => {
+    const x = o.bossLootSpread;
+    if (x === undefined) return null;
+    if (typeof x !== 'boolean') return strict ? 'สวิตช์กระจายของดรอปบอสต้องเป็นเปิด/ปิด' : null;
+    if (x !== CODE.bossLootSpread) out.bossLootSpread = x;
     return null;
   };
   const reviveGuard = (): string | null => {
@@ -1127,6 +1175,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     forgeAuto() ??
     forge() ??
     walkHidden() ??
+    shopNoEquip() ??
     hubChannels() ??
     wipeKeep() ??
     one('roomWipeSec', BALANCE_RANGE.roomWipeSec, 'เวลาชุบตอนตายหมดทีม (วินาที)') ??
@@ -1135,6 +1184,10 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     one('heartBlastSpots', BALANCE_RANGE.heartBlastSpots, 'จำนวนจุดปลอดภัยของระเบิดใหญ่หัวใจภูเขาไฟ') ??
     one('heartBlastMinDist', BALANCE_RANGE.heartBlastMinDist, 'ระยะจุดปลอดภัยห่างผู้เล่นขั้นต่ำ') ??
     one('heartBlastReach', BALANCE_RANGE.heartBlastReach, 'ค่าเผื่อวิ่งทันของจุดปลอดภัย') ??
+    bossLootSpread() ??
+    one('bossLootBase', BALANCE_RANGE.bossLootBase, 'รัศมีฐานของดรอปบอส') ??
+    one('bossLootK', BALANCE_RANGE.bossLootK, 'ตัวคูณรัศมีต่อจำนวนของดรอปบอส') ??
+    one('bossLootMax', BALANCE_RANGE.bossLootMax, 'รัศมีสูงสุดของดรอปบอส') ??
     reviveGuard() ??
     one('reviveGuardSec', BALANCE_RANGE.reviveGuardSec, 'อมตะหลังชุบด้วยขนนกฟีนิกซ์ (วินาที)') ??
     auto() ??
@@ -1252,11 +1305,16 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.heartBlastSpots !== b.heartBlastSpots) out.push(`จำนวนจุดปลอดภัยระเบิดใหญ่ ${a.heartBlastSpots} → ${b.heartBlastSpots}`);
   if (a.heartBlastMinDist !== b.heartBlastMinDist) out.push(`จุดปลอดภัยห่างผู้เล่นขั้นต่ำ ${a.heartBlastMinDist} → ${b.heartBlastMinDist}`);
   if (a.heartBlastReach !== b.heartBlastReach) out.push(`ค่าเผื่อวิ่งทันของจุดปลอดภัย ${a.heartBlastReach} → ${b.heartBlastReach}`);
+  if (a.bossLootSpread !== b.bossLootSpread) out.push(`กระจายของดรอปบอส ${a.bossLootSpread ? 'เปิด' : 'ปิด'} → ${b.bossLootSpread ? 'เปิด' : 'ปิด'}`);
+  if (a.bossLootBase !== b.bossLootBase) out.push(`รัศมีฐานของดรอปบอส ${a.bossLootBase} → ${b.bossLootBase}`);
+  if (a.bossLootK !== b.bossLootK) out.push(`ตัวคูณรัศมีต่อจำนวนของดรอปบอส ${a.bossLootK} → ${b.bossLootK}`);
+  if (a.bossLootMax !== b.bossLootMax) out.push(`รัศมีสูงสุดของดรอปบอส ${a.bossLootMax} → ${b.bossLootMax}`);
   if (a.reviveGuard !== b.reviveGuard) out.push(`อมตะหลังชุบด้วยขนนกฟีนิกซ์ ${a.reviveGuard ? 'เปิด' : 'ปิด'} → ${b.reviveGuard ? 'เปิด' : 'ปิด'}`);
   if (a.reviveGuardSec !== b.reviveGuardSec) out.push(`เวลาอมตะหลังชุบ ${a.reviveGuardSec} → ${b.reviveGuardSec} วิ`);
   out.push(...forgeChanges(a.forge, b.forge));
   if (a.forgeAuto !== b.forgeAuto) out.push(`ตีบวก Auto ${a.forgeAuto ? 'เปิด' : 'ปิด'} → ${b.forgeAuto ? 'เปิด' : 'ปิด'}`);
   if (a.hubChannels !== b.hubChannels) out.push(`แบ่งห้องเมืองกลาง ${a.hubChannels ? 'เปิด' : 'ปิด'} → ${b.hubChannels ? 'เปิด' : 'ปิด'}`);
+  if (a.shopNoEquip !== b.shopNoEquip) out.push(`ห้ามถอด/สวมขณะเปิดร้าน ${a.shopNoEquip ? 'เปิด' : 'ปิด'} → ${b.shopNoEquip ? 'เปิด' : 'ปิด'}`);
   if (a.walkHidden !== b.walkHidden) out.push(`เดินต่อเมื่อสลับแท็บ ${a.walkHidden ? 'เปิด' : 'ปิด'} → ${b.walkHidden ? 'เปิด' : 'ปิด'}`);
   if (a.buffDurSummons !== b.buffDurSummons) out.push(`เพิ่มเวลาบัฟนับ summon (ป้อมปืน โดรน กับระเบิด) ${a.buffDurSummons ? 'เปิด' : 'ปิด'} → ${b.buffDurSummons ? 'เปิด' : 'ปิด'}`);
   if (a.mobDropOnSafe !== b.mobDropOnSafe) out.push(`มอนเลิกไล่เมื่อผู้เล่นเข้าเมือง/safe zone ${a.mobDropOnSafe ? 'เปิด' : 'ปิด'} → ${b.mobDropOnSafe ? 'เปิด' : 'ปิด'}`);
