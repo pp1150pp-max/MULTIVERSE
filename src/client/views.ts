@@ -46,6 +46,24 @@ const AURA: { color: string; size: number; sparks: number }[] = [
   { color: '#ffd34a', size: 2.7, sparks: 12 },
 ];
 
+/** The aura's opacity before it breathes. */
+const AURA_ALPHA = 0.7;
+
+let smoothGlowTex: THREE.Texture | null = null;
+/**
+ * The aura's glow picture filtered smoothly. The shared one (fxTex.glow) is 32 px of hard steps drawn as hard pixels:
+ * stretched to the +15 aura's size each texel is several screen pixels, and as the aura breathes in size its pixel
+ * edges jump every frame, which showed as flicker (owner 2026-11-23, worse the bigger and brighter the aura).
+ */
+function smoothGlow(): THREE.Texture {
+  if (!smoothGlowTex) {
+    smoothGlowTex = fxTex.glow.clone();
+    smoothGlowTex.magFilter = THREE.LinearFilter;
+    smoothGlowTex.minFilter = THREE.LinearFilter;
+    smoothGlowTex.needsUpdate = true;
+  }
+  return smoothGlowTex;
+}
 
 /** The gold of the light around a player who just got up with a phoenix feather. */
 const GUARD_GOLD = '#ffd04a';
@@ -219,7 +237,7 @@ export class PlayerView {
       this.disposeAura();
       if (tier > 0) {
         const mat = new THREE.MeshBasicMaterial({
-          map: fxTex.glow, color: AURA[tier].color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.7,
+          map: fxTex.glow, color: AURA[tier].color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: AURA_ALPHA,
         });
         this.aura = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
         this.aura.rotation.x = -Math.PI / 2;
@@ -229,7 +247,17 @@ export class PlayerView {
     }
     if (!this.aura) return;
     const a = AURA[tier];
-    const pulse = 1 + Math.sin(this.clock * 3) * 0.08;
+    // Breathing, tuned on /admin → ปรับสมดุล → เอฟเฟกต์สกิล (fxLayer.enhAura*).
+    const fl = currentBalance().fxLayer;
+    const mat = this.aura.material as THREE.MeshBasicMaterial;
+    const map = fl.enhAuraSmooth ? smoothGlow() : fxTex.glow;
+    if (mat.map !== map) {
+      mat.map = map;
+      mat.needsUpdate = true;
+    }
+    const wave = Math.sin(this.clock * fl.enhAuraSpeed);
+    const pulse = 1 + wave * fl.enhAuraPulse;
+    mat.opacity = Math.min(1, AURA_ALPHA * (1 + wave * fl.enhAuraBreath));
     this.aura.position.set(p.x, 0.06, p.z);
     this.aura.scale.set(a.size * pulse, a.size * pulse, 1);
     if (a.sparks && Math.random() < a.sparks * dt) {
