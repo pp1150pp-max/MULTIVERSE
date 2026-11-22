@@ -201,6 +201,18 @@ async function run(): Promise<void> {
   ok((await api('POST', '/admin/menu-layout', { layout: { ...code, custom: [{ ...shortcut, act: 'logout' }] } }, tok.gm1)).status === 400, 'the server refuses a shortcut outside the list');
   const hl = await api('GET', '/admin/hud-layout', undefined, tok.gm1);
   ok(JSON.stringify(hl.data.freeButtons) === JSON.stringify([{ id: 'c1', label: 'เปิดแมพ', icon: shortcut.icon }]), 'the HUD layout tab gets the floating buttons to place');
+  // Place c1 on the screen and publish; then delete c1: its place goes too (published and draft), so a new c1 never
+  // appears at the old spot before its own place is published.
+  await api('POST', '/admin/hud-layout', { draft: { desktop: { 'hud-btn-c1': { x: 80, y: 40 }, log: { x: 2 } } } }, tok.gm1);
+  await api('POST', '/admin/hud-layout', { publish: true }, tok.gm1);
+  await api('POST', '/admin/hud-layout', { draft: { desktop: { 'hud-btn-c1': { x: 70, y: 40 }, log: { x: 2 } } } }, tok.gm1);
+  ok(JSON.stringify((await api('GET', '/admin/hud-layout', undefined, tok.gm1)).data.published.desktop) === '{"log":{"x":2},"hud-btn-c1":{"x":80,"y":40}}', 'the floating button is placed and published');
+  await api('POST', '/admin/menu-layout', { layout: { ...code, custom: withCustom.custom.slice(1), top: withCustom.top } }, tok.gm1);
+  const after = (await api('GET', '/admin/hud-layout', undefined, tok.gm1)).data;
+  ok(JSON.stringify(after.published.desktop) === '{"log":{"x":2}}' && JSON.stringify(after.draft.desktop) === '{"log":{"x":2}}', 'deleting it drops its place (published and draft), the rest stays');
+  await api('POST', '/admin/menu-layout', { layout: { ...code, custom: [shortcut, ...withCustom.custom.slice(1)], top: withCustom.top } }, tok.gm1);
+  ok(!JSON.stringify((await api('GET', '/admin/hud-layout', undefined, tok.gm1)).data.published).includes('hud-btn-c1'), 'a new button with the same id has no place yet');
+  await api('POST', '/admin/hud-layout', { reset: true }, tok.gm1);
   await api('POST', '/admin/menu-layout', { reset: true }, tok.owner1);
   p1.ws.close();
   p2.ws.close();

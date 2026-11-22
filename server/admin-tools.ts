@@ -32,8 +32,8 @@ import { checkCosShop, cosHiddenIds, cosShopChanges, sameCosShop } from '../src/
 import { checkOrbItems, checkOrbName, orbItemId, orbItemsChanges, ORB_ITEM_MAX, type OrbItems } from '../src/shared/orbItems';
 import { COS_SLOT_NAME, cosById } from '../src/shared/data/cosmetics';
 import { balanceChanges, checkBalance, currentBalance, currentBalanceTuning, sameBalance, withHudLayout, withItemStatMult, withMenuLayout, type BalanceTuning } from '../src/shared/balance';
-import { checkMenuLayoutTuning } from '../src/shared/menuLayout';
-import { checkHudLayoutTuning, hudLayoutChanges, mergeHudLayout, type HudLayoutTuning } from '../src/shared/hudLayout';
+import { checkMenuLayoutTuning, freeBtnDomId } from '../src/shared/menuLayout';
+import { checkHudLayoutTuning, HUD_DEVICES, hudLayoutChanges, isFreeBtnPart, mergeHudLayout, type HudLayoutTuning } from '../src/shared/hudLayout';
 import { upgradeItem } from '../src/shared/data/items';
 import { searchStats } from '../src/shared/sim/market';
 import type { Item, StoneStack } from '../src/shared/types';
@@ -687,11 +687,30 @@ export async function ownerToolsApi(
     const c = body.reset === true ? { tuning: undefined } : checkMenuLayoutTuning(body.layout, true);
     if ('error' in c) throw new HttpError(400, c.error);
     const before = currentBalanceTuning();
-    const next = withMenuLayout(before, c.tuning); // keeps every other key (the HUD layout too)
+    let next = withMenuLayout(before, c.tuning); // keeps every other key (the HUD layout too)
+    // A floating shortcut deleted (or no longer floating) loses its place on the screen, published and in the draft, so a
+    // new button that gets the same id later never shows up at once at the old spot (owner: only once its place is published).
+    const free = new Set((c.tuning?.custom ?? []).filter((b) => b.free).map((b) => freeBtnDomId(b.id)));
+    const dropGone = (t: HudLayoutTuning | undefined): HudLayoutTuning | undefined => {
+      if (!t) return t;
+      const out: HudLayoutTuning = {};
+      for (const d of HUD_DEVICES) {
+        const dev = t[d];
+        if (!dev) continue;
+        const kept = Object.fromEntries(Object.entries(dev).filter(([id]) => !isFreeBtnPart(id) || free.has(id)));
+        if (Object.keys(kept).length) out[d] = kept;
+      }
+      return Object.keys(out).length ? out : undefined;
+    };
+    next = withHudLayout(next, dropGone(next.hudLayout));
+    const draft = readHudDraft(db);
+    if (draft && JSON.stringify(dropGone(draft.layout) ?? {}) !== JSON.stringify(draft.layout)) {
+      db.setSetting(HUD_DRAFT_KEY, JSON.stringify({ ...draft, layout: dropGone(draft.layout) ?? {} } satisfies HudDraft));
+    }
     if (!sameBalance(before, next)) {
       db.setBalance(next);
       const changes = balanceChanges(before, next);
-      log(db, a, 'menu-layout', 'จัดเมนูเกม ทั้งเซิร์ฟ', (body.reset === true ? 'คืนค่าในโค้ด: ' : '') + changes);
+      log(db, a, 'menu-layout', 'จัดเมนูเกม ทั้งเซิร์ฟ', clip((body.reset === true ? 'คืนค่าในโค้ด: ' : '') + changes));
       world.balanceChanged(next);
     }
     send(res, 200, { layout: currentBalance().menuLayout, canEdit: true } satisfies AdminMenuLayout);
