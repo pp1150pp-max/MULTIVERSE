@@ -63,6 +63,8 @@ export async function topupAdminApi(
     const body = await readJson(req);
     if (typeof body.on !== 'boolean') throw new HttpError(400, 'ค่า on ต้องเป็น true/false');
     const was = world.topup.refundCfg();
+    // Top-up open while the refund starts = a top-up confirmed in between could pay twice (crystals now + refund).
+    if (body.on && !was && world.topup.cfg().open) throw new HttpError(409, 'ปิดการเติมก่อนเปิดคืนเพชร (กันรายการที่ยืนยันระหว่างนี้ได้เพชรซ้ำ)');
     if (body.on !== !!was) {
       world.topup.setRefund(body.on, a.acc.username);
       log(db, a, 'topup-refund-switch', 'คืนเพชร close beta', body.on ? 'เปิด: บัญชีที่เข้าเกมครั้งถัดไปได้คริสตัลคืน (ครั้งเดียวต่อบัญชี)' : 'ปิด');

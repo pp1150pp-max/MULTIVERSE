@@ -817,6 +817,7 @@ export class GameWorld {
     player.partyId = pv ? null : this.parties.online(charId);
     // The close beta refund (once per account, after the owner switched it on), before the welcome carries the crystals.
     const refunded = !acc.guest && !pv ? this.topup.refundOnJoin(acc.id, acc.username) : 0;
+    if (refunded) this.crystalsChanged(acc.id);
     this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), map: sim.terrain.mapRev, guest: acc.guest, ...(s.auto ? { auto: true } : {}), ...(pv ? { preview: true } : {}), orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), animTuning: this.db.animTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning(), cash: this.cash.catalog(), cashState: this.cash.state(acc.id, acc.guest), topup: this.topup.view(acc.id, acc.guest) });
     if (!pv) this.broadcastSystem(`${player.name} เข้าสู่โลก`);
     // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).

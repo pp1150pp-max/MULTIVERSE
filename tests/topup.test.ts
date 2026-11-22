@@ -257,6 +257,9 @@ async function run(): Promise<void> {
   await A.close();
   await B.close();
   ok((await api('POST', '/admin/topup/refund', { on: true }, gmTok)).status === 403, 'a GM cannot switch the refund');
+  ok((await api('POST', '/admin/topup/refund', { on: true }, ownerTok)).status === 409, 'refund refused while top-up is open');
+  const cur = (await api('GET', '/admin/topup', undefined, ownerTok)).data.cfg;
+  ok((await api('POST', '/admin/topup/settings', { cfg: { ...cur, open: false } }, ownerTok)).status === 200, 'owner closes top-up');
   ok((await api('POST', '/admin/topup/refund', { on: true }, ownerTok)).status === 200, 'owner switches the refund on');
   await sleep(20);
   // A top-up confirmed after the switch is not refunded.
