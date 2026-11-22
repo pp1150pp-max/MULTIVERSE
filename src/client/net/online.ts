@@ -986,6 +986,7 @@ export class OnlineBackend implements Backend {
       m.faceZ = ms.fz;
       m.moving = ms.mv;
       m.alive = ms.alive;
+      if (!ms.alive && m.isBoss) this.terrain.releaseBossSolid(); // its rock is gone on the server too
       m.deadT = ms.deadT;
       if (ms.mhp) m.syncMaxHp(ms.mhp);
       m.hp = ms.hp;
