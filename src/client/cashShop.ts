@@ -5,7 +5,7 @@
 // when the owner opened top-up, a package makes a PromptPay request and its QR shows here until the owner
 // confirms it (docs/systems/topup.md). The server checks and does every purchase (server/cashShop.ts).
 import type { Game } from './Game';
-import { COS_SLOTS, COS_SLOT_NAME, cosById, type CosSlot } from '../shared/data/cosmetics';
+import { COS_SLOTS, COS_SLOT_NAME, cosById, cosPerk, type CosSlot } from '../shared/data/cosmetics';
 import { STONE_DESC, STONE_NAME } from '../shared/data/stones';
 import { CASH_BADGE_NAME, CASH_QTY_MAX, cashBadge, cashBuyError, CURRENCY, type CashEntry } from '../shared/cashShop';
 import type { StoneKind } from '../shared/types';
@@ -71,6 +71,11 @@ function timeLeft(ms: number): string {
 
 const entryName = (e: CashEntry) => (e.kind === 'cos' ? cosById(e.ref)?.name ?? e.ref : STONE_NAME[e.ref as StoneKind]);
 const entryDesc = (e: CashEntry) => (e.kind === 'cos' ? cosById(e.ref)?.desc ?? '' : STONE_DESC[e.ref as StoneKind]);
+/** The mount's speed and the like (cosPerk), or ''. */
+const entryPerk = (e: CashEntry) => {
+  const c = e.kind === 'cos' ? cosById(e.ref) : undefined;
+  return (c && cosPerk(c)) ?? '';
+};
 
 function entryPic(e: CashEntry, big = false): HTMLElement {
   if (e.kind === 'cos') {
@@ -269,6 +274,7 @@ export class CashShopUI {
 
   private showTip(e: CashEntry, owned: boolean, ev: MouseEvent): void {
     const lines = [`<b>${entryName(e)}</b>`, entryDesc(e)];
+    if (entryPerk(e)) lines.push(entryPerk(e));
     if (e.kind === 'cos') lines.push(owned ? 'มีแล้วในบัญชี' : 'ได้ถาวร เข้าบัญชีทันที ทุกตัวละครในบัญชีใช้ได้');
     else lines.push(BOUND_KINDS.has(e.ref) ? 'ส่งเข้าจดหมาย · ผูกกับตัวละครที่กดรับ' : 'ส่งเข้าจดหมาย · เทรด/ขายได้');
     this.tip.innerHTML = lines.map((l) => `<div>${l}</div>`).join('');
@@ -313,6 +319,7 @@ export class CashShopUI {
     const top = el('div', 'cash-dialog-top');
     const info = el('div', 'cash-dialog-info');
     info.append(el('div', 'cash-name', entryName(e)), el('div', 'cash-desc', entryDesc(e)));
+    if (entryPerk(e)) info.append(el('div', 'cash-desc', entryPerk(e)));
     const notes: string[] = [];
     if (e.kind === 'cos') notes.push(owned.has(e.ref) ? 'มีแล้วในบัญชี' : 'ได้ถาวร เข้าบัญชีทันที ใส่ได้ทุกตัวละครในบัญชี');
     else notes.push(BOUND_KINDS.has(e.ref) ? 'ส่งเข้าจดหมายของบัญชี ผูกกับตัวละครที่กดรับ' : 'ส่งเข้าจดหมายของบัญชี เทรด/ขายได้');
