@@ -728,6 +728,7 @@ export async function ownerToolsApi(
       if (!sameBalance(before, next)) {
         db.setBalance(next);
         world.balanceChanged(next);
+        pushHudHistory(db, before.hudLayout, next.hudLayout, a.acc.username, 'publish');
       }
       log(db, a, 'hud-publish', 'จัดหน้าจอเกม ทั้งเซิร์ฟ', clip(changes || 'ไม่มีอะไรต่างจากที่ใช้อยู่'));
     } else if (body.discard === true) {
@@ -743,8 +744,18 @@ export async function ownerToolsApi(
         const changes = balanceChanges(before, next);
         db.setBalance(next);
         world.balanceChanged(next);
+        pushHudHistory(db, before.hudLayout, next.hudLayout, a.acc.username, 'reset');
         log(db, a, 'hud-reset', 'จัดหน้าจอเกม ทั้งเซิร์ฟ', clip('คืนค่าในโค้ด: ' + changes));
       }
+    } else if (typeof body.restore === 'number') {
+      // Back to an older published version: it becomes the draft, to look at in the game and then publish.
+      const h = readHudHistory(db).find((e) => e.at === body.restore);
+      if (!h) throw new HttpError(400, 'ไม่พบฉบับนี้ในประวัติ (อาจเก่าเกิน 20 ฉบับ)');
+      const old = readHudDraft(db);
+      db.setSetting(HUD_DRAFT_KEY, JSON.stringify({ layout: h.layout, by: a.acc.username, at: Date.now() } satisfies HudDraft));
+      const changes = hudLayoutChanges(old ? old.layout : before.hudLayout, h.layout);
+      const when = new Date(h.at).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
+      log(db, a, 'hud-rollback', 'จัดหน้าจอเกม (ร่าง)', clip(`ย้อนเป็นฉบับ ${when}${h.by ? ` (${h.by})` : ''} ไว้ในร่าง${changes.length ? ': ' + changes.join(', ') : ' (เหมือนร่าง/ที่ใช้อยู่)'}`));
     } else throw new HttpError(400, 'ไม่รู้ว่าจะทำอะไร');
     send(res, 200, hudLayoutState(db, true));
     return true;
@@ -1029,12 +1040,50 @@ function readHudDraft(db: Db): HudDraft | null {
   }
 }
 
+/** The settings key of the published "จัดหน้าจอเกม" versions, newest first (rolled back from /admin). */
+const HUD_HISTORY_KEY = 'hud_layout_history';
+const HUD_HISTORY_MAX = 20;
+interface HudVersion { layout: HudLayoutTuning; by: string; at: number; what: 'publish' | 'reset' | 'before' }
+
+function readHudHistory(db: Db): HudVersion[] {
+  const v = db.getSetting(HUD_HISTORY_KEY);
+  if (!v) return [];
+  try {
+    const arr = JSON.parse(v) as unknown;
+    if (!Array.isArray(arr)) return [];
+    const out: HudVersion[] = [];
+    for (const x of arr.slice(0, HUD_HISTORY_MAX)) {
+      if (!x || typeof x !== 'object') continue;
+      const o = x as Partial<HudVersion>;
+      if (typeof o.at !== 'number') continue;
+      // Parts (or shortcut buttons) the code no longer knows are dropped, never refused.
+      const c = checkHudLayoutTuning(o.layout, false);
+      const what = o.what === 'reset' || o.what === 'before' ? o.what : 'publish';
+      out.push({ layout: 'tuning' in c ? (c.tuning ?? {}) : {}, by: typeof o.by === 'string' ? o.by : '', at: o.at, what });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/** Keeps the layout just made live (newest first, at most HUD_HISTORY_MAX). The first time, what was live before goes in too. */
+function pushHudHistory(db: Db, was: HudLayoutTuning | undefined, now: HudLayoutTuning | undefined, by: string, what: 'publish' | 'reset'): void {
+  const list = readHudHistory(db);
+  const at = Math.max(Date.now(), (list[0]?.at ?? 0) + 2);
+  if (!list.length) list.unshift({ layout: was ?? {}, by: '', at: at - 1, what: 'before' });
+  list.unshift({ layout: now ?? {}, by, at, what });
+  db.setSetting(HUD_HISTORY_KEY, JSON.stringify(list.slice(0, HUD_HISTORY_MAX)));
+}
+
 function hudLayoutState(db: Db, canEdit: boolean): AdminHudLayout {
   const d = readHudDraft(db);
   return {
     published: currentBalance().hudLayout,
     draft: d ? mergeHudLayout(d.layout) : null,
     ...(d ? { draftBy: d.by, draftAt: d.at } : {}),
+    history: readHudHistory(db).map((h) => ({ at: h.at, by: h.by, what: h.what, layout: mergeHudLayout(h.layout) })),
+    freeButtons: currentBalance().menuLayout.custom.filter((b) => b.free).map((b) => ({ id: b.id, label: b.label, icon: b.icon })),
     canEdit,
   };
 }

@@ -58,6 +58,21 @@ ok(css.includes('body:not(.touch-ui) #log { display: none !important; }'), 'CSS:
 ok(css.includes('body.touch-ui #tc-stick { scale: 1.3;'), 'CSS: touch screens on their own');
 ok(hudLayoutCss(code) === '', 'CSS: nothing for the code layout');
 
+// Floating shortcut buttons (part hud-btn-c<n>): an entry means "placed on this device", even one equal to the code.
+{
+  const f = checkHudLayoutTuning({ desktop: { 'hud-btn-c2': { x: 90, y: 50 }, 'hud-btn-c10': {} }, touch: { 'hud-btn-c2': { hide: true } } }, true);
+  ok('tuning' in f && JSON.stringify(f.tuning) === '{"desktop":{"hud-btn-c2":{"x":90,"y":50},"hud-btn-c10":{}},"touch":{"hud-btn-c2":{"hide":true}}}', 'floating buttons: placed entries kept (an empty one too), sorted');
+  ok('error' in checkHudLayoutTuning({ desktop: { 'hud-btn-x1': { x: 1 } } }, true), 'floating buttons: a bad id is refused');
+  ok('error' in checkHudLayoutTuning({ desktop: { 'hud-btn-c1': { x: 1, z: 2 } } }, true), 'floating buttons: unknown value refused');
+  const many = Object.fromEntries(Array.from({ length: 21 }, (_, i) => [`hud-btn-c${i + 1}`, {}]));
+  ok('error' in checkHudLayoutTuning({ desktop: many }, true), 'floating buttons: at most 20');
+  const fcss = hudLayoutCss(mergeBalance({ hudLayout: (f as { tuning: object }).tuning }).hudLayout);
+  ok(fcss.includes('body:not(.touch-ui) #hud-btn-c2 { display: flex; }') && fcss.includes('body:not(.touch-ui) #hud-btn-c2 { translate: 90vw 50vh; }'), 'CSS: a placed button shows, moved');
+  ok(fcss.includes('body:not(.touch-ui) #hud-btn-c10 { display: flex; }'), 'CSS: placed at the corner still shows');
+  ok(!fcss.includes('body.touch-ui #hud-btn-c2 { display: flex; }') && fcss.includes('body.touch-ui #hud-btn-c2 { display: none !important; }'), 'CSS: hidden on touch');
+  ok(/ปุ่มลัด c2: ไม่วาง → วางที่ 90%,50%/.test(balanceChanges({}, { hudLayout: (f as { tuning: object }).tuning } as never)), 'audit: says where a button was placed');
+}
+
 // ---------------------------------------------------------- against a real server
 function freePort(): Promise<number> {
   return new Promise((res, rej) => {
@@ -168,6 +183,25 @@ async function run(): Promise<void> {
   const reset = await api('POST', '/admin/hud-layout', { reset: true }, tok.gm1);
   ok(reset.status === 200 && JSON.stringify(reset.data.published) === JSON.stringify(code), 'reset = the code layout');
   ok(auditOf().at(-1)?.action === 'hud-reset', 'the reset is logged');
+
+  // History: what was live before the first publish, the publish, the reset (newest first); any can come back as the draft.
+  const hist = reset.data.history as { at: number; by: string; what: string; layout: unknown }[];
+  ok(hist.length === 3 && hist.map((v) => v.what).join() === 'reset,publish,before', `history keeps reset, publish and what was before (${hist.map((v) => v.what)})`);
+  ok(JSON.stringify(hist[1].layout) === JSON.stringify(moved) && hist[1].by === 'gm1', 'the published version is kept whole, with who');
+  ok((await api('POST', '/admin/hud-layout', { restore: 123 }, tok.gm1)).status === 400, 'restoring an unknown version is refused');
+  ok((await api('POST', '/admin/hud-layout', { restore: hist[1].at }, tok.plain1)).status === 403, 'a player cannot restore');
+  const back = await api('POST', '/admin/hud-layout', { restore: hist[1].at }, tok.gm1);
+  ok(back.status === 200 && JSON.stringify(back.data.draft) === JSON.stringify(moved) && JSON.stringify(back.data.published) === JSON.stringify(code), 'restore = that version becomes the draft, nothing live yet');
+  ok(auditOf().at(-1)?.action === 'hud-rollback', 'the restore is logged');
+  const repub = await api('POST', '/admin/hud-layout', { publish: true }, tok.gm1);
+  ok(JSON.stringify(repub.data.published) === JSON.stringify(moved) && repub.data.history.length === 4, 'publishing it makes it live again and adds to the history');
+  for (let i = 0; i < 20; i++) {
+    await api('POST', '/admin/hud-layout', { draft: { desktop: { log: { x: i + 1 } } } }, tok.gm1);
+    await api('POST', '/admin/hud-layout', { publish: true }, tok.gm1);
+  }
+  const full = await api('GET', '/admin/hud-layout', undefined, tok.gm1);
+  ok(full.data.history.length === 20 && full.data.history[0].layout.desktop.log.x === 20, 'the history keeps the newest 20');
+  await api('POST', '/admin/hud-layout', { reset: true }, tok.gm1);
   await sleep(200);
   ok(p1.msgs.filter((m) => m.t === 'balance').at(-1)?.tuning?.hudLayout === undefined, 'and sent (no layout left in the tuning)');
   p1.ws.close();

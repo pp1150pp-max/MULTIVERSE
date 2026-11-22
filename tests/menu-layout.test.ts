@@ -10,7 +10,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { balanceChanges, checkBalance, mergeBalance } from '../src/shared/balance';
-import { codeMenuLayout, checkMenuLayoutTuning } from '../src/shared/menuLayout';
+import { buttonAct, buttonIcon, buttonLabel, codeMenuLayout, checkMenuLayoutTuning, mergeMenuLayout } from '../src/shared/menuLayout';
 import { finish, ok } from './check';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -26,9 +26,10 @@ ok(code.top.at(-1) === 'menu' && code.top.includes('auto'), 'code: เมนู 
 ok(JSON.stringify(mergeBalance({}).menuLayout) === JSON.stringify(code), 'the balance carries the code layout');
 ok(JSON.stringify(checkBalance({ menuLayout: code }, true).tuning) === '{}', 'the code layout is not stored');
 const moved = { menu: ['mail', 'bag', 'news', 'settings'], top: ['auto', 'trade', 'menu'] };
+const movedFull = { ...code, ...moved };
 const t = checkBalance({ menuLayout: moved }, true).tuning!;
 ok(JSON.stringify(t) === JSON.stringify({ menuLayout: moved }), 'a moved / hidden layout is stored whole');
-ok(JSON.stringify(mergeBalance(t).menuLayout) === JSON.stringify(moved), 'and merged back as it is');
+ok(JSON.stringify(mergeBalance(t).menuLayout) === JSON.stringify(movedFull), 'and merged back as it is');
 ok(JSON.stringify(checkBalance({ menuLayout: { top: ['auto', 'trade', 'menu'] } }, true).tuning) === '{"menuLayout":{"top":["auto","trade","menu"]}}', 'one list alone is fine, the other stays the code');
 for (const [what, v] of [
   ['ตั้งค่า missing', { menu: ['bag'] }],
@@ -47,6 +48,46 @@ for (const [what, v] of [
 ] as const) ok('error' in checkMenuLayoutTuning(v, true), `${what} refused`);
 ok(checkBalance({ menuLayout: { menu: ['bag'] } }, false).tuning?.menuLayout === undefined, 'read back leniently: a bad list is dropped');
 ok(/จัดเมนูเกม/.test(balanceChanges({}, t)), 'the audit names it');
+
+// Names / icons of code buttons, and the admins' shortcut buttons (PR 2 of "จัดหน้าจอเกม").
+const named = { names: { mail: { label: 'ตู้จดหมาย', icon: { img: 'bag', glyph: '📮' } }, bag: { label: 'กระเป๋า', icon: { img: 'bag' } }, auto: { icon: { img: 'blank', glyph: '🤖' } } } };
+const nt = checkMenuLayoutTuning(named, true);
+ok('tuning' in nt && JSON.stringify(nt.tuning) === '{"names":{"mail":{"label":"ตู้จดหมาย","icon":{"img":"bag","glyph":"📮"}},"auto":{"icon":{"img":"blank","glyph":"🤖"}}}}', 'renames / icons stored, the ones equal to the code left out');
+const nl = mergeMenuLayout('tuning' in nt ? nt.tuning : undefined);
+ok(buttonLabel(nl, 'mail') === 'ตู้จดหมาย' && buttonIcon(nl, 'mail').glyph === '📮' && buttonLabel(nl, 'daily', true) === 'รายวัน' && buttonLabel(nl, 'daily') === 'ล็อกอินรายวัน', 'labels: rename wins, the top row short name stays otherwise');
+const shortcut = { id: 'c1', label: 'เปิดแมพ', icon: { img: 'map', glyph: '⭐' }, act: 'map', free: true };
+const withCustom = { custom: [shortcut, { id: 'c3', label: 'ปุ่มลัดคีย์', icon: { img: 'blank' }, act: 'keybinds' }], menu: ['c1', 'bag', 'settings'], top: ['auto', 'c3', 'menu'] };
+const ct = checkMenuLayoutTuning(withCustom, true);
+ok('tuning' in ct && JSON.stringify(ct.tuning?.custom) === JSON.stringify(withCustom.custom) && JSON.stringify(ct.tuning?.menu) === JSON.stringify(withCustom.menu), 'shortcut buttons stored and placed in the lists');
+const cl = mergeMenuLayout('tuning' in ct ? ct.tuning : undefined);
+ok(buttonAct(cl, 'c1') === 'map' && buttonAct(cl, 'bag') === 'bag' && buttonLabel(cl, 'c3') === 'ปุ่มลัดคีย์', 'a shortcut runs its action, a code button itself');
+for (const [what, v] of [
+  ['renaming AUTO', { names: { auto: { label: 'ออโต้' } } }],
+  ['a name with markup', { names: { bag: { label: '<img src=x onerror=alert(1)>' } } }],
+  ['a name too long', { names: { bag: { label: 'ก'.repeat(21) } } }],
+  ['an empty shortcut name', { custom: [{ ...shortcut, label: '  ' }] }],
+  ['an unknown icon picture', { names: { bag: { icon: { img: '../../evil' } } } }],
+  ['a glyph with markup', { names: { bag: { icon: { img: 'blank', glyph: '<b>' } } } }],
+  ['a glyph too long', { names: { bag: { icon: { img: 'blank', glyph: 'abc' } } } }],
+  ['renaming an unknown button', { names: { nope: { label: 'x' } } }],
+  ['a shortcut that runs anything else', { custom: [{ ...shortcut, act: 'logout' }] }],
+  ['a shortcut that runs code', { custom: [{ ...shortcut, act: 'alert(1)' }] }],
+  ['a shortcut to the Seeker quest window', { custom: [{ ...shortcut, act: 'quests' }] }],
+  ['a bad shortcut id', { custom: [{ ...shortcut, id: 'bag' }] }],
+  ['two shortcuts with one id', { custom: [shortcut, shortcut] }],
+  ['an unknown key on a shortcut', { custom: [{ ...shortcut, code: 'x' }] }],
+  ['a list with a shortcut that does not exist', { menu: ['c9', 'settings'] }],
+  ['21 shortcuts', { custom: Array.from({ length: 21 }, (_, i) => ({ ...shortcut, id: `c${i + 1}` })) }],
+] as const) ok('error' in checkMenuLayoutTuning(v, true), `${what} refused`);
+{
+  // Read back leniently (e.g. a shortcut deleted since): only that id leaves the list, the rest of the order stays.
+  const lenient = checkMenuLayoutTuning({ menu: ['c9', 'mail', 'bag', 'settings'], top: ['auto', 'c9', 'trade', 'menu'] }, false);
+  ok('tuning' in lenient && JSON.stringify(lenient.tuning) === '{"menu":["mail","bag","settings"],"top":["auto","trade","menu"]}', 'a stale shortcut id is dropped from the lists, the order is kept');
+  const badOne = checkMenuLayoutTuning({ custom: [shortcut, { ...shortcut, id: 'c2', act: 'logout' }], menu: ['c1', 'c2', 'settings'] }, false);
+  ok('tuning' in badOne && badOne.tuning?.custom?.length === 1 && JSON.stringify(badOne.tuning.menu) === '["c1","settings"]', 'a bad shortcut read back is dropped with its place');
+}
+ok(/เพิ่มปุ่มลัด c1: เปิดแมพ/.test(balanceChanges({}, { menuLayout: (ct as { tuning: object }).tuning } as never)), 'the audit names a new shortcut');
+ok(/ชื่อปุ่ม จดหมาย: ในโค้ด → ตู้จดหมาย/.test(balanceChanges({}, { menuLayout: (nt as { tuning: object }).tuning } as never)), 'the audit names a rename');
 
 // ---------------------------------------------------------- against a real server
 function freePort(): Promise<number> {
@@ -117,10 +158,8 @@ async function run(): Promise<void> {
   ok((await api('POST', '/admin/roles', { username: 'gm1', role: 'gm' }, tok.owner1)).status === 200, 'gm1 made GM');
 
   const gmGet = await api('GET', '/admin/menu-layout', undefined, tok.gm1);
-  ok(gmGet.status === 200 && gmGet.data.canEdit === false && JSON.stringify(gmGet.data.layout) === JSON.stringify(code), 'GM sees the code layout but may not save');
+  ok(gmGet.status === 200 && gmGet.data.canEdit === true && JSON.stringify(gmGet.data.layout) === JSON.stringify(code), 'GM sees the code layout and may save (owner 2026-11-22)');
   ok((await api('GET', '/admin/menu-layout', undefined, tok.plain1)).status === 403, 'a player cannot read it from the admin API');
-  ok((await api('POST', '/admin/menu-layout', { layout: moved }, tok.gm1)).status === 403, 'GM cannot save');
-  ok((await api('POST', '/admin/menu-layout', { reset: true }, tok.gm1)).status === 403, 'GM cannot reset either');
   ok((await api('POST', '/admin/menu-layout', { layout: moved }, tok.plain1)).status === 403, 'a player cannot save');
   ok((await api('POST', '/admin/menu-layout', { layout: { menu: ['bag'] } }, tok.owner1)).status === 400, 'a menu without ตั้งค่า is refused');
   ok((await api('POST', '/admin/menu-layout', { layout: { menu: ['settings', 'bag'] } }, tok.owner1)).status === 400, 'ตั้งค่า not last is refused');
@@ -130,7 +169,7 @@ async function run(): Promise<void> {
   const p1 = joinWorld(tok.plain1, chars.plain1);
   await p1.ready;
   const saved = await api('POST', '/admin/menu-layout', { layout: moved }, tok.owner1);
-  ok(saved.status === 200 && JSON.stringify(saved.data.layout) === JSON.stringify(moved), 'the owner saves');
+  ok(saved.status === 200 && JSON.stringify(saved.data.layout) === JSON.stringify(movedFull), 'the owner saves');
   await sleep(300);
   const pushed = p1.msgs.filter((m) => m.t === 'balance');
   ok(pushed.length === 1 && JSON.stringify(pushed[0].tuning.menuLayout) === JSON.stringify(moved), 'a player online gets it at once');
@@ -155,6 +194,14 @@ async function run(): Promise<void> {
   await sleep(200);
   ok(auditOf().length === 2 && /^คืนค่าในโค้ด: /.test(auditOf()[1]), 'the reset is logged');
   ok(p1.msgs.filter((m) => m.t === 'balance').at(-1)?.tuning?.menuLayout === undefined, 'and sent (no layout left in the tuning)');
+  // GM adds a shortcut and renames a button; the server checks it and logs it in Thai.
+  const gmSave = await api('POST', '/admin/menu-layout', { layout: { ...code, ...withCustom, ...named } }, tok.gm1);
+  ok(gmSave.status === 200 && gmSave.data.layout.custom.length === 2 && gmSave.data.layout.names.mail.label === 'ตู้จดหมาย', 'GM saves shortcuts and names');
+  ok(/ปุ่มลัด/.test(auditOf().at(-1) ?? '') && /ตู้จดหมาย/.test(auditOf().at(-1) ?? ''), 'and it is in the audit');
+  ok((await api('POST', '/admin/menu-layout', { layout: { ...code, custom: [{ ...shortcut, act: 'logout' }] } }, tok.gm1)).status === 400, 'the server refuses a shortcut outside the list');
+  const hl = await api('GET', '/admin/hud-layout', undefined, tok.gm1);
+  ok(JSON.stringify(hl.data.freeButtons) === JSON.stringify([{ id: 'c1', label: 'เปิดแมพ', icon: shortcut.icon }]), 'the HUD layout tab gets the floating buttons to place');
+  await api('POST', '/admin/menu-layout', { reset: true }, tok.owner1);
   p1.ws.close();
   p2.ws.close();
 }

@@ -4,9 +4,10 @@
 // The boxes are only where the parts roughly sit by default: the game itself is the truth.
 import type { AdminHudLayout } from '../shared/admin';
 import {
-  HUD_DEVICE_NAME, HUD_DEVICES, HUD_FRAME, HUD_PARTS, HUD_RANGE,
+  FREE_BTN_START, HUD_DEVICE_NAME, HUD_DEVICES, HUD_FRAME, HUD_PARTS, HUD_RANGE, hudPart, isFreeBtnPart,
   type HudDevice, type HudLayoutConfig, type HudPartDef, type HudPos,
 } from '../shared/hudLayout';
+import { freeBtnDomId } from '../shared/menuLayout';
 
 type Kids = (Node | string | null | undefined | false)[];
 type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, unknown>, ...kids: Kids) => HTMLElementTagNameMap[K];
@@ -16,14 +17,14 @@ type Layer = 'hud' | 'window';
 const r1 = (v: number): number => Math.round(v * 10) / 10;
 const same = (a: HudLayoutConfig, b: HudLayoutConfig): boolean => JSON.stringify(a) === JSON.stringify(b);
 
-/** Drops zero / default values and empty entries so the draft equals what the server stores. */
-function tidy(p: HudPos): HudPos | undefined {
+/** Drops zero / default values and empty entries so the draft equals what the server stores (a floating button's entry stays: "placed"). */
+function tidy(p: HudPos, keep = false): HudPos | undefined {
   const o: HudPos = {};
   if (p.x) o.x = r1(p.x);
   if (p.y) o.y = r1(p.y);
   if (p.s && Math.abs(p.s - 1) > 0.001) o.s = Math.round(p.s * 100) / 100;
   if (p.hide) o.hide = true;
-  return Object.keys(o).length ? o : undefined;
+  return Object.keys(o).length || keep ? o : undefined;
 }
 
 export async function renderHudLayout(view: HTMLElement, h: H, api: Api): Promise<void> {
@@ -37,7 +38,13 @@ export async function renderHudLayout(view: HTMLElement, h: H, api: Api): Promis
     return;
   }
   /** What the server's draft holds (or, with no draft, what is published): the "unsaved" mark compares to this. */
-  let base: HudLayoutConfig = structuredClone(state.draft ?? state.published);
+  /** Floating shortcut buttons deleted (or no longer floating) in "จัดเมนูเกม" leave the layout here; the next save stores that. */
+  const dropGone = (c: HudLayoutConfig): HudLayoutConfig => {
+    const live = new Set(state.freeButtons.map((b) => freeBtnDomId(b.id)));
+    for (const d of HUD_DEVICES) for (const id of Object.keys(c[d])) if (isFreeBtnPart(id) && !live.has(id)) delete c[d][id];
+    return c;
+  };
+  let base: HudLayoutConfig = dropGone(structuredClone(state.draft ?? state.published));
   let draft: HudLayoutConfig = structuredClone(base);
   let device: HudDevice = 'desktop';
   let layer: Layer = 'hud';
@@ -48,6 +55,7 @@ export async function renderHudLayout(view: HTMLElement, h: H, api: Api): Promis
   const status = h('div', { class: 'muted' });
   const frame = h('div', { class: 'hl-frame' });
   const list = h('div', { class: 'hl-list' });
+  const history = h('details', { class: 'card' });
   const tabs = h('div', { class: 'row' });
   const saveBtn = h('button', { class: 'primary', disabled: !can }, 'บันทึกร่าง');
   const previewBtn = h('button', {}, '🎮 ดูในเกม (เฉพาะฉัน)');
@@ -57,11 +65,17 @@ export async function renderHudLayout(view: HTMLElement, h: H, api: Api): Promis
 
   const pos = (id: string): HudPos => draft[device][id] ?? {};
   const setPos = (id: string, p: HudPos): void => {
-    const t = tidy(p);
+    const t = tidy(p, isFreeBtnPart(id));
     if (t) draft[device][id] = t;
     else delete draft[device][id];
   };
-  const parts = (): HudPartDef[] => HUD_PARTS.filter((p) => p.box[device] && p.kind === layer);
+  /** The floating shortcut buttons as parts (named after the button). */
+  const freeParts = (): HudPartDef[] => state.freeButtons.map((b) => ({ ...hudPart(freeBtnDomId(b.id))!, label: `ปุ่มลัด: ${b.label}` }));
+  /** What this device / layer shows: the code's parts, plus the floating buttons placed on this device. */
+  const parts = (): HudPartDef[] => [
+    ...HUD_PARTS.filter((p) => p.box[device] && p.kind === layer),
+    ...(layer === 'hud' ? freeParts().filter((p) => draft[device][p.id]) : []),
+  ];
 
   const drawStatus = (): void => {
     const dirty = !same(draft, base);
@@ -178,10 +192,32 @@ export async function renderHudLayout(view: HTMLElement, h: H, api: Api): Promis
         const row = h('div', { class: `hl-row${selected === p.id ? ' hl-sel' : ''}${draft[device][p.id] ? ' hl-changed' : ''}` },
           h('span', { class: 'hl-name', onclick: () => { selected = p.id; draw(); } }, p.label),
           num(p.id, 'x', p), num(p.id, 'y', p), num(p.id, 's', p), hide,
-          h('button', { title: 'กลับเป็นค่าในโค้ด', disabled: !can || !draft[device][p.id], onclick: () => { setPos(p.id, {}); draw(); } }, '↺'),
+          isFreeBtnPart(p.id)
+            ? h('button', { title: 'เอาปุ่มนี้ออกจากจอนี้ (ผู้เล่นจะไม่เห็นบนจอนี้)', disabled: !can, onclick: () => { delete draft[device][p.id]; selected = null; draw(); } }, '🗑')
+            : h('button', { title: 'กลับเป็นค่าในโค้ด', disabled: !can || !draft[device][p.id], onclick: () => { setPos(p.id, {}); draw(); } }, '↺'),
         );
         return row;
       }),
+      ...(layer === 'hud' ? freeParts().filter((p) => !draft[device][p.id]).map((p) => h('div', { class: 'hl-row' },
+        h('span', { class: 'hl-name muted' }, `${p.label} (ยังไม่วางบนจอนี้)`),
+        h('button', { disabled: !can, onclick: () => { setPos(p.id, { ...FREE_BTN_START[device] }); selected = p.id; draw(); } }, '+ วางบนจอนี้'),
+      )) : []),
+      ...(layer === 'hud' && !state.freeButtons.length ? [h('div', { class: 'muted' }, 'ยังไม่มีปุ่มลัดวางอิสระ (เพิ่มได้ที่แท็บ "จัดเมนูเกม" → ปุ่มลัด → ติ๊ก "วางอิสระบนจอ")')] : []),
+    );
+  };
+
+  /** Versions made live before (publish / reset): any of them can come back as the draft. */
+  const drawHistory = (): void => {
+    const what = { publish: 'เผยแพร่', reset: 'คืนค่าในโค้ด', before: 'ที่ใช้อยู่ก่อนมีประวัติ' } as const;
+    const live = JSON.stringify(state.published);
+    history.replaceChildren(
+      h('summary', {}, `ประวัติที่เคยเผยแพร่ (${state.history.length}/20) — ย้อนกลับได้`),
+      h('div', { class: 'muted' }, 'กด "ย้อนเป็นฉบับนี้" = ฉบับนั้นกลายเป็นร่าง (ทับร่างเดิม) ดูในเกมก่อนแล้วค่อยกดเผยแพร่ · เก็บ 20 ฉบับล่าสุด'),
+      ...(state.history.length ? state.history.map((v) => h('div', { class: 'hl-hist' },
+        h('span', {}, new Date(v.at).toLocaleString('th-TH')),
+        h('span', { class: 'muted' }, `${what[v.what]}${v.by ? ` โดย ${v.by}` : ''}${JSON.stringify(v.layout) === live ? ' · ใช้อยู่ตอนนี้' : ''}`),
+        h('button', { disabled: !can, onclick: () => confirm('เอาฉบับนี้มาเป็นร่าง? (ร่างเดิมและการแก้ที่ยังไม่บันทึกจะหาย ผู้เล่นยังไม่เห็นจนกว่าจะกดเผยแพร่)') && void send({ restore: v.at }, 'ย้อนเป็นร่างแล้ว — กด "ดูในเกม" เพื่อตรวจ แล้วกดเผยแพร่') }, 'ย้อนเป็นฉบับนี้'),
+      )) : [h('div', { class: 'muted' }, 'ยังไม่มี (เริ่มเก็บตั้งแต่การเผยแพร่ครั้งถัดไป)')]),
     );
   };
 
@@ -197,13 +233,14 @@ export async function renderHudLayout(view: HTMLElement, h: H, api: Api): Promis
     drawTabs();
     drawFrame();
     drawList();
+    drawHistory();
     drawStatus();
   };
 
   const send = async (body: unknown, ok: string): Promise<boolean> => {
     try {
       state = await api<AdminHudLayout>('POST', '/admin/hud-layout', body);
-      base = structuredClone(state.draft ?? state.published);
+      base = dropGone(structuredClone(state.draft ?? state.published));
       draft = structuredClone(base);
       msg.className = 'msg ok';
       msg.textContent = ok;
@@ -236,6 +273,6 @@ export async function renderHudLayout(view: HTMLElement, h: H, api: Api): Promis
     ),
     h('div', { class: 'hl-wrap' }, frame, list),
     h('div', { class: 'row' }, saveBtn, previewBtn, publishBtn, discardBtn, resetBtn),
-    status, msg,
+    status, msg, history,
   );
 }
