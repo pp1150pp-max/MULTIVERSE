@@ -248,6 +248,19 @@ export class Terrain {
     return !!this.zone.iceLakes?.some((l) => Math.hypot((x - l.x) / l.rx, (z - l.z) / l.rz) < 1);
   }
 
+  /**
+   * The boss is dead: takes its solid (zone.bossSolid, the Volcano Heart's rock) away so its spot can be walked on.
+   * Whatever sits on the boss's exact spot goes, whether it came from a layout file or the generator. Only boss rooms.
+   */
+  releaseBossSolid(): void {
+    const b = this.zone.boss;
+    if (!b || !this.zone.roomOf || !this.zone.bossSolid) return;
+    for (let i = this.colliders.length - 1; i >= 0; i--) {
+      const c = this.colliders[i];
+      if (Math.abs(c.x - b.x) < 0.01 && Math.abs(c.z - b.z) < 0.01 && c.r <= this.zone.bossSolid + 0.01) this.colliders.splice(i, 1);
+    }
+  }
+
   /** Lava underfoot? It burns (see Sim.tickLava). */
   onLava(x: number, z: number): boolean {
     return !!lavaAt(this.zone, x, z);

@@ -670,6 +670,7 @@ export class Sim {
       this.log(`🏆 ปราบ ${m.def.name} สำเร็จ!`, '#ffcf5a');
       this.shake(0.4, m);
       if (this.zone.roomOf) this.cleared = true;
+      this.terrain.releaseBossSolid();
     }
   }
 
