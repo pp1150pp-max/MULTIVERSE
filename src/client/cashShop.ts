@@ -10,7 +10,7 @@ import { STONE_DESC, STONE_NAME } from '../shared/data/stones';
 import { CASH_BADGE_NAME, CASH_QTY_MAX, cashBadge, cashBuyError, CURRENCY, type CashEntry } from '../shared/cashShop';
 import type { StoneKind } from '../shared/types';
 import { cashCatalogNow, cashStateNow, cashVersion, topupNow } from './cashData';
-import { bahtText, topupNewError, type TopupPending } from '../shared/topup';
+import { bahtText, firstBonus, topupNewError, type TopupPending } from '../shared/topup';
 import { cosPicture } from './cosmetics';
 import { setTryOn } from './cosLook';
 import { stoneIcon } from './icons';
@@ -249,7 +249,7 @@ export class CashShopUI {
     card.append(well, el('div', 'cash-name', entryName(e)), info, priceBar(e));
     if (badge) {
       const rib = el('span', `cash-ribbon ${badge}`);
-      rib.append(el('b', '', CASH_BADGE_NAME[badge]));
+      rib.append(el('b', '', badge === 'sale' && e.pct ? `-${e.pct}%` : CASH_BADGE_NAME[badge]));
       card.append(rib);
     }
     card.onclick = () => {
@@ -395,6 +395,7 @@ export class CashShopUI {
         const tier = 1 + Math.min(3, Math.floor((order.indexOf(p.crystals + p.bonus) * 4) / pk.length));
         card.innerHTML = packPic(tier) + `<div class="cash-pack-n">${CRYSTAL_ICON}<b>${fmt(p.crystals)}</b></div>`
           + (p.bonus ? `<div class="cash-pack-bonus">+ โบนัส ${fmt(p.bonus)}</div>` : '')
+          + (firstBonus(tv, p) ? `<div class="cash-pack-first">ครั้งแรก + ${fmt(firstBonus(tv, p))}</div>` : '')
           + `<div class="cash-pack-baht">${fmt(p.baht)} บาท</div>`;
         const err = topupNewError(tv, pk, p, this.g.backend.guest);
         const label = !tv.open ? 'เร็วๆ นี้' : this.topupBusy ? 'รอสักครู่…' : 'เติม';
@@ -428,7 +429,7 @@ export class CashShopUI {
     info.append(
       el('div', 'cash-note', 'สแกนด้วยแอปธนาคาร (พร้อมเพย์) แล้วโอนยอดนี้ให้ตรงทุกสตางค์'),
       el('div', 'cash-topup-amount', `${bahtText(p.amount)} บาท`),
-      el('div', 'cash-note', `ได้ ${fmt(p.crystals)}${p.bonus ? ` + โบนัส ${fmt(p.bonus)}` : ''} ${CURRENCY} หลังทีมงานตรวจยอดเข้าแล้ว`),
+      el('div', 'cash-note', `ได้ ${fmt(p.crystals)}${p.bonus ? ` + โบนัส ${fmt(p.bonus)}` : ''}${p.first ? ` + ครั้งแรก ${fmt(p.first)}` : ''} ${CURRENCY} หลังทีมงานตรวจยอดเข้าแล้ว`),
       el('div', 'cash-note', `รอยืนยันถึง ${new Date(p.expiresAt).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' })} (${timeLeft(p.expiresAt - Date.now())})`),
       button('ยกเลิกคำขอ', () => {
         if (confirm(`ยกเลิกคำขอเติม ${bahtText(p.amount)} บาท?\nถ้าโอนไปแล้ว อย่ายกเลิก รอทีมงานยืนยัน`)) void this.topupCancel(p.id);
@@ -438,10 +439,11 @@ export class CashShopUI {
     return wrap;
   }
 
-  private async topupNew(p: { crystals: number; bonus: number; baht: number }): Promise<void> {
+  private async topupNew(p: { crystals: number; bonus: number; baht: number; first?: number }): Promise<void> {
     if (this.topupBusy) return;
-    if (!confirm(`เติม ${fmt(p.crystals)}${p.bonus ? ` + โบนัส ${fmt(p.bonus)}` : ''} ${CURRENCY} ราคา ${fmt(p.baht)} บาท?\n\n${topupNow().notice}`)) return;
-    await this.topupCall(() => this.g.backend.topupNew(p));
+    const first = firstBonus(topupNow(), p);
+    if (!confirm(`เติม ${fmt(p.crystals)}${p.bonus ? ` + โบนัส ${fmt(p.bonus)}` : ''}${first ? ` + ครั้งแรก ${fmt(first)}` : ''} ${CURRENCY} ราคา ${fmt(p.baht)} บาท?\n\n${topupNow().notice}`)) return;
+    await this.topupCall(() => this.g.backend.topupNew({ crystals: p.crystals, bonus: p.bonus, baht: p.baht }));
   }
 
   private async topupCancel(id: number): Promise<void> {

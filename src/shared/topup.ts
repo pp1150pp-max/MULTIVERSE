@@ -3,7 +3,7 @@
 // few satang no other open request has (100.37), the game shows a Thai QR (EMVCo, built here, no outside
 // service) for exactly that amount, and the owner confirms it in /admin after seeing the money arrive in
 // the bank app (never from a slip). Pure data and checks, used by browser and server.
-import type { CashPackage } from './cashShop';
+import { packageKey, type CashPackage } from './cashShop';
 
 export const TOPUP_SETTING = 'topup';
 /** `{ at, by }` once the owner switched the close beta refund on (no row = off). */
@@ -180,6 +180,8 @@ export interface TopupPending {
   id: number;
   crystals: number;
   bonus: number;
+  /** First-purchase bonus of the package, if this is the account's first of it (decided again at confirm). */
+  first: number;
   baht: number;
   /** To transfer, in satang. */
   amount: number;
@@ -189,9 +191,19 @@ export interface TopupPending {
 }
 
 /** What the browser is sent: whether top-up is open, the notice, and this account's open requests. */
-export interface TopupView { open: boolean; notice: string; pending: TopupPending[]; maxPending: number }
+export interface TopupView {
+  open: boolean;
+  notice: string;
+  pending: TopupPending[];
+  maxPending: number;
+  /** Packages (`packageKey`) this account already topped up with: no first-purchase bonus on those. */
+  used: string[];
+}
 
-export const closedTopup = (): TopupView => ({ open: false, notice: '', pending: [], maxPending: 1 });
+export const closedTopup = (): TopupView => ({ open: false, notice: '', pending: [], maxPending: 1, used: [] });
+
+/** The first-purchase bonus this account would get with package `p` (0 = none, or already used). */
+export const firstBonus = (v: TopupView, p: CashPackage): number => (p.first && !v.used.includes(packageKey(p)) ? p.first : 0);
 
 /** Why a package can't be asked for, or null (`pk` = the packages on sale now). */
 export function topupNewError(v: TopupView, pk: readonly CashPackage[], p: { crystals?: unknown; bonus?: unknown; baht?: unknown }, guest: boolean): string | null {
@@ -210,6 +222,8 @@ export interface TopupRow {
   charName: string;
   crystals: number;
   bonus: number;
+  /** First-purchase bonus: offered (open requests) or given (confirmed; 0 if the account had that package already). */
+  first: number;
   baht: number;
   amount: number;
   status: TopupStatus;

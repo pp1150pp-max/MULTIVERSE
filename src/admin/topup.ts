@@ -42,9 +42,9 @@ export async function renderTopup(view: HTMLElement, h: H, api: Api): Promise<vo
   };
 
   const act = (r: TopupRow, op: 'confirm' | 'reject' | 'reverse'): void => {
-    const n = fmt(r.crystals + r.bonus);
+    const n = fmt(r.crystals + r.bonus + r.first);
     const text = op === 'confirm'
-      ? `ยืนยันคำขอ #${r.id} ของ ${r.username}?\n\nยอด ${bahtText(r.amount)} บาท → ${n} คริสตัล (รวมโบนัส) เข้าบัญชีทันที\n\nกดเมื่อเห็นยอดนี้เข้าในแอปธนาคารจริงแล้วเท่านั้น ห้ามเชื่อสลิป`
+      ? `ยืนยันคำขอ #${r.id} ของ ${r.username}?\n\nยอด ${bahtText(r.amount)} บาท → ${n} คริสตัล (รวมโบนัส${r.first ? ' และโบนัสครั้งแรก ถ้าบัญชียังไม่เคยได้แพ็กนี้' : ''}) เข้าบัญชีทันที\n\nกดเมื่อเห็นยอดนี้เข้าในแอปธนาคารจริงแล้วเท่านั้น ห้ามเชื่อสลิป`
       : op === 'reject' ? `ปฏิเสธคำขอ #${r.id} ของ ${r.username} (ยอด ${bahtText(r.amount)} บาท)?`
       : `ย้อนรายการ #${r.id} ของ ${r.username}?\n\nเอา ${n} คริสตัลออกจากบัญชี (ถ้าผู้เล่นใช้ไปแล้วจะย้อนไม่ได้)`;
     if (!confirm(text)) return;
@@ -105,7 +105,7 @@ export async function renderTopup(view: HTMLElement, h: H, api: Api): Promise<vo
         const warn = (dup.get(r.amount) ?? 0) > 1 ? h('div', { class: 'msg bad', style: 'font-size:11px' }, '⚠ ยอดซ้ำกับอีกรายการ') : null;
         return h('tr', {},
           h('td', {}, String(r.id)), h('td', {}, fmtTime(r.createdAt)), h('td', {}, r.username), h('td', {}, r.charName),
-          h('td', {}, `${fmt(r.baht)} บาท → ${fmt(r.crystals)}${r.bonus ? ` + ${fmt(r.bonus)}` : ''}`),
+          h('td', {}, `${fmt(r.baht)} บาท → ${fmt(r.crystals)}${r.bonus ? ` + ${fmt(r.bonus)}` : ''}${r.first ? ` + ครั้งแรก ${fmt(r.first)}` : ''}`),
           h('td', {}, h('b', { style: 'font-size:15px' }, `${bahtText(r.amount)} บาท`), warn),
           h('td', {}, TOPUP_STATUS_NAME[r.status]),
           h('td', {}, waiting ? fmtTime(r.expiresAt) : `${r.decidedBy ?? ''} ${fmtTime(r.decidedAt)}`),
