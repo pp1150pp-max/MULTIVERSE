@@ -63,6 +63,11 @@ export const CODE_BOSS_WIPE_KEEP_HP = true;
 export const CODE_ROOM_WIPE_SECONDS = 5;
 /** Seconds between entering a boss room and its boss appearing (owner 2026-11-20: 13, was 5). */
 export const CODE_ROOM_BOSS_DELAY = 13;
+/** Boss-room boss drops spread over the arena, wider the more pieces drop (owner 2026-11-22: on). Radius = base + k x sqrt(pieces), capped. */
+export const CODE_BOSS_LOOT_SPREAD = true;
+export const CODE_BOSS_LOOT_BASE = 2.5;
+export const CODE_BOSS_LOOT_K = 0.8;
+export const CODE_BOSS_LOOT_MAX = 12;
 /** No damage for a moment after getting up with a phoenix feather in a boss room (owner 2026-11-20: on). */
 export const CODE_REVIVE_GUARD = true;
 /** How long that lasts, in seconds (owner: 5); attacking, a skill, a buff or a dash ends it at once. */
@@ -187,6 +192,12 @@ export interface Balance {
   roomWipeSec: number;
   /** Seconds a boss room counts down before its boss appears. */
   roomBossDelay: number;
+  /** A boss-room boss spreads its drops over the arena (off = the old 0.5-2.5 scatter). */
+  bossLootSpread: boolean;
+  /** Spread radius for one piece, the extra per square root of the piece count, and the cap (world units). */
+  bossLootBase: number;
+  bossLootK: number;
+  bossLootMax: number;
   /** Untouchable (no damage or boss effects, blinking) for a moment after a phoenix-feather revive in a boss room. */
   reviveGuard: boolean;
   /** How long that lasts; any attack, skill, buff or dash ends it early. */
@@ -266,6 +277,10 @@ export interface BalanceTuning {
   roomWipeSec?: number;
   /** Boss countdown seconds, when not the code's. */
   roomBossDelay?: number;
+  bossLootSpread?: boolean;
+  bossLootBase?: number;
+  bossLootK?: number;
+  bossLootMax?: number;
   /** Phoenix-feather revive guard, when not the code's (on). */
   reviveGuard?: boolean;
   /** Its seconds, when not the code's. */
@@ -314,6 +329,9 @@ export const BALANCE_RANGE = {
   mobGiveUpSec: [0, 120],
   roomWipeSec: [3, 60],
   roomBossDelay: [0, 60],
+  bossLootBase: [0.5, 10],
+  bossLootK: [0, 5],
+  bossLootMax: [1, 30],
   reviveGuardSec: [1, 30],
 } as const satisfies Record<string, readonly [number, number]>;
 
@@ -361,6 +379,10 @@ export function codeBalance(): Balance {
     bossWipeKeepHp: CODE_BOSS_WIPE_KEEP_HP,
     roomWipeSec: CODE_ROOM_WIPE_SECONDS,
     roomBossDelay: CODE_ROOM_BOSS_DELAY,
+    bossLootSpread: CODE_BOSS_LOOT_SPREAD,
+    bossLootBase: CODE_BOSS_LOOT_BASE,
+    bossLootK: CODE_BOSS_LOOT_K,
+    bossLootMax: CODE_BOSS_LOOT_MAX,
     reviveGuard: CODE_REVIVE_GUARD,
     reviveGuardSec: CODE_REVIVE_GUARD_SEC,
     auto: codeAuto(),
@@ -413,6 +435,10 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.bossWipeKeepHp !== undefined) b.bossWipeKeepHp = t.bossWipeKeepHp;
   if (t.roomWipeSec !== undefined) b.roomWipeSec = t.roomWipeSec;
   if (t.roomBossDelay !== undefined) b.roomBossDelay = t.roomBossDelay;
+  if (t.bossLootSpread !== undefined) b.bossLootSpread = t.bossLootSpread;
+  if (t.bossLootBase !== undefined) b.bossLootBase = t.bossLootBase;
+  if (t.bossLootK !== undefined) b.bossLootK = t.bossLootK;
+  if (t.bossLootMax !== undefined) b.bossLootMax = t.bossLootMax;
   if (t.reviveGuard !== undefined) b.reviveGuard = t.reviveGuard;
   if (t.reviveGuardSec !== undefined) b.reviveGuardSec = t.reviveGuardSec;
   if (t.mobReturnIgnoreHits !== undefined) b.mobReturnIgnoreHits = t.mobReturnIgnoreHits;
@@ -566,7 +592,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'forge', 'walkHidden', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'forge', 'walkHidden', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -643,7 +669,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   }
 
   // Single numbers
-  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'roomWipeSec' | 'roomBossDelay' | 'reviveGuardSec' | 'cdrCap', range: readonly [number, number], what: string): string | null => {
+  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'roomWipeSec' | 'roomBossDelay' | 'bossLootBase' | 'bossLootK' | 'bossLootMax' | 'reviveGuardSec' | 'cdrCap', range: readonly [number, number], what: string): string | null => {
     const n = num(o[key], range[0], range[1], what);
     if (typeof n === 'string') return n;
     if (n !== undefined && n !== CODE[key]) out[key] = n;
@@ -703,6 +729,13 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (x === undefined) return null;
     if (typeof x !== 'boolean') return strict ? 'สวิตช์บอสไม่ฟื้นเลือดตอนทีมตายหมดต้องเป็นเปิด/ปิด' : null;
     if (x !== CODE.bossWipeKeepHp) out.bossWipeKeepHp = x;
+    return null;
+  };
+  const bossLootSpread = (): string | null => {
+    const x = o.bossLootSpread;
+    if (x === undefined) return null;
+    if (typeof x !== 'boolean') return strict ? 'สวิตช์กระจายของดรอปบอสต้องเป็นเปิด/ปิด' : null;
+    if (x !== CODE.bossLootSpread) out.bossLootSpread = x;
     return null;
   };
   const reviveGuard = (): string | null => {
@@ -1097,6 +1130,10 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     wipeKeep() ??
     one('roomWipeSec', BALANCE_RANGE.roomWipeSec, 'เวลาชุบตอนตายหมดทีม (วินาที)') ??
     one('roomBossDelay', BALANCE_RANGE.roomBossDelay, 'นับถอยหลังก่อนบอสเกิด (วินาที)') ??
+    bossLootSpread() ??
+    one('bossLootBase', BALANCE_RANGE.bossLootBase, 'รัศมีฐานของดรอปบอส') ??
+    one('bossLootK', BALANCE_RANGE.bossLootK, 'ตัวคูณรัศมีต่อจำนวนของดรอปบอส') ??
+    one('bossLootMax', BALANCE_RANGE.bossLootMax, 'รัศมีสูงสุดของดรอปบอส') ??
     reviveGuard() ??
     one('reviveGuardSec', BALANCE_RANGE.reviveGuardSec, 'อมตะหลังชุบด้วยขนนกฟีนิกซ์ (วินาที)') ??
     auto() ??
@@ -1210,6 +1247,10 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.bossWipeKeepHp !== b.bossWipeKeepHp) out.push(`บอสไม่ฟื้นเลือดตอนทีมตายหมด ${a.bossWipeKeepHp ? 'เปิด' : 'ปิด'} → ${b.bossWipeKeepHp ? 'เปิด' : 'ปิด'}`);
   if (a.roomWipeSec !== b.roomWipeSec) out.push(`เวลาชุบตอนตายหมดทีม ${a.roomWipeSec} → ${b.roomWipeSec} วิ`);
   if (a.roomBossDelay !== b.roomBossDelay) out.push(`นับถอยหลังก่อนบอสเกิด ${a.roomBossDelay} → ${b.roomBossDelay} วิ`);
+  if (a.bossLootSpread !== b.bossLootSpread) out.push(`กระจายของดรอปบอส ${a.bossLootSpread ? 'เปิด' : 'ปิด'} → ${b.bossLootSpread ? 'เปิด' : 'ปิด'}`);
+  if (a.bossLootBase !== b.bossLootBase) out.push(`รัศมีฐานของดรอปบอส ${a.bossLootBase} → ${b.bossLootBase}`);
+  if (a.bossLootK !== b.bossLootK) out.push(`ตัวคูณรัศมีต่อจำนวนของดรอปบอส ${a.bossLootK} → ${b.bossLootK}`);
+  if (a.bossLootMax !== b.bossLootMax) out.push(`รัศมีสูงสุดของดรอปบอส ${a.bossLootMax} → ${b.bossLootMax}`);
   if (a.reviveGuard !== b.reviveGuard) out.push(`อมตะหลังชุบด้วยขนนกฟีนิกซ์ ${a.reviveGuard ? 'เปิด' : 'ปิด'} → ${b.reviveGuard ? 'เปิด' : 'ปิด'}`);
   if (a.reviveGuardSec !== b.reviveGuardSec) out.push(`เวลาอมตะหลังชุบ ${a.reviveGuardSec} → ${b.reviveGuardSec} วิ`);
   out.push(...forgeChanges(a.forge, b.forge));
