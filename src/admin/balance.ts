@@ -8,6 +8,7 @@ import { CIRCLE_FALLBACKS, FX_LAYER_NAME, FX_LAYER_RANGE, QUARKS_SKILLS, quarksK
 import { circleDesign, drawInner, drawOuter } from '../client/circleDesigns';
 import { skillExtras } from '../client/skillExtras';
 import { ATTACK_ROOT_RANGE, NO_ATTACK_ROOT } from '../shared/attackRootTuning';
+import { AUDIO_GAIN_RANGE, SFX_GROUP_NAME, SFX_GROUPS } from '../shared/audioTuning';
 import { FORGE_RANGE, PLUS_CAP, PLUS_NEVER } from '../shared/forgeTuning';
 import { RIG_ARMOR_ITEMS, RIG_ARMOR_NAME, RIG_ARMORS, RIG_WEAPON_ITEMS, RIG_WEAPON_NAME, RIG_WEAPONS } from '../shared/rigLookTuning';
 import {
@@ -1057,6 +1058,25 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
+  // ---------------------------------------------------------- sound effect groups (src/shared/audioTuning.ts)
+  const audioCard = h('div', { class: 'card' });
+  const drawAudio = (): void => {
+    const refresh = (): void => { updateSummary(); };
+    audioCard.replaceChildren(
+      h('h2', {}, 'เสียงเอฟเฟกต์'),
+      h('div', { class: 'muted' }, 'เปิด/ปิดและความดังของเสียงแต่ละหมวดทั้งเซิร์ฟ · คูณกับแถบเลื่อนของผู้เล่นในหน้าต่างเสียง · เสียงทุกอันสังเคราะห์ด้วยโค้ด (src/client/audio/sfx.ts) · ค่าในโค้ด: เปิด ×1 · มีผลกับทุกคนทันทีหลังบันทึก'),
+      ...SFX_GROUPS.map((g) => {
+        const c = draft.audio.groups[g];
+        const cc = code.audio.groups[g];
+        const on = h('input', { type: 'checkbox', checked: c.on, onchange: (e: Event) => { c.on = (e.target as HTMLInputElement).checked; refresh(); drawAudio(); } });
+        return h('div', { class: 'row bal-line' },
+          h('label', { class: c.on !== cc.on ? 'bal-changed' : '' }, on, ` เสียง${SFX_GROUP_NAME[g]}`),
+          h('label', {}, ' × ความดัง ', numBox(() => c.gain, (n) => { c.gain = n; }, cc.gain, AUDIO_GAIN_RANGE[0], AUDIO_GAIN_RANGE[1], 0.1, refresh)));
+      }),
+      h('div', { class: 'muted' }, 'สกิลผู้เล่น = ตีธรรมดา พุ่งหลบ ทุกสกิล และเสียงตอนสกิลลง · บอส = ตีธรรมดา ท่าสกิล เข้าเฟส/คลั่ง บอสปรากฏ บอสตาย · มอน = มอนโดนตี คริติคอล มอนตาย · ตัวละครและไอเทม = เจ็บ ตาย ฟื้น เลเวลอัป วาร์ป เก็บของ ดื่มยา ซื้อขาย ตีบวก · หน้าต่างและปุ่ม = คลิกปุ่ม'),
+    );
+  };
+
   // ---------------------------------------------------------- papercraft sword rig pictures (src/shared/rigLookTuning.ts)
   const rigCard = h('div', { class: 'card' });
   const drawRig = (): void => {
@@ -1160,6 +1180,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawFx();
     drawCircles();
     drawRoot();
+    drawAudio();
     drawRig();
   };
   const save = async (body: { tuning: BalanceTuning; part: 'rest' } | { reset: true; part: 'rest' }, ask: string): Promise<void> => {
@@ -1209,7 +1230,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     msg,
   );
 
-  box.replaceChildren(fold.toc, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, forgeCard, autoCard, tutCard, fxCard, circleCard, rootCard, rigCard, bar);
+  box.replaceChildren(fold.toc, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, forgeCard, autoCard, tutCard, fxCard, circleCard, rootCard, audioCard, rigCard, bar);
   redraw();
   fold.refreshToc();
 }

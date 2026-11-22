@@ -8,6 +8,8 @@ import { audioEngine } from './engine';
 import { music, type TrackId } from './music';
 import { mountAudioPanel } from './panel';
 import { isSoundName, playSound, type SoundName } from './sfx';
+import { BOSS_SOUNDS } from './bossSounds';
+import { IMPACT_OF } from './skillSounds';
 
 /** Full volume within this distance of our character, in world units. */
 const FULL_RADIUS = 7;
@@ -22,7 +24,6 @@ const BOSS_MUSIC_HOLD = 4;
 
 const ZONE_MUSIC: Record<string, TrackId> = { emerald_forest: 'forest', misty_marsh: 'marsh', frost_reach: 'snow', ashen_isle: 'volcano' };
 const ANIM_SLOT: Record<string, SkillSlot> = { attack: 'basic', skill_q: 'q', skill_e: 'e', skill_r: 'r', dash: 'dash' };
-const IMPACT_SOUND: Record<string, SoundName> = { explosion: 'explosion', crater: 'crater', impact: 'impact' };
 
 export class GameAudio {
   private zoneId: string | null = null;
@@ -52,15 +53,12 @@ export class GameAudio {
           this.at('level_up', x, z, me);
         } else if (ev.name === 'effect') {
           const [effect, x, z] = ev.args;
-          const name = IMPACT_SOUND[effect];
+          const name: SoundName | undefined = IMPACT_OF[effect] ?? (effect in BOSS_SOUNDS ? (effect as keyof typeof BOSS_SOUNDS) : undefined);
           if (name) this.at(name, x, z, me);
         }
         break;
       case 'sfx':
         this.at(ev.name, ev.x, ev.z, me);
-        break;
-      case 'banner':
-        this.at('enrage', ev.x, ev.z, me);
         break;
       case 'anim':
         this.onAnim(ev.id, ev.name, b, ev.skill);

@@ -13,6 +13,7 @@ import { MONSTERS, type MonsterDef } from './data/monsters';
 import { ZONES } from './data/zones';
 import { checkFxLayerTuning, codeFxLayer, fxLayerChanges, mergeFxLayer, type FxLayerConfig, type FxLayerTuning } from './fxLayerTuning';
 import { checkMenuLayoutTuning, codeMenuLayout, mergeMenuLayout, menuLayoutChanges, type MenuLayoutConfig, type MenuLayoutTuning } from './menuLayout';
+import { audioChanges, checkAudioTuning, codeAudio, mergeAudio, type AudioConfig, type AudioTuning } from './audioTuning';
 import { attackRootChanges, checkAttackRootTuning, codeAttackRoot, mergeAttackRoot, type AttackRootConfig, type AttackRootTuning } from './attackRootTuning';
 import { checkRigLookTuning, codeRigLook, mergeRigLook, rigLookChanges, type RigLookConfig, type RigLookTuning } from './rigLookTuning';
 import { autoChanges, checkAutoTuning, codeAuto, mergeAuto, type AutoConfig, type AutoTuning } from './autoTuning';
@@ -200,6 +201,8 @@ export interface Balance {
   rigLook: RigLookConfig;
   /** Stopping for a moment on each attack, per class (attackRootTuning.ts). */
   attackRoot: AttackRootConfig;
+  /** Sound effect groups: server-wide switch and loudness (audioTuning.ts). */
+  audio: AudioConfig;
   /** Which buttons the menu window and the top-right icon row show, in what order (menuLayout.ts). */
   menuLayout: MenuLayoutConfig;
   /** Tutorial quest rewards (tutorial.ts). */
@@ -277,6 +280,7 @@ export interface BalanceTuning {
   rigLook?: RigLookTuning;
   /** Attack stop settings that differ from the code. */
   attackRoot?: AttackRootTuning;
+  audio?: AudioTuning;
   /** Menu / icon row lists that differ from the code. */
   menuLayout?: MenuLayoutTuning;
   /** Tutorial quest rewards that differ from the code. */
@@ -364,6 +368,7 @@ export function codeBalance(): Balance {
     fxLayer: codeFxLayer(),
     rigLook: codeRigLook(),
     attackRoot: codeAttackRoot(),
+    audio: codeAudio(),
     menuLayout: codeMenuLayout(),
     tutorial: codeTutorial(),
     skills: codeSkills(),
@@ -423,6 +428,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   b.fxLayer = mergeFxLayer(t.fxLayer);
   b.rigLook = mergeRigLook(t.rigLook);
   b.attackRoot = mergeAttackRoot(t.attackRoot);
+  b.audio = mergeAudio(t.audio);
   b.menuLayout = mergeMenuLayout(t.menuLayout);
   b.tutorial = mergeTutorial(t.tutorial);
   b.skills = mergeSkills(t.skills);
@@ -560,7 +566,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'forge', 'walkHidden', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'menuLayout'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'forge', 'walkHidden', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -1032,6 +1038,12 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (c.tuning) out.rigLook = c.tuning;
     return null;
   };
+  const audio = (): string | null => {
+    const c = checkAudioTuning(o.audio, strict);
+    if ('error' in c) return c.error;
+    if (c.tuning) out.audio = c.tuning;
+    return null;
+  };
   const attackRoot = (): string | null => {
     const c = checkAttackRootTuning(o.attackRoot, strict);
     if ('error' in c) return c.error;
@@ -1094,6 +1106,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     fxLayer() ??
     rigLook() ??
     attackRoot() ??
+    audio() ??
     menuLayout();
   if (err) return { error: err };
   // Fixed key order.
@@ -1214,6 +1227,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   out.push(...fxLayerChanges(a.fxLayer, b.fxLayer));
   out.push(...rigLookChanges(a.rigLook, b.rigLook));
   out.push(...attackRootChanges(a.attackRoot, b.attackRoot));
+  out.push(...audioChanges(a.audio, b.audio));
   out.push(...menuLayoutChanges(a.menuLayout, b.menuLayout));
   return out.join(', ');
 }

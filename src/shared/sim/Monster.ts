@@ -749,7 +749,8 @@ export class Monster extends Unit {
       sim.fx('burst', this.x, 0.3, this.z, '#c9a27a', 14, 6);
       if (this.def.fx?.slam) sim.fx('effect', this.def.fx.slam, this.x, this.z, 0, radius);
       sim.shake(0.45, this);
-      sim.sfx('boss_slam', this.x, this.z);
+      // A boss with its own slam picture has its own slam sound (client bossSounds.ts).
+      if (!this.def.fx?.slam) sim.sfx('boss_slam', this.x, this.z);
       for (const pl of sim.players) {
         if (pl.alive && Math.hypot(pl.x - this.x, pl.z - this.z) <= radius + pl.radius) {
           sim.hitPlayer(this, pl, 2, { stun: 0.7, kb: 7, fromX: this.x, fromZ: this.z });
