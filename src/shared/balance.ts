@@ -61,6 +61,13 @@ export const CODE_HUB_CHANNELS = true;
 export const CODE_BOSS_WIPE_KEEP_HP = true;
 /** Seconds a boss-room group that is all down has to get someone up with a feather (owner: 5). */
 export const CODE_ROOM_WIPE_SECONDS = 5;
+/** Volcano Heart big blast (owner 2026-11-22): safe spots scattered over the arena, away from players but reachable; off = the old ring around the boss. */
+export const CODE_HEART_BLAST_RANDOM = true;
+export const CODE_HEART_BLAST_SPOTS = 6;
+/** Every safe spot is at least this far from every living player (relaxed only when nobody could reach a spot otherwise). */
+export const CODE_HEART_BLAST_MIN_DIST = 6;
+/** Share of (walk speed × warning time) a player is assumed to cover; every living player must have a spot within it. */
+export const CODE_HEART_BLAST_REACH = 0.7;
 /** Seconds between entering a boss room and its boss appearing (owner 2026-11-20: 13, was 5). */
 export const CODE_ROOM_BOSS_DELAY = 13;
 /** No damage for a moment after getting up with a phoenix feather in a boss room (owner 2026-11-20: on). */
@@ -187,6 +194,11 @@ export interface Balance {
   roomWipeSec: number;
   /** Seconds a boss room counts down before its boss appears. */
   roomBossDelay: number;
+  /** Volcano Heart blast: safe spots scattered over the arena (off = ring round the boss), how many, minimum distance from players, reach share. */
+  heartBlastRandom: boolean;
+  heartBlastSpots: number;
+  heartBlastMinDist: number;
+  heartBlastReach: number;
   /** Untouchable (no damage or boss effects, blinking) for a moment after a phoenix-feather revive in a boss room. */
   reviveGuard: boolean;
   /** How long that lasts; any attack, skill, buff or dash ends it early. */
@@ -266,6 +278,10 @@ export interface BalanceTuning {
   roomWipeSec?: number;
   /** Boss countdown seconds, when not the code's. */
   roomBossDelay?: number;
+  heartBlastRandom?: boolean;
+  heartBlastSpots?: number;
+  heartBlastMinDist?: number;
+  heartBlastReach?: number;
   /** Phoenix-feather revive guard, when not the code's (on). */
   reviveGuard?: boolean;
   /** Its seconds, when not the code's. */
@@ -314,6 +330,9 @@ export const BALANCE_RANGE = {
   mobGiveUpSec: [0, 120],
   roomWipeSec: [3, 60],
   roomBossDelay: [0, 60],
+  heartBlastSpots: [1, 12],
+  heartBlastMinDist: [0, 20],
+  heartBlastReach: [0.3, 1],
   reviveGuardSec: [1, 30],
 } as const satisfies Record<string, readonly [number, number]>;
 
@@ -361,6 +380,10 @@ export function codeBalance(): Balance {
     bossWipeKeepHp: CODE_BOSS_WIPE_KEEP_HP,
     roomWipeSec: CODE_ROOM_WIPE_SECONDS,
     roomBossDelay: CODE_ROOM_BOSS_DELAY,
+    heartBlastRandom: CODE_HEART_BLAST_RANDOM,
+    heartBlastSpots: CODE_HEART_BLAST_SPOTS,
+    heartBlastMinDist: CODE_HEART_BLAST_MIN_DIST,
+    heartBlastReach: CODE_HEART_BLAST_REACH,
     reviveGuard: CODE_REVIVE_GUARD,
     reviveGuardSec: CODE_REVIVE_GUARD_SEC,
     auto: codeAuto(),
@@ -413,6 +436,10 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.bossWipeKeepHp !== undefined) b.bossWipeKeepHp = t.bossWipeKeepHp;
   if (t.roomWipeSec !== undefined) b.roomWipeSec = t.roomWipeSec;
   if (t.roomBossDelay !== undefined) b.roomBossDelay = t.roomBossDelay;
+  if (t.heartBlastRandom !== undefined) b.heartBlastRandom = t.heartBlastRandom;
+  if (t.heartBlastSpots !== undefined) b.heartBlastSpots = t.heartBlastSpots;
+  if (t.heartBlastMinDist !== undefined) b.heartBlastMinDist = t.heartBlastMinDist;
+  if (t.heartBlastReach !== undefined) b.heartBlastReach = t.heartBlastReach;
   if (t.reviveGuard !== undefined) b.reviveGuard = t.reviveGuard;
   if (t.reviveGuardSec !== undefined) b.reviveGuardSec = t.reviveGuardSec;
   if (t.mobReturnIgnoreHits !== undefined) b.mobReturnIgnoreHits = t.mobReturnIgnoreHits;
@@ -566,7 +593,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'forge', 'walkHidden', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'forge', 'walkHidden', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -643,7 +670,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   }
 
   // Single numbers
-  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'roomWipeSec' | 'roomBossDelay' | 'reviveGuardSec' | 'cdrCap', range: readonly [number, number], what: string): string | null => {
+  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'roomWipeSec' | 'roomBossDelay' | 'heartBlastSpots' | 'heartBlastMinDist' | 'heartBlastReach' | 'reviveGuardSec' | 'cdrCap', range: readonly [number, number], what: string): string | null => {
     const n = num(o[key], range[0], range[1], what);
     if (typeof n === 'string') return n;
     if (n !== undefined && n !== CODE[key]) out[key] = n;
@@ -703,6 +730,13 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (x === undefined) return null;
     if (typeof x !== 'boolean') return strict ? 'สวิตช์บอสไม่ฟื้นเลือดตอนทีมตายหมดต้องเป็นเปิด/ปิด' : null;
     if (x !== CODE.bossWipeKeepHp) out.bossWipeKeepHp = x;
+    return null;
+  };
+  const heartRandom = (): string | null => {
+    const x = o.heartBlastRandom;
+    if (x === undefined) return null;
+    if (typeof x !== 'boolean') return strict ? 'สวิตช์จุดปลอดภัยสุ่มทั่วลานต้องเป็นเปิด/ปิด' : null;
+    if (x !== CODE.heartBlastRandom) out.heartBlastRandom = x;
     return null;
   };
   const reviveGuard = (): string | null => {
@@ -1097,6 +1131,10 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     wipeKeep() ??
     one('roomWipeSec', BALANCE_RANGE.roomWipeSec, 'เวลาชุบตอนตายหมดทีม (วินาที)') ??
     one('roomBossDelay', BALANCE_RANGE.roomBossDelay, 'นับถอยหลังก่อนบอสเกิด (วินาที)') ??
+    heartRandom() ??
+    one('heartBlastSpots', BALANCE_RANGE.heartBlastSpots, 'จำนวนจุดปลอดภัยของระเบิดใหญ่หัวใจภูเขาไฟ') ??
+    one('heartBlastMinDist', BALANCE_RANGE.heartBlastMinDist, 'ระยะจุดปลอดภัยห่างผู้เล่นขั้นต่ำ') ??
+    one('heartBlastReach', BALANCE_RANGE.heartBlastReach, 'ค่าเผื่อวิ่งทันของจุดปลอดภัย') ??
     reviveGuard() ??
     one('reviveGuardSec', BALANCE_RANGE.reviveGuardSec, 'อมตะหลังชุบด้วยขนนกฟีนิกซ์ (วินาที)') ??
     auto() ??
@@ -1210,6 +1248,10 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.bossWipeKeepHp !== b.bossWipeKeepHp) out.push(`บอสไม่ฟื้นเลือดตอนทีมตายหมด ${a.bossWipeKeepHp ? 'เปิด' : 'ปิด'} → ${b.bossWipeKeepHp ? 'เปิด' : 'ปิด'}`);
   if (a.roomWipeSec !== b.roomWipeSec) out.push(`เวลาชุบตอนตายหมดทีม ${a.roomWipeSec} → ${b.roomWipeSec} วิ`);
   if (a.roomBossDelay !== b.roomBossDelay) out.push(`นับถอยหลังก่อนบอสเกิด ${a.roomBossDelay} → ${b.roomBossDelay} วิ`);
+  if (a.heartBlastRandom !== b.heartBlastRandom) out.push(`ระเบิดใหญ่หัวใจภูเขาไฟสุ่มจุดปลอดภัยทั่วลาน ${a.heartBlastRandom ? 'เปิด' : 'ปิด'} → ${b.heartBlastRandom ? 'เปิด' : 'ปิด'}`);
+  if (a.heartBlastSpots !== b.heartBlastSpots) out.push(`จำนวนจุดปลอดภัยระเบิดใหญ่ ${a.heartBlastSpots} → ${b.heartBlastSpots}`);
+  if (a.heartBlastMinDist !== b.heartBlastMinDist) out.push(`จุดปลอดภัยห่างผู้เล่นขั้นต่ำ ${a.heartBlastMinDist} → ${b.heartBlastMinDist}`);
+  if (a.heartBlastReach !== b.heartBlastReach) out.push(`ค่าเผื่อวิ่งทันของจุดปลอดภัย ${a.heartBlastReach} → ${b.heartBlastReach}`);
   if (a.reviveGuard !== b.reviveGuard) out.push(`อมตะหลังชุบด้วยขนนกฟีนิกซ์ ${a.reviveGuard ? 'เปิด' : 'ปิด'} → ${b.reviveGuard ? 'เปิด' : 'ปิด'}`);
   if (a.reviveGuardSec !== b.reviveGuardSec) out.push(`เวลาอมตะหลังชุบ ${a.reviveGuardSec} → ${b.reviveGuardSec} วิ`);
   out.push(...forgeChanges(a.forge, b.forge));
