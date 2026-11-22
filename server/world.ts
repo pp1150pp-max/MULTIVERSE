@@ -218,7 +218,7 @@ interface Session {
   lastFriendAt: number;
   /** Level and zone its friends last saw (see friendsTick); a change updates their lists. */
   friendKey: string;
-  /** The channel number it was last in on a map with channels: entering another such map tries it first. */
+  /** The channel number it was last in on a map with channels (the hub too, when split): entering another such map tries it first. */
   lastCh: number;
   /** When the player last fought: a channel switch needs CH_SWITCH_CALM seconds since. Kept across maps. */
   fight: FightClock;
@@ -795,7 +795,7 @@ export class GameWorld {
       ip, edge, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, deflate: ws.extensions.includes('permessage-deflate'), staff: !acc.guest && ['owner', 'gm'].includes(this.db.adminRole(acc.id) ?? ''), pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity, blockTrades: false,
-      lastFriendAt: -Infinity, friendKey: '', lastCh: back?.channel.ch ?? 1, fight: new FightClock(Math.max(player.lastHurt, player.lastAttack)), lastChListAt: -Infinity, lastChAt: -Infinity,
+      lastFriendAt: -Infinity, friendKey: '', lastCh: back?.channel.ch ?? this.lastChOf(sim), fight: new FightClock(Math.max(player.lastHurt, player.lastAttack)), lastChListAt: -Infinity, lastChAt: -Infinity,
       pingHidden: false, awayAt: null,
     };
     // Back at the same spot after a drop (or a login elsewhere) with Auto on: Auto carries on, from the
@@ -2709,6 +2709,12 @@ export class GameWorld {
   // ------------------------------------------------------------ channels (server/channels.ts)
 
   /** The channel number a session is in (1 on a map without channels or in a boss room). */
+  /** The CH number to remember for the next map (one number for every map, owner 2026-11-22): this Sim's, if its map has channels; else 1. */
+  private lastChOf(sim: Sim): number {
+    const c = this.channels.of(sim);
+    return c && hasChannels(c.zone) ? c.ch : 1;
+  }
+
   private chOf(s: Session): number {
     return this.channels.of(s.sim)?.ch ?? 1;
   }

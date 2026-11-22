@@ -97,10 +97,20 @@ async function run(): Promise<void> {
   const Q = joinWorld(b.tok, b.id('Quin'));
   await Promise.all([P.ready, Q.ready]);
   ok(P.welcome()?.zone === 'nexus_city' && P.welcome()?.ch === 1, 'joining: the hub, CH 1');
+  ok(Q.welcome()?.zone === 'nexus_city' && Q.welcome()?.ch === 1, 'the second one joins the same hub room (fewest players, under 20)');
+
+  // ---------------------------------------------------------- the hub split into channels (Balance.hubChannels, on in the code)
+  P.act({ a: 'chList' });
+  await sleep(300);
+  const hubView = P.msgs.filter((m) => m.t === 'channels').at(-1)?.view;
+  ok(hubView?.zone === 'nexus_city' && hubView.list.length === 10 && hubView.list[0].n === 2, `the hub's channel list: CH 1–10, CH 1 with 2 players (${JSON.stringify(hubView)})`);
+  P.act({ a: 'chSwitch', ch: 4 });
+  await sleep(600);
+  ok(P.lastZone()?.zone === 'nexus_city' && P.lastZone()?.ch === 4, 'switching to hub CH 4: it opens and she goes in');
 
   // ---------------------------------------------------------- GM warp into a channel
   ok((await warp(a.id('Pia'), { zone: 'emerald_forest', ch: 11 })).status === 400, 'warp into CH 11 while it is not open: refused (only CH 1–10 are reserved)');
-  ok((await warp(a.id('Pia'), { zone: 'nexus_city', ch: 1 })).status === 400, 'choosing a CH on a map without channels: refused');
+  ok((await warp(a.id('Pia'), { zone: 'nexus_city', ch: 4 })).status === 400, 'warp into the hub channel she is already in: refused');
   ok((await warp(a.id('Pia'), { zone: 'emerald_forest', ch: 'x' })).status === 400, 'a CH that is not a number: refused');
   const w = await warp(a.id('Pia'), { zone: 'emerald_forest', ch: 1 });
   await sleep(400);
