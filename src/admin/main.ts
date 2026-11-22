@@ -22,6 +22,7 @@ import { renderCards } from './tabs/cards';
 import { renderOnline } from './tabs/online';
 import { renderRoles } from './tabs/permissions';
 import { renderMail } from './tabs/mail';
+import { renderNews } from './news';
 import { renderTrades } from './tabs/trades';
 import { renderReports } from './tabs/reports';
 import { renderAudit } from './tabs/audit';
@@ -163,14 +164,14 @@ async function start(): Promise<void> {
 const CATEGORIES: { name: (typeof FEATURE_GROUPS)[number]; tabs: Tab[] }[] = [
   { name: 'ผู้เล่น', tabs: ['online', 'users'] },
   { name: 'ประวัติ', tabs: ['stats', 'sessions', 'chat', 'trades', 'audit'] },
-  { name: 'สื่อสาร', tabs: ['mail', 'reports', 'broadcast'] },
+  { name: 'สื่อสาร', tabs: ['mail', 'reports', 'broadcast', 'news'] },
   { name: 'ปรับเกม', tabs: ['balance', 'skills', 'cards', 'daily', 'mysteryBox', 'cashShop', 'topup', 'menuLayout', 'maps'] },
   { name: 'หน้าตา', tabs: ['orbs', 'cos', 'cosManage', 'rig', 'anim'] },
   { name: 'ระบบ', tabs: ['server', 'roles'] },
 ];
 const TAB_LABEL: Record<Tab, string> = {
   online: 'ออนไลน์', users: 'ผู้ใช้และตัวละคร', stats: 'สถิติ', sessions: 'การเข้าเล่น', chat: 'แชท', trades: 'เทรด',
-  audit: 'ประวัติ (audit)', mail: 'จดหมาย', reports: 'รายงาน', broadcast: 'ประกาศ', balance: 'ปรับสมดุล', skills: 'ระบบสกิล', cards: 'การ์ด', daily: 'ล็อกอินรายวัน', mysteryBox: 'กล่องปริศนา', cashShop: 'แคชช็อป', topup: 'เติมเงิน', menuLayout: 'จัดเมนูเกม', maps: 'แมพ',
+  audit: 'ประวัติ (audit)', mail: 'จดหมาย', reports: 'รายงาน', broadcast: 'ประกาศ', news: 'มีอะไรใหม่', balance: 'ปรับสมดุล', skills: 'ระบบสกิล', cards: 'การ์ด', daily: 'ล็อกอินรายวัน', mysteryBox: 'กล่องปริศนา', cashShop: 'แคชช็อป', topup: 'เติมเงิน', menuLayout: 'จัดเมนูเกม', maps: 'แมพ',
   orbs: 'ลูกแก้วตีบวก', cos: 'ของแต่งตัว', cosManage: 'จัดการของแต่งตัว', rig: 'นักดาบกระดาษ', anim: 'ท่าตัวละคร', server: 'Server', roles: 'สิทธิ์',
 };
 
@@ -189,6 +190,7 @@ function tabAllowed(t: Tab): boolean {
     case 'mail': return f.includes('mail');
     case 'reports': return f.includes('reports');
     case 'broadcast': return f.includes('broadcast');
+    case 'news': return f.includes('news');
     // The skill system's page uses the same switch as the balance tab (owner 2026-11-19).
     case 'balance': case 'skills': return f.includes('balance');
     // The map tab: the editor (mapEdit) and the switch "ใช้แมพจาก DB" (balance).
@@ -214,7 +216,7 @@ const catOf = (t: Tab) => CATEGORIES.find((c) => c.tabs.includes(t))!;
 /** An icon per tab in the side menu (looks only). */
 const TAB_ICON: Record<Tab, string> = {
   online: '🟢', users: '👤', stats: '📈', sessions: '🕒', chat: '💬', trades: '🤝', audit: '📜', mail: '✉️', reports: '🚩',
-  broadcast: '📢', balance: '⚖️', skills: '✨', cards: '🃏', daily: '📅', mysteryBox: '🎁', cashShop: '💎', topup: '💳', menuLayout: '🧭', maps: '🗺️', orbs: '🔮', cos: '🪽', cosManage: '🧺', rig: '🗡️',
+  broadcast: '📢', news: '🆕', balance: '⚖️', skills: '✨', cards: '🃏', daily: '📅', mysteryBox: '🎁', cashShop: '💎', topup: '💳', menuLayout: '🧭', maps: '🗺️', orbs: '🔮', cos: '🪽', cosManage: '🧺', rig: '🗡️',
   anim: '🏃', server: '🖥️', roles: '🔑',
 };
 
@@ -237,6 +239,7 @@ const SEARCH_INDEX: { tab: Tab; title: string; words?: string }[] = [
   { tab: 'mail', title: 'จดหมายที่ส่งแล้ว' },
   { tab: 'reports', title: 'รายงานปัญหา', words: 'ข้อเสนอแนะ ห้ามรายงาน' },
   { tab: 'broadcast', title: 'ประกาศถึงผู้เล่นทุกคน' },
+  { tab: 'news', title: 'มีอะไรใหม่', words: 'ประกาศอัปเดต แพตช์โน้ต จุดแดง เด้งเอง ปุ่ม' },
   { tab: 'balance', title: 'ค่าอาชีพ', words: 'สเตตัส hp mp นักดาบ เวท' },
   { tab: 'balance', title: 'ตัวตัดฟื้นทั้งเกม', words: 'regen ฟื้น' },
   { tab: 'balance', title: 'Tier T1–T5', words: 'tier ตัวคูณสเตตัส ไอเทม' },
@@ -426,6 +429,7 @@ function setTab(t: Tab): void {
   else if (t === 'audit') void renderAudit();
   else if (t === 'cards') void renderCards();
   else if (t === 'broadcast') view.append(broadcastCard());
+  else if (t === 'news') void renderNews(view, h, api);
   else void renderServer();
 }
 
