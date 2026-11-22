@@ -1204,6 +1204,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawRoot();
     drawAudio();
     drawRig();
+    applyFilter(); // redrawn cards keep the chosen category / search
   };
   const save = async (body: { tuning: BalanceTuning; part: 'rest' } | { reset: true; part: 'rest' }, ask: string): Promise<void> => {
     if (!confirm(ask)) return;
@@ -1252,7 +1253,51 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     msg,
   );
 
-  box.replaceChildren(fold.toc, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, forgeCard, autoCard, tutCard, fxCard, circleCard, rootCard, audioCard, rigCard, bar);
+  // Category buttons + search box (owner 2026-11-22). Cards are only hidden with CSS (`.cat-hide`), never removed.
+  const CATS: { name: string; cards: HTMLElement[] }[] = [
+    { name: 'อาชีพ', cards: [classCard, regenCard, rootCard, rigCard] },
+    { name: 'มอน-บอส', cards: [monsterCard] },
+    { name: 'ไอเทม-ตีบวก-ยา', cards: [affixCard, tierCard, previewCard, potionCard, forgeCard] },
+    { name: 'Auto Play', cards: [autoCard] },
+    { name: 'เอฟเฟกต์-เสียง', cards: [fxCard, circleCard, audioCard] },
+    { name: 'ระบบ-อื่นๆ', cards: [expCard, tutCard] },
+  ];
+  const ALL = 'ทั้งหมด';
+  const CAT_KEY = 'adminBalanceCat';
+  let curCat = CATS[0].name;
+  try {
+    const s = localStorage.getItem(CAT_KEY);
+    if (s === ALL || CATS.some((c) => c.name === s)) curCat = s as string;
+  } catch { /* storage blocked: default */ }
+  const search = h('input', { type: 'search', class: 'bal-search', placeholder: '🔍 ค้นหาการ์ดหรือชื่อค่า', autocomplete: 'off' }) as HTMLInputElement;
+  const noHit = h('div', { class: 'muted bal-nohit' }, 'ไม่พบ');
+  noHit.style.display = 'none';
+  const catBar = h('nav', { class: 'cat-bar' });
+  function applyFilter(): void {
+    const q = search.value.trim().toLowerCase();
+    let shown = 0;
+    for (const cat of CATS) {
+      for (const c of cat.cards) {
+        const inCat = curCat === ALL || cat.name === curCat;
+        const hit = q ? (c.textContent ?? '').toLowerCase().includes(q) : inCat;
+        c.classList.toggle('cat-hide', !hit);
+        if (hit) shown++;
+      }
+    }
+    noHit.style.display = shown ? 'none' : '';
+    catBar.replaceChildren(...[ALL, ...CATS.map((c) => c.name)].map((name) => {
+      const b = h('button', { type: 'button', class: !q && name === curCat ? 'chip active' : 'chip', onclick: () => {
+        curCat = name;
+        search.value = '';
+        try { localStorage.setItem(CAT_KEY, name); } catch { /* ignore */ }
+        applyFilter();
+      } }, name);
+      return b;
+    }));
+    fold.refreshToc();
+  }
+  search.addEventListener('input', applyFilter);
+
+  box.replaceChildren(h('div', { class: 'cat-top' }, catBar, search), fold.toc, noHit, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, forgeCard, autoCard, tutCard, fxCard, circleCard, rootCard, audioCard, rigCard, bar);
   redraw();
-  fold.refreshToc();
 }
