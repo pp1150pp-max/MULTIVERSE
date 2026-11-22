@@ -15,7 +15,7 @@ const ROOT = join(import.meta.dirname, '..');
 /** Not player-facing: the admin page, previews and tuning tools, logs, map files. */
 const SKIP = [
   /^src\/admin\//, /^src\/dev\//, /^src\/client\/dev\//, /Preview\.ts$/, /Tune\.ts$/, /Tuning\.ts$/,
-  /^src\/shared\/admin\.ts$/, /^src\/shared\/mapSchema\.ts$/, /^src\/shared\/mapDiff\.ts$/,
+  /^src\/shared\/admin\.ts$/, /^src\/shared\/balance\.ts$/, /^src\/client\/i18n\.ts$/, /^src\/shared\/mapSchema\.ts$/, /^src\/shared\/mapDiff\.ts$/,
   /^server\/admin/, /^server\/.*-main\.ts$/, /^server\/(tunnel|control|backup|logfile|perf|add-news|direct)\.ts$/,
 ];
 
