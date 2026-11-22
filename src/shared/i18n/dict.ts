@@ -5,6 +5,9 @@ import { MONSTERS } from '../data/monsters';
 import { CLASSES } from '../data/classes';
 import { normKey } from './translator';
 import { EN_UI } from './en/ui';
+import { EN_HUD } from './en/hud';
+import { EN_SKILLS } from './en/skills';
+import { EN_ITEMS } from './en/items';
 
 let built: Record<string, string> | null = null;
 
@@ -17,6 +20,6 @@ export function englishDict(): Record<string, string> {
   };
   for (const m of Object.values(MONSTERS)) put(m.nameTh, m.name);
   for (const c of Object.values(CLASSES)) for (const s of c.skills) put(s.nameTh, s.name);
-  for (const part of [EN_UI]) for (const [th, en] of Object.entries(part)) put(th, en);
+  for (const part of [EN_UI, EN_HUD, EN_SKILLS, EN_ITEMS]) for (const [th, en] of Object.entries(part)) put(th, en);
   return (built = d);
 }

@@ -99,7 +99,24 @@ export class Translator {
       });
       return t.en.replace(PLACEHOLDER, (all, name: string) => vals.get(name) ?? all);
     }
-    return null;
+    return depth === 0 ? this.byPieces(key) : null;
+  }
+
+  /**
+   * Last try: each run of Thai (between numbers, Latin letters, symbols) on its own, e.g. "5 วิ" → "5 s",
+   * "Lv 5 นักดาบ" → "Lv 5 Swordsman". Null when not one run has English.
+   */
+  private byPieces(key: string): string | null {
+    let any = false;
+    const out = key.replace(/[฀-๿](?:[฀-๿\s]*[฀-๿])?/g, (run, at: number) => {
+      const en = this.lookup(run, 1);
+      if (en === null) return run;
+      any = true;
+      const before = at > 0 && /[\p{L}\p{N}]/u.test(key[at - 1]!) ? ' ' : '';
+      const after = /[\p{L}\p{N}]/u.test(key[at + run.length] ?? '') ? ' ' : '';
+      return before + en + after;
+    });
+    return any ? out : null;
   }
 }
 
