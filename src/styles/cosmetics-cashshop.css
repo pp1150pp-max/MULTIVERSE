@@ -6,7 +6,9 @@
    pieces (crown, bubble tail) are drawn over it, under the text. */
 .plate .pname.cos.paper-title, .chat-bubble.cos.paper-title { box-sizing: border-box; isolation: isolate; border: 1px solid transparent; border-image-repeat: round stretch; border-radius: 0; background: none; box-shadow: none; }
 .plate .pname.cos.paper-title { position: relative; padding: 3px 14px; text-shadow: 0 1px 2px #000; }
-.chat-bubble.cos.paper-title { padding: 7px 18px; color: #2a1c10; }
+/* round both ways: a long message makes the bubble several lines tall, and its plain middle band (about 6 px on screen)
+   would smear if stretched; it has no gradient, so tiled it shows no seams. Padding comes from fxLayer (floating.ts). */
+.chat-bubble.cos.paper-title { padding: 7px 18px; color: #2a1c10; border-image-repeat: round; }
 .paper-title::before, .paper-title::after { content: ''; position: absolute; left: 50%; width: var(--mw); transform: translateX(-50%); background-size: 100% 100%; z-index: -1; pointer-events: none; }
 .paper-title::before { top: calc(-1px - var(--ot)); height: var(--mth); background-image: var(--pt); }
 .paper-title::after { bottom: calc(-1px - var(--ob)); height: var(--mbh); background-image: var(--pb); }
@@ -22,6 +24,8 @@
 #cos-win .cos-card { display: flex; align-items: center; gap: 10px; padding: 6px; border: 1px solid #4a3c28; border-radius: 6px; background: rgba(0, 0, 0, 0.25); }
 #cos-win .cos-card.worn { border-color: var(--gold-hi); }
 :is(#cos-win, #cash-win, #inventory, #fashion-detail) .cos-pic { width: 72px; height: 48px; flex: none; object-fit: contain; image-rendering: pixelated; }
+/* Paper card pictures (paperCards.ts) are painted art shrunk down: smooth, not pixelated. */
+:is(#cos-win, #cash-win, #inventory, #fashion-detail) .cos-pic.cos-pic-paper { image-rendering: auto; }
 :is(#cos-win, #cash-win, #inventory, #fashion-detail) .cos-pic-title { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-size: 9px; text-shadow: 0 0 2px #000; }
 :is(#cos-win, #cash-win, #inventory, #fashion-detail) .cos-pic-title .cos-t { color: var(--c1); font-weight: 700; }
 :is(#cos-win, #cash-win, #inventory, #fashion-detail) .cos-pic-title .cos-n { padding: 0 4px; border: 1px solid var(--c1); border-radius: 3px; background: linear-gradient(var(--c2), #000); color: #fff; }

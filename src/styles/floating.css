@@ -43,6 +43,8 @@
 
 .plate { text-align: center; font-size: 11px; text-shadow: 0 0 3px #000; }
 .plate .pname { color: #f2e6c8; margin-bottom: 2px; }
+/* A player's name never wraps: floating.ts setPlateName cuts it with … past fxLayer.plateMaxW. */
+.plate.ally .pname { white-space: nowrap; }
 .plate .pdebuffs { display: flex; justify-content: center; gap: 2px; margin-bottom: 2px; min-height: 0; }
 .plate .pdebuffs img { width: 16px; height: 16px; image-rendering: pixelated; }
 .plate.hostile .pname { color: #ff9a8a; }
