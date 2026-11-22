@@ -53,6 +53,8 @@ export const CODE_MAP_FROM_DB = true;
 export const CODE_BUFF_DUR_SUMMONS = true;
 /** Blacksmith: the Auto button that enhances again and again up to a chosen level (owner 2026-11-18: on). */
 export const CODE_FORGE_AUTO = true;
+/** Players may pick English (owner 2026-11-22, docs/systems/i18n.md); off = everyone sees Thai and the language button is hidden. */
+export const CODE_ENGLISH = true;
 /** Click-to-walk carries on when the browser tab is hidden: the server walks the rest of the way (owner 2026-11-18: on). */
 export const CODE_WALK_HIDDEN = true;
 /** The hub town split into channels like the farm maps (owner 2026-11-22); off = one room as before. */
@@ -175,6 +177,8 @@ export interface Balance {
   buffDurSummons: boolean;
   /** Blacksmith Auto enhance button shown (owner 2026-11-18); off = hidden and a running Auto stops. Browser side only. */
   forgeAuto: boolean;
+  /** "ภาษาอังกฤษ": players may switch the game to English (docs/systems/i18n.md); off = Thai for everyone, no language button. */
+  english: boolean;
   /** Blacksmith enhancement numbers: rates, costs, pity, drop/stone/announce levels, max, cooldown, orbs, aura (forgeTuning.ts). */
   forge: ForgeConfig;
   /** A clicked walk goes on while the tab is hidden (server walks to the spot); off = the character stops as before. */
@@ -254,6 +258,8 @@ export interface BalanceTuning {
   buffDurSummons?: boolean;
   /** Blacksmith Auto enhance, when not the code's (on). */
   forgeAuto?: boolean;
+  /** English allowed, when not the code's (on). */
+  english?: boolean;
   /** Blacksmith enhancement numbers that differ from the code. */
   forge?: ForgeTuning;
   /** Walking on in a hidden tab, when not the code's (on). */
@@ -355,6 +361,7 @@ export function codeBalance(): Balance {
     mapFromDb: CODE_MAP_FROM_DB,
     buffDurSummons: CODE_BUFF_DUR_SUMMONS,
     forgeAuto: CODE_FORGE_AUTO,
+    english: CODE_ENGLISH,
     forge: codeForge(),
     walkHidden: CODE_WALK_HIDDEN,
     hubChannels: CODE_HUB_CHANNELS,
@@ -420,6 +427,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.mapFromDb !== undefined) b.mapFromDb = t.mapFromDb;
   if (t.buffDurSummons !== undefined) b.buffDurSummons = t.buffDurSummons;
   if (t.forgeAuto !== undefined) b.forgeAuto = t.forgeAuto;
+  if (t.english !== undefined) b.english = t.english;
   b.forge = mergeForge(t.forge);
   if (t.walkHidden !== undefined) b.walkHidden = t.walkHidden;
   if (t.hubChannels !== undefined) b.hubChannels = t.hubChannels;
@@ -566,7 +574,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'forge', 'walkHidden', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -682,6 +690,13 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (x === undefined) return null;
     if (typeof x !== 'boolean') return strict ? 'สวิตช์ตีบวก Auto ต้องเป็นเปิด/ปิด' : null;
     if (x !== CODE.forgeAuto) out.forgeAuto = x;
+    return null;
+  };
+  const english = (): string | null => {
+    const x = o.english;
+    if (x === undefined) return null;
+    if (typeof x !== 'boolean') return strict ? 'สวิตช์ภาษาอังกฤษต้องเป็นเปิด/ปิด' : null;
+    if (x !== CODE.english) out.english = x;
     return null;
   };
   const walkHidden = (): string | null => {
@@ -1091,6 +1106,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     mapFromDb() ??
     buffDurSummons() ??
     forgeAuto() ??
+    english() ??
     forge() ??
     walkHidden() ??
     hubChannels() ??
@@ -1213,6 +1229,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.reviveGuard !== b.reviveGuard) out.push(`อมตะหลังชุบด้วยขนนกฟีนิกซ์ ${a.reviveGuard ? 'เปิด' : 'ปิด'} → ${b.reviveGuard ? 'เปิด' : 'ปิด'}`);
   if (a.reviveGuardSec !== b.reviveGuardSec) out.push(`เวลาอมตะหลังชุบ ${a.reviveGuardSec} → ${b.reviveGuardSec} วิ`);
   out.push(...forgeChanges(a.forge, b.forge));
+  if (a.english !== b.english) out.push(`ภาษาอังกฤษ ${a.english ? 'เปิด' : 'ปิด'} → ${b.english ? 'เปิด' : 'ปิด'}`);
   if (a.forgeAuto !== b.forgeAuto) out.push(`ตีบวก Auto ${a.forgeAuto ? 'เปิด' : 'ปิด'} → ${b.forgeAuto ? 'เปิด' : 'ปิด'}`);
   if (a.hubChannels !== b.hubChannels) out.push(`แบ่งห้องเมืองกลาง ${a.hubChannels ? 'เปิด' : 'ปิด'} → ${b.hubChannels ? 'เปิด' : 'ปิด'}`);
   if (a.walkHidden !== b.walkHidden) out.push(`เดินต่อเมื่อสลับแท็บ ${a.walkHidden ? 'เปิด' : 'ปิด'} → ${b.walkHidden ? 'เปิด' : 'ปิด'}`);

@@ -2,7 +2,7 @@
 // Serves the account API under /api and, when `dist/` exists, the game itself — so friends only
 // need a browser and this computer's address.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { applyBalance } from '../src/shared/balance';
+import { applyBalance, currentBalance } from '../src/shared/balance';
 import { clientIp } from './clientIp';
 import { readFile, stat } from 'node:fs/promises';
 import { networkInterfaces } from 'node:os';
@@ -22,6 +22,7 @@ import { adminApi } from './admin';
 import { mapsPublicApi } from './admin-maps';
 import { applyMaps } from './maps-live';
 import { googleApi } from './google-api';
+import { LANG_CONFIG_PATH, type LangConfigResponse } from '../src/shared/i18n/translator';
 import { directPort } from './direct';
 import { Backups } from './backup';
 import { HISTORY_DAYS } from '../src/shared/admin';
@@ -128,6 +129,9 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string): Pro
 
   // Where the game connection may go past Cloudflare (src/client/net/route.ts), asked before every (re)connect.
   if (method === 'GET' && path === `/api${NET_ROUTE_PATH}`) return send(res, 200, { direct: world.directUrl() } satisfies NetRouteResponse);
+
+  // May players pick English? (/admin switch, read before the title screen: src/client/i18n.ts, docs/systems/i18n.md)
+  if (method === 'GET' && path === `/api${LANG_CONFIG_PATH}`) return send(res, 200, { english: currentBalance().english } satisfies LangConfigResponse);
 
   if (method === 'POST' && path === '/api/register') {
     const ip = clientIp(req);

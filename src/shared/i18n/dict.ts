@@ -1,0 +1,22 @@
+// The English dictionary (docs/systems/i18n.md): keyed by the Thai text exactly as the page shows it, `{0}` / `{name}`
+// for the parts that change. Names the data already has in English (monsters, skills) come from the data; the rest is
+// written in en/*.ts. Later entries win over earlier ones. Pure data: no DOM.
+import { MONSTERS } from '../data/monsters';
+import { CLASSES } from '../data/classes';
+import { normKey } from './translator';
+import { EN_UI } from './en/ui';
+
+let built: Record<string, string> | null = null;
+
+/** Thai → English for everything the game shows. */
+export function englishDict(): Record<string, string> {
+  if (built) return built;
+  const d: Record<string, string> = {};
+  const put = (th: string | undefined, en: string | undefined): void => {
+    if (th && en) d[normKey(th)] = en;
+  };
+  for (const m of Object.values(MONSTERS)) put(m.nameTh, m.name);
+  for (const c of Object.values(CLASSES)) for (const s of c.skills) put(s.nameTh, s.name);
+  for (const part of [EN_UI]) for (const [th, en] of Object.entries(part)) put(th, en);
+  return (built = d);
+}
