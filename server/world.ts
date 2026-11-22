@@ -57,6 +57,7 @@ import { MEGAPHONE_EVERY_MS, megaphoneText, STONE_NAME, STONE_STACK } from '../s
 import { COS_SLOTS, cosById, cosCodes } from '../src/shared/data/cosmetics';
 import { cosHiddenIds, mayPutOnCos } from '../src/shared/cosShop';
 import { CashShop } from './cashShop';
+import { Topup } from './topup';
 import { orbItemsRegistered } from '../src/shared/orbItems';
 
 /** How often the world looks for the Thai calendar day turning over. */
@@ -70,6 +71,8 @@ const MARKET_EXPIRE_MS = 60_000;
 const MARKET_ACT_MS = 100;
 /** One cash shop purchase per this many ms per player. */
 const CASH_BUY_MS = 300;
+/** One top-up request / cancel per this many ms per player (each new request takes up an amount). */
+const TOPUP_ACT_MS = 2000;
 /** Delay before telling a player who just joined what sold or expired while away. */
 const MARKET_JOIN_NOTE_MS = 3000;
 const SKILL_KEYS: SkillSlot[] = ['q', 'e', 'r'];
@@ -162,6 +165,8 @@ interface Session {
   lastMailAt: number;
   /** performance.now() of the last cash shop purchase (one per CASH_BUY_MS). */
   lastCashAt: number;
+  /** performance.now() of the last top-up request / cancel (one per TOPUP_ACT_MS). */
+  lastTopupAt: number;
   saveDue: number | null;
   /** Where the connection came from, for the owner's log only (never sent to anyone). */
   ip: string;
@@ -367,6 +372,8 @@ export class GameWorld {
   readonly daily: Daily;
   /** The cash shop (server/cashShop.ts). */
   readonly cash: CashShop;
+  /** Top-up by PromptPay (server/topup.ts). */
+  readonly topup: Topup;
   /** The Thai calendar day last checked, to hand out the new day's reward to everyone online at midnight. */
   private dailyDay = thaiDate(Date.now()).key;
   /** Parties, keyed on character ids (in memory only: a restart ends them). */
@@ -421,6 +428,7 @@ export class GameWorld {
     this.mail = new Mail(db);
     this.daily = new Daily(db);
     this.cash = new CashShop(db);
+    this.topup = new Topup(db);
     setInterval(() => this.dailyRollover(), DAILY_CHECK_MS);
     this.reports = new Reports(db);
     this.parties = new Parties({
@@ -781,7 +789,7 @@ export class GameWorld {
     const s: Session = {
       ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId: pv ? -(charId + 1) : charId, sim, player,
       preview: !!pv, move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null, recall: false,
-      auto: null, lastInputAt: 0, walkTo: null, walkEpoch: 0, serverWalk: false, walkAnchor: { x: 0, z: 0 }, walkAnchorAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', lastTut: '', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', delta, lastMe: new Map(), seenP: new Map(), seenM: new Map(), outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, lastCashAt: -Infinity, saveDue: null,
+      auto: null, lastInputAt: 0, walkTo: null, walkEpoch: 0, serverWalk: false, walkAnchor: { x: 0, z: 0 }, walkAnchorAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', lastTut: '', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', delta, lastMe: new Map(), seenP: new Map(), seenM: new Map(), outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, lastCashAt: -Infinity, lastTopupAt: -Infinity, saveDue: null,
       ip, edge, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, deflate: ws.extensions.includes('permessage-deflate'), staff: !acc.guest && ['owner', 'gm'].includes(this.db.adminRole(acc.id) ?? ''), pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity, blockTrades: false,
@@ -807,10 +815,12 @@ export class GameWorld {
     if (!acc.guest && !pv) this.friendsJoined(s, accountWasOnline);
     // Back within the grace time (or a takeover): still in the party.
     player.partyId = pv ? null : this.parties.online(charId);
-    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), map: sim.terrain.mapRev, guest: acc.guest, ...(s.auto ? { auto: true } : {}), ...(pv ? { preview: true } : {}), orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), animTuning: this.db.animTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning(), cash: this.cash.catalog(), cashState: this.cash.state(acc.id, acc.guest) });
+    // The close beta refund (once per account, after the owner switched it on), before the welcome carries the crystals.
+    const refunded = !acc.guest && !pv ? this.topup.refundOnJoin(acc.id, acc.username) : 0;
+    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), map: sim.terrain.mapRev, guest: acc.guest, ...(s.auto ? { auto: true } : {}), ...(pv ? { preview: true } : {}), orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), animTuning: this.db.animTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning(), cash: this.cash.catalog(), cashState: this.cash.state(acc.id, acc.guest), topup: this.topup.view(acc.id, acc.guest) });
     if (!pv) this.broadcastSystem(`${player.name} เข้าสู่โลก`);
     // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
-    if (!acc.guest && !pv) setTimeout(() => this.sessions.has(s) && (this.marketOnJoin(s), this.dailyCheck(s), this.mailNote(s, true)), MARKET_JOIN_NOTE_MS);
+    if (!acc.guest && !pv) setTimeout(() => this.sessions.has(s) && (this.marketOnJoin(s), this.dailyCheck(s), this.mailNote(s, true), refunded && this.send(s.ws, { t: 'chat', name: '', text: `ได้รับคริสตัลมิติคืนจากช่วง Close Beta ${refunded.toLocaleString('en-US')} (รวมโบนัส)` })), MARKET_JOIN_NOTE_MS);
     const extra = [rejoin && `reconnected: ${rejoin}`, back && 'back at the same spot', s.auto && 'Auto on'].filter(Boolean).join(' · ');
     console.log(`[world] ${acc.username} joined as ${player.name}${acc.guest ? ' (guest)' : ''} from ${ip}${edge === 'direct' ? ' direct (past Cloudflare)' : edge ? ` via Cloudflare ${edge}` : ''}${s.deflate ? '' : ' (no compression)'}${extra ? ` — ${extra}` : ''} (${this.onlineText()})`);
     return s;
@@ -1368,6 +1378,10 @@ export class GameWorld {
         break;
       case 'cashBuy':
         this.cashBuy(s, m);
+        break;
+      case 'topupNew':
+      case 'topupCancel':
+        this.topupAct(s, m);
         break;
       case 'useBuff':
         // Sim.useBuffScroll ignores anything that isn't a buff scroll kind.
@@ -2773,6 +2787,39 @@ export class GameWorld {
       }
     }
     return changed;
+  }
+
+  /**
+   * A player asks for a top-up package or cancels their open request (server/topup.ts checks everything).
+   * Every character of the account then gets the new state.
+   */
+  private topupAct(s: Session, m: { a: 'topupNew' | 'topupCancel'; req?: unknown; id?: unknown; crystals?: unknown; bonus?: unknown; baht?: unknown }): void {
+    const req = num(m.req, -1);
+    const now = performance.now();
+    if (now - s.lastTopupAt < TOPUP_ACT_MS) return this.send(s.ws, { t: 'topupRes', req, ok: false, msg: 'กดเร็วเกินไป รอสักครู่' });
+    s.lastTopupAt = now;
+    const r = m.a === 'topupNew'
+      ? this.topup.create({ accountId: s.accountId, guest: s.guest, username: s.username, charName: s.player.name, packages: this.cash.cfg().packages, crystals: m.crystals, bonus: m.bonus, baht: m.baht })
+      : s.guest ? { ok: false, msg: 'ไม่พบคำขอนี้' } : this.topup.cancel(s.accountId, m.id, s.username);
+    this.send(s.ws, { t: 'topupRes', req, ok: r.ok, msg: r.msg });
+    if (!r.ok) return;
+    console.log(`[topup] ${s.username} (${s.player.name}) ${m.a === 'topupNew' ? `asked for ${String(m.baht)} baht` : `cancelled #${String(m.id)}`}`);
+    this.topupChanged(s.accountId);
+  }
+
+  /** The account's top-up requests changed: its characters get the new state (and `note`, if any, in chat). */
+  topupChanged(accountId: number, note?: string): void {
+    const v = this.topup.view(accountId, false);
+    for (const s of this.sessions) {
+      if (s.accountId !== accountId || s.guest) continue;
+      this.send(s.ws, { t: 'topup', v });
+      if (note) this.send(s.ws, { t: 'chat', name: '', text: note });
+    }
+  }
+
+  /** The top-up settings changed in /admin: everyone gets their state again. */
+  topupAll(): void {
+    for (const s of this.sessions) this.send(s.ws, { t: 'topup', v: this.topup.view(s.accountId, s.guest) });
   }
 
   /** An admin gave or took crystals: every online character of the account gets the new total. */

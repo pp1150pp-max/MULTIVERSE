@@ -69,6 +69,16 @@
 - สำรอง DB: `server/data/backups/` (`VACUUM INTO`) อัตโนมัติทุก 6 ชม. เก็บ 28 ไฟล์ = 7 วัน (เจ้าของเลือก 2026-11-13, ชนิดไฟล์ยังชื่อ `daily` ให้ไฟล์เก่าหมุนรวมกัน), กดเองเก็บ 10, ก่อนลบเก็บ 20 (`BACKUP_KEEP`/`AUTO_MS` ใน `server/backup.ts`) · server นับจากไฟล์ล่าสุด รีสตาร์ทบ่อยก็ไม่สำรองถี่ขึ้น
 - กู้คืน: `npm run stop-server` → ลบ `multiverse.db-wal` / `multiverse.db-shm` → คัดลอกไฟล์สำรองทับ `server/data/multiverse.db` → `npm run autostart -- -Start` (หรือ `npm run online`)
 
+## ล้างข้อมูลเกม (wipe) แบบเก็บสมุดการเติมเงิน (2026-11-22)
+
+ทำเมื่อเจ้าของสั่งเท่านั้น และถามเจ้าของก่อนทุกครั้งว่าเก็บอะไรบ้าง (ครั้งก่อน 2026-11-08 เก็บบัญชี + login + settings) · ระบบเติมเงิน: [topup.md](topup.md)
+
+1. `npm run stop-server` (countdown + เซฟทุกคน) แล้ว**สำรอง DB ก่อน** (คัดลอก `multiverse.db` ทั้งไฟล์ไปที่อื่น)
+2. **ห้ามลบ** `topups` (สมุดบัญชีการเติม ทุกคำขอ + ยืนยันเมื่อไร) · `topup_refunds` (ใครได้คืนแล้ว) · `accounts` (id ต้องเหมือนเดิม การคืนเพชรผูกกับ `account_id`) · `settings` (มีเลขพร้อมเพย์และสวิตช์คืนเพชร)
+3. **ต้องทำ** เมื่อล้างก่อน open beta: `UPDATE accounts SET crystals = 0;` (ไม่งั้นได้เพชรเดิม + เพชรคืนซ้ำ) · `DELETE FROM cash_purchases;` · ของแต่งตัวที่ซื้อจากแคชช็อป `DELETE FROM account_cosmetics WHERE granted_by = 'แคชช็อป';` (ของที่ admin ให้ ถามเจ้าของ) · จดหมายที่แคชช็อปส่ง (`mail_sends`/`mail_box`) ไปกับการล้างจดหมาย
+4. ตารางข้อมูลเกมอื่น (`characters`, `stashes`, `market_*`, `mail_*`, `trade_log`, `play_sessions`, `chat_log`, `daily_*`, `tutorials` ฯลฯ) ล้างตามที่เจ้าของเลือก
+5. เปิด server → /admin แท็บ "เติมเงิน" → "เปิดคืนเพชร close beta" (ทำ**หลัง**ล้าง) → แต่ละบัญชีได้คริสตัลคืนตอนเข้าเกมครั้งถัดไป ครั้งเดียว ลง audit `topup-refund`
+
 ## ลิงก์ถาวรให้เพื่อน (named tunnel + โดเมนของเจ้าของ)
 
 ค่าเริ่มต้น `npm run tunnel` / `npm run online` ใช้ quick tunnel (`*.trycloudflare.com` เปลี่ยนทุกครั้งที่ tunnel เริ่มใหม่) ถ้ามีไฟล์ตั้งค่าด้านล่าง (หรือ env `TUNNEL_NAME` + `TUNNEL_HOSTNAME`) จะใช้ named tunnel แทนโดยอัตโนมัติ และแสดง `https://<hostname>` เป็นลิงก์ให้เพื่อน ถ้าไม่มี = quick tunnel เดิม (โค้ดอยู่ใน `server/tunnel.ts`)

@@ -141,6 +141,9 @@ export interface Backend {
 
   /** Cash shop: buy `qty` of item `id` at `price` crystals each (the price shown; the server checks everything). Catalogue and crystals: src/client/cashData.ts. */
   cashBuy(id: string, qty: number, price: number): Promise<{ ok: boolean; msg: string }>;
+  /** Top-up by PromptPay: ask for a package as shown, or cancel an open request (state: topupNow() in src/client/cashData.ts). */
+  topupNew(p: { crystals: number; bonus: number; baht: number }): Promise<{ ok: boolean; msg: string }>;
+  topupCancel(id: number): Promise<{ ok: boolean; msg: string }>;
 
   // Stash (warehouse keeper). The stash itself is `me.stash`. `to` = target slot, or -1 for wherever it fits.
   stashPut(bagIndex: number, to: number): void;

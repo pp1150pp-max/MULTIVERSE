@@ -13,6 +13,7 @@ import { ownerToolsApi } from './admin-tools';
 import { googleAdminApi } from './google-api';
 import { mailAdminApi } from './admin-mail';
 import { cashAdminApi } from './admin-cash';
+import { topupAdminApi } from './admin-topup';
 import { tradeAdminApi } from './admin-trade';
 import { reportsAdminApi } from './admin-reports';
 import { rolesAdminApi } from './admin-roles';
@@ -131,6 +132,7 @@ export async function adminApi(
   if (await googleAdminApi(req, res, path, db)) return;
   if (await mailAdminApi(req, res, path, method, db, world)) return;
   if (await cashAdminApi(req, res, path, method, db, world)) return;
+  if (await topupAdminApi(req, res, path, method, db, world)) return;
   if (tradeAdminApi(req, res, path, method, db)) return;
   if (await reportsAdminApi(req, res, path, method, db)) return;
   if (await rolesAdminApi(req, res, path, method, url, db)) return;

@@ -1,14 +1,16 @@
 // The cash shop window ("แคชช็อป", owner 2026-11-15, docs/systems/cash-shop.md). Opened from the top-right
 // icon, the menu, or the crystal merchant in town. Tabs แนะนำ / ของแต่งตัว / ของใช้ / หิน, a side list per
 // kind, item cards with a corner badge and a price bar; hovering a card shows its details, clicking opens the
-// buy window (quantity, try-on for cosmetics, total). The "+" by the crystals opens the top-up packages
-// ("เร็วๆ นี้": no real-money top-up yet). The server checks and does every purchase (server/cashShop.ts).
+// buy window (quantity, try-on for cosmetics, total). The "+" by the crystals opens the top-up packages:
+// when the owner opened top-up, a package makes a PromptPay request and its QR shows here until the owner
+// confirms it (docs/systems/topup.md). The server checks and does every purchase (server/cashShop.ts).
 import type { Game } from './Game';
 import { COS_SLOTS, COS_SLOT_NAME, cosById, type CosSlot } from '../shared/data/cosmetics';
 import { STONE_DESC, STONE_NAME } from '../shared/data/stones';
 import { CASH_BADGE_NAME, CASH_QTY_MAX, cashBadge, cashBuyError, CURRENCY, type CashEntry } from '../shared/cashShop';
 import type { StoneKind } from '../shared/types';
-import { cashCatalogNow, cashStateNow, cashVersion } from './cashData';
+import { cashCatalogNow, cashStateNow, cashVersion, topupNow } from './cashData';
+import { bahtText, topupNewError, type TopupPending } from '../shared/topup';
 import { cosPicture } from './cosmetics';
 import { setTryOn } from './cosLook';
 import { stoneIcon } from './icons';
@@ -40,6 +42,24 @@ function button(label: string, onClick: () => void, cls = '', disabled = false):
 }
 
 const fmt = (n: number) => n.toLocaleString('en-US');
+
+/** QR pictures by payload (the encoder is loaded only when a QR is first shown). */
+const qrSvg = new Map<string, string>();
+let qrVersion = 0;
+function qrPicture(payload: string, onReady: () => void): string | null {
+  const svg = qrSvg.get(payload);
+  if (svg !== undefined) return svg;
+  qrSvg.set(payload, '');
+  void import('qrcode-generator').then(({ default: qrcode }) => {
+    const q = qrcode(0, 'M');
+    q.addData(payload);
+    q.make();
+    qrSvg.set(payload, q.createSvgTag({ cellSize: 4, margin: 4, scalable: true }));
+    qrVersion++;
+    onReady();
+  }).catch(() => qrSvg.delete(payload));
+  return null;
+}
 
 /** "เหลือ 2 วัน" / "เหลือ 5 ชม." / "เหลือ 12 นาที". */
 function timeLeft(ms: number): string {
@@ -86,6 +106,9 @@ export class CashShopUI {
   private buying: { id: string; qty: number; msg: string; ok: boolean; busy: boolean } | null = null;
   private trying = false;
   private packages = false;
+  /** The top-up dialog: waiting for the server, and its last answer. */
+  private topupBusy = false;
+  private topupMsg: { text: string; ok: boolean } | null = null;
 
   constructor(private readonly g: Game) {
     this.win = el('div', 'panel hidden');
@@ -156,7 +179,7 @@ export class CashShopUI {
   /** Every frame: redraw when something shown changed (catalogue, crystals, owned cosmetics, the minute for timers). */
   update(): void {
     if (!this.open) return;
-    const key = JSON.stringify([this.tab, this.sub, cashVersion(), this.g.backend.cosOwned, this.buying, this.packages, Math.floor(Date.now() / 30_000)]);
+    const key = JSON.stringify([this.tab, this.sub, cashVersion(), this.g.backend.cosOwned, this.buying, this.packages, this.topupBusy, this.topupMsg, qrVersion, Math.floor(Date.now() / 30_000)]);
     if (key === this.drawn) return;
     this.drawn = key;
     this.draw();
@@ -256,6 +279,7 @@ export class CashShopUI {
 
   private showPackages(on: boolean): void {
     this.packages = on;
+    this.topupMsg = null;
     if (on) this.buying = null;
     this.update();
   }
@@ -357,8 +381,12 @@ export class CashShopUI {
     const box = el('div', 'cash-dialog wide');
     box.append(el('div', 'cash-name', `เติม${CURRENCY}`));
     const pk = cashCatalogNow().packages;
+    const tv = topupNow();
+    if (this.topupMsg) box.append(el('div', this.topupMsg.ok ? 'cash-msg ok' : 'cash-msg', this.topupMsg.text));
+    // Open requests first: their QR (the packages show only while another request may be made).
+    for (const p of tv.pending) box.append(this.pendingBox(p));
     if (!pk.length) box.append(el('div', 'cash-empty', `เติม${CURRENCY}ได้เร็วๆ นี้`));
-    else {
+    else if (tv.pending.length < tv.maxPending) {
       const list = el('div', 'cash-packs');
       // Pictures by rank among the packages (fewest crystals = the small heap, most = the chest).
       const order = pk.map((p) => p.crystals + p.bonus).sort((a, b) => a - b);
@@ -368,11 +396,18 @@ export class CashShopUI {
         card.innerHTML = packPic(tier) + `<div class="cash-pack-n">${CRYSTAL_ICON}<b>${fmt(p.crystals)}</b></div>`
           + (p.bonus ? `<div class="cash-pack-bonus">+ โบนัส ${fmt(p.bonus)}</div>` : '')
           + `<div class="cash-pack-baht">${fmt(p.baht)} บาท</div>`;
-        card.append(button('เร็วๆ นี้', () => undefined, '', true));
+        const err = topupNewError(tv, pk, p, this.g.backend.guest);
+        const label = !tv.open ? 'เร็วๆ นี้' : this.topupBusy ? 'รอสักครู่…' : 'เติม';
+        const b = button(label, () => void this.topupNew(p), tv.open ? 'primary' : '', !!err || this.topupBusy);
+        if (err && tv.open) b.title = err;
+        card.append(b);
         list.append(card);
       }
-      box.append(list, el('div', 'cash-note', 'ระบบเติมเงินยังไม่เปิด'));
+      box.append(list);
+      if (!tv.open) box.append(el('div', 'cash-note', 'ระบบเติมเงินยังไม่เปิด'));
+      else if (this.g.backend.guest) box.append(el('div', 'cash-note', 'Guest เติมไม่ได้ สมัครสมาชิกก่อน'));
     }
+    if (tv.open || tv.pending.length) box.append(el('div', 'cash-topup-notice', tv.notice));
     box.append(button('ปิด', () => {
       this.closeModal();
       this.drawn = '';
@@ -380,5 +415,47 @@ export class CashShopUI {
     }));
     this.modal.replaceChildren(box);
     this.modal.classList.remove('hidden');
+  }
+
+  /** One open request: QR, the exact amount to transfer, what it gives, until when, and cancel. */
+  private pendingBox(p: TopupPending): HTMLElement {
+    const wrap = el('div', 'cash-topup');
+    const qr = el('div', 'cash-topup-qr');
+    const svg = p.qr ? qrPicture(p.qr, () => this.update()) : '';
+    if (svg) qr.innerHTML = svg;
+    else qr.textContent = p.qr ? 'กำลังสร้าง QR…' : 'ยังไม่มี QR (ติดต่อทีมงาน)';
+    const info = el('div', 'cash-topup-info');
+    info.append(
+      el('div', 'cash-note', 'สแกนด้วยแอปธนาคาร (พร้อมเพย์) แล้วโอนยอดนี้ให้ตรงทุกสตางค์'),
+      el('div', 'cash-topup-amount', `${bahtText(p.amount)} บาท`),
+      el('div', 'cash-note', `ได้ ${fmt(p.crystals)}${p.bonus ? ` + โบนัส ${fmt(p.bonus)}` : ''} ${CURRENCY} หลังทีมงานตรวจยอดเข้าแล้ว`),
+      el('div', 'cash-note', `รอยืนยันถึง ${new Date(p.expiresAt).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' })} (${timeLeft(p.expiresAt - Date.now())})`),
+      button('ยกเลิกคำขอ', () => {
+        if (confirm(`ยกเลิกคำขอเติม ${bahtText(p.amount)} บาท?\nถ้าโอนไปแล้ว อย่ายกเลิก รอทีมงานยืนยัน`)) void this.topupCancel(p.id);
+      }, '', this.topupBusy),
+    );
+    wrap.append(qr, info);
+    return wrap;
+  }
+
+  private async topupNew(p: { crystals: number; bonus: number; baht: number }): Promise<void> {
+    if (this.topupBusy) return;
+    if (!confirm(`เติม ${fmt(p.crystals)}${p.bonus ? ` + โบนัส ${fmt(p.bonus)}` : ''} ${CURRENCY} ราคา ${fmt(p.baht)} บาท?\n\n${topupNow().notice}`)) return;
+    await this.topupCall(() => this.g.backend.topupNew(p));
+  }
+
+  private async topupCancel(id: number): Promise<void> {
+    if (this.topupBusy) return;
+    await this.topupCall(() => this.g.backend.topupCancel(id));
+  }
+
+  private async topupCall(f: () => Promise<{ ok: boolean; msg: string }>): Promise<void> {
+    this.topupBusy = true;
+    this.topupMsg = null;
+    this.update();
+    const r = await f();
+    this.topupBusy = false;
+    this.topupMsg = { text: r.msg, ok: r.ok };
+    this.update();
   }
 }

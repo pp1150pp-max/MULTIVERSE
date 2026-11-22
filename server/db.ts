@@ -14,6 +14,7 @@ import { checkCosTuning, COS_TUNING_SETTING, type CosTuning } from '../src/share
 import { ANIM_TUNING_SETTING, checkAnimTuning, type AnimTuning } from '../src/shared/animTuning';
 import { checkCosShop, COS_SHOP_SETTING, type CosShop } from '../src/shared/cosShop';
 import type { CashPurchaseRow } from '../src/shared/cashShop';
+import type { TopupRow, TopupStatus } from '../src/shared/topup';
 import { checkOrbItems, ORB_ITEMS_SETTING, registerOrbItems, type OrbItems } from '../src/shared/orbItems';
 import { CARD_TUNING_SETTING, checkCardTuning, type CardTuning } from '../src/shared/cardTuning';
 import { BALANCE_SETTING, checkBalance, type BalanceTuning } from '../src/shared/balance';
@@ -403,6 +404,36 @@ export class Db {
         at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS cash_purchases_account ON cash_purchases(account_id, item);
+    `);
+    // Top-up requests by PromptPay (server/topup.ts, docs/systems/topup.md). This is also the book of every
+    // top-up: it is NOT cleared when game data is wiped (docs/systems/server-ops.md) and has no foreign key,
+    // so the close beta refund can be paid from it later. Amounts in satang. One open request per amount.
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS topups (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        account_id INTEGER NOT NULL,
+        username TEXT NOT NULL,
+        char_name TEXT NOT NULL,
+        crystals INTEGER NOT NULL,
+        bonus INTEGER NOT NULL,
+        baht INTEGER NOT NULL,
+        amount INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        decided_at INTEGER,
+        decided_by TEXT,
+        confirmed_at INTEGER,
+        confirmed_by TEXT
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS topups_open_amount ON topups(amount) WHERE status = 'pending';
+      CREATE INDEX IF NOT EXISTS topups_account ON topups(account_id, status);
+      -- Close beta refunds paid (once per account), also kept through a wipe.
+      CREATE TABLE IF NOT EXISTS topup_refunds (
+        account_id INTEGER PRIMARY KEY,
+        crystals INTEGER NOT NULL,
+        at INTEGER NOT NULL
+      );
     `);
     // Admin roles the owner changed or added on the Permissions tab. 'gm' gets a row only once changed;
     // 'owner' never has one. `features` = JSON of only what differs from FEATURE_ROLES (feature → on/off).
@@ -991,6 +1022,87 @@ export class Db {
       id: Number(r.id), accountId: Number(r.account_id), username: String(r.username), charName: String(r.char_name),
       item: String(r.item), qty: Number(r.qty), price: Number(r.price), at: Number(r.at),
     }));
+  }
+
+  // ------------------------------------------------------------ top-up requests (server/topup.ts)
+
+  /** Open requests whose time ran out become 'expired' (their amount is free again). */
+  topupExpire(now: number): void {
+    this.db.prepare("UPDATE topups SET status = 'expired' WHERE status = 'pending' AND expires_at <= ?").run(now);
+  }
+
+  /** The amounts (satang) of every open request. */
+  topupOpenAmounts(): Set<number> {
+    const rows = this.db.prepare("SELECT amount FROM topups WHERE status = 'pending'").all() as { amount: number }[];
+    return new Set(rows.map((r) => Number(r.amount)));
+  }
+
+  /** Requests the account made since `since` (any status). */
+  topupCountSince(accountId: number, since: number): number {
+    return Number((this.db.prepare('SELECT COUNT(*) AS n FROM topups WHERE account_id = ? AND created_at >= ?').get(accountId, since) as { n: number }).n);
+  }
+
+  topupInsert(r: { accountId: number; username: string; charName: string; crystals: number; bonus: number; baht: number; amount: number; at: number; expiresAt: number }): number {
+    const x = this.db.prepare(`INSERT INTO topups (account_id, username, char_name, crystals, bonus, baht, amount, status, created_at, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`).run(r.accountId, r.username, r.charName, r.crystals, r.bonus, r.baht, r.amount, r.at, r.expiresAt);
+    return Number(x.lastInsertRowid);
+  }
+
+  private topupRow(r: Record<string, unknown>): TopupRow {
+    const n = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+    return {
+      id: Number(r.id), accountId: Number(r.account_id), username: String(r.username), charName: String(r.char_name),
+      crystals: Number(r.crystals), bonus: Number(r.bonus), baht: Number(r.baht), amount: Number(r.amount), status: String(r.status) as TopupStatus,
+      createdAt: Number(r.created_at), expiresAt: Number(r.expires_at), decidedAt: n(r.decided_at), decidedBy: r.decided_by === null ? null : String(r.decided_by),
+      confirmedAt: n(r.confirmed_at),
+    };
+  }
+
+  topupGet(id: number): TopupRow | undefined {
+    const r = this.db.prepare('SELECT * FROM topups WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+    return r ? this.topupRow(r) : undefined;
+  }
+
+  /** The account's open requests, oldest first. */
+  topupPending(accountId: number): TopupRow[] {
+    return (this.db.prepare("SELECT * FROM topups WHERE account_id = ? AND status = 'pending' ORDER BY id").all(accountId) as Record<string, unknown>[]).map((r) => this.topupRow(r));
+  }
+
+  /** The newest requests, for /admin. */
+  topupList(limit: number): TopupRow[] {
+    return (this.db.prepare('SELECT * FROM topups ORDER BY id DESC LIMIT ?').all(limit) as Record<string, unknown>[]).map((r) => this.topupRow(r));
+  }
+
+  /**
+   * Moves a request to `to` only if it is now one of `from` (one statement: two clicks can't both do it).
+   * `confirm` also stamps confirmed_at / confirmed_by. False = it was not in `from` any more.
+   */
+  topupSetStatus(id: number, from: readonly TopupStatus[], to: TopupStatus, by: string, now: number, confirm = false): boolean {
+    const r = this.db.prepare(`UPDATE topups SET status = ?, decided_at = ?, decided_by = ?${confirm ? ', confirmed_at = ?, confirmed_by = ?' : ''}
+      WHERE id = ? AND status IN (${from.map(() => '?').join(', ')})`).run(to, now, by, ...(confirm ? [now, by] : []), id, ...from);
+    return Number(r.changes) === 1;
+  }
+
+  /** Every confirmed top-up: how many, money in satang, crystals with bonus. */
+  topupTotals(): { count: number; amount: number; crystals: number } {
+    const r = this.db.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS b, COALESCE(SUM(crystals + bonus), 0) AS c FROM topups WHERE status = 'confirmed'").get() as Record<string, number>;
+    return { count: Number(r.n), amount: Number(r.b), crystals: Number(r.c) };
+  }
+
+  /** Crystals with bonus the account got from top-ups confirmed up to `until` and not reversed. */
+  topupRefundDue(accountId: number, until: number): number {
+    const r = this.db.prepare("SELECT COALESCE(SUM(crystals + bonus), 0) AS c FROM topups WHERE account_id = ? AND status = 'confirmed' AND confirmed_at <= ?").get(accountId, until) as { c: number };
+    return Number(r.c);
+  }
+
+  /** Records the account's refund; false if it already had one. */
+  topupRefundAdd(accountId: number, crystals: number, at: number): boolean {
+    return Number(this.db.prepare('INSERT OR IGNORE INTO topup_refunds (account_id, crystals, at) VALUES (?, ?, ?)').run(accountId, crystals, at).changes) === 1;
+  }
+
+  topupRefundStats(): { accounts: number; crystals: number } {
+    const r = this.db.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(crystals), 0) AS c FROM topup_refunds').get() as Record<string, number>;
+    return { accounts: Number(r.n), crystals: Number(r.c) };
   }
 
   // ------------------------------------------------------------ stash (one per account)
