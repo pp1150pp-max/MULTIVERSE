@@ -4,6 +4,7 @@
 import { finish, ok } from './check';
 import { Channels, FightClock, type Channel } from '../server/channels';
 import { BOSS_ROOMS, ZONE_1, ZONE_2, ZONE_HUB, ZONES } from '../src/shared/data/zones';
+import { applyBalance } from '../src/shared/balance';
 import { CH_PARTY_CAP, CH_RECONNECT_MS, CH_RESERVED, CH_SOLO_CAP, CH_SWITCH_CALM, hasChannels, placeLabel } from '../src/shared/channels';
 
 let n = 0;
@@ -19,13 +20,16 @@ const empty = (c: Channel) => {
 
 // ---------------------------------------------------------------- which maps
 {
-  ok([ZONE_1, ZONE_2].every(hasChannels) && Object.values(ZONES).filter(hasChannels).length === 4, 'the 4 farm maps have channels');
-  ok(!hasChannels(ZONE_HUB), 'the hub does not (yet)');
+  ok([ZONE_1, ZONE_2].every(hasChannels) && Object.values(ZONES).filter((z) => z.channels).length === 4, 'the 4 farm maps have channels (ZoneDef.channels)');
+  ok(hasChannels(ZONE_HUB) && placeLabel(ZONE_HUB, 3) === `${ZONE_HUB.nameTh} · CH 3`, 'the hub has them too (the /admin switch, on in the code)');
   ok(Object.values(BOSS_ROOMS).every((r) => !hasChannels(r)), 'boss rooms do not (they have their own rooms)');
-  ok(placeLabel(ZONE_1, 2) === 'ป่ามรกต · CH 2' && placeLabel(ZONE_HUB, 1) === ZONE_HUB.nameTh, 'label: "ป่ามรกต · CH 2", the hub just its name');
+  applyBalance({ hubChannels: false });
+  ok(!hasChannels(ZONE_HUB) && !ZONE_HUB.channels, 'switched off: the hub is one room (the zone itself never changes)');
+  ok(placeLabel(ZONE_1, 2) === 'ป่ามรกต · CH 2' && placeLabel(ZONE_HUB, 1) === ZONE_HUB.nameTh, 'label: "ป่ามรกต · CH 2", a hub of one room just its name');
   ok(CH_SOLO_CAP === 20 && CH_PARTY_CAP === 22 && CH_SWITCH_CALM === 10 && CH_RECONNECT_MS === 60_000, 'owner numbers: 20 / 22 / 10 s / 60 s');
 }
 
+// The sections below use the hub switched off as "a map without channels"; the hub split is tested at the end.
 // ---------------------------------------------------------------- auto-placement and full at 20
 {
   const C = new Channels(Object.values(ZONES), () => 0);
@@ -214,6 +218,44 @@ const empty = (c: Channel) => {
   ok(f.calmLeft(26_000) === 4, 'walking to another map does not clear it');
   f.seen(1, 27_000);
   ok(f.calmLeft(27_000) === CH_SWITCH_CALM, 'fighting in the new map counts');
+}
+
+// ---------------------------------------------------------------- the hub split into channels (Balance.hubChannels)
+{
+  applyBalance({});
+  const C = new Channels([ZONE_1, ZONE_2, ZONE_HUB], () => 0);
+  ok(C.sims().length === 0 && C.list(ZONE_HUB.id).length === CH_RESERVED, 'switched on: the hub starts with no Sim, CH 1–10 listed like a farm map');
+  const h1 = C.place(ZONE_HUB.id)!;
+  ok(h1.ch === 1, 'the first one into town: CH 1 opens');
+  fill(h1, CH_SOLO_CAP);
+  const h2 = C.place(ZONE_HUB.id)!;
+  ok(h2.ch === 2, 'CH 1 at 20: CH 2 opens');
+  fill(h2, 3);
+  ok(C.place(ZONE_HUB.id, { leader: h1.sim }) === h1, 'a party member follows the leader into a full CH 1 (up to 22)');
+  ok(C.switchError(true, h2, C.ensure(ZONE_HUB.id, 5)!, CH_SOLO_CAP, 0) === null, 'switching hub channels by hand: allowed');
+  C.release(C.get(ZONE_HUB.id, 5)!);
+  // One CH number for every map (owner 2026-11-22): forest CH 2 → town tries CH 2 → swamp tries CH 2.
+  const f1 = C.place(ZONE_1.id)!;
+  fill(f1, CH_SOLO_CAP);
+  fill(C.place(ZONE_1.id)!, 1);
+  ok(C.place(ZONE_HUB.id, { prefer: 2 }) === h2, 'farm CH 2 → the hub tries its CH 2 first');
+  ok(C.place(ZONE_1.id, { prefer: 2 })!.ch === 2, 'hub CH 2 → the farm map tries its CH 2 first');
+  ok(C.place(ZONE_HUB.id, { prefer: 7 }) === h2, 'a hub CH that is not open: not opened for it, placed like anyone (fewest)');
+  empty(h1);
+  ok(C.sweep().includes(h1) && !C.get(ZONE_HUB.id, 1), 'the hub CH 1 closes when empty, like a farm map CH');
+
+  // Switched off with people in CH 2: nobody moves; newcomers go to CH 1; CH 2 closes once empty and stays closed.
+  applyBalance({ hubChannels: false });
+  const one = C.place(ZONE_HUB.id)!;
+  ok(one.ch === 1 && C.get(ZONE_HUB.id, 2) === h2, 'switched off: newcomers to CH 1 (opened again), those in CH 2 stay');
+  fill(one, 30);
+  ok(C.place(ZONE_HUB.id, { prefer: 2 }) === one, 'off: one room whatever the count or the CH number remembered');
+  ok(C.switchError(true, h2, one, CH_SOLO_CAP, 0)?.includes('ไม่มีแชนแนล') && C.ensure(ZONE_HUB.id, 3) === undefined, 'off: no switching or opening hub channels');
+  empty(h2);
+  ok(C.sweep().includes(h2) && !C.get(ZONE_HUB.id, 2), 'the left-over CH 2 closes once empty');
+  empty(one);
+  ok(C.sweep().length === 0 && C.get(ZONE_HUB.id, 1) === one, 'off: the hub keeps its CH 1 open, empty or not');
+  applyBalance({});
 }
 
 finish('channels');

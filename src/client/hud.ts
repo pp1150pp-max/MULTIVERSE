@@ -1141,6 +1141,7 @@ export class Hud {
     this.g.report.toggle(false);
     this.g.megaphone.toggle(false);
     this.g.daily.toggle(false);
+    this.g.news.toggle(false);
     this.g.friends.toggle(false);
     this.g.cosmetics.toggle(false);
     this.g.quests.toggle(false);

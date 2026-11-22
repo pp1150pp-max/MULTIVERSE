@@ -5,7 +5,7 @@
 // - ของฉัน: what the account owns (an admin gives them out), to wear or take off. The server checks it.
 // Also the mount button (Z) shown while a mount is worn.
 import type { Game } from './Game';
-import { COSMETICS, COS_SLOTS, COS_SLOT_NAME, cosById, type CosmeticDef, type CosSlot, type CosWorn } from '../shared/data/cosmetics';
+import { COSMETICS, COS_SLOTS, COS_SLOT_NAME, cosById, cosPerk, type CosmeticDef, type CosSlot, type CosWorn } from '../shared/data/cosmetics';
 import { setLookOwner, setTryOn } from './cosLook';
 import { cosHiddenKey, isCosHidden } from './cosTune';
 import { cosCardImage } from './cosmeticViews';
@@ -206,6 +206,8 @@ export class CosmeticsUI {
       if (worn[c.slot] === c.id) card.classList.add('worn');
       const info = el('div', 'cos-info');
       info.append(el('div', 'cos-name', c.name), el('div', 'cos-desc', c.desc));
+      const perk = cosPerk(c);
+      if (perk) info.append(el('div', 'cos-desc', perk));
       const tags = el('div', 'cos-tags');
       if (owned.has(c.id)) tags.append(el('span', 'tag on', 'มีแล้ว'));
       if (worn[c.slot] === c.id) tags.append(el('span', 'tag', 'สวมอยู่'));

@@ -26,6 +26,7 @@ import { cleanCosOwned, cosCodes, cosFromCodes, type CosSlot } from '../../share
 import { inSafeArea, zoneById, type SpawnArea, type ZoneDef } from '../../shared/data/zones';
 import type { NpcId } from '../../shared/data/npcs';
 import type { DailyView } from '../../shared/daily';
+import type { NewsView } from '../../shared/news';
 import type { BuffScroll, EquipSlot, Item, PotionKind, PotionSize, Rarity, Vec2 } from '../../shared/types';
 import type { SkillSlot, WearSlot } from '../../shared/data/classes';
 import { cleanSkillBook } from '../../shared/skillBook';
@@ -321,6 +322,7 @@ export class OnlineBackend implements Backend {
   mailUnread = 0;
   /** New mail arrived (or you joined with some): `fresh` is how many you haven't been told about. */
   onMailNote: ((unread: number, fresh: number) => void) | null = null;
+  onNews: ((v: NewsView) => void) | null = null;
   /** This month's daily login calendar (with `popup` after today's reward was just mailed). */
   onDaily: ((view: DailyView) => void) | null = null;
   private readonly enhanceWait = new Map<number, (o: EnhanceOutcome) => void>();
@@ -774,6 +776,9 @@ export class OnlineBackend implements Backend {
       }
       case 'daily':
         this.onDaily?.(m.view);
+        break;
+      case 'news':
+        this.onNews?.(m.v);
         break;
       case 'mailNote':
         if (m.fresh > 0) playSound('notify_mail');

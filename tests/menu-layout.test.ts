@@ -25,7 +25,7 @@ ok(code.menu.at(-1) === 'settings', 'code: ตั้งค่า is the last but
 ok(code.top.at(-1) === 'menu' && code.top.includes('auto'), 'code: เมนู is last in the top row, AUTO is there');
 ok(JSON.stringify(mergeBalance({}).menuLayout) === JSON.stringify(code), 'the balance carries the code layout');
 ok(JSON.stringify(checkBalance({ menuLayout: code }, true).tuning) === '{}', 'the code layout is not stored');
-const moved = { menu: ['mail', 'bag', 'settings'], top: ['auto', 'trade', 'menu'] };
+const moved = { menu: ['mail', 'bag', 'news', 'settings'], top: ['auto', 'trade', 'menu'] };
 const t = checkBalance({ menuLayout: moved }, true).tuning!;
 ok(JSON.stringify(t) === JSON.stringify({ menuLayout: moved }), 'a moved / hidden layout is stored whole');
 ok(JSON.stringify(mergeBalance(t).menuLayout) === JSON.stringify(moved), 'and merged back as it is');
