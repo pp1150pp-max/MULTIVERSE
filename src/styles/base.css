@@ -57,4 +57,9 @@ button {
 button:hover { border-color: var(--gold-hi); color: #fff; }
 button.primary { background: linear-gradient(#d0a23e, #8a6420); border-color: var(--gold-hi); color: #24170a; font-weight: 600; }
 button.primary:hover { color: #000; filter: brightness(1.1); }
+/* Quest buttons: gold "!" = accept, green "?" = turn in, grey = in progress (not clickable). */
+button.quest-accept { background: linear-gradient(#d0a23e, #8a6420); border-color: var(--gold-hi); color: #24170a; font-weight: 700; }
+button.quest-turnin { background: linear-gradient(#5fcf6a, #247a34); border-color: #9cf0a4; color: #07210c; font-weight: 700; box-shadow: inset 0 0 0 1px #0d2a12, 0 0 6px rgba(110, 230, 120, 0.45); }
+button.quest-accept:hover, button.quest-turnin:hover { color: #000; filter: brightness(1.1); }
+button.quest-progress, button.quest-progress:hover { background: linear-gradient(#4a4741, #2c2a26); border-color: #5c574d; color: #a8a296; font-weight: 500; cursor: default; filter: none; }
 
