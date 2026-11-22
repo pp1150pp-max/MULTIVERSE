@@ -39,7 +39,7 @@ function launch(backend: OnlineBackend): void {
   backend.onDisconnect = (msg) => game.hud.showDisconnect(msg);
   backend.onReconnecting = (attempt) => game.hud.showReconnecting(attempt);
   backend.onShutdown = (mode, seconds, text) => game.hud.shutdownCountdown(mode, seconds, text);
-  backend.onAnnounce = (text, from, direct, megaphone) => game.hud.announce(text, from, direct, megaphone);
+  backend.onAnnounce = (text, from, direct, megaphone, box) => game.hud.announce(text, from, direct, megaphone, box);
   backend.onMarketNote = (text, sub) => game.hud.marketNote(text, sub);
   backend.onMailNote = (unread, fresh) => game.mailUI.note(unread, fresh);
   backend.onDaily = (view) => game.daily.show(view);

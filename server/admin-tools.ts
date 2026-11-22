@@ -39,6 +39,13 @@ import type { Item, StoneStack } from '../src/shared/types';
 import type { AdminBalance, AdminMenuLayout } from '../src/shared/admin';
 import { DAILY_DEFAULT } from '../src/shared/daily';
 import { STONE_NAME } from '../src/shared/data/stones';
+import { boxChanges, boxConfig, boxOrbs, cleanBoxOverrides, type AdminBox } from '../src/shared/mysteryBox';
+
+/** The /admin mystery box tab's data. */
+const boxState = (db: Db): AdminBox => ({
+  overrides: db.boxOverrides(),
+  orbs: boxOrbs().map((id) => ({ id, name: cosById(id)?.name ?? id })),
+});
 
 const MODE_NAME: Record<ShutdownMode, string> = { restart: 'ข้อความรีสตาร์ท', shutdown: 'ข้อความปิด server' };
 const orbLookState = (db: Db, canEdit: boolean): AdminOrbLook => ({
@@ -602,6 +609,30 @@ export async function ownerToolsApi(
       log(db, a, 'daily', 'ล็อกอินรายวัน', changed.map((d) => { const r = o[d] ?? DAILY_DEFAULT[d - 1]; return `วันที่ ${d}: ${STONE_NAME[r.stone]} ×${r.count}`; }).join(', '));
     }
     send(res, 200, { defaults: DAILY_DEFAULT, overrides: o });
+    return true;
+  }
+
+  // ---------------------------------------------------------- mystery box (src/shared/mysteryBox.ts)
+  if (method === 'GET' && path === '/api/admin/mystery-box') {
+    requireFeature(req, db, 'mysteryBox');
+    send(res, 200, boxState(db));
+    return true;
+  }
+
+  if (method === 'POST' && path === '/api/admin/mystery-box') {
+    const a = requireFeature(req, db, 'mysteryBoxEdit');
+    const body = await readJson(req);
+    const before = db.boxOverrides();
+    // Saved over what the page loaded: someone else's save in between = reload first.
+    if (JSON.stringify(body.base ?? null) !== JSON.stringify(before)) throw new HttpError(409, 'มีคนบันทึกค่ากล่องปริศนาไปแล้ว โหลดหน้าใหม่ก่อน');
+    const o = cleanBoxOverrides(body.overrides);
+    if (typeof o === 'string') throw new HttpError(400, o);
+    db.setBoxOverrides(o);
+    const changes = boxChanges(before, o);
+    if (changes) log(db, a, 'mystery-box', 'กล่องปริศนา', changes.length > 1500 ? changes.slice(0, 1500) + '…' : changes);
+    // Selling orbs in the cash shop may have changed.
+    if (boxConfig(before).orbsInShop !== boxConfig(o).orbsInShop) world.cashShopChanged();
+    send(res, 200, boxState(db));
     return true;
   }
 

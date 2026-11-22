@@ -85,6 +85,10 @@ export type ActionMsg =
   | { t: 'act'; a: 'buyScroll'; n: number }
   /** Uses one EXP or drop scroll from the bag (Sim.useBuffScroll). */
   | { t: 'act'; a: 'useBuff'; stone: BuffScroll }
+  /** Opens the mystery box in bag slot `slot`: one, or the whole stack with `all` (Sim.openBox; the server rolls). */
+  | { t: 'act'; a: 'openBox'; slot: number; all: boolean }
+  /** Gives the orb of the orb item in bag slot `slot` to the account (Sim.useOrbItem). */
+  | { t: 'act'; a: 'useOrbItem'; slot: number }
   /** Announces `text` to the whole server with a megaphone from the bag (server checks length, Guest and the cooldown). */
   | { t: 'act'; a: 'megaphone'; text: string }
   /** Cash shop: buy `qty` of item `id` at `price` crystals each, the price the buyer saw (src/shared/cashShop.ts; the server checks everything). Answered with `cashBuy`. */
@@ -448,7 +452,7 @@ export type ServerMsg =
   /** The server stops (or restarts) in `seconds`; sent once a second during the countdown. */
   | { t: 'shutdown'; mode: ShutdownMode; seconds: number; text?: string }
   /** An announcement from the server's owner (admin page): shown as a banner and a chat line. */
-  | { t: 'announce'; text: string; from: string; direct: boolean; megaphone?: boolean }
+  | { t: 'announce'; text: string; from: string; direct: boolean; megaphone?: boolean; /** A mystery box prize (src/shared/mysteryBox.ts). */ box?: boolean }
   /** This month's daily login calendar (`view.popup`: just got today's reward, open it by itself). */
   | { t: 'daily'; view: DailyView }
   /** The countdown was cancelled: the server stays up. */

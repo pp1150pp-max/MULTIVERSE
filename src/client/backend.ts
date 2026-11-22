@@ -87,6 +87,10 @@ export interface Backend {
   useReturnScroll(): void;
   /** Uses one EXP or drop scroll from the bag (the server checks). */
   useBuffScroll(kind: BuffScroll): void;
+  /** Opens the mystery box in bag slot `slot` (the whole stack with `all`). */
+  openBox(slot: number, all: boolean): void;
+  /** Gives the orb of the orb item in bag slot `slot` to the account. */
+  useOrbItem(slot: number): void;
   /** Announces `text` to everyone with a megaphone from the bag (the server checks). */
   useMegaphone(text: string): void;
   /** Asks for this month's daily login calendar (answered through onDaily). */

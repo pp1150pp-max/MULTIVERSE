@@ -84,6 +84,11 @@ function entryPic(e: CashEntry, big = false): HTMLElement {
 
 function priceBar(e: CashEntry, qty = 1): HTMLElement {
   const bar = el('div', 'cash-price');
+  // An orb that comes from the mystery box: no price.
+  if (e.fromBox) {
+    bar.textContent = '🎁 เปิดได้จากกล่องปริศนา';
+    return bar;
+  }
   bar.innerHTML = (e.now < e.price ? `<s>${fmt(e.price * qty)}</s> ` : '') + `${CRYSTAL_ICON}<b>${fmt(e.now * qty)}</b>`;
   return bar;
 }

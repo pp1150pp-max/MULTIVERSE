@@ -201,7 +201,7 @@ export interface AdminDirectWs {
  * switch: the Permissions tab, the audit log, restarting / stopping the server, deleting accounts or
  * characters, and making someone owner (command line).
  */
-export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'crystalGrant' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'directWs' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'topup' | 'topupConfirm' | 'animPreview' | 'animTune' | 'menuLayout' | 'menuLayoutEdit' | 'mapEdit' | 'mapRollback' | 'mapExport' | 'mapCreate' | 'mapDelete' | 'spawnSet';
+export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'crystalGrant' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'directWs' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'topup' | 'topupConfirm' | 'animPreview' | 'animTune' | 'menuLayout' | 'menuLayoutEdit' | 'mapEdit' | 'mapRollback' | 'mapExport' | 'mapCreate' | 'mapDelete' | 'spawnSet' | 'mysteryBox' | 'mysteryBoxEdit';
 
 /**
  * The defaults: which built-in role may use each tool (owner always has all). The owner can change
@@ -271,6 +271,8 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   // Confirming item stat multipliers on the "ปรับสมดุล" tab, which also scales every saved item (owner 2026-11-11: owner only).
   itemStatMult: ['owner'],
   daily: ['owner'],
+  mysteryBox: ['owner', 'gm'],
+  mysteryBoxEdit: ['owner'],
   // The snapshot delta switch on the Server tab (owner 2026-11-14: owner and GMs).
   netDelta: ['owner', 'gm'],
   // The direct connection card on the Server tab (owner 2026-11-20: owner and GMs switch it; only the owner changes the hostname).
@@ -363,6 +365,8 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   cosPreview: { name: 'ทดลองของแต่งตัว', desc: 'แท็บ "ของแต่งตัว": ลองตำแหน่ง/หน้าตาปีก สัตว์ขี่ สัตว์เลี้ยง ออร่า ไม่เปลี่ยนอะไรในเกม', group: 'หน้าตา' },
   balance: { name: 'ปรับสมดุล (อาชีพ, tier)', desc: 'แท็บ "ปรับสมดุล": แก้ค่าสเตตัสอาชีพ ตัวคูณ ตัวตัดฟื้น และตาราง tier T1–T5 ของทั้งเซิร์ฟ มีผลทันที', group: 'ปรับเกม' },
   daily: { name: 'ล็อกอินรายวัน', desc: 'แท็บ "ล็อกอินรายวัน": แก้ของรางวัลแต่ละวันของปฏิทิน (มีผลกับของที่ส่งหลังบันทึก)', group: 'ปรับเกม' },
+  mysteryBox: { name: 'กล่องปริศนา (ดู)', desc: 'แท็บ "กล่องปริศนา": ดูของในกล่องและโอกาสเป็น %', group: 'ปรับเกม' },
+  mysteryBoxEdit: { name: 'กล่องปริศนา (บันทึก)', desc: 'เปิด/ปิดกล่อง โอกาสดรอป ของในกล่อง % จำนวน ประกาศ และขายลูกแก้วในแคชช็อป (มีผลทันที)', group: 'ปรับเกม' },
   directWs: { name: 'ต่อตรง (ลดปิง)', desc: 'แท็บ Server: เปิด/ปิดให้เกมต่อตรงไปที่ VPS ไม่ผ่าน Cloudflare และเพดานการเชื่อมต่อต่อ IP (ชื่อ hostname แก้ได้เฉพาะ owner)', group: 'ระบบ' },
   netDelta: { name: 'ลดขนาด snapshot', desc: 'แท็บ Server: สวิตช์ส่งค่าที่แทบไม่เปลี่ยนเฉพาะตอนเปลี่ยน (ลดเน็ตขาออก) และตัวนับ', group: 'ระบบ' },
   googleLogin: { name: 'เข้าสู่ระบบด้วย Google', desc: 'แท็บ Server: เปิด/ปิดปุ่ม Google ที่หน้า Login ดูบัญชีที่ผูก Google และยกเลิกการผูก', group: 'ระบบ' },

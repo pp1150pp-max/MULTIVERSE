@@ -17,7 +17,7 @@ import { BOSS_QUEST_KEY, BUFF_MAX, QUEST_KILLS, STONE_STACK } from '../data/ston
 import { cleanGearDone, cleanGearQuests } from '../gearQuests';
 import type { TutorialData } from '../tutorial';
 import {
-  BUFF_SCROLLS, isPotion, isStack, isStone, RARITIES, sameStack, SLOTS, STONE_KINDS, wornPlaces,
+  BUFF_SCROLLS, isOrbStone, isPotion, isStack, isStone, RARITIES, sameStack, SLOTS, STONE_KINDS, wornPlaces,
   type BagEntry, type BuffScroll, type EquipSlot, type StoneKind, type ClassId, type Item, type PotionKind, type PotionSize, type Rarity, type SlotId, type Stats, type Vec2,
 } from '../types';
 import type { LootKind } from './Loot';
@@ -239,7 +239,9 @@ export function sortEntries(list: readonly (BagEntry | null)[], key: SortKey, de
     }
   }
   // Stones last, merged into full stacks too.
-  for (const k of STONE_KINDS) {
+  // Orb items (mystery box) come after the fixed kinds, in the order of their numbers.
+  const orbs = [...new Set([...stones.keys()].map((k) => k.replace(/:b$/, '')).filter(isOrbStone))].sort((a, b) => Number(a.slice(4)) - Number(b.slice(4)));
+  for (const k of [...STONE_KINDS, ...orbs]) {
     for (const b of [false, true]) {
       for (let n = stones.get(`${k}${b ? ':b' : ''}`) ?? 0; n > 0; n -= STONE_STACK) stacks.push({ stone: k, count: Math.min(n, STONE_STACK), ...bound(b) });
     }

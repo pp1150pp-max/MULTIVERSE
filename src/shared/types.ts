@@ -151,8 +151,8 @@ export type ShopStone = 'phoenix';
  * Consumables bought from the merchant (owner 2026-11-10: the return scroll). They share the stone stack too,
  * so they stack, sell, trade, go in the stash and on the market (under their own "ของใช้" tab).
  */
-export type Consumable = 'return_scroll' | BuffScroll | 'megaphone';
-export const CONSUMABLES: Consumable[] = ['return_scroll', 'exp_scroll', 'drop_scroll', 'megaphone'];
+export type Consumable = 'return_scroll' | BuffScroll | 'megaphone' | 'mystery_box';
+export const CONSUMABLES: Consumable[] = ['return_scroll', 'exp_scroll', 'drop_scroll', 'megaphone', 'mystery_box'];
 /**
  * Timed boosts (owner 2026-11-12): EXP ×2 and drop chance ×2 for 30 minutes of play each. Rewards (daily
  * login, mail from the owner), never bought, so they are bound to the character like quest keys.
@@ -162,8 +162,21 @@ export const BUFF_SCROLLS: BuffScroll[] = ['exp_scroll', 'drop_scroll'];
 /** Reward consumables, all bound: the buff scrolls and the megaphone (one server-wide announcement each). */
 export const REWARD_ITEMS: Consumable[] = [...BUFF_SCROLLS, 'megaphone'];
 /** Everything a stone stack can hold: blacksmith stones, boss keys, quest keys, phoenix feathers and consumables. */
-export type StoneKind = BlacksmithStone | BossKey | QuestKey | ShopStone | Consumable;
-export const STONE_KINDS: StoneKind[] = [...BLACKSMITH_STONES, ...BOSS_KEYS, ...QUEST_KEYS, 'phoenix', ...CONSUMABLES];
+export type BaseStoneKind = BlacksmithStone | BossKey | QuestKey | ShopStone | Consumable;
+/**
+ * An enhancement-orb cosmetic carried as a bag item (from the mystery box, owner 2026-11-22): its kind is the
+ * orb's cosmetic id (`orb_<n>`, src/shared/orbItems.ts). It stacks, trades, goes in the stash and on the market
+ * like a stone; clicking it gives the orb to the account. The merchant doesn't buy it.
+ */
+export type OrbStoneKind = `orb_${number}`;
+/** Everything a stone stack can hold: the fixed kinds (STONE_KINDS) and orb items. */
+export type StoneKind = BaseStoneKind | OrbStoneKind;
+/** The fixed stone kinds (orb items are not listed: they come and go with the orbs made in /admin). */
+export const STONE_KINDS: BaseStoneKind[] = [...BLACKSMITH_STONES, ...BOSS_KEYS, ...QUEST_KEYS, 'phoenix', ...CONSUMABLES];
+export const isOrbStone = (k: unknown): k is OrbStoneKind => typeof k === 'string' && /^orb_[1-9]d{0,5}$/.test(k);
+export const isBaseStone = (k: unknown): k is BaseStoneKind => (STONE_KINDS as unknown[]).includes(k);
+/** A stone kind read from a save or a message: a fixed kind or an orb item. */
+export const isStoneKind = (k: unknown): k is StoneKind => isBaseStone(k) || isOrbStone(k);
 export const isBossKey = (k: StoneKind): k is BossKey => (BOSS_KEYS as StoneKind[]).includes(k);
 export const isQuestKey = (k: StoneKind): k is QuestKey => (QUEST_KEYS as StoneKind[]).includes(k);
 export const isConsumable = (k: StoneKind): k is Consumable => (CONSUMABLES as StoneKind[]).includes(k);

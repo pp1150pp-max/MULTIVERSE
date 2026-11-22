@@ -56,6 +56,7 @@ import { CH_RECONNECT_MS, CH_RESERVED, hasChannels, type ChannelsView } from '..
 import { MEGAPHONE_EVERY_MS, megaphoneText, STONE_NAME, STONE_STACK } from '../src/shared/data/stones';
 import { COS_SLOTS, cosById, cosCodes } from '../src/shared/data/cosmetics';
 import { cosHiddenIds, mayPutOnCos } from '../src/shared/cosShop';
+import { setBoxHiddenCos } from '../src/shared/mysteryBox';
 import { CashShop } from './cashShop';
 import { Topup } from './topup';
 import { orbItemsRegistered } from '../src/shared/orbItems';
@@ -418,6 +419,7 @@ export class GameWorld {
     this.snapDelta = db.getSetting(SNAP_DELTA_KEY) !== '0';
     this.direct = directSettings(db);
     this.cosHidden = new Set(cosHiddenIds(db.cosShop()));
+    setBoxHiddenCos(this.cosHidden);
     const wss = new WebSocketServer({ server: http, path: WS_PATH, maxPayload: 16 * 1024, perMessageDeflate: WS_DEFLATE });
     wss.on('connection', (ws, req) => this.onConnection(ws, req));
     this.startTicking();
@@ -1009,6 +1011,12 @@ export class GameWorld {
    * An announcement from the admin page (a banner and a chat line): to everyone in the world, or with
    * `toCharId` to that one character. Returns how many got it (0 = that character isn't online).
    */
+  /** A mystery box prize the owner marked "announce": a banner to everyone, like the admin's (no megaphone queue). */
+  private boxAnnounce(name: string, got: string): void {
+    const text = `🎁 ${name} เปิดกล่องปริศนาได้ ${got}!`;
+    for (const o of this.sessions) this.send(o.ws, { t: 'announce', text, from: '', direct: false, box: true });
+  }
+
   broadcast(text: string, from: string, toCharId?: number): number {
     const to = toCharId === undefined ? [...this.sessions] : [...this.sessions].filter((s) => s.charId === toCharId);
     for (const s of to) this.send(s.ws, { t: 'announce', text, from, direct: toCharId !== undefined });
@@ -1388,6 +1396,27 @@ export class GameWorld {
         // Sim.useBuffScroll ignores anything that isn't a buff scroll kind.
         if (typeof m.stone === 'string') sim.useBuffScroll(p, m.stone);
         break;
+      case 'openBox': {
+        const slot = num(m.slot);
+        if (!Number.isInteger(slot) || slot < 0 || slot >= p.bag.length) break;
+        for (const got of sim.openBox(p, slot, m.all === true)) this.boxAnnounce(p.name, got);
+        break;
+      }
+      case 'useOrbItem': {
+        const slot = num(m.slot);
+        if (!Number.isInteger(slot) || slot < 0 || slot >= p.bag.length) break;
+        if (s.guest) {
+          this.send(s.ws, { t: 'chat', name: '', text: 'Guest มีของแต่งตัวไม่ได้ — สมัครสมาชิกก่อนแล้วค่อยใช้ลูกแก้ว' });
+          break;
+        }
+        let given = false;
+        sim.useOrbItem(p, slot, (id) => s.cosOwned.includes(id), (id) => (given = this.db.grantCosmetic(s.accountId, id, 'mystery_box')));
+        if (given) {
+          this.cosmeticsChanged(s.accountId);
+          this.save(s);
+        }
+        break;
+      }
       case 'buyScroll':
         sim.buyReturnScroll(p, Math.max(0, Math.min(99, Math.floor(num(m.n)))));
         break;
@@ -1861,6 +1890,7 @@ export class GameWorld {
   /** The owner hid / showed cosmetics (already saved by the admin API): used for wearing from now on and sent to everyone online. Nobody's worn piece comes off. */
   cosHiddenChanged(ids: string[]): void {
     this.cosHidden = new Set(ids);
+    setBoxHiddenCos(this.cosHidden);
     for (const s of this.sessions) this.send(s.ws, { t: 'cosHidden', ids });
   }
 
