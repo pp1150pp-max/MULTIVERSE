@@ -27,6 +27,8 @@ export interface AutoDefaults {
   noMp: AutoOutAction;
   bagFull: AutoOutAction;
   target: AutoTargetMode;
+  /** Skills only: Auto never uses the basic attack and waits for a skill instead (owner 2026-11-22). */
+  skillsOnly: boolean;
 }
 
 /** Server-wide switches: an option switched off can't be chosen, and Auto uses the safe one instead. */
@@ -68,6 +70,8 @@ export interface AutoConfig {
   aoeGuard: boolean;
   /** Safety metres taken off a skill's reach for that check, so the monster is well inside it (owner 2026-11-20; it used to be added). */
   aoeMargin: number;
+  /** Default seconds Auto waits after casting one skill before it casts the next (owner 2026-11-22; 0 = no wait). Players can set their own. */
+  skillGap: number;
 }
 
 /** What is saved: only what differs from the code. */
@@ -82,6 +86,7 @@ export interface AutoTuning {
   homeWait?: boolean;
   aoeGuard?: boolean;
   aoeMargin?: number;
+  skillGap?: number;
 }
 
 export const AUTO_RANGE = {
@@ -90,6 +95,7 @@ export const AUTO_RANGE = {
   threatDist: [1, 15],
   offlineMin: [1, 240],
   aoeMargin: [0, 3],
+  skillGap: [0, 2],
 } as const satisfies Record<string, readonly [number, number]>;
 export const AUTO_NUM_NAME: Record<keyof typeof AUTO_RANGE, string> = {
   giveUpSec: 'Auto ข้ามของที่เก็บไม่ได้หลัง (วิ)',
@@ -97,6 +103,7 @@ export const AUTO_NUM_NAME: Record<keyof typeof AUTO_RANGE, string> = {
   threatDist: 'Auto สมดุล: ระยะนับว่าโดนตี',
   offlineMin: 'Auto ฟาร์มต่อหลังหลุดได้นาน (นาที)',
   aoeMargin: 'Auto ระยะสกิล: หักระยะเผื่อพลาด (ม.)',
+  skillGap: 'Auto เว้นระหว่างสกิล ค่าเริ่มต้น (วิ)',
 };
 /** Name of the "keep farming after a dropped connection" switch. */
 /** Name of the "only cast a skill that reaches" switch (key `aoeGuard`, kept from the mage-only version). */
@@ -109,7 +116,7 @@ const NUMS = Object.keys(AUTO_RANGE) as (keyof typeof AUTO_RANGE)[];
 /** The code's own Auto numbers (a fresh copy). */
 export function codeAuto(): AutoConfig {
   return {
-    defaults: { lootOrder: 'fight', othersLoot: true, noHp: 'fight', noMp: 'fight', bagFull: 'fight', target: 'attacker' },
+    defaults: { lootOrder: 'fight', othersLoot: true, noHp: 'fight', noMp: 'fight', bagFull: 'fight', target: 'attacker', skillsOnly: false },
     giveUpSec: 4,
     nearDist: 5,
     threatDist: 3.5,
@@ -119,6 +126,7 @@ export function codeAuto(): AutoConfig {
     homeWait: true,
     aoeGuard: true,
     aoeMargin: 0.5,
+    skillGap: 0.3,
   };
 }
 const CODE = codeAuto();
@@ -142,17 +150,19 @@ const DEFAULT_CHOICES: { [K in keyof AutoDefaults]: readonly AutoDefaults[K][] }
   noMp: AUTO_OUT_ACTIONS,
   bagFull: AUTO_OUT_ACTIONS,
   target: AUTO_TARGET_MODES,
+  skillsOnly: [false, true],
 };
 /** The options that have a server default (and a player's own pick, AutoSettings.optsSet). */
 export const AUTO_DEFAULT_KEYS = Object.keys(DEFAULT_CHOICES) as (keyof AutoDefaults)[];
 const DEFAULT_KEYS = AUTO_DEFAULT_KEYS;
 export const AUTO_DEFAULT_NAME: Record<keyof AutoDefaults, string> = {
-  lootOrder: 'ลำดับเก็บของ', othersLoot: 'เก็บของคนอื่น', noHp: 'ยา HP หมด', noMp: 'ยา MP หมด', bagFull: 'กระเป๋าเต็ม', target: 'เป้าหมาย',
+  lootOrder: 'ลำดับเก็บของ', othersLoot: 'เก็บของคนอื่น', noHp: 'ยา HP หมด', noMp: 'ยา MP หมด', bagFull: 'กระเป๋าเต็ม', target: 'เป้าหมาย', skillsOnly: 'วิธีตี',
 };
 /** Thai name of one default's value. */
 export function autoDefaultValueName(k: keyof AutoDefaults, v: unknown): string {
   if (k === 'lootOrder') return AUTO_LOOT_ORDER_NAME[v as AutoLootOrder] ?? String(v);
   if (k === 'othersLoot') return v ? 'เก็บของคนอื่นด้วย' : 'เก็บเฉพาะของตัวเอง';
+  if (k === 'skillsOnly') return v ? 'ใช้สกิลอย่างเดียว' : 'ตีธรรมดา + สกิล';
   if (k === 'target') return AUTO_TARGET_NAME[v as AutoTargetMode] ?? String(v);
   return AUTO_OUT_ACTION_NAME[v as AutoOutAction] ?? String(v);
 }

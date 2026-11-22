@@ -67,6 +67,16 @@ export interface FxLayerConfig extends Record<QuarksKey, boolean> {
   /** Paper art (owner 2026-11-18): × the size of a title set's name frame and of its chat bubble. */
   paperPlate: number;
   paperBubble: number;
+  /**
+   * Name frames and chat bubbles (owner 2026-11-22): the widest they grow before a name is cut with … / a message wraps
+   * (screen px, plain ones too), and the paper frames' inner padding (px, top-bottom and left-right).
+   */
+  plateMaxW: number;
+  bubbleMaxW: number;
+  platePadY: number;
+  platePadX: number;
+  bubblePadY: number;
+  bubblePadX: number;
   /** Paper aura footprint length, × the aura's own step size (cosmetics tab). */
   paperFoot: number;
   /** Paper enhancement orbs: grey from which a part takes the accent colour (band, star), and the darkest shading. */
@@ -171,6 +181,12 @@ export const FX_LAYER_RANGE = {
   gfxLow: [0, 1],
   paperPlate: [0.5, 2],
   paperBubble: [0.5, 2],
+  plateMaxW: [80, 400],
+  bubbleMaxW: [120, 600],
+  platePadY: [0, 20],
+  platePadX: [0, 40],
+  bubblePadY: [0, 30],
+  bubblePadX: [0, 40],
   paperFoot: [0.3, 4],
   paperOrbLight: [0.8, 1],
   paperOrbShade: [0, 1],
@@ -201,6 +217,12 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   gfxLow: 'เมนูกราฟิก: × อนุภาคของ "ต่ำ"',
   paperPlate: '× ขนาดกรอบชื่อ',
   paperBubble: '× ขนาดฟองแชท',
+  plateMaxW: 'กรอบชื่อกว้างสุด (px เกินแล้วย่อชื่อด้วย …)',
+  bubbleMaxW: 'ฟองแชทกว้างสุด (px เกินแล้วขึ้นบรรทัดใหม่)',
+  platePadY: 'กรอบชื่อ: ขอบในบน-ล่าง (px)',
+  platePadX: 'กรอบชื่อ: ขอบในซ้าย-ขวา (px)',
+  bubblePadY: 'ฟองแชท: ขอบในบน-ล่าง (px)',
+  bubblePadX: 'ฟองแชท: ขอบในซ้าย-ขวา (px)',
   paperFoot: 'ขนาดรอยเท้าออร่า (× ขนาดรอยเท้าของชิ้น)',
   paperOrbLight: 'ลูกแก้ว: ส่วนที่ขาวกว่านี้เป็นสีเน้น',
   paperOrbShade: 'ลูกแก้ว: ความสว่างส่วนมืดสุด',
@@ -240,7 +262,7 @@ export function codeFxLayer(): FxLayerConfig {
   return {
     enabled: true, debuffs: true, guardGlow: true, buffIcons: true, barBuffIcons: true, glow: 1, ground: 1, particles: 1, shake: 1, hitstopMs: 60, crit: 1,
     maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true, droneFollow: true, droneSpeed: 7, droneDist: 1, circles: true, zoneCircles: true, circleGlow: 1, slashLift: 0.9, quarks: false, quarksOthers: 0.5, quarksTouch: 0.5, quarksCap: 3000,
-    paperPlate: 1, paperBubble: 1, paperFoot: 1.6, paperOrbLight: 0.95, paperOrbShade: 0.15,
+    paperPlate: 1, paperBubble: 1, plateMaxW: 200, bubbleMaxW: 220, platePadY: 3, platePadX: 14, bubblePadY: 7, bubblePadX: 18, paperFoot: 1.6, paperOrbLight: 0.95, paperOrbShade: 0.15,
     gfxMenu: true, keyRebind: true, orbsNearBar: true, gfxDefault: 3, gfxMax: 3, gfxMid: 0.6, gfxLow: 0.3,
     ...(Object.fromEntries(QUARKS_KEYS.map((k) => [k, true])) as Record<QuarksKey, boolean>),
     extras: true, extrasK: 1, bossFx: true, bossExtras: true, bossExtrasK: 1, skills: {},

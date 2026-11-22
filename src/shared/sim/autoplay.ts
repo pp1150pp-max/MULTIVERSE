@@ -74,6 +74,8 @@ export const AUTO_LEVEL_WARN = 10;
 export class AutoPlay {
   private target: Monster | null = null;
   private retargetAt = 0;
+  /** When Auto last asked for a skill: the next waits `autoSettings.skillGap` seconds (owner 2026-11-22). */
+  private lastSkillAt = -Infinity;
   private roam: { x: number; z: number } | null = null;
   /** Centre of the farming circle: where Auto was switched on. */
   private anchor: { x: number; z: number } | null = null;
@@ -327,16 +329,25 @@ export class AutoPlay {
     }
     // In reach: stop. The walk target set above is the monster's spot and would carry ranged classes into its face.
     out.moveTo = { x: p.x, z: p.z };
-    out.basic = true;
+    // Skills only (owner 2026-11-22): no basic attack. When a skill is ready but doesn't reach from here, step in.
+    out.basic = !set.skillsOnly;
     this.castByOrder(g, out);
+    if (set.skillsOnly && !out.skills.length && set.order.some((s) => this.usable(p, s) && !this.inReach(g, s))) {
+      out.moveTo = { x: target.x, z: target.z };
+    }
     return out;
   }
 
   /** Whether Auto may cast this skill now: switched on in the settings, off cooldown, enough MP, and it reaches (inReach). */
   private ready(g: AutoWorld, slot: AutoSkill): boolean {
     const p = g.player;
+    return this.usable(p, slot) && g.time - this.lastSkillAt >= p.autoSettings.skillGap && this.inReach(g, slot);
+  }
+
+  /** Switched on in the settings, off cooldown and enough MP (reach and the gap between skills not counted). */
+  private usable(p: Player, slot: AutoSkill): boolean {
     const sk = p.skill(slot);
-    return !!sk && p.autoSettings.skills[slot] && p.skillReady(sk) && p.mp >= p.skillMp(sk) + 5 && this.inReach(g, slot);
+    return !!sk && p.autoSettings.skills[slot] && p.skillReady(sk) && p.mp >= p.skillMp(sk) + 5;
   }
 
   /**
@@ -376,7 +387,10 @@ export class AutoPlay {
   }
 
   private tryCast(g: AutoWorld, out: Intent, slot: AutoSkill): void {
-    if (this.ready(g, slot) && !out.skills.includes(slot)) out.skills.push(slot);
+    if (!out.skills.length && this.ready(g, slot)) {
+      out.skills.push(slot);
+      this.lastSkillAt = g.time;
+    }
   }
 
   /**
@@ -385,9 +399,15 @@ export class AutoPlay {
    * Nothing extra when the player cast one by hand this frame.
    */
   private castByOrder(g: AutoWorld, out: Intent): void {
-    if (out.skills.length) return;
+    if (out.skills.length) {
+      this.lastSkillAt = g.time;
+      return;
+    }
     const slot = g.player.autoSettings.order.find((s) => this.ready(g, s));
-    if (slot) out.skills.push(slot);
+    if (slot) {
+      out.skills.push(slot);
+      this.lastSkillAt = g.time;
+    }
   }
 
   /**
