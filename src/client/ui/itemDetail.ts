@@ -86,7 +86,7 @@ export class ItemDetail {
     } else if ('slot' in at) {
       const slot = at.slot;
       if (this.w.forge.isOpen) acts.push({ label: 'วางที่ช่างตีเหล็ก', run: () => this.w.forge.forgePlace(entry), main: true });
-      else acts.push({ label: 'ถอด', run: () => g.backend.unequip(slot), main: true });
+      else acts.push({ label: 'ถอด', run: () => { if (!this.w.shop.blocksEquip()) g.backend.unequip(slot); }, main: true });
     } else {
       const i = at.bag;
       if (g.trade.open) acts.push({ label: 'เสนอในการเทรด', run: () => g.trade.offer(i), main: true });
@@ -97,7 +97,7 @@ export class ItemDetail {
         if (block) acts.push({ label: `สวมใส่ไม่ได้ — ${block}`, run: () => undefined, main: true, off: true });
         else if (places.length > 1) {
           for (const place of places) acts.push({ label: `ใส่ช่อง${EQUIP_SLOT_LABEL[place]}`, run: () => this.host.equipByDrag(i, place), main: true });
-        } else acts.push({ label: 'สวมใส่', run: () => g.backend.equip(i), main: true });
+        } else acts.push({ label: 'สวมใส่', run: () => { if (!this.w.shop.blocksEquip()) g.backend.equip(i); }, main: true });
       } else if (isPotion(entry)) {
         acts.push({ label: `ใช้กับปุ่มยา ${entry.potion === 'hp' ? 1 : 2}`, run: () => g.backend.equip(i), main: true });
       } else if (isStone(entry)) {
