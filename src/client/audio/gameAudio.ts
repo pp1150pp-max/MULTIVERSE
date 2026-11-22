@@ -31,11 +31,16 @@ const STRIDE = 1.5;
 /** A monster this close that starts chasing gives a cry. */
 const ALERT_RADIUS = 12;
 const DROP_SOUND: Record<Rarity, SoundName> = { common: 'drop_item', uncommon: 'drop_item', rare: 'drop_rare', epic: 'drop_epic', legendary: 'drop_legend' };
+/** Each room boss's own fight music (owner 2026-11-22); other bosses play 'boss'. */
+const BOSS_MUSIC: Record<string, TrackId> = { forest_bear: 'boss_bear', bog_witch: 'boss_witch', yeti: 'boss_yeti', volcano_heart: 'boss_heart' };
 const ANIM_SLOT: Record<string, SkillSlot> = { attack: 'basic', skill_q: 'q', skill_e: 'e', skill_r: 'r', dash: 'dash' };
 
 export class GameAudio {
   private zoneId: string | null = null;
   private bossHold = 0;
+  /** The boss fight track and its speed, kept while the boss is off the map (the Yeti's jump). */
+  private bossTrack: TrackId = 'boss';
+  private bossTempo = 1;
   private walked = 0;
   private lastX = NaN;
   private lastZ = NaN;
@@ -61,8 +66,22 @@ export class GameAudio {
     this.mobAlerts(b, moved);
     this.ambience(dt, look);
 
-    this.bossHold = this.bossFight(b) ? BOSS_MUSIC_HOLD : Math.max(0, this.bossHold - dt);
-    music.play(this.bossHold > 0 ? 'boss' : ZONE_MUSIC[b.zone.id] ?? 'forest');
+    const fight = this.bossFight(b);
+    if (fight) {
+      const boss = fight.isBoss ? fight : b.monsters.find((m) => m.isBoss && m.alive);
+      if (boss) {
+        this.bossTrack = BOSS_MUSIC[boss.def.id] ?? 'boss';
+        // Faster when it rages; the Heart speeds up with its phases (below half, below 30%).
+        const left = boss.hp / boss.maxHp;
+        this.bossTempo = boss.def.id === 'volcano_heart' ? (left < 0.3 ? 1.2 : left < 0.5 ? 1.1 : 1) : boss.enraged ? 1.12 : 1;
+      }
+    } else if (this.bossHold <= dt) {
+      this.bossTrack = 'boss';
+      this.bossTempo = 1;
+    }
+    this.bossHold = fight ? BOSS_MUSIC_HOLD : Math.max(0, this.bossHold - dt);
+    if (this.bossHold > 0) music.play(this.bossTrack, this.bossTempo);
+    else music.play(ZONE_MUSIC[b.zone.id] ?? 'forest');
   }
 
   /** The event already passed Game's "is this for me" check. */
@@ -192,10 +211,10 @@ export class GameAudio {
     playSound(name, gain * near, pan);
   }
 
-  private bossFight(b: Backend): boolean {
+  private bossFight(b: Backend) {
     const me = b.me;
     // Leapers only ever come with a boss, so its music keeps playing while that boss is off the map.
-    return b.monsters.some((m) =>
+    return b.monsters.find((m) =>
       (m.isBoss || m.def.leap) && m.alive &&
       Math.hypot(m.x - me.x, m.z - me.z) <= BOSS_MUSIC_RADIUS &&
       (m.state === 'chase' || m.state === 'charge' || (m.state !== 'return' && m.hp < m.maxHp)));

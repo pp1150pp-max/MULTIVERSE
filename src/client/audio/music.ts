@@ -2,7 +2,8 @@
 // and noise drums. Each line below is one bar of eight steps: a note, `-` to hold it, `.` for silence.
 import { audioEngine } from './engine';
 
-export type TrackId = 'forest' | 'marsh' | 'snow' | 'volcano' | 'town' | 'boss';
+export type TrackId = 'forest' | 'marsh' | 'snow' | 'volcano' | 'town' | 'boss'
+  | 'boss_bear' | 'boss_witch' | 'boss_yeti' | 'boss_heart';
 
 /** Chord symbol → bass root, bass fifth, then three arpeggio notes. */
 const CHORDS: Record<string, [string, string, string, string, string]> = {
@@ -17,6 +18,10 @@ const CHORDS: Record<string, [string, string, string, string, string]> = {
   Gm: ['G2', 'D3', 'D4', 'G4', 'A#4'],
   A: ['A2', 'E3', 'C#4', 'E4', 'A4'],
   E: ['E2', 'B2', 'E4', 'G#4', 'B4'],
+  B: ['B2', 'F#3', 'D#4', 'F#4', 'B4'],
+  Cm: ['C3', 'G2', 'C4', 'D#4', 'G4'],
+  Fm: ['F2', 'C3', 'C4', 'F4', 'G#4'],
+  Ab: ['G#2', 'D#3', 'C4', 'D#4', 'G#4'],
 };
 
 interface TrackDef {
@@ -110,6 +115,60 @@ const TRACKS: Record<TrackId, TrackDef> = {
     drums: 'k . h . s . h .',
     leadVol: 0.11, bassVol: 0.18, arpVol: 0.03, drumVol: 0.05,
   },
+  // Each room boss's own fight (owner 2026-11-22): it speeds up when the boss rages or the Heart changes phase.
+  // Forest Bear: heavy and stomping, in E minor.
+  boss_bear: {
+    bpm: 140,
+    lead: [
+      'E5 - E5 G5 - E5 D5 B4', 'E5 - - B4 - G4 A4 B4', 'C5 - C5 E5 - G5 E5 C5', 'D5 - F#5 - A5 - F#5 D5',
+      'E5 G5 B5 G5 - E5 G5 -', 'B5 - A5 G5 - F#5 E5 -', 'C5 - E5 G5 - A5 G5 E5', 'D#5 - F#5 - B5 - - -',
+    ],
+    chords: ['Em', 'Em', 'C', 'D', 'Em', 'Em', 'C', 'B'],
+    bass: '1 1 5 1 8 1 5 1',
+    arp: '1 2 3 2 1 2 3 2',
+    drums: 'k . s k k . s .',
+    leadVol: 0.12, bassVol: 0.24, arpVol: 0.03, drumVol: 0.15,
+  },
+  // Bog Witch: eerie and lurching, in D minor.
+  boss_witch: {
+    bpm: 128,
+    lead: [
+      'D5 - F5 - A5 - G#5 -', 'A5 - - - F5 - D5 -', 'A#4 - D5 - F5 - E5 D5', 'C#5 - E5 - A5 - - -',
+      'D5 F5 A5 D6 - C6 A#5 A5', 'G5 - A#5 - D5 - G5 -', 'E5 - C#5 - A4 - C#5 E5', 'D5 - - - . . . .',
+    ],
+    chords: ['Dm', 'Dm', 'Bb', 'A', 'Dm', 'Gm', 'A', 'Dm'],
+    bass: '1 - 5 - 1 5 8 5',
+    arp: '3 1 2 1 3 1 2 1',
+    drums: 'k . h s . k h s',
+    leadVol: 0.12, bassVol: 0.22, arpVol: 0.035, drumVol: 0.12,
+  },
+  // Yeti: cold and driving, in A minor.
+  boss_yeti: {
+    bpm: 146,
+    lead: [
+      'A5 - E5 A5 - C6 B5 A5', 'F5 - A5 C6 - A5 F5 -', 'G5 - E5 C5 - E5 G5 -', 'G5 - B5 D6 - B5 G5 -',
+      'A5 C6 A5 E5 - A5 E5 C5', 'F5 A5 F5 C5 - F5 A5 C6', 'B5 - G#5 E5 - G#5 B5 -', 'E6 - - - B5 - G#5 -',
+    ],
+    chords: ['Am', 'F', 'C', 'G', 'Am', 'F', 'E', 'E'],
+    bass: '1 8 1 8 5 8 1 8',
+    arp: '1 2 3 2 1 2 3 2',
+    drums: 'k h s h k h s s',
+    leadVol: 0.12, bassVol: 0.22, arpVol: 0.03, drumVol: 0.13,
+  },
+  // Volcano Heart: fast and burning, in C minor.
+  boss_heart: {
+    bpm: 160,
+    lead: [
+      'C5 - D#5 G5 - D#5 C5 G4', 'C5 D#5 G5 C6 - G5 D#5 -', 'G#5 - G5 F5 - D#5 F5 -', 'A#5 - G#5 G5 - F5 D#5 -',
+      'C6 - G5 D#5 C5 - D#5 G5', 'F5 - G#5 C6 - G#5 F5 -', 'G5 - B5 D6 - B5 G5 F5', 'D#5 - D5 - B4 - G4 -',
+    ],
+    chords: ['Cm', 'Cm', 'Ab', 'Bb', 'Cm', 'Fm', 'G', 'G'],
+    bass: '1 1 8 1 1 8 5 8',
+    arp: '1 2 3 2 1 2 3 2',
+    drums: 'k k s h k k s k',
+    leadVol: 0.12, bassVol: 0.24, arpVol: 0.03, drumVol: 0.15,
+  },
+  // Field bosses and anything without a track of its own.
   boss: {
     bpm: 152,
     lead: [
@@ -181,6 +240,7 @@ function pulseWave(ctx: AudioContext): PeriodicWave {
 
 class MusicPlayer {
   private wanted: TrackId | null = null;
+  private tempo = 1;
   private playing: TrackId | null = null;
   private out: GainNode | null = null;
   private pulse: PeriodicWave | null = null;
@@ -189,8 +249,10 @@ class MusicPlayer {
   private timer: number | null = null;
 
   /** Fades to this track. It starts as soon as sound is allowed. */
-  play(id: TrackId): void {
+  /** `tempo` speeds the track up (1 = as written), e.g. when a boss rages. */
+  play(id: TrackId, tempo = 1): void {
     this.wanted = id;
+    this.tempo = tempo;
     this.timer ??= window.setInterval(() => this.tick(), TICK_MS);
   }
 
@@ -204,7 +266,7 @@ class MusicPlayer {
     if (!ctx || !audioEngine.running || !this.wanted) return;
     if (this.playing !== this.wanted) this.begin(ctx, this.wanted);
     const track = COMPILED[this.playing!];
-    const stepDur = 60 / track.def.bpm / 2;
+    const stepDur = 60 / (track.def.bpm * this.tempo) / 2;
     if (this.nextT < ctx.currentTime) this.nextT = ctx.currentTime + 0.05;
     while (this.nextT < ctx.currentTime + LOOK_AHEAD) {
       this.schedule(ctx, track, this.step, this.nextT, stepDur);
