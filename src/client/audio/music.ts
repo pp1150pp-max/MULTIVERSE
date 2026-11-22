@@ -2,7 +2,7 @@
 // and noise drums. Each line below is one bar of eight steps: a note, `-` to hold it, `.` for silence.
 import { audioEngine } from './engine';
 
-export type TrackId = 'forest' | 'marsh' | 'snow' | 'volcano' | 'boss';
+export type TrackId = 'forest' | 'marsh' | 'snow' | 'volcano' | 'town' | 'boss';
 
 /** Chord symbol → bass root, bass fifth, then three arpeggio notes. */
 const CHORDS: Record<string, [string, string, string, string, string]> = {
@@ -97,6 +97,19 @@ const TRACKS: Record<TrackId, TrackDef> = {
     leadVol: 0.11, bassVol: 0.24, arpVol: 0.035, drumVol: 0.1,
   },
   // Fast and driving, in A minor.
+  // The hub city (owner 2026-11-22): warm and easy-going, in F major.
+  town: {
+    bpm: 84,
+    lead: [
+      'F4 - A4 C5 - A4 G4 -', 'E4 - G4 C5 - - . .', 'D5 - C5 A4 - F4 A4 -', 'A#4 - - - G4 - . .',
+      'A4 - C5 F5 - E5 D5 -', 'C5 - A4 F4 - G4 A4 -', 'A#4 - A4 G4 - E4 G4 -', 'F4 - - - . . . .',
+    ],
+    chords: ['F', 'C', 'Dm', 'Bb', 'F', 'Am', 'Gm', 'F'],
+    bass: '1 - 5 - 1 - 5 -',
+    arp: '1 3 2 3 1 3 2 3',
+    drums: 'k . h . s . h .',
+    leadVol: 0.11, bassVol: 0.18, arpVol: 0.03, drumVol: 0.05,
+  },
   boss: {
     bpm: 152,
     lead: [

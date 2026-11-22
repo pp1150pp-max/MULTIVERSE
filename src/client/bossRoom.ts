@@ -7,6 +7,7 @@ import { MONSTERS } from '../shared/data/monsters';
 import { BOSS_KEY, BOSS_QUEST_KEY, STONE_COLOR, STONE_NAME } from '../shared/data/stones';
 import { bossShortName, ROOM_KEYS_MAX, roomInviteText, type RoomAnswer, type RoomLobbyView } from '../shared/bossRoom';
 import { potionIcon, stoneIcon } from './icons';
+import { playSound } from './audio/sfx';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -266,6 +267,7 @@ export class RoomUI {
     this.countdown.classList.toggle('hidden', n <= 0);
     if (n <= 0) return;
     this.countdown.textContent = String(n);
+    if (n <= 5) playSound('boss_tick');
     // Replays the pop for each new number.
     this.countdown.classList.remove('pop');
     void this.countdown.offsetWidth;

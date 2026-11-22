@@ -266,7 +266,10 @@ export class Hud {
         if (entry.stone === 'return_scroll') g.useReturnScroll();
         else if (isBuffScroll(entry.stone)) g.backend.useBuffScroll(entry.stone);
         else if (entry.stone === 'megaphone') g.megaphone.toggle(true);
-        else if (entry.stone === 'mystery_box') g.backend.openBox(i, false);
+        else if (entry.stone === 'mystery_box') {
+          g.backend.openBox(i, false);
+          playSound('box_open');
+        }
         else if (isOrbStone(entry.stone)) g.backend.useOrbItem(i);
         return;
       }
@@ -313,6 +316,7 @@ export class Hud {
       // A mystery box: right click opens the whole stack (owner 2026-11-22).
       if (isStone(item) && item.stone === 'mystery_box') {
         g.backend.openBox(i, true);
+        playSound('box_open');
         return;
       }
       const dropAsk = () => this.askDrop(i);
