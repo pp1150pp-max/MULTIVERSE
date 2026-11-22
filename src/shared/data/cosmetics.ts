@@ -143,3 +143,8 @@ export function cleanCosOwned(v: unknown): string[] {
 export const MOUNT_SPEED = 1.3;
 /** Seconds after the last hit dealt or taken before you can get back on (owner: 3 s). */
 export const MOUNT_CALM = 3;
+
+/** What a cosmetic does besides its looks, shown under its description (owner 2026-11-22: the mount's speed). */
+export function cosPerk(c: CosmeticDef): string | null {
+  return c.slot === 'mount' ? `ความเร็วเคลื่อนที่ +${Math.round((MOUNT_SPEED - 1) * 100)}% (ตอนขี่)` : null;
+}

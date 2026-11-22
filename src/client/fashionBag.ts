@@ -6,7 +6,7 @@
 // Unowned pieces are not shown; pieces hidden in /admin follow the cosmetics window's rule (only while worn).
 // The window goes back to the normal bag while a shop, stash, market, trade or forge is open.
 import type { Game } from './Game';
-import { COSMETICS, COS_SLOTS, COS_SLOT_NAME, cosById, type CosmeticDef, type CosSlot } from '../shared/data/cosmetics';
+import { COSMETICS, COS_SLOTS, COS_SLOT_NAME, cosById, cosPerk, type CosmeticDef, type CosSlot } from '../shared/data/cosmetics';
 import { cosPicture } from './cosmetics';
 import { cosHiddenKey, isCosHidden } from './cosTune';
 import { orbItemsVersion } from '../shared/orbItems';
@@ -244,7 +244,7 @@ export class FashionBag {
     tip.innerHTML =
       `<div class="tt-name" style="color:${esc(c.color)}">${esc(c.name)}</div>` +
       `<div class="tt-sub">ของแต่งตัว · ${COS_SLOT_NAME[c.slot]}${isWorn ? ' · สวมอยู่' : ''}</div>` +
-      `<div class="tt-stats"><div>${esc(c.desc)}</div></div>` +
+      `<div class="tt-stats"><div>${esc(c.desc)}</div>${cosPerk(c) ? `<div>${esc(cosPerk(c)!)}</div>` : ''}</div>` +
       (isCosHidden(c.id) ? '<div class="tt-req">ปิดชั่วคราว ถอดแล้วสวมใหม่ไม่ได้</div>' : '') +
       `<div class="tt-hint">คลิก: ${isWorn ? 'ถอด' : 'สวม'}</div>`;
     tip.classList.remove('hidden');
@@ -276,6 +276,8 @@ export class FashionBag {
     const name = el('div', 'tt-name', c.name);
     name.style.color = c.color;
     info.append(name, el('div', 'tt-sub', `${COS_SLOT_NAME[c.slot]}${isWorn ? ' · สวมอยู่' : ''}`), el('div', 'tt-stats', c.desc));
+    const perk = cosPerk(c);
+    if (perk) info.append(el('div', 'tt-stats', perk));
     if (isCosHidden(c.id)) info.append(el('div', 'tt-req', 'ปิดชั่วคราว ถอดแล้วสวมใหม่ไม่ได้'));
     top.append(icon, info);
     const acts = el('div', 'idt-acts');
