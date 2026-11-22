@@ -22,6 +22,7 @@ import { BALANCE_SETTING, checkBalance, type BalanceTuning } from '../src/shared
 import { checkOrbLook, DEFAULT_ORB_LOOK, ORB_LOOK_SETTING, sameOrbLook, type OrbLook } from '../src/shared/orbLook';
 import { MARKET_HISTORY_DAYS, type MarketQuery } from '../src/shared/sim/market';
 import { MAIL_HISTORY_DAYS } from '../src/shared/mail';
+import { NEWS_ADMIN_LIST, NEWS_SHOW, NEWS_SWITCHES_DEFAULT, type AdminNewsNote, type NewsNote, type NewsSwitches } from '../src/shared/news';
 import type { TradeLogRow } from '../src/shared/trade';
 import type { AdminReportRow } from '../src/shared/reports';
 import type { FriendChar } from '../src/shared/friends';
@@ -112,6 +113,7 @@ export class Db {
     this.db = new DatabaseSync(file);
     this.db.exec(`
       PRAGMA journal_mode = WAL;
+      PRAGMA busy_timeout = 5000;
       PRAGMA foreign_keys = ON;
       CREATE TABLE IF NOT EXISTS accounts (
         id INTEGER PRIMARY KEY,
@@ -186,6 +188,18 @@ export class Db {
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL,
         updated_at INTEGER NOT NULL
+      );
+      -- "มีอะไรใหม่" (docs/systems/news.md): update notes the players read. lines is a JSON array of strings; key makes a
+      -- note added from the command line (tools/add-news.ts) safe to repeat. Every change bumps settings.news_rev.
+      CREATE TABLE IF NOT EXISTS news (
+        id INTEGER PRIMARY KEY,
+        key TEXT UNIQUE,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        lines TEXT NOT NULL,
+        hidden INTEGER NOT NULL DEFAULT 0,
+        author TEXT NOT NULL
       );
       -- Map layouts the owner edits in /admin (docs/plans/map-editor.md): at most one 'draft' row per map (saved over and over),
       -- and a new 'published' row for every publish (rev 1, 2, …; the newest MAP_KEEP_REVS are kept). No published row = the JSON that ships with the game.
@@ -499,6 +513,88 @@ export class Db {
   setSetting(key: string, value: string | null): void {
     if (value === null) this.db.prepare('DELETE FROM settings WHERE key = ?').run(key);
     else this.db.prepare('INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at').run(key, value, Date.now());
+  }
+
+  // ------------------------------------------------------------ news (server/news.ts, tools/add-news.ts)
+
+  /** Changes whenever a note or a news switch changes; the server polls it to tell players online (it also works for a write from another process). */
+  newsRev(): string {
+    return this.getSetting('news_rev') ?? '0';
+  }
+
+  private newsBump(): void {
+    this.setSetting('news_rev', String(Number(this.newsRev()) + 1));
+  }
+
+  newsSwitches(): NewsSwitches {
+    const out = { ...NEWS_SWITCHES_DEFAULT };
+    try {
+      const o = JSON.parse(this.getSetting('news_switches') ?? '{}') as Partial<NewsSwitches>;
+      if (typeof o.button === 'boolean') out.button = o.button;
+      if (typeof o.autopop === 'boolean') out.autopop = o.autopop;
+    } catch {
+      // damaged value: the code's switches
+    }
+    return out;
+  }
+
+  /** Stores only what differs from the code. */
+  setNewsSwitches(sw: NewsSwitches): void {
+    this.transaction(() => {
+      const diff: Partial<NewsSwitches> = {};
+      if (sw.button !== NEWS_SWITCHES_DEFAULT.button) diff.button = sw.button;
+      if (sw.autopop !== NEWS_SWITCHES_DEFAULT.autopop) diff.autopop = sw.autopop;
+      this.setSetting('news_switches', Object.keys(diff).length ? JSON.stringify(diff) : null);
+      this.newsBump();
+    });
+  }
+
+  /** The newest visible notes (what the players see). */
+  newsVisible(limit = NEWS_SHOW): NewsNote[] {
+    const rows = this.db.prepare('SELECT id, created_at, title, lines FROM news WHERE hidden = 0 ORDER BY created_at DESC, id DESC LIMIT ?').all(limit) as
+      { id: number; created_at: number; title: string; lines: string }[];
+    return rows.map((r) => ({ id: r.id, at: r.created_at, title: r.title, lines: JSON.parse(r.lines) as string[] }));
+  }
+
+  newsAll(): AdminNewsNote[] {
+    const rows = this.db.prepare('SELECT id, created_at, updated_at, title, lines, hidden, author FROM news ORDER BY created_at DESC, id DESC LIMIT ?').all(NEWS_ADMIN_LIST) as
+      { id: number; created_at: number; updated_at: number; title: string; lines: string; hidden: number; author: string }[];
+    return rows.map((r) => ({ id: r.id, at: r.created_at, updatedAt: r.updated_at, title: r.title, lines: JSON.parse(r.lines) as string[], hidden: r.hidden === 1, author: r.author }));
+  }
+
+  newsGet(id: number): AdminNewsNote | undefined {
+    return this.newsAll().find((n) => n.id === id);
+  }
+
+  /** Adds a note (already cleaned). With a `key` that exists, nothing is added and null is returned. */
+  newsAdd(title: string, lines: string[], author: string, key: string | null = null, at = Date.now()): number | null {
+    return this.transaction(() => {
+      if (key !== null && this.db.prepare('SELECT 1 FROM news WHERE key = ?').get(key)) return null;
+      const r = this.db.prepare('INSERT INTO news (key, created_at, updated_at, title, lines, hidden, author) VALUES (?, ?, ?, ?, ?, 0, ?)')
+        .run(key, at, at, title, JSON.stringify(lines), author);
+      this.newsBump();
+      return Number(r.lastInsertRowid);
+    });
+  }
+
+  /** Changes a note's text and/or whether it is hidden; false when it does not exist. */
+  newsEdit(id: number, patch: { title?: string; lines?: string[]; hidden?: boolean }): boolean {
+    return this.transaction(() => {
+      const cur = this.db.prepare('SELECT title, lines, hidden FROM news WHERE id = ?').get(id) as { title: string; lines: string; hidden: number } | undefined;
+      if (!cur) return false;
+      this.db.prepare('UPDATE news SET title = ?, lines = ?, hidden = ?, updated_at = ? WHERE id = ?')
+        .run(patch.title ?? cur.title, patch.lines ? JSON.stringify(patch.lines) : cur.lines, patch.hidden === undefined ? cur.hidden : patch.hidden ? 1 : 0, Date.now(), id);
+      this.newsBump();
+      return true;
+    });
+  }
+
+  newsDelete(id: number): boolean {
+    return this.transaction(() => {
+      const n = Number(this.db.prepare('DELETE FROM news WHERE id = ?').run(id).changes);
+      if (n) this.newsBump();
+      return n === 1;
+    });
   }
 
   // ------------------------------------------------------------ map layouts (server/admin-maps.ts)
