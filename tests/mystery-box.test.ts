@@ -21,7 +21,7 @@ const pctOf = (odds: ReturnType<typeof boxOdds>, id: string) => odds.find((x) =>
 
 // ---------------------------------------------------------------- the owner's table
 const cfg = boxConfig();
-ok(cfg.enabled === false, 'the box is off until the owner switches it on');
+ok(cfg.enabled === true, 'the box drops from the start (the owner can switch it off)');
 ok(cfg.mobPct === 0.5 && cfg.bossPct === 20, 'drops: monster 0.5%, boss 20%');
 const odds = boxOdds(cfg, 4);
 ok(near(odds.reduce((a, x) => a + x.pct, 0), 100), 'chances add up to 100%');
@@ -71,11 +71,11 @@ ok(typeof over === 'string' && over.includes('เกิน 100%'), 'fixed chance
 ok(typeof cleanBoxOverrides({ rows: { nope: {} } }) === 'string', 'unknown row refused');
 ok(typeof cleanBoxOverrides({ rows: { pot_hp_l: { count: 11 } } }) === 'string', 'potion amount over 10 refused');
 ok(typeof cleanBoxOverrides({ mobPct: -1 }) === 'string', 'negative drop chance refused');
-const same = cleanBoxOverrides({ enabled: false, mobPct: 0.5, rows: { gear_epic: { pct: 10, on: true } } });
+const same = cleanBoxOverrides({ enabled: true, mobPct: 0.5, rows: { gear_epic: { pct: 10, on: true } } });
 ok(typeof same !== 'string' && JSON.stringify(same) === '{}', 'values equal to the code are not stored');
-const mine = cleanBoxOverrides({ enabled: true, rows: { gear_epic: { pct: null }, gear_common: { on: true } } }) as BoxOverrides;
+const mine = cleanBoxOverrides({ enabled: false, rows: { gear_epic: { pct: null }, gear_common: { on: true } } }) as BoxOverrides;
 const mineOdds = boxOdds(boxConfig(mine), 4);
-ok(typeof mine !== 'string' && boxConfig(mine).enabled, 'owner changes kept');
+ok(typeof mine !== 'string' && !boxConfig(mine).enabled, 'owner changes kept');
 ok(near(pctOf(mineOdds, 'gear_epic')!, pctOf(mineOdds, 'gear_common')!) && near(mineOdds.reduce((a, x) => a + x.pct, 0), 100), 'a row set to share the rest shares it equally');
 const noShare = cleanBoxOverrides({ rows: Object.fromEntries(BOX_ROWS.map((x) => [x.id, { on: x.id === 'gear_epic' || x.id === 'gear_legendary' }])) }) as BoxOverrides;
 const two = boxOdds(boxConfig(noShare), 4);
@@ -90,7 +90,7 @@ const data = newCharacterData('T', 'mage');
 data.level = 20;
 data.bag = [{ stone: 'mystery_box', count: 3 }];
 const p = sim.addPlayer(data);
-setBoxConfig({});
+setBoxConfig({ enabled: false });
 ok(sim.openBox(p, 0, false).length === 0 && (p.bag[0] as StoneStack).count === 3, 'box switched off: nothing opens');
 setBoxConfig({ enabled: true, rows: { orb: { pct: 100 } } });
 const ann = sim.openBox(p, 0, false, mulberry32(1));

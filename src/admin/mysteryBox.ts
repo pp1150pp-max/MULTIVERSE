@@ -118,7 +118,7 @@ export async function renderMysteryBox(view: HTMLElement, h: H, api: Api): Promi
       }
       void save(o);
     } }, 'บันทึก');
-    const resetBtn = h('button', { disabled: !edit, onclick: () => confirm('คืนค่ากล่องปริศนาทั้งหมดเป็นค่าในโค้ด? (กล่องจะกลับเป็นปิด)') && void save({}) }, 'คืนค่าในโค้ดทั้งหมด');
+    const resetBtn = h('button', { disabled: !edit, onclick: () => confirm('คืนค่ากล่องปริศนาทั้งหมดเป็นค่าในโค้ด?') && void save({}) }, 'คืนค่าในโค้ดทั้งหมด');
 
     box.replaceChildren(h('div', { class: 'card' },
       h('h2', {}, 'กล่องปริศนา'),

@@ -81,7 +81,7 @@ export interface BoxRowOverride {
 
 /** The owner's changes. Missing = the code's value. */
 export interface BoxOverrides {
-  /** The box drops at all (owner: off after merge until switched on in /admin). */
+  /** The box drops and opens at all (owner 2026-11-22: on from the start, can be switched off in /admin). */
   enabled?: boolean;
   /** Drop chance in % from a normal monster / a boss (before the drop scroll ×2). */
   mobPct?: number;
@@ -91,7 +91,7 @@ export interface BoxOverrides {
   rows?: Record<string, BoxRowOverride>;
 }
 
-export const BOX_DEFAULTS = { enabled: false, mobPct: 0.5, bossPct: 20, orbsInShop: false } as const;
+export const BOX_DEFAULTS = { enabled: true, mobPct: 0.5, bossPct: 20, orbsInShop: false } as const;
 
 /** A row with the owner's changes applied. */
 export type BoxRow = BoxRowDef;
