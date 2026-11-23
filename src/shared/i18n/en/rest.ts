@@ -201,4 +201,16 @@ export const EN_REST: Record<string, string> = {
   'มีก็พอ': 'Any amount',
   'ราคา (G)': 'Price (G)',
   'ลบตัวละคร': 'Delete character',
+
+  // ---- added on main since (quest marks, channels, shop, HUD layout preview)
+  '! รับภารกิจ': '! Accept quest',
+  '? รับกุญแจ': '? Claim key',
+  '? รับอุปกรณ์': '? Claim gear',
+  '? ส่งภารกิจ': '? Hand in',
+  'แมพนี้ไม่มีแชนแนลให้เลือก': 'This map has no channels to choose',
+  'กำลังทำ {0}/{1}': 'In progress {0}/{1}',
+  'ปิดร้านก่อนถึงจะถอด/สวมได้': 'Close the shop before equipping / unequipping',
+  'ปุ่มลัด {0}': 'Shortcut {0}',
+  'ทดลองร่าง "จัดหน้าจอเกม" (เห็นเฉพาะคุณ) — ปิดแท็บนี้เพื่อจบ': 'Previewing the "screen layout" draft (only you see it) — close this tab to end',
+  'ไม่มีร่าง "จัดหน้าจอเกม": แสดงค่าที่เผยแพร่อยู่': 'No "screen layout" draft: showing the published one',
 };
