@@ -49,6 +49,9 @@ export function preloadLoadingArt(): void {
 const el = (): HTMLElement => document.getElementById('loading')!;
 let fadeTimer = 0;
 let hideTimer = 0;
+/** Changes the picture every SWAP_SEC while the screen is up (owner 2026-11-23, no /admin setting). */
+const SWAP_SEC = 15;
+let swapTimer = 0;
 
 export interface LoadingScreen {
   /** Its picture has loaded (or failed, or ART_WAIT passed): the other downloads may start. */
@@ -62,13 +65,15 @@ export interface LoadingScreen {
 export function showLoading(classId: ClassId | null, label = 'กำลังโหลดภาพในเกม…'): LoadingScreen {
   clearTimeout(fadeTimer);
   clearTimeout(hideTimer);
+  clearInterval(swapTimer);
   const root = el();
   root.innerHTML =
     `<div class="load-box"><div>${label} <span class="load-pct">0%</span></div>` +
     '<div class="load-bar"><i></i></div><p class="load-tip"></p></div>';
   root.querySelector('.load-tip')!.textContent = `เคล็ดลับ: ${pick(TIPS)}`;
   // The picture first (owner 2026-11-23: it showed up late behind the game's own downloads, the screen stayed blank).
-  const url = imgUrl(`${DIR}${pickArt(classId)}.webp`);
+  let art = pickArt(classId);
+  const url = imgUrl(`${DIR}${art}.webp`);
   const img = new Image();
   img.fetchPriority = 'high';
   const ready = new Promise<void>((done) => {
@@ -80,6 +85,16 @@ export function showLoading(classId: ClassId | null, label = 'กำลังโ
     window.setTimeout(go, ART_WAIT);
   });
   img.src = url;
+  swapTimer = window.setInterval(() => {
+    // Another picture, shown once it has loaded (the five are preloaded on the menu).
+    art = pick(ALL_ART.filter((a) => a !== art));
+    const next = imgUrl(`${DIR}${art}.webp`);
+    const n = new Image();
+    n.onload = () => {
+      root.style.backgroundImage = `url(${next})`;
+    };
+    n.src = next;
+  }, SWAP_SEC * 1000);
   root.classList.add('load-art');
   root.classList.remove('hidden', 'load-out');
   const pct = root.querySelector<HTMLElement>('.load-pct')!;
@@ -92,6 +107,7 @@ export function showLoading(classId: ClassId | null, label = 'กำลังโ
       fill.style.width = p;
     },
     hide() {
+      clearInterval(swapTimer);
       root.classList.add('hidden');
     },
   };
