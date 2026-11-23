@@ -56,6 +56,8 @@ export interface FxLayerConfig extends Record<QuarksKey, boolean> {
    * swinging down and behind the body swinging up, so the reach looked longer downward (owner 2026-11-21).
    */
   slashLift: number;
+  /** How far behind a dead player its crater lies (world units), so the lying body shows in its middle (owner 2026-11-23). */
+  craterBack: number;
   /**
    * The hub town's brick floor (owner 2026-11-23): width of its ragged edge into each zone's ground (0 = straight cut)
    * and the radius of its corners, where the gates are (world units). Used when a map is built.
@@ -210,6 +212,7 @@ export const FX_LAYER_RANGE = {
   mergeSec: [0, 1],
   circleGlow: [0, 3],
   slashLift: [0, 2],
+  craterBack: [0, 3],
   townEdge: [0, 6],
   townRound: [0, 12],
   quarksOthers: [0, 1],
@@ -259,6 +262,7 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   mergeSec: 'รวมเลขที่โดนในช่วง (วิ)',
   circleGlow: '× ความสว่างวงเวท',
   slashLift: 'ความสูงภาพคมดาบตอนฟัน (0 = บนพื้น)',
+  craterBack: 'หลุมใต้ศพ: เลื่อนไปข้างหลังตัว (ให้ตัวอยู่กลางหลุม)',
   townEdge: 'เมืองกลาง: ความกว้างขอบพื้นอิฐที่กลืนกับพื้นโซน (0 = ตัดตรง)',
   townRound: 'เมืองกลาง: ความโค้งมุมพื้นอิฐ (ตรงประตู)',
   quarksOthers: 'three.quarks: × อนุภาคของคนอื่น',
@@ -327,7 +331,7 @@ const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
 export function codeFxLayer(): FxLayerConfig {
   return {
     enabled: true, debuffs: true, guardGlow: true, buffIcons: true, barBuffIcons: true, glow: 1, ground: 1, particles: 1, shake: 1, hitstopMs: 60, crit: 1,
-    maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true, droneFollow: true, droneSpeed: 7, droneDist: 1, circles: true, zoneCircles: true, circleGlow: 1, slashLift: 0.9, townEdge: 1.2, townRound: 3, quarks: false, quarksOthers: 0.5, quarksTouch: 0.5, quarksCap: 3000,
+    maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true, droneFollow: true, droneSpeed: 7, droneDist: 1, circles: true, zoneCircles: true, circleGlow: 1, slashLift: 0.9, craterBack: 1, townEdge: 1.2, townRound: 3, quarks: false, quarksOthers: 0.5, quarksTouch: 0.5, quarksCap: 3000,
     paperPlate: 1, paperBubble: 1, plateMaxW: 200, bubbleMaxW: 220, platePadY: 3, platePadX: 14, bubblePadY: 7, bubblePadX: 18, paperFoot: 1.6, slotCorner: 1, slotInset: 1, slotIcon: 1, paperOrbLight: 0.95, paperOrbShade: 0.15,
     enhAuraSmooth: true, enhAuraPulse: 0.08, enhAuraBreath: 0, enhAuraSpeed: 3, enhAuraGlow: 1, enhSparkGlow: 1, enhSparkRate: 1, enhSparkFadeIn: 0.3, enhOrbGlowFront: true, enhOrbBackFade: 1,
     gfxMenu: true, keyRebind: true, orbsNearBar: true, gfxDefault: 3, gfxMax: 3, gfxMid: 0.6, gfxLow: 0.3,
