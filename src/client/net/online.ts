@@ -49,6 +49,7 @@ import type { TutStep } from '../../shared/tutorial';
 import { ensureMap, mapIsCurrent } from '../mapSync';
 import { playSound } from '../audio/sfx';
 import { activePreview, loadPreviewDraft, previewParam, settlePreview } from '../mapPreview';
+import { hudPreviewParam, loadHudPreview } from '../hudLayout';
 
 /** Mirrors never run game logic, so they don't need a simulation behind them. */
 const NO_SIM = null as unknown as Sim;
@@ -143,6 +144,8 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
     // ?previewMap=<zone>: the owner's draft of that map goes in first (a refusal or a failure = the normal game).
     const wanted = previewParam();
     const draftReady = wanted ? loadPreviewDraft(wanted, token) : Promise.resolve(null);
+    // ?previewHud=1: the "จัดหน้าจอเกม" draft, in this tab only (the join does not wait for it).
+    if (hudPreviewParam()) void loadHudPreview(token);
     let previewId: string | null = null;
     // Messages that come while the map layout of our first zone is fetched wait here and go to the backend once it exists.
     let waiting: ServerMsg[] | null = null;
@@ -986,6 +989,7 @@ export class OnlineBackend implements Backend {
       m.faceZ = ms.fz;
       m.moving = ms.mv;
       m.alive = ms.alive;
+      if (!ms.alive && m.isBoss) this.terrain.releaseBossSolid(); // its rock is gone on the server too
       m.deadT = ms.deadT;
       if (ms.mhp) m.syncMaxHp(ms.mhp);
       m.hp = ms.hp;

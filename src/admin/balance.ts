@@ -653,6 +653,22 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       ),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.heartBlastRandom, onchange: (e: Event) => { draft.heartBlastRandom = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' หัวใจภูเขาไฟ ระเบิดใหญ่: สุ่มจุดปลอดภัยทั่วลาน (ห่างผู้เล่นทุกคน แต่ทุกคนมีจุดที่วิ่งถึงทัน · ปิด = วงรอบบอสแบบเดิม)'),
+        h('label', {}, 'จำนวนจุด', numBox(() => draft.heartBlastSpots, (n) => { draft.heartBlastSpots = Math.round(n); }, code.heartBlastSpots, ...BALANCE_RANGE.heartBlastSpots, 1, updateSummary)),
+        h('label', {}, 'ห่างผู้เล่นขั้นต่ำ', numBox(() => draft.heartBlastMinDist, (n) => { draft.heartBlastMinDist = n; }, code.heartBlastMinDist, ...BALANCE_RANGE.heartBlastMinDist, 1, updateSummary)),
+        h('label', { title: 'ส่วนของ (ความเร็ววิ่ง × เวลาเตือน) ที่นับว่าวิ่งทัน' }, 'ค่าเผื่อวิ่งทัน', numBox(() => draft.heartBlastReach, (n) => { draft.heartBlastReach = n; }, code.heartBlastReach, ...BALANCE_RANGE.heartBlastReach, 0.05, updateSummary)),
+      ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.bossLootSpread, onchange: (e: Event) => { draft.bossLootSpread = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' กระจายของดรอปบอส (ห้องบอส: ของวางกระจายทั่วลาน ยิ่งชิ้นเยอะยิ่งกว้าง รัศมี = ฐาน + ตัวคูณ×√จำนวนชิ้น ไม่เกินสูงสุด · สิทธิ์เก็บ/จำนวน/โอกาสดรอปไม่เปลี่ยน · ปิด = วางใกล้ตัวบอสเหมือนเดิม)'),
+        h('label', {}, 'รัศมีฐาน', numBox(() => draft.bossLootBase, (n) => { draft.bossLootBase = n; }, code.bossLootBase, ...BALANCE_RANGE.bossLootBase, 0.5, updateSummary)),
+        h('label', {}, 'ตัวคูณต่อ √จำนวน', numBox(() => draft.bossLootK, (n) => { draft.bossLootK = n; }, code.bossLootK, ...BALANCE_RANGE.bossLootK, 0.1, updateSummary)),
+        h('label', {}, 'รัศมีสูงสุด', numBox(() => draft.bossLootMax, (n) => { draft.bossLootMax = n; }, code.bossLootMax, ...BALANCE_RANGE.bossLootMax, 0.5, updateSummary)),
+      ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
           h('input', { type: 'checkbox', checked: draft.reviveGuard, onchange: (e: Event) => { draft.reviveGuard = (e.target as HTMLInputElement).checked; updateSummary(); } }),
           ' อมตะหลังชุบด้วยขนนกฟีนิกซ์ (ห้องบอส: ไม่โดนดาเมจ/สตัน/ผลัก/ติดโคลน/ช้า/คางคก ตัวกะพริบให้ทุกคนเห็น · หายทันทีเมื่อตีธรรมดา ใช้สกิล บัฟ หรือแดช · เดินและกินยาไม่หาย)'),
         h('label', {}, 'เวลาอมตะ (วินาที)', numBox(() => draft.reviveGuardSec, (n) => { draft.reviveGuardSec = n; }, code.reviveGuardSec, ...BALANCE_RANGE.reviveGuardSec, 1, updateSummary)),
@@ -898,6 +914,12 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
           ' เดินต่อเมื่อสลับแท็บ'),
       ),
       h('div', { class: 'muted' }, 'เดินต่อเมื่อสลับแท็บ (ไม่ใช่ Auto): คลิกเดินไปจุดไกลแล้วสลับไปแท็บอื่น/พับจอ server พาเดินต่อจนถึงจุดที่คลิก (เดินตรงไป ไถลอ้อมของกลมชิ้นเดียวได้ ไม่หาทางอ้อมกำแพง ติดแทบไม่ขยับ 0.8 วิ = หยุด) · กลับมาที่แท็บ ตัวเลื่อนไปที่จริงแล้วเดินต่อเอง · ตาย/เปลี่ยนแมพ/วาร์ป/เทรด/หลุด = หยุด · ปิด = แบบเดิม สลับแท็บแล้วตัวหยุด'),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.shopNoEquip, onchange: (e: Event) => { draft.shopNoEquip = (e.target as HTMLInputElement).checked; refresh(); } }),
+          ' ห้ามถอด/สวมขณะเปิดร้านพ่อค้า'),
+      ),
+      h('div', { class: 'muted' }, 'ห้ามถอด/สวมขณะเปิดร้านพ่อค้า: ตอนหน้าต่างร้านพ่อค้าเปิด คลิก/ลาก/ปุ่มในรายละเอียดที่จะสวมหรือถอดอุปกรณ์ (และของแต่งตัวในกระเป๋าแฟชั่น) ไม่ทำงาน ขึ้นข้อความ "ปิดร้านก่อน" กันกดขายผิด · หน้าต่างอื่น (ช่างตีเหล็ก คลัง ตลาด) ไม่โดน · ยาที่เลือกให้ปุ่มด่วนไม่โดน · กันกดผิดฝั่งเบราว์เซอร์เท่านั้น (server ไม่รู้ว่าหน้าต่างร้านเปิดอยู่) · ปิด = ถอด/สวมได้ตามเดิม'),
       h('div', { class: 'muted' }, 'หลุดการเชื่อมต่อขณะเปิด Auto (ไม่ได้กดออกเกม): ตัวละครอยู่ในโลกต่อ Auto ฟาร์มเหมือนปกติ (EXP 50%) จนครบเวลา, Auto หยุดตามตัวเลือก (ยาหมด/กระเป๋าเต็ม/ม้วน) หรือตาย แล้วเซฟและออกจากโลก · เข้าเกมใหม่ = ได้ตัวที่กำลังฟาร์มคืน Auto ยังเปิด · ไม่รวม Guest และห้องบอส · ปิดสวิตช์ = คนที่ฟาร์มแบบหลุดอยู่ออกจากโลกทันที'),
     );
   };
@@ -933,6 +955,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('select', { onchange: (e: Event) => { a[k] = Number((e.target as HTMLSelectElement).value); refresh(); drawFx(); } },
         ...GFX_LEVELS.map((t, i) => h('option', { value: String(i), selected: a[k] === i }, t)).reverse()));
     const gfxOn = h('input', { type: 'checkbox', checked: a.gfxMenu, onchange: (e: Event) => { a.gfxMenu = (e.target as HTMLInputElement).checked; refresh(); } });
+    const enhSmoothOn = h('input', { type: 'checkbox', checked: a.enhAuraSmooth, onchange: (e: Event) => { a.enhAuraSmooth = (e.target as HTMLInputElement).checked; refresh(); } });
     const nearOn = h('input', { type: 'checkbox', checked: a.orbsNearBar, onchange: (e: Event) => { a.orbsNearBar = (e.target as HTMLInputElement).checked; refresh(); } });
     fxCard.replaceChildren(
       h('h2', {}, 'เอฟเฟกต์สกิล (ชั้นเสริม)'),
@@ -967,6 +990,9 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'row bal-line' }, num('plateMaxW', 10), num('platePadY', 1), num('platePadX', 1)),
       h('div', { class: 'row bal-line' }, num('bubbleMaxW', 10), num('bubblePadY', 1), num('bubblePadX', 1)),
       h('div', { class: 'muted' }, 'มีผลเฉพาะตอนเปิดสวิตช์ภาพกระดาษ (แท็บ Server) · ขนาดออร่า/ความทึบ/ระยะรอยเท้ารายชิ้นอยู่ในแท็บของแต่งตัว · กรอบชื่อ/ฟองแชทยืดตามความยาวข้อความเอง (9 ช่อง ซ้ำขอบเรียบ มุมและลายกลางไม่ถูกบีบ) ความกว้างสุดใช้กับชื่อ/ฟองธรรมดาด้วย ขอบในใช้กับกรอบกระดาษ · กรอบชื่อเปลี่ยนเมื่อมีคนสวม/ถอดหรือรีโหลด ลูกแก้วเปลี่ยนทันที'),
+      h('h3', {}, 'ออร่าตีบวกใต้เท้า (+7/+10/+13/+15)'),
+      h('div', { class: 'row bal-line' }, flag(enhSmoothOn, a.enhAuraSmooth !== ca.enhAuraSmooth, ' ขอบนุ่ม (ไม่กะพริบ)'), num('enhAuraPulse', 0.01), num('enhAuraBreath', 0.01), num('enhAuraSpeed', 0.5)),
+      h('div', { class: 'muted' }, 'ขอบนุ่ม เปิด (ค่าในโค้ด): ภาพแสงกรองแบบนุ่ม ขอบไม่กระโดดตอนหดขยาย · ปิด = ขอบพิกเซลแบบเดิม ซึ่งกะพริบตอนหดขยาย ยิ่ง +13/+15 (ใหญ่และสว่าง) ยิ่งเห็นชัด · หดขยาย 0.08 = ขนาด ±8% (ค่าเดิม) ยิ่งน้อยยิ่งนิ่ง · สว่างหรี่ 0 = ความสว่างคงที่ (ค่าเดิม) ใส่ 0.1–0.2 ให้หายใจด้วยความสว่างแทนขนาดได้ · ความเร็ว 3 = รอบละราว 2 วินาที · ประกายที่ลอยขึ้นจากออร่ายังเหมือนเดิม · มีผลกับทุกคนทันทีหลังบันทึก'),
       h('h3', {}, 'ตำแหน่งลูกแก้ว HP/MP'),
       h('div', { class: 'row bal-line' }, flag(nearOn, a.orbsNearBar !== ca.orbsNearBar, ' ลูกแก้วชิดแถบสกิล (ปิด = มุมล่างซ้าย/ขวาของจอ)')),
       h('div', { class: 'muted' }, 'เปิด (ค่าในโค้ด): บนจอคอมกว้าง ≥ 1000px ลูกแก้ว HP ชิดซ้ายของแถบสกิล MP ชิดขวา ดูเป็นแผงเดียวกัน (จอกว้าง ≥ 1850px แชทกับข้อความระบบลงมาที่มุมซ้ายล่าง) · จอแคบกว่านั้นและมือถือใช้มุมจอเหมือนเดิม (มือถือใช้แถบ HP/MP อยู่แล้ว) · ผู้เล่นที่เลือก "HP/MP: แถบ" ในเกมไม่ได้รับผล · มีผลกับทุกคนทันทีหลังบันทึก'),
@@ -1199,6 +1225,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawRoot();
     drawAudio();
     drawRig();
+    applyFilter(); // redrawn cards keep the chosen category / search
   };
   const save = async (body: { tuning: BalanceTuning; part: 'rest' } | { reset: true; part: 'rest' }, ask: string): Promise<void> => {
     if (!confirm(ask)) return;
@@ -1247,7 +1274,51 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     msg,
   );
 
-  box.replaceChildren(fold.toc, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, forgeCard, autoCard, tutCard, fxCard, circleCard, rootCard, audioCard, rigCard, langCard, bar);
+  // Category buttons + search box (owner 2026-11-22). Cards are only hidden with CSS (`.cat-hide`), never removed.
+  const CATS: { name: string; cards: HTMLElement[] }[] = [
+    { name: 'อาชีพ', cards: [classCard, regenCard, rootCard, rigCard] },
+    { name: 'มอน-บอส', cards: [monsterCard] },
+    { name: 'ไอเทม-ตีบวก-ยา', cards: [affixCard, tierCard, previewCard, potionCard, forgeCard] },
+    { name: 'Auto Play', cards: [autoCard] },
+    { name: 'เอฟเฟกต์-เสียง', cards: [fxCard, circleCard, audioCard] },
+    { name: 'ระบบ-อื่นๆ', cards: [expCard, tutCard, langCard] },
+  ];
+  const ALL = 'ทั้งหมด';
+  const CAT_KEY = 'adminBalanceCat';
+  let curCat = CATS[0].name;
+  try {
+    const s = localStorage.getItem(CAT_KEY);
+    if (s === ALL || CATS.some((c) => c.name === s)) curCat = s as string;
+  } catch { /* storage blocked: default */ }
+  const search = h('input', { type: 'search', class: 'bal-search', placeholder: '🔍 ค้นหาการ์ดหรือชื่อค่า', autocomplete: 'off' }) as HTMLInputElement;
+  const noHit = h('div', { class: 'muted bal-nohit' }, 'ไม่พบ');
+  noHit.style.display = 'none';
+  const catBar = h('nav', { class: 'cat-bar' });
+  function applyFilter(): void {
+    const q = search.value.trim().toLowerCase();
+    let shown = 0;
+    for (const cat of CATS) {
+      for (const c of cat.cards) {
+        const inCat = curCat === ALL || cat.name === curCat;
+        const hit = q ? (c.textContent ?? '').toLowerCase().includes(q) : inCat;
+        c.classList.toggle('cat-hide', !hit);
+        if (hit) shown++;
+      }
+    }
+    noHit.style.display = shown ? 'none' : '';
+    catBar.replaceChildren(...[ALL, ...CATS.map((c) => c.name)].map((name) => {
+      const b = h('button', { type: 'button', class: !q && name === curCat ? 'chip active' : 'chip', onclick: () => {
+        curCat = name;
+        search.value = '';
+        try { localStorage.setItem(CAT_KEY, name); } catch { /* ignore */ }
+        applyFilter();
+      } }, name);
+      return b;
+    }));
+    fold.refreshToc();
+  }
+  search.addEventListener('input', applyFilter);
+
+  box.replaceChildren(h('div', { class: 'cat-top' }, catBar, search), fold.toc, noHit, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, forgeCard, autoCard, tutCard, fxCard, circleCard, rootCard, audioCard, rigCard, langCard, bar);
   redraw();
-  fold.refreshToc();
 }

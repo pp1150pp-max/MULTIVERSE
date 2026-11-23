@@ -80,7 +80,7 @@ let paperMaps = false;
 
 /**
  * The game's art is papercraft (owner 2026-11-20: the only style, no switch): the paper pictures wherever one exists.
- * Called by the game page before anything loads. Pages that never call it (the /admin previews) keep the old art.
+ * Called by the game page and the /admin benches (src/admin/tabs/orbBench.ts) before anything loads.
  */
 export function usePaperArt(): void {
   paperMaps = true;
@@ -474,8 +474,8 @@ async function loadPaperCosmetics(): Promise<void> {
         // No paper picture: the old glow.
       }
     }),
-    // Raw greys: the orb shader reads them as they are in the file (like its code-made atlas). Game page only:
-    // the /admin orb bench keeps the code-made atlas.
+    // Raw greys: the orb shader reads them as they are in the file (like its code-made atlas). The game and
+    // the /admin benches; a page without paper art keeps the code-made atlas.
     ...(paperMaps ? [loadTexture(`${BASE}paper/fx/orbs.png`).then((t) => { paperTex.orbs = smooth(t, false); }, () => undefined)] : []),
   ]);
 }

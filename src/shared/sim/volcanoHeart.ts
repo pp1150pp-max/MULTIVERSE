@@ -7,6 +7,7 @@ import type { Monster } from './Monster';
 import type { Player } from './Player';
 import type { Sim } from './Sim';
 import type { WitchHazard } from './bogWitch';
+import { currentBalance } from '../balance';
 
 export interface HazardBase {
   id: number;
@@ -85,6 +86,77 @@ export const beamAngleAt = (h: BeamsHazard, i: number, t: number): number =>
 /** Is this direction (radians) inside one of the wave's gaps? */
 export function inRingGap(h: RingHazard, angle: number): boolean {
   return h.gaps.some((g) => Math.abs(Math.atan2(Math.sin(angle - g), Math.cos(angle - g))) <= h.gapArc / 2);
+}
+
+export interface BlastPlayer { x: number; z: number; speed: number }
+export interface BlastPickArgs {
+  /** Boss centre and the arena's radius. */
+  cx: number;
+  cz: number;
+  arenaR: number;
+  spots: number;
+  safeR: number;
+  minDist: number;
+  /** Living players in the arena. */
+  players: BlastPlayer[];
+  warn: number;
+  /** Share of speed × warn assumed to be walked. */
+  reach: number;
+  /** Is a spot centre unusable (wall, collider, lava)? */
+  bad: (x: number, z: number) => boolean;
+  rand: () => number;
+}
+const BOSS_CLEAR = 4;
+
+/**
+ * Safe spots for the big blast (owner 2026-11-22): scattered over the arena, each at least `minDist` from every
+ * living player, and every living player has one they can reach in time. Too hard to satisfy → the minimum
+ * distance shrinks step by step (never kills the whole team). Null when even that finds nothing.
+ */
+export function pickBlastSpots(a: BlastPickArgs): { x: number; z: number }[] | null {
+  const { cx, cz, safeR, players, rand } = a;
+  const maxR = a.arenaR - 1;
+  const reachOf = (p: BlastPlayer) => p.speed * a.warn * a.reach + safeR;
+  const covers = (s: { x: number; z: number }, p: BlastPlayer) => Math.hypot(s.x - p.x, s.z - p.z) <= reachOf(p);
+  const usable = (x: number, z: number, m: number, others: { x: number; z: number }[], gap: number): boolean => {
+    const d = Math.hypot(x - cx, z - cz);
+    if (d > maxR || d < BOSS_CLEAR || a.bad(x, z)) return false;
+    if (players.some((p) => Math.hypot(x - p.x, z - p.z) < m)) return false;
+    return !others.some((o) => Math.hypot(x - o.x, z - o.z) < gap);
+  };
+  for (const factor of [1, 0.75, 0.5, 0.25, 0]) {
+    const m = a.minDist * factor;
+    for (let round = 0; round < 40; round++) {
+      const gap = round < 20 ? safeR * 2 + 2 : safeR * 2;
+      const out: { x: number; z: number }[] = [];
+      for (let i = 0; i < a.spots; i++) {
+        const open = players.filter((p) => !out.some((s) => covers(s, p)));
+        const targeted = open.length > 0 && a.spots - i <= open.length;
+        let put: { x: number; z: number } | null = null;
+        for (let k = 0; k < 30 && !put; k++) {
+          let x: number;
+          let z: number;
+          if (targeted) {
+            // Inside this player's reach, outside the minimum distance.
+            const p = open[Math.floor(rand() * open.length)];
+            const ang = rand() * Math.PI * 2;
+            const dist = m + rand() * Math.max(0, reachOf(p) - m);
+            x = p.x + Math.cos(ang) * dist;
+            z = p.z + Math.sin(ang) * dist;
+          } else {
+            const ang = rand() * Math.PI * 2;
+            const dist = Math.sqrt(rand()) * maxR;
+            x = cx + Math.cos(ang) * dist;
+            z = cz + Math.sin(ang) * dist;
+          }
+          if (usable(x, z, m, out, gap)) put = { x, z };
+        }
+        if (put) out.push(put);
+      }
+      if (out.length && players.every((p) => out.some((s) => covers(s, p)))) return out;
+    }
+  }
+  return null;
 }
 
 interface Active {
@@ -252,11 +324,23 @@ export class VolcanoHeartBrain {
   private startBlast(sim: Sim, m: Monster, t: number, ph: HeartPhase): number {
     sim.anim(m.id, 'attack', { duration: ph.blastWarn });
     sim.sfx('heart_charge', m.x, m.z);
-    const a0 = Math.random() * Math.PI * 2;
-    const safe = Array.from({ length: BLAST.spots }, (_, i) => {
-      const a = a0 + (i * Math.PI * 2) / BLAST.spots;
-      return { x: m.x + Math.cos(a) * BLAST.spotAt, z: m.z + Math.sin(a) * BLAST.spotAt };
+    const b = currentBalance();
+    const ring = () => {
+      const a0 = Math.random() * Math.PI * 2;
+      return Array.from({ length: BLAST.spots }, (_, i) => {
+        const a = a0 + (i * Math.PI * 2) / BLAST.spots;
+        return { x: m.x + Math.cos(a) * BLAST.spotAt, z: m.z + Math.sin(a) * BLAST.spotAt };
+      });
+    };
+    const scattered = !b.heartBlastRandom ? null : pickBlastSpots({
+      cx: m.x, cz: m.z, arenaR: arenaRadius(sim.zone), spots: Math.max(1, Math.round(b.heartBlastSpots)), safeR: BLAST.safeR,
+      minDist: b.heartBlastMinDist,
+      players: sim.players.filter((p) => this.inArena(sim, m, p)).map((p) => ({ x: p.x, z: p.z, speed: p.moveSpeed })),
+      warn: ph.blastWarn, reach: b.heartBlastReach,
+      bad: (x, z) => sim.terrain.isBlocked(x, z, 1) || sim.terrain.onLava(x, z),
+      rand: Math.random,
     });
+    const safe = scattered ?? ring();
     this.add(sim, { id: sim.nextHazardId(), k: 'blast', x: m.x, z: m.z, start: t, hit: t + ph.blastWarn, r: clearingRadius(sim.zone), safe, safeR: BLAST.safeR });
     return ph.blastWarn;
   }

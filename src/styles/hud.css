@@ -66,6 +66,8 @@
 .top-icon .sys-ico { font-size: 44px; }
 .top-icon:hover:not(:disabled) .sys-ico img { filter: brightness(1.2); }
 .top-icon.active .sys-ico img { filter: drop-shadow(0 0 4px #8cff8c) drop-shadow(0 0 2px #8cff8c); }
+/* An admin's floating shortcut button (menuLayout `custom` + `free`): top left corner, moved by "จัดหน้าจอเกม" (hudLayoutCss shows it once placed on this device). */
+.hud-free-btn { position: fixed; left: 0; top: 0; display: none; pointer-events: auto; z-index: 4; }
 .auto-row { display: flex; gap: 4px; }
 .auto-row #btn-auto { flex: 1; }
 #btn-auto-set { padding-left: 8px; padding-right: 8px; }

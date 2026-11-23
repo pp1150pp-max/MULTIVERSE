@@ -420,6 +420,13 @@ button.more:hover { color: var(--gold-hi); text-decoration: underline; }
 .chip.dirty::before,
 .foldable > .card.dirty > h2::after { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ffd34a; margin-right: 6px; vertical-align: middle; }
 .foldable > .card.dirty > h2::after { margin: 0 0 0 8px; }
+.cat-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.cat-bar { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip.active { background: var(--gold); border-color: var(--gold-hi); color: #1b1814; font-weight: 600; }
+.bal-search { flex: 1 1 200px; min-width: 160px; max-width: 320px; }
+.foldable > .card.cat-hide { display: none !important; }
+.bal-nohit { padding: 16px 4px; }
+@media (max-width: 600px) { .cat-bar { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; } .cat-bar .chip { white-space: nowrap; } }
 .chip.ghost { background: none; border-style: dashed; color: var(--ink-dim); }
 .foldable > .card:not(.save-bar) > h2 { cursor: pointer; user-select: none; }
 .foldable > .card:not(.save-bar) > h2::before { content: '▾'; display: inline-block; width: 16px; color: var(--gold); transition: transform 0.15s; }
@@ -495,6 +502,14 @@ button.more:hover { color: var(--gold-hi); text-decoration: underline; }
 .ml-spare { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
 .ml-spare > b, .ml-spare > .muted { flex: 1 0 100%; }
 .ml-chip { display: flex; align-items: center; gap: 6px; }
+.ml-ico { position: relative; width: 28px; height: 28px; flex: none; display: inline-block; }
+.ml-ico img { width: 100%; height: 100%; }
+.ml-ico .ml-glyph { position: absolute; inset: 0; display: grid; place-items: center; font-size: 14px; }
+.ml-icopick { display: inline-flex; align-items: center; gap: 4px; }
+.ml-glyph-in { width: 4.5em; }
+.ml-changed { border-color: #f2c230; }
+.hl-hist { display: flex; align-items: center; gap: 8px; padding: 3px 0; border-bottom: 1px solid #2a2a2a; }
+.hl-hist .muted { flex: 1; }
 
 /* Skill system tab: one setting per row (name + hint left, box right). */
 .set-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px solid #2a2a2a; }
@@ -566,3 +581,26 @@ button.more:hover { color: var(--gold-hi); text-decoration: underline; }
 .me-newmap-fields input[type="text"] { min-width: 240px; }
 .me-newmap-fields input[type="number"] { width: 64px; }
 .me-wave-mons { display: flex; flex-wrap: wrap; gap: 2px 12px; max-height: 160px; overflow: auto; font-size: 12px; }
+
+/* "จัดหน้าจอเกม" (src/admin/hudLayout.ts): mock game screen + list. */
+.hl-wrap { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; margin: 8px 0; }
+.hl-frame { position: relative; flex: 2 1 560px; max-width: 960px; background: #1d2a1d linear-gradient(135deg, #24321f, #18221a); border: 2px solid #6b5a3a; border-radius: 6px; overflow: hidden; touch-action: none; user-select: none; }
+.hl-box { position: absolute; box-sizing: border-box; border: 1px solid rgba(240, 210, 140, 0.7); background: rgba(240, 210, 140, 0.16); border-radius: 3px; cursor: move; font-size: 11px; color: #f5e6c4; overflow: hidden; }
+.hl-box span { display: block; padding: 1px 3px; text-shadow: 0 1px 2px #000; pointer-events: none; }
+.hl-box.hl-win { border-style: dashed; background: rgba(120, 160, 220, 0.14); border-color: rgba(150, 190, 240, 0.7); }
+.hl-box.hl-changed { border-color: #f2c230; }
+.hl-box.hl-off { opacity: 0.35; border-style: dotted; }
+.hl-box.hl-sel { outline: 2px solid #ffd83a; z-index: 2; background: rgba(255, 216, 58, 0.22); }
+.hl-grip { position: absolute; width: 12px; height: 12px; background: #f2c230; }
+.hl-grip-bottom-right { right: 0; bottom: 0; cursor: nwse-resize; }
+.hl-grip-bottom-left { left: 0; bottom: 0; cursor: nesw-resize; }
+.hl-grip-top-right { right: 0; top: 0; cursor: nesw-resize; }
+.hl-grip-top-left { left: 0; top: 0; cursor: nwse-resize; }
+.hl-list { flex: 1 1 360px; min-width: 0; max-height: 640px; overflow-y: auto; }
+.hl-head, .hl-row { display: grid; grid-template-columns: minmax(0, 1fr) 62px 62px 62px 36px 34px; gap: 4px; align-items: center; padding: 3px 4px; }
+.hl-head { font-weight: bold; position: sticky; top: 0; background: var(--bg, #15110c); }
+.hl-row { border-bottom: 1px solid var(--line, #333); }
+.hl-row.hl-sel { background: rgba(255, 216, 58, 0.12); }
+.hl-row.hl-changed .hl-name { color: #f2c230; }
+.hl-name { cursor: pointer; overflow-wrap: anywhere; }
+.hl-num { width: 100%; box-sizing: border-box; }

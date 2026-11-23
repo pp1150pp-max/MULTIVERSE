@@ -82,6 +82,15 @@ export interface FxLayerConfig extends Record<QuarksKey, boolean> {
   /** Paper enhancement orbs: grey from which a part takes the accent colour (band, star), and the darkest shading. */
   paperOrbLight: number;
   paperOrbShade: number;
+  /**
+   * The enhancement aura under the feet (+7/+10/+13/+15, src/client/views.ts, owner 2026-11-23: it flickered at +15).
+   * Smooth = its stepped glow picture is filtered smoothly instead of as hard pixels, so it no longer shimmers while
+   * it breathes. It breathes in size (± share) and brightness (± share) at `enhAuraSpeed` (radians a second).
+   */
+  enhAuraSmooth: boolean;
+  enhAuraPulse: number;
+  enhAuraBreath: number;
+  enhAuraSpeed: number;
   /** Each skill's extra effects drawn in code over its painted frames (src/client/skillExtras.ts), and × their strength. */
   extras: boolean;
   extrasK: number;
@@ -190,6 +199,9 @@ export const FX_LAYER_RANGE = {
   paperFoot: [0.3, 4],
   paperOrbLight: [0.8, 1],
   paperOrbShade: [0, 1],
+  enhAuraPulse: [0, 0.3],
+  enhAuraBreath: [0, 0.5],
+  enhAuraSpeed: [0, 10],
   extrasK: [0, 3],
   bossExtrasK: [0, 3],
   droneSpeed: [1, 20],
@@ -226,13 +238,16 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   paperFoot: 'ขนาดรอยเท้าออร่า (× ขนาดรอยเท้าของชิ้น)',
   paperOrbLight: 'ลูกแก้ว: ส่วนที่ขาวกว่านี้เป็นสีเน้น',
   paperOrbShade: 'ลูกแก้ว: ความสว่างส่วนมืดสุด',
+  enhAuraPulse: 'ออร่าตีบวก: หดขยาย ± (สัดส่วนขนาด, 0 = ไม่หดขยาย)',
+  enhAuraBreath: 'ออร่าตีบวก: สว่างหรี่ ± (สัดส่วนความสว่าง, 0 = คงที่)',
+  enhAuraSpeed: 'ออร่าตีบวก: ความเร็วหายใจ (ยิ่งมากยิ่งเร็ว)',
   extrasK: '× ความแรงเอฟเฟกต์โค้ดของสกิล',
   bossExtrasK: '× ความแรงเอฟเฟกต์โค้ดของสกิลบอส',
   droneSpeed: 'โดรน: ความเร็วตามตัว (ต่อวิ ยิ่งมากยิ่งติด)',
   droneDist: 'โดรน: × ระยะห่างจากตัวละคร',
 };
 
-const BASE_BOOLS = ['enabled', 'debuffs', 'guardGlow', 'buffIcons', 'barBuffIcons', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'droneFollow', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'keyRebind', 'orbsNearBar', 'extras', 'bossFx', 'bossExtras'] as const;
+const BASE_BOOLS = ['enabled', 'debuffs', 'guardGlow', 'buffIcons', 'barBuffIcons', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'droneFollow', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'keyRebind', 'orbsNearBar', 'extras', 'bossFx', 'bossExtras', 'enhAuraSmooth'] as const;
 type FxLayerBool = (typeof BASE_BOOLS)[number] | QuarksKey;
 const FX_LAYER_BOOLS: readonly FxLayerBool[] = [...BASE_BOOLS, ...QUARKS_KEYS];
 const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
@@ -255,6 +270,7 @@ const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
   extras: 'เอฟเฟกต์โค้ดของสกิล (ทับภาพเดิม)',
   bossFx: 'ภาพเอฟเฟกต์สกิลบอส (ปิด = ภาพแบบเดิม ท่าตีตอนร่ายยังเล่น)',
   bossExtras: 'เอฟเฟกต์โค้ดของสกิลบอส (ทับภาพ)',
+  enhAuraSmooth: 'ออร่าตีบวกขอบนุ่ม (ปิด = ขอบพิกเซลแบบเดิม กะพริบตอนหดขยาย)',
 };
 
 /** The code's own numbers (a fresh copy). */
@@ -263,6 +279,7 @@ export function codeFxLayer(): FxLayerConfig {
     enabled: true, debuffs: true, guardGlow: true, buffIcons: true, barBuffIcons: true, glow: 1, ground: 1, particles: 1, shake: 1, hitstopMs: 60, crit: 1,
     maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true, droneFollow: true, droneSpeed: 7, droneDist: 1, circles: true, zoneCircles: true, circleGlow: 1, slashLift: 0.9, quarks: false, quarksOthers: 0.5, quarksTouch: 0.5, quarksCap: 3000,
     paperPlate: 1, paperBubble: 1, plateMaxW: 200, bubbleMaxW: 220, platePadY: 3, platePadX: 14, bubblePadY: 7, bubblePadX: 18, paperFoot: 1.6, paperOrbLight: 0.95, paperOrbShade: 0.15,
+    enhAuraSmooth: true, enhAuraPulse: 0.08, enhAuraBreath: 0, enhAuraSpeed: 3,
     gfxMenu: true, keyRebind: true, orbsNearBar: true, gfxDefault: 3, gfxMax: 3, gfxMid: 0.6, gfxLow: 0.3,
     ...(Object.fromEntries(QUARKS_KEYS.map((k) => [k, true])) as Record<QuarksKey, boolean>),
     extras: true, extrasK: 1, bossFx: true, bossExtras: true, bossExtrasK: 1, skills: {},

@@ -233,6 +233,7 @@ export class FashionBag {
   }
 
   private toggleWear(c: CosmeticDef): void {
+    if (this.g.hud.shopBlocksEquip()) return;
     const isWorn = this.g.player.cosmetics[c.slot] === c.id;
     this.g.backend.cosWear(c.slot, isWorn ? null : c.id);
   }

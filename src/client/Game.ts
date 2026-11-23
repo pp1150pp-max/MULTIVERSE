@@ -50,6 +50,7 @@ import { isTouchMode } from './touch/device';
 import { TouchControls, TOUCH_ATTACK } from './touch/controls';
 import { TouchGestures } from './touch/gestures';
 import { gfxOwnNumsOnly, gfxShakeOn } from './gfxPrefs';
+import { updateHudLayout } from './hudLayout';
 
 const S = Math.SQRT1_2;
 // Screen-space right / up projected onto the ground plane.
@@ -819,6 +820,7 @@ export class Game {
       // The server plays Auto (so it keeps going in a hidden tab); here it only gets our manual input.
       else if (this.autoPlay && !this.mapRoute.length && (intent.move || intent.moveTo)) this.toggleAuto(false, 'ปิด Auto Play — เดินเอง');
     }
+    updateHudLayout();
     this.sysMenu.update(dt, intent.basic || intent.skills.length > 0, !!(intent.move || intent.moveTo || intent.dash));
     const events = this.backend.frame(dt, intent);
     if (this.backend.zoneSeq !== this.zoneSeq) this.changeZone();
