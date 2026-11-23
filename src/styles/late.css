@@ -22,3 +22,13 @@ body:not(.touch-ui) #sys-menu .sys-tile.touch-extra { display: none; }
 #item-link-pop { left: 50%; top: 22%; transform: translateX(-50%); width: min(320px, 94vw); max-height: 70dvh; overflow-y: auto; z-index: 7; overscroll-behavior: contain; }
 #item-link-pop .ilp-body { padding: 6px 10px 10px; font-size: 12px; white-space: normal; }
 #item-link-pop .tt-hint:empty { display: none; }
+/* One shared fit for every item slot (bag, worn gear, stash, shop, market, trade, forge, fashion, detail):
+   the rarity background/border and glow stay inside the rounded frame, the +N and Lv labels sit inside the corners,
+   and the picture is centred (owner 2026-11-23). */
+.cell { --cell-r: calc(clamp(4px, 14%, 10px) * var(--slot-corner, 1)); --cell-in: calc(clamp(2px, 6%, 5px) * var(--slot-inset, 1)); border-radius: var(--cell-r); overflow: hidden; box-sizing: border-box; }
+.cell:not(.empty) { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rc) 70%, transparent), inset 0 0 10px color-mix(in srgb, var(--rc) 35%, transparent); }
+.cell .gi, .cell > img, .cell > canvas, .cell > svg { display: block; margin: auto; object-fit: contain; }
+.cell .iplus { left: var(--cell-in); top: calc(var(--cell-in) * 0.6); line-height: 1; }
+.cell .ilv { right: var(--cell-in); bottom: calc(var(--cell-in) * 0.6); line-height: 1; }
+.cell .gi { transform: scale(var(--slot-icon, 1)); }
+.fashion-cell.worn { outline-offset: -2px; }
