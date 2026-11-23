@@ -10,6 +10,7 @@ import type { OnlineBackend } from './client/net/online';
 import { audioEngine } from './client/audio/engine';
 import { loadPublishedMaps } from './client/mapSync';
 import { addLangButton, checkLangAllowed, startTranslator } from './client/i18n';
+import { hudMockParam, runHudMock } from './client/hudMock';
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -74,6 +75,8 @@ async function boot(): Promise<void> {
   // Papercraft art everywhere (maps, characters, NPCs, monsters, UI), set before anything loads.
   usePaperArt();
   usePaperUi();
+  // /admin "จัดหน้าจอเกม" shows this page as a HUD example: no login, no sound, no 3D (src/client/hudMock.ts).
+  if (hudMockParam()) return runHudMock();
   audioEngine.init();
   // The Login form needs no images, so it shows as soon as this code runs. The logo letters and
   // background (index.html / CSS) are already downloading; the class portraits (a few MB) come
