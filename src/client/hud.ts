@@ -1563,15 +1563,15 @@ export class Hud {
    * An announcement: a banner for a while (like the restart warning) and a chat line. From the server's
    * owner, or (`megaphone`) from a player's megaphone: same frame, its own heading and the character's name.
    */
-  announce(text: string, from: string, direct: boolean, megaphone = false, box = false): void {
+  announce(text: string, from: string, direct: boolean, megaphone = false, box = false, boxHead?: string): void {
     const wait = this.adminBannerUntil - performance.now();
     // Players' banners (megaphone, mystery box prize) wait for the owner's instead of covering it.
     if ((megaphone || box) && wait > 0) {
-      window.setTimeout(() => this.announce(text, from, direct, megaphone, box), wait + 50);
+      window.setTimeout(() => this.announce(text, from, direct, megaphone, box, boxHead), wait + 50);
       return;
     }
     if (box) {
-      this.boxBanner(text);
+      this.boxBanner(text, boxHead);
       return;
     }
     if (!megaphone) this.adminBannerUntil = performance.now() + ANNOUNCE_MS;
@@ -1602,17 +1602,18 @@ export class Hud {
   }
 
   /** A mystery box prize for the whole server (owner 2026-11-22): the announcement banner with its own heading and no sender. */
-  private boxBanner(text: string): void {
+  /** A player event for everyone: a mystery box prize, or () another, e.g. an enhancement at forge bannerFrom. */
+  private boxBanner(text: string, head = '🎁 กล่องปริศนา'): void {
     document.getElementById('announce-banner')?.remove();
     const el = document.createElement('div');
     el.id = 'announce-banner';
     el.classList.add('megaphone');
-    const head = document.createElement('div');
-    head.className = 'announce-head';
-    head.textContent = '🎁 กล่องปริศนา';
+    const headEl = document.createElement('div');
+    headEl.className = 'announce-head';
+    headEl.textContent = head;
     const body = document.createElement('div');
     body.textContent = text;
-    el.append(head, body);
+    el.append(headEl, body);
     $('hud').append(el);
     setTimeout(() => el.remove(), ANNOUNCE_MS);
     const line = document.createElement('div');

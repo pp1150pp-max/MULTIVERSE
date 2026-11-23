@@ -15,6 +15,7 @@ export const maxPlus = (): number => forgeConfig().maxPlus;
 export const forgeCd = (): number => forgeConfig().cd;
 /** Reaching this level or higher is announced to the whole server. */
 export const announceFrom = (): number => forgeConfig().announceFrom;
+export const bannerFrom = (): number => forgeConfig().bannerFrom;
 /** Each failed attempt adds this to the item's next success chance (0..1), until it succeeds. */
 export const pityStep = (): number => forgeConfig().pity / 100;
 /** Each worn item at this + level or higher gets an orb circling its wearer (owner 2026-11-10: +7). */

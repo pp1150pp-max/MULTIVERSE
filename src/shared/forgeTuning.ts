@@ -27,6 +27,8 @@ export interface ForgeConfig {
   stonesPerTry: number;
   /** Reaching this level or higher is announced to the whole server (PLUS_NEVER = never). */
   announceFrom: number;
+  /** From this level, a banner across everyone's screen instead of the chat line (owner 2026-11-23: +15; PLUS_NEVER = never). */
+  bannerFrom: number;
   /** Highest level the blacksmith enhances to (1..PLUS_CAP). Gear already above it keeps its level. */
   maxPlus: number;
   /** Seconds between two blacksmith actions (enhance or reroll) by the same player. */
@@ -53,6 +55,7 @@ export interface ForgeTuning {
   stoneFrom?: number;
   stonesPerTry?: number;
   announceFrom?: number;
+  bannerFrom?: number;
   maxPlus?: number;
   cd?: number;
   orbMin?: number;
@@ -89,6 +92,7 @@ export function codeForge(): ForgeConfig {
     stoneFrom: 11,
     stonesPerTry: 1,
     announceFrom: 10,
+    bannerFrom: 15,
     maxPlus: PLUS_CAP,
     cd: 1,
     orbMin: 7,
@@ -101,7 +105,7 @@ const CODE = codeForge();
 
 const TABLES = ['rate', 'costMult', 'bonusStep'] as const;
 type TableKey = (typeof TABLES)[number];
-const NUMS = ['costBase', 'costPerLevel', 'pity', 'dropFrom', 'stoneFrom', 'stonesPerTry', 'announceFrom', 'maxPlus', 'cd', 'orbMin', 'sellPerPlus', 'hiddenFrom'] as const;
+const NUMS = ['costBase', 'costPerLevel', 'pity', 'dropFrom', 'stoneFrom', 'stonesPerTry', 'announceFrom', 'bannerFrom', 'maxPlus', 'cd', 'orbMin', 'sellPerPlus', 'hiddenFrom'] as const;
 type NumKey = (typeof NUMS)[number];
 
 export function mergeForge(t: ForgeTuning | undefined): ForgeConfig {
@@ -129,6 +133,7 @@ const NUM_SPEC: Record<NumKey, [string, readonly [number, number], number]> = {
   stoneFrom: ['ระดับเริ่มใช้หินตีบวก', FORGE_RANGE.from, 0],
   stonesPerTry: ['หินตีบวกต่อครั้ง', FORGE_RANGE.stonesPerTry, 0],
   announceFrom: ['ระดับเริ่มประกาศทั้งเซิร์ฟ', FORGE_RANGE.from, 0],
+  bannerFrom: ['ระดับเริ่มป้ายประกาศกลางจอ', FORGE_RANGE.from, 0],
   maxPlus: ['ระดับตีบวกสูงสุด', FORGE_RANGE.maxPlus, 0],
   cd: ['คูลดาวน์ช่างตีเหล็ก (วินาที)', FORGE_RANGE.cd, 2],
   orbMin: ['ระดับเริ่มมีลูกแก้ว', FORGE_RANGE.from, 0],
@@ -217,7 +222,7 @@ export function forgeChanges(a: ForgeConfig, b: ForgeConfig): string[] {
   for (const k of NUMS) {
     if (a[k] === b[k]) continue;
     const name = NUM_SPEC[k][0];
-    const lv = k === 'dropFrom' || k === 'stoneFrom' || k === 'announceFrom' || k === 'orbMin' || k === 'hiddenFrom' || k === 'maxPlus';
+    const lv = k === 'dropFrom' || k === 'stoneFrom' || k === 'announceFrom' || k === 'bannerFrom' || k === 'orbMin' || k === 'hiddenFrom' || k === 'maxPlus';
     out.push(`ตีบวก ${name} ${lv ? lvText(a[k]) : a[k]} → ${lv ? lvText(b[k]) : b[k]}`);
   }
   if (a.aura.join() !== b.aura.join()) out.push(`ตีบวก ระดับเริ่มออร่า ${a.aura.map(lvText).join('/')} → ${b.aura.map(lvText).join('/')}`);

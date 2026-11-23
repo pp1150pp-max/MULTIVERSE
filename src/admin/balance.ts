@@ -779,7 +779,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         h('td', {}, numBox(() => f.bonusStep[t], (n) => { f.bonusStep[t] = n; }, cf.bonusStep[t], ...FORGE_RANGE.bonusStep, 1, refresh)),
         out));
     }
-    type FNum = 'costBase' | 'costPerLevel' | 'pity' | 'dropFrom' | 'stoneFrom' | 'stonesPerTry' | 'announceFrom' | 'maxPlus' | 'cd' | 'orbMin' | 'sellPerPlus' | 'hiddenFrom';
+    type FNum = 'costBase' | 'costPerLevel' | 'pity' | 'dropFrom' | 'stoneFrom' | 'stonesPerTry' | 'announceFrom' | 'bannerFrom' | 'maxPlus' | 'cd' | 'orbMin' | 'sellPerPlus' | 'hiddenFrom';
     const num = (k: FNum, label: string, range: readonly [number, number], step: number, whole: boolean) =>
       h('label', {}, label, numBox(() => f[k], (n) => { f[k] = whole ? Math.round(n) : n; }, cf[k], range[0], range[1], step, refresh));
     const never = `${PLUS_NEVER} = ไม่มี`;
@@ -812,6 +812,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         num('stoneFrom', 'ระดับเริ่มใช้หินตีบวก (+) ', FORGE_RANGE.from, 1, true),
         num('stonesPerTry', 'หินตีบวกต่อครั้ง ', FORGE_RANGE.stonesPerTry, 1, true),
         num('announceFrom', 'ระดับเริ่มประกาศทั้งเซิร์ฟ (+) ', FORGE_RANGE.from, 1, true),
+        num('bannerFrom', 'ระดับเริ่มป้ายประกาศกลางจอ (+) ', FORGE_RANGE.from, 1, true),
         num('hiddenFrom', 'ระดับเริ่มซ่อนโอกาสเป็น ?? (+) ', FORGE_RANGE.from, 1, true)),
       h('div', { class: 'row bal-line' },
         num('orbMin', 'ระดับเริ่มมีลูกแก้ว (+) ', FORGE_RANGE.from, 1, true),

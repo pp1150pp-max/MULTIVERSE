@@ -238,7 +238,7 @@ export class OnlineBackend implements Backend {
   /** Auto was on when the server welcomed us (a character still farming, or back at its spot); see takeAutoResume. */
   private autoResume: boolean;
   /** An announcement from the server's owner. */
-  onAnnounce: ((text: string, from: string, direct: boolean, megaphone: boolean, box: boolean) => void) | null = null;
+  onAnnounce: ((text: string, from: string, direct: boolean, megaphone: boolean, box: boolean, head?: string) => void) | null = null;
   /**
    * The server stops or restarts in `seconds` (sent once a second); null = cancelled. `text` is the
    * line to show, with the time filled in by the server (the owner's wording); absent = the default.
@@ -829,7 +829,7 @@ export class OnlineBackend implements Backend {
         useOrbLook(m.look);
         break;
       case 'announce':
-        this.onAnnounce?.(m.text, m.from, m.direct, !!m.megaphone, !!m.box);
+        this.onAnnounce?.(m.text, m.from, m.direct, !!m.megaphone, !!m.box, m.head);
         break;
       case 'shutdownCancel':
         this.onShutdown?.(m.mode, null);
