@@ -208,8 +208,11 @@ for (const cls of ['sword', 'mage', 'gunslinger'] as const) {
 // Enhancement aura and orb light (owner 2026-11-23, flicker at +13/+15): only differences kept, ranges checked.
 {
   const c = codeFxLayer();
-  ok(c.enhAuraGlow === 1 && c.enhSparkGlow === 1 && c.enhSparkRate === 1 && c.enhSparkFadeIn === 0.3 && c.enhOrbGlowFront, 'aura/orb light code values');
-  const same = checkFxLayerTuning({ enhAuraGlow: 1, enhSparkRate: 1, enhSparkFadeIn: 0.3, enhOrbGlowFront: true }, true);
+  ok(c.enhAuraGlow === 1 && c.enhSparkGlow === 1 && c.enhSparkRate === 1 && c.enhSparkFadeIn === 0.3 && c.enhOrbGlowFront && c.enhOrbBackFade === 1, 'aura/orb light code values');
+  const bf = checkFxLayerTuning({ enhOrbBackFade: 0 }, true);
+  ok('tuning' in bf && bf.tuning?.enhOrbBackFade === 0, 'back fade 0 is stored (differs from the code)');
+  ok('error' in checkFxLayerTuning({ enhOrbBackFade: 1.5 }, true), 'back fade past 1 refused');
+  const same = checkFxLayerTuning({ enhAuraGlow: 1, enhSparkRate: 1, enhSparkFadeIn: 0.3, enhOrbGlowFront: true, enhOrbBackFade: 1 }, true);
   ok('tuning' in same && same.tuning === undefined, 'code values are not stored');
   const t = checkFxLayerTuning({ enhSparkRate: 0, enhSparkFadeIn: 0.5, enhOrbGlowFront: false, enhAuraGlow: 0.6, enhSparkGlow: 0.5 }, true);
   const tu = 'tuning' in t ? t.tuning : undefined;

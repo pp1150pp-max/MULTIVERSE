@@ -105,6 +105,11 @@ export interface FxLayerConfig extends Record<QuarksKey, boolean> {
    * every pixel and the light blinked on and off, worst at +13/+15 (src/client/orbs.ts, owner 2026-11-23).
    */
   enhOrbGlowFront: boolean;
+  /**
+   * How much the light of an orb behind the character fades out (0 = not at all, 1 = gone, the code value: owner 2026-11-23). While running, the moving
+   * outline of the body cuts that light differently every frame (owner 2026-11-23: the orbs flicker while running).
+   */
+  enhOrbBackFade: number;
   /** Each skill's extra effects drawn in code over its painted frames (src/client/skillExtras.ts), and × their strength. */
   extras: boolean;
   extrasK: number;
@@ -220,6 +225,7 @@ export const FX_LAYER_RANGE = {
   enhSparkGlow: [0, 1.2],
   enhSparkRate: [0, 3],
   enhSparkFadeIn: [0, 0.6],
+  enhOrbBackFade: [0, 1],
   extrasK: [0, 3],
   bossExtrasK: [0, 3],
   droneSpeed: [1, 20],
@@ -263,6 +269,7 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   enhSparkGlow: 'ประกายออร่าตีบวก: × ความสว่าง',
   enhSparkRate: 'ประกายออร่าตีบวก: × จำนวนต่อวิ (0 = ปิด)',
   enhSparkFadeIn: 'ประกายออร่าตีบวก: เวลาค่อย ๆ สว่าง (วิ, 0 = สว่างทันที)',
+  enhOrbBackFade: 'แสงลูกแก้วที่อยู่หลังตัวจางลง (0 = ไม่จาง, 1 = หายหมด)',
   extrasK: '× ความแรงเอฟเฟกต์โค้ดของสกิล',
   bossExtrasK: '× ความแรงเอฟเฟกต์โค้ดของสกิลบอส',
   droneSpeed: 'โดรน: ความเร็วตามตัว (ต่อวิ ยิ่งมากยิ่งติด)',
@@ -302,7 +309,7 @@ export function codeFxLayer(): FxLayerConfig {
     enabled: true, debuffs: true, guardGlow: true, buffIcons: true, barBuffIcons: true, glow: 1, ground: 1, particles: 1, shake: 1, hitstopMs: 60, crit: 1,
     maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true, droneFollow: true, droneSpeed: 7, droneDist: 1, circles: true, zoneCircles: true, circleGlow: 1, slashLift: 0.9, quarks: false, quarksOthers: 0.5, quarksTouch: 0.5, quarksCap: 3000,
     paperPlate: 1, paperBubble: 1, plateMaxW: 200, bubbleMaxW: 220, platePadY: 3, platePadX: 14, bubblePadY: 7, bubblePadX: 18, paperFoot: 1.6, paperOrbLight: 0.95, paperOrbShade: 0.15,
-    enhAuraSmooth: true, enhAuraPulse: 0.08, enhAuraBreath: 0, enhAuraSpeed: 3, enhAuraGlow: 1, enhSparkGlow: 1, enhSparkRate: 1, enhSparkFadeIn: 0.3, enhOrbGlowFront: true,
+    enhAuraSmooth: true, enhAuraPulse: 0.08, enhAuraBreath: 0, enhAuraSpeed: 3, enhAuraGlow: 1, enhSparkGlow: 1, enhSparkRate: 1, enhSparkFadeIn: 0.3, enhOrbGlowFront: true, enhOrbBackFade: 1,
     gfxMenu: true, keyRebind: true, orbsNearBar: true, gfxDefault: 3, gfxMax: 3, gfxMid: 0.6, gfxLow: 0.3,
     ...(Object.fromEntries(QUARKS_KEYS.map((k) => [k, true])) as Record<QuarksKey, boolean>),
     extras: true, extrasK: 1, bossFx: true, bossExtras: true, bossExtrasK: 1, skills: {},
