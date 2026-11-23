@@ -1,7 +1,7 @@
 // Mystery box (src/shared/mysteryBox.ts): the odds match the owner's table, the roll follows them, the /admin
 // checks hold, and opening in the Sim gives the prize and keeps orb items working. Shared rules, no server.
 import { cashBuyError, cashCatalog, emptyCashShop } from '../src/shared/cashShop';
-import { STONE_NAME } from '../src/shared/data/stones';
+import { BOX_OPEN_COOLDOWN, MYSTERY_BOX_STACK, STONE_NAME, STONE_STACK } from '../src/shared/data/stones';
 import { ZONES } from '../src/shared/data/zones';
 import {
   BOX_ROWS, boxConfig, boxOdds, cleanBoxOverrides, rollBoxRow, setBoxConfig, setBoxHiddenCos, boxOrbs, type BoxOverrides,
@@ -99,13 +99,39 @@ const orbItem = p.bag.find((e) => isStone(e) && e.stone === 'orb_1') as StoneSta
 ok(!!orbItem && ann.length === 1 && ann[0] === STONE_NAME.orb_1 && STONE_NAME.orb_1 === 'ลูกแก้ว Prism Star', 'an orb prize: the orb item in the bag, announced');
 ok(marketSellable(orbItem) && marketKind(orbItem!) === 'cosmetic', 'orb items go on the market under ของแต่งตัว');
 setBoxConfig({ enabled: true, rows: Object.fromEntries(BOX_ROWS.map((x) => [x.id, { on: x.id === 'gear_legendary' }])) });
+sim.time += 1; // past the opening cooldown
 sim.openBox(p, 0, true, mulberry32(2));
 ok(!p.bag.some((e) => isStone(e) && e.stone === 'mystery_box') && p.bag.filter((e) => isItem(e) && e.rarity === 'legendary' && e.level === 20).length === 2, 'right click: the whole stack opens, gear at the opener\'s level');
 p.bag.fill(null);
 p.bag[0] = { stone: 'mystery_box', count: 2 };
 for (let i = 1; i < p.bag.length; i++) p.bag[i] = { potion: 'hp', size: 's', count: 10 };
+sim.time += 1;
 sim.openBox(p, 0, true);
 ok((p.bag[0] as StoneStack).count === 2, 'full bag: nothing opens, boxes kept');
+
+// Owner 2026-11-23: one opening per 0.2 s (server-side, in the Sim), boxes stack to 100.
+ok(BOX_OPEN_COOLDOWN === 0.2 && MYSTERY_BOX_STACK === 100, 'box constants: 0.2 s, 100 per slot');
+setBoxConfig({ enabled: true, rows: Object.fromEntries(BOX_ROWS.map((x) => [x.id, { on: x.id === 'gold_small' }])) });
+p.bag.fill(null);
+p.bag[0] = { stone: 'mystery_box', count: 5 };
+sim.time += 10;
+sim.openBox(p, 0, false, mulberry32(3));
+ok((p.bag[0] as StoneStack).count === 4, 'cooldown: first opening works');
+sim.openBox(p, 0, false, mulberry32(3));
+sim.openBox(p, 0, true, mulberry32(3));
+ok((p.bag[0] as StoneStack).count === 4, 'cooldown: openings within 0.2 s are ignored (one or the whole stack)');
+sim.time += 0.1;
+sim.openBox(p, 0, false, mulberry32(3));
+ok((p.bag[0] as StoneStack).count === 4, 'cooldown: still ignored after 0.1 s');
+sim.time += 0.11;
+sim.openBox(p, 0, false, mulberry32(3));
+ok((p.bag[0] as StoneStack).count === 3, 'cooldown: opens again after 0.2 s');
+p.bag.fill(null);
+ok(p.addStones('mystery_box', 250) && (p.bag[0] as StoneStack).count === 100 && (p.bag[1] as StoneStack).count === 100 && (p.bag[2] as StoneStack).count === 50, 'boxes stack to 100 per slot');
+ok(p.stoneRoom('mystery_box') === 100 * (p.bag.length - 3) + 50, 'box room counts 100 per slot');
+p.bag.fill(null);
+p.addStones('reroll_stat', 25);
+ok((p.bag[0] as StoneStack).count === STONE_STACK, 'other stones still stack to 10');
 
 // Orb item to the account.
 p.bag.fill(null);

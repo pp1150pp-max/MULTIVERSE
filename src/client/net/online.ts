@@ -17,6 +17,7 @@ import { checkCosTuning } from '../../shared/cosTuning';
 import { checkAnimTuning } from '../../shared/animTuning';
 import { applyAnimTuning } from '../animTune';
 import { applyBalance, checkBalance, currentBalance } from '../../shared/balance';
+import { applySlotVars } from '../img';
 import { attackRootTime } from '../../shared/attackRootTuning';
 import { skipsAttackRoot } from '../../shared/skillTuning';
 import { applyCosHidden, applyCosTuning } from '../cosTune';
@@ -1538,6 +1539,7 @@ function useAnimTuning(v: unknown): void {
 /** The server's game balance (class stats, tier tables), so tooltips and the blacksmith's odds match it. */
 function useBalance(v: unknown): void {
   applyBalance(v === undefined ? {} : checkBalance(v, false).tuning ?? {});
+  applySlotVars();
 }
 
 function useOrbLook(v: unknown): void {

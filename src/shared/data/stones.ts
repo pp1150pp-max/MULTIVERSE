@@ -6,6 +6,12 @@ import type { RerollKind } from './reroll';
 
 /** Most stones (or keys) one bag or stash slot can hold (owner: 10). */
 export const STONE_STACK = 10;
+/** Mystery boxes stack higher (owner 2026-11-23: 100 per slot, fixed in code). */
+export const MYSTERY_BOX_STACK = 100;
+/** The seconds between two box openings by one player (owner 2026-11-23: 0.2 s, fixed in code, enforced by the server). */
+export const BOX_OPEN_COOLDOWN = 0.2;
+/** Most of this stone kind one bag or stash slot can hold. */
+export const stoneStackMax = (k: StoneKind): number => (k === 'mystery_box' ? MYSTERY_BOX_STACK : STONE_STACK);
 /** What the merchant pays per stone or key (owner: 1,000 G each). */
 export const STONE_SELL = 1000;
 /** Chance of each stone kind on every boss kill, rolled separately (owner: 10%). */

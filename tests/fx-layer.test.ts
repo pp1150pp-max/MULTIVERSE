@@ -10,7 +10,7 @@ import { newCharacterData } from '../src/shared/sim/Player';
 import { basicAttack, castSkill } from '../src/shared/sim/skills';
 import { ON_CUE, ON_EFFECT, ON_ZONE } from '../src/client/quarksHooks';
 import { QUARKS_SKILLS } from '../src/shared/fxLayerTuning';
-import { codeFxLayer } from '../src/shared/fxLayerTuning';
+import { checkFxLayerTuning, codeFxLayer, fxLayerChanges, mergeFxLayer } from '../src/shared/fxLayerTuning';
 import { IDLE_INTENT } from '../src/shared/sim/types';
 import { circleDesign } from '../src/client/circleDesigns';
 import { CIRCLE_FALLBACKS } from '../src/shared/fxLayerTuning';
@@ -203,6 +203,27 @@ for (const cls of ['sword', 'mage', 'gunslinger'] as const) {
   }
   ok(msgs.length >= 2 && msgs[0][0] === p.id && (msgs[0][1] as number) > 0 && msgs[0].length === 2, `drone appears once with its life (${JSON.stringify(msgs[0])})`);
   ok(msgs.slice(1).every((a) => a[0] === p.id && a[1] === 0 && typeof a[2] === 'number'), 'each shot is (owner, 0, angle)');
+}
+
+// Enhancement aura and orb light (owner 2026-11-23, flicker at +13/+15): only differences kept, ranges checked.
+{
+  const c = codeFxLayer();
+  ok(c.enhAuraGlow === 1 && c.enhSparkGlow === 1 && c.enhSparkRate === 1 && c.enhSparkFadeIn === 0.3 && c.enhOrbGlowFront && c.enhOrbBackFade === 1, 'aura/orb light code values');
+  const bf = checkFxLayerTuning({ enhOrbBackFade: 0 }, true);
+  ok('tuning' in bf && bf.tuning?.enhOrbBackFade === 0, 'back fade 0 is stored (differs from the code)');
+  ok('error' in checkFxLayerTuning({ enhOrbBackFade: 1.5 }, true), 'back fade past 1 refused');
+  const same = checkFxLayerTuning({ enhAuraGlow: 1, enhSparkRate: 1, enhSparkFadeIn: 0.3, enhOrbGlowFront: true, enhOrbBackFade: 1 }, true);
+  ok('tuning' in same && same.tuning === undefined, 'code values are not stored');
+  const t = checkFxLayerTuning({ enhSparkRate: 0, enhSparkFadeIn: 0.5, enhOrbGlowFront: false, enhAuraGlow: 0.6, enhSparkGlow: 0.5 }, true);
+  const tu = 'tuning' in t ? t.tuning : undefined;
+  ok(JSON.stringify(tu) === '{"enhOrbGlowFront":false,"enhAuraGlow":0.6,"enhSparkGlow":0.5,"enhSparkRate":0,"enhSparkFadeIn":0.5}', `differences stored (${JSON.stringify(tu)})`);
+  ok('error' in checkFxLayerTuning({ enhSparkFadeIn: 0.7 }, true), 'fade-in past 0.6 refused');
+  ok('error' in checkFxLayerTuning({ enhAuraGlow: 2 }, true), 'ground glow past 1.4 refused');
+  ok('error' in checkFxLayerTuning({ enhOrbGlowFront: 1 }, true), 'orb light switch must be on/off');
+  const m = mergeFxLayer(tu);
+  ok(m.enhSparkRate === 0 && !m.enhOrbGlowFront, 'merged');
+  const lines = fxLayerChanges(codeFxLayer(), m).join(' | ');
+  ok(lines.includes('ประกายออร่าตีบวก: × จำนวนต่อวิ (0 = ปิด) 1 → 0') && lines.includes('แสงลูกแก้วตีบวกอยู่หน้าลูก (ปิด = หลังลูก) เปิด → ปิด'), `audit lines (${lines})`);
 }
 
 finish('fx-layer');
