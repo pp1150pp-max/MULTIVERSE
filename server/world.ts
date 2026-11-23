@@ -54,6 +54,7 @@ import { Channels, FightClock, type Channel } from './channels';
 import { Perf, PERF_LOG_MS } from './perf';
 import { CH_RECONNECT_MS, CH_RESERVED, hasChannels, type ChannelsView } from '../src/shared/channels';
 import { MEGAPHONE_EVERY_MS, megaphoneText, STONE_NAME, STONE_STACK } from '../src/shared/data/stones';
+import { buildChatLinks, type ChatLink } from '../src/shared/chatLinks';
 import { COS_SLOTS, cosById, cosCodes } from '../src/shared/data/cosmetics';
 import { cosHiddenIds, mayPutOnCos } from '../src/shared/cosShop';
 import { setBoxHiddenCos } from '../src/shared/mysteryBox';
@@ -694,7 +695,7 @@ export class GameWorld {
         if (msg.t === 'input') this.onInput(session, msg);
         else if (session.preview && (msg.t === 'chat' || (msg.t === 'act' && msg.a !== 'respawn'))) return; // a preview only walks and fights
         else if (msg.t === 'act') this.onAction(session, msg);
-        else if (msg.t === 'chat') this.onChat(session, msg.text, msg.ch, msg.to);
+        else if (msg.t === 'chat') this.onChat(session, msg.text, msg.ch, msg.to, msg.links);
         else if (msg.t === 'ping') this.onPing(session, msg);
         else if (msg.t === 'client') this.onClientInfo(session, msg);
       } catch (e) {
@@ -1072,7 +1073,7 @@ export class GameWorld {
    * A player's megaphone: one announcement for the whole server (every map, channel and boss room) at most
    * every MEGAPHONE_EVERY_MS. Everything is checked before the megaphone is used, so a refusal keeps it.
    */
-  private megaphone(s: Session, raw: unknown): void {
+  private megaphone(s: Session, raw: unknown, rawLinks?: unknown): void {
     const tell = (text: string) => this.send(s.ws, { t: 'chat', name: '', text });
     if (s.guest) return tell('Guest ใช้โทรโข่งไม่ได้ — สมัครสมาชิกก่อน');
     const msg = megaphoneText(raw);
@@ -1083,7 +1084,8 @@ export class GameWorld {
     if (wait > 0) return tell(`มีคนเพิ่งใช้โทรโข่ง — รออีก ${Math.ceil(wait / 1000)} วินาทีแล้วลองใหม่ (โทรโข่งยังอยู่)`);
     if (!s.sim.useMegaphone(s.player)) return;
     this.megaphoneAt = now;
-    for (const o of this.sessions) this.send(o.ws, { t: 'announce', text: msg.text, from: s.player.name, direct: false, megaphone: true });
+    const links = this.chatLinks(s, msg.text, rawLinks);
+    for (const o of this.sessions) this.send(o.ws, { t: 'announce', text: msg.text, from: s.player.name, direct: false, megaphone: true, links });
     try {
       this.db.logChat({ accountId: s.accountId, username: s.username, charName: s.player.name, zone: s.sim.zone.id, text: `[โทรโข่ง] ${msg.text}` });
     } catch (e) {
@@ -1386,7 +1388,7 @@ export class GameWorld {
         this.dailyMakeup(s, m.day);
         break;
       case 'megaphone':
-        this.megaphone(s, m.text);
+        this.megaphone(s, m.text, m.links);
         break;
       case 'cashBuy':
         this.cashBuy(s, m);
@@ -1832,7 +1834,7 @@ export class GameWorld {
   }
 
   /** A whisper: only the online character named `to` (and the sender, as an echo) sees it. */
-  private whisper(s: Session, to: unknown, text: string): void {
+  private whisper(s: Session, to: unknown, text: string, links?: ChatLink[]): void {
     if (typeof to !== 'string' || !to.trim() || to.length > FRIEND_NAME_MAX) return;
     const name = to.trim().toLowerCase();
     const o = [...this.sessions].find((x) => x.player.name.toLowerCase() === name);
@@ -1841,8 +1843,8 @@ export class GameWorld {
     if (o === s) return tell('กระซิบหาตัวเองไม่ได้');
     // Neutral on purpose: a blocked player isn't told they are blocked.
     if (this.friends.blocks(o.accountId, s.accountId)) return tell(`ส่งกระซิบถึง ${o.player.name} ไม่ได้`);
-    this.send(o.ws, { t: 'chat', name: s.player.name, text, ch: 'whisper' });
-    this.send(s.ws, { t: 'chat', name: s.player.name, text, ch: 'whisper', to: o.player.name });
+    this.send(o.ws, { t: 'chat', name: s.player.name, text, ch: 'whisper', links });
+    this.send(s.ws, { t: 'chat', name: s.player.name, text, ch: 'whisper', to: o.player.name, links });
     try {
       this.db.logChat({
         accountId: s.accountId, username: s.guest ? 'Guest' : s.username, charName: s.player.name, zone: s.sim.zone.id,
@@ -2106,15 +2108,24 @@ export class GameWorld {
     for (const s of this.sessions) this.mailNote(s, always);
   }
 
-  private onChat(s: Session, text: unknown, ch?: unknown, to?: unknown): void {
+  /** The item links of a final message text, looked up in the sender's own things (none when the owner turned links off). */
+  private chatLinks(s: Session, text: string, raw: unknown): ChatLink[] | undefined {
+    if (raw === undefined || !currentBalance().chatLinks) return undefined;
+    const p = s.player;
+    const links = buildChatLinks(text, raw, { bag: p.bag, stash: p.stash.items, equipment: p.equipment });
+    return links.length ? links : undefined;
+  }
+
+  private onChat(s: Session, text: unknown, ch?: unknown, to?: unknown, rawLinks?: unknown): void {
     if (typeof text !== 'string') return;
     const now = performance.now();
     if (now - s.lastChatAt < 600) return;
     const clean = text.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, CHAT_MAX);
     if (!clean) return;
+    const links = this.chatLinks(s, clean, rawLinks);
     if (ch === 'whisper') {
       s.lastChatAt = now;
-      return this.whisper(s, to, clean);
+      return this.whisper(s, to, clean, links);
     }
     const party = ch === 'party' ? this.parties.of(s.charId) : undefined;
     if (ch === 'party' && !party) return this.partyLine(s.charId, 'คุณไม่ได้อยู่ในปาร์ตี้ — แชทปาร์ตี้ไม่ได้');
@@ -2122,9 +2133,9 @@ export class GameWorld {
     if (party) {
       for (const m of party.members) {
         const o = m.online ? this.sessionOfChar(m.charId) : undefined;
-        if (o) this.send(o.ws, { t: 'chat', name: s.player.name, text: clean, ch: 'party' });
+        if (o) this.send(o.ws, { t: 'chat', name: s.player.name, text: clean, ch: 'party', links });
       }
-    } else for (const o of this.sessions) this.send(o.ws, { t: 'chat', name: s.player.name, text: clean });
+    } else for (const o of this.sessions) this.send(o.ws, { t: 'chat', name: s.player.name, text: clean, links });
     try {
       this.db.logChat({
         accountId: s.accountId, username: s.guest ? 'Guest' : s.username, charName: s.player.name, zone: s.sim.zone.id,

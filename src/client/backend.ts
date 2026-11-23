@@ -22,6 +22,7 @@ import type { RoomSnap } from '../shared/bossRoom';
 import type { PartyFound, PartySnap } from '../shared/party';
 import type { FriendsView } from '../shared/friends';
 import type { ChannelsView } from '../shared/channels';
+import type { ChatLinkRef } from '../shared/chatLinks';
 
 /** What a projectile view needs; the local simulation's Projectile fits this too. */
 export interface ProjectileLike {
@@ -92,7 +93,7 @@ export interface Backend {
   /** Gives the orb of the orb item in bag slot `slot` to the account. */
   useOrbItem(slot: number): void;
   /** Announces `text` to everyone with a megaphone from the bag (the server checks). */
-  useMegaphone(text: string): void;
+  useMegaphone(text: string, links?: ChatLinkRef[]): void;
   /** Asks for this month's daily login calendar (answered through onDaily). */
   dailyOpen(): void;
   /** Makes up an earlier missed day of this month (the server checks). */
@@ -130,9 +131,9 @@ export interface Backend {
   /** Blacksmith reroll of worn or bag gear; resolves with the changed item, or null if refused. */
   reroll(uid: string, kind: RerollKind): Promise<Item | null>;
   /** `party` = to the party only. */
-  chat(text: string, party?: boolean): void;
+  chat(text: string, party?: boolean, links?: ChatLinkRef[]): void;
   /** A whisper: only the online character named `to` sees it (the server echoes it back). */
-  whisper(to: string, text: string): void;
+  whisper(to: string, text: string, links?: ChatLinkRef[]): void;
   npcDistance(id: NpcId): number;
 
   // Cosmetics (src/shared/data/cosmetics.ts). What you wear is `me.cosmetics`, riding `me.mounted`.

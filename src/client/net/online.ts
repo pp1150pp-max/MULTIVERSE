@@ -50,6 +50,7 @@ import { ensureMap, mapIsCurrent } from '../mapSync';
 import { playSound } from '../audio/sfx';
 import { activePreview, loadPreviewDraft, previewParam, settlePreview } from '../mapPreview';
 import { hudPreviewParam, loadHudPreview } from '../hudLayout';
+import { validLinks, type ChatLink, type ChatLinkRef } from '../../shared/chatLinks';
 
 /** Mirrors never run game logic, so they don't need a simulation behind them. */
 const NO_SIM = null as unknown as Sim;
@@ -213,7 +214,7 @@ export class OnlineBackend implements Backend {
    * Hooks for the game screen. `ch: 'party'` = party chat or a party notice; `ch: 'whisper'` = a whisper
    * from `name`, or (with `to`) your own whisper to `to`.
    */
-  onChat: ((name: string, text: string, ch?: 'party' | 'whisper', to?: string) => void) | null = null;
+  onChat: ((name: string, text: string, ch?: 'party' | 'whisper', to?: string, links?: ChatLink[]) => void) | null = null;
   /** The friends window's state changed (sent on joining and on every change). */
   onFriends: ((view: FriendsView) => void) | null = null;
   friends: FriendsView | null = null;
@@ -238,7 +239,7 @@ export class OnlineBackend implements Backend {
   /** Auto was on when the server welcomed us (a character still farming, or back at its spot); see takeAutoResume. */
   private autoResume: boolean;
   /** An announcement from the server's owner. */
-  onAnnounce: ((text: string, from: string, direct: boolean, megaphone: boolean, box: boolean) => void) | null = null;
+  onAnnounce: ((text: string, from: string, direct: boolean, megaphone: boolean, box: boolean, links: ChatLink[]) => void) | null = null;
   /**
    * The server stops or restarts in `seconds` (sent once a second); null = cancelled. `text` is the
    * line to show, with the time filled in by the server (the owner's wording); absent = the default.
@@ -692,7 +693,7 @@ export class OnlineBackend implements Backend {
         break;
       case 'chat':
         if (m.name !== this.me?.name) playSound(m.ch === 'whisper' || m.ch === 'party' ? 'notify_whisper' : 'notify_chat');
-        this.onChat?.(m.name, m.text, m.ch === 'party' || m.ch === 'whisper' ? m.ch : undefined, typeof m.to === 'string' ? m.to : undefined);
+        this.onChat?.(m.name, m.text, m.ch === 'party' || m.ch === 'whisper' ? m.ch : undefined, typeof m.to === 'string' ? m.to : undefined, validLinks(m.text, m.links));
         break;
       case 'friends':
         this.friends = m.view;
@@ -829,7 +830,7 @@ export class OnlineBackend implements Backend {
         useOrbLook(m.look);
         break;
       case 'announce':
-        this.onAnnounce?.(m.text, m.from, m.direct, !!m.megaphone, !!m.box);
+        this.onAnnounce?.(m.text, m.from, m.direct, !!m.megaphone, !!m.box, validLinks(m.text, m.links));
         break;
       case 'shutdownCancel':
         this.onShutdown?.(m.mode, null);
@@ -1334,7 +1335,7 @@ export class OnlineBackend implements Backend {
   useBuffScroll(kind: BuffScroll): void { this.send({ t: 'act', a: 'useBuff', stone: kind }); }
   openBox(slot: number, all: boolean): void { this.send({ t: 'act', a: 'openBox', slot, all }); }
   useOrbItem(slot: number): void { this.send({ t: 'act', a: 'useOrbItem', slot }); }
-  useMegaphone(text: string): void { this.send({ t: 'act', a: 'megaphone', text }); }
+  useMegaphone(text: string, links?: ChatLinkRef[]): void { this.send({ t: 'act', a: 'megaphone', text, ...(links?.length ? { links } : {}) }); }
   dailyOpen(): void { this.send({ t: 'act', a: 'daily' }); }
   dailyMakeup(day: number): void { this.send({ t: 'act', a: 'dailyMakeup', day }); }
   sortBag(key: SortKey, desc: boolean): void { this.send({ t: 'act', a: 'sort', key, desc }); }
@@ -1464,7 +1465,9 @@ export class OnlineBackend implements Backend {
     });
   }
 
-  chat(text: string, party = false): void { this.send(party ? { t: 'chat', text, ch: 'party' } : { t: 'chat', text }); }
+  chat(text: string, party = false, links?: ChatLinkRef[]): void {
+    this.send({ t: 'chat', text, ...(party ? { ch: 'party' as const } : {}), ...(links?.length ? { links } : {}) });
+  }
 
   partyCreate(): void { this.send({ t: 'act', a: 'partyCreate' }); }
   partyInvite(name: string): void { this.send({ t: 'act', a: 'partyInvite', name }); }
@@ -1493,7 +1496,7 @@ export class OnlineBackend implements Backend {
   tradeConfirm(ver: number): void { this.send({ t: 'act', a: 'tradeConfirm', ver }); }
   tradeCancel(): void { this.send({ t: 'act', a: 'tradeCancel' }); }
   setTradeBlock(on: boolean): void { this.send({ t: 'act', a: 'tradeBlock', on }); }
-  whisper(to: string, text: string): void { this.send({ t: 'chat', text, ch: 'whisper', to }); }
+  whisper(to: string, text: string, links?: ChatLinkRef[]): void { this.send({ t: 'chat', text, ch: 'whisper', to, ...(links?.length ? { links } : {}) }); }
   friendRequest(name: string): void { this.send({ t: 'act', a: 'friendRequest', name }); }
   friendAnswer(acc: number, yes: boolean): void { this.send({ t: 'act', a: 'friendAnswer', acc, yes }); }
   friendCancel(acc: number): void { this.send({ t: 'act', a: 'friendCancel', acc }); }
