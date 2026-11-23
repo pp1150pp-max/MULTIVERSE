@@ -184,8 +184,43 @@ for (const slot of TUNED_SLOTS) {
     }
   }
 }
+// ---- Single-picture wings per facing (owner 2026-11-23) ----
+// The bench saved one facing's X/Y/Z offsets only, while the single-picture wing values stayed one value for
+// every facing. Now each facing has its own offset `<field>_at_<dir>` added to the base field (code default
+// 0, so old saves read exactly as before); the sum is kept inside the base field's range. Tilt and squeeze
+// show on the diagonals only (wingPair.ts viewParts). Height per facing is the existing Y offset.
+const DIAGONALS: readonly ViewDir[] = ['frontRight', 'backRight', 'backLeft', 'frontLeft'];
+export const WING_ONE_DIR_FIELDS: Readonly<Record<string, readonly ViewDir[]>> = {
+  oneSize: VIEW_DIRS,
+  oneDepth: VIEW_DIRS,
+  oneTilt: DIAGONALS,
+  oneSqueeze: DIAGONALS,
+};
+/** Field key of a base field's offset in a facing (the X/Y/Z ones are `viewOffKey`). */
+export const dirFieldKey = (key: string, d: ViewDir): string => `${key}_at_${d}`;
+/** A per-facing offset (X/Y/Z or a single-picture wing value), not a base value. */
+export const isPerFacingKey = (key: string): boolean => key.includes('_at_');
+for (const [key, dirs] of Object.entries(WING_ONE_DIR_FIELDS)) {
+  const f = COS_TUNE_FIELDS.wings[key];
+  if (f.kind !== 'num') continue;
+  const span = Math.round((f.max - f.min) * 1000) / 1000;
+  for (const d of dirs) COS_TUNE_FIELDS.wings[dirFieldKey(key, d)] = num(-span, span, f.step, `${f.label} · ส่วนปรับทิศ${VIEW_DIR_NAME[d]}`);
+}
+/** The fields the bench's view picker covers (and saves): the base values ('' = every facing) or one facing's offsets. */
+export function partOfView(view: ViewDir | ''): (key: string) => boolean {
+  return view ? (k) => k.endsWith(`_at_${view}`) : (k) => !isPerFacingKey(k);
+}
+/** A base number field with this facing's offset on top (no offset field = the base), kept in the base field's range. */
+export function valueAtDir(slot: TunedSlot, v: TuneValues, key: string, d: ViewDir): number {
+  const f = COS_TUNE_FIELDS[slot][key];
+  const base = typeof v[key] === 'number' ? (v[key] as number) : 0;
+  const off = v[dirFieldKey(key, d)];
+  if (f?.kind !== 'num' || typeof off !== 'number' || !off) return base;
+  return Math.min(f.max, Math.max(f.min, base + off));
+}
+
 const zeroViewOffsets = (slot: TunedSlot): TuneValues =>
-  Object.fromEntries(Object.keys(COS_TUNE_FIELDS[slot]).filter((k) => /^d[xyz]_/.test(k)).map((k) => [k, 0]));
+  Object.fromEntries(Object.keys(COS_TUNE_FIELDS[slot]).filter(isPerFacingKey).map((k) => [k, 0]));
 
 /**
  * Mounts: the values before the bench (owner-approved art fits, #192/#194/#198). The hoverboard and the
@@ -316,8 +351,8 @@ export function cosTuneOf(tuning: CosTuning, id: string): TuneValues | undefined
 }
 
 /**
- * The tuning after saving only the fields of ONE cosmetic that `part` picks (its base values, or one view
- * group's offsets) from what is tried out now (`cur`): everything else stays as `saved`. Returns the clean tuning.
+ * The tuning after saving only the fields of ONE cosmetic that `part` picks (its base values, or one facing's
+ * offsets) from what is tried out now (`cur`): everything else stays as `saved`. Returns the clean tuning.
  */
 export function savePartOf(saved: CosTuning, id: string, cur: TuneValues, part: (key: string) => boolean): CosTuning {
   const base = cosTuneOf(saved, id);

@@ -779,7 +779,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         h('td', {}, numBox(() => f.bonusStep[t], (n) => { f.bonusStep[t] = n; }, cf.bonusStep[t], ...FORGE_RANGE.bonusStep, 1, refresh)),
         out));
     }
-    type FNum = 'costBase' | 'costPerLevel' | 'pity' | 'dropFrom' | 'stoneFrom' | 'stonesPerTry' | 'announceFrom' | 'maxPlus' | 'cd' | 'orbMin' | 'sellPerPlus' | 'hiddenFrom';
+    type FNum = 'costBase' | 'costPerLevel' | 'pity' | 'dropFrom' | 'stoneFrom' | 'stonesPerTry' | 'announceFrom' | 'bannerFrom' | 'maxPlus' | 'cd' | 'orbMin' | 'sellPerPlus' | 'hiddenFrom';
     const num = (k: FNum, label: string, range: readonly [number, number], step: number, whole: boolean) =>
       h('label', {}, label, numBox(() => f[k], (n) => { f[k] = whole ? Math.round(n) : n; }, cf[k], range[0], range[1], step, refresh));
     const never = `${PLUS_NEVER} = ไม่มี`;
@@ -812,6 +812,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         num('stoneFrom', 'ระดับเริ่มใช้หินตีบวก (+) ', FORGE_RANGE.from, 1, true),
         num('stonesPerTry', 'หินตีบวกต่อครั้ง ', FORGE_RANGE.stonesPerTry, 1, true),
         num('announceFrom', 'ระดับเริ่มประกาศทั้งเซิร์ฟ (+) ', FORGE_RANGE.from, 1, true),
+        num('bannerFrom', 'ระดับเริ่มป้ายประกาศกลางจอ (+) ', FORGE_RANGE.from, 1, true),
         num('hiddenFrom', 'ระดับเริ่มซ่อนโอกาสเป็น ?? (+) ', FORGE_RANGE.from, 1, true)),
       h('div', { class: 'row bal-line' },
         num('orbMin', 'ระดับเริ่มมีลูกแก้ว (+) ', FORGE_RANGE.from, 1, true),
@@ -829,6 +830,22 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       ),
     );
     outs.forEach((fn) => fn());
+  };
+
+  // ---------------------------------------------------------- English (docs/systems/i18n.md)
+  const langCard = h('div', { class: 'card' });
+  const drawLang = (): void => {
+    langCard.replaceChildren(
+      h('h2', {}, 'ภาษาอังกฤษ'),
+      h('div', { class: 'muted' },
+        'ผู้เล่นเลือกภาษา ไทย / English ได้ที่ เมนู → ตั้งค่า (ครั้งแรกเลือกตามภาษาของเบราว์เซอร์) มีผลตอนเปิดเกมครั้งถัดไป · ' +
+        'ปิด = ทุกคนเห็นภาษาไทย และซ่อนปุ่มเลือกภาษา (คนที่เปิดเกมค้างเป็นอังกฤษอยู่จะกลับเป็นไทยตอนเปิดเกมใหม่)'),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.english, onchange: (e: Event) => { draft.english = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' เปิดให้เลือกภาษาอังกฤษ'),
+      ),
+    );
   };
 
   // ---------------------------------------------------------- Auto Play (src/shared/autoTuning.ts)
@@ -904,6 +921,12 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
           ' ห้ามถอด/สวมขณะเปิดร้านพ่อค้า'),
       ),
       h('div', { class: 'muted' }, 'ห้ามถอด/สวมขณะเปิดร้านพ่อค้า: ตอนหน้าต่างร้านพ่อค้าเปิด คลิก/ลาก/ปุ่มในรายละเอียดที่จะสวมหรือถอดอุปกรณ์ (และของแต่งตัวในกระเป๋าแฟชั่น) ไม่ทำงาน ขึ้นข้อความ "ปิดร้านก่อน" กันกดขายผิด · หน้าต่างอื่น (ช่างตีเหล็ก คลัง ตลาด) ไม่โดน · ยาที่เลือกให้ปุ่มด่วนไม่โดน · กันกดผิดฝั่งเบราว์เซอร์เท่านั้น (server ไม่รู้ว่าหน้าต่างร้านเปิดอยู่) · ปิด = ถอด/สวมได้ตามเดิม'),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.chatLinks, onchange: (e: Event) => { draft.chatLinks = (e.target as HTMLInputElement).checked; refresh(); } }),
+          ' ลิงก์ไอเทมในแชท'),
+      ),
+      h('div', { class: 'muted' }, 'ลิงก์ไอเทมในแชท: Ctrl+คลิกไอเทมในกระเป๋า/ชุดที่ใส่/คลัง/ร้านพ่อค้า = ใส่ [ชื่อไอเทม] ในช่องแชท (หรือโทรโข่งถ้าเปิดอยู่) ข้อความละไม่เกิน 3 ชิ้น · คนที่เห็นคลิกชื่อ (สีตามความหายาก) เปิดหน้าต่างข้อมูลของชิ้นนั้นตอนส่ง (+ตีบวก ค่าที่สุ่มได้) · server หาของจริงในตัวผู้ส่งเอง ปลอมไม่ได้ · ปิด = server ไม่ส่งลิงก์ (ชื่อเป็นข้อความธรรมดา) และ Ctrl+คลิกไม่ทำอะไร'),
       h('div', { class: 'muted' }, 'หลุดการเชื่อมต่อขณะเปิด Auto (ไม่ได้กดออกเกม): ตัวละครอยู่ในโลกต่อ Auto ฟาร์มเหมือนปกติ (EXP 50%) จนครบเวลา, Auto หยุดตามตัวเลือก (ยาหมด/กระเป๋าเต็ม/ม้วน) หรือตาย แล้วเซฟและออกจากโลก · เข้าเกมใหม่ = ได้ตัวที่กำลังฟาร์มคืน Auto ยังเปิด · ไม่รวม Guest และห้องบอส · ปิดสวิตช์ = คนที่ฟาร์มแบบหลุดอยู่ออกจากโลกทันที'),
     );
   };
@@ -971,6 +994,9 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'muted' }, 'ตัวเลขบนจอสูงสุด: เกินแล้วอันเก่าสุดหาย (ค่าในโค้ด 40 เดิม 120) · รวมเลข: ดาเมจบนเป้าเดียวกันในช่วงเวลานี้รวมเป็นเลขเดียว (คริรวมกับคริ ธรรมดารวมกับธรรมดา เลขที่ตัวเองโดนก็รวม) · เห็นเฉพาะของตัวเอง: เห็นแค่ดาเมจที่ตัวเองตีและที่ตัวเองโดน (server ไม่ส่งของคนอื่นมาเลย) ข้อความอื่นยังเห็นเหมือนเดิม'),
       h('h3', {}, 'ภาพกระดาษ: กรอบชื่อ ฟองแชท รอยเท้าออร่า ลูกแก้วตีบวก'),
       h('div', { class: 'row bal-line' }, num('paperPlate', 0.05), num('paperBubble', 0.05), num('paperFoot', 0.1)),
+      h('h3', {}, 'ช่องไอเทม (ทุกหน้าต่าง)'),
+      h('div', { class: 'row bal-line' }, num('slotCorner', 0.1), num('slotInset', 0.1), num('slotIcon', 0.05)),
+      h('div', { class: 'muted' }, 'ปรับกรอบช่องไอเทมทุกช่องพร้อมกัน (กระเป๋า ช่องสวม คลัง ร้าน ตลาด เทรด ตีบวก แฟชั่น) · 1 = ค่าในโค้ด'),
       h('div', { class: 'row bal-line' }, num('paperOrbLight', 0.01), num('paperOrbShade', 0.05)),
       h('div', { class: 'row bal-line' }, num('plateMaxW', 10), num('platePadY', 1), num('platePadX', 1)),
       h('div', { class: 'row bal-line' }, num('bubbleMaxW', 10), num('bubblePadY', 1), num('bubblePadX', 1)),
@@ -1206,6 +1232,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawExp();
     drawPotions();
     drawForge();
+    drawLang();
     drawAuto();
     drawTut();
     drawFx();
@@ -1269,7 +1296,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     { name: 'ไอเทม-ตีบวก-ยา', cards: [affixCard, tierCard, previewCard, potionCard, forgeCard] },
     { name: 'Auto Play', cards: [autoCard] },
     { name: 'เอฟเฟกต์-เสียง', cards: [fxCard, circleCard, audioCard] },
-    { name: 'ระบบ-อื่นๆ', cards: [expCard, tutCard] },
+    { name: 'ระบบ-อื่นๆ', cards: [expCard, tutCard, langCard] },
   ];
   const ALL = 'ทั้งหมด';
   const CAT_KEY = 'adminBalanceCat';
@@ -1307,6 +1334,6 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   }
   search.addEventListener('input', applyFilter);
 
-  box.replaceChildren(h('div', { class: 'cat-top' }, catBar, search), fold.toc, noHit, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, forgeCard, autoCard, tutCard, fxCard, circleCard, rootCard, audioCard, rigCard, bar);
+  box.replaceChildren(h('div', { class: 'cat-top' }, catBar, search), fold.toc, noHit, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, forgeCard, autoCard, tutCard, fxCard, circleCard, rootCard, audioCard, rigCard, langCard, bar);
   redraw();
 }

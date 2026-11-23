@@ -10,7 +10,7 @@ import { effectiveStats, enhanceBonus, itemName, plusOf, sellValue } from '../sh
 import {
   entryName, POTION_SIZE_LABEL, POTION_STACK, potionHeal, potionName, potionSellPrice, stackLimit,
 } from '../shared/data/potions';
-import { BUFF_LABEL, MONSTER_STONES, RETURN_CAST, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_STACK, stoneSellPrice, stoneUnit } from '../shared/data/stones';
+import { BUFF_LABEL, MONSTER_STONES, RETURN_CAST, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_STACK, stoneStackMax, stoneSellPrice, stoneUnit } from '../shared/data/stones';
 import { lootPots, type Buffs, type LootFilter, type SortKey } from '../shared/sim/Player';
 import { MONSTERS } from '../shared/data/monsters';
 import { currentBalance } from '../shared/balance';
@@ -38,6 +38,9 @@ import { StashWindow } from './ui/stash';
 import { AutoSettingsWindow } from './ui/autoSettings';
 import { MapWindow } from './ui/mapWindow';
 import { ItemDetail } from './ui/itemDetail';
+import { appendLinked, linkedWords, LinkDraft, LinkPopup } from './chatLinks';
+import { resolveLinkRef, type ChatLink, type ChatLinkRef } from '../shared/chatLinks';
+import { CHAT_MAX } from '../shared/net/protocol';
 
 /** Yellow, like the game's level-up lines. */
 const SHUTDOWN_COLOR = '#ffd34a';
@@ -119,6 +122,10 @@ export class Hud {
   private readonly autoSet: AutoSettingsWindow;
   private readonly map: MapWindow;
   private readonly detail: ItemDetail;
+  /** The window a clicked item link in chat opens. */
+  readonly linkPop: LinkPopup;
+  /** Item links typed into the chat box (Ctrl+click an item). */
+  private readonly chatDraft = new LinkDraft();
   /** The chat history tab picked last ('all', 'chat', 'system', 'party' or 'whisper'). */
   private chatTab = 'all';
   /** Who whispered you last ("/r" answers them). */
@@ -144,6 +151,8 @@ export class Hud {
     this.autoSet = new AutoSettingsWindow(g);
     this.map = new MapWindow(g);
     this.detail = new ItemDetail(g, this, { forge: this.forge, shop: this.shop, stash: this.stash, market: this.market });
+    this.linkPop = new LinkPopup(this);
+    this.setupItemLinks();
     $('hud').classList.remove('hidden');
     this.mm = $<HTMLCanvasElement>('minimap').getContext('2d')!;
     this.hudStyle = loadHudStyle();
@@ -164,6 +173,7 @@ export class Hud {
     $('mm-plus').onclick = () => this.setMinimapZoom(this.mmZoom + 1);
     $('mm-minus').onclick = () => this.setMinimapZoom(this.mmZoom - 1);
     $('hud-name').textContent = g.player.name;
+    $('hud-name').translate = false;
     this.showZoneName();
     $('hud-online').classList.toggle('hidden', !g.backend.online);
     $('hud-guest').classList.toggle('hidden', !g.backend.guest);
@@ -228,14 +238,15 @@ export class Hud {
         const p = /^\/p\s+/i.exec(text);
         const w = /^\/w\s+(?:"([^"]+)"|(\S+))\s+([\s\S]+)$/i.exec(text);
         const r = /^\/r\s+([\s\S]+)$/i.exec(text);
-        if (p) g.backend.chat(text.slice(p[0].length), true);
-        else if (w) g.backend.whisper((w[1] ?? w[2]).trim(), w[3]);
+        const links = this.chatDraft.refs(text);
+        if (p) g.backend.chat(text.slice(p[0].length), true, links);
+        else if (w) g.backend.whisper((w[1] ?? w[2]).trim(), w[3], links);
         else if (/^\/w(\s|$)/i.test(text)) this.log('กระซิบ: พิมพ์ /w ชื่อ ข้อความ (ชื่อที่มีเว้นวรรคใส่ "…")', '#e6a0ff');
         else if (r || (text && this.chatTab === 'whisper' && !text.startsWith('/'))) {
           const to = r ? this.lastWhisperFrom : this.whisperWith;
-          if (to) g.backend.whisper(to, r ? r[1] : text);
+          if (to) g.backend.whisper(to, r ? r[1] : text, links);
           else this.log(r ? 'ยังไม่มีใครกระซิบหาคุณ' : 'ยังไม่ได้เลือกคนกระซิบ — พิมพ์ /w ชื่อ ข้อความ', '#e6a0ff');
-        } else if (text) g.backend.chat(text, this.chatTab === 'party');
+        } else if (text) g.backend.chat(text, this.chatTab === 'party', links);
         this.closeChat();
       } else if (e.key === 'Escape') this.closeChat();
     });
@@ -1127,6 +1138,7 @@ export class Hud {
     if (this.amountDone) return this.closeAmount();
     if (this.confirmYes) return this.closeConfirm();
     if (this.detail.isOpen) return this.detail.closeDetail();
+    if (this.linkPop.isOpen) return this.linkPop.close();
     this.closeChat();
     this.toggleAutoSettings(false);
     this.toggleMap(false);
@@ -1431,8 +1443,8 @@ export class Hud {
     tip.innerHTML =
       `<div class="tt-name" style="color:${STONE_COLOR[s.stone]}">${STONE_NAME[s.stone]}</div>` +
       `<div class="tt-sub">${
-        isBoundKind(s.stone) && isConsumable(s.stone) ? `ของใช้ · ${s.count} / ${STONE_STACK} ${stoneUnit(s.stone)} · ผูกกับตัวละคร`
-        : isConsumable(s.stone) ? `ของใช้ · ${s.count} / ${STONE_STACK} ${stoneUnit(s.stone)} · ซื้อได้ที่พ่อค้า`
+        isBoundKind(s.stone) && isConsumable(s.stone) ? `ของใช้ · ${s.count} / ${stoneStackMax(s.stone)} ${stoneUnit(s.stone)} · ผูกกับตัวละคร`
+        : isConsumable(s.stone) ? `ของใช้ · ${s.count} / ${stoneStackMax(s.stone)} ${stoneUnit(s.stone)} · ซื้อได้ที่พ่อค้า`
         : isBossKey(s.stone) ? `Artifact · ${s.count} / ${STONE_STACK} อัน · ดรอปจากมอนสเตอร์ในแมพของบอส`
         : isBound(s) && !s.bound ? 'กุญแจเควส · ผูกกับตัวละคร'
         : s.stone === 'phoenix' ? `ไอเทมชุบชีวิต · ${s.count} / ${STONE_STACK} อัน · ซื้อจากพ่อค้า`
@@ -1466,6 +1478,58 @@ export class Hud {
 
   // ------------------------------------------------------------ online
 
+  /**
+   * Ctrl+click (⌘+click on a Mac) an item in the bag, worn gear, the stash or the merchant's stock: its
+   * "[name]" goes into the megaphone window if that is open, else into the chat box (opened if closed).
+   * Caught before the cells' own handlers, so the click doesn't also wear, use, buy or start a drag, and
+   * the chat box keeps focus (its blur would close it).
+   */
+  private setupItemLinks(): void {
+    const g = this.g;
+    const at = (e: MouseEvent): ChatLinkRef | null => {
+      if (!(e.ctrlKey || e.metaKey) || !currentBalance().chatLinks) return null;
+      const t = e.target as HTMLElement | null;
+      const bag = t?.closest<HTMLElement>('#bag-grid [data-i]');
+      if (bag) return { bag: Number(bag.dataset.i) };
+      const st = t?.closest<HTMLElement>('#stash-grid [data-s]');
+      if (st) return { stash: Number(st.dataset.s) };
+      const slot = t?.closest<HTMLElement>('#equip-slots [data-slot]');
+      if (slot) return { slot: slot.dataset.slot as EquipSlot };
+      const buy = t?.closest<HTMLElement>('#shop-buy [data-buy]');
+      if (buy) return { shop: buy.dataset.buy as `${'hp' | 'mp'}:${'s' | 'm' | 'l'}` };
+      if (t?.closest('#shop-buy [data-phoenix]')) return { shop: 'phoenix' };
+      if (t?.closest('#shop-buy [data-buy-scroll]')) return { shop: 'return_scroll' };
+      return null;
+    };
+    const swallow = (e: MouseEvent): void => {
+      if (!at(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    const link = (e: MouseEvent): void => {
+      const ref = at(e);
+      if (!ref) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const p = g.player;
+      const entry = resolveLinkRef(ref, { bag: p.bag, stash: p.stash.items, equipment: p.equipment });
+      if (!entry) return;
+      let why: string;
+      if (g.megaphone.open) why = g.megaphone.addLink(entry, ref);
+      else {
+        const input = $<HTMLInputElement>('chat-input');
+        if ($('chat').classList.contains('hidden')) this.openChat();
+        why = this.chatDraft.add(input, entry, ref, CHAT_MAX);
+        input.focus();
+      }
+      if (why) this.log(why, '#ff8a6a');
+    };
+    for (const type of ['pointerdown', 'mousedown', 'mouseup', 'dblclick'] as const) window.addEventListener(type, swallow, true);
+    window.addEventListener('click', link, true);
+    // A Mac turns Ctrl+click into a right click: that one links too (and doesn't sell or store).
+    window.addEventListener('contextmenu', (e) => { if (e.ctrlKey && !e.metaKey) link(e); }, true);
+  }
+
   /** Opens the chat box; `prefill` (e.g. "/w Name ") replaces what is typed, for answering a whisper. */
   openChat(prefill?: string): void {
     const box = $('chat');
@@ -1492,6 +1556,7 @@ export class Hud {
   closeChat(): void {
     const input = $<HTMLInputElement>('chat-input');
     input.value = '';
+    this.chatDraft.clear();
     $('chat').classList.add('hidden');
     $('log').classList.remove('open');
     input.blur();
@@ -1501,7 +1566,8 @@ export class Hud {
    * A chat line; an empty name means a server notice (someone joined or left). `ch: 'party'` = party chat or
    * a party notice; `ch: 'whisper'` = a whisper from `name`, or (with `to`) your own whisper to `to`.
    */
-  chatLine(name: string, text: string, fadeMs = 15000, ch?: 'party' | 'whisper', to?: string): void {
+  chatLine(name: string, text: string, fadeMs = 15000, ch?: 'party' | 'whisper', to?: string, links?: ChatLink[]): void {
+    const open = (entry: BagEntry) => this.linkPop.open(entry);
     const party = ch === 'party';
     const el = document.createElement('div');
     if (name && ch === 'whisper') {
@@ -1515,12 +1581,12 @@ export class Hud {
       el.addEventListener('mousedown', (e) => e.preventDefault()); // keep typing in the chat box
       if (!to) this.lastWhisperFrom = name;
       this.whisperWith = other;
-      el.append(b, document.createTextNode(text));
+      el.append(b, linkedWords(text, links, open));
     } else if (name) {
       el.className = `log-line chat${party ? ' party' : ''}`;
       const b = document.createElement('b');
       b.textContent = party ? `[ปาร์ตี้] ${name}: ` : `${name}: `;
-      el.append(b, document.createTextNode(text));
+      el.append(b, linkedWords(text, links, open));
     } else {
       el.className = `log-line system${party ? ' party' : ''}`;
       el.textContent = text;
@@ -1549,6 +1615,8 @@ export class Hud {
       $('hud').append(el);
     }
     el.textContent = text;
+    // The owner's own wording from /admin is never translated; the game's default line is.
+    el.translate = !(typeof serverText === 'string' && serverText);
     this.log(text, SHUTDOWN_COLOR);
   }
 
@@ -1559,15 +1627,15 @@ export class Hud {
    * An announcement: a banner for a while (like the restart warning) and a chat line. From the server's
    * owner, or (`megaphone`) from a player's megaphone: same frame, its own heading and the character's name.
    */
-  announce(text: string, from: string, direct: boolean, megaphone = false, box = false): void {
+  announce(text: string, from: string, direct: boolean, megaphone = false, box = false, boxHead?: string, links: ChatLink[] = []): void {
     const wait = this.adminBannerUntil - performance.now();
     // Players' banners (megaphone, mystery box prize) wait for the owner's instead of covering it.
     if ((megaphone || box) && wait > 0) {
-      window.setTimeout(() => this.announce(text, from, direct, megaphone, box), wait + 50);
+      window.setTimeout(() => this.announce(text, from, direct, megaphone, box, boxHead, links), wait + 50);
       return;
     }
     if (box) {
-      this.boxBanner(text);
+      this.boxBanner(text, boxHead);
       return;
     }
     if (!megaphone) this.adminBannerUntil = performance.now() + ANNOUNCE_MS;
@@ -1580,32 +1648,40 @@ export class Hud {
     head.className = 'announce-head';
     head.textContent = megaphone ? '📣 โทรโข่ง' : direct ? '📢 ข้อความจาก GM ถึงคุณ' : '📢 ประกาศ';
     const body = document.createElement('div');
-    body.textContent = text;
+    body.translate = false; // the owner's / a player's own words (src/client/i18n.ts)
+    const open = (entry: BagEntry) => this.linkPop.open(entry);
+    appendLinked(body, text, links, open);
     const sign = document.createElement('div');
     sign.className = 'announce-from';
     sign.textContent = `— ${from}`;
+    sign.translate = false;
     el.append(head, body, sign);
     $('hud').append(el);
     setTimeout(() => el.remove(), ANNOUNCE_MS);
     const line = document.createElement('div');
     line.className = 'log-line';
     line.style.color = megaphone ? STONE_COLOR.megaphone : SHUTDOWN_COLOR;
-    line.textContent = megaphone ? `📣 ${from}: ${text}` : direct ? `📢 ข้อความจาก ${from} ถึงคุณ: ${text}` : `📢 ประกาศ: ${text} — ${from}`;
+    if (megaphone) line.translate = false; // a player's own words
+    if (megaphone) {
+      line.textContent = `📣 ${from}: `;
+      appendLinked(line, text, links, open);
+    } else line.textContent = direct ? `📢 ข้อความจาก ${from} ถึงคุณ: ${text}` : `📢 ประกาศ: ${text} — ${from}`;
     this.pushLog(line, ANNOUNCE_MS * 3);
   }
 
   /** A mystery box prize for the whole server (owner 2026-11-22): the announcement banner with its own heading and no sender. */
-  private boxBanner(text: string): void {
+  /** A player event for everyone: a mystery box prize, or () another, e.g. an enhancement at forge bannerFrom. */
+  private boxBanner(text: string, head = '🎁 กล่องปริศนา'): void {
     document.getElementById('announce-banner')?.remove();
     const el = document.createElement('div');
     el.id = 'announce-banner';
     el.classList.add('megaphone');
-    const head = document.createElement('div');
-    head.className = 'announce-head';
-    head.textContent = '🎁 กล่องปริศนา';
+    const headEl = document.createElement('div');
+    headEl.className = 'announce-head';
+    headEl.textContent = head;
     const body = document.createElement('div');
     body.textContent = text;
-    el.append(head, body);
+    el.append(headEl, body);
     $('hud').append(el);
     setTimeout(() => el.remove(), ANNOUNCE_MS);
     const line = document.createElement('div');

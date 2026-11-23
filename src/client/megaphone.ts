@@ -3,6 +3,9 @@
 // a refusal keeps the megaphone.
 import type { Game } from './Game';
 import { MEGAPHONE_EVERY_MS, MEGAPHONE_MAX, megaphoneText } from '../shared/data/stones';
+import type { ChatLinkRef } from '../shared/chatLinks';
+import type { BagEntry } from '../shared/types';
+import { LinkDraft } from './chatLinks';
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -16,6 +19,8 @@ export class MegaphoneUI {
   private readonly text: HTMLTextAreaElement;
   private readonly count: HTMLElement;
   private readonly send: HTMLButtonElement;
+  /** Item links typed in (Ctrl+click an item while this window is open). */
+  private readonly links = new LinkDraft();
 
   constructor(private readonly g: Game) {
     this.win = el('div', 'panel hidden');
@@ -65,11 +70,20 @@ export class MegaphoneUI {
     this.send.disabled = n === 0 || n > MEGAPHONE_MAX;
   }
 
+  /** Ctrl+click on an item while this window is open: its "[name]" goes in. Returns why not, or ''. */
+  addLink(entry: BagEntry, ref: ChatLinkRef): string {
+    const why = this.links.add(this.text, entry, ref, MEGAPHONE_MAX);
+    this.text.focus();
+    this.refresh();
+    return why;
+  }
+
   private submit(): void {
     const msg = megaphoneText(this.text.value);
     if ('error' in msg) return this.g.hud.log(msg.error, '#ff8a6a');
     if (this.g.player.stoneCount('megaphone') < 1) return this.g.hud.log('ไม่มีโทรโข่ง', '#ff8a6a');
-    this.g.backend.useMegaphone(msg.text);
+    // The links stay with the text: a refused message is kept typed, and a link whose name is gone isn't sent.
+    this.g.backend.useMegaphone(msg.text, this.links.refs(msg.text));
     this.toggle(false);
   }
 }

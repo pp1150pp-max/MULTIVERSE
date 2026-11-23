@@ -3,6 +3,7 @@
 // this only shows its TradeView and sends what the player does. Plain CSS on purpose (src/style.css, the
 // "trade" part): every part has its own id (trade-win, trade-a-slots, trade-confirm …) so a friend can
 // paint the art over it later.
+import { noTranslate } from './i18n';
 import type { Game } from './Game';
 import { PARTY_SEARCH_MAX } from '../shared/party';
 import { CLASSES } from '../shared/data/classes';
@@ -198,7 +199,7 @@ export class TradeUI {
     if (!list.length) out.append(el('div', 'hint', 'ไม่พบผู้เล่นที่ออนไลน์'));
     for (const f of list) {
       const row = el('div', 'trade-found');
-      row.append(el('span', '', `${f.name} Lv.${f.lv} ${CLASSES[f.cls]?.name ?? ''}`));
+      row.append(noTranslate(el('span', '', `${f.name} Lv.${f.lv} ${CLASSES[f.cls]?.name ?? ''}`)));
       const btn = el('button', '', 'ขอเทรด');
       btn.onclick = () => this.request(f.name);
       row.append(btn);

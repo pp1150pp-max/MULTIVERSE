@@ -9,10 +9,10 @@ import { REROLL_NAME, rerollCost, type RerollKind } from '../data/reroll';
 import { inBossArena, lairExitSpot, LAVA_BURN, LAVA_TICK } from '../data/zones';
 import type { Hazard } from './volcanoHeart';
 import {
-  announceFrom, dropsOnFail, forgeCd, enhanceCost, itemName, maxPlus, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
+  announceFrom, bannerFrom, dropsOnFail, forgeCd, enhanceCost, itemName, maxPlus, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
 } from '../data/enhance';
 import { dropPotionSize, entryName, potionName, POTION_STACK, potionPrice, stackLimit } from '../data/potions';
-import { BOSS_KEY, BOSS_QUEST_KEY, BOSS_STONE_CHANCE, BOUND_MSG, BUFF_LABEL, BUFF_MAX, BUFF_MULT, BUFF_TIME, fmtBuff, PHOENIX_PRICE, QUEST_KILLS, REVIVES_PER_KEY, STONE_STACK, KEY_DROP_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, RETURN_CAST, RETURN_SCROLL_PRICE, STONE_COLOR, STONE_NAME } from '../data/stones';
+import { BOX_OPEN_COOLDOWN, BOSS_KEY, BOSS_QUEST_KEY, BOSS_STONE_CHANCE, BOUND_MSG, BUFF_LABEL, BUFF_MAX, BUFF_MULT, BUFF_TIME, fmtBuff, PHOENIX_PRICE, QUEST_KILLS, REVIVES_PER_KEY, STONE_STACK, KEY_DROP_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, RETURN_CAST, RETURN_SCROLL_PRICE, STONE_COLOR, STONE_NAME } from '../data/stones';
 import { NPC_INFO, NPC_USE_RANGE, type NpcId } from '../data/npcs';
 import { pick, rand, randInt, type Rng } from '../rng';
 import { splitExp } from '../party';
@@ -851,6 +851,7 @@ export class Sim {
   openBox(p: Player, slot: number, all: boolean, r: Rng = Math.random): string[] {
     const e = p.bag[slot];
     if (!isStone(e) || e.stone !== 'mystery_box') return [];
+    if (this.time < p.boxReadyAt) return [];
     const cfg = boxNow();
     if (!cfg.enabled) {
       this.log('กล่องปริศนายังเปิดไม่ได้ตอนนี้', '#ff8a6a', p.id);
@@ -881,6 +882,7 @@ export class Sim {
       if (row.announce) announce.push(got.text);
     }
     if (opened) {
+      p.boxReadyAt = this.time + BOX_OPEN_COOLDOWN;
       this.fx('burst', p.x, 1, p.z, STONE_COLOR.mystery_box, 18, 3);
       this.afterChange(p);
     }
@@ -1882,8 +1884,9 @@ export class Sim {
       this.fx('effect', 'enhance_ok', p.x, p.z, 0, 1.3);
       this.fx('burst', p.x, 1.2, p.z, '#ffd34a', 14, 3);
       this.text(p.x, p.topY + 0.6, p.z, `+${plusOf(item)} สำเร็จ!`, 'enh', 1.6);
-      if (plusOf(item) >= announceFrom()) {
-        this.events.push({ t: 'announce', text: `🔨 ${p.name} ตี${SLOT_LABEL[item.slot]} ${item.name} เป็น +${plusOf(item)} สำเร็จ!` });
+      if (plusOf(item) >= announceFrom() || plusOf(item) >= bannerFrom()) {
+        const text = `🔨 ${p.name} ตี${SLOT_LABEL[item.slot]} ${item.name} เป็น +${plusOf(item)} สำเร็จ!`;
+        this.events.push({ t: 'announce', text, ...(plusOf(item) >= bannerFrom() ? { banner: '🔨 ตีบวก' } : {}) });
       }
     } else {
       const why = result === 'drop' ? ` ระดับลดเหลือ +${plusOf(item)}` : result === 'saved' ? ' (หินกันระดับลดทำงาน ระดับเท่าเดิม)' : '';

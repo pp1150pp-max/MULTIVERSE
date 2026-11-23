@@ -154,7 +154,7 @@ export type SimEvent =
   /** The player's stash changed (save it, and refresh the stash window). */
   | { t: 'stash'; to: number }
   /** A system line for every player on the server, in every zone (a +10 or higher enhancement). */
-  | { t: 'announce'; text: string }
+  | { t: 'announce'; text: string; /** A banner across everyone's screen (with its heading) instead of a chat line. */ banner?: string }
   /** The server switched this player's Auto Play off. */
   | { t: 'autoOff'; to: number; msg: string }
   /** This player walked into a portal. Whoever drives the Sim moves them to that zone. */

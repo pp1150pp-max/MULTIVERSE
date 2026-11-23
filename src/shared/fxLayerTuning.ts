@@ -82,6 +82,10 @@ export interface FxLayerConfig extends Record<QuarksKey, boolean> {
   /** Paper enhancement orbs: grey from which a part takes the accent colour (band, star), and the darkest shading. */
   paperOrbLight: number;
   paperOrbShade: number;
+  /** Item slots (every .cell): × corner rounding, × the +N / Lv label inset, × the picture size (owner 2026-11-23). */
+  slotCorner: number;
+  slotInset: number;
+  slotIcon: number;
   /**
    * The enhancement aura under the feet (+7/+10/+13/+15, src/client/views.ts, owner 2026-11-23: it flickered at +15).
    * Smooth = its stepped glow picture is filtered smoothly instead of as hard pixels, so it no longer shimmers while
@@ -216,6 +220,9 @@ export const FX_LAYER_RANGE = {
   bubblePadY: [0, 30],
   bubblePadX: [0, 40],
   paperFoot: [0.3, 4],
+  slotCorner: [0, 3],
+  slotInset: [0, 3],
+  slotIcon: [0.5, 1.2],
   paperOrbLight: [0.8, 1],
   paperOrbShade: [0, 1],
   enhAuraPulse: [0, 0.3],
@@ -259,6 +266,9 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   platePadX: 'กรอบชื่อ: ขอบในซ้าย-ขวา (px)',
   bubblePadY: 'ฟองแชท: ขอบในบน-ล่าง (px)',
   bubblePadX: 'ฟองแชท: ขอบในซ้าย-ขวา (px)',
+  slotCorner: 'ช่องไอเทม: × ความโค้งมุม',
+  slotInset: 'ช่องไอเทม: × ระยะป้าย +N / Lv จากขอบ',
+  slotIcon: 'ช่องไอเทม: × ขนาดภาพไอเทม',
   paperFoot: 'ขนาดรอยเท้าออร่า (× ขนาดรอยเท้าของชิ้น)',
   paperOrbLight: 'ลูกแก้ว: ส่วนที่ขาวกว่านี้เป็นสีเน้น',
   paperOrbShade: 'ลูกแก้ว: ความสว่างส่วนมืดสุด',
@@ -308,7 +318,7 @@ export function codeFxLayer(): FxLayerConfig {
   return {
     enabled: true, debuffs: true, guardGlow: true, buffIcons: true, barBuffIcons: true, glow: 1, ground: 1, particles: 1, shake: 1, hitstopMs: 60, crit: 1,
     maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true, droneFollow: true, droneSpeed: 7, droneDist: 1, circles: true, zoneCircles: true, circleGlow: 1, slashLift: 0.9, quarks: false, quarksOthers: 0.5, quarksTouch: 0.5, quarksCap: 3000,
-    paperPlate: 1, paperBubble: 1, plateMaxW: 200, bubbleMaxW: 220, platePadY: 3, platePadX: 14, bubblePadY: 7, bubblePadX: 18, paperFoot: 1.6, paperOrbLight: 0.95, paperOrbShade: 0.15,
+    paperPlate: 1, paperBubble: 1, plateMaxW: 200, bubbleMaxW: 220, platePadY: 3, platePadX: 14, bubblePadY: 7, bubblePadX: 18, paperFoot: 1.6, slotCorner: 1, slotInset: 1, slotIcon: 1, paperOrbLight: 0.95, paperOrbShade: 0.15,
     enhAuraSmooth: true, enhAuraPulse: 0.08, enhAuraBreath: 0, enhAuraSpeed: 3, enhAuraGlow: 1, enhSparkGlow: 1, enhSparkRate: 1, enhSparkFadeIn: 0.3, enhOrbGlowFront: true, enhOrbBackFade: 1,
     gfxMenu: true, keyRebind: true, orbsNearBar: true, gfxDefault: 3, gfxMax: 3, gfxMid: 0.6, gfxLow: 0.3,
     ...(Object.fromEntries(QUARKS_KEYS.map((k) => [k, true])) as Record<QuarksKey, boolean>),

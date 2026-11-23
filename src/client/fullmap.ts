@@ -1,3 +1,4 @@
+import { t } from './i18n';
 import type { Game } from './Game';
 import type { NpcId } from '../shared/data/npcs';
 import { MONSTERS } from '../shared/data/monsters';
@@ -128,7 +129,8 @@ export class FullMap {
     // Labels go on top of every marker, each nudged clear of the ones already placed.
     const placed: Box[] = [];
     /** A dark pill with optional picture and text, centred on x. `step` is which way to dodge. */
-    const label = (x: number, y: number, text: string, colour: string, opts: { size?: number; step?: number; art?: (ax: number, ay: number, s: number) => void } = {}) => {
+    const label = (x: number, y: number, th: string, colour: string, opts: { size?: number; step?: number; art?: (ax: number, ay: number, s: number) => void } = {}) => {
+      const text = t(th); // drawn on a canvas, so the page translator can't reach it
       const size = (opts.size ?? 12) * px;
       ctx.font = `600 ${size}px Kanit, sans-serif`;
       ctx.textAlign = 'left';

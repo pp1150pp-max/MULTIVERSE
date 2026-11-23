@@ -1,6 +1,7 @@
 // The "มีอะไรใหม่" window (docs/systems/news.md): the newest update notes the owner posted. The server pushes them to everyone
 // (guests too) a moment after joining and whenever they change. The button shows a red dot while a note is newer than the last one
 // this browser opened (localStorage); the window never opens by itself, except once on join when the /admin switch says so.
+import { noTranslate } from './i18n';
 import type { Game } from './Game';
 import { newsDate, type NewsView } from '../shared/news';
 
@@ -104,8 +105,8 @@ export class NewsUI {
     this.list.replaceChildren(...notes.map((n) => {
       const box = el('section', 'news-note');
       const head = el('div', 'news-head');
-      head.append(el('span', 'news-title', n.title), el('span', 'news-date', newsDate(n.at)));
-      const ul = el('ul', 'news-lines');
+      head.append(noTranslate(el('span', 'news-title', n.title)), el('span', 'news-date', newsDate(n.at)));
+      const ul = noTranslate(el('ul', 'news-lines')); // the owner's own words
       for (const l of n.lines) ul.append(el('li', '', l));
       box.append(head, ul);
       return box;

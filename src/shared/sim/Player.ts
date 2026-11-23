@@ -13,7 +13,7 @@ import { cleanCosWorn, MOUNT_SPEED, type CosWorn } from '../data/cosmetics';
 import { auraTier, effectiveStats, orbCodes, plusOf, sellValue } from '../data/enhance';
 import { itemClass, starterWeapon, upgradeItem } from '../data/items';
 import { anyStackValue, potionHeal, potionPrice, POTION_SIZES, POTION_STACK, stackLimit } from '../data/potions';
-import { BOSS_QUEST_KEY, BUFF_MAX, QUEST_KILLS, STONE_STACK } from '../data/stones';
+import { BOSS_QUEST_KEY, BUFF_MAX, QUEST_KILLS, stoneStackMax } from '../data/stones';
 import { cleanGearDone, cleanGearQuests } from '../gearQuests';
 import type { TutorialData } from '../tutorial';
 import {
@@ -243,7 +243,7 @@ export function sortEntries(list: readonly (BagEntry | null)[], key: SortKey, de
   const orbs = [...new Set([...stones.keys()].map((k) => k.replace(/:b$/, '')).filter(isOrbStone))].sort((a, b) => Number(a.slice(4)) - Number(b.slice(4)));
   for (const k of [...STONE_KINDS, ...orbs]) {
     for (const b of [false, true]) {
-      for (let n = stones.get(`${k}${b ? ':b' : ''}`) ?? 0; n > 0; n -= STONE_STACK) stacks.push({ stone: k, count: Math.min(n, STONE_STACK), ...bound(b) });
+      for (let n = stones.get(`${k}${b ? ':b' : ''}`) ?? 0; n > 0; n -= stoneStackMax(k)) stacks.push({ stone: k, count: Math.min(n, stoneStackMax(k)), ...bound(b) });
     }
   }
   const all = [...items, ...stacks];
@@ -503,6 +503,8 @@ export class Player extends Unit {
   // a recast keeps the stronger value and refreshes the time.
   /** HP points of damage absorbed before HP, until `shieldUntil`. */
   shield = 0;
+  /** Sim time before which this player's next mystery box opening is ignored (BOX_OPEN_COOLDOWN; not saved). */
+  boxReadyAt = 0;
   shieldUntil = 0;
   /** Damage taken × this until `takenUntil` (e.g. 0.7 = 30% less). */
   takenMult = 1;
@@ -976,8 +978,8 @@ export class Player extends Unit {
   stoneRoom(kind: StoneKind): number {
     let n = 0;
     for (const e of this.bag) {
-      if (!e) n += STONE_STACK;
-      else if (isStone(e) && !e.bound && e.stone === kind) n += STONE_STACK - e.count;
+      if (!e) n += stoneStackMax(kind);
+      else if (isStone(e) && !e.bound && e.stone === kind) n += stoneStackMax(kind) - e.count;
     }
     return n;
   }
@@ -987,15 +989,15 @@ export class Player extends Unit {
     if (n <= 0 || this.stoneRoom(kind) < n) return false;
     for (const e of this.bag) {
       if (n <= 0) break;
-      if (isStone(e) && !e.bound && e.stone === kind && e.count < STONE_STACK) {
-        const add = Math.min(n, STONE_STACK - e.count);
+      if (isStone(e) && !e.bound && e.stone === kind && e.count < stoneStackMax(kind)) {
+        const add = Math.min(n, stoneStackMax(kind) - e.count);
         e.count += add;
         n -= add;
       }
     }
     for (let i = 0; i < this.bag.length && n > 0; i++) {
       if (this.bag[i]) continue;
-      const add = Math.min(n, STONE_STACK);
+      const add = Math.min(n, stoneStackMax(kind));
       this.bag[i] = { stone: kind, count: add };
       n -= add;
     }

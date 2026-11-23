@@ -1,6 +1,7 @@
 // The mailbox window (server/mail.ts decides everything; this only shows the answers and asks).
 // A list of mail, and a read view with Claim and Delete. Plain CSS on purpose: the icon and frame are
 // easy to swap for painted art later.
+import { noTranslate as noTr } from './i18n';
 import type { Game } from './Game';
 import type { MailFull, MailHead, MailReply } from '../shared/mail';
 import { playSound } from './audio/sfx';
@@ -177,9 +178,9 @@ export class MailUI {
     const bar = el('div', 'mail-bar');
     bar.append(back, claim, del);
     this.body.append(
-      el('div', 'mail-subject', m.title),
+      noTr(el('div', 'mail-subject', m.title)),
       el('div', 'mail-meta', `จาก ${m.from} · ${when(m.at)} · ${daysLeft(m.expiresAt)}`),
-      el('div', 'mail-text', m.body),
+      noTr(el('div', 'mail-text', m.body)),
       attach,
       bar,
     );

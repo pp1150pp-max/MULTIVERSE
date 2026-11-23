@@ -38,6 +38,35 @@ const GUEST_NO = new Set(['mail', 'report', 'trade', 'friends', 'daily']);
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
+/**
+ * The top row, the floating shortcut buttons and the menu window's tiles for a layout (src/shared/menuLayout.ts).
+ * Also drawn by the /admin HUD mock (src/client/hudMock.ts), so the mock shows the real buttons.
+ */
+export function menuButtonsHtml(lay: MenuLayoutConfig, guest: boolean): { top: string; free: string; tiles: string } {
+  // No เต็มจอ where the browser can't do it (iPhone Safari); none of mail / report / trade / friends / daily for a guest.
+  // Checked on what the button does, so an admin's shortcut to the same thing follows the same rules.
+  const okAct = (a: string) => !(guest && GUEST_NO.has(a)) && !(a === 'fullscreen' && !document.fullscreenEnabled) && !(a === 'news' && !newsButtonOn())
+    && !(a === 'keybinds' && !currentBalance().fxLayer.keyRebind);
+  const ok = (id: string) => okAct(buttonAct(lay, id));
+  // The badge key stays the code button's own Thai name (what setBadge uses), whatever the button is called now.
+  const badgeKey = (id: string) => esc(menuEntry(buttonAct(lay, id))?.label ?? '');
+  const ico = (id: string) => badge(buttonIcon(lay, id));
+  // data-act = what it does (a shortcut runs its action like the menu's own button; the graphics switch hides both).
+  const tile = (id: string, extra = '') =>
+    `<button class="sys-tile${extra}" data-act="${esc(buttonAct(lay, id))}"><span class="sys-ico">${ico(id)}</span><span class="sys-label">${esc(buttonLabel(lay, id))}</span><i class="badge hidden" data-badge="${badgeKey(id)}"></i></button>`;
+  const icon = (id: string, domId: string, extra = '') =>
+    `<button id="${domId}" class="top-icon${extra}" data-entry="${esc(id)}" data-act="${esc(buttonAct(lay, id))}"><span class="sys-ico">${ico(id)}</span><span class="sys-label">${id === 'auto' ? 'AUTO: OFF' : esc(buttonLabel(lay, id, true))}</span><i class="badge hidden" data-badge="${badgeKey(id)}"></i></button>`;
+  const top = lay.top.filter(ok).map((id) => icon(id, `top-${id}`)).join('');
+  const free = lay.custom.filter((b) => b.free && okAct(b.act)).map((b) => icon(b.id, freeBtnDomId(b.id), ' hud-free-btn')).join('');
+  // Touch play hides the top row (CSS), so what was put there also goes in the menu window, just before ตั้งค่า (which stays last).
+  // (Not what the code only ever had up there, i.e. แจ้งปัญหา: touch never had it in the menu window.)
+  const code = codeMenuLayout();
+  const touchExtra = lay.top.filter((id) => id !== 'auto' && id !== 'menu' && !lay.menu.includes(id) && !(code.top.includes(id) && !code.menu.includes(id)));
+  const menu = lay.menu.filter((id) => id !== 'settings');
+  const tiles = [...menu.filter(ok).map((id) => tile(id)), ...touchExtra.filter(ok).map((id) => tile(id, ' touch-extra')), tile('settings')];
+  return { top, free, tiles: tiles.join('') };
+}
+
 export class SystemMenu {
   private readonly panel: HTMLElement;
   private readonly countdownEl: HTMLElement;
@@ -137,29 +166,10 @@ export class SystemMenu {
   private build(): void {
     const lay = currentBalance().menuLayout;
     this.drawn = lay;
-    const guest = this.g.backend.guest;
-    // No เต็มจอ where the browser can't do it (iPhone Safari); none of mail / report / trade / friends / daily for a guest.
-    // Checked on what the button does, so an admin's shortcut to the same thing follows the same rules.
-    const okAct = (a: string) => !(guest && GUEST_NO.has(a)) && !(a === 'fullscreen' && !document.fullscreenEnabled) && !(a === 'news' && !newsButtonOn())
-      && !(a === 'keybinds' && !currentBalance().fxLayer.keyRebind);
-    const ok = (id: string) => okAct(buttonAct(lay, id));
-    // The badge key stays the code button's own Thai name (what setBadge uses), whatever the button is called now.
-    const badgeKey = (id: string) => esc(menuEntry(buttonAct(lay, id))?.label ?? '');
-    const ico = (id: string) => badge(buttonIcon(lay, id));
-    // data-act = what it does (a shortcut runs its action like the menu's own button; the graphics switch hides both).
-    const tile = (id: string, extra = '') =>
-      `<button class="sys-tile${extra}" data-act="${esc(buttonAct(lay, id))}"><span class="sys-ico">${ico(id)}</span><span class="sys-label">${esc(buttonLabel(lay, id))}</span><i class="badge hidden" data-badge="${badgeKey(id)}"></i></button>`;
-    const icon = (id: string, domId: string, extra = '') =>
-      `<button id="${domId}" class="top-icon${extra}" data-entry="${esc(id)}" data-act="${esc(buttonAct(lay, id))}"><span class="sys-ico">${ico(id)}</span><span class="sys-label">${id === 'auto' ? 'AUTO: OFF' : esc(buttonLabel(lay, id, true))}</span><i class="badge hidden" data-badge="${badgeKey(id)}"></i></button>`;
-    this.row.innerHTML = lay.top.filter(ok).map((id) => icon(id, `top-${id}`)).join('');
-    this.free.innerHTML = lay.custom.filter((b) => b.free && okAct(b.act)).map((b) => icon(b.id, freeBtnDomId(b.id), ' hud-free-btn')).join('');
-    // Touch play hides the top row (CSS), so what was put there also goes in the menu window, just before ตั้งค่า (which stays last).
-    // (Not what the code only ever had up there, i.e. แจ้งปัญหา: touch never had it in the menu window.)
-    const code = codeMenuLayout();
-    const touchExtra = lay.top.filter((id) => id !== 'auto' && id !== 'menu' && !lay.menu.includes(id) && !(code.top.includes(id) && !code.menu.includes(id)));
-    const menu = lay.menu.filter((id) => id !== 'settings');
-    const html = [...menu.filter(ok).map((id) => tile(id)), ...touchExtra.filter(ok).map((id) => tile(id, ' touch-extra')), tile('settings')];
-    this.panel.querySelector('[data-view="main"]')!.innerHTML = html.join('');
+    const html = menuButtonsHtml(lay, this.g.backend.guest);
+    this.row.innerHTML = html.top;
+    this.free.innerHTML = html.free;
+    this.panel.querySelector('[data-view="main"]')!.innerHTML = html.tiles;
     this.autoBtn = document.getElementById('top-auto') ?? document.createElement('button');
     this.applyGfxTile();
     this.renderBadges();

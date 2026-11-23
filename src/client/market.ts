@@ -1,6 +1,7 @@
 // The market broker's window: Buy (search with category, class, rarity and stat filters), Sell (list a
 // bag item at a price, see and cancel your listings) and the claim box (gold from sales, items back).
 // The server decides everything (server/market.ts); this only asks and shows the answers.
+import { t } from './i18n';
 import type { Game } from './Game';
 import { NPC_USE_RANGE } from '../shared/data/npcs';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
@@ -252,7 +253,8 @@ export class MarketWindow {
       }
       return;
     }
-    if ($('mkt-msg').textContent === MARKET_THROTTLE_MSG) this.say('');
+    const shown = $('mkt-msg').textContent;
+    if (shown === MARKET_THROTTLE_MSG || shown === t(MARKET_THROTTLE_MSG)) this.say('');
     if (!r.page) return;
     this.rows = r.page.rows;
     this.total = r.page.total;
