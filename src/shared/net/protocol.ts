@@ -459,7 +459,7 @@ export type ServerMsg =
   /** The server stops (or restarts) in `seconds`; sent once a second during the countdown. */
   | { t: 'shutdown'; mode: ShutdownMode; seconds: number; text?: string }
   /** An announcement from the server's owner (admin page): shown as a banner and a chat line. */
-  | { t: 'announce'; text: string; from: string; direct: boolean; megaphone?: boolean; /** A megaphone's item links (server-built copies). */ links?: ChatLink[]; /** A mystery box prize (src/shared/mysteryBox.ts). */ box?: boolean }
+  | { t: 'announce'; text: string; from: string; direct: boolean; megaphone?: boolean; /** A megaphone's item links (server-built copies). */ links?: ChatLink[]; /** A mystery box prize (src/shared/mysteryBox.ts). */ box?: boolean; /** The player-event banner's heading (box only; mystery box when missing). */ head?: string }
   /** This month's daily login calendar (`view.popup`: just got today's reward, open it by itself). */
   | { t: 'daily'; view: DailyView }
   /** The countdown was cancelled: the server stays up. */
