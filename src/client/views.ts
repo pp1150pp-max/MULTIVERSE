@@ -33,10 +33,11 @@ type AnimEvent = Extract<SimEvent, { t: 'anim' }>;
 /** World size of the crater a dead player lies in (the player is about 1.9 units tall). */
 const CRATER_SIZE = 3.2;
 /**
- * The lying body in the last death frame stands about 1 unit above the feet line on its billboard, which the
- * camera shows over the ground about this far behind the player, so the crater moves back to sit under it.
+ * The lying body in the last death frame stands about 0.7 units above the feet line on its billboard (paper art,
+ * 2026-11-22), which the camera shows over the ground about 1 unit behind the player (fxLayer.craterBack, /admin), so
+ * the crater moves back to sit under it.
  */
-const CRATER_BACK = 1.4;
+const craterBack = (): number => currentBalance().fxLayer.craterBack;
 
 const AURA: { color: string; size: number; sparks: number }[] = [
   { color: '', size: 0, sparks: 0 },
@@ -124,6 +125,7 @@ export class PlayerView {
       this.actor.setLook(look.armor, look.weapon);
     }
     this.actor.update(dt, p.moving, p.isDashing ? 14 : undefined);
+    this.placeCrater();
     this.updateAura(dt, fx);
     // Owner 2026-11-10: the orbs stay while dead (only the aura goes).
     this.orbs.update(this.clock, p.x, p.z, p.orbs, true, orbItemLook(shownCos(p, 'orb')?.id) ?? null);
@@ -320,9 +322,19 @@ export class PlayerView {
     const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
     this.crater = new THREE.Mesh(new THREE.PlaneGeometry(CRATER_SIZE, CRATER_SIZE).rotateX(-Math.PI / 2), mat);
     // Away from the camera (it looks from +x +z, see ISO_DIR).
-    this.crater.position.set(this.p.x - CRATER_BACK * Math.SQRT1_2, 0.03, this.p.z - CRATER_BACK * Math.SQRT1_2);
+    this.placeCrater();
     this.crater.renderOrder = -1;
     this.scene.add(this.crater);
+  }
+
+  /**
+   * Under the body: placed again every frame, as the body slides from where this screen saw it die to where the server
+   * has it (owner 2026-11-23: the body lay off to one side of its crater).
+   */
+  private placeCrater(): void {
+    if (!this.crater) return;
+    const back = craterBack() * Math.SQRT1_2;
+    this.crater.position.set(this.p.x - back, 0.03, this.p.z - back);
   }
 
   private disposeCrater(): void {
