@@ -38,7 +38,7 @@ export async function renderOrbs(): Promise<void> {
     await gameArt();
     const { mountOrbPreview } = await import('../../client/orbPreview');
     if (tab !== 'orbs' || !box.isConnected) return;
-    const stop = await mountOrbPreview(box, 'ทดลองที่นี่ไม่เปลี่ยนอะไรในเกม จนกว่าเจ้าของกด "บันทึกเป็นค่าเริ่มต้นทั้งเซิร์ฟ" · เดิน: WASD / ลูกศร หรือคลิกพื้น', {
+    const stop = await mountOrbPreview(box, 'ทดลองที่นี่ไม่เปลี่ยนอะไรในเกม จนกว่ากด "💾 บันทึกที่แก้" ด้านล่าง · เดิน: WASD / ลูกศร หรือคลิกพื้น', {
       load: () => api<AdminOrbLook>('GET', '/admin/orb-look'),
       save: (look) => api<AdminOrbLook>('POST', '/admin/orb-look', look === 'reset' ? { reset: true } : { look }),
       shop: {
