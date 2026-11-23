@@ -9,7 +9,7 @@ import * as api from './net/api';
 import { connectOnline, type OnlineBackend } from './net/online';
 import { preloadHudImages } from './icons';
 import { AFTER_EXIT_KEY, GOOGLE_AFTER_EXIT_KEY } from './sysmenu';
-import { beginEntryLoading, cancelEntryLoading } from './loadingScreen';
+import { beginEntryLoading, cancelEntryLoading, preloadLoadingArt } from './loadingScreen';
 import { imgUrl } from './img';
 
 export type Launcher = (backend: OnlineBackend) => void;
@@ -54,6 +54,8 @@ export function portrait(key: string, size: number): HTMLCanvasElement {
  */
 async function waitForGameAssets(classId: ClassId | null): Promise<void> {
   const screen = beginEntryLoading(classId);
+  // Its picture before the hundreds of game files, which would otherwise hold it up.
+  await screen.ready;
   // Game textures are most of the bytes; the HUD pictures are the last stretch of the bar.
   let tex = 0;
   let hud = 0;
@@ -617,6 +619,8 @@ function escapeHtml(s: string): string {
 }
 
 export function buildMenu(launch: Launcher): void {
+  // The loading pictures download while the player logs in, so the entry screen has its art at once.
+  preloadLoadingArt();
   const googleOn = api.googleEnabled();
   const online = new OnlineMenu(launch, googleOn);
   if (GUEST_LOGIN_ENABLED) {
