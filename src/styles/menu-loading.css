@@ -64,6 +64,8 @@
 .class-card canvas { flex: none; width: 96px; height: 96px; image-rendering: pixelated; background: #1a160f; border-radius: 6px; }
 .class-card h3 { margin: 0 0 4px; font-family: 'Cinzel', serif; color: var(--gold-hi); }
 .class-card h3 small { font-family: 'Kanit', sans-serif; color: var(--ink-dim); font-weight: 300; font-size: 13px; }
+/* English mode (docs/systems/i18n.md): the Thai class name beside the English one would just repeat it. */
+html[lang='en'] .class-card h3 small { display: none; }
 .class-card p { margin: 0 0 6px; font-size: 12px; color: var(--ink-dim); }
 .class-card ul { margin: 0; padding: 0; list-style: none; font-size: 12px; }
 .class-card li { padding: 2px 0; display: flex; align-items: center; gap: 8px; }

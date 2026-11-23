@@ -1,3 +1,4 @@
+import { said } from './i18n';
 import { SPACE_COLOUR } from './island';
 import { placeLabel } from '../shared/channels';
 import type { Game } from './Game';
@@ -164,6 +165,7 @@ export class Hud {
     $('mm-plus').onclick = () => this.setMinimapZoom(this.mmZoom + 1);
     $('mm-minus').onclick = () => this.setMinimapZoom(this.mmZoom - 1);
     $('hud-name').textContent = g.player.name;
+    $('hud-name').translate = false;
     this.showZoneName();
     $('hud-online').classList.toggle('hidden', !g.backend.online);
     $('hud-guest').classList.toggle('hidden', !g.backend.guest);
@@ -1515,12 +1517,12 @@ export class Hud {
       el.addEventListener('mousedown', (e) => e.preventDefault()); // keep typing in the chat box
       if (!to) this.lastWhisperFrom = name;
       this.whisperWith = other;
-      el.append(b, document.createTextNode(text));
+      el.append(b, said(text));
     } else if (name) {
       el.className = `log-line chat${party ? ' party' : ''}`;
       const b = document.createElement('b');
       b.textContent = party ? `[ปาร์ตี้] ${name}: ` : `${name}: `;
-      el.append(b, document.createTextNode(text));
+      el.append(b, said(text));
     } else {
       el.className = `log-line system${party ? ' party' : ''}`;
       el.textContent = text;
@@ -1549,6 +1551,8 @@ export class Hud {
       $('hud').append(el);
     }
     el.textContent = text;
+    // The owner's own wording from /admin is never translated; the game's default line is.
+    el.translate = !(typeof serverText === 'string' && serverText);
     this.log(text, SHUTDOWN_COLOR);
   }
 
@@ -1581,15 +1585,18 @@ export class Hud {
     head.textContent = megaphone ? '📣 โทรโข่ง' : direct ? '📢 ข้อความจาก GM ถึงคุณ' : '📢 ประกาศ';
     const body = document.createElement('div');
     body.textContent = text;
+    body.translate = false; // the owner's / a player's own words (src/client/i18n.ts)
     const sign = document.createElement('div');
     sign.className = 'announce-from';
     sign.textContent = `— ${from}`;
+    sign.translate = false;
     el.append(head, body, sign);
     $('hud').append(el);
     setTimeout(() => el.remove(), ANNOUNCE_MS);
     const line = document.createElement('div');
     line.className = 'log-line';
     line.style.color = megaphone ? STONE_COLOR.megaphone : SHUTDOWN_COLOR;
+    if (megaphone) line.translate = false; // a player's own words
     line.textContent = megaphone ? `📣 ${from}: ${text}` : direct ? `📢 ข้อความจาก ${from} ถึงคุณ: ${text}` : `📢 ประกาศ: ${text} — ${from}`;
     this.pushLog(line, ANNOUNCE_MS * 3);
   }

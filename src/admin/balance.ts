@@ -831,6 +831,22 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     outs.forEach((fn) => fn());
   };
 
+  // ---------------------------------------------------------- English (docs/systems/i18n.md)
+  const langCard = h('div', { class: 'card' });
+  const drawLang = (): void => {
+    langCard.replaceChildren(
+      h('h2', {}, 'ภาษาอังกฤษ'),
+      h('div', { class: 'muted' },
+        'ผู้เล่นเลือกภาษา ไทย / English ได้ที่ เมนู → ตั้งค่า (ครั้งแรกเลือกตามภาษาของเบราว์เซอร์) มีผลตอนเปิดเกมครั้งถัดไป · ' +
+        'ปิด = ทุกคนเห็นภาษาไทย และซ่อนปุ่มเลือกภาษา (คนที่เปิดเกมค้างเป็นอังกฤษอยู่จะกลับเป็นไทยตอนเปิดเกมใหม่)'),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.english, onchange: (e: Event) => { draft.english = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' เปิดให้เลือกภาษาอังกฤษ'),
+      ),
+    );
+  };
+
   // ---------------------------------------------------------- Auto Play (src/shared/autoTuning.ts)
   const autoCard = h('div', { class: 'card' });
   const drawAuto = (): void => {
@@ -1201,6 +1217,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawExp();
     drawPotions();
     drawForge();
+    drawLang();
     drawAuto();
     drawTut();
     drawFx();
@@ -1264,7 +1281,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     { name: 'ไอเทม-ตีบวก-ยา', cards: [affixCard, tierCard, previewCard, potionCard, forgeCard] },
     { name: 'Auto Play', cards: [autoCard] },
     { name: 'เอฟเฟกต์-เสียง', cards: [fxCard, circleCard, audioCard] },
-    { name: 'ระบบ-อื่นๆ', cards: [expCard, tutCard] },
+    { name: 'ระบบ-อื่นๆ', cards: [expCard, tutCard, langCard] },
   ];
   const ALL = 'ทั้งหมด';
   const CAT_KEY = 'adminBalanceCat';
@@ -1302,6 +1319,6 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   }
   search.addEventListener('input', applyFilter);
 
-  box.replaceChildren(h('div', { class: 'cat-top' }, catBar, search), fold.toc, noHit, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, forgeCard, autoCard, tutCard, fxCard, circleCard, rootCard, audioCard, rigCard, bar);
+  box.replaceChildren(h('div', { class: 'cat-top' }, catBar, search), fold.toc, noHit, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, forgeCard, autoCard, tutCard, fxCard, circleCard, rootCard, audioCard, rigCard, langCard, bar);
   redraw();
 }
