@@ -16,7 +16,7 @@ import {
 import { banMessage } from '../src/shared/api';
 import { ADMIN_CRYSTAL_MAX, HISTORY_PAGE, type AdminStats, type StatsPoint, type StatsRange } from '../src/shared/admin';
 import { SESSION_PAGE_SIZES, SESSION_SEARCH_MAX, SESSION_SORTS, type SessionPage, type SessionQuery, type SessionSort } from '../src/shared/admin';
-import { BAG_SIZE } from '../src/shared/sim/Player';
+import { layOutBag } from '../src/shared/sim/Player';
 import type { AdminShutdownText } from '../src/shared/admin';
 import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../src/shared/net/protocol';
 import { SHUTDOWN_TEXT_KEY } from './db';
@@ -196,7 +196,10 @@ export async function ownerToolsApi(
         const live = world.livePlayer(c.id);
         const data = live ? live.toData() : c.data;
         const base = charRow({ id: c.id, accountId: id, username: name?.username ?? '', guest: row.guest, name: data.name, data }, live);
-        return { ...base, equipment: data.equipment, bag: Array.from({ length: BAG_SIZE }, (_, i) => data.bag[i] ?? null) };
+        // An offline save not laid out in tabs yet is shown as it will be (nothing is written here).
+        const shown = live ? data : structuredClone(data);
+        const bagSlots = layOutBag(shown);
+        return { ...base, equipment: data.equipment, bag: shown.bag, bagSlots };
       });
       const stash = world.liveStash(id) ?? db.savedStash(id);
       const body: AdminAccountDetail = {

@@ -127,7 +127,7 @@ ok(TUT_STEPS.every((s) => state(alt, s) === 'done') && (['merchant', 'keeper', '
   const q = hub.addPlayer(newCharacterData('Binder', 'sword'));
   q.bag.fill(null);
   const entries = rollAttach(tutTurnInReward('shop', codeTutorial()), 'sword', 1);
-  ok(putAll(q.bag, entries) && q.bag.filter((e) => isPotion(e) && e.bound).length === 2, 'the claimed shop reward: two bound potion stacks');
+  ok(putAll(q.bag, entries, q.bagSlots) && q.bag.filter((e) => isPotion(e) && e.bound).length === 2, 'the claimed shop reward: two bound potion stacks');
   ok(q.addPotions('hp', 's', 3) && q.bag.filter((e) => isPotion(e) && e.potion === 'hp' && e.size === 's').length === 2, 'bought potions go to their own stack');
   ok(q.potionCount('hp', 's') === 13, 'both count for drinking');
   const b = q.bag.find((e): e is PotionStack => isPotion(e) && !!e.bound)!;

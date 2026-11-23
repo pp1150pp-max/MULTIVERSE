@@ -15,6 +15,7 @@ import { WaveRooms, type WaveExit } from './waveRooms';
 import { PORTAL_RANGE } from '../src/shared/sim/terrain';
 import { cleanAutoSettings, roundBuffs, SORT_KEYS, type LootFilter, type Player } from '../src/shared/sim/Player';
 import { applyBalance, currentBalance, currentBalanceTuning, type BalanceTuning } from '../src/shared/balance';
+import { BAG_TABS, nextExpand, TAB_NAME, type BagTab } from '../src/shared/bagTabs';
 import { upgradeItem } from '../src/shared/data/items';
 import { POTION_SIZES } from '../src/shared/data/potions';
 import { REROLL_KINDS } from '../src/shared/data/reroll';
@@ -93,7 +94,7 @@ const FRIEND_QUIET_MS = 60_000;
  * party actions are fine.
  */
 const TRADE_LOCKED = new Set([
-  'equip', 'unequip', 'drop', 'buy', 'move', 'sort', 'buyBack', 'sell', 'split', 'sellRarity', 'enhance', 'reroll',
+  'equip', 'unequip', 'drop', 'buy', 'move', 'sort', 'bagExpand', 'buyBack', 'sell', 'split', 'sellRarity', 'enhance', 'reroll',
   'stashPut', 'stashTake', 'stashMove', 'stashSort', 'stashBuy', 'stashGold', 'stashSplit',
   'mktSearch', 'mktMine', 'mktPrice', 'mktList', 'mktCancel', 'mktBuy', 'mktClaim',
   'mailList', 'mailRead', 'mailReadAll', 'mailClaim', 'mailDelete', 'mailDeleteRead', 'roomOpen', 'buyPhoenix', 'tutAccept',
@@ -1522,6 +1523,16 @@ export class GameWorld {
       case 'stashBuy':
         if (sim.stashBuyRow(p)) this.save(s);
         break;
+      case 'bagExpand': {
+        // Trade-locked (TRADE_LOCKED): growing the gear tab moves the usable slots an offer points at.
+        const tab = BAG_TABS.find((x) => x === m.tab);
+        const price = num(m.price, -1);
+        if (!tab || !Number.isInteger(price) || price < 0) break;
+        if (m.pay === 'gold') {
+          if (sim.bagExpandGold(p, tab, price)) this.save(s);
+        } else if (m.pay === 'crystal') this.bagExpandCrystal(s, tab, price);
+        break;
+      }
       case 'stashGold': {
         const amount = num(m.amount);
         if (Number.isInteger(amount) && amount !== 0 && Math.abs(amount) <= 1e9 && sim.stashGold(p, amount)) this.save(s);
@@ -2368,7 +2379,7 @@ export class GameWorld {
     if (late) s.slowSnapAt = now;
     const p = s.player;
     const near = (o: { x: number; z: number }) => Math.hypot(o.x - p.x, o.z - p.z) <= INTEREST_RADIUS;
-    const inv = JSON.stringify([p.equipment, p.bag, p.buyback]);
+    const inv = JSON.stringify([p.equipment, p.bag, p.buyback, p.bagSlots]);
     const me: PrivateSnap = {
       hp: r2(p.hp), mp: r2(p.mp), exp: p.exp, level: p.level, gold: p.gold,
       cd: p.cd, ...(Object.keys(p.charges).length ? { ch: p.charges } : {}), potCd: r2(p.potCd), restCd: r2(Math.max(0, p.restCd)), castT: p.castT > 0 ? r2(p.castT) : undefined,
@@ -2415,7 +2426,7 @@ export class GameWorld {
     };
     if (inv !== s.lastInv) {
       s.lastInv = inv;
-      me.inv = { equipment: p.equipment, bag: p.bag, buyback: p.buyback };
+      me.inv = { equipment: p.equipment, bag: p.bag, buyback: p.buyback, bagSlots: p.bagSlots };
     }
     const stash = JSON.stringify(p.stash);
     const owned = s.cosOwned.join(',');
@@ -2892,6 +2903,47 @@ export class GameWorld {
   }
 
   /** The top-up settings changed in /admin: everyone gets their state again. */
+  /**
+   * Buys the next slots of a bag tab with the account's crystals (bagTabs.ts nextExpand, off until /admin opens it):
+   * the crystals and the bigger bag are written in one transaction (UPDATE … WHERE crystals >= cost, like cashBuy).
+   */
+  private bagExpandCrystal(s: Session, tab: BagTab, price: number): void {
+    const p = s.player;
+    const say = (text: string) => this.send(s.ws, { t: 'chat', name: '', text });
+    const now = performance.now();
+    if (now - s.lastCashAt < CASH_BUY_MS) return say('กดเร็วเกินไป ลองอีกครั้ง');
+    s.lastCashAt = now;
+    if (s.guest || s.preview) return say('Guest ใช้คริสตัลมิติไม่ได้');
+    const cfg = currentBalance().bagExpand;
+    const next = nextExpand(cfg, p.bagSlots, tab);
+    if (typeof next === 'string') return say(next);
+    if (!cfg.crystal) return say('ขยายช่องด้วยคริสตัลมิติไม่ได้ตอนนี้');
+    if (next.crystal !== price) return say('ราคาเปลี่ยนแล้ว ลองอีกครั้ง');
+    let paid = false;
+    try {
+      this.db.transaction(() => {
+        if (!this.db.crystalsSpend(s.accountId, next.crystal)) return;
+        p.growTab(tab, next.add);
+        paid = true;
+        this.db.writeCharacterAndStash(s.charId, p.toData(), s.accountId, p.stash);
+      });
+    } catch (e) {
+      // Nothing was written: take the new (still empty) slots away again.
+      if (paid) {
+        if (tab === 'gear') p.bag.splice(p.bagSlots.gear - next.add, next.add);
+        else p.bag.splice(p.bag.length - next.add, next.add);
+        p.bagSlots[tab] -= next.add;
+      }
+      console.error('[bag] crystal expand failed', e);
+      return say('ขยายช่องไม่สำเร็จ ลองใหม่อีกครั้ง');
+    }
+    if (!paid) return say(`คริสตัลมิติไม่พอ — ต้องใช้ ${next.crystal.toLocaleString()}`);
+    console.log(`[bag] ${s.username} (${p.name}) ${tab} +${next.add} for ${next.crystal} crystals`);
+    say(`ขยาย${TAB_NAME[tab]}เป็น ${p.bagSlots[tab]} ช่อง (${next.crystal.toLocaleString()} คริสตัลมิติ)`);
+    s.sim.inventoryChanged(p);
+    this.crystalsChanged(s.accountId);
+  }
+
   topupAll(): void {
     for (const s of this.sessions) this.send(s.ws, { t: 'topup', v: this.topup.view(s.accountId, s.guest) });
   }

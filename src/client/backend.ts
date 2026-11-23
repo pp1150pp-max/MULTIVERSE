@@ -23,6 +23,7 @@ import type { PartyFound, PartySnap } from '../shared/party';
 import type { FriendsView } from '../shared/friends';
 import type { ChannelsView } from '../shared/channels';
 import type { ChatLinkRef } from '../shared/chatLinks';
+import type { BagPay, BagTab } from '../shared/bagTabs';
 
 /** What a projectile view needs; the local simulation's Projectile fits this too. */
 export interface ProjectileLike {
@@ -156,6 +157,8 @@ export interface Backend {
   stashMove(from: number, to: number): void;
   stashSort(key: SortKey, desc: boolean): void;
   stashBuyRow(): void;
+  /** Buys the next slots of a bag tab with gold or crystals (`price` as shown). */
+  bagExpand(tab: BagTab, pay: BagPay, price: number): void;
   /** amount > 0 deposits gold, < 0 withdraws it. */
   stashGold(amount: number): void;
 

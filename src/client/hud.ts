@@ -30,6 +30,8 @@ import { COIN_ICON, emptySlotIcon, itemIcon, potionIcon, skillIcon, stoneIcon } 
 import { shutdownCancelled, shutdownWarning, type ShutdownMode } from '../shared/net/protocol';
 import { isTouchMode, onPointerModeChange } from './touch/device';
 import { FashionBag } from './fashionBag';
+import { nextExpand, TAB_NAME, tabAt, tabOf, tabRange, type BagPay, type BagTab } from '../shared/bagTabs';
+import { cashStateNow } from './cashData';
 import { imgUrl } from './img';
 import { $, entryColor, lineHtml, POTION_COLOR, potionTotals, potToggles, readPots, syncPots } from './ui/hudShared';
 import { ForgeWindow } from './ui/forge';
@@ -42,6 +44,8 @@ import { appendLinked, linkedWords, LinkDraft, LinkPopup } from './chatLinks';
 import { resolveLinkRef, type ChatLink, type ChatLinkRef } from '../shared/chatLinks';
 import { CHAT_MAX } from '../shared/net/protocol';
 
+/** Bag slots shown at once (the painted grid). */
+const BAG_PAGE = 30;
 /** Yellow, like the game's level-up lines. */
 const SHUTDOWN_COLOR = '#ffd34a';
 /** How long an owner's announcement banner stays up. */
@@ -98,6 +102,10 @@ export class Hud {
   private invDirty = true;
   /** The fashion page of the bag window (owned cosmetics). */
   private fashion!: FashionBag;
+  /** The page of the bag tab shown (a tab bigger than BAG_PAGE slots, once slots can be bought). */
+  private bagPage = 0;
+  /** The slot purchase settings last drawn (a new object = /admin changed the balance). */
+  private bagExpandSeen: unknown = null;
   private bagOpen = false;
   /** Level the bag was last drawn for (gear above it is marked as locked). */
   private drawnLevel = 0;
@@ -185,7 +193,10 @@ export class Hud {
     $('btn-help').onclick = () => this.toggleHelp();
     $('btn-respawn').onclick = () => g.respawn();
     $('inv-close').onclick = () => this.toggleBag(false);
-    this.fashion = new FashionBag(g, () => this.hideTip());
+    this.fashion = new FashionBag(g, () => this.hideTip(), () => {
+      this.bagPage = 0;
+      this.markInventory();
+    });
     // Fold the bag's left panel away (and back); remembered in this browser only.
     const bagBox = $('inventory');
     const sideBtn = $('inv-side-toggle');
@@ -612,7 +623,10 @@ export class Hud {
           const to = Number(stashCell.dataset.s);
           if (to !== d.i) g.backend.stashMove(d.i, to);
         } else if (cell) {
-          g.backend.stashTake(d.i, Number(cell.dataset.i));
+          // Onto a slot of the other bag tab: take it out to wherever it fits in its own tab instead.
+          const to = Number(cell.dataset.i);
+          const it = g.player.stash.items[d.i]!;
+          g.backend.stashTake(d.i, tabAt(g.player.bagSlots, to) === tabOf(it) ? to : -1);
         } else if (target?.closest('#inventory .inv-window')) {
           g.backend.stashTake(d.i, -1);
         }
@@ -627,7 +641,11 @@ export class Hud {
       if (socket) {
         this.equipByDrag(d.i, socket.dataset.slot as EquipSlot);
       } else if (stashCell) {
-        g.backend.stashPut(d.i, Number(stashCell.dataset.s));
+        // A swap would bring the stash entry back into this bag slot: if it belongs in the other tab, just store.
+        const to = Number(stashCell.dataset.s);
+        const back = g.player.stash.items[to];
+        const swaps = back && !sameStack(item, back) && tabOf(back) !== tabOf(item);
+        g.backend.stashPut(d.i, swaps ? -1 : to);
       } else if (this.stash.isOpen && target?.closest('#stash')) {
         g.backend.stashPut(d.i, -1);
       } else if (shop) {
@@ -659,6 +677,8 @@ export class Hud {
     const to: 'bag' | 'stash' | null = stashCell ? 'stash' : cell ? 'bag' : null;
     const j = stashCell ? Number(stashCell.dataset.s) : cell ? Number(cell.dataset.i) : -1;
     if (!to || (from === to && i === j)) return false;
+    // Stacks only go in the usable tab.
+    if (to === 'bag' && tabAt(this.g.player.bagSlots, j) !== 'use') return false;
     const a = this.dragList(from)[i];
     if (!isStack(a) || a.count < 2) return false;
     const b = this.dragList(to)[j];
@@ -912,6 +932,12 @@ export class Hud {
       this.mmT = 0.1;
       this.drawMinimap();
       this.map.redraw();
+    }
+    // The slot purchase buttons follow /admin at once (a balance update doesn't touch the bag itself).
+    const expand = currentBalance().bagExpand;
+    if (expand !== this.bagExpandSeen) {
+      this.bagExpandSeen = expand;
+      this.invDirty = true;
     }
     if ((this.bagOpen || this.stash.isOpen) && this.invDirty) this.renderInventory();
     if (this.bagOpen) this.fashion.update(this.shop.isOpen || this.stash.isOpen || this.forge.isOpen || this.market.isOpen || this.g.trade.open);
@@ -1296,10 +1322,19 @@ export class Hud {
     const picked = this.market.picked;
     // Things on offer in an open trade stay in the bag but are marked (and the server refuses to move them).
     const offered = this.g.trade.offeredSlots();
-    $('bag-grid').innerHTML = p.bag.map((it, i) => {
+    // Only the tab picked above the slots (กระเป๋า / ประเภทใช้งาน), BAG_PAGE slots a page; `data-i` stays the
+    // slot's place in the whole bag, so dragging, trading, the market and chat links work as before.
+    const tab = this.fashion.bagTab;
+    const [ta, tb] = tabRange(p.bagSlots, tab);
+    const pages = Math.max(1, Math.ceil((tb - ta) / BAG_PAGE));
+    this.bagPage = Math.min(this.bagPage, pages - 1);
+    const from = ta + this.bagPage * BAG_PAGE;
+    $('bag-grid').innerHTML = p.bag.slice(from, Math.min(tb, from + BAG_PAGE)).map((it, k) => {
+      const i = from + k;
       const cell = this.itemCell(it, `data-i="${i}"`, '', i === picked);
       return offered.has(i) ? cell.replace('class="cell ', 'class="cell trade-offered ') : cell;
     }).join('');
+    this.renderBagMore(tab, pages);
     const fmt = (k: StatKey, v: number) =>
       k === 'hpRegen' || k === 'mpRegen' || k === 'cdr' || k === 'buffDur' || k === 'armorPen' ? v.toFixed(1) : String(Math.round(v));
     $('stat-list').innerHTML = STAT_KEYS.map((k) =>
@@ -1320,6 +1355,60 @@ export class Hud {
       : this.shop.isOpen
       ? 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = ขายให้พ่อค้า · คลิกช่องสวมใส่ = ถอด'
       : 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = วางลงพื้น · คลิกช่องสวมใส่ = ถอด · ขายของได้ที่พ่อค้าเท่านั้น';
+  }
+
+  /**
+   * Under the bag slots: the pages of a tab bigger than BAG_PAGE, and the slot purchase buttons (only while
+   * /admin has it on, BalanceTuning.bagExpand). The server checks and charges (Sim.bagExpandGold, world bagExpandCrystal).
+   */
+  private renderBagMore(tab: BagTab, pages: number): void {
+    const box = $('bag-more');
+    const p = this.g.player;
+    const cfg = currentBalance().bagExpand;
+    const next = nextExpand(cfg, p.bagSlots, tab);
+    const parts: HTMLElement[] = [];
+    if (pages > 1) {
+      const prev = document.createElement('button');
+      const nextPage = document.createElement('button');
+      prev.textContent = '◀';
+      nextPage.textContent = '▶';
+      prev.disabled = this.bagPage === 0;
+      nextPage.disabled = this.bagPage >= pages - 1;
+      prev.onclick = () => { this.bagPage--; this.markInventory(); };
+      nextPage.onclick = () => { this.bagPage++; this.markInventory(); };
+      const at = document.createElement('span');
+      at.textContent = `${this.bagPage + 1} / ${pages}`;
+      parts.push(prev, at, nextPage);
+    }
+    if (cfg.on && typeof next !== 'string') {
+      const name = TAB_NAME[tab];
+      const buy = (pay: BagPay, label: string, price: number) => {
+        const b = document.createElement('button');
+        b.className = 'bag-expand';
+        b.textContent = `+${next.add} ช่อง ${label}`;
+        b.title = `ขยาย${name}อีก ${next.add} ช่อง`;
+        b.onclick = () => {
+          const have = pay === 'gold' ? p.gold : cashStateNow().crystals;
+          if (have < price) {
+            this.log(pay === 'gold' ? `ทองไม่พอ — ต้องใช้ ${price.toLocaleString()} G` : `คริสตัลมิติไม่พอ — ต้องใช้ ${price.toLocaleString()}`, '#ff8a6a');
+            return;
+          }
+          this.confirm(
+            `ขยาย${name}อีก ${next.add} ช่อง (${p.bagSlots[tab]} → ${p.bagSlots[tab] + next.add})?<br><small>จ่าย ${label} · เฉพาะตัวละครนี้</small>`,
+            `จ่าย ${label}`,
+            () => {
+              this.g.backend.bagExpand(tab, pay, price);
+              this.markInventory();
+            },
+          );
+        };
+        parts.push(b);
+      };
+      if (cfg.gold) buy('gold', `${next.gold.toLocaleString()} G`, next.gold);
+      if (cfg.crystal && !this.g.backend.guest) buy('crystal', `${next.crystal.toLocaleString()} คริสตัลมิติ`, next.crystal);
+    }
+    box.replaceChildren(...parts);
+    box.classList.toggle('hidden', !parts.length);
   }
 
   /** Fashion bag: true (with a log line) when the merchant window is open and wearing is refused. */

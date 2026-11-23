@@ -54,23 +54,27 @@ const total = (...lists: (BagEntry | null)[][]) =>
       if (near(p, id)) return;
     }
   };
+  // The stacks are in the usable tab (src/shared/bagTabs.ts), from slot U.
+  const U = p.bagSlots.gear;
   const startPots = total(p.bag);
-  ok(sim.splitInBag(p, 0, 5, 3) && total(p.bag) === startPots, 'bag split keeps the total');
-  ok(!sim.splitInBag(p, 0, 1, 1), 'onto a different stack is refused');
-  ok(!sim.splitInBag(p, 0, 5, 5), 'taking all of what is left in the slot is refused');
+  ok(sim.splitInBag(p, U + 0, U + 5, 3) && total(p.bag) === startPots, 'bag split keeps the total');
+  ok(!sim.splitInBag(p, U + 0, U + 1, 1), 'onto a different stack is refused');
+  ok(!sim.splitInBag(p, U + 0, U + 5, 5), 'taking all of what is left in the slot is refused');
 
   stand('keeper');
   const all = () => total(p.bag, p.stash.items);
   const t0 = all();
-  ok(sim.stashSplit(p, 'bag', 5, 'stash', 0, 2) && all() === t0, 'bag to stash part of a stack');
-  ok((p.stash.items[0] as { count: number }).count === 2 && (p.bag[5] as { count: number }).count === 1, 'the right amounts moved');
+  ok(sim.stashSplit(p, 'bag', U + 5, 'stash', 0, 2) && all() === t0, 'bag to stash part of a stack');
+  ok((p.stash.items[0] as { count: number }).count === 2 && (p.bag[U + 5] as { count: number }).count === 1, 'the right amounts moved');
   ok(sim.stashSplit(p, 'stash', 0, 'stash', 4, 1) && all() === t0, 'inside the stash');
-  ok(sim.stashSplit(p, 'bag', 0, 'stash', 4, 2) && all() === t0 && (p.stash.items[4] as { count: number }).count === 3, 'bag onto the same stack in the stash');
-  ok(!sim.stashSplit(p, 'bag', 0, 'nowhere' as 'bag', 3, 1), 'unknown list is refused');
-  ok(!sim.stashSplit(p, 'bag', 1, 'stash', 0, 1), 'a stone onto a potion in the stash is refused');
+  ok(sim.stashSplit(p, 'bag', U + 0, 'stash', 4, 2) && all() === t0 && (p.stash.items[4] as { count: number }).count === 3, 'bag onto the same stack in the stash');
+  ok(!sim.stashSplit(p, 'bag', U + 0, 'nowhere' as 'bag', 3, 1), 'unknown list is refused');
+  ok(!sim.stashSplit(p, 'bag', U + 1, 'stash', 0, 1), 'a stone onto a potion in the stash is refused');
   ok(all() === t0, 'still nothing lost or made');
   stand('merchant');
-  ok(!sim.stashSplit(p, 'bag', 5, 'stash', 9, 1), 'away from the keeper it is refused');
+  ok(!sim.stashSplit(p, 'bag', U + 5, 'stash', 9, 1), 'away from the keeper it is refused');
+
+  ok(!sim.splitInBag(p, U, 3, 1), 'a split into the gear tab is refused');
 
   // selling part of a stack
   const slot = p.bag.findIndex((e) => (e as { potion?: string } | null)?.potion === 'hp');

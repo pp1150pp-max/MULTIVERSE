@@ -5,6 +5,7 @@ import type { ForgeWindow } from './forge';
 import type { ShopWindow } from './shop';
 import type { StashWindow } from './stash';
 import { $ } from './hudShared';
+import { freeSlot } from '../../shared/bagTabs';
 
 /** What the item detail sheet needs from the HUD (tooltips, bag actions). */
 export interface ItemDetailHost {
@@ -114,10 +115,13 @@ export class ItemDetail {
       if (this.w.stash.isOpen) acts.push({ label: 'ฝากเข้าคลัง', run: () => g.backend.stashPut(i, -1) });
       if (this.w.market.isOpen) acts.push({ label: 'ลงขายในตลาด', run: () => this.w.market.bagRightClick(i) });
       if (isStack(entry) && entry.count > 1) {
-        const free = p.bag.findIndex((x) => !x);
+        // An empty slot of the usable tab (it may be on another page of the tab, so a stand-in cell names it).
+        const free = freeSlot(p.bag, p.bagSlots, 'use');
+        const spot = document.createElement('div');
+        spot.dataset.i = String(free);
         acts.push({
-          label: free < 0 ? 'แบ่งกองไม่ได้ — กระเป๋าเต็ม' : 'แบ่งกอง',
-          run: () => this.host.splitDrag('bag', i, $('bag-grid').querySelector<HTMLElement>(`[data-i="${free}"]`), null),
+          label: free < 0 ? 'แบ่งกองไม่ได้ — ช่องประเภทใช้งานเต็ม' : 'แบ่งกอง',
+          run: () => this.host.splitDrag('bag', i, spot, null),
           off: free < 0,
         });
       }

@@ -2,7 +2,8 @@
 // Docs: docs/systems/trade.md. Trades live only in the server's memory; the finished ones go to trade_log.
 import { isBound, isItem, isStack, RARITY_LABEL, sameStack, type BagEntry } from './types';
 import { BOUND_MSG } from './data/stones';
-import { putAll, slotsNeeded } from './mail';
+import { putAll, roomShortText } from './mail';
+import type { BagSlots } from './bagTabs';
 import { entryName } from './data/potions';
 
 /** Bag slots one side may offer. */
@@ -48,6 +49,8 @@ export function makeOffer(bag: (BagEntry | null)[], slot: unknown, n?: unknown):
 export interface SwapSide {
   name: string;
   bag: (BagEntry | null)[];
+  /** The bag's tabs (src/shared/bagTabs.ts): what comes in goes to its own tab. */
+  bagSlots: BagSlots;
   gold: number;
   offers: TradeOffer[];
   offerGold: number;
@@ -100,8 +103,10 @@ export function planSwap(a: SwapSide, b: SwapSide): SwapPlan {
   if (!tb) return { ok: false, who: 'b', msg: `ของที่ ${b.name} เสนอไม่อยู่ในกระเป๋าครบแล้ว` };
   const bagA = ta.rest;
   const bagB = tb.rest;
-  if (!putAll(bagA, tb.taken)) return { ok: false, who: 'a', msg: `กระเป๋าของ ${a.name} ไม่พอ — ต้องมีช่องว่างอย่างน้อย ${slotsNeeded(ta.rest, tb.taken)} ช่อง` };
-  if (!putAll(bagB, ta.taken)) return { ok: false, who: 'b', msg: `กระเป๋าของ ${b.name} ไม่พอ — ต้องมีช่องว่างอย่างน้อย ${slotsNeeded(tb.rest, ta.taken)} ช่อง` };
+  const shortA = roomShortText(ta.rest, tb.taken, a.bagSlots);
+  if (!putAll(bagA, tb.taken, a.bagSlots)) return { ok: false, who: 'a', msg: `กระเป๋าของ ${a.name} ไม่พอ — ต้องมีช่องว่าง ${shortA}` };
+  const shortB = roomShortText(tb.rest, ta.taken, b.bagSlots);
+  if (!putAll(bagB, ta.taken, b.bagSlots)) return { ok: false, who: 'b', msg: `กระเป๋าของ ${b.name} ไม่พอ — ต้องมีช่องว่าง ${shortB}` };
   const taxA = taxOf(a.offerGold);
   const taxB = taxOf(b.offerGold);
   return {

@@ -1,6 +1,7 @@
 // Admin page (/admin): roles, limits and the shapes of the /api/admin requests, shared by the page
 // and the server. The server checks the role and every value on each call; the page is only a view.
 import { isPotion, isStack, isStone, RARITIES, RARITY_LABEL, sameStack, SLOTS, STAT_KEYS, STAT_LABEL, STONE_KINDS, type BagEntry, type PotionKind, type PotionStack, type StoneStack, type ClassId, type EquipSlot, type Item, type Rarity, type SlotId, type StatKey, type StatLine } from './types';
+import { tabRange, type BagSlots } from './bagTabs';
 import type { ShutdownMode } from './net/protocol';
 import type { OrbLook } from './orbLook';
 import type { OrbItem, OrbItems } from './orbItems';
@@ -453,7 +454,9 @@ export interface AdminAccountsResponse {
 /** A character with everything it carries, for the account details. */
 export interface AdminCharDetail extends AdminCharRow {
   equipment: Partial<Record<EquipSlot, Item>>;
+  /** Gear tab then usable tab (see bagSlots). */
   bag: (BagEntry | null)[];
+  bagSlots: BagSlots;
 }
 
 export interface AdminAccountDetail {
@@ -735,13 +738,14 @@ export function adminStack(body: Record<string, unknown>): AdminStack | string {
 export const adminStackName = (s: AdminStack): string => (isPotion(s) ? potionName(s.potion, s.size) : STONE_NAME[s.stone]);
 
 /**
- * Puts up to `n` of this potion/stone into the first `slots` bag slots like a pickup: tops up stacks of the
- * same kind first, then fills empty slots (each slot holds at most a stack's limit). Returns how many went in.
+ * Puts up to `n` of this potion/stone into the bag's usable tab like a pickup: tops up stacks of the same kind
+ * first, then fills empty slots (each slot holds at most a stack's limit). Returns how many went in.
  */
-export function addStackToBag(bag: (BagEntry | null)[], slots: number, kind: AdminStack, n: number): number {
+export function addStackToBag(bag: (BagEntry | null)[], slots: BagSlots, kind: AdminStack, n: number): number {
   const limit = stackLimit(kind);
   let left = n;
-  for (let i = 0; i < slots && left > 0; i++) {
+  const [ua, ub] = tabRange(slots, 'use');
+  for (let i = 0; i < ub && left > 0; i++) {
     const e = bag[i];
     if (e && sameStack(e, kind) && isStack(e) && e.count < limit) {
       const add = Math.min(left, limit - e.count);
@@ -749,7 +753,7 @@ export function addStackToBag(bag: (BagEntry | null)[], slots: number, kind: Adm
       left -= add;
     }
   }
-  for (let i = 0; i < slots && left > 0; i++) {
+  for (let i = ua; i < ub && left > 0; i++) {
     if (bag[i]) continue;
     const add = Math.min(left, limit);
     bag[i] = { ...kind, count: add };

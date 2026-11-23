@@ -4,6 +4,7 @@ import { entryName } from '../../shared/data/potions';
 import { COSMETICS, COS_SLOTS, COS_SLOT_NAME } from '../../shared/data/cosmetics';
 import { registerOrbItems } from '../../shared/orbItems';
 import { equipEntries, itemGrid, listEntries, type ItemCtx } from '../items';
+import { BAG_TABS, TAB_NAME, tabRange } from '../../shared/bagTabs';
 import { isStack, RARITY_COLOR, RARITY_LABEL, type BagEntry, type Item } from '../../shared/types';
 import { h, hooks, api, fmt, className, me, meta, zoneName, view, sheet, setSheet, closeSheet, can, roleLabel, dateOnly, ago, banText } from '../core';
 import { renderSearch, openChar } from './characterEditor';
@@ -285,8 +286,15 @@ export async function openAccount(id: number, note?: { text: string; ok: boolean
         can('charView') ? h('button', { class: 'small', onclick: () => void openChar(c.charId) }, 'แก้ไข') : null),
       h('div', { class: 'sub' }, 'สวมใส่'),
       ictx ? itemGrid(ictx, { place: 'equip', charId: c.charId, cls: c.classId, level: c.level }, equipEntries(c.equipment)) : itemList(eq, 'ไม่ได้สวมอะไร'),
-      h('div', { class: 'sub' }, `กระเป๋า (ว่าง ${c.bagFree} ช่อง)`),
-      ictx ? itemGrid(ictx, { place: 'bag', charId: c.charId, cls: c.classId, level: c.level }, listEntries(c.bag)) : itemList(c.bag, 'กระเป๋าว่าง'),
+      // The two bag tabs (src/shared/bagTabs.ts): gear, then everything that stacks. Keys stay whole-bag slot numbers.
+      ...BAG_TABS.flatMap((t) => {
+        const [a, b] = tabRange(c.bagSlots, t);
+        const part = c.bag.slice(a, b);
+        return [
+          h('div', { class: 'sub' }, `${TAB_NAME[t]} ${b - a} ช่อง (ว่าง ${part.filter((e) => !e).length})`),
+          ictx ? itemGrid(ictx, { place: 'bag', charId: c.charId, cls: c.classId, level: c.level }, part.map((e, k) => ({ key: a + k, e }))) : itemList(part, `${TAB_NAME[t]}ว่าง`),
+        ];
+      }),
       del,
     );
   });

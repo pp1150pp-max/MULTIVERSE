@@ -31,6 +31,7 @@ import { TUT_ACCEPT_GOLD, TUT_COUNT_MAX, TUT_GOLD_MAX, TUT_LINES_MAX, TUT_REWARD
 import type { MailAttachItem } from '../shared/mail';
 import { POTION_SIZES, potionName } from '../shared/data/potions';
 import { STONE_NAME } from '../shared/data/stones';
+import { BAG_EXPAND_FLAG_NAME, BAG_EXPAND_NUMS, BAG_TAB_START } from '../shared/bagTabs';
 
 type Kids = (Node | string | null | undefined | false)[];
 type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, unknown>, ...kids: Kids) => HTMLElementTagNameMap[K];
@@ -832,6 +833,41 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     outs.forEach((fn) => fn());
   };
 
+  // ---------------------------------------------------------- bag tabs + buying slots (src/shared/bagTabs.ts)
+  const bagCard = h('div', { class: 'card' });
+  const drawBag = (): void => {
+    const b = draft.bagExpand;
+    const cb = code.bagExpand;
+    const out = h('div', { class: 'muted' });
+    const refresh = (): void => {
+      // The price of each buy from 30 slots up to the top, as players would see it.
+      const rows: string[] = [];
+      for (let n = BAG_TAB_START, k = 0; n < b.max && k < 30; n += b.step, k++) {
+        const add = Math.min(b.step, b.max - n);
+        rows.push(`${n}→${n + add}: ${Math.round(b.goldBase * b.goldGrow ** k).toLocaleString()} G / ${Math.round(b.crystalBase * b.crystalGrow ** k).toLocaleString()} คริสตัล`);
+      }
+      out.textContent = rows.length ? `ราคาแต่ละครั้ง (ต่อแท็บ): ${rows.join(' · ')}` : 'ขยายไม่ได้ (สูงสุดไม่เกิน 30)';
+      updateSummary();
+    };
+    const flag = (k: 'on' | 'gold' | 'crystal') =>
+      h('label', { title: `ค่าในโค้ด: ${cb[k] ? 'เปิด' : 'ปิด'}` },
+        h('input', { type: 'checkbox', checked: b[k], onchange: (e: Event) => { b[k] = (e.target as HTMLInputElement).checked; refresh(); } }),
+        ` ${BAG_EXPAND_FLAG_NAME[k]}`);
+    const num = (k: keyof typeof BAG_EXPAND_NUMS, step: number) =>
+      h('label', {}, `${BAG_EXPAND_NUMS[k].name} `, numBox(() => b[k], (n) => { b[k] = BAG_EXPAND_NUMS[k].dp ? n : Math.round(n); }, cb[k], ...BAG_EXPAND_NUMS[k].range, step, refresh));
+    bagCard.replaceChildren(
+      h('h2', {}, 'กระเป๋า'),
+      h('div', { class: 'muted' }, 'กระเป๋ามี 2 แท็บ (เจ้าของ 2026-11-23): "กระเป๋า" ของสวมใส่ 30 ช่อง · "ประเภทใช้งาน" ยา หิน กุญแจ ขนนก ม้วน ใบคูณ โทรโข่ง กล่องปริศนา ลูกแก้ว 30 ช่อง · แท็บเต็ม = เก็บ/ซื้อ/รับไม่ได้'),
+      h('div', { class: 'muted' }, 'ขยายช่อง: ปิด = ผู้เล่นไม่เห็นปุ่มและ server ไม่รับ · เปิด = ปุ่มใต้ช่องกระเป๋า ขยายทีละแท็บ ต่อตัวละคร · ครั้งที่ k (เริ่ม 0) ราคา = ราคาครั้งแรก × ตัวคูณ^k · คริสตัลหักใน transaction เดียวกับการเซฟ · Guest จ่ายคริสตัลไม่ได้'),
+      h('div', { class: 'row bal-line' }, flag('on'), flag('gold'), flag('crystal')),
+      h('div', { class: 'row bal-line' }, num('step', 1), num('max', 10)),
+      h('div', { class: 'row bal-line' }, num('goldBase', 1000), num('goldGrow', 0.1)),
+      h('div', { class: 'row bal-line' }, num('crystalBase', 10), num('crystalGrow', 0.1)),
+      out,
+    );
+    refresh();
+  };
+
   // ---------------------------------------------------------- English (docs/systems/i18n.md)
   const langCard = h('div', { class: 'card' });
   const drawLang = (): void => {
@@ -1232,6 +1268,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawMonsters();
     drawExp();
     drawPotions();
+    drawBag();
     drawForge();
     drawLang();
     drawAuto();
@@ -1294,7 +1331,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   const CATS: { name: string; cards: HTMLElement[] }[] = [
     { name: 'อาชีพ', cards: [classCard, regenCard, rootCard, rigCard] },
     { name: 'มอน-บอส', cards: [monsterCard] },
-    { name: 'ไอเทม-ตีบวก-ยา', cards: [affixCard, tierCard, previewCard, potionCard, forgeCard] },
+    { name: 'ไอเทม-ตีบวก-ยา', cards: [affixCard, tierCard, previewCard, potionCard, bagCard, forgeCard] },
     { name: 'Auto Play', cards: [autoCard] },
     { name: 'เอฟเฟกต์-เสียง', cards: [fxCard, circleCard, audioCard] },
     { name: 'ระบบ-อื่นๆ', cards: [expCard, tutCard, langCard] },
@@ -1335,6 +1372,6 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   }
   search.addEventListener('input', applyFilter);
 
-  box.replaceChildren(h('div', { class: 'cat-top' }, catBar, search), fold.toc, noHit, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, forgeCard, autoCard, tutCard, fxCard, circleCard, rootCard, audioCard, rigCard, langCard, bar);
+  box.replaceChildren(h('div', { class: 'cat-top' }, catBar, search), fold.toc, noHit, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, bagCard, forgeCard, autoCard, tutCard, fxCard, circleCard, rootCard, audioCard, rigCard, langCard, bar);
   redraw();
 }

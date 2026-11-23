@@ -90,57 +90,59 @@ const data = newCharacterData('T', 'mage');
 data.level = 20;
 data.bag = [{ stone: 'mystery_box', count: 3 }];
 const p = sim.addPlayer(data);
+/** First slot of the usable tab, where the boxes are (src/shared/bagTabs.ts). */
+const U = p.bagSlots.gear;
 setBoxConfig({ enabled: false });
-ok(sim.openBox(p, 0, false).length === 0 && (p.bag[0] as StoneStack).count === 3, 'box switched off: nothing opens');
+ok(sim.openBox(p, U, false).length === 0 && (p.bag[U] as StoneStack).count === 3, 'box switched off: nothing opens');
 setBoxConfig({ enabled: true, rows: { orb: { pct: 100 } } });
-const ann = sim.openBox(p, 0, false, mulberry32(1));
-ok((p.bag[0] as StoneStack).count === 2, 'opening one uses one box');
+const ann = sim.openBox(p, U, false, mulberry32(1));
+ok((p.bag[U] as StoneStack).count === 2, 'opening one uses one box');
 const orbItem = p.bag.find((e) => isStone(e) && e.stone === 'orb_1') as StoneStack | undefined;
 ok(!!orbItem && ann.length === 1 && ann[0] === STONE_NAME.orb_1 && STONE_NAME.orb_1 === 'ลูกแก้ว Prism Star', 'an orb prize: the orb item in the bag, announced');
 ok(marketSellable(orbItem) && marketKind(orbItem!) === 'cosmetic', 'orb items go on the market under ของแต่งตัว');
 setBoxConfig({ enabled: true, rows: Object.fromEntries(BOX_ROWS.map((x) => [x.id, { on: x.id === 'gear_legendary' }])) });
 sim.time += 1; // past the opening cooldown
-sim.openBox(p, 0, true, mulberry32(2));
+sim.openBox(p, U, true, mulberry32(2));
 ok(!p.bag.some((e) => isStone(e) && e.stone === 'mystery_box') && p.bag.filter((e) => isItem(e) && e.rarity === 'legendary' && e.level === 20).length === 2, 'right click: the whole stack opens, gear at the opener\'s level');
 p.bag.fill(null);
-p.bag[0] = { stone: 'mystery_box', count: 2 };
-for (let i = 1; i < p.bag.length; i++) p.bag[i] = { potion: 'hp', size: 's', count: 10 };
+p.bag[U] = { stone: 'mystery_box', count: 2 };
+for (let i = 0; i < p.bag.length; i++) if (i !== U) p.bag[i] = { potion: 'hp', size: 's', count: 10 };
 sim.time += 1;
-sim.openBox(p, 0, true);
-ok((p.bag[0] as StoneStack).count === 2, 'full bag: nothing opens, boxes kept');
+sim.openBox(p, U, true);
+ok((p.bag[U] as StoneStack).count === 2, 'full bag: nothing opens, boxes kept');
 
 // Owner 2026-11-23: one opening per 0.2 s (server-side, in the Sim), boxes stack to 100.
 ok(BOX_OPEN_COOLDOWN === 0.2 && MYSTERY_BOX_STACK === 100, 'box constants: 0.2 s, 100 per slot');
 setBoxConfig({ enabled: true, rows: Object.fromEntries(BOX_ROWS.map((x) => [x.id, { on: x.id === 'gold_small' }])) });
 p.bag.fill(null);
-p.bag[0] = { stone: 'mystery_box', count: 5 };
+p.bag[U] = { stone: 'mystery_box', count: 5 };
 sim.time += 10;
-sim.openBox(p, 0, false, mulberry32(3));
-ok((p.bag[0] as StoneStack).count === 4, 'cooldown: first opening works');
-sim.openBox(p, 0, false, mulberry32(3));
-sim.openBox(p, 0, true, mulberry32(3));
-ok((p.bag[0] as StoneStack).count === 4, 'cooldown: openings within 0.2 s are ignored (one or the whole stack)');
+sim.openBox(p, U, false, mulberry32(3));
+ok((p.bag[U] as StoneStack).count === 4, 'cooldown: first opening works');
+sim.openBox(p, U, false, mulberry32(3));
+sim.openBox(p, U, true, mulberry32(3));
+ok((p.bag[U] as StoneStack).count === 4, 'cooldown: openings within 0.2 s are ignored (one or the whole stack)');
 sim.time += 0.1;
-sim.openBox(p, 0, false, mulberry32(3));
-ok((p.bag[0] as StoneStack).count === 4, 'cooldown: still ignored after 0.1 s');
+sim.openBox(p, U, false, mulberry32(3));
+ok((p.bag[U] as StoneStack).count === 4, 'cooldown: still ignored after 0.1 s');
 sim.time += 0.11;
-sim.openBox(p, 0, false, mulberry32(3));
-ok((p.bag[0] as StoneStack).count === 3, 'cooldown: opens again after 0.2 s');
+sim.openBox(p, U, false, mulberry32(3));
+ok((p.bag[U] as StoneStack).count === 3, 'cooldown: opens again after 0.2 s');
 p.bag.fill(null);
-ok(p.addStones('mystery_box', 250) && (p.bag[0] as StoneStack).count === 100 && (p.bag[1] as StoneStack).count === 100 && (p.bag[2] as StoneStack).count === 50, 'boxes stack to 100 per slot');
-ok(p.stoneRoom('mystery_box') === 100 * (p.bag.length - 3) + 50, 'box room counts 100 per slot');
+ok(p.addStones('mystery_box', 250) && (p.bag[U] as StoneStack).count === 100 && (p.bag[U + 1] as StoneStack).count === 100 && (p.bag[U + 2] as StoneStack).count === 50, 'boxes stack to 100 per slot');
+ok(p.stoneRoom('mystery_box') === 100 * (p.bagSlots.use - 3) + 50, 'box room counts 100 per free usable slot');
 p.bag.fill(null);
 p.addStones('reroll_stat', 25);
-ok((p.bag[0] as StoneStack).count === STONE_STACK, 'other stones still stack to 10');
+ok((p.bag[U] as StoneStack).count === STONE_STACK, 'other stones still stack to 10');
 
 // Orb item to the account.
 p.bag.fill(null);
-p.bag[0] = { stone: 'orb_1', count: 2 };
+p.bag[U] = { stone: 'orb_1', count: 2 };
 const owned = new Set<string>();
-sim.useOrbItem(p, 0, (id) => owned.has(id), (id) => (owned.add(id), true));
-ok(owned.has('orb_1') && (p.bag[0] as StoneStack).count === 1, 'using an orb item gives the orb to the account');
-sim.useOrbItem(p, 0, (id) => owned.has(id), () => true);
-ok((p.bag[0] as StoneStack).count === 1, 'already owned: the item is kept');
+sim.useOrbItem(p, U, (id) => owned.has(id), (id) => (owned.add(id), true));
+ok(owned.has('orb_1') && (p.bag[U] as StoneStack).count === 1, 'using an orb item gives the orb to the account');
+sim.useOrbItem(p, U, (id) => owned.has(id), () => true);
+ok((p.bag[U] as StoneStack).count === 1, 'already owned: the item is kept');
 
 // Saves, stash and sorting keep orb items.
 ok(JSON.stringify(cleanStash({ size: 30, items: [{ stone: 'orb_1', count: 2 }], gold: 0 }).items[0]) === '{"stone":"orb_1","count":2}', 'stash keeps orb items');
