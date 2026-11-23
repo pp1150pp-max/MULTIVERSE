@@ -2202,7 +2202,9 @@ export class GameWorld {
           continue;
         }
         if (ev.t === 'announce') {
-          this.broadcastSystem(ev.text);
+          // A banner (an enhancement at forge bannerFrom or higher) also writes its own chat line on each screen.
+          if (ev.banner) for (const o of this.sessions) this.send(o.ws, { t: 'announce', text: ev.text, from: '', direct: false, box: true, head: ev.banner });
+          else this.broadcastSystem(ev.text);
           continue;
         }
         if (ev.t === 'stash') continue; // saved by onAction; the snapshot carries the new stash

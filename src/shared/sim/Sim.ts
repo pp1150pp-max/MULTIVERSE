@@ -9,7 +9,7 @@ import { REROLL_NAME, rerollCost, type RerollKind } from '../data/reroll';
 import { inBossArena, lairExitSpot, LAVA_BURN, LAVA_TICK } from '../data/zones';
 import type { Hazard } from './volcanoHeart';
 import {
-  announceFrom, dropsOnFail, forgeCd, enhanceCost, itemName, maxPlus, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
+  announceFrom, bannerFrom, dropsOnFail, forgeCd, enhanceCost, itemName, maxPlus, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
 } from '../data/enhance';
 import { dropPotionSize, entryName, potionName, POTION_STACK, potionPrice, stackLimit } from '../data/potions';
 import { BOSS_KEY, BOSS_QUEST_KEY, BOSS_STONE_CHANCE, BOUND_MSG, BUFF_LABEL, BUFF_MAX, BUFF_MULT, BUFF_TIME, fmtBuff, PHOENIX_PRICE, QUEST_KILLS, REVIVES_PER_KEY, STONE_STACK, KEY_DROP_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, RETURN_CAST, RETURN_SCROLL_PRICE, STONE_COLOR, STONE_NAME } from '../data/stones';
@@ -1882,8 +1882,9 @@ export class Sim {
       this.fx('effect', 'enhance_ok', p.x, p.z, 0, 1.3);
       this.fx('burst', p.x, 1.2, p.z, '#ffd34a', 14, 3);
       this.text(p.x, p.topY + 0.6, p.z, `+${plusOf(item)} สำเร็จ!`, 'enh', 1.6);
-      if (plusOf(item) >= announceFrom()) {
-        this.events.push({ t: 'announce', text: `🔨 ${p.name} ตี${SLOT_LABEL[item.slot]} ${item.name} เป็น +${plusOf(item)} สำเร็จ!` });
+      if (plusOf(item) >= announceFrom() || plusOf(item) >= bannerFrom()) {
+        const text = `🔨 ${p.name} ตี${SLOT_LABEL[item.slot]} ${item.name} เป็น +${plusOf(item)} สำเร็จ!`;
+        this.events.push({ t: 'announce', text, ...(plusOf(item) >= bannerFrom() ? { banner: '🔨 ตีบวก' } : {}) });
       }
     } else {
       const why = result === 'drop' ? ` ระดับลดเหลือ +${plusOf(item)}` : result === 'saved' ? ' (หินกันระดับลดทำงาน ระดับเท่าเดิม)' : '';
