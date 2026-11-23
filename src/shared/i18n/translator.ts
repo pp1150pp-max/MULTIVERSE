@@ -19,17 +19,23 @@ const PLACEHOLDER = /\{(\w+)\}/g;
 
 interface Template {
   re: RegExp;
-  /** The placeholder names in the order they appear in the Thai. */
-  names: string[];
+  /** Per capture group, the placeholder names it holds: one, or several written side by side ("{0}{1}"). */
+  groups: string[][];
+  /** Per group: written straight against Thai letters ("{0}แล้ว"), so it could swallow a whole Thai sentence. */
+  glued: boolean[];
   en: string;
-  /** Characters of fixed Thai text: the more literal templates are tried first. */
+  /** Thai letters of fixed text: the more literal templates are tried first. */
   weight: number;
 }
+
+const thaiCount = (s: string): number => s.match(/[฀-๿]/g)?.length ?? 0;
+/** `en` with the white space `raw` had around it. */
+const keepSpaces = (raw: string, en: string): string => raw.match(/^\s*/)![0] + en + raw.match(/\s*$/)![0];
 
 /**
  * Turns Thai into English with one dictionary. A key may hold placeholders (`{0}`, `{name}`): it then
  * matches any text of that shape, and each value it caught is itself looked up again (so an item or
- * monster name inside a server notice is English too) unless the key is in `keep`.
+ * monster name inside a server notice is English too).
  */
 export class Translator {
   private readonly exact = new Map<string, string>();
@@ -47,18 +53,29 @@ export class Translator {
       const fixed = key.replace(PLACEHOLDER, '');
       // A key that is all placeholders (or has no Thai left) would catch anything: never a template.
       if (!hasThai(fixed)) continue;
-      const names: string[] = [];
-      const src = key
-        .split(PLACEHOLDER)
-        .map((part, i) => {
-          if (i % 2 === 1) {
-            names.push(part);
-            return '(.+?)';
-          }
-          return part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        })
-        .join('');
-      this.templates.push({ re: new RegExp(`^${src}$`, 's'), names, en, weight: fixed.length });
+      // Placeholders side by side ("{0}{1}") can't be told apart by a pattern: one group, cut later (cut()).
+      const groups: string[][] = [];
+      const glued: boolean[] = [];
+      const lits = key.split(PLACEHOLDER);
+      const thaiEdge = (s: string | undefined, end: boolean): boolean => !!s && /[฀-๿]/.test(end ? s.slice(-1) : s.slice(0, 1));
+      let src = '';
+      key.split(PLACEHOLDER).forEach((part, i) => {
+        if (i % 2 === 0) {
+          src += part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          return;
+        }
+        const prevLiteral = lits[i - 1];
+        const nextGlued = thaiEdge(lits[i + 1], false);
+        if (i > 1 && prevLiteral === '') {
+          groups[groups.length - 1]!.push(part);
+          glued[glued.length - 1] ||= nextGlued;
+        } else {
+          groups.push([part]);
+          glued.push(thaiEdge(prevLiteral, true) || nextGlued);
+          src += '(.*?)';
+        }
+      });
+      this.templates.push({ re: new RegExp(`^${src}$`, 's'), groups, glued, en, weight: thaiCount(fixed) });
     }
     this.templates.sort((a, b) => b.weight - a.weight);
   }
@@ -96,15 +113,49 @@ export class Translator {
       const m = t.re.exec(key);
       if (!m) continue;
       const vals = new Map<string, string>();
-      t.names.forEach((name, i) => {
-        const v = m[i + 1];
-        const en = hasThai(v) ? this.lookup(normKey(v), depth + 1) : null;
-        // Keep the spaces the caught part had around it ("{0} คน{1}" with {1} = " · กด Enter…").
-        vals.set(name, en === null ? v : v.match(/^\s*/)![0] + en + v.match(/\s*$/)![0]);
+      let unknown = 0;
+      t.groups.forEach((names, g) => {
+        const v = m[g + 1] ?? '';
+        if (names.length === 1) {
+          const en = hasThai(v) ? this.lookup(normKey(v), depth + 1) : null;
+          if (en === null && t.glued[g]) unknown += thaiCount(v);
+          // Keep the spaces the caught part had around it ("{0} คน{1}" with {1} = " · กด Enter…").
+          vals.set(names[0]!, en === null ? v : keepSpaces(v, en));
+          return;
+        }
+        const parts = this.cut(v, names.length);
+        if (!parts && t.glued[g]) unknown += thaiCount(v);
+        names.forEach((name, i) => vals.set(name, parts ? parts[i]! : i === 0 ? v : ''));
       });
+      // A short template ("{0}แล้ว") must not swallow a longer Thai text it doesn't know: that stays Thai instead.
+      if (unknown > t.weight) continue;
       return t.en.replace(PLACEHOLDER, (all, name: string) => vals.get(name) ?? all);
     }
     return depth === 0 ? this.byPieces(key) : null;
+  }
+
+  /**
+   * Cuts what "{0}{1}…" caught into `n` texts that each have English (or no Thai), e.g.
+   * "ขายทั้งช่อง · Shift+ลาก: แบ่งกอง" → ["Sell the stack", " · Shift+drag: split the stack"]. Null when no cut works.
+   */
+  private cut(v: string, n: number): string[] | null {
+    const one = (s: string): string | null => {
+      if (!hasThai(s)) return s;
+      const en = this.exact.get(normKey(s));
+      return en === undefined ? null : keepSpaces(s, en);
+    };
+    if (n === 1) {
+      const e = one(v);
+      return e === null ? null : [e];
+    }
+    if (v.length > 160) return null;
+    for (let i = 0; i <= v.length; i++) {
+      const left = one(v.slice(0, i));
+      if (left === null) continue;
+      const rest = this.cut(v.slice(i), n - 1);
+      if (rest) return [left, ...rest];
+    }
+    return null;
   }
 
   /**

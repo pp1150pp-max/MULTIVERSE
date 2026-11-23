@@ -520,7 +520,7 @@ class OnlineMenu {
       slot.append(facePortrait(c.classId, 80));
       const armed = this.armedDelete?.id === c.id && Date.now() - this.armedDelete.t < 3000;
       slot.insertAdjacentHTML('beforeend',
-        `<div class="cname">${escapeHtml(c.name)}</div><div class="cmeta">Lv.${c.level} ${CLASSES[c.classId].name}</div>` +
+        `<div class="cname" translate="no">${escapeHtml(c.name)}</div><div class="cmeta">Lv.${c.level} ${CLASSES[c.classId].name}</div>` +
         `<button class="cdel${armed ? ' armed' : ''}" data-del="${c.id}" title="ลบตัวละคร">${armed ? 'กดอีกครั้งเพื่อลบ' : '✕'}</button>`);
       list.append(slot);
     }

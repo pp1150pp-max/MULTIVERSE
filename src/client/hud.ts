@@ -1544,6 +1544,8 @@ export class Hud {
       $('hud').append(el);
     }
     el.textContent = text;
+    // The owner's own wording from /admin is never translated; the game's default line is.
+    el.translate = !(typeof serverText === 'string' && serverText);
     this.log(text, SHUTDOWN_COLOR);
   }
 
@@ -1580,6 +1582,7 @@ export class Hud {
     const sign = document.createElement('div');
     sign.className = 'announce-from';
     sign.textContent = `— ${from}`;
+    sign.translate = false;
     el.append(head, body, sign);
     $('hud').append(el);
     setTimeout(() => el.remove(), ANNOUNCE_MS);

@@ -44,12 +44,14 @@ const englishAllowed = (): boolean => read(ALLOWED_KEY) !== '0';
 export const LANG: Lang = englishAllowed() ? (langPref() ?? browserLang()) : 'th';
 
 let translator: Translator | null = null;
+/** True once startTranslator() ran: only the game page (main.ts) translates; /admin and the tool pages stay Thai. */
+let started = false;
 const tr = (): Translator => (translator ??= new Translator(englishDict()));
 
 /** A Thai text in the page's language (for text that never reaches the page as text: canvas, WebGL labels). */
 export function t(th: string, vars?: Record<string, string | number> | (string | number)[]): string {
   const s = fill(th, vars);
-  return LANG === 'en' ? tr().tr(s) : s;
+  return started ? tr().tr(s) : s;
 }
 
 // ------------------------------------------------------------------ English mode: the page translator
@@ -59,6 +61,18 @@ const SKIP = '[translate="no"], script, style, textarea, [contenteditable="true"
 
 /** Thai still on screen with no English (deduplicated): `__i18nMisses()` in the console lists them. */
 const misses = new Set<string>();
+
+/** Same Thai, other English inside one window (the Graphics window's "ปิด" is Off, not Close). */
+const CONTEXT: [selector: string, dict: Record<string, string>][] = [['#gfx-panel', { 'ปิด': 'Off' }]];
+
+/** English for a text node or attribute of `el`, or null. */
+function english(el: Element | null, text: string): string | null {
+  for (const [sel, d] of CONTEXT) {
+    const en = el?.closest(sel) ? d[text.trim()] : undefined;
+    if (en !== undefined) return text.replace(text.trim(), en);
+  }
+  return tr().translate(text);
+}
 
 function miss(text: string): void {
   const k = text.trim();
@@ -70,9 +84,10 @@ function miss(text: string): void {
 function translateText(n: Text): void {
   const v = n.data;
   if (!hasThai(v) || n.parentElement?.closest(SKIP)) return;
-  const out = tr().translate(v);
-  if (out === null) miss(v);
-  else if (out !== v) n.data = out;
+  const out = english(n.parentElement, v);
+  // Thai still showing (no English, or only part of it) is listed for __i18nMisses().
+  if (out === null || hasThai(out)) miss(v);
+  if (out !== null && out !== v) n.data = out;
 }
 
 function translateAttrs(el: Element): void {
@@ -80,9 +95,9 @@ function translateAttrs(el: Element): void {
   for (const a of ATTRS) {
     const v = el.getAttribute(a);
     if (!v || !hasThai(v)) continue;
-    const out = tr().translate(v);
-    if (out === null) miss(v);
-    else if (out !== v) el.setAttribute(a, out);
+    const out = english(el, v);
+    if (out === null || hasThai(out)) miss(v);
+    if (out !== null && out !== v) el.setAttribute(a, out);
   }
   if (el instanceof HTMLInputElement && (el.type === 'button' || el.type === 'submit') && hasThai(el.value)) {
     el.value = tr().tr(el.value);
@@ -103,8 +118,6 @@ function walk(root: Node): void {
     else translateAttrs(n as Element);
   }
 }
-
-let started = false;
 
 /** English mode only: translates the page now and everything put on it from now on. Call once, first thing. */
 export function startTranslator(): void {

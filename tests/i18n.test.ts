@@ -54,4 +54,10 @@ ok(real.translate('กลับเข้าเกม') === 'Resume', 'real dicti
 ok(real.translate('Bob เข้าร่วมปาร์ตี้') === 'Bob joined the party', 'real dictionary: a server notice');
 ok(real.translate('ขาย ดาบเหล็ก ได้ 15 G') === 'Sold ดาบเหล็ก for 15 G', 'real dictionary: unknown item name stays');
 
+// Short templates never swallow an unknown Thai sentence; side-by-side placeholders are cut by what has English.
+ok(real.translate('ส่งของเรียบร้อยแล้ว') === null, "'{0}แล้ว' does not swallow an unknown sentence");
+const hint = real.translate('คลิกซ้าย: ใช้กับปุ่มด่วน · คลิกขวา: ขายทั้งช่อง · Shift+ลาก: แบ่งกอง');
+ok(hint === 'Left-click: set as quick key · Right-click: Sell the stack · Shift+drag: split the stack', `"{0}{1}" cut right (${hint})`);
+ok(real.translate('สมชาย เข้าร่วมปาร์ตี้') === 'สมชาย joined the party', 'a Thai player name still fits a template');
+
 finish('i18n');
