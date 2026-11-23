@@ -363,6 +363,13 @@ const screenH = { value: 1080 };
 /** Paper orbs' accent grey and darkest shading (/admin → ปรับสมดุล → เอฟเฟกต์สกิล, fxLayer.paperOrbLight / paperOrbShade). */
 const orbLight = { value: 0.95 };
 const orbShade = { value: 0.15 };
+/**
+ * How far (world units) an orb's light is moved towards the camera (fxLayer.enhOrbGlowFront, − = away). Never 0: at the
+ * orb's own depth, rounding let the light win on one frame and lose on the next, so it blinked over the whole orb
+ * (measured 2026-11-23: ~120 one-frame jumps a second at +15, ~3 with this).
+ */
+const GLOW_NEAR = 0.02;
+const glowNear = { value: GLOW_NEAR };
 const bufSize = new THREE.Vector2();
 
 // gl_PointSize from a world size: projectionMatrix[1][1] = 2 / (view height in world units).
@@ -422,7 +429,7 @@ function materials(): [THREE.ShaderMaterial, THREE.ShaderMaterial] {
       }`,
   });
   glowMat ??= new THREE.ShaderMaterial({
-    uniforms: { map: { value: glowAtlas() }, uScreenH: screenH },
+    uniforms: { map: { value: glowAtlas() }, uScreenH: screenH, uNear: glowNear },
     vertexShader: `
       attribute vec3 color; attribute float size; attribute float alpha; attribute float kind;
       uniform float uScreenH;
@@ -441,6 +448,7 @@ function materials(): [THREE.ShaderMaterial, THREE.ShaderMaterial] {
       }`,
     fragmentShader: `
       uniform sampler2D map;
+      uniform float uNear;
       varying vec3 vColor; varying float vAlpha; varying float vKind;
       varying float vWorldY; varying float vViewZ; varying float vSize; varying float vUpY; varying float vCamY; varying vec2 vDepthK;
       void main() {
@@ -452,7 +460,7 @@ function materials(): [THREE.ShaderMaterial, THREE.ShaderMaterial] {
         // the light of orbs behind it.
         float y = vWorldY + vUpY * (0.5 - gl_PointCoord.y) * vSize;
         float z = vViewZ + (y < 0.0 ? (0.02 - y) / vCamY : 0.0);
-        gl_FragDepth = (vDepthK.x * z + vDepthK.y) * 0.5 + 0.5;
+        gl_FragDepth = (vDepthK.x * (z + uNear) + vDepthK.y) * 0.5 + 0.5;
         gl_FragColor = vec4(vColor, a);
       }`,
     transparent: true,
@@ -478,6 +486,7 @@ function points(cap: number, mat: THREE.ShaderMaterial, attrs: Record<string, nu
     const fl = currentBalance().fxLayer;
     orbLight.value = fl.paperOrbLight;
     orbShade.value = fl.paperOrbShade;
+    glowNear.value = fl.enhOrbGlowFront ? GLOW_NEAR : -GLOW_NEAR;
   };
   return pts;
 }
