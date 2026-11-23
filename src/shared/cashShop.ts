@@ -11,6 +11,7 @@ import { cosPrice, type CosShop } from './cosShop';
 import { STONE_NAME } from './data/stones';
 import type { StoneKind } from './types';
 import type { OrbItem } from './orbItems';
+import { VIP_DAYS_MAX } from './vip';
 
 export const CASH_SETTING = 'cash_shop';
 export const CURRENCY = 'คริสตัลมิติ';
@@ -67,15 +68,25 @@ export const packageKey = (p: { baht: number; crystals: number }): string => `${
 /** Sale price for `pct` percent off `full` (rounded down, at least 1, below the full price). */
 export const pctPrice = (full: number, pct: number): number => Math.max(1, Math.min(full - 1, Math.floor((full * (100 - pct)) / 100)));
 
+/**
+ * A VIP package (owner 2026-11-23, src/shared/vip.ts): `days` more VIP for `price` crystals. Set in /admin;
+ * none = VIP is not sold. Bought as item id `vip:<days>` (days are unique), once per purchase.
+ */
+export interface VipPackage { days: number; price: number }
+export const VIP_PACKAGES_MAX = 10;
+export const vipItemId = (days: number): string => `vip:${days}`;
+
 export interface CashShopCfg {
   /** Players may buy (otherwise look only). */
   open: boolean;
   /** Item id (`cos:<id>` / `stone:<kind>`) → its settings. */
   items: Record<string, CashItemCfg>;
   packages: CashPackage[];
+  /** VIP packages, shortest first (empty = VIP not sold). */
+  vip: VipPackage[];
 }
 
-export const emptyCashShop = (): CashShopCfg => ({ open: false, items: {}, packages: [] });
+export const emptyCashShop = (): CashShopCfg => ({ open: false, items: {}, packages: [], vip: [] });
 
 export const cosItemId = (id: string): string => `cos:${id}`;
 export const stoneItemId = (k: CashStone): string => `stone:${k}`;
@@ -93,6 +104,8 @@ export function cashRef(id: string): { kind: 'cos'; ref: string } | { kind: 'sto
 }
 
 export function cashItemName(id: string): string {
+  const vip = /^vip:([0-9]+)$/.exec(id);
+  if (vip) return `VIP ${vip[1]} วัน`;
   const r = cashRef(id);
   if (!r) return id;
   return r.kind === 'cos' ? cosById(r.ref)!.name : STONE_NAME[r.ref];
@@ -114,7 +127,7 @@ export function checkCashShop(v: unknown, strict: boolean, cosShop: CosShop): Ch
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าแคชช็อปไม่ถูกต้อง' } : { value: out };
   const o = v as Record<string, unknown>;
   if (strict) {
-    const extra = Object.keys(o).find((k) => !['open', 'items', 'packages'].includes(k));
+    const extra = Object.keys(o).find((k) => !['open', 'items', 'packages', 'vip'].includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 20)}"` };
   }
   if (o.open !== undefined) {
@@ -150,6 +163,22 @@ export function checkCashShop(v: unknown, strict: boolean, cosShop: CosShop): Ch
       return { error: `แพ็กเกจที่ ${i + 1}: คริสตัล 1–${CASH_PRICE_MAX.toLocaleString('en-US')} โบนัส/ครั้งแรก 0 ขึ้นไป ราคา 1–${CASH_BAHT_MAX.toLocaleString('en-US')} บาท (จำนวนเต็ม)` };
     }
   }
+  const vp = Array.isArray(o.vip) ? o.vip : [];
+  if (strict && o.vip !== undefined && !Array.isArray(o.vip)) return { error: 'แพ็ก VIP ไม่ถูกต้อง' };
+  if (strict && vp.length > VIP_PACKAGES_MAX) return { error: `แพ็ก VIP มีได้ไม่เกิน ${VIP_PACKAGES_MAX} แบบ` };
+  for (const [i, p] of vp.slice(0, VIP_PACKAGES_MAX).entries()) {
+    const x = (p && typeof p === 'object' ? p : {}) as Record<string, unknown>;
+    if (isInt(x.days, 1, VIP_DAYS_MAX) && isInt(x.price, CASH_PRICE_MIN, CASH_PRICE_MAX) && !(strict && Object.keys(x).some((k) => !['days', 'price'].includes(k)))) {
+      if (out.vip.some((q) => q.days === x.days)) {
+        if (strict) return { error: `แพ็ก VIP ที่ ${i + 1}: จำนวนวันซ้ำกับแพ็กอื่น` };
+        continue;
+      }
+      out.vip.push({ days: x.days, price: x.price });
+    } else if (strict) {
+      return { error: `แพ็ก VIP ที่ ${i + 1}: จำนวนวัน 1–${VIP_DAYS_MAX} ราคา ${CASH_PRICE_MIN}–${CASH_PRICE_MAX.toLocaleString('en-US')} คริสตัล (จำนวนเต็ม)` };
+    }
+  }
+  out.vip.sort((a, b) => a.days - b.days);
   return { value: out };
 }
 
@@ -239,8 +268,8 @@ export interface CashEntry {
   fromBox?: true;
 }
 
-/** What players are sent: the items on sale or coming (not ended), and the packages. */
-export interface CashCatalog { open: boolean; items: CashEntry[]; packages: CashPackage[] }
+/** What players are sent: the items on sale or coming (not ended), the top-up packages and the VIP packages. */
+export interface CashCatalog { open: boolean; items: CashEntry[]; packages: CashPackage[]; vip: VipPackage[] }
 
 /**
  * The catalogue at time `now`: switched-off items, ended ones, and cosmetics that are hidden, gone or have
@@ -274,21 +303,32 @@ export function cashCatalog(cfg: CashShopCfg, cosShop: CosShop, now: number, orb
       ...(c.end !== undefined ? { end: c.end } : {}), ...(c.badge ? { badge: c.badge } : {}), featured: !!c.featured,
     });
   }
-  return { open: cfg.open, items, packages: cfg.packages.map((p) => ({ ...p })) };
+  return { open: cfg.open, items, packages: cfg.packages.map((p) => ({ ...p })), vip: cfg.vip.map((p) => ({ ...p })) };
 }
 
 /** The badge on an item's card: the owner's, or "ลดราคา" for a sale. */
 export const cashBadge = (e: CashEntry): CashBadge | 'sale' | null => e.badge ?? (e.now < e.price ? 'sale' : null);
 
-/** What a buyer has: crystals, and how many of each limited item the account bought. */
-export interface CashState { crystals: number; bought: Record<string, number> }
+/** What a buyer has: crystals, how many of each limited item the account bought, and when its VIP ends (ms, 0 = never had it). */
+export interface CashState { crystals: number; bought: Record<string, number>; vipUntil: number }
+
+/** Why a VIP package can't be bought, or null (the server asks with its own catalogue; the browser greys the button). */
+export function vipBuyError(cat: CashCatalog, days: unknown, price: unknown, st: Pick<CashState, 'crystals'>, guest: boolean): string | null {
+  if (guest) return 'Guest ซื้อของในแคชช็อปไม่ได้ สมัครสมาชิกก่อน';
+  if (!cat.open) return 'แคชช็อปยังไม่เปิดขาย';
+  const p = cat.vip.find((x) => x.days === days);
+  if (!p) return 'แพ็ก VIP นี้ไม่มีขายแล้ว';
+  if (price !== p.price) return 'ราคาเปลี่ยนแล้ว เปิดดูใหม่อีกครั้ง';
+  if (st.crystals < p.price) return `${CURRENCY}ไม่พอ`;
+  return null;
+}
 
 /**
  * Why a purchase can't go ahead, or null. The server asks this with its own catalogue and the account's
  * numbers; the browser asks it to grey the button. `price` = the price per piece the buyer saw.
  */
 export function cashBuyError(
-  cat: CashCatalog, id: unknown, qty: unknown, price: unknown, st: CashState, owned: readonly string[], guest: boolean, now: number,
+  cat: CashCatalog, id: unknown, qty: unknown, price: unknown, st: Pick<CashState, 'crystals' | 'bought'>, owned: readonly string[], guest: boolean, now: number,
 ): string | null {
   if (guest) return 'Guest ซื้อของในแคชช็อปไม่ได้ สมัครสมาชิกก่อน';
   if (!cat.open) return 'แคชช็อปยังไม่เปิดขาย';
@@ -319,6 +359,9 @@ export function cashShopChanges(before: CashShopCfg, after: CashShopCfg): string
   }
   if (JSON.stringify(before.packages) !== JSON.stringify(after.packages)) {
     out.push(`แพ็กเกจ: ${after.packages.map((p) => `${p.crystals}+${p.bonus}${p.first ? ` (ครั้งแรก+${p.first})` : ''}=${p.baht}฿`).join(' ') || 'ไม่มี'}`);
+  }
+  if (JSON.stringify(before.vip) !== JSON.stringify(after.vip)) {
+    out.push(`แพ็ก VIP: ${after.vip.map((p) => `${p.days} วัน=${p.price}`).join(' ') || 'ไม่มี (ไม่ขาย)'}`);
   }
   return out.join(', ');
 }

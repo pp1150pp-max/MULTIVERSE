@@ -406,6 +406,10 @@ export class Db {
     if (!cols.includes('ban_reason')) this.db.exec('ALTER TABLE accounts ADD COLUMN ban_reason TEXT');
     // Cash shop currency (คริสตัลมิติ, src/shared/cashShop.ts), per account. Old accounts start with 0.
     if (!cols.includes('crystals')) this.db.exec('ALTER TABLE accounts ADD COLUMN crystals INTEGER NOT NULL DEFAULT 0');
+    // VIP end time (ms, src/shared/vip.ts; 0 = never had it) and the trades finished on Thai day `trade_day` (src/shared/trade.ts tradeDay).
+    if (!cols.includes('vip_until')) this.db.exec('ALTER TABLE accounts ADD COLUMN vip_until INTEGER NOT NULL DEFAULT 0');
+    if (!cols.includes('trade_day')) this.db.exec('ALTER TABLE accounts ADD COLUMN trade_day INTEGER NOT NULL DEFAULT 0');
+    if (!cols.includes('trade_n')) this.db.exec('ALTER TABLE accounts ADD COLUMN trade_n INTEGER NOT NULL DEFAULT 0');
     // Every cash shop purchase (also what the per-account limits count).
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS cash_purchases (
@@ -1111,6 +1115,29 @@ export class Db {
   crystalsSpend(accountId: number, n: number): boolean {
     const r = this.db.prepare('UPDATE accounts SET crystals = crystals - ? WHERE id = ? AND crystals >= ?').run(n, accountId, n);
     return Number(r.changes) > 0;
+  }
+
+  // ------------------------------------------------------------ VIP and the daily trade count (src/shared/vip.ts, server/trade.ts)
+
+  /** When the account's VIP ends (ms; 0 = never had it, unknown account = 0). */
+  vipUntil(accountId: number): number {
+    const r = this.db.prepare('SELECT vip_until FROM accounts WHERE id = ?').get(accountId) as { vip_until: number } | undefined;
+    return r ? Number(r.vip_until) : 0;
+  }
+
+  setVipUntil(accountId: number, until: number): void {
+    this.db.prepare('UPDATE accounts SET vip_until = ? WHERE id = ?').run(until, accountId);
+  }
+
+  /** Trades the account finished on Thai day `day` (0 if its count is from another day). */
+  tradesOn(accountId: number, day: number): number {
+    const r = this.db.prepare('SELECT trade_day, trade_n FROM accounts WHERE id = ?').get(accountId) as { trade_day: number; trade_n: number } | undefined;
+    return r && Number(r.trade_day) === day ? Number(r.trade_n) : 0;
+  }
+
+  /** Counts one more finished trade on day `day` (a new day starts again from 1). */
+  tradeCountAdd(accountId: number, day: number): void {
+    this.db.prepare('UPDATE accounts SET trade_n = CASE WHEN trade_day = ? THEN trade_n + 1 ELSE 1 END, trade_day = ? WHERE id = ?').run(day, day, accountId);
   }
 
   /** Sets an account's crystals (tests only: there is no way to get crystals yet). */

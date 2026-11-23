@@ -203,7 +203,7 @@ export interface AdminDirectWs {
  * switch: the Permissions tab, the audit log, restarting / stopping the server, deleting accounts or
  * characters, and making someone owner (command line).
  */
-export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'crystalGrant' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'directWs' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'topup' | 'topupConfirm' | 'animPreview' | 'animTune' | 'menuLayout' | 'menuLayoutEdit' | 'hudLayout' | 'hudLayoutEdit' | 'mapEdit' | 'mapRollback' | 'mapExport' | 'mapCreate' | 'mapDelete' | 'spawnSet' | 'mysteryBox' | 'mysteryBoxEdit' | 'news' | 'newsEdit';
+export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'crystalGrant' | 'vipGrant' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'directWs' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'topup' | 'topupConfirm' | 'animPreview' | 'animTune' | 'menuLayout' | 'menuLayoutEdit' | 'hudLayout' | 'hudLayoutEdit' | 'mapEdit' | 'mapRollback' | 'mapExport' | 'mapCreate' | 'mapDelete' | 'spawnSet' | 'mysteryBox' | 'mysteryBoxEdit' | 'news' | 'newsEdit';
 
 /**
  * The defaults: which built-in role may use each tool (owner always has all). The owner can change
@@ -251,6 +251,8 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   cosmetics: ['owner'],
   // Giving / taking crystals on an account's sheet (owner 2026-11-20, like giving gold; owner only to start with).
   crystalGrant: ['owner'],
+  // Giving / removing an account's VIP (owner 2026-11-23, src/shared/vip.ts).
+  vipGrant: ['owner'],
   // The cosmetics test bench tab "ของแต่งตัว" (owner 2026-11-10: owner and GMs). Only looks; changes nothing in the game.
   cosPreview: ['owner', 'gm'],
   // Saving the server-wide cosmetic tuning from that tab (owner 2026-11-10: owner only).
@@ -351,6 +353,7 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   teleport: { name: 'ย้ายโซน', desc: 'ย้ายตัวละครไปแคมป์ของโซนที่เลือก', group: 'ผู้เล่น' },
   channelWarp: { name: 'วาร์ปเลือก CH', desc: 'ตอนย้ายโซน เลือก CH ได้ เข้าได้แม้ห้องเต็ม', group: 'ผู้เล่น' },
   crystalGrant: { name: 'ให้/ลดคริสตัลมิติ', desc: 'ในหน้าบัญชี: ให้หรือลดคริสตัลมิติ (เงินแคชช็อป) ของบัญชี', group: 'ผู้เล่น' },
+  vipGrant: { name: 'ให้/ถอด VIP', desc: 'ในหน้าบัญชี: เพิ่มวัน VIP หรือถอด VIP ของบัญชี', group: 'ผู้เล่น' },
   cosmetics: { name: 'ให้/ถอนของแต่งตัว', desc: 'ให้หรือถอนของแต่งตัวในหน้าบัญชี', group: 'ผู้เล่น' },
   itemEdit: { name: 'แก้ไอเทมของผู้เล่น', desc: 'ในหน้าบัญชี: แก้ชนิด ความหายาก เลเวล อาชีพ ชื่อ ตีบวก pity สเตตัสทุกบรรทัด จำนวนยา/หิน หรือลบไอเทม ที่สวม/กระเป๋า/คลัง (ต้องมี "ผู้ใช้ทั้งหมด" ด้วย)', group: 'ผู้เล่น' },
   staffTarget: { name: 'จัดการบัญชีทีมงานคนอื่น', desc: 'แบน รีเซ็ตรหัส แก้ตัวละครของบัญชีที่มีสิทธิ์ผู้ดูแล (ไม่มี = ทำได้แค่ผู้เล่นธรรมดาและตัวเอง) · บัญชี owner แตะไม่ได้เสมอ', group: 'ผู้เล่น' },
@@ -467,6 +470,8 @@ export interface AdminAccountDetail {
   cosmetics: string[] | null;
   /** The account's cash shop crystals (คริสตัลมิติ); null for a guest. Look only. */
   crystals?: number | null;
+  /** When the account's VIP ends (ms, 0 = never had it); null for a guest. */
+  vipUntil?: number | null;
   /** Cosmetic ids hidden from the in-game window (may still be given; marked on the sheet). */
   cosHidden?: string[];
   /** The orb looks in the shop (they are cosmetics of slot 'orb', made in /admin). */

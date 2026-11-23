@@ -7,7 +7,7 @@ import { noTranslate } from './i18n';
 import type { Game } from './Game';
 import { PARTY_SEARCH_MAX } from '../shared/party';
 import { CLASSES } from '../shared/data/classes';
-import { afterTax, TRADE_GOLD_MAX, TRADE_SLOTS, TRADE_TAX_PCT, type TradeOffer, type TradeSideView, type TradeView } from '../shared/trade';
+import { afterTax, TRADE_DAILY_MAX, TRADE_GOLD_MAX, TRADE_SLOTS, TRADE_TAX_PCT, type TradeOffer, type TradeSideView, type TradeView } from '../shared/trade';
 import { playSound } from './audio/sfx';
 
 const BLOCK_KEY = 'multiverse-trade-block';
@@ -43,6 +43,8 @@ export class TradeUI {
     title: HTMLElement; count: HTMLElement; slots: HTMLElement; goldBox: HTMLElement; goldInput: HTMLInputElement; goldText: HTMLElement; state: HTMLElement;
   }>;
   private readonly taxHint: HTMLElement;
+  /** Trades left today (or "VIP: no limit"). */
+  private readonly limitHint: HTMLElement;
   /** Open requests: asker's character id → popup and when it runs out (performance.now()). */
   private readonly requests = new Map<number, { el: HTMLElement; until: number; count: HTMLElement }>();
   private view: TradeView | null = null;
@@ -95,6 +97,7 @@ export class TradeUI {
     this.cols = { a: ma.parts, b: mb.parts };
     colsBox.append(ma.box, mb.box);
     this.taxHint = el('div', 'trade-tax', '', 'trade-tax');
+    this.limitHint = el('div', 'trade-tax', '', 'trade-limit');
     const states = el('div', '', '', 'trade-states');
     for (const c of ['a', 'b'] as const) {
       const row = el('div', 'trade-state-row', '', `trade-${c}-state-row`);
@@ -110,7 +113,7 @@ export class TradeUI {
     const cancelBtn = el('button', '', 'ยกเลิก', 'trade-cancel');
     cancelBtn.onclick = () => this.cancel();
     btns.append(this.confirmBtn, cancelBtn);
-    this.win.append(head, colsBox, this.taxHint, states, statusBox, btns);
+    this.win.append(head, colsBox, this.taxHint, this.limitHint, states, statusBox, btns);
     $('hud').append(this.win);
 
     // ---- who to ask (the same online list the party invite uses)
@@ -290,6 +293,10 @@ export class TradeUI {
     this.taxHint.textContent = other.gold > 0
       ? `ทองที่ ${other.name} ส่งให้ ${other.gold.toLocaleString()} G · คุณจะได้ ${afterTax(other.gold).toLocaleString()} G (หักภาษี ${TRADE_TAX_PCT}%)`
       : `ทองที่ส่งโดนหักภาษี ${TRADE_TAX_PCT}% (ผู้รับได้ ${100 - TRADE_TAX_PCT}%)`;
+    // Counted per account, only when a trade goes through; resets at 00:00 Thai time.
+    this.limitHint.textContent = v.left === undefined ? ''
+      : v.left === null ? 'VIP: เทรดได้ไม่จำกัด'
+      : `เทรดวันนี้เหลือ ${v.left}/${TRADE_DAILY_MAX} ครั้ง (นับเมื่อเทรดสำเร็จ รีเซ็ตเที่ยงคืน)`;
     this.updateStatus();
   }
 

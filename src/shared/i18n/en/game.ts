@@ -79,7 +79,7 @@ export const EN_GAME: Record<string, string> = {
   'ภารกิจสอนระบบ: {0} ✓ (เหลืออีก {1})': 'Tutorial quest: {0} ✓ ({1} left)',
   'ภารกิจสอนระบบ {0} ครบแล้ว — กลับไปส่งที่{1}': 'Tutorial quest {0} done — hand it in to the {1}',
   'ได้รับ {0}{1}': 'Got {0}{1}',
-  'วาง {0} ลงบนพื้น (เก็บคืนได้ภายใน 60 วินาที)': 'Dropped {0} (pick it up within 60 seconds)',
+  'ทิ้ง {0} แล้ว (หายถาวร)': 'Threw away {0} (gone for good)',
   'เรียน{0}แล้ว': 'Learned {0}',
   '{0} แรงก์ {1}': '{0} rank {1}',
   'คืน {0} แต้มจาก{1}{2}{3}': 'Refunded {0} points from {1}{2}{3}',

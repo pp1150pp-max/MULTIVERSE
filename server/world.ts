@@ -235,6 +235,8 @@ interface Session {
    * stays in the world until Auto stops, it dies, the time is up or it logs in again (sweepAway). null = connected.
    */
   awayAt: number | null;
+  /** When the account's VIP ends (ms, src/shared/vip.ts); Player.vip follows it every tick. */
+  vipUntil: number;
   /**
    * A map-editor preview (docs/plans/map-editor.md 2.3): this session plays a copy of the character in its own private Sim built from
    * the draft layout. Nothing of it is saved, it has no stash, trades, chat or shop, it meets no other player, and it never leaves the Sim.
@@ -799,8 +801,9 @@ export class GameWorld {
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity, blockTrades: false,
       lastFriendAt: -Infinity, friendKey: '', lastCh: back?.channel.ch ?? this.lastChOf(sim), fight: new FightClock(Math.max(player.lastHurt, player.lastAttack)), lastChListAt: -Infinity, lastChAt: -Infinity,
-      pingHidden: false, awayAt: null,
+      pingHidden: false, awayAt: null, vipUntil: acc.guest || pv ? 0 : this.db.vipUntil(acc.id),
     };
+    player.vip = s.vipUntil > Date.now();
     // Back at the same spot after a drop (or a login elsewhere) with Auto on: Auto carries on, from the
     // same AutoPlay (its farm spot), and the welcome tells the browser so.
     const autoBack = pv ? undefined : this.autoBack.get(charId);
@@ -1374,7 +1377,11 @@ export class GameWorld {
         if (EQUIP_SLOTS.includes(m.slot)) p.unequip(m.slot);
         break;
       case 'drop':
-        if (i >= 0 && i < p.bag.length) sim.dropFromBag(p, i);
+        // Destroyed for good (owner 2026-11-23); there is no item log, so it goes to the server log.
+        if (i >= 0 && i < p.bag.length) {
+          const gone = sim.dropFromBag(p, i);
+          if (gone) console.log(`[drop] ${s.username} (${p.name}, char ${s.charId}) destroyed ${JSON.stringify(gone)}`);
+        }
         break;
       case 'buy':
         if ((m.kind === 'hp' || m.kind === 'mp') && POTION_SIZES.includes(m.size)) {
@@ -1926,11 +1933,17 @@ export class GameWorld {
     const now = performance.now();
     if (now - s.lastCashAt < CASH_BUY_MS) return this.send(s.ws, { t: 'cashBuy', req, ok: false, msg: 'กดเร็วเกินไป ลองอีกครั้ง' });
     s.lastCashAt = now;
-    const r = this.cash.buy({ accountId: s.accountId, guest: s.guest, charId: s.charId, charName: s.player.name, id: m.id, qty: m.qty, price: m.price });
+    // A VIP package comes as item id `vip:<days>` (src/shared/cashShop.ts vipItemId).
+    const vip = typeof m.id === 'string' ? /^vip:([0-9]{1,4})$/.exec(m.id) : null;
+    const who = { accountId: s.accountId, guest: s.guest, charId: s.charId, charName: s.player.name };
+    const r = vip
+      ? this.cash.buyVip({ ...who, days: Number(vip[1]), price: m.price })
+      : this.cash.buy({ ...who, id: m.id, qty: m.qty, price: m.price });
     this.send(s.ws, { t: 'cashBuy', req, ok: r.ok, msg: r.msg });
     if (!r.ok) return;
     console.log(`[cash] ${s.username} (${s.player.name}) bought ${String(m.id)} ×${String(m.qty)} at ${String(m.price)}`);
     if (r.kind === 'cos') this.cosmeticsChanged(s.accountId);
+    if (r.kind === 'vip') this.vipChanged(s.accountId);
     const state = this.cash.state(s.accountId, false);
     for (const o of this.sessions) {
       if (o.accountId !== s.accountId) continue;
@@ -2186,6 +2199,8 @@ export class GameWorld {
       s.outbox.push({ t: 'autoOff', to: p.id, msg: blocked });
     }
     p.autoOn = !!s.auto;
+    // VIP bonuses (src/shared/vip.ts) stop the moment it runs out.
+    p.vip = s.vipUntil > Date.now();
     if (s.auto) {
       const sim = s.sim;
       const world: AutoWorld = { player: p, monsters: sim.monsters, loots: sim.loots, time: sim.time, zone: sim.zone };
@@ -2949,6 +2964,13 @@ export class GameWorld {
   }
 
   /** An admin gave or took crystals: every online character of the account gets the new total. */
+  /** The account's VIP was bought, granted or removed: every online character of it gets the new end time (the bonuses follow it each tick). */
+  vipChanged(accountId: number): void {
+    const until = this.db.vipUntil(accountId);
+    for (const s of this.sessions) if (s.accountId === accountId && !s.guest) s.vipUntil = until;
+    this.crystalsChanged(accountId);
+  }
+
   crystalsChanged(accountId: number): void {
     const state = this.cash.state(accountId, false);
     for (const s of this.sessions) if (s.accountId === accountId && !s.guest) this.send(s.ws, { t: 'cashState', state });

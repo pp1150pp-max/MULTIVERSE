@@ -4,8 +4,8 @@
 import type { CashCatalog, CashState } from '../shared/cashShop';
 import { closedTopup, type TopupView } from '../shared/topup';
 
-let catalog: CashCatalog = { open: false, items: [], packages: [] };
-let state: CashState = { crystals: 0, bought: {} };
+let catalog: CashCatalog = { open: false, items: [], packages: [], vip: [] };
+let state: CashState = { crystals: 0, bought: {}, vipUntil: 0 };
 let topup: TopupView = closedTopup();
 let version = 0;
 

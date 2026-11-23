@@ -83,6 +83,9 @@ export const CODE_BOSS_LOOT_SPREAD = true;
 export const CODE_BOSS_LOOT_BASE = 2.5;
 export const CODE_BOSS_LOOT_K = 0.8;
 export const CODE_BOSS_LOOT_MAX = 12;
+/** VIP bonus in percent (owner 2026-11-23: EXP +10%, drop chances +10%, stacks with the ×2 scrolls). */
+export const CODE_VIP_EXP_PCT = 10;
+export const CODE_VIP_DROP_PCT = 10;
 /** No damage for a moment after getting up with a phoenix feather in a boss room (owner 2026-11-20: on). */
 export const CODE_REVIVE_GUARD = true;
 /** How long that lasts, in seconds (owner: 5); attacking, a skill, a buff or a dash ends it at once. */
@@ -224,6 +227,9 @@ export interface Balance {
   bossLootBase: number;
   bossLootK: number;
   bossLootMax: number;
+  /** VIP bonus (src/shared/vip.ts): EXP % (rounded down) and drop-chance %. */
+  vipExpPct: number;
+  vipDropPct: number;
   /** Untouchable (no damage or boss effects, blinking) for a moment after a phoenix-feather revive in a boss room. */
   reviveGuard: boolean;
   /** How long that lasts; any attack, skill, buff or dash ends it early. */
@@ -321,6 +327,8 @@ export interface BalanceTuning {
   bossLootBase?: number;
   bossLootK?: number;
   bossLootMax?: number;
+  vipExpPct?: number;
+  vipDropPct?: number;
   /** Phoenix-feather revive guard, when not the code's (on). */
   reviveGuard?: boolean;
   /** Its seconds, when not the code's. */
@@ -379,6 +387,8 @@ export const BALANCE_RANGE = {
   bossLootBase: [0.5, 10],
   bossLootK: [0, 5],
   bossLootMax: [1, 30],
+  vipExpPct: [0, 100],
+  vipDropPct: [0, 100],
   reviveGuardSec: [1, 30],
 } as const satisfies Record<string, readonly [number, number]>;
 
@@ -437,6 +447,8 @@ export function codeBalance(): Balance {
     bossLootBase: CODE_BOSS_LOOT_BASE,
     bossLootK: CODE_BOSS_LOOT_K,
     bossLootMax: CODE_BOSS_LOOT_MAX,
+    vipExpPct: CODE_VIP_EXP_PCT,
+    vipDropPct: CODE_VIP_DROP_PCT,
     reviveGuard: CODE_REVIVE_GUARD,
     reviveGuardSec: CODE_REVIVE_GUARD_SEC,
     auto: codeAuto(),
@@ -499,6 +511,8 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.bossLootBase !== undefined) b.bossLootBase = t.bossLootBase;
   if (t.bossLootK !== undefined) b.bossLootK = t.bossLootK;
   if (t.bossLootMax !== undefined) b.bossLootMax = t.bossLootMax;
+  if (t.vipExpPct !== undefined) b.vipExpPct = t.vipExpPct;
+  if (t.vipDropPct !== undefined) b.vipDropPct = t.vipDropPct;
   if (t.reviveGuard !== undefined) b.reviveGuard = t.reviveGuard;
   if (t.reviveGuardSec !== undefined) b.reviveGuardSec = t.reviveGuardSec;
   if (t.mobReturnIgnoreHits !== undefined) b.mobReturnIgnoreHits = t.mobReturnIgnoreHits;
@@ -657,7 +671,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'shopNoEquip', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'bagExpand', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'shopNoEquip', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'bagExpand', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -734,7 +748,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   }
 
   // Single numbers
-  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'roomWipeSec' | 'roomBossDelay' | 'bossLootBase' | 'bossLootK' | 'bossLootMax' | 'reviveGuardSec' | 'cdrCap' | 'heartBlastSpots' | 'heartBlastMinDist' | 'heartBlastReach', range: readonly [number, number], what: string): string | null => {
+  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'roomWipeSec' | 'roomBossDelay' | 'bossLootBase' | 'bossLootK' | 'bossLootMax' | 'vipExpPct' | 'vipDropPct' | 'reviveGuardSec' | 'cdrCap' | 'heartBlastSpots' | 'heartBlastMinDist' | 'heartBlastReach', range: readonly [number, number], what: string): string | null => {
     const n = num(o[key], range[0], range[1], what);
     if (typeof n === 'string') return n;
     if (n !== undefined && n !== CODE[key]) out[key] = n;
@@ -1246,6 +1260,8 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     one('bossLootBase', BALANCE_RANGE.bossLootBase, 'รัศมีฐานของดรอปบอส') ??
     one('bossLootK', BALANCE_RANGE.bossLootK, 'ตัวคูณรัศมีต่อจำนวนของดรอปบอส') ??
     one('bossLootMax', BALANCE_RANGE.bossLootMax, 'รัศมีสูงสุดของดรอปบอส') ??
+    one('vipExpPct', BALANCE_RANGE.vipExpPct, 'โบนัส EXP ของ VIP (%)') ??
+    one('vipDropPct', BALANCE_RANGE.vipDropPct, 'โบนัสดรอปของ VIP (%)') ??
     reviveGuard() ??
     one('reviveGuardSec', BALANCE_RANGE.reviveGuardSec, 'อมตะหลังชุบด้วยขนนกฟีนิกซ์ (วินาที)') ??
     auto() ??
@@ -1369,6 +1385,8 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.bossLootBase !== b.bossLootBase) out.push(`รัศมีฐานของดรอปบอส ${a.bossLootBase} → ${b.bossLootBase}`);
   if (a.bossLootK !== b.bossLootK) out.push(`ตัวคูณรัศมีต่อจำนวนของดรอปบอส ${a.bossLootK} → ${b.bossLootK}`);
   if (a.bossLootMax !== b.bossLootMax) out.push(`รัศมีสูงสุดของดรอปบอส ${a.bossLootMax} → ${b.bossLootMax}`);
+  if (a.vipExpPct !== b.vipExpPct) out.push(`โบนัส EXP ของ VIP ${a.vipExpPct}% → ${b.vipExpPct}%`);
+  if (a.vipDropPct !== b.vipDropPct) out.push(`โบนัสดรอปของ VIP ${a.vipDropPct}% → ${b.vipDropPct}%`);
   if (a.reviveGuard !== b.reviveGuard) out.push(`อมตะหลังชุบด้วยขนนกฟีนิกซ์ ${a.reviveGuard ? 'เปิด' : 'ปิด'} → ${b.reviveGuard ? 'เปิด' : 'ปิด'}`);
   if (a.reviveGuardSec !== b.reviveGuardSec) out.push(`เวลาอมตะหลังชุบ ${a.reviveGuardSec} → ${b.reviveGuardSec} วิ`);
   out.push(...forgeChanges(a.forge, b.forge));

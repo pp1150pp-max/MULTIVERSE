@@ -18,6 +18,14 @@ export const TRADE_COUNTDOWN = 3;
 export const TRADE_TAX_PCT = 3;
 /** Most gold one side may offer. */
 export const TRADE_GOLD_MAX = 1_000_000_000;
+/** Finished trades an account may make per Thai day (owner 2026-11-23: 3, fixed; VIP has no limit). */
+export const TRADE_DAILY_MAX = 3;
+/** Thailand is UTC+7 all year (no summer time). */
+const THAI_OFFSET_MS = 7 * 3_600_000;
+/** The Thai calendar day of time `ms` (a new day starts at 00:00 Thai time = 17:00 UTC). */
+export const tradeDay = (ms: number): number => Math.floor((ms + THAI_OFFSET_MS) / 86_400_000);
+/** Said when an account has used up today's trades. */
+export const TRADE_LIMIT_MSG = `วันนี้เทรดครบ ${TRADE_DAILY_MAX} ครั้งแล้ว — รีเซ็ตตอนเที่ยงคืน (เวลาไทย) · VIP เทรดได้ไม่จำกัด`;
 
 /** The tax on a gold offer (rounded down: 1,000 → 30; offers under 34 pay none). */
 export const taxOf = (gold: number): number => Math.floor((gold * TRADE_TAX_PCT) / 100);
@@ -140,6 +148,8 @@ export interface TradeView {
   b: TradeSideView;
   /** Seconds left of the 3 s countdown when this was sent, or null when it isn't running. */
   cd: number | null;
+  /** Trades the viewer's account has left today (of TRADE_DAILY_MAX), or null = VIP, no limit. */
+  left?: number | null;
 }
 
 /** One row of the admin trade log. */

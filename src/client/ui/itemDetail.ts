@@ -125,7 +125,7 @@ export class ItemDetail {
           off: free < 0,
         });
       }
-      acts.push({ label: 'วางลงพื้น', run: () => this.host.askDrop(i) });
+      acts.push({ label: 'ทิ้งไอเทม', run: () => this.host.askDrop(i) });
     }
     const box = this.detailEl.querySelector<HTMLElement>('.idt-acts')!;
     box.replaceChildren(...acts.map((a) => {
