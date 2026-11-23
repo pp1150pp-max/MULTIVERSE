@@ -972,6 +972,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'row bal-line' }, num('shake', 0.1), num('hitstopMs', 5), num('crit', 0.1)),
       h('div', { class: 'row bal-line' }, flag(circlesOn, a.circles !== ca.circles, ' วงเวทบนพื้น (ใต้มอนติดดีบัฟ ใต้ผู้เล่นติดบัฟ และพื้นที่สกิลวงกว้าง)'), flag(zoneCirclesOn, a.zoneCircles !== ca.zoneCircles, ' สกิลวงกว้างเป็นวงเวทอย่างเดียว (ปิด = ภาพพื้นที่เดิม)'), num('circleGlow', 0.1)),
       h('div', { class: 'row bal-line' }, num('slashLift', 0.05)),
+      h('div', { class: 'row bal-line' }, num('townEdge', 0.1), num('townRound', 0.5), h('span', { class: 'muted' }, ' มีผลตอนโหลดแมพเมืองครั้งถัดไป')),
       h('div', { class: 'muted' }, 'ภาพค้างจริง = ค่านี้ × ความหนักของท่า (0–1) และไม่เกิน 120 ms · ตอนนี้เปิดชั้นเสริมให้พายุดาบท่าเดียวก่อน'),
       h('h3', {}, 'อนุภาค three.quarks (ทดลอง)'),
       h('div', { class: 'row bal-line' }, flag(quarksOn, a.quarks !== ca.quarks, ' ใช้ three.quarks วาดอนุภาคของสกิล')),

@@ -56,6 +56,12 @@ export interface FxLayerConfig extends Record<QuarksKey, boolean> {
    * swinging down and behind the body swinging up, so the reach looked longer downward (owner 2026-11-21).
    */
   slashLift: number;
+  /**
+   * The hub town's brick floor (owner 2026-11-23): width of its ragged edge into each zone's ground (0 = straight cut)
+   * and the radius of its corners, where the gates are (world units). Used when a map is built.
+   */
+  townEdge: number;
+  townRound: number;
   /** Trial (owner 2026-11-18): skill particles drawn with three.quarks (src/client/quarksFx.ts), so far the Meteor only. */
   quarks: boolean;
   /** three.quarks: × particles of other players' effects (your own are always full). */
@@ -181,6 +187,8 @@ export const FX_LAYER_RANGE = {
   mergeSec: [0, 1],
   circleGlow: [0, 3],
   slashLift: [0, 2],
+  townEdge: [0, 6],
+  townRound: [0, 12],
   quarksOthers: [0, 1],
   quarksTouch: [0, 1],
   quarksCap: [0, 10000],
@@ -220,6 +228,8 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   mergeSec: 'รวมเลขที่โดนในช่วง (วิ)',
   circleGlow: '× ความสว่างวงเวท',
   slashLift: 'ความสูงภาพคมดาบตอนฟัน (0 = บนพื้น)',
+  townEdge: 'เมืองกลาง: ความกว้างขอบพื้นอิฐที่กลืนกับพื้นโซน (0 = ตัดตรง)',
+  townRound: 'เมืองกลาง: ความโค้งมุมพื้นอิฐ (ตรงประตู)',
   quarksOthers: 'three.quarks: × อนุภาคของคนอื่น',
   quarksTouch: 'three.quarks: × อนุภาคบนจอสัมผัส (มือถือ)',
   quarksCap: 'three.quarks: อนุภาคบนจอสูงสุด (เกินแล้วตัดของคนอื่น)',
@@ -277,7 +287,7 @@ const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
 export function codeFxLayer(): FxLayerConfig {
   return {
     enabled: true, debuffs: true, guardGlow: true, buffIcons: true, barBuffIcons: true, glow: 1, ground: 1, particles: 1, shake: 1, hitstopMs: 60, crit: 1,
-    maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true, droneFollow: true, droneSpeed: 7, droneDist: 1, circles: true, zoneCircles: true, circleGlow: 1, slashLift: 0.9, quarks: false, quarksOthers: 0.5, quarksTouch: 0.5, quarksCap: 3000,
+    maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true, droneFollow: true, droneSpeed: 7, droneDist: 1, circles: true, zoneCircles: true, circleGlow: 1, slashLift: 0.9, townEdge: 1.2, townRound: 3, quarks: false, quarksOthers: 0.5, quarksTouch: 0.5, quarksCap: 3000,
     paperPlate: 1, paperBubble: 1, plateMaxW: 200, bubbleMaxW: 220, platePadY: 3, platePadX: 14, bubblePadY: 7, bubblePadX: 18, paperFoot: 1.6, paperOrbLight: 0.95, paperOrbShade: 0.15,
     enhAuraSmooth: true, enhAuraPulse: 0.08, enhAuraBreath: 0, enhAuraSpeed: 3,
     gfxMenu: true, keyRebind: true, orbsNearBar: true, gfxDefault: 3, gfxMax: 3, gfxMid: 0.6, gfxLow: 0.3,

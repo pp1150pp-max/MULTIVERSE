@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { currentBalance } from '../shared/balance';
 import { clearingRadius, lairOf, themeAt, zoneById } from '../shared/data/zones';
 import { HUB_PLAZA_RADIUS, QUADRANT_JITTER } from '../shared/sim/terrain';
 import type { PropSpec, Terrain } from '../shared/sim/terrain';
@@ -87,6 +88,9 @@ const GROUND_FRAG = /* glsl */ `
   uniform float uHalf, uBound, uTileUnits, uTime, uBake, uFlow;
   // The hub's walled town (x, z, half): bricked up to a straight edge under its wall, not a wandering one.
   uniform vec3 uTown;
+  // Its edge (owner 2026-11-23: the straight cut showed as a hard corner at each gate): how wide the ragged blend into the
+  // zone's ground is (0 = the old straight cut) and how round the square's corners are, in world units.
+  uniform vec2 uTownEdge;
   // The hub's round plaza around the fountain (radius; 0 = none), laid with uPlazaTex inside a ring of darker stones.
   uniform float uPlaza;
   uniform sampler2D uPlazaTex;
@@ -178,7 +182,14 @@ const GROUND_FRAG = /* glsl */ `
     // Paving: raised stones show first, so grass and dirt fill the gaps at its edge.
     vec3 paveTex = texture2D(uPave, tile).rgb;
     float laid = cover.g + lobes * 0.6 + relief(paveTex, uPave) * 1.0;
-    if (uTown.z > 0.0) laid = max(abs(vWorld.x - uTown.x), abs(vWorld.y - uTown.y)) < uTown.z ? 1.0 : 0.0;
+    if (uTown.z > 0.0) {
+      // Distance outside a square with round corners (negative inside).
+      float r = min(uTownEdge.y, uTown.z);
+      vec2 q = abs(vWorld - uTown.xy) - vec2(uTown.z - r);
+      float dist = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+      // Ragged like the other paving: raised bricks win, the zone's ground fills the gaps.
+      laid = uTownEdge.x > 0.0 ? 0.5 - dist / uTownEdge.x + lobes * 0.6 + relief(paveTex, uPave) : (dist < 0.0 ? 1.0 : 0.0);
+    }
     col = mix(col, calm(paveTex, uPave, 0.9, 1.0, 1.0) * (1.0 + macro * 0.1), smoothstep(0.46, 0.54, laid));
     if (uPlaza > 0.0) {
       float pd = length(vWorld - uTown.xy);
@@ -467,6 +478,7 @@ export class World {
         uFlow: { value: terrain.zone.iceLakes ? 0 : 1 },
         // Right up to the foot of the town wall.
         uTown: { value: new THREE.Vector3(terrain.zone.safe?.x ?? 0, terrain.zone.safe?.z ?? 0, terrain.zone.safe ? terrain.zone.safe.half - 0.2 : 0) },
+        uTownEdge: { value: new THREE.Vector2(currentBalance().fxLayer.townEdge, currentBalance().fxLayer.townRound) },
         uPlaza: { value: terrain.zone.npcs ? HUB_PLAZA_RADIUS : 0 },
         uPlazaTex: { value: groundTiles.pave ?? tiles[3] },
       };
