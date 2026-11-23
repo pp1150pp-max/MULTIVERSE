@@ -259,13 +259,13 @@ export class PlayerView {
     }
     const wave = Math.sin(this.clock * fl.enhAuraSpeed);
     const pulse = 1 + wave * fl.enhAuraPulse;
-    mat.opacity = Math.min(1, AURA_ALPHA * (1 + wave * fl.enhAuraBreath));
+    mat.opacity = Math.min(1, AURA_ALPHA * fl.enhAuraGlow * (1 + wave * fl.enhAuraBreath));
     this.aura.position.set(p.x, 0.06, p.z);
     this.aura.scale.set(a.size * pulse, a.size * pulse, 1);
-    if (a.sparks && Math.random() < a.sparks * dt) {
+    if (a.sparks && Math.random() < a.sparks * fl.enhSparkRate * dt) {
       const ang = Math.random() * Math.PI * 2;
       const r = Math.random() * a.size * 0.35;
-      fx.puff(p.x + Math.cos(ang) * r, 0.2, p.z + Math.sin(ang) * r, a.color, 0.9, 0.35);
+      fx.puff(p.x + Math.cos(ang) * r, 0.2, p.z + Math.sin(ang) * r, a.color, 0.9, 0.35, fl.enhSparkFadeIn, 0.8 * fl.enhSparkGlow);
     }
   }
 

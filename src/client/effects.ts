@@ -741,12 +741,13 @@ export class Effects implements FxApi {
     });
   }
 
-  puff(x: number, y: number, z: number, color: string, life: number, size: number): void {
-    const s = this.glowSprite(color, size, 0.8);
+  /** A small glow that shrinks and fades out. `fadeIn` = seconds it takes to light up (0 = full at once). */
+  puff(x: number, y: number, z: number, color: string, life: number, size: number, fadeIn = 0, alpha = 0.8): void {
+    const s = this.glowSprite(color, size, fadeIn > 0 ? 0 : alpha);
     s.position.set(x, y, z);
     const mat = s.material;
     this.add(s, life, (k) => {
-      mat.opacity = 0.8 * (1 - k);
+      mat.opacity = alpha * (1 - k) * (fadeIn > 0 ? Math.min(1, (k * life) / fadeIn) : 1);
       s.scale.setScalar(size * (1 - 0.5 * k));
     });
   }

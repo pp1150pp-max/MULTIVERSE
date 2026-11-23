@@ -963,6 +963,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         ...GFX_LEVELS.map((t, i) => h('option', { value: String(i), selected: a[k] === i }, t)).reverse()));
     const gfxOn = h('input', { type: 'checkbox', checked: a.gfxMenu, onchange: (e: Event) => { a.gfxMenu = (e.target as HTMLInputElement).checked; refresh(); } });
     const enhSmoothOn = h('input', { type: 'checkbox', checked: a.enhAuraSmooth, onchange: (e: Event) => { a.enhAuraSmooth = (e.target as HTMLInputElement).checked; refresh(); } });
+    const enhFrontOn = h('input', { type: 'checkbox', checked: a.enhOrbGlowFront, onchange: (e: Event) => { a.enhOrbGlowFront = (e.target as HTMLInputElement).checked; refresh(); } });
     const nearOn = h('input', { type: 'checkbox', checked: a.orbsNearBar, onchange: (e: Event) => { a.orbsNearBar = (e.target as HTMLInputElement).checked; refresh(); } });
     fxCard.replaceChildren(
       h('h2', {}, 'เอฟเฟกต์สกิล (ชั้นเสริม)'),
@@ -972,6 +973,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'row bal-line' }, num('shake', 0.1), num('hitstopMs', 5), num('crit', 0.1)),
       h('div', { class: 'row bal-line' }, flag(circlesOn, a.circles !== ca.circles, ' วงเวทบนพื้น (ใต้มอนติดดีบัฟ ใต้ผู้เล่นติดบัฟ และพื้นที่สกิลวงกว้าง)'), flag(zoneCirclesOn, a.zoneCircles !== ca.zoneCircles, ' สกิลวงกว้างเป็นวงเวทอย่างเดียว (ปิด = ภาพพื้นที่เดิม)'), num('circleGlow', 0.1)),
       h('div', { class: 'row bal-line' }, num('slashLift', 0.05), num('craterBack', 0.05)),
+      h('div', { class: 'row bal-line' }, num('townEdge', 0.1), num('townRound', 0.5), h('span', { class: 'muted' }, ' มีผลตอนโหลดแมพเมืองครั้งถัดไป')),
       h('div', { class: 'muted' }, 'ภาพค้างจริง = ค่านี้ × ความหนักของท่า (0–1) และไม่เกิน 120 ms · ตอนนี้เปิดชั้นเสริมให้พายุดาบท่าเดียวก่อน'),
       h('h3', {}, 'อนุภาค three.quarks (ทดลอง)'),
       h('div', { class: 'row bal-line' }, flag(quarksOn, a.quarks !== ca.quarks, ' ใช้ three.quarks วาดอนุภาคของสกิล')),
@@ -993,6 +995,9 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'muted' }, 'ตัวเลขบนจอสูงสุด: เกินแล้วอันเก่าสุดหาย (ค่าในโค้ด 40 เดิม 120) · รวมเลข: ดาเมจบนเป้าเดียวกันในช่วงเวลานี้รวมเป็นเลขเดียว (คริรวมกับคริ ธรรมดารวมกับธรรมดา เลขที่ตัวเองโดนก็รวม) · เห็นเฉพาะของตัวเอง: เห็นแค่ดาเมจที่ตัวเองตีและที่ตัวเองโดน (server ไม่ส่งของคนอื่นมาเลย) ข้อความอื่นยังเห็นเหมือนเดิม'),
       h('h3', {}, 'ภาพกระดาษ: กรอบชื่อ ฟองแชท รอยเท้าออร่า ลูกแก้วตีบวก'),
       h('div', { class: 'row bal-line' }, num('paperPlate', 0.05), num('paperBubble', 0.05), num('paperFoot', 0.1)),
+      h('h3', {}, 'ช่องไอเทม (ทุกหน้าต่าง)'),
+      h('div', { class: 'row bal-line' }, num('slotCorner', 0.1), num('slotInset', 0.1), num('slotIcon', 0.05)),
+      h('div', { class: 'muted' }, 'ปรับกรอบช่องไอเทมทุกช่องพร้อมกัน (กระเป๋า ช่องสวม คลัง ร้าน ตลาด เทรด ตีบวก แฟชั่น) · 1 = ค่าในโค้ด'),
       h('div', { class: 'row bal-line' }, num('paperOrbLight', 0.01), num('paperOrbShade', 0.05)),
       h('div', { class: 'row bal-line' }, num('plateMaxW', 10), num('platePadY', 1), num('platePadX', 1)),
       h('div', { class: 'row bal-line' }, num('bubbleMaxW', 10), num('bubblePadY', 1), num('bubblePadX', 1)),
@@ -1000,6 +1005,10 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('h3', {}, 'ออร่าตีบวกใต้เท้า (+7/+10/+13/+15)'),
       h('div', { class: 'row bal-line' }, flag(enhSmoothOn, a.enhAuraSmooth !== ca.enhAuraSmooth, ' ขอบนุ่ม (ไม่กะพริบ)'), num('enhAuraPulse', 0.01), num('enhAuraBreath', 0.01), num('enhAuraSpeed', 0.5)),
       h('div', { class: 'muted' }, 'ขอบนุ่ม เปิด (ค่าในโค้ด): ภาพแสงกรองแบบนุ่ม ขอบไม่กระโดดตอนหดขยาย · ปิด = ขอบพิกเซลแบบเดิม ซึ่งกะพริบตอนหดขยาย ยิ่ง +13/+15 (ใหญ่และสว่าง) ยิ่งเห็นชัด · หดขยาย 0.08 = ขนาด ±8% (ค่าเดิม) ยิ่งน้อยยิ่งนิ่ง · สว่างหรี่ 0 = ความสว่างคงที่ (ค่าเดิม) ใส่ 0.1–0.2 ให้หายใจด้วยความสว่างแทนขนาดได้ · ความเร็ว 3 = รอบละราว 2 วินาที · ประกายที่ลอยขึ้นจากออร่ายังเหมือนเดิม · มีผลกับทุกคนทันทีหลังบันทึก'),
+      h('div', { class: 'row bal-line' }, num('enhAuraGlow', 0.05)),
+      h('div', { class: 'row bal-line' }, num('enhSparkGlow', 0.05), num('enhSparkRate', 0.1), num('enhSparkFadeIn', 0.05)),
+      h('div', { class: 'row bal-line' }, flag(enhFrontOn, a.enhOrbGlowFront !== ca.enhOrbGlowFront, ' แสงลูกแก้วตีบวกอยู่หน้าลูก (ปิด = หลังลูก)'), num('enhOrbBackFade', 0.1)),
+      h('div', { class: 'muted' }, 'ประกาย = จุดแสงที่ลอยขึ้นจากออร่า +10 ขึ้นไป (ในโค้ด +10/+13/+15 = 3/6/12 ต่อวิ) เวลาค่อย ๆ สว่าง 0 = สว่างทันทีแบบเดิม · แสงลูกแก้วหน้าลูก (ค่าในโค้ด) = แสงทับตัวลูก ดูสว่าง · หลังลูก = ตัวลูกคมกว่า แสงหรี่ลงเล็กน้อย · ทั้งสองแบบไม่กะพริบ · แสงลูกแก้วที่อยู่หลังตัวจางลง: ตอนวิ่ง ขา/แขนที่ขยับตัดแสงของลูกด้านหลังต่างกันทุกเฟรม ค่านี้ทำให้แสงของลูกด้านหลังจางลง (ค่าในโค้ด 1 = หายหมด, 0 = แบบเดิม)'),
       h('h3', {}, 'ตำแหน่งลูกแก้ว HP/MP'),
       h('div', { class: 'row bal-line' }, flag(nearOn, a.orbsNearBar !== ca.orbsNearBar, ' ลูกแก้วชิดแถบสกิล (ปิด = มุมล่างซ้าย/ขวาของจอ)')),
       h('div', { class: 'muted' }, 'เปิด (ค่าในโค้ด): บนจอคอมกว้าง ≥ 1000px ลูกแก้ว HP ชิดซ้ายของแถบสกิล MP ชิดขวา ดูเป็นแผงเดียวกัน (จอกว้าง ≥ 1850px แชทกับข้อความระบบลงมาที่มุมซ้ายล่าง) · จอแคบกว่านั้นและมือถือใช้มุมจอเหมือนเดิม (มือถือใช้แถบ HP/MP อยู่แล้ว) · ผู้เล่นที่เลือก "HP/MP: แถบ" ในเกมไม่ได้รับผล · มีผลกับทุกคนทันทีหลังบันทึก'),
