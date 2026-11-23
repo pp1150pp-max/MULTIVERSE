@@ -219,7 +219,7 @@ export class Market {
     const entry = parseEntry(r.entry);
     if (!entry) return fail('ของชิ้นนี้เสียหาย ซื้อไม่ได้');
     if (p.gold < r.price) return fail(`ทองไม่พอ (ต้องใช้ ${r.price.toLocaleString()} G)`);
-    if (isItem(entry) ? !p.hasBagSpace() : p.stoneRoom(entry.stone) < entry.count) return fail('กระเป๋าเต็ม');
+    if (isItem(entry) ? !p.hasBagSpace('gear') : p.stoneRoom(entry.stone) < entry.count) return fail(isItem(entry) ? 'กระเป๋าเต็ม' : 'ช่องประเภทใช้งานเต็ม');
     p.gold -= r.price;
     if (isItem(entry)) p.addToBag(entry);
     else p.addStones(entry.stone, entry.count);

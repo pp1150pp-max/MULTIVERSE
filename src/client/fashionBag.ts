@@ -5,6 +5,8 @@
 // sheet with the button). Wearing goes through backend.cosWear, which the server checks (wearCosmetic).
 // Unowned pieces are not shown; pieces hidden in /admin follow the cosmetics window's rule (only while worn).
 // The window goes back to the normal bag while a shop, stash, market, trade or forge is open.
+// The bag itself has two tabs (owner 2026-11-23, src/shared/bagTabs.ts): "กระเป๋า" (gear) and "ประเภทใช้งาน"
+// (everything that stacks), so the row reads กระเป๋า | ประเภทใช้งาน | แฟชั่น. The HUD draws the bag tab picked here.
 import type { Game } from './Game';
 import { COSMETICS, COS_SLOTS, COS_SLOT_NAME, cosById, cosPerk, type CosmeticDef, type CosSlot } from '../shared/data/cosmetics';
 import { cosPicture } from './cosmetics';
@@ -12,6 +14,7 @@ import { cosHiddenKey, isCosHidden } from './cosTune';
 import { orbItemsVersion } from '../shared/orbItems';
 import { isTouchMode } from './touch/device';
 import { imgUrl } from './img';
+import type { BagTab } from '../shared/bagTabs';
 
 /** Painted bag slots per page. */
 const PAGE = 30;
@@ -59,6 +62,9 @@ export class FashionBag {
   private drawn = '';
   private readonly box: HTMLElement;
   private readonly tabBag: HTMLButtonElement;
+  private readonly tabUse: HTMLButtonElement;
+  /** The bag tab shown when the fashion page is off. */
+  private bag: BagTab = 'gear';
   private readonly tabFashion: HTMLButtonElement;
   private readonly pager: HTMLElement;
   private readonly grid: HTMLElement;
@@ -69,7 +75,8 @@ export class FashionBag {
   private sheet: HTMLElement | null = null;
   private sheetId = '';
 
-  constructor(private readonly g: Game, private readonly hideTip: () => void) {
+  /** `onBagTab`: the bag tab changed (the HUD redraws the bag). */
+  constructor(private readonly g: Game, private readonly hideTip: () => void, private readonly onBagTab: () => void) {
     this.box = document.getElementById('inventory')!;
     const win = this.box.querySelector<HTMLElement>('.inv-window')!;
     this.title = win.querySelector<HTMLElement>('.inv-title')!;
@@ -79,10 +86,13 @@ export class FashionBag {
 
     const tabs = el('div', 'inv-tabs');
     this.tabBag = el('button', 'ui-tab active', 'กระเป๋า');
+    this.tabUse = el('button', 'ui-tab', 'ประเภทใช้งาน');
+    this.tabUse.title = 'ยา หิน กุญแจ ม้วนคัมภีร์ กล่องปริศนา และของใช้อื่น ๆ';
     this.tabFashion = el('button', 'ui-tab', 'แฟชั่น');
-    this.tabBag.onclick = () => this.set(false);
+    this.tabBag.onclick = () => this.pickBag('gear');
+    this.tabUse.onclick = () => this.pickBag('use');
     this.tabFashion.onclick = () => this.set(true);
-    tabs.append(this.tabBag, this.tabFashion);
+    tabs.append(this.tabBag, this.tabUse, this.tabFashion);
 
     this.pager = el('div', 'fashion-pager hidden');
     this.grid = el('div');
@@ -123,13 +133,35 @@ export class FashionBag {
     if (on === this.on) return;
     this.on = on;
     this.box.classList.toggle('fashion', on);
-    this.tabBag.classList.toggle('active', !on);
+    this.markTabs();
     this.tabFashion.classList.toggle('active', on);
     if (!on) this.pager.classList.add('hidden');
     this.title.textContent = on ? 'กระเป๋าแฟชั่น' : this.bagTitle;
     this.hideTip();
     if (!on) this.closeSheet();
     this.drawn = '';
+  }
+
+  /** The bag tab to draw (the gear tab while the fashion page is up, which hides the bag). */
+  get bagTab(): BagTab {
+    return this.bag;
+  }
+
+  /** Shows a bag tab (and leaves the fashion page). */
+  pickBag(tab: BagTab): void {
+    const changed = tab !== this.bag;
+    this.bag = tab;
+    this.set(false);
+    this.markTabs();
+    if (changed) {
+      this.hideTip();
+      this.onBagTab();
+    }
+  }
+
+  private markTabs(): void {
+    this.tabBag.classList.toggle('active', !this.on && this.bag === 'gear');
+    this.tabUse.classList.toggle('active', !this.on && this.bag === 'use');
   }
 
   /** Every frame while the bag window is open. `busy`: a window that works with the normal bag is open. */

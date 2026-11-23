@@ -100,8 +100,8 @@ ok(!hub.questTurnIn(p, 'forest_bear'), 'nothing to hand in yet');
   p.z = keeper.z + 1;
   ok(!hub.stashPut(p, i) && !hub.stashSplit(p, 'bag', i, 'stash', 0, 1) && p.stoneCount('qkey_bear') === 1, 'not into the stash');
   ok(!marketSellable(p.bag[i]) && makeOffer(p.bag, i) === BOUND_MSG, 'not on the market, not in a trade');
-  hub.moveInBag(p, i, 20);
-  ok((p.bag[20] as { stone?: string } | null)?.stone === 'qkey_bear', 'but it moves around the bag');
+  hub.moveInBag(p, i, 50); // within the usable tab (src/shared/bagTabs.ts)
+  ok((p.bag[50] as { stone?: string } | null)?.stone === 'qkey_bear', 'but it moves around the bag');
 }
 
 // ---- it opens the room at ×1 and is not used up; killing the bear takes it away

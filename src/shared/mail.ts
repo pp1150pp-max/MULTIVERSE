@@ -5,6 +5,7 @@ import { ITEM_BASES, makeItem } from './data/items';
 import { PLUS_CAP } from './data/enhance';
 import { MAX_LEVEL } from './formulas';
 import { RARITIES, RARITY_LABEL, isPotion, type BagEntry, type ClassId, type Item, type Rarity } from './types';
+import { BAG_TABS, freeCount, freeSlot, TAB_NAME, type BagSlots, type BagTab } from './bagTabs';
 
 /** Mail lives this long after it is sent; unclaimed attachments go with it. */
 export const MAIL_DAYS = 30;
@@ -109,13 +110,16 @@ export function rollAttach(a: MailAttach, cls: ClassId, charLevel: number): BagE
   return out;
 }
 
-/** Puts every entry into the bag (stacks top up, gear takes an empty slot). False if they don't all fit; use on a copy. */
-export function putAll(bag: (BagEntry | null)[], entries: BagEntry[]): boolean {
+/**
+ * Puts every entry into the bag, each in its tab (src/shared/bagTabs.ts): stacks top up and then take empty slots of
+ * the usable tab, gear takes an empty slot of the gear tab. False if they don't all fit; use on a copy.
+ */
+export function putAll(bag: (BagEntry | null)[], entries: BagEntry[], slots: BagSlots): boolean {
   for (const e of entries) {
     if (isPotion(e) || 'stone' in e) {
-      if (addStackToBag(bag, bag.length, e as AdminStack, (e as AdminStack).count) < (e as AdminStack).count) return false;
+      if (addStackToBag(bag, slots, e as AdminStack, (e as AdminStack).count) < (e as AdminStack).count) return false;
     } else {
-      const i = bag.indexOf(null);
+      const i = freeSlot(bag, slots, 'gear');
       if (i < 0) return false;
       bag[i] = e;
     }
@@ -123,13 +127,27 @@ export function putAll(bag: (BagEntry | null)[], entries: BagEntry[]): boolean {
   return true;
 }
 
-/** How many empty bag slots this bag needs for the entries to fit (what the player is told). */
-export function slotsNeeded(bag: (BagEntry | null)[], entries: BagEntry[]): number {
-  const free = bag.filter((e) => !e).length;
+/** Empty slots each tab needs for the entries to fit (at least what it has now). */
+export function slotsNeeded(bag: (BagEntry | null)[], entries: BagEntry[], slots: BagSlots): Record<BagTab, number> {
+  const gear = Math.max(freeCount(bag, slots, 'gear'), entries.filter((e) => !isPotion(e) && !('stone' in e)).length);
+  const freeUse = freeCount(bag, slots, 'use');
+  // Stacks: try with more and more usable slots (the gear tab made big enough not to matter).
   for (let extra = 0; extra <= 40; extra++) {
-    if (putAll([...structuredClone(bag), ...Array<null>(extra).fill(null)], entries)) return free + extra;
+    const s = { gear: slots.gear, use: slots.use + extra };
+    if (putAll([...structuredClone(bag), ...Array<null>(extra).fill(null)], entries.filter((e) => isPotion(e) || 'stone' in e), s)) return { gear, use: freeUse + extra };
   }
-  return free + 40;
+  return { gear, use: freeUse + 40 };
+}
+
+/**
+ * "Not enough room" for the player, naming each tab that is short, e.g. `กระเป๋า 2 ช่อง (ว่าง 1)`. Empty when
+ * everything fits.
+ */
+export function roomShortText(bag: (BagEntry | null)[], entries: BagEntry[], slots: BagSlots): string {
+  const need = slotsNeeded(bag, entries, slots);
+  return BAG_TABS.filter((t) => need[t] > freeCount(bag, slots, t))
+    .map((t) => `${TAB_NAME[t]} ${need[t]} ช่อง (ว่าง ${freeCount(bag, slots, t)})`)
+    .join(' · ');
 }
 
 // ------------------------------------------------------------ the player's side

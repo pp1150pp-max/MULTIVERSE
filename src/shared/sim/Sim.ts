@@ -38,6 +38,7 @@ import { questRows } from '../quests';
 import { GEAR_KILLS, GEAR_PART_NAME, gearReward, gearRow } from '../gearQuests';
 import { TUT_ACCEPT_GOLD, TUT_ACCEPT_STONES, TUT_NPC, TUT_STEPS, TUT_STEP_NAME, TUT_TASKS, TUT_TASK_NAME, tutRows, tutTurnInReward, type TutStep, type TutTask } from '../tutorial';
 import { putAll, type MailAttach } from '../mail';
+import { freeSlot, nextExpand, TAB_FULL, TAB_NAME, tabOf, type BagSlots, type BagTab } from '../bagTabs';
 import { RARITY_COLOR } from '../types';
 import { passiveOnCrit, passiveDealMult, passiveTakenMult } from '../passives';
 import type { MapData } from '../mapSchema';
@@ -94,9 +95,11 @@ function dropOnto(src: (BagEntry | null)[], i: number, dst: (BagEntry | null)[],
  * Moves src[i] into dst wherever it fits. Potions and stones top up matching stacks first, then fill an empty slot;
  * if only part fits, that part moves. Returns false when nothing moved.
  */
-function fillInto(src: (BagEntry | null)[], i: number, dst: (BagEntry | null)[]): boolean {
+function fillInto(src: (BagEntry | null)[], i: number, dst: (BagEntry | null)[], dstTabs?: BagSlots): boolean {
   const a = src[i];
   if (!a) return false;
+  // Into the bag: only empty slots of the tab it belongs in (the stash has no tabs).
+  const empty = (): number => (dstTabs ? freeSlot(dst, dstTabs, tabOf(a)) : dst.indexOf(null));
   if (isStack(a)) {
     const before = a.count;
     for (const e of dst) {
@@ -108,7 +111,7 @@ function fillInto(src: (BagEntry | null)[], i: number, dst: (BagEntry | null)[])
       }
     }
     if (a.count > 0) {
-      const k = dst.indexOf(null);
+      const k = empty();
       if (k >= 0) {
         dst[k] = { ...a };
         a.count = 0;
@@ -117,7 +120,7 @@ function fillInto(src: (BagEntry | null)[], i: number, dst: (BagEntry | null)[])
     if (a.count <= 0) src[i] = null;
     return a.count < before;
   }
-  const k = dst.indexOf(null);
+  const k = empty();
   if (k < 0) return false;
   dst[k] = a;
   src[i] = null;
@@ -867,7 +870,8 @@ export class Sim {
     let opened = 0;
     for (let n = all ? e.count : 1; n > 0; n--) {
       if (!p.hasBagSpace()) {
-        this.log(opened ? `กระเป๋าเต็ม — เปิดไปแล้ว ${opened} กล่อง` : 'กระเป๋าเต็ม — ต้องมีช่องว่างอย่างน้อย 1 ช่องถึงจะเปิดกล่องได้', '#ff8a6a', p.id);
+        // Both tabs need a slot: the prize (gear or a stack) is rolled only once it surely fits.
+        this.log(opened ? `กระเป๋าเต็ม — เปิดไปแล้ว ${opened} กล่อง` : 'ต้องมีช่องว่างในกระเป๋าและช่องประเภทใช้งานอย่างละ 1 ช่องถึงจะเปิดกล่องได้', '#ff8a6a', p.id);
         break;
       }
       const cur = p.bag[slot];
@@ -1081,7 +1085,7 @@ export class Sim {
     const key = BOSS_QUEST_KEY[boss];
     if (!key || !this.near(p, 'seeker') || (p.quests[boss] ?? -1) < QUEST_KILLS) return false;
     if (!p.addStones(key, 1)) {
-      this.log('กระเป๋าเต็ม — เคลียร์ช่องว่าง 1 ช่องก่อนรับกุญแจ', '#ff8a6a', p.id);
+      this.log('ช่องประเภทใช้งานเต็ม — เคลียร์ช่องว่าง 1 ช่องก่อนรับกุญแจ', '#ff8a6a', p.id);
       return false;
     }
     delete p.quests[boss];
@@ -1123,7 +1127,7 @@ export class Sim {
     const r = gearRow(p, id);
     if (!r || r.state !== 'ready' || !this.near(p, 'seeker')) return false;
     const items = gearReward(r.map, r.part, p.cls.id, p.level);
-    const free = p.bag.filter((e) => e === null).length;
+    const free = p.freeSlots('gear');
     if (free < items.length) {
       this.log(`กระเป๋าเต็ม — เคลียร์ช่องว่าง ${items.length} ช่องก่อนรับ${GEAR_PART_NAME[r.part]}`, '#ff8a6a', p.id);
       return false;
@@ -1168,11 +1172,11 @@ export class Sim {
     if (!row || row.state !== 'offer' || !this.near(p, TUT_NPC[step])) return false;
     const pay = !p.tut.paid?.includes(step);
     const stones = pay ? (TUT_ACCEPT_STONES[step] ?? []).map((s) => ({ stone: s.stone, count: s.count, bound: true as const })) : [];
-    if (stones.length && !putAll(structuredClone(p.bag), stones)) {
-      this.log(`กระเป๋าเต็ม — เคลียร์ช่องว่าง ${stones.length} ช่องก่อนรับภารกิจ`, '#ff8a6a', p.id);
+    if (stones.length && !putAll(structuredClone(p.bag), stones, p.bagSlots)) {
+      this.log(`ช่องประเภทใช้งานเต็ม — เคลียร์ช่องว่าง ${stones.length} ช่องก่อนรับภารกิจ`, '#ff8a6a', p.id);
       return false;
     }
-    putAll(p.bag, stones);
+    putAll(p.bag, stones, p.bagSlots);
     p.tut.cur = { step, by: p.name, got: [] };
     if (pay) {
       p.gold += TUT_ACCEPT_GOLD;
@@ -1399,7 +1403,7 @@ export class Sim {
     if (!p.alive || !l || l.dead || !l.canTake(p, this.time)) return false;
     if (Math.hypot(l.x - p.x, l.z - p.z) > LOOT_CLICK_RANGE) return false;
     if (!this.pickup(p, l)) {
-      this.text(p.x, p.topY, p.z, 'กระเป๋าเต็ม', 'info', undefined, p.id);
+      this.text(p.x, p.topY, p.z, l.kind.type === 'item' ? 'กระเป๋าเต็ม' : 'ช่องประเภทใช้งานเต็ม', 'info', undefined, p.id);
       return false;
     }
     l.dead = true;
@@ -1563,7 +1567,7 @@ export class Sim {
 
   /** Shift+drag in the bag: moves `n` of the stack in slot `from` onto slot `to` (empty, or the same stack with room). */
   splitInBag(p: Player, from: number, to: number, n: number): boolean {
-    if (!p.alive || !splitInto(p.bag, from, p.bag, to, n)) return false;
+    if (!p.alive || p.tabAt(to) !== 'use' || !splitInto(p.bag, from, p.bag, to, n)) return false;
     this.afterChange(p);
     return true;
   }
@@ -1571,6 +1575,33 @@ export class Sim {
   sortBag(p: Player, key: SortKey, desc: boolean): void {
     p.sortBag(key, desc);
     this.afterChange(p);
+  }
+
+  /**
+   * Buys the next `step` slots of a bag tab with gold (bagTabs.ts nextExpand; off until the owner opens it in /admin).
+   * `price` is what the player saw: refused if it no longer matches. The crystal way is the server's (it needs the DB).
+   */
+  bagExpandGold(p: Player, tab: BagTab, price: number): boolean {
+    const cfg = currentBalance().bagExpand;
+    const next = nextExpand(cfg, p.bagSlots, tab);
+    if (typeof next === 'string' || !cfg.gold) {
+      this.log(typeof next === 'string' ? next : 'ขยายช่องด้วยทองไม่ได้ตอนนี้', '#ff8a6a', p.id);
+      return false;
+    }
+    if (next.gold !== price) {
+      this.log('ราคาเปลี่ยนแล้ว ลองอีกครั้ง', '#ff8a6a', p.id);
+      return false;
+    }
+    if (p.gold < next.gold) {
+      this.log(`ทองไม่พอ — ต้องใช้ ${next.gold.toLocaleString()} G`, '#ff8a6a', p.id);
+      return false;
+    }
+    p.gold -= next.gold;
+    p.growTab(tab, next.add);
+    this.log(`ขยาย${TAB_NAME[tab]}เป็น ${p.bagSlots[tab]} ช่อง (${next.gold.toLocaleString()} G)`, '#f2c230', p.id);
+    this.sfx('trade', p.x, p.z, p.id);
+    this.afterChange(p);
+    return true;
   }
 
   buyPotion(p: Player, kind: PotionKind, size: PotionSize, n: number): boolean {
@@ -1581,7 +1612,7 @@ export class Sim {
       return false;
     }
     if (!p.addPotions(kind, size, n)) {
-      this.log('กระเป๋าเต็ม — ยาช่องละไม่เกิน 10 ขวด', '#ff8a6a', p.id);
+      this.log('ช่องประเภทใช้งานเต็ม — ยาช่องละไม่เกิน 10 ขวด', '#ff8a6a', p.id);
       return false;
     }
     p.gold -= cost;
@@ -1601,7 +1632,7 @@ export class Sim {
       return false;
     }
     if (!p.addStones('phoenix', n)) {
-      this.log(`กระเป๋าเต็ม — ${STONE_NAME.phoenix}ช่องละไม่เกิน ${STONE_STACK} อัน`, '#ff8a6a', p.id);
+      this.log(`ช่องประเภทใช้งานเต็ม — ${STONE_NAME.phoenix}ช่องละไม่เกิน ${STONE_STACK} อัน`, '#ff8a6a', p.id);
       return false;
     }
     p.gold -= cost;
@@ -1654,7 +1685,7 @@ export class Sim {
       return false;
     }
     if (!p.addStones('return_scroll', n)) {
-      this.log(`กระเป๋าเต็ม — ${STONE_NAME.return_scroll}ช่องละไม่เกิน ${STONE_STACK} ม้วน`, '#ff8a6a', p.id);
+      this.log(`ช่องประเภทใช้งานเต็ม — ${STONE_NAME.return_scroll}ช่องละไม่เกิน ${STONE_STACK} ม้วน`, '#ff8a6a', p.id);
       return false;
     }
     p.gold -= cost;
@@ -1675,7 +1706,7 @@ export class Sim {
       this.log('ทองไม่พอ', '#ff8a6a', p.id);
       return false;
     }
-    if (!p.hasBagSpace()) {
+    if (!p.hasBagSpace('gear')) {
       this.log('กระเป๋าเต็ม', '#ff8a6a', p.id);
       return false;
     }
@@ -1750,6 +1781,9 @@ export class Sim {
     if (!this.near(p, 'keeper') || !validSlot(bagI, p.bag.length) || (to !== -1 && !validSlot(to, st.size))) return false;
     if (!p.bag[bagI]) return false;
     if (isBound(p.bag[bagI])) return this.refuseBound(p);
+    // A swap brings the stash entry back into this bag slot: only if it belongs in this tab.
+    const back = to === -1 ? null : st.items[to];
+    if (back && !sameStack(p.bag[bagI], back) && p.tabAt(bagI) !== tabOf(back)) return false;
     const ok = to === -1 ? fillInto(p.bag, bagI, st.items) : dropOnto(p.bag, bagI, st.items, to);
     if (!ok) {
       this.log('คลังเต็ม', '#ff8a6a', p.id);
@@ -1764,10 +1798,13 @@ export class Sim {
   stashTake(p: Player, i: number, to = -1): boolean {
     const st = p.stash;
     if (!this.near(p, 'keeper') || !validSlot(i, st.size) || (to !== -1 && !validSlot(to, p.bag.length))) return false;
-    if (!st.items[i]) return false;
-    const ok = to === -1 ? fillInto(st.items, i, p.bag) : dropOnto(st.items, i, p.bag, to);
+    const a = st.items[i];
+    if (!a) return false;
+    // Onto a bag slot: only one of the tab it belongs in (a swap sends the bag entry to the stash, which takes anything).
+    if (to !== -1 && p.tabAt(to) !== tabOf(a)) return false;
+    const ok = to === -1 ? fillInto(st.items, i, p.bag, p.bagSlots) : dropOnto(st.items, i, p.bag, to);
     if (!ok) {
-      this.log('กระเป๋าเต็ม', '#ff8a6a', p.id);
+      this.log(TAB_FULL[tabOf(a)], '#ff8a6a', p.id);
       return false;
     }
     this.afterStash(p);
@@ -1791,6 +1828,7 @@ export class Sim {
     const b = list(to);
     if (!a || !b) return false;
     if (from === 'bag' && to === 'stash' && isBound(a[i])) return this.refuseBound(p);
+    if (to === 'bag' && p.tabAt(j) !== 'use') return false;
     if (!splitInto(a, i, b, j, n)) return false;
     if (from === 'bag' && to === 'stash') this.tutTask(p, 'stashItem');
     this.afterStash(p);

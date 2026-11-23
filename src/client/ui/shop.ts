@@ -60,7 +60,7 @@ export class ShopWindow {
         this.host.log(`ทองไม่พอ — ต้องใช้ ${price.toLocaleString()} G`, '#ff8a6a');
         return;
       }
-      if (!g.player.hasBagSpace()) {
+      if (!g.player.hasBagSpace('gear')) {
         this.host.log('กระเป๋าเต็ม', '#ff8a6a');
         return;
       }

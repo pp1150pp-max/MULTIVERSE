@@ -4,6 +4,7 @@ import type { SkillSlot, WearSlot } from '../data/classes';
 import type { WaveSnap } from '../waveGame';
 import type { SkillBook } from '../skillBook';
 import type { BagEntry, BuffScroll, ClassId, EquipSlot, Item, PotionKind, PotionSize, Rarity, Stats, Vec2 } from '../types';
+import type { BagPay, BagSlots, BagTab } from '../bagTabs';
 import type { LootKind } from '../sim/Loot';
 import type { SimEvent } from '../sim/types';
 import type { AutoSettings, Buffs, BuybackEntry, LootFilter, PotionSelect, SortKey } from '../sim/Player';
@@ -131,6 +132,8 @@ export type ActionMsg =
   | { t: 'act'; a: 'stashMove'; from: number; to: number }
   | { t: 'act'; a: 'stashSort'; key: SortKey; desc: boolean }
   | { t: 'act'; a: 'stashBuy' }
+  /** Buys the next slots of a bag tab (hidden until /admin opens it): `price` is the price the player saw, in `pay`. */
+  | { t: 'act'; a: 'bagExpand'; tab: BagTab; pay: BagPay; price: number }
   /** amount > 0 deposits gold, < 0 withdraws it. */
   | { t: 'act'; a: 'stashGold'; amount: number }
   /** Market broker (consignment market). The server answers each with a `market` message of the same `req`. */
@@ -346,7 +349,7 @@ export interface PrivateSnap {
   /** The `seq` of the last input the server had applied when it took this snapshot. */
   ack?: number;
   /** Bag and equipment, only when they changed since the last snapshot. */
-  inv?: { equipment: Partial<Record<EquipSlot, Item>>; bag: (BagEntry | null)[]; buyback?: BuybackEntry[] };
+  inv?: { equipment: Partial<Record<EquipSlot, Item>>; bag: (BagEntry | null)[]; buyback?: BuybackEntry[]; /** Bag tabs (src/shared/bagTabs.ts): `bag` is the gear tab then the usable tab. Missing = 30 + 30. */ bagSlots?: BagSlots };
   /** Seconds of play until the buyback list clears. */
   buybackLeft?: number;
   /** Cosmetic ids the account owns, only when it changed since the last snapshot (guests: always none). */

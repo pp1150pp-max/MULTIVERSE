@@ -219,8 +219,8 @@ export class Trades {
   /** The two sides as the swap check wants them (live bags and gold). */
   private sides(trade: Trade, a: TradeActor, b: TradeActor): [SwapSide, SwapSide] {
     return [
-      { name: trade.a.name, bag: a.player.bag, gold: a.player.gold, offers: trade.a.offers, offerGold: trade.a.gold },
-      { name: trade.b.name, bag: b.player.bag, gold: b.player.gold, offers: trade.b.offers, offerGold: trade.b.gold },
+      { name: trade.a.name, bag: a.player.bag, bagSlots: a.player.bagSlots, gold: a.player.gold, offers: trade.a.offers, offerGold: trade.a.gold },
+      { name: trade.b.name, bag: b.player.bag, bagSlots: b.player.bagSlots, gold: b.player.gold, offers: trade.b.offers, offerGold: trade.b.gold },
     ];
   }
 

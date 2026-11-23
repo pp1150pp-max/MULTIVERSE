@@ -139,7 +139,7 @@ async function run(): Promise<void> {
   const bad: [Record<string, unknown>, number, string][] = [
     [{ place: 'pocket' }, 400, 'place'],
     [{ op: 'burn' }, 400, 'op'],
-    [{ key: 30 }, 400, 'bag index past the end'],
+    [{ key: 60 }, 400, 'bag index past the end (30 + 30 slots)'],
     [{ key: 1.5 }, 400, 'fractional index'],
     [{ sig: 'item:someone-else' }, 409, 'slot no longer holds what the page saw'],
     [{ key: (wi + 5) % 30 }, 409, 'empty slot'],

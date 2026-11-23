@@ -43,6 +43,7 @@ import type { Hazard } from '../../shared/sim/volcanoHeart';
 import type { MarketCall, MarketReply } from '../../shared/sim/market';
 import type { RoomLobbyView, RoomSnap } from '../../shared/bossRoom';
 import type { WaveSnap } from '../../shared/waveGame';
+import { defaultBagSlots, type BagPay, type BagTab } from '../../shared/bagTabs';
 import type { MailCall, MailReply } from '../../shared/mail';
 import { WalkTarget } from '../walkTo';
 import type { ReportReply } from '../../shared/reports';
@@ -417,7 +418,7 @@ export class OnlineBackend implements Backend {
       // The first snapshot after joining always carries everything (look bundle included).
       name: mine.name!, classId: mine.cls!, level: first.me.level, exp: first.me.exp, gold: first.me.gold,
       potSel: first.me.potSel, lootFilter: first.me.lootFilter, autoSettings: first.me.autoSettings, bossKills: first.me.bossKills,
-      equipment: first.me.inv?.equipment ?? {}, bag: first.me.inv?.bag ?? [], zone: this.zone.id,
+      equipment: first.me.inv?.equipment ?? {}, bag: first.me.inv?.bag ?? [], bagSlots: first.me.inv?.bagSlots, zone: this.zone.id,
       buyback: first.me.inv?.buyback, buybackLeft: first.me.buybackLeft, skills: first.me.skills,
     };
     this.me = new Player(myId, NO_SIM, data);
@@ -1101,6 +1102,7 @@ export class OnlineBackend implements Backend {
     if (pv.inv) {
       me.equipment = pv.inv.equipment;
       me.bag = pv.inv.bag;
+      me.bagSlots = pv.inv.bagSlots ?? defaultBagSlots();
       me.buyback = pv.inv.buyback ?? [];
       this.events.push({ t: 'inventory', to: me.id });
     }
@@ -1381,6 +1383,7 @@ export class OnlineBackend implements Backend {
   stashMove(from: number, to: number): void { this.send({ t: 'act', a: 'stashMove', from, to }); }
   stashSort(key: SortKey, desc: boolean): void { this.send({ t: 'act', a: 'stashSort', key, desc }); }
   stashBuyRow(): void { this.send({ t: 'act', a: 'stashBuy' }); }
+  bagExpand(tab: BagTab, pay: BagPay, price: number): void { this.send({ t: 'act', a: 'bagExpand', tab, pay, price }); }
   stashGold(amount: number): void { this.send({ t: 'act', a: 'stashGold', amount }); }
 
   enhance(uid: string, protect: boolean): Promise<EnhanceOutcome> {
