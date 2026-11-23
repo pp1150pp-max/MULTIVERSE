@@ -9,7 +9,7 @@ import { Effects } from './effects';
 import { PlayerView } from './views';
 import { ISO_DIR } from './world';
 import { applyCosTuning, cosTune, currentCosTuning, resetCosTune, setCosTuneValue } from './cosTune';
-import { axisHiddenInDir, checkCosTuning, COS_AXES, COS_TUNE_FIELDS, cosTuneOf, dirFieldKey, isPerFacingKey, partOfView, sameCosTuning, savePartOf, valueAtDir, VIEW_DIR_NAME, VIEW_DIRS, viewOffKey, WING_ONE_DIR_FIELDS, type AxisSpec, type CosTuning, type TunedSlot, type ViewDir } from '../shared/cosTuning';
+import { axisHiddenInDir, checkCosTuning, COS_AXES, COS_TUNE_FIELDS, cosTuneOf, dirFieldKey, isPerFacingKey, partOfView, savePartOf, TUNED_SLOTS, valueAtDir, VIEW_DIR_NAME, VIEW_DIRS, viewOffKey, WING_ONE_DIR_FIELDS, type AxisSpec, type CosTuning, type TunedSlot, type ViewDir } from '../shared/cosTuning';
 import { COSMETICS, COS_SLOTS, COS_SLOT_NAME, cosById, MOUNT_SPEED, type CosSlot, type CosWorn } from '../shared/data/cosmetics';
 import { Player } from '../shared/sim/Player';
 import type { Sim } from '../shared/sim/Sim';
@@ -20,31 +20,54 @@ import type { ClassId } from '../shared/types';
 const NO_SIM = null as unknown as Sim;
 
 const CSS = `
-.cosp { position: relative; overflow: hidden; background: #10131a; color: #e8e4d8; font: 13px/1.4 system-ui, sans-serif; }
-.cosp .cosp-view { position: absolute; inset: 0; }
+.cosp { --cosp-w: min(400px, 55%); position: relative; overflow: hidden; background: #10131a; color: #e8e4d8; font: 13px/1.4 system-ui, sans-serif; }
+.cosp .cosp-view { position: absolute; top: 0; bottom: 0; left: 0; right: var(--cosp-w); }
 .cosp .cosp-view canvas { display: block; }
-.cosp .cosp-panel { position: absolute; top: 8px; left: 8px; width: 380px; max-width: calc(100% - 16px); max-height: calc(100% - 16px); overflow: auto;
-  background: rgba(16, 19, 26, 0.9); border: 1px solid #3a4152; border-radius: 6px; padding: 10px; box-sizing: border-box; }
+.cosp .cosp-panel { position: absolute; top: 0; right: 0; bottom: 0; width: var(--cosp-w); display: flex; flex-direction: column;
+  background: #161a24; border-left: 1px solid #3a4152; box-sizing: border-box; }
+.cosp .tabs { display: flex; flex-wrap: wrap; gap: 2px; padding: 6px 6px 0; border-bottom: 1px solid #3a4152; }
+.cosp .tabs button { margin: 0; border-radius: 4px 4px 0 0; }
+.cosp .tabs button.on { background: #4a5a80; border-color: #8fa8e0; }
+.cosp .tabs button.off { opacity: 0.45; }
+.cosp .body { flex: 1; overflow: auto; padding: 8px 10px; }
+.cosp .bar { border-top: 1px solid #3a4152; padding: 6px 10px; background: #1b2030; }
+.cosp button.save { background: #2f5a3a; border-color: #5aa070; font-weight: bold; }
+.cosp button:disabled { opacity: 0.5; cursor: default; }
 .cosp h1 { font-size: 15px; margin: 0 0 6px; }
 .cosp h2 { font-size: 12px; margin: 10px 0 4px; color: #f2d58a; }
-.cosp details { border: 1px solid #2c3343; border-radius: 4px; padding: 4px 6px; margin: 4px 0; }
+.cosp details { border: 1px solid #2c3343; border-radius: 4px; padding: 4px 6px; margin: 8px 0; }
 .cosp summary { cursor: pointer; color: #f2d58a; }
 .cosp .row { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 3px 0; }
 .cosp .row label { flex: 1; min-width: 0; }
 .cosp .row > span, .cosp .row > select, .cosp .row > input { flex-shrink: 0; }
 .cosp select, .cosp textarea { background: #1d2230; color: inherit; border: 1px solid #3a4152; border-radius: 3px; padding: 2px 4px; font: inherit; }
-.cosp input[type=range] { width: 110px; vertical-align: middle; }
+.cosp .grp { margin: 10px 0 2px; color: #f2d58a; font-size: 12px; border-bottom: 1px solid #2c3343; }
+.cosp .fld { margin: 3px 0; }
+.cosp .fld .lb { font-size: 12px; color: #c8c4b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cosp .ct { display: flex; align-items: center; gap: 3px; }
+.cosp .fld input[type=range] { flex: 1; min-width: 60px; }
+.cosp .fld button { margin: 0; padding: 1px 7px; }
+.cosp .fld .undo { visibility: hidden; }
+.cosp .fld.changed .undo { visibility: visible; }
+.cosp .fld.changed .val, .cosp .fld.changed label { color: #7fd0ff; }
 .cosp .val { width: 64px; text-align: right; }
-.cosp .val.changed { color: #7fd0ff; }
+.cosp .badge { display: inline-block; font-size: 10px; padding: 0 4px; margin-right: 4px; border-radius: 3px; background: #5a4a20; color: #ffe39a; }
 .cosp button { background: #2a3245; color: inherit; border: 1px solid #4a5570; border-radius: 3px; padding: 3px 6px; margin: 2px 2px 2px 0; cursor: pointer; font: inherit; }
-.cosp button:hover { background: #36405a; }
-.cosp .dirs { display: grid; grid-template-columns: repeat(3, 36px); gap: 2px; margin: 4px 0; }
-.cosp .dirs button { margin: 0; padding: 3px 0; }
+.cosp button:hover:not(:disabled) { background: #36405a; }
+.cosp .dirs { display: grid; grid-template-columns: repeat(3, 52px); gap: 3px; margin: 4px 0; }
+.cosp .dirs button { margin: 0; padding: 5px 0; position: relative; }
+.cosp .dirs button.mid { font-size: 11px; }
 .cosp .dirs button.on { background: #4a5a80; border-color: #8fa8e0; }
-.cosp .note { color: #9aa3b8; font-size: 11px; }
+.cosp .dirs button.cur { box-shadow: inset 0 -2px 0 #f2d58a; }
+.cosp .dirs button.has::after { content: '•'; position: absolute; top: -3px; right: 4px; color: #7fd0ff; font-size: 16px; }
+.cosp .note { color: #9aa3b8; font-size: 11px; margin: 4px 0; }
 .cosp .title-prev { display: inline-block; margin: 4px 0; padding: 6px 10px; border-radius: 6px; border: 2px solid var(--c1); background: var(--c2); }
 .cosp .title-prev .n { font-weight: bold; color: var(--c1); }
 .cosp .title-prev .b { margin-top: 4px; padding: 3px 8px; border-radius: 10px; background: #fff; color: #222; border: 2px solid var(--c1); }
+.cosp .modal { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; z-index: 5; }
+.cosp .modal > div { background: #1b2030; border: 1px solid #4a5570; border-radius: 6px; padding: 12px; width: min(620px, 92%); max-height: 80%; display: flex; flex-direction: column; box-sizing: border-box; }
+.cosp .modal .list { overflow: auto; flex: 1; margin: 6px 0; border: 1px solid #2c3343; padding: 4px 6px; }
+.cosp .modal .list label { display: block; padding: 2px 0; }
 `;
 
 /**
@@ -98,6 +121,25 @@ const ONE_WING_AXES: AxisSpec[] = [
   { axis: 'y', key: 'oneBackSeat', sign: 1, label: 'Y ความสูงโคนปีก (ตอนขี่ จากอาน)', ride: true },
 ];
 
+/** The panel's tabs: the character, one per kind of piece, and the rest (owner 2026-11-23). */
+type Tab = 'char' | TunedSlot | 'more';
+/** Slider groups on a piece's tab, in order; a field not listed below goes in the last one. */
+const GROUP_ORDER = ['ตำแหน่ง', 'ขนาดและรูปทรง', 'การวาดหน้า/หลัง', 'การขยับ', 'อื่น ๆ'];
+const GROUP_OF: Record<string, string> = {
+  h: 'ขนาดและรูปทรง', root: 'ขนาดและรูปทรง', oneSize: 'ขนาดและรูปทรง', oneTilt: 'ขนาดและรูปทรง', oneSqueeze: 'ขนาดและรูปทรง',
+  riderSword: 'ขนาดและรูปทรง', riderMage: 'ขนาดและรูปทรง', riderGunslinger: 'ขนาดและรูปทรง',
+  size: 'ขนาดและรูปทรง', alpha: 'ขนาดและรูปทรง', sparkSize: 'ขนาดและรูปทรง', stepSize: 'ขนาดและรูปทรง',
+  depth: 'การวาดหน้า/หลัง', overBack: 'การวาดหน้า/หลัง', oneDepth: 'การวาดหน้า/หลัง', nearSide: 'การวาดหน้า/หลัง', nearFrontDiag: 'การวาดหน้า/หลัง',
+  nearBackDiag: 'การวาดหน้า/หลัง', nearCut: 'การวาดหน้า/หลัง', nearDepth: 'การวาดหน้า/หลัง', front: 'การวาดหน้า/หลัง', cutFrontDiag: 'การวาดหน้า/หลัง',
+  cutSide: 'การวาดหน้า/หลัง', cutBackDiag: 'การวาดหน้า/หลัง', splitFront: 'การวาดหน้า/หลัง', frontDiag: 'การวาดหน้า/หลัง', behind: 'การวาดหน้า/หลัง',
+  under: 'การวาดหน้า/หลัง', underBehind: 'การวาดหน้า/หลัง',
+  headOnLift: 'ตำแหน่ง', fly: 'ตำแหน่ง', standFront: 'ตำแหน่ง', frontDist: 'ตำแหน่ง', frontSide: 'ตำแหน่ง',
+  flap: 'การขยับ', flapWalk: 'การขยับ', anim: 'การขยับ', bob: 'การขยับ', pulse: 'การขยับ', sparks: 'การขยับ', stepEvery: 'การขยับ',
+};
+const groupOf = (key: string): string => GROUP_OF[key] ?? 'อื่น ๆ';
+/** A shorter name for the slider (the full one shows on hover). */
+const shortLabel = (label: string): string => label.replace(/^ปีกข้างเดียว: /, '');
+
 const state = {
   /** The facing the position sliders edit: '' = every facing (the base value), else one of the 8. */
   view: '' as ViewDir | '',
@@ -108,8 +150,8 @@ const state = {
   spin: false,
   dir: 7,
   zoom: 9,
-  /** Which worn piece's sliders are open. */
-  open: 'wings' as CosSlot,
+  /** The panel's open tab. */
+  tab: 'char' as Tab,
   /** The "used by every facing" box under a picked facing is open. */
   sharedOpen: false,
 };
@@ -127,7 +169,16 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
   viewEl.className = 'cosp-view';
   const panel = document.createElement('div');
   panel.className = 'cosp-panel';
-  panel.textContent = 'กำลังโหลด…';
+  const tabsEl = document.createElement('div');
+  tabsEl.className = 'tabs';
+  const bodyEl = document.createElement('div');
+  bodyEl.className = 'body';
+  bodyEl.textContent = 'กำลังโหลด…';
+  const barEl = document.createElement('div');
+  barEl.className = 'bar';
+  panel.append(tabsEl, bodyEl, barEl);
+  /** The tab the panel was last built for (the scroll position is kept within a tab). */
+  let builtTab: Tab | null = null;
   root.replaceChildren(viewEl, panel);
 
   // The server's tuning: the bench starts from it, and the owner can save over it.
@@ -163,8 +214,8 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
   scene.background = new THREE.Color('#2b3a2a');
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 400);
   const resize = () => {
-    const w = Math.max(1, root.clientWidth);
-    const hh = Math.max(1, root.clientHeight);
+    const w = Math.max(1, viewEl.clientWidth);
+    const hh = Math.max(1, viewEl.clientHeight);
     renderer.setSize(w, hh);
     const aspect = w / hh;
     const h = state.zoom / 2;
@@ -175,7 +226,7 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
     camera.updateProjectionMatrix();
   };
   const ro = new ResizeObserver(resize);
-  ro.observe(root);
+  ro.observe(viewEl);
   cleanups.push(() => ro.disconnect());
   resize();
   const camTarget = new THREE.Vector3(0, 0.9, 0);
@@ -257,8 +308,9 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
   }
 
   let dirButtons: HTMLButtonElement[] = [];
-  const markDir = () => dirButtons.forEach((b, i) => b.classList.toggle('on', i === state.dir));
-  let statusEl: HTMLElement | null = null;
+  /** Puts the grid's dots on the facings that have their own values (set by the open piece's tab). */
+  let refreshDots = () => {};
+  const markDir = () => dirButtons.forEach((b, i) => b.classList.toggle('cur', i === state.dir));
   buildPanel();
 
   let last = performance.now();
@@ -336,45 +388,135 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
   raf = requestAnimationFrame(loop);
 
 
-  /** Is what the bench shows now the same as the server's? */
-  // A function declaration (hoisted): buildPanel() above calls it before this line runs.
-  function updateStatus(): void {
-    if (!statusEl) return;
+  /** Every value the bench shows that differs from the server's saved one (what the save button would save). */
+  function pendingChanges(): { id: string; key: string; text: string }[] {
     const now = checkCosTuning(currentCosTuning(), false).tuning ?? {};
-    const same = serverTuning && sameCosTuning(serverTuning, now);
-    statusEl.textContent = serverMsg || (same ? '✓ ตอนนี้ตรงกับค่าของเซิร์ฟ' : '• ตอนนี้ต่างจากค่าของเซิร์ฟ (ยังไม่ได้บันทึก)');
+    const saved = serverTuning ?? {};
+    const out: { id: string; key: string; text: string }[] = [];
+    for (const c of COSMETICS) {
+      const a = cosTuneOf(saved, c.id);
+      const b = cosTuneOf(now, c.id);
+      if (!a || !b) continue;
+      const fields = COS_TUNE_FIELDS[c.slot as TunedSlot];
+      for (const k of Object.keys(a)) {
+        if (a[k] === b[k]) continue;
+        const show = (v: number | boolean) => (typeof v === 'boolean' ? (v ? 'เปิด' : 'ปิด') : String(v));
+        out.push({ id: c.id, key: k, text: `${c.name} · ${fields[k]?.label ?? k}: ${show(a[k])} → ${show(b[k])}` });
+      }
+    }
+    return out;
+  }
+
+  /** The save bar and the arrow grid's dots follow every change (a function declaration: buildPanel() calls it early). */
+  function updateStatus(): void {
+    refreshDots();
+    barEl.innerHTML = '';
+    const n = pendingChanges().length;
+    const line = document.createElement('div');
+    line.className = 'note';
+    line.textContent = serverMsg || (!server ? 'หน้านี้ทดลองอย่างเดียว ไม่มีปุ่มบันทึกของเซิร์ฟ' : n ? `• ยังไม่ได้บันทึก ${n} ค่า` : '✓ ตรงกับค่าของเซิร์ฟ');
+    barEl.append(line);
+    if (server) {
+      const save = document.createElement('button');
+      save.className = 'save';
+      save.textContent = `💾 บันทึกที่แก้ (${n} ค่า)`;
+      save.disabled = !n || !canEdit;
+      save.onclick = () => openSaveDialog();
+      barEl.append(save);
+    }
+    const undo = document.createElement('button');
+    undo.textContent = 'ยกเลิกที่แก้ทั้งหมด';
+    undo.disabled = !n;
+    undo.onclick = () => {
+      applyCosTuning(serverTuning ?? {});
+      buildPanel();
+    };
+    barEl.append(undo);
+    if (server && !canEdit) {
+      const g = document.createElement('div');
+      g.className = 'note';
+      g.textContent = 'บันทึกค่าของเซิร์ฟได้เฉพาะเจ้าของ (GM ทดลองได้อย่างเดียว)';
+      barEl.append(g);
+    }
   }
 
   /**
-   * Owner only: saves one piece's `part` (see partOf) for the whole server. Everything else stays as last saved:
-   * other pieces, other views, and this piece's other fields (still only tried out on the bench).
+   * Owner only: lists every changed value (all ticked), saves the ticked ones for the whole server. The rest
+   * stays as last saved, and unticked changes stay tried out on the bench (savePartOf per piece).
    */
-  async function savePart(id: string, slot: TunedSlot, part: (key: string) => boolean, partName: string): Promise<void> {
-    if (!server || !confirm(`บันทึก${partName}ของ ${cosById(id)?.name ?? id} เป็นค่าเริ่มต้นทั้งเซิร์ฟเลยไหม? (ชิ้นอื่นและมุมอื่นไม่เปลี่ยน)`)) return;
-    const next = savePartOf(serverTuning ?? {}, id, cosTune(id)!, part);
-    try {
-      const r = await server.save(next);
-      serverTuning = r.tuning;
-      serverMsg = '✓ บันทึกแล้ว ผู้เล่นที่ออนไลน์อยู่เห็นทันที';
-    } catch (e) {
-      serverMsg = `บันทึกไม่สำเร็จ: ${(e as Error).message}`;
-    }
-    buildPanel();
-    serverMsg = '';
+  function openSaveDialog(): void {
+    if (!server) return;
+    const list = pendingChanges();
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    const box = document.createElement('div');
+    modal.append(box);
+    const title = document.createElement('h1');
+    title.textContent = `บันทึกเป็นค่าเริ่มต้นทั้งเซิร์ฟ (${list.length} ค่า)`;
+    const hint = document.createElement('div');
+    hint.className = 'note';
+    hint.textContent = 'ติ๊กค่าที่จะบันทึก ผู้เล่นที่ออนไลน์อยู่เห็นทันที · ค่าที่ไม่ติ๊กยังทดลองอยู่ในแท่น ไม่ถูกบันทึก';
+    const items = document.createElement('div');
+    items.className = 'list';
+    const ticks = list.map((x) => {
+      const l = document.createElement('label');
+      const c = document.createElement('input');
+      c.type = 'checkbox';
+      c.checked = true;
+      l.append(c, ' ', x.text);
+      items.append(l);
+      return c;
+    });
+    const all = document.createElement('button');
+    all.textContent = 'เลือกทั้งหมด / ไม่เลือก';
+    all.onclick = () => {
+      const on = !ticks.every((c) => c.checked);
+      for (const c of ticks) c.checked = on;
+    };
+    const ok = document.createElement('button');
+    ok.className = 'save';
+    ok.textContent = '💾 บันทึกที่เลือก';
+    const cancel = document.createElement('button');
+    cancel.textContent = 'ยกเลิก';
+    cancel.onclick = () => modal.remove();
+    ok.onclick = async () => {
+      const picked = new Set(list.filter((_, i) => ticks[i].checked).map((x) => `${x.id}\n${x.key}`));
+      if (!picked.size) return;
+      let next: CosTuning = serverTuning ?? {};
+      for (const id of new Set(list.map((x) => x.id))) next = savePartOf(next, id, cosTune(id)!, (k) => picked.has(`${id}\n${k}`));
+      ok.disabled = true;
+      try {
+        const r = await server.save(next);
+        serverTuning = r.tuning;
+        serverMsg = `✓ บันทึกแล้ว ${picked.size} ค่า ผู้เล่นที่ออนไลน์อยู่เห็นทันที`;
+      } catch (e) {
+        serverMsg = `บันทึกไม่สำเร็จ: ${(e as Error).message}`;
+      }
+      modal.remove();
+      buildPanel();
+      serverMsg = '';
+    };
+    box.append(title, hint, items, all, ok, cancel);
+    root.append(modal);
   }
 
   function buildPanel(): void {
-    panel.innerHTML = '';
+    const scroll = bodyEl.scrollTop;
+    const sameTab = builtTab === state.tab;
+    builtTab = state.tab;
+    tabsEl.innerHTML = '';
+    bodyEl.innerHTML = '';
+    refreshDots = () => {};
     const add = <T extends HTMLElement>(parent: HTMLElement, e: T): T => {
       parent.append(e);
       return e;
     };
-    const h = (tag: string, text: string, parent: HTMLElement = panel) => {
+    const h = (tag: string, text: string, parent: HTMLElement = bodyEl) => {
       const e = document.createElement(tag);
       e.textContent = text;
       return add(parent, e);
     };
-    const row = (label: string, input: HTMLElement, parent: HTMLElement = panel) => {
+    const row = (label: string, input: HTMLElement, parent: HTMLElement = bodyEl) => {
       const r = document.createElement('div');
       r.className = 'row';
       const l = document.createElement('label');
@@ -396,285 +538,295 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
       c.onchange = () => on(c.checked);
       return c;
     };
-    const button = (text: string, on: () => void, parent: HTMLElement = panel) => {
+    const button = (text: string, on: () => void, parent: HTMLElement = bodyEl) => {
       const b = document.createElement('button');
       b.textContent = text;
       b.onclick = on;
       return add(parent, b);
     };
-
-    h('h1', 'ทดลองของแต่งตัว');
-    h('div', note).className = 'note';
-
-    // ---- what to wear
-    h('h2', 'ตัวละครและของที่สวม');
-    row('อาชีพ', select(CLASS_IDS.map((c) => [c, c]), state.cls, (v) => {
-      state.cls = v as ClassId;
-      rebuildHero();
-    }));
-    for (const slot of COS_SLOTS) {
-      if (slot === 'orb') continue; // orb looks are made on the orb bench
+    const wornSelect = (slot: CosSlot) => {
       const opts: [string, string][] = [['', '— ไม่ใส่ —'], ...COSMETICS.filter((c) => c.slot === slot).map((c): [string, string] => [c.id, c.name])];
-      row(COS_SLOT_NAME[slot], select(opts, state.worn[slot] ?? '', (v) => {
+      return select(opts, state.worn[slot] ?? '', (v) => {
         if (v) state.worn[slot] = v;
         else delete state.worn[slot];
-        if (v && slot !== 'title') state.open = slot;
         if (slot === 'mount' && v) state.riding = true;
         dress(hero);
         buildPanel();
-      }));
-    }
-    if (state.worn.mount) {
-      row('ขี่สัตว์ขี่', check(state.riding, (v) => {
-        state.riding = v;
-        dress(hero);
-      }));
-    }
-    const title = cosById(state.worn.title);
-    if (title) {
-      // Name frames and chat bubbles are page text in the game (no 3D placement): shown here to look at only.
-      const box = document.createElement('div');
-      box.className = 'title-prev';
-      box.style.setProperty('--c1', title.color);
-      box.style.setProperty('--c2', title.color2);
-      h('div', 'ชื่อตัวละคร', box).className = 'n';
-      h('div', 'สวัสดี!', box).className = 'b';
-      panel.append(box);
-      h('div', 'กรอบชื่อ/ฟองแชท: ดูได้อย่างเดียว ไม่มีค่าให้ปรับ').className = 'note';
+      });
+    };
+
+    // ---- tabs
+    const tabs: [Tab, string][] = [['char', 'ตัวละคร'], ...TUNED_SLOTS.map((s): [Tab, string] => [s, COS_SLOT_NAME[s]]), ['more', 'อื่น ๆ']];
+    for (const [t, name] of tabs) {
+      const b = button(name, () => {
+        state.tab = t;
+        buildPanel();
+      }, tabsEl);
+      b.classList.toggle('on', t === state.tab);
+      if (t !== 'char' && t !== 'more' && !state.worn[t]) {
+        b.classList.add('off');
+        b.title = 'ยังไม่ได้สวม';
+      }
     }
 
-    // ---- facing and moving
-    h('h2', 'หันตัว (ครบ 8 ทิศ)');
-    const grid = document.createElement('div');
-    grid.className = 'dirs';
-    dirButtons = DIRS.map((d, i) => {
-      if (!d.label) {
-        const b = button(state.spin ? '⏸' : '⟳', () => {
-          state.spin = !state.spin;
-          state.walk = false;
+    if (state.tab === 'char') buildCharTab();
+    else if (state.tab === 'more') buildMoreTab();
+    else buildPieceTab(state.tab);
+    if (sameTab) bodyEl.scrollTop = scroll;
+    updateStatus();
+
+    function buildCharTab(): void {
+      h('div', note).className = 'note';
+      h('h2', 'ตัวละครและของที่สวม');
+      row('อาชีพ', select(CLASS_IDS.map((c) => [c, c]), state.cls, (v) => {
+        state.cls = v as ClassId;
+        rebuildHero();
+      }));
+      for (const slot of COS_SLOTS) {
+        if (slot === 'orb') continue; // orb looks are made on the orb bench
+        row(COS_SLOT_NAME[slot], wornSelect(slot));
+      }
+      if (state.worn.mount) row('ขี่สัตว์ขี่', check(state.riding, (v) => { state.riding = v; dress(hero); }));
+      const title = cosById(state.worn.title);
+      if (title) {
+        // Name frames and chat bubbles are page text in the game (no 3D placement): shown here to look at only.
+        const box = document.createElement('div');
+        box.className = 'title-prev';
+        box.style.setProperty('--c1', title.color);
+        box.style.setProperty('--c2', title.color2);
+        h('div', 'ชื่อตัวละคร', box).className = 'n';
+        h('div', 'สวัสดี!', box).className = 'b';
+        bodyEl.append(box);
+        h('div', 'กรอบชื่อ/ฟองแชท: ดูได้อย่างเดียว ไม่มีค่าให้ปรับ').className = 'note';
+      }
+      h('h2', 'หันตัวและเดิน');
+      dirGrid(undefined);
+      moveRows();
+      bodyEl.append(numField('ซูมกล้อง (เกมจริง 17)', '', 4, 17, 1, state.zoom, undefined, (v) => { state.zoom = v; resize(); }));
+      h('div', 'เดิน: WASD / ลูกศร หรือคลิกที่พื้น').className = 'note';
+    }
+
+    function moveRows(): void {
+      row('หมุนเองทีละทิศ (ทุก 1 วินาที)', check(state.spin, (v) => { state.spin = v; state.walk = false; buildPanel(); }));
+      row('เดินเป็นวง', check(state.walk, (v) => {
+        state.walk = v;
+        state.spin = false;
+        if (!v) hero.x = hero.z = 0;
+        buildPanel();
+      }));
+      row('ตาย (ดูปีกจางหาย)', check(!hero.alive, (v) => {
+        hero.alive = !v;
+        if (v) heroView.onDied();
+        else heroView.onRevived();
+      }));
+    }
+
+    /**
+     * One 3×3 grid for turning and for the facing the sliders edit (owner 2026-11-23): an arrow turns the
+     * character and edits that facing, the middle edits every facing (the base values). Dots = facings with values of their own.
+     */
+    function dirGrid(id: string | undefined): void {
+      const grid = document.createElement('div');
+      grid.className = 'dirs';
+      dirButtons = DIRS.map((d, i) => {
+        const b = button(d.label || 'ทุกมุม', () => {
+          if (!d.label) state.view = '';
+          else {
+            state.dir = i;
+            state.view = dirOfButton(i);
+            state.spin = state.walk = false;
+            walkTo = null;
+            face(hero, i);
+          }
           buildPanel();
         }, grid);
-        b.title = 'หมุนเองทีละทิศ ทุก 1 วินาที';
+        b.title = d.label ? `${d.name}: หันตัว + ปรับค่าเฉพาะทิศนี้` : 'ปรับค่าหลัก (ใช้ทุกทิศ)';
+        b.classList.toggle('on', state.view ? VIEW_DIR_BUTTON[state.view] === i : !d.label);
+        if (!d.label) b.classList.add('mid');
         return b;
+      });
+      bodyEl.append(grid);
+      markDir();
+      if (id) {
+        refreshDots = () => {
+          const v = cosTune(id);
+          dirButtons.forEach((b, i) => {
+            const dir = DIRS[i].label ? dirOfButton(i) : null;
+            b.classList.toggle('has', !!dir && !!v && Object.entries(v).some(([k, x]) => k.endsWith(`_at_${dir}`) && typeof x === 'number' && x !== 0));
+          });
+        };
       }
-      const b = button(d.label, () => {
-        state.dir = i;
-        state.view = dirOfButton(i); // a facing arrow also picks that facing for the position sliders (owner 2026-11-11)
-        state.spin = state.walk = false;
-        walkTo = null;
-        face(hero, i);
-        buildPanel();
-      }, grid);
-      b.title = d.name;
-      return b;
-    });
-    panel.append(grid);
-    markDir();
-    row('เดินเป็นวง', check(state.walk, (v) => {
-      state.walk = v;
-      state.spin = false;
-      if (!v) hero.x = hero.z = 0;
-      buildPanel();
-    }));
-    row('ตาย (ดูปีกจางหาย)', check(!hero.alive, (v) => {
-      hero.alive = !v;
-      if (v) heroView.onDied();
-      else heroView.onRevived();
-    }));
-    row('ซูมกล้อง (เกมจริง 17)', rangeBox(4, 17, 1, state.zoom, (v) => { state.zoom = v; resize(); }));
-    h('div', 'เดิน: WASD / ลูกศร หรือคลิกที่พื้น').className = 'note';
+    }
 
-    // ---- sliders for each worn piece
-    h('h2', 'ปรับค่าของแต่ละชิ้น (แยกรายชิ้น)');
-    // The view the position sliders edit: every view (the base value) or one of the 5 facings (an offset added
-    // in that view only; the front and front diagonal share one, the back and back diagonal too).
-    row('มุมที่ปรับตำแหน่ง', select([['', 'ทุกมุม (ค่าหลัก)'], ...VIEW_DIRS.map((d): [string, string] => [d, `ทิศ${VIEW_DIR_NAME[d]}`])], state.view, (v) => {
-      state.view = v as ViewDir | '';
-      if (state.view) {
-        state.dir = VIEW_DIR_BUTTON[state.view];
-        state.spin = state.walk = false;
-        walkTo = null;
-        face(hero, state.dir);
-      }
-      buildPanel();
-    }));
-    h('div', 'X = ซ้าย/ขวาของตัวละคร · Y = ขึ้น/ลง · Z = หน้า/หลัง · เลือกมุมแล้วเห็นเฉพาะแกนที่มีผลในมุมนั้น (ส่วนปรับของแต่ละทิศ ทั้ง 8 ทิศแยกกัน บวกเพิ่มจากค่าหลัก) · ปีกข้างเดียว: ขนาด ระยะ เอียง บีบ แยกต่อทิศด้วย · ค่าที่ใช้ทุกทิศอยู่ในกล่อง "ค่าที่ใช้ทุกทิศ" ปุ่มบันทึกทิศไม่เซฟค่าพวกนั้น').className = 'note';
-    for (const slot of COS_SLOTS) {
-      if (slot === 'title' || slot === 'orb') continue;
+    function buildPieceTab(slot: TunedSlot): void {
+      row(`${COS_SLOT_NAME[slot]}ที่สวม`, wornSelect(slot));
       const c = cosById(state.worn[slot]);
-      if (!c) continue;
-      // What "changed" means and what the reset buttons go back to: the last saved server-wide values.
+      if (!c) {
+        h('div', 'ยังไม่ได้สวมชิ้นในช่องนี้ เลือกด้านบนเพื่อปรับค่า').className = 'note';
+        return;
+      }
+      if ((slot === 'mount' || slot === 'wings') && state.worn.mount) row('ขี่สัตว์ขี่', check(state.riding, (v) => { state.riding = v; dress(hero); }));
+      h('h2', 'ทิศที่ปรับ');
+      dirGrid(c.id);
+      row('หมุนเองทีละทิศ', check(state.spin, (v) => { state.spin = v; state.walk = false; buildPanel(); }));
+      h('div', state.view
+        ? `กำลังปรับ: ทิศ${VIEW_DIR_NAME[state.view]} — ค่าที่มีป้าย "ทิศนี้" ใช้เฉพาะทิศนี้ (บวกจากค่าหลัก) ค่าในกล่อง "ค่าที่ใช้ทุกทิศ" เปลี่ยนแล้วมีผลทุกทิศ`
+        : 'กำลังปรับ: ทุกมุม (ค่าหลัก ใช้ทุกทิศ) · กดลูกศรเพื่อปรับเฉพาะทิศ · จุดฟ้า = ทิศที่มีค่าของตัวเอง').className = 'note';
+
+      // What "changed" means and what ↺ goes back to: the last saved server-wide values.
       const defs = cosTuneOf(serverTuning ?? {}, c.id)!;
-      const det = document.createElement('details');
-      det.open = state.open === slot;
-      det.ontoggle = () => {
-        if (det.open) state.open = slot;
-      };
-      h('summary', `${COS_SLOT_NAME[slot]}: ${c.name}`, det);
-      // ---- position: X / Y / Z
-      const axisKeys = new Set<string>();
       const curNow = cosTune(c.id)!;
-      const seen = new Set<string>();
+      const fields = COS_TUNE_FIELDS[slot];
+      const groups = new Map<string, HTMLElement[]>();
+      const shared = new Map<string, HTMLElement[]>();
+      const put = (to: Map<string, HTMLElement[]>, group: string, el: HTMLElement) => {
+        if (!to.has(group)) to.set(group, []);
+        to.get(group)!.push(el);
+      };
       // A single-wing picture (wingPair.ts): its own base Y, the old pair picture's fields hidden.
       const one = slot === 'wings' && assetSources[cosOneKey(c.id)] === 'file';
-      for (const spec of one && !state.view ? ONE_WING_AXES : COS_AXES[slot as TunedSlot]) {
+      const set = (key: string) => (v: number | boolean) => {
+        setCosTuneValue(c.id, key, v);
+        if (key === 'fly') buildPanel();
+        else updateStatus();
+      };
+
+      // ---- position: X / Y / Z
+      const axisKeys = new Set<string>();
+      const seen = new Set<string>();
+      for (const spec of one && !state.view ? ONE_WING_AXES : COS_AXES[slot]) {
         axisKeys.add(spec.key);
         if (spec.onlyIf && curNow[spec.onlyIf] !== true) continue;
-        const f = COS_TUNE_FIELDS[slot as TunedSlot][spec.key];
+        const f = fields[spec.key];
         if (f.kind !== 'num') continue;
         if (!state.view) {
           const lo = spec.sign === 1 ? f.min : -f.max;
           const hi = spec.sign === 1 ? f.max : -f.min;
-          const r = rangeBox(lo, hi, Math.min(f.step, 0.005), round(spec.sign * (curNow[spec.key] as number)), (v) => {
-            setCosTuneValue(c.id, spec.key, spec.sign === 1 ? v : v === 0 ? 0 : -v);
-            updateStatus();
-          }, (v) => Math.abs(spec.sign * v - (defs[spec.key] as number)) > 1e-6);
-          r.title = `ค่าที่บันทึกไว้ ${round(spec.sign * (defs[spec.key] as number))}`;
-          row(spec.label, r, det);
+          put(groups, 'ตำแหน่ง', numField(spec.label, f.label, lo, hi, Math.min(f.step, 0.005), round(spec.sign * (curNow[spec.key] as number)), round(spec.sign * (defs[spec.key] as number)), (v) => set(spec.key)(spec.sign === 1 ? v : v === 0 ? 0 : -v)));
         } else {
           if (spec.ride || seen.has(spec.axis) || axisHiddenInDir(spec.axis, state.view)) continue;
           seen.add(spec.axis);
           const key = viewOffKey(spec.axis, state.view);
-          const g = COS_TUNE_FIELDS[slot as TunedSlot][key];
+          const g = fields[key];
           if (g.kind !== 'num') continue;
-          const r = rangeBox(g.min, g.max, g.step, curNow[key] as number, (v) => {
-            setCosTuneValue(c.id, key, v);
-            updateStatus();
-          }, (v) => Math.abs(v - (defs[key] as number)) > 1e-6);
-          r.title = `ค่าที่บันทึกไว้ ${defs[key]}`;
-          row(`${spec.label.slice(0, 1)} ส่วนปรับทิศ${VIEW_DIR_NAME[state.view]}`, r, det);
+          put(groups, 'ตำแหน่ง', numField(spec.label.replace(/\s*\(.*\)$/, ''), g.label, g.min, g.max, g.step, curNow[key] as number, defs[key] as number, set(key), true));
         }
       }
-      if (state.view && !COS_AXES[slot as TunedSlot].some((s) => !axisHiddenInDir(s.axis, state.view as ViewDir))) h('div', 'ชิ้นนี้ไม่มีแกนที่มีผลในมุมนี้', det).className = 'note';
+      if (state.view && !COS_AXES[slot].some((s) => !axisHiddenInDir(s.axis, state.view as ViewDir))) put(groups, 'ตำแหน่ง', h('div', 'ชิ้นนี้ไม่มีแกนที่มีผลในมุมนี้'));
+
       // ---- single-wing picture, this facing only: the value used in it (base + this facing's offset, stored as the offset)
       if (one && state.view) {
         const view = state.view;
         for (const [key, dirs] of Object.entries(WING_ONE_DIR_FIELDS)) {
           if (!dirs.includes(view)) continue;
-          const f = COS_TUNE_FIELDS.wings[key];
+          const f = fields[key];
           if (f.kind !== 'num') continue;
           const offKey = dirFieldKey(key, view);
-          const savedAt = valueAtDir('wings', defs, key, view);
-          const r = rangeBox(f.min, f.max, f.step, round(valueAtDir('wings', curNow, key, view)), (v) => {
-            setCosTuneValue(c.id, offKey, round(v - (cosTune(c.id)![key] as number)));
-            updateStatus();
-          }, (v) => Math.abs(v - savedAt) > 1e-6);
-          r.title = `ค่าที่บันทึกไว้ในทิศนี้ ${round(savedAt)} (ค่าหลัก ${defs[key]} + ส่วนปรับ ${defs[offKey]})`;
-          row(`${f.label} · ทิศ${VIEW_DIR_NAME[view]}`, r, det);
+          put(groups, groupOf(key), numField(shortLabel(f.label), `${f.label} · ทิศ${VIEW_DIR_NAME[view]} (เก็บเป็นส่วนปรับจากค่าหลัก)`, f.min, f.max, f.step,
+            round(valueAtDir('wings', curNow, key, view)), round(valueAtDir('wings', defs, key, view)),
+            (v) => set(offKey)(round(v - (cosTune(c.id)![key] as number))), true));
         }
       }
-      // ---- everything else (used by every facing: under a picked facing it sits in its own box, which the facing's save leaves alone)
-      let shared: HTMLElement = det;
-      if (state.view) {
+
+      // ---- everything else (used by every facing: under a picked facing it goes in its own box)
+      for (const [key, f] of Object.entries(fields)) {
+        if (axisKeys.has(key) || isPerFacingKey(key)) continue;
+        if (one && (PAIR_ONLY.has(key) || (state.view && key in WING_ONE_DIR_FIELDS))) continue;
+        const el = f.kind === 'bool'
+          ? boolField(shortLabel(f.label), f.label, curNow[key] === true, defs[key] === true, set(key))
+          : numField(shortLabel(f.label), f.label, f.min, f.max, f.step, curNow[key] as number, defs[key] as number, set(key));
+        put(state.view ? shared : groups, groupOf(key), el);
+      }
+
+      const draw = (m: Map<string, HTMLElement[]>, parent: HTMLElement) => {
+        for (const g of GROUP_ORDER) {
+          const els = m.get(g);
+          if (!els?.length) continue;
+          h('div', g, parent).className = 'grp';
+          for (const el of els) parent.append(el);
+        }
+      };
+      draw(groups, bodyEl);
+      if (shared.size) {
         const box = document.createElement('details');
         box.open = state.sharedOpen;
         box.ontoggle = () => { state.sharedOpen = box.open; };
-        h('summary', 'ค่าที่ใช้ทุกทิศ (ปุ่มบันทึกทิศนี้ไม่เซฟ · บันทึกที่ "ทุกมุม (ค่าหลัก)")', box);
-        det.append(box);
-        shared = box;
+        h('summary', 'ค่าที่ใช้ทุกทิศ (เปลี่ยนแล้วมีผลทุกทิศ)', box);
+        draw(shared, box);
+        bodyEl.append(box);
       }
-      if (one && !state.view) h('div', 'ปีกภาพข้างเดียว: ซ่อนค่าของภาพปีกคู่แบบเก่าที่ไม่มีผล · ขนาด ระยะ เอียง บีบ ที่นี่คือค่าหลัก ปรับเพิ่มต่อทิศได้เมื่อเลือกทิศ', det).className = 'note';
-      for (const [key, f] of Object.entries(COS_TUNE_FIELDS[slot as TunedSlot])) {
-        if (axisKeys.has(key) || isPerFacingKey(key)) continue;
-        if (one && (PAIR_ONLY.has(key) || (state.view && key in WING_ONE_DIR_FIELDS))) continue;
-        const cur = cosTune(c.id)![key];
-        const changed = (v: number | boolean) => v !== defs[key];
-        if (f.kind === 'bool') {
-          row(f.label, check(cur === true, (v) => {
-            setCosTuneValue(c.id, key, v);
-            updateStatus();
-          }), shared);
-        } else {
-          const r = rangeBox(f.min, f.max, f.step, cur as number, (v) => {
-            setCosTuneValue(c.id, key, v);
-            updateStatus();
-          }, changed);
-          r.title = `ค่าที่บันทึกไว้ ${defs[key]}`;
-          row(f.label, r, shared);
-        }
-      }
-      // Save / reset just this piece, and just what the view picker shows: the base values (every facing) or
-      // that one facing's offsets (X/Y/Z, and the single-wing values).
-      const part = partOfView(state.view);
-      const partName = !state.view ? 'ค่าหลัก' : `ทิศ${VIEW_DIR_NAME[state.view]}`;
-      button(`คืนค่า${partName}ของชิ้นนี้`, () => {
-        const saved = cosTuneOf(serverTuning ?? {}, c.id)!;
-        for (const k of Object.keys(COS_TUNE_FIELDS[slot as TunedSlot])) if (part(k)) setCosTuneValue(c.id, k, saved[k]);
-        buildPanel();
-      }, det);
-      if (server && canEdit) button(`💾 บันทึก${partName}ของชิ้นนี้`, () => void savePart(c.id, slot as TunedSlot, part, partName), det);
-      button('คืนค่าชิ้นนี้ทั้งหมดเป็นค่าที่บันทึกไว้', () => {
-        resetCosTune(c.id, serverTuning?.[c.id]);
-        buildPanel();
-      }, det);
-      panel.append(det);
+      if (one && !state.view) h('div', 'ปีกภาพข้างเดียว: ซ่อนค่าของภาพปีกคู่แบบเก่าที่ไม่มีผล · ขนาด ระยะ เอียง บีบ ที่นี่คือค่าหลัก ปรับเพิ่มต่อทิศได้เมื่อกดลูกศร').className = 'note';
+      h('div', 'ตัวเลขสีฟ้า + ↺ = ต่างจากค่าที่บันทึกไว้ล่าสุด (กด ↺ เพื่อคืนค่านั้น) · ชี้ที่ชื่อเพื่อดูชื่อเต็ม · บันทึกด้วยปุ่มด้านล่าง').className = 'note';
     }
-    if (!COS_SLOTS.some((s) => s !== 'title' && state.worn[s])) h('div', 'ใส่ของสักชิ้นด้านบนเพื่อปรับค่า').className = 'note';
-    h('div', 'ตัวเลขสีฟ้า = ต่างจากค่าที่บันทึกไว้ล่าสุด (ค่าเริ่มต้นของเซิร์ฟ ถ้ายังไม่เคยบันทึกคือค่าในโค้ด) · ชี้ที่สไลเดอร์เพื่อดูค่านั้น').className = 'note';
 
-    // ---- server-wide
-    if (server) {
-      h('h2', 'ค่าเริ่มต้นทั้งเซิร์ฟ (ที่ผู้เล่นทุกคนเห็น)');
-      statusEl = h('div', '');
-      statusEl.className = 'note';
-      updateStatus();
-      button('โหลดค่าของเซิร์ฟ', async () => {
-        try {
-          const r = await server.load();
-          serverTuning = r.tuning;
-          canEdit = r.canEdit;
-        } catch (e) {
-          serverMsg = `โหลดค่าของเซิร์ฟไม่สำเร็จ: ${(e as Error).message}`;
-        }
-        if (serverTuning) applyCosTuning(serverTuning);
-        buildPanel();
-        serverMsg = '';
-      });
-      if (canEdit) {
-        const saveWith = async (what: CosTuning | 'reset', ask: string) => {
-          if (!confirm(ask)) return;
+    function buildMoreTab(): void {
+      h('h2', 'ค่าของเซิร์ฟ');
+      if (server) {
+        button('โหลดค่าของเซิร์ฟใหม่', async () => {
+          if (pendingChanges().length && !confirm('ค่าที่แก้แต่ยังไม่ได้บันทึกจะหายทั้งหมด โหลดใหม่ไหม?')) return;
           try {
-            const r = await server.save(what);
+            const r = await server.load();
             serverTuning = r.tuning;
-            applyCosTuning(r.tuning);
-            serverMsg = '✓ บันทึกแล้ว ผู้เล่นที่ออนไลน์อยู่เห็นทันที';
+            canEdit = r.canEdit;
           } catch (e) {
-            serverMsg = `บันทึกไม่สำเร็จ: ${(e as Error).message}`;
+            serverMsg = `โหลดค่าของเซิร์ฟไม่สำเร็จ: ${(e as Error).message}`;
           }
+          if (serverTuning) applyCosTuning(serverTuning);
           buildPanel();
           serverMsg = '';
-        };
-        button('💾 บันทึกเป็นค่าเริ่มต้นทั้งเซิร์ฟ', () => void saveWith(currentCosTuning(), 'ใช้ค่าของแต่งตัวทุกชิ้นตามที่ตั้งไว้ตอนนี้กับผู้เล่นทุกคนเลยไหม?'));
-        button('คืนค่าของเซิร์ฟเป็นค่าในโค้ด', () => void saveWith('reset', 'คืนค่าของแต่งตัวทุกชิ้นของทุกคนเป็นค่าในโค้ดไหม?'));
-      } else {
-        h('div', 'บันทึกค่าของเซิร์ฟได้เฉพาะเจ้าของ (GM ทดลองได้อย่างเดียว)').className = 'note';
-      }
+        });
+        if (canEdit) {
+          button('คืนค่าของเซิร์ฟเป็นค่าในโค้ด', async () => {
+            if (!confirm('คืนค่าของแต่งตัวทุกชิ้นของทุกคนเป็นค่าในโค้ดไหม?')) return;
+            try {
+              const r = await server.save('reset');
+              serverTuning = r.tuning;
+              applyCosTuning(r.tuning);
+              serverMsg = '✓ คืนค่าแล้ว ผู้เล่นที่ออนไลน์อยู่เห็นทันที';
+            } catch (e) {
+              serverMsg = `บันทึกไม่สำเร็จ: ${(e as Error).message}`;
+            }
+            buildPanel();
+            serverMsg = '';
+          });
+        }
+      } else h('div', 'หน้านี้ไม่ได้ต่อกับเซิร์ฟ (ทดลองอย่างเดียว)').className = 'note';
+      h('h2', 'คัดลอกค่า');
+      button('คัดลอกค่าที่ตั้งไว้', () => {
+        // Every tuned piece by name ({} = its code defaults), so a copy says exactly what each piece uses.
+        const t = checkCosTuning(currentCosTuning(), false).tuning ?? {};
+        const text = JSON.stringify(Object.fromEntries(COSMETICS.filter((c) => c.slot !== 'title' && c.slot !== 'orb').map((c) => [c.id, t[c.id] ?? {}])));
+        out.value = text;
+        navigator.clipboard?.writeText(text).catch(() => {});
+      });
+      const out = document.createElement('textarea');
+      out.readOnly = true;
+      out.rows = 4;
+      out.style.width = '100%';
+      out.placeholder = 'กด "คัดลอกค่าที่ตั้งไว้" แล้ววางข้อความนี้ให้ Claude (ทุกชิ้น เฉพาะค่าที่ต่างจากในโค้ด) · แก้หลายชิ้นพร้อมกันได้ในแท็บ "จัดการของแต่งตัว"';
+      bodyEl.append(out);
     }
-
-    // ---- copy / reset
-    h('h2', 'บันทึกค่า');
-    button('คัดลอกค่าที่ตั้งไว้', () => {
-      // Every tuned piece by name ({} = its code defaults), so a copy says exactly what each piece uses.
-      const t = checkCosTuning(currentCosTuning(), false).tuning ?? {};
-      const text = JSON.stringify(Object.fromEntries(COSMETICS.filter((c) => c.slot !== 'title' && c.slot !== 'orb').map((c) => [c.id, t[c.id] ?? {}])));
-      out.value = text;
-      navigator.clipboard?.writeText(text).catch(() => {});
-    });
-    button('คืนค่าทุกชิ้นเป็นค่าที่บันทึกไว้', () => {
-      applyCosTuning(serverTuning ?? {});
-      buildPanel();
-    });
-    const out = document.createElement('textarea');
-    out.readOnly = true;
-    out.rows = 3;
-    out.style.width = '100%';
-    out.placeholder = 'กด "คัดลอกค่าที่ตั้งไว้" แล้ววางข้อความนี้ให้ Claude (ทุกชิ้น เฉพาะค่าที่ต่างจากในโค้ด) · แก้หลายชิ้นพร้อมกันได้ในแท็บ "จัดการของแต่งตัว"';
-    panel.append(out);
   }
 
-  /** A slider with its value; `changed` colours the value when it differs from the code default. */
-  function rangeBox(min: number, max: number, step: number, value: number, on: (v: number) => void, changed?: (v: number) => boolean): HTMLSpanElement {
-    const wrap = document.createElement('span');
+  /**
+   * A number: name (full name on hover), − slider box + and ↺ (back to `saved`, shown when it differs).
+   * `perDir` = the value belongs to the picked facing only.
+   */
+  function numField(label: string, full: string, min: number, max: number, step: number, value: number, saved: number | undefined, on: (v: number) => void, perDir = false): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'fld';
+    const lb = document.createElement('div');
+    lb.className = 'lb';
+    if (perDir) {
+      const b = document.createElement('span');
+      b.className = 'badge';
+      b.textContent = 'ทิศนี้';
+      lb.append(b);
+    }
+    lb.append(label);
+    lb.title = `${full || label}${saved !== undefined ? ` · ค่าที่บันทึกไว้ ${round(saved)}` : ''}`;
+    const ct = document.createElement('div');
+    ct.className = 'ct';
     const s = document.createElement('input');
     s.type = 'range';
     s.min = String(min);
@@ -682,33 +834,67 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
     s.step = String(step);
     s.value = String(value);
     // The value is a box too: type an exact number (kept within the slider's range, 3 decimals).
-    const out = document.createElement('input');
-    out.type = 'number';
-    out.className = 'val';
-    out.min = String(min);
-    out.max = String(max);
-    out.step = '0.001';
-    const mark = (v: number) => out.classList.toggle('changed', !!changed?.(v));
-    out.value = String(value);
-    mark(value);
-    s.oninput = () => {
-      const v = Number(s.value);
-      out.value = String(v);
-      mark(v);
+    const box = document.createElement('input');
+    box.type = 'number';
+    box.className = 'val';
+    box.min = String(min);
+    box.max = String(max);
+    box.step = '0.001';
+    box.value = String(value);
+    const apply = (v: number) => {
+      v = round(Math.min(max, Math.max(min, v)));
+      s.value = String(v);
+      box.value = String(v);
+      wrap.classList.toggle('changed', saved !== undefined && Math.abs(v - saved) > 1e-6);
       on(v);
     };
-    out.onchange = () => {
-      if (out.value.trim() === '' || !Number.isFinite(Number(out.value))) {
-        out.value = s.value;
+    wrap.classList.toggle('changed', saved !== undefined && Math.abs(value - saved) > 1e-6);
+    s.oninput = () => apply(Number(s.value));
+    box.onchange = () => {
+      if (box.value.trim() === '' || !Number.isFinite(Number(box.value))) {
+        box.value = s.value;
         return;
       }
-      const v = round(Math.min(max, Math.max(min, Number(out.value))));
-      out.value = String(v);
-      s.value = String(v);
-      mark(v);
-      on(v);
+      apply(Number(box.value));
     };
-    wrap.append(s, out);
+    const stepBtn = (text: string, d: number) => {
+      const b = document.createElement('button');
+      b.textContent = text;
+      b.title = `${d > 0 ? 'เพิ่ม' : 'ลด'}ทีละ ${step}`;
+      b.onclick = () => apply(Number(s.value) + d * step);
+      return b;
+    };
+    const undo = document.createElement('button');
+    undo.className = 'undo';
+    undo.textContent = '↺';
+    undo.title = `คืนเป็นค่าที่บันทึกไว้ ${saved !== undefined ? round(saved) : ''}`;
+    undo.onclick = () => { if (saved !== undefined) apply(saved); };
+    ct.append(stepBtn('−', -1), s, stepBtn('+', 1), box);
+    if (saved !== undefined) ct.append(undo);
+    wrap.append(lb, ct);
+    return wrap;
+  }
+
+  /** An on/off switch with ↺ (back to `saved`, shown when it differs). */
+  function boolField(label: string, full: string, value: boolean, saved: boolean, on: (v: boolean) => void): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'fld ct';
+    const l = document.createElement('label');
+    l.title = `${full} · ค่าที่บันทึกไว้ ${saved ? 'เปิด' : 'ปิด'}`;
+    const c = document.createElement('input');
+    c.type = 'checkbox';
+    c.checked = value;
+    const mark = () => wrap.classList.toggle('changed', c.checked !== saved);
+    c.onchange = () => { mark(); on(c.checked); };
+    l.append(c, ' ', label);
+    l.style.flex = '1';
+    const undo = document.createElement('button');
+    undo.className = 'undo';
+    undo.textContent = '↺';
+    undo.title = 'คืนเป็นค่าที่บันทึกไว้';
+    undo.onclick = () => { c.checked = saved; mark(); on(saved); };
+    mark();
+    wrap.append(l, undo);
     return wrap;
   }
 
