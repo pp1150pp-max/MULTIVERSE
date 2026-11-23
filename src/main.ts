@@ -24,8 +24,8 @@ function start(game: Game, classId: string): void {
 function launch(backend: OnlineBackend): void {
   const game = new Game($('app'), backend);
   addLangButton();
-  backend.onChat = (name, text, ch, to) => {
-    game.hud.chatLine(name, text, undefined, ch, to);
+  backend.onChat = (name, text, ch, to, links) => {
+    game.hud.chatLine(name, text, undefined, ch, to, links);
     // Whispers are private: no speech bubble over the head.
     if (name && ch !== 'whisper') game.floating.bubble(name, text, ch === 'party');
   };
@@ -42,7 +42,7 @@ function launch(backend: OnlineBackend): void {
   backend.onDisconnect = (msg) => game.hud.showDisconnect(msg);
   backend.onReconnecting = (attempt) => game.hud.showReconnecting(attempt);
   backend.onShutdown = (mode, seconds, text) => game.hud.shutdownCountdown(mode, seconds, text);
-  backend.onAnnounce = (text, from, direct, megaphone, box, head) => game.hud.announce(text, from, direct, megaphone, box, head);
+  backend.onAnnounce = (text, from, direct, megaphone, box, head, links) => game.hud.announce(text, from, direct, megaphone, box, head, links);
   backend.onMarketNote = (text, sub) => game.hud.marketNote(text, sub);
   backend.onMailNote = (unread, fresh) => game.mailUI.note(unread, fresh);
   backend.onNews = (v) => game.news.show(v);

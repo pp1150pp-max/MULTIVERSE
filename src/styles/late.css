@@ -13,3 +13,12 @@
 
 /* A button the owner put in the top icon row also shows in the menu window on touch (the row is hidden there): /admin → จัดเมนูเกม. */
 body:not(.touch-ui) #sys-menu .sys-tile.touch-extra { display: none; }
+
+/* Item links in chat (src/client/chatLinks.ts): the name in its rarity colour, clickable even while the chat is
+   closed (not once its line has faded), and the item window a click opens. */
+.ilink { cursor: pointer; font-weight: 600; pointer-events: auto; }
+.ilink:hover { text-decoration: underline; }
+#log:not(.open) .log-line.fade .ilink { pointer-events: none; }
+#item-link-pop { left: 50%; top: 22%; transform: translateX(-50%); width: min(320px, 94vw); max-height: 70dvh; overflow-y: auto; z-index: 7; overscroll-behavior: contain; }
+#item-link-pop .ilp-body { padding: 6px 10px 10px; font-size: 12px; white-space: normal; }
+#item-link-pop .tt-hint:empty { display: none; }

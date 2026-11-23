@@ -18,6 +18,7 @@ import type { DailyView } from '../daily';
 import type { NewsView } from '../news';
 import type { StashData } from '../sim/stash';
 import type { Hazard } from '../sim/volcanoHeart';
+import type { ChatLink, ChatLinkRef } from '../chatLinks';
 import type { MarketCall, MarketReply } from '../sim/market';
 import type { MailCall, MailReply } from '../mail';
 import type { ReportCall, ReportReply } from '../reports';
@@ -91,7 +92,7 @@ export type ActionMsg =
   /** Gives the orb of the orb item in bag slot `slot` to the account (Sim.useOrbItem). */
   | { t: 'act'; a: 'useOrbItem'; slot: number }
   /** Announces `text` to the whole server with a megaphone from the bag (server checks length, Guest and the cooldown). */
-  | { t: 'act'; a: 'megaphone'; text: string }
+  | { t: 'act'; a: 'megaphone'; text: string; /** Item links, as in `chat`. */ links?: ChatLinkRef[] }
   /** Cash shop: buy `qty` of item `id` at `price` crystals each, the price the buyer saw (src/shared/cashShop.ts; the server checks everything). Answered with `cashBuy`. */
   | { t: 'act'; a: 'cashBuy'; req: number; id: string; qty: number; price: number }
   /** Top-up by PromptPay: ask for a cash shop package as the player saw it (src/shared/topup.ts; the server checks it is on sale now). Answered with `topupRes`. */
@@ -226,8 +227,11 @@ export type ClientMsg =
   | { t: 'join'; token: string; characterId: number; delta?: 1; back?: RejoinInfo; previewMap?: string }
   | InputMsg
   | ActionMsg
-  /** `ch: 'party'` = to the party only; `ch: 'whisper'` = only to the online character named `to`. */
-  | { t: 'chat'; text: string; ch?: 'party' | 'whisper'; to?: string }
+  /**
+   * `ch: 'party'` = to the party only; `ch: 'whisper'` = only to the online character named `to`.
+   * `links`: where the items whose "[name]" is in the text are (src/shared/chatLinks.ts; the server looks them up itself).
+   */
+  | { t: 'chat'; text: string; ch?: 'party' | 'whisper'; to?: string; links?: ChatLinkRef[] }
   /**
    * Answered at once with a pong of the same id. The rest is for the server's lag log, about the time
    * since the previous ping: `rtt` the round trip measured then (ms, each one reported once),
@@ -414,7 +418,7 @@ export type ServerMsg =
    * `ch: 'party'` = party chat, or (empty name) a party notice. `ch: 'whisper'` = a whisper from `name`;
    * with `to`, it is your own whisper to `to`, echoed back.
    */
-  | { t: 'chat'; name: string; text: string; ch?: 'party' | 'whisper'; to?: string }
+  | { t: 'chat'; name: string; text: string; ch?: 'party' | 'whisper'; to?: string; /** Item links in the text (server-built copies). */ links?: ChatLink[] }
   /** Your friends window (sent on joining, on `friendList`, and whenever any of it changes). */
   | { t: 'friends'; view: FriendsView }
   /** Someone invites you to their party; answer within `seconds`. */
@@ -455,7 +459,7 @@ export type ServerMsg =
   /** The server stops (or restarts) in `seconds`; sent once a second during the countdown. */
   | { t: 'shutdown'; mode: ShutdownMode; seconds: number; text?: string }
   /** An announcement from the server's owner (admin page): shown as a banner and a chat line. */
-  | { t: 'announce'; text: string; from: string; direct: boolean; megaphone?: boolean; /** A mystery box prize (src/shared/mysteryBox.ts). */ box?: boolean; /** The player-event banner's heading (box only; mystery box when missing). */ head?: string }
+  | { t: 'announce'; text: string; from: string; direct: boolean; megaphone?: boolean; /** A megaphone's item links (server-built copies). */ links?: ChatLink[]; /** A mystery box prize (src/shared/mysteryBox.ts). */ box?: boolean; /** The player-event banner's heading (box only; mystery box when missing). */ head?: string }
   /** This month's daily login calendar (`view.popup`: just got today's reward, open it by itself). */
   | { t: 'daily'; view: DailyView }
   /** The countdown was cancelled: the server stays up. */

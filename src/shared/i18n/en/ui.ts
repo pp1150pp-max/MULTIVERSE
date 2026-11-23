@@ -196,4 +196,9 @@ export const EN_UI: Record<string, string> = {
   'เข้าสู่โลก': 'Enter the world',
   'เลือกตัวละคร แล้วกด “เข้าสู่โลก” เพื่อเล่นในโลกเดียวกับทุกคนที่ออนไลน์อยู่': 'Pick a character and press “Enter the world” to play alongside everyone online',
   'กำลังโหลด…': 'Loading…',
+  // Item links in chat (src/client/chatLinks.ts)
+  'ข้อมูลไอเทม': 'Item info',
+  'คลิกเพื่อดูข้อมูลไอเทม': 'Click to see the item',
+  'ใส่ลิงก์ไอเทมได้ข้อความละ {0} ชิ้น': 'Up to {0} item links per message',
+  'ข้อความยาวเกินไป ใส่ลิงก์เพิ่มไม่ได้': 'The message is too long for another link',
 };
