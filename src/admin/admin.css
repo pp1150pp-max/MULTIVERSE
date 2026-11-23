@@ -591,6 +591,13 @@ button.more:hover { color: var(--gold-hi); text-decoration: underline; }
 .hl-box.hl-changed { border-color: #f2c230; }
 .hl-box.hl-off { opacity: 0.35; border-style: dotted; }
 .hl-box.hl-sel { outline: 2px solid #ffd83a; z-index: 2; background: rgba(255, 216, 58, 0.22); }
+/* The live HUD example under the boxes (/?hudMock=1): drawn at the device's own size, scaled to the frame, never clicked. */
+.hl-mock { position: absolute; left: 0; top: 0; border: 0; transform-origin: 0 0; pointer-events: none; }
+.hl-boxes { position: absolute; inset: 0; }
+.hl-live .hl-box { background: transparent; border-color: rgba(255, 230, 160, 0.55); }
+.hl-live .hl-box span { opacity: 0; }
+.hl-live .hl-box:hover span, .hl-live .hl-box.hl-sel span { opacity: 1; background: rgba(0, 0, 0, 0.6); display: inline-block; }
+.hl-live .hl-box.hl-sel { background: rgba(255, 216, 58, 0.12); }
 .hl-grip { position: absolute; width: 12px; height: 12px; background: #f2c230; }
 .hl-grip-bottom-right { right: 0; bottom: 0; cursor: nwse-resize; }
 .hl-grip-bottom-left { left: 0; bottom: 0; cursor: nesw-resize; }

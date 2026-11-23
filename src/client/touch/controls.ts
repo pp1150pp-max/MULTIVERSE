@@ -45,6 +45,30 @@ function aimSpec(sk: SkillDef | undefined): AimSpec | undefined {
 const art = (name: string): string => `<img src="${imgUrl(`assets/sprites/ui/touch/${name}.png`)}" alt="" draggable="false">`;
 const badgeArt = (name: string): string => `<img src="${imgUrl(`assets/sprites/ui/ico_${name}.png`)}" alt="" draggable="false">`;
 
+/**
+ * The on-screen controls' markup (`skillArt` = the picture on each skill slot). Also drawn by the /admin HUD mock
+ * (src/client/hudMock.ts), so it looks exactly like the game.
+ */
+export function touchControlsHtml(skillArt: (slot: SkillSlot) => string): string {
+  return `
+      <div id="tc-stick">${art('stick_base')}<div id="tc-knob">${art('stick_knob')}</div></div>
+      <button id="tc-menu" class="tc-btn tc-small" aria-label="เมนู"><span class="tc-ico">${badgeArt('menu')}</span><i class="badge hidden" data-badge="เมนู"></i></button>
+      <div id="tc-pad">
+        <button class="tc-btn tc-attack" data-slot="basic"><span class="tc-ico">${skillArt('basic')}<div class="tc-cd"></div></span><span class="tc-num"></span></button>
+        <button class="tc-btn tc-skill" data-slot="q"><span class="tc-ico">${skillArt('q')}<div class="tc-cd"></div></span><span class="tc-num"></span></button>
+        <button class="tc-btn tc-skill" data-slot="e"><span class="tc-ico">${skillArt('e')}<div class="tc-cd"></div></span><span class="tc-num"></span></button>
+        <button class="tc-btn tc-skill" data-slot="r"><span class="tc-ico">${skillArt('r')}<div class="tc-cd"></div></span><span class="tc-num"></span></button>
+        <button class="tc-btn tc-skill" data-slot="dash"><span class="tc-ico">${art('icon_dash')}<div class="tc-cd"></div></span><span class="tc-num"></span></button>
+        <button class="tc-btn tc-small tc-pot" data-pot="hp"><span class="tc-ico">${potionIcon('hp')}<div class="tc-cd"></div></span><span class="tc-num"></span></button>
+        <button class="tc-btn tc-small tc-pot" data-pot="mp"><span class="tc-ico">${potionIcon('mp')}<div class="tc-cd"></div></span><span class="tc-num"></span></button>
+        <button id="tc-talk" class="tc-btn tc-talk hidden"><span class="tc-ico">${art('icon_talk')}</span><span class="tc-label">พูดคุย</span></button>
+        <button id="tc-auto" class="tc-btn tc-skill"><span class="tc-ico">${badgeArt('auto')}</span><span class="tc-label">AUTO</span></button>
+        <button id="tc-scroll" class="tc-btn tc-small" aria-label="ม้วนคัมภีร์กลับเมือง"><span class="tc-ico">${stoneIcon('return_scroll')}</span><span class="tc-num"></span></button>
+        <button id="tc-mount" class="tc-btn tc-small" aria-label="สัตว์ขี่"><span class="tc-ico">${art('icon_mount')}</span></button>
+      </div>
+      <div id="tc-potpick" class="hidden"></div>`;
+}
+
 interface SkillButton { slot: SkillSlot; el: HTMLElement; cd: HTMLElement; num: HTMLElement }
 interface PotionButton { kind: PotionKind; el: HTMLElement; cd: HTMLElement; num: HTMLElement; img: HTMLImageElement | null }
 
@@ -71,23 +95,7 @@ export class TouchControls {
     };
     this.root = document.createElement('div');
     this.root.id = 'touch-ui';
-    this.root.innerHTML = `
-      <div id="tc-stick">${art('stick_base')}<div id="tc-knob">${art('stick_knob')}</div></div>
-      <button id="tc-menu" class="tc-btn tc-small" aria-label="เมนู"><span class="tc-ico">${badgeArt('menu')}</span><i class="badge hidden" data-badge="เมนู"></i></button>
-      <div id="tc-pad">
-        <button class="tc-btn tc-attack" data-slot="basic"><span class="tc-ico">${skillArt('basic')}<div class="tc-cd"></div></span><span class="tc-num"></span></button>
-        <button class="tc-btn tc-skill" data-slot="q"><span class="tc-ico">${skillArt('q')}<div class="tc-cd"></div></span><span class="tc-num"></span></button>
-        <button class="tc-btn tc-skill" data-slot="e"><span class="tc-ico">${skillArt('e')}<div class="tc-cd"></div></span><span class="tc-num"></span></button>
-        <button class="tc-btn tc-skill" data-slot="r"><span class="tc-ico">${skillArt('r')}<div class="tc-cd"></div></span><span class="tc-num"></span></button>
-        <button class="tc-btn tc-skill" data-slot="dash"><span class="tc-ico">${art('icon_dash')}<div class="tc-cd"></div></span><span class="tc-num"></span></button>
-        <button class="tc-btn tc-small tc-pot" data-pot="hp"><span class="tc-ico">${potionIcon('hp')}<div class="tc-cd"></div></span><span class="tc-num"></span></button>
-        <button class="tc-btn tc-small tc-pot" data-pot="mp"><span class="tc-ico">${potionIcon('mp')}<div class="tc-cd"></div></span><span class="tc-num"></span></button>
-        <button id="tc-talk" class="tc-btn tc-talk hidden"><span class="tc-ico">${art('icon_talk')}</span><span class="tc-label">พูดคุย</span></button>
-        <button id="tc-auto" class="tc-btn tc-skill"><span class="tc-ico">${badgeArt('auto')}</span><span class="tc-label">AUTO</span></button>
-        <button id="tc-scroll" class="tc-btn tc-small" aria-label="ม้วนคัมภีร์กลับเมือง"><span class="tc-ico">${stoneIcon('return_scroll')}</span><span class="tc-num"></span></button>
-        <button id="tc-mount" class="tc-btn tc-small" aria-label="สัตว์ขี่"><span class="tc-ico">${art('icon_mount')}</span></button>
-      </div>
-      <div id="tc-potpick" class="hidden"></div>`;
+    this.root.innerHTML = touchControlsHtml(skillArt);
     document.getElementById('hud')!.prepend(this.root);
     const q = <T extends HTMLElement = HTMLElement>(sel: string) => this.root.querySelector<T>(sel)!;
     this.stick = q('#tc-stick');

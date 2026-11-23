@@ -7,7 +7,9 @@ import {
   FREE_BTN_START, HUD_DEVICE_NAME, HUD_DEVICES, HUD_FRAME, HUD_PARTS, HUD_RANGE, hudPart, isFreeBtnPart,
   type HudDevice, type HudLayoutConfig, type HudPartDef, type HudPos,
 } from '../shared/hudLayout';
-import { freeBtnDomId } from '../shared/menuLayout';
+import { freeBtnDomId, type MenuLayoutConfig } from '../shared/menuLayout';
+import type { AdminMenuLayout } from '../shared/admin';
+import type { HudMockApi } from '../client/hudMock';
 
 type Kids = (Node | string | null | undefined | false)[];
 type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, unknown>, ...kids: Kids) => HTMLElementTagNameMap[K];
@@ -54,6 +56,57 @@ export async function renderHudLayout(view: HTMLElement, h: H, api: Api): Promis
   const msg = h('div', { class: 'msg' });
   const status = h('div', { class: 'muted' });
   const frame = h('div', { class: 'hl-frame' });
+  /** The boxes, laid over the live HUD example. */
+  const boxLayer = h('div', { class: 'hl-boxes' });
+  frame.append(boxLayer);
+
+  // The real game page as a HUD example under the boxes (/?hudMock=1, src/client/hudMock.ts), one per device, made
+  // when first shown. The boxes then sit where each part really is (measured from it), and the example moves with
+  // every drag. Until it is ready (or if it fails) the boxes use the rough spots in HUD_PARTS.
+  const mocks: Partial<Record<HudDevice, { frame: HTMLIFrameElement; api: HudMockApi | null }>> = {};
+  let menuLayout: MenuLayoutConfig | null = null;
+  void api<AdminMenuLayout>('GET', '/admin/menu-layout').then((m) => {
+    menuLayout = m.layout;
+    for (const d of HUD_DEVICES) mocks[d]?.api?.setMenu(m.layout);
+    draw();
+  }).catch(() => { /* no menu-layout tool: the code's buttons */ });
+  const live = (): HudMockApi | null => mocks[device]?.api ?? null;
+  const fitMocks = (): void => {
+    for (const d of HUD_DEVICES) {
+      const m = mocks[d];
+      if (m) m.frame.style.transform = `scale(${frame.clientWidth / HUD_FRAME[d].w})`;
+    }
+  };
+  new ResizeObserver(fitMocks).observe(frame);
+  const showMock = (): void => {
+    if (!mocks[device]) {
+      const F = HUD_FRAME[device];
+      const d = device;
+      const el = h('iframe', { class: 'hl-mock', src: `/?hudMock=1&device=${d}`, title: 'ตัวอย่างหน้าจอเกม', tabindex: '-1' });
+      el.style.width = `${F.w}px`;
+      el.style.height = `${F.h}px`;
+      const m = { frame: el, api: null as HudMockApi | null };
+      mocks[d] = m;
+      el.onload = () => {
+        // The page sets window.hudMock once its HUD is drawn.
+        let tries = 0;
+        const wait = (): void => {
+          const a = (el.contentWindow as (Window & { hudMock?: HudMockApi }) | null)?.hudMock;
+          if (!a) {
+            if (++tries < 50) setTimeout(wait, 100);
+            return;
+          }
+          m.api = a;
+          if (menuLayout) a.setMenu(menuLayout);
+          draw();
+        };
+        wait();
+      };
+      frame.prepend(el);
+      fitMocks();
+    }
+    for (const d of HUD_DEVICES) mocks[d]?.frame.classList.toggle('hidden', d !== device);
+  };
   const list = h('div', { class: 'hl-list' });
   const history = h('details', { class: 'card' });
   const tabs = h('div', { class: 'row' });
@@ -92,13 +145,27 @@ export async function renderHudLayout(view: HTMLElement, h: H, api: Api): Promis
   const drawFrame = (): void => {
     const F = HUD_FRAME[device];
     frame.style.aspectRatio = `${F.w} / ${F.h}`;
-    frame.replaceChildren(...parts().map((p) => {
+    showMock();
+    const mock = live();
+    mock?.setLayer(layer);
+    mock?.setLayout(draft);
+    frame.classList.toggle('hl-live', !!mock);
+    boxLayer.replaceChildren(...parts().map((p) => {
       const [bx, by, bw, bh] = p.box[device]!;
       const v = pos(p.id);
       // Scale around the part's origin corner, like the game does.
       const ox = p.origin.includes('right') ? 1 : p.origin.includes('left') ? 0 : 0.5;
       const oy = p.origin.includes('bottom') ? 1 : p.origin.includes('top') ? 0 : 0.5;
       const place = (el: HTMLElement, q: HudPos): void => {
+        // Where the part really is in the example (the layout already applied), else the rough spot.
+        const r = live()?.rect(p.id);
+        if (r) {
+          el.style.left = `${r.x}%`;
+          el.style.top = `${r.y}%`;
+          el.style.width = `${r.w}%`;
+          el.style.height = `${r.h}%`;
+          return;
+        }
         const s = q.s ?? 1;
         el.style.left = `${bx + (q.x ?? 0) + bw * (1 - s) * ox}%`;
         el.style.top = `${by + (q.y ?? 0) + bh * (1 - s) * oy}%`;
@@ -122,6 +189,9 @@ export async function renderHudLayout(view: HTMLElement, h: H, api: Api): Promis
         const resize = e.target === grip;
         const fr = frame.getBoundingClientRect();
         const start = { x: e.clientX, y: e.clientY, p: { ...pos(p.id) } };
+        // The part's width at size 100%: measured in the example when there is one.
+        const r0 = live()?.rect(p.id);
+        const baseW = r0 ? r0.w / (start.p.s ?? 1) : bw;
         if (!can) return draw();
         try {
           el.setPointerCapture(e.pointerId);
@@ -138,12 +208,13 @@ export async function renderHudLayout(view: HTMLElement, h: H, api: Api): Promis
             // Grow by how far the corner moved compared with the box's width.
             const s0 = start.p.s ?? 1;
             const sign = ox === 1 ? -1 : 1;
-            n.s = Math.min(HUD_RANGE.sMax, Math.max(HUD_RANGE.sMin, s0 + (sign * dx) / bw));
+            n.s = Math.min(HUD_RANGE.sMax, Math.max(HUD_RANGE.sMin, s0 + (sign * dx) / baseW));
           } else {
             n.x = Math.max(-HUD_RANGE.move, Math.min(HUD_RANGE.move, (start.p.x ?? 0) + dx));
             n.y = Math.max(-HUD_RANGE.move, Math.min(HUD_RANGE.move, (start.p.y ?? 0) + dy));
           }
           setPos(p.id, n);
+          live()?.setLayout(draft);
           place(el, pos(p.id));
           drawStatus();
         };
