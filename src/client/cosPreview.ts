@@ -4,12 +4,12 @@
 // the /admin "ของแต่งตัว" tab (owner + GM, the `cosPreview` switch in FEATURE_ROLES); saving the tuning
 // for the whole server is the `cosLook` switch (owner only). Loaded only when the tab opens.
 import * as THREE from 'three';
-import { loadGameAssets, groundTiles } from './assets';
+import { assetSources, cosOneKey, loadGameAssets, groundTiles } from './assets';
 import { Effects } from './effects';
 import { PlayerView } from './views';
 import { ISO_DIR } from './world';
 import { applyCosTuning, cosTune, currentCosTuning, resetCosTune, setCosTuneValue } from './cosTune';
-import { axisHiddenInDir, checkCosTuning, COS_AXES, COS_TUNE_FIELDS, cosTuneOf, sameCosTuning, savePartOf, VIEW_DIR_NAME, VIEW_DIRS, viewOffKey, type CosTuning, type TunedSlot, type ViewDir } from '../shared/cosTuning';
+import { axisHiddenInDir, checkCosTuning, COS_AXES, COS_TUNE_FIELDS, cosTuneOf, dirFieldKey, isPerFacingKey, partOfView, sameCosTuning, savePartOf, valueAtDir, VIEW_DIR_NAME, VIEW_DIRS, viewOffKey, WING_ONE_DIR_FIELDS, type AxisSpec, type CosTuning, type TunedSlot, type ViewDir } from '../shared/cosTuning';
 import { COSMETICS, COS_SLOTS, COS_SLOT_NAME, cosById, MOUNT_SPEED, type CosSlot, type CosWorn } from '../shared/data/cosmetics';
 import { Player } from '../shared/sim/Player';
 import type { Sim } from '../shared/sim/Sim';
@@ -87,6 +87,17 @@ const VIEW_DIR_BUTTON: Record<ViewDir, number> = { front: 7, frontRight: 8, righ
 const dirOfButton = (i: number): ViewDir => VIEW_DIRS.find((d) => VIEW_DIR_BUTTON[d] === i) ?? 'front';
 const round = (n: number) => Math.round(n * 1000) / 1000;
 
+/**
+ * Wings drawn from a single-wing picture (wingPair.ts, all 5 wings since 2026-11-12) don't read the old pair
+ * picture's fields: hidden on the bench for them (owner 2026-11-23; saved values are kept, the game ignores them).
+ */
+const PAIR_ONLY = new Set(['h', 'root', 'backStand', 'backSeat', 'back', 'shift', 'depth', 'overBack', 'nearSide', 'nearFrontDiag', 'nearBackDiag', 'nearCut', 'nearDepth']);
+/** Their base Y (every facing) is the single wing's root height; X/Z have only the per-facing offsets. */
+const ONE_WING_AXES: AxisSpec[] = [
+  { axis: 'y', key: 'oneBack', sign: 1, label: 'Y ความสูงโคนปีก (ตอนยืน)' },
+  { axis: 'y', key: 'oneBackSeat', sign: 1, label: 'Y ความสูงโคนปีก (ตอนขี่ จากอาน)', ride: true },
+];
+
 const state = {
   /** The facing the position sliders edit: '' = every facing (the base value), else one of the 8. */
   view: '' as ViewDir | '',
@@ -99,6 +110,8 @@ const state = {
   zoom: 9,
   /** Which worn piece's sliders are open. */
   open: 'wings' as CosSlot,
+  /** The "used by every facing" box under a picked facing is open. */
+  sharedOpen: false,
 };
 
 /** Builds the test bench inside `root` (which should have a size) and starts it. Returns a function that stops it and frees everything. */
@@ -332,12 +345,6 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
     statusEl.textContent = serverMsg || (same ? '✓ ตอนนี้ตรงกับค่าของเซิร์ฟ' : '• ตอนนี้ต่างจากค่าของเซิร์ฟ (ยังไม่ได้บันทึก)');
   }
 
-  /** The fields a view picker choice covers: the base values (`view` empty) or one facing's offsets. */
-  function partOf(view: ViewDir | ''): (key: string) => boolean {
-    if (!view) return (k) => !/^d[xyz]_/.test(k);
-    return (k) => new RegExp(`^d[xyz]_at_${view}$`).test(k);
-  }
-
   /**
    * Owner only: saves one piece's `part` (see partOf) for the whole server. Everything else stays as last saved:
    * other pieces, other views, and this piece's other fields (still only tried out on the bench).
@@ -491,7 +498,7 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
       }
       buildPanel();
     }));
-    h('div', 'X = ซ้าย/ขวาของตัวละคร · Y = ขึ้น/ลง · Z = หน้า/หลัง · เลือกมุมแล้วเห็นเฉพาะแกนที่มีผลในมุมนั้น (ส่วนปรับของแต่ละทิศ ทั้ง 8 ทิศแยกกัน บวกเพิ่มจากค่าหลัก)').className = 'note';
+    h('div', 'X = ซ้าย/ขวาของตัวละคร · Y = ขึ้น/ลง · Z = หน้า/หลัง · เลือกมุมแล้วเห็นเฉพาะแกนที่มีผลในมุมนั้น (ส่วนปรับของแต่ละทิศ ทั้ง 8 ทิศแยกกัน บวกเพิ่มจากค่าหลัก) · ปีกข้างเดียว: ขนาด ระยะ เอียง บีบ แยกต่อทิศด้วย · ค่าที่ใช้ทุกทิศอยู่ในกล่อง "ค่าที่ใช้ทุกทิศ" ปุ่มบันทึกทิศไม่เซฟค่าพวกนั้น').className = 'note';
     for (const slot of COS_SLOTS) {
       if (slot === 'title' || slot === 'orb') continue;
       const c = cosById(state.worn[slot]);
@@ -508,7 +515,9 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
       const axisKeys = new Set<string>();
       const curNow = cosTune(c.id)!;
       const seen = new Set<string>();
-      for (const spec of COS_AXES[slot as TunedSlot]) {
+      // A single-wing picture (wingPair.ts): its own base Y, the old pair picture's fields hidden.
+      const one = slot === 'wings' && assetSources[cosOneKey(c.id)] === 'file';
+      for (const spec of one && !state.view ? ONE_WING_AXES : COS_AXES[slot as TunedSlot]) {
         axisKeys.add(spec.key);
         if (spec.onlyIf && curNow[spec.onlyIf] !== true) continue;
         const f = COS_TUNE_FIELDS[slot as TunedSlot][spec.key];
@@ -537,28 +546,56 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
         }
       }
       if (state.view && !COS_AXES[slot as TunedSlot].some((s) => !axisHiddenInDir(s.axis, state.view as ViewDir))) h('div', 'ชิ้นนี้ไม่มีแกนที่มีผลในมุมนี้', det).className = 'note';
-      // ---- everything else
+      // ---- single-wing picture, this facing only: the value used in it (base + this facing's offset, stored as the offset)
+      if (one && state.view) {
+        const view = state.view;
+        for (const [key, dirs] of Object.entries(WING_ONE_DIR_FIELDS)) {
+          if (!dirs.includes(view)) continue;
+          const f = COS_TUNE_FIELDS.wings[key];
+          if (f.kind !== 'num') continue;
+          const offKey = dirFieldKey(key, view);
+          const savedAt = valueAtDir('wings', defs, key, view);
+          const r = rangeBox(f.min, f.max, f.step, round(valueAtDir('wings', curNow, key, view)), (v) => {
+            setCosTuneValue(c.id, offKey, round(v - (cosTune(c.id)![key] as number)));
+            updateStatus();
+          }, (v) => Math.abs(v - savedAt) > 1e-6);
+          r.title = `ค่าที่บันทึกไว้ในทิศนี้ ${round(savedAt)} (ค่าหลัก ${defs[key]} + ส่วนปรับ ${defs[offKey]})`;
+          row(`${f.label} · ทิศ${VIEW_DIR_NAME[view]}`, r, det);
+        }
+      }
+      // ---- everything else (used by every facing: under a picked facing it sits in its own box, which the facing's save leaves alone)
+      let shared: HTMLElement = det;
+      if (state.view) {
+        const box = document.createElement('details');
+        box.open = state.sharedOpen;
+        box.ontoggle = () => { state.sharedOpen = box.open; };
+        h('summary', 'ค่าที่ใช้ทุกทิศ (ปุ่มบันทึกทิศนี้ไม่เซฟ · บันทึกที่ "ทุกมุม (ค่าหลัก)")', box);
+        det.append(box);
+        shared = box;
+      }
+      if (one && !state.view) h('div', 'ปีกภาพข้างเดียว: ซ่อนค่าของภาพปีกคู่แบบเก่าที่ไม่มีผล · ขนาด ระยะ เอียง บีบ ที่นี่คือค่าหลัก ปรับเพิ่มต่อทิศได้เมื่อเลือกทิศ', det).className = 'note';
       for (const [key, f] of Object.entries(COS_TUNE_FIELDS[slot as TunedSlot])) {
-        if (axisKeys.has(key) || /^d[xyz]_/.test(key)) continue;
+        if (axisKeys.has(key) || isPerFacingKey(key)) continue;
+        if (one && (PAIR_ONLY.has(key) || (state.view && key in WING_ONE_DIR_FIELDS))) continue;
         const cur = cosTune(c.id)![key];
         const changed = (v: number | boolean) => v !== defs[key];
         if (f.kind === 'bool') {
           row(f.label, check(cur === true, (v) => {
             setCosTuneValue(c.id, key, v);
             updateStatus();
-          }), det);
+          }), shared);
         } else {
           const r = rangeBox(f.min, f.max, f.step, cur as number, (v) => {
             setCosTuneValue(c.id, key, v);
             updateStatus();
           }, changed);
           r.title = `ค่าที่บันทึกไว้ ${defs[key]}`;
-          row(f.label, r, det);
+          row(f.label, r, shared);
         }
       }
-      // Save / reset just this piece, and just what the view picker shows: the base values (every view) or the
-      // offsets of that view's group (front = front + front diagonal, back = back diagonal + back).
-      const part = partOf(state.view);
+      // Save / reset just this piece, and just what the view picker shows: the base values (every facing) or
+      // that one facing's offsets (X/Y/Z, and the single-wing values).
+      const part = partOfView(state.view);
       const partName = !state.view ? 'ค่าหลัก' : `ทิศ${VIEW_DIR_NAME[state.view]}`;
       button(`คืนค่า${partName}ของชิ้นนี้`, () => {
         const saved = cosTuneOf(serverTuning ?? {}, c.id)!;
