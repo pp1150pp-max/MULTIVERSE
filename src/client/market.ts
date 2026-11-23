@@ -643,7 +643,7 @@ export class MarketWindow {
       this.pick(i);
     });
     add('หาชิ้นแบบนี้ในตลาด', () => this.searchLike(i));
-    add('วางลงพื้น', drop);
+    add('ทิ้งไอเทม', drop);
     m.style.left = `${Math.min(ev.clientX, window.innerWidth - 190)}px`;
     m.style.top = `${Math.min(ev.clientY, window.innerHeight - 110)}px`;
     document.body.appendChild(m);

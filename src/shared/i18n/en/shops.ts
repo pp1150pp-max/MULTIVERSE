@@ -216,4 +216,18 @@ export const EN_SHOPS: Record<string, string> = {
   'ซื้อได้อีก {0} ชิ้น': 'You can buy {0} more',
   'ซื้อครบจำนวนที่จำกัดแล้ว': 'Purchase limit reached',
   'ไม่มี': 'None',
+  // VIP (owner 2026-11-23)
+  'VIP · เหลือ {0}': 'VIP · {0} left',
+  'คุณเป็น VIP · เหลือ {0}': 'You are VIP · {0} left',
+  'คุณยังไม่ได้เป็น VIP': 'You are not VIP yet',
+  'โอกาสดรอป +{0}%': 'Drop chance +{0}%',
+  'เทรดได้ไม่จำกัดครั้งต่อวัน': 'Unlimited trades per day',
+  'ใช้ได้ทุกตัวละครในบัญชี · ซ้อนกับใบคูณ EXP/ดรอปได้ · ซื้อซ้ำ = บวกวันเพิ่ม · เวลาเดินตลอดแม้ไม่ได้ออนไลน์': 'Works for every character on the account · stacks with EXP/drop scrolls · buying again adds more days · the time runs even while offline',
+  'ยังไม่มี VIP ขาย': 'VIP is not on sale yet',
+  '{0} วัน': '{0} days',
+  'VIP {0} วัน': 'VIP {0} days',
+  'ซื้อ VIP {0} วัน ราคา {1} {2}?': 'Buy VIP for {0} days at {1} {2}?',
+  'ซื้อ VIP {0} วันแล้ว (−{1} {2}) · VIP เหลือ {3}': 'Bought VIP for {0} days (−{1} {2}) · VIP {3} left',
+  'แพ็ก VIP นี้ไม่มีขายแล้ว': 'This VIP package is no longer sold',
+  '{0} วัน {1} ชม.': '{0} d {1} h',
 };

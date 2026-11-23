@@ -14,6 +14,7 @@ import {
   type AdminAccountDetail, type AdminAccountRow, type AdminAccountsResponse, type AdminCharDetail, type AdminFeature,
 } from '../src/shared/admin';
 import { banMessage } from '../src/shared/api';
+import { VIP_DAYS_MAX, vipExtend, vipLeftText } from '../src/shared/vip';
 import { ADMIN_CRYSTAL_MAX, HISTORY_PAGE, type AdminStats, type StatsPoint, type StatsRange } from '../src/shared/admin';
 import { SESSION_PAGE_SIZES, SESSION_SEARCH_MAX, SESSION_SORTS, type SessionPage, type SessionQuery, type SessionSort } from '../src/shared/admin';
 import { layOutBag } from '../src/shared/sim/Player';
@@ -183,7 +184,7 @@ export async function ownerToolsApi(
     return true;
   }
 
-  const acc = /^\/api\/admin\/accounts\/(\d{1,12})(?:\/(password|ban|unban|cosmetics|crystals))?$/.exec(path);
+  const acc = /^\/api\/admin\/accounts\/(\d{1,12})(?:\/(password|ban|unban|cosmetics|crystals|vip))?$/.exec(path);
   if (acc) {
     const id = Number(acc[1]);
     const action = acc[2];
@@ -203,7 +204,7 @@ export async function ownerToolsApi(
       });
       const stash = world.liveStash(id) ?? db.savedStash(id);
       const body: AdminAccountDetail = {
-        account: row, characters, stash: row.guest || !stash ? null : stash, cosmetics: row.guest ? null : db.cosmeticsOwned(id), crystals: row.guest ? null : db.crystals(id), cosHidden: cosHiddenIds(db.cosShop()), orbItems: db.orbItems().items,
+        account: row, characters, stash: row.guest || !stash ? null : stash, cosmetics: row.guest ? null : db.cosmeticsOwned(id), crystals: row.guest ? null : db.crystals(id), vipUntil: row.guest ? null : db.vipUntil(id), cosHidden: cosHiddenIds(db.cosShop()), orbItems: db.orbItems().items,
       };
       send(res, 200, body);
       return true;
@@ -233,6 +234,34 @@ export async function ownerToolsApi(
       }
       log(db, a, give ? 'cosmetic-give' : 'cosmetic-take', `${row.username} (#${id})`, `${COS_SLOT_NAME[c.slot]}: ${c.name}`);
       send(res, 200, { msg: give ? `ให้ ${c.name} แก่ ${row.username} แล้ว${mailNote}` : `ยึด ${c.name} คืนจาก ${row.username} แล้ว` });
+      return true;
+    }
+
+    if (method === 'POST' && action === 'vip') {
+      // { days: N } adds N days (from now, or from the end if it still runs); { remove: true } ends it now.
+      const a = requireFeature(req, db, 'vipGrant');
+      const row = accountRow(db, world, id);
+      if (row.guest) throw new HttpError(400, 'Guest เป็น VIP ไม่ได้');
+      const body = await readJson(req);
+      const now = Date.now();
+      const before = db.vipUntil(id);
+      if (body.remove === true) {
+        if (before <= now) throw new HttpError(400, 'บัญชีนี้ไม่ได้เป็น VIP อยู่');
+        db.setVipUntil(id, 0);
+        world.vipChanged(id);
+        log(db, a, 'vip-remove', `${row.username} (#${id})`, `เหลือ ${vipLeftText(before, now)}`);
+        send(res, 200, { msg: `ถอด VIP ของ ${row.username} แล้ว` });
+        return true;
+      }
+      const days = body.days;
+      if (typeof days !== 'number' || !Number.isInteger(days) || days < 1 || days > VIP_DAYS_MAX) {
+        throw new HttpError(400, `จำนวนวันต้องเป็นเลขเต็ม 1–${VIP_DAYS_MAX}`);
+      }
+      const until = vipExtend(before, days, now);
+      db.setVipUntil(id, until);
+      world.vipChanged(id);
+      log(db, a, 'vip-give', `${row.username} (#${id})`, `+${days} วัน → เหลือ ${vipLeftText(until, now)}`);
+      send(res, 200, { msg: `ให้ VIP ${days} วันแก่ ${row.username} (เหลือ ${vipLeftText(until, now)})` });
       return true;
     }
 

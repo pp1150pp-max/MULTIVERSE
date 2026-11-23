@@ -7,7 +7,9 @@
 import type { Game } from './Game';
 import { COS_SLOTS, COS_SLOT_NAME, cosById, cosPerk, type CosSlot } from '../shared/data/cosmetics';
 import { STONE_DESC, STONE_NAME } from '../shared/data/stones';
-import { CASH_BADGE_NAME, CASH_QTY_MAX, cashBadge, cashBuyError, CURRENCY, type CashEntry } from '../shared/cashShop';
+import { CASH_BADGE_NAME, CASH_QTY_MAX, cashBadge, cashBuyError, CURRENCY, vipBuyError, vipItemId, type CashEntry, type VipPackage } from '../shared/cashShop';
+import { currentBalance } from '../shared/balance';
+import { vipLeftText } from '../shared/vip';
 import type { StoneKind } from '../shared/types';
 import { cashCatalogNow, cashStateNow, cashVersion, topupNow } from './cashData';
 import { bahtText, firstBonus, topupNewError, type TopupPending } from '../shared/topup';
@@ -17,8 +19,8 @@ import { stoneIcon } from './icons';
 import { imgUrl } from './img';
 import { playSound } from './audio/sfx';
 
-type Tab = 'featured' | 'cos' | 'use' | 'stone';
-const TABS: [Tab, string][] = [['featured', 'แนะนำ'], ['cos', 'ของแต่งตัว'], ['use', 'ของใช้'], ['stone', 'หิน']];
+type Tab = 'featured' | 'cos' | 'use' | 'stone' | 'vip';
+const TABS: [Tab, string][] = [['featured', 'แนะนำ'], ['cos', 'ของแต่งตัว'], ['use', 'ของใช้'], ['stone', 'หิน'], ['vip', 'VIP']];
 /** Side lists of the ของใช้ tab. */
 const USE_GROUPS: [string, string, string[]][] = [['scroll', 'ใบคูณ', ['exp_scroll', 'drop_scroll']], ['mega', 'โทรโข่ง', ['megaphone']]];
 const BOUND_KINDS = new Set(['exp_scroll', 'drop_scroll', 'megaphone']);
@@ -102,6 +104,9 @@ function priceBar(e: CashEntry, qty = 1): HTMLElement {
 export class CashShopUI {
   private readonly win: HTMLElement;
   private readonly balance: HTMLElement;
+  /** "VIP · เหลือ …" by the crystals while the account's VIP runs. */
+  private readonly vipBadge: HTMLElement;
+  private vipBusy = false;
   private readonly tabsEl: HTMLElement;
   private readonly banner: HTMLElement;
   private readonly side: HTMLElement;
@@ -129,7 +134,8 @@ export class CashShopUI {
     const right = el('span', 'cash-head-right');
     const plus = button('+', () => this.showPackages(true), 'cash-plus');
     plus.title = `เติม${CURRENCY}`;
-    right.append(this.balance, plus);
+    this.vipBadge = el('span', 'cash-vip-badge hidden');
+    right.append(this.vipBadge, this.balance, plus);
     head.append(el('span', '', 'แคชช็อป'), right, button('✕', () => this.toggle(false)));
     this.tabsEl = el('div', 'ui-tabs');
     this.banner = el('div', 'cash-banner', 'ร้านยังไม่เปิดขาย ดูสินค้าได้อย่างเดียว');
@@ -190,7 +196,7 @@ export class CashShopUI {
   /** Every frame: redraw when something shown changed (catalogue, crystals, owned cosmetics, the minute for timers). */
   update(): void {
     if (!this.open) return;
-    const key = JSON.stringify([this.tab, this.sub, cashVersion(), this.g.backend.cosOwned, this.buying, this.packages, this.topupBusy, this.topupMsg, qrVersion, Math.floor(Date.now() / 30_000)]);
+    const key = JSON.stringify([this.tab, this.sub, cashVersion(), this.g.backend.cosOwned, this.buying, this.vipBusy, this.packages, this.topupBusy, this.topupMsg, qrVersion, Math.floor(Date.now() / 30_000)]);
     if (key === this.drawn) return;
     this.drawn = key;
     this.draw();
@@ -208,6 +214,9 @@ export class CashShopUI {
     const owned = new Set(this.g.backend.cosOwned);
     this.balance.innerHTML = `${CRYSTAL_ICON}<b>${fmt(st.crystals)}</b>`;
     this.balance.title = CURRENCY;
+    const vipLeft = vipLeftText(st.vipUntil, now);
+    this.vipBadge.classList.toggle('hidden', !vipLeft);
+    this.vipBadge.textContent = vipLeft ? `VIP · เหลือ ${vipLeft}` : '';
     this.banner.classList.toggle('hidden', cat.open);
     this.tabsEl.replaceChildren(...TABS.map(([t, label]) => button(label, () => {
       this.tab = t;
@@ -217,6 +226,12 @@ export class CashShopUI {
     const all = this.visible(now);
     let list: CashEntry[];
     const sides: [string, string][] = [];
+    if (this.tab === 'vip') {
+      this.side.classList.add('hidden');
+      this.grid.replaceChildren(this.vipBox(vipLeft));
+      this.drawModal(owned, now);
+      return;
+    }
     if (this.tab === 'featured') list = all.filter((e) => e.featured);
     else if (this.tab === 'cos') {
       sides.push(...COS_SLOTS.map((s): [string, string] => [s, COS_SLOT_NAME[s]]));
@@ -244,6 +259,50 @@ export class CashShopUI {
       this.grid.append(el('div', 'cash-empty', this.tab === 'featured' ? 'ยังไม่มีสินค้าแนะนำ' : 'ยังไม่มีสินค้าในหมวดนี้'));
     }
     this.drawModal(owned, now);
+  }
+
+  /** The VIP tab: what it gives, the time left, and a button per package (owner 2026-11-23, src/shared/vip.ts). */
+  private vipBox(left: string): HTMLElement {
+    const b = currentBalance();
+    const box = el('div', 'cash-vip');
+    box.append(
+      el('div', 'cash-hero-title', 'VIP'),
+      el('div', 'cash-vip-status', left ? `คุณเป็น VIP · เหลือ ${left}` : 'คุณยังไม่ได้เป็น VIP'),
+      el('div', 'cash-vip-perk', `EXP +${b.vipExpPct}%`),
+      el('div', 'cash-vip-perk', `โอกาสดรอป +${b.vipDropPct}%`),
+      el('div', 'cash-vip-perk', 'เทรดได้ไม่จำกัดครั้งต่อวัน'),
+      el('div', 'cash-note', 'ใช้ได้ทุกตัวละครในบัญชี · ซ้อนกับใบคูณ EXP/ดรอปได้ · ซื้อซ้ำ = บวกวันเพิ่ม · เวลาเดินตลอดแม้ไม่ได้ออนไลน์'),
+    );
+    const pk = cashCatalogNow().vip;
+    if (!pk.length) {
+      box.append(el('div', 'cash-empty', 'ยังไม่มี VIP ขาย'));
+      return box;
+    }
+    const row = el('div', 'cash-vip-packs');
+    for (const p of pk) {
+      const btn = button('', () => void this.buyVip(p));
+      btn.className = 'cash-vip-pack';
+      btn.innerHTML = `<b>${fmt(p.days)} วัน</b><span>${CRYSTAL_ICON}${fmt(p.price)}</span>`;
+      const err = vipBuyError(cashCatalogNow(), p.days, p.price, cashStateNow(), this.g.backend.guest);
+      btn.disabled = this.vipBusy || !!err;
+      if (err) btn.title = err;
+      row.append(btn);
+    }
+    box.append(row);
+    return box;
+  }
+
+  private async buyVip(p: VipPackage): Promise<void> {
+    if (this.vipBusy) return;
+    if (!confirm(`ซื้อ VIP ${fmt(p.days)} วัน ราคา ${fmt(p.price)} ${CURRENCY}?`)) return;
+    this.vipBusy = true;
+    this.update();
+    const r = await this.g.backend.cashBuy(vipItemId(p.days), 1, p.price);
+    this.vipBusy = false;
+    if (r.ok) playSound('cash_buy');
+    this.g.hud.log(r.msg, r.ok ? '#7ae8ff' : '#ffcf6a');
+    this.drawn = '';
+    this.update();
   }
 
   private card(e: CashEntry, owned: boolean, bought: number, now: number): HTMLElement {

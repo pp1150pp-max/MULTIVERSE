@@ -19,6 +19,7 @@ import { splitExp } from '../party';
 import { CLASS_IDS, SLOT_KIND, WEAR_SLOTS, type WearSlot } from '../data/classes';
 import { emptySkillBook, learnable, learnBlock, pointsSpent, rankOf, refundPrice, unlearnOne, wear, wearBlock } from '../skillBook';
 import { classBalance, currentBalance, packCount } from '../balance';
+import { vipDropMult, vipExp } from '../vip';
 import { COS_SLOT_NAME, cosById, MOUNT_CALM } from '../data/cosmetics';
 import {
   isBound, isBuffScroll, isOrbStone, type OrbStoneKind, isItem, isPotion, isStack, isStone, RARITY_LABEL, sameStack, SLOT_LABEL, BLACKSMITH_STONES, BUFF_SCROLLS, type BagEntry, type BuffScroll, type Item, type StoneKind, type PotionKind, type PotionSize, type Rarity } from '../types';
@@ -1028,10 +1029,10 @@ export class Sim {
     else if (this.zone.id !== HUB_ID) this.events.push({ t: 'travel', to: p.id, zone: HUB_ID, atCamp: true });
   }
 
-  /** EXP this player really gets from `n`: half while Auto Play is on, then doubled by an EXP scroll. */
+  /** EXP this player really gets from `n`: half while Auto Play is on, then doubled by an EXP scroll, then the VIP bonus (rounded down). */
   private autoExp(p: Player, n: number): number {
     const auto = p.autoOn ? Math.floor(n * AUTO_EXP_MULT) : n;
-    return p.buffs.exp_scroll ? auto * BUFF_MULT : auto;
+    return vipExp(p.buffs.exp_scroll ? auto * BUFF_MULT : auto, p.vip);
   }
 
   private addExp(p: Player, n: number): void {
@@ -1251,8 +1252,8 @@ export class Sim {
     const owner = top?.id;
     // Everyone in the top damage dealer's party (on this map) shares that first pick, gold included.
     const party = top?.partyId ?? null;
-    // The drop scroll of whoever gets first pick doubles every chance below (never the gold or fixed counts).
-    const boost = top?.buffs.drop_scroll ? BUFF_MULT : 1;
+    // The drop scroll of whoever gets first pick doubles every chance below (never the gold or fixed counts), and their VIP adds its bonus on top.
+    const boost = (top?.buffs.drop_scroll ? BUFF_MULT : 1) * vipDropMult(!!top?.vip);
     const chance = (c: number) => r() < Math.min(1, c * boost);
     // A boss room's boss drops everything once per key put in (owner: rewards times the keys).
     const times = m.isBoss ? this.keys : 1;
@@ -1410,27 +1411,26 @@ export class Sim {
     return true;
   }
 
-  /** Throws a bag item on the ground next to the player. It disappears after a while. */
   /** A quest key would leave the bag: say why, and refuse. */
   private refuseBound(p: Player): false {
     this.log(BOUND_MSG, '#ff8a6a', p.id);
     return false;
   }
 
-  dropFromBag(p: Player, i: number): boolean {
-    if (isBound(p.bag[i])) return this.refuseBound(p);
+  /**
+   * Throws a bag slot away for good (owner 2026-11-23: nothing is left on the ground; the browser asks first).
+   * Returns what was destroyed, or null (empty slot, or a quest key, which can't leave the bag).
+   */
+  dropFromBag(p: Player, i: number): BagEntry | null {
+    if (isBound(p.bag[i])) {
+      this.refuseBound(p);
+      return null;
+    }
     const item = p.takeFromBag(i);
-    if (!item) return false;
-    const a = Math.random() * Math.PI * 2;
-    const kind: LootKind = isPotion(item)
-      ? { type: 'potion', pot: item.potion, size: item.size, count: item.count }
-      : isStone(item)
-      ? { type: 'stone', stone: item.stone, count: item.count }
-      : { type: 'item', item };
-    this.loots.push(new Loot(this.newId(), p.x + Math.cos(a), p.z + Math.sin(a), p.x, p.z, kind, { dropped: true }));
-    this.log(`วาง ${entryName(item)} ลงบนพื้น (เก็บคืนได้ภายใน 60 วินาที)`, '#b9b09a', p.id);
+    if (!item) return null;
+    this.log(`ทิ้ง ${entryName(item)} แล้ว (หายถาวร)`, '#b9b09a', p.id);
     this.afterChange(p);
-    return true;
+    return item;
   }
 
   // ------------------------------------------------------------ NPC trades

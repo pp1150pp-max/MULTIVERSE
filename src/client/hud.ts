@@ -355,7 +355,7 @@ export class Hud {
       if (this.drag?.ghost || isTouchMode()) return;
       const i = this.cellIndex(e);
       const item = i >= 0 ? g.player.bag[i] : null;
-      const right = this.stash.isOpen ? 'ฝากเข้าคลัง' : this.market.isOpen ? 'เลือกมาลงขายในตลาด' : this.shop.isOpen ? (isStack(item) ? 'ขายทั้งช่อง' : 'ขาย') : 'วางลงพื้น';
+      const right = this.stash.isOpen ? 'ฝากเข้าคลัง' : this.market.isOpen ? 'เลือกมาลงขายในตลาด' : this.shop.isOpen ? (isStack(item) ? 'ขายทั้งช่อง' : 'ขาย') : 'ทิ้งไอเทม';
       const split = item && isStack(item) && item.count > 1 ? ' · Shift+ลาก: แบ่งกอง' : '';
       if (g.trade.open && item) {
         const part = isStack(item) && item.count > 1 ? ' · Shift+ลากไปที่หน้าต่างเทรด: เสนอบางส่วน' : '';
@@ -662,8 +662,8 @@ export class Hud {
           this.log('ลากยา HP ไปที่ปุ่ม 1 · ยา MP ไปที่ปุ่ม 2', '#ff8a6a');
         }
       } else if (target === g.renderer.domElement) {
-        g.dropFromBag(d.i);
-        if (this.forge.isOpen) this.forge.renderForge();
+        // Dropping destroys the item for good (owner 2026-11-23): always ask first.
+        this.askDrop(d.i);
       }
       this.markInventory();
     });
@@ -1354,7 +1354,7 @@ export class Hud {
       ? 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = ฝากเข้าคลัง · ลากไปวางในคลังได้'
       : this.shop.isOpen
       ? 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = ขายให้พ่อค้า · คลิกช่องสวมใส่ = ถอด'
-      : 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = วางลงพื้น · คลิกช่องสวมใส่ = ถอด · ขายของได้ที่พ่อค้าเท่านั้น';
+      : 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = ทิ้งไอเทม · คลิกช่องสวมใส่ = ถอด · ขายของได้ที่พ่อค้าเท่านั้น';
   }
 
   /**
@@ -1427,14 +1427,14 @@ export class Hud {
     else g.backend.equip(i, slot);
   }
 
-  /** Ask before dropping a bag item on the ground. */
+  /** Ask before throwing a bag item away (it is destroyed for good, nothing lands on the ground). */
   askDrop(i: number): void {
     const item = this.g.player.bag[i];
     if (!item) return;
     const name = `<b style="color:${entryColor(item)}">${entryName(item)}</b>`;
     this.confirm(
-      `วาง ${name} ลงบนพื้น?<br><small>เก็บคืนได้ภายใน 60 วินาที · ถ้าจะขาย ให้ไปหาพ่อค้าที่เมือง</small>`,
-      'วางลงพื้น',
+      `ทิ้ง ${name}?<br><small>⚠ ไอเทมจะหายไปถาวร กู้คืนไม่ได้ · ถ้าจะขาย ให้ไปหาพ่อค้าที่เมือง</small>`,
+      'ทิ้งถาวร',
       () => {
         if (this.g.player.bag[i] !== item) return;
         this.g.dropFromBag(i);

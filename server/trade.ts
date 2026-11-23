@@ -9,8 +9,8 @@ import type { Db } from './db';
 import type { Player } from '../src/shared/sim/Player';
 import type { Sim } from '../src/shared/sim/Sim';
 import {
-  afterTax, describeEntry, makeOffer, planSwap, TRADE_COUNTDOWN, TRADE_GOLD_MAX, TRADE_REQUEST_TTL, TRADE_REREQUEST_GAP, TRADE_SLOTS,
-  taxOf, type SwapSide, type TradeOffer, type TradeSideView, type TradeView,
+  afterTax, describeEntry, makeOffer, planSwap, TRADE_COUNTDOWN, TRADE_DAILY_MAX, TRADE_GOLD_MAX, TRADE_LIMIT_MSG, TRADE_REQUEST_TTL, TRADE_REREQUEST_GAP, TRADE_SLOTS,
+  taxOf, tradeDay, type SwapSide, type TradeOffer, type TradeSideView, type TradeView,
 } from '../src/shared/trade';
 
 /** A character in the world, as far as trading cares. `player` / `sim` are the live ones (they change when it walks through a portal). */
@@ -69,6 +69,9 @@ interface Trade {
 
 const GUEST_MSG = 'Guest เทรดไม่ได้ — สมัครสมาชิกเพื่อใช้งาน';
 
+/** Thrown inside the swap's transaction when a daily limit was used up meanwhile (rolls everything back). */
+class LimitReached extends Error {}
+
 export class Trades {
   private readonly byChar = new Map<number, Trade>();
   private requests: Request[] = [];
@@ -81,6 +84,13 @@ export class Trades {
   /** Whether this character has a trade window open (the world then refuses actions that move bag items). */
   busy(charId: number): boolean {
     return this.byChar.has(charId);
+  }
+
+  /** Trades the account has left today, or null when its VIP is running (no limit). Read from the database, so every character of the account shares it. */
+  left(accountId: number): number | null {
+    const t = this.now();
+    if (this.db.vipUntil(accountId) > t) return null;
+    return Math.max(0, TRADE_DAILY_MAX - this.db.tradesOn(accountId, tradeDay(t)));
   }
 
   // ------------------------------------------------------------ requests
@@ -96,6 +106,9 @@ export class Trades {
     if (from.sim !== to.sim) return `${to.name} อยู่คนละแมพหรือคนละ CH — ต้องอยู่ห้องเดียวกันถึงจะเทรดได้`;
     if (this.byChar.has(from.charId)) return 'คุณกำลังเทรดอยู่';
     if (this.byChar.has(to.charId)) return `${to.name} กำลังเทรดอยู่`;
+    // The daily limit: refused up front so nobody fills a window that can't go through.
+    if (this.left(from.accountId) === 0) return TRADE_LIMIT_MSG;
+    if (this.left(to.accountId) === 0) return `${to.name} เทรดครบ ${TRADE_DAILY_MAX} ครั้งของวันนี้แล้ว`;
     return null;
   }
 
@@ -176,7 +189,7 @@ export class Trades {
   private push(trade: Trade): void {
     const left = trade.countdownEnd === null ? null : Math.max(0, (trade.countdownEnd - this.now()) / 1000);
     for (const s of [trade.a, trade.b]) {
-      this.host.view(s.charId, { id: trade.id, ver: trade.ver, you: s === trade.a ? 'a' : 'b', a: this.sideView(trade.a), b: this.sideView(trade.b), cd: left });
+      this.host.view(s.charId, { id: trade.id, ver: trade.ver, you: s === trade.a ? 'a' : 'b', a: this.sideView(trade.a), b: this.sideView(trade.b), cd: left, left: this.left(s.accountId) });
     }
   }
 
@@ -294,8 +307,15 @@ export class Trades {
     pa.gold = plan.goldA;
     pb.gold = plan.goldB;
     const at = this.now();
+    const day = tradeDay(at);
     try {
       this.db.transaction(() => {
+        // Counted again here: two characters of one account can each have a trade open at the same time.
+        for (const s of [a, b]) {
+          if (this.left(s.accountId) === 0) throw new LimitReached(`${s.name} เทรดครบ ${TRADE_DAILY_MAX} ครั้งของวันนี้แล้ว`);
+        }
+        this.db.tradeCountAdd(a.accountId, day);
+        this.db.tradeCountAdd(b.accountId, day);
         this.db.tradeLogInsert({
           at, zone: a.zone,
           a: { charId: a.charId, accountId: a.accountId, name: a.name, items: trade.a.offers.map((o) => describeEntry(o.entry)), gold: trade.a.gold, tax: plan.taxA },
@@ -309,6 +329,7 @@ export class Trades {
       for (let i = 0; i < pb.bag.length; i++) pb.bag[i] = before.b.bag[i];
       pa.gold = before.a.gold;
       pb.gold = before.b.gold;
+      if (e instanceof LimitReached) return this.end(trade, false, `ยกเลิกการเทรด — ${e.message}`);
       console.error('[trade] saving failed, trade cancelled', e);
       return this.end(trade, false, 'ยกเลิกการเทรด — บันทึกข้อมูลไม่สำเร็จ ไม่มีอะไรเปลี่ยนแปลง');
     }
@@ -327,6 +348,10 @@ export class Trades {
     this.host.ended(trade.b.charId, true, got(trade.b, trade.a, plan.taxB));
     this.host.tell(trade.a.charId, got(trade.a, trade.b, plan.taxA));
     this.host.tell(trade.b.charId, got(trade.b, trade.a, plan.taxB));
+    for (const s of [a, b]) {
+      const n = this.left(s.accountId);
+      if (n !== null) this.host.tell(s.charId, `เทรดวันนี้เหลืออีก ${n}/${TRADE_DAILY_MAX} ครั้ง`);
+    }
   }
 
   // ------------------------------------------------------------ clock

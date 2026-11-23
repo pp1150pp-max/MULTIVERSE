@@ -202,3 +202,15 @@
 @media (max-width: 560px) {
   #cash-win .cash-topup { flex-direction: column; }
 }
+
+/* VIP (owner 2026-11-23): the badge by the crystals and the VIP tab. */
+#cash-win .cash-vip-badge { padding: 3px 8px; border: 1px solid #c9a24a; border-radius: 3px; background: rgba(60, 40, 8, 0.85); color: #ffd98a; font-size: 12px; white-space: nowrap; }
+#cash-win .cash-vip-badge.hidden { display: none; }
+#cash-win .cash-vip { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; padding: 14px 18px; border: 1px solid #4a3c28; background: rgba(20, 14, 32, 0.8); color: #e8f6ff; }
+#cash-win .cash-vip-status { font-size: 15px; color: #ffd98a; }
+#cash-win .cash-vip-perk { font-size: 13px; }
+#cash-win .cash-vip-perk::before { content: '✦ '; color: #c9a24a; }
+#cash-win .cash-vip-packs { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+#cash-win .cash-vip-pack { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 110px; padding: 10px 14px; }
+#cash-win .cash-vip-pack span { display: inline-flex; align-items: center; gap: 4px; }
+#cash-win .cash-vip-pack .cry-ico { width: 16px; height: 16px; }

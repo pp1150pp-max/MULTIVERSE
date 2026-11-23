@@ -456,6 +456,8 @@ export class Player extends Unit {
   buffs: Buffs;
   /** True while Auto Play runs for this player (set by the server each tick); Sim halves their EXP. Never saved. */
   autoOn = false;
+  /** The account's VIP is running (src/shared/vip.ts; set by the server, kept per account, never saved here). */
+  vip = false;
   /** Told once per stuck level that a boss gate is holding the EXP bar. Never saved. */
   gateHintedAt = 0;
   /** Shown once per session when low-level monsters start giving less EXP. */

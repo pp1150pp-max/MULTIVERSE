@@ -1,5 +1,6 @@
 import { ADMIN_CRYSTAL_MAX, BAN_DURATIONS, BAN_REASON_MAX, type AdminAccountDetail, type AdminAccountsResponse } from '../../shared/admin';
 import { MAX_CHARACTERS } from '../../shared/api';
+import { VIP_DAYS_MAX, vipLeftText } from '../../shared/vip';
 import { entryName } from '../../shared/data/potions';
 import { COSMETICS, COS_SLOTS, COS_SLOT_NAME } from '../../shared/data/cosmetics';
 import { registerOrbItems } from '../../shared/orbItems';
@@ -182,6 +183,37 @@ export async function openAccount(id: number, note?: { text: string; ok: boolean
       const take = h('button', { class: 'danger' }, 'ลดคริสตัล');
       take.onclick = send(-1);
       sections.push(h('div', { class: 'row' }, h('label', {}, 'เสกคริสตัลมิติ', amount), give, take));
+    }
+  }
+  if (d.vipUntil !== null && d.vipUntil !== undefined) {
+    const left = vipLeftText(d.vipUntil, Date.now());
+    sections.push(h('div', { class: 'muted' }, left ? `VIP: เหลือ ${left} (ถึง ${new Date(d.vipUntil).toLocaleString('th-TH')})` : 'VIP: ไม่ได้เป็น'));
+    if (can('vipGrant')) {
+      const days = h('input', { type: 'number', min: '1', max: String(VIP_DAYS_MAX), placeholder: 'วัน', style: 'width:80px' });
+      const give = h('button', { class: 'primary' }, 'ให้ VIP');
+      give.onclick = async () => {
+        const n = Math.floor(Number(days.value));
+        if (!Number.isFinite(n) || n < 1 || n > VIP_DAYS_MAX) return fail(new Error(`ใส่จำนวนวัน 1–${VIP_DAYS_MAX}`));
+        try {
+          after((await api<{ msg: string }>('POST', `/admin/accounts/${id}/vip`, { days: n })).msg);
+        } catch (e) {
+          fail(e);
+        }
+      };
+      const row: Node[] = [h('label', {}, 'เพิ่มวัน VIP', days), give];
+      if (left) {
+        const remove = h('button', { class: 'danger' }, 'ถอด VIP');
+        remove.onclick = async () => {
+          if (!confirm(`ถอด VIP ของ ${display}? (เวลาที่เหลือ ${left} หายทั้งหมด)`)) return;
+          try {
+            after((await api<{ msg: string }>('POST', `/admin/accounts/${id}/vip`, { remove: true })).msg);
+          } catch (e) {
+            fail(e);
+          }
+        };
+        row.push(remove);
+      }
+      sections.push(h('div', { class: 'row' }, ...row));
     }
   }
   // Tools

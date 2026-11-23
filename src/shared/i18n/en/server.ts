@@ -265,4 +265,8 @@ export const EN_SERVER: Record<string, string> = {
   'ทุกคนล้มหมด! ใช้ขนนกฟีนิกซ์ภายใน {0} วินาที ไม่อย่างนั้นทีมจะแพ้': 'Everyone is down! Use a Phoenix Feather within {0} seconds or the team loses',
   'ทีมพ่ายแพ้ — ออกไปที่แท่นเรียกบอส': 'The team was defeated — back to the boss altar',
   'เข้าสู่{0} — {1} ระดับ ×{2} (ห้อง {3})': 'Entered {0} — {1} ×{2} (room {3})',
+  // Daily trade limit (owner 2026-11-23)
+  'วันนี้เทรดครบ {0} ครั้งแล้ว — รีเซ็ตตอนเที่ยงคืน (เวลาไทย) · VIP เทรดได้ไม่จำกัด': 'You have used all {0} trades for today — resets at midnight (Thai time) · VIP trades without limit',
+  '{0} เทรดครบ {1} ครั้งของวันนี้แล้ว': '{0} has used all {1} trades for today',
+  'เทรดวันนี้เหลืออีก {0}/{1} ครั้ง': 'Trades left today: {0}/{1}',
 };
