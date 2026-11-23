@@ -3,7 +3,7 @@
 import { isPotion, isStone, type BagEntry, type PotionKind, type PotionSize, type PotionStack, type Stack } from '../types';
 import { currentBalance } from '../balance';
 import { itemName } from './enhance';
-import { STONE_NAME, STONE_STACK, stoneStackValue } from './stones';
+import { STONE_NAME, stoneStackMax, stoneStackValue } from './stones';
 
 export const POTION_SIZES: PotionSize[] = ['s', 'm', 'l'];
 /** Most potions one bag slot can hold. */
@@ -48,7 +48,7 @@ export function stackSellValue(s: PotionStack): number {
 
 /** Most of this stack one bag or stash slot can hold. */
 export function stackLimit(s: Stack): number {
-  return isPotion(s) ? POTION_STACK : STONE_STACK;
+  return isPotion(s) ? POTION_STACK : stoneStackMax(s.stone);
 }
 
 /** What the merchant pays for a whole stack. */
