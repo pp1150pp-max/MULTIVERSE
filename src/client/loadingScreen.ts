@@ -11,6 +11,8 @@ const ALL_ART = ['portal_1', 'portal_2', 'sword', 'mage', 'gunslinger'];
 /** How long the zone-change screen stays up, then how long it fades out (ms). */
 const ZONE_HOLD = 3000;
 const ZONE_FADE = 300;
+/** Longest the first-entry screen waits for its picture before the game files start downloading (ms). */
+const ART_WAIT = 2500;
 
 const TIPS = [
   'กด T ใกล้น้ำพุหรือกองไฟ เพื่อฟื้น HP และ MP',
@@ -49,6 +51,8 @@ let fadeTimer = 0;
 let hideTimer = 0;
 
 export interface LoadingScreen {
+  /** Its picture has loaded (or failed, or ART_WAIT passed): the other downloads may start. */
+  ready: Promise<void>;
   /** 0..1 */
   progress(f: number): void;
   hide(): void;
@@ -63,12 +67,25 @@ export function showLoading(classId: ClassId | null, label = 'กำลังโ
     `<div class="load-box"><div>${label} <span class="load-pct">0%</span></div>` +
     '<div class="load-bar"><i></i></div><p class="load-tip"></p></div>';
   root.querySelector('.load-tip')!.textContent = `เคล็ดลับ: ${pick(TIPS)}`;
-  root.style.backgroundImage = `url(${imgUrl(`${DIR}${pickArt(classId)}.webp`)})`;
+  // The picture first (owner 2026-11-23: it showed up late behind the game's own downloads, the screen stayed blank).
+  const url = imgUrl(`${DIR}${pickArt(classId)}.webp`);
+  const img = new Image();
+  img.fetchPriority = 'high';
+  const ready = new Promise<void>((done) => {
+    const go = (): void => {
+      root.style.backgroundImage = `url(${url})`;
+      done();
+    };
+    img.onload = img.onerror = go;
+    window.setTimeout(go, ART_WAIT);
+  });
+  img.src = url;
   root.classList.add('load-art');
   root.classList.remove('hidden', 'load-out');
   const pct = root.querySelector<HTMLElement>('.load-pct')!;
   const fill = root.querySelector<HTMLElement>('.load-bar i')!;
   return {
+    ready,
     progress(f) {
       const p = `${Math.floor(Math.max(0, Math.min(1, f)) * 100)}%`;
       if (pct) pct.textContent = p;
