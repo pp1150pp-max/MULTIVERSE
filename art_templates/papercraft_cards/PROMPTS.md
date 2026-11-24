@@ -4,13 +4,13 @@
 
 เกมนำภาพมาซ้อนกันเอง ภาพทุกภาพจึง**ไม่มีตัวหนังสือ**:
 - **กรอบ** 3 ระดับ ใช้ร่วมกันทุกใบ (หายาก / มหากาพย์ / ตำนาน) ช่องภาพ ช่องชื่อ ช่องผลเป็นสีม่วงแดงล้วน ผมตัดเป็นช่องโปร่งใส
-- **ตัวมอน** ใบละ 1 ภาพ ตัวมอนล้วนบนพื้นเขียว ผมตัดพื้นออก ฉากหลังเป็นโค้ดทีหลัง
+- **ตัวมอน** ใบละ 1 ภาพ **มีฉากหลังเต็มภาพของแมพบ้านมอนเหมือนภาพการ์ดเดิม** (เจ้าของสั่ง 2026-11-24) เกมวางเต็มช่องกลางของกรอบ ไม่ต้องตัดพื้น
 - ชื่อ ผล ป้ายระดับ สัญลักษณ์กลุ่ม เกมเขียน/วางเอง
 
 ## ที่วางภาพหลังเจน
 
 - วางทุกไฟล์ใน **`art_templates/papercraft_cards/raw/`** (โฟลเดอร์ `raw/` ไม่ commit · ห้าม `git add raw/`) ตั้งชื่อตามตารางด้านล่างเป๊ะ ๆ เป็น `.png`
-- เจนเสร็จบอกผม ผมจะตัดพื้น ย่อ แปลงเป็น WebP ใส่ `public/assets/sprites/paper/cards/` แล้วเปลี่ยนโค้ดให้โหลดภาพใหม่ (PR แยก ไม่อยู่ในงานนี้)
+- เจนเสร็จบอกผม ผมจะย่อ แปลงเป็น WebP ใส่ `public/assets/sprites/paper/cards/` แล้วเปลี่ยนโค้ดให้โหลดภาพใหม่ (PR แยก ไม่อยู่ในงานนี้)
 - ภาพการ์ดเดิม (16-bit) ใน `public/assets/sprites/cards/card_art_*.webp` เก็บไว้ ไม่ลบ
 
 ## วิธีเจน (ทุกภาพ)
@@ -45,28 +45,27 @@ Frame:
 
 ## 2. ตัวมอนกลางการ์ด (46 ภาพ, แนวตั้ง 2:3)
 
-### ส่วนสไตล์ (วางก่อนทุกตัว ต่อท้ายด้วย `Card monster:` แล้วคำอธิบาย)
+### ส่วนสไตล์ (วางก่อนทุกตัว ต่อท้ายด้วย `Card monster:` แล้วคำอธิบาย แล้วปิดท้ายด้วย `Background: <ฉากหลังของแมพ ตามหัวข้อแต่ละแมพ แปลเป็นอังกฤษสั้น ๆ>`)
 
 ```text
 The first attached image shows the papercraft art style of my game; the second attached image is the approved sprite sheet of this monster. Use EXACTLY this papercraft style and keep the monster's design, colours and outfit EXACTLY as in the second image: layered cut coloured paper and card, visible paper fibre, slightly uneven scissor-cut edges, small drop shadows between paper layers, built from flat paper pieces, slightly chibi proportions, warm soft light from the upper left. NOT pixel art.
-Generate ONE image, portrait 2:3: this single monster only, large and dynamic in an attack or signature pose, filling about 75% of the height, centred, slightly seen from below to look heroic, nothing cut off. Nothing else in the image: no ground, no scenery, no props except those named, no frame, no border, no text, no letters, no numbers, no cast shadow on the ground. Background ONE perfectly flat solid pure bright green (#00FF00), no gradient, and no bright green on the monster.
+Generate ONE image, portrait 2:3: a full card illustration. The monster is large and dynamic in an attack or signature pose, filling about 70% of the height, centred, slightly seen from below to look heroic, in front of a full papercraft background scene of its home area (given below) that fills the whole image edge to edge. The monster MUST stand out clearly: it is the brightest, sharpest and most saturated thing in the image, with a clean cut-paper edge and a strong light rim separating it from the scene; the background is darker, softer, less detailed and lower in contrast, in contrasting colours (cool behind a warm monster, warm behind a cool one). A soft glow behind the monster only to frame it. No frame, no border, no card edges, no text, no letters, no numbers, no UI.
 Card monster:
 ```
 
-> ถ้ามอนตัวไหนมีสีเขียวสดมาก (สไลม์เขียว) ให้เปลี่ยนคำว่า green เป็น **flat solid magenta (#FF00FF)** แล้วบอกผมว่าตัวไหนใช้พื้นอะไร
 
-### ชั้น 1 · แมพ 1 ป่ามรกต (แชทที่ 1) · sprite: `paper/monsters/<id>.png`
+### ชั้น 1 · แมพ 1 ป่ามรกต (แชทที่ 1) · ฉากหลัง: ป่าเขียวสดบนเกาะลอยกลางอวกาศ (เติมท้าย prompt: `Background: a sunny emerald forest on a floating island in space.`)
 
 | ไฟล์ | มอน | คำอธิบาย (ต่อท้าย `Card monster:`) |
 |---|---|---|
-| `card_art_green_slime.png` | สไลม์เขียว | `Green Slime, a round glossy translucent green slime blob with simple cute eyes, bouncing high with a splash of slime droplets` (ใช้พื้นม่วงแดง) |
+| `card_art_green_slime.png` | สไลม์เขียว | `Green Slime, a round glossy translucent green slime blob with simple cute eyes, bouncing high with a splash of slime droplets` |
 | `card_art_wild_rabbit.png` | กระต่ายป่า | `Wild Rabbit, a small tan and cream rabbit with long ears and a white puff tail, leaping, with a few paper gold coins flying around it` |
 | `card_art_forest_fox.png` | จิ้งจอกป่า | `Forest Fox, a slim orange fox with white chest and a bushy white-tipped tail, pouncing forward with a sharp claw-swipe trail` |
 | `card_art_wild_boar.png` | หมูป่า | `Wild Boar, a stocky dark-brown boar with a bristly mane and two small white tusks, charging head-first with paper dirt flying` |
 | `card_art_forest_wolf.png` | หมาป่า | `Forest Wolf, a lean grey wolf with pale chest and bushy tail, howling with head raised, faint red claw marks in the air` |
 | `card_art_forest_bear.png` | หมี (Mini Boss) | `Forest Bear, a big heavy brown bear with a lighter muzzle, rearing up on its hind legs and roaring, huge and powerful` |
 
-### ชั้น 1 · แมพ 2 หนองน้ำหมอก (แชทที่ 2)
+### ชั้น 1 · แมพ 2 หนองน้ำหมอก (แชทที่ 2) · ฉากหลัง: หนองน้ำมีหมอก ต้นกก แสงเรืองสีเขียว
 
 | ไฟล์ | มอน | คำอธิบาย |
 |---|---|---|
@@ -77,7 +76,7 @@ Card monster:
 | `card_art_will_o_wisp.png` | ผีไต้ไฟ | `Will-o'-Wisp, floating with swirling pale-green spirit flames around it` |
 | `card_art_bog_witch.png` | แม่มดหนอง (Boss) | `Bog Witch, casting a big spell with a glowing swamp-green orb, poison vials and a paper magic circle around her, the most dramatic and powerful pose` |
 
-### ชั้น 1 · แมพ 3 ดินแดนหิมะ (แชทที่ 3)
+### ชั้น 1 · แมพ 3 ดินแดนหิมะ (แชทที่ 3) · ฉากหลัง: ทุ่งหิมะ ทะเลสาบน้ำแข็ง แสงออโรรา
 
 | ไฟล์ | มอน | คำอธิบาย |
 |---|---|---|
@@ -89,7 +88,7 @@ Card monster:
 | `card_art_polar_bear.png` | หมีขั้วโลก | `Polar Bear, a big sturdy polar bear with thick white fur, old healed scars, jagged blue ice chunks on its back and forelegs, standing tall` |
 | `card_art_yeti.png` | เยติ (Boss) | `Yeti, a huge powerful yeti with shaggy white fur, pale blue face, two short dark horns, enormous fists and jagged blue ice crystals on its shoulders, slamming the ground, the most dramatic and powerful pose` |
 
-### ชั้น 1 · แมพ 4 เกาะภูเขาไฟ (แชทที่ 4)
+### ชั้น 1 · แมพ 4 เกาะภูเขาไฟ (แชทที่ 4) · ฉากหลัง: ภูเขาไฟ ลาวา หินบะซอลต์ดำ (หัวใจภูเขาไฟ: ฉากหลังเย็น น้ำเงินเทาอมเถ้า ให้ตัวมันเป็นสีส้มสว่างอย่างเดียว)
 
 | ไฟล์ | มอน | คำอธิบาย |
 |---|---|---|
@@ -101,7 +100,7 @@ Card monster:
 | `card_art_ash_knight.png` | อัศวินเถ้าถ่าน | `Ash Knight, a small round knight in dark soot-black armour with ember-coloured seams, lunging forward with a short black sword that glows at the edge` |
 | `card_art_volcano_heart.png` | หัวใจภูเขาไฟ (Boss) | `Volcano Heart, a huge living heart of molten rock on a small mound of black basalt, bright orange and yellow magma glowing through wide cracks, flames and embers erupting from its top, the most dramatic and powerful pose` |
 
-### ชั้น 2 · แมพ 1 หาดเรือแตก (แชทที่ 5) · ต้นแบบสไตล์เพิ่ม: `raw/floor2_maps/M1_shipwreck_beach`
+### ชั้น 2 · แมพ 1 หาดเรือแตก (แชทที่ 5) · ต้นแบบสไตล์เพิ่ม: `raw/floor2_maps/M1_shipwreck_beach` · ฉากหลัง: หาดทรายเรือแตกใต้ท้องฟ้าทะเลเมฆ
 
 | ไฟล์ | มอน | คำอธิบาย |
 |---|---|---|
@@ -111,7 +110,7 @@ Card monster:
 | `card_art_spike_turtle.png` | เต่าหลังหนาม | `Spike Turtle, a sturdy turtle with a shell covered in sharp thorns, planted firmly and snapping, with a faint glint on the spikes` |
 | `card_art_cannon_crab.png` | ปูยักษ์กระดองปืนใหญ่ (Boss) | `Giant Cannon Crab, a huge crab with big claws and a ship's cannon built into its shell, raised claws and the cannon firing a smoky shot, the most dramatic and powerful pose` (ไม่มีไฟล์ sprite กระดาษ ให้แนบภาพแมพ 1 แทน) |
 
-### ชั้น 2 · แมพ 2 อ่าวลักลอบ (แชทที่ 6) · ต้นแบบสไตล์เพิ่ม: `raw/floor2_maps/M2_smugglers_cove`
+### ชั้น 2 · แมพ 2 อ่าวลักลอบ (แชทที่ 6) · ต้นแบบสไตล์เพิ่ม: `raw/floor2_maps/M2_smugglers_cove` · ฉากหลัง: อ่าวลักลอบ หน้าผา เรือโจรสลัด ถังดินปืน
 
 | ไฟล์ | มอน | คำอธิบาย |
 |---|---|---|
@@ -121,7 +120,7 @@ Card monster:
 | `card_art_keg_prisoner.png` | นักโทษถังดินปืน | `Powder-Keg Prisoner, hugging a small powder keg with a lit fuse, about to throw it, a faint warning glow around the keg` |
 | `card_art_pegleg_captain.png` | กัปตันขาไม้ (Boss) | `Peg-Leg Captain, striking a commanding pose with his cutlass raised and a big ship's anchor on a chain in the other hand, the parrot on his shoulder, the most dramatic and powerful pose` (sprite ชื่อ `peg_captain.png`) |
 
-### ชั้น 2 · แมพ 3 สุสานเรือผี (แชทที่ 7) · ต้นแบบสไตล์เพิ่ม: `raw/floor2_maps/M3_ghost_ship_graveyard` · ทุกตัวโปร่งแสง เขียวอมฟ้า
+### ชั้น 2 · แมพ 3 สุสานเรือผี (แชทที่ 7) · ต้นแบบสไตล์เพิ่ม: `raw/floor2_maps/M3_ghost_ship_graveyard` · ฉากหลัง: ซากเรือผี หมอกเขียวอมฟ้า · ทุกตัวโปร่งแสง เขียวอมฟ้า
 
 | ไฟล์ | มอน | คำอธิบาย |
 |---|---|---|
@@ -131,7 +130,7 @@ Card monster:
 | `card_art_barnacle_crew.png` | ลูกเรือหอยเกาะผี | `Barnacle Ghost Crewman, a translucent ghost sailor covered in barnacles and shells, the shells cracking as if about to burst` |
 | `card_art_ghost_captain.png` | กัปตันผีเรือคนตาย (Boss) | `Ghost Captain of the Dead Ship, a tall translucent teal ghost captain in a tattered coat and hat, ghostly fog curling around him, a ship's bell in one hand, the most dramatic and powerful pose` |
 
-### ชั้น 2 · แมพ 4 วังวนกลางทะเล (แชทที่ 8) · ต้นแบบสไตล์เพิ่ม: `raw/floor2_maps/M4_kraken_maelstrom`
+### ชั้น 2 · แมพ 4 วังวนกลางทะเล (แชทที่ 8) · ต้นแบบสไตล์เพิ่ม: `raw/floor2_maps/M4_kraken_maelstrom` · ฉากหลัง: น้ำวนยักษ์กลางทะเล หมอกน้ำเย็น
 
 | ไฟล์ | มอน | คำอธิบาย |
 |---|---|---|
