@@ -295,10 +295,10 @@ function scatterZone(z: ZoneDef, list: Scatter[]): ZoneDef {
 export const FARM_SCALE = 1.5;
 const FARM_DENSITY = FARM_SCALE * FARM_SCALE;
 /**
- * On top of FARM_DENSITY: the farm maps were still half empty (owner 2026-11-25 "จุดเกิดให้เต็มไม่มีที่ว่าง", chose x3: about 170 spots,
- * 300 monsters a map). /admin can switch part of the spots off per map (Balance.farmSpots).
+ * On top of FARM_DENSITY: the farm maps were still half empty (owner 2026-11-25 "จุดเกิดให้เต็มไม่มีที่ว่าง"; x3 was too many, then
+ * x2: about 200 monsters a map). /admin can switch part of the spots off per map (Balance.farmSpots).
  */
-const FARM_FILL = 3;
+const FARM_FILL = 2;
 
 function grownFarm(z: ZoneDef): ZoneDef {
   const k = FARM_SCALE;

@@ -30,8 +30,8 @@ for (const id of FARMS) {
   ok(map.walkable.half === map.zone.half - 8, `${id}: walkable frame follows (${map.walkable.half})`);
   const monsters = map.spawns.reduce((t, s) => t + s.count, 0);
   const ratio = monsters / OLD_MONSTERS[id];
-  // x2.25 for the area, then x3 to fill the map (owner 2026-11-25): about 300 a map.
-  ok(ratio > 6.3 && ratio < 7.3, `${id}: ${monsters} monsters on ${map.spawns.length} spots, x${ratio.toFixed(2)} (x2.25 area x3 fill)`);
+  // x2.25 for the area, then x2 to fill the map (owner 2026-11-25, x3 was too many): about 200 a map.
+  ok(ratio > 4.2 && ratio < 4.8, `${id}: ${monsters} monsters on ${map.spawns.length} spots, x${ratio.toFixed(2)} (x2.25 area x2 fill)`);
   // Owner 2026-11-25: alone or in groups of 2–3, mixed (about half each), not a fixed number per spot.
   const lone = map.spawns.filter((s) => s.count === 1).length;
   const groups = map.spawns.filter((s) => s.count >= 2 && s.count <= 3).length;
@@ -100,7 +100,7 @@ ok(!validateMap(wrongSize, { propKeys: PROP_KEYS }).some((i) => i.code === 'lock
   const per = (pct: number) => spawns.map((a, i) => packCount('emerald_forest', a.count, i, { ...currentBalance(), farmSpots: { emerald_forest: pct } }));
   const on = (pct: number) => per(pct).filter((n) => n > 0).length;
   ok(on(100) === spawns.length && on(0) === 0, `100% = all ${spawns.length} spots, 0% = none`);
-  ok(Math.abs(on(33) - spawns.length * 0.33) <= 3, `33% = ${on(33)} spots of ${spawns.length}`);
+  ok(Math.abs(on(50) - spawns.length * 0.5) <= 3, `50% = ${on(50)} spots of ${spawns.length}`);
   const kinds = [...new Set(spawns.map((s) => s.monster))];
   const p33 = per(33);
   ok(kinds.every((k) => spawns.some((s, i) => s.monster === k && p33[i] > 0)), 'at 33% every kind still has spots');
