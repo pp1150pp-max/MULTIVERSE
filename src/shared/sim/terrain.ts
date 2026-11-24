@@ -129,7 +129,37 @@ const THEME_PROPS: Record<ZoneTheme, ThemeProps> = {
     ringRock: ['sea_rock_1', 2.2],
     campDecor: false,
   },
+  // Floor 2's Smugglers' Cove (FLOOR2_M2_COVE.md, cut by tools/cut_papercraft.cjs floor2_m2): rock outcrops among the palms,
+  // the smugglers' goods (powder kegs, crates, rum, a wanted board) and a hidden cave or two.
+  cove: {
+    trees: ['cliff_palm_0', 'cliff_palm_1', 'cliff_palm_0', 'cliff_rock_0'],
+    bushes: ['thicket_0', 'thicket_1'],
+    rocks: ['cliff_rock_1', 'cliff_rock_2'],
+    stump: 'rum_barrel',
+    tallStump: 'powder_keg',
+    extra: ['cave_mouth', 'tent_0', 'tent_1', 'stilt_hut', 'small_falls', 'smuggled_crates', 'pirate_lantern', 'wanted_board', 'cliff_cannon',
+      'cannonball_pile', 'smuggler_flag', 'cargo_net', 'bottles', 'loot_chest', 'pirate_boat'],
+    extraSize: {
+      cave_mouth: [3.6, 1.6], tent_0: [2.8, 1.2], tent_1: [2.6, 1.2], stilt_hut: [4, 1.2], small_falls: [2.8, 1], smuggled_crates: [1.4, 0.6],
+      pirate_lantern: [1.6, 0.2], wanted_board: [1.8, 0.4], cliff_cannon: [1.3, 0.6], cannonball_pile: [0.6, 0.3], smuggler_flag: [2.6, 0.2],
+      cargo_net: [0.9, 0.5], bottles: [0.8, 0.4], loot_chest: [1, 0.5], pirate_boat: [2.2, 1.2],
+    },
+    ringRock: ['cliff_rock_1', 2.2],
+    campDecor: false,
+  },
 };
+
+/**
+ * A boss room's kit pieces (room_<theme>_<name>) under another name where a theme's art has no piece of that name:
+ * the cove's sheet (tools/cut_papercraft.cjs floor2_m2) has one pillar, a mast and a gunboat instead of two pillars and a rune stone.
+ */
+const ROOM_KIT: Partial<Record<ZoneTheme, Record<string, string>>> = {
+  cove: { pillar_0: 'pillar', pillar_1: 'mast', rune_stone: 'boulder' },
+};
+/** Where the cove room's gunboats lie around the arena (angles from the boss; the way in is at π/4). */
+export const GUNBOAT_ANGLES = [Math.PI * 1.25, Math.PI * 0.72, Math.PI * 1.78];
+/** How far from the boss the gunboats lie: just outside the arena. */
+export const gunboatDist = (arena: number): number => arena + 2.2;
 
 /** How close a player has to walk to a portal to use it. */
 export const PORTAL_RANGE = 1.4;
@@ -140,6 +170,7 @@ export const SUMMONER_PROP: Record<ZoneTheme, string> = {
   snow: 'summoner_snow',
   volcano: 'summoner_volcano',
   beach: 'summoner_crab',
+  cove: 'summoner_captain',
 };
 export const SUMMONER_HEIGHT = 3.6;
 export const SUMMONER_SOLID = 1.2;
@@ -844,14 +875,19 @@ export class Terrain {
    * rubble and a tree or two between the ring and the edge of the room.
    */
   private placeRoom(r: Rng, b: { x: number; z: number }, ring: number): void {
-    const kit = (name: string) => `room_${this.zone.theme}_${name}`;
+    const theme = this.zone.theme;
+    const kit = (name: string) => `room_${theme}_${ROOM_KIT[theme]?.[name] ?? name}`;
     const way = Math.PI / 4;
     const gap = (a: number) => Math.abs(Math.atan2(Math.sin(a - way), Math.cos(a - way))) < 0.42;
+    const near = (a: number, b2: number) => Math.abs(Math.atan2(Math.sin(a - b2), Math.cos(a - b2))) < 0.3;
+    // The cove's gunboats stand at the edge of the arena (the Peg-Leg Captain's parrot calls their shots), in the ring's place.
+    const boats = theme === 'cove' ? GUNBOAT_ANGLES : [];
+    for (const a of boats) this.addProp('room_cove_gunboat', b.x + Math.cos(a) * gunboatDist(ring), b.z + Math.sin(a) * gunboatDist(ring), 2.4, 1);
     const RING: [string, number, number][] = [['pillar_0', 3.2, 0.6], ['brazier', 2.3, 0.4], ['pillar_1', 2.4, 0.6], ['rune_stone', 2.2, 0.6]];
     const n = 14;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2 + Math.PI / n;
-      if (gap(a)) continue;
+      if (gap(a) || boats.some((g) => near(a, g))) continue;
       const [name, h, solid] = RING[i % RING.length];
       this.addProp(kit(name), b.x + Math.cos(a) * (ring + 1.6), b.z + Math.sin(a) * (ring + 1.6), h, solid);
     }

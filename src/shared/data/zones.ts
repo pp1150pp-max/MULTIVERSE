@@ -55,7 +55,7 @@ export interface IceLake {
 }
 
 /** Which prop set and ground palette a zone is drawn with. */
-export type ZoneTheme = 'forest' | 'marsh' | 'snow' | 'volcano' | 'beach';
+export type ZoneTheme = 'forest' | 'marsh' | 'snow' | 'volcano' | 'beach' | 'cove';
 
 /** An ellipse of lava: walkable, but it burns whoever stands in it. */
 export interface LavaPool {
@@ -509,6 +509,42 @@ export const ZONE_BEACH: ZoneDef = scatterZone({
   { group: [['spike_turtle', 1]], count: 8, respawn: [14, 20] },
 ]);
 
+// Floor 2, map 2 (plan 2, 5.2): reached from the harbour's right pier, so the camp is on the left like the marsh's.
+// Numbers: owner 2026-11-24 (the proposed table, Shipwreck Beach's boost); every move number is in /admin (moveTuning.ts).
+export const ZONE_COVE: ZoneDef = rotateZone(1, scatterZone({
+  id: 'smugglers_cove',
+  name: "Smugglers' Cove",
+  nameTh: 'อ่าวลักลอบ',
+  subtitle: 'อ่าวหินลับบนเกาะลอยยามพระอาทิตย์ตก ที่ซ่อนของเถื่อนของโจรสลัด นักโทษหลบหนี และกัปตันขาไม้กับนกแก้วคู่ใจ',
+  levels: [51, 60],
+  floor: 2,
+  theme: 'cove',
+  monsterBoost: { stats: 7, tough: 0.5, mobTough: 0.7, speed: 1.25, skill: 1.25, aggro: 7 },
+  allowAutoPlay: true,
+  channels: true,
+  half: 64,
+  seed: 20261124,
+  start: { x: 44, z: 44 },
+  path: [[52, 52], [44, 44], [34, 30], [22, 24], [8, 14], [-2, 2], [-12, -8], [-22, -18], [-32, -32], [-42, -42]],
+  branches: [
+    [[34, 30], [42, 14]],
+    [[22, 24], [10, 38]],
+    [[8, 14], [20, -2]],
+    [[-2, 2], [-20, 12]],
+    [[-12, -8], [-2, -26]],
+  ],
+  spawns: [],
+  lair: { boss: 'pegleg_captain', x: -42, z: -42 },
+  // Room for the anchor throw and the gunboats' shots from the edge of the arena.
+  arenaRadius: 14,
+  portals: [{ to: HARBOR_ID, x: 49.5, z: 49.5, minLevel: 0 }],
+}, [
+  { group: [['prisoner', 1]], count: 12, respawn: [8, 12] },
+  { group: [['cutlass_pirate', 1]], count: 10, respawn: [10, 14] },
+  { group: [['shotgunner', 1]], count: 9, respawn: [10, 14] },
+  { group: [['keg_prisoner', 1]], count: 8, respawn: [14, 20] },
+]));
+
 /** Where each harbour pier leads (top, right, left, bottom of the screen), by plan 2; none of them built yet. */
 const HARBOR_PIERS: [string, string][] = [
   ['shipwreck_beach', 'หาดเรือแตก'],
@@ -559,6 +595,7 @@ export const GENERATED_ZONES: Record<string, ZoneDef> = {
   [ZONE_3.id]: ZONE_3,
   [ZONE_4.id]: ZONE_4,
   [ZONE_BEACH.id]: ZONE_BEACH,
+  [ZONE_COVE.id]: ZONE_COVE,
 };
 
 /**
@@ -640,13 +677,14 @@ export function zoneWithLayout(id: string, map: MapData): ZoneDef | undefined {
 }
 
 /** Each boss's body radius in its room (the Volcano Heart is a rock that never moves). */
-const BOSS_RADIUS: Record<string, number> = { forest_bear: 1, bog_witch: 1, yeti: 1, volcano_heart: 0, cannon_crab: 1 };
+const BOSS_RADIUS: Record<string, number> = { forest_bear: 1, bog_witch: 1, yeti: 1, volcano_heart: 0, cannon_crab: 1, pegleg_captain: 1 };
 const BOSS_ROOM_NAME: Record<string, [string, string]> = {
   forest_bear: ["Bear's Den", 'รังหมีป่า'],
   bog_witch: ["Bog Witch's Lair", 'กระท่อมแม่มดหนอง'],
   yeti: ["Yeti's Cave", 'ถ้ำเยติ'],
   volcano_heart: ['Heart of the Volcano', 'แกนกลางภูเขาไฟ'],
   cannon_crab: ["Giant Crab's Den", 'รังปูยักษ์'],
+  pegleg_captain: ["Peg-Leg Captain's Hideout", 'ถ้ำกัปตันขาไม้'],
 };
 
 /**
@@ -708,7 +746,7 @@ export function lairExitSpot(room: ZoneDef, r: () => number = Math.random): { fi
 
 /** The boss rooms as bossRoom() makes them, by room id. Only tools/bake_maps.ts and the bake test read these. */
 export const GENERATED_ROOMS: Record<string, ZoneDef> = Object.fromEntries(
-  [ZONE_1, ZONE_2, ZONE_3, ZONE_4, ZONE_BEACH].map((z) => {
+  [ZONE_1, ZONE_2, ZONE_3, ZONE_4, ZONE_BEACH, ZONE_COVE].map((z) => {
     const r = bossRoom(z);
     return [r.id, r];
   }),
