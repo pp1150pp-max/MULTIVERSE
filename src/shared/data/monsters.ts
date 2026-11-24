@@ -2,10 +2,13 @@ import type { BossEffect } from '../sim/types';
 
 export type Behavior = 'passive' | 'skittish' | 'aggressive' | 'charger' | 'boss';
 
+/** The picture a monster's shot flies as: the client's sheet fx_<art>. The cove's are paper only (sprites/paper/fx/). */
+export type ShotArt = 'ice_shard' | 'snowball' | 'ember_bolt' | 'iron_ball' | 'bomb' | 'pellets';
+
 /** A straight shot at the player. */
 export interface ShotDef {
   /** Which picture it flies as. */
-  art: 'ice_shard' | 'snowball' | 'ember_bolt';
+  art: ShotArt;
   speed: number;
   range: number;
   mult: number;
@@ -14,6 +17,13 @@ export interface ShotDef {
   size: number;
   color: string;
 }
+
+/**
+ * Smugglers' Cove's monster moves (sim/coveMoves.ts, plan 5.2): chainball = slow on its chain, then throws the ball and runs
+ * free once hurt · combo = three cuts, the third a short lunge · spread = a fan of pellets · keg = gets up when killed and runs
+ * at the nearest player to blow up · parrot = the captain's parrot (sim/peglegCaptain.ts moves it).
+ */
+export type CoveMove = 'chainball' | 'combo' | 'spread' | 'keg' | 'parrot';
 
 export interface MonsterDef {
   id: string;
@@ -80,9 +90,12 @@ export interface MonsterDef {
    * shell = hides when hit (less damage), then strikes back · steal = swoops for gold and flies off ·
    * chain = lightning that jumps from player to player · thorns = reflects part of close-range hits.
    */
-  move?: 'shell' | 'steal' | 'chain' | 'thorns';
-  /** Bosses with their own moves on top of walking and hitting: the Giant Cannon Crab (sim/cannonCrab.ts). */
-  brain?: 'cannon_crab';
+  move?: 'shell' | 'steal' | 'chain' | 'thorns' | CoveMove;
+  /**
+   * Bosses with their own moves on top of walking and hitting: the Giant Cannon Crab (sim/cannonCrab.ts),
+   * the Peg-Leg Captain (sim/peglegCaptain.ts).
+   */
+  brain?: 'cannon_crab' | 'pegleg_captain';
   /**
    * Bosses: the painted effect each of its skills plays (owner 2026-11-21, src/client/bossFx.ts): its hit (sent at
    * the boss with its facing and reach), ground slam, enrage, jumping off / landing, and where its minions appear.
@@ -314,5 +327,51 @@ export const MONSTERS: Record<string, MonsterDef> = {
     aggroRange: 9, attackRange: 2.2, attackCooldown: 1.8, height: 4.2, radius: 1.5,
     behavior: 'boss', brain: 'cannon_crab', itemChance: 1, potionChance: 1,
     bossLoot: { items: 6, epics: 2, stoneChance: 0.2 },
+  },
+
+  // Floor 2, map 2 — Smugglers' Cove (Lv51–60). Numbers: owner 2026-11-24 (the proposed table, plan 5.2); the zone's boost is the beach's.
+  // Their new moves (sim/coveMoves.ts) take their numbers from moveTuning.ts (/admin).
+  prisoner: {
+    id: 'prisoner', name: 'Ship Prisoner', nameTh: 'นักโทษในเรือ', levels: [51, 52],
+    hp: 3100, atk: 350, def: 66, speed: 2.0, exp: 2250, gold: [135, 205],
+    aggroRange: 0, attackRange: 1.2, attackCooldown: 1.6, height: 1.6, radius: 0.55,
+    behavior: 'passive', move: 'chainball', itemChance: 0.21, potionChance: 0.13,
+  },
+  cutlass_pirate: {
+    id: 'cutlass_pirate', name: 'Cutlass Pirate', nameTh: 'โจรสลัดดาบโค้ง', levels: [53, 54],
+    hp: 3400, atk: 390, def: 70, speed: 2.6, exp: 2650, gold: [155, 235],
+    aggroRange: 7, attackRange: 1.3, attackCooldown: 1.9, height: 1.7, radius: 0.5,
+    behavior: 'aggressive', move: 'combo', itemChance: 0.21, potionChance: 0.13,
+  },
+  shotgunner: {
+    id: 'shotgunner', name: 'Blunderbuss Pirate', nameTh: 'มือปืนลูกซอง', levels: [55, 56],
+    hp: 3300, atk: 440, def: 62, speed: 2.2, exp: 3100, gold: [180, 275],
+    aggroRange: 8, attackRange: 6.5, attackCooldown: 2.2, height: 1.7, radius: 0.5,
+    behavior: 'aggressive', move: 'spread', itemChance: 0.22, potionChance: 0.14,
+    // One pellet of the fan (coveMoves.ts fires several): its damage and range are the /admin card's, these are the defaults.
+    shot: { art: 'pellets', speed: 11, range: 8, mult: 0.5, radius: 0.3, size: 0.55, color: '#ffd27a' },
+  },
+  keg_prisoner: {
+    id: 'keg_prisoner', name: 'Powder-Keg Prisoner', nameTh: 'นักโทษถังดินปืน', levels: [57, 59],
+    hp: 5200, atk: 470, def: 85, speed: 2.0, exp: 3600, gold: [210, 320],
+    aggroRange: 7, attackRange: 1.3, attackCooldown: 1.8, height: 1.8, radius: 0.6,
+    behavior: 'aggressive', move: 'keg', itemChance: 0.22, potionChance: 0.14,
+    thrown: { art: 'bomb', speed: 8, range: 9, mult: 1.3, radius: 0.6, size: 0.9, color: '#ff8a3a', minRange: 3, cooldown: 5 },
+  },
+  // Its id is fixed by the Lv60 gate (BOSS_GATES); its pictures are cut as peg_captain_* (a placeholder until the owner's own).
+  pegleg_captain: {
+    id: 'pegleg_captain', name: 'Peg-Leg Captain', nameTh: 'กัปตันขาไม้ (Boss)', levels: [60, 60],
+    hp: 340000, atk: 680, def: 52, speed: 2.0, exp: 36000, gold: [2800, 4500],
+    aggroRange: 9, attackRange: 2.2, attackCooldown: 1.8, height: 4.4, radius: 1.3,
+    behavior: 'boss', brain: 'pegleg_captain', summon: { monster: 'cutlass_pirate', count: 3 }, itemChance: 1, potionChance: 1,
+    bossLoot: { items: 6, epics: 2, stoneChance: 0.2 },
+  },
+  // The captain's parrot (sim/peglegCaptain.ts): flies onto a player and calls the gunboats' shots. It never dies: shot down,
+  // it is gone for a while, then back on his shoulder. No rewards. Its HP is the /admin card's (moveTuning captain.parrotHp).
+  parrot: {
+    id: 'parrot', name: "Captain's Parrot", nameTh: 'นกแก้วคู่ใจ', levels: [60, 60],
+    hp: 15000, atk: 0, def: 0, speed: 7, exp: 0, gold: [0, 0],
+    aggroRange: 0, attackRange: 0, attackCooldown: 99, height: 1.1, radius: 0.45,
+    behavior: 'passive', move: 'parrot', summonOnly: true, ignoreTough: true, itemChance: 0, potionChance: 0,
   },
 };

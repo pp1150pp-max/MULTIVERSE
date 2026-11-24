@@ -23,8 +23,8 @@ import { MAP_SCHEMA_VERSION, type MapData, type MapProp, type MapCollider, type 
 
 /** The floor-1 maps, hub first. */
 export const FLOOR1_IDS = ['nexus_city', 'emerald_forest', 'misty_marsh', 'frost_reach', 'ashen_isle'];
-/** The floor-2 maps, its town first (the harbour, then Shipwreck Beach). */
-export const FLOOR2_IDS = ['harbor_town', 'shipwreck_beach'];
+/** The floor-2 maps, its town first (the harbour, then Shipwreck Beach and Smugglers' Cove). */
+export const FLOOR2_IDS = ['harbor_town', 'shipwreck_beach', 'smugglers_cove'];
 /** Every map (not boss rooms), floor by floor. */
 export const MAP_IDS = [...FLOOR1_IDS, ...FLOOR2_IDS];
 /** The boss rooms (ZoneDef.id of GENERATED_ROOMS), each next to its field. */

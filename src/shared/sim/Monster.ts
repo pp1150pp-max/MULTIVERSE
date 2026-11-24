@@ -7,6 +7,8 @@ import { VolcanoHeartBrain } from './volcanoHeart';
 import { SPELL_GAP, WitchSpells } from './bogWitch';
 import { CannonCrabBrain } from './cannonCrab';
 import { chainStrike, chainWarn, mv, shellCounter, shellOnHit, stealGold, stealTick, type StolenGold } from './beachMoves';
+import { chainballOnHit, chainballSpeed, comboCut, kegTick, spreadFire, spreadWarn, type KegRun } from './coveMoves';
+import { PeglegCaptainBrain } from './peglegCaptain';
 import { currentBalance, monsterMults, NO_MONSTER_MULT, type MonsterMults } from '../balance';
 
 const BOSS_RAMP_PER_SEC = 0.2;
@@ -132,6 +134,23 @@ export class Monster extends Unit {
   stolen: StolenGold | null = null;
   /** Thief gull: flying off faster than it chases. */
   private fleeFast = false;
+  /** The Peg-Leg Captain's moves and his parrot (def.brain). Made on first use, so only the server has them. */
+  captain: PeglegCaptainBrain | null = null;
+  /** Ship prisoner: has thrown its ball and broken its chain (sim/coveMoves.ts). */
+  freed = false;
+  /** Cutlass pirate: the cut of its combo coming next (0, 1, 2). */
+  private comboStep = 0;
+  /** Can't be hit at all: the parrot on its captain's shoulder, a powder-keg prisoner's last run. */
+  noHit = false;
+  /** A fallen powder-keg prisoner running to blow up (sim/coveMoves.ts): it does nothing else. */
+  keg: KegRun | null = null;
+  /** The captain's shout: this much faster (0.4 = +40%) for hasteT more seconds. */
+  haste = 0;
+  hasteT = 0;
+  /** Max HP set outright instead of from the def (the parrot's, /admin captain.parrotHp × keys). */
+  hpOverride: number | null = null;
+  /** The parrot's HP ran out: its captain's brain takes it down for a while instead of it dying. */
+  knockedDown = false;
 
   /** The zone's monster boost: multiplies HP, attack and defense, and speed (moving and attacking). */
   private readonly zoneSpeed: number;
@@ -183,7 +202,7 @@ export class Monster extends Unit {
     const m = this.isBoss ? this.bossMults() : monsterMults(this.def);
     const share = this.baseHp > 0 ? this.hp / this.maxHp : 1;
     this.mult = m;
-    this.baseHp = Math.max(1, Math.round(this.rawHp * m.hp));
+    this.baseHp = this.hpOverride ?? Math.max(1, Math.round(this.rawHp * m.hp));
     this.atk = this.rawAtk * m.atk;
     this.defense = this.rawDef * m.def;
     this.expReward = Math.round(this.rawExp * m.exp);
@@ -194,8 +213,9 @@ export class Monster extends Unit {
 
   /** Bosses are not in the monster multipliers; floor 2's own boss cards scale their HP and ATK (moveTuning.ts). */
   private bossMults(): Readonly<MonsterMults> {
-    if (this.def.brain !== 'cannon_crab') return NO_MONSTER_MULT;
-    return { ...NO_MONSTER_MULT, hp: mv('crab.hpMult'), atk: mv('crab.atkMult') };
+    const card = this.def.brain === 'cannon_crab' ? 'crab' : this.def.brain === 'pegleg_captain' ? 'captain' : null;
+    if (!card) return NO_MONSTER_MULT;
+    return { ...NO_MONSTER_MULT, hp: mv(card + '.hpMult'), atk: mv(card + '.atkMult') };
   }
 
   /** Runs away from its target for `sec` seconds, faster than it chases (a thief gull with gold). */
@@ -241,7 +261,11 @@ export class Monster extends Unit {
     this.hpMult = maxHp / this.baseHp;
   }
   /** Walking speed before enrage, ramps and slows: the def's, times the zone's boost. */
-  private get baseSpeed(): number { return this.def.speed * this.zoneSpeed * this.mult.speed; }
+  private get baseSpeed(): number { return this.def.speed * this.zoneSpeed * this.mult.speed * this.coveSpeed; }
+  /** The cove's: a ship prisoner on its chain (or free), the captain's shout. */
+  private get coveSpeed(): number {
+    return (this.def.move === 'chainball' ? chainballSpeed(this) : 1) * (this.hasteT > 0 ? 1 + this.haste : 1);
+  }
   get topY(): number { return this.def.height * 0.75; }
   /** Seconds it keeps chasing after the last hit (Balance: ordinary monsters' give-up time; bosses never give up by time). */
   private get aggroTime(): number {
@@ -283,7 +307,7 @@ export class Monster extends Unit {
     return this.alive && (this.state === 'chase' || this.state === 'charge' || this.state === 'leap' || this.windupT > 0);
   }
   /** In the air after vanishing or on its way back: can't be hit. */
-  get untargetable(): boolean { return this.jumpOutT > 0 || this.fallT > 0; }
+  get untargetable(): boolean { return this.jumpOutT > 0 || this.fallT > 0 || this.noHit; }
   private get slamRadius(): number { return this.def.slamRadius ?? DEFAULT_SLAM_RADIUS; }
 
   /**
@@ -308,6 +332,7 @@ export class Monster extends Unit {
     if (this.state !== 'charge' && this.state !== 'leap') this.state = 'chase';
     if (this.def.behavior === 'skittish' && Math.random() < 0.4) this.fleeT = 1.2;
     if (this.def.move === 'shell') shellOnHit(sim, this);
+    if (this.def.move === 'chainball') chainballOnHit(sim, this, attacker);
     if (this.def.pack) {
       for (const m of sim.monsters) {
         if (m !== this && m.alive && !m.ignoresHits && (m.def.packId ?? m.def.id) === (this.def.packId ?? this.def.id) && Math.hypot(m.x - this.x, m.z - this.z) < 9) {
@@ -384,6 +409,14 @@ export class Monster extends Unit {
       return;
     }
     this.moving = false;
+    // A powder-keg prisoner's last run, and the captain's parrot (his brain moves it): nothing else (sim/coveMoves.ts, peglegCaptain.ts).
+    if (this.keg) {
+      this.tickStatus(dt, sim.terrain);
+      kegTick(dt, sim, this);
+      return;
+    }
+    if (this.def.move === 'parrot') return;
+    if (this.hasteT > 0) this.hasteT -= dt;
     if (this.def.pattern) {
       this.brain ??= new VolcanoHeartBrain();
       this.face(1, 1);
@@ -402,6 +435,12 @@ export class Monster extends Unit {
       if (!this.holdsOnWipe(sim) && (this.state === 'return' || (this.state === 'idle' && !this.target))) this.crab.reset(sim);
       // Before any early return below, so its cannonballs still land while it is stunned.
       this.crab.tick(sim, this);
+    }
+    if (this.def.brain === 'pegleg_captain') {
+      this.captain ??= new PeglegCaptainBrain();
+      if (!this.holdsOnWipe(sim) && (this.state === 'return' || (this.state === 'idle' && !this.target))) this.captain.reset(sim, this);
+      // Before any early return below, so the gunboats' shells still land and the parrot still flies while he is stunned.
+      this.captain.tick(dt, sim, this);
     }
     if (this.def.move === 'steal') stealTick(sim, this);
     if (this.jumpOutT > 0) {
@@ -507,6 +546,8 @@ export class Monster extends Unit {
     }
     // The Giant Cannon Crab's own moves (sim/cannonCrab.ts); when it does none this tick it chases and hits as usual.
     if (this.crab && this.state !== 'return' && this.crab.act(dt, sim, this)) return;
+    // The Peg-Leg Captain's own moves (sim/peglegCaptain.ts).
+    if (this.captain && this.state !== 'return' && this.captain.act(dt, sim, this)) return;
 
     if (this.windupT > 0) {
       this.windupT -= dt;
@@ -619,6 +660,7 @@ export class Monster extends Unit {
               this.windupT = (this.isBoss ? 0.5 : this.def.shot ? 0.5 : 0.35) * this.skillMult();
               this.atkCd = (this.def.attackCooldown / (this.zoneSpeed * this.mult.atkSpeed)) * (frenzy ? frenzy.skill : this.enraged ? 0.75 : 1);
               if (this.def.shot) this.warnShot(sim, p, this.def.shot);
+              this.comboStep = 0;
             }
           } else {
             mx = dx / d;
@@ -770,6 +812,10 @@ export class Monster extends Unit {
   /** Locks the aim for the coming shot and marks its path on the ground, so it can be stepped out of. */
   private warnShot(sim: Sim, p: Player, shot: ShotDef): void {
     this.shotAngle = Math.atan2(p.z - this.z, p.x - this.x);
+    if (this.def.move === 'spread') {
+      spreadWarn(sim, this, this.shotAngle, this.windupT);
+      return;
+    }
     sim.fx('lineTelegraph', this.x, this.z, this.shotAngle, shot.range * this.mult.range, shot.radius * 2, this.windupT);
   }
 
@@ -793,8 +839,18 @@ export class Monster extends Unit {
     } else if (this.windKind === 'chain') {
       chainStrike(sim, this, p);
       this.atkCd = Math.max(this.atkCd, 0.8);
+    } else if (this.windKind === 'melee' && this.def.move === 'spread') {
+      spreadFire(sim, this, this.shotAngle);
     } else if (this.windKind === 'melee' && this.def.shot) {
       this.fire(sim, this.def.shot);
+    } else if (this.windKind === 'melee' && this.def.move === 'combo') {
+      // Three cuts in a row, the third a lunge (sim/coveMoves.ts); each next one winds up quickly.
+      if (comboCut(sim, this, p, this.comboStep, this.attackRange) && p?.alive) {
+        this.comboStep++;
+        this.windKind = 'melee';
+        this.windupT = mv('combo.gap') * this.skillMult();
+        sim.anim(this.id, 'attack', { duration: this.windupT });
+      } else this.comboStep = 0;
     } else if (this.windKind === 'melee') {
       const ang = Math.atan2(this.faceZ, this.faceX);
       // A boss's own claw / lantern / ice hit (bossFx.ts), sent from where it stands; others the plain slash.

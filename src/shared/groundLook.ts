@@ -8,6 +8,8 @@ export type GroundTileName = 'grass' | 'dirt' | 'water' | 'marsh' | 'mud' | 'pav
   | 'room_forest' | 'room_marsh' | 'room_snow' | 'room_volcano' | 'harbor_plank' | 'harbor_plaza' | 'harbor_water'
   // Floor 2's Shipwreck Beach (paper only).
   | 'sand' | 'wreck' | 'shallow' | 'room_beach'
+  // Floor 2's Smugglers' Cove (paper only).
+  | 'rock' | 'boardwalk' | 'cove_water' | 'room_cove'
   // Floor 2's cloud-sea backdrop (FLOOR2_SKY.md), once the owner has made it; until then island.ts paintSky.
   | 'sky_day';
 
@@ -19,6 +21,8 @@ export const THEME_TILES: Record<MapTheme, { base: GroundTileName; dirt: GroundT
   volcano: { base: 'ash_rock', dirt: 'ash_path', water: 'lava', pave: 'ash_path' },
   // Floor 2's Shipwreck Beach: warm cream sand, salvaged planks for the roads and turquoise tide pools (FLOOR2_M1_BEACH.md).
   beach: { base: 'sand', dirt: 'wreck', water: 'shallow', pave: 'wreck' },
+  // Floor 2's Smugglers' Cove: mauve-grey rock floor, dark plank boardwalks for the roads, turquoise cove water (FLOOR2_M2_COVE.md).
+  cove: { base: 'rock', dirt: 'boardwalk', water: 'cove_water', pave: 'boardwalk' },
 };
 
 /** World units covered by one repeat of a ground tile: about the same pixel size as the sprites. */
@@ -26,7 +30,7 @@ export const TILE_UNITS = 10.4;
 /** Bare ground around the camp at a zone's start. */
 export const CAMP_RADIUS = 7;
 /** How wide each theme's roads are worn into the grass (the game draws every path this wide, whatever its `w`). */
-export const TRAIL_WIDTH: Record<MapTheme, number> = { forest: 4.2, marsh: 3.6, snow: 3.8, volcano: 3.8, beach: 3.8 };
+export const TRAIL_WIDTH: Record<MapTheme, number> = { forest: 4.2, marsh: 3.6, snow: 3.8, volcano: 3.8, beach: 3.8, cove: 3.6 };
 
 /** Where a small ground detail belongs. */
 export type DecorSpot = 'verge' | 'field' | 'road' | 'shore' | 'water';
@@ -100,6 +104,20 @@ export const DECOR: Record<MapTheme, { key: string; cols: number; rows: number; 
       water: [],
     },
     flat: [2, 3, 9, 10],
+  },
+  // FLOOR2_M2_COVE.md 4: pebbles, flat rock, grass, plant / rope coil, broken bottle, cannonball, coins / wanted poster, chain, plank, seaweed.
+  cove: {
+    key: 'decor_cove',
+    cols: 4,
+    rows: 3,
+    spots: {
+      verge: [2, 2, 3, 0, 1, 4],
+      field: [0, 0, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+      road: [10, 10, 8, 9],
+      shore: [11, 11, 0, 1, 2],
+      water: [],
+    },
+    flat: [8, 9, 10],
   },
 };
 /** World size of one decor atlas cell: 128 pixels at about the same density as the ground tiles. */
