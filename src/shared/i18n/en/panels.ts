@@ -69,6 +69,7 @@ export const EN_PANELS: Record<string, string> = {
   'ออกจากมินิเกม (ออกอัตโนมัติใน {0} วิ)': 'Leave the mini-game (auto in {0} s)',
   'ออกจากมินิเกม': 'Leave the mini-game',
   'ออกจากห้องบอส (ออกอัตโนมัติใน {0} วิ)': 'Leave the boss room (auto in {0} s)',
+  'รอผู้เล่นโหลด… {0}/{1}': 'Waiting for players to load… {0}/{1}',
   'ฟื้นคืนชีพหน้าประตู (ออกจากมินิเกม)': 'Revive at the gate (leave the mini-game)',
   'ฟื้นคืนชีพที่แท่นเรียกบอส': 'Revive at the boss altar',
   'ชุบชีวิตในห้องนี้ครบแล้ว': 'No revives left in this room',

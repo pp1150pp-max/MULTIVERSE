@@ -35,12 +35,17 @@ export interface RoomLobbyView {
 }
 
 /** Your boss room, in snapshots while you are in one. */
+/** Waiting for everyone to load the map before a countdown starts (server/loadGate.ts): loaded / still in the room. */
+export interface LoadWait { ready: number; total: number }
+
 export interface RoomSnap {
   boss: string;
   keys: number;
   channel: number;
-  /** Seconds before the boss appears (the countdown when the room opens). */
+  /** Seconds before the boss appears (the countdown, once everyone has loaded). */
   bossIn?: number;
+  /** The countdown waits for players still loading the map (owner 2026-11-24). */
+  bossWait?: LoadWait;
   /** Seconds until everyone is sent out by the summoner (once the boss is dead). */
   leaveIn?: number;
   /** How many more times you may get up here with a phoenix feather. */

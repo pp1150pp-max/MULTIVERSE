@@ -56,7 +56,8 @@ export class RoomUI {
   private readonly line: HTMLElement;
   private drawnLine = '';
   private readonly countdown: HTMLElement;
-  private drawnCount = 0;
+  /** What the countdown shows now: a number, 'wait r/t' while players load, or '' (hidden). */
+  private drawnCount = '';
   private readonly exitBtn: HTMLButtonElement;
 
   constructor(private readonly g: Game) {
@@ -260,10 +261,23 @@ export class RoomUI {
   }
 
   private updateCountdown(): void {
+    // Before the countdown starts the server waits for everyone to load the map (owner 2026-11-24): a short line instead of a number.
+    const wait = this.g.backend.room?.bossWait ?? this.g.backend.waves?.wait;
+    if (wait) {
+      const key = `wait ${wait.ready}/${wait.total}`;
+      if (key === this.drawnCount) return;
+      this.drawnCount = key;
+      this.countdown.classList.remove('hidden', 'pop');
+      this.countdown.classList.add('waiting');
+      this.countdown.textContent = `รอผู้เล่นโหลด… ${wait.ready}/${wait.total}`;
+      return;
+    }
     const left = this.g.backend.room?.bossIn ?? this.g.backend.waves?.nextIn;
     const n = left === undefined ? 0 : Math.ceil(left);
-    if (n === this.drawnCount) return;
-    this.drawnCount = n;
+    const key = n > 0 ? String(n) : '';
+    if (key === this.drawnCount) return;
+    this.drawnCount = key;
+    this.countdown.classList.remove('waiting');
     this.countdown.classList.toggle('hidden', n <= 0);
     if (n <= 0) return;
     this.countdown.textContent = String(n);

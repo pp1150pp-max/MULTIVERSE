@@ -118,6 +118,7 @@ ok(!hub.questTurnIn(p, 'forest_bear'), 'nothing to hand in yet');
     save: () => {},
   });
   ok(rooms.open(1, 7, true) === null, 'opened with the quest key');
+  rooms.loaded(1); // the map is up: the countdown starts (server/loadGate.ts)
   const room = actor.sim;
   for (let i = 0; i < (ROOM_BOSS_DELAY + 1) * 30; i++) room.step(1 / 30);
   ok(room.zone === BOSS_ROOMS.emerald_forest && room.keys === 1, 'always ×1, whatever was asked');

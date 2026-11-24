@@ -416,7 +416,8 @@ export class Game {
 
   /** The backend moved us to another zone: redraw the map, camp and everything in it. */
   private changeZone(): void {
-    flashZoneLoading(this.player.cls.id);
+    // Once the player can see the map, tell the server: a boss room / wave run starts its countdown when everyone has (owner 2026-11-24).
+    flashZoneLoading(this.player.cls.id, () => this.backend.zoneReady());
     this.mapRoute = [];
     this.goal = null;
     this.world.dispose();

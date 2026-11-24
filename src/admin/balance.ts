@@ -651,6 +651,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       ),
       h('div', { class: 'row bal-line' },
         h('label', { title: `ค่าในโค้ด: ${code.roomBossDelay} วิ` }, 'นับถอยหลังก่อนบอสเกิด (วินาที, 0 = เกิดทันที · ใช้กับห้องที่เปิดใหม่)', numBox(() => draft.roomBossDelay, (n) => { draft.roomBossDelay = n; }, code.roomBossDelay, ...BALANCE_RANGE.roomBossDelay, 1, updateSummary)),
+        h('label', { title: `ค่าในโค้ด: ${code.roomLoadWait} วิ · นับถอยหลังเริ่มเมื่อทุกคนที่เข้าห้องโหลดแมพเสร็จ (คนที่หลุด/ออกไม่ต้องรอ) หรือรอครบเวลานี้ แล้วแต่อะไรถึงก่อน ระหว่างรอผู้เล่นเห็น "รอผู้เล่นโหลด… 2/3"` }, 'เวลารอผู้เล่นโหลดสูงสุด (วินาที, 0 = ไม่รอ · ใช้กับห้องบอสและมินิเกมระลอกที่เปิดใหม่)', numBox(() => draft.roomLoadWait, (n) => { draft.roomLoadWait = n; }, code.roomLoadWait, ...BALANCE_RANGE.roomLoadWait, 1, updateSummary)),
       ),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },

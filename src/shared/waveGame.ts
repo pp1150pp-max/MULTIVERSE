@@ -2,6 +2,7 @@
 // that walks in its own room; after a countdown, waves of monsters come out of the map's wave spots, each wave bigger and stronger;
 // clearing one pays gold, clearing the last pays a bonus. All the numbers are here, server-wide, adjustable in /admin (BalanceTuning.waves,
 // stored as what differs from the code). Shared by the server's Sim, the browser and /admin.
+import type { LoadWait } from './bossRoom';
 
 export interface WaveConfig {
   /** The minigame on at all (/admin switch "minigameWaves"). Off: its maps' doors say it is closed. */
@@ -105,6 +106,8 @@ export interface WaveSnap {
   left: number;
   /** Seconds before the next wave (the countdown, or the rest). */
   nextIn?: number;
+  /** The countdown to wave 1 waits for players still loading the map (owner 2026-11-24). */
+  wait?: LoadWait;
   /** Won: seconds before everyone is sent out. */
   wonIn?: number;
   /** Everyone is down: seconds left to get up before the group has lost. */
