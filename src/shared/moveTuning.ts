@@ -140,7 +140,7 @@ export const MOVE_GROUPS: MoveGroup[] = [
       p('captain.shoutRange', 'ตะโกนสั่ง: รัศมีลูกน้อง', 12, 1, 40, 1),
     ],
   },
-  // Ghost Ship Graveyard (map 3): proposed numbers of 2026-11-24 (plan 5.3, sim/graveMoves.ts and sim/ghostCaptain.ts).
+  // Ghost Ship Graveyard (map 3): the proposed numbers, owner 2026-11-24 (plan 5.3, sim/graveMoves.ts and sim/ghostCaptain.ts).
   {
     id: 'curse', title: 'ลิงกะลาสีผี: วงคำสาป', params: [
       p('curse.radius', 'วงคำสาป: รัศมี', 1.8, 0.5, 6, 0.1),

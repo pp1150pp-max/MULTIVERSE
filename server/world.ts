@@ -306,7 +306,8 @@ function eventPos(ev: SimEvent, sim: Sim): Vec2 | null {
 
 /** While the server itself is moving (or holding) a character, the client's reported position is ignored. */
 function serverMoves(p: Player): boolean {
-  return !p.alive || p.isDashing || p.stunT > 0 || p.rootT > 0 || p.snareT > 0 || Math.abs(p.kbx) + Math.abs(p.kbz) > 0.05;
+  // charmT: a ghost siren's song walks them (sim/graveMoves.ts); the browser glides along instead of fighting it.
+  return !p.alive || p.isDashing || p.stunT > 0 || p.rootT > 0 || p.snareT > 0 || p.charmT > 0 || Math.abs(p.kbx) + Math.abs(p.kbz) > 0.05;
 }
 
 /** Input older than this is treated as "let go of everything" so a stalled client doesn't keep walking. */

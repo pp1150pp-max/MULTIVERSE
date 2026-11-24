@@ -1240,6 +1240,8 @@ export class Player extends Unit {
     this.moving = false;
     if (!this.alive) {
       this.potHeals = [];
+      this.charmT = 0;
+      this.charmBy = null;
       return;
     }
     this.tickStatus(dt, sim.terrain);
