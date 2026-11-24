@@ -8,6 +8,7 @@ import type { Monster } from '../shared/sim/Monster';
 import type { Loot } from '../shared/sim/Loot';
 import type { Intent, SimEvent } from '../shared/sim/types';
 import type { ZoneDef } from '../shared/data/zones';
+import type { ShotArt } from '../shared/data/monsters';
 import type { Hazard } from '../shared/sim/volcanoHeart';
 import type { NpcId } from '../shared/data/npcs';
 import type { WaveSnap } from '../shared/waveGame';
@@ -30,7 +31,7 @@ export interface ProjectileLike {
   readonly id: number;
   readonly x: number;
   readonly z: number;
-  readonly o: { readonly color: string; readonly size: number; readonly art?: 'ice_shard' | 'snowball' | 'ember_bolt' };
+  readonly o: { readonly color: string; readonly size: number; readonly art?: ShotArt };
 }
 
 export type EnhanceOutcome = { result: EnhanceResult; item: Item } | null;

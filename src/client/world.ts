@@ -25,6 +25,7 @@ const ISLAND_ART: Record<ZoneTheme, { cliff: string; slabs: string }> = {
   snow: { cliff: 'island_cliff_snow', slabs: 'island_slabs_snow' },
   volcano: { cliff: 'island_cliff_volcano', slabs: 'island_slabs_volcano' },
   beach: { cliff: 'island_cliff_beach', slabs: 'island_slabs_beach' },
+  cove: { cliff: 'island_cliff_cove', slabs: 'island_slabs_cove' },
 };
 /** Light snowfall: how many flakes hang around the player, inside a box this many units across. */
 const SNOW_FLAKES = 240;
@@ -404,6 +405,33 @@ const PALETTES: Record<ZoneTheme, GroundPalette> = {
     flowerCore: '#f2c24a',
     edge: 'rgba(40,60,70,0.35)',
     pools: 26,
+    fog: 0,
+    portalGlow: '#6ae8ff',
+  },
+  // Dusty mauve rock in the sunset, dark plank boardwalks for the roads, turquoise water in the cove (FLOOR2_M2_COVE.md).
+  cove: {
+    tiles: THEME_TILES.cove,
+    background: '#f2c8a8',
+    mapEdge: '#c89a8a',
+    mapRoad: ['rgba(60, 40, 30, 0.7)', 'rgba(170, 130, 100, 0.5)'],
+    base: '#9a8a8e',
+    patchDark: ['#8e7e84', '#887a80', '#928388'],
+    patchLight: ['#a89498', '#ae9a9a', '#a49094'],
+    specks: ['#7e6e74', '#b8a2a0', '#76686e', '#c4aca4', '#8a7a7e', '#d0a68a'],
+    tuft: ['#8a9a4a', '#b8c06a'],
+    clearing: ['#a08c8a', '#a69290', '#9a8684'],
+    clearingRim: ['#8a7676', '#907c7a'],
+    clearingStone: '#b4988a',
+    path: [
+      [4.6, ['#3e2a20', '#432e23']],
+      [3.9, ['#5a3e2c', '#604330', '#563b2a']],
+      [2.8, ['#6e4c36', '#74523b', '#6a4934', '#6e4c36']],
+    ],
+    pathDetail: { kind: 'planks', colors: ['#2e1e16', '#8a6448'] },
+    flowers: ['#e8a040', '#ff7a4a', '#f2d070'],
+    flowerCore: '#c8501a',
+    edge: 'rgba(40,20,30,0.4)',
+    pools: 18,
     fog: 0,
     portalGlow: '#6ae8ff',
   },

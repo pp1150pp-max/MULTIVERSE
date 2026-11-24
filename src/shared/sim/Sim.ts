@@ -9,6 +9,7 @@ import { REROLL_NAME, rerollCost, type RerollKind } from '../data/reroll';
 import { inBossArena, lairExitSpot, LAVA_BURN, LAVA_TICK } from '../data/zones';
 import type { Hazard } from './volcanoHeart';
 import { stealReturn, thornsReflect } from './beachMoves';
+import { kegStart } from './coveMoves';
 import {
   announceFrom, bannerFrom, dropsOnFail, forgeCd, enhanceCost, itemName, maxPlus, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
 } from '../data/enhance';
@@ -162,7 +163,7 @@ export class Sim {
   /** Keys put into this boss room (1 elsewhere): the boss's HP, attack and rewards are multiplied by it. */
   readonly keys: number;
   /** What this zone's monsters (and their summons) are boosted by, keys included. */
-  private readonly boost: MonsterBoost | undefined;
+  readonly boost: MonsterBoost | undefined;
   /** A boss room whose boss is dead: its portal back to town opens and nothing comes back. */
   cleared = false;
   /** A boss room with a countdown: sim time its boss appears (null once it has, or with no countdown). */
@@ -231,6 +232,20 @@ export class Sim {
 
   nextHazardId(): number {
     return this.newId();
+  }
+
+  /**
+   * A monster a move brings in (the captain's parrot, a fallen powder-keg prisoner's last run): summoned (no rewards, never
+   * respawns), with its own home spot, boosted like this zone's. Null for an unknown kind.
+   */
+  spawnSummon(monsterId: string, x: number, z: number, level?: number): Monster | null {
+    const def = MONSTERS[monsterId];
+    if (!def) return null;
+    const area: SpawnArea = { monster: monsterId, x, z, radius: 1, count: 0, respawn: [0, 0] };
+    const m = new Monster(this.newId(), def, level ?? def.levels[0], area, x, z, this.boost);
+    m.markSummoned();
+    this.monsters.push(m);
+    return m;
   }
 
   // ------------------------------------------------------------ players
@@ -517,6 +532,12 @@ export class Sim {
     // A spike turtle bounces part of a close hit back (never a hit that was itself bounced back, see opts.reflected).
     if (m.def.move === 'thorns' && !opts.reflected) thornsReflect(this, m, p, dealt);
     if (m.hp <= 0) {
+      // The captain's parrot never dies: its brain takes it down for a while (sim/peglegCaptain.ts).
+      if (m.def.move === 'parrot') {
+        m.hp = 1;
+        m.knockedDown = true;
+        return;
+      }
       this.killMonster(m);
       p.onKill(m);
     }
@@ -727,6 +748,7 @@ export class Sim {
     if (m.def.pattern || m.def.spells || m.def.brain) this.hazards = [];
     m.spells?.reset(this);
     m.crab?.reset(this);
+    m.captain?.remove(this);
     // A gull shot down with stolen gold: it goes back (sim/beachMoves.ts).
     stealReturn(this, m);
     if (!m.summoned) {
@@ -743,6 +765,11 @@ export class Sim {
       sp.alive--;
       // A boss room's boss never comes back: the room closes after it.
       if (!this.zone.roomOf) sp.queue.push(this.time + rand(Math.random, sp.area.respawn[0], sp.area.respawn[1]));
+    }
+    // A powder-keg prisoner gets up for one last run at the nearest player (sim/coveMoves.ts): a new monster, no rewards.
+    if (m.def.move === 'keg' && !m.summoned) {
+      const runner = this.spawnSummon(m.def.id, m.x, m.z, m.level);
+      if (runner) kegStart(this, runner, m);
     }
     if (m.isBoss) {
       this.log(`🏆 ปราบ ${m.def.name} สำเร็จ!`, '#ffcf5a');
@@ -2315,10 +2342,11 @@ export class Sim {
     const ms = this.monsters;
     for (let a = 0; a < ms.length; a++) {
       const m = ms[a];
-      if (!m.alive) continue;
+      // The captain's parrot flies: it sits on shoulders and heads, pushing nobody (sim/peglegCaptain.ts).
+      if (!m.alive || m.def.move === 'parrot') continue;
       for (let b = a + 1; b < ms.length; b++) {
         const n = ms[b];
-        if (!n.alive) continue;
+        if (!n.alive || n.def.move === 'parrot') continue;
         const dx = n.x - m.x;
         const dz = n.z - m.z;
         const min = m.radius + n.radius;

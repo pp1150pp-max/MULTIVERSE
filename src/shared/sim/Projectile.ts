@@ -2,6 +2,7 @@ import type { Sim } from './Sim';
 import type { Player } from './Player';
 import type { Monster } from './Monster';
 import type { HitOpts, SkillEffect } from './types';
+import type { ShotArt } from '../data/monsters';
 
 export interface ProjOpts {
   x: number;
@@ -28,7 +29,7 @@ export interface ProjOpts {
   /** Drawn on the target when this single-target shot lands, instead of the small burst. */
   hitFx?: { name: SkillEffect; size: number };
   /** Monster shots: the picture to draw. Player shots leave this out. */
-  art?: 'ice_shard' | 'snowball' | 'ember_bolt';
+  art?: ShotArt;
   /** Player shots: extra damage multiplier (× ATK) on this target, worked out as it lands (execute, stacks, weak spots). */
   bonus?: (m: Monster) => number;
   /** Player shots: runs after a single-target or piercing hit lands on `m` (bounces, burning, marks). */

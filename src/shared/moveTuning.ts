@@ -18,7 +18,7 @@ export interface MoveGroup { id: string; title: string; params: MoveParam[] }
 const p = (key: string, label: string, code: number, min: number, max: number, step: number, unit?: string): MoveParam =>
   ({ key, label, code, min, max, step, unit });
 
-/** Every group, in /admin order. Shipwreck Beach (map 1): owner's numbers of 2026-11-20. */
+/** Every group, in /admin order. Shipwreck Beach (map 1): owner's numbers of 2026-11-20; Smugglers' Cove (map 2) after it. */
 export const MOVE_GROUPS: MoveGroup[] = [
   {
     id: 'shell', title: 'ปูเสฉวน: หดกระดอง', params: [
@@ -76,6 +76,65 @@ export const MOVE_GROUPS: MoveGroup[] = [
       p('crab.shellCut', 'เลือดน้อย: ลดดาเมจที่รับ', 0.8, 0, 1, 0.05, '×'),
       p('crab.barrageShells', 'ระดมยิง: ลูกทั่วลาน', 12, 0, 60, 1, 'ลูก'),
       p('crab.barrageEvery', 'ระดมยิง: ซ้ำทุก', 20, 3, 120, 1, 'วิ'),
+    ],
+  },
+  // Smugglers' Cove (map 2): owner's numbers of 2026-11-24 (plan 5.2, sim/coveMoves.ts and sim/peglegCaptain.ts).
+  {
+    id: 'chainball', title: 'นักโทษในเรือ: ลูกตุ้มเหล็ก', params: [
+      p('chainball.slow', 'ความเร็วตอนล่ามโซ่', 0.65, 0.1, 2, 0.05, '×'),
+      p('chainball.at', 'หลุดโซ่เมื่อ HP เหลือ', 0.8, 0.05, 1, 0.05, '×HP'),
+      p('chainball.mult', 'ลูกตุ้มที่โยน: ดาเมจ', 1.6, 0, 20, 0.1, '×ATK'),
+      p('chainball.free', 'ความเร็วหลังหลุดโซ่', 2.2, 0.5, 5, 0.1, '×'),
+    ],
+  },
+  {
+    id: 'combo', title: 'โจรสลัดดาบโค้ง: คอมโบ 3 ฟัน', params: [
+      p('combo.gap', 'เว้นระหว่างฟัน', 0.3, 0.1, 2, 0.05, 'วิ'),
+      p('combo.mult1', 'ฟันที่ 1', 1, 0, 10, 0.1, '×ATK'),
+      p('combo.mult2', 'ฟันที่ 2', 1, 0, 10, 0.1, '×ATK'),
+      p('combo.mult3', 'ฟันที่ 3 (พุ่ง)', 1.5, 0, 10, 0.1, '×ATK'),
+      p('combo.lunge', 'ฟันที่ 3: ระยะพุ่ง', 2.5, 0, 8, 0.5, 'หน่วย'),
+    ],
+  },
+  {
+    id: 'spread', title: 'มือปืนลูกซอง: ยิงกระจาย', params: [
+      p('spread.pellets', 'จำนวนลูกต่อนัด', 5, 1, 15, 1, 'ลูก'),
+      p('spread.angle', 'มุมกระจาย', 50, 0, 180, 5, '°'),
+      p('spread.mult', 'ดาเมจต่อลูก', 0.5, 0, 10, 0.05, '×ATK'),
+      p('spread.range', 'ระยะ', 8, 2, 20, 0.5),
+    ],
+  },
+  {
+    id: 'keg', title: 'นักโทษถังดินปืน: ระเบิดตอนตาย', params: [
+      p('keg.run', 'วิ่งได้นานสุด', 6, 0.5, 30, 0.5, 'วิ'),
+      p('keg.speed', 'ความเร็วตอนวิ่ง', 1.6, 0.5, 5, 0.1, '×'),
+      p('keg.near', 'จุดชนวนเมื่อเข้าใกล้', 1.5, 0.5, 6, 0.1),
+      p('keg.warn', 'เตือนก่อนระเบิด', 0.5, 0.1, 5, 0.1, 'วิ'),
+      p('keg.radius', 'รัศมีระเบิด', 2.5, 0.5, 8, 0.1),
+      p('keg.mult', 'ดาเมจระเบิด', 2.5, 0, 20, 0.1, '×ATK'),
+    ],
+  },
+  {
+    id: 'captain', title: 'กัปตันขาไม้ (บอส)', params: [
+      p('captain.hpMult', 'ตัวคูณ HP บอส', 1, 0.1, 10, 0.05, '×'),
+      p('captain.atkMult', 'ตัวคูณ ATK บอส', 1, 0.1, 10, 0.05, '×'),
+      p('captain.anchorCd', 'ทอดสมอ: คูลดาวน์', 9, 1, 60, 0.5, 'วิ'),
+      p('captain.anchorRange', 'ทอดสมอ: ระยะ', 10, 2, 20, 0.5),
+      p('captain.anchorWindup', 'ทอดสมอ: ง้าง', 0.8, 0.1, 5, 0.1, 'วิ'),
+      p('captain.anchorMult', 'ทอดสมอ: ดาเมจ', 1.4, 0, 20, 0.1, '×ATK'),
+      p('captain.anchorPull', 'ทอดสมอ: ดึงมาหยุดห่างบอส', 2.5, 0, 10, 0.5, 'หน่วย'),
+      p('captain.parrotCd', 'นกแก้วชี้เป้า: คูลดาวน์', 12, 2, 60, 0.5, 'วิ'),
+      p('captain.parrotPerch', 'นกแก้วชี้เป้า: เกาะเป้านาน', 5, 1, 30, 0.5, 'วิ'),
+      p('captain.parrotShots', 'นกแก้วชี้เป้า: เรือยิง (นัด)', 3, 1, 20, 1, 'นัด'),
+      p('captain.parrotRadius', 'นกแก้วชี้เป้า: รัศมีวง', 2.2, 0.5, 8, 0.1),
+      p('captain.parrotWarn', 'นกแก้วชี้เป้า: เตือนก่อนตก', 1.2, 0.2, 5, 0.1, 'วิ'),
+      p('captain.parrotMult', 'นกแก้วชี้เป้า: ดาเมจ', 1.6, 0, 20, 0.1, '×ATK'),
+      p('captain.parrotHp', 'นกแก้ว: HP (×จำนวนกุญแจ)', 15000, 1, 10000000, 100),
+      p('captain.parrotDown', 'นกแก้ว: ตีตกแล้วหายไป', 8, 1, 60, 0.5, 'วิ'),
+      p('captain.shoutCd', 'ตะโกนสั่ง: คูลดาวน์', 18, 2, 120, 1, 'วิ'),
+      p('captain.shoutSpeed', 'ตะโกนสั่ง: เร็วขึ้น', 0.4, 0, 3, 0.05, '×'),
+      p('captain.shoutSec', 'ตะโกนสั่ง: นาน', 6, 0.5, 30, 0.5, 'วิ'),
+      p('captain.shoutRange', 'ตะโกนสั่ง: รัศมีลูกน้อง', 12, 1, 40, 1),
     ],
   },
 ];

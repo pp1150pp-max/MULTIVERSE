@@ -151,7 +151,7 @@ export class AutoPlay {
 
   /** A monster after this player right now (not one walking back home). */
   private static attacking(m: Monster, p: Player): boolean {
-    return m.alive && !m.isBoss && m.isHostile && m.state !== 'return' && m.target?.id === p.id;
+    return m.alive && !m.untargetable && !m.isBoss && m.isHostile && m.state !== 'return' && m.target?.id === p.id;
   }
 
   /**
@@ -422,7 +422,7 @@ export class AutoPlay {
     let best: Monster | null = null;
     let bs = Infinity;
     for (const m of g.monsters) {
-      if (!m.alive || m.isBoss || m.state === 'return' || inBossArena(g.zone, m.x, m.z)) continue;
+      if (!m.alive || m.untargetable || m.isBoss || m.state === 'return' || inBossArena(g.zone, m.x, m.z)) continue;
       const d = Math.hypot(m.x - p.x, m.z - p.z);
       if (d > TARGET_REACH) continue;
       const attacking = AutoPlay.attacking(m, p);

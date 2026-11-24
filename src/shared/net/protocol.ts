@@ -6,6 +6,7 @@ import type { SkillBook } from '../skillBook';
 import type { BagEntry, BuffScroll, ClassId, EquipSlot, Item, PotionKind, PotionSize, Rarity, Stats, Vec2 } from '../types';
 import type { BagPay, BagSlots, BagTab } from '../bagTabs';
 import type { LootKind } from '../sim/Loot';
+import type { ShotArt } from '../data/monsters';
 import type { SimEvent } from '../sim/types';
 import type { AutoSettings, Buffs, BuybackEntry, LootFilter, PotionSelect, SortKey } from '../sim/Player';
 import type { EnhanceResult } from '../data/enhance';
@@ -304,7 +305,7 @@ export interface MonsterSnap {
   ds?: string;
 }
 
-export interface ProjectileSnap { id: number; x: number; z: number; vx: number; vz: number; color: string; size: number; art?: 'ice_shard' | 'snowball' | 'ember_bolt' }
+export interface ProjectileSnap { id: number; x: number; z: number; vx: number; vz: number; color: string; size: number; art?: ShotArt }
 
 export interface LootSnap {
   id: number; x: number; z: number; fromX: number; fromZ: number; t: number;

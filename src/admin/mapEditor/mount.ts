@@ -41,6 +41,7 @@ const MAP_NAMES: Record<string, string> = {
   frost_reach_room: 'ห้องบอส · ถ้ำเยติ', ashen_isle_room: 'ห้องบอส · แกนกลางภูเขาไฟ',
   harbor_town: 'ชั้น 2 · ท่าเรือมิติ (Dimensional Harbour)', shipwreck_beach: 'ชั้น 2 แมพ 1 · Shipwreck Beach',
   shipwreck_beach_room: 'ห้องบอส · รังปูยักษ์',
+  smugglers_cove: "ชั้น 2 แมพ 2 · Smugglers' Cove", smugglers_cove_room: 'ห้องบอส · ถ้ำกัปตันขาไม้',
 };
 /** In a boss room these tools make no sense (no doors, monster spawns, NPCs, paths or lakes there): only pieces, borders and the spawn pin stay. */
 const ROOM_TOOLS = new Set(['select', 'place', 'scatter', 'blocker', 'startpin']);

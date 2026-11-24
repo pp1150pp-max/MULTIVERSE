@@ -23,7 +23,7 @@ const has = (m: MapData, code: string): boolean => errs(m).some((i) => i.code ==
 const clone = (id: string): MapData => JSON.parse(JSON.stringify(MapRegistry.bundled(id)));
 
 // ---------------------------------------------------------------- 1) validation
-ok(BOSS_ROOM_IDS.length === 5 && BOSS_ROOM_IDS.every((id) => MapRegistry.bundled(id)?.room), 'five bundled boss rooms (4 on floor 1, the crab on floor 2), each with a room block');
+ok(BOSS_ROOM_IDS.length === 6 && BOSS_ROOM_IDS.every((id) => MapRegistry.bundled(id)?.room), 'six bundled boss rooms (4 on floor 1, the crab and the captain on floor 2), each with a room block');
 for (const id of BOSS_ROOM_IDS) {
   const m = clone(id);
   const room = m.room!;
