@@ -24,7 +24,7 @@ import {
 } from '../shared/autoTuning';
 import { NO_BOOST, ZONES, type MonsterBoost } from '../shared/data/zones';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
-import { ITEM_BASES, itemRowKinds, rowRanges, TIER_BAND_NAME, TIER_BANDS, tierBandOf, tierChances, tierRanges } from '../shared/data/items';
+import { ITEM_BASES, itemRowKinds, statStep, rowRanges, TIER_BAND_NAME, TIER_BANDS, tierBandOf, tierChances, tierRanges } from '../shared/data/items';
 import { expToNext, MAX_LEVEL } from '../shared/formulas';
 import { ITEM_ONLY_STATS, RARITIES, RARITY_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, type ClassId, type Rarity, type StatKey } from '../shared/types';
 import { FLOOR_GATE_LEVEL_MAX, FLOOR_GATE_LEVEL_MIN } from '../shared/floorGate';
@@ -32,7 +32,7 @@ import { TUT_ACCEPT_GOLD, TUT_COUNT_MAX, TUT_GOLD_MAX, TUT_LINES_MAX, TUT_REWARD
 import type { MailAttachItem } from '../shared/mail';
 import { POTION_SIZES, potionName } from '../shared/data/potions';
 import { STONE_NAME } from '../shared/data/stones';
-import { CODE_SET_STEPS, SET_IDS, SET_MAX_PIECES, SET_NAME } from '../shared/data/sets';
+import { CODE_SET_STEPS, SET_BONUS_MAX, SET_IDS, SET_MAX_PIECES, SET_NAME, setPieceKinds } from '../shared/data/sets';
 import { MOVE_GROUPS } from '../shared/moveTuning';
 import { BAG_EXPAND_FLAG_NAME, BAG_EXPAND_NUMS, BAG_TAB_START } from '../shared/bagTabs';
 
@@ -852,7 +852,8 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('h2', {}, 'เซ็ตไอเทม'),
       h('div', { class: 'muted' },
         `ชิ้นเซ็ตนับทุกช่องที่ใส่ (แหวน 2 วงนับ 2 ชิ้น) สูงสุด ${SET_MAX_PIECES} ชิ้น · หน้ารายละเอียดไอเทมแสดง "ชื่อเซ็ต (ใส่อยู่/${SET_MAX_PIECES})" และขั้นโบนัส · ` +
-        'ยังไม่คิดโบนัส (ค่าโบนัสต่อขั้นจะมาทีหลัง) · ยังไม่มีชิ้นเซ็ตในเกม (มากับแมพชั้น 2) · ปิด = ไม่แสดงเซ็ตบนไอเทม'),
+        'โบนัสสะสม: ถึงขั้นไหนได้โบนัสของขั้นนั้นบวกขั้นก่อนหน้า (6 ชิ้น = ขั้น 1 + ขั้น 2) · ได้ตามเลขที่ตั้งตรง ๆ ไม่คูณตัวคูณอาชีพ · ' +
+        'ค่าในโค้ดเป็น 0 ทุกช่อง · บันทึกแล้วคนที่ออนไลน์ได้ค่าใหม่ทันที · ปิด = ไม่แสดงเซ็ตบนไอเทม และไม่คิดโบนัส'),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
           h('input', { type: 'checkbox', checked: sc.on, onchange: (e: Event) => { sc.on = (e.target as HTMLInputElement).checked; updateSummary(); } }),
@@ -862,6 +863,17 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         h('thead', {}, h('tr', {}, h('th', {}, 'เซ็ต'), ...CODE_SET_STEPS.map((_, i) => h('th', {}, `ขั้น ${i + 1} (ชิ้น)`)))),
         h('tbody', {}, ...rows)),
       h('div', { class: 'muted' }, `แต่ละขั้นต้องมากกว่าขั้นก่อน (1–${SET_MAX_PIECES}) · ค่าในโค้ด ${CODE_SET_STEPS.join(' / ')}`),
+      h('h3', {}, 'โบนัสต่อขั้น'),
+      ...SET_IDS.map((id) => h('details', { class: 'bal-line' },
+        h('summary', {}, `${SET_NAME[id]} (${setPieceKinds(id).length} ชนิด, Lv${Math.min(...setPieceKinds(id).map((b) => b.minLevel))})`),
+        h('table', { class: 'bal-table' },
+          h('thead', {}, h('tr', {}, h('th', {}, 'สเตตัส'), ...CODE_SET_STEPS.map((_, i) => h('th', {}, `ขั้น ${i + 1}`)))),
+          h('tbody', {}, ...STAT_KEYS.map((k) => h('tr', {},
+            h('td', {}, STAT_LABEL[k]),
+            ...CODE_SET_STEPS.map((_, i) => h('td', {}, numBox(() => sc.bonus[id][i][k] ?? 0, (n) => {
+              if (n) sc.bonus[id][i][k] = n;
+              else delete sc.bonus[id][i][k];
+            }, 0, 0, SET_BONUS_MAX, statStep(k), updateSummary))))))))),
     );
   };
 

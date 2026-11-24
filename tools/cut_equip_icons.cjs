@@ -65,6 +65,10 @@ function cut(src) {
   return dst;
 }
 
+module.exports = { cut, SIZE };
+if (require.main === module) main();
+
+function main() {
 const files = fs.readdirSync(RAW).filter((f) => f.endsWith('.png')).sort();
 const icons = files.map((f) => {
   const icon = cut(PNG.sync.read(fs.readFileSync(path.join(RAW, f))));
@@ -86,4 +90,5 @@ if (process.argv[2]) {
     }
   });
   fs.writeFileSync(process.argv[2], PNG.sync.write(sheet));
+}
 }

@@ -75,6 +75,98 @@ const BASES: BaseItem[] = [
   { id: 'pouch_3', slot: 'offhand', names: { gunslinger: 'Glacier Ammo Case' }, main: { atk: 2, critDmg: 4 }, minLevel: 24 },
 ];
 
+// ---------------------------------------------------------------- floor 2 item sets
+// Owner 2026-11-24 (docs/systems/items-and-forge.md "เซ็ตไอเทม"): one set per floor-2 map, 11 kinds each: a weapon
+// named per class, the three classes' off-hands, and seven pieces every class wears. Every piece is worn from the
+// map's first level (41/51/61/71, for the equipment quests); main stats carry floor 1's step per map on.
+// Ids are `<set>_<part>` (data/sets.ts SET_IDS), pictures item_<id>[_<class>].png cut from the owner's sheets.
+interface SetRow {
+  set: SetId;
+  minLevel: number;
+  weapon: { sword: string; mage: string; gunslinger: string };
+  scabbard: string;
+  orb: string;
+  pouch: string;
+  helmet: string;
+  necklace: string;
+  armor: string;
+  gloves: string;
+  belt: string;
+  boots: string;
+  ring: string;
+}
+
+const SET_ROWS: SetRow[] = [
+  {
+    set: 'beach', minLevel: 41,
+    weapon: { sword: 'Driftwood Cutlass', mage: 'Conch Pearl Staff', gunslinger: 'Coral Flintlock' },
+    scabbard: 'Rope-bound Scabbard', orb: 'Clamshell Pearl Orb', pouch: 'Palm-leaf Ammo Pouch',
+    helmet: 'Beachcomber Sun Hat', necklace: 'Sharktooth Necklace', armor: 'Beachcomber Linen Vest',
+    gloves: 'Rope-wrapped Gloves', belt: 'Shell-buckle Rope Belt', boots: 'Shell Sandals', ring: 'Coral Pearl Ring',
+  },
+  {
+    set: 'pirate', minLevel: 51,
+    weapon: { sword: 'Corsair Cutlass', mage: 'Compass Rose Staff', gunslinger: 'Corsair Blunderbuss' },
+    scabbard: 'Gold-banded Scabbard', orb: 'Compass Orb', pouch: 'Corsair Powder Horn',
+    helmet: 'Corsair Tricorn', necklace: 'Doubloon Necklace', armor: 'Corsair Coat',
+    gloves: 'Corsair Gloves', belt: 'Corsair Belt', boots: 'Corsair Boots', ring: 'Skull Signet Ring',
+  },
+  {
+    set: 'ghost_sailor', minLevel: 61,
+    weapon: { sword: 'Drowned Sabre', mage: 'Ghostlantern Staff', gunslinger: 'Wisp Pistol' },
+    scabbard: 'Barnacled Scabbard', orb: 'Bottled Wisp Orb', pouch: 'Ship-bell Ammo Case',
+    helmet: 'Drowned Captain Hat', necklace: 'Ship-bell Necklace', armor: 'Drowned Sailor Coat',
+    gloves: 'Barnacled Gloves', belt: 'Anchor Chain Belt', boots: 'Drowned Boots', ring: 'Ghostlight Ring',
+  },
+  {
+    set: 'sea_king', minLevel: 71,
+    weapon: { sword: 'Tidecrest Sword', mage: 'Sea King Trident', gunslinger: 'Nautilus Pistol' },
+    scabbard: 'Pearl Wave Scabbard', orb: 'Nautilus Orb', pouch: 'Scallop Ammo Case',
+    helmet: 'Sea King Crown', necklace: 'Great Pearl Necklace', armor: 'Sea King Scale Armor',
+    gloves: 'Sea King Gauntlets', belt: 'Starfish Belt', boots: 'Sea King Greaves', ring: 'Kraken Eye Ring',
+  },
+];
+
+/** Main stats of set `k` (0 = the beach, 3 = the sea king): floor 1's last map plus its step per map, k + 1 times. */
+function setMain(k: number): Record<string, Partial<Stats>> {
+  const n = k + 1;
+  const r = (x: number) => Math.round(x * 10) / 10;
+  return {
+    weapon: { atk: 30 + 8 * n },
+    scabbard: { def: r(6.5 + 1.5 * n), hpRegen: r(0.9 + 0.2 * n) },
+    orb: { atk: 4 + n, mpRegen: r(0.9 + 0.2 * n) },
+    pouch: { atk: 3 + n, critDmg: 5 + n },
+    helmet: { def: 10 + 2 * n, maxHp: 26 + 6 * n },
+    necklace: { maxMp: 15 + 3 * n, crit: r(2 + 0.5 * n) },
+    armor: { def: 18 + 4 * n, maxHp: 58 + 14 * n },
+    gloves: { atk: r(5.5 + 1.5 * n), atkSpeed: r(2 + 0.5 * n) },
+    belt: { maxHp: 21 + 5 * n, def: 4 + n },
+    boots: { def: 9 + 2 * n, moveSpeed: 8 + n },
+    ring: { maxHp: 34 + 8 * n },
+  };
+}
+
+for (const [k, row] of SET_ROWS.entries()) {
+  const main = setMain(k);
+  const add = (part: string, slot: SlotId, names: BaseItem['names']) =>
+    BASES.push({ id: `${row.set}_${part}`, slot, names, main: main[part], minLevel: row.minLevel, set: row.set });
+  add('weapon', 'weapon', { ...row.weapon });
+  add('scabbard', 'offhand', { sword: row.scabbard });
+  add('orb', 'offhand', { mage: row.orb });
+  add('pouch', 'offhand', { gunslinger: row.pouch });
+  for (const part of ['helmet', 'necklace', 'armor', 'gloves', 'belt', 'boots', 'ring'] as const) add(part, part, { any: row[part] });
+}
+
+/**
+ * Level bands of the farm maps in the game (data/zones.ts registers them). Without a map band (the mystery box)
+ * a set piece only rolls once a map of its level is in the game (owner 2026-11-24), so no pirate piece before the cove.
+ */
+let liveBands: readonly (readonly [number, number])[] = [];
+export function setDropBands(bands: readonly (readonly [number, number])[]): void {
+  liveBands = bands;
+}
+const setLive = (b: BaseItem): boolean => !b.set || liveBands.some(([lo, hi]) => b.minLevel >= lo && b.minLevel <= hi);
+
 /** The class an item of this kind belongs to: `cls` if the kind has a version for it, else its only class. */
 function ownerClass(base: BaseItem, cls: ClassId): ClassId {
   return base.names[cls] ? cls : (Object.keys(base.names)[0] as ClassId);
@@ -504,7 +596,7 @@ function build(base: BaseItem, rarity: Rarity, level: number, cls: ClassId, r: R
 export function rollItem(r: Rng, level: number, cls: ClassId, boost = 0, band?: readonly [number, number], rarity?: Rarity): Item {
   const forClass = BASES.filter((b) => b.names.any || b.names[cls]);
   const ofMap = band ? forClass.filter((b) => b.minLevel >= band[0] && b.minLevel <= band[1]) : [];
-  const candidates = ofMap.length ? ofMap : forClass.filter((b) => b.minLevel <= level + 1);
+  const candidates = ofMap.length ? ofMap : forClass.filter((b) => b.minLevel <= level + 1 && setLive(b));
   return build(pick(r, candidates), rarity ?? rollRarity(r, boost), level, cls, r, boost);
 }
 
