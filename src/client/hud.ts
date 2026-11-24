@@ -1893,10 +1893,19 @@ export class Hud {
   }
 }
 
-/** An item's set line for its tooltip: "ชุดโจรสลัด (2/9)" then each bonus step, lit once that many pieces are worn. */
+/**
+ * An item's set part for its tooltip: the set's badge and "ชุดโจรสลัด (2/9)", then each bonus step with what it
+ * gives (steps add up), lit once that many pieces are worn.
+ */
 function setHtml(item: Item, equipment: Partial<Record<EquipSlot, Item>>): string {
   const s = setInfo(item, equipment, currentBalance().sets);
   if (!s) return '';
-  const steps = s.steps.map((n) => `<span class="${s.pieces >= n ? 'on' : ''}">${n} ชิ้น</span>`).join(' · ');
-  return `<div class="tt-set"><div class="tt-set-name">${s.name} (${s.pieces}/${SET_MAX_PIECES})</div><div class="tt-set-steps">โบนัสเซ็ต: ${steps}</div></div>`;
+  const badge = `<img class="tt-set-badge" src="${imgUrl(`assets/sprites/icons/set_${s.set}.png`)}" alt="" draggable="false" onerror="this.remove()">`;
+  const steps = s.steps.map((n, i) => {
+    // One text per stat so the English dictionary finds each (docs/systems/i18n.md).
+    const what = STAT_KEYS.filter((k) => s.bonus[i]?.[k]).map((k) => `<span>${STAT_LABEL[k]}</span> +${s.bonus[i][k]}`).join(', ') ||
+      '<span>ยังไม่มีโบนัส</span>';
+    return `<div class="${s.pieces >= n ? 'on' : ''}"><span>${n} ชิ้น:</span> ${what}</div>`;
+  }).join('');
+  return `<div class="tt-set"><div class="tt-set-name">${badge}<span>${s.name}</span> (${s.pieces}/${SET_MAX_PIECES})</div><div class="tt-set-steps">${steps}</div></div>`;
 }

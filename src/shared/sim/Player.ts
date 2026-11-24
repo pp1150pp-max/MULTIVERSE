@@ -13,6 +13,7 @@ import { cleanUnlocks } from '../floors';
 import { cleanCosWorn, MOUNT_SPEED, type CosWorn } from '../data/cosmetics';
 import { auraTier, effectiveStats, orbCodes, plusOf, sellValue } from '../data/enhance';
 import { itemClass, starterWeapon, upgradeItem } from '../data/items';
+import { setBonusStats } from '../data/sets';
 import { anyStackValue, potionHeal, potionPrice, POTION_SIZES, POTION_STACK, stackLimit } from '../data/potions';
 import { BOSS_QUEST_KEY, BUFF_MAX, QUEST_KILLS, stoneStackMax } from '../data/stones';
 import { cleanGearDone, cleanGearQuests } from '../gearQuests';
@@ -766,6 +767,8 @@ export class Player extends Unit {
     this.orbs = orbCodes(this.equipment);
     // Class multipliers, then the regen cuts (so players lean on potions), gear included.
     finishStats(s, this.cls.id);
+    // Item-set bonuses (data/sets.ts): exactly the numbers set in /admin, after the class multipliers.
+    addInto(s, setBonusStats(this.equipment, currentBalance().sets));
     // The worn passive and skill buffs, flat in Stats units ("+40% attack speed" is +40 atkSpeed).
     passiveStats(this, s);
     for (const b of this.statBuffs) addInto(s, b.mods);

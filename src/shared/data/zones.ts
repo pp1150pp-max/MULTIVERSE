@@ -1,4 +1,5 @@
 import { mulberry32 } from '../rng';
+import { setDropBands } from './items';
 import { HARBOR_CORNERS, HARBOR_ID, HARBOR_PIER, HARBOR_RETURN } from './harbor';
 import { MapRegistry } from '../mapRegistry';
 import type { MapData } from '../mapSchema';
@@ -594,6 +595,8 @@ export const ZONES: Record<string, ZoneDef> = Object.fromEntries(
     return [id, map ? zoneWithMap(z, map) : z];
   }),
 );
+// Set pieces outside a map band (the mystery box) only roll once a farm map of their level exists (data/items.ts).
+setDropBands(Object.values(ZONES).filter((z) => !!z.lair).map((z) => z.levels));
 
 /**
  * Maps made in the editor (src/shared/customZones.ts sets this when it loads): builds the ZoneDef of such a map from its layout,

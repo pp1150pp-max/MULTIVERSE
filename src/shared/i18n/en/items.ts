@@ -173,4 +173,11 @@ export const EN_ITEMS: Record<string, string> = {
   'จ่าย {0} · เฉพาะตัวละครนี้': "Pay {0} · this character only",
   'จ่าย {0}': "Pay {0}",
   '{0} คริสตัลมิติ': "{0} crystals",
+  // ---- floor 2 item sets (data/sets.ts)
+  'ชุดชาวหาด': 'Beachcomber Set',
+  'ชุดโจรสลัด': 'Corsair Set',
+  'ชุดกะลาสีผี': 'Drowned Sailor Set',
+  'ชุดราชาท้องทะเล': 'Sea King Set',
+  '{0} ชิ้น:': '{0} pieces:',
+  'ยังไม่มีโบนัส': 'No bonus yet',
 };
