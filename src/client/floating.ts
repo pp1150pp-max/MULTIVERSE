@@ -208,7 +208,7 @@ export class Floating {
       // Above the nameplate (own character has no plate, so it sits a little lower).
       // Your own framed name plate (a title set worn) sits where other players' plates do.
       const extra = p === g.player && shownCos(p, 'title') ? 30 : 0;
-      const lift = p === g.player ? 14 + extra : 32;
+      const lift = (p === g.player ? 14 + extra : 32) + currentBalance().fxLayer.plateLift;
       b.el.style.transform = `translate(${s.sx}px, ${s.sy - lift}px) translate(-50%, -100%)`;
     }
   }
@@ -262,7 +262,7 @@ export class Floating {
     const s = g.toScreen(me.x, headY(me), me.z);
     t.el.classList.toggle('hidden', !s.on);
     // Lower than other players' plates: it sits where the chat bubble's own-character spot expects it.
-    t.el.style.transform = `translate(${s.sx}px, ${s.sy + 4}px) translate(-50%, -100%)`;
+    t.el.style.transform = `translate(${s.sx}px, ${s.sy + 4 - currentBalance().fxLayer.plateLift}px) translate(-50%, -100%)`;
   }
 
   /** Countdown over the boss's empty lair, or hidden when text is null. */
@@ -500,7 +500,7 @@ export class Floating {
         pl.f = party;
         pl.el.classList.toggle('party', !!party);
       }
-      pl.el.style.transform = `translate(${s.sx.toFixed(1)}px, ${s.sy.toFixed(1)}px) translate(-50%, -100%)`;
+      pl.el.style.transform = `translate(${s.sx.toFixed(1)}px, ${(s.sy - currentBalance().fxLayer.plateLift).toFixed(1)}px) translate(-50%, -100%)`;
       setWidth(pl, (Math.max(0, p.hp) / Math.max(1, p.maxHp)) * 100);
     }
     for (const [p, pl] of this.names) {
