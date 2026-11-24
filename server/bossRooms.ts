@@ -3,13 +3,15 @@
 // once); on their own they go straight in, a party leader's members are invited first (30 s to answer)
 // and the leader starts or calls it off (the keys come back then). Everyone who accepted goes into a
 // fresh copy of the boss's room (a channel: one Sim per group), with the boss's HP, attack and rewards
-// times the keys; the boss appears after a 5 s countdown. After the kill there are 90 s to pick things up
+// times the keys; the boss appears after a countdown (/admin roomBossDelay) that starts once everyone sent in has loaded the
+// map, or the longest wait (/admin roomLoadWait) is up (server/loadGate.ts, owner 2026-11-24). After the kill there are 90 s to pick things up
 // (the portal opens, clicked to leave), then everyone is sent out next to the summoner; a group that all
 // lie dead at once has lost and goes out there too (owner 2026-11-12: win or lose, by the summoner).
 //
 // Everything is in memory (a restart sends everyone to town anyway and gives open lobbies' keys back).
 // Keyed on character ids, because a player's id inside a Sim changes whenever they change zone.
 import { Sim } from '../src/shared/sim/Sim';
+import { LoadGate } from './loadGate';
 import { currentBalance } from '../src/shared/balance';
 import type { Player } from '../src/shared/sim/Player';
 import { BOSS_ROOMS, ZONES } from '../src/shared/data/zones';
@@ -74,6 +76,8 @@ export interface Run {
   endAt: number | null;
   /** Everyone is down: when (ms) the group has lost unless someone gets up. */
   wipeAt: number | null;
+  /** Waiting for everyone to load before the boss countdown starts (null once it has). */
+  gate: LoadGate | null;
 }
 
 export class BossRooms {
@@ -99,6 +103,7 @@ export class BossRooms {
     const snap: RoomSnap = { boss: r.boss, keys: r.keys, channel: r.channel, revives: sim.revivesLeft(p) };
     if (r.endAt !== null) snap.leaveIn = Math.max(0, Math.ceil((r.endAt - this.now()) / 1000));
     if (sim.bossAt !== null) snap.bossIn = Math.max(0, sim.bossAt - sim.time);
+    if (r.gate && sim.waiting) snap.bossWait = r.gate.view();
     if (r.wipeAt !== null) snap.wipeIn = Math.max(0, (r.wipeAt - this.now()) / 1000);
     return snap;
   }
@@ -205,6 +210,16 @@ export class BossRooms {
 
   // ------------------------------------------------------------ the world tells us
 
+  /** The browser has the map up after a zone change (`zoneReady`): only counts if this character's room waits for it. */
+  loaded(charId: number): void {
+    const a = this.host.actor(charId);
+    const r = a && this.runs.get(a.sim);
+    if (r?.gate) {
+      r.gate.loaded(charId);
+      if (r.gate.check(this.now())) r.gate = null;
+    }
+  }
+
   /** The character left the game or its party: its own lobby is called off, an invite to it counts as "no". */
   gone(charId: number): void {
     const own = this.lobbyOf(charId);
@@ -252,6 +267,7 @@ export class BossRooms {
       this.runs.delete(sim);
       return;
     }
+    if (r.gate?.check(t)) r.gate = null;
     if (sim.cleared && r.endAt === null) {
       r.endAt = t + ROOM_END_SECONDS * 1000;
       for (const p of sim.players) {
@@ -281,9 +297,17 @@ export class BossRooms {
     const used = new Set([...this.runs.values()].filter((r) => r.sim.zone.id === room.id).map((r) => r.channel));
     let channel = 1;
     while (used.has(channel)) channel++;
-    const sim = new Sim(room, { keys, bossDelay: currentBalance().roomBossDelay });
-    this.runs.set(sim, { sim, boss, keys, channel, endAt: null, wipeAt: null });
+    const bal = currentBalance();
+    const sim = new Sim(room, { keys, bossDelay: bal.roomBossDelay, hold: true });
+    const run: Run = { sim, boss, keys, channel, endAt: null, wipeAt: null, gate: null };
+    this.runs.set(sim, run);
     this.host.enter(charIds, sim);
+    // The countdown waits for those actually sent in (one away from the keyboard is not moved) to load the map.
+    if (sim.waiting) {
+      const gate = new LoadGate(sim, this.now() + bal.roomLoadWait * 1000, (id) => this.host.actor(id)?.sim);
+      for (const id of charIds) gate.add(id);
+      if (!gate.check(this.now())) run.gate = gate;
+    }
     const bossName = bossShortName(MONSTERS[boss].nameTh);
     for (const id of charIds) this.host.tell(id, `เข้าสู่${room.nameTh} — ${bossName} ระดับ ×${keys} (ห้อง ${channel})`);
     console.log(`[rooms] ${room.id} #${channel} x${keys}: ${charIds.length} player(s) (${ZONES[field]?.name ?? field})`);

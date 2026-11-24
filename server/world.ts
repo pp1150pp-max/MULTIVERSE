@@ -398,6 +398,10 @@ export class GameWorld {
     // The dead get up by the door (Sim.respawn, whose exit is that door); the living walk out there.
     if (!p.alive) return sim.respawn(p);
     this.travel(s, exit.field, false, { x: exit.x, z: exit.z });
+  }, undefined, (charId) => {
+    // Away (disconnected, Auto farming on) counts as gone: the countdown does not wait for them.
+    const s = this.sessionOfChar(charId);
+    return s && s.awayAt === null ? s.sim : undefined;
   });
   private readonly reports: Reports;
   /** Set while the server counts down to stopping: no new players may join. */
@@ -1583,6 +1587,11 @@ export class GameWorld {
         // Sim.leaveRoom checks the room, the kill and the distance to the portal.
         sim.leaveRoom(p);
         break;
+      case 'zoneReady':
+        // Only speeds up a boss room's / wave run's wait for everyone to load; the longest wait is still the server's.
+        this.rooms.loaded(s.charId);
+        this.waveRooms.loaded(s.charId);
+        break;
       case 'questAccept':
         if (typeof m.boss === 'string') sim.questAccept(p, m.boss);
         break;
@@ -2756,7 +2765,7 @@ export class GameWorld {
     const partyId = party ? party.id : null;
     const join = this.waveRooms.partyRun(zone.id, partyId);
     if (join) {
-      this.waveRooms.joined(s.charId);
+      this.waveRooms.joined(s.charId, join);
       this.travel(s, join, true);
       tell(s, `เข้าร่วมมินิเกม "${zone.nameTh}" กับปาร์ตี้`);
       return;

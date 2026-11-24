@@ -123,7 +123,12 @@ async function run(): Promise<void> {
   await sleep(400);
   ok(A.zone() === id && B.zone() === id, 'both are in the minigame map');
   ok(A.chats().some((t) => t.includes('ห้อง 1')) && B.chats().some((t) => t.includes('ห้อง 2')), 'in rooms of their own (1 and 2)');
-  ok(A.waves()?.wave === 0 && A.waves()?.of === 2 && A.waves()?.nextIn > 0, `counting down to wave 1 (${JSON.stringify(A.waves())})`);
+  // The countdown waits for the map to load (server/loadGate.ts, owner 2026-11-24): the browser says so once its loading screen is gone.
+  ok(A.waves()?.wait?.ready === 0 && A.waves()?.wait?.total === 1 && A.waves()?.nextIn === undefined, `waiting for A to load (${JSON.stringify(A.waves())})`);
+  A.act('zoneReady');
+  B.act('zoneReady');
+  await sleep(300);
+  ok(A.waves()?.wave === 0 && A.waves()?.of === 2 && A.waves()?.nextIn > 0 && !A.waves()?.wait, `counting down to wave 1 (${JSON.stringify(A.waves())})`);
   await sleep(1600);
   ok(A.waves()?.wave === 1 && A.waves()?.left === 2, `wave 1 is out: 2 monsters (${JSON.stringify(A.waves())})`);
   const online = (await api('GET', '/admin/online', undefined, owner.token)).data;

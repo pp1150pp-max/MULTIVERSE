@@ -199,6 +199,8 @@ export type ActionMsg =
   /** Dead in a boss room: get up where you fell, for one phoenix feather. */
   | { t: 'act'; a: 'roomRevive' }
   | { t: 'act'; a: 'roomLeave' }
+  /** The map is up after a zone change (the loading screen is gone): a boss room / wave run may start its countdown sooner. */
+  | { t: 'act'; a: 'zoneReady' }
   | { t: 'act'; a: 'roomAnswer'; id: number; yes: boolean }
   | { t: 'act'; a: 'roomStart' }
   | { t: 'act'; a: 'roomCancel' }

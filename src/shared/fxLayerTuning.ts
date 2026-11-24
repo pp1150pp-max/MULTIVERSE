@@ -83,6 +83,8 @@ export interface FxLayerConfig extends Record<QuarksKey, boolean> {
   bubbleMaxW: number;
   platePadY: number;
   platePadX: number;
+  /** Players' name plates (and the chat bubbles over them): screen px raised above the head (owner 2026-11-24; 0 = as before). */
+  plateLift: number;
   bubblePadY: number;
   bubblePadX: number;
   /** Paper aura footprint length, × the aura's own step size (cosmetics tab). */
@@ -228,6 +230,7 @@ export const FX_LAYER_RANGE = {
   bubbleMaxW: [120, 600],
   platePadY: [0, 20],
   platePadX: [0, 40],
+  plateLift: [-40, 150],
   bubblePadY: [0, 30],
   bubblePadX: [0, 40],
   paperFoot: [0.3, 4],
@@ -278,6 +281,7 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   bubbleMaxW: 'ฟองแชทกว้างสุด (px เกินแล้วขึ้นบรรทัดใหม่)',
   platePadY: 'กรอบชื่อ: ขอบในบน-ล่าง (px)',
   platePadX: 'กรอบชื่อ: ขอบในซ้าย-ขวา (px)',
+  plateLift: 'ป้ายชื่อผู้เล่น: ยกสูงขึ้น (px)',
   bubblePadY: 'ฟองแชท: ขอบในบน-ล่าง (px)',
   bubblePadX: 'ฟองแชท: ขอบในซ้าย-ขวา (px)',
   slotCorner: 'ช่องไอเทม: × ความโค้งมุม',
@@ -332,7 +336,7 @@ export function codeFxLayer(): FxLayerConfig {
   return {
     enabled: true, debuffs: true, guardGlow: true, buffIcons: true, barBuffIcons: true, glow: 1, ground: 1, particles: 1, shake: 1, hitstopMs: 60, crit: 1,
     maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true, droneFollow: true, droneSpeed: 7, droneDist: 1, circles: true, zoneCircles: true, circleGlow: 1, slashLift: 0.9, craterBack: 1, townEdge: 1.2, townRound: 3, quarks: false, quarksOthers: 0.5, quarksTouch: 0.5, quarksCap: 3000,
-    paperPlate: 1, paperBubble: 1, plateMaxW: 200, bubbleMaxW: 220, platePadY: 3, platePadX: 14, bubblePadY: 7, bubblePadX: 18, paperFoot: 1.6, slotCorner: 1, slotInset: 1, slotIcon: 1, paperOrbLight: 0.95, paperOrbShade: 0.15,
+    paperPlate: 1, paperBubble: 1, plateMaxW: 200, bubbleMaxW: 220, platePadY: 3, platePadX: 14, plateLift: 0, bubblePadY: 7, bubblePadX: 18, paperFoot: 1.6, slotCorner: 1, slotInset: 1, slotIcon: 1, paperOrbLight: 0.95, paperOrbShade: 0.15,
     enhAuraSmooth: true, enhAuraPulse: 0.08, enhAuraBreath: 0, enhAuraSpeed: 3, enhAuraGlow: 1, enhSparkGlow: 1, enhSparkRate: 1, enhSparkFadeIn: 0.3, enhOrbGlowFront: true, enhOrbBackFade: 1,
     gfxMenu: true, keyRebind: true, orbsNearBar: true, gfxDefault: 3, gfxMax: 3, gfxMid: 0.6, gfxLow: 0.3,
     ...(Object.fromEntries(QUARKS_KEYS.map((k) => [k, true])) as Record<QuarksKey, boolean>),

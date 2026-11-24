@@ -242,6 +242,8 @@ export interface Backend {
   roomRevive(): void;
   /** Leave a boss room through its portal (the boss dead, standing near it). Comes out by the summoner. */
   roomLeave(): void;
+  /** The map is drawn and the loading screen gone after a zone change (a boss room's countdown waits for it). */
+  zoneReady(): void;
   roomAnswer(id: number, yes: boolean): void;
   roomStart(): void;
   roomCancel(): void;
