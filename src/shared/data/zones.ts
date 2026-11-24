@@ -55,7 +55,7 @@ export interface IceLake {
 }
 
 /** Which prop set and ground palette a zone is drawn with. */
-export type ZoneTheme = 'forest' | 'marsh' | 'snow' | 'volcano' | 'beach' | 'cove';
+export type ZoneTheme = 'forest' | 'marsh' | 'snow' | 'volcano' | 'beach' | 'cove' | 'grave';
 
 /** An ellipse of lava: walkable, but it burns whoever stands in it. */
 export interface LavaPool {
@@ -545,6 +545,42 @@ export const ZONE_COVE: ZoneDef = rotateZone(1, scatterZone({
   { group: [['keg_prisoner', 1]], count: 8, respawn: [14, 20] },
 ]));
 
+// Floor 2, map 3 (plan 2, 5.3): reached from the harbour's left pier, so the camp is on the right like Ashen Isle's.
+// Numbers: owner 2026-11-24 (the proposed table, the cove's boost); every move number is in /admin (moveTuning.ts).
+export const ZONE_GRAVE: ZoneDef = rotateZone(3, scatterZone({
+  id: 'ghost_ship_graveyard',
+  name: 'Ghost Ship Graveyard',
+  nameTh: 'สุสานเรือผี',
+  subtitle: 'สุสานซากเรือกลางทะเลเมฆใต้แสงจันทร์ หมอกเย็นเยียบ ตะเกียงผีเรืองแสงเขียว และกัปตันผีที่ยังคุมเรือคนตายอยู่',
+  levels: [61, 70],
+  floor: 2,
+  theme: 'grave',
+  monsterBoost: { stats: 7, tough: 0.5, mobTough: 0.7, speed: 1.25, skill: 1.25, aggro: 7 },
+  allowAutoPlay: true,
+  channels: true,
+  half: 64,
+  seed: 20261125,
+  start: { x: 44, z: 44 },
+  path: [[52, 52], [44, 44], [32, 32], [24, 18], [10, 12], [0, 0], [-10, -6], [-20, -20], [-32, -30], [-42, -42]],
+  branches: [
+    [[32, 32], [12, 40]],
+    [[24, 18], [40, 6]],
+    [[10, 12], [-6, 24]],
+    [[0, 0], [14, -14]],
+    [[-10, -6], [-26, 6]],
+  ],
+  spawns: [],
+  lair: { boss: 'ghost_captain', x: -42, z: -42 },
+  // Room for the warp behind a target and the ghost sailors his bell calls.
+  arenaRadius: 14,
+  portals: [{ to: HARBOR_ID, x: 49.5, z: 49.5, minLevel: 0 }],
+}, [
+  { group: [['ghost_monkey', 1]], count: 12, respawn: [8, 12] },
+  { group: [['ghost_sailor', 1]], count: 10, respawn: [10, 14] },
+  { group: [['ghost_siren', 1]], count: 9, respawn: [10, 14] },
+  { group: [['barnacle_crew', 1]], count: 8, respawn: [14, 20] },
+]));
+
 /** Where each harbour pier leads (top, right, left, bottom of the screen), by plan 2; none of them built yet. */
 const HARBOR_PIERS: [string, string][] = [
   ['shipwreck_beach', 'หาดเรือแตก'],
@@ -596,6 +632,7 @@ export const GENERATED_ZONES: Record<string, ZoneDef> = {
   [ZONE_4.id]: ZONE_4,
   [ZONE_BEACH.id]: ZONE_BEACH,
   [ZONE_COVE.id]: ZONE_COVE,
+  [ZONE_GRAVE.id]: ZONE_GRAVE,
 };
 
 /**
@@ -677,7 +714,7 @@ export function zoneWithLayout(id: string, map: MapData): ZoneDef | undefined {
 }
 
 /** Each boss's body radius in its room (the Volcano Heart is a rock that never moves). */
-const BOSS_RADIUS: Record<string, number> = { forest_bear: 1, bog_witch: 1, yeti: 1, volcano_heart: 0, cannon_crab: 1, pegleg_captain: 1 };
+const BOSS_RADIUS: Record<string, number> = { forest_bear: 1, bog_witch: 1, yeti: 1, volcano_heart: 0, cannon_crab: 1, pegleg_captain: 1, ghost_captain: 1 };
 const BOSS_ROOM_NAME: Record<string, [string, string]> = {
   forest_bear: ["Bear's Den", 'รังหมีป่า'],
   bog_witch: ["Bog Witch's Lair", 'กระท่อมแม่มดหนอง'],
@@ -685,6 +722,7 @@ const BOSS_ROOM_NAME: Record<string, [string, string]> = {
   volcano_heart: ['Heart of the Volcano', 'แกนกลางภูเขาไฟ'],
   cannon_crab: ["Giant Crab's Den", 'รังปูยักษ์'],
   pegleg_captain: ["Peg-Leg Captain's Hideout", 'ถ้ำกัปตันขาไม้'],
+  ghost_captain: ["Ghost Captain's Dead Ship", 'เรือคนตายของกัปตันผี'],
 };
 
 /**
@@ -746,7 +784,7 @@ export function lairExitSpot(room: ZoneDef, r: () => number = Math.random): { fi
 
 /** The boss rooms as bossRoom() makes them, by room id. Only tools/bake_maps.ts and the bake test read these. */
 export const GENERATED_ROOMS: Record<string, ZoneDef> = Object.fromEntries(
-  [ZONE_1, ZONE_2, ZONE_3, ZONE_4, ZONE_BEACH, ZONE_COVE].map((z) => {
+  [ZONE_1, ZONE_2, ZONE_3, ZONE_4, ZONE_BEACH, ZONE_COVE, ZONE_GRAVE].map((z) => {
     const r = bossRoom(z);
     return [r.id, r];
   }),

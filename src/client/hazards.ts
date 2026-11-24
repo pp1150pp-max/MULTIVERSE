@@ -3,6 +3,8 @@
 import * as THREE from 'three';
 import { assetSources, fxSheets, fxTex, sheets } from './assets';
 import type { ShellHazard } from '../shared/sim/cannonCrab';
+import type { CurseHazard } from '../shared/sim/graveMoves';
+import type { FogHazard } from '../shared/sim/ghostCaptain';
 import { bossFxOn } from './bossFx';
 import { cloneShared } from './texShare';
 import type { GraspHazard, HexHazard, PoolHazard, VialHazard } from '../shared/sim/bogWitch';
@@ -420,8 +422,63 @@ function shellView(h: ShellHazard): View {
   };
 }
 
+/** The Ghost Ship Graveyard: a ghost monkey's curse ring (paper fx_curse_ring, or a teal disc), fading out at its end. */
+function curseView(h: CurseHazard): View {
+  const group = new THREE.Group();
+  group.position.set(h.x, Y, h.z);
+  const tex = paperFx('fx_curse_ring');
+  const ring = decal(mat(tex ? '#ffffff' : '#5ad8c0', tex ? 0.9 : 0.35, tex ?? fxTex.disc));
+  const rim = decal(mat('#5ad8c0', 0.5, fxTex.edge));
+  rim.scale.setScalar(h.r);
+  group.add(ring, rim);
+  const mats = [ring.material as THREE.MeshBasicMaterial, rim.material as THREE.MeshBasicMaterial];
+  const full = mats.map((m) => m.opacity);
+  return {
+    group,
+    update(t) {
+      const grow = Math.min(1, (t - h.start) / 0.25);
+      ring.scale.setScalar(h.r * Math.max(0.05, grow));
+      ring.rotation.y = t * 0.6;
+      const fade = Math.min(1, Math.max(0, (h.end - t) / 0.5));
+      mats.forEach((m, i) => (m.opacity = full[i] * fade));
+    },
+  };
+}
+
+/** Where the fog's clear circle is: this browser's own player (HazardViews.update sets it). */
+const fogCentre = { x: 0, z: 0 };
+/** How far out the fog reaches past the clear circle (past any arena). */
+const FOG_OUTER = 90;
+
+/**
+ * The Ghost Captain's fog: dark mist over everything but a circle around this browser's own player, drawn over the
+ * whole scene (no depth test), closing in until `hit` and lifting over its last half second.
+ */
+function fogView(h: FogHazard): View {
+  const group = new THREE.Group();
+  const soft = new THREE.Mesh(arc(h.r, h.r + 1.6, 0, Math.PI * 2), mat('#0c1a20', 0.5));
+  const thick = new THREE.Mesh(arc(h.r + 1.6, FOG_OUTER, 0, Math.PI * 2), mat('#0c1a20', 0.88));
+  for (const o of [soft, thick]) {
+    (o.material as THREE.MeshBasicMaterial).depthTest = false;
+    o.renderOrder = 900;
+    group.add(o);
+  }
+  group.position.y = 0.2;
+  const mats = [soft.material as THREE.MeshBasicMaterial, thick.material as THREE.MeshBasicMaterial];
+  const full = mats.map((m) => m.opacity);
+  return {
+    group,
+    update(t) {
+      group.position.x = fogCentre.x;
+      group.position.z = fogCentre.z;
+      const k = Math.min(1, Math.max(0, (t - h.start) / Math.max(0.01, h.hit - h.start))) * Math.min(1, Math.max(0, (h.end - t) / 0.5));
+      mats.forEach((m, i) => (m.opacity = full[i] * k));
+    },
+  };
+}
+
 const MAKE: { [K in Hazard['k']]: (h: Extract<Hazard, { k: K }>) => View } = {
-  shell: shellView,
+  shell: shellView, curse: curseView, fog: fogView,
   meteor: meteorView, ring: ringView, beams: beamsView, blast: blastView,
   vial: vialView, pool: poolView, grasp: graspView, hex: hexView,
 };
@@ -446,7 +503,12 @@ export class HazardViews {
 
   constructor(private readonly scene: THREE.Scene) {}
 
-  update(list: readonly Hazard[], time: number): void {
+  /** `me`: this browser's own player (the Ghost Captain's fog clears around them). */
+  update(list: readonly Hazard[], time: number, me?: { x: number; z: number }): void {
+    if (me) {
+      fogCentre.x = me.x;
+      fogCentre.z = me.z;
+    }
     const seen = new Set<number>();
     // Oldest wave first: each one's gaps stop where the wave ahead of it has got to.
     const outer = new Map<number, number>();

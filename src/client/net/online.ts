@@ -1000,6 +1000,8 @@ export class OnlineBackend implements Backend {
       m.windupT = ms.wind ? 1 : 0;
       m.enraged = ms.enr;
       m.lift = ms.y;
+      m.fade = ms.inv === 1;
+      m.noHit = m.fade;
       m.debuffs = ms.db ?? 0;
       m.debuffSkill = ms.ds ?? '';
     }

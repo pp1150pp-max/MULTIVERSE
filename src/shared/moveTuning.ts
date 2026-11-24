@@ -18,7 +18,10 @@ export interface MoveGroup { id: string; title: string; params: MoveParam[] }
 const p = (key: string, label: string, code: number, min: number, max: number, step: number, unit?: string): MoveParam =>
   ({ key, label, code, min, max, step, unit });
 
-/** Every group, in /admin order. Shipwreck Beach (map 1): owner's numbers of 2026-11-20; Smugglers' Cove (map 2) after it. */
+/**
+ * Every group, in /admin order. Shipwreck Beach (map 1): owner's numbers of 2026-11-20; Smugglers' Cove (map 2) after it, then the
+ * Ghost Ship Graveyard (map 3).
+ */
 export const MOVE_GROUPS: MoveGroup[] = [
   {
     id: 'shell', title: 'ปูเสฉวน: หดกระดอง', params: [
@@ -135,6 +138,54 @@ export const MOVE_GROUPS: MoveGroup[] = [
       p('captain.shoutSpeed', 'ตะโกนสั่ง: เร็วขึ้น', 0.4, 0, 3, 0.05, '×'),
       p('captain.shoutSec', 'ตะโกนสั่ง: นาน', 6, 0.5, 30, 0.5, 'วิ'),
       p('captain.shoutRange', 'ตะโกนสั่ง: รัศมีลูกน้อง', 12, 1, 40, 1),
+    ],
+  },
+  // Ghost Ship Graveyard (map 3): proposed numbers of 2026-11-24 (plan 5.3, sim/graveMoves.ts and sim/ghostCaptain.ts).
+  {
+    id: 'curse', title: 'ลิงกะลาสีผี: วงคำสาป', params: [
+      p('curse.radius', 'วงคำสาป: รัศมี', 1.8, 0.5, 6, 0.1),
+      p('curse.sec', 'วงคำสาป: ค้างนาน', 4, 0.5, 20, 0.5, 'วิ'),
+      p('curse.slow', 'วงคำสาป: เดินช้าลง', 0.35, 0, 0.9, 0.05, '×'),
+    ],
+  },
+  {
+    id: 'phase', title: 'กะลาสีผี: ล่องหน', params: [
+      p('phase.cd', 'ล่องหน: คูลดาวน์', 8, 1, 60, 0.5, 'วิ'),
+      p('phase.sec', 'ล่องหนนาน', 1.5, 0.2, 10, 0.1, 'วิ'),
+      p('phase.speed', 'ความเร็วตอนล่องหน', 1.6, 0.5, 5, 0.1, '×'),
+      p('phase.mult', 'โผล่ตี: ดาเมจ', 1.8, 0, 20, 0.1, '×ATK'),
+      p('phase.windup', 'โผล่ตี: ง้าง', 0.35, 0.1, 3, 0.05, 'วิ'),
+    ],
+  },
+  {
+    id: 'song', title: 'ไซเรนผี: เพลงดึงดูด', params: [
+      p('song.cd', 'ร้องเพลง: คูลดาวน์', 10, 2, 60, 0.5, 'วิ'),
+      p('song.windup', 'ร้องเพลง: ง้าง', 1, 0.1, 5, 0.1, 'วิ'),
+      p('song.radius', 'ร้องเพลง: รัศมี', 6, 1, 15, 0.5),
+      p('song.sec', 'ถูกบังคับเดินนาน (แดชตัดได้)', 1.5, 0.2, 5, 0.1, 'วิ'),
+      p('song.mult', 'ร้องเพลง: ดาเมจ', 0.5, 0, 20, 0.1, '×ATK'),
+    ],
+  },
+  {
+    id: 'split', title: 'ลูกเรือหอยเกาะผี: แยกร่าง', params: [
+      p('split.count', 'แตกเป็นตัวเล็ก', 2, 0, 6, 1, 'ตัว'),
+    ],
+  },
+  {
+    id: 'ghost', title: 'กัปตันผีเรือคนตาย (บอส)', params: [
+      p('ghost.hpMult', 'ตัวคูณ HP บอส', 1, 0.1, 10, 0.05, '×'),
+      p('ghost.atkMult', 'ตัวคูณ ATK บอส', 1, 0.1, 10, 0.05, '×'),
+      p('ghost.fogCd', 'หมอกผี: คูลดาวน์', 22, 3, 120, 1, 'วิ'),
+      p('ghost.fogSec', 'หมอกผี: นาน', 7, 1, 60, 0.5, 'วิ'),
+      p('ghost.fogSight', 'หมอกผี: มองเห็นรอบตัว', 5, 1, 20, 0.5, 'หน่วย'),
+      p('ghost.bellCd', 'ระฆังเรือผี: คูลดาวน์', 16, 2, 120, 1, 'วิ'),
+      p('ghost.bellCount', 'ระฆังเรือผี: กะลาสีผีต่อครั้ง', 2, 0, 10, 1, 'ตัว'),
+      p('ghost.bellMax', 'ระฆังเรือผี: กะลาสีผีอยู่พร้อมกันไม่เกิน', 6, 0, 30, 1, 'ตัว'),
+      p('ghost.warpCd', 'วาร์ปข้างหลัง: คูลดาวน์', 11, 2, 60, 0.5, 'วิ'),
+      p('ghost.warpHide', 'วาร์ปข้างหลัง: หายไปนาน', 0.8, 0.1, 5, 0.1, 'วิ'),
+      p('ghost.warpWindup', 'วาร์ปข้างหลัง: ง้างก่อนฟัน', 0.5, 0.1, 3, 0.05, 'วิ'),
+      p('ghost.warpRadius', 'วาร์ปข้างหลัง: รัศมีฟัน', 2.4, 0.5, 8, 0.1),
+      p('ghost.warpMult', 'วาร์ปข้างหลัง: ดาเมจ', 2.2, 0, 20, 0.1, '×ATK'),
     ],
   },
 ];

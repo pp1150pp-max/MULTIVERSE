@@ -492,6 +492,12 @@ export class Player extends Unit {
   /** Held by the Bog Witch's mud hand: can still attack and cast, but not walk or dash. */
   snareT = 0;
   /**
+   * A ghost siren's song (sim/graveMoves.ts): made to walk to `charmBy` for this long. Attacks and skills still work; a dash
+   * or a movement skill breaks it (owner 2026-11-24). Never saved.
+   */
+  charmT = 0;
+  charmBy: { readonly x: number; readonly z: number; readonly alive: boolean } | null = null;
+  /**
    * Stopping for a moment on an attack (attackRootTuning.ts): no walking until it runs out, but turning, attacking,
    * casting and dashing (which ends it) still work. A clicked walk carries on afterwards. Never saved.
    */
@@ -1250,6 +1256,8 @@ export class Player extends Unit {
     this.faceLockT -= dt;
     this.rootT = Math.max(0, this.rootT - dt);
     this.snareT = Math.max(0, this.snareT - dt);
+    this.charmT = Math.max(0, this.charmT - dt);
+    if (this.charmT <= 0 || !this.charmBy?.alive) this.charmBy = null;
     this.toadT = Math.max(0, this.toadT - dt);
     this.guardT = Math.max(0, this.guardT - dt);
     this.atkRootT = Math.max(0, this.atkRootT - dt);
@@ -1270,6 +1278,9 @@ export class Player extends Unit {
     }
 
     if (this.dashT > 0) {
+      // Dashing breaks a siren's song.
+      this.charmT = 0;
+      this.charmBy = null;
       this.dashT -= dt;
       this.x += this.dashVx * dt;
       this.z += this.dashVz * dt;
@@ -1321,6 +1332,19 @@ export class Player extends Unit {
       mx = 0;
       mz = 0;
       this.moveTarget = null;
+    }
+    // A siren's song: walking to her whatever the player asks (a dash below breaks it).
+    const charm = !snared && this.charmBy ? this.charmBy : null;
+    if (charm) {
+      const cdx = charm.x - this.x;
+      const cdz = charm.z - this.z;
+      const cd = Math.hypot(cdx, cdz);
+      this.moveTarget = null;
+      remaining = Infinity;
+      if (cd > 1) {
+        mx = cdx / cd;
+        mz = cdz / cd;
+      } else mx = mz = 0;
     }
 
     if (it.dash && !snared && (this.cd.dash ?? 0) <= 0) {
@@ -1378,7 +1402,7 @@ export class Player extends Unit {
 
     let moving = mx !== 0 || mz !== 0;
     // Stopped: a reported position counts only near where the stop began (the browser stops too, a moment earlier).
-    const posOk = !!it.pos && !snared && (!rooted || Math.hypot(it.pos.x - this.atkRootX, it.pos.z - this.atkRootZ) <= ATTACK_ROOT_SLACK);
+    const posOk = !!it.pos && !snared && !charm && (!rooted || Math.hypot(it.pos.x - this.atkRootX, it.pos.z - this.atkRootZ) <= ATTACK_ROOT_SLACK);
     if (rooted && !posOk) {
       moving = false;
     } else if (it.pos && posOk) {
