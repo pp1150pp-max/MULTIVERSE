@@ -7,7 +7,7 @@ import { Terrain, boxHit } from '../src/shared/sim/terrain';
 import { MapRegistry } from '../src/shared/mapRegistry';
 import { pointInPropSolid, type MapData, type MapProp } from '../src/shared/mapSchema';
 import { findPath } from '../src/client/pathfind';
-import { FLOOR1_IDS, BOSS_ROOM_IDS } from '../tools/bake_maps';
+import { MAP_IDS, BOSS_ROOM_IDS } from '../tools/bake_maps';
 import { mergeBalance, checkBalance, balanceChanges } from '../src/shared/balance';
 
 // Stable text of a value: keys sorted, undefined dropped.
@@ -16,9 +16,9 @@ const canon = (v: unknown): string =>
 const cmp = (a: { x: number; z: number; r: number }, b: { x: number; z: number; r: number }) => a.x - b.x || a.z - b.z || a.r - b.r;
 
 // ---------------------------------------------------------------- 1) JSON == generators
-// The floor-1 maps and, with them, the four boss rooms (their zone is BOSS_ROOMS[field], their Terrain reads `<field>_room.json`).
+// Every map (floor 1 and 2) and, with them, the five boss rooms (their zone is BOSS_ROOMS[field], their Terrain reads `<field>_room.json`).
 const live = (id: string) => (GENERATED_ROOMS[id] ? BOSS_ROOMS[GENERATED_ROOMS[id].roomOf!] : ZONES[id]);
-for (const id of [...FLOOR1_IDS, ...BOSS_ROOM_IDS]) {
+for (const id of [...MAP_IDS, ...BOSS_ROOM_IDS]) {
   const generated = GENERATED_ZONES[id] ?? GENERATED_ROOMS[id];
   const gen = new Terrain(generated, null);
   const json = new Terrain(live(id));

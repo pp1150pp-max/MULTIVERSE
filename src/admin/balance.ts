@@ -24,13 +24,16 @@ import {
 } from '../shared/autoTuning';
 import { NO_BOOST, ZONES, type MonsterBoost } from '../shared/data/zones';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
-import { ITEM_BASES, itemRowKinds, rowRanges, TIER_BAND_NAME, TIER_BANDS, tierBandOf, tierChances, tierRanges } from '../shared/data/items';
+import { ITEM_BASES, itemRowKinds, statStep, rowRanges, TIER_BAND_NAME, TIER_BANDS, tierBandOf, tierChances, tierRanges } from '../shared/data/items';
 import { expToNext, MAX_LEVEL } from '../shared/formulas';
 import { ITEM_ONLY_STATS, RARITIES, RARITY_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, type ClassId, type Rarity, type StatKey } from '../shared/types';
+import { FLOOR_GATE_LEVEL_MAX, FLOOR_GATE_LEVEL_MIN } from '../shared/floorGate';
 import { TUT_ACCEPT_GOLD, TUT_COUNT_MAX, TUT_GOLD_MAX, TUT_LINES_MAX, TUT_REWARD_KEYS, TUT_REWARD_NAME, TUT_STONES, tutRewardText, type TutRewardKey } from '../shared/tutorial';
 import type { MailAttachItem } from '../shared/mail';
 import { POTION_SIZES, potionName } from '../shared/data/potions';
 import { STONE_NAME } from '../shared/data/stones';
+import { CODE_SET_STEPS, SET_BONUS_MAX, SET_IDS, SET_MAX_PIECES, SET_NAME, setPieceKinds } from '../shared/data/sets';
+import { MOVE_GROUPS } from '../shared/moveTuning';
 import { BAG_EXPAND_FLAG_NAME, BAG_EXPAND_NUMS, BAG_TAB_START } from '../shared/bagTabs';
 
 type Kids = (Node | string | null | undefined | false)[];
@@ -839,6 +842,88 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     outs.forEach((fn) => fn());
   };
 
+  // ---------------------------------------------------------- item sets (src/shared/data/sets.ts)
+  const setCard = h('div', { class: 'card' });
+  const drawSets = (): void => {
+    const sc = draft.sets;
+    const rows = SET_IDS.map((id) => h('tr', {},
+      h('td', {}, SET_NAME[id]),
+      ...CODE_SET_STEPS.map((_, i) => h('td', {}, numBox(() => sc.steps[id][i], (n) => { sc.steps[id][i] = n; }, code.sets.steps[id][i], 1, SET_MAX_PIECES, 1, updateSummary)))));
+    setCard.replaceChildren(
+      h('h2', {}, 'เซ็ตไอเทม'),
+      h('div', { class: 'muted' },
+        `ชิ้นเซ็ตนับทุกช่องที่ใส่ (แหวน 2 วงนับ 2 ชิ้น) สูงสุด ${SET_MAX_PIECES} ชิ้น · หน้ารายละเอียดไอเทมแสดง "ชื่อเซ็ต (ใส่อยู่/${SET_MAX_PIECES})" และขั้นโบนัส · ` +
+        'โบนัสสะสม: ถึงขั้นไหนได้โบนัสของขั้นนั้นบวกขั้นก่อนหน้า (6 ชิ้น = ขั้น 1 + ขั้น 2) · ได้ตามเลขที่ตั้งตรง ๆ ไม่คูณตัวคูณอาชีพ · ' +
+        'ค่าในโค้ดเป็น 0 ทุกช่อง · บันทึกแล้วคนที่ออนไลน์ได้ค่าใหม่ทันที · ปิด = ไม่แสดงเซ็ตบนไอเทม และไม่คิดโบนัส'),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: sc.on, onchange: (e: Event) => { sc.on = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' เปิดระบบเซ็ตไอเทม'),
+      ),
+      h('table', { class: 'bal-table' },
+        h('thead', {}, h('tr', {}, h('th', {}, 'เซ็ต'), ...CODE_SET_STEPS.map((_, i) => h('th', {}, `ขั้น ${i + 1} (ชิ้น)`)))),
+        h('tbody', {}, ...rows)),
+      h('div', { class: 'muted' }, `แต่ละขั้นต้องมากกว่าขั้นก่อน (1–${SET_MAX_PIECES}) · ค่าในโค้ด ${CODE_SET_STEPS.join(' / ')}`),
+      h('h3', {}, 'โบนัสต่อขั้น'),
+      ...SET_IDS.map((id) => h('details', { class: 'bal-line' },
+        h('summary', {}, `${SET_NAME[id]} (${setPieceKinds(id).length} ชนิด, Lv${Math.min(...setPieceKinds(id).map((b) => b.minLevel))})`),
+        h('table', { class: 'bal-table' },
+          h('thead', {}, h('tr', {}, h('th', {}, 'สเตตัส'), ...CODE_SET_STEPS.map((_, i) => h('th', {}, `ขั้น ${i + 1}`)))),
+          h('tbody', {}, ...STAT_KEYS.map((k) => h('tr', {},
+            h('td', {}, STAT_LABEL[k]),
+            ...CODE_SET_STEPS.map((_, i) => h('td', {}, numBox(() => sc.bonus[id][i][k] ?? 0, (n) => {
+              if (n) sc.bonus[id][i][k] = n;
+              else delete sc.bonus[id][i][k];
+            }, 0, 0, SET_BONUS_MAX, statStep(k), updateSummary))))))))),
+    );
+  };
+
+  // ---------------------------------------------------------- floor gates (src/shared/floors.ts, plan 4.2)
+  const floorCard = h('div', { class: 'card' });
+  const drawFloor = (): void => {
+    const box = (key: 'floorGateOpen' | 'floorGateQuest', label: string): HTMLElement =>
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft[key], onchange: (e: Event) => { draft[key] = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ` ${label}`));
+    const fg = draft.floorGate;
+    const cg = code.floorGate;
+    floorCard.replaceChildren(
+      h('h2', {}, 'ทางขึ้นชั้น 2'),
+      h('div', { class: 'muted' },
+        'ขึ้นชั้น 2 ผ่านนักเดินเรือแห่งมิติหน้าน้ำพุในเมืองศูนย์กลางมิติ (เห็นเฉพาะตัวที่ถึงเงื่อนไข) คุยครั้งแรก = ส่งเควส เปิดทาง + รางวัลทางจดหมาย (ผูกตัว ครั้งเดียวต่อตัวละคร Guest ส่งไม่ได้) แล้วพาไปท่าเรือมิติ · ' +
+        'ปิด "เปิดทาง" = ไม่มีใครขึ้นได้ แม้ทำเควสแล้ว (เข้าเกมใหม่ไปเกิดที่เมืองชั้น 1) · ' +
+        'ปิด "ต้องทำเควส" = ถึงเลเวลขั้นต่ำก็ขึ้นได้เลย ไม่ต้องปราบบอส ไม่ได้รางวัล · ตัวที่อยู่ชั้น 2 อยู่แล้วไม่ถูกย้ายออก'),
+      box('floorGateOpen', 'เปิดทางขึ้นชั้น 2'),
+      box('floorGateQuest', 'ต้องทำเควสก่อนขึ้น'),
+      h('div', { class: 'row bal-line' },
+        h('label', {}, 'เลเวลขั้นต่ำ ', numBox(() => fg.minLevel, (n) => { fg.minLevel = n; }, cg.minLevel, FLOOR_GATE_LEVEL_MIN, FLOOR_GATE_LEVEL_MAX, 1, () => updateSummary())),
+        h('span', { class: 'muted' }, ` ค่าในโค้ด ${cg.minLevel}`)),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: `ค่าในโค้ด: ${cg.needBoss ? 'เปิด' : 'ปิด'}` },
+          h('input', { type: 'checkbox', checked: fg.needBoss, onchange: (e: Event) => { fg.needBoss = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' ต้องเคยปราบหัวใจภูเขาไฟ')),
+      floorRewardBox(),
+    );
+  };
+
+  // ---------------------------------------------------------- floor 2 monster moves (src/shared/moveTuning.ts, plan 5)
+  const moveCard = h('div', { class: 'card' });
+  const drawMoves = (): void => {
+    const groups = MOVE_GROUPS.map((g) => h('div', { class: 'bal-line' },
+      h('h3', {}, g.title),
+      ...g.params.map((q) => h('div', { class: 'row bal-line' },
+        h('label', {}, `${q.label} `, numBox(() => draft.moves[q.key], (n) => { draft.moves[q.key] = n; }, q.code, q.min, q.max, q.step, () => updateSummary())),
+        h('span', { class: 'muted' }, ` ${q.unit ?? ''} · ค่าในโค้ด ${q.code}`)))));
+    moveCard.replaceChildren(
+      h('h2', {}, 'ท่ามอนชั้น 2'),
+      h('div', { class: 'muted' },
+        'ค่าท่าใหม่ของมอนและบอสชั้น 2 (แมพ 1 หาดเรือแตก) มีผลทันทีหลังบันทึก · ×ATK = คูณพลังโจมตีของมอน (บอสในห้องคูณตามจำนวนกุญแจด้วย) · ' +
+        'ค่า HP/ATK/DEF ของมอนธรรมดาปรับในการ์ดตัวคูณมอน · นางนวลขโมยทองจริง ตีตกภายในเวลาบินหนีได้คืนคนที่โดนขโมย ไม่ทัน = ทองหาย'),
+      ...groups,
+    );
+  };
+
   // ---------------------------------------------------------- bag tabs + buying slots (src/shared/bagTabs.ts)
   const bagCard = h('div', { class: 'card' });
   const drawBag = (): void => {
@@ -1210,6 +1295,39 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   ];
   const lineKey = (x: TutLine | MailAttachItem): string =>
     x.kind === 'potion' ? `p:${x.potion}:${x.size}` : x.kind === 'stone' ? `s:${x.stone}` : 'e';
+  /** The floor-2 quest's reward (ทางขึ้นชั้น 2 card), edited like a tutorial reward. */
+  function floorRewardBox(): HTMLElement {
+    const r = draft.floorGate.reward;
+    const cr = code.floorGate.reward;
+    const refresh = (): void => {
+      updateSummary();
+      drawFloor();
+    };
+    const lines = r.items.map((it, i) => {
+      const sel = h('select', {
+        onchange: (e: Event) => {
+          const pick = tutKinds[(e.target as HTMLSelectElement).selectedIndex];
+          r.items[i] = { ...pick.line, count: it.count } as MailAttachItem;
+          refresh();
+        },
+      }, ...tutKinds.map((o) => h('option', { selected: lineKey(o.line) === lineKey(it) }, o.label)));
+      const count = numBox(() => it.count, (n) => { it.count = n; }, it.count, 1, TUT_COUNT_MAX, 1, () => updateSummary());
+      const del = h('button', { onclick: () => { r.items.splice(i, 1); refresh(); } }, '✕');
+      return h('div', { class: 'row bal-line' }, sel, ' × ', count, del);
+    });
+    const add = h('button', {
+      disabled: r.items.length >= TUT_LINES_MAX,
+      onclick: () => { r.items.push({ ...tutKinds[0].line, count: 1 } as MailAttachItem); refresh(); },
+    }, '+ เพิ่มของ');
+    const changed = JSON.stringify(r) !== JSON.stringify(cr);
+    return h('div', { class: changed ? 'bal-changed' : '', style: 'margin:6px 0;padding:6px;border:1px solid #444;border-radius:4px' },
+      h('b', {}, 'รางวัลเควสเปิดทาง'),
+      h('div', { class: 'muted' }, `ค่าในโค้ด: ${tutRewardText(cr)} · ส่งทางจดหมาย ของทุกชิ้นผูกตัวละคร`),
+      h('div', { class: 'row bal-line' }, h('label', {}, 'ทอง (G) ', numBox(() => r.gold, (n) => { r.gold = n; }, cr.gold, 0, TUT_GOLD_MAX, 100, () => updateSummary()))),
+      ...lines,
+      add,
+    );
+  }
   const drawTut = (): void => {
     const refresh = (): void => {
       updateSummary();
@@ -1278,6 +1396,9 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawPotions();
     drawBag();
     drawForge();
+    drawSets();
+    drawFloor();
+    drawMoves();
     drawLang();
     drawAuto();
     drawTut();
@@ -1330,7 +1451,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         void save({ tuning: c.tuning, part: 'rest' }, `ใช้ค่าใหม่กับทั้งเซิร์ฟทันทีไหม?\n\n${changes.slice(0, 1200)}`);
       } }, '💾 บันทึกทั้งเซิร์ฟ'),
       h('button', { onclick: () => { draft = mergeBalance(saved); redraw(); fold.clearDirty(); msg.textContent = ''; } }, 'ยกเลิกที่ยังไม่บันทึก'),
-      h('button', { onclick: () => void save({ reset: true, part: 'rest' }, 'คืนทุกค่าในแท็บนี้ (อาชีพ tier ตัวคูณมอน ตัวคูณ EXP ยา Auto Play รางวัลเควสสอนระบบ เอฟเฟกต์สกิล และหยุดตอนโจมตี) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?\n(ค่าในแท็บระบบสกิลไม่เปลี่ยน มีปุ่มคืนค่าของตัวเอง)') }, '↺ คืนค่าในโค้ด'),
+      h('button', { onclick: () => void save({ reset: true, part: 'rest' }, 'คืนทุกค่าในแท็บนี้ (อาชีพ tier ตัวคูณมอน ตัวคูณ EXP ยา เซ็ตไอเทม Auto Play รางวัลเควสสอนระบบ เอฟเฟกต์สกิล และหยุดตอนโจมตี) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?\n(ค่าในแท็บระบบสกิลไม่เปลี่ยน มีปุ่มคืนค่าของตัวเอง)') }, '↺ คืนค่าในโค้ด'),
     ),
     msg,
   );
@@ -1338,11 +1459,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   // Category buttons + search box (owner 2026-11-22). Cards are only hidden with CSS (`.cat-hide`), never removed.
   const CATS: { name: string; cards: HTMLElement[] }[] = [
     { name: 'อาชีพ', cards: [classCard, regenCard, rootCard, rigCard] },
-    { name: 'มอน-บอส', cards: [monsterCard] },
-    { name: 'ไอเทม-ตีบวก-ยา', cards: [affixCard, tierCard, previewCard, potionCard, bagCard, forgeCard] },
+    { name: 'มอน-บอส', cards: [monsterCard, moveCard] },
+    { name: 'ไอเทม-ตีบวก-ยา', cards: [affixCard, tierCard, previewCard, potionCard, bagCard, forgeCard, setCard] },
     { name: 'Auto Play', cards: [autoCard] },
     { name: 'เอฟเฟกต์-เสียง', cards: [fxCard, circleCard, audioCard] },
-    { name: 'ระบบ-อื่นๆ', cards: [expCard, tutCard, langCard] },
+    { name: 'ระบบ-อื่นๆ', cards: [expCard, floorCard, tutCard, langCard] },
   ];
   const ALL = 'ทั้งหมด';
   const CAT_KEY = 'adminBalanceCat';
@@ -1380,6 +1501,6 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   }
   search.addEventListener('input', applyFilter);
 
-  box.replaceChildren(h('div', { class: 'cat-top' }, catBar, search), fold.toc, noHit, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, bagCard, forgeCard, autoCard, tutCard, fxCard, circleCard, rootCard, audioCard, rigCard, langCard, bar);
+  box.replaceChildren(h('div', { class: 'cat-top' }, catBar, search), fold.toc, noHit, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, bagCard, forgeCard, setCard, floorCard, moveCard, autoCard, tutCard, fxCard, circleCard, rootCard, audioCard, rigCard, langCard, bar);
   redraw();
 }

@@ -52,8 +52,8 @@ export function portrait(key: string, size: number): HTMLCanvasElement {
  * download. The screen stays up after this: the game takes it down once its first frames are drawn
  * (endEntryLoading), or the menu does if entering fails (cancelEntryLoading).
  */
-async function waitForGameAssets(classId: ClassId | null): Promise<void> {
-  const screen = beginEntryLoading(classId);
+async function waitForGameAssets(classId: ClassId | null, floor = 1): Promise<void> {
+  const screen = beginEntryLoading(classId, floor);
   // Its picture before the hundreds of game files, which would otherwise hold it up.
   await screen.ready;
   // Game textures are most of the bytes; the HUD pictures are the last stretch of the bar.
@@ -188,7 +188,7 @@ class GuestMenu {
     this.busy = true;
     $('guest-error').textContent = 'กำลังเข้าสู่โลก…';
     try {
-      await waitForGameAssets(this.char?.classId ?? null);
+      await waitForGameAssets(this.char?.classId ?? null, this.char?.floor);
       const backend = await connectOnline(token, charId);
       $('guest-error').textContent = '';
       this.launch(backend);
@@ -253,7 +253,8 @@ class OnlineMenu {
     btn.disabled = true;
     $('char-error').textContent = 'กำลังเข้าสู่โลก…';
     try {
-      await waitForGameAssets(this.chars.find((c) => c.id === this.selected)?.classId ?? null);
+      const ch = this.chars.find((c) => c.id === this.selected);
+      await waitForGameAssets(ch?.classId ?? null, ch?.floor);
       const backend = await connectOnline(token, this.selected);
       $('char-error').textContent = '';
       this.launch(backend);

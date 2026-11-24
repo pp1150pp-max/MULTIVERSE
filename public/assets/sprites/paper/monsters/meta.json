@@ -79,5 +79,141 @@
   },
   "volcano_heart": {
     "scale": 1.055
+  },
+  "hermit_crab": {
+    "moves": [
+      "walk",
+      "attack"
+    ]
+  },
+  "thief_gull": {
+    "moves": [
+      "walk",
+      "attack"
+    ]
+  },
+  "prisoner": {
+    "moves": [
+      "walk",
+      "throw",
+      "run"
+    ]
+  },
+  "cutlass_pirate": {
+    "moves": [
+      "walk",
+      "combo"
+    ]
+  },
+  "shotgunner": {
+    "moves": [
+      "walk",
+      "attack"
+    ]
+  },
+  "keg_prisoner": {
+    "moves": [
+      "walk",
+      "throw",
+      "charge"
+    ]
+  },
+  "peg_captain": {
+    "moves": [
+      "walk",
+      "anchor",
+      "shout"
+    ]
+  },
+  "parrot": {
+    "moves": [
+      "fly",
+      "perch"
+    ]
+  },
+  "ghost_monkey": {
+    "moves": [
+      "walk",
+      "throw"
+    ]
+  },
+  "ghost_sailor": {
+    "moves": [
+      "walk",
+      "attack",
+      "fade"
+    ]
+  },
+  "ghost_siren": {
+    "moves": [
+      "walk",
+      "sing"
+    ]
+  },
+  "barnacle_crew": {
+    "moves": [
+      "walk",
+      "attack"
+    ]
+  },
+  "barnacle_small": {
+    "moves": [
+      "walk",
+      "attack"
+    ]
+  },
+  "shark_knight": {
+    "moves": [
+      "walk",
+      "attack",
+      "dive"
+    ]
+  },
+  "seahorse_soldier": {
+    "moves": [
+      "walk",
+      "shoot"
+    ]
+  },
+  "ghost_pirate_king": {
+    "moves": [
+      "walk",
+      "slash"
+    ]
+  },
+  "kraken_tentacle": {
+    "moves": [
+      "idle",
+      "slam"
+    ]
+  },
+  "kraken": {
+    "moves": [
+      "idle",
+      "arm_slam",
+      "arm_cut",
+      "ink",
+      "dive"
+    ]
+  },
+  "ghost_captain": {
+    "moves": [
+      "walk",
+      "slash",
+      "bell",
+      "vanish"
+    ]
+  },
+  "shock_eel": {
+    "moves": [
+      "walk",
+      "attack"
+    ]
+  },
+  "spike_turtle": {
+    "moves": [
+      "walk",
+      "attack"
+    ]
   }
 }

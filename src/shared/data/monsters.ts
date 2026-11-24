@@ -76,6 +76,14 @@ export interface MonsterDef {
   /** Fights by a scripted attack pattern and never moves (see sim/volcanoHeart.ts). */
   pattern?: 'volcano_heart';
   /**
+   * Floor 2's new monster moves (sim/beachMoves.ts), their numbers in src/shared/floor2Tuning.ts (/admin):
+   * shell = hides when hit (less damage), then strikes back · steal = swoops for gold and flies off ·
+   * chain = lightning that jumps from player to player · thorns = reflects part of close-range hits.
+   */
+  move?: 'shell' | 'steal' | 'chain' | 'thorns';
+  /** Bosses with their own moves on top of walking and hitting: the Giant Cannon Crab (sim/cannonCrab.ts). */
+  brain?: 'cannon_crab';
+  /**
    * Bosses: the painted effect each of its skills plays (owner 2026-11-21, src/client/bossFx.ts): its hit (sent at
    * the boss with its facing and reach), ground slam, enrage, jumping off / landing, and where its minions appear.
    */
@@ -271,6 +279,40 @@ export const MONSTERS: Record<string, MonsterDef> = {
     hp: 157500, atk: 380, def: 31.85, speed: 0, exp: 16000, gold: [1300, 2100],
     aggroRange: 0, attackRange: 0, attackCooldown: 99, height: 4.4, radius: 1.5,
     behavior: 'boss', pattern: 'volcano_heart', itemChance: 1, potionChance: 1,
+    bossLoot: { items: 6, epics: 2, stoneChance: 0.2 },
+  },
+
+  // Floor 2, map 1 — Shipwreck Beach (Lv41–50). Numbers: owner 2026-11-20 (plan 5.1); the zone's monsterBoost is Ashen Isle's.
+  hermit_crab: {
+    id: 'hermit_crab', name: 'Hermit Crab', nameTh: 'ปูเสฉวน', levels: [41, 42],
+    hp: 2200, atk: 270, def: 58, speed: 2.0, exp: 1600, gold: [95, 145],
+    aggroRange: 0, attackRange: 1.2, attackCooldown: 1.6, height: 1.5, radius: 0.6,
+    behavior: 'passive', move: 'shell', itemChance: 0.19, potionChance: 0.12,
+  },
+  thief_gull: {
+    id: 'thief_gull', name: 'Thief Gull', nameTh: 'นกนางนวลขโมย', levels: [43, 44],
+    hp: 2400, atk: 300, def: 50, speed: 3.4, exp: 1900, gold: [110, 165],
+    aggroRange: 7, attackRange: 1.15, attackCooldown: 1.3, height: 1.6, radius: 0.5,
+    behavior: 'aggressive', move: 'steal', itemChance: 0.19, potionChance: 0.12,
+  },
+  shock_eel: {
+    id: 'shock_eel', name: 'Shock Eel', nameTh: 'ปลาไหลไฟฟ้า', levels: [45, 46],
+    hp: 2900, atk: 340, def: 60, speed: 2.4, exp: 2200, gold: [130, 195],
+    aggroRange: 6, attackRange: 1.2, attackCooldown: 1.5, height: 1.7, radius: 0.5,
+    behavior: 'aggressive', move: 'chain', itemChance: 0.2, potionChance: 0.13,
+  },
+  spike_turtle: {
+    id: 'spike_turtle', name: 'Spike Turtle', nameTh: 'เต่าหลังหนาม', levels: [47, 49],
+    hp: 4600, atk: 360, def: 90, speed: 1.6, exp: 2600, gold: [150, 230],
+    aggroRange: 6, attackRange: 1.4, attackCooldown: 1.8, height: 1.8, radius: 0.85,
+    behavior: 'aggressive', move: 'thorns', itemChance: 0.21, potionChance: 0.13,
+  },
+  // Its id is fixed by the Lv50 gate (BOSS_GATES); its pictures are cut as giant_crab_* (art/floor2-cut).
+  cannon_crab: {
+    id: 'cannon_crab', name: 'Giant Cannon Crab', nameTh: 'ปูยักษ์กระดองปืนใหญ่ (Boss)', levels: [50, 50],
+    hp: 240000, atk: 520, def: 45, speed: 2.0, exp: 26000, gold: [2000, 3200],
+    aggroRange: 9, attackRange: 2.2, attackCooldown: 1.8, height: 4.2, radius: 1.5,
+    behavior: 'boss', brain: 'cannon_crab', itemChance: 1, potionChance: 1,
     bossLoot: { items: 6, epics: 2, stoneChance: 0.2 },
   },
 };

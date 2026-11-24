@@ -37,13 +37,18 @@ export interface BoxRowDef {
 
 const row = (id: string, name: string, prize: BoxPrize, pct: number | null, count = 1, on = true, announce = false): BoxRowDef =>
   ({ id, name, prize, on, pct, count, announce });
-const KEY_NAME: Record<string, string> = { bear: 'หมี', witch: 'แม่มดหนอง', yeti: 'เยติ', heart: 'หัวใจลาวา' };
+const KEY_NAME: Record<string, string> = { bear: 'หมี', witch: 'แม่มดหนอง', yeti: 'เยติ', heart: 'หัวใจลาวา', crab: 'ปูยักษ์' };
+/** Floor 1's boss keys are in the owner's table; later floors' keys start switched off (the owner turns them on in /admin). */
+const FLOOR1_KEY = new Set(['bear', 'witch', 'yeti', 'heart']);
 
 /** The owner's table (2026-11-22). Order here is the order in /admin. */
 export const BOX_ROWS: readonly BoxRowDef[] = [
   row('gear_epic', 'อุปกรณ์ม่วง (มหากาพย์)', { kind: 'gear', rarity: 'epic' }, 10),
   row('gear_legendary', 'อุปกรณ์ส้ม (ตำนาน)', { kind: 'gear', rarity: 'legendary' }, 5),
-  ...BOSS_KEYS.map((k) => row(`stone_${k}`, `กุญแจบอส ${KEY_NAME[k.slice(4)]}`, { kind: 'stone', stone: k }, 2.5)),
+  ...BOSS_KEYS.map((k) => {
+    const f1 = FLOOR1_KEY.has(k.slice(4));
+    return row(`stone_${k}`, `กุญแจบอส ${KEY_NAME[k.slice(4)]}`, { kind: 'stone', stone: k }, f1 ? 2.5 : null, 1, f1);
+  }),
   row('stone_enhance', 'หินตีบวก', { kind: 'stone', stone: 'enhance' }, 3),
   row('stone_protect', 'หินกันระดับลด', { kind: 'stone', stone: 'protect' }, 3),
   row('stone_reroll_values', 'หินสุ่มค่า', { kind: 'stone', stone: 'reroll_values' }, 5),

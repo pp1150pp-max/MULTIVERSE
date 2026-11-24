@@ -45,6 +45,8 @@ export interface HitOpts {
   weakT?: number;
   /** The skill this hit comes from (passives can check its line); missing = basic attack or other. */
   skill?: SkillDef;
+  /** Damage bounced back (the sword's Thorn Armor): a spike turtle doesn't bounce it again (no endless loop). */
+  reflected?: boolean;
   /**
    * Whose extra effects (/admin, sim/extraEffects.ts) this hit gives: a skill id or a basic attack id. Missing = `skill`,
    * else the skill running now (Sim.castingSkill). Only picks the extra effects: passives, visuals and debuff circles
@@ -82,6 +84,13 @@ export interface FxApi {
    */
   /** `follow` may come as null over the wire; `skill` = the skill that made it (its standing layer, zoneProps.ts). */
   zone(name: SkillEffect, x: number, z: number, size: number, duration: number, follow?: number | null, skill?: string, by?: number): void;
+  /**
+   * A paper effect picture (a SHEET_SPECS key such as fx_shell_guard, fx_shock) standing at (x, z) for `life` seconds,
+   * `size` its half-width; `follow` = a unit id it stays on (floor 2's monster moves, sim/beachMoves.ts).
+   */
+  sprite(key: string, x: number, z: number, size: number, life: number, follow?: number | null): void;
+  /** A lightning bolt from one spot to another (the shock eel's chain), fading over `life` seconds. */
+  bolt(x1: number, z1: number, x2: number, z2: number, life: number): void;
   /**
    * The Gunslinger's Support Drone (owner 2026-11-19): `duration` > 0 = it appears and flies after player `by` for that
    * long; `duration` 0 with an `angle` = it just fired that way (it turns and kicks back). One message per cast / shot.

@@ -9,9 +9,11 @@ import { CLASSES, type ClassDef, type SkillDef, type SkillSlot } from '../data/c
 import { cleanSkillBook, rankedCooldown, rankedMp, rankOf, skillParam, type SkillBook } from '../skillBook';
 import { addInto, BASE_MOVE_SPEED, emptyStats } from '../formulas';
 import { gatesPassedBy } from '../data/bossGates';
+import { cleanUnlocks } from '../floors';
 import { cleanCosWorn, MOUNT_SPEED, type CosWorn } from '../data/cosmetics';
 import { auraTier, effectiveStats, orbCodes, plusOf, sellValue } from '../data/enhance';
 import { itemClass, starterWeapon, upgradeItem } from '../data/items';
+import { setBonusStats } from '../data/sets';
 import { anyStackValue, potionHeal, potionPrice, POTION_SIZES, POTION_STACK, stackLimit } from '../data/potions';
 import { BOSS_QUEST_KEY, BUFF_MAX, QUEST_KILLS, stoneStackMax } from '../data/stones';
 import { cleanGearDone, cleanGearQuests } from '../gearQuests';
@@ -291,6 +293,8 @@ export interface CharacterData {
    * level counts as passed.
    */
   bossKills?: string[];
+  /** Ways opened by quests, e.g. floorUnlock(2) = the portal up to floor 2 (src/shared/floors.ts). Missing = none. */
+  unlocks?: string[];
   /** The Seeker's key quests taken: boss id → monsters killed so far (see QUEST_KILLS). Missing = none. */
   quests?: Record<string, number>;
   /** The Seeker's gear quests taken (src/shared/gearQuests.ts): quest id → kills so far. Missing = none. */
@@ -448,6 +452,8 @@ export class Player extends Unit {
   moveTarget: Vec2 | null = null;
   /** Gate bosses killed (see BOSS_GATES). Saved. */
   bossKills: string[];
+  /** Ways opened by quests (PortalDef.requires). Saved. */
+  unlocks: string[];
   /** The Seeker's key quests taken: boss id → monsters killed so far. Saved. */
   quests: Record<string, number>;
   /** The Seeker's gear quests taken: quest id → kills so far. Saved. */
@@ -571,6 +577,7 @@ export class Player extends Unit {
     this.buffs = cleanBuffs(data.buffs);
     this.skillBook = cleanSkillBook(data.classId, data.skills);
     this.bossKills = [...new Set([...gatesPassedBy(data.level), ...(Array.isArray(data.bossKills) ? data.bossKills.filter((x) => typeof x === 'string') : [])])];
+    this.unlocks = cleanUnlocks(data.unlocks);
     this.potSel = { hp: 's', mp: 's', ...data.potSel };
     this.lootFilter = data.lootFilter
       ? { ...data.lootFilter, rarities: [...data.lootFilter.rarities], pots: lootPots(data.lootFilter) }
@@ -760,6 +767,8 @@ export class Player extends Unit {
     this.orbs = orbCodes(this.equipment);
     // Class multipliers, then the regen cuts (so players lean on potions), gear included.
     finishStats(s, this.cls.id);
+    // Item-set bonuses (data/sets.ts): exactly the numbers set in /admin, after the class multipliers.
+    addInto(s, setBonusStats(this.equipment, currentBalance().sets));
     // The worn passive and skill buffs, flat in Stats units ("+40% attack speed" is +40 atkSpeed).
     passiveStats(this, s);
     for (const b of this.statBuffs) addInto(s, b.mods);
@@ -785,6 +794,7 @@ export class Player extends Unit {
       buyback: this.buyback,
       buybackLeft: Math.round(this.buybackLeft),
       bossKills: this.bossKills,
+      unlocks: [...this.unlocks],
       quests: { ...this.quests },
       gearQuests: { ...this.gearQuests },
       gearDone: [...this.gearDone],

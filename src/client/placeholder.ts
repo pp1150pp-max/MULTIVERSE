@@ -704,11 +704,13 @@ const GEM: Record<`stone_${BaseStoneKind}`, [string, string, string]> = {
   stone_key_witch: ['#1f5a4a', '#6fd8b0', '#d0fff0'],
   stone_key_yeti: ['#4a6a8a', '#cfeeff', '#ffffff'],
   stone_key_heart: ['#7a1f10', '#ff6a3a', '#ffd0a0'],
+  stone_key_crab: ['#8a5a10', '#ffc94a', '#fff0b0'],
   // Quest keys look like the boss keys (they use the same painted icons).
   stone_qkey_bear: ['#3a5a1f', '#9ad86a', '#e0ffc0'],
   stone_qkey_witch: ['#1f5a4a', '#6fd8b0', '#d0fff0'],
   stone_qkey_yeti: ['#4a6a8a', '#cfeeff', '#ffffff'],
   stone_qkey_heart: ['#7a1f10', '#ff6a3a', '#ffd0a0'],
+  stone_qkey_crab: ['#8a5a10', '#ffc94a', '#fff0b0'],
   stone_phoenix: ['#8a2a10', '#ff9a3a', '#ffe8a0'],
   // Return scroll: parchment with a teal rune until its painted icon exists.
   stone_return_scroll: ['#8a6a3a', '#efdcae', '#5fe0d0'],

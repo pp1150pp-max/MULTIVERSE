@@ -9,8 +9,8 @@ import { CLASS_IDS } from '../src/shared/data/classes';
 const minLevel = new Map(ITEM_BASES.map((b) => [b.id, b.minLevel]));
 const zones = [ZONE_1, ZONE_2, ZONE_3, ZONE_4];
 
-// Every item kind belongs to exactly one outer map.
-for (const b of ITEM_BASES) {
+// Every floor-1 item kind belongs to exactly one outer map (floor 2's set pieces: tests/item-sets.test.ts).
+for (const b of ITEM_BASES.filter((b) => !b.set)) {
   const n = zones.filter((z) => b.minLevel >= z.levels[0] && b.minLevel <= z.levels[1]).length;
   ok(n === 1, `${b.id} (Lv.${b.minLevel}) belongs to one map`);
 }

@@ -2,7 +2,7 @@
 // with what the step asks for, what it gives, a take / hand-in button and a button on to the NPC's own
 // window. The server decides everything (Sim.tutAccept / tutTurnIn); rules in src/shared/tutorial.ts.
 import type { Game } from './Game';
-import { NPC_INFO, type NpcId } from '../shared/data/npcs';
+import { npcLook, type NpcId } from '../shared/data/npcs';
 import { STONE_NAME } from '../shared/data/stones';
 import { currentBalance } from '../shared/balance';
 import {
@@ -70,7 +70,7 @@ export class TutorialUI {
     const sig = JSON.stringify([rows, this.g.backend.guest, currentBalance().tutorial]);
     if (sig === this.drawn) return;
     this.drawn = sig;
-    this.title.textContent = NPC_INFO[id].name;
+    this.title.textContent = npcLook(id, this.g.backend.zone.town).name;
     this.body.replaceChildren();
     for (const r of rows) {
       this.body.append(el('div', 'quest-head', `ภารกิจสอนระบบ ${TUT_STEPS.indexOf(r.step) + 1}/${TUT_STEPS.length}: ${TUT_STEP_NAME[r.step]}`));
@@ -106,7 +106,7 @@ export class TutorialUI {
         this.body.append(btn);
       }
     }
-    const go = el('button', '', `${NPC_INFO[id].action}`);
+    const go = el('button', '', `${npcLook(id).action}`);
     go.onclick = () => {
       this.close();
       this.openNpc(id);

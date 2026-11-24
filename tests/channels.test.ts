@@ -20,7 +20,10 @@ const empty = (c: Channel) => {
 
 // ---------------------------------------------------------------- which maps
 {
-  ok([ZONE_1, ZONE_2].every(hasChannels) && Object.values(ZONES).filter((z) => z.channels).length === 4, 'the 4 farm maps have channels (ZoneDef.channels)');
+  // Every farm map has channels (4 on floor 1 + the floor-2 beach); boss rooms don't.
+  const farms = Object.values(ZONES).filter((z) => !!z.lair);
+  ok([ZONE_1, ZONE_2].every(hasChannels) && farms.length === 5 && Object.values(ZONES).filter((z) => z.channels).length === farms.length
+    && farms.every(hasChannels), 'every farm map has channels (ZoneDef.channels)');
   ok(hasChannels(ZONE_HUB) && placeLabel(ZONE_HUB, 3) === `${ZONE_HUB.nameTh} · CH 3`, 'the hub has them too (the /admin switch, on in the code)');
   ok(Object.values(BOSS_ROOMS).every((r) => !hasChannels(r)), 'boss rooms do not (they have their own rooms)');
   applyBalance({ hubChannels: false });
@@ -34,7 +37,7 @@ const empty = (c: Channel) => {
 {
   const C = new Channels(Object.values(ZONES), () => 0);
   ok(Object.values(ZONES).filter(hasChannels).every((z) => C.channels(z.id).length === 0) && C.channels(ZONE_HUB.id).length === 1, 'farm maps start with no channel running (no Sim), the hub with its one');
-  ok(C.sims().length === 1, 'free channels cost nothing: only the hub has a Sim');
+  ok(C.sims().length === Object.values(ZONES).filter((z) => !hasChannels(z)).length, 'free channels cost nothing: only the towns have a Sim');
   const ch1 = C.place(ZONE_1.id)!;
   ok(ch1.ch === 1 && C.get(ZONE_1.id, 1) === ch1, 'entering an empty map: CH 1 opens');
   fill(ch1, CH_SOLO_CAP - 1);

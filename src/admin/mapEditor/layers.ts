@@ -3,8 +3,9 @@ import { ROOM_EDGE, roomSpawnOf, type MapTheme } from '../../shared/mapSchema';
 import { catalogEntry, spriteOf } from './sprites';
 import type { Editor, Layer } from './editor';
 import { decorLayer, drawRealGround } from './groundArt';
+import { HARBOR_DECKS, HARBOR_ID } from '../../shared/data/harbor';
 
-const GROUND: Record<MapTheme, string> = { forest: '#4f7a3f', marsh: '#566a43', snow: '#cfdbe3', volcano: '#4b3a34' };
+const GROUND: Record<MapTheme, string> = { forest: '#4f7a3f', marsh: '#566a43', snow: '#cfdbe3', volcano: '#4b3a34', beach: '#d9c79a' };
 const PATH_COLOR = 'rgba(196,166,112,0.85)';
 
 /** Floor colour by theme (the hub's four quarters in their own colours), the walkable frame, paths and lakes. */
@@ -13,7 +14,8 @@ const ground: Layer = {
   draw(ed, g) {
     const { zone, walkable } = ed.map;
     const h = zone.half;
-    if (!(ed.opts.realGround && drawRealGround(ed, g))) plainGround(ed, g);
+    if (ed.map.id === HARBOR_ID) harborGround(ed, g);
+    else if (!(ed.opts.realGround && drawRealGround(ed, g))) plainGround(ed, g);
     // The frame the player may walk in, and the edge of the map.
     g.setLineDash([6, 5]);
     g.strokeStyle = 'rgba(255,255,255,0.35)';
@@ -26,6 +28,26 @@ const ground: Layer = {
     g.stroke();
   },
 };
+
+/**
+ * Floor 2's harbour: water with the plank platforms over it, as the game lays them (src/client/harborGround.ts). The platforms'
+ * shape is in code (HARBOR_DECKS, round the map's middle), not in the map file: off them is water nobody can walk on
+ * (Terrain.isBlocked), whatever the file says. Plain colours whatever the "พื้นแบบในเกม" switch says.
+ */
+function harborGround(ed: Editor, g: CanvasRenderingContext2D): void {
+  const h = ed.map.zone.half;
+  ed.path(g, [[-h, -h], [h, -h], [h, h], [-h, h]]);
+  g.fillStyle = '#3f7fa6';
+  g.fill();
+  g.fillStyle = '#a77c4f';
+  g.strokeStyle = 'rgba(60,35,15,0.8)';
+  g.lineWidth = 1;
+  for (const d of HARBOR_DECKS) {
+    ed.path(g, d);
+    g.fill();
+    g.stroke();
+  }
+}
 
 /** The plain colours (the "พื้นแบบในเกม" switch off, or while the ground tiles load). */
 function plainGround(ed: Editor, g: CanvasRenderingContext2D): void {

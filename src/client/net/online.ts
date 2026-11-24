@@ -417,7 +417,7 @@ export class OnlineBackend implements Backend {
     const data: CharacterData = {
       // The first snapshot after joining always carries everything (look bundle included).
       name: mine.name!, classId: mine.cls!, level: first.me.level, exp: first.me.exp, gold: first.me.gold,
-      potSel: first.me.potSel, lootFilter: first.me.lootFilter, autoSettings: first.me.autoSettings, bossKills: first.me.bossKills,
+      potSel: first.me.potSel, lootFilter: first.me.lootFilter, autoSettings: first.me.autoSettings, bossKills: first.me.bossKills, unlocks: first.me.unlocks,
       equipment: first.me.inv?.equipment ?? {}, bag: first.me.inv?.bag ?? [], bagSlots: first.me.inv?.bagSlots, zone: this.zone.id,
       buyback: first.me.inv?.buyback, buybackLeft: first.me.buybackLeft, skills: first.me.skills,
     };
@@ -1072,6 +1072,7 @@ export class OnlineBackend implements Backend {
     me.shownBuffs = (pv.sb ?? []).map(([id, left, total]) => ({ id, left, total }));
     me.shownBuffsAt = performance.now() / 1000;
     if (pv.bossKills) me.bossKills = pv.bossKills;
+    if (pv.unlocks) me.unlocks = pv.unlocks;
     if (pv.quests) me.quests = pv.quests;
     if (pv.gearQuests) me.gearQuests = pv.gearQuests;
     if (pv.gearDone) me.gearDone = pv.gearDone;
@@ -1487,6 +1488,8 @@ export class OnlineBackend implements Backend {
   gearTurnIn(id: string): void { this.send({ t: 'act', a: 'gearTurnIn', id }); }
   tutAccept(step: TutStep): void { this.send({ t: 'act', a: 'tutAccept', step }); }
   tutTurnIn(step: TutStep): void { this.send({ t: 'act', a: 'tutTurnIn', step }); }
+  floorTurnIn(): void { this.send({ t: 'act', a: 'floorTurnIn' }); }
+  floorTravel(): void { this.send({ t: 'act', a: 'floorTravel' }); }
   buyPhoenix(n: number): void { this.send({ t: 'act', a: 'buyPhoenix', n }); }
   roomRevive(): void { this.send({ t: 'act', a: 'roomRevive' }); }
   roomLeave(): void { this.send({ t: 'act', a: 'roomLeave' }); }

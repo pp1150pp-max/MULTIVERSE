@@ -12,6 +12,8 @@ import { PAPER_TITLES } from './paperTitles';
 import { questRows, seekerMark } from '../shared/quests';
 import { currentBalance } from '../shared/balance';
 import { gearRows } from '../shared/gearQuests';
+import { floorOf } from '../shared/data/zones';
+import { navState } from '../shared/floorGate';
 import { tutMark, tutRows } from '../shared/tutorial';
 import type { RestSpot } from '../shared/sim/terrain';
 import type { CosmeticDef } from '../shared/data/cosmetics';
@@ -355,7 +357,9 @@ export class Floating {
       // Gold or items wait in your claim box at the market broker.
       el.classList.toggle('alert', n.id === 'broker' && g.backend.marketBox > 0);
       // The Seeker's quests, or a tutorial step at the NPC that runs that system (src/shared/tutorial.ts).
-      const mark = n.id === 'seeker' ? seekerMark([...questRows(g.player), ...gearRows(g.player)]) : tutMark(tutRows(g.player.tut, g.player.name), n.id);
+      const floor = floorOf(g.backend.zone);
+      const mark = n.id === 'seeker' ? seekerMark([...questRows(g.player), ...gearRows(g.player)].filter((r) => floorOf(r.map) === floor))
+        : n.id === 'navigator' ? (navState(g.player, currentBalance()) === 'offer' ? '!' : '') : tutMark(tutRows(g.player.tut, g.player.name), n.id);
       const markEl = el.querySelector<HTMLElement>('.npc-mark');
       if (markEl) {
         if (markEl.textContent !== mark) markEl.textContent = mark;

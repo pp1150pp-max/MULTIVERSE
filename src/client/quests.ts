@@ -5,6 +5,8 @@ import type { Game } from './Game';
 import { MONSTERS } from '../shared/data/monsters';
 import { QUEST_KILLS, STONE_NAME } from '../shared/data/stones';
 import { questRows } from '../shared/quests';
+import { floorOf } from '../shared/data/zones';
+import { npcLook } from '../shared/data/npcs';
 import { bossShortName } from '../shared/bossRoom';
 import { stoneIcon } from './icons';
 import { GEAR_KILLS, GEAR_PART_NAME, gearRarity, gearRewardText, gearRows, type GearRow } from '../shared/gearQuests';
@@ -23,6 +25,7 @@ export class QuestUI {
   private readonly win: HTMLElement;
   private readonly body: HTMLElement;
   private drawn = '';
+  private readonly title: HTMLElement;
 
   constructor(private readonly g: Game, private readonly story: () => void) {
     this.win = el('div', 'panel hidden');
@@ -30,7 +33,8 @@ export class QuestUI {
     const head = el('div', 'panel-head');
     const close = el('button', '', '✕');
     close.onclick = () => this.toggle(false);
-    head.append(el('span', '', 'The Seeker'), close);
+    this.title = el('span', '', 'The Seeker');
+    head.append(this.title, close);
     this.body = el('div', 'quest-body');
     this.win.append(head, this.body);
     $('hud').append(this.win);
@@ -55,8 +59,11 @@ export class QuestUI {
       this.toggle(false);
       return;
     }
-    const rows = questRows(this.g.player);
-    const gear = gearRows(this.g.player);
+    // Each floor's quest giver has his own floor's quests (The Seeker / the harbour's navigator).
+    const floor = floorOf(this.g.backend.zone);
+    const rows = questRows(this.g.player).filter((r) => floorOf(r.map) === floor);
+    const gear = gearRows(this.g.player).filter((r) => floorOf(r.map) === floor);
+    this.title.textContent = npcLook('seeker', this.g.backend.zone.town).name;
     const sig = JSON.stringify([rows.map((r) => [r.state, r.kills]), gear.map((r) => [r.state, r.kills]), this.g.player.level]);
     if (sig === this.drawn) return;
     this.drawn = sig;

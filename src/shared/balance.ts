@@ -16,11 +16,14 @@ import { checkMenuLayoutTuning, codeMenuLayout, mergeMenuLayout, menuLayoutChang
 import { checkHudLayoutTuning, codeHudLayout, hudLayoutChanges, mergeHudLayout, type HudLayoutConfig, type HudLayoutTuning } from './hudLayout';
 import { audioChanges, checkAudioTuning, codeAudio, mergeAudio, type AudioConfig, type AudioTuning } from './audioTuning';
 import { attackRootChanges, checkAttackRootTuning, codeAttackRoot, mergeAttackRoot, type AttackRootConfig, type AttackRootTuning } from './attackRootTuning';
+import { checkSetTuning, codeSets, mergeSets, setChanges, type SetConfig, type SetTuning } from './data/sets';
 import { checkRigLookTuning, codeRigLook, mergeRigLook, rigLookChanges, type RigLookConfig, type RigLookTuning } from './rigLookTuning';
 import { autoChanges, checkAutoTuning, codeAuto, mergeAuto, type AutoConfig, type AutoTuning } from './autoTuning';
-import { checkWaveTuning, codeWaves, mergeWaves, waveChanges, type WaveConfig, type WaveTuning } from './waveGame';
+import { checkFloorGateTuning, codeFloorGate, floorGateChanges, mergeFloorGate, type FloorGateConfig, type FloorGateTuning } from './floorGate';
 import { bagExpandChanges, checkBagExpand, codeBagExpand, mergeBagExpand, type BagExpandCfg, type BagExpandTuning } from './bagTabs';
 import { checkTutorialTuning, codeTutorial, mergeTutorial, tutorialChanges, type TutorialConfig, type TutorialTuning } from './tutorial';
+import { checkMoveTuning, codeMoves, mergeMoves, moveChanges, type MoveConfig, type MoveTuning } from './moveTuning';
+import { checkWaveTuning, codeWaves, mergeWaves, waveChanges, type WaveConfig, type WaveTuning } from './waveGame';
 import { checkForgeTuning, codeForge, forgeChanges, mergeForge, type ForgeConfig, type ForgeTuning } from './forgeTuning';
 import { checkSkillTuning, codeSkills, mergeSkills, skillChanges, type SkillConfig, type SkillTuning } from './skillTuning';
 import { addInto, emptyStats, setExpTune } from './formulas';
@@ -59,6 +62,10 @@ export const CODE_FORGE_AUTO = true;
 export const CODE_ENGLISH = true;
 /** Click-to-walk carries on when the browser tab is hidden: the server walks the rest of the way (owner 2026-11-18: on). */
 export const CODE_WALK_HIDDEN = true;
+/** Portals that need an unlock (PortalDef.requires, e.g. the way up to floor 2) let anyone through who has it; off = closed to everyone. Off in the code (owner 2026-11-24: floor 2 shut to players on main, admins go in with the /admin teleport) until the owner opens it in /admin. */
+export const CODE_FLOOR_GATE_OPEN = false;
+/** Those portals check the unlock (The Seeker's quest) (owner 2026-11-19: on); off = anyone at minLevel walks through. */
+export const CODE_FLOOR_GATE_QUEST = true;
 /** Wearing/taking off gear is refused (browser side) while the merchant's window is open, so a click meant to wear cannot sell (owner 2026-11-22). */
 export const CODE_SHOP_NO_EQUIP = true;
 /** Item links in chat: Ctrl+click an item to put a clickable [name] into a message (owner 2026-11-23: on). */
@@ -206,6 +213,12 @@ export interface Balance {
   forge: ForgeConfig;
   /** A clicked walk goes on while the tab is hidden (server walks to the spot); off = the character stops as before. */
   walkHidden: boolean;
+  /** Portals with an unlock (PortalDef.requires) open at all; off = closed to everyone (src/shared/floors.ts). */
+  floorGateOpen: boolean;
+  /** Those portals need the unlock (quest done); off = level only. */
+  floorGateQuest: boolean;
+  /** The navigator's quest that opens floor 2: level, boss, reward (src/shared/floorGate.ts). */
+  floorGate: FloorGateConfig;
   /** No wearing/taking off gear (or fashion items) while the merchant window is open. Browser side only. */
   shopNoEquip: boolean;
   /** Item links in chat and the megaphone (src/shared/chatLinks.ts); off = the server sends no links, Ctrl+click does nothing. */
@@ -258,8 +271,12 @@ export interface Balance {
   hudLayout: HudLayoutConfig;
   /** Tutorial quest rewards (tutorial.ts). */
   tutorial: TutorialConfig;
+  /** Item sets: server-wide switch and each set's bonus steps (data/sets.ts). */
+  sets: SetConfig;
   /** Skill points, ranks, unlock levels, refunds and every learnable skill's numbers (skillTuning.ts). */
   skills: SkillConfig;
+  /** Floor 2's new monster and boss moves (moveTuning.ts). */
+  moves: MoveConfig;
 }
 
 /** What is saved: only what differs from the code. Tier arrays are saved whole when any entry differs. */
@@ -311,6 +328,12 @@ export interface BalanceTuning {
   forge?: ForgeTuning;
   /** Walking on in a hidden tab, when not the code's (on). */
   walkHidden?: boolean;
+  /** Unlock portals open, when not the code's (on). */
+  floorGateOpen?: boolean;
+  /** Unlock portals check the quest, when not the code's (on). */
+  floorGateQuest?: boolean;
+  /** The floor-2 quest's level, boss and reward, where they differ from the code. */
+  floorGate?: FloorGateTuning;
   /** No wear/take off while the merchant window is open, when not the code's (on). */
   shopNoEquip?: boolean;
   /** Item links in chat, when not the code's (on). */
@@ -358,8 +381,12 @@ export interface BalanceTuning {
   hudLayout?: HudLayoutTuning;
   /** Tutorial quest rewards that differ from the code. */
   tutorial?: TutorialTuning;
+  /** Item set settings that differ from the code. */
+  sets?: SetTuning;
   /** Skill system settings that differ from the code. */
   skills?: SkillTuning;
+  /** Floor 2 move numbers that differ from the code. */
+  moves?: MoveTuning;
 }
 
 /** Highest Lv1 / per-level value of each stat (owner 2026-11-11); the lowest is 0. */
@@ -440,6 +467,9 @@ export function codeBalance(): Balance {
     english: CODE_ENGLISH,
     forge: codeForge(),
     walkHidden: CODE_WALK_HIDDEN,
+    floorGateOpen: CODE_FLOOR_GATE_OPEN,
+    floorGateQuest: CODE_FLOOR_GATE_QUEST,
+    floorGate: codeFloorGate(),
     shopNoEquip: CODE_SHOP_NO_EQUIP,
     chatLinks: CODE_CHAT_LINKS,
     hubChannels: CODE_HUB_CHANNELS,
@@ -469,7 +499,9 @@ export function codeBalance(): Balance {
     menuLayout: codeMenuLayout(),
     hudLayout: codeHudLayout(),
     tutorial: codeTutorial(),
+    sets: codeSets(),
     skills: codeSkills(),
+    moves: codeMoves(),
   };
 }
 
@@ -532,6 +564,9 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.english !== undefined) b.english = t.english;
   b.forge = mergeForge(t.forge);
   if (t.walkHidden !== undefined) b.walkHidden = t.walkHidden;
+  if (t.floorGateOpen !== undefined) b.floorGateOpen = t.floorGateOpen;
+  if (t.floorGateQuest !== undefined) b.floorGateQuest = t.floorGateQuest;
+  b.floorGate = mergeFloorGate(t.floorGate);
   if (t.shopNoEquip !== undefined) b.shopNoEquip = t.shopNoEquip;
   if (t.chatLinks !== undefined) b.chatLinks = t.chatLinks;
   if (t.hubChannels !== undefined) b.hubChannels = t.hubChannels;
@@ -545,7 +580,9 @@ export function mergeBalance(t: BalanceTuning): Balance {
   b.menuLayout = mergeMenuLayout(t.menuLayout);
   b.hudLayout = mergeHudLayout(t.hudLayout);
   b.tutorial = mergeTutorial(t.tutorial);
+  b.sets = mergeSets(t.sets);
   b.skills = mergeSkills(t.skills);
+  b.moves = mergeMoves(t.moves);
   return b;
 }
 
@@ -680,7 +717,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'shopNoEquip', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'bagExpand', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'shopNoEquip', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'bagExpand', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -812,6 +849,15 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (x !== CODE.walkHidden) out.walkHidden = x;
     return null;
   };
+  const flag = (key: 'floorGateOpen' | 'floorGateQuest', name: string) => (): string | null => {
+    const x = o[key];
+    if (x === undefined) return null;
+    if (typeof x !== 'boolean') return strict ? `สวิตช์${name}ต้องเป็นเปิด/ปิด` : null;
+    if (x !== CODE[key]) out[key] = x;
+    return null;
+  };
+  const gateOpen = flag('floorGateOpen', 'เปิดประตูที่ต้องทำเควส');
+  const gateQuest = flag('floorGateQuest', 'ต้องทำเควสก่อนผ่านประตู');
   const shopNoEquip = (): string | null => {
     const x = o.shopNoEquip;
     if (x === undefined) return null;
@@ -1163,6 +1209,12 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (c.tuning) out.auto = c.tuning;
     return null;
   };
+  const floorGate = (): string | null => {
+    const c = checkFloorGateTuning(o.floorGate, strict);
+    if ('error' in c) return c.error;
+    if (c.tuning) out.floorGate = c.tuning;
+    return null;
+  };
   const waves = (): string | null => {
     const c = checkWaveTuning(o.waves, strict);
     if ('error' in c) return c.error;
@@ -1203,6 +1255,18 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     const c = checkAttackRootTuning(o.attackRoot, strict);
     if ('error' in c) return c.error;
     if (c.tuning) out.attackRoot = c.tuning;
+    return null;
+  };
+  const sets = (): string | null => {
+    const c = checkSetTuning(o.sets, strict);
+    if ('error' in c) return c.error;
+    if (c.tuning) out.sets = c.tuning;
+    return null;
+  };
+  const moves = (): string | null => {
+    const c = checkMoveTuning(o.moves, strict);
+    if ('error' in c) return c.error;
+    if (c.tuning) out.moves = c.tuning;
     return null;
   };
   const menuLayout = (): string | null => {
@@ -1255,6 +1319,9 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     english() ??
     forge() ??
     walkHidden() ??
+    gateOpen() ??
+    gateQuest() ??
+    floorGate() ??
     shopNoEquip() ??
     chatLinks() ??
     hubChannels() ??
@@ -1284,7 +1351,9 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     attackRoot() ??
     audio() ??
     menuLayout() ??
-    hudLayout();
+    hudLayout() ??
+    sets() ??
+    moves();
   if (err) return { error: err };
   // Fixed key order.
   const ordered: BalanceTuning = {};
@@ -1407,10 +1476,13 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.shopNoEquip !== b.shopNoEquip) out.push(`ห้ามถอด/สวมขณะเปิดร้าน ${a.shopNoEquip ? 'เปิด' : 'ปิด'} → ${b.shopNoEquip ? 'เปิด' : 'ปิด'}`);
   if (a.chatLinks !== b.chatLinks) out.push(`ลิงก์ไอเทมในแชท ${a.chatLinks ? 'เปิด' : 'ปิด'} → ${b.chatLinks ? 'เปิด' : 'ปิด'}`);
   if (a.walkHidden !== b.walkHidden) out.push(`เดินต่อเมื่อสลับแท็บ ${a.walkHidden ? 'เปิด' : 'ปิด'} → ${b.walkHidden ? 'เปิด' : 'ปิด'}`);
+  if (a.floorGateOpen !== b.floorGateOpen) out.push(`ประตูที่ต้องทำเควส (ทางขึ้นชั้น 2) ${a.floorGateOpen ? 'เปิด' : 'ปิด'} → ${b.floorGateOpen ? 'เปิด' : 'ปิด'}`);
+  if (a.floorGateQuest !== b.floorGateQuest) out.push(`ต้องทำเควสก่อนผ่านประตู ${a.floorGateQuest ? 'เปิด' : 'ปิด'} → ${b.floorGateQuest ? 'เปิด' : 'ปิด'}`);
   if (a.buffDurSummons !== b.buffDurSummons) out.push(`เพิ่มเวลาบัฟนับ summon (ป้อมปืน โดรน กับระเบิด) ${a.buffDurSummons ? 'เปิด' : 'ปิด'} → ${b.buffDurSummons ? 'เปิด' : 'ปิด'}`);
   if (a.mobDropOnSafe !== b.mobDropOnSafe) out.push(`มอนเลิกไล่เมื่อผู้เล่นเข้าเมือง/safe zone ${a.mobDropOnSafe ? 'เปิด' : 'ปิด'} → ${b.mobDropOnSafe ? 'เปิด' : 'ปิด'}`);
   if (a.mapFromDb !== b.mapFromDb) out.push(`ใช้แมพจาก DB ${a.mapFromDb ? 'เปิด' : 'ปิด'} → ${b.mapFromDb ? 'เปิด' : 'ปิด'}`);
   if (a.mobReturnIgnoreHits !== b.mobReturnIgnoreHits) out.push(`มอนเดินกลับบ้านไม่สนการโจมตี ${a.mobReturnIgnoreHits ? 'เปิด' : 'ปิด'} → ${b.mobReturnIgnoreHits ? 'เปิด' : 'ปิด'}`);
+  out.push(...floorGateChanges(a.floorGate, b.floorGate));
   out.push(...autoChanges(a.auto, b.auto));
   out.push(...waveChanges(a.waves, b.waves));
   out.push(...bagExpandChanges(a.bagExpand, b.bagExpand));
@@ -1421,6 +1493,8 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   out.push(...attackRootChanges(a.attackRoot, b.attackRoot));
   out.push(...audioChanges(a.audio, b.audio));
   out.push(...menuLayoutChanges(a.menuLayout, b.menuLayout));
+  out.push(...setChanges(a.sets, b.sets));
+  out.push(...moveChanges(a.moves, b.moves));
   out.push(...hudLayoutChanges(a.hudLayout, b.hudLayout));
   return out.join(', ');
 }

@@ -5,6 +5,8 @@ import type { MonsterDef, ShotDef } from '../data/monsters';
 import { NO_BOOST, type MonsterBoost, type SpawnArea } from '../data/zones';
 import { VolcanoHeartBrain } from './volcanoHeart';
 import { SPELL_GAP, WitchSpells } from './bogWitch';
+import { CannonCrabBrain } from './cannonCrab';
+import { chainStrike, chainWarn, mv, shellCounter, shellOnHit, stealGold, stealTick, type StolenGold } from './beachMoves';
 import { currentBalance, monsterMults, NO_MONSTER_MULT, type MonsterMults } from '../balance';
 
 const BOSS_RAMP_PER_SEC = 0.2;
@@ -26,7 +28,7 @@ const LEAP_HEIGHT = 3;
 const DEFAULT_SLAM_RADIUS = 4.2;
 
 type State = 'idle' | 'chase' | 'return' | 'charge' | 'leap';
-type Windup = 'melee' | 'slam' | 'charge' | 'throw' | 'leap';
+type Windup = 'melee' | 'slam' | 'charge' | 'throw' | 'leap' | 'chain';
 
 export class Monster extends Unit {
   readonly def: MonsterDef;
@@ -116,6 +118,20 @@ export class Monster extends Unit {
   private brain: VolcanoHeartBrain | null = null;
   /** The Bog Witch's spells (def.spells). Made on first use, so only the server has them. */
   spells: WitchSpells | null = null;
+  /** The Giant Cannon Crab's moves (def.brain). Made on first use, so only the server has them. */
+  crab: CannonCrabBrain | null = null;
+  /** Takes this share less damage until guardUntil (sim time): hiding in a shell (sim/beachMoves.ts). */
+  guard = 0;
+  guardUntil = 0;
+  /** Hermit crab: seconds left inside its shell, and until it can hide again. */
+  hideT = 0;
+  shellCd = 0;
+  /** Shock eel: until its next chain shock. */
+  private chainCd = 2;
+  /** Thief gull: the gold it is carrying off. */
+  stolen: StolenGold | null = null;
+  /** Thief gull: flying off faster than it chases. */
+  private fleeFast = false;
 
   /** The zone's monster boost: multiplies HP, attack and defense, and speed (moving and attacking). */
   private readonly zoneSpeed: number;
@@ -164,7 +180,7 @@ export class Monster extends Unit {
    * already out when they are saved. The share of HP left stays the same.
    */
   retune(): void {
-    const m = this.isBoss ? NO_MONSTER_MULT : monsterMults(this.def);
+    const m = this.isBoss ? this.bossMults() : monsterMults(this.def);
     const share = this.baseHp > 0 ? this.hp / this.maxHp : 1;
     this.mult = m;
     this.baseHp = Math.max(1, Math.round(this.rawHp * m.hp));
@@ -174,6 +190,20 @@ export class Monster extends Unit {
     // Passive kinds (0) stay passive; the zone's forced aggro is not multiplied.
     this.aggroRange = Math.max(this.def.aggroRange * m.aggro, this.zoneAggro);
     if (this.alive && share > 0) this.hp = Math.max(1, Math.min(this.maxHp, share * this.maxHp));
+  }
+
+  /** Bosses are not in the monster multipliers; floor 2's own boss cards scale their HP and ATK (moveTuning.ts). */
+  private bossMults(): Readonly<MonsterMults> {
+    if (this.def.brain !== 'cannon_crab') return NO_MONSTER_MULT;
+    return { ...NO_MONSTER_MULT, hp: mv('crab.hpMult'), atk: mv('crab.atkMult') };
+  }
+
+  /** Runs away from its target for `sec` seconds, faster than it chases (a thief gull with gold). */
+  fleeFor(sec: number): void {
+    this.fleeT = sec;
+    this.aggroT = Math.max(this.aggroT, sec);
+    this.fleeFast = true;
+    this.windupT = 0;
   }
 
   /** Called in by a boss: no rewards, no respawn. The admin's multipliers for its kind still apply. */
@@ -277,6 +307,7 @@ export class Monster extends Unit {
     if (!this.target?.alive) this.target = attacker;
     if (this.state !== 'charge' && this.state !== 'leap') this.state = 'chase';
     if (this.def.behavior === 'skittish' && Math.random() < 0.4) this.fleeT = 1.2;
+    if (this.def.move === 'shell') shellOnHit(sim, this);
     if (this.def.pack) {
       for (const m of sim.monsters) {
         if (m !== this && m.alive && !m.ignoresHits && (m.def.packId ?? m.def.id) === (this.def.packId ?? this.def.id) && Math.hypot(m.x - this.x, m.z - this.z) < 9) {
@@ -366,6 +397,13 @@ export class Monster extends Unit {
       // Before any early return below, so a stunned witch's pools still hurt and curses still land.
       this.spells.update(sim, this);
     }
+    if (this.def.brain === 'cannon_crab') {
+      this.crab ??= new CannonCrabBrain();
+      if (!this.holdsOnWipe(sim) && (this.state === 'return' || (this.state === 'idle' && !this.target))) this.crab.reset(sim);
+      // Before any early return below, so its cannonballs still land while it is stunned.
+      this.crab.tick(sim, this);
+    }
+    if (this.def.move === 'steal') stealTick(sim, this);
     if (this.jumpOutT > 0) {
       this.jumpOutT -= dt;
       const up = Math.max(0, 1 - this.jumpOutT / JUMP_OUT_TIME - 0.3) / 0.7;
@@ -409,6 +447,8 @@ export class Monster extends Unit {
     this.thrownCd -= skillTick;
     if (this.spells) this.spells.cd -= skillTick;
     this.leapCd -= dt * this.skillSpeed;
+    this.shellCd -= skillTick;
+    this.chainCd -= skillTick;
     this.aggroT -= dt;
     this.fleeT -= dt;
 
@@ -458,6 +498,15 @@ export class Monster extends Unit {
       if (this.state === 'charge') this.state = 'chase';
       return;
     }
+    // A hermit crab in its shell stays put, then strikes back as it comes out (sim/beachMoves.ts).
+    if (this.hideT > 0) {
+      this.hideT -= dt;
+      this.windupT = 0;
+      if (this.hideT <= 0) shellCounter(sim, this);
+      return;
+    }
+    // The Giant Cannon Crab's own moves (sim/cannonCrab.ts); when it does none this tick it chases and hits as usual.
+    if (this.crab && this.state !== 'return' && this.crab.act(dt, sim, this)) return;
 
     if (this.windupT > 0) {
       this.windupT -= dt;
@@ -523,9 +572,10 @@ export class Monster extends Unit {
         if (hostile && this.fleeT > 0) {
           mx = -dx / d;
           mz = -dz / d;
-          spd *= 1.1;
+          spd *= this.fleeFast ? mv('steal.fleeSpeed') : 1.1;
           this.state = 'chase';
         } else if (hostile) {
+          this.fleeFast = false;
           this.state = 'chase';
           // A vanish comes first, so a hit past both marks still sends the minions before the rage.
           if (this.def.summon?.vanish && !this.vanished && this.hp < this.maxHp * 0.5) {
@@ -548,7 +598,12 @@ export class Monster extends Unit {
           } else if (this.spells && this.spells.cd <= 0 && this.spells.cast(sim, this, p)) {
             const [lo, hi] = SPELL_GAP;
             this.spells.cd = (lo + Math.random() * (hi - lo)) * (frenzy ? frenzy.skill : 1) * (this.def.skillCd ?? 1);
-          } else if (this.isBoss && this.slamCd <= 0 && d < Math.max(5, this.slamRadius)) {
+          } else if (this.def.move === 'chain' && this.chainCd <= 0 && d <= mv('chain.range')) {
+            this.windKind = 'chain';
+            this.windupT = mv('chain.warn');
+            this.chainCd = mv('chain.cd');
+            chainWarn(sim, this, p, this.windupT);
+          } else if (this.isBoss && !this.def.brain && this.slamCd <= 0 && d < Math.max(5, this.slamRadius)) {
             this.windKind = 'slam';
             this.windupT = 1.1 * this.skillMult();
             this.slamCd = (frenzy ? 7 * frenzy.skill : this.enraged ? 5 : 7) * (this.def.skillCd ?? 1);
@@ -735,6 +790,9 @@ export class Monster extends Unit {
       this.leapT = LEAP_TIME;
       this.leapFromX = this.x;
       this.leapFromZ = this.z;
+    } else if (this.windKind === 'chain') {
+      chainStrike(sim, this, p);
+      this.atkCd = Math.max(this.atkCd, 0.8);
     } else if (this.windKind === 'melee' && this.def.shot) {
       this.fire(sim, this.def.shot);
     } else if (this.windKind === 'melee') {
@@ -742,7 +800,10 @@ export class Monster extends Unit {
       // A boss's own claw / lantern / ice hit (bossFx.ts), sent from where it stands; others the plain slash.
       if (this.def.fx?.melee) sim.fx('effect', this.def.fx.melee, this.x, this.z, ang, this.attackRange);
       else sim.fx('slash', this.x, this.z, ang, Math.PI * 0.6, this.attackRange + 0.6, '#ff8a6a');
-      if (p?.alive && d <= this.attackRange + p.radius + 0.5) sim.hitPlayer(this, p, 1, {});
+      if (p?.alive && d <= this.attackRange + p.radius + 0.5) {
+        sim.hitPlayer(this, p, 1, {});
+        if (this.def.move === 'steal' && p.alive) stealGold(sim, this, p);
+      }
     } else if (this.windKind === 'slam') {
       const radius = this.slamRadius;
       sim.fx('ring', this.x, this.z, radius, '#ffb070', 0.45);

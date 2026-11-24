@@ -1,6 +1,6 @@
 // The game rules, with no rendering. The game server runs one of these per zone. Whoever drives it calls step() every frame and reads drainEvents()
 // to show effects, damage numbers and messages.
-import { HUB_ID, NO_BOOST, ZONES, inSafeArea, type MonsterBoost, type SafeArea, type ZoneDef, type SpawnArea } from '../data/zones';
+import { hubOf, isHub, NO_BOOST, ZONES, inSafeArea, type MonsterBoost, type SafeArea, type ZoneDef, type SpawnArea } from '../data/zones';
 import { DROP_GOLD_MULT, MONSTERS } from '../data/monsters';
 import { AUTO_EXP_MULT, expGapMult, expToNext, mitigate, MAX_LEVEL, MISS_GAP, outLevelled } from '../formulas';
 import { blockingGate, BOSS_GATE_IDS } from '../data/bossGates';
@@ -8,12 +8,13 @@ import { lineRanges, rerollStat, rerollValues, rollItem } from '../data/items';
 import { REROLL_NAME, rerollCost, type RerollKind } from '../data/reroll';
 import { inBossArena, lairExitSpot, LAVA_BURN, LAVA_TICK } from '../data/zones';
 import type { Hazard } from './volcanoHeart';
+import { stealReturn, thornsReflect } from './beachMoves';
 import {
   announceFrom, bannerFrom, dropsOnFail, forgeCd, enhanceCost, itemName, maxPlus, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
 } from '../data/enhance';
 import { dropPotionSize, entryName, potionName, POTION_STACK, potionPrice, stackLimit } from '../data/potions';
 import { BOX_OPEN_COOLDOWN, BOSS_KEY, BOSS_QUEST_KEY, BOSS_STONE_CHANCE, BOUND_MSG, BUFF_LABEL, BUFF_MAX, BUFF_MULT, BUFF_TIME, fmtBuff, PHOENIX_PRICE, QUEST_KILLS, REVIVES_PER_KEY, STONE_STACK, KEY_DROP_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, RETURN_CAST, RETURN_SCROLL_PRICE, STONE_COLOR, STONE_NAME } from '../data/stones';
-import { NPC_INFO, NPC_USE_RANGE, type NpcId } from '../data/npcs';
+import { NPC_USE_RANGE, npcLook, type NpcId } from '../data/npcs';
 import { pick, rand, randInt, type Rng } from '../rng';
 import { splitExp } from '../party';
 import { CLASS_IDS, SLOT_KIND, WEAR_SLOTS, type WearSlot } from '../data/classes';
@@ -36,6 +37,9 @@ import { Loot, LOOT_PRIORITY_TIME, type LootKind } from './Loot';
 import { nextRowPrice, STASH_GOLD_MAX, STASH_ROW } from './stash';
 import { splitInto } from './split';
 import { questRows } from '../quests';
+import { portalLock } from '../floors';
+import { FLOOR2_UNLOCK, floorGateReward, navState } from '../floorGate';
+import { HARBOR_ID } from '../data/harbor';
 import { GEAR_KILLS, GEAR_PART_NAME, gearReward, gearRow } from '../gearQuests';
 import { TUT_ACCEPT_GOLD, TUT_ACCEPT_STONES, TUT_NPC, TUT_STEPS, TUT_STEP_NAME, TUT_TASKS, TUT_TASK_NAME, tutRows, tutTurnInReward, type TutStep, type TutTask } from '../tutorial';
 import { putAll, type MailAttach } from '../mail';
@@ -239,7 +243,16 @@ export class Sim {
     const p = new Player(this.newId(), this, data);
     p.zone = this.zone.id;
     const back = fromZone ? this.zone.portals.find((pt) => pt.to === fromZone) : undefined;
-    if (back) {
+    // Down from floor 2 (no portal here leads there): beside the navigator who took them up (owner 2026-11-19), a
+    // couple of steps out from the middle (he stands in front of the fountain).
+    const guide = !back && fromZone && ZONES[fromZone] && (ZONES[fromZone].floor ?? 1) !== (this.zone.floor ?? 1) ? this.terrain.npcPos.navigator : undefined;
+    if (guide) {
+      const s = this.zone.start;
+      const d = Math.hypot(guide.x - s.x, guide.z - s.z) || 1;
+      p.x = guide.x + ((guide.x - s.x) / d) * 2;
+      p.z = guide.z + ((guide.z - s.z) / d) * 2;
+      p.face(guide.x - p.x, guide.z - p.z);
+    } else if (back) {
       // A few steps from the portal toward the middle of the map.
       const d = Math.hypot(back.x, back.z) || 1;
       p.x = back.x - (back.x / d) * 3.5;
@@ -288,6 +301,11 @@ export class Sim {
 
   sfx(name: SfxName, x: number, z: number, to?: number): void {
     this.events.push({ t: 'sfx', name, x, z, to });
+  }
+
+  /** Big text across the middle of the screen for the players near (x, z) (a boss's phase). */
+  banner(text: string, sub: string, x: number, z: number): void {
+    this.events.push({ t: 'banner', text, sub, x, z });
   }
 
   log(msg: string, color?: string, to?: number): void {
@@ -444,7 +462,9 @@ export class Sim {
     const def = (this.time < m.armorBreakUntil ? m.defense * (1 - m.armorBreak) : m.defense) * pen;
     const under = m.isBoss && m.level - p.level > BOSS_LEVEL_GAP;
     const bossMult = m.isBoss ? classBalance(p.cls.id).bossDmgMult : 1;
-    const dmg = Math.max(1, Math.round(mitigate(raw, def) * bossMult * (under ? BOSS_UNDERLEVEL_MULT : 1)));
+    // Hiding in a shell (hermit crab, the Giant Cannon Crab's low-HP hide): less damage for a moment (sim/beachMoves.ts).
+    const guarded = this.time < m.guardUntil ? 1 - m.guard : 1;
+    const dmg = Math.max(1, Math.round(mitigate(raw, def) * bossMult * (under ? BOSS_UNDERLEVEL_MULT : 1) * guarded));
     if (!m.damageBy.has(p.id)) {
       m.damageBy.set(p.id, 0);
       m.addFighter(m.damageBy.size);
@@ -494,6 +514,8 @@ export class Sim {
     const sk = opts.skill?.id ?? this.casterSkill;
     if (sk && (opts.stun || opts.slow || opts.armorBreak || opts.weak)) m.debuffSkill = sk;
     m.onHit(this, p);
+    // A spike turtle bounces part of a close hit back (never a hit that was itself bounced back, see opts.reflected).
+    if (m.def.move === 'thorns' && !opts.reflected) thornsReflect(this, m, p, dealt);
     if (m.hp <= 0) {
       this.killMonster(m);
       p.onKill(m);
@@ -533,9 +555,32 @@ export class Sim {
     if (this.time < p.reflectUntil && p.reflect > 0 && dmg > 0 && m.alive && p.stats.atk > 0) {
       this.fx('effect', 'sw_armorhit', m.x, m.z, 0, 0.9);
       const back = (dmg * p.reflect + p.reflectFlat) / p.stats.atk;
-      this.hitMonster(p, m, back, { maxMult: back });
+      this.hitMonster(p, m, back, { maxMult: back, reflected: true });
     }
     if (p.hp <= 0) this.killPlayer(p);
+  }
+
+  /**
+   * Damage set by a move, not by the monster's attack (a spike turtle's thorns): no defense, no reflect back. Shields
+   * still take it first, and it stops potions and the return scroll like any hit.
+   */
+  hurtPlayer(m: Monster, p: Player, amount: number): void {
+    if (!p.alive || this.inSafe(p) || p.invulnT > 0) return;
+    let dmg = Math.max(0, Math.round(amount));
+    if (p.shield > 0 && this.time < p.shieldUntil) {
+      const soak = Math.min(p.shield, dmg);
+      p.shield -= soak;
+      dmg -= soak;
+      if (soak > 0) this.dmgText(p, `-${soak}`, 'shield', p.id);
+    }
+    p.hp -= dmg;
+    p.lastHurt = this.time;
+    p.interruptPotions();
+    this.cancelReturnCast(p, 'โดนโจมตี');
+    this.events.push({ t: 'flash', id: p.id });
+    if (dmg > 0) this.dmgText(p, `-${dmg}`, 'hurt', p.id);
+    if (p.hp <= 0) this.killPlayer(p);
+    void m;
   }
 
   /** The Volcano Heart reached a faster phase (1 = below half HP, 2 = below 30%). */
@@ -679,8 +724,11 @@ export class Sim {
     m.deadT = 0;
     m.hp = 0;
     this.sfx(m.isBoss ? 'boss_die' : 'monster_die', m.x, m.z);
-    if (m.def.pattern || m.def.spells) this.hazards = [];
+    if (m.def.pattern || m.def.spells || m.def.brain) this.hazards = [];
     m.spells?.reset(this);
+    m.crab?.reset(this);
+    // A gull shot down with stolen gold: it goes back (sim/beachMoves.ts).
+    stealReturn(this, m);
     if (!m.summoned) {
       this.shareExp(m);
       // Wave monsters give EXP but no loot (owner 2026-11-21: not a farm).
@@ -1014,9 +1062,11 @@ export class Sim {
     this.inventoryChanged(p);
     this.events.push({ t: 'save', to: p.id });
     this.fx('burst', p.x, 1, p.z, STONE_COLOR.return_scroll, 22, 4);
-    this.log(`ใช้${STONE_NAME.return_scroll} — กลับศูนย์กลางมิติ`, STONE_COLOR.return_scroll, p.id);
-    if (this.zone.id !== HUB_ID) {
-      this.events.push({ t: 'travel', to: p.id, zone: HUB_ID, atCamp: true });
+    // Back to the town of the floor they're on (plan 4.3).
+    const hub = hubOf(this.zone);
+    this.log(`ใช้${STONE_NAME.return_scroll} — กลับ${hub.nameTh}`, STONE_COLOR.return_scroll, p.id);
+    if (this.zone.id !== hub.id) {
+      this.events.push({ t: 'travel', to: p.id, zone: hub.id, atCamp: true });
       return;
     }
     ({ x: p.x, z: p.z } = this.spawnPoint());
@@ -1043,9 +1093,10 @@ export class Sim {
     const lair = this.exitTo ?? lairExitSpot(this.zone);
     this.log(`ฟื้นคืนชีพที่${this.exitTo ? 'หน้าประตู' : lair ? 'แท่นเรียกบอส' : 'เมือง'} (เสีย EXP ${penalty})`, '#ff9a6a', p.id);
     this.events.push({ t: 'save', to: p.id });
-    // Out in a zone, the town is in the hub. Queued after `revived`, so the browser gets both in order.
+    // Out in a zone, the town is that floor's hub. Queued after `revived`, so the browser gets both in order.
+    const hub = hubOf(this.zone);
     if (lair) this.events.push({ t: 'travel', to: p.id, zone: lair.field, spot: { x: lair.x, z: lair.z } });
-    else if (this.zone.id !== HUB_ID) this.events.push({ t: 'travel', to: p.id, zone: HUB_ID, atCamp: true });
+    else if (this.zone.id !== hub.id) this.events.push({ t: 'travel', to: p.id, zone: hub.id, atCamp: true });
   }
 
   /** EXP this player really gets from `n`: half while Auto Play is on, then doubled by an EXP scroll, then the VIP bonus (rounded down). */
@@ -1084,12 +1135,13 @@ export class Sim {
 
   /** The map a monster comes from (by its level), also when it stands in the hub. */
   private homeOf(def: { levels: [number, number] }): ZoneDef | undefined {
-    return Object.values(ZONES).find((z) => z.id !== HUB_ID && def.levels[0] >= z.levels[0] && def.levels[0] <= z.levels[1]);
+    // Not a town: a floor's hub spans the whole floor's levels.
+    return Object.values(ZONES).find((z) => !isHub(z) && def.levels[0] >= z.levels[0] && def.levels[0] <= z.levels[1]);
   }
 
   /** Quests The Seeker can give this player now: a boss of a map they have reached, not yet beaten, not taken, no key held. */
   questOffers(p: Player): string[] {
-    return questRows(p).filter((r) => r.state === 'offer').map((r) => r.boss);
+    return questRows(p).filter((r) => r.state === 'offer' && this.ownFloor(r.map)).map((r) => r.boss);
   }
 
   questAccept(p: Player, boss: string): boolean {
@@ -1101,9 +1153,18 @@ export class Sim {
     return true;
   }
 
+  /**
+   * Whether a quest's map is on this town's floor: each floor's quest giver (The Seeker in nexus_city, the navigator
+   * in the harbour, owner 2026-11-19) gives and takes his own floor's quests only.
+   */
+  private ownFloor(map: ZoneDef): boolean {
+    return (map.floor ?? 1) === (this.zone.floor ?? 1);
+  }
+
   questTurnIn(p: Player, boss: string): boolean {
     const key = BOSS_QUEST_KEY[boss];
-    if (!key || !this.near(p, 'seeker') || (p.quests[boss] ?? -1) < QUEST_KILLS) return false;
+    const map = Object.values(ZONES).find((z) => z.lair?.boss === boss);
+    if (!key || !map || !this.ownFloor(map) || !this.near(p, 'seeker') || (p.quests[boss] ?? -1) < QUEST_KILLS) return false;
     if (!p.addStones(key, 1)) {
       this.log('ช่องประเภทใช้งานเต็ม — เคลียร์ช่องว่าง 1 ช่องก่อนรับกุญแจ', '#ff8a6a', p.id);
       return false;
@@ -1132,11 +1193,40 @@ export class Sim {
     }
   }
 
+  // ------------------------------------------------------------ the way up to floor 2 (src/shared/floorGate.ts)
+
+  /**
+   * Hands in the navigator's quest (talking to him once it is offered): opens the way up for this character and
+   * returns the reward the server mails (bound), or null when it can't be handed in. `undo` takes the unlock back
+   * if the mail can't be written.
+   */
+  floorTurnIn(p: Player): { reward: MailAttach; undo: () => void } | null {
+    if (!this.near(p, 'navigator') || navState(p, currentBalance()) !== 'offer') return null;
+    p.unlocks.push(FLOOR2_UNLOCK);
+    this.log('เปิดทางขึ้นชั้น 2 ทะเลเมฆแล้ว! รางวัลส่งไปที่กล่องจดหมาย', '#ffd34a', p.id);
+    this.sfx('trade', p.x, p.z, p.id);
+    this.events.push({ t: 'save', to: p.id });
+    return {
+      reward: floorGateReward(currentBalance().floorGate),
+      undo: () => {
+        p.unlocks = p.unlocks.filter((u) => u !== FLOOR2_UNLOCK);
+      },
+    };
+  }
+
+  /** The navigator takes a player up to the harbour (they come out beside the lighthouse's gate back). */
+  floorTravel(p: Player): boolean {
+    if (!this.near(p, 'navigator') || navState(p, currentBalance()) !== 'go' || this.zone.town === 'harbor') return false;
+    this.fx('burst', p.x, 1.4, p.z, '#6affd0', 18, 3);
+    this.events.push({ t: 'travel', to: p.id, zone: HARBOR_ID });
+    return true;
+  }
+
   // ------------------------------------------------------------ The Seeker's gear quests (src/shared/gearQuests.ts)
 
   gearAccept(p: Player, id: string): boolean {
     const r = gearRow(p, id);
-    if (!r || r.state !== 'offer' || !this.near(p, 'seeker')) return false;
+    if (!r || r.state !== 'offer' || !this.ownFloor(r.map) || !this.near(p, 'seeker')) return false;
     p.gearQuests[id] = 0;
     this.log(`รับภารกิจ: ล่ามอนสเตอร์ใน${r.map.nameTh} ${GEAR_KILLS} ตัว แล้วกลับมาหา The Seeker เพื่อรับ${GEAR_PART_NAME[r.part]}`, '#ffd34a', p.id);
     this.events.push({ t: 'save', to: p.id });
@@ -1145,7 +1235,7 @@ export class Sim {
 
   gearTurnIn(p: Player, id: string): boolean {
     const r = gearRow(p, id);
-    if (!r || r.state !== 'ready' || !this.near(p, 'seeker')) return false;
+    if (!r || r.state !== 'ready' || !this.ownFloor(r.map) || !this.near(p, 'seeker')) return false;
     const items = gearReward(r.map, r.part, p.cls.id, p.level);
     const free = p.freeSlots('gear');
     if (free < items.length) {
@@ -1242,7 +1332,7 @@ export class Sim {
     if (!cur || cur.by !== p.name || !TUT_TASKS[cur.step].includes(task) || cur.got.includes(task)) return false;
     cur.got.push(task);
     const left = TUT_TASKS[cur.step].filter((k) => !cur.got.includes(k)).length;
-    this.log(left ? `ภารกิจสอนระบบ: ${TUT_TASK_NAME[task]} ✓ (เหลืออีก ${left})` : `ภารกิจสอนระบบ ${TUT_STEP_NAME[cur.step]} ครบแล้ว — กลับไปส่งที่${NPC_INFO[TUT_NPC[cur.step]].name}`, '#ffd34a', p.id);
+    this.log(left ? `ภารกิจสอนระบบ: ${TUT_TASK_NAME[task]} ✓ (เหลืออีก ${left})` : `ภารกิจสอนระบบ ${TUT_STEP_NAME[cur.step]} ครบแล้ว — กลับไปส่งที่${npcLook(TUT_NPC[cur.step], this.zone.town).name}`, '#ffd34a', p.id);
     this.events.push({ t: 'save', to: p.id });
     return true;
   }
@@ -2167,12 +2257,35 @@ export class Sim {
       }
       if (!p.portalReady) continue;
       const dest = ZONES[pt.to];
-      if (!dest) continue;
+      if (!dest) {
+        // A pier whose map isn't in the game yet (the harbour, owner 2026-11-19): shut, and it says so.
+        if (pt.soonName && this.time - p.portalMsgAt > 3) {
+          p.portalMsgAt = this.time;
+          this.log(`ท่าเรือไป${pt.soonName}ยังไม่เปิด`, '#ff9a6a', p.id);
+          this.text(p.x, p.topY, p.z, 'ยังไม่เปิด', 'info', 1);
+        }
+        continue;
+      }
       if (p.level < pt.minLevel) {
         if (this.time - p.portalMsgAt > 3) {
           p.portalMsgAt = this.time;
           this.log(`ประตูสู่ ${dest.name} ยังไม่เปิดให้คุณ — ต้อง Lv.${pt.minLevel} ขึ้นไป`, '#ff9a6a', p.id);
           this.text(p.x, p.topY, p.z, `ต้อง Lv.${pt.minLevel}`, 'info', 1);
+        }
+        continue;
+      }
+      // A way opened by a quest (plan 4.2), with its two /admin switches.
+      const lock = portalLock(p.unlocks, pt.requires);
+      if (lock) {
+        if (this.time - p.portalMsgAt > 3) {
+          p.portalMsgAt = this.time;
+          if (lock === 'closed') {
+            this.log(`ประตูสู่ ${dest.name} ปิดอยู่ชั่วคราว`, '#ff9a6a', p.id);
+            this.text(p.x, p.topY, p.z, 'ประตูปิดอยู่', 'info', 1);
+          } else {
+            this.log(`ประตูสู่ ${dest.name} ยังไม่เปิดให้คุณ — ไปคุยกับนักเดินเรือแห่งมิติก่อน`, '#ff9a6a', p.id);
+            this.text(p.x, p.topY, p.z, 'คุยกับนักเดินเรือก่อน', 'info', 1);
+          }
         }
         continue;
       }

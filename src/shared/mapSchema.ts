@@ -16,7 +16,9 @@ const BOSS_REACH = 4;
 /** Where players of a boss room stand when they come in (Sim.spawnPoint). */
 export const roomSpawnOf = (start: { x: number; z: number }): { x: number; z: number } => ({ x: start.x - ROOM_SPAWN_OFFSET, z: start.z - ROOM_SPAWN_OFFSET });
 
-export type MapTheme = 'forest' | 'marsh' | 'snow' | 'volcano';
+export type MapTheme = 'forest' | 'marsh' | 'snow' | 'volcano' | 'beach';
+/** Every theme a map file may name (floor 2's beach included). */
+export const MAP_THEMES: readonly string[] = ['forest', 'marsh', 'snow', 'volcano', 'beach'];
 export type Pt = [number, number]; // [x, z] in world units
 
 /** Collision of a prop: a circle `{r}` or a box `{w, d}` (full width along x, full depth along z, before `rot`). */
@@ -43,7 +45,18 @@ export interface MapBlocker { id: string; pts: Pt[] }
 export interface MapCollider { x: number; z: number; r: number }
 export interface MapNpc { id: string; x: number; z: number }
 export interface MapRest { kind: 'fountain' | 'campfire'; x: number; z: number }
-export interface MapPortal { to: string; x: number; z: number; minLevel: number }
+export interface MapPortal {
+  to: string;
+  x: number;
+  z: number;
+  minLevel: number;
+  /** An unlock the player must have on top of minLevel (PortalDef.requires, the way up a floor). */
+  requires?: string;
+  /** The place it will lead to while `to` is not in the game yet: it stays shut and says so (the harbour's piers, PortalDef.soonName). */
+  soonName?: string;
+  /** Its picture, when not the usual 'portal' (PortalDef.prop: the harbour's dock and lighthouse gates). */
+  prop?: string;
+}
 export interface MapSpawn { monster: string; x: number; z: number; radius: number; count: number; respawn: [number, number] }
 export interface MapLair { boss: string; x: number; z: number }
 /**
@@ -225,8 +238,8 @@ function validateInner(map: MapData, ctx: MapValidateCtx, err: Err, warn: Err): 
   const z = map.zone;
   const zoneOk = range(z.half, 4, 500, 'zone.half', 'zone');
   const half = zoneOk ? z.half : 500;
-  if (!['forest', 'marsh', 'snow', 'volcano'].includes(z.theme)) err('range', `zone.theme "${String(z.theme)}" is unknown`, 'zone');
-  if (z.quadrants && (!Array.isArray(z.quadrants) || z.quadrants.length !== 4 || z.quadrants.some(q => !['forest', 'marsh', 'snow', 'volcano'].includes(q))))
+  if (!MAP_THEMES.includes(z.theme)) err('range', `zone.theme "${String(z.theme)}" is unknown`, 'zone');
+  if (z.quadrants && (!Array.isArray(z.quadrants) || z.quadrants.length !== 4 || z.quadrants.some(q => !MAP_THEMES.includes(q))))
     err('range', 'zone.quadrants must be 4 valid themes', 'zone');
   const wOk = range(map.walkable.half, 1, half, 'walkable.half', 'walkable');
   const whalf = wOk ? map.walkable.half : half;
@@ -344,7 +357,7 @@ function validateInner(map: MapData, ctx: MapValidateCtx, err: Err, warn: Err): 
   }
   map.portals.forEach((p, i) => {
     const id = String(i);
-    if (zones && !zones.has(p.to)) err('bad_ref', `portal ${i} leads to unknown zone "${p.to}"`, 'portal', id);
+    if (zones && !zones.has(p.to) && !p.soonName) err('bad_ref', `portal ${i} leads to unknown zone "${p.to}"`, 'portal', id);
     if (typeof p.to !== 'string' || !p.to) err('schema', `portal ${i} has no target`, 'portal', id);
     if (!Number.isInteger(p.minLevel) || p.minLevel < 0 || p.minLevel > 200) err('range', `portal ${i} minLevel ${p.minLevel} must be an integer 0–200`, 'portal', id);
     placed('portal', id, p.x, p.z, `portal ${i} (to ${p.to})`);

@@ -1,4 +1,6 @@
 import { mulberry32 } from '../rng';
+import { setDropBands } from './items';
+import { HARBOR_CORNERS, HARBOR_ID, HARBOR_PIER, HARBOR_RETURN } from './harbor';
 import { MapRegistry } from '../mapRegistry';
 import type { MapData } from '../mapSchema';
 
@@ -14,8 +16,14 @@ export interface SpawnArea {
   boost?: MonsterBoost;
 }
 
-/** The town in the middle that every zone's portal leads back to. */
+/** Floor 1's town, in the middle of the first island: every floor-1 zone's portal leads back to it. */
 export const HUB_ID = 'nexus_city';
+
+/**
+ * Each floor's town (docs/plans/FLOOR2_PLAN.md 4.3): where its return scroll, death and login go.
+ * A floor left out (its town not built yet) falls back to floor 1's.
+ */
+export const FLOOR_HUBS: Record<number, string> = { 1: HUB_ID, 2: HARBOR_ID };
 
 /** Walking into it moves the player to another zone. */
 export interface PortalDef {
@@ -24,6 +32,18 @@ export interface PortalDef {
   z: number;
   /** Players below this level are turned away. */
   minLevel: number;
+  /**
+   * An unlock the player must have (Player.unlocks, e.g. floorUnlock(2) from The Seeker's quest) on top
+   * of minLevel. See portalLock in src/shared/floors.ts and its two /admin switches. None = level only.
+   */
+  requires?: string;
+  /**
+   * The place it will lead to, for a portal whose map isn't in the game yet (`to` not in ZONES): it stays shut and
+   * says so ("ยังไม่เปิด"). The harbour's four piers (owner 2026-11-19); each map's PR brings its zone and opens it.
+   */
+  soonName?: string;
+  /** Its picture, when not the usual 'portal' (the harbour's ship's-wheel and lighthouse gates). */
+  prop?: string;
 }
 
 /** An ellipse of slippery ice. */
@@ -35,7 +55,7 @@ export interface IceLake {
 }
 
 /** Which prop set and ground palette a zone is drawn with. */
-export type ZoneTheme = 'forest' | 'marsh' | 'snow' | 'volcano';
+export type ZoneTheme = 'forest' | 'marsh' | 'snow' | 'volcano' | 'beach';
 
 /** An ellipse of lava: walkable, but it burns whoever stands in it. */
 export interface LavaPool {
@@ -51,6 +71,8 @@ export interface ZoneDef {
   nameTh: string;
   subtitle: string;
   levels: [number, number];
+  /** Which floor of the world it is on (floor 2 = the cloud sea, Lv41–80). Missing = 1. */
+  floor?: number;
   theme: ZoneTheme;
   /** Open world allows Auto Play; rare-loot dungeons will set this false. */
   allowAutoPlay: boolean;
@@ -77,6 +99,8 @@ export interface ZoneDef {
   safe?: SafeArea;
   /** The camp NPCs stand around `start` (only the hub has them). */
   npcs?: boolean;
+  /** Which town it is, when not nexus_city's walled ruin: 'harbor' = floor 2's plank harbour (data/harbor.ts). */
+  town?: 'harbor';
   /**
    * Draws each quarter of the map with another zone's theme, blended where they meet.
    * Order: [x<0 z<0 (top of the screen), x≥0 z<0 (right), x<0 z≥0 (left), x≥0 z≥0 (bottom)].
@@ -449,13 +473,92 @@ export const ZONE_HUB: ZoneDef = {
   portals: HUB_CORNERS.map(([sx, sz, zone]) => ({ to: zone.id, x: sx * HUB_PORTAL, z: sz * HUB_PORTAL, minLevel: 0 })),
 };
 
+// Floor 2, map 1 (plan 2, 5.1): reached from the harbour's top pier, so the camp is at the bottom like the forest's.
+export const ZONE_BEACH: ZoneDef = scatterZone({
+  id: 'shipwreck_beach',
+  name: 'Shipwreck Beach',
+  nameTh: 'หาดเรือแตก',
+  subtitle: 'หาดทรายบนเกาะลอยกลางทะเลเมฆ ซากเรือโจรสลัดเกยตื้น สมบัติกระจัดกระจาย และปูยักษ์ที่แบกปืนใหญ่ไว้บนกระดอง',
+  levels: [41, 50],
+  floor: 2,
+  theme: 'beach',
+  // Owner 2026-11-20: Ashen Isle's boost, the monsters' own numbers carry the step up.
+  monsterBoost: { stats: 7, tough: 0.5, mobTough: 0.7, speed: 1.25, skill: 1.25, aggro: 7 },
+  allowAutoPlay: true,
+  channels: true,
+  half: 64,
+  seed: 20261120,
+  start: { x: 44, z: 44 },
+  path: [[52, 52], [44, 44], [32, 28], [18, 22], [6, 10], [-6, 4], [-14, -10], [-24, -20], [-32, -34], [-42, -42]],
+  branches: [
+    [[32, 28], [40, 12]],
+    [[18, 22], [6, 36]],
+    [[6, 10], [16, -6]],
+    [[-6, 4], [-22, 14]],
+    [[-14, -10], [-4, -26]],
+  ],
+  spawns: [],
+  lair: { boss: 'cannon_crab', x: -42, z: -42 },
+  // Room for the crab's sidesteps and its cannon barrage.
+  arenaRadius: 14,
+  portals: [{ to: HARBOR_ID, x: 49.5, z: 49.5, minLevel: 0 }],
+}, [
+  { group: [['hermit_crab', 1]], count: 12, respawn: [8, 12] },
+  { group: [['thief_gull', 1]], count: 10, respawn: [10, 14] },
+  { group: [['shock_eel', 1]], count: 9, respawn: [10, 14] },
+  { group: [['spike_turtle', 1]], count: 8, respawn: [14, 20] },
+]);
+
+/** Where each harbour pier leads (top, right, left, bottom of the screen), by plan 2; none of them built yet. */
+const HARBOR_PIERS: [string, string][] = [
+  ['shipwreck_beach', 'หาดเรือแตก'],
+  ['smugglers_cove', 'อ่าวลักลอบ'],
+  ['ghost_ship_graveyard', 'สุสานเรือผี'],
+  ['kraken_maelstrom', 'วังวนกลางทะเล'],
+];
+
+/**
+ * Floor 2's town (plan 3, art M0b_harbor_docks): a safe harbour of plank platforms on the cloud sea, no monsters,
+ * a pier to each corner whose portal leads to that corner's map (shut until the map exists) and the way back to
+ * floor 1 beside the lighthouse. Players get here from nexus_city through the navigator (src/shared/floors.ts).
+ */
+export const ZONE_HARBOR: ZoneDef = {
+  id: HARBOR_ID,
+  name: 'Dimensional Harbour',
+  nameTh: 'ท่าเรือมิติ',
+  subtitle: 'เมืองท่าไม้กลางทะเลเมฆ ปลอดภัยจากมอนสเตอร์ ท่าเรือทั้งสี่ทิศพาไปสู่ดินแดนของชั้นสอง',
+  levels: [41, 80],
+  floor: 2,
+  // Its own look (town: 'harbor'); the theme only picks the colours of the map frame and the like.
+  theme: 'forest',
+  town: 'harbor',
+  allowAutoPlay: false,
+  half: 35,
+  seed: 20261119,
+  start: { x: 0, z: 0 },
+  // The whole town is safe (the platforms reach out to the piers' ends).
+  safe: { x: 0, z: 0, half: 34 },
+  npcs: true,
+  path: [],
+  branches: [],
+  spawns: [],
+  portals: [
+    ...HARBOR_CORNERS.map(([sx, sz], i) => ({
+      to: HARBOR_PIERS[i][0], soonName: HARBOR_PIERS[i][1], x: sx * HARBOR_PIER, z: sz * HARBOR_PIER, minLevel: 0, prop: 'hb_portal_dock',
+    })),
+    { to: HUB_ID, x: HARBOR_RETURN.x, z: HARBOR_RETURN.z, minLevel: 0, prop: 'hb_portal_return' },
+  ],
+};
+
 /** The floor-1 zones as the generators above make them. Only tools/bake_maps.ts and the bake test read these. */
 export const GENERATED_ZONES: Record<string, ZoneDef> = {
   [ZONE_HUB.id]: ZONE_HUB,
+  [ZONE_HARBOR.id]: ZONE_HARBOR,
   [ZONE_1.id]: ZONE_1,
   [ZONE_2.id]: ZONE_2,
   [ZONE_3.id]: ZONE_3,
   [ZONE_4.id]: ZONE_4,
+  [ZONE_BEACH.id]: ZONE_BEACH,
 };
 
 /**
@@ -492,6 +595,8 @@ export const ZONES: Record<string, ZoneDef> = Object.fromEntries(
     return [id, map ? zoneWithMap(z, map) : z];
   }),
 );
+// Set pieces outside a map band (the mystery box) only roll once a farm map of their level exists (data/items.ts).
+setDropBands(Object.values(ZONES).filter((z) => !!z.lair).map((z) => z.levels));
 
 /**
  * Maps made in the editor (src/shared/customZones.ts sets this when it loads): builds the ZoneDef of such a map from its layout,
@@ -535,12 +640,13 @@ export function zoneWithLayout(id: string, map: MapData): ZoneDef | undefined {
 }
 
 /** Each boss's body radius in its room (the Volcano Heart is a rock that never moves). */
-const BOSS_RADIUS: Record<string, number> = { forest_bear: 1, bog_witch: 1, yeti: 1, volcano_heart: 0 };
+const BOSS_RADIUS: Record<string, number> = { forest_bear: 1, bog_witch: 1, yeti: 1, volcano_heart: 0, cannon_crab: 1 };
 const BOSS_ROOM_NAME: Record<string, [string, string]> = {
   forest_bear: ["Bear's Den", 'รังหมีป่า'],
   bog_witch: ["Bog Witch's Lair", 'กระท่อมแม่มดหนอง'],
   yeti: ["Yeti's Cave", 'ถ้ำเยติ'],
   volcano_heart: ['Heart of the Volcano', 'แกนกลางภูเขาไฟ'],
+  cannon_crab: ["Giant Crab's Den", 'รังปูยักษ์'],
 };
 
 /**
@@ -578,6 +684,7 @@ function bossRoom(field: ZoneDef): ZoneDef {
     // No portal: the leave button (Sim.leaveRoom) puts you by this map's summoner (lairExitSpot).
     portals: [],
     roomOf: field.id,
+    floor: field.floor,
     arenaRadius: field.arenaRadius,
     bossSolid: lair.boss === 'volcano_heart' ? 1.5 : undefined,
     monsterBoost: field.monsterBoost,
@@ -601,7 +708,7 @@ export function lairExitSpot(room: ZoneDef, r: () => number = Math.random): { fi
 
 /** The boss rooms as bossRoom() makes them, by room id. Only tools/bake_maps.ts and the bake test read these. */
 export const GENERATED_ROOMS: Record<string, ZoneDef> = Object.fromEntries(
-  [ZONE_1, ZONE_2, ZONE_3, ZONE_4].map((z) => {
+  [ZONE_1, ZONE_2, ZONE_3, ZONE_4, ZONE_BEACH].map((z) => {
     const r = bossRoom(z);
     return [r.id, r];
   }),
@@ -623,6 +730,21 @@ export const BOSS_ROOMS: Record<string, ZoneDef> = Object.fromEntries(
   }),
 );
 const ROOMS_BY_ID: Record<string, ZoneDef> = Object.fromEntries(Object.values(BOSS_ROOMS).map((r) => [r.id, r]));
+
+/** The floor a zone is on (a boss room: its map's). */
+export function floorOf(zone: ZoneDef): number {
+  return zone.floor ?? 1;
+}
+
+/** Whether this zone is a floor's town (FLOOR_HUBS). */
+export function isHub(zone: ZoneDef): boolean {
+  return Object.values(FLOOR_HUBS).includes(zone.id);
+}
+
+/** The town of the floor this zone is on; floor 1's while that floor has none. */
+export function hubOf(zone: ZoneDef): ZoneDef {
+  return ZONES[FLOOR_HUBS[floorOf(zone)]] ?? ZONE_HUB;
+}
 
 /** Unknown or missing zone ids land in the hub. Boss rooms count too (the browser draws them). */
 export function zoneById(id: string | undefined): ZoneDef {

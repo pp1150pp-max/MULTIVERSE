@@ -14,6 +14,7 @@ import { BUFF_LABEL, MONSTER_STONES, RETURN_CAST, STONE_COLOR, STONE_DESC, STONE
 import { lootPots, type Buffs, type LootFilter, type SortKey } from '../shared/sim/Player';
 import { MONSTERS } from '../shared/data/monsters';
 import { currentBalance } from '../shared/balance';
+import { SET_MAX_PIECES, setInfo } from '../shared/data/sets';
 import { ZONE_1 } from '../shared/data/zones';
 import { expToNext } from '../shared/formulas';
 import { blockingGate } from '../shared/data/bossGates';
@@ -1029,7 +1030,7 @@ export class Hud {
     if (boss) icon('boss', boss.x, boss.z, 20);
     for (const pt of g.backend.zone.portals) icon('portal', pt.x, pt.z, 18);
     for (const r of g.backend.terrain.restSpots) icon('camp', r.x, r.z, 14);
-    for (const n of g.npcs) icon(NPC_MAP_ICON[n.id], n.x, n.z, 15);
+    for (const n of g.shownNpcs) icon(NPC_MAP_ICON[n.id], n.x, n.z, 15);
     for (const o of g.backend.players) {
       if (o !== p && !g.party.memberOf(o)) drawMapIcon(ctx, 'ally', ...toMM(o.x, o.z), 16, facingAngle(o.faceX, o.faceZ));
     }
@@ -1069,7 +1070,7 @@ export class Hud {
     }
     // Town NPCs and gates beyond the minimap's reach: a small icon on the rim, pointing their way.
     for (const pt of g.backend.zone.portals) drawEdgeMarker(ctx, c, rim, ...toMM(pt.x, pt.z), (x, y, s) => drawMapIcon(ctx, 'portal', x, y, s));
-    for (const n of g.npcs) drawEdgeMarker(ctx, c, rim, ...toMM(n.x, n.z), (x, y, s) => drawMapIcon(ctx, NPC_MAP_ICON[n.id], x, y, s));
+    for (const n of g.shownNpcs) drawEdgeMarker(ctx, c, rim, ...toMM(n.x, n.z), (x, y, s) => drawMapIcon(ctx, NPC_MAP_ICON[n.id], x, y, s));
     drawMapIcon(ctx, 'player', c, c, 22, facingAngle(p.faceX, p.faceZ));
     ctx.restore();
     // A two-tone gold rim.
@@ -1191,11 +1192,12 @@ export class Hud {
     this.g.rooms.hideLobby();
     if (this.dialogOpen) this.closeDialog();
     this.g.tutorial.close();
+    this.g.navigator.close();
   }
 
   talkTo(id: NpcId): void {
     // A tutorial step to take or hand in here: talk about it first (that window has a button on to the NPC's own).
-    if (id !== 'seeker' && this.g.tutorial.wants(id)) return this.g.tutorial.show(id);
+    if (id !== 'seeker' && id !== 'navigator' && this.g.tutorial.wants(id)) return this.g.tutorial.show(id);
     this.openNpcWindow(id);
   }
 
@@ -1203,6 +1205,7 @@ export class Hud {
   openNpcWindow(id: NpcId): void {
     // His key quests; his story is a button in that window.
     if (id === 'seeker') this.g.quests.toggle(true);
+    else if (id === 'navigator') this.g.navigator.show();
     else if (id === 'merchant') this.openShop();
     else if (id === 'keeper') {
       // The server refuses guests' stash actions too; this just says why up front.
@@ -1495,6 +1498,7 @@ export class Hud {
       `<div class="tt-name" style="color:${RARITY_COLOR[item.rarity]}">${itemName(item)}</div>` +
       `<div class="tt-sub">${RARITY_LABEL[item.rarity]} · ${SLOT_LABEL[item.slot]} · iLv.${item.level}${plusOf(item) ? ` · ตีบวก +${plusOf(item)}` : ''}</div>` +
       `<div class="tt-stats">${lines || '<div>—</div>'}</div>` +
+      setHtml(item, p.equipment) +
       (p.equipBlock(item) ? `<div class="tt-req">${p.equipBlock(item)}</div>` : '') +
       `<div class="tt-hint">${hint}</div><div class="tt-val">ขายให้พ่อค้าได้ ${sellValue(item)} G</div>`;
     this.placeTip(tip, e);
@@ -1887,4 +1891,21 @@ export class Hud {
       this.log(`ภารกิจ: ฝึกฝนในป่ามรกต แล้วปราบ ${boss.name}`, '#ffd34a');
     }
   }
+}
+
+/**
+ * An item's set part for its tooltip: the set's badge and "ชุดโจรสลัด (2/9)", then each bonus step with what it
+ * gives (steps add up), lit once that many pieces are worn.
+ */
+function setHtml(item: Item, equipment: Partial<Record<EquipSlot, Item>>): string {
+  const s = setInfo(item, equipment, currentBalance().sets);
+  if (!s) return '';
+  const badge = `<img class="tt-set-badge" src="${imgUrl(`assets/sprites/icons/set_${s.set}.png`)}" alt="" draggable="false" onerror="this.remove()">`;
+  const steps = s.steps.map((n, i) => {
+    // One text per stat so the English dictionary finds each (docs/systems/i18n.md).
+    const what = STAT_KEYS.filter((k) => s.bonus[i]?.[k]).map((k) => `<span>${STAT_LABEL[k]}</span> +${s.bonus[i][k]}`).join(', ') ||
+      '<span>ยังไม่มีโบนัส</span>';
+    return `<div class="${s.pieces >= n ? 'on' : ''}"><span>${n} ชิ้น:</span> ${what}</div>`;
+  }).join('');
+  return `<div class="tt-set"><div class="tt-set-name">${badge}<span>${s.name}</span> (${s.pieces}/${SET_MAX_PIECES})</div><div class="tt-set-steps">${steps}</div></div>`;
 }

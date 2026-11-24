@@ -65,5 +65,8 @@ for (const zone of zones) {
 
 // The hub's monsters drop the key of the map they come from.
 const hub = keysFrom(ZONE_HUB, 800);
-ok(BOSS_KEYS.every((k) => (hub.kinds.get(k) ?? 0) > 0), 'hub monsters drop all four keys (each from its own corner)');
+// Only the four floor-1 keys: the floor-2 bosses' keys never drop in the floor-1 hub.
+const floor1Keys = zones.map((z) => BOSS_KEY[z.lair!.boss]);
+ok(floor1Keys.every((k) => (hub.kinds.get(k) ?? 0) > 0) && [...hub.kinds.keys()].every((k) => floor1Keys.includes(k as BossKey)),
+  'hub monsters drop all four floor-1 keys (each from its own corner) and no floor-2 key');
 finish('boss-keys');

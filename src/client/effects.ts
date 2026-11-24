@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { circlesOn, MagicCircle, zoneAsCircle, zoneCircle } from './magicCircles';
-import { fxSheets, fxTex, type FxSheet } from './assets';
+import { assetSources, fxSheets, fxTex, sheets, type FxSheet } from './assets';
 import { cloneShared } from './texShare';
 import type { FxApi, SkillEffect } from '../shared/sim/types';
 import { loopProps, playProps } from './zoneProps';
@@ -13,6 +13,9 @@ import { bossFxOn, bossFxSpot, isBossEffect, isBossMelee, playBossExtras } from 
 
 /** The three.quarks trial's switch (fxLayer.quarks, under the extra layer's own switch), and not "off" in the player's graphics window. */
 const quarksOn = (): boolean => currentBalance().fxLayer.enabled && currentBalance().fxLayer.quarks && gfxQuality() > 0;
+
+/** Glow colour standing in for a floor-2 move picture that isn't cut yet (Effects.sprite). */
+const SPRITE_GLOW: Record<string, string> = { fx_shell_guard: '#ffe9a0', fx_shock: '#ffe14a', fx_spike_burst: '#e8ecf0' };
 
 const FRAMES = 6;
 const SHEET_ROWS: Record<FxSheet, number> = {
@@ -705,6 +708,48 @@ export class Effects implements FxApi {
     g.scale.setScalar(radius);
     this.add(g, duration, (k) => {
       fill.scale.setScalar(Math.max(0.01, k));
+    });
+  }
+
+  /**
+   * A paper effect picture standing at (x, z) (floor 2's moves: fx_shell_guard, fx_shock, fx_spike_burst), popping in
+   * and fading out. `follow` = a player it stays on. Missing picture: a soft glow of the same size instead.
+   */
+  sprite(key: string, x: number, z: number, size: number, life: number, follow?: number | null): void {
+    const sheet = assetSources[key] === 'file' ? sheets[key] : undefined;
+    const s = sheet
+      ? new THREE.Sprite(new THREE.SpriteMaterial({ map: sheet.texture, transparent: true, depthWrite: false }))
+      : this.glowSprite(SPRITE_GLOW[key] ?? '#fff0b0', size * 2, 0.7);
+    const aspect = sheet ? sheet.cellAspect : 1;
+    const h = size * 2;
+    s.scale.set(h * aspect, h, 1);
+    s.position.set(x, h * 0.45, z);
+    const mat = s.material;
+    const base = mat.opacity;
+    this.add(s, life, (k) => {
+      const at = follow != null ? this.posOf?.(follow) : null;
+      if (at) s.position.set(at.x, h * 0.45, at.z);
+      const pop = Math.min(1, k * life * 8);
+      s.scale.set(h * aspect * (0.7 + 0.3 * pop), h * (0.7 + 0.3 * pop), 1);
+      mat.opacity = base * (k > 0.8 ? (1 - k) / 0.2 : 1);
+    });
+  }
+
+  /** A lightning bolt between two spots, at chest height, flickering out (the chain shock, fx_chain_bolt). */
+  bolt(x1: number, z1: number, x2: number, z2: number, life: number): void {
+    const len = Math.hypot(x2 - x1, z2 - z1);
+    if (len < 0.05) return;
+    const pic = assetSources.fx_chain_bolt === 'file' ? sheets.fx_chain_bolt?.texture ?? null : null;
+    const geo = new THREE.PlaneGeometry(len, pic ? 0.9 : 0.35);
+    flat(geo);
+    const m = pic
+      ? new THREE.MeshBasicMaterial({ map: pic, transparent: true, depthWrite: false, side: THREE.DoubleSide })
+      : this.mat('#ffe14a', 0.95, true);
+    const mesh = new THREE.Mesh(geo, m);
+    mesh.position.set((x1 + x2) / 2, 0.9, (z1 + z2) / 2);
+    mesh.rotation.y = -Math.atan2(z2 - z1, x2 - x1);
+    this.add(mesh, life, (k) => {
+      m.opacity = (1 - k) * (0.6 + 0.4 * Math.random());
     });
   }
 

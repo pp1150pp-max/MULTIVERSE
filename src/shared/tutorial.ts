@@ -97,8 +97,8 @@ export const TUT_STONES: readonly StoneKind[] = STONE_KINDS.filter((k) => !isQue
 const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
 const sameAttach = (a: MailAttach, b: MailAttach) => JSON.stringify(a) === JSON.stringify(b);
 
-/** One reward from a request, or a Thai error. */
-function checkReward(x: unknown, name: string): MailAttach | string {
+/** One reward from a request, or a Thai error (also the floor-2 quest's, src/shared/floorGate.ts). */
+export function checkReward(x: unknown, name: string): MailAttach | string {
   if (!isObj(x)) return `รางวัล${name}ไม่ถูกต้อง`;
   const gold = x.gold ?? 0;
   if (typeof gold !== 'number' || !Number.isInteger(gold) || gold < 0 || gold > TUT_GOLD_MAX) return `ทองของรางวัล${name}ต้องเป็นจำนวนเต็ม 0–${TUT_GOLD_MAX.toLocaleString()}`;

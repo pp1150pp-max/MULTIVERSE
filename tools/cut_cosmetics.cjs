@@ -17,7 +17,10 @@ const ROOT = path.join(__dirname, '..');
 const RAW_ROOT = process.argv[2] || ROOT;
 // Papercraft run (art_templates/papercraft_cosmetics/PROMPTS.md): COS_PAPER=1 reads art_templates/papercraft_cosmetics/raw
 // and writes public/assets/sprites/paper/cosmetics, cosmetics only (no riding poses, no stylist).
-const PAPER = !!process.env.COS_PAPER;
+const PAPER = !!process.env.COS_PAPER || !!process.env.NPC_ONLY;
+// NPC_ONLY=1 [NPC_RAW_DIR=<folder>]: only the papercraft NPC sheets, read from that folder (default
+// art_templates/papercraft_chars/raw/npc), e.g. the harbour town's (FLOOR2_HUB.md 9: raw/floor2_hub/npc).
+const NPC_ONLY = !!process.env.NPC_ONLY;
 const COS_RAW = process.env.COS_RAW_DIR ? process.env.COS_RAW_DIR : PAPER ? path.join(ROOT, 'art_templates/papercraft_cosmetics/raw') : path.join(RAW_ROOT, 'art_templates/cosmetics/raw');
 const COS_OUT = path.join(ROOT, PAPER ? 'public/assets/sprites/paper/cosmetics' : 'public/assets/sprites/cosmetics');
 
@@ -200,8 +203,11 @@ function place(src, fig, k, dst, dx, dy) {
 /**
  * Lays the figures out as a sheet. `cellW/cellH` fixed (riding poses) or null (fit the biggest figure, cosmetics).
  * Horizontally each figure is centred; vertically it keeps its height above its row's lowest foot.
+ * `k`: one scale for the sheet, or one per row.
  */
-function layout(src, grid, k, cellW, cellH, footPad) {
+function layout(src, grid, kk, cellW, cellH, footPad) {
+  const kr = Array.isArray(kk) ? kk : grid.map(() => kk);
+  const k = Math.max(...kr);
   const rows = grid.length;
   const cols = grid[0].length;
   const base = grid.map((row) => Math.max(...row.map((f) => f.box[3])));
@@ -214,17 +220,17 @@ function layout(src, grid, k, cellW, cellH, footPad) {
   const H = cellH ?? Math.ceil(maxUp * k) + footPad + 4;
   const dst = { w: W * cols, h: H * rows, d: Buffer.alloc(W * cols * H * rows * 4) };
   grid.forEach((row, r) => row.forEach((f, c) => {
-    const fw = Math.round((f.box[2] - f.box[0]) * k);
+    const fw = Math.round((f.box[2] - f.box[0]) * kr[r]);
     const dx = c * W + Math.round((W - fw) / 2);
-    const dy = r * H + H - footPad - Math.round((base[r] - f.box[1]) * k);
+    const dy = r * H + H - footPad - Math.round((base[r] - f.box[1]) * kr[r]);
     if (dy < r * H) console.warn(`r${r} c${c}: figure taller than its cell, top clipped`);
-    place(src, f, k, dst, dx, dy);
+    place(src, f, kr[r], dst, dx, dy);
   }));
   return dst;
 }
 
 // ---- cosmetics
-for (const id of COSMETICS) {
+for (const id of NPC_ONLY ? [] : COSMETICS) {
   const file = path.join(COS_RAW, `${id}.png`);
   if (!fs.existsSync(file)) {
     console.warn(`missing ${file}`);
@@ -240,7 +246,7 @@ for (const id of COSMETICS) {
 }
 
 // ---- riding poses
-for (const cls of PAPER ? [] : CLASSES) {
+for (const cls of PAPER || NPC_ONLY ? [] : CLASSES) {
   const dir = path.join(ROOT, 'public/assets/sprites/player', cls);
   const manifestFile = path.join(dir, 'sprite.json');
   const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
@@ -277,12 +283,15 @@ for (const cls of PAPER ? [] : CLASSES) {
 // × 4 breathing frames, art_templates/papercraft_chars/NPC.md) → public/assets/sprites/paper/npc/, laid out like the
 // old ones (208px cells, body 200px tall) but 4 frames across.
 if (PAPER) {
-  const dir = path.join(ROOT, 'art_templates/papercraft_chars/raw/npc');
+  const dir = process.env.NPC_RAW_DIR || path.join(ROOT, 'art_templates/papercraft_chars/raw/npc');
   for (const f of fs.existsSync(dir) ? fs.readdirSync(dir).filter((x) => x.endsWith('.png')) : []) {
     const src = key(read(path.join(dir, f)));
     const grid = cells(src, 3, 4, 0.02, `npc ${f}`);
     const front = grid[0][0];
-    save(layout(src, grid, 200 / (front.box[3] - front.box[1]), null, 208, 2), path.join(ROOT, 'public/assets/sprites/paper/npc', f));
+    // NPC_ONLY (the harbour town's sheets): GPT drew some side/back rows bigger than the front, so each row is scaled
+    // to the front's 200 px on its own (its first frame) instead of one scale clipping them.
+    const k = NPC_ONLY ? grid.map((row) => 200 / (row[0].box[3] - row[0].box[1])) : 200 / (front.box[3] - front.box[1]);
+    save(layout(src, grid, k, null, 208, 2), path.join(ROOT, 'public/assets/sprites/paper/npc', f));
   }
 }
 
@@ -290,7 +299,7 @@ if (PAPER) {
 // it into the pair (src/client/cosmeticViews.ts, WingPair). Every cell puts the wing's root (the binding at its left
 // edge) at the cell's left edge, half way down, so the game can turn and mirror each frame around it. One scale for the
 // sheet: the front view's first frame 160 px tall, on the class sheets' scale (a body is 200 px).
-for (const id of COSMETICS.filter((c) => c.startsWith('wings_'))) {
+for (const id of NPC_ONLY ? [] : COSMETICS.filter((c) => c.startsWith('wings_'))) {
   const file = path.join(COS_RAW, `${id}_one.png`);
   if (!fs.existsSync(file)) continue;
   const src = key(read(file));
