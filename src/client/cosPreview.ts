@@ -68,6 +68,13 @@ const CSS = `
 .cosp .modal > div { background: #1b2030; border: 1px solid #4a5570; border-radius: 6px; padding: 12px; width: min(620px, 92%); max-height: 80%; display: flex; flex-direction: column; box-sizing: border-box; }
 .cosp .modal .list { overflow: auto; flex: 1; margin: 6px 0; border: 1px solid #2c3343; padding: 4px 6px; }
 .cosp .modal .list label { display: block; padding: 2px 0; }
+/* The /admin page styles every input/select/button big and full width: keep the bench's own sizes so names are not covered. */
+.cosp select, .cosp input[type=number], .cosp textarea { width: auto; min-height: 0; padding: 2px 4px; font-size: 13px; }
+.cosp input[type=range] { width: auto; min-height: 0; padding: 0; border: 0; background: none; }
+.cosp button { min-height: 0; font-size: 13px; box-shadow: none; }
+.cosp .row label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cosp .row > select { flex-shrink: 1; min-width: 0; max-width: 62%; }
+.cosp .val { width: 64px; }
 `;
 
 /**

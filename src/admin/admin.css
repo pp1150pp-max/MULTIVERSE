@@ -160,7 +160,7 @@ input[type="checkbox"]:disabled, input[type="radio"]:disabled { opacity: 0.45; c
 main { padding: 18px 20px 40px; max-width: 1200px; width: 100%; margin: 0 auto; min-width: 0; }
 @media (max-width: 600px) { main { padding: 12px 10px 40px; } }
 .orb-bench { height: calc(100vh - var(--top-h) - 60px); min-height: 480px; border: 1px solid var(--edge-dim); border-radius: 6px; }
-/* The orb bench uses the whole screen width (owner 2026-11-24). */
+/* The orb and cosmetics benches use the whole screen width (owner 2026-11-24). */
 main.wide { max-width: none; }
 
 .card { background: var(--panel); border: 1px solid var(--edge-dim); border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; scroll-margin-top: calc(var(--top-h) + 60px); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); }
