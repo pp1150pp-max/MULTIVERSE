@@ -95,6 +95,18 @@ const BEACH_PROPS = [
 ];
 /** Floor 2's move effects (sim/beachMoves.ts, cannonCrab.ts: Sim fx 'sprite' and the crab's cannonballs), paper only. */
 const BEACH_FX = ['fx_cannonball', 'fx_warn_ring', 'fx_chain_bolt', 'fx_shock', 'fx_spike_burst', 'fx_shell_guard'];
+/**
+ * Floor 2's Smugglers' Cove (FLOOR2_M2_COVE.md, tools/cut_papercraft.cjs floor2_m2): paper only, under sprites/paper/props/.
+ * The room kit has one pillar, a mast and the gunboats the captain's parrot calls (Terrain.placeRoom ROOM_KIT).
+ */
+const COVE_PROPS = [
+  'cliff_palm_0', 'cliff_palm_1', 'cliff_rock_0', 'cliff_rock_1', 'cliff_rock_2', 'cave_mouth', 'tent_0', 'tent_1', 'stilt_hut', 'small_falls',
+  'thicket_0', 'thicket_1', 'powder_keg', 'smuggled_crates', 'rum_barrel', 'pirate_lantern', 'wanted_board', 'cliff_cannon', 'cannonball_pile',
+  'smuggler_flag', 'cargo_net', 'bottles', 'loot_chest', 'pirate_boat', 'summoner_captain', 'decor_cove', 'island_cliff_cove', 'island_slabs_cove',
+  ...['gunboat', 'wall', 'brazier', 'boulder', 'pillar', 'rubble', 'mast', 'tree'].map((n) => `room_cove_${n}`),
+];
+/** The cove's move effects (sim/coveMoves.ts, peglegCaptain.ts): thrown ball, bomb, pellets, blast, anchor, shout, parrot mark. Paper only. */
+const COVE_FX = ['fx_iron_ball', 'fx_bomb', 'fx_explosion', 'fx_anchor', 'fx_pellets', 'fx_shout_ring', 'fx_parrot_mark', 'fx_ship_shell'];
 /** The harbour's NPC sheets and the navigator's (SHEET_SPECS keys): paper only. */
 const PAPER_ONLY_NPC = new Set(['hb_supply_merchant', 'hb_dock_keeper', 'hb_shipwright', 'hb_harbor_broker', 'hb_smuggler_npc', 'navigator']);
 const PAPER_GROUND = new Set(['grass', 'dirt', 'pave', 'room_forest', 'marsh', 'mud', 'water', 'room_marsh',
@@ -216,6 +228,16 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   cannon_crab: monster('monsters/cannon_crab.png', () => makeSheet(56, drawQuad(['#d8502a', '#7a2410', '#c89a5a', '#2a1410'], {
     bodyRx: 0.4, bodyRy: 0.2, head: 0.1, ears: 'small', earSize: 0.03, tail: 'none', legLen: 0.08, legW: 0.08, snout: 0.03, tusks: true, belly: true,
   }))),
+  // Floor 2, Smugglers' Cove: paper sheets only (sprites/paper/monsters/, 3 moves for the two prisoners). Placeholders until then;
+  // the captain stays one until the owner's own pictures (his cut sheets are named peg_captain).
+  prisoner: monster('monsters/prisoner.png', () => makeSheet(36, drawSlime(['#e8e8e0', '#2a2a2a', '#8a8a8a']))),
+  cutlass_pirate: monster('monsters/cutlass_pirate.png', () => makeSheet(36, drawSlime(['#c83a2a', '#6a1a10', '#f2e2c0']))),
+  shotgunner: monster('monsters/shotgunner.png', () => makeSheet(36, drawSlime(['#5a3e2c', '#2a1a10', '#e8d6a6']))),
+  keg_prisoner: monster('monsters/keg_prisoner.png', () => makeSheet(40, drawSlime(['#d8402a', '#2a2a2a', '#f2f2f2']))),
+  pegleg_captain: monster('monsters/pegleg_captain.png', () => makeSheet(56, drawQuad(['#8a1a1a', '#2a1410', '#d8a84a', '#1a0e0a'], {
+    bodyRx: 0.32, bodyRy: 0.26, head: 0.16, ears: 'small', earSize: 0.03, tail: 'none', legLen: 0.15, legW: 0.1, snout: 0.03, mane: true, belly: true,
+  }))),
+  parrot: monster('monsters/parrot.png', () => makeSheet(28, drawSlime(['#e83a2a', '#2a6ad8', '#f2c24a']))),
   fx_ember_bolt: single('fx/ember_bolt.png', drawEmberBolt),
 
   burnt_pillar_0: single('props/burnt_pillar_0.png', () => drawBurntPillar(0)),
@@ -341,6 +363,9 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   // Floor 2's Shipwreck Beach props and move effects: paper pictures only.
   ...Object.fromEntries(BEACH_PROPS.map((k) => [k, single(`paper/props/${k}.png`, () => drawRock(0))])),
   ...Object.fromEntries(BEACH_FX.map((k) => [k, single(`paper/fx/${k}.png`, () => drawRunestone())])),
+  // Floor 2's Smugglers' Cove props and move effects: paper pictures only.
+  ...Object.fromEntries(COVE_PROPS.map((k) => [k, single(`paper/props/${k}.png`, () => drawRock(0))])),
+  ...Object.fromEntries(COVE_FX.map((k) => [k, single(`paper/fx/${k}.png`, () => drawRunestone())])),
   // Floor 2's harbour town (Terrain.placeHarbor, tools/cut_papercraft.cjs floor2_hub): paper pictures only.
   ...Object.fromEntries(HARBOR_PROPS.map((k) => [k, single(`paper/props/${k}.png`, () => drawRock(0))])),
   // The harbour's NPCs and the navigator (also in nexus_city): paper sheets (src/shared/data/npcs.ts npcLook).
@@ -455,7 +480,8 @@ export type GroundTile = GroundTileName;
 export const groundTiles: Partial<Record<GroundTile, THREE.Texture>> = {};
 
 /** Ground tiles that exist only as paper (floor 2's): loaded from sprites/paper/ground/ whatever the art switch says. */
-const PAPER_ONLY_GROUND = new Set<string>(['harbor_plank', 'harbor_plaza', 'harbor_water', 'sky_day', 'sand', 'wreck', 'shallow', 'room_beach']);
+const PAPER_ONLY_GROUND = new Set<string>(['harbor_plank', 'harbor_plaza', 'harbor_water', 'sky_day', 'sand', 'wreck', 'shallow', 'room_beach',
+  'rock', 'boardwalk', 'cove_water', 'room_cove']);
 
 async function loadGroundTile(name: GroundTile): Promise<void> {
   try {
@@ -710,7 +736,8 @@ export function portraitSource(key: string): PortraitSource | undefined {
 
 async function loadAssets(): Promise<void> {
   // Paper monsters (tools/cut_paper_monsters.cjs): which ones exist, and how much taller each picture is drawn.
-  const paperMonsters: Record<string, { scale: number }> = paperMaps
+  // Floor 2's sheets name their moves instead (walk first, attack second; 4 frames each): as many columns as moves.
+  const paperMonsters: Record<string, { scale?: number; moves?: string[] }> = paperMaps
     ? await fetch(`${BASE}paper/monsters/meta.json`).then((r) => (r.ok ? r.json() : {})).catch(() => ({}))
     : {};
   // Everything at once: the files don't depend on each other.
@@ -724,7 +751,7 @@ async function loadAssets(): Promise<void> {
     loadPaperCosmetics(),
     ...(['grass', 'dirt', 'water', 'marsh', 'mud', 'pave', 'brick', 'snow', 'snow_path', 'ice', 'ash_rock', 'ash_path', 'lava',
       'room_forest', 'room_marsh', 'room_snow', 'room_volcano', 'harbor_plank', 'harbor_plaza', 'harbor_water', 'sky_day',
-      'sand', 'wreck', 'shallow', 'room_beach'] as const).map((n) => loadGroundTile(n)),
+      'sand', 'wreck', 'shallow', 'room_beach', 'rock', 'boardwalk', 'cove_water', 'room_cove'] as const).map((n) => loadGroundTile(n)),
     ...Object.entries(ANIM_SET_DIRS).map(([key, dir]) => loadCharSet(key, dir)),
     ...Object.entries(SHEET_SPECS).map(async ([key, spec]) => {
       let tex: THREE.Texture;
@@ -743,8 +770,8 @@ async function loadAssets(): Promise<void> {
           idleFrames = 4;
         } else if (monster) {
           tex = await loadTexture(`${BASE}paper/monsters/${key}.png`);
-          paperMonster = { walk: 4, attack: 4, scale: monster.scale };
-          cols = 8;
+          paperMonster = { walk: 4, attack: 4, scale: monster.scale ?? 1 };
+          cols = 4 * Math.max(2, monster.moves?.length ?? 2);
         } else {
           const paper = !paperMaps ? null
             : PAPER_PROPS.has(key) ? `${BASE}paper/props/${key}.png`

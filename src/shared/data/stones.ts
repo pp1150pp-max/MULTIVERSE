@@ -30,6 +30,7 @@ export const BOSS_KEY: Record<string, BossKey> = {
   yeti: 'key_yeti',
   volcano_heart: 'key_heart',
   cannon_crab: 'key_crab',
+  pegleg_captain: 'key_captain',
 };
 /** A phoenix feather at the merchant (owner: 1,000 G); it sells back for half, like potions. */
 export const PHOENIX_PRICE = 1000;
@@ -43,6 +44,7 @@ export const BOSS_QUEST_KEY: Record<string, QuestKey> = {
   yeti: 'qkey_yeti',
   volcano_heart: 'qkey_heart',
   cannon_crab: 'qkey_crab',
+  pegleg_captain: 'qkey_captain',
 };
 /** The Seeker's key quest: kill this many monsters of the boss's map (owner: 30). */
 export const QUEST_KILLS = 30;
@@ -61,11 +63,13 @@ const BASE_NAME: Record<BaseStoneKind, string> = {
   key_yeti: 'เขี้ยวเยติ',
   key_heart: 'แกนหัวใจลาวา',
   key_crab: 'ก้ามปูทอง',
+  key_captain: 'เข็มทิศชี้ขุมทรัพย์',
   qkey_bear: 'อุ้งเท้าหมี (เควส)',
   qkey_witch: 'ลูกแก้วแม่มดหนอง (เควส)',
   qkey_yeti: 'เขี้ยวเยติ (เควส)',
   qkey_heart: 'แกนหัวใจลาวา (เควส)',
   qkey_crab: 'ก้ามปูทอง (เควส)',
+  qkey_captain: 'เข็มทิศชี้ขุมทรัพย์ (เควส)',
   phoenix: 'ขนนกฟีนิกซ์',
   return_scroll: 'ม้วนคัมภีร์กลับเมือง',
   exp_scroll: 'ใบคูณ EXP 100%',
@@ -91,11 +95,13 @@ const BASE_DESC: Record<BaseStoneKind, string> = {
   key_yeti: keyDesc('เยติ', 'ดินแดนหิมะ'),
   key_heart: keyDesc('หัวใจภูเขาไฟ', 'เกาะภูเขาไฟ'),
   key_crab: keyDesc('ปูยักษ์กระดองปืนใหญ่', 'หาดเรือแตก'),
+  key_captain: keyDesc('กัปตันขาไม้', 'อ่าวลักลอบ'),
   qkey_bear: questDesc('หมี'),
   qkey_witch: questDesc('แม่มดหนอง'),
   qkey_yeti: questDesc('เยติ'),
   qkey_heart: questDesc('หัวใจภูเขาไฟ'),
   qkey_crab: questDesc('ปูยักษ์กระดองปืนใหญ่', 'นักเดินเรือแห่งมิติ'),
+  qkey_captain: questDesc('กัปตันขาไม้', 'นักเดินเรือแห่งมิติ'),
   phoenix: 'ใช้ตอนล้มในห้องบอส: ฟื้นตรงที่ล้มด้วย HP/MP ครึ่งหนึ่ง (1 อันต่อครั้ง ใช้ได้สูงสุด 3 ครั้งต่อกุญแจที่ใส่)',
   return_scroll: 'ร่าย 3 วินาทีแล้ววาร์ปกลับกลางเมืองของชั้นที่อยู่ (ปุ่ม G หรือคลิก) · โดนโจมตี เดิน ตี หรือใช้สกิลระหว่างร่าย = ยกเลิก ม้วนไม่หาย',
   exp_scroll: 'คลิกเพื่อใช้: EXP ที่ได้ ×2 (รวมส่วนแบ่งปาร์ตี้และตอนเปิด Auto) นาน 30 นาทีที่ออนไลน์ · ใช้ซ้อนได้ บวกเวลาเพิ่ม สูงสุด 5 ชั่วโมง',
@@ -114,11 +120,13 @@ const BASE_COLOR: Record<BaseStoneKind, string> = {
   key_yeti: '#cfeeff',
   key_heart: '#ff6a3a',
   key_crab: '#ffc94a',
+  key_captain: '#e8b04a',
   qkey_bear: '#9ad86a',
   qkey_witch: '#6fd8b0',
   qkey_yeti: '#cfeeff',
   qkey_heart: '#ff6a3a',
   qkey_crab: '#ffc94a',
+  qkey_captain: '#e8b04a',
   phoenix: '#ff9a3a',
   return_scroll: '#5fe0d0',
   exp_scroll: '#7ee06a',
