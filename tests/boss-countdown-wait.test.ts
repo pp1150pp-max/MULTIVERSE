@@ -107,6 +107,7 @@ function run(sim: Sim, sec: number): void {
   ok(sim.waiting && sim.bossAt === null && bossIn(sim, 1) === undefined, 'no countdown before anyone has loaded');
   ok(wait(sim, 1)?.ready === 0 && wait(sim, 1)?.total === 3, 'the players see "0/3 loaded"');
   run(sim, 3);
+  ok(!sim.cleared && rooms.run(sim)?.endAt === null && !sim.monsters.some((m) => m.isBoss), 'no boss yet is not a beaten boss: no portal, no kick timer');
   rooms.loaded(1);
   rooms.loaded(1); // twice changes nothing
   rooms.loaded(99); // someone not in the room: nothing
