@@ -306,7 +306,8 @@ function eventPos(ev: SimEvent, sim: Sim): Vec2 | null {
 
 /** While the server itself is moving (or holding) a character, the client's reported position is ignored. */
 function serverMoves(p: Player): boolean {
-  return !p.alive || p.isDashing || p.stunT > 0 || p.rootT > 0 || p.snareT > 0 || Math.abs(p.kbx) + Math.abs(p.kbz) > 0.05;
+  // charmT: a ghost siren's song walks them (sim/graveMoves.ts); the browser glides along instead of fighting it.
+  return !p.alive || p.isDashing || p.stunT > 0 || p.rootT > 0 || p.snareT > 0 || p.charmT > 0 || Math.abs(p.kbx) + Math.abs(p.kbz) > 0.05;
 }
 
 /** Input older than this is treated as "let go of everything" so a stalled client doesn't keep walking. */
@@ -2531,6 +2532,7 @@ export class GameWorld {
         x: r2(m.x), z: r2(m.z), fx: r2(m.faceX), fz: r2(m.faceZ), mv: m.moving,
         alive: m.alive, deadT: r2(m.deadT), hp: Math.round(m.hp),
         st: m.state, wind: m.windupT > 0, enr: m.enraged, y: r2(m.lift),
+        ...(m.fade ? { inv: 1 as const } : {}),
         ...debuffField(m, sim.time, s.player.id),
         ...withLook<MonsterLook>(s.seenM, nextM, m.id, monsterLook(m, looks)),
       })),
@@ -2539,7 +2541,9 @@ export class GameWorld {
         vx: r2(Math.cos(pr.o.angle) * pr.o.speed), vz: r2(Math.sin(pr.o.angle) * pr.o.speed),
         color: pr.o.color, size: pr.o.size, art: pr.o.art,
       })),
-      ...(sim.hazards.length && sim.zone.boss && near(sim.zone.boss) ? { hazards: sim.hazards } : {}),
+      ...(!sim.hazards.length ? {} : sim.zone.boss ? (near(sim.zone.boss) ? { hazards: sim.hazards } : {})
+        // Field maps: the ground hazards near this player (the Ghost Ship Graveyard's curse rings).
+        : { hazards: sim.hazards.filter(near) }),
       room: this.rooms.snap(sim, p),
       waves: this.waveRooms.snap(sim, p),
       loots: sim.loots.filter(near).map((l) => ({

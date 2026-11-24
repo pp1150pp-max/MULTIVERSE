@@ -107,6 +107,18 @@ const COVE_PROPS = [
 ];
 /** The cove's move effects (sim/coveMoves.ts, peglegCaptain.ts): thrown ball, bomb, pellets, blast, anchor, shout, parrot mark. Paper only. */
 const COVE_FX = ['fx_iron_ball', 'fx_bomb', 'fx_explosion', 'fx_anchor', 'fx_pellets', 'fx_shout_ring', 'fx_parrot_mark', 'fx_ship_shell'];
+/**
+ * Floor 2's Ghost Ship Graveyard (FLOOR2_M3_GRAVEYARD.md, tools/cut_papercraft.cjs floor2_m3): paper only, under sprites/paper/props/.
+ * The room kit has a figurehead and a mast instead of a rune stone and a tree (Terrain.placeRoom ROOM_KIT).
+ */
+const GRAVE_PROPS = [
+  'wreck_hull_0', 'wreck_hull_1', 'ghost_mast', 'bell_mast', 'mossy_rock_0', 'mossy_rock_1', 'ghost_lamp_post', 'slime_post', 'wreck_small',
+  'rotten_stump', 'broken_rail', 'figurehead', 'candles', 'skull_barrel', 'skull_pile', 'net', 'rotten_chest', 'rusty_anchor', 'green_lantern',
+  'grave_marker', 'torn_flag', 'rope_coil', 'spirit_bottle', 'fallen_bell', 'summoner_ghost', 'decor_graveyard', 'island_cliff_graveyard',
+  'island_slabs_graveyard', ...['pillar_0', 'pillar_1', 'wall', 'brazier', 'boulder', 'rubble', 'mast', 'figurehead'].map((n) => `room_grave_${n}`),
+];
+/** The graveyard's move effects (sim/graveMoves.ts, ghostCaptain.ts): skull, curse ring, song, pull, mist, bell, ghost puff, shell burst. */
+const GRAVE_FX = ['fx_ghost_skull', 'fx_curse_ring', 'fx_music_notes', 'fx_siren_pull', 'fx_mist', 'fx_bell_waves', 'fx_spirit_puff', 'fx_shell_burst'];
 /** The harbour's NPC sheets and the navigator's (SHEET_SPECS keys): paper only. */
 const PAPER_ONLY_NPC = new Set(['hb_supply_merchant', 'hb_dock_keeper', 'hb_shipwright', 'hb_harbor_broker', 'hb_smuggler_npc', 'navigator']);
 const PAPER_GROUND = new Set(['grass', 'dirt', 'pave', 'room_forest', 'marsh', 'mud', 'water', 'room_marsh',
@@ -238,6 +250,16 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
     bodyRx: 0.32, bodyRy: 0.26, head: 0.16, ears: 'small', earSize: 0.03, tail: 'none', legLen: 0.15, legW: 0.1, snout: 0.03, mane: true, belly: true,
   }))),
   parrot: monster('monsters/parrot.png', () => makeSheet(28, drawSlime(['#e83a2a', '#2a6ad8', '#f2c24a']))),
+  // Floor 2, Ghost Ship Graveyard: paper sheets (sprites/paper/monsters/, moves named in meta.json), every one a teal ghost.
+  // The captain uses his cut sheet ghost_captain (owner 2026-11-24) until the owner makes another.
+  ghost_monkey: monster('monsters/ghost_monkey.png', () => makeSheet(32, drawSlime(['#7fe0d0', '#2a6a6a', '#d8fff4']))),
+  ghost_sailor: monster('monsters/ghost_sailor.png', () => makeSheet(36, drawSlime(['#6ad8c8', '#205a5a', '#d0fff0']))),
+  ghost_siren: monster('monsters/ghost_siren.png', () => makeSheet(36, drawSlime(['#8ae8e0', '#2a5a70', '#e0fff8']))),
+  barnacle_crew: monster('monsters/barnacle_crew.png', () => makeSheet(40, drawSlime(['#5ac8b0', '#1a4a48', '#c8f0e0']))),
+  barnacle_small: monster('monsters/barnacle_small.png', () => makeSheet(26, drawSlime(['#5ac8b0', '#1a4a48', '#c8f0e0']))),
+  ghost_captain: monster('monsters/ghost_captain.png', () => makeSheet(56, drawQuad(['#5ad8c0', '#1a3a3a', '#d8a84a', '#0e1a1a'], {
+    bodyRx: 0.32, bodyRy: 0.26, head: 0.16, ears: 'small', earSize: 0.03, tail: 'none', legLen: 0.15, legW: 0.1, snout: 0.03, mane: true, belly: true,
+  }))),
   fx_ember_bolt: single('fx/ember_bolt.png', drawEmberBolt),
 
   burnt_pillar_0: single('props/burnt_pillar_0.png', () => drawBurntPillar(0)),
@@ -366,6 +388,9 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   // Floor 2's Smugglers' Cove props and move effects: paper pictures only.
   ...Object.fromEntries(COVE_PROPS.map((k) => [k, single(`paper/props/${k}.png`, () => drawRock(0))])),
   ...Object.fromEntries(COVE_FX.map((k) => [k, single(`paper/fx/${k}.png`, () => drawRunestone())])),
+  // Floor 2's Ghost Ship Graveyard props and move effects: paper pictures only.
+  ...Object.fromEntries(GRAVE_PROPS.map((k) => [k, single(`paper/props/${k}.png`, () => drawRock(0))])),
+  ...Object.fromEntries(GRAVE_FX.map((k) => [k, single(`paper/fx/${k}.png`, () => drawRunestone())])),
   // Floor 2's harbour town (Terrain.placeHarbor, tools/cut_papercraft.cjs floor2_hub): paper pictures only.
   ...Object.fromEntries(HARBOR_PROPS.map((k) => [k, single(`paper/props/${k}.png`, () => drawRock(0))])),
   // The harbour's NPCs and the navigator (also in nexus_city): paper sheets (src/shared/data/npcs.ts npcLook).
@@ -481,7 +506,7 @@ export const groundTiles: Partial<Record<GroundTile, THREE.Texture>> = {};
 
 /** Ground tiles that exist only as paper (floor 2's): loaded from sprites/paper/ground/ whatever the art switch says. */
 const PAPER_ONLY_GROUND = new Set<string>(['harbor_plank', 'harbor_plaza', 'harbor_water', 'sky_day', 'sand', 'wreck', 'shallow', 'room_beach',
-  'rock', 'boardwalk', 'cove_water', 'room_cove']);
+  'rock', 'boardwalk', 'cove_water', 'room_cove', 'stone', 'rotten_deck', 'misty_water', 'room_grave']);
 
 async function loadGroundTile(name: GroundTile): Promise<void> {
   try {
@@ -751,7 +776,8 @@ async function loadAssets(): Promise<void> {
     loadPaperCosmetics(),
     ...(['grass', 'dirt', 'water', 'marsh', 'mud', 'pave', 'brick', 'snow', 'snow_path', 'ice', 'ash_rock', 'ash_path', 'lava',
       'room_forest', 'room_marsh', 'room_snow', 'room_volcano', 'harbor_plank', 'harbor_plaza', 'harbor_water', 'sky_day',
-      'sand', 'wreck', 'shallow', 'room_beach', 'rock', 'boardwalk', 'cove_water', 'room_cove'] as const).map((n) => loadGroundTile(n)),
+      'sand', 'wreck', 'shallow', 'room_beach', 'rock', 'boardwalk', 'cove_water', 'room_cove',
+      'stone', 'rotten_deck', 'misty_water', 'room_grave'] as const).map((n) => loadGroundTile(n)),
     ...Object.entries(ANIM_SET_DIRS).map(([key, dir]) => loadCharSet(key, dir)),
     ...Object.entries(SHEET_SPECS).map(async ([key, spec]) => {
       let tex: THREE.Texture;

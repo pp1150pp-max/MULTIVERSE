@@ -124,8 +124,8 @@ async function run(): Promise<void> {
     ok((await api(m, p, b, plain.token)).status === 403, `normal player → 403 on ${m} ${p}`);
   }
   const list = (await api('GET', '/admin/maps', undefined, gm.token)).data;
-  ok(list.maps.length === 14 && list.fromDb === true && list.maps.every((m: any) => m.publishedRev === null && m.draft === null), 'gm sees the 8 maps of floor 1 and 2 and their 6 boss rooms, nothing published or drafted');
-  ok(list.maps.filter((m: any) => m.of).map((m: any) => `${m.id}<${m.of}`).join() === 'emerald_forest_room<emerald_forest,misty_marsh_room<misty_marsh,frost_reach_room<frost_reach,ashen_isle_room<ashen_isle,shipwreck_beach_room<shipwreck_beach,smugglers_cove_room<smugglers_cove', 'each boss room is listed right after its field and says which field it belongs to');
+  ok(list.maps.length === 16 && list.fromDb === true && list.maps.every((m: any) => m.publishedRev === null && m.draft === null), 'gm sees the 9 maps of floor 1 and 2 and their 7 boss rooms, nothing published or drafted');
+  ok(list.maps.filter((m: any) => m.of).map((m: any) => `${m.id}<${m.of}`).join() === 'emerald_forest_room<emerald_forest,misty_marsh_room<misty_marsh,frost_reach_room<frost_reach,ashen_isle_room<ashen_isle,shipwreck_beach_room<shipwreck_beach,smugglers_cove_room<smugglers_cove,ghost_ship_graveyard_room<ghost_ship_graveyard', 'each boss room is listed right after its field and says which field it belongs to');
   ok((await api('GET', '/admin/maps/nope/draft', undefined, owner.token)).status === 404, 'unknown map → 404');
 
   // ---------------------------------------------------------- drafts are checked again on the server
@@ -263,7 +263,7 @@ async function run(): Promise<void> {
 
   // ---------------------------------------------------------- floor 2 (PR 9): the harbour, the beach and the crab's room edit like the rest
   // (as the owner: gm lost mapEdit above)
-  for (const id of ['harbor_town', 'shipwreck_beach', 'shipwreck_beach_room', 'smugglers_cove', 'smugglers_cove_room']) {
+  for (const id of ['harbor_town', 'shipwreck_beach', 'shipwreck_beach_room', 'smugglers_cove', 'smugglers_cove_room', 'ghost_ship_graveyard', 'ghost_ship_graveyard_room']) {
     const d = (await api('GET', `/admin/maps/${id}/draft`, undefined, owner.token)).data;
     ok(d.source === 'bundled' && d.map?.id === id && d.map.floor === 2 && d.issues.every((i: any) => i.severity === 'warn'), `${id}: opens from its bundled file (floor 2), no errors`);
     const edited: MapData = JSON.parse(JSON.stringify(d.map));

@@ -147,6 +147,25 @@ const THEME_PROPS: Record<ZoneTheme, ThemeProps> = {
     ringRock: ['cliff_rock_1', 2.2],
     campDecor: false,
   },
+  // Floor 2's Ghost Ship Graveyard (FLOOR2_M3_GRAVEYARD.md, cut by tools/cut_papercraft.cjs floor2_m3): rotting hulls and broken masts
+  // among mossy rocks, candles, skulls and teal ghost lanterns.
+  grave: {
+    trees: ['ghost_mast', 'slime_post', 'ghost_mast', 'mossy_rock_0'],
+    bushes: ['rope_coil', 'net'],
+    rocks: ['mossy_rock_0', 'mossy_rock_1'],
+    stump: 'rotten_stump',
+    tallStump: 'slime_post',
+    extra: ['wreck_hull_0', 'wreck_hull_1', 'bell_mast', 'ghost_lamp_post', 'wreck_small', 'broken_rail', 'figurehead', 'candles', 'skull_barrel',
+      'skull_pile', 'rotten_chest', 'rusty_anchor', 'green_lantern', 'grave_marker', 'torn_flag', 'spirit_bottle', 'fallen_bell'],
+    extraSize: {
+      wreck_hull_0: [4, 1.6], wreck_hull_1: [3.8, 1.4], bell_mast: [4.5, 0.5], ghost_lamp_post: [2.4, 0.25], wreck_small: [1.6, 1],
+      broken_rail: [1.4, 0.5], figurehead: [1.8, 0.6], candles: [0.7, 0.3], skull_barrel: [1.2, 0.4], skull_pile: [0.6, 0.3],
+      rotten_chest: [1, 0.5], rusty_anchor: [1.2, 0.6], green_lantern: [1.8, 0.2], grave_marker: [1.4, 0.2], torn_flag: [2.6, 0.2],
+      spirit_bottle: [0.6, 0.2], fallen_bell: [0.9, 0.5],
+    },
+    ringRock: ['mossy_rock_1', 2.2],
+    campDecor: false,
+  },
 };
 
 /**
@@ -155,6 +174,8 @@ const THEME_PROPS: Record<ZoneTheme, ThemeProps> = {
  */
 const ROOM_KIT: Partial<Record<ZoneTheme, Record<string, string>>> = {
   cove: { pillar_0: 'pillar', pillar_1: 'mast', rune_stone: 'boulder' },
+  // The graveyard's (floor2_m3) has a figurehead for the rune stone and a mast for the tree.
+  grave: { rune_stone: 'figurehead', tree: 'mast' },
 };
 /** Where the cove room's gunboats lie around the arena (angles from the boss; the way in is at π/4). */
 export const GUNBOAT_ANGLES = [Math.PI * 1.25, Math.PI * 0.72, Math.PI * 1.78];
@@ -171,6 +192,7 @@ export const SUMMONER_PROP: Record<ZoneTheme, string> = {
   volcano: 'summoner_volcano',
   beach: 'summoner_crab',
   cove: 'summoner_captain',
+  grave: 'summoner_ghost',
 };
 export const SUMMONER_HEIGHT = 3.6;
 export const SUMMONER_SOLID = 1.2;
@@ -361,8 +383,9 @@ export class Terrain {
   }
 
   /** Push a circle out of static colliders and keep it inside the zone. */
-  resolve(u: { x: number; z: number; radius: number }): void {
-    for (const c of this.colliders) {
+  /** `ghost`: passes through props (colliders and boxes) but still not through blockers or off the map. */
+  resolve(u: { x: number; z: number; radius: number }, ghost = false): void {
+    for (const c of ghost ? [] : this.colliders) {
       const dx = u.x - c.x;
       const dz = u.z - c.z;
       const min = c.r + u.radius;
@@ -375,7 +398,7 @@ export class Terrain {
         u.z += dz * push;
       }
     }
-    for (const b of this.boxes) this.pushOutOfBox(u, b);
+    if (!ghost) for (const b of this.boxes) this.pushOutOfBox(u, b);
     for (const poly of this.blockers) this.pushOutOfPoly(u, poly);
     u.x = Math.max(-this.bound, Math.min(this.bound, u.x));
     u.z = Math.max(-this.bound, Math.min(this.bound, u.z));

@@ -13,7 +13,7 @@ const holder = (level: number, keys: StoneKind[] = []): QuestHolder => ({
 const state = (p: QuestHolder, boss: string) => questRows(p).find((r) => r.boss === boss)?.state;
 
 const p = holder(5);
-ok(questRows(p).length === 6, 'one row per boss (4 on floor 1 + the floor-2 crab and captain)');
+ok(questRows(p).length === 7, 'one row per boss (4 on floor 1 + the floor-2 crab, captain and ghost captain)');
 ok(state(p, 'forest_bear') === 'offer', 'Lv.5: the bear is offered');
 ok(state(p, 'yeti') === 'locked', 'Lv.5: the yeti is locked');
 ok(seekerMark(questRows(p)) === '!', 'something to take: !');
