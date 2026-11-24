@@ -53,13 +53,13 @@ const run = (sim: Sim, secs: number) => {
   }
 }
 
-// ---- piers whose map isn't in the game yet are shut (map 1, Shipwreck Beach, is: tests/floor2-map1.test.ts), the lighthouse gate goes home
+// ---- piers whose map isn't in the game yet are shut (maps 1 and 2 are: tests/floor2-map1.test.ts, floor2-map2.test.ts), the lighthouse gate goes home
 {
   const sim = new Sim(ZONE_HARBOR);
   const p = sim.addPlayer(hero({ unlocks: [FLOOR2_UNLOCK] }));
   const shut = ZONE_HARBOR.portals.filter((pt) => pt.soonName && !ZONES[pt.to]);
   const pier = shut[0];
-  ok(ZONE_HARBOR.portals.filter((pt) => pt.soonName).length === 4 && shut.length === 3, 'four piers, three of their maps not built yet');
+  ok(ZONE_HARBOR.portals.filter((pt) => pt.soonName).length === 4 && shut.length === 2, 'four piers, two of their maps not built yet');
   p.x = pier.x + 6;
   p.z = pier.z;
   run(sim, 0.1);

@@ -133,7 +133,7 @@ async function run(): Promise<void> {
   const imp = await api('POST', '/admin/maps/new', { mode: 'import', map: MapRegistry.bundled('emerald_forest'), def: DEF }, owner.token);
   ok(imp.status === 200 && imp.data.id === 'c_test_field_2', 'an imported file makes a map; the same name gets _2');
   const list = (await api('GET', '/admin/maps', undefined, gm.token)).data.maps as any[];
-  ok(list.length === 15 && list.slice(12).every((m) => m.custom?.def?.id === m.id && m.custom.status === 'live' && m.publishedRev === null), 'the list has the 12 maps of the game (floor 1 and 2, boss rooms included), then the 3 new ones (not published)');
+  ok(list.length === 17 && list.slice(14).every((m) => m.custom?.def?.id === m.id && m.custom.status === 'live' && m.publishedRev === null), 'the list has the 14 maps of the game (floor 1 and 2, boss rooms included), then the 3 new ones (not published)');
 
   // ---------------------------------------------------------- out of the game until published
   ok((await api('GET', '/zones')).data.zones.length === 0, 'GET /api/zones: nothing until one is published');
