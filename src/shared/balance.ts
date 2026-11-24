@@ -78,6 +78,8 @@ export const CODE_HEART_BLAST_MIN_DIST = 6;
 export const CODE_HEART_BLAST_REACH = 0.7;
 /** Seconds between entering a boss room and its boss appearing (owner 2026-11-20: 13, was 5). */
 export const CODE_ROOM_BOSS_DELAY = 13;
+/** Longest wait (s) for everyone sent into a boss room / wave run to load the map before its countdown starts (owner 2026-11-24: 10). */
+export const CODE_ROOM_LOAD_WAIT = 10;
 /** Boss-room boss drops spread over the arena, wider the more pieces drop (owner 2026-11-22: on). Radius = base + k x sqrt(pieces), capped. */
 export const CODE_BOSS_LOOT_SPREAD = true;
 export const CODE_BOSS_LOOT_BASE = 2.5;
@@ -216,6 +218,8 @@ export interface Balance {
   roomWipeSec: number;
   /** Seconds a boss room counts down before its boss appears. */
   roomBossDelay: number;
+  /** Longest wait (s) for players to load a boss room / wave run before its countdown starts (0 = start at once). */
+  roomLoadWait: number;
   /** Volcano Heart blast: safe spots scattered over the arena (off = ring round the boss), how many, minimum distance from players, reach share. */
   heartBlastRandom: boolean;
   heartBlastSpots: number;
@@ -319,6 +323,8 @@ export interface BalanceTuning {
   roomWipeSec?: number;
   /** Boss countdown seconds, when not the code's. */
   roomBossDelay?: number;
+  /** Longest load wait before the countdown, when not the code's. */
+  roomLoadWait?: number;
   heartBlastRandom?: boolean;
   heartBlastSpots?: number;
   heartBlastMinDist?: number;
@@ -381,6 +387,7 @@ export const BALANCE_RANGE = {
   mobGiveUpSec: [0, 120],
   roomWipeSec: [3, 60],
   roomBossDelay: [0, 60],
+  roomLoadWait: [0, 60],
   heartBlastSpots: [1, 12],
   heartBlastMinDist: [0, 20],
   heartBlastReach: [0.3, 1],
@@ -439,6 +446,7 @@ export function codeBalance(): Balance {
     bossWipeKeepHp: CODE_BOSS_WIPE_KEEP_HP,
     roomWipeSec: CODE_ROOM_WIPE_SECONDS,
     roomBossDelay: CODE_ROOM_BOSS_DELAY,
+    roomLoadWait: CODE_ROOM_LOAD_WAIT,
     heartBlastRandom: CODE_HEART_BLAST_RANDOM,
     heartBlastSpots: CODE_HEART_BLAST_SPOTS,
     heartBlastMinDist: CODE_HEART_BLAST_MIN_DIST,
@@ -503,6 +511,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.bossWipeKeepHp !== undefined) b.bossWipeKeepHp = t.bossWipeKeepHp;
   if (t.roomWipeSec !== undefined) b.roomWipeSec = t.roomWipeSec;
   if (t.roomBossDelay !== undefined) b.roomBossDelay = t.roomBossDelay;
+  if (t.roomLoadWait !== undefined) b.roomLoadWait = t.roomLoadWait;
   if (t.heartBlastRandom !== undefined) b.heartBlastRandom = t.heartBlastRandom;
   if (t.heartBlastSpots !== undefined) b.heartBlastSpots = t.heartBlastSpots;
   if (t.heartBlastMinDist !== undefined) b.heartBlastMinDist = t.heartBlastMinDist;
@@ -671,7 +680,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'shopNoEquip', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'bagExpand', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'shopNoEquip', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'bagExpand', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -748,7 +757,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   }
 
   // Single numbers
-  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'roomWipeSec' | 'roomBossDelay' | 'bossLootBase' | 'bossLootK' | 'bossLootMax' | 'vipExpPct' | 'vipDropPct' | 'reviveGuardSec' | 'cdrCap' | 'heartBlastSpots' | 'heartBlastMinDist' | 'heartBlastReach', range: readonly [number, number], what: string): string | null => {
+  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'roomWipeSec' | 'roomBossDelay' | 'roomLoadWait' | 'bossLootBase' | 'bossLootK' | 'bossLootMax' | 'vipExpPct' | 'vipDropPct' | 'reviveGuardSec' | 'cdrCap' | 'heartBlastSpots' | 'heartBlastMinDist' | 'heartBlastReach', range: readonly [number, number], what: string): string | null => {
     const n = num(o[key], range[0], range[1], what);
     if (typeof n === 'string') return n;
     if (n !== undefined && n !== CODE[key]) out[key] = n;
@@ -1252,6 +1261,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     wipeKeep() ??
     one('roomWipeSec', BALANCE_RANGE.roomWipeSec, 'เวลาชุบตอนตายหมดทีม (วินาที)') ??
     one('roomBossDelay', BALANCE_RANGE.roomBossDelay, 'นับถอยหลังก่อนบอสเกิด (วินาที)') ??
+    one('roomLoadWait', BALANCE_RANGE.roomLoadWait, 'เวลารอผู้เล่นโหลดสูงสุด (วินาที)') ??
     heartRandom() ??
     one('heartBlastSpots', BALANCE_RANGE.heartBlastSpots, 'จำนวนจุดปลอดภัยของระเบิดใหญ่หัวใจภูเขาไฟ') ??
     one('heartBlastMinDist', BALANCE_RANGE.heartBlastMinDist, 'ระยะจุดปลอดภัยห่างผู้เล่นขั้นต่ำ') ??
@@ -1377,6 +1387,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.bossWipeKeepHp !== b.bossWipeKeepHp) out.push(`บอสไม่ฟื้นเลือดตอนทีมตายหมด ${a.bossWipeKeepHp ? 'เปิด' : 'ปิด'} → ${b.bossWipeKeepHp ? 'เปิด' : 'ปิด'}`);
   if (a.roomWipeSec !== b.roomWipeSec) out.push(`เวลาชุบตอนตายหมดทีม ${a.roomWipeSec} → ${b.roomWipeSec} วิ`);
   if (a.roomBossDelay !== b.roomBossDelay) out.push(`นับถอยหลังก่อนบอสเกิด ${a.roomBossDelay} → ${b.roomBossDelay} วิ`);
+  if (a.roomLoadWait !== b.roomLoadWait) out.push(`เวลารอผู้เล่นโหลดสูงสุด ${a.roomLoadWait} → ${b.roomLoadWait} วิ`);
   if (a.heartBlastRandom !== b.heartBlastRandom) out.push(`ระเบิดใหญ่หัวใจภูเขาไฟสุ่มจุดปลอดภัยทั่วลาน ${a.heartBlastRandom ? 'เปิด' : 'ปิด'} → ${b.heartBlastRandom ? 'เปิด' : 'ปิด'}`);
   if (a.heartBlastSpots !== b.heartBlastSpots) out.push(`จำนวนจุดปลอดภัยระเบิดใหญ่ ${a.heartBlastSpots} → ${b.heartBlastSpots}`);
   if (a.heartBlastMinDist !== b.heartBlastMinDist) out.push(`จุดปลอดภัยห่างผู้เล่นขั้นต่ำ ${a.heartBlastMinDist} → ${b.heartBlastMinDist}`);

@@ -171,23 +171,49 @@ export class Sim {
   readonly waveRun: { cfg: WaveConfig; wave: number; nextAt: number | null; ids: Set<number>; won: boolean } | null = null;
   /** Where getting up / leaving takes a player from this Sim (a wave run: back out by the door they came through). */
   private readonly exitTo: { field: string; x: number; z: number } | undefined;
+  /** The boss room's countdown (seconds; 0 = the boss is there from the start). */
+  private readonly bossDelay: number;
+  /**
+   * Opened with `hold`: the boss countdown / the countdown to wave 1 has not started yet — the server waits for everyone
+   * sent in to finish loading the map (or its longest wait), then calls startCountdown (owner 2026-11-24).
+   */
+  waiting = false;
 
-  /** `bossDelay`: seconds before the boss appears (a boss room's countdown, owner 2026-11-12). */
-  constructor(readonly zone: ZoneDef, opts: { keys?: number; bossDelay?: number; map?: MapData; waves?: WaveConfig; exit?: { field: string; x: number; z: number } } = {}) {
+  /**
+   * `bossDelay`: seconds before the boss appears (a boss room's countdown, owner 2026-11-12). `hold`: that countdown (and a
+   * wave run's countdown to wave 1) only starts on startCountdown.
+   */
+  constructor(readonly zone: ZoneDef, opts: { keys?: number; bossDelay?: number; hold?: boolean; map?: MapData; waves?: WaveConfig; exit?: { field: string; x: number; z: number } } = {}) {
     this.keys = Math.max(1, Math.floor(opts.keys ?? 1));
     this.boost = this.keys > 1 ? { ...(zone.monsterBoost ?? NO_BOOST), keys: this.keys } : zone.monsterBoost;
     this.terrain = opts.map ? new Terrain(zone, opts.map) : new Terrain(zone);
     this.exitTo = opts.exit;
     // A wave run brings its own monsters, in waves: the map's ordinary spawn rings stay empty.
-    if (opts.waves && zone.waves) this.waveRun = { cfg: { ...opts.waves }, wave: 0, nextAt: opts.waves.countdown, ids: new Set(), won: false };
+    const delay = zone.boss ? opts.bossDelay ?? 0 : 0;
+    this.bossDelay = delay;
+    const waveHold = !!opts.hold && !!opts.waves && !!zone.waves && opts.waves.countdown > 0;
+    this.waiting = !!opts.hold && (delay > 0 || waveHold);
+    if (opts.waves && zone.waves) this.waveRun = { cfg: { ...opts.waves }, wave: 0, nextAt: waveHold ? null : opts.waves.countdown, ids: new Set(), won: false };
     else zone.spawns.forEach((area, index) => this.spawners.push({ area, alive: 0, queue: [], boss: false, index }));
     if (zone.boss) this.spawners.push({ area: zone.boss, alive: 0, queue: [], boss: true, index: -1 });
-    const delay = zone.boss ? opts.bossDelay ?? 0 : 0;
-    if (delay > 0) this.bossAt = delay;
+    if (delay > 0 && !this.waiting) this.bossAt = delay;
     for (const sp of this.spawners) {
-      if (sp.boss && delay > 0) sp.queue.push(delay);
-      else for (let i = 0, n = this.wanted(sp); i < n; i++) this.spawnMonster(sp);
+      if (sp.boss && delay > 0) {
+        if (!this.waiting) sp.queue.push(delay);
+      } else for (let i = 0, n = this.wanted(sp); i < n; i++) this.spawnMonster(sp);
     }
+  }
+
+  /** Everyone has loaded (or the server stopped waiting): the boss countdown / the countdown to wave 1 starts now, at its full length. */
+  startCountdown(): void {
+    if (!this.waiting) return;
+    this.waiting = false;
+    if (this.bossDelay > 0) {
+      this.bossAt = this.time + this.bossDelay;
+      for (const sp of this.spawners) if (sp.boss) sp.queue.push(this.bossAt);
+    }
+    const w = this.waveRun;
+    if (w && w.wave === 0 && w.nextAt === null) w.nextAt = this.time + w.cfg.countdown;
   }
 
   /** How many monsters this spawner keeps: the code's count, ×the map's pack multiplier (/admin) unless it is a boss. */

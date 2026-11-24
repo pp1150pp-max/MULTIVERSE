@@ -117,7 +117,7 @@ export function showLoading(classId: ClassId | null, label = 'กำลังโ
  * Zone change: the new map is already built underneath, so the screen only covers the swap:
  * the bar runs to full, then the screen fades away.
  */
-export function flashZoneLoading(classId: ClassId): void {
+export function flashZoneLoading(classId: ClassId, onDone?: () => void): void {
   const screen = showLoading(classId, 'กำลังเดินทาง…');
   el().querySelector('.load-pct')?.remove();
   // Let the empty bar paint first so its CSS transition runs across the hold.
@@ -129,7 +129,11 @@ export function flashZoneLoading(classId: ClassId): void {
   }));
   fadeTimer = window.setTimeout(() => {
     el().classList.add('load-out');
-    hideTimer = window.setTimeout(() => screen.hide(), ZONE_FADE);
+    hideTimer = window.setTimeout(() => {
+      screen.hide();
+      // Not called when another loading screen replaced this one (showLoading clears the timers).
+      onDone?.();
+    }, ZONE_FADE);
   }, ZONE_HOLD);
 }
 

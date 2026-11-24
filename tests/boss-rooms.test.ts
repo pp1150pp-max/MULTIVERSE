@@ -208,6 +208,10 @@ const lastSaid = (id: number) => said.filter(([c]) => c === id).at(-1)?.[1] ?? '
   applyBalance({ roomBossDelay: 7 });
   rooms2.open(2, 1);
   applyBalance({});
+  // The countdown starts once each player's map is up (server/loadGate.ts, owner 2026-11-24).
+  ok(chars.get(2)!.sim.bossAt === null && a.sim.bossAt === null && rooms2.snap(a.sim, a.player)?.bossWait?.total === 1, 'waiting for the map to load');
+  rooms2.loaded(1);
+  rooms2.loaded(2);
   ok(chars.get(2)!.sim.bossAt === 7 && a.sim.bossAt === ROOM_BOSS_DELAY, 'the countdown follows the /admin seconds');
   ok(rooms2.run(chars.get(2)!.sim)?.channel === 2 && chars.get(2)!.sim !== a.sim, 'the next group gets its own copy, channel 2');
   ok(rooms2.snap(a.sim, a.player)?.channel === 1 && rooms2.snap(field, a.player) === undefined, 'snapshots carry the room');

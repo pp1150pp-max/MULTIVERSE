@@ -1490,6 +1490,7 @@ export class OnlineBackend implements Backend {
   buyPhoenix(n: number): void { this.send({ t: 'act', a: 'buyPhoenix', n }); }
   roomRevive(): void { this.send({ t: 'act', a: 'roomRevive' }); }
   roomLeave(): void { this.send({ t: 'act', a: 'roomLeave' }); }
+  zoneReady(): void { this.send({ t: 'act', a: 'zoneReady' }); }
   roomAnswer(id: number, yes: boolean): void { this.send({ t: 'act', a: 'roomAnswer', id, yes }); }
   roomStart(): void { this.send({ t: 'act', a: 'roomStart' }); }
   roomCancel(): void { this.send({ t: 'act', a: 'roomCancel' }); }
