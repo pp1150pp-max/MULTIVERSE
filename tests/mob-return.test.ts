@@ -24,7 +24,9 @@ const setup = () => {
   p.stats.maxHp = p.hp = 1e9;
   const m = sim.monsters.find((x) => !x.isBoss && x.def.pack) as Monster;
   const key = m.def.packId ?? m.def.id;
-  const mate = sim.monsters.find((o) => o !== m && (o.def.packId ?? o.def.id) === key) as Monster;
+  // The mate whose home is farthest from where it is dragged to (beside m), so it is still walking home when the test looks.
+  const away = (o: Monster) => Math.hypot(o.area.x - (m.area.x + 33), o.area.z - (m.area.z + 3));
+  const mate = sim.monsters.filter((o) => o !== m && (o.def.packId ?? o.def.id) === key).sort((a, b) => away(b) - away(a))[0];
   m.x = m.area.x + 30;
   m.z = m.area.z;
   p.x = m.x + 2;

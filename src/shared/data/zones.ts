@@ -241,7 +241,7 @@ function scatterZone(z: ZoneDef, list: Scatter[]): ZoneDef {
     const squad = s.group.length > 1 || s.group[0][1] > 1;
     const apart = squad ? 9 : 6.5;
     let n = 0;
-    for (let tries = 0; tries < 5000 && n < s.count; tries++) {
+    for (let tries = 0; tries < 20000 && n < s.count; tries++) {
       const x = -B + r() * 2 * B;
       const y = -B + r() * 2 * B;
       const p = progress(x, y);
@@ -263,7 +263,39 @@ function scatterZone(z: ZoneDef, list: Scatter[]): ZoneDef {
   return { ...z, spawns };
 }
 
-export const ZONE_1: ZoneDef = scatterZone({
+/**
+ * Floor 1's four farm maps are this much bigger each way than they were drawn (owner 2026-11-24: x1.5 a side, about
+ * 2.25x the area; the towns, boss rooms, floor 2 and editor-made maps keep their size). grownFarm() scales the drawing
+ * (size, camp, roads, summoner, lakes and pools; the portal back stays beside the camp) before scatterZone, and FARM_DENSITY gives each kind of
+ * monster that many more spots so the map is as full as before. Trees and decor follow by themselves (Terrain.placeProps
+ * fills by area). The seed and the arena stay: the boss rooms are built from those (bossRoom()).
+ */
+export const FARM_SCALE = 1.5;
+const FARM_DENSITY = FARM_SCALE * FARM_SCALE;
+
+function grownFarm(z: ZoneDef): ZoneDef {
+  const k = FARM_SCALE;
+  const pt = <T extends { x: number; z: number }>(o: T): T => ({ ...o, x: o.x * k, z: o.z * k });
+  const ellipse = <T extends { x: number; z: number; rx: number; rz: number }>(o: T): T => ({ ...pt(o), rx: o.rx * k, rz: o.rz * k });
+  const line = (pts: [number, number][]) => pts.map(([x, y]) => [x * k, y * k] as [number, number]);
+  return {
+    ...z,
+    half: z.half * k,
+    start: pt(z.start),
+    path: line(z.path),
+    branches: z.branches.map(line),
+    lair: z.lair && pt(z.lair),
+    // The camp keeps its size, so the portal back keeps its place beside it (moves with the camp, not out from the middle).
+    portals: z.portals.map((p) => ({ ...p, x: z.start.x * k + (p.x - z.start.x), z: z.start.z * k + (p.z - z.start.z) })),
+    iceLakes: z.iceLakes?.map(ellipse),
+    lavaPools: z.lavaPools?.map(ellipse),
+  };
+}
+
+/** A farm map's monster list with FARM_DENSITY times as many spots of each kind. */
+const denser = (list: Scatter[]): Scatter[] => list.map((s) => ({ ...s, count: Math.round(s.count * FARM_DENSITY) }));
+
+export const ZONE_1: ZoneDef = scatterZone(grownFarm({
   id: 'emerald_forest',
   name: 'Emerald Forest',
   nameTh: 'ป่ามรกต',
@@ -285,16 +317,16 @@ export const ZONE_1: ZoneDef = scatterZone({
   spawns: [],
   lair: { boss: 'forest_bear', x: -42, z: -42 },
   portals: [{ to: HUB_ID, x: 49.5, z: 49.5, minLevel: 0 }],
-}, [
+}), denser([
   { group: [['green_slime', 1]], count: 14, respawn: [6, 10] },
   { group: [['wild_rabbit', 1]], count: 8, respawn: [7, 11] },
   { group: [['forest_fox', 1]], count: 9, respawn: [8, 12] },
   { group: [['wild_boar', 1]], count: 8, respawn: [9, 14] },
   { group: [['forest_wolf', 1]], count: 8, respawn: [10, 15] },
-]);
+]));
 
 // Reached from the hub's right portal, so the camp is on the left.
-export const ZONE_2: ZoneDef = rotateZone(1, scatterZone({
+export const ZONE_2: ZoneDef = rotateZone(1, scatterZone(grownFarm({
   id: 'misty_marsh',
   name: 'Misty Marsh',
   nameTh: 'หนองน้ำหมอก',
@@ -318,16 +350,16 @@ export const ZONE_2: ZoneDef = rotateZone(1, scatterZone({
   spawns: [],
   lair: { boss: 'bog_witch', x: -42, z: -42 },
   portals: [{ to: HUB_ID, x: 49.5, z: 49.5, minLevel: 0 }],
-}, [
+}), denser([
   { group: [['bog_toad', 1]], count: 12, respawn: [7, 11] },
   { group: [['marsh_leech', 1]], count: 8, respawn: [8, 12] },
   { group: [['swamp_serpent', 1]], count: 8, respawn: [9, 13] },
   { group: [['mire_ghoul', 1]], count: 8, respawn: [10, 14] },
   { group: [['will_o_wisp', 1]], count: 8, respawn: [10, 15] },
-]));
+])));
 
 // Reached from the hub's bottom portal, so the camp is at the top.
-export const ZONE_3: ZoneDef = rotateZone(2, scatterZone({
+export const ZONE_3: ZoneDef = rotateZone(2, scatterZone(grownFarm({
   id: 'frost_reach',
   name: 'Frost Reach',
   nameTh: 'ดินแดนหิมะ',
@@ -356,17 +388,17 @@ export const ZONE_3: ZoneDef = rotateZone(2, scatterZone({
     { x: 34, z: -32, rx: 11, rz: 8 },
     { x: 3, z: -7, rx: 5.5, rz: 4 },
   ],
-}, [
+}), denser([
   { group: [['frost_penguin', 1]], count: 12, respawn: [8, 12] },
   { group: [['tusk_seal', 1]], count: 8, respawn: [10, 14] },
   { group: [['snow_owl', 1]], count: 8, respawn: [10, 14] },
   // Squads of 1 sprite shooting from behind 2 brawlers.
   { group: [['snow_sprite', 1], ['snow_brawler', 2]], count: 3, respawn: [10, 15] },
   { group: [['polar_bear', 1]], count: 4, respawn: [16, 22] },
-]));
+])));
 
 // Reached from the hub's left portal, so the camp is on the right.
-export const ZONE_4: ZoneDef = rotateZone(3, scatterZone({
+export const ZONE_4: ZoneDef = rotateZone(3, scatterZone(grownFarm({
   id: 'ashen_isle',
   name: 'Ashen Isle',
   nameTh: 'เกาะภูเขาไฟ',
@@ -397,14 +429,14 @@ export const ZONE_4: ZoneDef = rotateZone(3, scatterZone({
     { x: -8, z: 22, rx: 5, rz: 3.5 },
     { x: -34, z: -4, rx: 6, rz: 4 },
   ],
-}, [
+}), denser([
   { group: [['ember_wisp', 1]], count: 12, respawn: [8, 12] },
   { group: [['salamander', 1]], count: 8, respawn: [10, 14] },
   { group: [['lava_bat', 1]], count: 8, respawn: [10, 14] },
   // A mage casting from behind a knight.
   { group: [['ash_mage', 1], ['ash_knight', 1]], count: 4, respawn: [10, 15] },
   { group: [['magma_golem', 1]], count: 6, respawn: [14, 20] },
-]));
+])));
 
 /** Where the hub's portals sit: one per corner, this far out on each axis. */
 const HUB_PORTAL = 54.5;
