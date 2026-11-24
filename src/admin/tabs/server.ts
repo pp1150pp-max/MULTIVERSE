@@ -30,7 +30,7 @@ async function renderRestart(): Promise<void> {
       status.className = 'msg';
       status.textContent = '';
     }
-    restart.title = st.supervised ? '' : 'server นี้ไม่ได้เปิดด้วย npm run online';
+    restart.title = st.supervised ? '' : 'server นี้ไม่ได้เปิดผ่านตัวคุม (npm run online / always-on)';
     if (!st.supervised) restart.disabled = true;
     if (st.stopping) {
       status.className = 'msg bad';
@@ -69,14 +69,14 @@ async function renderRestart(): Promise<void> {
   stop.onclick = () => void go('shutdown', stop);
   const note = h('div', { class: 'muted', style: 'margin:-6px 0 10px' },
     `ทั้งสองแบบ: ผู้เล่นเห็นคำเตือนนับถอยหลังตามเวลาที่เลือก (${countdownTime(SHUTDOWN_CHOICES[0])}–${countdownTime(SHUTDOWN_CHOICES[SHUTDOWN_CHOICES.length - 1])}) และเข้าเกมใหม่ไม่ได้ระหว่างนั้น แล้ว server เซฟทุกคนก่อนตัดการเชื่อมต่อ · `
-    + 'รีสตาร์ท = เปิดใหม่ด้วยโค้ดที่ build ไว้แล้ว (ไม่ build ใหม่) ลิงก์เพื่อนไม่เปลี่ยน · ปิด server = ปิดเลย ต้องเปิดใหม่เองที่เครื่อง');
+    + 'รีสตาร์ท = เปิดใหม่ด้วยโค้ดที่ build ไว้แล้ว (ไม่ build ใหม่) ลิงก์เข้าเกมไม่เปลี่ยน · ปิด server = ปิดเลย ต้องเปิดใหม่เองที่เครื่อง server (VPS: ssh แล้ว systemctl start multiverse)');
   view.append(h('div', { class: 'card' }, h('h2', {}, 'รีสตาร์ท / ปิด server'), note, h('div', { class: 'row' }, secs, restart, stop, cancel), status));
   try {
     const st = await api<AdminServerState>('GET', '/admin/server');
     draw(st);
     if (!st.supervised && !st.stopping) {
       status.className = 'msg';
-      status.textContent = 'server นี้ไม่ได้เปิดด้วย npm run online จึงรีสตาร์ทเองไม่ได้ (ปิดได้อย่างเดียว)';
+      status.textContent = 'server นี้ไม่ได้เปิดผ่านตัวคุม (npm run online / always-on) จึงรีสตาร์ทเองไม่ได้ (ปิดได้อย่างเดียว)';
     }
   } catch (e) {
     status.className = 'msg bad';

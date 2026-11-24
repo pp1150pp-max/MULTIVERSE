@@ -518,6 +518,15 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
 
   // ---------------------------------------------------------- ordinary monsters
   const monsterCard = h('div', { class: 'card' });
+  // Cards filled by more than one draw function (owner 2026-11-24: settings of one topic in one place).
+  // The holders (…Box) are kept across redraws; each draw function only replaces what is inside.
+  const bossCard = h('div', { class: 'card' });
+  const hubCard = h('div', { class: 'card' });
+  const vipCard = h('div', { class: 'card' });
+  const uiCard = h('div', { class: 'card' });
+  const bossFxBox = h('div');
+  const townBox = h('div');
+  const auraBox = h('div');
   /** The zone boost a monster kind spawns with (its spawn area's, else its map's). */
   const boostOf = (def: MonsterDef): MonsterBoost => {
     for (const z of Object.values(ZONES)) {
@@ -625,10 +634,8 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         })))),
       h('h3', {}, 'การไล่เป้าหมาย'),
       h('div', { class: 'muted' },
-        'บอส: อยู่กับเป้าเดิมครบกี่วินาทีแล้วสุ่มเปลี่ยนไปหาผู้เล่นที่เคยตีบอสตัวนี้ (ยังมีชีวิต อยู่ห้องเดียวกัน ไม่ใช่เป้าเดิม) · เปลี่ยนตอนบอสว่างเท่านั้น (ไม่ขัดท่าที่กำลังง้าง/พุ่ง/กระโดด) · ไม่มีคนอื่น = ไม่เปลี่ยน · 0 = ปิด · ' +
         'มอนธรรมดา: ใส่เลขมากกว่า 0 = เลิกไล่เมื่อไม่โดนตีครบกี่วินาที แล้วเดินกลับบ้านฟื้น HP · 0 = ไม่เลิกไล่จนกว่าเป้าจะตาย/ออกแมพ/ถูกลากไกลเกินระยะวิ่งกลับ (ระยะนี้ยังทำงานเสมอ)'),
       h('div', { class: 'row bal-line' },
-        h('label', {}, 'บอสเปลี่ยนเป้าทุก (วินาที, 0 = ปิด)', numBox(() => draft.bossSwitchSec, (n) => { draft.bossSwitchSec = n; }, code.bossSwitchSec, ...BALANCE_RANGE.bossSwitchSec, 1, updateSummary)),
         h('label', {}, 'มอนธรรมดาเลิกไล่เมื่อไม่โดนตี (วินาที, 0 = ไม่เลิก)', numBox(() => draft.mobGiveUpSec, (n) => { draft.mobGiveUpSec = n; }, code.mobGiveUpSec, ...BALANCE_RANGE.mobGiveUpSec, 1, updateSummary)),
       ),
       h('div', { class: 'row bal-line' },
@@ -641,10 +648,14 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
           h('input', { type: 'checkbox', checked: draft.mobDropOnSafe, onchange: (e: Event) => { draft.mobDropOnSafe = (e.target as HTMLInputElement).checked; updateSummary(); } }),
           ' มอนเลิกไล่เมื่อผู้เล่นเข้าเมือง/safe zone (ทิ้งเป้าทันทีแล้วเดินกลับจุดเกิดของตัวเอง ไม่ไล่ซ้ำตราบที่ผู้เล่นอยู่ในเมือง · ผู้เล่นออกแมพหรือตายก็เดินกลับเช่นกัน · บอสไม่เกี่ยว · ปิด = พฤติกรรมเดิม)'),
       ),
+    );
+    // Boss rooms: everything about boss rooms in one card (owner 2026-11-24 "same topic together"); the bosses' skill effects come from drawCircles (bossFxBox).
+    bossCard.replaceChildren(
+      h('h2', {}, 'ห้องบอส'),
+      h('div', { class: 'muted' },
+        'บอสเปลี่ยนเป้า: อยู่กับเป้าเดิมครบกี่วินาทีแล้วสุ่มเปลี่ยนไปหาผู้เล่นที่เคยตีบอสตัวนี้ (ยังมีชีวิต อยู่ห้องเดียวกัน ไม่ใช่เป้าเดิม) · เปลี่ยนตอนบอสว่างเท่านั้น (ไม่ขัดท่าที่กำลังง้าง/พุ่ง/กระโดด) · ไม่มีคนอื่น = ไม่เปลี่ยน · 0 = ปิด'),
       h('div', { class: 'row bal-line' },
-        h('label', { title: 'ค่าในโค้ด: เปิด' },
-          h('input', { type: 'checkbox', checked: draft.hubChannels, onchange: (e: Event) => { draft.hubChannels = (e.target as HTMLInputElement).checked; updateSummary(); } }),
-          ' แบ่งห้องเมืองกลาง (เมืองกลางมี CH 1–10 เหมือนแมพฟาร์ม: ห้องละ 20 คน ลูกตี้ตามหัวตี้ 22 ระบบจัดห้องคนน้อยสุด ย้ายเองได้ · ปิด = ห้องเดียว (CH 1) แบบเดิม ไม่ย้ายใคร คนที่อยู่ CH 2 ขึ้นไปอยู่ห้องเดิมจนออกจากเมือง คนที่เข้าเมืองใหม่ไป CH 1 · เปิดอีกครั้ง = ใช้ตอนคนเข้าเมืองครั้งถัดไป)'),
+        h('label', {}, 'บอสเปลี่ยนเป้าทุก (วินาที, 0 = ปิด)', numBox(() => draft.bossSwitchSec, (n) => { draft.bossSwitchSec = n; }, code.bossSwitchSec, ...BALANCE_RANGE.bossSwitchSec, 1, updateSummary)),
       ),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
@@ -678,8 +689,21 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
           ' อมตะหลังชุบด้วยขนนกฟีนิกซ์ (ห้องบอส: ไม่โดนดาเมจ/สตัน/ผลัก/ติดโคลน/ช้า/คางคก ตัวกะพริบให้ทุกคนเห็น · หายทันทีเมื่อตีธรรมดา ใช้สกิล บัฟ หรือแดช · เดินและกินยาไม่หาย)'),
         h('label', {}, 'เวลาอมตะ (วินาที)', numBox(() => draft.reviveGuardSec, (n) => { draft.reviveGuardSec = n; }, code.reviveGuardSec, ...BALANCE_RANGE.reviveGuardSec, 1, updateSummary)),
       ),
+      bossFxBox,
+    );
+    hubCard.replaceChildren(
+      h('h2', {}, 'เมืองกลาง'),
       h('div', { class: 'row bal-line' },
-        h('span', { class: 'muted' }, 'VIP (ซื้อในแคชช็อป ผูกบัญชี · ซ้อนกับใบคูณ ×2 ได้ · เทรดไม่จำกัด)'),
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.hubChannels, onchange: (e: Event) => { draft.hubChannels = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' แบ่งห้องเมืองกลาง (เมืองกลางมี CH 1–10 เหมือนแมพฟาร์ม: ห้องละ 20 คน ลูกตี้ตามหัวตี้ 22 ระบบจัดห้องคนน้อยสุด ย้ายเองได้ · ปิด = ห้องเดียว (CH 1) แบบเดิม ไม่ย้ายใคร คนที่อยู่ CH 2 ขึ้นไปอยู่ห้องเดิมจนออกจากเมือง คนที่เข้าเมืองใหม่ไป CH 1 · เปิดอีกครั้ง = ใช้ตอนคนเข้าเมืองครั้งถัดไป)'),
+      ),
+      townBox,
+    );
+    vipCard.replaceChildren(
+      h('h2', {}, 'VIP: โบนัส EXP/ดรอป'),
+      h('div', { class: 'muted' }, 'VIP ซื้อในแคชช็อป ผูกบัญชี · ซ้อนกับใบคูณ ×2 ได้ · เทรดไม่จำกัด · แพ็กวันและราคาตั้งในแท็บ ', h('a', { href: '#cashShop' }, 'แคชช็อป')),
+      h('div', { class: 'row bal-line' },
         h('label', { title: `ค่าในโค้ด: ${code.vipExpPct}% (ปัดลง)` }, 'โบนัส EXP %', numBox(() => draft.vipExpPct, (n) => { draft.vipExpPct = n; }, code.vipExpPct, ...BALANCE_RANGE.vipExpPct, 1, updateSummary)),
         h('label', { title: `ค่าในโค้ด: ${code.vipDropPct}%` }, 'โบนัสโอกาสดรอป %', numBox(() => draft.vipDropPct, (n) => { draft.vipDropPct = n; }, code.vipDropPct, ...BALANCE_RANGE.vipDropPct, 1, updateSummary)),
       ),
@@ -838,6 +862,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
           h('input', { type: 'checkbox', checked: draft.forgeAuto, onchange: (e: Event) => { draft.forgeAuto = (e.target as HTMLInputElement).checked; updateSummary(); } }),
           ' เปิดใช้ตีบวก Auto'),
       ),
+      auraBox,
     );
     outs.forEach((fn) => fn());
   };
@@ -947,7 +972,8 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     const num = (k: keyof typeof BAG_EXPAND_NUMS, step: number) =>
       h('label', {}, `${BAG_EXPAND_NUMS[k].name} `, numBox(() => b[k], (n) => { b[k] = BAG_EXPAND_NUMS[k].dp ? n : Math.round(n); }, cb[k], ...BAG_EXPAND_NUMS[k].range, step, refresh));
     bagCard.replaceChildren(
-      h('h2', {}, 'กระเป๋า'),
+      h('h2', {}, 'กระเป๋า ร้านค้า แชท'),
+      h('h3', {}, 'กระเป๋าและขยายช่อง'),
       h('div', { class: 'muted' }, 'กระเป๋ามี 2 แท็บ (เจ้าของ 2026-11-23): "กระเป๋า" ของสวมใส่ 30 ช่อง · "ประเภทใช้งาน" ยา หิน กุญแจ ขนนก ม้วน ใบคูณ โทรโข่ง กล่องปริศนา ลูกแก้ว 30 ช่อง · แท็บเต็ม = เก็บ/ซื้อ/รับไม่ได้'),
       h('div', { class: 'muted' }, 'ขยายช่อง: ปิด = ผู้เล่นไม่เห็นปุ่มและ server ไม่รับ · เปิด = ปุ่มใต้ช่องกระเป๋า ขยายทีละแท็บ ต่อตัวละคร · ครั้งที่ k (เริ่ม 0) ราคา = ราคาครั้งแรก × ตัวคูณ^k · คริสตัลหักใน transaction เดียวกับการเซฟ · Guest จ่ายคริสตัลไม่ได้'),
       h('div', { class: 'row bal-line' }, flag('on'), flag('gold'), flag('crystal')),
@@ -955,6 +981,20 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'row bal-line' }, num('goldBase', 1000), num('goldGrow', 0.1)),
       h('div', { class: 'row bal-line' }, num('crystalBase', 10), num('crystalGrow', 0.1)),
       out,
+      // Shop and chat switches (owner 2026-11-24: moved here from the Auto Play card, same save as before).
+      h('h3', {}, 'ร้านพ่อค้าและแชท'),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.shopNoEquip, onchange: (e: Event) => { draft.shopNoEquip = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' ห้ามถอด/สวมขณะเปิดร้านพ่อค้า'),
+      ),
+      h('div', { class: 'muted' }, 'ห้ามถอด/สวมขณะเปิดร้านพ่อค้า: ตอนหน้าต่างร้านพ่อค้าเปิด คลิก/ลาก/ปุ่มในรายละเอียดที่จะสวมหรือถอดอุปกรณ์ (และของแต่งตัวในกระเป๋าแฟชั่น) ไม่ทำงาน ขึ้นข้อความ "ปิดร้านก่อน" กันกดขายผิด · หน้าต่างอื่น (ช่างตีเหล็ก คลัง ตลาด) ไม่โดน · ยาที่เลือกให้ปุ่มด่วนไม่โดน · กันกดผิดฝั่งเบราว์เซอร์เท่านั้น (server ไม่รู้ว่าหน้าต่างร้านเปิดอยู่) · ปิด = ถอด/สวมได้ตามเดิม'),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.chatLinks, onchange: (e: Event) => { draft.chatLinks = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' ลิงก์ไอเทมในแชท'),
+      ),
+      h('div', { class: 'muted' }, 'ลิงก์ไอเทมในแชท: Ctrl+คลิกไอเทมในกระเป๋า/ชุดที่ใส่/คลัง/ร้านพ่อค้า = ใส่ [ชื่อไอเทม] ในช่องแชท (หรือโทรโข่งถ้าเปิดอยู่) ข้อความละไม่เกิน 3 ชิ้น · คนที่เห็นคลิกชื่อ (สีตามความหายาก) เปิดหน้าต่างข้อมูลของชิ้นนั้นตอนส่ง (+ตีบวก ค่าที่สุ่มได้) · server หาของจริงในตัวผู้ส่งเอง ปลอมไม่ได้ · ปิด = server ไม่ส่งลิงก์ (ชื่อเป็นข้อความธรรมดา) และ Ctrl+คลิกไม่ทำอะไร'),
     );
     refresh();
   };
@@ -1002,6 +1042,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     };
     autoCard.replaceChildren(
       h('h2', {}, 'Auto Play'),
+      h('h3', {}, 'ค่าเริ่มต้นของผู้เล่น'),
       h('div', { class: 'muted' }, 'ค่าเริ่มต้น = ใช้กับตัวเลือกที่ผู้เล่นยังไม่เคยเปลี่ยนเองในหน้าต่างตั้งค่า Auto (มีผลทันทีแม้คนที่ออนไลน์ · ช่องที่ผู้เล่นเปลี่ยนเองแล้วใช้ค่าของเขา)'),
       h('div', { class: 'row bal-line' },
         h('label', {}, `${AUTO_DEFAULT_NAME.lootOrder} `, pick('lootOrder', AUTO_LOOT_ORDERS)),
@@ -1020,12 +1061,15 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       ),
       h('div', { class: 'row bal-line' }, num('giveUpSec', 0.5), num('nearDist', 0.5), num('threatDist', 0.5)),
       h('div', { class: 'muted' }, 'ข้ามของ = เดินไปหาของชิ้นเดิมแล้วไม่เข้าใกล้ขึ้นเลยนานเท่านี้ (ติดสิ่งกีดขวาง/เก็บไม่ได้) จะเลิกสนใจชิ้นนั้น · ระยะ 2 ช่องหลังใช้กับลำดับ "สมดุล" (1 ช่องในแมพ = 50 px)'),
+      h('h3', {}, 'สวิตช์ทั้งเซิร์ฟ: ตัวเลือกที่ผู้เล่นเลือกได้'),
       h('div', { class: 'muted' }, 'สวิตช์ทั้งเซิร์ฟ (ติ๊กออก = ผู้เล่นเลือกไม่ได้ Auto ใช้แบบปลอดภัยแทน: เก็บของก่อน→สมดุล, ของคนอื่น→ของตัวเอง, ม้วน→หยุด Auto, ชนิดมอนที่ไม่ตี→ตีทุกชนิด)'),
       h('div', { class: 'row bal-line' }, ...AUTO_ALLOWS.map(allow)),
+      h('h3', {}, 'ฟาร์มต่อหลังหลุด · รอที่จุดกด · ระยะสกิล'),
       h('div', { class: 'row bal-line' },
         h('label', {}, h('input', { type: 'checkbox', checked: a.offline, onchange: (e: Event) => { a.offline = (e.target as HTMLInputElement).checked; refresh(); } }), ` ${AUTO_OFFLINE_NAME}`),
         num('offlineMin', 1),
       ),
+      h('div', { class: 'muted' }, 'หลุดการเชื่อมต่อขณะเปิด Auto (ไม่ได้กดออกเกม): ตัวละครอยู่ในโลกต่อ Auto ฟาร์มเหมือนปกติ (EXP 50%) จนครบเวลา, Auto หยุดตามตัวเลือก (ยาหมด/กระเป๋าเต็ม/ม้วน) หรือตาย แล้วเซฟและออกจากโลก · เข้าเกมใหม่ = ได้ตัวที่กำลังฟาร์มคืน Auto ยังเปิด · ไม่รวม Guest และห้องบอส · ปิดสวิตช์ = คนที่ฟาร์มแบบหลุดอยู่ออกจากโลกทันที'),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด · ปิด = วิ่งไปรอที่จุดเกิดมอนในวง (แบบเดิม)' },
           h('input', { type: 'checkbox', checked: a.homeWait, onchange: (e: Event) => { a.homeWait = (e.target as HTMLInputElement).checked; refresh(); } }),
@@ -1036,25 +1080,13 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         num('aoeMargin', 0.1),
       ),
       h('div', { class: 'muted' }, 'ทุกอาชีพ: Auto กดสกิลเมื่อสกิลนั้นถึงจริงเท่านั้น (ระยะสกิลตามที่ปรับ + ขนาดตัวมอน − ระยะเผื่อพลาด: มอนต้องเข้ามาลึกกว่าขอบสกิลเท่านี้ กันวืด ยิ่งมากยิ่งกดช้า) · วงรอบตัว = มีมอนในวง · ยิง/พุ่ง/ฟันด้านหน้า = เป้าอยู่ในระยะสกิล (ยิงระเบิดบวกวงระเบิด) · ตกที่จุด = ระยะร่าย + วงตก · บัฟ/สกิลวงที่ไม่มีดาเมจ กดตามเดิม · ไม่ถึง = ข้ามไปสกิลถัดไปในลำดับ ไม่มีสกิลไหนถึง = ตีธรรมดาต่อ (ไม่เดินเข้าไปเพิ่ม) · ปิดสวิตช์ = แบบเดิม กดทันทีที่ตีธรรมดาถึง'),
+      h('h3', {}, 'เดินต่อเมื่อสลับแท็บ (ไม่ใช่ Auto)'),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
           h('input', { type: 'checkbox', checked: draft.walkHidden, onchange: (e: Event) => { draft.walkHidden = (e.target as HTMLInputElement).checked; refresh(); } }),
           ' เดินต่อเมื่อสลับแท็บ'),
       ),
       h('div', { class: 'muted' }, 'เดินต่อเมื่อสลับแท็บ (ไม่ใช่ Auto): คลิกเดินไปจุดไกลแล้วสลับไปแท็บอื่น/พับจอ server พาเดินต่อจนถึงจุดที่คลิก (เดินตรงไป ไถลอ้อมของกลมชิ้นเดียวได้ ไม่หาทางอ้อมกำแพง ติดแทบไม่ขยับ 0.8 วิ = หยุด) · กลับมาที่แท็บ ตัวเลื่อนไปที่จริงแล้วเดินต่อเอง · ตาย/เปลี่ยนแมพ/วาร์ป/เทรด/หลุด = หยุด · ปิด = แบบเดิม สลับแท็บแล้วตัวหยุด'),
-      h('div', { class: 'row bal-line' },
-        h('label', { title: 'ค่าในโค้ด: เปิด' },
-          h('input', { type: 'checkbox', checked: draft.shopNoEquip, onchange: (e: Event) => { draft.shopNoEquip = (e.target as HTMLInputElement).checked; refresh(); } }),
-          ' ห้ามถอด/สวมขณะเปิดร้านพ่อค้า'),
-      ),
-      h('div', { class: 'muted' }, 'ห้ามถอด/สวมขณะเปิดร้านพ่อค้า: ตอนหน้าต่างร้านพ่อค้าเปิด คลิก/ลาก/ปุ่มในรายละเอียดที่จะสวมหรือถอดอุปกรณ์ (และของแต่งตัวในกระเป๋าแฟชั่น) ไม่ทำงาน ขึ้นข้อความ "ปิดร้านก่อน" กันกดขายผิด · หน้าต่างอื่น (ช่างตีเหล็ก คลัง ตลาด) ไม่โดน · ยาที่เลือกให้ปุ่มด่วนไม่โดน · กันกดผิดฝั่งเบราว์เซอร์เท่านั้น (server ไม่รู้ว่าหน้าต่างร้านเปิดอยู่) · ปิด = ถอด/สวมได้ตามเดิม'),
-      h('div', { class: 'row bal-line' },
-        h('label', { title: 'ค่าในโค้ด: เปิด' },
-          h('input', { type: 'checkbox', checked: draft.chatLinks, onchange: (e: Event) => { draft.chatLinks = (e.target as HTMLInputElement).checked; refresh(); } }),
-          ' ลิงก์ไอเทมในแชท'),
-      ),
-      h('div', { class: 'muted' }, 'ลิงก์ไอเทมในแชท: Ctrl+คลิกไอเทมในกระเป๋า/ชุดที่ใส่/คลัง/ร้านพ่อค้า = ใส่ [ชื่อไอเทม] ในช่องแชท (หรือโทรโข่งถ้าเปิดอยู่) ข้อความละไม่เกิน 3 ชิ้น · คนที่เห็นคลิกชื่อ (สีตามความหายาก) เปิดหน้าต่างข้อมูลของชิ้นนั้นตอนส่ง (+ตีบวก ค่าที่สุ่มได้) · server หาของจริงในตัวผู้ส่งเอง ปลอมไม่ได้ · ปิด = server ไม่ส่งลิงก์ (ชื่อเป็นข้อความธรรมดา) และ Ctrl+คลิกไม่ทำอะไร'),
-      h('div', { class: 'muted' }, 'หลุดการเชื่อมต่อขณะเปิด Auto (ไม่ได้กดออกเกม): ตัวละครอยู่ในโลกต่อ Auto ฟาร์มเหมือนปกติ (EXP 50%) จนครบเวลา, Auto หยุดตามตัวเลือก (ยาหมด/กระเป๋าเต็ม/ม้วน) หรือตาย แล้วเซฟและออกจากโลก · เข้าเกมใหม่ = ได้ตัวที่กำลังฟาร์มคืน Auto ยังเปิด · ไม่รวม Guest และห้องบอส · ปิดสวิตช์ = คนที่ฟาร์มแบบหลุดอยู่ออกจากโลกทันที'),
     );
   };
 
@@ -1100,7 +1132,6 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'row bal-line' }, num('shake', 0.1), num('hitstopMs', 5), num('crit', 0.1)),
       h('div', { class: 'row bal-line' }, flag(circlesOn, a.circles !== ca.circles, ' วงเวทบนพื้น (ใต้มอนติดดีบัฟ ใต้ผู้เล่นติดบัฟ และพื้นที่สกิลวงกว้าง)'), flag(zoneCirclesOn, a.zoneCircles !== ca.zoneCircles, ' สกิลวงกว้างเป็นวงเวทอย่างเดียว (ปิด = ภาพพื้นที่เดิม)'), num('circleGlow', 0.1)),
       h('div', { class: 'row bal-line' }, num('slashLift', 0.05), num('craterBack', 0.05)),
-      h('div', { class: 'row bal-line' }, num('townEdge', 0.1), num('townRound', 0.5), h('span', { class: 'muted' }, ' มีผลตอนโหลดแมพเมืองครั้งถัดไป')),
       h('div', { class: 'muted' }, 'ภาพค้างจริง = ค่านี้ × ความหนักของท่า (0–1) และไม่เกิน 120 ms · ตอนนี้เปิดชั้นเสริมให้พายุดาบท่าเดียวก่อน'),
       h('h3', {}, 'อนุภาค three.quarks (ทดลอง)'),
       h('div', { class: 'row bal-line' }, flag(quarksOn, a.quarks !== ca.quarks, ' ใช้ three.quarks วาดอนุภาคของสกิล')),
@@ -1120,33 +1151,50 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         flag(ownOnly, a.ownNumsOnly !== ca.ownNumsOnly, ' เห็นเฉพาะเลขดาเมจของตัวเอง'),
       ),
       h('div', { class: 'muted' }, 'ตัวเลขบนจอสูงสุด: เกินแล้วอันเก่าสุดหาย (ค่าในโค้ด 40 เดิม 120) · รวมเลข: ดาเมจบนเป้าเดียวกันในช่วงเวลานี้รวมเป็นเลขเดียว (คริรวมกับคริ ธรรมดารวมกับธรรมดา เลขที่ตัวเองโดนก็รวม) · เห็นเฉพาะของตัวเอง: เห็นแค่ดาเมจที่ตัวเองตีและที่ตัวเองโดน (server ไม่ส่งของคนอื่นมาเลย) ข้อความอื่นยังเห็นเหมือนเดิม'),
-      h('h3', {}, 'ภาพกระดาษ: กรอบชื่อ ฟองแชท รอยเท้าออร่า ลูกแก้วตีบวก'),
-      h('div', { class: 'row bal-line' }, num('paperPlate', 0.05), num('paperBubble', 0.05), num('paperFoot', 0.1)),
-      h('h3', {}, 'ช่องไอเทม (ทุกหน้าต่าง)'),
-      h('div', { class: 'row bal-line' }, num('slotCorner', 0.1), num('slotInset', 0.1), num('slotIcon', 0.05)),
-      h('div', { class: 'muted' }, 'ปรับกรอบช่องไอเทมทุกช่องพร้อมกัน (กระเป๋า ช่องสวม คลัง ร้าน ตลาด เทรด ตีบวก แฟชั่น) · 1 = ค่าในโค้ด'),
-      h('div', { class: 'row bal-line' }, num('paperOrbLight', 0.01), num('paperOrbShade', 0.05)),
-      h('div', { class: 'row bal-line' }, num('plateMaxW', 10), num('platePadY', 1), num('platePadX', 1)),
-      h('div', { class: 'row bal-line' }, num('plateLift', 1)),
-      h('div', { class: 'muted' }, 'ยกป้ายชื่อผู้เล่น (ชื่อ เลเวล HP ของคนอื่น และกรอบชื่อของตัวเอง) พร้อมฟองแชทให้สูงขึ้นเป็นพิกเซลบนจอ 0 = ตำแหน่งเดิม ติดลบ = ต่ำลง · ไม่รวมป้ายมอน'),
-      h('div', { class: 'row bal-line' }, num('bubbleMaxW', 10), num('bubblePadY', 1), num('bubblePadX', 1)),
-      h('div', { class: 'muted' }, 'มีผลเฉพาะตอนเปิดสวิตช์ภาพกระดาษ (แท็บ Server) · ขนาดออร่า/ความทึบ/ระยะรอยเท้ารายชิ้นอยู่ในแท็บของแต่งตัว · กรอบชื่อ/ฟองแชทยืดตามความยาวข้อความเอง (9 ช่อง ซ้ำขอบเรียบ มุมและลายกลางไม่ถูกบีบ) ความกว้างสุดใช้กับชื่อ/ฟองธรรมดาด้วย ขอบในใช้กับกรอบกระดาษ · กรอบชื่อเปลี่ยนเมื่อมีคนสวม/ถอดหรือรีโหลด ลูกแก้วเปลี่ยนทันที'),
-      h('h3', {}, 'ออร่าตีบวกใต้เท้า (+7/+10/+13/+15)'),
-      h('div', { class: 'row bal-line' }, flag(enhSmoothOn, a.enhAuraSmooth !== ca.enhAuraSmooth, ' ขอบนุ่ม (ไม่กะพริบ)'), num('enhAuraPulse', 0.01), num('enhAuraBreath', 0.01), num('enhAuraSpeed', 0.5)),
-      h('div', { class: 'muted' }, 'ขอบนุ่ม เปิด (ค่าในโค้ด): ภาพแสงกรองแบบนุ่ม ขอบไม่กระโดดตอนหดขยาย · ปิด = ขอบพิกเซลแบบเดิม ซึ่งกะพริบตอนหดขยาย ยิ่ง +13/+15 (ใหญ่และสว่าง) ยิ่งเห็นชัด · หดขยาย 0.08 = ขนาด ±8% (ค่าเดิม) ยิ่งน้อยยิ่งนิ่ง · สว่างหรี่ 0 = ความสว่างคงที่ (ค่าเดิม) ใส่ 0.1–0.2 ให้หายใจด้วยความสว่างแทนขนาดได้ · ความเร็ว 3 = รอบละราว 2 วินาที · ประกายที่ลอยขึ้นจากออร่ายังเหมือนเดิม · มีผลกับทุกคนทันทีหลังบันทึก'),
-      h('div', { class: 'row bal-line' }, num('enhAuraGlow', 0.05)),
-      h('div', { class: 'row bal-line' }, num('enhSparkGlow', 0.05), num('enhSparkRate', 0.1), num('enhSparkFadeIn', 0.05)),
-      h('div', { class: 'row bal-line' }, flag(enhFrontOn, a.enhOrbGlowFront !== ca.enhOrbGlowFront, ' แสงลูกแก้วตีบวกอยู่หน้าลูก (ปิด = หลังลูก)'), num('enhOrbBackFade', 0.1)),
-      h('div', { class: 'muted' }, 'ประกาย = จุดแสงที่ลอยขึ้นจากออร่า +10 ขึ้นไป (ในโค้ด +10/+13/+15 = 3/6/12 ต่อวิ) เวลาค่อย ๆ สว่าง 0 = สว่างทันทีแบบเดิม · แสงลูกแก้วหน้าลูก (ค่าในโค้ด) = แสงทับตัวลูก ดูสว่าง · หลังลูก = ตัวลูกคมกว่า แสงหรี่ลงเล็กน้อย · ทั้งสองแบบไม่กะพริบ · แสงลูกแก้วที่อยู่หลังตัวจางลง: ตอนวิ่ง ขา/แขนที่ขยับตัดแสงของลูกด้านหลังต่างกันทุกเฟรม ค่านี้ทำให้แสงของลูกด้านหลังจางลง (ค่าในโค้ด 1 = หายหมด, 0 = แบบเดิม)'),
-      h('h3', {}, 'ตำแหน่งลูกแก้ว HP/MP'),
-      h('div', { class: 'row bal-line' }, flag(nearOn, a.orbsNearBar !== ca.orbsNearBar, ' ลูกแก้วชิดแถบสกิล (ปิด = มุมล่างซ้าย/ขวาของจอ)')),
-      h('div', { class: 'muted' }, 'เปิด (ค่าในโค้ด): บนจอคอมกว้าง ≥ 1000px ลูกแก้ว HP ชิดซ้ายของแถบสกิล MP ชิดขวา ดูเป็นแผงเดียวกัน (จอกว้าง ≥ 1850px แชทกับข้อความระบบลงมาที่มุมซ้ายล่าง) · จอแคบกว่านั้นและมือถือใช้มุมจอเหมือนเดิม (มือถือใช้แถบ HP/MP อยู่แล้ว) · ผู้เล่นที่เลือก "HP/MP: แถบ" ในเกมไม่ได้รับผล · มีผลกับทุกคนทันทีหลังบันทึก'),
       h('h3', {}, 'กระสุน'),
       h('div', { class: 'row bal-line' }, flag(smoothOn, a.smoothShots !== ca.smoothShots, ' กระสุนบินลื่น (ไม่ดึงกลับตาม server)')),
       h('div', { class: 'muted' }, 'เปิด (ค่าในโค้ด): เบราว์เซอร์ให้กระสุนบินต่อเอง ตำแหน่งจาก server ดันไปข้างหน้าครึ่งหนึ่งของปิง ห่างนิดหน่อยค่อย ๆ ขยับเข้า ห่างเกิน 3 หน่วยค่อยกระโดด · ปิด: แบบเดิม กระสุนกระโดดไปตำแหน่งของ server ทุกครั้งที่ข้อมูลมา (เห็นกระตุกตอนยิงเยอะ เช่น Bullet Storm) · เป็นแค่ภาพ ดาเมจยังตัดสินที่ server'),
       h('h3', {}, 'โดรนสนับสนุน (มือปืน)'),
       h('div', { class: 'row bal-line' }, flag(droneOn, a.droneFollow !== ca.droneFollow, ' โดรนบินตามลื่น'), num('droneSpeed', 0.5), num('droneDist', 0.1)),
       h('div', { class: 'muted' }, 'เปิด (ค่าในโค้ด): โดรนเป็นตัวเดียวตลอดอายุสกิล บินตามหลังไหล่ตัวละครเหมือนสัตว์เลี้ยง ลอยขึ้นลงเบา ๆ หันไปทางมอนตอนยิง หมดเวลา/ตาย/เปลี่ยนแมพแล้วหายไป · ปิด: แบบเดิม วาดภาพโดรนใหม่ที่ไหล่ทุกนัด · ความเร็วตามยิ่งมากยิ่งติดตัว ระยะห่าง 1 = ตำแหน่งที่ server ใช้ปล่อยกระสุน · เป็นแค่ภาพ ดาเมจ/ระยะ/จังหวะยิงตัดสินที่ server'),
+    );
+    // In-game screen parts (owner 2026-11-24: one card for the item slots, name plates, chat bubbles and HP/MP orbs).
+    uiCard.replaceChildren(
+      h('h2', {}, 'หน้าตา UI ในเกม'),
+      h('div', { class: 'muted' }, 'กรอบและขนาดของส่วนต่าง ๆ บนจอเกม · ย้าย/ย่อขยาย/ซ่อนหน้าต่างและ HUD อยู่ที่แท็บ ', h('a', { href: '#hudLayout' }, 'จัดหน้าจอเกม')),
+      h('h3', {}, 'ช่องไอเทม (ทุกหน้าต่าง)'),
+      h('div', { class: 'row bal-line' }, num('slotCorner', 0.1), num('slotInset', 0.1), num('slotIcon', 0.05)),
+      h('div', { class: 'muted' }, 'ปรับกรอบช่องไอเทมทุกช่องพร้อมกัน (กระเป๋า ช่องสวม คลัง ร้าน ตลาด เทรด ตีบวก แฟชั่น) · 1 = ค่าในโค้ด'),
+      h('h3', {}, 'กรอบชื่อและป้ายชื่อ'),
+      h('div', { class: 'row bal-line' }, num('paperPlate', 0.05), num('plateMaxW', 10), num('platePadY', 1), num('platePadX', 1)),
+      h('div', { class: 'row bal-line' }, num('plateLift', 1)),
+      h('div', { class: 'muted' }, 'ยกป้ายชื่อผู้เล่น (ชื่อ เลเวล HP ของคนอื่น และกรอบชื่อของตัวเอง) พร้อมฟองแชทให้สูงขึ้นเป็นพิกเซลบนจอ 0 = ตำแหน่งเดิม ติดลบ = ต่ำลง · ไม่รวมป้ายมอน'),
+      h('h3', {}, 'ฟองแชท'),
+      h('div', { class: 'row bal-line' }, num('paperBubble', 0.05), num('bubbleMaxW', 10), num('bubblePadY', 1), num('bubblePadX', 1)),
+      h('div', { class: 'muted' }, 'กรอบชื่อ/ฟองแชทยืดตามความยาวข้อความเอง (9 ช่อง ซ้ำขอบเรียบ มุมและลายกลางไม่ถูกบีบ) ความกว้างสุดใช้กับชื่อ/ฟองธรรมดาด้วย ขอบในใช้กับกรอบกระดาษ · กรอบชื่อเปลี่ยนเมื่อมีคนสวม/ถอดหรือรีโหลด'),
+      h('h3', {}, 'รอยเท้าออร่า (ของแต่งตัว)'),
+      h('div', { class: 'row bal-line' }, num('paperFoot', 0.1)),
+      h('div', { class: 'muted' }, 'ขนาดออร่า/ความทึบ/ระยะรอยเท้ารายชิ้นอยู่ในแท็บ ', h('a', { href: '#cos' }, 'ของแต่งตัว')),
+      h('h3', {}, 'ตำแหน่งลูกแก้ว HP/MP'),
+      h('div', { class: 'row bal-line' }, flag(nearOn, a.orbsNearBar !== ca.orbsNearBar, ' ลูกแก้วชิดแถบสกิล (ปิด = มุมล่างซ้าย/ขวาของจอ)')),
+      h('div', { class: 'muted' }, 'เปิด (ค่าในโค้ด): บนจอคอมกว้าง ≥ 1000px ลูกแก้ว HP ชิดซ้ายของแถบสกิล MP ชิดขวา ดูเป็นแผงเดียวกัน (จอกว้าง ≥ 1850px แชทกับข้อความระบบลงมาที่มุมซ้ายล่าง) · จอแคบกว่านั้นและมือถือใช้มุมจอเหมือนเดิม (มือถือใช้แถบ HP/MP อยู่แล้ว) · ผู้เล่นที่เลือก "HP/MP: แถบ" ในเกมไม่ได้รับผล · มีผลกับทุกคนทันทีหลังบันทึก'),
+    );
+    // The enhance aura and orbs' looks sit in the forge card (auraBox), next to the levels they start at.
+    auraBox.replaceChildren(
+      h('h3', {}, 'ออร่าและลูกแก้วตีบวก: หน้าตา'),
+      h('div', { class: 'muted' }, 'ระดับที่ออร่า/ลูกแก้วเริ่มมี ตั้งด้านบน · ค่าด้านล่างเป็นแค่ภาพ'),
+      h('div', { class: 'row bal-line' }, flag(enhSmoothOn, a.enhAuraSmooth !== ca.enhAuraSmooth, ' ขอบนุ่ม (ไม่กะพริบ)'), num('enhAuraPulse', 0.01), num('enhAuraBreath', 0.01), num('enhAuraSpeed', 0.5)),
+      h('div', { class: 'muted' }, 'ขอบนุ่ม เปิด (ค่าในโค้ด): ภาพแสงกรองแบบนุ่ม ขอบไม่กระโดดตอนหดขยาย · ปิด = ขอบพิกเซลแบบเดิม ซึ่งกะพริบตอนหดขยาย ยิ่ง +13/+15 (ใหญ่และสว่าง) ยิ่งเห็นชัด · หดขยาย 0.08 = ขนาด ±8% (ค่าเดิม) ยิ่งน้อยยิ่งนิ่ง · สว่างหรี่ 0 = ความสว่างคงที่ (ค่าเดิม) ใส่ 0.1–0.2 ให้หายใจด้วยความสว่างแทนขนาดได้ · ความเร็ว 3 = รอบละราว 2 วินาที · ประกายที่ลอยขึ้นจากออร่ายังเหมือนเดิม · มีผลกับทุกคนทันทีหลังบันทึก'),
+      h('div', { class: 'row bal-line' }, num('enhAuraGlow', 0.05)),
+      h('div', { class: 'row bal-line' }, num('enhSparkGlow', 0.05), num('enhSparkRate', 0.1), num('enhSparkFadeIn', 0.05)),
+      h('div', { class: 'row bal-line' }, flag(enhFrontOn, a.enhOrbGlowFront !== ca.enhOrbGlowFront, ' แสงลูกแก้วตีบวกอยู่หน้าลูก (ปิด = หลังลูก)'), num('enhOrbBackFade', 0.1)),
+      h('div', { class: 'muted' }, 'ประกาย = จุดแสงที่ลอยขึ้นจากออร่า +10 ขึ้นไป (ในโค้ด +10/+13/+15 = 3/6/12 ต่อวิ) เวลาค่อย ๆ สว่าง 0 = สว่างทันทีแบบเดิม · แสงลูกแก้วหน้าลูก (ค่าในโค้ด) = แสงทับตัวลูก ดูสว่าง · หลังลูก = ตัวลูกคมกว่า แสงหรี่ลงเล็กน้อย · ทั้งสองแบบไม่กะพริบ · แสงลูกแก้วที่อยู่หลังตัวจางลง: ตอนวิ่ง ขา/แขนที่ขยับตัดแสงของลูกด้านหลังต่างกันทุกเฟรม ค่านี้ทำให้แสงของลูกด้านหลังจางลง (ค่าในโค้ด 1 = หายหมด, 0 = แบบเดิม)'),
+      h('div', { class: 'row bal-line' }, num('paperOrbLight', 0.01), num('paperOrbShade', 0.05)),
+      h('div', { class: 'muted' }, 'ภาพลูกแก้วตีบวก (กระดาษ): ส่วนที่ขาวกว่าค่าแรกเป็นสีเน้น ค่าที่สองคือความสว่างส่วนมืดสุด · ลูกแก้วเปลี่ยนทันที'),
+    );
+    townBox.replaceChildren(
+      h('div', { class: 'row bal-line' }, num('townEdge', 0.1), num('townRound', 0.5)),
+      h('div', { class: 'muted' }, 'ขอบพื้นอิฐเมืองกลาง: มีผลตอนโหลดแมพเมืองครั้งถัดไป'),
     );
   };
 
@@ -1200,17 +1248,20 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'muted' }, 'ทุกสกิลมีวงเวทไม่ซ้ำกัน (โชว์ใต้มอนที่โดนดีบัฟของสกิลนั้น ใต้ผู้เล่นที่ได้บัฟของสกิลนั้น และบนพื้นที่สกิลวงกว้าง) ภาพหมุนตัวอย่างอยู่หน้าชื่อ · เอฟเฟกต์โค้ดเล่นทับภาพเดิมตอนร่าย 1 ครั้งต่อจุด · ค่าในโค้ด: เปิด ×1 · มีผลกับทุกคนทันทีหลังบันทึก'),
       h('div', { class: 'row bal-line' }, h('label', { class: a.extras !== ca.extras ? 'bal-changed' : '' }, extrasOn, ' เอฟเฟกต์โค้ดของสกิล (ทับภาพเดิม)'),
         h('label', {}, FX_LAYER_NAME.extrasK, numBox(() => a.extrasK, (n) => { a.extrasK = n; }, ca.extrasK, FX_LAYER_RANGE.extrasK[0], FX_LAYER_RANGE.extrasK[1], 0.1, refresh))),
+      ...CLASS_IDS.flatMap((cid) => [h('h3', {}, CLASSES[cid].nameTh ?? cid), ...CLASSES[cid].skills.map((s) => row(s.id, s.nameTh))]),
+      h('h3', {}, 'วงเวทตอนไม่รู้ว่ามาจากสกิลไหน'),
+      ...CIRCLE_FALLBACKS.map((k) => row(k, FALLBACK_NAME[k] ?? k)),
+    );
+    // The bosses' skill effects are shown in the boss-room card (bossFxBox).
+    bossFxBox.replaceChildren(
       // Bosses' skills (owner 2026-11-21, src/client/bossFx.ts)
-      h('h3', {}, 'สกิลบอส (หมี แม่มด เยติ หัวใจภูเขาไฟ)'),
+      h('h3', {}, 'เอฟเฟกต์สกิลบอส (หมี แม่มด เยติ หัวใจภูเขาไฟ)'),
       h('div', { class: 'row bal-line' },
         h('label', { class: a.bossFx !== ca.bossFx ? 'bal-changed' : '' },
           h('input', { type: 'checkbox', checked: a.bossFx, onchange: (e: Event) => { a.bossFx = (e.target as HTMLInputElement).checked; refresh(); } }), ' ภาพเอฟเฟกต์สกิลบอส (ปิด = ภาพแบบเดิม ท่าตีตอนร่ายยังเล่น)'),
         h('label', { class: a.bossExtras !== ca.bossExtras ? 'bal-changed' : '' },
           h('input', { type: 'checkbox', checked: a.bossExtras, onchange: (e: Event) => { a.bossExtras = (e.target as HTMLInputElement).checked; refresh(); } }), ' เอฟเฟกต์โค้ดทับภาพ'),
         h('label', {}, FX_LAYER_NAME.bossExtrasK, numBox(() => a.bossExtrasK, (n) => { a.bossExtrasK = n; }, ca.bossExtrasK, FX_LAYER_RANGE.bossExtrasK[0], FX_LAYER_RANGE.bossExtrasK[1], 0.1, refresh))),
-      ...CLASS_IDS.flatMap((cid) => [h('h3', {}, CLASSES[cid].nameTh ?? cid), ...CLASSES[cid].skills.map((s) => row(s.id, s.nameTh))]),
-      h('h3', {}, 'วงเวทตอนไม่รู้ว่ามาจากสกิลไหน'),
-      ...CIRCLE_FALLBACKS.map((k) => row(k, FALLBACK_NAME[k] ?? k)),
     );
   };
 
@@ -1451,19 +1502,19 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         void save({ tuning: c.tuning, part: 'rest' }, `ใช้ค่าใหม่กับทั้งเซิร์ฟทันทีไหม?\n\n${changes.slice(0, 1200)}`);
       } }, '💾 บันทึกทั้งเซิร์ฟ'),
       h('button', { onclick: () => { draft = mergeBalance(saved); redraw(); fold.clearDirty(); msg.textContent = ''; } }, 'ยกเลิกที่ยังไม่บันทึก'),
-      h('button', { onclick: () => void save({ reset: true, part: 'rest' }, 'คืนทุกค่าในแท็บนี้ (อาชีพ tier ตัวคูณมอน ตัวคูณ EXP ยา เซ็ตไอเทม Auto Play รางวัลเควสสอนระบบ เอฟเฟกต์สกิล และหยุดตอนโจมตี) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?\n(ค่าในแท็บระบบสกิลไม่เปลี่ยน มีปุ่มคืนค่าของตัวเอง)') }, '↺ คืนค่าในโค้ด'),
+      h('button', { onclick: () => void save({ reset: true, part: 'rest' }, 'คืนทุกค่าในแท็บนี้ (ทุกการ์ดทุกหมวด: อาชีพ tier ตัวคูณมอน ห้องบอส เมืองกลาง ตัวคูณ EXP VIP ยา กระเป๋า ตีบวก เซ็ตไอเทม Auto Play รางวัลเควสสอนระบบ หน้าตา UI เอฟเฟกต์สกิล เสียง และหยุดตอนโจมตี) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?\n(ค่าในแท็บระบบสกิลไม่เปลี่ยน มีปุ่มคืนค่าของตัวเอง)') }, '↺ คืนค่าในโค้ด'),
     ),
     msg,
   );
 
   // Category buttons + search box (owner 2026-11-22). Cards are only hidden with CSS (`.cat-hide`), never removed.
   const CATS: { name: string; cards: HTMLElement[] }[] = [
-    { name: 'อาชีพ', cards: [classCard, regenCard, rootCard, rigCard] },
-    { name: 'มอน-บอส', cards: [monsterCard, moveCard] },
-    { name: 'ไอเทม-ตีบวก-ยา', cards: [affixCard, tierCard, previewCard, potionCard, bagCard, forgeCard, setCard] },
+    { name: 'อาชีพ-ต่อสู้', cards: [classCard, regenCard, rootCard] },
+    { name: 'มอน-บอส-เมือง', cards: [monsterCard, bossCard, moveCard, hubCard] },
+    { name: 'ไอเทม-ตีบวก', cards: [affixCard, tierCard, previewCard, setCard, potionCard, bagCard, forgeCard] },
     { name: 'Auto Play', cards: [autoCard] },
-    { name: 'เอฟเฟกต์-เสียง', cards: [fxCard, circleCard, audioCard] },
-    { name: 'ระบบ-อื่นๆ', cards: [expCard, floorCard, tutCard, langCard] },
+    { name: 'หน้าตา-เอฟเฟกต์-เสียง', cards: [uiCard, fxCard, circleCard, audioCard, rigCard] },
+    { name: 'ระบบ-รางวัล', cards: [expCard, vipCard, floorCard, tutCard, langCard] },
   ];
   const ALL = 'ทั้งหมด';
   const CAT_KEY = 'adminBalanceCat';
@@ -1502,6 +1553,6 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   search.addEventListener('input', applyFilter);
 
   fold.head.prepend(h('div', { class: 'cat-top' }, catBar, search));
-  box.replaceChildren(fold.head, noHit, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, bagCard, forgeCard, setCard, floorCard, moveCard, autoCard, tutCard, fxCard, circleCard, rootCard, audioCard, rigCard, langCard, bar);
+  box.replaceChildren(fold.head, noHit, ...CATS.flatMap((c) => c.cards), bar);
   redraw();
 }
