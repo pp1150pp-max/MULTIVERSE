@@ -194,10 +194,18 @@ export const DEFAULT_ARENA = 11;
 /** One kind of monster to scatter over a zone, or a squad (`group` of several) that stands together. */
 interface Scatter {
   group: [monster: string, count: number][];
-  /** How many singles (or squads). */
+  /** How many singles (or squads); for a `mixed` kind, how many monsters. */
   count: number;
   respawn: [number, number];
+  /**
+   * Floor-1 farm maps (owner 2026-11-25): `count` is monsters, not spots, and each spot rolls its own size: half alone, half a
+   * group of 2–3 of the kind standing together (FARM_GROUP). Only for a kind on its own (`group` of one monster).
+   */
+  mixed?: boolean;
 }
+
+/** A mixed spot (Scatter.mixed): this share is a group, of this many monsters (each size as likely). */
+export const FARM_GROUP = { share: 0.5, sizes: [2, 3] };
 
 /**
  * Spreads a zone's monsters one by one over the whole map instead of in herds, the kinds in order
@@ -239,9 +247,14 @@ function scatterZone(z: ZoneDef, list: Scatter[]): ZoneDef {
     done += s.count;
     const hi = FIRST + ((LAST - FIRST) * done) / total;
     const squad = s.group.length > 1 || s.group[0][1] > 1;
-    const apart = squad ? 9 : 6.5;
+    const mixed = !!s.mixed && s.group.length === 1;
+    // A mixed list rolls the next spot's size up front, so it is known when the spot is tested for room.
+    const roll = (): number => (r() < FARM_GROUP.share ? FARM_GROUP.sizes[Math.floor(r() * FARM_GROUP.sizes.length)] : 1);
+    let size = mixed ? Math.min(roll(), s.count) : 1;
     let n = 0;
     for (let tries = 0; tries < 20000 && n < s.count; tries++) {
+      const together = squad || size > 1;
+      const apart = together ? 9 : 6.5;
       const x = -B + r() * 2 * B;
       const y = -B + r() * 2 * B;
       const p = progress(x, y);
@@ -253,6 +266,12 @@ function scatterZone(z: ZoneDef, list: Scatter[]): ZoneDef {
       if (placed.some((o) => Math.hypot(o.x - x, o.z - y) < apart)) continue;
       const at = { x: Math.round(x), z: Math.round(y) };
       placed.push(at);
+      if (mixed) {
+        spawns.push({ monster: s.group[0][0], ...at, radius: together ? 3 : 2.5, count: size, respawn: s.respawn });
+        n += size;
+        size = Math.min(roll(), s.count - n);
+        continue;
+      }
       for (const [monster, count] of s.group) {
         spawns.push({ monster, ...at, radius: squad ? 3 : 2.5, count, respawn: s.respawn });
       }
@@ -292,8 +311,11 @@ function grownFarm(z: ZoneDef): ZoneDef {
   };
 }
 
-/** A farm map's monster list with FARM_DENSITY times as many spots of each kind. */
-const denser = (list: Scatter[]): Scatter[] => list.map((s) => ({ ...s, count: Math.round(s.count * FARM_DENSITY) }));
+/**
+ * A farm map's monster list with FARM_DENSITY times as many monsters of each kind, on mixed spots (alone or 2–3 together, FARM_GROUP;
+ * squads stay as they are).
+ */
+const denser = (list: Scatter[]): Scatter[] => list.map((s) => ({ ...s, count: Math.round(s.count * FARM_DENSITY), mixed: s.group.length === 1 && s.group[0][1] === 1 }));
 
 export const ZONE_1: ZoneDef = scatterZone(grownFarm({
   id: 'emerald_forest',
@@ -437,6 +459,9 @@ export const ZONE_4: ZoneDef = rotateZone(3, scatterZone(grownFarm({
   { group: [['ash_mage', 1], ['ash_knight', 1]], count: 4, respawn: [10, 15] },
   { group: [['magma_golem', 1]], count: 6, respawn: [14, 20] },
 ])));
+
+/** Floor 1's farm maps (grownFarm): their monster spots move about on respawn (Sim, Balance.mobRoam). */
+export const FARM_IDS: readonly string[] = [ZONE_1.id, ZONE_2.id, ZONE_3.id, ZONE_4.id];
 
 /** Where the hub's portals sit: one per corner, this far out on each axis. */
 const HUB_PORTAL = 54.5;

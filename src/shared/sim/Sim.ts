@@ -6,7 +6,7 @@ import { AUTO_EXP_MULT, expGapMult, expToNext, mitigate, MAX_LEVEL, MISS_GAP, ou
 import { blockingGate, BOSS_GATE_IDS } from '../data/bossGates';
 import { lineRanges, rerollStat, rerollValues, rollItem } from '../data/items';
 import { REROLL_NAME, rerollCost, type RerollKind } from '../data/reroll';
-import { inBossArena, lairExitSpot, LAVA_BURN, LAVA_TICK } from '../data/zones';
+import { arenaRadius, FARM_IDS, inBossArena, lairExitSpot, LAVA_BURN, LAVA_TICK } from '../data/zones';
 import type { Hazard } from './volcanoHeart';
 import { stealReturn, thornsReflect } from './beachMoves';
 import { kegStart } from './coveMoves';
@@ -134,7 +134,16 @@ function fillInto(src: (BagEntry | null)[], i: number, dst: (BagEntry | null)[],
 }
 
 /** `index`: the spot's place in the zone's spawn list (spreads the pack multiplier's fraction, see packCount). */
-interface Spawner { area: SpawnArea; alive: number; queue: number[]; boss: boolean; index: number }
+/** A roaming farm spot lands this far at most from the spot of its kind it picked (Sim.moveSpawner). */
+const ROAM_REACH = 8;
+/** …and at least this far from every other spot as they stand now. */
+const ROAM_APART = 6;
+
+/**
+ * One spot's monsters. `roam` (floor-1 farm maps): `area` is this Sim's own copy, moved about once all its monsters are dead
+ * (moveSpawner, Balance.mobRoam); `home` is the spot in the map, where it starts.
+ */
+interface Spawner { area: SpawnArea; alive: number; queue: number[]; boss: boolean; index: number; roam?: boolean; home?: SpawnArea }
 
 /** How close a player must be to a drop they clicked to pick it up (walking over others takes them at 0.8). */
 export const LOOT_CLICK_RANGE = 1.5;
@@ -199,7 +208,10 @@ export class Sim {
     const waveHold = !!opts.hold && !!opts.waves && !!zone.waves && opts.waves.countdown > 0;
     this.waiting = !!opts.hold && (delay > 0 || waveHold);
     if (opts.waves && zone.waves) this.waveRun = { cfg: { ...opts.waves }, wave: 0, nextAt: waveHold ? null : opts.waves.countdown, ids: new Set(), won: false };
-    else zone.spawns.forEach((area, index) => this.spawners.push({ area, alive: 0, queue: [], boss: false, index }));
+    else {
+      const roam = FARM_IDS.includes(zone.id);
+      zone.spawns.forEach((area, index) => this.spawners.push(roam ? { area: { ...area }, alive: 0, queue: [], boss: false, index, roam, home: area } : { area, alive: 0, queue: [], boss: false, index }));
+    }
     if (zone.boss) this.spawners.push({ area: zone.boss, alive: 0, queue: [], boss: true, index: -1 });
     if (delay > 0 && !this.waiting) this.bossAt = delay;
     for (const sp of this.spawners) {
@@ -408,6 +420,40 @@ export class Sim {
   }
 
   // ------------------------------------------------------------ spawning
+
+  /**
+   * A farm spot whose monsters are all dead comes back somewhere else in its kind's band (owner 2026-11-25): near one of the spots of
+   * the same kind in the map, picked at random, clear of the roads, camp, summoner, lakes, collision and the other spots as they
+   * stand now. No room = its own spot in the map. Off in /admin (Balance.mobRoam) = always its own spot.
+   */
+  private moveSpawner(sp: Spawner): void {
+    const home = sp.home!;
+    const put = (x: number, z: number) => { sp.area.x = x; sp.area.z = z; };
+    if (!currentBalance().mobRoam) { put(home.x, home.z); return; }
+    const kin = this.spawners.filter((o) => o.roam && o.home!.monster === home.monster);
+    const zone = this.zone;
+    const lair = zone.lair;
+    const ring = arenaRadius(zone);
+    const pools = [...(zone.iceLakes ?? []), ...(zone.lavaPools ?? [])];
+    const def = MONSTERS[home.monster];
+    const r = Math.random;
+    for (let tries = 0; tries < 24; tries++) {
+      const anchor = kin[Math.floor(r() * kin.length)].home!;
+      const a = r() * Math.PI * 2;
+      const d = Math.sqrt(r()) * ROAM_REACH;
+      const x = anchor.x + Math.cos(a) * d;
+      const z = anchor.z + Math.sin(a) * d;
+      if (Math.abs(x) > this.terrain.bound - 3 || Math.abs(z) > this.terrain.bound - 3) continue;
+      if (this.terrain.isBlocked(x, z, Math.max(1, def.radius))) continue;
+      if (this.terrain.distToPath(x, z) < 3.5 || Math.hypot(x - zone.start.x, z - zone.start.z) < 14) continue;
+      if (lair && Math.hypot(x - lair.x, z - lair.z) < ring + 5) continue;
+      if (pools.some((l) => Math.hypot((x - l.x) / (l.rx + 2.5), (z - l.z) / (l.rz + 2.5)) < 1)) continue;
+      if (this.spawners.some((o) => o !== sp && !o.boss && Math.hypot(o.area.x - x, o.area.z - z) < ROAM_APART)) continue;
+      put(Math.round(x * 10) / 10, Math.round(z * 10) / 10);
+      return;
+    }
+    put(home.x, home.z);
+  }
 
   private spawnMonster(sp: Spawner): void {
     const def = MONSTERS[sp.area.monster];
@@ -765,6 +811,7 @@ export class Sim {
       sp.alive--;
       // A boss room's boss never comes back: the room closes after it.
       if (!this.zone.roomOf) sp.queue.push(this.time + rand(Math.random, sp.area.respawn[0], sp.area.respawn[1]));
+      if (sp.roam && sp.alive <= 0) this.moveSpawner(sp);
     }
     // A powder-keg prisoner gets up for one last run at the nearest player (sim/coveMoves.ts): a new monster, no rewards.
     if (m.def.move === 'keg' && !m.summoned) {

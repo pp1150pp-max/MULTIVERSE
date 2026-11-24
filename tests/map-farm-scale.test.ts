@@ -1,6 +1,6 @@
 // Floor 1's four farm maps grew x1.5 a side (owner 2026-11-24, docs/systems/map-editor.md "ขยายแมพฟาร์มชั้น 1"):
 // - only those four changed size; the towns, boss rooms and floor 2 keep theirs
-// - each has about as many monster spots per area as before (FARM_DENSITY)
+// - each has about as many monsters per area as before (FARM_DENSITY), alone or 2–3 together, and a dead spot respawns elsewhere
 // - a layout drawn at another size than the game's file fails validateMap ('locked'), so the server skips an old published rev
 //   (applyMaps) and does not tell the browsers to load it (publishedRevs). Throwaway DB in the temp folder, never server/data.
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -12,20 +12,30 @@ import { MapRegistry } from '../src/shared/mapRegistry';
 import { validateMap, type MapData } from '../src/shared/mapSchema';
 import { SHEET_SPECS } from '../src/client/assets';
 import { Db } from '../server/db';
+import { Sim } from '../src/shared/sim/Sim';
+import type { Monster } from '../src/shared/sim/Monster';
+import type { SpawnArea } from '../src/shared/data/zones';
+import { applyBalance, balanceChanges, checkBalance, currentBalance } from '../src/shared/balance';
 import { applyMaps, publishedRevs } from '../server/maps-live';
 
 const FARMS = ['emerald_forest', 'misty_marsh', 'frost_reach', 'ashen_isle'];
-/** Sizes before the change (half 64, 47-ish spots each). */
+/** Sizes before the change (half 64, and how many monsters each map had). */
 const OLD_HALF = 64;
-const OLD_SPOTS: Record<string, number> = { emerald_forest: 47, misty_marsh: 44, frost_reach: 38, ashen_isle: 42 };
+const OLD_MONSTERS: Record<string, number> = { emerald_forest: 47, misty_marsh: 44, frost_reach: 41, ashen_isle: 42 };
 
 ok(FARM_SCALE === 1.5, 'farm maps grow x1.5 a side');
 for (const id of FARMS) {
   const map = MapRegistry.bundled(id)!;
   ok(map.zone.half === OLD_HALF * FARM_SCALE && ZONES[id].half === map.zone.half, `${id}: half ${map.zone.half} (was ${OLD_HALF})`);
   ok(map.walkable.half === map.zone.half - 8, `${id}: walkable frame follows (${map.walkable.half})`);
-  const ratio = map.spawns.length / OLD_SPOTS[id];
-  ok(ratio > 2.1 && ratio < 2.4, `${id}: ${map.spawns.length} monster spots, x${ratio.toFixed(2)} for x2.25 the area`);
+  const monsters = map.spawns.reduce((t, s) => t + s.count, 0);
+  const ratio = monsters / OLD_MONSTERS[id];
+  ok(ratio > 2.1 && ratio < 2.4, `${id}: ${monsters} monsters on ${map.spawns.length} spots, x${ratio.toFixed(2)} for x2.25 the area`);
+  // Owner 2026-11-25: alone or in groups of 2–3, mixed (about half each), not a fixed number per spot.
+  const lone = map.spawns.filter((s) => s.count === 1).length;
+  const groups = map.spawns.filter((s) => s.count >= 2 && s.count <= 3).length;
+  ok(lone >= map.spawns.length * 0.25 && groups >= map.spawns.length * 0.25 && map.spawns.every((s) => s.count <= 3),
+    `${id}: spots mixed, ${lone} alone and ${groups} groups of 2–3`);
   const zone = ZONES[id];
   const back = zone.portals[0];
   ok(Math.hypot(back.x - zone.start.x, back.z - zone.start.z) < 9, `${id}: portal back to town still beside the camp`);
@@ -44,6 +54,40 @@ ok(!validateMap(bundled, ctx('emerald_forest')).some((i) => i.code === 'locked')
 const wrongSize: MapData = { ...structuredClone(bundled), zone: { ...bundled.zone, half: 100 } };
 ok(validateMap(wrongSize, ctx('emerald_forest')).some((i) => i.code === 'locked' && i.severity === 'error'), 'a layout of another size fails (locked)');
 ok(!validateMap(wrongSize, { propKeys: PROP_KEYS }).some((i) => i.code === 'locked'), 'without a bundled file (an editor-made map) the size is free');
+
+// Respawn somewhere else (owner 2026-11-25, Balance.mobRoam): once a farm spot's monsters are all dead, it moves to a random place
+// near a spot of the same kind; switch off = back to its own spot. The hub's spots never move.
+{
+  type Sp = { area: SpawnArea; alive: number; queue: number[]; roam?: boolean; home?: SpawnArea };
+  const spawnersOf = (sim: Sim) => (sim as unknown as { spawners: Sp[] }).spawners;
+  const killAll = (sim: Sim, sp: Sp) => {
+    for (const m of sim.monsters.filter((x) => x.alive && x.area === sp.area)) (sim as unknown as { killMonster(m: Monster): void }).killMonster(m);
+  };
+  const sim = new Sim(ZONES.emerald_forest);
+  const list = spawnersOf(sim);
+  ok(list.every((sp) => sp.roam && sp.area !== sp.home && sp.area.x === sp.home!.x), 'farm spots: own copy, starting at their map spot');
+  let moved = 0;
+  let inBand = true;
+  for (const sp of list.slice(0, 30)) {
+    killAll(sim, sp);
+    ok(sp.alive === 0, `${sp.home!.monster}: all dead`);
+    if (sp.area.x !== sp.home!.x || sp.area.z !== sp.home!.z) moved++;
+    const kin = list.filter((o) => o.home!.monster === sp.home!.monster);
+    if (!kin.some((o) => Math.hypot(o.home!.x - sp.area.x, o.home!.z - sp.area.z) <= 8.01)) inBand = false;
+    if (sim.terrain.isBlocked(sp.area.x, sp.area.z, 0.5)) inBand = false;
+  }
+  ok(moved >= 25, `dead spots come back elsewhere (${moved}/30 moved)`);
+  ok(inBand, 'each lands near a spot of its own kind, not in collision');
+  applyBalance(checkBalance({ mobRoam: false }, true).tuning!);
+  const sp = list[40];
+  killAll(sim, sp);
+  ok(sp.area.x === sp.home!.x && sp.area.z === sp.home!.z, 'switch off: back at its own spot');
+  applyBalance({});
+  ok(currentBalance().mobRoam === true && JSON.stringify(checkBalance({ mobRoam: true }, true).tuning) === '{}', 'code default on, not saved');
+  ok(balanceChanges({}, { mobRoam: false }).includes('เกิดใหม่สุ่มที่'), 'the audit names it');
+  const hub = new Sim(ZONES.nexus_city);
+  ok(spawnersOf(hub).every((s) => !s.roam), 'the hub spots never move');
+}
 
 // Server: an old-size published row is skipped and not advertised; a right-size one is used and advertised.
 const dir = mkdtempSync(join(tmpdir(), 'multiverse-farm-scale-'));

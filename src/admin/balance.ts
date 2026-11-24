@@ -648,6 +648,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
           h('input', { type: 'checkbox', checked: draft.mobDropOnSafe, onchange: (e: Event) => { draft.mobDropOnSafe = (e.target as HTMLInputElement).checked; updateSummary(); } }),
           ' มอนเลิกไล่เมื่อผู้เล่นเข้าเมือง/safe zone (ทิ้งเป้าทันทีแล้วเดินกลับจุดเกิดของตัวเอง ไม่ไล่ซ้ำตราบที่ผู้เล่นอยู่ในเมือง · ผู้เล่นออกแมพหรือตายก็เดินกลับเช่นกัน · บอสไม่เกี่ยว · ปิด = พฤติกรรมเดิม)'),
       ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.mobRoam, onchange: (e: Event) => { draft.mobRoam = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' มอนแมพฟาร์มชั้น 1 เกิดใหม่สุ่มที่ (จุดที่มอนตายหมดทั้งตัวเดี่ยว/ทั้งกลุ่ม ย้ายไปเกิดที่ใหม่ในย่านของมอนชนิดนั้น กลุ่มยังเกิดด้วยกัน · ปิด = เกิดที่จุดเดิมเสมอ)'),
+      ),
     );
     // Boss rooms: everything about boss rooms in one card (owner 2026-11-24 "same topic together"); the bosses' skill effects come from drawCircles (bossFxBox).
     bossCard.replaceChildren(

@@ -72,6 +72,8 @@ function stars(sim: Sim, p: Player, aim: { x: number; z: number }, rank = 1): { 
   mobs[1].z = c.z;
   mobs[2].x = c.x;
   mobs[2].z = c.z + 4;
+  // All three at home here, so none walks back to a spot far away while the stars fall (it depends on where the map puts them).
+  for (const m of mobs) (m as { area: Monster['area'] }).area = { ...mobs[0].area, radius: 0.1 };
   const at = stars(sim, p, c);
   ok(at.length === 8, `8 stars (${at.length})`);
   ok(at.every((s) => s.d < 0.5), 'every star is aimed at a monster');

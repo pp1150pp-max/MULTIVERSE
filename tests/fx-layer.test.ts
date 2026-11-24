@@ -144,6 +144,8 @@ for (const cls of ['sword', 'mage', 'gunslinger'] as const) {
     sim.monsters.push(m);
     m.x = sk.id === 'gs_mine' ? 0.6 : 2; // a mine goes off only when one steps close
     m.z = 0;
+    // At home where it stands, so it does not walk back to a spot far away mid-test (depends on where the map puts the first monster).
+    (m as { area: typeof m.area }).area = { ...m.area, x: m.x, z: 0, radius: 0.1 };
     (m as unknown as { baseHp: number }).baseHp = m.hp = 1e9; // big enough to outlive a burn
     const p = sim.addPlayer({ ...newCharacterData('Sw', cls), level: 40 });
     p.x = 0;
