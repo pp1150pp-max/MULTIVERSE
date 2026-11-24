@@ -9,7 +9,7 @@ import { ITEM_ART, ITEM_BASES, itemSet, makeItem, rollItem } from '../src/shared
 import { CODE_SET_STEPS, SET_IDS, setBonusStats, setInfo, setPieces, type SetConfig } from '../src/shared/data/sets';
 import { mulberry32 } from '../src/shared/rng';
 import { Sim } from '../src/shared/sim/Sim';
-import { ZONE_1 } from '../src/shared/data/zones';
+import { BOSS_ROOMS, ZONE_1, ZONES } from '../src/shared/data/zones';
 import { EQUIP_SLOTS, type EquipSlot, type Item } from '../src/shared/types';
 import { finish, ok } from './check';
 
@@ -77,6 +77,15 @@ for (let i = 0; i < 5000; i++) {
   if (['pirate_', 'ghost_sailor_', 'sea_king_'].some((pre) => id.startsWith(pre))) later++;
 }
 ok(later === 0, 'mystery box at Lv80: no pirate / ghost / sea king pieces before their maps');
+
+// Real Sims: the beach's monsters and the crab in its room drop only beach pieces.
+for (const zone of [ZONES.shipwreck_beach, BOSS_ROOMS.shipwreck_beach]) {
+  const sim = new Sim(zone, { bossDelay: 0 });
+  for (let i = 0; i < 600 && sim.monsters.length < 4; i++) sim.step(0.1);
+  for (let k = 0; k < 60; k++) for (const m of sim.monsters) (sim as unknown as { dropLoot(m: unknown): void }).dropLoot(m);
+  const items = sim.loots.flatMap((l) => (l.kind.type === 'item' ? [l.kind.item] : []));
+  ok(sim.monsters.length > 0 && items.length > 0 && items.every((it) => itemSet(it) === 'beach'), `${zone.id}: ${items.length} drops, all beach pieces`);
+}
 
 // ---------------------------------------------------------------- set bonuses
 const piece = (part: string) => makeItem(`beach_${part}`, 'common', 41, 'sword')!;
