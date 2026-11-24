@@ -11,12 +11,16 @@ export const fmtNum = (v: number) => String(Math.round(v * 10) / 10);
 
 export const POTION_COLOR: Record<PotionKind, string> = { hp: '#e8323c', mp: '#3a7bff' };
 
-/** Six checkboxes: HP small/medium/large, MP small/medium/large. */
+/** One row of the shared tick-box table (CSS `.chk-grid`): row title on the left, ticks in equal columns. `title` '' = no title column. */
+export function chkRow(title: string, labelsHtml: string): string {
+  return `<div class="chk-row${title ? '' : ' no-head'}">${title ? `<span class="chk-head">${title}</span>` : ''}<div class="chk-opts">${labelsHtml}</div></div>`;
+}
+
+/** Six checkboxes: HP small/medium/large, MP small/medium/large (two rows of the tick-box table). */
 export function potToggles(): string {
   return (['hp', 'mp'] as const).map((k) =>
-    `<span class="pot-group">ยา ${k.toUpperCase()}` +
-    POTION_SIZES.map((sz) => `<label><input type="checkbox" data-pot="${k}" data-size="${sz}">${POTION_SIZE_LABEL[sz]}</label>`).join('') +
-    '</span>',
+    chkRow(`ยา ${k.toUpperCase()}`,
+      POTION_SIZES.map((sz) => `<label><input type="checkbox" data-pot="${k}" data-size="${sz}">${POTION_SIZE_LABEL[sz]}</label>`).join('')),
   ).join('');
 }
 

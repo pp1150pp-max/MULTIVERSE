@@ -7,7 +7,7 @@ import { isBulkSellable } from '../../shared/sim/Sim';
 import { isPotion, isStack, isStone, RARITIES, RARITY_COLOR, RARITY_LABEL, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity, type StoneStack } from '../../shared/types';
 import { COIN_ICON, potionIcon, stoneIcon } from '../icons';
 import { currentBalance } from '../../shared/balance';
-import { $, entryColor, POTION_COLOR, potionTotals } from './hudShared';
+import { $, chkRow, entryColor, POTION_COLOR, potionTotals } from './hudShared';
 
 const SELL_RARITY_KEY = 'multiverse-sell-rarities';
 /** Which rarities the merchant's "sell ticked" boxes had ticked last time (this browser only). */
@@ -120,9 +120,9 @@ export class ShopWindow {
     buyGrid.addEventListener('mouseleave', () => this.host.hideTip());
     // Sell by rarity: tick the rarities, then one button sells them all. The ticks are remembered in this browser.
     const ticked = loadSellRarities();
-    $('sell-rarity').innerHTML = RARITIES.map((r) =>
+    $('sell-rarity').innerHTML = chkRow('', RARITIES.map((r) =>
       `<label style="color:${RARITY_COLOR[r]}"><input type="checkbox" data-sell="${r}"${ticked.includes(r) ? ' checked' : ''}>` +
-      `${RARITY_LABEL[r]} <span class="n" data-sell-n="${r}"></span></label>`).join('');
+      `${RARITY_LABEL[r]} <span class="n" data-sell-n="${r}"></span></label>`).join(''));
     $('sell-rarity').addEventListener('change', () => {
       saveSellRarities(this.checkedSellRarities());
       this.renderShopMoney();

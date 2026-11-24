@@ -34,7 +34,7 @@ import { FashionBag } from './fashionBag';
 import { nextExpand, TAB_NAME, tabAt, tabOf, tabRange, type BagPay, type BagTab } from '../shared/bagTabs';
 import { cashStateNow } from './cashData';
 import { imgUrl } from './img';
-import { $, entryColor, lineHtml, POTION_COLOR, potionTotals, potToggles, readPots, syncPots } from './ui/hudShared';
+import { $, chkRow, entryColor, lineHtml, POTION_COLOR, potionTotals, potToggles, readPots, syncPots } from './ui/hudShared';
 import { ForgeWindow } from './ui/forge';
 import { ShopWindow } from './ui/shop';
 import { StashWindow } from './ui/stash';
@@ -387,8 +387,8 @@ export class Hud {
     const sortKeys = ['sort-key', 'stash-sort-key'].map((id) => $<HTMLSelectElement>(id));
     for (const sel of sortKeys) sel.addEventListener('change', () => sortKeys.forEach((o) => (o.value = sel.value)));
     const lf = $('loot-filter');
-    lf.innerHTML = '<span>เก็บ</span>' +
-      RARITIES.map((r) => `<label style="color:${RARITY_COLOR[r]}"><input type="checkbox" data-rarity="${r}">${RARITY_LABEL[r]}</label>`).join('') +
+    lf.innerHTML = chkRow('เก็บ',
+      RARITIES.map((r) => `<label style="color:${RARITY_COLOR[r]}"><input type="checkbox" data-rarity="${r}">${RARITY_LABEL[r]}</label>`).join('')) +
       potToggles();
     lf.addEventListener('change', () => {
       const rarities = RARITIES.filter((r) => lf.querySelector<HTMLInputElement>(`[data-rarity="${r}"]`)!.checked);
