@@ -494,6 +494,8 @@ export class Game {
         // "Only my damage numbers" (graphics window), as the server's /admin switch: `by` = who dealt or took it.
         // No `by` = not a damage number.
         if (ev.by !== undefined && ev.by !== this.player.id && gfxOwnNumsOnly()) break;
+        // The new level-up effect draws its own "LEVEL UP !" title (fxLayer.luText): no floating text on top of it.
+        if (ev.cls === 'lvl' && ev.text === 'LEVEL UP!' && currentBalance().fxLayer.luNew && currentBalance().fxLayer.luText) break;
         this.floating.text(ev.x, ev.y, ev.z, ev.text, ev.cls, ev.life, ev.on);
         break;
       case 'shake':

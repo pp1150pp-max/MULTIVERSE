@@ -68,7 +68,8 @@ export interface FxApi {
   puff(x: number, y: number, z: number, color: string, life: number, size: number): void;
   /** `by`, `skill`: tagged by Sim.asCaster (the client's three.quarks particles draw some skills' bursts). */
   burst(x: number, y: number, z: number, color: string, n?: number, speed?: number, by?: number, skill?: string): void;
-  levelUp(x: number, z: number): void;
+  /** `by` = the player who levelled up (the client follows them and applies its "others" graphics option). */
+  levelUp(x: number, z: number, by?: number): void;
   /** A crystal standing on the ground for `duration` seconds (Crystal Spikes: where its spikes come from). */
   crystal(x: number, z: number, duration: number, color: string): void;
   /** `by` = the caster's id (tagged by Sim.asCaster), so the client can draw other players' lighter. */
