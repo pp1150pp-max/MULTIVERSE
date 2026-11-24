@@ -115,6 +115,7 @@ export interface MapValidateCtx {
   /**
    * The bundled file of this map (MapRegistry.bundled). A boss room is compared with it: what the editor must not change
    * (id, floor, half, theme, walkable frame, the `room` block) has to equal it. Without it only the shape of a room is checked.
+   * Any other map with a bundled file must keep that file's size (`zone.half`).
    */
   baseline?: MapData;
 }
@@ -371,6 +372,11 @@ function validateInner(map: MapData, ctx: MapValidateCtx, err: Err, warn: Err): 
 
   if (map.room) validateRoom(map, ctx, err, whalf);
   else if (ctx.baseline?.room) err('locked', 'แมพนี้เป็นห้องบอส ต้องมีบล็อก room ตามไฟล์เดิม', 'zone');
+  // A map that comes with the game keeps the size of its file (the farm maps grew x1.5 on 2026-11-24): a layout drawn at
+  // the old size (an old published rev, an old draft) fails, so the server skips it and the editor offers the game's file.
+  else if (ctx.baseline && fin(ctx.baseline.zone?.half) && z.half !== ctx.baseline.zone.half) {
+    err('locked', `ขนาดแมพ (half ${z.half}) ไม่ตรงกับไฟล์ที่มากับเกม (half ${ctx.baseline.zone.half}) · กด "📄 โหลดไฟล์ที่มากับเกม" แล้ววางของที่แก้ไว้ใหม่`, 'zone');
+  }
 
   // reachability: BFS on a grid from zone.start; every portal must be reachable
   if (!z.start || !fin(z.start.x) || !fin(z.start.z) || !wOk) return;

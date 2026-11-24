@@ -88,6 +88,8 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
   const redoBtn = h('button', { title: 'ทำซ้ำ (Ctrl+Y)', onclick: () => ed?.redo() }, '↷ ทำซ้ำ');
   const publishBtn = h('button', { class: 'primary', onclick: () => void publish() }, '🚀 เผยแพร่');
   const latestBtn = h('button', { title: 'ทิ้งร่างที่บันทึกไว้ แล้วโหลดฉบับที่เผยแพร่ล่าสุดมาแก้ต่อ', onclick: () => void loadLatest() }, '↩ โหลดที่เผยแพร่ล่าสุด');
+  // The way back after the game's own file changed under a published layout (floor-1 farm maps grew x1.5, 2026-11-24).
+  const bundledBtn = h('button', { title: 'ทิ้งร่างที่บันทึกไว้ แล้วโหลดไฟล์แมพที่มากับเกมมาเป็นร่าง (ไม่สนฉบับที่เผยแพร่) · เผยแพร่ร่างนี้ = เกมใช้แมพตามไฟล์ที่มากับเกม', onclick: () => void loadLatest(true) }, '📄 โหลดไฟล์ที่มากับเกม');
   const checkBtn = h('button', { title: 'ตรวจแมพ: ชิ้นอยู่ใน collision, ประตูเดินไม่ถึง, key ภาพไม่มี, อยู่นอกกรอบ ฯลฯ แล้วคลิกรายการเพื่อกระโดดไปชิ้นนั้น', onclick: () => checkNow() }, '🔍 ตรวจแมพ');
   const solidBtn = h('button', { title: 'โชว์/ซ่อนวง/กล่อง collision ของทุกชิ้น (ตรวจบ้านทับธง)', onclick: () => { if (!ed) return; ed.opts.showSolid = !ed.opts.showSolid; ed.requestDraw(); renderOptions(); refreshTop(); } }, '⭕ วง collision');
   const previewBtn = h('button', { title: 'เปิดเกมแท็บใหม่ เดินในร่างที่บันทึกไว้ (ห้องส่วนตัวของคุณ ไม่กระทบผู้เล่นจริง ไม่เซฟตัวละคร)', onclick: () => void tryWalk() }, '🎮 ทดลองเดิน');
@@ -125,7 +127,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
   const revBox = h('div', { class: 'me-revbox' });
   const overlay = compareOverlay();
   const root = h('div', { class: 'me' },
-    h('div', { class: 'me-top' }, mapSel, ...(perms.create ? [newBtn] : []), undoBtn, redoBtn, checkBtn, solidBtn, fitBtn, previewBtn, latestBtn, status, diffText, publishBtn),
+    h('div', { class: 'me-top' }, mapSel, ...(perms.create ? [newBtn] : []), undoBtn, redoBtn, checkBtn, solidBtn, fitBtn, previewBtn, latestBtn, bundledBtn, status, diffText, publishBtn),
     h('div', { class: 'me-body' },
       h('div', { class: 'me-left' }, h('h4', {}, 'เครื่องมือ'), toolBox, toolHint, h('h4', {}, 'ตัวช่วยวาง'), optBox, h('h4', {}, 'เลเยอร์'), layerBox, h('h4', {}, 'ข้อผิดพลาดจากการตรวจ'), issueBox),
       h('div', { class: 'me-center' }, canvas),
@@ -262,18 +264,26 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
     }
   }
 
-  /** Drops the saved draft and loads the newest published layout (or the bundled file when none was published yet). */
-  async function loadLatest(): Promise<void> {
+  /**
+   * Drops the saved draft and loads the newest published layout (or the bundled file when none was published yet).
+   * `bundled` (📄): the bundled file whatever was published, numbered as the newest rev so the editor does not call the draft stale.
+   */
+  async function loadLatest(bundled = false): Promise<void> {
     if (!ed) return;
     try { await refreshRows(); } catch (err) { setStatus(`โหลดรายการแมพไม่สำเร็จ: ${errText(err)}`, 'bad'); return; } // others may have published since the page opened
     const row = rows.find((r) => r.id === current);
-    const from = row?.publishedRev != null ? `rev ${row.publishedRev} ที่เผยแพร่ล่าสุด` : 'ไฟล์ที่มากับเกม (ยังไม่เคยเผยแพร่)';
+    const fromPublished = !bundled && row?.publishedRev != null;
+    const from = fromPublished ? `rev ${row!.publishedRev} ที่เผยแพร่ล่าสุด`
+      : row?.publishedRev != null ? 'ไฟล์ที่มากับเกม (ของที่แก้ไว้ในฉบับที่เผยแพร่จะไม่ติดมา)' : 'ไฟล์ที่มากับเกม (ยังไม่เคยเผยแพร่)';
     if (!confirm(`ทิ้งการแก้ที่ยังไม่เผยแพร่ของแมพนี้ แล้วโหลด ${from} มาแทน?\n\nร่างที่บันทึกไว้จะถูกเขียนทับ`)) return;
     try {
       let map: MapData | undefined;
-      if (row?.publishedRev != null) map = (await api<{ map?: MapData }>('GET', `/admin/maps/${current}/revisions/${row.publishedRev}`)).map;
-      else map = structuredClone((await import('../../shared/mapRegistry')).MapRegistry.bundled(current));
-      if (!map) throw new Error('ไม่พบข้อมูล');
+      if (fromPublished) map = (await api<{ map?: MapData }>('GET', `/admin/maps/${current}/revisions/${row!.publishedRev}`)).map;
+      else {
+        map = structuredClone((await import('../../shared/mapRegistry')).MapRegistry.bundled(current));
+        if (map && row?.publishedRev != null) map.rev = row.publishedRev;
+      }
+      if (!map) throw new Error(bundled ? 'แมพนี้ไม่มีไฟล์ที่มากับเกม (แมพที่สร้างเอง)' : 'ไม่พบข้อมูล');
       ed.setMap(map);
       diff = { added: 0, removed: 0, changed: 0 };
       scheduleSave(); // the draft now holds exactly this

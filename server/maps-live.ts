@@ -94,7 +94,11 @@ export function previewLayout(db: Db, id: string): MapData | undefined {
 export function publishedRevs(db: Db): Record<string, number> {
   if (!currentBalance().mapFromDb) return {};
   const out: Record<string, number> = {};
-  for (const row of db.publishedMaps()) if (!isCustomZone(row.zoneId) || MapRegistry.isCustom(row.zoneId)) out[row.zoneId] = row.rev;
+  // Only what applyMaps took in: a published layout it skipped (fails the check, e.g. drawn at a map's old size) is left out,
+  // so the browsers draw the bundled file the server runs, not a layout the server does not.
+  for (const row of db.publishedMaps()) {
+    if (isCustomZone(row.zoneId) ? MapRegistry.isCustom(row.zoneId) : MapRegistry.get(row.zoneId)?.rev === row.rev) out[row.zoneId] = row.rev;
+  }
   return out;
 }
 

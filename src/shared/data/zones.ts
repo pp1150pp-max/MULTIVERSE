@@ -194,10 +194,18 @@ export const DEFAULT_ARENA = 11;
 /** One kind of monster to scatter over a zone, or a squad (`group` of several) that stands together. */
 interface Scatter {
   group: [monster: string, count: number][];
-  /** How many singles (or squads). */
+  /** How many singles (or squads); for a `mixed` kind, how many monsters. */
   count: number;
   respawn: [number, number];
+  /**
+   * Floor-1 farm maps (owner 2026-11-25): `count` is monsters, not spots, and each spot rolls its own size: half alone, half a
+   * group of 2–3 of the kind standing together (FARM_GROUP). Only for a kind on its own (`group` of one monster).
+   */
+  mixed?: boolean;
 }
+
+/** A mixed spot (Scatter.mixed): this share is a group, of this many monsters (each size as likely). */
+export const FARM_GROUP = { share: 0.5, sizes: [2, 3] };
 
 /**
  * Spreads a zone's monsters one by one over the whole map instead of in herds, the kinds in order
@@ -239,9 +247,14 @@ function scatterZone(z: ZoneDef, list: Scatter[]): ZoneDef {
     done += s.count;
     const hi = FIRST + ((LAST - FIRST) * done) / total;
     const squad = s.group.length > 1 || s.group[0][1] > 1;
-    const apart = squad ? 9 : 6.5;
+    const mixed = !!s.mixed && s.group.length === 1;
+    // A mixed list rolls the next spot's size up front, so it is known when the spot is tested for room.
+    const roll = (): number => (r() < FARM_GROUP.share ? FARM_GROUP.sizes[Math.floor(r() * FARM_GROUP.sizes.length)] : 1);
+    let size = mixed ? Math.min(roll(), s.count) : 1;
     let n = 0;
-    for (let tries = 0; tries < 5000 && n < s.count; tries++) {
+    for (let tries = 0; tries < 80000 && n < s.count; tries++) {
+      const together = squad || size > 1;
+      const apart = together ? 9 : 6.5;
       const x = -B + r() * 2 * B;
       const y = -B + r() * 2 * B;
       const p = progress(x, y);
@@ -250,9 +263,18 @@ function scatterZone(z: ZoneDef, list: Scatter[]): ZoneDef {
       if (Math.hypot(x - z.start.x, y - z.start.z) < 14) continue;
       if (Math.hypot(x - boss.x, y - boss.z) < arena + 5) continue;
       if (pools.some((l) => Math.hypot((x - l.x) / (l.rx + 2.5), (y - l.z) / (l.rz + 2.5)) < 1)) continue;
+      // Farm-map spots (denser sets `mixed`, true or false) stand off a pool by its longest radius too: with the map full, the narrow
+      // side of an oval came too close.
+      if (s.mixed !== undefined && pools.some((l) => Math.hypot(x - l.x, y - l.z) < Math.max(l.rx, l.rz) + 4)) continue;
       if (placed.some((o) => Math.hypot(o.x - x, o.z - y) < apart)) continue;
       const at = { x: Math.round(x), z: Math.round(y) };
       placed.push(at);
+      if (mixed) {
+        spawns.push({ monster: s.group[0][0], ...at, radius: together ? 3 : 2.5, count: size, respawn: s.respawn });
+        n += size;
+        size = Math.min(roll(), s.count - n);
+        continue;
+      }
       for (const [monster, count] of s.group) {
         spawns.push({ monster, ...at, radius: squad ? 3 : 2.5, count, respawn: s.respawn });
       }
@@ -263,7 +285,47 @@ function scatterZone(z: ZoneDef, list: Scatter[]): ZoneDef {
   return { ...z, spawns };
 }
 
-export const ZONE_1: ZoneDef = scatterZone({
+/**
+ * Floor 1's four farm maps are this much bigger each way than they were drawn (owner 2026-11-24: x1.5 a side, about
+ * 2.25x the area; the towns, boss rooms, floor 2 and editor-made maps keep their size). grownFarm() scales the drawing
+ * (size, camp, roads, summoner, lakes and pools; the portal back stays beside the camp) before scatterZone, and FARM_DENSITY gives each kind of
+ * monster that many more spots so the map is as full as before. Trees and decor follow by themselves (Terrain.placeProps
+ * fills by area). The seed and the arena stay: the boss rooms are built from those (bossRoom()).
+ */
+export const FARM_SCALE = 1.5;
+const FARM_DENSITY = FARM_SCALE * FARM_SCALE;
+/**
+ * On top of FARM_DENSITY: the farm maps were still half empty (owner 2026-11-25 "จุดเกิดให้เต็มไม่มีที่ว่าง"; x3 was too many, then
+ * x2: about 200 monsters a map). /admin can switch part of the spots off per map (Balance.farmSpots).
+ */
+const FARM_FILL = 2;
+
+function grownFarm(z: ZoneDef): ZoneDef {
+  const k = FARM_SCALE;
+  const pt = <T extends { x: number; z: number }>(o: T): T => ({ ...o, x: o.x * k, z: o.z * k });
+  const ellipse = <T extends { x: number; z: number; rx: number; rz: number }>(o: T): T => ({ ...pt(o), rx: o.rx * k, rz: o.rz * k });
+  const line = (pts: [number, number][]) => pts.map(([x, y]) => [x * k, y * k] as [number, number]);
+  return {
+    ...z,
+    half: z.half * k,
+    start: pt(z.start),
+    path: line(z.path),
+    branches: z.branches.map(line),
+    lair: z.lair && pt(z.lair),
+    // The camp keeps its size, so the portal back keeps its place beside it (moves with the camp, not out from the middle).
+    portals: z.portals.map((p) => ({ ...p, x: z.start.x * k + (p.x - z.start.x), z: z.start.z * k + (p.z - z.start.z) })),
+    iceLakes: z.iceLakes?.map(ellipse),
+    lavaPools: z.lavaPools?.map(ellipse),
+  };
+}
+
+/**
+ * A farm map's monster list with FARM_DENSITY x FARM_FILL times as many monsters of each kind, on mixed spots (alone or 2–3 together, FARM_GROUP;
+ * squads stay as they are).
+ */
+const denser = (list: Scatter[]): Scatter[] => list.map((s) => ({ ...s, count: Math.round(s.count * FARM_DENSITY * FARM_FILL), mixed: s.group.length === 1 && s.group[0][1] === 1 }));
+
+export const ZONE_1: ZoneDef = scatterZone(grownFarm({
   id: 'emerald_forest',
   name: 'Emerald Forest',
   nameTh: 'ป่ามรกต',
@@ -285,16 +347,16 @@ export const ZONE_1: ZoneDef = scatterZone({
   spawns: [],
   lair: { boss: 'forest_bear', x: -42, z: -42 },
   portals: [{ to: HUB_ID, x: 49.5, z: 49.5, minLevel: 0 }],
-}, [
+}), denser([
   { group: [['green_slime', 1]], count: 14, respawn: [6, 10] },
   { group: [['wild_rabbit', 1]], count: 8, respawn: [7, 11] },
   { group: [['forest_fox', 1]], count: 9, respawn: [8, 12] },
   { group: [['wild_boar', 1]], count: 8, respawn: [9, 14] },
   { group: [['forest_wolf', 1]], count: 8, respawn: [10, 15] },
-]);
+]));
 
 // Reached from the hub's right portal, so the camp is on the left.
-export const ZONE_2: ZoneDef = rotateZone(1, scatterZone({
+export const ZONE_2: ZoneDef = rotateZone(1, scatterZone(grownFarm({
   id: 'misty_marsh',
   name: 'Misty Marsh',
   nameTh: 'หนองน้ำหมอก',
@@ -318,16 +380,16 @@ export const ZONE_2: ZoneDef = rotateZone(1, scatterZone({
   spawns: [],
   lair: { boss: 'bog_witch', x: -42, z: -42 },
   portals: [{ to: HUB_ID, x: 49.5, z: 49.5, minLevel: 0 }],
-}, [
+}), denser([
   { group: [['bog_toad', 1]], count: 12, respawn: [7, 11] },
   { group: [['marsh_leech', 1]], count: 8, respawn: [8, 12] },
   { group: [['swamp_serpent', 1]], count: 8, respawn: [9, 13] },
   { group: [['mire_ghoul', 1]], count: 8, respawn: [10, 14] },
   { group: [['will_o_wisp', 1]], count: 8, respawn: [10, 15] },
-]));
+])));
 
 // Reached from the hub's bottom portal, so the camp is at the top.
-export const ZONE_3: ZoneDef = rotateZone(2, scatterZone({
+export const ZONE_3: ZoneDef = rotateZone(2, scatterZone(grownFarm({
   id: 'frost_reach',
   name: 'Frost Reach',
   nameTh: 'ดินแดนหิมะ',
@@ -356,17 +418,17 @@ export const ZONE_3: ZoneDef = rotateZone(2, scatterZone({
     { x: 34, z: -32, rx: 11, rz: 8 },
     { x: 3, z: -7, rx: 5.5, rz: 4 },
   ],
-}, [
+}), denser([
   { group: [['frost_penguin', 1]], count: 12, respawn: [8, 12] },
   { group: [['tusk_seal', 1]], count: 8, respawn: [10, 14] },
   { group: [['snow_owl', 1]], count: 8, respawn: [10, 14] },
   // Squads of 1 sprite shooting from behind 2 brawlers.
   { group: [['snow_sprite', 1], ['snow_brawler', 2]], count: 3, respawn: [10, 15] },
   { group: [['polar_bear', 1]], count: 4, respawn: [16, 22] },
-]));
+])));
 
 // Reached from the hub's left portal, so the camp is on the right.
-export const ZONE_4: ZoneDef = rotateZone(3, scatterZone({
+export const ZONE_4: ZoneDef = rotateZone(3, scatterZone(grownFarm({
   id: 'ashen_isle',
   name: 'Ashen Isle',
   nameTh: 'เกาะภูเขาไฟ',
@@ -397,14 +459,17 @@ export const ZONE_4: ZoneDef = rotateZone(3, scatterZone({
     { x: -8, z: 22, rx: 5, rz: 3.5 },
     { x: -34, z: -4, rx: 6, rz: 4 },
   ],
-}, [
+}), denser([
   { group: [['ember_wisp', 1]], count: 12, respawn: [8, 12] },
   { group: [['salamander', 1]], count: 8, respawn: [10, 14] },
   { group: [['lava_bat', 1]], count: 8, respawn: [10, 14] },
   // A mage casting from behind a knight.
   { group: [['ash_mage', 1], ['ash_knight', 1]], count: 4, respawn: [10, 15] },
   { group: [['magma_golem', 1]], count: 6, respawn: [14, 20] },
-]));
+])));
+
+/** Floor 1's farm maps (grownFarm): their monster spots move about on respawn (Sim, Balance.mobRoam). */
+export const FARM_IDS: readonly string[] = [ZONE_1.id, ZONE_2.id, ZONE_3.id, ZONE_4.id];
 
 /** Where the hub's portals sit: one per corner, this far out on each axis. */
 const HUB_PORTAL = 54.5;

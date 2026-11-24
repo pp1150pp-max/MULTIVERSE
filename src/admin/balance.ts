@@ -22,7 +22,7 @@ import {
   AUTO_ALLOW_NAME, AUTO_ALLOWS, AUTO_HOME_WAIT_NAME, AUTO_OFFLINE_NAME, AUTO_AOE_GUARD_NAME, AUTO_DEFAULT_NAME, AUTO_LOOT_ORDERS, AUTO_NUM_NAME, AUTO_OUT_ACTIONS, AUTO_RANGE, AUTO_TARGET_MODES, autoDefaultValueName,
   type AutoAllow, type AutoDefaults,
 } from '../shared/autoTuning';
-import { NO_BOOST, ZONES, type MonsterBoost } from '../shared/data/zones';
+import { FARM_IDS, NO_BOOST, ZONES, type MonsterBoost } from '../shared/data/zones';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { ITEM_BASES, itemRowKinds, statStep, rowRanges, TIER_BAND_NAME, TIER_BANDS, tierBandOf, tierChances, tierRanges } from '../shared/data/items';
 import { expToNext, MAX_LEVEL } from '../shared/formulas';
@@ -632,6 +632,32 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
           }, 1, ...BALANCE_RANGE.mobPack, 0.1, () => { show(); updateSummary(); });
           return h('tr', {}, h('td', {}, z.nameTh), h('td', {}, box), total);
         })))),
+      h('h3', {}, 'จุดเกิดที่เปิดใช้ (แมพฟาร์มชั้น 1)'),
+      h('div', { class: 'muted' },
+        `แมพฟาร์มชั้น 1 มีจุดเกิดเต็มแมพ (เจ้าของ 2026-11-25) ใส่ % ของจุดที่เปิดใช้ ${BALANCE_RANGE.farmSpots[0]}–${BALANCE_RANGE.farmSpots[1]} (100 = ทุกจุด) · จุดที่ปิดกระจายเท่า ๆ กันทั้งแมพและทุกชนิดมอน · ` +
+        'บันทึกแล้วมีผลทันที: เพิ่ม = มอนทยอยเกิดตามเวลาเกิดใหม่, ลด = มอนของจุดที่ปิดตายแล้วไม่เกิดใหม่ · ใช้คู่กับ "มอนต่อจุด ×" ด้านบนได้'),
+      h('div', { class: 'bal-scroll' }, h('table', { class: 'bal-table' },
+        h('thead', {}, h('tr', {}, h('th', {}, 'แมพ'), h('th', {}, 'จุดที่เปิด %'), h('th', {}, 'จุด / มอนทั้งแมพ (ต่อ CH)'))),
+        h('tbody', {}, ...FARM_IDS.map((id) => {
+          const total = h('td', { class: 'bal-out' });
+          const spawns = ZONES[id].spawns;
+          const sum = (b: Parameters<typeof packCount>[3]) => {
+            const per = spawns.map((a, i) => packCount(id, a.count, i, b));
+            return `${per.filter((n) => n > 0).length} จุด / ${per.reduce((t, n) => t + n, 0)} ตัว`;
+          };
+          const show = (): void => {
+            const before = sum(code);
+            const after = sum(draft);
+            total.textContent = before === after ? before : `${before} → ${after}`;
+            total.classList.toggle('bal-changed', before !== after);
+          };
+          show();
+          const box = numBox(() => draft.farmSpots[id] ?? 100, (n) => {
+            if (n === 100) delete draft.farmSpots[id];
+            else draft.farmSpots[id] = n;
+          }, 100, ...BALANCE_RANGE.farmSpots, 5, () => { show(); updateSummary(); });
+          return h('tr', {}, h('td', {}, ZONES[id].nameTh), h('td', {}, box), total);
+        })))),
       h('h3', {}, 'การไล่เป้าหมาย'),
       h('div', { class: 'muted' },
         'มอนธรรมดา: ใส่เลขมากกว่า 0 = เลิกไล่เมื่อไม่โดนตีครบกี่วินาที แล้วเดินกลับบ้านฟื้น HP · 0 = ไม่เลิกไล่จนกว่าเป้าจะตาย/ออกแมพ/ถูกลากไกลเกินระยะวิ่งกลับ (ระยะนี้ยังทำงานเสมอ)'),
@@ -647,6 +673,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         h('label', { title: 'ค่าในโค้ด: เปิด' },
           h('input', { type: 'checkbox', checked: draft.mobDropOnSafe, onchange: (e: Event) => { draft.mobDropOnSafe = (e.target as HTMLInputElement).checked; updateSummary(); } }),
           ' มอนเลิกไล่เมื่อผู้เล่นเข้าเมือง/safe zone (ทิ้งเป้าทันทีแล้วเดินกลับจุดเกิดของตัวเอง ไม่ไล่ซ้ำตราบที่ผู้เล่นอยู่ในเมือง · ผู้เล่นออกแมพหรือตายก็เดินกลับเช่นกัน · บอสไม่เกี่ยว · ปิด = พฤติกรรมเดิม)'),
+      ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.mobRoam, onchange: (e: Event) => { draft.mobRoam = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' มอนแมพฟาร์มชั้น 1 เกิดใหม่สุ่มที่ (จุดที่มอนตายหมดทั้งตัวเดี่ยว/ทั้งกลุ่ม ย้ายไปเกิดที่ใหม่ในย่านของมอนชนิดนั้น กลุ่มยังเกิดด้วยกัน · ปิด = เกิดที่จุดเดิมเสมอ)'),
       ),
     );
     // Boss rooms: everything about boss rooms in one card (owner 2026-11-24 "same topic together"); the bosses' skill effects come from drawCircles (bossFxBox).
