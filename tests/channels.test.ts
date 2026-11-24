@@ -20,9 +20,9 @@ const empty = (c: Channel) => {
 
 // ---------------------------------------------------------------- which maps
 {
-  // Every farm map has channels (4 on floor 1 + the floor-2 beach and cove); boss rooms don't.
+  // Every farm map has channels (4 on floor 1 + the floor-2 beach, cove and graveyard); boss rooms don't.
   const farms = Object.values(ZONES).filter((z) => !!z.lair);
-  ok([ZONE_1, ZONE_2].every(hasChannels) && farms.length === 6 && Object.values(ZONES).filter((z) => z.channels).length === farms.length
+  ok([ZONE_1, ZONE_2].every(hasChannels) && farms.length === 7 && Object.values(ZONES).filter((z) => z.channels).length === farms.length
     && farms.every(hasChannels), 'every farm map has channels (ZoneDef.channels)');
   ok(hasChannels(ZONE_HUB) && placeLabel(ZONE_HUB, 3) === `${ZONE_HUB.nameTh} · CH 3`, 'the hub has them too (the /admin switch, on in the code)');
   ok(Object.values(BOSS_ROOMS).every((r) => !hasChannels(r)), 'boss rooms do not (they have their own rooms)');

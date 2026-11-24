@@ -6,7 +6,7 @@ import type { Editor, Layer } from './editor';
 import { decorLayer, drawRealGround } from './groundArt';
 import { HARBOR_DECKS, HARBOR_ID } from '../../shared/data/harbor';
 
-const GROUND: Record<MapTheme, string> = { forest: '#4f7a3f', marsh: '#566a43', snow: '#cfdbe3', volcano: '#4b3a34', beach: '#d9c79a', cove: '#9a8a8e' };
+const GROUND: Record<MapTheme, string> = { forest: '#4f7a3f', marsh: '#566a43', snow: '#cfdbe3', volcano: '#4b3a34', beach: '#d9c79a', cove: '#9a8a8e', grave: '#5e6a72' };
 const PATH_COLOR = 'rgba(196,166,112,0.85)';
 
 /** Floor colour by theme (the hub's four quarters in their own colours), the walkable frame, paths and lakes. */

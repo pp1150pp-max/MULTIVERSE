@@ -30,6 +30,8 @@ export interface ProjOpts {
   hitFx?: { name: SkillEffect; size: number };
   /** Monster shots: the picture to draw. Player shots leave this out. */
   art?: ShotArt;
+  /** Monster shots: runs where it ends, on a player or at the end of its flight (a ghost monkey's curse ring). */
+  onEnd?: (x: number, z: number) => void;
   /** Player shots: extra damage multiplier (× ATK) on this target, worked out as it lands (execute, stacks, weak spots). */
   bonus?: (m: Monster) => number;
   /** Player shots: runs after a single-target or piercing hit lands on `m` (bounces, burning, marks). */
@@ -73,12 +75,14 @@ export class EnemyShot {
         sim.hitPlayer(this.owner, p, this.o.mult, { kb: this.o.kb ?? 2, fromX: this.x - this.dx, fromZ: this.z - this.dz });
         sim.fx('burst', this.x, 0.85, this.z, this.o.color, 7, 3);
         this.dead = true;
+        this.o.onEnd?.(this.x, this.z);
         return;
       }
     }
     if (this.traveled >= this.o.range) {
       sim.fx('burst', this.x, 0.4, this.z, this.o.color, 4, 2);
       this.dead = true;
+      this.o.onEnd?.(this.x, this.z);
     }
   }
 }

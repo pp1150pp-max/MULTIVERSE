@@ -299,6 +299,8 @@ export interface MonsterSnap {
   st: 'idle' | 'chase' | 'return' | 'charge' | 'leap'; wind: boolean; enr: boolean;
   /** Height above the ground while jumping. */
   y: number;
+  /** Faded out (a ghost sailor, the Ghost Captain's warp): drawn see-through, can't be hit. Left out when not. */
+  inv?: 1;
   /** Its debuffs as bits (sim/debuffs.ts), left out when none. */
   db?: number;
   /** With `db`: the skill whose debuff it got last (its magic circle). */

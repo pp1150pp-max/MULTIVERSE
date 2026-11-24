@@ -3,7 +3,7 @@ import type { BossEffect } from '../sim/types';
 export type Behavior = 'passive' | 'skittish' | 'aggressive' | 'charger' | 'boss';
 
 /** The picture a monster's shot flies as: the client's sheet fx_<art>. The cove's are paper only (sprites/paper/fx/). */
-export type ShotArt = 'ice_shard' | 'snowball' | 'ember_bolt' | 'iron_ball' | 'bomb' | 'pellets';
+export type ShotArt = 'ice_shard' | 'snowball' | 'ember_bolt' | 'iron_ball' | 'bomb' | 'pellets' | 'ghost_skull';
 
 /** A straight shot at the player. */
 export interface ShotDef {
@@ -24,6 +24,13 @@ export interface ShotDef {
  * at the nearest player to blow up · parrot = the captain's parrot (sim/peglegCaptain.ts moves it).
  */
 export type CoveMove = 'chainball' | 'combo' | 'spread' | 'keg' | 'parrot';
+
+/**
+ * The Ghost Ship Graveyard's monster moves (sim/graveMoves.ts, plan 5.3): curse = its thrown skull leaves a ring that slows ·
+ * phase = walks through props, fades out (can't be hit) and comes back beside its target with a strike · song = sings, and
+ * players in the circle are made to walk to it (a dash breaks it) · split = breaks into small ones when killed.
+ */
+export type GraveMove = 'curse' | 'phase' | 'song' | 'split';
 
 export interface MonsterDef {
   id: string;
@@ -90,12 +97,12 @@ export interface MonsterDef {
    * shell = hides when hit (less damage), then strikes back · steal = swoops for gold and flies off ·
    * chain = lightning that jumps from player to player · thorns = reflects part of close-range hits.
    */
-  move?: 'shell' | 'steal' | 'chain' | 'thorns' | CoveMove;
+  move?: 'shell' | 'steal' | 'chain' | 'thorns' | CoveMove | GraveMove;
   /**
    * Bosses with their own moves on top of walking and hitting: the Giant Cannon Crab (sim/cannonCrab.ts),
-   * the Peg-Leg Captain (sim/peglegCaptain.ts).
+   * the Peg-Leg Captain (sim/peglegCaptain.ts), the Ghost Captain (sim/ghostCaptain.ts).
    */
-  brain?: 'cannon_crab' | 'pegleg_captain';
+  brain?: 'cannon_crab' | 'pegleg_captain' | 'ghost_captain';
   /**
    * Bosses: the painted effect each of its skills plays (owner 2026-11-21, src/client/bossFx.ts): its hit (sent at
    * the boss with its facing and reach), ground slam, enrage, jumping off / landing, and where its minions appear.
@@ -373,5 +380,49 @@ export const MONSTERS: Record<string, MonsterDef> = {
     hp: 15000, atk: 0, def: 0, speed: 7, exp: 0, gold: [0, 0],
     aggroRange: 0, attackRange: 0, attackCooldown: 99, height: 1.1, radius: 0.45,
     behavior: 'passive', move: 'parrot', summonOnly: true, ignoreTough: true, itemChance: 0, potionChance: 0,
+  },
+
+  // Floor 2, map 3 — Ghost Ship Graveyard (Lv61–70). Every one a ghost. Numbers: owner 2026-11-24 (the proposed table: the cove's
+  // step again, HP ×1.4 ATK ×1.3 EXP ×1.4 gold ×1.45); the zone's boost is the cove's. Move numbers: moveTuning.ts (/admin).
+  ghost_monkey: {
+    id: 'ghost_monkey', name: 'Ghost Sailor Monkey', nameTh: 'ลิงกะลาสีผี', levels: [61, 62],
+    hp: 4350, atk: 455, def: 76, speed: 2.4, exp: 3150, gold: [195, 295],
+    aggroRange: 0, attackRange: 1.2, attackCooldown: 1.6, height: 1.4, radius: 0.5,
+    behavior: 'passive', move: 'curse', itemChance: 0.22, potionChance: 0.14,
+    // Its skull leaves a curse ring where it lands (graveMoves.ts); the ring's slow and time are the /admin card's.
+    thrown: { art: 'ghost_skull', speed: 8, range: 8, mult: 1.2, radius: 0.55, size: 0.9, color: '#7fe0d0', minRange: 2.5, cooldown: 5 },
+  },
+  ghost_sailor: {
+    id: 'ghost_sailor', name: 'Ghost Sailor', nameTh: 'กะลาสีผี', levels: [63, 64],
+    hp: 4750, atk: 505, def: 80, speed: 2.5, exp: 3700, gold: [225, 340],
+    aggroRange: 7, attackRange: 1.3, attackCooldown: 1.8, height: 1.7, radius: 0.5,
+    behavior: 'aggressive', move: 'phase', itemChance: 0.22, potionChance: 0.14,
+  },
+  ghost_siren: {
+    id: 'ghost_siren', name: 'Ghost Siren', nameTh: 'ไซเรนผี', levels: [65, 66],
+    hp: 4600, atk: 570, def: 72, speed: 2.2, exp: 4350, gold: [260, 400],
+    aggroRange: 8, attackRange: 1.4, attackCooldown: 1.9, height: 1.7, radius: 0.5,
+    behavior: 'aggressive', move: 'song', itemChance: 0.23, potionChance: 0.14,
+  },
+  barnacle_crew: {
+    id: 'barnacle_crew', name: 'Barnacle Ghost Crew', nameTh: 'ลูกเรือหอยเกาะผี', levels: [67, 69],
+    hp: 7300, atk: 610, def: 98, speed: 2.0, exp: 5050, gold: [305, 465],
+    aggroRange: 7, attackRange: 1.4, attackCooldown: 1.9, height: 1.9, radius: 0.65,
+    behavior: 'aggressive', move: 'split', itemChance: 0.23, potionChance: 0.15,
+  },
+  // What a barnacle ghost crew breaks into (graveMoves.ts): 30% of its HP, 70% of its ATK, its level. No rewards (owner 2026-11-24).
+  barnacle_small: {
+    id: 'barnacle_small', name: 'Small Barnacle Ghost', nameTh: 'หอยเกาะผีตัวเล็ก', levels: [67, 69],
+    hp: 2190, atk: 427, def: 98, speed: 2.6, exp: 0, gold: [0, 0],
+    aggroRange: 8, attackRange: 1.2, attackCooldown: 1.5, height: 1.1, radius: 0.4,
+    behavior: 'aggressive', summonOnly: true, itemChance: 0, potionChance: 0,
+  },
+  // Its id is fixed by the Lv70 gate (BOSS_GATES); its picture is the cut sheet ghost_captain (walk, slash, bell, vanish).
+  ghost_captain: {
+    id: 'ghost_captain', name: 'Ghost Captain of the Dead Ship', nameTh: 'กัปตันผีเรือคนตาย (Boss)', levels: [70, 70],
+    hp: 476000, atk: 885, def: 60, speed: 2.0, exp: 50400, gold: [4060, 6525],
+    aggroRange: 9, attackRange: 2.2, attackCooldown: 1.8, height: 4.4, radius: 1.3,
+    behavior: 'boss', brain: 'ghost_captain', itemChance: 1, potionChance: 1,
+    bossLoot: { items: 6, epics: 2, stoneChance: 0.2 },
   },
 };

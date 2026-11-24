@@ -10,6 +10,7 @@ import { arenaRadius, FARM_IDS, inBossArena, lairExitSpot, LAVA_BURN, LAVA_TICK 
 import type { Hazard } from './volcanoHeart';
 import { stealReturn, thornsReflect } from './beachMoves';
 import { kegStart } from './coveMoves';
+import { splitOnDeath, tickCurses } from './graveMoves';
 import {
   announceFrom, bannerFrom, dropsOnFail, forgeCd, enhanceCost, itemName, maxPlus, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
 } from '../data/enhance';
@@ -808,6 +809,7 @@ export class Sim {
     m.spells?.reset(this);
     m.crab?.reset(this);
     m.captain?.remove(this);
+    m.ghostCaptain?.remove(this);
     // A gull shot down with stolen gold: it goes back (sim/beachMoves.ts).
     stealReturn(this, m);
     if (!m.summoned) {
@@ -831,6 +833,8 @@ export class Sim {
       const runner = this.spawnSummon(m.def.id, m.x, m.z, m.level);
       if (runner) kegStart(this, runner, m);
     }
+    // A barnacle ghost crew breaks into small ones (sim/graveMoves.ts): summons, no rewards.
+    if (m.def.move === 'split' && !m.summoned) splitOnDeath(this, m);
     if (m.isBoss) {
       this.log(`🏆 ปราบ ${m.def.name} สำเร็จ!`, '#ffcf5a');
       this.shake(0.4, m);
@@ -2189,6 +2193,8 @@ export class Sim {
     }
     for (const p of this.players) if (p.alive) this.checkPortals(p);
     if (this.zone.lavaPools) for (const p of this.players) if (p.alive) this.tickLava(p, dt);
+    // The Ghost Ship Graveyard's curse rings slow whoever stands in them (sim/graveMoves.ts).
+    if (this.hazards.length) tickCurses(this);
 
     for (const m of this.monsters) m.update(dt, this);
     this.separateMonsters();

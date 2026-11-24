@@ -16,9 +16,9 @@ const BOSS_REACH = 4;
 /** Where players of a boss room stand when they come in (Sim.spawnPoint). */
 export const roomSpawnOf = (start: { x: number; z: number }): { x: number; z: number } => ({ x: start.x - ROOM_SPAWN_OFFSET, z: start.z - ROOM_SPAWN_OFFSET });
 
-export type MapTheme = 'forest' | 'marsh' | 'snow' | 'volcano' | 'beach' | 'cove';
-/** Every theme a map file may name (floor 2's beach and cove included). */
-export const MAP_THEMES: readonly string[] = ['forest', 'marsh', 'snow', 'volcano', 'beach', 'cove'];
+export type MapTheme = 'forest' | 'marsh' | 'snow' | 'volcano' | 'beach' | 'cove' | 'grave';
+/** Every theme a map file may name (floor 2's beach, cove and ghost-ship graveyard included). */
+export const MAP_THEMES: readonly string[] = ['forest', 'marsh', 'snow', 'volcano', 'beach', 'cove', 'grave'];
 export type Pt = [number, number]; // [x, z] in world units
 
 /** Collision of a prop: a circle `{r}` or a box `{w, d}` (full width along x, full depth along z, before `rot`). */
