@@ -15,7 +15,7 @@ import { Db } from '../server/db';
 import { Sim } from '../src/shared/sim/Sim';
 import type { Monster } from '../src/shared/sim/Monster';
 import type { SpawnArea } from '../src/shared/data/zones';
-import { applyBalance, balanceChanges, checkBalance, currentBalance } from '../src/shared/balance';
+import { applyBalance, balanceChanges, checkBalance, currentBalance, packCount } from '../src/shared/balance';
 import { applyMaps, publishedRevs } from '../server/maps-live';
 
 const FARMS = ['emerald_forest', 'misty_marsh', 'frost_reach', 'ashen_isle'];
@@ -30,7 +30,8 @@ for (const id of FARMS) {
   ok(map.walkable.half === map.zone.half - 8, `${id}: walkable frame follows (${map.walkable.half})`);
   const monsters = map.spawns.reduce((t, s) => t + s.count, 0);
   const ratio = monsters / OLD_MONSTERS[id];
-  ok(ratio > 2.1 && ratio < 2.4, `${id}: ${monsters} monsters on ${map.spawns.length} spots, x${ratio.toFixed(2)} for x2.25 the area`);
+  // x2.25 for the area, then x3 to fill the map (owner 2026-11-25): about 300 a map.
+  ok(ratio > 6.3 && ratio < 7.3, `${id}: ${monsters} monsters on ${map.spawns.length} spots, x${ratio.toFixed(2)} (x2.25 area x3 fill)`);
   // Owner 2026-11-25: alone or in groups of 2–3, mixed (about half each), not a fixed number per spot.
   const lone = map.spawns.filter((s) => s.count === 1).length;
   const groups = map.spawns.filter((s) => s.count >= 2 && s.count <= 3).length;
@@ -87,6 +88,28 @@ ok(!validateMap(wrongSize, { propKeys: PROP_KEYS }).some((i) => i.code === 'lock
   ok(balanceChanges({}, { mobRoam: false }).includes('เกิดใหม่สุ่มที่'), 'the audit names it');
   const hub = new Sim(ZONES.nexus_city);
   ok(spawnersOf(hub).every((s) => !s.roam), 'the hub spots never move');
+}
+
+// /admin "จุดเกิดที่เปิดใช้ %" (Balance.farmSpots): off spots spread evenly, every kind keeps some; 100 = all; live in a Sim.
+{
+  ok(currentBalance().farmSpots.emerald_forest === undefined, 'code default: every spot (no value stored)');
+  ok('error' in checkBalance({ farmSpots: { nexus_city: 50 } }, true), 'only the four farm maps take it');
+  ok('error' in checkBalance({ farmSpots: { emerald_forest: 150 } }, true), 'more than 100% is refused');
+  ok(JSON.stringify(checkBalance({ farmSpots: { emerald_forest: 100 } }, true).tuning) === '{}', '100% is the code value, not saved');
+  const spawns = ZONES.emerald_forest.spawns;
+  const per = (pct: number) => spawns.map((a, i) => packCount('emerald_forest', a.count, i, { ...currentBalance(), farmSpots: { emerald_forest: pct } }));
+  const on = (pct: number) => per(pct).filter((n) => n > 0).length;
+  ok(on(100) === spawns.length && on(0) === 0, `100% = all ${spawns.length} spots, 0% = none`);
+  ok(Math.abs(on(33) - spawns.length * 0.33) <= 3, `33% = ${on(33)} spots of ${spawns.length}`);
+  const kinds = [...new Set(spawns.map((s) => s.monster))];
+  const p33 = per(33);
+  ok(kinds.every((k) => spawns.some((s, i) => s.monster === k && p33[i] > 0)), 'at 33% every kind still has spots');
+  ok(balanceChanges({}, { farmSpots: { emerald_forest: 50 } }).includes('จุดเกิดที่เปิดใช้ ป่ามรกต 100% → 50%'), 'the audit names it');
+  // Live: the monsters of switched-off spots are not replaced when they die.
+  applyBalance(checkBalance({ farmSpots: { emerald_forest: 0 } }, true).tuning!);
+  const sim = new Sim(ZONES.emerald_forest);
+  ok(sim.monsters.filter((m) => !m.isBoss).length === 0, '0%: a new room has no monsters');
+  applyBalance({});
 }
 
 // Server: an old-size published row is skipped and not advertised; a right-size one is used and advertised.

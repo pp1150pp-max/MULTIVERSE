@@ -448,7 +448,8 @@ export class Sim {
       if (this.terrain.distToPath(x, z) < 3.5 || Math.hypot(x - zone.start.x, z - zone.start.z) < 14) continue;
       if (lair && Math.hypot(x - lair.x, z - lair.z) < ring + 5) continue;
       if (pools.some((l) => Math.hypot((x - l.x) / (l.rx + 2.5), (z - l.z) / (l.rz + 2.5)) < 1)) continue;
-      if (this.spawners.some((o) => o !== sp && !o.boss && Math.hypot(o.area.x - x, o.area.z - z) < ROAM_APART)) continue;
+      // Spots switched off in /admin (wanted 0) stand nowhere.
+      if (this.spawners.some((o) => o !== sp && !o.boss && this.wanted(o) > 0 && Math.hypot(o.area.x - x, o.area.z - z) < ROAM_APART)) continue;
       put(Math.round(x * 10) / 10, Math.round(z * 10) / 10);
       return;
     }

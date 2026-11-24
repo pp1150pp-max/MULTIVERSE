@@ -252,7 +252,7 @@ function scatterZone(z: ZoneDef, list: Scatter[]): ZoneDef {
     const roll = (): number => (r() < FARM_GROUP.share ? FARM_GROUP.sizes[Math.floor(r() * FARM_GROUP.sizes.length)] : 1);
     let size = mixed ? Math.min(roll(), s.count) : 1;
     let n = 0;
-    for (let tries = 0; tries < 20000 && n < s.count; tries++) {
+    for (let tries = 0; tries < 80000 && n < s.count; tries++) {
       const together = squad || size > 1;
       const apart = together ? 9 : 6.5;
       const x = -B + r() * 2 * B;
@@ -263,6 +263,9 @@ function scatterZone(z: ZoneDef, list: Scatter[]): ZoneDef {
       if (Math.hypot(x - z.start.x, y - z.start.z) < 14) continue;
       if (Math.hypot(x - boss.x, y - boss.z) < arena + 5) continue;
       if (pools.some((l) => Math.hypot((x - l.x) / (l.rx + 2.5), (y - l.z) / (l.rz + 2.5)) < 1)) continue;
+      // Farm-map spots (denser sets `mixed`, true or false) stand off a pool by its longest radius too: with the map full, the narrow
+      // side of an oval came too close.
+      if (s.mixed !== undefined && pools.some((l) => Math.hypot(x - l.x, y - l.z) < Math.max(l.rx, l.rz) + 4)) continue;
       if (placed.some((o) => Math.hypot(o.x - x, o.z - y) < apart)) continue;
       const at = { x: Math.round(x), z: Math.round(y) };
       placed.push(at);
@@ -291,6 +294,11 @@ function scatterZone(z: ZoneDef, list: Scatter[]): ZoneDef {
  */
 export const FARM_SCALE = 1.5;
 const FARM_DENSITY = FARM_SCALE * FARM_SCALE;
+/**
+ * On top of FARM_DENSITY: the farm maps were still half empty (owner 2026-11-25 "จุดเกิดให้เต็มไม่มีที่ว่าง", chose x3: about 170 spots,
+ * 300 monsters a map). /admin can switch part of the spots off per map (Balance.farmSpots).
+ */
+const FARM_FILL = 3;
 
 function grownFarm(z: ZoneDef): ZoneDef {
   const k = FARM_SCALE;
@@ -312,10 +320,10 @@ function grownFarm(z: ZoneDef): ZoneDef {
 }
 
 /**
- * A farm map's monster list with FARM_DENSITY times as many monsters of each kind, on mixed spots (alone or 2–3 together, FARM_GROUP;
+ * A farm map's monster list with FARM_DENSITY x FARM_FILL times as many monsters of each kind, on mixed spots (alone or 2–3 together, FARM_GROUP;
  * squads stay as they are).
  */
-const denser = (list: Scatter[]): Scatter[] => list.map((s) => ({ ...s, count: Math.round(s.count * FARM_DENSITY), mixed: s.group.length === 1 && s.group[0][1] === 1 }));
+const denser = (list: Scatter[]): Scatter[] => list.map((s) => ({ ...s, count: Math.round(s.count * FARM_DENSITY * FARM_FILL), mixed: s.group.length === 1 && s.group[0][1] === 1 }));
 
 export const ZONE_1: ZoneDef = scatterZone(grownFarm({
   id: 'emerald_forest',
