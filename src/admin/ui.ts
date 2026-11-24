@@ -73,10 +73,19 @@ export function headsOnPage(view: HTMLElement, q: string): string[] {
  * and a card edited since the last save gets a dot. Call `refreshToc` after the cards are drawn;
  * `clearDirty` after a save or a cancel; set `box.dataset.clean = '1'` while nothing differs from what is saved.
  */
-export function foldable(box: HTMLElement): { toc: HTMLElement; refreshToc: () => void; clearDirty: () => void } {
+export function foldable(box: HTMLElement): { head: HTMLElement; toc: HTMLElement; refreshToc: () => void; clearDirty: () => void } {
   box.classList.add('foldable');
   const toc = document.createElement('nav');
   toc.className = 'toc';
+  // The bar stuck under the top bar (put `head` on the page; a tab may add its own rows to it, e.g. categories).
+  // Its height goes to --stick-h, so a card scrolled to (jump buttons, search) stops below it instead of under it.
+  const head = document.createElement('div');
+  head.className = 'fold-head';
+  head.append(toc);
+  const measure = (): void => {
+    if (head.isConnected) box.style.setProperty('--stick-h', `${head.offsetHeight}px`);
+  };
+  new ResizeObserver(measure).observe(head);
   box.addEventListener('click', (e) => {
     const head = (e.target as HTMLElement).closest('h2');
     const card = head?.parentElement;
@@ -119,8 +128,10 @@ export function foldable(box: HTMLElement): { toc: HTMLElement; refreshToc: () =
     });
     toc.append(all);
     toc.dataset.dirty = String(n);
+    measure(); // also here: a tab in the background gets no resize callbacks
   }
   return {
+    head,
     toc,
     refreshToc,
     clearDirty: () => {

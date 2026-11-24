@@ -593,7 +593,7 @@ export async function renderSkills(view: HTMLElement, h: H, api: Api, onSaved: (
     msg,
   );
 
-  box.replaceChildren(fold.toc, mapCard, cardPoints, cardUnlock, cardZoom, cardFx, bar);
+  box.replaceChildren(fold.head, mapCard, cardPoints, cardUnlock, cardZoom, cardFx, bar);
   redraw();
   fold.refreshToc();
 }

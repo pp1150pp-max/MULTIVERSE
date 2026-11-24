@@ -1501,6 +1501,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   }
   search.addEventListener('input', applyFilter);
 
-  box.replaceChildren(h('div', { class: 'cat-top' }, catBar, search), fold.toc, noHit, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, bagCard, forgeCard, setCard, floorCard, moveCard, autoCard, tutCard, fxCard, circleCard, rootCard, audioCard, rigCard, langCard, bar);
+  fold.head.prepend(h('div', { class: 'cat-top' }, catBar, search));
+  box.replaceChildren(fold.head, noHit, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, bagCard, forgeCard, setCard, floorCard, moveCard, autoCard, tutCard, fxCard, circleCard, rootCard, audioCard, rigCard, langCard, bar);
   redraw();
 }

@@ -410,12 +410,25 @@ button.more:hover { color: var(--gold-hi); text-decoration: underline; }
 }
 
 /* Balance tab: jump buttons, folding cards, a dot on cards edited since the last save, the save bar stuck to the bottom. */
-.toc {
+/* One bar stuck under the top bar: the tab's own rows (balance: categories + search) and the jump buttons on one
+   scrolling line, so it stays short however many cards there are. Its height is --stick-h (ui.ts foldable). */
+.fold-head {
   position: sticky; top: var(--top-h); z-index: 6;
-  display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 0; margin: -6px 0 8px;
+  display: flex; flex-direction: column; gap: 6px; padding: 8px 0 6px; margin: -6px 0 8px;
   background: var(--bg); border-bottom: 1px solid var(--edge-dim);
 }
-@media (max-width: 600px) { .toc { flex-wrap: nowrap; overflow-x: auto; } .toc .chip { white-space: nowrap; } }
+.fold-head .cat-top { margin-bottom: 0; }
+.toc { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px; padding-bottom: 2px; }
+.toc .chip { white-space: nowrap; flex: none; }
+/* Phone: categories (scrolling) and the search box share one line. */
+@media (max-width: 600px) {
+  .fold-head .cat-top { flex-wrap: nowrap; }
+  .fold-head .cat-bar { flex: 1 1 auto; min-width: 0; }
+  .fold-head .bal-search { flex: 0 0 110px; min-width: 0; }
+}
+/* A table inside a folding row (item sets) scrolls on its own instead of running off a phone screen. */
+details.bal-line { overflow-x: auto; }
+.foldable > .card, .foldable > .card h3 { scroll-margin-top: calc(var(--top-h) + var(--stick-h, 60px) + 8px); }
 .chip { min-height: 28px; padding: 2px 10px; border-radius: 14px; font-size: 13px; background: var(--panel-2); border-color: var(--edge-dim); box-shadow: none; }
 .chip.dirty { border-color: var(--gold-hi); color: var(--gold-hi); }
 .chip.dirty::before,
@@ -439,6 +452,30 @@ button.more:hover { color: var(--gold-hi); text-decoration: underline; }
   border-color: var(--gold); background: linear-gradient(#2a2312, #1b1814); box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.6);
 }
 .card.save-bar > .muted { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* Phone: the save bar was ~1/5 of the screen; one line of text and one row of small buttons. */
+@media (max-width: 600px) {
+  .card.save-bar { padding: 8px 10px; }
+  .card.save-bar > .muted { -webkit-line-clamp: 1; line-clamp: 1; }
+  .card.save-bar .row { flex-wrap: nowrap; overflow-x: auto; gap: 6px; }
+  .card.save-bar button { min-height: 32px; padding: 4px 10px; font-size: 13px; white-space: nowrap; flex: none; }
+  .card.save-bar .msg { margin-top: 4px; min-height: 0; }
+}
+
+/* Settings rows (.row.bal-line made only of labels): a grid, so boxes line up from row to row instead of each
+   row stretching its own way. Rows with anything else in them (buttons, pictures, notes) keep the flex row. */
+.row.bal-line:not(:has(> :not(label))) {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px 18px; align-items: end;
+}
+.row.bal-line:not(:has(> :not(label))) > label { min-width: 0; }
+.row.bal-line:not(:has(> :not(label))) > label > input.bal-num { width: 140px; max-width: 100%; }
+.row.bal-line:not(:has(> :not(label))) > label > select { width: 100%; max-width: 230px; }
+/* A switch never sits beside number boxes: it takes a line of its own, the boxes start under it.
+   (:has() may not be nested, so "a label with a box" is written as > label > input / select.) */
+.row.bal-line:not(:has(> :not(label))):has(> label > input:not([type="checkbox"]), > label > select) > label:has(> input[type="checkbox"]),
+.row.bal-line:not(:has(> :not(label))) > label:only-child:has(> input[type="checkbox"]) { grid-column: 1 / -1; }
+/* Rows of switches only: two or three long ones keep the flex row, many short ones (per skill) go on the grid. */
+.row.bal-line:not(:has(> :not(label))):not(:has(> label > input:not([type="checkbox"]), > label > select)):not(:has(> label:nth-child(4))) { display: flex; }
+.row.bal-line:not(:has(> :not(label))):not(:has(> label > input:not([type="checkbox"]), > label > select)):has(> label:nth-child(4)) { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 4px 12px; }
 
 /* The skill system tab (src/admin/skills.ts): the class constellation as in the game's K window, and the editing panel. */
 .skm-search { width: 100%; max-width: 360px; margin: 2px 0 6px; }
