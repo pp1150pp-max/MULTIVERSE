@@ -2,9 +2,11 @@
 // public/assets/sprites/paper/{props,ground}/, with the same names and sizes as the old art they stand in for
 // (see art_templates/papercraft_maps/PROMPTS.md). Usage: node tools/cut_papercraft.cjs map1_forest
 // [PAPER_RAW=<raw folder>] node tools/cut_papercraft.cjs floor2_hub
+// (floor 2: floor2_m1 … floor2_m4)
 const path = require('path');
 const fs = require('fs');
 const sharp = require('sharp');
+const { keyBg, trackedSprites } = require('./paper_key.cjs');
 
 const ROOT = path.join(__dirname, '..');
 const OLD = path.join(ROOT, 'public/assets/sprites');
@@ -111,6 +113,70 @@ const MAPS = {
     // The six NPCs' dialogue portraits (FLOOR2_HUB.md 10): 256 square, under sprites/paper/ui/npc/.
     ...['supply_merchant', 'dock_keeper', 'shipwright', 'harbor_broker', 'navigator', 'smuggler'].map((n) => [`portrait/${n}.png`, 'portrait', { out: n }]),
   ],
+  // Floor 2 (art_templates/papercraft_maps/FLOOR2_*.md). New pictures with no old file: props get a fixed height
+  // (`share`: one scale for the whole sheet, its tallest piece that tall, for pieces that must match each other),
+  // atlases floor 1's sizes. Names that clashed with floor 1 or between maps were renamed (owner 2026-11-19).
+  // The background is measured from each sheet's border, so green and off-magenta sheets key the same way. The harbour
+  // town (raw/floor2_hub) is cut by its own PR (feature/harbor-town).
+  floor2_m1: [
+    ['props.png', 'props', { cols: 4, rows: 3, height: 256, names: ['coconut_palm_0', 'coconut_palm_1', 'coconut_palm_2', 'wreck_hull', 'torn_sail_mast', 'sea_rock_0', 'sea_rock_1', 'rock_pillar', 'hibiscus', 'tropical_fern', 'giant_clam', 'broken_ladder'] }],
+    ['camp.png', 'props', { cols: 4, rows: 3, height: 256, names: ['treasure_chest', 'wreck_crates', 'salvage_barrel', 'brass_lantern', 'plank_pile', 'stuck_anchor', 'beached_rowboat', 'old_cannon', 'driftwood_sign', 'skull_flag', 'tide_pool', 'coin_pile'] }],
+    ['room_props.png', 'props', { cols: 3, rows: 3, height: 256, names: ['summoner_crab', ...['pillar_0', 'wall', 'brazier', 'boulder', 'pillar_1', 'rubble', 'rune_stone', 'tree'].map((n) => `room_beach_${n}`)] }],
+    ['decor.png', 'atlas', { cols: 4, rows: 3, out: 'decor_beach', size: [512, 384], place: 'bottom', fit: 'shared' }],
+    ['island_cliff.png', 'atlas', { cols: 4, rows: 2, out: 'island_cliff_beach', size: [1536, 768], place: 'top', fit: 'each' }],
+    ['island_slabs.png', 'atlas', { cols: 4, rows: 2, out: 'island_slabs_beach', size: [887, 443], place: 'centre', fit: 'shared' }],
+    ['fx.png', 'props', { cols: 3, rows: 2, dir: 'fx', box: 256, see: true, names: ['fx_cannonball', 'fx_warn_ring', 'fx_chain_bolt', 'fx_shock', 'fx_spike_burst', 'fx_shell_guard'] }],
+    ['ground_sand.png', 'ground', { out: 'sand' }],
+    ['ground_wreck.png', 'ground', { out: 'wreck' }],
+    ['ground_shallow.png', 'ground', { out: 'shallow' }],
+    ['ground_room.png', 'ground', { out: 'room_beach' }],
+  ],
+  floor2_m2: [
+    ['props.png', 'props', { cols: 4, rows: 3, height: 256, names: ['cliff_palm_0', 'cliff_palm_1', 'cliff_rock_0', 'cliff_rock_1', 'cliff_rock_2', 'cave_mouth', 'tent_0', 'tent_1', 'stilt_hut', 'small_falls', 'thicket_0', 'thicket_1'] }],
+    ['camp.png', 'props', { cols: 4, rows: 3, height: 256, names: ['powder_keg', 'smuggled_crates', 'rum_barrel', 'pirate_lantern', 'wanted_board', 'cliff_cannon', 'cannonball_pile', 'smuggler_flag', 'cargo_net', 'bottles', 'loot_chest', 'pirate_boat'] }],
+    ['room_props.png', 'props', { cols: 3, rows: 3, height: 256, names: ['summoner_captain', ...['gunboat', 'wall', 'brazier', 'boulder', 'pillar', 'rubble', 'mast', 'tree'].map((n) => `room_cove_${n}`)] }],
+    ['decor.png', 'atlas', { cols: 4, rows: 3, out: 'decor_cove', size: [512, 384], place: 'bottom', fit: 'shared' }],
+    ['island_cliff.png', 'atlas', { cols: 4, rows: 2, out: 'island_cliff_cove', size: [1536, 768], place: 'top', fit: 'each' }],
+    ['island_slabs.png', 'atlas', { cols: 4, rows: 2, out: 'island_slabs_cove', size: [887, 443], place: 'centre', fit: 'shared' }],
+    ['fx.png', 'props', { cols: 4, rows: 2, dir: 'fx', box: 256, see: true, names: ['fx_iron_ball', 'fx_bomb', 'fx_explosion', 'fx_anchor', 'fx_pellets', 'fx_shout_ring', 'fx_parrot_mark', 'fx_ship_shell'] }],
+    ['ground_rock.png', 'ground', { out: 'rock' }],
+    ['ground_boardwalk.png', 'ground', { out: 'boardwalk' }],
+    ['ground_cove_water.png', 'ground', { out: 'cove_water' }],
+    ['ground_room.png', 'ground', { out: 'room_cove' }],
+  ],
+  floor2_m3: [
+    ['props.png', 'props', { cols: 4, rows: 3, height: 256, names: ['wreck_hull_0', 'wreck_hull_1', 'ghost_mast', 'bell_mast', 'mossy_rock_0', 'mossy_rock_1', 'ghost_lamp_post', 'slime_post', 'wreck_small', 'rotten_stump', 'broken_rail', 'figurehead'] }],
+    ['camp.png', 'props', { cols: 4, rows: 3, height: 256, names: ['candles', 'skull_barrel', 'skull_pile', 'net', 'rotten_chest', 'rusty_anchor', 'green_lantern', 'grave_marker', 'torn_flag', 'rope_coil', 'spirit_bottle', 'fallen_bell'] }],
+    ['room_props.png', 'props', { cols: 3, rows: 3, height: 256, names: ['summoner_ghost', ...['pillar_0', 'wall', 'brazier', 'boulder', 'pillar_1', 'rubble', 'mast', 'figurehead'].map((n) => `room_grave_${n}`)] }],
+    ['decor.png', 'atlas', { cols: 4, rows: 3, out: 'decor_graveyard', size: [512, 384], place: 'bottom', fit: 'shared' }],
+    ['island_cliff.png', 'atlas', { cols: 4, rows: 2, out: 'island_cliff_graveyard', size: [1536, 768], place: 'top', fit: 'each' }],
+    ['island_slabs.png', 'atlas', { cols: 4, rows: 2, out: 'island_slabs_graveyard', size: [887, 443], place: 'centre', fit: 'shared' }],
+    ['fx.png', 'props', { cols: 4, rows: 2, dir: 'fx', box: 256, see: true, names: ['fx_ghost_skull', 'fx_curse_ring', 'fx_music_notes', 'fx_siren_pull', 'fx_mist', 'fx_bell_waves', 'fx_spirit_puff', 'fx_shell_burst'] }],
+    ['ground_stone.png', 'ground', { out: 'stone' }],
+    ['ground_rotten_deck.png', 'ground', { out: 'rotten_deck' }],
+    ['ground_misty_water.png', 'ground', { out: 'misty_water' }],
+    ['ground_room.png', 'ground', { out: 'room_grave' }],
+  ],
+  floor2_m4: [
+    ['props.png', 'props', { cols: 4, rows: 3, height: 256, names: ['storm_rock_0', 'storm_rock_1', 'storm_rock_2', 'wreck_0', 'wreck_1', 'broken_mast', 'coral_0', 'coral_1', 'kraken_flag', 'storm_lamp', 'rope_post', 'storm_anchor'] }],
+    // This sheet came with 10 pieces, two altars in the top row (owner 2026-11-19: the tentacle altar with the eye is the
+    // summoner, the flagged portal gate is kept as an extra piece): `cols` per row.
+    ['room_props.png', 'props', { cols: [4, 3, 3], rows: 3, height: 256, names: ['room_kraken_gate', 'summoner_kraken', ...['pillar_0', 'wall', 'brazier', 'boulder', 'pillar_1', 'rubble', 'coral', 'mast'].map((n) => `room_kraken_${n}`)] }],
+    ['decor.png', 'atlas', { cols: 4, rows: 3, out: 'decor_maelstrom', size: [512, 384], place: 'bottom', fit: 'shared' }],
+    ['island_cliff.png', 'atlas', { cols: 4, rows: 2, out: 'island_cliff_maelstrom', size: [1536, 768], place: 'top', fit: 'each' }],
+    ['island_slabs.png', 'atlas', { cols: 4, rows: 2, out: 'island_slabs_maelstrom', size: [887, 443], place: 'centre', fit: 'shared' }],
+    ['fx.png', 'props', { cols: 4, rows: 2, dir: 'fx', box: 256, see: true, names: ['fx_shark_fin', 'fx_bubble', 'fx_bubble_trap', 'fx_sword_wave', 'fx_ink_blob', 'fx_ink_splat', 'fx_suction', 'fx_slam_splash'] }],
+    // The whirlpool's four layers (FLOOR2_M4_WHIRLPOOL.md): squares centred on the circle, sized as they stack.
+    ['whirlpool_ring_1.png', 'disc', { out: 'whirlpool_ring_1', size: 1024 }],
+    ['whirlpool_ring_2.png', 'disc', { out: 'whirlpool_ring_2', size: 768 }],
+    ['whirlpool_ring_3.png', 'disc', { out: 'whirlpool_ring_3', size: 512 }],
+    ['whirlpool_core.png', 'disc', { out: 'whirlpool_core', size: 288 }],
+    ['whirlpool_rim.png', 'props', { cols: 4, rows: 2, share: 192, names: ['rim_0', 'rim_1', 'rim_2', 'rim_3', 'rim_4', 'rim_5', 'rim_6', 'rim_7'] }],
+    ['ground_storm_rock.png', 'ground', { out: 'storm_rock' }],
+    ['ground_wet_planks.png', 'ground', { out: 'wet_planks' }],
+    ['ground_rough_sea.png', 'ground', { out: 'rough_sea' }],
+    ['ground_room.png', 'ground', { out: 'room_kraken' }],
+  ],
 };
 
 async function readRaw(file) {
@@ -208,14 +274,80 @@ function bandsOf(has, size, gap, want, label) {
   return bands;
 }
 
+/**
+ * When a piece reaches past the next row (a flag pole beside a ship's mast) no empty line splits the rows. Then the
+ * cols × rows biggest pieces are the objects: rows cut where their centres jump down the most, columns where they jump
+ * across the most, and every smaller piece (smoke, a loose coin) joins the nearest object. Boxes in reading order.
+ */
+function cellsByPieces(img, cols, rows, label) {
+  const { w, h, d } = img;
+  const seen = new Int32Array(w * h).fill(-1);
+  const all = [];
+  for (let s = 0; s < w * h; s++) {
+    if (seen[s] >= 0 || !d[s * 4 + 3]) continue;
+    const stack = [s];
+    seen[s] = all.length;
+    let n = 0, sx = 0, sy = 0, x0 = w, y0 = h, x1 = 0, y1 = 0;
+    while (stack.length) {
+      const k = stack.pop();
+      const x = k % w, y = (k - x) / w;
+      n++; sx += x; sy += y;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const t = ny * w + nx;
+        if (seen[t] < 0 && d[t * 4 + 3]) { seen[t] = all.length; stack.push(t); }
+      }
+    }
+    all.push({ n, cx: sx / n, cy: sy / n, box: [x0, y0, x1 + 1, y1 + 1] });
+  }
+  const want = cols * rows;
+  const big = [...all].sort((a, b) => b.n - a.n).slice(0, want);
+  if (big.length < want) throw new Error(`${label}: only ${big.length} pieces, wanted ${want}`);
+  const splitAt = (list, key, parts) => {
+    const s = [...list].sort((a, b) => a[key] - b[key]);
+    const cuts = s.slice(1).map((p, i) => ({ i: i + 1, gap: p[key] - s[i][key] })).sort((a, b) => b.gap - a.gap).slice(0, parts - 1).map((c) => c.i).sort((a, b) => a - b);
+    const b = [0, ...cuts, s.length];
+    return b.slice(0, -1).map((v, i) => s.slice(v, b[i + 1]));
+  };
+  const grid = [];
+  for (const row of splitAt(big, 'cy', rows)) {
+    if (row.length !== cols) throw new Error(`${label}: a row has ${row.length} objects, wanted ${cols}`);
+    grid.push(...splitAt(row, 'cx', cols).map((c) => c[0]));
+  }
+  const boxes = grid.map((p) => [...p.box]);
+  const gapTo = (b, q) => Math.hypot(Math.max(0, b[0] - q.box[2], q.box[0] - b[2]), Math.max(0, b[1] - q.box[3], q.box[1] - b[3]));
+  for (const p of all) {
+    if (grid.includes(p)) continue;
+    let best = 0;
+    for (let i = 1; i < grid.length; i++) if (gapTo(grid[i].box, p) < gapTo(grid[best].box, p)) best = i;
+    const b = boxes[best];
+    b[0] = Math.min(b[0], p.box[0]); b[1] = Math.min(b[1], p.box[1]); b[2] = Math.max(b[2], p.box[2]); b[3] = Math.max(b[3], p.box[3]);
+  }
+  console.log(`  ${label}: split by pieces`);
+  return boxes;
+}
+
 /** Splits a keyed sheet into rows, then each row into columns, on empty lines. Boxes in reading order. */
 function cells(img, cols, rows, label, gap = 6) {
+  try {
+    return cellsOnLines(img, cols, rows, label, gap);
+  } catch (e) {
+    if (!piecesFallback) throw e;
+    return cellsByPieces(img, cols, rows, label);
+  }
+}
+/** Floor 2 only: fall back to cellsByPieces. */
+let piecesFallback = false;
+
+function cellsOnLines(img, cols, rows, label, gap = 6) {
   const { w, h, d } = img;
   const opaque = (x, y) => d[(y * w + x) * 4 + 3] !== 0;
   const out = [];
   const rowBands = bandsOf((y) => { for (let x = 0; x < w; x++) if (opaque(x, y)) return true; return false; }, h, gap, rows, `${label} rows`);
   for (const [y0, y1] of rowBands) {
-    const colBands = bandsOf((x) => { for (let y = y0; y < y1; y++) if (opaque(x, y)) return true; return false; }, w, gap, cols, `${label} cols`);
+    const colBands = bandsOf((x) => { for (let y = y0; y < y1; y++) if (opaque(x, y)) return true; return false; }, w, gap, Array.isArray(cols) ? cols[rowBands.findIndex(([a]) => a === y0)] : cols, `${label} cols`);
     for (const [x0, x1] of colBands) out.push(tight(img, [x0, y0, x1, y1], `${label} cell ${out.length}`));
   }
   return out;
@@ -229,8 +361,12 @@ async function sizeOf(rel) {
   return [m.width, m.height];
 }
 
+/** For the floor 2 sets: files git already tracks, which they must never overwrite. */
+let tracked = null;
+
 async function save(pipeline, rel) {
   const file = path.join(OUT, rel);
+  if (tracked?.has(path.resolve(file))) throw new Error(`${rel} is already in git (a floor 1 file): refusing to overwrite`);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   await pipeline.png({ compressionLevel: 9 }).toFile(file);
   const m = await sharp(file).metadata();
@@ -300,8 +436,18 @@ async function props(img, o, label) {
   const pieces = o.blobs ? blobs(img, o.names.length, o.cols, label) : null;
   const boxes = pieces ? pieces.map((p) => p.box) : cells(img, o.cols, o.rows, label);
   const sheetImg = img;
+  const dir = o.dir ?? 'props';
+  // `share`: one scale for the sheet, its tallest piece this tall.
+  const shared = o.share ? o.share / Math.max(...boxes.map((b) => b[3] - b[1])) : 0;
   const one = async (name, box, i) => {
     const img = pieces ? pieces[i].img : sheetImg;
+    if (o.share || o.box) {
+      const bw = box[2] - box[0], bh = box[3] - box[1];
+      // `box`: each piece fitted inside a square this big (effects: long bolts and round bursts alike).
+      const k = o.share ? shared : o.box / Math.max(bw, bh);
+      await save(crop(img, box).resize(Math.max(1, Math.round(bw * k)), Math.max(1, Math.round(bh * k)), { kernel: 'lanczos3', fit: 'fill' }), `${dir}/${name}.png`);
+      return;
+    }
     // `slope`: a long piece lying along a world axis, drawn a little flatter than the game sees it: sheared so its
     // foot climbs at the game's slope (as strip() does for whole rows, but at most a little, so it isn't stretched).
     if (o.shear?.[name] !== undefined) {
@@ -352,7 +498,7 @@ async function props(img, o, label) {
  * `place`: where a piece sits in its cell ('bottom' = standing on the cell's floor, 'top' = hanging from its top).
  */
 async function atlas(img, o, label) {
-  const [W, H] = await sizeOf(`props/${o.out}.png`);
+  const [W, H] = o.size ?? await sizeOf(`props/${o.out}.png`);
   const cw = W / o.cols;
   const ch = H / o.rows;
   const pad = 0.04;
@@ -430,6 +576,18 @@ async function strip(img, o, label) {
   await save(sharp(t).resize({ width: o.width, kernel: 'lanczos3' }), `props/${o.out}.png`);
 }
 
+/** A round layer that the game spins: a square centred on the circle's own box, so it turns without wobbling. */
+async function disc(img, o, label) {
+  const [x0, y0, x1, y1] = tight(img, [0, 0, img.w, img.h], label);
+  const side = Math.max(x1 - x0, y1 - y0);
+  const left = Math.round((x0 + x1) / 2 - side / 2), top = Math.round((y0 + y1) / 2 - side / 2);
+  // The circle may touch the picture's edge: pad with transparency before taking the square.
+  const big = await sharp(img.d, { raw: { width: img.w, height: img.h, channels: 4 } })
+    .extend({ top: side, bottom: side, left: side, right: side, background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+  console.log(`  ${label}: circle ${x1 - x0}x${y1 - y0}`);
+  await save(sharp(big).extract({ left: left + side, top: top + side, width: side, height: side }).resize(o.size, o.size, { kernel: 'lanczos3' }), `props/${o.out}.png`);
+}
+
 /** A repeating ground tile: shrunk to 1024 square, its edges blended into the opposite ones so it repeats without a seam. */
 async function ground(file, o) {
   const N = 1024;
@@ -467,6 +625,12 @@ async function main() {
   if (!specs) throw new Error(`usage: node tools/cut_papercraft.cjs <${Object.keys(MAPS).join('|')}>`);
   // PAPER_RAW=<folder>: the raw sheets are somewhere else (another checkout's raw/, which git doesn't carry).
   const RAW = process.env.PAPER_RAW || path.join(ROOT, 'art_templates/papercraft_maps/raw', map);
+  // Floor 2's maps (not the harbour town, whose cut is already in git and may be redone): never overwrite a tracked file.
+  const floor2 = /^floor2_m\d/.test(map);
+  if (floor2) {
+    tracked = trackedSprites(ROOT);
+    piecesFallback = true;
+  }
   for (const [file, kind, o] of specs) {
     const src = path.join(RAW, file);
     if (!fs.existsSync(src)) {
@@ -477,8 +641,14 @@ async function main() {
     if (kind === 'ground') await ground(src, o);
     else if (kind === 'portrait') await portrait(src, o);
     else {
-      const img = key(await readRaw(src), 40, o.bg);
-      if (kind === 'props') await props(img, o, file);
+      const img = await readRaw(src);
+      if (floor2) {
+        // `see`: tissue-paper effects drawn see-through over the background keep their see-through parts (as the ghosts).
+        const { bg, green } = keyBg(img, o.see ? { soft: true, ghost: true } : {});
+        console.log(`  background ${green ? 'green' : 'magenta'} ${bg.join(',')}`);
+      } else key(img, 40, o.bg);
+      if (kind === 'disc') await disc(img, o, file);
+      else if (kind === 'props') await props(img, o, file);
       else if (kind === 'planks') await planks(img, o, file);
       else if (kind === 'strip') await strip(img, o, file);
       else await atlas(img, o, file);
