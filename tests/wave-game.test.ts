@@ -1,4 +1,4 @@
-// Minigame "รอดมอนเป็นระลอก" (owner 2026-11-21): its settings in the balance tuning, a map's settings, and a run in the Sim
+﻿// Minigame "รอดมอนเป็นระลอก" (owner 2026-11-21): its settings in the balance tuning, a map's settings, and a run in the Sim
 // (countdown, waves growing and getting stronger, gold per wave, the win bonus, no loot, getting up by the door).
 import { balanceChanges, checkBalance, mergeBalance } from '../src/shared/balance';
 import { cleanCustomDef, emptyMap, zoneFromCustom } from '../src/shared/customZones';
@@ -74,5 +74,23 @@ sim2.respawn(q);
 const tr = evs.find((e) => e.t === 'travel') as { zone: string; spot?: { x: number; z: number } } | undefined;
 ok(tr?.zone === 'nexus_city' && tr.spot?.x === 3 && tr.spot?.z === 4, 'getting up takes you out by the door');
 ok(sim2.leaveRoom(q) === null, 'the leave button works at any time');
+
+// Wave monsters hunt the player: a player far past the old 22-unit leash is chased all the way, nobody walks home (bug 2026-11-21).
+{
+  const bigMap = emptyMap('c_y', 1, 'forest', 100);
+  bigMap.waveSpots = [{ x: 0, z: -20, radius: 2 }];
+  const bigZone = zoneFromCustom((c as { def: never }).def, bigMap);
+  const sim3 = new Sim(bigZone, { waves: { ...cfg, countdown: 0 }, exit });
+  const h = sim3.addPlayer({ name: 'H', classId: 'sword', level: 1, exp: 0, gold: 0, equipment: {}, bag: [] });
+  h.stats.maxHp = h.hp = 1e9;
+  const hold = (): void => { h.x = 0; h.z = 15; h.hp = h.stats.maxHp; };
+  hold();
+  for (let t = 0; t < 0.2; t += TICK) { hold(); sim3.step(TICK); }
+  const mons = sim3.monsters.filter((m) => m.alive);
+  let wentHome = false;
+  for (let t = 0; t < 40; t += TICK) { hold(); sim3.step(TICK); if (mons.some((m) => (m as unknown as { state: string }).state === 'return')) wentHome = true; }
+  const d = mons.map((m) => Math.hypot(m.x - h.x, m.z - h.z));
+  ok(mons.length > 0 && !wentHome && d.every((x) => x < 12), `wave monsters chase a player 35 units away (past the old leash) and never walk home (${d.map(Math.round)})`);
+}
 
 finish('wave-game');

@@ -98,10 +98,10 @@ export async function mountAnimPreview(root: HTMLElement, io?: AnimBenchIo): Pro
 
   await loadGameAssets();
   const sets = new Map<string, Promise<AnimSet | null>>();
-  const setOf = (cls: Cls, paper: boolean) => {
-    const key = `${cls}:${paper ? 'paper' : 'old'}`;
-    if (!sets.has(key)) sets.set(key, loadCharAnimSet(cls, paper ? `paper/player/${cls}` : `player/${cls}`));
-    return sets.get(key)!;
+  // The paper sheets are the only class art left (the old sprites/player/<class> were removed); the rig builds on them like the game.
+  const setOf = (cls: Cls) => {
+    if (!sets.has(cls)) sets.set(cls, loadCharAnimSet(cls, `paper/player/${cls}`));
+    return sets.get(cls)!;
   };
   let rigAssets: RigAssets | null = null;
 
@@ -116,7 +116,7 @@ export async function mountAnimPreview(root: HTMLElement, io?: AnimBenchIo): Pro
   camera.lookAt(target);
 
   const state = {
-    cls: 'sword' as Cls, art: 'old' as Art, anim: 'run', speed: 1, move: BASE_MOVE_SPEED, zoom: 3.2,
+    cls: 'sword' as Cls, art: 'paper' as Art, anim: 'run', speed: 1, move: BASE_MOVE_SPEED, zoom: 3.2,
     paused: false, ground: true, rideMove: true, line: true,
     /** The facing being tuned: an index of DIRS. */
     sel: 1,
@@ -171,8 +171,7 @@ export async function mountAnimPreview(root: HTMLElement, io?: AnimBenchIo): Pro
   const animsOf = (a: Actor) => ANIM_ORDER.filter((n) => (n === 'combo' ? a.has('attack_3') : a.has(n)));
   const rebuild = async () => {
     const my = ++building;
-    const paper = state.art === 'paper';
-    const set = await setOf(state.cls, paper);
+    const set = await setOf(state.cls);
     if (state.art === 'rig' && !rigAssets) rigAssets = await loadSwordRig();
     if (my !== building) return;
     for (const c of cells) {
@@ -201,8 +200,8 @@ export async function mountAnimPreview(root: HTMLElement, io?: AnimBenchIo): Pro
   const note = h('div', { class: 'note' });
   const artBox = h('span');
   const drawArt = () => {
-    const arts: Art[] = state.cls === 'sword' ? ['old', 'paper', 'rig'] : ['old', 'paper'];
-    if (!arts.includes(state.art)) state.art = 'old';
+    const arts: Art[] = state.cls === 'sword' ? ['paper', 'rig'] : ['paper'];
+    if (!arts.includes(state.art)) state.art = 'paper';
     artBox.replaceChildren(sel(arts, ART_NAME, () => state.art, (v) => { state.art = v; void rebuild(); }));
   };
   const animBox = h('span');
@@ -430,7 +429,7 @@ export async function mountAnimPreview(root: HTMLElement, io?: AnimBenchIo): Pro
   let shownSet: AnimSet | null = null;
   const cellsSet = () => shownSet;
   const refreshSet = async () => {
-    shownSet = await setOf(state.cls, state.art === 'paper');
+    shownSet = await setOf(state.cls);
   };
 
   // ---- layout: a 3×3 grid of square-ish cells

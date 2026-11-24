@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { fxSheets } from './assets';
 import { PROP_SHEET_ROWS, SKILL_PROPS, type PropDef } from './zonePropsTable';
+import { cloneShared } from './texShare';
 
 const FRAMES = 6;
 
@@ -53,8 +54,7 @@ function spots(def: PropDef, size: number, angle: number): { x: number; z: numbe
 function sheetTex(def: PropDef): THREE.Texture | null {
   const base = fxSheets[def.sheet];
   if (!base) return null;
-  const t = base.clone();
-  t.needsUpdate = true;
+  const t = cloneShared(base);
   t.userData.effectFrame = true;
   return t;
 }

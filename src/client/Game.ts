@@ -16,6 +16,7 @@ import { ISO_DIR, World } from './world';
 import { restSpotNear, SUMMONER_HEIGHT, SUMMONER_RANGE } from '../shared/sim/terrain';
 import { Input } from './input';
 import { AimGuide, Effects } from './effects';
+import { setTexShareRenderer } from './texShare';
 import { Floating, countdown } from './floating';
 import { MONSTERS } from '../shared/data/monsters';
 import { Hud } from './hud';
@@ -42,6 +43,7 @@ import { MailUI } from './mail';
 import { ReportUI } from './report';
 import { MegaphoneUI } from './megaphone';
 import { DailyUI } from './daily';
+import { NewsUI } from './news';
 import { SkillWindow } from './skillWindow';
 import { SystemMenu } from './sysmenu';
 import { endEntryLoading, flashZoneLoading, preloadLoadingArt } from './loadingScreen';
@@ -51,6 +53,7 @@ import { isTouchMode } from './touch/device';
 import { TouchControls, TOUCH_ATTACK } from './touch/controls';
 import { TouchGestures } from './touch/gestures';
 import { gfxOwnNumsOnly, gfxShakeOn } from './gfxPrefs';
+import { updateHudLayout } from './hudLayout';
 
 const S = Math.SQRT1_2;
 // Screen-space right / up projected onto the ground plane.
@@ -110,6 +113,7 @@ export class Game {
   readonly report: ReportUI;
   readonly megaphone: MegaphoneUI;
   readonly daily: DailyUI;
+  readonly news: NewsUI;
   readonly skillWin: SkillWindow;
   /** Another player under the mouse (when no monster or usable thing is): a left click offers a party invite. */
   private hoveredPlayer: Player | null = null;
@@ -174,6 +178,7 @@ export class Game {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    setTexShareRenderer(this.renderer);
     // A mount seen on the front diagonal is cut in two around its rider (cosmeticViews.ts).
     this.renderer.localClippingEnabled = true;
     container.prepend(this.renderer.domElement);
@@ -225,6 +230,7 @@ export class Game {
     this.report = new ReportUI(this);
     this.megaphone = new MegaphoneUI(this);
     this.daily = new DailyUI(this);
+    this.news = new NewsUI(this);
     this.skillWin = new SkillWindow(this);
     initDraggableWindows(document.getElementById('hud')!);
     this.touch = new TouchControls(this);
@@ -832,6 +838,7 @@ export class Game {
       // The server plays Auto (so it keeps going in a hidden tab); here it only gets our manual input.
       else if (this.autoPlay && !this.mapRoute.length && (intent.move || intent.moveTo)) this.toggleAuto(false, 'ปิด Auto Play — เดินเอง');
     }
+    updateHudLayout();
     this.sysMenu.update(dt, intent.basic || intent.skills.length > 0, !!(intent.move || intent.moveTo || intent.dash));
     const events = this.backend.frame(dt, intent);
     if (this.backend.zoneSeq !== this.zoneSeq) this.changeZone();

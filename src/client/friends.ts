@@ -2,6 +2,7 @@
 // remove buttons, friend requests (in and out), and the block list. The server decides everything
 // (server/friends.ts) and sends the whole view on every change; this only shows it and asks.
 // Party invites and trade requests go through the existing systems (backend.partyInvite / trade.request).
+import { noTranslate } from './i18n';
 import type { Game } from './Game';
 import { CLASSES } from '../shared/data/classes';
 import { ZONES } from '../shared/data/zones';
@@ -147,7 +148,7 @@ export class FriendsUI {
       for (const x of v.blocked) {
         const row = el('div', 'friend-row');
         const info = el('div', 'friend-info');
-        info.append(el('b', '', x.name));
+        info.append(noTranslate(el('b', '', x.name)));
         const btns = el('div', 'friend-btns');
         btns.append(button('ปลดบล็อก', () => this.g.backend.friendUnblock(x.acc)));
         row.append(info, btns);
@@ -185,7 +186,7 @@ export class FriendsUI {
   private info(f: FriendEntry): HTMLElement {
     const info = el('div', 'friend-info');
     const top = el('div', 'friend-name');
-    top.append(el('i', `friend-dot${f.online ? ' on' : ''}`), el('b', '', f.char?.name ?? '(ไม่มีตัวละคร)'));
+    top.append(el('i', `friend-dot${f.online ? ' on' : ''}`), f.char ? noTranslate(el('b', '', f.char.name)) : el('b', '', '(ไม่มีตัวละคร)'));
     if (f.char) top.append(el('span', 'friend-lv', ` Lv.${f.char.lv} ${CLASSES[f.char.cls]?.name ?? ''}`));
     const sub = el('div', 'friend-sub', f.online ? placeText(f.char?.zone ?? '', f.char?.ch) : `ออฟไลน์${f.char?.zone ? ` · ล่าสุด ${mapName(f.char.zone)}` : ''}`);
     info.append(top, sub);

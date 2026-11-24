@@ -220,6 +220,7 @@ export const PAPER_ICONS: ReadonlySet<string> = new Set([
   'stone_key_witch',
   'stone_key_yeti',
   'stone_megaphone',
+  'stone_mystery_box',
   'stone_phoenix',
   'stone_protect',
   'stone_reroll_stat',

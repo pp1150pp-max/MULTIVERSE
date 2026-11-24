@@ -9,6 +9,8 @@ import { buildMenu, facePortrait } from './client/menu';
 import type { OnlineBackend } from './client/net/online';
 import { audioEngine } from './client/audio/engine';
 import { loadPublishedMaps } from './client/mapSync';
+import { addLangButton, checkLangAllowed, startTranslator } from './client/i18n';
+import { hudMockParam, runHudMock } from './client/hudMock';
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -21,8 +23,9 @@ function start(game: Game, classId: string): void {
 
 function launch(backend: OnlineBackend): void {
   const game = new Game($('app'), backend);
-  backend.onChat = (name, text, ch, to) => {
-    game.hud.chatLine(name, text, undefined, ch, to);
+  addLangButton();
+  backend.onChat = (name, text, ch, to, links) => {
+    game.hud.chatLine(name, text, undefined, ch, to, links);
     // Whispers are private: no speech bubble over the head.
     if (name && ch !== 'whisper') game.floating.bubble(name, text, ch === 'party');
   };
@@ -39,9 +42,10 @@ function launch(backend: OnlineBackend): void {
   backend.onDisconnect = (msg) => game.hud.showDisconnect(msg);
   backend.onReconnecting = (attempt) => game.hud.showReconnecting(attempt);
   backend.onShutdown = (mode, seconds, text) => game.hud.shutdownCountdown(mode, seconds, text);
-  backend.onAnnounce = (text, from, direct, megaphone) => game.hud.announce(text, from, direct, megaphone);
+  backend.onAnnounce = (text, from, direct, megaphone, box, head, links) => game.hud.announce(text, from, direct, megaphone, box, head, links);
   backend.onMarketNote = (text, sub) => game.hud.marketNote(text, sub);
   backend.onMailNote = (unread, fresh) => game.mailUI.note(unread, fresh);
+  backend.onNews = (v) => game.news.show(v);
   backend.onDaily = (view) => game.daily.show(view);
   start(game, backend.me.cls.id);
 }
@@ -65,9 +69,14 @@ function revealLogoWhenLoaded(): void {
 }
 
 async function boot(): Promise<void> {
+  // English mode: translate the page before anything else is drawn (docs/systems/i18n.md).
+  startTranslator();
+  void checkLangAllowed(() => 'game' in window);
   // Papercraft art everywhere (maps, characters, NPCs, monsters, UI), set before anything loads.
   usePaperArt();
   usePaperUi();
+  // /admin "จัดหน้าจอเกม" shows this page as a HUD example: no login, no sound, no 3D (src/client/hudMock.ts).
+  if (hudMockParam()) return runHudMock();
   audioEngine.init();
   // The Login form needs no images, so it shows as soon as this code runs. The logo letters and
   // background (index.html / CSS) are already downloading; the class portraits (a few MB) come

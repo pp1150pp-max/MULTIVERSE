@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import { PAPER_ICONS } from './paperIcons';
+import { currentBalance } from '../shared/balance';
 /**
  * The real URL of a sprite PNG under public/assets/sprites/. The build ships those PNGs as WebP
  * (see the webp plugin in vite.config.ts), so outside dev `.png` becomes `.webp`. Dev serves the PNGs as they are.
@@ -82,4 +83,13 @@ export function usePaperUi(): void {
     const nv = toPaperUi(v);
     if (nv !== v) el.setAttribute('src', nv);
   }
+}
+
+/** Item slot look knobs from /admin (fxLayer.slot*) as CSS variables on <html>; used by the .cell rules in late.css. */
+export function applySlotVars(): void {
+  const fx = currentBalance().fxLayer;
+  const st = document.documentElement.style;
+  st.setProperty('--slot-corner', String(fx.slotCorner));
+  st.setProperty('--slot-inset', String(fx.slotInset));
+  st.setProperty('--slot-icon', String(fx.slotIcon));
 }

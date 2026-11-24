@@ -77,8 +77,8 @@ export interface ZoneDef {
   allowAutoPlay: boolean;
   /**
    * Split into channels (several copies of the map, CH 1, CH 2, …) so players don't crowd one map
-   * (see server/channels.ts, docs/systems/channels.md). The farm maps have it; the hub doesn't yet,
-   * but setting it there is all it takes.
+   * (see server/channels.ts, docs/systems/channels.md). The farm maps have it. The hub's is the /admin switch
+   * Balance.hubChannels instead (read through hasChannels in src/shared/channels.ts), so it stays unset there.
    */
   channels?: boolean;
   half: number;

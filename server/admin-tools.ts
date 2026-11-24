@@ -14,9 +14,10 @@ import {
   type AdminAccountDetail, type AdminAccountRow, type AdminAccountsResponse, type AdminCharDetail, type AdminFeature,
 } from '../src/shared/admin';
 import { banMessage } from '../src/shared/api';
+import { VIP_DAYS_MAX, vipExtend, vipLeftText } from '../src/shared/vip';
 import { ADMIN_CRYSTAL_MAX, HISTORY_PAGE, type AdminStats, type StatsPoint, type StatsRange } from '../src/shared/admin';
 import { SESSION_PAGE_SIZES, SESSION_SEARCH_MAX, SESSION_SORTS, type SessionPage, type SessionQuery, type SessionSort } from '../src/shared/admin';
-import { BAG_SIZE } from '../src/shared/sim/Player';
+import { layOutBag } from '../src/shared/sim/Player';
 import type { AdminShutdownText } from '../src/shared/admin';
 import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../src/shared/net/protocol';
 import { SHUTDOWN_TEXT_KEY } from './db';
@@ -31,14 +32,22 @@ import { checkCosTuning, cosTuningChanges, pasteCosTuning, sameCosTuning } from 
 import { checkCosShop, cosHiddenIds, cosShopChanges, sameCosShop } from '../src/shared/cosShop';
 import { checkOrbItems, checkOrbName, orbItemId, orbItemsChanges, ORB_ITEM_MAX, type OrbItems } from '../src/shared/orbItems';
 import { COS_SLOT_NAME, cosById } from '../src/shared/data/cosmetics';
-import { balanceChanges, checkBalance, currentBalance, currentBalanceTuning, sameBalance, withItemStatMult, withMenuLayout, type BalanceTuning } from '../src/shared/balance';
-import { checkMenuLayoutTuning } from '../src/shared/menuLayout';
+import { balanceChanges, checkBalance, currentBalance, currentBalanceTuning, sameBalance, withHudLayout, withItemStatMult, withMenuLayout, type BalanceTuning } from '../src/shared/balance';
+import { checkMenuLayoutTuning, freeBtnDomId } from '../src/shared/menuLayout';
+import { checkHudLayoutTuning, HUD_DEVICES, hudLayoutChanges, isFreeBtnPart, mergeHudLayout, type HudLayoutTuning } from '../src/shared/hudLayout';
 import { upgradeItem } from '../src/shared/data/items';
 import { searchStats } from '../src/shared/sim/market';
 import type { Item, StoneStack } from '../src/shared/types';
-import type { AdminBalance, AdminMenuLayout } from '../src/shared/admin';
+import type { AdminBalance, AdminHudLayout, AdminMenuLayout } from '../src/shared/admin';
 import { DAILY_DEFAULT } from '../src/shared/daily';
 import { STONE_NAME } from '../src/shared/data/stones';
+import { boxChanges, boxConfig, boxOrbs, cleanBoxOverrides, type AdminBox } from '../src/shared/mysteryBox';
+
+/** The /admin mystery box tab's data. */
+const boxState = (db: Db): AdminBox => ({
+  overrides: db.boxOverrides(),
+  orbs: boxOrbs().map((id) => ({ id, name: cosById(id)?.name ?? id })),
+});
 
 const MODE_NAME: Record<ShutdownMode, string> = { restart: 'ข้อความรีสตาร์ท', shutdown: 'ข้อความปิด server' };
 const orbLookState = (db: Db, canEdit: boolean): AdminOrbLook => ({
@@ -175,7 +184,7 @@ export async function ownerToolsApi(
     return true;
   }
 
-  const acc = /^\/api\/admin\/accounts\/(\d{1,12})(?:\/(password|ban|unban|cosmetics|crystals))?$/.exec(path);
+  const acc = /^\/api\/admin\/accounts\/(\d{1,12})(?:\/(password|ban|unban|cosmetics|crystals|vip))?$/.exec(path);
   if (acc) {
     const id = Number(acc[1]);
     const action = acc[2];
@@ -188,11 +197,14 @@ export async function ownerToolsApi(
         const live = world.livePlayer(c.id);
         const data = live ? live.toData() : c.data;
         const base = charRow({ id: c.id, accountId: id, username: name?.username ?? '', guest: row.guest, name: data.name, data }, live);
-        return { ...base, equipment: data.equipment, bag: Array.from({ length: BAG_SIZE }, (_, i) => data.bag[i] ?? null) };
+        // An offline save not laid out in tabs yet is shown as it will be (nothing is written here).
+        const shown = live ? data : structuredClone(data);
+        const bagSlots = layOutBag(shown);
+        return { ...base, equipment: data.equipment, bag: shown.bag, bagSlots };
       });
       const stash = world.liveStash(id) ?? db.savedStash(id);
       const body: AdminAccountDetail = {
-        account: row, characters, stash: row.guest || !stash ? null : stash, cosmetics: row.guest ? null : db.cosmeticsOwned(id), crystals: row.guest ? null : db.crystals(id), cosHidden: cosHiddenIds(db.cosShop()), orbItems: db.orbItems().items,
+        account: row, characters, stash: row.guest || !stash ? null : stash, cosmetics: row.guest ? null : db.cosmeticsOwned(id), crystals: row.guest ? null : db.crystals(id), vipUntil: row.guest ? null : db.vipUntil(id), cosHidden: cosHiddenIds(db.cosShop()), orbItems: db.orbItems().items,
       };
       send(res, 200, body);
       return true;
@@ -222,6 +234,34 @@ export async function ownerToolsApi(
       }
       log(db, a, give ? 'cosmetic-give' : 'cosmetic-take', `${row.username} (#${id})`, `${COS_SLOT_NAME[c.slot]}: ${c.name}`);
       send(res, 200, { msg: give ? `ให้ ${c.name} แก่ ${row.username} แล้ว${mailNote}` : `ยึด ${c.name} คืนจาก ${row.username} แล้ว` });
+      return true;
+    }
+
+    if (method === 'POST' && action === 'vip') {
+      // { days: N } adds N days (from now, or from the end if it still runs); { remove: true } ends it now.
+      const a = requireFeature(req, db, 'vipGrant');
+      const row = accountRow(db, world, id);
+      if (row.guest) throw new HttpError(400, 'Guest เป็น VIP ไม่ได้');
+      const body = await readJson(req);
+      const now = Date.now();
+      const before = db.vipUntil(id);
+      if (body.remove === true) {
+        if (before <= now) throw new HttpError(400, 'บัญชีนี้ไม่ได้เป็น VIP อยู่');
+        db.setVipUntil(id, 0);
+        world.vipChanged(id);
+        log(db, a, 'vip-remove', `${row.username} (#${id})`, `เหลือ ${vipLeftText(before, now)}`);
+        send(res, 200, { msg: `ถอด VIP ของ ${row.username} แล้ว` });
+        return true;
+      }
+      const days = body.days;
+      if (typeof days !== 'number' || !Number.isInteger(days) || days < 1 || days > VIP_DAYS_MAX) {
+        throw new HttpError(400, `จำนวนวันต้องเป็นเลขเต็ม 1–${VIP_DAYS_MAX}`);
+      }
+      const until = vipExtend(before, days, now);
+      db.setVipUntil(id, until);
+      world.vipChanged(id);
+      log(db, a, 'vip-give', `${row.username} (#${id})`, `+${days} วัน → เหลือ ${vipLeftText(until, now)}`);
+      send(res, 200, { msg: `ให้ VIP ${days} วันแก่ ${row.username} (เหลือ ${vipLeftText(until, now)})` });
       return true;
     }
 
@@ -605,6 +645,30 @@ export async function ownerToolsApi(
     return true;
   }
 
+  // ---------------------------------------------------------- mystery box (src/shared/mysteryBox.ts)
+  if (method === 'GET' && path === '/api/admin/mystery-box') {
+    requireFeature(req, db, 'mysteryBox');
+    send(res, 200, boxState(db));
+    return true;
+  }
+
+  if (method === 'POST' && path === '/api/admin/mystery-box') {
+    const a = requireFeature(req, db, 'mysteryBoxEdit');
+    const body = await readJson(req);
+    const before = db.boxOverrides();
+    // Saved over what the page loaded: someone else's save in between = reload first.
+    if (JSON.stringify(body.base ?? null) !== JSON.stringify(before)) throw new HttpError(409, 'มีคนบันทึกค่ากล่องปริศนาไปแล้ว โหลดหน้าใหม่ก่อน');
+    const o = cleanBoxOverrides(body.overrides);
+    if (typeof o === 'string') throw new HttpError(400, o);
+    db.setBoxOverrides(o);
+    const changes = boxChanges(before, o);
+    if (changes) log(db, a, 'mystery-box', 'กล่องปริศนา', changes.length > 1500 ? changes.slice(0, 1500) + '…' : changes);
+    // Selling orbs in the cash shop may have changed.
+    if (boxConfig(before).orbsInShop !== boxConfig(o).orbsInShop) world.cashShopChanged();
+    send(res, 200, boxState(db));
+    return true;
+  }
+
   // ---------------------------------------------------------- game balance (server-wide, src/shared/balance.ts)
   if (method === 'GET' && path === '/api/admin/balance') {
     requireFeature(req, db, 'balance');
@@ -629,8 +693,8 @@ export async function ownerToolsApi(
       : part === 'rest' ? { ...bodyRest, ...(savedSkills ? { skills: savedSkills } : {}) }
       : c.tuning;
     // The item stat multipliers are never changed here (not even by the reset): only the owner's confirm below does.
-    // The menu layout has its own save below (its own switch), so this one never changes it either.
-    const next = withMenuLayout(withItemStatMult(merged, before.itemStatMult), before.menuLayout);
+    // The menu layout and the HUD layout have their own saves below (their own switches), so this one never changes them either.
+    const next = withHudLayout(withMenuLayout(withItemStatMult(merged, before.itemStatMult), before.menuLayout), before.hudLayout);
     if (!sameBalance(before, next)) {
       db.setBalance(next);
       const changes = balanceChanges(before, next);
@@ -655,14 +719,96 @@ export async function ownerToolsApi(
     const c = body.reset === true ? { tuning: undefined } : checkMenuLayoutTuning(body.layout, true);
     if ('error' in c) throw new HttpError(400, c.error);
     const before = currentBalanceTuning();
-    const next = withMenuLayout(before, c.tuning);
+    let next = withMenuLayout(before, c.tuning); // keeps every other key (the HUD layout too)
+    // A floating shortcut deleted (or no longer floating) loses its place on the screen, published and in the draft, so a
+    // new button that gets the same id later never shows up at once at the old spot (owner: only once its place is published).
+    const free = new Set((c.tuning?.custom ?? []).filter((b) => b.free).map((b) => freeBtnDomId(b.id)));
+    const dropGone = (t: HudLayoutTuning | undefined): HudLayoutTuning | undefined => {
+      if (!t) return t;
+      const out: HudLayoutTuning = {};
+      for (const d of HUD_DEVICES) {
+        const dev = t[d];
+        if (!dev) continue;
+        const kept = Object.fromEntries(Object.entries(dev).filter(([id]) => !isFreeBtnPart(id) || free.has(id)));
+        if (Object.keys(kept).length) out[d] = kept;
+      }
+      return Object.keys(out).length ? out : undefined;
+    };
+    next = withHudLayout(next, dropGone(next.hudLayout));
+    const draft = readHudDraft(db);
+    if (draft && JSON.stringify(dropGone(draft.layout) ?? {}) !== JSON.stringify(draft.layout)) {
+      db.setSetting(HUD_DRAFT_KEY, JSON.stringify({ ...draft, layout: dropGone(draft.layout) ?? {} } satisfies HudDraft));
+    }
     if (!sameBalance(before, next)) {
       db.setBalance(next);
       const changes = balanceChanges(before, next);
-      log(db, a, 'menu-layout', 'จัดเมนูเกม ทั้งเซิร์ฟ', (body.reset === true ? 'คืนค่าในโค้ด: ' : '') + changes);
+      log(db, a, 'menu-layout', 'จัดเมนูเกม ทั้งเซิร์ฟ', clip((body.reset === true ? 'คืนค่าในโค้ด: ' : '') + changes));
       world.balanceChanged(next);
     }
     send(res, 200, { layout: currentBalance().menuLayout, canEdit: true } satisfies AdminMenuLayout);
+    return true;
+  }
+
+  // HUD / window layout ("จัดหน้าจอเกม", src/shared/hudLayout.ts): one draft in the settings table, publishing puts it into
+  // the balance tuning (live for everyone online through the usual `balance` message). The game's ?previewHud=1 reads the draft here too.
+  if (method === 'GET' && path === '/api/admin/hud-layout') {
+    const a = requireFeature(req, db, 'hudLayout');
+    send(res, 200, hudLayoutState(db, a.features.includes('hudLayoutEdit')));
+    return true;
+  }
+
+  if (method === 'POST' && path === '/api/admin/hud-layout') {
+    const a = requireFeature(req, db, 'hudLayoutEdit');
+    const body = await readJson(req);
+    const before = currentBalanceTuning();
+    if (body.draft !== undefined) {
+      // Save the draft (the whole layout: only the changed parts).
+      const c = checkHudLayoutTuning(body.draft, true);
+      if ('error' in c) throw new HttpError(400, c.error);
+      const old = readHudDraft(db);
+      const was = old ? old.layout : before.hudLayout;
+      db.setSetting(HUD_DRAFT_KEY, JSON.stringify({ layout: c.tuning ?? {}, by: a.acc.username, at: Date.now() } satisfies HudDraft));
+      const changes = hudLayoutChanges(was, c.tuning);
+      if (changes.length) log(db, a, 'hud-draft', 'จัดหน้าจอเกม (ร่าง)', clip(changes.join(', ')));
+    } else if (body.publish === true) {
+      const d = readHudDraft(db);
+      if (!d) throw new HttpError(400, 'ยังไม่มีร่างให้เผยแพร่');
+      const next = withHudLayout(before, d.layout && Object.keys(d.layout).length ? d.layout : undefined);
+      db.setSetting(HUD_DRAFT_KEY, null);
+      const changes = balanceChanges(before, next);
+      if (!sameBalance(before, next)) {
+        db.setBalance(next);
+        world.balanceChanged(next);
+        pushHudHistory(db, before.hudLayout, next.hudLayout, a.acc.username, 'publish');
+      }
+      log(db, a, 'hud-publish', 'จัดหน้าจอเกม ทั้งเซิร์ฟ', clip(changes || 'ไม่มีอะไรต่างจากที่ใช้อยู่'));
+    } else if (body.discard === true) {
+      if (readHudDraft(db)) {
+        db.setSetting(HUD_DRAFT_KEY, null);
+        log(db, a, 'hud-draft', 'จัดหน้าจอเกม (ร่าง)', 'ทิ้งร่าง');
+      }
+    } else if (body.reset === true) {
+      // Everything back to the code, for everyone, and the draft goes too.
+      const next = withHudLayout(before, undefined);
+      db.setSetting(HUD_DRAFT_KEY, null);
+      if (!sameBalance(before, next)) {
+        const changes = balanceChanges(before, next);
+        db.setBalance(next);
+        world.balanceChanged(next);
+        pushHudHistory(db, before.hudLayout, next.hudLayout, a.acc.username, 'reset');
+        log(db, a, 'hud-reset', 'จัดหน้าจอเกม ทั้งเซิร์ฟ', clip('คืนค่าในโค้ด: ' + changes));
+      }
+    } else if (typeof body.restore === 'number') {
+      // Back to an older published version: it becomes the draft, to look at in the game and then publish.
+      const h = readHudHistory(db).find((e) => e.at === body.restore);
+      if (!h) throw new HttpError(400, 'ไม่พบฉบับนี้ในประวัติ (อาจเก่าเกิน 20 ฉบับ)');
+      const old = readHudDraft(db);
+      db.setSetting(HUD_DRAFT_KEY, JSON.stringify({ layout: h.layout, by: a.acc.username, at: Date.now() } satisfies HudDraft));
+      const changes = hudLayoutChanges(old ? old.layout : before.hudLayout, h.layout);
+      const when = new Date(h.at).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
+      log(db, a, 'hud-rollback', 'จัดหน้าจอเกม (ร่าง)', clip(`ย้อนเป็นฉบับ ${when}${h.by ? ` (${h.by})` : ''} ไว้ในร่าง${changes.length ? ': ' + changes.join(', ') : ' (เหมือนร่าง/ที่ใช้อยู่)'}`));
+    } else throw new HttpError(400, 'ไม่รู้ว่าจะทำอะไร');
+    send(res, 200, hudLayoutState(db, true));
     return true;
   }
 
@@ -928,3 +1074,69 @@ function stats(db: Db, world: GameWorld, range: StatsRange): AdminStats {
     since: db.samples(0)[0]?.at ?? null,
   };
 }
+
+/** The settings key of the "จัดหน้าจอเกม" draft (one for the whole server). */
+const HUD_DRAFT_KEY = 'hud_layout_draft';
+interface HudDraft { layout: HudLayoutTuning; by: string; at: number }
+
+function readHudDraft(db: Db): HudDraft | null {
+  const v = db.getSetting(HUD_DRAFT_KEY);
+  if (!v) return null;
+  try {
+    const o = JSON.parse(v) as Partial<HudDraft>;
+    const c = checkHudLayoutTuning(o.layout, false);
+    return { layout: 'tuning' in c ? (c.tuning ?? {}) : {}, by: typeof o.by === 'string' ? o.by : '', at: typeof o.at === 'number' ? o.at : 0 };
+  } catch {
+    return null;
+  }
+}
+
+/** The settings key of the published "จัดหน้าจอเกม" versions, newest first (rolled back from /admin). */
+const HUD_HISTORY_KEY = 'hud_layout_history';
+const HUD_HISTORY_MAX = 20;
+interface HudVersion { layout: HudLayoutTuning; by: string; at: number; what: 'publish' | 'reset' | 'before' }
+
+function readHudHistory(db: Db): HudVersion[] {
+  const v = db.getSetting(HUD_HISTORY_KEY);
+  if (!v) return [];
+  try {
+    const arr = JSON.parse(v) as unknown;
+    if (!Array.isArray(arr)) return [];
+    const out: HudVersion[] = [];
+    for (const x of arr.slice(0, HUD_HISTORY_MAX)) {
+      if (!x || typeof x !== 'object') continue;
+      const o = x as Partial<HudVersion>;
+      if (typeof o.at !== 'number') continue;
+      // Parts (or shortcut buttons) the code no longer knows are dropped, never refused.
+      const c = checkHudLayoutTuning(o.layout, false);
+      const what = o.what === 'reset' || o.what === 'before' ? o.what : 'publish';
+      out.push({ layout: 'tuning' in c ? (c.tuning ?? {}) : {}, by: typeof o.by === 'string' ? o.by : '', at: o.at, what });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/** Keeps the layout just made live (newest first, at most HUD_HISTORY_MAX). The first time, what was live before goes in too. */
+function pushHudHistory(db: Db, was: HudLayoutTuning | undefined, now: HudLayoutTuning | undefined, by: string, what: 'publish' | 'reset'): void {
+  const list = readHudHistory(db);
+  const at = Math.max(Date.now(), (list[0]?.at ?? 0) + 2);
+  if (!list.length) list.unshift({ layout: was ?? {}, by: '', at: at - 1, what: 'before' });
+  list.unshift({ layout: now ?? {}, by, at, what });
+  db.setSetting(HUD_HISTORY_KEY, JSON.stringify(list.slice(0, HUD_HISTORY_MAX)));
+}
+
+function hudLayoutState(db: Db, canEdit: boolean): AdminHudLayout {
+  const d = readHudDraft(db);
+  return {
+    published: currentBalance().hudLayout,
+    draft: d ? mergeHudLayout(d.layout) : null,
+    ...(d ? { draftBy: d.by, draftAt: d.at } : {}),
+    history: readHudHistory(db).map((h) => ({ at: h.at, by: h.by, what: h.what, layout: mergeHudLayout(h.layout) })),
+    freeButtons: currentBalance().menuLayout.custom.filter((b) => b.free).map((b) => ({ id: b.id, label: b.label, icon: b.icon })),
+    canEdit,
+  };
+}
+
+const clip = (t: string): string => (t.length > 1500 ? t.slice(0, 1500) + '…' : t);

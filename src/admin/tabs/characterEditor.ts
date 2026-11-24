@@ -1,4 +1,4 @@
-import { ADMIN_ITEM_ROWS_MAX, ADMIN_STAT_MULT, statStep, type AdminItemRow, type AdminCharRow, type AdminEditResult, type AdminOnline } from '../../shared/admin';
+import { ADMIN_SET_SIZE, ADMIN_ITEM_ROWS_MAX, ADMIN_STAT_MULT, statStep, type AdminItemRow, type AdminCharRow, type AdminEditResult, type AdminOnline } from '../../shared/admin';
 import { POTION_SIZES, potionName } from '../../shared/data/potions';
 import { STONE_NAME } from '../../shared/data/stones';
 import { CLASS_IDS } from '../../shared/data/classes';
@@ -233,8 +233,12 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
   const rarityWrap = h('label', {}, 'ความหายาก', rarity);
   const itemLvWrap = h('label', {}, 'เลเวลไอเทม', itemLv);
   /** Potions and stones have no rarity, +N, level or stats: only the count shows. */
+  let wasGear = !stackPick();
   const showGearFields = () => {
     const gear = !stackPick();
+    // Switching from potions/stones (a stack of 10) to gear: back to 1 piece.
+    if (gear && !wasGear) form.count = count.value = '1';
+    wasGear = gear;
     for (const el of [rarityWrap, plusWrap, itemLvWrap, exampleBox]) el.style.display = gear ? '' : 'none';
   };
   const refreshExample = () => {
@@ -263,6 +267,16 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
     }, itemBtn);
   };
 
+  // Whole set: every wear slot at one rarity / tier / level / +N (spawnSet tool, owner 2026-11-21).
+  const setCls = h('select', {}, ...CLASS_IDS.map((k) => h('option', { value: k, selected: k === c.classId }, k === c.classId ? `${className(k)} (อาชีพตัวนี้)` : className(k))));
+  const setRarity = h('select', {}, ...m.rarities.map((r) => h('option', { value: r, style: `color:${RARITY_COLOR[r]}` }, RARITY_LABEL[r])));
+  const setTier = h('select', {}, ...[1, 2, 3, 4, 5].map((t) => h('option', { value: String(t) }, `T${t}${t === 1 ? ' (ดีสุด)' : t === 5 ? ' (ต่ำสุด)' : ''}`)));
+  const setLv = numInput(c.level, 1, m.maxLevel);
+  const setPlus = h('select', {}, ...Array.from({ length: m.maxPlus + 1 }, (_, i) => h('option', { value: String(i) }, `+${i}`)));
+  const setBtn = h('button', { class: 'primary' }, 'เสกทั้งเซต');
+  setBtn.onclick = () => void run('itemset', { classId: setCls.value, rarity: setRarity.value, tier: Number(setTier.value), level: intOf(setLv), plus: Number(setPlus.value) }, setBtn,
+    `เสกเซตทุกช่อง (${setRarity.selectedOptions[0].text} T${setTier.value} Lv.${intOf(setLv)} +${setPlus.value}) ให้ ${c.name}?`);
+
   // Zone
   const zone = h('select', {}, ...m.zones.map((z) => h('option', { value: z.id, selected: z.id === c.zone }, `${z.nameTh} (Lv.${z.levels[0]}–${z.levels[1]})`)));
   const tpBtn = h('button', { class: 'primary' }, 'ย้ายโซน');
@@ -290,6 +304,7 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
   const kickBtn = h('button', { class: 'danger' }, 'เตะออกจากเกม');
   kickBtn.onclick = () => void run('kick', {}, kickBtn, `เตะ ${c.name} ออกจากเกม?`);
 
+  const rarityLabel = (t: string, el: HTMLElement) => h('label', {}, t, el);
   const fact = (label: string, v: string) => h('div', {}, `${label} `, h('b', {}, v));
   const edit = can('charEdit');
   const bg = h('div', { class: 'sheet-bg', onclick: (ev: Event) => ev.target === bg && closeSheet() });
@@ -318,6 +333,10 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
       h('div', { class: 'row', style: 'margin-top:8px' },
         rarityWrap, plusWrap, itemLvWrap, h('label', {}, 'จำนวน', count), itemBtn),
       custom ? exampleBox : null),
+    !edit || !can('spawnSet') ? null : h('section', {}, h('h3', {}, `เสกของเป็นเซต (ทุกช่องสวมใส่ สูงสุด ${ADMIN_SET_SIZE} ชิ้น เข้ากระเป๋า)`),
+      h('div', { class: 'row' }, h('label', {}, 'อาชีพ', setCls), rarityLabel('ความหายาก', setRarity), h('label', {}, 'tier สเตตัส', setTier),
+        h('label', {}, 'เลเวลไอเทม', setLv), h('label', {}, 'ตีบวก', setPlus), setBtn),
+      h('div', { class: 'muted' }, `แต่ละช่องใช้ชนิดที่ดีที่สุดที่เลเวลนี้ใส่ได้ · ทุกแถวสเตตัสอยู่กลางช่วง tier ที่เลือก · แหวน 2 วง · กระเป๋าว่างไม่พอ = ไม่เสกเลย`)),
     can('teleport') ? h('section', {}, h('h3', {}, 'ย้ายโซน (ไปที่แคมป์)'),
       h('div', { class: 'row' }, h('label', {}, 'โซน', zone), chWrap, tpBtn),
       can('channelWarp') ? h('div', { class: 'muted' }, 'เลือก CH ได้เฉพาะแมพที่มีแชนแนล · เลือก CH แล้วเข้าได้แม้ห้องเต็ม') : null) : null,

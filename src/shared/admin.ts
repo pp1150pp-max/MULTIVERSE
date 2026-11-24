@@ -1,6 +1,7 @@
 // Admin page (/admin): roles, limits and the shapes of the /api/admin requests, shared by the page
 // and the server. The server checks the role and every value on each call; the page is only a view.
-import { isPotion, isStack, isStone, RARITIES, RARITY_LABEL, sameStack, STAT_KEYS, STAT_LABEL, STONE_KINDS, type BagEntry, type PotionKind, type PotionStack, type StoneStack, type ClassId, type EquipSlot, type Item, type Rarity, type SlotId, type StatKey, type StatLine } from './types';
+import { isPotion, isStack, isStone, RARITIES, RARITY_LABEL, sameStack, SLOTS, STAT_KEYS, STAT_LABEL, STONE_KINDS, type BagEntry, type PotionKind, type PotionStack, type StoneStack, type ClassId, type EquipSlot, type Item, type Rarity, type SlotId, type StatKey, type StatLine } from './types';
+import { tabRange, type BagSlots } from './bagTabs';
 import type { ShutdownMode } from './net/protocol';
 import type { OrbLook } from './orbLook';
 import type { OrbItem, OrbItems } from './orbItems';
@@ -9,8 +10,9 @@ import type { AnimTuning } from './animTuning';
 import type { CosShop } from './cosShop';
 import type { CardTuning } from './cardTuning';
 import type { BalanceTuning } from './balance';
-import type { MenuLayoutConfig } from './menuLayout';
-import { ITEM_BASES, itemNames, makeItem, roundStat, rowRanges, stampTier, statStep, tierOf } from './data/items';
+import type { MenuIcon, MenuLayoutConfig } from './menuLayout';
+import type { HudLayoutConfig } from './hudLayout';
+import { ITEM_BASES, itemNames, makeItem, roundStat, rowRanges, stampTier, statStep, tierOf, tierRanges } from './data/items';
 import { CLASS_IDS } from './data/classes';
 import { MAX_LEVEL } from './formulas';
 import { PLUS_CAP } from './data/enhance';
@@ -201,7 +203,7 @@ export interface AdminDirectWs {
  * switch: the Permissions tab, the audit log, restarting / stopping the server, deleting accounts or
  * characters, and making someone owner (command line).
  */
-export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'crystalGrant' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'directWs' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'animPreview' | 'animTune' | 'menuLayout' | 'menuLayoutEdit' | 'mapEdit' | 'mapRollback' | 'mapExport' | 'mapCreate' | 'mapDelete';
+export type AdminFeature = 'online' | 'charView' | 'charEdit' | 'kick' | 'teleport' | 'staffTarget' | 'customItem' | 'users' | 'resetPassword' | 'ban' | 'broadcast' | 'backup' | 'sessions' | 'stats' | 'chatLog' | 'chatDelete' | 'shutdownText' | 'mail' | 'tradeLog' | 'orbPreview' | 'orbLook' | 'channelWarp' | 'reports' | 'reportBan' | 'cosmetics' | 'crystalGrant' | 'vipGrant' | 'cosPreview' | 'cosLook' | 'cosManage' | 'cosManageEdit' | 'orbShopAdd' | 'cardView' | 'cardTune' | 'balance' | 'itemEdit' | 'itemStatMult' | 'daily' | 'netDelta' | 'directWs' | 'googleLogin' | 'cashShop' | 'cashShopEdit' | 'topup' | 'topupConfirm' | 'animPreview' | 'animTune' | 'menuLayout' | 'menuLayoutEdit' | 'hudLayout' | 'hudLayoutEdit' | 'mapEdit' | 'mapRollback' | 'mapExport' | 'mapCreate' | 'mapDelete' | 'spawnSet' | 'mysteryBox' | 'mysteryBoxEdit' | 'news' | 'newsEdit';
 
 /**
  * The defaults: which built-in role may use each tool (owner always has all). The owner can change
@@ -249,6 +251,8 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   cosmetics: ['owner'],
   // Giving / taking crystals on an account's sheet (owner 2026-11-20, like giving gold; owner only to start with).
   crystalGrant: ['owner'],
+  // Giving / removing an account's VIP (owner 2026-11-23, src/shared/vip.ts).
+  vipGrant: ['owner'],
   // The cosmetics test bench tab "ของแต่งตัว" (owner 2026-11-10: owner and GMs). Only looks; changes nothing in the game.
   cosPreview: ['owner', 'gm'],
   // Saving the server-wide cosmetic tuning from that tab (owner 2026-11-10: owner only).
@@ -271,6 +275,11 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   // Confirming item stat multipliers on the "ปรับสมดุล" tab, which also scales every saved item (owner 2026-11-11: owner only).
   itemStatMult: ['owner'],
   daily: ['owner'],
+  mysteryBox: ['owner', 'gm'],
+  mysteryBoxEdit: ['owner'],
+  // The "มีอะไรใหม่" tab (owner 2026-11-22): GMs look, only the owner adds / edits / hides / deletes and flips the switches.
+  news: ['owner', 'gm'],
+  newsEdit: ['owner'],
   // The snapshot delta switch on the Server tab (owner 2026-11-14: owner and GMs).
   netDelta: ['owner', 'gm'],
   // The direct connection card on the Server tab (owner 2026-11-20: owner and GMs switch it; only the owner changes the hostname).
@@ -282,6 +291,11 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   cashShop: ['owner', 'gm'],
   // Saving it, opening / closing sales (owner only).
   cashShopEdit: ['owner'],
+  // The "เติมเงิน" tab: PromptPay top-up requests and their history (owner 2026-11-22: owner and GMs may look; the number shows masked to GMs).
+  topup: ['owner', 'gm'],
+  // Confirming / rejecting / reversing a top-up request (owner 2026-11-22: owner only, it is their bank account).
+  // The PromptPay number, the on/off switch and the close beta refund are owner-only for good (no switch).
+  topupConfirm: ['owner'],
   // The "ท่าตัวละคร" tab: every facing of every animation, tried out per facing (owner 2026-11-18: owner and GMs).
   animPreview: ['owner', 'gm'],
   // Saving those per-facing fixes server-wide (owner only).
@@ -289,13 +303,18 @@ export const FEATURE_ROLES: Record<AdminFeature, AdminRole[]> = {
   // The "จัดเมนูเกม" tab: which buttons the in-game menu / top-right icon row show and their order (default chosen without asking the owner yet, 2026-11-19: owner and GMs may look).
   menuLayout: ['owner', 'gm'],
   // Saving it, server-wide, live for everyone online (owner only, like the other server-wide look tabs).
-  menuLayoutEdit: ['owner'],
+  menuLayoutEdit: ['owner', 'gm'],
+  // The "จัดหน้าจอเกม" tab (owner 2026-11-22: owner and GMs may look, save drafts and publish).
+  hudLayout: ['owner', 'gm'],
+  hudLayoutEdit: ['owner', 'gm'],
   // The map editor (docs/plans/map-editor.md): save drafts and publish; going back to an older revision and exporting a map into the repo are owner-only until the owner hands them out.
   mapEdit: ['owner', 'gm'],
   mapRollback: ['owner'],
   mapExport: ['owner'],
   mapCreate: ['owner', 'gm'],
   mapDelete: ['owner', 'gm'],
+  // Spawning a whole set (every wear slot) at one rarity / tier / level / +N into the bag (owner 2026-11-21: owner and GMs).
+  spawnSet: ['owner', 'gm'],
 };
 
 export const ADMIN_FEATURES = Object.keys(FEATURE_ROLES) as AdminFeature[];
@@ -328,11 +347,13 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   online: { name: 'ดูผู้เล่นออนไลน์', desc: 'แท็บ "ออนไลน์": ใครเล่นอยู่ แมพ/CH ping FPS GPU และ IP', group: 'ผู้เล่น' },
   charView: { name: 'ค้นหา/ดูตัวละคร', desc: 'ช่องค้นหาตัวละครในแท็บ "ผู้ใช้และตัวละคร" และเปิดดูตัวละคร (เลเวล ทอง โซน)', group: 'ผู้เล่น' },
   charEdit: { name: 'แก้ตัวละคร', desc: 'ตั้งเลเวล/EXP ให้-หักทอง เสกไอเทม ยา หิน (ต้องมี "ค้นหา/ดูตัวละคร" ด้วย)', group: 'ผู้เล่น' },
+  spawnSet: { name: 'เสกของเป็นเซตทุกชิ้น', desc: 'ในหน้าตัวละคร: เสกอุปกรณ์ทุกช่องสวมใส่ครั้งเดียว เลือกความหายาก tier เลเวล ระดับตีบวก อาชีพ (ต้องมี "แก้ตัวละคร" ด้วย)', group: 'ผู้เล่น' },
   customItem: { name: 'เสกไอเทมกำหนดสเตตัสเอง', desc: 'เลือกสเตตัสทีละแถวตอนเสกอุปกรณ์ (ไม่มี = สุ่มแบบของดรอป)', group: 'ผู้เล่น' },
   kick: { name: 'เตะออกจากเกม', desc: 'เตะตัวละครที่ออนไลน์อยู่ออกจากเกม', group: 'ผู้เล่น' },
   teleport: { name: 'ย้ายโซน', desc: 'ย้ายตัวละครไปแคมป์ของโซนที่เลือก', group: 'ผู้เล่น' },
   channelWarp: { name: 'วาร์ปเลือก CH', desc: 'ตอนย้ายโซน เลือก CH ได้ เข้าได้แม้ห้องเต็ม', group: 'ผู้เล่น' },
   crystalGrant: { name: 'ให้/ลดคริสตัลมิติ', desc: 'ในหน้าบัญชี: ให้หรือลดคริสตัลมิติ (เงินแคชช็อป) ของบัญชี', group: 'ผู้เล่น' },
+  vipGrant: { name: 'ให้/ถอด VIP', desc: 'ในหน้าบัญชี: เพิ่มวัน VIP หรือถอด VIP ของบัญชี', group: 'ผู้เล่น' },
   cosmetics: { name: 'ให้/ถอนของแต่งตัว', desc: 'ให้หรือถอนของแต่งตัวในหน้าบัญชี', group: 'ผู้เล่น' },
   itemEdit: { name: 'แก้ไอเทมของผู้เล่น', desc: 'ในหน้าบัญชี: แก้ชนิด ความหายาก เลเวล อาชีพ ชื่อ ตีบวก pity สเตตัสทุกบรรทัด จำนวนยา/หิน หรือลบไอเทม ที่สวม/กระเป๋า/คลัง (ต้องมี "ผู้ใช้ทั้งหมด" ด้วย)', group: 'ผู้เล่น' },
   staffTarget: { name: 'จัดการบัญชีทีมงานคนอื่น', desc: 'แบน รีเซ็ตรหัส แก้ตัวละครของบัญชีที่มีสิทธิ์ผู้ดูแล (ไม่มี = ทำได้แค่ผู้เล่นธรรมดาและตัวเอง) · บัญชี owner แตะไม่ได้เสมอ', group: 'ผู้เล่น' },
@@ -355,13 +376,19 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   cosPreview: { name: 'ทดลองของแต่งตัว', desc: 'แท็บ "ของแต่งตัว": ลองตำแหน่ง/หน้าตาปีก สัตว์ขี่ สัตว์เลี้ยง ออร่า ไม่เปลี่ยนอะไรในเกม', group: 'หน้าตา' },
   balance: { name: 'ปรับสมดุล (อาชีพ, tier)', desc: 'แท็บ "ปรับสมดุล": แก้ค่าสเตตัสอาชีพ ตัวคูณ ตัวตัดฟื้น และตาราง tier T1–T5 ของทั้งเซิร์ฟ มีผลทันที', group: 'ปรับเกม' },
   daily: { name: 'ล็อกอินรายวัน', desc: 'แท็บ "ล็อกอินรายวัน": แก้ของรางวัลแต่ละวันของปฏิทิน (มีผลกับของที่ส่งหลังบันทึก)', group: 'ปรับเกม' },
+  mysteryBox: { name: 'กล่องปริศนา (ดู)', desc: 'แท็บ "กล่องปริศนา": ดูของในกล่องและโอกาสเป็น %', group: 'ปรับเกม' },
+  news: { name: 'มีอะไรใหม่ (ดู)', desc: 'แท็บ "มีอะไรใหม่": ดูประกาศอัปเดตที่ผู้เล่นเห็นในเกม', group: 'สื่อสาร' },
+  newsEdit: { name: 'มีอะไรใหม่ (แก้)', desc: 'เพิ่ม/แก้/ซ่อน/ลบประกาศอัปเดต และเปิด/ปิดปุ่ม + การเด้งหน้าต่างเองครั้งแรกหลังอัปเดต (มีผลทันที)', group: 'สื่อสาร' },
+  mysteryBoxEdit: { name: 'กล่องปริศนา (บันทึก)', desc: 'เปิด/ปิดกล่อง โอกาสดรอป ของในกล่อง % จำนวน ประกาศ และขายลูกแก้วในแคชช็อป (มีผลทันที)', group: 'ปรับเกม' },
   directWs: { name: 'ต่อตรง (ลดปิง)', desc: 'แท็บ Server: เปิด/ปิดให้เกมต่อตรงไปที่ VPS ไม่ผ่าน Cloudflare และเพดานการเชื่อมต่อต่อ IP (ชื่อ hostname แก้ได้เฉพาะ owner)', group: 'ระบบ' },
   netDelta: { name: 'ลดขนาด snapshot', desc: 'แท็บ Server: สวิตช์ส่งค่าที่แทบไม่เปลี่ยนเฉพาะตอนเปลี่ยน (ลดเน็ตขาออก) และตัวนับ', group: 'ระบบ' },
   googleLogin: { name: 'เข้าสู่ระบบด้วย Google', desc: 'แท็บ Server: เปิด/ปิดปุ่ม Google ที่หน้า Login ดูบัญชีที่ผูก Google และยกเลิกการผูก', group: 'ระบบ' },
   animPreview: { name: 'ดูท่าตัวละคร', desc: 'แท็บ "ท่าตัวละคร": ดูท่ายืน วิ่ง โจมตี ฯลฯ ของทุกอาชีพครบ 8 ทิศ บนพื้นเลื่อน ไม่เปลี่ยนอะไรในเกม (ปรับค่าต่อทิศได้ บันทึกต้องมีสวิตช์ animTune)', group: 'หน้าตา' },
   animTune: { name: 'บันทึกค่าท่าตัวละคร', desc: 'แท็บ "ท่าตัวละคร": บันทึกค่าที่ปรับต่อทิศ (แถวภาพ พลิก ความเร็ว เลื่อน ขนาด) เป็นของทั้งเซิร์ฟ ทุกคนเห็นทันที', group: 'หน้าตา' },
   menuLayout: { name: 'ดูจัดเมนูเกม', desc: 'แท็บ "จัดเมนูเกม": ดูว่าหน้าต่างเมนูและแถวไอคอนมุมขวาบนมีปุ่มอะไร ลำดับไหน (ลองจัดได้ แต่บันทึกต้องมีสวิตช์ "บันทึกจัดเมนูเกม")', group: 'ปรับเกม' },
-  menuLayoutEdit: { name: 'บันทึกจัดเมนูเกม', desc: 'แท็บ "จัดเมนูเกม": บันทึกลำดับ/ซ่อน/ย้ายปุ่มระหว่างหน้าต่างเมนูกับแถวไอคอนมุมขวาบน มีผลกับผู้เล่นที่ออนไลน์ทันที', group: 'ปรับเกม' },
+  menuLayoutEdit: { name: 'บันทึกจัดเมนูเกม', desc: 'แท็บ "จัดเมนูเกม": บันทึกลำดับ/ซ่อน/ย้ายปุ่ม เปลี่ยนชื่อ/ไอคอนปุ่ม และเพิ่ม/ลบปุ่มลัด มีผลกับผู้เล่นที่ออนไลน์ทันที', group: 'ปรับเกม' },
+  hudLayout: { name: 'ดูจัดหน้าจอเกม', desc: 'แท็บ "จัดหน้าจอเกม": ดูตำแหน่ง/ขนาด/การซ่อนของ HUD และหน้าต่างในเกม และทดลองร่างในเกม (เฉพาะตัวเอง)', group: 'ปรับเกม' },
+  hudLayoutEdit: { name: 'แก้จัดหน้าจอเกม', desc: 'แท็บ "จัดหน้าจอเกม": บันทึกร่าง (รวมตำแหน่งปุ่มลัดวางอิสระ) เผยแพร่ให้ผู้เล่นทุกคน ย้อนฉบับเก่า และคืนค่าในโค้ด (มีผลกับผู้เล่นที่ออนไลน์ทันที)', group: 'ปรับเกม' },
   itemStatMult: { name: 'คอนเฟิร์มตัวคูณสเตตัสบนไอเทม', desc: 'แท็บ "ปรับสมดุล": คอนเฟิร์มตัวคูณค่าสเตตัสบนไอเทม คูณค่าของทุกชิ้นในเซิร์ฟจริง (สำรอง DB ให้ก่อน) · ทดลองดูตัวอย่างได้ด้วยสิทธิ์ "ปรับสมดุล"', group: 'ปรับเกม' },
   cosLook: { name: 'บันทึกของแต่งตัวทั้งเซิร์ฟ', desc: 'บันทึกค่าตำแหน่ง/หน้าตาของแต่งตัวที่ทุกคนเห็น (ต้องมี "ทดลองของแต่งตัว" ด้วย)', group: 'หน้าตา' },
   cosManage: { name: 'ดูจัดการของแต่งตัว', desc: 'แท็บ "จัดการของแต่งตัว": ดูทุกชิ้นว่าซ่อน/แสดง ราคาคริสตัลมิติ และค่าหน้าตารายชิ้น', group: 'หน้าตา' },
@@ -370,6 +397,8 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   cardView: { name: 'ดูค่าการ์ด', desc: 'แท็บ "การ์ด": ดูผลของการ์ดทุกใบ เรทดรอป ราคา และเพดาน', group: 'ปรับเกม' },
   cashShop: { name: 'ดูแคชช็อป', desc: 'แท็บ "แคชช็อป": ดูสินค้า ราคาคริสตัลมิติ แพ็กเกจเติม และประวัติการซื้อ', group: 'ปรับเกม' },
   cashShopEdit: { name: 'แก้แคชช็อป', desc: 'เปิด/ปิดขาย และบันทึกสินค้า ราคา ราคาลด จำกัดต่อบัญชี ช่วงเวลา ป้าย แนะนำ แพ็กเกจ (รวมราคาของแต่งตัว) ต้องมี "ดูแคชช็อป" ด้วย', group: 'ปรับเกม' },
+  topup: { name: 'ดูการเติมเงิน', desc: 'แท็บ "เติมเงิน": คำขอเติมคริสตัลผ่านพร้อมเพย์ ยอดที่ต้องโอน และประวัติ (เลขพร้อมเพย์เห็นแค่ 4 ตัวท้าย)', group: 'ปรับเกม' },
+  topupConfirm: { name: 'ยืนยันการเติมเงิน', desc: 'กดยืนยัน (คริสตัลเข้าบัญชีทันที) ปฏิเสธ และย้อนรายการที่ยืนยันผิด · ยืนยันเมื่อเห็นยอดเข้าในแอปธนาคารเท่านั้น ห้ามเชื่อสลิป · ต้องมี "ดูการเติมเงิน" ด้วย', group: 'ปรับเกม' },
   mapEdit: { name: 'แก้แมพ', desc: 'ตัวแก้แมพ: ดูรายการแมพ/ร่าง/revision บันทึกร่าง และเผยแพร่แมพ (ห้องใหม่ใช้ทันที ห้องที่มีคนอยู่ใช้ตอนผู้เล่นเข้าแมพครั้งถัดไป) ลง audit ทุกครั้ง', group: 'ปรับเกม' },
   mapRollback: { name: 'ย้อนแมพกลับ revision เก่า', desc: 'ย้อนแมพไปใช้ revision ก่อนหน้า (ต้องมี "แก้แมพ" ด้วย) เผยแพร่เป็น revision ใหม่ทันที', group: 'ปรับเกม' },
   mapExport: { name: 'ส่งออกแมพเข้า repo', desc: 'ดึง JSON ของแมพที่เผยแพร่แล้วไปเป็นไฟล์ค่าตั้งต้นใน repo (ต้องมี "แก้แมพ" ด้วย)', group: 'ปรับเกม' },
@@ -428,7 +457,9 @@ export interface AdminAccountsResponse {
 /** A character with everything it carries, for the account details. */
 export interface AdminCharDetail extends AdminCharRow {
   equipment: Partial<Record<EquipSlot, Item>>;
+  /** Gear tab then usable tab (see bagSlots). */
   bag: (BagEntry | null)[];
+  bagSlots: BagSlots;
 }
 
 export interface AdminAccountDetail {
@@ -439,6 +470,8 @@ export interface AdminAccountDetail {
   cosmetics: string[] | null;
   /** The account's cash shop crystals (คริสตัลมิติ); null for a guest. Look only. */
   crystals?: number | null;
+  /** When the account's VIP ends (ms, 0 = never had it); null for a guest. */
+  vipUntil?: number | null;
   /** Cosmetic ids hidden from the in-game window (may still be given; marked on the sheet). */
   cosHidden?: string[];
   /** The orb looks in the shop (they are cosmetics of slot 'orb', made in /admin). */
@@ -578,6 +611,48 @@ export function customItem(baseId: string, rarity: Rarity, level: number, cls: C
   return item;
 }
 
+/** Pieces in a full set: one per wear slot, rings twice. */
+export const ADMIN_SET_SIZE = 10;
+
+/**
+ * A full set (every wear slot, two rings) for this class: per slot the best kind the level allows, at
+ * `rarity`, every stat row in the middle of tier `tier`, +`plus`. `skipped` lists slots with no kind
+ * yet at that level (the bag then needs fewer free slots). Checks every value; a Thai error otherwise.
+ */
+export function buildGearSet(body: Record<string, unknown>, cls: ClassId): { items: Item[]; skipped: SlotId[]; level: number; rarity: Rarity; tier: number; plus: number } | string {
+  const rarity = RARITIES.find((r) => r === body.rarity);
+  if (!rarity) return 'ระดับความหายากไม่ถูกต้อง';
+  const whole = (v: unknown, lo: number, hi: number): v is number => typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi;
+  if (!whole(body.level, 1, MAX_LEVEL)) return `เลเวลไอเทมต้องเป็น 1–${MAX_LEVEL}`;
+  if (!whole(body.tier, 1, 5)) return 'tier ต้องเป็น 1–5';
+  if (!whole(body.plus, 0, PLUS_CAP)) return `ระดับตีบวกต้องเป็น 0–${PLUS_CAP}`;
+  const level: number = body.level, tier: number = body.tier, plus: number = body.plus;
+  const items: Item[] = [];
+  const skipped: SlotId[] = [];
+  for (const slot of SLOTS) {
+    const base = ITEM_BASES.filter((b) => b.slot === slot && b.minLevel <= level && (b.names.any || b.names[cls])).sort((x, y) => y.minLevel - x.minLevel)[0];
+    if (!base) { skipped.push(slot); continue; }
+    for (let k = 0; k < (slot === 'ring' ? 2 : 1); k++) {
+      const rolled = makeItem(base.id, rarity, level, cls);
+      if (!rolled) return 'ไม่มีไอเทมชนิดนี้';
+      const stats = (rolled.lines ?? []).map((l) => l.stat);
+      const ranges = rowRanges(base.id, rarity, level, stats);
+      if (!ranges) return 'ไม่มีไอเทมชนิดนี้';
+      const rows = stats.map((stat, i) => {
+        const t = tierRanges(stat, level, ranges[i].lo, ranges[i].hi)[tier - 1];
+        const mid = roundStat(stat, (t.min + t.max) / 2);
+        return { stat, value: tierOf(stat, level, mid, ranges[i].lo, ranges[i].hi).tier === tier ? mid : t.min };
+      });
+      const item = customItem(base.id, rarity, level, cls, rolled.name, rows);
+      if (typeof item === 'string') return item;
+      if (plus > 0) item.plus = plus;
+      items.push(item);
+    }
+  }
+  if (!items.length) return 'ไม่มีอุปกรณ์ที่เลเวลนี้';
+  return { items, skipped, level, rarity, tier, plus };
+}
+
 /** What the editor shows for row `i` of these stats at this value: its normal range, cap and tier. */
 export function adminRowInfo(baseId: string, rarity: Rarity, level: number, stats: StatKey[], i: number, value: number):
   { min: number; max: number; lo: number; hi: number; main: boolean; step: number; top: number; tier: number; tmin: number; tmax: number } | null {
@@ -668,13 +743,14 @@ export function adminStack(body: Record<string, unknown>): AdminStack | string {
 export const adminStackName = (s: AdminStack): string => (isPotion(s) ? potionName(s.potion, s.size) : STONE_NAME[s.stone]);
 
 /**
- * Puts up to `n` of this potion/stone into the first `slots` bag slots like a pickup: tops up stacks of the
- * same kind first, then fills empty slots (each slot holds at most a stack's limit). Returns how many went in.
+ * Puts up to `n` of this potion/stone into the bag's usable tab like a pickup: tops up stacks of the same kind
+ * first, then fills empty slots (each slot holds at most a stack's limit). Returns how many went in.
  */
-export function addStackToBag(bag: (BagEntry | null)[], slots: number, kind: AdminStack, n: number): number {
+export function addStackToBag(bag: (BagEntry | null)[], slots: BagSlots, kind: AdminStack, n: number): number {
   const limit = stackLimit(kind);
   let left = n;
-  for (let i = 0; i < slots && left > 0; i++) {
+  const [ua, ub] = tabRange(slots, 'use');
+  for (let i = 0; i < ub && left > 0; i++) {
     const e = bag[i];
     if (e && sameStack(e, kind) && isStack(e) && e.count < limit) {
       const add = Math.min(left, limit - e.count);
@@ -682,7 +758,7 @@ export function addStackToBag(bag: (BagEntry | null)[], slots: number, kind: Adm
       left -= add;
     }
   }
-  for (let i = 0; i < slots && left > 0; i++) {
+  for (let i = ua; i < ub && left > 0; i++) {
     if (bag[i]) continue;
     const add = Math.min(left, limit);
     bag[i] = { ...kind, count: add };
@@ -708,6 +784,23 @@ export interface AdminBalance {
   scaled?: { characters: number; stashes: number; listings: number };
   backup?: string;
   ms?: number;
+}
+
+/** GET/POST /api/admin/hud-layout: the HUD / window layout (src/shared/hudLayout.ts), published and draft. */
+export interface AdminHudLayout {
+  /** What players see now (only the changed parts). */
+  published: HudLayoutConfig;
+  /** The saved draft, or null when there is none. */
+  draft: HudLayoutConfig | null;
+  /** Who saved the draft, and when (ms). */
+  draftBy?: string;
+  draftAt?: number;
+  /** Versions made live by publish / reset, newest first (at most 20); `at` picks one for `{ restore: at }`. */
+  history: { at: number; by: string; what: 'publish' | 'reset' | 'before'; layout: HudLayoutConfig }[];
+  /** The admins' floating shortcut buttons (menu layout `custom` with `free`), to place on the mock screen. */
+  freeButtons: { id: string; label: string; icon: MenuIcon }[];
+  /** May this admin save / publish (the `hudLayoutEdit` switch). */
+  canEdit: boolean;
 }
 
 /** GET/POST /api/admin/menu-layout: the menu window / top icon row layout (src/shared/menuLayout.ts). */

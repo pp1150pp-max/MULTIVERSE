@@ -9,7 +9,8 @@ import type { GameWorld } from './world';
 import { HttpError, readJson, send } from './http';
 import { int, log, mayTouch, requireFeature } from './admin';
 import { describeEntry, editGear, entrySig, type AdminItemPlace } from '../src/shared/admin';
-import { BAG_SIZE } from '../src/shared/sim/Player';
+import { layOutBag } from '../src/shared/sim/Player';
+import { bagTotal, tabAt, TAB_NAME } from '../src/shared/bagTabs';
 import { itemClass } from '../src/shared/data/items';
 import { CLASSES } from '../src/shared/data/classes';
 import { stackLimit } from '../src/shared/data/potions';
@@ -63,13 +64,15 @@ export async function itemsAdminApi(req: IncomingMessage, res: ServerResponse, p
     if (!c.guest && mayTouch(db, a, c.accountId) !== 'ok') throw new HttpError(403, SCOPE);
     // Online: the live character (its next save would overwrite a DB edit). All of this runs synchronously.
     const live = world.livePlayer(charId);
-    if (!live) c.data.bag = Array.from({ length: BAG_SIZE }, (_, i) => c.data.bag[i] ?? null);
+    // Offline: the save's bag laid out in its tabs (as the account sheet showed it, see normalizeBag).
+    const slots = live ? live.bagSlots : layOutBag(c.data);
     const d = live ?? c.data;
     if (place === 'bag') {
-      const i = int(body.key, 0, BAG_SIZE - 1, 'ช่องกระเป๋า');
+      const i = int(body.key, 0, bagTotal(slots) - 1, 'ช่องกระเป๋า');
+      const tab = tabAt(slots, i)!;
       get = () => d.bag[i];
       put = (e) => (d.bag[i] = e);
-      where = `กระเป๋าช่อง ${i + 1}`;
+      where = `${TAB_NAME[tab]}ช่อง ${tab === 'gear' ? i + 1 : i - slots.gear + 1}`;
     } else {
       const slot = EQUIP_SLOTS.find((s) => s === body.key);
       if (!slot) throw new HttpError(400, 'ช่องสวมใส่ไม่ถูกต้อง');

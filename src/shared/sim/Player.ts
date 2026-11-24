@@ -14,15 +14,16 @@ import { cleanCosWorn, MOUNT_SPEED, type CosWorn } from '../data/cosmetics';
 import { auraTier, effectiveStats, orbCodes, plusOf, sellValue } from '../data/enhance';
 import { itemClass, starterWeapon, upgradeItem } from '../data/items';
 import { anyStackValue, potionHeal, potionPrice, POTION_SIZES, POTION_STACK, stackLimit } from '../data/potions';
-import { BOSS_QUEST_KEY, BUFF_MAX, QUEST_KILLS, STONE_STACK } from '../data/stones';
+import { BOSS_QUEST_KEY, BUFF_MAX, QUEST_KILLS, stoneStackMax } from '../data/stones';
 import { cleanGearDone, cleanGearQuests } from '../gearQuests';
 import type { TutorialData } from '../tutorial';
 import {
-  BUFF_SCROLLS, isPotion, isStack, isStone, RARITIES, sameStack, SLOTS, STONE_KINDS, wornPlaces,
+  BUFF_SCROLLS, isOrbStone, isPotion, isStack, isStone, RARITIES, sameStack, SLOTS, STONE_KINDS, wornPlaces,
   type BagEntry, type BuffScroll, type EquipSlot, type StoneKind, type ClassId, type Item, type PotionKind, type PotionSize, type Rarity, type SlotId, type Stats, type Vec2,
 } from '../types';
 import type { LootKind } from './Loot';
 import { newStash, type StashData } from './stash';
+import { BAG_TABS, cleanBagSlots, freeCount, freeSlot, normalizeBag, tabAt, tabOf, tabRange, type BagSlots, type BagTab } from '../bagTabs';
 import { classBalance, currentBalance, finishStats } from '../balance';
 import { CHARGE_SKILLS, chargeMax, skipsAttackRoot } from '../skillTuning';
 import { attackRootTime } from '../attackRootTuning';
@@ -45,7 +46,6 @@ const ICE_GRIP = 1.5;
 /** A slide slower than this stops. */
 const ICE_STOP_SPEED = 0.25;
 
-export const BAG_SIZE = 30;
 export const POTION_CD = 1.5;
 /** A potion restores its amount evenly over this many seconds (owner: not all at once). */
 export const POTION_TIME = 3;
@@ -101,6 +101,12 @@ export interface AutoSettings {
   target: AutoTargetMode;
   /** Monster kinds (MONSTERS ids) Auto doesn't attack, unless one attacks the player. */
   skip: string[];
+  /** Skills only: no basic attack, stand and wait for a skill (follows the server default until picked, see optsSet). */
+  skillsOnly: boolean;
+  /** Seconds between two skills Auto casts (0 = no wait). */
+  skillGap: number;
+  /** True once the player has set the gap themselves. Without it, the server default (/admin) applies. */
+  skillGapSet?: boolean;
 }
 export type AutoSkill = 'q' | 'e' | 'r';
 export const AUTO_SKILLS: readonly AutoSkill[] = ['q', 'e', 'r'];
@@ -114,7 +120,10 @@ export const AUTO_SKIP_MAX = 60;
 export const DEFAULT_AUTO_SETTINGS: AutoSettings = {
   range: 750, hpPct: 45, mpPct: 15, skills: { q: true, e: true, r: true }, order: [...AUTO_SKILLS], loot: true,
   lootOrder: 'fight', othersLoot: true, noHp: 'fight', noMp: 'fight', bagFull: 'fight', target: 'attacker', skip: [],
+  skillsOnly: false, skillGap: 0.3,
 };
+/** Longest gap a player may set between Auto's skills (seconds). */
+export const AUTO_SKILL_GAP_MAX = 2;
 
 /** Monster kinds from a save or a client: known, not bosses, each once. */
 function cleanAutoSkip(raw: unknown): string[] {
@@ -143,7 +152,9 @@ export function cleanAutoSettings(raw: unknown): AutoSettings {
     typeof v === 'number' && Number.isFinite(v) ? Math.round(Math.max(lo, Math.min(hi, v))) : def;
   const sk = (r.skills ?? {}) as Partial<AutoSettings['skills']>;
   // Options the player hasn't picked take the server's defaults (tunable on /admin).
-  const ad = currentBalance().auto.defaults;
+  const auto = currentBalance().auto;
+  const ad = auto.defaults;
+  const gapSet = r.skillGapSet === true && typeof r.skillGap === 'number' && Number.isFinite(r.skillGap);
   const pick = <T,>(v: unknown, ok: readonly T[], def: T): T => (ok.includes(v as T) ? (v as T) : def);
   const own = AUTO_DEFAULT_KEYS.filter((k) => Array.isArray(r.optsSet) && r.optsSet.includes(k));
   const mine = (k: keyof AutoDefaults) => own.includes(k);
@@ -167,6 +178,9 @@ export function cleanAutoSettings(raw: unknown): AutoSettings {
     bagFull: mine('bagFull') ? pick(r.bagFull, AUTO_OUT_ACTIONS, ad.bagFull) : ad.bagFull,
     target: mine('target') ? pick(r.target, AUTO_TARGET_MODES, ad.target) : ad.target,
     skip: cleanAutoSkip(r.skip),
+    skillsOnly: mine('skillsOnly') && typeof r.skillsOnly === 'boolean' ? r.skillsOnly : ad.skillsOnly,
+    skillGap: gapSet ? Math.round(Math.max(0, Math.min(AUTO_SKILL_GAP_MAX, r.skillGap!)) * 10) / 10 : auto.skillGap,
+    skillGapSet: gapSet,
   };
 }
 
@@ -226,9 +240,11 @@ export function sortEntries(list: readonly (BagEntry | null)[], key: SortKey, de
     }
   }
   // Stones last, merged into full stacks too.
-  for (const k of STONE_KINDS) {
+  // Orb items (mystery box) come after the fixed kinds, in the order of their numbers.
+  const orbs = [...new Set([...stones.keys()].map((k) => k.replace(/:b$/, '')).filter(isOrbStone))].sort((a, b) => Number(a.slice(4)) - Number(b.slice(4)));
+  for (const k of [...STONE_KINDS, ...orbs]) {
     for (const b of [false, true]) {
-      for (let n = stones.get(`${k}${b ? ':b' : ''}`) ?? 0; n > 0; n -= STONE_STACK) stacks.push({ stone: k, count: Math.min(n, STONE_STACK), ...bound(b) });
+      for (let n = stones.get(`${k}${b ? ':b' : ''}`) ?? 0; n > 0; n -= stoneStackMax(k)) stacks.push({ stone: k, count: Math.min(n, stoneStackMax(k)), ...bound(b) });
     }
   }
   const all = [...items, ...stacks];
@@ -254,6 +270,11 @@ export interface CharacterData {
   gold: number;
   equipment: Partial<Record<EquipSlot, Item>>;
   bag: (BagEntry | null)[];
+  /**
+   * Slots in each bag tab (src/shared/bagTabs.ts): `bag` is the gear tab then the usable tab. Missing in saves
+   * from before the tabs (owner 2026-11-23): loading sorts the old bag into the two tabs (normalizeBag).
+   */
+  bagSlots?: BagSlots;
   /** Missing in saves from before potion sizes existed. */
   potSel?: PotionSelect;
   /** Missing in older saves = pick up everything. */
@@ -321,8 +342,21 @@ export function upgradeCharacter(data: CharacterData): CharacterData {
   if (!data || typeof data !== 'object') return data;
   for (const it of Object.values(data.equipment ?? {})) upgradeItem(it);
   for (const e of data.bag ?? []) upgradeItem(e);
+  // Floor 1 quest rewards stopped being bound (owner 2026-11-24): old saves lose the mark.
+  for (const e of data.bag ?? []) if (e && typeof e === 'object' && 'bound' in e) delete (e as { bound?: true }).bound;
   for (const b of data.buyback ?? []) upgradeItem(b?.item);
   return data;
+}
+
+/**
+ * Lays a save's bag out in its two tabs, in place (normalizeBag: old saves get sorted into the tabs, nothing is
+ * lost), and returns the tab sizes now in `data.bagSlots`. For code that edits a save without a Player (/admin).
+ */
+export function layOutBag(data: CharacterData): BagSlots {
+  const laid = normalizeBag(data.bag, cleanBagSlots(data.bagSlots));
+  data.bag = laid.bag;
+  data.bagSlots = laid.slots;
+  return laid.slots;
 }
 
 /** A fresh level 1 character with the class starter weapon and a few potions. */
@@ -347,6 +381,8 @@ export class Player extends Unit {
   mp = 0;
   equipment: Partial<Record<EquipSlot, Item>>;
   bag: (BagEntry | null)[];
+  /** Slots in each bag tab (gear first, then usable). Saved. */
+  bagSlots: BagSlots;
   potSel: PotionSelect;
   lootFilter: LootFilter;
   autoSettings: AutoSettings;
@@ -427,6 +463,8 @@ export class Player extends Unit {
   buffs: Buffs;
   /** True while Auto Play runs for this player (set by the server each tick); Sim halves their EXP. Never saved. */
   autoOn = false;
+  /** The account's VIP is running (src/shared/vip.ts; set by the server, kept per account, never saved here). */
+  vip = false;
   /** Told once per stuck level that a boss gate is holding the EXP bar. Never saved. */
   gateHintedAt = 0;
   /** Shown once per session when low-level monsters start giving less EXP. */
@@ -492,6 +530,8 @@ export class Player extends Unit {
   // a recast keeps the stronger value and refreshes the time.
   /** HP points of damage absorbed before HP, until `shieldUntil`. */
   shield = 0;
+  /** Sim time before which this player's next mystery box opening is ignored (BOX_OPEN_COOLDOWN; not saved). */
+  boxReadyAt = 0;
   shieldUntil = 0;
   /** Damage taken × this until `takenUntil` (e.g. 0.7 = 30% less). */
   takenMult = 1;
@@ -526,7 +566,8 @@ export class Player extends Unit {
     this.exp = data.exp;
     this.gold = data.gold;
     this.equipment = { ...data.equipment };
-    this.bag = Array.from({ length: BAG_SIZE }, (_, i) => data.bag[i] ?? null);
+    this.bagSlots = { ...layOutBag(data) };
+    this.bag = [...data.bag];
     this.zone = data.zone;
     this.quests = cleanQuests(data.quests);
     this.gearQuests = cleanGearQuests(data.gearQuests);
@@ -742,6 +783,7 @@ export class Player extends Unit {
       gold: this.gold,
       equipment: this.equipment,
       bag: this.bag,
+      bagSlots: { ...this.bagSlots },
       zone: this.zone,
       potSel: this.potSel,
       lootFilter: this.lootFilter,
@@ -761,15 +803,27 @@ export class Player extends Unit {
 
   // ------------------------------------------------------------ inventory
 
+  /** Puts gear in the first empty slot of the gear tab. */
   addToBag(item: Item): boolean {
-    const i = this.bag.indexOf(null);
+    const i = freeSlot(this.bag, this.bagSlots, 'gear');
     if (i < 0) return false;
     this.bag[i] = item;
     return true;
   }
 
-  hasBagSpace(): boolean {
-    return this.bag.includes(null);
+  /** An empty slot in that tab; with no tab, in both (Auto's "bag full" is either tab full, owner 2026-11-23). */
+  hasBagSpace(tab?: BagTab): boolean {
+    return (tab ? [tab] : BAG_TABS).every((t) => freeSlot(this.bag, this.bagSlots, t) >= 0);
+  }
+
+  /** Empty slots in a tab. */
+  freeSlots(tab: BagTab): number {
+    return freeCount(this.bag, this.bagSlots, tab);
+  }
+
+  /** The tab slot `i` is in, or null when it isn't a bag slot. */
+  tabAt(i: number): BagTab | null {
+    return tabAt(this.bagSlots, i);
   }
 
   /** Whether the loot filter lets this player pick it up (gold always; a thrown-away item always). */
@@ -785,7 +839,7 @@ export class Player extends Unit {
     if (kind.type === 'gold') return true;
     if (kind.type === 'potion') return this.potionRoom(kind.pot, kind.size) >= kind.count;
     if (kind.type === 'stone') return this.stoneRoom(kind.stone) >= kind.count;
-    return this.hasBagSpace();
+    return this.hasBagSpace('gear');
   }
 
   /**
@@ -838,6 +892,8 @@ export class Player extends Unit {
     const a = this.bag[from];
     const b = this.bag[to];
     if (!a) return;
+    // Each tab keeps its own kind: nothing lands in (or is swapped into) the other tab.
+    if (this.tabAt(to) !== tabOf(a) || (b && this.tabAt(from) !== tabOf(b))) return;
     if (isStack(a) && isStack(b) && sameStack(a, b) && b.count < stackLimit(b)) {
       const n = Math.min(a.count, stackLimit(b) - b.count);
       b.count += n;
@@ -910,11 +966,8 @@ export class Player extends Unit {
 
   /** How many more of these potions fit: room left in matching stacks plus empty slots. */
   potionRoom(kind: PotionKind, size: PotionSize): number {
-    let n = 0;
-    for (const e of this.bag) {
-      if (!e) n += POTION_STACK;
-      else if (isPotion(e) && !e.bound && e.potion === kind && e.size === size) n += POTION_STACK - e.count;
-    }
+    let n = this.freeSlots('use') * POTION_STACK;
+    for (const e of this.bag) if (isPotion(e) && !e.bound && e.potion === kind && e.size === size) n += Math.max(0, POTION_STACK - e.count);
     return n;
   }
 
@@ -929,7 +982,8 @@ export class Player extends Unit {
         n -= add;
       }
     }
-    for (let i = 0; i < this.bag.length && n > 0; i++) {
+    const [ua, ub] = tabRange(this.bagSlots, 'use');
+    for (let i = ua; i < ub && n > 0; i++) {
       if (this.bag[i]) continue;
       const add = Math.min(n, POTION_STACK);
       this.bag[i] = { potion: kind, size, count: add };
@@ -965,11 +1019,8 @@ export class Player extends Unit {
 
   /** How many more of these stones fit: room left in matching stacks plus empty slots. */
   stoneRoom(kind: StoneKind): number {
-    let n = 0;
-    for (const e of this.bag) {
-      if (!e) n += STONE_STACK;
-      else if (isStone(e) && !e.bound && e.stone === kind) n += STONE_STACK - e.count;
-    }
+    let n = this.freeSlots('use') * stoneStackMax(kind);
+    for (const e of this.bag) if (isStone(e) && !e.bound && e.stone === kind) n += Math.max(0, stoneStackMax(kind) - e.count);
     return n;
   }
 
@@ -978,15 +1029,16 @@ export class Player extends Unit {
     if (n <= 0 || this.stoneRoom(kind) < n) return false;
     for (const e of this.bag) {
       if (n <= 0) break;
-      if (isStone(e) && !e.bound && e.stone === kind && e.count < STONE_STACK) {
-        const add = Math.min(n, STONE_STACK - e.count);
+      if (isStone(e) && !e.bound && e.stone === kind && e.count < stoneStackMax(kind)) {
+        const add = Math.min(n, stoneStackMax(kind) - e.count);
         e.count += add;
         n -= add;
       }
     }
-    for (let i = 0; i < this.bag.length && n > 0; i++) {
+    const [ua, ub] = tabRange(this.bagSlots, 'use');
+    for (let i = ua; i < ub && n > 0; i++) {
       if (this.bag[i]) continue;
-      const add = Math.min(n, STONE_STACK);
+      const add = Math.min(n, stoneStackMax(kind));
       this.bag[i] = { stone: kind, count: add };
       n -= add;
     }
@@ -1026,7 +1078,18 @@ export class Player extends Unit {
 
   /** Rearranges the bag by `key` (see sortEntries). */
   sortBag(key: SortKey, desc: boolean): void {
-    this.bag = sortEntries(this.bag, key, desc);
+    // Each tab on its own, so the tabs never mix.
+    this.bag = BAG_TABS.flatMap((t) => sortEntries(this.bag.slice(...tabRange(this.bagSlots, t)), key, desc));
+  }
+
+  /**
+   * Adds `n` empty slots to a tab (the slot purchase, Sim.bagExpand). Growing the gear tab moves every usable
+   * slot up by `n`, so callers refuse it while something points at bag slots (an open trade).
+   */
+  growTab(tab: BagTab, n: number): void {
+    if (tab === 'gear') this.bag.splice(this.bagSlots.gear, 0, ...Array<null>(n).fill(null));
+    else this.bag.push(...Array<null>(n).fill(null));
+    this.bagSlots[tab] += n;
   }
 
   // ------------------------------------------------------------ actions

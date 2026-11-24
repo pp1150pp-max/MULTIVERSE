@@ -8,7 +8,9 @@ import { gfxMenuOn } from './gfxPrefs';
 import { toggleGfxPanel } from './gfxPanel';
 import { toggleKeybindPanel } from './keybindPanel';
 import { currentBalance } from '../shared/balance';
-import { codeMenuLayout, menuEntry, type MenuLayoutConfig } from '../shared/menuLayout';
+import { newsButtonOn } from './news';
+import { hasChannels } from '../shared/channels';
+import { buttonAct, buttonIcon, buttonLabel, codeMenuLayout, freeBtnDomId, menuEntry, type MenuIcon, type MenuLayoutConfig } from '../shared/menuLayout';
 
 /** Read once by the title menu after the reload. */
 export const AFTER_EXIT_KEY = 'multiverse-after-exit';
@@ -21,44 +23,49 @@ const EXIT_COUNTDOWN = 5;
 /** "In combat" = hurt or attacked within this many seconds, or Auto Play running. */
 const COMBAT_WINDOW = 5;
 
-/** Painted badge from public/assets/sprites/ui/ico_<name>.png. A glyph draws on the blank badge for systems with no art yet. */
-const badge = (name: string, glyph = ''): string =>
-  `<img src="${imgUrl(`assets/sprites/ui/ico_${name}.png`)}" alt="">${glyph ? `<span class="ico-glyph">${glyph}</span>` : ''}`;
+/** Text from /admin (button names, glyphs) goes into HTML: never as markup. */
+const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
-/** Party has no painted badge yet: the blank one with a glyph. Swap for badge('party') once ico_party.png exists. */
-const PARTY_ICON = badge('blank', '👥');
+/**
+ * Painted badge from public/assets/sprites/ui/ico_<name>.png, with a glyph drawn on top for systems with no art yet. Each
+ * button's picture is CODE_ICON in src/shared/menuLayout.ts (or an admin's choice on /admin → จัดเมนูเกม).
+ */
+const badge = (i: MenuIcon): string =>
+  `<img src="${imgUrl(`assets/sprites/ui/ico_${i.img}.png`)}" alt="">${i.glyph ? `<span class="ico-glyph">${esc(i.glyph)}</span>` : ''}`;
 
-/** Mail has no painted badge yet (a friend adds ico_mail.png later): the blank one with a glyph. Swap for badge('mail'). */
-const MAIL_ICON = badge('blank', '✉');
-
-/** Trade has no painted badge yet: the blank one with a glyph. Swap for badge('trade') once ico_trade.png exists. */
-const TRADE_ICON = badge('blank', '🤝');
-
-/** Friends: painted badge (art_templates/ui/raw/ico_friends.png, magenta keyed out and cut to 96×96). */
-const FRIENDS_ICON = badge('friends');
-
-/** Daily login calendar: painted badge (art_templates/ui/raw/ico_daily.png, magenta keyed out, 96×96). */
-const DAILY_ICON = badge('daily');
-
-/** Cash shop: painted badge (art_templates/cashshop/raw/ico_cashshop.png, cut by tools/cut_cashshop.cjs). */
-const CASH_ICON = badge('cashshop');
-
-/** Skills have no painted badge yet: the blank one with a glyph. Swap for badge('skills') once ico_skills.png exists. */
-const SKILLS_ICON = badge('blank', '⚔');
-
-/** Every button's picture, by id (the ids and Thai names are in src/shared/menuLayout.ts; where each sits is set on /admin → จัดเมนูเกม). */
-const ICONS: Record<string, string> = {
-  bag: badge('bag'), skills: SKILLS_ICON, party: PARTY_ICON, friends: FRIENDS_ICON, trade: TRADE_ICON, daily: DAILY_ICON, map: badge('map'),
-  cosmetics: badge('blank', '👑'), cashshop: CASH_ICON, autoset: badge('autoset'), audio: badge('blank', '🔊'), graphics: badge('blank', '🎨'),
-  help: badge('help'), mail: MAIL_ICON, report: badge('blank', '🐞'), fullscreen: badge('blank', '⛶'), settings: badge('settings'),
-  auto: badge('auto'), menu: badge('menu'),
-};
-/** The top row's own short name where it differs from the menu's. */
-const TOP_LABEL: Record<string, string> = { daily: 'รายวัน' };
-/** No such buttons for a guest (no mail, reports, trade, friends, daily login). */
+/** No such buttons for a guest (no mail, reports, trade, friends, daily login); keyed by what the button does. */
 const GUEST_NO = new Set(['mail', 'report', 'trade', 'friends', 'daily']);
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+
+/**
+ * The top row, the floating shortcut buttons and the menu window's tiles for a layout (src/shared/menuLayout.ts).
+ * Also drawn by the /admin HUD mock (src/client/hudMock.ts), so the mock shows the real buttons.
+ */
+export function menuButtonsHtml(lay: MenuLayoutConfig, guest: boolean): { top: string; free: string; tiles: string } {
+  // No เต็มจอ where the browser can't do it (iPhone Safari); none of mail / report / trade / friends / daily for a guest.
+  // Checked on what the button does, so an admin's shortcut to the same thing follows the same rules.
+  const okAct = (a: string) => !(guest && GUEST_NO.has(a)) && !(a === 'fullscreen' && !document.fullscreenEnabled) && !(a === 'news' && !newsButtonOn())
+    && !(a === 'keybinds' && !currentBalance().fxLayer.keyRebind);
+  const ok = (id: string) => okAct(buttonAct(lay, id));
+  // The badge key stays the code button's own Thai name (what setBadge uses), whatever the button is called now.
+  const badgeKey = (id: string) => esc(menuEntry(buttonAct(lay, id))?.label ?? '');
+  const ico = (id: string) => badge(buttonIcon(lay, id));
+  // data-act = what it does (a shortcut runs its action like the menu's own button; the graphics switch hides both).
+  const tile = (id: string, extra = '') =>
+    `<button class="sys-tile${extra}" data-act="${esc(buttonAct(lay, id))}"><span class="sys-ico">${ico(id)}</span><span class="sys-label">${esc(buttonLabel(lay, id))}</span><i class="badge hidden" data-badge="${badgeKey(id)}"></i></button>`;
+  const icon = (id: string, domId: string, extra = '') =>
+    `<button id="${domId}" class="top-icon${extra}" data-entry="${esc(id)}" data-act="${esc(buttonAct(lay, id))}"><span class="sys-ico">${ico(id)}</span><span class="sys-label">${id === 'auto' ? 'AUTO: OFF' : esc(buttonLabel(lay, id, true))}</span><i class="badge hidden" data-badge="${badgeKey(id)}"></i></button>`;
+  const top = lay.top.filter(ok).map((id) => icon(id, `top-${id}`)).join('');
+  const free = lay.custom.filter((b) => b.free && okAct(b.act)).map((b) => icon(b.id, freeBtnDomId(b.id), ' hud-free-btn')).join('');
+  // Touch play hides the top row (CSS), so what was put there also goes in the menu window, just before ตั้งค่า (which stays last).
+  // (Not what the code only ever had up there, i.e. แจ้งปัญหา: touch never had it in the menu window.)
+  const code = codeMenuLayout();
+  const touchExtra = lay.top.filter((id) => id !== 'auto' && id !== 'menu' && !lay.menu.includes(id) && !(code.top.includes(id) && !code.menu.includes(id)));
+  const menu = lay.menu.filter((id) => id !== 'settings');
+  const tiles = [...menu.filter(ok).map((id) => tile(id)), ...touchExtra.filter(ok).map((id) => tile(id, ' touch-extra')), tile('settings')];
+  return { top, free, tiles: tiles.join('') };
+}
 
 export class SystemMenu {
   private readonly panel: HTMLElement;
@@ -71,6 +78,7 @@ export class SystemMenu {
   private clock = 0;
   private autoBtn!: HTMLElement;
   private readonly row: HTMLElement;
+  private readonly free: HTMLElement;
   /** The layout drawn now (the balance's object, so a new one from the server is noticed by identity). */
   private drawn: MenuLayoutConfig | null = null;
 
@@ -81,6 +89,14 @@ export class SystemMenu {
     this.row.id = 'hud-iconrow';
     $('hud-topright').prepend(this.row);
     this.row.addEventListener('click', (e) => {
+      const id = (e.target as HTMLElement).closest<HTMLElement>('.top-icon')?.dataset.entry;
+      if (id) this.onTop(id);
+    });
+    // The admins' floating shortcut buttons (each moved into place by "จัดหน้าจอเกม", hidden until placed).
+    this.free = document.createElement('div');
+    this.free.id = 'hud-free';
+    $('hud').append(this.free);
+    this.free.addEventListener('click', (e) => {
       const id = (e.target as HTMLElement).closest<HTMLElement>('.top-icon')?.dataset.entry;
       if (id) this.onTop(id);
     });
@@ -130,7 +146,8 @@ export class SystemMenu {
 
   private renderBadges(): void {
     // The เมนู icon adds up only what sits in the menu window (a button moved to the top row shows its own badge).
-    const inMenu = new Set((this.drawn?.menu ?? []).map((id) => menuEntry(id)?.label));
+    const lay = this.drawn;
+    const inMenu = new Set((lay?.menu ?? []).map((id) => menuEntry(buttonAct(lay!, id))?.label));
     const total = [...this.badges].reduce((a, [k, n]) => a + (k !== 'เมนู' && inMenu.has(k) ? n : 0), 0);
     for (const el of document.querySelectorAll<HTMLElement>('i.badge')) {
       const n = el.dataset.badge === 'เมนู' ? total : (this.badges.get(el.dataset.badge!) ?? 0);
@@ -140,26 +157,19 @@ export class SystemMenu {
     }
   }
 
+  /** Draws the buttons again (the news switch changed). */
+  rebuild(): void {
+    this.build();
+  }
+
   /** Draws the top row and the menu grid from the balance's layout (again whenever the server sends a new one). */
   private build(): void {
     const lay = currentBalance().menuLayout;
     this.drawn = lay;
-    const guest = this.g.backend.guest;
-    // No เต็มจอ where the browser can't do it (iPhone Safari); none of mail / report / trade / friends / daily for a guest.
-    const ok = (id: string) => !(guest && GUEST_NO.has(id)) && !(id === 'fullscreen' && !document.fullscreenEnabled);
-    const label = (id: string) => menuEntry(id)?.label ?? id;
-    const tile = (id: string, extra = '') =>
-      `<button class="sys-tile${extra}" data-act="${id}"><span class="sys-ico">${ICONS[id] ?? ''}</span><span class="sys-label">${label(id)}</span><i class="badge hidden" data-badge="${label(id)}"></i></button>`;
-    this.row.innerHTML = lay.top.filter(ok).map(
-      (id) => `<button id="top-${id}" class="top-icon" data-entry="${id}" data-act="${id}"><span class="sys-ico">${ICONS[id] ?? ''}</span><span class="sys-label">${TOP_LABEL[id] ?? (id === 'auto' ? 'AUTO: OFF' : label(id))}</span><i class="badge hidden" data-badge="${label(id)}"></i></button>`,
-    ).join('');
-    // Touch play hides the top row (CSS), so what was put there also goes in the menu window, just before ตั้งค่า (which stays last).
-    // (Not what the code only ever had up there, i.e. แจ้งปัญหา: touch never had it in the menu window.)
-    const code = codeMenuLayout();
-    const touchExtra = lay.top.filter((id) => id !== 'auto' && id !== 'menu' && !lay.menu.includes(id) && !(code.top.includes(id) && !code.menu.includes(id)));
-    const menu = lay.menu.filter((id) => id !== 'settings');
-    const html = [...menu.filter(ok).map((id) => tile(id)), ...touchExtra.filter(ok).map((id) => tile(id, ' touch-extra')), tile('settings')];
-    this.panel.querySelector('[data-view="main"]')!.innerHTML = html.join('');
+    const html = menuButtonsHtml(lay, this.g.backend.guest);
+    this.row.innerHTML = html.top;
+    this.free.innerHTML = html.free;
+    this.panel.querySelector('[data-view="main"]')!.innerHTML = html.tiles;
     this.autoBtn = document.getElementById('top-auto') ?? document.createElement('button');
     this.applyGfxTile();
     this.renderBadges();
@@ -167,7 +177,7 @@ export class SystemMenu {
 
   /** The graphics window's button only while /admin shows it (fxLayer.gfxMenu). */
   private applyGfxTile(): void {
-    for (const el of document.querySelectorAll<HTMLElement>('#sys-menu [data-act="graphics"], #hud-iconrow [data-act="graphics"]')) el.classList.toggle('hidden', !gfxMenuOn());
+    for (const el of document.querySelectorAll<HTMLElement>('#sys-menu [data-act="graphics"], #hud-iconrow [data-act="graphics"], #hud-free [data-act="graphics"]')) el.classList.toggle('hidden', !gfxMenuOn());
   }
 
   get open(): boolean {
@@ -232,6 +242,13 @@ export class SystemMenu {
   /** A click on a top-row icon: the ones that were always there toggle their window, the rest open like from the menu window. */
   private onTop(id: string): void {
     const g = this.g;
+    // An admin's shortcut (top row or floating) runs its action like that button would; ตั้งค่า opens the menu on its settings page.
+    const act = this.drawn ? buttonAct(this.drawn, id) : id;
+    if (act !== id) {
+      if (act !== 'settings') return this.onTop(act);
+      this.toggle(true);
+      return this.showView('settings');
+    }
     switch (id) {
       case 'auto': return g.toggleAuto();
       case 'bag': return g.hud.toggleBag();
@@ -240,6 +257,7 @@ export class SystemMenu {
       case 'friends': return g.friends.toggle();
       case 'report': return g.report.toggle();
       case 'daily': return g.daily.toggle();
+      case 'news': return g.news.toggle();
       case 'cashshop': return g.cashShop.toggle();
       case 'map': return g.hud.toggleMap();
       case 'menu': return this.toggle();
@@ -285,6 +303,9 @@ export class SystemMenu {
       case 'daily':
         this.toggle(false);
         return this.g.daily.toggle(true);
+      case 'news':
+        this.toggle(false);
+        return this.g.news.toggle(true);
       case 'report':
         this.toggle(false);
         return this.g.report.toggle(true);
@@ -299,6 +320,11 @@ export class SystemMenu {
       case 'keybinds':
         this.toggle(false);
         return toggleKeybindPanel(true);
+      case 'channels':
+        // Only on maps with channels (the window stays shut elsewhere).
+        this.toggle(false);
+        if (!hasChannels(this.g.backend.zone)) return this.g.hud.log('แมพนี้ไม่มีแชนแนลให้เลือก', '#ffcf6a');
+        return this.g.channels.toggle(true);
       case 'back':
         return this.showView('main');
       case 'help':

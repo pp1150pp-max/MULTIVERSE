@@ -9,7 +9,11 @@ import { join } from 'node:path';
 import { Db } from '../server/db';
 import { Trades, type TradeActor, type TradeHost } from '../server/trade';
 import { Sim } from '../src/shared/sim/Sim';
-import { BAG_SIZE, newCharacterData } from '../src/shared/sim/Player';
+import { newCharacterData } from '../src/shared/sim/Player';
+
+/** The gear tab (src/shared/bagTabs.ts): gear trades land here; the usable tab follows it. */
+const BAG_SIZE = 30;
+const TABS = { gear: 30, use: 30 };
 import { cleanStash } from '../src/shared/sim/stash';
 import { HUB_ID, ZONES } from '../src/shared/data/zones';
 import { makeItem } from '../src/shared/data/items';
@@ -44,8 +48,8 @@ const pot = (count: number): BagEntry => ({ potion: 'hp', size: 's', count });
   for (const n of [0, -1, 11, 1.5, '3', NaN, null]) ok(typeof makeOffer(bag, 1, n) === 'string', `amount ${String(n)} refused`);
 }
 {
-  const mk = (name: string, gold: number): { name: string; bag: (BagEntry | null)[]; gold: number; offers: never[]; offerGold: number } =>
-    ({ name, bag: Array(BAG_SIZE).fill(null), gold, offers: [], offerGold: 0 });
+  const mk = (name: string, gold: number): { name: string; bag: (BagEntry | null)[]; bagSlots: typeof TABS; gold: number; offers: never[]; offerGold: number } =>
+    ({ name, bag: Array(60).fill(null), bagSlots: TABS, gold, offers: [], offerGold: 0 });
   // Full bags swap one for one (the offered slot is freed first).
   const a = mk('A', 100);
   const b = mk('B', 100);
@@ -225,7 +229,7 @@ const A2 = actor('AliceAlt', { account: A.accountId });
   open(A, B);
   A.player.bag[10] = item();
   A.player.bag[11] = pot(10);
-  for (const bad of [-1, 30, 1.5, '1', null, NaN, 99]) ok(trades.add(A, bad) !== null, `add slot ${String(bad)} refused`);
+  for (const bad of [-1, 60, 1.5, '1', null, NaN, 99]) ok(trades.add(A, bad) !== null, `add slot ${String(bad)} refused`);
   ok(trades.add(A, 20) !== null, 'an empty slot refused');
   for (const bad of [0, -1, 11, 2.5, '3', NaN]) ok(trades.add(A, 11, bad) !== null, `amount ${String(bad)} refused`);
   for (const bad of [-1, 1.5, NaN, Infinity, '5', null, undefined, TRADE_GOLD_MAX + 1, A.player.gold + 1]) ok(trades.setGold(A, bad) !== null, `gold ${String(bad)} refused`);
@@ -264,7 +268,7 @@ const A2 = actor('AliceAlt', { account: A.accountId });
   ok(trades.confirm(X, ver(X)) === null && trades.confirm(Y, ver(Y)) === null, 'two full bags confirm a 1-for-1 swap');
   advance(TRADE_COUNTDOWN * 1000 + 100);
   ok(lastEnd(X)?.ok === true, 'and it goes through');
-  ok(X.player.bag.every((e) => e) && Y.player.bag.every((e) => e), 'both bags are still full, nothing lost');
+  ok(X.player.bag.slice(0, BAG_SIZE).every((e) => e) && Y.player.bag.slice(0, BAG_SIZE).every((e) => e), 'both gear tabs are still full, nothing lost');
 }
 {
   // The bag fills up between confirm and the swap → cancelled, nothing moves.

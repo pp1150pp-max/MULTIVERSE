@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { currentBalance } from '../shared/balance';
 import { clearingRadius, floorOf, lairOf, themeAt, zoneById, ZONES } from '../shared/data/zones';
 import { HUB_PLAZA_RADIUS, QUADRANT_JITTER } from '../shared/sim/terrain';
 import type { PropSpec, Terrain } from '../shared/sim/terrain';
@@ -9,6 +10,7 @@ import { assetSources, fxTex, groundTiles, sheets, type GroundTile } from './ass
 import { CAM_RIGHT_RAW, ISO_RAW, TOWN2_PROP_RE } from '../shared/isoProjection';
 import { closeBias, IslandOutline, paintSky, paintSpace, PieceBatch } from './island';
 import { HARBOR_FRAG, harborUniforms, paintHarborMask } from './harborGround';
+import { cloneShared } from './texShare';
 
 /** Size of the picture the maps are cut from, and of the ground rendered for it. */
 const MAP_SIZE = 1400;
@@ -53,6 +55,15 @@ const CLIFF_LAYERS = [
 
 /** Props at least this tall turn see-through when the player walks behind them. */
 const FADE_MIN_HEIGHT = 1.6;
+/** Props' depth tie-break: this many distinct steps of this size toward the camera (see World.addProp). */
+const PROP_DEPTH_STEPS = 64;
+const PROP_DEPTH_STEP = 0.0005;
+/**
+ * Pieces lying flat at one height (cracks, plank runs) that overlap: the GPU picked either one frame by frame as the
+ * camera moved, so they swapped places while walking (owner 2026-11-21). Each piece sits this step above the last
+ * (cycling, at most ~0.05 units: unseen), so the order holds and they still hide under nothing laid lower.
+ */
+const flatStep = (i: number) => (i % 48) * 0.001;
 /** How much of a prop still shows while the player stands behind it. */
 const FADE_OPACITY = 0.3;
 /** About half a player's width on screen, in world units, for the see-through test. */
@@ -79,6 +90,9 @@ const GROUND_FRAG = /* glsl */ `
   uniform float uHalf, uBound, uTileUnits, uTime, uBake, uFlow;
   // The hub's walled town (x, z, half): bricked up to a straight edge under its wall, not a wandering one.
   uniform vec3 uTown;
+  // Its edge (owner 2026-11-23: the straight cut showed as a hard corner at each gate): how wide the ragged blend into the
+  // zone's ground is (0 = the old straight cut) and how round the square's corners are, in world units.
+  uniform vec2 uTownEdge;
   // The hub's round plaza around the fountain (radius; 0 = none), laid with uPlazaTex inside a ring of darker stones.
   uniform float uPlaza;
   uniform sampler2D uPlazaTex;
@@ -170,7 +184,14 @@ const GROUND_FRAG = /* glsl */ `
     // Paving: raised stones show first, so grass and dirt fill the gaps at its edge.
     vec3 paveTex = texture2D(uPave, tile).rgb;
     float laid = cover.g + lobes * 0.6 + relief(paveTex, uPave) * 1.0;
-    if (uTown.z > 0.0) laid = max(abs(vWorld.x - uTown.x), abs(vWorld.y - uTown.y)) < uTown.z ? 1.0 : 0.0;
+    if (uTown.z > 0.0) {
+      // Distance outside a square with round corners (negative inside).
+      float r = min(uTownEdge.y, uTown.z);
+      vec2 q = abs(vWorld - uTown.xy) - vec2(uTown.z - r);
+      float dist = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+      // Ragged like the other paving: raised bricks win, the zone's ground fills the gaps.
+      laid = uTownEdge.x > 0.0 ? 0.5 - dist / uTownEdge.x + lobes * 0.6 + relief(paveTex, uPave) : (dist < 0.0 ? 1.0 : 0.0);
+    }
     col = mix(col, calm(paveTex, uPave, 0.9, 1.0, 1.0) * (1.0 + macro * 0.1), smoothstep(0.46, 0.54, laid));
     if (uPlaza > 0.0) {
       float pd = length(vWorld - uTown.xy);
@@ -408,6 +429,8 @@ export class World {
   private readonly sharedMats = new Map<string, THREE.SpriteMaterial>();
   /** Mirrored copies of prop textures (addProp's `flip`), by key. */
   private readonly flipped = new Map<string, THREE.Texture>();
+  /** Counts the props drawn, for their depth tie-break (see addProp). */
+  private propSeq = 0;
   private readonly shadowGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
   private readonly shadowMat: THREE.MeshBasicMaterial;
   private readonly groundTex: THREE.CanvasTexture;
@@ -500,6 +523,7 @@ export class World {
         uFlow: { value: terrain.zone.iceLakes ? 0 : 1 },
         // Right up to the foot of the town wall.
         uTown: { value: new THREE.Vector3(terrain.zone.safe?.x ?? 0, terrain.zone.safe?.z ?? 0, terrain.zone.safe ? terrain.zone.safe.half - 0.2 : 0) },
+        uTownEdge: { value: new THREE.Vector2(currentBalance().fxLayer.townEdge, currentBalance().fxLayer.townRound) },
         uPlaza: { value: terrain.zone.npcs ? HUB_PLAZA_RADIUS : 0 },
         uPlazaTex: { value: groundTiles.pave ?? tiles[3] },
       };
@@ -827,11 +851,12 @@ export class World {
       const a = r() * Math.PI * 2;
       const cx = Math.cos(a) * size * 0.5;
       const cz = Math.sin(a) * size * 0.5;
+      const y = 0.015 + flatStep(placed);
       positions.push(
-        x - cx - cz, 0.015, z - cz + cx,
-        x + cx - cz, 0.015, z + cz + cx,
-        x + cx + cz, 0.015, z + cz - cx,
-        x - cx + cz, 0.015, z - cz - cx,
+        x - cx - cz, y, z - cz + cx,
+        x + cx - cz, y, z + cz + cx,
+        x + cx + cz, y, z + cz - cx,
+        x - cx + cz, y, z - cz - cx,
       );
       const cell = (r() * 8) | 0;
       const u0 = (cell % 4) / 4;
@@ -1081,6 +1106,7 @@ export class World {
     const boss = lairOf(this.zone);
     const positions: number[] = [];
     const uvs: number[] = [];
+    let runs = 0;
     for (const [ax, az, bx, bz] of this.segs) {
       const dist = Math.hypot(bx - ax, bz - az);
       for (let t = rand(r, 3, 8); t < dist - 3; t += rand(r, 11, 20)) {
@@ -1091,10 +1117,12 @@ export class World {
         const a = Math.atan2(bz - az, bx - ax) + rand(r, -0.12, 0.12);
         const along = [Math.cos(a), Math.sin(a)];
         const across = [-along[1], along[0]];
+        // A hair above the flat decor (0.01), and each run a step above the last (see flatStep).
+        const y = 0.012 + flatStep(runs++);
         const hw = (width / 2) * rand(r, 0.9, 1.05);
         const hl = (length / 2) * rand(r, 0.8, 1.2);
         for (const [sa, sb] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
-          positions.push(x + across[0] * hw * sa + along[0] * hl * sb, 0.01, z + across[1] * hw * sa + along[1] * hl * sb);
+          positions.push(x + across[0] * hw * sa + along[0] * hl * sb, y, z + across[1] * hw * sa + along[1] * hl * sb);
         }
         const cell = (r() * cols) | 0;
         uvs.push(cell / cols, 1, (cell + 1) / cols, 1, (cell + 1) / cols, 0, cell / cols, 0);
@@ -1264,10 +1292,9 @@ export class World {
     // is turned, a copy sharing the same image, read right to left.
     let map = sh.texture;
     if (flip) {
-      map = this.flipped.get(key) ?? sh.texture.clone();
+      map = this.flipped.get(key) ?? cloneShared(sh.texture);
       map.repeat.x = -1;
       map.offset.x = 1;
-      map.needsUpdate = true;
       this.flipped.set(key, map);
     }
     let mat: THREE.SpriteMaterial;
@@ -1285,6 +1312,10 @@ export class World {
     spr.center.set(0.5, TOWN2_PROP.test(key) ? 0 : 0.03);
     spr.scale.set(w, height, 1);
     spr.position.set(x, 0, z);
+    // Two pieces placed (almost) on the same spot came out at the same depth, and the GPU drew one or the other
+    // frame by frame: they flickered (owner 2026-11-21). A tiny, different step toward the camera for each piece
+    // (along the view, so nothing moves on screen; at most ~0.03 world units) keeps their order fixed.
+    spr.position.addScaledVector(ISO_DIR, (this.propSeq++ % PROP_DEPTH_STEPS) * PROP_DEPTH_STEP);
     // Long town-wall pieces stand on a line, not a spot: a round shadow under each would only blot the ground.
     // Nor under the hub town's buildings, stalls and fountain: their pictures stand on their nearest corner, not their
     // middle, so a round shadow there floated off to one side (owner 2026-11-19).

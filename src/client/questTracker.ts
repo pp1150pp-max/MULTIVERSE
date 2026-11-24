@@ -2,6 +2,7 @@
 // along it is, and when it is ready to hand in. It folds away (remembered per browser); on a narrow
 // portrait screen it starts folded. Clicking a quest opens the map.
 import type { Game } from './Game';
+import { playSound } from './audio/sfx';
 import { QUEST_KILLS, STONE_NAME } from '../shared/data/stones';
 import { questRows } from '../shared/quests';
 import { GEAR_KILLS, GEAR_PART_NAME, gearRows } from '../shared/gearQuests';
@@ -26,6 +27,8 @@ export class QuestTracker {
   private readonly list: HTMLElement;
   private folded: boolean;
   private drawn = '';
+  /** Each row's state last update (null before the first), to hear a quest turning ready. */
+  private lastStates: Map<string, string> | null = null;
 
   constructor(private readonly g: Game) {
     this.folded = savedFold() ?? matchMedia('(max-width: 700px) and (orientation: portrait)').matches;
@@ -62,6 +65,9 @@ export class QuestTracker {
       ...questRows(this.g.player).map((r) => ({ id: r.boss, name: STONE_NAME[r.key], goal: `${hunt(r.map, r.state, r.kills)}/${QUEST_KILLS}`, state: r.state as string, kills: r.kills, max: QUEST_KILLS })),
       ...gearRows(this.g.player).map((r) => ({ id: r.id, name: `${GEAR_PART_NAME[r.part]} · ${r.map.nameTh}`, goal: `${hunt(r.map, r.state, r.kills)}/${GEAR_KILLS}`, state: r.state as string, kills: r.kills, max: GEAR_KILLS })),
     ].filter((r) => r.state === 'going' || r.state === 'ready');
+    // A quest that just became ready to hand in (not the ones already ready when the game loaded).
+    if (this.lastStates && rows.some((r) => r.state === 'ready' && this.lastStates!.get(r.id) === 'going')) playSound('quest_done');
+    this.lastStates = new Map(rows.map((r) => [r.id, r.state]));
     const sig = JSON.stringify([this.folded, rows.map((r) => [r.id, r.state, r.kills])]);
     if (sig === this.drawn) return;
     this.drawn = sig;

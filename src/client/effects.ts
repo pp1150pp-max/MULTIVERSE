@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { circlesOn, MagicCircle, zoneAsCircle, zoneCircle } from './magicCircles';
 import { assetSources, fxSheets, fxTex, sheets, type FxSheet } from './assets';
+import { cloneShared } from './texShare';
 import type { FxApi, SkillEffect } from '../shared/sim/types';
 import { loopProps, playProps } from './zoneProps';
 import { playSkillExtras } from './skillExtras';
@@ -8,6 +9,7 @@ import { playLayer, ShotLayer, type FxLayerHooks, type FxLayerHost } from './fxL
 import type { QuarksFx } from './quarksFx';
 import { currentBalance } from '../shared/balance';
 import { gfxQuality } from './gfxPrefs';
+import { bossFxOn, bossFxSpot, isBossEffect, isBossMelee, playBossExtras } from './bossFx';
 
 /** The three.quarks trial's switch (fxLayer.quarks, under the extra layer's own switch), and not "off" in the player's graphics window. */
 const quarksOn = (): boolean => currentBalance().fxLayer.enabled && currentBalance().fxLayer.quarks && gfxQuality() > 0;
@@ -25,6 +27,8 @@ const SHEET_ROWS: Record<FxSheet, number> = {
   mg_a: 6, mg_b: 6, mg_c: 6, mg_d: 3, mg_e: 4, mg_f: 4, mg_g: 5,
   // Gunslinger
   gs_skill: 6, gs_gear: 6, gs_passive: 3,
+  // Bosses
+  boss_bear: 3, boss_witch: 3, boss_yeti: 4, boss_heart: 5,
   // Area skills' standing layer (zoneProps.ts)
   ap_sw_a: 4, ap_sw_b: 4, ap_sw_c: 4, ap_mg_a: 4, ap_mg_b: 4, ap_mg_c: 4, ap_mg_d: 4, ap_mg_e: 4, ap_gs_a: 4,
 };
@@ -39,11 +43,25 @@ interface EffectDef {
   upright?: boolean;
   /** Standing on the ground whatever its size (art drawn at the bottom of its cell: a dome, a sword stuck in the ground). */
   stand?: boolean;
+  /**
+   * With `stand`: how far down its cell (0 top … 1 bottom) the art's ground centre is (a ring of roots or spikes
+   * drawn seen at an angle), put on the effect's spot; missing = the cell's bottom edge on the ground.
+   */
+  ground?: number;
+  /**
+   * Drawn on the ground layer whole, after the ground and before the bosses (owner 2026-11-21: a boss's skill goes
+   * behind the boss, from its base). Pushing it back in depth hid its lower half under the ground instead.
+   */
+  under?: boolean;
   /** Multiplies the art's colours (a tinted copy of a row, e.g. the sword's dark-red Execute). */
   tint?: string;
   /** The row is drawn as one seamless loop (all 6 frames at full strength), for zones; otherwise a zone loops frames 2–5. */
   loop?: boolean;
 }
+
+/** Draw order of a boss's standing skill picture (`under`): after the ground and everything at 0, before the bosses (BOSS_ORDER). */
+export const BOSS_FX_ORDER = 1;
+export const BOSS_ORDER = 2;
 
 const EFFECTS: Record<SkillEffect, EffectDef> = {
   slash: { sheet: 'sword', row: 0, life: 0.22, height: 'ground' },
@@ -108,6 +126,20 @@ const EFFECTS: Record<SkillEffect, EffectDef> = {
   gs_hawkeye: { sheet: 'gs_passive', row: 0, life: 0.45, height: 2.2, upright: true },
   gs_trigger: { sheet: 'gs_passive', row: 1, life: 0.3, height: 0.95, upright: true },
   gs_special: { sheet: 'gs_passive', row: 2, life: 0.5, height: 'ground' },
+  // Bosses' skills (owner 2026-11-21). `size` is the skill's radius; the ones drawn seen at an angle stand on the ground,
+  // their ground centre (measured on the cut sheets) on the skill's spot: the witch's roots floated above her slam's circle.
+  boss_bear_claw: { sheet: 'boss_bear', row: 0, life: 0.32, height: 1.1, upright: true },
+  boss_bear_slam: { sheet: 'boss_bear', row: 1, life: 0.75, height: 'ground' },
+  boss_bear_roar: { sheet: 'boss_bear', row: 2, life: 0.7, height: 'ground' },
+  boss_witch_swipe: { sheet: 'boss_witch', row: 0, life: 0.38, height: 1.2 },
+  boss_witch_slam: { sheet: 'boss_witch', row: 1, life: 0.85, height: 0, upright: true, stand: true, ground: 0.63, under: true },
+  boss_witch_frenzy: { sheet: 'boss_witch', row: 2, life: 0.9, height: 0, upright: true, stand: true, ground: 0.7, under: true },
+  boss_yeti_hit: { sheet: 'boss_yeti', row: 0, life: 0.38, height: 0.7, upright: true },
+  boss_yeti_slam: { sheet: 'boss_yeti', row: 1, life: 0.8, height: 0, upright: true, stand: true, ground: 0.55, under: true },
+  boss_yeti_snow: { sheet: 'boss_yeti', row: 2, life: 0.75, height: 0, upright: true, stand: true, ground: 0.72, under: true },
+  boss_yeti_blizzard: { sheet: 'boss_yeti', row: 3, life: 0.9, height: 'ground' },
+  boss_heart_impact: { sheet: 'boss_heart', row: 1, life: 0.6, height: 0, upright: true, stand: true, ground: 0.75, under: true },
+  boss_heart_blast: { sheet: 'boss_heart', row: 4, life: 1, height: 0, upright: true, stand: true, ground: 0.82, under: true },
 };
 
 /** Flying shots, looked up by the colour the simulation gives each projectile. */
@@ -219,8 +251,7 @@ const screenAngle = (dx: number, dz: number) => Math.atan2(-dx - dz, dx - dz);
 function frameTexture(sheet: FxSheet): THREE.Texture | null {
   const base = fxSheets[sheet];
   if (!base) return null;
-  const tex = base.clone();
-  tex.needsUpdate = true;
+  const tex = cloneShared(base);
   tex.userData.effectFrame = true;
   return tex;
 }
@@ -442,6 +473,15 @@ export class Effects implements FxApi {
       x = drone.x;
       z = drone.z;
     }
+    // A boss's skill (bossFx.ts): its picture plus code effects, or with the switch off the old look (a hit's plain slash).
+    if (isBossEffect(name)) {
+      if (!bossFxOn()) {
+        if (isBossMelee(name)) this.slash(x, z, angle, Math.PI * 0.6, size + 0.6, '#ff8a6a');
+        return;
+      }
+      ({ x, z, size } = bossFxSpot(name, x, z, angle, size));
+      playBossExtras(this, name, x, z, angle, size);
+    }
     // The standing layer of an area skill (zoneProps.ts), once per cast spot: a skill that plays two pictures at the
     // same place (Unleash: ring + quake) shouldn't double it.
     if (skill) {
@@ -467,7 +507,9 @@ export class Effects implements FxApi {
     const play = (k: number) => showFrame(tex, def.sheet, def.row, Math.min(FRAMES - 1, Math.floor(k * FRAMES)));
     if (def.height === 'ground') {
       const mesh = this.decal(new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.5, depthWrite: false, side: THREE.DoubleSide, color: def.tint ?? '#ffffff' }));
-      mesh.position.set(x, 0.09, z);
+      // The sword's slash lies at its height, not on the ground (fxLayer.slashLift): the arc then sits around the body the
+      // same way whichever way the swing goes.
+      mesh.position.set(x, name === 'slash' ? Math.max(0.09, currentBalance().fxLayer.slashLift) : 0.09, z);
       mesh.rotation.y = -angle;
       mesh.scale.setScalar(size);
       this.add(mesh, def.life, play);
@@ -477,7 +519,13 @@ export class Effects implements FxApi {
       const mat = new THREE.SpriteMaterial({ map: tex, alphaTest: 0.5, transparent: false, rotation, color: def.tint ?? '#ffffff' });
       const spr = new THREE.Sprite(mat);
       // The sprite is size × 2 tall: centred at `size` its bottom edge is on the ground.
-      spr.position.set(x, def.stand ? size * 0.9 : def.height, z);
+      // `ground`: the point that far down the picture (2 × size tall) goes on the ground.
+      spr.position.set(x, def.stand ? (def.ground !== undefined ? size * (2 * def.ground - 1) : size * 0.9) : def.height, z);
+      if (def.under) {
+        mat.depthTest = false;
+        mat.depthWrite = false;
+        spr.renderOrder = BOSS_FX_ORDER;
+      }
       spr.scale.setScalar(size * 2);
       this.add(spr, def.life, play);
       playLayer(this, this.layerHooks, name, spr, x, spr.position.y, z, size, def.life, by, hit);
@@ -738,12 +786,13 @@ export class Effects implements FxApi {
     });
   }
 
-  puff(x: number, y: number, z: number, color: string, life: number, size: number): void {
-    const s = this.glowSprite(color, size, 0.8);
+  /** A small glow that shrinks and fades out. `fadeIn` = seconds it takes to light up (0 = full at once). */
+  puff(x: number, y: number, z: number, color: string, life: number, size: number, fadeIn = 0, alpha = 0.8): void {
+    const s = this.glowSprite(color, size, fadeIn > 0 ? 0 : alpha);
     s.position.set(x, y, z);
     const mat = s.material;
     this.add(s, life, (k) => {
-      mat.opacity = 0.8 * (1 - k);
+      mat.opacity = alpha * (1 - k) * (fadeIn > 0 ? Math.min(1, (k * life) / fadeIn) : 1);
       s.scale.setScalar(size * (1 - 0.5 * k));
     });
   }

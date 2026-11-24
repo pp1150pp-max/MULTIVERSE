@@ -12,7 +12,7 @@ import type { BagEntry } from '../src/shared/types';
 import { ITEM_BASES } from '../src/shared/data/items';
 import { CLASSES } from '../src/shared/data/classes';
 import {
-  cleanAttach, describeAttach, hasAttach, putAll, rollAttach, slotsNeeded,
+  cleanAttach, describeAttach, hasAttach, putAll, rollAttach, roomShortText,
   MAIL_BODY_MAX, MAIL_MS, MAIL_TITLE_MAX,
   type MailAttach, type MailCall, type MailFull, type MailHead, type MailReply, type MailSendRow, type MailTargetReq,
 } from '../src/shared/mail';
@@ -206,13 +206,12 @@ export class Mail {
     const att = parseAttach(r.attach);
     if (!hasAttach(att)) return 'จดหมายฉบับนี้ไม่มีของแนบ';
     const entries: BagEntry[] = rollAttach(att, p.cls.id, p.level);
-    if (!putAll(structuredClone(p.bag), entries)) {
-      const need = slotsNeeded(p.bag, entries);
-      return `กระเป๋าไม่พอ — ต้องมีช่องว่างอย่างน้อย ${need} ช่อง (ตอนนี้ว่าง ${p.bag.filter((e) => !e).length} ช่อง)`;
+    if (!putAll(structuredClone(p.bag), entries, p.bagSlots)) {
+      return `กระเป๋าไม่พอ — ต้องมีช่องว่าง ${roomShortText(p.bag, entries, p.bagSlots)}`;
     }
     const before = structuredClone(p.bag);
     const goldBefore = p.gold;
-    putAll(p.bag, entries);
+    putAll(p.bag, entries, p.bagSlots);
     p.gold += att.gold;
     try {
       this.db.transaction(() => {

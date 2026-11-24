@@ -1,10 +1,11 @@
 import type { Game } from '../Game';
-import { isBuffScroll, isItem, isPotion, isStack, isStone, EQUIP_SLOT_LABEL, wornPlaces, type BagEntry, type EquipSlot } from '../../shared/types';
+import { isBuffScroll, isOrbStone, isItem, isPotion, isStack, isStone, EQUIP_SLOT_LABEL, wornPlaces, type BagEntry, type EquipSlot } from '../../shared/types';
 import type { MarketWindow } from '../market';
 import type { ForgeWindow } from './forge';
 import type { ShopWindow } from './shop';
 import type { StashWindow } from './stash';
 import { $ } from './hudShared';
+import { freeSlot } from '../../shared/bagTabs';
 
 /** What the item detail sheet needs from the HUD (tooltips, bag actions). */
 export interface ItemDetailHost {
@@ -86,7 +87,7 @@ export class ItemDetail {
     } else if ('slot' in at) {
       const slot = at.slot;
       if (this.w.forge.isOpen) acts.push({ label: 'วางที่ช่างตีเหล็ก', run: () => this.w.forge.forgePlace(entry), main: true });
-      else acts.push({ label: 'ถอด', run: () => g.backend.unequip(slot), main: true });
+      else acts.push({ label: 'ถอด', run: () => { if (!this.w.shop.blocksEquip()) g.backend.unequip(slot); }, main: true });
     } else {
       const i = at.bag;
       if (g.trade.open) acts.push({ label: 'เสนอในการเทรด', run: () => g.trade.offer(i), main: true });
@@ -97,7 +98,7 @@ export class ItemDetail {
         if (block) acts.push({ label: `สวมใส่ไม่ได้ — ${block}`, run: () => undefined, main: true, off: true });
         else if (places.length > 1) {
           for (const place of places) acts.push({ label: `ใส่ช่อง${EQUIP_SLOT_LABEL[place]}`, run: () => this.host.equipByDrag(i, place), main: true });
-        } else acts.push({ label: 'สวมใส่', run: () => g.backend.equip(i), main: true });
+        } else acts.push({ label: 'สวมใส่', run: () => { if (!this.w.shop.blocksEquip()) g.backend.equip(i); }, main: true });
       } else if (isPotion(entry)) {
         acts.push({ label: `ใช้กับปุ่มยา ${entry.potion === 'hp' ? 1 : 2}`, run: () => g.backend.equip(i), main: true });
       } else if (isStone(entry)) {
@@ -105,19 +106,26 @@ export class ItemDetail {
         if (st === 'return_scroll') acts.push({ label: 'ใช้', run: () => g.useReturnScroll(), main: true });
         else if (isBuffScroll(st)) acts.push({ label: 'ใช้', run: () => g.backend.useBuffScroll(st), main: true });
         else if (st === 'megaphone') acts.push({ label: 'ใช้', run: () => g.megaphone.toggle(true), main: true });
+        else if (st === 'mystery_box') {
+          acts.push({ label: 'เปิด 1 กล่อง', run: () => g.backend.openBox(i, false), main: true });
+          if (entry.count > 1) acts.push({ label: 'เปิดทั้งกอง', run: () => g.backend.openBox(i, true) });
+        } else if (isOrbStone(st)) acts.push({ label: 'ใช้ (เข้าบัญชี)', run: () => g.backend.useOrbItem(i), main: true });
       }
       if (this.w.shop.isOpen) acts.push({ label: isStack(entry) ? 'ขายทั้งช่อง' : 'ขาย', run: () => this.w.shop.sellFromBag(i) });
       if (this.w.stash.isOpen) acts.push({ label: 'ฝากเข้าคลัง', run: () => g.backend.stashPut(i, -1) });
       if (this.w.market.isOpen) acts.push({ label: 'ลงขายในตลาด', run: () => this.w.market.bagRightClick(i) });
       if (isStack(entry) && entry.count > 1) {
-        const free = p.bag.findIndex((x) => !x);
+        // An empty slot of the usable tab (it may be on another page of the tab, so a stand-in cell names it).
+        const free = freeSlot(p.bag, p.bagSlots, 'use');
+        const spot = document.createElement('div');
+        spot.dataset.i = String(free);
         acts.push({
-          label: free < 0 ? 'แบ่งกองไม่ได้ — กระเป๋าเต็ม' : 'แบ่งกอง',
-          run: () => this.host.splitDrag('bag', i, $('bag-grid').querySelector<HTMLElement>(`[data-i="${free}"]`), null),
+          label: free < 0 ? 'แบ่งกองไม่ได้ — ช่องประเภทใช้งานเต็ม' : 'แบ่งกอง',
+          run: () => this.host.splitDrag('bag', i, spot, null),
           off: free < 0,
         });
       }
-      acts.push({ label: 'วางลงพื้น', run: () => this.host.askDrop(i) });
+      acts.push({ label: 'ทิ้งไอเทม', run: () => this.host.askDrop(i) });
     }
     const box = this.detailEl.querySelector<HTMLElement>('.idt-acts')!;
     box.replaceChildren(...acts.map((a) => {

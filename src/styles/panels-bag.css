@@ -123,19 +123,25 @@ html.paper-ui .eq-ring2 { left: 61.5%; top: 37.2%; width: 6.6%; height: 4.4%; }
 .bag-sort button { padding: 3px 8px; font-size: 12px; }
 /* Bag sort sits on the bag window itself, right above the slots (owner: players didn't see it in the side panel,
    which is also hidden while a shop or stash is open). Measured from the painted window like the slots. */
-.inv-sort { position: absolute; right: 8.4%; top: 61%; height: 4.4%; flex-wrap: nowrap; gap: 3px; z-index: 1; }
-.inv-sort select, .inv-sort button { height: 100%; padding: 0 6px; font-size: clamp(10px, calc(var(--inv-w) * 0.022), 12px); }
+.inv-sort { position: absolute; right: 8.4%; top: 61%; height: 4.4%; flex-wrap: nowrap; gap: 2px; z-index: 1; }
+.inv-sort select, .inv-sort button { height: 100%; padding: 0 clamp(2px, calc(var(--inv-w) * 0.0107), 6px); font-size: clamp(10px, calc(var(--inv-w) * 0.022), 12px); }
 .bag-filter { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: -2px 0 8px; font-size: 12px; color: var(--ink-dim); }
 .bag-filter label { display: flex; align-items: center; gap: 2px; cursor: pointer; }
 .bag-filter input { margin: 0; accent-color: var(--gold-hi); }
-/* Fashion bag (owned cosmetics): the "กระเป๋า" / "แฟชั่น" tabs sit left on the sort row; in fashion mode the
+/* Fashion bag (owned cosmetics): the "กระเป๋า" / "ประเภทใช้งาน" / "แฟชั่น" tabs sit left on the sort row; in fashion mode the
    bag slots, equipment and sort bar make way for #fashion-grid (same painted slots) and the worn bar. */
-.inv-tabs { position: absolute; left: 8.6%; top: 61%; height: 4.4%; display: flex; gap: 3px; z-index: 1; }
-.inv-tabs .ui-tab { height: 100%; padding: 0 10px; font-size: clamp(10px, calc(var(--inv-w) * 0.024), 13px); border-bottom-color: var(--tab-edge-active); }
+/* Three tabs and the sort bar share the row: paddings shrink with the window so they still fit on a phone (375 px). */
+.inv-tabs { position: absolute; left: 8.6%; top: 61%; height: 4.4%; display: flex; gap: 2px; z-index: 1; }
+.inv-tabs .ui-tab { height: 100%; padding: 0 clamp(3px, calc(var(--inv-w) * 0.0125), 7px); font-size: clamp(10px, calc(var(--inv-w) * 0.024), 13px); border-bottom-color: var(--tab-edge-active); }
 .inv-tabs .ui-tab:disabled { opacity: 0.45; cursor: not-allowed; }
 .fashion-pager { position: absolute; right: 8.4%; top: 61%; height: 4.4%; display: flex; align-items: center; gap: 6px; z-index: 1; font-size: clamp(10px, calc(var(--inv-w) * 0.024), 13px); }
 .fashion-pager button { height: 100%; padding: 0 8px; }
 .fashion-pager.hidden { display: none; }
+/* Under the bag slots (owner 2026-11-23): pages of a bag tab past 30 slots, and the slot purchase buttons while /admin has
+   them on (BalanceTuning.bagExpand). Hidden when it has nothing to show, and on the fashion page. */
+.bag-more { position: absolute; right: 8.4%; top: 86.9%; height: 3.4%; display: flex; align-items: center; gap: 4px; z-index: 1; font-size: clamp(10px, calc(var(--inv-w) * 0.022), 12px); }
+.bag-more button { height: 100%; padding: 0 6px; font-size: inherit; }
+.bag-more.hidden, #inventory.fashion .bag-more { display: none; }
 /* The fashion page has its own window art (inventory_fashion.png, owner 2026-11-18, papercraft style): 6 frames with
    name plates on top, 30 slots below. Positions are measured from that art (see the constants in fashionBag.ts). */
 #inventory.fashion .inv-window { background-image: url(/assets/sprites/ui/inventory_fashion.png); }

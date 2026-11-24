@@ -12,7 +12,9 @@ import { bearer, HttpError, readJson, send, str } from './http';
 import { ownerToolsApi } from './admin-tools';
 import { googleAdminApi } from './google-api';
 import { mailAdminApi } from './admin-mail';
+import { newsAdminApi } from './admin-news';
 import { cashAdminApi } from './admin-cash';
+import { topupAdminApi } from './admin-topup';
 import { tradeAdminApi } from './admin-trade';
 import { reportsAdminApi } from './admin-reports';
 import { rolesAdminApi } from './admin-roles';
@@ -22,10 +24,11 @@ import type { Backups } from './backup';
 import { currentBalanceTuning } from '../src/shared/balance';
 import {
   ADMIN_AUDIT_PAGE, ADMIN_GOLD_MAX, ADMIN_NO_RIGHTS, ADMIN_ITEMS_MAX, ADMIN_SEARCH_MAX,
-  addStackToBag, adminStack, adminStackName, customItem, OWNER_ROLE, type AdminFeature, type AdminCharRow, type AdminEditResult, type AdminMe, type AdminMeta, type AdminRole, type AdminServerState,
+  addStackToBag, buildGearSet, adminStack, adminStackName, customItem, OWNER_ROLE, type AdminFeature, type AdminCharRow, type AdminEditResult, type AdminMe, type AdminMeta, type AdminRole, type AdminServerState,
 } from '../src/shared/admin';
 import { countdownTime, SHUTDOWN_SECONDS, SHUTDOWN_SECONDS_MAX, shutdownCancelled, shutdownSeconds, type ShutdownMode } from '../src/shared/net/protocol';
-import { BAG_SIZE, type CharacterData, type Player } from '../src/shared/sim/Player';
+import { layOutBag, type CharacterData, type Player } from '../src/shared/sim/Player';
+import { cleanBagSlots, freeCount, freeSlot, normalizeBag, type BagSlots } from '../src/shared/bagTabs';
 import { expToNext, MAX_LEVEL } from '../src/shared/formulas';
 import { gatesPassedBy } from '../src/shared/data/bossGates';
 import { ZONES, zoneById } from '../src/shared/data/zones';
@@ -88,22 +91,22 @@ export function log(db: Db, a: Admin, action: string, target: string, details: s
 }
 
 /** The fields an edit touches; a live Player and a saved CharacterData both have them. */
-interface Editable { level: number; exp: number; gold: number; bag: (BagEntry | null)[]; bossKills?: string[] }
+interface Editable { level: number; exp: number; gold: number; bag: (BagEntry | null)[]; bagSlots?: BagSlots; bossKills?: string[] }
 
-const freeSlots = (bag: (BagEntry | null)[]): number => {
-  let n = 0;
-  for (let i = 0; i < BAG_SIZE; i++) if (!bag[i]) n++;
-  return n;
+/** Empty slots in both bag tabs (a save not laid out yet is counted as it will be). */
+const bagFree = (bag: (BagEntry | null)[], slots: BagSlots | undefined, live: boolean): number => {
+  const laid = live && slots ? { bag, slots } : normalizeBag(bag, cleanBagSlots(slots));
+  return freeCount(laid.bag, laid.slots, 'gear') + freeCount(laid.bag, laid.slots, 'use');
 };
 
 export function charRow(c: AdminCharacterRow, live: Player | undefined): AdminCharRow {
   const d: Editable & { classId: CharacterData['classId']; zone?: string } = live
-    ? { level: live.level, exp: live.exp, gold: live.gold, bag: live.bag, classId: live.cls.id, zone: live.zone }
+    ? { level: live.level, exp: live.exp, gold: live.gold, bag: live.bag, bagSlots: live.bagSlots, classId: live.cls.id, zone: live.zone }
     : c.data;
   return {
     charId: c.id, accountId: c.accountId, username: c.guest ? 'Guest' : c.username, guest: c.guest, name: c.name,
     classId: d.classId, level: d.level, exp: d.exp, expToNext: expToNext(d.level), gold: d.gold,
-    zone: zoneById(d.zone).id, bagFree: freeSlots(d.bag), online: !!live,
+    zone: zoneById(d.zone).id, bagFree: bagFree(d.bag, d.bagSlots, !!live), online: !!live,
   };
 }
 
@@ -130,7 +133,9 @@ export async function adminApi(
   if (await ownerToolsApi(req, res, path, method, url, db, world, backups)) return;
   if (await googleAdminApi(req, res, path, db)) return;
   if (await mailAdminApi(req, res, path, method, db, world)) return;
+  if (await newsAdminApi(req, res, path, method, db, world)) return;
   if (await cashAdminApi(req, res, path, method, db, world)) return;
+  if (await topupAdminApi(req, res, path, method, db, world)) return;
   if (tradeAdminApi(req, res, path, method, db)) return;
   if (await reportsAdminApi(req, res, path, method, db)) return;
   if (await rolesAdminApi(req, res, path, method, url, db)) return;
@@ -176,10 +181,11 @@ export async function adminApi(
     return send(res, 200, charRow(c, world.livePlayer(c.id)));
   }
 
-  const edit = /^\/api\/admin\/characters\/(\d{1,12})\/(level|gold|items|kick|teleport)$/.exec(path);
+  const edit = /^\/api\/admin\/characters\/(\d{1,12})\/(level|gold|items|itemset|kick|teleport)$/.exec(path);
   if (method === 'POST' && edit) {
     const tool: AdminFeature = edit[2] === 'kick' ? 'kick' : edit[2] === 'teleport' ? 'teleport' : 'charEdit';
     const a = requireFeature(req, db, tool);
+    if (edit[2] === 'itemset') requireFeature(req, db, 'spawnSet');
     const body = await readJson(req);
     return send(res, 200, editCharacter(db, world, a, Number(edit[1]), edit[2], body));
   }
@@ -229,8 +235,9 @@ function editCharacter(db: Db, world: GameWorld, a: Admin, charId: number, what:
   // Online: change the live character (a DB edit would be overwritten by its next save).
   // Everything below runs synchronously, so the character can't log in or out half way.
   const live = world.livePlayer(charId);
+  // Offline: lay the save's bag out in its tabs first (an old save gets sorted into them, see normalizeBag).
+  const slots: BagSlots = live ? live.bagSlots : layOutBag(c.data);
   const d: Editable = live ?? c.data;
-  if (!live) c.data.bag = Array.from({ length: BAG_SIZE }, (_, i) => c.data.bag[i] ?? null);
 
   let msg: string;
   let tell: string;
@@ -275,10 +282,10 @@ function editCharacter(db: Db, world: GameWorld, a: Admin, charId: number, what:
         const kind = adminStack(body);
         if (typeof kind === 'string') throw new HttpError(400, kind);
         const count = int(body.count ?? 1, 1, ADMIN_ITEMS_MAX, 'จำนวนชิ้น');
-        const n = addStackToBag(d.bag, BAG_SIZE, kind, count);
-        if (n === 0) throw new HttpError(400, 'กระเป๋าเต็ม');
+        const n = addStackToBag(d.bag, slots, kind, count);
+        if (n === 0) throw new HttpError(400, 'ช่องประเภทใช้งานเต็ม');
         const label = adminStackName(kind);
-        msg = n < count ? `ใส่ได้ ${n}/${count} ชิ้น — กระเป๋าเต็ม (${label})` : `เสกให้ ${n} ชิ้น: ${label}`;
+        msg = n < count ? `ใส่ได้ ${n}/${count} ชิ้น — ช่องประเภทใช้งานเต็ม (${label})` : `เสกให้ ${n} ชิ้น: ${label}`;
         tell = `GM มอบ ${label} × ${n}`;
         log(db, a, 'items', target, `${label} × ${n}${n < count ? ` (ขอ ${count}, กระเป๋าเต็ม)` : ''}`);
         break;
@@ -293,7 +300,7 @@ function editCharacter(db: Db, world: GameWorld, a: Admin, charId: number, what:
       // An item type never drops below its own minimum level, so a spawned one doesn't either.
       const level = Math.max(asked, base.minLevel);
       const adjusted = level !== asked ? `ปรับเลเวลไอเทมเป็น Lv.${level} (ขั้นต่ำของชนิดนี้)` : '';
-      const free = freeSlots(d.bag);
+      const free = freeCount(d.bag, slots, 'gear');
       if (free === 0) throw new HttpError(400, 'กระเป๋าเต็ม');
       const n = Math.min(count, free);
       // Gear for another class may be asked for (to hand on to someone else); default is the character's own.
@@ -311,13 +318,28 @@ function editCharacter(db: Db, world: GameWorld, a: Admin, charId: number, what:
         if (plus > 0) item.plus = plus;
         made.push(item);
       }
-      for (const item of made) d.bag[d.bag.indexOf(null)] = item;
+      for (const item of made) d.bag[freeSlot(d.bag, slots, 'gear')] = item;
       const name = made[0].name;
       const rows = custom ? ` · ${(made[0].lines ?? []).map((l) => `${STAT_LABEL[l.stat]} ${l.value}`).join(', ') || 'ไม่มีสเตตัส'}` : '';
       const label = `${plus ? `+${plus} ` : ''}${name} [${RARITY_LABEL[rarity]}] Lv.${level}`;
       msg = (n < count ? `ใส่ได้ ${n}/${count} ชิ้น — กระเป๋าเต็ม (${label})` : `เสกให้ ${n} ชิ้น: ${label}`) + (adjusted ? ` · ${adjusted}` : '');
       tell = `GM มอบไอเทม ${label} × ${n}`;
       log(db, a, 'items', target, `${label} × ${n}${n < count ? ` (ขอ ${count}, กระเป๋าเต็ม)` : ''}${adjusted ? ` · ${adjusted}` : ''}${custom ? ' · กำหนดสเตตัส' : ''}${rows}`);
+      break;
+    }
+    case 'itemset': {
+      const own = live ? live.cls.id : c.data.classId;
+      const classId = body.classId === undefined ? own : CLASS_IDS.find((k) => k === body.classId);
+      if (!classId) throw new HttpError(400, 'อาชีพไม่ถูกต้อง');
+      const set = buildGearSet(body, classId);
+      if (typeof set === 'string') throw new HttpError(400, set);
+      const free = freeCount(d.bag, slots, 'gear');
+      if (free < set.items.length) throw new HttpError(400, `กระเป๋าว่างไม่พอ: เซตนี้ ${set.items.length} ชิ้น ต้องว่างอย่างน้อย ${set.items.length} ช่อง (ตอนนี้ว่าง ${free})`);
+      for (const item of set.items) d.bag[freeSlot(d.bag, slots, 'gear')] = item;
+      const label = `เซต ${RARITY_LABEL[set.rarity]} T${set.tier} Lv.${set.level}${set.plus ? ` +${set.plus}` : ''} (${classId})`;
+      msg = `เสกให้ ${set.items.length} ชิ้น: ${label}${set.skipped.length ? ` · ไม่มีชนิดที่เลเวลนี้: ${set.skipped.join(', ')}` : ''}`;
+      tell = `GM มอบ${label} × ${set.items.length}`;
+      log(db, a, 'items', target, `${label} × ${set.items.length}: ${set.items.map((i) => i.name).join(', ')}${set.skipped.length ? ` · ข้าม ${set.skipped.join(', ')}` : ''}`);
       break;
     }
     case 'kick': {

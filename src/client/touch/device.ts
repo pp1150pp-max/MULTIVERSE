@@ -30,16 +30,26 @@ function startsAsTouch(): boolean {
 
 let mode: PointerMode = startsAsTouch() ? 'touch' : 'mouse';
 let mouseMoves = 0;
+/** Set by lockPointerMode (the /admin HUD mock): the mode never changes after that. */
+let locked = false;
 
 function apply(): void {
   document.body.classList.toggle('touch-ui', mode === 'touch');
 }
 
 function setMode(next: PointerMode): void {
-  if (next === mode) return;
+  if (locked || next === mode) return;
   mode = next;
   apply();
   for (const fn of listeners) fn(mode);
+}
+
+/** Fixes the mode for good (the /admin "จัดหน้าจอเกม" mock page shows one device, whatever the admin's pointer does). */
+export function lockPointerMode(m: PointerMode): void {
+  locked = false;
+  setMode(m);
+  apply();
+  locked = true;
 }
 
 /** The current mode. */

@@ -275,6 +275,9 @@ export class Monster extends Unit {
     this.swT = 0;
   }
 
+  /** A wave monster (minigame "รอดมอนเป็นระลอก"): always hunts the nearest living player, never walks home, never gives up. */
+  hunter = false;
+
   get isBoss(): boolean { return this.def.behavior === 'boss'; }
   get isHostile(): boolean {
     return this.alive && (this.state === 'chase' || this.state === 'charge' || this.state === 'leap' || this.windupT > 0);
@@ -339,6 +342,7 @@ export class Monster extends Unit {
    * Bosses, and the Balance switch off, keep the old `calm()`.
    */
   dropTarget(): void {
+    if (this.hunter) { this.target = null; this.state = 'idle'; return; }
     if (this.isBoss || !currentBalance().mobDropOnSafe) {
       this.calm();
       return;
@@ -413,6 +417,7 @@ export class Monster extends Unit {
       this.lift = up * up * JUMP_HEIGHT;
       if (this.fallT <= 0) {
         this.lift = 0;
+        if (this.def.fx?.jump) sim.fx('effect', this.def.fx.jump, this.x, this.z, 0, this.radius * 2.2);
         this.windKind = 'slam';
         this.resolveWindup(sim, 0);
       }
@@ -465,6 +470,13 @@ export class Monster extends Unit {
       return;
     }
     this.switchTarget(dt, sim);
+    if (this.hunter) {
+      // Wave monsters: the nearest living player, always (owner 2026-11-21: they wandered instead of chasing).
+      const n = this.nearestPlayer(sim);
+      this.target = n ? n.p : null;
+      this.aggroT = Math.max(this.aggroT, 4);
+      if (this.state === 'return') this.state = 'idle';
+    }
     const b = this.def.behavior;
     if ((b === 'aggressive' || b === 'boss' || b === 'charger' || this.forceAggro) && this.state !== 'return') {
       const n = this.nearestPlayer(sim);
@@ -534,7 +546,7 @@ export class Monster extends Unit {
       }
     } else {
       const leash = Math.hypot(this.x - this.area.x, this.z - this.area.z);
-      if (this.state !== 'return' && leash > (this.isBoss ? 18 : 22)) {
+      if (!this.hunter && this.state !== 'return' && leash > (this.isBoss ? 18 : 22)) {
         this.state = 'return';
         this.aggroT = 0;
         this.target = null;
@@ -613,7 +625,7 @@ export class Monster extends Unit {
             mz = dz / d;
             spd = this.chaseSpeed();
           }
-        } else if (this.hp < this.maxHp || this.enraged) {
+        } else if (!this.hunter && (this.hp < this.maxHp || this.enraged)) {
           // The fight is over (everyone died, left or stopped hitting it) but it is still hurt:
           // walk home like a leashed monster, healing on the way, then reset fully (HP, enrage, damage shares).
           this.state = 'return';
@@ -738,6 +750,7 @@ export class Monster extends Unit {
     this.windupT = 0;
     this.jumpOutT = JUMP_OUT_TIME;
     sim.fx('burst', this.x, 0.3, this.z, '#dcecf7', 16, 5);
+    if (this.def.fx?.jump) sim.fx('effect', this.def.fx.jump, this.x, this.z, 0, this.radius * 2.2);
     sim.shake(0.3, this);
   }
 
@@ -784,7 +797,9 @@ export class Monster extends Unit {
       this.fire(sim, this.def.shot);
     } else if (this.windKind === 'melee') {
       const ang = Math.atan2(this.faceZ, this.faceX);
-      sim.fx('slash', this.x, this.z, ang, Math.PI * 0.6, this.attackRange + 0.6, '#ff8a6a');
+      // A boss's own claw / lantern / ice hit (bossFx.ts), sent from where it stands; others the plain slash.
+      if (this.def.fx?.melee) sim.fx('effect', this.def.fx.melee, this.x, this.z, ang, this.attackRange);
+      else sim.fx('slash', this.x, this.z, ang, Math.PI * 0.6, this.attackRange + 0.6, '#ff8a6a');
       if (p?.alive && d <= this.attackRange + p.radius + 0.5) {
         sim.hitPlayer(this, p, 1, {});
         if (this.def.move === 'steal' && p.alive) stealGold(sim, this, p);
@@ -793,8 +808,10 @@ export class Monster extends Unit {
       const radius = this.slamRadius;
       sim.fx('ring', this.x, this.z, radius, '#ffb070', 0.45);
       sim.fx('burst', this.x, 0.3, this.z, '#c9a27a', 14, 6);
+      if (this.def.fx?.slam) sim.fx('effect', this.def.fx.slam, this.x, this.z, 0, radius);
       sim.shake(0.45, this);
-      sim.sfx('boss_slam', this.x, this.z);
+      // A boss with its own slam picture has its own slam sound (client bossSounds.ts).
+      if (!this.def.fx?.slam) sim.sfx('boss_slam', this.x, this.z);
       for (const pl of sim.players) {
         if (pl.alive && Math.hypot(pl.x - this.x, pl.z - this.z) <= radius + pl.radius) {
           sim.hitPlayer(this, pl, 2, { stun: 0.7, kb: 7, fromX: this.x, fromZ: this.z });

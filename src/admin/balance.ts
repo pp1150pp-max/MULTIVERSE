@@ -8,6 +8,7 @@ import { CIRCLE_FALLBACKS, FX_LAYER_NAME, FX_LAYER_RANGE, QUARKS_SKILLS, quarksK
 import { circleDesign, drawInner, drawOuter } from '../client/circleDesigns';
 import { skillExtras } from '../client/skillExtras';
 import { ATTACK_ROOT_RANGE, NO_ATTACK_ROOT } from '../shared/attackRootTuning';
+import { AUDIO_GAIN_RANGE, SFX_GROUP_NAME, SFX_GROUPS } from '../shared/audioTuning';
 import { FORGE_RANGE, PLUS_CAP, PLUS_NEVER } from '../shared/forgeTuning';
 import { RIG_ARMOR_ITEMS, RIG_ARMOR_NAME, RIG_ARMORS, RIG_WEAPON_ITEMS, RIG_WEAPON_NAME, RIG_WEAPONS } from '../shared/rigLookTuning';
 import {
@@ -33,6 +34,7 @@ import { POTION_SIZES, potionName } from '../shared/data/potions';
 import { STONE_NAME } from '../shared/data/stones';
 import { CODE_SET_STEPS, SET_IDS, SET_MAX_PIECES, SET_NAME } from '../shared/data/sets';
 import { MOVE_GROUPS } from '../shared/moveTuning';
+import { BAG_EXPAND_FLAG_NAME, BAG_EXPAND_NUMS, BAG_TAB_START } from '../shared/bagTabs';
 
 type Kids = (Node | string | null | undefined | false)[];
 type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, unknown>, ...kids: Kids) => HTMLElementTagNameMap[K];
@@ -641,6 +643,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       ),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.hubChannels, onchange: (e: Event) => { draft.hubChannels = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' แบ่งห้องเมืองกลาง (เมืองกลางมี CH 1–10 เหมือนแมพฟาร์ม: ห้องละ 20 คน ลูกตี้ตามหัวตี้ 22 ระบบจัดห้องคนน้อยสุด ย้ายเองได้ · ปิด = ห้องเดียว (CH 1) แบบเดิม ไม่ย้ายใคร คนที่อยู่ CH 2 ขึ้นไปอยู่ห้องเดิมจนออกจากเมือง คนที่เข้าเมืองใหม่ไป CH 1 · เปิดอีกครั้ง = ใช้ตอนคนเข้าเมืองครั้งถัดไป)'),
+      ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
           h('input', { type: 'checkbox', checked: draft.bossWipeKeepHp, onchange: (e: Event) => { draft.bossWipeKeepHp = (e.target as HTMLInputElement).checked; updateSummary(); } }),
           ' บอสไม่ฟื้นเลือดตอนทีมตายหมด (ห้องบอส: ทุกคนล้ม = บอสยืนรอ HP เท่าเดิม ไม่เดินกลับ/ไม่รีเซ็ต ชุบด้วยขนนกทันเวลาแล้วสู้ต่อ · ปิด = เดินกลับฟื้นเลือดเต็มเหมือนเดิม)'),
         h('label', {}, 'เวลาชุบตอนตายหมดทีม (วินาที)', numBox(() => draft.roomWipeSec, (n) => { draft.roomWipeSec = n; }, code.roomWipeSec, ...BALANCE_RANGE.roomWipeSec, 1, updateSummary)),
@@ -650,9 +657,30 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       ),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.heartBlastRandom, onchange: (e: Event) => { draft.heartBlastRandom = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' หัวใจภูเขาไฟ ระเบิดใหญ่: สุ่มจุดปลอดภัยทั่วลาน (ห่างผู้เล่นทุกคน แต่ทุกคนมีจุดที่วิ่งถึงทัน · ปิด = วงรอบบอสแบบเดิม)'),
+        h('label', {}, 'จำนวนจุด', numBox(() => draft.heartBlastSpots, (n) => { draft.heartBlastSpots = Math.round(n); }, code.heartBlastSpots, ...BALANCE_RANGE.heartBlastSpots, 1, updateSummary)),
+        h('label', {}, 'ห่างผู้เล่นขั้นต่ำ', numBox(() => draft.heartBlastMinDist, (n) => { draft.heartBlastMinDist = n; }, code.heartBlastMinDist, ...BALANCE_RANGE.heartBlastMinDist, 1, updateSummary)),
+        h('label', { title: 'ส่วนของ (ความเร็ววิ่ง × เวลาเตือน) ที่นับว่าวิ่งทัน' }, 'ค่าเผื่อวิ่งทัน', numBox(() => draft.heartBlastReach, (n) => { draft.heartBlastReach = n; }, code.heartBlastReach, ...BALANCE_RANGE.heartBlastReach, 0.05, updateSummary)),
+      ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.bossLootSpread, onchange: (e: Event) => { draft.bossLootSpread = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' กระจายของดรอปบอส (ห้องบอส: ของวางกระจายทั่วลาน ยิ่งชิ้นเยอะยิ่งกว้าง รัศมี = ฐาน + ตัวคูณ×√จำนวนชิ้น ไม่เกินสูงสุด · สิทธิ์เก็บ/จำนวน/โอกาสดรอปไม่เปลี่ยน · ปิด = วางใกล้ตัวบอสเหมือนเดิม)'),
+        h('label', {}, 'รัศมีฐาน', numBox(() => draft.bossLootBase, (n) => { draft.bossLootBase = n; }, code.bossLootBase, ...BALANCE_RANGE.bossLootBase, 0.5, updateSummary)),
+        h('label', {}, 'ตัวคูณต่อ √จำนวน', numBox(() => draft.bossLootK, (n) => { draft.bossLootK = n; }, code.bossLootK, ...BALANCE_RANGE.bossLootK, 0.1, updateSummary)),
+        h('label', {}, 'รัศมีสูงสุด', numBox(() => draft.bossLootMax, (n) => { draft.bossLootMax = n; }, code.bossLootMax, ...BALANCE_RANGE.bossLootMax, 0.5, updateSummary)),
+      ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
           h('input', { type: 'checkbox', checked: draft.reviveGuard, onchange: (e: Event) => { draft.reviveGuard = (e.target as HTMLInputElement).checked; updateSummary(); } }),
           ' อมตะหลังชุบด้วยขนนกฟีนิกซ์ (ห้องบอส: ไม่โดนดาเมจ/สตัน/ผลัก/ติดโคลน/ช้า/คางคก ตัวกะพริบให้ทุกคนเห็น · หายทันทีเมื่อตีธรรมดา ใช้สกิล บัฟ หรือแดช · เดินและกินยาไม่หาย)'),
         h('label', {}, 'เวลาอมตะ (วินาที)', numBox(() => draft.reviveGuardSec, (n) => { draft.reviveGuardSec = n; }, code.reviveGuardSec, ...BALANCE_RANGE.reviveGuardSec, 1, updateSummary)),
+      ),
+      h('div', { class: 'row bal-line' },
+        h('span', { class: 'muted' }, 'VIP (ซื้อในแคชช็อป ผูกบัญชี · ซ้อนกับใบคูณ ×2 ได้ · เทรดไม่จำกัด)'),
+        h('label', { title: `ค่าในโค้ด: ${code.vipExpPct}% (ปัดลง)` }, 'โบนัส EXP %', numBox(() => draft.vipExpPct, (n) => { draft.vipExpPct = n; }, code.vipExpPct, ...BALANCE_RANGE.vipExpPct, 1, updateSummary)),
+        h('label', { title: `ค่าในโค้ด: ${code.vipDropPct}%` }, 'โบนัสโอกาสดรอป %', numBox(() => draft.vipDropPct, (n) => { draft.vipDropPct = n; }, code.vipDropPct, ...BALANCE_RANGE.vipDropPct, 1, updateSummary)),
       ),
     );
     refresh();
@@ -721,6 +749,9 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         h('thead', {}, h('tr', {}, h('th', {}, 'ยา'), h('th', {}, 'ฟื้น'), h('th', {}, 'ราคา (G)'), h('th', { class: 'bal-out' }, 'ได้จริง'))),
         h('tbody', {}, ...rows))),
       h('div', { class: 'row bal-line' }, h('label', {}, 'นักดาบฟื้นจากยา HP เพิ่ม (%)', numBox(() => pb.swordBonus, (n) => { pb.swordBonus = n; }, code.potions.swordBonus, ...POTION_RANGE.swordBonus, 5, refresh))),
+      h('div', { class: 'muted' }, 'ยาที่มอนดรอป (ทั้งมอนธรรมดาและบอส) ขนาดตามเลเวลของมอน: ต่ำกว่าเลเวลยากลาง = ยาเล็ก · 81 = ไม่ดรอปขนาดนั้น'),
+      h('div', { class: 'row bal-line' }, h('label', {}, 'ดรอปยากลางตั้งแต่ Lv', numBox(() => pb.dropM, (n) => { pb.dropM = Math.round(n); }, code.potions.dropM, ...POTION_RANGE.dropLevel, 1, refresh))),
+      h('div', { class: 'row bal-line' }, h('label', {}, 'ดรอปยาใหญ่ตั้งแต่ Lv', numBox(() => pb.dropL, (n) => { pb.dropL = Math.round(n); }, code.potions.dropL, ...POTION_RANGE.dropLevel, 1, refresh))),
     );
     outs.forEach((f) => f());
   };
@@ -757,7 +788,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         h('td', {}, numBox(() => f.bonusStep[t], (n) => { f.bonusStep[t] = n; }, cf.bonusStep[t], ...FORGE_RANGE.bonusStep, 1, refresh)),
         out));
     }
-    type FNum = 'costBase' | 'costPerLevel' | 'pity' | 'dropFrom' | 'stoneFrom' | 'stonesPerTry' | 'announceFrom' | 'maxPlus' | 'cd' | 'orbMin' | 'sellPerPlus' | 'hiddenFrom';
+    type FNum = 'costBase' | 'costPerLevel' | 'pity' | 'dropFrom' | 'stoneFrom' | 'stonesPerTry' | 'announceFrom' | 'bannerFrom' | 'maxPlus' | 'cd' | 'orbMin' | 'sellPerPlus' | 'hiddenFrom';
     const num = (k: FNum, label: string, range: readonly [number, number], step: number, whole: boolean) =>
       h('label', {}, label, numBox(() => f[k], (n) => { f[k] = whole ? Math.round(n) : n; }, cf[k], range[0], range[1], step, refresh));
     const never = `${PLUS_NEVER} = ไม่มี`;
@@ -790,6 +821,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         num('stoneFrom', 'ระดับเริ่มใช้หินตีบวก (+) ', FORGE_RANGE.from, 1, true),
         num('stonesPerTry', 'หินตีบวกต่อครั้ง ', FORGE_RANGE.stonesPerTry, 1, true),
         num('announceFrom', 'ระดับเริ่มประกาศทั้งเซิร์ฟ (+) ', FORGE_RANGE.from, 1, true),
+        num('bannerFrom', 'ระดับเริ่มป้ายประกาศกลางจอ (+) ', FORGE_RANGE.from, 1, true),
         num('hiddenFrom', 'ระดับเริ่มซ่อนโอกาสเป็น ?? (+) ', FORGE_RANGE.from, 1, true)),
       h('div', { class: 'row bal-line' },
         num('orbMin', 'ระดับเริ่มมีลูกแก้ว (+) ', FORGE_RANGE.from, 1, true),
@@ -879,6 +911,57 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
+  // ---------------------------------------------------------- bag tabs + buying slots (src/shared/bagTabs.ts)
+  const bagCard = h('div', { class: 'card' });
+  const drawBag = (): void => {
+    const b = draft.bagExpand;
+    const cb = code.bagExpand;
+    const out = h('div', { class: 'muted' });
+    const refresh = (): void => {
+      // The price of each buy from 30 slots up to the top, as players would see it.
+      const rows: string[] = [];
+      for (let n = BAG_TAB_START, k = 0; n < b.max && k < 30; n += b.step, k++) {
+        const add = Math.min(b.step, b.max - n);
+        rows.push(`${n}→${n + add}: ${Math.round(b.goldBase * b.goldGrow ** k).toLocaleString()} G / ${Math.round(b.crystalBase * b.crystalGrow ** k).toLocaleString()} คริสตัล`);
+      }
+      out.textContent = rows.length ? `ราคาแต่ละครั้ง (ต่อแท็บ): ${rows.join(' · ')}` : 'ขยายไม่ได้ (สูงสุดไม่เกิน 30)';
+      updateSummary();
+    };
+    const flag = (k: 'on' | 'gold' | 'crystal') =>
+      h('label', { title: `ค่าในโค้ด: ${cb[k] ? 'เปิด' : 'ปิด'}` },
+        h('input', { type: 'checkbox', checked: b[k], onchange: (e: Event) => { b[k] = (e.target as HTMLInputElement).checked; refresh(); } }),
+        ` ${BAG_EXPAND_FLAG_NAME[k]}`);
+    const num = (k: keyof typeof BAG_EXPAND_NUMS, step: number) =>
+      h('label', {}, `${BAG_EXPAND_NUMS[k].name} `, numBox(() => b[k], (n) => { b[k] = BAG_EXPAND_NUMS[k].dp ? n : Math.round(n); }, cb[k], ...BAG_EXPAND_NUMS[k].range, step, refresh));
+    bagCard.replaceChildren(
+      h('h2', {}, 'กระเป๋า'),
+      h('div', { class: 'muted' }, 'กระเป๋ามี 2 แท็บ (เจ้าของ 2026-11-23): "กระเป๋า" ของสวมใส่ 30 ช่อง · "ประเภทใช้งาน" ยา หิน กุญแจ ขนนก ม้วน ใบคูณ โทรโข่ง กล่องปริศนา ลูกแก้ว 30 ช่อง · แท็บเต็ม = เก็บ/ซื้อ/รับไม่ได้'),
+      h('div', { class: 'muted' }, 'ขยายช่อง: ปิด = ผู้เล่นไม่เห็นปุ่มและ server ไม่รับ · เปิด = ปุ่มใต้ช่องกระเป๋า ขยายทีละแท็บ ต่อตัวละคร · ครั้งที่ k (เริ่ม 0) ราคา = ราคาครั้งแรก × ตัวคูณ^k · คริสตัลหักใน transaction เดียวกับการเซฟ · Guest จ่ายคริสตัลไม่ได้'),
+      h('div', { class: 'row bal-line' }, flag('on'), flag('gold'), flag('crystal')),
+      h('div', { class: 'row bal-line' }, num('step', 1), num('max', 10)),
+      h('div', { class: 'row bal-line' }, num('goldBase', 1000), num('goldGrow', 0.1)),
+      h('div', { class: 'row bal-line' }, num('crystalBase', 10), num('crystalGrow', 0.1)),
+      out,
+    );
+    refresh();
+  };
+
+  // ---------------------------------------------------------- English (docs/systems/i18n.md)
+  const langCard = h('div', { class: 'card' });
+  const drawLang = (): void => {
+    langCard.replaceChildren(
+      h('h2', {}, 'ภาษาอังกฤษ'),
+      h('div', { class: 'muted' },
+        'ผู้เล่นเลือกภาษา ไทย / English ได้ที่ เมนู → ตั้งค่า (ครั้งแรกเลือกตามภาษาของเบราว์เซอร์) มีผลตอนเปิดเกมครั้งถัดไป · ' +
+        'ปิด = ทุกคนเห็นภาษาไทย และซ่อนปุ่มเลือกภาษา (คนที่เปิดเกมค้างเป็นอังกฤษอยู่จะกลับเป็นไทยตอนเปิดเกมใหม่)'),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.english, onchange: (e: Event) => { draft.english = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' เปิดให้เลือกภาษาอังกฤษ'),
+      ),
+    );
+  };
+
   // ---------------------------------------------------------- Auto Play (src/shared/autoTuning.ts)
   const autoCard = h('div', { class: 'card' });
   const drawAuto = (): void => {
@@ -913,6 +996,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         h('label', {}, `${AUTO_DEFAULT_NAME.target} `, pick('target', AUTO_TARGET_MODES)),
       ),
       h('div', { class: 'row bal-line' },
+        h('label', {}, `${AUTO_DEFAULT_NAME.skillsOnly} `, pick('skillsOnly', [false, true])),
+        num('skillGap', 0.1),
+      ),
+      h('div', { class: 'muted' }, 'ใช้สกิลอย่างเดียว = Auto ไม่ตีธรรมดา ยืนรอสกิล (สกิลพร้อมแต่ไม่ถึงเป้า = เดินเข้าไปใกล้) · เว้นระหว่างสกิล = หลัง Auto กดสกิลหนึ่ง รอเท่านี้ก่อนกดสกิลถัดไป (0 = ไม่เว้น) ผู้เล่นตั้งเองได้ในหน้าต่างตั้งค่า Auto'),
+      h('div', { class: 'row bal-line' },
         h('label', {}, `${AUTO_DEFAULT_NAME.noHp} `, pick('noHp', AUTO_OUT_ACTIONS)),
         h('label', {}, `${AUTO_DEFAULT_NAME.noMp} `, pick('noMp', AUTO_OUT_ACTIONS)),
         h('label', {}, `${AUTO_DEFAULT_NAME.bagFull} `, pick('bagFull', AUTO_OUT_ACTIONS)),
@@ -941,6 +1029,18 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
           ' เดินต่อเมื่อสลับแท็บ'),
       ),
       h('div', { class: 'muted' }, 'เดินต่อเมื่อสลับแท็บ (ไม่ใช่ Auto): คลิกเดินไปจุดไกลแล้วสลับไปแท็บอื่น/พับจอ server พาเดินต่อจนถึงจุดที่คลิก (เดินตรงไป ไถลอ้อมของกลมชิ้นเดียวได้ ไม่หาทางอ้อมกำแพง ติดแทบไม่ขยับ 0.8 วิ = หยุด) · กลับมาที่แท็บ ตัวเลื่อนไปที่จริงแล้วเดินต่อเอง · ตาย/เปลี่ยนแมพ/วาร์ป/เทรด/หลุด = หยุด · ปิด = แบบเดิม สลับแท็บแล้วตัวหยุด'),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.shopNoEquip, onchange: (e: Event) => { draft.shopNoEquip = (e.target as HTMLInputElement).checked; refresh(); } }),
+          ' ห้ามถอด/สวมขณะเปิดร้านพ่อค้า'),
+      ),
+      h('div', { class: 'muted' }, 'ห้ามถอด/สวมขณะเปิดร้านพ่อค้า: ตอนหน้าต่างร้านพ่อค้าเปิด คลิก/ลาก/ปุ่มในรายละเอียดที่จะสวมหรือถอดอุปกรณ์ (และของแต่งตัวในกระเป๋าแฟชั่น) ไม่ทำงาน ขึ้นข้อความ "ปิดร้านก่อน" กันกดขายผิด · หน้าต่างอื่น (ช่างตีเหล็ก คลัง ตลาด) ไม่โดน · ยาที่เลือกให้ปุ่มด่วนไม่โดน · กันกดผิดฝั่งเบราว์เซอร์เท่านั้น (server ไม่รู้ว่าหน้าต่างร้านเปิดอยู่) · ปิด = ถอด/สวมได้ตามเดิม'),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.chatLinks, onchange: (e: Event) => { draft.chatLinks = (e.target as HTMLInputElement).checked; refresh(); } }),
+          ' ลิงก์ไอเทมในแชท'),
+      ),
+      h('div', { class: 'muted' }, 'ลิงก์ไอเทมในแชท: Ctrl+คลิกไอเทมในกระเป๋า/ชุดที่ใส่/คลัง/ร้านพ่อค้า = ใส่ [ชื่อไอเทม] ในช่องแชท (หรือโทรโข่งถ้าเปิดอยู่) ข้อความละไม่เกิน 3 ชิ้น · คนที่เห็นคลิกชื่อ (สีตามความหายาก) เปิดหน้าต่างข้อมูลของชิ้นนั้นตอนส่ง (+ตีบวก ค่าที่สุ่มได้) · server หาของจริงในตัวผู้ส่งเอง ปลอมไม่ได้ · ปิด = server ไม่ส่งลิงก์ (ชื่อเป็นข้อความธรรมดา) และ Ctrl+คลิกไม่ทำอะไร'),
       h('div', { class: 'muted' }, 'หลุดการเชื่อมต่อขณะเปิด Auto (ไม่ได้กดออกเกม): ตัวละครอยู่ในโลกต่อ Auto ฟาร์มเหมือนปกติ (EXP 50%) จนครบเวลา, Auto หยุดตามตัวเลือก (ยาหมด/กระเป๋าเต็ม/ม้วน) หรือตาย แล้วเซฟและออกจากโลก · เข้าเกมใหม่ = ได้ตัวที่กำลังฟาร์มคืน Auto ยังเปิด · ไม่รวม Guest และห้องบอส · ปิดสวิตช์ = คนที่ฟาร์มแบบหลุดอยู่ออกจากโลกทันที'),
     );
   };
@@ -976,6 +1076,8 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('select', { onchange: (e: Event) => { a[k] = Number((e.target as HTMLSelectElement).value); refresh(); drawFx(); } },
         ...GFX_LEVELS.map((t, i) => h('option', { value: String(i), selected: a[k] === i }, t)).reverse()));
     const gfxOn = h('input', { type: 'checkbox', checked: a.gfxMenu, onchange: (e: Event) => { a.gfxMenu = (e.target as HTMLInputElement).checked; refresh(); } });
+    const enhSmoothOn = h('input', { type: 'checkbox', checked: a.enhAuraSmooth, onchange: (e: Event) => { a.enhAuraSmooth = (e.target as HTMLInputElement).checked; refresh(); } });
+    const enhFrontOn = h('input', { type: 'checkbox', checked: a.enhOrbGlowFront, onchange: (e: Event) => { a.enhOrbGlowFront = (e.target as HTMLInputElement).checked; refresh(); } });
     const nearOn = h('input', { type: 'checkbox', checked: a.orbsNearBar, onchange: (e: Event) => { a.orbsNearBar = (e.target as HTMLInputElement).checked; refresh(); } });
     fxCard.replaceChildren(
       h('h2', {}, 'เอฟเฟกต์สกิล (ชั้นเสริม)'),
@@ -984,6 +1086,8 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'row bal-line' }, num('glow', 0.1), num('ground', 0.1), num('particles', 0.1)),
       h('div', { class: 'row bal-line' }, num('shake', 0.1), num('hitstopMs', 5), num('crit', 0.1)),
       h('div', { class: 'row bal-line' }, flag(circlesOn, a.circles !== ca.circles, ' วงเวทบนพื้น (ใต้มอนติดดีบัฟ ใต้ผู้เล่นติดบัฟ และพื้นที่สกิลวงกว้าง)'), flag(zoneCirclesOn, a.zoneCircles !== ca.zoneCircles, ' สกิลวงกว้างเป็นวงเวทอย่างเดียว (ปิด = ภาพพื้นที่เดิม)'), num('circleGlow', 0.1)),
+      h('div', { class: 'row bal-line' }, num('slashLift', 0.05), num('craterBack', 0.05)),
+      h('div', { class: 'row bal-line' }, num('townEdge', 0.1), num('townRound', 0.5), h('span', { class: 'muted' }, ' มีผลตอนโหลดแมพเมืองครั้งถัดไป')),
       h('div', { class: 'muted' }, 'ภาพค้างจริง = ค่านี้ × ความหนักของท่า (0–1) และไม่เกิน 120 ms · ตอนนี้เปิดชั้นเสริมให้พายุดาบท่าเดียวก่อน'),
       h('h3', {}, 'อนุภาค three.quarks (ทดลอง)'),
       h('div', { class: 'row bal-line' }, flag(quarksOn, a.quarks !== ca.quarks, ' ใช้ three.quarks วาดอนุภาคของสกิล')),
@@ -1005,8 +1109,20 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'muted' }, 'ตัวเลขบนจอสูงสุด: เกินแล้วอันเก่าสุดหาย (ค่าในโค้ด 40 เดิม 120) · รวมเลข: ดาเมจบนเป้าเดียวกันในช่วงเวลานี้รวมเป็นเลขเดียว (คริรวมกับคริ ธรรมดารวมกับธรรมดา เลขที่ตัวเองโดนก็รวม) · เห็นเฉพาะของตัวเอง: เห็นแค่ดาเมจที่ตัวเองตีและที่ตัวเองโดน (server ไม่ส่งของคนอื่นมาเลย) ข้อความอื่นยังเห็นเหมือนเดิม'),
       h('h3', {}, 'ภาพกระดาษ: กรอบชื่อ ฟองแชท รอยเท้าออร่า ลูกแก้วตีบวก'),
       h('div', { class: 'row bal-line' }, num('paperPlate', 0.05), num('paperBubble', 0.05), num('paperFoot', 0.1)),
+      h('h3', {}, 'ช่องไอเทม (ทุกหน้าต่าง)'),
+      h('div', { class: 'row bal-line' }, num('slotCorner', 0.1), num('slotInset', 0.1), num('slotIcon', 0.05)),
+      h('div', { class: 'muted' }, 'ปรับกรอบช่องไอเทมทุกช่องพร้อมกัน (กระเป๋า ช่องสวม คลัง ร้าน ตลาด เทรด ตีบวก แฟชั่น) · 1 = ค่าในโค้ด'),
       h('div', { class: 'row bal-line' }, num('paperOrbLight', 0.01), num('paperOrbShade', 0.05)),
-      h('div', { class: 'muted' }, 'มีผลเฉพาะตอนเปิดสวิตช์ภาพกระดาษ (แท็บ Server) · ขนาดออร่า/ความทึบ/ระยะรอยเท้ารายชิ้นอยู่ในแท็บของแต่งตัว · กรอบชื่อเปลี่ยนเมื่อมีคนสวม/ถอดหรือรีโหลด ลูกแก้วเปลี่ยนทันที'),
+      h('div', { class: 'row bal-line' }, num('plateMaxW', 10), num('platePadY', 1), num('platePadX', 1)),
+      h('div', { class: 'row bal-line' }, num('bubbleMaxW', 10), num('bubblePadY', 1), num('bubblePadX', 1)),
+      h('div', { class: 'muted' }, 'มีผลเฉพาะตอนเปิดสวิตช์ภาพกระดาษ (แท็บ Server) · ขนาดออร่า/ความทึบ/ระยะรอยเท้ารายชิ้นอยู่ในแท็บของแต่งตัว · กรอบชื่อ/ฟองแชทยืดตามความยาวข้อความเอง (9 ช่อง ซ้ำขอบเรียบ มุมและลายกลางไม่ถูกบีบ) ความกว้างสุดใช้กับชื่อ/ฟองธรรมดาด้วย ขอบในใช้กับกรอบกระดาษ · กรอบชื่อเปลี่ยนเมื่อมีคนสวม/ถอดหรือรีโหลด ลูกแก้วเปลี่ยนทันที'),
+      h('h3', {}, 'ออร่าตีบวกใต้เท้า (+7/+10/+13/+15)'),
+      h('div', { class: 'row bal-line' }, flag(enhSmoothOn, a.enhAuraSmooth !== ca.enhAuraSmooth, ' ขอบนุ่ม (ไม่กะพริบ)'), num('enhAuraPulse', 0.01), num('enhAuraBreath', 0.01), num('enhAuraSpeed', 0.5)),
+      h('div', { class: 'muted' }, 'ขอบนุ่ม เปิด (ค่าในโค้ด): ภาพแสงกรองแบบนุ่ม ขอบไม่กระโดดตอนหดขยาย · ปิด = ขอบพิกเซลแบบเดิม ซึ่งกะพริบตอนหดขยาย ยิ่ง +13/+15 (ใหญ่และสว่าง) ยิ่งเห็นชัด · หดขยาย 0.08 = ขนาด ±8% (ค่าเดิม) ยิ่งน้อยยิ่งนิ่ง · สว่างหรี่ 0 = ความสว่างคงที่ (ค่าเดิม) ใส่ 0.1–0.2 ให้หายใจด้วยความสว่างแทนขนาดได้ · ความเร็ว 3 = รอบละราว 2 วินาที · ประกายที่ลอยขึ้นจากออร่ายังเหมือนเดิม · มีผลกับทุกคนทันทีหลังบันทึก'),
+      h('div', { class: 'row bal-line' }, num('enhAuraGlow', 0.05)),
+      h('div', { class: 'row bal-line' }, num('enhSparkGlow', 0.05), num('enhSparkRate', 0.1), num('enhSparkFadeIn', 0.05)),
+      h('div', { class: 'row bal-line' }, flag(enhFrontOn, a.enhOrbGlowFront !== ca.enhOrbGlowFront, ' แสงลูกแก้วตีบวกอยู่หน้าลูก (ปิด = หลังลูก)'), num('enhOrbBackFade', 0.1)),
+      h('div', { class: 'muted' }, 'ประกาย = จุดแสงที่ลอยขึ้นจากออร่า +10 ขึ้นไป (ในโค้ด +10/+13/+15 = 3/6/12 ต่อวิ) เวลาค่อย ๆ สว่าง 0 = สว่างทันทีแบบเดิม · แสงลูกแก้วหน้าลูก (ค่าในโค้ด) = แสงทับตัวลูก ดูสว่าง · หลังลูก = ตัวลูกคมกว่า แสงหรี่ลงเล็กน้อย · ทั้งสองแบบไม่กะพริบ · แสงลูกแก้วที่อยู่หลังตัวจางลง: ตอนวิ่ง ขา/แขนที่ขยับตัดแสงของลูกด้านหลังต่างกันทุกเฟรม ค่านี้ทำให้แสงของลูกด้านหลังจางลง (ค่าในโค้ด 1 = หายหมด, 0 = แบบเดิม)'),
       h('h3', {}, 'ตำแหน่งลูกแก้ว HP/MP'),
       h('div', { class: 'row bal-line' }, flag(nearOn, a.orbsNearBar !== ca.orbsNearBar, ' ลูกแก้วชิดแถบสกิล (ปิด = มุมล่างซ้าย/ขวาของจอ)')),
       h('div', { class: 'muted' }, 'เปิด (ค่าในโค้ด): บนจอคอมกว้าง ≥ 1000px ลูกแก้ว HP ชิดซ้ายของแถบสกิล MP ชิดขวา ดูเป็นแผงเดียวกัน (จอกว้าง ≥ 1850px แชทกับข้อความระบบลงมาที่มุมซ้ายล่าง) · จอแคบกว่านั้นและมือถือใช้มุมจอเหมือนเดิม (มือถือใช้แถบ HP/MP อยู่แล้ว) · ผู้เล่นที่เลือก "HP/MP: แถบ" ในเกมไม่ได้รับผล · มีผลกับทุกคนทันทีหลังบันทึก'),
@@ -1069,6 +1185,14 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'muted' }, 'ทุกสกิลมีวงเวทไม่ซ้ำกัน (โชว์ใต้มอนที่โดนดีบัฟของสกิลนั้น ใต้ผู้เล่นที่ได้บัฟของสกิลนั้น และบนพื้นที่สกิลวงกว้าง) ภาพหมุนตัวอย่างอยู่หน้าชื่อ · เอฟเฟกต์โค้ดเล่นทับภาพเดิมตอนร่าย 1 ครั้งต่อจุด · ค่าในโค้ด: เปิด ×1 · มีผลกับทุกคนทันทีหลังบันทึก'),
       h('div', { class: 'row bal-line' }, h('label', { class: a.extras !== ca.extras ? 'bal-changed' : '' }, extrasOn, ' เอฟเฟกต์โค้ดของสกิล (ทับภาพเดิม)'),
         h('label', {}, FX_LAYER_NAME.extrasK, numBox(() => a.extrasK, (n) => { a.extrasK = n; }, ca.extrasK, FX_LAYER_RANGE.extrasK[0], FX_LAYER_RANGE.extrasK[1], 0.1, refresh))),
+      // Bosses' skills (owner 2026-11-21, src/client/bossFx.ts)
+      h('h3', {}, 'สกิลบอส (หมี แม่มด เยติ หัวใจภูเขาไฟ)'),
+      h('div', { class: 'row bal-line' },
+        h('label', { class: a.bossFx !== ca.bossFx ? 'bal-changed' : '' },
+          h('input', { type: 'checkbox', checked: a.bossFx, onchange: (e: Event) => { a.bossFx = (e.target as HTMLInputElement).checked; refresh(); } }), ' ภาพเอฟเฟกต์สกิลบอส (ปิด = ภาพแบบเดิม ท่าตีตอนร่ายยังเล่น)'),
+        h('label', { class: a.bossExtras !== ca.bossExtras ? 'bal-changed' : '' },
+          h('input', { type: 'checkbox', checked: a.bossExtras, onchange: (e: Event) => { a.bossExtras = (e.target as HTMLInputElement).checked; refresh(); } }), ' เอฟเฟกต์โค้ดทับภาพ'),
+        h('label', {}, FX_LAYER_NAME.bossExtrasK, numBox(() => a.bossExtrasK, (n) => { a.bossExtrasK = n; }, ca.bossExtrasK, FX_LAYER_RANGE.bossExtrasK[0], FX_LAYER_RANGE.bossExtrasK[1], 0.1, refresh))),
       ...CLASS_IDS.flatMap((cid) => [h('h3', {}, CLASSES[cid].nameTh ?? cid), ...CLASSES[cid].skills.map((s) => row(s.id, s.nameTh))]),
       h('h3', {}, 'วงเวทตอนไม่รู้ว่ามาจากสกิลไหน'),
       ...CIRCLE_FALLBACKS.map((k) => row(k, FALLBACK_NAME[k] ?? k)),
@@ -1103,6 +1227,25 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         h('label', {}, '× เวลาหยุดตอนใช้สกิล (เทียบกับตีธรรมดา) ', numBox(() => r.skillMult, (n) => { r.skillMult = n; }, cr.skillMult, ATTACK_ROOT_RANGE.skillMult[0], ATTACK_ROOT_RANGE.skillMult[1], 0.1, refresh))),
       h('div', { class: 'muted' }, 'ตีธรรมดาหยุดไม่นานกว่าท่าโจมตี (ท่ายาว 0.95 ÷ ความเร็วตี ไม่เกิน 0.5 วิ: ดาบ/เวท ~0.5 ปืน ~0.37 ตีเร็วขึ้นท่าก็สั้นลง) · สกิลหยุด = เวลาตีธรรมดาของอาชีพ × ตัวคูณ · 0 = ไม่หยุด'),
       h('div', { class: 'muted' }, `สกิลที่ไม่หยุด (ท่าพุ่ง/กระโดดถอย/หายตัว และบัฟ): ${[...NO_ATTACK_ROOT].map(skillName).join(', ')} · สกิลที่ยืนเล็ง/ชาร์จเองอยู่แล้ว (ยิงหัว ยิงประณีต รางแม่เหล็ก เวทชาร์จ ปลดปล่อยพลัง) ใช้เวลาของสกิลนั้นแทน`),
+    );
+  };
+
+  // ---------------------------------------------------------- sound effect groups (src/shared/audioTuning.ts)
+  const audioCard = h('div', { class: 'card' });
+  const drawAudio = (): void => {
+    const refresh = (): void => { updateSummary(); };
+    audioCard.replaceChildren(
+      h('h2', {}, 'เสียงเอฟเฟกต์'),
+      h('div', { class: 'muted' }, 'เปิด/ปิดและความดังของเสียงแต่ละหมวดทั้งเซิร์ฟ · คูณกับแถบเลื่อนของผู้เล่นในหน้าต่างเสียง · เสียงทุกอันสังเคราะห์ด้วยโค้ด (src/client/audio/sfx.ts) · ค่าในโค้ด: เปิด ×1 · มีผลกับทุกคนทันทีหลังบันทึก'),
+      ...SFX_GROUPS.map((g) => {
+        const c = draft.audio.groups[g];
+        const cc = code.audio.groups[g];
+        const on = h('input', { type: 'checkbox', checked: c.on, onchange: (e: Event) => { c.on = (e.target as HTMLInputElement).checked; refresh(); drawAudio(); } });
+        return h('div', { class: 'row bal-line' },
+          h('label', { class: c.on !== cc.on ? 'bal-changed' : '' }, on, ` เสียง${SFX_GROUP_NAME[g]}`),
+          h('label', {}, ' × ความดัง ', numBox(() => c.gain, (n) => { c.gain = n; }, cc.gain, AUDIO_GAIN_RANGE[0], AUDIO_GAIN_RANGE[1], 0.1, refresh)));
+      }),
+      h('div', { class: 'muted' }, 'สกิลผู้เล่น = ตีธรรมดา พุ่งหลบ ทุกสกิล และเสียงตอนสกิลลง · บอส = ตีธรรมดา ท่าสกิล เข้าเฟส/คลั่ง บอสปรากฏ นับถอยหลังบอสเกิด บอสตาย · มอน = มอนโดนตี คริติคอล มอนตาย มอนเง้าตีเรา มอนเห็นเรา · ตัวละครและไอเทม = เจ็บ ตาย ฟื้น เลเวลอัป วาร์ป ฝีเท้า เก็บของ ของดรอปตามความหายาก ดื่มยา ซื้อขาย ตีบวก แคชช็อป เปิดกล่องสุ่ม · หน้าต่างและการแจ้งเตือน = คลิกปุ่ม เปิด/ปิดหน้าต่าง แชท จดหมาย คำเชิญ เควสสำเร็จ · บรรยากาศแมพ = นก กบ ลม ลาวา เสียงเมือง (สุ่มเป็นระยะ)'),
     );
   };
 
@@ -1236,16 +1379,20 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawMonsters();
     drawExp();
     drawPotions();
+    drawBag();
     drawForge();
     drawSets();
     drawFloor();
     drawMoves();
+    drawLang();
     drawAuto();
     drawTut();
     drawFx();
     drawCircles();
     drawRoot();
+    drawAudio();
     drawRig();
+    applyFilter(); // redrawn cards keep the chosen category / search
   };
   const save = async (body: { tuning: BalanceTuning; part: 'rest' } | { reset: true; part: 'rest' }, ask: string): Promise<void> => {
     if (!confirm(ask)) return;
@@ -1294,7 +1441,51 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     msg,
   );
 
-  box.replaceChildren(fold.toc, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, forgeCard, setCard, floorCard, moveCard, autoCard, tutCard, fxCard, circleCard, rootCard, rigCard, bar);
+  // Category buttons + search box (owner 2026-11-22). Cards are only hidden with CSS (`.cat-hide`), never removed.
+  const CATS: { name: string; cards: HTMLElement[] }[] = [
+    { name: 'อาชีพ', cards: [classCard, regenCard, rootCard, rigCard] },
+    { name: 'มอน-บอส', cards: [monsterCard, moveCard] },
+    { name: 'ไอเทม-ตีบวก-ยา', cards: [affixCard, tierCard, previewCard, potionCard, bagCard, forgeCard, setCard] },
+    { name: 'Auto Play', cards: [autoCard] },
+    { name: 'เอฟเฟกต์-เสียง', cards: [fxCard, circleCard, audioCard] },
+    { name: 'ระบบ-อื่นๆ', cards: [expCard, floorCard, tutCard, langCard] },
+  ];
+  const ALL = 'ทั้งหมด';
+  const CAT_KEY = 'adminBalanceCat';
+  let curCat = CATS[0].name;
+  try {
+    const s = localStorage.getItem(CAT_KEY);
+    if (s === ALL || CATS.some((c) => c.name === s)) curCat = s as string;
+  } catch { /* storage blocked: default */ }
+  const search = h('input', { type: 'search', class: 'bal-search', placeholder: '🔍 ค้นหาการ์ดหรือชื่อค่า', autocomplete: 'off' }) as HTMLInputElement;
+  const noHit = h('div', { class: 'muted bal-nohit' }, 'ไม่พบ');
+  noHit.style.display = 'none';
+  const catBar = h('nav', { class: 'cat-bar' });
+  function applyFilter(): void {
+    const q = search.value.trim().toLowerCase();
+    let shown = 0;
+    for (const cat of CATS) {
+      for (const c of cat.cards) {
+        const inCat = curCat === ALL || cat.name === curCat;
+        const hit = q ? (c.textContent ?? '').toLowerCase().includes(q) : inCat;
+        c.classList.toggle('cat-hide', !hit);
+        if (hit) shown++;
+      }
+    }
+    noHit.style.display = shown ? 'none' : '';
+    catBar.replaceChildren(...[ALL, ...CATS.map((c) => c.name)].map((name) => {
+      const b = h('button', { type: 'button', class: !q && name === curCat ? 'chip active' : 'chip', onclick: () => {
+        curCat = name;
+        search.value = '';
+        try { localStorage.setItem(CAT_KEY, name); } catch { /* ignore */ }
+        applyFilter();
+      } }, name);
+      return b;
+    }));
+    fold.refreshToc();
+  }
+  search.addEventListener('input', applyFilter);
+
+  box.replaceChildren(h('div', { class: 'cat-top' }, catBar, search), fold.toc, noHit, classCard, regenCard, affixCard, tierCard, previewCard, monsterCard, expCard, potionCard, bagCard, forgeCard, setCard, floorCard, moveCard, autoCard, tutCard, fxCard, circleCard, rootCard, audioCard, rigCard, langCard, bar);
   redraw();
-  fold.refreshToc();
 }

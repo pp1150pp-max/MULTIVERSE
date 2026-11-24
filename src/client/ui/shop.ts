@@ -6,6 +6,7 @@ import { buybackPrice } from '../../shared/sim/Player';
 import { isBulkSellable } from '../../shared/sim/Sim';
 import { isPotion, isStack, isStone, RARITIES, RARITY_COLOR, RARITY_LABEL, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity, type StoneStack } from '../../shared/types';
 import { COIN_ICON, potionIcon, stoneIcon } from '../icons';
+import { currentBalance } from '../../shared/balance';
 import { $, entryColor, POTION_COLOR, potionTotals } from './hudShared';
 
 const SELL_RARITY_KEY = 'multiverse-sell-rarities';
@@ -59,7 +60,7 @@ export class ShopWindow {
         this.host.log(`ทองไม่พอ — ต้องใช้ ${price.toLocaleString()} G`, '#ff8a6a');
         return;
       }
-      if (!g.player.hasBagSpace()) {
+      if (!g.player.hasBagSpace('gear')) {
         this.host.log('กระเป๋าเต็ม', '#ff8a6a');
         return;
       }
@@ -132,6 +133,13 @@ export class ShopWindow {
   /** True while the merchant window is open. */
   get isOpen(): boolean {
     return this.shopOpen;
+  }
+
+  /** True (with a log line) when wearing/taking off must be refused because the merchant window is open (Balance.shopNoEquip). */
+  blocksEquip(): boolean {
+    if (!this.shopOpen || !currentBalance().shopNoEquip) return false;
+    this.host.log('ปิดร้านก่อนถึงจะถอด/สวมได้', '#ff8a6a');
+    return true;
   }
 
   // ------------------------------------------------------------ merchant

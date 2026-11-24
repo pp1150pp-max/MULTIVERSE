@@ -5,12 +5,14 @@
 // stones are mailed to the account; any failure rolls all of it back.
 import type { Db } from './db';
 import {
-  CASH_SETTING, cashBuyError, cashCatalog, checkCashShop, CURRENCY, emptyCashShop,
+  CASH_SETTING, cashBuyError, cashCatalog, checkCashShop, CURRENCY, emptyCashShop, vipBuyError, vipItemId,
   type CashCatalog, type CashShopCfg, type CashState,
 } from '../src/shared/cashShop';
 import { cosById } from '../src/shared/data/cosmetics';
+import { boxNow } from '../src/shared/mysteryBox';
 import { STONE_NAME } from '../src/shared/data/stones';
 import { MAIL_MS, type MailAttach } from '../src/shared/mail';
+import { vipExtend, vipLeftText } from '../src/shared/vip';
 
 /** Who the purchase mail says it is from. */
 export const CASH_SENDER = 'แคชช็อป';
@@ -18,7 +20,7 @@ export const CASH_SENDER = 'แคชช็อป';
 /** Thrown inside the transaction to roll it back with a reason for the buyer. */
 class Refused extends Error {}
 
-export type CashBuyResult = { ok: true; msg: string; kind: 'cos' | 'stone' } | { ok: false; msg: string };
+export type CashBuyResult = { ok: true; msg: string; kind: 'cos' | 'stone' | 'vip' } | { ok: false; msg: string };
 
 export class CashShop {
   constructor(private readonly db: Db, private readonly now: () => number = Date.now) {}
@@ -36,17 +38,45 @@ export class CashShop {
 
   /** Saves settings already checked strictly (all defaults = no row). */
   setCfg(cfg: CashShopCfg): void {
-    const empty = !cfg.open && !Object.keys(cfg.items).length && !cfg.packages.length;
+    const empty = !cfg.open && !Object.keys(cfg.items).length && !cfg.packages.length && !cfg.vip.length;
     this.db.setSetting(CASH_SETTING, empty ? null : JSON.stringify(cfg));
   }
 
   /** What players are sent now. */
   catalog(): CashCatalog {
-    return cashCatalog(this.cfg(), this.db.cosShop(), this.now());
+    return cashCatalog(this.cfg(), this.db.cosShop(), this.now(), !boxNow().orbsInShop);
   }
 
   state(accountId: number, guest: boolean): CashState {
-    return guest ? { crystals: 0, bought: {} } : { crystals: this.db.crystals(accountId), bought: this.db.cashBought(accountId) };
+    return guest
+      ? { crystals: 0, bought: {}, vipUntil: 0 }
+      : { crystals: this.db.crystals(accountId), bought: this.db.cashBought(accountId), vipUntil: this.db.vipUntil(accountId) };
+  }
+
+  /**
+   * Buys a VIP package (`days` at `price`, as the buyer saw it): the crystals are taken, the VIP end moves
+   * on by the days (from now, or from the old end if it still runs) and the purchase is recorded, in one
+   * transaction.
+   */
+  buyVip(b: { accountId: number; guest: boolean; charId: number; charName: string; days: unknown; price: unknown }): CashBuyResult {
+    const now = this.now();
+    const err = vipBuyError(this.catalog(), b.days, b.price, this.state(b.accountId, b.guest), b.guest);
+    if (err) return { ok: false, msg: err };
+    const days = b.days as number;
+    const price = b.price as number;
+    let until = 0;
+    try {
+      this.db.transaction(() => {
+        if (!this.db.crystalsSpend(b.accountId, price)) throw new Refused(`${CURRENCY}ไม่พอ`);
+        until = vipExtend(this.db.vipUntil(b.accountId), days, now);
+        this.db.setVipUntil(b.accountId, until);
+        this.db.cashPurchaseAdd({ accountId: b.accountId, charId: b.charId, charName: b.charName, item: vipItemId(days), qty: 1, price, at: now });
+      });
+    } catch (x) {
+      if (x instanceof Refused) return { ok: false, msg: x.message };
+      throw x;
+    }
+    return { ok: true, kind: 'vip', msg: `ซื้อ VIP ${days} วันแล้ว (−${price.toLocaleString('en-US')} ${CURRENCY}) · VIP เหลือ ${vipLeftText(until, now)}` };
   }
 
   /** One purchase; every value from the browser is checked here. */

@@ -17,6 +17,8 @@ const FLOOR2_ART = ['floor2_1', 'floor2_2'];
 /** How long the zone-change screen stays up, then how long it fades out (ms). */
 const ZONE_HOLD = 3000;
 const ZONE_FADE = 300;
+/** Longest the first-entry screen waits for its picture before the game files start downloading (ms). */
+const ART_WAIT = 2500;
 
 const TIPS = [
   'กด T ใกล้น้ำพุหรือกองไฟ เพื่อฟื้น HP และ MP',
@@ -60,8 +62,13 @@ export function preloadLoadingArt(): void {
 const el = (): HTMLElement => document.getElementById('loading')!;
 let fadeTimer = 0;
 let hideTimer = 0;
+/** Changes the picture every SWAP_SEC while the screen is up (owner 2026-11-23, no /admin setting). */
+const SWAP_SEC = 15;
+let swapTimer = 0;
 
 export interface LoadingScreen {
+  /** Its picture has loaded (or failed, or ART_WAIT passed): the other downloads may start. */
+  ready: Promise<void>;
   /** 0..1 */
   progress(f: number): void;
   hide(): void;
@@ -71,23 +78,50 @@ export interface LoadingScreen {
 export function showLoading(classId: ClassId | null, label = 'กำลังโหลดภาพในเกม…', floor = 1): LoadingScreen {
   clearTimeout(fadeTimer);
   clearTimeout(hideTimer);
+  clearInterval(swapTimer);
   const root = el();
   root.innerHTML =
     `<div class="load-box"><div>${label} <span class="load-pct">0%</span></div>` +
     '<div class="load-bar"><i></i></div><p class="load-tip"></p></div>';
   root.querySelector('.load-tip')!.textContent = `เคล็ดลับ: ${pick(TIPS)}`;
-  root.style.backgroundImage = `url(${imgUrl(artUrl(classId, floor))})`;
+  // The picture first (owner 2026-11-23: it showed up late behind the game's own downloads, the screen stayed blank).
+  // Floor 2 swaps between its own pictures (FLOOR2_PLAN.md 10).
+  let url = imgUrl(artUrl(classId, floor));
+  const img = new Image();
+  img.fetchPriority = 'high';
+  const ready = new Promise<void>((done) => {
+    const go = (): void => {
+      root.style.backgroundImage = `url(${url})`;
+      done();
+    };
+    img.onload = img.onerror = go;
+    window.setTimeout(go, ART_WAIT);
+  });
+  img.src = url;
+  swapTimer = window.setInterval(() => {
+    // Another picture, shown once it has loaded (they are preloaded on the menu).
+    let next = url;
+    for (let i = 0; i < 5 && next === url; i++) next = imgUrl(artUrl(classId, floor));
+    url = next;
+    const n = new Image();
+    n.onload = () => {
+      root.style.backgroundImage = `url(${next})`;
+    };
+    n.src = next;
+  }, SWAP_SEC * 1000);
   root.classList.add('load-art');
   root.classList.remove('hidden', 'load-out');
   const pct = root.querySelector<HTMLElement>('.load-pct')!;
   const fill = root.querySelector<HTMLElement>('.load-bar i')!;
   return {
+    ready,
     progress(f) {
       const p = `${Math.floor(Math.max(0, Math.min(1, f)) * 100)}%`;
       if (pct) pct.textContent = p;
       fill.style.width = p;
     },
     hide() {
+      clearInterval(swapTimer);
       root.classList.add('hidden');
     },
   };

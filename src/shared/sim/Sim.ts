@@ -10,19 +10,20 @@ import { inBossArena, lairExitSpot, LAVA_BURN, LAVA_TICK } from '../data/zones';
 import type { Hazard } from './volcanoHeart';
 import { stealReturn, thornsReflect } from './beachMoves';
 import {
-  announceFrom, dropsOnFail, forgeCd, enhanceCost, itemName, maxPlus, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
+  announceFrom, bannerFrom, dropsOnFail, forgeCd, enhanceCost, itemName, maxPlus, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
 } from '../data/enhance';
-import { entryName, potionName, POTION_STACK, potionPrice, stackLimit } from '../data/potions';
-import { BOSS_KEY, BOSS_QUEST_KEY, BOSS_STONE_CHANCE, BOUND_MSG, BUFF_LABEL, BUFF_MAX, BUFF_MULT, BUFF_TIME, fmtBuff, PHOENIX_PRICE, QUEST_KILLS, REVIVES_PER_KEY, STONE_STACK, KEY_DROP_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, RETURN_CAST, RETURN_SCROLL_PRICE, STONE_COLOR, STONE_NAME } from '../data/stones';
+import { dropPotionSize, entryName, potionName, POTION_STACK, potionPrice, stackLimit } from '../data/potions';
+import { BOX_OPEN_COOLDOWN, BOSS_KEY, BOSS_QUEST_KEY, BOSS_STONE_CHANCE, BOUND_MSG, BUFF_LABEL, BUFF_MAX, BUFF_MULT, BUFF_TIME, fmtBuff, PHOENIX_PRICE, QUEST_KILLS, REVIVES_PER_KEY, STONE_STACK, KEY_DROP_CHANCE, MONSTER_STONE_CHANCE, MONSTER_STONES, REROLL_STONE, RETURN_CAST, RETURN_SCROLL_PRICE, STONE_COLOR, STONE_NAME } from '../data/stones';
 import { NPC_USE_RANGE, npcLook, type NpcId } from '../data/npcs';
-import { pick, rand, randInt } from '../rng';
+import { pick, rand, randInt, type Rng } from '../rng';
 import { splitExp } from '../party';
 import { CLASS_IDS, SLOT_KIND, WEAR_SLOTS, type WearSlot } from '../data/classes';
 import { emptySkillBook, learnable, learnBlock, pointsSpent, rankOf, refundPrice, unlearnOne, wear, wearBlock } from '../skillBook';
 import { classBalance, currentBalance, packCount } from '../balance';
+import { vipDropMult, vipExp } from '../vip';
 import { COS_SLOT_NAME, cosById, MOUNT_CALM } from '../data/cosmetics';
 import {
-  isBound, isBuffScroll, isItem, isPotion, isStack, isStone, RARITY_LABEL, sameStack, SLOT_LABEL, BLACKSMITH_STONES, BUFF_SCROLLS, type BagEntry, type BuffScroll, type Item, type StoneKind, type PotionKind, type PotionSize, type Rarity } from '../types';
+  isBound, isBuffScroll, isOrbStone, type OrbStoneKind, isItem, isPotion, isStack, isStone, RARITY_LABEL, sameStack, SLOT_LABEL, BLACKSMITH_STONES, BUFF_SCROLLS, type BagEntry, type BuffScroll, type Item, type StoneKind, type PotionKind, type PotionSize, type Rarity } from '../types';
 import { PORTAL_RANGE, REST_CD, restSpotNear, Terrain, type RestSpot } from './terrain';
 import {
   BUYBACK_RESET, buybackPrice, cleanAutoSettings, lootPots, Player, sortEntries,
@@ -42,11 +43,13 @@ import { HARBOR_ID } from '../data/harbor';
 import { GEAR_KILLS, GEAR_PART_NAME, gearReward, gearRow } from '../gearQuests';
 import { TUT_ACCEPT_GOLD, TUT_ACCEPT_STONES, TUT_NPC, TUT_STEPS, TUT_STEP_NAME, TUT_TASKS, TUT_TASK_NAME, tutRows, tutTurnInReward, type TutStep, type TutTask } from '../tutorial';
 import { putAll, type MailAttach } from '../mail';
+import { freeSlot, nextExpand, TAB_FULL, TAB_NAME, tabOf, type BagSlots, type BagTab } from '../bagTabs';
 import { RARITY_COLOR } from '../types';
 import { passiveOnCrit, passiveDealMult, passiveTakenMult } from '../passives';
 import type { MapData } from '../mapSchema';
 import { waveCount, waveStats, type WaveConfig } from '../waveGame';
 import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type SfxName, type SimEvent } from './types';
+import { boxNow, boxOdds, boxOrbs, rollBoxRow, type BoxRow } from '../mysteryBox';
 
 /** Gear of this rarity that "sell all" may take: never potions or enhanced items. */
 /** Seconds of warning before a freshly summoned minion pounces. */
@@ -97,9 +100,11 @@ function dropOnto(src: (BagEntry | null)[], i: number, dst: (BagEntry | null)[],
  * Moves src[i] into dst wherever it fits. Potions and stones top up matching stacks first, then fill an empty slot;
  * if only part fits, that part moves. Returns false when nothing moved.
  */
-function fillInto(src: (BagEntry | null)[], i: number, dst: (BagEntry | null)[]): boolean {
+function fillInto(src: (BagEntry | null)[], i: number, dst: (BagEntry | null)[], dstTabs?: BagSlots): boolean {
   const a = src[i];
   if (!a) return false;
+  // Into the bag: only empty slots of the tab it belongs in (the stash has no tabs).
+  const empty = (): number => (dstTabs ? freeSlot(dst, dstTabs, tabOf(a)) : dst.indexOf(null));
   if (isStack(a)) {
     const before = a.count;
     for (const e of dst) {
@@ -111,7 +116,7 @@ function fillInto(src: (BagEntry | null)[], i: number, dst: (BagEntry | null)[])
       }
     }
     if (a.count > 0) {
-      const k = dst.indexOf(null);
+      const k = empty();
       if (k >= 0) {
         dst[k] = { ...a };
         a.count = 0;
@@ -120,7 +125,7 @@ function fillInto(src: (BagEntry | null)[], i: number, dst: (BagEntry | null)[])
     if (a.count <= 0) src[i] = null;
     return a.count < before;
   }
-  const k = dst.indexOf(null);
+  const k = empty();
   if (k < 0) return false;
   dst[k] = a;
   src[i] = null;
@@ -558,6 +563,7 @@ export class Sim {
     const sub = phase >= 2 ? 'ท่าเร็วขึ้นอีกขั้น เตือนสั้นลง' : 'ท่าเร็วขึ้น และซ้อนกันได้ 2 ชุด';
     this.log(`${text} ${sub}`, '#ff6a5a');
     this.events.push({ t: 'banner', text, sub, x: m.x, z: m.z });
+    this.sfx('heart_phase', m.x, m.z);
     this.shake(0.4, m);
   }
 
@@ -602,6 +608,8 @@ export class Sim {
       z: m.z,
     });
     this.shake(0.3, m);
+    if (!m.def.fx?.enrage) this.sfx('boss_arrive', m.x, m.z);
+    if (m.def.fx?.enrage) this.fx('effect', m.def.fx.enrage, m.x, m.z, 0, Math.max(2.5, m.radius * 2.5));
     if (m.def.summon && !m.def.summon.vanish) this.summonMinions(m, m.def.summon.monster, m.def.summon.count);
   }
 
@@ -679,6 +687,7 @@ export class Sim {
       this.monsters.push(m);
       minions.push(m);
       this.fx('burst', x, 0.3, z, '#9fd98a', 10, 4);
+      if (boss.def.fx?.summon) this.fx('effect', boss.def.fx.summon, x, z, 0, 1.6);
     }
     this.log(`${boss.def.name} เรียก${def.nameTh} ${count} ตัวมาช่วย!`, '#ff9a6a');
     return minions;
@@ -713,6 +722,7 @@ export class Sim {
       this.log(`🏆 ปราบ ${m.def.name} สำเร็จ!`, '#ffcf5a');
       this.shake(0.4, m);
       if (this.zone.roomOf) this.cleared = true;
+      this.terrain.releaseBossSolid();
     }
   }
 
@@ -757,13 +767,6 @@ export class Sim {
       for (const p of killers) {
         if (!p.bossKills.includes(m.def.id)) {
           p.bossKills.push(m.def.id);
-          this.events.push({ t: 'save', to: p.id });
-        }
-        // The Seeker's key for this boss has done its job.
-        const qkey = BOSS_QUEST_KEY[m.def.id];
-        if (qkey && p.stoneCount(qkey) > 0) {
-          p.takeStones(qkey, p.stoneCount(qkey));
-          this.log(`${STONE_NAME[qkey]} สลายไปแล้ว — ภารกิจนี้สำเร็จ`, '#ffd34a', p.id);
           this.events.push({ t: 'save', to: p.id });
         }
         delete p.quests[m.def.id];
@@ -884,6 +887,97 @@ export class Sim {
     return true;
   }
 
+  /**
+   * Opens mystery boxes from bag slot `slot` (owner 2026-11-22): one, or the whole stack with `all`. The server
+   * rolls each box here (src/shared/mysteryBox.ts). A box needs one empty bag slot first, so every prize fits and
+   * nothing is rolled only to be refused; opening the stack stops when the bag fills. Returns what should be
+   * announced to the whole server (rows marked "announce" in /admin), for the server to send.
+   */
+  openBox(p: Player, slot: number, all: boolean, r: Rng = Math.random): string[] {
+    const e = p.bag[slot];
+    if (!isStone(e) || e.stone !== 'mystery_box') return [];
+    if (this.time < p.boxReadyAt) return [];
+    const cfg = boxNow();
+    if (!cfg.enabled) {
+      this.log('กล่องปริศนายังเปิดไม่ได้ตอนนี้', '#ff8a6a', p.id);
+      return [];
+    }
+    const orbs = boxOrbs();
+    const odds = boxOdds(cfg, orbs.length);
+    if (!odds.length) {
+      this.log('กล่องปริศนายังไม่มีของ — แจ้งผู้ดูแล', '#ff8a6a', p.id);
+      return [];
+    }
+    const announce: string[] = [];
+    let opened = 0;
+    for (let n = all ? e.count : 1; n > 0; n--) {
+      if (!p.hasBagSpace()) {
+        // Both tabs need a slot: the prize (gear or a stack) is rolled only once it surely fits.
+        this.log(opened ? `กระเป๋าเต็ม — เปิดไปแล้ว ${opened} กล่อง` : 'ต้องมีช่องว่างในกระเป๋าและช่องประเภทใช้งานอย่างละ 1 ช่องถึงจะเปิดกล่องได้', '#ff8a6a', p.id);
+        break;
+      }
+      const cur = p.bag[slot];
+      if (!isStone(cur) || cur.stone !== 'mystery_box') break;
+      const row = rollBoxRow(odds, r);
+      if (!row) break;
+      if (--cur.count <= 0) p.bag[slot] = null;
+      opened++;
+      const got = this.giveBoxPrize(p, row, orbs, r);
+      this.text(p.x, p.topY, p.z, `🎁 ${got.text}`, 'lvl', 1.2, p.id);
+      this.log(`เปิดกล่องปริศนาได้ ${got.text}`, got.color, p.id);
+      if (row.announce) announce.push(got.text);
+    }
+    if (opened) {
+      p.boxReadyAt = this.time + BOX_OPEN_COOLDOWN;
+      this.fx('burst', p.x, 1, p.z, STONE_COLOR.mystery_box, 18, 3);
+      this.afterChange(p);
+    }
+    return announce;
+  }
+
+  /** Puts one box prize into the bag (there is an empty slot) and says what it was. */
+  private giveBoxPrize(p: Player, row: BoxRow, orbs: readonly string[], r: Rng): { text: string; color: string } {
+    const pr = row.prize;
+    switch (pr.kind) {
+      case 'gear': {
+        const item = rollItem(r, p.level, p.cls.id, 0, undefined, pr.rarity);
+        p.addToBag(item);
+        return { text: item.name, color: RARITY_COLOR[item.rarity] };
+      }
+      case 'potion':
+        p.addPotions(pr.potion, pr.size, row.count);
+        return { text: `${potionName(pr.potion, pr.size)} ×${row.count}`, color: '#ff8a8a' };
+      case 'gold':
+        p.gold += row.count;
+        return { text: `${row.count.toLocaleString()} G`, color: '#f2c230' };
+      case 'stone':
+        p.addStones(pr.stone, row.count);
+        return { text: `${STONE_NAME[pr.stone]}${row.count > 1 ? ` ×${row.count}` : ''}`, color: STONE_COLOR[pr.stone] };
+      case 'orb': {
+        const id = pick(r, orbs) as OrbStoneKind;
+        p.addStones(id, 1);
+        return { text: STONE_NAME[id], color: STONE_COLOR[id] };
+      }
+    }
+  }
+
+  /**
+   * Gives the orb of an orb item (mystery box) to the account. `owned` = the account already has it, `give` puts
+   * it on the account (the server's cosmetics table). The item is used up only when the orb was given.
+   */
+  useOrbItem(p: Player, slot: number, owned: (id: string) => boolean, give: (id: string) => boolean): void {
+    const e = p.bag[slot];
+    if (!isStone(e) || !isOrbStone(e.stone)) return;
+    const id = e.stone;
+    if (cosById(id)?.slot !== 'orb') return void this.log('ลูกแก้วนี้ถูกนำออกจากเกมแล้ว ใช้ไม่ได้', '#ff8a6a', p.id);
+    if (owned(id)) return void this.log(`มี${STONE_NAME[id]}อยู่แล้ว — เก็บไว้เทรดหรือขายในตลาดได้`, '#ff8a6a', p.id);
+    if (!give(id)) return;
+    if (--e.count <= 0) p.bag[slot] = null;
+    this.fx('burst', p.x, 1, p.z, STONE_COLOR[id], 16, 3);
+    this.log(`ได้รับ${STONE_NAME[id]} — สวมได้ที่กระเป๋าแฟชั่น`, STONE_COLOR[id], p.id);
+    this.afterChange(p);
+  }
+
   /** Counts each running buff down by the seconds played; tells the player when one runs out. */
   private tickBuffs(p: Player, dt: number): void {
     for (const k of BUFF_SCROLLS) {
@@ -979,10 +1073,10 @@ export class Sim {
     else if (this.zone.id !== hub.id) this.events.push({ t: 'travel', to: p.id, zone: hub.id, atCamp: true });
   }
 
-  /** EXP this player really gets from `n`: half while Auto Play is on, then doubled by an EXP scroll. */
+  /** EXP this player really gets from `n`: half while Auto Play is on, then doubled by an EXP scroll, then the VIP bonus (rounded down). */
   private autoExp(p: Player, n: number): number {
     const auto = p.autoOn ? Math.floor(n * AUTO_EXP_MULT) : n;
-    return p.buffs.exp_scroll ? auto * BUFF_MULT : auto;
+    return vipExp(p.buffs.exp_scroll ? auto * BUFF_MULT : auto, p.vip);
   }
 
   private addExp(p: Player, n: number): void {
@@ -1046,11 +1140,11 @@ export class Sim {
     const map = Object.values(ZONES).find((z) => z.lair?.boss === boss);
     if (!key || !map || !this.ownFloor(map) || !this.near(p, 'seeker') || (p.quests[boss] ?? -1) < QUEST_KILLS) return false;
     if (!p.addStones(key, 1)) {
-      this.log('กระเป๋าเต็ม — เคลียร์ช่องว่าง 1 ช่องก่อนรับกุญแจ', '#ff8a6a', p.id);
+      this.log('ช่องประเภทใช้งานเต็ม — เคลียร์ช่องว่าง 1 ช่องก่อนรับกุญแจ', '#ff8a6a', p.id);
       return false;
     }
     delete p.quests[boss];
-    this.log(`ได้รับ ${STONE_NAME[key]} — ใส่ที่แท่นเรียกบอสได้ (ไม่หายเมื่อใช้ จนกว่าจะปราบบอสได้)`, STONE_COLOR[key], p.id);
+    this.log(`ได้รับ ${STONE_NAME[key]} — ใส่ที่แท่นเรียกบอสได้ (ใช้แล้วหาย เหมือนกุญแจดรอป)`, STONE_COLOR[key], p.id);
     this.sfx('trade', p.x, p.z, p.id);
     this.events.push({ t: 'save', to: p.id });
     return true;
@@ -1117,7 +1211,7 @@ export class Sim {
     const r = gearRow(p, id);
     if (!r || r.state !== 'ready' || !this.ownFloor(r.map) || !this.near(p, 'seeker')) return false;
     const items = gearReward(r.map, r.part, p.cls.id, p.level);
-    const free = p.bag.filter((e) => e === null).length;
+    const free = p.freeSlots('gear');
     if (free < items.length) {
       this.log(`กระเป๋าเต็ม — เคลียร์ช่องว่าง ${items.length} ช่องก่อนรับ${GEAR_PART_NAME[r.part]}`, '#ff8a6a', p.id);
       return false;
@@ -1161,12 +1255,12 @@ export class Sim {
     const row = tutRows(p.tut, p.name).find((r) => r.step === step);
     if (!row || row.state !== 'offer' || !this.near(p, TUT_NPC[step])) return false;
     const pay = !p.tut.paid?.includes(step);
-    const stones = pay ? (TUT_ACCEPT_STONES[step] ?? []).map((s) => ({ stone: s.stone, count: s.count, bound: true as const })) : [];
-    if (stones.length && !putAll(structuredClone(p.bag), stones)) {
-      this.log(`กระเป๋าเต็ม — เคลียร์ช่องว่าง ${stones.length} ช่องก่อนรับภารกิจ`, '#ff8a6a', p.id);
+    const stones = pay ? (TUT_ACCEPT_STONES[step] ?? []).map((s) => ({ stone: s.stone, count: s.count })) : [];
+    if (stones.length && !putAll(structuredClone(p.bag), stones, p.bagSlots)) {
+      this.log(`ช่องประเภทใช้งานเต็ม — เคลียร์ช่องว่าง ${stones.length} ช่องก่อนรับภารกิจ`, '#ff8a6a', p.id);
       return false;
     }
-    putAll(p.bag, stones);
+    putAll(p.bag, stones, p.bagSlots);
     p.tut.cur = { step, by: p.name, got: [] };
     if (pay) {
       p.gold += TUT_ACCEPT_GOLD;
@@ -1241,31 +1335,38 @@ export class Sim {
     const owner = top?.id;
     // Everyone in the top damage dealer's party (on this map) shares that first pick, gold included.
     const party = top?.partyId ?? null;
-    // The drop scroll of whoever gets first pick doubles every chance below (never the gold or fixed counts).
-    const boost = top?.buffs.drop_scroll ? BUFF_MULT : 1;
+    // The drop scroll of whoever gets first pick doubles every chance below (never the gold or fixed counts), and their VIP adds its bonus on top.
+    const boost = (top?.buffs.drop_scroll ? BUFF_MULT : 1) * vipDropMult(!!top?.vip);
     const chance = (c: number) => r() < Math.min(1, c * boost);
     // A boss room's boss drops everything once per key put in (owner: rewards times the keys).
     const times = m.isBoss ? this.keys : 1;
+    const box = boxNow();
     const gold = Math.round(randInt(r, d.gold[0], d.gold[1]) * (1 + 0.1 * (m.level - d.levels[0])) * DROP_GOLD_MULT * m.mult.gold) * times;
     // A low gold multiplier (admin) can round a drop down to nothing: no empty pile then.
     if (gold > 0) this.spawnLoot(m, { type: 'gold', amount: gold }, owner, party);
     if (m.isBoss) {
       const loot = d.bossLoot;
+      // In a boss room the whole drop is collected first, then spread over the arena by its size.
+      const spread = !!this.zone.roomOf && currentBalance().bossLootSpread;
+      if (spread) this.lootQueue = [];
       for (let k = 0; k < times; k++) {
         const n = loot?.items ?? randInt(r, 2, 3);
         for (let i = 0; i < n; i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 1.5, band) }, owner, party);
         for (let i = 0; i < (loot?.epics ?? 0); i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 1.5, band, 'epic') }, owner, party);
-        this.spawnLoot(m, { type: 'potion', pot: 'hp', size: 's', count: DROP_POTION_MULT }, owner, party);
-        this.spawnLoot(m, { type: 'potion', pot: 'mp', size: 's', count: DROP_POTION_MULT }, owner, party);
+        this.spawnLoot(m, { type: 'potion', pot: 'hp', size: dropPotionSize(m.level), count: DROP_POTION_MULT }, owner, party);
+        this.spawnLoot(m, { type: 'potion', pot: 'mp', size: dropPotionSize(m.level), count: DROP_POTION_MULT }, owner, party);
         // Every blacksmith stone kind can drop from a boss, each rolled on its own.
         for (const stone of BLACKSMITH_STONES) {
           if (chance(loot?.stoneChance ?? BOSS_STONE_CHANCE)) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner, party);
         }
+        // Mystery box (owner 2026-11-22): once per key, while the owner has it switched on in /admin.
+        if (box.enabled && chance(box.bossPct / 100)) this.spawnLoot(m, { type: 'stone', stone: 'mystery_box', count: 1 }, owner, party);
       }
+      if (spread) this.flushSpreadLoot(m, owner, party);
       return;
     }
     if (chance(d.itemChance)) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 0, band) }, owner, party);
-    if (chance(d.potionChance * DROP_POTION_MULT)) this.spawnLoot(m, { type: 'potion', pot: r() < 0.6 ? 'hp' : 'mp', size: 's', count: 1 }, owner, party);
+    if (chance(d.potionChance * DROP_POTION_MULT)) this.spawnLoot(m, { type: 'potion', pot: r() < 0.6 ? 'hp' : 'mp', size: dropPotionSize(m.level), count: 1 }, owner, party);
     // Reroll stones, rarely, from monsters that drop items at all (not summoned minions).
     if (d.itemChance > 0) {
       for (const stone of MONSTER_STONES) {
@@ -1274,11 +1375,59 @@ export class Sim {
       // The key of its home map's boss, wherever it stands (its map or the hub).
       const key = home?.lair && BOSS_KEY[home.lair.boss];
       if (key && chance(KEY_DROP_CHANCE)) this.spawnLoot(m, { type: 'stone', stone: key, count: 1 }, owner, party);
+      if (box.enabled && chance(box.mobPct / 100)) this.spawnLoot(m, { type: 'stone', stone: 'mystery_box', count: 1 }, owner, party);
     }
   }
 
+  /** A boss room boss's drop while it is being rolled: placed together by flushSpreadLoot. */
+  private lootQueue: LootKind[] | null = null;
+
   private spawnLoot(m: Monster, kind: LootKind, owner?: number, ownerParty: number | null = null): void {
+    if (this.lootQueue) {
+      this.lootQueue.push(kind);
+      return;
+    }
     const [x, z] = this.lootSpot(m.x, m.z, 0.5 + Math.random() * (m.isBoss ? 2 : 1));
+    this.pushLoot(m, kind, x, z, owner, ownerParty);
+  }
+
+  /**
+   * Places the queued boss drop on a sunflower spiral around the boss (even spacing, no piles): the
+   * radius is base + k x sqrt(pieces), capped (BalanceConfig.bossLoot*). A spot nobody could stand on
+   * moves in towards the boss along its own direction, then falls back to lootSpot. Who may pick up
+   * and when is untouched (owner / ownerParty / ownerUntil as for any drop).
+   */
+  private flushSpreadLoot(m: Monster, owner: number | undefined, party: number | null): void {
+    const kinds = this.lootQueue ?? [];
+    this.lootQueue = null;
+    const n = kinds.length;
+    if (!n) return;
+    const bal = currentBalance();
+    const R = Math.min(bal.bossLootMax, bal.bossLootBase + bal.bossLootK * Math.sqrt(n));
+    // Shuffle so the rare pieces do not all land in the middle.
+    for (let i = n - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [kinds[i], kinds[j]] = [kinds[j], kinds[i]];
+    }
+    const a0 = Math.random() * Math.PI * 2;
+    for (let i = 0; i < n; i++) {
+      const a = a0 + i * 2.399963229728653;
+      let r = Math.max(0.5, R * Math.sqrt((i + 0.5) / n));
+      let spot: [number, number] | null = null;
+      for (; r >= 0.5; r -= 0.4) {
+        const lx = m.x + Math.cos(a) * r;
+        const lz = m.z + Math.sin(a) * r;
+        if (!this.terrain.isBlocked(lx, lz, LOOT_STAND_R)) {
+          spot = [lx, lz];
+          break;
+        }
+      }
+      spot ??= this.lootSpot(m.x, m.z, 0.5);
+      this.pushLoot(m, kinds[i], spot[0], spot[1], owner, party);
+    }
+  }
+
+  private pushLoot(m: Monster, kind: LootKind, x: number, z: number, owner: number | undefined, ownerParty: number | null): void {
     this.loots.push(new Loot(this.newId(), x, z, m.x, m.z, kind, {
       owner, ownerParty, ownerUntil: this.time + LOOT_PRIORITY_TIME, forever: !!this.zone.roomOf,
     }));
@@ -1338,34 +1487,33 @@ export class Sim {
     if (!p.alive || !l || l.dead || !l.canTake(p, this.time)) return false;
     if (Math.hypot(l.x - p.x, l.z - p.z) > LOOT_CLICK_RANGE) return false;
     if (!this.pickup(p, l)) {
-      this.text(p.x, p.topY, p.z, 'กระเป๋าเต็ม', 'info', undefined, p.id);
+      this.text(p.x, p.topY, p.z, l.kind.type === 'item' ? 'กระเป๋าเต็ม' : 'ช่องประเภทใช้งานเต็ม', 'info', undefined, p.id);
       return false;
     }
     l.dead = true;
     return true;
   }
 
-  /** Throws a bag item on the ground next to the player. It disappears after a while. */
   /** A quest key would leave the bag: say why, and refuse. */
   private refuseBound(p: Player): false {
     this.log(BOUND_MSG, '#ff8a6a', p.id);
     return false;
   }
 
-  dropFromBag(p: Player, i: number): boolean {
-    if (isBound(p.bag[i])) return this.refuseBound(p);
+  /**
+   * Throws a bag slot away for good (owner 2026-11-23: nothing is left on the ground; the browser asks first).
+   * Returns what was destroyed, or null (empty slot, or a quest key, which can't leave the bag).
+   */
+  dropFromBag(p: Player, i: number): BagEntry | null {
+    if (isBound(p.bag[i])) {
+      this.refuseBound(p);
+      return null;
+    }
     const item = p.takeFromBag(i);
-    if (!item) return false;
-    const a = Math.random() * Math.PI * 2;
-    const kind: LootKind = isPotion(item)
-      ? { type: 'potion', pot: item.potion, size: item.size, count: item.count }
-      : isStone(item)
-      ? { type: 'stone', stone: item.stone, count: item.count }
-      : { type: 'item', item };
-    this.loots.push(new Loot(this.newId(), p.x + Math.cos(a), p.z + Math.sin(a), p.x, p.z, kind, { dropped: true }));
-    this.log(`วาง ${entryName(item)} ลงบนพื้น (เก็บคืนได้ภายใน 60 วินาที)`, '#b9b09a', p.id);
+    if (!item) return null;
+    this.log(`ทิ้ง ${entryName(item)} แล้ว (หายถาวร)`, '#b9b09a', p.id);
     this.afterChange(p);
-    return true;
+    return item;
   }
 
   // ------------------------------------------------------------ NPC trades
@@ -1502,7 +1650,7 @@ export class Sim {
 
   /** Shift+drag in the bag: moves `n` of the stack in slot `from` onto slot `to` (empty, or the same stack with room). */
   splitInBag(p: Player, from: number, to: number, n: number): boolean {
-    if (!p.alive || !splitInto(p.bag, from, p.bag, to, n)) return false;
+    if (!p.alive || p.tabAt(to) !== 'use' || !splitInto(p.bag, from, p.bag, to, n)) return false;
     this.afterChange(p);
     return true;
   }
@@ -1510,6 +1658,33 @@ export class Sim {
   sortBag(p: Player, key: SortKey, desc: boolean): void {
     p.sortBag(key, desc);
     this.afterChange(p);
+  }
+
+  /**
+   * Buys the next `step` slots of a bag tab with gold (bagTabs.ts nextExpand; off until the owner opens it in /admin).
+   * `price` is what the player saw: refused if it no longer matches. The crystal way is the server's (it needs the DB).
+   */
+  bagExpandGold(p: Player, tab: BagTab, price: number): boolean {
+    const cfg = currentBalance().bagExpand;
+    const next = nextExpand(cfg, p.bagSlots, tab);
+    if (typeof next === 'string' || !cfg.gold) {
+      this.log(typeof next === 'string' ? next : 'ขยายช่องด้วยทองไม่ได้ตอนนี้', '#ff8a6a', p.id);
+      return false;
+    }
+    if (next.gold !== price) {
+      this.log('ราคาเปลี่ยนแล้ว ลองอีกครั้ง', '#ff8a6a', p.id);
+      return false;
+    }
+    if (p.gold < next.gold) {
+      this.log(`ทองไม่พอ — ต้องใช้ ${next.gold.toLocaleString()} G`, '#ff8a6a', p.id);
+      return false;
+    }
+    p.gold -= next.gold;
+    p.growTab(tab, next.add);
+    this.log(`ขยาย${TAB_NAME[tab]}เป็น ${p.bagSlots[tab]} ช่อง (${next.gold.toLocaleString()} G)`, '#f2c230', p.id);
+    this.sfx('trade', p.x, p.z, p.id);
+    this.afterChange(p);
+    return true;
   }
 
   buyPotion(p: Player, kind: PotionKind, size: PotionSize, n: number): boolean {
@@ -1520,7 +1695,7 @@ export class Sim {
       return false;
     }
     if (!p.addPotions(kind, size, n)) {
-      this.log('กระเป๋าเต็ม — ยาช่องละไม่เกิน 10 ขวด', '#ff8a6a', p.id);
+      this.log('ช่องประเภทใช้งานเต็ม — ยาช่องละไม่เกิน 10 ขวด', '#ff8a6a', p.id);
       return false;
     }
     p.gold -= cost;
@@ -1540,7 +1715,7 @@ export class Sim {
       return false;
     }
     if (!p.addStones('phoenix', n)) {
-      this.log(`กระเป๋าเต็ม — ${STONE_NAME.phoenix}ช่องละไม่เกิน ${STONE_STACK} อัน`, '#ff8a6a', p.id);
+      this.log(`ช่องประเภทใช้งานเต็ม — ${STONE_NAME.phoenix}ช่องละไม่เกิน ${STONE_STACK} อัน`, '#ff8a6a', p.id);
       return false;
     }
     p.gold -= cost;
@@ -1593,7 +1768,7 @@ export class Sim {
       return false;
     }
     if (!p.addStones('return_scroll', n)) {
-      this.log(`กระเป๋าเต็ม — ${STONE_NAME.return_scroll}ช่องละไม่เกิน ${STONE_STACK} ม้วน`, '#ff8a6a', p.id);
+      this.log(`ช่องประเภทใช้งานเต็ม — ${STONE_NAME.return_scroll}ช่องละไม่เกิน ${STONE_STACK} ม้วน`, '#ff8a6a', p.id);
       return false;
     }
     p.gold -= cost;
@@ -1614,7 +1789,7 @@ export class Sim {
       this.log('ทองไม่พอ', '#ff8a6a', p.id);
       return false;
     }
-    if (!p.hasBagSpace()) {
+    if (!p.hasBagSpace('gear')) {
       this.log('กระเป๋าเต็ม', '#ff8a6a', p.id);
       return false;
     }
@@ -1643,6 +1818,7 @@ export class Sim {
     const item = p.bag[i];
     if (!item || !this.near(p, 'merchant')) return 0;
     if (isBound(item)) return this.refuseBound(p), 0;
+    if (isStone(item) && isOrbStone(item.stone)) return this.log('พ่อค้าไม่รับซื้อลูกแก้ว — เทรดหรือลงขายในตลาดแทน', '#ff8a6a', p.id), 0;
     if (n !== undefined && (!isStack(item) || !Number.isInteger(n) || n < 1 || n > item.count)) return 0;
     const part = n !== undefined && isStack(item) && n < item.count ? n : undefined;
     const name = entryName(part ? { ...item, count: part } : item);
@@ -1688,6 +1864,9 @@ export class Sim {
     if (!this.near(p, 'keeper') || !validSlot(bagI, p.bag.length) || (to !== -1 && !validSlot(to, st.size))) return false;
     if (!p.bag[bagI]) return false;
     if (isBound(p.bag[bagI])) return this.refuseBound(p);
+    // A swap brings the stash entry back into this bag slot: only if it belongs in this tab.
+    const back = to === -1 ? null : st.items[to];
+    if (back && !sameStack(p.bag[bagI], back) && p.tabAt(bagI) !== tabOf(back)) return false;
     const ok = to === -1 ? fillInto(p.bag, bagI, st.items) : dropOnto(p.bag, bagI, st.items, to);
     if (!ok) {
       this.log('คลังเต็ม', '#ff8a6a', p.id);
@@ -1702,10 +1881,13 @@ export class Sim {
   stashTake(p: Player, i: number, to = -1): boolean {
     const st = p.stash;
     if (!this.near(p, 'keeper') || !validSlot(i, st.size) || (to !== -1 && !validSlot(to, p.bag.length))) return false;
-    if (!st.items[i]) return false;
-    const ok = to === -1 ? fillInto(st.items, i, p.bag) : dropOnto(st.items, i, p.bag, to);
+    const a = st.items[i];
+    if (!a) return false;
+    // Onto a bag slot: only one of the tab it belongs in (a swap sends the bag entry to the stash, which takes anything).
+    if (to !== -1 && p.tabAt(to) !== tabOf(a)) return false;
+    const ok = to === -1 ? fillInto(st.items, i, p.bag, p.bagSlots) : dropOnto(st.items, i, p.bag, to);
     if (!ok) {
-      this.log('กระเป๋าเต็ม', '#ff8a6a', p.id);
+      this.log(TAB_FULL[tabOf(a)], '#ff8a6a', p.id);
       return false;
     }
     this.afterStash(p);
@@ -1729,6 +1911,7 @@ export class Sim {
     const b = list(to);
     if (!a || !b) return false;
     if (from === 'bag' && to === 'stash' && isBound(a[i])) return this.refuseBound(p);
+    if (to === 'bag' && p.tabAt(j) !== 'use') return false;
     if (!splitInto(a, i, b, j, n)) return false;
     if (from === 'bag' && to === 'stash') this.tutTask(p, 'stashItem');
     this.afterStash(p);
@@ -1822,8 +2005,9 @@ export class Sim {
       this.fx('effect', 'enhance_ok', p.x, p.z, 0, 1.3);
       this.fx('burst', p.x, 1.2, p.z, '#ffd34a', 14, 3);
       this.text(p.x, p.topY + 0.6, p.z, `+${plusOf(item)} สำเร็จ!`, 'enh', 1.6);
-      if (plusOf(item) >= announceFrom()) {
-        this.events.push({ t: 'announce', text: `🔨 ${p.name} ตี${SLOT_LABEL[item.slot]} ${item.name} เป็น +${plusOf(item)} สำเร็จ!` });
+      if (plusOf(item) >= announceFrom() || plusOf(item) >= bannerFrom()) {
+        const text = `🔨 ${p.name} ตี${SLOT_LABEL[item.slot]} ${item.name} เป็น +${plusOf(item)} สำเร็จ!`;
+        this.events.push({ t: 'announce', text, ...(plusOf(item) >= bannerFrom() ? { banner: '🔨 ตีบวก' } : {}) });
       }
     } else {
       const why = result === 'drop' ? ` ระดับลดเหลือ +${plusOf(item)}` : result === 'saved' ? ' (หินกันระดับลดทำงาน ระดับเท่าเดิม)' : '';
@@ -1994,6 +2178,7 @@ export class Sim {
         if (!this.terrain.isBlocked(x, zz, def.radius)) break;
       }
       const m = new Monster(this.newId(), def, randInt(r, def.levels[0], def.levels[1]), area, x, zz, boost);
+      m.hunter = true;
       this.monsters.push(m);
       w.ids.add(m.id);
       this.fx('burst', x, 1, zz, '#ff9a3a', 10, 2);
@@ -2011,6 +2196,7 @@ export class Sim {
     this.fx('burst', area.x, 1.5, area.z, '#ffcf5a', 30, 6);
     this.shake(0.4, area);
     this.sfx('boss_slam', area.x, area.z);
+    this.sfx('boss_appear', area.x, area.z);
   }
 
   /**

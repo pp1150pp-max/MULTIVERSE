@@ -5,6 +5,9 @@ import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { drawIcon } from './placeholder';
 import { CRIT_BURST, GLYPH_SHEET } from './floating';
 import { imgUrl } from './img';
+import { isOrbStone, type OrbStoneKind } from '../shared/types';
+import { orbItemLook } from '../shared/orbItems';
+import { ORB_PALETTES } from './orbs';
 
 export const iconImg = (name: string): string =>
   `<img class="gi" src="${imgUrl(`assets/sprites/icons/${name}.png`)}" alt="" draggable="false">`;
@@ -24,6 +27,7 @@ const missingStone = new Set<string>();
 const stoneFallback: Partial<Record<StoneKind, string>> = {};
 /** Blacksmith stone icon. No painted file yet: falls back to the placeholder gem until icons/stone_*.png exists. */
 export const stoneIcon = (kind: StoneKind): string => {
+  if (isOrbStone(kind)) return `<img class="gi" src="${orbStoneIcon(kind)}" alt="" draggable="false">`;
   const alt = (stoneFallback[kind] ??= drawIcon(`stone_${kind}`).toDataURL());
   // A quest key wears its boss key's picture, with a mark that it is bound.
   const file = kind.replace(/^qkey_/, 'key_');
@@ -32,6 +36,35 @@ export const stoneIcon = (kind: StoneKind): string => {
   if (missingStone.has(file)) return `<img class="gi" src="${alt}" alt="" draggable="false">`;
   return `<img class="gi" src="${imgUrl(`assets/sprites/icons/stone_${file}.png`)}" alt="" draggable="false" onerror="this.onerror=null;this.src='${alt}';window.__stoneMissing('${file}')">`;
 };
+/** An orb item (mystery box): a glowing ball in its orb's palette (as at +11), redrawn when the look changes. */
+function orbStoneIcon(kind: OrbStoneKind): string {
+  const look = orbItemLook(kind);
+  const key = `${kind}:${look?.palette ?? ''}`;
+  const hit = orbIcons.get(kind);
+  if (hit?.key === key) return hit.url;
+  const col = (ORB_PALETTES.find((p) => p.id === look?.palette) ?? ORB_PALETTES[0]).colors(3, 11);
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 32;
+  const g = cv.getContext('2d')!;
+  const glow = g.createRadialGradient(16, 16, 4, 16, 16, 16);
+  glow.addColorStop(0, col.glow);
+  glow.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = glow;
+  g.fillRect(0, 0, 32, 32);
+  const ball = g.createRadialGradient(13, 12, 1, 16, 16, 9);
+  ball.addColorStop(0, '#ffffff');
+  ball.addColorStop(0.35, col.core);
+  ball.addColorStop(1, col.accent);
+  g.fillStyle = ball;
+  g.beginPath();
+  g.arc(16, 16, 9, 0, Math.PI * 2);
+  g.fill();
+  const url = cv.toDataURL();
+  orbIcons.set(kind, { key, url });
+  return url;
+}
+const orbIcons = new Map<string, { key: string; url: string }>();
+
 export const FORGE_ICON = iconImg('npc_forge');
 
 let itemFallback: string | undefined;

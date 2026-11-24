@@ -4,6 +4,7 @@ import type { SkillSlot, WearSlot } from '../data/classes';
 import type { WaveSnap } from '../waveGame';
 import type { SkillBook } from '../skillBook';
 import type { BagEntry, BuffScroll, ClassId, EquipSlot, Item, PotionKind, PotionSize, Rarity, Stats, Vec2 } from '../types';
+import type { BagPay, BagSlots, BagTab } from '../bagTabs';
 import type { LootKind } from '../sim/Loot';
 import type { SimEvent } from '../sim/types';
 import type { AutoSettings, Buffs, BuybackEntry, LootFilter, PotionSelect, SortKey } from '../sim/Player';
@@ -15,8 +16,10 @@ import type { CosTuning } from '../cosTuning';
 import type { AnimTuning } from '../animTuning';
 import type { BalanceTuning } from '../balance';
 import type { DailyView } from '../daily';
+import type { NewsView } from '../news';
 import type { StashData } from '../sim/stash';
 import type { Hazard } from '../sim/volcanoHeart';
+import type { ChatLink, ChatLinkRef } from '../chatLinks';
 import type { MarketCall, MarketReply } from '../sim/market';
 import type { MailCall, MailReply } from '../mail';
 import type { ReportCall, ReportReply } from '../reports';
@@ -28,6 +31,7 @@ import type { RoomLobbyView, RoomSnap } from '../bossRoom';
 import type { ChannelsView } from '../channels';
 import type { CosSlot } from '../data/cosmetics';
 import type { CashCatalog, CashState } from '../cashShop';
+import type { TopupView } from '../topup';
 
 export const WS_PATH = '/ws';
 /** Server simulation rate and how often it sends snapshots. */
@@ -84,10 +88,18 @@ export type ActionMsg =
   | { t: 'act'; a: 'buyScroll'; n: number }
   /** Uses one EXP or drop scroll from the bag (Sim.useBuffScroll). */
   | { t: 'act'; a: 'useBuff'; stone: BuffScroll }
+  /** Opens the mystery box in bag slot `slot`: one, or the whole stack with `all` (Sim.openBox; the server rolls). */
+  | { t: 'act'; a: 'openBox'; slot: number; all: boolean }
+  /** Gives the orb of the orb item in bag slot `slot` to the account (Sim.useOrbItem). */
+  | { t: 'act'; a: 'useOrbItem'; slot: number }
   /** Announces `text` to the whole server with a megaphone from the bag (server checks length, Guest and the cooldown). */
-  | { t: 'act'; a: 'megaphone'; text: string }
+  | { t: 'act'; a: 'megaphone'; text: string; /** Item links, as in `chat`. */ links?: ChatLinkRef[] }
   /** Cash shop: buy `qty` of item `id` at `price` crystals each, the price the buyer saw (src/shared/cashShop.ts; the server checks everything). Answered with `cashBuy`. */
   | { t: 'act'; a: 'cashBuy'; req: number; id: string; qty: number; price: number }
+  /** Top-up by PromptPay: ask for a cash shop package as the player saw it (src/shared/topup.ts; the server checks it is on sale now). Answered with `topupRes`. */
+  | { t: 'act'; a: 'topupNew'; req: number; crystals: number; bonus: number; baht: number }
+  /** Cancel this account's open top-up request `id`. Answered with `topupRes`. */
+  | { t: 'act'; a: 'topupCancel'; req: number; id: number }
   /** Daily login: show this month's calendar / make up an earlier missed day of this month (the server checks). */
   | { t: 'act'; a: 'daily' }
   | { t: 'act'; a: 'dailyMakeup'; day: number }
@@ -120,6 +132,8 @@ export type ActionMsg =
   | { t: 'act'; a: 'stashMove'; from: number; to: number }
   | { t: 'act'; a: 'stashSort'; key: SortKey; desc: boolean }
   | { t: 'act'; a: 'stashBuy' }
+  /** Buys the next slots of a bag tab (hidden until /admin opens it): `price` is the price the player saw, in `pay`. */
+  | { t: 'act'; a: 'bagExpand'; tab: BagTab; pay: BagPay; price: number }
   /** amount > 0 deposits gold, < 0 withdraws it. */
   | { t: 'act'; a: 'stashGold'; amount: number }
   /** Market broker (consignment market). The server answers each with a `market` message of the same `req`. */
@@ -220,8 +234,11 @@ export type ClientMsg =
   | { t: 'join'; token: string; characterId: number; delta?: 1; back?: RejoinInfo; previewMap?: string }
   | InputMsg
   | ActionMsg
-  /** `ch: 'party'` = to the party only; `ch: 'whisper'` = only to the online character named `to`. */
-  | { t: 'chat'; text: string; ch?: 'party' | 'whisper'; to?: string }
+  /**
+   * `ch: 'party'` = to the party only; `ch: 'whisper'` = only to the online character named `to`.
+   * `links`: where the items whose "[name]" is in the text are (src/shared/chatLinks.ts; the server looks them up itself).
+   */
+  | { t: 'chat'; text: string; ch?: 'party' | 'whisper'; to?: string; links?: ChatLinkRef[] }
   /**
    * Answered at once with a pong of the same id. The rest is for the server's lag log, about the time
    * since the previous ping: `rtt` the round trip measured then (ms, each one reported once),
@@ -338,7 +355,7 @@ export interface PrivateSnap {
   /** The `seq` of the last input the server had applied when it took this snapshot. */
   ack?: number;
   /** Bag and equipment, only when they changed since the last snapshot. */
-  inv?: { equipment: Partial<Record<EquipSlot, Item>>; bag: (BagEntry | null)[]; buyback?: BuybackEntry[] };
+  inv?: { equipment: Partial<Record<EquipSlot, Item>>; bag: (BagEntry | null)[]; buyback?: BuybackEntry[]; /** Bag tabs (src/shared/bagTabs.ts): `bag` is the gear tab then the usable tab. Missing = 30 + 30. */ bagSlots?: BagSlots };
   /** Seconds of play until the buyback list clears. */
   buybackLeft?: number;
   /** Cosmetic ids the account owns, only when it changed since the last snapshot (guests: always none). */
@@ -373,13 +390,19 @@ export interface SnapshotMsg {
 export type ServerMsg =
   /** `guest`: playing a guest character (no stash, deleted after a day offline). */
   /** `ch`: the channel of that zone (1 when it has none). */
-  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; map?: number; guest?: boolean; auto?: boolean; preview?: boolean; orbLook?: OrbLook; cosTuning?: CosTuning; animTuning?: AnimTuning; cosHidden?: string[]; orbItems?: OrbItem[]; balance?: BalanceTuning; cash?: CashCatalog; cashState?: CashState }
+  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; map?: number; guest?: boolean; auto?: boolean; preview?: boolean; orbLook?: OrbLook; cosTuning?: CosTuning; animTuning?: AnimTuning; cosHidden?: string[]; orbItems?: OrbItem[]; balance?: BalanceTuning; cash?: CashCatalog; cashState?: CashState; topup?: TopupView }
   /** The cash shop's catalogue changed (the owner saved /admin, or a cosmetic's price / hiding changed). */
   | { t: 'cash'; cat: CashCatalog }
   /** Your account's crystals and purchase counts changed (a purchase by any of its characters). */
   | { t: 'cashState'; state: CashState }
   /** The answer to `cashBuy`. */
   | { t: 'cashBuy'; req: number; ok: boolean; msg: string }
+  /** The "มีอะไรใหม่" notes and switches: sent a moment after joining (guests too) and whenever they change. */
+  | { t: 'news'; v: NewsView }
+  /** This account's top-up state changed (a request made / cancelled / confirmed / rejected, or the owner changed the settings). */
+  | { t: 'topup'; v: TopupView }
+  /** The answer to `topupNew` / `topupCancel`. */
+  | { t: 'topupRes'; req: number; ok: boolean; msg: string }
   /** The owner changed the server-wide enhancement orb look (src/shared/orbLook.ts). */
   | { t: 'orbLook'; look: OrbLook }
   /** An admin changed the server-wide game balance (src/shared/balance.ts). */
@@ -404,7 +427,7 @@ export type ServerMsg =
    * `ch: 'party'` = party chat, or (empty name) a party notice. `ch: 'whisper'` = a whisper from `name`;
    * with `to`, it is your own whisper to `to`, echoed back.
    */
-  | { t: 'chat'; name: string; text: string; ch?: 'party' | 'whisper'; to?: string }
+  | { t: 'chat'; name: string; text: string; ch?: 'party' | 'whisper'; to?: string; /** Item links in the text (server-built copies). */ links?: ChatLink[] }
   /** Your friends window (sent on joining, on `friendList`, and whenever any of it changes). */
   | { t: 'friends'; view: FriendsView }
   /** Someone invites you to their party; answer within `seconds`. */
@@ -445,7 +468,7 @@ export type ServerMsg =
   /** The server stops (or restarts) in `seconds`; sent once a second during the countdown. */
   | { t: 'shutdown'; mode: ShutdownMode; seconds: number; text?: string }
   /** An announcement from the server's owner (admin page): shown as a banner and a chat line. */
-  | { t: 'announce'; text: string; from: string; direct: boolean; megaphone?: boolean }
+  | { t: 'announce'; text: string; from: string; direct: boolean; megaphone?: boolean; /** A megaphone's item links (server-built copies). */ links?: ChatLink[]; /** A mystery box prize (src/shared/mysteryBox.ts). */ box?: boolean; /** The player-event banner's heading (box only; mystery box when missing). */ head?: string }
   /** This month's daily login calendar (`view.popup`: just got today's reward, open it by itself). */
   | { t: 'daily'; view: DailyView }
   /** The countdown was cancelled: the server stays up. */

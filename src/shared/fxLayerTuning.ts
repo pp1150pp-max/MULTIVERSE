@@ -51,6 +51,19 @@ export interface FxLayerConfig extends Record<QuarksKey, boolean> {
   zoneCircles: boolean;
   /** × the magic circles' brightness. */
   circleGlow: number;
+  /**
+   * How high the sword's slash picture lies (world units, 0 = on the ground). On the ground it showed below the feet
+   * swinging down and behind the body swinging up, so the reach looked longer downward (owner 2026-11-21).
+   */
+  slashLift: number;
+  /** How far behind a dead player its crater lies (world units), so the lying body shows in its middle (owner 2026-11-23). */
+  craterBack: number;
+  /**
+   * The hub town's brick floor (owner 2026-11-23): width of its ragged edge into each zone's ground (0 = straight cut)
+   * and the radius of its corners, where the gates are (world units). Used when a map is built.
+   */
+  townEdge: number;
+  townRound: number;
   /** Trial (owner 2026-11-18): skill particles drawn with three.quarks (src/client/quarksFx.ts), so far the Meteor only. */
   quarks: boolean;
   /** three.quarks: × particles of other players' effects (your own are always full). */
@@ -62,14 +75,60 @@ export interface FxLayerConfig extends Record<QuarksKey, boolean> {
   /** Paper art (owner 2026-11-18): × the size of a title set's name frame and of its chat bubble. */
   paperPlate: number;
   paperBubble: number;
+  /**
+   * Name frames and chat bubbles (owner 2026-11-22): the widest they grow before a name is cut with … / a message wraps
+   * (screen px, plain ones too), and the paper frames' inner padding (px, top-bottom and left-right).
+   */
+  plateMaxW: number;
+  bubbleMaxW: number;
+  platePadY: number;
+  platePadX: number;
+  bubblePadY: number;
+  bubblePadX: number;
   /** Paper aura footprint length, × the aura's own step size (cosmetics tab). */
   paperFoot: number;
   /** Paper enhancement orbs: grey from which a part takes the accent colour (band, star), and the darkest shading. */
   paperOrbLight: number;
   paperOrbShade: number;
+  /** Item slots (every .cell): × corner rounding, × the +N / Lv label inset, × the picture size (owner 2026-11-23). */
+  slotCorner: number;
+  slotInset: number;
+  slotIcon: number;
+  /**
+   * The enhancement aura under the feet (+7/+10/+13/+15, src/client/views.ts, owner 2026-11-23: it flickered at +15).
+   * Smooth = its stepped glow picture is filtered smoothly instead of as hard pixels, so it no longer shimmers while
+   * it breathes. It breathes in size (± share) and brightness (± share) at `enhAuraSpeed` (radians a second).
+   */
+  enhAuraSmooth: boolean;
+  enhAuraPulse: number;
+  enhAuraBreath: number;
+  enhAuraSpeed: number;
+  /** × the brightness of its ground glow (1.4 = as bright as it gets). */
+  enhAuraGlow: number;
+  /**
+   * Its rising sparks (+10 and up): × brightness, × how many a second (0 = off), and the seconds one takes to light up
+   * (0 = at once, which popped).
+   */
+  enhSparkGlow: number;
+  enhSparkRate: number;
+  enhSparkFadeIn: number;
+  /**
+   * Enhancement orbs: the light is drawn over its orb (off = behind it). At the very same depth the two fought over
+   * every pixel and the light blinked on and off, worst at +13/+15 (src/client/orbs.ts, owner 2026-11-23).
+   */
+  enhOrbGlowFront: boolean;
+  /**
+   * How much the light of an orb behind the character fades out (0 = not at all, 1 = gone, the code value: owner 2026-11-23). While running, the moving
+   * outline of the body cuts that light differently every frame (owner 2026-11-23: the orbs flicker while running).
+   */
+  enhOrbBackFade: number;
   /** Each skill's extra effects drawn in code over its painted frames (src/client/skillExtras.ts), and × their strength. */
   extras: boolean;
   extrasK: number;
+  /** Bosses' skills (owner 2026-11-21): their painted effects (sheets boss_*), and the code effects on top, × strength (src/client/bossFx.ts). */
+  bossFx: boolean;
+  bossExtras: boolean;
+  bossExtrasK: number;
   /** Per skill (or circle fallback key, CIRCLE_FALLBACKS): only what differs from on / ×1 (owner 2026-11-18). */
   skills: Record<string, SkillFxTune>;
   /** The players' own graphics window (owner 2026-11-18, src/client/gfxPrefs.ts): shown in the in-game menu. */
@@ -152,6 +211,10 @@ export const FX_LAYER_RANGE = {
   maxNums: [10, 200],
   mergeSec: [0, 1],
   circleGlow: [0, 3],
+  slashLift: [0, 2],
+  craterBack: [0, 3],
+  townEdge: [0, 6],
+  townRound: [0, 12],
   quarksOthers: [0, 1],
   quarksTouch: [0, 1],
   quarksCap: [0, 10000],
@@ -161,10 +224,28 @@ export const FX_LAYER_RANGE = {
   gfxLow: [0, 1],
   paperPlate: [0.5, 2],
   paperBubble: [0.5, 2],
+  plateMaxW: [80, 400],
+  bubbleMaxW: [120, 600],
+  platePadY: [0, 20],
+  platePadX: [0, 40],
+  bubblePadY: [0, 30],
+  bubblePadX: [0, 40],
   paperFoot: [0.3, 4],
+  slotCorner: [0, 3],
+  slotInset: [0, 3],
+  slotIcon: [0.5, 1.2],
   paperOrbLight: [0.8, 1],
   paperOrbShade: [0, 1],
+  enhAuraPulse: [0, 0.3],
+  enhAuraBreath: [0, 0.5],
+  enhAuraSpeed: [0, 10],
+  enhAuraGlow: [0, 1.4],
+  enhSparkGlow: [0, 1.2],
+  enhSparkRate: [0, 3],
+  enhSparkFadeIn: [0, 0.6],
+  enhOrbBackFade: [0, 1],
   extrasK: [0, 3],
+  bossExtrasK: [0, 3],
   droneSpeed: [1, 20],
   droneDist: [0.3, 3],
 } as const satisfies Record<string, readonly [number, number]>;
@@ -180,6 +261,10 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   maxNums: 'ตัวเลขบนจอสูงสุด',
   mergeSec: 'รวมเลขที่โดนในช่วง (วิ)',
   circleGlow: '× ความสว่างวงเวท',
+  slashLift: 'ความสูงภาพคมดาบตอนฟัน (0 = บนพื้น)',
+  craterBack: 'หลุมใต้ศพ: เลื่อนไปข้างหลังตัว (ให้ตัวอยู่กลางหลุม)',
+  townEdge: 'เมืองกลาง: ความกว้างขอบพื้นอิฐที่กลืนกับพื้นโซน (0 = ตัดตรง)',
+  townRound: 'เมืองกลาง: ความโค้งมุมพื้นอิฐ (ตรงประตู)',
   quarksOthers: 'three.quarks: × อนุภาคของคนอื่น',
   quarksTouch: 'three.quarks: × อนุภาคบนจอสัมผัส (มือถือ)',
   quarksCap: 'three.quarks: อนุภาคบนจอสูงสุด (เกินแล้วตัดของคนอื่น)',
@@ -189,15 +274,33 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   gfxLow: 'เมนูกราฟิก: × อนุภาคของ "ต่ำ"',
   paperPlate: '× ขนาดกรอบชื่อ',
   paperBubble: '× ขนาดฟองแชท',
+  plateMaxW: 'กรอบชื่อกว้างสุด (px เกินแล้วย่อชื่อด้วย …)',
+  bubbleMaxW: 'ฟองแชทกว้างสุด (px เกินแล้วขึ้นบรรทัดใหม่)',
+  platePadY: 'กรอบชื่อ: ขอบในบน-ล่าง (px)',
+  platePadX: 'กรอบชื่อ: ขอบในซ้าย-ขวา (px)',
+  bubblePadY: 'ฟองแชท: ขอบในบน-ล่าง (px)',
+  bubblePadX: 'ฟองแชท: ขอบในซ้าย-ขวา (px)',
+  slotCorner: 'ช่องไอเทม: × ความโค้งมุม',
+  slotInset: 'ช่องไอเทม: × ระยะป้าย +N / Lv จากขอบ',
+  slotIcon: 'ช่องไอเทม: × ขนาดภาพไอเทม',
   paperFoot: 'ขนาดรอยเท้าออร่า (× ขนาดรอยเท้าของชิ้น)',
   paperOrbLight: 'ลูกแก้ว: ส่วนที่ขาวกว่านี้เป็นสีเน้น',
   paperOrbShade: 'ลูกแก้ว: ความสว่างส่วนมืดสุด',
+  enhAuraPulse: 'ออร่าตีบวก: หดขยาย ± (สัดส่วนขนาด, 0 = ไม่หดขยาย)',
+  enhAuraBreath: 'ออร่าตีบวก: สว่างหรี่ ± (สัดส่วนความสว่าง, 0 = คงที่)',
+  enhAuraSpeed: 'ออร่าตีบวก: ความเร็วหายใจ (ยิ่งมากยิ่งเร็ว)',
+  enhAuraGlow: 'ออร่าตีบวก: × ความสว่างแสงบนพื้น',
+  enhSparkGlow: 'ประกายออร่าตีบวก: × ความสว่าง',
+  enhSparkRate: 'ประกายออร่าตีบวก: × จำนวนต่อวิ (0 = ปิด)',
+  enhSparkFadeIn: 'ประกายออร่าตีบวก: เวลาค่อย ๆ สว่าง (วิ, 0 = สว่างทันที)',
+  enhOrbBackFade: 'แสงลูกแก้วที่อยู่หลังตัวจางลง (0 = ไม่จาง, 1 = หายหมด)',
   extrasK: '× ความแรงเอฟเฟกต์โค้ดของสกิล',
+  bossExtrasK: '× ความแรงเอฟเฟกต์โค้ดของสกิลบอส',
   droneSpeed: 'โดรน: ความเร็วตามตัว (ต่อวิ ยิ่งมากยิ่งติด)',
   droneDist: 'โดรน: × ระยะห่างจากตัวละคร',
 };
 
-const BASE_BOOLS = ['enabled', 'debuffs', 'guardGlow', 'buffIcons', 'barBuffIcons', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'droneFollow', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'keyRebind', 'orbsNearBar', 'extras'] as const;
+const BASE_BOOLS = ['enabled', 'debuffs', 'guardGlow', 'buffIcons', 'barBuffIcons', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'droneFollow', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'keyRebind', 'orbsNearBar', 'extras', 'bossFx', 'bossExtras', 'enhAuraSmooth', 'enhOrbGlowFront'] as const;
 type FxLayerBool = (typeof BASE_BOOLS)[number] | QuarksKey;
 const FX_LAYER_BOOLS: readonly FxLayerBool[] = [...BASE_BOOLS, ...QUARKS_KEYS];
 const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
@@ -218,17 +321,22 @@ const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
   orbsNearBar: 'ลูกแก้ว HP/MP ชิดแถบสกิล (ปิด = มุมจอ)',
   ...(Object.fromEntries(QUARKS_SKILL_IDS.map((s) => [quarksKey(s), `three.quarks: ${QUARKS_SKILLS[s]}`])) as Record<QuarksKey, string>),
   extras: 'เอฟเฟกต์โค้ดของสกิล (ทับภาพเดิม)',
+  bossFx: 'ภาพเอฟเฟกต์สกิลบอส (ปิด = ภาพแบบเดิม ท่าตีตอนร่ายยังเล่น)',
+  bossExtras: 'เอฟเฟกต์โค้ดของสกิลบอส (ทับภาพ)',
+  enhAuraSmooth: 'ออร่าตีบวกขอบนุ่ม (ปิด = ขอบพิกเซลแบบเดิม กะพริบตอนหดขยาย)',
+  enhOrbGlowFront: 'แสงลูกแก้วตีบวกอยู่หน้าลูก (ปิด = หลังลูก)',
 };
 
 /** The code's own numbers (a fresh copy). */
 export function codeFxLayer(): FxLayerConfig {
   return {
     enabled: true, debuffs: true, guardGlow: true, buffIcons: true, barBuffIcons: true, glow: 1, ground: 1, particles: 1, shake: 1, hitstopMs: 60, crit: 1,
-    maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true, droneFollow: true, droneSpeed: 7, droneDist: 1, circles: true, zoneCircles: true, circleGlow: 1, quarks: false, quarksOthers: 0.5, quarksTouch: 0.5, quarksCap: 3000,
-    paperPlate: 1, paperBubble: 1, paperFoot: 1.6, paperOrbLight: 0.95, paperOrbShade: 0.15,
+    maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true, droneFollow: true, droneSpeed: 7, droneDist: 1, circles: true, zoneCircles: true, circleGlow: 1, slashLift: 0.9, craterBack: 1, townEdge: 1.2, townRound: 3, quarks: false, quarksOthers: 0.5, quarksTouch: 0.5, quarksCap: 3000,
+    paperPlate: 1, paperBubble: 1, plateMaxW: 200, bubbleMaxW: 220, platePadY: 3, platePadX: 14, bubblePadY: 7, bubblePadX: 18, paperFoot: 1.6, slotCorner: 1, slotInset: 1, slotIcon: 1, paperOrbLight: 0.95, paperOrbShade: 0.15,
+    enhAuraSmooth: true, enhAuraPulse: 0.08, enhAuraBreath: 0, enhAuraSpeed: 3, enhAuraGlow: 1, enhSparkGlow: 1, enhSparkRate: 1, enhSparkFadeIn: 0.3, enhOrbGlowFront: true, enhOrbBackFade: 1,
     gfxMenu: true, keyRebind: true, orbsNearBar: true, gfxDefault: 3, gfxMax: 3, gfxMid: 0.6, gfxLow: 0.3,
     ...(Object.fromEntries(QUARKS_KEYS.map((k) => [k, true])) as Record<QuarksKey, boolean>),
-    extras: true, extrasK: 1, skills: {},
+    extras: true, extrasK: 1, bossFx: true, bossExtras: true, bossExtrasK: 1, skills: {},
   };
 }
 const CODE = codeFxLayer();

@@ -177,8 +177,11 @@ export class Floating {
     this.bubbles.get(name)?.el.remove();
     const el = document.createElement('div');
     el.className = `chat-bubble${party ? ' party' : ''}`;
+    el.translate = false; // what a player typed: never translated (src/client/i18n.ts)
     el.textContent = text;
     el.style.display = 'none';
+    // Past this width the message wraps; the frame grows taller (/admin → ปรับสมดุล → เอฟเฟกต์สกิล → ภาพกระดาษ).
+    el.style.maxWidth = `${currentBalance().fxLayer.bubbleMaxW}px`;
     this.root.append(el);
     this.bubbles.set(name, { el, until: performance.now() + BUBBLE_MS });
   }
@@ -246,6 +249,7 @@ export class Floating {
       title.className = 'cos-title';
       const name = document.createElement('div');
       name.className = 'pname';
+      name.translate = false; // a player's own name: never translated (src/client/i18n.ts)
       el.append(title, name);
       this.root.append(el);
       this.myTitle = { el, fill: name, title };
@@ -256,7 +260,7 @@ export class Floating {
       paintTitle(t.title!, set);
       paintCos(t.fill, set);
     }
-    if (t.fill.textContent !== me.name) t.fill.textContent = me.name;
+    setPlateName(t.fill, me.name);
     const s = g.toScreen(me.x, headY(me), me.z);
     t.el.classList.toggle('hidden', !s.on);
     // Lower than other players' plates: it sits where the chat bubble's own-character spot expects it.
@@ -473,6 +477,7 @@ export class Floating {
         el.className = 'plate ally';
         const name = document.createElement('div');
         name.className = 'pname';
+        name.translate = false; // a player's own name: never translated (src/client/i18n.ts)
         const bar = document.createElement('div');
         bar.className = 'pbar';
         const fill = document.createElement('div');
@@ -493,7 +498,7 @@ export class Floating {
       }
       // The name row, not firstChild: the (usually hidden) title row comes first in the plate.
       const label = `Lv.${p.level} ${p.name}${p.alive ? '' : ' 💀'}`;
-      if (pl.name!.textContent !== label) pl.name!.textContent = label;
+      setPlateName(pl.name!, label);
       const party = g.party.memberOf(p) ? 1 : 0;
       if (pl.f !== party) {
         pl.f = party;
@@ -555,6 +560,36 @@ function paintCos(el: HTMLElement, set: CosmeticDef | undefined): void {
   el.style.setProperty('--c1', set?.color ?? '');
   el.style.setProperty('--c2', set?.color2 ?? '');
   paintPaperFrame(el, set);
+  delete el.dataset.full; // the padding may have changed: fit the name again
+}
+
+let measureCtx: CanvasRenderingContext2D | null | undefined;
+
+/**
+ * A player's name row, cut with … when it would be wider than fxLayer.plateMaxW (frame and padding included). Measured
+ * only when the text, the frame or the limit changes.
+ */
+function setPlateName(el: HTMLElement, text: string): void {
+  const maxW = currentBalance().fxLayer.plateMaxW;
+  const key = `${maxW}|${text}`;
+  if (el.dataset.full === key) return;
+  el.dataset.full = key;
+  el.style.maxWidth = `${maxW}px`;
+  measureCtx ??= document.createElement('canvas').getContext('2d');
+  let out = text;
+  if (measureCtx) {
+    const cs = getComputedStyle(el);
+    const side = (k: 'paddingLeft' | 'paddingRight' | 'borderLeftWidth' | 'borderRightWidth'): number => parseFloat(cs[k]) || 0;
+    const room = maxW - side('paddingLeft') - side('paddingRight') - side('borderLeftWidth') - side('borderRightWidth');
+    measureCtx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    if (measureCtx.measureText(text).width > room) {
+      // Whole letters with their marks (Thai vowels and tone marks stay on their letter).
+      const chars = typeof Intl.Segmenter === 'function' ? [...new Intl.Segmenter('th', { granularity: 'grapheme' }).segment(text)].map((s) => s.segment) : [...text];
+      while (chars.length > 1 && measureCtx.measureText(`${chars.join('')}…`).width > room) chars.pop();
+      out = `${chars.join('')}…`;
+    }
+  }
+  if (el.textContent !== out) el.textContent = out;
 }
 
 /**
@@ -573,7 +608,7 @@ function paintPaperFrame(el: HTMLElement, set: CosmeticDef | undefined): void {
   el.classList.toggle('paper-title', !!f);
   const st = el.style;
   if (!f || !set) {
-    for (const k of ['border-image-source', 'border-image-slice', 'border-image-width', 'border-image-outset', 'min-width', 'min-height', '--pt', '--pb', '--mw', '--mth', '--mbh', '--ot', '--ob']) st.removeProperty(k);
+    for (const k of ['border-image-source', 'border-image-slice', 'border-image-width', 'border-image-outset', 'min-width', 'min-height', 'padding', '--pt', '--pb', '--mw', '--mth', '--mbh', '--ot', '--ob']) st.removeProperty(k);
     return;
   }
   const fl = currentBalance().fxLayer;
@@ -589,6 +624,8 @@ function paintPaperFrame(el: HTMLElement, set: CosmeticDef | undefined): void {
   // Never smaller than its corners and middle piece, or the browser shrinks the whole frame to fit.
   st.setProperty('min-width', px(sl[1] + sl[3] - ou[1] - ou[3] + mid[0]));
   st.setProperty('min-height', px(sl[0] + sl[2] - ou[0] - ou[2]));
+  const pad = kind === 'plate' ? [fl.platePadY, fl.platePadX] : [fl.bubblePadY, fl.bubblePadX];
+  st.setProperty('padding', `${pad[0]}px ${pad[1]}px`);
   st.setProperty('--pt', url('_t'));
   st.setProperty('--pb', url('_b'));
   st.setProperty('--mw', px(mid[0]));

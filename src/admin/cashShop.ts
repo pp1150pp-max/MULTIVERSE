@@ -4,8 +4,9 @@
 // "จัดการของแต่งตัว" tab (saved there too). The server checks everything again (server/admin-cash.ts).
 import {
   CASH_LIMIT_MAX, CASH_PRICE_MAX, CASH_STONE_PRICE, CASH_STONES, CURRENCY, cashItemName, cosItemId, stoneItemId,
-  type AdminCashShop, type CashBadge, type CashItemCfg, type CashPackage, type CashShopCfg,
+  type AdminCashShop, type CashBadge, type CashItemCfg, type CashPackage, type CashShopCfg, type VipPackage,
 } from '../shared/cashShop';
+import { VIP_DAYS_MAX } from '../shared/vip';
 import { COSMETICS, COS_SLOTS, COS_SLOT_NAME } from '../shared/data/cosmetics';
 import { registerOrbItems } from '../shared/orbItems';
 
@@ -70,7 +71,8 @@ export async function renderCashShop(view: HTMLElement, h: H, api: Api): Promise
       sell.checked = !c.off;
       const stone = cos ? null : (id.slice(6) as (typeof CASH_STONES)[number]);
       const price = cos ? num(st.cosShop[cos]?.price, CASH_PRICE_MAX, 'ไม่ขาย') : num(c.price ?? CASH_STONE_PRICE[stone!], CASH_PRICE_MAX);
-      const sale = num(c.sale, CASH_PRICE_MAX, '—');
+      // A sale price, or percent off typed as "20%" (owner 2026-11-22).
+      const sale = h('input', { type: 'text', value: c.pct !== undefined ? `${c.pct}%` : c.sale === undefined ? '' : String(c.sale), placeholder: '— / 20%', style: 'width:76px', disabled: ro }) as HTMLInputElement;
       const limit = cos ? null : num(c.limit, CASH_LIMIT_MAX, 'ไม่จำกัด');
       const start = time(c.start);
       const end = time(c.end);
@@ -85,7 +87,7 @@ export async function renderCashShop(view: HTMLElement, h: H, api: Api): Promise
         h('td', {}, cashItemName(id), note), h('td', {}, sell), h('td', {}, price), h('td', {}, sale),
         h('td', {}, limit ?? h('span', { class: 'muted' }, '1 ครั้ง')), h('td', {}, start), h('td', {}, end), h('td', {}, badge), h('td', {}, featured));
     };
-    const head = () => h('tr', {}, ...['สินค้า', 'ขาย', `ราคา (${CURRENCY})`, 'ราคาลด', 'จำกัด/บัญชี', 'เริ่มขาย (เวลาไทย)', 'หมดเวลา (เวลาไทย)', 'ป้าย', 'แนะนำ'].map((t) => h('th', {}, t)));
+    const head = () => h('tr', {}, ...['สินค้า', 'ขาย', `ราคา (${CURRENCY})`, 'ราคาลด (หรือ %)', 'จำกัด/บัญชี', 'เริ่มขาย (เวลาไทย)', 'หมดเวลา (เวลาไทย)', 'ป้าย', 'แนะนำ'].map((t) => h('th', {}, t)));
     const group = (title: string) => h('tr', {}, h('th', { colspan: '9', style: 'text-align:left' }, title));
     const table = h('table', {}, head(), group('ของใช้และหิน (ส่งเข้าจดหมาย)'), ...CASH_STONES.map((k) => row(stoneItemId(k), null)));
     for (const slot of COS_SLOTS) {
@@ -94,18 +96,18 @@ export async function renderCashShop(view: HTMLElement, h: H, api: Api): Promise
       table.append(group(`ของแต่งตัว: ${COS_SLOT_NAME[slot]}`), ...list.map((c) => row(cosItemId(c.id), c.id)));
     }
 
-    // Packages: crystals + bonus for baht, shown "เร็วๆ นี้" (no real-money top-up yet).
+    // Packages: crystals + bonus for baht; players top up with them by PromptPay once the "เติมเงิน" tab opened it.
     const packs: CashPackage[] = st.cfg.packages.map((p) => ({ ...p }));
     const packBox = h('div', {});
     const drawPacks = (): void => {
-      const t = h('table', {}, h('tr', {}, h('th', {}, 'คริสตัล'), h('th', {}, 'โบนัส'), h('th', {}, 'ราคา (บาท)'), h('th', {}, '')));
+      const t = h('table', {}, h('tr', {}, h('th', {}, 'คริสตัล'), h('th', {}, 'โบนัส'), h('th', {}, 'ครั้งแรก +'), h('th', {}, 'ราคา (บาท)'), h('th', {}, '')));
       packs.forEach((p, i) => {
         const field = (k: keyof CashPackage, min: number) => {
-          const inp = h('input', { type: 'number', min: String(min), value: String(p[k]), style: 'width:90px', disabled: ro }) as HTMLInputElement;
+          const inp = h('input', { type: 'number', min: String(min), value: String(p[k] ?? 0), style: 'width:90px', disabled: ro }) as HTMLInputElement;
           inp.oninput = () => (p[k] = Number(inp.value));
           return inp;
         };
-        t.append(h('tr', {}, h('td', {}, field('crystals', 1)), h('td', {}, field('bonus', 0)), h('td', {}, field('baht', 1)),
+        t.append(h('tr', {}, h('td', {}, field('crystals', 1)), h('td', {}, field('bonus', 0)), h('td', {}, field('first', 0)), h('td', {}, field('baht', 1)),
           h('td', {}, ro ? null : h('button', { onclick: () => (packs.splice(i, 1), drawPacks()) }, 'ลบ'))));
       });
       packBox.replaceChildren(t, ro ? '' : h('button', { onclick: () => (packs.push({ crystals: 100, bonus: 0, baht: 35 }), drawPacks()) }, '+ เพิ่มแพ็กเกจ'),
@@ -113,8 +115,27 @@ export async function renderCashShop(view: HTMLElement, h: H, api: Api): Promise
     };
     drawPacks();
 
+    // VIP packages (src/shared/vip.ts): days + price in crystals; none = VIP is not sold.
+    const vips: VipPackage[] = st.cfg.vip.map((p) => ({ ...p }));
+    const vipBox = h('div', {});
+    const drawVips = (): void => {
+      const t = h('table', {}, h('tr', {}, h('th', {}, 'จำนวนวัน'), h('th', {}, `ราคา (${CURRENCY})`), h('th', {}, '')));
+      vips.forEach((p, i) => {
+        const field = (k: keyof VipPackage, max: number) => {
+          const inp = h('input', { type: 'number', min: '1', max: String(max), value: String(p[k]), style: 'width:90px', disabled: ro }) as HTMLInputElement;
+          inp.oninput = () => (p[k] = Number(inp.value));
+          return inp;
+        };
+        t.append(h('tr', {}, h('td', {}, field('days', VIP_DAYS_MAX)), h('td', {}, field('price', 1_000_000)),
+          h('td', {}, ro ? null : h('button', { onclick: () => (vips.splice(i, 1), drawVips()) }, 'ลบ'))));
+      });
+      vipBox.replaceChildren(t, ro ? '' : h('button', { onclick: () => (vips.push({ days: 30, price: 1000 }), drawVips()) }, '+ เพิ่มแพ็ก VIP'),
+        vips.length ? '' : h('div', { class: 'muted' }, 'ยังไม่มีแพ็ก VIP: ไม่ขาย VIP'));
+    };
+    drawVips();
+
     const collect = (): { cfg: CashShopCfg; cosPrices: Record<string, number | null> } | string => {
-      const cfg: CashShopCfg = { open: open.checked, items: {}, packages: packs.map((p) => ({ ...p })) };
+      const cfg: CashShopCfg = { open: open.checked, items: {}, packages: packs.map(({ first, ...p }) => ({ ...p, ...(first ? { first } : {}) })), vip: vips.map((p) => ({ ...p })) };
       const cosPrices: Record<string, number | null> = {};
       const int = (inp: HTMLInputElement): number | undefined | string => {
         if (inp.value.trim() === '') return undefined;
@@ -131,9 +152,13 @@ export async function renderCashShop(view: HTMLElement, h: H, api: Api): Promise
           if (price !== st.cosShop[r.cos]?.price) cosPrices[r.cos] = price ?? null;
         } else if (price === undefined) return `${name}: ต้องใส่ราคา`;
         else e.price = price;
-        const sale = int(r.sale);
-        if (typeof sale === 'string') return `${name}: ราคาลด${sale}`;
-        if (sale !== undefined) e.sale = sale;
+        const pm = /^\s*(\d+)\s*%\s*$/.exec(r.sale.value);
+        if (pm) e.pct = Number(pm[1]);
+        else {
+          const sale = int(r.sale);
+          if (typeof sale === 'string') return `${name}: ราคาลด${sale} (ใส่ตัวเลข หรือ % เช่น 20%)`;
+          if (sale !== undefined) e.sale = sale;
+        }
         if (r.limit) {
           const lim = int(r.limit);
           if (typeof lim === 'string') return `${name}: จำกัด${lim}`;
@@ -186,10 +211,11 @@ export async function renderCashShop(view: HTMLElement, h: H, api: Api): Promise
     box.replaceChildren(
       h('div', { class: 'card cash-admin' },
         h('h2', {}, 'แคชช็อป'),
-        h('div', { class: 'muted' }, `ซื้อด้วย${CURRENCY} (เก็บต่อบัญชี) · ยังไม่มีระบบเติมเงิน ผู้เล่นยังไม่มีทางได้${CURRENCY} · ของแต่งตัวเข้าบัญชีทันที ใบคูณ/โทรโข่ง/หินส่งเข้าจดหมาย (หินไม่ผูก ใบคูณ/โทรโข่งผูกตัวละครที่กดรับ) · ช่องราคาของแต่งตัวคือราคาเดียวกับแท็บ "จัดการของแต่งตัว" เว้นว่าง = ไม่ขาย · ราคาลดต้องต่ำกว่าราคาเต็ม ป้าย "ลดราคา" ขึ้นเอง · เวลาเว้นว่าง = ไม่จำกัด`),
+        h('div', { class: 'muted' }, `ซื้อด้วย${CURRENCY} (เก็บต่อบัญชี) · ผู้เล่นได้${CURRENCY}จากการเติมผ่านพร้อมเพย์ (แท็บ "เติมเงิน") หรือ owner เสกให้ · ของแต่งตัวเข้าบัญชีทันที ใบคูณ/โทรโข่ง/หินส่งเข้าจดหมาย (หินไม่ผูก ใบคูณ/โทรโข่งผูกตัวละครที่กดรับ) · ช่องราคาของแต่งตัวคือราคาเดียวกับแท็บ "จัดการของแต่งตัว" เว้นว่าง = ไม่ขาย · ราคาลดต้องต่ำกว่าราคาเต็ม ป้าย "ลดราคา" ขึ้นเอง · เวลาเว้นว่าง = ไม่จำกัด`),
         h('label', { class: 'cash-open' }, open, 'เปิดขาย (ปิด = ผู้เล่นดูสินค้าได้แต่ซื้อไม่ได้)'),
         h('div', { style: 'overflow-x:auto' }, table),
-        h('h3', {}, 'แพ็กเกจเติมคริสตัล (แสดงเป็น "เร็วๆ นี้")'), packBox,
+        h('h3', {}, 'แพ็ก VIP (ผูกบัญชี · ซื้อซ้ำ = บวกวันเพิ่ม · โบนัส EXP/ดรอป ตั้งในแท็บปรับสมดุล · เทรดไม่จำกัด)'), vipBox,
+        h('h3', {}, 'แพ็กเกจเติมคริสตัล (กดเติมได้เมื่อเปิดการเติมในแท็บ "เติมเงิน" ไม่งั้นแสดง "เร็วๆ นี้")'), packBox,
         h('div', { style: 'display:flex;gap:8px;margin-top:8px' },
           ro ? h('span', { class: 'muted' }, 'ดูได้อย่างเดียว (ต้องมีสิทธิ์ "แก้แคชช็อป")') : h('button', { class: 'primary', onclick: () => void save() }, 'บันทึก'),
           h('button', { onclick: () => void reload() }, 'โหลดค่าของเซิร์ฟใหม่')),
