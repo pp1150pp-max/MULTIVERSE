@@ -1151,7 +1151,7 @@ export class Sim {
       p.recompute();
       p.hp = p.maxHp;
       p.mp = p.stats.maxMp;
-      this.fx('levelUp', p.x, p.z);
+      this.fx('levelUp', p.x, p.z, p.id);
       this.text(p.x, p.topY + 0.5, p.z, 'LEVEL UP!', 'lvl', 1.8);
       this.log(`✨ เลเวลอัพ! ตอนนี้ Lv.${p.level}`, '#ffd34a', p.id);
       this.events.push({ t: 'save', to: p.id });

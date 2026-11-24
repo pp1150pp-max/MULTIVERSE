@@ -8,11 +8,14 @@ import { playSkillExtras } from './skillExtras';
 import { playLayer, ShotLayer, type FxLayerHooks, type FxLayerHost } from './fxLayer';
 import type { QuarksFx } from './quarksFx';
 import { currentBalance } from '../shared/balance';
-import { gfxQuality } from './gfxPrefs';
+import { gfxOthers, gfxParticles, gfxQuality } from './gfxPrefs';
+import { levelUpLook, playLevelUp } from './levelUpFx';
 import { bossFxOn, bossFxSpot, isBossEffect, isBossMelee, playBossExtras } from './bossFx';
 
 /** The three.quarks trial's switch (fxLayer.quarks, under the extra layer's own switch), and not "off" in the player's graphics window. */
 const quarksOn = (): boolean => currentBalance().fxLayer.enabled && currentBalance().fxLayer.quarks && gfxQuality() > 0;
+
+const TOUCH = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
 /** Glow colour standing in for a floor-2 move picture that isn't cut yet (Effects.sprite). */
 const SPRITE_GLOW: Record<string, string> = { fx_shell_guard: '#ffe9a0', fx_shock: '#ffe14a', fx_spike_burst: '#e8ecf0' };
@@ -819,7 +822,19 @@ export class Effects implements FxApi {
     }
   }
 
-  levelUp(x: number, z: number): void {
+  levelUp(x: number, z: number, by?: number): void {
+    const cfg = currentBalance().fxLayer;
+    if (cfg.luNew) {
+      const mine = by === undefined || !this.layerHooks || by === this.layerHooks.me();
+      const q = gfxQuality();
+      const others = mine ? 1 : gfxOthers();
+      playLevelUp((o, life, tick) => this.add(o, life, tick), x, z, levelUpLook(cfg), {
+        particles: gfxParticles() * others * (TOUCH ? 0.5 : 1),
+        extras: q > 0 && others > 0,
+        follow: by === undefined ? undefined : () => this.posOf?.(by) ?? null,
+      });
+      return;
+    }
     const m = this.mat('#ffd34a', 0.6);
     const col = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 4, 8, 1, true), m);
     col.position.set(x, 2, z);

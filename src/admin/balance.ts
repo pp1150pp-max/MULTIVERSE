@@ -6,6 +6,7 @@
 import { foldable } from './ui';
 import { CIRCLE_FALLBACKS, FX_LAYER_NAME, FX_LAYER_RANGE, QUARKS_SKILLS, quarksKey, SKILL_FX_RANGE, type FxLayerNum, type QuarksSkill, type SkillFxTune } from '../shared/fxLayerTuning';
 import { circleDesign, drawInner, drawOuter } from '../client/circleDesigns';
+import { levelUpLook } from '../client/levelUpFx';
 import { skillExtras } from '../client/skillExtras';
 import { ATTACK_ROOT_RANGE, NO_ATTACK_ROOT } from '../shared/attackRootTuning';
 import { AUDIO_GAIN_RANGE, SFX_GROUP_NAME, SFX_GROUPS } from '../shared/audioTuning';
@@ -1093,6 +1094,10 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
 
   // ---------------------------------------------------------- skill effects' extra layer (src/shared/fxLayerTuning.ts)
   const fxCard = h('div', { class: 'card' });
+  // level-up effect (owner 2026-11-25, src/client/levelUpFx.ts); its preview canvas stays across redraws
+  const luCard = h('div', { class: 'card' });
+  const luView = h('div', { class: 'muted' }, 'กด "ดูตัวอย่าง" เพื่อเล่นเอฟเฟกต์ด้วยค่าที่ตั้งอยู่ (ยังไม่ต้องบันทึก)');
+  let luPreview: Promise<import('../client/levelUpPreview').LevelUpPreview> | null = null;
   const drawFx = (): void => {
     const a = draft.fxLayer;
     const ca = code.fxLayer;
@@ -1196,6 +1201,27 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     townBox.replaceChildren(
       h('div', { class: 'row bal-line' }, num('townEdge', 0.1), num('townRound', 0.5)),
       h('div', { class: 'muted' }, 'ขอบพื้นอิฐเมืองกลาง: มีผลตอนโหลดแมพเมืองครั้งถัดไป'),
+    );
+    // level-up effect
+    const luFlag = (k: 'luNew' | 'luGround' | 'luSparks' | 'luArrows' | 'luText', text: string) => flag(
+      h('input', { type: 'checkbox', checked: a[k], onchange: (e: Event) => { a[k] = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } }),
+      a[k] !== ca[k], text);
+    const luColor = (k: 'luColor1' | 'luColor2', text: string) => h('label', { class: a[k] !== ca[k] ? 'bal-changed' : '', title: `ค่าในโค้ด: ${ca[k]}` }, text + ' ',
+      h('input', { type: 'color', value: a[k], oninput: (e: Event) => { a[k] = (e.target as HTMLInputElement).value.toLowerCase(); refresh(); }, onchange: () => drawFx() }),
+      a[k] !== ca[k] ? h('button', { type: 'button', title: 'คืนค่าในโค้ด', onclick: () => { a[k] = ca[k]; refresh(); drawFx(); } }, '↺') : '');
+    const play = (): void => {
+      luPreview ??= import('../client/levelUpPreview').then((m) => new m.LevelUpPreview(luView));
+      luPreview.then((p) => p.play(levelUpLook(a))).catch((e) => { luView.textContent = `เปิดตัวอย่างไม่ได้: ${e}`; luPreview = null; });
+    };
+    luCard.replaceChildren(
+      h('h2', {}, 'เอฟเฟกต์เลเวลอัป'),
+      h('div', { class: 'muted' }, 'วงเวทเรืองแสงบนพื้น ประกายและเส้นแสงพุ่งขึ้น ลูกศรลอยเหนือหัว และตัวหนังสือ LEVEL UP ! วาดด้วยโค้ดทั้งหมด · เห็นทุกคนรอบ ๆ ตามเมนูกราฟิกของแต่ละคน · มีผลทันทีหลังบันทึก'),
+      h('div', { class: 'row bal-line' }, luFlag('luNew', ' ใช้แบบใหม่ (ปิด = แบบเดิม เสาแสงสีทอง)')),
+      h('div', { class: 'row bal-line' }, luColor('luColor1', 'สีหลัก'), luColor('luColor2', 'สีรอง'), num('luSize', 0.1), num('luSec', 0.1)),
+      h('div', { class: 'row bal-line' }, luFlag('luGround', ' วงเวทบนพื้น'), luFlag('luSparks', ' ประกายและเส้นแสง'), luFlag('luArrows', ' ลูกศร'), luFlag('luText', ' ตัวหนังสือ LEVEL UP !')),
+      h('div', { class: 'row bal-line' }, h('button', { type: 'button', onclick: play }, '▶ ดูตัวอย่าง')),
+      luView,
+      h('div', { class: 'muted' }, 'สีหลัก = วงแหวนนอก ประกาย ตัวหนังสือ · สีรอง = แผ่นแสงบนพื้น วงแหวนใน ไล่สีล่างของตัวหนังสือ/ลูกศร · เมนูกราฟิกของผู้เล่น: คุณภาพ "ปิด" = เหลือแค่ตัวหนังสือ, "ต่ำ/กลาง" = ประกายลดตาม × อนุภาค, ของคนอื่น "ไม่แสดง" = เห็นเลเวลอัปของคนอื่นแค่ตัวหนังสือ "ครึ่งเดียว" = ประกายครึ่งเดียว, จอสัมผัส ประกายครึ่งเดียว · ปิดตัวหนังสือ = กลับไปใช้ตัวหนังสือลอยแบบเดิม'),
     );
   };
 
@@ -1514,7 +1540,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     { name: 'มอน-บอส-เมือง', cards: [monsterCard, bossCard, moveCard, hubCard] },
     { name: 'ไอเทม-ตีบวก', cards: [affixCard, tierCard, previewCard, setCard, potionCard, bagCard, forgeCard] },
     { name: 'Auto Play', cards: [autoCard] },
-    { name: 'หน้าตา-เอฟเฟกต์-เสียง', cards: [uiCard, fxCard, circleCard, audioCard, rigCard] },
+    { name: 'หน้าตา-เอฟเฟกต์-เสียง', cards: [uiCard, fxCard, luCard, circleCard, audioCard, rigCard] },
     { name: 'ระบบ-รางวัล', cards: [expCard, vipCard, floorCard, tutCard, langCard] },
   ];
   const ALL = 'ทั้งหมด';
