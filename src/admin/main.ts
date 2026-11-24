@@ -407,6 +407,7 @@ function setTab(t: Tab): void {
   document.title = `${TAB_LABEL[t]} · Multiverse Admin`;
   window.scrollTo(0, 0);
   view.replaceChildren();
+  view.classList.toggle('wide', t === 'orbs');
   if (t === 'online') renderOnline();
   else if (t === 'users') void renderUsers();
   else if (t === 'stats') void renderStats();
