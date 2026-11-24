@@ -1,13 +1,13 @@
 // The Seeker's key quests: take one by him, kill 30 monsters of the boss's map (a hit counts, the hub's
-// visitors from that map too), hand it in for a bound key that opens the room at ×1 without being used
-// up, stays in the bag, and goes once the boss is killed. Real Sims, no server.
+// visitors from that map too), hand it in for a key that opens the room at ×1 and is used up like a dropped key,
+// and trades like one (unbound since 2026-11-24). Real Sims, no server.
 import { ok, finish } from './check';
 import { BOSS_ROOMS, ZONES, ZONE_1, ZONE_HUB } from '../src/shared/data/zones';
 import { Sim } from '../src/shared/sim/Sim';
 import { newCharacterData, type Player } from '../src/shared/sim/Player';
 import { marketSellable } from '../src/shared/sim/market';
 import { makeOffer } from '../src/shared/trade';
-import { BOUND_MSG, QUEST_KILLS } from '../src/shared/data/stones';
+import { QUEST_KILLS } from '../src/shared/data/stones';
 import { BossRooms, type RoomActor } from '../server/bossRooms';
 import type { Monster } from '../src/shared/sim/Monster';
 import { ROOM_BOSS_DELAY } from '../src/shared/bossRoom';
@@ -76,7 +76,7 @@ ok(!hub.questTurnIn(p, 'forest_bear'), 'nothing to hand in yet');
   ok(q.quests.forest_bear === QUEST_KILLS, `stops at ${QUEST_KILLS}`);
 }
 
-// ---- handing in: a bound key
+// ---- handing in: the key
 {
   p.bag = p.bag.map(() => ({ stone: 'enhance' as const, count: 10 }));
   ok(!hub.questTurnIn(p, 'forest_bear') && p.quests.forest_bear === QUEST_KILLS, 'a full bag keeps the quest open');
@@ -87,24 +87,14 @@ ok(!hub.questTurnIn(p, 'forest_bear'), 'nothing to hand in yet');
   ok(hub.addPlayer(data).stoneCount('qkey_bear') === 1, 'the key survives a save');
 }
 
-// ---- it stays in the bag
+// ---- not bound any more: it sells, stores, trades and goes on the market (owner 2026-11-24)
 {
   const i = p.bag.findIndex((e) => e && 'stone' in e && e.stone === 'qkey_bear');
-  const merchant = hub.terrain.npcPos.merchant!;
-  p.x = merchant.x + 1;
-  p.z = merchant.z + 1;
-  ok(hub.sellItem(p, i) === 0 && p.stoneCount('qkey_bear') === 1, 'not sold');
-  ok(!hub.dropFromBag(p, i) && p.stoneCount('qkey_bear') === 1, 'not dropped');
-  const keeper = hub.terrain.npcPos.keeper!;
-  p.x = keeper.x + 1;
-  p.z = keeper.z + 1;
-  ok(!hub.stashPut(p, i) && !hub.stashSplit(p, 'bag', i, 'stash', 0, 1) && p.stoneCount('qkey_bear') === 1, 'not into the stash');
-  ok(!marketSellable(p.bag[i]) && makeOffer(p.bag, i) === BOUND_MSG, 'not on the market, not in a trade');
-  hub.moveInBag(p, i, 50); // within the usable tab (src/shared/bagTabs.ts)
-  ok((p.bag[50] as { stone?: string } | null)?.stone === 'qkey_bear', 'but it moves around the bag');
+  ok(marketSellable(p.bag[i]), 'on the market');
+  ok(typeof makeOffer(p.bag, i) !== 'string', 'in a trade');
 }
 
-// ---- it opens the room at ×1 and is not used up; killing the bear takes it away
+// ---- it opens the room at ×1 and is used up
 {
   const field = new Sim(ZONE_1);
   const q = field.addPlayer(p.toData());
@@ -132,7 +122,7 @@ ok(!hub.questTurnIn(p, 'forest_bear'), 'nothing to hand in yet');
   for (let i = 0; i < (ROOM_BOSS_DELAY + 1) * 30; i++) room.step(1 / 30);
   ok(room.zone === BOSS_ROOMS.emerald_forest && room.keys === 1, 'always ×1, whatever was asked');
   const me = actor.player;
-  ok(me.stoneCount('qkey_bear') === 1, 'the key is still there');
+  ok(me.stoneCount('qkey_bear') === 0, 'the key is used up');
   const bear = room.monsters.find((m) => m.isBoss)!;
   me.x = bear.x + 2;
   me.z = bear.z;
@@ -140,7 +130,6 @@ ok(!hub.questTurnIn(p, 'forest_bear'), 'nothing to hand in yet');
   me.stats.atk = 1e12;
   room.hitMonster(me, bear, 1);
   ok(!bear.alive && me.bossKills.includes('forest_bear'), 'the bear is beaten');
-  ok(me.stoneCount('qkey_bear') === 0, 'and the quest key is gone');
 }
 
 finish('boss-quest');

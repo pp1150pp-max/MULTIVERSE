@@ -182,7 +182,8 @@ export const isQuestKey = (k: StoneKind): k is QuestKey => (QUEST_KEYS as StoneK
 export const isConsumable = (k: StoneKind): k is Consumable => (CONSUMABLES as StoneKind[]).includes(k);
 export const isBuffScroll = (k: StoneKind): k is BuffScroll => (BUFF_SCROLLS as StoneKind[]).includes(k);
 /** Kinds bound to the character: quest keys and reward consumables (REWARD_ITEMS). */
-export const isBoundKind = (k: StoneKind): boolean => isQuestKey(k) || (REWARD_ITEMS as StoneKind[]).includes(k);
+// Floor 1 quest keys and quest rewards are no longer bound (owner 2026-11-24); the login/mail reward items still are.
+export const isBoundKind = (k: StoneKind): boolean => (REWARD_ITEMS as StoneKind[]).includes(k);
 /** A bound stack (isBoundKind, or marked bound: tutorial quest rewards): stays in its owner's bag. */
 export const isBound = (e: BagEntry | null | undefined): boolean => (isStack(e) && e.bound === true) || (isStone(e) && isBoundKind(e.stone));
 

@@ -61,7 +61,7 @@ export const EN_PANELS: Record<string, string> = {
   'ใส่กุญแจและเชิญปาร์ตี้': 'Place keys and invite the party',
   'ใส่กุญแจและเข้าห้อง': 'Place keys and enter',
   'ยังไม่มี{0} — ดรอปจากมอนสเตอร์ในแมพนี้ ซื้อในตลาด หรือรับภารกิจจาก The Seeker': "No {0} yet — monsters on this map drop it, the market sells it, or take The Seeker's quest",
-  'ใช้{0} (×1 ไม่หาย)': 'Use {0} (×1, not used up)',
+  'ใช้{0} (×1)': 'Use {0} (×1)',
   'เริ่ม': 'Start',
   'ยกเลิกการตีบอส?': 'Cancel the boss fight?',
   'กุญแจจะคืนเข้ากระเป๋า': 'The keys go back to your bag',

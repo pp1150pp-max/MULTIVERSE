@@ -76,8 +76,8 @@ export const EN_REST: Record<string, string> = {
   'ตัวละครอื่นในบัญชีนี้ ({0}) รับภารกิจนี้ไปแล้ว — ภารกิจสอนระบบได้ครั้งเดียวต่อบัญชี': 'Another character on this account ({0}) already took this quest — tutorial quests are once per account',
   'รับต่อจากตัวละครที่ถูกลบ — บัญชีนี้ได้ของตอนรับภารกิจไปแล้ว จะไม่ได้ซ้ำ': 'Continued from a deleted character — this account already got the start reward',
   'รับภารกิจแล้วได้ทันที: {0} G{1}': 'On accepting: {0} G{1}',
-  '+ {0} (เข้ากระเป๋า ผูกตัวละคร)': '+ {0} (to the bag, character-bound)',
-  'รางวัลเมื่อส่งภารกิจ (ส่งทางจดหมาย ของผูกตัวละคร): {0}': 'Reward on hand-in (by mail, character-bound): {0}',
+  '+ {0} (เข้ากระเป๋า)': '+ {0} (to the bag)',
+  'รางวัลเมื่อส่งภารกิจ (ส่งทางจดหมาย): {0}': 'Reward on hand-in (by mail): {0}',
   'Guest ไม่มีกล่องจดหมาย — สมัครสมาชิกก่อนจึงจะส่งภารกิจได้ (ตัวละครนี้จะย้ายไปอยู่ในบัญชีใหม่)': 'Guests have no mailbox — sign up to hand in quests (this character moves into the new account)',
   'ส่งภารกิจ': 'Hand in',
 

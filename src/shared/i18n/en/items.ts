@@ -90,7 +90,7 @@ export const EN_ITEMS: Record<string, string> = {
   'โทรโข่ง': 'Megaphone',
   'กล่องปริศนา': 'Mystery Box',
   'กุญแจห้องบอส{0} ใส่ที่แท่นเรียกบอสใน{1} (ครั้งละ 1–10 อัน ยิ่งใส่มาก บอสยิ่งแรงและรางวัลยิ่งมาก)': 'Boss room key for {0}. Place it at the boss altar in {1} (1–10 at a time — the more you place, the stronger the boss and the bigger the reward)',
-  'กุญแจจาก The Seeker: เปิดห้องบอส{0}ได้ระดับ ×1 โดยไม่หายเมื่อใช้ และจะหายไปเมื่อปราบ{1}ได้ (ผูกกับตัวละคร)': "The Seeker's key: opens {0}'s boss room at ×1 without being used up, and disappears once you defeat {1} (character-bound)",
+  'กุญแจจาก The Seeker: เปิดห้องบอส{0}ได้ระดับ ×1 ใช้แล้วหาย (ยกเลิกการเรียก = คืน) เทรด ขาย ฝากคลังได้': "The Seeker's key: opens {0}'s boss room at ×1, used up (given back if the summoning is called off); can be traded, sold and stored",
   'ใช้ตอนตีบวก: ถ้าล้มเหลว ระดับจะไม่ลด (ใช้ 1 ก้อนต่อครั้ง)': 'Used when enhancing: a failure does not lower the level (1 per attempt)',
   'วัตถุดิบตีบวกตั้งแต่ +11 ขึ้นไป (ใช้ 1 ก้อนต่อครั้ง)': 'Enhance material from +11 up (1 per attempt)',
   'ใช้ตอนสุ่มค่าตัวเลขที่ช่างตีเหล็ก (ใช้ 1 ก้อนต่อครั้ง)': 'Used to reroll values at the blacksmith (1 per attempt)',

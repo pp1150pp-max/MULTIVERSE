@@ -90,9 +90,9 @@ export class TutorialUI {
         this.body.append(el('div', 'quest-sub', 'รับต่อจากตัวละครที่ถูกลบ — บัญชีนี้ได้ของตอนรับภารกิจไปแล้ว จะไม่ได้ซ้ำ'));
       } else if (r.state === 'offer') {
         const extra = stones.map((s) => `${STONE_NAME[s.stone]} ×${s.count}`).join(', ');
-        this.body.append(el('div', 'quest-sub', `รับภารกิจแล้วได้ทันที: ${TUT_ACCEPT_GOLD.toLocaleString()} G${extra ? ` + ${extra} (เข้ากระเป๋า ผูกตัวละคร)` : ''}`));
+        this.body.append(el('div', 'quest-sub', `รับภารกิจแล้วได้ทันที: ${TUT_ACCEPT_GOLD.toLocaleString()} G${extra ? ` + ${extra} (เข้ากระเป๋า)` : ''}`));
       }
-      this.body.append(el('div', 'quest-sub', `รางวัลเมื่อส่งภารกิจ (ส่งทางจดหมาย ของผูกตัวละคร): ${tutRewardText(tutTurnInReward(r.step, currentBalance().tutorial))}`));
+      this.body.append(el('div', 'quest-sub', `รางวัลเมื่อส่งภารกิจ (ส่งทางจดหมาย): ${tutRewardText(tutTurnInReward(r.step, currentBalance().tutorial))}`));
       if (r.state === 'ready' && this.g.backend.guest) {
         this.body.append(el('div', 'quest-sub tut-warn', 'Guest ไม่มีกล่องจดหมาย — สมัครสมาชิกก่อนจึงจะส่งภารกิจได้ (ตัวละครนี้จะย้ายไปอยู่ในบัญชีใหม่)'));
       }

@@ -339,6 +339,8 @@ export function upgradeCharacter(data: CharacterData): CharacterData {
   if (!data || typeof data !== 'object') return data;
   for (const it of Object.values(data.equipment ?? {})) upgradeItem(it);
   for (const e of data.bag ?? []) upgradeItem(e);
+  // Floor 1 quest rewards stopped being bound (owner 2026-11-24): old saves lose the mark.
+  for (const e of data.bag ?? []) if (e && typeof e === 'object' && 'bound' in e) delete (e as { bound?: true }).bound;
   for (const b of data.buyback ?? []) upgradeItem(b?.item);
   return data;
 }

@@ -18,7 +18,7 @@ import { ZONE_1 } from '../shared/data/zones';
 import { expToNext } from '../shared/formulas';
 import { blockingGate } from '../shared/data/bossGates';
 import {
-  BUFF_SCROLLS, isBossKey, isBound, isBoundKind, isBuffScroll, isConsumable, isOrbStone, isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
+  BUFF_SCROLLS, isBossKey, isBound, isBoundKind, isQuestKey, isBuffScroll, isConsumable, isOrbStone, isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
   type BagEntry, type Item, type PotionKind, type PotionStack, type StoneStack, type EquipSlot, type StatKey,
 } from '../shared/types';
 import { drawEdgeMarker, drawMapIcon, drawPin, facingAngle, partyDot } from './mapIcons';
@@ -1535,7 +1535,7 @@ export class Hud {
         isBoundKind(s.stone) && isConsumable(s.stone) ? `ของใช้ · ${s.count} / ${stoneStackMax(s.stone)} ${stoneUnit(s.stone)} · ผูกกับตัวละคร`
         : isConsumable(s.stone) ? `ของใช้ · ${s.count} / ${stoneStackMax(s.stone)} ${stoneUnit(s.stone)} · ซื้อได้ที่พ่อค้า`
         : isBossKey(s.stone) ? `Artifact · ${s.count} / ${STONE_STACK} อัน · ดรอปจากมอนสเตอร์ในแมพของบอส`
-        : isBound(s) && !s.bound ? 'กุญแจเควส · ผูกกับตัวละคร'
+        : isQuestKey(s.stone) ? `กุญแจเควส · ${s.count} / ${STONE_STACK} อัน · จาก The Seeker`
         : s.stone === 'phoenix' ? `ไอเทมชุบชีวิต · ${s.count} / ${STONE_STACK} อัน · ซื้อจากพ่อค้า`
         // Reroll stones also drop (rarely) from ordinary monsters: MONSTER_STONES.
         : MONSTER_STONES.includes(s.stone) ? `วัตถุดิบช่างตีเหล็ก · ${s.count} / ${STONE_STACK} ก้อน · ดรอปจากบอส และมอนสเตอร์ทั่วไป (หายาก)`

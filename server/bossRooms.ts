@@ -44,7 +44,7 @@ export interface RoomHost {
   /** Sends this player out of its room, next to the summoner of its map: the living walk out, the dead get up there. */
   toLair(sim: Sim, player: Player): void;
   /** Gives keys back: into the bag if there is room (and the character is online), else by mail. */
-  refund(charId: number, key: BossKey, n: number): void;
+  refund(charId: number, key: StoneKind, n: number): void;
   save(charId: number): void;
 }
 
@@ -57,7 +57,7 @@ interface Lobby {
   boss: string;
   key: StoneKind;
   keys: number;
-  /** Opened with the quest key: nothing was taken, so nothing goes back. */
+  /** Opened with the quest key (taken like a dropped key, given back the same way: owner 2026-11-24). */
   quest: boolean;
   answers: Map<number, { name: string; answer: RoomAnswer }>;
   /** When (ms) unanswered invites count as "no", and when the lobby is called off. */
@@ -123,8 +123,8 @@ export class BossRooms {
   // ------------------------------------------------------------ actions (checked here; the world checks the types)
 
   /**
-   * Puts `keys` keys into the summoner the player stands next to. With `quest`, the bound quest key is
-   * shown instead: always ×1, and it stays in the bag (it goes once the boss is killed). Returns a Thai error, or null.
+   * Puts `keys` keys into the summoner the player stands next to. With `quest`, the quest key instead: always ×1, and
+   * used up like a dropped key (owner 2026-11-24, it trades now). Returns a Thai error, or null.
    */
   open(charId: number, keys: unknown, quest = false): string | null {
     const a = this.host.actor(charId);
@@ -142,11 +142,9 @@ export class BossRooms {
     const bossName = bossShortName(MONSTERS[lair.boss].nameTh);
     if (!key) return null;
     if (p.stoneCount(key) < keys) return quest ? `ไม่มี${STONE_NAME[key]}` : `${STONE_NAME[key]}ไม่พอ (มี ${p.stoneCount(key)} อัน)`;
-    // Gone at once (owner); given back only if the summoning is called off. A quest key is only shown.
-    if (!quest) {
-      p.takeStones(key, keys);
-      this.host.save(charId);
-    }
+    // Gone at once (owner); given back only if the summoning is called off. The quest key too.
+    p.takeStones(key, keys);
+    this.host.save(charId);
     const field = a.sim.zone.id;
     const others = (party?.members ?? []).filter((m) => m.charId !== charId && this.host.actor(m.charId) && !this.inRoom(m.charId));
     if (!others.length) {
@@ -300,8 +298,8 @@ export class BossRooms {
     }
     this.host.lobby(l.leader, null);
     if (why) {
-      if (!l.quest) this.host.refund(l.leader, l.key as BossKey, l.keys);
-      this.host.tell(l.leader, l.quest ? why.replace(/ ?—? ?คืนกุญแจ(ให้หัวตี้|แล้ว)/, '') : why);
+      this.host.refund(l.leader, l.key, l.keys);
+      this.host.tell(l.leader, why);
     }
   }
 

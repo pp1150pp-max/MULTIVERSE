@@ -78,7 +78,7 @@ export const EN_EXTRAS: Record<string, string> = {
   'ยา HP กลาง': 'Medium HP potion',
   'ยา MP เล็ก': 'Small MP potion',
   'ยา MP กลาง': 'Medium MP potion',
-  'กุญแจเควส {0} (ผูกตัว)': '{0} quest key (bound)',
+  'กุญแจเควส {0}': '{0} quest key',
 
   // ---- top-up
   'ช่วง Close Beta: การเติมคริสตัลมิติเป็นการสนับสนุนการพัฒนาเกม': 'Closed Beta: buying Dimension Crystals supports the game’s development',

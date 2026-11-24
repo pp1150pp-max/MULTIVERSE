@@ -62,7 +62,7 @@ export const EN_GAME: Record<string, string> = {
   '✨ เลเวลอัพ! ตอนนี้ Lv.{0}': '✨ Level up! Now Lv.{0}',
   'รับภารกิจ: ล่ามอนสเตอร์ใน{0} {1} ตัว แล้วกลับมาหา The Seeker': 'Quest accepted: hunt {1} monsters in {0}, then return to The Seeker',
   'กระเป๋าเต็ม — เคลียร์ช่องว่าง 1 ช่องก่อนรับกุญแจ': 'Bag full — free 1 slot before taking the key',
-  'ได้รับ {0} — ใส่ที่แท่นเรียกบอสได้ (ไม่หายเมื่อใช้ จนกว่าจะปราบบอสได้)': 'Got {0} — place it at the boss altar (not used up until you defeat the boss)',
+  'ได้รับ {0} — ใส่ที่แท่นเรียกบอสได้ (ใช้แล้วหาย เหมือนกุญแจดรอป)': 'Got {0} — place it at the boss altar (used up like a dropped key)',
   'ภารกิจ {0}/{1}': 'Quest {0}/{1}',
   'ล่าครบ {0} ตัวแล้ว — กลับไปหา The Seeker ที่เมืองเพื่อรับกุญแจ': 'Hunted {0} — return to The Seeker in town for the key',
   'รับภารกิจ: ล่ามอนสเตอร์ใน{0} {1} ตัว แล้วกลับมาหา The Seeker เพื่อรับ{2}': 'Quest accepted: hunt {1} monsters in {0}, then return to The Seeker for {2}',
