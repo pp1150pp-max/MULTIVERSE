@@ -5,10 +5,11 @@
 // - ของฉัน: what the account owns (an admin gives them out), to wear or take off. The server checks it.
 // Also the mount button (Z) shown while a mount is worn.
 import type { Game } from './Game';
-import { COSMETICS, COS_SLOTS, COS_SLOT_NAME, cosById, type CosmeticDef, type CosSlot, type CosWorn } from '../shared/data/cosmetics';
+import { COSMETICS, COS_SLOTS, COS_SLOT_NAME, cosById, cosPerk, type CosmeticDef, type CosSlot, type CosWorn } from '../shared/data/cosmetics';
 import { setLookOwner, setTryOn } from './cosLook';
 import { cosHiddenKey, isCosHidden } from './cosTune';
 import { cosCardImage } from './cosmeticViews';
+import { hasPaperCard, paperCardImage } from './paperCards';
 import { orbItemLook, orbItemsVersion } from '../shared/orbItems';
 import { ORB_PALETTES } from './orbs';
 import { cashCatalogNow, cashVersion } from './cashData';
@@ -31,8 +32,41 @@ function button(label: string, onClick: () => void, cls = '', disabled = false):
 
 const picCache = new Map<string, string>();
 
+/**
+ * An aura's or a title set's card picture from its paper art (paperCards.ts). It loads in the background: until then the
+ * old picture shows, then every copy on the page (copies made with cloneNode too, found by data-cos-pic) gets it.
+ */
+function paperPicture(c: CosmeticDef, fallback: string): HTMLElement {
+  const img = el('img', 'cos-pic cos-pic-paper');
+  img.alt = c.name;
+  img.dataset.cosPic = c.id;
+  const done = picCache.get(`paper:${c.id}`);
+  img.src = done ?? fallback;
+  if (!done && !paperLoading.has(c.id)) {
+    paperLoading.add(c.id);
+    void paperCardImage(c).then((src) => {
+      if (!src) return; // art missing: keep the old picture (and try again next time)
+      picCache.set(`paper:${c.id}`, src);
+      for (const im of document.querySelectorAll<HTMLImageElement>(`img[data-cos-pic="${c.id}"]`)) im.src = src;
+    }).finally(() => paperLoading.delete(c.id));
+  }
+  return img;
+}
+const paperLoading = new Set<string>();
+/** Until the paper title card loads: nothing (a transparent pixel). */
+const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+
 /** The card picture (made once): the front view of the real sheet or its placeholder; a title set as text. */
 export function cosPicture(c: CosmeticDef): HTMLElement {
+  if (hasPaperCard(c)) {
+    if (c.slot === 'title') return paperPicture(c, BLANK);
+    let src = picCache.get(c.id);
+    if (!src) {
+      src = cosCardImage(c);
+      picCache.set(c.id, src);
+    }
+    return paperPicture(c, src);
+  }
   if (c.slot === 'title') {
     const box = el('div', 'cos-pic cos-pic-title');
     box.style.setProperty('--c1', c.color);
@@ -172,6 +206,8 @@ export class CosmeticsUI {
       if (worn[c.slot] === c.id) card.classList.add('worn');
       const info = el('div', 'cos-info');
       info.append(el('div', 'cos-name', c.name), el('div', 'cos-desc', c.desc));
+      const perk = cosPerk(c);
+      if (perk) info.append(el('div', 'cos-desc', perk));
       const tags = el('div', 'cos-tags');
       if (owned.has(c.id)) tags.append(el('span', 'tag on', 'มีแล้ว'));
       if (worn[c.slot] === c.id) tags.append(el('span', 'tag', 'สวมอยู่'));

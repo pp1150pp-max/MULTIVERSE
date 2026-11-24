@@ -17,15 +17,17 @@ import { checkCosTuning } from '../../shared/cosTuning';
 import { checkAnimTuning } from '../../shared/animTuning';
 import { applyAnimTuning } from '../animTune';
 import { applyBalance, checkBalance, currentBalance } from '../../shared/balance';
+import { applySlotVars } from '../img';
 import { attackRootTime } from '../../shared/attackRootTuning';
 import { skipsAttackRoot } from '../../shared/skillTuning';
 import { applyCosHidden, applyCosTuning } from '../cosTune';
-import { useCash, useCashState } from '../cashData';
+import { useCash, useCashState, useTopup } from '../cashData';
 import { EQUIP_SLOTS } from '../../shared/types';
 import { cleanCosOwned, cosCodes, cosFromCodes, type CosSlot } from '../../shared/data/cosmetics';
 import { inSafeArea, zoneById, type SpawnArea, type ZoneDef } from '../../shared/data/zones';
 import type { NpcId } from '../../shared/data/npcs';
 import type { DailyView } from '../../shared/daily';
+import type { NewsView } from '../../shared/news';
 import type { BuffScroll, EquipSlot, Item, PotionKind, PotionSize, Rarity, Vec2 } from '../../shared/types';
 import type { SkillSlot, WearSlot } from '../../shared/data/classes';
 import { cleanSkillBook } from '../../shared/skillBook';
@@ -41,12 +43,16 @@ import type { Hazard } from '../../shared/sim/volcanoHeart';
 import type { MarketCall, MarketReply } from '../../shared/sim/market';
 import type { RoomLobbyView, RoomSnap } from '../../shared/bossRoom';
 import type { WaveSnap } from '../../shared/waveGame';
+import { defaultBagSlots, type BagPay, type BagTab } from '../../shared/bagTabs';
 import type { MailCall, MailReply } from '../../shared/mail';
 import { WalkTarget } from '../walkTo';
 import type { ReportReply } from '../../shared/reports';
 import type { TutStep } from '../../shared/tutorial';
 import { ensureMap, mapIsCurrent } from '../mapSync';
+import { playSound } from '../audio/sfx';
 import { activePreview, loadPreviewDraft, previewParam, settlePreview } from '../mapPreview';
+import { hudPreviewParam, loadHudPreview } from '../hudLayout';
+import { validLinks, type ChatLink, type ChatLinkRef } from '../../shared/chatLinks';
 
 /** Mirrors never run game logic, so they don't need a simulation behind them. */
 const NO_SIM = null as unknown as Sim;
@@ -114,6 +120,7 @@ function useWelcome(m: WelcomeMsg): void {
   useBalance(m.balance);
   useCash(m.cash);
   useCashState(m.cashState);
+  useTopup(m.topup);
 }
 
 /** Opens the connection (direct or through the tunnel: route.ts), joins with the chosen character and resolves once the first snapshot arrives. */
@@ -140,6 +147,8 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
     // ?previewMap=<zone>: the owner's draft of that map goes in first (a refusal or a failure = the normal game).
     const wanted = previewParam();
     const draftReady = wanted ? loadPreviewDraft(wanted, token) : Promise.resolve(null);
+    // ?previewHud=1: the "จัดหน้าจอเกม" draft, in this tab only (the join does not wait for it).
+    if (hudPreviewParam()) void loadHudPreview(token);
     let previewId: string | null = null;
     // Messages that come while the map layout of our first zone is fetched wait here and go to the backend once it exists.
     let waiting: ServerMsg[] | null = null;
@@ -207,7 +216,7 @@ export class OnlineBackend implements Backend {
    * Hooks for the game screen. `ch: 'party'` = party chat or a party notice; `ch: 'whisper'` = a whisper
    * from `name`, or (with `to`) your own whisper to `to`.
    */
-  onChat: ((name: string, text: string, ch?: 'party' | 'whisper', to?: string) => void) | null = null;
+  onChat: ((name: string, text: string, ch?: 'party' | 'whisper', to?: string, links?: ChatLink[]) => void) | null = null;
   /** The friends window's state changed (sent on joining and on every change). */
   onFriends: ((view: FriendsView) => void) | null = null;
   friends: FriendsView | null = null;
@@ -232,7 +241,7 @@ export class OnlineBackend implements Backend {
   /** Auto was on when the server welcomed us (a character still farming, or back at its spot); see takeAutoResume. */
   private autoResume: boolean;
   /** An announcement from the server's owner. */
-  onAnnounce: ((text: string, from: string, direct: boolean, megaphone: boolean) => void) | null = null;
+  onAnnounce: ((text: string, from: string, direct: boolean, megaphone: boolean, box: boolean, head?: string, links?: ChatLink[]) => void) | null = null;
   /**
    * The server stops or restarts in `seconds` (sent once a second); null = cancelled. `text` is the
    * line to show, with the time filled in by the server (the owner's wording); absent = the default.
@@ -319,6 +328,7 @@ export class OnlineBackend implements Backend {
   mailUnread = 0;
   /** New mail arrived (or you joined with some): `fresh` is how many you haven't been told about. */
   onMailNote: ((unread: number, fresh: number) => void) | null = null;
+  onNews: ((v: NewsView) => void) | null = null;
   /** This month's daily login calendar (with `popup` after today's reward was just mailed). */
   onDaily: ((view: DailyView) => void) | null = null;
   private readonly enhanceWait = new Map<number, (o: EnhanceOutcome) => void>();
@@ -408,7 +418,7 @@ export class OnlineBackend implements Backend {
       // The first snapshot after joining always carries everything (look bundle included).
       name: mine.name!, classId: mine.cls!, level: first.me.level, exp: first.me.exp, gold: first.me.gold,
       potSel: first.me.potSel, lootFilter: first.me.lootFilter, autoSettings: first.me.autoSettings, bossKills: first.me.bossKills, unlocks: first.me.unlocks,
-      equipment: first.me.inv?.equipment ?? {}, bag: first.me.inv?.bag ?? [], zone: this.zone.id,
+      equipment: first.me.inv?.equipment ?? {}, bag: first.me.inv?.bag ?? [], bagSlots: first.me.inv?.bagSlots, zone: this.zone.id,
       buyback: first.me.inv?.buyback, buybackLeft: first.me.buybackLeft, skills: first.me.skills,
     };
     this.me = new Player(myId, NO_SIM, data);
@@ -684,7 +694,8 @@ export class OnlineBackend implements Backend {
         this.applySnapshot(m);
         break;
       case 'chat':
-        this.onChat?.(m.name, m.text, m.ch === 'party' || m.ch === 'whisper' ? m.ch : undefined, typeof m.to === 'string' ? m.to : undefined);
+        if (m.name !== this.me?.name) playSound(m.ch === 'whisper' || m.ch === 'party' ? 'notify_whisper' : 'notify_chat');
+        this.onChat?.(m.name, m.text, m.ch === 'party' || m.ch === 'whisper' ? m.ch : undefined, typeof m.to === 'string' ? m.to : undefined, validLinks(m.text, m.links));
         break;
       case 'friends':
         this.friends = m.view;
@@ -694,12 +705,14 @@ export class OnlineBackend implements Backend {
         this.onChannels?.(m.view);
         break;
       case 'partyInvite':
+        playSound('notify_invite');
         this.onPartyInvite?.(m.party, m.from, m.seconds);
         break;
       case 'partyInviteGone':
         this.onPartyInviteGone?.(m.party);
         break;
       case 'roomInvite':
+        playSound('notify_invite');
         this.onRoomInvite?.(m.id, m.from, m.boss, m.keys, m.seconds);
         break;
       case 'roomInviteGone':
@@ -709,6 +722,7 @@ export class OnlineBackend implements Backend {
         this.onRoomLobby?.(m.view);
         break;
       case 'tradeRequest':
+        playSound('notify_invite');
         this.onTradeRequest?.(m.from, m.name, m.seconds);
         break;
       case 'tradeRequestGone':
@@ -769,7 +783,11 @@ export class OnlineBackend implements Backend {
       case 'daily':
         this.onDaily?.(m.view);
         break;
+      case 'news':
+        this.onNews?.(m.v);
+        break;
       case 'mailNote':
+        if (m.fresh > 0) playSound('notify_mail');
         this.mailUnread = m.unread;
         this.onMailNote?.(m.unread, m.fresh);
         break;
@@ -800,6 +818,10 @@ export class OnlineBackend implements Backend {
       case 'cashState':
         useCashState(m.state);
         break;
+      case 'topup':
+        useTopup(m.v);
+        break;
+      case 'topupRes':
       case 'cashBuy': {
         const done = this.cashWait.get(m.req);
         this.cashWait.delete(m.req);
@@ -810,7 +832,7 @@ export class OnlineBackend implements Backend {
         useOrbLook(m.look);
         break;
       case 'announce':
-        this.onAnnounce?.(m.text, m.from, m.direct, !!m.megaphone);
+        this.onAnnounce?.(m.text, m.from, m.direct, !!m.megaphone, !!m.box, m.head, validLinks(m.text, m.links));
         break;
       case 'shutdownCancel':
         this.onShutdown?.(m.mode, null);
@@ -970,6 +992,7 @@ export class OnlineBackend implements Backend {
       m.faceZ = ms.fz;
       m.moving = ms.mv;
       m.alive = ms.alive;
+      if (!ms.alive && m.isBoss) this.terrain.releaseBossSolid(); // its rock is gone on the server too
       m.deadT = ms.deadT;
       if (ms.mhp) m.syncMaxHp(ms.mhp);
       m.hp = ms.hp;
@@ -1080,6 +1103,7 @@ export class OnlineBackend implements Backend {
     if (pv.inv) {
       me.equipment = pv.inv.equipment;
       me.bag = pv.inv.bag;
+      me.bagSlots = pv.inv.bagSlots ?? defaultBagSlots();
       me.buyback = pv.inv.buyback ?? [];
       this.events.push({ t: 'inventory', to: me.id });
     }
@@ -1313,7 +1337,9 @@ export class OnlineBackend implements Backend {
   toggleMount(): void { this.send({ t: 'act', a: 'mount' }); }
   useReturnScroll(): void { this.pendingRecall = true; }
   useBuffScroll(kind: BuffScroll): void { this.send({ t: 'act', a: 'useBuff', stone: kind }); }
-  useMegaphone(text: string): void { this.send({ t: 'act', a: 'megaphone', text }); }
+  openBox(slot: number, all: boolean): void { this.send({ t: 'act', a: 'openBox', slot, all }); }
+  useOrbItem(slot: number): void { this.send({ t: 'act', a: 'useOrbItem', slot }); }
+  useMegaphone(text: string, links?: ChatLinkRef[]): void { this.send({ t: 'act', a: 'megaphone', text, ...(links?.length ? { links } : {}) }); }
   dailyOpen(): void { this.send({ t: 'act', a: 'daily' }); }
   dailyMakeup(day: number): void { this.send({ t: 'act', a: 'dailyMakeup', day }); }
   sortBag(key: SortKey, desc: boolean): void { this.send({ t: 'act', a: 'sort', key, desc }); }
@@ -1358,6 +1384,7 @@ export class OnlineBackend implements Backend {
   stashMove(from: number, to: number): void { this.send({ t: 'act', a: 'stashMove', from, to }); }
   stashSort(key: SortKey, desc: boolean): void { this.send({ t: 'act', a: 'stashSort', key, desc }); }
   stashBuyRow(): void { this.send({ t: 'act', a: 'stashBuy' }); }
+  bagExpand(tab: BagTab, pay: BagPay, price: number): void { this.send({ t: 'act', a: 'bagExpand', tab, pay, price }); }
   stashGold(amount: number): void { this.send({ t: 'act', a: 'stashGold', amount }); }
 
   enhance(uid: string, protect: boolean): Promise<EnhanceOutcome> {
@@ -1396,6 +1423,23 @@ export class OnlineBackend implements Backend {
   cashBuy(id: string, qty: number, price: number): Promise<{ ok: boolean; msg: string }> {
     const req = ++this.cashReq;
     this.send({ t: 'act', a: 'cashBuy', req, id, qty, price });
+    return this.cashAnswer(req);
+  }
+
+  topupNew(p: { crystals: number; bonus: number; baht: number }): Promise<{ ok: boolean; msg: string }> {
+    const req = ++this.cashReq;
+    this.send({ t: 'act', a: 'topupNew', req, crystals: p.crystals, bonus: p.bonus, baht: p.baht });
+    return this.cashAnswer(req);
+  }
+
+  topupCancel(id: number): Promise<{ ok: boolean; msg: string }> {
+    const req = ++this.cashReq;
+    this.send({ t: 'act', a: 'topupCancel', req, id });
+    return this.cashAnswer(req);
+  }
+
+  /** Waits for the answer (`cashBuy` / `topupRes`) to request `req`. */
+  private cashAnswer(req: number): Promise<{ ok: boolean; msg: string }> {
     return new Promise((resolve) => {
       this.cashWait.set(req, resolve);
       setTimeout(() => {
@@ -1426,7 +1470,9 @@ export class OnlineBackend implements Backend {
     });
   }
 
-  chat(text: string, party = false): void { this.send(party ? { t: 'chat', text, ch: 'party' } : { t: 'chat', text }); }
+  chat(text: string, party = false, links?: ChatLinkRef[]): void {
+    this.send({ t: 'chat', text, ...(party ? { ch: 'party' as const } : {}), ...(links?.length ? { links } : {}) });
+  }
 
   partyCreate(): void { this.send({ t: 'act', a: 'partyCreate' }); }
   partyInvite(name: string): void { this.send({ t: 'act', a: 'partyInvite', name }); }
@@ -1457,7 +1503,7 @@ export class OnlineBackend implements Backend {
   tradeConfirm(ver: number): void { this.send({ t: 'act', a: 'tradeConfirm', ver }); }
   tradeCancel(): void { this.send({ t: 'act', a: 'tradeCancel' }); }
   setTradeBlock(on: boolean): void { this.send({ t: 'act', a: 'tradeBlock', on }); }
-  whisper(to: string, text: string): void { this.send({ t: 'chat', text, ch: 'whisper', to }); }
+  whisper(to: string, text: string, links?: ChatLinkRef[]): void { this.send({ t: 'chat', text, ch: 'whisper', to, ...(links?.length ? { links } : {}) }); }
   friendRequest(name: string): void { this.send({ t: 'act', a: 'friendRequest', name }); }
   friendAnswer(acc: number, yes: boolean): void { this.send({ t: 'act', a: 'friendAnswer', acc, yes }); }
   friendCancel(acc: number): void { this.send({ t: 'act', a: 'friendCancel', acc }); }
@@ -1499,6 +1545,7 @@ function useAnimTuning(v: unknown): void {
 /** The server's game balance (class stats, tier tables), so tooltips and the blacksmith's odds match it. */
 function useBalance(v: unknown): void {
   applyBalance(v === undefined ? {} : checkBalance(v, false).tuning ?? {});
+  applySlotVars();
 }
 
 function useOrbLook(v: unknown): void {

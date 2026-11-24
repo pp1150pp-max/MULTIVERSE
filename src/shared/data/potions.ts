@@ -3,7 +3,7 @@
 import { isPotion, isStone, type BagEntry, type PotionKind, type PotionSize, type PotionStack, type Stack } from '../types';
 import { currentBalance } from '../balance';
 import { itemName } from './enhance';
-import { STONE_NAME, STONE_STACK, stoneStackValue } from './stones';
+import { STONE_NAME, stoneStackMax, stoneStackValue } from './stones';
 
 export const POTION_SIZES: PotionSize[] = ['s', 'm', 'l'];
 /** Most potions one bag slot can hold. */
@@ -27,6 +27,12 @@ export function potionHeal(kind: PotionKind, size: PotionSize, cls: string): num
   return kind === 'hp' && cls === 'sword' ? Math.round((base * (100 + currentBalance().potions.swordBonus)) / 100) : base;
 }
 
+/** Size of a potion a monster of this level drops: small, medium from `dropM`, large from `dropL` (/admin card "ยา"). */
+export function dropPotionSize(level: number): PotionSize {
+  const { dropM, dropL } = currentBalance().potions;
+  return level >= dropL ? 'l' : level >= dropM ? 'm' : 's';
+}
+
 /** The merchant buys potions back at half price. */
 export function potionSellPrice(kind: PotionKind, size: PotionSize): number {
   return Math.floor(potionPrice(kind, size) / 2);
@@ -42,7 +48,7 @@ export function stackSellValue(s: PotionStack): number {
 
 /** Most of this stack one bag or stash slot can hold. */
 export function stackLimit(s: Stack): number {
-  return isPotion(s) ? POTION_STACK : STONE_STACK;
+  return isPotion(s) ? POTION_STACK : stoneStackMax(s.stone);
 }
 
 /** What the merchant pays for a whole stack. */

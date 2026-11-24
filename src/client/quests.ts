@@ -87,8 +87,12 @@ export class QuestUI {
       text.append(sub);
       row.append(text);
       if (r.state === 'offer' || r.state === 'ready') {
-        const btn = el('button', 'primary', r.state === 'offer' ? 'รับภารกิจ' : 'รับกุญแจ');
+        const btn = el('button', r.state === 'offer' ? 'quest-accept' : 'quest-turnin', r.state === 'offer' ? '! รับภารกิจ' : '? รับกุญแจ');
         btn.onclick = () => (r.state === 'offer' ? this.g.backend.questAccept(r.boss) : this.g.backend.questTurnIn(r.boss));
+        row.append(btn);
+      } else if (r.state === 'going') {
+        const btn = el('button', 'quest-progress', `${r.kills}/${QUEST_KILLS}`);
+        btn.disabled = true;
         row.append(btn);
       }
       this.body.append(row);
@@ -124,8 +128,12 @@ export class QuestUI {
       text.append(sub);
       row.append(text);
       if (r.state === 'offer' || r.state === 'ready') {
-        const btn = el('button', 'primary', r.state === 'offer' ? 'รับภารกิจ' : 'รับอุปกรณ์');
+        const btn = el('button', r.state === 'offer' ? 'quest-accept' : 'quest-turnin', r.state === 'offer' ? '! รับภารกิจ' : '? รับอุปกรณ์');
         btn.onclick = () => (r.state === 'offer' ? this.g.backend.gearAccept(r.id) : this.g.backend.gearTurnIn(r.id));
+        row.append(btn);
+      } else if (r.state === 'going') {
+        const btn = el('button', 'quest-progress', `${r.kills}/${GEAR_KILLS}`);
+        btn.disabled = true;
         row.append(btn);
       }
       this.body.append(row);

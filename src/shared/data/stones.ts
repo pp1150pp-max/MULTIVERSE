@@ -1,10 +1,17 @@
 // Blacksmith stones: dropped by bosses (reroll stones rarely by other monsters too), stacked in the bag like potions.
 // Boss keys (Artifacts) share the stone stack: they stack, sell, trade and list on the market the same way.
-import { isBoundKind, isBuffScroll, isConsumable, type BossKey, type BuffScroll, type QuestKey, type StoneKind, type StoneStack } from '../types';
+import { isBoundKind, isBuffScroll, isConsumable, isOrbStone, type BaseStoneKind, type BossKey, type BuffScroll, type OrbStoneKind, type QuestKey, type StoneKind, type StoneStack } from '../types';
+import { cosById } from './cosmetics';
 import type { RerollKind } from './reroll';
 
 /** Most stones (or keys) one bag or stash slot can hold (owner: 10). */
 export const STONE_STACK = 10;
+/** Mystery boxes stack higher (owner 2026-11-23: 100 per slot, fixed in code). */
+export const MYSTERY_BOX_STACK = 100;
+/** The seconds between two box openings by one player (owner 2026-11-23: 0.2 s, fixed in code, enforced by the server). */
+export const BOX_OPEN_COOLDOWN = 0.2;
+/** Most of this stone kind one bag or stash slot can hold. */
+export const stoneStackMax = (k: StoneKind): number => (k === 'mystery_box' ? MYSTERY_BOX_STACK : STONE_STACK);
 /** What the merchant pays per stone or key (owner: 1,000 G each). */
 export const STONE_SELL = 1000;
 /** Chance of each stone kind on every boss kill, rolled separately (owner: 10%). */
@@ -44,7 +51,7 @@ export const BOUND_MSG = 'ของชิ้นนี้ผูกกับตั
 /** Chance that a monster from a boss's map drops that boss's key, also when it stands in the hub (owner: 1%, lowered to 0.3% on 2026-11-10). */
 export const KEY_DROP_CHANCE = 0.003;
 
-export const STONE_NAME: Record<StoneKind, string> = {
+const BASE_NAME: Record<BaseStoneKind, string> = {
   protect: 'หินกันระดับลด',
   enhance: 'หินตีบวก',
   reroll_values: 'หินสุ่มค่า',
@@ -64,6 +71,7 @@ export const STONE_NAME: Record<StoneKind, string> = {
   exp_scroll: 'ใบคูณ EXP 100%',
   drop_scroll: 'ใบคูณดรอป 100%',
   megaphone: 'โทรโข่ง',
+  mystery_box: 'กล่องปริศนา',
 };
 
 const keyDesc = (boss: string, zone: string): string =>
@@ -71,9 +79,9 @@ const keyDesc = (boss: string, zone: string): string =>
 
 // Floor 1's key quests come from The Seeker, floor 2's from the navigator in the harbour (plan 12.5).
 const questDesc = (boss: string, giver = 'The Seeker'): string =>
-  `กุญแจจาก ${giver}: เปิดห้องบอส${boss}ได้ระดับ ×1 โดยไม่หายเมื่อใช้ และจะหายไปเมื่อปราบ${boss}ได้ (ผูกกับตัวละคร)`;
+  `กุญแจจาก ${giver}: เปิดห้องบอส${boss}ได้ระดับ ×1 ใช้แล้วหาย (ยกเลิกการเรียก = คืน) เทรด ขาย ฝากคลังได้`;
 
-export const STONE_DESC: Record<StoneKind, string> = {
+const BASE_DESC: Record<BaseStoneKind, string> = {
   protect: 'ใช้ตอนตีบวก: ถ้าล้มเหลว ระดับจะไม่ลด (ใช้ 1 ก้อนต่อครั้ง)',
   enhance: 'วัตถุดิบตีบวกตั้งแต่ +11 ขึ้นไป (ใช้ 1 ก้อนต่อครั้ง)',
   reroll_values: 'ใช้ตอนสุ่มค่าตัวเลขที่ช่างตีเหล็ก (ใช้ 1 ก้อนต่อครั้ง)',
@@ -93,9 +101,10 @@ export const STONE_DESC: Record<StoneKind, string> = {
   exp_scroll: 'คลิกเพื่อใช้: EXP ที่ได้ ×2 (รวมส่วนแบ่งปาร์ตี้และตอนเปิด Auto) นาน 30 นาทีที่ออนไลน์ · ใช้ซ้อนได้ บวกเวลาเพิ่ม สูงสุด 5 ชั่วโมง',
   drop_scroll: 'คลิกเพื่อใช้: โอกาสดรอปไอเทม ยา หิน และกุญแจ ×2 (ไม่รวมทอง) นาน 30 นาทีที่ออนไลน์ · นับใบของคนที่ได้สิทธิ์เก็บของ · ใช้ซ้อนได้ บวกเวลาเพิ่ม สูงสุด 5 ชั่วโมง',
   megaphone: 'คลิกเพื่อใช้: พิมพ์ข้อความไม่เกิน 100 ตัว ประกาศขึ้นกลางจอถึงผู้เล่นทุกคนในเซิร์ฟเวอร์ · ทั้งเซิร์ฟเวอร์ประกาศได้ 1 ครั้งต่อ 30 วินาที ถ้าติดคิว โทรโข่งไม่หาย',
+  mystery_box: 'คลิกเพื่อเปิด 1 กล่อง · คลิกขวา: เปิดทั้งกอง — สุ่มได้อุปกรณ์ หิน กุญแจบอส ของใช้ ทอง หรือลูกแก้วตีบวก (ต้องมีที่ว่างในกระเป๋า)',
 };
 
-export const STONE_COLOR: Record<StoneKind, string> = {
+const BASE_COLOR: Record<BaseStoneKind, string> = {
   protect: '#6fd8ff',
   enhance: '#ff9a2e',
   reroll_values: '#ffd34a',
@@ -115,10 +124,31 @@ export const STONE_COLOR: Record<StoneKind, string> = {
   exp_scroll: '#7ee06a',
   drop_scroll: '#ffc23a',
   megaphone: '#ffb347',
+  mystery_box: '#e07aff',
 };
 
+/** An orb item's orb (undefined once the orb was taken out of the shop list in /admin). */
+const orbOf = (k: OrbStoneKind) => {
+  const c = cosById(k);
+  return c?.slot === 'orb' ? c : undefined;
+};
+export const ORB_STONE_COLOR = '#9ad0ff';
+export const orbStoneName = (k: OrbStoneKind): string => `ลูกแก้ว ${orbOf(k)?.name ?? '(ถูกนำออกแล้ว)'}`;
+const orbStoneDesc = (k: OrbStoneKind): string =>
+  orbOf(k)
+    ? 'คลิกเพื่อใช้: ได้หน้าตาลูกแก้วตีบวกนี้เข้าบัญชี (สวมได้ที่กระเป๋าแฟชั่น) · ถ้ามีอยู่แล้วใช้ไม่ได้ เก็บไว้เทรดหรือขายในตลาดได้ · ขายให้พ่อค้าไม่ได้'
+    : 'ลูกแก้วนี้ถูกนำออกจากเกมแล้ว ใช้ไม่ได้';
+
+/** The fixed kinds' values, and for an orb item (any `orb_<n>` key) the value worked out from the orb. */
+const withOrbs = (base: Record<BaseStoneKind, string>, orb: (k: OrbStoneKind) => string): Record<StoneKind, string> =>
+  new Proxy(base as Record<StoneKind, string>, { get: (t, k) => (isOrbStone(k) ? orb(k) : Reflect.get(t, k)) });
+
+export const STONE_NAME = withOrbs(BASE_NAME, orbStoneName);
+export const STONE_DESC = withOrbs(BASE_DESC, orbStoneDesc);
+export const STONE_COLOR = withOrbs(BASE_COLOR, () => ORB_STONE_COLOR);
+
 /** "ก้อน" for stones, "อัน" for keys and feathers, "ม้วน" for the return scroll. */
-export const stoneUnit = (k: StoneKind): string => (k === 'return_scroll' ? 'ม้วน' : isBuffScroll(k) ? 'ใบ' : k === 'megaphone' ? 'อัน' : k.includes('key_') || k === 'phoenix' ? 'อัน' : 'ก้อน');
+export const stoneUnit = (k: StoneKind): string => (isOrbStone(k) ? 'ลูก' : k === 'mystery_box' ? 'กล่อง' : k === 'return_scroll' ? 'ม้วน' : isBuffScroll(k) ? 'ใบ' : k === 'megaphone' ? 'อัน' : k.includes('key_') || k === 'phoenix' ? 'อัน' : 'ก้อน');
 
 /** Return scroll: the merchant's price (owner: 500 G) and how long it takes to cast (owner: 3 s). */
 export const RETURN_SCROLL_PRICE = 500;
@@ -127,6 +157,8 @@ export const RETURN_CAST = 3;
 /** What the merchant pays for one: shop items (feather, consumables) half their shop price, stones and keys STONE_SELL. */
 export function stoneSellPrice(k: StoneKind): number {
   if (k === 'phoenix') return PHOENIX_PRICE / 2;
+  // Orb items are sold on the market or traded, never to the merchant.
+  if (isOrbStone(k)) return 0;
   // Bound rewards never reach the merchant.
   if (isBoundKind(k)) return 0;
   return isConsumable(k) ? Math.floor(RETURN_SCROLL_PRICE / 2) : STONE_SELL;

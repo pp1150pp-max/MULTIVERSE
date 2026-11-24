@@ -9,7 +9,7 @@ import * as api from './net/api';
 import { connectOnline, type OnlineBackend } from './net/online';
 import { preloadHudImages } from './icons';
 import { AFTER_EXIT_KEY, GOOGLE_AFTER_EXIT_KEY } from './sysmenu';
-import { beginEntryLoading, cancelEntryLoading } from './loadingScreen';
+import { beginEntryLoading, cancelEntryLoading, preloadLoadingArt } from './loadingScreen';
 import { imgUrl } from './img';
 
 export type Launcher = (backend: OnlineBackend) => void;
@@ -54,6 +54,8 @@ export function portrait(key: string, size: number): HTMLCanvasElement {
  */
 async function waitForGameAssets(classId: ClassId | null, floor = 1): Promise<void> {
   const screen = beginEntryLoading(classId, floor);
+  // Its picture before the hundreds of game files, which would otherwise hold it up.
+  await screen.ready;
   // Game textures are most of the bytes; the HUD pictures are the last stretch of the bar.
   let tex = 0;
   let hud = 0;
@@ -521,7 +523,7 @@ class OnlineMenu {
       slot.append(facePortrait(c.classId, 80));
       const armed = this.armedDelete?.id === c.id && Date.now() - this.armedDelete.t < 3000;
       slot.insertAdjacentHTML('beforeend',
-        `<div class="cname">${escapeHtml(c.name)}</div><div class="cmeta">Lv.${c.level} ${CLASSES[c.classId].name}</div>` +
+        `<div class="cname" translate="no">${escapeHtml(c.name)}</div><div class="cmeta">Lv.${c.level} ${CLASSES[c.classId].name}</div>` +
         `<button class="cdel${armed ? ' armed' : ''}" data-del="${c.id}" title="ลบตัวละคร">${armed ? 'กดอีกครั้งเพื่อลบ' : '✕'}</button>`);
       list.append(slot);
     }
@@ -618,6 +620,8 @@ function escapeHtml(s: string): string {
 }
 
 export function buildMenu(launch: Launcher): void {
+  // The loading pictures download while the player logs in, so the entry screen has its art at once.
+  preloadLoadingArt();
   const googleOn = api.googleEnabled();
   const online = new OnlineMenu(launch, googleOn);
   if (GUEST_LOGIN_ENABLED) {

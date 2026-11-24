@@ -10,16 +10,20 @@ import { renderBalance } from './balance';
 import { renderSkills } from './skills';
 import { headsOnPage, jumpTo, watchCards } from './ui';
 import { renderDaily } from './daily';
+import { renderMysteryBox } from './mysteryBox';
 import { renderMenuLayout } from './menuLayout';
+import { renderHudLayout } from './hudLayout';
 import { renderMaps } from './maps';
 import { renderCosManage } from './cosManage';
 import { renderCashShop } from './cashShop';
+import { renderTopup } from './topup';
 import { ADMIN_TOKEN, h, read, store, token, setToken, hooks, ApiError, api, root, me, setMe, setMeta, type Tab, tab, setCurrentTab, view, stopRefresh, closeSheet, can } from './core';
 import { stopOrbBench, setOrbOpenId, renderOrbs, renderCos, renderRig, renderAnim } from './tabs/orbBench';
 import { renderCards } from './tabs/cards';
 import { renderOnline } from './tabs/online';
 import { renderRoles } from './tabs/permissions';
 import { renderMail } from './tabs/mail';
+import { renderNews } from './news';
 import { renderTrades } from './tabs/trades';
 import { renderReports } from './tabs/reports';
 import { renderAudit } from './tabs/audit';
@@ -161,14 +165,14 @@ async function start(): Promise<void> {
 const CATEGORIES: { name: (typeof FEATURE_GROUPS)[number]; tabs: Tab[] }[] = [
   { name: 'ผู้เล่น', tabs: ['online', 'users'] },
   { name: 'ประวัติ', tabs: ['stats', 'sessions', 'chat', 'trades', 'audit'] },
-  { name: 'สื่อสาร', tabs: ['mail', 'reports', 'broadcast'] },
-  { name: 'ปรับเกม', tabs: ['balance', 'skills', 'cards', 'daily', 'cashShop', 'menuLayout', 'maps'] },
+  { name: 'สื่อสาร', tabs: ['mail', 'reports', 'broadcast', 'news'] },
+  { name: 'ปรับเกม', tabs: ['balance', 'skills', 'cards', 'daily', 'mysteryBox', 'cashShop', 'topup', 'menuLayout', 'hudLayout', 'maps'] },
   { name: 'หน้าตา', tabs: ['orbs', 'cos', 'cosManage', 'rig', 'anim'] },
   { name: 'ระบบ', tabs: ['server', 'roles'] },
 ];
 const TAB_LABEL: Record<Tab, string> = {
   online: 'ออนไลน์', users: 'ผู้ใช้และตัวละคร', stats: 'สถิติ', sessions: 'การเข้าเล่น', chat: 'แชท', trades: 'เทรด',
-  audit: 'ประวัติ (audit)', mail: 'จดหมาย', reports: 'รายงาน', broadcast: 'ประกาศ', balance: 'ปรับสมดุล', skills: 'ระบบสกิล', cards: 'การ์ด', daily: 'ล็อกอินรายวัน', cashShop: 'แคชช็อป', menuLayout: 'จัดเมนูเกม', maps: 'แมพ',
+  audit: 'ประวัติ (audit)', mail: 'จดหมาย', reports: 'รายงาน', broadcast: 'ประกาศ', news: 'มีอะไรใหม่', balance: 'ปรับสมดุล', skills: 'ระบบสกิล', cards: 'การ์ด', daily: 'ล็อกอินรายวัน', mysteryBox: 'กล่องปริศนา', cashShop: 'แคชช็อป', topup: 'เติมเงิน', menuLayout: 'จัดเมนูเกม', hudLayout: 'จัดหน้าจอเกม', maps: 'แมพ',
   orbs: 'ลูกแก้วตีบวก', cos: 'ของแต่งตัว', cosManage: 'จัดการของแต่งตัว', rig: 'นักดาบกระดาษ', anim: 'ท่าตัวละคร', server: 'Server', roles: 'สิทธิ์',
 };
 
@@ -187,13 +191,17 @@ function tabAllowed(t: Tab): boolean {
     case 'mail': return f.includes('mail');
     case 'reports': return f.includes('reports');
     case 'broadcast': return f.includes('broadcast');
+    case 'news': return f.includes('news');
     // The skill system's page uses the same switch as the balance tab (owner 2026-11-19).
     case 'balance': case 'skills': return f.includes('balance');
     // The map tab: the editor (mapEdit) and the switch "ใช้แมพจาก DB" (balance).
     case 'maps': return f.includes('mapEdit') || f.includes('balance');
     case 'daily': return f.includes('daily');
+    case 'mysteryBox': return f.includes('mysteryBox');
     case 'cashShop': return f.includes('cashShop');
+    case 'topup': return f.includes('topup');
     case 'menuLayout': return f.includes('menuLayout');
+    case 'hudLayout': return f.includes('hudLayout');
     case 'cards': return f.includes('cardView');
     case 'orbs': return f.includes('orbPreview');
     case 'cos': return f.includes('cosPreview');
@@ -210,7 +218,7 @@ const catOf = (t: Tab) => CATEGORIES.find((c) => c.tabs.includes(t))!;
 /** An icon per tab in the side menu (looks only). */
 const TAB_ICON: Record<Tab, string> = {
   online: '🟢', users: '👤', stats: '📈', sessions: '🕒', chat: '💬', trades: '🤝', audit: '📜', mail: '✉️', reports: '🚩',
-  broadcast: '📢', balance: '⚖️', skills: '✨', cards: '🃏', daily: '📅', cashShop: '💎', menuLayout: '🧭', maps: '🗺️', orbs: '🔮', cos: '🪽', cosManage: '🧺', rig: '🗡️',
+  broadcast: '📢', news: '🆕', balance: '⚖️', skills: '✨', cards: '🃏', daily: '📅', mysteryBox: '🎁', cashShop: '💎', topup: '💳', menuLayout: '🧭', hudLayout: '🖼️', maps: '🗺️', orbs: '🔮', cos: '🪽', cosManage: '🧺', rig: '🗡️',
   anim: '🏃', server: '🖥️', roles: '🔑',
 };
 
@@ -233,6 +241,7 @@ const SEARCH_INDEX: { tab: Tab; title: string; words?: string }[] = [
   { tab: 'mail', title: 'จดหมายที่ส่งแล้ว' },
   { tab: 'reports', title: 'รายงานปัญหา', words: 'ข้อเสนอแนะ ห้ามรายงาน' },
   { tab: 'broadcast', title: 'ประกาศถึงผู้เล่นทุกคน' },
+  { tab: 'news', title: 'มีอะไรใหม่', words: 'ประกาศอัปเดต แพตช์โน้ต จุดแดง เด้งเอง ปุ่ม' },
   { tab: 'balance', title: 'ค่าอาชีพ', words: 'สเตตัส hp mp นักดาบ เวท' },
   { tab: 'balance', title: 'ตัวตัดฟื้นทั้งเกม', words: 'regen ฟื้น' },
   { tab: 'balance', title: 'Tier T1–T5', words: 'tier ตัวคูณสเตตัส ไอเทม' },
@@ -251,10 +260,13 @@ const SEARCH_INDEX: { tab: Tab; title: string; words?: string }[] = [
   { tab: 'maps', title: 'ตัวแก้แมพ', words: 'แมพ แก้แมพ วางบ้าน ลากวาง หมุน ร่าง เผยแพร่ undo snap คลังภาพ' },
   { tab: 'maps', title: 'แมพ: ใช้แมพจาก DB', words: 'แมพ json ใช้แมพจาก db ฉุกเฉิน' },
   { tab: 'menuLayout', title: 'จัดเมนูเกม', words: 'ปุ่ม ลำดับ ซ่อน ย้าย ไอคอน มุมขวาบน หน้าต่างเมนู ตั้งค่า' },
+  { tab: 'hudLayout', title: 'จัดหน้าจอเกม', words: 'hud ui ย้าย ขยับ ตำแหน่ง ขนาด ย่อ ขยาย ซ่อน มินิแมพ แชต แถบสกิล หลอด hp mp ลูกแก้ว หน้าต่าง มือถือ จอสัมผัส ร่าง เผยแพร่' },
   { tab: 'cards', title: 'การ์ด', words: 'เรทดรอป' },
   { tab: 'cards', title: 'ตัวเลขของระบบการ์ด' },
   { tab: 'daily', title: 'ของรางวัลล็อกอินรายวัน' },
+  { tab: 'mysteryBox', title: 'กล่องปริศนา', words: 'กล่อง สุ่ม โอกาส ดรอป ลูกแก้ว ประกาศ' },
   { tab: 'cashShop', title: 'แคชช็อป', words: 'คริสตัลมิติ เปิดขาย แพ็กเกจ' },
+  { tab: 'topup', title: 'เติมเงิน', words: 'พร้อมเพย์ QR ยืนยัน โอน คืนเพชร close beta' },
   { tab: 'cosManage', title: 'จัดการของแต่งตัว', words: 'ซ่อน ราคา ปีก สัตว์ขี่ สัตว์เลี้ยง ออร่า' },
   { tab: 'roles', title: 'Role และเครื่องมือที่ใช้ได้', words: 'สิทธิ์ gm' },
   { tab: 'roles', title: 'ผู้ดูแลตอนนี้' },
@@ -410,14 +422,18 @@ function setTab(t: Tab): void {
   else if (t === 'balance') void renderBalance(view, h, api, (tuning) => applyBalance(tuning), can('itemStatMult'));
   else if (t === 'skills') void renderSkills(view, h, api, (tuning) => applyBalance(tuning));
   else if (t === 'daily') void renderDaily(view, h, api);
+  else if (t === 'mysteryBox') void renderMysteryBox(view, h, api);
   else if (t === 'cashShop') void renderCashShop(view, h, api);
+  else if (t === 'topup') void renderTopup(view, h, api);
   else if (t === 'menuLayout') void renderMenuLayout(view, h, api, () => undefined);
+  else if (t === 'hudLayout') void renderHudLayout(view, h, api);
   else if (t === 'maps') void renderMaps(view, h, api, (tuning) => applyBalance(tuning), { balance: can('balance'), mapEdit: can('mapEdit'), mapRollback: can('mapRollback'), mapExport: can('mapExport'), mapCreate: can('mapCreate'), mapDelete: can('mapDelete') });
   else if (t === 'cosManage') void renderCosManage(view, h, api, allowedTabs.has('orbs') ? (id) => { setOrbOpenId(id); setTab('orbs'); } : null);
   else if (t === 'roles') void renderRoles();
   else if (t === 'audit') void renderAudit();
   else if (t === 'cards') void renderCards();
   else if (t === 'broadcast') view.append(broadcastCard());
+  else if (t === 'news') void renderNews(view, h, api);
   else void renderServer();
 }
 

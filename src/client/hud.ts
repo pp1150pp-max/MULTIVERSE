@@ -10,7 +10,7 @@ import { effectiveStats, enhanceBonus, itemName, plusOf, sellValue } from '../sh
 import {
   entryName, POTION_SIZE_LABEL, POTION_STACK, potionHeal, potionName, potionSellPrice, stackLimit,
 } from '../shared/data/potions';
-import { BUFF_LABEL, MONSTER_STONES, RETURN_CAST, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_STACK, stoneSellPrice, stoneUnit } from '../shared/data/stones';
+import { BUFF_LABEL, MONSTER_STONES, RETURN_CAST, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_STACK, stoneStackMax, stoneSellPrice, stoneUnit } from '../shared/data/stones';
 import { lootPots, type Buffs, type LootFilter, type SortKey } from '../shared/sim/Player';
 import { MONSTERS } from '../shared/data/monsters';
 import { currentBalance } from '../shared/balance';
@@ -19,7 +19,7 @@ import { ZONE_1 } from '../shared/data/zones';
 import { expToNext } from '../shared/formulas';
 import { blockingGate } from '../shared/data/bossGates';
 import {
-  BUFF_SCROLLS, isBossKey, isBound, isBoundKind, isBuffScroll, isConsumable, isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
+  BUFF_SCROLLS, isBossKey, isBound, isBoundKind, isQuestKey, isBuffScroll, isConsumable, isOrbStone, isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
   type BagEntry, type Item, type PotionKind, type PotionStack, type StoneStack, type EquipSlot, type StatKey,
 } from '../shared/types';
 import { drawEdgeMarker, drawMapIcon, drawPin, facingAngle, partyDot } from './mapIcons';
@@ -31,6 +31,8 @@ import { COIN_ICON, emptySlotIcon, itemIcon, potionIcon, skillIcon, stoneIcon } 
 import { shutdownCancelled, shutdownWarning, type ShutdownMode } from '../shared/net/protocol';
 import { isTouchMode, onPointerModeChange } from './touch/device';
 import { FashionBag } from './fashionBag';
+import { nextExpand, TAB_NAME, tabAt, tabOf, tabRange, type BagPay, type BagTab } from '../shared/bagTabs';
+import { cashStateNow } from './cashData';
 import { imgUrl } from './img';
 import { $, entryColor, lineHtml, POTION_COLOR, potionTotals, potToggles, readPots, syncPots } from './ui/hudShared';
 import { ForgeWindow } from './ui/forge';
@@ -39,7 +41,12 @@ import { StashWindow } from './ui/stash';
 import { AutoSettingsWindow } from './ui/autoSettings';
 import { MapWindow } from './ui/mapWindow';
 import { ItemDetail } from './ui/itemDetail';
+import { appendLinked, linkedWords, LinkDraft, LinkPopup } from './chatLinks';
+import { resolveLinkRef, type ChatLink, type ChatLinkRef } from '../shared/chatLinks';
+import { CHAT_MAX } from '../shared/net/protocol';
 
+/** Bag slots shown at once (the painted grid). */
+const BAG_PAGE = 30;
 /** Yellow, like the game's level-up lines. */
 const SHUTDOWN_COLOR = '#ffd34a';
 /** How long an owner's announcement banner stays up. */
@@ -96,6 +103,10 @@ export class Hud {
   private invDirty = true;
   /** The fashion page of the bag window (owned cosmetics). */
   private fashion!: FashionBag;
+  /** The page of the bag tab shown (a tab bigger than BAG_PAGE slots, once slots can be bought). */
+  private bagPage = 0;
+  /** The slot purchase settings last drawn (a new object = /admin changed the balance). */
+  private bagExpandSeen: unknown = null;
   private bagOpen = false;
   /** Level the bag was last drawn for (gear above it is marked as locked). */
   private drawnLevel = 0;
@@ -120,6 +131,10 @@ export class Hud {
   private readonly autoSet: AutoSettingsWindow;
   private readonly map: MapWindow;
   private readonly detail: ItemDetail;
+  /** The window a clicked item link in chat opens. */
+  readonly linkPop: LinkPopup;
+  /** Item links typed into the chat box (Ctrl+click an item). */
+  private readonly chatDraft = new LinkDraft();
   /** The chat history tab picked last ('all', 'chat', 'system', 'party' or 'whisper'). */
   private chatTab = 'all';
   /** Who whispered you last ("/r" answers them). */
@@ -145,6 +160,8 @@ export class Hud {
     this.autoSet = new AutoSettingsWindow(g);
     this.map = new MapWindow(g);
     this.detail = new ItemDetail(g, this, { forge: this.forge, shop: this.shop, stash: this.stash, market: this.market });
+    this.linkPop = new LinkPopup(this);
+    this.setupItemLinks();
     $('hud').classList.remove('hidden');
     this.mm = $<HTMLCanvasElement>('minimap').getContext('2d')!;
     this.hudStyle = loadHudStyle();
@@ -165,6 +182,7 @@ export class Hud {
     $('mm-plus').onclick = () => this.setMinimapZoom(this.mmZoom + 1);
     $('mm-minus').onclick = () => this.setMinimapZoom(this.mmZoom - 1);
     $('hud-name').textContent = g.player.name;
+    $('hud-name').translate = false;
     this.showZoneName();
     $('hud-online').classList.toggle('hidden', !g.backend.online);
     $('hud-guest').classList.toggle('hidden', !g.backend.guest);
@@ -176,7 +194,10 @@ export class Hud {
     $('btn-help').onclick = () => this.toggleHelp();
     $('btn-respawn').onclick = () => g.respawn();
     $('inv-close').onclick = () => this.toggleBag(false);
-    this.fashion = new FashionBag(g, () => this.hideTip());
+    this.fashion = new FashionBag(g, () => this.hideTip(), () => {
+      this.bagPage = 0;
+      this.markInventory();
+    });
     // Fold the bag's left panel away (and back); remembered in this browser only.
     const bagBox = $('inventory');
     const sideBtn = $('inv-side-toggle');
@@ -229,14 +250,15 @@ export class Hud {
         const p = /^\/p\s+/i.exec(text);
         const w = /^\/w\s+(?:"([^"]+)"|(\S+))\s+([\s\S]+)$/i.exec(text);
         const r = /^\/r\s+([\s\S]+)$/i.exec(text);
-        if (p) g.backend.chat(text.slice(p[0].length), true);
-        else if (w) g.backend.whisper((w[1] ?? w[2]).trim(), w[3]);
+        const links = this.chatDraft.refs(text);
+        if (p) g.backend.chat(text.slice(p[0].length), true, links);
+        else if (w) g.backend.whisper((w[1] ?? w[2]).trim(), w[3], links);
         else if (/^\/w(\s|$)/i.test(text)) this.log('กระซิบ: พิมพ์ /w ชื่อ ข้อความ (ชื่อที่มีเว้นวรรคใส่ "…")', '#e6a0ff');
         else if (r || (text && this.chatTab === 'whisper' && !text.startsWith('/'))) {
           const to = r ? this.lastWhisperFrom : this.whisperWith;
-          if (to) g.backend.whisper(to, r ? r[1] : text);
+          if (to) g.backend.whisper(to, r ? r[1] : text, links);
           else this.log(r ? 'ยังไม่มีใครกระซิบหาคุณ' : 'ยังไม่ได้เลือกคนกระซิบ — พิมพ์ /w ชื่อ ข้อความ', '#e6a0ff');
-        } else if (text) g.backend.chat(text, this.chatTab === 'party');
+        } else if (text) g.backend.chat(text, this.chatTab === 'party', links);
         this.closeChat();
       } else if (e.key === 'Escape') this.closeChat();
     });
@@ -267,6 +289,11 @@ export class Hud {
         if (entry.stone === 'return_scroll') g.useReturnScroll();
         else if (isBuffScroll(entry.stone)) g.backend.useBuffScroll(entry.stone);
         else if (entry.stone === 'megaphone') g.megaphone.toggle(true);
+        else if (entry.stone === 'mystery_box') {
+          g.backend.openBox(i, false);
+          playSound('box_open');
+        }
+        else if (isOrbStone(entry.stone)) g.backend.useOrbItem(i);
         return;
       }
       // At the blacksmith a click on gear puts it in the forge's slot instead of wearing it.
@@ -275,6 +302,7 @@ export class Hud {
         this.forge.forgePlace(entry);
         return;
       }
+      if (isItem(entry) && this.shop.blocksEquip()) return;
       const block = isItem(entry) ? g.player.equipBlock(entry) : null;
       if (block && isItem(entry)) {
         this.log(`ใส่ ${itemName(entry)} ไม่ได้ — ${block}`, '#ff8a6a');
@@ -309,6 +337,12 @@ export class Hud {
         this.shop.sellFromBag(i);
         return;
       }
+      // A mystery box: right click opens the whole stack (owner 2026-11-22).
+      if (isStone(item) && item.stone === 'mystery_box') {
+        g.backend.openBox(i, true);
+        playSound('box_open');
+        return;
+      }
       const dropAsk = () => this.askDrop(i);
       // Standing at the market broker: offer to list it or search for the same kind (the menu also has "drop").
       if (g.backend.npcDistance('broker') <= NPC_USE_RANGE) {
@@ -322,7 +356,7 @@ export class Hud {
       if (this.drag?.ghost || isTouchMode()) return;
       const i = this.cellIndex(e);
       const item = i >= 0 ? g.player.bag[i] : null;
-      const right = this.stash.isOpen ? 'ฝากเข้าคลัง' : this.market.isOpen ? 'เลือกมาลงขายในตลาด' : this.shop.isOpen ? (isStack(item) ? 'ขายทั้งช่อง' : 'ขาย') : 'วางลงพื้น';
+      const right = this.stash.isOpen ? 'ฝากเข้าคลัง' : this.market.isOpen ? 'เลือกมาลงขายในตลาด' : this.shop.isOpen ? (isStack(item) ? 'ขายทั้งช่อง' : 'ขาย') : 'ทิ้งไอเทม';
       const split = item && isStack(item) && item.count > 1 ? ' · Shift+ลาก: แบ่งกอง' : '';
       if (g.trade.open && item) {
         const part = isStack(item) && item.count > 1 ? ' · Shift+ลากไปที่หน้าต่างเทรด: เสนอบางส่วน' : '';
@@ -330,7 +364,8 @@ export class Hud {
         return;
       }
       if (isPotion(item)) this.showPotionTip(item, e, `คลิกซ้าย: ใช้กับปุ่มด่วน · คลิกขวา: ${right}${split}`);
-      else if (isStone(item)) this.showStoneTip(item, e, `${item.stone === 'return_scroll' ? 'คลิกซ้าย / ปุ่ม G: ใช้ · ' : isBuffScroll(item.stone) || item.stone === 'megaphone' ? 'คลิกซ้าย: ใช้ · ' : ''}คลิกขวา: ${right}${split}`);
+      else if (isStone(item) && item.stone === 'mystery_box' && !this.stash.isOpen && !this.market.isOpen && !this.shop.isOpen) this.showStoneTip(item, e, `คลิกซ้าย: เปิด 1 กล่อง · คลิกขวา: เปิดทั้งกอง${split}`);
+      else if (isStone(item)) this.showStoneTip(item, e, `${item.stone === 'return_scroll' ? 'คลิกซ้าย / ปุ่ม G: ใช้ · ' : isBuffScroll(item.stone) || item.stone === 'megaphone' || item.stone === 'mystery_box' || isOrbStone(item.stone) ? 'คลิกซ้าย: ใช้ · ' : ''}คลิกขวา: ${right}${split}`);
       else if (item) {
         const both = item.slot === 'ring' && g.player.equipment.ring && g.player.equipment.ring2;
         if (this.forge.isOpen) this.showTip(item, e, `คลิกซ้าย / ลาก: วางที่ช่างตีเหล็ก · คลิกขวา: ${right}`);
@@ -396,6 +431,7 @@ export class Hud {
         if (item) this.forge.forgePlace(item);
         return;
       }
+      if (this.shop.blocksEquip()) return;
       g.backend.unequip(slot);
       this.markInventory();
     });
@@ -588,7 +624,10 @@ export class Hud {
           const to = Number(stashCell.dataset.s);
           if (to !== d.i) g.backend.stashMove(d.i, to);
         } else if (cell) {
-          g.backend.stashTake(d.i, Number(cell.dataset.i));
+          // Onto a slot of the other bag tab: take it out to wherever it fits in its own tab instead.
+          const to = Number(cell.dataset.i);
+          const it = g.player.stash.items[d.i]!;
+          g.backend.stashTake(d.i, tabAt(g.player.bagSlots, to) === tabOf(it) ? to : -1);
         } else if (target?.closest('#inventory .inv-window')) {
           g.backend.stashTake(d.i, -1);
         }
@@ -603,7 +642,11 @@ export class Hud {
       if (socket) {
         this.equipByDrag(d.i, socket.dataset.slot as EquipSlot);
       } else if (stashCell) {
-        g.backend.stashPut(d.i, Number(stashCell.dataset.s));
+        // A swap would bring the stash entry back into this bag slot: if it belongs in the other tab, just store.
+        const to = Number(stashCell.dataset.s);
+        const back = g.player.stash.items[to];
+        const swaps = back && !sameStack(item, back) && tabOf(back) !== tabOf(item);
+        g.backend.stashPut(d.i, swaps ? -1 : to);
       } else if (this.stash.isOpen && target?.closest('#stash')) {
         g.backend.stashPut(d.i, -1);
       } else if (shop) {
@@ -620,8 +663,8 @@ export class Hud {
           this.log('ลากยา HP ไปที่ปุ่ม 1 · ยา MP ไปที่ปุ่ม 2', '#ff8a6a');
         }
       } else if (target === g.renderer.domElement) {
-        g.dropFromBag(d.i);
-        if (this.forge.isOpen) this.forge.renderForge();
+        // Dropping destroys the item for good (owner 2026-11-23): always ask first.
+        this.askDrop(d.i);
       }
       this.markInventory();
     });
@@ -635,6 +678,8 @@ export class Hud {
     const to: 'bag' | 'stash' | null = stashCell ? 'stash' : cell ? 'bag' : null;
     const j = stashCell ? Number(stashCell.dataset.s) : cell ? Number(cell.dataset.i) : -1;
     if (!to || (from === to && i === j)) return false;
+    // Stacks only go in the usable tab.
+    if (to === 'bag' && tabAt(this.g.player.bagSlots, j) !== 'use') return false;
     const a = this.dragList(from)[i];
     if (!isStack(a) || a.count < 2) return false;
     const b = this.dragList(to)[j];
@@ -889,6 +934,12 @@ export class Hud {
       this.drawMinimap();
       this.map.redraw();
     }
+    // The slot purchase buttons follow /admin at once (a balance update doesn't touch the bag itself).
+    const expand = currentBalance().bagExpand;
+    if (expand !== this.bagExpandSeen) {
+      this.bagExpandSeen = expand;
+      this.invDirty = true;
+    }
     if ((this.bagOpen || this.stash.isOpen) && this.invDirty) this.renderInventory();
     if (this.bagOpen) this.fashion.update(this.shop.isOpen || this.stash.isOpen || this.forge.isOpen || this.market.isOpen || this.g.trade.open);
   }
@@ -1114,6 +1165,7 @@ export class Hud {
     if (this.amountDone) return this.closeAmount();
     if (this.confirmYes) return this.closeConfirm();
     if (this.detail.isOpen) return this.detail.closeDetail();
+    if (this.linkPop.isOpen) return this.linkPop.close();
     this.closeChat();
     this.toggleAutoSettings(false);
     this.toggleMap(false);
@@ -1130,6 +1182,7 @@ export class Hud {
     this.g.report.toggle(false);
     this.g.megaphone.toggle(false);
     this.g.daily.toggle(false);
+    this.g.news.toggle(false);
     this.g.friends.toggle(false);
     this.g.cosmetics.toggle(false);
     this.g.quests.toggle(false);
@@ -1272,10 +1325,19 @@ export class Hud {
     const picked = this.market.picked;
     // Things on offer in an open trade stay in the bag but are marked (and the server refuses to move them).
     const offered = this.g.trade.offeredSlots();
-    $('bag-grid').innerHTML = p.bag.map((it, i) => {
+    // Only the tab picked above the slots (กระเป๋า / ประเภทใช้งาน), BAG_PAGE slots a page; `data-i` stays the
+    // slot's place in the whole bag, so dragging, trading, the market and chat links work as before.
+    const tab = this.fashion.bagTab;
+    const [ta, tb] = tabRange(p.bagSlots, tab);
+    const pages = Math.max(1, Math.ceil((tb - ta) / BAG_PAGE));
+    this.bagPage = Math.min(this.bagPage, pages - 1);
+    const from = ta + this.bagPage * BAG_PAGE;
+    $('bag-grid').innerHTML = p.bag.slice(from, Math.min(tb, from + BAG_PAGE)).map((it, k) => {
+      const i = from + k;
       const cell = this.itemCell(it, `data-i="${i}"`, '', i === picked);
       return offered.has(i) ? cell.replace('class="cell ', 'class="cell trade-offered ') : cell;
     }).join('');
+    this.renderBagMore(tab, pages);
     const fmt = (k: StatKey, v: number) =>
       k === 'hpRegen' || k === 'mpRegen' || k === 'cdr' || k === 'buffDur' || k === 'armorPen' ? v.toFixed(1) : String(Math.round(v));
     $('stat-list').innerHTML = STAT_KEYS.map((k) =>
@@ -1295,28 +1357,87 @@ export class Hud {
       ? 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = ฝากเข้าคลัง · ลากไปวางในคลังได้'
       : this.shop.isOpen
       ? 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = ขายให้พ่อค้า · คลิกช่องสวมใส่ = ถอด'
-      : 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = วางลงพื้น · คลิกช่องสวมใส่ = ถอด · ขายของได้ที่พ่อค้าเท่านั้น';
+      : 'คลิกซ้าย = สวมใส่ / เลือกยาให้ปุ่มด่วน · คลิกขวา = ทิ้งไอเทม · คลิกช่องสวมใส่ = ถอด · ขายของได้ที่พ่อค้าเท่านั้น';
+  }
+
+  /**
+   * Under the bag slots: the pages of a tab bigger than BAG_PAGE, and the slot purchase buttons (only while
+   * /admin has it on, BalanceTuning.bagExpand). The server checks and charges (Sim.bagExpandGold, world bagExpandCrystal).
+   */
+  private renderBagMore(tab: BagTab, pages: number): void {
+    const box = $('bag-more');
+    const p = this.g.player;
+    const cfg = currentBalance().bagExpand;
+    const next = nextExpand(cfg, p.bagSlots, tab);
+    const parts: HTMLElement[] = [];
+    if (pages > 1) {
+      const prev = document.createElement('button');
+      const nextPage = document.createElement('button');
+      prev.textContent = '◀';
+      nextPage.textContent = '▶';
+      prev.disabled = this.bagPage === 0;
+      nextPage.disabled = this.bagPage >= pages - 1;
+      prev.onclick = () => { this.bagPage--; this.markInventory(); };
+      nextPage.onclick = () => { this.bagPage++; this.markInventory(); };
+      const at = document.createElement('span');
+      at.textContent = `${this.bagPage + 1} / ${pages}`;
+      parts.push(prev, at, nextPage);
+    }
+    if (cfg.on && typeof next !== 'string') {
+      const name = TAB_NAME[tab];
+      const buy = (pay: BagPay, label: string, price: number) => {
+        const b = document.createElement('button');
+        b.className = 'bag-expand';
+        b.textContent = `+${next.add} ช่อง ${label}`;
+        b.title = `ขยาย${name}อีก ${next.add} ช่อง`;
+        b.onclick = () => {
+          const have = pay === 'gold' ? p.gold : cashStateNow().crystals;
+          if (have < price) {
+            this.log(pay === 'gold' ? `ทองไม่พอ — ต้องใช้ ${price.toLocaleString()} G` : `คริสตัลมิติไม่พอ — ต้องใช้ ${price.toLocaleString()}`, '#ff8a6a');
+            return;
+          }
+          this.confirm(
+            `ขยาย${name}อีก ${next.add} ช่อง (${p.bagSlots[tab]} → ${p.bagSlots[tab] + next.add})?<br><small>จ่าย ${label} · เฉพาะตัวละครนี้</small>`,
+            `จ่าย ${label}`,
+            () => {
+              this.g.backend.bagExpand(tab, pay, price);
+              this.markInventory();
+            },
+          );
+        };
+        parts.push(b);
+      };
+      if (cfg.gold) buy('gold', `${next.gold.toLocaleString()} G`, next.gold);
+      if (cfg.crystal && !this.g.backend.guest) buy('crystal', `${next.crystal.toLocaleString()} คริสตัลมิติ`, next.crystal);
+    }
+    box.replaceChildren(...parts);
+    box.classList.toggle('hidden', !parts.length);
+  }
+
+  /** Fashion bag: true (with a log line) when the merchant window is open and wearing is refused. */
+  shopBlocksEquip(): boolean {
+    return this.shop.blocksEquip();
   }
 
   /** Dropping a bag item on a socket wears it there; a ring replaces the ring of that socket. */
   equipByDrag(i: number, slot: EquipSlot): void {
     const g = this.g;
     const item = g.player.bag[i];
-    if (!isItem(item)) return;
+    if (!isItem(item) || this.shop.blocksEquip()) return;
     const block = g.player.equipBlock(item);
     if (block) this.log(`ใส่ ${itemName(item)} ไม่ได้ — ${block}`, '#ff8a6a');
     else if (!wornPlaces(item.slot).includes(slot)) this.log(`${itemName(item)} ใส่ช่อง${EQUIP_SLOT_LABEL[slot]}ไม่ได้`, '#ff8a6a');
     else g.backend.equip(i, slot);
   }
 
-  /** Ask before dropping a bag item on the ground. */
+  /** Ask before throwing a bag item away (it is destroyed for good, nothing lands on the ground). */
   askDrop(i: number): void {
     const item = this.g.player.bag[i];
     if (!item) return;
     const name = `<b style="color:${entryColor(item)}">${entryName(item)}</b>`;
     this.confirm(
-      `วาง ${name} ลงบนพื้น?<br><small>เก็บคืนได้ภายใน 60 วินาที · ถ้าจะขาย ให้ไปหาพ่อค้าที่เมือง</small>`,
-      'วางลงพื้น',
+      `ทิ้ง ${name}?<br><small>⚠ ไอเทมจะหายไปถาวร กู้คืนไม่ได้ · ถ้าจะขาย ให้ไปหาพ่อค้าที่เมือง</small>`,
+      'ทิ้งถาวร',
       () => {
         if (this.g.player.bag[i] !== item) return;
         this.g.dropFromBag(i);
@@ -1415,10 +1536,10 @@ export class Hud {
     tip.innerHTML =
       `<div class="tt-name" style="color:${STONE_COLOR[s.stone]}">${STONE_NAME[s.stone]}</div>` +
       `<div class="tt-sub">${
-        isBoundKind(s.stone) && isConsumable(s.stone) ? `ของใช้ · ${s.count} / ${STONE_STACK} ${stoneUnit(s.stone)} · ผูกกับตัวละคร`
-        : isConsumable(s.stone) ? `ของใช้ · ${s.count} / ${STONE_STACK} ${stoneUnit(s.stone)} · ซื้อได้ที่พ่อค้า`
+        isBoundKind(s.stone) && isConsumable(s.stone) ? `ของใช้ · ${s.count} / ${stoneStackMax(s.stone)} ${stoneUnit(s.stone)} · ผูกกับตัวละคร`
+        : isConsumable(s.stone) ? `ของใช้ · ${s.count} / ${stoneStackMax(s.stone)} ${stoneUnit(s.stone)} · ซื้อได้ที่พ่อค้า`
         : isBossKey(s.stone) ? `Artifact · ${s.count} / ${STONE_STACK} อัน · ดรอปจากมอนสเตอร์ในแมพของบอส`
-        : isBound(s) && !s.bound ? 'กุญแจเควส · ผูกกับตัวละคร'
+        : isQuestKey(s.stone) ? `กุญแจเควส · ${s.count} / ${STONE_STACK} อัน · จาก The Seeker`
         : s.stone === 'phoenix' ? `ไอเทมชุบชีวิต · ${s.count} / ${STONE_STACK} อัน · ซื้อจากพ่อค้า`
         // Reroll stones also drop (rarely) from ordinary monsters: MONSTER_STONES.
         : MONSTER_STONES.includes(s.stone) ? `วัตถุดิบช่างตีเหล็ก · ${s.count} / ${STONE_STACK} ก้อน · ดรอปจากบอส และมอนสเตอร์ทั่วไป (หายาก)`
@@ -1450,6 +1571,58 @@ export class Hud {
 
   // ------------------------------------------------------------ online
 
+  /**
+   * Ctrl+click (⌘+click on a Mac) an item in the bag, worn gear, the stash or the merchant's stock: its
+   * "[name]" goes into the megaphone window if that is open, else into the chat box (opened if closed).
+   * Caught before the cells' own handlers, so the click doesn't also wear, use, buy or start a drag, and
+   * the chat box keeps focus (its blur would close it).
+   */
+  private setupItemLinks(): void {
+    const g = this.g;
+    const at = (e: MouseEvent): ChatLinkRef | null => {
+      if (!(e.ctrlKey || e.metaKey) || !currentBalance().chatLinks) return null;
+      const t = e.target as HTMLElement | null;
+      const bag = t?.closest<HTMLElement>('#bag-grid [data-i]');
+      if (bag) return { bag: Number(bag.dataset.i) };
+      const st = t?.closest<HTMLElement>('#stash-grid [data-s]');
+      if (st) return { stash: Number(st.dataset.s) };
+      const slot = t?.closest<HTMLElement>('#equip-slots [data-slot]');
+      if (slot) return { slot: slot.dataset.slot as EquipSlot };
+      const buy = t?.closest<HTMLElement>('#shop-buy [data-buy]');
+      if (buy) return { shop: buy.dataset.buy as `${'hp' | 'mp'}:${'s' | 'm' | 'l'}` };
+      if (t?.closest('#shop-buy [data-phoenix]')) return { shop: 'phoenix' };
+      if (t?.closest('#shop-buy [data-buy-scroll]')) return { shop: 'return_scroll' };
+      return null;
+    };
+    const swallow = (e: MouseEvent): void => {
+      if (!at(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    const link = (e: MouseEvent): void => {
+      const ref = at(e);
+      if (!ref) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const p = g.player;
+      const entry = resolveLinkRef(ref, { bag: p.bag, stash: p.stash.items, equipment: p.equipment });
+      if (!entry) return;
+      let why: string;
+      if (g.megaphone.open) why = g.megaphone.addLink(entry, ref);
+      else {
+        const input = $<HTMLInputElement>('chat-input');
+        if ($('chat').classList.contains('hidden')) this.openChat();
+        why = this.chatDraft.add(input, entry, ref, CHAT_MAX);
+        input.focus();
+      }
+      if (why) this.log(why, '#ff8a6a');
+    };
+    for (const type of ['pointerdown', 'mousedown', 'mouseup', 'dblclick'] as const) window.addEventListener(type, swallow, true);
+    window.addEventListener('click', link, true);
+    // A Mac turns Ctrl+click into a right click: that one links too (and doesn't sell or store).
+    window.addEventListener('contextmenu', (e) => { if (e.ctrlKey && !e.metaKey) link(e); }, true);
+  }
+
   /** Opens the chat box; `prefill` (e.g. "/w Name ") replaces what is typed, for answering a whisper. */
   openChat(prefill?: string): void {
     const box = $('chat');
@@ -1476,6 +1649,7 @@ export class Hud {
   closeChat(): void {
     const input = $<HTMLInputElement>('chat-input');
     input.value = '';
+    this.chatDraft.clear();
     $('chat').classList.add('hidden');
     $('log').classList.remove('open');
     input.blur();
@@ -1485,7 +1659,8 @@ export class Hud {
    * A chat line; an empty name means a server notice (someone joined or left). `ch: 'party'` = party chat or
    * a party notice; `ch: 'whisper'` = a whisper from `name`, or (with `to`) your own whisper to `to`.
    */
-  chatLine(name: string, text: string, fadeMs = 15000, ch?: 'party' | 'whisper', to?: string): void {
+  chatLine(name: string, text: string, fadeMs = 15000, ch?: 'party' | 'whisper', to?: string, links?: ChatLink[]): void {
+    const open = (entry: BagEntry) => this.linkPop.open(entry);
     const party = ch === 'party';
     const el = document.createElement('div');
     if (name && ch === 'whisper') {
@@ -1499,12 +1674,12 @@ export class Hud {
       el.addEventListener('mousedown', (e) => e.preventDefault()); // keep typing in the chat box
       if (!to) this.lastWhisperFrom = name;
       this.whisperWith = other;
-      el.append(b, document.createTextNode(text));
+      el.append(b, linkedWords(text, links, open));
     } else if (name) {
       el.className = `log-line chat${party ? ' party' : ''}`;
       const b = document.createElement('b');
       b.textContent = party ? `[ปาร์ตี้] ${name}: ` : `${name}: `;
-      el.append(b, document.createTextNode(text));
+      el.append(b, linkedWords(text, links, open));
     } else {
       el.className = `log-line system${party ? ' party' : ''}`;
       el.textContent = text;
@@ -1533,6 +1708,8 @@ export class Hud {
       $('hud').append(el);
     }
     el.textContent = text;
+    // The owner's own wording from /admin is never translated; the game's default line is.
+    el.translate = !(typeof serverText === 'string' && serverText);
     this.log(text, SHUTDOWN_COLOR);
   }
 
@@ -1543,10 +1720,15 @@ export class Hud {
    * An announcement: a banner for a while (like the restart warning) and a chat line. From the server's
    * owner, or (`megaphone`) from a player's megaphone: same frame, its own heading and the character's name.
    */
-  announce(text: string, from: string, direct: boolean, megaphone = false): void {
+  announce(text: string, from: string, direct: boolean, megaphone = false, box = false, boxHead?: string, links: ChatLink[] = []): void {
     const wait = this.adminBannerUntil - performance.now();
-    if (megaphone && wait > 0) {
-      window.setTimeout(() => this.announce(text, from, direct, true), wait + 50);
+    // Players' banners (megaphone, mystery box prize) wait for the owner's instead of covering it.
+    if ((megaphone || box) && wait > 0) {
+      window.setTimeout(() => this.announce(text, from, direct, megaphone, box, boxHead, links), wait + 50);
+      return;
+    }
+    if (box) {
+      this.boxBanner(text, boxHead);
       return;
     }
     if (!megaphone) this.adminBannerUntil = performance.now() + ANNOUNCE_MS;
@@ -1559,17 +1741,46 @@ export class Hud {
     head.className = 'announce-head';
     head.textContent = megaphone ? '📣 โทรโข่ง' : direct ? '📢 ข้อความจาก GM ถึงคุณ' : '📢 ประกาศ';
     const body = document.createElement('div');
-    body.textContent = text;
+    body.translate = false; // the owner's / a player's own words (src/client/i18n.ts)
+    const open = (entry: BagEntry) => this.linkPop.open(entry);
+    appendLinked(body, text, links, open);
     const sign = document.createElement('div');
     sign.className = 'announce-from';
     sign.textContent = `— ${from}`;
+    sign.translate = false;
     el.append(head, body, sign);
     $('hud').append(el);
     setTimeout(() => el.remove(), ANNOUNCE_MS);
     const line = document.createElement('div');
     line.className = 'log-line';
     line.style.color = megaphone ? STONE_COLOR.megaphone : SHUTDOWN_COLOR;
-    line.textContent = megaphone ? `📣 ${from}: ${text}` : direct ? `📢 ข้อความจาก ${from} ถึงคุณ: ${text}` : `📢 ประกาศ: ${text} — ${from}`;
+    if (megaphone) line.translate = false; // a player's own words
+    if (megaphone) {
+      line.textContent = `📣 ${from}: `;
+      appendLinked(line, text, links, open);
+    } else line.textContent = direct ? `📢 ข้อความจาก ${from} ถึงคุณ: ${text}` : `📢 ประกาศ: ${text} — ${from}`;
+    this.pushLog(line, ANNOUNCE_MS * 3);
+  }
+
+  /** A mystery box prize for the whole server (owner 2026-11-22): the announcement banner with its own heading and no sender. */
+  /** A player event for everyone: a mystery box prize, or () another, e.g. an enhancement at forge bannerFrom. */
+  private boxBanner(text: string, head = '🎁 กล่องปริศนา'): void {
+    document.getElementById('announce-banner')?.remove();
+    const el = document.createElement('div');
+    el.id = 'announce-banner';
+    el.classList.add('megaphone');
+    const headEl = document.createElement('div');
+    headEl.className = 'announce-head';
+    headEl.textContent = head;
+    const body = document.createElement('div');
+    body.textContent = text;
+    el.append(headEl, body);
+    $('hud').append(el);
+    setTimeout(() => el.remove(), ANNOUNCE_MS);
+    const line = document.createElement('div');
+    line.className = 'log-line';
+    line.style.color = STONE_COLOR.mystery_box;
+    line.textContent = text;
     this.pushLog(line, ANNOUNCE_MS * 3);
   }
 

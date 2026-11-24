@@ -2,6 +2,7 @@
 // character card, invite popups, and the small menu for kicking a member or inviting a player clicked
 // in the world. The server decides everything (server/party.ts); this only shows its snapshot and asks.
 // Plain CSS on purpose: the icons (.party-ico) and frames are easy to swap for painted art later.
+import { noTranslate } from './i18n';
 import type { Game } from './Game';
 import type { Player } from '../shared/sim/Player';
 import { PARTY_SEARCH_MAX, type PartyMemberSnap, type PartySnap } from '../shared/party';
@@ -47,7 +48,7 @@ function bars(m: PartyMemberSnap): HTMLElement {
 function nameLine(m: PartyMemberSnap): HTMLElement {
   const line = el('div', 'party-name');
   if (m.leader) line.append(el('span', 'party-ico leader', '♛'));
-  line.append(el('b', '', m.name), el('span', 'party-lv', ` Lv.${m.lv} ${CLASSES[m.cls]?.name ?? ''}`));
+  line.append(noTranslate(el('b', '', m.name)), el('span', 'party-lv', ` Lv.${m.lv} ${CLASSES[m.cls]?.name ?? ''}`));
   if (!m.online) line.append(el('span', 'party-off', ' ออฟไลน์'));
   else if (m.away) line.append(el('span', 'party-off', ' หลุด · Auto'));
   return line;
@@ -311,7 +312,7 @@ export class PartyUI {
     if (!list.length) out.append(el('div', 'hint', 'ไม่พบผู้เล่นที่ออนไลน์'));
     for (const f of list) {
       const row = el('div', 'party-found');
-      row.append(el('span', '', `${f.name} Lv.${f.lv} ${CLASSES[f.cls]?.name ?? ''}`));
+      row.append(noTranslate(el('span', '', `${f.name} Lv.${f.lv} ${CLASSES[f.cls]?.name ?? ''}`)));
       const btn = el('button', '', f.inParty ? 'มีปาร์ตี้แล้ว' : 'ชวน');
       btn.disabled = f.inParty;
       btn.onclick = () => this.g.backend.partyInvite(f.name);

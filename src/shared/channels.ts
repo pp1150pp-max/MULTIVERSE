@@ -1,7 +1,8 @@
 // Channels: several copies (CH 1, CH 2, …) of a busy map, so players don't crowd one. Numbers and
 // helpers shared by the server (which decides, server/channels.ts) and the browser (which shows them).
 // Rules agreed with the owner: docs/systems/channels.md.
-import type { ZoneDef } from './data/zones';
+import { HUB_ID, type ZoneDef } from './data/zones';
+import { currentBalance } from './balance';
 
 /** A channel takes up to this many players who come alone (or are placed automatically). */
 export const CH_SOLO_CAP = 20;
@@ -14,8 +15,11 @@ export const CH_SWITCH_CALM = 10;
 /** A dropped connection back within this many ms returns to the same map, channel and spot. */
 export const CH_RECONNECT_MS = 60_000;
 
-/** Whether this map is split into channels (a per-zone setting: `ZoneDef.channels`). */
-export const hasChannels = (zone: ZoneDef): boolean => zone.channels === true;
+/**
+ * Whether this map is split into channels: a per-zone setting (`ZoneDef.channels`), and for the hub town the /admin switch
+ * `Balance.hubChannels` (owner 2026-11-22), which the server and every browser read from the same balance settings.
+ */
+export const hasChannels = (zone: ZoneDef): boolean => zone.channels === true || (zone.id === HUB_ID && currentBalance().hubChannels);
 
 /** "ป่ามรกต · CH 2", or just the name for a map without channels. */
 export const placeLabel = (zone: ZoneDef, ch: number): string => (hasChannels(zone) ? `${zone.nameTh} · CH ${ch}` : zone.nameTh);

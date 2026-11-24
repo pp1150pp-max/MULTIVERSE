@@ -1,8 +1,10 @@
 // Draws the boss ground attacks the server lists in its snapshots. Everything is worked out from the
 // hazard's own numbers and the server's clock, so every player sees the same thing at the same time.
 import * as THREE from 'three';
-import { assetSources, fxTex, sheets } from './assets';
+import { assetSources, fxSheets, fxTex, sheets } from './assets';
 import type { ShellHazard } from '../shared/sim/cannonCrab';
+import { bossFxOn } from './bossFx';
+import { cloneShared } from './texShare';
 import type { GraspHazard, HexHazard, PoolHazard, VialHazard } from '../shared/sim/bogWitch';
 import { beamAngleAt, ringRadiusAt, type BeamsHazard, type BlastHazard, type Hazard, type MeteorHazard, type RingHazard } from '../shared/sim/volcanoHeart';
 
@@ -54,12 +56,43 @@ function follower(group: THREE.Group): { sync(h: Hazard): void; step(): void } {
   };
 }
 
+// ---- The Volcano Heart's painted effects (owner 2026-11-21, sheet boss_heart: rows falling rock, impact, fire wave,
+// fire beam, blast; the impact and blast are played by the server's effect events). Off (fxLayer.bossFx) = the old look.
+const HEART_COLS = 6;
+const HEART_ROWS = 5;
+const HEART_ROCK = 0;
+const HEART_WAVE = 2;
+const HEART_BEAM = 3;
+/** Most flame pieces one wave draws (a wave near the arena's edge would want dozens). */
+const WAVE_PIECES = 40;
+/** Flame pieces about this far apart along a wave. */
+const WAVE_STEP = 1.5;
+
+/** Its own copy of the heart's sheet (so it can show its own frame), or null when the art is off or missing. */
+function heartTex(): THREE.Texture | null {
+  const base = fxSheets.boss_heart;
+  if (!base || !bossFxOn()) return null;
+  // The same GPU picture with its own frame (texShare.ts: a plain clone sends the whole sheet to the GPU again).
+  const tex = cloneShared(base);
+  tex.userData.ownFrame = true;
+  return tex;
+}
+
+function heartFrame(tex: THREE.Texture, row: number, frame: number): void {
+  tex.repeat.set(1 / HEART_COLS, 1 / HEART_ROWS);
+  tex.offset.set((Math.floor(frame) % HEART_COLS) / HEART_COLS, 1 - (row + 1) / HEART_ROWS);
+}
+
 function meteorView(h: MeteorHazard): View {
   const group = new THREE.Group();
   const edge = decal(mat(WARN, 0.75, fxTex.edge));
   const fill = decal(mat(WARN, 0.3, fxTex.disc));
-  const rock = new THREE.Sprite(new THREE.SpriteMaterial({ map: fxTex.glow, color: FIRE, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-  rock.scale.setScalar(1.6);
+  const paper = heartTex();
+  // A burning paper rock, or (art off) the old glow.
+  const rock = paper
+    ? new THREE.Sprite(new THREE.SpriteMaterial({ map: paper, transparent: true, alphaTest: 0.3, depthWrite: false }))
+    : new THREE.Sprite(new THREE.SpriteMaterial({ map: fxTex.glow, color: FIRE, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  rock.scale.setScalar(paper ? 2.6 : 1.6);
   group.add(edge, fill, rock);
   group.position.set(h.x, Y, h.z);
   edge.scale.setScalar(h.r);
@@ -68,7 +101,9 @@ function meteorView(h: MeteorHazard): View {
     update(t) {
       const k = Math.min(1, Math.max(0, (t - h.start) / (h.hit - h.start)));
       fill.scale.setScalar(h.r * Math.max(0.01, k));
-      rock.position.set(0, (1 - k) * 12 + 0.5, 0);
+      rock.position.set(0, (1 - k) * 12 + (paper ? 1.1 : 0.5), 0);
+      // Its flames grow as it falls (frame 1 → 6).
+      if (paper) heartFrame(paper, HEART_ROCK, k * (HEART_COLS - 0.01));
     },
   };
 }
@@ -82,6 +117,26 @@ function ringView(h: RingHazard): View {
   const wave = new THREE.Mesh(new THREE.BufferGeometry(), mat(HURT, 0.85));
   group.add(safe, wave);
   const walls = (Math.PI * 2) / h.gaps.length - h.gapArc;
+  // A wall of paper flames standing along the wave, two frames apart so it flickers.
+  const paperA = heartTex();
+  const paperB = paperA && heartTex();
+  const flames: THREE.Sprite[] = [];
+  if (paperA && paperB) {
+    const ma = new THREE.SpriteMaterial({ map: paperA, transparent: true, alphaTest: 0.3, depthWrite: false });
+    const mb = new THREE.SpriteMaterial({ map: paperB, transparent: true, alphaTest: 0.3, depthWrite: false });
+    for (let i = 0; i < WAVE_PIECES; i++) {
+      const s = new THREE.Sprite(i % 2 ? mb : ma);
+      s.visible = false;
+      flames.push(s);
+      group.add(s);
+    }
+    // The band under them stays (it is what hurts), dimmer.
+    (wave.material as THREE.MeshBasicMaterial).opacity = 0.45;
+  }
+  const inWall = (a: number): boolean => h.gaps.some((g) => {
+    const d = ((a - (g + h.gapArc / 2)) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+    return d <= walls;
+  });
   const rebuild = (mesh: THREE.Mesh, geos: THREE.BufferGeometry[]) => {
     mesh.geometry.dispose();
     mesh.geometry = merge(geos);
@@ -97,6 +152,19 @@ function ringView(h: RingHazard): View {
       wave.visible = t >= h.hit && rr > 0;
       // The band keeps its width as it grows, so its shape is rebuilt.
       if (wave.visible) rebuild(wave, h.gaps.map((g) => arc(rr - h.width / 2, rr + h.width / 2, g + h.gapArc / 2, walls)));
+      if (!flames.length) return;
+      const f = t * 12;
+      heartFrame(paperA!, HEART_WAVE, f);
+      heartFrame(paperB!, HEART_WAVE, f + 3);
+      const n = wave.visible ? Math.min(WAVE_PIECES, Math.max(6, Math.round((Math.PI * 2 * rr) / WAVE_STEP))) : 0;
+      const size = h.width * 1.9;
+      flames.forEach((s, i) => {
+        const a = (i / n) * Math.PI * 2;
+        s.visible = i < n && inWall(a);
+        if (!s.visible) return;
+        s.position.set(Math.cos(a) * rr, size * 0.42, Math.sin(a) * rr);
+        s.scale.set(size, size, 1);
+      });
     },
   };
 }
@@ -120,14 +188,28 @@ function beamsView(h: BeamsHazard): View {
   const group = new THREE.Group();
   group.position.set(h.x, Y + 0.01, h.z);
   const warn = mat(WARN, 0.35);
-  const live = mat(HURT, 0.8);
+  const paper = heartTex();
+  // With the paper beam on top, the red band under it (what hurts) is dimmer.
+  const live = mat(HURT, paper ? 0.4 : 0.8);
   const meshes: THREE.Mesh[] = [];
+  const fire: THREE.Mesh[] = [];
+  const fireMat = paper && new THREE.MeshBasicMaterial({ map: paper, transparent: true, alphaTest: 0.2, depthWrite: false, side: THREE.DoubleSide });
   for (let i = 0; i < h.n; i++) {
     const geo = new THREE.PlaneGeometry(h.len, h.width);
     geo.translate(h.len / 2, 0, 0);
     const mesh = new THREE.Mesh(flat(geo), warn);
     meshes.push(mesh);
     group.add(mesh);
+    if (fireMat) {
+      // The painted beam: the flame strip fills about the middle half of its cell, so the plane is wider than the band.
+      const g2 = new THREE.PlaneGeometry(h.len, h.width * 2.2);
+      g2.translate(h.len / 2, 0, 0);
+      const m2 = new THREE.Mesh(flat(g2), fireMat);
+      m2.position.y = 0.02;
+      m2.visible = false;
+      fire.push(m2);
+      group.add(m2);
+    }
   }
   return {
     group,
@@ -136,7 +218,12 @@ function beamsView(h: BeamsHazard): View {
       meshes.forEach((mesh, i) => {
         mesh.material = on ? live : warn;
         mesh.rotation.y = -beamAngleAt(h, i, t);
+        if (fire[i]) {
+          fire[i].visible = on;
+          fire[i].rotation.y = mesh.rotation.y;
+        }
       });
+      if (paper && on) heartFrame(paper, HEART_BEAM, t * 12);
       if (!on) warn.opacity = 0.2 + 0.3 * Math.min(1, (t - h.start) / (h.hit - h.start));
     },
   };
@@ -345,6 +432,12 @@ function disposeGroup(g: THREE.Object3D): void {
       o.geometry.dispose();
       (o.material as THREE.Material).dispose();
     } else if (o instanceof THREE.Sprite) o.material.dispose();
+    // The Volcano Heart's own sheet copies (heartTex).
+    const map = (o as THREE.Mesh | THREE.Sprite).material && ((o as THREE.Mesh).material as THREE.MeshBasicMaterial).map;
+    if (map?.userData.ownFrame && !map.userData.disposed) {
+      map.userData.disposed = true;
+      map.dispose();
+    }
   });
 }
 

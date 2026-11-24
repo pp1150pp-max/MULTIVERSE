@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
-import { pasteCosTuning, savePartOf, axisHiddenInDir, checkCosTuning, COS_AXES, COS_TUNE_FIELDS, viewDirOf, viewOffKey, COS_TUNING_SETTING, cosTuneDefaults, cosTuneOf, cosTuningChanges, TUNED_SLOTS } from '../src/shared/cosTuning';
+import { pasteCosTuning, partOfView, savePartOf, valueAtDir, VIEW_DIRS, axisHiddenInDir, checkCosTuning, COS_AXES, COS_TUNE_FIELDS, viewDirOf, viewOffKey, COS_TUNING_SETTING, cosTuneDefaults, cosTuneOf, cosTuningChanges, TUNED_SLOTS } from '../src/shared/cosTuning';
 import { COSMETICS } from '../src/shared/data/cosmetics';
 import { checkCosShop, COS_SHOP_SETTING, cosHiddenIds, cosPrice, cosShopChanges, mayPutOnCos } from '../src/shared/cosShop';
 import { finish, ok } from './check';
@@ -85,6 +85,40 @@ ok(!!checkCosTuning({ aura_star: { dz_at_front: 0.1 } }, true).error, 'an aura h
   ok(old.dx_at_left === 0.2 && old.dx_at_right === 0.2, 'old side offsets go to left and right');
   ok(old.dz_at_back === -0.1 && old.dz_at_backLeft === -0.1 && old.dz_at_backRight === -0.1 && Object.keys(old).length === 8, 'old back offsets go to the back and both back diagonals');
   ok(checkCosTuning({ wings_angel: { dy_front: 0.3, dy_at_frontLeft: 0.5 } }, true).tuning?.wings_angel?.dy_at_frontLeft === 0.5, 'a facing saved on its own wins over the old group value');
+}
+
+// Single-picture wings per facing (owner 2026-11-23): size, depth, tilt and squeeze get an offset per facing.
+{
+  const d = cosTuneDefaults('wings_bat')!;
+  ok(d.oneSize_at_front === 0 && d.oneDepth_at_backLeft === 0 && d.oneTilt_at_frontRight === 0 && d.oneSqueeze_at_backRight === 0, 'per-facing wing offsets start at 0');
+  ok(d.oneTilt_at_front === undefined && d.oneSqueeze_at_left === undefined, 'tilt and squeeze offsets exist on the diagonals only');
+  ok(d.oneBack_at_front === undefined && d.oneBackSeat_at_front === undefined, 'height per facing stays the Y offset (no oneBack offset)');
+  // An old save (before these keys) reads exactly as before, in every facing.
+  const old = { wings_bat: { oneSize: 1.1, oneTilt: 0.3, dy_at_front: 0.1 } };
+  const oldV = cosTuneOf(checkCosTuning(old, false).tuning!, 'wings_bat')!;
+  ok(VIEW_DIRS.every((dd) => valueAtDir('wings', oldV, 'oneSize', dd) === 1.1 && valueAtDir('wings', oldV, 'oneTilt', dd) === 0.3), 'an old save gives the same size and tilt in every facing');
+  ok(JSON.stringify(checkCosTuning(old, true).tuning) === JSON.stringify(old), 'an old save checks clean and stores nothing new');
+  // Saved, checked, kept in range.
+  ok(checkCosTuning({ wings_bat: { oneSize_at_front: 0.2 } }, true).tuning?.wings_bat?.oneSize_at_front === 0.2, 'a facing offset can be saved');
+  ok(!!checkCosTuning({ wings_bat: { oneSize_at_front: 9 } }, true).error, 'an out-of-range facing offset is refused');
+  ok(!!checkCosTuning({ wings_bat: { oneSize_at_front: '0.2' } }, true).error, 'a facing offset sent as text is refused');
+  ok(!!checkCosTuning({ wings_bat: { oneTilt_at_front: 0.1 } }, true).error, 'a tilt offset straight from the front is refused');
+  ok(!!checkCosTuning({ mount_wolf: { oneSize_at_front: 0.1 } }, true).error, 'a mount has no wing offsets');
+  ok(JSON.stringify(checkCosTuning({ wings_bat: { oneSize_at_front: 9, oneDepth_at_back: 0.05 } }, false).tuning) === '{"wings_bat":{"oneDepth_at_back":0.05}}', 'read back leniently: a bad offset dropped, the rest kept');
+  const v = cosTuneOf({ wings_bat: { oneSize: 1, oneSize_at_front: 0.3, oneSize_at_back: -2 } }, 'wings_bat')!;
+  ok(valueAtDir('wings', v, 'oneSize', 'front') === 1.3 && valueAtDir('wings', v, 'oneSize', 'right') === 1, 'base + this facing\'s offset, other facings keep the base');
+  ok(valueAtDir('wings', v, 'oneSize', 'back') === 0.3, 'the sum stays inside the base range (no negative size)');
+  // Saving one facing on the bench changes that facing only (the bug: other facings changed too).
+  const saved = { wings_bat: { oneSize_at_back: 0.1, dy_at_left: 0.2 } };
+  const cur = { ...cosTuneOf(saved, 'wings_bat')!, oneSize: 1.4, oneSize_at_front: 0.25, oneDepth_at_front: 0.05, dx_at_front: 0.1, oneSize_at_left: 0.3 };
+  const front = savePartOf(saved, 'wings_bat', cur, partOfView('front'));
+  const sorted = (o: Record<string, unknown>) => JSON.stringify(Object.entries(o).sort(([x], [y]) => (x < y ? -1 : 1)));
+  ok(Object.keys(front).join() === 'wings_bat' && sorted(front.wings_bat) === sorted({ dx_at_front: 0.1, oneSize_at_front: 0.25, oneDepth_at_front: 0.05, oneSize_at_back: 0.1, dy_at_left: 0.2 }), `saving the front saves only the front's values (${JSON.stringify(front)})`);
+  const after = cosTuneOf(front, 'wings_bat')!;
+  ok(VIEW_DIRS.filter((dd) => dd !== 'front').every((dd) => valueAtDir('wings', after, 'oneSize', dd) === valueAtDir('wings', cosTuneOf(saved, 'wings_bat')!, 'oneSize', dd)), 'every other facing looks as before the save');
+  ok(!partOfView('front')('dx_at_frontRight') && !partOfView('left')('dx_at_backLeft') && partOfView('')('oneSize') && !partOfView('')('oneSize_at_front'), 'facing parts do not overlap (front vs front diagonal, left vs back-left)');
+  const base = savePartOf(saved, 'wings_bat', cur, partOfView(''));
+  ok(Object.keys(base).join() === 'wings_bat' && sorted(base.wings_bat) === sorted({ oneSize: 1.4, oneSize_at_back: 0.1, dy_at_left: 0.2 }), 'saving every facing (base) leaves the facing offsets as saved');
 }
 
 // Shop settings (the "จัดการของแต่งตัว" tab): hidden / crystal price per piece, overrides only.

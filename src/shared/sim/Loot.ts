@@ -94,7 +94,7 @@ export class Loot {
       return;
     }
     if (full && fd < 0.8 && fd < d && this.blockedMsgT <= 0) {
-      sim.text(full.x, full.topY, full.z, 'กระเป๋าเต็ม', 'info', undefined, full.id);
+      sim.text(full.x, full.topY, full.z, this.kind.type === 'item' ? 'กระเป๋าเต็ม' : 'ช่องประเภทใช้งานเต็ม', 'info', undefined, full.id);
       this.blockedMsgT = 2;
     }
     if (!p) return;
@@ -107,7 +107,7 @@ export class Loot {
     if (d < 0.8) {
       if (sim.pickup(p, this)) this.dead = true;
       else if (this.blockedMsgT <= 0) {
-        sim.text(p.x, p.topY, p.z, 'กระเป๋าเต็ม', 'info', undefined, p.id);
+        sim.text(p.x, p.topY, p.z, this.kind.type === 'item' ? 'กระเป๋าเต็ม' : 'ช่องประเภทใช้งานเต็ม', 'info', undefined, p.id);
         this.blockedMsgT = 2;
       }
     }

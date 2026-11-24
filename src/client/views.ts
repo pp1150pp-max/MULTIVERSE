@@ -21,7 +21,7 @@ import { paperSwordOn } from './rig/paperSwitch';
 import { rigLookOf } from '../shared/rigLookTuning';
 import { currentBalance } from '../shared/balance';
 import { animSets, decalTex, fxTex, sheets } from './assets';
-import { PassiveAura, type Effects, type ShotSprite } from './effects';
+import { BOSS_ORDER, PassiveAura, type Effects, type ShotSprite } from './effects';
 import type { ProjectileLike } from './backend';
 
 type AnimEvent = Extract<SimEvent, { t: 'anim' }>;
@@ -33,10 +33,11 @@ type AnimEvent = Extract<SimEvent, { t: 'anim' }>;
 /** World size of the crater a dead player lies in (the player is about 1.9 units tall). */
 const CRATER_SIZE = 3.2;
 /**
- * The lying body in the last death frame stands about 1 unit above the feet line on its billboard, which the
- * camera shows over the ground about this far behind the player, so the crater moves back to sit under it.
+ * The lying body in the last death frame stands about 0.7 units above the feet line on its billboard (paper art,
+ * 2026-11-22), which the camera shows over the ground about 1 unit behind the player (fxLayer.craterBack, /admin), so
+ * the crater moves back to sit under it.
  */
-const CRATER_BACK = 1.4;
+const craterBack = (): number => currentBalance().fxLayer.craterBack;
 
 const AURA: { color: string; size: number; sparks: number }[] = [
   { color: '', size: 0, sparks: 0 },
@@ -46,6 +47,24 @@ const AURA: { color: string; size: number; sparks: number }[] = [
   { color: '#ffd34a', size: 2.7, sparks: 12 },
 ];
 
+/** The aura's opacity before it breathes. */
+const AURA_ALPHA = 0.7;
+
+let smoothGlowTex: THREE.Texture | null = null;
+/**
+ * The aura's glow picture filtered smoothly. The shared one (fxTex.glow) is 32 px of hard steps drawn as hard pixels:
+ * stretched to the +15 aura's size each texel is several screen pixels, and as the aura breathes in size its pixel
+ * edges jump every frame, which showed as flicker (owner 2026-11-23, worse the bigger and brighter the aura).
+ */
+function smoothGlow(): THREE.Texture {
+  if (!smoothGlowTex) {
+    smoothGlowTex = fxTex.glow.clone();
+    smoothGlowTex.magFilter = THREE.LinearFilter;
+    smoothGlowTex.minFilter = THREE.LinearFilter;
+    smoothGlowTex.needsUpdate = true;
+  }
+  return smoothGlowTex;
+}
 
 /** The gold of the light around a player who just got up with a phoenix feather. */
 const GUARD_GOLD = '#ffd04a';
@@ -106,6 +125,7 @@ export class PlayerView {
       this.actor.setLook(look.armor, look.weapon);
     }
     this.actor.update(dt, p.moving, p.isDashing ? 14 : undefined);
+    this.placeCrater();
     this.updateAura(dt, fx);
     // Owner 2026-11-10: the orbs stay while dead (only the aura goes).
     this.orbs.update(this.clock, p.x, p.z, p.orbs, true, orbItemLook(shownCos(p, 'orb')?.id) ?? null);
@@ -219,7 +239,7 @@ export class PlayerView {
       this.disposeAura();
       if (tier > 0) {
         const mat = new THREE.MeshBasicMaterial({
-          map: fxTex.glow, color: AURA[tier].color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.7,
+          map: fxTex.glow, color: AURA[tier].color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: AURA_ALPHA,
         });
         this.aura = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
         this.aura.rotation.x = -Math.PI / 2;
@@ -229,13 +249,23 @@ export class PlayerView {
     }
     if (!this.aura) return;
     const a = AURA[tier];
-    const pulse = 1 + Math.sin(this.clock * 3) * 0.08;
+    // Breathing, tuned on /admin → ปรับสมดุล → เอฟเฟกต์สกิล (fxLayer.enhAura*).
+    const fl = currentBalance().fxLayer;
+    const mat = this.aura.material as THREE.MeshBasicMaterial;
+    const map = fl.enhAuraSmooth ? smoothGlow() : fxTex.glow;
+    if (mat.map !== map) {
+      mat.map = map;
+      mat.needsUpdate = true;
+    }
+    const wave = Math.sin(this.clock * fl.enhAuraSpeed);
+    const pulse = 1 + wave * fl.enhAuraPulse;
+    mat.opacity = Math.min(1, AURA_ALPHA * fl.enhAuraGlow * (1 + wave * fl.enhAuraBreath));
     this.aura.position.set(p.x, 0.06, p.z);
     this.aura.scale.set(a.size * pulse, a.size * pulse, 1);
-    if (a.sparks && Math.random() < a.sparks * dt) {
+    if (a.sparks && Math.random() < a.sparks * fl.enhSparkRate * dt) {
       const ang = Math.random() * Math.PI * 2;
       const r = Math.random() * a.size * 0.35;
-      fx.puff(p.x + Math.cos(ang) * r, 0.2, p.z + Math.sin(ang) * r, a.color, 0.9, 0.35);
+      fx.puff(p.x + Math.cos(ang) * r, 0.2, p.z + Math.sin(ang) * r, a.color, 0.9, 0.35, fl.enhSparkFadeIn, 0.8 * fl.enhSparkGlow);
     }
   }
 
@@ -292,9 +322,19 @@ export class PlayerView {
     const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
     this.crater = new THREE.Mesh(new THREE.PlaneGeometry(CRATER_SIZE, CRATER_SIZE).rotateX(-Math.PI / 2), mat);
     // Away from the camera (it looks from +x +z, see ISO_DIR).
-    this.crater.position.set(this.p.x - CRATER_BACK * Math.SQRT1_2, 0.03, this.p.z - CRATER_BACK * Math.SQRT1_2);
+    this.placeCrater();
     this.crater.renderOrder = -1;
     this.scene.add(this.crater);
+  }
+
+  /**
+   * Under the body: placed again every frame, as the body slides from where this screen saw it die to where the server
+   * has it (owner 2026-11-23: the body lay off to one side of its crater).
+   */
+  private placeCrater(): void {
+    if (!this.crater) return;
+    const back = craterBack() * Math.SQRT1_2;
+    this.crater.position.set(this.p.x - back, 0.03, this.p.z - back);
   }
 
   private disposeCrater(): void {
@@ -342,6 +382,8 @@ export class MonsterView {
 
   constructor(readonly m: Monster, private readonly scene: THREE.Scene) {
     this.actor = new SpriteActor(sheets[m.def.id], m.def.height, m.def.radius * 1.1);
+    // Over its own skill pictures (Effects: `under`), which go after the ground layer.
+    if (m.isBoss) this.actor.sprite.renderOrder = BOSS_ORDER;
     this.debuffFx = new DebuffFx(this.actor.group);
     this.circle = new MagicCircle(this.actor.group, Math.max(1.4, m.def.radius * 3));
     this.actor.face(m.faceX, m.faceZ);
@@ -439,7 +481,7 @@ export class LootView {
       : k.type === 'potion' ? `icon_potion_${k.pot}`
       : k.type === 'stone' ? `icon_stone_${k.stone}`
       : itemArt(k.item);
-    this.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: sheets[key].texture, alphaTest: 0.5, transparent: true }));
+    this.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: (sheets[key] ?? sheets.icon_stone_mystery_box).texture, alphaTest: 0.5, transparent: true }));
     const size = k.type === 'item' ? 0.85 : 0.55;
     this.sprite.scale.set(size, size, 1);
     // Drawn after the glow, so the rarity light sits behind the picture instead of washing it out.

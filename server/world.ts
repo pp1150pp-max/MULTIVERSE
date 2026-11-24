@@ -16,6 +16,7 @@ import { WaveRooms, type WaveExit } from './waveRooms';
 import { PORTAL_RANGE } from '../src/shared/sim/terrain';
 import { cleanAutoSettings, roundBuffs, SORT_KEYS, type LootFilter, type Player } from '../src/shared/sim/Player';
 import { applyBalance, currentBalance, currentBalanceTuning, type BalanceTuning } from '../src/shared/balance';
+import { BAG_TABS, nextExpand, TAB_NAME, type BagTab } from '../src/shared/bagTabs';
 import { upgradeItem } from '../src/shared/data/items';
 import { POTION_SIZES } from '../src/shared/data/potions';
 import { REROLL_KINDS } from '../src/shared/data/reroll';
@@ -55,9 +56,13 @@ import { Channels, FightClock, type Channel } from './channels';
 import { Perf, PERF_LOG_MS } from './perf';
 import { CH_RECONNECT_MS, CH_RESERVED, hasChannels, type ChannelsView } from '../src/shared/channels';
 import { MEGAPHONE_EVERY_MS, megaphoneText, STONE_NAME, STONE_STACK } from '../src/shared/data/stones';
+import { buildChatLinks, type ChatLink } from '../src/shared/chatLinks';
 import { COS_SLOTS, cosById, cosCodes } from '../src/shared/data/cosmetics';
 import { cosHiddenIds, mayPutOnCos } from '../src/shared/cosShop';
+import { setBoxHiddenCos } from '../src/shared/mysteryBox';
 import { CashShop } from './cashShop';
+import { Topup } from './topup';
+import type { NewsView } from '../src/shared/news';
 import { orbItemsRegistered } from '../src/shared/orbItems';
 
 /** How often the world looks for the Thai calendar day turning over. */
@@ -71,6 +76,8 @@ const MARKET_EXPIRE_MS = 60_000;
 const MARKET_ACT_MS = 100;
 /** One cash shop purchase per this many ms per player. */
 const CASH_BUY_MS = 300;
+/** One top-up request / cancel per this many ms per player (each new request takes up an amount). */
+const TOPUP_ACT_MS = 2000;
 /** Delay before telling a player who just joined what sold or expired while away. */
 const MARKET_JOIN_NOTE_MS = 3000;
 const SKILL_KEYS: SkillSlot[] = ['q', 'e', 'r'];
@@ -88,7 +95,7 @@ const FRIEND_QUIET_MS = 60_000;
  * party actions are fine.
  */
 const TRADE_LOCKED = new Set([
-  'equip', 'unequip', 'drop', 'buy', 'move', 'sort', 'buyBack', 'sell', 'split', 'sellRarity', 'enhance', 'reroll',
+  'equip', 'unequip', 'drop', 'buy', 'move', 'sort', 'bagExpand', 'buyBack', 'sell', 'split', 'sellRarity', 'enhance', 'reroll',
   'stashPut', 'stashTake', 'stashMove', 'stashSort', 'stashBuy', 'stashGold', 'stashSplit',
   'mktSearch', 'mktMine', 'mktPrice', 'mktList', 'mktCancel', 'mktBuy', 'mktClaim',
   'mailList', 'mailRead', 'mailReadAll', 'mailClaim', 'mailDelete', 'mailDeleteRead', 'roomOpen', 'buyPhoenix', 'tutAccept',
@@ -163,6 +170,8 @@ interface Session {
   lastMailAt: number;
   /** performance.now() of the last cash shop purchase (one per CASH_BUY_MS). */
   lastCashAt: number;
+  /** performance.now() of the last top-up request / cancel (one per TOPUP_ACT_MS). */
+  lastTopupAt: number;
   saveDue: number | null;
   /** Where the connection came from, for the owner's log only (never sent to anyone). */
   ip: string;
@@ -213,7 +222,7 @@ interface Session {
   lastFriendAt: number;
   /** Level and zone its friends last saw (see friendsTick); a change updates their lists. */
   friendKey: string;
-  /** The channel number it was last in on a map with channels: entering another such map tries it first. */
+  /** The channel number it was last in on a map with channels (the hub too, when split): entering another such map tries it first. */
   lastCh: number;
   /** When the player last fought: a channel switch needs CH_SWITCH_CALM seconds since. Kept across maps. */
   fight: FightClock;
@@ -227,6 +236,8 @@ interface Session {
    * stays in the world until Auto stops, it dies, the time is up or it logs in again (sweepAway). null = connected.
    */
   awayAt: number | null;
+  /** When the account's VIP ends (ms, src/shared/vip.ts); Player.vip follows it every tick. */
+  vipUntil: number;
   /**
    * A map-editor preview (docs/plans/map-editor.md 2.3): this session plays a copy of the character in its own private Sim built from
    * the draft layout. Nothing of it is saved, it has no stash, trades, chat or shop, it meets no other player, and it never leaves the Sim.
@@ -368,6 +379,8 @@ export class GameWorld {
   readonly daily: Daily;
   /** The cash shop (server/cashShop.ts). */
   readonly cash: CashShop;
+  /** Top-up by PromptPay (server/topup.ts). */
+  readonly topup: Topup;
   /** The Thai calendar day last checked, to hand out the new day's reward to everyone online at midnight. */
   private dailyDay = thaiDate(Date.now()).key;
   /** Parties, keyed on character ids (in memory only: a restart ends them). */
@@ -412,6 +425,7 @@ export class GameWorld {
     this.snapDelta = db.getSetting(SNAP_DELTA_KEY) !== '0';
     this.direct = directSettings(db);
     this.cosHidden = new Set(cosHiddenIds(db.cosShop()));
+    setBoxHiddenCos(this.cosHidden);
     const wss = new WebSocketServer({ server: http, path: WS_PATH, maxPayload: 16 * 1024, perMessageDeflate: WS_DEFLATE });
     wss.on('connection', (ws, req) => this.onConnection(ws, req));
     this.startTicking();
@@ -422,6 +436,7 @@ export class GameWorld {
     this.mail = new Mail(db);
     this.daily = new Daily(db);
     this.cash = new CashShop(db);
+    this.topup = new Topup(db);
     setInterval(() => this.dailyRollover(), DAILY_CHECK_MS);
     this.reports = new Reports(db);
     this.parties = new Parties({
@@ -684,7 +699,7 @@ export class GameWorld {
         if (msg.t === 'input') this.onInput(session, msg);
         else if (session.preview && (msg.t === 'chat' || (msg.t === 'act' && msg.a !== 'respawn'))) return; // a preview only walks and fights
         else if (msg.t === 'act') this.onAction(session, msg);
-        else if (msg.t === 'chat') this.onChat(session, msg.text, msg.ch, msg.to);
+        else if (msg.t === 'chat') this.onChat(session, msg.text, msg.ch, msg.to, msg.links);
         else if (msg.t === 'ping') this.onPing(session, msg);
         else if (msg.t === 'client') this.onClientInfo(session, msg);
       } catch (e) {
@@ -783,13 +798,14 @@ export class GameWorld {
     const s: Session = {
       ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId: pv ? -(charId + 1) : charId, sim, player,
       preview: !!pv, move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null, recall: false,
-      auto: null, lastInputAt: 0, walkTo: null, walkEpoch: 0, serverWalk: false, walkAnchor: { x: 0, z: 0 }, walkAnchorAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', lastTut: '', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', delta, lastMe: new Map(), seenP: new Map(), seenM: new Map(), outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, lastCashAt: -Infinity, saveDue: null,
+      auto: null, lastInputAt: 0, walkTo: null, walkEpoch: 0, serverWalk: false, walkAnchor: { x: 0, z: 0 }, walkAnchorAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', lastTut: '', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', delta, lastMe: new Map(), seenP: new Map(), seenM: new Map(), outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, lastCashAt: -Infinity, lastTopupAt: -Infinity, saveDue: null,
       ip, edge, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, deflate: ws.extensions.includes('permessage-deflate'), staff: !acc.guest && ['owner', 'gm'].includes(this.db.adminRole(acc.id) ?? ''), pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity, blockTrades: false,
-      lastFriendAt: -Infinity, friendKey: '', lastCh: back?.channel.ch ?? 1, fight: new FightClock(Math.max(player.lastHurt, player.lastAttack)), lastChListAt: -Infinity, lastChAt: -Infinity,
-      pingHidden: false, awayAt: null,
+      lastFriendAt: -Infinity, friendKey: '', lastCh: back?.channel.ch ?? this.lastChOf(sim), fight: new FightClock(Math.max(player.lastHurt, player.lastAttack)), lastChListAt: -Infinity, lastChAt: -Infinity,
+      pingHidden: false, awayAt: null, vipUntil: acc.guest || pv ? 0 : this.db.vipUntil(acc.id),
     };
+    player.vip = s.vipUntil > Date.now();
     // Back at the same spot after a drop (or a login elsewhere) with Auto on: Auto carries on, from the
     // same AutoPlay (its farm spot), and the welcome tells the browser so.
     const autoBack = pv ? undefined : this.autoBack.get(charId);
@@ -809,10 +825,15 @@ export class GameWorld {
     if (!acc.guest && !pv) this.friendsJoined(s, accountWasOnline);
     // Back within the grace time (or a takeover): still in the party.
     player.partyId = pv ? null : this.parties.online(charId);
-    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), map: sim.terrain.mapRev, guest: acc.guest, ...(s.auto ? { auto: true } : {}), ...(pv ? { preview: true } : {}), orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), animTuning: this.db.animTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning(), cash: this.cash.catalog(), cashState: this.cash.state(acc.id, acc.guest) });
+    // The close beta refund (once per account, after the owner switched it on), before the welcome carries the crystals.
+    const refunded = !acc.guest && !pv ? this.topup.refundOnJoin(acc.id, acc.username) : 0;
+    if (refunded) this.crystalsChanged(acc.id);
+    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), map: sim.terrain.mapRev, guest: acc.guest, ...(s.auto ? { auto: true } : {}), ...(pv ? { preview: true } : {}), orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), animTuning: this.db.animTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning(), cash: this.cash.catalog(), cashState: this.cash.state(acc.id, acc.guest), topup: this.topup.view(acc.id, acc.guest) });
     if (!pv) this.broadcastSystem(`${player.name} เข้าสู่โลก`);
     // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
-    if (!acc.guest && !pv) setTimeout(() => this.sessions.has(s) && (this.marketOnJoin(s), this.dailyCheck(s), this.mailNote(s, true)), MARKET_JOIN_NOTE_MS);
+    // The update notes (everyone, guests too), after the same moment as the notices below.
+    if (!pv) setTimeout(() => this.sessions.has(s) && this.send(s.ws, { t: 'news', v: this.newsView() }), MARKET_JOIN_NOTE_MS);
+    if (!acc.guest && !pv) setTimeout(() => this.sessions.has(s) && (this.marketOnJoin(s), this.dailyCheck(s), this.mailNote(s, true), refunded && this.send(s.ws, { t: 'chat', name: '', text: `ได้รับคริสตัลมิติคืนจากช่วง Close Beta ${refunded.toLocaleString('en-US')} (รวมโบนัส)` })), MARKET_JOIN_NOTE_MS);
     const extra = [rejoin && `reconnected: ${rejoin}`, back && 'back at the same spot', s.auto && 'Auto on'].filter(Boolean).join(' · ');
     console.log(`[world] ${acc.username} joined as ${player.name}${acc.guest ? ' (guest)' : ''} from ${ip}${edge === 'direct' ? ' direct (past Cloudflare)' : edge ? ` via Cloudflare ${edge}` : ''}${s.deflate ? '' : ' (no compression)'}${extra ? ` — ${extra}` : ''} (${this.onlineText()})`);
     return s;
@@ -1000,6 +1021,12 @@ export class GameWorld {
    * An announcement from the admin page (a banner and a chat line): to everyone in the world, or with
    * `toCharId` to that one character. Returns how many got it (0 = that character isn't online).
    */
+  /** A mystery box prize the owner marked "announce": a banner to everyone, like the admin's (no megaphone queue). */
+  private boxAnnounce(name: string, got: string): void {
+    const text = `🎁 ${name} เปิดกล่องปริศนาได้ ${got}!`;
+    for (const o of this.sessions) this.send(o.ws, { t: 'announce', text, from: '', direct: false, box: true });
+  }
+
   broadcast(text: string, from: string, toCharId?: number): number {
     const to = toCharId === undefined ? [...this.sessions] : [...this.sessions].filter((s) => s.charId === toCharId);
     for (const s of to) this.send(s.ws, { t: 'announce', text, from, direct: toCharId !== undefined });
@@ -1052,7 +1079,7 @@ export class GameWorld {
    * A player's megaphone: one announcement for the whole server (every map, channel and boss room) at most
    * every MEGAPHONE_EVERY_MS. Everything is checked before the megaphone is used, so a refusal keeps it.
    */
-  private megaphone(s: Session, raw: unknown): void {
+  private megaphone(s: Session, raw: unknown, rawLinks?: unknown): void {
     const tell = (text: string) => this.send(s.ws, { t: 'chat', name: '', text });
     if (s.guest) return tell('Guest ใช้โทรโข่งไม่ได้ — สมัครสมาชิกก่อน');
     const msg = megaphoneText(raw);
@@ -1063,7 +1090,8 @@ export class GameWorld {
     if (wait > 0) return tell(`มีคนเพิ่งใช้โทรโข่ง — รออีก ${Math.ceil(wait / 1000)} วินาทีแล้วลองใหม่ (โทรโข่งยังอยู่)`);
     if (!s.sim.useMegaphone(s.player)) return;
     this.megaphoneAt = now;
-    for (const o of this.sessions) this.send(o.ws, { t: 'announce', text: msg.text, from: s.player.name, direct: false, megaphone: true });
+    const links = this.chatLinks(s, msg.text, rawLinks);
+    for (const o of this.sessions) this.send(o.ws, { t: 'announce', text: msg.text, from: s.player.name, direct: false, megaphone: true, links });
     try {
       this.db.logChat({ accountId: s.accountId, username: s.username, charName: s.player.name, zone: s.sim.zone.id, text: `[โทรโข่ง] ${msg.text}` });
     } catch (e) {
@@ -1351,7 +1379,11 @@ export class GameWorld {
         if (EQUIP_SLOTS.includes(m.slot)) p.unequip(m.slot);
         break;
       case 'drop':
-        if (i >= 0 && i < p.bag.length) sim.dropFromBag(p, i);
+        // Destroyed for good (owner 2026-11-23); there is no item log, so it goes to the server log.
+        if (i >= 0 && i < p.bag.length) {
+          const gone = sim.dropFromBag(p, i);
+          if (gone) console.log(`[drop] ${s.username} (${p.name}, char ${s.charId}) destroyed ${JSON.stringify(gone)}`);
+        }
         break;
       case 'buy':
         if ((m.kind === 'hp' || m.kind === 'mp') && POTION_SIZES.includes(m.size)) {
@@ -1366,15 +1398,40 @@ export class GameWorld {
         this.dailyMakeup(s, m.day);
         break;
       case 'megaphone':
-        this.megaphone(s, m.text);
+        this.megaphone(s, m.text, m.links);
         break;
       case 'cashBuy':
         this.cashBuy(s, m);
+        break;
+      case 'topupNew':
+      case 'topupCancel':
+        this.topupAct(s, m);
         break;
       case 'useBuff':
         // Sim.useBuffScroll ignores anything that isn't a buff scroll kind.
         if (typeof m.stone === 'string') sim.useBuffScroll(p, m.stone);
         break;
+      case 'openBox': {
+        const slot = num(m.slot);
+        if (!Number.isInteger(slot) || slot < 0 || slot >= p.bag.length) break;
+        for (const got of sim.openBox(p, slot, m.all === true)) this.boxAnnounce(p.name, got);
+        break;
+      }
+      case 'useOrbItem': {
+        const slot = num(m.slot);
+        if (!Number.isInteger(slot) || slot < 0 || slot >= p.bag.length) break;
+        if (s.guest) {
+          this.send(s.ws, { t: 'chat', name: '', text: 'Guest มีของแต่งตัวไม่ได้ — สมัครสมาชิกก่อนแล้วค่อยใช้ลูกแก้ว' });
+          break;
+        }
+        let given = false;
+        sim.useOrbItem(p, slot, (id) => s.cosOwned.includes(id), (id) => (given = this.db.grantCosmetic(s.accountId, id, 'mystery_box')));
+        if (given) {
+          this.cosmeticsChanged(s.accountId);
+          this.save(s);
+        }
+        break;
+      }
       case 'buyScroll':
         sim.buyReturnScroll(p, Math.max(0, Math.min(99, Math.floor(num(m.n)))));
         break;
@@ -1475,6 +1532,16 @@ export class GameWorld {
       case 'stashBuy':
         if (sim.stashBuyRow(p)) this.save(s);
         break;
+      case 'bagExpand': {
+        // Trade-locked (TRADE_LOCKED): growing the gear tab moves the usable slots an offer points at.
+        const tab = BAG_TABS.find((x) => x === m.tab);
+        const price = num(m.price, -1);
+        if (!tab || !Number.isInteger(price) || price < 0) break;
+        if (m.pay === 'gold') {
+          if (sim.bagExpandGold(p, tab, price)) this.save(s);
+        } else if (m.pay === 'crystal') this.bagExpandCrystal(s, tab, price);
+        break;
+      }
       case 'stashGold': {
         const amount = num(m.amount);
         if (Number.isInteger(amount) && amount !== 0 && Math.abs(amount) <= 1e9 && sim.stashGold(p, amount)) this.save(s);
@@ -1794,7 +1861,7 @@ export class GameWorld {
   }
 
   /** A whisper: only the online character named `to` (and the sender, as an echo) sees it. */
-  private whisper(s: Session, to: unknown, text: string): void {
+  private whisper(s: Session, to: unknown, text: string, links?: ChatLink[]): void {
     if (typeof to !== 'string' || !to.trim() || to.length > FRIEND_NAME_MAX) return;
     const name = to.trim().toLowerCase();
     const o = [...this.sessions].find((x) => x.player.name.toLowerCase() === name);
@@ -1803,8 +1870,8 @@ export class GameWorld {
     if (o === s) return tell('กระซิบหาตัวเองไม่ได้');
     // Neutral on purpose: a blocked player isn't told they are blocked.
     if (this.friends.blocks(o.accountId, s.accountId)) return tell(`ส่งกระซิบถึง ${o.player.name} ไม่ได้`);
-    this.send(o.ws, { t: 'chat', name: s.player.name, text, ch: 'whisper' });
-    this.send(s.ws, { t: 'chat', name: s.player.name, text, ch: 'whisper', to: o.player.name });
+    this.send(o.ws, { t: 'chat', name: s.player.name, text, ch: 'whisper', links });
+    this.send(s.ws, { t: 'chat', name: s.player.name, text, ch: 'whisper', to: o.player.name, links });
     try {
       this.db.logChat({
         accountId: s.accountId, username: s.guest ? 'Guest' : s.username, charName: s.player.name, zone: s.sim.zone.id,
@@ -1855,6 +1922,7 @@ export class GameWorld {
   /** The owner hid / showed cosmetics (already saved by the admin API): used for wearing from now on and sent to everyone online. Nobody's worn piece comes off. */
   cosHiddenChanged(ids: string[]): void {
     this.cosHidden = new Set(ids);
+    setBoxHiddenCos(this.cosHidden);
     for (const s of this.sessions) this.send(s.ws, { t: 'cosHidden', ids });
   }
 
@@ -1874,11 +1942,17 @@ export class GameWorld {
     const now = performance.now();
     if (now - s.lastCashAt < CASH_BUY_MS) return this.send(s.ws, { t: 'cashBuy', req, ok: false, msg: 'กดเร็วเกินไป ลองอีกครั้ง' });
     s.lastCashAt = now;
-    const r = this.cash.buy({ accountId: s.accountId, guest: s.guest, charId: s.charId, charName: s.player.name, id: m.id, qty: m.qty, price: m.price });
+    // A VIP package comes as item id `vip:<days>` (src/shared/cashShop.ts vipItemId).
+    const vip = typeof m.id === 'string' ? /^vip:([0-9]{1,4})$/.exec(m.id) : null;
+    const who = { accountId: s.accountId, guest: s.guest, charId: s.charId, charName: s.player.name };
+    const r = vip
+      ? this.cash.buyVip({ ...who, days: Number(vip[1]), price: m.price })
+      : this.cash.buy({ ...who, id: m.id, qty: m.qty, price: m.price });
     this.send(s.ws, { t: 'cashBuy', req, ok: r.ok, msg: r.msg });
     if (!r.ok) return;
     console.log(`[cash] ${s.username} (${s.player.name}) bought ${String(m.id)} ×${String(m.qty)} at ${String(m.price)}`);
     if (r.kind === 'cos') this.cosmeticsChanged(s.accountId);
+    if (r.kind === 'vip') this.vipChanged(s.accountId);
     const state = this.cash.state(s.accountId, false);
     for (const o of this.sessions) {
       if (o.accountId !== s.accountId) continue;
@@ -2102,15 +2176,24 @@ export class GameWorld {
     for (const s of this.sessions) this.mailNote(s, always);
   }
 
-  private onChat(s: Session, text: unknown, ch?: unknown, to?: unknown): void {
+  /** The item links of a final message text, looked up in the sender's own things (none when the owner turned links off). */
+  private chatLinks(s: Session, text: string, raw: unknown): ChatLink[] | undefined {
+    if (raw === undefined || !currentBalance().chatLinks) return undefined;
+    const p = s.player;
+    const links = buildChatLinks(text, raw, { bag: p.bag, stash: p.stash.items, equipment: p.equipment });
+    return links.length ? links : undefined;
+  }
+
+  private onChat(s: Session, text: unknown, ch?: unknown, to?: unknown, rawLinks?: unknown): void {
     if (typeof text !== 'string') return;
     const now = performance.now();
     if (now - s.lastChatAt < 600) return;
     const clean = text.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, CHAT_MAX);
     if (!clean) return;
+    const links = this.chatLinks(s, clean, rawLinks);
     if (ch === 'whisper') {
       s.lastChatAt = now;
-      return this.whisper(s, to, clean);
+      return this.whisper(s, to, clean, links);
     }
     const party = ch === 'party' ? this.parties.of(s.charId) : undefined;
     if (ch === 'party' && !party) return this.partyLine(s.charId, 'คุณไม่ได้อยู่ในปาร์ตี้ — แชทปาร์ตี้ไม่ได้');
@@ -2118,9 +2201,9 @@ export class GameWorld {
     if (party) {
       for (const m of party.members) {
         const o = m.online ? this.sessionOfChar(m.charId) : undefined;
-        if (o) this.send(o.ws, { t: 'chat', name: s.player.name, text: clean, ch: 'party' });
+        if (o) this.send(o.ws, { t: 'chat', name: s.player.name, text: clean, ch: 'party', links });
       }
-    } else for (const o of this.sessions) this.send(o.ws, { t: 'chat', name: s.player.name, text: clean });
+    } else for (const o of this.sessions) this.send(o.ws, { t: 'chat', name: s.player.name, text: clean, links });
     try {
       this.db.logChat({
         accountId: s.accountId, username: s.guest ? 'Guest' : s.username, charName: s.player.name, zone: s.sim.zone.id,
@@ -2160,6 +2243,8 @@ export class GameWorld {
       s.outbox.push({ t: 'autoOff', to: p.id, msg: blocked });
     }
     p.autoOn = !!s.auto;
+    // VIP bonuses (src/shared/vip.ts) stop the moment it runs out.
+    p.vip = s.vipUntil > Date.now();
     if (s.auto) {
       const sim = s.sim;
       const world: AutoWorld = { player: p, monsters: sim.monsters, loots: sim.loots, time: sim.time, zone: sim.zone };
@@ -2198,7 +2283,9 @@ export class GameWorld {
           continue;
         }
         if (ev.t === 'announce') {
-          this.broadcastSystem(ev.text);
+          // A banner (an enhancement at forge bannerFrom or higher) also writes its own chat line on each screen.
+          if (ev.banner) for (const o of this.sessions) this.send(o.ws, { t: 'announce', text: ev.text, from: '', direct: false, box: true, head: ev.banner });
+          else this.broadcastSystem(ev.text);
           continue;
         }
         if (ev.t === 'stash') continue; // saved by onAction; the snapshot carries the new stash
@@ -2351,7 +2438,7 @@ export class GameWorld {
     if (late) s.slowSnapAt = now;
     const p = s.player;
     const near = (o: { x: number; z: number }) => Math.hypot(o.x - p.x, o.z - p.z) <= INTEREST_RADIUS;
-    const inv = JSON.stringify([p.equipment, p.bag, p.buyback]);
+    const inv = JSON.stringify([p.equipment, p.bag, p.buyback, p.bagSlots]);
     const me: PrivateSnap = {
       hp: r2(p.hp), mp: r2(p.mp), exp: p.exp, level: p.level, gold: p.gold,
       cd: p.cd, ...(Object.keys(p.charges).length ? { ch: p.charges } : {}), potCd: r2(p.potCd), restCd: r2(Math.max(0, p.restCd)), castT: p.castT > 0 ? r2(p.castT) : undefined,
@@ -2398,7 +2485,7 @@ export class GameWorld {
     };
     if (inv !== s.lastInv) {
       s.lastInv = inv;
-      me.inv = { equipment: p.equipment, bag: p.bag, buyback: p.buyback };
+      me.inv = { equipment: p.equipment, bag: p.bag, buyback: p.buyback, bagSlots: p.bagSlots };
     }
     const stash = JSON.stringify(p.stash);
     const owned = s.cosOwned.join(',');
@@ -2708,6 +2795,12 @@ export class GameWorld {
   // ------------------------------------------------------------ channels (server/channels.ts)
 
   /** The channel number a session is in (1 on a map without channels or in a boss room). */
+  /** The CH number to remember for the next map (one number for every map, owner 2026-11-22): this Sim's, if its map has channels; else 1. */
+  private lastChOf(sim: Sim): number {
+    const c = this.channels.of(sim);
+    return c && hasChannels(c.zone) ? c.ch : 1;
+  }
+
   private chOf(s: Session): number {
     return this.channels.of(s.sim)?.ch ?? 1;
   }
@@ -2819,7 +2912,109 @@ export class GameWorld {
     return changed;
   }
 
+  /**
+   * A player asks for a top-up package or cancels their open request (server/topup.ts checks everything).
+   * Every character of the account then gets the new state.
+   */
+  private topupAct(s: Session, m: { a: 'topupNew' | 'topupCancel'; req?: unknown; id?: unknown; crystals?: unknown; bonus?: unknown; baht?: unknown }): void {
+    const req = num(m.req, -1);
+    const now = performance.now();
+    if (now - s.lastTopupAt < TOPUP_ACT_MS) return this.send(s.ws, { t: 'topupRes', req, ok: false, msg: 'กดเร็วเกินไป รอสักครู่' });
+    s.lastTopupAt = now;
+    const r = m.a === 'topupNew'
+      ? this.topup.create({ accountId: s.accountId, guest: s.guest, username: s.username, charName: s.player.name, packages: this.cash.cfg().packages, crystals: m.crystals, bonus: m.bonus, baht: m.baht })
+      : s.guest ? { ok: false, msg: 'ไม่พบคำขอนี้' } : this.topup.cancel(s.accountId, m.id, s.username);
+    this.send(s.ws, { t: 'topupRes', req, ok: r.ok, msg: r.msg });
+    if (!r.ok) return;
+    console.log(`[topup] ${s.username} (${s.player.name}) ${m.a === 'topupNew' ? `asked for ${String(m.baht)} baht` : `cancelled #${String(m.id)}`}`);
+    this.topupChanged(s.accountId);
+  }
+
+  /** The account's top-up requests changed: its characters get the new state (and `note`, if any, in chat). */
+  topupChanged(accountId: number, note?: string): void {
+    const v = this.topup.view(accountId, false);
+    for (const s of this.sessions) {
+      if (s.accountId !== accountId || s.guest) continue;
+      this.send(s.ws, { t: 'topup', v });
+      if (note) this.send(s.ws, { t: 'chat', name: '', text: note });
+    }
+  }
+
+  /** What the "มีอะไรใหม่" window shows (src/shared/news.ts): the switches and the newest visible notes. */
+  newsView(): NewsView {
+    return { ...this.db.newsSwitches(), notes: this.db.newsVisible() };
+  }
+
+  private newsSeenRev: string | null = null;
+
+  /**
+   * Tells everyone online when the notes or their switches changed since the last look (also when another process wrote the DB:
+   * tools/add-news.ts at /ship). Called every few seconds by main.ts and straight after an /admin change.
+   */
+  newsPoll(): void {
+    const rev = this.db.newsRev();
+    // First look: take the current value (players joining get the notes with their own message).
+    if (this.newsSeenRev === null) this.newsSeenRev = rev;
+    if (rev === this.newsSeenRev) return;
+    this.newsSeenRev = rev;
+    const v = this.newsView();
+    for (const s of this.sessions) if (!s.preview) this.send(s.ws, { t: 'news', v });
+  }
+
+  /** The top-up settings changed in /admin: everyone gets their state again. */
+  /**
+   * Buys the next slots of a bag tab with the account's crystals (bagTabs.ts nextExpand, off until /admin opens it):
+   * the crystals and the bigger bag are written in one transaction (UPDATE … WHERE crystals >= cost, like cashBuy).
+   */
+  private bagExpandCrystal(s: Session, tab: BagTab, price: number): void {
+    const p = s.player;
+    const say = (text: string) => this.send(s.ws, { t: 'chat', name: '', text });
+    const now = performance.now();
+    if (now - s.lastCashAt < CASH_BUY_MS) return say('กดเร็วเกินไป ลองอีกครั้ง');
+    s.lastCashAt = now;
+    if (s.guest || s.preview) return say('Guest ใช้คริสตัลมิติไม่ได้');
+    const cfg = currentBalance().bagExpand;
+    const next = nextExpand(cfg, p.bagSlots, tab);
+    if (typeof next === 'string') return say(next);
+    if (!cfg.crystal) return say('ขยายช่องด้วยคริสตัลมิติไม่ได้ตอนนี้');
+    if (next.crystal !== price) return say('ราคาเปลี่ยนแล้ว ลองอีกครั้ง');
+    let paid = false;
+    try {
+      this.db.transaction(() => {
+        if (!this.db.crystalsSpend(s.accountId, next.crystal)) return;
+        p.growTab(tab, next.add);
+        paid = true;
+        this.db.writeCharacterAndStash(s.charId, p.toData(), s.accountId, p.stash);
+      });
+    } catch (e) {
+      // Nothing was written: take the new (still empty) slots away again.
+      if (paid) {
+        if (tab === 'gear') p.bag.splice(p.bagSlots.gear - next.add, next.add);
+        else p.bag.splice(p.bag.length - next.add, next.add);
+        p.bagSlots[tab] -= next.add;
+      }
+      console.error('[bag] crystal expand failed', e);
+      return say('ขยายช่องไม่สำเร็จ ลองใหม่อีกครั้ง');
+    }
+    if (!paid) return say(`คริสตัลมิติไม่พอ — ต้องใช้ ${next.crystal.toLocaleString()}`);
+    console.log(`[bag] ${s.username} (${p.name}) ${tab} +${next.add} for ${next.crystal} crystals`);
+    say(`ขยาย${TAB_NAME[tab]}เป็น ${p.bagSlots[tab]} ช่อง (${next.crystal.toLocaleString()} คริสตัลมิติ)`);
+    s.sim.inventoryChanged(p);
+    this.crystalsChanged(s.accountId);
+  }
+
+  topupAll(): void {
+    for (const s of this.sessions) this.send(s.ws, { t: 'topup', v: this.topup.view(s.accountId, s.guest) });
+  }
+
   /** An admin gave or took crystals: every online character of the account gets the new total. */
+  /** The account's VIP was bought, granted or removed: every online character of it gets the new end time (the bonuses follow it each tick). */
+  vipChanged(accountId: number): void {
+    const until = this.db.vipUntil(accountId);
+    for (const s of this.sessions) if (s.accountId === accountId && !s.guest) s.vipUntil = until;
+    this.crystalsChanged(accountId);
+  }
+
   crystalsChanged(accountId: number): void {
     const state = this.cash.state(accountId, false);
     for (const s of this.sessions) if (s.accountId === accountId && !s.guest) this.send(s.ws, { t: 'cashState', state });

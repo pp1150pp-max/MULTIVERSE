@@ -1,6 +1,6 @@
 // Cosmetics on a character in the world: wings, a mount under it, a pet that follows it, and a ground
 // aura with footprints. Wings, mounts and pets are 8-direction walk sheets like the monsters'
-// (public/assets/sprites/cosmetics/<id>.png: 3 frames × 5 rows front, front diagonal, side, back diagonal,
+// (public/assets/sprites/paper/cosmetics/<id>.png: 3 frames × 5 rows front, front diagonal, side, back diagonal,
 // back, the other three directions mirrored); until a file exists its placeholder is drawn in code
 // (placeholder.ts drawCosmetic, see SHEET_SPECS in assets.ts).
 import * as THREE from 'three';
@@ -11,11 +11,11 @@ import { WingPair } from './wingPair';
 import { SpriteActor } from './SpriteActor';
 import type { Effects } from './effects';
 import { shownCos, shownRiding } from './cosLook';
-import { tuneBool, tuneNum as tunedValue } from './cosTune';
+import { cosTune, tuneBool, tuneNum as tunedValue } from './cosTune';
 import { cosById } from '../shared/data/cosmetics';
 import { currentBalance } from '../shared/balance';
 import { ISO_DIR } from './world';
-import { axisHiddenInDir, viewDirOf, viewOffKey, type Axis } from '../shared/cosTuning';
+import { axisHiddenInDir, valueAtDir, viewDirOf, viewOffKey, type Axis, type ViewDir } from '../shared/cosTuning';
 
 /**
  * Draw order between the character and its cosmetics. The camera is orthographic and looks down, so a
@@ -41,14 +41,14 @@ function screenShift(p: Player, amount: number): [number, number] {
  * Y = up, Z = forward, in the view the character shows now. An axis that has no visible effect in the view
  * (Z straight from the front or back, X from the side) is left out.
  */
-function viewOff(p: Player, id: string): { x: number; y: number; z: number; rx: number; rz: number; fx: number; fz: number } {
+function viewOff(p: Player, id: string): { dir: ViewDir; x: number; y: number; z: number; rx: number; rz: number; fx: number; fz: number } {
   const row = viewRow(p);
   // Which side of the screen it faces (a side or diagonal facing is drawn mirrored toward the left).
   const dir = viewDirOf(row, (p.faceX - p.faceZ) * Math.SQRT1_2 >= -0.05);
   const val = (a: Axis) => (axisHiddenInDir(a, dir) ? 0 : tuneNum(id, viewOffKey(a, dir)));
   const fl = Math.hypot(p.faceX, p.faceZ) || 1;
   // forward (fx, fz) and the character's right (−fz, fx), as unit vectors in the world's x/z plane.
-  return { x: val('x'), y: val('y'), z: val('z'), rx: -p.faceZ / fl, rz: p.faceX / fl, fx: p.faceX / fl, fz: p.faceZ / fl };
+  return { dir, x: val('x'), y: val('y'), z: val('z'), rx: -p.faceZ / fl, rz: p.faceX / fl, fx: p.faceX / fl, fz: p.faceZ / fl };
 }
 
 /** World x/z shift of a piece for `dx` to the character's right and `dz` forward. */
@@ -331,11 +331,15 @@ export class CosmeticRig {
       this.wingT += dt;
       const vo = viewOff(p, id);
       const [dx, dz] = moveBy(vo, vo.x, vo.z);
+      // Size, depth, tilt and squeeze: the base value plus this facing's own offset (owner 2026-11-23, cosTuning.ts).
+      // These fields are not scaled to the player's size (UNSCALED), so the sum is used as it is.
+      const tv = cosTune(id) ?? {};
+      const at = (key: string) => valueAtDir('wings', tv, key, vo.dir);
       this.wingPair.pair.update({
         x: p.x, y: seat, z: p.z,
         view: viewRow(p), left: (p.faceX - p.faceZ) * Math.SQRT1_2 < -0.05,
-        back: tuneNum(id, seat > 0 ? 'oneBackSeat' : 'oneBack'), size: tuneNum(id, 'oneSize'), depth: tuneNum(id, 'oneDepth'),
-        tilt: tuneNum(id, 'oneTilt'), squeeze: tuneNum(id, 'oneSqueeze'),
+        back: tuneNum(id, seat > 0 ? 'oneBackSeat' : 'oneBack'), size: at('oneSize'), depth: at('oneDepth'),
+        tilt: at('oneTilt'), squeeze: at('oneSqueeze'),
         t: this.wingT, fps: tuneNum(id, p.moving ? 'flapWalk' : 'flap'),
         dx, dy: vo.y, dz, alpha: fade,
       });

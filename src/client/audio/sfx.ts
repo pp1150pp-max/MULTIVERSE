@@ -1,27 +1,51 @@
 // Every sound effect is synthesised, so the game ships no audio files.
+import type { SfxGroup } from '../../shared/audioTuning';
+import { currentBalance } from '../../shared/balance';
 import type { SfxName } from '../../shared/sim/types';
+import { BOSS_SOUNDS } from './bossSounds';
 import { audioEngine } from './engine';
+import { EXTRA_SOUNDS } from './extraSounds';
+import { IMPACT_SOUNDS, SKILL_SOUNDS } from './skillSounds';
 
 type SkillSound =
   | 'slash' | 'whirlwind' | 'charge' | 'earthquake'
   | 'bolt' | 'fireball' | 'frostnova' | 'meteor'
   | 'shot' | 'rapidfire' | 'pierce' | 'headshot'
   | 'dash';
-type WorldSound = 'explosion' | 'crater' | 'impact' | 'hit' | 'hurt' | 'enrage' | 'level_up' | 'death' | 'revive' | 'portal' | 'ui_click';
-export type SoundName = SfxName | SkillSound | WorldSound;
+type WorldSound = 'explosion' | 'crater' | 'impact' | 'hit' | 'hurt' | 'level_up' | 'death' | 'revive' | 'portal' | 'ui_click';
+type BaseSound = SfxName | SkillSound | WorldSound;
+export type SoundName = BaseSound | keyof typeof SKILL_SOUNDS | keyof typeof IMPACT_SOUNDS | keyof typeof BOSS_SOUNDS | keyof typeof EXTRA_SOUNDS;
 
 /** Sounds playing at once. Past this, combat sounds are dropped; `always` sounds still play. */
 const MAX_VOICES = 24;
 
-interface Sound {
+export interface Sound {
   /** Shortest time between two plays, in ms. Stops Auto Play and area skills from machine-gunning. */
   gap: number;
   always?: boolean;
+  /** Which volume group it follows (the player's slider × /admin's switch and loudness, audioTuning.ts). */
+  group: SfxGroup;
   make(s: Voice): void;
 }
 
+/** What every base sound below is (the skill, impact and boss tables set their own). */
+const GROUP_OF: Record<BaseSound, SfxGroup> = {
+  slash: 'skill', whirlwind: 'skill', charge: 'skill', earthquake: 'skill',
+  bolt: 'skill', fireball: 'skill', frostnova: 'skill', meteor: 'skill',
+  shot: 'skill', rapidfire: 'skill', pierce: 'skill', headshot: 'skill', dash: 'skill', headshot_fire: 'skill',
+  explosion: 'skill', crater: 'skill', impact: 'skill',
+  hit: 'monster', crit: 'monster', monster_die: 'monster',
+  boss_die: 'boss', boss_slam: 'boss', boss_arrive: 'boss', boss_appear: 'boss',
+  witch_cast: 'boss', witch_vial: 'boss', witch_grasp: 'boss', witch_hex: 'boss',
+  heart_meteor: 'boss', heart_ring: 'boss', heart_beam: 'boss', heart_charge: 'boss', heart_phase: 'boss',
+  hurt: 'player', death: 'player', revive: 'player', level_up: 'player', portal: 'player',
+  pickup_gold: 'player', pickup_item: 'player', pickup_potion: 'player', drink: 'player', trade: 'player',
+  enhance_ok: 'player', enhance_fail: 'player',
+  ui_click: 'ui',
+};
+
 /** One playing sound: a set of envelopes sharing an output, cleaned up when the last one ends. */
-class Voice {
+export class Voice {
   private pending = 0;
 
   constructor(private readonly ctx: AudioContext, private readonly out: AudioNode, private readonly t0: number, private readonly onDone: () => void) {}
@@ -75,7 +99,7 @@ class Voice {
   }
 }
 
-const SOUNDS: Record<SoundName, Sound> = {
+const BASE: Record<BaseSound, Omit<Sound, 'group'>> = {
   // ---------------- Sword
   slash: { gap: 60, make: (s) => s.noise(1400, 4200, 0.13, 0.32) },
   whirlwind: {
@@ -246,13 +270,111 @@ const SOUNDS: Record<SoundName, Sound> = {
       s.noise(800, 80, 0.5, 0.6, 0, 0.6, 'lowpass');
     },
   },
-  enrage: {
+  // A boss rises in its room, or a field boss comes back: a low horn and a drum roll.
+  boss_appear: {
+    gap: 800,
+    always: true,
+    make: (s) => {
+      for (let i = 0; i < 6; i++) s.tone('triangle', 90, 60, 0.12, 0.3, i * 0.07);
+      s.tone('sawtooth', 110, 110, 1.0, 0.14, 0.45);
+      s.tone('sawtooth', 165, 165, 1.0, 0.1, 0.45);
+      s.tone('sawtooth', 220, 208, 1.0, 0.08, 0.45);
+    },
+  },
+  // A boss without a roar of its own goes into a rage.
+  boss_arrive: {
     gap: 800,
     always: true,
     make: (s) => {
       s.tone('sawtooth', 75, 240, 0.8, 0.26);
       s.tone('sawtooth', 79, 256, 0.8, 0.22);
       s.noise(280, 1500, 0.8, 0.28);
+    },
+  },
+
+  // ---------------- Boss spells the server names (the moves with a picture of their own arrive as effects, bossSounds.ts)
+  witch_cast: {
+    gap: 300,
+    always: true,
+    // An eerie rising chord as she lifts the lantern.
+    make: (s) => {
+      [330, 392, 466].forEach((f, i) => s.tone('triangle', f, f * 1.5, 0.45, 0.09, i * 0.05));
+      s.noise(1800, 700, 0.4, 0.12, 0, 0.7);
+    },
+  },
+  witch_vial: {
+    gap: 120,
+    // Glass breaking, then the poison splashing out.
+    make: (s) => {
+      for (let i = 0; i < 4; i++) s.tone('square', 3200 - i * 300, 2400 - i * 250, 0.05, 0.06, i * 0.025);
+      s.noise(5200, 2600, 0.08, 0.34, 0, 2);
+      s.noise(1300, 360, 0.32, 0.3, 0.04, 0.8);
+      [0.1, 0.2].forEach((d) => s.tone('sine', 280, 560, 0.07, 0.12, d));
+    },
+  },
+  witch_grasp: {
+    gap: 150,
+    // Mud squelching up.
+    make: (s) => {
+      s.tone('triangle', 120, 45, 0.3, 0.4);
+      s.noise(700, 160, 0.36, 0.36, 0, 0.9, 'lowpass');
+      s.tone('sine', 220, 480, 0.1, 0.14, 0.12);
+    },
+  },
+  witch_hex: {
+    gap: 300,
+    always: true,
+    // A croak (she turns you into a toad).
+    make: (s) => {
+      s.tone('square', 190, 120, 0.14, 0.14);
+      s.tone('square', 170, 105, 0.18, 0.14, 0.18);
+      s.tone('triangle', 900, 400, 0.4, 0.08);
+    },
+  },
+  heart_meteor: {
+    gap: 250,
+    // Rocks heaved up and whistling down.
+    make: (s) => {
+      s.tone('triangle', 90, 40, 0.25, 0.4);
+      s.tone('sine', 1600, 320, 0.9, 0.07, 0.15);
+      s.noise(2600, 500, 0.9, 0.1, 0.15);
+    },
+  },
+  heart_ring: {
+    gap: 300,
+    // A roaring wave of fire rolling out.
+    make: (s) => {
+      s.noise(220, 1600, 0.9, 0.32, 0, 0.7);
+      s.tone('sawtooth', 70, 140, 0.8, 0.12);
+    },
+  },
+  heart_beam: {
+    gap: 500,
+    always: true,
+    // The beams light up: a rising hum then a long burning drone.
+    make: (s) => {
+      s.tone('sawtooth', 80, 160, 0.6, 0.12);
+      s.tone('sawtooth', 160, 168, 1.6, 0.06, 0.5);
+      s.noise(500, 900, 1.6, 0.18, 0.5, 0.6);
+    },
+  },
+  heart_charge: {
+    gap: 500,
+    always: true,
+    // The big eruption building up.
+    make: (s) => {
+      s.tone('sawtooth', 50, 180, 1.4, 0.18);
+      s.noise(120, 900, 1.4, 0.3, 0, 0.6, 'lowpass');
+    },
+  },
+  heart_phase: {
+    gap: 800,
+    always: true,
+    // Two heavy heartbeats, then a roar of fire.
+    make: (s) => {
+      [0, 0.22, 0.7, 0.92].forEach((d, i) => s.tone('triangle', i % 2 ? 70 : 90, 30, 0.22, 0.6, d));
+      s.noise(200, 1400, 0.9, 0.34, 1.1, 0.6);
+      s.tone('sawtooth', 70, 220, 0.9, 0.2, 1.1);
     },
   },
 
@@ -349,6 +471,22 @@ const SOUNDS: Record<SoundName, Sound> = {
   ui_click: { gap: 40, always: true, make: (s) => s.tone('square', 980, 720, 0.035, 0.07) },
 };
 
+const SOUNDS = {
+  ...Object.fromEntries(Object.entries(BASE).map(([k, v]) => [k, { ...v, group: GROUP_OF[k as BaseSound] }])),
+  ...SKILL_SOUNDS,
+  ...IMPACT_SOUNDS,
+  ...BOSS_SOUNDS,
+  ...EXTRA_SOUNDS,
+} as Record<SoundName, Sound>;
+
+/** The group's level: the player's own slider × /admin's loudness (0 when /admin switched it off). */
+function groupLevel(g: SfxGroup): number {
+  const a = currentBalance().audio.groups[g];
+  if (!a.on) return 0;
+  const mine = audioEngine.settings.groups[g];
+  return mine * mine * a.gain;
+}
+
 export const isSoundName = (name: string): name is SoundName => name in SOUNDS;
 
 const lastPlayed = new Map<SoundName, number>();
@@ -360,6 +498,8 @@ export function playSound(name: SoundName, gain = 1, pan = 0): void {
   const bus = audioEngine.sfxBus;
   if (!ctx || !bus || !audioEngine.running || gain <= 0) return;
   const sound = SOUNDS[name];
+  gain *= groupLevel(sound.group);
+  if (gain <= 0) return;
   const now = performance.now();
   if (now - (lastPlayed.get(name) ?? -Infinity) < sound.gap) return;
   if (voices >= MAX_VOICES && !sound.always) return;

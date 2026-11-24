@@ -194,7 +194,7 @@ async function run(): Promise<void> {
   const gold = await edit('gold', { delta: ADMIN_GOLD_MAX });
   ok(gold.status === 200 && gold.data.char.gold === ADMIN_GOLD_MAX, 'give gold at the cap');
   const items = await edit('items', { baseId: 'weapon_5', rarity: 'legendary', plus: 7, count: 2 });
-  ok(items.status === 200 && items.data.char.bagFree === 30 - 2 - 2, `spawn 2 items (${items.data.msg})`);
+  ok(items.status === 200 && items.data.char.bagFree === 60 - 2 - 2, `spawn 2 items (${items.data.msg})`);
   await sleep(400);
   const m = c.lastMe();
   ok(m.level === 20 && m.exp === 100 && m.gold === ADMIN_GOLD_MAX, 'the player sees the new level and gold');
@@ -231,23 +231,21 @@ async function run(): Promise<void> {
   ok((await edit('level', { level: MAX_LEVEL, exp: 5 })).status === 200 && saved(charId).level === MAX_LEVEL && saved(charId).exp === 0,
     'offline level to max (EXP 0 at max)');
   ok((await edit('teleport', { zone: 'frost_reach' })).status === 400, 'teleport offline refused (they log in to the hub anyway)');
-  // 30 slots: 2 potion stacks + 3 items used, 25 free.
+  // Gear tab (30 slots, owner 2026-11-23: potions are in the usable tab): 3 items used, 27 free.
   for (let k = 0; k < 2; k++) await edit('items', { baseId: 'cap', rarity: 'common', count: ADMIN_ITEMS_MAX });
   const part = await edit('items', { baseId: 'cap', rarity: 'common', count: ADMIN_ITEMS_MAX });
-  ok(part.status === 200 && part.data.msg.includes('5/10') && part.data.msg.includes('กระเป๋าเต็ม'), `partly fits: ${part.data.msg}`);
+  ok(part.status === 200 && part.data.msg.includes('7/10') && part.data.msg.includes('กระเป๋าเต็ม'), `partly fits: ${part.data.msg}`);
   const full = await edit('items', { baseId: 'cap', rarity: 'common', count: 1 });
   ok(full.status === 400 && full.data.error === 'กระเป๋าเต็ม', 'full bag → "กระเป๋าเต็ม"');
-  ok(saved(charId).bag.filter(Boolean).length === 30, 'bag has exactly 30 entries');
-  // Full bag, but the starting stack of 5 small HP potions has room for 5 more (owner, offline).
+  ok(saved(charId).bag.slice(0, 30).every(Boolean) && saved(charId).bag.slice(0, 30).every((e: any) => !e.potion && !e.stone), 'gear tab has exactly 30 items');
+  // Gear tab full, but potions and stones go in the usable tab: the starting stack of 5 small HP potions tops up, the rest takes a slot.
   const potPart = await edit('items', { kind: 'potion', potion: 'hp', size: 's', count: ADMIN_ITEMS_MAX }, ownerTok);
-  const hpStack = saved(charId).bag.filter((e: any) => e?.potion === 'hp' && e.size === 's');
-  ok(potPart.status === 200 && potPart.data.msg === 'ใส่ได้ 5/10 ชิ้น — กระเป๋าเต็ม (ยา HP เล็ก)' && hpStack.length === 1 && hpStack[0].count === 10,
-    `potions top up the stack, the rest refused (${potPart.data.msg})`);
-  const potFull = await edit('items', { kind: 'potion', potion: 'hp', size: 's', count: 1 }, ownerTok);
-  ok(potFull.status === 400 && potFull.data.error === 'กระเป๋าเต็ม', 'potion into a full bag (stack full too) → "กระเป๋าเต็ม"');
-  const stoneFull = await edit('items', { kind: 'stone', stone: 'protect', count: 1 }, ownerTok);
-  ok(stoneFull.status === 400 && stoneFull.data.error === 'กระเป๋าเต็ม', 'stone into a full bag → "กระเป๋าเต็ม"');
-  ok(saved(charId).bag.filter(Boolean).length === 30 && !saved(charId).bag.some((e: any) => e?.stone), 'refused stacks changed nothing');
+  const afterPot = saved(charId).bag;
+  const hpStack = afterPot.filter((e: any) => e?.potion === 'hp' && e.size === 's');
+  ok(potPart.status === 200 && potPart.data.msg === 'เสกให้ 10 ชิ้น: ยา HP เล็ก' && hpStack.length === 2 && hpStack[0].count === 10 && hpStack[1].count === 5 && afterPot.indexOf(hpStack[1]) >= 30,
+    `potions top up the stack, the rest in the usable tab (${potPart.data.msg})`);
+  const stoneIn = await edit('items', { kind: 'stone', stone: 'protect', count: 1 }, ownerTok);
+  ok(stoneIn.status === 200 && saved(charId).bag.findIndex((e: any) => e?.stone === 'protect') >= 30, 'a stone fits in the usable tab while the gear tab is full');
 
   // ---------------------------------------------------------- back online: always in the hub
   const c2 = joinWorld(plainTok, charId);
@@ -277,7 +275,7 @@ async function run(): Promise<void> {
   const gmStone = await edit('items', { kind: 'stone', stone: 'protect', count: 3 }, gmTok, own.data.id);
   ok(gmStone.status === 200 && gmStone.data.msg === 'เสกให้ 3 ชิ้น: หินกันระดับลด', `GM spawns 3 stones online (${gmStone.data.msg ?? gmStone.data.error})`);
   const ownStone = await edit('items', { kind: 'stone', stone: 'protect', count: ADMIN_ITEMS_MAX }, ownerTok, own.data.id);
-  ok(ownStone.status === 200 && ownStone.data.char.bagFree === 30 - 2 - 1 - 2, `owner spawns 10 stones: 3+10 = a full stack + 3 (${ownStone.data.char.bagFree} free)`);
+  ok(ownStone.status === 200 && ownStone.data.char.bagFree === 60 - 2 - 1 - 2, `owner spawns 10 stones: 3+10 = a full stack + 3 (${ownStone.data.char.bagFree} free)`);
   ok((await edit('items', { kind: 'stone', stone: 'enhance', count: 2 }, ownerTok, own.data.id)).status === 200, 'owner spawns enhance stones');
   await sleep(400);
   const gBag = gc.msgs.filter((x) => x.t === 'snap' && x.me.inv).at(-1)?.me.inv.bag ?? [];
@@ -327,7 +325,7 @@ async function run(): Promise<void> {
   ok(!rows.some((r) => r.details.includes('999999')), 'refused edits are not logged');
   ok(!rows.some((r) => r.action === 'gold' && r.details.startsWith('0 → 0')), 'no "0 → 0" gold row for a refused take');
   ok(rows.some((r) => r.action === 'items' && r.details.includes('ขั้นต่ำของชนิดนี้')), 'audit: item level raise is noted');
-  ok(rows.some((r) => r.admin_name === 'owner1' && r.action === 'items' && r.details === 'ยา HP เล็ก × 5 (ขอ 10, กระเป๋าเต็ม)'), 'audit: potion spawn, partly fitting');
+  ok(rows.some((r) => r.admin_name === 'owner1' && r.action === 'items' && r.details === 'ยา HP เล็ก × 10'), 'audit: potion spawn');
   ok(rows.some((r) => r.admin_name === 'gm1' && r.action === 'items' && r.target.includes('GmChar') && r.details === 'หินกันระดับลด × 3'), 'audit: GM stone spawn');
   ok(!rows.some((r) => r.target.includes('OwnerChar') && r.admin_name === 'gm1'), "refused GM edits on the owner's character are not logged");
   const log = await api('GET', '/admin/audit', undefined, ownerTok);
@@ -338,7 +336,7 @@ async function run(): Promise<void> {
   const ownerId = (await api('GET', '/admin/accounts', undefined, ownerTok)).data.rows.find((r: any) => r.username === 'owner1').accountId;
   ok((await api('GET', '/admin/me', undefined, ownerTok)).data.features.length === Object.keys(FEATURE_ROLES).length, 'owner has every owner tool');
   ok(JSON.stringify((await api('GET', '/admin/me', undefined, gmTok)).data.features) === JSON.stringify(GM_DEFAULT), 'GM has only its FEATURE_ROLES tools (the base tools, broadcast, orb bench, channel warp, reports, cosmetics bench, card view, balance tab)');
-  ok(GM_DEFAULT.join() === 'online,charView,charEdit,kick,teleport,broadcast,orbPreview,channelWarp,reports,cosPreview,cosManage,orbShopAdd,cardView,balance,itemEdit,netDelta,directWs,cashShop,animPreview,menuLayout,mapEdit,mapCreate,mapDelete', `GM defaults: the base tools plus what the owner gave GMs since (card view, balance and item edit 2026-11-11, snapshot delta 2026-11-14, direct connection switch 2026-11-20, cash shop view 2026-11-15, animation bench 2026-11-18, menu layout view 2026-11-19, map editor 2026-11-20, new maps + deleting them 2026-11-21) (${GM_DEFAULT.join()})`);
+  ok(GM_DEFAULT.join() === 'online,charView,charEdit,kick,teleport,broadcast,orbPreview,channelWarp,reports,cosPreview,cosManage,orbShopAdd,cardView,balance,itemEdit,mysteryBox,news,netDelta,directWs,cashShop,topup,animPreview,menuLayout,menuLayoutEdit,hudLayout,hudLayoutEdit,mapEdit,mapCreate,mapDelete,spawnSet', `GM defaults: the base tools plus what the owner gave GMs since (card view, balance and item edit 2026-11-11, snapshot delta 2026-11-14, direct connection switch 2026-11-20, cash shop view 2026-11-15, top-up view 2026-11-22, animation bench 2026-11-18, menu layout view 2026-11-19 + save 2026-11-22, HUD layout view+edit 2026-11-22, map editor 2026-11-20, new maps + deleting them 2026-11-21, gear-set spawn 2026-11-21, mystery box view 2026-11-22, news tab view 2026-11-22) (${GM_DEFAULT.join()})`);
   const trades = await api('GET', '/admin/trades', undefined, ownerTok);
   ok(trades.status === 200 && Array.isArray(trades.data) && (await api('GET', '/admin/trades?q=x%25', undefined, ownerTok)).status === 200, 'owner reads the trade log (and a search with odd characters is fine)');
   const gmDenied: [string, string, unknown?][] = [
@@ -359,7 +357,7 @@ async function run(): Promise<void> {
   ok(prow && prow.characters === 1 && prow.names[0] === 'Tester' && prow.maxLevel === MAX_LEVEL && !prow.guest && prow.role === null && prow.lastOnline > 0,
     'account row: characters, max level, last online');
   const det = await api('GET', `/admin/accounts/${plainId}`, undefined, ownerTok);
-  ok(det.status === 200 && det.data.characters[0].bag.length === 30 && det.data.characters[0].bag.filter(Boolean).length === 30 && det.data.characters[0].equipment.weapon,
+  ok(det.status === 200 && det.data.characters[0].bag.length === 60 && det.data.characters[0].bagSlots.gear === 30 && det.data.characters[0].bag.slice(0, 30).every(Boolean) && det.data.characters[0].equipment.weapon,
     'account details: bag and equipment');
 
   // ---------------------------------------------------------- broadcast

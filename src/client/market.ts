@@ -1,6 +1,7 @@
 // The market broker's window: Buy (search with category, class, rarity and stat filters), Sell (list a
 // bag item at a price, see and cancel your listings) and the claim box (gold from sales, items back).
 // The server decides everything (server/market.ts); this only asks and shows the answers.
+import { t } from './i18n';
 import type { Game } from './Game';
 import { NPC_USE_RANGE } from '../shared/data/npcs';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
@@ -252,7 +253,8 @@ export class MarketWindow {
       }
       return;
     }
-    if ($('mkt-msg').textContent === MARKET_THROTTLE_MSG) this.say('');
+    const shown = $('mkt-msg').textContent;
+    if (shown === MARKET_THROTTLE_MSG || shown === t(MARKET_THROTTLE_MSG)) this.say('');
     if (!r.page) return;
     this.rows = r.page.rows;
     this.total = r.page.total;
@@ -446,8 +448,8 @@ export class MarketWindow {
 
   private renderFilters(): void {
     const myCls = this.g.player.cls.id;
-    const kindIcon = (k: MarketKind) => (k === 'stone' ? stoneIcon('enhance') : k === 'artifact' ? stoneIcon('key_bear') : k === 'consumable' ? stoneIcon('return_scroll') : emptySlotIcon(k, myCls));
-    const kindLabel = (k: MarketKind) => (k === 'stone' ? 'หินตีบวก' : k === 'artifact' ? 'Artifact' : k === 'consumable' ? 'ของใช้' : SLOT_LABEL[k]);
+    const kindIcon = (k: MarketKind) => (k === 'stone' ? stoneIcon('enhance') : k === 'artifact' ? stoneIcon('key_bear') : k === 'consumable' ? stoneIcon('return_scroll') : k === 'cosmetic' ? stoneIcon('mystery_box') : emptySlotIcon(k, myCls));
+    const kindLabel = (k: MarketKind) => (k === 'stone' ? 'หินตีบวก' : k === 'artifact' ? 'Artifact' : k === 'consumable' ? 'ของใช้' : k === 'cosmetic' ? 'ของแต่งตัว' : SLOT_LABEL[k]);
     $('mkt-cats').innerHTML =
       `<button class="mkt-cat${this.kind ? '' : ' on'}" data-kind=""><span class="mkt-cat-ic">${COIN_ICON}</span>ทั้งหมด</button>` +
       MARKET_KINDS.map((k) =>
@@ -641,7 +643,7 @@ export class MarketWindow {
       this.pick(i);
     });
     add('หาชิ้นแบบนี้ในตลาด', () => this.searchLike(i));
-    add('วางลงพื้น', drop);
+    add('ทิ้งไอเทม', drop);
     m.style.left = `${Math.min(ev.clientX, window.innerWidth - 190)}px`;
     m.style.top = `${Math.min(ev.clientY, window.innerHeight - 110)}px`;
     document.body.appendChild(m);

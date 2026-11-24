@@ -11,7 +11,7 @@ export class AutoSettingsWindow {
   constructor(private readonly g: Game) {
     $('btn-auto-set').onclick = () => this.toggleAutoSettings();
     $('auto-set-close').onclick = () => this.toggleAutoSettings(false);
-    for (const id of ['aset-range', 'aset-hp', 'aset-mp', 'aset-loot', 'aset-lootorder', 'aset-others', 'aset-nohp', 'aset-nomp', 'aset-bagfull', 'aset-target']) $(id).addEventListener('change', () => this.applyAutoSettings());
+    for (const id of ['aset-range', 'aset-hp', 'aset-mp', 'aset-loot', 'aset-lootorder', 'aset-others', 'aset-nohp', 'aset-nomp', 'aset-bagfull', 'aset-target', 'aset-skillsonly', 'aset-skillgap']) $(id).addEventListener('change', () => this.applyAutoSettings());
   }
 
   // ------------------------------------------------------------ auto settings
@@ -42,6 +42,8 @@ export class AutoSettingsWindow {
     $<HTMLInputElement>('aset-hp').value = String(s.hpPct);
     $<HTMLInputElement>('aset-mp').value = String(s.mpPct);
     $<HTMLInputElement>('aset-loot').checked = s.loot;
+    $<HTMLInputElement>('aset-skillsonly').checked = s.skillsOnly;
+    $<HTMLInputElement>('aset-skillgap').value = String(s.skillGap);
     // Options the server switched off (admin) can't be chosen; Auto uses the safe one for them.
     const allow = currentBalance().auto.allow;
     const off = ' (ปิดโดยผู้ดูแล)';
@@ -164,12 +166,15 @@ export class AutoSettingsWindow {
     const opts = {
       lootOrder: val('aset-lootorder'), othersLoot: val('aset-others') === '1',
       noHp: val('aset-nohp'), noMp: val('aset-nomp'), bagFull: val('aset-bagfull'), target: val('aset-target'),
+      skillsOnly: $<HTMLInputElement>('aset-skillsonly').checked,
     };
     // An option the player changes is theirs from now on; the others keep following the server's default.
     const optsSet = AUTO_DEFAULT_KEYS.filter((k) => cur.optsSet?.includes(k) || opts[k] !== cur[k]);
     const s = cleanAutoSettings({
       range: num('aset-range'), hpPct: num('aset-hp'), mpPct: num('aset-mp'), skills, order, loot: $<HTMLInputElement>('aset-loot').checked,
       rangeSet: cur.rangeSet || num('aset-range') !== cur.range,
+      skillGap: num('aset-skillgap'),
+      skillGapSet: cur.skillGapSet || num('aset-skillgap') !== cur.skillGap,
       ...opts, optsSet, skip,
     });
     this.g.backend.setAutoSettings(s);

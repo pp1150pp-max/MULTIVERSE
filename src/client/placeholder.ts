@@ -2,7 +2,7 @@
 // 3 rows (front, side, back) × 3 walk frames. Drop a PNG with that layout into
 // public/assets/... and it replaces the placeholder automatically (see assets.ts).
 import { mulberry32, type Rng } from '../shared/rng';
-import type { ClassId, StoneKind } from '../shared/types';
+import { isOrbStone, type BaseStoneKind, type ClassId, type StoneKind } from '../shared/types';
 
 export type View = 'front' | 'side' | 'back';
 type Ctx = CanvasRenderingContext2D;
@@ -694,7 +694,7 @@ export function drawRunestone(): HTMLCanvasElement {
 // ---------------------------------------------------------------- icons & fx
 
 /** Placeholder gem colours per stone (dark, mid, light). */
-const GEM: Record<`stone_${StoneKind}`, [string, string, string]> = {
+const GEM: Record<`stone_${BaseStoneKind}`, [string, string, string]> = {
   stone_protect: ['#1f5f8a', '#4fb4e8', '#c8f2ff'],
   stone_enhance: ['#8a3a10', '#ff9a2e', '#ffe0a0'],
   stone_reroll_values: ['#8a6a10', '#ffd34a', '#fff3b0'],
@@ -717,6 +717,8 @@ const GEM: Record<`stone_${StoneKind}`, [string, string, string]> = {
   stone_exp_scroll: ['#8a6a3a', '#efdcae', '#7ee06a'],
   stone_drop_scroll: ['#8a6a3a', '#efdcae', '#ffc23a'],
   stone_megaphone: ['#6a4a1a', '#d8a040', '#ffe0a0'],
+  // Mystery box: a purple box with a gold band until its painted icon exists.
+  stone_mystery_box: ['#3a1a5a', '#8a4ad0', '#ffd24a'],
 };
 
 export function drawIcon(
@@ -724,7 +726,19 @@ export function drawIcon(
 ): HTMLCanvasElement {
   const c = newCanvas(16, 16);
   const ctx = c.getContext('2d')!;
-  if (kind === 'stone_return_scroll' || kind === 'stone_exp_scroll' || kind === 'stone_drop_scroll') {
+  if (isOrbStone(kind.slice(6))) {
+    // An orb item (mystery box): a glowing ball.
+    ell(ctx, 1, 8, 8, 6, 6, '#3a5a8a');
+    ell(ctx, 1, 8, 8, 4.5, 4.5, '#9ad0ff', null);
+    rect(ctx, 1, 5, 4, 3, 2, '#ffffff', null);
+  } else if (kind === 'stone_mystery_box') {
+    // A box with a gold band and a "?" mark.
+    const [dark, mid, light] = GEM[kind];
+    rect(ctx, 1, 2, 5, 12, 9, mid);
+    rect(ctx, 1, 1, 3, 14, 3, dark);
+    rect(ctx, 1, 7, 3, 2, 11, light, null);
+    rect(ctx, 1, 6, 8, 4, 3, light, null);
+  } else if (kind === 'stone_return_scroll' || kind === 'stone_exp_scroll' || kind === 'stone_drop_scroll') {
     // A rolled scroll lying across, with a rune on the open part.
     const [dark, mid, light] = GEM[kind];
     rect(ctx, 1, 2, 5, 12, 7, mid);
@@ -733,7 +747,7 @@ export function drawIcon(
     rect(ctx, 1, 6, 7, 4, 3, light, null);
   } else if (kind.includes('key_')) {
     // A key: round bow at the top left, shaft down to the right, two teeth.
-    const [dark, mid, light] = GEM[kind as `stone_${StoneKind}`];
+    const [dark, mid, light] = GEM[kind as `stone_${BaseStoneKind}`];
     ell(ctx, 1, 5, 5, 4, 4, mid);
     ell(ctx, 1, 5, 5, 1.6, 1.6, dark, null);
     ctx.fillStyle = mid;
@@ -743,7 +757,7 @@ export function drawIcon(
     rect(ctx, 1, 3, 3, 2, 1, light, null);
   } else if (kind.startsWith('stone_')) {
     // A cut gem in the stone's colour.
-    const [dark, mid, light] = GEM[kind as `stone_${StoneKind}`];
+    const [dark, mid, light] = GEM[kind as `stone_${BaseStoneKind}`];
     ctx.fillStyle = dark;
     ctx.beginPath();
     ctx.moveTo(8, 1); ctx.lineTo(14, 6); ctx.lineTo(8, 15); ctx.lineTo(2, 6); ctx.closePath();

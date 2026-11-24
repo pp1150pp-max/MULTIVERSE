@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { disposeShadow, shadowFade, shadowGeometry, sharedShadowMat } from './SpriteActor';
 import { animTuneAt } from './animTune';
 import type { DirTune } from '../shared/animTuning';
+import { cloneShared } from './texShare';
 
 /**
  * Facing rows an animation file may contain. `side`, `down_side` and `up_side` are mirrored for
@@ -120,9 +121,7 @@ export class AnimatedActor implements Actor {
     this.m = set.manifest;
     this.tuneKey = set.tuneKey;
     for (const [name, t] of Object.entries(set.textures)) {
-      const c = t.clone();
-      c.needsUpdate = true;
-      this.tex[name] = c;
+      this.tex[name] = cloneShared(t);
     }
     const first = this.tex.idle ?? Object.values(this.tex)[0];
     this.mat = new THREE.SpriteMaterial({ map: first, alphaTest: 0.5, transparent: false });

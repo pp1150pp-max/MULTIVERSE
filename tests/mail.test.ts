@@ -43,7 +43,8 @@ const call = (a: MailActor, c: MailCall): MailReply => mail.handle(a, c);
 const list = (a: MailActor) => call(a, { a: 'mailList' }).list!;
 const send = (target: object, attach: MailAttach | object | undefined, title = 'หัวข้อ', body = 'เนื้อหา') =>
   mail.send(ADMIN, { target: target as never, title, body, attach });
-const free = (a: MailActor) => a.player.bag.filter((e) => !e).length;
+/** Empty slots in the gear tab (where mailed gear goes, src/shared/bagTabs.ts). */
+const free = (a: MailActor) => a.player.freeSlots('gear');
 const saved = (a: MailActor) => db.loadCharacter(a.accountId, a.charId)!;
 
 const alice = actor('Alice');
@@ -137,7 +138,7 @@ const guest = actor('Guesty', undefined, true);
   const a = actor('Packer');
   send({ kind: 'char', name: 'Packer' }, { gold: 100, items: [{ kind: 'equip', baseId: 'necklace_3', rarity: 'rare', plus: 0, count: 3 }] }, 'สามชิ้น');
   const id = list(a)[0].id;
-  for (let i = 0; i < a.player.bag.length - 2; i++) a.player.bag[i] = makeItem('ring_jade', 'common', 1, 'mage')!;
+  for (let i = 0; i < a.player.bagSlots.gear - 2; i++) a.player.bag[i] = makeItem('ring_jade', 'common', 1, 'mage')!;
   ok(free(a) === 2, 'the bag has 2 free slots');
   const gold = a.player.gold;
   const r = call(a, { a: 'mailClaim', id });

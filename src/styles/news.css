@@ -1,0 +1,9 @@
+/* "มีอะไรใหม่": a big window with the newest update notes (src/client/news.ts). */
+#news-win { left: 50%; top: 8px; transform: translateX(-50%); width: min(620px, calc(100vw - 24px)); max-height: calc(100vh - 100px); display: flex; flex-direction: column; font-size: 13px; }
+#news-win .news-list { overflow-y: auto; padding: 4px 10px 10px; display: flex; flex-direction: column; gap: 10px; }
+#news-win .news-empty { padding: 24px; text-align: center; color: var(--ink-dim); }
+#news-win .news-note { border: 1px solid #4a3e2a; border-radius: 6px; background: rgba(20, 16, 10, 0.75); padding: 8px 12px; }
+#news-win .news-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+#news-win .news-title { color: var(--gold); font-size: 15px; font-weight: 600; }
+#news-win .news-date { color: var(--ink-dim); font-size: 11px; }
+#news-win .news-lines { margin: 0; padding-left: 20px; line-height: 1.55; }

@@ -101,13 +101,11 @@ const PAPER_GROUND = new Set(['grass', 'dirt', 'pave', 'room_forest', 'marsh', '
   'snow', 'snow_path', 'ice', 'room_snow', 'ash_rock', 'ash_path', 'lava', 'room_volcano', 'brick',
   // Floor 2's harbour town (tools/cut_papercraft.cjs floor2_hub): paper only.
   'harbor_plank', 'harbor_plaza', 'harbor_water', 'sky_day']);
-/** Classes with a paper animation set in sprites/paper/player/<class>/ (tools/cut_paper_char.cjs). */
-const PAPER_CHARS = new Set(['sword', 'mage', 'gunslinger']);
 let paperMaps = false;
 
 /**
  * The game's art is papercraft (owner 2026-11-20: the only style, no switch): the paper pictures wherever one exists.
- * Called by the game page before anything loads. Pages that never call it (the /admin previews) keep the old art.
+ * Called by the game page and the /admin benches (src/admin/tabs/orbBench.ts) before anything loads.
  */
 export function usePaperArt(): void {
   paperMaps = true;
@@ -143,12 +141,12 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   crystal: sheet('npc/crystal_merchant.png', () => makeSheet(32, drawCrystalMerchant())),
   // Cosmetics with a body (wings, mounts, pets): 8-direction walk sheets like the monsters' (see cosmeticViews.ts).
   ...Object.fromEntries(COSMETICS.filter((c) => c.slot !== 'aura' && c.slot !== 'title' && c.slot !== 'orb').map((c) => [
-    cosSheetKey(c.id), monster(`cosmetics/${c.id}.png`, () => makeSheet(c.slot === 'pet' ? 32 : 48, drawCosmetic(c))),
+    cosSheetKey(c.id), monster(`paper/cosmetics/${c.id}.png`, () => makeSheet(c.slot === 'pet' ? 32 : 48, drawCosmetic(c))),
   ])),
   // Wings from ONE wing picture, mirrored into the pair (wingPair.ts). Used only when the file exists
   // (assetSources 'file'); otherwise the pair sheet above is drawn as before.
   ...Object.fromEntries(COSMETICS.filter((c) => c.slot === 'wings').map((c) => [
-    cosOneKey(c.id), { path: `${BASE}cosmetics/${c.id}_one.png`, cols: 3, rows: 5, fileSideFaces: 'left' as const, placeholder: () => document.createElement('canvas') },
+    cosOneKey(c.id), { path: `${BASE}paper/cosmetics/${c.id}_one.png`, cols: 3, rows: 5, fileSideFaces: 'left' as const, placeholder: () => document.createElement('canvas') },
   ])),
 
   green_slime: monster('monsters/green_slime.png', () => makeSheet(32, drawSlime(['#6cc25a', '#4a9a3e', '#c8f0b0']))),
@@ -368,9 +366,10 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
  * CharManifest) plus one PNG per animation. Missing folder = fall back to the simple 3×3 sheet.
  */
 const ANIM_SET_DIRS: Record<string, string> = {
-  sword: 'player/sword',
-  mage: 'player/mage',
-  gunslinger: 'player/gunslinger',
+  // Paper sets (tools/cut_paper_char.cjs); the old pixel sets were removed (owner 2026-11-22).
+  sword: 'paper/player/sword',
+  mage: 'paper/player/mage',
+  gunslinger: 'paper/player/gunslinger',
 };
 
 export const sheets: Record<string, SheetInfo> = {};
@@ -394,9 +393,8 @@ function fxTexture(canvas: HTMLCanvasElement): THREE.CanvasTexture {
   return tex;
 }
 
-/** A character's animation set; with the paper switch on, its paper set (sprites/paper/…) when there is one. */
+/** A character's animation set (sprites/paper/player/<class>). */
 async function loadCharSet(key: string, dir: string): Promise<void> {
-  if (paperMaps && PAPER_CHARS.has(key) && (await loadAnimSet(key, `${BASE}paper/${dir}`))) return;
   await loadAnimSet(key, BASE + dir);
 }
 
@@ -410,8 +408,8 @@ async function loadAnimSet(key: string, dir: string): Promise<boolean> {
 }
 
 /**
- * A character's animation set from `sprites/<dir>` (e.g. `player/sword` or `paper/player/sword`) without touching
- * the game's own sets: the /admin animation bench shows the old and the paper pictures side by side.
+ * A character's animation set from `sprites/<dir>` (e.g. `paper/player/sword`) without touching
+ * the game's own sets: the /admin animation bench loads its own copies.
  */
 export function loadCharAnimSet(key: string, dir: string): Promise<AnimSet | null> {
   return fetchAnimSet(key, BASE + dir);
@@ -485,6 +483,8 @@ export type FxSheet = 'sword' | 'mage' | 'gun' | 'gun_ult' | 'enhance'
   | 'mg_a' | 'mg_b' | 'mg_c' | 'mg_d' | 'mg_e' | 'mg_f' | 'mg_g'
   // Gunslinger skills (art_templates/skills/FX_GUNSLINGER.md)
   | 'gs_skill' | 'gs_gear' | 'gs_passive'
+  // Bosses' skills (owner 2026-11-21, tools/cut_boss_fx.cjs): papercraft only, there is no old sheet.
+  | 'boss_bear' | 'boss_witch' | 'boss_yeti' | 'boss_heart'
   // Area skills' standing layer (zoneProps.ts, art_templates/skills/AOE_PROPS.md); missing ones just aren't drawn.
   | PropSheet;
 export const fxSheets: Partial<Record<FxSheet, THREE.Texture>> = {};
@@ -505,7 +505,7 @@ async function loadFxSheet(name: FxSheet): Promise<void> {
 }
 
 /**
- * Paper cosmetics drawn in code (tools/cut_paper_extras.cjs), loaded only with the paper switch on: per aura the ring
+ * Paper cosmetics drawn in code (tools/cut_paper_extras.cjs), per aura the ring
  * laid under the character and one footprint, and the white enhancement-orb atlas the orbs are tinted from.
  */
 export const paperTex: { auras: Record<string, { ring: THREE.Texture; foot: THREE.Texture }>; orbs?: THREE.Texture } = { auras: {} };
@@ -527,8 +527,9 @@ async function loadPaperCosmetics(): Promise<void> {
         // No paper picture: the old glow.
       }
     }),
-    // Raw greys: the orb shader reads them as they are in the file (like its code-made atlas).
-    loadTexture(`${BASE}paper/fx/orbs.png`).then((t) => { paperTex.orbs = smooth(t, false); }, () => undefined),
+    // Raw greys: the orb shader reads them as they are in the file (like its code-made atlas). The game and
+    // the /admin benches; a page without paper art keeps the code-made atlas.
+    ...(paperMaps ? [loadTexture(`${BASE}paper/fx/orbs.png`).then((t) => { paperTex.orbs = smooth(t, false); }, () => undefined)] : []),
   ]);
 }
 
@@ -665,9 +666,7 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 
 async function loadPortrait(key: string): Promise<void> {
   const base = ANIM_SET_DIRS[key];
-  // The menu's class pictures are the paper ones too (owner 2026-11-18).
-  const paper = base && PAPER_CHARS.has(key) && paperMaps;
-  for (const dir of paper ? [`paper/${base}`, base] : base ? [base] : []) {
+  for (const dir of base ? [base] : []) {
     try {
       const res = await fetch(`${BASE}${dir}/sprite.json`);
       const m = (await res.json()) as CharManifest;
@@ -720,8 +719,9 @@ async function loadAssets(): Promise<void> {
     ...PROP_SHEETS.map((n) => loadFxSheet(n)),
     // Gunslinger
     ...(['gs_skill', 'gs_gear', 'gs_passive'] as const).map((n) => loadFxSheet(n)),
+    ...(['boss_bear', 'boss_witch', 'boss_yeti', 'boss_heart'] as const).map((n) => loadFxSheet(n)),
     loadDecals(),
-    ...(paperMaps ? [loadPaperCosmetics()] : []),
+    loadPaperCosmetics(),
     ...(['grass', 'dirt', 'water', 'marsh', 'mud', 'pave', 'brick', 'snow', 'snow_path', 'ice', 'ash_rock', 'ash_path', 'lava',
       'room_forest', 'room_marsh', 'room_snow', 'room_volcano', 'harbor_plank', 'harbor_plaza', 'harbor_water', 'sky_day',
       'sand', 'wreck', 'shallow', 'room_beach'] as const).map((n) => loadGroundTile(n)),
@@ -746,11 +746,8 @@ async function loadAssets(): Promise<void> {
           paperMonster = { walk: 4, attack: 4, scale: monster.scale };
           cols = 8;
         } else {
-          // Cosmetics (wings, mounts, pets, single wings: tools/cut_cosmetics.cjs with COS_PAPER=1) have a paper copy
-          // of the same name under sprites/paper/cosmetics/.
           const paper = !paperMaps ? null
             : PAPER_PROPS.has(key) ? `${BASE}paper/props/${key}.png`
-            : spec.path.startsWith(`${BASE}cosmetics/`) ? spec.path.replace(`${BASE}cosmetics/`, `${BASE}paper/cosmetics/`)
             : spec.path.startsWith(`${BASE}fx/`) ? spec.path.replace(`${BASE}fx/`, `${BASE}paper/fx/`)
             : null;
           tex = await (paper ? loadTexture(paper).catch(() => loadTexture(spec.path)) : loadTexture(spec.path))

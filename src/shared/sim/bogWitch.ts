@@ -102,7 +102,7 @@ export class WitchSpells {
       switch (h.k) {
         case 'vial': {
           sim.fx('burst', h.x, 0.3, h.z, '#7aff6a', 10, 3);
-          sim.sfx('boss_slam', h.x, h.z);
+          sim.sfx('witch_vial', h.x, h.z);
           const p = player(h.pid);
           if (p) sim.hitPlayer(m, p, VIAL.hitMult, {});
           added.push({ h: { id: sim.nextHazardId(), k: 'pool', x: h.x, z: h.z, start: h.hit, hit: h.hit, r: h.r, end: h.hit + VIAL.poolTime }, nextHit: new Map() });
@@ -123,7 +123,7 @@ export class WitchSpells {
           if (!a.nextHit.has(0)) {
             a.nextHit.set(0, t);
             sim.fx('burst', h.x, 0.4, h.z, '#6a4a2a', 12, 4);
-            sim.sfx('boss_slam', h.x, h.z);
+            sim.sfx('witch_grasp', h.x, h.z);
             for (const p of sim.players) {
               if (!p.alive || a.cast?.has(p.id) || Math.hypot(p.x - h.x, p.z - h.z) > h.r + p.radius) continue;
               a.cast?.add(p.id);
@@ -138,6 +138,7 @@ export class WitchSpells {
           return t < h.end;
         case 'hex': {
           const p = player(h.pid);
+          sim.sfx('witch_hex', h.x, h.z);
           if (p && p.invulnT <= 0 && p.guardT <= 0 && !sim.inSafe(p) && Math.hypot(p.x - h.x, p.z - h.z) <= h.r) {
             p.stunT = Math.max(p.stunT, HEX.toad);
             p.toadT = Math.max(p.toadT, HEX.toad);
@@ -162,6 +163,9 @@ export class WitchSpells {
     if (!near.length) return false;
     const spell = ORDER[this.next % ORDER.length];
     this.next++;
+    // She raises her lantern to cast (her attack frames; the spells keep their own pictures, owner 2026-11-21).
+    sim.anim(m.id, 'attack', { duration: 0.35 });
+    sim.sfx('witch_cast', m.x, m.z);
     const t = sim.time;
     if (spell === 'vial') {
       // One at each player, landing on their head however they run.

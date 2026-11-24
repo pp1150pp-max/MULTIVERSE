@@ -1,6 +1,7 @@
 // Channels of the open maps: every zone has one Sim per channel (CH 1, CH 2, …). A zone without
-// channels (ZoneDef.channels unset, e.g. the hub for now) simply always has just CH 1. This decides
-// where someone entering a map goes, opens a channel when all are full, closes empty ones (never CH 1),
+// channels (hasChannels false: ZoneDef.channels unset, or the hub with its /admin switch off) has just CH 1
+// (the hub keeps it open). This decides
+// where someone entering a map goes, opens a channel when all are full, closes empty ones,
 // remembers where a dropped connection was for CH_RECONNECT_MS, and checks a manual channel switch.
 // It knows nothing of sessions or sockets (server/world.ts does), so tests can drive it with plain Sims.
 // Rules agreed with the owner: docs/systems/channels.md.
@@ -86,7 +87,7 @@ export class Channels {
   ) {
     for (const zone of zones) {
       this.byZone.set(zone.id, []);
-      // A farm map starts with no channel running (CH 1–10 are reserved slots, see list()); the hub has its one.
+      // A map with channels starts with none running (CH 1–10 are reserved slots, see list()); one without (the hub switched off) has its one.
       if (!hasChannels(zone)) this.open(zone, 1);
     }
   }
@@ -171,14 +172,15 @@ export class Channels {
    *   2. `prefer` (the channel number they were last in), if this map has it and it has fewer than CH_SOLO_CAP;
    *   3. the open channel with the fewest players (below CH_SOLO_CAP; a tie: the lower number);
    *   4. none open, or all full: a new channel (the lowest free number).
-   * A zone without channels always gives its only one; on a farm map with no channel running, CH 1 opens. Undefined only for an unknown zone.
+   * A zone without channels always gives CH 1; on a farm map with no channel running, CH 1 opens. Undefined only for an unknown zone.
    */
   place(zoneId: string, opts: PlaceOpts = {}): Channel | undefined {
     if (!this.known(zoneId)) return undefined;
     const list = this.byZone.get(zoneId)!;
     const zone = this.zoneOf(zoneId);
     if (!zone) return undefined;
-    if (!hasChannels(zone)) return list[0] ?? this.open(zone, 1);
+    // One room: CH 1. (The hub switched off while people were in its CH 2+: they stay there until they leave; newcomers go to CH 1.)
+    if (!hasChannels(zone)) return list.find((c) => c.ch === 1) ?? this.open(zone, 1);
     const lead = opts.leader && this.bySim.get(opts.leader);
     if (lead && lead.zone.id === zone.id && this.count(lead) < CH_PARTY_CAP) return lead;
     const pref = opts.prefer !== undefined ? list.find((c) => c.ch === opts.prefer) : undefined;
@@ -209,7 +211,7 @@ export class Channels {
 
   /**
    * Closes channels nobody is in (a reserved CH 1–10 goes back to a free slot), except one that a
-   * dropped player may come back to and the hub's only channel. Players are never moved to merge channels. Returns the channels closed (for the log).
+   * dropped player may come back to and the hub's CH 1 while the hub is one room (its switch off; on, it closes like a farm map's). Players are never moved to merge channels. Returns the channels closed (for the log).
    */
   sweep(): Channel[] {
     const t = this.now();
@@ -219,7 +221,7 @@ export class Channels {
     for (const [zoneId, list] of this.byZone) {
       for (const c of [...list]) {
         if (this.count(c) > 0 || held.has(`${zoneId}|${c.ch}`)) continue;
-        if (!hasChannels(c.zone) && this.zones.some((z) => z.id === zoneId)) {
+        if (c.ch === 1 && !hasChannels(c.zone) && this.zones.some((z) => z.id === zoneId)) {
           // The hub's only channel stays, but an empty one made before a map was published is made again with the new layout.
           if (this.fresh(c.zone) !== c.zone) {
             this.close(c);
