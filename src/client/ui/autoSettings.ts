@@ -4,7 +4,7 @@ import { MONSTERS } from '../../shared/data/monsters';
 import { currentBalance } from '../../shared/balance';
 import { AUTO_DEFAULT_KEYS, AUTO_LOOT_ORDER_NAME, AUTO_LOOT_ORDERS, AUTO_OUT_ACTION_NAME, AUTO_OUT_ACTIONS, AUTO_TARGET_MODES, AUTO_TARGET_NAME } from '../../shared/autoTuning';
 import { skillIcon } from '../icons';
-import { $, syncPots } from './hudShared';
+import { $, chkRow, syncPots } from './hudShared';
 
 /** The Auto Play settings window (range, potions %, skills and their order, loot and target options). */
 export class AutoSettingsWindow {
@@ -70,17 +70,17 @@ export class AutoSettingsWindow {
     const kinds = [...new Set(this.g.zone.spawns.map((sp) => sp.monster))].filter((id) => MONSTERS[id] && MONSTERS[id].behavior !== 'boss');
     $('aset-skip-wrap').classList.toggle('hidden', !kinds.length || !allow.skip);
     const skipBox = $('aset-skip');
-    skipBox.innerHTML = '';
+    skipBox.innerHTML = chkRow('', '');
+    const skipOpts = skipBox.querySelector<HTMLElement>('.chk-opts')!;
     for (const id of kinds) {
       const label = document.createElement('label');
-      label.className = 'aset-check';
       const cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.dataset.monster = id;
       cb.checked = !s.skip.includes(id);
       cb.addEventListener('change', () => this.applyAutoSettings());
       label.append(cb, ` ${MONSTERS[id].nameTh}`);
-      skipBox.append(label);
+      skipOpts.append(label);
     }
     syncPots($('aset-pots'), p.lootFilter);
     const box = $('aset-skills');
