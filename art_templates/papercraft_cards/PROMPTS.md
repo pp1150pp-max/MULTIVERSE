@@ -37,7 +37,7 @@ Frame:
 
 | ไฟล์ | ระดับ | คำอธิบาย (ต่อท้าย `Frame:`) |
 |---|---|---|
-| `card_frame_rare.png` | หายาก | `a plain frame of layered dark navy-blue and cream card with thin pale-blue paper trim, four small round blue paper gems in the corners, the simplest of the three` |
+| `card_frame_rare.png` | หายาก | `a frame of layered dark navy-blue and cream card with a thin pale-blue paper trim and a second inner border line, small paper-cut leaf scrolls along the top and bottom edges, a small paper-cut star on the top plate, four round blue paper gems in the corners each set in a small cut-paper rosette, and fine stitched-line detail along the inner window edge; clearly detailed but still the plainest of the three` |
 | `card_frame_epic.png` | มหากาพย์ | `the same frame layout in layered deep violet and cream card with paper-cut vine curls along the sides, small violet paper gems at the corners and the top plate` |
 | `card_frame_legendary.png` | ตำนาน | `the same frame layout, the richest of the three: layered deep amber-orange, dark brown and gold-foil paper, thick paper-cut filigree and small spiky ornaments, a few small gold paper stars, amber paper gems at the corners and the top plate` |
 
