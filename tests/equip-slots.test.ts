@@ -23,10 +23,12 @@ function player(bag: Item[], cls: 'sword' | 'mage' | 'gunslinger' = 'sword', equ
 const ids = ITEM_BASES.map((b) => b.id);
 ok(new Set(ids).size === ids.length, 'item kinds have unique ids');
 const newSlots: SlotId[] = ['necklace', 'gloves', 'belt', 'offhand'];
+// Floor 1's own kinds (floor 2's set pieces add one of each per set: tests/item-sets.test.ts).
+const floor1 = ITEM_BASES.filter((b) => !b.set);
 for (const s of ['necklace', 'gloves', 'belt']) {
-  ok(ITEM_BASES.filter((b) => b.slot === s).length === 4, `${s} has 4 kinds`);
+  ok(floor1.filter((b) => b.slot === s).length === 4, `${s} has 4 kinds on floor 1`);
 }
-ok(ITEM_BASES.filter((b) => b.slot === 'offhand').length === 12, 'off-hands: 4 kinds per class');
+ok(floor1.filter((b) => b.slot === 'offhand').length === 12, 'off-hands: 4 kinds per class on floor 1');
 ok(ITEM_ART.length === new Set(ITEM_ART).size, 'item pictures have unique names');
 
 // Off-hands belong to one class
