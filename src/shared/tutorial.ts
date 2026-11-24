@@ -155,12 +155,12 @@ export function tutorialChanges(a: TutorialConfig, b: TutorialConfig): string[] 
   return TUT_REWARD_KEYS.filter((k) => !sameAttach(a[k], b[k])).map((k) => `รางวัลเควสสอนระบบ ${TUT_REWARD_NAME[k]}: ${tutRewardText(a[k])} → ${tutRewardText(b[k])}`);
 }
 
-/** The reward mailed when a step is handed in, every item bound (the last step adds the chain's reward). */
+/** The reward mailed when a step is handed in (the last step adds the chain's reward). Not bound since 2026-11-24. */
 export function tutTurnInReward(step: TutStep, cfg: TutorialConfig): MailAttach {
   const parts = step === TUT_STEPS[TUT_STEPS.length - 1] ? [cfg[step], cfg.final] : [cfg[step]];
   return {
     gold: parts.reduce((n, a) => n + a.gold, 0),
-    items: parts.flatMap((a) => a.items).map((it) => (it.kind === 'equip' ? it : { ...it, bound: true as const })),
+    items: parts.flatMap((a) => a.items),
   };
 }
 

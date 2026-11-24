@@ -64,10 +64,10 @@ const sellAt = p.bag.findIndex((e) => e && isPotion(e));
 hub.sellItem(p, sellAt);
 ok(state(p, 'shop') === 'ready' && mark(p, 'merchant') === '?', 'ready: ? over the merchant');
 
-// ---- handing in: reward from the tuning, every item bound; the step is done for the whole account
+// ---- handing in: reward from the tuning, nothing bound (owner 2026-11-24); the step is done for the whole account
 const got = hub.tutTurnIn(p, 'shop');
 ok(!!got && acc.done.includes('shop') && !acc.cur, 'handed in');
-ok(!!got && got.reward.items.length === 2 && got.reward.items.every((it) => it.kind !== 'equip' && it.bound === true), 'the shop reward: two potion lines, bound');
+ok(!!got && got.reward.items.length === 2 && got.reward.items.every((it) => it.kind !== 'equip' && !it.bound), 'the shop reward: two potion lines, not bound');
 got?.undo();
 ok(!acc.done.includes('shop') && acc.cur?.step === 'shop', 'undo (mail failed) puts it back');
 ok(!!hub.tutTurnIn(p, 'shop'), 'and it can be handed in again then');
@@ -95,17 +95,16 @@ ok(!!hub.enhance(p, sword.uid, false) && state(p, 'enhance') === 'ready', 'one e
 const enh = hub.tutTurnIn(p, 'enhance');
 ok(enh?.reward.items.length === 1 && enh.reward.items[0].kind === 'stone' && enh.reward.items[0].stone === 'protect', 'a protection stone');
 
-// ---- reroll: bound stones into the bag on taking it (refused with a full bag), then both rerolls
+// ---- reroll: stones into the bag on taking it (refused with a full bag), then both rerolls
 const saved = [...p.bag];
 for (let i = 0; i < p.bag.length; i++) p.bag[i] ??= gear();
 const goldFull = p.gold;
 ok(!hub.tutAccept(p, 'reroll') && p.gold === goldFull && !acc.cur, 'a full bag: not taken, no gold');
 p.bag.splice(0, p.bag.length, ...saved);
 ok(hub.tutAccept(p, 'reroll'), 'reroll step taken');
-const bound = p.bag.filter((e) => isStone(e) && e.bound);
-ok(bound.length === 2 && p.stoneCount('reroll_values') === 1 && p.stoneCount('reroll_stat') === 1, 'one bound stone of each kind in the bag');
+ok(!p.bag.some((e) => isStone(e) && e.bound) && p.stoneCount('reroll_values') === 1 && p.stoneCount('reroll_stat') === 1, 'one stone of each kind in the bag, not bound');
 p.forgeAt = -1e9;
-ok(!!hub.reroll(p, sword.uid, 'values'), 'reroll values (uses the bound stone)');
+ok(!!hub.reroll(p, sword.uid, 'values'), 'reroll values (uses the given stone)');
 ok(state(p, 'reroll') === 'going', 'one of two: still going');
 p.forgeAt = -1e9;
 ok(!!hub.reroll(p, sword.uid, 'stat') && state(p, 'reroll') === 'ready', 'and stat: ready');
@@ -122,21 +121,20 @@ ok(last?.reward.gold === code.market.gold + code.final.gold, 'last step: its rew
 ok(!!last && last.reward.items.some((x) => x.kind === 'stone' && x.stone === 'exp_scroll') && last.reward.items.some((x) => x.kind === 'stone' && x.stone === 'drop_scroll'), 'EXP and drop scrolls');
 ok(TUT_STEPS.every((s) => state(alt, s) === 'done') && (['merchant', 'keeper', 'blacksmith', 'broker'] as NpcId[]).every((n) => mark(alt, n) === ''), 'all done for the account: no marks for the alt either');
 
-// ---- bound stacks: never merge with bought ones, stay in the bag
+// ---- rewards are not bound any more (owner 2026-11-24): they merge, sell; old saves lose the mark
 {
   const q = hub.addPlayer(newCharacterData('Binder', 'sword'));
   q.bag.fill(null);
   const entries = rollAttach(tutTurnInReward('shop', codeTutorial()), 'sword', 1);
-  ok(putAll(q.bag, entries, q.bagSlots) && q.bag.filter((e) => isPotion(e) && e.bound).length === 2, 'the claimed shop reward: two bound potion stacks');
-  ok(q.addPotions('hp', 's', 3) && q.bag.filter((e) => isPotion(e) && e.potion === 'hp' && e.size === 's').length === 2, 'bought potions go to their own stack');
-  ok(q.potionCount('hp', 's') === 13, 'both count for drinking');
-  const b = q.bag.find((e): e is PotionStack => isPotion(e) && !!e.bound)!;
-  ok(isBound(b) && !sameStack(b, { potion: b.potion, size: b.size, count: 1 }), 'isBound, and does not merge with an unbound stack');
-  const sorted = sortEntries(q.bag, 'rarity', false);
-  ok(sorted.filter((e) => isPotion(e) && e.bound).length === 2 && sorted.filter((e) => isPotion(e) && !e.bound).length === 1, 'sorting keeps bound and unbound apart');
-  at(q, 'merchant');
-  const gold = q.gold;
-  ok(hub.sellItem(q, q.bag.indexOf(b)) === 0 && q.gold === gold, 'a bound stack cannot be sold');
+  ok(putAll(q.bag, entries, q.bagSlots) && !q.bag.some((e) => isPotion(e) && e.bound), 'the claimed shop reward: not bound');
+  const data = newCharacterData('OldBinder', 'sword');
+  data.bag = [{ potion: 'hp', size: 's', count: 4, bound: true }, { stone: 'reroll_values', count: 1, bound: true }];
+  const r = hub.addPlayer(JSON.parse(JSON.stringify(data)));
+  const b = r.bag.find((e): e is PotionStack => isPotion(e))!;
+  ok(!!b && !b.bound && !isBound(b) && !r.bag.some((e) => isStone(e) && e.bound), 'an old save: the bound mark is gone');
+  at(r, 'merchant');
+  const gold = r.gold;
+  ok(hub.sellItem(r, r.bag.indexOf(b)) > 0 && r.gold > gold, 'and it sells');
 }
 
 // ---- save rows: garbage never breaks a login
@@ -156,7 +154,7 @@ ok(mergeTutorial(c && 'tuning' in c ? c.tuning : undefined).stash.gold === 5000,
 const bal = checkBalance({ ...codeBalance(), tutorial: more }, true);
 ok('tuning' in bal && bal.tuning?.tutorial?.stash?.gold === 5000, 'saved through the balance tuning');
 applyBalance(('tuning' in bal && bal.tuning) || {});
-ok(currentBalance().tutorial.stash.gold === 5000 && (tutTurnInReward('stash', currentBalance().tutorial).items[0] as { bound?: true }).bound === true, 'the game uses it; items still given bound');
+ok(currentBalance().tutorial.stash.gold === 5000 && !(tutTurnInReward('stash', currentBalance().tutorial).items[0] as { bound?: true }).bound, 'the game uses it; items not bound');
 applyBalance({});
 
 // ---- the DB row: saved per account; a step held by a deleted character is dropped

@@ -721,13 +721,6 @@ export class Sim {
           p.bossKills.push(m.def.id);
           this.events.push({ t: 'save', to: p.id });
         }
-        // The Seeker's key for this boss has done its job.
-        const qkey = BOSS_QUEST_KEY[m.def.id];
-        if (qkey && p.stoneCount(qkey) > 0) {
-          p.takeStones(qkey, p.stoneCount(qkey));
-          this.log(`${STONE_NAME[qkey]} สลายไปแล้ว — ภารกิจนี้สำเร็จ`, '#ffd34a', p.id);
-          this.events.push({ t: 'save', to: p.id });
-        }
         delete p.quests[m.def.id];
         if (!gained.has(p)) gained.set(p, 0);
       }
@@ -1090,7 +1083,7 @@ export class Sim {
       return false;
     }
     delete p.quests[boss];
-    this.log(`ได้รับ ${STONE_NAME[key]} — ใส่ที่แท่นเรียกบอสได้ (ไม่หายเมื่อใช้ จนกว่าจะปราบบอสได้)`, STONE_COLOR[key], p.id);
+    this.log(`ได้รับ ${STONE_NAME[key]} — ใส่ที่แท่นเรียกบอสได้ (ใช้แล้วหาย เหมือนกุญแจดรอป)`, STONE_COLOR[key], p.id);
     this.sfx('trade', p.x, p.z, p.id);
     this.events.push({ t: 'save', to: p.id });
     return true;
@@ -1172,7 +1165,7 @@ export class Sim {
     const row = tutRows(p.tut, p.name).find((r) => r.step === step);
     if (!row || row.state !== 'offer' || !this.near(p, TUT_NPC[step])) return false;
     const pay = !p.tut.paid?.includes(step);
-    const stones = pay ? (TUT_ACCEPT_STONES[step] ?? []).map((s) => ({ stone: s.stone, count: s.count, bound: true as const })) : [];
+    const stones = pay ? (TUT_ACCEPT_STONES[step] ?? []).map((s) => ({ stone: s.stone, count: s.count })) : [];
     if (stones.length && !putAll(structuredClone(p.bag), stones, p.bagSlots)) {
       this.log(`ช่องประเภทใช้งานเต็ม — เคลียร์ช่องว่าง ${stones.length} ช่องก่อนรับภารกิจ`, '#ff8a6a', p.id);
       return false;

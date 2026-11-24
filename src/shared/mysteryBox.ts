@@ -67,7 +67,7 @@ export const BOX_ROWS: readonly BoxRowDef[] = [
   row('pot_hp_m', 'ยา HP กลาง', { kind: 'potion', potion: 'hp', size: 'm' }, null, 5, false),
   row('pot_mp_s', 'ยา MP เล็ก', { kind: 'potion', potion: 'mp', size: 's' }, null, 5, false),
   row('pot_mp_m', 'ยา MP กลาง', { kind: 'potion', potion: 'mp', size: 'm' }, null, 5, false),
-  ...QUEST_KEYS.map((k) => row(`stone_${k}`, `กุญแจเควส ${KEY_NAME[k.slice(5)]} (ผูกตัว)`, { kind: 'stone', stone: k }, null, 1, false)),
+  ...QUEST_KEYS.map((k) => row(`stone_${k}`, `กุญแจเควส ${KEY_NAME[k.slice(5)]}`, { kind: 'stone', stone: k }, null, 1, false)),
 ];
 const ROW_BY_ID = new Map(BOX_ROWS.map((r) => [r.id, r]));
 

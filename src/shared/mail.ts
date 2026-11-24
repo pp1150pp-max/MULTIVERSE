@@ -104,7 +104,8 @@ export function rollAttach(a: MailAttach, cls: ClassId, charLevel: number): BagE
       }
     } else {
       const s = x.kind === 'potion' ? adminStack({ kind: 'potion', potion: x.potion, size: x.size }) : adminStack({ kind: 'stone', stone: x.stone });
-      if (typeof s !== 'string') out.push({ ...s, count: x.count, ...(x.bound ? { bound: true } : {}) } as BagEntry);
+      if (typeof s !== 'string') // Bound attachments (old tutorial rewards) arrive unbound since 2026-11-24.
+      out.push({ ...s, count: x.count } as BagEntry);
     }
   }
   return out;

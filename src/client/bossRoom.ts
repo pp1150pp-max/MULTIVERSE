@@ -161,7 +161,7 @@ export class RoomUI {
     // The Seeker's key: ×1, not used up.
     const qkey = BOSS_QUEST_KEY[s.boss];
     if (qkey && this.g.player.stoneCount(qkey) > 0) {
-      const q = el('button', '', `ใช้${STONE_NAME[qkey]} (×1 ไม่หาย)`);
+      const q = el('button', '', `ใช้${STONE_NAME[qkey]} (×1)`);
       q.id = 'room-quest';
       q.disabled = !lead;
       q.onclick = () => {
