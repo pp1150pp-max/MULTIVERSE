@@ -182,17 +182,21 @@ export class FullMap {
       label(sx + side * 92 * px, sy + (side ? 0 : (sy < c ? 30 : -30) * px), `วาปไป ${name}${lv}`, '#e0c8ff', { step: sy < c ? 1 : -1 });
     }
 
-    // Two areas of the same monster close together get one label, so the text doesn't pile up.
+    // Areas of the same monster get one label, so the text doesn't pile up. A farm map: one per kind for the whole map (owner
+    // 2026-11-25: with x2.25 the spots the old 24-unit groups gave a wall of labels); each kind has its own band from camp to boss.
     const labelled: { monster: string; x: number; z: number }[] = [];
     for (const sp of zone.spawns) {
       // The hub's single monsters stand in a long line in front of each portal: one label per kind per corner.
-      const together = zone.quadrants ? 60 : 24;
+      const together = zone.quadrants ? 60 : Infinity;
       if (labelled.some((l) => l.monster === sp.monster && Math.hypot(l.x - sp.x, l.z - sp.z) < together)) continue;
       labelled.push({ monster: sp.monster, x: sp.x, z: sp.z });
-      // In the middle of its group, not at its first spot (which in the hub is the one nearest town).
+      // In the middle of its group, not at its first spot (which in the hub is the one nearest town); on the group's own spot
+      // nearest that middle, so the label sits where the monster really is.
       const group = zone.spawns.filter((o) => o.monster === sp.monster && Math.hypot(o.x - sp.x, o.z - sp.z) < together);
-      const gx = group.reduce((t, o) => t + o.x, 0) / group.length;
-      const gz = group.reduce((t, o) => t + o.z, 0) / group.length;
+      const mx = group.reduce((t, o) => t + o.x, 0) / group.length;
+      const mz = group.reduce((t, o) => t + o.z, 0) / group.length;
+      const mid = group.reduce((a, o) => (Math.hypot(o.x - mx, o.z - mz) < Math.hypot(a.x - mx, a.z - mz) ? o : a));
+      const [gx, gz] = zone.quadrants ? [mx, mz] : [mid.x, mid.z];
       const d = MONSTERS[sp.monster];
       const [sx, sy] = at(gx, gz);
       const sheet = sheets[sp.monster];
