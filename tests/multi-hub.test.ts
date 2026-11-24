@@ -27,12 +27,13 @@ ok(isHub(ZONE_HUB) && isHub(ZONE_HARBOR) && Object.values(ZONES).filter(isHub).l
 ok(loginHub({ zone: 'emerald_forest' }).id === HUB_ID && loginHub({}).id === HUB_ID && loginHub({ zone: 'nope' }).id === HUB_ID, 'login: floor 1 → nexus_city (also missing/unknown zone)');
 
 // ---- switches: code defaults, check, audit text
-ok(currentBalance().floorGateOpen === true && currentBalance().floorGateQuest === true, 'both switches on in the code');
+ok(currentBalance().floorGateOpen === false && currentBalance().floorGateQuest === true, 'code: the way up shut (owner 2026-11-24), the quest check on');
+ok(loginHub({ zone: 'harbor_town', unlocks: ['floor2'] }).id === HUB_ID, 'code default: a floor-2 logout logs back in at nexus_city');
 {
-  const c = checkBalance({ floorGateOpen: false, floorGateQuest: true }, true);
-  ok(!c.error && c.tuning?.floorGateOpen === false && c.tuning.floorGateQuest === undefined, 'only values that differ from the code are kept');
+  const c = checkBalance({ floorGateOpen: true, floorGateQuest: true }, true);
+  ok(!c.error && c.tuning?.floorGateOpen === true && c.tuning.floorGateQuest === undefined, 'only values that differ from the code are kept');
   ok(!!checkBalance({ floorGateQuest: 'x' }, true).error, 'a non-boolean is refused');
-  ok(balanceChanges({}, { floorGateOpen: false }).includes('ประตูที่ต้องทำเควส'), 'audit line for the switch');
+  ok(balanceChanges({}, { floorGateOpen: true }).includes('ประตูที่ต้องทำเควส'), 'audit line for the switch');
 }
 
 // ---- portalLock
@@ -117,7 +118,10 @@ ok(loginHub({ zone: 'emerald_forest', unlocks: ['floor2'] }, OPEN).id === HUB_ID
     const evs = sim.drainEvents();
     return { travel: evs.some((e) => e.t === 'travel' && e.zone === HARBOR.id), log: evs.filter((e) => e.t === 'log').map((e) => (e as { msg: string }).msg).join(' ') };
   };
-  let r = tryGate({});
+  let r = tryGate({ unlocks: ['floor2'] });
+  ok(!r.travel && r.log.includes('ปิดอยู่'), 'code default: shut even with the quest done');
+  applyBalance({ floorGateOpen: true });
+  r = tryGate({});
   ok(!r.travel && r.log.includes('นักเดินเรือ'), 'no quest: turned away, told to see the navigator');
   r = tryGate({ unlocks: ['floor2'] });
   ok(r.travel, 'quest done: walks through');
@@ -126,7 +130,7 @@ ok(loginHub({ zone: 'emerald_forest', unlocks: ['floor2'] }, OPEN).id === HUB_ID
   applyBalance({ floorGateOpen: false });
   r = tryGate({ unlocks: ['floor2'] });
   ok(!r.travel && r.log.includes('ปิดอยู่'), 'gate switch off: shut, says closed');
-  applyBalance({ floorGateQuest: false });
+  applyBalance({ floorGateOpen: true, floorGateQuest: false });
   r = tryGate({});
   ok(r.travel, 'quest switch off: anyone at the level walks through');
   applyBalance({});

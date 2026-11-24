@@ -62,8 +62,8 @@ export const CODE_FORGE_AUTO = true;
 export const CODE_ENGLISH = true;
 /** Click-to-walk carries on when the browser tab is hidden: the server walks the rest of the way (owner 2026-11-18: on). */
 export const CODE_WALK_HIDDEN = true;
-/** Portals that need an unlock (PortalDef.requires, e.g. the way up to floor 2) let anyone through who has it (owner 2026-11-19: on); off = closed to everyone. */
-export const CODE_FLOOR_GATE_OPEN = true;
+/** Portals that need an unlock (PortalDef.requires, e.g. the way up to floor 2) let anyone through who has it; off = closed to everyone. Off in the code (owner 2026-11-24: floor 2 shut to players on main, admins go in with the /admin teleport) until the owner opens it in /admin. */
+export const CODE_FLOOR_GATE_OPEN = false;
 /** Those portals check the unlock (The Seeker's quest) (owner 2026-11-19: on); off = anyone at minLevel walks through. */
 export const CODE_FLOOR_GATE_QUEST = true;
 /** Wearing/taking off gear is refused (browser side) while the merchant's window is open, so a click meant to wear cannot sell (owner 2026-11-22). */

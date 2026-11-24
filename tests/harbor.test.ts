@@ -102,8 +102,23 @@ const run = (sim: Sim, secs: number) => {
   ok(navState(who(35, []), { ...b, floorGate: { ...b.floorGate, minLevel: 35, needBoss: false } }) === 'offer', '/admin level and boss switch count');
 }
 
-// ---- the quest and the trip, in nexus_city
+// ---- shut in the code (owner 2026-11-24): the navigator neither offers the quest nor takes anyone up
 {
+  const sim = new Sim(ZONE_HUB);
+  const nav = sim.terrain.npcPos.navigator!;
+  const p = sim.addPlayer(hero({ level: 45, bossKills: ['volcano_heart'], unlocks: [FLOOR2_UNLOCK] }));
+  p.x = nav.x + 1;
+  p.z = nav.z + 1;
+  ok(navState(p, currentBalance()) === 'closed' && !sim.floorTravel(p), 'code default: the way up is shut, even with the quest done');
+  const q = sim.addPlayer(hero({ level: 45, bossKills: ['volcano_heart'] }));
+  q.x = nav.x + 1;
+  q.z = nav.z + 1;
+  ok(navState(q, currentBalance()) === 'closed' && !sim.floorTurnIn(q), 'code default: the quest cannot be taken or handed in');
+}
+
+// ---- the quest and the trip, in nexus_city (the way opened in /admin)
+{
+  applyBalance({ floorGateOpen: true });
   const sim = new Sim(ZONE_HUB);
   const nav = sim.terrain.npcPos.navigator!;
   ok(!!nav && inSafeArea(ZONE_HUB, nav.x, nav.z), 'the navigator stands in nexus_city');
@@ -131,6 +146,7 @@ const run = (sim: Sim, secs: number) => {
   low.x = nav.x + 1;
   low.z = nav.z + 1;
   ok(!sim.floorTurnIn(low) && !sim.floorTravel(low), 'without the Volcano Heart: nothing');
+  applyBalance({});
 }
 
 // ---- each floor's quest giver has his own floor's quests
