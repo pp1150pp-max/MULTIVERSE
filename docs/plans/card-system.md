@@ -427,7 +427,7 @@ PR 9 ควรเสร็จก่อนหรือพร้อม PR 5 เพ
 
 - เจ้าของเจนภาพครบ 50 ภาพ: กรอบ 3 ภาพ และภาพมอน 47 ภาพ (ชั้น 1 มี 26 ภาพ ชั้น 2 มี 21 ภาพ รวมนกแก้ว) prompt อยู่ที่ [art_templates/papercraft_cards/PROMPTS.md](../../art_templates/papercraft_cards/PROMPTS.md)
 - ตัดด้วย `node tools/cut_paper_cards.cjs [โฟลเดอร์ภาพดิบ]` ได้ไฟล์ WebP ขนาด 512×768 ที่ `public/assets/sprites/paper/cards/`
-  - **กรอบบาง (เจ้าของสั่ง 2026-11-25 แทนกรอบแบบมีช่อง):** กรอบเป็นแค่เส้นขอบรอบใบ มุมโค้ง กลางใบโปร่งใสทั้งหมด ภาพมอนเต็มใบอยู่ใต้กรอบ · ภาพดิบอยู่ที่ `raw/thin/` (prompt หัวข้อ 0 ใน PROMPTS.md) · กรอบแบบมีช่องเดิมถูกเขียนทับ (ดูได้ในประวัติ git) · เลิกใช้ `CARD_FRAME_WINDOWS` แล้ว
+  - **กรอบบาง (เจ้าของสั่ง 2026-11-25 แทนกรอบแบบมีช่อง):** กรอบเป็นแค่เส้นขอบรอบใบ มุมโค้ง กลางใบโปร่งใสทั้งหมด ภาพมอนเต็มใบอยู่ใต้กรอบ · ภาพดิบอยู่ที่ `raw/thin/` (prompt หัวข้อ 0 ใน PROMPTS.md) · ไฟล์ในเกมชื่อ `card_frame_thin_<ระดับ>.webp` (ชื่อใหม่กันเบราว์เซอร์/Cloudflare จำกรอบเก่า) · กรอบแบบมีช่องเดิมถูกเขียนทับ (ดูได้ในประวัติ git) · เลิกใช้ `CARD_FRAME_WINDOWS` แล้ว
 - `cardArt(id)` โหลดภาพมอน และ `cardFrame(rarity)` ให้กรอบ
   - ภาพ 16-bit เดิม (`public/assets/sprites/cards/card_art_*.webp`) เก็บไว้ ไม่ได้ลบ
 - **ตัวแสดงการ์ด `src/client/cardView.ts`** (`cardViewEl`, CSS `src/styles/cardView.css`):

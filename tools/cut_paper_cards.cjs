@@ -55,7 +55,7 @@ async function cutFrame(file, name) {
     }
     if (n > 2000) wins.push({ n, x: x0 / width, y: y0 / height, w: (x1 + 1 - x0) / width, h: (y1 + 1 - y0) / height });
   }
-  await sharp(data, { raw: { width, height, channels: 4 } }).resize(W, H).webp({ quality: 90, alphaQuality: 100 }).toFile(path.join(OUT, name.replace(/\.png$/, '.webp')));
+  await sharp(data, { raw: { width, height, channels: 4 } }).resize(W, H).webp({ quality: 90, alphaQuality: 100 }).toFile(path.join(OUT, name.replace('card_frame_', 'card_frame_thin_').replace(/\.png$/, '.webp')));
   const r4 = (v) => Math.round(v * 10000) / 10000;
   console.log(name, JSON.stringify(wins.sort((a, b) => a.y - b.y).map((w) => ({ x: r4(w.x), y: r4(w.y), w: r4(w.w), h: r4(w.h) }))));
 }
