@@ -54,7 +54,8 @@ import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type S
 import { boxNow, boxOdds, boxOrbs, rollBoxRow, type BoxRow } from '../mysteryBox';
 import { cardNum, cardDef } from '../cardTuning';
 import { drillCost, freeSocket, isDrilled, rollSockets, socketBlock, socketCards } from '../cardSockets';
-import { cardName, isCardId } from '../data/cards';
+import { cardAnnounced, rollCardDrops } from '../cardDrops';
+import { CARD_RARITY_NAME, cardName, isCardId, type CardId } from '../data/cards';
 
 /** Gear of this rarity that "sell all" may take: never potions or enhanced items. */
 /** Seconds of warning before a freshly summoned minion pounces. */
@@ -1480,6 +1481,11 @@ export class Sim {
     const gold = Math.round(randInt(r, d.gold[0], d.gold[1]) * (1 + 0.1 * (m.level - d.levels[0])) * DROP_GOLD_MULT * m.mult.gold * cardGold) * times;
     // A low gold multiplier (admin) can round a drop down to nothing: no empty pile then.
     if (gold > 0) this.spawnLoot(m, { type: 'gold', amount: gold }, owner, party);
+    // Cards (card plan PR 5, owner 2026-11-25): straight into the top damage dealer's bag, never on the floor.
+    // A boss's card drops only in its boss room; a farm monster's only if it drops items at all.
+    if (top && (m.isBoss ? !!this.zone.roomOf : d.itemChance > 0)) {
+      for (const id of rollCardDrops(d.id, m.isBoss, times, boost, r)) this.grantCard(top, id);
+    }
     if (m.isBoss) {
       const loot = d.bossLoot;
       // In a boss room the whole drop is collected first, then spread over the arena by its size.
@@ -1517,6 +1523,25 @@ export class Sim {
       if (key && chance(KEY_DROP_CHANCE)) this.spawnLoot(m, { type: 'stone', stone: key, count: 1 }, owner, party);
       if (box.enabled && chance(box.mobPct / 100)) this.spawnLoot(m, { type: 'stone', stone: 'mystery_box', count: 1 }, owner, party);
     }
+  }
+
+  /**
+   * A card dropped for `p`: into the bag, or (no room) by mail from the server (SimEvent cardMail). Announced to
+   * the whole server from the /admin rarity announceFrom (legendary in code) either way.
+   */
+  private grantCard(p: Player, id: CardId): void {
+    const name = cardName(id);
+    const rarity = cardDef(id)?.rarity ?? 'rare';
+    if (p.addStones(id, 1)) {
+      this.text(p.x, p.topY, p.z, `+${name}`, 'lvl', 1.2, p.id);
+      this.log(`ได้รับ ${name}!`, STONE_COLOR[id], p.id);
+      this.sfx('pickup_item', p.x, p.z, p.id);
+      this.afterChange(p);
+    } else {
+      this.events.push({ t: 'cardMail', to: p.id, card: id });
+      this.log(`ได้รับ ${name}! ช่องประเภทใช้งานเต็ม จึงส่งทางจดหมาย`, STONE_COLOR[id], p.id);
+    }
+    if (cardAnnounced(rarity)) this.events.push({ t: 'announce', text: `🃏 ${p.name} ได้รับ${name} (${CARD_RARITY_NAME[rarity]})!`, banner: '🃏 การ์ด' });
   }
 
   /** A boss room boss's drop while it is being rolled: placed together by flushSpreadLoot. */

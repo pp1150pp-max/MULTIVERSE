@@ -1,6 +1,7 @@
 // Types shared by the simulation (run by the server) and the browser that shows it.
 import type { SkillDef, SkillSlot } from '../data/classes';
 import type { Item, Vec2 } from '../types';
+import type { CardId } from '../data/cards';
 
 /** What a player wants to do this frame. Built from keyboard/mouse or by Auto Play. */
 export interface Intent {
@@ -164,6 +165,8 @@ export type SimEvent =
   /** The player's stash changed (save it, and refresh the stash window). */
   | { t: 'stash'; to: number }
   /** A system line for every player on the server, in every zone (a +10 or higher enhancement). */
+  /** A card for a player whose bag had no room (Sim.grantCard): the server mails it. */
+  | { t: 'cardMail'; to: number; card: CardId }
   | { t: 'announce'; text: string; /** A banner across everyone's screen (with its heading) instead of a chat line. */ banner?: string }
   /** The server switched this player's Auto Play off. */
   | { t: 'autoOff'; to: number; msg: string }
