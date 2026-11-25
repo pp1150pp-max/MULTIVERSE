@@ -18,6 +18,7 @@ import { setBonusStats } from '../data/sets';
 import { anyStackValue, potionHeal, potionPrice, POTION_SIZES, POTION_STACK, stackLimit } from '../data/potions';
 import { BOSS_QUEST_KEY, BUFF_MAX, QUEST_KILLS, stoneStackMax } from '../data/stones';
 import { CARD_IDS } from '../data/cards';
+import { cardFxTotal, noCardFx, type CardFxTotals } from '../cardSockets';
 import { cleanGearDone, cleanGearQuests } from '../gearQuests';
 import type { TutorialData } from '../tutorial';
 import {
@@ -532,6 +533,11 @@ export class Player extends Unit {
   /** Share of damage dealt that heals the player, until sim time `lifestealUntil` (sword Q). */
   lifesteal = 0;
   lifestealUntil = -1;
+  /**
+   * The effects of the cards on worn gear, each capped (cardSockets.ts cardFxTotal), worked out in recompute. Percents.
+   * The browser works out its own player's too (same gear, same card tuning), so cooldowns match the server.
+   */
+  cardFx: CardFxTotals = noCardFx();
   /** Timed stat buffs from skills (Gunslinger Sniper Focus, Quick Reload, Overdrive...), added after the class multipliers. Never saved; death ends them. */
   statBuffs: { id: string; until: number; mods: Partial<Stats> }[] = [];
   /** Gunslinger Rapid Fire line: what the basic shot does while its buffs run. Never saved. */
@@ -774,8 +780,20 @@ export class Player extends Unit {
     }
     this.aura = auraTier(best);
     this.orbs = orbCodes(this.equipment);
+    // Cards on worn gear (cardSockets.ts), each effect capped on the whole character. Their HP/MP/ATK/DEF % multiply
+    // class + level + gear + enhance before the class multipliers (owner 2026-11-26, card plan 5.1).
+    const fx = cardFxTotal(Object.values(this.equipment));
+    this.cardFx = fx;
+    s.maxHp *= 1 + fx.hpPct / 100;
+    s.maxMp *= 1 + fx.mpPct / 100;
+    s.atk *= 1 + fx.atkPct / 100;
+    s.def *= 1 + fx.defPct / 100;
     // Class multipliers, then the regen cuts (so players lean on potions), gear included.
     finishStats(s, this.cls.id);
+    // The cards' cooldown cut and armor pierce add to the item mods of the same name (owner 2026-11-26); the totals keep
+    // their own caps (cdrCap in skillCooldown, 100% in Sim.hitMonster).
+    s.cdr = (s.cdr ?? 0) + fx.cdr;
+    s.armorPen = (s.armorPen ?? 0) + fx.pierce;
     // Item-set bonuses (data/sets.ts): exactly the numbers set in /admin, after the class multipliers.
     addInto(s, setBonusStats(this.equipment, currentBalance().sets));
     // The worn passive and skill buffs, flat in Stats units ("+40% attack speed" is +40 atkSpeed).
@@ -1202,7 +1220,8 @@ export class Player extends Unit {
     }
     sim.inventoryChanged(this);
     sim.sfx('drink', this.x, this.z, this.id);
-    const amount = potionHeal(kind, size, this.cls.id);
+    // The cards' "ยาฟื้นเพิ่ม %" on top of the class's potion bonus (card plan 5.1).
+    const amount = Math.round(potionHeal(kind, size, this.cls.id) * (1 + this.cardFx.potion / 100));
     this.potHeals.push({ kind, perSec: amount / POTION_TIME, left: POTION_TIME });
     if (kind === 'hp') {
       sim.text(this.x, this.topY, this.z, `+${amount}`, 'heal');

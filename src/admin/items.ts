@@ -11,7 +11,9 @@ import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { POTION_SIZE_LABEL, potionName, potionSellPrice, stackLimit } from '../shared/data/potions';
 import { STONE_COLOR, STONE_DESC, STONE_NAME, stoneSellPrice } from '../shared/data/stones';
 import { drawIcon } from '../client/placeholder';
-import { cardArt } from '../shared/data/cards';
+import { cardArt, CARD_GROUP_NAME, CARD_IDS, cardName } from '../shared/data/cards';
+import { cardDef } from '../shared/cardTuning';
+import { MAX_SOCKETS } from '../shared/cardSockets';
 import { imgUrl } from '../client/img';
 import {
   EQUIP_SLOTS, EQUIP_SLOT_LABEL, isCardStone, isPotion, isStack, isStone, RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, SLOTS, STAT_KEYS, STAT_LABEL, wornPlaces,
@@ -239,6 +241,17 @@ function gearEditor(ctx: ItemCtx, owner: ItemOwner, key: EquipSlot | number, it:
   const plus = h('select', {}, ...Array.from({ length: m.maxPlus + 1 }, (_, i) => h('option', { value: String(i), selected: i === draft.plus }, `+${i}`)));
   const pity = num(draft.pity, 0, ADMIN_PITY_MAX);
   const rowsBox = h('div', { class: 'example' });
+  // Card sockets (card plan PR 2–3): -1 = not drilled. The server checks each card fits the item's slot.
+  const sockSel = h('select', {}, ...[-1, ...Array.from({ length: MAX_SOCKETS + 1 }, (_, i) => i)].map((n) =>
+    h('option', { value: String(n), selected: n === (it.sockets ?? -1) }, n < 0 ? 'ยังไม่เจาะ' : `${n} ช่อง`)));
+  const cardSels = Array.from({ length: MAX_SOCKETS }, (_, i) => {
+    const s = h('select', {}, h('option', { value: '' }, '(ว่าง)'),
+      ...CARD_IDS.map((c) => h('option', { value: c, selected: it.cards?.[i] === c }, `${cardName(c)} (${CARD_GROUP_NAME[cardDef(c)?.group ?? 'weapon'].replace(/\s*\(.*\)$/, '')})`)));
+    return s;
+  });
+  const showSocks = () => cardSels.forEach((s, i) => (s.style.display = i < Number(sockSel.value) ? '' : 'none'));
+  sockSel.onchange = showSocks;
+  showSocks();
 
   const fillBases = () => {
     base.replaceChildren();
@@ -342,6 +355,7 @@ function gearEditor(ctx: ItemCtx, owner: ItemOwner, key: EquipSlot | number, it:
   save.onclick = () => void send(ctx, owner, key, it, {
     op: 'save', baseId: draft.baseId, rarity: draft.rarity, level: draft.level, classId: draft.classId, name: draft.name,
     plus: draft.plus, pity: draft.pity, lines: draft.rows,
+    sockets: Number(sockSel.value), cards: cardSels.slice(0, Math.max(0, Number(sockSel.value))).map((s) => s.value || null),
   }, msg, save);
   const reqNote = worn && owner.place !== 'stash'
     ? h('div', { class: 'muted' }, `สวมอยู่ช่อง${EQUIP_SLOT_LABEL[worn]}: ต้องเป็นของช่องนี้ ของสาย ${CLASSES[owner.cls].nameTh} และไม่เกิน Lv.${owner.level}`)
@@ -351,6 +365,7 @@ function gearEditor(ctx: ItemCtx, owner: ItemOwner, key: EquipSlot | number, it:
     h('div', { class: 'row' }, h('label', {}, 'อาชีพ', cls), h('label', { style: 'flex:1' }, 'ชนิด', base)),
     h('div', { class: 'row' }, h('label', {}, 'ความหายาก', rarity), h('label', {}, 'เลเวล', level), h('label', { style: 'flex:1' }, 'ชื่อ', name)),
     h('div', { class: 'row' }, h('label', {}, 'ตีบวก', plus), h('label', {}, `pity (0–${ADMIN_PITY_MAX})`, pity)),
+    h('div', { class: 'row' }, h('label', {}, 'รูการ์ด', sockSel), ...cardSels.map((s, i) => h('label', {}, `การ์ดช่อง ${i + 1}`, s))),
     rowsBox,
     h('div', { class: 'row' }, save, deleteButton(ctx, owner, key, it, msg)),
     msg);

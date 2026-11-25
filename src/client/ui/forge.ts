@@ -10,13 +10,19 @@ import { currentBalance } from '../../shared/balance';
 import { isItem, EQUIP_SLOTS, RARITY_COLOR, SLOT_LABEL, STAT_LABEL, type BagEntry, type Item, type StatLine, type StoneKind, type StatKey } from '../../shared/types';
 import { COIN_ICON, FORGE_ICON, itemIcon, stoneIcon } from '../icons';
 import { $, fmtNum, lineHtml } from './hudShared';
+import { drillCost, drillOdds, isDrilled, socketCount } from '../../shared/cardSockets';
+import { socketTipHtml } from './cardPopup';
 
+
+/** The blacksmith's menus: enhance, the two rerolls and drilling (card plan PR 2). */
+type ForgeMode = 'enhance' | RerollKind | 'drill';
 
 /** The blacksmith menu's one-line description of each system (left column, under the menu). */
-const FORGE_DESC: Record<'enhance' | RerollKind, string> = {
+const FORGE_DESC: Record<ForgeMode, string> = {
   enhance: 'เพิ่มระดับ +N ทุกค่าบนชิ้นนั้นแรงขึ้นเป็น % · ยิ่งบวกสูง ยิ่งเสี่ยง',
   values: 'สุ่มค่าตัวเลขใหม่ทุกบรรทัด tier เท่าเดิม',
   stat: 'สุ่มสเตตัสเสริม 1 บรรทัด เป็นชนิดใหม่ พร้อม tier และค่าใหม่',
+  drill: 'เจาะรูสำหรับเสียบการ์ด ได้ 0–2 ช่อง · เจาะได้ครั้งเดียวต่อชิ้น',
 };
 
 /** A running Auto enhance: the item, the level to stop at, and whether to use protection stones. */
@@ -45,7 +51,7 @@ export class ForgeWindow {
   /** Use a protection stone on attempts that can drop the level (the forge's tick box; off until ticked). */
   private forgeProtect = false;
   /** The blacksmith's menu: enhance, or one of the rerolls. */
-  private forgeMode: 'enhance' | RerollKind = 'enhance';
+  private forgeMode: ForgeMode = 'enhance';
   /**
    * Auto enhance while it runs (owner 2026-11-18): the item, the level to stop at, and whether to use protection
    * stones (taken from the tick box when it started). Browser side only: it sends the same enhance action as a click.
@@ -59,6 +65,7 @@ export class ForgeWindow {
     $('forge-go').onclick = () => {
       if (this.forgeAuto) return;
       if (this.forgeMode === 'enhance') void this.enhance();
+      else if (this.forgeMode === 'drill') this.askDrill();
       else this.askReroll(this.forgeMode);
     };
     $('forge-auto-btn').onclick = () => (this.forgeAuto ? this.stopForgeAuto('กดหยุด') : this.startForgeAuto());
@@ -168,7 +175,7 @@ export class ForgeWindow {
     for (const b of $('forge-menu').querySelectorAll<HTMLElement>('[data-mode]')) b.classList.toggle('active', b.dataset.mode === mode);
     $('forge-desc').textContent = FORGE_DESC[mode];
     // Odds table: enhance rates, or what "สุ่มสเตตัส" can give (for the item placed, if any).
-    const hasRates = mode === 'enhance' || mode === 'stat';
+    const hasRates = mode === 'enhance' || mode === 'stat' || mode === 'drill';
     $('forge-rates-btn').classList.toggle('hidden', !hasRates);
     if (!hasRates) $('forge-rates').classList.add('hidden');
 
@@ -176,13 +183,13 @@ export class ForgeWindow {
     if (!item) this.forgeSel = null; // sold, dropped or stored since
     if (hasRates) {
       const btn = mode === 'enhance' ? 'ตารางโอกาสสำเร็จ' : 'ตารางโอกาส';
-      const title = mode === 'enhance' ? 'ตารางโอกาสสำเร็จ / โบนัส' : 'ตารางโอกาส — สุ่มสเตตัส';
-      const table = mode === 'enhance' ? this.rateTable() : this.statOddsTable(item);
+      const title = mode === 'enhance' ? 'ตารางโอกาสสำเร็จ / โบนัส' : mode === 'drill' ? 'ตารางโอกาส — เจาะรู' : 'ตารางโอกาส — สุ่มสเตตัส';
+      const table = mode === 'enhance' ? this.rateTable() : mode === 'drill' ? this.drillOddsTable() : this.statOddsTable(item);
       if ($('forge-rates-btn').textContent !== btn) $('forge-rates-btn').textContent = btn;
       if ($('forge-rates-title').textContent !== title) $('forge-rates-title').textContent = title;
       if ($('forge-table').innerHTML !== table) $('forge-table').innerHTML = table;
     }
-    const stones: StoneKind[] = mode === 'enhance' ? ['enhance', 'protect'] : [REROLL_STONE[mode]];
+    const stones: StoneKind[] = mode === 'enhance' ? ['enhance', 'protect'] : mode === 'drill' ? ['drill'] : [REROLL_STONE[mode]];
     $('forge-foot').innerHTML = `<span class="ff-gold">${COIN_ICON} ${p.gold.toLocaleString()} G</span>` +
       stones.map((s) => `<span class="ff-stone" title="${STONE_NAME[s]}">${stoneIcon(s)} ${STONE_NAME[s]} ${p.stoneCount(s)}</span>`).join('');
 
@@ -192,7 +199,7 @@ export class ForgeWindow {
     slot.className = item ? 'filled' : '';
     if (item) slot.style.setProperty('--rc', RARITY_COLOR[item.rarity]);
     else slot.style.removeProperty('--rc');
-    const label = `${FORGE_ICON} ${mode === 'enhance' ? 'ตีบวก' : REROLL_NAME[mode]}`;
+    const label = `${FORGE_ICON} ${mode === 'enhance' ? 'ตีบวก' : mode === 'drill' ? 'เจาะรู' : REROLL_NAME[mode]}`;
     if (!item) {
       slot.innerHTML = '';
       $('forge-drop-hint').innerHTML = 'ลากอุปกรณ์มาวางที่นี่<small>หรือคลิกอุปกรณ์ในกระเป๋า / ที่สวมอยู่</small>';
@@ -211,8 +218,9 @@ export class ForgeWindow {
       `<div class="fi-name" style="color:${RARITY_COLOR[item.rarity]}">${itemName(item)}</div>` +
       `<div class="fi-meta">${SLOT_LABEL[item.slot]} · ${worn ? 'สวมใส่อยู่' : 'ในกระเป๋า'} · iLv.${item.level}` +
       ` · ${cur ? `+${cur} (โบนัส +${bonusPct(cur)}%)` : 'ยังไม่ตีบวก'}</div>` +
-      `<div class="fi-lines">${this.forgeLines(item, mode)}</div>`;
-    const why = mode === 'enhance' ? this.renderEnhanceCost(item) : this.renderRerollCost(item, mode);
+      `<div class="fi-lines">${this.forgeLines(item, mode === 'drill' ? 'enhance' : mode)}</div>` +
+      (mode === 'drill' ? `<div class="fi-sock">${socketTipHtml(item)}</div>` : '');
+    const why = mode === 'enhance' ? this.renderEnhanceCost(item) : mode === 'drill' ? this.renderDrillCost(item) : this.renderRerollCost(item, mode);
     go.disabled = !!why || !!this.forgeAuto;
     go.innerHTML = why || label;
     this.renderForgeAuto(item, why);
@@ -438,6 +446,56 @@ export class ForgeWindow {
     this.forgeResult('ok', `${REROLL_NAME[kind]}แล้ว`);
     this.host.markInventory();
     this.renderForge();
+  }
+
+  /** Drilling: the stone, the cost, or why it can't be done ('' = it can). */
+  private renderDrillCost(item: Item): string {
+    const p = this.g.player;
+    if (isDrilled(item)) {
+      $('forge-cost').innerHTML = `<div class="fc-max">เจาะรูแล้ว (${socketCount(item) ? `${socketCount(item)} ช่อง` : 'ไม่มีช่อง'}) · เจาะซ้ำไม่ได้</div>`;
+      return 'เจาะแล้ว';
+    }
+    const cost = drillCost(item);
+    const have = p.stoneCount('drill');
+    const [o0, o1, o2] = drillOdds();
+    $('forge-cost').innerHTML =
+      `<div class="safe">ได้ 0 ช่อง ${o0}% · 1 ช่อง ${o1}% · 2 ช่อง ${o2}%</div>` +
+      `<div class="warn">⚠ เจาะได้ครั้งเดียวต่อชิ้น ได้ 0 ช่องก็เจาะใหม่ไม่ได้</div>` +
+      `<div class="fd-row"><span>${stoneIcon('drill')} ${STONE_NAME.drill}</span><b class="${have < 1 ? 'bad' : ''}">ใช้ 1 / มี ${have}</b></div>` +
+      `<div class="fd-row"><span>ค่าเจาะรู</span><b class="${p.gold < cost ? 'bad' : ''}">${cost.toLocaleString()} G</b></div>`;
+    return have < 1 ? `ไม่มี${STONE_NAME.drill}` : p.gold < cost ? 'ทองไม่พอ' : '';
+  }
+
+  /** Asks first (drilling happens once per item), then drills the selected item. */
+  private askDrill(): void {
+    const item = this.forgeItem();
+    if (!item || isDrilled(item) || this.enhancing || this.forgeCooling()) return;
+    this.host.confirm(
+      `เจาะรู ${itemName(item)}?<br><small>ค่าเจาะ ${drillCost(item).toLocaleString()} G + ${STONE_NAME.drill} 1 ก้อน · เจาะได้ครั้งเดียวต่อชิ้น ได้ 0 ช่องก็เจาะใหม่ไม่ได้</small>`,
+      'เจาะรู',
+      () => void this.drill(item),
+    );
+  }
+
+  private async drill(item: Item): Promise<void> {
+    if (this.enhancing || this.forgeCooling()) return;
+    this.enhancing = true;
+    this.startForgeCd();
+    const [out] = await Promise.all([this.g.backend.drill(item.uid), this.swingHammer(), this.forgeCdDone()])
+      .finally(() => (this.enhancing = false));
+    if (!out) this.forgeResult('fail', 'เจาะไม่สำเร็จ');
+    else if (socketCount(out) > 0) this.forgeResult('ok', `เจาะสำเร็จ! ได้ ${socketCount(out)} ช่อง`);
+    else this.forgeResult('fail', 'เจาะแล้ว… ไม่ได้ช่อง');
+    this.host.markInventory();
+    this.renderForge();
+  }
+
+  /** "เจาะรู": the chance of 0 / 1 / 2 sockets (the /admin card tab's odds). */
+  private drillOddsTable(): string {
+    const odds = drillOdds();
+    return '<table><tr><th>ผล</th><th>โอกาส</th></tr>' +
+      odds.map((o, n) => `<tr><td>${n ? `${n} ช่อง` : 'ไม่ได้ช่อง'}</td><td>${o}%</td></tr>`).join('') +
+      `</table><div class="hint">เจาะได้ครั้งเดียวต่อชิ้น · ใช้${STONE_NAME.drill} 1 ก้อน + ทอง · ช่องไม่หายตอนตีบวกหรือสุ่มค่า · เสียบการ์ดได้โดยคลิกการ์ดในกระเป๋า</div>`;
   }
 
   /** True while the blacksmith cooldown (forgeCd()) is running. */

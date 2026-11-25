@@ -3,6 +3,7 @@ import {
 } from '../types';
 import { mulberry32, pick, type Rng } from '../rng';
 import type { SetId } from './sets';
+import { cleanSockets } from '../cardSockets';
 
 interface BaseItem {
   id: string;
@@ -731,6 +732,8 @@ function hash(s: string): number {
 export function upgradeItem<T>(item: T): T {
   const it = item as unknown as Item;
   if (!it || typeof it !== 'object' || !('baseId' in it)) return item;
+  // Card sockets (cardSockets.ts): a bad count or unknown card ids from an old or edited save are cleaned every load.
+  cleanSockets(it);
   if (it.tierV === TIER_VERSION && (it.tierK ?? '') === itemTierKey(it) && (it.mulK ?? '') === MUL_KEY) return item;
   const base = BASES.find((b) => b.id === it.baseId);
   if (!base) return item;
