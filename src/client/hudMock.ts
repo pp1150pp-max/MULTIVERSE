@@ -69,7 +69,8 @@ export function runHudMock(): void {
   const online = $('hud-online');
   online.textContent = 'ออนไลน์ 12 คน';
   online.classList.remove('hidden');
-  $('hud-buffs').innerHTML = BUFF_SCROLLS.map((k) => `<div class="buff">${stoneIcon(k)}<span>${BUFF_LABEL[k]} 0:24:10</span></div>`).join('');
+  $('hud-buffs').innerHTML = BUFF_SCROLLS.map((k) => `<div class="buff">${stoneIcon(k)}<span>${
+    currentBalance().buffTotal ? `${k === 'exp_scroll' ? 'EXP' : 'ดรอป'} +120%` : `${BUFF_LABEL[k]} 0:24:10`}</span></div>`).join('');
 
   // A party member (PartyUI.renderHud) and a quest (QuestTracker.update), with the same classes.
   const party = document.createElement('div');

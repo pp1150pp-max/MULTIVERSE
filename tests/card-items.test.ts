@@ -31,7 +31,7 @@ applyCardTuning(checkCardTuning({ nums: { sell_rare: 1234 } }, true).tuning!);
 ok(stoneSellPrice(WOLF) === 1234, 'the sell price follows the card tuning from /admin');
 applyCardTuning({});
 ok(isPriorityLoot({ type: 'stone', stone: WOLF, count: 1 }), 'Auto picks cards up first (isPriorityLoot)');
-ok(marketKind({ stone: WOLF, count: 1 }) === 'stone', 'cards list on the market in the stone category for now');
+ok(marketKind({ stone: WOLF, count: 1 }) === 'card', 'cards list on the market in their own "การ์ด" category');
 
 // ---------------------------------------------------------- stacking and sorting in the bag
 const sim = new Sim(Object.values(ZONES)[0]);

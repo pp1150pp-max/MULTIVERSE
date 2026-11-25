@@ -116,8 +116,8 @@
 #cash-win .cash-time { color: #ffb08a; }
 #cash-win .cash-price { display: flex; align-items: center; justify-content: center; gap: 2px; color: #2a1a08; font-weight: 700; }
 #cash-win .cash-card .cash-price { position: absolute; left: 13%; right: 13%; top: 86%; height: 8.6%; font-size: 13px; }
-/* "🎁 เปิดได้จากกล่องปริศนา" is too long for the card's price plate: two small lines inside it. */
-#cash-win .cash-card .cash-price.box { font-size: 10px; line-height: 1.05; text-align: center; white-space: normal; padding: 0 2px; }
+/* "🎁 เปิดได้จากกล่องปริศนา" is too long for the card's price plate: a taller plate with two lines (owner 2026-11-25). */
+#cash-win .cash-card .cash-price.box { top: 83%; height: 13.5%; font-size: 10.5px; line-height: 1.05; text-align: center; white-space: normal; padding: 0 2px; }
 #cash-win .cash-price s { color: #5a3c14; font-size: 11px; font-weight: 400; margin-right: 3px; }
 #cash-win .cash-ribbon {
   position: absolute; left: -5px; top: -6px; width: 25%; aspect-ratio: 96 / 103; z-index: 1; pointer-events: none;
@@ -188,6 +188,7 @@
   #cash-win .cash-side { flex-direction: row; flex-wrap: wrap; width: auto; }
   #cash-win .cash-side button { padding: 0 10px; }
   #cash-win .cash-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+  #cash-win .cash-card .cash-price.box { top: 82%; height: 15.5%; font-size: 10px; }
   #cash-win .cash-hero { height: 84px; }
 }
 #mount-btn { position: absolute; left: 50%; bottom: 128px; transform: translateX(-50%); padding: 4px 12px; font-size: 13px; }
