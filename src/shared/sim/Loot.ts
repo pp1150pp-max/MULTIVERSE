@@ -10,6 +10,26 @@ export type LootKind =
   /** Blacksmith stones (boss drops, or a stack a player threw away). */
   | { type: 'stone'; stone: StoneKind; count: number };
 
+/**
+ * Drops Auto fetches first, even mid-fight and whatever the loot order (owner 2026-11-25): anything the loot filter has no
+ * setting for (stones, the mystery box, keys, scrolls, and any new kind such as cards), but not gold (it drops from nearly every
+ * monster). A new loot kind fails the typecheck here until it is sorted into one side (AutoConfig.priorityLoot switches it off).
+ */
+export function isPriorityLoot(kind: LootKind): boolean {
+  switch (kind.type) {
+    case 'gold':
+    case 'item':
+    case 'potion':
+      return false;
+    case 'stone':
+      return true;
+    default: {
+      const unsorted: never = kind;
+      return !!unsorted;
+    }
+  }
+}
+
 /** Seconds of the pop-out arc when loot drops; it can't be picked up before it lands. */
 export const LOOT_POP_TIME = 0.35;
 /** Items the player throws on the ground vanish after this many seconds. */

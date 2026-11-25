@@ -1,7 +1,7 @@
 import type { Intent } from './types';
 import type { Monster } from './Monster';
 import { AUTO_PX_PER_UNIT, type AutoSkill, type Player } from './Player';
-import type { Loot } from './Loot';
+import { isPriorityLoot, type Loot } from './Loot';
 import { MONSTERS } from '../data/monsters';
 import { inBossArena, inSafeArea, lavaAt, whirlpoolAt, type ZoneDef } from '../data/zones';
 import { currentBalance } from '../balance';
@@ -201,16 +201,31 @@ export class AutoPlay {
       return null;
     }
     const order = set.lootOrder === 'loot' && !cfg.allow.lootFirst ? 'balanced' : set.lootOrder;
+    // Stones, boxes, cards (Loot.isPriorityLoot) come first, mid-fight too, whatever the order (owner 2026-11-25).
+    if (cfg.priorityLoot) {
+      const first = this.nearestLoot(g, cfg, cfg.priorityDist > 0 ? cfg.priorityDist : Infinity, true);
+      if (first) return first;
+    }
     // Fight first: nothing is picked up while anything attacks.
     if (order === 'fight' && attackers > 0) {
       this.chase = null;
       return null;
     }
-    const othersLoot = set.othersLoot && cfg.allow.othersLoot;
     const dist = (a: { x: number; z: number }) => Math.hypot(a.x - p.x, a.z - p.z);
     let maxD = Infinity;
     // Balanced (the old way): drops close by even mid-fight; anything in the circle once nothing is near.
     if (order === 'balanced' && g.monsters.some((m) => m.isHostile && dist(m) < cfg.threatDist)) maxD = cfg.nearDist;
+    return this.nearestLoot(g, cfg, maxD, false);
+  }
+
+  /**
+   * The nearest drop within `maxD` that Auto may take (in its circle, filter, bag room, own-loot option), following the
+   * give-up rule; `priority` = only Loot.isPriorityLoot kinds. Null when there is none.
+   */
+  private nearestLoot(g: AutoWorld, cfg: AutoConfig, maxD: number, priority: boolean): Loot | null {
+    const p = g.player;
+    const othersLoot = p.autoSettings.othersLoot && cfg.allow.othersLoot;
+    const dist = (a: { x: number; z: number }) => Math.hypot(a.x - p.x, a.z - p.z);
     const R = this.radius(p);
     if (this.gaveUp.size > 50) {
       const live = new Set(g.loots.map((l) => l.id));
@@ -220,6 +235,7 @@ export class AutoPlay {
       let best: Loot | null = null;
       let bd = maxD;
       for (const l of g.loots) {
+        if (priority && !isPriorityLoot(l.kind)) continue;
         if (this.gaveUp.has(l.id) || this.fromAnchor(l) > R + 0.5 || inBossArena(g.zone, l.x, l.z) || lavaAt(g.zone, l.x, l.z)) continue;
         // Loot that doesn't fit in the bag (or the loot filter skips) is ignored, so a full bag just keeps fighting.
         if (l.dead || l.dropped || !l.canTake(p, g.time) || !p.wantsLoot(l.kind, false) || !p.canFit(l.kind)) continue;
@@ -232,7 +248,8 @@ export class AutoPlay {
         }
       }
       if (!best) {
-        this.chase = null;
+        // An empty priority scan leaves the chase alone: the ordinary scan right after decides.
+        if (!priority) this.chase = null;
         return null;
       }
       if (!this.chase || this.chase.id !== best.id) this.chase = { id: best.id, bestD: bd, since: g.time };
