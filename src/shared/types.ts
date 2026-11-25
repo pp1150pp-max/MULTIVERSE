@@ -136,15 +136,15 @@ export const BLACKSMITH_STONES: BlacksmithStone[] = ['protect', 'enhance', 'rero
  * Boss keys (Artifacts): one per boss, put into its summoner to open the boss room. They stack, sell,
  * trade and go on the market exactly like stones, so they share the stone stack (see BOSS_KEY in data/stones).
  */
-export type BossKey = 'key_bear' | 'key_witch' | 'key_yeti' | 'key_heart' | 'key_crab' | 'key_captain';
-export const BOSS_KEYS: BossKey[] = ['key_bear', 'key_witch', 'key_yeti', 'key_heart', 'key_crab', 'key_captain'];
+export type BossKey = 'key_bear' | 'key_witch' | 'key_yeti' | 'key_heart' | 'key_crab' | 'key_captain' | 'key_ghost' | 'key_kraken';
+export const BOSS_KEYS: BossKey[] = ['key_bear', 'key_witch', 'key_yeti', 'key_heart', 'key_crab', 'key_captain', 'key_ghost', 'key_kraken'];
 /**
  * Quest keys from The Seeker: one per boss, bound to the character. They open the boss's room at ×1
  * without being used up, and vanish once that boss is killed. They can't leave the bag (no selling,
  * dropping, stash, trade or market), only move around in it. See isBound.
  */
-export type QuestKey = 'qkey_bear' | 'qkey_witch' | 'qkey_yeti' | 'qkey_heart' | 'qkey_crab' | 'qkey_captain';
-export const QUEST_KEYS: QuestKey[] = ['qkey_bear', 'qkey_witch', 'qkey_yeti', 'qkey_heart', 'qkey_crab', 'qkey_captain'];
+export type QuestKey = 'qkey_bear' | 'qkey_witch' | 'qkey_yeti' | 'qkey_heart' | 'qkey_crab' | 'qkey_captain' | 'qkey_ghost' | 'qkey_kraken';
+export const QUEST_KEYS: QuestKey[] = ['qkey_bear', 'qkey_witch', 'qkey_yeti', 'qkey_heart', 'qkey_crab', 'qkey_captain', 'qkey_ghost', 'qkey_kraken'];
 /** Phoenix feathers: sold by the merchant, used to get up again where you fell in a boss room. Not on the market. */
 export type ShopStone = 'phoenix';
 /**

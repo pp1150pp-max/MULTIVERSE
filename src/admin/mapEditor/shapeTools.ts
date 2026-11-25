@@ -232,7 +232,7 @@ export const pathTool = (): Tool => polylineTool(PATH);
 
 // ---------------------------------------------------------------- lakes
 
-const LAKE_KIND: [string, string][] = [['ice', 'ทะเลสาบน้ำแข็ง'], ['lava', 'สระลาวา']];
+const LAKE_KIND: [string, string][] = [['ice', 'ทะเลสาบน้ำแข็ง'], ['lava', 'สระลาวา'], ['whirlpool', 'น้ำวน (เดินเข้าไม่ได้ ใช้แค่ rx)']];
 
 export function lakeTool(): Tool {
   let drag: { i: number; mode: 'move' | 'rx' | 'rz'; start: [number, number]; before: MapPatch; moved: boolean } | null = null;
@@ -318,8 +318,8 @@ export function lakeTool(): Tool {
       const adds = el('div', { class: 'row' }, btn('＋ น้ำแข็ง', () => add(ed, 'ice')), btn('＋ ลาวา', () => add(ed, 'lava')));
       if (!w) { box.append(note('ยังไม่ได้เลือก คลิกวงรีบนแมพ หรือเพิ่มใหม่'), adds); return box; }
       box.append(
-        el('div', { class: 'me-title' }, `${w.kind === 'ice' ? 'ทะเลสาบน้ำแข็ง' : 'สระลาวา'} ที่ ${i + 1}`),
-        selectField('ชนิด', w.kind, LAKE_KIND, (v) => setLake(ed, i, 'แก้ชนิดทะเลสาบ', (q) => ({ ...q, kind: v === 'lava' ? 'lava' : 'ice' }))),
+        el('div', { class: 'me-title' }, `${w.kind === 'ice' ? 'ทะเลสาบน้ำแข็ง' : w.kind === 'whirlpool' ? 'น้ำวน (เดินเข้าไม่ได้)' : 'สระลาวา'} ที่ ${i + 1}`),
+        selectField('ชนิด', w.kind, LAKE_KIND, (v) => setLake(ed, i, 'แก้ชนิดทะเลสาบ', (q) => ({ ...q, kind: v === 'lava' ? 'lava' : v === 'whirlpool' ? 'whirlpool' : 'ice' }))),
         el('div', { class: 'me-grid2' },
           numField('x', w.x, (n) => setLake(ed, i, 'ย้ายทะเลสาบ', (q) => ({ ...q, x: round3(n) })), 0.5),
           numField('z', w.z, (n) => setLake(ed, i, 'ย้ายทะเลสาบ', (q) => ({ ...q, z: round3(n) })), 0.5),

@@ -6,7 +6,7 @@ import type { Editor, Layer } from './editor';
 import { decorLayer, drawRealGround } from './groundArt';
 import { HARBOR_DECKS, HARBOR_ID } from '../../shared/data/harbor';
 
-const GROUND: Record<MapTheme, string> = { forest: '#4f7a3f', marsh: '#566a43', snow: '#cfdbe3', volcano: '#4b3a34', beach: '#d9c79a', cove: '#9a8a8e' };
+const GROUND: Record<MapTheme, string> = { forest: '#4f7a3f', marsh: '#566a43', snow: '#cfdbe3', volcano: '#4b3a34', beach: '#d9c79a', cove: '#9a8a8e', grave: '#5e6a72', kraken: '#4a5462' };
 const PATH_COLOR = 'rgba(196,166,112,0.85)';
 
 /** Floor colour by theme (the hub's four quarters in their own colours), the walkable frame, paths and lakes. */
@@ -77,7 +77,7 @@ function plainGround(ed: Editor, g: CanvasRenderingContext2D): void {
     for (const w of ed.map.water) {
       const pts: [number, number][] = Array.from({ length: 36 }, (_, i) => [w.x + Math.cos((i / 36) * Math.PI * 2) * w.rx, w.z + Math.sin((i / 36) * Math.PI * 2) * w.rz]);
       ed.path(g, pts);
-      g.fillStyle = w.kind === 'ice' ? 'rgba(150,200,235,0.8)' : 'rgba(230,90,30,0.85)';
+      g.fillStyle = w.kind === 'ice' ? 'rgba(150,200,235,0.8)' : w.kind === 'whirlpool' ? 'rgba(30,110,140,0.85)' : 'rgba(230,90,30,0.85)';
       g.fill();
     }
 }

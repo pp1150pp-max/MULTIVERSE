@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { WhirlpoolViews } from './whirlpool';
 import { currentBalance } from '../shared/balance';
 import { clearingRadius, floorOf, lairOf, themeAt, zoneById, ZONES } from '../shared/data/zones';
 import { HUB_PLAZA_RADIUS, QUADRANT_JITTER } from '../shared/sim/terrain';
@@ -26,6 +27,8 @@ const ISLAND_ART: Record<ZoneTheme, { cliff: string; slabs: string }> = {
   volcano: { cliff: 'island_cliff_volcano', slabs: 'island_slabs_volcano' },
   beach: { cliff: 'island_cliff_beach', slabs: 'island_slabs_beach' },
   cove: { cliff: 'island_cliff_cove', slabs: 'island_slabs_cove' },
+  grave: { cliff: 'island_cliff_graveyard', slabs: 'island_slabs_graveyard' },
+  kraken: { cliff: 'island_cliff_maelstrom', slabs: 'island_slabs_maelstrom' },
 };
 /** Light snowfall: how many flakes hang around the player, inside a box this many units across. */
 const SNOW_FLAKES = 240;
@@ -435,6 +438,60 @@ const PALETTES: Record<ZoneTheme, GroundPalette> = {
     fog: 0,
     portalGlow: '#6ae8ff',
   },
+  // Wet slate flagstones under the moon, rotten decks for the roads, dark misty water and teal ghost light (FLOOR2_M3_GRAVEYARD.md).
+  grave: {
+    tiles: THEME_TILES.grave,
+    background: '#1e2a3a',
+    mapEdge: '#5a6a78',
+    mapRoad: ['rgba(40, 34, 30, 0.7)', 'rgba(120, 110, 96, 0.5)'],
+    base: '#5e6a72',
+    patchDark: ['#56626a', '#525e66', '#5a666e'],
+    patchLight: ['#68747c', '#6c7880', '#66727a'],
+    specks: ['#4a565e', '#7a868c', '#46525a', '#808c90', '#56625a', '#6a7a5a'],
+    tuft: ['#6a7240', '#8a9050'],
+    clearing: ['#626e74', '#66727a', '#5e6a70'],
+    clearingRim: ['#505c62', '#545e66'],
+    clearingStone: '#76828a',
+    path: [
+      [4.6, ['#3a322c', '#3e352f']],
+      [3.9, ['#514840', '#564c44', '#4e453d']],
+      [2.8, ['#625850', '#685e55', '#5e544c', '#625850']],
+    ],
+    pathDetail: { kind: 'planks', colors: ['#2a241f', '#7a6e60'] },
+    flowers: ['#6ae8d0', '#9af0e0', '#e88a40'],
+    flowerCore: '#2a8a7a',
+    edge: 'rgba(10,20,30,0.45)',
+    pools: 22,
+    fog: 18,
+    portalGlow: '#6ae8c8',
+  },
+  // Rain-soaked dark slate under a storm, wet pier planks for the roads, rough navy sea, warm lamps and red coral (FLOOR2_M4_MAELSTROM.md).
+  kraken: {
+    tiles: THEME_TILES.kraken,
+    background: '#141c2e',
+    mapEdge: '#4a5668',
+    mapRoad: ['rgba(36, 30, 26, 0.7)', 'rgba(110, 100, 88, 0.5)'],
+    base: '#4a5462',
+    patchDark: ['#444e5c', '#404a58', '#485262'],
+    patchLight: ['#56606e', '#5a6472', '#545e6c'],
+    specks: ['#3a4452', '#6a7482', '#36404e', '#748090', '#4a5462', '#8a3a3a'],
+    tuft: ['#4a5236', '#5e6640'],
+    clearing: ['#4e5866', '#525c6a', '#4a5462'],
+    clearingRim: ['#3e4856', '#424c5a'],
+    clearingStone: '#66707e',
+    path: [
+      [4.6, ['#2e2620', '#322a24']],
+      [3.9, ['#463c34', '#4a4038', '#423830']],
+      [2.8, ['#584c42', '#5e5248', '#54483e', '#584c42']],
+    ],
+    pathDetail: { kind: 'planks', colors: ['#221c18', '#6e6254'] },
+    flowers: ['#e8503a', '#f2a04a', '#e8d8b0'],
+    flowerCore: '#8a2a2a',
+    edge: 'rgba(8,14,26,0.5)',
+    pools: 18,
+    fog: 10,
+    portalGlow: '#8ae0f0',
+  },
 };
 
 /** Draws a zone: painted ground plus the props laid out by the shared Terrain. */
@@ -450,6 +507,8 @@ export class World {
   private snow: { geo: THREE.BufferGeometry; speeds: Float32Array } | null = null;
   /** Glow over the lava pools and along the cracks, pulsing slowly. */
   private readonly lavaGlows: THREE.Material[] = [];
+  /** The Kraken Maelstrom's turning whirlpools (src/client/whirlpool.ts). */
+  private whirlpools: WhirlpoolViews | null = null;
   /** Everything added to the scene, so a zone change can take it all down again. */
   private readonly objects: THREE.Object3D[] = [];
   private readonly ownMats: THREE.Material[] = [];
@@ -617,6 +676,10 @@ export class World {
         halo.scale.set(l.rx * 1.5, 1, l.rz * 1.5);
         this.lavaGlows.push(mat);
       }
+    }
+    if (terrain.zone.whirlpools?.length) {
+      this.whirlpools = new WhirlpoolViews(terrain.zone.whirlpools);
+      this.add(this.whirlpools.group);
     }
     if (this.groundUniforms && !harbor) {
       this.addDecor(mulberry32(terrain.zone.seed + 11));
@@ -1258,11 +1321,13 @@ export class World {
     this.groundTex.dispose();
     this.groundCover?.dispose();
     this.spaceTex.dispose();
+    this.whirlpools?.dispose();
   }
 
   /** Fade trees that stand between the camera and the player. */
   update(dt: number, px: number, pz: number): void {
     this.t += dt;
+    this.whirlpools?.update(this.t);
     if (this.groundUniforms) this.groundUniforms.uTime.value = this.t;
     this.pieceUniforms.uTime.value = this.t;
     this.updateSnow(dt, px, pz);

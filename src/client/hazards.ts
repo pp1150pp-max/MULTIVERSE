@@ -3,6 +3,10 @@
 import * as THREE from 'three';
 import { assetSources, fxSheets, fxTex, sheets } from './assets';
 import type { ShellHazard } from '../shared/sim/cannonCrab';
+import type { CurseHazard } from '../shared/sim/graveMoves';
+import type { FogHazard } from '../shared/sim/ghostCaptain';
+import type { InkHazard, SuctionHazard } from '../shared/sim/kraken';
+import { imgUrl } from './img';
 import { bossFxOn } from './bossFx';
 import { cloneShared } from './texShare';
 import type { GraspHazard, HexHazard, PoolHazard, VialHazard } from '../shared/sim/bogWitch';
@@ -420,13 +424,132 @@ function shellView(h: ShellHazard): View {
   };
 }
 
+/** The Ghost Ship Graveyard: a ghost monkey's curse ring (paper fx_curse_ring, or a teal disc), fading out at its end. */
+function curseView(h: CurseHazard): View {
+  const group = new THREE.Group();
+  group.position.set(h.x, Y, h.z);
+  const tex = paperFx('fx_curse_ring');
+  const ring = decal(mat(tex ? '#ffffff' : '#5ad8c0', tex ? 0.9 : 0.35, tex ?? fxTex.disc));
+  const rim = decal(mat('#5ad8c0', 0.5, fxTex.edge));
+  rim.scale.setScalar(h.r);
+  group.add(ring, rim);
+  const mats = [ring.material as THREE.MeshBasicMaterial, rim.material as THREE.MeshBasicMaterial];
+  const full = mats.map((m) => m.opacity);
+  return {
+    group,
+    update(t) {
+      const grow = Math.min(1, (t - h.start) / 0.25);
+      ring.scale.setScalar(h.r * Math.max(0.05, grow));
+      ring.rotation.y = t * 0.6;
+      const fade = Math.min(1, Math.max(0, (h.end - t) / 0.5));
+      mats.forEach((m, i) => (m.opacity = full[i] * fade));
+    },
+  };
+}
+
+/** Where the fog's clear circle is: this browser's own player (HazardViews.update sets it). */
+const fogCentre = { x: 0, z: 0 };
+/** How far out the fog reaches past the clear circle (past any arena). */
+const FOG_OUTER = 90;
+
+/**
+ * The Ghost Captain's fog: dark mist over everything but a circle around this browser's own player, drawn over the
+ * whole scene (no depth test), closing in until `hit` and lifting over its last half second.
+ */
+function fogView(h: FogHazard): View {
+  const group = new THREE.Group();
+  const soft = new THREE.Mesh(arc(h.r, h.r + 1.6, 0, Math.PI * 2), mat('#0c1a20', 0.5));
+  const thick = new THREE.Mesh(arc(h.r + 1.6, FOG_OUTER, 0, Math.PI * 2), mat('#0c1a20', 0.88));
+  for (const o of [soft, thick]) {
+    (o.material as THREE.MeshBasicMaterial).depthTest = false;
+    o.renderOrder = 900;
+    group.add(o);
+  }
+  group.position.y = 0.2;
+  const mats = [soft.material as THREE.MeshBasicMaterial, thick.material as THREE.MeshBasicMaterial];
+  const full = mats.map((m) => m.opacity);
+  return {
+    group,
+    update(t) {
+      group.position.x = fogCentre.x;
+      group.position.z = fogCentre.z;
+      const k = Math.min(1, Math.max(0, (t - h.start) / Math.max(0.01, h.hit - h.start))) * Math.min(1, Math.max(0, (h.end - t) / 0.5));
+      mats.forEach((m, i) => (m.opacity = full[i] * k));
+    },
+  };
+}
+
+/** This browser's own player id (HazardViews.update sets it): the kraken's ink covers only its victim's screen. */
+let myId = -1;
+
+/**
+ * The kraken's ink on this browser's own screen (sim/kraken.ts): ink blots over the page (not the world), splashing in at once and
+ * running off over its last second. Someone else's ink draws nothing here.
+ */
+function inkView(h: InkHazard): View {
+  const group = new THREE.Group();
+  if (h.pid !== myId || typeof document === 'undefined') return { group, update() {} };
+  const el = document.createElement('div');
+  el.className = 'kraken-ink';
+  el.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:40;overflow:hidden;';
+  const src = imgUrl('assets/sprites/paper/fx/fx_ink_splat.png');
+  // A few big blots over the middle of the screen, with gaps between them to peek through.
+  const BLOTS: [number, number, number, number][] = [[50, 48, 62, 0], [22, 30, 46, 40], [78, 34, 44, 160], [30, 74, 50, 260], [74, 72, 48, 90], [52, 18, 36, 200]];
+  for (const [x, y, w, rot] of BLOTS) {
+    const img = document.createElement('img');
+    img.src = src;
+    img.alt = '';
+    img.draggable = false;
+    img.style.cssText = `position:absolute;left:${x}%;top:${y}%;width:${w}vmin;transform:translate(-50%,-50%) rotate(${rot}deg);opacity:0.92;`;
+    el.appendChild(img);
+  }
+  document.body.appendChild(el);
+  // Removed with the group (disposeGroup runs on every view that goes).
+  group.userData.dom = el;
+  return {
+    group,
+    update(t) {
+      el.style.opacity = String(Math.min(1, Math.max(0, h.end - t)));
+    },
+  };
+}
+
+/** The kraken's whirlpool pulling (sim/kraken.ts): rings closing in on it across the room, faint while it warns, strong while it pulls. */
+function suctionView(h: SuctionHazard): View {
+  const group = new THREE.Group();
+  group.position.set(h.x, Y, h.z);
+  const mats: THREE.MeshBasicMaterial[] = [];
+  const rings: THREE.Mesh[] = [];
+  for (let i = 0; i < 4; i++) {
+    const m = mat('#8ae0f0', 0.5);
+    mats.push(m);
+    const ring = new THREE.Mesh(arc(0.92, 1, 0, Math.PI * 2), m);
+    rings.push(ring);
+    group.add(ring);
+  }
+  return {
+    group,
+    update(t) {
+      const on = t >= h.hit;
+      const fade = Math.min(1, Math.max(0, (h.end - t) / 0.4)) * Math.min(1, Math.max(0, (t - h.start) / 0.3));
+      rings.forEach((ring, i) => {
+        // Each ring runs from the room's edge in to the whirlpool, over and over.
+        const k = 1 - ((((t - h.start) * (on ? 0.6 : 0.25)) + i / rings.length) % 1);
+        ring.scale.setScalar(Math.max(0.5, h.r * k));
+        mats[i].opacity = (on ? 0.55 : 0.22) * fade * Math.min(1, k * 2);
+      });
+    },
+  };
+}
+
 const MAKE: { [K in Hazard['k']]: (h: Extract<Hazard, { k: K }>) => View } = {
-  shell: shellView,
+  shell: shellView, curse: curseView, fog: fogView, ink: inkView, suction: suctionView,
   meteor: meteorView, ring: ringView, beams: beamsView, blast: blastView,
   vial: vialView, pool: poolView, grasp: graspView, hex: hexView,
 };
 
 function disposeGroup(g: THREE.Object3D): void {
+  (g.userData.dom as HTMLElement | undefined)?.remove();
   g.traverse((o) => {
     if (o instanceof THREE.Mesh) {
       o.geometry.dispose();
@@ -446,7 +569,13 @@ export class HazardViews {
 
   constructor(private readonly scene: THREE.Scene) {}
 
-  update(list: readonly Hazard[], time: number): void {
+  /** `me`: this browser's own player (the Ghost Captain's fog clears around them). */
+  update(list: readonly Hazard[], time: number, me?: { x: number; z: number; id?: number }): void {
+    if (me) {
+      fogCentre.x = me.x;
+      fogCentre.z = me.z;
+      myId = me.id ?? -1;
+    }
     const seen = new Set<number>();
     // Oldest wave first: each one's gaps stop where the wave ahead of it has got to.
     const outer = new Map<number, number>();
