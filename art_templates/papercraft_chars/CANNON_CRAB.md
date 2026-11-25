@@ -82,4 +82,5 @@ The monster: the Giant Cannon Crab, a large imposing boss about three times the 
 
 - แผ่นในเกม: `public/assets/sprites/paper/monsters/giant_crab.png` ตัดด้วย `node tools/cut_floor2_chars.cjs monsters --only giant_crab` · เกมโหลดให้ `cannon_crab` ผ่าน `PAPER_MONSTER_FILE` ใน `src/client/assets.ts`
 - เกมเล่นเฉพาะท่าเดินกับท่าที่ 2 (ก้ามหนีบ) กับทุกการโจมตี ท่ายิงปืนใหญ่กับหดกระดองอยู่ในแผ่นแล้ว แต่ต้องแก้โค้ดก่อนถึงจะเล่น (งานแยก ไม่ต้องเจนภาพ)
+- ท่า "เดินข้างหลบเร็ว" ใช้ภาพเดินซ้ำ ท่าเลือดน้อยระดมยิงใช้ภาพยิงปืนใหญ่ซ้ำ (ไม่มีแผ่นแยก)
 - ลูกปืนใหญ่ วงเตือน และโดมกันดาเมจอยู่ใน `fx.png` ของ `FLOOR2_M1_BEACH.md` ข้อ 9 ไม่ต้องเจนในไฟล์นี้
