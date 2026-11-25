@@ -55,7 +55,17 @@ export interface IceLake {
 }
 
 /** Which prop set and ground palette a zone is drawn with. */
-export type ZoneTheme = 'forest' | 'marsh' | 'snow' | 'volcano' | 'beach' | 'cove' | 'grave';
+export type ZoneTheme = 'forest' | 'marsh' | 'snow' | 'volcano' | 'beach' | 'cove' | 'grave' | 'kraken';
+
+/**
+ * A whirlpool (the Kraken Maelstrom, plan 5.4): a circle nobody can walk into (Terrain.isBlocked), drawn as four paper rings turning
+ * at their own speeds. Only the kraken's tentacles rise around its rim, and the kraken itself from the one in its room.
+ */
+export interface Whirlpool {
+  x: number;
+  z: number;
+  r: number;
+}
 
 /** An ellipse of lava: walkable, but it burns whoever stands in it. */
 export interface LavaPool {
@@ -110,6 +120,8 @@ export interface ZoneDef {
   iceLakes?: IceLake[];
   /** Burning pools. See LAVA_BURN. */
   lavaPools?: LavaPool[];
+  /** Whirlpools nobody can walk into (the Kraken Maelstrom and its boss room). */
+  whirlpools?: Whirlpool[];
   /** Size of the boss's arena, marked by the ring of stones (default DEFAULT_ARENA). Auto Play stays out of it. */
   arenaRadius?: number;
   /** The boss can't be walked through (for one that never moves). */
@@ -185,6 +197,7 @@ function rotateZone(turns: 0 | 1 | 2 | 3, z: ZoneDef): ZoneDef {
     portals: z.portals.map(pt),
     iceLakes: z.iceLakes?.map(ellipse),
     lavaPools: z.lavaPools?.map(ellipse),
+    whirlpools: z.whirlpools?.map(pt),
   };
 }
 
@@ -266,6 +279,8 @@ function scatterZone(z: ZoneDef, list: Scatter[]): ZoneDef {
       // Farm-map spots (denser sets `mixed`, true or false) stand off a pool by its longest radius too: with the map full, the narrow
       // side of an oval came too close.
       if (s.mixed !== undefined && pools.some((l) => Math.hypot(x - l.x, y - l.z) < Math.max(l.rx, l.rz) + 4)) continue;
+      // Clear of a whirlpool's rim too: the kraken's tentacles stand there (rimSpawns).
+      if (z.whirlpools?.some((w) => Math.hypot(x - w.x, y - w.z) < w.r + RIM_CLEAR)) continue;
       if (placed.some((o) => Math.hypot(o.x - x, o.z - y) < apart)) continue;
       const at = { x: Math.round(x), z: Math.round(y) };
       placed.push(at);
@@ -646,6 +661,60 @@ export const ZONE_GRAVE: ZoneDef = rotateZone(3, scatterZone({
   { group: [['barnacle_crew', 1]], count: 8, respawn: [14, 20] },
 ]));
 
+/** Monsters are scattered at least this far past a whirlpool's rim (the tentacles' ring, rimSpawns). */
+const RIM_CLEAR = 7;
+/** How far past a whirlpool's rim its tentacles rise (they stand half over the foam). */
+export const RIM_OUT = 1.2;
+
+/**
+ * Stationary monsters evenly round a whirlpool's rim (the kraken's tentacles, plan 5.4, owner 2026-11-24): one each, never wandering
+ * (radius 0), the ring turned by a0 so none sits on a road.
+ */
+function rimSpawns(z: ZoneDef, monster: string, count: number, respawn: [number, number], a0: number): ZoneDef {
+  const w = z.whirlpools![0];
+  const spawns: SpawnArea[] = [];
+  for (let i = 0; i < count; i++) {
+    const a = a0 + (i / count) * Math.PI * 2;
+    const d = w.r + RIM_OUT;
+    spawns.push({ monster, x: Math.round((w.x + Math.cos(a) * d) * 10) / 10, z: Math.round((w.z + Math.sin(a) * d) * 10) / 10, radius: 0, count: 1, respawn });
+  }
+  return { ...z, spawns: [...z.spawns, ...spawns] };
+}
+
+// Floor 2, map 4 (plan 2, 5.4): reached from the harbour's bottom pier, so the camp is at the top like Frost Reach's. A whirlpool
+// half the map across fills its middle (owner 2026-11-19): two roads go round it to the kraken's summoner, the tentacles stand
+// round its rim. Numbers: owner 2026-11-24 (the proposed table, the graveyard's boost); every move number is in /admin (moveTuning.ts).
+export const ZONE_MAELSTROM: ZoneDef = rotateZone(2, rimSpawns(scatterZone({
+  id: 'kraken_maelstrom',
+  name: 'Kraken Maelstrom',
+  nameTh: 'วังวนกลางทะเล',
+  subtitle: 'น้ำวนยักษ์กลางทะเลเมฆในคืนพายุ ซากเรือที่ถูกดูดลงไป หนวดคราเคนโผล่รอบวังวน และคราเคนที่รออยู่ใต้น้ำ',
+  levels: [71, 80],
+  floor: 2,
+  theme: 'kraken',
+  monsterBoost: { stats: 7, tough: 0.5, mobTough: 0.7, speed: 1.25, skill: 1.25, aggro: 7 },
+  allowAutoPlay: true,
+  channels: true,
+  half: 64,
+  seed: 20261126,
+  start: { x: 44, z: 44 },
+  // Round the right of the whirlpool; the branch goes round its left (both meet at the summoner).
+  path: [[52, 52], [44, 44], [46, 20], [44, 0], [38, -20], [24, -36], [4, -44], [-18, -44], [-42, -42]],
+  branches: [
+    [[44, 44], [20, 46], [0, 44], [-20, 40], [-38, 26], [-44, 6], [-44, -18], [-42, -42]],
+  ],
+  spawns: [],
+  whirlpools: [{ x: 0, z: 0, r: 28 }],
+  lair: { boss: 'kraken', x: -42, z: -42 },
+  // Room for the tentacles round the room's whirlpool and players round them.
+  arenaRadius: 15,
+  portals: [{ to: HARBOR_ID, x: 49.5, z: 49.5, minLevel: 0 }],
+}, [
+  { group: [['shark_knight', 1]], count: 12, respawn: [8, 12] },
+  { group: [['seahorse_soldier', 1]], count: 10, respawn: [10, 14] },
+  { group: [['ghost_pirate_king', 1]], count: 9, respawn: [10, 14] },
+]), 'kraken_tentacle', 10, [14, 20], Math.PI / 10));
+
 /** Where each harbour pier leads (top, right, left, bottom of the screen), by plan 2; none of them built yet. */
 const HARBOR_PIERS: [string, string][] = [
   ['shipwreck_beach', 'หาดเรือแตก'],
@@ -698,6 +767,7 @@ export const GENERATED_ZONES: Record<string, ZoneDef> = {
   [ZONE_BEACH.id]: ZONE_BEACH,
   [ZONE_COVE.id]: ZONE_COVE,
   [ZONE_GRAVE.id]: ZONE_GRAVE,
+  [ZONE_MAELSTROM.id]: ZONE_MAELSTROM,
 };
 
 /**
@@ -709,6 +779,7 @@ export function zoneWithMap(zone: ZoneDef, map: MapData): ZoneDef {
   const water = (kind: 'ice' | 'lava') => map.water.filter((w) => w.kind === kind).map(({ x, z, rx, rz }) => ({ x, z, rx, rz }));
   const ice = water('ice');
   const lava = water('lava');
+  const whirl = map.water.filter((w) => w.kind === 'whirlpool').map(({ x, z, rx }) => ({ x, z, r: rx }));
   return {
     ...zone,
     half: map.zone.half,
@@ -718,6 +789,7 @@ export function zoneWithMap(zone: ZoneDef, map: MapData): ZoneDef {
     branches: rest.map((b) => b.pts.map(([x, z]) => [x, z] as [number, number])),
     iceLakes: zone.iceLakes || ice.length ? ice : undefined,
     lavaPools: zone.lavaPools || lava.length ? lava : undefined,
+    whirlpools: zone.whirlpools || whirl.length ? whirl : undefined,
     spawns: map.spawns.map((s, i) => {
       const boost = zone.spawns[i]?.boost;
       return { monster: s.monster, x: s.x, z: s.z, radius: s.radius, count: s.count, respawn: [s.respawn[0], s.respawn[1]], ...(boost ? { boost } : {}) };
@@ -779,7 +851,7 @@ export function zoneWithLayout(id: string, map: MapData): ZoneDef | undefined {
 }
 
 /** Each boss's body radius in its room (the Volcano Heart is a rock that never moves). */
-const BOSS_RADIUS: Record<string, number> = { forest_bear: 1, bog_witch: 1, yeti: 1, volcano_heart: 0, cannon_crab: 1, pegleg_captain: 1, ghost_captain: 1 };
+const BOSS_RADIUS: Record<string, number> = { forest_bear: 1, bog_witch: 1, yeti: 1, volcano_heart: 0, cannon_crab: 1, pegleg_captain: 1, ghost_captain: 1, kraken: 0 };
 const BOSS_ROOM_NAME: Record<string, [string, string]> = {
   forest_bear: ["Bear's Den", 'รังหมีป่า'],
   bog_witch: ["Bog Witch's Lair", 'กระท่อมแม่มดหนอง'],
@@ -788,7 +860,10 @@ const BOSS_ROOM_NAME: Record<string, [string, string]> = {
   cannon_crab: ["Giant Crab's Den", 'รังปูยักษ์'],
   pegleg_captain: ["Peg-Leg Captain's Hideout", 'ถ้ำกัปตันขาไม้'],
   ghost_captain: ["Ghost Captain's Dead Ship", 'เรือคนตายของกัปตันผี'],
+  kraken: ["Kraken's Maelstrom", 'วังวนของคราเคน'],
 };
+/** The kraken's room: a whirlpool in the middle (owner 2026-11-24) that the kraken rises from; players fight round its rim. */
+export const ROOM_WHIRLPOOL = 4.5;
 
 /**
  * A map's boss room: a small island the size of the old boss clearing, drawn with the map's own look,
@@ -828,6 +903,7 @@ function bossRoom(field: ZoneDef): ZoneDef {
     floor: field.floor,
     arenaRadius: field.arenaRadius,
     bossSolid: lair.boss === 'volcano_heart' ? 1.5 : undefined,
+    ...(lair.boss === 'kraken' ? { whirlpools: [{ x: 0, z: 0, r: ROOM_WHIRLPOOL }] } : {}),
     monsterBoost: field.monsterBoost,
   };
 }
@@ -849,7 +925,7 @@ export function lairExitSpot(room: ZoneDef, r: () => number = Math.random): { fi
 
 /** The boss rooms as bossRoom() makes them, by room id. Only tools/bake_maps.ts and the bake test read these. */
 export const GENERATED_ROOMS: Record<string, ZoneDef> = Object.fromEntries(
-  [ZONE_1, ZONE_2, ZONE_3, ZONE_4, ZONE_BEACH, ZONE_COVE, ZONE_GRAVE].map((z) => {
+  [ZONE_1, ZONE_2, ZONE_3, ZONE_4, ZONE_BEACH, ZONE_COVE, ZONE_GRAVE, ZONE_MAELSTROM].map((z) => {
     const r = bossRoom(z);
     return [r.id, r];
   }),
@@ -924,6 +1000,11 @@ export function inBossArena(zone: ZoneDef, x: number, z: number): boolean {
 
 export function lavaAt(zone: ZoneDef, x: number, z: number): LavaPool | null {
   return zone.lavaPools?.find((l) => Math.hypot((x - l.x) / l.rx, (z - l.z) / l.rz) < 1) ?? null;
+}
+
+/** The whirlpool (x, z) is in, with pad added to its radius (a unit's radius, or a margin). Null outside every one. */
+export function whirlpoolAt(zone: ZoneDef, x: number, z: number, pad = 0): Whirlpool | null {
+  return zone.whirlpools?.find((w) => Math.hypot(x - w.x, z - w.z) < w.r + pad) ?? null;
 }
 
 /** Lava: this share of max HP, every LAVA_TICK seconds while standing in it. Ignores defense. */

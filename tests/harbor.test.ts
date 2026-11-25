@@ -53,13 +53,15 @@ const run = (sim: Sim, secs: number) => {
   }
 }
 
-// ---- piers whose map isn't in the game yet are shut (maps 1–3 are: tests/floor2-map1/2/3.test.ts), the lighthouse gate goes home
+// ---- piers whose map isn't in the game yet are shut (all four are now: tests/floor2-map1/2/3/4.test.ts), the lighthouse gate goes home
 {
-  const sim = new Sim(ZONE_HARBOR);
+  ok(ZONE_HARBOR.portals.filter((pt) => pt.soonName).length === 4 && ZONE_HARBOR.portals.every((pt) => !pt.soonName || !!ZONES[pt.to]),
+    'four piers, every map built');
+  // Every pier's map is in now (map 4 was the last), so a harbour with one pier pointed at a map that doesn't exist checks the shut rule.
+  const zone = { ...ZONE_HARBOR, portals: ZONE_HARBOR.portals.map((pt, i) => (i === 0 ? { ...pt, to: 'not_built_yet' } : pt)) };
+  const sim = new Sim(zone);
   const p = sim.addPlayer(hero({ unlocks: [FLOOR2_UNLOCK] }));
-  const shut = ZONE_HARBOR.portals.filter((pt) => pt.soonName && !ZONES[pt.to]);
-  const pier = shut[0];
-  ok(ZONE_HARBOR.portals.filter((pt) => pt.soonName).length === 4 && shut.length === 1, 'four piers, one of their maps not built yet');
+  const pier = zone.portals[0];
   p.x = pier.x + 6;
   p.z = pier.z;
   run(sim, 0.1);
@@ -70,7 +72,7 @@ const run = (sim: Sim, secs: number) => {
   let evs = sim.drainEvents();
   ok(!evs.some((e) => e.t === 'travel'), 'a shut pier takes nobody anywhere');
   ok(evs.some((e) => e.t === 'log' && e.msg.includes('ยังไม่เปิด') && e.msg.includes(pier.soonName!)), 'and says it isn\'t open yet');
-  const home = ZONE_HARBOR.portals.find((pt) => pt.to === HUB_ID)!;
+  const home = zone.portals.find((pt) => pt.to === HUB_ID)!;
   p.x = home.x + 6;
   run(sim, 0.1);
   p.x = home.x;

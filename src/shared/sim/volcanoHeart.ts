@@ -10,6 +10,7 @@ import type { WitchHazard } from './bogWitch';
 import type { CrabHazard } from './cannonCrab';
 import type { CurseHazard } from './graveMoves';
 import type { FogHazard } from './ghostCaptain';
+import type { InkHazard, SuctionHazard } from './kraken';
 import { currentBalance } from '../balance';
 
 export interface HazardBase {
@@ -29,7 +30,7 @@ export interface BeamsHazard extends HazardBase { k: 'beams'; a0: number; spin: 
 /** Burns the whole clearing except a few small circles. */
 export interface BlastHazard extends HazardBase { k: 'blast'; r: number; safe: { x: number; z: number }[]; safeR: number }
 /** Every boss ground attack: the Volcano Heart's, the Bog Witch's (bogWitch.ts) and the Giant Cannon Crab's (cannonCrab.ts). */
-export type Hazard = MeteorHazard | RingHazard | BeamsHazard | BlastHazard | WitchHazard | CrabHazard | CurseHazard | FogHazard;
+export type Hazard = MeteorHazard | RingHazard | BeamsHazard | BlastHazard | WitchHazard | CrabHazard | CurseHazard | FogHazard | InkHazard | SuctionHazard;
 
 /** Attack sizes and damage (times the boss's ATK). */
 export const METEOR = { radius: 2, count: 5, every: 0.6, mult: 1.4 };

@@ -23,8 +23,8 @@ import { MAP_SCHEMA_VERSION, type MapData, type MapProp, type MapCollider, type 
 
 /** The floor-1 maps, hub first. */
 export const FLOOR1_IDS = ['nexus_city', 'emerald_forest', 'misty_marsh', 'frost_reach', 'ashen_isle'];
-/** The floor-2 maps, its town first (the harbour, then Shipwreck Beach, Smugglers' Cove and the Ghost Ship Graveyard). */
-export const FLOOR2_IDS = ['harbor_town', 'shipwreck_beach', 'smugglers_cove', 'ghost_ship_graveyard'];
+/** The floor-2 maps, its town first (the harbour, then Shipwreck Beach, Smugglers' Cove, the Ghost Ship Graveyard and the Kraken Maelstrom). */
+export const FLOOR2_IDS = ['harbor_town', 'shipwreck_beach', 'smugglers_cove', 'ghost_ship_graveyard', 'kraken_maelstrom'];
 /** Every map (not boss rooms), floor by floor. */
 export const MAP_IDS = [...FLOOR1_IDS, ...FLOOR2_IDS];
 /** The boss rooms (ZoneDef.id of GENERATED_ROOMS), each next to its field. */
@@ -83,6 +83,8 @@ export function bakeZone(zone: ZoneDef): MapData {
   const water: MapData['water'] = [
     ...(zone.iceLakes ?? []).map((l) => ({ kind: 'ice' as const, x: l.x, z: l.z, rx: l.rx, rz: l.rz })),
     ...(zone.lavaPools ?? []).map((l) => ({ kind: 'lava' as const, x: l.x, z: l.z, rx: l.rx, rz: l.rz })),
+    // A boss room's whirlpool stays in code (bossRoom, like its boss and arena): a room file holds no water (validateMap).
+    ...(zone.roomOf ? [] : zone.whirlpools ?? []).map((w) => ({ kind: 'whirlpool' as const, x: w.x, z: w.z, rx: w.r, rz: w.r })),
   ];
   const w = TRAIL_WIDTH[zone.theme];
   const map: MapData = {

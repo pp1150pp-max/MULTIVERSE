@@ -16,9 +16,9 @@ const BOSS_REACH = 4;
 /** Where players of a boss room stand when they come in (Sim.spawnPoint). */
 export const roomSpawnOf = (start: { x: number; z: number }): { x: number; z: number } => ({ x: start.x - ROOM_SPAWN_OFFSET, z: start.z - ROOM_SPAWN_OFFSET });
 
-export type MapTheme = 'forest' | 'marsh' | 'snow' | 'volcano' | 'beach' | 'cove' | 'grave';
+export type MapTheme = 'forest' | 'marsh' | 'snow' | 'volcano' | 'beach' | 'cove' | 'grave' | 'kraken';
 /** Every theme a map file may name (floor 2's beach, cove and ghost-ship graveyard included). */
-export const MAP_THEMES: readonly string[] = ['forest', 'marsh', 'snow', 'volcano', 'beach', 'cove', 'grave'];
+export const MAP_THEMES: readonly string[] = ['forest', 'marsh', 'snow', 'volcano', 'beach', 'cove', 'grave', 'kraken'];
 export type Pt = [number, number]; // [x, z] in world units
 
 /** Collision of a prop: a circle `{r}` or a box `{w, d}` (full width along x, full depth along z, before `rot`). */
@@ -38,7 +38,8 @@ export interface MapProp {
 }
 
 export interface MapPath { id: string; w: number; pts: Pt[] }
-export interface MapWater { kind: 'ice' | 'lava'; x: number; z: number; rx: number; rz: number }
+/** `whirlpool`: a circle (rx = rz) nobody walks into (ZoneDef.whirlpools, the Kraken Maelstrom). */
+export interface MapWater { kind: 'ice' | 'lava' | 'whirlpool'; x: number; z: number; rx: number; rz: number }
 /** A closed polygon the player cannot enter (its inside is blocked). */
 export interface MapBlocker { id: string; pts: Pt[] }
 /** A solid circle that no prop owns (the hub's fountain, wall line and house footprints). Drawn as nothing. */
@@ -306,7 +307,7 @@ function validateInner(map: MapData, ctx: MapValidateCtx, err: Err, warn: Err): 
   }
   map.water.forEach((w, i) => {
     const id = String(i);
-    if (w.kind !== 'ice' && w.kind !== 'lava') err('range', `water[${i}] kind must be ice or lava`, 'water', id);
+    if (w.kind !== 'ice' && w.kind !== 'lava' && w.kind !== 'whirlpool') err('range', `water[${i}] kind must be ice, lava or whirlpool`, 'water', id);
     if (!fin(w.x) || !fin(w.z)) err('range', `water[${i}] needs finite x and z`, 'water', id);
     else if (Math.abs(w.x) > half || Math.abs(w.z) > half) err('out_of_bounds', `water[${i}] is outside the map frame`, 'water', id);
     range(w.rx, 0.5, 200, `water[${i}] rx`, 'water', id);
