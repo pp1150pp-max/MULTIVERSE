@@ -479,6 +479,8 @@ export interface AdminAccountDetail {
   cosHidden?: string[];
   /** The orb looks in the shop (they are cosmetics of slot 'orb', made in /admin). */
   orbItems?: OrbItem[];
+  /** The account's card album (src/shared/cardAlbum.ts): registered card ids and the bonus they give now (percent); null for a guest. */
+  album?: { cards: string[]; bonus: Record<string, number> } | null;
 }
 
 /**

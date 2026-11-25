@@ -42,6 +42,7 @@ import type { AdminBalance, AdminHudLayout, AdminMenuLayout } from '../src/share
 import { DAILY_DEFAULT } from '../src/shared/daily';
 import { STONE_NAME } from '../src/shared/data/stones';
 import { boxChanges, boxConfig, boxOrbs, cleanBoxOverrides, type AdminBox } from '../src/shared/mysteryBox';
+import { albumBonus } from '../src/shared/cardAlbum';
 
 /** The /admin mystery box tab's data. */
 const boxState = (db: Db): AdminBox => ({
@@ -205,6 +206,10 @@ export async function ownerToolsApi(
       const stash = world.liveStash(id) ?? db.savedStash(id);
       const body: AdminAccountDetail = {
         account: row, characters, stash: row.guest || !stash ? null : stash, cosmetics: row.guest ? null : db.cosmeticsOwned(id), crystals: row.guest ? null : db.crystals(id), vipUntil: row.guest ? null : db.vipUntil(id), cosHidden: cosHiddenIds(db.cosShop()), orbItems: db.orbItems().items,
+        album: row.guest ? null : (() => {
+          const cards = db.loadAlbum(id);
+          return { cards, bonus: albumBonus(cards) };
+        })(),
       };
       send(res, 200, body);
       return true;
