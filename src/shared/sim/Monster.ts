@@ -342,6 +342,8 @@ export class Monster extends Unit {
   }
 
   onHit(sim: Sim, attacker: Player): void {
+    // A tentacle being hit (from out of its reach too: a gunslinger, a mage) is in a fight: it doesn't heal (sim/maelstromMoves.ts).
+    this.idleT = 0;
     // Still takes the damage (and heals on the way); only the aggro / pack wake-up is skipped.
     if (this.ignoresHits) return;
     this.aggroT = this.aggroTime;

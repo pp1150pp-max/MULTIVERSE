@@ -159,7 +159,7 @@ function slamNums(m: Monster): { cd: number; len: number; warn: number; mult: nu
     : { cd: mv('tentacle.cd'), len: mv('tentacle.len'), warn: mv('tentacle.warn'), mult: mv('tentacle.mult') };
 }
 
-/** Out of a fight this long, a hurt tentacle heals back up (it can't walk home like other monsters). */
+/** Not hit and nobody in reach this long, a hurt field tentacle heals back up (it can't walk home like other monsters). */
 const TENTACLE_RESET = 6;
 
 /**
@@ -208,7 +208,8 @@ export function tentacleTick(dt: number, sim: Sim, m: Monster): void {
     m.target = null;
     m.state = 'idle';
     m.idleT += dt;
-    if (m.idleT > TENTACLE_RESET && m.hp < m.maxHp) {
+    // The kraken's own arms never heal: its brain takes them away when the room empties.
+    if (!m.summoned && m.idleT > TENTACLE_RESET && m.hp < m.maxHp) {
       m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.25 * dt);
       if (m.hp >= m.maxHp) m.resetFight();
     }

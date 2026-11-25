@@ -170,6 +170,18 @@ const walkTo = (x: number, z: number) => (p: Player): Intent => {
   far.hp = 1e9;
   run(sim, 4);
   ok(far.hp === 1e9, 'out of its reach nothing happens');
+  // Shot at from beyond its reach (a mage, a gunslinger): it doesn't heal while being hit.
+  m.hp = m.maxHp * 0.5;
+  let rose = false;
+  for (let i = 0; i < 9 * 30; i++) {
+    const before = m.hp;
+    if (i % 15 === 0) sim.hitMonster(far, m, 0.0001);
+    run(sim, TICK);
+    if (m.hp > before + 1e-6) rose = true;
+  }
+  ok(!rose, 'hit from out of its reach, it never heals');
+  run(sim, 8);
+  ok(m.hp === m.maxHp, 'left alone a while, it heals back up');
 }
 
 // ---- shark knight: dives (can't be hit) and bursts up under its target
@@ -279,6 +291,19 @@ const walkTo = (x: number, z: number) => (p: Player): Intent => {
   run(sim, 0.2);
   ok(!k.alive && sim.cleared && sim.hazards.length === 0, 'dead: the room is cleared, no ink or suction left');
   ok(!sim.monsters.some((m) => m.summoned && m.alive), 'its arms sink with it');
+}
+
+// ---- the kraken's room drop (10 keys) lands round the rim, none in the whirlpool
+{
+  const sim = new Sim(ROOM, { bossDelay: 0, keys: 10 });
+  run(sim, 0.2);
+  const k = sim.monsters.find((m) => m.isBoss)!;
+  const p = tough(sim, ROOM.start.x, ROOM.start.z);
+  k.noHit = false;
+  k.fade = false;
+  sim.hitMonster(p, k, 1e12);
+  const inside = sim.loots.filter((l) => whirlpoolAt(ROOM, l.x, l.z));
+  ok(!k.alive && sim.loots.length > 40 && inside.length === 0, `${sim.loots.length} pieces dropped, ${inside.length} in the whirlpool`);
 }
 
 // ---- /admin numbers
