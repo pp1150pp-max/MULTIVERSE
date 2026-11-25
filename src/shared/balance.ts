@@ -51,6 +51,8 @@ export const CODE_BOSS_SWITCH_SEC = 10;
 /** Ordinary monsters give up after this many seconds without a hit (owner 2026-11-17: off). */
 export const CODE_MOB_GIVE_UP_SEC = 0;
 export const CODE_MOB_RETURN_IGNORE_HITS = true;
+/** The HUD's buff chips show the total EXP / drop bonus (scrolls × VIP), sources and times on hover (owner 2026-11-25); off = the old scroll chips. */
+export const CODE_BUFF_TOTAL = true;
 /** Ordinary monsters drop a target that is in a safe area / left / died at once and walk home (owner 2026-11-20). */
 export const CODE_MOB_DROP_ON_SAFE = true;
 /** Floor-1 farm maps: a spot whose monsters are all dead comes back somewhere else in its kind's band (owner 2026-11-25). */
@@ -267,6 +269,8 @@ export interface Balance {
   /** VIP bonus (src/shared/vip.ts): EXP % (rounded down) and drop-chance %. */
   vipExpPct: number;
   vipDropPct: number;
+  /** HUD buff chips: total EXP / drop bonus with a per-source hover (CODE_BUFF_TOTAL); off = one chip per running scroll. */
+  buffTotal: boolean;
   /** Untouchable (no damage or boss effects, blinking) for a moment after a phoenix-feather revive in a boss room. */
   reviveGuard: boolean;
   /** How long that lasts; any attack, skill, buff or dash ends it early. */
@@ -388,6 +392,7 @@ export interface BalanceTuning {
   bossLootMax?: number;
   vipExpPct?: number;
   vipDropPct?: number;
+  buffTotal?: boolean;
   /** Phoenix-feather revive guard, when not the code's (on). */
   reviveGuard?: boolean;
   /** Its seconds, when not the code's. */
@@ -525,6 +530,7 @@ export function codeBalance(): Balance {
     bossLootMax: CODE_BOSS_LOOT_MAX,
     vipExpPct: CODE_VIP_EXP_PCT,
     vipDropPct: CODE_VIP_DROP_PCT,
+    buffTotal: CODE_BUFF_TOTAL,
     reviveGuard: CODE_REVIVE_GUARD,
     reviveGuardSec: CODE_REVIVE_GUARD_SEC,
     auto: codeAuto(),
@@ -595,6 +601,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.bossLootMax !== undefined) b.bossLootMax = t.bossLootMax;
   if (t.vipExpPct !== undefined) b.vipExpPct = t.vipExpPct;
   if (t.vipDropPct !== undefined) b.vipDropPct = t.vipDropPct;
+  if (t.buffTotal !== undefined) b.buffTotal = t.buffTotal;
   if (t.reviveGuard !== undefined) b.reviveGuard = t.reviveGuard;
   if (t.reviveGuardSec !== undefined) b.reviveGuardSec = t.reviveGuardSec;
   if (t.mobReturnIgnoreHits !== undefined) b.mobReturnIgnoreHits = t.mobReturnIgnoreHits;
@@ -767,7 +774,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mobRoam', 'mobRoamReach', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'shopNoEquip', 'tryOnTownOnly', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'bagExpand', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'buffTotal', 'mobDropOnSafe', 'mobRoam', 'mobRoamReach', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'shopNoEquip', 'tryOnTownOnly', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'bagExpand', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -862,6 +869,13 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (x === undefined) return null;
     if (typeof x !== 'boolean') return strict ? 'สวิตช์มอนเดินกลับไม่สนการโจมตีต้องเป็นเปิด/ปิด' : null;
     if (x !== CODE.mobReturnIgnoreHits) out.mobReturnIgnoreHits = x;
+    return null;
+  };
+  const buffTotal = (): string | null => {
+    const x = o.buffTotal;
+    if (x === undefined) return null;
+    if (typeof x !== 'boolean') return strict ? 'สวิตช์ป้ายบัฟรวมต้องเป็นเปิด/ปิด' : null;
+    if (x !== CODE.buffTotal) out.buffTotal = x;
     return null;
   };
   const dropOnSafe = (): string | null => {
@@ -1415,6 +1429,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     one('bossSwitchSec', BALANCE_RANGE.bossSwitchSec, 'บอสเปลี่ยนเป้าหมายทุก (วินาที)') ??
     one('mobGiveUpSec', BALANCE_RANGE.mobGiveUpSec, 'มอนธรรมดาเลิกไล่เมื่อไม่โดนตี (วินาที)') ??
     returnIgnore() ??
+    buffTotal() ??
     roam() ??
     one('mobRoamReach', BALANCE_RANGE.mobRoamReach, 'ระยะที่จุดเกิดย้ายได้จากจุดเดิม') ??
     dropOnSafe() ??
@@ -1583,6 +1598,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.bossLootMax !== b.bossLootMax) out.push(`รัศมีสูงสุดของดรอปบอส ${a.bossLootMax} → ${b.bossLootMax}`);
   if (a.vipExpPct !== b.vipExpPct) out.push(`โบนัส EXP ของ VIP ${a.vipExpPct}% → ${b.vipExpPct}%`);
   if (a.vipDropPct !== b.vipDropPct) out.push(`โบนัสดรอปของ VIP ${a.vipDropPct}% → ${b.vipDropPct}%`);
+  if (a.buffTotal !== b.buffTotal) out.push(`ป้ายบัฟรวม EXP/ดรอป ${a.buffTotal ? 'เปิด' : 'ปิด'} → ${b.buffTotal ? 'เปิด' : 'ปิด'}`);
   if (a.reviveGuard !== b.reviveGuard) out.push(`อมตะหลังชุบด้วยขนนกฟีนิกซ์ ${a.reviveGuard ? 'เปิด' : 'ปิด'} → ${b.reviveGuard ? 'เปิด' : 'ปิด'}`);
   if (a.reviveGuardSec !== b.reviveGuardSec) out.push(`เวลาอมตะหลังชุบ ${a.reviveGuardSec} → ${b.reviveGuardSec} วิ`);
   out.push(...forgeChanges(a.forge, b.forge));

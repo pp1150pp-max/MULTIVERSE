@@ -94,6 +94,7 @@ function priceBar(e: CashEntry, qty = 1): HTMLElement {
   const bar = el('div', 'cash-price');
   // An orb that comes from the mystery box: no price.
   if (e.fromBox) {
+    bar.classList.add('box');
     bar.textContent = '🎁 เปิดได้จากกล่องปริศนา';
     return bar;
   }

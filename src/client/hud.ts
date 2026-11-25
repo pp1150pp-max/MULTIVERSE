@@ -10,7 +10,9 @@ import { effectiveStats, enhanceBonus, itemName, plusOf, sellValue } from '../sh
 import {
   entryName, POTION_SIZE_LABEL, POTION_STACK, potionHeal, potionName, potionSellPrice, stackLimit,
 } from '../shared/data/potions';
-import { BUFF_LABEL, CARD_HOW, MONSTER_STONES, RETURN_CAST, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_STACK, stoneStackMax, stoneSellPrice, stoneUnit } from '../shared/data/stones';
+import { vipLeftText } from '../shared/vip';
+import { t } from './i18n';
+import { BUFF_LABEL, BUFF_MULT, CARD_HOW, MONSTER_STONES, RETURN_CAST, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_STACK, stoneStackMax, stoneSellPrice, stoneUnit } from '../shared/data/stones';
 import { CARD_GROUP_NAME, CARD_RARITY_NAME, cardFxLines } from '../shared/data/cards';
 import { cardDef } from '../shared/cardTuning';
 import { cardFxHtml, gameSocketHost, openCardView, openSocketView, socketTipHtml } from './ui/cardPopup';
@@ -24,7 +26,7 @@ import { expToNext } from '../shared/formulas';
 import { blockingGate } from '../shared/data/bossGates';
 import {
   BUFF_SCROLLS, isBossKey, isBound, isBoundKind, isQuestKey, isBuffScroll, isCardStone, isConsumable, isOrbStone, isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
-  type BagEntry, type Item, type PotionKind, type PotionStack, type StoneStack, type EquipSlot, type StatKey,
+  type BagEntry, type BuffScroll, type Item, type PotionKind, type PotionStack, type StoneStack, type EquipSlot, type StatKey,
 } from '../shared/types';
 import { drawEdgeMarker, drawMapIcon, drawPin, facingAngle, partyDot } from './mapIcons';
 import type { MapIcon } from './mapIconNames';
@@ -116,6 +118,7 @@ export class Hud {
   private drawnLevel = 0;
   /** Last buff row drawn (redrawn only when a second ticks over). */
   private drawnBuffs = '';
+  private drawnBuffTitles: string[] = [];
   /** A bag or stash item being dragged with the mouse (ghost appears once the mouse moves a few pixels). */
   private drag: { src: 'bag' | 'stash' | 'equip'; i: number; x: number; y: number; ghost: HTMLElement | null } | null = null;
   /** True right after a drag ends, so the click that follows mouseup does nothing. */
@@ -1547,20 +1550,61 @@ export class Hud {
     this.placeTip(tip, e);
   }
 
-  /** Running buff scrolls under the online line: icon, label and time left (h:mm:ss). */
+  /**
+   * The buff chips under the online line. With the /admin switch `buffTotal` (owner 2026-11-25): one chip each for
+   * the total EXP and drop bonus (scroll ×2 times VIP, as Sim counts them), the sources and their time left on hover.
+   * Off: one chip per running scroll with its time left (h:mm:ss), VIP not shown.
+   */
   private drawBuffs(buffs: Buffs): void {
+    const hms = (sec: number) => {
+      const s = Math.ceil(sec);
+      return `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+    };
     const parts: string[] = [];
-    for (const k of BUFF_SCROLLS) {
-      const t = buffs[k];
-      if (!t || t <= 0) continue;
-      const s = Math.ceil(t);
-      const time = `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-      parts.push(`<div class="buff" style="--bc:${STONE_COLOR[k]}" title="${STONE_NAME[k]} — เวลาที่เหลือ (นับเฉพาะตอนออนไลน์)">${stoneIcon(k)}<span>${BUFF_LABEL[k]} ${time}</span></div>`);
+    const titles: string[] = [];
+    const b = currentBalance();
+    if (b.buffTotal) {
+      const vipLeft = vipLeftText(cashStateNow().vipUntil, Date.now());
+      const rows: [BuffScroll, string, number][] = [['exp_scroll', 'EXP', b.vipExpPct], ['drop_scroll', 'ดรอป', b.vipDropPct]];
+      for (const [k, label, vipPct] of rows) {
+        const left = buffs[k] ?? 0;
+        const scroll = left > 0;
+        const vip = !!vipLeft && vipPct > 0;
+        if (!scroll && !vip) continue;
+        const mult = (scroll ? BUFF_MULT : 1) * (vip ? 1 + vipPct / 100 : 1);
+        const total = Math.round((mult - 1) * 100);
+        const color = scroll ? STONE_COLOR[k] : '#ffd98a';
+        parts.push(`<div class="buff" style="--bc:${color}">${stoneIcon(k)}<span>${label} +${total}%</span></div>`);
+        const lines = [`${label} รวม +${total}% (×${Number(mult.toFixed(2))})`];
+        if (scroll) lines.push(`• ${STONE_NAME[k]} ×${BUFF_MULT} (+${(BUFF_MULT - 1) * 100}%) · เหลือ ${hms(left)} (นับเฉพาะตอนออนไลน์)`);
+        if (vip) lines.push(`• VIP +${vipPct}% · เหลือ ${vipLeft}`);
+        if (scroll && vip) lines.push('ใบคูณกับ VIP คูณกัน');
+        // Each line on its own through the dictionary (a whole multi-line title matches no key).
+        titles.push(lines.map((l) => t(l)).join('\n'));
+      }
+    } else {
+      for (const k of BUFF_SCROLLS) {
+        const left = buffs[k];
+        if (!left || left <= 0) continue;
+        parts.push(`<div class="buff" style="--bc:${STONE_COLOR[k]}">${stoneIcon(k)}<span>${BUFF_LABEL[k]} ${hms(left)}</span></div>`);
+        titles.push(`${STONE_NAME[k]} — เวลาที่เหลือ (นับเฉพาะตอนออนไลน์)`);
+      }
     }
+    const box = $('hud-buffs');
     const html = parts.join('');
-    if (html === this.drawnBuffs) return;
-    this.drawnBuffs = html;
-    $('hud-buffs').innerHTML = html;
+    if (html !== this.drawnBuffs) {
+      this.drawnBuffs = html;
+      this.drawnBuffTitles = [];
+      box.innerHTML = html;
+    }
+    // Titles carry the ticking times: set on the same chips, so a hover tip is not torn down every second.
+    // Compared with what we set last, not the attribute (English mode's page translator rewrites that).
+    titles.forEach((tt, i) => {
+      const c = box.children[i];
+      if (!c || this.drawnBuffTitles[i] === tt) return;
+      this.drawnBuffTitles[i] = tt;
+      c.setAttribute('title', tt);
+    });
   }
 
   showStoneTip(s: StoneStack, e: MouseEvent, hint: string): void {

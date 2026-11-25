@@ -12,13 +12,15 @@ import { cleanStash } from '../src/shared/sim/stash';
 import { HUB_ID, ZONES } from '../src/shared/data/zones';
 import { makeItem } from '../src/shared/data/items';
 import { isItem, type Item } from '../src/shared/types';
-import { listingFee, MARKET_MS, MARKET_SLOTS, sellerGets, type MarketCall, type MarketReply } from '../src/shared/sim/market';
+import { cleanQuery, listingFee, MARKET_MS, MARKET_SLOTS, sellerGets, type MarketCall, type MarketQuery, type MarketReply } from '../src/shared/sim/market';
+import { CARD_IDS, type CardGroup, type CardRarity } from '../src/shared/data/cards';
+import { cardDef } from '../src/shared/cardTuning';
 import { finish, ok } from './check';
 
 const dir = mkdtempSync(join(tmpdir(), 'multiverse-test-'));
-const db = new Db(join(dir, 'market.db'));
+let db = new Db(join(dir, 'market.db'));
 let clock = Date.now();
-const market = new Market(db, () => clock);
+let market = new Market(db, () => clock);
 const sim = new Sim(ZONES[HUB_ID]);
 const broker = sim.terrain.npcPos.broker!;
 ok(!!broker, 'the hub has a market broker');
@@ -179,6 +181,39 @@ const id = call(buyer, { a: 'mktSearch', q: {} }).page!.rows[0].id;
   ok(listed === MARKET_SLOTS, `${MARKET_SLOTS} listings at once`);
   seller.player.bag[10] = item('ring_jade', 'common', 1);
   ok(!call(seller, { a: 'mktList', i: 10, price: 10 }).ok && isItem(seller.player.bag[10]), 'one more is refused and stays in the bag');
+}
+
+// ------------------------------------------------------------ cards: own category, card rarity and group filters
+{
+  const carder = actor('Carder');
+  carder.player.gold = 1_000_000;
+  const pick = (r: CardRarity, gr: CardGroup) => CARD_IDS.find((id) => cardDef(id)?.rarity === r && cardDef(id)?.group === gr);
+  const a = pick('rare', 'weapon');
+  const b = CARD_IDS.find((id) => cardDef(id)?.rarity !== 'rare' && cardDef(id)?.group !== 'weapon');
+  ok(!!a && !!b, 'test cards: a rare weapon card and another of other rarity and group');
+  carder.player.bag[0] = { stone: a!, count: 2 };
+  carder.player.bag[1] = { stone: b!, count: 1 };
+  carder.player.bag[2] = { stone: 'enhance', count: 1 };
+  ok(call(carder, { a: 'mktList', i: 0, price: 500 }).ok && call(carder, { a: 'mktList', i: 1, price: 600 }).ok, 'cards can be listed');
+  ok(call(carder, { a: 'mktList', i: 2, price: 700 }).ok, 'and a stone next to them');
+  const find = (q: MarketQuery) => call(buyer, { a: 'mktSearch', q }).page!.rows.filter((r) => r.seller === 'Carder')
+    .map((r) => ('stone' in r.entry ? r.entry.stone : '')).sort();
+  ok(JSON.stringify(find({ kind: 'card' })) === JSON.stringify([a, b].sort()), 'the "การ์ด" category shows both cards, not the stone');
+  ok(!find({ kind: 'stone' }).some((s) => s.startsWith('card_')), 'cards are no longer under blacksmith stones');
+  ok(JSON.stringify(find({ kind: 'card', rarities: ['rare'] })) === JSON.stringify([a]), 'card rarity filter');
+  ok(JSON.stringify(find({ kind: 'card', cardGroups: ['weapon'] })) === JSON.stringify([a]), 'card group filter');
+  ok(find({ kind: 'card', rarities: [cardDef(b!)!.rarity], cardGroups: ['weapon'] }).length === 0, 'rarity and group together');
+  ok(cleanQuery({ cardGroups: ['weapon', 'bogus'] }).cardGroups?.join() === 'weapon', 'unknown groups are dropped');
+  ok(find({ kind: 'card', lvMin: 50 }).length === 2, 'the level range does not hide cards');
+  // A card listed before the category existed (kind 'stone') moves over when the server starts.
+  const raw = (db as unknown as { db: { prepare(s: string): { run(...a: unknown[]): unknown } } }).db;
+  raw.prepare("UPDATE market_listings SET kind = 'stone' WHERE json_extract(entry, '$.stone') = ?").run(a);
+  // (sort 'newest': a query the market has not cached yet)
+  ok(!find({ kind: 'card', sort: 'newest' }).includes(a!), 'set up an old card listing under stones');
+  db.close();
+  db = new Db(join(dir, 'market.db'));
+  market = new Market(db, () => clock);
+  ok(find({ kind: 'card' }).includes(a!), 'old card listings move to the card category on start');
 }
 
 // ------------------------------------------------------------ history cleanup

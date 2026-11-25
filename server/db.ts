@@ -22,7 +22,7 @@ import { cleanBoxOverrides, MYSTERY_BOX_SETTING, setBoxConfig, type BoxOverrides
 import { CARD_TUNING_SETTING, checkCardTuning, type CardTuning } from '../src/shared/cardTuning';
 import { BALANCE_SETTING, checkBalance, type BalanceTuning } from '../src/shared/balance';
 import { checkOrbLook, DEFAULT_ORB_LOOK, ORB_LOOK_SETTING, sameOrbLook, type OrbLook } from '../src/shared/orbLook';
-import { MARKET_HISTORY_DAYS, type MarketQuery } from '../src/shared/sim/market';
+import { MARKET_HISTORY_DAYS, marketCardIds, type MarketQuery } from '../src/shared/sim/market';
 import { MAIL_HISTORY_DAYS } from '../src/shared/mail';
 import { NEWS_ADMIN_LIST, NEWS_SHOW, NEWS_SWITCHES_DEFAULT, type AdminNewsNote, type NewsNote, type NewsSwitches } from '../src/shared/news';
 import type { TradeLogRow } from '../src/shared/trade';
@@ -412,6 +412,8 @@ export class Db {
     if (!cols.includes('vip_until')) this.db.exec('ALTER TABLE accounts ADD COLUMN vip_until INTEGER NOT NULL DEFAULT 0');
     if (!cols.includes('trade_day')) this.db.exec('ALTER TABLE accounts ADD COLUMN trade_day INTEGER NOT NULL DEFAULT 0');
     if (!cols.includes('trade_n')) this.db.exec('ALTER TABLE accounts ADD COLUMN trade_n INTEGER NOT NULL DEFAULT 0');
+    // Cards listed before the market's "การ์ด" category (owner 2026-11-25) were filed under blacksmith stones: move them over.
+    this.db.exec("UPDATE market_listings SET kind = 'card' WHERE kind = 'stone' AND json_extract(entry, '$.stone') LIKE 'card\\_%' ESCAPE '\\'");
     // Every cash shop purchase (also what the per-account limits count).
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS cash_purchases (
@@ -1694,11 +1696,20 @@ export class Db {
     const args: (string | number)[] = [now];
     if (q.kind) where.push('l.kind = ?'), args.push(q.kind);
     if (q.cls) where.push('(l.cls IS NULL OR l.cls = ?)'), args.push(q.cls);
-    if (q.rarities?.length) where.push(`l.rarity IN (${q.rarities.map(() => '?').join(', ')})`), args.push(...q.rarities);
+    // Cards keep no rarity column: their rarity and group come from cardDef now (the owner may retune them).
+    const cardIn = (ids: string[]) => (ids.length ? `(l.kind = 'card' AND json_extract(l.entry, '$.stone') IN (${ids.map(() => '?').join(', ')}))` : '0');
+    if (q.rarities?.length) {
+      const ids = marketCardIds(q.rarities, q.cardGroups);
+      where.push(`(l.rarity IN (${q.rarities.map(() => '?').join(', ')}) OR ${cardIn(ids)})`), args.push(...q.rarities, ...ids);
+    }
+    if (q.cardGroups?.length) {
+      const ids = marketCardIds(undefined, q.cardGroups);
+      where.push(cardIn(ids)), args.push(...ids);
+    }
     if (q.name) where.push("l.name LIKE ? ESCAPE '\\'"), args.push(`%${q.name.replace(/[\\%_]/g, (c) => '\\' + c)}%`);
     // Stones have no level: the level range only narrows gear.
-    if (q.lvMin) where.push("(l.kind IN ('stone', 'consumable') OR l.level >= ?)"), args.push(q.lvMin);
-    if (q.lvMax) where.push("(l.kind IN ('stone', 'consumable') OR l.level <= ?)"), args.push(q.lvMax);
+    if (q.lvMin) where.push("(l.kind IN ('stone', 'consumable', 'card') OR l.level >= ?)"), args.push(q.lvMin);
+    if (q.lvMax) where.push("(l.kind IN ('stone', 'consumable', 'card') OR l.level <= ?)"), args.push(q.lvMax);
     if (q.plusMin) where.push('l.plus >= ?'), args.push(q.plusMin);
     if (q.priceMax) where.push('l.price <= ?'), args.push(q.priceMax);
     for (const f of q.stats ?? []) {

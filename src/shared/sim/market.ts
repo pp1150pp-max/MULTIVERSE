@@ -3,10 +3,12 @@
 // the server's database; what sold, expired or was cancelled waits in the seller's claim box at the
 // broker. Shared so the browser shows the same fees and limits the server checks.
 import { CLASS_IDS } from '../data/classes';
+import { CARD_GROUPS, CARD_IDS, type CardGroup, type CardId } from '../data/cards';
+import { cardDef } from '../cardTuning';
 import { effectiveStats } from '../data/enhance';
 import { itemClass } from '../data/items';
 import {
-  isBossKey, isBound, isConsumable, isOrbStone, isItem, isStone, RARITIES, SLOTS, STAT_KEYS,
+  isBossKey, isBound, isCardStone, isConsumable, isOrbStone, isItem, isStone, RARITIES, SLOTS, STAT_KEYS,
   type BagEntry, type ClassId, type Item, type Rarity, type SlotId, type StatKey, type StoneStack,
 } from '../types';
 
@@ -37,9 +39,20 @@ export const saleTax = (price: number): number => Math.floor((price * MARKET_TAX
 /** What the seller collects when it sells. */
 export const sellerGets = (price: number): number => price - saleTax(price);
 
-/** What a listing is, for the category filter: a gear kind, blacksmith stones, boss keys (Artifacts) or consumables. */
-export type MarketKind = SlotId | 'stone' | 'artifact' | 'consumable' | 'cosmetic';
-export const MARKET_KINDS: MarketKind[] = [...SLOTS, 'stone', 'artifact', 'consumable', 'cosmetic'];
+/** What a listing is, for the category filter: a gear kind, blacksmith stones, boss keys (Artifacts), consumables, cosmetics or cards. */
+export type MarketKind = SlotId | 'stone' | 'artifact' | 'consumable' | 'cosmetic' | 'card';
+export const MARKET_KINDS: MarketKind[] = [...SLOTS, 'stone', 'artifact', 'consumable', 'cosmetic', 'card'];
+
+/**
+ * The card ids matching a card search (owner 2026-11-25): of these card rarities and these groups (empty / omitted =
+ * any). Read through cardDef at search time, so a rarity or group the owner changes in /admin applies to old listings.
+ */
+export function marketCardIds(rarities?: readonly Rarity[], groups?: readonly CardGroup[]): CardId[] {
+  return CARD_IDS.filter((id) => {
+    const d = cardDef(id);
+    return !!d && (!rarities?.length || rarities.includes(d.rarity)) && (!groups?.length || groups.includes(d.group));
+  });
+}
 
 /** Gear, stones and boss keys can be listed; potions can't (the merchant sells them), nor quest keys (bound). */
 export function marketSellable(e: BagEntry | null | undefined): e is Item | StoneStack {
@@ -49,8 +62,8 @@ export function marketSellable(e: BagEntry | null | undefined): e is Item | Ston
 
 export function marketKind(e: Item | StoneStack): MarketKind {
   if (!isStone(e)) return e.slot;
-  // Orb items (mystery box) are cosmetics.
-  return isOrbStone(e.stone) ? 'cosmetic' : isBossKey(e.stone) ? 'artifact' : isConsumable(e.stone) ? 'consumable' : 'stone';
+  // Orb items (mystery box) are cosmetics; monster cards have their own category.
+  return isCardStone(e.stone) ? 'card' : isOrbStone(e.stone) ? 'cosmetic' : isBossKey(e.stone) ? 'artifact' : isConsumable(e.stone) ? 'consumable' : 'stone';
 }
 
 /** The stats a listing can be searched by: the item's totals including its enhancement. */
@@ -72,7 +85,10 @@ export interface MarketQuery {
   kind?: MarketKind;
   /** Gear for this class (gear any class can wear is included). */
   cls?: ClassId;
+  /** Gear rarity; for cards, the card's rarity (rare / epic / legendary). */
   rarities?: Rarity[];
+  /** Cards of these groups only (weapon / armor / accessory); other listings are left out while it is set. */
+  cardGroups?: CardGroup[];
   /** Part of the item name. */
   name?: string;
   lvMin?: number;
@@ -159,6 +175,10 @@ export function cleanQuery(raw: unknown): MarketQuery {
   if (Array.isArray(r.rarities)) {
     const rs = RARITIES.filter((x) => (r.rarities as unknown[]).includes(x));
     if (rs.length && rs.length < RARITIES.length) q.rarities = rs;
+  }
+  if (Array.isArray(r.cardGroups)) {
+    const gs = CARD_GROUPS.filter((x) => (r.cardGroups as unknown[]).includes(x));
+    if (gs.length && gs.length < CARD_GROUPS.length) q.cardGroups = gs;
   }
   if (typeof r.name === 'string') {
     const n = r.name.trim().slice(0, MARKET_NAME_MAX);
