@@ -3,6 +3,8 @@
 // them off when it closes.
 import type { Player } from '../shared/sim/Player';
 import { cosById, type CosmeticDef, type CosSlot, type CosWorn } from '../shared/data/cosmetics';
+import { inSafeArea, type ZoneDef } from '../shared/data/zones';
+import { currentBalance } from '../shared/balance';
 
 let tryOn: CosWorn | null = null;
 /** Your own character (set by the game each frame it draws). */
@@ -15,6 +17,14 @@ export function setLookOwner(p: Player | null): void {
 /** Puts pieces on your own character for a look (null = back to what you really wear). */
 export function setTryOn(worn: CosWorn | null): void {
   tryOn = worn && Object.keys(worn).length ? { ...worn } : null;
+}
+
+/** Shown when a try-on is refused or taken off outside a town. */
+export const TRY_ON_TOWN_MSG = 'ลองสวมได้เฉพาะในเมือง';
+
+/** Why trying on isn't allowed where `p` stands (owner 2026-11-25: town / safe area only, Balance.tryOnTownOnly), or null. */
+export function tryOnBlocked(zone: ZoneDef, p: { x: number; z: number }): string | null {
+  return currentBalance().tryOnTownOnly && !inSafeArea(zone, p.x, p.z) ? TRY_ON_TOWN_MSG : null;
 }
 
 export function tryingOn(): CosWorn | null {
