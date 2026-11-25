@@ -516,7 +516,7 @@ export class Sim {
     let raw = p.stats.atk * mult * (0.9 + Math.random() * 0.2) * passiveDealMult(p, m, opts.skill);
     if (this.time < p.dmgUntil) raw *= p.dmgMult;
     const marked = m.markBy === p.id && this.time < m.markUntil ? m.markCrit : 0;
-    const crit = opts.forceCrit || Math.random() * 100 < p.stats.crit + (opts.critBonus ?? 0) + marked;
+    const crit = opts.forceCrit || Math.random() * 100 < Math.min(currentBalance().critCap, p.stats.crit + (opts.critBonus ?? 0) + marked);
     if (crit) raw *= 1 + p.stats.critDmg / 100;
     if (opts.maxMult) raw = Math.min(raw, p.stats.atk * opts.maxMult);
     // Armor break from skills, then the attacker's "เจาะเกราะ %" item stat (owner 2026-11-19), both cut DEF.
