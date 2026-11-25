@@ -202,6 +202,14 @@ export class Game {
       const p = this.backend.players.find((q) => q.id === id);
       return p && shownCos(p, 'levelup')?.id;
     };
+    this.fx.dashOf = (id) => {
+      const p = this.backend.players.find((q) => q.id === id);
+      return p && shownCos(p, 'dash')?.id;
+    };
+    this.fx.ghostOf = (id) => {
+      const v = this.viewById(id);
+      return v instanceof PlayerView ? v.ghost() : null;
+    };
     this.autoRing = new AutoRing(this.scene);
     this.lockRing = new AutoRing(this.scene, '#ff4a3a');
     this.skillRing = new AutoRing(this.scene, '#ffcf5a');

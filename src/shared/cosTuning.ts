@@ -9,7 +9,7 @@ import { COSMETICS, cosById, type CosSlot } from './data/cosmetics';
 
 /** Slots with a tuning (title sets are name frames and chat bubbles, no 3D placement). */
 export type TunedSlot = Exclude<CosSlot, 'title' | 'orb'>;
-export const TUNED_SLOTS: readonly TunedSlot[] = ['wings', 'mount', 'pet', 'aura', 'levelup'];
+export const TUNED_SLOTS: readonly TunedSlot[] = ['wings', 'mount', 'pet', 'aura', 'levelup', 'dash'];
 
 /**
  * One field: a number with its range and slider step, an on/off switch, or a colour (stored as a whole number
@@ -112,6 +112,18 @@ export const COS_TUNE_FIELDS: Record<TunedSlot, Record<string, TuneField>> = {
     main: bool('ส่วนเด่นของแบบ (ลูกศร เปลวไฟ สายฟ้า ลมใบไม้ ดาวตก ควันวน)'),
     text: bool('ตัวหนังสือ LEVEL UP !'),
   },
+  // Owner 2026-11-26: each dash style has its own look (src/client/dashFx.ts). Players dash all the time, so
+  // the time stays short. `trail` is the style's own path: speed lines, flames, the bolt, leaves, stars, smoke.
+  dash: {
+    color1: color('สีหลัก'),
+    color2: color('สีรอง'),
+    size: num(0.3, 3, 0.05, 'ขนาดทั้งหมด (คูณ)'),
+    sec: num(0.2, 1.5, 0.05, 'เวลา (วินาที)'),
+    ends: bool('วงที่จุดเริ่มและจุดปลาย'),
+    trail: bool('ทางที่พุ่ง (เส้นความเร็ว เปลวไฟ สายฟ้า ใบไม้ ดาว ควัน)'),
+    ghosts: bool('เงาตัวละครตามหลัง'),
+    sparks: bool('ประกาย / อนุภาค'),
+  },
 };
 
 export type TuneValues = Record<string, number | boolean>;
@@ -197,6 +209,8 @@ export const COS_AXES: Record<TunedSlot, AxisSpec[]> = {
   aura: [{ axis: 'x', key: 'shift', sign: 1, label: 'X ซ้าย/ขวา' }],
   // Played where the character stands: no placement.
   levelup: [],
+  // Drawn along the dash: no placement.
+  dash: [],
 };
 
 // The new fields: the mount's own Z, and every view offset.
@@ -304,6 +318,11 @@ function baseDefaults(id: string, slot: TunedSlot): TuneValues | undefined {
       // The two colours are the catalogue's (the cyan's are #485's code colours); 2.2 s like #485.
       const c = cosById(id)!;
       return { color1: colorNum(c.color) ?? 0xffffff, color2: colorNum(c.color2) ?? 0xffffff, size: 1, sec: 2.2, ground: true, sparks: true, main: true, text: true };
+    }
+    case 'dash': {
+      // The catalogue's colours; 0.55 s (a dash takes 0.18 s, the rest is the fade).
+      const c = cosById(id)!;
+      return { color1: colorNum(c.color) ?? 0xffffff, color2: colorNum(c.color2) ?? 0xffffff, size: 1, sec: 0.55, ends: true, trail: true, ghosts: true, sparks: true };
     }
   }
 }

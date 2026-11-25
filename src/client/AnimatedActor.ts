@@ -281,6 +281,23 @@ export class AnimatedActor implements Actor {
     return this.shown;
   }
 
+  /**
+   * A copy of the picture as drawn now, for a dash afterimage (dashFx.ts): its own texture copy on the same GPU
+   * picture (freed with the effect), placed like the sprite relative to the feet (add the feet's x / z).
+   */
+  snapshot(): THREE.Sprite | null {
+    const src = this.mat.map;
+    if (!src || !this.sprite.visible) return null;
+    const t = cloneShared(src);
+    t.userData.effectFrame = true;
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false }));
+    const g = this.group.scale.x;
+    s.center.copy(this.sprite.center);
+    s.scale.copy(this.sprite.scale).multiplyScalar(g);
+    s.position.set(0, this.group.position.y + this.sprite.position.y * g, 0);
+    return s;
+  }
+
   /** Shows or hides the character picture, keeping the shadow (RigActor draws its own body). */
   setSpriteVisible(v: boolean): void {
     this.sprite.visible = v;

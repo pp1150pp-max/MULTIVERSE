@@ -248,6 +248,24 @@ async function run(): Promise<void> {
   await sleep(300);
   ok(JSON.stringify(A2.seen()?.cos) === JSON.stringify([codes[0]]), 'level-up effect taken off');
 
+  // ---- dash effects (owner 2026-11-26): a slot of their own, same rules
+  A2.act({ a: 'cosWear', slot: 'dash', id: 'dash_wind' });
+  await sleep(300);
+  ok(JSON.stringify(A2.seen()?.cos) === JSON.stringify([codes[0]]), 'a dash effect not owned: not worn');
+  ok((await api('POST', `/admin/accounts/${accId}/cosmetics`, { id: 'dash_wind', give: true }, owner.tok)).status === 200, 'owner gives a dash effect');
+  await sleep(300);
+  A2.act({ a: 'cosWear', slot: 'levelup', id: 'dash_wind' });
+  await sleep(300);
+  ok(JSON.stringify(A2.seen()?.cos) === JSON.stringify([codes[0]]), 'a dash effect cannot go in another slot');
+  A2.act({ a: 'cosWear', slot: 'dash', id: 'dash_wind' });
+  await sleep(300);
+  const windCode = cosById('dash_wind')!.code;
+  ok(JSON.stringify(A2.seen()?.cos) === JSON.stringify([codes[0], windCode]), `dash effect worn (${JSON.stringify(A2.seen()?.cos)})`);
+  ok(JSON.stringify(B.seen(A2.you())?.cos) === JSON.stringify([codes[0], windCode]), 'others see which dash effect is worn');
+  A2.act({ a: 'cosWear', slot: 'dash', id: null });
+  await sleep(300);
+  ok(JSON.stringify(A2.seen()?.cos) === JSON.stringify([codes[0]]), 'dash effect taken off');
+
   // ---- guests
   G.act({ a: 'cosWear', slot: 'wings', id: 'wings_angel' });
   await sleep(300);

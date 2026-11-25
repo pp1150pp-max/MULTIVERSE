@@ -1172,6 +1172,8 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   const fxCard = h('div', { class: 'card' });
   // level-up effect (owner 2026-11-25, src/client/levelUpFx.ts); its preview canvas stays across redraws
   const luCard = h('div', { class: 'card' });
+  // dash effect (owner 2026-11-26, src/client/dashFx.ts): only the on/off switch here, the looks are per piece
+  const dashCard = h('div', { class: 'card' });
   const drawFx = (): void => {
     const a = draft.fxLayer;
     const ca = code.fxLayer;
@@ -1282,6 +1284,12 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('h2', {}, 'เอฟเฟกต์เลเวลอัป'),
       h('div', { class: 'row bal-line' }, flag(luOn, a.luNew !== ca.luNew, ' เปิดเอฟเฟกต์เลเวลอัปของแต่งตัว (ปิด = ทุกคนเห็นเสาแสงสีทองแบบเดิม)')),
       h('div', { class: 'muted' }, 'เอฟเฟกต์เลเวลอัปเป็นของแต่งตัวแล้ว 6 แบบ (วงเวทมิติ พายุเพลิง สายฟ้าฟาด พายุใบไม้ ดาวตก เงารัตติกาล) คนที่ไม่ได้สวมเห็นเสาแสงสีทองแบบเดิม · สี ขนาด เวลา สวิตช์รายส่วน และปุ่มดูตัวอย่าง อยู่ที่ /admin แท็บ "ของแต่งตัว" แท็บย่อย "เอฟเฟกต์เลเวลอัป" (ปรับแยกทีละแบบ) · ราคาและซ่อน/แสดงอยู่ที่แท็บ "จัดการของแต่งตัว" · คนอื่นเห็นตามแบบที่คนเลเวลอัปสวม ตามเมนูกราฟิกของแต่ละคน'),
+    );
+    const dashOn = h('input', { type: 'checkbox', checked: a.dashNew, onchange: (e: Event) => { a.dashNew = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
+    dashCard.replaceChildren(
+      h('h2', {}, 'เอฟเฟกต์แดช'),
+      h('div', { class: 'row bal-line' }, flag(dashOn, a.dashNew !== ca.dashNew, ' เปิดเอฟเฟกต์แดชของแต่งตัว (ปิด = ทุกคนเห็นแดชแบบเดิม)')),
+      h('div', { class: 'muted' }, 'เอฟเฟกต์แดชเป็นของแต่งตัว 6 แบบ (ลมฟ้า เพลิง สายฟ้า ใบไม้ ดาว เงา) ใช้กับปุ่มแดชของทุกอาชีพ ไม่รวมสกิลที่พุ่งตัว คนที่ไม่ได้สวมเห็นแดชแบบเดิม · สี ขนาด เวลา สวิตช์รายส่วน และปุ่มดูตัวอย่าง อยู่ที่ /admin แท็บ "ของแต่งตัว" แท็บย่อย "เอฟเฟกต์แดช" (ปรับแยกทีละแบบ) · ราคาและซ่อน/แสดงอยู่ที่แท็บ "จัดการของแต่งตัว" · คนอื่นเห็นตามแบบที่คนแดชสวม ตามเมนูกราฟิกของแต่ละคน'),
     );
   };
 
@@ -1633,7 +1641,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     { name: 'มอน-บอส-เมือง', cards: [monsterCard, bossCard, moveCard, hubCard] },
     { name: 'ไอเทม-ตีบวก', cards: [affixCard, tierCard, previewCard, setCard, potionCard, bagCard, forgeCard] },
     { name: 'Auto Play', cards: [autoCard] },
-    { name: 'หน้าตา-เอฟเฟกต์-เสียง', cards: [uiCard, fxCard, luCard, circleCard, audioCard, bossMusicCard, rigCard] },
+    { name: 'หน้าตา-เอฟเฟกต์-เสียง', cards: [uiCard, fxCard, luCard, dashCard, circleCard, audioCard, bossMusicCard, rigCard] },
     { name: 'ระบบ-รางวัล', cards: [expCard, vipCard, floorCard, tutCard, langCard] },
   ];
   const ALL = 'ทั้งหมด';

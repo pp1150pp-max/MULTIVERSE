@@ -23,7 +23,7 @@ const round3 = (n: number) => Math.round(n * 1000) / 1000;
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const isTuned = (slot: string): slot is TunedSlot => (TUNED_SLOTS as readonly string[]).includes(slot);
 /** The value shown first for each kind: the height on the character (owner's example), the aura's size. */
-const FIRST_FIELD: Record<TunedSlot, string> = { wings: 'backStand', mount: 'seat', pet: 'float', aura: 'size', levelup: 'color1' };
+const FIRST_FIELD: Record<TunedSlot, string> = { wings: 'backStand', mount: 'seat', pet: 'float', aura: 'size', levelup: 'color1', dash: 'color1' };
 const CHANGED = '1px solid #f2c230';
 
 /** The orb look values, with the names of the orb bench's sliders (steps as there). */

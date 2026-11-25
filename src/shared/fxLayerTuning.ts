@@ -152,6 +152,11 @@ export interface FxLayerConfig extends Record<QuarksKey, boolean> {
    * luSparks, luArrows, luText) moved to the cyan piece (server/db.ts migrateLevelUpLook).
    */
   luNew: boolean;
+  /**
+   * Dash effects worn as cosmetics (owner 2026-11-26, src/client/dashFx.ts): on = each player's worn style on
+   * the dash button (not worn = the old dash), off = the old dash for everyone. Looks: cosTuning.ts `dash`.
+   */
+  dashNew: boolean;
 }
 
 /** One skill's magic circle and code effects, as set on /admin. Missing = on / ×1. */
@@ -311,7 +316,7 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   droneDist: 'โดรน: × ระยะห่างจากตัวละคร',
 };
 
-const BASE_BOOLS = ['enabled', 'debuffs', 'guardGlow', 'buffIcons', 'barBuffIcons', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'droneFollow', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'keyRebind', 'orbsNearBar', 'extras', 'bossFx', 'bossExtras', 'enhAuraSmooth', 'enhOrbGlowFront', 'luNew'] as const;
+const BASE_BOOLS = ['enabled', 'debuffs', 'guardGlow', 'buffIcons', 'barBuffIcons', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'droneFollow', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'keyRebind', 'orbsNearBar', 'extras', 'bossFx', 'bossExtras', 'enhAuraSmooth', 'enhOrbGlowFront', 'luNew', 'dashNew'] as const;
 type FxLayerBool = (typeof BASE_BOOLS)[number] | QuarksKey;
 const FX_LAYER_BOOLS: readonly FxLayerBool[] = [...BASE_BOOLS, ...QUARKS_KEYS];
 const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
@@ -337,6 +342,7 @@ const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
   enhAuraSmooth: 'ออร่าตีบวกขอบนุ่ม (ปิด = ขอบพิกเซลแบบเดิม กะพริบตอนหดขยาย)',
   enhOrbGlowFront: 'แสงลูกแก้วตีบวกอยู่หน้าลูก (ปิด = หลังลูก)',
   luNew: 'เอฟเฟกต์เลเวลอัปของแต่งตัว (ปิด = เสาแสงสีทองแบบเดิมทุกคน)',
+  dashNew: 'เอฟเฟกต์แดชของแต่งตัว (ปิด = แดชแบบเดิมทุกคน)',
 };
 
 
@@ -351,6 +357,7 @@ export function codeFxLayer(): FxLayerConfig {
     ...(Object.fromEntries(QUARKS_KEYS.map((k) => [k, true])) as Record<QuarksKey, boolean>),
     extras: true, extrasK: 1, bossFx: true, bossExtras: true, bossExtrasK: 1, skills: {},
     luNew: true,
+    dashNew: true,
   };
 }
 const CODE = codeFxLayer();
