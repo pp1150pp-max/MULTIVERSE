@@ -19,7 +19,7 @@ import {
 } from '../shared/balance';
 import { DROP_GOLD_MULT, type MonsterDef } from '../shared/data/monsters';
 import {
-  AUTO_ALLOW_NAME, AUTO_ALLOWS, AUTO_HOME_WAIT_NAME, AUTO_OFFLINE_NAME, AUTO_AOE_GUARD_NAME, AUTO_DEFAULT_NAME, AUTO_LOOT_ORDERS, AUTO_NUM_NAME, AUTO_OUT_ACTIONS, AUTO_RANGE, AUTO_TARGET_MODES, autoDefaultValueName,
+  AUTO_ALLOW_NAME, AUTO_ALLOWS, AUTO_HOME_WAIT_NAME, AUTO_OFFLINE_NAME, AUTO_PRIORITY_LOOT_NAME, AUTO_AOE_GUARD_NAME, AUTO_DEFAULT_NAME, AUTO_LOOT_ORDERS, AUTO_NUM_NAME, AUTO_OUT_ACTIONS, AUTO_RANGE, AUTO_TARGET_MODES, autoDefaultValueName,
   type AutoAllow, type AutoDefaults,
 } from '../shared/autoTuning';
 import { FARM_IDS, NO_BOOST, ZONES, type MonsterBoost } from '../shared/data/zones';
@@ -1049,7 +1049,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         h('label', { title: 'ค่าในโค้ด: เปิด' },
           h('input', { type: 'checkbox', checked: draft.shopNoEquip, onchange: (e: Event) => { draft.shopNoEquip = (e.target as HTMLInputElement).checked; updateSummary(); } }),
           ' ห้ามถอด/สวมขณะเปิดร้านพ่อค้า'),
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.tryOnTownOnly, onchange: (e: Event) => { draft.tryOnTownOnly = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' ลองสวมของแต่งตัวได้เฉพาะในเมือง'),
       ),
+      h('div', { class: 'muted' }, 'ลองสวมได้เฉพาะในเมือง (เจ้าของ 2026-11-25): ปุ่ม "ลองสวม" ในแคชช็อปและหน้าต่างแต่งตัวกดได้เฉพาะในเมือง/safe zone นอกเมืองขึ้น "ลองสวมได้เฉพาะในเมือง" · ลองค้างแล้วเดินออกนอกเมือง = ถอดที่ลองให้เอง · ฝั่งเบราว์เซอร์เท่านั้น (ของที่ลองเห็นแค่ตัวเอง server ไม่รู้) · ปิด = ลองได้ทุกที่ตามเดิม'),
       h('div', { class: 'muted' }, 'ห้ามถอด/สวมขณะเปิดร้านพ่อค้า: ตอนหน้าต่างร้านพ่อค้าเปิด คลิก/ลาก/ปุ่มในรายละเอียดที่จะสวมหรือถอดอุปกรณ์ (และของแต่งตัวในกระเป๋าแฟชั่น) ไม่ทำงาน ขึ้นข้อความ "ปิดร้านก่อน" กันกดขายผิด · หน้าต่างอื่น (ช่างตีเหล็ก คลัง ตลาด) ไม่โดน · ยาที่เลือกให้ปุ่มด่วนไม่โดน · กันกดผิดฝั่งเบราว์เซอร์เท่านั้น (server ไม่รู้ว่าหน้าต่างร้านเปิดอยู่) · ปิด = ถอด/สวมได้ตามเดิม'),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
@@ -1137,6 +1141,13 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
           h('input', { type: 'checkbox', checked: a.homeWait, onchange: (e: Event) => { a.homeWait = (e.target as HTMLInputElement).checked; refresh(); } }),
           ` ${AUTO_HOME_WAIT_NAME}`),
       ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด · ปิด = ของพวกนี้เก็บตามลำดับเก็บของของผู้เล่นเหมือนของอื่น' },
+          h('input', { type: 'checkbox', checked: a.priorityLoot, onchange: (e: Event) => { a.priorityLoot = (e.target as HTMLInputElement).checked; refresh(); } }),
+          ` ${AUTO_PRIORITY_LOOT_NAME}`),
+        num('priorityDist', 1),
+      ),
+      h('div', { class: 'muted' }, 'เจ้าของ 2026-11-25: กล่องปริศนา หินทุกชนิด กุญแจ ม้วน และของชนิดใหม่ที่ไม่มีตัวกรองในกระเป๋า (เช่นการ์ด) Auto เดินไปเก็บก่อนทุกอย่าง แม้มอนกำลังตีและแม้ผู้เล่นตั้ง "ตีก่อน" · ยังอยู่ในวง Auto ต้องมีช่องว่าง และทำตามสวิตช์เก็บของคนอื่น · ทองกับไอเทม/ยาเก็บตามลำดับเดิม · ระยะ 0 = ทั้งวง Auto'),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' }, h('input', { type: 'checkbox', checked: a.aoeGuard, onchange: (e: Event) => { a.aoeGuard = (e.target as HTMLInputElement).checked; refresh(); } }), ` ${AUTO_AOE_GUARD_NAME}`),
         num('aoeMargin', 0.1),

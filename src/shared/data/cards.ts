@@ -15,9 +15,9 @@ export const CARD_GROUP_NAME: Record<CardGroup, string> = {
 export type CardRarity = 'rare' | 'epic' | 'legendary';
 export const CARD_RARITIES: CardRarity[] = ['rare', 'epic', 'legendary'];
 
-/** The 12 effects a card can give (none of them is a stone stat). Values are percents. */
-export type CardFx = 'atkPct' | 'defPct' | 'hpPct' | 'mpPct' | 'pierce' | 'lifesteal' | 'dmgReduce' | 'bossDmg' | 'cdr' | 'potion' | 'expPct' | 'goldPct';
-export const CARD_FX: CardFx[] = ['atkPct', 'defPct', 'hpPct', 'mpPct', 'pierce', 'lifesteal', 'dmgReduce', 'bossDmg', 'cdr', 'potion', 'expPct', 'goldPct'];
+/** The 13 effects a card can give (none of them is a stone stat). Values are percents. normalAtkPct: owner 2026-11-25 (plan 12.3 no. 7). */
+export type CardFx = 'atkPct' | 'defPct' | 'hpPct' | 'mpPct' | 'pierce' | 'lifesteal' | 'dmgReduce' | 'bossDmg' | 'cdr' | 'potion' | 'expPct' | 'goldPct' | 'normalAtkPct';
+export const CARD_FX: CardFx[] = ['atkPct', 'defPct', 'hpPct', 'mpPct', 'pierce', 'lifesteal', 'dmgReduce', 'bossDmg', 'cdr', 'potion', 'expPct', 'goldPct', 'normalAtkPct'];
 export const CARD_FX_NAME: Record<CardFx, string> = {
   atkPct: 'พลังโจมตี %',
   defPct: 'พลังป้องกัน %',
@@ -31,6 +31,7 @@ export const CARD_FX_NAME: Record<CardFx, string> = {
   potion: 'ยาฟื้นเพิ่ม %',
   expPct: 'EXP %',
   goldPct: 'ทอง %',
+  normalAtkPct: 'ดาเมจโจมตีปกติ %',
 };
 /** Most effects one card may have (plan: 2–3). */
 export const CARD_FX_MAX = 3;
@@ -39,19 +40,34 @@ export type CardId = `card_${string}`;
 
 export interface CardDef {
   id: CardId;
-  /** The monster that drops it (MONSTERS key). */
+  /** The monster on the card (MONSTERS key). It drops the card unless dropFrom is set. */
   monster: string;
-  /** Map 1–4 of floor 1, for sorting and the admin table. */
+  /**
+   * Floor 1 or 2. Fusing takes cards of one floor and gives a card of that floor (owner 2026-11-25, cardFusePool), and
+   * floor 2 cards drop only while the /admin switch floor2Drop is on (cardDropsOpen in cardTuning.ts).
+   */
+  floor: 1 | 2;
+  /** Map 1–4 of its floor, for sorting and the admin table. */
   map: number;
+  /**
+   * The boss whose kill rolls this card (rate dropBossExtra per key) when the card's own monster never dies and gives
+   * nothing: the Peg-Leg Captain's parrot (owner 2026-11-25).
+   */
+  dropFrom?: string;
   rarity: CardRarity;
   group: CardGroup;
   fx: Partial<Record<CardFx, number>>;
 }
 
 const c = (monster: string, map: number, rarity: CardRarity, group: CardGroup, fx: CardDef['fx']): CardDef =>
-  ({ id: `card_${monster}`, monster, map, rarity, group, fx });
+  ({ id: `card_${monster}`, monster, floor: 1, map, rarity, group, fx });
+const c2 = (monster: string, map: number, rarity: CardRarity, group: CardGroup, fx: CardDef['fx'], dropFrom?: string): CardDef =>
+  ({ id: `card_${monster}`, monster, floor: 2, map, rarity, group, fx, ...(dropFrom ? { dropFrom } : {}) });
 
-/** Floor 1's 26 cards (plan section 5.3, owner 2026-11-11: rare cards get stronger map by map). */
+/**
+ * Floor 1's 26 cards (plan section 5.3, owner 2026-11-11: rare cards get stronger map by map) and floor 2's 21
+ * (plan section 12, owner 2026-11-25: 20 monster cards + the parrot's epic card).
+ */
 export const CARD_DEFAULTS: readonly CardDef[] = [
   c('green_slime', 1, 'rare', 'armor', { hpPct: 2, potion: 5 }),
   c('wild_rabbit', 1, 'rare', 'accessory', { expPct: 3, goldPct: 3 }),
@@ -79,14 +95,66 @@ export const CARD_DEFAULTS: readonly CardDef[] = [
   c('ash_mage', 4, 'rare', 'accessory', { mpPct: 5, cdr: 4 }),
   c('ash_knight', 4, 'rare', 'weapon', { atkPct: 4, pierce: 7 }),
   c('volcano_heart', 4, 'legendary', 'weapon', { atkPct: 6, pierce: 10, bossDmg: 10 }),
+  // Floor 2, map 1 Shipwreck Beach (×1.3)
+  c2('hermit_crab', 1, 'rare', 'armor', { defPct: 6, dmgReduce: 4 }),
+  c2('thief_gull', 1, 'rare', 'accessory', { goldPct: 8, expPct: 5 }),
+  c2('shock_eel', 1, 'rare', 'weapon', { atkPct: 4, pierce: 8 }),
+  c2('spike_turtle', 1, 'rare', 'armor', { hpPct: 6, dmgReduce: 4 }),
+  c2('cannon_crab', 1, 'legendary', 'weapon', { atkPct: 8, pierce: 12, bossDmg: 12 }),
+  // Map 2 Smugglers Cove (×1.5)
+  c2('prisoner', 2, 'rare', 'armor', { hpPct: 6, defPct: 4 }),
+  c2('cutlass_pirate', 2, 'rare', 'weapon', { atkPct: 5, lifesteal: 2, normalAtkPct: 6 }),
+  c2('shotgunner', 2, 'rare', 'weapon', { atkPct: 5, pierce: 9, normalAtkPct: 8 }),
+  c2('keg_prisoner', 2, 'rare', 'armor', { hpPct: 7, potion: 12 }),
+  c2('parrot', 2, 'epic', 'weapon', { atkPct: 6, pierce: 6, bossDmg: 12 }, 'pegleg_captain'),
+  c2('pegleg_captain', 2, 'legendary', 'accessory', { cdr: 6, expPct: 10, goldPct: 12 }),
+  // Map 3 Ghost Ship Graveyard (×1.75)
+  c2('ghost_monkey', 3, 'rare', 'accessory', { mpPct: 6, cdr: 5 }),
+  c2('ghost_sailor', 3, 'rare', 'weapon', { atkPct: 6, pierce: 10 }),
+  c2('ghost_siren', 3, 'rare', 'accessory', { mpPct: 6, expPct: 7 }),
+  c2('barnacle_crew', 3, 'rare', 'armor', { defPct: 7, dmgReduce: 5 }),
+  c2('ghost_captain', 3, 'legendary', 'armor', { hpPct: 10, defPct: 8, dmgReduce: 7 }),
+  // Map 4 Kraken Maelstrom (×2)
+  c2('shark_knight', 4, 'rare', 'weapon', { atkPct: 7, lifesteal: 2.5 }),
+  c2('seahorse_soldier', 4, 'rare', 'accessory', { mpPct: 7, cdr: 6 }),
+  c2('ghost_pirate_king', 4, 'rare', 'weapon', { atkPct: 7, pierce: 12, bossDmg: 8 }),
+  c2('kraken_tentacle', 4, 'rare', 'armor', { hpPct: 8, dmgReduce: 5 }),
+  c2('kraken', 4, 'legendary', 'weapon', { atkPct: 10, pierce: 15, bossDmg: 15 }),
 ];
 
 export const CARD_IDS: readonly CardId[] = CARD_DEFAULTS.map((d) => d.id);
 export const isCardId = (v: unknown): v is CardId => typeof v === 'string' && CARD_IDS.includes(v as CardId);
 
-/** The card's monster picture (512×768, from art_templates/cards/PROMPTS.md). */
+/** The card's monster picture with its own background (papercraft 512×768, art_templates/papercraft_cards/PROMPTS.md). */
 export function cardArt(id: CardId): string {
-  return `/assets/sprites/cards/card_art_${id.slice('card_'.length)}.webp`;
+  return `/assets/sprites/paper/cards/card_art_${id.slice('card_'.length)}.webp`;
+}
+
+/** The papercraft frame of a rarity (512×768); its windows are transparent, see CARD_FRAME_WINDOWS. */
+export function cardFrame(r: CardRarity): string {
+  return `/assets/sprites/paper/cards/card_frame_${r}.webp`;
+}
+
+/** A place on a frame, as fractions of the frame's width and height. */
+export interface CardWindow { x: number; y: number; w: number; h: number }
+/**
+ * Where things go on each frame (measured by tools/cut_paper_cards.cjs): the round group symbol, the monster picture,
+ * the name plate (the epic frame's plate is cream paper, not a window, at about the same place) and the effects strip.
+ */
+export const CARD_FRAME_WINDOWS: Record<CardRarity, Record<'group' | 'art' | 'name' | 'fx', CardWindow>> = {
+  rare: { group: { x: 0.0439, y: 0.0371, w: 0.1357, h: 0.0918 }, art: { x: 0.1064, y: 0.138, w: 0.7881, h: 0.5247 }, name: { x: 0.0752, y: 0.7285, w: 0.8486, h: 0.1113 }, fx: { x: 0.1201, y: 0.8958, w: 0.7559, h: 0.0417 } },
+  epic: { group: { x: 0.0488, y: 0.0391, w: 0.1465, h: 0.0957 }, art: { x: 0.082, y: 0.1087, w: 0.8359, h: 0.5573 }, name: { x: 0.08, y: 0.725, w: 0.84, h: 0.11 }, fx: { x: 0.1133, y: 0.8958, w: 0.7734, h: 0.0534 } },
+  legendary: { group: { x: 0.0439, y: 0.0371, w: 0.1436, h: 0.0944 }, art: { x: 0.1104, y: 0.1348, w: 0.7783, h: 0.528 }, name: { x: 0.0664, y: 0.7272, w: 0.8652, h: 0.1087 }, fx: { x: 0.1221, y: 0.8919, w: 0.752, h: 0.0417 } },
+};
+
+/** The cards a fusion of `rarity` cards from `floor` can give: same rarity, same floor (owner 2026-11-25). */
+export function cardFusePool(rarity: CardRarity, floor: 1 | 2): CardId[] {
+  return CARD_DEFAULTS.filter((d) => d.rarity === rarity && d.floor === floor).map((d) => d.id);
+}
+
+/** The cards a monster's death rolls: its own card, and cards whose dropFrom is this monster (the parrot's for the captain). */
+export function cardsOfMonster(monster: string): CardDef[] {
+  return CARD_DEFAULTS.filter((d) => (d.dropFrom ?? d.monster) === monster);
 }
 
 /** "การ์ดหมาป่า" (the monster's Thai name without "(Boss)" / "(Mini Boss)"). */
@@ -117,6 +185,8 @@ export const CARD_RARITY_NAME = RARITY_TH;
 export const CARD_NUM_FIELDS: readonly CardNumField[] = [
   { key: 'dropMonster', name: 'การ์ดจากมอนทั่วไป (ต่อการฆ่า)', group: 'เรทดรอป', def: 0.01, min: 0, max: 100, step: 0.0001, unit: '%' },
   { key: 'dropBoss', name: 'การ์ดบอส (ต่อกุญแจ 1 อัน)', group: 'เรทดรอป', def: 0.1, min: 0, max: 100, step: 0.0001, unit: '%' },
+  { key: 'dropBossExtra', name: 'การ์ดนกแก้ว (ต่อกุญแจ 1 อัน ตอนฆ่ากัปตันขาไม้ สุ่มแยกจากการ์ดบอส)', group: 'เรทดรอป', def: 0.1, min: 0, max: 100, step: 0.0001, unit: '%' },
+  { key: 'floor2Drop', name: 'การ์ดชั้น 2 ดรอปได้ (1 = เปิด, 0 = ปิด · เปิดเมื่อเปิดชั้น 2 ให้ผู้เล่น)', group: 'เรทดรอป', def: 0, min: 0, max: 1, step: 1, unit: '' },
   { key: 'drillDropMonster', name: 'หินเจาะรูจากมอนทั่วไป', group: 'เรทดรอป', def: 0.2, min: 0, max: 100, step: 0.0001, unit: '%' },
   { key: 'drillDropBoss', name: 'หินเจาะรูจากบอส (ต่อกุญแจ)', group: 'เรทดรอป', def: 10, min: 0, max: 100, step: 0.0001, unit: '%' },
   { key: 'drill0', name: 'เจาะแล้วได้ 0 ช่อง', group: 'เจาะรู (3 ช่องรวมกันต้องได้ 100%)', def: 40, min: 0, max: 100, step: 0.1, unit: '%' },
@@ -131,6 +201,6 @@ export const CARD_NUM_FIELDS: readonly CardNumField[] = [
   { key: 'sell_drill', name: 'ขายพ่อค้า: หินเจาะรู', group: 'ราคาขายพ่อค้า', def: 1000, min: 0, max: 100_000_000, step: 1, unit: 'G' },
   ...CARD_FX.map((f): CardNumField => ({
     key: `cap_${f}`, name: `เพดาน${CARD_FX_NAME[f]} (0 = ไม่จำกัด)`, group: 'เพดานรวมทั้งตัว', min: 0, max: 100, step: 0.1, unit: '%',
-    def: ({ pierce: 50, lifesteal: 10, dmgReduce: 30, bossDmg: 40, cdr: 20, potion: 40, expPct: 30, goldPct: 30 } as Partial<Record<CardFx, number>>)[f] ?? 0,
+    def: ({ pierce: 50, lifesteal: 10, dmgReduce: 30, bossDmg: 40, cdr: 20, potion: 40, expPct: 30, goldPct: 30, normalAtkPct: 40 } as Partial<Record<CardFx, number>>)[f] ?? 0,
   })),
 ];
