@@ -19,7 +19,7 @@ import {
 } from '../shared/balance';
 import { DROP_GOLD_MULT, type MonsterDef } from '../shared/data/monsters';
 import {
-  AUTO_ALLOW_NAME, AUTO_ALLOWS, AUTO_HOME_WAIT_NAME, AUTO_OFFLINE_NAME, AUTO_AOE_GUARD_NAME, AUTO_DEFAULT_NAME, AUTO_LOOT_ORDERS, AUTO_NUM_NAME, AUTO_OUT_ACTIONS, AUTO_RANGE, AUTO_TARGET_MODES, autoDefaultValueName,
+  AUTO_ALLOW_NAME, AUTO_ALLOWS, AUTO_HOME_WAIT_NAME, AUTO_OFFLINE_NAME, AUTO_PRIORITY_LOOT_NAME, AUTO_AOE_GUARD_NAME, AUTO_DEFAULT_NAME, AUTO_LOOT_ORDERS, AUTO_NUM_NAME, AUTO_OUT_ACTIONS, AUTO_RANGE, AUTO_TARGET_MODES, autoDefaultValueName,
   type AutoAllow, type AutoDefaults,
 } from '../shared/autoTuning';
 import { FARM_IDS, NO_BOOST, ZONES, type MonsterBoost } from '../shared/data/zones';
@@ -1135,6 +1135,13 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
           h('input', { type: 'checkbox', checked: a.homeWait, onchange: (e: Event) => { a.homeWait = (e.target as HTMLInputElement).checked; refresh(); } }),
           ` ${AUTO_HOME_WAIT_NAME}`),
       ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด · ปิด = ของพวกนี้เก็บตามลำดับเก็บของของผู้เล่นเหมือนของอื่น' },
+          h('input', { type: 'checkbox', checked: a.priorityLoot, onchange: (e: Event) => { a.priorityLoot = (e.target as HTMLInputElement).checked; refresh(); } }),
+          ` ${AUTO_PRIORITY_LOOT_NAME}`),
+        num('priorityDist', 1),
+      ),
+      h('div', { class: 'muted' }, 'เจ้าของ 2026-11-25: กล่องปริศนา หินทุกชนิด กุญแจ ม้วน และของชนิดใหม่ที่ไม่มีตัวกรองในกระเป๋า (เช่นการ์ด) Auto เดินไปเก็บก่อนทุกอย่าง แม้มอนกำลังตีและแม้ผู้เล่นตั้ง "ตีก่อน" · ยังอยู่ในวง Auto ต้องมีช่องว่าง และทำตามสวิตช์เก็บของคนอื่น · ทองกับไอเทม/ยาเก็บตามลำดับเดิม · ระยะ 0 = ทั้งวง Auto'),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' }, h('input', { type: 'checkbox', checked: a.aoeGuard, onchange: (e: Event) => { a.aoeGuard = (e.target as HTMLInputElement).checked; refresh(); } }), ` ${AUTO_AOE_GUARD_NAME}`),
         num('aoeMargin', 0.1),
