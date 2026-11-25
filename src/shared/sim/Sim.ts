@@ -134,9 +134,7 @@ function fillInto(src: (BagEntry | null)[], i: number, dst: (BagEntry | null)[],
 }
 
 /** `index`: the spot's place in the zone's spawn list (spreads the pack multiplier's fraction, see packCount). */
-/** A roaming farm spot lands this far at most from the spot of its kind it picked (Sim.moveSpawner). */
-const ROAM_REACH = 8;
-/** …and at least this far from every other spot as they stand now. */
+/** A roaming farm spot lands at least this far from every other spot as they stand now. */
 const ROAM_APART = 6;
 
 /**
@@ -422,27 +420,26 @@ export class Sim {
   // ------------------------------------------------------------ spawning
 
   /**
-   * A farm spot whose monsters are all dead comes back somewhere else in its kind's band (owner 2026-11-25): near one of the spots of
-   * the same kind in the map, picked at random, clear of the roads, camp, summoner, lakes, collision and the other spots as they
-   * stand now. No room = its own spot in the map. Off in /admin (Balance.mobRoam) = always its own spot.
+   * A farm spot whose monsters are all dead comes back somewhere else near its own spot in the map, within Balance.mobRoamReach
+   * (owner 2026-11-25: first anywhere among its kind's spots, then "only near its own spot", so a player farming there sees them
+   * come back), clear of the roads, camp, summoner, lakes, collision and the other spots as they stand now. No room = its own spot in the map. Off in /admin (Balance.mobRoam) = always its own spot.
    */
   private moveSpawner(sp: Spawner): void {
     const home = sp.home!;
     const put = (x: number, z: number) => { sp.area.x = x; sp.area.z = z; };
     if (!currentBalance().mobRoam) { put(home.x, home.z); return; }
-    const kin = this.spawners.filter((o) => o.roam && o.home!.monster === home.monster);
     const zone = this.zone;
     const lair = zone.lair;
     const ring = arenaRadius(zone);
     const pools = [...(zone.iceLakes ?? []), ...(zone.lavaPools ?? [])];
     const def = MONSTERS[home.monster];
     const r = Math.random;
+    const reach = currentBalance().mobRoamReach;
     for (let tries = 0; tries < 24; tries++) {
-      const anchor = kin[Math.floor(r() * kin.length)].home!;
       const a = r() * Math.PI * 2;
-      const d = Math.sqrt(r()) * ROAM_REACH;
-      const x = anchor.x + Math.cos(a) * d;
-      const z = anchor.z + Math.sin(a) * d;
+      const d = Math.sqrt(r()) * reach;
+      const x = home.x + Math.cos(a) * d;
+      const z = home.z + Math.sin(a) * d;
       if (Math.abs(x) > this.terrain.bound - 3 || Math.abs(z) > this.terrain.bound - 3) continue;
       if (this.terrain.isBlocked(x, z, Math.max(1, def.radius))) continue;
       if (this.terrain.distToPath(x, z) < 3.5 || Math.hypot(x - zone.start.x, z - zone.start.z) < 14) continue;
