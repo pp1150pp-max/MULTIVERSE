@@ -766,6 +766,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         h('label', { title: `ค่าในโค้ด: ${code.vipExpPct}% (ปัดลง)` }, 'โบนัส EXP %', numBox(() => draft.vipExpPct, (n) => { draft.vipExpPct = n; }, code.vipExpPct, ...BALANCE_RANGE.vipExpPct, 1, updateSummary)),
         h('label', { title: `ค่าในโค้ด: ${code.vipDropPct}%` }, 'โบนัสโอกาสดรอป %', numBox(() => draft.vipDropPct, (n) => { draft.vipDropPct = n; }, code.vipDropPct, ...BALANCE_RANGE.vipDropPct, 1, updateSummary)),
       ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.buffTotal, onchange: (e: Event) => { draft.buffTotal = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' ป้ายบัฟรวมบนจอ: "EXP +x%" / "ดรอป +x%" รวมใบคูณกับ VIP ชี้เมาส์เห็นแยกแหล่งและเวลาที่เหลือ (ปิด = ป้ายใบคูณ ×2 แบบเดิม ไม่โชว์ VIP)'),
+      ),
     );
     refresh();
   };

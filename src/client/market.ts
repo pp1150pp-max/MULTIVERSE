@@ -17,6 +17,7 @@ import {
   type MarketCall, type MarketKind, type MarketMine, type MarketPriceRef, type MarketQuery, type MarketReply, type MarketRow, type MarketSort,
 } from '../shared/sim/market';
 import { COIN_ICON, emptySlotIcon, itemIcon, stoneIcon } from './icons';
+import { CARD_GROUP_NAME, CARD_GROUPS, CARD_IDS, CARD_RARITIES, type CardGroup } from '../shared/data/cards';
 import { playSound } from './audio/sfx';
 
 /** What the window needs from the HUD. */
@@ -48,6 +49,8 @@ export class MarketWindow {
   private kind: MarketKind | null = null;
   private cls: ClassId | null = null;
   private rarities = new Set<Rarity>();
+  /** Card groups picked on the "การ์ด" category (none = all). */
+  private cardGroups = new Set<CardGroup>();
   private stats: { stat: StatKey; min: number | null }[] = [];
   private page = 0;
   private rows: MarketRow[] = [];
@@ -222,7 +225,10 @@ export class MarketWindow {
     const q: MarketQuery = { page, sort: $<HTMLSelectElement>('mkt-sort').value as MarketSort };
     if (this.kind) q.kind = this.kind;
     if (this.cls) q.cls = this.cls;
-    if (this.rarities.size) q.rarities = [...this.rarities];
+    // Cards: only the card rarities count (the others are hidden on the card category), plus the card group chips.
+    const rars = this.kind === 'card' ? [...this.rarities].filter((r) => (CARD_RARITIES as Rarity[]).includes(r)) : [...this.rarities];
+    if (rars.length) q.rarities = rars;
+    if (this.kind === 'card' && this.cardGroups.size) q.cardGroups = [...this.cardGroups];
     const name = $<HTMLInputElement>('mkt-name').value.trim();
     if (name) q.name = name;
     q.lvMin = num('mkt-lvmin');
@@ -389,6 +395,14 @@ export class MarketWindow {
       this.renderFilters();
       this.search(0);
     });
+    $('mkt-cgrp').addEventListener('click', (e) => {
+      const gr = (e.target as HTMLElement).closest<HTMLElement>('[data-cgrp]')?.dataset.cgrp as CardGroup | undefined;
+      if (!gr) return;
+      if (this.cardGroups.has(gr)) this.cardGroups.delete(gr);
+      else this.cardGroups.add(gr);
+      this.renderFilters();
+      this.search(0);
+    });
     $('mkt-cats').addEventListener('click', (e) => {
       const b = (e.target as HTMLElement).closest<HTMLElement>('[data-kind]');
       if (!b) return;
@@ -437,6 +451,7 @@ export class MarketWindow {
     this.kind = null;
     this.cls = null;
     this.rarities.clear();
+    this.cardGroups.clear();
     this.stats = [];
     for (const id of ['mkt-name', 'mkt-lvmin', 'mkt-lvmax', 'mkt-plus', 'mkt-pmax']) $<HTMLInputElement>(id).value = '';
     $<HTMLInputElement>('mkt-fit').checked = false;
@@ -448,8 +463,8 @@ export class MarketWindow {
 
   private renderFilters(): void {
     const myCls = this.g.player.cls.id;
-    const kindIcon = (k: MarketKind) => (k === 'stone' ? stoneIcon('enhance') : k === 'artifact' ? stoneIcon('key_bear') : k === 'consumable' ? stoneIcon('return_scroll') : k === 'cosmetic' ? stoneIcon('mystery_box') : emptySlotIcon(k, myCls));
-    const kindLabel = (k: MarketKind) => (k === 'stone' ? 'หินตีบวก' : k === 'artifact' ? 'Artifact' : k === 'consumable' ? 'ของใช้' : k === 'cosmetic' ? 'ของแต่งตัว' : SLOT_LABEL[k]);
+    const kindIcon = (k: MarketKind) => (k === 'card' ? stoneIcon(CARD_IDS[0]!) : k === 'stone' ? stoneIcon('enhance') : k === 'artifact' ? stoneIcon('key_bear') : k === 'consumable' ? stoneIcon('return_scroll') : k === 'cosmetic' ? stoneIcon('mystery_box') : emptySlotIcon(k, myCls));
+    const kindLabel = (k: MarketKind) => (k === 'card' ? 'การ์ด' : k === 'stone' ? 'หินตีบวก' : k === 'artifact' ? 'Artifact' : k === 'consumable' ? 'ของใช้' : k === 'cosmetic' ? 'ของแต่งตัว' : SLOT_LABEL[k]);
     $('mkt-cats').innerHTML =
       `<button class="mkt-cat${this.kind ? '' : ' on'}" data-kind=""><span class="mkt-cat-ic">${COIN_ICON}</span>ทั้งหมด</button>` +
       MARKET_KINDS.map((k) =>
@@ -457,8 +472,13 @@ export class MarketWindow {
     $('mkt-cls').innerHTML =
       `<button class="mkt-chip${this.cls ? '' : ' on'}" data-cls="">ทุกอาชีพ</button>` +
       CLASS_IDS.map((c) => `<button class="mkt-chip${this.cls === c ? ' on' : ''}" data-cls="${c}">${CLASSES[c].name}</button>`).join('');
-    $('mkt-rar').innerHTML = RARITIES.map((r) =>
+    const isCard = this.kind === 'card';
+    $('mkt-rar').innerHTML = (isCard ? (CARD_RARITIES as Rarity[]) : RARITIES).map((r) =>
       `<button class="mkt-chip${this.rarities.has(r) ? ' on' : ''}" data-rar="${r}" style="--rc:${RARITY_COLOR[r]}">${RARITY_LABEL[r]}</button>`).join('');
+    // Card groups: only on the card category. Short name on the chip, the slots it fits in on hover.
+    $('mkt-cgrp-row').classList.toggle('hidden', !isCard);
+    $('mkt-cgrp').innerHTML = CARD_GROUPS.map((gr) =>
+      `<button class="mkt-chip${this.cardGroups.has(gr) ? ' on' : ''}" data-cgrp="${gr}" title="${CARD_GROUP_NAME[gr]}">${CARD_GROUP_NAME[gr].replace(/\s*\(.*$/, '')}</button>`).join('');
     $('mkt-stats').innerHTML = this.stats.map((f, i) =>
       `<div class="mkt-srow" data-srow="${i}"><select>${STAT_KEYS.map((k) =>
         `<option value="${k}"${k === f.stat ? ' selected' : ''}${k !== f.stat && this.stats.some((o) => o.stat === k) ? ' disabled' : ''}>${STAT_LABEL[k]}</option>`).join('')}</select>` +
@@ -674,6 +694,7 @@ export class MarketWindow {
     this.kind = marketKind(e);
     this.cls = null;
     this.rarities.clear();
+    this.cardGroups.clear();
     this.stats = [];
     for (const id of ['mkt-lvmin', 'mkt-lvmax', 'mkt-plus', 'mkt-pmax']) $<HTMLInputElement>(id).value = '';
     $<HTMLInputElement>('mkt-fit').checked = false;
