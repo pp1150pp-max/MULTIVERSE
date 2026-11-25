@@ -174,7 +174,36 @@ export interface CardNumField {
   unit: '%' | 'G' | '×' | '';
 }
 
-const RARITY_TH: Record<CardRarity, string> = { rare: 'หายาก', epic: 'มหากาพย์', legendary: 'ตำนาน' };
+/** The album's pages: one per farm map, `f<floor>m<map>` (plan section 14). */
+export const ALBUM_PAGE_KEYS = ['f1m1', 'f1m2', 'f1m3', 'f1m4', 'f2m1', 'f2m2', 'f2m3', 'f2m4'] as const;
+export type AlbumPageKey = (typeof ALBUM_PAGE_KEYS)[number];
+export const ALBUM_PAGE_NAME: Record<AlbumPageKey, string> = {
+  f1m1: 'ชั้น 1 ป่ามรกต', f1m2: 'ชั้น 1 หนองน้ำหมอก', f1m3: 'ชั้น 1 ดินแดนหิมะ', f1m4: 'ชั้น 1 เกาะภูเขาไฟ',
+  f2m1: 'ชั้น 2 หาดเรือแตก', f2m2: 'ชั้น 2 อ่าวลักลอบ', f2m3: 'ชั้น 2 สุสานเรือผี', f2m4: 'ชั้น 2 วังวนกลางทะเล',
+};
+/** The album's bonus stats: percent of the character's whole HP / MP / attack / defense. */
+export const ALBUM_STATS = ['hpPct', 'mpPct', 'atkPct', 'defPct'] as const;
+export type AlbumStat = (typeof ALBUM_STATS)[number];
+export const ALBUM_STAT_NAME: Record<AlbumStat, string> = { hpPct: 'HP สูงสุด %', mpPct: 'MP สูงสุด %', atkPct: 'พลังโจมตี %', defPct: 'พลังป้องกัน %' };
+type AlbumBonus = Partial<Record<AlbumStat, number>>;
+const F1: Record<string, [AlbumBonus, AlbumBonus]> = {
+  m1: [{ hpPct: 2 }, { atkPct: 2 }],
+  m2: [{ mpPct: 3 }, { hpPct: 3 }],
+  m3: [{ defPct: 2 }, { hpPct: 4 }],
+  m4: [{ atkPct: 2 }, { atkPct: 3 }],
+};
+const twice = (b: AlbumBonus): AlbumBonus => Object.fromEntries(Object.entries(b).map(([k, v]) => [k, v * 2]));
+/** Code bonus per page and step (owner 2026-11-25: floor 2 twice floor 1's same map). */
+export const ALBUM_DEFAULT: Record<AlbumPageKey, [AlbumBonus, AlbumBonus]> = Object.fromEntries(
+  ALBUM_PAGE_KEYS.map((k) => {
+    const f1 = F1[k.slice(2)];
+    return [k, k.startsWith('f1') ? f1 : [twice(f1[0]), twice(f1[1])]];
+  }),
+) as Record<AlbumPageKey, [AlbumBonus, AlbumBonus]>;
+/** The CARD_NUM_FIELDS key of one album bonus number. */
+export const albumKey = (page: AlbumPageKey, step: 1 | 2, stat: AlbumStat): string => `album_${page}_${step}_${stat}`;
+
+const RARITY_TH: Record<CardRarity, string> ={ rare: 'หายาก', epic: 'มหากาพย์', legendary: 'ตำนาน' };
 export const CARD_RARITY_NAME = RARITY_TH;
 
 /** Every adjustable number with its code default. Percents are stored as percents (0.01 = 0.01%). */
@@ -198,6 +227,14 @@ export const CARD_NUM_FIELDS: readonly CardNumField[] = [
   ...CARD_RARITIES.map((r): CardNumField => ({ key: `fuseOn_${r}`, name: `เปิดรวมการ์ด${RARITY_TH[r]} (1 = เปิด, 0 = ปิด)`, group: 'รวมการ์ด', def: r === 'epic' ? 0 : 1, min: 0, max: 1, step: 1, unit: '' })),
   ...CARD_RARITIES.map((r): CardNumField => ({ key: `sell_${r}`, name: `ขายพ่อค้า: การ์ด${RARITY_TH[r]}`, group: 'ราคาขายพ่อค้า', def: r === 'rare' ? 2000 : r === 'epic' ? 10000 : 50000, min: 0, max: 100_000_000, step: 1, unit: 'G' })),
   { key: 'sell_drill', name: 'ขายพ่อค้า: หินเจาะรู', group: 'ราคาขายพ่อค้า', def: 1000, min: 0, max: 100_000_000, step: 1, unit: 'G' },
+  // Card album (plan section 14, owner 2026-11-25): a stat bonus per map, step 1 = its rare cards, step 2 = all its cards.
+  { key: 'albumOn', name: 'อัลบั้มการ์ด (1 = เปิด, 0 = ปิด · ปิด = ลงทะเบียนไม่ได้และโบนัสไม่มีผล)', group: 'อัลบั้มการ์ด', def: 1, min: 0, max: 1, step: 1, unit: '' },
+  ...ALBUM_PAGE_KEYS.flatMap((page) => ([1, 2] as const).flatMap((step) => ALBUM_STATS.map((stat): CardNumField => ({
+    key: albumKey(page, step, stat),
+    name: `${ALBUM_STAT_NAME[stat]} ขั้น ${step} (${step === 1 ? 'ครบการ์ดมอนทั่วไป' : 'ครบทุกใบรวมบอส'})`,
+    group: `อัลบั้ม: ${ALBUM_PAGE_NAME[page]}`,
+    def: ALBUM_DEFAULT[page][step - 1][stat] ?? 0, min: 0, max: 100, step: 0.1, unit: '%',
+  })))),
   // How a card looks when viewed (src/client/cardView.ts, owner 2026-11-25): a shine that follows the pointer and a tilt.
   { key: 'viewShine', name: 'แสงสะท้อนตามเมาส์/นิ้ว (1 = เปิด, 0 = ปิด)', group: 'หน้าตาการ์ด', def: 1, min: 0, max: 1, step: 1, unit: '' },
   { key: 'viewShinePct', name: 'ความแรงแสงสะท้อน', group: 'หน้าตาการ์ด', def: 55, min: 0, max: 100, step: 1, unit: '%' },

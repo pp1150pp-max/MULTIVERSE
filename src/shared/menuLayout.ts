@@ -40,6 +40,7 @@ export const MENU_ENTRIES: readonly MenuEntryDef[] = [
   { id: 'graphics', label: 'กราฟิก' },
   { id: 'help', label: 'วิธีเล่น' },
   { id: 'news', label: 'มีอะไรใหม่' },
+  { id: 'album', label: 'อัลบั้มการ์ด' },
   { id: 'mail', label: 'จดหมาย' },
   { id: 'report', label: 'แจ้งปัญหา' },
   { id: 'fullscreen', label: 'เต็มจอ', only: 'menu', why: 'ใช้เฉพาะจอสัมผัส (ซ่อนเองเมื่อใช้เมาส์) จึงอยู่ได้แค่ในหน้าต่างเมนู' },
@@ -69,11 +70,11 @@ export const CODE_ICON: Readonly<Record<string, MenuIcon>> = {
   bag: { img: 'bag' }, skills: { img: 'blank', glyph: '⚔' }, party: { img: 'blank', glyph: '👥' }, friends: { img: 'friends' },
   trade: { img: 'blank', glyph: '🤝' }, daily: { img: 'daily' }, map: { img: 'map' }, cosmetics: { img: 'blank', glyph: '👑' },
   cashshop: { img: 'cashshop' }, autoset: { img: 'autoset' }, audio: { img: 'blank', glyph: '🔊' }, graphics: { img: 'blank', glyph: '🎨' },
-  help: { img: 'help' }, news: { img: 'blank', glyph: '📰' }, mail: { img: 'blank', glyph: '✉' }, report: { img: 'blank', glyph: '🐞' },
+  help: { img: 'help' }, news: { img: 'blank', glyph: '📰' }, album: { img: 'blank', glyph: '🃏' }, mail: { img: 'blank', glyph: '✉' }, report: { img: 'blank', glyph: '🐞' },
   fullscreen: { img: 'blank', glyph: '⛶' }, settings: { img: 'settings' }, auto: { img: 'auto' }, menu: { img: 'menu' },
 };
 /** The top row's own short name where it differs from the menu's (an admin's rename wins over it). */
-export const TOP_LABEL: Readonly<Record<string, string>> = { daily: 'รายวัน' };
+export const TOP_LABEL: Readonly<Record<string, string>> = { daily: 'รายวัน', album: 'อัลบั้ม' };
 /** Code buttons whose name can't be changed (the game writes AUTO: ON / OFF on it every frame). */
 export const NO_RENAME = new Set(['auto']);
 
@@ -83,7 +84,7 @@ export const NO_RENAME = new Set(['auto']);
  * close when the player is away from their NPC), AUTO on/off and leaving the game.
  */
 export const SHORTCUT_ACTS = [
-  'bag', 'skills', 'party', 'friends', 'trade', 'daily', 'map', 'cosmetics', 'cashshop', 'autoset', 'audio', 'graphics', 'help', 'news',
+  'bag', 'skills', 'party', 'friends', 'trade', 'daily', 'map', 'cosmetics', 'cashshop', 'autoset', 'audio', 'graphics', 'help', 'news', 'album',
   'mail', 'report', 'fullscreen', 'settings', 'keybinds', 'channels', 'hudstyle',
 ] as const;
 export type ShortcutAct = (typeof SHORTCUT_ACTS)[number];
@@ -129,7 +130,7 @@ export type MenuLayoutTuning = Partial<MenuLayoutConfig>;
 export function codeMenuLayout(): MenuLayoutConfig {
   return {
     menu: ['bag', 'skills', 'party', 'friends', 'trade', 'daily', 'map', 'cosmetics', 'cashshop', 'autoset', 'audio', 'graphics', 'help', 'news', 'mail', 'fullscreen', 'settings'],
-    top: ['auto', 'bag', 'skills', 'party', 'friends', 'report', 'daily', 'cashshop', 'map', 'menu'],
+    top: ['auto', 'bag', 'skills', 'party', 'friends', 'report', 'daily', 'cashshop', 'map', 'album', 'menu'],
     names: {},
     custom: [],
   };
@@ -159,6 +160,8 @@ export function buttonAct(cfg: MenuLayoutConfig, id: string): string {
  * Move one to the top row to put it there; hide it with its own switch, not by leaving it out.
  */
 const ADDED_LATER = ['news'];
+/** Like ADDED_LATER, but put in the top row (just before เมนู): the card album (owner 2026-11-25: "in the top row"). */
+const ADDED_LATER_TOP = ['album'];
 
 export function mergeMenuLayout(t: MenuLayoutTuning | undefined): MenuLayoutConfig {
   const c = codeMenuLayout();
@@ -167,6 +170,11 @@ export function mergeMenuLayout(t: MenuLayoutTuning | undefined): MenuLayoutConf
   if (t?.names) c.names = structuredClone(t.names);
   if (t?.custom) c.custom = structuredClone(t.custom);
   if (t?.menu || t?.top) {
+    for (const id of ADDED_LATER_TOP) {
+      if (c.menu.includes(id) || c.top.includes(id)) continue;
+      const at = c.top.indexOf('menu');
+      c.top.splice(at < 0 ? c.top.length : at, 0, id);
+    }
     for (const id of ADDED_LATER) {
       if (c.menu.includes(id) || c.top.includes(id)) continue;
       const at = c.menu.indexOf('settings');

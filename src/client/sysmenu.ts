@@ -34,7 +34,7 @@ const badge = (i: MenuIcon): string =>
   `<img src="${imgUrl(`assets/sprites/ui/ico_${i.img}.png`)}" alt="">${i.glyph ? `<span class="ico-glyph">${esc(i.glyph)}</span>` : ''}`;
 
 /** No such buttons for a guest (no mail, reports, trade, friends, daily login); keyed by what the button does. */
-const GUEST_NO = new Set(['mail', 'report', 'trade', 'friends', 'daily']);
+const GUEST_NO = new Set(['mail', 'report', 'trade', 'friends', 'daily', 'album']);
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -258,6 +258,7 @@ export class SystemMenu {
       case 'report': return g.report.toggle();
       case 'daily': return g.daily.toggle();
       case 'news': return g.news.toggle();
+      case 'album': return g.album.toggle();
       case 'cashshop': return g.cashShop.toggle();
       case 'map': return g.hud.toggleMap();
       case 'menu': return this.toggle();
@@ -309,6 +310,9 @@ export class SystemMenu {
       case 'report':
         this.toggle(false);
         return this.g.report.toggle(true);
+      case 'album':
+        this.toggle(false);
+        return this.g.album.toggle(true);
       case 'partyblock':
         this.g.party.setBlock(!this.g.party.block);
         return this.showView('settings');

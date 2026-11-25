@@ -28,6 +28,8 @@ import { NEWS_ADMIN_LIST, NEWS_SHOW, NEWS_SWITCHES_DEFAULT, type AdminNewsNote, 
 import type { TradeLogRow } from '../src/shared/trade';
 import type { AdminReportRow } from '../src/shared/reports';
 import type { FriendChar } from '../src/shared/friends';
+import { cleanAlbum } from '../src/shared/cardAlbum';
+import type { CardId } from '../src/shared/data/cards';
 import { ADMIN_FEATURES, BUILTIN_ROLE_NAME, BUILTIN_ROLES, isAdminFeature, OWNER_ROLE, roleFeatures, type AdminFeature, type AdminRole, type AuditRow, type FeatureOverrides, type RoleDef, type ChatLogRow, type PlaySessionRow, type RoleRow, type SessionQuery, type SessionSort } from '../src/shared/admin';
 
 /** A play session's username as the admin page shows it. */
@@ -148,6 +150,13 @@ export class Db {
         account_id INTEGER PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
         data TEXT NOT NULL,
         updated_at INTEGER NOT NULL
+      );
+      -- Card album (src/shared/cardAlbum.ts): the cards an account registered. Kept through a wipe (owner 2026-11-25).
+      CREATE TABLE IF NOT EXISTS card_album (
+        account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        card_id TEXT NOT NULL,
+        at INTEGER NOT NULL,
+        PRIMARY KEY (account_id, card_id)
       );
       -- One row per play session (join → leave), for the admin page. Kept PLAY_SESSION_DAYS.
       CREATE TABLE IF NOT EXISTS play_sessions (
@@ -1322,6 +1331,19 @@ export class Db {
     this.db.prepare(`INSERT INTO stashes (account_id, data, updated_at) VALUES (?, ?, ?)
       ON CONFLICT(account_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`)
       .run(accountId, JSON.stringify(stash), Date.now());
+  }
+
+  // ------------------------------------------------------------ card album (src/shared/cardAlbum.ts)
+
+  /** The account's registered cards (unknown ids dropped), in card order. */
+  loadAlbum(accountId: number): CardId[] {
+    const rows = this.db.prepare('SELECT card_id FROM card_album WHERE account_id = ?').all(accountId) as { card_id: string }[];
+    return cleanAlbum(rows.map((r) => r.card_id));
+  }
+
+  /** Registers one card (inside the caller's transaction); a card already there throws (never twice). */
+  addAlbumCard(accountId: number, card: CardId): void {
+    this.db.prepare('INSERT INTO card_album (account_id, card_id, at) VALUES (?, ?, ?)').run(accountId, card, Date.now());
   }
 
   // ------------------------------------------------------------ tutorial quests (one row per account)

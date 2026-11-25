@@ -4,6 +4,8 @@
 // character immediately so controls feel instant. The server checks every reported position.
 import { suctionStep } from '../../shared/sim/kraken';
 import { Terrain } from '../../shared/sim/terrain';
+import { cleanAlbum } from '../../shared/cardAlbum';
+import type { CardId } from '../../shared/data/cards';
 import { Player, type AutoSettings, type CharacterData, type LootFilter, type SortKey } from '../../shared/sim/Player';
 import { Monster } from '../../shared/sim/Monster';
 import { Loot } from '../../shared/sim/Loot';
@@ -889,6 +891,7 @@ export class OnlineBackend implements Backend {
     me.z = z;
     me.face(-x, -z);
     me.partyId = old.partyId;
+    me.album = old.album;
     me.tut = old.tut; // the new mirror starts with nothing done; the server only resends it when it changes
     this.me = me;
     this.myId = you;
@@ -1087,6 +1090,10 @@ export class OnlineBackend implements Backend {
     if (pv.gearQuests) me.gearQuests = pv.gearQuests;
     if (pv.gearDone) me.gearDone = pv.gearDone;
     if (pv.tut) me.tut = pv.tut;
+    if (pv.album) {
+      me.album = cleanAlbum(pv.album);
+      me.recompute();
+    }
     me.level = pv.level;
     me.gold = pv.gold;
     // These come only when they changed (snapshot delta): missing = keep ours.
@@ -1518,6 +1525,7 @@ export class OnlineBackend implements Backend {
   gearAccept(id: string): void { this.send({ t: 'act', a: 'gearAccept', id }); }
   gearTurnIn(id: string): void { this.send({ t: 'act', a: 'gearTurnIn', id }); }
   tutAccept(step: TutStep): void { this.send({ t: 'act', a: 'tutAccept', step }); }
+  albumRegister(card: CardId): void { this.send({ t: 'act', a: 'albumRegister', card }); }
   tutTurnIn(step: TutStep): void { this.send({ t: 'act', a: 'tutTurnIn', step }); }
   floorTurnIn(): void { this.send({ t: 'act', a: 'floorTurnIn' }); }
   floorTravel(): void { this.send({ t: 'act', a: 'floorTravel' }); }

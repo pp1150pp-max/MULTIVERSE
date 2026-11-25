@@ -1,6 +1,7 @@
 // Where the game world comes from: the server runs the simulation, and OnlineBackend (net/online.ts)
 // mirrors what it sends. Game, HUD and views only talk to this interface.
 import type { Terrain } from '../shared/sim/terrain';
+import type { CardId } from '../shared/data/cards';
 import type { CosSlot } from '../shared/data/cosmetics';
 import type { WearSlot } from '../shared/data/classes';
 import type { Player, AutoSettings, LootFilter, SortKey } from '../shared/sim/Player';
@@ -240,6 +241,8 @@ export interface Backend {
   gearTurnIn(id: string): void;
   /** Tutorial quests: take / hand in a step at its NPC (the server checks the distance and the state). */
   tutAccept(step: TutStep): void;
+  /** Card album: register one card from the bag into the account's album (used up; the server checks it all). */
+  albumRegister(card: CardId): void;
   tutTurnIn(step: TutStep): void;
   /** The navigator (src/shared/floorGate.ts): hand in the floor-2 quest / be taken up to the harbour. The server checks it all. */
   floorTurnIn(): void;

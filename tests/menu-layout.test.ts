@@ -26,7 +26,8 @@ ok(code.top.at(-1) === 'menu' && code.top.includes('auto'), 'code: เมนู 
 ok(JSON.stringify(mergeBalance({}).menuLayout) === JSON.stringify(code), 'the balance carries the code layout');
 ok(JSON.stringify(checkBalance({ menuLayout: code }, true).tuning) === '{}', 'the code layout is not stored');
 const moved = { menu: ['mail', 'bag', 'news', 'settings'], top: ['auto', 'trade', 'menu'] };
-const movedFull = { ...code, ...moved };
+// A saved layout without the card album gets it in the top row, before เมนู (ADDED_LATER_TOP, owner 2026-11-25).
+const movedFull = { ...code, ...moved, top: ['auto', 'trade', 'album', 'menu'] };
 const t = checkBalance({ menuLayout: moved }, true).tuning!;
 ok(JSON.stringify(t) === JSON.stringify({ menuLayout: moved }), 'a moved / hidden layout is stored whole');
 ok(JSON.stringify(mergeBalance(t).menuLayout) === JSON.stringify(movedFull), 'and merged back as it is');
