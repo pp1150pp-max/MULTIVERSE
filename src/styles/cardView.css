@@ -1,0 +1,32 @@
+/* One monster card shown big (src/client/cardView.ts): picture + thin frame + pointer shine, text under the card. */
+.cv { display: flex; flex-direction: column; align-items: center; gap: 12px; max-width: 100%; }
+.cv-stage { perspective: 900px; }
+.cv-card {
+  --cv-x: 50%; --cv-y: 50%; --cv-shine: 0.55;
+  position: relative; height: min(70vh, 120vw); aspect-ratio: 2 / 3; border-radius: 3.5% / 2.4%; overflow: hidden;
+  transform-style: preserve-3d; transition: transform 0.35s ease-out; touch-action: none; cursor: default;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.55);
+}
+.cv-card.cv-live { transition: transform 0.06s linear; }
+.cv-card img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; user-select: none; pointer-events: none; }
+.cv-art { object-fit: cover; }
+/* A soft light spot and a diagonal glare band that follow the pointer, only while it is over the card. */
+.cv-shine {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.3s; mix-blend-mode: screen;
+  background:
+    radial-gradient(circle at var(--cv-x) var(--cv-y), rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0.18) 22%, transparent 48%),
+    linear-gradient(115deg, transparent calc(var(--cv-x) - 22%), rgba(255, 255, 255, 0.35) var(--cv-x), transparent calc(var(--cv-x) + 22%));
+}
+.cv-live .cv-shine { opacity: var(--cv-shine); }
+.cv-noshine .cv-shine { display: none; }
+/* Legendary: a faint rainbow sheen that slides with the pointer. */
+.cv-rainbow .cv-shine {
+  background:
+    radial-gradient(circle at var(--cv-x) var(--cv-y), rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0.15) 22%, transparent 48%),
+    linear-gradient(115deg, transparent calc(var(--cv-x) - 22%), rgba(255, 255, 255, 0.35) var(--cv-x), transparent calc(var(--cv-x) + 22%)),
+    linear-gradient(125deg, #ff5f6d55, #ffc37155, #8cff9e55, #6ec6ff55, #c58bff55, #ff5f6d55) calc(var(--cv-x) * 1.5) calc(var(--cv-y) * 1.5) / 250% 250%;
+}
+.cv-text { text-align: center; max-width: min(92vw, 420px); }
+.cv-name { font-size: 20px; color: var(--gold-hi, #ffe08a); font-weight: 600; }
+.cv-meta { font-size: 14px; opacity: 0.85; margin-top: 2px; }
+.cv-fx { list-style: none; margin: 6px 0 0; padding: 0; font-size: 15px; line-height: 1.5; }

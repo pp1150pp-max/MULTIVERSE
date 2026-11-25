@@ -1,4 +1,5 @@
-import { CARD_DEFAULTS, CARD_FRAME_WINDOWS, CARD_FX, CARD_FX_MAX, CARD_FX_NAME, CARD_GROUPS, CARD_GROUP_NAME, CARD_NUM_FIELDS, CARD_RARITY_NAME, cardArt, cardFrame, cardName, type CardFx, type CardGroup, type CardId } from '../../shared/data/cards';
+import { CARD_DEFAULTS, CARD_FX, CARD_FX_MAX, CARD_FX_NAME, CARD_GROUPS, CARD_GROUP_NAME, CARD_NUM_FIELDS, CARD_RARITY_NAME, cardArt, cardName, type CardFx, type CardGroup, type CardId } from '../../shared/data/cards';
+import { cardViewEl } from '../../client/cardView';
 import { CARD_FX_LIMIT, type CardTuning } from '../../shared/cardTuning';
 import { type AdminCardTune } from '../../shared/admin';
 import { RARITY_COLOR } from '../../shared/types';
@@ -38,8 +39,11 @@ function workTuning(w: CardWork): CardTuning {
   return { cards, nums: { ...w.nums } };
 }
 
-/** A card's picture full size over the page; a click anywhere or Esc closes it. */
-function showCardArt(id: CardId): void {
+/**
+ * A card full size over the page as players will see it (src/client/cardView.ts), with the tab's current values,
+ * saved or not: its group and effects, and the look numbers. A click outside the card or Esc closes it.
+ */
+function showCardArt(id: CardId, w: CardWork): void {
   const close = () => {
     over.remove();
     window.removeEventListener('keydown', onKey);
@@ -47,15 +51,16 @@ function showCardArt(id: CardId): void {
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'Escape') close();
   };
-  // The papercraft frame of its rarity over the picture, which fills the frame's art window.
   const d = CARD_DEFAULTS.find((x) => x.id === id)!;
-  const win = CARD_FRAME_WINDOWS[d.rarity].art;
-  const pct = (v: number) => `${v * 100}%`;
-  const over = h('div', { class: 'card-art-view', onclick: close },
-    h('div', { class: 'card-framed' },
-      h('img', { class: 'card-framed-art', src: cardArt(id), alt: cardName(id), style: `left:${pct(win.x)};top:${pct(win.y)};width:${pct(win.w)};height:${pct(win.h)}` }),
-      h('img', { class: 'card-framed-frame', src: cardFrame(d.rarity), alt: '' })),
-    h('div', {}, cardName(id)));
+  const c = w.cards[id];
+  const fx: Partial<Record<CardFx, number>> = {};
+  for (const [f, v] of c.fx) if (f) fx[f] = v;
+  const cardEl = cardViewEl({ id, rarity: d.rarity, group: c.group, fx }, {
+    shine: w.nums.viewShine === 1, shinePct: w.nums.viewShinePct, tiltDeg: w.nums.viewTiltDeg, rainbow: w.nums.viewRainbow === 1,
+  });
+  cardEl.onclick = (e) => e.stopPropagation();
+  const over = h('div', { class: 'card-art-view', onclick: close }, cardEl,
+    h('div', { class: 'muted', style: 'font-size:13px' }, 'ขยับเมาส์บนการ์ดเพื่อดูแสงสะท้อน · คลิกที่ว่างหรือกด Esc เพื่อปิด'));
   window.addEventListener('keydown', onKey);
   document.body.append(over);
 }
@@ -116,7 +121,7 @@ export async function renderCards(): Promise<void> {
     return h('tr', { 'data-card': id },
       h('td', { 'data-label': 'แมพ' }, `ชั้น ${d.floor} แมพ ${d.map}`, d.dropFrom ? h('div', { class: 'muted' }, 'ดรอปตอนฆ่ากัปตันขาไม้') : null),
       h('td', { 'data-label': 'การ์ด' },
-        h('img', { class: 'card-thumb', src: cardArt(id), alt: cardName(id), title: 'คลิกเพื่อดูภาพใหญ่', loading: 'lazy', onclick: () => showCardArt(id) }),
+        h('img', { class: 'card-thumb', src: cardArt(id), alt: cardName(id), title: 'คลิกเพื่อดูภาพใหญ่', loading: 'lazy', onclick: () => showCardArt(id, work) }),
         h('div', {}, cardName(id))),
       h('td', { 'data-label': 'ระดับ', style: `color:${RARITY_COLOR[d.rarity]}` }, CARD_RARITY_NAME[d.rarity]),
       h('td', { 'data-label': 'ใส่ได้' }, group),
