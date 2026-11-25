@@ -119,6 +119,8 @@ const GRAVE_PROPS = [
 ];
 /** The graveyard's move effects (sim/graveMoves.ts, ghostCaptain.ts): skull, curse ring, song, pull, mist, bell, ghost puff, shell burst. */
 const GRAVE_FX = ['fx_ghost_skull', 'fx_curse_ring', 'fx_music_notes', 'fx_siren_pull', 'fx_mist', 'fx_bell_waves', 'fx_spirit_puff', 'fx_shell_burst'];
+/** Floor 2 bosses whose cut sheets (tools/cut_floor2_chars.cjs) are named after the picture, not the monster id. */
+const PAPER_MONSTER_FILE: Record<string, string> = { cannon_crab: 'giant_crab', pegleg_captain: 'peg_captain' };
 /** The harbour's NPC sheets and the navigator's (SHEET_SPECS keys): paper only. */
 const PAPER_ONLY_NPC = new Set(['hb_supply_merchant', 'hb_dock_keeper', 'hb_shipwright', 'hb_harbor_broker', 'hb_smuggler_npc', 'navigator']);
 const PAPER_GROUND = new Set(['grass', 'dirt', 'pave', 'room_forest', 'marsh', 'mud', 'water', 'room_marsh',
@@ -236,12 +238,13 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   spike_turtle: monster('monsters/spike_turtle.png', () => makeSheet(44, drawQuad(['#5a8a4a', '#4a3424', '#d8dcd8', '#1a2014'], {
     bodyRx: 0.34, bodyRy: 0.2, head: 0.12, ears: 'small', earSize: 0.02, tail: 'short', legLen: 0.06, legW: 0.09, snout: 0.04, belly: true,
   }))),
-  // Its pictures are cut as giant_crab (4 moves, waiting for the owner's cannon and shell sheets); a placeholder until then.
+  // Paper sheet giant_crab (PAPER_MONSTER_FILE): walk, claw, cannon, shell. The game plays walk and the second move (claw)
+  // for every attack for now; the code-drawn shape below only stands in if the sheet does not load.
   cannon_crab: monster('monsters/cannon_crab.png', () => makeSheet(56, drawQuad(['#d8502a', '#7a2410', '#c89a5a', '#2a1410'], {
     bodyRx: 0.4, bodyRy: 0.2, head: 0.1, ears: 'small', earSize: 0.03, tail: 'none', legLen: 0.08, legW: 0.08, snout: 0.03, tusks: true, belly: true,
   }))),
   // Floor 2, Smugglers' Cove: paper sheets only (sprites/paper/monsters/, 3 moves for the two prisoners). Placeholders until then;
-  // the captain stays one until the owner's own pictures (his cut sheets are named peg_captain).
+  // the captain's paper sheet is peg_captain (PAPER_MONSTER_FILE): walk, anchor, shout; the code-drawn shape is the fallback.
   prisoner: monster('monsters/prisoner.png', () => makeSheet(36, drawSlime(['#e8e8e0', '#2a2a2a', '#8a8a8a']))),
   cutlass_pirate: monster('monsters/cutlass_pirate.png', () => makeSheet(36, drawSlime(['#c83a2a', '#6a1a10', '#f2e2c0']))),
   shotgunner: monster('monsters/shotgunner.png', () => makeSheet(36, drawSlime(['#5a3e2c', '#2a1a10', '#e8d6a6']))),
@@ -787,7 +790,8 @@ async function loadAssets(): Promise<void> {
       let paperMonster: SheetInfo['paper'];
       let idleFrames: number | undefined;
       try {
-        const monster = paperMonsters[key];
+        const paperFile = PAPER_MONSTER_FILE[key] ?? key;
+        const monster = paperMonsters[paperFile];
         // Floor 2's NPC sheets exist only as paper: from sprites/paper/npc/ whatever the art switch says.
         const npcPaper = (paperMaps || PAPER_ONLY_NPC.has(key)) && spec.path.startsWith(`${BASE}npc/`) ? spec.path.replace(`${BASE}npc/`, `${BASE}paper/npc/`) : null;
         if (npcPaper && (tex = await loadTexture(npcPaper).catch(() => null as unknown as THREE.Texture))) {
@@ -795,7 +799,7 @@ async function loadAssets(): Promise<void> {
           cols = 4;
           idleFrames = 4;
         } else if (monster) {
-          tex = await loadTexture(`${BASE}paper/monsters/${key}.png`);
+          tex = await loadTexture(`${BASE}paper/monsters/${paperFile}.png`);
           paperMonster = { walk: 4, attack: 4, scale: monster.scale ?? 1 };
           cols = 4 * Math.max(2, monster.moves?.length ?? 2);
         } else {
