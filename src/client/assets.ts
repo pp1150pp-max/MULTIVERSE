@@ -152,7 +152,7 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   stylist: sheet('npc/stylist.png', () => makeSheet(32, drawStylist())),
   crystal: sheet('npc/crystal_merchant.png', () => makeSheet(32, drawCrystalMerchant())),
   // Cosmetics with a body (wings, mounts, pets): 8-direction walk sheets like the monsters' (see cosmeticViews.ts).
-  ...Object.fromEntries(COSMETICS.filter((c) => c.slot !== 'aura' && c.slot !== 'title' && c.slot !== 'orb').map((c) => [
+  ...Object.fromEntries(COSMETICS.filter((c) => c.slot === 'wings' || c.slot === 'mount' || c.slot === 'pet').map((c) => [
     cosSheetKey(c.id), monster(`paper/cosmetics/${c.id}.png`, () => makeSheet(c.slot === 'pet' ? 32 : 48, drawCosmetic(c))),
   ])),
   // Wings from ONE wing picture, mirrored into the pair (wingPair.ts). Used only when the file exists
