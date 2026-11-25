@@ -1,5 +1,6 @@
 // What the editor canvas draws (each a Layer in editor.ts). The ground is the game's tiles (groundArt.ts) or, switched off, plain colours.
 import { ROOM_EDGE, roomSpawnOf, type MapTheme } from '../../shared/mapSchema';
+import { spawnRadiusMult } from '../../shared/balance';
 import { catalogEntry, spriteOf } from './sprites';
 import type { Editor, Layer } from './editor';
 import { decorLayer, drawRealGround } from './groundArt';
@@ -144,10 +145,16 @@ const markers: Layer = {
     for (const n of m.npcs) dot(n.x, n.z, '#4ac0e8', n.id);
     for (const p of m.portals) dot(p.x, p.z, '#b070f0', `→ ${p.to}`);
     for (const r of m.rest) dot(r.x, r.z, '#e8c040', r.kind);
+    const k = spawnRadiusMult(m.id);
     for (const s of m.spawns) {
       const pts: [number, number][] = Array.from({ length: 20 }, (_, i) => [s.x + Math.cos((i / 20) * Math.PI * 2) * s.radius, s.z + Math.sin((i / 20) * Math.PI * 2) * s.radius]);
       ed.path(g, pts);
       g.strokeStyle = 'rgba(240,120,120,0.7)'; g.lineWidth = 1; g.stroke();
+      // The map's spawn-radius × (ปรับสมดุล, ordinary monsters only): where they really appear in game, a dashed guide that is not edited here.
+      if (!m.room && k > 1) {
+        ed.path(g, Array.from({ length: 28 }, (_, i) => [s.x + Math.cos((i / 28) * Math.PI * 2) * s.radius * k, s.z + Math.sin((i / 28) * Math.PI * 2) * s.radius * k]));
+        g.setLineDash([5, 4]); g.strokeStyle = 'rgba(255,170,90,0.85)'; g.stroke(); g.setLineDash([]);
+      }
     }
     if (m.lair) dot(m.lair.x, m.lair.z, '#e05050', m.lair.boss);
   },
