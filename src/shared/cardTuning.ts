@@ -167,3 +167,9 @@ export function cardDef(id: CardId): CardDef | undefined {
 export function cardNum(key: string): number {
   return current.nums?.[key] ?? FIELD.get(key)?.def ?? 0;
 }
+
+/** Whether a card may drop now: floor 1 always, floor 2 only while the /admin switch floor2Drop is on (owner 2026-11-25). */
+export function cardDropsOpen(id: CardId): boolean {
+  const d = CARD_DEFAULTS.find((x) => x.id === id);
+  return !!d && (d.floor === 1 || cardNum('floor2Drop') === 1);
+}

@@ -353,10 +353,14 @@ td.changed, input.changed { background: #3a3110; }
 .bal-num.bal-bad { border-color: var(--bad); }
 .bal-out { color: var(--gold-hi); text-align: right; }
 
-.card-thumb { display: block; width: 72px; height: 108px; object-fit: cover; border: 1px solid var(--edge-dim); border-radius: 4px; margin-bottom: 4px; cursor: zoom-in; image-rendering: pixelated; }
+.card-thumb { display: block; width: 72px; height: 108px; object-fit: cover; border: 1px solid var(--edge-dim); border-radius: 4px; margin-bottom: 4px; cursor: zoom-in; }
 .card-fx .row { flex-wrap: nowrap; }
 .card-art-view { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.8); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; cursor: zoom-out; color: var(--gold-hi); font-size: 18px; }
-.card-art-view img { max-width: 92vw; max-height: 82vh; border: 2px solid var(--edge); border-radius: 6px; image-rendering: pixelated; }
+/* A card at full size: the papercraft frame (transparent windows) over the monster picture. */
+.card-framed { position: relative; height: min(82vh, 138vw); aspect-ratio: 2 / 3; }
+.card-framed img { position: absolute; display: block; }
+.card-framed-art { object-fit: cover; }
+.card-framed-frame { inset: 0; width: 100%; height: 100%; }
 
 /* Account sheet: worn gear / bag / stash as slot grids like the game's bag (src/admin/items.ts). */
 .igrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); gap: 4px; margin-top: 4px; max-width: 520px; }
