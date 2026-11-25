@@ -9,6 +9,7 @@ import { toggleGfxPanel } from './gfxPanel';
 import { toggleKeybindPanel } from './keybindPanel';
 import { currentBalance } from '../shared/balance';
 import { newsButtonOn } from './news';
+import { albumOn } from '../shared/cardAlbum';
 import { hasChannels } from '../shared/channels';
 import { buttonAct, buttonIcon, buttonLabel, codeMenuLayout, freeBtnDomId, menuEntry, type MenuIcon, type MenuLayoutConfig } from '../shared/menuLayout';
 
@@ -45,7 +46,7 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 export function menuButtonsHtml(lay: MenuLayoutConfig, guest: boolean): { top: string; free: string; tiles: string } {
   // No เต็มจอ where the browser can't do it (iPhone Safari); none of mail / report / trade / friends / daily for a guest.
   // Checked on what the button does, so an admin's shortcut to the same thing follows the same rules.
-  const okAct = (a: string) => !(guest && GUEST_NO.has(a)) && !(a === 'fullscreen' && !document.fullscreenEnabled) && !(a === 'news' && !newsButtonOn())
+  const okAct = (a: string) => !(guest && GUEST_NO.has(a)) && !(a === 'fullscreen' && !document.fullscreenEnabled) && !(a === 'news' && !newsButtonOn()) && !(a === 'album' && !albumOn())
     && !(a === 'keybinds' && !currentBalance().fxLayer.keyRebind);
   const ok = (id: string) => okAct(buttonAct(lay, id));
   // The badge key stays the code button's own Thai name (what setBadge uses), whatever the button is called now.

@@ -2436,6 +2436,9 @@ export class GameWorld {
       p.z = spot.z;
       p.face(old.faceX, old.faceZ);
     }
+    // The account's card album first: its bonus is part of the max HP / MP the old values are clamped to.
+    p.album = old.album;
+    p.recompute();
     p.hp = Math.min(old.hp, p.maxHp);
     p.mp = Math.min(old.mp, p.stats.maxMp);
     p.cd = { ...old.cd };
@@ -2446,8 +2449,6 @@ export class GameWorld {
     // The account's tutorial (shared object, like the stash). Left out before 2026-11-18: every map change
     // reset it to nothing done and the save below wrote that, so the steps (and their gold) could be taken again.
     p.tut = old.tut;
-    p.album = old.album;
-    p.recompute();
     p.partyId = old.partyId;
     // Still riding after a portal or a channel switch; Sim.tickMount throws them off in a boss room.
     if (old.mounted) {
