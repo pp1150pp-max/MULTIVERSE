@@ -267,7 +267,7 @@ function nearestTo(sim: Sim, x: number, z: number, r: number, skip?: Set<Monster
 }
 
 /** Monsters a skill can push or pull: not bosses (the same rule as knockback). */
-const movable = (m: Monster): boolean => !m.isBoss && !m.def.pattern;
+const movable = (m: Monster): boolean => !m.isBoss && !m.def.pattern && !m.def.anchored;
 
 /** A random spot inside a circle. */
 function spotIn(x: number, z: number, r: number): Vec2 {

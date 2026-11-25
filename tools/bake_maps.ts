@@ -83,7 +83,8 @@ export function bakeZone(zone: ZoneDef): MapData {
   const water: MapData['water'] = [
     ...(zone.iceLakes ?? []).map((l) => ({ kind: 'ice' as const, x: l.x, z: l.z, rx: l.rx, rz: l.rz })),
     ...(zone.lavaPools ?? []).map((l) => ({ kind: 'lava' as const, x: l.x, z: l.z, rx: l.rx, rz: l.rz })),
-    ...(zone.whirlpools ?? []).map((w) => ({ kind: 'whirlpool' as const, x: w.x, z: w.z, rx: w.r, rz: w.r })),
+    // A boss room's whirlpool stays in code (bossRoom, like its boss and arena): a room file holds no water (validateMap).
+    ...(zone.roomOf ? [] : zone.whirlpools ?? []).map((w) => ({ kind: 'whirlpool' as const, x: w.x, z: w.z, rx: w.r, rz: w.r })),
   ];
   const w = TRAIL_WIDTH[zone.theme];
   const map: MapData = {

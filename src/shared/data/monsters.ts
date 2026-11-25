@@ -3,7 +3,7 @@ import type { BossEffect } from '../sim/types';
 export type Behavior = 'passive' | 'skittish' | 'aggressive' | 'charger' | 'boss';
 
 /** The picture a monster's shot flies as: the client's sheet fx_<art>. The cove's are paper only (sprites/paper/fx/). */
-export type ShotArt = 'ice_shard' | 'snowball' | 'ember_bolt' | 'iron_ball' | 'bomb' | 'pellets' | 'ghost_skull' | 'bubble';
+export type ShotArt = 'ice_shard' | 'snowball' | 'ember_bolt' | 'iron_ball' | 'bomb' | 'pellets' | 'ghost_skull' | 'bubble' | 'ink_blob';
 
 /** A straight shot at the player. */
 export interface ShotDef {

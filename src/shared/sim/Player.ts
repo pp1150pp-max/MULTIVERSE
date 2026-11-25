@@ -1,6 +1,7 @@
 import { Unit } from './Unit';
 import type { Sim } from './Sim';
 import type { Monster } from './Monster';
+import { suctionStep } from './kraken';
 import type { Terrain } from './terrain';
 import type { Intent, SkillEffect } from './types';
 import { castSkill, basicAttack, quarksCue, emptyGunBuffs, type GunBuffs } from './skills';
@@ -1423,6 +1424,8 @@ export class Player extends Unit {
     } else {
       moving = this.walkStep(mx, mz, remaining, dt, sim.terrain);
     }
+    // The kraken's whirlpool pulls (sim/kraken.ts). A position from the browser already has it (the browser walks the pull too).
+    if (!(it.pos && posOk) && sim.hazards.length) suctionStep(this, sim.hazards, sim.time, dt, sim.terrain);
     if (this.atkRootNew) {
       this.atkRootNew = false;
       this.atkRootX = this.x;
