@@ -31,10 +31,10 @@ for (const c of COSMETICS) {
   ok(!!d && Object.keys(fields).every((k) => k in d) && Object.keys(d).every((k) => k in fields), `${c.id}: defaults cover every field`);
   for (const [k, f] of Object.entries(fields)) {
     const v = d![k];
-    ok(f.kind === 'bool' ? typeof v === 'boolean' : typeof v === 'number' && v >= f.min && v <= f.max, `${c.id}.${k}: default ${v} fits its range`);
+    ok(f.kind === 'bool' ? typeof v === 'boolean' : f.kind === 'color' ? Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 0xffffff : typeof v === 'number' && v >= f.min && v <= f.max, `${c.id}.${k}: default ${v} fits its range`);
   }
 }
-ok(TUNED_SLOTS.length === 4, 'wings, mounts, pets and auras are tuned');
+ok(TUNED_SLOTS.length === 5, 'wings, mounts, pets, auras and level-up effects are tuned');
 ok(cosTuneDefaults('wings_angel')?.h === 1.625 && cosTuneDefaults('wings_angel')?.root === 0.6 && cosTuneDefaults('wings_angel')?.backStand === 1.35 && cosTuneDefaults('wings_angel')?.backSeat === 1 && cosTuneDefaults('wings_angel')?.overBack === true && cosTuneDefaults('wings_angel')?.back === 0.22, 'wings start where #197/#200 put them (size 1.625, roots 60% up on the middle of the back, back 0.22)');
 ok(cosTuneDefaults('mount_wolf')?.seat === 0.5 && cosTuneDefaults('mount_wolf')?.cutFrontDiag === true && cosTuneDefaults('mount_wolf')?.cutSide === true && cosTuneDefaults('mount_wolf')?.cutBackDiag === true && cosTuneDefaults('mount_wolf')?.under === false, 'mount defaults kept (seat, cut in two on the front/back diagonal and the side)');
 ok(cosTuneDefaults('mount_hoverboard') === undefined && cosTuneDefaults('mount_tortoise') === undefined, 'removed mounts (#200) have no tuning');

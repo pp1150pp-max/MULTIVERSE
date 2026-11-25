@@ -227,6 +227,27 @@ async function run(): Promise<void> {
   await sleep(300);
   ok(JSON.stringify(A2.seen()?.cos) === JSON.stringify([codes[0]]), 'shown again: it can be worn');
 
+  // ---- level-up effects (owner 2026-11-25): a slot of their own, same rules
+  A2.act({ a: 'cosWear', slot: 'levelup', id: 'levelup_fire' });
+  await sleep(300);
+  ok(JSON.stringify(A2.seen()?.cos) === JSON.stringify([codes[0]]), 'a level-up effect not owned: not worn');
+  ok((await api('POST', `/admin/accounts/${accId}/cosmetics`, { id: 'levelup_fire', give: true }, owner.tok)).status === 200, 'owner gives a level-up effect');
+  await sleep(300);
+  A2.act({ a: 'cosWear', slot: 'aura', id: 'levelup_fire' });
+  await sleep(300);
+  ok(JSON.stringify(A2.seen()?.cos) === JSON.stringify([codes[0]]), 'a level-up effect cannot go in another slot');
+  A2.act({ a: 'cosWear', slot: 'levelup', id: 'levelup_fire' });
+  await sleep(300);
+  const fireCode = cosById('levelup_fire')!.code;
+  ok(JSON.stringify(A2.seen()?.cos) === JSON.stringify([codes[0], fireCode]), `level-up effect worn (${JSON.stringify(A2.seen()?.cos)})`);
+  ok(JSON.stringify(B.seen(A2.you())?.cos) === JSON.stringify([codes[0], fireCode]), 'others see which level-up effect is worn');
+  A2.act({ a: 'cosWear', slot: 'levelup', id: 'levelup_star' });
+  await sleep(300);
+  ok(JSON.stringify(A2.seen()?.cos) === JSON.stringify([codes[0], fireCode]), 'only an owned one: the unowned star is refused, the fire stays');
+  A2.act({ a: 'cosWear', slot: 'levelup', id: null });
+  await sleep(300);
+  ok(JSON.stringify(A2.seen()?.cos) === JSON.stringify([codes[0]]), 'level-up effect taken off');
+
   // ---- guests
   G.act({ a: 'cosWear', slot: 'wings', id: 'wings_angel' });
   await sleep(300);

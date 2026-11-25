@@ -6,10 +6,11 @@
 import * as THREE from 'three';
 import { assetSources, cosOneKey, loadGameAssets, groundTiles } from './assets';
 import { Effects } from './effects';
+import { LEVELUP_STYLE, levelUpLookOf, playLevelUp } from './levelUpFx';
 import { PlayerView } from './views';
 import { ISO_DIR } from './world';
 import { applyCosTuning, cosTune, currentCosTuning, resetCosTune, setCosTuneValue } from './cosTune';
-import { axisHiddenInDir, checkCosTuning, COS_AXES, COS_TUNE_FIELDS, cosTuneOf, dirFieldKey, isPerFacingKey, partOfView, savePartOf, TUNED_SLOTS, valueAtDir, VIEW_DIR_NAME, VIEW_DIRS, viewOffKey, WING_ONE_DIR_FIELDS, type AxisSpec, type CosTuning, type TunedSlot, type ViewDir } from '../shared/cosTuning';
+import { axisHiddenInDir, checkCosTuning, colorHex, colorNum, COS_AXES, COS_TUNE_FIELDS, cosTuneOf, dirFieldKey, isPerFacingKey, partOfView, savePartOf, TUNED_SLOTS, valueAtDir, VIEW_DIR_NAME, VIEW_DIRS, viewOffKey, WING_ONE_DIR_FIELDS, type AxisSpec, type CosTuning, type TunedSlot, type ViewDir } from '../shared/cosTuning';
 import { COSMETICS, COS_SLOTS, COS_SLOT_NAME, cosById, MOUNT_SPEED, type CosSlot, type CosWorn } from '../shared/data/cosmetics';
 import { Player } from '../shared/sim/Player';
 import type { Sim } from '../shared/sim/Sim';
@@ -144,7 +145,9 @@ const state = {
   /** The facing the position sliders edit: '' = every facing (the base value), else one of the 8. */
   view: '' as ViewDir | '',
   cls: 'sword' as ClassId,
-  worn: { wings: 'wings_angel', mount: 'mount_wolf', pet: 'pet_slime', aura: 'aura_star' } as CosWorn,
+  worn: { wings: 'wings_angel', mount: 'mount_wolf', pet: 'pet_slime', aura: 'aura_star', levelup: 'levelup_cyan' } as CosWorn,
+  /** The level-up tab plays the effect again every time it ends. */
+  luLoop: false,
   riding: false,
   walk: false,
   spin: false,
@@ -315,6 +318,19 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
 
   let last = performance.now();
   let t = 0;
+  /** When the level-up tab's loop plays the effect next (bench seconds). */
+  let luNext = 0;
+  /** Plays the worn level-up piece on the character with the values tried out now. */
+  function playLu(): void {
+    const id = state.worn.levelup;
+    const style = id ? LEVELUP_STYLE[id] : undefined;
+    if (!id || !style) return;
+    const look = levelUpLookOf(cosTune(id));
+    playLevelUp((o, life, tick) => fx.add(o, life, tick), hero.x, hero.z, style, look, {
+      particles: 1, extras: true, follow: () => ({ x: hero.x, z: hero.z }),
+    });
+    luNext = t + Math.max(0.3, look.sec) + 0.6;
+  }
   let spinT = 0;
   // For checks while the pane is hidden (no animation frames): window.cosPreview.step(n) runs n frames.
   (window as unknown as { cosPreview: object }).cosPreview = {
@@ -383,6 +399,7 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
     camTarget.z += (hero.z - camTarget.z) * k;
     placeCamera();
     fx.update(dt);
+    if (state.luLoop && state.tab === 'levelup' && t >= luNext) playLu();
     renderer.render(scene, camera);
   };
   raf = requestAnimationFrame(loop);
@@ -400,7 +417,7 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
       const fields = COS_TUNE_FIELDS[c.slot as TunedSlot];
       for (const k of Object.keys(a)) {
         if (a[k] === b[k]) continue;
-        const show = (v: number | boolean) => (typeof v === 'boolean' ? (v ? 'เปิด' : 'ปิด') : String(v));
+        const show = (v: number | boolean) => (typeof v === 'boolean' ? (v ? 'เปิด' : 'ปิด') : fields[k]?.kind === 'color' ? colorHex(v) : String(v));
         out.push({ id: c.id, key: k, text: `${c.name} · ${fields[k]?.label ?? k}: ${show(a[k])} → ${show(b[k])}` });
       }
     }
@@ -665,6 +682,10 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
         h('div', 'ยังไม่ได้สวมชิ้นในช่องนี้ เลือกด้านบนเพื่อปรับค่า').className = 'note';
         return;
       }
+      if (slot === 'levelup') {
+        buildLevelUpTab(c.id);
+        return;
+      }
       if ((slot === 'mount' || slot === 'wings') && state.worn.mount) row('ขี่สัตว์ขี่', check(state.riding, (v) => { state.riding = v; dress(hero); }));
       h('h2', 'ทิศที่ปรับ');
       dirGrid(c.id);
@@ -732,6 +753,7 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
       for (const [key, f] of Object.entries(fields)) {
         if (axisKeys.has(key) || isPerFacingKey(key)) continue;
         if (one && (PAIR_ONLY.has(key) || (state.view && key in WING_ONE_DIR_FIELDS))) continue;
+        if (f.kind === 'color') continue;
         const el = f.kind === 'bool'
           ? boolField(shortLabel(f.label), f.label, curNow[key] === true, defs[key] === true, set(key))
           : numField(shortLabel(f.label), f.label, f.min, f.max, f.step, curNow[key] as number, defs[key] as number, set(key));
@@ -757,6 +779,38 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
       }
       if (one && !state.view) h('div', 'ปีกภาพข้างเดียว: ซ่อนค่าของภาพปีกคู่แบบเก่าที่ไม่มีผล · ขนาด ระยะ เอียง บีบ ที่นี่คือค่าหลัก ปรับเพิ่มต่อทิศได้เมื่อกดลูกศร').className = 'note';
       h('div', 'ตัวเลขสีฟ้า + ↺ = ต่างจากค่าที่บันทึกไว้ล่าสุด (กด ↺ เพื่อคืนค่านั้น) · ชี้ที่ชื่อเพื่อดูชื่อเต็ม · บันทึกด้วยปุ่มด้านล่าง').className = 'note';
+    }
+
+    /** A level-up piece (owner 2026-11-25): colours, size, time and parts, and playing it on the character. */
+    function buildLevelUpTab(id: string): void {
+      const play = button('▶ ดูตัวอย่าง', () => playLu());
+      play.className = 'save';
+      row('เล่นซ้ำเรื่อย ๆ', check(state.luLoop, (v) => {
+        state.luLoop = v;
+        if (v) playLu();
+      }));
+      h('div', 'เล่นบนตัวละครด้วยค่าที่ตั้งอยู่ (ยังไม่ต้องบันทึก) · ในเกมเห็นตอนเลเวลอัป ทุกคนรอบ ๆ เห็นตามเมนูกราฟิกของแต่ละคน').className = 'note';
+      const defs = cosTuneOf(serverTuning ?? {}, id)!;
+      const curNow = cosTune(id)!;
+      const fields = COS_TUNE_FIELDS.levelup;
+      const set = (key: string) => (v: number | boolean) => {
+        setCosTuneValue(id, key, v);
+        updateStatus();
+      };
+      const groups: [string, string[]][] = [['สี', ['color1', 'color2']], ['ขนาดและเวลา', ['size', 'sec']], ['ส่วนที่แสดง', ['ground', 'sparks', 'main', 'text']]];
+      for (const [g, keys] of groups) {
+        h('div', g).className = 'grp';
+        for (const key of keys) {
+          const f = fields[key];
+          if (f.kind === 'color') bodyEl.append(colorField(f.label, curNow[key] as number, defs[key] as number, set(key)));
+          else if (f.kind === 'bool') bodyEl.append(boolField(f.label, f.label, curNow[key] === true, defs[key] === true, set(key)));
+          else bodyEl.append(numField(f.label, f.label, f.min, f.max, f.step, curNow[key] as number, defs[key] as number, set(key)));
+        }
+      }
+      const style = LEVELUP_STYLE[id];
+      const mainName: Record<string, string> = { cyan: 'ลูกศรลอยเหนือหัว', fire: 'เปลวไฟหมุนเป็นเกลียว', thunder: 'สายฟ้าผ่าลง', leaf: 'ลมหมุนและใบไม้เป็นเกลียว', star: 'ดาวตก', shadow: 'ควันวนเป็นวังวน' };
+      h('div', `สีหลัก/สีรอง ใช้ทั้งวงบนพื้น อนุภาค และตัวหนังสือ · ส่วนเด่นของแบบนี้ = ${mainName[style ?? 'cyan']} · เมนูกราฟิกของผู้เล่น: คุณภาพ "ปิด" = เหลือตัวหนังสือ, "ต่ำ/กลาง" = อนุภาคลดลง, ของคนอื่น "ไม่แสดง" = เห็นแค่ตัวหนังสือ`).className = 'note';
+      h('div', 'ตัวเลขสีฟ้า + ↺ = ต่างจากค่าที่บันทึกไว้ล่าสุด · บันทึกด้วยปุ่มด้านล่าง').className = 'note';
     }
 
     function buildMoreTab(): void {
@@ -872,6 +926,33 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
     ct.append(stepBtn('−', -1), s, stepBtn('+', 1), box);
     if (saved !== undefined) ct.append(undo);
     wrap.append(lb, ct);
+    return wrap;
+  }
+
+  /** A colour (stored as 0xRRGGBB) with ↺ (back to `saved`, shown when it differs). */
+  function colorField(label: string, value: number, saved: number, on: (v: number) => void): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'fld ct';
+    const l = document.createElement('label');
+    l.textContent = label;
+    l.title = `${label} · ค่าที่บันทึกไว้ ${colorHex(saved)}`;
+    l.style.flex = '1';
+    const c = document.createElement('input');
+    c.type = 'color';
+    c.value = colorHex(value);
+    const mark = () => wrap.classList.toggle('changed', colorNum(c.value) !== saved);
+    c.oninput = () => {
+      const v = colorNum(c.value);
+      mark();
+      if (v !== undefined) on(v);
+    };
+    const undo = document.createElement('button');
+    undo.className = 'undo';
+    undo.textContent = '↺';
+    undo.title = 'คืนเป็นค่าที่บันทึกไว้';
+    undo.onclick = () => { c.value = colorHex(saved); mark(); on(saved); };
+    mark();
+    wrap.append(l, c, undo);
     return wrap;
   }
 

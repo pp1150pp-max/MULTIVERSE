@@ -12,7 +12,7 @@ import { checkShutdownText, DEFAULT_SHUTDOWN_TEXT, type ShutdownMode } from '../
 import { cleanStash, type StashData } from '../src/shared/sim/stash';
 import { cleanTutorial, type TutorialData } from '../src/shared/tutorial';
 import { cleanCosOwned } from '../src/shared/data/cosmetics';
-import { checkCosTuning, COS_TUNING_SETTING, type CosTuning } from '../src/shared/cosTuning';
+import { checkCosTuning, COS_TUNING_SETTING, levelUpFromOldBalance, OLD_LEVELUP_KEYS, OLD_LEVELUP_PIECE, type CosTuning } from '../src/shared/cosTuning';
 import { ANIM_TUNING_SETTING, checkAnimTuning, type AnimTuning } from '../src/shared/animTuning';
 import { checkCosShop, COS_SHOP_SETTING, type CosShop } from '../src/shared/cosShop';
 import type { CashPurchaseRow } from '../src/shared/cashShop';
@@ -482,6 +482,7 @@ export class Db {
     // The orb looks made in /admin are cosmetics too: put them in the list before anything reads owned or
     // worn cosmetics, hidden pieces or prices (those drop ids they don't know).
     registerOrbItems(this.orbItems().items);
+    this.migrateLevelUpLook();
     // The owner's mystery box table (src/shared/mysteryBox.ts): in use from the start.
     setBoxConfig(this.boxOverrides());
   }
@@ -726,6 +727,38 @@ export class Db {
     } catch {
       return {};
     }
+  }
+
+  /**
+   * Owner 2026-11-25: the level-up look moved from the balance tab (fxLayer.lu*) to the cyan level-up cosmetic.
+   * Whatever was saved there becomes that piece's values, and the old keys are taken out of the saved balance in
+   * the same transaction, so this runs once (a later reset of the piece is never undone by it). True if it moved anything.
+   */
+  migrateLevelUpLook(): boolean {
+    const raw = this.getSetting(BALANCE_SETTING);
+    if (!raw) return false;
+    let o: Record<string, unknown>;
+    try {
+      o = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      return false;
+    }
+    const fx = o && typeof o === 'object' ? (o.fxLayer as Record<string, unknown> | undefined) : undefined;
+    if (!fx || typeof fx !== 'object' || Array.isArray(fx)) return false;
+    const old = Object.keys(OLD_LEVELUP_KEYS).filter((k) => k in fx);
+    if (!old.length) return false;
+    const moved = levelUpFromOldBalance(fx);
+    this.transaction(() => {
+      if (Object.keys(moved).length) {
+        const t = this.cosTuning();
+        this.setCosTuning(checkCosTuning({ ...t, [OLD_LEVELUP_PIECE]: { ...t[OLD_LEVELUP_PIECE], ...moved } }, false).tuning ?? t);
+      }
+      for (const k of old) delete fx[k];
+      if (!Object.keys(fx).length) delete o.fxLayer;
+      this.setSetting(BALANCE_SETTING, Object.keys(o).length ? JSON.stringify(o) : null);
+    });
+    console.log(`[db] level-up look moved from the balance tab to ${OLD_LEVELUP_PIECE}: ${JSON.stringify(moved)}`);
+    return true;
   }
 
   /** Saves the server-wide cosmetic tuning (already clean; nothing changed is stored as no row). */

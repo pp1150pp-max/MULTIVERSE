@@ -406,10 +406,13 @@ export class CashShopUI {
         setTryOn(this.trying ? { [c.slot]: c.id } : null);
         // The window covers the character: step aside while trying on (the bar brings it back).
         if (this.trying) this.setPeek(c.name);
+        // A level-up effect plays once on your character to look at (only you see it).
+        if (this.trying && c.slot === 'levelup') this.g.fx.levelUpWith(c.id, this.g.player.x, this.g.player.z, this.g.player.id);
         this.drawn = '';
         this.update();
       }, this.trying ? 'on' : ''));
       if (c.slot === 'orb') row.append(el('span', 'cash-note', 'เห็นเมื่อสวมของ +7 ขึ้นไป'));
+      if (c.slot === 'levelup') row.append(el('span', 'cash-note', 'เห็นตอนเลเวลอัป คนรอบ ๆ เห็นด้วย'));
     }
     box.append(row);
 

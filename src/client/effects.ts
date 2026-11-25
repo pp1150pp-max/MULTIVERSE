@@ -9,7 +9,8 @@ import { playLayer, ShotLayer, type FxLayerHooks, type FxLayerHost } from './fxL
 import type { QuarksFx } from './quarksFx';
 import { currentBalance } from '../shared/balance';
 import { gfxOthers, gfxParticles, gfxQuality } from './gfxPrefs';
-import { levelUpLook, playLevelUp } from './levelUpFx';
+import { LEVELUP_STYLE, levelUpLookOf, playLevelUp } from './levelUpFx';
+import { cosTune } from './cosTune';
 import { bossFxOn, bossFxSpot, isBossEffect, isBossMelee, playBossExtras } from './bossFx';
 
 /** The three.quarks trial's switch (fxLayer.quarks, under the extra layer's own switch), and not "off" in the player's graphics window. */
@@ -822,19 +823,49 @@ export class Effects implements FxApi {
     }
   }
 
+  /** The level-up cosmetic a player shows (set by the game: the worn one, yours with the shop's try-on). */
+  levelUpOf: ((id: number) => string | undefined) | null = null;
+  /** Where a worn style drew its own "LEVEL UP !" title lately (the game then skips the floating text there). */
+  private titles: { x: number; z: number; at: number }[] = [];
+
   levelUp(x: number, z: number, by?: number): void {
-    const cfg = currentBalance().fxLayer;
-    if (cfg.luNew) {
-      const mine = by === undefined || !this.layerHooks || by === this.layerHooks.me();
-      const q = gfxQuality();
-      const others = mine ? 1 : gfxOthers();
-      playLevelUp((o, life, tick) => this.add(o, life, tick), x, z, levelUpLook(cfg), {
-        particles: gfxParticles() * others * (TOUCH ? 0.5 : 1),
-        extras: q > 0 && others > 0,
-        follow: by === undefined ? undefined : () => this.posOf?.(by) ?? null,
-      });
-      return;
+    const id = by === undefined ? undefined : this.levelUpOf?.(by);
+    if (this.levelUpWith(id, x, z, by)) return;
+    this.oldLevelUp(x, z);
+  }
+
+  /**
+   * Plays the level-up cosmetic `id` at (x, z) (following player `by`), within the player's graphics menu.
+   * False = not a level-up cosmetic, or /admin turned them off (the caller plays the old gold column).
+   */
+  levelUpWith(id: string | undefined, x: number, z: number, by?: number): boolean {
+    const style = id ? LEVELUP_STYLE[id] : undefined;
+    if (!id || !style || !currentBalance().fxLayer.luNew) return false;
+    const look = levelUpLookOf(cosTune(id));
+    const mine = by === undefined || !this.layerHooks || by === this.layerHooks.me();
+    const q = gfxQuality();
+    const others = mine ? 1 : gfxOthers();
+    playLevelUp((o, life, tick) => this.add(o, life, tick), x, z, style, look, {
+      particles: gfxParticles() * others * (TOUCH ? 0.5 : 1),
+      extras: q > 0 && others > 0,
+      follow: by === undefined ? undefined : () => this.posOf?.(by) ?? null,
+    });
+    if (look.text) {
+      const now = performance.now();
+      this.titles = this.titles.filter((t) => now - t.at < 1500);
+      this.titles.push({ x, z, at: now });
     }
+    return true;
+  }
+
+  /** A worn level-up style drew its own title at (x, z) just now (no floating "LEVEL UP!" on top of it). */
+  drewLevelUpTitle(x: number, z: number): boolean {
+    const now = performance.now();
+    return this.titles.some((t) => now - t.at < 1500 && Math.abs(t.x - x) < 1 && Math.abs(t.z - z) < 1);
+  }
+
+  /** The level-up look of a player who wears no level-up cosmetic: a gold column. */
+  private oldLevelUp(x: number, z: number): void {
     const m = this.mat('#ffd34a', 0.6);
     const col = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 4, 8, 1, true), m);
     col.position.set(x, 2, z);
