@@ -136,7 +136,7 @@ export function cardArt(id: CardId): string {
  * the card's name, rarity, slot and effects are written under the card, not on it (src/client/cardView.ts).
  */
 export function cardFrame(r: CardRarity): string {
-  return `/assets/sprites/paper/cards/card_frame_${r}.webp`;
+  return `/assets/sprites/paper/cards/card_frame_thin_${r}.webp`;
 }
 
 /** The cards a fusion of `rarity` cards from `floor` can give: same rarity, same floor (owner 2026-11-25). */
