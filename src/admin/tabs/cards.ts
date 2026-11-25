@@ -1,4 +1,4 @@
-import { CARD_DEFAULTS, CARD_FX, CARD_FX_MAX, CARD_FX_NAME, CARD_GROUPS, CARD_GROUP_NAME, CARD_NUM_FIELDS, CARD_RARITY_NAME, cardArt, cardName, type CardFx, type CardGroup, type CardId } from '../../shared/data/cards';
+import { CARD_DEFAULTS, CARD_FRAME_WINDOWS, CARD_FX, CARD_FX_MAX, CARD_FX_NAME, CARD_GROUPS, CARD_GROUP_NAME, CARD_NUM_FIELDS, CARD_RARITY_NAME, cardArt, cardFrame, cardName, type CardFx, type CardGroup, type CardId } from '../../shared/data/cards';
 import { CARD_FX_LIMIT, type CardTuning } from '../../shared/cardTuning';
 import { type AdminCardTune } from '../../shared/admin';
 import { RARITY_COLOR } from '../../shared/types';
@@ -47,8 +47,14 @@ function showCardArt(id: CardId): void {
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'Escape') close();
   };
+  // The papercraft frame of its rarity over the picture, which fills the frame's art window.
+  const d = CARD_DEFAULTS.find((x) => x.id === id)!;
+  const win = CARD_FRAME_WINDOWS[d.rarity].art;
+  const pct = (v: number) => `${v * 100}%`;
   const over = h('div', { class: 'card-art-view', onclick: close },
-    h('img', { src: cardArt(id), alt: cardName(id) }),
+    h('div', { class: 'card-framed' },
+      h('img', { class: 'card-framed-art', src: cardArt(id), alt: cardName(id), style: `left:${pct(win.x)};top:${pct(win.y)};width:${pct(win.w)};height:${pct(win.h)}` }),
+      h('img', { class: 'card-framed-frame', src: cardFrame(d.rarity), alt: '' })),
     h('div', {}, cardName(id)));
   window.addEventListener('keydown', onKey);
   document.body.append(over);
@@ -108,7 +114,7 @@ export async function renderCards(): Promise<void> {
       fxBox.append(h('div', { class: 'row', style: 'align-items:center;margin-bottom:3px' }, sel, num));
     }
     return h('tr', { 'data-card': id },
-      h('td', { 'data-label': 'แมพ' }, `แมพ ${d.map}`),
+      h('td', { 'data-label': 'แมพ' }, `ชั้น ${d.floor} แมพ ${d.map}`, d.dropFrom ? h('div', { class: 'muted' }, 'ดรอปตอนฆ่ากัปตันขาไม้') : null),
       h('td', { 'data-label': 'การ์ด' },
         h('img', { class: 'card-thumb', src: cardArt(id), alt: cardName(id), title: 'คลิกเพื่อดูภาพใหญ่', loading: 'lazy', onclick: () => showCardArt(id) }),
         h('div', {}, cardName(id))),
@@ -205,7 +211,7 @@ export async function renderCards(): Promise<void> {
           : 'ดูได้อย่างเดียว (ต้องมีสิทธิ์ "แก้ค่าการ์ดทั้งเซิร์ฟ" จึงจะบันทึกได้)'),
         canEdit && reset, canEdit && discard, canEdit && save),
       msg),
-    h('div', { class: 'card' }, h('h2', {}, `การ์ด ${CARD_DEFAULTS.length} ใบ (ชั้น 1)`),
+    h('div', { class: 'card' }, h('h2', {}, `การ์ด ${CARD_DEFAULTS.length} ใบ (ชั้น 1 + ชั้น 2)`),
       h('div', { class: 'muted', style: 'margin:-6px 0 10px' }, `การ์ด 1 ใบมีผลได้ 1–${CARD_FX_MAX} อย่าง ค่าเป็นเปอร์เซ็นต์ (มากกว่า 0 ไม่เกิน ${CARD_FX_LIMIT})`),
       h('table', { class: 'cards' },
         h('thead', {}, h('tr', {}, h('th', {}, 'แมพ'), h('th', {}, 'การ์ด'), h('th', {}, 'ระดับ'), h('th', {}, 'ใส่ได้'), h('th', {}, 'ผล'))),

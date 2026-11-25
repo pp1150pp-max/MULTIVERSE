@@ -10,7 +10,7 @@
 ## ที่วางภาพหลังเจน
 
 - วางทุกไฟล์ใน **`art_templates/papercraft_cards/raw/`** (โฟลเดอร์ `raw/` ไม่ commit · ห้าม `git add raw/`) ตั้งชื่อตามตารางด้านล่างเป๊ะ ๆ เป็น `.png`
-- เจนเสร็จบอกผม ผมจะย่อ แปลงเป็น WebP ใส่ `public/assets/sprites/paper/cards/` แล้วเปลี่ยนโค้ดให้โหลดภาพใหม่ (PR แยก ไม่อยู่ในงานนี้)
+- ตัดเข้าเกมด้วย `node tools/cut_paper_cards.cjs <โฟลเดอร์ raw>` → WebP 512×768 ใน `public/assets/sprites/paper/cards/` (กรอบตัดช่องม่วงแดงเป็นโปร่งใส ตำแหน่งช่องอยู่ใน `CARD_FRAME_WINDOWS` ของ `src/shared/data/cards.ts`)
 - ภาพการ์ดเดิม (16-bit) ใน `public/assets/sprites/cards/card_art_*.webp` เก็บไว้ ไม่ลบ
 
 ## วิธีเจน (ทุกภาพ)
@@ -118,6 +118,7 @@ Card monster:
 | `card_art_cutlass_pirate.png` | โจรสลัดดาบโค้ง | `Cutlass Pirate, slashing a curved cutlass in a wide arc with a paper slash trail, a grin on his face` | `the wooden deck of a pirate ship docked in a hidden cove, ropes, sails and high cliffs behind` |
 | `card_art_shotgunner.png` | มือปืนลูกซอง | `Blunderbuss Pirate, firing a big flared blunderbuss with a fan of paper pellets and smoke spreading out in front` | `a smugglers dock at dusk stacked with crates and barrels, lanterns and a moored boat` |
 | `card_art_keg_prisoner.png` | นักโทษถังดินปืน | `Powder-Keg Prisoner, hugging a small powder keg with a lit fuse, about to throw it, a faint warning glow around the keg` | `a dark cave storeroom full of powder barrels and rope coils, cool blue shadows` |
+| `card_art_parrot.png` | นกแก้วคู่ใจ (การ์ดมหากาพย์ · เจ้าของสั่ง 2026-11-25) | `Captain's Parrot, a bright red, blue and yellow pirate parrot diving at the viewer with wings spread wide and claws out, squawking, a glowing paper target ring marked on the ground below it, the most dramatic pose` (sprite `parrot.png`) | `the stormy sky above the captain's ship with taut sails, rigging ropes and distant gunboats firing, warm orange-violet light` |
 | `card_art_pegleg_captain.png` | กัปตันขาไม้ (Boss) | `Peg-Leg Captain, striking a commanding pose with his cutlass raised and a big ship's anchor on a chain in the other hand, the parrot on his shoulder, the most dramatic and powerful pose` (sprite ชื่อ `peg_captain.png`) | `the captain's ship at the mouth of the cove with a black skull flag, cannons and a dramatic orange-violet storm sky` |
 
 ### ชั้น 2 · แมพ 3 สุสานเรือผี (แชทที่ 7) · ต้นแบบสไตล์เพิ่ม: `raw/floor2_maps/M3_ghost_ship_graveyard` · ฉากหลัง: ซากเรือผี หมอกเขียวอมฟ้า · ทุกตัวโปร่งแสง เขียวอมฟ้า
@@ -150,8 +151,8 @@ Card monster:
 |---|---|
 | กรอบ 3 ระดับ | 3 |
 | มอนชั้น 1 (แมพ 1–4) | 26 |
-| มอนชั้น 2 แมพ 1–2 (มีใน `origin/floor2` แล้ว) | 10 |
-| มอนชั้น 2 แมพ 3–4 (ยังไม่เสร็จ เจนทีหลังได้) | 10 |
-| **รวม** | **49** |
+| มอนชั้น 2 แมพ 1–4 | 20 |
+| นกแก้วคู่ใจ (การ์ดมหากาพย์ชั้น 2, เพิ่ม 2026-11-25) | 1 |
+| **รวม** | **50** |
 
 ภาพที่ควรเจนก่อน: กรอบ 3 + ชั้น 1 ทั้งหมด (29) เพราะชั้น 1 มีการ์ดในเกมแล้ว
