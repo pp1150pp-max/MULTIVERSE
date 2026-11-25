@@ -10,6 +10,10 @@ export type GroundTileName = 'grass' | 'dirt' | 'water' | 'marsh' | 'mud' | 'pav
   | 'sand' | 'wreck' | 'shallow' | 'room_beach'
   // Floor 2's Smugglers' Cove (paper only).
   | 'rock' | 'boardwalk' | 'cove_water' | 'room_cove'
+  // Floor 2's Ghost Ship Graveyard (paper only).
+  | 'stone' | 'rotten_deck' | 'misty_water' | 'room_grave'
+  // Floor 2's Kraken Maelstrom (paper only).
+  | 'storm_rock' | 'wet_planks' | 'rough_sea' | 'room_kraken'
   // Floor 2's cloud-sea backdrop (FLOOR2_SKY.md), once the owner has made it; until then island.ts paintSky.
   | 'sky_day';
 
@@ -23,6 +27,10 @@ export const THEME_TILES: Record<MapTheme, { base: GroundTileName; dirt: GroundT
   beach: { base: 'sand', dirt: 'wreck', water: 'shallow', pave: 'wreck' },
   // Floor 2's Smugglers' Cove: mauve-grey rock floor, dark plank boardwalks for the roads, turquoise cove water (FLOOR2_M2_COVE.md).
   cove: { base: 'rock', dirt: 'boardwalk', water: 'cove_water', pave: 'boardwalk' },
+  // Floor 2's Ghost Ship Graveyard: wet slate flagstones, rotten ship decks for the roads, dark misty sea water (FLOOR2_M3_GRAVEYARD.md).
+  grave: { base: 'stone', dirt: 'rotten_deck', water: 'misty_water', pave: 'rotten_deck' },
+  // Floor 2's Kraken Maelstrom: rain-soaked slate rock, wet pier planks for the roads, rough stormy sea (FLOOR2_M4_MAELSTROM.md).
+  kraken: { base: 'storm_rock', dirt: 'wet_planks', water: 'rough_sea', pave: 'wet_planks' },
 };
 
 /** World units covered by one repeat of a ground tile: about the same pixel size as the sprites. */
@@ -30,7 +38,7 @@ export const TILE_UNITS = 10.4;
 /** Bare ground around the camp at a zone's start. */
 export const CAMP_RADIUS = 7;
 /** How wide each theme's roads are worn into the grass (the game draws every path this wide, whatever its `w`). */
-export const TRAIL_WIDTH: Record<MapTheme, number> = { forest: 4.2, marsh: 3.6, snow: 3.8, volcano: 3.8, beach: 3.8, cove: 3.6 };
+export const TRAIL_WIDTH: Record<MapTheme, number> = { forest: 4.2, marsh: 3.6, snow: 3.8, volcano: 3.8, beach: 3.8, cove: 3.6, grave: 3.6, kraken: 3.6 };
 
 /** Where a small ground detail belongs. */
 export type DecorSpot = 'verge' | 'field' | 'road' | 'shore' | 'water';
@@ -118,6 +126,34 @@ export const DECOR: Record<MapTheme, { key: string; cols: number; rows: number; 
       water: [],
     },
     flat: [8, 9, 10],
+  },
+  // FLOOR2_M3_GRAVEYARD.md 4: pebbles, seaweed, starfish, shells / skull, candle, plank, chain / dead grass, mossy stone, puddle, nail.
+  grave: {
+    key: 'decor_graveyard',
+    cols: 4,
+    rows: 3,
+    spots: {
+      verge: [8, 8, 1, 0, 9, 3],
+      field: [0, 0, 1, 2, 3, 4, 5, 8, 9, 9, 7, 11],
+      road: [6, 6, 7, 11],
+      shore: [1, 1, 2, 3, 0, 10],
+      water: [],
+    },
+    flat: [2, 6, 7, 10, 11],
+  },
+  // FLOOR2_M4_MAELSTROM.md 4: pebbles, flat stone, coral sprig, starfish / seaweed, puddle, plank, rope / shells, foam, stave, sucker stone.
+  kraken: {
+    key: 'decor_maelstrom',
+    cols: 4,
+    rows: 3,
+    spots: {
+      verge: [0, 1, 4, 8, 2],
+      field: [0, 0, 1, 1, 2, 3, 4, 5, 8, 11],
+      road: [6, 7, 10, 10],
+      shore: [9, 9, 8, 3, 4, 0],
+      water: [],
+    },
+    flat: [1, 3, 5, 6, 7, 9, 10],
   },
 };
 /** World size of one decor atlas cell: 128 pixels at about the same density as the ground tiles. */

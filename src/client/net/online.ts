@@ -2,6 +2,7 @@
 // copies of nearby players, monsters, projectiles and loot (real shared classes, so the views, HUD
 // and Auto Play work unchanged), smooths their movement between snapshots, and walks your own
 // character immediately so controls feel instant. The server checks every reported position.
+import { suctionStep } from '../../shared/sim/kraken';
 import { Terrain } from '../../shared/sim/terrain';
 import { Player, type AutoSettings, type CharacterData, type LootFilter, type SortKey } from '../../shared/sim/Player';
 import { Monster } from '../../shared/sim/Monster';
@@ -1000,6 +1001,8 @@ export class OnlineBackend implements Backend {
       m.windupT = ms.wind ? 1 : 0;
       m.enraged = ms.enr;
       m.lift = ms.y;
+      m.fade = ms.inv === 1;
+      m.noHit = m.fade;
       m.debuffs = ms.db ?? 0;
       m.debuffSkill = ms.ds ?? '';
     }
@@ -1312,7 +1315,9 @@ export class OnlineBackend implements Backend {
     // Stopped on an attack: stand (a clicked spot is kept, walking carries on when the stop ends) facing the aim.
     const paused = this.atkRootT > 0;
     const walking = !paused && (mx !== 0 || mz !== 0);
-    const moving = !paused && me.walkStep(mx, mz, remaining, dt, this.terrain);
+    let moving = !paused && me.walkStep(mx, mz, remaining, dt, this.terrain);
+    // The kraken's whirlpool pulls us as it pulls us on the server (sim/kraken.ts), walking or not.
+    if (this.hazards.length && suctionStep(me, this.hazards, this.time, dt, this.terrain)) moving = true;
     if (!paused) this.walkTarget.check(me, dt);
     if (it.basic || it.skills.length) {
       this.faceLockT = 0.25;

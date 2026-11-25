@@ -215,5 +215,13 @@
       "walk",
       "attack"
     ]
+  },
+  "giant_crab": {
+    "moves": [
+      "walk",
+      "claw",
+      "cannon",
+      "shell"
+    ]
   }
 }

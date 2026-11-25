@@ -921,7 +921,7 @@ export class Game {
     else this.lockRing.hide();
 
     this.fx.update(vdt);
-    this.hazardViews.update(this.backend.hazards, this.backend.time);
+    this.hazardViews.update(this.backend.hazards, this.backend.time, p);
     this.world.update(dt, p.x, p.z);
     this.updateCamera(dt);
     this.cosmetics.update();

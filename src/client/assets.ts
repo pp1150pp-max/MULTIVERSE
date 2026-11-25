@@ -107,6 +107,36 @@ const COVE_PROPS = [
 ];
 /** The cove's move effects (sim/coveMoves.ts, peglegCaptain.ts): thrown ball, bomb, pellets, blast, anchor, shout, parrot mark. Paper only. */
 const COVE_FX = ['fx_iron_ball', 'fx_bomb', 'fx_explosion', 'fx_anchor', 'fx_pellets', 'fx_shout_ring', 'fx_parrot_mark', 'fx_ship_shell'];
+/**
+ * Floor 2's Ghost Ship Graveyard (FLOOR2_M3_GRAVEYARD.md, tools/cut_papercraft.cjs floor2_m3): paper only, under sprites/paper/props/.
+ * The room kit has a figurehead and a mast instead of a rune stone and a tree (Terrain.placeRoom ROOM_KIT).
+ */
+const GRAVE_PROPS = [
+  'wreck_hull_0', 'wreck_hull_1', 'ghost_mast', 'bell_mast', 'mossy_rock_0', 'mossy_rock_1', 'ghost_lamp_post', 'slime_post', 'wreck_small',
+  'rotten_stump', 'broken_rail', 'figurehead', 'candles', 'skull_barrel', 'skull_pile', 'net', 'rotten_chest', 'rusty_anchor', 'green_lantern',
+  'grave_marker', 'torn_flag', 'rope_coil', 'spirit_bottle', 'fallen_bell', 'summoner_ghost', 'decor_graveyard', 'island_cliff_graveyard',
+  'island_slabs_graveyard', ...['pillar_0', 'pillar_1', 'wall', 'brazier', 'boulder', 'rubble', 'mast', 'figurehead'].map((n) => `room_grave_${n}`),
+];
+/** The graveyard's move effects (sim/graveMoves.ts, ghostCaptain.ts): skull, curse ring, song, pull, mist, bell, ghost puff, shell burst. */
+const GRAVE_FX = ['fx_ghost_skull', 'fx_curse_ring', 'fx_music_notes', 'fx_siren_pull', 'fx_mist', 'fx_bell_waves', 'fx_spirit_puff', 'fx_shell_burst'];
+/**
+ * Floor 2's Kraken Maelstrom (FLOOR2_M4_MAELSTROM.md, FLOOR2_M4_WHIRLPOOL.md, tools/cut_papercraft.cjs floor2_m4): paper only, under
+ * sprites/paper/props/. The whirlpool's four turning layers (src/client/whirlpool.ts) and its rim foam are here too. The room kit has a
+ * red coral and a flagged mast instead of a rune stone and a tree (Terrain ROOM_KIT).
+ */
+const MAELSTROM_PROPS = [
+  'storm_rock_0', 'storm_rock_1', 'storm_rock_2', 'wreck_0', 'wreck_1', 'broken_mast', 'coral_0', 'coral_1', 'kraken_flag', 'storm_lamp',
+  'rope_post', 'storm_anchor', 'summoner_kraken', 'room_kraken_gate', 'decor_maelstrom', 'island_cliff_maelstrom', 'island_slabs_maelstrom',
+  'whirlpool_ring_1', 'whirlpool_ring_2', 'whirlpool_ring_3', 'whirlpool_core', ...Array.from({ length: 8 }, (_, i) => `rim_${i}`),
+  ...['pillar_0', 'pillar_1', 'wall', 'brazier', 'boulder', 'rubble', 'coral', 'mast'].map((n) => `room_kraken_${n}`),
+];
+/** The maelstrom's move effects (sim/maelstromMoves.ts, kraken.ts): fin, bubbles, sword wave, ink, suction, splash. */
+const MAELSTROM_FX = ['fx_shark_fin', 'fx_bubble', 'fx_bubble_trap', 'fx_sword_wave', 'fx_ink_blob', 'fx_ink_splat', 'fx_suction', 'fx_slam_splash'];
+/**
+ * Monsters drawn from a paper sheet under another name: floor 2 bosses whose cut sheets (tools/cut_floor2_chars.cjs) are named after the
+ * picture, and the kraken's arms in its room, which are its tentacles.
+ */
+const PAPER_MONSTER_FILE: Record<string, string> = { cannon_crab: 'giant_crab', pegleg_captain: 'peg_captain', kraken_arm: 'kraken_tentacle' };
 /** The harbour's NPC sheets and the navigator's (SHEET_SPECS keys): paper only. */
 const PAPER_ONLY_NPC = new Set(['hb_supply_merchant', 'hb_dock_keeper', 'hb_shipwright', 'hb_harbor_broker', 'hb_smuggler_npc', 'navigator']);
 const PAPER_GROUND = new Set(['grass', 'dirt', 'pave', 'room_forest', 'marsh', 'mud', 'water', 'room_marsh',
@@ -224,12 +254,13 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   spike_turtle: monster('monsters/spike_turtle.png', () => makeSheet(44, drawQuad(['#5a8a4a', '#4a3424', '#d8dcd8', '#1a2014'], {
     bodyRx: 0.34, bodyRy: 0.2, head: 0.12, ears: 'small', earSize: 0.02, tail: 'short', legLen: 0.06, legW: 0.09, snout: 0.04, belly: true,
   }))),
-  // Its pictures are cut as giant_crab (4 moves, waiting for the owner's cannon and shell sheets); a placeholder until then.
+  // Paper sheet giant_crab (PAPER_MONSTER_FILE): walk, claw, cannon, shell. The game plays walk and the second move (claw)
+  // for every attack for now; the code-drawn shape below only stands in if the sheet does not load.
   cannon_crab: monster('monsters/cannon_crab.png', () => makeSheet(56, drawQuad(['#d8502a', '#7a2410', '#c89a5a', '#2a1410'], {
     bodyRx: 0.4, bodyRy: 0.2, head: 0.1, ears: 'small', earSize: 0.03, tail: 'none', legLen: 0.08, legW: 0.08, snout: 0.03, tusks: true, belly: true,
   }))),
   // Floor 2, Smugglers' Cove: paper sheets only (sprites/paper/monsters/, 3 moves for the two prisoners). Placeholders until then;
-  // the captain stays one until the owner's own pictures (his cut sheets are named peg_captain).
+  // the captain's paper sheet is peg_captain (PAPER_MONSTER_FILE): walk, anchor, shout; the code-drawn shape is the fallback.
   prisoner: monster('monsters/prisoner.png', () => makeSheet(36, drawSlime(['#e8e8e0', '#2a2a2a', '#8a8a8a']))),
   cutlass_pirate: monster('monsters/cutlass_pirate.png', () => makeSheet(36, drawSlime(['#c83a2a', '#6a1a10', '#f2e2c0']))),
   shotgunner: monster('monsters/shotgunner.png', () => makeSheet(36, drawSlime(['#5a3e2c', '#2a1a10', '#e8d6a6']))),
@@ -238,6 +269,24 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
     bodyRx: 0.32, bodyRy: 0.26, head: 0.16, ears: 'small', earSize: 0.03, tail: 'none', legLen: 0.15, legW: 0.1, snout: 0.03, mane: true, belly: true,
   }))),
   parrot: monster('monsters/parrot.png', () => makeSheet(28, drawSlime(['#e83a2a', '#2a6ad8', '#f2c24a']))),
+  // Floor 2, Ghost Ship Graveyard: paper sheets (sprites/paper/monsters/, moves named in meta.json), every one a teal ghost.
+  // The captain uses his cut sheet ghost_captain (owner 2026-11-24) until the owner makes another.
+  ghost_monkey: monster('monsters/ghost_monkey.png', () => makeSheet(32, drawSlime(['#7fe0d0', '#2a6a6a', '#d8fff4']))),
+  ghost_sailor: monster('monsters/ghost_sailor.png', () => makeSheet(36, drawSlime(['#6ad8c8', '#205a5a', '#d0fff0']))),
+  ghost_siren: monster('monsters/ghost_siren.png', () => makeSheet(36, drawSlime(['#8ae8e0', '#2a5a70', '#e0fff8']))),
+  barnacle_crew: monster('monsters/barnacle_crew.png', () => makeSheet(40, drawSlime(['#5ac8b0', '#1a4a48', '#c8f0e0']))),
+  barnacle_small: monster('monsters/barnacle_small.png', () => makeSheet(26, drawSlime(['#5ac8b0', '#1a4a48', '#c8f0e0']))),
+  ghost_captain: monster('monsters/ghost_captain.png', () => makeSheet(56, drawQuad(['#5ad8c0', '#1a3a3a', '#d8a84a', '#0e1a1a'], {
+    bodyRx: 0.32, bodyRy: 0.26, head: 0.16, ears: 'small', earSize: 0.03, tail: 'none', legLen: 0.15, legW: 0.1, snout: 0.03, mane: true, belly: true,
+  }))),
+  // Floor 2, Kraken Maelstrom: paper sheets (sprites/paper/monsters/, moves named in meta.json). The kraken's arms in its room use the
+  // tentacle's sheet.
+  shark_knight: monster('monsters/shark_knight.png', () => makeSheet(40, drawSlime(['#8a96a4', '#2a3440', '#d8b04a']))),
+  seahorse_soldier: monster('monsters/seahorse_soldier.png', () => makeSheet(36, drawSlime(['#e8a03a', '#7a4a1a', '#5ac8b0']))),
+  ghost_pirate_king: monster('monsters/ghost_pirate_king.png', () => makeSheet(40, drawSlime(['#6ad8c8', '#1a4a48', '#d8b04a']))),
+  kraken_tentacle: monster('monsters/kraken_tentacle.png', () => makeSheet(40, drawSlime(['#7a3a9a', '#3a1a4a', '#f2e2c0']))),
+  kraken_arm: monster('monsters/kraken_tentacle.png', () => makeSheet(40, drawSlime(['#7a3a9a', '#3a1a4a', '#f2e2c0']))),
+  kraken: monster('monsters/kraken.png', () => makeSheet(64, drawSlime(['#6a2a8a', '#2a1036', '#e8d8b0']))),
   fx_ember_bolt: single('fx/ember_bolt.png', drawEmberBolt),
 
   burnt_pillar_0: single('props/burnt_pillar_0.png', () => drawBurntPillar(0)),
@@ -366,6 +415,12 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   // Floor 2's Smugglers' Cove props and move effects: paper pictures only.
   ...Object.fromEntries(COVE_PROPS.map((k) => [k, single(`paper/props/${k}.png`, () => drawRock(0))])),
   ...Object.fromEntries(COVE_FX.map((k) => [k, single(`paper/fx/${k}.png`, () => drawRunestone())])),
+  // Floor 2's Ghost Ship Graveyard props and move effects: paper pictures only.
+  ...Object.fromEntries(GRAVE_PROPS.map((k) => [k, single(`paper/props/${k}.png`, () => drawRock(0))])),
+  ...Object.fromEntries(GRAVE_FX.map((k) => [k, single(`paper/fx/${k}.png`, () => drawRunestone())])),
+  // Floor 2's Kraken Maelstrom props and move effects: paper pictures only.
+  ...Object.fromEntries(MAELSTROM_PROPS.map((k) => [k, single(`paper/props/${k}.png`, () => drawRock(0))])),
+  ...Object.fromEntries(MAELSTROM_FX.map((k) => [k, single(`paper/fx/${k}.png`, () => drawRunestone())])),
   // Floor 2's harbour town (Terrain.placeHarbor, tools/cut_papercraft.cjs floor2_hub): paper pictures only.
   ...Object.fromEntries(HARBOR_PROPS.map((k) => [k, single(`paper/props/${k}.png`, () => drawRock(0))])),
   // The harbour's NPCs and the navigator (also in nexus_city): paper sheets (src/shared/data/npcs.ts npcLook).
@@ -481,7 +536,7 @@ export const groundTiles: Partial<Record<GroundTile, THREE.Texture>> = {};
 
 /** Ground tiles that exist only as paper (floor 2's): loaded from sprites/paper/ground/ whatever the art switch says. */
 const PAPER_ONLY_GROUND = new Set<string>(['harbor_plank', 'harbor_plaza', 'harbor_water', 'sky_day', 'sand', 'wreck', 'shallow', 'room_beach',
-  'rock', 'boardwalk', 'cove_water', 'room_cove']);
+  'rock', 'boardwalk', 'cove_water', 'room_cove', 'stone', 'rotten_deck', 'misty_water', 'room_grave', 'storm_rock', 'wet_planks', 'rough_sea', 'room_kraken']);
 
 async function loadGroundTile(name: GroundTile): Promise<void> {
   try {
@@ -751,7 +806,8 @@ async function loadAssets(): Promise<void> {
     loadPaperCosmetics(),
     ...(['grass', 'dirt', 'water', 'marsh', 'mud', 'pave', 'brick', 'snow', 'snow_path', 'ice', 'ash_rock', 'ash_path', 'lava',
       'room_forest', 'room_marsh', 'room_snow', 'room_volcano', 'harbor_plank', 'harbor_plaza', 'harbor_water', 'sky_day',
-      'sand', 'wreck', 'shallow', 'room_beach', 'rock', 'boardwalk', 'cove_water', 'room_cove'] as const).map((n) => loadGroundTile(n)),
+      'sand', 'wreck', 'shallow', 'room_beach', 'rock', 'boardwalk', 'cove_water', 'room_cove',
+      'stone', 'rotten_deck', 'misty_water', 'room_grave', 'storm_rock', 'wet_planks', 'rough_sea', 'room_kraken'] as const).map((n) => loadGroundTile(n)),
     ...Object.entries(ANIM_SET_DIRS).map(([key, dir]) => loadCharSet(key, dir)),
     ...Object.entries(SHEET_SPECS).map(async ([key, spec]) => {
       let tex: THREE.Texture;
@@ -761,7 +817,8 @@ async function loadAssets(): Promise<void> {
       let paperMonster: SheetInfo['paper'];
       let idleFrames: number | undefined;
       try {
-        const monster = paperMonsters[key];
+        const paperFile = PAPER_MONSTER_FILE[key] ?? key;
+        const monster = paperMonsters[paperFile];
         // Floor 2's NPC sheets exist only as paper: from sprites/paper/npc/ whatever the art switch says.
         const npcPaper = (paperMaps || PAPER_ONLY_NPC.has(key)) && spec.path.startsWith(`${BASE}npc/`) ? spec.path.replace(`${BASE}npc/`, `${BASE}paper/npc/`) : null;
         if (npcPaper && (tex = await loadTexture(npcPaper).catch(() => null as unknown as THREE.Texture))) {
@@ -769,7 +826,7 @@ async function loadAssets(): Promise<void> {
           cols = 4;
           idleFrames = 4;
         } else if (monster) {
-          tex = await loadTexture(`${BASE}paper/monsters/${key}.png`);
+          tex = await loadTexture(`${BASE}paper/monsters/${paperFile}.png`);
           paperMonster = { walk: 4, attack: 4, scale: monster.scale ?? 1 };
           cols = 4 * Math.max(2, monster.moves?.length ?? 2);
         } else {

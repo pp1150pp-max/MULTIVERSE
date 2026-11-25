@@ -10,6 +10,7 @@ import { arenaRadius, FARM_IDS, inBossArena, lairExitSpot, LAVA_BURN, LAVA_TICK 
 import type { Hazard } from './volcanoHeart';
 import { stealReturn, thornsReflect } from './beachMoves';
 import { kegStart } from './coveMoves';
+import { splitOnDeath, tickCurses } from './graveMoves';
 import {
   announceFrom, bannerFrom, dropsOnFail, forgeCd, enhanceCost, itemName, maxPlus, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
 } from '../data/enhance';
@@ -565,7 +566,7 @@ export class Sim {
     // Extra effects the owner added to this skill on /admin, merged in (the stronger wins): sim/extraEffects.ts.
     const src = opts.src ?? opts.skill?.id ?? this.casterSkill;
     if (src && !opts.noExtra) opts = withExtras(this, p, m, src, opts);
-    if (opts.kb && !m.isBoss) m.knockback(opts.fromX ?? p.x, opts.fromZ ?? p.z, opts.kb);
+    if (opts.kb && !m.isBoss && !m.def.anchored) m.knockback(opts.fromX ?? p.x, opts.fromZ ?? p.z, opts.kb);
     if (opts.stun && !m.def.pattern) m.stunT = Math.max(m.stunT, m.isBoss ? opts.stun * 0.3 : opts.stun);
     if (opts.slow) {
       m.slowAmt = opts.slow;
@@ -808,6 +809,8 @@ export class Sim {
     m.spells?.reset(this);
     m.crab?.reset(this);
     m.captain?.remove(this);
+    m.ghostCaptain?.remove(this);
+    m.kraken?.remove(this);
     // A gull shot down with stolen gold: it goes back (sim/beachMoves.ts).
     stealReturn(this, m);
     if (!m.summoned) {
@@ -831,6 +834,8 @@ export class Sim {
       const runner = this.spawnSummon(m.def.id, m.x, m.z, m.level);
       if (runner) kegStart(this, runner, m);
     }
+    // A barnacle ghost crew breaks into small ones (sim/graveMoves.ts): summons, no rewards.
+    if (m.def.move === 'split' && !m.summoned) splitOnDeath(this, m);
     if (m.isBoss) {
       this.log(`🏆 ปราบ ${m.def.name} สำเร็จ!`, '#ffcf5a');
       this.shake(0.4, m);
@@ -2189,6 +2194,8 @@ export class Sim {
     }
     for (const p of this.players) if (p.alive) this.checkPortals(p);
     if (this.zone.lavaPools) for (const p of this.players) if (p.alive) this.tickLava(p, dt);
+    // The Ghost Ship Graveyard's curse rings slow whoever stands in them (sim/graveMoves.ts).
+    if (this.hazards.length) tickCurses(this);
 
     for (const m of this.monsters) m.update(dt, this);
     this.separateMonsters();
@@ -2413,15 +2420,23 @@ export class Sim {
         if (Math.abs(dx) > min || Math.abs(dz) > min) continue;
         const d = Math.hypot(dx, dz) || 0.01;
         if (d < min) {
-          const push = (min - d) / d / 2;
-          m.x -= dx * push;
-          m.z -= dz * push;
-          n.x += dx * push;
-          n.z += dz * push;
+          // The kraken and its tentacles never move (MonsterDef.anchored): the other one takes the whole push.
+          const ma = !!m.def.anchored;
+          const na = !!n.def.anchored;
+          if (ma && na) continue;
+          const push = (min - d) / d / (ma || na ? 1 : 2);
+          if (!ma) {
+            m.x -= dx * push;
+            m.z -= dz * push;
+          }
+          if (!na) {
+            n.x += dx * push;
+            n.z += dz * push;
+          }
         }
       }
       for (const p of this.players) {
-        if (!p.alive || p.isDashing) continue;
+        if (!p.alive || p.isDashing || m.def.anchored) continue;
         const dx = m.x - p.x;
         const dz = m.z - p.z;
         const min = m.radius + p.radius;

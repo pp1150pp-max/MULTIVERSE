@@ -71,14 +71,17 @@ const rr = mulberry32(7);
 const beachDrops = new Set<string>();
 for (let i = 0; i < 3000; i++) beachDrops.add(itemSet(rollItem(rr, 46, 'gunslinger', 0, [41, 50])) ?? 'none');
 ok(beachDrops.size === 1 && beachDrops.has('beach'), 'the beach drops only the beach set');
-let later = 0;
+let sea = 0;
 let pirate = 0;
+let ghost = 0;
 for (let i = 0; i < 5000; i++) {
   const id = rollItem(rr, 80, 'mage').baseId;
-  if (['ghost_sailor_', 'sea_king_'].some((pre) => id.startsWith(pre))) later++;
+  if (id.startsWith('ghost_sailor_')) ghost++;
+  if (id.startsWith('sea_king_')) sea++;
   if (id.startsWith('pirate_')) pirate++;
 }
-ok(later === 0, 'mystery box at Lv80: no ghost / sea king pieces before their maps');
+ok(ghost > 0, 'ghost-sailor pieces can come now that the graveyard is in the game');
+ok(sea > 0, 'sea-king pieces can come now that the maelstrom is in the game');
 ok(pirate > 0, 'pirate pieces can come now that the cove is in the game');
 
 // Real Sims: the beach's monsters and the crab in its room drop only beach pieces.
