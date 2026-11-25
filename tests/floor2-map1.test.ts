@@ -191,8 +191,11 @@ function alone(kind: string, x = 0, z = 0): { sim: Sim; m: Monster } {
   crab.state = 'chase';
   let held = false;
   let maxD = 0;
+  // Its picture's events, in order (src/client/paperMoves.ts): grab wind-up, held up, flung.
+  const anims: string[] = [];
   for (let i = 0; i < 600; i++) {
     run(sim, 0.05);
+    for (const e of sim.drainEvents()) if (e.t === 'anim' && e.id === crab.id && e.name.startsWith('claw')) anims.push(e.name);
     if (p.snareT > 0) held = true;
     maxD = Math.max(maxD, Math.hypot(p.x - crab.x, p.z - crab.z));
     if (held && maxD > 6) break;
@@ -202,6 +205,7 @@ function alone(kind: string, x = 0, z = 0): { sim: Sim; m: Monster } {
     }
   }
   ok(held, 'the claw grabs');
+  ok(anims.slice(0, 3).join() === 'claw,claw_hold,claw_fling', `and says so for its picture (${anims.slice(0, 3).join()})`);
   ok(maxD > 6, `then flings far (${maxD.toFixed(1)} away)`);
   run(sim, 1);
   ok(Math.hypot(p.x - ROOM.boss!.x, p.z - ROOM.boss!.z) <= (ROOM.arenaRadius ?? 11) + 1.6, 'and never out of the arena');

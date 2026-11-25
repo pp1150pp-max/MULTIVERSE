@@ -414,6 +414,8 @@ export class MonsterView {
       this.actor.setOpacity(op);
     }
     this.actor.face(m.faceX, m.faceZ);
+    // The fight is off (walking home): drop a long move, such as the crab's hide.
+    if (m.def.brain && m.state === 'return') this.actor.reset();
     this.actor.update(dt, m.moving, m.state === 'idle' ? 6 : 10);
   }
 

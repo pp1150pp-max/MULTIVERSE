@@ -10,7 +10,7 @@
 |---|---|---|
 | `peg_captain_walk.png` | เดิน | เล่นตอนเดิน |
 | `peg_captain_anchor.png` | ทอดสมอ | เล่นกับทุกการโจมตี (รวมตีธรรมดา) |
-| `peg_captain_shout.png` | ตะโกนสั่ง | อยู่ในแผ่น ยังไม่ถูกเล่น (ต้องแก้โค้ด) |
+| `peg_captain_shout.png` | ตะโกนสั่ง | เล่นตอนตะโกนสั่ง (จังหวะใน `src/client/paperMoves.ts`) |
 
 - แผ่นในเกม: `public/assets/sprites/paper/monsters/peg_captain.png` · เกมโหลดให้ `pegleg_captain` ผ่าน `PAPER_MONSTER_FILE` ใน `src/client/assets.ts`
 - นกแก้วเป็นแผ่นแยก `parrot.png` (บิน/เกาะ) ใช้อยู่แล้ว
