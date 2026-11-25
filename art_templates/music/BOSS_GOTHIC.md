@@ -53,32 +53,34 @@ Oh-ah, oh-ah, ah...
 
 ## เพลงชั้น 2: `boss_gothic_f2` (ทะเลคำสาป)
 
-ชื่อเพลง: `Boss Gothic F2`
+อารมณ์ที่เจ้าของเลือก (2026-11-25): แนวกอทิกแบบเพลงชั้น 1 **ผสม**บทสวดชาวเรือเสียงเบสทุ้มลึก คงธีมทะเล
+
+ชื่อเพลง: `Boss Gothic F2` · เจนรอบแรกด้วยรุ่น **V7.5-all** (ไม่มี Advanced options)
 
 Music Style:
 
 ```
-dark gothic orchestral sea battle, C minor, 140 BPM, deep male choir with high sopranos singing wordless vowels in a solemn latin sacred style, drowned cathedral pipe organ, surging cello ostinato like crashing waves, low brass, war drums, ship bell, stormy, ominous, epic, relentless, full energy from the first second, steady intensity, no fade out, ending flows back into the beginning, seamless loop game soundtrack
+dark gothic sea dirge boss battle, C minor, 90 BPM, heavy half-time stomping march, very deep basso profundo male choir leading a slow call-and-response chant of doomed sailors, answered by a solemn latin sacred style mixed choir, wordless vowels and humming only, thundering church pipe organ, low strings ostinato rolling like ocean waves, war drums, ship bell, ominous, majestic, relentless, strong from the first second, steady intensity, no fade out, ending flows back into the beginning, seamless loop game soundtrack
 ```
 
 Lyrics:
 
 ```
 [Choir]
+Mmm... mmm... oh...
 Oh... oh... oh...
-Ah... oh... oh...
 
 [Verse]
-Oh-oh, ah-oh
-Oh-ah-oh, eh-oh
+Oh-oh, oh-ah, oh
+Ah-oh, oh-oh, mmm
 
 [Chorus]
-Oh! Ah! Oh!
+Oh! Oh! Ah!
 Ah-oh, ah-oh, oh...
 
 [Verse]
-Ah-ah, oh-ah
-Eh-oh, ah-oh, ah
+Oh-ah-oh, eh-oh
+Mmm... oh-oh, ah
 
 [Chorus]
 Oh! Ah! Oh!
