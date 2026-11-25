@@ -24,6 +24,7 @@ import {
   type AutoAllow, type AutoDefaults,
 } from '../shared/autoTuning';
 import { FARM_IDS, NO_BOOST, ZONES, type MonsterBoost } from '../shared/data/zones';
+import { customDefs } from '../shared/customZones';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { ITEM_BASES, itemRowKinds, statStep, rowRanges, TIER_BAND_NAME, TIER_BANDS, tierBandOf, tierChances, tierRanges } from '../shared/data/items';
 import { expToNext, MAX_LEVEL } from '../shared/formulas';
@@ -632,6 +633,30 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
             else draft.mobPack[z.id] = n;
           }, 1, ...BALANCE_RANGE.mobPack, 0.1, () => { show(); updateSummary(); });
           return h('tr', {}, h('td', {}, z.nameTh), h('td', {}, box), total);
+        })))),
+      h('h3', {}, 'รัศมีจุดเกิดมอน (ต่อแมพ)'),
+      h('div', { class: 'muted' },
+        `คูณรัศมีวงที่มอนเกิดและเดินวนรอบจุดเกิด (ในแมพไฟล์ 2.5–3 ม.) ทุกจุดของแมพนั้น ให้มอนกระจายห่างกันไม่กองเป็นก้อน · ใส่ได้ ×${BALANCE_RANGE.spawnRadius[0]}–×${BALANCE_RANGE.spawnRadius[1]} ทศนิยมได้ (×1 = ตามไฟล์แมพ) · ไม่รวมบอส ห้องบอส · ` +
+        'ระยะวิ่งกลับบ้านโตตามตัวคูณ · มอนไม่เกิดนอกขอบแมพ ในที่เดินไม่ได้ เขตปลอดภัย ทะเลสาบหรือบ่อลาวา · บันทึกแล้วมีผลกับมอนที่เกิดใหม่ (ตัวที่อยู่แล้วคงเดิมจนตาย)'),
+      h('div', { class: 'bal-scroll' }, h('table', { class: 'bal-table' },
+        h('thead', {}, h('tr', {}, h('th', {}, 'แมพ'), h('th', {}, 'รัศมีจุดเกิด ×'), h('th', {}, 'รัศมีจริง (ม.)'))),
+        h('tbody', {}, ...[...PACK_ZONES, ...customDefs().map((d) => ({ id: d.id, nameTh: d.nameTh }))].map((z) => {
+          const out = h('td', { class: 'bal-out' });
+          const radii = ZONES[z.id]?.spawns.map((a) => a.radius) ?? [];
+          const show = (): void => {
+            const m = draft.spawnRadius[z.id] ?? 1;
+            if (!radii.length) { out.textContent = m === 1 ? '-' : `×${m}`; return; }
+            const lo = Math.min(...radii), hi = Math.max(...radii);
+            const f = (k: number) => (lo === hi ? `${+(lo * k).toFixed(1)}` : `${+(lo * k).toFixed(1)}–${+(hi * k).toFixed(1)}`);
+            out.textContent = m === 1 ? f(1) : `${f(1)} → ${f(m)}`;
+            out.classList.toggle('bal-changed', m !== 1);
+          };
+          show();
+          const box = numBox(() => draft.spawnRadius[z.id] ?? 1, (n) => {
+            if (n === 1) delete draft.spawnRadius[z.id];
+            else draft.spawnRadius[z.id] = n;
+          }, 1, ...BALANCE_RANGE.spawnRadius, 0.1, () => { show(); updateSummary(); });
+          return h('tr', {}, h('td', {}, z.nameTh), h('td', {}, box), out);
         })))),
       h('h3', {}, 'จุดเกิดที่เปิดใช้ (แมพฟาร์มชั้น 1)'),
       h('div', { class: 'muted' },

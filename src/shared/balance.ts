@@ -11,6 +11,7 @@ import {
 import { CODE_POTIONS, CODE_POTION_DROP, CODE_SWORD_POTION_BONUS, POTION_RANGE, type PotionNums } from './data/potionTable';
 import { MONSTERS, type MonsterDef } from './data/monsters';
 import { FARM_IDS, ZONES } from './data/zones';
+import { customDef } from './customZones';
 import { checkFxLayerTuning, codeFxLayer, fxLayerChanges, mergeFxLayer, type FxLayerConfig, type FxLayerTuning } from './fxLayerTuning';
 import { checkMenuLayoutTuning, codeMenuLayout, mergeMenuLayout, menuLayoutChanges, type MenuLayoutConfig, type MenuLayoutTuning } from './menuLayout';
 import { checkHudLayoutTuning, codeHudLayout, hudLayoutChanges, mergeHudLayout, type HudLayoutConfig, type HudLayoutTuning } from './hudLayout';
@@ -191,6 +192,8 @@ export interface Balance {
   monsters: MonsterTuning;
   /** Monsters per spawn spot ×, by map id (PACK_ZONES); a map left out is ×1. */
   mobPack: Record<string, number>;
+  /** Spawn-spot radius × (the circle monsters appear and wander in), by map id (a built-in map or an editor-made one); a map left out is ×1. */
+  spawnRadius: Record<string, number>;
   /**
    * Floor-1 farm maps (FARM_IDS): % of the map's spawn spots in use, by map id; a map left out is 100 (owner 2026-11-25). The spots
    * switched off are spread evenly over the map and over each kind (packCount).
@@ -314,6 +317,8 @@ export interface BalanceTuning {
   monsters?: MonsterTuning;
   /** Monsters-per-spot multipliers that are not ×1, by map id. */
   mobPack?: Record<string, number>;
+  /** Spawn-spot radius multipliers that are not ×1, by map id. */
+  spawnRadius?: Record<string, number>;
   /** Farm maps' % of spawn spots in use that are not 100, by map id. */
   farmSpots?: Record<string, number>;
   /** EXP multipliers per 10 levels that are not ×1. */
@@ -422,6 +427,7 @@ export const BALANCE_RANGE = {
   cdrCap: [0, 95],
   monsterMult: [0.1, 10],
   mobPack: [1, 5],
+  spawnRadius: [1, 4],
   farmSpots: [0, 100],
   expMult: [0.1, 10],
   bossSwitchSec: [0, 120],
@@ -469,6 +475,7 @@ export function codeBalance(): Balance {
     cdrCap: CODE_CDR_CAP,
     monsters: {},
     mobPack: {},
+    spawnRadius: {},
     farmSpots: {},
     expMult: {},
     potions: codePotions(),
@@ -547,6 +554,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.cdrCap !== undefined) b.cdrCap = t.cdrCap;
   if (t.monsters) b.monsters = structuredClone(t.monsters);
   if (t.mobPack) b.mobPack = { ...t.mobPack };
+  if (t.spawnRadius) b.spawnRadius = { ...t.spawnRadius };
   if (t.farmSpots) b.farmSpots = { ...t.farmSpots };
   if (t.expMult) b.expMult = { ...t.expMult };
   if (t.potions) {
@@ -694,6 +702,9 @@ export function packCount(zoneId: string, count: number, index: number, b: Balan
   return Math.max(1, whole + (((index * 0.6180339887) % 1) < want - whole ? 1 : 0));
 }
 
+/** Spawn-spot radius × of a map (/admin; ×1 = the radius in the map file). Bosses and boss rooms ignore it (callers skip them). */
+export const spawnRadiusMult = (zoneId: string, b: Balance = current): number => b.spawnRadius[zoneId] ?? 1;
+
 /**
  * The MP a skill costs a character of this class at this level (owner 2026-11-13): the skill's `mp` in code
  * × (1 + k × (level − 1)), k = the class's % per level, rounded to the nearest whole MP. Free skills stay free.
@@ -739,7 +750,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mobRoam', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'shopNoEquip', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'bagExpand', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mobRoam', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'shopNoEquip', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'bagExpand', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -1157,6 +1168,25 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (Object.keys(res).length) out.mobPack = res;
     return null;
   };
+  // Spawn-spot radius ×, by map: the built-in maps with spawn spots, plus any editor-made map the server knows.
+  const spawnRadius = (): string | null => {
+    const x = o.spawnRadius;
+    if (x === undefined) return null;
+    if (!isObj(x)) return strict ? 'รัศมีจุดเกิดไม่ถูกต้อง' : null;
+    const known = (id: string) => PACK_ZONES.some((z) => z.id === id) || !!customDef(id);
+    const res: Record<string, number> = {};
+    for (const id of Object.keys(x)) {
+      if (!known(id)) {
+        if (strict) return `รัศมีจุดเกิด: ไม่รู้จักแมพ "${id.slice(0, 30)}"`;
+        continue;
+      }
+      const n = num(x[id], ...BALANCE_RANGE.spawnRadius, `รัศมีจุดเกิด ${id}`);
+      if (typeof n === 'string') return n;
+      if (n !== undefined && n !== 1) res[id] = n;
+    }
+    if (Object.keys(res).length) out.spawnRadius = res;
+    return null;
+  };
   // Farm maps' % of spawn spots in use, in FARM_IDS order.
   const farmSpots = (): string | null => {
     const x = o.farmSpots;
@@ -1354,6 +1384,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     one('cdrCap', BALANCE_RANGE.cdrCap, 'ลดคูลดาวน์ได้สูงสุด %') ??
     monsters() ??
     mobPack() ??
+    spawnRadius() ??
     farmSpots() ??
     expMult() ??
     potions() ??
@@ -1482,6 +1513,11 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
     const p = a.mobPack[z.id] ?? 1;
     const q = b.mobPack[z.id] ?? 1;
     if (p !== q) out.push(`มอนต่อจุด ${z.nameTh} ×${p} → ×${q}`);
+  }
+  for (const id of new Set([...Object.keys(a.spawnRadius), ...Object.keys(b.spawnRadius)])) {
+    const p = a.spawnRadius[id] ?? 1;
+    const q = b.spawnRadius[id] ?? 1;
+    if (p !== q) out.push(`รัศมีจุดเกิด ${ZONES[id]?.nameTh ?? customDef(id)?.nameTh ?? id} ×${p} → ×${q}`);
   }
   for (const id of FARM_IDS) {
     const p = a.farmSpots[id] ?? 100;

@@ -90,6 +90,8 @@ export class Monster extends Unit {
   target: Player | null = null;
   /** Damage dealt by each player id — EXP is split by these shares. */
   readonly damageBy = new Map<number, number>();
+  /** Spawn-spot radius × it was born with (Balance.spawnRadius): it wanders that much wider and its run-home leash grows with it. */
+  spread = 1;
   private wanderT = Math.random() * 3;
   private wandering = false;
   private wx = 0;
@@ -587,7 +589,7 @@ export class Monster extends Unit {
       }
     } else {
       const leash = Math.hypot(this.x - this.area.x, this.z - this.area.z);
-      if (!this.hunter && this.state !== 'return' && leash > (this.isBoss ? 18 : 22)) {
+      if (!this.hunter && this.state !== 'return' && leash > (this.isBoss ? 18 : 22 + 2 * this.area.radius * (this.spread - 1))) {
         this.state = 'return';
         this.aggroT = 0;
         this.target = null;
@@ -680,7 +682,7 @@ export class Monster extends Unit {
           if (this.wanderT <= 0) {
             this.wandering = Math.random() < 0.55;
             const a = Math.random() * Math.PI * 2;
-            const rr = Math.sqrt(Math.random()) * this.area.radius;
+            const rr = Math.sqrt(Math.random()) * this.area.radius * this.spread;
             this.wx = this.area.x + Math.cos(a) * rr;
             this.wz = this.area.z + Math.sin(a) * rr;
             this.wanderT = 2 + Math.random() * 3;

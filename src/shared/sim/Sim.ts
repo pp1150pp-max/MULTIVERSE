@@ -20,7 +20,7 @@ import { pick, rand, randInt, type Rng } from '../rng';
 import { splitExp } from '../party';
 import { CLASS_IDS, SLOT_KIND, WEAR_SLOTS, type WearSlot } from '../data/classes';
 import { emptySkillBook, learnable, learnBlock, pointsSpent, rankOf, refundPrice, unlearnOne, wear, wearBlock } from '../skillBook';
-import { classBalance, currentBalance, packCount } from '../balance';
+import { classBalance, currentBalance, packCount, spawnRadiusMult } from '../balance';
 import { vipDropMult, vipExp } from '../vip';
 import { COS_SLOT_NAME, cosById, MOUNT_CALM } from '../data/cosmetics';
 import {
@@ -459,18 +459,33 @@ export class Sim {
   private spawnMonster(sp: Spawner): void {
     const def = MONSTERS[sp.area.monster];
     const r = Math.random;
+    // The map's spawn-radius × (/admin): ordinary monsters only, never a boss or a boss room.
+    const spread = sp.boss || this.zone.roomOf ? 1 : spawnRadiusMult(this.zone.id);
+    const pools = spread > 1 ? [...(this.zone.iceLakes ?? []), ...(this.zone.lavaPools ?? [])] : [];
     let x = sp.area.x;
     let z = sp.area.z;
-    for (let tries = 0; tries < 12; tries++) {
+    let found = false;
+    for (let tries = 0; tries < 12 && !found; tries++) {
       const a = r() * Math.PI * 2;
       // A bigger pack spreads a little wider (up to twice the spot's radius).
       const n = sp.boss ? 1 : this.wanted(sp) / Math.max(1, sp.area.count);
-      const d = Math.sqrt(r()) * sp.area.radius * Math.min(2, Math.sqrt(Math.max(1, n)));
-      x = sp.area.x + Math.cos(a) * d;
-      z = sp.area.z + Math.sin(a) * d;
-      if (!this.terrain.isBlocked(x, z, def.radius)) break;
+      const d = Math.sqrt(r()) * sp.area.radius * spread * Math.min(2, Math.sqrt(Math.max(1, n)));
+      const tx = sp.area.x + Math.cos(a) * d;
+      const tz = sp.area.z + Math.sin(a) * d;
+      if (this.terrain.isBlocked(tx, tz, def.radius)) continue;
+      // A widened spot must not drop one in the map's edge, the safe area or a lake / lava pool.
+      if (spread > 1) {
+        if (Math.abs(tx) > this.terrain.bound - 3 || Math.abs(tz) > this.terrain.bound - 3) continue;
+        if (this.zone.safe && inSafeArea(this.zone, tx, tz)) continue;
+        if (pools.some((l) => Math.hypot((tx - l.x) / (l.rx + 1), (tz - l.z) / (l.rz + 1)) < 1)) continue;
+      }
+      x = tx;
+      z = tz;
+      found = true;
     }
-    this.monsters.push(new Monster(this.newId(), def, randInt(r, def.levels[0], def.levels[1]), sp.area, x, z, sp.area.boost ?? this.boost));
+    const m = new Monster(this.newId(), def, randInt(r, def.levels[0], def.levels[1]), sp.area, x, z, sp.area.boost ?? this.boost);
+    m.spread = spread;
+    this.monsters.push(m);
     sp.alive++;
   }
 
