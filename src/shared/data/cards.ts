@@ -33,6 +33,10 @@ export const CARD_FX_NAME: Record<CardFx, string> = {
   goldPct: 'ทอง %',
   normalAtkPct: 'ดาเมจโจมตีปกติ %',
 };
+/** "พลังโจมตี +2%" lines of a card's effects, in the fixed effect order. */
+export function cardFxLines(fx: Partial<Record<CardFx, number>>): string[] {
+  return CARD_FX.filter((f) => fx[f] !== undefined).map((f) => `${CARD_FX_NAME[f].replace(/\s*%$/, '')} +${fx[f]}%`);
+}
 /** Most effects one card may have (plan: 2–3). */
 export const CARD_FX_MAX = 3;
 

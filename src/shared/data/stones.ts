@@ -1,7 +1,9 @@
 // Blacksmith stones: dropped by bosses (reroll stones rarely by other monsters too), stacked in the bag like potions.
 // Boss keys (Artifacts) share the stone stack: they stack, sell, trade and list on the market the same way.
-import { isBoundKind, isBuffScroll, isConsumable, isOrbStone, type BaseStoneKind, type BossKey, type BuffScroll, type OrbStoneKind, type QuestKey, type StoneKind, type StoneStack } from '../types';
+import { isBoundKind, isBuffScroll, isCardStone, isConsumable, isOrbStone, RARITY_COLOR, type BaseStoneKind, type BossKey, type BuffScroll, type OrbStoneKind, type QuestKey, type StoneKind, type StoneStack } from '../types';
 import { cosById } from './cosmetics';
+import { CARD_GROUP_NAME, CARD_RARITY_NAME, cardFxLines, cardName, type CardId } from './cards';
+import { cardDef, cardNum } from '../cardTuning';
 import type { RerollKind } from './reroll';
 
 /** Most stones (or keys) one bag or stash slot can hold (owner: 10). */
@@ -163,16 +165,30 @@ const orbStoneDesc = (k: OrbStoneKind): string =>
     ? 'คลิกเพื่อใช้: ได้หน้าตาลูกแก้วตีบวกนี้เข้าบัญชี (สวมได้ที่กระเป๋าแฟชั่น) · ถ้ามีอยู่แล้วใช้ไม่ได้ เก็บไว้เทรดหรือขายในตลาดได้ · ขายให้พ่อค้าไม่ได้'
     : 'ลูกแก้วนี้ถูกนำออกจากเกมแล้ว ใช้ไม่ได้';
 
-/** The fixed kinds' values, and for an orb item (any `orb_<n>` key) the value worked out from the orb. */
-const withOrbs = (base: Record<BaseStoneKind, string>, orb: (k: OrbStoneKind) => string): Record<StoneKind, string> =>
-  new Proxy(base as Record<StoneKind, string>, { get: (t, k) => (isOrbStone(k) ? orb(k) : Reflect.get(t, k)) });
+/** Said on every card until socketing exists (plan PR 3). */
+export const CARD_SOON = 'ยังเสียบอุปกรณ์ไม่ได้ (เร็ว ๆ นี้)';
+/** A card item's description, from the card tuning (the group and effects the owner set on the /admin card tab). */
+const cardStoneDesc = (k: CardId): string => {
+  const d = cardDef(k);
+  if (!d) return '';
+  return `การ์ดมอนสเตอร์ระดับ${CARD_RARITY_NAME[d.rarity]} · ${cardFxLines(d.fx).join(' · ')} · ใส่ได้: ${CARD_GROUP_NAME[d.group]} · ${CARD_SOON}`;
+};
+/** A card item's colour: its rarity's. */
+const cardStoneColor = (k: CardId): string => RARITY_COLOR[cardDef(k)?.rarity ?? 'rare'];
 
-export const STONE_NAME = withOrbs(BASE_NAME, orbStoneName);
-export const STONE_DESC = withOrbs(BASE_DESC, orbStoneDesc);
-export const STONE_COLOR = withOrbs(BASE_COLOR, () => ORB_STONE_COLOR);
+/**
+ * The fixed kinds' values, and for an orb item (any `orb_<n>` key) or a card item (`card_<monster>`) the value worked out
+ * from the orb or the card.
+ */
+const withOrbs = (base: Record<BaseStoneKind, string>, orb: (k: OrbStoneKind) => string, card: (k: CardId) => string): Record<StoneKind, string> =>
+  new Proxy(base as Record<StoneKind, string>, { get: (t, k) => (isOrbStone(k) ? orb(k) : isCardStone(k) ? card(k) : Reflect.get(t, k)) });
 
-/** "ก้อน" for stones, "อัน" for keys and feathers, "ม้วน" for the return scroll. */
-export const stoneUnit = (k: StoneKind): string => (isOrbStone(k) ? 'ลูก' : k === 'mystery_box' ? 'กล่อง' : k === 'return_scroll' ? 'ม้วน' : isBuffScroll(k) ? 'ใบ' : k === 'megaphone' ? 'อัน' : k.includes('key_') || k === 'phoenix' ? 'อัน' : 'ก้อน');
+export const STONE_NAME = withOrbs(BASE_NAME, orbStoneName, cardName);
+export const STONE_DESC = withOrbs(BASE_DESC, orbStoneDesc, cardStoneDesc);
+export const STONE_COLOR = withOrbs(BASE_COLOR, () => ORB_STONE_COLOR, cardStoneColor);
+
+/** "ก้อน" for stones, "อัน" for keys and feathers, "ม้วน" for the return scroll, "ใบ" for cards (checked first: card_ghost_monkey contains "key_"). */
+export const stoneUnit = (k: StoneKind): string => (isCardStone(k) ? 'ใบ' : isOrbStone(k) ? 'ลูก' : k === 'mystery_box' ? 'กล่อง' : k === 'return_scroll' ? 'ม้วน' : isBuffScroll(k) ? 'ใบ' : k === 'megaphone' ? 'อัน' : k.includes('key_') || k === 'phoenix' ? 'อัน' : 'ก้อน');
 
 /** Return scroll: the merchant's price (owner: 500 G) and how long it takes to cast (owner: 3 s). */
 export const RETURN_SCROLL_PRICE = 500;
@@ -181,6 +197,11 @@ export const RETURN_CAST = 3;
 /** What the merchant pays for one: shop items (feather, consumables) half their shop price, stones and keys STONE_SELL. */
 export function stoneSellPrice(k: StoneKind): number {
   if (k === 'phoenix') return PHOENIX_PRICE / 2;
+  // Cards: their rarity's price on the /admin card tab (sell_rare / sell_epic / sell_legendary).
+  if (isCardStone(k)) {
+    const d = cardDef(k);
+    return d ? cardNum(`sell_${d.rarity}`) : 0;
+  }
   // Orb items are sold on the market or traded, never to the merchant.
   if (isOrbStone(k)) return 0;
   // Bound rewards never reach the merchant.

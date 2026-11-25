@@ -1,5 +1,6 @@
 import type { Game } from '../Game';
-import { isBuffScroll, isOrbStone, isItem, isPotion, isStack, isStone, EQUIP_SLOT_LABEL, wornPlaces, type BagEntry, type EquipSlot } from '../../shared/types';
+import { openCardView } from './cardPopup';
+import { isBuffScroll, isCardStone, isOrbStone, isItem, isPotion, isStack, isStone, EQUIP_SLOT_LABEL, wornPlaces, type BagEntry, type EquipSlot } from '../../shared/types';
 import type { MarketWindow } from '../market';
 import type { ForgeWindow } from './forge';
 import type { ShopWindow } from './shop';
@@ -110,6 +111,7 @@ export class ItemDetail {
           acts.push({ label: 'เปิด 1 กล่อง', run: () => g.backend.openBox(i, false), main: true });
           if (entry.count > 1) acts.push({ label: 'เปิดทั้งกอง', run: () => g.backend.openBox(i, true) });
         } else if (isOrbStone(st)) acts.push({ label: 'ใช้ (เข้าบัญชี)', run: () => g.backend.useOrbItem(i), main: true });
+        else if (isCardStone(st)) acts.push({ label: 'ดูการ์ด', run: () => openCardView(st), main: true });
       }
       if (this.w.shop.isOpen) acts.push({ label: isStack(entry) ? 'ขายทั้งช่อง' : 'ขาย', run: () => this.w.shop.sellFromBag(i) });
       if (this.w.stash.isOpen) acts.push({ label: 'ฝากเข้าคลัง', run: () => g.backend.stashPut(i, -1) });

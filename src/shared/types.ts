@@ -1,4 +1,5 @@
 // Shared types — no rendering code here so the future Colyseus server can import them.
+import { isCardId, type CardId } from './data/cards';
 
 export type Vec2 = { x: number; z: number };
 
@@ -169,14 +170,20 @@ export type BaseStoneKind = BlacksmithStone | BossKey | QuestKey | ShopStone | C
  * like a stone; clicking it gives the orb to the account. The merchant doesn't buy it.
  */
 export type OrbStoneKind = `orb_${number}`;
-/** Everything a stone stack can hold: the fixed kinds (STONE_KINDS) and orb items. */
-export type StoneKind = BaseStoneKind | OrbStoneKind;
+/**
+ * Everything a stone stack can hold: the fixed kinds (STONE_KINDS), orb items and monster cards (`card_<monster>`,
+ * src/shared/data/cards.ts, plan docs/plans/card-system.md PR 1). Cards stack 10 per slot, trade, go in the stash,
+ * the mail and on the market like a stone, and sell to the merchant at their rarity's price (card tuning).
+ */
+export type StoneKind = BaseStoneKind | OrbStoneKind | CardId;
 /** The fixed stone kinds (orb items are not listed: they come and go with the orbs made in /admin). */
 export const STONE_KINDS: BaseStoneKind[] = [...BLACKSMITH_STONES, ...BOSS_KEYS, ...QUEST_KEYS, 'phoenix', ...CONSUMABLES];
 export const isOrbStone = (k: unknown): k is OrbStoneKind => typeof k === 'string' && /^orb_[1-9]d{0,5}$/.test(k);
 export const isBaseStone = (k: unknown): k is BaseStoneKind => (STONE_KINDS as unknown[]).includes(k);
-/** A stone kind read from a save or a message: a fixed kind or an orb item. */
-export const isStoneKind = (k: unknown): k is StoneKind => isBaseStone(k) || isOrbStone(k);
+/** A monster card carried as a bag item (not listed in STONE_KINDS, like orb items). */
+export const isCardStone = (k: unknown): k is CardId => isCardId(k);
+/** A stone kind read from a save or a message: a fixed kind, an orb item or a monster card. */
+export const isStoneKind = (k: unknown): k is StoneKind => isBaseStone(k) || isOrbStone(k) || isCardId(k);
 export const isBossKey = (k: StoneKind): k is BossKey => (BOSS_KEYS as StoneKind[]).includes(k);
 export const isQuestKey = (k: StoneKind): k is QuestKey => (QUEST_KEYS as StoneKind[]).includes(k);
 export const isConsumable = (k: StoneKind): k is Consumable => (CONSUMABLES as StoneKind[]).includes(k);

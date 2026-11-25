@@ -16,6 +16,7 @@ import { checkOrbItems, registerOrbItems } from '../../shared/orbItems';
 import { applyOrbLook } from '../orbs';
 import { checkCosTuning } from '../../shared/cosTuning';
 import { checkAnimTuning } from '../../shared/animTuning';
+import { applyCardTuning, checkCardTuning } from '../../shared/cardTuning';
 import { applyAnimTuning } from '../animTune';
 import { applyBalance, checkBalance, currentBalance } from '../../shared/balance';
 import { applySlotVars } from '../img';
@@ -116,6 +117,7 @@ function useWelcome(m: WelcomeMsg): void {
   useOrbLook(m.orbLook);
   useCosTuning(m.cosTuning);
   useAnimTuning(m.animTuning);
+  useCardTuning(m.cardTuning);
   applyCosHidden(m.cosHidden);
   useOrbItems(m.orbItems);
   useBalance(m.balance);
@@ -803,6 +805,9 @@ export class OnlineBackend implements Backend {
         break;
       case 'animTuning':
         useAnimTuning(m.tuning);
+        break;
+      case 'cardTuning':
+        useCardTuning(m.tuning);
         break;
       case 'cosHidden':
         applyCosHidden(m.ids);
@@ -1546,6 +1551,11 @@ function useCosTuning(v: unknown): void {
 /** The server's per-facing animation fixes (src/shared/animTuning.ts), used by every character drawn from now on. */
 function useAnimTuning(v: unknown): void {
   applyAnimTuning(checkAnimTuning(v, false).tuning ?? {});
+}
+
+/** The server's card tuning (src/shared/cardTuning.ts), so card tooltips (effects, sell price) match /admin. */
+function useCardTuning(v: unknown): void {
+  applyCardTuning(v === undefined ? {} : checkCardTuning(v, false).tuning ?? {});
 }
 
 /** The server's game balance (class stats, tier tables), so tooltips and the blacksmith's odds match it. */

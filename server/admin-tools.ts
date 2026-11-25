@@ -617,6 +617,7 @@ export async function ownerToolsApi(
     if (!sameCardTuning(before, c.tuning)) {
       db.setCardTuning(c.tuning);
       applyCardTuning(c.tuning);
+      world.cardTuningChanged(c.tuning);
       const changes = cardTuningChanges(before, c.tuning, cardName);
       log(db, a, 'card-tune', 'ค่าการ์ดทั้งเซิร์ฟ', (body.reset === true ? 'คืนค่าเริ่มต้น: ' : '') + (changes.length > 1500 ? changes.slice(0, 1500) + '…' : changes));
     }

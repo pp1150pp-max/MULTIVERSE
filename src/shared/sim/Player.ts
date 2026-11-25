@@ -17,6 +17,7 @@ import { itemClass, starterWeapon, upgradeItem } from '../data/items';
 import { setBonusStats } from '../data/sets';
 import { anyStackValue, potionHeal, potionPrice, POTION_SIZES, POTION_STACK, stackLimit } from '../data/potions';
 import { BOSS_QUEST_KEY, BUFF_MAX, QUEST_KILLS, stoneStackMax } from '../data/stones';
+import { CARD_IDS } from '../data/cards';
 import { cleanGearDone, cleanGearQuests } from '../gearQuests';
 import type { TutorialData } from '../tutorial';
 import {
@@ -244,7 +245,8 @@ export function sortEntries(list: readonly (BagEntry | null)[], key: SortKey, de
   // Stones last, merged into full stacks too.
   // Orb items (mystery box) come after the fixed kinds, in the order of their numbers.
   const orbs = [...new Set([...stones.keys()].map((k) => k.replace(/:b$/, '')).filter(isOrbStone))].sort((a, b) => Number(a.slice(4)) - Number(b.slice(4)));
-  for (const k of [...STONE_KINDS, ...orbs]) {
+  // Monster cards last, in their table order (CARD_DEFAULTS: floor 1 map by map, then floor 2).
+  for (const k of [...STONE_KINDS, ...orbs, ...CARD_IDS]) {
     for (const b of [false, true]) {
       for (let n = stones.get(`${k}${b ? ':b' : ''}`) ?? 0; n > 0; n -= stoneStackMax(k)) stacks.push({ stone: k, count: Math.min(n, stoneStackMax(k)), ...bound(b) });
     }

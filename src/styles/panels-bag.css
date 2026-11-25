@@ -255,3 +255,6 @@ html.paper-ui .eq-ring2 { left: 61.5%; top: 37.2%; width: 6.6%; height: 4.4%; }
 #death h2 { font-family: 'Cinzel', 'Kanit', serif; font-size: 42px; margin: 0; color: #ff8a7a; }
 #death p { color: var(--ink-dim); }
 
+
+/* Monster card items (card-system PR 1): the card picture cropped into the slot, a border in the card's rarity colour. */
+img.gi.gi-card { box-sizing: border-box; object-fit: cover; object-position: 50% 30%; border: 2px solid var(--card-c, #4fa0ff); border-radius: 3px; background: #1a1610; }

@@ -11,9 +11,10 @@ import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { POTION_SIZE_LABEL, potionName, potionSellPrice, stackLimit } from '../shared/data/potions';
 import { STONE_COLOR, STONE_DESC, STONE_NAME, stoneSellPrice } from '../shared/data/stones';
 import { drawIcon } from '../client/placeholder';
+import { cardArt } from '../shared/data/cards';
 import { imgUrl } from '../client/img';
 import {
-  EQUIP_SLOTS, EQUIP_SLOT_LABEL, isPotion, isStack, isStone, RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, SLOTS, STAT_KEYS, STAT_LABEL, wornPlaces,
+  EQUIP_SLOTS, EQUIP_SLOT_LABEL, isCardStone, isPotion, isStack, isStone, RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, SLOTS, STAT_KEYS, STAT_LABEL, wornPlaces,
   type BagEntry, type ClassId, type EquipSlot, type Item, type Rarity, type StatLine,
 } from '../shared/types';
 
@@ -54,8 +55,31 @@ function img(file: string, alt: () => HTMLCanvasElement, key: string): HTMLImage
   return el;
 }
 
-function entryIcon(e: BagEntry): HTMLImageElement {
+/** A monster card item: its picture cropped into the slot with a border in its rarity's colour (admin.css .gi-card). */
+export function cardImg(id: Parameters<typeof cardArt>[0]): HTMLImageElement {
+  const el = document.createElement('img');
+  el.className = 'gi gi-card';
+  el.alt = '';
+  el.draggable = false;
+  el.loading = 'lazy';
+  el.style.setProperty('--card-c', STONE_COLOR[id]);
+  el.src = cardArt(id);
+  el.onerror = () => {
+    el.onerror = null;
+    el.src = drawIcon(`stone_${id}`).toDataURL();
+  };
+  return el;
+}
+
+/** A gear kind's icon (the picture of the class's version, or the first class's when none is given), as itemArt names it. */
+export function baseIcon(b: AdminMeta['bases'][number], cls: ClassId | null): HTMLImageElement {
+  const k = b.names.any ? '' : cls && b.names[cls] ? cls : Object.keys(b.names)[0];
+  return img(k ? `item_${b.id}_${k}` : `item_${b.id}`, () => drawIcon('bag'), 'bag');
+}
+
+export function entryIcon(e: BagEntry): HTMLImageElement {
   if (isPotion(e)) return img(`potion_${e.potion}_${e.size}`, () => drawIcon(`potion_${e.potion}`), `p${e.potion}`);
+  if (isStone(e) && isCardStone(e.stone)) return cardImg(e.stone);
   if (isStone(e)) return img(`stone_${e.stone.replace(/^qkey_/, 'key_')}`, () => drawIcon(`stone_${e.stone}`), e.stone);
   return img(itemArt(e), () => drawIcon('bag'), 'bag');
 }
