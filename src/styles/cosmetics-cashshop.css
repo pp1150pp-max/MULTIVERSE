@@ -116,6 +116,8 @@
 #cash-win .cash-time { color: #ffb08a; }
 #cash-win .cash-price { display: flex; align-items: center; justify-content: center; gap: 2px; color: #2a1a08; font-weight: 700; }
 #cash-win .cash-card .cash-price { position: absolute; left: 13%; right: 13%; top: 86%; height: 8.6%; font-size: 13px; }
+/* "🎁 เปิดได้จากกล่องปริศนา" is too long for the card's price plate: two small lines inside it. */
+#cash-win .cash-card .cash-price.box { font-size: 10px; line-height: 1.05; text-align: center; white-space: normal; padding: 0 2px; }
 #cash-win .cash-price s { color: #5a3c14; font-size: 11px; font-weight: 400; margin-right: 3px; }
 #cash-win .cash-ribbon {
   position: absolute; left: -5px; top: -6px; width: 25%; aspect-ratio: 96 / 103; z-index: 1; pointer-events: none;
