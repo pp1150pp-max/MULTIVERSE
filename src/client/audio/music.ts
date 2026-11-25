@@ -1,6 +1,10 @@
 // Original chiptune tracks, sequenced live with Web Audio: a pulse lead, a triangle bass, a soft arpeggio
 // and noise drums. Each line below is one bar of eight steps: a note, `-` to hold it, `.` for silence.
+// Boss rooms may loop a song file instead (songFiles.ts); both go through the same fade and music slider.
+import type { BossSong } from '../../shared/audioTuning';
+import { currentBalance } from '../../shared/balance';
 import { audioEngine } from './engine';
+import { songFiles } from './songFiles';
 
 export type TrackId = 'forest' | 'marsh' | 'snow' | 'volcano' | 'town' | 'boss'
   | 'boss_bear' | 'boss_witch' | 'boss_yeti' | 'boss_heart';
@@ -226,6 +230,8 @@ function compile(def: TrackDef): Compiled {
 const COMPILED = Object.fromEntries((Object.keys(TRACKS) as TrackId[]).map((id) => [id, compile(TRACKS[id])])) as Record<TrackId, Compiled>;
 
 const FADE_OUT = 0.9;
+/** Longest we stay on the old track while a song file loads, before the wanted chiptune plays meanwhile. */
+const SONG_WAIT_MS = 3000;
 const LOOK_AHEAD = 0.4;
 const TICK_MS = 100;
 
@@ -240,32 +246,49 @@ function pulseWave(ctx: AudioContext): PeriodicWave {
 
 class MusicPlayer {
   private wanted: TrackId | null = null;
+  private song: BossSong | null = null;
+  private songAsked = 0;
   private tempo = 1;
-  private playing: TrackId | null = null;
+  private playing: TrackId | BossSong | null = null;
+  /** The looping song file and its /admin loudness, while one is playing. */
+  private file: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
   private out: GainNode | null = null;
   private pulse: PeriodicWave | null = null;
   private step = 0;
   private nextT = 0;
   private timer: number | null = null;
 
-  /** Fades to this track. It starts as soon as sound is allowed. */
-  /** `tempo` speeds the track up (1 = as written), e.g. when a boss rages. */
-  play(id: TrackId, tempo = 1): void {
+  /**
+   * Fades to this track. It starts as soon as sound is allowed.
+   * `tempo` speeds the track up (1 = as written), e.g. when a boss rages. `song` is a file to loop instead:
+   * `id` still plays if that file can't be had. Tempo never touches a file.
+   */
+  play(id: TrackId, tempo = 1, song: BossSong | null = null): void {
+    if (song !== this.song) this.songAsked = Date.now();
+    this.song = song;
     this.wanted = id;
     this.tempo = tempo;
     this.timer ??= window.setInterval(() => this.tick(), TICK_MS);
   }
 
   /** Which track is sounding now, for tests and debugging. */
-  get current(): TrackId | null {
+  get current(): TrackId | BossSong | null {
     return this.playing;
   }
 
   private tick(): void {
     const ctx = audioEngine.ctx;
     if (!ctx || !audioEngine.running || !this.wanted) return;
-    if (this.playing !== this.wanted) this.begin(ctx, this.wanted);
-    const track = COMPILED[this.playing!];
+    const buffer = songFiles.get(ctx, this.song);
+    let next: TrackId | BossSong = buffer ? this.song! : this.wanted;
+    // Still loading: stay on what is playing for a moment, rather than flash another chiptune first.
+    if (this.playing && songFiles.loading(this.song) && Date.now() - this.songAsked < SONG_WAIT_MS) next = this.playing;
+    if (this.playing !== next) this.begin(ctx, next, buffer);
+    if (this.file) {
+      this.file.gain.gain.setTargetAtTime(currentBalance().audio.music.gain, ctx.currentTime, 0.05);
+      return;
+    }
+    const track = COMPILED[this.playing as TrackId];
     const stepDur = 60 / (track.def.bpm * this.tempo) / 2;
     if (this.nextT < ctx.currentTime) this.nextT = ctx.currentTime + 0.05;
     while (this.nextT < ctx.currentTime + LOOK_AHEAD) {
@@ -275,12 +298,14 @@ class MusicPlayer {
     }
   }
 
-  private begin(ctx: AudioContext, id: TrackId): void {
+  private begin(ctx: AudioContext, id: TrackId | BossSong, buffer: AudioBuffer | null): void {
     const old = this.out;
     if (old) {
       old.gain.cancelScheduledValues(ctx.currentTime);
       old.gain.setValueAtTime(old.gain.value, ctx.currentTime);
       old.gain.linearRampToValueAtTime(0, ctx.currentTime + FADE_OUT);
+      // A song stops by the audio clock, so it also ends right if the tab is hidden mid-fade.
+      this.file?.src.stop(ctx.currentTime + FADE_OUT);
       window.setTimeout(() => old.disconnect(), (FADE_OUT + LOOK_AHEAD + 0.5) * 1000);
     }
     const out = ctx.createGain();
@@ -294,6 +319,17 @@ class MusicPlayer {
     this.step = 0;
     this.nextT = t;
     this.pulse ??= pulseWave(ctx);
+    this.file = null;
+    if (id in COMPILED) return;
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.loop = true;
+    const gain = ctx.createGain();
+    gain.gain.value = currentBalance().audio.music.gain;
+    src.connect(gain);
+    gain.connect(out);
+    src.start(t);
+    this.file = { src, gain };
   }
 
   private schedule(ctx: AudioContext, track: Compiled, step: number, t: number, stepDur: number): void {

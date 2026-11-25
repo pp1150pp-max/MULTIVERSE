@@ -8,7 +8,7 @@ import { CIRCLE_FALLBACKS, FX_LAYER_NAME, FX_LAYER_RANGE, QUARKS_SKILLS, quarksK
 import { circleDesign, drawInner, drawOuter } from '../client/circleDesigns';
 import { skillExtras } from '../client/skillExtras';
 import { ATTACK_ROOT_RANGE, NO_ATTACK_ROOT } from '../shared/attackRootTuning';
-import { AUDIO_GAIN_RANGE, SFX_GROUP_NAME, SFX_GROUPS } from '../shared/audioTuning';
+import { AUDIO_GAIN_RANGE, BOSS_SONG_NAME, BOSS_SONGS, ROOM_BOSS_NAME, ROOM_BOSSES, SFX_GROUP_NAME, SFX_GROUPS, type RoomSong } from '../shared/audioTuning';
 import { FORGE_RANGE, PLUS_CAP, PLUS_NEVER } from '../shared/forgeTuning';
 import { RIG_ARMOR_ITEMS, RIG_ARMOR_NAME, RIG_ARMORS, RIG_WEAPON_ITEMS, RIG_WEAPON_NAME, RIG_WEAPONS } from '../shared/rigLookTuning';
 import {
@@ -1397,6 +1397,38 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
+  // ---------------------------------------------------------- boss room song files (src/shared/audioTuning.ts)
+  const bossMusicCard = h('div', { class: 'card' });
+  // Built once: redrawing the card must not stop a song being listened to.
+  const songRows = BOSS_SONGS.map((s) => {
+    const state = h('span', { class: 'muted' }, ` assets/music/${s}.mp3`);
+    const player = h('audio', { controls: true, preload: 'metadata', src: `assets/music/${s}.mp3` });
+    player.addEventListener('error', () => {
+      player.remove();
+      state.textContent = ' ยังไม่มีไฟล์ (ห้องที่เลือกเพลงนี้เล่น chiptune เดิม)';
+    });
+    return h('div', { class: 'row bal-line' }, h('label', {}, BOSS_SONG_NAME[s]), player, state);
+  });
+  const drawBossMusic = (): void => {
+    const m = draft.audio.music;
+    const cm = code.audio.music;
+    const refresh = (): void => { updateSummary(); };
+    const on = h('input', { type: 'checkbox', checked: m.on, onchange: (e: Event) => { m.on = (e.target as HTMLInputElement).checked; refresh(); drawBossMusic(); } });
+    const choices: RoomSong[] = [...BOSS_SONGS, 'chip'];
+    bossMusicCard.replaceChildren(
+      h('h2', {}, 'เพลงห้องบอส'),
+      h('div', { class: 'muted' }, 'ในห้องบอสเล่นไฟล์เพลงวนลูปแทนเพลง chiptune ตั้งแต่เข้าห้องจนออก (ค่อย ๆ เฟดเข้าออก) · ใช้แถบ "เพลงประกอบ" ของผู้เล่น · ไม่เร่งตามบอสคลั่ง · ยังไม่มีไฟล์ = เล่น chiptune เดิม · วิธีเจนและวางไฟล์: art_templates/music/BOSS_GOTHIC.md · มีผลกับทุกคนทันทีหลังบันทึก'),
+      h('div', { class: 'row bal-line' },
+        h('label', { class: m.on !== cm.on ? 'bal-changed' : '' }, on, ' ใช้ไฟล์เพลงในห้องบอส'),
+        h('label', {}, ' × ความดังเพลงไฟล์ (เทียบกับ chiptune) ', numBox(() => m.gain, (n) => { m.gain = n; }, cm.gain, AUDIO_GAIN_RANGE[0], AUDIO_GAIN_RANGE[1], 0.1, refresh))),
+      h('div', { class: 'row bal-line' }, ...ROOM_BOSSES.map((id) =>
+        h('label', { class: m.rooms[id] !== cm.rooms[id] ? 'bal-changed' : '' }, `${ROOM_BOSS_NAME[id]} `,
+          h('select', { onchange: (e: Event) => { m.rooms[id] = (e.target as HTMLSelectElement).value as RoomSong; refresh(); drawBossMusic(); } },
+            ...choices.map((s) => h('option', { value: s, selected: m.rooms[id] === s }, s === 'chip' ? 'chiptune เดิม' : BOSS_SONG_NAME[s])))))),
+      ...songRows,
+    );
+  };
+
   // ---------------------------------------------------------- papercraft sword rig pictures (src/shared/rigLookTuning.ts)
   const rigCard = h('div', { class: 'card' });
   const drawRig = (): void => {
@@ -1539,6 +1571,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawCircles();
     drawRoot();
     drawAudio();
+    drawBossMusic();
     drawRig();
     applyFilter(); // redrawn cards keep the chosen category / search
   };
@@ -1595,7 +1628,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     { name: 'มอน-บอส-เมือง', cards: [monsterCard, bossCard, moveCard, hubCard] },
     { name: 'ไอเทม-ตีบวก', cards: [affixCard, tierCard, previewCard, setCard, potionCard, bagCard, forgeCard] },
     { name: 'Auto Play', cards: [autoCard] },
-    { name: 'หน้าตา-เอฟเฟกต์-เสียง', cards: [uiCard, fxCard, luCard, circleCard, audioCard, rigCard] },
+    { name: 'หน้าตา-เอฟเฟกต์-เสียง', cards: [uiCard, fxCard, luCard, circleCard, audioCard, bossMusicCard, rigCard] },
     { name: 'ระบบ-รางวัล', cards: [expCard, vipCard, floorCard, tutCard, langCard] },
   ];
   const ALL = 'ทั้งหมด';
