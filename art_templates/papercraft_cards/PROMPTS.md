@@ -3,7 +3,7 @@
 เจ้าของสั่งเมื่อ 2026-11-24 · แผนระบบ [docs/plans/card-system.md](../../docs/plans/card-system.md) หัวข้อ 12 · **แทน** [art_templates/cards/PROMPTS.md](../cards/PROMPTS.md) (16-bit เลิกใช้แล้ว เก็บไว้เฉยๆ)
 
 เกมนำภาพมาซ้อนกันเอง ภาพทุกภาพจึง**ไม่มีตัวหนังสือ**:
-- **กรอบ** 3 ระดับ ใช้ร่วมกันทุกใบ (หายาก / มหากาพย์ / ตำนาน) ช่องภาพ ช่องชื่อ ช่องผลเป็นสีม่วงแดงล้วน ผมตัดเป็นช่องโปร่งใส
+- **กรอบ** 3 ระดับ ใช้ร่วมกันทุกใบ (หายาก / มหากาพย์ / ตำนาน) **เป็นกรอบบางรอบขอบ (หัวข้อ 0)** ด้านในเป็นสีม่วงแดงล้วน ตัดเป็นโปร่งใส
 - **ตัวมอน** ใบละ 1 ภาพ **มีฉากหลังเต็มภาพของแมพบ้านมอนเหมือนภาพการ์ดเดิม** (เจ้าของสั่ง 2026-11-24) เกมวางเต็มช่องกลางของกรอบ ไม่ต้องตัดพื้น
 - ชื่อ ผล ป้ายระดับ สัญลักษณ์กลุ่ม เกมเขียน/วางเอง
 
@@ -23,7 +23,41 @@
 
 ---
 
-## 1. กรอบการ์ด 3 ระดับ (3 ภาพ, แนวตั้ง 2:3)
+## 0. กรอบบาง 3 ระดับ (ใหม่ · ใช้แทนหัวข้อ 1)
+
+เจ้าของสั่ง 2026-11-25: **กรอบต้องไม่บังภาพการ์ด** ให้เป็นแค่เส้นขอบบาง ๆ เหมือนใส่สโตรก ภาพมอนเต็มใบ · ชื่อ ระดับ ช่อง ผลการ์ด ย้ายไปเป็นข้อความ**ใต้ภาพ** (เกมเขียนเอง) · แสงสะท้อนตอนขยับเกมทำเอง ไม่ต้องอยู่ในภาพ
+
+- ที่วาง: **`art_templates/papercraft_cards/raw/thin/`** ชื่อไฟล์ตามตาราง (`.png`) · ไม่ commit
+- **เปิดแชทใหม่** ห้ามใช้แชทที่เคยเจนกรอบแบบมีช่อง และ**ห้ามแนบภาพกรอบเก่า** แนบแค่ภาพต้นแบบสไตล์ (ดู "วิธีเจน") ไม่งั้น GPT จะทำช่องชื่อ/ช่องสเตตัสกลับมา
+- prompt ไม่ใช้คำว่า "trading card" เพราะ GPT จะใส่ช่องเอง ใช้คำว่ากรอบรูป (picture frame) แทน
+
+### ส่วนสไตล์ (วางก่อนทุกกรอบ ต่อท้าย `Frame:` ด้วยคำอธิบายในตาราง)
+
+```text
+The attached image shows the papercraft art style of my game. Use EXACTLY this style: layered cut coloured paper and card, visible paper fibre texture, slightly uneven scissor-cut edges, small drop shadows between paper layers, warm soft light from the upper left. NOT pixel art.
+Generate an image, portrait 2:3: a simple thin PICTURE FRAME made of paper strips, like a thin outline around a photo. The frame is a narrow band along the outer edge only, about 4% of the image width on each side, with slightly rounded corners. The whole inside of the frame is ONE single flat solid magenta (#FF00FF) rectangle with no gradient, no shadow, no texture. IMPORTANT: there is only ONE magenta area. No dividers, no inner panels, no nameplate, no plates, no strips, no holes, no circles, nothing crossing the middle. Decorations only at the four corners, inside the thin band. No text, no letters, no numbers. Do not use pink, magenta or purple on the frame itself (for the epic frame use a deep violet that is clearly darker and bluer than the magenta).
+Frame:
+```
+
+| ไฟล์ | ระดับ | คำอธิบาย (ต่อท้าย `Frame:`) |
+|---|---|---|
+| `card_frame_rare.png` | หายาก | `thin strips of dark navy-blue card with a fine cream inner line and a pale-blue outer line, a tiny round blue paper gem at each corner, plain straight edges, the simplest of the three` |
+| `card_frame_epic.png` | มหากาพย์ | `thin strips of deep violet card with a fine cream inner line, tiny paper-cut vine curls at the four corners only, a small violet paper gem at each corner` |
+| `card_frame_legendary.png` | ตำนาน | `thin strips of deep amber-orange and gold-foil paper with a fine dark-brown inner line, small paper-cut filigree and a tiny gold star at each corner, the richest of the three but still thin` |
+
+### ถ้ายังได้ขอบหนาหรือมีช่องโผล่มา
+
+พิมพ์ต่อในแชทเดิม (แก้จากภาพที่ได้):
+
+```text
+Edit this exact image. Keep the same paper style, colours and corner decorations. REMOVE any top plate, round hole, nameplate and bottom stats strip. Make the border a THIN band along the outer edge only, about 4% of the width on each side, and fill EVERYTHING inside it with one single flat magenta (#FF00FF) area. Only one magenta area, no inner panels, no dividers, no plates.
+```
+
+ถ้าลองแล้วยังไม่ได้ ทางสำรองคือวาดกรอบด้วยโค้ด (สโตรก 2 ชั้นแบบกระดาษ + อัญมณีที่มุม) ไม่ต้องใช้ภาพ
+
+---
+
+## 1. กรอบการ์ด 3 ระดับแบบมีช่อง (เลิกใช้ 2026-11-25 · ใช้หัวข้อ 0 แทน · เก็บไว้อ้างอิง)
 
 สี: หายาก = น้ำเงิน · มหากาพย์ = ม่วง · ตำนาน = ส้มอำพัน (ตามสีความหายากของไอเทม) ทั้ง 3 ใบดีไซน์เดียวกัน ต่างกันที่สีกระดาษหลักและปริมาณลวดลายประดับ
 
