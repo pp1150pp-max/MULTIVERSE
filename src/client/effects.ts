@@ -832,6 +832,18 @@ export class Effects implements FxApi {
   ghostOf: ((id: number) => THREE.Sprite | null) | null = null;
 
   /**
+   * Whether player `by`'s dash button shows its worn dash cosmetic instead of the old dash (then the old glow puffs
+   * along the way, src/client/views.ts, stay off too). Same checks as dashWith.
+   */
+  dashCosmeticShown(by: number): boolean {
+    const id = this.dashOf?.(by);
+    if (!id || !DASH_STYLE[id] || !currentBalance().fxLayer.dashNew) return false;
+    const mine = !this.layerHooks || by === this.layerHooks.me();
+    const others = mine ? 1 : gfxOthers();
+    return gfxParticles() * others > 0 || (gfxQuality() > 0 && others > 0);
+  }
+
+  /**
    * Plays the dash cosmetic `id` from (x, z) toward angle `ang`, within the player's graphics menu. The end follows
    * player `by` (or `at`: where the character is t seconds in, for a demo). False = not a dash cosmetic, /admin
    * turned them off, or the graphics menu leaves nothing to draw (the caller plays the old dash).
