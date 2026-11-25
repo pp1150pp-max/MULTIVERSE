@@ -36,6 +36,7 @@ import { DIRECT_WS_HOST_DEFAULT, DIRECT_WS_IP_MAX_DEFAULT } from '../src/shared/
 import type { OrbLook } from '../src/shared/orbLook';
 import type { CosTuning } from '../src/shared/cosTuning';
 import type { AnimTuning } from '../src/shared/animTuning';
+import { currentCardTuning, type CardTuning } from '../src/shared/cardTuning';
 import { banMessage } from '../src/shared/api';
 import { Market, type MarketNote } from './market';
 import { Daily } from './daily';
@@ -834,7 +835,7 @@ export class GameWorld {
     // The close beta refund (once per account, after the owner switched it on), before the welcome carries the crystals.
     const refunded = !acc.guest && !pv ? this.topup.refundOnJoin(acc.id, acc.username) : 0;
     if (refunded) this.crystalsChanged(acc.id);
-    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), map: sim.terrain.mapRev, guest: acc.guest, ...(s.auto ? { auto: true } : {}), ...(pv ? { preview: true } : {}), orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), animTuning: this.db.animTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning(), cash: this.cash.catalog(), cashState: this.cash.state(acc.id, acc.guest), topup: this.topup.view(acc.id, acc.guest) });
+    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), map: sim.terrain.mapRev, guest: acc.guest, ...(s.auto ? { auto: true } : {}), ...(pv ? { preview: true } : {}), orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), animTuning: this.db.animTuning(), cardTuning: currentCardTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning(), cash: this.cash.catalog(), cashState: this.cash.state(acc.id, acc.guest), topup: this.topup.view(acc.id, acc.guest) });
     if (!pv) this.broadcastSystem(`${player.name} เข้าสู่โลก`);
     // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
     // The update notes (everyone, guests too), after the same moment as the notices below.
@@ -1927,6 +1928,11 @@ export class GameWorld {
   }
 
   /** Sends the new server-wide per-facing animation fixes to everyone online (already saved by the admin API). */
+  /** Sends the new server-wide card tuning to everyone online (already saved and applied by the admin API). */
+  cardTuningChanged(tuning: CardTuning): void {
+    for (const s of this.sessions) this.send(s.ws, { t: 'cardTuning', tuning });
+  }
+
   animTuningChanged(tuning: AnimTuning): void {
     for (const s of this.sessions) this.send(s.ws, { t: 'animTuning', tuning });
   }

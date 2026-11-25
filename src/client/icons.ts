@@ -5,7 +5,9 @@ import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { drawIcon } from './placeholder';
 import { CRIT_BURST, GLYPH_SHEET } from './floating';
 import { imgUrl } from './img';
-import { isOrbStone, type OrbStoneKind } from '../shared/types';
+import { isCardStone, isOrbStone, type OrbStoneKind } from '../shared/types';
+import { cardArt, type CardId } from '../shared/data/cards';
+import { STONE_COLOR } from '../shared/data/stones';
 import { orbItemLook } from '../shared/orbItems';
 import { ORB_PALETTES } from './orbs';
 
@@ -28,6 +30,7 @@ const stoneFallback: Partial<Record<StoneKind, string>> = {};
 /** Blacksmith stone icon. No painted file yet: falls back to the placeholder gem until icons/stone_*.png exists. */
 export const stoneIcon = (kind: StoneKind): string => {
   if (isOrbStone(kind)) return `<img class="gi" src="${orbStoneIcon(kind)}" alt="" draggable="false">`;
+  if (isCardStone(kind)) return cardIcon(kind);
   const alt = (stoneFallback[kind] ??= drawIcon(`stone_${kind}`).toDataURL());
   // A quest key wears its boss key's picture, with a mark that it is bound.
   const file = kind.replace(/^qkey_/, 'key_');
@@ -36,6 +39,14 @@ export const stoneIcon = (kind: StoneKind): string => {
   if (missingStone.has(file)) return `<img class="gi" src="${alt}" alt="" draggable="false">`;
   return `<img class="gi" src="${imgUrl(`assets/sprites/icons/stone_${file}.png`)}" alt="" draggable="false" onerror="this.onerror=null;this.src='${alt}';window.__stoneMissing('${file}')">`;
 };
+/**
+ * A monster card item: its picture (cardArt, 2:3) cropped into the square slot with a border in its rarity's colour
+ * (card-system PR 1). The drawn placeholder card shows if the picture is missing.
+ */
+export function cardIcon(id: CardId): string {
+  const alt = (stoneFallback[id] ??= drawIcon(`stone_${id}`).toDataURL());
+  return `<img class="gi gi-card" style="--card-c:${STONE_COLOR[id]}" src="${cardArt(id)}" alt="" draggable="false" onerror="this.onerror=null;this.src='${alt}'">`;
+}
 /** An orb item (mystery box): a glowing ball in its orb's palette (as at +11), redrawn when the look changes. */
 function orbStoneIcon(kind: OrbStoneKind): string {
   const look = orbItemLook(kind);

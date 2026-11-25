@@ -18,6 +18,7 @@ import { MAX_LEVEL } from './formulas';
 import { PLUS_CAP } from './data/enhance';
 import { entryName, POTION_SIZES, potionName, stackLimit } from './data/potions';
 import { STONE_NAME } from './data/stones';
+import { isCardId } from './data/cards';
 
 /**
  * A role id in `accounts.admin_role`. 'owner' has every tool and is made from the command line only;
@@ -732,7 +733,8 @@ export function adminStack(body: Record<string, unknown>): AdminStack | string {
     return { potion, size, count: 0 };
   }
   if (body.kind === 'stone') {
-    const stone = STONE_KINDS.find((k) => k === body.stone);
+    // A fixed stone kind or a monster card (card_<monster>, plan card-system PR 1); orb items are not made here.
+    const stone = STONE_KINDS.find((k) => k === body.stone) ?? (isCardId(body.stone) ? body.stone : undefined);
     if (!stone) return 'ชนิดหินไม่ถูกต้อง';
     return { stone, count: 0 };
   }

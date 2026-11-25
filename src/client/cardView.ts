@@ -3,7 +3,7 @@
 // under the card. Used by the /admin "การ์ด" tab now and meant for the in-game card window (plan PR 6) later.
 // The look numbers come from the card tuning (viewShine, viewShinePct, viewTiltDeg, viewRainbow in data/cards.ts).
 import {
-  CARD_FX, CARD_FX_NAME, CARD_GROUP_NAME, CARD_RARITY_NAME, cardArt, cardFrame, cardName,
+  CARD_GROUP_NAME, CARD_RARITY_NAME, cardArt, cardFrame, cardFxLines, cardName,
   type CardFx, type CardGroup, type CardId, type CardRarity,
 } from '../shared/data/cards';
 import { RARITY_COLOR } from '../shared/types';
@@ -27,10 +27,7 @@ export interface CardShown {
   fx: Partial<Record<CardFx, number>>;
 }
 
-/** "พลังโจมตี +2%" lines of a card's effects, in the fixed effect order. */
-export function cardFxLines(fx: Partial<Record<CardFx, number>>): string[] {
-  return CARD_FX.filter((f) => fx[f] !== undefined).map((f) => `${CARD_FX_NAME[f].replace(/\s*%$/, '')} +${fx[f]}%`);
-}
+export { cardFxLines };
 
 /** The card (picture, frame, shine) with its text under it. The card follows the pointer while it is over it. */
 export function cardViewEl(c: CardShown, look: CardLook): HTMLElement {

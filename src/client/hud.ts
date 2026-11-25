@@ -10,7 +10,10 @@ import { effectiveStats, enhanceBonus, itemName, plusOf, sellValue } from '../sh
 import {
   entryName, POTION_SIZE_LABEL, POTION_STACK, potionHeal, potionName, potionSellPrice, stackLimit,
 } from '../shared/data/potions';
-import { BUFF_LABEL, MONSTER_STONES, RETURN_CAST, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_STACK, stoneStackMax, stoneSellPrice, stoneUnit } from '../shared/data/stones';
+import { BUFF_LABEL, CARD_SOON, MONSTER_STONES, RETURN_CAST, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_STACK, stoneStackMax, stoneSellPrice, stoneUnit } from '../shared/data/stones';
+import { CARD_GROUP_NAME, CARD_RARITY_NAME, cardFxLines } from '../shared/data/cards';
+import { cardDef } from '../shared/cardTuning';
+import { openCardView } from './ui/cardPopup';
 import { lootPots, type Buffs, type LootFilter, type SortKey } from '../shared/sim/Player';
 import { MONSTERS } from '../shared/data/monsters';
 import { currentBalance } from '../shared/balance';
@@ -19,7 +22,7 @@ import { ZONE_1 } from '../shared/data/zones';
 import { expToNext } from '../shared/formulas';
 import { blockingGate } from '../shared/data/bossGates';
 import {
-  BUFF_SCROLLS, isBossKey, isBound, isBoundKind, isQuestKey, isBuffScroll, isConsumable, isOrbStone, isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
+  BUFF_SCROLLS, isBossKey, isBound, isBoundKind, isQuestKey, isBuffScroll, isCardStone, isConsumable, isOrbStone, isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
   type BagEntry, type Item, type PotionKind, type PotionStack, type StoneStack, type EquipSlot, type StatKey,
 } from '../shared/types';
 import { drawEdgeMarker, drawMapIcon, drawPin, facingAngle, partyDot } from './mapIcons';
@@ -294,6 +297,10 @@ export class Hud {
           playSound('box_open');
         }
         else if (isOrbStone(entry.stone)) g.backend.useOrbItem(i);
+        else if (isCardStone(entry.stone)) {
+          this.hideTip();
+          openCardView(entry.stone);
+        }
         return;
       }
       // At the blacksmith a click on gear puts it in the forge's slot instead of wearing it.
@@ -365,7 +372,7 @@ export class Hud {
       }
       if (isPotion(item)) this.showPotionTip(item, e, `คลิกซ้าย: ใช้กับปุ่มด่วน · คลิกขวา: ${right}${split}`);
       else if (isStone(item) && item.stone === 'mystery_box' && !this.stash.isOpen && !this.market.isOpen && !this.shop.isOpen) this.showStoneTip(item, e, `คลิกซ้าย: เปิด 1 กล่อง · คลิกขวา: เปิดทั้งกอง${split}`);
-      else if (isStone(item)) this.showStoneTip(item, e, `${item.stone === 'return_scroll' ? 'คลิกซ้าย / ปุ่ม G: ใช้ · ' : isBuffScroll(item.stone) || item.stone === 'megaphone' || item.stone === 'mystery_box' || isOrbStone(item.stone) ? 'คลิกซ้าย: ใช้ · ' : ''}คลิกขวา: ${right}${split}`);
+      else if (isStone(item)) this.showStoneTip(item, e, `${item.stone === 'return_scroll' ? 'คลิกซ้าย / ปุ่ม G: ใช้ · ' : isBuffScroll(item.stone) || item.stone === 'megaphone' || item.stone === 'mystery_box' || isOrbStone(item.stone) ? 'คลิกซ้าย: ใช้ · ' : isCardStone(item.stone) ? 'คลิกซ้าย: ดูการ์ด · ' : ''}คลิกขวา: ${right}${split}`);
       else if (item) {
         const both = item.slot === 'ring' && g.player.equipment.ring && g.player.equipment.ring2;
         if (this.forge.isOpen) this.showTip(item, e, `คลิกซ้าย / ลาก: วางที่ช่างตีเหล็ก · คลิกขวา: ${right}`);
@@ -1533,6 +1540,7 @@ export class Hud {
 
   showStoneTip(s: StoneStack, e: MouseEvent, hint: string): void {
     const tip = $('tooltip');
+    if (isCardStone(s.stone)) return this.showCardTip(s, e, hint);
     tip.innerHTML =
       `<div class="tt-name" style="color:${STONE_COLOR[s.stone]}">${STONE_NAME[s.stone]}</div>` +
       `<div class="tt-sub">${
@@ -1546,6 +1554,24 @@ export class Hud {
         : `วัตถุดิบตีบวก · ${s.count} / ${STONE_STACK} ก้อน · ดรอปจากบอสเท่านั้น`}${s.bound ? ' · ผูกกับตัวละคร (รางวัลภารกิจ)' : ''}</div>` +
       `<div class="tt-stats"><div>${STONE_DESC[s.stone]}</div></div>` +
       `<div class="tt-hint">${hint}</div><div class="tt-val">${isBound(s) ? 'ขาย ทิ้ง ฝากคลัง หรือเทรดไม่ได้' : `ขายให้พ่อค้าได้${stoneUnit(s.stone)}ละ ${stoneSellPrice(s.stone).toLocaleString()} G`}</div>`;
+    this.placeTip(tip, e);
+  }
+
+  /**
+   * A monster card's tooltip (card-system PR 1): name, rarity, the slots it fits and its effects, all from the card
+   * tuning the server sent (the /admin card tab), and that it can't be socketed yet.
+   */
+  private showCardTip(s: StoneStack, e: MouseEvent, hint: string): void {
+    const d = isCardStone(s.stone) ? cardDef(s.stone) : undefined;
+    if (!d) return;
+    const tip = $('tooltip');
+    tip.innerHTML =
+      `<div class="tt-name" style="color:${STONE_COLOR[s.stone]}">${STONE_NAME[s.stone]}</div>` +
+      `<div class="tt-sub">การ์ด${CARD_RARITY_NAME[d.rarity]} · ${s.count} / ${stoneStackMax(s.stone)} ใบ</div>` +
+      `<div class="tt-stats">${cardFxLines(d.fx).map((l) => `<div>${l}</div>`).join('')}</div>` +
+      `<div class="tt-sub">ใส่ได้: ${CARD_GROUP_NAME[d.group]}</div>` +
+      `<div class="tt-sub" style="color:#ffcf6a">${CARD_SOON}</div>` +
+      `<div class="tt-hint">${hint}</div><div class="tt-val">ขายให้พ่อค้าได้ใบละ ${stoneSellPrice(s.stone).toLocaleString()} G</div>`;
     this.placeTip(tip, e);
   }
 
