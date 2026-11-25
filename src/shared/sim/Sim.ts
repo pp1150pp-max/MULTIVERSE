@@ -507,7 +507,7 @@ export class Sim {
     // Extra effects the owner added to this skill on /admin, merged in (the stronger wins): sim/extraEffects.ts.
     const src = opts.src ?? opts.skill?.id ?? this.casterSkill;
     if (src && !opts.noExtra) opts = withExtras(this, p, m, src, opts);
-    if (opts.kb && !m.isBoss) m.knockback(opts.fromX ?? p.x, opts.fromZ ?? p.z, opts.kb);
+    if (opts.kb && !m.isBoss && !m.def.anchored) m.knockback(opts.fromX ?? p.x, opts.fromZ ?? p.z, opts.kb);
     if (opts.stun && !m.def.pattern) m.stunT = Math.max(m.stunT, m.isBoss ? opts.stun * 0.3 : opts.stun);
     if (opts.slow) {
       m.slowAmt = opts.slow;
@@ -751,6 +751,7 @@ export class Sim {
     m.crab?.reset(this);
     m.captain?.remove(this);
     m.ghostCaptain?.remove(this);
+    m.kraken?.remove(this);
     // A gull shot down with stolen gold: it goes back (sim/beachMoves.ts).
     stealReturn(this, m);
     if (!m.summoned) {
@@ -2359,15 +2360,23 @@ export class Sim {
         if (Math.abs(dx) > min || Math.abs(dz) > min) continue;
         const d = Math.hypot(dx, dz) || 0.01;
         if (d < min) {
-          const push = (min - d) / d / 2;
-          m.x -= dx * push;
-          m.z -= dz * push;
-          n.x += dx * push;
-          n.z += dz * push;
+          // The kraken and its tentacles never move (MonsterDef.anchored): the other one takes the whole push.
+          const ma = !!m.def.anchored;
+          const na = !!n.def.anchored;
+          if (ma && na) continue;
+          const push = (min - d) / d / (ma || na ? 1 : 2);
+          if (!ma) {
+            m.x -= dx * push;
+            m.z -= dz * push;
+          }
+          if (!na) {
+            n.x += dx * push;
+            n.z += dz * push;
+          }
         }
       }
       for (const p of this.players) {
-        if (!p.alive || p.isDashing) continue;
+        if (!p.alive || p.isDashing || m.def.anchored) continue;
         const dx = m.x - p.x;
         const dz = m.z - p.z;
         const min = m.radius + p.radius;

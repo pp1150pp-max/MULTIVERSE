@@ -11,6 +11,8 @@ import { chainballOnHit, chainballSpeed, comboCut, kegTick, spreadFire, spreadWa
 import { PeglegCaptainBrain } from './peglegCaptain';
 import { curseLand, ghostAct, type GhostMove } from './graveMoves';
 import { GhostCaptainBrain } from './ghostCaptain';
+import { bubbleStun, bubbleTrapped, seaAct, tentacleTick, type SeaMove } from './maelstromMoves';
+import { KrakenBrain } from './kraken';
 import { currentBalance, monsterMults, NO_MONSTER_MULT, type MonsterMults } from '../balance';
 
 const BOSS_RAMP_PER_SEC = 0.2;
@@ -159,6 +161,12 @@ export class Monster extends Unit {
   ghost: GhostMove | null = null;
   /** Faded out (a ghost sailor, the Ghost Captain's warp): drawn see-through and can't be hit (noHit too). Sent as `inv`. */
   fade = false;
+  /** A shark knight's dive, a ghost pirate king's wave, a tentacle's slam (sim/maelstromMoves.ts). */
+  sea: SeaMove | null = null;
+  /** The Kraken's moves (def.brain). Made on first use, so only the server has them. */
+  kraken: KrakenBrain | null = null;
+  /** A tentacle: seconds with nobody in reach (it heals back up after a while, sim/maelstromMoves.ts). */
+  idleT = 0;
 
   /** The zone's monster boost: multiplies HP, attack and defense, and speed (moving and attacking). */
   private readonly zoneSpeed: number;
@@ -221,7 +229,8 @@ export class Monster extends Unit {
 
   /** Bosses are not in the monster multipliers; floor 2's own boss cards scale their HP and ATK (moveTuning.ts). */
   private bossMults(): Readonly<MonsterMults> {
-    const card = this.def.brain === 'cannon_crab' ? 'crab' : this.def.brain === 'pegleg_captain' ? 'captain' : this.def.brain === 'ghost_captain' ? 'ghost' : null;
+    const card = this.def.brain === 'cannon_crab' ? 'crab' : this.def.brain === 'pegleg_captain' ? 'captain' : this.def.brain === 'ghost_captain' ? 'ghost'
+      : this.def.brain === 'kraken' ? 'kraken' : null;
     if (!card) return NO_MONSTER_MULT;
     return { ...NO_MONSTER_MULT, hp: mv(card + '.hpMult'), atk: mv(card + '.atkMult') };
   }
@@ -333,6 +342,8 @@ export class Monster extends Unit {
   }
 
   onHit(sim: Sim, attacker: Player): void {
+    // A tentacle being hit (from out of its reach too: a gunslinger, a mage) is in a fight: it doesn't heal (sim/maelstromMoves.ts).
+    this.idleT = 0;
     // Still takes the damage (and heals on the way); only the aggro / pack wake-up is skipped.
     if (this.ignoresHits) return;
     this.aggroT = this.aggroTime;
@@ -424,6 +435,16 @@ export class Monster extends Unit {
       return;
     }
     if (this.def.move === 'parrot') return;
+    // Never moves (the kraken and its tentacles round a whirlpool): no knockback, no chase, no walking home.
+    if (this.def.anchored) {
+      this.kbx = this.kbz = 0;
+      this.tickStatus(dt, sim.terrain);
+      if (this.def.brain === 'kraken') {
+        this.kraken ??= new KrakenBrain();
+        this.kraken.update(dt, sim, this);
+      } else if (this.def.move === 'tentacle') tentacleTick(dt, sim, this);
+      return;
+    }
     if (this.hasteT > 0) this.hasteT -= dt;
     if (this.def.pattern) {
       this.brain ??= new VolcanoHeartBrain();
@@ -565,6 +586,8 @@ export class Monster extends Unit {
     // The Ghost Captain's (sim/ghostCaptain.ts), and a ghost sailor's fade or a siren's song (sim/graveMoves.ts).
     if (this.ghostCaptain && this.state !== 'return' && this.ghostCaptain.act(dt, sim, this)) return;
     if ((this.def.move === 'phase' || this.def.move === 'song') && ghostAct(dt, sim, this)) return;
+    // A shark knight's dive, a ghost pirate king's wave (sim/maelstromMoves.ts).
+    if ((this.def.move === 'dive' || this.def.move === 'wave') && seaAct(dt, sim, this)) return;
 
     if (this.windupT > 0) {
       this.windupT -= dt;
@@ -752,6 +775,11 @@ export class Monster extends Unit {
   }
 
   /** Wind-ups shrink while a frenzy boss is enraged, and as a boss's ramp climbs. */
+  /** Its next normal hit no sooner than `sec` from now (after a move of its own). */
+  resetAttack(sec: number): void {
+    this.atkCd = Math.max(this.atkCd, sec);
+  }
+
   skillMult(): number {
     return (this.enraged && this.def.frenzy ? this.def.frenzy.skill : 1) / this.skillRamp;
   }
@@ -844,6 +872,8 @@ export class Monster extends Unit {
       color: shot.color, size: shot.size, art: shot.art,
       // A ghost monkey's skull leaves a curse ring where it lands (sim/graveMoves.ts).
       ...(this.def.move === 'curse' ? { onEnd: (x: number, z: number) => curseLand(sim, x, z) } : {}),
+      // A seahorse soldier's bubble holds whoever it hits (sim/maelstromMoves.ts).
+      ...(this.def.move === 'bubble' ? { kb: 0, stun: bubbleStun(), onHitPlayer: (p: Player) => bubbleTrapped(sim, p) } : {}),
     });
   }
 

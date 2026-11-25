@@ -707,6 +707,7 @@ const GEM: Record<`stone_${BaseStoneKind}`, [string, string, string]> = {
   stone_key_crab: ['#8a5a10', '#ffc94a', '#fff0b0'],
   stone_key_captain: ['#6a3a10', '#e8b04a', '#fff0c0'],
   stone_key_ghost: ['#1a4a48', '#7fe0d0', '#e0fff8'],
+  stone_key_kraken: ['#3a1a4a', '#b07ae8', '#f0e0ff'],
   // Quest keys look like the boss keys (they use the same painted icons).
   stone_qkey_bear: ['#3a5a1f', '#9ad86a', '#e0ffc0'],
   stone_qkey_witch: ['#1f5a4a', '#6fd8b0', '#d0fff0'],
@@ -715,6 +716,7 @@ const GEM: Record<`stone_${BaseStoneKind}`, [string, string, string]> = {
   stone_qkey_crab: ['#8a5a10', '#ffc94a', '#fff0b0'],
   stone_qkey_captain: ['#6a3a10', '#e8b04a', '#fff0c0'],
   stone_qkey_ghost: ['#1a4a48', '#7fe0d0', '#e0fff8'],
+  stone_qkey_kraken: ['#3a1a4a', '#b07ae8', '#f0e0ff'],
   stone_phoenix: ['#8a2a10', '#ff9a3a', '#ffe8a0'],
   // Return scroll: parchment with a teal rune until its painted icon exists.
   stone_return_scroll: ['#8a6a3a', '#efdcae', '#5fe0d0'],

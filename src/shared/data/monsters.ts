@@ -3,7 +3,7 @@ import type { BossEffect } from '../sim/types';
 export type Behavior = 'passive' | 'skittish' | 'aggressive' | 'charger' | 'boss';
 
 /** The picture a monster's shot flies as: the client's sheet fx_<art>. The cove's are paper only (sprites/paper/fx/). */
-export type ShotArt = 'ice_shard' | 'snowball' | 'ember_bolt' | 'iron_ball' | 'bomb' | 'pellets' | 'ghost_skull';
+export type ShotArt = 'ice_shard' | 'snowball' | 'ember_bolt' | 'iron_ball' | 'bomb' | 'pellets' | 'ghost_skull' | 'bubble' | 'ink_blob';
 
 /** A straight shot at the player. */
 export interface ShotDef {
@@ -31,6 +31,13 @@ export type CoveMove = 'chainball' | 'combo' | 'spread' | 'keg' | 'parrot';
  * players in the circle are made to walk to it (a dash breaks it) · split = breaks into small ones when killed.
  */
 export type GraveMove = 'curse' | 'phase' | 'song' | 'split';
+
+/**
+ * The Kraken Maelstrom's monster moves (sim/maelstromMoves.ts, plan 5.4): dive = sinks out of reach (only its fin shows), slides
+ * under its target and bursts up after a warning circle · bubble = its shot traps whoever it hits in a bubble (can't move or dash) ·
+ * wave = slashes a wave of power that runs along a straight line · tentacle = never moves, slams a long line at whoever comes near.
+ */
+export type MaelstromMove = 'dive' | 'bubble' | 'wave' | 'tentacle';
 
 export interface MonsterDef {
   id: string;
@@ -97,12 +104,17 @@ export interface MonsterDef {
    * shell = hides when hit (less damage), then strikes back · steal = swoops for gold and flies off ·
    * chain = lightning that jumps from player to player · thorns = reflects part of close-range hits.
    */
-  move?: 'shell' | 'steal' | 'chain' | 'thorns' | CoveMove | GraveMove;
+  move?: 'shell' | 'steal' | 'chain' | 'thorns' | CoveMove | GraveMove | MaelstromMove;
+  /**
+   * Never moves and can't be pushed, pulled or knocked back (the kraken and its tentacles round a whirlpool, owner 2026-11-24):
+   * no walking, no wandering home, no shoving by other monsters or players.
+   */
+  anchored?: boolean;
   /**
    * Bosses with their own moves on top of walking and hitting: the Giant Cannon Crab (sim/cannonCrab.ts),
-   * the Peg-Leg Captain (sim/peglegCaptain.ts), the Ghost Captain (sim/ghostCaptain.ts).
+   * the Peg-Leg Captain (sim/peglegCaptain.ts), the Ghost Captain (sim/ghostCaptain.ts), the Kraken (sim/kraken.ts).
    */
-  brain?: 'cannon_crab' | 'pegleg_captain' | 'ghost_captain';
+  brain?: 'cannon_crab' | 'pegleg_captain' | 'ghost_captain' | 'kraken';
   /**
    * Bosses: the painted effect each of its skills plays (owner 2026-11-21, src/client/bossFx.ts): its hit (sent at
    * the boss with its facing and reach), ground slam, enrage, jumping off / landing, and where its minions appear.
@@ -423,6 +435,51 @@ export const MONSTERS: Record<string, MonsterDef> = {
     hp: 476000, atk: 885, def: 60, speed: 2.0, exp: 50400, gold: [4060, 6525],
     aggroRange: 9, attackRange: 2.2, attackCooldown: 1.8, height: 4.4, radius: 1.3,
     behavior: 'boss', brain: 'ghost_captain', itemChance: 1, potionChance: 1,
+    bossLoot: { items: 6, epics: 2, stoneChance: 0.2 },
+  },
+
+  // Floor 2, map 4 — Kraken Maelstrom (Lv71–80). Numbers: owner 2026-11-24 (the proposed table: the graveyard's slot by slot, HP ×1.4
+  // ATK ×1.3 DEF ×1.15 EXP ×1.4 gold ×1.45); the zone's boost is the graveyard's. Move numbers: moveTuning.ts (/admin).
+  shark_knight: {
+    id: 'shark_knight', name: 'Shark Knight', nameTh: 'อัศวินฉลาม', levels: [71, 72],
+    hp: 6100, atk: 590, def: 87, speed: 2.5, exp: 4400, gold: [285, 430],
+    aggroRange: 7, attackRange: 1.4, attackCooldown: 1.7, height: 1.9, radius: 0.55,
+    behavior: 'aggressive', move: 'dive', itemChance: 0.23, potionChance: 0.15,
+  },
+  seahorse_soldier: {
+    id: 'seahorse_soldier', name: 'Seahorse Soldier', nameTh: 'ม้าน้ำทหาร', levels: [73, 74],
+    hp: 6650, atk: 655, def: 92, speed: 2.2, exp: 5200, gold: [325, 495],
+    aggroRange: 9, attackRange: 9, attackCooldown: 2.4, height: 1.6, radius: 0.5,
+    behavior: 'aggressive', move: 'bubble', itemChance: 0.23, potionChance: 0.15,
+    // Its bubble traps whoever it hits (maelstromMoves.ts); the trap's time is the /admin card's, its reach and damage here.
+    shot: { art: 'bubble', speed: 7, range: 9, mult: 1, radius: 0.5, size: 0.9, color: '#8ae0f0' },
+  },
+  ghost_pirate_king: {
+    id: 'ghost_pirate_king', name: 'Ghost Pirate King', nameTh: 'ราชาโจรสลัดผี', levels: [75, 76],
+    hp: 6450, atk: 740, def: 83, speed: 2.3, exp: 6100, gold: [375, 580],
+    aggroRange: 8, attackRange: 1.5, attackCooldown: 1.9, height: 2.1, radius: 0.6,
+    behavior: 'aggressive', move: 'wave', itemChance: 0.24, potionChance: 0.15,
+  },
+  // Round the whirlpool's rim (zones.ts rimSpawns): never moves, slams a long line at whoever comes within reach.
+  kraken_tentacle: {
+    id: 'kraken_tentacle', name: 'Kraken Tentacle', nameTh: 'หนวดคราเคน', levels: [77, 79],
+    hp: 10200, atk: 795, def: 113, speed: 0, exp: 7050, gold: [440, 675],
+    aggroRange: 7, attackRange: 7, attackCooldown: 2.4, height: 3.2, radius: 0.7,
+    behavior: 'aggressive', move: 'tentacle', anchored: true, itemChance: 0.24, potionChance: 0.15,
+  },
+  // The kraken's own arms in its room (sim/kraken.ts): its picture is the tentacle's; HP a share of the kraken's (/admin), no rewards.
+  kraken_arm: {
+    id: 'kraken_arm', name: 'Kraken Arm', nameTh: 'หนวดคราเคน', levels: [80, 80],
+    hp: 10200, atk: 1150, def: 69, speed: 0, exp: 0, gold: [0, 0],
+    aggroRange: 9, attackRange: 7, attackCooldown: 2.4, height: 3.6, radius: 0.8,
+    behavior: 'aggressive', move: 'tentacle', anchored: true, summonOnly: true, ignoreTough: true, itemChance: 0, potionChance: 0,
+  },
+  // Its id is fixed by the Lv80 gate (BOSS_GATES). It lies under its room's whirlpool and never moves (sim/kraken.ts).
+  kraken: {
+    id: 'kraken', name: 'Kraken', nameTh: 'คราเคน (Boss)', levels: [80, 80],
+    hp: 666000, atk: 1150, def: 69, speed: 0, exp: 70500, gold: [5890, 9460],
+    aggroRange: 16, attackRange: 6, attackCooldown: 2.2, height: 6.5, radius: 3.8,
+    behavior: 'boss', brain: 'kraken', anchored: true, itemChance: 1, potionChance: 1,
     bossLoot: { items: 6, epics: 2, stoneChance: 0.2 },
   },
 };

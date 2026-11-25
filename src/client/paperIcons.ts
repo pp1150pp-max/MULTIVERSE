@@ -218,6 +218,7 @@ export const PAPER_ICONS: ReadonlySet<string> = new Set([
   'stone_key_captain',
   'stone_key_crab',
   'stone_key_ghost',
+  'stone_key_kraken',
   'stone_key_heart',
   'stone_key_witch',
   'stone_key_yeti',

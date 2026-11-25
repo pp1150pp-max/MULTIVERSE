@@ -1,6 +1,6 @@
 // Zone layout and collision, without any rendering. Built from the zone seed, so the browser and
 // the server get exactly the same trees, rocks and camp.
-import { arenaRadius, clearingRadius, lairOf, lavaAt, themeAt, type Lair, type ZoneDef, type ZoneTheme } from '../data/zones';
+import { arenaRadius, clearingRadius, lairOf, lavaAt, themeAt, whirlpoolAt, type Lair, type ZoneDef, type ZoneTheme } from '../data/zones';
 import { NPC_IDS, type NpcId } from '../data/npcs';
 import {
   HARBOR_BOATS, HARBOR_CORNERS, HARBOR_DECKS, HARBOR_GARDEN, HARBOR_LIGHTHOUSE, HARBOR_MAIN, HARBOR_PIER, HARBOR_PLAZA_RADIUS,
@@ -166,6 +166,22 @@ const THEME_PROPS: Record<ZoneTheme, ThemeProps> = {
     ringRock: ['mossy_rock_1', 2.2],
     campDecor: false,
   },
+  // Floor 2's Kraken Maelstrom (FLOOR2_M4_MAELSTROM.md, cut by tools/cut_papercraft.cjs floor2_m4): storm-wet slate rocks and spires,
+  // wrecks sucked in by the whirlpool, red coral, warm lamps and the kraken's red flags.
+  kraken: {
+    trees: ['storm_rock_1', 'broken_mast', 'storm_rock_1', 'coral_0'],
+    bushes: ['coral_1', 'rope_post'],
+    rocks: ['storm_rock_0', 'storm_rock_2'],
+    stump: 'rope_post',
+    tallStump: 'storm_rock_1',
+    extra: ['wreck_0', 'wreck_1', 'broken_mast', 'kraken_flag', 'storm_lamp', 'storm_anchor', 'coral_0', 'coral_1'],
+    extraSize: {
+      wreck_0: [3.2, 1.4], wreck_1: [3.6, 1.5], broken_mast: [4.2, 0.5], kraken_flag: [2.6, 0.2], storm_lamp: [2.4, 0.25],
+      storm_anchor: [1.6, 0.6], coral_0: [1.8, 0.5], coral_1: [1.1, 0.4],
+    },
+    ringRock: ['storm_rock_0', 2.2],
+    campDecor: false,
+  },
 };
 
 /**
@@ -176,11 +192,18 @@ const ROOM_KIT: Partial<Record<ZoneTheme, Record<string, string>>> = {
   cove: { pillar_0: 'pillar', pillar_1: 'mast', rune_stone: 'boulder' },
   // The graveyard's (floor2_m3) has a figurehead for the rune stone and a mast for the tree.
   grave: { rune_stone: 'figurehead', tree: 'mast' },
+  // The maelstrom's (floor2_m4) has a red coral tree for the rune stone and a flagged mast for the tree.
+  kraken: { rune_stone: 'coral', tree: 'mast' },
 };
 /** Where the cove room's gunboats lie around the arena (angles from the boss; the way in is at π/4). */
 export const GUNBOAT_ANGLES = [Math.PI * 1.25, Math.PI * 0.72, Math.PI * 1.78];
 /** How far from the boss the gunboats lie: just outside the arena. */
 export const gunboatDist = (arena: number): number => arena + 2.2;
+
+/** Scattered props keep this far off a whirlpool's rim: room for its tentacles and for players round them. */
+const WHIRL_PROP_CLEAR = 6;
+/** One foam wave about this often round a whirlpool's rim. */
+const RIM_STEP = 3.4;
 
 /** How close a player has to walk to a portal to use it. */
 export const PORTAL_RANGE = 1.4;
@@ -193,6 +216,7 @@ export const SUMMONER_PROP: Record<ZoneTheme, string> = {
   beach: 'summoner_crab',
   cove: 'summoner_captain',
   grave: 'summoner_ghost',
+  kraken: 'summoner_kraken',
 };
 export const SUMMONER_HEIGHT = 3.6;
 export const SUMMONER_SOLID = 1.2;
@@ -329,6 +353,8 @@ export class Terrain {
     // The decks are laid round the map's middle (HARBOR_DECKS), not round `start`, so moving the spawn in the editor doesn't move the water.
     if (this.zone.town === 'harbor' && !onDeck(x, z, -0.3)) return true;
     if (this.colliders.some((c) => Math.hypot(c.x - x, c.z - z) < c.r + r)) return true;
+    // A whirlpool (the Kraken Maelstrom, its room): nobody walks into it (owner 2026-11-19).
+    if (whirlpoolAt(this.zone, x, z, r)) return true;
     return this.boxes.some((b) => boxHit(b, x, z, r)) || this.blockers.some((b) => polyHit(b, x, z, r));
   }
 
@@ -400,6 +426,17 @@ export class Terrain {
     }
     if (!ghost) for (const b of this.boxes) this.pushOutOfBox(u, b);
     for (const poly of this.blockers) this.pushOutOfPoly(u, poly);
+    for (const w of this.zone.whirlpools ?? []) {
+      // Out of a whirlpool onto its rim, the way it came from (its middle: any way).
+      const dx = u.x - w.x;
+      const dz = u.z - w.z;
+      const d = Math.hypot(dx, dz);
+      const min = w.r + u.radius;
+      if (d >= min) continue;
+      const k = d > 1e-4 ? min / d : 1;
+      u.x = w.x + (d > 1e-4 ? dx * k : min);
+      u.z = w.z + (d > 1e-4 ? dz * k : 0);
+    }
     u.x = Math.max(-this.bound, Math.min(this.bound, u.x));
     u.z = Math.max(-this.bound, Math.min(this.bound, u.z));
     // A boss room: nothing is pushed out past its edge either (a knockback, the Giant Cannon Crab's fling).
@@ -875,6 +912,7 @@ export class Terrain {
       // Single monsters (the hub's) still get a little room to stand in.
       if (zone.spawns.some((sp) => near(x, z, sp, sp.radius <= 1 ? 3 : sp.radius * 0.55))) continue;
       if ([...(zone.iceLakes ?? []), ...(zone.lavaPools ?? [])].some((l) => Math.hypot((x - l.x) / (l.rx + 2), (z - l.z) / (l.rz + 2)) < 1)) continue;
+      if (whirlpoolAt(zone, x, z, WHIRL_PROP_CLEAR)) continue;
       if (this.colliders.some((c) => Math.hypot(c.x - x, c.z - z) < 2.2)) continue;
       const set = this.setAt(r, x, z);
       const roll = r();
@@ -889,6 +927,23 @@ export class Terrain {
       else if (set.tallStump && roll >= 0.97) this.addProp(set.tallStump, x, z, 1.3, 0.5);
       else this.addProp(set.stump, x, z, 0.8, 0.4);
       placed++;
+    }
+    this.placeRims(r);
+  }
+
+  /**
+   * Foam waves along every whirlpool's rim (whirlpool_rim.png, FLOOR2_M4_WHIRLPOOL.md): walk-through pictures on its edge, about one
+   * every RIM_STEP round it. The whirlpool itself is drawn by the browser (four turning rings, src/client/whirlpool.ts).
+   */
+  private placeRims(r: Rng): void {
+    for (const w of this.zone.whirlpools ?? []) {
+      const n = Math.max(6, Math.round((Math.PI * 2 * w.r) / RIM_STEP));
+      const a0 = r() * Math.PI * 2;
+      for (let i = 0; i < n; i++) {
+        const ang = a0 + (i / n) * Math.PI * 2 + rand(r, -0.08, 0.08);
+        const d = w.r + rand(r, -0.4, 0.2);
+        this.addProp(`rim_${Math.floor(r() * 8)}`, w.x + Math.cos(ang) * d, w.z + Math.sin(ang) * d, rand(r, 1.1, 1.5), 0);
+      }
     }
   }
 

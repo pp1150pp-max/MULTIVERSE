@@ -1,6 +1,7 @@
 // The shared online world: one Sim per zone, driven by the input of the players in it. Walking
 // through a portal moves a player's session to the other zone's Sim. The server decides all combat,
 // loot and EXP; clients only move their own character, and the server checks those moves are possible.
+import { suctionSpeed } from '../src/shared/sim/kraken';
 import { buffMask, debuffMask, runningSkillBuffs } from '../src/shared/sim/debuffs';
 import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage, Server as HttpServer } from 'node:http';
@@ -1170,7 +1171,8 @@ export class GameWorld {
     }
     // Accept the move only if the character could have walked that far since the last one.
     const from = s.pendingPos ?? p;
-    const maxStep = p.moveSpeed * Math.min((now - s.lastPosAt) / 1000, 0.5) * 1.4 + 0.3;
+    // The kraken's whirlpool pulls the browser's character too (sim/kraken.ts): that much further is fine.
+    const maxStep = (p.moveSpeed * 1.4 + suctionSpeed(s.sim.hazards, s.sim.time)) * Math.min((now - s.lastPosAt) / 1000, 0.5) + 0.3;
     if (Math.hypot(pos.x - from.x, pos.z - from.z) <= maxStep && !s.sim.terrain.isBlocked(pos.x, pos.z, 0)) {
       s.pendingPos = pos;
       s.lastPosAt = now;

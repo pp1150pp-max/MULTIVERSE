@@ -3,7 +3,7 @@ import type { Monster } from './Monster';
 import { AUTO_PX_PER_UNIT, type AutoSkill, type Player } from './Player';
 import type { Loot } from './Loot';
 import { MONSTERS } from '../data/monsters';
-import { inBossArena, inSafeArea, lavaAt, type ZoneDef } from '../data/zones';
+import { inBossArena, inSafeArea, lavaAt, whirlpoolAt, type ZoneDef } from '../data/zones';
 import { currentBalance } from '../balance';
 import { SKILL_REACH } from '../data/skillRanges';
 import { skillReach, skillValues } from '../skillBook';
@@ -448,7 +448,7 @@ export class AutoPlay {
     const home = this.anchor ?? { x: p.x, z: p.z };
     const here = { x: p.x, z: p.z };
     const d = Math.hypot(home.x - p.x, home.z - p.z);
-    if (inBossArena(g.zone, home.x, home.z) || lavaAt(g.zone, home.x, home.z)) return here;
+    if (inBossArena(g.zone, home.x, home.z) || lavaAt(g.zone, home.x, home.z) || whirlpoolAt(g.zone, home.x, home.z, 1)) return here;
     if (d <= (this.homeArrived ? HOME_LEAVE : HOME_ARRIVE)) {
       this.homeArrived = true;
       this.homeProgress = null;
@@ -494,7 +494,7 @@ export class AutoPlay {
       z = anchor.z + (dz / d) * R * 0.9;
     }
     // Never wander into a boss's arena or a pool: wait where it is instead.
-    if (inBossArena(g.zone, x, z) || lavaAt(g.zone, x, z)) return { x: p.x, z: p.z };
+    if (inBossArena(g.zone, x, z) || lavaAt(g.zone, x, z) || whirlpoolAt(g.zone, x, z, 1)) return { x: p.x, z: p.z };
     this.roam = { x, z };
     return this.roam;
   }
