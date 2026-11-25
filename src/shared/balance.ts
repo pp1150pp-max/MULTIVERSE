@@ -55,6 +55,8 @@ export const CODE_MOB_RETURN_IGNORE_HITS = true;
 export const CODE_MOB_DROP_ON_SAFE = true;
 /** Floor-1 farm maps: a spot whose monsters are all dead comes back somewhere else in its kind's band (owner 2026-11-25). */
 export const CODE_MOB_ROAM = true;
+/** …and lands this far at most from its own spot in the map (owner 2026-11-25: "near its own spot", not across the map). */
+export const CODE_MOB_ROAM_REACH = 8;
 /** Maps come from the DB's published layouts when there are any (docs/plans/map-editor.md 3.1); off = always the JSON in the bundle. Nothing publishes to the DB before PR 5. */
 export const CODE_MAP_FROM_DB = true;
 /** The "เพิ่มเวลาบัฟ %" item stat also lengthens summons: turret, drone, land mine (owner 2026-11-19). */
@@ -213,6 +215,8 @@ export interface Balance {
   mobDropOnSafe: boolean;
   /** Floor-1 farm maps: once every monster of a spot is dead, the spot moves to a random place among its kind's spots before they come back (owner 2026-11-25); off = always the same spot. */
   mobRoam: boolean;
+  /** How far (units) a roaming spot may land from its own spot in the map. */
+  mobRoamReach: number;
   /** "ใช้แมพจาก DB": on = published map layouts in the DB replace the bundled JSON (PR 5); off = always the bundled JSON, the emergency way out. Rooms made after the change follow it (server/maps-live.ts). */
   mapFromDb: boolean;
   /** "เพิ่มเวลาบัฟ %" counts for summons too (turret, drone, land mine lifetime); off = only buffs. */
@@ -334,6 +338,8 @@ export interface BalanceTuning {
   mobDropOnSafe?: boolean;
   /** Monster spots moving on respawn, when not the code's (on). */
   mobRoam?: boolean;
+  /** Roaming reach, when not the code's (8). */
+  mobRoamReach?: number;
   /** Maps from the DB, when not the code's (on). */
   mapFromDb?: boolean;
   /** Buff-time stat on summons, when not the code's (on). */
@@ -432,6 +438,7 @@ export const BALANCE_RANGE = {
   expMult: [0.1, 10],
   bossSwitchSec: [0, 120],
   mobGiveUpSec: [0, 120],
+  mobRoamReach: [2, 30],
   roomWipeSec: [3, 60],
   roomBossDelay: [0, 60],
   roomLoadWait: [0, 60],
@@ -484,6 +491,7 @@ export function codeBalance(): Balance {
     mobReturnIgnoreHits: CODE_MOB_RETURN_IGNORE_HITS,
     mobDropOnSafe: CODE_MOB_DROP_ON_SAFE,
     mobRoam: CODE_MOB_ROAM,
+    mobRoamReach: CODE_MOB_ROAM_REACH,
     mapFromDb: CODE_MAP_FROM_DB,
     buffDurSummons: CODE_BUFF_DUR_SUMMONS,
     forgeAuto: CODE_FORGE_AUTO,
@@ -565,6 +573,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   }
   if (t.bossSwitchSec !== undefined) b.bossSwitchSec = t.bossSwitchSec;
   if (t.mobGiveUpSec !== undefined) b.mobGiveUpSec = t.mobGiveUpSec;
+  if (t.mobRoamReach !== undefined) b.mobRoamReach = t.mobRoamReach;
   if (t.bossWipeKeepHp !== undefined) b.bossWipeKeepHp = t.bossWipeKeepHp;
   if (t.roomWipeSec !== undefined) b.roomWipeSec = t.roomWipeSec;
   if (t.roomBossDelay !== undefined) b.roomBossDelay = t.roomBossDelay;
@@ -750,7 +759,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mobRoam', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'shopNoEquip', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'bagExpand', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mobRoam', 'mobRoamReach', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'shopNoEquip', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'bagExpand', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -827,7 +836,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   }
 
   // Single numbers
-  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'roomWipeSec' | 'roomBossDelay' | 'roomLoadWait' | 'bossLootBase' | 'bossLootK' | 'bossLootMax' | 'vipExpPct' | 'vipDropPct' | 'reviveGuardSec' | 'cdrCap' | 'heartBlastSpots' | 'heartBlastMinDist' | 'heartBlastReach', range: readonly [number, number], what: string): string | null => {
+  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'mobRoamReach' | 'roomWipeSec' | 'roomBossDelay' | 'roomLoadWait' | 'bossLootBase' | 'bossLootK' | 'bossLootMax' | 'vipExpPct' | 'vipDropPct' | 'reviveGuardSec' | 'cdrCap' | 'heartBlastSpots' | 'heartBlastMinDist' | 'heartBlastReach', range: readonly [number, number], what: string): string | null => {
     const n = num(o[key], range[0], range[1], what);
     if (typeof n === 'string') return n;
     if (n !== undefined && n !== CODE[key]) out[key] = n;
@@ -1392,6 +1401,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     one('mobGiveUpSec', BALANCE_RANGE.mobGiveUpSec, 'มอนธรรมดาเลิกไล่เมื่อไม่โดนตี (วินาที)') ??
     returnIgnore() ??
     roam() ??
+    one('mobRoamReach', BALANCE_RANGE.mobRoamReach, 'ระยะที่จุดเกิดย้ายได้จากจุดเดิม') ??
     dropOnSafe() ??
     mapFromDb() ??
     buffDurSummons() ??
@@ -1571,6 +1581,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.buffDurSummons !== b.buffDurSummons) out.push(`เพิ่มเวลาบัฟนับ summon (ป้อมปืน โดรน กับระเบิด) ${a.buffDurSummons ? 'เปิด' : 'ปิด'} → ${b.buffDurSummons ? 'เปิด' : 'ปิด'}`);
   if (a.mobDropOnSafe !== b.mobDropOnSafe) out.push(`มอนเลิกไล่เมื่อผู้เล่นเข้าเมือง/safe zone ${a.mobDropOnSafe ? 'เปิด' : 'ปิด'} → ${b.mobDropOnSafe ? 'เปิด' : 'ปิด'}`);
   if (a.mapFromDb !== b.mapFromDb) out.push(`ใช้แมพจาก DB ${a.mapFromDb ? 'เปิด' : 'ปิด'} → ${b.mapFromDb ? 'เปิด' : 'ปิด'}`);
+  if (a.mobRoamReach !== b.mobRoamReach) out.push(`ระยะที่จุดเกิดมอนย้ายได้จากจุดเดิม ${a.mobRoamReach} → ${b.mobRoamReach}`);
   if (a.mobRoam !== b.mobRoam) out.push(`มอนแมพฟาร์มชั้น 1 เกิดใหม่สุ่มที่ ${a.mobRoam ? 'เปิด' : 'ปิด'} → ${b.mobRoam ? 'เปิด' : 'ปิด'}`);
   if (a.mobReturnIgnoreHits !== b.mobReturnIgnoreHits) out.push(`มอนเดินกลับบ้านไม่สนการโจมตี ${a.mobReturnIgnoreHits ? 'เปิด' : 'ปิด'} → ${b.mobReturnIgnoreHits ? 'เปิด' : 'ปิด'}`);
   out.push(...floorGateChanges(a.floorGate, b.floorGate));
