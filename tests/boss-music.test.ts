@@ -2,7 +2,7 @@
 // setting, the code's defaults follow the floors, what may be saved, and which file a room ends up playing.
 import { BOSS_SONGS, bossRoomSong, ROOM_BOSSES } from '../src/shared/audioTuning';
 import { balanceChanges, checkBalance, codeBalance, mergeBalance } from '../src/shared/balance';
-import { BOSS_ROOMS, floorOf } from '../src/shared/data/zones';
+import { BOSS_ROOMS, floorOf, zoneById, ZONES } from '../src/shared/data/zones';
 import { finish, ok } from './check';
 
 const code = codeBalance().audio.music;
@@ -16,6 +16,14 @@ ok(bossRoomSong(code, 'yeti') === 'boss_gothic_f1' && bossRoomSong(code, 'kraken
 ok(bossRoomSong(code, undefined) === null && bossRoomSong(code, 'forest_wolf') === null, 'not a boss room: no file');
 ok(bossRoomSong({ ...code, on: false }, 'yeti') === null, 'switched off: no file');
 ok(bossRoomSong({ ...code, rooms: { ...code.rooms, yeti: 'chip' } }, 'yeti') === null, 'a room set to chiptune: no file');
+
+// The way gameAudio.ts asks, with the zone the client resolves from the room's id.
+const songIn = (id: string) => {
+  const z = zoneById(id);
+  return bossRoomSong(code, z.roomOf ? z.boss?.monster : undefined);
+};
+ok(rooms.every((r) => songIn(r.id) !== null), 'standing in any boss room finds its song');
+ok(Object.keys(ZONES).every((id) => songIn(id) === null), 'no map or town plays a song file (a field boss is not a room)');
 
 const check = (music: unknown) => checkBalance({ audio: { music } }, true);
 const good = check({ on: false, gain: 1.25, rooms: { yeti: 'chip', kraken: 'boss_gothic_f1' } });
