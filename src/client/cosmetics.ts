@@ -6,7 +6,7 @@
 // Also the mount button (Z) shown while a mount is worn.
 import type { Game } from './Game';
 import { COSMETICS, COS_SLOTS, COS_SLOT_NAME, cosById, cosPerk, type CosmeticDef, type CosSlot, type CosWorn } from '../shared/data/cosmetics';
-import { setLookOwner, setTryOn } from './cosLook';
+import { setLookOwner, setTryOn, tryingOn, tryOnBlocked, TRY_ON_TOWN_MSG } from './cosLook';
 import { cosHiddenKey, isCosHidden } from './cosTune';
 import { cosCardImage } from './cosmeticViews';
 import { hasPaperCard, paperCardImage } from './paperCards';
@@ -155,6 +155,12 @@ export class CosmeticsUI {
   update(): void {
     const me = this.g.player;
     setLookOwner(me);
+    // Out of town with a try-on on (Balance.tryOnTownOnly): it comes off, for this window and the cash shop alike.
+    if (tryingOn() && tryOnBlocked(this.g.zone, me)) {
+      this.clearTry();
+      this.drawn = '';
+      this.g.hud.log(`${TRY_ON_TOWN_MSG} ถอดที่ลองแล้ว`, '#ffcf6a');
+    }
     const mount = cosById(me.cosmetics.mount);
     this.mountBtn.classList.toggle('hidden', !mount || !me.alive);
     const label = me.mounted ? 'ลงจากสัตว์ขี่ (Z)' : 'ขี่ (Z)';
@@ -234,6 +240,8 @@ export class CosmeticsUI {
         const tryingThis = this.trying[c.slot] === c.id;
         btns.append(
           button(tryingThis ? 'ถอดที่ลอง' : 'ลองสวม', () => {
+            const why = tryingThis ? null : tryOnBlocked(this.g.zone, this.g.player);
+            if (why) return this.g.hud.log(why, '#ffcf6a');
             this.setTry(c.slot, tryingThis ? null : c.id);
             this.update();
           }, tryingThis ? 'on' : ''),
