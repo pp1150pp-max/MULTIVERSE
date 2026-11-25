@@ -21,9 +21,11 @@ import smugglers_cove from './data/maps/smugglers_cove.json';
 import smugglers_cove_room from './data/maps/smugglers_cove_room.json';
 import ghost_ship_graveyard from './data/maps/ghost_ship_graveyard.json';
 import ghost_ship_graveyard_room from './data/maps/ghost_ship_graveyard_room.json';
+import kraken_maelstrom from './data/maps/kraken_maelstrom.json';
+import kraken_maelstrom_room from './data/maps/kraken_maelstrom_room.json';
 
 const BUNDLED: Record<string, MapData> = Object.fromEntries(
-  ([nexus_city, emerald_forest, emerald_forest_room, misty_marsh, misty_marsh_room, frost_reach, frost_reach_room, ashen_isle, ashen_isle_room, harbor_town, shipwreck_beach, shipwreck_beach_room, smugglers_cove, smugglers_cove_room, ghost_ship_graveyard, ghost_ship_graveyard_room] as unknown as MapData[]).map((m) => [m.id, m]),
+  ([nexus_city, emerald_forest, emerald_forest_room, misty_marsh, misty_marsh_room, frost_reach, frost_reach_room, ashen_isle, ashen_isle_room, harbor_town, shipwreck_beach, shipwreck_beach_room, smugglers_cove, smugglers_cove_room, ghost_ship_graveyard, ghost_ship_graveyard_room, kraken_maelstrom, kraken_maelstrom_room] as unknown as MapData[]).map((m) => [m.id, m]),
 );
 
 /** Layouts that replace the bundled ones (empty in PR 3: nothing sets them yet). */
