@@ -417,11 +417,14 @@ export class CashShopUI {
         if (this.trying) this.setPeek(c.name);
         // A level-up effect plays once on your character to look at (only you see it).
         if (this.trying && c.slot === 'levelup') this.g.fx.levelUpWith(c.id, this.g.player.x, this.g.player.z, this.g.player.id);
+        // A dash effect plays once as if you had just dashed there; pressing dash while trying it on shows it too.
+        if (this.trying && c.slot === 'dash') this.g.fx.dashDemo(c.id, this.g.player);
         this.drawn = '';
         this.update();
       }, this.trying ? 'on' : ''));
       if (c.slot === 'orb') row.append(el('span', 'cash-note', 'เห็นเมื่อสวมของ +7 ขึ้นไป'));
       if (c.slot === 'levelup') row.append(el('span', 'cash-note', 'เห็นตอนเลเวลอัป คนรอบ ๆ เห็นด้วย'));
+      if (c.slot === 'dash') row.append(el('span', 'cash-note', 'เห็นตอนกดแดช คนรอบ ๆ เห็นด้วย'));
     }
     box.append(row);
 

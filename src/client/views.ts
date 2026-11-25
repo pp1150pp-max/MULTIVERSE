@@ -306,6 +306,12 @@ export class PlayerView {
     } else this.actor.play(ev.name, { duration: ev.duration });
   }
 
+  /** A copy of the character's picture as drawn now, for a dash afterimage (dashFx.ts); null = none to copy. */
+  ghost(): THREE.Sprite | null {
+    if (!this.actor.group.visible || !(this.actor instanceof AnimatedActor)) return null;
+    return this.actor.snapshot();
+  }
+
   onDied(): void {
     this.showDead(false);
   }
