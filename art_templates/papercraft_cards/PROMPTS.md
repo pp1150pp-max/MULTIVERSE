@@ -10,7 +10,7 @@
 ## ที่วางภาพหลังเจน
 
 - วางทุกไฟล์ใน **`art_templates/papercraft_cards/raw/`** (โฟลเดอร์ `raw/` ไม่ commit · ห้าม `git add raw/`) ตั้งชื่อตามตารางด้านล่างเป๊ะ ๆ เป็น `.png`
-- ตัดเข้าเกมด้วย `node tools/cut_paper_cards.cjs <โฟลเดอร์ raw>` → WebP 512×768 ใน `public/assets/sprites/paper/cards/` (กรอบตัดช่องม่วงแดงเป็นโปร่งใส ตำแหน่งช่องอยู่ใน `CARD_FRAME_WINDOWS` ของ `src/shared/data/cards.ts`)
+- ตัดเข้าเกมด้วย `node tools/cut_paper_cards.cjs <โฟลเดอร์ raw>` → WebP 512×768 ใน `public/assets/sprites/paper/cards/` (กรอบตัดช่องม่วงแดงเป็นโปร่งใส · กรอบบางตัดด้วย `node tools/cut_paper_cards.cjs art_templates/papercraft_cards/raw/thin`)
 - ภาพการ์ดเดิม (16-bit) ใน `public/assets/sprites/cards/card_art_*.webp` เก็บไว้ ไม่ลบ
 
 ## วิธีเจน (ทุกภาพ)

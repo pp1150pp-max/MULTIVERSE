@@ -130,22 +130,14 @@ export function cardArt(id: CardId): string {
   return `/assets/sprites/paper/cards/card_art_${id.slice('card_'.length)}.webp`;
 }
 
-/** The papercraft frame of a rarity (512×768); its windows are transparent, see CARD_FRAME_WINDOWS. */
+/**
+ * The papercraft frame of a rarity (512×768): a thin border with rounded corners whose whole middle is transparent
+ * (owner 2026-11-25: the frame must not cover the picture). It lies over the monster picture, which fills the card;
+ * the card's name, rarity, slot and effects are written under the card, not on it (src/client/cardView.ts).
+ */
 export function cardFrame(r: CardRarity): string {
   return `/assets/sprites/paper/cards/card_frame_${r}.webp`;
 }
-
-/** A place on a frame, as fractions of the frame's width and height. */
-export interface CardWindow { x: number; y: number; w: number; h: number }
-/**
- * Where things go on each frame (measured by tools/cut_paper_cards.cjs): the round group symbol, the monster picture,
- * the name plate (the epic frame's plate is cream paper, not a window, at about the same place) and the effects strip.
- */
-export const CARD_FRAME_WINDOWS: Record<CardRarity, Record<'group' | 'art' | 'name' | 'fx', CardWindow>> = {
-  rare: { group: { x: 0.0439, y: 0.0371, w: 0.1357, h: 0.0918 }, art: { x: 0.1064, y: 0.138, w: 0.7881, h: 0.5247 }, name: { x: 0.0752, y: 0.7285, w: 0.8486, h: 0.1113 }, fx: { x: 0.1201, y: 0.8958, w: 0.7559, h: 0.0417 } },
-  epic: { group: { x: 0.0488, y: 0.0391, w: 0.1465, h: 0.0957 }, art: { x: 0.082, y: 0.1087, w: 0.8359, h: 0.5573 }, name: { x: 0.08, y: 0.725, w: 0.84, h: 0.11 }, fx: { x: 0.1133, y: 0.8958, w: 0.7734, h: 0.0534 } },
-  legendary: { group: { x: 0.0439, y: 0.0371, w: 0.1436, h: 0.0944 }, art: { x: 0.1104, y: 0.1348, w: 0.7783, h: 0.528 }, name: { x: 0.0664, y: 0.7272, w: 0.8652, h: 0.1087 }, fx: { x: 0.1221, y: 0.8919, w: 0.752, h: 0.0417 } },
-};
 
 /** The cards a fusion of `rarity` cards from `floor` can give: same rarity, same floor (owner 2026-11-25). */
 export function cardFusePool(rarity: CardRarity, floor: 1 | 2): CardId[] {
@@ -199,6 +191,11 @@ export const CARD_NUM_FIELDS: readonly CardNumField[] = [
   ...CARD_RARITIES.map((r): CardNumField => ({ key: `fuseOn_${r}`, name: `เปิดรวมการ์ด${RARITY_TH[r]} (1 = เปิด, 0 = ปิด)`, group: 'รวมการ์ด', def: r === 'epic' ? 0 : 1, min: 0, max: 1, step: 1, unit: '' })),
   ...CARD_RARITIES.map((r): CardNumField => ({ key: `sell_${r}`, name: `ขายพ่อค้า: การ์ด${RARITY_TH[r]}`, group: 'ราคาขายพ่อค้า', def: r === 'rare' ? 2000 : r === 'epic' ? 10000 : 50000, min: 0, max: 100_000_000, step: 1, unit: 'G' })),
   { key: 'sell_drill', name: 'ขายพ่อค้า: หินเจาะรู', group: 'ราคาขายพ่อค้า', def: 1000, min: 0, max: 100_000_000, step: 1, unit: 'G' },
+  // How a card looks when viewed (src/client/cardView.ts, owner 2026-11-25): a shine that follows the pointer and a tilt.
+  { key: 'viewShine', name: 'แสงสะท้อนตามเมาส์/นิ้ว (1 = เปิด, 0 = ปิด)', group: 'หน้าตาการ์ด', def: 1, min: 0, max: 1, step: 1, unit: '' },
+  { key: 'viewShinePct', name: 'ความแรงแสงสะท้อน', group: 'หน้าตาการ์ด', def: 55, min: 0, max: 100, step: 1, unit: '%' },
+  { key: 'viewTiltDeg', name: 'การ์ดเอียงสูงสุด (องศา, 0 = ไม่เอียง)', group: 'หน้าตาการ์ด', def: 10, min: 0, max: 30, step: 0.5, unit: '' },
+  { key: 'viewRainbow', name: 'แสงรุ้งบนการ์ดตำนาน (1 = เปิด, 0 = ปิด)', group: 'หน้าตาการ์ด', def: 1, min: 0, max: 1, step: 1, unit: '' },
   ...CARD_FX.map((f): CardNumField => ({
     key: `cap_${f}`, name: `เพดาน${CARD_FX_NAME[f]} (0 = ไม่จำกัด)`, group: 'เพดานรวมทั้งตัว', min: 0, max: 100, step: 0.1, unit: '%',
     def: ({ pierce: 50, lifesteal: 10, dmgReduce: 30, bossDmg: 40, cdr: 20, potion: 40, expPct: 30, goldPct: 30, normalAtkPct: 40 } as Partial<Record<CardFx, number>>)[f] ?? 0,

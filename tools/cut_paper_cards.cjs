@@ -3,7 +3,7 @@
 // raw folder (default art_templates/papercraft_cards/raw, not committed): card_frame_<rarity>.png + card_art_<monster>.png, 1024×1536.
 // Out: public/assets/sprites/paper/cards/ — frames 512×768 WebP with the flat magenta windows cut to transparent,
 // monster art 512×768 WebP (full picture with its own background). Prints each frame's windows as fractions of the
-// frame (for CARD_FRAME_WINDOWS in src/shared/data/cards.ts).
+// frame (the thin frames since 2026-11-25 have one window, the whole middle; nothing reads these numbers now).
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
