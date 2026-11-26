@@ -1,11 +1,12 @@
-import { cardDropsOpen, cardNum } from './cardTuning';
+import { cardDef, cardDropsOpen, cardNum } from './cardTuning';
 import { cardsOfMonster, type CardId, type CardRarity } from './data/cards';
 
 /**
  * The cards one kill rolls (card plan sections 3.1, 3.2 and 12.3, PR 5). Pure: Sim.dropLoot gives them out.
- * - A farm monster: each of its cards at dropMonster % once.
- * - A boss in its boss room: its own card at dropBoss % and a card it drops for another monster (dropFrom: the
- *   parrot's for the Peg-Leg Captain) at dropBossExtra %, each rolled on its own once per key put in.
+ * Each card rolls at the rate of its rarity as tuned on /admin (drop_<rarity>, owner 2026-11-26):
+ * - A farm monster: each of its cards once.
+ * - A boss in its boss room: its own card and a card it drops for another monster (dropFrom: the parrot's for the
+ *   Peg-Leg Captain), each rolled on its own once per key put in.
  * Floor 2 cards roll only while floor2Drop is on (cardDropsOpen). `boost` is the drop scroll x VIP multiplier,
  * used only while the /admin switch dropBoost is on (owner 2026-11-25).
  */
@@ -14,7 +15,7 @@ export function rollCardDrops(monster: string, boss: boolean, times: number, boo
   const out: CardId[] = [];
   for (const d of cardsOfMonster(monster)) {
     if (!cardDropsOpen(d.id)) continue;
-    const pct = !boss ? cardNum('dropMonster') : d.dropFrom ? cardNum('dropBossExtra') : cardNum('dropBoss');
+    const pct = cardNum(`drop_${(cardDef(d.id) ?? d).rarity}`);
     const c = Math.min(1, (pct / 100) * mult);
     for (let k = 0; k < (boss ? times : 1); k++) if (c > 0 && r() < c) out.push(d.id);
   }

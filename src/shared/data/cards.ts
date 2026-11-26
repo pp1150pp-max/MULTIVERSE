@@ -208,9 +208,13 @@ export const CARD_RARITY_NAME = RARITY_TH;
 
 /** Every adjustable number with its code default. Percents are stored as percents (0.01 = 0.01%). */
 export const CARD_NUM_FIELDS: readonly CardNumField[] = [
-  { key: 'dropMonster', name: 'การ์ดจากมอนทั่วไป (ต่อการฆ่า)', group: 'เรทดรอป', def: 0.01, min: 0, max: 100, step: 0.0001, unit: '%' },
-  { key: 'dropBoss', name: 'การ์ดบอส (ต่อกุญแจ 1 อัน)', group: 'เรทดรอป', def: 0.1, min: 0, max: 100, step: 0.0001, unit: '%' },
-  { key: 'dropBossExtra', name: 'การ์ดนกแก้ว (ต่อกุญแจ 1 อัน ตอนฆ่ากัปตันขาไม้ สุ่มแยกจากการ์ดบอส)', group: 'เรทดรอป', def: 0.1, min: 0, max: 100, step: 0.0001, unit: '%' },
+  // Drop rate by the card's rarity (owner 2026-11-26): a farm monster rolls once per kill, a boss in its room once
+  // per key. The defaults give every card the rate it had before (rare = farm monsters, epic = bear and parrot,
+  // legendary = bosses). Old dropMonster/dropBoss/dropBossExtra tuning is moved over in checkCardTuning.
+  ...CARD_RARITIES.map((r): CardNumField => ({
+    key: `drop_${r}`, name: `การ์ด${RARITY_TH[r]} (มอนทั่วไป: ต่อการฆ่า · บอส: ต่อกุญแจ 1 อัน)`, group: 'เรทดรอป',
+    def: r === 'rare' ? 0.01 : 0.1, min: 0, max: 100, step: 0.0001, unit: '%',
+  })),
   { key: 'floor2Drop', name: 'การ์ดชั้น 2 ดรอปได้ (1 = เปิด, 0 = ปิด · เปิดเมื่อเปิดชั้น 2 ให้ผู้เล่น)', group: 'เรทดรอป', def: 0, min: 0, max: 1, step: 1, unit: '' },
   // Card drops (PR 5, owner 2026-11-25): a card goes straight into the top damage dealer's bag (full bag: by mail).
   { key: 'dropBoost', name: 'ใบคูณดรอปและ VIP เพิ่มโอกาสได้การ์ด (1 = เพิ่ม, 0 = เรทคงที่)', group: 'เรทดรอป', def: 1, min: 0, max: 1, step: 1, unit: '' },
