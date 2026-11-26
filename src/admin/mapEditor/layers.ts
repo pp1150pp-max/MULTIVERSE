@@ -1,11 +1,12 @@
 // What the editor canvas draws (each a Layer in editor.ts). The ground is the game's tiles (groundArt.ts) or, switched off, plain colours.
 import { ROOM_EDGE, roomSpawnOf, type MapTheme } from '../../shared/mapSchema';
+import { spawnRadiusMult } from '../../shared/balance';
 import { catalogEntry, spriteOf } from './sprites';
 import type { Editor, Layer } from './editor';
 import { decorLayer, drawRealGround } from './groundArt';
 import { HARBOR_DECKS, HARBOR_ID } from '../../shared/data/harbor';
 
-const GROUND: Record<MapTheme, string> = { forest: '#4f7a3f', marsh: '#566a43', snow: '#cfdbe3', volcano: '#4b3a34', beach: '#d9c79a', cove: '#9a8a8e' };
+const GROUND: Record<MapTheme, string> = { forest: '#4f7a3f', marsh: '#566a43', snow: '#cfdbe3', volcano: '#4b3a34', beach: '#d9c79a', cove: '#9a8a8e', grave: '#5e6a72', kraken: '#4a5462' };
 const PATH_COLOR = 'rgba(196,166,112,0.85)';
 
 /** Floor colour by theme (the hub's four quarters in their own colours), the walkable frame, paths and lakes. */
@@ -76,7 +77,7 @@ function plainGround(ed: Editor, g: CanvasRenderingContext2D): void {
     for (const w of ed.map.water) {
       const pts: [number, number][] = Array.from({ length: 36 }, (_, i) => [w.x + Math.cos((i / 36) * Math.PI * 2) * w.rx, w.z + Math.sin((i / 36) * Math.PI * 2) * w.rz]);
       ed.path(g, pts);
-      g.fillStyle = w.kind === 'ice' ? 'rgba(150,200,235,0.8)' : 'rgba(230,90,30,0.85)';
+      g.fillStyle = w.kind === 'ice' ? 'rgba(150,200,235,0.8)' : w.kind === 'whirlpool' ? 'rgba(30,110,140,0.85)' : 'rgba(230,90,30,0.85)';
       g.fill();
     }
 }
@@ -144,10 +145,16 @@ const markers: Layer = {
     for (const n of m.npcs) dot(n.x, n.z, '#4ac0e8', n.id);
     for (const p of m.portals) dot(p.x, p.z, '#b070f0', `→ ${p.to}`);
     for (const r of m.rest) dot(r.x, r.z, '#e8c040', r.kind);
+    const k = spawnRadiusMult(m.id);
     for (const s of m.spawns) {
       const pts: [number, number][] = Array.from({ length: 20 }, (_, i) => [s.x + Math.cos((i / 20) * Math.PI * 2) * s.radius, s.z + Math.sin((i / 20) * Math.PI * 2) * s.radius]);
       ed.path(g, pts);
       g.strokeStyle = 'rgba(240,120,120,0.7)'; g.lineWidth = 1; g.stroke();
+      // The map's spawn-radius × (ปรับสมดุล, ordinary monsters only): where they really appear in game, a dashed guide that is not edited here.
+      if (!m.room && k > 1) {
+        ed.path(g, Array.from({ length: 28 }, (_, i) => [s.x + Math.cos((i / 28) * Math.PI * 2) * s.radius * k, s.z + Math.sin((i / 28) * Math.PI * 2) * s.radius * k]));
+        g.setLineDash([5, 4]); g.strokeStyle = 'rgba(255,170,90,0.85)'; g.stroke(); g.setLineDash([]);
+      }
     }
     if (m.lair) dot(m.lair.x, m.lair.z, '#e05050', m.lair.boss);
   },

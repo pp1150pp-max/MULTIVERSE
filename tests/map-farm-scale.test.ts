@@ -57,7 +57,7 @@ ok(validateMap(wrongSize, ctx('emerald_forest')).some((i) => i.code === 'locked'
 ok(!validateMap(wrongSize, { propKeys: PROP_KEYS }).some((i) => i.code === 'locked'), 'without a bundled file (an editor-made map) the size is free');
 
 // Respawn somewhere else (owner 2026-11-25, Balance.mobRoam): once a farm spot's monsters are all dead, it moves to a random place
-// near a spot of the same kind; switch off = back to its own spot. The hub's spots never move.
+// near its own spot (mobRoamReach); switch off = back to its own spot. The hub's spots never move.
 {
   type Sp = { area: SpawnArea; alive: number; queue: number[]; roam?: boolean; home?: SpawnArea };
   const spawnersOf = (sim: Sim) => (sim as unknown as { spawners: Sp[] }).spawners;
@@ -73,12 +73,11 @@ ok(!validateMap(wrongSize, { propKeys: PROP_KEYS }).some((i) => i.code === 'lock
     killAll(sim, sp);
     ok(sp.alive === 0, `${sp.home!.monster}: all dead`);
     if (sp.area.x !== sp.home!.x || sp.area.z !== sp.home!.z) moved++;
-    const kin = list.filter((o) => o.home!.monster === sp.home!.monster);
-    if (!kin.some((o) => Math.hypot(o.home!.x - sp.area.x, o.home!.z - sp.area.z) <= 8.01)) inBand = false;
+    if (Math.hypot(sp.home!.x - sp.area.x, sp.home!.z - sp.area.z) > currentBalance().mobRoamReach + 0.01) inBand = false;
     if (sim.terrain.isBlocked(sp.area.x, sp.area.z, 0.5)) inBand = false;
   }
   ok(moved >= 25, `dead spots come back elsewhere (${moved}/30 moved)`);
-  ok(inBand, 'each lands near a spot of its own kind, not in collision');
+  ok(inBand, 'each lands near its own spot (mobRoamReach), not in collision');
   applyBalance(checkBalance({ mobRoam: false }, true).tuning!);
   const sp = list[40];
   killAll(sim, sp);
@@ -86,6 +85,15 @@ ok(!validateMap(wrongSize, { propKeys: PROP_KEYS }).some((i) => i.code === 'lock
   applyBalance({});
   ok(currentBalance().mobRoam === true && JSON.stringify(checkBalance({ mobRoam: true }, true).tuning) === '{}', 'code default on, not saved');
   ok(balanceChanges({}, { mobRoam: false }).includes('เกิดใหม่สุ่มที่'), 'the audit names it');
+  applyBalance(checkBalance({ mobRoamReach: 3 }, true).tuning!);
+  {
+    const far = list[50];
+    killAll(sim, far);
+    ok(Math.hypot(far.home!.x - far.area.x, far.home!.z - far.area.z) <= 3.01, 'mobRoamReach 3: lands within 3 of its own spot');
+  }
+  applyBalance({});
+  ok(currentBalance().mobRoamReach === 8 && JSON.stringify(checkBalance({ mobRoamReach: 8 }, true).tuning) === '{}', 'reach: code 8, not saved');
+  ok('error' in checkBalance({ mobRoamReach: 99 }, true), 'reach out of range is refused');
   const hub = new Sim(ZONES.nexus_city);
   ok(spawnersOf(hub).every((s) => !s.roam), 'the hub spots never move');
 }

@@ -157,7 +157,7 @@ input[type="checkbox"]:disabled, input[type="radio"]:disabled { opacity: 0.45; c
 }
 @media (max-width: 480px) { .brand { display: none; } }
 
-main { padding: 18px 20px 40px; max-width: 1200px; width: 100%; margin: 0 auto; min-width: 0; }
+main { padding: 18px 20px 40px; width: 100%; margin: 0; min-width: 0; }
 @media (max-width: 600px) { main { padding: 12px 10px 40px; } }
 .orb-bench { height: calc(100vh - var(--top-h) - 60px); min-height: 480px; border: 1px solid var(--edge-dim); border-radius: 6px; }
 
@@ -353,10 +353,10 @@ td.changed, input.changed { background: #3a3110; }
 .bal-num.bal-bad { border-color: var(--bad); }
 .bal-out { color: var(--gold-hi); text-align: right; }
 
-.card-thumb { display: block; width: 72px; height: 108px; object-fit: cover; border: 1px solid var(--edge-dim); border-radius: 4px; margin-bottom: 4px; cursor: zoom-in; image-rendering: pixelated; }
+.card-thumb { display: block; width: 72px; height: 108px; object-fit: cover; border: 1px solid var(--edge-dim); border-radius: 4px; margin-bottom: 4px; cursor: zoom-in; }
 .card-fx .row { flex-wrap: nowrap; }
 .card-art-view { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.8); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; cursor: zoom-out; color: var(--gold-hi); font-size: 18px; }
-.card-art-view img { max-width: 92vw; max-height: 82vh; border: 2px solid var(--edge); border-radius: 6px; image-rendering: pixelated; }
+.card-art-view .cv { cursor: default; }
 
 /* Account sheet: worn gear / bag / stash as slot grids like the game's bag (src/admin/items.ts). */
 .igrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); gap: 4px; margin-top: 4px; max-width: 520px; }
@@ -483,7 +483,7 @@ details.bal-line { overflow-x: auto; }
 .skm-found .chip.on { border-color: var(--gold); color: var(--gold-hi); }
 .skm-body { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 10px; align-items: start; margin-top: 6px; }
 .skm-box { position: relative; min-width: 0; }
-.skm-wrap { display: flex; overflow: auto; height: min(70vh, 640px); border: 1px solid #4a3e2a; border-radius: 6px; background: #0a0f24; touch-action: none; cursor: grab; overscroll-behavior: contain; }
+.skm-wrap { display: flex; overflow: auto; height: max(480px, calc(100vh - var(--top-h) - 170px)); border: 1px solid #4a3e2a; border-radius: 6px; background: #0a0f24; touch-action: none; cursor: grab; overscroll-behavior: contain; }
 .skm-wrap.panning { cursor: grabbing; user-select: none; }
 .skm-sizer { position: relative; flex: none; margin: auto; }
 .skm-map {
@@ -569,7 +569,7 @@ details.bal-line { overflow-x: auto; }
 .me-status.bad { color: var(--bad); }
 .me-diff { font-size: 12px; }
 .me-body { display: grid; grid-template-columns: 190px minmax(0, 1fr) 270px; gap: 10px; height: max(560px, calc(100vh - 250px)); }
-.me-left, .me-right { overflow-y: auto; min-height: 0; font-size: 13px; }
+.me-left, .me-right { overflow-y: auto; overflow-x: hidden; min-width: 0; min-height: 0; font-size: 13px; }
 .me h4 { margin: 10px 0 4px; font-size: 12px; color: var(--gold); letter-spacing: 0.5px; }
 .me h4:first-child { margin-top: 0; }
 .me-center { min-width: 0; min-height: 0; border: 1px solid var(--edge-dim); border-radius: 6px; overflow: hidden; background: #1b1d22; }
@@ -594,8 +594,8 @@ details.bal-line { overflow-x: auto; }
 .me-palette-bar { display: flex; gap: 4px; margin-bottom: 6px; }
 .me-palette-bar input { flex: 1 1 90px; min-width: 0; }
 .me-palette-bar select { flex: 0 1 110px; min-width: 0; }
-.me-palette { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
-.me-item { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 3px; min-height: 0; background: #14120e; }
+.me-palette { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.me-item { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 3px; min-height: 0; background: #14120e; }
 .me-item img { width: 100%; height: 54px; object-fit: contain; pointer-events: auto; }
 .me-item span { font-size: 9.5px; color: var(--ink-dim); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .me-item.on { border-color: var(--gold-hi); background: #3a2e17; }
@@ -622,7 +622,7 @@ details.bal-line { overflow-x: auto; }
 
 /* "จัดหน้าจอเกม" (src/admin/hudLayout.ts): mock game screen + list. */
 .hl-wrap { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; margin: 8px 0; }
-.hl-frame { position: relative; flex: 2 1 560px; max-width: 960px; background: #1d2a1d linear-gradient(135deg, #24321f, #18221a); border: 2px solid #6b5a3a; border-radius: 6px; overflow: hidden; touch-action: none; user-select: none; }
+.hl-frame { position: relative; flex: 2 1 560px; max-width: 1600px; background: #1d2a1d linear-gradient(135deg, #24321f, #18221a); border: 2px solid #6b5a3a; border-radius: 6px; overflow: hidden; touch-action: none; user-select: none; }
 .hl-box { position: absolute; box-sizing: border-box; border: 1px solid rgba(240, 210, 140, 0.7); background: rgba(240, 210, 140, 0.16); border-radius: 3px; cursor: move; font-size: 11px; color: #f5e6c4; overflow: hidden; }
 .hl-box span { display: block; padding: 1px 3px; text-shadow: 0 1px 2px #000; pointer-events: none; }
 .hl-box.hl-win { border-style: dashed; background: rgba(120, 160, 220, 0.14); border-color: rgba(150, 190, 240, 0.7); }
@@ -649,3 +649,31 @@ details.bal-line { overflow-x: auto; }
 .hl-row.hl-changed .hl-name { color: #f2c230; }
 .hl-name { cursor: pointer; overflow-wrap: anywhere; }
 .hl-num { width: 100%; box-sizing: border-box; }
+
+/* Monster card items in the item grids (src/admin/items.ts cardImg): the card picture cropped, a border in its rarity colour. */
+.icell img.gi.gi-card { width: 82%; height: 82%; box-sizing: border-box; object-fit: cover; object-position: 50% 30%; image-rendering: auto; border: 2px solid var(--card-c, #4fa0ff); border-radius: 3px; }
+
+/* Picture picker for what to spawn (src/admin/itemPicker.ts): a button that opens a window of tabs, search and icon grids. */
+.ipick-btn { display: inline-flex; align-items: center; gap: 8px; min-width: 220px; max-width: 100%; text-align: left; padding: 4px 8px; }
+.ipick-btn .ipick-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ipick-btn .ipick-arrow { opacity: 0.7; }
+.ipick-ic { display: grid; place-items: center; width: 40px; height: 40px; flex: none; background: #12100d; border: 1px solid var(--edge-dim); border-radius: 4px; }
+.ipick-ic .gi { width: 80%; height: 80%; object-fit: contain; image-rendering: pixelated; }
+.ipick-ic.card { width: 34px; height: 48px; background: none; border: none; }
+.ipick-btn .ipick-ic { width: 32px; height: 32px; }
+.ipick-btn .ipick-ic.card { width: 26px; height: 38px; }
+.ipick-card { width: 100%; height: 100%; object-fit: cover; border: 2px solid var(--rc); border-radius: 4px; box-sizing: border-box; }
+.ipick-bg { position: fixed; inset: 0; z-index: 200; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.ipick { background: var(--panel, #1c1812); border: 1px solid var(--edge-dim); border-radius: 8px; width: min(860px, 100%); max-height: calc(100dvh - 32px); display: flex; flex-direction: column; gap: 8px; padding: 12px; box-sizing: border-box; }
+.ipick-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.ipick-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.ipick-tabs button.on { border-color: var(--gold-hi); color: var(--gold-hi); }
+.ipick input[type=search] { flex: 1; min-width: 140px; }
+.ipick-body { overflow-y: auto; min-height: 0; }
+.ipick-body h4 { margin: 10px 0 4px; font-size: 13px; color: var(--ink-dim); }
+.ipick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; }
+.ipick-tile { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; min-width: 0; font-size: 11px; line-height: 1.2; }
+.ipick-tile.card .ipick-ic { width: 56px; height: 84px; }
+.ipick-tile.sel { outline: 2px solid var(--gold-hi); outline-offset: 1px; background: color-mix(in srgb, var(--gold-hi) 14%, transparent); }
+.ipick-tname { width: 100%; text-align: center; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.ipick-sub { font-size: 10px; color: var(--ink-dim); }

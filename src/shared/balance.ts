@@ -11,6 +11,7 @@ import {
 import { CODE_POTIONS, CODE_POTION_DROP, CODE_SWORD_POTION_BONUS, POTION_RANGE, type PotionNums } from './data/potionTable';
 import { MONSTERS, type MonsterDef } from './data/monsters';
 import { FARM_IDS, ZONES } from './data/zones';
+import { customDef } from './customZones';
 import { checkFxLayerTuning, codeFxLayer, fxLayerChanges, mergeFxLayer, type FxLayerConfig, type FxLayerTuning } from './fxLayerTuning';
 import { checkMenuLayoutTuning, codeMenuLayout, mergeMenuLayout, menuLayoutChanges, type MenuLayoutConfig, type MenuLayoutTuning } from './menuLayout';
 import { checkHudLayoutTuning, codeHudLayout, hudLayoutChanges, mergeHudLayout, type HudLayoutConfig, type HudLayoutTuning } from './hudLayout';
@@ -21,6 +22,7 @@ import { checkRigLookTuning, codeRigLook, mergeRigLook, rigLookChanges, type Rig
 import { autoChanges, checkAutoTuning, codeAuto, mergeAuto, type AutoConfig, type AutoTuning } from './autoTuning';
 import { checkFloorGateTuning, codeFloorGate, floorGateChanges, mergeFloorGate, type FloorGateConfig, type FloorGateTuning } from './floorGate';
 import { bagExpandChanges, checkBagExpand, codeBagExpand, mergeBagExpand, type BagExpandCfg, type BagExpandTuning } from './bagTabs';
+import { checkNpcTalkTuning, codeNpcTalk, mergeNpcTalk, npcTalkChanges, type NpcTalkConfig, type NpcTalkTuning } from './npcTalk';
 import { checkTutorialTuning, codeTutorial, mergeTutorial, tutorialChanges, type TutorialConfig, type TutorialTuning } from './tutorial';
 import { checkMoveTuning, codeMoves, mergeMoves, moveChanges, type MoveConfig, type MoveTuning } from './moveTuning';
 import { checkWaveTuning, codeWaves, mergeWaves, waveChanges, type WaveConfig, type WaveTuning } from './waveGame';
@@ -50,10 +52,14 @@ export const CODE_BOSS_SWITCH_SEC = 10;
 /** Ordinary monsters give up after this many seconds without a hit (owner 2026-11-17: off). */
 export const CODE_MOB_GIVE_UP_SEC = 0;
 export const CODE_MOB_RETURN_IGNORE_HITS = true;
+/** The HUD's buff chips show the total EXP / drop bonus (scrolls × VIP), sources and times on hover (owner 2026-11-25); off = the old scroll chips. */
+export const CODE_BUFF_TOTAL = true;
 /** Ordinary monsters drop a target that is in a safe area / left / died at once and walk home (owner 2026-11-20). */
 export const CODE_MOB_DROP_ON_SAFE = true;
 /** Floor-1 farm maps: a spot whose monsters are all dead comes back somewhere else in its kind's band (owner 2026-11-25). */
 export const CODE_MOB_ROAM = true;
+/** …and lands this far at most from its own spot in the map (owner 2026-11-25: "near its own spot", not across the map). */
+export const CODE_MOB_ROAM_REACH = 8;
 /** Maps come from the DB's published layouts when there are any (docs/plans/map-editor.md 3.1); off = always the JSON in the bundle. Nothing publishes to the DB before PR 5. */
 export const CODE_MAP_FROM_DB = true;
 /** The "เพิ่มเวลาบัฟ %" item stat also lengthens summons: turret, drone, land mine (owner 2026-11-19). */
@@ -70,6 +76,8 @@ export const CODE_FLOOR_GATE_OPEN = false;
 export const CODE_FLOOR_GATE_QUEST = true;
 /** Wearing/taking off gear is refused (browser side) while the merchant's window is open, so a click meant to wear cannot sell (owner 2026-11-22). */
 export const CODE_SHOP_NO_EQUIP = true;
+/** Trying cosmetics on (cash shop, dress window) only in a town / safe area (owner 2026-11-25). Browser side only. */
+export const CODE_TRY_ON_TOWN_ONLY = true;
 /** Item links in chat: Ctrl+click an item to put a clickable [name] into a message (owner 2026-11-23: on). */
 export const CODE_CHAT_LINKS = true;
 /** The hub town split into channels like the farm maps (owner 2026-11-22); off = one room as before. */
@@ -196,6 +204,8 @@ export interface Balance {
   monsters: MonsterTuning;
   /** Monsters per spawn spot ×, by map id (PACK_ZONES); a map left out is ×1. */
   mobPack: Record<string, number>;
+  /** Spawn-spot radius × (the circle monsters appear and wander in), by map id (a built-in map or an editor-made one); a map left out is ×1. */
+  spawnRadius: Record<string, number>;
   /**
    * Floor-1 farm maps (FARM_IDS): % of the map's spawn spots in use, by map id; a map left out is 100 (owner 2026-11-25). The spots
    * switched off are spread evenly over the map and over each kind (packCount).
@@ -215,6 +225,8 @@ export interface Balance {
   mobDropOnSafe: boolean;
   /** Floor-1 farm maps: once every monster of a spot is dead, the spot moves to a random place among its kind's spots before they come back (owner 2026-11-25); off = always the same spot. */
   mobRoam: boolean;
+  /** How far (units) a roaming spot may land from its own spot in the map. */
+  mobRoamReach: number;
   /** "ใช้แมพจาก DB": on = published map layouts in the DB replace the bundled JSON (PR 5); off = always the bundled JSON, the emergency way out. Rooms made after the change follow it (server/maps-live.ts). */
   mapFromDb: boolean;
   /** "เพิ่มเวลาบัฟ %" counts for summons too (turret, drone, land mine lifetime); off = only buffs. */
@@ -235,6 +247,8 @@ export interface Balance {
   floorGate: FloorGateConfig;
   /** No wearing/taking off gear (or fashion items) while the merchant window is open. Browser side only. */
   shopNoEquip: boolean;
+  /** Trying cosmetics on only in a town / safe area; stepping out takes the try-on off (src/client/cosLook.ts). Browser side only. */
+  tryOnTownOnly: boolean;
   /** Item links in chat and the megaphone (src/shared/chatLinks.ts); off = the server sends no links, Ctrl+click does nothing. */
   chatLinks: boolean;
   /** The hub town (nexus_city) split into channels CH 1–10 like the farm maps; off = one room (CH 1). Used on the next entry into town. */
@@ -261,6 +275,8 @@ export interface Balance {
   /** VIP bonus (src/shared/vip.ts): EXP % (rounded down) and drop-chance %. */
   vipExpPct: number;
   vipDropPct: number;
+  /** HUD buff chips: total EXP / drop bonus with a per-source hover (CODE_BUFF_TOTAL); off = one chip per running scroll. */
+  buffTotal: boolean;
   /** Untouchable (no damage or boss effects, blinking) for a moment after a phoenix-feather revive in a boss room. */
   reviveGuard: boolean;
   /** How long that lasts; any attack, skill, buff or dash ends it early. */
@@ -285,6 +301,8 @@ export interface Balance {
   hudLayout: HudLayoutConfig;
   /** Tutorial quest rewards (tutorial.ts). */
   tutorial: TutorialConfig;
+  /** NPC talk window and lines over NPC heads (npcTalk.ts). */
+  npcTalk: NpcTalkConfig;
   /** Item sets: server-wide switch and each set's bonus steps (data/sets.ts). */
   sets: SetConfig;
   /** Skill points, ranks, unlock levels, refunds and every learnable skill's numbers (skillTuning.ts). */
@@ -321,6 +339,8 @@ export interface BalanceTuning {
   monsters?: MonsterTuning;
   /** Monsters-per-spot multipliers that are not ×1, by map id. */
   mobPack?: Record<string, number>;
+  /** Spawn-spot radius multipliers that are not ×1, by map id. */
+  spawnRadius?: Record<string, number>;
   /** Farm maps' % of spawn spots in use that are not 100, by map id. */
   farmSpots?: Record<string, number>;
   /** EXP multipliers per 10 levels that are not ×1. */
@@ -336,6 +356,8 @@ export interface BalanceTuning {
   mobDropOnSafe?: boolean;
   /** Monster spots moving on respawn, when not the code's (on). */
   mobRoam?: boolean;
+  /** Roaming reach, when not the code's (8). */
+  mobRoamReach?: number;
   /** Maps from the DB, when not the code's (on). */
   mapFromDb?: boolean;
   /** Buff-time stat on summons, when not the code's (on). */
@@ -356,6 +378,8 @@ export interface BalanceTuning {
   floorGate?: FloorGateTuning;
   /** No wear/take off while the merchant window is open, when not the code's (on). */
   shopNoEquip?: boolean;
+  /** Try-on in town only, when not the code's (on). */
+  tryOnTownOnly?: boolean;
   /** Item links in chat, when not the code's (on). */
   chatLinks?: boolean;
   /** Hub split into channels, when not the code's (on). */
@@ -378,6 +402,7 @@ export interface BalanceTuning {
   bossLootMax?: number;
   vipExpPct?: number;
   vipDropPct?: number;
+  buffTotal?: boolean;
   /** Phoenix-feather revive guard, when not the code's (on). */
   reviveGuard?: boolean;
   /** Its seconds, when not the code's. */
@@ -401,6 +426,8 @@ export interface BalanceTuning {
   hudLayout?: HudLayoutTuning;
   /** Tutorial quest rewards that differ from the code. */
   tutorial?: TutorialTuning;
+  /** NPC talk window settings and lines that differ from the code. */
+  npcTalk?: NpcTalkTuning;
   /** Item set settings that differ from the code. */
   sets?: SetTuning;
   /** Skill system settings that differ from the code. */
@@ -430,10 +457,12 @@ export const BALANCE_RANGE = {
   critCap: [0, 100],
   monsterMult: [0.1, 10],
   mobPack: [1, 5],
+  spawnRadius: [1, 4],
   farmSpots: [0, 100],
   expMult: [0.1, 10],
   bossSwitchSec: [0, 120],
   mobGiveUpSec: [0, 120],
+  mobRoamReach: [2, 30],
   roomWipeSec: [3, 60],
   roomBossDelay: [0, 60],
   roomLoadWait: [0, 60],
@@ -478,6 +507,7 @@ export function codeBalance(): Balance {
     critCap: CODE_CRIT_CAP,
     monsters: {},
     mobPack: {},
+    spawnRadius: {},
     farmSpots: {},
     expMult: {},
     potions: codePotions(),
@@ -486,6 +516,7 @@ export function codeBalance(): Balance {
     mobReturnIgnoreHits: CODE_MOB_RETURN_IGNORE_HITS,
     mobDropOnSafe: CODE_MOB_DROP_ON_SAFE,
     mobRoam: CODE_MOB_ROAM,
+    mobRoamReach: CODE_MOB_ROAM_REACH,
     mapFromDb: CODE_MAP_FROM_DB,
     buffDurSummons: CODE_BUFF_DUR_SUMMONS,
     forgeAuto: CODE_FORGE_AUTO,
@@ -496,6 +527,7 @@ export function codeBalance(): Balance {
     floorGateQuest: CODE_FLOOR_GATE_QUEST,
     floorGate: codeFloorGate(),
     shopNoEquip: CODE_SHOP_NO_EQUIP,
+    tryOnTownOnly: CODE_TRY_ON_TOWN_ONLY,
     chatLinks: CODE_CHAT_LINKS,
     hubChannels: CODE_HUB_CHANNELS,
     bossWipeKeepHp: CODE_BOSS_WIPE_KEEP_HP,
@@ -512,6 +544,7 @@ export function codeBalance(): Balance {
     bossLootMax: CODE_BOSS_LOOT_MAX,
     vipExpPct: CODE_VIP_EXP_PCT,
     vipDropPct: CODE_VIP_DROP_PCT,
+    buffTotal: CODE_BUFF_TOTAL,
     reviveGuard: CODE_REVIVE_GUARD,
     reviveGuardSec: CODE_REVIVE_GUARD_SEC,
     auto: codeAuto(),
@@ -524,6 +557,7 @@ export function codeBalance(): Balance {
     menuLayout: codeMenuLayout(),
     hudLayout: codeHudLayout(),
     tutorial: codeTutorial(),
+    npcTalk: codeNpcTalk(),
     sets: codeSets(),
     skills: codeSkills(),
     moves: codeMoves(),
@@ -557,6 +591,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.critCap !== undefined) b.critCap = t.critCap;
   if (t.monsters) b.monsters = structuredClone(t.monsters);
   if (t.mobPack) b.mobPack = { ...t.mobPack };
+  if (t.spawnRadius) b.spawnRadius = { ...t.spawnRadius };
   if (t.farmSpots) b.farmSpots = { ...t.farmSpots };
   if (t.expMult) b.expMult = { ...t.expMult };
   if (t.potions) {
@@ -567,6 +602,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   }
   if (t.bossSwitchSec !== undefined) b.bossSwitchSec = t.bossSwitchSec;
   if (t.mobGiveUpSec !== undefined) b.mobGiveUpSec = t.mobGiveUpSec;
+  if (t.mobRoamReach !== undefined) b.mobRoamReach = t.mobRoamReach;
   if (t.bossWipeKeepHp !== undefined) b.bossWipeKeepHp = t.bossWipeKeepHp;
   if (t.roomWipeSec !== undefined) b.roomWipeSec = t.roomWipeSec;
   if (t.roomBossDelay !== undefined) b.roomBossDelay = t.roomBossDelay;
@@ -581,6 +617,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.bossLootMax !== undefined) b.bossLootMax = t.bossLootMax;
   if (t.vipExpPct !== undefined) b.vipExpPct = t.vipExpPct;
   if (t.vipDropPct !== undefined) b.vipDropPct = t.vipDropPct;
+  if (t.buffTotal !== undefined) b.buffTotal = t.buffTotal;
   if (t.reviveGuard !== undefined) b.reviveGuard = t.reviveGuard;
   if (t.reviveGuardSec !== undefined) b.reviveGuardSec = t.reviveGuardSec;
   if (t.mobReturnIgnoreHits !== undefined) b.mobReturnIgnoreHits = t.mobReturnIgnoreHits;
@@ -596,6 +633,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.floorGateQuest !== undefined) b.floorGateQuest = t.floorGateQuest;
   b.floorGate = mergeFloorGate(t.floorGate);
   if (t.shopNoEquip !== undefined) b.shopNoEquip = t.shopNoEquip;
+  if (t.tryOnTownOnly !== undefined) b.tryOnTownOnly = t.tryOnTownOnly;
   if (t.chatLinks !== undefined) b.chatLinks = t.chatLinks;
   if (t.hubChannels !== undefined) b.hubChannels = t.hubChannels;
   b.auto = mergeAuto(t.auto);
@@ -608,6 +646,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   b.menuLayout = mergeMenuLayout(t.menuLayout);
   b.hudLayout = mergeHudLayout(t.hudLayout);
   b.tutorial = mergeTutorial(t.tutorial);
+  b.npcTalk = mergeNpcTalk(t.npcTalk);
   b.sets = mergeSets(t.sets);
   b.skills = mergeSkills(t.skills);
   b.moves = mergeMoves(t.moves);
@@ -704,6 +743,9 @@ export function packCount(zoneId: string, count: number, index: number, b: Balan
   return Math.max(1, whole + (((index * 0.6180339887) % 1) < want - whole ? 1 : 0));
 }
 
+/** Spawn-spot radius × of a map (/admin; ×1 = the radius in the map file). Bosses and boss rooms ignore it (callers skip them). */
+export const spawnRadiusMult = (zoneId: string, b: Balance = current): number => b.spawnRadius[zoneId] ?? 1;
+
 /**
  * The MP a skill costs a character of this class at this level (owner 2026-11-13): the skill's `mp` in code
  * × (1 + k × (level − 1)), k = the class's % per level, rounded to the nearest whole MP. Free skills stay free.
@@ -749,7 +791,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'critCap', 'monsters', 'mobPack', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mobRoam', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'shopNoEquip', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'bagExpand', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'critCap', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'buffTotal', 'mobDropOnSafe', 'mobRoam', 'mobRoamReach', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'shopNoEquip', 'tryOnTownOnly', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'bagExpand', 'tutorial', 'npcTalk', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -826,7 +868,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   }
 
   // Single numbers
-  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'roomWipeSec' | 'roomBossDelay' | 'roomLoadWait' | 'bossLootBase' | 'bossLootK' | 'bossLootMax' | 'vipExpPct' | 'vipDropPct' | 'reviveGuardSec' | 'cdrCap' | 'critCap' | 'heartBlastSpots' | 'heartBlastMinDist' | 'heartBlastReach', range: readonly [number, number], what: string): string | null => {
+  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'mobRoamReach' | 'roomWipeSec' | 'roomBossDelay' | 'roomLoadWait' | 'bossLootBase' | 'bossLootK' | 'bossLootMax' | 'vipExpPct' | 'vipDropPct' | 'reviveGuardSec' | 'cdrCap' | 'critCap' | 'heartBlastSpots' | 'heartBlastMinDist' | 'heartBlastReach', range: readonly [number, number], what: string): string | null => {
     const n = num(o[key], range[0], range[1], what);
     if (typeof n === 'string') return n;
     if (n !== undefined && n !== CODE[key]) out[key] = n;
@@ -844,6 +886,13 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (x === undefined) return null;
     if (typeof x !== 'boolean') return strict ? 'สวิตช์มอนเดินกลับไม่สนการโจมตีต้องเป็นเปิด/ปิด' : null;
     if (x !== CODE.mobReturnIgnoreHits) out.mobReturnIgnoreHits = x;
+    return null;
+  };
+  const buffTotal = (): string | null => {
+    const x = o.buffTotal;
+    if (x === undefined) return null;
+    if (typeof x !== 'boolean') return strict ? 'สวิตช์ป้ายบัฟรวมต้องเป็นเปิด/ปิด' : null;
+    if (x !== CODE.buffTotal) out.buffTotal = x;
     return null;
   };
   const dropOnSafe = (): string | null => {
@@ -902,6 +951,13 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (x === undefined) return null;
     if (typeof x !== 'boolean') return strict ? 'สวิตช์ห้ามถอด/สวมขณะเปิดร้านต้องเป็นเปิด/ปิด' : null;
     if (x !== CODE.shopNoEquip) out.shopNoEquip = x;
+    return null;
+  };
+  const tryOnTown = (): string | null => {
+    const x = o.tryOnTownOnly;
+    if (x === undefined) return null;
+    if (typeof x !== 'boolean') return strict ? 'สวิตช์ลองสวมได้เฉพาะในเมืองต้องเป็นเปิด/ปิด' : null;
+    if (x !== CODE.tryOnTownOnly) out.tryOnTownOnly = x;
     return null;
   };
   const chatLinks = (): string | null => {
@@ -1167,6 +1223,25 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (Object.keys(res).length) out.mobPack = res;
     return null;
   };
+  // Spawn-spot radius ×, by map: the built-in maps with spawn spots, plus any editor-made map the server knows.
+  const spawnRadius = (): string | null => {
+    const x = o.spawnRadius;
+    if (x === undefined) return null;
+    if (!isObj(x)) return strict ? 'รัศมีจุดเกิดไม่ถูกต้อง' : null;
+    const known = (id: string) => PACK_ZONES.some((z) => z.id === id) || !!customDef(id);
+    const res: Record<string, number> = {};
+    for (const id of Object.keys(x)) {
+      if (!known(id)) {
+        if (strict) return `รัศมีจุดเกิด: ไม่รู้จักแมพ "${id.slice(0, 30)}"`;
+        continue;
+      }
+      const n = num(x[id], ...BALANCE_RANGE.spawnRadius, `รัศมีจุดเกิด ${id}`);
+      if (typeof n === 'string') return n;
+      if (n !== undefined && n !== 1) res[id] = n;
+    }
+    if (Object.keys(res).length) out.spawnRadius = res;
+    return null;
+  };
   // Farm maps' % of spawn spots in use, in FARM_IDS order.
   const farmSpots = (): string | null => {
     const x = o.farmSpots;
@@ -1326,6 +1401,12 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (c.tuning) out.moves = c.tuning;
     return null;
   };
+  const npcTalk = (): string | null => {
+    const c = checkNpcTalkTuning(o.npcTalk, strict);
+    if ('error' in c) return c.error;
+    if (c.tuning) out.npcTalk = c.tuning;
+    return null;
+  };
   const menuLayout = (): string | null => {
     const c = checkMenuLayoutTuning(o.menuLayout, strict);
     if ('error' in c) return c.error;
@@ -1365,13 +1446,16 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     one('critCap', BALANCE_RANGE.critCap, 'อัตราคริสูงสุด %') ??
     monsters() ??
     mobPack() ??
+    spawnRadius() ??
     farmSpots() ??
     expMult() ??
     potions() ??
     one('bossSwitchSec', BALANCE_RANGE.bossSwitchSec, 'บอสเปลี่ยนเป้าหมายทุก (วินาที)') ??
     one('mobGiveUpSec', BALANCE_RANGE.mobGiveUpSec, 'มอนธรรมดาเลิกไล่เมื่อไม่โดนตี (วินาที)') ??
     returnIgnore() ??
+    buffTotal() ??
     roam() ??
+    one('mobRoamReach', BALANCE_RANGE.mobRoamReach, 'ระยะที่จุดเกิดย้ายได้จากจุดเดิม') ??
     dropOnSafe() ??
     mapFromDb() ??
     buffDurSummons() ??
@@ -1383,6 +1467,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     gateQuest() ??
     floorGate() ??
     shopNoEquip() ??
+    tryOnTown() ??
     chatLinks() ??
     hubChannels() ??
     wipeKeep() ??
@@ -1405,6 +1490,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     waves() ??
     bagExpand() ??
     tutorial() ??
+    npcTalk() ??
     skills() ??
     fxLayer() ??
     rigLook() ??
@@ -1495,6 +1581,11 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
     const q = b.mobPack[z.id] ?? 1;
     if (p !== q) out.push(`มอนต่อจุด ${z.nameTh} ×${p} → ×${q}`);
   }
+  for (const id of new Set([...Object.keys(a.spawnRadius), ...Object.keys(b.spawnRadius)])) {
+    const p = a.spawnRadius[id] ?? 1;
+    const q = b.spawnRadius[id] ?? 1;
+    if (p !== q) out.push(`รัศมีจุดเกิด ${ZONES[id]?.nameTh ?? customDef(id)?.nameTh ?? id} ×${p} → ×${q}`);
+  }
   for (const id of FARM_IDS) {
     const p = a.farmSpots[id] ?? 100;
     const q = b.farmSpots[id] ?? 100;
@@ -1533,12 +1624,14 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.bossLootMax !== b.bossLootMax) out.push(`รัศมีสูงสุดของดรอปบอส ${a.bossLootMax} → ${b.bossLootMax}`);
   if (a.vipExpPct !== b.vipExpPct) out.push(`โบนัส EXP ของ VIP ${a.vipExpPct}% → ${b.vipExpPct}%`);
   if (a.vipDropPct !== b.vipDropPct) out.push(`โบนัสดรอปของ VIP ${a.vipDropPct}% → ${b.vipDropPct}%`);
+  if (a.buffTotal !== b.buffTotal) out.push(`ป้ายบัฟรวม EXP/ดรอป ${a.buffTotal ? 'เปิด' : 'ปิด'} → ${b.buffTotal ? 'เปิด' : 'ปิด'}`);
   if (a.reviveGuard !== b.reviveGuard) out.push(`อมตะหลังชุบด้วยขนนกฟีนิกซ์ ${a.reviveGuard ? 'เปิด' : 'ปิด'} → ${b.reviveGuard ? 'เปิด' : 'ปิด'}`);
   if (a.reviveGuardSec !== b.reviveGuardSec) out.push(`เวลาอมตะหลังชุบ ${a.reviveGuardSec} → ${b.reviveGuardSec} วิ`);
   out.push(...forgeChanges(a.forge, b.forge));
   if (a.english !== b.english) out.push(`ภาษาอังกฤษ ${a.english ? 'เปิด' : 'ปิด'} → ${b.english ? 'เปิด' : 'ปิด'}`);
   if (a.forgeAuto !== b.forgeAuto) out.push(`ตีบวก Auto ${a.forgeAuto ? 'เปิด' : 'ปิด'} → ${b.forgeAuto ? 'เปิด' : 'ปิด'}`);
   if (a.hubChannels !== b.hubChannels) out.push(`แบ่งห้องเมืองกลาง ${a.hubChannels ? 'เปิด' : 'ปิด'} → ${b.hubChannels ? 'เปิด' : 'ปิด'}`);
+  if (a.tryOnTownOnly !== b.tryOnTownOnly) out.push(`ลองสวมของแต่งตัวได้เฉพาะในเมือง ${a.tryOnTownOnly ? 'เปิด' : 'ปิด'} → ${b.tryOnTownOnly ? 'เปิด' : 'ปิด'}`);
   if (a.shopNoEquip !== b.shopNoEquip) out.push(`ห้ามถอด/สวมขณะเปิดร้าน ${a.shopNoEquip ? 'เปิด' : 'ปิด'} → ${b.shopNoEquip ? 'เปิด' : 'ปิด'}`);
   if (a.chatLinks !== b.chatLinks) out.push(`ลิงก์ไอเทมในแชท ${a.chatLinks ? 'เปิด' : 'ปิด'} → ${b.chatLinks ? 'เปิด' : 'ปิด'}`);
   if (a.walkHidden !== b.walkHidden) out.push(`เดินต่อเมื่อสลับแท็บ ${a.walkHidden ? 'เปิด' : 'ปิด'} → ${b.walkHidden ? 'เปิด' : 'ปิด'}`);
@@ -1547,6 +1640,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.buffDurSummons !== b.buffDurSummons) out.push(`เพิ่มเวลาบัฟนับ summon (ป้อมปืน โดรน กับระเบิด) ${a.buffDurSummons ? 'เปิด' : 'ปิด'} → ${b.buffDurSummons ? 'เปิด' : 'ปิด'}`);
   if (a.mobDropOnSafe !== b.mobDropOnSafe) out.push(`มอนเลิกไล่เมื่อผู้เล่นเข้าเมือง/safe zone ${a.mobDropOnSafe ? 'เปิด' : 'ปิด'} → ${b.mobDropOnSafe ? 'เปิด' : 'ปิด'}`);
   if (a.mapFromDb !== b.mapFromDb) out.push(`ใช้แมพจาก DB ${a.mapFromDb ? 'เปิด' : 'ปิด'} → ${b.mapFromDb ? 'เปิด' : 'ปิด'}`);
+  if (a.mobRoamReach !== b.mobRoamReach) out.push(`ระยะที่จุดเกิดมอนย้ายได้จากจุดเดิม ${a.mobRoamReach} → ${b.mobRoamReach}`);
   if (a.mobRoam !== b.mobRoam) out.push(`มอนแมพฟาร์มชั้น 1 เกิดใหม่สุ่มที่ ${a.mobRoam ? 'เปิด' : 'ปิด'} → ${b.mobRoam ? 'เปิด' : 'ปิด'}`);
   if (a.mobReturnIgnoreHits !== b.mobReturnIgnoreHits) out.push(`มอนเดินกลับบ้านไม่สนการโจมตี ${a.mobReturnIgnoreHits ? 'เปิด' : 'ปิด'} → ${b.mobReturnIgnoreHits ? 'เปิด' : 'ปิด'}`);
   out.push(...floorGateChanges(a.floorGate, b.floorGate));
@@ -1554,6 +1648,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   out.push(...waveChanges(a.waves, b.waves));
   out.push(...bagExpandChanges(a.bagExpand, b.bagExpand));
   out.push(...tutorialChanges(a.tutorial, b.tutorial));
+  out.push(...npcTalkChanges(a.npcTalk, b.npcTalk));
   out.push(...skillChanges(a.skills, b.skills));
   out.push(...fxLayerChanges(a.fxLayer, b.fxLayer));
   out.push(...rigLookChanges(a.rigLook, b.rigLook));

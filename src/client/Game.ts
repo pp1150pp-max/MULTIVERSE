@@ -31,6 +31,7 @@ import { PartyUI } from './party';
 import { TradeUI } from './trade';
 import { FriendsUI } from './friends';
 import { CosmeticsUI } from './cosmetics';
+import { shownCos } from './cosLook';
 import { CashShopUI } from './cashShop';
 import { ChannelUI } from './channels';
 import { RoomUI } from './bossRoom';
@@ -38,6 +39,7 @@ import { QuestUI } from './quests';
 import { QuestTracker } from './questTracker';
 import { TutorialUI } from './tutorial';
 import { NavigatorUI } from './navigator';
+import { NpcDialog } from './npcDialog';
 import { bossShortName } from '../shared/bossRoom';
 import { MailUI } from './mail';
 import { ReportUI } from './report';
@@ -109,6 +111,7 @@ export class Game {
   readonly tutorial: TutorialUI;
   /** The navigator's window in nexus_city (the way up to floor 2). */
   readonly navigator: NavigatorUI;
+  readonly npcDialog: NpcDialog;
   readonly mailUI: MailUI;
   readonly report: ReportUI;
   readonly megaphone: MegaphoneUI;
@@ -197,6 +200,18 @@ export class Game {
       hitstop: (sec) => { this.hitstopT = Math.max(this.hitstopT, sec); },
     };
     this.fx.posOf = (id) => this.backend.players.find((p) => p.id === id) ?? null;
+    this.fx.levelUpOf = (id) => {
+      const p = this.backend.players.find((q) => q.id === id);
+      return p && shownCos(p, 'levelup')?.id;
+    };
+    this.fx.dashOf = (id) => {
+      const p = this.backend.players.find((q) => q.id === id);
+      return p && shownCos(p, 'dash')?.id;
+    };
+    this.fx.ghostOf = (id) => {
+      const v = this.viewById(id);
+      return v instanceof PlayerView ? v.ghost() : null;
+    };
     this.autoRing = new AutoRing(this.scene);
     this.lockRing = new AutoRing(this.scene, '#ff4a3a');
     this.skillRing = new AutoRing(this.scene, '#ffcf5a');
@@ -226,6 +241,7 @@ export class Game {
     this.questTracker = new QuestTracker(this);
     this.tutorial = new TutorialUI(this, (id) => this.hud.openNpcWindow(id));
     this.navigator = new NavigatorUI(this);
+    this.npcDialog = new NpcDialog(this);
     this.mailUI = new MailUI(this);
     this.report = new ReportUI(this);
     this.megaphone = new MegaphoneUI(this);
@@ -494,8 +510,8 @@ export class Game {
         // "Only my damage numbers" (graphics window), as the server's /admin switch: `by` = who dealt or took it.
         // No `by` = not a damage number.
         if (ev.by !== undefined && ev.by !== this.player.id && gfxOwnNumsOnly()) break;
-        // The new level-up effect draws its own "LEVEL UP !" title (fxLayer.luText): no floating text on top of it.
-        if (ev.cls === 'lvl' && ev.text === 'LEVEL UP!' && currentBalance().fxLayer.luNew && currentBalance().fxLayer.luText) break;
+        // A worn level-up style draws its own "LEVEL UP !" title: no floating text on top of it (not worn = the old one).
+        if (ev.cls === 'lvl' && ev.text === 'LEVEL UP!' && this.fx.drewLevelUpTitle(ev.x, ev.z)) break;
         this.floating.text(ev.x, ev.y, ev.z, ev.text, ev.cls, ev.life, ev.on);
         break;
       case 'shake':
@@ -882,13 +898,13 @@ export class Game {
     const restName = rest?.kind === 'fountain' ? 'น้ำพุ' : 'กองไฟ';
     // Touch: no T key — tap the NPC, rest spot or altar itself; near an NPC a "พูดคุย" button shows too.
     const key = isTouchMode() ? 'แตะ' : 'กด T ';
-    const prompt = this.hud.dialogOpen ? null
+    const prompt = this.hud.dialogOpen || this.npcDialog.open ? null
       : near ? `${near.name} — ${key}เพื่อ${near.action}`
       : summ ? `แท่นเรียก${bossShortName(MONSTERS[summ.boss].nameTh)} — ${key}เพื่อใส่กุญแจ`
       // No prompt line at the hub's fountain (owner 2026-11-19): its "ฟื้นพลัง" badge says it already. Campfires keep theirs.
       : rest && rest.kind !== 'fountain' ? (restIn > 0 ? `${restName} — พักได้อีกใน ${restIn} วิ` : `${restName} — ${key}เพื่อฟื้น HP/MP ให้เต็ม`)
       : null;
-    this.talkReady = !!near && !this.hud.dialogOpen;
+    this.talkReady = !!near && !this.hud.dialogOpen && !this.npcDialog.open;
     this.floating.npcBadges(this, shown);
     this.floating.restBadges(this, spots, restIn);
     if (near) this.floating.npcPrompt(this, near.x, 3.7, near.z, prompt);
@@ -916,7 +932,7 @@ export class Game {
     else this.lockRing.hide();
 
     this.fx.update(vdt);
-    this.hazardViews.update(this.backend.hazards, this.backend.time);
+    this.hazardViews.update(this.backend.hazards, this.backend.time, p);
     this.world.update(dt, p.x, p.z);
     this.updateCamera(dt);
     this.cosmetics.update();
@@ -933,6 +949,7 @@ export class Game {
     this.questTracker.update();
     this.tutorial.update();
     this.navigator.update();
+    this.npcDialog.update();
   }
 
   private updateCamera(dt: number): void {

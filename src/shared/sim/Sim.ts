@@ -10,6 +10,7 @@ import { arenaRadius, FARM_IDS, inBossArena, lairExitSpot, LAVA_BURN, LAVA_TICK 
 import type { Hazard } from './volcanoHeart';
 import { stealReturn, thornsReflect } from './beachMoves';
 import { kegStart } from './coveMoves';
+import { splitOnDeath, tickCurses } from './graveMoves';
 import {
   announceFrom, bannerFrom, dropsOnFail, forgeCd, enhanceCost, itemName, maxPlus, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
 } from '../data/enhance';
@@ -20,7 +21,7 @@ import { pick, rand, randInt, type Rng } from '../rng';
 import { splitExp } from '../party';
 import { CLASS_IDS, SLOT_KIND, WEAR_SLOTS, type WearSlot } from '../data/classes';
 import { emptySkillBook, learnable, learnBlock, pointsSpent, rankOf, refundPrice, unlearnOne, wear, wearBlock } from '../skillBook';
-import { classBalance, currentBalance, packCount } from '../balance';
+import { classBalance, currentBalance, packCount, spawnRadiusMult } from '../balance';
 import { vipDropMult, vipExp } from '../vip';
 import { COS_SLOT_NAME, cosById, MOUNT_CALM } from '../data/cosmetics';
 import {
@@ -51,6 +52,9 @@ import type { MapData } from '../mapSchema';
 import { waveCount, waveStats, type WaveConfig } from '../waveGame';
 import { IDLE_INTENT, type FxApi, type FxName, type HitOpts, type Intent, type SfxName, type SimEvent } from './types';
 import { boxNow, boxOdds, boxOrbs, rollBoxRow, type BoxRow } from '../mysteryBox';
+import { cardNum, cardDef } from '../cardTuning';
+import { drillCost, freeSocket, isDrilled, rollSockets, socketBlock, socketCards } from '../cardSockets';
+import { cardName, isCardId } from '../data/cards';
 
 /** Gear of this rarity that "sell all" may take: never potions or enhanced items. */
 /** Seconds of warning before a freshly summoned minion pounces. */
@@ -68,7 +72,8 @@ const BOSS_LEVEL_GAP = 5;
 const BOSS_UNDERLEVEL_MULT = 0.1;
 
 export function isBulkSellable(e: BagEntry | null, rarity: Rarity): e is Item {
-  return isItem(e) && e.rarity === rarity && !plusOf(e);
+  // Enhanced and drilled gear (with or without cards) is never sold in bulk (card plan 4.4).
+  return isItem(e) && e.rarity === rarity && !plusOf(e) && !isDrilled(e);
 }
 
 function validSlot(i: number, len: number): boolean {
@@ -134,9 +139,7 @@ function fillInto(src: (BagEntry | null)[], i: number, dst: (BagEntry | null)[],
 }
 
 /** `index`: the spot's place in the zone's spawn list (spreads the pack multiplier's fraction, see packCount). */
-/** A roaming farm spot lands this far at most from the spot of its kind it picked (Sim.moveSpawner). */
-const ROAM_REACH = 8;
-/** …and at least this far from every other spot as they stand now. */
+/** A roaming farm spot lands at least this far from every other spot as they stand now. */
 const ROAM_APART = 6;
 
 /**
@@ -422,27 +425,26 @@ export class Sim {
   // ------------------------------------------------------------ spawning
 
   /**
-   * A farm spot whose monsters are all dead comes back somewhere else in its kind's band (owner 2026-11-25): near one of the spots of
-   * the same kind in the map, picked at random, clear of the roads, camp, summoner, lakes, collision and the other spots as they
-   * stand now. No room = its own spot in the map. Off in /admin (Balance.mobRoam) = always its own spot.
+   * A farm spot whose monsters are all dead comes back somewhere else near its own spot in the map, within Balance.mobRoamReach
+   * (owner 2026-11-25: first anywhere among its kind's spots, then "only near its own spot", so a player farming there sees them
+   * come back), clear of the roads, camp, summoner, lakes, collision and the other spots as they stand now. No room = its own spot in the map. Off in /admin (Balance.mobRoam) = always its own spot.
    */
   private moveSpawner(sp: Spawner): void {
     const home = sp.home!;
     const put = (x: number, z: number) => { sp.area.x = x; sp.area.z = z; };
     if (!currentBalance().mobRoam) { put(home.x, home.z); return; }
-    const kin = this.spawners.filter((o) => o.roam && o.home!.monster === home.monster);
     const zone = this.zone;
     const lair = zone.lair;
     const ring = arenaRadius(zone);
     const pools = [...(zone.iceLakes ?? []), ...(zone.lavaPools ?? [])];
     const def = MONSTERS[home.monster];
     const r = Math.random;
+    const reach = currentBalance().mobRoamReach;
     for (let tries = 0; tries < 24; tries++) {
-      const anchor = kin[Math.floor(r() * kin.length)].home!;
       const a = r() * Math.PI * 2;
-      const d = Math.sqrt(r()) * ROAM_REACH;
-      const x = anchor.x + Math.cos(a) * d;
-      const z = anchor.z + Math.sin(a) * d;
+      const d = Math.sqrt(r()) * reach;
+      const x = home.x + Math.cos(a) * d;
+      const z = home.z + Math.sin(a) * d;
       if (Math.abs(x) > this.terrain.bound - 3 || Math.abs(z) > this.terrain.bound - 3) continue;
       if (this.terrain.isBlocked(x, z, Math.max(1, def.radius))) continue;
       if (this.terrain.distToPath(x, z) < 3.5 || Math.hypot(x - zone.start.x, z - zone.start.z) < 14) continue;
@@ -459,18 +461,33 @@ export class Sim {
   private spawnMonster(sp: Spawner): void {
     const def = MONSTERS[sp.area.monster];
     const r = Math.random;
+    // The map's spawn-radius × (/admin): ordinary monsters only, never a boss or a boss room.
+    const spread = sp.boss || this.zone.roomOf ? 1 : spawnRadiusMult(this.zone.id);
+    const pools = spread > 1 ? [...(this.zone.iceLakes ?? []), ...(this.zone.lavaPools ?? [])] : [];
     let x = sp.area.x;
     let z = sp.area.z;
-    for (let tries = 0; tries < 12; tries++) {
+    let found = false;
+    for (let tries = 0; tries < 12 && !found; tries++) {
       const a = r() * Math.PI * 2;
       // A bigger pack spreads a little wider (up to twice the spot's radius).
       const n = sp.boss ? 1 : this.wanted(sp) / Math.max(1, sp.area.count);
-      const d = Math.sqrt(r()) * sp.area.radius * Math.min(2, Math.sqrt(Math.max(1, n)));
-      x = sp.area.x + Math.cos(a) * d;
-      z = sp.area.z + Math.sin(a) * d;
-      if (!this.terrain.isBlocked(x, z, def.radius)) break;
+      const d = Math.sqrt(r()) * sp.area.radius * spread * Math.min(2, Math.sqrt(Math.max(1, n)));
+      const tx = sp.area.x + Math.cos(a) * d;
+      const tz = sp.area.z + Math.sin(a) * d;
+      if (this.terrain.isBlocked(tx, tz, def.radius)) continue;
+      // A widened spot must not drop one in the map's edge, the safe area or a lake / lava pool.
+      if (spread > 1) {
+        if (Math.abs(tx) > this.terrain.bound - 3 || Math.abs(tz) > this.terrain.bound - 3) continue;
+        if (this.zone.safe && inSafeArea(this.zone, tx, tz)) continue;
+        if (pools.some((l) => Math.hypot((tx - l.x) / (l.rx + 1), (tz - l.z) / (l.rz + 1)) < 1)) continue;
+      }
+      x = tx;
+      z = tz;
+      found = true;
     }
-    this.monsters.push(new Monster(this.newId(), def, randInt(r, def.levels[0], def.levels[1]), sp.area, x, z, sp.area.boost ?? this.boost));
+    const m = new Monster(this.newId(), def, randInt(r, def.levels[0], def.levels[1]), sp.area, x, z, sp.area.boost ?? this.boost);
+    m.spread = spread;
+    this.monsters.push(m);
     sp.alive++;
   }
 
@@ -515,6 +532,12 @@ export class Sim {
     this.hitCount++;
     let raw = p.stats.atk * mult * (0.9 + Math.random() * 0.2) * passiveDealMult(p, m, opts.skill);
     if (this.time < p.dmgUntil) raw *= p.dmgMult;
+    // Card "ดาเมจโจมตีปกติ %" (normalAtkPct): the class's basic attack only, never a skill (card plan 12.3 no. 7).
+    const fx = p.cardFx;
+    if (fx.normalAtkPct > 0) {
+      const src0 = opts.src ?? opts.skill?.id ?? this.casterSkill;
+      if (src0 && p.cls.skills.some((s) => s.kind === 'basic' && s.id === src0)) raw *= 1 + fx.normalAtkPct / 100;
+    }
     const marked = m.markBy === p.id && this.time < m.markUntil ? m.markCrit : 0;
     const crit = opts.forceCrit || Math.random() * 100 < Math.min(currentBalance().critCap, p.stats.crit + (opts.critBonus ?? 0) + marked);
     if (crit) raw *= 1 + p.stats.critDmg / 100;
@@ -523,7 +546,8 @@ export class Sim {
     const pen = 1 - Math.min(100, Math.max(0, p.stats.armorPen ?? 0)) / 100;
     const def = (this.time < m.armorBreakUntil ? m.defense * (1 - m.armorBreak) : m.defense) * pen;
     const under = m.isBoss && m.level - p.level > BOSS_LEVEL_GAP;
-    const bossMult = m.isBoss ? classBalance(p.cls.id).bossDmgMult : 1;
+    // Card "ดาเมจต่อบอส %" on top of the class's boss multiplier (bosses only: summoned minions are not bosses).
+    const bossMult = m.isBoss ? classBalance(p.cls.id).bossDmgMult * (1 + fx.bossDmg / 100) : 1;
     // Hiding in a shell (hermit crab, the Giant Cannon Crab's low-HP hide): less damage for a moment (sim/beachMoves.ts).
     const guarded = this.time < m.guardUntil ? 1 - m.guard : 1;
     const dmg = Math.max(1, Math.round(mitigate(raw, def) * bossMult * (under ? BOSS_UNDERLEVEL_MULT : 1) * guarded));
@@ -536,9 +560,11 @@ export class Sim {
     m.damageBy.set(p.id, m.damageBy.get(p.id)! + dealt);
     if (this.hexSeeds.length) noteHexHit(this, p, m, dealt, opts.skill?.id ?? this.casterSkill);
     m.hp -= dmg;
-    if (this.time < p.lifestealUntil && p.hp < p.maxHp) {
+    // Sword-storm lifesteal while it runs, plus the cards' "ดูดเลือด %" always (added together, card plan 5.1).
+    const steal = (this.time < p.lifestealUntil ? p.lifesteal : 0) + fx.lifesteal / 100;
+    if (steal > 0 && p.hp < p.maxHp) {
       // Whole HP only: near full the gap to max is fractional (regen), so floor the capped amount too.
-      const heal = Math.floor(Math.min(p.maxHp - p.hp, dealt * p.lifesteal));
+      const heal = Math.floor(Math.min(p.maxHp - p.hp, dealt * steal));
       if (heal > 0) {
         p.hp += heal;
         this.text(p.x, p.topY, p.z, `+${heal}`, 'heal', 0.6);
@@ -553,7 +579,7 @@ export class Sim {
     // Extra effects the owner added to this skill on /admin, merged in (the stronger wins): sim/extraEffects.ts.
     const src = opts.src ?? opts.skill?.id ?? this.casterSkill;
     if (src && !opts.noExtra) opts = withExtras(this, p, m, src, opts);
-    if (opts.kb && !m.isBoss) m.knockback(opts.fromX ?? p.x, opts.fromZ ?? p.z, opts.kb);
+    if (opts.kb && !m.isBoss && !m.def.anchored) m.knockback(opts.fromX ?? p.x, opts.fromZ ?? p.z, opts.kb);
     if (opts.stun && !m.def.pattern) m.stunT = Math.max(m.stunT, m.isBoss ? opts.stun * 0.3 : opts.stun);
     if (opts.slow) {
       m.slowAmt = opts.slow;
@@ -597,7 +623,8 @@ export class Sim {
       return;
     }
     const weak = this.time < m.weakUntil ? 1 - m.weak : 1;
-    const taken = (this.time < p.takenUntil ? p.takenMult : 1) * passiveTakenMult(p);
+    // Card "ลดดาเมจที่ได้รับ %" cuts the hit after the defense formula (card plan 5.1).
+    const taken = (this.time < p.takenUntil ? p.takenMult : 1) * passiveTakenMult(p) * (1 - p.cardFx.dmgReduce / 100);
     let dmg = Math.round((mitigate(m.atk * weak * mult * (0.9 + Math.random() * 0.2), p.stats.def) + p.maxHp * (opts.maxHpShare ?? 0)) * taken);
     if (p.shield > 0 && this.time < p.shieldUntil) {
       // A skill's shield takes the hit first.
@@ -634,7 +661,7 @@ export class Sim {
    */
   hurtPlayer(m: Monster, p: Player, amount: number): void {
     if (!p.alive || this.inSafe(p) || p.invulnT > 0) return;
-    let dmg = Math.max(0, Math.round(amount));
+    let dmg = Math.max(0, Math.round(amount * (1 - p.cardFx.dmgReduce / 100)));
     if (p.shield > 0 && this.time < p.shieldUntil) {
       const soak = Math.min(p.shield, dmg);
       p.shield -= soak;
@@ -796,6 +823,8 @@ export class Sim {
     m.spells?.reset(this);
     m.crab?.reset(this);
     m.captain?.remove(this);
+    m.ghostCaptain?.remove(this);
+    m.kraken?.remove(this);
     // A gull shot down with stolen gold: it goes back (sim/beachMoves.ts).
     stealReturn(this, m);
     if (!m.summoned) {
@@ -819,6 +848,8 @@ export class Sim {
       const runner = this.spawnSummon(m.def.id, m.x, m.z, m.level);
       if (runner) kegStart(this, runner, m);
     }
+    // A barnacle ghost crew breaks into small ones (sim/graveMoves.ts): summons, no rewards.
+    if (m.def.move === 'split' && !m.summoned) splitOnDeath(this, m);
     if (m.isBoss) {
       this.log(`🏆 ปราบ ${m.def.name} สำเร็จ!`, '#ffcf5a');
       this.shake(0.4, m);
@@ -1174,8 +1205,10 @@ export class Sim {
     else if (this.zone.id !== hub.id) this.events.push({ t: 'travel', to: p.id, zone: hub.id, atCamp: true });
   }
 
-  /** EXP this player really gets from `n`: half while Auto Play is on, then doubled by an EXP scroll, then the VIP bonus (rounded down). */
+  /** EXP this player really gets from `n`: the cards' EXP %, half while Auto Play is on, then doubled by an EXP scroll, then the VIP bonus (rounded down). */
   private autoExp(p: Player, n: number): number {
+    // The cards' "EXP %" first (card plan 5.1), on kills and party shares alike.
+    if (p.cardFx.expPct > 0) n = Math.floor(n * (1 + p.cardFx.expPct / 100));
     const auto = p.autoOn ? Math.floor(n * AUTO_EXP_MULT) : n;
     return vipExp(p.buffs.exp_scroll ? auto * BUFF_MULT : auto, p.vip);
   }
@@ -1442,7 +1475,9 @@ export class Sim {
     // A boss room's boss drops everything once per key put in (owner: rewards times the keys).
     const times = m.isBoss ? this.keys : 1;
     const box = boxNow();
-    const gold = Math.round(randInt(r, d.gold[0], d.gold[1]) * (1 + 0.1 * (m.level - d.levels[0])) * DROP_GOLD_MULT * m.mult.gold) * times;
+    // The "ทอง %" card effect of whoever gets first pick raises the pile (card plan 5.1).
+    const cardGold = 1 + (top?.cardFx.goldPct ?? 0) / 100;
+    const gold = Math.round(randInt(r, d.gold[0], d.gold[1]) * (1 + 0.1 * (m.level - d.levels[0])) * DROP_GOLD_MULT * m.mult.gold * cardGold) * times;
     // A low gold multiplier (admin) can round a drop down to nothing: no empty pile then.
     if (gold > 0) this.spawnLoot(m, { type: 'gold', amount: gold }, owner, party);
     if (m.isBoss) {
@@ -1456,9 +1491,11 @@ export class Sim {
         for (let i = 0; i < (loot?.epics ?? 0); i++) this.spawnLoot(m, { type: 'item', item: rollItem(r, m.level, anyClass(), 1.5, band, 'epic') }, owner, party);
         this.spawnLoot(m, { type: 'potion', pot: 'hp', size: dropPotionSize(m.level), count: DROP_POTION_MULT }, owner, party);
         this.spawnLoot(m, { type: 'potion', pot: 'mp', size: dropPotionSize(m.level), count: DROP_POTION_MULT }, owner, party);
-        // Every blacksmith stone kind can drop from a boss, each rolled on its own.
+        // Every blacksmith stone kind can drop from a boss, each rolled on its own. The drill stone at its own rate
+        // (drillDropBoss on the /admin card tab, owner 2026-11-26).
         for (const stone of BLACKSMITH_STONES) {
-          if (chance(loot?.stoneChance ?? BOSS_STONE_CHANCE)) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner, party);
+          const c = stone === 'drill' ? cardNum('drillDropBoss') / 100 : loot?.stoneChance ?? BOSS_STONE_CHANCE;
+          if (chance(c)) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner, party);
         }
         // Mystery box (owner 2026-11-22): once per key, while the owner has it switched on in /admin.
         if (box.enabled && chance(box.bossPct / 100)) this.spawnLoot(m, { type: 'stone', stone: 'mystery_box', count: 1 }, owner, party);
@@ -1473,6 +1510,8 @@ export class Sim {
       for (const stone of MONSTER_STONES) {
         if (chance(MONSTER_STONE_CHANCE)) this.spawnLoot(m, { type: 'stone', stone, count: 1 }, owner, party);
       }
+      // The drill stone (card plan 3.4, drillDropMonster on the /admin card tab).
+      if (chance(cardNum('drillDropMonster') / 100)) this.spawnLoot(m, { type: 'stone', stone: 'drill', count: 1 }, owner, party);
       // The key of its home map's boss, wherever it stands (its map or the hub).
       const key = home?.lair && BOSS_KEY[home.lair.boss];
       if (key && chance(KEY_DROP_CHANCE)) this.spawnLoot(m, { type: 'stone', stone: key, count: 1 }, owner, party);
@@ -1943,7 +1982,7 @@ export class Sim {
       }
     });
     if (!n) {
-      this.log(`ไม่มีของระดับ${RARITY_LABEL[rarity]}ในกระเป๋า (ของที่ตีบวกแล้วจะไม่ถูกขาย)`, '#b9b09a', p.id);
+      this.log(`ไม่มีของระดับ${RARITY_LABEL[rarity]}ในกระเป๋า (ของที่ตีบวกหรือเจาะรูแล้วจะไม่ถูกขาย)`, '#b9b09a', p.id);
       return 0;
     }
     this.log(`ขายของระดับ${RARITY_LABEL[rarity]} ${n} ชิ้น ได้ ${total} G`, '#f2c230', p.id);
@@ -2149,6 +2188,94 @@ export class Sim {
     return item;
   }
 
+  /** Worn gear or gear in the bag with this uid (never the stash), and whether it is worn. */
+  private ownGear(p: Player, uid: string): { item: Item; worn: boolean } | null {
+    const worn = Object.values(p.equipment).find((w) => w?.uid === uid);
+    if (worn) return { item: worn, worn: true };
+    const item = p.bag.find((w): w is Item => isItem(w) && w.uid === uid);
+    return item ? { item, worn: false } : null;
+  }
+
+  /**
+   * Drills an item at the blacksmith (card plan PR 2): once per item, gold + one drill stone, 0–2 sockets by the odds on
+   * the /admin card tab. Returns the drilled item, or null if nothing happened.
+   */
+  drill(p: Player, uid: string): Item | null {
+    if (!p.alive || !this.near(p, 'blacksmith')) return null;
+    if (this.time < p.forgeAt + forgeCd()) return null;
+    const own = this.ownGear(p, uid);
+    if (!own || isDrilled(own.item)) return null;
+    const { item } = own;
+    const cost = drillCost(item);
+    if (p.gold < cost || p.stoneCount('drill') < 1) return null;
+    p.forgeAt = this.time;
+    p.gold -= cost;
+    p.takeStones('drill', 1);
+    item.sockets = rollSockets(Math.random);
+    delete item.cards;
+    const n = item.sockets;
+    this.log(`🔨 เจาะรู ${itemName(item)}: ${n ? `ได้ ${n} ช่อง` : 'ไม่ได้ช่อง'} (−${cost.toLocaleString()} G)`, n ? '#7fd4c8' : '#ff8a6a', p.id);
+    this.fx('burst', p.x, 1.2, p.z, n ? '#7fd4c8' : '#8a8a8a', n ? 14 : 6, 2.5);
+    this.sfx(n ? 'enhance_ok' : 'enhance_fail', p.x, p.z, p.id);
+    this.afterChange(p);
+    return item;
+  }
+
+  /**
+   * Puts one card from the bag into the first empty socket of the player's gear (worn or in the bag), from anywhere
+   * (owner 2026-11-26). The card must fit the item's group (its tuned group). Free unless socketCost is set.
+   */
+  socketCard(p: Player, uid: string, card: unknown): boolean {
+    if (!p.alive || !isCardId(card)) return false;
+    const own = this.ownGear(p, uid);
+    if (!own) return false;
+    const why = socketBlock(card, own.item);
+    const cost = cardNum('socketCost');
+    const fail = why || (p.stoneCount(card) < 1 ? `ไม่มี${cardName(card)}ในกระเป๋า` : p.gold < cost ? 'ทองไม่พอ' : '');
+    if (fail) {
+      this.log(`เสียบการ์ดไม่ได้: ${fail}`, '#ff8a6a', p.id);
+      return false;
+    }
+    const { item } = own;
+    const cards = socketCards(item);
+    cards[freeSocket(item)] = card;
+    p.gold -= cost;
+    p.takeStones(card, 1);
+    item.cards = cards;
+    if (own.worn) p.recompute();
+    this.log(`🃏 เสียบ${cardName(card)}ลง ${itemName(item)}${cost ? ` (−${cost.toLocaleString()} G)` : ''}`, '#c9a8ff', p.id);
+    this.fx('burst', p.x, 1.2, p.z, '#c9a8ff', 10, 2);
+    this.sfx('enhance_ok', p.x, p.z, p.id);
+    this.afterChange(p);
+    return true;
+  }
+
+  /** Takes the card out of socket `i` of the player's gear: the card breaks (owner 2026-11-11). */
+  unsocketCard(p: Player, uid: string, i: unknown): boolean {
+    if (!p.alive || typeof i !== 'number' || !Number.isInteger(i)) return false;
+    const own = this.ownGear(p, uid);
+    if (!own) return false;
+    const { item } = own;
+    const cards = socketCards(item);
+    const card = cards[i];
+    if (i < 0 || i >= cards.length || !card) return false;
+    const cost = cardNum('unsocketCost');
+    if (p.gold < cost) {
+      this.log('ถอดการ์ดไม่ได้: ทองไม่พอ', '#ff8a6a', p.id);
+      return false;
+    }
+    p.gold -= cost;
+    cards[i] = null;
+    if (cards.some((c) => c !== null)) item.cards = cards;
+    else delete item.cards;
+    if (own.worn) p.recompute();
+    const name = cardDef(card) ? cardName(card) : 'การ์ด';
+    this.log(`💥 ถอด${name}ออกจาก ${itemName(item)} — การ์ดแตกหายไป${cost ? ` (−${cost.toLocaleString()} G)` : ''}`, '#ff8a6a', p.id);
+    this.fx('burst', p.x, 1.2, p.z, '#ff8a6a', 10, 2);
+    this.afterChange(p);
+    return true;
+  }
+
   // ------------------------------------------------------------ frame
 
   /** Advances the world. `intentOf` supplies each living player's input for this frame. */
@@ -2177,6 +2304,8 @@ export class Sim {
     }
     for (const p of this.players) if (p.alive) this.checkPortals(p);
     if (this.zone.lavaPools) for (const p of this.players) if (p.alive) this.tickLava(p, dt);
+    // The Ghost Ship Graveyard's curse rings slow whoever stands in them (sim/graveMoves.ts).
+    if (this.hazards.length) tickCurses(this);
 
     for (const m of this.monsters) m.update(dt, this);
     this.separateMonsters();
@@ -2401,15 +2530,23 @@ export class Sim {
         if (Math.abs(dx) > min || Math.abs(dz) > min) continue;
         const d = Math.hypot(dx, dz) || 0.01;
         if (d < min) {
-          const push = (min - d) / d / 2;
-          m.x -= dx * push;
-          m.z -= dz * push;
-          n.x += dx * push;
-          n.z += dz * push;
+          // The kraken and its tentacles never move (MonsterDef.anchored): the other one takes the whole push.
+          const ma = !!m.def.anchored;
+          const na = !!n.def.anchored;
+          if (ma && na) continue;
+          const push = (min - d) / d / (ma || na ? 1 : 2);
+          if (!ma) {
+            m.x -= dx * push;
+            m.z -= dz * push;
+          }
+          if (!na) {
+            n.x += dx * push;
+            n.z += dz * push;
+          }
         }
       }
       for (const p of this.players) {
-        if (!p.alive || p.isDashing) continue;
+        if (!p.alive || p.isDashing || m.def.anchored) continue;
         const dx = m.x - p.x;
         const dz = m.z - p.z;
         const min = m.radius + p.radius;

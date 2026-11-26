@@ -4,7 +4,7 @@
 import { ok, finish } from './check';
 import { ZONE_1 } from '../src/shared/data/zones';
 import { Sim } from '../src/shared/sim/Sim';
-import { Loot } from '../src/shared/sim/Loot';
+import { Loot, isPriorityLoot } from '../src/shared/sim/Loot';
 import { AutoPlay, type AutoWorld } from '../src/shared/sim/autoplay';
 import { cleanAutoSettings, type AutoSettings, type Player } from '../src/shared/sim/Player';
 import type { Monster } from '../src/shared/sim/Monster';
@@ -197,4 +197,33 @@ ok(cleanAutoSettings({ lootOrder: 'balanced' }).lootOrder === 'loot', 'a value w
 applyBalance({});
 
 sim.removePlayer(p as Player);
+// ---- stones, boxes, cards first (owner 2026-11-25, Loot.isPriorityLoot): fetched mid-fight whatever the loot order; gold and gear wait
+{
+  const kindDrop = (dx: number, dz: number, kind: ConstructorParameters<typeof Loot>[5]): Loot => new Loot(lootId++, p.x + dx, p.z + dz, p.x, p.z, kind, {});
+  settings({ lootOrder: 'fight', othersLoot: true, skip: [], target: 'attacker' });
+  place(mob, true);
+  const box = kindDrop(0, 6, { type: 'stone', stone: 'mystery_box', count: 1 });
+  const stone = kindDrop(0, 4, { type: 'stone', stone: 'enhance', count: 1 });
+  const gold = drop(0, 1);
+  let q = run([mob], [gold, box]);
+  ok(goesTo(q.it, box), 'fight first + attacked: still walks to a mystery box (priority), not the gold next to it');
+  q = run([mob], [gold, box, stone]);
+  ok(goesTo(q.it, stone), 'priority: the nearest priority drop first');
+  q = run([mob], [gold]);
+  ok(!goesTo(q.it, gold), 'gold is not priority: waits while attacked');
+  ok(isPriorityLoot({ type: 'stone', stone: 'key_bear', count: 1 }) && !isPriorityLoot({ type: 'gold', amount: 1 })
+    && !isPriorityLoot({ type: 'potion', pot: 'hp', size: 's', count: 1 }), 'stones/keys priority; gold and potions not');
+  applyBalance(checkBalance({ auto: { priorityDist: 5 } }, true).tuning!);
+  q = run([mob], [box]);
+  ok(!goesTo(q.it, box), 'priorityDist 5: a box 6 away waits while attacked');
+  q = run([mob], [stone]);
+  ok(goesTo(q.it, stone), 'priorityDist 5: a stone 4 away is fetched');
+  applyBalance(checkBalance({ auto: { priorityLoot: false } }, true).tuning!);
+  q = run([mob], [stone]);
+  ok(!goesTo(q.it, stone), 'switch off: stones follow the loot order (fight first waits)');
+  applyBalance({});
+  ok(JSON.stringify(checkBalance({ auto: { priorityLoot: true, priorityDist: 0 } }, true).tuning) === '{}', 'code values: on, 0, not saved');
+  ok('error' in checkBalance({ auto: { priorityDist: 99 } }, true), 'priorityDist out of range is refused');
+}
+
 finish('auto-options');

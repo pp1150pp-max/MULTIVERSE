@@ -1,4 +1,5 @@
 // Shared types — no rendering code here so the future Colyseus server can import them.
+import { isCardId, type CardId } from './data/cards';
 
 export type Vec2 = { x: number; z: number };
 
@@ -100,6 +101,13 @@ export interface Item {
    * Missing = all ×1. When it differs from the multipliers in use, the values are scaled on load (once).
    */
   mulK?: string;
+  /**
+   * Card sockets from drilling at the blacksmith (card plan PR 2, src/shared/cardSockets.ts): missing = not drilled,
+   * 0 = drilled without a socket (can't be drilled again), 1–2 = sockets.
+   */
+  sockets?: number;
+  /** The card in each socket (null = empty), as long as `sockets`; missing when every socket is empty. */
+  cards?: (CardId | null)[];
 }
 
 /** Stat tiers: 1 is the best, 5 the lowest. Each has its own range (see tierRanges in data/items). */
@@ -130,21 +138,21 @@ export interface PotionStack {
 }
 
 /** Boss-only blacksmith materials: protection keeps the + level on a fail, enhance is needed from +11. */
-export type BlacksmithStone = 'protect' | 'enhance' | 'reroll_values' | 'reroll_stat';
-export const BLACKSMITH_STONES: BlacksmithStone[] = ['protect', 'enhance', 'reroll_values', 'reroll_stat'];
+export type BlacksmithStone = 'protect' | 'enhance' | 'reroll_values' | 'reroll_stat' | 'drill';
+export const BLACKSMITH_STONES: BlacksmithStone[] = ['protect', 'enhance', 'reroll_values', 'reroll_stat', 'drill'];
 /**
  * Boss keys (Artifacts): one per boss, put into its summoner to open the boss room. They stack, sell,
  * trade and go on the market exactly like stones, so they share the stone stack (see BOSS_KEY in data/stones).
  */
-export type BossKey = 'key_bear' | 'key_witch' | 'key_yeti' | 'key_heart' | 'key_crab' | 'key_captain';
-export const BOSS_KEYS: BossKey[] = ['key_bear', 'key_witch', 'key_yeti', 'key_heart', 'key_crab', 'key_captain'];
+export type BossKey = 'key_bear' | 'key_witch' | 'key_yeti' | 'key_heart' | 'key_crab' | 'key_captain' | 'key_ghost' | 'key_kraken';
+export const BOSS_KEYS: BossKey[] = ['key_bear', 'key_witch', 'key_yeti', 'key_heart', 'key_crab', 'key_captain', 'key_ghost', 'key_kraken'];
 /**
  * Quest keys from The Seeker: one per boss, bound to the character. They open the boss's room at ×1
  * without being used up, and vanish once that boss is killed. They can't leave the bag (no selling,
  * dropping, stash, trade or market), only move around in it. See isBound.
  */
-export type QuestKey = 'qkey_bear' | 'qkey_witch' | 'qkey_yeti' | 'qkey_heart' | 'qkey_crab' | 'qkey_captain';
-export const QUEST_KEYS: QuestKey[] = ['qkey_bear', 'qkey_witch', 'qkey_yeti', 'qkey_heart', 'qkey_crab', 'qkey_captain'];
+export type QuestKey = 'qkey_bear' | 'qkey_witch' | 'qkey_yeti' | 'qkey_heart' | 'qkey_crab' | 'qkey_captain' | 'qkey_ghost' | 'qkey_kraken';
+export const QUEST_KEYS: QuestKey[] = ['qkey_bear', 'qkey_witch', 'qkey_yeti', 'qkey_heart', 'qkey_crab', 'qkey_captain', 'qkey_ghost', 'qkey_kraken'];
 /** Phoenix feathers: sold by the merchant, used to get up again where you fell in a boss room. Not on the market. */
 export type ShopStone = 'phoenix';
 /**
@@ -169,14 +177,20 @@ export type BaseStoneKind = BlacksmithStone | BossKey | QuestKey | ShopStone | C
  * like a stone; clicking it gives the orb to the account. The merchant doesn't buy it.
  */
 export type OrbStoneKind = `orb_${number}`;
-/** Everything a stone stack can hold: the fixed kinds (STONE_KINDS) and orb items. */
-export type StoneKind = BaseStoneKind | OrbStoneKind;
+/**
+ * Everything a stone stack can hold: the fixed kinds (STONE_KINDS), orb items and monster cards (`card_<monster>`,
+ * src/shared/data/cards.ts, plan docs/plans/card-system.md PR 1). Cards stack 10 per slot, trade, go in the stash,
+ * the mail and on the market like a stone, and sell to the merchant at their rarity's price (card tuning).
+ */
+export type StoneKind = BaseStoneKind | OrbStoneKind | CardId;
 /** The fixed stone kinds (orb items are not listed: they come and go with the orbs made in /admin). */
 export const STONE_KINDS: BaseStoneKind[] = [...BLACKSMITH_STONES, ...BOSS_KEYS, ...QUEST_KEYS, 'phoenix', ...CONSUMABLES];
 export const isOrbStone = (k: unknown): k is OrbStoneKind => typeof k === 'string' && /^orb_[1-9]d{0,5}$/.test(k);
 export const isBaseStone = (k: unknown): k is BaseStoneKind => (STONE_KINDS as unknown[]).includes(k);
-/** A stone kind read from a save or a message: a fixed kind or an orb item. */
-export const isStoneKind = (k: unknown): k is StoneKind => isBaseStone(k) || isOrbStone(k);
+/** A monster card carried as a bag item (not listed in STONE_KINDS, like orb items). */
+export const isCardStone = (k: unknown): k is CardId => isCardId(k);
+/** A stone kind read from a save or a message: a fixed kind, an orb item or a monster card. */
+export const isStoneKind = (k: unknown): k is StoneKind => isBaseStone(k) || isOrbStone(k) || isCardId(k);
 export const isBossKey = (k: StoneKind): k is BossKey => (BOSS_KEYS as StoneKind[]).includes(k);
 export const isQuestKey = (k: StoneKind): k is QuestKey => (QUEST_KEYS as StoneKind[]).includes(k);
 export const isConsumable = (k: StoneKind): k is Consumable => (CONSUMABLES as StoneKind[]).includes(k);

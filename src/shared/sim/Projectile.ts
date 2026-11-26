@@ -30,6 +30,12 @@ export interface ProjOpts {
   hitFx?: { name: SkillEffect; size: number };
   /** Monster shots: the picture to draw. Player shots leave this out. */
   art?: ShotArt;
+  /** Monster shots: runs where it ends, on a player or at the end of its flight (a ghost monkey's curse ring). */
+  onEnd?: (x: number, z: number) => void;
+  /** Monster shots: holds the player it hits this long (Sim.hitPlayer's stun: a seahorse's bubble). */
+  stun?: number;
+  /** Monster shots: runs on the player it hit, after the hit (the seahorse's bubble, the kraken's ink). */
+  onHitPlayer?: (p: Player) => void;
   /** Player shots: extra damage multiplier (× ATK) on this target, worked out as it lands (execute, stacks, weak spots). */
   bonus?: (m: Monster) => number;
   /** Player shots: runs after a single-target or piercing hit lands on `m` (bounces, burning, marks). */
@@ -70,15 +76,18 @@ export class EnemyShot {
     this.traveled += step;
     for (const p of sim.players) {
       if (p.alive && Math.hypot(p.x - this.x, p.z - this.z) < this.o.radius + p.radius) {
-        sim.hitPlayer(this.owner, p, this.o.mult, { kb: this.o.kb ?? 2, fromX: this.x - this.dx, fromZ: this.z - this.dz });
+        sim.hitPlayer(this.owner, p, this.o.mult, { kb: this.o.kb ?? 2, fromX: this.x - this.dx, fromZ: this.z - this.dz, ...(this.o.stun ? { stun: this.o.stun } : {}) });
+        if (p.alive) this.o.onHitPlayer?.(p);
         sim.fx('burst', this.x, 0.85, this.z, this.o.color, 7, 3);
         this.dead = true;
+        this.o.onEnd?.(this.x, this.z);
         return;
       }
     }
     if (this.traveled >= this.o.range) {
       sim.fx('burst', this.x, 0.4, this.z, this.o.color, 4, 2);
       this.dead = true;
+      this.o.onEnd?.(this.x, this.z);
     }
   }
 }

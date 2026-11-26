@@ -14,7 +14,7 @@ import type { StoneKind } from '../shared/types';
 import { cashCatalogNow, cashStateNow, cashVersion, topupNow } from './cashData';
 import { bahtText, firstBonus, topupNewError, type TopupPending } from '../shared/topup';
 import { cosPicture } from './cosmetics';
-import { setTryOn } from './cosLook';
+import { setTryOn, tryingOn, tryOnBlocked } from './cosLook';
 import { stoneIcon } from './icons';
 import { imgUrl } from './img';
 import { playSound } from './audio/sfx';
@@ -94,6 +94,7 @@ function priceBar(e: CashEntry, qty = 1): HTMLElement {
   const bar = el('div', 'cash-price');
   // An orb that comes from the mystery box: no price.
   if (e.fromBox) {
+    bar.classList.add('box');
     bar.textContent = '🎁 เปิดได้จากกล่องปริศนา';
     return bar;
   }
@@ -195,6 +196,12 @@ export class CashShopUI {
 
   /** Every frame: redraw when something shown changed (catalogue, crystals, owned cosmetics, the minute for timers). */
   update(): void {
+    // The try-on came off elsewhere (stepped out of town, src/client/cosmetics.ts): drop it here too.
+    if (this.trying && !tryingOn()) {
+      this.trying = false;
+      this.setPeek(null);
+      this.drawn = '';
+    }
     if (!this.open) return;
     const key = JSON.stringify([this.tab, this.sub, cashVersion(), this.g.backend.cosOwned, this.buying, this.vipBusy, this.packages, this.topupBusy, this.topupMsg, qrVersion, Math.floor(Date.now() / 30_000)]);
     if (key === this.drawn) return;
@@ -402,14 +409,22 @@ export class CashShopUI {
     } else {
       const c = cosById(e.ref)!;
       row.append(button(this.trying ? 'ถอดที่ลอง' : 'ลองสวม', () => {
+        const why = this.trying ? null : tryOnBlocked(this.g.zone, this.g.player);
+        if (why) return this.g.hud.log(why, '#ffcf6a');
         this.trying = !this.trying;
         setTryOn(this.trying ? { [c.slot]: c.id } : null);
         // The window covers the character: step aside while trying on (the bar brings it back).
         if (this.trying) this.setPeek(c.name);
+        // A level-up effect plays once on your character to look at (only you see it).
+        if (this.trying && c.slot === 'levelup') this.g.fx.levelUpWith(c.id, this.g.player.x, this.g.player.z, this.g.player.id);
+        // A dash effect plays once as if you had just dashed there; pressing dash while trying it on shows it too.
+        if (this.trying && c.slot === 'dash') this.g.fx.dashDemo(c.id, this.g.player);
         this.drawn = '';
         this.update();
       }, this.trying ? 'on' : ''));
       if (c.slot === 'orb') row.append(el('span', 'cash-note', 'เห็นเมื่อสวมของ +7 ขึ้นไป'));
+      if (c.slot === 'levelup') row.append(el('span', 'cash-note', 'เห็นตอนเลเวลอัป คนรอบ ๆ เห็นด้วย'));
+      if (c.slot === 'dash') row.append(el('span', 'cash-note', 'เห็นตอนกดแดช คนรอบ ๆ เห็นด้วย'));
     }
     box.append(row);
 

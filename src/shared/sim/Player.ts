@@ -1,6 +1,7 @@
 import { Unit } from './Unit';
 import type { Sim } from './Sim';
 import type { Monster } from './Monster';
+import { suctionStep } from './kraken';
 import type { Terrain } from './terrain';
 import type { Intent, SkillEffect } from './types';
 import { castSkill, basicAttack, quarksCue, emptyGunBuffs, type GunBuffs } from './skills';
@@ -16,6 +17,8 @@ import { itemClass, starterWeapon, upgradeItem } from '../data/items';
 import { setBonusStats } from '../data/sets';
 import { anyStackValue, potionHeal, potionPrice, POTION_SIZES, POTION_STACK, stackLimit } from '../data/potions';
 import { BOSS_QUEST_KEY, BUFF_MAX, QUEST_KILLS, stoneStackMax } from '../data/stones';
+import { CARD_IDS } from '../data/cards';
+import { cardFxTotal, noCardFx, type CardFxTotals } from '../cardSockets';
 import { cleanGearDone, cleanGearQuests } from '../gearQuests';
 import type { TutorialData } from '../tutorial';
 import {
@@ -243,7 +246,8 @@ export function sortEntries(list: readonly (BagEntry | null)[], key: SortKey, de
   // Stones last, merged into full stacks too.
   // Orb items (mystery box) come after the fixed kinds, in the order of their numbers.
   const orbs = [...new Set([...stones.keys()].map((k) => k.replace(/:b$/, '')).filter(isOrbStone))].sort((a, b) => Number(a.slice(4)) - Number(b.slice(4)));
-  for (const k of [...STONE_KINDS, ...orbs]) {
+  // Monster cards last, in their table order (CARD_DEFAULTS: floor 1 map by map, then floor 2).
+  for (const k of [...STONE_KINDS, ...orbs, ...CARD_IDS]) {
     for (const b of [false, true]) {
       for (let n = stones.get(`${k}${b ? ':b' : ''}`) ?? 0; n > 0; n -= stoneStackMax(k)) stacks.push({ stone: k, count: Math.min(n, stoneStackMax(k)), ...bound(b) });
     }
@@ -492,6 +496,12 @@ export class Player extends Unit {
   /** Held by the Bog Witch's mud hand: can still attack and cast, but not walk or dash. */
   snareT = 0;
   /**
+   * A ghost siren's song (sim/graveMoves.ts): made to walk to `charmBy` for this long. Attacks and skills still work; a dash
+   * or a movement skill breaks it (owner 2026-11-24). Never saved.
+   */
+  charmT = 0;
+  charmBy: { readonly x: number; readonly z: number; readonly alive: boolean } | null = null;
+  /**
    * Stopping for a moment on an attack (attackRootTuning.ts): no walking until it runs out, but turning, attacking,
    * casting and dashing (which ends it) still work. A clicked walk carries on afterwards. Never saved.
    */
@@ -523,6 +533,11 @@ export class Player extends Unit {
   /** Share of damage dealt that heals the player, until sim time `lifestealUntil` (sword Q). */
   lifesteal = 0;
   lifestealUntil = -1;
+  /**
+   * The effects of the cards on worn gear, each capped (cardSockets.ts cardFxTotal), worked out in recompute. Percents.
+   * The browser works out its own player's too (same gear, same card tuning), so cooldowns match the server.
+   */
+  cardFx: CardFxTotals = noCardFx();
   /** Timed stat buffs from skills (Gunslinger Sniper Focus, Quick Reload, Overdrive...), added after the class multipliers. Never saved; death ends them. */
   statBuffs: { id: string; until: number; mods: Partial<Stats> }[] = [];
   /** Gunslinger Rapid Fire line: what the basic shot does while its buffs run. Never saved. */
@@ -765,10 +780,23 @@ export class Player extends Unit {
     }
     this.aura = auraTier(best);
     this.orbs = orbCodes(this.equipment);
+    // Cards on worn gear (cardSockets.ts), each effect capped on the whole character. Their HP/MP/ATK/DEF % multiply the
+    // whole total before the class multipliers: class + level + gear + enhance + item-set bonus (owner 2026-11-26).
+    // The set bonus itself still skips the class multipliers, so it gets the card % on its own (see below).
+    const fx = cardFxTotal(Object.values(this.equipment));
+    this.cardFx = fx;
+    const pct = { maxHp: fx.hpPct, maxMp: fx.mpPct, atk: fx.atkPct, def: fx.defPct } as const;
+    for (const k of Object.keys(pct) as (keyof typeof pct)[]) s[k] *= 1 + pct[k] / 100;
     // Class multipliers, then the regen cuts (so players lean on potions), gear included.
     finishStats(s, this.cls.id);
-    // Item-set bonuses (data/sets.ts): exactly the numbers set in /admin, after the class multipliers.
-    addInto(s, setBonusStats(this.equipment, currentBalance().sets));
+    // The cards' cooldown cut and armor pierce add to the item mods of the same name (owner 2026-11-26); the totals keep
+    // their own caps (cdrCap in skillCooldown, 100% in Sim.hitMonster).
+    s.cdr = (s.cdr ?? 0) + fx.cdr;
+    s.armorPen = (s.armorPen ?? 0) + fx.pierce;
+    // Item-set bonuses (data/sets.ts): exactly the numbers set in /admin, after the class multipliers, raised by the card %.
+    const set = setBonusStats(this.equipment, currentBalance().sets);
+    for (const k of Object.keys(pct) as (keyof typeof pct)[]) if (set[k]) set[k] = set[k]! * (1 + pct[k] / 100);
+    addInto(s, set);
     // The worn passive and skill buffs, flat in Stats units ("+40% attack speed" is +40 atkSpeed).
     passiveStats(this, s);
     for (const b of this.statBuffs) addInto(s, b.mods);
@@ -1195,7 +1223,8 @@ export class Player extends Unit {
     }
     sim.inventoryChanged(this);
     sim.sfx('drink', this.x, this.z, this.id);
-    const amount = potionHeal(kind, size, this.cls.id);
+    // The cards' "ยาฟื้นเพิ่ม %" on top of the class's potion bonus (card plan 5.1).
+    const amount = Math.round(potionHeal(kind, size, this.cls.id) * (1 + this.cardFx.potion / 100));
     this.potHeals.push({ kind, perSec: amount / POTION_TIME, left: POTION_TIME });
     if (kind === 'hp') {
       sim.text(this.x, this.topY, this.z, `+${amount}`, 'heal');
@@ -1236,6 +1265,8 @@ export class Player extends Unit {
     this.moving = false;
     if (!this.alive) {
       this.potHeals = [];
+      this.charmT = 0;
+      this.charmBy = null;
       return;
     }
     this.tickStatus(dt, sim.terrain);
@@ -1252,6 +1283,8 @@ export class Player extends Unit {
     this.faceLockT -= dt;
     this.rootT = Math.max(0, this.rootT - dt);
     this.snareT = Math.max(0, this.snareT - dt);
+    this.charmT = Math.max(0, this.charmT - dt);
+    if (this.charmT <= 0 || !this.charmBy?.alive) this.charmBy = null;
     this.toadT = Math.max(0, this.toadT - dt);
     this.guardT = Math.max(0, this.guardT - dt);
     this.atkRootT = Math.max(0, this.atkRootT - dt);
@@ -1272,6 +1305,9 @@ export class Player extends Unit {
     }
 
     if (this.dashT > 0) {
+      // Dashing breaks a siren's song.
+      this.charmT = 0;
+      this.charmBy = null;
       this.dashT -= dt;
       this.x += this.dashVx * dt;
       this.z += this.dashVz * dt;
@@ -1323,6 +1359,19 @@ export class Player extends Unit {
       mx = 0;
       mz = 0;
       this.moveTarget = null;
+    }
+    // A siren's song: walking to her whatever the player asks (a dash below breaks it).
+    const charm = !snared && this.charmBy ? this.charmBy : null;
+    if (charm) {
+      const cdx = charm.x - this.x;
+      const cdz = charm.z - this.z;
+      const cd = Math.hypot(cdx, cdz);
+      this.moveTarget = null;
+      remaining = Infinity;
+      if (cd > 1) {
+        mx = cdx / cd;
+        mz = cdz / cd;
+      } else mx = mz = 0;
     }
 
     if (it.dash && !snared && (this.cd.dash ?? 0) <= 0) {
@@ -1380,7 +1429,7 @@ export class Player extends Unit {
 
     let moving = mx !== 0 || mz !== 0;
     // Stopped: a reported position counts only near where the stop began (the browser stops too, a moment earlier).
-    const posOk = !!it.pos && !snared && (!rooted || Math.hypot(it.pos.x - this.atkRootX, it.pos.z - this.atkRootZ) <= ATTACK_ROOT_SLACK);
+    const posOk = !!it.pos && !snared && !charm && (!rooted || Math.hypot(it.pos.x - this.atkRootX, it.pos.z - this.atkRootZ) <= ATTACK_ROOT_SLACK);
     if (rooted && !posOk) {
       moving = false;
     } else if (it.pos && posOk) {
@@ -1399,6 +1448,8 @@ export class Player extends Unit {
     } else {
       moving = this.walkStep(mx, mz, remaining, dt, sim.terrain);
     }
+    // The kraken's whirlpool pulls (sim/kraken.ts). A position from the browser already has it (the browser walks the pull too).
+    if (!(it.pos && posOk) && sim.hazards.length) suctionStep(this, sim.hazards, sim.time, dt, sim.terrain);
     if (this.atkRootNew) {
       this.atkRootNew = false;
       this.atkRootX = this.x;

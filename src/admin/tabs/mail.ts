@@ -1,8 +1,7 @@
 import { MAIL_BODY_MAX, MAIL_DAYS, MAIL_TITLE_MAX, type MailRecipientRow, type MailSendRow } from '../../shared/mail';
-import { POTION_SIZES, potionName } from '../../shared/data/potions';
-import { STONE_NAME } from '../../shared/data/stones';
-import { RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, SLOTS, BLACKSMITH_STONES, BOSS_KEYS, REWARD_ITEMS, type ClassId } from '../../shared/types';
-import { h, api, fmt, className, time, meta, view } from '../core';
+import { RARITY_COLOR, RARITY_LABEL } from '../../shared/types';
+import { ItemPicker } from '../itemPicker';
+import { h, api, fmt, time, meta, view } from '../core';
 
 // ------------------------------------------------------------ mail
 
@@ -47,34 +46,21 @@ export async function renderMail(): Promise<void> {
   const gold = h('input', { type: 'number', inputMode: 'numeric', min: '0', max: String(m.goldMax), step: '1', placeholder: '0' });
   gold.value = mailDraft.gold;
   gold.oninput = () => (mailDraft.gold = gold.value);
-  type Line = { plus: HTMLSelectElement; rarity: HTMLSelectElement; level: HTMLInputElement; count: HTMLInputElement; pick: HTMLSelectElement; el: HTMLElement };
+  type Line = { plus: HTMLSelectElement; rarity: HTMLSelectElement; level: HTMLInputElement; count: HTMLInputElement; pick: ItemPicker; el: HTMLElement };
   const lines: Line[] = [];
   const linesBox = h('div');
   const addLine = () => {
-    const pick = h('select');
-    for (const slot of SLOTS) {
-      const group = h('optgroup', { label: SLOT_LABEL[slot] });
-      for (const b of m.bases.filter((x) => x.slot === slot)) {
-        group.append(h('option', { value: b.id }, `${b.names.any ? `${b.names.any} [ทุกอาชีพ]` : Object.entries(b.names).map(([k, n]) => `${n} [${className(k as ClassId)}]`).join(' / ')} (Lv.${b.minLevel}+)`));
-      }
-      pick.append(group);
-    }
-    pick.append(
-      h('optgroup', { label: 'ยา' }, ...(['hp', 'mp'] as const).flatMap((k) => POTION_SIZES.map((sz) => h('option', { value: `potion:${k}:${sz}` }, potionName(k, sz))))),
-      h('optgroup', { label: 'หินช่างตีเหล็ก' }, ...BLACKSMITH_STONES.map((k) => h('option', { value: `stone:${k}` }, STONE_NAME[k]))),
-      h('optgroup', { label: 'กุญแจห้องบอส (Artifact)' }, ...BOSS_KEYS.map((k) => h('option', { value: `stone:${k}` }, STONE_NAME[k]))),
-      h('optgroup', { label: 'ของใช้ (ผูกตัวละคร)' }, ...REWARD_ITEMS.map((k) => h('option', { value: `stone:${k}` }, STONE_NAME[k]))),
-    );
+    // Gear of every class (rolled for the claimer's class when claimed), monster cards and usable items, picked from pictures.
+    const pick = new ItemPicker({ bases: m.bases, onChange: () => sync() });
     const rarity = h('select', {}, ...m.rarities.map((r) => h('option', { value: r, style: `color:${RARITY_COLOR[r]}` }, RARITY_LABEL[r])));
     const plus = h('select', {}, ...Array.from({ length: m.maxPlus + 1 }, (_, i) => h('option', { value: String(i) }, `+${i}`)));
     const level = h('input', { type: 'number', inputMode: 'numeric', min: '1', max: String(m.maxLevel), placeholder: 'เลเวลผู้รับ', style: 'width:90px' });
     const count = h('input', { type: 'number', inputMode: 'numeric', min: '1', max: String(m.itemsMax), value: '1', style: 'width:60px' });
     const gearOnly = [rarity, plus, level];
     const sync = () => gearOnly.forEach((e) => (e.style.display = /^(potion|stone):/.test(pick.value) ? 'none' : ''));
-    pick.onchange = sync;
     sync();
     const del = h('button', { class: 'small', type: 'button', title: 'เอาออก' }, '✕');
-    const row = h('div', { class: 'row', style: 'margin-top:6px' }, pick, rarity, plus, level, h('label', {}, 'จำนวน', count), del);
+    const row = h('div', { class: 'row', style: 'margin-top:6px' }, pick.el, rarity, plus, level, h('label', {}, 'จำนวน', count), del);
     const line: Line = { pick, rarity, plus, level, count, el: row };
     del.onclick = () => { lines.splice(lines.indexOf(line), 1); row.remove(); };
     lines.push(line);

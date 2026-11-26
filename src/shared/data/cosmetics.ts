@@ -6,10 +6,12 @@
 /**
  * Where a cosmetic is worn. A `title` is a set: a name frame and a chat bubble style (the title text is not shown for now).
  * An `orb` is a look for the enhancement orbs (src/shared/orbItems.ts), made in /admin while the server runs.
- * Keep `orb` last: the order of the others is part of their snapshot codes.
+ * A `levelup` is the level-up effect's look (owner 2026-11-25, src/client/levelUpFx.ts): six styles drawn in code.
+ * A `dash` is the dash button's look (owner 2026-11-26, src/client/dashFx.ts): six styles drawn in code.
+ * Only add slots at the end: the order of the others is part of their snapshot codes.
  */
-export type CosSlot = 'wings' | 'mount' | 'pet' | 'aura' | 'title' | 'orb';
-export const COS_SLOTS: readonly CosSlot[] = ['wings', 'mount', 'pet', 'aura', 'title', 'orb'];
+export type CosSlot = 'wings' | 'mount' | 'pet' | 'aura' | 'title' | 'orb' | 'levelup' | 'dash';
+export const COS_SLOTS: readonly CosSlot[] = ['wings', 'mount', 'pet', 'aura', 'title', 'orb', 'levelup', 'dash'];
 
 export const COS_SLOT_NAME: Record<CosSlot, string> = {
   wings: 'ปีก',
@@ -19,6 +21,8 @@ export const COS_SLOT_NAME: Record<CosSlot, string> = {
   // Owner 2026-11-10: no titles for now; the set is a name frame and a chat bubble.
   title: 'กรอบชื่อ / ฟองแชท',
   orb: 'ลูกแก้วตีบวก',
+  levelup: 'เอฟเฟกต์เลเวลอัป',
+  dash: 'เอฟเฟกต์แดช',
 };
 
 export interface CosmeticDef {
@@ -75,6 +79,24 @@ export const COSMETICS: CosmeticDef[] = [
   def('title', 3, 'title_shadow', 'ชุดเงาแห่งรัตติกาล', 'กรอบชื่อ และฟองแชทสีม่วงรัตติกาล', '#b07aff', '#1a0a2a', 'เงาแห่งรัตติกาล'),
   def('title', 4, 'title_forest', 'ชุดผู้พิทักษ์ป่า', 'กรอบชื่อ และฟองแชทสีเขียวป่า', '#7ddc6a', '#1a3a1a', 'ผู้พิทักษ์ป่า'),
   def('title', 5, 'title_gold', 'ชุดตำนานทองคำ', 'กรอบชื่อ และฟองแชทสีทอง', '#ffd24a', '#5a3a0a', 'ตำนานทองคำ'),
+
+  // Owner 2026-11-25: the level-up effect as a cosmetic. The cyan circle (#485) plus five new styles, each its
+  // own drawing in src/client/levelUpFx.ts (LEVELUP_STYLE). Not worn = the old gold column.
+  def('levelup', 1, 'levelup_cyan', 'เลเวลอัป: วงเวทมิติ', 'วงเวทสีฟ้าเรืองแสง ประกายพุ่งขึ้น ลูกศรลอยเหนือหัว', '#4dfff0', '#2a9fe0'),
+  def('levelup', 2, 'levelup_fire', 'เลเวลอัป: พายุเพลิง', 'วงไฟลุกบนพื้น เปลวไฟหมุนเป็นเกลียวขึ้นรอบตัว ถ่านไฟปลิว', '#ffb03a', '#ff3a1a'),
+  def('levelup', 3, 'levelup_thunder', 'เลเวลอัป: สายฟ้าฟาด', 'สายฟ้าสีม่วงขาวผ่าลงหลายครั้ง ไฟฟ้าแตกประกายบนพื้น', '#efe6ff', '#9a5cff'),
+  def('levelup', 4, 'levelup_leaf', 'เลเวลอัป: พายุใบไม้', 'ลมหมุนสีเขียว ใบไม้ปลิวเป็นเกลียวขึ้นรอบตัว', '#a8ff6a', '#2fa84a'),
+  def('levelup', 5, 'levelup_star', 'เลเวลอัป: ดาวตก', 'ดาวตกสีทองพุ่งลงหาตัว วงดาวบนพื้น ประกายรูปดาว', '#ffe27a', '#ff9f1a'),
+  def('levelup', 6, 'levelup_shadow', 'เลเวลอัป: เงารัตติกาล', 'ควันม่วงดำหมุนเป็นวังวน เงาลอยขึ้นรอบตัว', '#c48aff', '#3a1060'),
+
+  // Owner 2026-11-26: the dash button's look as a cosmetic (every class's dash, not the skills that dash). Six
+  // styles, each its own drawing in src/client/dashFx.ts (DASH_STYLE). Not worn = the old dash.
+  def('dash', 1, 'dash_wind', 'แดช: ลมฟ้า', 'วงแหวนลมสีฟ้าขาวที่จุดเริ่มและปลาย เส้นความเร็วเรืองแสง เงาตัวละครตามหลัง', '#c8f4ff', '#3aa8ff'),
+  def('dash', 2, 'dash_fire', 'แดช: เพลิง', 'วงไฟที่จุดเริ่มและปลาย ทางเปลวไฟบนพื้น ถ่านไฟปลิว', '#ffb03a', '#ff3a1a'),
+  def('dash', 3, 'dash_thunder', 'แดช: สายฟ้า', 'สายฟ้าแลบตามทางที่พุ่ง แสงวาบสองปลาย ประกายไฟฟ้ากระเด็น', '#efe6ff', '#9a5cff'),
+  def('dash', 4, 'dash_leaf', 'แดช: ใบไม้', 'ลมหมุนสีเขียวสองปลาย ใบไม้ปลิวตามทาง', '#a8ff6a', '#2fa84a'),
+  def('dash', 5, 'dash_star', 'แดช: ดาว', 'หางดาวหางสีทอง ดาวกะพริบตามทาง ดาวแตกที่จุดปลาย', '#ffe27a', '#ff9f1a'),
+  def('dash', 6, 'dash_shadow', 'แดช: เงา', 'ควันม่วงดำตามทาง เงามืดของตัวละครหลายชั้น', '#c48aff', '#3a1060'),
 ];
 
 const BY_ID = new Map(COSMETICS.map((c) => [c.id, c]));

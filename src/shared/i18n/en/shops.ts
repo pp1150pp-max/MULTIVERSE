@@ -160,6 +160,8 @@ export const EN_SHOPS: Record<string, string> = {
   'กำลังลองสวม {0} (เห็นแค่คุณ)': 'Trying on {0} (only you see it)',
   'กลับไปที่ร้าน': 'Back to the shop',
   'ถอดที่ลอง': 'Take off',
+  'ลองสวมได้เฉพาะในเมือง': 'You can only try things on in town',
+  'ลองสวมได้เฉพาะในเมือง ถอดที่ลองแล้ว': 'You can only try things on in town: taken off',
   'ตลาดมิติ': 'Dimension Market',
   'ของพิเศษจากพ่อค้าคริสตัล ซื้อด้วย{0}': 'Special goods from the Crystal Merchant, bought with {0}',
   'ยังไม่มีสินค้าแนะนำ': 'No featured items yet',

@@ -15,6 +15,7 @@ import type { OrbLook } from '../orbLook';
 import type { OrbItem } from '../orbItems';
 import type { CosTuning } from '../cosTuning';
 import type { AnimTuning } from '../animTuning';
+import type { CardTuning } from '../cardTuning';
 import type { BalanceTuning } from '../balance';
 import type { DailyView } from '../daily';
 import type { NewsView } from '../news';
@@ -127,6 +128,12 @@ export type ActionMsg =
   | { t: 'act'; a: 'enhance'; uid: string; protect?: boolean; req: number }
   /** Blacksmith reroll (see Sim.reroll); answered with `rerolled`. */
   | { t: 'act'; a: 'reroll'; uid: string; kind: RerollKind; req: number }
+  /** Blacksmith drilling (see Sim.drill); answered with `drilled`. */
+  | { t: 'act'; a: 'drill'; uid: string; req: number }
+  /** A card from the bag into the first empty socket of worn or bag gear (Sim.socketCard), from anywhere. */
+  | { t: 'act'; a: 'socketCard'; uid: string; card: string }
+  /** Takes the card out of socket `i`: the card breaks (Sim.unsocketCard). */
+  | { t: 'act'; a: 'unsocketCard'; uid: string; i: number }
   /** Stash (warehouse keeper). `to` = target slot, or -1 for wherever it fits. */
   | { t: 'act'; a: 'stashPut'; i: number; to: number }
   | { t: 'act'; a: 'stashTake'; i: number; to: number }
@@ -299,6 +306,8 @@ export interface MonsterSnap {
   st: 'idle' | 'chase' | 'return' | 'charge' | 'leap'; wind: boolean; enr: boolean;
   /** Height above the ground while jumping. */
   y: number;
+  /** Faded out (a ghost sailor, the Ghost Captain's warp): drawn see-through, can't be hit. Left out when not. */
+  inv?: 1;
   /** Its debuffs as bits (sim/debuffs.ts), left out when none. */
   db?: number;
   /** With `db`: the skill whose debuff it got last (its magic circle). */
@@ -393,7 +402,7 @@ export interface SnapshotMsg {
 export type ServerMsg =
   /** `guest`: playing a guest character (no stash, deleted after a day offline). */
   /** `ch`: the channel of that zone (1 when it has none). */
-  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; map?: number; guest?: boolean; auto?: boolean; preview?: boolean; orbLook?: OrbLook; cosTuning?: CosTuning; animTuning?: AnimTuning; cosHidden?: string[]; orbItems?: OrbItem[]; balance?: BalanceTuning; cash?: CashCatalog; cashState?: CashState; topup?: TopupView }
+  | { t: 'welcome'; you: number; time: number; zone: string; ch?: number; map?: number; guest?: boolean; auto?: boolean; preview?: boolean; orbLook?: OrbLook; cosTuning?: CosTuning; animTuning?: AnimTuning; cardTuning?: CardTuning; cosHidden?: string[]; orbItems?: OrbItem[]; balance?: BalanceTuning; cash?: CashCatalog; cashState?: CashState; topup?: TopupView }
   /** The cash shop's catalogue changed (the owner saved /admin, or a cosmetic's price / hiding changed). */
   | { t: 'cash'; cat: CashCatalog }
   /** Your account's crystals and purchase counts changed (a purchase by any of its characters). */
@@ -414,6 +423,8 @@ export type ServerMsg =
   | { t: 'cosTuning'; tuning: CosTuning }
   /** The owner changed the server-wide per-facing animation fixes (src/shared/animTuning.ts). */
   | { t: 'animTuning'; tuning: AnimTuning }
+  /** The owner changed the server-wide card tuning (src/shared/cardTuning.ts): card names, effects and sell prices in tooltips. */
+  | { t: 'cardTuning'; tuning: CardTuning }
   /** The owner hid / showed cosmetics in the "แต่งตัว" window (src/shared/cosShop.ts): the hidden ids. Never prices. */
   | { t: 'cosHidden'; ids: string[] }
   /** The orb looks made in /admin changed (src/shared/orbItems.ts): the whole list. */
@@ -454,6 +465,8 @@ export type ServerMsg =
   | { t: 'enhanced'; req: number; result: EnhanceResult | null; item: Item | null }
   /** The rerolled item, or null when the server refused. */
   | { t: 'rerolled'; req: number; item: Item | null }
+  /** The drilled item (its `sockets` say how many it got), or null when the server refused. */
+  | { t: 'drilled'; req: number; item: Item | null }
   /** The answer to a market action with this `req`. */
   | ({ t: 'market'; req: number } & MarketReply)
   /** Something of yours sold or expired at the market (a banner and a chat line). */

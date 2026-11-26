@@ -1,6 +1,7 @@
 // The shared online world: one Sim per zone, driven by the input of the players in it. Walking
 // through a portal moves a player's session to the other zone's Sim. The server decides all combat,
 // loot and EXP; clients only move their own character, and the server checks those moves are possible.
+import { suctionSpeed } from '../src/shared/sim/kraken';
 import { buffMask, debuffMask, runningSkillBuffs } from '../src/shared/sim/debuffs';
 import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage, Server as HttpServer } from 'node:http';
@@ -35,6 +36,7 @@ import { DIRECT_WS_HOST_DEFAULT, DIRECT_WS_IP_MAX_DEFAULT } from '../src/shared/
 import type { OrbLook } from '../src/shared/orbLook';
 import type { CosTuning } from '../src/shared/cosTuning';
 import type { AnimTuning } from '../src/shared/animTuning';
+import { currentCardTuning, type CardTuning } from '../src/shared/cardTuning';
 import { banMessage } from '../src/shared/api';
 import { Market, type MarketNote } from './market';
 import { Daily } from './daily';
@@ -96,6 +98,7 @@ const FRIEND_QUIET_MS = 60_000;
  */
 const TRADE_LOCKED = new Set([
   'equip', 'unequip', 'drop', 'buy', 'move', 'sort', 'bagExpand', 'buyBack', 'sell', 'split', 'sellRarity', 'enhance', 'reroll',
+  'drill', 'socketCard', 'unsocketCard',
   'stashPut', 'stashTake', 'stashMove', 'stashSort', 'stashBuy', 'stashGold', 'stashSplit',
   'mktSearch', 'mktMine', 'mktPrice', 'mktList', 'mktCancel', 'mktBuy', 'mktClaim',
   'mailList', 'mailRead', 'mailReadAll', 'mailClaim', 'mailDelete', 'mailDeleteRead', 'roomOpen', 'buyPhoenix', 'tutAccept',
@@ -306,7 +309,8 @@ function eventPos(ev: SimEvent, sim: Sim): Vec2 | null {
 
 /** While the server itself is moving (or holding) a character, the client's reported position is ignored. */
 function serverMoves(p: Player): boolean {
-  return !p.alive || p.isDashing || p.stunT > 0 || p.rootT > 0 || p.snareT > 0 || Math.abs(p.kbx) + Math.abs(p.kbz) > 0.05;
+  // charmT: a ghost siren's song walks them (sim/graveMoves.ts); the browser glides along instead of fighting it.
+  return !p.alive || p.isDashing || p.stunT > 0 || p.rootT > 0 || p.snareT > 0 || p.charmT > 0 || Math.abs(p.kbx) + Math.abs(p.kbz) > 0.05;
 }
 
 /** Input older than this is treated as "let go of everything" so a stalled client doesn't keep walking. */
@@ -832,7 +836,7 @@ export class GameWorld {
     // The close beta refund (once per account, after the owner switched it on), before the welcome carries the crystals.
     const refunded = !acc.guest && !pv ? this.topup.refundOnJoin(acc.id, acc.username) : 0;
     if (refunded) this.crystalsChanged(acc.id);
-    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), map: sim.terrain.mapRev, guest: acc.guest, ...(s.auto ? { auto: true } : {}), ...(pv ? { preview: true } : {}), orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), animTuning: this.db.animTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning(), cash: this.cash.catalog(), cashState: this.cash.state(acc.id, acc.guest), topup: this.topup.view(acc.id, acc.guest) });
+    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), map: sim.terrain.mapRev, guest: acc.guest, ...(s.auto ? { auto: true } : {}), ...(pv ? { preview: true } : {}), orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), animTuning: this.db.animTuning(), cardTuning: currentCardTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning(), cash: this.cash.catalog(), cashState: this.cash.state(acc.id, acc.guest), topup: this.topup.view(acc.id, acc.guest) });
     if (!pv) this.broadcastSystem(`${player.name} เข้าสู่โลก`);
     // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
     // The update notes (everyone, guests too), after the same moment as the notices below.
@@ -1169,7 +1173,8 @@ export class GameWorld {
     }
     // Accept the move only if the character could have walked that far since the last one.
     const from = s.pendingPos ?? p;
-    const maxStep = p.moveSpeed * Math.min((now - s.lastPosAt) / 1000, 0.5) * 1.4 + 0.3;
+    // The kraken's whirlpool pulls the browser's character too (sim/kraken.ts): that much further is fine.
+    const maxStep = (p.moveSpeed * 1.4 + suctionSpeed(s.sim.hazards, s.sim.time)) * Math.min((now - s.lastPosAt) / 1000, 0.5) + 0.3;
     if (Math.hypot(pos.x - from.x, pos.z - from.z) <= maxStep && !s.sim.terrain.isBlocked(pos.x, pos.z, 0)) {
       s.pendingPos = pos;
       s.lastPosAt = now;
@@ -1353,6 +1358,7 @@ export class GameWorld {
       else if (req >= 0 && m.a.startsWith('mail')) this.send(s.ws, { t: 'mail', req, ok: false, msg: TRADE_LOCKED_MSG });
       else if (m.a === 'enhance') this.send(s.ws, { t: 'enhanced', req: num((m as { req?: unknown }).req), result: null, item: null });
       else if (m.a === 'reroll') this.send(s.ws, { t: 'rerolled', req: num((m as { req?: unknown }).req), item: null });
+      else if (m.a === 'drill') this.send(s.ws, { t: 'drilled', req: num((m as { req?: unknown }).req), item: null });
       return;
     }
     switch (m.a) {
@@ -1627,6 +1633,21 @@ export class GameWorld {
         this.send(s.ws, { t: 'rerolled', req: num(m.req), item });
         break;
       }
+      case 'drill': {
+        // Sim.drill checks the NPC distance, ownership, that it isn't drilled yet, the gold and the drill stone.
+        const item = typeof m.uid === 'string' ? sim.drill(p, m.uid) : null;
+        this.send(s.ws, { t: 'drilled', req: num(m.req), item });
+        if (item) this.save(s);
+        break;
+      }
+      case 'socketCard':
+        // Sim.socketCard checks the card id, ownership, the group, an empty socket, the card in the bag and the gold.
+        if (typeof m.uid === 'string' && sim.socketCard(p, m.uid, m.card)) this.save(s);
+        break;
+      case 'unsocketCard':
+        // Sim.unsocketCard checks ownership, the socket index and that a card is in it.
+        if (typeof m.uid === 'string' && sim.unsocketCard(p, m.uid, m.i)) this.save(s);
+        break;
     }
     s.saveDue ??= performance.now() + 2000;
   }
@@ -1924,6 +1945,13 @@ export class GameWorld {
   }
 
   /** Sends the new server-wide per-facing animation fixes to everyone online (already saved by the admin API). */
+  /** Sends the new server-wide card tuning to everyone online (already saved and applied by the admin API). */
+  cardTuningChanged(tuning: CardTuning): void {
+    // Socketed cards follow the new effects and caps at once (items keep only which card sits where).
+    for (const sim of this.allSims()) for (const p of sim.players) p.recompute();
+    for (const s of this.sessions) this.send(s.ws, { t: 'cardTuning', tuning });
+  }
+
   animTuningChanged(tuning: AnimTuning): void {
     for (const s of this.sessions) this.send(s.ws, { t: 'animTuning', tuning });
   }
@@ -2531,6 +2559,7 @@ export class GameWorld {
         x: r2(m.x), z: r2(m.z), fx: r2(m.faceX), fz: r2(m.faceZ), mv: m.moving,
         alive: m.alive, deadT: r2(m.deadT), hp: Math.round(m.hp),
         st: m.state, wind: m.windupT > 0, enr: m.enraged, y: r2(m.lift),
+        ...(m.fade ? { inv: 1 as const } : {}),
         ...debuffField(m, sim.time, s.player.id),
         ...withLook<MonsterLook>(s.seenM, nextM, m.id, monsterLook(m, looks)),
       })),
@@ -2539,7 +2568,9 @@ export class GameWorld {
         vx: r2(Math.cos(pr.o.angle) * pr.o.speed), vz: r2(Math.sin(pr.o.angle) * pr.o.speed),
         color: pr.o.color, size: pr.o.size, art: pr.o.art,
       })),
-      ...(sim.hazards.length && sim.zone.boss && near(sim.zone.boss) ? { hazards: sim.hazards } : {}),
+      ...(!sim.hazards.length ? {} : sim.zone.boss ? (near(sim.zone.boss) ? { hazards: sim.hazards } : {})
+        // Field maps: the ground hazards near this player (the Ghost Ship Graveyard's curse rings).
+        : { hazards: sim.hazards.filter(near) }),
       room: this.rooms.snap(sim, p),
       waves: this.waveRooms.snap(sim, p),
       loots: sim.loots.filter(near).map((l) => ({

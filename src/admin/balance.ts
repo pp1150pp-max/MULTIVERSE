@@ -6,10 +6,9 @@
 import { foldable } from './ui';
 import { CIRCLE_FALLBACKS, FX_LAYER_NAME, FX_LAYER_RANGE, QUARKS_SKILLS, quarksKey, SKILL_FX_RANGE, type FxLayerNum, type QuarksSkill, type SkillFxTune } from '../shared/fxLayerTuning';
 import { circleDesign, drawInner, drawOuter } from '../client/circleDesigns';
-import { levelUpLook } from '../client/levelUpFx';
 import { skillExtras } from '../client/skillExtras';
 import { ATTACK_ROOT_RANGE, NO_ATTACK_ROOT } from '../shared/attackRootTuning';
-import { AUDIO_GAIN_RANGE, SFX_GROUP_NAME, SFX_GROUPS } from '../shared/audioTuning';
+import { AUDIO_GAIN_RANGE, BOSS_SONG_NAME, BOSS_SONGS, ROOM_BOSS_NAME, ROOM_BOSSES, SFX_GROUP_NAME, SFX_GROUPS, type RoomSong } from '../shared/audioTuning';
 import { FORGE_RANGE, PLUS_CAP, PLUS_NEVER } from '../shared/forgeTuning';
 import { RIG_ARMOR_ITEMS, RIG_ARMOR_NAME, RIG_ARMORS, RIG_WEAPON_ITEMS, RIG_WEAPON_NAME, RIG_WEAPONS } from '../shared/rigLookTuning';
 import {
@@ -20,15 +19,18 @@ import {
 } from '../shared/balance';
 import { DROP_GOLD_MULT, type MonsterDef } from '../shared/data/monsters';
 import {
-  AUTO_ALLOW_NAME, AUTO_ALLOWS, AUTO_HOME_WAIT_NAME, AUTO_OFFLINE_NAME, AUTO_AOE_GUARD_NAME, AUTO_DEFAULT_NAME, AUTO_LOOT_ORDERS, AUTO_NUM_NAME, AUTO_OUT_ACTIONS, AUTO_RANGE, AUTO_TARGET_MODES, autoDefaultValueName,
+  AUTO_ALLOW_NAME, AUTO_ALLOWS, AUTO_HOME_WAIT_NAME, AUTO_OFFLINE_NAME, AUTO_PRIORITY_LOOT_NAME, AUTO_AOE_GUARD_NAME, AUTO_DEFAULT_NAME, AUTO_LOOT_ORDERS, AUTO_NUM_NAME, AUTO_OUT_ACTIONS, AUTO_RANGE, AUTO_TARGET_MODES, autoDefaultValueName,
   type AutoAllow, type AutoDefaults,
 } from '../shared/autoTuning';
 import { FARM_IDS, NO_BOOST, ZONES, type MonsterBoost } from '../shared/data/zones';
+import { customDefs } from '../shared/customZones';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { ITEM_BASES, itemRowKinds, statStep, rowRanges, TIER_BAND_NAME, TIER_BANDS, tierBandOf, tierChances, tierRanges } from '../shared/data/items';
 import { expToNext, MAX_LEVEL } from '../shared/formulas';
 import { ITEM_ONLY_STATS, RARITIES, RARITY_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, type ClassId, type Rarity, type StatKey } from '../shared/types';
 import { FLOOR_GATE_LEVEL_MAX, FLOOR_GATE_LEVEL_MIN } from '../shared/floorGate';
+import { NPC_INFO, type NpcId } from '../shared/data/npcs';
+import { TALK_LINE_LEN, TALK_LINES_MAX, TALK_NPCS, TALK_NUM_KEYS, TALK_NUMS, type TalkNumKey } from '../shared/npcTalk';
 import { TUT_ACCEPT_GOLD, TUT_COUNT_MAX, TUT_GOLD_MAX, TUT_LINES_MAX, TUT_REWARD_KEYS, TUT_REWARD_NAME, TUT_STONES, tutRewardText, type TutRewardKey } from '../shared/tutorial';
 import type { MailAttachItem } from '../shared/mail';
 import { POTION_SIZES, potionName } from '../shared/data/potions';
@@ -635,6 +637,30 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
           }, 1, ...BALANCE_RANGE.mobPack, 0.1, () => { show(); updateSummary(); });
           return h('tr', {}, h('td', {}, z.nameTh), h('td', {}, box), total);
         })))),
+      h('h3', {}, 'รัศมีจุดเกิดมอน (ต่อแมพ)'),
+      h('div', { class: 'muted' },
+        `คูณรัศมีวงที่มอนเกิดและเดินวนรอบจุดเกิด (ในแมพไฟล์ 2.5–3 ม.) ทุกจุดของแมพนั้น ให้มอนกระจายห่างกันไม่กองเป็นก้อน · ใส่ได้ ×${BALANCE_RANGE.spawnRadius[0]}–×${BALANCE_RANGE.spawnRadius[1]} ทศนิยมได้ (×1 = ตามไฟล์แมพ) · ไม่รวมบอส ห้องบอส · ` +
+        'ระยะวิ่งกลับบ้านโตตามตัวคูณ · มอนไม่เกิดนอกขอบแมพ ในที่เดินไม่ได้ เขตปลอดภัย ทะเลสาบหรือบ่อลาวา · บันทึกแล้วมีผลกับมอนที่เกิดใหม่ (ตัวที่อยู่แล้วคงเดิมจนตาย)'),
+      h('div', { class: 'bal-scroll' }, h('table', { class: 'bal-table' },
+        h('thead', {}, h('tr', {}, h('th', {}, 'แมพ'), h('th', {}, 'รัศมีจุดเกิด ×'), h('th', {}, 'รัศมีจริง (ม.)'))),
+        h('tbody', {}, ...[...PACK_ZONES, ...customDefs().map((d) => ({ id: d.id, nameTh: d.nameTh }))].map((z) => {
+          const out = h('td', { class: 'bal-out' });
+          const radii = ZONES[z.id]?.spawns.map((a) => a.radius) ?? [];
+          const show = (): void => {
+            const m = draft.spawnRadius[z.id] ?? 1;
+            if (!radii.length) { out.textContent = m === 1 ? '-' : `×${m}`; return; }
+            const lo = Math.min(...radii), hi = Math.max(...radii);
+            const f = (k: number) => (lo === hi ? `${+(lo * k).toFixed(1)}` : `${+(lo * k).toFixed(1)}–${+(hi * k).toFixed(1)}`);
+            out.textContent = m === 1 ? f(1) : `${f(1)} → ${f(m)}`;
+            out.classList.toggle('bal-changed', m !== 1);
+          };
+          show();
+          const box = numBox(() => draft.spawnRadius[z.id] ?? 1, (n) => {
+            if (n === 1) delete draft.spawnRadius[z.id];
+            else draft.spawnRadius[z.id] = n;
+          }, 1, ...BALANCE_RANGE.spawnRadius, 0.1, () => { show(); updateSummary(); });
+          return h('tr', {}, h('td', {}, z.nameTh), h('td', {}, box), out);
+        })))),
       h('h3', {}, 'จุดเกิดที่เปิดใช้ (แมพฟาร์มชั้น 1)'),
       h('div', { class: 'muted' },
         `แมพฟาร์มชั้น 1 มีจุดเกิดเต็มแมพ (เจ้าของ 2026-11-25) ใส่ % ของจุดที่เปิดใช้ ${BALANCE_RANGE.farmSpots[0]}–${BALANCE_RANGE.farmSpots[1]} (100 = ทุกจุด) · จุดที่ปิดกระจายเท่า ๆ กันทั้งแมพและทุกชนิดมอน · ` +
@@ -680,7 +706,10 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
           h('input', { type: 'checkbox', checked: draft.mobRoam, onchange: (e: Event) => { draft.mobRoam = (e.target as HTMLInputElement).checked; updateSummary(); } }),
-          ' มอนแมพฟาร์มชั้น 1 เกิดใหม่สุ่มที่ (จุดที่มอนตายหมดทั้งตัวเดี่ยว/ทั้งกลุ่ม ย้ายไปเกิดที่ใหม่ในย่านของมอนชนิดนั้น กลุ่มยังเกิดด้วยกัน · ปิด = เกิดที่จุดเดิมเสมอ)'),
+          ' มอนแมพฟาร์มชั้น 1 เกิดใหม่สุ่มที่ (จุดที่มอนตายหมดทั้งตัวเดี่ยว/ทั้งกลุ่ม ย้ายไปเกิดที่ใหม่ใกล้จุดเดิมของมันเอง กลุ่มยังเกิดด้วยกัน · ปิด = เกิดที่จุดเดิมเสมอ)'),
+      ),
+      h('div', { class: 'row bal-line' },
+        h('label', {}, 'ระยะที่จุดเกิดย้ายได้จากจุดเดิม (หน่วย, ค่าในโค้ด 8)', numBox(() => draft.mobRoamReach, (n) => { draft.mobRoamReach = n; }, code.mobRoamReach, ...BALANCE_RANGE.mobRoamReach, 1, updateSummary)),
       ),
     );
     // Boss rooms: everything about boss rooms in one card (owner 2026-11-24 "same topic together"); the bosses' skill effects come from drawCircles (bossFxBox).
@@ -740,6 +769,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'row bal-line' },
         h('label', { title: `ค่าในโค้ด: ${code.vipExpPct}% (ปัดลง)` }, 'โบนัส EXP %', numBox(() => draft.vipExpPct, (n) => { draft.vipExpPct = n; }, code.vipExpPct, ...BALANCE_RANGE.vipExpPct, 1, updateSummary)),
         h('label', { title: `ค่าในโค้ด: ${code.vipDropPct}%` }, 'โบนัสโอกาสดรอป %', numBox(() => draft.vipDropPct, (n) => { draft.vipDropPct = n; }, code.vipDropPct, ...BALANCE_RANGE.vipDropPct, 1, updateSummary)),
+      ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.buffTotal, onchange: (e: Event) => { draft.buffTotal = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' ป้ายบัฟรวมบนจอ: "EXP +x%" / "ดรอป +x%" รวมใบคูณกับ VIP ชี้เมาส์เห็นแยกแหล่งและเวลาที่เหลือ (ปิด = ป้ายใบคูณ ×2 แบบเดิม ไม่โชว์ VIP)'),
       ),
     );
     refresh();
@@ -977,9 +1011,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     moveCard.replaceChildren(
       h('h2', {}, 'ท่ามอนชั้น 2'),
       h('div', { class: 'muted' },
-        'ค่าท่าใหม่ของมอนและบอสชั้น 2 (แมพ 1 หาดเรือแตก, แมพ 2 อ่าวลักลอบ) มีผลทันทีหลังบันทึก · ×ATK = คูณพลังโจมตีของมอน (บอสในห้องคูณตามจำนวนกุญแจด้วย) · ' +
+        'ค่าท่าใหม่ของมอนและบอสชั้น 2 (แมพ 1 หาดเรือแตก, แมพ 2 อ่าวลักลอบ, แมพ 3 สุสานเรือผี, แมพ 4 วังวนกลางทะเล) มีผลทันทีหลังบันทึก · ×ATK = คูณพลังโจมตีของมอน (บอสในห้องคูณตามจำนวนกุญแจด้วย) · ' +
         'ค่า HP/ATK/DEF ของมอนธรรมดาปรับในการ์ดตัวคูณมอน · นางนวลขโมยทองจริง ตีตกภายในเวลาบินหนีได้คืนคนที่โดนขโมย ไม่ทัน = ทองหาย · ' +
-        'นักโทษถังดินปืนตายแล้วลุกวิ่งมาระเบิด (ตีไม่ได้ ต้องแดชหลบ) · นกแก้วของกัปตันไม่ตาย ตีตกแล้วหายไปตามเวลาที่ตั้ง แล้วกลับมาเกาะไหล่'),
+        'นักโทษถังดินปืนตายแล้วลุกวิ่งมาระเบิด (ตีไม่ได้ ต้องแดชหลบ) · นกแก้วของกัปตันไม่ตาย ตีตกแล้วหายไปตามเวลาที่ตั้ง แล้วกลับมาเกาะไหล่ · ' +
+        'กะลาสีผีตอนล่องหนและกัปตันผีตอนวาร์ปตีไม่ได้ · เพลงไซเรนแดชตัดได้ · หอยเกาะผีตัวเล็กไม่ให้รางวัล · ' +
+        'อัศวินฉลามตอนมุดตีไม่ได้ · ฟองม้าน้ำแดชออกไม่ได้ · หนวดคราเคนไม่เดิน · คราเคนตีได้เฉพาะตอนตัดหนวดครบแล้วหัวโผล่ หนวดในห้องไม่ให้รางวัล'),
       ...groups,
     );
   };
@@ -1022,7 +1058,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         h('label', { title: 'ค่าในโค้ด: เปิด' },
           h('input', { type: 'checkbox', checked: draft.shopNoEquip, onchange: (e: Event) => { draft.shopNoEquip = (e.target as HTMLInputElement).checked; updateSummary(); } }),
           ' ห้ามถอด/สวมขณะเปิดร้านพ่อค้า'),
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.tryOnTownOnly, onchange: (e: Event) => { draft.tryOnTownOnly = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' ลองสวมของแต่งตัวได้เฉพาะในเมือง'),
       ),
+      h('div', { class: 'muted' }, 'ลองสวมได้เฉพาะในเมือง (เจ้าของ 2026-11-25): ปุ่ม "ลองสวม" ในแคชช็อปและหน้าต่างแต่งตัวกดได้เฉพาะในเมือง/safe zone นอกเมืองขึ้น "ลองสวมได้เฉพาะในเมือง" · ลองค้างแล้วเดินออกนอกเมือง = ถอดที่ลองให้เอง · ฝั่งเบราว์เซอร์เท่านั้น (ของที่ลองเห็นแค่ตัวเอง server ไม่รู้) · ปิด = ลองได้ทุกที่ตามเดิม'),
       h('div', { class: 'muted' }, 'ห้ามถอด/สวมขณะเปิดร้านพ่อค้า: ตอนหน้าต่างร้านพ่อค้าเปิด คลิก/ลาก/ปุ่มในรายละเอียดที่จะสวมหรือถอดอุปกรณ์ (และของแต่งตัวในกระเป๋าแฟชั่น) ไม่ทำงาน ขึ้นข้อความ "ปิดร้านก่อน" กันกดขายผิด · หน้าต่างอื่น (ช่างตีเหล็ก คลัง ตลาด) ไม่โดน · ยาที่เลือกให้ปุ่มด่วนไม่โดน · กันกดผิดฝั่งเบราว์เซอร์เท่านั้น (server ไม่รู้ว่าหน้าต่างร้านเปิดอยู่) · ปิด = ถอด/สวมได้ตามเดิม'),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
@@ -1111,6 +1151,13 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
           ` ${AUTO_HOME_WAIT_NAME}`),
       ),
       h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด · ปิด = ของพวกนี้เก็บตามลำดับเก็บของของผู้เล่นเหมือนของอื่น' },
+          h('input', { type: 'checkbox', checked: a.priorityLoot, onchange: (e: Event) => { a.priorityLoot = (e.target as HTMLInputElement).checked; refresh(); } }),
+          ` ${AUTO_PRIORITY_LOOT_NAME}`),
+        num('priorityDist', 1),
+      ),
+      h('div', { class: 'muted' }, 'เจ้าของ 2026-11-25: กล่องปริศนา หินทุกชนิด กุญแจ ม้วน และของชนิดใหม่ที่ไม่มีตัวกรองในกระเป๋า (เช่นการ์ด) Auto เดินไปเก็บก่อนทุกอย่าง แม้มอนกำลังตีและแม้ผู้เล่นตั้ง "ตีก่อน" · ยังอยู่ในวง Auto ต้องมีช่องว่าง และทำตามสวิตช์เก็บของคนอื่น · ทองกับไอเทม/ยาเก็บตามลำดับเดิม · ระยะ 0 = ทั้งวง Auto'),
+      h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' }, h('input', { type: 'checkbox', checked: a.aoeGuard, onchange: (e: Event) => { a.aoeGuard = (e.target as HTMLInputElement).checked; refresh(); } }), ` ${AUTO_AOE_GUARD_NAME}`),
         num('aoeMargin', 0.1),
       ),
@@ -1129,8 +1176,8 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   const fxCard = h('div', { class: 'card' });
   // level-up effect (owner 2026-11-25, src/client/levelUpFx.ts); its preview canvas stays across redraws
   const luCard = h('div', { class: 'card' });
-  const luView = h('div', { class: 'muted' }, 'กด "ดูตัวอย่าง" เพื่อเล่นเอฟเฟกต์ด้วยค่าที่ตั้งอยู่ (ยังไม่ต้องบันทึก)');
-  let luPreview: Promise<import('../client/levelUpPreview').LevelUpPreview> | null = null;
+  // dash effect (owner 2026-11-26, src/client/dashFx.ts): only the on/off switch here, the looks are per piece
+  const dashCard = h('div', { class: 'card' });
   const drawFx = (): void => {
     const a = draft.fxLayer;
     const ca = code.fxLayer;
@@ -1235,26 +1282,18 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'row bal-line' }, num('townEdge', 0.1), num('townRound', 0.5)),
       h('div', { class: 'muted' }, 'ขอบพื้นอิฐเมืองกลาง: มีผลตอนโหลดแมพเมืองครั้งถัดไป'),
     );
-    // level-up effect
-    const luFlag = (k: 'luNew' | 'luGround' | 'luSparks' | 'luArrows' | 'luText', text: string) => flag(
-      h('input', { type: 'checkbox', checked: a[k], onchange: (e: Event) => { a[k] = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } }),
-      a[k] !== ca[k], text);
-    const luColor = (k: 'luColor1' | 'luColor2', text: string) => h('label', { class: a[k] !== ca[k] ? 'bal-changed' : '', title: `ค่าในโค้ด: ${ca[k]}` }, text + ' ',
-      h('input', { type: 'color', value: a[k], oninput: (e: Event) => { a[k] = (e.target as HTMLInputElement).value.toLowerCase(); refresh(); }, onchange: () => drawFx() }),
-      a[k] !== ca[k] ? h('button', { type: 'button', title: 'คืนค่าในโค้ด', onclick: () => { a[k] = ca[k]; refresh(); drawFx(); } }, '↺') : '');
-    const play = (): void => {
-      luPreview ??= import('../client/levelUpPreview').then((m) => new m.LevelUpPreview(luView));
-      luPreview.then((p) => p.play(levelUpLook(a))).catch((e) => { luView.textContent = `เปิดตัวอย่างไม่ได้: ${e}`; luPreview = null; });
-    };
+    // level-up effect: worn as a cosmetic since 2026-11-25, its looks are set per piece on the cosmetics bench
+    const luOn = h('input', { type: 'checkbox', checked: a.luNew, onchange: (e: Event) => { a.luNew = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
     luCard.replaceChildren(
       h('h2', {}, 'เอฟเฟกต์เลเวลอัป'),
-      h('div', { class: 'muted' }, 'วงเวทเรืองแสงบนพื้น ประกายและเส้นแสงพุ่งขึ้น ลูกศรลอยเหนือหัว และตัวหนังสือ LEVEL UP ! วาดด้วยโค้ดทั้งหมด · เห็นทุกคนรอบ ๆ ตามเมนูกราฟิกของแต่ละคน · มีผลทันทีหลังบันทึก'),
-      h('div', { class: 'row bal-line' }, luFlag('luNew', ' ใช้แบบใหม่ (ปิด = แบบเดิม เสาแสงสีทอง)')),
-      h('div', { class: 'row bal-line' }, luColor('luColor1', 'สีหลัก'), luColor('luColor2', 'สีรอง'), num('luSize', 0.1), num('luSec', 0.1)),
-      h('div', { class: 'row bal-line' }, luFlag('luGround', ' วงเวทบนพื้น'), luFlag('luSparks', ' ประกายและเส้นแสง'), luFlag('luArrows', ' ลูกศร'), luFlag('luText', ' ตัวหนังสือ LEVEL UP !')),
-      h('div', { class: 'row bal-line' }, h('button', { type: 'button', onclick: play }, '▶ ดูตัวอย่าง')),
-      luView,
-      h('div', { class: 'muted' }, 'สีหลัก = วงแหวนนอก ประกาย ตัวหนังสือ · สีรอง = แผ่นแสงบนพื้น วงแหวนใน ไล่สีล่างของตัวหนังสือ/ลูกศร · เมนูกราฟิกของผู้เล่น: คุณภาพ "ปิด" = เหลือแค่ตัวหนังสือ, "ต่ำ/กลาง" = ประกายลดตาม × อนุภาค, ของคนอื่น "ไม่แสดง" = เห็นเลเวลอัปของคนอื่นแค่ตัวหนังสือ "ครึ่งเดียว" = ประกายครึ่งเดียว, จอสัมผัส ประกายครึ่งเดียว · ปิดตัวหนังสือ = กลับไปใช้ตัวหนังสือลอยแบบเดิม'),
+      h('div', { class: 'row bal-line' }, flag(luOn, a.luNew !== ca.luNew, ' เปิดเอฟเฟกต์เลเวลอัปของแต่งตัว (ปิด = ทุกคนเห็นเสาแสงสีทองแบบเดิม)')),
+      h('div', { class: 'muted' }, 'เอฟเฟกต์เลเวลอัปเป็นของแต่งตัวแล้ว 6 แบบ (วงเวทมิติ พายุเพลิง สายฟ้าฟาด พายุใบไม้ ดาวตก เงารัตติกาล) คนที่ไม่ได้สวมเห็นเสาแสงสีทองแบบเดิม · สี ขนาด เวลา สวิตช์รายส่วน และปุ่มดูตัวอย่าง อยู่ที่ /admin แท็บ "ของแต่งตัว" แท็บย่อย "เอฟเฟกต์เลเวลอัป" (ปรับแยกทีละแบบ) · ราคาและซ่อน/แสดงอยู่ที่แท็บ "จัดการของแต่งตัว" · คนอื่นเห็นตามแบบที่คนเลเวลอัปสวม ตามเมนูกราฟิกของแต่ละคน'),
+    );
+    const dashOn = h('input', { type: 'checkbox', checked: a.dashNew, onchange: (e: Event) => { a.dashNew = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
+    dashCard.replaceChildren(
+      h('h2', {}, 'เอฟเฟกต์แดช'),
+      h('div', { class: 'row bal-line' }, flag(dashOn, a.dashNew !== ca.dashNew, ' เปิดเอฟเฟกต์แดชของแต่งตัว (ปิด = ทุกคนเห็นแดชแบบเดิม)')),
+      h('div', { class: 'muted' }, 'เอฟเฟกต์แดชเป็นของแต่งตัว 6 แบบ (ลมฟ้า เพลิง สายฟ้า ใบไม้ ดาว เงา) ใช้กับปุ่มแดชของทุกอาชีพ ไม่รวมสกิลที่พุ่งตัว คนที่ไม่ได้สวมเห็นแดชแบบเดิม · สี ขนาด เวลา สวิตช์รายส่วน และปุ่มดูตัวอย่าง อยู่ที่ /admin แท็บ "ของแต่งตัว" แท็บย่อย "เอฟเฟกต์แดช" (ปรับแยกทีละแบบ) · ราคาและซ่อน/แสดงอยู่ที่แท็บ "จัดการของแต่งตัว" · คนอื่นเห็นตามแบบที่คนแดชสวม ตามเมนูกราฟิกของแต่ละคน'),
     );
   };
 
@@ -1375,6 +1414,38 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
+  // ---------------------------------------------------------- boss room song files (src/shared/audioTuning.ts)
+  const bossMusicCard = h('div', { class: 'card' });
+  // Built once: redrawing the card must not stop a song being listened to.
+  const songRows = BOSS_SONGS.map((s) => {
+    const state = h('span', { class: 'muted' }, ` assets/music/${s}.mp3`);
+    const player = h('audio', { controls: true, preload: 'metadata', src: `assets/music/${s}.mp3` });
+    player.addEventListener('error', () => {
+      player.remove();
+      state.textContent = ' ยังไม่มีไฟล์ (ห้องที่เลือกเพลงนี้เล่น chiptune เดิม)';
+    });
+    return h('div', { class: 'row bal-line' }, h('label', {}, BOSS_SONG_NAME[s]), player, state);
+  });
+  const drawBossMusic = (): void => {
+    const m = draft.audio.music;
+    const cm = code.audio.music;
+    const refresh = (): void => { updateSummary(); };
+    const on = h('input', { type: 'checkbox', checked: m.on, onchange: (e: Event) => { m.on = (e.target as HTMLInputElement).checked; refresh(); drawBossMusic(); } });
+    const choices: RoomSong[] = [...BOSS_SONGS, 'chip'];
+    bossMusicCard.replaceChildren(
+      h('h2', {}, 'เพลงห้องบอส'),
+      h('div', { class: 'muted' }, 'ในห้องบอสเล่นไฟล์เพลงวนลูปแทนเพลง chiptune ตั้งแต่เข้าห้องจนออก (ค่อย ๆ เฟดเข้าออก) · ใช้แถบ "เพลงประกอบ" ของผู้เล่น · ไม่เร่งตามบอสคลั่ง · ยังไม่มีไฟล์ = เล่น chiptune เดิม · วิธีเจนและวางไฟล์: art_templates/music/BOSS_GOTHIC.md · มีผลกับทุกคนทันทีหลังบันทึก'),
+      h('div', { class: 'row bal-line' },
+        h('label', { class: m.on !== cm.on ? 'bal-changed' : '' }, on, ' ใช้ไฟล์เพลงในห้องบอส'),
+        h('label', {}, ' × ความดังเพลงไฟล์ (เทียบกับ chiptune) ', numBox(() => m.gain, (n) => { m.gain = n; }, cm.gain, AUDIO_GAIN_RANGE[0], AUDIO_GAIN_RANGE[1], 0.1, refresh))),
+      h('div', { class: 'row bal-line' }, ...ROOM_BOSSES.map((id) =>
+        h('label', { class: m.rooms[id] !== cm.rooms[id] ? 'bal-changed' : '' }, `${ROOM_BOSS_NAME[id]} `,
+          h('select', { onchange: (e: Event) => { m.rooms[id] = (e.target as HTMLSelectElement).value as RoomSong; refresh(); drawBossMusic(); } },
+            ...choices.map((s) => h('option', { value: s, selected: m.rooms[id] === s }, s === 'chip' ? 'chiptune เดิม' : BOSS_SONG_NAME[s])))))),
+      ...songRows,
+    );
+  };
+
   // ---------------------------------------------------------- papercraft sword rig pictures (src/shared/rigLookTuning.ts)
   const rigCard = h('div', { class: 'card' });
   const drawRig = (): void => {
@@ -1478,6 +1549,45 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
+  // ---------------------------------------------------------- NPC talk window (src/shared/npcTalk.ts)
+  const talkCard = h('div', { class: 'card' });
+  const drawTalk = (): void => {
+    const t = draft.npcTalk;
+    const ct = code.npcTalk;
+    const flag = (k: 'on' | 'bubbles', label: string): HTMLElement =>
+      h('label', { title: `ค่าในโค้ด: ${ct[k] ? 'เปิด' : 'ปิด'}`, class: t[k] !== ct[k] ? 'bal-changed' : '' },
+        h('input', { type: 'checkbox', checked: t[k], onchange: (e: Event) => { t[k] = (e.target as HTMLInputElement).checked; updateSummary(); drawTalk(); } }),
+        ` ${label}`);
+    const num = (k: TalkNumKey): HTMLElement =>
+      h('label', {}, `${TALK_NUMS[k].name} `, numBox(() => t[k], (n) => { t[k] = n; }, ct[k], ...TALK_NUMS[k].range, 1, () => updateSummary()));
+    /** One line per row; empty rows are dropped on save. */
+    const lines = (part: 'greet' | 'chat', id: NpcId): HTMLElement => {
+      const ta = h('textarea', { rows: '3', style: 'width:100%;font:inherit' }) as HTMLTextAreaElement;
+      ta.value = t[part][id].join('\n');
+      const changed = (): boolean => JSON.stringify(t[part][id]) !== JSON.stringify(ct[part][id]);
+      ta.classList.toggle('bal-changed', changed());
+      ta.addEventListener('input', () => {
+        t[part][id] = ta.value.split('\n').map((x) => x.trim()).filter(Boolean);
+        const bad = t[part][id].length > TALK_LINES_MAX || t[part][id].some((x) => x.length > TALK_LINE_LEN);
+        ta.classList.toggle('bal-bad', bad);
+        ta.classList.toggle('bal-changed', changed());
+        updateSummary();
+      });
+      return ta;
+    };
+    talkCard.replaceChildren(
+      h('h2', {}, 'หน้าต่างคุย NPC'),
+      h('div', { class: 'muted' }, 'คลิก NPC = หน้าต่างคุย (ฉากสถานที่ของ NPC รูปครึ่งตัวซ้าย บทพูดล่าง ปุ่มคำตอบมีไอคอน) กดคำตอบแล้วเปิดหน้าต่างของ NPC (ร้าน เมนูช่างตีเหล็ก คลัง แท็บตลาด/กล่องรับของ แคชช็อป เควสกุญแจ) · ปิด = คลิกแล้วเปิดหน้าต่างของ NPC ทันทีแบบเดิม · คำพูดเหนือหัว: เดินเข้าใกล้ NPC แล้วมีคำพูดสั้น ๆ ลอยเหนือหัว · ฝั่งเบราว์เซอร์เท่านั้น มีผลทันที'),
+      h('div', { class: 'row bal-line' }, flag('on', 'ใช้หน้าต่างคุย NPC'), flag('bubbles', 'คำพูดเหนือหัว NPC')),
+      h('div', { class: 'row bal-line' }, ...TALK_NUM_KEYS.map(num)),
+      h('div', { class: 'muted' }, `บทพูด: บรรทัดละ 1 ประโยค (ไม่เกิน ${TALK_LINES_MAX} บรรทัด บรรทัดละ ${TALK_LINE_LEN} ตัวอักษร) สุ่มทีละบรรทัด · ทักทาย = ในหน้าต่างคุย (ปุ่ม "พูดคุย" สุ่มบรรทัดใหม่) · เหนือหัว = ลอยเหนือหัวเมื่อเดินเข้าใกล้ · NPC ท่าเรือใช้บทของงานเดียวกัน`),
+      ...TALK_NPCS.map((id) => h('details', { style: 'margin:4px 0' },
+        h('summary', {}, NPC_INFO[id].name),
+        h('div', {}, 'ทักทาย (หน้าต่างคุย)'), lines('greet', id),
+        h('div', {}, 'เหนือหัว'), lines('chat', id))),
+    );
+  };
+
   // The skill system's card is its own tab now (src/admin/skills.ts, owner 2026-11-19): this tab saves with
   // `part: 'rest'`, so the server keeps the skills as they are saved there.
 
@@ -1513,10 +1623,12 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawLang();
     drawAuto();
     drawTut();
+    drawTalk();
     drawFx();
     drawCircles();
     drawRoot();
     drawAudio();
+    drawBossMusic();
     drawRig();
     applyFilter(); // redrawn cards keep the chosen category / search
   };
@@ -1573,8 +1685,8 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     { name: 'มอน-บอส-เมือง', cards: [monsterCard, bossCard, moveCard, hubCard] },
     { name: 'ไอเทม-ตีบวก', cards: [affixCard, tierCard, previewCard, setCard, potionCard, bagCard, forgeCard] },
     { name: 'Auto Play', cards: [autoCard] },
-    { name: 'หน้าตา-เอฟเฟกต์-เสียง', cards: [uiCard, fxCard, luCard, circleCard, audioCard, rigCard] },
-    { name: 'ระบบ-รางวัล', cards: [expCard, vipCard, floorCard, tutCard, langCard] },
+    { name: 'หน้าตา-เอฟเฟกต์-เสียง', cards: [uiCard, fxCard, luCard, dashCard, circleCard, audioCard, bossMusicCard, rigCard] },
+    { name: 'ระบบ-รางวัล', cards: [expCard, vipCard, floorCard, tutCard, talkCard, langCard] },
   ];
   const ALL = 'ทั้งหมด';
   const CAT_KEY = 'adminBalanceCat';

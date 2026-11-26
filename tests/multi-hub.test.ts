@@ -19,7 +19,7 @@ const OPEN = { floorGateOpen: true, floorGateQuest: true };
 
 // ---- floor 1 stays as it was
 const FLOOR1 = Object.values(ZONES).filter((z) => floorOf(z) === 1);
-ok(FLOOR1.length === 5 && Object.values(ZONES).filter((z) => floorOf(z) === 2).map((z) => z.id).sort().join() === 'harbor_town,shipwreck_beach,smugglers_cove', 'floor 1: the five zones; floor 2: the harbour, the beach and the cove');
+ok(FLOOR1.length === 5 && Object.values(ZONES).filter((z) => floorOf(z) === 2).map((z) => z.id).sort().join() === 'ghost_ship_graveyard,harbor_town,kraken_maelstrom,shipwreck_beach,smugglers_cove', 'floor 1: the five zones; floor 2: the harbour, the beach, the cove, the graveyard and the maelstrom');
 ok(FLOOR1.every((z) => hubOf(z).id === HUB_ID), 'floor 1: every zone\'s town is nexus_city');
 ok(FLOOR1.every((z) => !BOSS_ROOMS[z.id] || hubOf(BOSS_ROOMS[z.id]).id === HUB_ID), 'floor 1 boss rooms: nexus_city too');
 ok(hubOf(BOSS_ROOMS.shipwreck_beach).id === 'harbor_town', 'the floor-2 crab lair: the harbour');

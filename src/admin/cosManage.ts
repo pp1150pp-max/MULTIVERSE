@@ -8,7 +8,7 @@
 //   the same way, open on the orb bench, delete (one no account owns) (switch cosManageEdit).
 // One "บันทึก" saves everything after a confirm listing every change (from → to).
 import { COS_PRICE_MAX, COS_PRICE_MIN, checkCosShop, cosShopChanges, type CosShop } from '../shared/cosShop';
-import { COS_TUNE_FIELDS, cosTuneOf, cosTuningChanges, pasteCosTuning, TUNED_SLOTS, type CosTuning, type TunedSlot, type TuneValues } from '../shared/cosTuning';
+import { colorHex, colorNum, COS_TUNE_FIELDS, cosTuneOf, cosTuningChanges, pasteCosTuning, TUNED_SLOTS, type CosTuning, type TunedSlot, type TuneValues } from '../shared/cosTuning';
 import { COSMETICS, COS_SLOTS, COS_SLOT_NAME } from '../shared/data/cosmetics';
 import { checkOrbName, orbItemsChanges, registerOrbItems, type OrbItems } from '../shared/orbItems';
 import { ORB_LOOK_RANGES, ORB_PALETTE_IDS, ORB_PALETTE_NAME, ORB_SHAPE_IDS, ORB_SHAPE_NAME, sameOrbLook, type OrbLook, type OrbLookNumber } from '../shared/orbLook';
@@ -23,7 +23,7 @@ const round3 = (n: number) => Math.round(n * 1000) / 1000;
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const isTuned = (slot: string): slot is TunedSlot => (TUNED_SLOTS as readonly string[]).includes(slot);
 /** The value shown first for each kind: the height on the character (owner's example), the aura's size. */
-const FIRST_FIELD: Record<TunedSlot, string> = { wings: 'backStand', mount: 'seat', pet: 'float', aura: 'size' };
+const FIRST_FIELD: Record<TunedSlot, string> = { wings: 'backStand', mount: 'seat', pet: 'float', aura: 'size', levelup: 'color1', dash: 'color1' };
 const CHANGED = '1px solid #f2c230';
 
 /** The orb look values, with the names of the orb bench's sliders (steps as there). */
@@ -231,6 +231,19 @@ export async function renderCosManage(view: HTMLElement, h: H, api: Api, openOrb
     const savedV = cosTuneOf(st.tuning, id)?.[k];
     if (f.kind === 'bool') {
       return boolBox(look[id][k] === true, savedV === true, !st.canPaste, (v) => { look[id][k] = v; });
+    }
+    if (f.kind === 'color') {
+      const c = h('input', { type: 'color' });
+      c.value = colorHex(look[id][k]);
+      c.disabled = !st.canPaste;
+      const mark = () => { c.style.outline = colorNum(c.value) !== savedV ? CHANGED : ''; };
+      c.oninput = () => {
+        const v = colorNum(c.value);
+        if (v !== undefined) look[id][k] = v;
+        mark();
+      };
+      mark();
+      return h('span', {}, c);
     }
     return numberBox(look[id][k] as number, savedV as number, f.min, f.max, f.step, !st.canPaste, (v) => { look[id][k] = v; });
   };

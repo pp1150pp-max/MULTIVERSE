@@ -263,6 +263,7 @@ const TYPES: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
   '.woff2': 'font/woff2',
+  '.mp3': 'audio/mpeg',
 };
 
 /** Vite's build output: `assets/<name>-<hash>.<ext>`. A new build gets new names, so these never change. */

@@ -146,18 +146,17 @@ export interface FxLayerConfig extends Record<QuarksKey, boolean> {
   gfxMid: number;
   gfxLow: number;
   /**
-   * Level-up effect (owner 2026-11-25, src/client/levelUpFx.ts): the new look (off = the old gold column), its parts
-   * (ground circle, sparks and streaks, chevrons, the "LEVEL UP !" title), × size, seconds, and its two colours.
+   * Level-up effects worn as cosmetics (owner 2026-11-25, src/client/levelUpFx.ts): on = each player's worn style
+   * (not worn = the old gold column), off = the old gold column for everyone. Each style's look is its cosmetic
+   * tuning (cosTuning.ts `levelup`); the look settings that were here (luColor1/2, luSize, luSec, luGround,
+   * luSparks, luArrows, luText) moved to the cyan piece (server/db.ts migrateLevelUpLook).
    */
   luNew: boolean;
-  luGround: boolean;
-  luSparks: boolean;
-  luArrows: boolean;
-  luText: boolean;
-  luSize: number;
-  luSec: number;
-  luColor1: string;
-  luColor2: string;
+  /**
+   * Dash effects worn as cosmetics (owner 2026-11-26, src/client/dashFx.ts): on = each player's worn style on
+   * the dash button (not worn = the old dash), off = the old dash for everyone. Looks: cosTuning.ts `dash`.
+   */
+  dashNew: boolean;
 }
 
 /** One skill's magic circle and code effects, as set on /admin. Missing = on / ×1. */
@@ -264,8 +263,6 @@ export const FX_LAYER_RANGE = {
   bossExtrasK: [0, 3],
   droneSpeed: [1, 20],
   droneDist: [0.3, 3],
-  luSize: [0.5, 2.5],
-  luSec: [0.8, 5],
 } as const satisfies Record<string, readonly [number, number]>;
 export type FxLayerNum = keyof typeof FX_LAYER_RANGE;
 export const FX_LAYER_NUMS = Object.keys(FX_LAYER_RANGE) as FxLayerNum[];
@@ -317,11 +314,9 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   bossExtrasK: '× ความแรงเอฟเฟกต์โค้ดของสกิลบอส',
   droneSpeed: 'โดรน: ความเร็วตามตัว (ต่อวิ ยิ่งมากยิ่งติด)',
   droneDist: 'โดรน: × ระยะห่างจากตัวละคร',
-  luSize: 'เลเวลอัป: × ขนาด',
-  luSec: 'เลเวลอัป: ระยะเวลา (วิ)',
 };
 
-const BASE_BOOLS = ['enabled', 'debuffs', 'guardGlow', 'buffIcons', 'barBuffIcons', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'droneFollow', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'keyRebind', 'orbsNearBar', 'extras', 'bossFx', 'bossExtras', 'enhAuraSmooth', 'enhOrbGlowFront', 'luNew', 'luGround', 'luSparks', 'luArrows', 'luText'] as const;
+const BASE_BOOLS = ['enabled', 'debuffs', 'guardGlow', 'buffIcons', 'barBuffIcons', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'droneFollow', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'keyRebind', 'orbsNearBar', 'extras', 'bossFx', 'bossExtras', 'enhAuraSmooth', 'enhOrbGlowFront', 'luNew', 'dashNew'] as const;
 type FxLayerBool = (typeof BASE_BOOLS)[number] | QuarksKey;
 const FX_LAYER_BOOLS: readonly FxLayerBool[] = [...BASE_BOOLS, ...QUARKS_KEYS];
 const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
@@ -346,18 +341,10 @@ const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
   bossExtras: 'เอฟเฟกต์โค้ดของสกิลบอส (ทับภาพ)',
   enhAuraSmooth: 'ออร่าตีบวกขอบนุ่ม (ปิด = ขอบพิกเซลแบบเดิม กะพริบตอนหดขยาย)',
   enhOrbGlowFront: 'แสงลูกแก้วตีบวกอยู่หน้าลูก (ปิด = หลังลูก)',
-  luNew: 'เอฟเฟกต์เลเวลอัปแบบใหม่ (ปิด = แบบเดิม)',
-  luGround: 'เลเวลอัป: วงเวทบนพื้น',
-  luSparks: 'เลเวลอัป: ประกายและเส้นแสง',
-  luArrows: 'เลเวลอัป: ลูกศร',
-  luText: 'เลเวลอัป: ตัวหนังสือ LEVEL UP !',
+  luNew: 'เอฟเฟกต์เลเวลอัปของแต่งตัว (ปิด = เสาแสงสีทองแบบเดิมทุกคน)',
+  dashNew: 'เอฟเฟกต์แดชของแต่งตัว (ปิด = แดชแบบเดิมทุกคน)',
 };
 
-/** Colour settings (#rrggbb). */
-const FX_LAYER_COLORS = ['luColor1', 'luColor2'] as const;
-type FxLayerColor = (typeof FX_LAYER_COLORS)[number];
-const FX_LAYER_COLOR_NAME: Record<FxLayerColor, string> = { luColor1: 'เลเวลอัป: สีหลัก', luColor2: 'เลเวลอัป: สีรอง' };
-const isColor = (v: unknown): v is string => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
 
 /** The code's own numbers (a fresh copy). */
 export function codeFxLayer(): FxLayerConfig {
@@ -369,7 +356,8 @@ export function codeFxLayer(): FxLayerConfig {
     gfxMenu: true, keyRebind: true, orbsNearBar: true, gfxDefault: 3, gfxMax: 3, gfxMid: 0.6, gfxLow: 0.3,
     ...(Object.fromEntries(QUARKS_KEYS.map((k) => [k, true])) as Record<QuarksKey, boolean>),
     extras: true, extrasK: 1, bossFx: true, bossExtras: true, bossExtrasK: 1, skills: {},
-    luNew: true, luGround: true, luSparks: true, luArrows: true, luText: true, luSize: 1, luSec: 2.2, luColor1: '#4dfff0', luColor2: '#2a9fe0',
+    luNew: true,
+    dashNew: true,
   };
 }
 const CODE = codeFxLayer();
@@ -379,7 +367,6 @@ export function mergeFxLayer(t: FxLayerTuning | undefined): FxLayerConfig {
   if (!t) return c;
   for (const k of FX_LAYER_BOOLS) if (t[k] !== undefined) c[k] = t[k]!;
   for (const k of FX_LAYER_NUMS) if (t[k] !== undefined) c[k] = t[k]!;
-  for (const k of FX_LAYER_COLORS) if (isColor(t[k])) c[k] = t[k]!.toLowerCase();
   if (t.skills) c.skills = { ...t.skills };
   return c;
 }
@@ -427,7 +414,7 @@ export function checkFxLayerTuning(x: unknown, strict: boolean): { tuning: FxLay
   if (x === undefined) return { tuning: undefined };
   if (!isObj(x)) return strict ? { error: 'ค่าเอฟเฟกต์สกิลไม่ถูกต้อง' } : { tuning: undefined };
   if (strict) {
-    const extra = Object.keys(x).find((k) => k !== 'skills' && !(FX_LAYER_BOOLS as readonly string[]).includes(k) && !(FX_LAYER_NUMS as string[]).includes(k) && !(FX_LAYER_COLORS as readonly string[]).includes(k));
+    const extra = Object.keys(x).find((k) => k !== 'skills' && !(FX_LAYER_BOOLS as readonly string[]).includes(k) && !(FX_LAYER_NUMS as string[]).includes(k));
     if (extra) return { error: `เอฟเฟกต์สกิล: ไม่รู้จักค่า "${extra.slice(0, 20)}"` };
   }
   const out: FxLayerTuning = {};
@@ -449,15 +436,6 @@ export function checkFxLayerTuning(x: unknown, strict: boolean): { tuning: FxLay
     const n = k === 'maxNums' || k === 'quarksCap' || k === 'gfxDefault' || k === 'gfxMax' ? Math.round(v) : round3(v);
     if (n !== CODE[k]) out[k] = n;
   }
-  for (const k of FX_LAYER_COLORS) {
-    const v = x[k];
-    if (v === undefined) continue;
-    if (!isColor(v)) {
-      if (strict) return { error: `${FX_LAYER_COLOR_NAME[k]} ต้องเป็นสีแบบ #rrggbb` };
-      continue;
-    }
-    if (v.toLowerCase() !== CODE[k]) out[k] = v.toLowerCase();
-  }
   const sk = checkSkillFx(x.skills, strict);
   if ('error' in sk) return sk;
   if (sk.skills) out.skills = sk.skills;
@@ -469,7 +447,6 @@ export function fxLayerChanges(a: FxLayerConfig, b: FxLayerConfig): string[] {
   const out: string[] = [];
   for (const k of FX_LAYER_BOOLS) if (a[k] !== b[k]) out.push(`${FX_LAYER_BOOL_NAME[k]} ${a[k] ? 'เปิด' : 'ปิด'} → ${b[k] ? 'เปิด' : 'ปิด'}`);
   for (const k of FX_LAYER_NUMS) if (a[k] !== b[k]) out.push(`เอฟเฟกต์สกิล ${FX_LAYER_NAME[k]} ${a[k]} → ${b[k]}`);
-  for (const k of FX_LAYER_COLORS) if (a[k] !== b[k]) out.push(`${FX_LAYER_COLOR_NAME[k]} ${a[k]} → ${b[k]}`);
   for (const id of new Set([...Object.keys(a.skills), ...Object.keys(b.skills)])) {
     const x = JSON.stringify(a.skills[id] ?? {}), y = JSON.stringify(b.skills[id] ?? {});
     if (x !== y) out.push(`วงเวท/เอฟเฟกต์ ${id} ${x} → ${y}`);

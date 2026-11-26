@@ -1,7 +1,7 @@
 // The fashion bag (กระเป๋าแฟชั่น, owner 2026-11-18, docs/systems/cosmetics.md): a second page of the bag
 // window, switched with the "กระเป๋า" / "แฟชั่น" tabs above the bag slots. It shows the cosmetics the
 // account owns in the painted 30 slots (in COS_SLOTS order, pages past 30) and, over the equipment
-// area, a bar of the six cosmetic slots with what is worn. Click = wear / take off at once (touch: a
+// area, a bar of the cosmetic slots with what is worn (six painted frames + two drawn in code). Click = wear / take off at once (touch: a
 // sheet with the button). Wearing goes through backend.cosWear, which the server checks (wearCosmetic).
 // Unowned pieces are not shown; pieces hidden in /admin follow the cosmetics window's rule (only while worn).
 // The window goes back to the normal bag while a shop, stash, market, trade or forge is open.
@@ -34,7 +34,14 @@ const PLATE_Y = [388, 579];
 const PLATE_W = 98;
 const PLATE_H = 21;
 /** Shorter names where COS_SLOT_NAME doesn't fit on a plate (owner 2026-11-18); the full name stays in the tooltip. */
-const PLATE_NAME: Partial<Record<CosSlot, string>> = { title: 'กรอบชื่อ/แชท' };
+const PLATE_NAME: Partial<Record<CosSlot, string>> = { title: 'กรอบชื่อ/แชท', levelup: 'เลเวลอัป', dash: 'แดช' };
+/**
+ * The art has six frames; the seventh slot (the level-up effect, owner 2026-11-25) gets a small frame drawn in code
+ * on the dark area right of the heading, its name plate just above it. The eighth (the dash effect, 2026-11-26)
+ * the same, mirrored left of the heading.
+ */
+const EXTRA_FRAMES: Box[] = [[604, 140, 108, 94], [103, 140, 108, 94]];
+const EXTRA_PLATES: Box[] = [[604, 114, 108, 22], [103, 114, 108, 22]];
 /** The heading plate, and the line of help text under the frames: [left, top, width, height]. */
 const HEAD: Box = [268, 172, 288, 30];
 const NOTE: Box = [90, 607, 635, 26];
@@ -231,18 +238,31 @@ export class FashionBag {
       this.pager.replaceChildren(prev, el('span', '', `${this.page + 1} / ${pages}`), next);
     }
 
-    // What is worn, on the six painted frames of inventory_fashion.png (3 x 2), each with its name plate.
+    // What is worn, on the six painted frames of inventory_fashion.png (3 x 2), each with its name plate; the
+    // seventh and eighth slots in small frames drawn in code (EXTRA_FRAMES).
     const parts: HTMLElement[] = [place(el('div', 'fashion-head', 'ของแต่งตัวที่สวมอยู่'), HEAD)];
     COS_SLOTS.forEach((s, i) => {
       const c = cosById(worn[s]);
-      const x = FRAME_X[i % 3];
-      const y = FRAME_Y[Math.floor(i / 3)];
       const cell = el('div', c ? 'cell fashion-cell worn' : 'cell empty');
       if (c) {
         cell.dataset.wornSlot = s;
         cell.style.setProperty('--rc', c.color);
         cell.append(cosPicture(c).cloneNode(true));
       }
+      if (i >= 6) {
+        const frame = EXTRA_FRAMES[i - 6];
+        if (!frame) return;
+        const [fx, fy, fw, fh] = frame;
+        cell.title = COS_SLOT_NAME[s];
+        parts.push(
+          place(el('div', 'fashion-extra-frame'), frame),
+          place(cell, [fx + 6, fy + 6, fw - 12, fh - 12]),
+          place(el('div', 'fashion-slot-name fashion-extra-plate', PLATE_NAME[s] ?? COS_SLOT_NAME[s]), EXTRA_PLATES[i - 6]),
+        );
+        return;
+      }
+      const x = FRAME_X[i % 3];
+      const y = FRAME_Y[Math.floor(i / 3)];
       parts.push(
         place(cell, [x + FRAME_IN, y + FRAME_IN, FRAME_W - FRAME_IN * 2, FRAME_H - FRAME_IN * 2]),
         place(el('div', 'fashion-slot-name', PLATE_NAME[s] ?? COS_SLOT_NAME[s]), [x + PLATE_DX, PLATE_Y[Math.floor(i / 3)], PLATE_W, PLATE_H]),

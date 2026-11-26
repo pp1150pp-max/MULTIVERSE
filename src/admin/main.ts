@@ -260,6 +260,7 @@ const SEARCH_INDEX: { tab: Tab; title: string; words?: string }[] = [
   { tab: 'balance', title: 'หยุดตอนโจมตี' },
   { tab: 'balance', title: 'นักดาบกระดาษ: ภาพอาวุธและเกราะ' },
   { tab: 'balance', title: 'เควสสอนระบบ: รางวัล', words: 'tutorial' },
+  { tab: 'balance', title: 'หน้าต่างคุย NPC', words: 'npc คุย บทพูด ทักทาย คำพูดเหนือหัว ฟองคำพูด dialog' },
   { tab: 'skills', title: 'ระบบสกิล: ค่ารวม', words: 'แต้มสกิล แรงก์ คืนแต้ม ปลดล็อก ซูมผัง' },
   { tab: 'skills', title: 'ค่ารายสกิล', words: 'สกิล ดาเมจ คูลดาวน์ mp ระยะ ผังดาว' },
   { tab: 'maps', title: 'ตัวแก้แมพ', words: 'แมพ แก้แมพ วางบ้าน ลากวาง หมุน ร่าง เผยแพร่ undo snap คลังภาพ' },

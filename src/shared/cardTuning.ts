@@ -2,12 +2,14 @@
 // defaults in data/cards.ts, stored in the settings table. Game code reads cards and numbers through
 // cardDef / cardNum, which apply the current tuning (the server sets it at start and on every save).
 import {
-  CARD_DEFAULTS, CARD_FX, CARD_FX_MAX, CARD_FX_NAME, CARD_GROUP_NAME, CARD_GROUPS, CARD_NUM_FIELDS, isCardId,
-  type CardDef, type CardFx, type CardGroup, type CardId,
+  CARD_DEFAULTS, CARD_FX, CARD_FX_MAX, CARD_FX_NAME, CARD_GROUP_NAME, CARD_GROUPS, CARD_NUM_FIELDS, CARD_RARITIES, CARD_RARITY_NAME, isCardId,
+  type CardDef, type CardFx, type CardGroup, type CardId, type CardRarity,
 } from './data/cards';
 
-/** One card's changes: its group and/or its whole effect list. */
+/** One card's changes: its rarity, its group and/or its whole effect list. */
 export interface CardChange {
+  /** Owner 2026-11-26: rarity is adjustable per card (sell price, colour, frame and the fusion pool follow it). */
+  rarity?: CardRarity;
   group?: CardGroup;
   fx?: Partial<Record<CardFx, number>>;
 }
@@ -60,6 +62,11 @@ export function checkCardTuning(v: unknown, strict: boolean): Result {
     }
     const gi = g as Record<string, unknown>;
     const ch: CardChange = {};
+    if (gi.rarity !== undefined) {
+      if (!CARD_RARITIES.includes(gi.rarity as CardRarity)) {
+        if (strict) return { error: `ระดับของ ${d.id} ไม่ถูกต้อง` };
+      } else if (gi.rarity !== d.rarity) ch.rarity = gi.rarity as CardRarity;
+    }
     if (gi.group !== undefined) {
       if (!CARD_GROUPS.includes(gi.group as CardGroup)) {
         if (strict) return { error: `กลุ่มช่องของ ${d.id} ไม่ถูกต้อง` };
@@ -71,7 +78,7 @@ export function checkCardTuning(v: unknown, strict: boolean): Result {
         if (strict) return { error: `${d.id}: ${fx}` };
       } else if (!sameFx(fx, d.fx)) ch.fx = fx;
     }
-    if (ch.group || ch.fx) cards[d.id] = ch;
+    if (ch.rarity || ch.group || ch.fx) cards[d.id] = ch;
   }
   if (Object.keys(cards).length) out.cards = cards;
 
@@ -131,6 +138,7 @@ export function cardTuningChanges(before: CardTuning, after: CardTuning, name: (
   for (const d of CARD_DEFAULTS) {
     const a = cardOf(before, d);
     const b = cardOf(after, d);
+    if (a.rarity !== b.rarity) out.push(`${name(d.id)} ระดับ: ${CARD_RARITY_NAME[a.rarity]} → ${CARD_RARITY_NAME[b.rarity]}`);
     if (a.group !== b.group) out.push(`${name(d.id)} ใส่ได้: ${groupText(a.group)} → ${groupText(b.group)}`);
     if (!sameFx(a.fx, b.fx)) out.push(`${name(d.id)}: ${fxText(a.fx)} → ${fxText(b.fx)}`);
   }
@@ -144,7 +152,12 @@ export function cardTuningChanges(before: CardTuning, after: CardTuning, name: (
 
 function cardOf(t: CardTuning, d: CardDef): CardDef {
   const ch = t.cards?.[d.id];
-  return ch ? { ...d, group: ch.group ?? d.group, fx: ch.fx ?? d.fx } : d;
+  return ch ? { ...d, rarity: ch.rarity ?? d.rarity, group: ch.group ?? d.group, fx: ch.fx ?? d.fx } : d;
+}
+
+/** The cards a fusion of `rarity` cards from `floor` can give, by the tuned rarity (cardFusePool in data/cards uses the code's). */
+export function tunedFusePool(rarity: CardRarity, floor: 1 | 2): CardId[] {
+  return CARD_DEFAULTS.filter((d) => d.floor === floor && cardOf(current, d).rarity === rarity).map((d) => d.id);
 }
 
 // ------------------------------------------------------------ the current tuning (game code reads these)
@@ -166,4 +179,10 @@ export function cardDef(id: CardId): CardDef | undefined {
 /** One card-system number with the current tuning applied (see CARD_NUM_FIELDS for keys and units). */
 export function cardNum(key: string): number {
   return current.nums?.[key] ?? FIELD.get(key)?.def ?? 0;
+}
+
+/** Whether a card may drop now: floor 1 always, floor 2 only while the /admin switch floor2Drop is on (owner 2026-11-25). */
+export function cardDropsOpen(id: CardId): boolean {
+  const d = CARD_DEFAULTS.find((x) => x.id === id);
+  return !!d && (d.floor === 1 || cardNum('floor2Drop') === 1);
 }

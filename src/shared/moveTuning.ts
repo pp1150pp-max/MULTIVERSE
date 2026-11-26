@@ -18,7 +18,10 @@ export interface MoveGroup { id: string; title: string; params: MoveParam[] }
 const p = (key: string, label: string, code: number, min: number, max: number, step: number, unit?: string): MoveParam =>
   ({ key, label, code, min, max, step, unit });
 
-/** Every group, in /admin order. Shipwreck Beach (map 1): owner's numbers of 2026-11-20; Smugglers' Cove (map 2) after it. */
+/**
+ * Every group, in /admin order. Shipwreck Beach (map 1): owner's numbers of 2026-11-20; Smugglers' Cove (map 2) after it, then the
+ * Ghost Ship Graveyard (map 3), then the Kraken Maelstrom (map 4).
+ */
 export const MOVE_GROUPS: MoveGroup[] = [
   {
     id: 'shell', title: 'ปูเสฉวน: หดกระดอง', params: [
@@ -135,6 +138,109 @@ export const MOVE_GROUPS: MoveGroup[] = [
       p('captain.shoutSpeed', 'ตะโกนสั่ง: เร็วขึ้น', 0.4, 0, 3, 0.05, '×'),
       p('captain.shoutSec', 'ตะโกนสั่ง: นาน', 6, 0.5, 30, 0.5, 'วิ'),
       p('captain.shoutRange', 'ตะโกนสั่ง: รัศมีลูกน้อง', 12, 1, 40, 1),
+    ],
+  },
+  // Ghost Ship Graveyard (map 3): the proposed numbers, owner 2026-11-24 (plan 5.3, sim/graveMoves.ts and sim/ghostCaptain.ts).
+  {
+    id: 'curse', title: 'ลิงกะลาสีผี: วงคำสาป', params: [
+      p('curse.radius', 'วงคำสาป: รัศมี', 1.8, 0.5, 6, 0.1),
+      p('curse.sec', 'วงคำสาป: ค้างนาน', 4, 0.5, 20, 0.5, 'วิ'),
+      p('curse.slow', 'วงคำสาป: เดินช้าลง', 0.35, 0, 0.9, 0.05, '×'),
+    ],
+  },
+  {
+    id: 'phase', title: 'กะลาสีผี: ล่องหน', params: [
+      p('phase.cd', 'ล่องหน: คูลดาวน์', 8, 1, 60, 0.5, 'วิ'),
+      p('phase.sec', 'ล่องหนนาน', 1.5, 0.2, 10, 0.1, 'วิ'),
+      p('phase.speed', 'ความเร็วตอนล่องหน', 1.6, 0.5, 5, 0.1, '×'),
+      p('phase.mult', 'โผล่ตี: ดาเมจ', 1.8, 0, 20, 0.1, '×ATK'),
+      p('phase.windup', 'โผล่ตี: ง้าง', 0.35, 0.1, 3, 0.05, 'วิ'),
+    ],
+  },
+  {
+    id: 'song', title: 'ไซเรนผี: เพลงดึงดูด', params: [
+      p('song.cd', 'ร้องเพลง: คูลดาวน์', 10, 2, 60, 0.5, 'วิ'),
+      p('song.windup', 'ร้องเพลง: ง้าง', 1, 0.1, 5, 0.1, 'วิ'),
+      p('song.radius', 'ร้องเพลง: รัศมี', 6, 1, 15, 0.5),
+      p('song.sec', 'ถูกบังคับเดินนาน (แดชตัดได้)', 1.5, 0.2, 5, 0.1, 'วิ'),
+      p('song.mult', 'ร้องเพลง: ดาเมจ', 0.5, 0, 20, 0.1, '×ATK'),
+    ],
+  },
+  {
+    id: 'split', title: 'ลูกเรือหอยเกาะผี: แยกร่าง', params: [
+      p('split.count', 'แตกเป็นตัวเล็ก', 2, 0, 6, 1, 'ตัว'),
+    ],
+  },
+  {
+    id: 'ghost', title: 'กัปตันผีเรือคนตาย (บอส)', params: [
+      p('ghost.hpMult', 'ตัวคูณ HP บอส', 1, 0.1, 10, 0.05, '×'),
+      p('ghost.atkMult', 'ตัวคูณ ATK บอส', 1, 0.1, 10, 0.05, '×'),
+      p('ghost.fogCd', 'หมอกผี: คูลดาวน์', 22, 3, 120, 1, 'วิ'),
+      p('ghost.fogSec', 'หมอกผี: นาน', 7, 1, 60, 0.5, 'วิ'),
+      p('ghost.fogSight', 'หมอกผี: มองเห็นรอบตัว', 5, 1, 20, 0.5, 'หน่วย'),
+      p('ghost.bellCd', 'ระฆังเรือผี: คูลดาวน์', 16, 2, 120, 1, 'วิ'),
+      p('ghost.bellCount', 'ระฆังเรือผี: กะลาสีผีต่อครั้ง', 2, 0, 10, 1, 'ตัว'),
+      p('ghost.bellMax', 'ระฆังเรือผี: กะลาสีผีอยู่พร้อมกันไม่เกิน', 6, 0, 30, 1, 'ตัว'),
+      p('ghost.warpCd', 'วาร์ปข้างหลัง: คูลดาวน์', 11, 2, 60, 0.5, 'วิ'),
+      p('ghost.warpHide', 'วาร์ปข้างหลัง: หายไปนาน', 0.8, 0.1, 5, 0.1, 'วิ'),
+      p('ghost.warpWindup', 'วาร์ปข้างหลัง: ง้างก่อนฟัน', 0.5, 0.1, 3, 0.05, 'วิ'),
+      p('ghost.warpRadius', 'วาร์ปข้างหลัง: รัศมีฟัน', 2.4, 0.5, 8, 0.1),
+      p('ghost.warpMult', 'วาร์ปข้างหลัง: ดาเมจ', 2.2, 0, 20, 0.1, '×ATK'),
+    ],
+  },
+  // Kraken Maelstrom (map 4): the proposed numbers, owner 2026-11-24 (plan 5.4, sim/maelstromMoves.ts and sim/kraken.ts).
+  {
+    id: 'dive', title: 'อัศวินฉลาม: มุดดิน', params: [
+      p('dive.cd', 'มุดดิน: คูลดาวน์', 7, 1, 60, 0.5, 'วิ'),
+      p('dive.sec', 'มุดอยู่นาน (ตีไม่ได้)', 1.5, 0.2, 10, 0.1, 'วิ'),
+      p('dive.speed', 'ความเร็วตอนมุด', 1.6, 0.5, 5, 0.1, '×'),
+      p('dive.warn', 'โผล่: วงเตือน', 0.6, 0.1, 3, 0.05, 'วิ'),
+      p('dive.radius', 'โผล่: รัศมี', 1.8, 0.5, 6, 0.1),
+      p('dive.mult', 'โผล่: ดาเมจ', 1.8, 0, 20, 0.1, '×ATK'),
+    ],
+  },
+  {
+    id: 'bubble', title: 'ม้าน้ำทหาร: ฟองน้ำ', params: [
+      p('bubble.sec', 'ติดฟอง (ขยับ/ตี/แดชไม่ได้)', 1.2, 0, 5, 0.1, 'วิ'),
+    ],
+  },
+  {
+    id: 'wave', title: 'ราชาโจรสลัดผี: คลื่นดาบ', params: [
+      p('wave.cd', 'คลื่นดาบ: คูลดาวน์', 6, 1, 60, 0.5, 'วิ'),
+      p('wave.len', 'คลื่นดาบ: ระยะ', 10, 2, 25, 0.5),
+      p('wave.width', 'คลื่นดาบ: ความกว้าง', 1.4, 0.4, 5, 0.1),
+      p('wave.warn', 'คลื่นดาบ: แนวเตือน', 0.6, 0.1, 3, 0.05, 'วิ'),
+      p('wave.mult', 'คลื่นดาบ: ดาเมจ', 1.6, 0, 20, 0.1, '×ATK'),
+    ],
+  },
+  {
+    id: 'tentacle', title: 'หนวดคราเคน: ฟาดเป็นแนว', params: [
+      p('tentacle.cd', 'ฟาด: คูลดาวน์', 3.5, 0.5, 30, 0.5, 'วิ'),
+      p('tentacle.len', 'ฟาด: ระยะแนว', 7, 2, 20, 0.5),
+      p('tentacle.width', 'ฟาด: ความกว้างแนว (หนวดในห้องบอสด้วย)', 1.6, 0.4, 5, 0.1),
+      p('tentacle.warn', 'ฟาด: แนวเตือน', 0.9, 0.1, 3, 0.05, 'วิ'),
+      p('tentacle.mult', 'ฟาด: ดาเมจ', 1.5, 0, 20, 0.1, '×ATK'),
+    ],
+  },
+  {
+    id: 'kraken', title: 'คราเคน (บอส)', params: [
+      p('kraken.hpMult', 'ตัวคูณ HP บอส', 1, 0.1, 10, 0.05, '×'),
+      p('kraken.atkMult', 'ตัวคูณ ATK บอส', 1, 0.1, 10, 0.05, '×'),
+      p('kraken.arms', 'หนวด: จำนวนต่อรอบ', 4, 1, 12, 1, 'เส้น'),
+      p('kraken.armHp', 'หนวด: HP ต่อเส้น (ส่วนของ HP บอส)', 0.03, 0.001, 0.5, 0.005, '×HP'),
+      p('kraken.armCd', 'หนวด: ฟาดคูลดาวน์', 3.5, 0.5, 30, 0.5, 'วิ'),
+      p('kraken.armLen', 'หนวด: ระยะแนว', 8, 2, 20, 0.5),
+      p('kraken.armWarn', 'หนวด: แนวเตือน', 0.9, 0.1, 3, 0.05, 'วิ'),
+      p('kraken.armMult', 'หนวด: ดาเมจ', 1.5, 0, 20, 0.1, '×ATK'),
+      p('kraken.headSec', 'ตัดหนวดครบ: หัวโผล่ให้ตีนาน', 12, 2, 60, 0.5, 'วิ'),
+      p('kraken.inkCd', 'พ่นหมึก: คูลดาวน์', 9, 1, 60, 0.5, 'วิ'),
+      p('kraken.inkTargets', 'พ่นหมึก: จำนวนคน', 2, 0, 10, 1, 'คน'),
+      p('kraken.inkSec', 'พ่นหมึก: บังจอนาน', 3, 0.5, 15, 0.5, 'วิ'),
+      p('kraken.inkMult', 'พ่นหมึก: ดาเมจ', 0.8, 0, 20, 0.1, '×ATK'),
+      p('kraken.suckCd', 'ดูดน้ำวน: คูลดาวน์', 18, 3, 120, 1, 'วิ'),
+      p('kraken.suckSec', 'ดูดน้ำวน: นาน', 3, 0.5, 15, 0.5, 'วิ'),
+      p('kraken.suckSpeed', 'ดูดน้ำวน: แรงดูด', 2.6, 0, 8, 0.1, 'หน่วย/วิ'),
+      p('kraken.suckMult', 'ดูดน้ำวน: ดาเมจที่ขอบน้ำวน (ทุก 0.5 วิ)', 0.4, 0, 20, 0.05, '×ATK'),
     ],
   },
 ];

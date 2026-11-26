@@ -2,6 +2,7 @@
 // copies of nearby players, monsters, projectiles and loot (real shared classes, so the views, HUD
 // and Auto Play work unchanged), smooths their movement between snapshots, and walks your own
 // character immediately so controls feel instant. The server checks every reported position.
+import { suctionStep } from '../../shared/sim/kraken';
 import { Terrain } from '../../shared/sim/terrain';
 import { Player, type AutoSettings, type CharacterData, type LootFilter, type SortKey } from '../../shared/sim/Player';
 import { Monster } from '../../shared/sim/Monster';
@@ -15,6 +16,7 @@ import { checkOrbItems, registerOrbItems } from '../../shared/orbItems';
 import { applyOrbLook } from '../orbs';
 import { checkCosTuning } from '../../shared/cosTuning';
 import { checkAnimTuning } from '../../shared/animTuning';
+import { applyCardTuning, checkCardTuning } from '../../shared/cardTuning';
 import { applyAnimTuning } from '../animTune';
 import { applyBalance, checkBalance, currentBalance } from '../../shared/balance';
 import { applySlotVars } from '../img';
@@ -115,6 +117,7 @@ function useWelcome(m: WelcomeMsg): void {
   useOrbLook(m.orbLook);
   useCosTuning(m.cosTuning);
   useAnimTuning(m.animTuning);
+  useCardTuning(m.cardTuning);
   applyCosHidden(m.cosHidden);
   useOrbItems(m.orbItems);
   useBalance(m.balance);
@@ -746,7 +749,9 @@ export class OnlineBackend implements Backend {
         done?.(m.result && m.item ? { result: m.result, item: m.item } : null);
         break;
       }
-      case 'rerolled': {
+      // Drilling answers like a reroll: the changed item (its req numbers come from the same counter).
+      case 'rerolled':
+      case 'drilled': {
         const done = this.rerollWait.get(m.req);
         this.rerollWait.delete(m.req);
         done?.(m.item);
@@ -802,6 +807,9 @@ export class OnlineBackend implements Backend {
         break;
       case 'animTuning':
         useAnimTuning(m.tuning);
+        break;
+      case 'cardTuning':
+        useCardTuning(m.tuning);
         break;
       case 'cosHidden':
         applyCosHidden(m.ids);
@@ -1000,6 +1008,8 @@ export class OnlineBackend implements Backend {
       m.windupT = ms.wind ? 1 : 0;
       m.enraged = ms.enr;
       m.lift = ms.y;
+      m.fade = ms.inv === 1;
+      m.noHit = m.fade;
       m.debuffs = ms.db ?? 0;
       m.debuffSkill = ms.ds ?? '';
     }
@@ -1312,7 +1322,9 @@ export class OnlineBackend implements Backend {
     // Stopped on an attack: stand (a clicked spot is kept, walking carries on when the stop ends) facing the aim.
     const paused = this.atkRootT > 0;
     const walking = !paused && (mx !== 0 || mz !== 0);
-    const moving = !paused && me.walkStep(mx, mz, remaining, dt, this.terrain);
+    let moving = !paused && me.walkStep(mx, mz, remaining, dt, this.terrain);
+    // The kraken's whirlpool pulls us as it pulls us on the server (sim/kraken.ts), walking or not.
+    if (this.hazards.length && suctionStep(me, this.hazards, this.time, dt, this.terrain)) moving = true;
     if (!paused) this.walkTarget.check(me, dt);
     if (it.basic || it.skills.length) {
       this.faceLockT = 0.25;
@@ -1401,12 +1413,31 @@ export class OnlineBackend implements Backend {
   reroll(uid: string, kind: RerollKind): Promise<Item | null> {
     const req = ++this.enhanceReq;
     this.send({ t: 'act', a: 'reroll', uid, kind, req });
+    return this.waitItem(req);
+  }
+
+  drill(uid: string): Promise<Item | null> {
+    const req = ++this.enhanceReq;
+    this.send({ t: 'act', a: 'drill', uid, req });
+    return this.waitItem(req);
+  }
+
+  /** The item a blacksmith answer (`rerolled` / `drilled`) with this req carries, or null after 5 s. */
+  private waitItem(req: number): Promise<Item | null> {
     return new Promise((resolve) => {
       this.rerollWait.set(req, resolve);
       setTimeout(() => {
         if (this.rerollWait.delete(req)) resolve(null);
       }, 5000);
     });
+  }
+
+  socketCard(uid: string, card: string): void {
+    this.send({ t: 'act', a: 'socketCard', uid, card });
+  }
+
+  unsocketCard(uid: string, i: number): void {
+    this.send({ t: 'act', a: 'unsocketCard', uid, i });
   }
 
   market(call: MarketCall): Promise<MarketReply> {
@@ -1541,6 +1572,11 @@ function useCosTuning(v: unknown): void {
 /** The server's per-facing animation fixes (src/shared/animTuning.ts), used by every character drawn from now on. */
 function useAnimTuning(v: unknown): void {
   applyAnimTuning(checkAnimTuning(v, false).tuning ?? {});
+}
+
+/** The server's card tuning (src/shared/cardTuning.ts), so card tooltips (effects, sell price) match /admin. */
+function useCardTuning(v: unknown): void {
+  applyCardTuning(v === undefined ? {} : checkCardTuning(v, false).tuning ?? {});
 }
 
 /** The server's game balance (class stats, tier tables), so tooltips and the blacksmith's odds match it. */

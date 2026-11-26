@@ -9,15 +9,26 @@ import { COSMETICS, cosById, type CosSlot } from './data/cosmetics';
 
 /** Slots with a tuning (title sets are name frames and chat bubbles, no 3D placement). */
 export type TunedSlot = Exclude<CosSlot, 'title' | 'orb'>;
-export const TUNED_SLOTS: readonly TunedSlot[] = ['wings', 'mount', 'pet', 'aura'];
+export const TUNED_SLOTS: readonly TunedSlot[] = ['wings', 'mount', 'pet', 'aura', 'levelup', 'dash'];
 
-/** One field: a number with its range and slider step, or an on/off switch. `label` is the admin's Thai name. */
+/**
+ * One field: a number with its range and slider step, an on/off switch, or a colour (stored as a whole number
+ * 0–0xFFFFFF so the values stay numbers; colorHex / colorNum convert). `label` is the admin's Thai name.
+ */
 export type TuneField =
   | { kind: 'num'; min: number; max: number; step: number; label: string }
-  | { kind: 'bool'; label: string };
+  | { kind: 'bool'; label: string }
+  | { kind: 'color'; label: string };
 
 const num = (min: number, max: number, step: number, label: string): TuneField => ({ kind: 'num', min, max, step, label });
 const bool = (label: string): TuneField => ({ kind: 'bool', label });
+const color = (label: string): TuneField => ({ kind: 'color', label });
+
+/** A colour field's value as '#rrggbb'. */
+export const colorHex = (v: unknown): string => '#' + ((typeof v === 'number' ? v : 0) & 0xffffff).toString(16).padStart(6, '0');
+/** '#rrggbb' as a colour field's value (anything else: undefined). */
+export const colorNum = (hex: unknown): number | undefined =>
+  typeof hex === 'string' && /^#[0-9a-f]{6}$/i.test(hex) ? parseInt(hex.slice(1), 16) : undefined;
 
 /** Every field of each slot (the admin sliders use the same ranges; the server checks against them). */
 export const COS_TUNE_FIELDS: Record<TunedSlot, Record<string, TuneField>> = {
@@ -88,6 +99,30 @@ export const COS_TUNE_FIELDS: Record<TunedSlot, Record<string, TuneField>> = {
     sparkSize: num(0, 1.5, 0.02, 'ขนาดประกาย'),
     stepEvery: num(0.1, 1, 0.02, 'รอยเท้าทุก ๆ (วินาที)'),
     stepSize: num(0, 1.5, 0.02, 'ขนาดรอยเท้า'),
+  },
+  // Owner 2026-11-25: each level-up style has its own look (moved off the balance tab's card). `main` is the
+  // style's own centrepiece: chevrons, the fire spiral, the bolts, the leaf whirl, the shooting stars, the smoke vortex.
+  levelup: {
+    color1: color('สีหลัก'),
+    color2: color('สีรอง'),
+    size: num(0.3, 3, 0.05, 'ขนาดทั้งหมด (คูณ)'),
+    sec: num(0.5, 6, 0.1, 'เวลา (วินาที)'),
+    ground: bool('วงบนพื้น'),
+    sparks: bool('ประกาย / อนุภาค'),
+    main: bool('ส่วนเด่นของแบบ (ลูกศร เปลวไฟ สายฟ้า ลมใบไม้ ดาวตก ควันวน)'),
+    text: bool('ตัวหนังสือ LEVEL UP !'),
+  },
+  // Owner 2026-11-26: each dash style has its own look (src/client/dashFx.ts). Players dash all the time, so
+  // the time stays short. `trail` is the style's own path: speed lines, flames, the bolt, leaves, stars, smoke.
+  dash: {
+    color1: color('สีหลัก'),
+    color2: color('สีรอง'),
+    size: num(0.3, 3, 0.05, 'ขนาดทั้งหมด (คูณ)'),
+    sec: num(0.2, 1.5, 0.05, 'เวลา (วินาที)'),
+    ends: bool('วงที่จุดเริ่มและจุดปลาย'),
+    trail: bool('ทางที่พุ่ง (เส้นความเร็ว เปลวไฟ สายฟ้า ใบไม้ ดาว ควัน)'),
+    ghosts: bool('เงาตัวละครตามหลัง'),
+    sparks: bool('ประกาย / อนุภาค'),
   },
 };
 
@@ -172,6 +207,10 @@ export const COS_AXES: Record<TunedSlot, AxisSpec[]> = {
     { axis: 'z', key: 'back', sign: -1, label: 'Z หน้า/หลัง' },
   ],
   aura: [{ axis: 'x', key: 'shift', sign: 1, label: 'X ซ้าย/ขวา' }],
+  // Played where the character stands: no placement.
+  levelup: [],
+  // Drawn along the dash: no placement.
+  dash: [],
 };
 
 // The new fields: the mount's own Z, and every view offset.
@@ -275,6 +314,16 @@ function baseDefaults(id: string, slot: TunedSlot): TuneValues | undefined {
     }
     case 'aura':
       return { size: 2.1, shift: 0, alpha: 0.55, pulse: 0.06, sparks: 4, sparkSize: 0.3, stepEvery: 0.28, stepSize: 0.32 };
+    case 'levelup': {
+      // The two colours are the catalogue's (the cyan's are #485's code colours); 2.2 s like #485.
+      const c = cosById(id)!;
+      return { color1: colorNum(c.color) ?? 0xffffff, color2: colorNum(c.color2) ?? 0xffffff, size: 1, sec: 2.2, ground: true, sparks: true, main: true, text: true };
+    }
+    case 'dash': {
+      // The catalogue's colours; 0.55 s (a dash takes 0.18 s, the rest is the fade).
+      const c = cosById(id)!;
+      return { color1: colorNum(c.color) ?? 0xffffff, color2: colorNum(c.color2) ?? 0xffffff, size: 1, sec: 0.55, ends: true, trail: true, ghosts: true, sparks: true };
+    }
   }
 }
 
@@ -322,6 +371,12 @@ export function checkCosTuning(v: unknown, strict: boolean): { tuning: CosTuning
       if (f.kind === 'bool') {
         if (typeof x !== 'boolean') {
           if (strict) return { error: `${c.id}: ค่า ${k} ต้องเป็น true/false` };
+          continue;
+        }
+        clean = x;
+      } else if (f.kind === 'color') {
+        if (typeof x !== 'number' || !Number.isInteger(x) || x < 0 || x > 0xffffff) {
+          if (strict) return { error: `${c.id}: ค่า ${k} ต้องเป็นสี` };
           continue;
         }
         clean = x;
@@ -395,7 +450,38 @@ export function cosTuningChanges(before: CosTuning, after: CosTuning): string {
     const a = cosTuneOf(before, c.id);
     const b = cosTuneOf(after, c.id);
     if (!a || !b) continue;
-    for (const k of Object.keys(a)) if (a[k] !== b[k]) out.push(`${c.id}.${k} ${a[k]} → ${b[k]}`);
+    const isColor = (k: string) => COS_TUNE_FIELDS[c.slot as TunedSlot]?.[k]?.kind === 'color';
+    for (const k of Object.keys(a)) {
+      if (a[k] === b[k]) continue;
+      out.push(isColor(k) ? `${c.id}.${k} ${colorHex(a[k])} → ${colorHex(b[k])}` : `${c.id}.${k} ${a[k]} → ${b[k]}`);
+    }
   }
   return out.join(', ');
+}
+
+// ---- the level-up look that used to be on the balance tab (owner 2026-11-25) ----
+/** fxLayer keys the level-up look had on the balance tab, and the field of the cyan piece each one moved to. */
+export const OLD_LEVELUP_KEYS: Readonly<Record<string, string>> = {
+  luColor1: 'color1', luColor2: 'color2', luSize: 'size', luSec: 'sec', luGround: 'ground', luSparks: 'sparks', luArrows: 'main', luText: 'text',
+};
+/** The piece the old balance-tab look belongs to (the cyan circle of #485). */
+export const OLD_LEVELUP_PIECE = 'levelup_cyan';
+
+/**
+ * The cyan piece's values from a saved balance's raw fxLayer (only what was saved there: the changes from the
+ * old code defaults, which are the cyan piece's own defaults). Anything of the wrong type is left out.
+ */
+export function levelUpFromOldBalance(fx: Record<string, unknown>): TuneValues {
+  const out: TuneValues = {};
+  for (const [old, key] of Object.entries(OLD_LEVELUP_KEYS)) {
+    const v = fx[old];
+    const f = COS_TUNE_FIELDS.levelup[key];
+    if (f.kind === 'color') {
+      const n = colorNum(v);
+      if (n !== undefined) out[key] = n;
+    } else if (f.kind === 'bool') {
+      if (typeof v === 'boolean') out[key] = v;
+    } else if (typeof v === 'number' && Number.isFinite(v)) out[key] = Math.min(f.max, Math.max(f.min, v));
+  }
+  return out;
 }

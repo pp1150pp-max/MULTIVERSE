@@ -99,7 +99,7 @@ export const EN_GAME: Record<string, string> = {
   'พ่อค้าเคลียร์ของที่รับซื้อไว้แล้ว — ซื้อคืนไม่ได้อีก': 'The merchant has cleared what he bought — it can no longer be bought back',
   'พ่อค้าไม่รับซื้อลูกแก้ว — เทรดหรือลงขายในตลาดแทน': "The merchant doesn't buy orbs — trade them or list them on the market",
   'ขาย {0} ได้ {1} G': 'Sold {0} for {1} G',
-  'ไม่มีของระดับ{0}ในกระเป๋า (ของที่ตีบวกแล้วจะไม่ถูกขาย)': 'No {0} items in the bag (enhanced items are never sold)',
+  'ไม่มีของระดับ{0}ในกระเป๋า (ของที่ตีบวกหรือเจาะรูแล้วจะไม่ถูกขาย)': 'No {0} items in the bag (enhanced or drilled items are never sold)',
   'ขายของระดับ{0} {1} ชิ้น ได้ {2} G': 'Sold {1} {0} items for {2} G',
   'คลังเต็ม': 'Storage full',
   'ทองไม่พอ — ต้องใช้ {0} G': 'Not enough gold — need {0} G',
