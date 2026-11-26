@@ -1203,9 +1203,12 @@ export class Hud {
     if (this.dialogOpen) this.closeDialog();
     this.g.tutorial.close();
     this.g.navigator.close();
+    this.g.npcDialog.close();
   }
 
   talkTo(id: NpcId): void {
+    // The talk window (owner 2026-11-26, npcDialog.ts); off on /admin = straight to the NPC's own window as before.
+    if (currentBalance().npcTalk.on) return this.g.npcDialog.show(id);
     // A tutorial step to take or hand in here: talk about it first (that window has a button on to the NPC's own).
     if (id !== 'seeker' && id !== 'navigator' && this.g.tutorial.wants(id)) return this.g.tutorial.show(id);
     this.openNpcWindow(id);
@@ -1955,6 +1958,16 @@ export class Hud {
   private closeDialog(): void {
     this.dialogOpen = false;
     $('dialog').classList.add('hidden');
+    this.seekerStoryDone();
+  }
+
+  /** The Seeker's story, for the talk window to page through (npcDialog.ts). */
+  get seekerLines(): readonly string[] {
+    return SEEKER_LINES;
+  }
+
+  /** The Seeker's story has been read to the end: the first time, the first goal goes in the chat. */
+  seekerStoryDone(): void {
     if (!this.g.metSeeker) {
       this.g.metSeeker = true;
       const boss = MONSTERS[ZONE_1.lair!.boss];

@@ -7,8 +7,10 @@ import { STONE_NAME } from '../shared/data/stones';
 import { currentBalance } from '../shared/balance';
 import {
   TUT_ACCEPT_GOLD, TUT_ACCEPT_STONES, TUT_INTRO, TUT_STEP_NAME, TUT_STEPS, TUT_TASK_NAME, TUT_TASKS,
-  tutMark, tutRewardText, tutRows, tutTurnInReward,
+  tutMark, tutRewardText, tutRows, tutTurnInReward, type TutStep,
 } from '../shared/tutorial';
+import { RewardWin, rewardIcons } from './rewardWin';
+import { talkIconUrl } from './npcDialog';
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -23,10 +25,14 @@ export class TutorialUI {
   private readonly body: HTMLElement;
   private npc: NpcId | null = null;
   private drawn = '';
+  /** The step just sent to hand in, and when: once it shows as done, the reward window (F) pops. */
+  private turningIn: { step: TutStep; at: number } | null = null;
+  private readonly reward = new RewardWin();
 
   /** `openNpc` opens the NPC's own window (shop, stash, forge, market). */
   constructor(private readonly g: Game, private readonly openNpc: (id: NpcId) => void) {
-    this.win = el('div', 'panel hidden');
+    // D (owner 2026-11-26): a parchment quest card with a scroll and the rewards as icons.
+    this.win = el('div', 'panel hidden quest-card');
     this.win.id = 'tut-win';
     const head = el('div', 'panel-head');
     const close = el('button', '', '✕');
@@ -60,6 +66,7 @@ export class TutorialUI {
   }
 
   update(): void {
+    this.watchTurnIns();
     const id = this.npc;
     if (!this.open || !id) return;
     // Walked away: the window closes.
@@ -73,8 +80,15 @@ export class TutorialUI {
     this.title.textContent = npcLook(id, this.g.backend.zone.town).name;
     this.body.replaceChildren();
     for (const r of rows) {
-      this.body.append(el('div', 'quest-head', `ภารกิจสอนระบบ ${TUT_STEPS.indexOf(r.step) + 1}/${TUT_STEPS.length}: ${TUT_STEP_NAME[r.step]}`));
-      if (r.state === 'offer') this.body.append(el('div', 'quest-intro', TUT_INTRO[r.step]));
+      const top = el('div', 'qc-top');
+      const scroll = el('img', 'qc-scroll');
+      scroll.src = talkIconUrl(r.state === 'ready' ? 'turnin' : 'quest');
+      scroll.alt = '';
+      const txt = el('div');
+      top.append(scroll, txt);
+      this.body.append(top);
+      txt.append(el('div', 'quest-head', `ภารกิจสอนระบบ ${TUT_STEPS.indexOf(r.step) + 1}/${TUT_STEPS.length}: ${TUT_STEP_NAME[r.step]}`));
+      if (r.state === 'offer') txt.append(el('div', 'quest-intro', TUT_INTRO[r.step]));
       const list = el('div', 'tut-tasks');
       for (const k of TUT_TASKS[r.step]) {
         const got = r.got.includes(k);
@@ -92,14 +106,23 @@ export class TutorialUI {
         const extra = stones.map((s) => `${STONE_NAME[s.stone]} ×${s.count}`).join(', ');
         this.body.append(el('div', 'quest-sub', `รับภารกิจแล้วได้ทันที: ${TUT_ACCEPT_GOLD.toLocaleString()} G${extra ? ` + ${extra} (เข้ากระเป๋า)` : ''}`));
       }
-      this.body.append(el('div', 'quest-sub', `รางวัลเมื่อส่งภารกิจ (ส่งทางจดหมาย): ${tutRewardText(tutTurnInReward(r.step, currentBalance().tutorial))}`));
+      const reward = tutTurnInReward(r.step, currentBalance().tutorial);
+      this.body.append(el('div', 'quest-head', 'รางวัลเมื่อส่งภารกิจ (ส่งทางจดหมาย)'), rewardIcons(reward));
+      if (!reward.gold && !reward.items.length) this.body.append(el('div', 'quest-sub', tutRewardText(reward)));
       if (r.state === 'ready' && this.g.backend.guest) {
         this.body.append(el('div', 'quest-sub tut-warn', 'Guest ไม่มีกล่องจดหมาย — สมัครสมาชิกก่อนจึงจะส่งภารกิจได้ (ตัวละครนี้จะย้ายไปอยู่ในบัญชีใหม่)'));
       }
       if (r.state === 'offer' || r.state === 'ready') {
         const btn = el('button', r.state === 'offer' ? 'quest-accept' : 'quest-turnin', r.state === 'offer' ? '! รับภารกิจ' : '? ส่งภารกิจ');
-        btn.onclick = () => (r.state === 'offer' ? this.g.backend.tutAccept(r.step) : this.g.backend.tutTurnIn(r.step));
-        this.body.append(btn);
+        btn.onclick = () => (r.state === 'offer' ? this.g.backend.tutAccept(r.step) : this.turnIn(r.step));
+        const btns = el('div', 'qc-btns');
+        btns.append(btn);
+        if (r.state === 'offer') {
+          const no = el('button', '', 'ปฏิเสธ');
+          no.onclick = () => this.close();
+          btns.append(no);
+        }
+        this.body.append(btns);
       } else if (r.state === 'going') {
         const btn = el('button', 'quest-progress', `กำลังทำ ${r.got.length}/${TUT_TASKS[r.step].length}`);
         btn.disabled = true;
@@ -112,5 +135,24 @@ export class TutorialUI {
       this.openNpc(id);
     };
     this.body.append(go);
+  }
+
+  private turnIn(step: TutStep): void {
+    this.turningIn = { step, at: performance.now() };
+    this.g.backend.tutTurnIn(step);
+  }
+
+  /** F: the step sent to hand in shows as done (within 20 s): show what was mailed. */
+  private watchTurnIns(): void {
+    const t = this.turningIn;
+    if (!t) return;
+    if (performance.now() - t.at > 20_000) {
+      this.turningIn = null;
+      return;
+    }
+    const p = this.g.player;
+    if (!tutRows(p.tut, p.name).some((r) => r.step === t.step && r.state === 'done')) return;
+    this.turningIn = null;
+    this.reward.show('ได้รับรางวัลแล้ว!', `ภารกิจ ${TUT_STEP_NAME[t.step]} สำเร็จ — รางวัลส่งไปที่กล่องจดหมายแล้ว`,tutTurnInReward(t.step, currentBalance().tutorial));
   }
 }

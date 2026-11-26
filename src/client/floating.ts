@@ -327,6 +327,31 @@ export class Floating {
     });
   }
 
+  /** E (owner 2026-11-26): per NPC, when its line goes away and when it may speak again. */
+  private says = new Map<string, { until: number; next: number }>();
+
+  /** A short line over an NPC's head when the player walks near (currentBalance().npcTalk, src/shared/npcTalk.ts). */
+  private npcSay(g: Game, n: Npc, badge: HTMLElement): void {
+    const cfg = currentBalance().npcTalk;
+    let say = badge.querySelector<HTMLElement>('.npc-say');
+    const now = performance.now();
+    const st = this.says.get(n.id) ?? { until: 0, next: 0 };
+    const near = Math.hypot(g.player.x - n.x, g.player.z - n.z) <= cfg.bubbleRange;
+    const lines = cfg.chat[n.id] ?? [];
+    if (cfg.bubbles && near && now >= st.next && lines.length && !g.npcDialog.open) {
+      if (!say) {
+        say = document.createElement('div');
+        say.className = 'npc-say off';
+        badge.append(say);
+      }
+      say.textContent = lines[Math.floor(Math.random() * lines.length)];
+      st.until = now + cfg.bubbleSec * 1000;
+      st.next = now + Math.max(cfg.bubbleSec, cfg.bubbleGap) * 1000;
+      this.says.set(n.id, st);
+    }
+    if (say) say.classList.toggle('off', !cfg.bubbles || now >= st.until || g.npcDialog.open);
+  }
+
   /** Always-on badge over each camp NPC: an icon and what it does, then its name. */
   npcBadges(g: Game, npcs: readonly Npc[]): void {
     const seen = new Set<Npc>();
@@ -366,6 +391,7 @@ export class Floating {
         markEl.classList.toggle('hidden', !mark);
         markEl.classList.toggle('turn-in', mark === '?');
       }
+      this.npcSay(g, n, el);
       el.style.transform = `translate(${s.sx}px, ${s.sy}px) translate(-50%, -100%)`;
     }
     for (const [n, el] of this.badges) {
