@@ -11,11 +11,16 @@ import { isItem, EQUIP_SLOTS, RARITY_COLOR, SLOT_LABEL, STAT_LABEL, type BagEntr
 import { COIN_ICON, FORGE_ICON, itemIcon, stoneIcon } from '../icons';
 import { $, fmtNum, lineHtml } from './hudShared';
 import { drillCost, drillOdds, isDrilled, socketCount } from '../../shared/cardSockets';
-import { socketTipHtml } from './cardPopup';
+import { gameSocketHost, openCardView, socketTipHtml } from './cardPopup';
+import { cardDef } from '../../shared/cardTuning';
+import { FUSE_COUNT, cardFloor, fuseBlock, fuseInfo } from '../../shared/cardFuse';
+import { CARD_DEFAULTS, CARD_RARITY_NAME, cardName, isCardId, type CardId } from '../../shared/data/cards';
+import { isStone } from '../../shared/types';
+import { cardIcon } from '../icons';
 
 
-/** The blacksmith's menus: enhance, the two rerolls and drilling (card plan PR 2). */
-type ForgeMode = 'enhance' | RerollKind | 'drill';
+/** The blacksmith's menus: enhance, the two rerolls, drilling (card plan PR 2) and card fusion (card plan 6.1). */
+type ForgeMode = 'enhance' | RerollKind | 'drill' | 'fuse';
 
 /** The blacksmith menu's one-line description of each system (left column, under the menu). */
 const FORGE_DESC: Record<ForgeMode, string> = {
@@ -23,6 +28,7 @@ const FORGE_DESC: Record<ForgeMode, string> = {
   values: 'สุ่มค่าตัวเลขใหม่ทุกบรรทัด tier เท่าเดิม',
   stat: 'สุ่มสเตตัสเสริม 1 บรรทัด เป็นชนิดใหม่ พร้อม tier และค่าใหม่',
   drill: 'เจาะรูสำหรับเสียบการ์ด ได้ 0–2 ช่อง · เจาะได้ครั้งเดียวต่อชิ้น',
+  fuse: 'ใช้การ์ดระดับเดียวกันและชั้นเดียวกัน 3 ใบ สุ่มได้การ์ดใบใหม่ 1 ใบ (ระดับและชั้นเดิม)',
 };
 
 /** A running Auto enhance: the item, the level to stop at, and whether to use protection stones. */
@@ -59,6 +65,8 @@ export class ForgeWindow {
   private forgeAuto: ForgeAutoRun | null = null;
   /** Lines of the item before its last reroll, shown next to the new ones until another item is picked. */
   private rerollPrev: { uid: string; lines: StatLine[] } | null = null;
+  /** The cards in the fusion's 3 slots (repeats allowed). */
+  private fuseSel: CardId[] = [];
 
   constructor(private readonly g: Game, private readonly host: ForgeHost) {
     $('forge-close').onclick = () => this.closeForge();
@@ -66,10 +74,21 @@ export class ForgeWindow {
       if (this.forgeAuto) return;
       if (this.forgeMode === 'enhance') void this.enhance();
       else if (this.forgeMode === 'drill') this.askDrill();
+      else if (this.forgeMode === 'fuse') this.askFuse();
       else this.askReroll(this.forgeMode);
     };
     $('forge-auto-btn').onclick = () => (this.forgeAuto ? this.stopForgeAuto('กดหยุด') : this.startForgeAuto());
-    $('forge-cancel').onclick = () => this.forgePlace(null);
+    $('forge-cancel').onclick = () => (this.forgeMode === 'fuse' ? this.setFuse([]) : this.forgePlace(null));
+    // Fusion: a card slot takes its card back out, a card in the list goes into the next empty slot.
+    $('forge-slot').addEventListener('click', (e) => {
+      const i = (e.target as HTMLElement).closest<HTMLElement>('[data-fuse-i]')?.dataset.fuseI;
+      if (this.forgeMode !== 'fuse' || i === undefined) return;
+      this.setFuse(this.fuseSel.filter((_, k) => k !== Number(i)));
+    });
+    $('forge-item').addEventListener('click', (e) => {
+      const id = (e.target as HTMLElement).closest<HTMLElement>('[data-fuse-card]')?.dataset.fuseCard;
+      if (this.forgeMode === 'fuse' && isCardId(id)) this.addFuseCard(id);
+    });
     $('forge-menu').addEventListener('click', (e) => {
       const mode = (e.target as HTMLElement).closest<HTMLElement>('[data-mode]')?.dataset.mode as typeof this.forgeMode | undefined;
       if (!mode || mode === this.forgeMode) return;
@@ -84,11 +103,16 @@ export class ForgeWindow {
     $('forge-rates-close').onclick = () => $('forge-rates').classList.add('hidden');
     const fslot = $('forge-slot');
     fslot.addEventListener('mousemove', (e) => {
-      const item = this.forgeItem();
-      if (item) this.host.showTip(item, e, 'ลากชิ้นอื่นมาวางเพื่อเปลี่ยน · ปุ่ม "นำออก" เพื่อเอาออก');
+      const item = this.forgeMode === 'fuse' ? undefined : this.forgeItem();
+      if (item) this.host.showTip(item, e,'ลากชิ้นอื่นมาวางเพื่อเปลี่ยน · ปุ่ม "นำออก" เพื่อเอาออก');
       else this.host.hideTip();
     });
     fslot.addEventListener('mouseleave', () => this.host.hideTip());
+  }
+
+  /** True while the card fusion menu is the one open (a click on a card in the bag goes into its slots). */
+  get fusing(): boolean {
+    return this.forgeOpen && this.forgeMode === 'fuse';
   }
 
   /** True while the blacksmith window is open. */
@@ -140,6 +164,12 @@ export class ForgeWindow {
 
   /** Puts gear in the forge's slot (null empties it). Potions and stones are turned away. */
   forgePlace(entry: BagEntry | null): void {
+    if (this.forgeMode === 'fuse') {
+      if (entry && isStone(entry) && isCardId(entry.stone)) this.addFuseCard(entry.stone);
+      else if (entry) this.host.log('เมนูรวมการ์ดรับเฉพาะการ์ด', '#ff8a6a');
+      else this.setFuse([]);
+      return;
+    }
     if (entry && !isItem(entry)) {
       this.host.log('ช่างตีเหล็กรับเฉพาะอุปกรณ์สวมใส่ (ไม่รับยาและหิน)', '#ff8a6a');
       return;
@@ -175,10 +205,12 @@ export class ForgeWindow {
     for (const b of $('forge-menu').querySelectorAll<HTMLElement>('[data-mode]')) b.classList.toggle('active', b.dataset.mode === mode);
     $('forge-desc').textContent = FORGE_DESC[mode];
     // Odds table: enhance rates, or what "สุ่มสเตตัส" can give (for the item placed, if any).
-    const hasRates = mode === 'enhance' || mode === 'stat' || mode === 'drill';
+    const hasRates = mode === 'enhance' || mode === 'stat' || mode === 'drill' || mode === 'fuse';
     $('forge-rates-btn').classList.toggle('hidden', !hasRates);
     if (!hasRates) $('forge-rates').classList.add('hidden');
 
+    if (mode === 'fuse') return this.renderFuse();
+    $('forge-slot').classList.remove('fuse');
     const item = this.forgeItem();
     if (!item) this.forgeSel = null; // sold, dropped or stored since
     if (hasRates) {
@@ -189,7 +221,7 @@ export class ForgeWindow {
       if ($('forge-rates-title').textContent !== title) $('forge-rates-title').textContent = title;
       if ($('forge-table').innerHTML !== table) $('forge-table').innerHTML = table;
     }
-    const stones: StoneKind[] = mode === 'enhance' ? ['enhance', 'protect'] : mode === 'drill' ? ['drill'] : [REROLL_STONE[mode]];
+    const stones: StoneKind[] = mode === 'enhance' ? ['enhance', 'protect'] : mode === 'drill' ? ['drill'] : [REROLL_STONE[mode as RerollKind]];
     $('forge-foot').innerHTML = `<span class="ff-gold">${COIN_ICON} ${p.gold.toLocaleString()} G</span>` +
       stones.map((s) => `<span class="ff-stone" title="${STONE_NAME[s]}">${stoneIcon(s)} ${STONE_NAME[s]} ${p.stoneCount(s)}</span>`).join('');
 
@@ -199,7 +231,7 @@ export class ForgeWindow {
     slot.className = item ? 'filled' : '';
     if (item) slot.style.setProperty('--rc', RARITY_COLOR[item.rarity]);
     else slot.style.removeProperty('--rc');
-    const label = `${FORGE_ICON} ${mode === 'enhance' ? 'ตีบวก' : mode === 'drill' ? 'เจาะรู' : REROLL_NAME[mode]}`;
+    const label = `${FORGE_ICON} ${mode === 'enhance' ? 'ตีบวก' : mode === 'drill' ? 'เจาะรู' : REROLL_NAME[mode as RerollKind]}`;
     if (!item) {
       slot.innerHTML = '';
       $('forge-drop-hint').innerHTML = 'ลากอุปกรณ์มาวางที่นี่<small>หรือคลิกอุปกรณ์ในกระเป๋า / ที่สวมอยู่</small>';
@@ -218,9 +250,9 @@ export class ForgeWindow {
       `<div class="fi-name" style="color:${RARITY_COLOR[item.rarity]}">${itemName(item)}</div>` +
       `<div class="fi-meta">${SLOT_LABEL[item.slot]} · ${worn ? 'สวมใส่อยู่' : 'ในกระเป๋า'} · iLv.${item.level}` +
       ` · ${cur ? `+${cur} (โบนัส +${bonusPct(cur)}%)` : 'ยังไม่ตีบวก'}</div>` +
-      `<div class="fi-lines">${this.forgeLines(item, mode === 'drill' ? 'enhance' : mode)}</div>` +
+      `<div class="fi-lines">${this.forgeLines(item, mode === 'drill' ? 'enhance' : (mode as RerollKind | 'enhance'))}</div>` +
       (mode === 'drill' ? `<div class="fi-sock">${socketTipHtml(item)}</div>` : '');
-    const why = mode === 'enhance' ? this.renderEnhanceCost(item) : mode === 'drill' ? this.renderDrillCost(item) : this.renderRerollCost(item, mode);
+    const why = mode === 'enhance' ? this.renderEnhanceCost(item) : mode === 'drill' ? this.renderDrillCost(item) : this.renderRerollCost(item, mode as RerollKind);
     go.disabled = !!why || !!this.forgeAuto;
     go.innerHTML = why || label;
     this.renderForgeAuto(item, why);
@@ -498,6 +530,121 @@ export class ForgeWindow {
       `</table><div class="hint">เจาะได้ครั้งเดียวต่อชิ้น · ใช้${STONE_NAME.drill} 1 ก้อน + ทอง · ช่องไม่หายตอนตีบวกหรือสุ่มค่า · เสียบการ์ดได้โดยคลิกการ์ดในกระเป๋า</div>`;
   }
 
+  // ------------------------------------------------------------ card fusion (card plan 6.1, src/shared/cardFuse.ts)
+
+  /** Every card in the bag with how many there are, in the card table's order. */
+  private ownedCards(): { id: CardId; n: number }[] {
+    const n = new Map<CardId, number>();
+    for (const e of this.g.player.bag) if (isStone(e) && isCardId(e.stone)) n.set(e.stone, (n.get(e.stone) ?? 0) + e.count);
+    return CARD_DEFAULTS.filter((d) => n.has(d.id)).map((d) => ({ id: d.id, n: n.get(d.id)! }));
+  }
+
+  private setFuse(sel: CardId[]): void {
+    this.fuseSel = sel;
+    this.forgeResult('', '');
+    this.renderForge();
+  }
+
+  /** Puts a card into the next empty fusion slot: it must match the cards already in (rarity and floor) and be in the bag. */
+  private addFuseCard(id: CardId): void {
+    if (this.fuseSel.length >= FUSE_COUNT) return this.host.log('ช่องรวมการ์ดเต็มแล้ว (คลิกการ์ดในช่องเพื่อเอาออก)', '#ff8a6a');
+    const first = this.fuseSel[0];
+    if (first && cardDef(first)?.rarity !== cardDef(id)?.rarity) return this.host.log('การ์ดทั้ง 3 ใบต้องระดับเดียวกัน', '#ff8a6a');
+    if (first && cardFloor(first) !== cardFloor(id)) return this.host.log('การ์ดทั้ง 3 ใบต้องมาจากชั้นเดียวกัน', '#ff8a6a');
+    const used = this.fuseSel.filter((c) => c === id).length;
+    if (this.g.player.stoneCount(id) <= used) return this.host.log(`${cardName(id)}ในกระเป๋าไม่พอ`, '#ff8a6a');
+    this.setFuse([...this.fuseSel, id]);
+  }
+
+  /** The fusion menu: 3 card slots, the bag's cards to pick from, the cost and the odds. */
+  private renderFuse(): void {
+    const p = this.g.player;
+    // Cards sold, traded or socketed since are taken back out of the slots.
+    const left = new Map<CardId, number>();
+    this.fuseSel = this.fuseSel.filter((id) => {
+      const n = (left.get(id) ?? p.stoneCount(id)) - 1;
+      left.set(id, n);
+      return n >= 0;
+    });
+    const sel = this.fuseSel;
+    const info = sel.length ? fuseInfo(sel) : null;
+    const slot = $('forge-slot');
+    slot.className = 'fuse';
+    slot.style.removeProperty('--rc');
+    slot.innerHTML = Array.from({ length: FUSE_COUNT }, (_, i) => {
+      const id = sel[i];
+      const d = id ? cardDef(id) : undefined;
+      return id && d
+        ? `<div class="fuse-card filled" data-fuse-i="${i}" style="--rc:${RARITY_COLOR[d.rarity]}" title="${cardName(id)} (คลิกเพื่อเอาออก)">${cardIcon(id)}</div>`
+        : '<div class="fuse-card"></div>';
+    }).join('');
+    $('forge-drop-hint').innerHTML = info
+      ? `การ์ด<span style="color:${RARITY_COLOR[info.rarity]}">${CARD_RARITY_NAME[info.rarity]}</span> ชั้น ${info.floor} · ${sel.length}/${FUSE_COUNT} ใบ`
+      : 'คลิกการ์ดในกระเป๋าหรือรายการด้านขวา<small>ระดับเดียวกันและชั้นเดียวกัน 3 ใบ (ซ้ำกันได้)</small>';
+    const owned = this.ownedCards();
+    $('forge-item').innerHTML = owned.length
+      ? '<div class="fi-name">การ์ดในกระเป๋า</div><div class="fuse-list">' + owned.map(({ id, n }) => {
+        const d = cardDef(id)!;
+        const free = n - sel.filter((c) => c === id).length;
+        const fits = !sel.length || (cardDef(sel[0])?.rarity === d.rarity && cardFloor(sel[0]) === cardFloor(id));
+        return `<button type="button" class="fuse-pick" data-fuse-card="${id}" ${free > 0 && fits && sel.length < FUSE_COUNT ? '' : 'disabled'}>` +
+          `<span class="fp-icon">${cardIcon(id)}</span><span class="fp-name" style="color:${RARITY_COLOR[d.rarity]}">${cardName(id)}</span>` +
+          `<span class="fp-n">ชั้น ${cardFloor(id)} · ×${free}</span></button>`;
+      }).join('') + '</div>'
+      : '<div class="fi-empty">ไม่มีการ์ดในกระเป๋า</div>';
+    const why = sel.length < FUSE_COUNT ? `ใส่การ์ดอีก ${FUSE_COUNT - sel.length} ใบ` : fuseBlock(sel, (id) => p.stoneCount(id), p.gold);
+    $('forge-cost').innerHTML = info
+      ? `<div class="safe">สุ่มได้ 1 ใบจากการ์ด${CARD_RARITY_NAME[info.rarity]}ชั้น ${info.floor} ทั้งหมด ${info.pool.length} ใบ (ใบละ ${fmtPct(info.pool.length)}%)</div>` +
+        '<div class="warn">⚠ การ์ดทั้ง 3 ใบหายไป อาจได้ใบเดิม</div>' +
+        `<div class="fd-row"><span>ค่ารวมการ์ด</span><b class="${p.gold < info.cost ? 'bad' : ''}">${info.cost.toLocaleString()} G</b></div>`
+      : '';
+    const go = $<HTMLButtonElement>('forge-go');
+    go.disabled = !!why;
+    go.innerHTML = why || `${FORGE_ICON} รวมการ์ด`;
+    $<HTMLButtonElement>('forge-cancel').disabled = !sel.length;
+    const table = this.fuseOddsTable(info);
+    if ($('forge-rates-btn').textContent !== 'ตารางโอกาส') $('forge-rates-btn').textContent = 'ตารางโอกาส';
+    $('forge-rates-title').textContent = 'ตารางโอกาส — รวมการ์ด';
+    if ($('forge-table').innerHTML !== table) $('forge-table').innerHTML = table;
+    $('forge-foot').innerHTML = `<span class="ff-gold">${COIN_ICON} ${p.gold.toLocaleString()} G</span>`;
+    this.renderForgeAuto(undefined, 'x');
+  }
+
+  /** "รวมการ์ด": every card the fusion can give and its chance (all equal). */
+  private fuseOddsTable(info: ReturnType<typeof fuseInfo>): string {
+    if (!info) return '<div class="hint">ใส่การ์ดใบแรกเพื่อดูว่าสุ่มได้ใบไหนบ้าง</div>';
+    return '<table><tr><th>การ์ด</th><th>โอกาส</th></tr>' +
+      info.pool.map((id) => `<tr><td style="color:${RARITY_COLOR[info.rarity]}">${cardName(id)}</td><td>${fmtPct(info.pool.length)}%</td></tr>`).join('') +
+      `</table><div class="hint">การ์ด${CARD_RARITY_NAME[info.rarity]}ชั้น ${info.floor} · ทุกใบโอกาสเท่ากัน รวมใบที่ใส่ไปด้วย</div>`;
+  }
+
+  /** Asks first (the 3 cards are used up), then fuses. */
+  private askFuse(): void {
+    const sel = [...this.fuseSel];
+    const info = fuseInfo(sel);
+    if (sel.length !== FUSE_COUNT || !info || this.enhancing || this.forgeCooling()) return;
+    this.host.confirm(
+      `รวมการ์ด ${sel.map((id) => cardName(id)).join(' + ')}?<br><small>การ์ดทั้ง 3 ใบจะหายไป สุ่มได้การ์ด${CARD_RARITY_NAME[info.rarity]}ชั้น ${info.floor} 1 ใบ${info.cost ? ` · ค่ารวม ${info.cost.toLocaleString()} G` : ''}</small>`,
+      'รวมการ์ด',
+      () => void this.fuse(sel),
+    );
+  }
+
+  private async fuse(sel: CardId[]): Promise<void> {
+    if (this.enhancing || this.forgeCooling()) return;
+    this.enhancing = true;
+    this.startForgeCd();
+    const [got] = await Promise.all([this.g.backend.fuseCards(sel), this.swingHammer(), this.forgeCdDone()])
+      .finally(() => (this.enhancing = false));
+    this.fuseSel = [];
+    if (got && isCardId(got)) {
+      this.forgeResult('ok', `ได้${cardName(got)}!`);
+      openCardView(got, gameSocketHost(this.g));
+    } else this.forgeResult('fail', 'รวมการ์ดไม่สำเร็จ');
+    this.host.markInventory();
+    this.renderForge();
+  }
+
   /** True while the blacksmith cooldown (forgeCd()) is running. */
   private forgeCooling(): boolean {
     return performance.now() < this.forgeReadyAt;
@@ -606,4 +753,9 @@ export class ForgeWindow {
       ` · ${STONE_NAME.protect}กันระดับลด` +
       (f.stoneFrom <= maxPlus() && f.stonesPerTry > 0 ? `, ${STONE_NAME.enhance}ใช้ตั้งแต่ +${f.stoneFrom}` : '') + ' — ดรอปจากบอสเท่านั้น</div>';
   }
+}
+
+/** 100 / n as a short percent ("33.33"). */
+function fmtPct(n: number): string {
+  return String(Math.round((100 / Math.max(1, n)) * 100) / 100);
 }

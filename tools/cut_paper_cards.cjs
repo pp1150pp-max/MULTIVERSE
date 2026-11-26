@@ -4,6 +4,7 @@
 // Out: public/assets/sprites/paper/cards/ — frames 512×768 WebP with the flat magenta windows cut to transparent,
 // monster art 512×768 WebP (full picture with its own background). Prints each frame's windows as fractions of the
 // frame (the thin frames since 2026-11-25 have one window, the whole middle; nothing reads these numbers now).
+// After cutting frames, run tools/clean_card_frames.cjs: the game shows its card_frame_clean_* output (pink edges taken off).
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');

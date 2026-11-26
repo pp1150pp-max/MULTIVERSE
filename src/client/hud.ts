@@ -303,7 +303,9 @@ export class Hud {
         else if (isOrbStone(entry.stone)) g.backend.useOrbItem(i);
         else if (isCardStone(entry.stone)) {
           this.hideTip();
-          openCardView(entry.stone, gameSocketHost(g));
+          // At the blacksmith's card fusion a card goes into the next fusion slot instead.
+          if (this.forge.fusing) this.forge.forgePlace(entry);
+          else openCardView(entry.stone, gameSocketHost(g));
         }
         return;
       }
