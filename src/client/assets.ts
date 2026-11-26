@@ -126,6 +126,7 @@ const GRAVE_FX = ['fx_ghost_skull', 'fx_curse_ring', 'fx_music_notes', 'fx_siren
  */
 const MAELSTROM_PROPS = [
   'storm_rock_0', 'storm_rock_1', 'storm_rock_2', 'wreck_0', 'wreck_1', 'broken_mast', 'coral_0', 'coral_1', 'kraken_flag', 'storm_lamp',
+  'sea_stack', 'sea_barnacle', 'sea_kelp', 'sea_arch', 'sea_crates', 'sea_cannon', 'sea_ribs', 'sea_buoy', 'sea_driftwood', 'sea_coral', 'sea_shells', 'sea_chain',
   'rope_post', 'storm_anchor', 'summoner_kraken', 'room_kraken_gate', 'decor_maelstrom', 'island_cliff_maelstrom', 'island_slabs_maelstrom',
   'whirlpool_ring_1', 'whirlpool_ring_2', 'whirlpool_ring_3', 'whirlpool_core', ...Array.from({ length: 8 }, (_, i) => `rim_${i}`),
   ...['pillar_0', 'pillar_1', 'wall', 'brazier', 'boulder', 'rubble', 'coral', 'mast'].map((n) => `room_kraken_${n}`),
@@ -136,7 +137,7 @@ const MAELSTROM_FX = ['fx_shark_fin', 'fx_bubble', 'fx_bubble_trap', 'fx_sword_w
  * Monsters drawn from a paper sheet under another name: floor 2 bosses whose cut sheets (tools/cut_floor2_chars.cjs) are named after the
  * picture, and the kraken's arms in its room, which are its tentacles.
  */
-const PAPER_MONSTER_FILE: Record<string, string> = { cannon_crab: 'giant_crab', pegleg_captain: 'peg_captain', kraken_arm: 'kraken_tentacle' };
+const PAPER_MONSTER_FILE: Record<string, string> = { cannon_crab: 'giant_crab', pegleg_captain: 'peg_captain', kraken_arm: 'kraken_tentacle', kraken_tentacle: 'kraken_tentacle_sea' };
 /** The harbour's NPC sheets and the navigator's (SHEET_SPECS keys): paper only. */
 const PAPER_ONLY_NPC = new Set(['hb_supply_merchant', 'hb_dock_keeper', 'hb_shipwright', 'hb_harbor_broker', 'hb_smuggler_npc', 'navigator']);
 const PAPER_GROUND = new Set(['grass', 'dirt', 'pave', 'room_forest', 'marsh', 'mud', 'water', 'room_marsh',

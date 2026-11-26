@@ -36,7 +36,7 @@ The monster: a single huge kraken tentacle rising out of dark swirling whirlpool
 
 ใส่ในเกมแทนที่ว่างของเสาเรือหักที่เอาออก (ตอนนี้เป็นหินกับปะการังเดิมไปก่อน) ของสูงพอ ๆ กับเสาเรือเดิม ให้แมพไม่โล่ง
 
-ลำดับช่อง: `sea_stack` `barnacle_rock` `kelp_rock` `rock_arch` / `wreck_crates` `sunken_cannon` `whale_ribs` `buoy` / `driftwood` `coral_rock` `shell_pile` `chain_rock`
+ลำดับช่อง (ชื่อชิ้นในเกม): `sea_stack` `sea_barnacle` `sea_kelp` `sea_arch` / `sea_crates` `sea_cannon` `sea_ribs` `sea_buoy` / `sea_driftwood` `sea_coral` `sea_shells` `sea_chain`
 
 ```
 Now more map props for this Kraken Maelstrom, in EXACTLY the same papercraft style as the attached map: layered cut paper and card, visible paper fibre, slightly uneven scissor-cut edges, small drop shadows between the paper layers INSIDE each object. NOT pixel art. SAME camera as the map: 2D isometric 3/4 view from above, light from the upper left, each object's base sits on an imaginary diamond-shaped ground footprint.
@@ -49,7 +49,8 @@ Row 3: a long twisted piece of grey driftwood; a rock covered in red and orange 
 Each object has crisp clean outer edges with no glow or halo around it. Background ONE perfectly flat solid pure bright green (#00FF00) everywhere, no gradient, no paper texture on the background, no ground patches, no water, no cast shadows on the background, no text, no letters, no labels, no grid lines. Do not use bright green anywhere on the objects; any seaweed or kelp must be a dull dark olive.
 ```
 
-## หลังได้ภาพ (สำหรับ Claude)
+## ใส่เกมแล้ว (2026-11-26)
 
-- `props_sea.png`: เพิ่มแถวใน `tools/cut_papercraft.cjs` ชุด `floor2_m4` (4×3, `height: 256`, ชื่อตามลำดับช่องข้างบน) แล้วใส่ชื่อชิ้นเข้า `mapTrees` / `extra` ของธีม `kraken` ใน `src/shared/sim/terrain.ts` (เฉพาะแมพ ไม่ใช่ห้องบอส) แล้วอบแมพใหม่ (`node --import tsx tools/bake_maps.ts` เอาเฉพาะ `kraken_maelstrom.json`)
-- หนวด: ตัดเป็นแผ่น paper `kraken_tentacle_sea` (moves `idle`, `slam`) แล้วให้ `kraken_tentacle` ในแมพใช้แผ่นนี้ ส่วน `kraken_arm` ในห้องบอสยังใช้ `kraken_tentacle` เดิม
+- เจ้าของเจนครบทั้ง 3 ภาพ (ไฟล์ดิบที่ส่งมาชื่อ `props_sea.png` กับ `kraken_tentacle_sea_slam.png` สลับกัน แก้ชื่อคืนแล้ว)
+- `props_sea.png` ตัดด้วย `node tools/cut_papercraft.cjs floor2_m4` → `sprites/paper/props/sea_*.png` 12 ชิ้น (ลบสีเขียวที่ค้างในช่องว่างของชิ้นอีกรอบ) · ชิ้นสูงเข้า `mapTrees` (`sea_stack` `sea_kelp` `sea_ribs` `sea_buoy` `sea_arch`) ชิ้นเตี้ยเข้า `mapExtra` ของธีม `kraken` ใน `terrain.ts` (เฉพาะแมพ ห้องบอสใช้ชุดเดิม) · อบแมพใหม่แล้ว · `propCatalog.json` สร้างใหม่ (`tools/build_prop_catalog.ts`)
+- หนวด: `node tools/cut_floor2_chars.cjs monsters --only kraken_tentacle_sea` → แผ่น `kraken_tentacle_sea` (moves `idle`, `slam`) · `kraken_tentacle` ในแมพใช้แผ่นนี้ (`PAPER_MONSTER_FILE`) ส่วน `kraken_arm` ในห้องบอสยังใช้ `kraken_tentacle` เดิม

@@ -74,6 +74,8 @@ interface ThemeProps {
   campDecor: boolean;
   /** Extras drawn bigger than a rock, as [height, collider radius] (the beach's wrecks and treasure). */
   extraSize?: Record<string, [number, number]>;
+  /** The extras out on a farm map, when not the same as in its boss room (sizes in extraSize). */
+  mapExtra?: string[];
 }
 
 const THEME_PROPS: Record<ZoneTheme, ThemeProps> = {
@@ -173,7 +175,12 @@ const THEME_PROPS: Record<ZoneTheme, ThemeProps> = {
   kraken: {
     trees: ['storm_rock_1', 'broken_mast', 'storm_rock_1', 'coral_0'],
     // Out on the map a mast is 1 tree in 20 instead of 1 in 4 (owner 2026-11-26: "เสาเรือเยอะไป", about a fifth of them).
-    mapTrees: [...Array<string>(13).fill('storm_rock_1'), ...Array<string>(6).fill('coral_0'), 'broken_mast'],
+    // The owner's sea props (FLOOR2_M4_REVISION.md, 2026-11-26) take most of the masts' place: tall ones as trees, low ones as extras.
+    mapTrees: [
+      ...Array<string>(6).fill('storm_rock_1'), ...Array<string>(4).fill('coral_0'), 'sea_stack', 'sea_stack', 'sea_stack', 'sea_kelp', 'sea_kelp',
+      'sea_ribs', 'sea_ribs', 'sea_buoy', 'sea_arch', 'broken_mast',
+    ],
+    mapExtra: ['wreck_0', 'wreck_1', 'kraken_flag', 'storm_lamp', 'storm_anchor', 'coral_0', 'coral_1', 'sea_barnacle', 'sea_crates', 'sea_cannon', 'sea_driftwood', 'sea_coral', 'sea_shells', 'sea_chain'],
     bushes: ['coral_1', 'rope_post'],
     rocks: ['storm_rock_0', 'storm_rock_2'],
     stump: 'rope_post',
@@ -182,6 +189,8 @@ const THEME_PROPS: Record<ZoneTheme, ThemeProps> = {
     extraSize: {
       wreck_0: [3.2, 1.4], wreck_1: [3.6, 1.5], broken_mast: [4.2, 0.5], kraken_flag: [2.6, 0.2], storm_lamp: [2.4, 0.25],
       storm_anchor: [1.6, 0.6], coral_0: [1.8, 0.5], coral_1: [1.1, 0.4],
+      sea_barnacle: [1.8, 0.6], sea_crates: [1.6, 0.6], sea_cannon: [1.8, 0.6], sea_driftwood: [2, 0.3], sea_coral: [1.6, 0.6],
+      sea_shells: [1.2, 0.4], sea_chain: [1.6, 0.6],
     },
     ringRock: ['storm_rock_0', 2.2],
     campDecor: false,
@@ -925,7 +934,7 @@ export class Terrain {
       else if (roll < 0.8) this.addProp(pick(r, set.bushes), x, z, rand(r, 0.9, 1.3), 0);
       else if (roll < (set.extra.length ? 0.9 : 0.93)) this.addProp(pick(r, set.rocks), x, z, rand(r, 0.7, 1.1), 0.5);
       else if (roll < 0.95 && set.extra.length) {
-        const key = pick(r, set.extra);
+        const key = pick(r, (!zone.roomOf && set.mapExtra) || set.extra);
         const size = set.extraSize?.[key];
         this.addProp(key, x, z, size ? size[0] * rand(r, 0.9, 1.1) : rand(r, 0.8, 1.1), size?.[1] ?? 0);
       }
