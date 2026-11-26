@@ -198,6 +198,8 @@ function room(px = 5): { sim: Sim; cap: Monster; p: Player } {
   ok(!m.alive && exp1 > exp0, 'killed: its EXP is given');
   const runner = sim.monsters.find((q) => q !== m && q.alive && q.def.id === 'keg_prisoner');
   ok(!!runner && runner.summoned && runner.untargetable, 'it gets up as a runner that can\'t be hit');
+  run(sim, 0.05);
+  ok(!sim.monsters.includes(m), 'no second body left where it fell (owner 2026-11-25: the prisoner itself gets up)');
   const hp0 = runner!.hp;
   sim.hitMonster(p, runner!, 100);
   ok(runner!.hp === hp0, 'hitting the runner does nothing');

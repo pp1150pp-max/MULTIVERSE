@@ -2594,6 +2594,7 @@ export class GameWorld {
         alive: m.alive, deadT: r2(m.deadT), hp: Math.round(m.hp),
         st: m.state, wind: m.windupT > 0, enr: m.enraged, y: r2(m.lift),
         ...(m.fade ? { inv: 1 as const } : {}),
+        ...(m.freed ? { fr: 1 as const } : {}),
         ...debuffField(m, sim.time, s.player.id),
         ...withLook<MonsterLook>(s.seenM, nextM, m.id, monsterLook(m, looks)),
       })),

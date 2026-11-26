@@ -402,6 +402,8 @@ export class MonsterView {
 
   update(dt: number, fx: Effects | null): void {
     const m = this.m;
+    // A ship prisoner that threw its ball runs free (sheet move 'run': no ball at the leg, owner 2026-11-25).
+    if (m.def.move === 'chainball') this.actor.setWalkMove(m.freed ? 'run' : 'walk');
     if (fx) this.debuffFx.update(dt, m, fx);
     this.circle.set(m.alive ? debuffCircle(m.debuffs, m.debuffSkill) : null);
     this.circle.update(dt);
