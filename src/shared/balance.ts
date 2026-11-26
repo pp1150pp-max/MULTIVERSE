@@ -6,7 +6,7 @@
 // and on every save, and sends them to every browser so tooltips and the blacksmith's odds match.
 import { CLASSES, CLASS_IDS, MP_COST_PER_LEVEL } from './data/classes';
 import {
-  CODE_BOSS_TIER_BOOST, CODE_RANGE_FLOOR, setAffixWeights, CODE_TIER_WEIGHT, CODE_TIER_WIDTH, setItemStatMult, setTierTables, TIER_BAND_NAME, TIER_BANDS, tierBandOf, type TierBand, type TierTableDef,
+  CODE_BOSS_TIER_BOOST, CODE_RANGE_FLOOR, setAffixWeights, CODE_TIER_WEIGHT, CODE_TIER_WIDTH, setItemStatMult, setMoveGrowth, CODE_MOVE_GROWTH, setTierTables, TIER_BAND_NAME, TIER_BANDS, tierBandOf, type TierBand, type TierTableDef,
 } from './data/items';
 import { CODE_POTIONS, CODE_POTION_DROP, CODE_SWORD_POTION_BONUS, POTION_RANGE, type PotionNums } from './data/potionTable';
 import { MONSTERS, type MonsterDef } from './data/monsters';
@@ -208,6 +208,8 @@ export interface Balance {
   critCap: number;
   /** Most move speed % from items (gear + set bonuses); class, passives, buffs and the mount come on top. */
   moveCap: number;
+  /** Per-level growth of the boots' move speed main line (data/items.ts CODE_MOVE_GROWTH). */
+  moveGrowth: number;
   /** Ordinary monsters' multipliers that are not ×1 (none in code). */
   monsters: MonsterTuning;
   /** Monsters per spawn spot ×, by map id (PACK_ZONES); a map left out is ×1. */
@@ -345,6 +347,8 @@ export interface BalanceTuning {
   critCap?: number;
   /** Item move speed cap %, when not the code's. */
   moveCap?: number;
+  /** Boots move speed main-line growth per level, when not the code's. */
+  moveGrowth?: number;
   /** Ordinary monsters' multipliers that are not ×1. */
   monsters?: MonsterTuning;
   /** Monsters-per-spot multipliers that are not ×1, by map id. */
@@ -466,6 +470,7 @@ export const BALANCE_RANGE = {
   cdrCap: [0, 95],
   critCap: [0, 100],
   moveCap: [0, 300],
+  moveGrowth: [0, 0.12],
   monsterMult: [0.1, 10],
   mobPack: [1, 5],
   spawnRadius: [1, 4],
@@ -517,6 +522,7 @@ export function codeBalance(): Balance {
     cdrCap: CODE_CDR_CAP,
     critCap: CODE_CRIT_CAP,
     moveCap: CODE_MOVE_CAP,
+    moveGrowth: CODE_MOVE_GROWTH,
     monsters: {},
     mobPack: {},
     spawnRadius: {},
@@ -602,6 +608,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.cdrCap !== undefined) b.cdrCap = t.cdrCap;
   if (t.critCap !== undefined) b.critCap = t.critCap;
   if (t.moveCap !== undefined) b.moveCap = t.moveCap;
+  if (t.moveGrowth !== undefined) b.moveGrowth = t.moveGrowth;
   if (t.monsters) b.monsters = structuredClone(t.monsters);
   if (t.mobPack) b.mobPack = { ...t.mobPack };
   if (t.spawnRadius) b.spawnRadius = { ...t.spawnRadius };
@@ -677,6 +684,7 @@ export function applyBalance(t: BalanceTuning): void {
   setTierTables((stat, band) => statTierTable(b, stat, band));
   setItemStatMult(b.itemStatMult);
   setAffixWeights(b.affixWeight);
+  setMoveGrowth(b.moveGrowth);
   setExpTune(expTuneOf(b));
 }
 
@@ -804,7 +812,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'critCap', 'moveCap', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'buffTotal', 'mobDropOnSafe', 'mobRoam', 'mobRoamReach', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'shopNoEquip', 'tryOnTownOnly', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'bagExpand', 'tutorial', 'npcTalk', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'critCap', 'moveCap', 'moveGrowth', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'buffTotal', 'mobDropOnSafe', 'mobRoam', 'mobRoamReach', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'shopNoEquip', 'tryOnTownOnly', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'bagExpand', 'tutorial', 'npcTalk', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -881,7 +889,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   }
 
   // Single numbers
-  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'mobRoamReach' | 'roomWipeSec' | 'roomBossDelay' | 'roomLoadWait' | 'bossLootBase' | 'bossLootK' | 'bossLootMax' | 'vipExpPct' | 'vipDropPct' | 'reviveGuardSec' | 'cdrCap' | 'critCap' | 'moveCap' | 'heartBlastSpots' | 'heartBlastMinDist' | 'heartBlastReach', range: readonly [number, number], what: string): string | null => {
+  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'mobRoamReach' | 'roomWipeSec' | 'roomBossDelay' | 'roomLoadWait' | 'bossLootBase' | 'bossLootK' | 'bossLootMax' | 'vipExpPct' | 'vipDropPct' | 'reviveGuardSec' | 'cdrCap' | 'critCap' | 'moveCap' | 'moveGrowth' | 'heartBlastSpots' | 'heartBlastMinDist' | 'heartBlastReach', range: readonly [number, number], what: string): string | null => {
     const n = num(o[key], range[0], range[1], what);
     if (typeof n === 'string') return n;
     if (n !== undefined && n !== CODE[key]) out[key] = n;
@@ -1458,6 +1466,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     one('cdrCap', BALANCE_RANGE.cdrCap, 'ลดคูลดาวน์ได้สูงสุด %') ??
     one('critCap', BALANCE_RANGE.critCap, 'อัตราคริสูงสุด %') ??
     one('moveCap', BALANCE_RANGE.moveCap, 'ความเร็วเคลื่อนที่จากไอเทมสูงสุด %') ??
+    one('moveGrowth', BALANCE_RANGE.moveGrowth, 'ค่าหลักความเร็วเคลื่อนที่โตต่อเลเวล') ??
     monsters() ??
     mobPack() ??
     spawnRadius() ??
@@ -1582,6 +1591,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.cdrCap !== b.cdrCap) out.push(`ลดคูลดาวน์ได้สูงสุด ${a.cdrCap}% → ${b.cdrCap}%`);
   if (a.critCap !== b.critCap) out.push(`อัตราคริสูงสุด ${a.critCap}% → ${b.critCap}%`);
   if (a.moveCap !== b.moveCap) out.push(`ความเร็วเคลื่อนที่จากไอเทมสูงสุด ${a.moveCap}% → ${b.moveCap}%`);
+  if (a.moveGrowth !== b.moveGrowth) out.push(`ค่าหลักความเร็วเคลื่อนที่โตต่อเลเวล ${a.moveGrowth} → ${b.moveGrowth}`);
   const mons = (what: string, x: Partial<MonsterMults> | undefined, y: Partial<MonsterMults> | undefined): void => {
     for (const k of MONSTER_STATS) {
       const p = x?.[k] ?? 1;

@@ -190,6 +190,9 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด 50 · นับรวมความเร็วจากของทุกชิ้น (ค่าหลัก บรรทัดเสริม ตีบวก) + โบนัสเซ็ต ไม่แตะค่าบนไอเทม มีผลทันที · ค่าอาชีพ พาสซีฟ บัฟสกิล และสัตว์ขี่ บวกเพิ่มนอกเพดาน' }, 'ความเร็วเคลื่อนที่จากไอเทมสูงสุด %', numBox(() => draft.moveCap, (n) => { draft.moveCap = n; }, code.moveCap, ...BALANCE_RANGE.moveCap, 1, refresh))),
       h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด 0.003 (ค่าหลักอื่นทุกตัว 0.12) · ค่าหลักความเร็วของรองเท้า = ค่าฐาน × (1 + (เลเวลไอเทม − 1) × ค่านี้) × ความหายาก · รองเท้าตำนาน T1 ราว 10 ที่ Lv1, 30 ที่ Lv40, 50 ที่ Lv80 · บันทึกแล้วรองเท้าที่มีอยู่ทุกคู่ปรับบรรทัดหลักตามสัดส่วนเอง (ออนไลน์ทันที ออฟไลน์ตอนโหลด) บรรทัดเสริมไม่เปลี่ยน' }, 'ค่าหลักความเร็วเคลื่อนที่ (รองเท้า) โตต่อเลเวล', numBox(() => draft.moveGrowth, (n) => { draft.moveGrowth = n; }, code.moveGrowth, ...BALANCE_RANGE.moveGrowth, 0.001, refresh))),
+      h('div', { class: 'muted' }, 'ดูช่วงค่าจริงของรองเท้าแต่ละเลเวลได้ที่การ์ด "ตัวอย่างค่าจริงที่สุ่มได้" (ช่อง รองเท้า) คิดจากค่าที่กำลังแก้'),
+      h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
           h('input', { type: 'checkbox', checked: draft.buffDurSummons, onchange: (e: Event) => { draft.buffDurSummons = (e.target as HTMLInputElement).checked; refresh(); } }),
           ' "เพิ่มเวลาบัฟ %" นับ summon ด้วย (ป้อมปืน โดรนสนับสนุน กับระเบิด อยู่นานขึ้นตาม %) · ปิด = นับแค่บัฟ')),
@@ -469,11 +472,13 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
     const base = ITEM_BASES.find((b) => b.id === pvBase)!;
     // Slot first, then that slot's kinds by level (owner 2026-11-26: the one long list was hard to use).
+    // Picking a kind sets the item level to the kind's own (owner 2026-11-26); the box can still be changed after.
+    const pickKind = (id: string) => { pvBase = id; pvLevel = ITEM_BASES.find((b) => b.id === id)!.minLevel; drawPreview(); };
     const ofSlot = (slot: SlotId) => ITEM_BASES.filter((b) => b.slot === slot).sort((x, y) => x.minLevel - y.minLevel);
-    const pickSlot = h('select', { onchange: (e: Event) => { pvBase = ofSlot((e.target as HTMLSelectElement).value as SlotId)[0].id; drawPreview(); } },
+    const pickSlot = h('select', { onchange: (e: Event) => { pickKind(ofSlot((e.target as HTMLSelectElement).value as SlotId)[0].id); } },
       ...(Object.keys(SLOT_LABEL) as SlotId[]).filter((sl) => ofSlot(sl).length).map((sl) =>
         h('option', { value: sl, selected: sl === base.slot }, SLOT_LABEL[sl])));
-    const pickBase = h('select', { onchange: (e: Event) => { pvBase = (e.target as HTMLSelectElement).value; drawPreview(); } },
+    const pickBase = h('select', { onchange: (e: Event) => { pickKind((e.target as HTMLSelectElement).value); } },
       ...ofSlot(base.slot).map((b) => h('option', { value: b.id, selected: b.id === pvBase }, `Lv.${b.minLevel}+ · ${baseName(b)}`)));
     const pickRarity = h('select', { onchange: (e: Event) => { pvRarity = (e.target as HTMLSelectElement).value as Rarity; drawPreview(); } },
       ...RARITIES.map((r) => h('option', { value: r, selected: r === pvRarity }, RARITY_LABEL[r])));

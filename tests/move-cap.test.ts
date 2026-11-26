@@ -4,7 +4,8 @@
 import { ok, finish } from './check';
 import { applyBalance, balanceChanges, checkBalance, codeBalance, currentBalanceTuning } from '../src/shared/balance';
 import { ZONE_1 } from '../src/shared/data/zones';
-import { makeItem } from '../src/shared/data/items';
+import { CODE_MOVE_GROWTH, makeItem, rowRanges, upgradeItem } from '../src/shared/data/items';
+import type { Item } from '../src/shared/types';
 import { BASE_MOVE_SPEED } from '../src/shared/formulas';
 import { MOUNT_SPEED } from '../src/shared/data/cosmetics';
 import { Sim } from '../src/shared/sim/Sim';
@@ -76,5 +77,57 @@ ok(p.stats.moveSpeed === 0, 'cap 0: items give no move speed');
 applyBalance(keep);
 p.recompute();
 ok(p.stats.moveSpeed === 50, 'back to 50 with the code cap');
+
+// ---------------------------------------------------------------- boots move speed main line grows slower (owner 2026-11-26)
+ok(CODE_MOVE_GROWTH === 0.003 && codeBalance().moveGrowth === 0.003, 'move growth 0.003 in code');
+ok(JSON.stringify(checkBalance({ moveGrowth: 0.01 }, true).tuning) === '{"moveGrowth":0.01}', '/admin can set the growth');
+ok(JSON.stringify(checkBalance({ moveGrowth: 0.003 }, true).tuning) === '{}', 'the code growth is not saved');
+ok(checkBalance({ moveGrowth: 0.13 }, true).error !== undefined && checkBalance({ moveGrowth: -0.001 }, true).error !== undefined, 'growth only 0–0.12');
+ok(balanceChanges({}, { moveGrowth: 0.01 }).includes('ค่าหลักความเร็วเคลื่อนที่โตต่อเลเวล 0.003 → 0.01'), 'the audit names the growth');
+
+const t1Max = (id: string, lv: number) => rowRanges(id, 'legendary', lv, ['moveSpeed'])![0].max;
+ok(Math.abs(t1Max('sandals', 1) - 10.1) < 0.2, `legendary sandals Lv1 T1 up to ~10 (${t1Max('sandals', 1)})`);
+ok(Math.abs(t1Max('cinder_boots', 40) - 30.1) < 0.5, `legendary cinder boots Lv40 T1 up to ~30 (${t1Max('cinder_boots', 40)})`);
+ok(Math.abs(t1Max('sea_king_boots', 80) - 50.1) < 0.5, `legendary sea king boots Lv80 T1 up to ~50 (${t1Max('sea_king_boots', 80)})`);
+const extraMax = rowRanges('sea_king_boots', 'legendary', 80, ['moveSpeed', 'moveSpeed'])![1].max;
+ok(Math.abs(extraMax - 40.1) < 0.2, `extra move speed lines keep their range (${extraMax})`);
+
+const fresh = makeItem('sea_king_boots', 'legendary', 80, 'sword')!;
+ok(fresh.mvG === 0.003, 'new boots are stamped with the growth');
+ok(makeItem('cap', 'legendary', 80, 'sword')!.mvG === undefined, 'other kinds carry no growth stamp');
+
+// An old save's boots: rolled with 0.12 (no stamp), main line 400, an extra move speed line 30.
+const old = makeItem('sea_king_boots', 'legendary', 80, 'sword')!;
+const mainAt = old.lines!.findIndex((l) => l.stat === 'moveSpeed');
+old.lines![mainAt] = { ...old.lines![mainAt], value: 400, tier: 1, min: 360.8, max: 424.3 };
+old.lines!.push({ stat: 'moveSpeed', value: 30, tier: 2, min: 0, max: 0 });
+old.stats = { ...old.stats, moveSpeed: 430 };
+delete old.mvG;
+const oldDef = old.stats.def;
+upgradeItem(old);
+const want = Math.round(400 * (1 + 79 * 0.003) / (1 + 79 * 0.12) * 10) / 10;
+ok(old.lines![mainAt].value === want, `old main line 400 → ${want} (${old.lines![mainAt].value})`);
+ok(old.lines![old.lines!.length - 1].value === 30, 'the extra line keeps 30');
+ok(old.stats.moveSpeed === Math.round((want + 30) * 10) / 10 && old.stats.def === oldDef, `stats add up again (${old.stats.moveSpeed}), other stats untouched`);
+ok(old.mvG === 0.003 && old.lines![mainAt].tier === 1, 'stamped, and still a T1 line on the new range');
+const once = JSON.stringify(old);
+upgradeItem(old);
+ok(JSON.stringify(old) === once, 'loading again changes nothing');
+
+// /admin changes the growth: the stamped boots follow it, once.
+applyBalance({ moveGrowth: 0.01 });
+const before = old.lines![mainAt].value;
+upgradeItem(old);
+const want2 = Math.round(before * (1 + 79 * 0.01) / (1 + 79 * 0.003) * 10) / 10;
+ok(old.lines![mainAt].value === want2 && old.mvG === 0.01, `growth 0.01: ${before} → ${want2} (${old.lines![mainAt].value})`);
+applyBalance(keep);
+
+// An old save loads with the new values.
+const saveBoots: Item = JSON.parse(once);
+saveBoots.lines![mainAt].value = 400;
+saveBoots.stats.moveSpeed = 430;
+delete saveBoots.mvG;
+const q = sim.addPlayer({ ...newCharacterData('OldBoots', 'sword'), level: 80, equipment: { boots: saveBoots } });
+ok(q.equipment.boots!.lines![mainAt].value === want && q.stats.moveSpeed === 50, `old save: boots ${q.equipment.boots!.lines![mainAt].value} + 30, still capped at 50`);
 
 finish('move-cap');
