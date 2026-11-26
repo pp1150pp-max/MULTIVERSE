@@ -27,7 +27,7 @@ import { customDefs } from '../shared/customZones';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { ITEM_BASES, itemRowKinds, statStep, rowRanges, TIER_BAND_NAME, TIER_BANDS, tierBandOf, tierChances, tierRanges } from '../shared/data/items';
 import { expToNext, MAX_LEVEL } from '../shared/formulas';
-import { ITEM_ONLY_STATS, RARITIES, RARITY_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, type ClassId, type Rarity, type StatKey } from '../shared/types';
+import { ITEM_ONLY_STATS, RARITIES, RARITY_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, type ClassId, type Rarity, type SlotId, type StatKey } from '../shared/types';
 import { FLOOR_GATE_LEVEL_MAX, FLOOR_GATE_LEVEL_MIN } from '../shared/floorGate';
 import { NPC_INFO, type NpcId } from '../shared/data/npcs';
 import { TALK_LINE_LEN, TALK_LINES_MAX, TALK_NPCS, TALK_NUM_KEYS, TALK_NUMS, type TalkNumKey } from '../shared/npcTalk';
@@ -52,6 +52,13 @@ const DECIMAL = new Set<StatKey>(['crit', 'critDmg', 'atkSpeed', 'moveSpeed', 'h
 const CLASS_STATS = STAT_KEYS.filter((k) => !ITEM_ONLY_STATS.includes(k));
 const show = (k: StatKey, v: number): string => (DECIMAL.has(k) ? (Math.round(v * 10) / 10).toString() : Math.round(v).toLocaleString());
 const pct = (n: number): string => `${(Math.round(n * 1000) / 10).toString()}%`;
+/** An item kind's readable name: the one name, or each class's (offhand pieces carry their class, e.g. "Nautilus Orb (จอมเวท)"). */
+const baseName = (b: (typeof ITEM_BASES)[number]): string => {
+  if (b.names.any) return b.names.any;
+  const per = CLASS_IDS.filter((id) => b.names[id]);
+  if (per.length === 1) return `${b.names[per[0]]} (${CLASSES[per[0]].nameTh})`;
+  return per.map((id) => b.names[id]).join(' / ') || b.id;
+};
 
 /** The server's answer to GET/POST /api/admin/balance. */
 interface BalanceState { tuning: BalanceTuning }
@@ -173,13 +180,15 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         out);
     });
     affixCard.replaceChildren(
-      h('h2', {}, 'สเตตัสเสริม: น้ำหนักสุ่ม · ลดคูลดาวน์สูงสุด · คริสูงสุด'),
+      h('h2', {}, 'สเตตัสเสริม: น้ำหนักสุ่ม · ลดคูลดาวน์สูงสุด · คริสูงสุด · ความเร็วเคลื่อนที่สูงสุด'),
       h('div', { class: 'muted' }, 'น้ำหนักสุ่ม = โอกาสที่บรรทัดเสริม 1 บรรทัดจะได้สเตตัสนั้น เทียบกับตัวอื่น (ค่าในโค้ด 1 ทุกตัว = เท่ากัน, 0 = ไม่ออก) ใช้กับดรอปและ "สุ่มสเตตัส" ที่ช่างตีเหล็ก · % ข้างช่อง = โอกาสต่อบรรทัดเมื่อยังไม่มีสเตตัสอื่นบนของ · มีผลกับของใหม่เท่านั้น'),
       h('div', { class: 'row bal-line' }, ...boxes),
       h('div', { class: 'row bal-line' },
         h('label', {}, 'ลดคูลดาวน์สกิลได้สูงสุด %', numBox(() => draft.cdrCap, (n) => { draft.cdrCap = n; }, code.cdrCap, ...BALANCE_RANGE.cdrCap, 1, refresh))),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด 100 · ใช้กับค่าคริในหน้าตัวละครและทุกครั้งที่สุ่มคริ (รวมคริเพิ่มจากสกิล/เป้าที่ติดมาร์ก)' }, 'อัตราคริสูงสุด %', numBox(() => draft.critCap, (n) => { draft.critCap = n; }, code.critCap, ...BALANCE_RANGE.critCap, 1, refresh))),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด 50 · นับรวมความเร็วจากของทุกชิ้น (ค่าหลัก บรรทัดเสริม ตีบวก) + โบนัสเซ็ต ไม่แตะค่าบนไอเทม มีผลทันที · ค่าอาชีพ พาสซีฟ บัฟสกิล และสัตว์ขี่ บวกเพิ่มนอกเพดาน' }, 'ความเร็วเคลื่อนที่จากไอเทมสูงสุด %', numBox(() => draft.moveCap, (n) => { draft.moveCap = n; }, code.moveCap, ...BALANCE_RANGE.moveCap, 1, refresh))),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
           h('input', { type: 'checkbox', checked: draft.buffDurSummons, onchange: (e: Event) => { draft.buffDurSummons = (e.target as HTMLInputElement).checked; refresh(); } }),
@@ -459,9 +468,13 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       multMsg,
     );
     const base = ITEM_BASES.find((b) => b.id === pvBase)!;
+    // Slot first, then that slot's kinds by level (owner 2026-11-26: the one long list was hard to use).
+    const ofSlot = (slot: SlotId) => ITEM_BASES.filter((b) => b.slot === slot).sort((x, y) => x.minLevel - y.minLevel);
+    const pickSlot = h('select', { onchange: (e: Event) => { pvBase = ofSlot((e.target as HTMLSelectElement).value as SlotId)[0].id; drawPreview(); } },
+      ...(Object.keys(SLOT_LABEL) as SlotId[]).filter((sl) => ofSlot(sl).length).map((sl) =>
+        h('option', { value: sl, selected: sl === base.slot }, SLOT_LABEL[sl])));
     const pickBase = h('select', { onchange: (e: Event) => { pvBase = (e.target as HTMLSelectElement).value; drawPreview(); } },
-      ...ITEM_BASES.map((b) => h('option', { value: b.id, selected: b.id === pvBase },
-        `${b.names.any ?? b.names.sword ?? b.id} [${SLOT_LABEL[b.slot]}] (Lv.${b.minLevel}+)`)));
+      ...ofSlot(base.slot).map((b) => h('option', { value: b.id, selected: b.id === pvBase }, `Lv.${b.minLevel}+ · ${baseName(b)}`)));
     const pickRarity = h('select', { onchange: (e: Event) => { pvRarity = (e.target as HTMLSelectElement).value as Rarity; drawPreview(); } },
       ...RARITIES.map((r) => h('option', { value: r, selected: r === pvRarity }, RARITY_LABEL[r])));
     const lv = h('input', { type: 'number', min: '1', max: String(MAX_LEVEL), step: '1', value: String(pvLevel) });
@@ -513,10 +526,10 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     previewCard.replaceChildren(
       h('h2', {}, 'ตัวอย่างค่าจริงที่สุ่มได้'),
       h('div', { class: 'muted' }, 'คิดจากค่าที่กำลังแก้ (ยังไม่บันทึกก็เห็น) · ชี้ค้างที่ช่องเพื่อดูโอกาสของ tier นั้น (ปกติ/บอส) · บรรทัด "เสริม" = สเตตัสที่สุ่มจากความหายาก'),
-      h('div', { class: 'row bal-line' }, h('label', {}, 'ชนิดไอเทม', pickBase), h('label', {}, 'ความหายาก', pickRarity), h('label', {}, 'เลเวลไอเทม', lv)),
+      h('div', { class: 'row bal-line' }, h('label', {}, 'ช่อง', pickSlot), h('label', {}, 'ชิ้น', pickBase), h('label', {}, 'ความหายาก', pickRarity), h('label', {}, 'เลเวลไอเทม', lv)),
       multPart,
       h('h3', {}, 'ตาราง'),
-      h('div', { class: 'muted' }, `${base.names.any ?? base.names.sword ?? base.id} ${RARITY_LABEL[pvRarity]} Lv.${pvLevel} · ช่วงเลเวล ${TIER_BAND_NAME[TIER_BANDS[tierBandOf(pvLevel)]]}`),
+      h('div', { class: 'muted' }, `${baseName(base)} ${RARITY_LABEL[pvRarity]} Lv.${pvLevel} · ช่วงเลเวล ${TIER_BAND_NAME[TIER_BANDS[tierBandOf(pvLevel)]]}`),
       body,
     );
   };

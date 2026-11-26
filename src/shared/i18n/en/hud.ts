@@ -7,6 +7,7 @@ export const EN_HUD: Record<string, string> = {
   'เหนื่อยเมื่อไหร่ ให้มาดื่มน้ำจากน้ำพุกลางเมือง หรือนั่งพักข้างกองไฟในแคมป์ของแต่ละดินแดน กด T เมื่ออยู่ใกล้ เลือดและมานาจะกลับมาเต็ม': 'When you tire, drink from the town fountain or rest by the camp fire in each land. Press T when close and your HP and MP fill up.',
   'จงเริ่มฝึกฝนที่ป่ามรกต ผ่านประตูมุมบนของเมือง ลึกเข้าไปในป่ามีหมีใหญ่ที่ถูกพลังนั้นครอบงำ หากเจ้าปราบมันได้ เราจะได้เบาะแสแรกของ The Origin': 'Begin your training in the Emerald Forest, through the top gate of the town. Deep in the forest a great bear is possessed by that power. Defeat it and we will have our first clue to The Origin.',
   'แสดงแผงค่าสถานะ': 'Show the stats panel',
+  '(เต็มเพดาน, ของ {0})': '(capped, items {0})',
   'กระซิบ: พิมพ์ /w ชื่อ ข้อความ (ชื่อที่มีเว้นวรรคใส่ "…")': 'Whisper: type /w name message (names with spaces go in "…")',
   'ยังไม่มีใครกระซิบหาคุณ': 'Nobody has whispered to you yet',
   'ยังไม่ได้เลือกคนกระซิบ — พิมพ์ /w ชื่อ ข้อความ': 'No whisper target — type /w name message',
