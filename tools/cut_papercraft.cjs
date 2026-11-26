@@ -2,7 +2,7 @@
 // public/assets/sprites/paper/{props,ground}/, with the same names and sizes as the old art they stand in for
 // (see art_templates/papercraft_maps/PROMPTS.md). Usage: node tools/cut_papercraft.cjs map1_forest
 // [PAPER_RAW=<raw folder>] node tools/cut_papercraft.cjs floor2_hub
-// (floor 2: floor2_m1 … floor2_m4)
+// (floor 2: floor2_m1 … floor2_m4, floor2_sky)
 const path = require('path');
 const fs = require('fs');
 const sharp = require('sharp');
@@ -156,6 +156,14 @@ const MAPS = {
     ['ground_rotten_deck.png', 'ground', { out: 'rotten_deck' }],
     ['ground_misty_water.png', 'ground', { out: 'misty_water' }],
     ['ground_room.png', 'ground', { out: 'room_grave' }],
+  ],
+  // Floor 2's cloud sea behind every floor 2 map (FLOOR2_SKY.md, docs/systems/shaders.md): two tiles that already
+  // repeat (`seamless`: only shrunk) and two sheets of 8 loose clouds, each packed into one 4x2 atlas under sprites/paper/sky/.
+  floor2_sky: [
+    ['sky_day.png', 'ground', { out: 'sky_day', seamless: true }],
+    ['sky_storm.png', 'ground', { out: 'sky_storm', seamless: true }],
+    ['clouds_day.png', 'atlas', { cols: 4, rows: 2, dir: 'sky', out: 'clouds_day', size: [1536, 640], place: 'centre', fit: 'shared', soft: true }],
+    ['clouds_storm.png', 'atlas', { cols: 4, rows: 2, dir: 'sky', out: 'clouds_storm', size: [1536, 640], place: 'centre', fit: 'shared', soft: true }],
   ],
   floor2_m4: [
     ['props.png', 'props', { cols: 4, rows: 3, height: 256, names: ['storm_rock_0', 'storm_rock_1', 'storm_rock_2', 'wreck_0', 'wreck_1', 'broken_mast', 'coral_0', 'coral_1', 'kraken_flag', 'storm_lamp', 'rope_post', 'storm_anchor'] }],
@@ -524,7 +532,7 @@ async function atlas(img, o, label) {
     layers.push({ input: await crop(img, b).resize(w, h, { kernel: 'lanczos3' }).png().toBuffer(), left, top });
   }
   const sheet = sharp({ create: { width: W, height: H, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).composite(layers);
-  await save(sheet, `props/${o.out}.png`);
+  await save(sheet, `${o.dir ?? 'props'}/${o.out}.png`);
 }
 
 /**
@@ -593,7 +601,10 @@ async function disc(img, o, label) {
 /** A repeating ground tile: shrunk to 1024 square, its edges blended into the opposite ones so it repeats without a seam. */
 async function ground(file, o) {
   const N = 1024;
-  const { data } = await sharp(file).removeAlpha().resize(N, N, { kernel: 'lanczos3', fit: 'fill' }).raw().toBuffer({ resolveWithObject: true });
+  const shrunk = sharp(file).removeAlpha().resize(N, N, { kernel: 'lanczos3', fit: 'fill' });
+  // `seamless`: the picture's edges already meet, so blending them would only ghost it.
+  if (o.seamless) return save(shrunk, `ground/${o.out}.png`);
+  const { data } = await shrunk.raw().toBuffer({ resolveWithObject: true });
   const B = 96; // Blend band in pixels: each edge fades into the wrapped-around copy of the far side.
   const at = (x, y, c) => data[(((y + N) % N) * N + ((x + N) % N)) * 3 + c];
   const out = Buffer.alloc(N * N * 3);
@@ -633,6 +644,8 @@ async function main() {
     tracked = trackedSprites(ROOT);
     piecesFallback = true;
   }
+  // The sky's cloud sheets are keyed like floor 2's (the background measured from the border).
+  const measured = floor2 || map === 'floor2_sky';
   for (const [file, kind, o] of specs) {
     const src = path.join(RAW, file);
     if (!fs.existsSync(src)) {
@@ -644,9 +657,9 @@ async function main() {
     else if (kind === 'portrait') await portrait(src, o);
     else {
       const img = await readRaw(src);
-      if (floor2) {
+      if (measured) {
         // `see`: tissue-paper effects drawn see-through over the background keep their see-through parts (as the ghosts).
-        const { bg, green } = keyBg(img, o.see ? { soft: true, ghost: true } : {});
+        const { bg, green } = keyBg(img, o.see ? { soft: true, ghost: true } : { soft: !!o.soft });
         console.log(`  background ${green ? 'green' : 'magenta'} ${bg.join(',')}`);
       } else key(img, 40, o.bg);
       if (kind === 'disc') await disc(img, o, file);
