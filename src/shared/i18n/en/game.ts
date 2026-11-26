@@ -70,6 +70,8 @@ export const EN_GAME: Record<string, string> = {
   'ได้รับ{0}: {1}': 'Got {0}: {1}',
   'อุปกรณ์ {0}/{1}': 'Gear {0}/{1}',
   'ล่าครบ {0} ตัวแล้ว — กลับไปหา The Seeker ที่เมืองเพื่อรับอุปกรณ์': 'Hunted {0} — return to The Seeker in town for your gear',
+  'รับภารกิจ: ล่ามอนสเตอร์ใน{0} {1} ตัว แล้วกลับมาหานักเดินเรือแห่งมิติ เพื่อรับ{2}': 'Quest accepted: hunt {1} monsters in {0}, then return to the Dimension Navigator for {2}',
+  'ล่าครบ {0} ตัวแล้ว — กลับไปหานักเดินเรือแห่งมิติที่ท่าเรือเพื่อรับอุปกรณ์': 'Hunted {0} — return to the Dimension Navigator at the harbour for your gear',
   'กระเป๋าเต็ม — เคลียร์ช่องว่าง {0} ช่องก่อนรับภารกิจ': 'Bag full — free {0} slots before taking the quest',
   'รับภารกิจสอนระบบ: {0} (+{1} G{2})': 'Tutorial quest accepted: {0} (+{1} G{2})',
   ', {0} ผูกตัวละคร': ', {0} character-bound',

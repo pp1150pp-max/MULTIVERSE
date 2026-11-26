@@ -1338,16 +1338,11 @@ export class Sim {
 
   // ------------------------------------------------------------ gear quests (src/shared/gearQuests.ts): The Seeker / the navigator
 
-  /** Who gives this town's quests, for the log lines. */
-  private questGiver(): string {
-    return this.zone.town === 'harbor' ? 'นักเดินเรือแห่งมิติ' : 'The Seeker';
-  }
-
   gearAccept(p: Player, id: string): boolean {
     const r = gearRow(p, id);
     if (!r || r.state !== 'offer' || !this.ownFloor(r.map) || !this.near(p, 'seeker')) return false;
     p.gearQuests[id] = 0;
-    this.log(`รับภารกิจ: ล่ามอนสเตอร์ใน${r.map.nameTh} ${gearKills(r.map)} ตัว แล้วกลับมาหา${this.questGiver()} เพื่อรับ${GEAR_PART_NAME[r.part]}`, '#ffd34a', p.id);
+    this.log(`รับภารกิจ: ล่ามอนสเตอร์ใน${r.map.nameTh} ${gearKills(r.map)} ตัว แล้วกลับมาหา${floorOf(r.map) === 2 ? 'นักเดินเรือแห่งมิติ' : ' The Seeker'} เพื่อรับ${GEAR_PART_NAME[r.part]}`, '#ffd34a', p.id);
     this.events.push({ t: 'save', to: p.id });
     return true;
   }
@@ -1375,7 +1370,8 @@ export class Sim {
     const map = this.homeOf(m.def);
     if (!map || !gearOn(map)) return;
     const need = gearKills(map);
-    const giver = floorOf(map) === 2 ? 'นักเดินเรือแห่งมิติที่ท่าเรือ' : 'The Seeker ที่เมือง';
+    // Floor 1's line stays word for word (its English entry); floor 2 names the harbour's navigator.
+    const giver = floorOf(map) === 2 ? 'นักเดินเรือแห่งมิติที่ท่าเรือ' : ' The Seeker ที่เมือง';
     for (const [pid, dealt] of m.damageBy) {
       const p = this.players.find((x) => x.id === pid);
       if (!p || dealt <= 0) continue;

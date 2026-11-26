@@ -11,6 +11,7 @@ export const EN_REST: Record<string, string> = {
   'พับรายการเควส': 'Fold the quest list',
   'คลิกเพื่อเปิดแผนที่': 'Click to open the map',
   'ล่าครบแล้ว — กลับไปหา The Seeker': 'Done hunting — return to The Seeker',
+  'ล่าครบแล้ว — กลับไปหา นักเดินเรือแห่งมิติ': 'Done hunting — return to the Dimension Navigator',
 
   // ---- connection
   'server ไม่ตอบกลับ ลองใหม่อีกครั้ง': 'No answer from the server, try again',
