@@ -38,7 +38,10 @@ const CSS = `
 .orbp h2 { font-size: 12px; margin: 10px 0 4px; color: #f2d58a; }
 .orbp .row { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 3px 0; }
 .orbp .row label { flex: 1; min-width: 0; }
-.orbp .row > span, .orbp .row > select, .orbp .row > input { flex-shrink: 0; }
+/* label + pick-list: the label keeps its own width (never squeezed to 1-2 letters); the box takes what is left */
+.orbp .row > label:not(:only-child) { flex: 0 0 auto; max-width: 45%; min-width: 4.5em; }
+.orbp .row > select { flex: 1 1 9em; min-width: 0; max-width: none; width: auto; } /* too narrow for both on one line = the box drops under its label */
+.orbp .row > span, .orbp .row > input { flex-shrink: 0; }
 .orbp select, .orbp input[type=number], .orbp textarea { background: #1d2230; color: inherit; border: 1px solid #3a4152; border-radius: 3px; padding: 2px 4px; font: inherit; }
 .orbp .grp { margin: 10px 0 2px; color: #f2d58a; font-size: 12px; border-bottom: 1px solid #2c3343; }
 .orbp .fld { margin: 3px 0; }

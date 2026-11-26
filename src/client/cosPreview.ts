@@ -41,13 +41,17 @@ const CSS = `
 .cosp summary { cursor: pointer; color: #f2d58a; }
 .cosp .row { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 3px 0; }
 .cosp .row label { flex: 1; min-width: 0; }
-.cosp .row > span, .cosp .row > select, .cosp .row > input { flex-shrink: 0; }
+/* label + pick-list: the label keeps its own width (never squeezed to 1-2 letters); the box takes what is left */
+.cosp .row > label:not(:only-child) { flex: 0 0 auto; max-width: 45%; min-width: 4.5em; }
+.cosp .row > select { flex: 1 1 9em; min-width: 0; max-width: none; width: auto; } /* too narrow for both on one line = the box drops under its label */
+.cosp .row > span, .cosp .row > input { flex-shrink: 0; }
 .cosp select, .cosp textarea { background: #1d2230; color: inherit; border: 1px solid #3a4152; border-radius: 3px; padding: 2px 4px; font: inherit; }
 .cosp .grp { margin: 10px 0 2px; color: #f2d58a; font-size: 12px; border-bottom: 1px solid #2c3343; }
 .cosp .fld { margin: 3px 0; }
 .cosp .fld .lb { font-size: 12px; color: #c8c4b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cosp .ct { display: flex; align-items: center; gap: 3px; }
 .cosp .fld input[type=range] { flex: 1; min-width: 60px; }
+.cosp .fld input[type=color] { flex: none; width: 44px; min-width: 0; } /* the page's "input = full width" must not push the label out */
 .cosp .fld button { margin: 0; padding: 1px 7px; }
 .cosp .fld .undo { visibility: hidden; }
 .cosp .fld.changed .undo { visibility: visible; }

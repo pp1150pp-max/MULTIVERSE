@@ -98,7 +98,7 @@ export async function renderCosManage(view: HTMLElement, h: H, api: Api, openOrb
     msg.className = `msg ${cls}`;
     msg.textContent = text;
   };
-  const table = h('table', {});
+  const table = h('table', { class: 'cos-manage' });
 
   const draw = (): void => {
     table.replaceChildren(h('tr', {}, h('th', {}, ''), h('th', {}, 'ชิ้น'), h('th', {}, 'แสดงในเกม'), h('th', {}, 'ราคา (คริสตัลมิติ)'), h('th', {}, 'ค่าหน้าตา')));
@@ -443,7 +443,7 @@ export async function renderCosManage(view: HTMLElement, h: H, api: Api, openOrb
       + 'ช่องกรอบเหลือง = ต่างจากที่บันทึกไว้ (ยังไม่บันทึก) · เปลี่ยนค่าที่แก้ได้เรื่อย ๆ แล้วกดบันทึกครั้งเดียว'),
     !st.canEdit ? h('div', { class: 'muted' }, 'ซ่อน/ราคา และลูกแก้ว: ดูได้อย่างเดียว (ต้องมีสิทธิ์ "ซ่อน/ตั้งราคาของแต่งตัว")') : null,
     !st.canPaste ? h('div', { class: 'muted' }, 'ค่าหน้าตา (ปีก สัตว์ขี่ สัตว์เลี้ยง ออร่า): ดูได้อย่างเดียว (ต้องมีสิทธิ์ "บันทึกของแต่งตัวทั้งเซิร์ฟ")') : null,
-    table,
+    h('div', { style: 'overflow-x:auto' }, table),
     h('div', { style: 'display:flex;gap:8px;margin-top:8px;position:sticky;bottom:0;background:var(--panel);padding:6px 0' },
       canSave ? h('button', { class: 'primary', onclick: () => void save() }, 'บันทึก') : null,
       canSave ? h('button', { onclick: () => { startEdit(); draw(); say(''); } }, 'ยกเลิกที่แก้') : null,
