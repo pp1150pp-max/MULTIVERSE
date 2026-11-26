@@ -62,6 +62,11 @@ export interface InputMsg {
   pos?: Vec2;
   /** Counts up with every input message, so the server can say which one its position answers (PrivateSnap.ack). */
   seq?: number;
+  /**
+   * The last PrivateSnap.epoch the client saw: a `pos` from before the server moved the character at once (respawn,
+   * warp circle, the mage's Warp) is refused. Older clients never send it (their positions are checked as before).
+   */
+  epoch?: number;
   move: Vec2 | null;
   aim: Vec2;
   basic: boolean;

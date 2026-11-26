@@ -4,7 +4,7 @@
 import { ok, finish } from './check';
 import { COSMETICS, COS_SLOTS, cleanCosWorn, cosById, cosCodes, cosFromCodes } from '../src/shared/data/cosmetics';
 import { checkCosTuning, colorNum, COS_AXES, COS_TUNE_FIELDS, cosTuneDefaults, cosTuningChanges } from '../src/shared/cosTuning';
-import { checkBalance, currentBalance } from '../src/shared/balance';
+import { applyBalance, checkBalance, currentBalance } from '../src/shared/balance';
 import { checkCosShop, mayPutOnCos } from '../src/shared/cosShop';
 import { DASH_DIST, DASH_STYLE, DASH_TIME, dashLookOf } from '../src/client/dashFx';
 import { CLASSES, isLearnable } from '../src/shared/data/classes';
@@ -69,6 +69,8 @@ const step = (sim: Sim, it: Partial<Intent>) => sim.step(TICK, () => ({ ...IDLE_
 /** The dash cues in what the Sim sent: burst(x, y, z, class, 0, angle, by, 'dash'). */
 const cues = (evs: SimEvent[]) => evs.filter((e) => e.t === 'fx' && e.name === 'burst' && (e.args as unknown[])[7] === 'dash').map((e) => (e as { args: unknown[] }).args);
 
+// The mage's class passive Warp (classPassives.ts) turns its dash into a vanish-and-appear: the plain dash is checked with it off.
+applyBalance({ skills: { classPassive: { warp: { on: false } } } });
 for (const cls of ['sword', 'mage', 'gunslinger'] as const) {
   const { sim, p } = field(cls);
   sim.drainEvents();
@@ -77,6 +79,15 @@ for (const cls of ['sword', 'mage', 'gunslinger'] as const) {
   const c = cues(sim.drainEvents());
   ok(c.length === 1 && c[0][6] === p.id && c[0][4] === 0 && Math.abs(c[0][5] as number) < 1e-6 && Math.abs((c[0][0] as number) - x0) < 0.5,
     `${cls}: the dash button sends one cue with its id and direction (${JSON.stringify(c)})`);
+}
+applyBalance({});
+{
+  // Warp on (the code's own): no dash cue, its own two rings instead (the old dash never shows on top).
+  const { sim, p } = field('mage');
+  sim.drainEvents();
+  step(sim, { move: { x: 1, z: 0 }, dash: true });
+  const evs = sim.drainEvents();
+  ok(cues(evs).length === 0 && evs.some((e) => e.t === 'fx' && e.name === 'warp') && !p.isDashing, 'mage with Warp: no dash cue, the Warp rings instead');
 }
 let skillCues = 0;
 let dashing = 0;

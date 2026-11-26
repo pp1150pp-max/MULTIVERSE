@@ -16,6 +16,10 @@ import { currentBalance } from '../shared/balance';
 import { chargeMax } from '../shared/skillTuning';
 import { skillIcon } from './icons';
 import { constellation, PAD, SIZE } from './skillMap';
+import { CLASS_PASSIVE_TBD, CLASS_PASSIVES, passiveKey } from '../shared/classPassives';
+
+/** The details box's id for the class passive at the centre (owner 2026-11-27). */
+const CORE = '#core';
 
 /** Refund clicks this soon after a + click are ignored (rapid clicking that runs past rank 10). */
 const REFUND_AFTER_LEARN_MS = 700;
@@ -116,7 +120,7 @@ export class SkillWindow {
       this.g.sysMenu.setBadge('สกิล', left);
     }
     if (!this.open) return;
-    const key = JSON.stringify([p.skillBook, p.level, p.gold, this.sel]);
+    const key = JSON.stringify([p.skillBook, p.level, p.gold, this.sel, currentBalance().skills.classPassive]);
     if (key === this.drawn) return;
     this.drawn = key;
     this.render();
@@ -171,7 +175,13 @@ export class SkillWindow {
     const ghost = outline.map((s) => `<line class="ghost" x1="${X(s.from.x)}" y1="${Y(s.from.y)}" x2="${X(s.to.x)}" y2="${Y(s.to.y)}" style="--lc:${p.cls.lines[s.line].color}"/>`).join('') +
       spots.map((s) => `<circle class="spot" cx="${X(s.x)}" cy="${Y(s.y)}" r="3"/>`).join('');
     const svg = `<svg class="sk-lines" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${ghost}${lines}` +
-      `<g class="sk-core">${rays}<circle cx="${X(0)}" cy="${Y(0)}" r="6"/></g></svg>`;
+      `<g class="sk-core">${rays}</g></svg>`;
+    // The class passive at the centre (owner 2026-11-27): always on from its level, no points, no slot to wear it in.
+    const cp = this.corePassive();
+    const core = `<button class="sk-node core${cp.state === 'on' ? ' learned' : ' locked'}${this.sel === CORE ? ' sel' : ''}" data-id="${CORE}" title="${cp.nameTh}" style="left:${X(0)}px;top:${Y(0)}px;--sz:${SIZE.core}px;--lc:#f2c14e">` +
+      `<span class="sk-ico">${cp.def ? skillIcon(cp.def.id) : skillIcon('cp_none')}</span>` +
+      (cp.state === 'level' ? `<span class="sk-nlv">Lv${cp.level}</span>` : cp.state !== 'on' ? '<span class="sk-nlock">🔒</span>' : '') +
+      '</button>';
 
     const names = p.cls.lines.map((l, i) =>
       `<div class="sk-lname" style="left:${X(labels[i].x)}px;top:${Y(labels[i].y)}px;--lc:${l.color}">${l.nameTh}</div>`).join('');
@@ -205,7 +215,7 @@ export class SkillWindow {
     // The frame keeps the size of the fit-to-window map: zooming only changes what is inside it, never the window.
     this.wrap.style.height = `${Math.round(Math.min(maxH, h * this.fit))}px`;
     const z = this.zoom();
-    this.wrap.innerHTML = `<div class="sk-sizer" style="width:${w * z}px;height:${h * z}px"><div class="sk-map" style="width:${w}px;height:${h}px;transform:scale(${z})">${svg}${names}${nodes}</div></div>`;
+    this.wrap.innerHTML = `<div class="sk-sizer" style="width:${w * z}px;height:${h * z}px"><div class="sk-map" style="width:${w}px;height:${h}px;transform:scale(${z})">${svg}${names}${core}${nodes}</div></div>`;
     if (this.centre) {
       this.centre = false;
       this.wrap.scrollLeft = ox * z - this.wrap.clientWidth / 2;
@@ -317,9 +327,39 @@ export class SkillWindow {
     }, true);
   }
 
+  /** This class's passive and where it stands: on, waiting for its level, turned off on /admin, or still being designed. */
+  private corePassive(): { def: (typeof CLASS_PASSIVES)[keyof typeof CLASS_PASSIVES]; nameTh: string; state: 'on' | 'level' | 'off' | 'tbd'; level: number } {
+    const p = this.g.player;
+    const def = CLASS_PASSIVES[p.cls.id];
+    const key = passiveKey(p.cls.id);
+    if (!def || !key) return { def: null, nameTh: CLASS_PASSIVE_TBD.nameTh, state: 'tbd', level: 0 };
+    const c = currentBalance().skills.classPassive[key];
+    return { def, nameTh: def.nameTh, state: !c.on ? 'off' : p.level < c.level ? 'level' : 'on', level: c.level };
+  }
+
+  /** The details box for the class passive at the centre. */
+  private renderCore(): void {
+    const p = this.g.player;
+    const cp = this.corePassive();
+    const status = cp.state === 'on' ? '<span class="sk-cp-on">✓ ทำงานอยู่ ติดตัวตลอด ไม่ต้องใส่ช่อง</span>'
+      : cp.state === 'level' ? `<span class="sk-cp-off">🔒 ปลดล็อกที่ Lv.${cp.level}</span>`
+        : cp.state === 'off' ? '<span class="sk-cp-off">🔒 ปิดอยู่ชั่วคราว</span>'
+          : '<span class="sk-cp-off">🔒 ยังอยู่ระหว่างออกแบบ</span>';
+    const warp = cp.def?.id === 'cp_warp' ? currentBalance().skills.classPassive.warp : null;
+    const vals = warp
+      ? `<div class="sk-dval">ค่า: <span class="tt-val">เก็บได้ ${warp.stacks} ครั้ง (คืนทีละครั้ง) · คูลดาวน์ต่อครั้ง ${Math.round(p.dashCooldown() * 100) / 100} วิ · ระยะเท่าแดช</span></div>`
+      : '';
+    this.detail.innerHTML =
+      `<div class="sk-dhead"><span class="sk-ico cp">${cp.def ? skillIcon(cp.def.id) : skillIcon('cp_none')}</span><span><b>${cp.nameTh}</b>${cp.def ? ` (${cp.def.name})` : ''}<br>` +
+      `<span class="sk-dsub">พาสซีฟประจำอาชีพ${p.cls.nameTh}${cp.def ? ` · ปลด Lv.${cp.level}` : ''}</span></span></div>` +
+      `<div class="sk-desc">${cp.def ? cp.def.desc : CLASS_PASSIVE_TBD.desc}</div>` + vals +
+      `<div class="sk-dval">${status}</div>`;
+  }
+
   /** The details box: the chosen skill now and at its next rank, and its buttons. */
   private renderDetail(): void {
     const p = this.g.player;
+    if (this.sel === CORE) return this.renderCore();
     const sk = p.cls.skills.find((s) => s.id === this.sel);
     if (!sk) {
       this.detail.innerHTML = '<div class="sk-empty">คลิกดาวเพื่อดูรายละเอียดของสกิล</div>';

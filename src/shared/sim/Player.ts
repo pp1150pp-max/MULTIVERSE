@@ -32,6 +32,7 @@ import { BAG_TABS, cleanBagSlots, freeCount, freeSlot, normalizeBag, tabAt, tabO
 import { classBalance, currentBalance, finishStats } from '../balance';
 import { CHARGE_SKILLS, chargeMax, skipsAttackRoot } from '../skillTuning';
 import { attackRootTime } from '../attackRootTuning';
+import { classPassiveOn } from '../classPassives';
 import { AUTO_DEFAULT_KEYS, AUTO_LOOT_ORDERS, AUTO_OUT_ACTIONS, AUTO_TARGET_MODES, type AutoDefaults, type AutoLootOrder, type AutoOutAction, type AutoTargetMode } from '../autoTuning';
 import { MONSTERS } from '../data/monsters';
 
@@ -46,6 +47,11 @@ export const OUT_OF_COMBAT_REGEN = 2.5;
  * arrive while the server is still stopped. Refusing them all would leave the server behind and pull the player back.
  */
 const ATTACK_ROOT_SLACK = 0.45;
+/** The dash button's distance and time (the client's dashFx.ts uses the same). */
+export const DASH_DIST = 4.8;
+export const DASH_TIME = 0.18;
+/** Warp walks the dash's path in steps this long (short enough not to slip through a thin collider). */
+const WARP_STEP = 0.2;
 /** How quickly a character on ice gets to the speed it wants, per second. Lower is slipperier. */
 const ICE_GRIP = 1.5;
 /** A slide slower than this stops. */
@@ -714,9 +720,25 @@ export class Player extends Unit {
    * Full cooldown of this skill at its rank, cut by the "ลดคูลดาวน์สกิล %" item stat (owner 2026-11-19: Q/E/R,
    * not the basic attack or the dash; at most the /admin cap).
    */
-  /** Most charges this skill holds at its rank (0 = a plain cooldown skill). */
+  /** Most charges this skill holds at its rank (0 = a plain cooldown skill). The mage's Warp gives the dash charges. */
   chargeMax(sk: SkillDef): number {
+    if (sk.kind === 'dash') return this.warpOn() ? currentBalance().skills.classPassive.warp.stacks : 0;
     return chargeMax(currentBalance().skills, sk.id, this.skillRank(sk));
+  }
+
+  /** The gunslinger's class passive Hit and Run works now: basic attacks never hold the player still (classPassives.ts). */
+  hitRunOn(): boolean {
+    return classPassiveOn(currentBalance().skills.classPassive, this.cls.id, this.level, 'hitrun');
+  }
+
+  /** The mage's class passive Warp works now: the dash appears at its end at once, with charges (classPassives.ts). */
+  warpOn(): boolean {
+    return classPassiveOn(currentBalance().skills.classPassive, this.cls.id, this.level, 'warp');
+  }
+
+  /** The plain dash's full cooldown (the sword's passive may cut it). */
+  dashCooldown(): number {
+    return (this.skill('dash')?.cooldown ?? 0) * passiveDashCdMult(this);
   }
 
   /** Charges held right now (only meaningful when chargeMax > 0). */
@@ -734,22 +756,29 @@ export class Player extends Unit {
   /** The cast spent a charge (starts the recharge when it was full) and starts the gap. */
   useCharge(sk: SkillDef): void {
     const max = this.chargeMax(sk);
+    const dash = sk.kind === 'dash';
+    const full = dash ? this.dashCooldown() : this.skillCooldown(sk);
     if (!max) {
-      this.cd[sk.id] = this.skillCooldown(sk);
+      this.cd[sk.id] = full;
       return;
     }
     const had = this.chargesOf(sk);
     this.charges[sk.id] = had - 1;
-    if (had >= max || !((this.cd[sk.id] ?? 0) > 0)) this.cd[sk.id] = this.skillCooldown(sk);
-    this.cd[sk.id + ':gap'] = currentBalance().skills.mineGap;
+    if (had >= max || !((this.cd[sk.id] ?? 0) > 0)) this.cd[sk.id] = full;
+    this.cd[sk.id + ':gap'] = dash ? currentBalance().skills.classPassive.warp.gap : currentBalance().skills.mineGap;
   }
 
   /** Runs after the cooldowns tick: a finished recharge gives a charge back and starts the next one while still short. */
   tickCharges(): void {
     for (const sk of this.cls.skills) {
-      if (!CHARGE_SKILLS.has(sk.id)) continue;
+      const dash = sk.kind === 'dash';
+      if (!CHARGE_SKILLS.has(sk.id) && !dash) continue;
       const max = this.chargeMax(sk);
-      if (!max) continue;
+      if (!max) {
+        // Warp turned off (or the level lowered): the dash is a plain cooldown again.
+        if (dash) delete this.charges[sk.id];
+        continue;
+      }
       let have = this.chargesOf(sk);
       if (have >= max) {
         delete this.charges[sk.id];
@@ -757,7 +786,7 @@ export class Player extends Unit {
       }
       if (!((this.cd[sk.id] ?? 0) > 0)) {
         have++;
-        this.cd[sk.id] = have < max ? this.skillCooldown(sk) : 0;
+        this.cd[sk.id] = have < max ? (dash ? this.dashCooldown() : this.skillCooldown(sk)) : 0;
       }
       if (have >= max) delete this.charges[sk.id];
       else this.charges[sk.id] = have;
@@ -1159,6 +1188,40 @@ export class Player extends Unit {
 
   // ------------------------------------------------------------ actions
 
+  /**
+   * Warp (mage class passive, owner 2026-11-27): the dash, but gone from here and standing at its end at once. The end
+   * is found by walking the dash's path in short steps against the terrain (as a dash slides along walls), so it never
+   * passes through a wall, a prop, a whirlpool or the map's edge. Same short invulnerability as a dash.
+   */
+  warpDash(dx: number, dz: number): void {
+    const l = Math.hypot(dx, dz) || 1;
+    const ux = dx / l;
+    const uz = dz / l;
+    const fromX = this.x;
+    const fromZ = this.z;
+    const u = { x: this.x, z: this.z, radius: this.radius };
+    const steps = Math.ceil(DASH_DIST / WARP_STEP);
+    for (let i = 0; i < steps; i++) {
+      u.x += (ux * DASH_DIST) / steps;
+      u.z += (uz * DASH_DIST) / steps;
+      this.sim.terrain.resolve(u);
+    }
+    this.x = u.x;
+    this.z = u.z;
+    this.charmT = 0;
+    this.charmBy = null;
+    this.invulnT = DASH_TIME + 0.05;
+    this.moveTarget = null;
+    this.atkRootT = 0;
+    this.kbx = this.kbz = 0;
+    this.face(dx, dz);
+    this.sim.fx('warp', fromX, fromZ, this.x, this.z, this.id);
+    this.sim.sfx('warp', this.x, this.z);
+    // The browser jumps there instead of gliding, and its older positions are refused (server/world.ts epoch).
+    this.sim.markWarped(this);
+    passiveOnDash(this);
+  }
+
   startDash(dx: number, dz: number, dist: number, time: number, kind: 'dash' | 'charge'): void {
     const l = Math.hypot(dx, dz) || 1;
     this.dashVx = (dx / l) * (dist / time);
@@ -1236,6 +1299,8 @@ export class Player extends Unit {
 
   /** Starts (or lengthens) the stop on an attack: `skillId` null = the basic attack. */
   private startAttackRoot(skillId: string | null): void {
+    // Hit and Run (gunslinger class passive): the basic attack walks on.
+    if (skillId === null && this.hitRunOn()) return;
     const t = attackRootTime(currentBalance().attackRoot, this.cls.id, skillId, this.attackAnimDuration());
     if (t <= 0) return;
     if (this.atkRootT <= 0) this.atkRootNew = true;
@@ -1406,10 +1471,17 @@ export class Player extends Unit {
       } else mx = mz = 0;
     }
 
-    if (it.dash && !snared && (this.cd.dash ?? 0) <= 0) {
-      const dashSkill = this.skill('dash')!;
+    const dashSkill = this.skill('dash')!;
+    const warp = this.warpOn();
+    if (it.dash && !snared && (warp ? this.skillReady(dashSkill) : (this.cd.dash ?? 0) <= 0)) {
       const [dx, dz] = mx || mz ? [mx, mz] : [this.aimX, this.aimZ];
-      this.startDash(dx, dz, 4.8, 0.18, 'dash');
+      if (warp) {
+        this.warpDash(dx, dz);
+        this.useCharge(dashSkill);
+        this.guardT = 0;
+        return;
+      }
+      this.startDash(dx, dz, DASH_DIST, DASH_TIME, 'dash');
       quarksCue(sim, this, 'dash', Math.atan2(dz, dx));
       this.cd.dash = dashSkill.cooldown * passiveDashCdMult(this);
       this.guardT = 0;

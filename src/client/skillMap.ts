@@ -15,8 +15,8 @@ const ULT_SIDE = 74;
 /** Passives circle the centre at these angles, this far out. */
 const PASSIVE_ANGLE = [-90, 30, 150];
 const PASSIVE_R = 46;
-/** Star sizes: normal, ultimate, passive. */
-export const SIZE = { normal: 40, ult: 52, passive: 34 } as const;
+/** Star sizes: normal, ultimate, passive, and the class passive at the centre (owner 2026-11-27: a little bigger than a normal star). */
+export const SIZE = { normal: 40, ult: 52, passive: 34, core: 46 } as const;
 /** Empty space around the stars. */
 export const PAD = 34;
 

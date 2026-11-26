@@ -98,6 +98,11 @@ export interface FxApi {
    * long; `duration` 0 with an `angle` = it just fired that way (it turns and kicks back). One message per cast / shot.
    */
   drone(by: number, duration: number, angle?: number): void;
+  /**
+   * The mage's Warp (class passive, owner 2026-11-27): player `by` vanished at (x1, z1) and stands at (x2, z2) now.
+   * The client draws a vanishing ring and an appearing ring in the colours of the worn dash cosmetic.
+   */
+  warp(x1: number, z1: number, x2: number, z2: number, by: number): void;
 }
 
 export type SkillEffect = 'slash' | 'whirlwind' | 'charge' | 'quake' | 'explosion' | 'frost' | 'crater' | 'muzzle' | 'impact'
@@ -126,6 +131,8 @@ export type SfxName =
   | 'pickup_gold' | 'pickup_item' | 'pickup_potion' | 'drink'
   | 'trade' | 'enhance_ok' | 'enhance_fail'
   | 'headshot_fire'
+  // The mage's Warp (class passive, owner 2026-11-27)
+  | 'warp'
   // Bosses (owner 2026-11-22, docs/systems/audio.md)
   | 'boss_arrive' | 'boss_appear' | 'witch_cast' | 'witch_vial' | 'witch_grasp' | 'witch_hex'
   | 'heart_meteor' | 'heart_ring' | 'heart_beam' | 'heart_charge' | 'heart_phase';

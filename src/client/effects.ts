@@ -10,7 +10,7 @@ import type { QuarksFx } from './quarksFx';
 import { currentBalance } from '../shared/balance';
 import { gfxOthers, gfxParticles, gfxQuality } from './gfxPrefs';
 import { LEVELUP_STYLE, levelUpLookOf, playLevelUp } from './levelUpFx';
-import { DASH_DIST, DASH_STYLE, DASH_TIME, dashLookOf, playDash } from './dashFx';
+import { DASH_DIST, DASH_STYLE, DASH_TIME, dashLookOf, playDash, playWarp } from './dashFx';
 import { cosTune } from './cosTune';
 import { bossFxOn, bossFxSpot, isBossEffect, isBossMelee, playBossExtras } from './bossFx';
 
@@ -863,13 +863,37 @@ export class Effects implements FxApi {
   }
 
   /**
+   * The mage's Warp (class passive, owner 2026-11-27): rings where player `by` vanished and where it appears, in the
+   * worn dash cosmetic's style and colours (× the Warp's own size), or the /admin purple when none is worn (or /admin
+   * turned dash cosmetics off). Within the graphics menu, as dashWith. Never the old dash's puffs or path.
+   */
+  warp(x1: number, z1: number, x2: number, z2: number, by: number, cosId?: string): void {
+    const w = currentBalance().skills.classPassive.warp.look;
+    const id = cosId ?? this.dashOf?.(by);
+    const style = id && DASH_STYLE[id] && currentBalance().fxLayer.dashNew ? DASH_STYLE[id] : null;
+    const cos = style ? dashLookOf(cosTune(id!)) : null;
+    const look = cos ? { size: w.size * cos.size, sec: w.sec, color1: cos.color1, color2: cos.color2 } : { size: w.size, sec: w.sec, color1: w.color1, color2: w.color2 };
+    const mine = !this.layerHooks || by === this.layerHooks.me();
+    const others = mine ? 1 : gfxOthers();
+    playWarp((o, life, tick) => this.add(o, life, tick), x1, z1, x2, z2, style, look, {
+      particles: gfxParticles() * others * (TOUCH ? 0.5 : 1),
+      extras: gfxQuality() > 0 && others > 0,
+    });
+  }
+
+  /**
    * A dash cosmetic played as if player `p` had just dashed to where it stands, along its facing (the shop's
    * try-on and the "play again" button: only on this screen, the character doesn't move).
    */
-  dashDemo(id: string, p: { id: number; x: number; z: number; faceX: number; faceZ: number }): boolean {
+  dashDemo(id: string, p: { id: number; x: number; z: number; faceX: number; faceZ: number; warpOn?: () => boolean }): boolean {
     const ang = Math.atan2(p.faceZ, p.faceX);
     const sx = p.x - Math.cos(ang) * DASH_DIST;
     const sz = p.z - Math.sin(ang) * DASH_DIST;
+    // A mage with Warp sees it as it really plays: the two rings (owner 2026-11-27).
+    if (p.warpOn?.() && DASH_STYLE[id] && currentBalance().fxLayer.dashNew) {
+      this.warp(sx, sz, p.x, p.z, p.id, id);
+      return true;
+    }
     const k = (t: number) => Math.min(1, t / DASH_TIME);
     return this.dashWith(id, sx, sz, ang, p.id, (t) => ({ x: sx + (p.x - sx) * k(t), z: sz + (p.z - sz) * k(t) }));
   }

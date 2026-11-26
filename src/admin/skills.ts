@@ -15,6 +15,8 @@ import { MAX_LEVEL } from '../shared/formulas';
 import type { ClassId } from '../shared/types';
 import { constellation, PAD, SIZE } from '../client/skillMap';
 import { imgUrl } from '../client/img';
+import { CLASS_PASSIVES } from '../shared/classPassives';
+import { CP_RANGE } from '../shared/classPassiveTuning';
 
 type Kids = (Node | string | null | undefined | false)[];
 type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, unknown>, ...kids: Kids) => HTMLElementTagNameMap[K];
@@ -97,6 +99,7 @@ export async function renderSkills(view: HTMLElement, h: H, api: Api, onSaved: (
   const cardUnlock = h('div', { class: 'card folded' });
   const cardZoom = h('div', { class: 'card folded' });
   const cardFx = h('div', { class: 'card folded' });
+  const cardCp = h('div', { class: 'card folded' });
   /** One setting: its name and hint on the left, the box on the right. */
   const setRow = (label: string, hint: string | null, ctl: Node, unit = ''): HTMLElement =>
     h('div', { class: 'set-row' }, h('div', { class: 'set-name' }, h('div', {}, label), hint ? h('div', { class: 'muted set-hint' }, hint) : null), h('div', { class: 'set-ctl' }, ctl, unit ? h('span', { class: 'muted' }, ` ${unit}`) : null));
@@ -133,6 +136,35 @@ export async function renderSkills(view: HTMLElement, h: H, api: Api, onSaved: (
       h('h2', {}, 'ค่ารวม 4: เอฟเฟกต์พิเศษ'),
       h('div', { class: 'muted' }, 'เพิ่มเอฟเฟกต์ให้แต่ละสกิลได้ที่แผงของสกิลนั้น (คลิกดาวบนผัง) ส่วนนี้คือค่ากลางของเอฟเฟกต์'),
       numRow('extraStunGap', 0.5, 'มอนตัวเดิมโดนสตันซ้ำจากสกิลเดิมได้เมื่อพ้นเวลานี้ (กันสกิลที่ตีหลายครั้งสตันค้าง) · 0 = สตันทุกครั้งที่โดน', 'วิ'),
+    );
+    // Class passives (owner 2026-11-27, src/shared/classPassives.ts): always on from their level, no points.
+    const cp = sc.classPassive;
+    const ccp = cs.classPassive;
+    const sw = (get: () => boolean, set: (v: boolean) => void): HTMLInputElement =>
+      h('input', { type: 'checkbox', checked: get(), onchange: (e: Event) => { set((e.target as HTMLInputElement).checked); updateSummary(); } });
+    const cpNum = (key: string, what: string, get: () => number, set: (n: number) => void, codeVal: number, r: readonly [number, number], step: number): HTMLInputElement =>
+      numBox(`cp.${key}`, what, get, set, codeVal, r[0], r[1], step, refresh);
+    const color = (get: () => string, set: (v: string) => void, codeVal: string): HTMLInputElement =>
+      h('input', { type: 'color', value: get(), title: `ค่าในโค้ด: ${codeVal}`, oninput: (e: Event) => { set((e.target as HTMLInputElement).value.toLowerCase()); updateSummary(); } });
+    const hr = CLASS_PASSIVES.gunslinger!;
+    const wp = CLASS_PASSIVES.mage!;
+    cardCp.replaceChildren(
+      h('h2', {}, 'ค่ารวม 5: พาสซีฟประจำอาชีพ'),
+      h('div', { class: 'muted' }, 'ดาวกลางของผังสกิล ติดตัวตลอดเมื่อถึงเลเวล ไม่ใช้แต้ม ไม่มีแรงก์ ไม่ต้องใส่ช่อง (ใช้คู่กับพาสซีฟ 1 ช่องเดิมได้) · นักดาบยังไม่มี (ผังขึ้น "ยังอยู่ระหว่างออกแบบ")'),
+      h('div', { class: 'skm-sub' }, `มือปืน: ${hr.nameTh} (${hr.name})`),
+      setRow('เปิดใช้', hr.desc, sw(() => cp.hitrun.on, (v) => { cp.hitrun.on = v; })),
+      setRow('เลเวลปลดล็อก', null, cpNum('hitrun.level', 'เลเวลปลดล็อกยิงแล้ววิ่ง', () => cp.hitrun.level, (n) => { cp.hitrun.level = n; }, ccp.hitrun.level, CP_RANGE.level, 1), 'เลเวล'),
+      h('div', { class: 'skm-sub' }, `เมจ: ${wp.nameTh} (${wp.name})`),
+      setRow('เปิดใช้', 'กดแดชแล้วหายตัวไปโผล่ปลายทางทันที (ระยะเท่าแดช ชนกำแพง/ของ/ขอบแมพหยุดตรงนั้น) · ปิด = แดชพุ่งแบบเดิม', sw(() => cp.warp.on, (v) => { cp.warp.on = v; })),
+      setRow('เลเวลปลดล็อก', null, cpNum('warp.level', 'เลเวลปลดล็อกก้าวมิติ', () => cp.warp.level, (n) => { cp.warp.level = n; }, ccp.warp.level, CP_RANGE.level, 1), 'เลเวล'),
+      setRow('จำนวนครั้งที่เก็บได้', 'คืนทีละครั้งตามคูลดาวน์แดชเดิม', cpNum('warp.stacks', 'จำนวนครั้งที่เก็บวาร์ปได้', () => cp.warp.stacks, (n) => { cp.warp.stacks = n; }, ccp.warp.stacks, CP_RANGE.stacks, 1), 'ครั้ง'),
+      setRow('หน่วงระหว่างวาร์ป', 'วาร์ปสองครั้งติดกันต้องห่างอย่างน้อยเท่านี้', cpNum('warp.gap', 'หน่วงระหว่างวาร์ป', () => cp.warp.gap, (n) => { cp.warp.gap = n; }, ccp.warp.gap, CP_RANGE.gap, 0.05), 'วิ'),
+      setRow('ขนาดวง', 'วงหายตัว + วงโผล่ (คูณกับขนาดของเอฟเฟกต์แดชที่สวม)', cpNum('warp.size', 'ขนาดวงวาร์ป', () => cp.warp.look.size, (n) => { cp.warp.look.size = n; }, ccp.warp.look.size, CP_RANGE.size, 0.1), '×'),
+      setRow('เวลาวง', null, cpNum('warp.sec', 'เวลาวงวาร์ป', () => cp.warp.look.sec, (n) => { cp.warp.look.sec = n; }, ccp.warp.look.sec, CP_RANGE.sec, 0.05), 'วิ'),
+      setRow('สีใน / สีนอก (ไม่ได้สวมเอฟเฟกต์แดช)', 'สวมเอฟเฟกต์แดชอยู่ = ใช้สีและอนุภาคของชิ้นนั้น',
+        h('div', { class: 'set-multi' },
+          color(() => cp.warp.look.color1, (v) => { cp.warp.look.color1 = v; }, ccp.warp.look.color1),
+          color(() => cp.warp.look.color2, (v) => { cp.warp.look.color2 = v; }, ccp.warp.look.color2))),
     );
   };
 
@@ -593,7 +625,7 @@ export async function renderSkills(view: HTMLElement, h: H, api: Api, onSaved: (
     msg,
   );
 
-  box.replaceChildren(fold.head, mapCard, cardPoints, cardUnlock, cardZoom, cardFx, bar);
+  box.replaceChildren(fold.head, mapCard, cardPoints, cardUnlock, cardZoom, cardFx, cardCp, bar);
   redraw();
   fold.refreshToc();
 }

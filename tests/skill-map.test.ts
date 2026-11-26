@@ -2,7 +2,7 @@
 // as the class sessions will add (8 normal + 2 ultimates per line), never overlap and each line comes from somewhere.
 import { ok, finish } from './check';
 import { CLASSES, type SkillDef } from '../src/shared/data/classes';
-import { constellation, type Star } from '../src/client/skillMap';
+import { constellation, SIZE, type Star } from '../src/client/skillMap';
 
 function overlaps(stars: Star[]): string[] {
   const bad: string[] = [];
@@ -21,6 +21,8 @@ for (const cls of Object.values(CLASSES)) {
   ok(stars.length === cls.skills.filter((s) => s.kind !== 'basic' && s.kind !== 'dash').length, `${cls.id}: a star for every learnable skill`);
   ok(overlaps(stars).length === 0, `${cls.id}: no stars overlap (${overlaps(stars).join(', ')})`);
 }
+/** Stars too close to the class passive at the centre (owner 2026-11-27), at least 4 px between the edges. */
+const nearCore = (stars: Star[]) => stars.filter((s) => Math.hypot(s.x, s.y) < (s.size + SIZE.core) / 2 + 4).map((s) => s.sk.id);
 
 // A full class as planned: 3 lines × (8 normal + 2 ultimates) + 3 passives.
 const full: SkillDef[] = [];
@@ -35,6 +37,7 @@ for (let tier = 0; tier < 3; tier++) full.push({ ...base, id: `p${tier}`, kind: 
   ok(stars.length === 33, 'full class: 33 stars');
   const bad = overlaps(stars);
   ok(bad.length === 0, `full class: no stars overlap (${bad.slice(0, 5).join(', ')})`);
+  ok(nearCore(stars).length === 0, `full class: the class passive at the centre is clear of every star (${nearCore(stars).join(', ')})`);
   // Line names stay clear of every star.
   const hit = labels.filter((l) => stars.some((s) => Math.hypot(l.x - s.x, l.y - s.y) < s.size / 2 + 14));
   ok(hit.length === 0, 'full class: line names clear of the stars');
