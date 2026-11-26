@@ -232,20 +232,34 @@
 #sys-menu .set-big.danger { background: linear-gradient(#a8362c, #5e1a14); border-color: #e0806a; color: #ffe8dc; }
 #sys-menu .set-big.danger:hover { filter: brightness(1.15); color: #fff; }
 #sys-menu [data-view="settings"] .sys-note { margin-top: 6px; }
-@media (max-width: 620px), (max-height: 520px) {
+/* Narrow (phones upright): tabs become a row on top, arrow pointing down. */
+@media (max-width: 620px) {
   #sys-menu.sys-settings { padding: 12px 10px; }
   #sys-menu .set-body { grid-template-columns: 1fr; gap: 8px; }
-  #sys-menu .set-tabs { flex-direction: row; gap: 4px; overflow-x: auto; }
-  #sys-menu .set-tab { flex: 1 0 auto; justify-content: center; gap: 4px; height: 38px; padding: 0 8px; font-size: 13px; }
-  #sys-menu .set-tab-ico { width: auto; font-size: 16px; }
+  #sys-menu .set-tabs { flex-direction: row; gap: 3px; overflow-x: auto; }
+  #sys-menu .set-tab { flex: 1 1 auto; justify-content: center; gap: 3px; height: 38px; padding: 0 5px; font-size: 13px; }
+  #sys-menu .set-tab-ico { width: auto; font-size: 14px; }
   #sys-menu .set-tab.on::after { right: 50%; top: auto; bottom: -9px; width: 18px; height: 9px; transform: translateX(50%); clip-path: polygon(0 0, 100% 0, 50% 100%); background: #8a6420; }
-  #sys-menu .set-back { flex: none; margin: 0; padding: 0 8px; }
+  #sys-menu .set-back { flex: none; margin: 0; padding: 0 6px; }
   #sys-menu .set-pane { min-height: 0; max-height: calc(100vh - 190px); padding: 8px 10px; }
-  #sys-menu .set-select { min-width: 120px; }
+  #sys-menu .set-select { min-width: 110px; }
   #sys-menu .set-foot { gap: 6px; margin-top: 8px; }
   #sys-menu .set-big { height: 38px; font-size: 13px; padding: 0 4px; }
 }
-@supports (height: 100dvh) { @media (max-width: 620px), (max-height: 520px) { #sys-menu .set-pane { max-height: calc(100dvh - 190px); } } }
+@supports (height: 100dvh) { @media (max-width: 620px) { #sys-menu .set-pane { max-height: calc(100dvh - 190px); } } }
+/* Short (phones on their side): side tabs stay, everything tighter so the rows get the height. */
+@media (max-height: 520px) and (min-width: 621px) {
+  #sys-menu.sys-settings { padding: 10px 12px; }
+  #sys-menu.sys-settings .panel-head { margin-bottom: 8px; }
+  #sys-menu .set-body { grid-template-columns: 140px minmax(0, 1fr); }
+  #sys-menu .set-tabs { gap: 5px; }
+  #sys-menu .set-tab { height: 36px; font-size: 14px; }
+  #sys-menu .set-pane { min-height: 0; max-height: calc(100vh - 130px); padding: 6px 12px 8px; }
+  #sys-menu .set-row { min-height: 36px; padding: 3px 2px; }
+  #sys-menu .set-foot { margin-top: 8px; }
+  #sys-menu .set-big { height: 34px; font-size: 14px; }
+}
+@supports (height: 100dvh) { @media (max-height: 520px) and (min-width: 621px) { #sys-menu .set-pane { max-height: calc(100dvh - 130px); } } }
 #exit-countdown {
   position: absolute; left: 50%; top: 28%; transform: translateX(-50%); padding: 8px 16px;
   background: rgba(10, 7, 4, 0.85); border: 1px solid var(--panel-edge); border-radius: 6px;
