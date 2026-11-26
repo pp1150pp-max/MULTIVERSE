@@ -9,7 +9,7 @@ import { buildMenu, facePortrait } from './client/menu';
 import type { OnlineBackend } from './client/net/online';
 import { audioEngine } from './client/audio/engine';
 import { loadPublishedMaps } from './client/mapSync';
-import { addLangButton, checkLangAllowed, startTranslator } from './client/i18n';
+import { checkLangAllowed, startTranslator } from './client/i18n';
 import { hudMockParam, runHudMock } from './client/hudMock';
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -23,7 +23,6 @@ function start(game: Game, classId: string): void {
 
 function launch(backend: OnlineBackend): void {
   const game = new Game($('app'), backend);
-  addLangButton();
   backend.onChat = (name, text, ch, to, links) => {
     game.hud.chatLine(name, text, undefined, ch, to, links);
     // Whispers are private: no speech bubble over the head.

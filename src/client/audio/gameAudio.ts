@@ -11,7 +11,6 @@ import { bossRoomSong } from '../../shared/audioTuning';
 import { currentBalance } from '../../shared/balance';
 import { audioEngine } from './engine';
 import { music, type TrackId } from './music';
-import { mountAudioPanel } from './panel';
 import { isSoundName, playSound, type SoundName } from './sfx';
 import { BOSS_SOUNDS } from './bossSounds';
 import { IMPACT_OF } from './skillSounds';
@@ -53,7 +52,6 @@ export class GameAudio {
 
   constructor() {
     audioEngine.onUiClick = () => playSound('ui_click');
-    mountAudioPanel();
     watchWindows();
   }
 

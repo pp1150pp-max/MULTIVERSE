@@ -62,8 +62,8 @@ const SKIP = '[translate="no"], script, style, textarea, [contenteditable="true"
 /** Thai still on screen with no English (deduplicated): `__i18nMisses()` in the console lists them. */
 const misses = new Set<string>();
 
-/** Same Thai, other English inside one window (the Graphics window's "ปิด" is Off, not Close). */
-const CONTEXT: [selector: string, dict: Record<string, string>][] = [['#gfx-panel', { 'ปิด': 'Off' }]];
+/** Same Thai, other English inside one window (the settings page's "ปิด" / "เปิด" are Off / On, not Close / Open). */
+const CONTEXT: [selector: string, dict: Record<string, string>][] = [['#sys-menu .set-pane', { 'ปิด': 'Off', 'เปิด': 'On' }]];
 
 /** English for a text node or attribute of `el`, or null. */
 function english(el: Element | null, text: string): string | null {
@@ -151,45 +151,23 @@ export async function checkLangAllowed(inGame: () => boolean): Promise<void> {
     const was = englishAllowed();
     write(ALLOWED_KEY, r.english ? '1' : '0');
     if (was && !r.english && LANG === 'en' && !inGame()) location.reload();
-    langButtonShown(r.english);
   } catch {
     // Offline or an older server: keep what we knew.
   }
 }
 
-// ------------------------------------------------------------------ the button in เมนู → ตั้งค่า
+// ------------------------------------------------------------------ the row in เมนู → ตั้งค่า → ทั่วไป
 
-const NAME: Record<Lang, string> = { th: 'ไทย', en: 'English' };
-let langBtn: HTMLButtonElement | null = null;
-
-function langButtonShown(on: boolean): void {
-  langBtn?.classList.toggle('hidden', !on);
+/** Whether the language row shows (the /admin switch as last heard). */
+export const langRowShown = (): boolean => englishAllowed();
+/** The language picked for the next time the game opens (or this page's). */
+export const langWanted = (): Lang => langPref() ?? LANG;
+/** Picks the language for the next time the game opens. */
+export function setLangPref(l: Lang): void {
+  write(PREF_KEY, l);
 }
-
-function drawLangButton(): void {
-  if (!langBtn) return;
-  const want = langPref() ?? LANG;
-  // Written in both languages and never translated, so either reader finds it.
-  langBtn.textContent = want === LANG ? `ภาษา / Language: ${NAME[want]}` : `ภาษา / Language: ${NAME[want]} (เปิดเกมใหม่ / reopen game)`;
-  langBtn.title = want === LANG ? 'ไทย ↔ English' : 'มีผลเมื่อเปิดเกมใหม่ / Takes effect when you open the game again';
-}
-
-/** Puts the language button into the settings view of the system menu (after the game's menu is built). */
-export function addLangButton(): void {
-  const view = document.querySelector('#sys-menu [data-view="settings"]');
-  if (!view || langBtn) return;
-  langBtn = document.createElement('button');
-  langBtn.id = 'sys-lang';
-  langBtn.setAttribute('translate', 'no');
-  langBtn.addEventListener('click', () => {
-    const next: Lang = (langPref() ?? LANG) === 'th' ? 'en' : 'th';
-    write(PREF_KEY, next);
-    drawLangButton();
-  });
-  view.insertBefore(langBtn, view.querySelector('#sys-keybinds'));
-  langButtonShown(englishAllowed());
-  drawLangButton();
-}
+/** Names in both languages, never translated, so either reader finds them. */
+export const LANG_NAME: Record<Lang, string> = { th: 'ไทย', en: 'English' };
 
 // ------------------------------------------------------------------ player-written text
 

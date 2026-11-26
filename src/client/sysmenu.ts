@@ -5,8 +5,11 @@ import type { Game } from './Game';
 import { googleEnabled, logout } from './net/api';
 import { imgUrl } from './img';
 import { gfxMenuOn } from './gfxPrefs';
-import { toggleGfxPanel } from './gfxPanel';
-import { toggleKeybindPanel } from './keybindPanel';
+import { renderGfxSettings } from './gfxPanel';
+import { keybindWaiting, renderKeybindSettings, resetKeybindTab } from './keybindPanel';
+import { renderAudioSettings } from './audio/panel';
+import { LANG, LANG_NAME, langRowShown, langWanted, setLangPref } from './i18n';
+import { setRow, setSelect, setSwitch } from './settingsUi';
 import { currentBalance } from '../shared/balance';
 import { newsButtonOn } from './news';
 import { albumOn } from '../shared/cardAlbum';
@@ -38,6 +41,17 @@ const badge = (i: MenuIcon): string =>
 const GUEST_NO = new Set(['mail', 'report', 'trade', 'friends', 'daily', 'album']);
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+
+/** The settings page's tabs (owner 2026-11-26): side tabs left, rows right, big exit buttons at the bottom. */
+type SetTab = 'general' | 'graphics' | 'audio' | 'keys';
+const SET_TABS: Array<[SetTab, string, string]> = [
+  ['general', '⚙️', 'ทั่วไป'],
+  ['graphics', '🖥️', 'กราฟิก'],
+  ['audio', '🔊', 'เสียง'],
+  ['keys', '🎮', 'ปุ่ม'],
+];
+/** Each tab's heading on the right. */
+const SET_TITLE: Record<SetTab, string> = { general: 'ตั้งค่าทั่วไป', graphics: 'กราฟิก', audio: 'เสียง', keys: 'ตั้งค่าปุ่ม' };
 
 /**
  * The top row, the floating shortcut buttons and the menu window's tiles for a layout (src/shared/menuLayout.ts).
@@ -82,6 +96,10 @@ export class SystemMenu {
   private readonly free: HTMLElement;
   /** The layout drawn now (the balance's object, so a new one from the server is noticed by identity). */
   private drawn: MenuLayoutConfig | null = null;
+  /** The settings tab showing. */
+  private tab: SetTab = 'general';
+  /** The Google button is offered (server has Google sign-in on). */
+  private googleOn = false;
 
   constructor(private readonly g: Game) {
     const guest = g.backend.guest;
@@ -106,25 +124,34 @@ export class SystemMenu {
     this.panel.id = 'sys-menu';
     this.panel.className = 'panel hidden';
     this.panel.innerHTML = `
-      <div class="panel-head"><span>เมนู</span><button data-act="close">✕</button></div>
+      <div class="panel-head"><span id="sys-title">เมนู</span><button data-act="close">✕</button></div>
       <div class="sys-view sys-grid" data-view="main"></div>
       <div class="sys-view hidden" data-view="settings">
-        <button data-act="hudstyle" id="sys-hudstyle"></button>
-        <button data-act="partyblock" id="sys-partyblock"></button>
-        <button data-act="keybinds" id="sys-keybinds">ตั้งค่าปุ่ม</button>
-        ${guest ? '' : '<button data-act="tradeblock" id="sys-tradeblock"></button>'}
-        <div class="sys-sep"></div>
-        <button data-act="google" id="sys-google" class="hidden">${guest ? 'บันทึกตัวละครด้วย Google' : 'ผูกบัญชี Google'}</button>
-        <button data-act="chars">${guest ? 'กลับไปหน้า Guest' : 'กลับไปเลือกตัวละคร'}</button>
-        <button data-act="logout">${guest ? 'กลับหน้าแรก' : 'ออกจากระบบ'}</button>
-        ${guest ? '<div class="sys-note">สมัครสมาชิกที่หน้าแรก<br>เพื่อเก็บตัวละคร Guest นี้ไว้ถาวร</div>' : ''}
-        <div class="sys-sep"></div>
-        <button data-act="resume" class="primary">กลับเข้าเกม</button>
-        <button data-act="back">‹ กลับ</button>
+        <div class="set-body">
+          <nav class="set-tabs">
+            ${SET_TABS.map(([id, ico, name]) => `<button class="set-tab" data-tab="${id}"><span class="set-tab-ico">${ico}</span><span class="set-tab-name">${name}</span></button>`).join('')}
+            <button class="set-back" data-act="back">‹ กลับ</button>
+          </nav>
+          <section class="set-pane">
+            <div class="set-title"></div>
+            <div class="set-rows"></div>
+          </section>
+        </div>
+        <div class="set-foot">
+          <button data-act="resume" class="primary set-big">กลับเข้าเกม</button>
+          <button data-act="chars" class="set-big">${guest ? 'กลับไปหน้า Guest' : 'เลือกตัวละคร'}</button>
+          <button data-act="logout" class="set-big danger">${guest ? 'กลับหน้าแรก' : 'ออกจากระบบ'}</button>
+        </div>
+        ${guest ? '<div class="sys-note">สมัครสมาชิกที่หน้าแรก เพื่อเก็บตัวละคร Guest นี้ไว้ถาวร</div>' : ''}
       </div>`;
     this.build();
-    void googleEnabled().then((on) => this.panel.querySelector('#sys-google')?.classList.toggle('hidden', !on));
+    void googleEnabled().then((on) => {
+      this.googleOn = on;
+      if (this.tab === 'general') this.drawTab();
+    });
     this.panel.addEventListener('click', (e) => {
+      const tab = (e.target as HTMLElement).closest<HTMLElement>('[data-tab]')?.dataset.tab;
+      if (tab) return this.selectTab(tab as SetTab);
       const act = (e.target as HTMLElement).closest<HTMLElement>('[data-act]')?.dataset.act;
       if (act) this.onAct(act);
     });
@@ -189,6 +216,7 @@ export class SystemMenu {
     const show = force ?? !this.open;
     if (show) {
       this.g.hud.closePanels();
+      resetKeybindTab();
       this.showView('main');
     }
     this.panel.classList.toggle('hidden', !show);
@@ -196,6 +224,7 @@ export class SystemMenu {
 
   /** Esc: cancel a pending exit, else close what's open, else open this menu. */
   onEscape(): void {
+    if (keybindWaiting()) return; // the ปุ่ม tab takes this Esc (cancels picking a key)
     if (this.exit) return this.cancelExit('ยกเลิกการออก');
     if (this.open) return this.toggle(false);
     // Esc closes the trade window = cancels the trade (nothing left the bags, so nothing to return).
@@ -232,12 +261,70 @@ export class SystemMenu {
   private showView(v: string): void {
     this.applyGfxTile();
     this.panel.querySelectorAll<HTMLElement>('.sys-view').forEach((el) => el.classList.toggle('hidden', el.dataset.view !== v));
-    $('sys-hudstyle').textContent = $('btn-hud-style').textContent;
-    // The /admin switch can change while playing: shown only while players may set their own keys.
-    document.getElementById('sys-keybinds')?.classList.toggle('hidden', !currentBalance().fxLayer.keyRebind);
-    $('sys-partyblock').textContent = `${this.g.party.block ? '☑' : '☐'} ไม่รับคำชวนปาร์ตี้`;
-    const tb = document.getElementById('sys-tradeblock');
-    if (tb) tb.textContent = `${this.g.trade.block ? '☑' : '☐'} ไม่รับคำขอเทรด`;
+    this.panel.classList.toggle('sys-settings', v === 'settings');
+    $('sys-title').textContent = v === 'settings' ? 'ตั้งค่า' : 'เมนู';
+    if (v === 'settings') this.selectTab(this.tab);
+  }
+
+  /** Whether a tab may show: กราฟิก and ปุ่ม follow their /admin switches (fxLayer.gfxMenu / keyRebind). */
+  private tabOn(t: SetTab): boolean {
+    if (t === 'graphics') return gfxMenuOn();
+    if (t === 'keys') return currentBalance().fxLayer.keyRebind;
+    return true;
+  }
+
+  /** Shows a settings tab (ทั่วไป when that one is switched off on /admin). */
+  private selectTab(t: SetTab): void {
+    if (t !== this.tab) resetKeybindTab();
+    this.tab = this.tabOn(t) ? t : 'general';
+    for (const b of this.panel.querySelectorAll<HTMLElement>('.set-tab')) {
+      const id = b.dataset.tab as SetTab;
+      b.classList.toggle('hidden', !this.tabOn(id));
+      b.classList.toggle('on', id === this.tab);
+    }
+    this.drawTab();
+  }
+
+  /** Draws the rows of the tab showing (again after every change, so each control shows what is in use). */
+  private drawTab(): void {
+    const pane = this.panel.querySelector<HTMLElement>('.set-pane');
+    if (!pane) return;
+    pane.querySelector('.set-title')!.textContent = SET_TITLE[this.tab];
+    const rows = pane.querySelector<HTMLElement>('.set-rows')!;
+    rows.replaceChildren();
+    rows.dataset.tab = this.tab;
+    const redraw = () => this.drawTab();
+    if (this.tab === 'graphics') return renderGfxSettings(rows, redraw);
+    if (this.tab === 'audio') return renderAudioSettings(rows, redraw);
+    if (this.tab === 'keys') return renderKeybindSettings(rows, redraw);
+    const g = this.g;
+    if (langRowShown()) {
+      // Written in both languages and never translated, so either reader finds it.
+      const want = langWanted();
+      const row = setRow('ภาษา / Language', setSelect([['th', LANG_NAME.th], ['en', LANG_NAME.en]], want, (l) => { setLangPref(l); redraw(); }),
+        want === LANG ? undefined : 'มีผลเมื่อเปิดเกมใหม่ / Takes effect when you open the game again');
+      row.setAttribute('translate', 'no');
+      rows.append(row);
+    }
+    rows.append(
+      setRow('HP / MP', setSelect([['orbs', 'ลูกแก้ว'], ['bars', 'แถบ']], g.hud.hpStyle, (v) => { g.hud.setHudStyle(v); redraw(); })),
+      setRow('รับคำชวนปาร์ตี้', setSwitch(!g.party.block, (on) => { g.party.setBlock(!on); redraw(); })),
+    );
+    if (!g.backend.guest) rows.append(setRow('รับคำขอเทรด', setSwitch(!g.trade.block, (on) => { g.trade.setBlock(!on); redraw(); })));
+    if (this.googleOn) {
+      const b = document.createElement('button');
+      b.className = 'set-btn';
+      b.dataset.act = 'google';
+      b.textContent = g.backend.guest ? 'บันทึกตัวละครด้วย Google' : 'ผูกบัญชี Google';
+      rows.append(setRow('บัญชี Google', b));
+    }
+  }
+
+  /** Opens the menu straight on a settings tab (the menu tiles, top-row icons and admins' shortcuts). */
+  private openTab(t: SetTab): void {
+    if (!this.open) this.toggle(true);
+    this.tab = t;
+    this.showView('settings');
   }
 
   /** A click on a top-row icon: the ones that were always there toggle their window, the rest open like from the menu window. */
@@ -247,8 +334,7 @@ export class SystemMenu {
     const act = this.drawn ? buttonAct(this.drawn, id) : id;
     if (act !== id) {
       if (act !== 'settings') return this.onTop(act);
-      this.toggle(true);
-      return this.showView('settings');
+      return this.openTab('general');
     }
     switch (id) {
       case 'auto': return g.toggleAuto();
@@ -296,9 +382,6 @@ export class SystemMenu {
       case 'trade':
         this.toggle(false);
         return this.g.trade.toggleFind(true);
-      case 'tradeblock':
-        this.g.trade.setBlock(!this.g.trade.block);
-        return this.showView('settings');
       case 'mail':
         this.toggle(false);
         return this.g.mailUI.toggle(true);
@@ -314,17 +397,13 @@ export class SystemMenu {
       case 'album':
         this.toggle(false);
         return this.g.album.toggle(true);
-      case 'partyblock':
-        this.g.party.setBlock(!this.g.party.block);
-        return this.showView('settings');
       case 'autoset':
         this.toggle(false);
         return $('btn-auto-set').click();
       case 'settings':
-        return this.showView('settings');
+        return this.openTab('general');
       case 'keybinds':
-        this.toggle(false);
-        return toggleKeybindPanel(true);
+        return this.openTab('keys');
       case 'channels':
         // Only on maps with channels (the window stays shut elsewhere).
         this.toggle(false);
@@ -341,14 +420,14 @@ export class SystemMenu {
         else void document.documentElement.requestFullscreen().catch(() => {});
         return;
       case 'audio':
-        this.toggle(false);
-        return $('btn-audio')?.click();
+        return this.openTab('audio');
       case 'graphics':
-        this.toggle(false);
-        return toggleGfxPanel(true);
+        return this.openTab('graphics');
       case 'hudstyle':
-        $('btn-hud-style').click();
-        return void ($('sys-hudstyle').textContent = $('btn-hud-style').textContent);
+        // An admin's shortcut: flips HP/MP at once, like the old button.
+        this.g.hud.setHudStyle(this.g.hud.hpStyle === 'orbs' ? 'bars' : 'orbs');
+        if (this.open && this.tab === 'general') this.drawTab();
+        return;
       case 'chars':
         this.toGoogle = false;
         return this.requestExit('characters');

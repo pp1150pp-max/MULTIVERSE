@@ -67,9 +67,6 @@ export const HUD_PARTS: readonly HudPartDef[] = [
   { id: 'cash-win', label: 'หน้าต่าง: แคชช็อป', kind: 'window', origin: 'top left', box: { desktop: [19.5, 7.8, 60.9, 74.9], touch: [3.8, 14.4, 92.4, 85.6] } },
   { id: 'auto-settings', label: 'หน้าต่าง: ตั้งค่า Auto', kind: 'window', origin: 'top right', box: { desktop: [63.4, 1.7, 23.4, 96.7], touch: [44.5, 3.1, 35.5, 93.8] } },
   { id: 'sys-menu', label: 'หน้าต่าง: เมนู', kind: 'window', origin: 'top left', box: { desktop: [36.7, 0, 26.6, 100], touch: [29.9, 0, 40.3, 100] } },
-  { id: 'audio-panel', label: 'หน้าต่าง: เสียง', kind: 'window', origin: 'top left', box: { desktop: [66.6, 7.8, 20.3, 75.1], touch: [49.3, 14.4, 30.8, 85.6] } },
-  { id: 'gfx-panel', label: 'หน้าต่าง: กราฟิก', kind: 'window', origin: 'top left', box: { desktop: [35, 20, 30, 55], touch: [20, 4, 60, 92] } },
-  { id: 'keybind-panel', label: 'หน้าต่าง: ปุ่มลัด', kind: 'window', origin: 'top left', box: { desktop: WIN_MID, touch: [10, 4, 80, 92] } },
   { id: 'help', label: 'หน้าต่าง: วิธีเล่น', kind: 'window', origin: 'top left', box: { desktop: [32, 0, 35.9, 100], touch: [22.7, 0, 54.5, 100] } },
   { id: 'news-win', label: 'หน้าต่าง: มีอะไรใหม่', kind: 'window', origin: 'top left', box: { desktop: [25.8, 1.1, 48.4, 22.1], touch: [13.3, 2.1, 73.5, 40.8] } },
   { id: 'report-win', label: 'หน้าต่าง: แจ้งปัญหา', kind: 'window', origin: 'top left', box: { desktop: [34.4, 11.1, 31.3, 46.1], touch: [26.3, 20.5, 47.4, 79.5] } },
@@ -83,6 +80,11 @@ export const HUD_PARTS: readonly HudPartDef[] = [
 ];
 
 const DEF = new Map(HUD_PARTS.map((p) => [p.id, p]));
+/**
+ * Windows that no longer exist (2026-11-26: กราฟิก / เสียง / ปุ่มลัด became tabs of the settings page in the เมนู window).
+ * A saved layout, draft or history entry may still name them: dropped quietly, never an error on /admin's save.
+ */
+const RETIRED_PARTS = new Set(['audio-panel', 'gfx-panel', 'keybind-panel']);
 
 /**
  * An admin's floating shortcut button (menuLayout.ts `custom` with `free`), part id `hud-btn-<c…>`. It sits at the top left
@@ -197,7 +199,7 @@ export function checkHudLayoutTuning(x: unknown, strict: boolean): { tuning: Hud
     }
     const parts = v as Record<string, unknown>;
     if (strict) {
-      const unknown = Object.keys(parts).find((id) => !hudPart(id));
+      const unknown = Object.keys(parts).find((id) => !hudPart(id) && !RETIRED_PARTS.has(id));
       if (unknown) return { error: `จัดหน้าจอเกม: ไม่รู้จักส่วน "${unknown.slice(0, 30)}"` };
     }
     const dev: Record<string, HudPos> = {};
