@@ -9,6 +9,7 @@
 // Everything is drawn in code (canvas textures made once, the coloured titles cached per colour pair). Each
 // worn piece has its own colours, size, time and parts (cosTuning.ts `levelup`, set on the /admin bench).
 // Kept free of the game's own textures so the /admin benches can play it in their own scenes.
+// The plain textures and the small helpers are shared with the dash effects (dashFx.ts).
 import * as THREE from 'three';
 import { colorHex, type TuneValues } from '../shared/cosTuning';
 
@@ -64,20 +65,20 @@ const TAU = Math.PI * 2;
 
 // ------------------------------------------------------------------ textures (white, tinted by the material)
 
-const canvas = (w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] => {
+export const canvas = (w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] => {
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
   return [c, c.getContext('2d')!];
 };
-const toTex = (c: HTMLCanvasElement): THREE.CanvasTexture => {
+export const toTex = (c: HTMLCanvasElement): THREE.CanvasTexture => {
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 };
-const rnd = (a: number, b: number) => a + Math.random() * (b - a);
+export const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 
-interface Plain {
+export interface Plain {
   disc: THREE.Texture; ringA: THREE.Texture; ringB: THREE.Texture; streak: THREE.Texture; spark: THREE.Texture;
   star4: THREE.Texture; star5: THREE.Texture; flame: THREE.Texture; leaf: THREE.Texture; smoke: THREE.Texture;
   fireRing: THREE.Texture; crack: THREE.Texture; windRing: THREE.Texture; stars: THREE.Texture; vortex: THREE.Texture;
@@ -85,7 +86,7 @@ interface Plain {
 }
 let plain: Plain | null = null;
 
-function starPath(x: CanvasRenderingContext2D, cx: number, cy: number, points: number, outer: number, inner: number, rot = -Math.PI / 2): void {
+export function starPath(x: CanvasRenderingContext2D, cx: number, cy: number, points: number, outer: number, inner: number, rot = -Math.PI / 2): void {
   x.beginPath();
   for (let i = 0; i < points * 2; i++) {
     const r = i % 2 ? inner : outer;
@@ -96,7 +97,7 @@ function starPath(x: CanvasRenderingContext2D, cx: number, cy: number, points: n
   x.closePath();
 }
 
-function flamePath(x: CanvasRenderingContext2D, cx: number, base: number, w: number, h: number): void {
+export function flamePath(x: CanvasRenderingContext2D, cx: number, base: number, w: number, h: number): void {
   x.beginPath();
   x.moveTo(cx, base - h);
   x.bezierCurveTo(cx + w * 0.15, base - h * 0.6, cx + w * 0.6, base - h * 0.45, cx + w * 0.5, base - h * 0.15);
@@ -105,7 +106,7 @@ function flamePath(x: CanvasRenderingContext2D, cx: number, base: number, w: num
   x.closePath();
 }
 
-function leafPath(x: CanvasRenderingContext2D, cx: number, cy: number, len: number, wid: number): void {
+export function leafPath(x: CanvasRenderingContext2D, cx: number, cy: number, len: number, wid: number): void {
   x.beginPath();
   x.moveTo(cx, cy - len / 2);
   x.quadraticCurveTo(cx + wid, cy, cx, cy + len / 2);
@@ -151,7 +152,7 @@ function boltTex(): THREE.Texture {
   return toTex(c);
 }
 
-function plainTex(): Plain {
+export function plainTex(): Plain {
   if (plain) return plain;
   // soft glow disc
   const [d, dc] = canvas(128, 128);
@@ -370,7 +371,7 @@ function plainTex(): Plain {
 }
 
 /** `hex` mixed toward white (k > 0) or black (k < 0). */
-function shade(hex: string, k: number): string {
+export function shade(hex: string, k: number): string {
   const c = new THREE.Color(hex);
   const to = k > 0 ? new THREE.Color('#ffffff') : new THREE.Color('#000000');
   return '#' + c.lerp(to, Math.abs(k)).getHexString();
@@ -550,18 +551,18 @@ function colorTex(style: LevelUpStyle, c1: string, c2: string): { text: THREE.Te
 
 // ------------------------------------------------------------------ building blocks
 
-const ease = (k: number) => 1 - (1 - k) * (1 - k);
+export const ease = (k: number) => 1 - (1 - k) * (1 - k);
 /** 0 → 1 over the first `a` of the life, 1 → 0 over the last `b`. */
-const envelope = (k: number, a: number, b: number) => Math.max(0, Math.min(1, k / a, (1 - k) / b));
+export const envelope = (k: number, a: number, b: number) => Math.max(0, Math.min(1, k / a, (1 - k) / b));
 
-function sprite(map: THREE.Texture, color: string, additive = true): THREE.Sprite {
+export function sprite(map: THREE.Texture, color: string, additive = true): THREE.Sprite {
   return new THREE.Sprite(new THREE.SpriteMaterial({
     map, color, transparent: true, depthWrite: false, opacity: 0,
     blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
   }));
 }
 
-function groundMesh(map: THREE.Texture, color: string, additive = true): THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial> {
+export function groundMesh(map: THREE.Texture, color: string, additive = true): THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial> {
   const g = new THREE.PlaneGeometry(2, 2);
   g.rotateX(-Math.PI / 2);
   const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({

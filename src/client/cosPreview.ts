@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { assetSources, cosOneKey, loadGameAssets, groundTiles } from './assets';
 import { Effects } from './effects';
 import { LEVELUP_STYLE, levelUpLookOf, playLevelUp } from './levelUpFx';
+import { DASH_DIST, DASH_STYLE, DASH_TIME, dashLookOf, playDash } from './dashFx';
 import { PlayerView } from './views';
 import { ISO_DIR } from './world';
 import { applyCosTuning, cosTune, currentCosTuning, resetCosTune, setCosTuneValue } from './cosTune';
@@ -145,9 +146,11 @@ const state = {
   /** The facing the position sliders edit: '' = every facing (the base value), else one of the 8. */
   view: '' as ViewDir | '',
   cls: 'sword' as ClassId,
-  worn: { wings: 'wings_angel', mount: 'mount_wolf', pet: 'pet_slime', aura: 'aura_star', levelup: 'levelup_cyan' } as CosWorn,
+  worn: { wings: 'wings_angel', mount: 'mount_wolf', pet: 'pet_slime', aura: 'aura_star', levelup: 'levelup_cyan', dash: 'dash_wind' } as CosWorn,
   /** The level-up tab plays the effect again every time it ends. */
   luLoop: false,
+  /** The dash tab dashes again (back and forth) every time the effect ends. */
+  dashLoop: false,
   riding: false,
   walk: false,
   spin: false,
@@ -331,6 +334,24 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
     });
     luNext = t + Math.max(0.3, look.sec) + 0.6;
   }
+  /** The bench's own dash (the hero moves DASH_DIST over DASH_TIME along `ang`), and when the loop dashes next. */
+  let dashRun: { ang: number; t: number } | null = null;
+  let dashNext = 0;
+  /** Dashes the hero along its facing and plays the worn dash piece with the values tried out now. */
+  function playDashFx(): void {
+    const id = state.worn.dash;
+    const style = id ? DASH_STYLE[id] : undefined;
+    if (!id || !style) return;
+    const ang = Math.atan2(hero.faceZ, hero.faceX);
+    dashRun = { ang, t: 0 };
+    walkTo = null;
+    heroView.actor.play('dash', { duration: DASH_TIME + 0.12 });
+    const look = dashLookOf(cosTune(id));
+    playDash((o, life, tick) => fx.add(o, life, tick), hero.x, hero.z, ang, style, look, {
+      particles: 1, extras: true, at: () => ({ x: hero.x, z: hero.z }), ghost: () => heroView.ghost(),
+    });
+    dashNext = t + Math.max(0.2, look.sec) + 0.5;
+  }
   let spinT = 0;
   // For checks while the pane is hidden (no animation frames): window.cosPreview.step(n) runs n frames.
   (window as unknown as { cosPreview: object }).cosPreview = {
@@ -366,7 +387,14 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
       }
     }
     const speed = BASE_MOVE_SPEED * (hero.mounted ? MOUNT_SPEED : 1);
-    if ((mx || mz) && hero.alive) {
+    if (dashRun) {
+      const step = Math.min(dt, DASH_TIME - dashRun.t);
+      hero.x += Math.cos(dashRun.ang) * (DASH_DIST / DASH_TIME) * step;
+      hero.z += Math.sin(dashRun.ang) * (DASH_DIST / DASH_TIME) * step;
+      hero.moving = true;
+      dashRun.t += dt;
+      if (dashRun.t >= DASH_TIME) dashRun = null;
+    } else if ((mx || mz) && hero.alive) {
       const len = Math.hypot(mx, mz);
       const step = Math.min(speed * dt, walkTo ? len : Infinity);
       hero.x += (mx / len) * step;
@@ -400,6 +428,12 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
     placeCamera();
     fx.update(dt);
     if (state.luLoop && state.tab === 'levelup' && t >= luNext) playLu();
+    if (state.dashLoop && state.tab === 'dash' && !dashRun && t >= dashNext) {
+      // back and forth, so the hero stays in view
+      hero.faceX = -hero.faceX;
+      hero.faceZ = -hero.faceZ;
+      playDashFx();
+    }
     renderer.render(scene, camera);
   };
   raf = requestAnimationFrame(loop);
@@ -686,6 +720,10 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
         buildLevelUpTab(c.id);
         return;
       }
+      if (slot === 'dash') {
+        buildDashTab(c.id);
+        return;
+      }
       if ((slot === 'mount' || slot === 'wings') && state.worn.mount) row('ขี่สัตว์ขี่', check(state.riding, (v) => { state.riding = v; dress(hero); }));
       h('h2', 'ทิศที่ปรับ');
       dirGrid(c.id);
@@ -810,6 +848,38 @@ export async function mountCosPreview(root: HTMLElement, note: string, server?: 
       const style = LEVELUP_STYLE[id];
       const mainName: Record<string, string> = { cyan: 'ลูกศรลอยเหนือหัว', fire: 'เปลวไฟหมุนเป็นเกลียว', thunder: 'สายฟ้าผ่าลง', leaf: 'ลมหมุนและใบไม้เป็นเกลียว', star: 'ดาวตก', shadow: 'ควันวนเป็นวังวน' };
       h('div', `สีหลัก/สีรอง ใช้ทั้งวงบนพื้น อนุภาค และตัวหนังสือ · ส่วนเด่นของแบบนี้ = ${mainName[style ?? 'cyan']} · เมนูกราฟิกของผู้เล่น: คุณภาพ "ปิด" = เหลือตัวหนังสือ, "ต่ำ/กลาง" = อนุภาคลดลง, ของคนอื่น "ไม่แสดง" = เห็นแค่ตัวหนังสือ`).className = 'note';
+      h('div', 'ตัวเลขสีฟ้า + ↺ = ต่างจากค่าที่บันทึกไว้ล่าสุด · บันทึกด้วยปุ่มด้านล่าง').className = 'note';
+    }
+
+    /** A dash piece (owner 2026-11-26): colours, size, time and parts, and dashing with it on the bench. */
+    function buildDashTab(id: string): void {
+      const play = button('▶ ดูตัวอย่าง (แดชไปทางที่หัน)', () => playDashFx());
+      play.className = 'save';
+      row('แดชซ้ำเรื่อย ๆ (ไป-กลับ)', check(state.dashLoop, (v) => {
+        state.dashLoop = v;
+        if (v) playDashFx();
+      }));
+      h('div', 'ตัวละครพุ่งไปทางที่หันอยู่ (หันด้วยลูกศรในแท็บ "ตัวละคร" หรือเดินก่อน) แล้วเล่นด้วยค่าที่ตั้งอยู่ (ยังไม่ต้องบันทึก) · ในเกมเล่นตอนกดปุ่มแดชของทุกอาชีพ ไม่รวมสกิลที่พุ่งตัว ทุกคนรอบ ๆ เห็นตามเมนูกราฟิกของแต่ละคน').className = 'note';
+      const defs = cosTuneOf(serverTuning ?? {}, id)!;
+      const curNow = cosTune(id)!;
+      const fields = COS_TUNE_FIELDS.dash;
+      const set = (key: string) => (v: number | boolean) => {
+        setCosTuneValue(id, key, v);
+        updateStatus();
+      };
+      const groups: [string, string[]][] = [['สี', ['color1', 'color2']], ['ขนาดและเวลา', ['size', 'sec']], ['ส่วนที่แสดง', ['ends', 'trail', 'ghosts', 'sparks']]];
+      for (const [g, keys] of groups) {
+        h('div', g).className = 'grp';
+        for (const key of keys) {
+          const f = fields[key];
+          if (f.kind === 'color') bodyEl.append(colorField(f.label, curNow[key] as number, defs[key] as number, set(key)));
+          else if (f.kind === 'bool') bodyEl.append(boolField(f.label, f.label, curNow[key] === true, defs[key] === true, set(key)));
+          else bodyEl.append(numField(f.label, f.label, f.min, f.max, f.step, curNow[key] as number, defs[key] as number, set(key)));
+        }
+      }
+      const style = DASH_STYLE[id];
+      const trailName: Record<string, string> = { wind: 'เส้นความเร็ว', fire: 'ทางเปลวไฟบนพื้น', thunder: 'สายฟ้าตามทาง', leaf: 'ลมและใบไม้ปลิว', star: 'หางดาวหางและดาวกะพริบ', shadow: 'ควันมืดตามทาง' };
+      h('div', `สีหลัก/สีรอง ใช้ทั้งวง ทางที่พุ่ง เงา และอนุภาค · ทางที่พุ่งของแบบนี้ = ${trailName[style ?? 'wind']} · เวลา = ทั้งเอฟเฟกต์ (ตัวพุ่งจริง 0.18 วิ ที่เหลือคือค่อย ๆ จาง) · เมนูกราฟิกของผู้เล่น: คุณภาพ "ปิด" หรือของคนอื่น "ไม่แสดง" = เห็นแดชแบบเดิม, "ต่ำ/กลาง" = อนุภาคลดลง`).className = 'note';
       h('div', 'ตัวเลขสีฟ้า + ↺ = ต่างจากค่าที่บันทึกไว้ล่าสุด · บันทึกด้วยปุ่มด้านล่าง').className = 'note';
     }
 

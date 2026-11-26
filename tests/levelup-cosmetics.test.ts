@@ -14,7 +14,7 @@ import { finish, ok } from './check';
 // ---- the pieces
 const pieces = COSMETICS.filter((c) => c.slot === 'levelup');
 ok(pieces.length === 6, `six level-up pieces (${pieces.length})`);
-ok(COS_SLOTS[COS_SLOTS.length - 1] === 'levelup' && COS_SLOTS.indexOf('orb') === 5, 'the new slot is last: older slots keep their codes');
+ok(COS_SLOTS.indexOf('levelup') === 6 && COS_SLOTS.indexOf('orb') === 5, 'the level-up slot comes after the orb: older slots keep their codes');
 ok(cosById('wings_angel')?.code === 1 && cosById('title_gold')?.code === 69, 'older codes unchanged');
 ok(pieces.map((c) => c.code).join(',') === '97,98,99,100,101,102', `codes 97–102 (${pieces.map((c) => c.code)})`);
 ok(new Set(COSMETICS.map((c) => c.code)).size === COSMETICS.length, 'every code unique');

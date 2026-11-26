@@ -10,6 +10,7 @@ import type { QuarksFx } from './quarksFx';
 import { currentBalance } from '../shared/balance';
 import { gfxOthers, gfxParticles, gfxQuality } from './gfxPrefs';
 import { LEVELUP_STYLE, levelUpLookOf, playLevelUp } from './levelUpFx';
+import { DASH_DIST, DASH_STYLE, DASH_TIME, dashLookOf, playDash } from './dashFx';
 import { cosTune } from './cosTune';
 import { bossFxOn, bossFxSpot, isBossEffect, isBossMelee, playBossExtras } from './bossFx';
 
@@ -802,6 +803,8 @@ export class Effects implements FxApi {
   }
 
   burst(x: number, y: number, z: number, color: string, n = 8, speed = 4, by?: number, skill?: string): void {
+    // The dash button's cue (quarksCue, speed = the angle): a worn dash style plays instead of the old one.
+    if (skill === 'dash' && by !== undefined && this.dashWith(this.dashOf?.(by), x, z, speed, by)) return;
     // a skill drawn in three.quarks instead (Fire Rain's falling fire)
     if (skill && this.quarks?.onBurst(skill, x, z, by, n, speed, color)) return;
     for (let i = 0; i < n; i++) {
@@ -821,6 +824,54 @@ export class Effects implements FxApi {
         mat.opacity = 1 - k;
       });
     }
+  }
+
+  /** The dash cosmetic a player shows (set by the game: the worn one, yours with the shop's try-on). */
+  dashOf: ((id: number) => string | undefined) | null = null;
+  /** A copy of a player's picture as drawn now, for a dash afterimage (set by the game). */
+  ghostOf: ((id: number) => THREE.Sprite | null) | null = null;
+
+  /**
+   * Whether player `by`'s dash button shows its worn dash cosmetic instead of the old dash (then the old glow puffs
+   * along the way, src/client/views.ts, stay off too). Same checks as dashWith.
+   */
+  dashCosmeticShown(by: number): boolean {
+    const id = this.dashOf?.(by);
+    if (!id || !DASH_STYLE[id] || !currentBalance().fxLayer.dashNew) return false;
+    const mine = !this.layerHooks || by === this.layerHooks.me();
+    const others = mine ? 1 : gfxOthers();
+    return gfxParticles() * others > 0 || (gfxQuality() > 0 && others > 0);
+  }
+
+  /**
+   * Plays the dash cosmetic `id` from (x, z) toward angle `ang`, within the player's graphics menu. The end follows
+   * player `by` (or `at`: where the character is t seconds in, for a demo). False = not a dash cosmetic, /admin
+   * turned them off, or the graphics menu leaves nothing to draw (the caller plays the old dash).
+   */
+  dashWith(id: string | undefined, x: number, z: number, ang: number, by?: number, at?: (t: number) => { x: number; z: number } | null): boolean {
+    const style = id ? DASH_STYLE[id] : undefined;
+    if (!id || !style || !currentBalance().fxLayer.dashNew) return false;
+    const mine = by === undefined || !this.layerHooks || by === this.layerHooks.me();
+    const q = gfxQuality();
+    const others = mine ? 1 : gfxOthers();
+    return playDash((o, life, tick) => this.add(o, life, tick), x, z, ang, style, dashLookOf(cosTune(id)), {
+      particles: gfxParticles() * others * (TOUCH ? 0.5 : 1),
+      extras: q > 0 && others > 0,
+      at: at ?? ((): { x: number; z: number } | null => (by === undefined ? null : this.posOf?.(by) ?? null)),
+      ghost: by === undefined ? undefined : () => this.ghostOf?.(by) ?? null,
+    });
+  }
+
+  /**
+   * A dash cosmetic played as if player `p` had just dashed to where it stands, along its facing (the shop's
+   * try-on and the "play again" button: only on this screen, the character doesn't move).
+   */
+  dashDemo(id: string, p: { id: number; x: number; z: number; faceX: number; faceZ: number }): boolean {
+    const ang = Math.atan2(p.faceZ, p.faceX);
+    const sx = p.x - Math.cos(ang) * DASH_DIST;
+    const sz = p.z - Math.sin(ang) * DASH_DIST;
+    const k = (t: number) => Math.min(1, t / DASH_TIME);
+    return this.dashWith(id, sx, sz, ang, p.id, (t) => ({ x: sx + (p.x - sx) * k(t), z: sz + (p.z - sz) * k(t) }));
   }
 
   /** The level-up cosmetic a player shows (set by the game: the worn one, yours with the shop's try-on). */

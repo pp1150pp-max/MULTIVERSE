@@ -117,7 +117,8 @@ export class PlayerView {
     const p = this.p;
     this.clock += dt;
     this.actor.face(p.faceX, p.faceZ);
-    if (p.isDashing && Math.random() < 0.7) fx.puff(p.x, 0.9, p.z, p.dashKind === 'charge' ? '#ffcf7a' : '#cfe8ff', 0.25, 1.1);
+    // The old dash's glow puffs; a worn dash cosmetic draws its own instead (the dash button only, not a skill's charge).
+    if (p.isDashing && !(p.dashKind === 'dash' && fx.dashCosmeticShown(p.id)) && Math.random() < 0.7) fx.puff(p.x, 0.9, p.z, p.dashKind === 'charge' ? '#ffcf7a' : '#cfe8ff', 0.25, 1.1);
     this.matchStride(dt);
     this.actor.setRide?.(ridePose(p));
     if (this.actor instanceof RigActor) {
@@ -304,6 +305,12 @@ export class PlayerView {
         this.actor.play(ev.name);
       } else if (!this.p.isDashing) this.playAttack(ev.duration);
     } else this.actor.play(ev.name, { duration: ev.duration });
+  }
+
+  /** A copy of the character's picture as drawn now, for a dash afterimage (dashFx.ts); null = none to copy. */
+  ghost(): THREE.Sprite | null {
+    if (!this.actor.group.visible || !(this.actor instanceof AnimatedActor)) return null;
+    return this.actor.snapshot();
   }
 
   onDied(): void {
