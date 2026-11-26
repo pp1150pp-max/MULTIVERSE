@@ -598,8 +598,10 @@ export const ZONE_GRAVE: ZoneDef = rotateZone(3, scatterZone({
 
 /** Monsters are scattered at least this far past a whirlpool's rim (the tentacles' ring, rimSpawns). */
 const RIM_CLEAR = 7;
-/** How far past a whirlpool's rim its tentacles rise (they stand half over the foam). */
+/** How far past a whirlpool's rim its tentacles rise (they stand half over the foam): the kraken's arms in its room. */
 export const RIM_OUT = 1.2;
+/** How far inside the map's whirlpool its tentacles rise (owner 2026-11-26: in the whirlpool, still in reach from its edge). */
+export const RIM_IN = 0.8;
 
 /**
  * Stationary monsters evenly round a whirlpool's rim (the kraken's tentacles, plan 5.4, owner 2026-11-24): one each, never wandering
@@ -610,7 +612,7 @@ function rimSpawns(z: ZoneDef, monster: string, count: number, respawn: [number,
   const spawns: SpawnArea[] = [];
   for (let i = 0; i < count; i++) {
     const a = a0 + (i / count) * Math.PI * 2;
-    const d = w.r + RIM_OUT;
+    const d = w.r - RIM_IN;
     spawns.push({ monster, x: Math.round((w.x + Math.cos(a) * d) * 10) / 10, z: Math.round((w.z + Math.sin(a) * d) * 10) / 10, radius: 0, count: 1, respawn });
   }
   return { ...z, spawns: [...z.spawns, ...spawns] };

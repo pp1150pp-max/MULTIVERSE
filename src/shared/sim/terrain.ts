@@ -61,6 +61,8 @@ type Seg = [number, number, number, number];
 /** Prop keys each theme scatters around. Every key needs an entry in the client's SHEET_SPECS. */
 interface ThemeProps {
   trees: string[];
+  /** The trees out on a farm map, when not the same as in its boss room (the maelstrom: far fewer masts, owner 2026-11-26). */
+  mapTrees?: string[];
   bushes: string[];
   rocks: string[];
   stump: string;
@@ -170,6 +172,8 @@ const THEME_PROPS: Record<ZoneTheme, ThemeProps> = {
   // wrecks sucked in by the whirlpool, red coral, warm lamps and the kraken's red flags.
   kraken: {
     trees: ['storm_rock_1', 'broken_mast', 'storm_rock_1', 'coral_0'],
+    // Out on the map a mast is 1 tree in 20 instead of 1 in 4 (owner 2026-11-26: "เสาเรือเยอะไป", about a fifth of them).
+    mapTrees: [...Array<string>(13).fill('storm_rock_1'), ...Array<string>(6).fill('coral_0'), 'broken_mast'],
     bushes: ['coral_1', 'rope_post'],
     rocks: ['storm_rock_0', 'storm_rock_2'],
     stump: 'rope_post',
@@ -510,7 +514,8 @@ export class Terrain {
   }
 
   private addTree(r: Rng, x: number, z: number): void {
-    this.addProp(pick(r, this.setAt(r, x, z).trees), x, z, rand(r, 4.6, 6.4), 0.55, true);
+    const set = this.setAt(r, x, z);
+    this.addProp(pick(r, (!this.zone.roomOf && set.mapTrees) || set.trees), x, z, rand(r, 4.6, 6.4), 0.55, true);
   }
 
   /**
@@ -928,7 +933,8 @@ export class Terrain {
       else this.addProp(set.stump, x, z, 0.8, 0.4);
       placed++;
     }
-    this.placeRims(r);
+    // Foam waves round the whirlpool only in the kraken's room: the map has none (owner 2026-11-26).
+    if (this.zone.roomOf) this.placeRims(r);
   }
 
   /**
