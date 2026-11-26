@@ -2,7 +2,7 @@
 // the caster's own screen can feel a hit (Whirlwind: the caster's id and whether it hit). The drawing itself
 // (src/client/fxLayer.ts) needs a screen and is looked at in the game.
 import { ok, finish } from './check';
-import { balanceChanges, checkBalance, mergeBalance } from '../src/shared/balance';
+import { applyBalance, balanceChanges, checkBalance, mergeBalance } from '../src/shared/balance';
 import { CLASSES } from '../src/shared/data/classes';
 import { ZONE_1 } from '../src/shared/data/zones';
 import { Sim } from '../src/shared/sim/Sim';
@@ -169,6 +169,8 @@ for (const cls of ['sword', 'mage', 'gunslinger'] as const) {
     for (const [kind, name] of wants) ok(seen.has(`${kind}:${name}`), `${sk.id} plays ${kind} ${name} tagged with itself (saw ${[...seen].join(',')})`);
   }
 }
+// The mage's class passive Warp replaces its dash (no cue, its own rings): the plain dash's cue is checked with it off.
+applyBalance({ skills: { classPassive: { warp: { on: false } } } });
 for (const cls of ['sword', 'mage', 'gunslinger'] as const) {
   // the basic attack and the dash send a cue: a burst of 0 tagged with the skill, colour = class, speed = angle
   const sim = new Sim(ZONE_1);
@@ -184,6 +186,7 @@ for (const cls of ['sword', 'mage', 'gunslinger'] as const) {
   const dcue = sim.drainEvents().find((e) => e.t === 'fx' && e.name === 'burst' && (e.args as unknown[])[7] === 'dash');
   ok(!!dcue && dcue.t === 'fx' && (dcue.args as unknown[])[4] === 0 && (dcue.args as unknown[])[3] === cls, `${cls} dash cue`);
 }
+applyBalance({});
 
 // Support Drone (owner 2026-11-19): one "drone" message per cast (owner id + life) and one per shot (angle), no position stream.
 {

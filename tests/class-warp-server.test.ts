@@ -118,7 +118,7 @@ async function run(): Promise<void> {
 
   const r = await tryOnce(C, true);
   ok(r.epochChanged, 'the warp bumps the epoch (the browser jumps there)');
-  ok(r.moved > 3, `the mage stands further along after the warp (${r.moved.toFixed(2)} m)`);
+  ok(r.moved > 1, `the mage stands further along after the warp (a town prop may stop it short) (${r.moved.toFixed(2)} m)`);
   ok(r.pulled > 0.5, `the positions sent from before the warp are refused: not pulled back (${r.pulled.toFixed(2)} m from the stale spot)`);
 
   // Wait for the warps to come back, then the same from an older browser that sends no epoch.
