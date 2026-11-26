@@ -269,12 +269,16 @@ class OnlineMenu {
 
   /**
    * Shows the Login form. If a saved token still works, it also offers a one-click way back in,
-   * or goes straight to the character list when `goToCharacters` is set.
+   * or goes straight to the character list when `goToCharacters` is set (back from the game's "เลือกตัวละคร": the
+   * character screen waits for the server instead of the Login form flashing up, owner 2026-11-26; the Login form
+   * shows only when the saved login no longer works).
    */
   async open(goToCharacters = false): Promise<void> {
     const resume = $('btn-account-continue');
     resume.classList.add('hidden');
-    this.showLogin();
+    const waiting = goToCharacters && !!api.savedToken();
+    if (waiting) this.showWaiting();
+    else this.showLogin();
     void this.googleOn.then((on) => $('btn-google').classList.toggle('hidden', !on));
     void this.showGuestMoveHint();
     if (!api.savedToken()) return;
@@ -287,6 +291,7 @@ class OnlineMenu {
       resume.classList.remove('hidden');
       if (goToCharacters) resume.click();
     } catch (e) {
+      if (waiting) this.showLogin();
       if (e instanceof api.ApiFailure && e.status !== 401) $('login-error').textContent = e.message;
     }
   }
@@ -299,6 +304,21 @@ class OnlineMenu {
     if (!c) return;
     hint.textContent = `สมัครสมาชิกใหม่จากเครื่องนี้ ตัวละคร Guest “${describe(c)}” จะย้ายเข้าบัญชีใหม่ทันที`;
     hint.classList.remove('hidden');
+  }
+
+  /** The character screen, empty, while the saved login is checked (open with goToCharacters). */
+  private showWaiting(): void {
+    $('login-box').classList.add('hidden');
+    $('register-box').classList.add('hidden');
+    $('google-name-box').classList.add('hidden');
+    $('google-link-row').classList.add('hidden');
+    $('char-create').classList.add('hidden');
+    $('btn-create-char').classList.add('hidden');
+    $<HTMLButtonElement>('btn-enter-world').disabled = true;
+    $('account-name').textContent = '';
+    $('char-error').textContent = '';
+    $('char-list').textContent = 'กำลังโหลด…';
+    $('char-box').classList.remove('hidden');
   }
 
   private showLogin(error = ''): void {
