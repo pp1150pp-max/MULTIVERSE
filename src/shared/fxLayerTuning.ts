@@ -159,6 +159,25 @@ export interface FxLayerConfig extends Record<QuarksKey, boolean> {
    * the dash button (not worn = the old dash), off = the old dash for everyone. Looks: cosTuning.ts `dash`.
    */
   dashNew: boolean;
+  /**
+   * Shader effects (docs/systems/shaders.md, owner 2026-11-26): `shader` off = everyone sees the game as it was before
+   * them; `shWater` = the water group (floor 2's cloud sea, the harbour's water, the pools, the whirlpools).
+   */
+  shader: boolean;
+  shWater: boolean;
+  /** The level (2 high, 1 low, 0 off) a player starts on, on a computer and on a touch screen, and the most anyone can pick. */
+  shaderDefault: number;
+  shaderTouchDefault: number;
+  shaderMax: number;
+  /** × how fast the cloud sea drifts, the harbour water flows, and the strength of its waves and of its foam and sparkles. */
+  cloudDrift: number;
+  waterSpeed: number;
+  waterWave: number;
+  waterFoam: number;
+  /** × the lava pools' churn and glow, and the whirlpools' spiral twist and light bands. */
+  lavaWave: number;
+  whirlTwist: number;
+  whirlGlow: number;
 }
 
 /** One skill's magic circle and code effects, as set on /admin. Missing = on / ×1. */
@@ -265,6 +284,16 @@ export const FX_LAYER_RANGE = {
   bossExtrasK: [0, 3],
   droneSpeed: [1, 20],
   droneDist: [0.3, 3],
+  shaderDefault: [0, 2],
+  shaderTouchDefault: [0, 2],
+  shaderMax: [0, 2],
+  cloudDrift: [0, 4],
+  waterSpeed: [0, 3],
+  waterWave: [0, 3],
+  waterFoam: [0, 2],
+  lavaWave: [0, 3],
+  whirlTwist: [0, 3],
+  whirlGlow: [0, 3],
 } as const satisfies Record<string, readonly [number, number]>;
 export type FxLayerNum = keyof typeof FX_LAYER_RANGE;
 export const FX_LAYER_NUMS = Object.keys(FX_LAYER_RANGE) as FxLayerNum[];
@@ -316,9 +345,19 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   bossExtrasK: '× ความแรงเอฟเฟกต์โค้ดของสกิลบอส',
   droneSpeed: 'โดรน: ความเร็วตามตัว (ต่อวิ ยิ่งมากยิ่งติด)',
   droneDist: 'โดรน: × ระยะห่างจากตัวละคร',
+  shaderDefault: 'น้ำ ลม และแสง: ระดับเริ่มต้นบนคอม (2 สูง 1 ต่ำ 0 ปิด)',
+  shaderTouchDefault: 'น้ำ ลม และแสง: ระดับเริ่มต้นบนจอสัมผัส',
+  shaderMax: 'น้ำ ลม และแสง: ระดับสูงสุดที่เลือกได้',
+  cloudDrift: '× ความเร็วทะเลเมฆ',
+  waterSpeed: '× ความเร็วน้ำท่าเรือ',
+  waterWave: '× แรงคลื่นน้ำท่าเรือและบ่อน้ำ',
+  waterFoam: '× ฟองและประกายน้ำท่าเรือ',
+  lavaWave: '× การไหลและเรืองของลาวา',
+  whirlTwist: '× เกลียวบิดของน้ำวน',
+  whirlGlow: '× แถบสว่างของน้ำวน',
 };
 
-const BASE_BOOLS = ['enabled', 'debuffs', 'guardGlow', 'buffIcons', 'barBuffIcons', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'droneFollow', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'keyRebind', 'settingsTabs', 'orbsNearBar', 'extras', 'bossFx', 'bossExtras', 'enhAuraSmooth', 'enhOrbGlowFront', 'luNew', 'dashNew'] as const;
+const BASE_BOOLS = ['enabled', 'debuffs', 'guardGlow', 'buffIcons', 'barBuffIcons', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'droneFollow', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'keyRebind', 'settingsTabs', 'orbsNearBar', 'extras', 'bossFx', 'bossExtras', 'enhAuraSmooth', 'enhOrbGlowFront', 'luNew', 'dashNew', 'shader', 'shWater'] as const;
 type FxLayerBool = (typeof BASE_BOOLS)[number] | QuarksKey;
 const FX_LAYER_BOOLS: readonly FxLayerBool[] = [...BASE_BOOLS, ...QUARKS_KEYS];
 const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
@@ -346,6 +385,8 @@ const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
   enhOrbGlowFront: 'แสงลูกแก้วตีบวกอยู่หน้าลูก (ปิด = หลังลูก)',
   luNew: 'เอฟเฟกต์เลเวลอัปของแต่งตัว (ปิด = เสาแสงสีทองแบบเดิมทุกคน)',
   dashNew: 'เอฟเฟกต์แดชของแต่งตัว (ปิด = แดชแบบเดิมทุกคน)',
+  shader: 'เอฟเฟกต์น้ำ ลม และแสง (shader) (ปิด = ทุกคนเห็นภาพแบบเดิม)',
+  shWater: 'น้ำและทะเลเมฆขยับ (shader)',
 };
 
 
@@ -361,9 +402,28 @@ export function codeFxLayer(): FxLayerConfig {
     extras: true, extrasK: 1, bossFx: true, bossExtras: true, bossExtrasK: 1, skills: {},
     luNew: true,
     dashNew: true,
+    shader: true, shWater: true, shaderDefault: 2, shaderTouchDefault: 1, shaderMax: 2,
+    cloudDrift: 1, waterSpeed: 1, waterWave: 1, waterFoam: 1, lavaWave: 1, whirlTwist: 1, whirlGlow: 1,
   };
 }
 const CODE = codeFxLayer();
+/** Settings that are whole numbers. */
+const WHOLE = new Set<FxLayerNum>(['maxNums', 'quarksCap', 'gfxDefault', 'gfxMax', 'shaderDefault', 'shaderTouchDefault', 'shaderMax']);
+
+/** The shader effects' level: 2 high, 1 low, 0 off (the picture as it was before them). */
+export type ShaderLevel = 0 | 1 | 2;
+
+/**
+ * The level in use (docs/systems/shaders.md): the player's own pick (left out = the server's starting one for a computer
+ * or a touch screen), never above the server's most. Off for everyone while `shader` is off, and for a browser drawing
+ * on the CPU.
+ */
+export function shaderLevelFor(cfg: FxLayerConfig, pick: unknown, touch: boolean, software: boolean): ShaderLevel {
+  if (!cfg.shader || software) return 0;
+  const start = touch ? cfg.shaderTouchDefault : cfg.shaderDefault;
+  const want = typeof pick === 'number' && Number.isFinite(pick) ? pick : start;
+  return Math.max(0, Math.min(2, Math.round(want), Math.round(cfg.shaderMax))) as ShaderLevel;
+}
 
 export function mergeFxLayer(t: FxLayerTuning | undefined): FxLayerConfig {
   const c = codeFxLayer();
@@ -436,7 +496,7 @@ export function checkFxLayerTuning(x: unknown, strict: boolean): { tuning: FxLay
       if (strict) return { error: `เอฟเฟกต์สกิล "${FX_LAYER_NAME[k]}" ต้องอยู่ระหว่าง ${lo}–${hi}` };
       continue;
     }
-    const n = k === 'maxNums' || k === 'quarksCap' || k === 'gfxDefault' || k === 'gfxMax' ? Math.round(v) : round3(v);
+    const n = WHOLE.has(k) ? Math.round(v) : round3(v);
     if (n !== CODE[k]) out[k] = n;
   }
   const sk = checkSkillFx(x.skills, strict);

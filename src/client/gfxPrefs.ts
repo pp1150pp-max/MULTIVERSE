@@ -3,6 +3,7 @@
 // (localStorage); /admin sets the starting quality, the most anyone can pick, and whether the window shows at all
 // (fxLayer.gfxMenu / gfxDefault / gfxMax / gfxMid / gfxLow). Window hidden = everyone on /admin's starting values.
 import { currentBalance } from '../shared/balance';
+import { shaderLevelFor, type ShaderLevel } from '../shared/fxLayerTuning';
 
 /** 3 high (as the server set it), 2 medium, 1 low, 0 off (no three.quarks, no extra-layer particles). */
 export type GfxLevel = 0 | 1 | 2 | 3;
@@ -16,6 +17,8 @@ interface Prefs {
   shake?: boolean;
   hitstop?: boolean;
   ownNums?: boolean;
+  /** Water, wind and light (docs/systems/shaders.md). Left out = /admin's starting level for this kind of screen. */
+  shader?: ShaderLevel;
 }
 
 const KEY = 'mv.gfx';
@@ -64,3 +67,19 @@ export const gfxShakeOn = (): boolean => own().shake ?? true;
 export const gfxHitstopOn = (): boolean => own().hitstop ?? true;
 /** Only my damage numbers: forced on while /admin's ownNumsOnly is on (others' aren't even sent then). */
 export const gfxOwnNumsOnly = (): boolean => cfg().ownNumsOnly || (own().ownNums ?? false);
+
+/** A browser drawing the game on the CPU (Game.checkGpu): the shader effects stay off. */
+let softwareRender = false;
+export function setSoftwareRender(on: boolean): void {
+  softwareRender = on;
+}
+export const isSoftwareRender = (): boolean => softwareRender;
+/** Whether the player plays by touch, asked of the game (touch/device.ts isTouchMode). */
+let onTouch = (): boolean => false;
+export function setTouchProbe(probe: () => boolean): void {
+  onTouch = probe;
+}
+/** Water, wind and light: the level in use (2 high, 1 low, 0 off). */
+export const gfxShader = (): ShaderLevel => shaderLevelFor(cfg(), own().shader, onTouch(), softwareRender);
+/** The level the water and the cloud sea are drawn with (0 while /admin's water switch is off). */
+export const gfxWater = (): ShaderLevel => (cfg().shWater ? gfxShader() : 0);

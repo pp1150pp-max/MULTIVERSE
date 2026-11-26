@@ -144,7 +144,7 @@ const PAPER_ONLY_NPC = new Set(['hb_supply_merchant', 'hb_dock_keeper', 'hb_ship
 const PAPER_GROUND = new Set(['grass', 'dirt', 'pave', 'room_forest', 'marsh', 'mud', 'water', 'room_marsh',
   'snow', 'snow_path', 'ice', 'room_snow', 'ash_rock', 'ash_path', 'lava', 'room_volcano', 'brick',
   // Floor 2's harbour town (tools/cut_papercraft.cjs floor2_hub): paper only.
-  'harbor_plank', 'harbor_plaza', 'harbor_water', 'sky_day']);
+  'harbor_plank', 'harbor_plaza', 'harbor_water']);
 let paperMaps = false;
 
 /**
@@ -537,7 +537,7 @@ export type GroundTile = GroundTileName;
 export const groundTiles: Partial<Record<GroundTile, THREE.Texture>> = {};
 
 /** Ground tiles that exist only as paper (floor 2's): loaded from sprites/paper/ground/ whatever the art switch says. */
-const PAPER_ONLY_GROUND = new Set<string>(['harbor_plank', 'harbor_plaza', 'harbor_water', 'sky_day', 'sand', 'wreck', 'shallow', 'room_beach',
+const PAPER_ONLY_GROUND = new Set<string>(['harbor_plank', 'harbor_plaza', 'harbor_water', 'sand', 'wreck', 'shallow', 'room_beach',
   'rock', 'boardwalk', 'cove_water', 'room_cove', 'stone', 'rotten_deck', 'misty_water', 'room_grave', 'storm_rock', 'wet_planks', 'rough_sea', 'room_kraken']);
 
 async function loadGroundTile(name: GroundTile): Promise<void> {
@@ -553,8 +553,30 @@ async function loadGroundTile(name: GroundTile): Promise<void> {
     tex.anisotropy = 4;
     groundTiles[name] = tex;
   } catch {
-    // The cloud-sea tile isn't made yet (FLOOR2_SKY.md): island.ts paints a stand-in, nothing to warn about.
-    if (name !== 'sky_day') console.warn(`[assets] missing ground tile "${name}"`);
+    console.warn(`[assets] missing ground tile "${name}"`);
+  }
+}
+
+/** Floor 2's cloud sea (FLOOR2_SKY.md, tools/cut_papercraft.cjs floor2_sky): by day and in the night storm. */
+export type SkyMood = 'day' | 'storm';
+/** Each mood's repeating tile and its 4 × 2 atlas of loose clouds (src/client/cloudSea.ts). */
+export const skyArt: Partial<Record<SkyMood, { tile: THREE.Texture; clouds: THREE.Texture }>> = {};
+
+async function loadSkyArt(mood: SkyMood): Promise<void> {
+  try {
+    const [tile, clouds] = await Promise.all([
+      loadTexture(`${BASE}paper/sky/sky_${mood}.png`), loadTexture(`${BASE}paper/sky/clouds_${mood}.png`),
+    ]);
+    for (const t of [tile, clouds]) {
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.magFilter = t.minFilter = THREE.LinearFilter;
+      t.generateMipmaps = false;
+    }
+    tile.wrapS = tile.wrapT = THREE.RepeatWrapping;
+    skyArt[mood] = { tile, clouds };
+  } catch {
+    // the code-painted sky stays
+    console.warn(`[assets] missing sky "${mood}"`);
   }
 }
 
@@ -807,9 +829,10 @@ async function loadAssets(): Promise<void> {
     loadDecals(),
     loadPaperCosmetics(),
     ...(['grass', 'dirt', 'water', 'marsh', 'mud', 'pave', 'brick', 'snow', 'snow_path', 'ice', 'ash_rock', 'ash_path', 'lava',
-      'room_forest', 'room_marsh', 'room_snow', 'room_volcano', 'harbor_plank', 'harbor_plaza', 'harbor_water', 'sky_day',
+      'room_forest', 'room_marsh', 'room_snow', 'room_volcano', 'harbor_plank', 'harbor_plaza', 'harbor_water',
       'sand', 'wreck', 'shallow', 'room_beach', 'rock', 'boardwalk', 'cove_water', 'room_cove',
       'stone', 'rotten_deck', 'misty_water', 'room_grave', 'storm_rock', 'wet_planks', 'rough_sea', 'room_kraken'] as const).map((n) => loadGroundTile(n)),
+    ...(['day', 'storm'] as const).map((m) => loadSkyArt(m)),
     ...Object.entries(ANIM_SET_DIRS).map(([key, dir]) => loadCharSet(key, dir)),
     ...Object.entries(SHEET_SPECS).map(async ([key, spec]) => {
       let tex: THREE.Texture;

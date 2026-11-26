@@ -13,9 +13,7 @@ export type GroundTileName = 'grass' | 'dirt' | 'water' | 'marsh' | 'mud' | 'pav
   // Floor 2's Ghost Ship Graveyard (paper only).
   | 'stone' | 'rotten_deck' | 'misty_water' | 'room_grave'
   // Floor 2's Kraken Maelstrom (paper only).
-  | 'storm_rock' | 'wet_planks' | 'rough_sea' | 'room_kraken'
-  // Floor 2's cloud-sea backdrop (FLOOR2_SKY.md), once the owner has made it; until then island.ts paintSky.
-  | 'sky_day';
+  | 'storm_rock' | 'wet_planks' | 'rough_sea' | 'room_kraken';
 
 /** Each theme's tiles. `dirt` also covers clearings and pond banks; `water` and `pave` fall back to 'water' and 'pave'. */
 export const THEME_TILES: Record<MapTheme, { base: GroundTileName; dirt: GroundTileName; water?: GroundTileName; pave?: GroundTileName }> = {

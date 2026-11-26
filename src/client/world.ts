@@ -18,10 +18,13 @@ import type { PropSpec, Terrain } from '../shared/sim/terrain';
 import type { ZoneTheme } from '../shared/data/zones';
 import { CAMP_RADIUS, DECOR, DECOR_CELL_UNITS, THEME_TILES, TILE_UNITS, TRAIL_WIDTH, type DecorSpot } from '../shared/groundLook';
 import { mulberry32, pick, rand, type Rng } from '../shared/rng';
-import { assetSources, fxTex, groundTiles, sheets, type GroundTile } from './assets';
+import { assetSources, fxTex, groundTiles, sheets, skyArt, type GroundTile } from './assets';
 import { CAM_RIGHT_RAW, ISO_RAW, TOWN2_PROP_RE } from '../shared/isoProjection';
 import { closeBias, IslandOutline, paintSky, paintSpace, PieceBatch } from './island';
-import { HARBOR_FRAG, harborUniforms, paintHarborMask } from './harborGround';
+import { HARBOR_FRAG, harborUniforms, paintHarborMask, updateHarborWater } from './harborGround';
+import { CloudSea, skyMood } from './cloudSea';
+import { gfxWater } from './gfxPrefs';
+import { frac, noiseTexture, turn } from './waterFx';
 import { cloneShared } from './texShare';
 
 /** Size of the picture the maps are cut from, and of the ground rendered for it. */
@@ -111,6 +114,10 @@ const GROUND_FRAG = /* glsl */ `
   // The hub's round plaza around the fountain (radius; 0 = none), laid with uPlazaTex inside a ring of darker stones.
   uniform float uPlaza;
   uniform sampler2D uPlazaTex;
+  // Shader water on the pools (docs/systems/shaders.md): strength of the bending (0 = as before), extra glow (lava).
+  uniform sampler2D uNoise;
+  uniform float uPoolWave, uPoolGlow, uPoolPhase;
+  uniform vec2 uPoolShift;
   #ifdef QUADS
   // The hub: uBase/uDirt are the top quarter's (x<0, z<0); 1 = right (x≥0, z<0), 2 = left (x<0, z≥0), 3 = bottom.
   uniform sampler2D uBase1, uBase2, uBase3, uDirt1, uDirt2, uDirt3;
@@ -222,7 +229,16 @@ const GROUND_FRAG = /* glsl */ `
     if (id == 1) {
       col = dirt * 0.4;
     } else if (id == 2) {
-      col = calm(texture2D(uWater, tile + vec2(uTime * 0.012, sin(uTime * 0.25) * 0.006) * uFlow).rgb, uWater, 0.7, 0.8, 1.0);
+      // Not on the baked map picture.
+      bool live = uPoolWave > 0.0 && uBake < 0.5;
+      vec2 bend = live ? (texture2D(uNoise, vWorld * 0.11 + uPoolShift).rg - 0.5) * 0.06 * uPoolWave : vec2(0.0);
+      col = calm(texture2D(uWater, tile + vec2(uTime * 0.012, sin(uTime * 0.25) * 0.006) * uFlow + bend).rgb, uWater, 0.7, 0.8, 1.0);
+      if (live) {
+        // Thin bands of light like cut paper, sliding over the pool.
+        float n = texture2D(uNoise, vWorld * 0.06 - uPoolShift).r + texture2D(uNoise, vWorld * 0.09 + uPoolShift.yx).g * 0.6;
+        float band = 1.0 - smoothstep(0.025, 0.04, abs(n - 0.8));
+        col *= 1.0 + band * 0.18 * min(uPoolWave, 1.5) + uPoolGlow * (0.5 + 0.5 * sin(uPoolPhase + n * 5.0));
+      }
     }
     // Past the walkable square the land darkens, without showing the square's straight lines.
     float past = max(abs(vWorld.x), abs(vWorld.y)) - uBound;
@@ -544,6 +560,13 @@ export class World {
   /** Water shapes, so flowers don't grow on the pools. */
   private poolBlobs: { x: number; z: number; rx: number; rz: number }[] = [];
   private t = 0;
+  /** Floor 2's paper cloud sea, drawn while the water effects are on (cloudSea.ts). */
+  private cloudSea: CloudSea | null = null;
+  /** Foam waves round a whirlpool, bobbing while the water effects are on. */
+  private readonly rims: { spr: THREE.Sprite; y: number }[] = [];
+  /** Seconds of flow so far of the harbour's water and the pools (added up, so /admin's speeds never make them jump). */
+  private harborFlow = 0;
+  private poolFlow = 0;
   /** The land's broken shoreline. */
   private readonly outline: IslandOutline;
   /** The props actually drawn: the rim forest has gaps in it, and nothing stands out over space. */
@@ -559,14 +582,19 @@ export class World {
     this.pal = PALETTES[terrain.zone.theme];
     this.outline = new IslandOutline(this.half, this.bound, terrain.zone.seed + 21);
     this.props = this.visibleProps(mulberry32(terrain.zone.seed + 23));
-    // Floor 1 floats in space; floor 2 on the cloud sea (FLOOR2_SKY.md: the owner's tile once it exists).
-    this.backdrop = floorOf(terrain.zone) >= 2 ? paintSky(groundTiles.sky_day?.image as CanvasImageSource | undefined) : paintSpace();
+    // Floor 1 floats in space; floor 2 on the cloud sea (FLOOR2_SKY.md).
+    this.backdrop = floorOf(terrain.zone) >= 2 ? paintSky() : paintSpace();
     this.spaceTex = new THREE.CanvasTexture(this.backdrop);
     this.spaceTex.colorSpace = THREE.SRGBColorSpace;
     this.spaceTex.wrapS = this.spaceTex.wrapT = THREE.RepeatWrapping;
     this.spaceTex.magFilter = this.spaceTex.minFilter = THREE.NearestFilter;
     this.spaceTex.generateMipmaps = false;
     scene.background = this.spaceTex;
+    const sky = floorOf(terrain.zone) >= 2 ? skyArt[skyMood(terrain.zone.theme)] : undefined;
+    if (sky) {
+      this.cloudSea = new CloudSea(sky, terrain.zone.seed + 53);
+      this.add(this.cloudSea.group);
+    }
     this.pieceUniforms = {
       uTime: { value: 0 },
       uHalf: { value: this.half },
@@ -626,6 +654,11 @@ export class World {
         uTownEdge: { value: new THREE.Vector2(currentBalance().fxLayer.townEdge, currentBalance().fxLayer.townRound) },
         uPlaza: { value: terrain.zone.npcs ? HUB_PLAZA_RADIUS : 0 },
         uPlazaTex: { value: groundTiles.pave ?? tiles[3] },
+        uNoise: { value: noiseTexture() },
+        uPoolWave: { value: 0 },
+        uPoolGlow: { value: 0 },
+        uPoolPhase: { value: 0 },
+        uPoolShift: { value: new THREE.Vector2() },
       };
       quads.forEach(([base, dirt], i) => {
         this.groundUniforms![`uBase${i + 1}`] = { value: base };
@@ -1339,21 +1372,59 @@ export class World {
     this.groundCover?.dispose();
     this.spaceTex.dispose();
     this.whirlpools?.dispose();
+    this.cloudSea?.dispose();
     this.warpPads?.dispose();
+  }
+
+  /**
+   * The shader water (docs/systems/shaders.md): read every frame, so the player's setting and /admin apply at once.
+   * Level 0 leaves everything as it was before the effects.
+   */
+  private updateWater(dt: number): void {
+    const level = gfxWater();
+    const cfg = currentBalance().fxLayer;
+    this.whirlpools?.update(this.t, level, cfg);
+    this.rims.forEach((r, i) => (r.spr.position.y = r.y + (level > 0 ? Math.sin(this.t * 1.5 + i * 2.1) * 0.07 : 0)));
+    const u = this.groundUniforms;
+    if (!u) return;
+    if (u.uShLevel) {
+      this.harborFlow += dt * cfg.waterSpeed;
+      updateHarborWater(u, level, this.harborFlow, cfg);
+      return;
+    }
+    // Pools move only at the high level. Lava churns slower and glows; ice stays still.
+    const lava = this.zone.theme === 'volcano';
+    const strength = level < 2 || this.zone.iceLakes ? 0 : lava ? cfg.lavaWave : cfg.waterWave;
+    this.poolFlow += dt * (lava ? 0.4 : 1);
+    u.uPoolWave.value = lava ? strength * 0.8 : strength;
+    u.uPoolGlow.value = lava ? strength * 0.14 : 0;
+    u.uPoolShift.value.set(frac(this.poolFlow * 0.021), frac(this.poolFlow * 0.016));
+    u.uPoolPhase.value = turn(this.poolFlow * 2.2);
+  }
+
+  /** The picture behind the land. Space (and the cloud sea) slides past far slower than the land, as if very far behind it. */
+  private updateSky(dt: number, walkX: number, walkY: number): void {
+    const level = gfxWater();
+    if (this.cloudSea && level > 0) {
+      this.scene.background = this.cloudSea.update(level as 1 | 2, dt, currentBalance().fxLayer.cloudDrift, walkX, walkY);
+      return;
+    }
+    this.cloudSea?.hide();
+    const tile = this.backdrop.width * SPACE_PIXEL;
+    this.spaceTex.repeat.set(window.innerWidth / tile, window.innerHeight / tile);
+    this.spaceTex.offset.set(walkX / tile, walkY / tile);
+    this.scene.background = this.spaceTex;
   }
 
   /** Fade trees that stand between the camera and the player. */
   update(dt: number, px: number, pz: number): void {
     this.t += dt;
-    this.whirlpools?.update(this.t);
     this.warpPads?.update(this.t);
     if (this.groundUniforms) this.groundUniforms.uTime.value = this.t;
     this.pieceUniforms.uTime.value = this.t;
     this.updateSnow(dt, px, pz);
-    // Space slides past far slower than the land, as if very far behind it.
-    const tile = this.backdrop.width * SPACE_PIXEL;
-    this.spaceTex.repeat.set(window.innerWidth / tile, window.innerHeight / tile);
-    this.spaceTex.offset.set(((px - pz) * S * SPACE_DRIFT) / tile, (-(px + pz) * S * SPACE_DRIFT) / tile);
+    this.updateWater(dt);
+    this.updateSky(dt, (px - pz) * S * SPACE_DRIFT, -(px + pz) * S * SPACE_DRIFT);
     for (const f of this.fadeables) {
       const depth = f.x + f.z - (px + pz);
       let target = 1;
@@ -1420,6 +1491,7 @@ export class World {
     }
     const spr = this.add(new THREE.Sprite(mat));
     const w = height * sh.cellAspect;
+    if (key.startsWith('rim_')) this.rims.push({ spr, y: 0 });
     // Sunk a little into the ground, except the rebuilt town's wide paper pieces, whose flat bottoms the ground would cut off.
     spr.center.set(0.5, TOWN2_PROP.test(key) ? 0 : 0.03);
     spr.scale.set(w, height, 1);
@@ -1428,6 +1500,8 @@ export class World {
     // frame by frame: they flickered (owner 2026-11-21). A tiny, different step toward the camera for each piece
     // (along the view, so nothing moves on screen; at most ~0.03 world units) keeps their order fixed.
     spr.position.addScaledVector(ISO_DIR, (this.propSeq++ % PROP_DEPTH_STEPS) * PROP_DEPTH_STEP);
+    const rim = this.rims[this.rims.length - 1];
+    if (rim?.spr === spr) rim.y = spr.position.y;
     // Long town-wall pieces stand on a line, not a spot: a round shadow under each would only blot the ground.
     // Nor under the hub town's buildings, stalls and fountain: their pictures stand on their nearest corner, not their
     // middle, so a round shadow there floated off to one side (owner 2026-11-19).

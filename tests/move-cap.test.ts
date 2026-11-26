@@ -109,7 +109,9 @@ upgradeItem(old);
 const want = Math.round(400 * (1 + 79 * 0.003) / (1 + 79 * 0.12) * 10) / 10;
 ok(old.lines![mainAt].value === want, `old main line 400 → ${want} (${old.lines![mainAt].value})`);
 ok(old.lines![old.lines!.length - 1].value === 30, 'the extra line keeps 30');
-ok(old.stats.moveSpeed === Math.round((want + 30) * 10) / 10 && old.stats.def === oldDef, `stats add up again (${old.stats.moveSpeed}), other stats untouched`);
+// makeItem may also roll extra move speed lines of its own: they count too.
+const allMove = Math.round(old.lines!.filter((l) => l.stat === 'moveSpeed').reduce((t, l) => t + l.value, 0) * 10) / 10;
+ok(old.stats.moveSpeed === allMove && old.stats.def === oldDef, `stats add up again (${old.stats.moveSpeed}), other stats untouched`);
 ok(old.mvG === 0.003 && old.lines![mainAt].tier === 1, 'stamped, and still a T1 line on the new range');
 const ml = old.lines![mainAt];
 const newT1 = rowRanges('sea_king_boots', 'legendary', 80, ['moveSpeed'])![0];

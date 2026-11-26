@@ -1230,6 +1230,8 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   const luCard = h('div', { class: 'card' });
   // dash effect (owner 2026-11-26, src/client/dashFx.ts): only the on/off switch here, the looks are per piece
   const dashCard = h('div', { class: 'card' });
+  // water, wind and light (docs/systems/shaders.md); so far the water group
+  const shaderCard = h('div', { class: 'card' });
   const drawFx = (): void => {
     const a = draft.fxLayer;
     const ca = code.fxLayer;
@@ -1344,6 +1346,24 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('h2', {}, 'เอฟเฟกต์เลเวลอัป'),
       h('div', { class: 'row bal-line' }, flag(luOn, a.luNew !== ca.luNew, ' เปิดเอฟเฟกต์เลเวลอัปของแต่งตัว (ปิด = ทุกคนเห็นเสาแสงสีทองแบบเดิม)')),
       h('div', { class: 'muted' }, 'เอฟเฟกต์เลเวลอัปเป็นของแต่งตัวแล้ว 6 แบบ (วงเวทมิติ พายุเพลิง สายฟ้าฟาด พายุใบไม้ ดาวตก เงารัตติกาล) คนที่ไม่ได้สวมเห็นเสาแสงสีทองแบบเดิม · สี ขนาด เวลา สวิตช์รายส่วน และปุ่มดูตัวอย่าง อยู่ที่ /admin แท็บ "ของแต่งตัว" แท็บย่อย "เอฟเฟกต์เลเวลอัป" (ปรับแยกทีละแบบ) · ราคาและซ่อน/แสดงอยู่ที่แท็บ "จัดการของแต่งตัว" · คนอื่นเห็นตามแบบที่คนเลเวลอัปสวม ตามเมนูกราฟิกของแต่ละคน'),
+    );
+    const SHADER_LEVELS = ['ปิด', 'ต่ำ', 'สูง'];
+    const shaderPick = (k: 'shaderDefault' | 'shaderTouchDefault' | 'shaderMax', label: string) => h('label', { class: a[k] !== ca[k] ? 'bal-changed' : '' }, label + ' ',
+      h('select', { onchange: (e: Event) => { a[k] = Number((e.target as HTMLSelectElement).value); refresh(); drawFx(); } },
+        ...SHADER_LEVELS.map((t, i) => h('option', { value: String(i), selected: a[k] === i }, t)).reverse()));
+    const shaderOn = h('input', { type: 'checkbox', checked: a.shader, onchange: (e: Event) => { a.shader = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
+    const waterOn = h('input', { type: 'checkbox', checked: a.shWater, onchange: (e: Event) => { a.shWater = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
+    shaderCard.replaceChildren(
+      h('h2', {}, 'น้ำ ลม และแสง (shader)'),
+      h('div', { class: 'row bal-line' }, flag(shaderOn, a.shader !== ca.shader, ' เปิดเอฟเฟกต์ shader (ปิด = ทุกคนเห็นภาพแบบเดิม)'), flag(waterOn, a.shWater !== ca.shWater, ' น้ำและทะเลเมฆขยับ')),
+      h('div', { class: 'row bal-line' }, shaderPick('shaderDefault', 'เริ่มต้นบนคอม'), shaderPick('shaderTouchDefault', 'เริ่มต้นบนจอสัมผัส'), shaderPick('shaderMax', 'สูงสุดที่เลือกได้')),
+      h('div', { class: 'muted' }, 'ผู้เล่นเลือกเองในเมนู → ตั้งค่า → กราฟิก แถว "น้ำ ลม และแสง" (เก็บในเครื่องผู้เล่น) ไม่เกิน "สูงสุดที่เลือกได้" · คนที่ยังไม่เคยเลือกใช้ค่าเริ่มต้นของจอแบบนั้น · แถวนี้อยู่ในแท็บกราฟิก ถ้าซ่อนเมนูกราฟิก ทุกคนใช้ค่าเริ่มต้น · เบราว์เซอร์ที่วาดด้วย CPU ถูกบังคับปิด · มีผลทันที'),
+      h('h3', {}, 'ทะเลเมฆชั้น 2 และน้ำท่าเรือ'),
+      h('div', { class: 'row bal-line' }, num('cloudDrift', 0.1), num('waterSpeed', 0.1), num('waterWave', 0.1), num('waterFoam', 0.1)),
+      h('div', { class: 'muted' }, 'ต่ำ: ภาพเมฆเลื่อนเอง น้ำ 2 ชั้นเลื่อนคนละทิศ · สูง: + เมฆมีก้อนลอยซ้อนอีกชั้นและขอบบิดเบา ๆ น้ำมีคลื่น เส้นฟองขาวรอบแพ และประกาย · ปิด: ฟ้าวาดด้วยโค้ดแบบเดิม'),
+      h('h3', {}, 'บ่อน้ำ ลาวา และน้ำวน'),
+      h('div', { class: 'row bal-line' }, num('lavaWave', 0.1), num('whirlTwist', 0.1), num('whirlGlow', 0.1)),
+      h('div', { class: 'muted' }, 'บ่อน้ำและลาวากระเพื่อมเฉพาะระดับสูง (บ่อน้ำแข็งนิ่งเสมอ แรงคลื่นใช้ค่า "แรงคลื่น" ด้านบน) · น้ำวน: ต่ำ = แถบสว่างหมุนเข้ากลาง สูง = + เกลียวบิดและกลางวนมืดเต้นช้า ๆ · คลื่นฟองรอบน้ำวนในห้องคราเคนโยกเบา ๆ ทั้งต่ำและสูง'),
     );
     const dashOn = h('input', { type: 'checkbox', checked: a.dashNew, onchange: (e: Event) => { a.dashNew = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
     dashCard.replaceChildren(
@@ -1742,7 +1762,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     { name: 'มอน-บอส-เมือง', cards: [monsterCard, bossCard, moveCard, hubCard] },
     { name: 'ไอเทม-ตีบวก', cards: [affixCard, tierCard, previewCard, setCard, potionCard, bagCard, forgeCard] },
     { name: 'Auto Play', cards: [autoCard] },
-    { name: 'หน้าตา-เอฟเฟกต์-เสียง', cards: [uiCard, fxCard, luCard, dashCard, circleCard, audioCard, bossMusicCard, rigCard] },
+    { name: 'หน้าตา-เอฟเฟกต์-เสียง', cards: [uiCard, fxCard, shaderCard, luCard, dashCard, circleCard, audioCard, bossMusicCard, rigCard] },
     { name: 'ระบบ-รางวัล', cards: [expCard, vipCard, floorCard, gearCard, tutCard, talkCard, langCard] },
   ];
   const ALL = 'ทั้งหมด';
