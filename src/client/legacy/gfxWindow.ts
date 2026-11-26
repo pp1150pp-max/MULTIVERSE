@@ -3,8 +3,10 @@
 // The players' graphics window (owner 2026-11-18): opened from the in-game menu (เมนู → กราฟิก). The choices are
 // kept in this browser (src/client/gfxPrefs.ts) and take effect at once; /admin caps the quality.
 import {
-  gfxHitstopOn, gfxMax, gfxOthersPick, gfxOwnNumsOnly, gfxQuality, gfxShakeOn, setGfxPrefs, type GfxLevel, type GfxOthers,
+  gfxHitstopOn, gfxMax, gfxOthersPick, gfxOwnNumsOnly, gfxQuality, gfxShader, gfxShakeOn, isSoftwareRender, setGfxPrefs,
+  type GfxLevel, type GfxOthers,
 } from '../gfxPrefs';
+import type { ShaderLevel } from '../../shared/fxLayerTuning';
 import { currentBalance } from '../../shared/balance';
 
 const CSS = `
@@ -18,7 +20,7 @@ const CSS = `
 #gfx-panel .gfx-note { color: var(--ink-dim); font-size: 11px; margin-top: 4px; }
 `;
 
-type Row = { label: string; opts: Array<[string, () => boolean, () => void, (() => boolean)?]>; note?: () => string };
+type Row = { label: string; opts: Array<[string, () => boolean, () => void, (() => boolean)?]>; note?: () => string; show?: () => boolean };
 
 let panel: HTMLDivElement | null = null;
 let render = (): void => {};
@@ -38,9 +40,14 @@ function build(): HTMLDivElement | null {
     [['ปิด', 'ต่ำ', 'กลาง', 'สูง'][n], () => gfxQuality() === n, () => setGfxPrefs({ quality: n }), () => n <= gfxMax()];
   const o = (n: GfxOthers): [string, () => boolean, () => void] =>
     [['ปิด', 'ครึ่ง', 'เต็ม'][n], () => gfxOthersPick() === n, () => setGfxPrefs({ others: n })];
+  const sh = (n: ShaderLevel): [string, () => boolean, () => void, () => boolean] =>
+    [['ปิด', 'ต่ำ', 'สูง'][n], () => gfxShader() === n, () => setGfxPrefs({ shader: n }),
+      () => n === 0 || (!isSoftwareRender() && n <= currentBalance().fxLayer.shaderMax)];
   const rows: Row[] = [
     { label: 'คุณภาพอนุภาค', opts: [q(3), q(2), q(1), q(0)],
       note: () => (gfxMax() < 3 ? `เซิร์ฟเวอร์ให้เลือกได้ถึง "${['ปิด', 'ต่ำ', 'กลาง', 'สูง'][gfxMax()]}"` : 'ปิด = ไม่มีอนุภาคเสริม ภาพสกิลหลักยังอยู่') },
+    { label: 'น้ำ ลม และแสง', opts: [sh(2), sh(1), sh(0)], show: () => currentBalance().fxLayer.shader,
+      note: () => (isSoftwareRender() ? 'เบราว์เซอร์กำลังวาดด้วย CPU จึงปิดไว้' : 'ปิด = ภาพนิ่งแบบเดิม · ตอนนี้มีผลกับน้ำและทะเลเมฆ') },
     { label: 'อนุภาคของผู้เล่นคนอื่น', opts: [o(2), o(1), o(0)] },
     { label: 'จอสั่น', opts: [['เปิด', () => gfxShakeOn(), () => setGfxPrefs({ shake: true })], ['ปิด', () => !gfxShakeOn(), () => setGfxPrefs({ shake: false })]] },
     { label: 'ภาพค้างตอนตีโดน', opts: [['เปิด', () => gfxHitstopOn(), () => setGfxPrefs({ hitstop: true })], ['ปิด', () => !gfxHitstopOn(), () => setGfxPrefs({ hitstop: false })]] },
@@ -62,6 +69,7 @@ function build(): HTMLDivElement | null {
     head.append(title, close);
     el.append(head);
     for (const r of rows) {
+      if (r.show && !r.show()) continue;
       const row = document.createElement('div');
       row.className = 'gfx-row';
       const label = document.createElement('div');

@@ -157,7 +157,7 @@ const SPACE_BANDS = ['#070517', '#0b0720', '#110a2c', '#1a0f3c', '#26144c', '#35
 let spaceTile: HTMLCanvasElement | null = null;
 
 /** Value noise that repeats across the tile. */
-function tileNoise(r: Rng, cells: number): (x: number, y: number) => number {
+export function tileNoise(r: Rng, cells: number): (x: number, y: number) => number {
   const grid = Array.from({ length: cells * cells }, () => r());
   return (x, y) => {
     const fx = x * cells;
@@ -366,20 +366,15 @@ const SKY_BANDS = ['#7fc4e4', '#94d0ea', '#aedcef', '#c8e7f3', '#dcefF6', '#eef6
 let skyTile: HTMLCanvasElement | null = null;
 
 /**
- * Floor 2's backdrop, the cloud sea (art_templates/papercraft_maps/FLOOR2_SKY.md): the owner's paper tile
- * `sky` (sprites/paper/ground/sky_day.png) when it is there, else a stand-in painted here: soft white cloud
- * banks over pale sky blue, repeating in both directions. Same size as the space tile, so it drifts the same way.
+ * Floor 2's code-painted backdrop: soft white cloud banks over pale sky blue, repeating in both directions. Same size
+ * as the space tile, so it drifts the same way. Shown while the water effects are off, and under the baked map
+ * picture; otherwise the owner's paper sea is drawn instead (src/client/cloudSea.ts).
  */
-export function paintSky(sky?: CanvasImageSource): HTMLCanvasElement {
-  if (skyTile && !sky) return skyTile;
+export function paintSky(): HTMLCanvasElement {
+  if (skyTile) return skyTile;
   const cv = document.createElement('canvas');
   cv.width = cv.height = SPACE_TILE;
   const ctx = cv.getContext('2d')!;
-  if (sky) {
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(sky, 0, 0, SPACE_TILE, SPACE_TILE);
-    return (skyTile = cv);
-  }
   const r = mulberry32(20261119);
   const big = tileNoise(r, 3);
   const midN = tileNoise(r, 7);

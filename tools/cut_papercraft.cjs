@@ -160,8 +160,8 @@ const MAPS = {
   // Floor 2's cloud sea behind every floor 2 map (FLOOR2_SKY.md, docs/systems/shaders.md): two tiles that already
   // repeat (`seamless`: only shrunk) and two sheets of 8 loose clouds, each packed into one 4x2 atlas under sprites/paper/sky/.
   floor2_sky: [
-    ['sky_day.png', 'ground', { out: 'sky_day', seamless: true }],
-    ['sky_storm.png', 'ground', { out: 'sky_storm', seamless: true }],
+    ['sky_day.png', 'ground', { out: 'sky_day', dir: 'sky', seamless: true }],
+    ['sky_storm.png', 'ground', { out: 'sky_storm', dir: 'sky', seamless: true }],
     ['clouds_day.png', 'atlas', { cols: 4, rows: 2, dir: 'sky', out: 'clouds_day', size: [1536, 640], place: 'centre', fit: 'shared', soft: true }],
     ['clouds_storm.png', 'atlas', { cols: 4, rows: 2, dir: 'sky', out: 'clouds_storm', size: [1536, 640], place: 'centre', fit: 'shared', soft: true }],
   ],
@@ -603,7 +603,7 @@ async function ground(file, o) {
   const N = 1024;
   const shrunk = sharp(file).removeAlpha().resize(N, N, { kernel: 'lanczos3', fit: 'fill' });
   // `seamless`: the picture's edges already meet, so blending them would only ghost it.
-  if (o.seamless) return save(shrunk, `ground/${o.out}.png`);
+  if (o.seamless) return save(shrunk, `${o.dir ?? 'ground'}/${o.out}.png`);
   const { data } = await shrunk.raw().toBuffer({ resolveWithObject: true });
   const B = 96; // Blend band in pixels: each edge fades into the wrapped-around copy of the far side.
   const at = (x, y, c) => data[(((y + N) % N) * N + ((x + N) % N)) * 3 + c];

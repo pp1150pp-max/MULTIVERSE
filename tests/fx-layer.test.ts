@@ -13,6 +13,7 @@ import { QUARKS_SKILLS } from '../src/shared/fxLayerTuning';
 import { checkFxLayerTuning, codeFxLayer, fxLayerChanges, mergeFxLayer } from '../src/shared/fxLayerTuning';
 import { IDLE_INTENT } from '../src/shared/sim/types';
 import { circleDesign } from '../src/client/circleDesigns';
+import { shaderLevelFor } from '../src/shared/fxLayerTuning';
 import { CIRCLE_FALLBACKS } from '../src/shared/fxLayerTuning';
 
 // One magic circle per skill (owner 2026-11-18): every skill and fallback has a design, and no two are alike.
@@ -226,6 +227,25 @@ for (const cls of ['sword', 'mage', 'gunslinger'] as const) {
   ok(m.enhSparkRate === 0 && !m.enhOrbGlowFront, 'merged');
   const lines = fxLayerChanges(codeFxLayer(), m).join(' | ');
   ok(lines.includes('ประกายออร่าตีบวก: × จำนวนต่อวิ (0 = ปิด) 1 → 0') && lines.includes('แสงลูกแก้วตีบวกอยู่หน้าลูก (ปิด = หลังลูก) เปิด → ปิด'), `audit lines (${lines})`);
+}
+
+// Water, wind and light (owner 2026-11-26, docs/systems/shaders.md): which level a player gets, and what is stored.
+{
+  const code = codeFxLayer();
+  ok(code.shader && code.shWater, 'on in code');
+  ok(shaderLevelFor(code, undefined, false, false) === 2, 'a computer starts high');
+  ok(shaderLevelFor(code, undefined, true, false) === 1, 'a touch screen starts low');
+  ok(shaderLevelFor(code, 0, false, false) === 0 && shaderLevelFor(code, 2, true, false) === 2, "the player's pick wins");
+  ok(shaderLevelFor(code, 2, false, true) === 0, 'drawn on the CPU = off, whatever was picked');
+  ok(shaderLevelFor({ ...code, shader: false }, 2, false, false) === 0, 'switched off for everyone');
+  ok(shaderLevelFor({ ...code, shaderMax: 1 }, 2, false, false) === 1, "never above the server's most");
+  ok(shaderLevelFor(code, 'high', false, false) === 2 && shaderLevelFor(code, NaN, true, false) === 1 && shaderLevelFor(code, 9, false, false) === 2, 'a broken saved pick is ignored or held in range');
+  const t = checkFxLayerTuning({ shader: true, shaderDefault: 2, shaderTouchDefault: 0.4, cloudDrift: 1, waterFoam: 0.5, shWater: false }, true);
+  const tu = 'tuning' in t ? t.tuning : undefined;
+  ok(JSON.stringify(tu) === '{"shWater":false,"shaderTouchDefault":0,"waterFoam":0.5}', `differences stored, levels whole (${JSON.stringify(tu)})`);
+  ok('error' in checkFxLayerTuning({ shaderMax: 3 }, true), 'level past high refused');
+  ok('error' in checkFxLayerTuning({ whirlTwist: -1 }, true), 'negative strength refused');
+  ok(fxLayerChanges(code, mergeFxLayer(tu)).join(' | ').includes('น้ำและทะเลเมฆขยับ (shader) เปิด → ปิด'), 'audit line');
 }
 
 finish('fx-layer');

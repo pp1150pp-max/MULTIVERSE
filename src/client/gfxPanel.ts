@@ -2,12 +2,15 @@
 // 2026-11-26 a window of its own). The choices are kept in this browser (src/client/gfxPrefs.ts) and take effect at once;
 // /admin caps the quality and can hide the tab (fxLayer.gfxMenu).
 import {
-  gfxHitstopOn, gfxMax, gfxOthersPick, gfxOwnNumsOnly, gfxQuality, gfxShakeOn, setGfxPrefs, type GfxLevel, type GfxOthers,
+  gfxHitstopOn, gfxMax, gfxOthersPick, gfxOwnNumsOnly, gfxQuality, gfxShader, gfxShakeOn, isSoftwareRender, setGfxPrefs,
+  type GfxLevel, type GfxOthers,
 } from './gfxPrefs';
+import type { ShaderLevel } from '../shared/fxLayerTuning';
 import { currentBalance } from '../shared/balance';
 import { setRow, setSelect, setSwitch } from './settingsUi';
 
 const QUALITY = ['ปิด', 'ต่ำ', 'กลาง', 'สูง'];
+const SHADER = ['ปิด', 'ต่ำ', 'สูง'];
 
 /** Draws the graphics rows into `host`; `redraw` is called after a change. */
 export function renderGfxSettings(host: HTMLElement, redraw: () => void): void {
@@ -17,6 +20,10 @@ export function renderGfxSettings(host: HTMLElement, redraw: () => void): void {
     setRow('คุณภาพอนุภาค',
       setSelect<GfxLevel>(([3, 2, 1, 0] as GfxLevel[]).map((n) => [n, QUALITY[n], n <= max]), gfxQuality(), (n) => set({ quality: n })),
       max < 3 ? `เซิร์ฟเวอร์ให้เลือกได้ถึง "${QUALITY[max]}"` : 'ปิด = ไม่มีอนุภาคเสริม ภาพสกิลหลักยังอยู่'),
+    ...(currentBalance().fxLayer.shader ? [setRow('น้ำ ลม และแสง',
+      setSelect<ShaderLevel>(([2, 1, 0] as ShaderLevel[]).map((n) => [n, SHADER[n], n === 0 || (!isSoftwareRender() && n <= currentBalance().fxLayer.shaderMax)]),
+        gfxShader(), (n) => set({ shader: n })),
+      isSoftwareRender() ? 'เบราว์เซอร์กำลังวาดด้วย CPU จึงปิดไว้' : 'ปิด = ภาพนิ่งแบบเดิม · ตอนนี้มีผลกับน้ำและทะเลเมฆ')] : []),
     setRow('อนุภาคของผู้เล่นคนอื่น',
       setSelect<GfxOthers>([[2, 'เต็ม'], [1, 'ครึ่ง'], [0, 'ปิด']], gfxOthersPick(), (n) => set({ others: n }))),
     setRow('จอสั่น', setSwitch(gfxShakeOn(), (on) => set({ shake: on }))),

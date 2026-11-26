@@ -55,7 +55,7 @@ import { isSoftwareRenderer } from '../shared/net/protocol';
 import { isTouchMode } from './touch/device';
 import { TouchControls, TOUCH_ATTACK } from './touch/controls';
 import { TouchGestures } from './touch/gestures';
-import { gfxOwnNumsOnly, gfxShakeOn } from './gfxPrefs';
+import { gfxOwnNumsOnly, gfxShakeOn, setSoftwareRender, setTouchProbe } from './gfxPrefs';
 import { updateHudLayout } from './hudLayout';
 
 const S = Math.SQRT1_2;
@@ -254,6 +254,7 @@ export class Game {
     initDraggableWindows(document.getElementById('hud')!);
     this.touch = new TouchControls(this);
     new TouchGestures(this, this.renderer.domElement);
+    setTouchProbe(isTouchMode);
     this.checkGpu();
     window.addEventListener('resize', () => {
       this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -300,6 +301,7 @@ export class Game {
     const name = String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER) ?? '');
     this.backend.reportGpu?.(name);
     if (isSoftwareRenderer(name)) {
+      setSoftwareRender(true); // the shader effects stay off (gfxPrefs.ts)
       this.hud.chatLine('', '⚠ เบราว์เซอร์กำลังวาดเกมด้วย CPU ไม่ได้ใช้การ์ดจอ เกมจึงกระตุก — เปิด "ใช้การเร่งกราฟิกเมื่อพร้อมใช้งาน" (Use graphics acceleration when available) ในการตั้งค่าเบราว์เซอร์ › ระบบ แล้วปิด-เปิดเบราว์เซอร์ใหม่', 60_000);
     }
   }
