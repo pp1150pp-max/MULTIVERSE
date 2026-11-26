@@ -848,7 +848,11 @@ export class Sim {
     // A powder-keg prisoner gets up for one last run at the nearest player (sim/coveMoves.ts): a new monster, no rewards.
     if (m.def.move === 'keg' && !m.summoned) {
       const runner = this.spawnSummon(m.def.id, m.x, m.z, m.level);
-      if (runner) kegStart(this, runner, m);
+      if (runner) {
+        kegStart(this, runner, m);
+        // No body left behind next to the runner (owner 2026-11-25): the prisoner itself is what gets up.
+        m.gone = true;
+      }
     }
     // A barnacle ghost crew breaks into small ones (sim/graveMoves.ts): summons, no rewards.
     if (m.def.move === 'split' && !m.summoned) splitOnDeath(this, m);

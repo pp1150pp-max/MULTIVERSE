@@ -59,8 +59,23 @@ export class SpriteActor implements Actor {
   /** A paper monster's move being played (paperMoves.ts), or null, and the seconds since it began. */
   private move: Step[] | null = null;
   private moveT = 0;
-  private readonly cycle: readonly number[];
+  private cycle: readonly number[];
+  /** The paper move used as the walk ("walk" unless setWalkMove changed it). */
+  private walkMove = 'walk';
   private readonly shadow: THREE.Mesh;
+
+  /**
+   * Walks with another of the paper sheet's moves (its 4 columns), e.g. the ship prisoner's "run" once its ball is gone
+   * (owner 2026-11-25). Nothing happens when the sheet has no such move.
+   */
+  setWalkMove(name: string): void {
+    const paper = this.sheet.paper;
+    if (name === this.walkMove || !paper?.moves) return;
+    const i = paper.moves.indexOf(name);
+    if (i < 0) return;
+    this.walkMove = name;
+    this.cycle = Array.from({ length: paper.walk }, (_, f) => i * paper.walk + f);
+  }
 
   constructor(private readonly sheet: SheetInfo, public height: number, shadowRadius: number, cycle: readonly number[] = WALK) {
     // A paper monster walks through its 4 walk frames in order.
