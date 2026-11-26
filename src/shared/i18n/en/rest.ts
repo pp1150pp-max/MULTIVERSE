@@ -198,6 +198,15 @@ export const EN_REST: Record<string, string> = {
   'เลื่อนขึ้น': 'Move up',
   'เลื่อนลง': 'Move down',
   '{0} — เวลาที่เหลือ (นับเฉพาะตอนออนไลน์)': '{0} — time left (counts only while online)',
+  // Market "การ์ด" category (market.ts).
+  'การ์ด': 'Cards',
+  'กลุ่มการ์ด': 'Card group',
+  // HUD buff chips, total EXP / drop bonus (hud.ts drawBuffs).
+  'ดรอป': 'Drop',
+  '{0} รวม +{1}% (×{2})': '{0} total +{1}% (×{2})',
+  '• {0} ×{1} (+{2}%) · เหลือ {3} (นับเฉพาะตอนออนไลน์)': '• {0} ×{1} (+{2}%) · {3} left (counts only while online)',
+  '• VIP +{0}% · เหลือ {1}': '• VIP +{0}% · {1} left',
+  'ใบคูณกับ VIP คูณกัน': 'Scroll and VIP multiply together',
   'มีก็พอ': 'Any amount',
   'ราคา (G)': 'Price (G)',
   'ลบตัวละคร': 'Delete character',

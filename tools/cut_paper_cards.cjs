@@ -3,7 +3,7 @@
 // raw folder (default art_templates/papercraft_cards/raw, not committed): card_frame_<rarity>.png + card_art_<monster>.png, 1024×1536.
 // Out: public/assets/sprites/paper/cards/ — frames 512×768 WebP with the flat magenta windows cut to transparent,
 // monster art 512×768 WebP (full picture with its own background). Prints each frame's windows as fractions of the
-// frame (for CARD_FRAME_WINDOWS in src/shared/data/cards.ts).
+// frame (the thin frames since 2026-11-25 have one window, the whole middle; nothing reads these numbers now).
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
@@ -55,7 +55,7 @@ async function cutFrame(file, name) {
     }
     if (n > 2000) wins.push({ n, x: x0 / width, y: y0 / height, w: (x1 + 1 - x0) / width, h: (y1 + 1 - y0) / height });
   }
-  await sharp(data, { raw: { width, height, channels: 4 } }).resize(W, H).webp({ quality: 90, alphaQuality: 100 }).toFile(path.join(OUT, name.replace(/\.png$/, '.webp')));
+  await sharp(data, { raw: { width, height, channels: 4 } }).resize(W, H).webp({ quality: 90, alphaQuality: 100 }).toFile(path.join(OUT, name.replace('card_frame_', 'card_frame_thin_').replace(/\.png$/, '.webp')));
   const r4 = (v) => Math.round(v * 10000) / 10000;
   console.log(name, JSON.stringify(wins.sort((a, b) => a.y - b.y).map((w) => ({ x: r4(w.x), y: r4(w.y), w: r4(w.w), h: r4(w.h) }))));
 }

@@ -182,9 +182,9 @@ export const EN_PANELS: Record<string, string> = {
   'ขายที่เลือก {0} ชิ้น · {1} G': 'Sell selected: {0} items · {1} G',
   'ขายที่เลือก': 'Sell selected',
   'ติ๊กเลือกระดับที่จะขายก่อน': 'Tick the rarities to sell first',
-  'ไม่มีของระดับที่เลือกในกระเป๋า (ของที่ตีบวกแล้วจะไม่ถูกขาย)': 'No items of the chosen rarities in the bag (enhanced items are never sold)',
+  'ไม่มีของระดับที่เลือกในกระเป๋า (ของที่ตีบวกหรือเจาะรูแล้วจะไม่ถูกขาย)': 'No items of the chosen rarities in the bag (enhanced or drilled items are never sold)',
   'ขายของระดับ {0} ทั้งหมด {1} ชิ้น?': 'Sell all {1} {0} items?',
-  'ได้ {0} G · ของที่ตีบวกแล้วจะไม่ถูกขาย · ซื้อคืนได้ภายใน 30 นาที': 'Get {0} G · enhanced items are never sold · buy back within 30 minutes',
+  'ได้ {0} G · ของที่ตีบวกหรือเจาะรูแล้วจะไม่ถูกขาย · ซื้อคืนได้ภายใน 30 นาที': 'Get {0} G · enhanced or drilled items are never sold · buy back within 30 minutes',
   'ขายทั้งหมด': 'Sell all',
 
   // ---- item detail

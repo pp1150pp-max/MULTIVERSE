@@ -22,6 +22,7 @@ import { checkRigLookTuning, codeRigLook, mergeRigLook, rigLookChanges, type Rig
 import { autoChanges, checkAutoTuning, codeAuto, mergeAuto, type AutoConfig, type AutoTuning } from './autoTuning';
 import { checkFloorGateTuning, codeFloorGate, floorGateChanges, mergeFloorGate, type FloorGateConfig, type FloorGateTuning } from './floorGate';
 import { bagExpandChanges, checkBagExpand, codeBagExpand, mergeBagExpand, type BagExpandCfg, type BagExpandTuning } from './bagTabs';
+import { checkNpcTalkTuning, codeNpcTalk, mergeNpcTalk, npcTalkChanges, type NpcTalkConfig, type NpcTalkTuning } from './npcTalk';
 import { checkTutorialTuning, codeTutorial, mergeTutorial, tutorialChanges, type TutorialConfig, type TutorialTuning } from './tutorial';
 import { checkMoveTuning, codeMoves, mergeMoves, moveChanges, type MoveConfig, type MoveTuning } from './moveTuning';
 import { checkWaveTuning, codeWaves, mergeWaves, waveChanges, type WaveConfig, type WaveTuning } from './waveGame';
@@ -51,6 +52,8 @@ export const CODE_BOSS_SWITCH_SEC = 10;
 /** Ordinary monsters give up after this many seconds without a hit (owner 2026-11-17: off). */
 export const CODE_MOB_GIVE_UP_SEC = 0;
 export const CODE_MOB_RETURN_IGNORE_HITS = true;
+/** The HUD's buff chips show the total EXP / drop bonus (scrolls × VIP), sources and times on hover (owner 2026-11-25); off = the old scroll chips. */
+export const CODE_BUFF_TOTAL = true;
 /** Ordinary monsters drop a target that is in a safe area / left / died at once and walk home (owner 2026-11-20). */
 export const CODE_MOB_DROP_ON_SAFE = true;
 /** Floor-1 farm maps: a spot whose monsters are all dead comes back somewhere else in its kind's band (owner 2026-11-25). */
@@ -111,6 +114,9 @@ export const CODE_REVIVE_GUARD_SEC = 5;
  * no cap on the total from items, but a safety stop at 75% in case the multipliers are set high).
  */
 export const CODE_CDR_CAP = 75;
+
+/** Most a character's crit rate can be, in % (owner 2026-11-25: tops out at 100, gear and buffs past it do nothing). */
+export const CODE_CRIT_CAP = 100;
 
 /**
  * One class's numbers: Lv1 stats, added per level, final multipliers (gear included), damage to bosses, and how
@@ -192,6 +198,8 @@ export interface Balance {
   affixWeight: Record<StatKey, number>;
   /** Most the "ลดคูลดาวน์สกิล %" stat can cut a skill's cooldown, in %. */
   cdrCap: number;
+  /** Most a character's crit rate can be, in % (stats shown and every crit roll). */
+  critCap: number;
   /** Ordinary monsters' multipliers that are not ×1 (none in code). */
   monsters: MonsterTuning;
   /** Monsters per spawn spot ×, by map id (PACK_ZONES); a map left out is ×1. */
@@ -267,6 +275,8 @@ export interface Balance {
   /** VIP bonus (src/shared/vip.ts): EXP % (rounded down) and drop-chance %. */
   vipExpPct: number;
   vipDropPct: number;
+  /** HUD buff chips: total EXP / drop bonus with a per-source hover (CODE_BUFF_TOTAL); off = one chip per running scroll. */
+  buffTotal: boolean;
   /** Untouchable (no damage or boss effects, blinking) for a moment after a phoenix-feather revive in a boss room. */
   reviveGuard: boolean;
   /** How long that lasts; any attack, skill, buff or dash ends it early. */
@@ -291,6 +301,8 @@ export interface Balance {
   hudLayout: HudLayoutConfig;
   /** Tutorial quest rewards (tutorial.ts). */
   tutorial: TutorialConfig;
+  /** NPC talk window and lines over NPC heads (npcTalk.ts). */
+  npcTalk: NpcTalkConfig;
   /** Item sets: server-wide switch and each set's bonus steps (data/sets.ts). */
   sets: SetConfig;
   /** Skill points, ranks, unlock levels, refunds and every learnable skill's numbers (skillTuning.ts). */
@@ -321,6 +333,8 @@ export interface BalanceTuning {
   affixWeight?: Partial<Record<StatKey, number>>;
   /** Cooldown cut cap %, when not the code's. */
   cdrCap?: number;
+  /** Crit rate cap %, when not the code's. */
+  critCap?: number;
   /** Ordinary monsters' multipliers that are not ×1. */
   monsters?: MonsterTuning;
   /** Monsters-per-spot multipliers that are not ×1, by map id. */
@@ -388,6 +402,7 @@ export interface BalanceTuning {
   bossLootMax?: number;
   vipExpPct?: number;
   vipDropPct?: number;
+  buffTotal?: boolean;
   /** Phoenix-feather revive guard, when not the code's (on). */
   reviveGuard?: boolean;
   /** Its seconds, when not the code's. */
@@ -411,6 +426,8 @@ export interface BalanceTuning {
   hudLayout?: HudLayoutTuning;
   /** Tutorial quest rewards that differ from the code. */
   tutorial?: TutorialTuning;
+  /** NPC talk window settings and lines that differ from the code. */
+  npcTalk?: NpcTalkTuning;
   /** Item set settings that differ from the code. */
   sets?: SetTuning;
   /** Skill system settings that differ from the code. */
@@ -437,6 +454,7 @@ export const BALANCE_RANGE = {
   itemStatMult: [0.1, 10],
   affixWeight: [0, 100],
   cdrCap: [0, 95],
+  critCap: [0, 100],
   monsterMult: [0.1, 10],
   mobPack: [1, 5],
   spawnRadius: [1, 4],
@@ -486,6 +504,7 @@ export function codeBalance(): Balance {
     itemStatMult: full(undefined, 1),
     affixWeight: full(undefined, 1),
     cdrCap: CODE_CDR_CAP,
+    critCap: CODE_CRIT_CAP,
     monsters: {},
     mobPack: {},
     spawnRadius: {},
@@ -525,6 +544,7 @@ export function codeBalance(): Balance {
     bossLootMax: CODE_BOSS_LOOT_MAX,
     vipExpPct: CODE_VIP_EXP_PCT,
     vipDropPct: CODE_VIP_DROP_PCT,
+    buffTotal: CODE_BUFF_TOTAL,
     reviveGuard: CODE_REVIVE_GUARD,
     reviveGuardSec: CODE_REVIVE_GUARD_SEC,
     auto: codeAuto(),
@@ -537,6 +557,7 @@ export function codeBalance(): Balance {
     menuLayout: codeMenuLayout(),
     hudLayout: codeHudLayout(),
     tutorial: codeTutorial(),
+    npcTalk: codeNpcTalk(),
     sets: codeSets(),
     skills: codeSkills(),
     moves: codeMoves(),
@@ -567,6 +588,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   Object.assign(b.itemStatMult, t.itemStatMult);
   Object.assign(b.affixWeight, t.affixWeight);
   if (t.cdrCap !== undefined) b.cdrCap = t.cdrCap;
+  if (t.critCap !== undefined) b.critCap = t.critCap;
   if (t.monsters) b.monsters = structuredClone(t.monsters);
   if (t.mobPack) b.mobPack = { ...t.mobPack };
   if (t.spawnRadius) b.spawnRadius = { ...t.spawnRadius };
@@ -595,6 +617,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.bossLootMax !== undefined) b.bossLootMax = t.bossLootMax;
   if (t.vipExpPct !== undefined) b.vipExpPct = t.vipExpPct;
   if (t.vipDropPct !== undefined) b.vipDropPct = t.vipDropPct;
+  if (t.buffTotal !== undefined) b.buffTotal = t.buffTotal;
   if (t.reviveGuard !== undefined) b.reviveGuard = t.reviveGuard;
   if (t.reviveGuardSec !== undefined) b.reviveGuardSec = t.reviveGuardSec;
   if (t.mobReturnIgnoreHits !== undefined) b.mobReturnIgnoreHits = t.mobReturnIgnoreHits;
@@ -623,6 +646,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   b.menuLayout = mergeMenuLayout(t.menuLayout);
   b.hudLayout = mergeHudLayout(t.hudLayout);
   b.tutorial = mergeTutorial(t.tutorial);
+  b.npcTalk = mergeNpcTalk(t.npcTalk);
   b.sets = mergeSets(t.sets);
   b.skills = mergeSkills(t.skills);
   b.moves = mergeMoves(t.moves);
@@ -767,7 +791,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'mobDropOnSafe', 'mobRoam', 'mobRoamReach', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'shopNoEquip', 'tryOnTownOnly', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'bagExpand', 'tutorial', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'critCap', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'buffTotal', 'mobDropOnSafe', 'mobRoam', 'mobRoamReach', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'shopNoEquip', 'tryOnTownOnly', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'bagExpand', 'tutorial', 'npcTalk', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -844,7 +868,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   }
 
   // Single numbers
-  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'mobRoamReach' | 'roomWipeSec' | 'roomBossDelay' | 'roomLoadWait' | 'bossLootBase' | 'bossLootK' | 'bossLootMax' | 'vipExpPct' | 'vipDropPct' | 'reviveGuardSec' | 'cdrCap' | 'heartBlastSpots' | 'heartBlastMinDist' | 'heartBlastReach', range: readonly [number, number], what: string): string | null => {
+  const one = (key: 'hpRegenMult' | 'mpRegenMult' | 'rangeFloor' | 'bossTierBoost' | 'bossSwitchSec' | 'mobGiveUpSec' | 'mobRoamReach' | 'roomWipeSec' | 'roomBossDelay' | 'roomLoadWait' | 'bossLootBase' | 'bossLootK' | 'bossLootMax' | 'vipExpPct' | 'vipDropPct' | 'reviveGuardSec' | 'cdrCap' | 'critCap' | 'heartBlastSpots' | 'heartBlastMinDist' | 'heartBlastReach', range: readonly [number, number], what: string): string | null => {
     const n = num(o[key], range[0], range[1], what);
     if (typeof n === 'string') return n;
     if (n !== undefined && n !== CODE[key]) out[key] = n;
@@ -862,6 +886,13 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (x === undefined) return null;
     if (typeof x !== 'boolean') return strict ? 'สวิตช์มอนเดินกลับไม่สนการโจมตีต้องเป็นเปิด/ปิด' : null;
     if (x !== CODE.mobReturnIgnoreHits) out.mobReturnIgnoreHits = x;
+    return null;
+  };
+  const buffTotal = (): string | null => {
+    const x = o.buffTotal;
+    if (x === undefined) return null;
+    if (typeof x !== 'boolean') return strict ? 'สวิตช์ป้ายบัฟรวมต้องเป็นเปิด/ปิด' : null;
+    if (x !== CODE.buffTotal) out.buffTotal = x;
     return null;
   };
   const dropOnSafe = (): string | null => {
@@ -1370,6 +1401,12 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (c.tuning) out.moves = c.tuning;
     return null;
   };
+  const npcTalk = (): string | null => {
+    const c = checkNpcTalkTuning(o.npcTalk, strict);
+    if ('error' in c) return c.error;
+    if (c.tuning) out.npcTalk = c.tuning;
+    return null;
+  };
   const menuLayout = (): string | null => {
     const c = checkMenuLayoutTuning(o.menuLayout, strict);
     if ('error' in c) return c.error;
@@ -1406,6 +1443,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     itemMult() ??
     affixWeight() ??
     one('cdrCap', BALANCE_RANGE.cdrCap, 'ลดคูลดาวน์ได้สูงสุด %') ??
+    one('critCap', BALANCE_RANGE.critCap, 'อัตราคริสูงสุด %') ??
     monsters() ??
     mobPack() ??
     spawnRadius() ??
@@ -1415,6 +1453,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     one('bossSwitchSec', BALANCE_RANGE.bossSwitchSec, 'บอสเปลี่ยนเป้าหมายทุก (วินาที)') ??
     one('mobGiveUpSec', BALANCE_RANGE.mobGiveUpSec, 'มอนธรรมดาเลิกไล่เมื่อไม่โดนตี (วินาที)') ??
     returnIgnore() ??
+    buffTotal() ??
     roam() ??
     one('mobRoamReach', BALANCE_RANGE.mobRoamReach, 'ระยะที่จุดเกิดย้ายได้จากจุดเดิม') ??
     dropOnSafe() ??
@@ -1451,6 +1490,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     waves() ??
     bagExpand() ??
     tutorial() ??
+    npcTalk() ??
     skills() ??
     fxLayer() ??
     rigLook() ??
@@ -1526,6 +1566,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
     if (a.affixWeight[k] !== b.affixWeight[k]) out.push(`น้ำหนักสุ่ม${STAT_LABEL[k]} ${a.affixWeight[k]} → ${b.affixWeight[k]}`);
   }
   if (a.cdrCap !== b.cdrCap) out.push(`ลดคูลดาวน์ได้สูงสุด ${a.cdrCap}% → ${b.cdrCap}%`);
+  if (a.critCap !== b.critCap) out.push(`อัตราคริสูงสุด ${a.critCap}% → ${b.critCap}%`);
   const mons = (what: string, x: Partial<MonsterMults> | undefined, y: Partial<MonsterMults> | undefined): void => {
     for (const k of MONSTER_STATS) {
       const p = x?.[k] ?? 1;
@@ -1583,6 +1624,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.bossLootMax !== b.bossLootMax) out.push(`รัศมีสูงสุดของดรอปบอส ${a.bossLootMax} → ${b.bossLootMax}`);
   if (a.vipExpPct !== b.vipExpPct) out.push(`โบนัส EXP ของ VIP ${a.vipExpPct}% → ${b.vipExpPct}%`);
   if (a.vipDropPct !== b.vipDropPct) out.push(`โบนัสดรอปของ VIP ${a.vipDropPct}% → ${b.vipDropPct}%`);
+  if (a.buffTotal !== b.buffTotal) out.push(`ป้ายบัฟรวม EXP/ดรอป ${a.buffTotal ? 'เปิด' : 'ปิด'} → ${b.buffTotal ? 'เปิด' : 'ปิด'}`);
   if (a.reviveGuard !== b.reviveGuard) out.push(`อมตะหลังชุบด้วยขนนกฟีนิกซ์ ${a.reviveGuard ? 'เปิด' : 'ปิด'} → ${b.reviveGuard ? 'เปิด' : 'ปิด'}`);
   if (a.reviveGuardSec !== b.reviveGuardSec) out.push(`เวลาอมตะหลังชุบ ${a.reviveGuardSec} → ${b.reviveGuardSec} วิ`);
   out.push(...forgeChanges(a.forge, b.forge));
@@ -1606,6 +1648,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   out.push(...waveChanges(a.waves, b.waves));
   out.push(...bagExpandChanges(a.bagExpand, b.bagExpand));
   out.push(...tutorialChanges(a.tutorial, b.tutorial));
+  out.push(...npcTalkChanges(a.npcTalk, b.npcTalk));
   out.push(...skillChanges(a.skills, b.skills));
   out.push(...fxLayerChanges(a.fxLayer, b.fxLayer));
   out.push(...rigLookChanges(a.rigLook, b.rigLook));

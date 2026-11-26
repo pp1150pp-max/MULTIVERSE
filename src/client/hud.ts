@@ -10,7 +10,13 @@ import { effectiveStats, enhanceBonus, itemName, plusOf, sellValue } from '../sh
 import {
   entryName, POTION_SIZE_LABEL, POTION_STACK, potionHeal, potionName, potionSellPrice, stackLimit,
 } from '../shared/data/potions';
-import { BUFF_LABEL, MONSTER_STONES, RETURN_CAST, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_STACK, stoneStackMax, stoneSellPrice, stoneUnit } from '../shared/data/stones';
+import { vipLeftText } from '../shared/vip';
+import { t } from './i18n';
+import { BUFF_LABEL, BUFF_MULT, CARD_HOW, MONSTER_STONES, RETURN_CAST, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_STACK, stoneStackMax, stoneSellPrice, stoneUnit } from '../shared/data/stones';
+import { CARD_GROUP_NAME, CARD_RARITY_NAME, cardFxLines } from '../shared/data/cards';
+import { cardDef } from '../shared/cardTuning';
+import { cardFxHtml, gameSocketHost, openCardView, openSocketView, socketTipHtml } from './ui/cardPopup';
+import { socketCount } from '../shared/cardSockets';
 import { lootPots, type Buffs, type LootFilter, type SortKey } from '../shared/sim/Player';
 import { MONSTERS } from '../shared/data/monsters';
 import { currentBalance } from '../shared/balance';
@@ -19,8 +25,8 @@ import { ZONE_1 } from '../shared/data/zones';
 import { expToNext } from '../shared/formulas';
 import { blockingGate } from '../shared/data/bossGates';
 import {
-  BUFF_SCROLLS, isBossKey, isBound, isBoundKind, isQuestKey, isBuffScroll, isConsumable, isOrbStone, isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
-  type BagEntry, type Item, type PotionKind, type PotionStack, type StoneStack, type EquipSlot, type StatKey,
+  BUFF_SCROLLS, isBossKey, isBound, isBoundKind, isQuestKey, isBuffScroll, isCardStone, isConsumable, isOrbStone, isItem, isPotion, isStack, isStone, sameStack, RARITIES, RARITY_COLOR, RARITY_LABEL, EQUIP_SLOTS, EQUIP_SLOT_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, wornPlaces,
+  type BagEntry, type BuffScroll, type Item, type PotionKind, type PotionStack, type StoneStack, type EquipSlot, type StatKey,
 } from '../shared/types';
 import { drawEdgeMarker, drawMapIcon, drawPin, facingAngle, partyDot } from './mapIcons';
 import type { MapIcon } from './mapIconNames';
@@ -112,6 +118,7 @@ export class Hud {
   private drawnLevel = 0;
   /** Last buff row drawn (redrawn only when a second ticks over). */
   private drawnBuffs = '';
+  private drawnBuffTitles: string[] = [];
   /** A bag or stash item being dragged with the mouse (ghost appears once the mouse moves a few pixels). */
   private drag: { src: 'bag' | 'stash' | 'equip'; i: number; x: number; y: number; ghost: HTMLElement | null } | null = null;
   /** True right after a drag ends, so the click that follows mouseup does nothing. */
@@ -294,6 +301,16 @@ export class Hud {
           playSound('box_open');
         }
         else if (isOrbStone(entry.stone)) g.backend.useOrbItem(i);
+        else if (isCardStone(entry.stone)) {
+          this.hideTip();
+          openCardView(entry.stone, gameSocketHost(g));
+        }
+        return;
+      }
+      // Shift+click on drilled gear: its sockets, with the cards to take out (card plan 4.3).
+      if (e.shiftKey && isItem(entry) && socketCount(entry) > 0) {
+        this.hideTip();
+        this.openSockets(entry);
         return;
       }
       // At the blacksmith a click on gear puts it in the forge's slot instead of wearing it.
@@ -365,11 +382,12 @@ export class Hud {
       }
       if (isPotion(item)) this.showPotionTip(item, e, `คลิกซ้าย: ใช้กับปุ่มด่วน · คลิกขวา: ${right}${split}`);
       else if (isStone(item) && item.stone === 'mystery_box' && !this.stash.isOpen && !this.market.isOpen && !this.shop.isOpen) this.showStoneTip(item, e, `คลิกซ้าย: เปิด 1 กล่อง · คลิกขวา: เปิดทั้งกอง${split}`);
-      else if (isStone(item)) this.showStoneTip(item, e, `${item.stone === 'return_scroll' ? 'คลิกซ้าย / ปุ่ม G: ใช้ · ' : isBuffScroll(item.stone) || item.stone === 'megaphone' || item.stone === 'mystery_box' || isOrbStone(item.stone) ? 'คลิกซ้าย: ใช้ · ' : ''}คลิกขวา: ${right}${split}`);
+      else if (isStone(item)) this.showStoneTip(item, e, `${item.stone === 'return_scroll' ? 'คลิกซ้าย / ปุ่ม G: ใช้ · ' : isBuffScroll(item.stone) || item.stone === 'megaphone' || item.stone === 'mystery_box' || isOrbStone(item.stone) ? 'คลิกซ้าย: ใช้ · ' : isCardStone(item.stone) ? 'คลิกซ้าย: ดูการ์ด · ' : ''}คลิกขวา: ${right}${split}`);
       else if (item) {
         const both = item.slot === 'ring' && g.player.equipment.ring && g.player.equipment.ring2;
-        if (this.forge.isOpen) this.showTip(item, e, `คลิกซ้าย / ลาก: วางที่ช่างตีเหล็ก · คลิกขวา: ${right}`);
-        else this.showTip(item, e, `คลิกซ้าย: สวมใส่${both ? ' (แทนแหวน 1 · ลากไปช่องแหวน 2 เพื่อแทนวงนั้น)' : ''} · คลิกขวา: ${right}`);
+        const sock = socketCount(item) > 0 ? ' · Shift+คลิก: ดู/ถอดการ์ด' : '';
+        if (this.forge.isOpen) this.showTip(item, e, `คลิกซ้าย / ลาก: วางที่ช่างตีเหล็ก · คลิกขวา: ${right}${sock}`);
+        else this.showTip(item, e, `คลิกซ้าย: สวมใส่${both ? ' (แทนแหวน 1 · ลากไปช่องแหวน 2 เพื่อแทนวงนั้น)' : ''} · คลิกขวา: ${right}${sock}`);
       }
       else this.hideTip();
     });
@@ -426,6 +444,11 @@ export class Hud {
       const slot = eqSlot(e);
       if (!slot) return;
       this.hideTip();
+      const worn = g.player.equipment[slot];
+      if (e.shiftKey && worn && socketCount(worn) > 0) {
+        this.openSockets(worn);
+        return;
+      }
       if (this.forge.isOpen) {
         const item = g.player.equipment[slot];
         if (item) this.forge.forgePlace(item);
@@ -439,7 +462,8 @@ export class Hud {
       if (this.drag?.ghost || isTouchMode()) return;
       const slot = eqSlot(e);
       const item = slot ? g.player.equipment[slot] : undefined;
-      if (item) this.showTip(item, e, this.forge.isOpen ? 'คลิก / ลาก: วางที่ช่างตีเหล็ก' : 'คลิก: ถอดเก็บเข้ากระเป๋า');
+      const sock = item && socketCount(item) > 0 ? ' · Shift+คลิก: ดู/ถอดการ์ด' : '';
+      if (item) this.showTip(item, e, (this.forge.isOpen ? 'คลิก / ลาก: วางที่ช่างตีเหล็ก' : 'คลิก: ถอดเก็บเข้ากระเป๋า') + sock);
       else this.hideTip();
     });
     eq.addEventListener('mouseleave', () => this.hideTip());
@@ -1193,9 +1217,13 @@ export class Hud {
     if (this.dialogOpen) this.closeDialog();
     this.g.tutorial.close();
     this.g.navigator.close();
+    this.g.npcDialog.close();
+    this.g.tutorial.closeReward();
   }
 
   talkTo(id: NpcId): void {
+    // The talk window (owner 2026-11-26, npcDialog.ts); off on /admin = straight to the NPC's own window as before.
+    if (currentBalance().npcTalk.on) return this.g.npcDialog.show(id);
     // A tutorial step to take or hand in here: talk about it first (that window has a button on to the NPC's own).
     if (id !== 'seeker' && id !== 'navigator' && this.g.tutorial.wants(id)) return this.g.tutorial.show(id);
     this.openNpcWindow(id);
@@ -1310,6 +1338,7 @@ export class Hud {
     const icon = itemIcon(item);
     const plus = plusOf(item) ? `<span class="iplus">+${plusOf(item)}</span>` : '';
     const locked = this.g.player.canEquip(item) ? '' : ' locked';
+    // No socket marks on the icon (owner 2026-11-26): sockets show only in the tooltip when pointing at the item.
     return `<div class="cell r-${item.rarity}${selected ? ' sel' : ''}${locked}" ${attrs} style="--rc:${RARITY_COLOR[item.rarity]}">${icon}${plus}<span class="ilv">Lv.${item.level}</span></div>`;
   }
 
@@ -1342,7 +1371,7 @@ export class Hud {
       k === 'hpRegen' || k === 'mpRegen' || k === 'cdr' || k === 'buffDur' || k === 'armorPen' ? v.toFixed(1) : String(Math.round(v));
     $('stat-list').innerHTML = STAT_KEYS.map((k) =>
       `<div class="stat"><span>${STAT_LABEL[k]}</span><b>${fmt(k, p.stats[k])}</b></div>`,
-    ).join('');
+    ).join('') + cardFxHtml(Object.values(p.equipment));
     $('inv-gold').innerHTML = `${COIN_ICON} ${p.gold.toLocaleString()} G`;
     $('inv-pots').innerHTML = potionTotals(this.g.player);
     const lf = $('loot-filter');
@@ -1431,6 +1460,14 @@ export class Hud {
   }
 
   /** Ask before throwing a bag item away (it is destroyed for good, nothing lands on the ground). */
+  /** The socket panel of drilled gear (Shift+click, or "ถอดการ์ด" on the touch sheet). */
+  openSockets(item: Item): void {
+    openSocketView(item, (html, yes, onYes) => this.confirm(html, yes, onYes), (uid, i) => {
+      this.g.backend.unsocketCard(uid, i);
+      this.markInventory();
+    });
+  }
+
   askDrop(i: number): void {
     const item = this.g.player.bag[i];
     if (!item) return;
@@ -1499,6 +1536,7 @@ export class Hud {
       `<div class="tt-sub">${RARITY_LABEL[item.rarity]} · ${SLOT_LABEL[item.slot]} · iLv.${item.level}${plusOf(item) ? ` · ตีบวก +${plusOf(item)}` : ''}</div>` +
       `<div class="tt-stats">${lines || '<div>—</div>'}</div>` +
       setHtml(item, p.equipment) +
+      socketTipHtml(item) +
       (p.equipBlock(item) ? `<div class="tt-req">${p.equipBlock(item)}</div>` : '') +
       `<div class="tt-hint">${hint}</div><div class="tt-val">ขายให้พ่อค้าได้ ${sellValue(item)} G</div>`;
     this.placeTip(tip, e);
@@ -1515,24 +1553,66 @@ export class Hud {
     this.placeTip(tip, e);
   }
 
-  /** Running buff scrolls under the online line: icon, label and time left (h:mm:ss). */
+  /**
+   * The buff chips under the online line. With the /admin switch `buffTotal` (owner 2026-11-25): one chip each for
+   * the total EXP and drop bonus (scroll ×2 times VIP, as Sim counts them), the sources and their time left on hover.
+   * Off: one chip per running scroll with its time left (h:mm:ss), VIP not shown.
+   */
   private drawBuffs(buffs: Buffs): void {
+    const hms = (sec: number) => {
+      const s = Math.ceil(sec);
+      return `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+    };
     const parts: string[] = [];
-    for (const k of BUFF_SCROLLS) {
-      const t = buffs[k];
-      if (!t || t <= 0) continue;
-      const s = Math.ceil(t);
-      const time = `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-      parts.push(`<div class="buff" style="--bc:${STONE_COLOR[k]}" title="${STONE_NAME[k]} — เวลาที่เหลือ (นับเฉพาะตอนออนไลน์)">${stoneIcon(k)}<span>${BUFF_LABEL[k]} ${time}</span></div>`);
+    const titles: string[] = [];
+    const b = currentBalance();
+    if (b.buffTotal) {
+      const vipLeft = vipLeftText(cashStateNow().vipUntil, Date.now());
+      const rows: [BuffScroll, string, number][] = [['exp_scroll', 'EXP', b.vipExpPct], ['drop_scroll', 'ดรอป', b.vipDropPct]];
+      for (const [k, label, vipPct] of rows) {
+        const left = buffs[k] ?? 0;
+        const scroll = left > 0;
+        const vip = !!vipLeft && vipPct > 0;
+        if (!scroll && !vip) continue;
+        const mult = (scroll ? BUFF_MULT : 1) * (vip ? 1 + vipPct / 100 : 1);
+        const total = Math.round((mult - 1) * 100);
+        const color = scroll ? STONE_COLOR[k] : '#ffd98a';
+        parts.push(`<div class="buff" style="--bc:${color}">${stoneIcon(k)}<span>${label} +${total}%</span></div>`);
+        const lines = [`${label} รวม +${total}% (×${Number(mult.toFixed(2))})`];
+        if (scroll) lines.push(`• ${STONE_NAME[k]} ×${BUFF_MULT} (+${(BUFF_MULT - 1) * 100}%) · เหลือ ${hms(left)} (นับเฉพาะตอนออนไลน์)`);
+        if (vip) lines.push(`• VIP +${vipPct}% · เหลือ ${vipLeft}`);
+        if (scroll && vip) lines.push('ใบคูณกับ VIP คูณกัน');
+        // Each line on its own through the dictionary (a whole multi-line title matches no key).
+        titles.push(lines.map((l) => t(l)).join('\n'));
+      }
+    } else {
+      for (const k of BUFF_SCROLLS) {
+        const left = buffs[k];
+        if (!left || left <= 0) continue;
+        parts.push(`<div class="buff" style="--bc:${STONE_COLOR[k]}">${stoneIcon(k)}<span>${BUFF_LABEL[k]} ${hms(left)}</span></div>`);
+        titles.push(`${STONE_NAME[k]} — เวลาที่เหลือ (นับเฉพาะตอนออนไลน์)`);
+      }
     }
+    const box = $('hud-buffs');
     const html = parts.join('');
-    if (html === this.drawnBuffs) return;
-    this.drawnBuffs = html;
-    $('hud-buffs').innerHTML = html;
+    if (html !== this.drawnBuffs) {
+      this.drawnBuffs = html;
+      this.drawnBuffTitles = [];
+      box.innerHTML = html;
+    }
+    // Titles carry the ticking times: set on the same chips, so a hover tip is not torn down every second.
+    // Compared with what we set last, not the attribute (English mode's page translator rewrites that).
+    titles.forEach((tt, i) => {
+      const c = box.children[i];
+      if (!c || this.drawnBuffTitles[i] === tt) return;
+      this.drawnBuffTitles[i] = tt;
+      c.setAttribute('title', tt);
+    });
   }
 
   showStoneTip(s: StoneStack, e: MouseEvent, hint: string): void {
     const tip = $('tooltip');
+    if (isCardStone(s.stone)) return this.showCardTip(s, e, hint);
     tip.innerHTML =
       `<div class="tt-name" style="color:${STONE_COLOR[s.stone]}">${STONE_NAME[s.stone]}</div>` +
       `<div class="tt-sub">${
@@ -1546,6 +1626,24 @@ export class Hud {
         : `วัตถุดิบตีบวก · ${s.count} / ${STONE_STACK} ก้อน · ดรอปจากบอสเท่านั้น`}${s.bound ? ' · ผูกกับตัวละคร (รางวัลภารกิจ)' : ''}</div>` +
       `<div class="tt-stats"><div>${STONE_DESC[s.stone]}</div></div>` +
       `<div class="tt-hint">${hint}</div><div class="tt-val">${isBound(s) ? 'ขาย ทิ้ง ฝากคลัง หรือเทรดไม่ได้' : `ขายให้พ่อค้าได้${stoneUnit(s.stone)}ละ ${stoneSellPrice(s.stone).toLocaleString()} G`}</div>`;
+    this.placeTip(tip, e);
+  }
+
+  /**
+   * A monster card's tooltip (card-system PR 1): name, rarity, the slots it fits and its effects, all from the card
+   * tuning the server sent (the /admin card tab), and that it can't be socketed yet.
+   */
+  private showCardTip(s: StoneStack, e: MouseEvent, hint: string): void {
+    const d = isCardStone(s.stone) ? cardDef(s.stone) : undefined;
+    if (!d) return;
+    const tip = $('tooltip');
+    tip.innerHTML =
+      `<div class="tt-name" style="color:${STONE_COLOR[s.stone]}">${STONE_NAME[s.stone]}</div>` +
+      `<div class="tt-sub">การ์ด${CARD_RARITY_NAME[d.rarity]} · ${s.count} / ${stoneStackMax(s.stone)} ใบ</div>` +
+      `<div class="tt-stats">${cardFxLines(d.fx).map((l) => `<div>${l}</div>`).join('')}</div>` +
+      `<div class="tt-sub">ใส่ได้: ${CARD_GROUP_NAME[d.group]}</div>` +
+      `<div class="tt-sub" style="color:#ffcf6a">${CARD_HOW}</div>` +
+      `<div class="tt-hint">${hint}</div><div class="tt-val">ขายให้พ่อค้าได้ใบละ ${stoneSellPrice(s.stone).toLocaleString()} G</div>`;
     this.placeTip(tip, e);
   }
 
@@ -1885,6 +1983,16 @@ export class Hud {
   private closeDialog(): void {
     this.dialogOpen = false;
     $('dialog').classList.add('hidden');
+    this.seekerStoryDone();
+  }
+
+  /** The Seeker's story, for the talk window to page through (npcDialog.ts). */
+  get seekerLines(): readonly string[] {
+    return SEEKER_LINES;
+  }
+
+  /** The Seeker's story has been read to the end: the first time, the first goal goes in the chat. */
+  seekerStoryDone(): void {
     if (!this.g.metSeeker) {
       this.g.metSeeker = true;
       const boss = MONSTERS[ZONE_1.lair!.boss];

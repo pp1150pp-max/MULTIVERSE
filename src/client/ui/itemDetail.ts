@@ -1,5 +1,7 @@
 import type { Game } from '../Game';
-import { isBuffScroll, isOrbStone, isItem, isPotion, isStack, isStone, EQUIP_SLOT_LABEL, wornPlaces, type BagEntry, type EquipSlot } from '../../shared/types';
+import { gameSocketHost, openCardView } from './cardPopup';
+import { socketCount } from '../../shared/cardSockets';
+import { isBuffScroll, isCardStone, isOrbStone, isItem, isPotion, isStack, isStone, EQUIP_SLOT_LABEL, wornPlaces, type BagEntry, type EquipSlot, type Item } from '../../shared/types';
 import type { MarketWindow } from '../market';
 import type { ForgeWindow } from './forge';
 import type { ShopWindow } from './shop';
@@ -15,6 +17,8 @@ export interface ItemDetailHost {
   equipByDrag(i: number, slot: EquipSlot): void;
   splitDrag(from: 'bag' | 'stash', i: number, cell: HTMLElement | null | undefined, stashCell: HTMLElement | null | undefined): boolean;
   askDrop(i: number): void;
+  /** The socket panel of drilled gear (see the cards in it, take one out). */
+  openSockets(item: Item): void;
 }
 
 /** The windows whose open state decides the sheet's buttons. */
@@ -88,6 +92,7 @@ export class ItemDetail {
       const slot = at.slot;
       if (this.w.forge.isOpen) acts.push({ label: 'วางที่ช่างตีเหล็ก', run: () => this.w.forge.forgePlace(entry), main: true });
       else acts.push({ label: 'ถอด', run: () => { if (!this.w.shop.blocksEquip()) g.backend.unequip(slot); }, main: true });
+      if (isItem(entry) && socketCount(entry) > 0) acts.push({ label: 'ดู/ถอดการ์ด', run: () => this.host.openSockets(entry) });
     } else {
       const i = at.bag;
       if (g.trade.open) acts.push({ label: 'เสนอในการเทรด', run: () => g.trade.offer(i), main: true });
@@ -110,7 +115,9 @@ export class ItemDetail {
           acts.push({ label: 'เปิด 1 กล่อง', run: () => g.backend.openBox(i, false), main: true });
           if (entry.count > 1) acts.push({ label: 'เปิดทั้งกอง', run: () => g.backend.openBox(i, true) });
         } else if (isOrbStone(st)) acts.push({ label: 'ใช้ (เข้าบัญชี)', run: () => g.backend.useOrbItem(i), main: true });
+        else if (isCardStone(st)) acts.push({ label: 'ดู / เสียบการ์ด', run: () => openCardView(st, gameSocketHost(g)), main: true });
       }
+      if (isItem(entry) && socketCount(entry) > 0) acts.push({ label: 'ดู/ถอดการ์ด', run: () => this.host.openSockets(entry) });
       if (this.w.shop.isOpen) acts.push({ label: isStack(entry) ? 'ขายทั้งช่อง' : 'ขาย', run: () => this.w.shop.sellFromBag(i) });
       if (this.w.stash.isOpen) acts.push({ label: 'ฝากเข้าคลัง', run: () => g.backend.stashPut(i, -1) });
       if (this.w.market.isOpen) acts.push({ label: 'ลงขายในตลาด', run: () => this.w.market.bagRightClick(i) });

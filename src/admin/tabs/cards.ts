@@ -1,5 +1,6 @@
-import { CARD_DEFAULTS, CARD_FRAME_WINDOWS, CARD_FX, CARD_FX_MAX, CARD_FX_NAME, CARD_GROUPS, CARD_GROUP_NAME, CARD_NUM_FIELDS, CARD_RARITY_NAME, cardArt, cardFrame, cardName, type CardFx, type CardGroup, type CardId } from '../../shared/data/cards';
-import { CARD_FX_LIMIT, type CardTuning } from '../../shared/cardTuning';
+import { CARD_DEFAULTS, CARD_FX, CARD_FX_MAX, CARD_FX_NAME, CARD_GROUPS, CARD_GROUP_NAME, CARD_NUM_FIELDS, CARD_RARITIES, CARD_RARITY_NAME, cardArt, cardName, type CardFx, type CardGroup, type CardId, type CardRarity } from '../../shared/data/cards';
+import { cardViewEl } from '../../client/cardView';
+import { applyCardTuning, CARD_FX_LIMIT, type CardTuning } from '../../shared/cardTuning';
 import { type AdminCardTune } from '../../shared/admin';
 import { RARITY_COLOR } from '../../shared/types';
 import { h, api, tab, view } from '../core';
@@ -8,7 +9,7 @@ import { h, api, tab, view } from '../core';
 
 /** What the tab edits: every card and every number in full (the server keeps only what differs from the code). */
 interface CardWork {
-  cards: Record<CardId, { group: CardGroup; fx: [CardFx | '', number][] }>;
+  cards: Record<CardId, { rarity: CardRarity; group: CardGroup; fx: [CardFx | '', number][] }>;
   nums: Record<string, number>;
 }
 
@@ -19,7 +20,7 @@ function cardWork(t: CardTuning): CardWork {
     const fx = ch?.fx ?? d.fx;
     const rows: [CardFx | '', number][] = CARD_FX.filter((f) => fx[f] !== undefined).map((f) => [f, fx[f]!]);
     while (rows.length < CARD_FX_MAX) rows.push(['', 0]);
-    cards[d.id] = { group: ch?.group ?? d.group, fx: rows };
+    cards[d.id] = { rarity: ch?.rarity ?? d.rarity, group: ch?.group ?? d.group, fx: rows };
   }
   const nums: Record<string, number> = {};
   for (const f of CARD_NUM_FIELDS) nums[f.key] = t.nums?.[f.key] ?? f.def;
@@ -33,13 +34,16 @@ function workTuning(w: CardWork): CardTuning {
     const c = w.cards[d.id];
     const fx: Partial<Record<CardFx, number>> = {};
     for (const [f, v] of c.fx) if (f) fx[f] = v;
-    cards[d.id] = { group: c.group, fx };
+    cards[d.id] = { rarity: c.rarity, group: c.group, fx };
   }
   return { cards, nums: { ...w.nums } };
 }
 
-/** A card's picture full size over the page; a click anywhere or Esc closes it. */
-function showCardArt(id: CardId): void {
+/**
+ * A card full size over the page as players will see it (src/client/cardView.ts), with the tab's current values,
+ * saved or not: its group and effects, and the look numbers. A click outside the card or Esc closes it.
+ */
+function showCardArt(id: CardId, w: CardWork): void {
   const close = () => {
     over.remove();
     window.removeEventListener('keydown', onKey);
@@ -47,15 +51,15 @@ function showCardArt(id: CardId): void {
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'Escape') close();
   };
-  // The papercraft frame of its rarity over the picture, which fills the frame's art window.
-  const d = CARD_DEFAULTS.find((x) => x.id === id)!;
-  const win = CARD_FRAME_WINDOWS[d.rarity].art;
-  const pct = (v: number) => `${v * 100}%`;
-  const over = h('div', { class: 'card-art-view', onclick: close },
-    h('div', { class: 'card-framed' },
-      h('img', { class: 'card-framed-art', src: cardArt(id), alt: cardName(id), style: `left:${pct(win.x)};top:${pct(win.y)};width:${pct(win.w)};height:${pct(win.h)}` }),
-      h('img', { class: 'card-framed-frame', src: cardFrame(d.rarity), alt: '' })),
-    h('div', {}, cardName(id)));
+  const c = w.cards[id];
+  const fx: Partial<Record<CardFx, number>> = {};
+  for (const [f, v] of c.fx) if (f) fx[f] = v;
+  const cardEl = cardViewEl({ id, rarity: c.rarity, group: c.group, fx }, {
+    shine: w.nums.viewShine === 1, shinePct: w.nums.viewShinePct, tiltDeg: w.nums.viewTiltDeg, rainbow: w.nums.viewRainbow === 1,
+  });
+  cardEl.onclick = (e) => e.stopPropagation();
+  const over = h('div', { class: 'card-art-view', onclick: close }, cardEl,
+    h('div', { class: 'muted', style: 'font-size:13px' }, 'ขยับเมาส์บนการ์ดเพื่อดูแสงสะท้อน · คลิกที่ว่างหรือกด Esc เพื่อปิด'));
   window.addEventListener('keydown', onKey);
   document.body.append(over);
 }
@@ -73,6 +77,7 @@ export async function renderCards(): Promise<void> {
   }
   if (tab !== 'cards' || !box.isConnected) return;
   const canEdit = st.canEdit;
+  applyCardTuning(st.tuning);
   const def = cardWork({});
   let savedJson = JSON.stringify(workTuning(cardWork(st.tuning)));
   let work = cardWork(st.tuning);
@@ -92,6 +97,14 @@ export async function renderCards(): Promise<void> {
       ...CARD_GROUPS.map((g) => h('option', { value: g, selected: g === c.group }, CARD_GROUP_NAME[g])));
     group.onchange = () => {
       c.group = group.value as CardGroup;
+      update();
+    };
+    // Rarity per card (owner 2026-11-26): sell price, colour, frame and the fusion pool follow it.
+    const rarity = h('select', { disabled: !canEdit, style: `color:${RARITY_COLOR[c.rarity]}` },
+      ...CARD_RARITIES.map((r) => h('option', { value: r, selected: r === c.rarity, style: `color:${RARITY_COLOR[r]}` }, CARD_RARITY_NAME[r])));
+    rarity.onchange = () => {
+      c.rarity = rarity.value as CardRarity;
+      rarity.style.color = RARITY_COLOR[c.rarity];
       update();
     };
     const fxBox = h('div', { class: 'card-fx' });
@@ -116,9 +129,9 @@ export async function renderCards(): Promise<void> {
     return h('tr', { 'data-card': id },
       h('td', { 'data-label': 'แมพ' }, `ชั้น ${d.floor} แมพ ${d.map}`, d.dropFrom ? h('div', { class: 'muted' }, 'ดรอปตอนฆ่ากัปตันขาไม้') : null),
       h('td', { 'data-label': 'การ์ด' },
-        h('img', { class: 'card-thumb', src: cardArt(id), alt: cardName(id), title: 'คลิกเพื่อดูภาพใหญ่', loading: 'lazy', onclick: () => showCardArt(id) }),
+        h('img', { class: 'card-thumb', src: cardArt(id), alt: cardName(id), title: 'คลิกเพื่อดูภาพใหญ่', loading: 'lazy', onclick: () => showCardArt(id, work) }),
         h('div', {}, cardName(id))),
-      h('td', { 'data-label': 'ระดับ', style: `color:${RARITY_COLOR[d.rarity]}` }, CARD_RARITY_NAME[d.rarity]),
+      h('td', { 'data-label': 'ระดับ' }, rarity, h('div', { class: 'muted' }, `ในโค้ด ${CARD_RARITY_NAME[d.rarity]}`)),
       h('td', { 'data-label': 'ใส่ได้' }, group),
       h('td', { 'data-label': 'ผล' }, fxBox),
     );
@@ -150,6 +163,7 @@ export async function renderCards(): Promise<void> {
     const base = workTuning(def);
     for (const tr of body.querySelectorAll<HTMLTableRowElement>('tr')) {
       const id = tr.dataset.card as CardId;
+      mark(tr.cells[2], now.cards![id]!.rarity !== base.cards![id]!.rarity);
       mark(tr.cells[3], now.cards![id]!.group !== base.cards![id]!.group);
       mark(tr.cells[4], JSON.stringify(now.cards![id]!.fx) !== JSON.stringify(base.cards![id]!.fx));
     }
@@ -169,6 +183,8 @@ export async function renderCards(): Promise<void> {
     update();
   };
   const load = (s: AdminCardTune) => {
+    // The rest of the admin page (item picker, item editor) follows the saved tuning too.
+    applyCardTuning(s.tuning);
     savedJson = JSON.stringify(workTuning(cardWork(s.tuning)));
     work = cardWork(s.tuning);
     draw();

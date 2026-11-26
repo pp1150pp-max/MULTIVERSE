@@ -4,6 +4,7 @@ import { POTION_SIZES, POTION_SIZE_LABEL, POTION_STACK, potionHeal, potionPrice,
 import { RETURN_SCROLL_PRICE, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_STACK, stoneSellPrice, stoneStackValue, stoneUnit, PHOENIX_PRICE } from '../../shared/data/stones';
 import { buybackPrice } from '../../shared/sim/Player';
 import { isBulkSellable } from '../../shared/sim/Sim';
+import { hasCards, isDrilled } from '../../shared/cardSockets';
 import { isPotion, isStack, isStone, RARITIES, RARITY_COLOR, RARITY_LABEL, type BagEntry, type Item, type PotionKind, type PotionSize, type Rarity, type StoneStack } from '../../shared/types';
 import { COIN_ICON, potionIcon, stoneIcon } from '../icons';
 import { currentBalance } from '../../shared/balance';
@@ -246,10 +247,12 @@ export class ShopWindow {
       this.host.confirm(`ขาย ${name}?<br><small>ได้ ${stoneStackValue(item).toLocaleString()} G (${stoneUnit(item.stone)}ละ ${stoneSellPrice(item.stone).toLocaleString()} G) · ซื้อคืนไม่ได้</small>`, 'ขาย', sell);
       return;
     }
-    if ((item.plus ?? 0) > 0) {
+    // Enhanced or drilled gear: ask first. With cards: the price doesn't include them (card plan 4.4).
+    if ((item.plus ?? 0) > 0 || isDrilled(item)) {
       const v = sellValue(item);
+      const why = hasCards(item) ? '⚠ มีการ์ดเสียบอยู่ การ์ดจะไปกับอุปกรณ์ ราคาไม่รวมการ์ด' : (item.plus ?? 0) > 0 ? 'ของชิ้นนี้ตีบวกแล้ว' : 'ของชิ้นนี้เจาะรูแล้ว';
       this.host.confirm(
-        `ขาย ${name}?<br><small>ของชิ้นนี้ตีบวกแล้ว · ได้ ${v.toLocaleString()} G · ซื้อคืนได้ ${buybackPrice({ item, paid: v }).toLocaleString()} G ภายใน 30 นาที</small>`,
+        `ขาย ${name}?<br><small>${why} · ได้ ${v.toLocaleString()} G · ซื้อคืนได้ ${buybackPrice({ item, paid: v }).toLocaleString()} G ภายใน 30 นาที</small>`,
         'ขาย', sell,
       );
       return;
@@ -321,12 +324,12 @@ export class ShopWindow {
       return;
     }
     if (!items.length) {
-      this.host.log('ไม่มีของระดับที่เลือกในกระเป๋า (ของที่ตีบวกแล้วจะไม่ถูกขาย)', '#b9b09a');
+      this.host.log('ไม่มีของระดับที่เลือกในกระเป๋า (ของที่ตีบวกหรือเจาะรูแล้วจะไม่ถูกขาย)', '#b9b09a');
       return;
     }
     const total = items.reduce((s, it) => s + sellValue(it), 0);
     const labels = rs.map((r) => `<b style="color:${RARITY_COLOR[r]}">${RARITY_LABEL[r]}</b>`).join(', ');
-    this.host.confirm(`ขายของระดับ ${labels} ทั้งหมด ${items.length} ชิ้น?<br><small>ได้ ${total.toLocaleString()} G · ของที่ตีบวกแล้วจะไม่ถูกขาย · ซื้อคืนได้ภายใน 30 นาที</small>`, 'ขายทั้งหมด', () => {
+    this.host.confirm(`ขายของระดับ ${labels} ทั้งหมด ${items.length} ชิ้น?<br><small>ได้ ${total.toLocaleString()} G · ของที่ตีบวกหรือเจาะรูแล้วจะไม่ถูกขาย · ซื้อคืนได้ภายใน 30 นาที</small>`, 'ขายทั้งหมด', () => {
       const bag = this.g.player.bag;
       for (const r of rs) if (bag.some((e) => isBulkSellable(e, r))) this.g.backend.sellAllOfRarity(r);
       this.afterTrade();

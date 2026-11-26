@@ -2,7 +2,9 @@
 // 3 rows (front, side, back) × 3 walk frames. Drop a PNG with that layout into
 // public/assets/... and it replaces the placeholder automatically (see assets.ts).
 import { mulberry32, type Rng } from '../shared/rng';
-import { isOrbStone, type BaseStoneKind, type ClassId, type StoneKind } from '../shared/types';
+import { isCardStone, isOrbStone, RARITY_COLOR, type BaseStoneKind, type ClassId, type StoneKind } from '../shared/types';
+import { cardDef } from '../shared/cardTuning';
+import type { CardId } from '../shared/data/cards';
 
 export type View = 'front' | 'side' | 'back';
 type Ctx = CanvasRenderingContext2D;
@@ -699,6 +701,7 @@ const GEM: Record<`stone_${BaseStoneKind}`, [string, string, string]> = {
   stone_enhance: ['#8a3a10', '#ff9a2e', '#ffe0a0'],
   stone_reroll_values: ['#8a6a10', '#ffd34a', '#fff3b0'],
   stone_reroll_stat: ['#4a2a8a', '#b67cff', '#e8d4ff'],
+  stone_drill: ['#1f5a54', '#7fd4c8', '#e0fff8'],
   // Boss keys: drawn as an old key in the boss's colours until their painted icons exist.
   stone_key_bear: ['#3a5a1f', '#9ad86a', '#e0ffc0'],
   stone_key_witch: ['#1f5a4a', '#6fd8b0', '#d0fff0'],
@@ -732,7 +735,12 @@ export function drawIcon(
 ): HTMLCanvasElement {
   const c = newCanvas(16, 16);
   const ctx = c.getContext('2d')!;
-  if (isOrbStone(kind.slice(6))) {
+  if (isCardStone(kind.slice(6))) {
+    // A monster card (used only while its picture loads or if it is missing): an upright card in its rarity's colour.
+    rect(ctx, 1, 3, 1, 10, 14, '#2a2418');
+    rect(ctx, 1, 4, 2, 8, 12, RARITY_COLOR[cardDef(kind.slice(6) as CardId)?.rarity ?? 'rare'], null);
+    rect(ctx, 1, 5, 3, 6, 7, '#f0e6cc', null);
+  } else if (isOrbStone(kind.slice(6))) {
     // An orb item (mystery box): a glowing ball.
     ell(ctx, 1, 8, 8, 6, 6, '#3a5a8a');
     ell(ctx, 1, 8, 8, 4.5, 4.5, '#9ad0ff', null);

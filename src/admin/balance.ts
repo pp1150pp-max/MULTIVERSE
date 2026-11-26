@@ -8,7 +8,7 @@ import { CIRCLE_FALLBACKS, FX_LAYER_NAME, FX_LAYER_RANGE, QUARKS_SKILLS, quarksK
 import { circleDesign, drawInner, drawOuter } from '../client/circleDesigns';
 import { skillExtras } from '../client/skillExtras';
 import { ATTACK_ROOT_RANGE, NO_ATTACK_ROOT } from '../shared/attackRootTuning';
-import { AUDIO_GAIN_RANGE, SFX_GROUP_NAME, SFX_GROUPS } from '../shared/audioTuning';
+import { AUDIO_GAIN_RANGE, BOSS_SONG_NAME, BOSS_SONGS, ROOM_BOSS_NAME, ROOM_BOSSES, SFX_GROUP_NAME, SFX_GROUPS, type RoomSong } from '../shared/audioTuning';
 import { FORGE_RANGE, PLUS_CAP, PLUS_NEVER } from '../shared/forgeTuning';
 import { RIG_ARMOR_ITEMS, RIG_ARMOR_NAME, RIG_ARMORS, RIG_WEAPON_ITEMS, RIG_WEAPON_NAME, RIG_WEAPONS } from '../shared/rigLookTuning';
 import {
@@ -29,6 +29,8 @@ import { ITEM_BASES, itemRowKinds, statStep, rowRanges, TIER_BAND_NAME, TIER_BAN
 import { expToNext, MAX_LEVEL } from '../shared/formulas';
 import { ITEM_ONLY_STATS, RARITIES, RARITY_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, type ClassId, type Rarity, type StatKey } from '../shared/types';
 import { FLOOR_GATE_LEVEL_MAX, FLOOR_GATE_LEVEL_MIN } from '../shared/floorGate';
+import { NPC_INFO, type NpcId } from '../shared/data/npcs';
+import { TALK_LINE_LEN, TALK_LINES_MAX, TALK_NPCS, TALK_NUM_KEYS, TALK_NUMS, type TalkNumKey } from '../shared/npcTalk';
 import { TUT_ACCEPT_GOLD, TUT_COUNT_MAX, TUT_GOLD_MAX, TUT_LINES_MAX, TUT_REWARD_KEYS, TUT_REWARD_NAME, TUT_STONES, tutRewardText, type TutRewardKey } from '../shared/tutorial';
 import type { MailAttachItem } from '../shared/mail';
 import { POTION_SIZES, potionName } from '../shared/data/potions';
@@ -171,11 +173,13 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         out);
     });
     affixCard.replaceChildren(
-      h('h2', {}, 'สเตตัสเสริม: น้ำหนักสุ่ม · ลดคูลดาวน์สูงสุด'),
+      h('h2', {}, 'สเตตัสเสริม: น้ำหนักสุ่ม · ลดคูลดาวน์สูงสุด · คริสูงสุด'),
       h('div', { class: 'muted' }, 'น้ำหนักสุ่ม = โอกาสที่บรรทัดเสริม 1 บรรทัดจะได้สเตตัสนั้น เทียบกับตัวอื่น (ค่าในโค้ด 1 ทุกตัว = เท่ากัน, 0 = ไม่ออก) ใช้กับดรอปและ "สุ่มสเตตัส" ที่ช่างตีเหล็ก · % ข้างช่อง = โอกาสต่อบรรทัดเมื่อยังไม่มีสเตตัสอื่นบนของ · มีผลกับของใหม่เท่านั้น'),
       h('div', { class: 'row bal-line' }, ...boxes),
       h('div', { class: 'row bal-line' },
         h('label', {}, 'ลดคูลดาวน์สกิลได้สูงสุด %', numBox(() => draft.cdrCap, (n) => { draft.cdrCap = n; }, code.cdrCap, ...BALANCE_RANGE.cdrCap, 1, refresh))),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด 100 · ใช้กับค่าคริในหน้าตัวละครและทุกครั้งที่สุ่มคริ (รวมคริเพิ่มจากสกิล/เป้าที่ติดมาร์ก)' }, 'อัตราคริสูงสุด %', numBox(() => draft.critCap, (n) => { draft.critCap = n; }, code.critCap, ...BALANCE_RANGE.critCap, 1, refresh))),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
           h('input', { type: 'checkbox', checked: draft.buffDurSummons, onchange: (e: Event) => { draft.buffDurSummons = (e.target as HTMLInputElement).checked; refresh(); } }),
@@ -766,6 +770,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         h('label', { title: `ค่าในโค้ด: ${code.vipExpPct}% (ปัดลง)` }, 'โบนัส EXP %', numBox(() => draft.vipExpPct, (n) => { draft.vipExpPct = n; }, code.vipExpPct, ...BALANCE_RANGE.vipExpPct, 1, updateSummary)),
         h('label', { title: `ค่าในโค้ด: ${code.vipDropPct}%` }, 'โบนัสโอกาสดรอป %', numBox(() => draft.vipDropPct, (n) => { draft.vipDropPct = n; }, code.vipDropPct, ...BALANCE_RANGE.vipDropPct, 1, updateSummary)),
       ),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' },
+          h('input', { type: 'checkbox', checked: draft.buffTotal, onchange: (e: Event) => { draft.buffTotal = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+          ' ป้ายบัฟรวมบนจอ: "EXP +x%" / "ดรอป +x%" รวมใบคูณกับ VIP ชี้เมาส์เห็นแยกแหล่งและเวลาที่เหลือ (ปิด = ป้ายใบคูณ ×2 แบบเดิม ไม่โชว์ VIP)'),
+      ),
     );
     refresh();
   };
@@ -1167,6 +1176,8 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   const fxCard = h('div', { class: 'card' });
   // level-up effect (owner 2026-11-25, src/client/levelUpFx.ts); its preview canvas stays across redraws
   const luCard = h('div', { class: 'card' });
+  // dash effect (owner 2026-11-26, src/client/dashFx.ts): only the on/off switch here, the looks are per piece
+  const dashCard = h('div', { class: 'card' });
   const drawFx = (): void => {
     const a = draft.fxLayer;
     const ca = code.fxLayer;
@@ -1277,6 +1288,12 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('h2', {}, 'เอฟเฟกต์เลเวลอัป'),
       h('div', { class: 'row bal-line' }, flag(luOn, a.luNew !== ca.luNew, ' เปิดเอฟเฟกต์เลเวลอัปของแต่งตัว (ปิด = ทุกคนเห็นเสาแสงสีทองแบบเดิม)')),
       h('div', { class: 'muted' }, 'เอฟเฟกต์เลเวลอัปเป็นของแต่งตัวแล้ว 6 แบบ (วงเวทมิติ พายุเพลิง สายฟ้าฟาด พายุใบไม้ ดาวตก เงารัตติกาล) คนที่ไม่ได้สวมเห็นเสาแสงสีทองแบบเดิม · สี ขนาด เวลา สวิตช์รายส่วน และปุ่มดูตัวอย่าง อยู่ที่ /admin แท็บ "ของแต่งตัว" แท็บย่อย "เอฟเฟกต์เลเวลอัป" (ปรับแยกทีละแบบ) · ราคาและซ่อน/แสดงอยู่ที่แท็บ "จัดการของแต่งตัว" · คนอื่นเห็นตามแบบที่คนเลเวลอัปสวม ตามเมนูกราฟิกของแต่ละคน'),
+    );
+    const dashOn = h('input', { type: 'checkbox', checked: a.dashNew, onchange: (e: Event) => { a.dashNew = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
+    dashCard.replaceChildren(
+      h('h2', {}, 'เอฟเฟกต์แดช'),
+      h('div', { class: 'row bal-line' }, flag(dashOn, a.dashNew !== ca.dashNew, ' เปิดเอฟเฟกต์แดชของแต่งตัว (ปิด = ทุกคนเห็นแดชแบบเดิม)')),
+      h('div', { class: 'muted' }, 'เอฟเฟกต์แดชเป็นของแต่งตัว 6 แบบ (ลมฟ้า เพลิง สายฟ้า ใบไม้ ดาว เงา) ใช้กับปุ่มแดชของทุกอาชีพ ไม่รวมสกิลที่พุ่งตัว คนที่ไม่ได้สวมเห็นแดชแบบเดิม · สี ขนาด เวลา สวิตช์รายส่วน และปุ่มดูตัวอย่าง อยู่ที่ /admin แท็บ "ของแต่งตัว" แท็บย่อย "เอฟเฟกต์แดช" (ปรับแยกทีละแบบ) · ราคาและซ่อน/แสดงอยู่ที่แท็บ "จัดการของแต่งตัว" · คนอื่นเห็นตามแบบที่คนแดชสวม ตามเมนูกราฟิกของแต่ละคน'),
     );
   };
 
@@ -1397,6 +1414,38 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
+  // ---------------------------------------------------------- boss room song files (src/shared/audioTuning.ts)
+  const bossMusicCard = h('div', { class: 'card' });
+  // Built once: redrawing the card must not stop a song being listened to.
+  const songRows = BOSS_SONGS.map((s) => {
+    const state = h('span', { class: 'muted' }, ` assets/music/${s}.mp3`);
+    const player = h('audio', { controls: true, preload: 'metadata', src: `assets/music/${s}.mp3` });
+    player.addEventListener('error', () => {
+      player.remove();
+      state.textContent = ' ยังไม่มีไฟล์ (ห้องที่เลือกเพลงนี้เล่น chiptune เดิม)';
+    });
+    return h('div', { class: 'row bal-line' }, h('label', {}, BOSS_SONG_NAME[s]), player, state);
+  });
+  const drawBossMusic = (): void => {
+    const m = draft.audio.music;
+    const cm = code.audio.music;
+    const refresh = (): void => { updateSummary(); };
+    const on = h('input', { type: 'checkbox', checked: m.on, onchange: (e: Event) => { m.on = (e.target as HTMLInputElement).checked; refresh(); drawBossMusic(); } });
+    const choices: RoomSong[] = [...BOSS_SONGS, 'chip'];
+    bossMusicCard.replaceChildren(
+      h('h2', {}, 'เพลงห้องบอส'),
+      h('div', { class: 'muted' }, 'ในห้องบอสเล่นไฟล์เพลงวนลูปแทนเพลง chiptune ตั้งแต่เข้าห้องจนออก (ค่อย ๆ เฟดเข้าออก) · ใช้แถบ "เพลงประกอบ" ของผู้เล่น · ไม่เร่งตามบอสคลั่ง · ยังไม่มีไฟล์ = เล่น chiptune เดิม · วิธีเจนและวางไฟล์: art_templates/music/BOSS_GOTHIC.md · มีผลกับทุกคนทันทีหลังบันทึก'),
+      h('div', { class: 'row bal-line' },
+        h('label', { class: m.on !== cm.on ? 'bal-changed' : '' }, on, ' ใช้ไฟล์เพลงในห้องบอส'),
+        h('label', {}, ' × ความดังเพลงไฟล์ (เทียบกับ chiptune) ', numBox(() => m.gain, (n) => { m.gain = n; }, cm.gain, AUDIO_GAIN_RANGE[0], AUDIO_GAIN_RANGE[1], 0.1, refresh))),
+      h('div', { class: 'row bal-line' }, ...ROOM_BOSSES.map((id) =>
+        h('label', { class: m.rooms[id] !== cm.rooms[id] ? 'bal-changed' : '' }, `${ROOM_BOSS_NAME[id]} `,
+          h('select', { onchange: (e: Event) => { m.rooms[id] = (e.target as HTMLSelectElement).value as RoomSong; refresh(); drawBossMusic(); } },
+            ...choices.map((s) => h('option', { value: s, selected: m.rooms[id] === s }, s === 'chip' ? 'chiptune เดิม' : BOSS_SONG_NAME[s])))))),
+      ...songRows,
+    );
+  };
+
   // ---------------------------------------------------------- papercraft sword rig pictures (src/shared/rigLookTuning.ts)
   const rigCard = h('div', { class: 'card' });
   const drawRig = (): void => {
@@ -1500,6 +1549,45 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
+  // ---------------------------------------------------------- NPC talk window (src/shared/npcTalk.ts)
+  const talkCard = h('div', { class: 'card' });
+  const drawTalk = (): void => {
+    const t = draft.npcTalk;
+    const ct = code.npcTalk;
+    const flag = (k: 'on' | 'bubbles', label: string): HTMLElement =>
+      h('label', { title: `ค่าในโค้ด: ${ct[k] ? 'เปิด' : 'ปิด'}`, class: t[k] !== ct[k] ? 'bal-changed' : '' },
+        h('input', { type: 'checkbox', checked: t[k], onchange: (e: Event) => { t[k] = (e.target as HTMLInputElement).checked; updateSummary(); drawTalk(); } }),
+        ` ${label}`);
+    const num = (k: TalkNumKey): HTMLElement =>
+      h('label', {}, `${TALK_NUMS[k].name} `, numBox(() => t[k], (n) => { t[k] = n; }, ct[k], ...TALK_NUMS[k].range, 1, () => updateSummary()));
+    /** One line per row; empty rows are dropped on save. */
+    const lines = (part: 'greet' | 'chat', id: NpcId): HTMLElement => {
+      const ta = h('textarea', { rows: '3', style: 'width:100%;font:inherit' }) as HTMLTextAreaElement;
+      ta.value = t[part][id].join('\n');
+      const changed = (): boolean => JSON.stringify(t[part][id]) !== JSON.stringify(ct[part][id]);
+      ta.classList.toggle('bal-changed', changed());
+      ta.addEventListener('input', () => {
+        t[part][id] = ta.value.split('\n').map((x) => x.trim()).filter(Boolean);
+        const bad = t[part][id].length > TALK_LINES_MAX || t[part][id].some((x) => x.length > TALK_LINE_LEN);
+        ta.classList.toggle('bal-bad', bad);
+        ta.classList.toggle('bal-changed', changed());
+        updateSummary();
+      });
+      return ta;
+    };
+    talkCard.replaceChildren(
+      h('h2', {}, 'หน้าต่างคุย NPC'),
+      h('div', { class: 'muted' }, 'คลิก NPC = หน้าต่างคุย (ฉากสถานที่ของ NPC รูปครึ่งตัวซ้าย บทพูดล่าง ปุ่มคำตอบมีไอคอน) กดคำตอบแล้วเปิดหน้าต่างของ NPC (ร้าน เมนูช่างตีเหล็ก คลัง แท็บตลาด/กล่องรับของ แคชช็อป เควสกุญแจ) · ปิด = คลิกแล้วเปิดหน้าต่างของ NPC ทันทีแบบเดิม · คำพูดเหนือหัว: เดินเข้าใกล้ NPC แล้วมีคำพูดสั้น ๆ ลอยเหนือหัว · ฝั่งเบราว์เซอร์เท่านั้น มีผลทันที'),
+      h('div', { class: 'row bal-line' }, flag('on', 'ใช้หน้าต่างคุย NPC'), flag('bubbles', 'คำพูดเหนือหัว NPC')),
+      h('div', { class: 'row bal-line' }, ...TALK_NUM_KEYS.map(num)),
+      h('div', { class: 'muted' }, `บทพูด: บรรทัดละ 1 ประโยค (ไม่เกิน ${TALK_LINES_MAX} บรรทัด บรรทัดละ ${TALK_LINE_LEN} ตัวอักษร) สุ่มทีละบรรทัด · ทักทาย = ในหน้าต่างคุย (ปุ่ม "พูดคุย" สุ่มบรรทัดใหม่) · เหนือหัว = ลอยเหนือหัวเมื่อเดินเข้าใกล้ · NPC ท่าเรือใช้บทของงานเดียวกัน`),
+      ...TALK_NPCS.map((id) => h('details', { style: 'margin:4px 0' },
+        h('summary', {}, NPC_INFO[id].name),
+        h('div', {}, 'ทักทาย (หน้าต่างคุย)'), lines('greet', id),
+        h('div', {}, 'เหนือหัว'), lines('chat', id))),
+    );
+  };
+
   // The skill system's card is its own tab now (src/admin/skills.ts, owner 2026-11-19): this tab saves with
   // `part: 'rest'`, so the server keeps the skills as they are saved there.
 
@@ -1535,10 +1623,12 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawLang();
     drawAuto();
     drawTut();
+    drawTalk();
     drawFx();
     drawCircles();
     drawRoot();
     drawAudio();
+    drawBossMusic();
     drawRig();
     applyFilter(); // redrawn cards keep the chosen category / search
   };
@@ -1595,8 +1685,8 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     { name: 'มอน-บอส-เมือง', cards: [monsterCard, bossCard, moveCard, hubCard] },
     { name: 'ไอเทม-ตีบวก', cards: [affixCard, tierCard, previewCard, setCard, potionCard, bagCard, forgeCard] },
     { name: 'Auto Play', cards: [autoCard] },
-    { name: 'หน้าตา-เอฟเฟกต์-เสียง', cards: [uiCard, fxCard, luCard, circleCard, audioCard, rigCard] },
-    { name: 'ระบบ-รางวัล', cards: [expCard, vipCard, floorCard, tutCard, langCard] },
+    { name: 'หน้าตา-เอฟเฟกต์-เสียง', cards: [uiCard, fxCard, luCard, dashCard, circleCard, audioCard, bossMusicCard, rigCard] },
+    { name: 'ระบบ-รางวัล', cards: [expCard, vipCard, floorCard, tutCard, talkCard, langCard] },
   ];
   const ALL = 'ทั้งหมด';
   const CAT_KEY = 'adminBalanceCat';

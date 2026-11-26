@@ -176,6 +176,9 @@ async function run(): Promise<void> {
     [{ kind: 'potion', potion: 'hp', size: 'xl', count: 1 }, 'ขนาดยาไม่ถูกต้อง'],
     [{ kind: 'potion', potion: 'hp', count: 1 }, 'ขนาดยาไม่ถูกต้อง'],
     [{ kind: 'stone', stone: 'gold', count: 1 }, 'ชนิดหินไม่ถูกต้อง'],
+    // Monster cards (card-system PR 1): only cards that exist.
+    [{ kind: 'stone', stone: 'card_not_a_monster', count: 1 }, 'ชนิดหินไม่ถูกต้อง'],
+    [{ kind: 'stone', stone: 'card_', count: 1 }, 'ชนิดหินไม่ถูกต้อง'],
     [{ kind: 'stone', stone: 'enhance', count: 0 }, 'จำนวนชิ้น'],
     [{ kind: 'stone', stone: 'enhance', count: ADMIN_ITEMS_MAX + 1 }, 'จำนวนชิ้น'],
     [{ kind: 'potion', potion: 'mp', size: 'l', count: 2.5 }, 'จำนวนชิ้น'],
@@ -277,17 +280,23 @@ async function run(): Promise<void> {
   const ownStone = await edit('items', { kind: 'stone', stone: 'protect', count: ADMIN_ITEMS_MAX }, ownerTok, own.data.id);
   ok(ownStone.status === 200 && ownStone.data.char.bagFree === 60 - 2 - 1 - 2, `owner spawns 10 stones: 3+10 = a full stack + 3 (${ownStone.data.char.bagFree} free)`);
   ok((await edit('items', { kind: 'stone', stone: 'enhance', count: 2 }, ownerTok, own.data.id)).status === 200, 'owner spawns enhance stones');
+  // Monster cards stack 10 per slot like stones (card-system PR 1).
+  const card1 = await edit('items', { kind: 'stone', stone: 'card_forest_wolf', count: ADMIN_ITEMS_MAX }, ownerTok, own.data.id);
+  const card2 = await edit('items', { kind: 'stone', stone: 'card_forest_wolf', count: 3 }, ownerTok, own.data.id);
+  ok(card1.status === 200 && card2.status === 200 && card2.data.msg === 'เสกให้ 3 ชิ้น: การ์ดหมาป่า', `owner spawns monster cards (${card2.data.msg ?? card2.data.error})`);
   await sleep(400);
   const gBag = gc.msgs.filter((x) => x.t === 'snap' && x.me.inv).at(-1)?.me.inv.bag ?? [];
   const counts = (pred: (e: any) => boolean) => gBag.filter((e: any) => e && pred(e)).map((e: any) => e.count).sort((a: number, b: number) => b - a).join(',');
   ok(counts((e) => e.potion === 'mp' && e.size === 'm') === '10' && counts((e) => e.stone === 'protect') === '10,3' && counts((e) => e.stone === 'enhance') === '2',
     `the player sees the stacks (mp m ${counts((e) => e.potion === 'mp' && e.size === 'm')}, protect ${counts((e) => e.stone === 'protect')})`);
+  ok(counts((e) => e.stone === 'card_forest_wolf') === '10,3', `cards stack 10 per slot (${counts((e) => e.stone === 'card_forest_wolf')})`);
   ok(gc.msgs.some((x) => x.t === 'chat' && x.name === '' && x.text === 'GM มอบ หินกันระดับลด × 3'), 'the player gets the Thai GM message for stones');
   gc.send({ t: 'act', a: 'sort', key: 'rarity', desc: true });
   await sleep(2600);
   const gSaved = saved(own.data.id).bag.filter(Boolean);
   ok(gSaved.filter((e: any) => e.stone === 'protect').reduce((n: number, e: any) => n + e.count, 0) === 13
     && gSaved.some((e: any) => e.potion === 'mp' && e.size === 'm' && e.count === 10), 'spawned potions/stones survive the next save');
+  ok(gSaved.filter((e: any) => e.stone === 'card_forest_wolf').map((e: any) => e.count).join(',') === '10,3', 'cards survive sorting and the next save as 10 + 3');
   gc.ws.close();
   await sleep(300);
 

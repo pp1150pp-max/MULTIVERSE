@@ -16,6 +16,7 @@ import { checkOrbItems, registerOrbItems } from '../../shared/orbItems';
 import { applyOrbLook } from '../orbs';
 import { checkCosTuning } from '../../shared/cosTuning';
 import { checkAnimTuning } from '../../shared/animTuning';
+import { applyCardTuning, checkCardTuning } from '../../shared/cardTuning';
 import { applyAnimTuning } from '../animTune';
 import { applyBalance, checkBalance, currentBalance } from '../../shared/balance';
 import { applySlotVars } from '../img';
@@ -116,6 +117,7 @@ function useWelcome(m: WelcomeMsg): void {
   useOrbLook(m.orbLook);
   useCosTuning(m.cosTuning);
   useAnimTuning(m.animTuning);
+  useCardTuning(m.cardTuning);
   applyCosHidden(m.cosHidden);
   useOrbItems(m.orbItems);
   useBalance(m.balance);
@@ -747,7 +749,9 @@ export class OnlineBackend implements Backend {
         done?.(m.result && m.item ? { result: m.result, item: m.item } : null);
         break;
       }
-      case 'rerolled': {
+      // Drilling answers like a reroll: the changed item (its req numbers come from the same counter).
+      case 'rerolled':
+      case 'drilled': {
         const done = this.rerollWait.get(m.req);
         this.rerollWait.delete(m.req);
         done?.(m.item);
@@ -803,6 +807,9 @@ export class OnlineBackend implements Backend {
         break;
       case 'animTuning':
         useAnimTuning(m.tuning);
+        break;
+      case 'cardTuning':
+        useCardTuning(m.tuning);
         break;
       case 'cosHidden':
         applyCosHidden(m.ids);
@@ -1406,12 +1413,31 @@ export class OnlineBackend implements Backend {
   reroll(uid: string, kind: RerollKind): Promise<Item | null> {
     const req = ++this.enhanceReq;
     this.send({ t: 'act', a: 'reroll', uid, kind, req });
+    return this.waitItem(req);
+  }
+
+  drill(uid: string): Promise<Item | null> {
+    const req = ++this.enhanceReq;
+    this.send({ t: 'act', a: 'drill', uid, req });
+    return this.waitItem(req);
+  }
+
+  /** The item a blacksmith answer (`rerolled` / `drilled`) with this req carries, or null after 5 s. */
+  private waitItem(req: number): Promise<Item | null> {
     return new Promise((resolve) => {
       this.rerollWait.set(req, resolve);
       setTimeout(() => {
         if (this.rerollWait.delete(req)) resolve(null);
       }, 5000);
     });
+  }
+
+  socketCard(uid: string, card: string): void {
+    this.send({ t: 'act', a: 'socketCard', uid, card });
+  }
+
+  unsocketCard(uid: string, i: number): void {
+    this.send({ t: 'act', a: 'unsocketCard', uid, i });
   }
 
   market(call: MarketCall): Promise<MarketReply> {
@@ -1546,6 +1572,11 @@ function useCosTuning(v: unknown): void {
 /** The server's per-facing animation fixes (src/shared/animTuning.ts), used by every character drawn from now on. */
 function useAnimTuning(v: unknown): void {
   applyAnimTuning(checkAnimTuning(v, false).tuning ?? {});
+}
+
+/** The server's card tuning (src/shared/cardTuning.ts), so card tooltips (effects, sell price) match /admin. */
+function useCardTuning(v: unknown): void {
+  applyCardTuning(v === undefined ? {} : checkCardTuning(v, false).tuning ?? {});
 }
 
 /** The server's game balance (class stats, tier tables), so tooltips and the blacksmith's odds match it. */

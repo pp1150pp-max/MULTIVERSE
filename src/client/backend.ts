@@ -132,6 +132,12 @@ export interface Backend {
   enhance(uid: string, protect: boolean): Promise<EnhanceOutcome>;
   /** Blacksmith reroll of worn or bag gear; resolves with the changed item, or null if refused. */
   reroll(uid: string, kind: RerollKind): Promise<Item | null>;
+  /** Blacksmith drilling of worn or bag gear; resolves with the drilled item, or null if refused. */
+  drill(uid: string): Promise<Item | null>;
+  /** Puts a card from the bag into the first empty socket of worn or bag gear (anywhere). */
+  socketCard(uid: string, card: string): void;
+  /** Takes the card out of socket `i` (the card breaks). */
+  unsocketCard(uid: string, i: number): void;
   /** `party` = to the party only. */
   chat(text: string, party?: boolean, links?: ChatLinkRef[]): void;
   /** A whisper: only the online character named `to` sees it (the server echoes it back). */

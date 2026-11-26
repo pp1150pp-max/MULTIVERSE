@@ -14,6 +14,7 @@ import { orbItemLook, orbItemsVersion } from '../shared/orbItems';
 import { ORB_PALETTES } from './orbs';
 import { cashCatalogNow, cashVersion } from './cashData';
 import { levelUpCard, levelUpLookOf } from './levelUpFx';
+import { dashCard, dashLookOf } from './dashFx';
 import { cosTune } from './cosTune';
 
 type Tab = 'shop' | 'mine';
@@ -80,6 +81,13 @@ export function cosPicture(c: CosmeticDef): HTMLElement {
     // A still of the style in the piece's own colours, drawn in code (levelUpFx.ts).
     const img = el('img', 'cos-pic');
     img.src = levelUpCard(c.id, levelUpLookOf(cosTune(c.id)));
+    img.alt = c.name;
+    return img;
+  }
+  if (c.slot === 'dash') {
+    // A still of the style in the piece's own colours, drawn in code (dashFx.ts).
+    const img = el('img', 'cos-pic');
+    img.src = dashCard(c.id, dashLookOf(cosTune(c.id)));
     img.alt = c.name;
     return img;
   }
@@ -183,6 +191,12 @@ export class CosmeticsUI {
     else delete this.trying[slot];
     setTryOn(this.trying);
     if (id && slot === 'levelup') this.playLevelUp(id);
+    if (id && slot === 'dash') this.playDash(id);
+  }
+
+  /** A dash effect played once as if your character had just dashed to where it stands (only you see it). */
+  private playDash(id: string): void {
+    this.g.fx.dashDemo(id, this.g.player);
   }
 
   /** A level-up effect played once on your own character to look at (only you see it). */
@@ -246,6 +260,7 @@ export class CosmeticsUI {
             this.update();
           }, tryingThis ? 'on' : ''),
           ...(tryingThis && c.slot === 'levelup' ? [button('▶ เล่นอีกครั้ง', () => this.playLevelUp(c.id))] : []),
+          ...(tryingThis && c.slot === 'dash' ? [button('▶ เล่นอีกครั้ง', () => this.playDash(c.id))] : []),
           ...(onSale.has(c.id) ? [button('ซื้อในแคชช็อป', () => this.g.cashShop.openCos(c.slot), 'cos-buy')] : []),
         );
       } else if (worn[c.slot] === c.id) {
@@ -262,6 +277,7 @@ export class CosmeticsUI {
     else if (guest) notes.push(el('div', 'cos-note', 'Guest รับ Cosmetics ไม่ได้ สมัครสมาชิกเพื่อรับของ'));
     else if (!cards.length) notes.push(el('div', 'cos-note', `ยังไม่มี${COS_SLOT_NAME[this.slot]} ทุกตัวละครในบัญชีใช้ของที่ได้รับร่วมกัน`));
     if (this.slot === 'orb') notes.push(el('div', 'cos-note', 'ลูกแก้วตีบวก: เปลี่ยนหน้าตาลูกแก้วของคุณ ลูกแก้วมีเมื่อสวมของที่ตีบวก +7 ขึ้นไป (1 ชิ้น = 1 ลูก) ไม่มีของ +7 จะไม่เห็นลูกแก้ว'));
+    if (this.slot === 'dash') notes.push(el('div', 'cos-note', 'เอฟเฟกต์แดช: เล่นตอนกดแดช (ไม่รวมสกิลที่พุ่งตัว) คนรอบ ๆ เห็นด้วย ไม่ได้สวม = แดชแบบเดิม · ลองสวมแล้วจะเล่นให้ดูบนตัวคุณ 1 ครั้ง และกดแดชดูเองได้ขณะลองสวม'));
     if (this.slot === 'levelup') notes.push(el('div', 'cos-note', 'เอฟเฟกต์เลเวลอัป: เล่นตอนตัวละครเลเวลอัป คนรอบ ๆ เห็นด้วย ไม่ได้สวม = เสาแสงสีทองแบบเดิม · ลองสวมแล้วจะเล่นให้ดูบนตัวคุณ 1 ครั้ง'));
     if (this.slot === 'mount') notes.push(el('div', 'cos-note', 'สัตว์ขี่: เดินเร็วขึ้น 30% กด Z เพื่อขึ้น/ลง โจมตี ใช้สกิล หรือโดนตีจะลงเอง ขึ้นใหม่ได้หลังเลิกสู้ 3 วิ ขี่ในห้องบอสไม่ได้'));
     this.body.replaceChildren(...notes, el('div', 'cos-grid'));

@@ -7,6 +7,8 @@ import type { Backend } from '../backend';
 import { HUB_ID } from '../../shared/data/zones';
 import type { Rarity } from '../../shared/types';
 import { AMBIENCE, STEP_OF } from './extraSounds';
+import { bossRoomSong } from '../../shared/audioTuning';
+import { currentBalance } from '../../shared/balance';
 import { audioEngine } from './engine';
 import { music, type TrackId } from './music';
 import { mountAudioPanel } from './panel';
@@ -60,6 +62,8 @@ export class GameAudio {
     const moved = this.zoneId !== b.zone.id;
     if (this.zoneId !== null && moved) playSound('portal');
     this.zoneId = b.zone.id;
+    // Boss music never follows you into another map.
+    if (moved) this.bossHold = 0;
     const look = b.zone.id === HUB_ID ? 'town' : b.zone.theme;
     this.footsteps(b, look, moved);
     this.drops(b, moved);
@@ -80,8 +84,11 @@ export class GameAudio {
       this.bossTempo = 1;
     }
     this.bossHold = fight ? BOSS_MUSIC_HOLD : Math.max(0, this.bossHold - dt);
-    if (this.bossHold > 0) music.play(this.bossTrack, this.bossTempo);
-    else music.play(ZONE_MUSIC[b.zone.id] ?? 'forest');
+    // In a boss room the song file /admin gives it plays for the whole stay, over whichever chiptune would
+    // play: that one is what you hear if there is no file.
+    const song = bossRoomSong(currentBalance().audio.music, b.zone.roomOf ? b.zone.boss?.monster : undefined);
+    if (this.bossHold > 0) music.play(this.bossTrack, this.bossTempo, song);
+    else music.play(ZONE_MUSIC[b.zone.id] ?? 'forest', 1, song);
   }
 
   /** The event already passed Game's "is this for me" check. */

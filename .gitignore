@@ -11,3 +11,5 @@ Thumbs.db
 .env.*
 server/data/
 tools/bin/
+# Raw AI songs, before tools/convert_music.mjs
+art_templates/music/raw/

@@ -1,9 +1,8 @@
 import { ADMIN_SET_SIZE, ADMIN_ITEM_ROWS_MAX, ADMIN_STAT_MULT, statStep, type AdminItemRow, type AdminCharRow, type AdminEditResult, type AdminOnline } from '../../shared/admin';
-import { POTION_SIZES, potionName } from '../../shared/data/potions';
-import { STONE_NAME } from '../../shared/data/stones';
 import { CLASS_IDS } from '../../shared/data/classes';
 import { itemNames, makeItem, roundStat, rowRanges, tierOf } from '../../shared/data/items';
-import { RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, SLOTS, STAT_KEYS, STAT_LABEL, BLACKSMITH_STONES, BOSS_KEYS, REWARD_ITEMS, type ClassId, type Rarity } from '../../shared/types';
+import { RARITY_COLOR, RARITY_LABEL, STAT_KEYS, STAT_LABEL, type ClassId, type Rarity } from '../../shared/types';
+import { ItemPicker } from '../itemPicker';
 import { h, api, fmt, className, meta, online, zoneName, view, sheet, setSheet, closeSheet, can } from '../core';
 
 // ------------------------------------------------------------ search
@@ -121,28 +120,9 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
   // Items: gear is made for the class picked here (default: this character's), so a GM can hand over gear for another class to pass on.
   const forCls = h('select', {}, ...CLASS_IDS.map((k) => h('option', { value: k, selected: k === c.classId }, k === c.classId ? `${className(k)} (อาชีพตัวนี้)` : className(k))));
   const cls = (): ClassId => forCls.value as ClassId;
-  const base = h('select');
-  const fillBases = () => {
-    const keep = base.value;
-    base.replaceChildren();
-    for (const slot of SLOTS) {
-      const group = h('optgroup', { label: SLOT_LABEL[slot] });
-      // Off-hands exist per class: only the picked class's are offered.
-      for (const b of m.bases.filter((x) => x.slot === slot && (x.names.any || x.names[cls()]))) {
-        group.append(h('option', { value: b.id }, `${b.names[cls()] ?? b.names.any ?? b.id} [${b.names.any ? 'ทุกอาชีพ' : className(cls())}] (Lv.${b.minLevel}+)`));
-      }
-      base.append(group);
-    }
-    // Potions and blacksmith stones share the list; their value is "potion:hp:l" / "stone:protect".
-    base.append(
-      h('optgroup', { label: 'ยา' }, ...(['hp', 'mp'] as const).flatMap((k) => POTION_SIZES.map((sz) => h('option', { value: `potion:${k}:${sz}` }, potionName(k, sz))))),
-      h('optgroup', { label: 'หินช่างตีเหล็ก' }, ...BLACKSMITH_STONES.map((k) => h('option', { value: `stone:${k}` }, STONE_NAME[k]))),
-      h('optgroup', { label: 'กุญแจห้องบอส (Artifact)' }, ...BOSS_KEYS.map((k) => h('option', { value: `stone:${k}` }, STONE_NAME[k]))),
-      h('optgroup', { label: 'ของใช้ (ผูกตัวละคร)' }, ...REWARD_ITEMS.map((k) => h('option', { value: `stone:${k}` }, STONE_NAME[k]))),
-    );
-    if ([...base.options].some((o) => o.value === keep)) base.value = keep;
-  };
-  fillBases();
+  // What to spawn: picked from pictures (gear of the class above, monster cards, usable items). Its value is the
+  // dropdown's old text: a gear base id, "potion:hp:l" or "stone:<kind>" (cards: "stone:card_<monster>").
+  const base = new ItemPicker({ bases: m.bases, cls, onChange: () => { form.baseId = base.value; refreshExample(); } });
   /** The potion/stone picked, as the request fields; null while gear is picked. */
   const stackPick = (): Record<string, string> | null => {
     const [kind, a, b] = base.value.split(':');
@@ -153,10 +133,9 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
   const rarity = h('select', {}, ...m.rarities.map((r) => h('option', { value: r, style: `color:${RARITY_COLOR[r]}` }, RARITY_LABEL[r])));
   const plus = h('select', {}, ...Array.from({ length: m.maxPlus + 1 }, (_, i) => h('option', { value: String(i) }, `+${i}`)));
   const plusWrap = h('label', {}, 'ตีบวก', plus);
-  if ([...base.options].some((o) => o.value === form.baseId)) base.value = form.baseId;
+  if (base.has(form.baseId)) base.value = form.baseId;
   rarity.value = form.rarity;
   plus.value = form.plus;
-  base.onchange = () => (form.baseId = base.value);
   rarity.onchange = () => (form.rarity = rarity.value);
   plus.onchange = () => (form.plus = plus.value);
   const itemLv = numInput(Number(form.level) || c.level, 1, m.maxLevel);
@@ -249,9 +228,8 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
     ensureExample();
     drawExample();
   };
-  base.addEventListener('change', refreshExample);
   forCls.onchange = () => {
-    fillBases();
+    base.refresh();
     form.baseId = base.value;
     refreshExample();
   };
@@ -329,7 +307,7 @@ function renderSheet(c: AdminCharRow, note?: { text: string; ok: boolean }): voi
     edit ? h('section', {}, h('h3', {}, `ทอง (ครั้งละไม่เกิน ${fmt(m.goldMax)} G)`),
       h('div', { class: 'row' }, h('label', {}, 'จำนวน', gold), giveBtn, takeBtn)) : null,
     !edit ? null : h('section', {}, h('h3', {}, `เสกไอเทมใส่กระเป๋า (ครั้งละไม่เกิน ${m.itemsMax} ชิ้น · ยา/หินนับทีละขวด/ก้อน)`),
-      h('div', { class: 'row' }, h('label', {}, 'ของอาชีพ', forCls), h('label', { style: 'flex:1' }, 'ชนิด', base)),
+      h('div', { class: 'row' }, h('label', {}, 'ของอาชีพ', forCls), h('label', { style: 'flex:1' }, 'ชนิด', base.el)),
       h('div', { class: 'row', style: 'margin-top:8px' },
         rarityWrap, plusWrap, itemLvWrap, h('label', {}, 'จำนวน', count), itemBtn),
       custom ? exampleBox : null),

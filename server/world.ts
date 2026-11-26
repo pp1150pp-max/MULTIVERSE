@@ -36,6 +36,7 @@ import { DIRECT_WS_HOST_DEFAULT, DIRECT_WS_IP_MAX_DEFAULT } from '../src/shared/
 import type { OrbLook } from '../src/shared/orbLook';
 import type { CosTuning } from '../src/shared/cosTuning';
 import type { AnimTuning } from '../src/shared/animTuning';
+import { currentCardTuning, type CardTuning } from '../src/shared/cardTuning';
 import { banMessage } from '../src/shared/api';
 import { Market, type MarketNote } from './market';
 import { Daily } from './daily';
@@ -97,6 +98,7 @@ const FRIEND_QUIET_MS = 60_000;
  */
 const TRADE_LOCKED = new Set([
   'equip', 'unequip', 'drop', 'buy', 'move', 'sort', 'bagExpand', 'buyBack', 'sell', 'split', 'sellRarity', 'enhance', 'reroll',
+  'drill', 'socketCard', 'unsocketCard',
   'stashPut', 'stashTake', 'stashMove', 'stashSort', 'stashBuy', 'stashGold', 'stashSplit',
   'mktSearch', 'mktMine', 'mktPrice', 'mktList', 'mktCancel', 'mktBuy', 'mktClaim',
   'mailList', 'mailRead', 'mailReadAll', 'mailClaim', 'mailDelete', 'mailDeleteRead', 'roomOpen', 'buyPhoenix', 'tutAccept',
@@ -834,7 +836,7 @@ export class GameWorld {
     // The close beta refund (once per account, after the owner switched it on), before the welcome carries the crystals.
     const refunded = !acc.guest && !pv ? this.topup.refundOnJoin(acc.id, acc.username) : 0;
     if (refunded) this.crystalsChanged(acc.id);
-    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), map: sim.terrain.mapRev, guest: acc.guest, ...(s.auto ? { auto: true } : {}), ...(pv ? { preview: true } : {}), orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), animTuning: this.db.animTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning(), cash: this.cash.catalog(), cashState: this.cash.state(acc.id, acc.guest), topup: this.topup.view(acc.id, acc.guest) });
+    this.send(ws, { t: 'welcome', you: player.id, time: sim.time, zone: sim.zone.id, ch: this.chOf(s), map: sim.terrain.mapRev, guest: acc.guest, ...(s.auto ? { auto: true } : {}), ...(pv ? { preview: true } : {}), orbLook: this.db.orbLook(), cosTuning: this.db.cosTuning(), animTuning: this.db.animTuning(), cardTuning: currentCardTuning(), cosHidden: [...this.cosHidden], orbItems: [...orbItemsRegistered()], balance: currentBalanceTuning(), cash: this.cash.catalog(), cashState: this.cash.state(acc.id, acc.guest), topup: this.topup.view(acc.id, acc.guest) });
     if (!pv) this.broadcastSystem(`${player.name} เข้าสู่โลก`);
     // A moment later, once the browser has its game screen up (messages before the first snapshot are dropped).
     // The update notes (everyone, guests too), after the same moment as the notices below.
@@ -1356,6 +1358,7 @@ export class GameWorld {
       else if (req >= 0 && m.a.startsWith('mail')) this.send(s.ws, { t: 'mail', req, ok: false, msg: TRADE_LOCKED_MSG });
       else if (m.a === 'enhance') this.send(s.ws, { t: 'enhanced', req: num((m as { req?: unknown }).req), result: null, item: null });
       else if (m.a === 'reroll') this.send(s.ws, { t: 'rerolled', req: num((m as { req?: unknown }).req), item: null });
+      else if (m.a === 'drill') this.send(s.ws, { t: 'drilled', req: num((m as { req?: unknown }).req), item: null });
       return;
     }
     switch (m.a) {
@@ -1630,6 +1633,21 @@ export class GameWorld {
         this.send(s.ws, { t: 'rerolled', req: num(m.req), item });
         break;
       }
+      case 'drill': {
+        // Sim.drill checks the NPC distance, ownership, that it isn't drilled yet, the gold and the drill stone.
+        const item = typeof m.uid === 'string' ? sim.drill(p, m.uid) : null;
+        this.send(s.ws, { t: 'drilled', req: num(m.req), item });
+        if (item) this.save(s);
+        break;
+      }
+      case 'socketCard':
+        // Sim.socketCard checks the card id, ownership, the group, an empty socket, the card in the bag and the gold.
+        if (typeof m.uid === 'string' && sim.socketCard(p, m.uid, m.card)) this.save(s);
+        break;
+      case 'unsocketCard':
+        // Sim.unsocketCard checks ownership, the socket index and that a card is in it.
+        if (typeof m.uid === 'string' && sim.unsocketCard(p, m.uid, m.i)) this.save(s);
+        break;
     }
     s.saveDue ??= performance.now() + 2000;
   }
@@ -1927,6 +1945,13 @@ export class GameWorld {
   }
 
   /** Sends the new server-wide per-facing animation fixes to everyone online (already saved by the admin API). */
+  /** Sends the new server-wide card tuning to everyone online (already saved and applied by the admin API). */
+  cardTuningChanged(tuning: CardTuning): void {
+    // Socketed cards follow the new effects and caps at once (items keep only which card sits where).
+    for (const sim of this.allSims()) for (const p of sim.players) p.recompute();
+    for (const s of this.sessions) this.send(s.ws, { t: 'cardTuning', tuning });
+  }
+
   animTuningChanged(tuning: AnimTuning): void {
     for (const s of this.sessions) this.send(s.ws, { t: 'animTuning', tuning });
   }
