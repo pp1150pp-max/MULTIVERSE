@@ -937,6 +937,9 @@ export class OnlineBackend implements Backend {
     }
 
     // ---- players
+    // A mage's Warp (class passive): someone else who warped stands at the far end at once, never sliding there.
+    const warped = new Set<number>();
+    for (const ev of s.events) if (ev.t === 'fx' && ev.name === 'warp') warped.add(ev.args[4]);
     const seenP = new Set<number>();
     for (const ps of s.players) {
       seenP.add(ps.id);
@@ -974,6 +977,10 @@ export class OnlineBackend implements Backend {
       if (p === this.me) {
         this.applyMine(s, ps.x, ps.z, ps.fx, ps.fz, ps.mv);
         continue;
+      }
+      if (warped.has(ps.id)) {
+        p.x = ps.x;
+        p.z = ps.z;
       }
       this.glide(p, ps.x, ps.z, p);
       if (ps.lv !== undefined) p.level = ps.lv;

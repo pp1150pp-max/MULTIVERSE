@@ -70,14 +70,14 @@ function joinWorld(token: string, characterId: number) {
   let seq = 0;
   const input = (at: { x: number; z: number }, o: { dash?: boolean; epoch?: number | null } = {}) =>
     ws.send(JSON.stringify({
-      t: 'input', pos: at, seq: ++seq, move: o.dash ? { x: 1, z: 0 } : null, aim: { x: at.x + 10, z: at.z }, basic: false, skills: [], dash: !!o.dash, potion: null,
+      t: 'input', pos: at, seq: ++seq, move: null, aim: { x: at.x + 10, z: at.z }, basic: false, skills: [], dash: !!o.dash, potion: null,
       ...(o.epoch === null ? {} : { epoch: o.epoch ?? epoch() }),
     }));
   return { ws, ready, pos, epoch, input };
 }
 
-/** Warps east, then sends where the browser still thought it was (2 m along) for a while; where does it end up? */
-async function tryOnce(C: ReturnType<typeof joinWorld>, sendEpoch: boolean): Promise<{ moved: number; pulled: number; epochChanged: boolean }> {
+/** Warps east, then sends where the browser still thought it was (3.5 m along) for a while; where does it end up? */
+async function tryOnce(C: ReturnType<typeof joinWorld>, sendEpoch: boolean): Promise<{ moved: number; pulled: number; epochChanged: boolean; warp: number }> {
   const here = C.pos();
   for (let i = 0; i < 4; i++) {
     C.input(here);
@@ -88,15 +88,17 @@ async function tryOnce(C: ReturnType<typeof joinWorld>, sendEpoch: boolean): Pro
   const e0 = C.epoch();
   C.input(start, { dash: true });
   await sleep(250);
-  // The browser hasn't seen the warp yet: it walked 2 m east and reports that, with the epoch it knows.
-  const stale = { x: start.x + 2, z: start.z };
+  const mid = C.pos();
+  const warp = Math.hypot(mid.x - start.x, mid.z - start.z);
+  // The browser hasn't seen the warp yet: it walked 3.5 m east (close to the warp's end, so the distance check alone would take it) and reports that, with the epoch it knows.
+  const stale = { x: start.x + 3.5, z: start.z };
   for (let i = 0; i < 5; i++) {
     C.input(stale, { epoch: sendEpoch ? e0 : null });
     await sleep(60);
   }
   await sleep(300);
   const end = C.pos();
-  return { moved: Math.hypot(end.x - start.x, end.z - start.z), pulled: Math.hypot(end.x - stale.x, end.z - stale.z), epochChanged: C.epoch() !== e0 };
+  return { moved: Math.hypot(end.x - start.x, end.z - start.z), pulled: Math.hypot(end.x - stale.x, end.z - stale.z), epochChanged: C.epoch() !== e0, warp };
 }
 
 async function run(): Promise<void> {
@@ -122,7 +124,8 @@ async function run(): Promise<void> {
   // Wait for the warps to come back, then the same from an older browser that sends no epoch.
   await sleep(5500);
   const old = await tryOnce(C, false);
-  ok(old.epochChanged && old.pulled < 0.6, `without an epoch the old distance check alone applies (stale spot taken: ${old.pulled.toFixed(2)} m, moved ${old.moved.toFixed(2)} m)`);
+  // Only meaningful when the warp went its whole way (the town's props may stop it short of the stale spot).
+  ok(old.epochChanged && (old.warp < 4.7 || old.pulled < 0.6), `without an epoch the old distance check alone applies (stale spot taken: ${old.pulled.toFixed(2)} m, moved ${old.moved.toFixed(2)} m, warp ${old.warp.toFixed(2)} m)`);
   C.ws.close();
 }
 

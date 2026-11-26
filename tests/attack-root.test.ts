@@ -30,6 +30,8 @@ const step = (sim: Sim, it: Partial<Intent>) => sim.step(TICK, () => ({ ...IDLE_
 
 try {
   // ---------------------------------------------------------- walk, attack, stand, walk on
+  // The gunslinger's class passive Hit and Run skips the basic attack's stop (classPassives.ts): checked here with it off.
+  applyBalance({ skills: { classPassive: { hitrun: { on: false } } } });
   for (const cls of ['sword', 'mage', 'gunslinger'] as const) {
     const { sim, p } = field(cls);
     ok(!sim.inSafe(p), `${cls}: the test spot is outside town`);
@@ -55,6 +57,7 @@ try {
     step(sim, { move: EAST });
     ok(p.x > xHit + 0.1 && p.moving, `${cls}: then walks on by itself`);
   }
+  applyBalance({});
 
   // ---------------------------------------------------------- a clicked spot is kept through the stop
   {
@@ -150,7 +153,7 @@ try {
     const x0 = p.x;
     step(sim, { move: EAST });
     ok(p.atkRootT === 0 && p.x > x0 && p.moving, 'sword switched off: walks on while attacking (the old way)');
-    const g = field('gunslinger');
+    const g = field('mage');
     step(g.sim, { move: EAST, basic: true });
     ok(g.p.atkRootT > 0, 'the other classes keep their own switch');
     applyBalance({});
