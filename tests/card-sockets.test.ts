@@ -4,7 +4,9 @@
 // effects on stats (% before the class multipliers, cdr / pierce added to the item mods, caps). Shared rules, no server.
 import { editGear } from '../src/shared/admin';
 import { cardFxTotal, cleanSockets, drillCost, MAX_SOCKETS, rollSockets, socketBlock } from '../src/shared/cardSockets';
-import { applyCardTuning, checkCardTuning } from '../src/shared/cardTuning';
+import { applyCardTuning, cardNum, cardTuningChanges, checkCardTuning, currentCardTuning, tunedFusePool } from '../src/shared/cardTuning';
+import { STONE_COLOR, stoneSellPrice } from '../src/shared/data/stones';
+import { RARITY_COLOR } from '../src/shared/types';
 import { type CardId } from '../src/shared/data/cards';
 import { ITEM_BASES, makeItem, upgradeItem } from '../src/shared/data/items';
 import { ZONES } from '../src/shared/data/zones';
@@ -142,6 +144,30 @@ ok(!sim.unsocketCard(p, sword.uid, 0), 'an empty socket has nothing to take out'
   ok(Object.values(q.cardFx).every((v) => v === 0), 'no cards worn: no effects');
 }
 ok(Object.values(cardFxTotal([sword])).some((v) => v > 0), 'cardFxTotal reads the bag item too (used for previews)');
+
+// ---------------------------------------------------------- the card % also raises the item-set bonus (owner 2026-11-26)
+{
+  const q = sim.addPlayer({ ...newCharacterData('S', 'sword'), level: 30 });
+  const plain = { ...gear('weapon'), sockets: 0 };
+  q.equipment.weapon = plain;
+  q.recompute();
+  const before = q.stats.atk;
+  q.equipment.weapon = { ...plain, sockets: 2, cards: [WOLF, WOLF] };
+  q.recompute();
+  // No set worn: the whole total is ×1.04 (class multiplier applied after the card %, so the ratio stays 1.04).
+  ok(Math.abs(q.stats.atk / before - 1.04) < 1e-9, 'card ATK% on the whole total');
+}
+
+// ---------------------------------------------------------- rarity tuning per card (owner 2026-11-26)
+{
+  ok(typeof checkCardTuning({ cards: { [WOLF]: { rarity: 'mythic' } } }, true).error === 'string', 'an unknown rarity is refused');
+  tune({ cards: { [WOLF]: { rarity: 'legendary' } } });
+  ok(stoneSellPrice(WOLF) === cardNum('sell_legendary') && STONE_COLOR[WOLF] === RARITY_COLOR.legendary, 'a tuned rarity changes the sell price and colour');
+  ok(tunedFusePool('legendary', 1).includes(WOLF) && !tunedFusePool('rare', 1).includes(WOLF), 'the fusion pool follows the tuned rarity');
+  ok(cardTuningChanges({}, currentCardTuning(), (id) => id).includes('ระดับ'), 'the audit line names the rarity change');
+  ok(JSON.stringify(checkCardTuning({ cards: { [WOLF]: { rarity: 'rare' } } }, true).tuning) === '{}', 'the code rarity is not stored');
+  applyCardTuning({});
+}
 
 // ---------------------------------------------------------- effects in combat (damage taken, lifesteal)
 {

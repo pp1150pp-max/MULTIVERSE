@@ -66,13 +66,9 @@
 .cardpop-sock .cs-out { margin-left: auto; font-size: 12px; padding: 2px 8px; }
 .cardpop-itemwrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 
-/* Socket lines in item tooltips and the blacksmith's drill menu; marks on bag cells; "ผลการ์ด" in the character window. */
+/* Socket lines in item tooltips and the blacksmith's drill menu; "ผลการ์ด" in the character window. */
 .tt-sock { margin-top: 4px; font-size: 12px; }
 .tt-sock .off, .tt-sock.off { opacity: 0.65; }
-.cell .isock {
-  position: absolute; left: 2px; bottom: 12px; font-size: 9px; line-height: 1; color: #c9a8ff;
-  text-shadow: 0 0 2px #000, 0 0 2px #000; pointer-events: none;
-}
 #stat-list .stat-head { margin-top: 6px; font-size: 12px; color: #c9a8ff; grid-column: 1 / -1; }
 #stat-list .card-fx small { font-size: 10px; color: #ffcf6a; }
 #card-view .cardpop-x {

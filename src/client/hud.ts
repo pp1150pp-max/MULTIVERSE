@@ -16,7 +16,7 @@ import { BUFF_LABEL, BUFF_MULT, CARD_HOW, MONSTER_STONES, RETURN_CAST, STONE_COL
 import { CARD_GROUP_NAME, CARD_RARITY_NAME, cardFxLines } from '../shared/data/cards';
 import { cardDef } from '../shared/cardTuning';
 import { cardFxHtml, gameSocketHost, openCardView, openSocketView, socketTipHtml } from './ui/cardPopup';
-import { socketCards, socketCount } from '../shared/cardSockets';
+import { socketCount } from '../shared/cardSockets';
 import { lootPots, type Buffs, type LootFilter, type SortKey } from '../shared/sim/Player';
 import { MONSTERS } from '../shared/data/monsters';
 import { currentBalance } from '../shared/balance';
@@ -1334,9 +1334,8 @@ export class Hud {
     const icon = itemIcon(item);
     const plus = plusOf(item) ? `<span class="iplus">+${plusOf(item)}</span>` : '';
     const locked = this.g.player.canEquip(item) ? '' : ' locked';
-    // Small socket marks (card plan 7.2): ◆ a card, ◇ an empty socket.
-    const socks = socketCount(item) ? `<span class="isock">${socketCards(item).map((c) => (c ? '◆' : '◇')).join('')}</span>` : '';
-    return `<div class="cell r-${item.rarity}${selected ? ' sel' : ''}${locked}" ${attrs} style="--rc:${RARITY_COLOR[item.rarity]}">${icon}${plus}${socks}<span class="ilv">Lv.${item.level}</span></div>`;
+    // No socket marks on the icon (owner 2026-11-26): sockets show only in the tooltip when pointing at the item.
+    return `<div class="cell r-${item.rarity}${selected ? ' sel' : ''}${locked}" ${attrs} style="--rc:${RARITY_COLOR[item.rarity]}">${icon}${plus}<span class="ilv">Lv.${item.level}</span></div>`;
   }
 
   private renderInventory(): void {

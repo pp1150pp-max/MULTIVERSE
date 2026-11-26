@@ -780,22 +780,23 @@ export class Player extends Unit {
     }
     this.aura = auraTier(best);
     this.orbs = orbCodes(this.equipment);
-    // Cards on worn gear (cardSockets.ts), each effect capped on the whole character. Their HP/MP/ATK/DEF % multiply
-    // class + level + gear + enhance before the class multipliers (owner 2026-11-26, card plan 5.1).
+    // Cards on worn gear (cardSockets.ts), each effect capped on the whole character. Their HP/MP/ATK/DEF % multiply the
+    // whole total before the class multipliers: class + level + gear + enhance + item-set bonus (owner 2026-11-26).
+    // The set bonus itself still skips the class multipliers, so it gets the card % on its own (see below).
     const fx = cardFxTotal(Object.values(this.equipment));
     this.cardFx = fx;
-    s.maxHp *= 1 + fx.hpPct / 100;
-    s.maxMp *= 1 + fx.mpPct / 100;
-    s.atk *= 1 + fx.atkPct / 100;
-    s.def *= 1 + fx.defPct / 100;
+    const pct = { maxHp: fx.hpPct, maxMp: fx.mpPct, atk: fx.atkPct, def: fx.defPct } as const;
+    for (const k of Object.keys(pct) as (keyof typeof pct)[]) s[k] *= 1 + pct[k] / 100;
     // Class multipliers, then the regen cuts (so players lean on potions), gear included.
     finishStats(s, this.cls.id);
     // The cards' cooldown cut and armor pierce add to the item mods of the same name (owner 2026-11-26); the totals keep
     // their own caps (cdrCap in skillCooldown, 100% in Sim.hitMonster).
     s.cdr = (s.cdr ?? 0) + fx.cdr;
     s.armorPen = (s.armorPen ?? 0) + fx.pierce;
-    // Item-set bonuses (data/sets.ts): exactly the numbers set in /admin, after the class multipliers.
-    addInto(s, setBonusStats(this.equipment, currentBalance().sets));
+    // Item-set bonuses (data/sets.ts): exactly the numbers set in /admin, after the class multipliers, raised by the card %.
+    const set = setBonusStats(this.equipment, currentBalance().sets);
+    for (const k of Object.keys(pct) as (keyof typeof pct)[]) if (set[k]) set[k] = set[k]! * (1 + pct[k] / 100);
+    addInto(s, set);
     // The worn passive and skill buffs, flat in Stats units ("+40% attack speed" is +40 atkSpeed).
     passiveStats(this, s);
     for (const b of this.statBuffs) addInto(s, b.mods);
