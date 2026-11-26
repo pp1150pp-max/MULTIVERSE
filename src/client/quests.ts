@@ -9,7 +9,7 @@ import { floorOf } from '../shared/data/zones';
 import { npcLook } from '../shared/data/npcs';
 import { bossShortName } from '../shared/bossRoom';
 import { stoneIcon } from './icons';
-import { GEAR_KILLS, GEAR_PART_NAME, gearRarity, gearRewardText, gearRows, type GearRow } from '../shared/gearQuests';
+import { GEAR_PART_NAME, gearKills, gearRarity, gearRewardText, gearRows, type GearRow } from '../shared/gearQuests';
 import { RARITY_COLOR, RARITY_LABEL } from '../shared/types';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -121,9 +121,9 @@ export class QuestUI {
       text.append(el('b', '', `${GEAR_PART_NAME[r.part]} · ${r.map.nameTh}`), grade);
       const sub = el('div', 'quest-sub');
       sub.textContent =
-        r.state === 'offer' ? `ล่ามอนสเตอร์ใน${r.map.nameTh} ${GEAR_KILLS} ตัว · ได้ ${gearRewardText(r.part)}`
-        : r.state === 'going' ? `ล่ามอนสเตอร์ใน${r.map.nameTh} ${r.kills}/${GEAR_KILLS}`
-        : r.state === 'ready' ? `ล่าครบ ${GEAR_KILLS} ตัวแล้ว — รับ ${gearRewardText(r.part)} ได้เลย`
+        r.state === 'offer' ? `ล่ามอนสเตอร์ใน${r.map.nameTh} ${gearKills(r.map)} ตัว · ได้ ${gearRewardText(r.part)}`
+        : r.state === 'going' ? `ล่ามอนสเตอร์ใน${r.map.nameTh} ${r.kills}/${gearKills(r.map)}`
+        : r.state === 'ready' ? `ล่าครบ ${gearKills(r.map)} ตัวแล้ว — รับ ${gearRewardText(r.part)} ได้เลย`
         : `ต้อง Lv.${r.map.levels[0]} ขึ้นไป`;
       text.append(sub);
       row.append(text);
@@ -132,7 +132,7 @@ export class QuestUI {
         btn.onclick = () => (r.state === 'offer' ? this.g.backend.gearAccept(r.id) : this.g.backend.gearTurnIn(r.id));
         row.append(btn);
       } else if (r.state === 'going') {
-        const btn = el('button', 'quest-progress', `${r.kills}/${GEAR_KILLS}`);
+        const btn = el('button', 'quest-progress', `${r.kills}/${gearKills(r.map)}`);
         btn.disabled = true;
         row.append(btn);
       }

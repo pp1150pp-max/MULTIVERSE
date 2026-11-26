@@ -20,6 +20,7 @@ import { attackRootChanges, checkAttackRootTuning, codeAttackRoot, mergeAttackRo
 import { checkSetTuning, codeSets, mergeSets, setChanges, type SetConfig, type SetTuning } from './data/sets';
 import { checkRigLookTuning, codeRigLook, mergeRigLook, rigLookChanges, type RigLookConfig, type RigLookTuning } from './rigLookTuning';
 import { autoChanges, checkAutoTuning, codeAuto, mergeAuto, type AutoConfig, type AutoTuning } from './autoTuning';
+import { checkGearTuning, codeGear, gearChanges, mergeGear, type GearConfig, type GearTuning } from './gearTuning';
 import { checkFloorGateTuning, codeFloorGate, floorGateChanges, mergeFloorGate, type FloorGateConfig, type FloorGateTuning } from './floorGate';
 import { bagExpandChanges, checkBagExpand, codeBagExpand, mergeBagExpand, type BagExpandCfg, type BagExpandTuning } from './bagTabs';
 import { checkNpcTalkTuning, codeNpcTalk, mergeNpcTalk, npcTalkChanges, type NpcTalkConfig, type NpcTalkTuning } from './npcTalk';
@@ -255,6 +256,8 @@ export interface Balance {
   floorGateQuest: boolean;
   /** The navigator's quest that opens floor 2: level, boss, reward (src/shared/floorGate.ts). */
   floorGate: FloorGateConfig;
+  /** Gear quests: per floor a switch and the kills, per map the rarity (src/shared/gearTuning.ts). */
+  gear: GearConfig;
   /** No wearing/taking off gear (or fashion items) while the merchant window is open. Browser side only. */
   shopNoEquip: boolean;
   /** Trying cosmetics on only in a town / safe area; stepping out takes the try-on off (src/client/cosLook.ts). Browser side only. */
@@ -390,6 +393,7 @@ export interface BalanceTuning {
   floorGateQuest?: boolean;
   /** The floor-2 quest's level, boss and reward, where they differ from the code. */
   floorGate?: FloorGateTuning;
+  gear?: GearTuning;
   /** No wear/take off while the merchant window is open, when not the code's (on). */
   shopNoEquip?: boolean;
   /** Try-on in town only, when not the code's (on). */
@@ -544,6 +548,7 @@ export function codeBalance(): Balance {
     floorGateOpen: CODE_FLOOR_GATE_OPEN,
     floorGateQuest: CODE_FLOOR_GATE_QUEST,
     floorGate: codeFloorGate(),
+    gear: codeGear(),
     shopNoEquip: CODE_SHOP_NO_EQUIP,
     tryOnTownOnly: CODE_TRY_ON_TOWN_ONLY,
     chatLinks: CODE_CHAT_LINKS,
@@ -652,6 +657,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.floorGateOpen !== undefined) b.floorGateOpen = t.floorGateOpen;
   if (t.floorGateQuest !== undefined) b.floorGateQuest = t.floorGateQuest;
   b.floorGate = mergeFloorGate(t.floorGate);
+  b.gear = mergeGear(t.gear);
   if (t.shopNoEquip !== undefined) b.shopNoEquip = t.shopNoEquip;
   if (t.tryOnTownOnly !== undefined) b.tryOnTownOnly = t.tryOnTownOnly;
   if (t.chatLinks !== undefined) b.chatLinks = t.chatLinks;
@@ -812,7 +818,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'critCap', 'moveCap', 'moveGrowth', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'buffTotal', 'mobDropOnSafe', 'mobRoam', 'mobRoamReach', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'shopNoEquip', 'tryOnTownOnly', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'bagExpand', 'tutorial', 'npcTalk', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'critCap', 'moveCap', 'moveGrowth', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'buffTotal', 'mobDropOnSafe', 'mobRoam', 'mobRoamReach', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'gear', 'shopNoEquip', 'tryOnTownOnly', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'bagExpand', 'tutorial', 'npcTalk', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -1368,6 +1374,12 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (c.tuning) out.floorGate = c.tuning;
     return null;
   };
+  const gear = (): string | null => {
+    const c = checkGearTuning(o.gear, strict);
+    if ('error' in c) return c.error;
+    if (c.tuning) out.gear = c.tuning;
+    return null;
+  };
   const waves = (): string | null => {
     const c = checkWaveTuning(o.waves, strict);
     if ('error' in c) return c.error;
@@ -1489,6 +1501,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     gateOpen() ??
     gateQuest() ??
     floorGate() ??
+    gear() ??
     shopNoEquip() ??
     tryOnTown() ??
     chatLinks() ??
@@ -1669,6 +1682,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.mobRoam !== b.mobRoam) out.push(`มอนแมพฟาร์มชั้น 1 เกิดใหม่สุ่มที่ ${a.mobRoam ? 'เปิด' : 'ปิด'} → ${b.mobRoam ? 'เปิด' : 'ปิด'}`);
   if (a.mobReturnIgnoreHits !== b.mobReturnIgnoreHits) out.push(`มอนเดินกลับบ้านไม่สนการโจมตี ${a.mobReturnIgnoreHits ? 'เปิด' : 'ปิด'} → ${b.mobReturnIgnoreHits ? 'เปิด' : 'ปิด'}`);
   out.push(...floorGateChanges(a.floorGate, b.floorGate));
+  out.push(...gearChanges(a.gear, b.gear));
   out.push(...autoChanges(a.auto, b.auto));
   out.push(...waveChanges(a.waves, b.waves));
   out.push(...bagExpandChanges(a.bagExpand, b.bagExpand));

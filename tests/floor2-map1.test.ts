@@ -70,12 +70,12 @@ function alone(kind: string, x = 0, z = 0): { sim: Sim; m: Monster } {
   ok(harbor.drainEvents().some((e) => e.t === 'travel' && e.zone === BEACH.id), 'the harbour pier takes you to the beach');
 }
 
-// ---- key, quest key, gate, no gear quests yet
+// ---- key, quest key, gate, gear quests
 {
   ok(BOSS_KEY.cannon_crab === 'key_crab' && STONE_NAME.key_crab === 'ก้ามปูทอง', 'its key is the Golden Crab Claw');
   ok(BOSS_QUEST_KEY.cannon_crab === 'qkey_crab' && STONE_DESC.qkey_crab.includes('นักเดินเรือ'), 'its quest key comes from the navigator');
   ok(!!blockingGate(50, []) && !blockingGate(50, ['cannon_crab']), 'the Lv50 gate now blocks until the crab is beaten');
-  ok(gearMaps().every((z) => floorOf(z) === 1), 'no floor-2 gear quests yet (owner: wait for floor-2 gear)');
+  ok(gearMaps().some((z) => z.id === BEACH.id), 'the beach has gear quests (owner 2026-11-26, tests/gear-quests-f2.test.ts)');
   const harbor = new Sim(ZONE_HARBOR);
   const hub = new Sim(ZONE_HUB);
   ok(harbor.questOffers(harbor.addPlayer(hero({ level: 45 }))).includes('cannon_crab'), 'the navigator offers the crab key quest');

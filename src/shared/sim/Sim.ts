@@ -1,6 +1,6 @@
 // The game rules, with no rendering. The game server runs one of these per zone. Whoever drives it calls step() every frame and reads drainEvents()
 // to show effects, damage numbers and messages.
-import { hubOf, isHub, NO_BOOST, ZONES, inSafeArea, type MonsterBoost, type SafeArea, type ZoneDef, type SpawnArea } from '../data/zones';
+import { floorOf, hubOf, isHub, NO_BOOST, ZONES, inSafeArea, type MonsterBoost, type SafeArea, type ZoneDef, type SpawnArea } from '../data/zones';
 import { DROP_GOLD_MULT, MONSTERS } from '../data/monsters';
 import { AUTO_EXP_MULT, expGapMult, expToNext, mitigate, MAX_LEVEL, MISS_GAP, outLevelled } from '../formulas';
 import { blockingGate, BOSS_GATE_IDS } from '../data/bossGates';
@@ -42,7 +42,7 @@ import { questRows } from '../quests';
 import { portalLock } from '../floors';
 import { FLOOR2_UNLOCK, floorGateReward, navState } from '../floorGate';
 import { HARBOR_ID } from '../data/harbor';
-import { GEAR_KILLS, GEAR_PART_NAME, gearReward, gearRow } from '../gearQuests';
+import { GEAR_PART_NAME, gearKills, gearOn, gearReward, gearRow } from '../gearQuests';
 import { TUT_ACCEPT_GOLD, TUT_ACCEPT_STONES, TUT_NPC, TUT_STEPS, TUT_STEP_NAME, TUT_TASKS, TUT_TASK_NAME, tutRows, tutTurnInReward, type TutStep, type TutTask } from '../tutorial';
 import { putAll, type MailAttach } from '../mail';
 import { freeSlot, nextExpand, TAB_FULL, TAB_NAME, tabOf, type BagSlots, type BagTab } from '../bagTabs';
@@ -1336,13 +1336,13 @@ export class Sim {
     return true;
   }
 
-  // ------------------------------------------------------------ The Seeker's gear quests (src/shared/gearQuests.ts)
+  // ------------------------------------------------------------ gear quests (src/shared/gearQuests.ts): The Seeker / the navigator
 
   gearAccept(p: Player, id: string): boolean {
     const r = gearRow(p, id);
     if (!r || r.state !== 'offer' || !this.ownFloor(r.map) || !this.near(p, 'seeker')) return false;
     p.gearQuests[id] = 0;
-    this.log(`รับภารกิจ: ล่ามอนสเตอร์ใน${r.map.nameTh} ${GEAR_KILLS} ตัว แล้วกลับมาหา The Seeker เพื่อรับ${GEAR_PART_NAME[r.part]}`, '#ffd34a', p.id);
+    this.log(`รับภารกิจ: ล่ามอนสเตอร์ใน${r.map.nameTh} ${gearKills(r.map)} ตัว แล้วกลับมาหา${floorOf(r.map) === 2 ? 'นักเดินเรือแห่งมิติ' : ' The Seeker'} เพื่อรับ${GEAR_PART_NAME[r.part]}`, '#ffd34a', p.id);
     this.events.push({ t: 'save', to: p.id });
     return true;
   }
@@ -1368,16 +1368,19 @@ export class Sim {
   /** A monster of a map died: everyone who hit it and has one of that map's gear quests under way counts one. */
   private gearProgress(m: Monster): void {
     const map = this.homeOf(m.def);
-    if (!map) return;
+    if (!map || !gearOn(map)) return;
+    const need = gearKills(map);
+    // Floor 1's line stays word for word (its English entry); floor 2 names the harbour's navigator.
+    const giver = floorOf(map) === 2 ? 'นักเดินเรือแห่งมิติที่ท่าเรือ' : ' The Seeker ที่เมือง';
     for (const [pid, dealt] of m.damageBy) {
       const p = this.players.find((x) => x.id === pid);
       if (!p || dealt <= 0) continue;
       for (const [id, n] of Object.entries(p.gearQuests)) {
-        if (!id.startsWith(`${map.id}:`) || n >= GEAR_KILLS) continue;
+        if (!id.startsWith(`${map.id}:`) || n >= need) continue;
         p.gearQuests[id] = n + 1;
-        this.text(m.x, m.topY + 1.3, m.z, `อุปกรณ์ ${n + 1}/${GEAR_KILLS}`, 'info', 1, p.id);
-        if (n + 1 >= GEAR_KILLS) {
-          this.log(`ล่าครบ ${GEAR_KILLS} ตัวแล้ว — กลับไปหา The Seeker ที่เมืองเพื่อรับอุปกรณ์`, '#ffd34a', p.id);
+        this.text(m.x, m.topY + 1.3, m.z, `อุปกรณ์ ${n + 1}/${need}`, 'info', 1, p.id);
+        if (n + 1 >= need) {
+          this.log(`ล่าครบ ${need} ตัวแล้ว — กลับไปหา${giver}เพื่อรับอุปกรณ์`, '#ffd34a', p.id);
           this.events.push({ t: 'save', to: p.id });
         }
       }

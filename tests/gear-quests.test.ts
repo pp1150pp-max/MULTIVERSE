@@ -2,11 +2,12 @@
 // asks for 20 monsters of that map and gives that part's gear for the player's class, at their level kept
 // inside the map's range, green on maps 1–2 and blue on 3–4; a full bag keeps the quest open. Real Sims, no server.
 import { ok, finish } from './check';
-import { ZONES, ZONE_1, ZONE_HUB } from '../src/shared/data/zones';
+import { ZONES, ZONE_1, ZONE_HUB, floorOf } from '../src/shared/data/zones';
 import { Sim } from '../src/shared/sim/Sim';
 import { newCharacterData, type Player } from '../src/shared/sim/Player';
 import { itemClass } from '../src/shared/data/items';
-import { GEAR_KILLS, GEAR_SLOTS, gearMaps, gearReward, gearRows } from '../src/shared/gearQuests';
+import { GEAR_SLOTS, gearKills, gearMaps, gearReward, gearRows } from '../src/shared/gearQuests';
+import { GEAR_KILLS_MAX } from '../src/shared/gearTuning';
 import { questRows, seekerMark } from '../src/shared/quests';
 import type { Item } from '../src/shared/types';
 import type { Monster } from '../src/shared/sim/Monster';
@@ -20,10 +21,13 @@ const atSeeker = (p: Player) => {
   p.x = seeker.x + 1;
   p.z = seeker.z + 1;
 };
+/** Floor 1 asks for 20 (owner, /admin per floor). */
+const GEAR_KILLS = gearKills(ZONES.emerald_forest);
+ok(GEAR_KILLS === 20, `floor 1 asks for 20 (${GEAR_KILLS})`);
 const offers = (p: Player) => gearRows(p).filter((r) => r.state === 'offer').map((r) => r.id);
 
 // ---- the maps and what each offers
-ok(gearMaps().map((m) => m.levels[0]).join() === '1,11,21,31', 'four farm maps, from Lv.1/11/21/31');
+ok(gearMaps().filter((m) => floorOf(m) === 1).map((m) => m.levels[0]).join() === '1,11,21,31', 'four floor-1 farm maps, from Lv.1/11/21/31');
 const fresh = hub.addPlayer(hero('Fresh', 1));
 ok(offers(fresh).join() === 'emerald_forest:weapon', `Lv.1: only the forest weapon (${offers(fresh).join()})`);
 ok(seekerMark([...questRows(fresh), ...gearRows(fresh)]) === '!', 'the ! over The Seeker');
@@ -104,7 +108,7 @@ ok(seekerMark([...questRows(p), ...gearRows(p)]) === '?', 'the ? over The Seeker
   const old = hub.addPlayer({ ...hero('Old', 12), gearQuests: undefined, gearDone: undefined });
   ok(Object.keys(old.gearQuests).length === 0 && old.gearDone.length === 0, 'a save without the fields loads empty');
   const junk = hub.addPlayer({ ...hero('Junk', 12), gearQuests: { 'x:y': 3, 'emerald_forest:armor': 999 } as Record<string, number>, gearDone: ['bad', 'emerald_forest:weapon'] });
-  ok(junk.gearQuests['emerald_forest:armor'] === GEAR_KILLS && !('x:y' in junk.gearQuests), 'unknown ids dropped, counts clamped');
+  ok(junk.gearQuests['emerald_forest:armor'] === GEAR_KILLS_MAX && !('x:y' in junk.gearQuests), 'unknown ids dropped, counts clamped');
   ok(junk.gearDone.join() === 'emerald_forest:weapon', 'unknown done ids dropped');
 }
 
