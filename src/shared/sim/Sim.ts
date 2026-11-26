@@ -6,7 +6,7 @@ import { AUTO_EXP_MULT, expGapMult, expToNext, mitigate, MAX_LEVEL, MISS_GAP, ou
 import { blockingGate, BOSS_GATE_IDS } from '../data/bossGates';
 import { lineRanges, rerollStat, rerollValues, rollItem } from '../data/items';
 import { REROLL_NAME, rerollCost, type RerollKind } from '../data/reroll';
-import { arenaRadius, FARM_IDS, inBossArena, lairExitSpot, LAVA_BURN, LAVA_TICK } from '../data/zones';
+import { arenaRadius, FARM_IDS, inBossArena, lairExitSpot, LAVA_BURN, LAVA_TICK, warpPadNear } from '../data/zones';
 import type { Hazard } from './volcanoHeart';
 import { stealReturn, thornsReflect } from './beachMoves';
 import { kegStart } from './coveMoves';
@@ -951,6 +951,29 @@ export class Sim {
     this.fx('burst', p.x, 1, p.z, '#9fffb0', 16, 3);
     this.text(p.x, p.topY, p.z, 'HP / MP เต็ม', 'heal', 1.2, p.id);
     this.log(`${spot.kind === 'fountain' ? 'ดื่มน้ำจากน้ำพุ' : 'นั่งพักข้างกองไฟ'} — HP และ MP เต็ม (พักได้อีกใน ${REST_CD} วิ)`, '#9fffb0', p.id);
+    return true;
+  }
+
+  // ------------------------------------------------------------ warp circles
+
+  /**
+   * Step through the warp circle this player stands at (ZoneDef.warps, owner 2026-11-26: the Kraken Maelstrom's way onto its
+   * whirlpool's island and back): alive, within WARP_RANGE (warpPadNear). Lands beside the far end if that very spot is taken.
+   */
+  useWarp(p: Player): boolean {
+    const pad = warpPadNear(this.zone, p.x, p.z);
+    if (!p.alive || !pad) return false;
+    const to = this.terrain.isBlocked(pad.toX, pad.toZ, p.radius)
+      ? this.terrain.standSpot(pad.toX, pad.toZ, p.radius, { x: pad.x, z: pad.z })
+      : { x: pad.toX, z: pad.toZ };
+    if (!to) return false;
+    this.fx('burst', p.x, 1, p.z, '#7fe0ff', 18, 3);
+    p.x = to.x;
+    p.z = to.z;
+    p.moveTarget = null;
+    for (const m of this.monsters) if (m.target === p) m.dropTarget();
+    this.fx('burst', p.x, 1, p.z, '#7fe0ff', 18, 3);
+    this.events.push({ t: 'warped', id: p.id });
     return true;
   }
 

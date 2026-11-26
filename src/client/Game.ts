@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { HazardViews } from './hazards';
-import { floorOf, inBossArena } from '../shared/data/zones';
+import { floorOf, inBossArena, islandAt, WARP_RANGE, warpPadNear } from '../shared/data/zones';
 import { autoBlocked } from '../shared/sim/autoplay';
 import type { Vec2 } from '../shared/types';
 import type { ZoneDef } from '../shared/data/zones';
@@ -78,7 +78,8 @@ type ClickGoal =
   | { kind: 'loot'; id: number; x: number; z: number }
   | { kind: 'npc'; id: NpcId; x: number; z: number }
   | { kind: 'rest'; x: number; z: number }
-  | { kind: 'summoner'; x: number; z: number };
+  | { kind: 'summoner'; x: number; z: number }
+  | { kind: 'warp'; x: number; z: number };
 
 export interface Npc { id: NpcId; name: string; action: string; icon: string; role: string; portrait?: string; x: number; z: number; actor: SpriteActor }
 
@@ -337,6 +338,12 @@ export class Game {
     if (this.autoPlay) this.toggleAuto(false, 'ปิด Auto Play — กำลังร่ายม้วนคัมภีร์กลับเมือง');
     this.goal = null;
     this.backend.useReturnScroll();
+  }
+
+  /** Step through the warp circle you stand at. Auto Play stops first, as on a map change: its circle stays on the other side of the water. */
+  private useWarp(): void {
+    if (this.autoPlay) this.toggleAuto(false, 'ปิด Auto Play — ใช้วงวาร์ป');
+    this.backend.useWarp();
   }
 
   toggleAuto(force?: boolean, offMsg = 'ปิด Auto Play'): void {
@@ -783,8 +790,12 @@ export class Game {
     }
     for (const n of this.shownNpcs) consider({ kind: 'npc', id: n.id, x: n.x, z: n.z }, 1, Math.max(22, 0.9 * pxPerUnit));
     for (const s of this.backend.terrain.restSpots) consider({ kind: 'rest', x: s.x, z: s.z }, 0.6, Math.max(22, (s.kind === 'fountain' ? 2.2 : 0.9) * pxPerUnit));
+    // Only what is on this side of a whirlpool's water: the Kraken Maelstrom's summoner and island circle can't be walked to from the shore.
+    const zone = this.backend.terrain.zone;
+    const side = (x: number, z: number) => !!islandAt(zone, x, z) === !!islandAt(zone, this.player.x, this.player.z);
     const sm = this.backend.terrain.summoner;
-    if (sm) consider({ kind: 'summoner', x: sm.x, z: sm.z }, 1.4, Math.max(22, 1.2 * pxPerUnit));
+    if (sm && side(sm.x, sm.z)) consider({ kind: 'summoner', x: sm.x, z: sm.z }, 1.4, Math.max(22, 1.2 * pxPerUnit));
+    for (const w of zone.warps ?? []) if (side(w.x, w.z)) consider({ kind: 'warp', x: w.x, z: w.z }, 0.05, Math.max(22, 1.1 * pxPerUnit));
     return best;
   }
 
@@ -814,6 +825,11 @@ export class Game {
     } else if (g.kind === 'summoner') {
       if (d < SUMMONER_RANGE - 0.4) {
         this.rooms.toggle(true);
+        this.goal = null;
+      }
+    } else if (g.kind === 'warp') {
+      if (d < WARP_RANGE - 0.4) {
+        this.useWarp();
         this.goal = null;
       }
     } else {
@@ -898,7 +914,10 @@ export class Game {
     // The boss summoner on this map, when no NPC is closer.
     const sm = this.backend.terrain.summoner;
     const summ = !near && p.alive && sm && Math.hypot(p.x - sm.x, p.z - sm.z) < SUMMONER_RANGE ? sm : null;
-    const rest = !near && !summ && p.alive ? restSpotNear(spots, p) : null;
+    // A warp circle on the ground (the Kraken Maelstrom's way onto its whirlpool's island and back).
+    const zone = this.backend.terrain.zone;
+    const pad = !near && !summ && p.alive ? warpPadNear(zone, p.x, p.z) : null;
+    const rest = !near && !summ && !pad && p.alive ? restSpotNear(spots, p) : null;
     const restIn = Math.max(0, Math.ceil(p.restCd));
     const restName = rest?.kind === 'fountain' ? 'น้ำพุ' : 'กองไฟ';
     // Touch: no T key — tap the NPC, rest spot or altar itself; near an NPC a "พูดคุย" button shows too.
@@ -906,6 +925,7 @@ export class Game {
     const prompt = this.hud.dialogOpen || this.npcDialog.open ? null
       : near ? `${near.name} — ${key}เพื่อ${near.action}`
       : summ ? `แท่นเรียก${bossShortName(MONSTERS[summ.boss].nameTh)} — ${key}เพื่อใส่กุญแจ`
+      : pad ? `วงวาร์ป — ${key}เพื่อ${islandAt(zone, pad.toX, pad.toZ) ? 'ข้ามไปเกาะกลางน้ำวน' : 'กลับขึ้นฝั่ง'}`
       // No prompt line at the hub's fountain (owner 2026-11-19): its "ฟื้นพลัง" badge says it already. Campfires keep theirs.
       : rest && rest.kind !== 'fountain' ? (restIn > 0 ? `${restName} — พักได้อีกใน ${restIn} วิ` : `${restName} — ${key}เพื่อฟื้น HP/MP ให้เต็ม`)
       : null;
@@ -914,12 +934,14 @@ export class Game {
     this.floating.restBadges(this, spots, restIn);
     if (near) this.floating.npcPrompt(this, near.x, 3.7, near.z, prompt);
     else if (summ) this.floating.npcPrompt(this, summ.x, SUMMONER_HEIGHT + 0.6, summ.z, prompt);
+    else if (pad) this.floating.npcPrompt(this, pad.x, 1.4, pad.z, prompt);
     // Rest spots: stack the label just above the spot's own badge (same anchor, lifted by the badge's
     // height plus room for its 4px bob) so the two never overlap whatever the zoom.
     else if (rest) this.floating.npcPrompt(this, rest.x, Floating.restBadgeY(rest.kind), rest.z, prompt, this.floating.restBadgeHeight(spots.indexOf(rest)) + 8);
     else this.floating.npcPrompt(this, 0, 0, 0, prompt);
     if (near && i.pressed('KeyT')) this.hud.talkTo(near.id);
     else if (summ && i.pressed('KeyT')) this.rooms.toggle();
+    else if (pad && i.pressed('KeyT')) this.useWarp();
     else if (rest && i.pressed('KeyT')) this.backend.rest();
 
     // Farming circle: while Auto runs (around where it started) and while the settings window is open

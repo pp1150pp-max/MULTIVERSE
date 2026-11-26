@@ -81,6 +81,8 @@ export interface InputMsg {
 export type ActionMsg =
   | { t: 'act'; a: 'respawn' }
   | { t: 'act'; a: 'rest' }
+  // Step through the warp circle you stand at (Sim.useWarp checks alive + range).
+  | { t: 'act'; a: 'warp' }
   | { t: 'act'; a: 'pickup'; id: number }
   | { t: 'act'; a: 'equip'; i: number; slot?: EquipSlot }
   | { t: 'act'; a: 'unequip'; slot: EquipSlot }

@@ -80,6 +80,8 @@ export interface Backend {
   respawn(): void;
   /** Rest at the fountain or a campfire the player is next to (the server checks). */
   rest(): void;
+  /** Step through the warp circle you stand at (ZoneDef.warps): the server checks the range. */
+  useWarp(): void;
   /** Pick up a drop the player clicked and walked to, even one the loot filter skips (the server checks). */
   pickup(lootId: number): void;
   equip(bagIndex: number, slot?: EquipSlot): void;

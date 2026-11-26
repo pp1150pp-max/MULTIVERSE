@@ -3,7 +3,7 @@ import type { Monster } from './Monster';
 import { AUTO_PX_PER_UNIT, type AutoSkill, type Player } from './Player';
 import { isPriorityLoot, type Loot } from './Loot';
 import { MONSTERS } from '../data/monsters';
-import { inBossArena, inSafeArea, lavaAt, whirlpoolAt, type ZoneDef } from '../data/zones';
+import { inBossArena, inSafeArea, inWhirlpoolCircle, lavaAt, whirlpoolAt, type ZoneDef } from '../data/zones';
 import { currentBalance } from '../balance';
 import { SKILL_REACH } from '../data/skillRanges';
 import { skillReach, skillValues } from '../skillBook';
@@ -510,8 +510,8 @@ export class AutoPlay {
       x = anchor.x + (dx / d) * R * 0.9;
       z = anchor.z + (dz / d) * R * 0.9;
     }
-    // Never wander into a boss's arena or a pool: wait where it is instead.
-    if (inBossArena(g.zone, x, z) || lavaAt(g.zone, x, z) || whirlpoolAt(g.zone, x, z, 1)) return { x: p.x, z: p.z };
+    // Never wander into a boss's arena or a pool (or onto a whirlpool's island: only a warp circle gets there): wait where it is instead.
+    if (inBossArena(g.zone, x, z) || lavaAt(g.zone, x, z) || inWhirlpoolCircle(g.zone, x, z, 1)) return { x: p.x, z: p.z };
     this.roam = { x, z };
     return this.roam;
   }

@@ -325,6 +325,12 @@ export function lakeTool(): Tool {
           numField('z', w.z, (n) => setLake(ed, i, 'ย้ายทะเลสาบ', (q) => ({ ...q, z: round3(n) })), 0.5),
           numField('รัศมี x', w.rx, (n) => setLake(ed, i, 'ปรับขนาดทะเลสาบ', (q) => ({ ...q, rx: Math.max(0.5, Math.min(200, n)) })), 0.5, 0.5, 200),
           numField('รัศมี z', w.rz, (n) => setLake(ed, i, 'ปรับขนาดทะเลสาบ', (q) => ({ ...q, rz: Math.max(0.5, Math.min(200, n)) })), 0.5, 0.5, 200)),
+        // A whirlpool's island (owner 2026-11-26): dry ground in its middle, reached only by a warp circle (pins tool). 0 = none.
+        ...(w.kind === 'whirlpool' ? [numField('รัศมีเกาะกลาง (0 = ไม่มีเกาะ · ไปถึงได้ด้วยวงวาร์ปเท่านั้น)', w.island ?? 0, (n) => setLake(ed, i, 'ปรับเกาะกลางน้ำวน', (q) => {
+          const { island: _old, ...rest } = q;
+          const r = Math.round(Math.max(0, Math.min(q.rx - 1, n)) * 2) / 2;
+          return r >= 1 ? { ...rest, island: r } : rest;
+        }), 0.5, 0, 200)] : []),
         btn('🗑 ลบอันนี้ (Delete)', () => { ed.exec('ลบทะเลสาบ', { water: ed.map.water.filter((_, k) => k !== i) }); ed.select([]); }),
         adds);
       return box;

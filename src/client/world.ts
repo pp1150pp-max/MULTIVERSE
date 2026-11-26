@@ -1,7 +1,18 @@
 import * as THREE from 'three';
 import { WhirlpoolViews } from './whirlpool';
+import { WarpPadViews } from './warpPads';
 import { currentBalance } from '../shared/balance';
-import { clearingRadius, floorOf, lairOf, themeAt, zoneById, ZONES } from '../shared/data/zones';
+import { clearingRadius as arenaClearing, floorOf, islandAt, lairOf, themeAt, zoneById, ZONES, type ZoneDef } from '../shared/data/zones';
+
+/**
+ * The bare ground round a map's boss clearing: the arena's, or on a whirlpool's island (the Kraken Maelstrom's summoner,
+ * owner 2026-11-26) the island itself.
+ */
+function clearingRadius(zone: ZoneDef): number {
+  const b = lairOf(zone);
+  const isle = b && !zone.roomOf ? islandAt(zone, b.x, b.z) : null;
+  return isle?.island ? isle.island + 1 : arenaClearing(zone);
+}
 import { HUB_PLAZA_RADIUS, QUADRANT_JITTER } from '../shared/sim/terrain';
 import type { PropSpec, Terrain } from '../shared/sim/terrain';
 import type { ZoneTheme } from '../shared/data/zones';
@@ -525,6 +536,8 @@ export class World {
   private readonly lavaGlows: THREE.Material[] = [];
   /** The Kraken Maelstrom's turning whirlpools (src/client/whirlpool.ts). */
   private whirlpools: WhirlpoolViews | null = null;
+  /** Warp circles on the ground (src/client/warpPads.ts). */
+  private warpPads: WarpPadViews | null = null;
   /** Everything added to the scene, so a zone change can take it all down again. */
   private readonly objects: THREE.Object3D[] = [];
   private readonly ownMats: THREE.Material[] = [];
@@ -713,6 +726,10 @@ export class World {
     if (terrain.zone.whirlpools?.length) {
       this.whirlpools = new WhirlpoolViews(terrain.zone.whirlpools);
       this.add(this.whirlpools.group);
+    }
+    if (terrain.zone.warps?.length) {
+      this.warpPads = new WarpPadViews(terrain.zone.warps);
+      this.add(this.warpPads.group);
     }
     if (this.groundUniforms && !harbor) {
       this.addDecor(mulberry32(terrain.zone.seed + 11));
@@ -1356,6 +1373,7 @@ export class World {
     this.spaceTex.dispose();
     this.whirlpools?.dispose();
     this.cloudSea?.dispose();
+    this.warpPads?.dispose();
   }
 
   /**
@@ -1401,6 +1419,7 @@ export class World {
   /** Fade trees that stand between the camera and the player. */
   update(dt: number, px: number, pz: number): void {
     this.t += dt;
+    this.warpPads?.update(this.t);
     if (this.groundUniforms) this.groundUniforms.uTime.value = this.t;
     this.pieceUniforms.uTime.value = this.t;
     this.updateSnow(dt, px, pz);

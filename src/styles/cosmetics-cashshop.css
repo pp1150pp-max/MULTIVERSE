@@ -134,7 +134,9 @@
 #cash-win .cash-empty { grid-column: 1 / -1; padding: 16px; text-align: center; color: var(--ink-dim); }
 #cash-win .cash-tip { position: absolute; z-index: 5; max-width: 230px; padding: 7px 9px; border: 1px solid #6f5a32; border-radius: 3px; background: rgba(16, 12, 8, 0.96); font-size: 12px; pointer-events: none; box-shadow: 0 0 0 1px #000, 0 0 10px rgba(138, 90, 255, 0.35); }
 #cash-win .cash-tip div + div { color: var(--ink-dim); margin-top: 2px; }
-#cash-win .cash-modal { position: absolute; inset: -6px; z-index: 6; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.6); }
+/* Dims the whole window in the frame's own shape (owner 2026-11-26: at -6px a dark edge lay across the frame): the border box
+ * (-30px = the frame's border), masked by the frame picture like #cash-win's border-image, so nothing shows past the frame. */
+#cash-win .cash-modal { position: absolute; inset: -30px; -webkit-mask-box-image: url(/assets/sprites/ui/cash_frame.png) 96 fill / 64px / 0 stretch; z-index: 6; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.6); }
 #cash-win .cash-dialog {
   width: min(380px, 94%); display: flex; flex-direction: column; gap: 9px; padding: 30px 30px 28px; /* the frame art is drawn 52px wide over a 24px border, so keep content inside it */
   border: 24px solid transparent; border-image: url(/assets/sprites/ui/cash_dialog.png) 92 fill / 52px / 0 stretch; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.8));
