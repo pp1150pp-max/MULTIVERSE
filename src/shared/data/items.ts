@@ -391,6 +391,53 @@ export function stampTier(item: Item): void {
   if (key) item.tierK = key;
   else delete item.tierK;
   stampMult(item);
+  stampMoveGrowth(item);
+}
+
+// ------------------------------------------------------------ move speed main line: its own growth per level
+
+/** How fast every main stat grows per item level: ×(1 + (level − 1) × this). */
+const MAIN_GROWTH = 0.12;
+/**
+ * Per-level growth of the boots' move speed main line (owner 2026-11-26: legendary T1 about 10 at Lv1, 30 at Lv40,
+ * 50 at Lv80, where 0.12 like the other main stats gave up to 424). The /admin "ปรับสมดุล" tab can change it.
+ */
+export const CODE_MOVE_GROWTH = 0.003;
+let MOVE_GROWTH = CODE_MOVE_GROWTH;
+/** Item kinds whose own (main) stats include move speed: the boots. */
+const MOVE_BASES: ReadonlySet<string> = new Set(BASES.filter((b) => b.main.moveSpeed !== undefined).map((b) => b.id));
+const mainGrowth = (stat: StatKey): number => (stat === 'moveSpeed' ? MOVE_GROWTH : MAIN_GROWTH);
+
+/** Uses this move speed main-line growth from now on (already checked by src/shared/balance.ts). */
+export function setMoveGrowth(g: number): void {
+  MOVE_GROWTH = g;
+}
+
+/** Marks a boots item as rolled with the current move speed growth (`mvG`); other kinds carry none. */
+function stampMoveGrowth(item: Item): void {
+  if (MOVE_BASES.has(item.baseId)) item.mvG = MOVE_GROWTH;
+  else delete item.mvG;
+}
+
+/** Whether a boots item's move speed main line was made with another growth than today's (missing `mvG` = 0.12). */
+const moveStale = (it: Item): boolean => MOVE_BASES.has(it.baseId) && (it.mvG ?? MAIN_GROWTH) !== MOVE_GROWTH;
+
+/**
+ * Brings a boots item's move speed main line (the first moveSpeed line, see rowKinds) from the growth it was made with
+ * to today's, at its item level: value × (1 + (L−1)·new) ÷ (1 + (L−1)·old), once (it is stamped after). Extra lines
+ * keep their values. Items from before lines existed keep theirs (the character's move cap still holds them).
+ */
+function scaleMoveGrowth(it: Item): void {
+  if (!moveStale(it)) return;
+  const from = it.mvG ?? MAIN_GROWTH;
+  const lv = Math.max(0, it.level - 1);
+  const ratio = (1 + lv * MOVE_GROWTH) / (1 + lv * from);
+  const at = it.lines?.findIndex((l) => l.stat === 'moveSpeed') ?? -1;
+  if (it.lines && at >= 0) {
+    it.lines = it.lines.map((l, i) => (i === at ? { ...l, value: fmt(l.stat, l.value * ratio) } : l));
+    it.stats = sumLines(it.lines);
+  }
+  it.mvG = MOVE_GROWTH;
 }
 
 /**
@@ -628,7 +675,7 @@ export type RowKind = 'main' | 'locked' | 'extra';
 function rowRange(base: BaseItem, rarity: Rarity, level: number, stat: StatKey, kind: RowKind): [number, number] {
   // The item stat multiplier scales the whole range, so every tier moves with it.
   const rm = RARITY_MULT[rarity] * itemStatMult(stat);
-  if (kind === 'main') return rangeAround(stat, level, (base.main[stat] ?? 0) * (1 + (level - 1) * 0.12) * rm);
+  if (kind === 'main') return rangeAround(stat, level, (base.main[stat] ?? 0) * (1 + (level - 1) * mainGrowth(stat)) * rm);
   // Extras average the middle of their table min–max, raised with item level.
   const a = AFFIXES.find((x) => x.stat === stat)!;
   const scale = kind === 'extra' ? EXTRA_SCALE[stat] ?? 1 : 1;
@@ -734,12 +781,14 @@ export function upgradeItem<T>(item: T): T {
   if (!it || typeof it !== 'object' || !('baseId' in it)) return item;
   // Card sockets (cardSockets.ts): a bad count or unknown card ids from an old or edited save are cleaned every load.
   cleanSockets(it);
-  if (it.tierV === TIER_VERSION && (it.tierK ?? '') === itemTierKey(it) && (it.mulK ?? '') === MUL_KEY) return item;
+  if (it.tierV === TIER_VERSION && (it.tierK ?? '') === itemTierKey(it) && (it.mulK ?? '') === MUL_KEY && !moveStale(it)) return item;
   const base = BASES.find((b) => b.id === it.baseId);
   if (!base) return item;
   // Values first: from the multipliers the item was made under to today's (before the v3 locked line,
   // which is rolled with today's).
   scaleToMult(it);
+  // The boots' move speed main line, from the growth it was made with to today's (owner 2026-11-26).
+  scaleMoveGrowth(it);
   if (!it.lines?.length) return item;
   if ((it.tierV ?? 0) < 3) {
     const old = rowKinds(base, it.lines.map((l) => l.stat), false);

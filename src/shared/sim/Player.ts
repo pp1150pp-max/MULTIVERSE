@@ -366,6 +366,22 @@ export function layOutBag(data: CharacterData): BagSlots {
 }
 
 /** A fresh level 1 character with the class starter weapon and a few potions. */
+/**
+ * Move speed % a character gets from its items before the cap: worn gear (enhance and rerolled lines included, after
+ * the class multiplier) plus item-set bonuses. The status window shows it next to the capped value.
+ */
+export function itemMoveSpeed(equipment: Partial<Record<EquipSlot, Item | null>>, cls: ClassId): number {
+  const b = currentBalance();
+  let gear = 0;
+  for (const it of Object.values(equipment)) if (it) gear += effectiveStats(it).moveSpeed ?? 0;
+  return gear * b.classes[cls].mult.moveSpeed + (setBonusStats(equipment, b.sets).moveSpeed ?? 0);
+}
+
+/** The part of `itemMoveSpeed` that counts: at most the /admin cap (`moveCap`, 50% in code). */
+export function cappedItemMove(raw: number): number {
+  return Math.min(raw, Math.max(0, currentBalance().moveCap));
+}
+
 export function newCharacterData(name: string, classId: ClassId): CharacterData {
   return {
     name,
@@ -775,12 +791,15 @@ export class Player extends Unit {
     const c = classBalance(this.cls.id);
     addInto(s, c.base);
     addInto(s, c.growth, this.level - 1);
+    // Move speed from items is capped on its own (itemMoveSpeed below), so take the gear's part back out after the loop.
+    const classMove = s.moveSpeed;
     let best = 0;
     for (const it of Object.values(this.equipment)) {
       if (!it) continue;
       addInto(s, effectiveStats(it));
       best = Math.max(best, plusOf(it));
     }
+    s.moveSpeed = classMove;
     this.aura = auraTier(best);
     this.orbs = orbCodes(this.equipment);
     // Cards on worn gear (cardSockets.ts), each effect capped on the whole character. Their HP/MP/ATK/DEF % multiply the
@@ -798,6 +817,10 @@ export class Player extends Unit {
     s.armorPen = (s.armorPen ?? 0) + fx.pierce;
     // Item-set bonuses (data/sets.ts): exactly the numbers set in /admin, after the class multipliers, raised by the card %.
     const set = setBonusStats(this.equipment, currentBalance().sets);
+    // Move speed from gear + set bonuses together stops at the /admin cap (owner 2026-11-26); class numbers, the
+    // passive, skill buffs (below) and the mount (moveSpeed getter) come on top of it.
+    delete set.moveSpeed;
+    s.moveSpeed += cappedItemMove(itemMoveSpeed(this.equipment, this.cls.id));
     for (const k of Object.keys(pct) as (keyof typeof pct)[]) if (set[k]) set[k] = set[k]! * (1 + pct[k] / 100);
     addInto(s, set);
     // Card album pages completed (cardAlbum.ts): percent of the whole HP / MP / attack / defense.

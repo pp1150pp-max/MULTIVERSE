@@ -99,6 +99,7 @@ html.paper-ui .eq-ring2 { left: 61.5%; top: 37.2%; width: 6.6%; height: 4.4%; }
 .inv-foot { position: absolute; left: 30%; top: 89.6%; width: 40%; height: 4.4%; display: flex; justify-content: space-around; align-items: center; font-size: 13px; }
 .stat { display: flex; justify-content: space-between; font-size: 12px; padding: 1px 0; }
 .stat b { color: var(--gold-hi); font-weight: 400; }
+.stat b .stat-cap { color: #ffb070; font-size: 11px; }
 .cell {
   position: relative; width: 46px; height: 46px; border: 1px solid #8f7238; border-radius: 3px;
   background: #12100d; display: grid; place-items: center; font-size: 22px; cursor: pointer;

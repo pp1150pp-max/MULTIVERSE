@@ -102,6 +102,11 @@ export interface Item {
    */
   mulK?: string;
   /**
+   * Boots only: the per-level growth their move speed main line was made with (data/items.ts setMoveGrowth). Missing =
+   * 0.12, before 2026-11-26. When it differs from today's, that line is scaled on load (once).
+   */
+  mvG?: number;
+  /**
    * Card sockets from drilling at the blacksmith (card plan PR 2, src/shared/cardSockets.ts): missing = not drilled,
    * 0 = drilled without a socket (can't be drilled again), 1–2 = sockets.
    */

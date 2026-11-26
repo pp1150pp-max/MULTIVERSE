@@ -17,7 +17,7 @@ import { CARD_GROUP_NAME, CARD_RARITY_NAME, cardFxLines } from '../shared/data/c
 import { cardDef } from '../shared/cardTuning';
 import { cardFxHtml, gameSocketHost, openCardView, openSocketView, socketTipHtml } from './ui/cardPopup';
 import { socketCount } from '../shared/cardSockets';
-import { lootPots, type Buffs, type LootFilter, type SortKey } from '../shared/sim/Player';
+import { cappedItemMove, itemMoveSpeed, lootPots, type Buffs, type LootFilter, type SortKey } from '../shared/sim/Player';
 import { MONSTERS } from '../shared/data/monsters';
 import { currentBalance } from '../shared/balance';
 import { SET_MAX_PIECES, setInfo } from '../shared/data/sets';
@@ -1374,8 +1374,12 @@ export class Hud {
     this.renderBagMore(tab, pages);
     const fmt = (k: StatKey, v: number) =>
       k === 'hpRegen' || k === 'mpRegen' || k === 'cdr' || k === 'buffDur' || k === 'armorPen' ? v.toFixed(1) : String(Math.round(v));
+    // Move speed from items past the cap (owner 2026-11-26): "50 (เต็มเพดาน, ของ 190)".
+    const moveRaw = itemMoveSpeed(p.equipment, p.cls.id);
+    const moveNote = moveRaw > cappedItemMove(moveRaw)
+      ? ` <span class="stat-cap">${t('(เต็มเพดาน, ของ {0})', [Math.round(moveRaw)])}</span>` : '';
     $('stat-list').innerHTML = STAT_KEYS.map((k) =>
-      `<div class="stat"><span>${STAT_LABEL[k]}</span><b>${fmt(k, p.stats[k])}</b></div>`,
+      `<div class="stat"><span>${STAT_LABEL[k]}</span><b>${fmt(k, p.stats[k])}${k === 'moveSpeed' ? moveNote : ''}</b></div>`,
     ).join('') + cardFxHtml(Object.values(p.equipment));
     $('inv-gold').innerHTML = `${COIN_ICON} ${p.gold.toLocaleString()} G`;
     $('inv-pots').innerHTML = potionTotals(this.g.player);
