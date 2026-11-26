@@ -55,6 +55,7 @@ import { boxNow, boxOdds, boxOrbs, rollBoxRow, type BoxRow } from '../mysteryBox
 import { cardNum, cardDef } from '../cardTuning';
 import { drillCost, freeSocket, isDrilled, rollSockets, socketBlock, socketCards } from '../cardSockets';
 import { cardAnnounced, rollCardDrops } from '../cardDrops';
+import { fuseBlock, fuseInfo, rollFuse } from '../cardFuse';
 import { albumOn, albumPageOf } from '../cardAlbum';
 import { CARD_RARITY_NAME, cardName, isCardId, type CardId } from '../data/cards';
 
@@ -2300,6 +2301,38 @@ export class Sim {
     this.sfx('enhance_ok', p.x, p.z, p.id);
     this.afterChange(p);
     return true;
+  }
+
+  /**
+   * Fuses 3 cards from the bag at the blacksmith (card plan 6.1, src/shared/cardFuse.ts): same rarity and floor, gold
+   * fuseCost_<rarity>, gives one random card of that rarity and floor. Never announced (owner 2026-11-26). Returns the
+   * new card, or null if nothing happened (the reason goes to the player's log).
+   */
+  fuseCards(p: Player, ids: unknown): CardId | null {
+    if (!p.alive || !this.near(p, 'blacksmith') || !Array.isArray(ids)) return null;
+    if (this.time < p.forgeAt + forgeCd()) return null;
+    const why = fuseBlock(ids, (id) => p.stoneCount(id), p.gold);
+    if (why) {
+      this.log(`รวมการ์ดไม่ได้: ${why}`, '#ff8a6a', p.id);
+      return null;
+    }
+    const cards = ids as CardId[];
+    const info = fuseInfo(cards)!;
+    const got = rollFuse(info.pool, Math.random);
+    for (const id of cards) p.takeStones(id, 1);
+    // Taking 3 cards may free no slot (a stack of 10): put them back when the new card has no room.
+    if (!p.addStones(got, 1)) {
+      for (const id of cards) p.addStones(id, 1);
+      this.log('รวมการ์ดไม่ได้: ช่องประเภทใช้งานเต็ม', '#ff8a6a', p.id);
+      return null;
+    }
+    p.forgeAt = this.time;
+    p.gold -= info.cost;
+    this.log(`🃏 รวมการ์ดได้ ${cardName(got)}!${info.cost ? ` (−${info.cost.toLocaleString()} G)` : ''}`, STONE_COLOR[got], p.id);
+    this.fx('burst', p.x, 1.2, p.z, '#c9a8ff', 14, 2.5);
+    this.sfx('enhance_ok', p.x, p.z, p.id);
+    this.afterChange(p);
+    return got;
   }
 
   /** Takes the card out of socket `i` of the player's gear: the card breaks (owner 2026-11-11). */

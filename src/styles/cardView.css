@@ -1,8 +1,8 @@
 /* One monster card shown big (src/client/cardView.ts): picture + thin frame + pointer shine, text under the card. */
 .cv { display: flex; flex-direction: column; align-items: center; gap: 12px; max-width: 100%; }
-.cv-stage { perspective: 900px; }
+.cv-stage { position: relative; perspective: 900px; }
 .cv-card {
-  --cv-x: 50%; --cv-y: 50%; --cv-shine: 0.55;
+  --cv-x: 50%; --cv-y: 50%; --cv-dx: 0; --cv-dy: 0; --cv-shine: 0.5;
   position: relative; height: min(70vh, 120vw); aspect-ratio: 2 / 3; border-radius: 3.5% / 2.4%; overflow: hidden;
   transform-style: preserve-3d; transition: transform 0.35s ease-out; touch-action: none; cursor: default;
   box-shadow: 0 14px 30px rgba(0, 0, 0, 0.55);
@@ -10,22 +10,50 @@
 .cv-card.cv-live { transition: transform 0.06s linear; }
 .cv-card img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; user-select: none; pointer-events: none; }
 .cv-art { object-fit: cover; }
-/* A soft light spot and a diagonal glare band that follow the pointer, only while it is over the card. */
-.cv-shine {
-  position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.3s; mix-blend-mode: screen;
-  background:
-    radial-gradient(circle at var(--cv-x) var(--cv-y), rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0.18) 22%, transparent 48%),
-    linear-gradient(115deg, transparent calc(var(--cv-x) - 22%), rgba(255, 255, 255, 0.35) var(--cv-x), transparent calc(var(--cv-x) + 22%));
-}
+.cv-shine, .cv-spark, .cv-holo-l { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.3s; }
+.cv-noshine .cv-shine, .cv-noshine .cv-spark, .cv-noshine .cv-holo-l { display: none; }
 .cv-live .cv-shine { opacity: var(--cv-shine); }
-.cv-noshine .cv-shine { display: none; }
-/* Legendary: a faint rainbow sheen that slides with the pointer. */
-.cv-rainbow .cv-shine {
+/* Every rarity: a soft light spot and a white glare band that sweep with the pointer (rare has only this). */
+.cv-shine {
+  mix-blend-mode: screen;
   background:
-    radial-gradient(circle at var(--cv-x) var(--cv-y), rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0.15) 22%, transparent 48%),
-    linear-gradient(115deg, transparent calc(var(--cv-x) - 22%), rgba(255, 255, 255, 0.35) var(--cv-x), transparent calc(var(--cv-x) + 22%)),
-    linear-gradient(125deg, #ff5f6d55, #ffc37155, #8cff9e55, #6ec6ff55, #c58bff55, #ff5f6d55) calc(var(--cv-x) * 1.5) calc(var(--cv-y) * 1.5) / 250% 250%;
+    radial-gradient(circle at var(--cv-x) var(--cv-y), rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0.16) 22%, transparent 46%),
+    linear-gradient(115deg, transparent calc(var(--cv-x) - 24%), rgba(255, 255, 255, 0.4) var(--cv-x), transparent calc(var(--cv-x) + 24%));
 }
+/* Epic: colour sparkles near the pointer that twinkle. */
+.cv-spark {
+  mix-blend-mode: color-dodge;
+  background:
+    radial-gradient(circle, #fff 0 1px, transparent 1.6px) 0 0 / 23px 29px,
+    radial-gradient(circle, #ffd76a 0 1.2px, transparent 2px) 7px 11px / 31px 37px,
+    radial-gradient(circle, #7fe3ff 0 1.2px, transparent 2px) 15px 4px / 41px 33px,
+    radial-gradient(circle, #ff8ad8 0 1px, transparent 1.8px) 3px 19px / 37px 43px;
+  -webkit-mask: radial-gradient(circle at var(--cv-x) var(--cv-y), #000 0%, rgba(0, 0, 0, 0.5) 30%, transparent 58%);
+  mask: radial-gradient(circle at var(--cv-x) var(--cv-y), #000 0%, rgba(0, 0, 0, 0.5) 30%, transparent 58%);
+}
+.cv-live .cv-spark { opacity: calc(var(--cv-shine) * 1.4); animation: cv-twinkle 1.6s ease-in-out infinite alternate; }
+@keyframes cv-twinkle { from { filter: brightness(0.7); } to { filter: brightness(1.6); } }
+/* Legendary: a rainbow holo whose colours slide as the card tilts. */
+.cv-holo-l {
+  mix-blend-mode: color-dodge;
+  background:
+    repeating-linear-gradient(120deg, #ff5f6d 0%, #ffc371 7%, #8cff9e 14%, #6ec6ff 21%, #c58bff 28%, #ff5f6d 35%)
+      calc(50% + var(--cv-dx) * 60%) calc(50% + var(--cv-dy) * 60%) / 300% 300%;
+  filter: saturate(1.3) brightness(0.8);
+  -webkit-mask: radial-gradient(ellipse at var(--cv-x) var(--cv-y), #000 0%, rgba(0, 0, 0, 0.35) 45%, rgba(0, 0, 0, 0.15) 80%);
+  mask: radial-gradient(ellipse at var(--cv-x) var(--cv-y), #000 0%, rgba(0, 0, 0, 0.35) 45%, rgba(0, 0, 0, 0.15) 80%);
+}
+.cv-live .cv-holo-l { opacity: calc(var(--cv-shine) * 0.9); }
+/* Light rays behind the card in the rarity's colour, turning slowly (the in-game window; the /admin preview too). */
+.cv-rays {
+  position: absolute; left: 50%; top: 50%; width: 160%; aspect-ratio: 1; z-index: 0; transform: translate(-50%, -50%); pointer-events: none;
+  background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--cv-ray) 55%, transparent) 0deg 6deg, transparent 6deg 18deg);
+  -webkit-mask: radial-gradient(circle, #000 0%, rgba(0, 0, 0, 0.5) 25%, transparent 62%);
+  mask: radial-gradient(circle, #000 0%, rgba(0, 0, 0, 0.5) 25%, transparent 62%);
+  animation: cv-rays 40s linear infinite; opacity: 0.8;
+}
+@keyframes cv-rays { to { transform: translate(-50%, -50%) rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .cv-rays { animation: none; } .cv-live .cv-spark { animation: none; } }
 .cv-text { text-align: center; max-width: min(92vw, 420px); }
 .cv-name { font-size: 20px; color: var(--gold-hi, #ffe08a); font-weight: 600; }
 .cv-meta { font-size: 14px; opacity: 0.85; margin-top: 2px; }
@@ -37,7 +65,7 @@
   background: rgba(8, 6, 4, 0.78); color: #f0e6cc; cursor: pointer;
 }
 #card-view .cv-card { height: min(58vh, 105vw); }
-#card-view { overflow-y: auto; }
+#card-view { overflow-y: auto; overflow-x: hidden; }
 #card-view .cardpop-hint { font-size: 12px; opacity: 0.6; }
 /* With the socket list under it the card is smaller, so both fit on a phone. */
 #card-view .cv:has(.cardpop-sock) .cv-card { height: min(42vh, 80vw); }

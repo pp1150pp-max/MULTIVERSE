@@ -139,6 +139,8 @@ export interface Backend {
   socketCard(uid: string, card: string): void;
   /** Takes the card out of socket `i` (the card breaks). */
   unsocketCard(uid: string, i: number): void;
+  /** Blacksmith card fusion of 3 cards; resolves with the new card, or null if refused. */
+  fuseCards(cards: string[]): Promise<string | null>;
   /** `party` = to the party only. */
   chat(text: string, party?: boolean, links?: ChatLinkRef[]): void;
   /** A whisper: only the online character named `to` sees it (the server echoes it back). */

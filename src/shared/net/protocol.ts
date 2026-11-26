@@ -134,6 +134,8 @@ export type ActionMsg =
   | { t: 'act'; a: 'socketCard'; uid: string; card: string }
   /** Takes the card out of socket `i`: the card breaks (Sim.unsocketCard). */
   | { t: 'act'; a: 'unsocketCard'; uid: string; i: number }
+  /** Blacksmith card fusion: 3 cards of one rarity and floor (Sim.fuseCards); answered with `fused`. */
+  | { t: 'act'; a: 'fuseCards'; cards: string[]; req: number }
   /** Stash (warehouse keeper). `to` = target slot, or -1 for wherever it fits. */
   | { t: 'act'; a: 'stashPut'; i: number; to: number }
   | { t: 'act'; a: 'stashTake'; i: number; to: number }
@@ -473,6 +475,8 @@ export type ServerMsg =
   | { t: 'rerolled'; req: number; item: Item | null }
   /** The drilled item (its `sockets` say how many it got), or null when the server refused. */
   | { t: 'drilled'; req: number; item: Item | null }
+  /** The card a fusion gave, or null when the server refused. */
+  | { t: 'fused'; req: number; card: string | null }
   /** The answer to a market action with this `req`. */
   | ({ t: 'market'; req: number } & MarketReply)
   /** Something of yours sold or expired at the market (a banner and a chat line). */

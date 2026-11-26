@@ -140,7 +140,8 @@ export function cardArt(id: CardId): string {
  * the card's name, rarity, slot and effects are written under the card, not on it (src/client/cardView.ts).
  */
 export function cardFrame(r: CardRarity): string {
-  return `/assets/sprites/paper/cards/card_frame_thin_${r}.webp`;
+  // card_frame_clean_*: the thin frames with the pink edge cast taken off (tools/clean_card_frames.cjs, owner 2026-11-26).
+  return `/assets/sprites/paper/cards/card_frame_clean_${r}.webp`;
 }
 
 /** The cards a fusion of `rarity` cards from `floor` can give: same rarity, same floor (owner 2026-11-25). */
@@ -241,9 +242,17 @@ export const CARD_NUM_FIELDS: readonly CardNumField[] = [
   })))),
   // How a card looks when viewed (src/client/cardView.ts, owner 2026-11-25): a shine that follows the pointer and a tilt.
   { key: 'viewShine', name: 'แสงสะท้อนตามเมาส์/นิ้ว (1 = เปิด, 0 = ปิด)', group: 'หน้าตาการ์ด', def: 1, min: 0, max: 1, step: 1, unit: '' },
-  { key: 'viewShinePct', name: 'ความแรงแสงสะท้อน', group: 'หน้าตาการ์ด', def: 55, min: 0, max: 100, step: 1, unit: '%' },
+  // Shine per rarity (owner 2026-11-26, plan 7.1): rare a white sweep, epic + colour sparkles, legendary a rainbow holo
+  // that shifts with the tilt. 0 = no shine on that rarity. Replaces the one viewShinePct (old saves move over in checkCardTuning).
+  ...CARD_RARITIES.map((r): CardNumField => ({
+    key: `viewShinePct_${r}`, name: `ความแรงแสงสะท้อน: การ์ด${RARITY_TH[r]} (0 = ไม่มีแสง)`, group: 'หน้าตาการ์ด',
+    def: r === 'rare' ? 45 : r === 'epic' ? 55 : 65, min: 0, max: 100, step: 1, unit: '%',
+  })),
+  { key: 'viewSparkle', name: 'ประกายสีบนการ์ดมหากาพย์ (1 = เปิด, 0 = ปิด)', group: 'หน้าตาการ์ด', def: 1, min: 0, max: 1, step: 1, unit: '' },
   { key: 'viewTiltDeg', name: 'การ์ดเอียงสูงสุด (องศา, 0 = ไม่เอียง)', group: 'หน้าตาการ์ด', def: 10, min: 0, max: 30, step: 0.5, unit: '' },
-  { key: 'viewRainbow', name: 'แสงรุ้งบนการ์ดตำนาน (1 = เปิด, 0 = ปิด)', group: 'หน้าตาการ์ด', def: 1, min: 0, max: 1, step: 1, unit: '' },
+  { key: 'viewRainbow', name: 'แสงโฮโลสีรุ้งบนการ์ดตำนาน เปลี่ยนสีตามมุมเอียง (1 = เปิด, 0 = ปิด)', group: 'หน้าตาการ์ด', def: 1, min: 0, max: 1, step: 1, unit: '' },
+  { key: 'viewRays', name: 'แสงเป็นลำพุ่งหลังการ์ด สีตามระดับ ในหน้าต่างดูการ์ดในเกม (1 = เปิด, 0 = ปิด)', group: 'หน้าตาการ์ด', def: 1, min: 0, max: 1, step: 1, unit: '' },
+  { key: 'viewIdle', name: 'จอสัมผัส: แสงวิ่งช้า ๆ เองเมื่อไม่ได้แตะ (1 = เปิด, 0 = ปิด)', group: 'หน้าตาการ์ด', def: 1, min: 0, max: 1, step: 1, unit: '' },
   ...CARD_FX.map((f): CardNumField => ({
     key: `cap_${f}`, name: `เพดาน${CARD_FX_NAME[f]} (0 = ไม่จำกัด)`, group: 'เพดานรวมทั้งตัว', min: 0, max: 100, step: 0.1, unit: '%',
     def: ({ pierce: 50, lifesteal: 10, dmgReduce: 30, bossDmg: 40, cdr: 20, potion: 40, expPct: 30, goldPct: 30, normalAtkPct: 40 } as Partial<Record<CardFx, number>>)[f] ?? 0,

@@ -92,6 +92,11 @@ export function checkCardTuning(v: unknown, strict: boolean): Result {
     const { dropMonster, dropBoss, dropBossExtra, ...rest } = ni;
     ni = { drop_rare: dropMonster, drop_epic: dropBossExtra ?? dropBoss, drop_legendary: dropBoss, ...rest };
   }
+  // Tuning saved before the shine went by rarity (2026-11-26): one viewShinePct for every card.
+  if (!strict && 'viewShinePct' in ni) {
+    const { viewShinePct, ...rest } = ni;
+    ni = { viewShinePct_rare: viewShinePct, viewShinePct_epic: viewShinePct, viewShinePct_legendary: viewShinePct, ...rest };
+  }
   if (strict) {
     const bad = Object.keys(ni).find((k) => !FIELD.has(k));
     if (bad) return { error: `ไม่มีค่า "${bad.slice(0, 30)}"` };

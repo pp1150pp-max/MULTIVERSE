@@ -99,7 +99,7 @@ const FRIEND_QUIET_MS = 60_000;
  */
 const TRADE_LOCKED = new Set([
   'equip', 'unequip', 'drop', 'buy', 'move', 'sort', 'bagExpand', 'buyBack', 'sell', 'split', 'sellRarity', 'enhance', 'reroll',
-  'drill', 'socketCard', 'unsocketCard',
+  'drill', 'socketCard', 'unsocketCard', 'fuseCards',
   'stashPut', 'stashTake', 'stashMove', 'stashSort', 'stashBuy', 'stashGold', 'stashSplit',
   'mktSearch', 'mktMine', 'mktPrice', 'mktList', 'mktCancel', 'mktBuy', 'mktClaim',
   'mailList', 'mailRead', 'mailReadAll', 'mailClaim', 'mailDelete', 'mailDeleteRead', 'roomOpen', 'buyPhoenix', 'tutAccept', 'albumRegister',
@@ -1377,6 +1377,7 @@ export class GameWorld {
       else if (m.a === 'enhance') this.send(s.ws, { t: 'enhanced', req: num((m as { req?: unknown }).req), result: null, item: null });
       else if (m.a === 'reroll') this.send(s.ws, { t: 'rerolled', req: num((m as { req?: unknown }).req), item: null });
       else if (m.a === 'drill') this.send(s.ws, { t: 'drilled', req: num((m as { req?: unknown }).req), item: null });
+      else if (m.a === 'fuseCards') this.send(s.ws, { t: 'fused', req: num((m as { req?: unknown }).req), card: null });
       return;
     }
     switch (m.a) {
@@ -1665,6 +1666,14 @@ export class GameWorld {
         // Sim.socketCard checks the card id, ownership, the group, an empty socket, the card in the bag and the gold.
         if (typeof m.uid === 'string' && sim.socketCard(p, m.uid, m.card)) this.save(s);
         break;
+      case 'fuseCards': {
+        // Sim.fuseCards checks the NPC distance, the cooldown, 3 known cards of one rarity and floor, the switches,
+        // the cards in the bag, the gold and room for the new card.
+        const card = sim.fuseCards(p, m.cards);
+        this.send(s.ws, { t: 'fused', req: num(m.req), card });
+        if (card) this.save(s);
+        break;
+      }
       case 'unsocketCard':
         // Sim.unsocketCard checks ownership, the socket index and that a card is in it.
         if (typeof m.uid === 'string' && sim.unsocketCard(p, m.uid, m.i)) this.save(s);

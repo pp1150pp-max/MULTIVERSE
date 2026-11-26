@@ -1,5 +1,5 @@
 import { CARD_DEFAULTS, CARD_FX, CARD_FX_MAX, CARD_FX_NAME, CARD_GROUPS, CARD_GROUP_NAME, CARD_NUM_FIELDS, CARD_RARITIES, CARD_RARITY_NAME, cardArt, cardName, type CardFx, type CardGroup, type CardId, type CardRarity } from '../../shared/data/cards';
-import { cardViewEl } from '../../client/cardView';
+import { cardLook, cardViewEl } from '../../client/cardView';
 import { applyCardTuning, CARD_FX_LIMIT, type CardTuning } from '../../shared/cardTuning';
 import { type AdminCardTune } from '../../shared/admin';
 import { RARITY_COLOR } from '../../shared/types';
@@ -54,9 +54,7 @@ function showCardArt(id: CardId, w: CardWork): void {
   const c = w.cards[id];
   const fx: Partial<Record<CardFx, number>> = {};
   for (const [f, v] of c.fx) if (f) fx[f] = v;
-  const cardEl = cardViewEl({ id, rarity: c.rarity, group: c.group, fx }, {
-    shine: w.nums.viewShine === 1, shinePct: w.nums.viewShinePct, tiltDeg: w.nums.viewTiltDeg, rainbow: w.nums.viewRainbow === 1,
-  });
+  const cardEl = cardViewEl({ id, rarity: c.rarity, group: c.group, fx }, cardLook((k) => w.nums[k] ?? 0, c.rarity));
   cardEl.onclick = (e) => e.stopPropagation();
   const over = h('div', { class: 'card-art-view', onclick: close }, cardEl,
     h('div', { class: 'muted', style: 'font-size:13px' }, 'ขยับเมาส์บนการ์ดเพื่อดูแสงสะท้อน · คลิกที่ว่างหรือกด Esc เพื่อปิด'));

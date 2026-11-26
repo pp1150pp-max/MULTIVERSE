@@ -759,6 +759,12 @@ export class OnlineBackend implements Backend {
         done?.(m.item);
         break;
       }
+      case 'fused': {
+        const done = this.fuseWait.get(m.req);
+        this.fuseWait.delete(m.req);
+        done?.(m.card);
+        break;
+      }
       case 'market': {
         const done = this.marketWait.get(m.req);
         this.marketWait.delete(m.req);
@@ -1446,6 +1452,20 @@ export class OnlineBackend implements Backend {
 
   unsocketCard(uid: string, i: number): void {
     this.send({ t: 'act', a: 'unsocketCard', uid, i });
+  }
+
+  /** Card fusion answers (`fused`) by req. */
+  private fuseWait = new Map<number, (card: string | null) => void>();
+
+  fuseCards(cards: string[]): Promise<string | null> {
+    const req = ++this.enhanceReq;
+    this.send({ t: 'act', a: 'fuseCards', cards, req });
+    return new Promise((resolve) => {
+      this.fuseWait.set(req, resolve);
+      setTimeout(() => {
+        if (this.fuseWait.delete(req)) resolve(null);
+      }, 5000);
+    });
   }
 
   market(call: MarketCall): Promise<MarketReply> {

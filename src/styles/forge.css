@@ -164,3 +164,24 @@
 .amount-row input[type=range] { flex: 1; }
 .amount-row input[type=number] { width: 64px; }
 
+
+/* Card fusion (card plan 6.1): the slot becomes 3 card slots, the info column lists the bag's cards. */
+#forge-slot.fuse { width: auto; height: auto; display: flex; gap: 6px; padding: 6px; }
+#forge-slot.fuse::after { content: none; }
+#forge-slot .fuse-card {
+  width: 52px; height: 78px; display: grid; place-items: center; border: 2px dashed rgba(201, 168, 255, 0.4); border-radius: 5px;
+  background: rgba(12, 9, 20, 0.6);
+}
+#forge-slot .fuse-card:not(.filled)::after { content: '+'; font-size: 22px; color: rgba(201, 168, 255, 0.35); }
+#forge-slot .fuse-card.filled { border: 2px solid var(--rc); cursor: pointer; box-shadow: 0 0 10px color-mix(in srgb, var(--rc) 55%, transparent); }
+#forge-slot .fuse-card .gi { width: 100%; height: 100%; object-fit: cover; image-rendering: auto; border-radius: 3px; }
+#forge-item .fuse-list { display: flex; flex-direction: column; gap: 3px; max-height: 190px; overflow-y: auto; margin-top: 4px; }
+#forge-item .fuse-pick {
+  display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 6px; padding: 2px 6px; text-align: left;
+  background: rgba(60, 48, 30, 0.6); border: 1px solid #4a3a20; border-radius: 4px; color: var(--ink); cursor: pointer; box-shadow: none;
+}
+#forge-item .fuse-pick:hover:not(:disabled) { border-color: var(--gold-hi); }
+#forge-item .fuse-pick:disabled { opacity: 0.4; cursor: default; }
+#forge-item .fuse-pick .fp-icon, #forge-item .fuse-pick .fp-icon .gi { width: 26px; height: 26px; display: block; }
+#forge-item .fuse-pick .fp-name { font-size: 12px; }
+#forge-item .fuse-pick .fp-n { font-size: 11px; color: var(--ink-dim); white-space: nowrap; }

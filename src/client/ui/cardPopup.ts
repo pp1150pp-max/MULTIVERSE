@@ -1,7 +1,7 @@
 // A monster card shown big over the game (card-system PR 1): clicking a card in the bag opens it. The game behind
 // darkens; ✕, Esc or a click outside the socket list closes it. The card's effects and group come from the card tuning
-// the server sends (src/shared/cardTuning.ts), its look from the /admin card tab numbers viewShine / viewShinePct /
-// viewTiltDeg / viewRainbow.
+// the server sends (src/shared/cardTuning.ts), its look from the /admin card tab's 'หน้าตาการ์ด' numbers (cardLook); the
+// player's graphics menu at 'ปิด' turns the shine, sparkles, holo and rays off.
 // Under the card: "เสียบการ์ด" (owner 2026-11-26: socket from the bag, anywhere) lists the player's drilled gear
 // (worn first, then the bag) the card fits; a click puts one card into that item's first empty socket.
 import { cardDef, cardNum } from '../../shared/cardTuning';
@@ -10,7 +10,8 @@ import { cardFxCap, cardFxRaw, freeSocket, isDrilled, SLOT_CARD_GROUP, socketCar
 import { itemName } from '../../shared/data/enhance';
 import { EQUIP_SLOTS, isItem, RARITY_COLOR, SLOT_LABEL, type Item } from '../../shared/types';
 import type { Game } from '../Game';
-import { cardViewEl } from '../cardView';
+import { cardLook, cardViewEl } from '../cardView';
+import { gfxQuality } from '../gfxPrefs';
 import { itemIcon } from '../icons';
 
 /** What the socket list needs from the game: the player's gear and how to send a socket action. */
@@ -200,12 +201,8 @@ export function openCardView(id: CardId, host?: CardSocketHost): void {
   const d = cardDef(id);
   if (!d) return;
   closeCardView();
-  const view = cardViewEl(d, {
-    shine: cardNum('viewShine') === 1,
-    shinePct: cardNum('viewShinePct'),
-    tiltDeg: cardNum('viewTiltDeg'),
-    rainbow: cardNum('viewRainbow') === 1,
-  });
+  const look = cardLook(cardNum, d.rarity);
+  const view = cardViewEl(d, gfxQuality() === 0 ? { ...look, shinePct: 0, sparkle: false, holo: false, rays: false } : look);
   if (host) view.append(socketList(id, host));
   const hint = document.createElement('div');
   hint.className = 'cardpop-hint';
