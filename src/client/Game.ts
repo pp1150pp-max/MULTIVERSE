@@ -45,6 +45,7 @@ import { MailUI } from './mail';
 import { ReportUI } from './report';
 import { MegaphoneUI } from './megaphone';
 import { DailyUI } from './daily';
+import { AlbumUI } from './cardAlbum';
 import { NewsUI } from './news';
 import { SkillWindow } from './skillWindow';
 import { SystemMenu } from './sysmenu';
@@ -116,6 +117,7 @@ export class Game {
   readonly report: ReportUI;
   readonly megaphone: MegaphoneUI;
   readonly daily: DailyUI;
+  readonly album: AlbumUI;
   readonly news: NewsUI;
   readonly skillWin: SkillWindow;
   /** Another player under the mouse (when no monster or usable thing is): a left click offers a party invite. */
@@ -246,6 +248,7 @@ export class Game {
     this.report = new ReportUI(this);
     this.megaphone = new MegaphoneUI(this);
     this.daily = new DailyUI(this);
+    this.album = new AlbumUI(this);
     this.news = new NewsUI(this);
     this.skillWin = new SkillWindow(this);
     initDraggableWindows(document.getElementById('hud')!);

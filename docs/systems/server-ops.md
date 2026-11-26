@@ -77,7 +77,7 @@
 1. `npm run stop-server` (countdown + เซฟทุกคน) แล้ว**สำรอง DB ก่อน** (คัดลอก `multiverse.db` ทั้งไฟล์ไปที่อื่น)
 2. **ห้ามลบ** `topups` (สมุดบัญชีการเติม ทุกคำขอ + ยืนยันเมื่อไร) · `topup_refunds` (ใครได้คืนแล้ว) · `accounts` (id ต้องเหมือนเดิม การคืนเพชรผูกกับ `account_id`) · `settings` (มีเลขพร้อมเพย์และสวิตช์คืนเพชร)
 3. **ต้องทำ** เมื่อล้างก่อน open beta: `UPDATE accounts SET crystals = 0;` (ไม่งั้นได้เพชรเดิม + เพชรคืนซ้ำ) · `DELETE FROM cash_purchases;` · ของแต่งตัวที่ซื้อจากแคชช็อป `DELETE FROM account_cosmetics WHERE granted_by = 'แคชช็อป';` (ของที่ admin ให้ ถามเจ้าของ) · จดหมายที่แคชช็อปส่ง (`mail_sends`/`mail_box`) ไปกับการล้างจดหมาย
-4. ตารางข้อมูลเกมอื่น (`characters`, `stashes`, `market_*`, `mail_*`, `trade_log`, `play_sessions`, `chat_log`, `daily_*`, `tutorials` ฯลฯ) ล้างตามที่เจ้าของเลือก
+4. **ไม่ล้าง** `card_album` (อัลบั้มการ์ด เจ้าของ 2026-11-25) · ตารางข้อมูลเกมอื่น (`characters`, `stashes`, `market_*`, `mail_*`, `trade_log`, `play_sessions`, `chat_log`, `daily_*`, `tutorials` ฯลฯ) ล้างตามที่เจ้าของเลือก
 5. เปิด server → /admin แท็บ "เติมเงิน" → "เปิดคืนเพชร close beta" (ทำ**หลัง**ล้าง และ**ก่อน**เปิดการเติมอีกครั้ง · server ไม่ยอมเปิดคืนเพชรขณะเปิดการเติม · ห้ามยืนยันรายการใดระหว่างล้างกับเปิดคืนเพชร ไม่งั้นได้เพชรซ้ำ) → แต่ละบัญชีได้คริสตัลคืนตอนเข้าเกมครั้งถัดไป ครั้งเดียว ลง audit `topup-refund` → ค่อยเปิดการเติมของ open beta
 
 ## ลิงก์ถาวรให้เพื่อน (named tunnel + โดเมนของเจ้าของ)

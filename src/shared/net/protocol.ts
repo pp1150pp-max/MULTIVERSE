@@ -197,6 +197,8 @@ export type ActionMsg =
   | { t: 'act'; a: 'gearTurnIn'; id: string }
   // Tutorial quests (Sim.tutAccept / tutTurnIn, src/shared/tutorial.ts): `step` is a tutorial step id.
   | { t: 'act'; a: 'tutAccept'; step: TutStep }
+  // Card album (src/shared/cardAlbum.ts): register one card from the bag (it is used up). Not for a guest.
+  | { t: 'act'; a: 'albumRegister'; card: string }
   | { t: 'act'; a: 'tutTurnIn'; step: TutStep }
   // The navigator in nexus_city (Sim.floorTurnIn / floorTravel, src/shared/floorGate.ts): hand in the quest that
   // opens floor 2, and be taken up to the harbour.
@@ -346,6 +348,8 @@ export interface PrivateSnap {
   gearDone?: string[];
   /** The account's tutorial quests (sent when they change). */
   tut?: TutorialData;
+  /** The account's card album: registered card ids (sent when it changes). */
+  album?: string[];
   /** Cooldown left by skill id ('dash' for the dash). */
   cd: Record<string, number>; potCd: number; restCd: number;
   /** Charges held by skills that keep stacks (Land Mine); left out when all are full. */

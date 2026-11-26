@@ -4,6 +4,8 @@ import { VIP_DAYS_MAX, vipLeftText } from '../../shared/vip';
 import { entryName } from '../../shared/data/potions';
 import { COSMETICS, COS_SLOTS, COS_SLOT_NAME } from '../../shared/data/cosmetics';
 import { registerOrbItems } from '../../shared/orbItems';
+import { ALBUM_PAGES, albumStep } from '../../shared/cardAlbum';
+import { ALBUM_PAGE_NAME, ALBUM_STATS, ALBUM_STAT_NAME, CARD_IDS, cardName, type CardId } from '../../shared/data/cards';
 import { equipEntries, itemGrid, listEntries, type ItemCtx } from '../items';
 import { BAG_TABS, TAB_NAME, tabRange } from '../../shared/bagTabs';
 import { isStack, RARITY_COLOR, RARITY_LABEL, type BagEntry, type Item } from '../../shared/types';
@@ -347,6 +349,23 @@ export async function openAccount(id: number, note?: { text: string; ok: boolean
       h('div', { class: 'sub', style: 'margin-top:0' }, d.stash ? `คลัง ${d.stash.size} ช่อง · ทอง ${fmt(d.stash.gold)} G` : 'คลัง'),
       !d.stash ? h('div', { class: 'muted' }, 'ยังไม่เคยใช้คลัง')
         : ictx ? itemGrid(ictx, { place: 'stash', accountId: id }, listEntries(d.stash.items)) : itemList(d.stash.items, 'คลังว่าง'))]);
+  }
+  if (!a.guest && d.album) {
+    // Card album (src/shared/cardAlbum.ts): look only. Registered cards per map page, the steps reached and the bonus now.
+    const has = new Set(d.album.cards as CardId[]);
+    const bonus = ALBUM_STATS.filter((s) => d.album!.bonus[s]).map((s) => `${ALBUM_STAT_NAME[s]} +${+d.album!.bonus[s].toFixed(1)}`).join(', ') || 'ยังไม่มี';
+    panes.push(['album', `อัลบั้มการ์ด (${has.size}/${CARD_IDS.length})`, () => h('div', { class: 'char-card' },
+      h('div', { class: 'muted' }, 'ดูได้อย่างเดียว · ตัวเลขโบนัสปรับในแท็บการ์ด'),
+      h('div', { class: 'sub' }, `โบนัสตอนนี้ (ทุกตัวละครในบัญชี): ${bonus}`),
+      ...ALBUM_PAGES.map((p) => {
+        const step = albumStep(p, has);
+        const n = [...p.normal, ...p.boss].filter((c) => has.has(c)).length;
+        return h('div', {},
+          h('div', { class: 'sub' }, `${ALBUM_PAGE_NAME[p.key]} ${n}/${p.normal.length + p.boss.length}`, ' ',
+            step ? h('span', { class: 'tag on' }, `ขั้น ${step}`) : null),
+          h('ul', { class: 'items' }, ...[...p.normal, ...p.boss].map((c) =>
+            h('li', {}, has.has(c) ? '✓ ' : '– ', cardName(c), p.boss.includes(c) ? ' (บอส)' : ''))));
+      }))]);
   }
   if (!a.guest && d.cosmetics) {
     const owned = new Set(d.cosmetics);

@@ -55,6 +55,7 @@ import { boxNow, boxOdds, boxOrbs, rollBoxRow, type BoxRow } from '../mysteryBox
 import { cardNum, cardDef } from '../cardTuning';
 import { drillCost, freeSocket, isDrilled, rollSockets, socketBlock, socketCards } from '../cardSockets';
 import { cardAnnounced, rollCardDrops } from '../cardDrops';
+import { albumOn, albumPageOf } from '../cardAlbum';
 import { CARD_RARITY_NAME, cardName, isCardId, type CardId } from '../data/cards';
 
 /** Gear of this rarity that "sell all" may take: never potions or enhanced items. */
@@ -1386,6 +1387,25 @@ export class Sim {
    * nothing given, if they don't fit). The server saves right after, so the gold and the taken step stay together.
    * A step the account was already paid for (its holder was deleted) is taken again for nothing.
    */
+  /**
+   * Card album (src/shared/cardAlbum.ts): moves one card from the bag into the account's album (shared array), the
+   * bonus applying at once. The server writes it (World.albumRegister) and puts it back if that fails.
+   */
+  albumRegister(p: Player, card: CardId): boolean {
+    if (!albumOn()) {
+      this.log('อัลบั้มการ์ดปิดอยู่', '#ff8a6a', p.id);
+      return false;
+    }
+    if (!albumPageOf(card) || p.album.includes(card)) return false;
+    if (!p.takeStones(card, 1)) return false;
+    p.album.push(card);
+    p.recompute();
+    this.log(`ลงทะเบียน${cardName(card)}ในอัลบั้มแล้ว`, STONE_COLOR[card], p.id);
+    this.sfx('trade', p.x, p.z, p.id);
+    this.inventoryChanged(p);
+    return true;
+  }
+
   tutAccept(p: Player, step: TutStep): boolean {
     const row = tutRows(p.tut, p.name).find((r) => r.step === step);
     if (!row || row.state !== 'offer' || !this.near(p, TUT_NPC[step])) return false;

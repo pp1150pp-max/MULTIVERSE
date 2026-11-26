@@ -9,6 +9,7 @@ import { toggleGfxPanel } from './gfxPanel';
 import { toggleKeybindPanel } from './keybindPanel';
 import { currentBalance } from '../shared/balance';
 import { newsButtonOn } from './news';
+import { albumOn } from '../shared/cardAlbum';
 import { hasChannels } from '../shared/channels';
 import { buttonAct, buttonIcon, buttonLabel, codeMenuLayout, freeBtnDomId, menuEntry, type MenuIcon, type MenuLayoutConfig } from '../shared/menuLayout';
 
@@ -34,7 +35,7 @@ const badge = (i: MenuIcon): string =>
   `<img src="${imgUrl(`assets/sprites/ui/ico_${i.img}.png`)}" alt="">${i.glyph ? `<span class="ico-glyph">${esc(i.glyph)}</span>` : ''}`;
 
 /** No such buttons for a guest (no mail, reports, trade, friends, daily login); keyed by what the button does. */
-const GUEST_NO = new Set(['mail', 'report', 'trade', 'friends', 'daily']);
+const GUEST_NO = new Set(['mail', 'report', 'trade', 'friends', 'daily', 'album']);
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -45,7 +46,7 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 export function menuButtonsHtml(lay: MenuLayoutConfig, guest: boolean): { top: string; free: string; tiles: string } {
   // No เต็มจอ where the browser can't do it (iPhone Safari); none of mail / report / trade / friends / daily for a guest.
   // Checked on what the button does, so an admin's shortcut to the same thing follows the same rules.
-  const okAct = (a: string) => !(guest && GUEST_NO.has(a)) && !(a === 'fullscreen' && !document.fullscreenEnabled) && !(a === 'news' && !newsButtonOn())
+  const okAct = (a: string) => !(guest && GUEST_NO.has(a)) && !(a === 'fullscreen' && !document.fullscreenEnabled) && !(a === 'news' && !newsButtonOn()) && !(a === 'album' && !albumOn())
     && !(a === 'keybinds' && !currentBalance().fxLayer.keyRebind);
   const ok = (id: string) => okAct(buttonAct(lay, id));
   // The badge key stays the code button's own Thai name (what setBadge uses), whatever the button is called now.
@@ -258,6 +259,7 @@ export class SystemMenu {
       case 'report': return g.report.toggle();
       case 'daily': return g.daily.toggle();
       case 'news': return g.news.toggle();
+      case 'album': return g.album.toggle();
       case 'cashshop': return g.cashShop.toggle();
       case 'map': return g.hud.toggleMap();
       case 'menu': return this.toggle();
@@ -309,6 +311,9 @@ export class SystemMenu {
       case 'report':
         this.toggle(false);
         return this.g.report.toggle(true);
+      case 'album':
+        this.toggle(false);
+        return this.g.album.toggle(true);
       case 'partyblock':
         this.g.party.setBlock(!this.g.party.block);
         return this.showView('settings');

@@ -17,8 +17,9 @@ import { itemClass, starterWeapon, upgradeItem } from '../data/items';
 import { setBonusStats } from '../data/sets';
 import { anyStackValue, potionHeal, potionPrice, POTION_SIZES, POTION_STACK, stackLimit } from '../data/potions';
 import { BOSS_QUEST_KEY, BUFF_MAX, QUEST_KILLS, stoneStackMax } from '../data/stones';
-import { CARD_IDS } from '../data/cards';
+import { CARD_IDS, type CardId } from '../data/cards';
 import { cardFxTotal, noCardFx, type CardFxTotals } from '../cardSockets';
+import { albumBonus } from '../cardAlbum';
 import { cleanGearDone, cleanGearQuests } from '../gearQuests';
 import type { TutorialData } from '../tutorial';
 import {
@@ -402,6 +403,8 @@ export class Player extends Unit {
   stash: StashData = newStash();
   /** The account's tutorial quests (src/shared/tutorial.ts): like the stash, saved on its own and shared by its characters. */
   tut: TutorialData = { done: [] };
+  /** The account's card album (src/shared/cardAlbum.ts): registered cards, shared by its characters, saved by the server on its own. */
+  album: CardId[] = [];
   /**
    * Enhancement aura tier (see auraTier): from the highest + item worn. The server works it out;
    * other players' mirrors in the browser have no equipment, so theirs comes from the snapshot.
@@ -797,6 +800,12 @@ export class Player extends Unit {
     const set = setBonusStats(this.equipment, currentBalance().sets);
     for (const k of Object.keys(pct) as (keyof typeof pct)[]) if (set[k]) set[k] = set[k]! * (1 + pct[k] / 100);
     addInto(s, set);
+    // Card album pages completed (cardAlbum.ts): percent of the whole HP / MP / attack / defense.
+    const ab = albumBonus(this.album);
+    s.maxHp = Math.round(s.maxHp * (1 + ab.hpPct / 100));
+    s.maxMp = Math.round(s.maxMp * (1 + ab.mpPct / 100));
+    s.atk *= 1 + ab.atkPct / 100;
+    s.def *= 1 + ab.defPct / 100;
     // The worn passive and skill buffs, flat in Stats units ("+40% attack speed" is +40 atkSpeed).
     passiveStats(this, s);
     for (const b of this.statBuffs) addInto(s, b.mods);

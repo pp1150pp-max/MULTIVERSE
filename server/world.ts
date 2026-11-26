@@ -58,7 +58,7 @@ import { Channels, FightClock, type Channel } from './channels';
 import { Perf, PERF_LOG_MS } from './perf';
 import { CH_RECONNECT_MS, CH_RESERVED, hasChannels, type ChannelsView } from '../src/shared/channels';
 import { MEGAPHONE_EVERY_MS, megaphoneText, STONE_NAME, STONE_STACK } from '../src/shared/data/stones';
-import { cardName, type CardId } from '../src/shared/data/cards';
+import { cardName, isCardId, type CardId } from '../src/shared/data/cards';
 import { buildChatLinks, type ChatLink } from '../src/shared/chatLinks';
 import { COS_SLOTS, cosById, cosCodes } from '../src/shared/data/cosmetics';
 import { cosHiddenIds, mayPutOnCos } from '../src/shared/cosShop';
@@ -102,7 +102,7 @@ const TRADE_LOCKED = new Set([
   'drill', 'socketCard', 'unsocketCard',
   'stashPut', 'stashTake', 'stashMove', 'stashSort', 'stashBuy', 'stashGold', 'stashSplit',
   'mktSearch', 'mktMine', 'mktPrice', 'mktList', 'mktCancel', 'mktBuy', 'mktClaim',
-  'mailList', 'mailRead', 'mailReadAll', 'mailClaim', 'mailDelete', 'mailDeleteRead', 'roomOpen', 'buyPhoenix', 'tutAccept',
+  'mailList', 'mailRead', 'mailReadAll', 'mailClaim', 'mailDelete', 'mailDeleteRead', 'roomOpen', 'buyPhoenix', 'tutAccept', 'albumRegister',
 ]);
 const TRADE_LOCKED_MSG = 'กำลังเทรดอยู่ — ปิดหน้าต่างเทรดก่อนถึงจะจัดการของได้';
 const PARTY_GUEST_MSG = 'Guest ใช้ระบบปาร์ตี้ไม่ได้ — สมัครสมาชิกเพื่อใช้งาน';
@@ -156,6 +156,8 @@ interface Session {
   lastStash: string;
   /** The tutorial state the last snapshot sent (JSON). */
   lastTut: string;
+  /** The card album the last snapshot sent (ids joined). */
+  lastAlbum: string;
   /** Cosmetic ids the account owns (guests: none), and what the last snapshot sent of it. */
   cosOwned: string[];
   lastCosOwned: string;
@@ -379,6 +381,8 @@ export class GameWorld {
   private readonly stashes = new Map<number, StashData>();
   /** One live tutorial state per account with a character online, shared like the stash (src/shared/tutorial.ts). */
   private readonly tuts = new Map<number, TutorialData>();
+  /** One live card album per account with a character online (src/shared/cardAlbum.ts). */
+  private readonly albums = new Map<number, CardId[]>();
   private readonly market: Market;
   readonly mail: Mail;
   readonly daily: Daily;
@@ -804,10 +808,22 @@ export class GameWorld {
       this.tuts.set(acc.id, tut);
     }
     player.tut = tut;
+    // The account's card album (src/shared/cardAlbum.ts), shared by its characters online like the tutorial.
+    let album = pv ? this.db.loadAlbum(acc.id) : this.albums.get(acc.id);
+    if (!album) {
+      album = this.db.loadAlbum(acc.id);
+      this.albums.set(acc.id, album);
+    }
+    const fullHp = player.hp >= player.stats.maxHp;
+    const fullMp = player.mp >= player.stats.maxMp;
+    player.album = album;
+    player.recompute();
+    if (fullHp) player.hp = player.stats.maxHp;
+    if (fullMp) player.mp = player.stats.maxMp;
     const s: Session = {
       ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId: pv ? -(charId + 1) : charId, sim, player,
       preview: !!pv, move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null, recall: false,
-      auto: null, lastInputAt: 0, walkTo: null, walkEpoch: 0, serverWalk: false, walkAnchor: { x: 0, z: 0 }, walkAnchorAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', lastTut: '', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', delta, lastMe: new Map(), seenP: new Map(), seenM: new Map(), outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, lastCashAt: -Infinity, lastTopupAt: -Infinity, saveDue: null,
+      auto: null, lastInputAt: 0, walkTo: null, walkEpoch: 0, serverWalk: false, walkAnchor: { x: 0, z: 0 }, walkAnchorAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', lastTut: '', lastAlbum: '-', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', delta, lastMe: new Map(), seenP: new Map(), seenM: new Map(), outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, lastCashAt: -Infinity, lastTopupAt: -Infinity, saveDue: null,
       ip, edge, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, deflate: ws.extensions.includes('permessage-deflate'), staff: !acc.guest && ['owner', 'gm'].includes(this.db.adminRole(acc.id) ?? ''), pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity, blockTrades: false,
@@ -983,6 +999,7 @@ export class GameWorld {
     if (![...this.sessions].some((o) => o.accountId === s.accountId)) {
       this.stashes.delete(s.accountId);
       this.tuts.delete(s.accountId);
+      this.albums.delete(s.accountId);
     }
     // Offline now (or shown as another character of the account).
     if (!s.guest) this.friendsMoved(s.accountId);
@@ -1616,6 +1633,9 @@ export class GameWorld {
         // Sim.tutAccept checks the step, its state for this character and the distance to its NPC.
         // Saved now: the gold given and the step taken must never come apart.
         if (TUT_STEPS.includes(m.step) && sim.tutAccept(p, m.step)) this.save(s);
+        break;
+      case 'albumRegister':
+        if (isCardId(m.card)) this.albumRegister(s, m.card);
         break;
       case 'tutTurnIn':
         if (TUT_STEPS.includes(m.step)) this.tutTurnIn(s, m.step);
@@ -2416,6 +2436,9 @@ export class GameWorld {
       p.z = spot.z;
       p.face(old.faceX, old.faceZ);
     }
+    // The account's card album first: its bonus is part of the max HP / MP the old values are clamped to.
+    p.album = old.album;
+    p.recompute();
     p.hp = Math.min(old.hp, p.maxHp);
     p.mp = Math.min(old.mp, p.stats.maxMp);
     p.cd = { ...old.cd };
@@ -2539,6 +2562,11 @@ export class GameWorld {
     if (stash !== s.lastStash) {
       s.lastStash = stash;
       me.stash = p.stash;
+    }
+    const album = p.album.join(',');
+    if (album !== s.lastAlbum) {
+      s.lastAlbum = album;
+      me.album = [...p.album];
     }
     const tut = JSON.stringify(p.tut);
     if (tut !== s.lastTut) {
@@ -2720,6 +2748,32 @@ export class GameWorld {
       console.error(`[cards] could not mail ${card} to ${s.player.name}: ${sent}`);
       this.send(s.ws, { t: 'chat', name: '', text: `ส่ง${cardName(card)}ทางจดหมายไม่ได้ (${sent})` });
     } else this.mailArrived();
+  }
+
+  /**
+   * Card album (src/shared/cardAlbum.ts): Sim takes the card from the bag and adds it to the account's album, then
+   * the character and the album row are written in one transaction (a failed write puts it all back). Every
+   * character of the account online gets the new bonus. Guests have no album (the account is deleted).
+   */
+  private albumRegister(s: Session, card: CardId): void {
+    if (s.guest) return this.send(s.ws, { t: 'chat', name: '', text: 'Guest ใช้อัลบั้มการ์ดไม่ได้ — สมัครสมาชิกก่อน' });
+    if (s.preview) return;
+    const p = s.player;
+    if (!s.sim.albumRegister(p, card)) return;
+    try {
+      this.db.transaction(() => {
+        this.db.addAlbumCard(s.accountId, card);
+        this.db.writeCharacterAndStash(s.charId, p.toData(), s.accountId, p.stash);
+      });
+    } catch (e) {
+      console.error(`[album] registering ${card} failed for`, p.name, e);
+      p.album.splice(p.album.indexOf(card), 1);
+      p.addStones(card, 1);
+      p.recompute();
+      this.send(s.ws, { t: 'chat', name: '', text: 'ลงทะเบียนการ์ดไม่สำเร็จ ลองใหม่อีกครั้ง' });
+      return;
+    }
+    for (const o of this.sessions) if (o.accountId === s.accountId && o !== s) o.player.recompute();
   }
 
   private sessionOfChar(charId: number): Session | undefined {
