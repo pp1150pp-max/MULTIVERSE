@@ -49,6 +49,8 @@ const MONSTERS = {
   seahorse_soldier: { map: 'floor2_m4', moves: ['walk', 'shoot'] },
   ghost_pirate_king: { map: 'floor2_m4', ghost: true, moves: ['walk', 'slash'] },
   kraken_tentacle: { map: 'floor2_m4', moves: ['idle', 'slam'] },
+  // The map's tentacles rising out of the whirlpool (FLOOR2_M4_REVISION.md, owner 2026-11-26); the room's arms keep kraken_tentacle.
+  kraken_tentacle_sea: { map: 'floor2_m4', moves: ['idle', 'slam'] },
   kraken: { map: 'floor2_m4', boss: true, moves: ['idle', 'arm_slam', 'arm_cut', 'ink', 'dive'], ref: { dive: 'first' } },
 };
 const KEYS = { crab: 'floor2_m1/key_crab_claw.png', captain: 'floor2_m2/key_treasure_compass.png', ghost: 'floor2_m3/key_ghost_bell.png', kraken: 'floor2_m4/key_kraken_eye.png' };

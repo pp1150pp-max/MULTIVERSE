@@ -162,6 +162,8 @@ const MAPS = {
     // This sheet came with 10 pieces, two altars in the top row (owner 2026-11-19: the tentacle altar with the eye is the
     // summoner, the flagged portal gate is kept as an extra piece): `cols` per row.
     ['room_props.png', 'props', { cols: [4, 3, 3], rows: 3, height: 256, names: ['room_kraken_gate', 'summoner_kraken', ...['pillar_0', 'wall', 'brazier', 'boulder', 'pillar_1', 'rubble', 'coral', 'mast'].map((n) => `room_kraken_${n}`)] }],
+    // More props for the map, in place of most of its broken masts (FLOOR2_M4_REVISION.md, owner 2026-11-26).
+    ['props_sea.png', 'props', { cols: 4, rows: 3, height: 256, names: ['sea_stack', 'sea_barnacle', 'sea_kelp', 'sea_arch', 'sea_crates', 'sea_cannon', 'sea_ribs', 'sea_buoy', 'sea_driftwood', 'sea_coral', 'sea_shells', 'sea_chain'] }],
     ['decor.png', 'atlas', { cols: 4, rows: 3, out: 'decor_maelstrom', size: [512, 384], place: 'bottom', fit: 'shared' }],
     ['island_cliff.png', 'atlas', { cols: 4, rows: 2, out: 'island_cliff_maelstrom', size: [1536, 768], place: 'top', fit: 'each' }],
     ['island_slabs.png', 'atlas', { cols: 4, rows: 2, out: 'island_slabs_maelstrom', size: [887, 443], place: 'centre', fit: 'shared' }],

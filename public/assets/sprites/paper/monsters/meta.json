@@ -223,5 +223,11 @@
       "cannon",
       "shell"
     ]
+  },
+  "kraken_tentacle_sea": {
+    "moves": [
+      "idle",
+      "slam"
+    ]
   }
 }

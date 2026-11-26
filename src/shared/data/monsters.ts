@@ -460,7 +460,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     aggroRange: 8, attackRange: 1.5, attackCooldown: 1.9, height: 2.1, radius: 0.6,
     behavior: 'aggressive', move: 'wave', itemChance: 0.24, potionChance: 0.15,
   },
-  // Round the whirlpool's rim (zones.ts rimSpawns): never moves, slams a long line at whoever comes within reach.
+  // Just inside the whirlpool's edge (zones.ts rimSpawns): never moves, slams a long line at whoever comes within reach.
   kraken_tentacle: {
     id: 'kraken_tentacle', name: 'Kraken Tentacle', nameTh: 'หนวดคราเคน', levels: [77, 79],
     hp: 10200, atk: 795, def: 113, speed: 0, exp: 7050, gold: [440, 675],
