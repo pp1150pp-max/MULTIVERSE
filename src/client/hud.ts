@@ -1204,6 +1204,7 @@ export class Hud {
     this.g.tutorial.close();
     this.g.navigator.close();
     this.g.npcDialog.close();
+    this.g.tutorial.closeReward();
   }
 
   talkTo(id: NpcId): void {

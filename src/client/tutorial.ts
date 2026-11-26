@@ -65,6 +65,11 @@ export class TutorialUI {
     this.npc = null;
   }
 
+  /** Esc: the reward window (F) too. */
+  closeReward(): void {
+    this.reward.close();
+  }
+
   update(): void {
     this.watchTurnIns();
     const id = this.npc;

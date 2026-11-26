@@ -60,6 +60,8 @@
   #npc-talk { font-size: max(9px, calc(var(--nt-w) / 62)); }
   #npc-talk .nt-answers { width: 44%; }
 }
+/* Touch: answers tall enough for a finger. */
+.touch-ui #npc-talk .nt-ans { min-height: 40px; }
 
 /* D: the tutorial quest card (src/client/tutorial.ts) — a parchment card with a scroll, rewards as icons. */
 #tut-win.quest-card {
