@@ -79,6 +79,12 @@ function plainGround(ed: Editor, g: CanvasRenderingContext2D): void {
       ed.path(g, pts);
       g.fillStyle = w.kind === 'ice' ? 'rgba(150,200,235,0.8)' : w.kind === 'whirlpool' ? 'rgba(30,110,140,0.85)' : 'rgba(230,90,30,0.85)';
       g.fill();
+      if (w.island) {
+        // A whirlpool's island: dry ground in its middle (only a warp circle gets there).
+        ed.path(g, Array.from({ length: 36 }, (_, i) => [w.x + Math.cos((i / 36) * Math.PI * 2) * w.island!, w.z + Math.sin((i / 36) * Math.PI * 2) * w.island!] as [number, number]));
+        g.fillStyle = 'rgba(150,130,95,0.95)';
+        g.fill();
+      }
     }
 }
 
@@ -157,6 +163,15 @@ const markers: Layer = {
       }
     }
     if (m.lair) dot(m.lair.x, m.lair.z, '#e05050', m.lair.boss);
+    // Warp circles: a line from each to where it leads.
+    (m.warps ?? []).forEach((w, i) => {
+      const [ax, ay] = ed.toScreen(w.x, w.z);
+      const [bx, by] = ed.toScreen(w.toX, w.toZ);
+      g.strokeStyle = 'rgba(64,224,192,0.8)'; g.lineWidth = 1.5; g.setLineDash([4, 4]);
+      g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke(); g.setLineDash([]);
+      dot(w.x, w.z, '#40e0c0', `วงวาร์ป ${i + 1}`);
+      dot(w.toX, w.toZ, '#a0fff0', `→ ${i + 1}`);
+    });
   },
 };
 

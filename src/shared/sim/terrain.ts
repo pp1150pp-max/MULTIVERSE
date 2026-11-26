@@ -1,6 +1,6 @@
 // Zone layout and collision, without any rendering. Built from the zone seed, so the browser and
 // the server get exactly the same trees, rocks and camp.
-import { arenaRadius, clearingRadius, lairOf, lavaAt, themeAt, whirlpoolAt, type Lair, type ZoneDef, type ZoneTheme } from '../data/zones';
+import { arenaRadius, clearingRadius, islandAt, lairOf, lavaAt, themeAt, whirlpoolAt, type Lair, type ZoneDef, type ZoneTheme } from '../data/zones';
 import { NPC_IDS, type NpcId } from '../data/npcs';
 import {
   HARBOR_BOATS, HARBOR_CORNERS, HARBOR_DECKS, HARBOR_GARDEN, HARBOR_LIGHTHOUSE, HARBOR_MAIN, HARBOR_PIER, HARBOR_PLAZA_RADIUS,
@@ -446,6 +446,17 @@ export class Terrain {
       const d = Math.hypot(dx, dz);
       const min = w.r + u.radius;
       if (d >= min) continue;
+      if (w.island) {
+        // A whirlpool with an island: on it is dry ground; in the water, back to whichever shore is nearer.
+        const shore = w.island - u.radius;
+        if (d <= shore) continue;
+        if (shore > 0 && d - shore < min - d) {
+          const k = d > 1e-4 ? shore / d : 0;
+          u.x = w.x + dx * k;
+          u.z = w.z + dz * k;
+          continue;
+        }
+      }
       const k = d > 1e-4 ? min / d : 1;
       u.x = w.x + (d > 1e-4 ? dx * k : min);
       u.z = w.z + (d > 1e-4 ? dz * k : 0);
@@ -902,7 +913,8 @@ export class Terrain {
       if (zone.boss && zone.bossSolid) this.colliders.push({ x: b.x, z: b.z, r: zone.bossSolid });
       if (zone.lair) this.addProp(SUMMONER_PROP[zone.theme], b.x, b.z, SUMMONER_HEIGHT, SUMMONER_SOLID);
       if (zone.roomOf) this.placeRoom(r, b, ring);
-      else {
+      // A summoner on a whirlpool's island (the Kraken Maelstrom, owner 2026-11-26): no ring, the island is its clearing.
+      else if (!islandAt(zone, b.x, b.z)) {
         for (let a = 0.3; a < Math.PI * 2; a += Math.PI / 4) {
           const [ringRock, ringH] = set.ringRock;
           this.addProp(a % 2 > 1 ? ringRock : 'runestone', b.x + Math.cos(a) * ring, b.z + Math.sin(a) * ring, a % 2 > 1 ? ringH : 2.6, 0.6);

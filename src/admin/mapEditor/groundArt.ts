@@ -77,6 +77,10 @@ const borderZ = (x: number): number => -QUADRANT_JITTER * Math.sin(x * 0.19 + Ma
 
 /** The arena's bare ground radius round a field's lair, as the game draws it. */
 function lairClearing(map: MapData): number {
+  // On a whirlpool's island (the Kraken Maelstrom's summoner) the island is the clearing, as src/client/world.ts draws it.
+  const l = map.lair;
+  const isle = l && map.water.find((w) => w.kind === 'whirlpool' && w.island && Math.hypot(l.x - w.x, l.z - w.z) < w.island);
+  if (isle && isle.island) return isle.island + 1;
   const z = ZONES[map.id];
   return z ? clearingRadius(z) : 13;
 }

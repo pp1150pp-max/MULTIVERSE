@@ -710,7 +710,8 @@ export class GameWorld {
       }
       try {
         if (msg.t === 'input') this.onInput(session, msg);
-        else if (session.preview && (msg.t === 'chat' || (msg.t === 'act' && msg.a !== 'respawn'))) return; // a preview only walks and fights
+        // A preview only walks and fights (warp circles are walking: the Kraken Maelstrom's island is tried out through them).
+        else if (session.preview && (msg.t === 'chat' || (msg.t === 'act' && msg.a !== 'respawn' && msg.a !== 'warp'))) return;
         else if (msg.t === 'act') this.onAction(session, msg);
         else if (msg.t === 'chat') this.onChat(session, msg.text, msg.ch, msg.to, msg.links);
         else if (msg.t === 'ping') this.onPing(session, msg);
@@ -1400,6 +1401,10 @@ export class GameWorld {
       case 'rest':
         // Sim.rest checks the distance, that the player is alive and the cooldown.
         if (sim.rest(p)) this.save(s);
+        break;
+      case 'warp':
+        // Sim.useWarp checks the player is alive and standing at one of this map's warp circles; the 'warped' event bumps the epoch.
+        sim.useWarp(p);
         break;
       case 'equip':
         if (i >= 0 && i < p.bag.length) p.equipFromBag(i, m.slot);
