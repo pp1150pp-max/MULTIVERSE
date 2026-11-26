@@ -23,9 +23,10 @@ export interface SheetInfo {
   cellAspect: number;
   /**
    * A paper monster sheet (tools/cut_paper_monsters.cjs): columns 0-3 walk, 4-7 attack, and the picture drawn this
-   * much taller than the unit's height (its cell has room for the attack poses).
+   * much taller than the unit's height (its cell has room for the attack poses). Floor 2's sheets also give their file
+   * name and move names, 4 columns each (paperMoves.ts).
    */
-  paper?: { walk: number; attack: number; scale: number };
+  paper?: { walk: number; scale: number; sheet: string; moves?: string[] };
   /** A paper NPC sheet: this many breathing frames across, looped while it stands (SpriteActor). */
   idleFrames?: number;
 }
@@ -254,8 +255,8 @@ export const SHEET_SPECS: Record<string, SheetSpec> = {
   spike_turtle: monster('monsters/spike_turtle.png', () => makeSheet(44, drawQuad(['#5a8a4a', '#4a3424', '#d8dcd8', '#1a2014'], {
     bodyRx: 0.34, bodyRy: 0.2, head: 0.12, ears: 'small', earSize: 0.02, tail: 'short', legLen: 0.06, legW: 0.09, snout: 0.04, belly: true,
   }))),
-  // Paper sheet giant_crab (PAPER_MONSTER_FILE): walk, claw, cannon, shell. The game plays walk and the second move (claw)
-  // for every attack for now; the code-drawn shape below only stands in if the sheet does not load.
+  // Paper sheet giant_crab (PAPER_MONSTER_FILE): walk, claw (also its plain hit), cannon, shell (paperMoves.ts); the
+  // code-drawn shape below only stands in if the sheet does not load.
   cannon_crab: monster('monsters/cannon_crab.png', () => makeSheet(56, drawQuad(['#d8502a', '#7a2410', '#c89a5a', '#2a1410'], {
     bodyRx: 0.4, bodyRy: 0.2, head: 0.1, ears: 'small', earSize: 0.03, tail: 'none', legLen: 0.08, legW: 0.08, snout: 0.03, tusks: true, belly: true,
   }))),
@@ -827,7 +828,7 @@ async function loadAssets(): Promise<void> {
           idleFrames = 4;
         } else if (monster) {
           tex = await loadTexture(`${BASE}paper/monsters/${paperFile}.png`);
-          paperMonster = { walk: 4, attack: 4, scale: monster.scale ?? 1 };
+          paperMonster = { walk: 4, scale: monster.scale ?? 1, sheet: paperFile, moves: monster.moves };
           cols = 4 * Math.max(2, monster.moves?.length ?? 2);
         } else {
           const paper = !paperMaps ? null

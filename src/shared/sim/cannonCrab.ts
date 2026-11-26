@@ -156,7 +156,7 @@ export class CannonCrabBrain {
         // Knockback slides power/10 units (Unit.tickStatus decays it ×e^-10 per second).
         h.knockback(m.x, m.z, mv('crab.clawFling') * 10);
         h.stunT = Math.max(h.stunT, mv('crab.clawStun') + 0.3);
-        sim.anim(m.id, 'claw', { duration: 0.4, fallback: 'attack' });
+        sim.anim(m.id, 'claw_fling', { duration: 0.4, fallback: 'attack' });
         sim.shake(0.3, { to: h.id });
       }
       return true;
@@ -235,6 +235,7 @@ export class CannonCrabBrain {
     this.held = t;
     this.holdT = mv('crab.clawHold');
     t.snareT = Math.max(t.snareT, this.holdT + 0.1);
+    sim.anim(m.id, 'claw_hold', { duration: this.holdT });
     sim.text(t.x, t.topY + 0.4, t.z, 'โดนหนีบ!', 'info', 0.8, t.id);
     // No hold at all (0 in /admin): flung at once.
     if (this.holdT <= 0) this.holdT = 0.01;

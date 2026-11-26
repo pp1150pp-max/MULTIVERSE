@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { fxTex, type SheetInfo } from './assets';
 import type { Actor, PlayOpts } from './AnimatedActor';
 import { cloneShared } from './texShare';
+import { moveSteps, stepColumn, type Step } from './paperMoves';
 
 const S = Math.SQRT1_2;
 const ROW_FRONT = 0;
@@ -11,8 +12,6 @@ const ROW_BACK = 2;
 const DIAGONAL_ROWS = 5;
 /** Frame order while moving. Cosmetic sheets pass COS_CYCLE (rest, up, rest, down: a flap or a step each way). */
 const WALK: readonly number[] = [0, 1, 2, 1];
-/** A paper monster's strike frames after its wind-up: each shown this long. */
-const ATTACK_FRAME_SECS = 0.11;
 /** A paper NPC's breathing loop, frames per second. */
 const NPC_IDLE_FPS = 4;
 
@@ -57,9 +56,9 @@ export class SpriteActor implements Actor {
   private flip = false;
   private animT = 0;
   private flashT = 0;
-  /** A paper monster's attack: seconds since it began (-1 = none) and its wind-up (see play). */
-  private attackT = -1;
-  private attackWind = 0;
+  /** A paper monster's move being played (paperMoves.ts), or null, and the seconds since it began. */
+  private move: Step[] | null = null;
+  private moveT = 0;
   private readonly cycle: readonly number[];
   private readonly shadow: THREE.Mesh;
 
@@ -113,17 +112,14 @@ export class SpriteActor implements Actor {
   }
 
   update(dt: number, moving: boolean, fps = 9): void {
-    const paper = this.sheet.paper;
-    if (paper && this.attackT >= 0) {
-      // The first attack frame (wind-up) while it winds up, then the rest quickly, the strike as the wind-up ends.
-      this.attackT += dt;
-      const after = this.attackT - this.attackWind;
-      const step = Math.floor(Math.max(0, after) / ATTACK_FRAME_SECS) + (after >= 0 ? 1 : 0);
-      if (step >= paper.attack) this.attackT = -1;
-      else this.frame = paper.walk + step;
+    if (this.move) {
+      this.moveT += dt;
+      const col = stepColumn(this.move, this.moveT);
+      if (col < 0) this.move = null;
+      else this.frame = col;
     }
-    if (this.attackT >= 0) {
-      // Showing an attack frame.
+    if (this.move) {
+      // Showing one of the move's frames.
     } else if (moving) {
       this.animT += dt * fps;
       this.frame = this.cycle[Math.floor(this.animT) % this.cycle.length];
@@ -148,22 +144,29 @@ export class SpriteActor implements Actor {
   }
 
   /**
-   * Simple sheets only have walk frames, so one-shot animations are no-ops. A paper monster plays 'attack':
-   * `duration` = its wind-up's seconds (Monster.update sends it as the wind-up begins).
+   * Simple sheets only have walk frames, so one-shot animations are no-ops. A paper monster plays 'attack', and a floor 2
+   * boss its own moves (paperMoves.ts): `duration` = the wind-up's or the hold's seconds, as the Sim sends it. A new move
+   * takes over from the one playing.
    */
   play(name: string, opts?: PlayOpts): boolean {
-    if (!this.has(name)) return false;
-    this.attackT = 0;
-    this.attackWind = Math.max(0, opts?.duration ?? 0.3);
+    const steps = this.stepsFor(name, opts?.duration ?? 0.3);
+    if (!steps) return false;
+    this.move = steps;
+    this.moveT = 0;
     return true;
   }
 
   has(name: string): boolean {
-    return name === 'attack' && !!this.sheet.paper;
+    return !!this.stepsFor(name, 0.3);
+  }
+
+  private stepsFor(name: string, duration: number): Step[] | null {
+    const paper = this.sheet.paper;
+    return paper ? moveSteps(paper.sheet, paper.moves, name, duration) : null;
   }
 
   reset(): void {
-    this.attackT = -1;
+    this.move = null;
   }
 
   /** Cuts the picture with world-space planes (the renderer has localClippingEnabled); null = whole. */

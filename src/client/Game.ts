@@ -536,8 +536,8 @@ export class Game {
       case 'anim': {
         const v = this.viewById(ev.id);
         if (v instanceof PlayerView) v.onAnim(ev);
-        // A monster winding up: only sheets with attack frames (the paper monsters) show it.
-        else if (v && ev.name === 'attack') v.actor.play('attack', { duration: ev.duration });
+        // A monster winding up, or a floor 2 boss's move: only sheets with those frames (the paper monsters) show it.
+        else if (v) v.actor.play(ev.name, { duration: ev.duration });
         break;
       }
       case 'item':
