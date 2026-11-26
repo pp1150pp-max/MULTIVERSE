@@ -183,6 +183,9 @@ export const CARD_NUM_FIELDS: readonly CardNumField[] = [
   { key: 'dropBoss', name: 'การ์ดบอส (ต่อกุญแจ 1 อัน)', group: 'เรทดรอป', def: 0.1, min: 0, max: 100, step: 0.0001, unit: '%' },
   { key: 'dropBossExtra', name: 'การ์ดนกแก้ว (ต่อกุญแจ 1 อัน ตอนฆ่ากัปตันขาไม้ สุ่มแยกจากการ์ดบอส)', group: 'เรทดรอป', def: 0.1, min: 0, max: 100, step: 0.0001, unit: '%' },
   { key: 'floor2Drop', name: 'การ์ดชั้น 2 ดรอปได้ (1 = เปิด, 0 = ปิด · เปิดเมื่อเปิดชั้น 2 ให้ผู้เล่น)', group: 'เรทดรอป', def: 0, min: 0, max: 1, step: 1, unit: '' },
+  // Card drops (PR 5, owner 2026-11-25): a card goes straight into the top damage dealer's bag (full bag: by mail).
+  { key: 'dropBoost', name: 'ใบคูณดรอปและ VIP เพิ่มโอกาสได้การ์ด (1 = เพิ่ม, 0 = เรทคงที่)', group: 'เรทดรอป', def: 1, min: 0, max: 1, step: 1, unit: '' },
+  { key: 'announceFrom', name: 'ประกาศทั้งเซิร์ฟเมื่อได้การ์ดระดับนี้ขึ้นไป (1 = หายาก, 2 = มหากาพย์, 3 = ตำนาน, 0 = ไม่ประกาศ)', group: 'เรทดรอป', def: 3, min: 0, max: 3, step: 1, unit: '' },
   { key: 'drillDropMonster', name: 'หินเจาะรูจากมอนทั่วไป', group: 'เรทดรอป', def: 0.2, min: 0, max: 100, step: 0.0001, unit: '%' },
   { key: 'drillDropBoss', name: 'หินเจาะรูจากบอส (ต่อกุญแจ)', group: 'เรทดรอป', def: 10, min: 0, max: 100, step: 0.0001, unit: '%' },
   { key: 'drill0', name: 'เจาะแล้วได้ 0 ช่อง', group: 'เจาะรู (3 ช่องรวมกันต้องได้ 100%)', def: 40, min: 0, max: 100, step: 0.1, unit: '%' },

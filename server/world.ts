@@ -58,6 +58,7 @@ import { Channels, FightClock, type Channel } from './channels';
 import { Perf, PERF_LOG_MS } from './perf';
 import { CH_RECONNECT_MS, CH_RESERVED, hasChannels, type ChannelsView } from '../src/shared/channels';
 import { MEGAPHONE_EVERY_MS, megaphoneText, STONE_NAME, STONE_STACK } from '../src/shared/data/stones';
+import { cardName, type CardId } from '../src/shared/data/cards';
 import { buildChatLinks, type ChatLink } from '../src/shared/chatLinks';
 import { COS_SLOTS, cosById, cosCodes } from '../src/shared/data/cosmetics';
 import { cosHiddenIds, mayPutOnCos } from '../src/shared/cosShop';
@@ -2319,6 +2320,11 @@ export class GameWorld {
           if (s) s.saveDue ??= now + 2000;
           continue;
         }
+        if (ev.t === 'cardMail') {
+          const s = this.sessionById(sim, ev.to);
+          if (s) this.mailCard(s, ev.card);
+          continue;
+        }
         if (ev.t === 'announce') {
           // A banner (an enhancement at forge bannerFrom or higher) also writes its own chat line on each screen.
           if (ev.banner) for (const o of this.sessions) this.send(o.ws, { t: 'announce', text: ev.text, from: '', direct: false, box: true, head: ev.banner });
@@ -2699,6 +2705,21 @@ export class GameWorld {
       if (s) this.send(s.ws, { t: 'chat', name: '', text: `กระเป๋าเต็ม — ส่ง${STONE_NAME[key]} ×${n} คืนทางจดหมาย` });
       this.mailArrived();
     }
+  }
+
+  /** A dropped card for a character whose bag was full (Sim.grantCard): sent by system mail. */
+  private mailCard(s: Session, card: CardId): void {
+    const sent = this.mail.send({ id: null, name: 'ระบบ' }, {
+      target: { kind: 'char', name: s.player.name },
+      title: 'การ์ดที่ได้จากมอน',
+      body: `ช่องประเภทใช้งานเต็มตอนได้${cardName(card)} จึงส่งมาทางจดหมาย`,
+      attach: { gold: 0, items: [{ kind: 'stone', stone: card, count: 1 }] },
+    });
+    if (typeof sent === 'string') {
+      // A Guest has no mailbox: the card is lost (it was told its bag was full).
+      console.error(`[cards] could not mail ${card} to ${s.player.name}: ${sent}`);
+      this.send(s.ws, { t: 'chat', name: '', text: `ส่ง${cardName(card)}ทางจดหมายไม่ได้ (${sent})` });
+    } else this.mailArrived();
   }
 
   private sessionOfChar(charId: number): Session | undefined {
