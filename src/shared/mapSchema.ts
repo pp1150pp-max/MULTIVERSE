@@ -38,8 +38,13 @@ export interface MapProp {
 }
 
 export interface MapPath { id: string; w: number; pts: Pt[] }
-/** `whirlpool`: a circle (rx = rz) nobody walks into (ZoneDef.whirlpools, the Kraken Maelstrom). */
-export interface MapWater { kind: 'ice' | 'lava' | 'whirlpool'; x: number; z: number; rx: number; rz: number }
+/**
+ * `whirlpool`: a circle (rx = rz) nobody walks into (ZoneDef.whirlpools, the Kraken Maelstrom). `island`: radius of dry ground in its
+ * middle, reached only by a warp circle (MapData.warps). Only whirlpools have it.
+ */
+export interface MapWater { kind: 'ice' | 'lava' | 'whirlpool'; x: number; z: number; rx: number; rz: number; island?: number }
+/** A warp circle on the ground (ZoneDef.warps): standing at (x, z), T or a click puts you at (toX, toZ) on the same map. */
+export interface MapWarp { x: number; z: number; toX: number; toZ: number }
 /** A closed polygon the player cannot enter (its inside is blocked). */
 export interface MapBlocker { id: string; pts: Pt[] }
 /** A solid circle that no prop owns (the hub's fountain, wall line and house footprints). Drawn as nothing. */
@@ -101,6 +106,8 @@ export interface MapData {
    */
   waveSpots?: { x: number; z: number; radius: number }[];
   lair?: MapLair;
+  /** Warp circles on the ground (the Kraken Maelstrom's way onto its whirlpool's island and back). Absent = none. */
+  warps?: MapWarp[];
   /** Only boss rooms have it. Absent on every other map. */
   room?: MapRoom;
 }
@@ -129,7 +136,7 @@ export interface MapIssue {
   severity: 'error' | 'warn';
   code: MapIssueCode;
   /** Which collection and id the issue is about, so the editor can jump to it. */
-  kind?: 'zone' | 'prop' | 'blocker' | 'path' | 'water' | 'npc' | 'rest' | 'portal' | 'spawn' | 'lair' | 'walkable' | 'wave';
+  kind?: 'zone' | 'prop' | 'blocker' | 'path' | 'water' | 'npc' | 'rest' | 'portal' | 'spawn' | 'lair' | 'walkable' | 'wave' | 'warp';
   id?: string;
   message: string;
 }
@@ -312,6 +319,10 @@ function validateInner(map: MapData, ctx: MapValidateCtx, err: Err, warn: Err): 
     else if (Math.abs(w.x) > half || Math.abs(w.z) > half) err('out_of_bounds', `water[${i}] is outside the map frame`, 'water', id);
     range(w.rx, 0.5, 200, `water[${i}] rx`, 'water', id);
     range(w.rz, 0.5, 200, `water[${i}] rz`, 'water', id);
+    if (w.island !== undefined) {
+      if (w.kind !== 'whirlpool') err('range', `water[${i}] only a whirlpool can have an island`, 'water', id);
+      else range(w.island, 1, Math.max(1, w.rx - 1), `water[${i}] island`, 'water', id);
+    }
   });
 
   // blockers
@@ -363,6 +374,11 @@ function validateInner(map: MapData, ctx: MapValidateCtx, err: Err, warn: Err): 
     if (typeof p.to !== 'string' || !p.to) err('schema', `portal ${i} has no target`, 'portal', id);
     if (!Number.isInteger(p.minLevel) || p.minLevel < 0 || p.minLevel > 200) err('range', `portal ${i} minLevel ${p.minLevel} must be an integer 0–200`, 'portal', id);
     placed('portal', id, p.x, p.z, `portal ${i} (to ${p.to})`);
+  });
+  (map.warps ?? []).forEach((w, i) => {
+    const id = String(i);
+    placed('warp', id, w?.x, w?.z, `วงวาร์ป ${i + 1}`);
+    placed('warp', id, w?.toX, w?.toZ, `ปลายทางวงวาร์ป ${i + 1}`);
   });
   if (map.lair) {
     if (mons && !mons.has(map.lair.boss)) err('bad_ref', `lair boss "${map.lair.boss}" is unknown`, 'lair');
@@ -439,7 +455,7 @@ function validateRoom(map: MapData, ctx: MapValidateCtx, err: Err, whalf: number
   if (map.lair) locked('ที่เรียกบอส (lair)', 'lair');
   if (map.zone.quadrants || map.zone.safe) locked('เขตปลอดภัย/ควอดแรนท์');
   const lists: [string, unknown[], MapIssue['kind']][] = [['ประตู', map.portals, 'portal'], ['จุดเกิดมอน', map.spawns, 'spawn'], ['NPC', map.npcs, 'npc'],
-    ['จุดพัก', map.rest, 'rest'], ['ทางเดิน', map.paths, 'path'], ['ทะเลสาบ/ลาวา', map.water, 'water'], ['จุดเกิดระลอก', map.waveSpots ?? [], 'wave']];
+    ['จุดพัก', map.rest, 'rest'], ['ทางเดิน', map.paths, 'path'], ['ทะเลสาบ/ลาวา', map.water, 'water'], ['จุดเกิดระลอก', map.waveSpots ?? [], 'wave'], ['วงวาร์ป', map.warps ?? [], 'warp']];
   for (const [name, list, kind] of lists) if (list.length) err('locked', `ห้องบอสห้ามมี${name} (ลบออก)`, kind);
   const b = ctx.baseline;
   if (b) {

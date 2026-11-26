@@ -65,6 +65,22 @@ export interface Whirlpool {
   x: number;
   z: number;
   r: number;
+  /**
+   * Radius of dry ground in its middle (owner 2026-11-26: the Kraken Maelstrom's summoner stands on it). Only reached by a warp pad
+   * (ZoneDef.warps): the water round it is still blocked. None = water all the way in.
+   */
+  island?: number;
+}
+
+/**
+ * A warp circle on the ground (owner 2026-11-26): stand within WARP_RANGE and press T or click it, and you are at (toX, toZ) on the
+ * same map. The Kraken Maelstrom has a pair: the whirlpool's bottom rim and its island.
+ */
+export interface WarpPad {
+  x: number;
+  z: number;
+  toX: number;
+  toZ: number;
 }
 
 /** An ellipse of lava: walkable, but it burns whoever stands in it. */
@@ -122,6 +138,8 @@ export interface ZoneDef {
   lavaPools?: LavaPool[];
   /** Whirlpools nobody can walk into (the Kraken Maelstrom and its boss room). */
   whirlpools?: Whirlpool[];
+  /** Warp circles on the ground (the Kraken Maelstrom's way onto its whirlpool's island and back). */
+  warps?: WarpPad[];
   /** Size of the boss's arena, marked by the ring of stones (default DEFAULT_ARENA). Auto Play stays out of it. */
   arenaRadius?: number;
   /** The boss can't be walked through (for one that never moves). */
@@ -198,6 +216,10 @@ function rotateZone(turns: 0 | 1 | 2 | 3, z: ZoneDef): ZoneDef {
     iceLakes: z.iceLakes?.map(ellipse),
     lavaPools: z.lavaPools?.map(ellipse),
     whirlpools: z.whirlpools?.map(pt),
+    warps: z.warps?.map((w) => {
+      const [toX, toZ] = r(w.toX, w.toZ);
+      return { ...pt(w), toX, toZ };
+    }),
   };
 }
 
@@ -226,7 +248,7 @@ export const FARM_GROUP = { share: 0.5, sizes: [2, 3] };
  * Off the roads, clear of the camp, the boss's arena, the lakes and pools, and of each other.
  * Seeded by the zone, so every server and browser gets the same layout.
  */
-function scatterZone(z: ZoneDef, list: Scatter[]): ZoneDef {
+function scatterZone(z: ZoneDef, list: Scatter[], end?: { x: number; z: number }): ZoneDef {
   const r = mulberry32(z.seed + 7);
   const segs: [number, number, number, number][] = [];
   for (const line of [z.path, ...z.branches]) {
@@ -245,9 +267,10 @@ function scatterZone(z: ZoneDef, list: Scatter[]): ZoneDef {
   const boss = z.lair!;
   const arena = z.arenaRadius ?? DEFAULT_ARENA;
   const pools = [...(z.iceLakes ?? []), ...(z.lavaPools ?? [])];
-  // 0 at the camp, 1 at the boss, measured along the diagonal between them.
+  // 0 at the camp, 1 at the far end (the boss, unless `end` says otherwise), measured along the diagonal between them.
+  const far = end ?? boss;
   const from = z.start.x + z.start.z;
-  const progress = (x: number, y: number) => (from - (x + y)) / (from - (boss.x + boss.z));
+  const progress = (x: number, y: number) => (from - (x + y)) / (from - (far.x + far.z));
   const FIRST = 0.08;
   const LAST = 0.87;
   const B = z.half - 11;
@@ -683,9 +706,16 @@ function rimSpawns(z: ZoneDef, monster: string, count: number, respawn: [number,
   return { ...z, spawns: [...z.spawns, ...spawns] };
 }
 
+/** The Kraken Maelstrom's island in its whirlpool (owner 2026-11-26: "not too big"): the summoner in the middle, a warp circle back. */
+export const MAELSTROM_ISLAND = 7;
+// Before the zone's half turn (rotateZone 2): on the bottom of the screen once turned.
+const MAELSTROM_PAD: [number, number] = [-22, -22];
+const MAELSTROM_ISLAND_PAD: [number, number] = [-3.5, -3.5];
+
 // Floor 2, map 4 (plan 2, 5.4): reached from the harbour's bottom pier, so the camp is at the top like Frost Reach's. A whirlpool
-// half the map across fills its middle (owner 2026-11-19): two roads go round it to the kraken's summoner, the tentacles stand
-// round its rim. Numbers: owner 2026-11-24 (the proposed table, the graveyard's boost); every move number is in /admin (moveTuning.ts).
+// half the map across fills its middle (owner 2026-11-19), the tentacles stand round its rim. The kraken's summoner stands on a small
+// island in its middle (owner 2026-11-26), reached by a warp circle on the whirlpool's bottom rim (on screen) where both roads end;
+// another on the island leads back. The old summoner's corner is ordinary map now. Numbers: owner 2026-11-24 (the proposed table, the graveyard's boost); every move number is in /admin (moveTuning.ts).
 export const ZONE_MAELSTROM: ZoneDef = rotateZone(2, rimSpawns(scatterZone({
   id: 'kraken_maelstrom',
   name: 'Kraken Maelstrom',
@@ -700,14 +730,18 @@ export const ZONE_MAELSTROM: ZoneDef = rotateZone(2, rimSpawns(scatterZone({
   half: 64,
   seed: 20261126,
   start: { x: 44, z: 44 },
-  // Round the right of the whirlpool; the branch goes round its left (both meet at the summoner).
-  path: [[52, 52], [44, 44], [46, 20], [44, 0], [38, -20], [24, -36], [4, -44], [-18, -44], [-42, -42]],
+  // Round the right of the whirlpool; the branch goes round its left (both meet at the warp circle on its rim).
+  path: [[52, 52], [44, 44], [46, 20], [44, 0], [38, -20], [24, -36], [4, -44], [-14, -38], MAELSTROM_PAD],
   branches: [
-    [[44, 44], [20, 46], [0, 44], [-20, 40], [-38, 26], [-44, 6], [-44, -18], [-42, -42]],
+    [[44, 44], [20, 46], [0, 44], [-20, 40], [-38, 26], [-44, 6], [-40, -12], MAELSTROM_PAD],
   ],
   spawns: [],
-  whirlpools: [{ x: 0, z: 0, r: 28 }],
-  lair: { boss: 'kraken', x: -42, z: -42 },
+  whirlpools: [{ x: 0, z: 0, r: 28, island: MAELSTROM_ISLAND }],
+  warps: [
+    { x: MAELSTROM_PAD[0], z: MAELSTROM_PAD[1], toX: MAELSTROM_ISLAND_PAD[0], toZ: MAELSTROM_ISLAND_PAD[1] },
+    { x: MAELSTROM_ISLAND_PAD[0], z: MAELSTROM_ISLAND_PAD[1], toX: MAELSTROM_PAD[0], toZ: MAELSTROM_PAD[1] },
+  ],
+  lair: { boss: 'kraken', x: 0, z: 0 },
   // Room for the tentacles round the room's whirlpool and players round them.
   arenaRadius: 15,
   portals: [{ to: HARBOR_ID, x: 49.5, z: 49.5, minLevel: 0 }],
@@ -715,7 +749,8 @@ export const ZONE_MAELSTROM: ZoneDef = rotateZone(2, rimSpawns(scatterZone({
   { group: [['shark_knight', 1]], count: 12, respawn: [8, 12] },
   { group: [['seahorse_soldier', 1]], count: 10, respawn: [10, 14] },
   { group: [['ghost_pirate_king', 1]], count: 9, respawn: [10, 14] },
-]), 'kraken_tentacle', 10, [14, 20], Math.PI / 10));
+// Monsters spread into the old summoner's corner too (owner 2026-11-26: ordinary map now): the far end lies past it.
+], { x: -60, z: -60 }), 'kraken_tentacle', 10, [14, 20], Math.PI / 10));
 
 /** Where each harbour pier leads (top, right, left, bottom of the screen), by plan 2; none of them built yet. */
 const HARBOR_PIERS: [string, string][] = [
@@ -781,7 +816,7 @@ export function zoneWithMap(zone: ZoneDef, map: MapData): ZoneDef {
   const water = (kind: 'ice' | 'lava') => map.water.filter((w) => w.kind === kind).map(({ x, z, rx, rz }) => ({ x, z, rx, rz }));
   const ice = water('ice');
   const lava = water('lava');
-  const whirl = map.water.filter((w) => w.kind === 'whirlpool').map(({ x, z, rx }) => ({ x, z, r: rx }));
+  const whirl = map.water.filter((w) => w.kind === 'whirlpool').map(({ x, z, rx, island }) => ({ x, z, r: rx, ...(island ? { island } : {}) }));
   return {
     ...zone,
     half: map.zone.half,
@@ -797,6 +832,7 @@ export function zoneWithMap(zone: ZoneDef, map: MapData): ZoneDef {
       return { monster: s.monster, x: s.x, z: s.z, radius: s.radius, count: s.count, respawn: [s.respawn[0], s.respawn[1]], ...(boost ? { boost } : {}) };
     }),
     portals: map.portals.map((p) => ({ ...p })),
+    warps: zone.warps || map.warps?.length ? (map.warps ?? []).map((w) => ({ ...w })) : undefined,
     lair: map.lair ? { ...map.lair } : undefined,
   };
 }
@@ -1006,7 +1042,38 @@ export function lavaAt(zone: ZoneDef, x: number, z: number): LavaPool | null {
 
 /** The whirlpool (x, z) is in, with pad added to its radius (a unit's radius, or a margin). Null outside every one. */
 export function whirlpoolAt(zone: ZoneDef, x: number, z: number, pad = 0): Whirlpool | null {
-  return zone.whirlpools?.find((w) => Math.hypot(x - w.x, z - w.z) < w.r + pad) ?? null;
+  return zone.whirlpools?.find((w) => {
+    const d = Math.hypot(x - w.x, z - w.z);
+    // The island in its middle is dry ground (pad eats into it too: a unit stands that far in from its shore).
+    return d < w.r + pad && !(w.island && d < w.island - pad);
+  }) ?? null;
+}
+
+/** The whirlpool whose island (x, z) stands on, shrunk by pad (a unit's radius). Null off every island. */
+export function islandAt(zone: ZoneDef, x: number, z: number, pad = 0): Whirlpool | null {
+  return zone.whirlpools?.find((w) => !!w.island && Math.hypot(x - w.x, z - w.z) < w.island - pad) ?? null;
+}
+
+/** Inside a whirlpool's whole circle, its island too, grown by pad: where nothing is scattered and nothing roams to. */
+export function inWhirlpoolCircle(zone: ZoneDef, x: number, z: number, pad = 0): boolean {
+  return !!zone.whirlpools?.some((w) => Math.hypot(x - w.x, z - w.z) < w.r + pad);
+}
+
+/** How close a player must stand to a warp circle to use it (the server checks it). */
+export const WARP_RANGE = 2;
+
+/** The warp circle a player at (x, z) can use: the nearest within WARP_RANGE. */
+export function warpPadNear(zone: ZoneDef, x: number, z: number): WarpPad | null {
+  let best: WarpPad | null = null;
+  let bestD = WARP_RANGE;
+  for (const w of zone.warps ?? []) {
+    const d = Math.hypot(x - w.x, z - w.z);
+    if (d <= bestD) {
+      bestD = d;
+      best = w;
+    }
+  }
+  return best;
 }
 
 /** Lava: this share of max HP, every LAVA_TICK seconds while standing in it. Ignores defense. */

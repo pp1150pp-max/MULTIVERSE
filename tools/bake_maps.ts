@@ -84,7 +84,7 @@ export function bakeZone(zone: ZoneDef): MapData {
     ...(zone.iceLakes ?? []).map((l) => ({ kind: 'ice' as const, x: l.x, z: l.z, rx: l.rx, rz: l.rz })),
     ...(zone.lavaPools ?? []).map((l) => ({ kind: 'lava' as const, x: l.x, z: l.z, rx: l.rx, rz: l.rz })),
     // A boss room's whirlpool stays in code (bossRoom, like its boss and arena): a room file holds no water (validateMap).
-    ...(zone.roomOf ? [] : zone.whirlpools ?? []).map((w) => ({ kind: 'whirlpool' as const, x: w.x, z: w.z, rx: w.r, rz: w.r })),
+    ...(zone.roomOf ? [] : zone.whirlpools ?? []).map((w) => ({ kind: 'whirlpool' as const, x: w.x, z: w.z, rx: w.r, rz: w.r, ...(w.island ? { island: w.island } : {}) })),
   ];
   const w = TRAIL_WIDTH[zone.theme];
   const map: MapData = {
@@ -114,6 +114,7 @@ export function bakeZone(zone: ZoneDef): MapData {
     })),
     spawns: zone.spawns.map((s) => ({ monster: s.monster, x: s.x, z: s.z, radius: s.radius, count: s.count, respawn: [s.respawn[0], s.respawn[1]] as [number, number] })),
   };
+  if (zone.warps?.length) map.warps = zone.warps.map((w) => ({ x: w.x, z: w.z, toX: w.toX, toZ: w.toZ }));
   if (zone.lair) map.lair = { boss: zone.lair.boss, x: zone.lair.x, z: zone.lair.z };
   if (zone.roomOf && zone.boss) {
     map.room = { of: zone.roomOf, arena: arenaRadius(zone), boss: { monster: zone.boss.monster, x: zone.boss.x, z: zone.boss.z, radius: zone.boss.radius } };

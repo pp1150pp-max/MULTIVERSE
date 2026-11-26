@@ -1,4 +1,5 @@
-// PR 7 tools that edit single points: named pins (NPC, doors, rest spots, the boss lair) and monster spawn circles.
+// PR 7 tools that edit single points: named pins (NPC, doors, rest spots, the boss lair, warp circles and where they lead) and monster
+// spawn circles.
 // Each is one `Tool` added with `ed.addTool`; every change is one command of the PR 6 stack (ed.exec / live + commitLive).
 import { MONSTERS } from '../../shared/data/monsters';
 import { ZONES } from '../../shared/data/zones';
@@ -25,9 +26,9 @@ export function keyOf(ed: Editor, kind: string): string | null {
 
 // ---------------------------------------------------------------- pins
 
-type PinKind = 'npc' | 'portal' | 'rest' | 'lair';
+type PinKind = 'npc' | 'portal' | 'rest' | 'lair' | 'warp' | 'warpTo';
 interface Pin { key: string; kind: PinKind; id: string; x: number; z: number; label: string; color: string }
-const PIN_COLOR: Record<PinKind, string> = { npc: '#4ac0e8', portal: '#b070f0', rest: '#e8c040', lair: '#e05050' };
+const PIN_COLOR: Record<PinKind, string> = { npc: '#4ac0e8', portal: '#b070f0', rest: '#e8c040', lair: '#e05050', warp: '#40e0c0', warpTo: '#a0fff0' };
 
 /** Zones a door may lead to: the maps themselves (boss rooms are reached by the boss summoner, not by a door). */
 /** Where a door may lead: the game's maps, then (set by the page from its map list) the maps made in the editor. */
@@ -42,6 +43,10 @@ function pinsOf(m: MapData): Pin[] {
   m.portals.forEach((p, i) => out.push({ key: `portal:${i}`, kind: 'portal', id: String(i), x: p.x, z: p.z, label: `→ ${p.to}`, color: PIN_COLOR.portal }));
   m.rest.forEach((r, i) => out.push({ key: `rest:${i}`, kind: 'rest', id: String(i), x: r.x, z: r.z, label: r.kind, color: PIN_COLOR.rest }));
   if (m.lair) out.push({ key: 'lair:lair', kind: 'lair', id: 'lair', x: m.lair.x, z: m.lair.z, label: m.lair.boss, color: PIN_COLOR.lair });
+  (m.warps ?? []).forEach((w, i) => {
+    out.push({ key: `warp:${i}`, kind: 'warp', id: String(i), x: w.x, z: w.z, label: `วงวาร์ป ${i + 1}`, color: PIN_COLOR.warp });
+    out.push({ key: `warpTo:${i}`, kind: 'warpTo', id: String(i), x: w.toX, z: w.toZ, label: `ปลายทางวาร์ป ${i + 1}`, color: PIN_COLOR.warpTo });
+  });
   return out;
 }
 
@@ -52,9 +57,11 @@ function movePin(m: MapData, pin: Pin, x: number, z: number): MapPatch {
     case 'portal': return { portals: m.portals.map((p, i) => (String(i) === pin.id ? { ...p, x, z } : p)) };
     case 'rest': return { rest: m.rest.map((r, i) => (String(i) === pin.id ? { ...r, x, z } : r)) };
     case 'lair': return { lair: m.lair ? { ...m.lair, x, z } : m.lair };
+    case 'warp': return { warps: (m.warps ?? []).map((w, i) => (String(i) === pin.id ? { ...w, x, z } : w)) };
+    case 'warpTo': return { warps: (m.warps ?? []).map((w, i) => (String(i) === pin.id ? { ...w, toX: x, toZ: z } : w)) };
   }
 }
-const pinKeys = (k: PinKind): (keyof MapData)[] => [k === 'npc' ? 'npcs' : k === 'portal' ? 'portals' : k === 'rest' ? 'rest' : 'lair'];
+const pinKeys = (k: PinKind): (keyof MapData)[] => [k === 'npc' ? 'npcs' : k === 'portal' ? 'portals' : k === 'rest' ? 'rest' : k === 'lair' ? 'lair' : 'warps'];
 
 function removePortal(ed: Editor, i: number): void {
   ed.exec('ลบประตู', { portals: ed.map.portals.filter((_, k) => k !== i) });
@@ -81,7 +88,7 @@ export function pinTool(): Tool {
     id: 'pins',
     label: 'NPC / ประตู',
     icon: '📍',
-    hint: 'คลิกหมุดเพื่อเลือก ลากเพื่อย้าย (Alt = ปิด snap) · ฟ้า = NPC (หนึ่งตัวมีหมุดเดียว ย้ายได้ เพิ่ม/ลบไม่ได้) · ม่วง = ประตู เลือกปลายทางและเลเวลขั้นต่ำที่ช่องขวา · เหลือง = จุดพัก · แดง = ที่เรียกบอส · Delete ลบประตู',
+    hint: 'คลิกหมุดเพื่อเลือก ลากเพื่อย้าย (Alt = ปิด snap) · ฟ้า = NPC (หนึ่งตัวมีหมุดเดียว ย้ายได้ เพิ่ม/ลบไม่ได้) · ม่วง = ประตู เลือกปลายทางและเลเวลขั้นต่ำที่ช่องขวา · เหลือง = จุดพัก · แดง = ที่เรียกบอส · เขียว = วงวาร์ปบนพื้น (ยืนกด T) เขียวอ่อน = ที่ที่วาร์ปไปถึง · Delete ลบประตู',
     activate(ed) { ed.select([]); },
     pointerDown(ed, e) {
       const hit = hitPin(ed, e.px, e.py);
@@ -125,7 +132,8 @@ export function pinTool(): Tool {
         ed.select([`portal:${ed.map.portals.length - 1}`]);
       }, 'วางประตูใหม่กลางจอ แล้วลากไปที่ที่ต้องการ');
       if (!p) { box.append(note('ยังไม่ได้เลือกหมุด คลิกหมุดบนแมพ'), addDoor); return box; }
-      const kindName = p.kind === 'npc' ? 'NPC' : p.kind === 'portal' ? 'ประตู' : p.kind === 'rest' ? 'จุดพัก' : 'ที่เรียกบอส';
+      const kindName = p.kind === 'npc' ? 'NPC' : p.kind === 'portal' ? 'ประตู' : p.kind === 'rest' ? 'จุดพัก' : p.kind === 'lair' ? 'ที่เรียกบอส'
+        : p.kind === 'warp' ? 'วงวาร์ป (ยืนกด T)' : 'ปลายทางวงวาร์ป';
       box.append(el('div', { class: 'me-title' }, `${kindName} · ${p.label}`),
         el('div', { class: 'me-grid2' },
           numField('x', p.x, (n) => ed.exec('ย้ายหมุด', movePin(ed.map, p, round3(n), p.z)), 0.5),

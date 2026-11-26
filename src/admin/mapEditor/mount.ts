@@ -331,6 +331,7 @@ export function mountMapEditor(host: HTMLElement, h: H, api: Api, perms: Revisio
       case 'portal': { const p = m.portals[Number(i.id)]; if (p) { tool = 'pins'; key = `portal:${i.id}`; at = [p.x, p.z]; } break; }
       case 'rest': { const r = m.rest[Number(i.id)]; if (r) { tool = 'pins'; key = `rest:${i.id}`; at = [r.x, r.z]; } break; }
       case 'lair': if (m.lair) { tool = 'pins'; key = 'lair:lair'; at = [m.lair.x, m.lair.z]; } break;
+      case 'warp': { const w = m.warps?.[Number(i.id)]; if (w) { tool = 'pins'; key = `warp:${i.id}`; at = [w.x, w.z]; } break; }
       case 'spawn': { const s = m.spawns[Number(i.id)]; if (s) { tool = 'spawns'; key = `spawn:${i.id}`; at = [s.x, s.z]; } break; }
       case 'wave': { const w = m.waveSpots?.[Number(i.id)]; if (w) { tool = 'wavespot'; key = `wave:${i.id}`; at = [w.x, w.z]; } break; }
       default: return;

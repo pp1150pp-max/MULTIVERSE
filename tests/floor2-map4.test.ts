@@ -3,7 +3,7 @@
 // monster moves (dive, bubble, wave, tentacle), the Kraken's moves (arms then head, ink, suction) and their /admin numbers.
 // On real Sims, no server.
 import { finish, ok } from './check';
-import { BOSS_ROOMS, ROOM_WHIRLPOOL, ZONES, ZONE_HARBOR, ZONE_HUB, floorOf, hubOf, whirlpoolAt } from '../src/shared/data/zones';
+import { BOSS_ROOMS, MAELSTROM_ISLAND, ROOM_WHIRLPOOL, WARP_RANGE, ZONES, ZONE_HARBOR, ZONE_HUB, floorOf, hubOf, islandAt, lairExitSpot, whirlpoolAt } from '../src/shared/data/zones';
 import { HARBOR_ID } from '../src/shared/data/harbor';
 import { MONSTERS } from '../src/shared/data/monsters';
 import { BOSS_KEY, BOSS_QUEST_KEY, STONE_DESC, STONE_NAME } from '../src/shared/data/stones';
@@ -93,7 +93,7 @@ const walkTo = (x: number, z: number) => (p: Player): Intent => {
   ok(sim.terrain.props.some((p) => p.key === 'summoner_kraken'), 'the kraken\'s summoner stands on the map');
   ok(['storm_rock_0', 'wreck_0', 'coral_0', 'kraken_flag', 'storm_lamp'].every((k) => sim.terrain.props.some((p) => p.key === k)), 'storm rocks, wrecks, coral, kraken flags and lamps');
   ok(!sim.terrain.props.some((p) => p.key.startsWith('rim_')), 'no foam waves round the whirlpool (owner 2026-11-26)');
-  ok(sim.terrain.props.every((p) => Math.hypot(p.x, p.z) > w!.r + 1), 'nothing stands in the whirlpool');
+  ok(sim.terrain.props.every((p) => Math.hypot(p.x, p.z) > w!.r + 1 || (p.key === 'summoner_kraken' && p.x === 0 && p.z === 0)), 'nothing stands in the whirlpool but the summoner on its island');
   const masts = sim.terrain.props.filter((p) => p.key === 'broken_mast').length;
   ok(masts > 0 && masts < 70, `far fewer broken masts (${masts}, was 224)`);
   const rs = new Sim(ROOM);
@@ -127,6 +127,50 @@ const walkTo = (x: number, z: number) => (p: Player): Intent => {
   run(sim, 1);
   ok(Math.hypot(p.x, p.z) >= r + p.radius - 0.01, 'a knockback into it stops at the rim too');
   ok(sim.terrain.isBlocked(0, 0, 0) && sim.terrain.isBlocked(r - 1, 0, 0) && !sim.terrain.isBlocked(r + 3, 0, 0.4), 'its inside is blocked, its rim is not');
+}
+
+// ---- the island in the whirlpool: the summoner, the warp circles (owner 2026-11-26)
+{
+  const w = SEA.whirlpools![0];
+  const isle = w.island!;
+  ok(isle === MAELSTROM_ISLAND && isle >= 6 && isle <= 9, `a small island in the whirlpool's middle (r ${isle})`);
+  ok(SEA.lair!.x === 0 && SEA.lair!.z === 0 && !!islandAt(SEA, 0, 0), "the kraken's summoner stands in the island's middle");
+  const sim = new Sim(SEA);
+  sim.monsters = [];
+  const t = sim.terrain;
+  ok(!t.isBlocked(4, 0, 0.4) && t.isBlocked(isle + 1, 0, 0.4) && t.isBlocked(w.r - 1, 0, 0.4) && !t.isBlocked(w.r + 2, 0, 0.4), 'the island is ground, the water round it is not');
+  ok(!t.props.some((p) => p.key === 'runestone' && Math.hypot(p.x, p.z) < w.r + 20), 'no ring of stones round the island');
+  const [rim, back] = SEA.warps ?? [];
+  const rimD = rim ? Math.hypot(rim.x - w.x, rim.z - w.z) : 0;
+  ok(SEA.warps?.length === 2 && rim.x > 0 && rim.z > 0 && rimD > w.r && rimD < w.r + 5, `a warp circle just off the whirlpool's bottom rim on screen (${rimD.toFixed(1)} from its middle)`);
+  ok(!!islandAt(SEA, rim.toX, rim.toZ, 0.5) && !!islandAt(SEA, back.x, back.z) && back.toX === rim.x && back.toZ === rim.z, "it leads onto the island; the island's leads back to it");
+  ok([SEA.path, ...SEA.branches].every((l) => l[l.length - 1][0] === rim.x && l[l.length - 1][1] === rim.z), 'both roads round the whirlpool end at the warp circle');
+  const corner = SEA.spawns.filter((s) => Math.hypot(s.x - 42, s.z - 42) < 20).length;
+  ok(corner >= 2 && !t.props.some((p) => p.key === 'summoner_kraken' && Math.hypot(p.x - 42, p.z - 42) < 5), `the old summoner's corner is ordinary map (${corner} spots there)`);
+
+  const p = tough(sim, rim.x + WARP_RANGE + 1, rim.z);
+  ok(!sim.useWarp(p), 'too far from the circle: nothing happens');
+  p.x = rim.x + 1;
+  p.z = rim.z;
+  sim.drainEvents();
+  ok(sim.useWarp(p) && !!islandAt(SEA, p.x, p.z, p.radius) && sim.drainEvents().some((e) => e.t === 'warped' && e.id === p.id), 'standing at it: onto the island (the browser is told to jump)');
+  run(sim, 2, walkTo(isle + 6, 0));
+  ok(Math.hypot(p.x, p.z) <= isle - p.radius + 0.01, `walking off the island stops at its shore (${Math.hypot(p.x, p.z).toFixed(2)})`);
+  p.knockback(p.x - 1, p.z, 40);
+  run(sim, 1);
+  ok(Math.hypot(p.x, p.z) <= isle - p.radius + 0.01, 'a knockback stops at its shore too');
+  p.x = back.x;
+  p.z = back.z;
+  ok(sim.useWarp(p) && Math.hypot(p.x - rim.x, p.z - rim.z) < 0.01, "the island's circle takes you back to the rim");
+  p.alive = false;
+  ok(!sim.useWarp(p), 'not while dead');
+  p.alive = true;
+  let onIsle = 0;
+  for (let i = 0; i < 24; i++) {
+    const spot = lairExitSpot(ROOM, () => i / 24)!;
+    if (spot.field === SEA.id && islandAt(SEA, spot.x, spot.z, 0.5) && !t.isBlocked(spot.x, spot.z, 0.4)) onIsle++;
+  }
+  ok(onIsle === 24, `leaving the kraken's room comes out on the island (${onIsle}/24)`);
 }
 
 // ---- key, quest key, gate, set drops
