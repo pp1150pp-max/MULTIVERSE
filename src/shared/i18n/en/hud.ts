@@ -135,9 +135,6 @@ export const EN_HUD: Record<string, string> = {
   'ปิดเสียงทั้งหมด': 'Mute all',
   'เอฟเฟกต์แยกหมวด': 'Effects by group',
   'สมัครสมาชิกที่หน้าแรก เพื่อเก็บตัวละคร Guest นี้ไว้ถาวร': 'Sign up on the title screen to keep this Guest character for good',
-  // Written in both languages and marked translate="no": never translated, listed so the extractor knows.
-  'ภาษา / Language': 'ภาษา / Language',
-  'มีผลเมื่อเปิดเกมใหม่ / Takes effect when you open the game again': 'มีผลเมื่อเปิดเกมใหม่ / Takes effect when you open the game again',
   'กลับเข้าเกม': 'Resume',
   'ผูกบัญชี Google': 'Link Google account',
   'กลับไปหน้า Guest': 'Back to Guest screen',

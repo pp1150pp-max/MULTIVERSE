@@ -8,7 +8,7 @@ import { gfxMenuOn } from './gfxPrefs';
 import { renderGfxSettings } from './gfxPanel';
 import { keybindWaiting, renderKeybindSettings, resetKeybindTab } from './keybindPanel';
 import { renderAudioSettings } from './audio/panel';
-import { LANG, LANG_NAME, langRowShown, langWanted, legacyLangButton, setLangPref } from './i18n';
+import { LANG, LANG_NAME, LANG_ROW_LABEL, LANG_ROW_NOTE, langRowShown, langWanted, legacyLangButton, setLangPref } from './i18n';
 import { toggleGfxPanel } from './legacy/gfxWindow';
 import { toggleKeybindPanel } from './legacy/keybindWindow';
 import { setRow, setSelect, setSwitch } from './settingsUi';
@@ -335,8 +335,8 @@ export class SystemMenu {
     if (langRowShown()) {
       // Written in both languages and never translated, so either reader finds it.
       const want = langWanted();
-      const row = setRow('ภาษา / Language', setSelect([['th', LANG_NAME.th], ['en', LANG_NAME.en]], want, (l) => { setLangPref(l); redraw(); }),
-        want === LANG ? undefined : 'มีผลเมื่อเปิดเกมใหม่ / Takes effect when you open the game again');
+      const row = setRow(LANG_ROW_LABEL, setSelect([['th', LANG_NAME.th], ['en', LANG_NAME.en]], want, (l) => { setLangPref(l); redraw(); }),
+        want === LANG ? undefined : LANG_ROW_NOTE);
       row.setAttribute('translate', 'no');
       rows.append(row);
     }

@@ -168,6 +168,9 @@ export function setLangPref(l: Lang): void {
 }
 /** Names in both languages, never translated, so either reader finds them. */
 export const LANG_NAME: Record<Lang, string> = { th: 'ไทย', en: 'English' };
+/** The settings row's name and its "next time" note, in both languages (kept here, where the extractor never looks). */
+export const LANG_ROW_LABEL = 'ภาษา / Language';
+export const LANG_ROW_NOTE = 'มีผลเมื่อเปิดเกมใหม่ / Takes effect when you open the game again';
 
 /**
  * The old one-button language switch (the settings button list used while /admin turns the tabbed page off): click =
