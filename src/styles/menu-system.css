@@ -124,9 +124,143 @@
 #sys-menu .sys-ico { position: relative; width: 56px; height: 56px; display: block; font-size: 56px; }
 #sys-menu .sys-view { display: flex; flex-direction: column; gap: 6px; }
 #sys-menu .sys-view.hidden { display: none; }
-#sys-menu .sys-view button { width: 100%; padding: 7px 10px; font-size: 14px; }
+#sys-menu .sys-view:not([data-view="settings"]) button { width: 100%; padding: 7px 10px; font-size: 14px; }
 #sys-menu .sys-sep { height: 1px; background: var(--panel-edge); margin: 4px 0; }
 #sys-menu .sys-note { font-size: 11px; color: var(--ink-dim); text-align: center; white-space: normal; line-height: 1.4; }
+
+/* Settings page (owner 2026-11-26, src/client/sysmenu.ts + settingsUi.ts): side tabs left, "name / control" rows right,
+   big exit buttons at the bottom. CSS only, in the game's dark-and-gold window style. Narrow screens: tabs on top. */
+#sys-menu.sys-settings { width: min(720px, 96vw); }
+#sys-menu .set-body { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 12px; }
+#sys-menu .set-tabs { display: flex; flex-direction: column; gap: 8px; }
+#sys-menu .set-tab {
+  position: relative; display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 12px; text-align: left; font-size: 15px;
+  color: #d8ccb0; background: linear-gradient(#3a342c, #1e1a15); border: 1px solid #6f5a32; border-radius: 3px;
+  box-shadow: inset 0 0 0 1px #0d0a07, 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+#sys-menu .set-tab-ico { width: 26px; font-size: 20px; text-align: center; line-height: 1; filter: drop-shadow(0 1px 0 #000); }
+#sys-menu .set-tab:hover { border-color: var(--gold-hi); color: #fff; }
+#sys-menu .set-tab.on {
+  color: #24170a; font-weight: 600; background: linear-gradient(#e6bd5a, #b0852e 55%, #8a6420); border-color: var(--gold-hi);
+  box-shadow: inset 0 1px 0 rgba(255, 240, 200, 0.5), 0 0 8px rgba(242, 213, 138, 0.35);
+}
+/* The arrow head on the picked tab, pointing at its page. */
+#sys-menu .set-tab.on::after {
+  content: ''; position: absolute; right: -11px; top: 50%; width: 12px; height: 22px; transform: translateY(-50%);
+  background: linear-gradient(90deg, #b0852e, #e6bd5a); clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+#sys-menu .set-back { margin-top: auto; padding: 6px 10px; font-size: 13px; color: var(--ink-dim); }
+#sys-menu .set-pane {
+  display: flex; flex-direction: column; min-height: 300px; max-height: min(58vh, 440px); padding: 10px 16px 12px;
+  background: rgba(0, 0, 0, 0.28); border: 1px solid #4a3a20; border-radius: 3px; box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.6);
+}
+@supports (height: 100dvh) { #sys-menu .set-pane { max-height: min(58dvh, 440px); } }
+#sys-menu .set-title {
+  flex: none; padding-bottom: 6px; margin-bottom: 4px; font-family: 'Cinzel', 'Kanit', serif; font-weight: 700; font-size: 17px; letter-spacing: 0.5px;
+  color: var(--gold-hi); text-shadow: 0 1px 0 #000; border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, transparent, var(--gold) 12%, var(--gold) 60%, transparent) 1;
+}
+#sys-menu .set-rows { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
+#sys-menu .set-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; min-height: 42px; padding: 5px 2px;
+  border-bottom: 1px solid rgba(201, 168, 90, 0.14);
+}
+#sys-menu .set-name { font-size: 14px; color: var(--ink); }
+#sys-menu .set-ctl { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+#sys-menu .set-note { grid-column: 1 / -1; padding: 2px 0 2px 2px; font-size: 11.5px; color: var(--ink-dim); white-space: normal; line-height: 1.4; }
+#sys-menu .set-note::before { content: 'ⓘ '; color: var(--gold); }
+#sys-menu .set-sub { margin: 12px 0 0; font-size: 12px; color: var(--gold); letter-spacing: 0.5px; }
+/* Drop-down: dark plate, gold edge and chevron. */
+#sys-menu .set-select {
+  min-width: 150px; height: 32px; padding: 0 30px 0 10px; font: inherit; font-size: 14px; color: var(--ink); cursor: pointer;
+  appearance: none; -webkit-appearance: none; border: 1px solid #8f7238; border-radius: 3px;
+  background:
+    linear-gradient(45deg, transparent 50%, var(--gold) 50%) right 15px center / 6px 6px no-repeat,
+    linear-gradient(135deg, var(--gold) 50%, transparent 50%) right 9px center / 6px 6px no-repeat,
+    linear-gradient(#2e2922, #18140f);
+  box-shadow: inset 0 0 0 1px #0d0a07;
+}
+#sys-menu .set-select:hover { border-color: var(--gold-hi); }
+#sys-menu .set-select option { background: #1e1a15; color: var(--ink); }
+#sys-menu .set-select option:disabled { color: #6a6358; }
+/* ON / OFF switch: a pill with a round gold knob; on = gold pill, knob right. */
+#sys-menu .set-switch {
+  position: relative; width: 82px; height: 30px; padding: 0; border-radius: 15px; border: 1px solid #6f5a32;
+  background: linear-gradient(#141210, #2a2620); box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.7);
+}
+#sys-menu .set-switch-text { position: absolute; top: 50%; right: 12px; transform: translateY(-50%); font-size: 12px; font-weight: 600; color: #9a927f; }
+#sys-menu .set-switch i {
+  position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; transition: left 0.15s;
+  background: radial-gradient(circle at 35% 30%, #d8d2c4, #7a746a 70%); box-shadow: 0 1px 2px #000;
+}
+#sys-menu .set-switch.on { border-color: var(--gold-hi); background: linear-gradient(#e0b552, #8a6420); }
+#sys-menu .set-switch.on .set-switch-text { right: auto; left: 12px; color: #24170a; }
+#sys-menu .set-switch.on i { left: 55px; background: radial-gradient(circle at 35% 30%, #fff1c8, #c99a3a 70%); }
+#sys-menu .set-switch:disabled { opacity: 0.45; cursor: default; }
+/* Slider: gold-filled track (--fill set by the code), diamond knob, the number beside it. */
+#sys-menu .set-slider { display: flex; align-items: center; gap: 8px; }
+#sys-menu .set-slider input {
+  --fill: 50%; width: min(190px, 34vw); height: 18px; margin: 0; background: transparent; cursor: pointer; appearance: none; -webkit-appearance: none;
+}
+#sys-menu .set-slider input::-webkit-slider-runnable-track {
+  height: 6px; border-radius: 3px; border: 1px solid #5a4a2a;
+  background: linear-gradient(90deg, #8a6420, #f2d58a var(--fill), #141210 var(--fill));
+}
+#sys-menu .set-slider input::-moz-range-track { height: 6px; border-radius: 3px; border: 1px solid #5a4a2a; background: #141210; }
+#sys-menu .set-slider input::-moz-range-progress { height: 6px; border-radius: 3px; background: linear-gradient(90deg, #8a6420, #f2d58a); }
+#sys-menu .set-slider input::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 15px; height: 15px; margin-top: -5.5px; transform: rotate(45deg);
+  background: linear-gradient(135deg, #fff1c8, #c99a3a); border: 1px solid #5a3e12; box-shadow: 0 0 4px rgba(242, 213, 138, 0.7);
+}
+#sys-menu .set-slider input::-moz-range-thumb {
+  width: 13px; height: 13px; border-radius: 0; transform: rotate(45deg);
+  background: linear-gradient(135deg, #fff1c8, #c99a3a); border: 1px solid #5a3e12; box-shadow: 0 0 4px rgba(242, 213, 138, 0.7);
+}
+#sys-menu .set-num { min-width: 42px; text-align: right; font-size: 14px; color: var(--gold-hi); }
+#sys-menu .set-btn { padding: 6px 12px; font-size: 13px; }
+/* ปุ่ม tab (src/client/keybindPanel.ts). */
+#sys-menu .kb-row { min-height: 36px; }
+#sys-menu .kb-key { min-width: 96px; padding: 4px 8px; font-weight: 600; }
+#sys-menu .kb-key.none { color: var(--ink-dim); }
+#sys-menu .kb-key.wait { outline: 2px solid var(--gold); color: var(--gold); }
+#sys-menu .kb-clear { padding: 4px 8px; }
+#sys-menu .kb-msg { min-height: 1.4em; margin-top: 8px; font-size: 12px; color: #ffb35a; white-space: normal; }
+#sys-menu .kb-msg.ok { color: var(--ink-dim); }
+#sys-menu .kb-reset { margin-top: 6px; padding: 6px 14px; }
+/* Big buttons along the bottom. */
+#sys-menu .set-foot { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+#sys-menu .set-big { height: 46px; padding: 0 10px; font-size: 16px; font-weight: 600; letter-spacing: 0.3px; }
+#sys-menu .set-big.danger { background: linear-gradient(#a8362c, #5e1a14); border-color: #e0806a; color: #ffe8dc; }
+#sys-menu .set-big.danger:hover { filter: brightness(1.15); color: #fff; }
+#sys-menu [data-view="settings"] .sys-note { margin-top: 6px; }
+/* Narrow (phones upright): tabs become a row on top, arrow pointing down. */
+@media (max-width: 620px) {
+  #sys-menu.sys-settings { padding: 12px 10px; }
+  #sys-menu .set-body { grid-template-columns: 1fr; gap: 8px; }
+  #sys-menu .set-tabs { flex-direction: row; gap: 3px; overflow-x: auto; }
+  #sys-menu .set-tab { flex: 1 1 auto; justify-content: center; gap: 3px; height: 38px; padding: 0 5px; font-size: 13px; }
+  #sys-menu .set-tab-ico { width: auto; font-size: 14px; }
+  #sys-menu .set-tab.on::after { right: 50%; top: auto; bottom: -9px; width: 18px; height: 9px; transform: translateX(50%); clip-path: polygon(0 0, 100% 0, 50% 100%); background: #8a6420; }
+  #sys-menu .set-back { flex: none; margin: 0; padding: 0 6px; }
+  #sys-menu .set-pane { min-height: 0; max-height: calc(100vh - 190px); padding: 8px 10px; }
+  #sys-menu .set-select { min-width: 110px; }
+  #sys-menu .set-foot { gap: 6px; margin-top: 8px; }
+  #sys-menu .set-big { height: 38px; font-size: 13px; padding: 0 4px; }
+}
+@supports (height: 100dvh) { @media (max-width: 620px) { #sys-menu .set-pane { max-height: calc(100dvh - 190px); } } }
+/* Short (phones on their side): side tabs stay, everything tighter so the rows get the height. */
+@media (max-height: 520px) and (min-width: 621px) {
+  #sys-menu.sys-settings { padding: 10px 12px; }
+  #sys-menu.sys-settings .panel-head { margin-bottom: 8px; }
+  #sys-menu .set-body { grid-template-columns: 140px minmax(0, 1fr); }
+  #sys-menu .set-tabs { gap: 5px; }
+  #sys-menu .set-tab { height: 36px; font-size: 14px; }
+  #sys-menu .set-pane { min-height: 0; max-height: calc(100vh - 130px); padding: 6px 12px 8px; }
+  #sys-menu .set-row { min-height: 36px; padding: 3px 2px; }
+  #sys-menu .set-foot { margin-top: 8px; }
+  #sys-menu .set-big { height: 34px; font-size: 14px; }
+}
+@supports (height: 100dvh) { @media (max-height: 520px) and (min-width: 621px) { #sys-menu .set-pane { max-height: calc(100dvh - 130px); } } }
 #exit-countdown {
   position: absolute; left: 50%; top: 28%; transform: translateX(-50%); padding: 8px 16px;
   background: rgba(10, 7, 4, 0.85); border: 1px solid var(--panel-edge); border-radius: 6px;

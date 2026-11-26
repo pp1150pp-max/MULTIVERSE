@@ -70,7 +70,7 @@ const MINIMAP_ZOOMS = [1.8, 2.6, 3.8];
 const MINIMAP_ZOOM_KEY = 'multiverse-minimap-zoom';
 const BAG_SIDE_KEY = 'multiverse-bag-side-collapsed';
 
-type HudStyle = 'orbs' | 'bars';
+export type HudStyle = 'orbs' | 'bars';
 const HUD_STYLE_KEY = 'multiverse-hud-style';
 
 function loadHudStyle(): HudStyle {
@@ -993,7 +993,12 @@ export class Hud {
     $('btn-hud-style').textContent = this.hudStyle === 'orbs' ? 'HP/MP: ลูกแก้ว' : 'HP/MP: แถบ';
   }
 
-  private setHudStyle(style: HudStyle): void {
+  /** HP/MP as the player picked it (เมนู → ตั้งค่า → ทั่วไป); touch screens always show the bars. */
+  get hpStyle(): HudStyle {
+    return this.hudStyle;
+  }
+
+  setHudStyle(style: HudStyle): void {
     this.hudStyle = style;
     this.applyHudStyle();
     try {

@@ -137,6 +137,8 @@ export interface FxLayerConfig extends Record<QuarksKey, boolean> {
   gfxMenu: boolean;
   /** Players can move game actions to their own keys (เมนู → ตั้งค่า → ตั้งค่าปุ่ม, src/client/keybinds.ts). Off = the code's keys. */
   keyRebind: boolean;
+  /** The in-game settings page with side tabs (owner 2026-11-26, src/client/sysmenu.ts); off = the old button list and separate graphics / sound / key windows. */
+  settingsTabs: boolean;
   /** HP/MP orbs hug the skill bar on wide screens (owner 2026-11-18); off = the screen's bottom corners. */
   orbsNearBar: boolean;
   /** Particle quality a player starts on (3 high, 2 medium, 1 low, 0 off), and the most anyone can pick. */
@@ -316,7 +318,7 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   droneDist: 'โดรน: × ระยะห่างจากตัวละคร',
 };
 
-const BASE_BOOLS = ['enabled', 'debuffs', 'guardGlow', 'buffIcons', 'barBuffIcons', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'droneFollow', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'keyRebind', 'orbsNearBar', 'extras', 'bossFx', 'bossExtras', 'enhAuraSmooth', 'enhOrbGlowFront', 'luNew', 'dashNew'] as const;
+const BASE_BOOLS = ['enabled', 'debuffs', 'guardGlow', 'buffIcons', 'barBuffIcons', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'droneFollow', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'keyRebind', 'settingsTabs', 'orbsNearBar', 'extras', 'bossFx', 'bossExtras', 'enhAuraSmooth', 'enhOrbGlowFront', 'luNew', 'dashNew'] as const;
 type FxLayerBool = (typeof BASE_BOOLS)[number] | QuarksKey;
 const FX_LAYER_BOOLS: readonly FxLayerBool[] = [...BASE_BOOLS, ...QUARKS_KEYS];
 const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
@@ -334,6 +336,7 @@ const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
   quarks: 'อนุภาค three.quarks (ทดลอง)',
   gfxMenu: 'เมนูกราฟิกของผู้เล่น',
   keyRebind: 'ให้ผู้เล่นตั้งปุ่มเอง (เมนู › ตั้งค่า › ตั้งค่าปุ่ม)',
+  settingsTabs: 'หน้าต่างตั้งค่าแบบแท็บ (ปิด = ปุ่มเรียง + หน้าต่างกราฟิก/เสียง/ปุ่มแยกแบบเดิม)',
   orbsNearBar: 'ลูกแก้ว HP/MP ชิดแถบสกิล (ปิด = มุมจอ)',
   ...(Object.fromEntries(QUARKS_SKILL_IDS.map((s) => [quarksKey(s), `three.quarks: ${QUARKS_SKILLS[s]}`])) as Record<QuarksKey, string>),
   extras: 'เอฟเฟกต์โค้ดของสกิล (ทับภาพเดิม)',
@@ -353,7 +356,7 @@ export function codeFxLayer(): FxLayerConfig {
     maxNums: 40, mergeNums: true, mergeSec: 0.15, ownNumsOnly: false, smoothShots: true, droneFollow: true, droneSpeed: 7, droneDist: 1, circles: true, zoneCircles: true, circleGlow: 1, slashLift: 0.9, craterBack: 1, townEdge: 1.2, townRound: 3, quarks: false, quarksOthers: 0.5, quarksTouch: 0.5, quarksCap: 3000,
     paperPlate: 1, paperBubble: 1, plateMaxW: 200, bubbleMaxW: 220, platePadY: 3, platePadX: 14, plateLift: 0, bubblePadY: 7, bubblePadX: 18, paperFoot: 1.6, slotCorner: 1, slotInset: 1, slotIcon: 1, paperOrbLight: 0.95, paperOrbShade: 0.15,
     enhAuraSmooth: true, enhAuraPulse: 0.08, enhAuraBreath: 0, enhAuraSpeed: 3, enhAuraGlow: 1, enhSparkGlow: 1, enhSparkRate: 1, enhSparkFadeIn: 0.3, enhOrbGlowFront: true, enhOrbBackFade: 1,
-    gfxMenu: true, keyRebind: true, orbsNearBar: true, gfxDefault: 3, gfxMax: 3, gfxMid: 0.6, gfxLow: 0.3,
+    gfxMenu: true, keyRebind: true, settingsTabs: true, orbsNearBar: true, gfxDefault: 3, gfxMax: 3, gfxMid: 0.6, gfxLow: 0.3,
     ...(Object.fromEntries(QUARKS_KEYS.map((k) => [k, true])) as Record<QuarksKey, boolean>),
     extras: true, extrasK: 1, bossFx: true, bossExtras: true, bossExtrasK: 1, skills: {},
     luNew: true,
