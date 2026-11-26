@@ -8,7 +8,9 @@ import { gfxMenuOn } from './gfxPrefs';
 import { renderGfxSettings } from './gfxPanel';
 import { keybindWaiting, renderKeybindSettings, resetKeybindTab } from './keybindPanel';
 import { renderAudioSettings } from './audio/panel';
-import { LANG, LANG_NAME, langRowShown, langWanted, setLangPref } from './i18n';
+import { LANG, LANG_NAME, langRowShown, langWanted, legacyLangButton, setLangPref } from './i18n';
+import { toggleGfxPanel } from './legacy/gfxWindow';
+import { toggleKeybindPanel } from './legacy/keybindWindow';
 import { setRow, setSelect, setSwitch } from './settingsUi';
 import { currentBalance } from '../shared/balance';
 import { newsButtonOn } from './news';
@@ -50,6 +52,8 @@ const SET_TABS: Array<[SetTab, string, string]> = [
   ['audio', '🔊', 'เสียง'],
   ['keys', '🎮', 'ปุ่ม'],
 ];
+/** The tabbed page is on (/admin fxLayer.settingsTabs; off = the old button list and separate windows). */
+const tabsOn = (): boolean => currentBalance().fxLayer.settingsTabs;
 /** Each tab's heading on the right. */
 const SET_TITLE: Record<SetTab, string> = { general: 'ตั้งค่าทั่วไป', graphics: 'กราฟิก', audio: 'เสียง', keys: 'ตั้งค่าปุ่ม' };
 
@@ -143,10 +147,28 @@ export class SystemMenu {
           <button data-act="logout" class="set-big danger">${guest ? 'กลับหน้าแรก' : 'ออกจากระบบ'}</button>
         </div>
         ${guest ? '<div class="sys-note">สมัครสมาชิกที่หน้าแรก เพื่อเก็บตัวละคร Guest นี้ไว้ถาวร</div>' : ''}
+      </div>
+      <div class="sys-view hidden" data-view="settings-old">
+        <button data-act="hudstyle" id="sys-hudstyle"></button>
+        <button data-act="partyblock" id="sys-partyblock"></button>
+        <button data-act="keybinds" id="sys-keybinds">ตั้งค่าปุ่ม</button>
+        ${guest ? '' : '<button data-act="tradeblock" id="sys-tradeblock"></button>'}
+        <div class="sys-sep"></div>
+        <button data-act="google" id="sys-google" class="hidden">${guest ? 'บันทึกตัวละครด้วย Google' : 'ผูกบัญชี Google'}</button>
+        <button data-act="chars">${guest ? 'กลับไปหน้า Guest' : 'กลับไปเลือกตัวละคร'}</button>
+        <button data-act="logout">${guest ? 'กลับหน้าแรก' : 'ออกจากระบบ'}</button>
+        ${guest ? '<div class="sys-note">สมัครสมาชิกที่หน้าแรก<br>เพื่อเก็บตัวละคร Guest นี้ไว้ถาวร</div>' : ''}
+        <div class="sys-sep"></div>
+        <button data-act="resume" class="primary">กลับเข้าเกม</button>
+        <button data-act="back">‹ กลับ</button>
       </div>`;
     this.build();
+    // The old list (/admin settingsTabs off): the language button goes before ตั้งค่าปุ่ม, as it always did.
+    const oldView = this.panel.querySelector('[data-view="settings-old"]')!;
+    oldView.insertBefore(legacyLangButton(), oldView.querySelector('#sys-keybinds'));
     void googleEnabled().then((on) => {
       this.googleOn = on;
+      this.panel.querySelector('#sys-google')?.classList.toggle('hidden', !on);
       if (this.tab === 'general') this.drawTab();
     });
     this.panel.addEventListener('click', (e) => {
@@ -260,10 +282,22 @@ export class SystemMenu {
 
   private showView(v: string): void {
     this.applyGfxTile();
+    // ตั้งค่า shows the tabbed page, or the old button list while /admin turns the tabs off.
+    if (v === 'settings' && !tabsOn()) v = 'settings-old';
     this.panel.querySelectorAll<HTMLElement>('.sys-view').forEach((el) => el.classList.toggle('hidden', el.dataset.view !== v));
     this.panel.classList.toggle('sys-settings', v === 'settings');
     $('sys-title').textContent = v === 'settings' ? 'ตั้งค่า' : 'เมนู';
     if (v === 'settings') this.selectTab(this.tab);
+    if (v === 'settings-old') this.drawOldList();
+  }
+
+  /** The old list's texts (HP/MP, the ☐/☑ blocks, ตั้งค่าปุ่ม only while players may set keys). */
+  private drawOldList(): void {
+    $('sys-hudstyle').textContent = $('btn-hud-style').textContent;
+    document.getElementById('sys-keybinds')?.classList.toggle('hidden', !currentBalance().fxLayer.keyRebind);
+    $('sys-partyblock').textContent = `${this.g.party.block ? '☑' : '☐'} ไม่รับคำชวนปาร์ตี้`;
+    const tb = document.getElementById('sys-tradeblock');
+    if (tb) tb.textContent = `${this.g.trade.block ? '☑' : '☐'} ไม่รับคำขอเทรด`;
   }
 
   /** Whether a tab may show: กราฟิก and ปุ่ม follow their /admin switches (fxLayer.gfxMenu / keyRebind). */
@@ -322,6 +356,17 @@ export class SystemMenu {
 
   /** Opens the menu straight on a settings tab (the menu tiles, top-row icons and admins' shortcuts). */
   private openTab(t: SetTab): void {
+    if (!tabsOn()) {
+      // The old way: ตั้งค่า = the button list, the others = their own windows.
+      if (t === 'general') {
+        if (!this.open) this.toggle(true);
+        return this.showView('settings');
+      }
+      this.toggle(false);
+      if (t === 'graphics') return toggleGfxPanel(true);
+      if (t === 'keys') return toggleKeybindPanel(true);
+      return $('btn-audio')?.click();
+    }
     if (!this.open) this.toggle(true);
     this.tab = t;
     this.showView('settings');
@@ -424,10 +469,16 @@ export class SystemMenu {
       case 'graphics':
         return this.openTab('graphics');
       case 'hudstyle':
-        // An admin's shortcut: flips HP/MP at once, like the old button.
+        // The old list's button, or an admin's shortcut: flips HP/MP at once.
         this.g.hud.setHudStyle(this.g.hud.hpStyle === 'orbs' ? 'bars' : 'orbs');
-        if (this.open && this.tab === 'general') this.drawTab();
-        return;
+        if (this.open && tabsOn() && this.tab === 'general') this.drawTab();
+        return this.drawOldList();
+      case 'partyblock':
+        this.g.party.setBlock(!this.g.party.block);
+        return this.drawOldList();
+      case 'tradeblock':
+        this.g.trade.setBlock(!this.g.trade.block);
+        return this.drawOldList();
       case 'chars':
         this.toGoogle = false;
         return this.requestExit('characters');

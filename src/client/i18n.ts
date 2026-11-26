@@ -63,7 +63,7 @@ const SKIP = '[translate="no"], script, style, textarea, [contenteditable="true"
 const misses = new Set<string>();
 
 /** Same Thai, other English inside one window (the settings page's "ปิด" / "เปิด" are Off / On, not Close / Open). */
-const CONTEXT: [selector: string, dict: Record<string, string>][] = [['#sys-menu .set-pane', { 'ปิด': 'Off', 'เปิด': 'On' }]];
+const CONTEXT: [selector: string, dict: Record<string, string>][] = [['#sys-menu .set-pane', { 'ปิด': 'Off', 'เปิด': 'On' }], ['#gfx-panel', { 'ปิด': 'Off' }]];
 
 /** English for a text node or attribute of `el`, or null. */
 function english(el: Element | null, text: string): string | null {
@@ -168,6 +168,28 @@ export function setLangPref(l: Lang): void {
 }
 /** Names in both languages, never translated, so either reader finds them. */
 export const LANG_NAME: Record<Lang, string> = { th: 'ไทย', en: 'English' };
+
+/**
+ * The old one-button language switch (the settings button list used while /admin turns the tabbed page off): click =
+ * ไทย ↔ English for the next time the game opens. Hidden while English is off.
+ */
+export function legacyLangButton(): HTMLButtonElement {
+  const b = document.createElement('button');
+  b.id = 'sys-lang';
+  b.setAttribute('translate', 'no');
+  const draw = () => {
+    const want = langWanted();
+    b.classList.toggle('hidden', !langRowShown());
+    b.textContent = want === LANG ? `ภาษา / Language: ${LANG_NAME[want]}` : `ภาษา / Language: ${LANG_NAME[want]} (เปิดเกมใหม่ / reopen game)`;
+    b.title = want === LANG ? 'ไทย ↔ English' : 'มีผลเมื่อเปิดเกมใหม่ / Takes effect when you open the game again';
+  };
+  b.addEventListener('click', () => {
+    setLangPref(langWanted() === 'th' ? 'en' : 'th');
+    draw();
+  });
+  draw();
+  return b;
+}
 
 // ------------------------------------------------------------------ player-written text
 

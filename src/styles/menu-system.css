@@ -125,6 +125,7 @@
 #sys-menu .sys-view { display: flex; flex-direction: column; gap: 6px; }
 #sys-menu .sys-view.hidden { display: none; }
 #sys-menu .sys-view:not([data-view="settings"]) button { width: 100%; padding: 7px 10px; font-size: 14px; }
+#sys-menu .sys-sep { height: 1px; background: var(--panel-edge); margin: 4px 0; }
 #sys-menu .sys-note { font-size: 11px; color: var(--ink-dim); text-align: center; white-space: normal; line-height: 1.4; }
 
 /* Settings page (owner 2026-11-26, src/client/sysmenu.ts + settingsUi.ts): side tabs left, "name / control" rows right,
