@@ -173,11 +173,13 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         out);
     });
     affixCard.replaceChildren(
-      h('h2', {}, 'สเตตัสเสริม: น้ำหนักสุ่ม · ลดคูลดาวน์สูงสุด'),
+      h('h2', {}, 'สเตตัสเสริม: น้ำหนักสุ่ม · ลดคูลดาวน์สูงสุด · คริสูงสุด'),
       h('div', { class: 'muted' }, 'น้ำหนักสุ่ม = โอกาสที่บรรทัดเสริม 1 บรรทัดจะได้สเตตัสนั้น เทียบกับตัวอื่น (ค่าในโค้ด 1 ทุกตัว = เท่ากัน, 0 = ไม่ออก) ใช้กับดรอปและ "สุ่มสเตตัส" ที่ช่างตีเหล็ก · % ข้างช่อง = โอกาสต่อบรรทัดเมื่อยังไม่มีสเตตัสอื่นบนของ · มีผลกับของใหม่เท่านั้น'),
       h('div', { class: 'row bal-line' }, ...boxes),
       h('div', { class: 'row bal-line' },
         h('label', {}, 'ลดคูลดาวน์สกิลได้สูงสุด %', numBox(() => draft.cdrCap, (n) => { draft.cdrCap = n; }, code.cdrCap, ...BALANCE_RANGE.cdrCap, 1, refresh))),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด 100 · ใช้กับค่าคริในหน้าตัวละครและทุกครั้งที่สุ่มคริ (รวมคริเพิ่มจากสกิล/เป้าที่ติดมาร์ก)' }, 'อัตราคริสูงสุด %', numBox(() => draft.critCap, (n) => { draft.critCap = n; }, code.critCap, ...BALANCE_RANGE.critCap, 1, refresh))),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
           h('input', { type: 'checkbox', checked: draft.buffDurSummons, onchange: (e: Event) => { draft.buffDurSummons = (e.target as HTMLInputElement).checked; refresh(); } }),

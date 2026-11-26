@@ -539,7 +539,7 @@ export class Sim {
       if (src0 && p.cls.skills.some((s) => s.kind === 'basic' && s.id === src0)) raw *= 1 + fx.normalAtkPct / 100;
     }
     const marked = m.markBy === p.id && this.time < m.markUntil ? m.markCrit : 0;
-    const crit = opts.forceCrit || Math.random() * 100 < p.stats.crit + (opts.critBonus ?? 0) + marked;
+    const crit = opts.forceCrit || Math.random() * 100 < Math.min(currentBalance().critCap, p.stats.crit + (opts.critBonus ?? 0) + marked);
     if (crit) raw *= 1 + p.stats.critDmg / 100;
     if (opts.maxMult) raw = Math.min(raw, p.stats.atk * opts.maxMult);
     // Armor break from skills, then the attacker's "เจาะเกราะ %" item stat (owner 2026-11-19), both cut DEF.

@@ -800,6 +800,8 @@ export class Player extends Unit {
     // The worn passive and skill buffs, flat in Stats units ("+40% attack speed" is +40 atkSpeed).
     passiveStats(this, s);
     for (const b of this.statBuffs) addInto(s, b.mods);
+    // Crit rate tops out at the cap (owner 2026-11-25, /admin "อัตราคริสูงสุด %").
+    s.crit = Math.min(s.crit, currentBalance().critCap);
     this.stats = s;
     this.hp = Math.min(this.hp, s.maxHp);
     this.mp = Math.min(this.mp, s.maxMp);
