@@ -1,14 +1,30 @@
-// The Seeker's gear quests (owner 2026-11-12): from the first level of each farm map, three quests in a
-// row (weapon → armour → jewellery). Each asks for GEAR_KILLS monsters of that map, then gives a set of
-// gear made for the player's class and level, green on the first two maps, blue after. Not bound to the
-// character, and a player above a map can still take its quests. One place for the rules, so his window,
-// the quest tracker, the ! / ? over his head and Sim never disagree.
-import { floorOf, ZONES, type ZoneDef } from './data/zones';
+// The gear quests of each floor's quest giver (owner 2026-11-12; floor 2 2026-11-26): The Seeker in nexus_city
+// gives floor 1's, the navigator of the dimensions in the harbour floor 2's (Sim.ownFloor, both are NPC id 'seeker').
+// From the first level of each farm map, three quests in a row (weapon → armour → jewellery). Each asks for a
+// number of monsters of that map (/admin, floor 1 20, floor 2 40), then gives a set of gear made for the player's
+// class and level, of the map's rarity (/admin, floor 1 green on maps 1–2 and blue after, floor 2 blue; on floor 2
+// that is the map's set pieces, all nine places). Not bound to the character, and a player above a map can still
+// take its quests. One place for the rules, so the window, the quest tracker, the ! / ? over his head and Sim never
+// disagree. /admin: the 'เควสอุปกรณ์' card (BalanceTuning.gear, src/shared/gearTuning.ts).
+import { floorOf, type ZoneDef } from './data/zones';
 import { ITEM_BASES, makeItem } from './data/items';
+import { currentBalance } from './balance';
+import { GEAR_KILLS_MAX, gearMaps, type GearConfig } from './gearTuning';
 import type { ClassId, Item, Rarity, SlotId } from './types';
 
-/** Monsters of the map to kill for one gear quest (owner: 20). */
-export const GEAR_KILLS = 20;
+export { gearMaps } from './gearTuning';
+
+const cfg = (): GearConfig => currentBalance().gear;
+
+/** Monsters of the map to kill for one of its gear quests (/admin per floor). */
+export function gearKills(map: ZoneDef): number {
+  return cfg().floors[floorOf(map)]?.kills ?? GEAR_KILLS_MAX;
+}
+
+/** Whether the map's floor gives gear quests now (/admin per floor; off = hidden, refused, not counted, progress kept). */
+export function gearOn(map: ZoneDef): boolean {
+  return cfg().floors[floorOf(map)]?.on ?? false;
+}
 
 export type GearPart = 'weapon' | 'armor' | 'jewel';
 /** The order a map's quests come in: the next one opens once the one before is handed in. */
@@ -24,17 +40,9 @@ const SLOT_NAME: Record<SlotId, string> = {
   weapon: 'อาวุธ', offhand: 'มือรอง', helmet: 'หมวก', armor: 'เกราะ', gloves: 'ถุงมือ', belt: 'เข็มขัด', boots: 'รองเท้า', necklace: 'สร้อย', ring: 'แหวน',
 } as Record<SlotId, string>;
 
-/**
- * Farm maps in order (the ones with a boss lair, so never the hub or a boss room). Floor 1 only: floor 2's gear quests
- * wait until there is floor-2 gear (owner 2026-11-20, plan 12.6).
- */
-export function gearMaps(): ZoneDef[] {
-  return Object.values(ZONES).filter((z) => z.lair && floorOf(z) === 1).sort((a, b) => a.levels[0] - b.levels[0]);
-}
-
-/** Rarity of a map's quest gear (owner: maps 1–2 green, 3–4 blue; never above blue). */
+/** Rarity of a map's quest gear (/admin per map). */
 export function gearRarity(map: ZoneDef): Rarity {
-  return gearMaps().indexOf(map) < 2 ? 'uncommon' : 'rare';
+  return cfg().rarity[map.id] ?? 'rare';
 }
 
 export const gearQuestId = (map: ZoneDef, part: GearPart): string => `${map.id}:${part}`;
@@ -53,18 +61,19 @@ export interface GearHolder {
   gearDone: string[];
 }
 
-/** Every gear quest as this player sees it, map by map, each map's in GEAR_PARTS order. */
+/** Every gear quest as this player sees it (floors switched on only), map by map, each map's in GEAR_PARTS order. */
 export function gearRows(p: GearHolder): GearRow[] {
-  return gearMaps().flatMap((map) => {
+  return gearMaps().filter(gearOn).flatMap((map) => {
+    const need = gearKills(map);
     let before = true;
     return GEAR_PARTS.map((part) => {
       const id = gearQuestId(map, part);
       const kills = p.gearQuests[id];
       const state: GearState = p.gearDone.includes(id) ? 'done'
-        : kills !== undefined ? (kills >= GEAR_KILLS ? 'ready' : 'going')
+        : kills !== undefined ? (kills >= need ? 'ready' : 'going')
         : before && p.level >= map.levels[0] ? 'offer' : 'locked';
       before = state === 'done';
-      return { id, map, part, kills: kills ?? 0, state };
+      return { id, map, part, kills: Math.min(kills ?? 0, need), state };
     });
   });
 }
@@ -103,13 +112,13 @@ export function gearReward(map: ZoneDef, part: GearPart, cls: ClassId, playerLev
   return out;
 }
 
-/** Gear quests read from a save: known ids only, counts 0..GEAR_KILLS. */
+/** Gear quests read from a save: known ids only (every floor, whatever the switches), counts 0..GEAR_KILLS_MAX. */
 export function cleanGearQuests(raw: unknown): Record<string, number> {
   const ids = new Set(gearMaps().flatMap((m) => GEAR_PARTS.map((p) => gearQuestId(m, p))));
   const out: Record<string, number> = {};
   if (!raw || typeof raw !== 'object') return out;
   for (const [id, n] of Object.entries(raw as Record<string, unknown>)) {
-    if (ids.has(id) && typeof n === 'number' && Number.isFinite(n)) out[id] = Math.max(0, Math.min(GEAR_KILLS, Math.floor(n)));
+    if (ids.has(id) && typeof n === 'number' && Number.isFinite(n)) out[id] = Math.max(0, Math.min(GEAR_KILLS_MAX, Math.floor(n)));
   }
   return out;
 }

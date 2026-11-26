@@ -5,9 +5,13 @@ import type { Game } from './Game';
 import { playSound } from './audio/sfx';
 import { QUEST_KILLS, STONE_NAME } from '../shared/data/stones';
 import { questRows } from '../shared/quests';
-import { GEAR_KILLS, GEAR_PART_NAME, gearRows } from '../shared/gearQuests';
+import { GEAR_PART_NAME, gearKills, gearRows } from '../shared/gearQuests';
 import { TUT_STEP_NAME, TUT_TASK_NAME, TUT_TASKS, tutRows } from '../shared/tutorial';
 import { npcLook } from '../shared/data/npcs';
+import { floorOf } from '../shared/data/zones';
+
+/** Who takes a hunt back: floor 1 The Seeker, floor 2 the harbour's navigator. */
+const giverOf = (map: Parameters<typeof floorOf>[0]): string => npcLook('seeker', floorOf(map) === 2 ? 'harbor' : undefined).name;
 
 const FOLD_KEY = 'multiverse-quest-tracker-folded';
 
@@ -60,10 +64,10 @@ export class QuestTracker {
       ...tutRows(this.g.player.tut, this.g.player.name).map((r) => {
         const left = TUT_TASKS[r.step].filter((k) => !r.got.includes(k));
         const goal = r.state === 'ready' ? `ครบแล้ว — กลับไปหา${npcLook(r.npc, this.g.backend.zone.town).name}` : `ยังเหลือ: ${left.map((k) => TUT_TASK_NAME[k]).join(' · ')}`;
-        return { id: `tut:${r.step}`, name: `สอนระบบ · ${TUT_STEP_NAME[r.step]}`, goal, state: r.state as string, kills: r.got.length, max: TUT_TASKS[r.step].length };
+        return { id: `tut:${r.step}`, name: `สอนระบบ · ${TUT_STEP_NAME[r.step]}`, goal, state: r.state as string, kills: r.got.length, max: TUT_TASKS[r.step].length, giver: '' };
       }),
-      ...questRows(this.g.player).map((r) => ({ id: r.boss, name: STONE_NAME[r.key], goal: `${hunt(r.map, r.state, r.kills)}/${QUEST_KILLS}`, state: r.state as string, kills: r.kills, max: QUEST_KILLS })),
-      ...gearRows(this.g.player).map((r) => ({ id: r.id, name: `${GEAR_PART_NAME[r.part]} · ${r.map.nameTh}`, goal: `${hunt(r.map, r.state, r.kills)}/${GEAR_KILLS}`, state: r.state as string, kills: r.kills, max: GEAR_KILLS })),
+      ...questRows(this.g.player).map((r) => ({ id: r.boss, name: STONE_NAME[r.key], goal: `${hunt(r.map, r.state, r.kills)}/${QUEST_KILLS}`, state: r.state as string, kills: r.kills, max: QUEST_KILLS, giver: giverOf(r.map) })),
+      ...gearRows(this.g.player).map((r) => ({ id: r.id, name: `${GEAR_PART_NAME[r.part]} · ${r.map.nameTh}`, goal: `${hunt(r.map, r.state, r.kills)}/${gearKills(r.map)}`, state: r.state as string, kills: r.kills, max: gearKills(r.map), giver: giverOf(r.map) })),
     ].filter((r) => r.state === 'going' || r.state === 'ready');
     // A quest that just became ready to hand in (not the ones already ready when the game loaded).
     if (this.lastStates && rows.some((r) => r.state === 'ready' && this.lastStates!.get(r.id) === 'going')) playSound('quest_done');
@@ -89,7 +93,7 @@ export class QuestTracker {
       name.textContent = r.name;
       const goal = document.createElement('div');
       goal.className = 'qt-goal';
-      goal.textContent = r.state === 'ready' && !r.id.startsWith('tut:') ? 'ล่าครบแล้ว — กลับไปหา The Seeker' : r.goal;
+      goal.textContent = r.state === 'ready' && !r.id.startsWith('tut:') ? `ล่าครบแล้ว — กลับไปหา ${r.giver}` : r.goal;
       const bar = document.createElement('div');
       bar.className = 'qt-bar';
       const fill = document.createElement('div');

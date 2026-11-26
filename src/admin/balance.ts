@@ -29,6 +29,7 @@ import { ITEM_BASES, itemRowKinds, statStep, rowRanges, TIER_BAND_NAME, TIER_BAN
 import { expToNext, MAX_LEVEL } from '../shared/formulas';
 import { ITEM_ONLY_STATS, RARITIES, RARITY_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, type ClassId, type Rarity, type SlotId, type StatKey } from '../shared/types';
 import { FLOOR_GATE_LEVEL_MAX, FLOOR_GATE_LEVEL_MIN } from '../shared/floorGate';
+import { GEAR_KILLS_MAX, GEAR_KILLS_MIN, gearFloors, gearMaps } from '../shared/gearTuning';
 import { NPC_INFO, type NpcId } from '../shared/data/npcs';
 import { TALK_LINE_LEN, TALK_LINES_MAX, TALK_NPCS, TALK_NUM_KEYS, TALK_NUMS, type TalkNumKey } from '../shared/npcTalk';
 import { TUT_ACCEPT_GOLD, TUT_COUNT_MAX, TUT_GOLD_MAX, TUT_LINES_MAX, TUT_REWARD_KEYS, TUT_REWARD_NAME, TUT_STONES, tutRewardText, type TutRewardKey } from '../shared/tutorial';
@@ -1018,6 +1019,39 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
+  // ---------------------------------------------------------- gear quests (src/shared/gearTuning.ts)
+  const gearCard = h('div', { class: 'card' });
+  const drawGear = (): void => {
+    const gc = draft.gear;
+    const cc = code.gear;
+    const floorRows = gearFloors().map((f) => {
+      const row = gc.floors[f];
+      const cr = cc.floors[f];
+      return h('div', { class: 'bal-line' },
+        h('h3', {}, f === 1 ? 'ชั้น 1 (The Seeker ในเมืองศูนย์กลางมิติ)' : `ชั้น ${f}` + (f === 2 ? ' (นักเดินเรือแห่งมิติในท่าเรือมิติ)' : '')),
+        h('div', { class: 'row bal-line' },
+          h('label', { title: `ค่าในโค้ด: ${cr.on ? 'เปิด' : 'ปิด'}` },
+            h('input', { type: 'checkbox', checked: row.on, onchange: (e: Event) => { row.on = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+            ' เปิดเควสอุปกรณ์ชั้นนี้')),
+        h('div', { class: 'row bal-line' },
+          h('label', {}, 'ล่ามอนต่อเควส ', numBox(() => row.kills, (n) => { row.kills = n; }, cr.kills, GEAR_KILLS_MIN, GEAR_KILLS_MAX, 1, () => updateSummary())),
+          h('span', { class: 'muted' }, ` ตัว · ค่าในโค้ด ${cr.kills}`)),
+        ...gearMaps().filter((m) => (m.floor ?? 1) === f).map((m) => h('div', { class: 'row bal-line' },
+          h('label', {}, `เกรดของ ${m.nameTh} (Lv${m.levels[0]}) `,
+            h('select', { onchange: (e: Event) => { gc.rarity[m.id] = (e.target as HTMLSelectElement).value as Rarity; updateSummary(); } },
+              ...RARITIES.map((r) => h('option', { value: r, selected: r === gc.rarity[m.id] }, RARITY_LABEL[r])))),
+          h('span', { class: 'muted' }, ` ค่าในโค้ด ${RARITY_LABEL[cc.rarity[m.id]]}`))));
+    });
+    gearCard.replaceChildren(
+      h('h2', {}, 'เควสอุปกรณ์'),
+      h('div', { class: 'muted' },
+        'แต่ละแมพฟาร์มมี 3 เควสต่อกัน อาวุธ → ชุดเกราะ → เครื่องประดับ รับได้ตั้งแต่เลเวลแรกของแมพ ล่ามอนของแมพนั้นครบแล้วได้ของครบ 9 ช่อง (ตามอาชีพ+เลเวล ไม่ผูกตัว) · ' +
+        'ชั้น 1 รับจาก The Seeker ชั้น 2 รับจากนักเดินเรือแห่งมิติในท่าเรือ (ของชั้น 2 เป็นชิ้นเซ็ตของแมพนั้น) · ' +
+        'ปิดชั้นไหน = ชั้นนั้นไม่มีเควสให้รับ/ส่ง และไม่นับตัวที่ล่า แต่ความคืบหน้าที่เซฟไว้ไม่หาย · ลดจำนวนล่าแล้วคนที่ล่าเกินแล้วส่งได้ทันที'),
+      ...floorRows,
+    );
+  };
+
   // ---------------------------------------------------------- floor 2 monster moves (src/shared/moveTuning.ts, plan 5)
   const moveCard = h('div', { class: 'card' });
   const drawMoves = (): void => {
@@ -1641,6 +1675,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawForge();
     drawSets();
     drawFloor();
+    drawGear();
     drawMoves();
     drawLang();
     drawAuto();
@@ -1708,7 +1743,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     { name: 'ไอเทม-ตีบวก', cards: [affixCard, tierCard, previewCard, setCard, potionCard, bagCard, forgeCard] },
     { name: 'Auto Play', cards: [autoCard] },
     { name: 'หน้าตา-เอฟเฟกต์-เสียง', cards: [uiCard, fxCard, luCard, dashCard, circleCard, audioCard, bossMusicCard, rigCard] },
-    { name: 'ระบบ-รางวัล', cards: [expCard, vipCard, floorCard, tutCard, talkCard, langCard] },
+    { name: 'ระบบ-รางวัล', cards: [expCard, vipCard, floorCard, gearCard, tutCard, talkCard, langCard] },
   ];
   const ALL = 'ทั้งหมด';
   const CAT_KEY = 'adminBalanceCat';
