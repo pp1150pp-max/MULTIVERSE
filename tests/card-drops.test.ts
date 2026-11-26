@@ -2,7 +2,7 @@
 // (the Peg-Leg Captain also the parrot's), floor 2 only with floor2Drop on, straight into the top damage dealer's
 // bag (full: a cardMail event), the drop scroll counts while dropBoost is on, legendary cards are announced.
 import { cardAnnounced, rollCardDrops } from '../src/shared/cardDrops';
-import { applyCardTuning } from '../src/shared/cardTuning';
+import { applyCardTuning, checkCardTuning } from '../src/shared/cardTuning';
 import { BOSS_ROOMS, ZONES, type ZoneDef } from '../src/shared/data/zones';
 import type { Monster } from '../src/shared/sim/Monster';
 import type { Player } from '../src/shared/sim/Player';
@@ -12,7 +12,7 @@ import { finish, ok } from './check';
 
 const hero = { name: 'A', classId: 'sword' as const, level: 80, exp: 0, gold: 0, equipment: {}, bag: [] };
 const TICK = 1 / 30;
-const ALL = { dropMonster: 100, dropBoss: 100, dropBossExtra: 100 };
+const ALL = { drop_rare: 100, drop_epic: 100, drop_legendary: 100 };
 
 /** A Sim on `zone` with one player who did all the damage to the first monster `id`; kills it (loot only). */
 function kill(zone: ZoneDef, id: string, keys = 1, setup?: (p: Player) => void) {
@@ -43,6 +43,20 @@ ok(rollCardDrops('forest_bear', true, 2, 1, () => 0.0009).length === 2 && rollCa
 ok(rollCardDrops('forest_wolf', false, 1, 2, () => 0.00019).length === 1, 'drop scroll x2 counts (dropBoost on in code)');
 applyCardTuning({ nums: { dropBoost: 0 } });
 ok(rollCardDrops('forest_wolf', false, 1, 2, () => 0.00019).length === 0, 'dropBoost 0: the scroll does not count');
+applyCardTuning({});
+// The rate goes by the card's rarity (owner 2026-11-26), the tuned rarity included.
+applyCardTuning({ nums: { floor2Drop: 1, drop_epic: 50, drop_legendary: 0 } });
+const cap2 = rollCardDrops('pegleg_captain', true, 1, 1, () => 0.4);
+ok(cap2.length === 1 && cap2[0] === 'card_parrot', 'drop_epic 50 / drop_legendary 0: the epic parrot drops, the legendary captain not');
+ok(rollCardDrops('forest_wolf', false, 1, 1, () => 0.4).length === 0, 'rare still at its own 0.01%');
+applyCardTuning({ cards: { card_forest_wolf: { rarity: 'epic' } }, nums: { drop_epic: 50 } });
+ok(rollCardDrops('forest_wolf', false, 1, 1, () => 0.4).length === 1, 'a card tuned to epic rolls at the epic rate');
+// Tuning saved with the old keys moves over.
+const old = checkCardTuning({ nums: { dropMonster: 0.02, dropBoss: 0.3, dropBossExtra: 0.5 } }, false).tuning!;
+ok(old.nums?.drop_rare === 0.02 && old.nums?.drop_epic === 0.5 && old.nums?.drop_legendary === 0.3, 'old dropMonster/dropBoss/dropBossExtra become drop_rare/epic/legendary');
+const oldBoss = checkCardTuning({ nums: { dropBoss: 0.3 } }, false).tuning!;
+ok(oldBoss.nums?.drop_epic === 0.3 && oldBoss.nums?.drop_legendary === 0.3 && oldBoss.nums?.drop_rare === undefined, 'old dropBoss alone: epic and legendary take it');
+ok(checkCardTuning({ nums: { dropMonster: 1 } }, true).error !== undefined, 'the old keys are refused from the browser');
 applyCardTuning({});
 ok(cardAnnounced('legendary') && !cardAnnounced('epic') && !cardAnnounced('rare'), 'announced: legendary only (code)');
 applyCardTuning({ nums: { announceFrom: 0 } });

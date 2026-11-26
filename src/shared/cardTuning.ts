@@ -85,7 +85,13 @@ export function checkCardTuning(v: unknown, strict: boolean): Result {
   // Numbers
   const numsIn = o.nums ?? {};
   if (!numsIn || typeof numsIn !== 'object' || Array.isArray(numsIn)) return fail('ตัวเลขการ์ดไม่ถูกต้อง');
-  const ni = numsIn as Record<string, unknown>;
+  let ni = numsIn as Record<string, unknown>;
+  // Tuning saved before the drop rates went by rarity (2026-11-26): farm monsters were all rare cards, bosses
+  // legendary, and the epic cards were the bear (a boss) and the parrot (dropBossExtra).
+  if (!strict && ('dropMonster' in ni || 'dropBoss' in ni || 'dropBossExtra' in ni)) {
+    const { dropMonster, dropBoss, dropBossExtra, ...rest } = ni;
+    ni = { drop_rare: dropMonster, drop_epic: dropBossExtra ?? dropBoss, drop_legendary: dropBoss, ...rest };
+  }
   if (strict) {
     const bad = Object.keys(ni).find((k) => !FIELD.has(k));
     if (bad) return { error: `ไม่มีค่า "${bad.slice(0, 30)}"` };
