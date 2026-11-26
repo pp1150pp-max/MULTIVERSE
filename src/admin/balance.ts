@@ -29,6 +29,8 @@ import { ITEM_BASES, itemRowKinds, statStep, rowRanges, TIER_BAND_NAME, TIER_BAN
 import { expToNext, MAX_LEVEL } from '../shared/formulas';
 import { ITEM_ONLY_STATS, RARITIES, RARITY_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LABEL, type ClassId, type Rarity, type StatKey } from '../shared/types';
 import { FLOOR_GATE_LEVEL_MAX, FLOOR_GATE_LEVEL_MIN } from '../shared/floorGate';
+import { NPC_INFO, type NpcId } from '../shared/data/npcs';
+import { TALK_LINE_LEN, TALK_LINES_MAX, TALK_NPCS, TALK_NUM_KEYS, TALK_NUMS, type TalkNumKey } from '../shared/npcTalk';
 import { TUT_ACCEPT_GOLD, TUT_COUNT_MAX, TUT_GOLD_MAX, TUT_LINES_MAX, TUT_REWARD_KEYS, TUT_REWARD_NAME, TUT_STONES, tutRewardText, type TutRewardKey } from '../shared/tutorial';
 import type { MailAttachItem } from '../shared/mail';
 import { POTION_SIZES, potionName } from '../shared/data/potions';
@@ -1545,6 +1547,45 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
+  // ---------------------------------------------------------- NPC talk window (src/shared/npcTalk.ts)
+  const talkCard = h('div', { class: 'card' });
+  const drawTalk = (): void => {
+    const t = draft.npcTalk;
+    const ct = code.npcTalk;
+    const flag = (k: 'on' | 'bubbles', label: string): HTMLElement =>
+      h('label', { title: `ค่าในโค้ด: ${ct[k] ? 'เปิด' : 'ปิด'}`, class: t[k] !== ct[k] ? 'bal-changed' : '' },
+        h('input', { type: 'checkbox', checked: t[k], onchange: (e: Event) => { t[k] = (e.target as HTMLInputElement).checked; updateSummary(); drawTalk(); } }),
+        ` ${label}`);
+    const num = (k: TalkNumKey): HTMLElement =>
+      h('label', {}, `${TALK_NUMS[k].name} `, numBox(() => t[k], (n) => { t[k] = n; }, ct[k], ...TALK_NUMS[k].range, 1, () => updateSummary()));
+    /** One line per row; empty rows are dropped on save. */
+    const lines = (part: 'greet' | 'chat', id: NpcId): HTMLElement => {
+      const ta = h('textarea', { rows: '3', style: 'width:100%;font:inherit' }) as HTMLTextAreaElement;
+      ta.value = t[part][id].join('\n');
+      const changed = (): boolean => JSON.stringify(t[part][id]) !== JSON.stringify(ct[part][id]);
+      ta.classList.toggle('bal-changed', changed());
+      ta.addEventListener('input', () => {
+        t[part][id] = ta.value.split('\n').map((x) => x.trim()).filter(Boolean);
+        const bad = t[part][id].length > TALK_LINES_MAX || t[part][id].some((x) => x.length > TALK_LINE_LEN);
+        ta.classList.toggle('bal-bad', bad);
+        ta.classList.toggle('bal-changed', changed());
+        updateSummary();
+      });
+      return ta;
+    };
+    talkCard.replaceChildren(
+      h('h2', {}, 'หน้าต่างคุย NPC'),
+      h('div', { class: 'muted' }, 'คลิก NPC = หน้าต่างคุย (ฉากสถานที่ของ NPC รูปครึ่งตัวซ้าย บทพูดล่าง ปุ่มคำตอบมีไอคอน) กดคำตอบแล้วเปิดหน้าต่างของ NPC (ร้าน เมนูช่างตีเหล็ก คลัง แท็บตลาด/กล่องรับของ แคชช็อป เควสกุญแจ) · ปิด = คลิกแล้วเปิดหน้าต่างของ NPC ทันทีแบบเดิม · คำพูดเหนือหัว: เดินเข้าใกล้ NPC แล้วมีคำพูดสั้น ๆ ลอยเหนือหัว · ฝั่งเบราว์เซอร์เท่านั้น มีผลทันที'),
+      h('div', { class: 'row bal-line' }, flag('on', 'ใช้หน้าต่างคุย NPC'), flag('bubbles', 'คำพูดเหนือหัว NPC')),
+      h('div', { class: 'row bal-line' }, ...TALK_NUM_KEYS.map(num)),
+      h('div', { class: 'muted' }, `บทพูด: บรรทัดละ 1 ประโยค (ไม่เกิน ${TALK_LINES_MAX} บรรทัด บรรทัดละ ${TALK_LINE_LEN} ตัวอักษร) สุ่มทีละบรรทัด · ทักทาย = ในหน้าต่างคุย (ปุ่ม "พูดคุย" สุ่มบรรทัดใหม่) · เหนือหัว = ลอยเหนือหัวเมื่อเดินเข้าใกล้ · NPC ท่าเรือใช้บทของงานเดียวกัน`),
+      ...TALK_NPCS.map((id) => h('details', { style: 'margin:4px 0' },
+        h('summary', {}, NPC_INFO[id].name),
+        h('div', {}, 'ทักทาย (หน้าต่างคุย)'), lines('greet', id),
+        h('div', {}, 'เหนือหัว'), lines('chat', id))),
+    );
+  };
+
   // The skill system's card is its own tab now (src/admin/skills.ts, owner 2026-11-19): this tab saves with
   // `part: 'rest'`, so the server keeps the skills as they are saved there.
 
@@ -1580,6 +1621,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawLang();
     drawAuto();
     drawTut();
+    drawTalk();
     drawFx();
     drawCircles();
     drawRoot();
@@ -1642,7 +1684,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     { name: 'ไอเทม-ตีบวก', cards: [affixCard, tierCard, previewCard, setCard, potionCard, bagCard, forgeCard] },
     { name: 'Auto Play', cards: [autoCard] },
     { name: 'หน้าตา-เอฟเฟกต์-เสียง', cards: [uiCard, fxCard, luCard, dashCard, circleCard, audioCard, bossMusicCard, rigCard] },
-    { name: 'ระบบ-รางวัล', cards: [expCard, vipCard, floorCard, tutCard, langCard] },
+    { name: 'ระบบ-รางวัล', cards: [expCard, vipCard, floorCard, tutCard, talkCard, langCard] },
   ];
   const ALL = 'ทั้งหมด';
   const CAT_KEY = 'adminBalanceCat';
