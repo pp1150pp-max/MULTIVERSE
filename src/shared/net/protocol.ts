@@ -128,6 +128,12 @@ export type ActionMsg =
   | { t: 'act'; a: 'enhance'; uid: string; protect?: boolean; req: number }
   /** Blacksmith reroll (see Sim.reroll); answered with `rerolled`. */
   | { t: 'act'; a: 'reroll'; uid: string; kind: RerollKind; req: number }
+  /** Blacksmith drilling (see Sim.drill); answered with `drilled`. */
+  | { t: 'act'; a: 'drill'; uid: string; req: number }
+  /** A card from the bag into the first empty socket of worn or bag gear (Sim.socketCard), from anywhere. */
+  | { t: 'act'; a: 'socketCard'; uid: string; card: string }
+  /** Takes the card out of socket `i`: the card breaks (Sim.unsocketCard). */
+  | { t: 'act'; a: 'unsocketCard'; uid: string; i: number }
   /** Stash (warehouse keeper). `to` = target slot, or -1 for wherever it fits. */
   | { t: 'act'; a: 'stashPut'; i: number; to: number }
   | { t: 'act'; a: 'stashTake'; i: number; to: number }
@@ -459,6 +465,8 @@ export type ServerMsg =
   | { t: 'enhanced'; req: number; result: EnhanceResult | null; item: Item | null }
   /** The rerolled item, or null when the server refused. */
   | { t: 'rerolled'; req: number; item: Item | null }
+  /** The drilled item (its `sockets` say how many it got), or null when the server refused. */
+  | { t: 'drilled'; req: number; item: Item | null }
   /** The answer to a market action with this `req`. */
   | ({ t: 'market'; req: number } & MarketReply)
   /** Something of yours sold or expired at the market (a banner and a chat line). */

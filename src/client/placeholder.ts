@@ -701,6 +701,7 @@ const GEM: Record<`stone_${BaseStoneKind}`, [string, string, string]> = {
   stone_enhance: ['#8a3a10', '#ff9a2e', '#ffe0a0'],
   stone_reroll_values: ['#8a6a10', '#ffd34a', '#fff3b0'],
   stone_reroll_stat: ['#4a2a8a', '#b67cff', '#e8d4ff'],
+  stone_drill: ['#1f5a54', '#7fd4c8', '#e0fff8'],
   // Boss keys: drawn as an old key in the boss's colours until their painted icons exist.
   stone_key_bear: ['#3a5a1f', '#9ad86a', '#e0ffc0'],
   stone_key_witch: ['#1f5a4a', '#6fd8b0', '#d0fff0'],

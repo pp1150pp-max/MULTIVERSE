@@ -101,6 +101,13 @@ export interface Item {
    * Missing = all ×1. When it differs from the multipliers in use, the values are scaled on load (once).
    */
   mulK?: string;
+  /**
+   * Card sockets from drilling at the blacksmith (card plan PR 2, src/shared/cardSockets.ts): missing = not drilled,
+   * 0 = drilled without a socket (can't be drilled again), 1–2 = sockets.
+   */
+  sockets?: number;
+  /** The card in each socket (null = empty), as long as `sockets`; missing when every socket is empty. */
+  cards?: (CardId | null)[];
 }
 
 /** Stat tiers: 1 is the best, 5 the lowest. Each has its own range (see tierRanges in data/items). */
@@ -131,8 +138,8 @@ export interface PotionStack {
 }
 
 /** Boss-only blacksmith materials: protection keeps the + level on a fail, enhance is needed from +11. */
-export type BlacksmithStone = 'protect' | 'enhance' | 'reroll_values' | 'reroll_stat';
-export const BLACKSMITH_STONES: BlacksmithStone[] = ['protect', 'enhance', 'reroll_values', 'reroll_stat'];
+export type BlacksmithStone = 'protect' | 'enhance' | 'reroll_values' | 'reroll_stat' | 'drill';
+export const BLACKSMITH_STONES: BlacksmithStone[] = ['protect', 'enhance', 'reroll_values', 'reroll_stat', 'drill'];
 /**
  * Boss keys (Artifacts): one per boss, put into its summoner to open the boss room. They stack, sell,
  * trade and go on the market exactly like stones, so they share the stone stack (see BOSS_KEY in data/stones).

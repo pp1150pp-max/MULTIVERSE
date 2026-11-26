@@ -37,8 +37,40 @@
   background: rgba(8, 6, 4, 0.78); color: #f0e6cc; cursor: pointer;
 }
 #card-view .cv-card { height: min(58vh, 105vw); }
-#card-view .cardpop-soon { font-size: 13px; color: #ffcf6a; }
+#card-view { overflow-y: auto; }
 #card-view .cardpop-hint { font-size: 12px; opacity: 0.6; }
+/* With the socket list under it the card is smaller, so both fit on a phone. */
+#card-view .cv:has(.cardpop-sock) .cv-card { height: min(42vh, 80vw); }
+
+/* "เสียบการ์ด" under the card, and the socket panel of one item (Shift+click gear). */
+.cardpop-sock {
+  width: min(420px, 92vw); margin-top: 8px; padding: 8px; border: 1px solid #8a7550; border-radius: 8px;
+  background: rgba(30, 24, 16, 0.92); cursor: default; text-align: left;
+}
+.cardpop-sock .cs-title { font-size: 14px; color: #ffe08a; margin-bottom: 6px; }
+.cardpop-sock .cs-none { font-size: 13px; opacity: 0.8; }
+.cardpop-sock .cs-list { display: flex; flex-direction: column; gap: 4px; max-height: 30vh; overflow-y: auto; }
+.cardpop-sock .cs-row {
+  display: grid; grid-template-columns: 32px 1fr; grid-template-rows: auto auto; column-gap: 8px; align-items: center;
+  padding: 4px 6px; border: 1px solid #5a4a32; border-radius: 6px; background: rgba(60, 48, 30, 0.7); color: #f0e6cc;
+  text-align: left; cursor: pointer; box-shadow: none;
+}
+.cardpop-sock .cs-row:hover:not(:disabled) { border-color: #ffe08a; }
+.cardpop-sock .cs-row:disabled { opacity: 0.5; cursor: not-allowed; }
+.cardpop-sock .cs-icon { grid-row: span 2; width: 32px; height: 32px; }
+.cardpop-sock .cs-icon > * { width: 100%; height: 100%; }
+.cardpop-sock .cs-name { font-size: 13px; font-weight: 600; }
+.cardpop-sock .cs-meta { font-size: 12px; opacity: 0.8; }
+.cardpop-sock .cs-slot { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; padding: 4px 0; border-top: 1px solid #5a4a32; }
+.cardpop-sock .cs-slot .cs-meta { flex: 1 1 100%; }
+.cardpop-sock .cs-out { margin-left: auto; font-size: 12px; padding: 2px 8px; }
+.cardpop-itemwrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+
+/* Socket lines in item tooltips and the blacksmith's drill menu; "ผลการ์ด" in the character window. */
+.tt-sock { margin-top: 4px; font-size: 12px; }
+.tt-sock .off, .tt-sock.off { opacity: 0.65; }
+#stat-list .stat-head { margin-top: 6px; font-size: 12px; color: #c9a8ff; grid-column: 1 / -1; }
+#stat-list .card-fx small { font-size: 10px; color: #ffcf6a; }
 #card-view .cardpop-x {
   position: absolute; top: 12px; right: 12px; width: 36px; height: 36px; border-radius: 50%; border: 1px solid #8a7550;
   background: rgba(30, 24, 16, 0.9); color: #f0e6cc; font-size: 18px; cursor: pointer;

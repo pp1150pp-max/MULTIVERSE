@@ -7,6 +7,7 @@ import type { AdminMeta } from '../shared/admin';
 import { POTION_SIZES, potionName } from '../shared/data/potions';
 import { STONE_NAME } from '../shared/data/stones';
 import { CARD_DEFAULTS, CARD_RARITY_NAME, cardArt, cardName } from '../shared/data/cards';
+import { cardDef } from '../shared/cardTuning';
 import { BLACKSMITH_STONES, BOSS_KEYS, RARITY_COLOR, REWARD_ITEMS, SLOT_LABEL, SLOTS, type ClassId, type StoneKind } from '../shared/types';
 import { className, h } from './core';
 import { baseIcon, entryIcon } from './items';
@@ -102,7 +103,9 @@ export class ItemPicker {
     }
     if (tab === 'card') {
       const out: Section[] = [];
-      for (const d of CARD_DEFAULTS) {
+      for (const d0 of CARD_DEFAULTS) {
+        // The tuned rarity when the page has the card tuning (the /admin card tab can change it).
+        const d = cardDef(d0.id) ?? d0;
         const title = `ชั้น ${d.floor} · แมพ ${d.map} ${MAP_NAME[d.floor][d.map - 1] ?? ''}`.trim();
         let s = out.find((x) => x.title === title);
         if (!s) out.push((s = { title, items: [] }));

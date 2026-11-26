@@ -18,7 +18,9 @@ import { MAX_LEVEL } from './formulas';
 import { PLUS_CAP } from './data/enhance';
 import { entryName, POTION_SIZES, potionName, stackLimit } from './data/potions';
 import { STONE_NAME } from './data/stones';
-import { isCardId } from './data/cards';
+import { cardName, isCardId, type CardId } from './data/cards';
+import { cardDef } from './cardTuning';
+import { MAX_SOCKETS, SLOT_CARD_GROUP } from './cardSockets';
 
 /**
  * A role id in `accounts.admin_role`. 'owner' has every tool and is made from the command line only;
@@ -356,7 +358,7 @@ export const FEATURE_INFO: Record<AdminFeature, { name: string; desc: string; gr
   crystalGrant: { name: 'ให้/ลดคริสตัลมิติ', desc: 'ในหน้าบัญชี: ให้หรือลดคริสตัลมิติ (เงินแคชช็อป) ของบัญชี', group: 'ผู้เล่น' },
   vipGrant: { name: 'ให้/ถอด VIP', desc: 'ในหน้าบัญชี: เพิ่มวัน VIP หรือถอด VIP ของบัญชี', group: 'ผู้เล่น' },
   cosmetics: { name: 'ให้/ถอนของแต่งตัว', desc: 'ให้หรือถอนของแต่งตัวในหน้าบัญชี', group: 'ผู้เล่น' },
-  itemEdit: { name: 'แก้ไอเทมของผู้เล่น', desc: 'ในหน้าบัญชี: แก้ชนิด ความหายาก เลเวล อาชีพ ชื่อ ตีบวก pity สเตตัสทุกบรรทัด จำนวนยา/หิน หรือลบไอเทม ที่สวม/กระเป๋า/คลัง (ต้องมี "ผู้ใช้ทั้งหมด" ด้วย)', group: 'ผู้เล่น' },
+  itemEdit: { name: 'แก้ไอเทมของผู้เล่น', desc: 'ในหน้าบัญชี: แก้ชนิด ความหายาก เลเวล อาชีพ ชื่อ ตีบวก pity สเตตัสทุกบรรทัด รูการ์ดและการ์ดที่เสียบ จำนวนยา/หิน หรือลบไอเทม ที่สวม/กระเป๋า/คลัง (ต้องมี "ผู้ใช้ทั้งหมด" ด้วย)', group: 'ผู้เล่น' },
   staffTarget: { name: 'จัดการบัญชีทีมงานคนอื่น', desc: 'แบน รีเซ็ตรหัส แก้ตัวละครของบัญชีที่มีสิทธิ์ผู้ดูแล (ไม่มี = ทำได้แค่ผู้เล่นธรรมดาและตัวเอง) · บัญชี owner แตะไม่ได้เสมอ', group: 'ผู้เล่น' },
   users: { name: 'ผู้ใช้ทั้งหมด', desc: 'ตารางบัญชีในแท็บ "ผู้ใช้และตัวละคร": ทุกบัญชี ตัวละคร ทอง คลัง', group: 'ผู้เล่น' },
   resetPassword: { name: 'ตั้งรหัสผ่านชั่วคราว', desc: 'ตั้งรหัสผ่านใหม่ให้บัญชีที่ลืมรหัส', group: 'ผู้เล่น' },
@@ -702,6 +704,30 @@ export function editGear(old: Item, body: Record<string, unknown>): Item | strin
   item.uid = old.uid;
   if (body.plus) item.plus = body.plus;
   if (body.pity) item.pity = body.pity;
+  // Card sockets (cardSockets.ts): kept as they were unless the page sent them. -1 = not drilled.
+  if (body.sockets === undefined) {
+    if (old.sockets !== undefined) item.sockets = old.sockets;
+    if (old.cards) item.cards = [...old.cards];
+  } else {
+    if (!whole(body.sockets, -1, MAX_SOCKETS)) return `จำนวนรูต้องเป็น -1 (ยังไม่เจาะ) ถึง ${MAX_SOCKETS}`;
+    if (body.sockets >= 0) {
+      item.sockets = body.sockets;
+      const raw: unknown[] = Array.isArray(body.cards) ? body.cards : [];
+      if (raw.length > body.sockets) return 'การ์ดมากกว่าจำนวนรู';
+      const cards: (CardId | null)[] = [];
+      for (let i = 0; i < body.sockets; i++) {
+        const c = raw[i];
+        if (c === undefined || c === null || c === '') {
+          cards.push(null);
+          continue;
+        }
+        if (!isCardId(c)) return `ไม่มีการ์ด "${String(c).slice(0, 30)}"`;
+        if (cardDef(c)?.group !== SLOT_CARD_GROUP[item.slot]) return `${cardName(c)} ใส่อุปกรณ์ชนิดนี้ไม่ได้`;
+        cards.push(c);
+      }
+      if (cards.some((c) => c !== null)) item.cards = cards;
+    }
+  }
   return item;
 }
 
@@ -709,7 +735,8 @@ export function editGear(old: Item, body: Record<string, unknown>): Item | strin
 export function describeEntry(e: BagEntry): string {
   if (isStack(e)) return entryName(e);
   const lines = (e.lines ?? []).map((l) => `${STAT_LABEL[l.stat]} ${l.value} T${l.tier}`).join(', ') || 'ไม่มีสเตตัส';
-  return `${e.plus ? `+${e.plus} ` : ''}${e.name} [${RARITY_LABEL[e.rarity]}] Lv.${e.level}${e.cls ? ` (${e.cls})` : ''}${e.pity ? ` pity ${e.pity}` : ''} · ${lines}`;
+  const socks = e.sockets === undefined ? '' : ` · รู ${e.sockets}${e.cards?.some((c) => c) ? ` [${e.cards.map((c) => (c ? cardName(c) : 'ว่าง')).join(', ')}]` : ''}`;
+  return `${e.plus ? `+${e.plus} ` : ''}${e.name} [${RARITY_LABEL[e.rarity]}] Lv.${e.level}${e.cls ? ` (${e.cls})` : ''}${e.pity ? ` pity ${e.pity}` : ''} · ${lines}${socks}`;
 }
 
 /** The smallest value a chosen stat row may have. */

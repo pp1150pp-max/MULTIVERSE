@@ -12,10 +12,11 @@ import {
 } from '../shared/data/potions';
 import { vipLeftText } from '../shared/vip';
 import { t } from './i18n';
-import { BUFF_LABEL, BUFF_MULT, CARD_SOON, MONSTER_STONES, RETURN_CAST, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_STACK, stoneStackMax, stoneSellPrice, stoneUnit } from '../shared/data/stones';
+import { BUFF_LABEL, BUFF_MULT, CARD_HOW, MONSTER_STONES, RETURN_CAST, STONE_COLOR, STONE_DESC, STONE_NAME, STONE_STACK, stoneStackMax, stoneSellPrice, stoneUnit } from '../shared/data/stones';
 import { CARD_GROUP_NAME, CARD_RARITY_NAME, cardFxLines } from '../shared/data/cards';
 import { cardDef } from '../shared/cardTuning';
-import { openCardView } from './ui/cardPopup';
+import { cardFxHtml, gameSocketHost, openCardView, openSocketView, socketTipHtml } from './ui/cardPopup';
+import { socketCount } from '../shared/cardSockets';
 import { lootPots, type Buffs, type LootFilter, type SortKey } from '../shared/sim/Player';
 import { MONSTERS } from '../shared/data/monsters';
 import { currentBalance } from '../shared/balance';
@@ -302,8 +303,14 @@ export class Hud {
         else if (isOrbStone(entry.stone)) g.backend.useOrbItem(i);
         else if (isCardStone(entry.stone)) {
           this.hideTip();
-          openCardView(entry.stone);
+          openCardView(entry.stone, gameSocketHost(g));
         }
+        return;
+      }
+      // Shift+click on drilled gear: its sockets, with the cards to take out (card plan 4.3).
+      if (e.shiftKey && isItem(entry) && socketCount(entry) > 0) {
+        this.hideTip();
+        this.openSockets(entry);
         return;
       }
       // At the blacksmith a click on gear puts it in the forge's slot instead of wearing it.
@@ -378,8 +385,9 @@ export class Hud {
       else if (isStone(item)) this.showStoneTip(item, e, `${item.stone === 'return_scroll' ? 'คลิกซ้าย / ปุ่ม G: ใช้ · ' : isBuffScroll(item.stone) || item.stone === 'megaphone' || item.stone === 'mystery_box' || isOrbStone(item.stone) ? 'คลิกซ้าย: ใช้ · ' : isCardStone(item.stone) ? 'คลิกซ้าย: ดูการ์ด · ' : ''}คลิกขวา: ${right}${split}`);
       else if (item) {
         const both = item.slot === 'ring' && g.player.equipment.ring && g.player.equipment.ring2;
-        if (this.forge.isOpen) this.showTip(item, e, `คลิกซ้าย / ลาก: วางที่ช่างตีเหล็ก · คลิกขวา: ${right}`);
-        else this.showTip(item, e, `คลิกซ้าย: สวมใส่${both ? ' (แทนแหวน 1 · ลากไปช่องแหวน 2 เพื่อแทนวงนั้น)' : ''} · คลิกขวา: ${right}`);
+        const sock = socketCount(item) > 0 ? ' · Shift+คลิก: ดู/ถอดการ์ด' : '';
+        if (this.forge.isOpen) this.showTip(item, e, `คลิกซ้าย / ลาก: วางที่ช่างตีเหล็ก · คลิกขวา: ${right}${sock}`);
+        else this.showTip(item, e, `คลิกซ้าย: สวมใส่${both ? ' (แทนแหวน 1 · ลากไปช่องแหวน 2 เพื่อแทนวงนั้น)' : ''} · คลิกขวา: ${right}${sock}`);
       }
       else this.hideTip();
     });
@@ -436,6 +444,11 @@ export class Hud {
       const slot = eqSlot(e);
       if (!slot) return;
       this.hideTip();
+      const worn = g.player.equipment[slot];
+      if (e.shiftKey && worn && socketCount(worn) > 0) {
+        this.openSockets(worn);
+        return;
+      }
       if (this.forge.isOpen) {
         const item = g.player.equipment[slot];
         if (item) this.forge.forgePlace(item);
@@ -449,7 +462,8 @@ export class Hud {
       if (this.drag?.ghost || isTouchMode()) return;
       const slot = eqSlot(e);
       const item = slot ? g.player.equipment[slot] : undefined;
-      if (item) this.showTip(item, e, this.forge.isOpen ? 'คลิก / ลาก: วางที่ช่างตีเหล็ก' : 'คลิก: ถอดเก็บเข้ากระเป๋า');
+      const sock = item && socketCount(item) > 0 ? ' · Shift+คลิก: ดู/ถอดการ์ด' : '';
+      if (item) this.showTip(item, e, (this.forge.isOpen ? 'คลิก / ลาก: วางที่ช่างตีเหล็ก' : 'คลิก: ถอดเก็บเข้ากระเป๋า') + sock);
       else this.hideTip();
     });
     eq.addEventListener('mouseleave', () => this.hideTip());
@@ -1324,6 +1338,7 @@ export class Hud {
     const icon = itemIcon(item);
     const plus = plusOf(item) ? `<span class="iplus">+${plusOf(item)}</span>` : '';
     const locked = this.g.player.canEquip(item) ? '' : ' locked';
+    // No socket marks on the icon (owner 2026-11-26): sockets show only in the tooltip when pointing at the item.
     return `<div class="cell r-${item.rarity}${selected ? ' sel' : ''}${locked}" ${attrs} style="--rc:${RARITY_COLOR[item.rarity]}">${icon}${plus}<span class="ilv">Lv.${item.level}</span></div>`;
   }
 
@@ -1356,7 +1371,7 @@ export class Hud {
       k === 'hpRegen' || k === 'mpRegen' || k === 'cdr' || k === 'buffDur' || k === 'armorPen' ? v.toFixed(1) : String(Math.round(v));
     $('stat-list').innerHTML = STAT_KEYS.map((k) =>
       `<div class="stat"><span>${STAT_LABEL[k]}</span><b>${fmt(k, p.stats[k])}</b></div>`,
-    ).join('');
+    ).join('') + cardFxHtml(Object.values(p.equipment));
     $('inv-gold').innerHTML = `${COIN_ICON} ${p.gold.toLocaleString()} G`;
     $('inv-pots').innerHTML = potionTotals(this.g.player);
     const lf = $('loot-filter');
@@ -1445,6 +1460,14 @@ export class Hud {
   }
 
   /** Ask before throwing a bag item away (it is destroyed for good, nothing lands on the ground). */
+  /** The socket panel of drilled gear (Shift+click, or "ถอดการ์ด" on the touch sheet). */
+  openSockets(item: Item): void {
+    openSocketView(item, (html, yes, onYes) => this.confirm(html, yes, onYes), (uid, i) => {
+      this.g.backend.unsocketCard(uid, i);
+      this.markInventory();
+    });
+  }
+
   askDrop(i: number): void {
     const item = this.g.player.bag[i];
     if (!item) return;
@@ -1513,6 +1536,7 @@ export class Hud {
       `<div class="tt-sub">${RARITY_LABEL[item.rarity]} · ${SLOT_LABEL[item.slot]} · iLv.${item.level}${plusOf(item) ? ` · ตีบวก +${plusOf(item)}` : ''}</div>` +
       `<div class="tt-stats">${lines || '<div>—</div>'}</div>` +
       setHtml(item, p.equipment) +
+      socketTipHtml(item) +
       (p.equipBlock(item) ? `<div class="tt-req">${p.equipBlock(item)}</div>` : '') +
       `<div class="tt-hint">${hint}</div><div class="tt-val">ขายให้พ่อค้าได้ ${sellValue(item)} G</div>`;
     this.placeTip(tip, e);
@@ -1618,7 +1642,7 @@ export class Hud {
       `<div class="tt-sub">การ์ด${CARD_RARITY_NAME[d.rarity]} · ${s.count} / ${stoneStackMax(s.stone)} ใบ</div>` +
       `<div class="tt-stats">${cardFxLines(d.fx).map((l) => `<div>${l}</div>`).join('')}</div>` +
       `<div class="tt-sub">ใส่ได้: ${CARD_GROUP_NAME[d.group]}</div>` +
-      `<div class="tt-sub" style="color:#ffcf6a">${CARD_SOON}</div>` +
+      `<div class="tt-sub" style="color:#ffcf6a">${CARD_HOW}</div>` +
       `<div class="tt-hint">${hint}</div><div class="tt-val">ขายให้พ่อค้าได้ใบละ ${stoneSellPrice(s.stone).toLocaleString()} G</div>`;
     this.placeTip(tip, e);
   }

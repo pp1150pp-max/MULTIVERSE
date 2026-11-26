@@ -64,6 +64,7 @@ const BASE_NAME: Record<BaseStoneKind, string> = {
   enhance: 'หินตีบวก',
   reroll_values: 'หินสุ่มค่า',
   reroll_stat: 'หินสุ่มสเตตัส',
+  drill: 'หินเจาะรู',
   key_bear: 'อุ้งเท้าหมี',
   key_witch: 'ลูกแก้วแม่มดหนอง',
   key_yeti: 'เขี้ยวเยติ',
@@ -100,6 +101,7 @@ const BASE_DESC: Record<BaseStoneKind, string> = {
   enhance: 'วัตถุดิบตีบวกตั้งแต่ +11 ขึ้นไป (ใช้ 1 ก้อนต่อครั้ง)',
   reroll_values: 'ใช้ตอนสุ่มค่าตัวเลขที่ช่างตีเหล็ก (ใช้ 1 ก้อนต่อครั้ง)',
   reroll_stat: 'ใช้ตอนสุ่มสเตตัสที่ช่างตีเหล็ก (ใช้ 1 ก้อนต่อครั้ง)',
+  drill: 'ใช้ตอนเจาะรูอุปกรณ์ที่ช่างตีเหล็ก (ใช้ 1 ก้อนต่อครั้ง) · เจาะได้ครั้งเดียวต่อชิ้น ได้ 0–2 ช่องสำหรับเสียบการ์ด',
   key_bear: keyDesc('หมี', 'ป่ามรกต'),
   key_witch: keyDesc('แม่มดหนอง', 'หนองน้ำหมอก'),
   key_yeti: keyDesc('เยติ', 'ดินแดนหิมะ'),
@@ -129,6 +131,7 @@ const BASE_COLOR: Record<BaseStoneKind, string> = {
   enhance: '#ff9a2e',
   reroll_values: '#ffd34a',
   reroll_stat: '#b67cff',
+  drill: '#7fd4c8',
   key_bear: '#9ad86a',
   key_witch: '#6fd8b0',
   key_yeti: '#cfeeff',
@@ -165,13 +168,13 @@ const orbStoneDesc = (k: OrbStoneKind): string =>
     ? 'คลิกเพื่อใช้: ได้หน้าตาลูกแก้วตีบวกนี้เข้าบัญชี (สวมได้ที่กระเป๋าแฟชั่น) · ถ้ามีอยู่แล้วใช้ไม่ได้ เก็บไว้เทรดหรือขายในตลาดได้ · ขายให้พ่อค้าไม่ได้'
     : 'ลูกแก้วนี้ถูกนำออกจากเกมแล้ว ใช้ไม่ได้';
 
-/** Said on every card until socketing exists (plan PR 3). */
-export const CARD_SOON = 'ยังเสียบอุปกรณ์ไม่ได้ (เร็ว ๆ นี้)';
+/** How to socket a card (owner 2026-11-26: clicked in the bag, anywhere). */
+export const CARD_HOW = 'คลิกการ์ดเพื่อเสียบลงอุปกรณ์ที่เจาะรูแล้ว (เจาะรูได้ที่ช่างตีเหล็ก)';
 /** A card item's description, from the card tuning (the group and effects the owner set on the /admin card tab). */
 const cardStoneDesc = (k: CardId): string => {
   const d = cardDef(k);
   if (!d) return '';
-  return `การ์ดมอนสเตอร์ระดับ${CARD_RARITY_NAME[d.rarity]} · ${cardFxLines(d.fx).join(' · ')} · ใส่ได้: ${CARD_GROUP_NAME[d.group]} · ${CARD_SOON}`;
+  return `การ์ดมอนสเตอร์ระดับ${CARD_RARITY_NAME[d.rarity]} · ${cardFxLines(d.fx).join(' · ')} · ใส่ได้: ${CARD_GROUP_NAME[d.group]} · ${CARD_HOW}`;
 };
 /** A card item's colour: its rarity's. */
 const cardStoneColor = (k: CardId): string => RARITY_COLOR[cardDef(k)?.rarity ?? 'rare'];

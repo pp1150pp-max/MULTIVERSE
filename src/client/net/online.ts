@@ -749,7 +749,9 @@ export class OnlineBackend implements Backend {
         done?.(m.result && m.item ? { result: m.result, item: m.item } : null);
         break;
       }
-      case 'rerolled': {
+      // Drilling answers like a reroll: the changed item (its req numbers come from the same counter).
+      case 'rerolled':
+      case 'drilled': {
         const done = this.rerollWait.get(m.req);
         this.rerollWait.delete(m.req);
         done?.(m.item);
@@ -1411,12 +1413,31 @@ export class OnlineBackend implements Backend {
   reroll(uid: string, kind: RerollKind): Promise<Item | null> {
     const req = ++this.enhanceReq;
     this.send({ t: 'act', a: 'reroll', uid, kind, req });
+    return this.waitItem(req);
+  }
+
+  drill(uid: string): Promise<Item | null> {
+    const req = ++this.enhanceReq;
+    this.send({ t: 'act', a: 'drill', uid, req });
+    return this.waitItem(req);
+  }
+
+  /** The item a blacksmith answer (`rerolled` / `drilled`) with this req carries, or null after 5 s. */
+  private waitItem(req: number): Promise<Item | null> {
     return new Promise((resolve) => {
       this.rerollWait.set(req, resolve);
       setTimeout(() => {
         if (this.rerollWait.delete(req)) resolve(null);
       }, 5000);
     });
+  }
+
+  socketCard(uid: string, card: string): void {
+    this.send({ t: 'act', a: 'socketCard', uid, card });
+  }
+
+  unsocketCard(uid: string, i: number): void {
+    this.send({ t: 'act', a: 'unsocketCard', uid, i });
   }
 
   market(call: MarketCall): Promise<MarketReply> {
