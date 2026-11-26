@@ -1186,7 +1186,9 @@ export class GameWorld {
     if (!s.serverWalk) this.takeWalkTo(s, m.to);
 
     const now = performance.now();
-    if (!pos || serverMoves(p) || s.auto || s.serverWalk) {
+    // Sent before the server moved us at once (Warp, respawn, warp circle): from where we no longer are.
+    const stale = typeof m.epoch === 'number' && m.epoch !== s.epoch;
+    if (!pos || stale || serverMoves(p) || s.auto || s.serverWalk) {
       s.lastPosAt = now;
       return;
     }

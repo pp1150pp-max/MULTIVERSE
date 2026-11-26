@@ -639,6 +639,93 @@ export function playDash(add: DashHost, x: number, z: number, ang: number, style
   return true;
 }
 
+// ------------------------------------------------------------------ the mage's Warp (class passive, owner 2026-11-27)
+
+/** Warp's own numbers: × size, seconds, and the colours (the worn dash cosmetic's, or the /admin purple). */
+export interface WarpFxLook { size: number; sec: number; color1: string; color2: string }
+
+/**
+ * The mage's Warp: a ring where the character vanished (x1, z1) and one where it appears (x2, z2), each with a magic
+ * circle on the ground and bits in the worn dash style (`style` null = none worn: one purple magic circle). No path
+ * between them and no afterimages (owner 2026-11-27). False = the graphics menu leaves nothing to draw.
+ */
+export function playWarp(add: DashHost, x1: number, z1: number, x2: number, z2: number, style: DashStyle | null, look: WarpFxLook, opts: { particles: number; extras: boolean }): boolean {
+  if (!opts.extras && opts.particles <= 0) return false;
+  const T = Math.max(0.15, look.sec);
+  const S = Math.max(0.1, look.size);
+  const tex = plainTex();
+  const group = new THREE.Group();
+  const ticks: ((t: number, dt: number) => void)[] = [];
+  // Bits in the style's own shape.
+  const bit = style === 'fire' ? tex.flame : style === 'leaf' ? tex.leaf : style === 'star' ? tex.star5 : style === 'shadow' ? tex.smoke
+    : style === 'thunder' ? tex.spark : style === 'wind' ? tex.spark : tex.star4;
+  const circle = style === 'fire' ? tex.fireRing : style === 'wind' || style === 'leaf' ? tex.windRing : style === 'shadow' ? tex.vortex
+    : style === 'star' ? tex.stars : tex.ringA;
+  const end = (x: number, z: number, at: number, appear: boolean): void => {
+    const life = Math.max(0.1, T - at);
+    if (opts.extras) {
+      // the magic circle on the ground, turning
+      const g = groundMesh(circle, look.color2, style !== 'shadow');
+      g.visible = false;
+      g.position.set(x, 0.06, z);
+      group.add(g);
+      // the upright ring: closing in where it vanished, opening out where it appears
+      const r = sprite(tex.ringB, look.color1);
+      r.visible = false;
+      r.position.set(x, MID_Y * S, z);
+      group.add(r);
+      const glow = sprite(tex.disc, look.color1);
+      glow.visible = false;
+      glow.position.set(x, MID_Y * S, z);
+      group.add(glow);
+      ticks.push((t, dt) => {
+        const q = (t - at) / life;
+        const on = q >= 0 && q <= 1;
+        g.visible = r.visible = glow.visible = on;
+        if (!on) return;
+        const fade = Math.min(1, q * 8) * (1 - q);
+        g.scale.setScalar(S * (0.6 + 0.6 * ease(Math.min(1, q * 2))));
+        g.rotation.y += (appear ? 2.4 : -2.4) * dt;
+        g.material.opacity = 0.9 * fade;
+        const k = appear ? 0.4 + 1.2 * ease(Math.min(1, q * 2.5)) : 1.6 - 1.3 * ease(Math.min(1, q * 2.5));
+        r.scale.set(1.6 * S * k, 2.2 * S * k, 1);
+        r.material.opacity = fade;
+        glow.scale.setScalar(1.3 * S * (appear ? 1 - 0.5 * q : 0.5 + 0.5 * (1 - q)));
+        glow.material.opacity = 0.55 * (appear ? 1 - q : Math.max(0, 1 - q * 2));
+      });
+    }
+    // bits: drawn in to where it vanished, bursting out where it appears
+    const n = Math.round(14 * opts.particles);
+    for (let i = 0; i < n; i++) {
+      const s = sprite(bit, i % 2 ? look.color1 : look.color2, style !== 'shadow');
+      s.visible = false;
+      group.add(s);
+      const a = rnd(0, TAU);
+      const d = rnd(0.7, 1.3) * S;
+      const y = rnd(0.2, 1.6) * S;
+      const born = at + rnd(0, 0.08);
+      const len = rnd(0.25, 0.45) * Math.max(0.6, T / 0.6);
+      ticks.push((t) => {
+        const q = (t - born) / len;
+        s.visible = q >= 0 && q <= 1;
+        if (!s.visible) return;
+        const out = appear ? ease(q) : 1 - ease(q);
+        s.position.set(x + Math.cos(a) * d * out, y + (appear ? q * 0.5 : -q * 0.3) * S, z + Math.sin(a) * d * out);
+        s.scale.setScalar((style === 'shadow' ? 0.35 : 0.14) * S * (1 - q * 0.4));
+        s.material.opacity = 1 - q;
+      });
+    }
+  };
+  end(x1, z1, 0, false);
+  end(x2, z2, 0.04, true);
+  if (!ticks.length) return false;
+  add(group, T, (k, dt) => {
+    const t = k * T;
+    for (const f of ticks) f(t, dt);
+  });
+  return true;
+}
+
 // ------------------------------------------------------------------ card pictures (shop, fashion bag)
 
 const cards = new Map<string, string>();

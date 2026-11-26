@@ -960,6 +960,11 @@ export class Sim {
    * Step through the warp circle this player stands at (ZoneDef.warps, owner 2026-11-26: the Kraken Maelstrom's way onto its
    * whirlpool's island and back): alive, within WARP_RANGE (warpPadNear). Lands beside the far end if that very spot is taken.
    */
+  /** Tells the server this player was moved at once (a Warp dash): the browser jumps there and its older positions are refused. */
+  markWarped(p: Player): void {
+    this.events.push({ t: 'warped', id: p.id });
+  }
+
   useWarp(p: Player): boolean {
     const pad = warpPadNear(this.zone, p.x, p.z);
     if (!p.alive || !pad) return false;

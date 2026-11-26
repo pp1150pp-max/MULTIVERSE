@@ -60,6 +60,15 @@
 #skills-win .sk-node.locked { border-style: dashed; border-color: #5a5870; }
 #skills-win .sk-node.locked .sk-ico { filter: grayscale(1) brightness(0.5); }
 #skills-win .sk-node.sel { outline: 2px solid #fff; outline-offset: 3px; }
+/* The class passive at the centre (owner 2026-11-27): a gold double ring on warm paper, a little bigger than a skill. */
+#skills-win .sk-node.core { z-index: 1; border: 3px double #f2c14e; background: radial-gradient(circle, #4a3a20 0%, #2a2012 70%, #1a140a 100%); box-shadow: 0 0 0 2px #1a140a, 0 0 0 4px rgba(242, 193, 78, 0.55), 0 0 14px rgba(242, 193, 78, 0.45); }
+#skills-win .sk-node.core.learned { box-shadow: 0 0 0 2px #1a140a, 0 0 0 4px #f2c14e, 0 0 18px rgba(242, 193, 78, 0.9); }
+#skills-win .sk-node.core.locked { border: 3px dashed #8a7a58; box-shadow: 0 0 0 2px #1a140a, 0 0 0 4px rgba(138, 122, 88, 0.45); }
+#skills-win .sk-node.core.locked .sk-ico { filter: grayscale(1) brightness(0.55) sepia(0.4); }
+#skills-win .sk-nlock { position: absolute; right: -6px; bottom: -6px; font-size: 13px; line-height: 1; text-shadow: 0 0 3px #000; }
+#skills-win .sk-dhead .sk-ico.cp { box-shadow: 0 0 0 2px #f2c14e, 0 0 8px rgba(242, 193, 78, 0.6); border-radius: 50%; }
+#skills-win .sk-cp-on { color: #9fe08a; font-weight: bold; }
+#skills-win .sk-cp-off { color: #c9b98a; font-weight: bold; }
 #skills-win .sk-nr { position: absolute; right: -4px; bottom: -4px; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 8px; background: #f2c14e; color: #2a1a00; font-size: 10px; font-weight: bold; line-height: 16px; text-align: center; }
 #skills-win .sk-nlv { position: absolute; left: 50%; bottom: -15px; transform: translateX(-50%); font-size: 10px; color: #a9a6c0; white-space: nowrap; text-shadow: 0 0 3px #000; }
 #skills-win .sk-nw { position: absolute; left: -5px; top: -5px; width: 15px; height: 15px; border-radius: 3px; background: #2b5fa8; color: #fff; font-size: 10px; font-weight: bold; line-height: 15px; text-align: center; }

@@ -1238,7 +1238,8 @@ export class OnlineBackend implements Backend {
     this.atkT -= dt;
     this.atkRootT = Math.max(0, this.atkRootT - dt);
     // A dash ends the stop (Player.startDash) — at once here, the server dashes when the input gets there.
-    if (it.dash && (me.cd.dash ?? 0) <= 0 && me.snareT <= 0) this.atkRootT = 0;
+    const dashSk = me.skill('dash');
+    if (it.dash && dashSk && (me.warpOn() ? me.skillReady(dashSk) : (me.cd.dash ?? 0) <= 0) && me.snareT <= 0) this.atkRootT = 0;
     const moveDir = this.walk(dt, it);
 
     if (it.dash) this.pendingDash = true;
@@ -1274,7 +1275,7 @@ export class OnlineBackend implements Backend {
     }
     const to = me.alive && me.moveTarget ? { x: me.moveTarget.x, z: me.moveTarget.z } : undefined;
     this.send({
-      t: 'input', pos: ours ? { x: me.x, z: me.z } : undefined, seq, move: moveDir, aim: it.aim, basic: it.basic, skills: it.skills,
+      t: 'input', pos: ours ? { x: me.x, z: me.z } : undefined, seq, epoch: this.epoch, move: moveDir, aim: it.aim, basic: it.basic, skills: it.skills,
       dash: oneShots && this.pendingDash, potion: oneShots ? this.pendingPotion : null, recall: (oneShots && this.pendingRecall) || undefined, to,
     });
     if (!oneShots) return;
@@ -1305,7 +1306,8 @@ export class OnlineBackend implements Backend {
     }
     if (it.basic && this.atkT <= 0) {
       this.atkT = 1 / me.attackRate;
-      t = Math.max(t, attackRootTime(cfg, me.cls.id, null, anim));
+      // Hit and Run (gunslinger class passive): the basic attack walks on, as on the server (Player.startAttackRoot).
+      if (!me.hitRunOn()) t = Math.max(t, attackRootTime(cfg, me.cls.id, null, anim));
     }
     this.atkRootT = Math.max(this.atkRootT, t);
   }

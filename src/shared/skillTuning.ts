@@ -8,6 +8,7 @@ import {
 import type { ClassId } from './types';
 import { MAX_LEVEL } from './formulas';
 import { reachRadius, SKILL_REACH } from './data/skillRanges';
+import { checkClassPassive, classPassiveChanges, codeClassPassive, mergeClassPassive, type ClassPassiveConfig, type ClassPassiveTuning } from './classPassiveTuning';
 
 /** One learnable skill's numbers. Growth is in % per rank above 1 (negative = less). */
 export interface SkillValues {
@@ -144,6 +145,8 @@ export interface SkillConfig {
   extraStunGap: number;
   /** Extra effects per skill id (learnable or basic); none in code. */
   effects: Record<string, ExtraEffect[]>;
+  /** Each class's always-on passive (owner 2026-11-27, classPassives.ts). */
+  classPassive: ClassPassiveConfig;
 }
 
 /** What is saved: only what differs from the code. Unlock lists are saved whole when any entry differs. */
@@ -166,6 +169,7 @@ export interface SkillTuning {
   basicRate?: Partial<Record<ClassId, number>>;
   /** Saved whole per skill (a skill with none is left out). */
   effects?: Record<string, ExtraEffect[]>;
+  classPassive?: ClassPassiveTuning;
 }
 /** One skill's saved differences. */
 export type SkillValuesTuning = Partial<Record<SkillNum, number>> & { params?: Record<string, number>; paramsPerRank?: Record<string, number> };
@@ -239,6 +243,7 @@ export function codeSkills(): SkillConfig {
     basicRate: Object.fromEntries(CLASS_IDS.map((c) => [c, CLASSES[c].attackRate])) as Record<ClassId, number>,
     extraStunGap: 2,
     effects: {},
+    classPassive: codeClassPassive(),
   };
 }
 const CODE = codeSkills();
@@ -278,6 +283,7 @@ export function mergeSkills(t: SkillTuning | undefined): SkillConfig {
   for (const id of CLASS_IDS) if (t.basicRate?.[id] !== undefined) c.basicRate[id] = t.basicRate[id]!;
   // A copy: the /admin page edits its draft in place.
   for (const [id, list] of Object.entries(t.effects ?? {})) if (c.skills[id]) c.effects[id] = list.map((e) => ({ ...e }));
+  c.classPassive = mergeClassPassive(t.classPassive);
   return c;
 }
 
@@ -338,7 +344,7 @@ function checkExtras(id: string, v: unknown, strict: boolean): ExtraEffect[] | s
 export function checkSkillTuning(x: unknown, strict: boolean): { tuning: SkillTuning | undefined } | { error: string } {
   if (x === undefined) return { tuning: undefined };
   if (!isObj(x)) return strict ? { error: 'ค่าสกิลไม่ถูกต้อง' } : { tuning: undefined };
-  const TOP = [...NUMS, 'mapZoom', 'mineNoRoot', 'mineRanks', 'unlock', 'skills', 'basicRate', 'effects'];
+  const TOP = [...NUMS, 'mapZoom', 'mineNoRoot', 'mineRanks', 'unlock', 'skills', 'basicRate', 'effects', 'classPassive'];
   if (strict) {
     const extra = Object.keys(x).find((k) => !TOP.includes(k));
     if (extra) return { error: `สกิล: ไม่รู้จักค่า "${extra.slice(0, 20)}"` };
@@ -358,6 +364,11 @@ export function checkSkillTuning(x: unknown, strict: boolean): { tuning: SkillTu
     if (typeof x.mapZoom !== 'boolean') {
       if (strict) return { error: 'สวิตช์ซูมผังสกิลไม่ถูกต้อง' };
     } else if (x.mapZoom !== CODE.mapZoom) out.mapZoom = x.mapZoom;
+  }
+  {
+    const c = checkClassPassive(x.classPassive, strict);
+    if ('error' in c) return c;
+    if (c.tuning) out.classPassive = c.tuning;
   }
   if (x.mineNoRoot !== undefined) {
     if (typeof x.mineNoRoot !== 'boolean') {
@@ -528,6 +539,7 @@ export function skillChanges(a: SkillConfig, b: SkillConfig): string[] {
   for (const k of NUMS) if (a[k] !== b[k]) out.push(`${SKILL_NUM_NAME[k]} ${a[k]} → ${b[k]}`);
   if (a.mapZoom !== b.mapZoom) out.push(`ซูมผังสกิล ${a.mapZoom ? 'เปิด' : 'ปิด'} → ${b.mapZoom ? 'เปิด' : 'ปิด'}`);
   if (a.mineNoRoot !== b.mineNoRoot) out.push(`กับระเบิดวางไม่ชะงัก ${a.mineNoRoot ? 'เปิด' : 'ปิด'} → ${b.mineNoRoot ? 'เปิด' : 'ปิด'}`);
+  out.push(...classPassiveChanges(a.classPassive, b.classPassive));
   if (a.mineRanks.join() !== b.mineRanks.join()) out.push(`กับระเบิดแรงก์ที่ได้สแตค ${a.mineRanks.join('/')} → ${b.mineRanks.join('/')}`);
   for (const k of LEARN_KINDS) {
     if (a.unlock[k].join() !== b.unlock[k].join()) out.push(`เลเวลปลดล็อก${KIND_NAME[k]} ${a.unlock[k].join('/')} → ${b.unlock[k].join('/')}`);

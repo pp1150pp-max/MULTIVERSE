@@ -206,4 +206,22 @@ export const EN_SKILLS: Record<string, string> = {
   'คูลดาวน์แดชลดลง': 'Dash cooldown cut',
   'พลังป้องกันเพิ่ม และเมื่อ HP ต่ำ รับดาเมจน้อยลงอีก': 'More defence, and even less damage taken at low HP',
   'รับดาเมจลดลงเมื่อ HP ต่ำ': 'Damage reduction at low HP',
+
+  // ---- class passives (classPassives.ts, owner 2026-11-27)
+  'ยิงแล้ววิ่ง': 'Hit and Run',
+  'ก้าวมิติ': 'Warp',
+  'เดินและวิ่งได้ขณะตีธรรมดา ไม่หยุดกับที่ตอนยิง (สกิลยังหยุดตามปกติ)': 'Walk and run while basic-attacking, with no stop to shoot (skills still stop as usual)',
+  'กดแดชแล้วหายตัวไปโผล่ปลายทางทันทีแทนการพุ่ง ระยะเท่าแดช ทะลุกำแพงไม่ได้ เก็บได้หลายครั้ง คืนทีละครั้งตามคูลดาวน์แดช': 'The dash vanishes you and you appear at its end at once instead of rushing there. Same reach as a dash, never through walls. Holds several, each coming back one at a time with the dash cooldown',
+  'พาสซีฟประจำอาชีพ': 'Class passive',
+  'ยังอยู่ระหว่างออกแบบ': 'Still being designed',
+  '✓ ทำงานอยู่ ติดตัวตลอด ไม่ต้องใส่ช่อง': '✓ Active: always on, no slot needed',
+  '🔒 ปลดล็อกที่ Lv.{0}': '🔒 Unlocks at Lv.{0}',
+  '🔒 ปิดอยู่ชั่วคราว': '🔒 Turned off for now',
+  '🔒 ยังอยู่ระหว่างออกแบบ': '🔒 Still being designed',
+  'ค่า:': 'Values:',
+  'เก็บได้ {0} ครั้ง (คืนทีละครั้ง) · คูลดาวน์ต่อครั้ง {1} วิ · ระยะเท่าแดช': 'Holds {0} (back one at a time) · {1} s cooldown each · same reach as a dash',
+  'พาสซีฟประจำอาชีพ{0}{1}': 'Class passive · {0}{1}',
+  '· ปลด Lv.{0}': '· unlocks at Lv.{0}',
+  'ต่อ 1 ครั้ง': 'per use',
+  '{0}: หายตัวไปโผล่ปลายทางทันที': '{0}: vanish and appear at the end at once',
 };

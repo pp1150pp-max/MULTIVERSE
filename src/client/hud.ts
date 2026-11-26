@@ -1,4 +1,5 @@
 import { SPACE_COLOUR } from './island';
+import { CLASS_PASSIVES } from '../shared/classPassives';
 import { placeLabel } from '../shared/channels';
 import type { Game } from './Game';
 import { NPC_USE_RANGE, type NpcId } from '../shared/data/npcs';
@@ -835,8 +836,10 @@ export class Hud {
       // The basic attack's damage and speed (tuned on /admin, owner 2026-11-20).
       sk.kind === 'basic' ? `<div>ดาเมจ <span class="tt-val">${Math.round(rankedDmg(sk, 1) * 100)}% ATK</span> · <span class="tt-val">${Math.round(p.attackRate * 100) / 100} ครั้ง/วิ</span></div>` : '',
       sk.mp ? `<div>MP <span class="tt-val">${p.skillMp(sk)}</span></div>` : '',
-      full ? `<div>คูลดาวน์ <span class="tt-val">${full} วิ${stacks ? ' ต่อ 1 อัน' : ''}</span></div>` : '',
-      stacks ? `<div>เก็บได้ <span class="tt-val">${held} / ${stacks} อัน</span></div>` : '',
+      full ? `<div>คูลดาวน์ <span class="tt-val">${full} วิ${stacks ? (sk.kind === 'dash' ? ' ต่อ 1 ครั้ง' : ' ต่อ 1 อัน') : ''}</span></div>` : '',
+      stacks ? `<div>เก็บได้ <span class="tt-val">${held} / ${stacks} ${sk.kind === 'dash' ? 'ครั้ง' : 'อัน'}</span></div>` : '',
+      // The mage's class passive Warp turns the dash into a vanish-and-appear (classPassives.ts).
+      sk.kind === 'dash' && p.warpOn() ? `<div><span class="tt-val">${CLASS_PASSIVES.mage!.nameTh}: หายตัวไปโผล่ปลายทางทันที</span></div>` : '',
       ...skillParamLines(sk, Math.max(1, rank)).map((l) => `<div><span class="tt-val">${l}</span></div>`),
       reach ? `<div><span class="tt-val">${reachText(reach)}</span></div>` : '',
     ].join('');

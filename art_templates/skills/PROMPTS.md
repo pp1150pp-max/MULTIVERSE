@@ -206,3 +206,13 @@ magenta (#FF00FF), no shadows on it. No readable words, no logos. Do not use pin
 | `skill_sw_duelist.png` | นักดวล | two swords crossed point-to-point in a duel, a single red target between them |
 | `skill_sw_lightfeet.png` | เท้าคล่อง | an armoured boot with small blue wings and speed lines |
 | `skill_sw_ironhide.png` | เกราะเหล็ก | a thick riveted iron breastplate with a glowing golden heart in the centre |
+
+## พาสซีฟประจำอาชีพ (ดาวกลางของผังสกิล, เจ้าของ 2026-11-27)
+
+ใช้แม่แบบด้านบน แนบไอคอนเดิมของคลาสนั้นเป็นตัวอย่างสไตล์ ขอบให้เป็นทองหนาสองชั้น (ช่องนี้เด่นกว่าสกิลทั่วไปเล็กน้อย)
+
+| ไฟล์ | พาสซีฟ | `<SYMBOL>` |
+|---|---|---|
+| `skill_cp_hitrun.png` | มือปืน ยิงแล้ววิ่ง (Hit and Run) | a running boot mid-stride with a smoking revolver firing forward above it, speed lines behind |
+| `skill_cp_warp.png` | เมจ ก้าวมิติ (Warp) | two glowing purple magic circles side by side, a figure's silhouette fading out of the left one and appearing in the right one |
+| `skill_cp_none.png` | นักดาบ (ยังออกแบบ) | a sword standing in a stone pedestal wrapped in a faint question-mark of light |

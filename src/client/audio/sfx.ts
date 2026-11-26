@@ -32,7 +32,7 @@ export interface Sound {
 const GROUP_OF: Record<BaseSound, SfxGroup> = {
   slash: 'skill', whirlwind: 'skill', charge: 'skill', earthquake: 'skill',
   bolt: 'skill', fireball: 'skill', frostnova: 'skill', meteor: 'skill',
-  shot: 'skill', rapidfire: 'skill', pierce: 'skill', headshot: 'skill', dash: 'skill', headshot_fire: 'skill',
+  shot: 'skill', rapidfire: 'skill', pierce: 'skill', headshot: 'skill', dash: 'skill', headshot_fire: 'skill', warp: 'skill',
   explosion: 'skill', crater: 'skill', impact: 'skill',
   hit: 'monster', crit: 'monster', monster_die: 'monster',
   boss_die: 'boss', boss_slam: 'boss', boss_arrive: 'boss', boss_appear: 'boss',
@@ -228,6 +228,16 @@ const BASE: Record<BaseSound, Omit<Sound, 'group'>> = {
       s.noise(2600, 300, 0.35, 0.7, 0, 0.6);
       s.tone('sawtooth', 220, 45, 0.3, 0.2);
       s.noise(5200, 2000, 0.06, 0.4, 0, 1.5);
+    },
+  },
+  warp: {
+    gap: 120,
+    // The mage's Warp: a soft airy whoosh sucked in, then a bright shimmering pop where it appears.
+    make: (s) => {
+      s.noise(900, 3200, 0.14, 0.32, 0, 1.2);
+      s.tone('sine', 520, 1400, 0.12, 0.12);
+      s.tone('triangle', 1760, 2350, 0.16, 0.08, 0.1);
+      s.tone('sine', 2640, 3520, 0.12, 0.05, 0.13);
     },
   },
   crit: {
