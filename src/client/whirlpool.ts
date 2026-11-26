@@ -37,7 +37,8 @@ const SHADER_MAP = /* glsl */ `
       float d = r * 2.0 * uSize;
       float band = smoothstep(0.86, 0.97, sin(angle * 3.0 + d * 22.0 + uPhase))
         * smoothstep(0.04, 0.2, d) * (1.0 - smoothstep(0.75, 0.97, d));
-      sampledDiffuseColor.rgb += vec3(0.55, 0.85, 0.9) * band * 0.1 * uGlow;
+      // Lifts the water's own colour: plain white added here read as grey smears on the dark rings.
+      sampledDiffuseColor.rgb = sampledDiffuseColor.rgb * (1.0 + band * 0.5 * uGlow) + vec3(0.0, 0.035, 0.05) * band * uGlow;
       if (uShLevel > 1.5) {
         // The eye darkens and clears again, slowly.
         float eye = 1.0 - smoothstep(0.02, 0.22, d);
