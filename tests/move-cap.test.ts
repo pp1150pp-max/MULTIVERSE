@@ -6,6 +6,7 @@ import { applyBalance, balanceChanges, checkBalance, codeBalance, currentBalance
 import { ZONE_1 } from '../src/shared/data/zones';
 import { CODE_MOVE_GROWTH, makeItem, rowRanges, upgradeItem } from '../src/shared/data/items';
 import type { Item } from '../src/shared/types';
+import { cleanStash } from '../src/shared/sim/stash';
 import { BASE_MOVE_SPEED } from '../src/shared/formulas';
 import { MOUNT_SPEED } from '../src/shared/data/cosmetics';
 import { Sim } from '../src/shared/sim/Sim';
@@ -110,6 +111,10 @@ ok(old.lines![mainAt].value === want, `old main line 400 → ${want} (${old.line
 ok(old.lines![old.lines!.length - 1].value === 30, 'the extra line keeps 30');
 ok(old.stats.moveSpeed === Math.round((want + 30) * 10) / 10 && old.stats.def === oldDef, `stats add up again (${old.stats.moveSpeed}), other stats untouched`);
 ok(old.mvG === 0.003 && old.lines![mainAt].tier === 1, 'stamped, and still a T1 line on the new range');
+const ml = old.lines![mainAt];
+const newT1 = rowRanges('sea_king_boots', 'legendary', 80, ['moveSpeed'])![0];
+ok(ml.min <= ml.value && ml.value <= ml.max, `the line's stored range moved too: ${ml.min} ≤ ${ml.value} ≤ ${ml.max}`);
+ok(ml.max === newT1.max && ml.max < 60, `stored T1 range is the new one (max ${ml.max}), not 361–424`);
 const once = JSON.stringify(old);
 upgradeItem(old);
 ok(JSON.stringify(old) === once, 'loading again changes nothing');
@@ -129,5 +134,13 @@ saveBoots.stats.moveSpeed = 430;
 delete saveBoots.mvG;
 const q = sim.addPlayer({ ...newCharacterData('OldBoots', 'sword'), level: 80, equipment: { boots: saveBoots } });
 ok(q.equipment.boots!.lines![mainAt].value === want && q.stats.moveSpeed === 50, `old save: boots ${q.equipment.boots!.lines![mainAt].value} + 30, still capped at 50`);
+
+// The shared stash is read through upgradeItem too (market listings: server/market.ts; mail rolls new items on claim).
+const stashBoots: Item = JSON.parse(once);
+stashBoots.lines![mainAt] = { ...stashBoots.lines![mainAt], value: 400, min: 360.8, max: 424.3 };
+delete stashBoots.mvG;
+const st = cleanStash({ size: 30, gold: 0, items: [stashBoots] });
+const sl = (st.items[0] as Item).lines![mainAt];
+ok(sl.value === want && sl.min <= sl.value && sl.value <= sl.max && sl.tier === 1, `stash boots: ${sl.value} in ${sl.min}–${sl.max} T${sl.tier}`);
 
 finish('move-cap');
