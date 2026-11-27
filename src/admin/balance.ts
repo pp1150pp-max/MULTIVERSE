@@ -8,6 +8,7 @@ import { CIRCLE_FALLBACKS, FX_LAYER_NAME, FX_LAYER_RANGE, QUARKS_SKILLS, quarksK
 import { circleDesign, drawInner, drawOuter } from '../client/circleDesigns';
 import { skillExtras } from '../client/skillExtras';
 import { ATTACK_ROOT_RANGE, NO_ATTACK_ROOT } from '../shared/attackRootTuning';
+import { DODGE_NAME, DODGE_RANGE } from '../shared/dodgeTuning';
 import { AUDIO_GAIN_RANGE, BOSS_SONG_NAME, BOSS_SONGS, ROOM_BOSS_NAME, ROOM_BOSSES, SFX_GROUP_NAME, SFX_GROUPS, type RoomSong } from '../shared/audioTuning';
 import { FORGE_RANGE, PLUS_CAP, PLUS_NEVER } from '../shared/forgeTuning';
 import { RIG_ARMOR_ITEMS, RIG_ARMOR_NAME, RIG_ARMORS, RIG_WEAPON_ITEMS, RIG_WEAPON_NAME, RIG_WEAPONS } from '../shared/rigLookTuning';
@@ -19,7 +20,7 @@ import {
 } from '../shared/balance';
 import { DROP_GOLD_MULT, type MonsterDef } from '../shared/data/monsters';
 import {
-  AUTO_ALLOW_NAME, AUTO_ALLOWS, AUTO_HOME_WAIT_NAME, AUTO_OFFLINE_NAME, AUTO_PRIORITY_LOOT_NAME, AUTO_AOE_GUARD_NAME, AUTO_DEFAULT_NAME, AUTO_LOOT_ORDERS, AUTO_NUM_NAME, AUTO_OUT_ACTIONS, AUTO_RANGE, AUTO_TARGET_MODES, autoDefaultValueName,
+  AUTO_ALLOW_NAME, AUTO_ALLOWS, AUTO_HOME_WAIT_NAME, AUTO_OFFLINE_NAME, AUTO_PRIORITY_LOOT_NAME, AUTO_SUMMARY_NAME, AUTO_AOE_GUARD_NAME, AUTO_DEFAULT_NAME, AUTO_LOOT_ORDERS, AUTO_NUM_NAME, AUTO_OUT_ACTIONS, AUTO_RANGE, AUTO_TARGET_MODES, autoDefaultValueName,
   type AutoAllow, type AutoDefaults,
 } from '../shared/autoTuning';
 import { FARM_IDS, NO_BOOST, ZONES, type MonsterBoost } from '../shared/data/zones';
@@ -1216,6 +1217,12 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         num('aoeMargin', 0.1),
       ),
       h('div', { class: 'muted' }, 'ทุกอาชีพ: Auto กดสกิลเมื่อสกิลนั้นถึงจริงเท่านั้น (ระยะสกิลตามที่ปรับ + ขนาดตัวมอน − ระยะเผื่อพลาด: มอนต้องเข้ามาลึกกว่าขอบสกิลเท่านี้ กันวืด ยิ่งมากยิ่งกดช้า) · วงรอบตัว = มีมอนในวง · ยิง/พุ่ง/ฟันด้านหน้า = เป้าอยู่ในระยะสกิล (ยิงระเบิดบวกวงระเบิด) · ตกที่จุด = ระยะร่าย + วงตก · บัฟ/สกิลวงที่ไม่มีดาเมจ กดตามเดิม · ไม่ถึง = ข้ามไปสกิลถัดไปในลำดับ ไม่มีสกิลไหนถึง = ตีธรรมดาต่อ (ไม่เดินเข้าไปเพิ่ม) · ปิดสวิตช์ = แบบเดิม กดทันทีที่ตีธรรมดาถึง'),
+      h('h3', {}, 'หน้าสรุปผล Auto'),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' }, h('input', { type: 'checkbox', checked: a.summary, onchange: (e: Event) => { a.summary = (e.target as HTMLInputElement).checked; refresh(); } }), ` ${AUTO_SUMMARY_NAME}`),
+        num('summaryMin', 1),
+      ),
+      h('div', { class: 'muted' }, 'เจ้าของ 2026-11-27: เปิด Auto แล้วไม่แตะเกม (ไม่กดคีย์ ไม่คลิก ไม่แตะจอ ไม่หมุนล้อ) ครบเวลานี้ = ขึ้นหน้าสรุป EXP เลเวล ทอง มอนที่ล่า ไอเทมแยกความหายาก หิน ยา ตาย ตั้งแต่แตะเกมครั้งล่าสุด · ตัวเลขนับต่อเรื่อย ๆ ไม่หยุด จนผู้เล่นกด ✕ หรือดับเบิลคลิก · ใช้ได้ทั้งตอนสลับแท็บและตอนหลุดแล้ว Auto ฟาร์มต่อ · ปิดสวิตช์ = ไม่ขึ้น (server ไม่ส่งตัวเลข)'),
       h('h3', {}, 'เดินต่อเมื่อสลับแท็บ (ไม่ใช่ Auto)'),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
@@ -1502,6 +1509,26 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
+  // ---------------------------------------------------------- Perfect Dodge (src/shared/dodgeTuning.ts)
+  const dodgeCard = h('div', { class: 'card' });
+  const drawDodge = (): void => {
+    const d = draft.dodge;
+    const cd = code.dodge;
+    const refresh = (): void => { updateSummary(); };
+    const sw = (k: 'on' | 'boss') => h('label', { class: d[k] !== cd[k] ? 'bal-changed' : '', title: 'ค่าในโค้ด: เปิด' },
+      h('input', { type: 'checkbox', checked: d[k], onchange: (e: Event) => { d[k] = (e.target as HTMLInputElement).checked; refresh(); drawDodge(); } }), ` ${DODGE_NAME[k]}`);
+    const num = (k: keyof typeof DODGE_RANGE, step: number) =>
+      h('label', {}, `${DODGE_NAME[k]} `, numBox(() => d[k], (n) => { d[k] = n; }, cd[k], DODGE_RANGE[k][0], DODGE_RANGE[k][1], step, refresh));
+    dodgeCard.replaceChildren(
+      h('h2', {}, 'Perfect Dodge'),
+      h('div', { class: 'muted' }, 'เจ้าของ 2026-11-27: กดแดชแล้วท่าของมอน/กระสุน/ท่าบอสลงตอนกำลังอมตะจากแดช (ปกติขึ้น MISS) และกดแดชมาไม่เกินเวลาข้างล่าง = Perfect Dodge ได้อมตะเพิ่ม + ดาเมจเพิ่มชั่วคราว ขึ้นป้าย "PERFECT DODGE!" และวงเวทบัฟโจมตี · ดาเมจเพิ่มแยกจากบัฟสกิล (คูณต่อกัน) · ตายแล้วหาย · แดชพ้นระยะไปเลย (ท่าไม่โดนตัว) ไม่นับ · มีผลกับทุกคนทันทีหลังบันทึก'),
+      h('div', { class: 'row bal-line' }, sw('on'), sw('boss')),
+      h('div', { class: 'row bal-line' }, num('window', 0.05), num('invuln', 0.1), num('cooldown', 0.5)),
+      h('div', { class: 'row bal-line' }, num('dmgPct', 5), num('dmgSec', 0.5)),
+      h('div', { class: 'muted' }, `ค่าในโค้ด: กดแดชก่อนโดนตีไม่เกิน ${cd.window} วิ (แดชอมตะ 0.23 วิ) · อมตะเพิ่ม ${cd.invuln} วิ · ดาเมจ +${cd.dmgPct}% นาน ${cd.dmgSec} วิ · เกิดซ้ำได้ทุก ${cd.cooldown} วิ · ดาเมจ 0% หรือ 0 วิ = ไม่มีบัฟดาเมจ`),
+    );
+  };
+
   // ---------------------------------------------------------- sound effect groups (src/shared/audioTuning.ts)
   const audioCard = h('div', { class: 'card' });
   const drawAudio = (): void => {
@@ -1736,6 +1763,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawFx();
     drawCircles();
     drawRoot();
+    drawDodge();
     drawAudio();
     drawBossMusic();
     drawRig();
@@ -1790,7 +1818,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
 
   // Category buttons + search box (owner 2026-11-22). Cards are only hidden with CSS (`.cat-hide`), never removed.
   const CATS: { name: string; cards: HTMLElement[] }[] = [
-    { name: 'อาชีพ-ต่อสู้', cards: [classCard, regenCard, rootCard] },
+    { name: 'อาชีพ-ต่อสู้', cards: [classCard, regenCard, rootCard, dodgeCard] },
     { name: 'มอน-บอส-เมือง', cards: [monsterCard, bossCard, moveCard, hubCard] },
     { name: 'ไอเทม-ตีบวก', cards: [affixCard, tierCard, previewCard, setCard, potionCard, bagCard, forgeCard] },
     { name: 'Auto Play', cards: [autoCard, petCard] },

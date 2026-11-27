@@ -1,4 +1,5 @@
 import type { Intent } from './types';
+import { newTally, type AutoTally } from './autoTally';
 import type { Monster } from './Monster';
 import { AUTO_PX_PER_UNIT, type AutoSkill, type Player } from './Player';
 import { isPriorityLoot, type Loot } from './Loot';
@@ -110,9 +111,12 @@ export class AutoPlay {
   private gaveUp = new Set<number>();
   /** Auto wants to be switched off (out of supplies, or reading the return scroll): the message why. */
   private stopMsg: string | null = null;
+  /** What this Auto run has earned (src/shared/sim/autoTally.ts): kept across a dropped connection, new on each start. */
+  tally: AutoTally = newTally();
 
   /** Auto was just switched on here. */
   start(x: number, z: number): void {
+    this.tally = newTally();
     this.anchor = { x, z };
     this.idleSince = null;
     this.hintAt = -Infinity;

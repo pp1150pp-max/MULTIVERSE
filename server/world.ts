@@ -1,6 +1,7 @@
 // The shared online world: one Sim per zone, driven by the input of the players in it. Walking
 // through a portal moves a player's session to the other zone's Sim. The server decides all combat,
 // loot and EXP; clients only move their own character, and the server checks those moves are possible.
+import type { AutoTally } from '../src/shared/sim/autoTally';
 import { suctionSpeed } from '../src/shared/sim/kraken';
 import { buffMask, debuffMask, runningSkillBuffs } from '../src/shared/sim/debuffs';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -165,6 +166,8 @@ interface Session {
   delta: boolean;
   /** Snapshot delta (SNAP_DELTA_KEY): the JSON of each STATIC_ME field the last sent snapshot carried. */
   lastMe: Map<string, string>;
+  /** The last Auto run's tally (the away summary): kept after Auto stops, and across leaving and coming back (lastTally). */
+  tally: AutoTally | null;
   /** Players / monsters in the last sent snapshot (id → the JSON of their look bundle). */
   seenP: Map<number, string>;
   seenM: Map<number, string>;
@@ -374,6 +377,17 @@ export class GameWorld {
   private readonly friendDroppedAt = new Map<number, number>();
   /** Auto that was on when a character dropped (or was taken over): it carries on if the character is back at the same spot (join). */
   private readonly autoBack = new Map<number, { auto: AutoPlay; at: number }>();
+  /**
+   * The last Auto run's tally of characters that left the world (owner 2026-11-27, the away summary): Auto that kept
+   * farming after a dropped connection may stop and leave long before the player comes back; the browser still has
+   * the numbers from when the game was last touched, so it can show what that run earned. Kept TALLY_KEEP_MS.
+   */
+  private readonly lastTally = new Map<number, { t: AutoTally; at: number }>();
+
+  private keptTally(charId: number): AutoTally | null {
+    const k = this.lastTally.get(charId);
+    return k && Date.now() - k.at <= TALLY_KEEP_MS ? k.t : null;
+  }
   /**
    * One live stash per account with a character online, shared by all of them (the same object),
    * so nothing can be copied by having two characters open it.
@@ -824,7 +838,7 @@ export class GameWorld {
     const s: Session = {
       ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId: pv ? -(charId + 1) : charId, sim, player,
       preview: !!pv, move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null, recall: false,
-      auto: null, lastInputAt: 0, walkTo: null, walkEpoch: 0, serverWalk: false, walkAnchor: { x: 0, z: 0 }, walkAnchorAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', lastTut: '', lastAlbum: '-', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', delta, lastMe: new Map(), seenP: new Map(), seenM: new Map(), outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, lastCashAt: -Infinity, lastTopupAt: -Infinity, saveDue: null,
+      auto: null, lastInputAt: 0, walkTo: null, walkEpoch: 0, serverWalk: false, walkAnchor: { x: 0, z: 0 }, walkAnchorAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', lastTut: '', lastAlbum: '-', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', delta, lastMe: new Map(), tally: this.keptTally(charId), seenP: new Map(), seenM: new Map(), outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, lastCashAt: -Infinity, lastTopupAt: -Infinity, saveDue: null,
       ip, edge, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, deflate: ws.extensions.includes('permessage-deflate'), staff: !acc.guest && ['owner', 'gm'].includes(this.db.adminRole(acc.id) ?? ''), pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity, blockTrades: false,
@@ -945,6 +959,7 @@ export class GameWorld {
       if (why) this.leave(s, 'drop', `Auto away ended: ${why}, after ${fmtAgo(now - s.awayAt)}`);
     }
     for (const [id, a] of this.autoBack) if (now - a.at > CH_RECONNECT_MS) this.autoBack.delete(id);
+    for (const [id, k] of this.lastTally) if (Date.now() - k.at > TALLY_KEEP_MS) this.lastTally.delete(id);
   }
 
   /** Every running Sim: the channels, the boss rooms and the map-editor previews. */
@@ -965,6 +980,7 @@ export class GameWorld {
       return;
     }
     // Auto was on and the character can come back to the same spot: it carries on then (join).
+    if (s.tally) this.lastTally.set(s.charId, { t: s.tally, at: Date.now() });
     if (how !== 'quit' && s.auto && s.player.alive && !this.rooms.sims().includes(s.sim) && !this.waveRooms.has(s.sim)) this.autoBack.set(s.charId, { auto: s.auto, at: Date.now() });
     else this.autoBack.delete(s.charId);
     // Whatever the reason (quit, lost connection, a login from elsewhere): the trade ends, nothing moves.
@@ -2324,6 +2340,8 @@ export class GameWorld {
     p.autoOn = !!s.auto;
     // The pet loots inside the Auto circle while Auto runs (src/shared/sim/petLoot.ts).
     p.autoAnchor = s.auto?.anchorPoint ?? null;
+    p.autoTally = s.auto?.tally ?? null;
+    if (s.auto) s.tally = s.auto.tally;
     // VIP bonuses (src/shared/vip.ts) stop the moment it runs out.
     p.vip = s.vipUntil > Date.now();
     if (s.auto) {
@@ -2545,6 +2563,8 @@ export class GameWorld {
     const statics: Pick<PrivateSnap, StaticMeKey> = {
       potSel: p.potSel, lootFilter: p.lootFilter, autoSettings: p.autoSettings, stats: p.stats, skills: p.skillBook,
       bossKills: p.bossKills, unlocks: p.unlocks, quests: p.quests, gearQuests: p.gearQuests, gearDone: p.gearDone,
+      // The "while you were away" summary's numbers (owner 2026-11-27): only while Auto runs and the switch is on.
+      at: currentBalance().auto.summary ? s.auto?.tally ?? s.tally ?? undefined : undefined,
     };
     for (const k of STATIC_ME) {
       if (!delta) {
@@ -3212,9 +3232,11 @@ export class GameWorld {
 const SNAP_DELTA_KEY = 'snap_delta';
 /** Close code for direct connections when the direct switch goes off: a plain drop, the browser reconnects (through the tunnel). */
 const WS_CLOSE_DIRECT_OFF = 4100;
+/** How long the last Auto tally of a character that left the world is kept for the away summary. */
+const TALLY_KEEP_MS = 6 * 3600_000;
 /** PrivateSnap fields that hardly ever change: sent only when they did (snapshot delta). */
-type StaticMeKey = 'potSel' | 'lootFilter' | 'autoSettings' | 'stats' | 'skills' | 'bossKills' | 'unlocks' | 'quests' | 'gearQuests' | 'gearDone';
-const STATIC_ME: readonly StaticMeKey[] = ['potSel', 'lootFilter', 'autoSettings', 'stats', 'skills', 'bossKills', 'unlocks', 'quests', 'gearQuests', 'gearDone'];
+type StaticMeKey = 'potSel' | 'lootFilter' | 'autoSettings' | 'stats' | 'skills' | 'bossKills' | 'unlocks' | 'quests' | 'gearQuests' | 'gearDone' | 'at';
+const STATIC_ME: readonly StaticMeKey[] = ['potSel', 'lootFilter', 'autoSettings', 'stats', 'skills', 'bossKills', 'unlocks', 'quests', 'gearQuests', 'gearDone', 'at'];
 type PlayerLook = Pick<PlayerSnap, 'name' | 'cls' | 'lv' | 'maxHp' | 'aura' | 'orbs' | 'cos' | 'mnt' | 'toad' | 'psv' | 'wpn' | 'arm'>;
 type MonsterLook = Pick<MonsterSnap, 'def' | 'lv' | 'mhp'>;
 
