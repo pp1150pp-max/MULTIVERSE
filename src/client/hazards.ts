@@ -5,7 +5,7 @@ import { assetSources, fxSheets, fxTex, sheets } from './assets';
 import type { ShellHazard } from '../shared/sim/cannonCrab';
 import type { CurseHazard } from '../shared/sim/graveMoves';
 import type { FogHazard } from '../shared/sim/ghostCaptain';
-import type { InkHazard, SuctionHazard } from '../shared/sim/kraken';
+import type { InkHazard, SuctionHazard, SweepHazard } from '../shared/sim/kraken';
 import { imgUrl } from './img';
 import { bossFxOn } from './bossFx';
 import { cloneShared } from './texShare';
@@ -514,8 +514,12 @@ function inkView(h: InkHazard): View {
   };
 }
 
-/** The kraken's whirlpool pulling (sim/kraken.ts): rings closing in on it across the room, faint while it warns, strong while it pulls. */
+/**
+ * The kraken's water pulling (sim/kraken.ts): rings running out across the floor to its shore while the whirlpool drags everyone
+ * out (`out`), or closing in on the arm that holds a grabbed player (`pid`); faint while it warns, strong while it pulls.
+ */
 function suctionView(h: SuctionHazard): View {
+  const R = h.pid !== undefined ? 2.5 : h.r;
   const group = new THREE.Group();
   group.position.set(h.x, Y, h.z);
   const mats: THREE.MeshBasicMaterial[] = [];
@@ -533,17 +537,40 @@ function suctionView(h: SuctionHazard): View {
       const on = t >= h.hit;
       const fade = Math.min(1, Math.max(0, (h.end - t) / 0.4)) * Math.min(1, Math.max(0, (t - h.start) / 0.3));
       rings.forEach((ring, i) => {
-        // Each ring runs from the room's edge in to the whirlpool, over and over.
-        const k = 1 - ((((t - h.start) * (on ? 0.6 : 0.25)) + i / rings.length) % 1);
-        ring.scale.setScalar(Math.max(0.5, h.r * k));
+        // Each ring runs in to the middle (or out to the shore), over and over.
+        const run = (((t - h.start) * (on ? 0.6 : 0.25)) + i / rings.length) % 1;
+        const k = h.out ? run : 1 - run;
+        ring.scale.setScalar(Math.max(0.5, R * k));
         mats[i].opacity = (on ? 0.55 : 0.22) * fade * Math.min(1, k * 2);
       });
     },
   };
 }
 
+/** The kraken's giant arm sweeping a fan from its corner (sim/kraken.ts): the fan fills red until it hits, then flashes. */
+function sweepView(h: SweepHazard): View {
+  const group = new THREE.Group();
+  group.position.set(h.x, Y, h.z);
+  const base = mat(WARN, 0.18);
+  const fill = mat(HURT, 0.35);
+  const from = h.angle - h.arc / 2;
+  group.add(new THREE.Mesh(arc(0.01, h.r, from, h.arc), base));
+  const grow = new THREE.Mesh(arc(0.01, 1, from, h.arc), fill);
+  group.add(grow);
+  return {
+    group,
+    update(t) {
+      const k = Math.min(1, Math.max(0, (t - h.start) / Math.max(0.01, h.hit - h.start)));
+      grow.scale.setScalar(Math.max(0.01, h.r * k));
+      const after = t >= h.hit ? Math.max(0, 1 - (t - h.hit) / Math.max(0.01, h.end - h.hit)) : 1;
+      base.opacity = 0.18 * after;
+      fill.opacity = (t >= h.hit ? 0.7 : 0.35) * after;
+    },
+  };
+}
+
 const MAKE: { [K in Hazard['k']]: (h: Extract<Hazard, { k: K }>) => View } = {
-  shell: shellView, curse: curseView, fog: fogView, ink: inkView, suction: suctionView,
+  shell: shellView, curse: curseView, fog: fogView, ink: inkView, suction: suctionView, sweep: sweepView,
   meteor: meteorView, ring: ringView, beams: beamsView, blast: blastView,
   vial: vialView, pool: poolView, grasp: graspView, hex: hexView,
 };

@@ -175,6 +175,8 @@ export class Monster extends Unit {
   sea: SeaMove | null = null;
   /** The Kraken's moves (def.brain). Made on first use, so only the server has them. */
   kraken: KrakenBrain | null = null;
+  /** Where its drop lands round instead of its own spot (the kraken rises from water: its drop washes up on the room's floor). */
+  lootFrom: { x: number; z: number } | null = null;
   /** A tentacle: seconds with nobody in reach (it heals back up after a while, sim/maelstromMoves.ts). */
   idleT = 0;
 
