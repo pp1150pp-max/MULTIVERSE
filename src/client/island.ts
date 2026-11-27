@@ -44,6 +44,12 @@ function loopNoise(r: Rng, size: number, knots: number): number[] {
   });
 }
 
+/** The soft shore (IslandOutline.softened): samples averaged either side, points per sample, and its small arcs. */
+const SOFT_REACH = 7;
+const SOFT_DETAIL = 4;
+const SOFT_ARC = 3.2;
+const SOFT_ARC_DEPTH = 0.45;
+
 /** The broken shoreline of the island, used by the ground, cliffs, props and maps alike. */
 export class IslandOutline {
   /** How far in from the zone's square the shore sits, at each sample around it. */
@@ -81,10 +87,28 @@ export class IslandOutline {
   }
 
   private sample(values: number[], s: number): number {
-    const f = ((((s / 8) % 1) + 1) % 1) * this.count;
-    const a = Math.floor(f) % this.count;
+    const n = values.length;
+    const f = ((((s / 8) % 1) + 1) % 1) * n;
+    const a = Math.floor(f) % n;
     const t = f - Math.floor(f);
-    return values[a] * (1 - t) + values[(a + 1) % this.count] * t;
+    return values[a] * (1 - t) + values[(a + 1) % n] * t;
+  }
+
+  /**
+   * The same coast without its steep bites, in small rounded arcs like torn paper: the harbour's water, which has no
+   * cliffs to hide a broken edge (harborFalls.ts). Never inside this one, so nothing standing on it is left hanging.
+   */
+  softened(): IslandOutline {
+    const n = this.inset.length;
+    const around = (v: number[], i: number) => Array.from({ length: SOFT_REACH * 2 + 1 }, (_, k) => v[(i + k - SOFT_REACH + n) % n]);
+    // The furthest the land reaches nearby, then averaged over the same stretch: smooth, and still at least as far out.
+    const low = this.inset.map((_, i) => Math.min(...around(this.inset, i)));
+    const even = low.map((_, i) => around(low, i).reduce((a, b) => a + b, 0) / (SOFT_REACH * 2 + 1));
+    const count = n * SOFT_DETAIL;
+    const arcs = Math.round(n / SOFT_ARC);
+    const inset = Array.from({ length: count }, (_, i) =>
+      this.sample(even, (i / count) * 8) - SOFT_ARC_DEPTH * Math.abs(Math.sin((Math.PI * arcs * i) / count)));
+    return Object.assign(Object.create(IslandOutline.prototype) as IslandOutline, { half: this.half, thin: this.thin, count, inset });
   }
 
   /** The shore at position `s` (0 to 8, see squarePoint), pushed out by `past` world units. */

@@ -1391,6 +1391,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         ...SHADER_LEVELS.map((t, i) => h('option', { value: String(i), selected: a[k] === i }, t)).reverse()));
     const shaderOn = h('input', { type: 'checkbox', checked: a.shader, onchange: (e: Event) => { a.shader = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
     const waterOn = h('input', { type: 'checkbox', checked: a.shWater, onchange: (e: Event) => { a.shWater = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
+    const fallsOn = h('input', { type: 'checkbox', checked: a.harborFalls, onchange: (e: Event) => { a.harborFalls = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
     shaderCard.replaceChildren(
       h('h2', {}, 'น้ำ ลม และแสง (shader)'),
       h('div', { class: 'row bal-line' }, flag(shaderOn, a.shader !== ca.shader, ' เปิดเอฟเฟกต์ shader (ปิด = ทุกคนเห็นภาพแบบเดิม)'), flag(waterOn, a.shWater !== ca.shWater, ' น้ำและทะเลเมฆขยับ')),
@@ -1399,6 +1400,9 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('h3', {}, 'ทะเลเมฆชั้น 2 และน้ำท่าเรือ'),
       h('div', { class: 'row bal-line' }, num('cloudDrift', 0.1), num('waterSpeed', 0.1), num('waterWave', 0.1), num('waterFoam', 0.1)),
       h('div', { class: 'muted' }, 'ต่ำ: ภาพเมฆเลื่อนเอง น้ำ 2 ชั้นเลื่อนคนละทิศ · สูง: + เมฆมีก้อนลอยซ้อนอีกชั้นและขอบบิดเบา ๆ น้ำมีคลื่น เส้นฟองขาวรอบแพ และประกาย · ปิด: ฟ้าวาดด้วยโค้ดแบบเดิม'),
+      h('h3', {}, 'ขอบเมืองท่าเรือ'),
+      h('div', { class: 'row bal-line' }, flag(fallsOn, a.harborFalls !== ca.harborFalls, ' น้ำตกขอบเมืองลงทะเลเมฆ (ปิด = ขอบน้ำตัดแบบเดิม)'), num('harborFallDepth', 0.5)),
+      h('div', { class: 'muted' }, 'ขอบน้ำโค้งแบบกระดาษฉีกมีฟองขาว ด้านที่หันเข้ากล้องมีม่านน้ำไหลลงหายในเมฆ · เห็นทุกระดับรวม "ปิด" (ระดับปิดเป็นภาพนิ่ง) ไม่ขึ้นกับสวิตช์ shader ด้านบน · มีผลตอนผู้เล่นเข้าแมพครั้งถัดไป · ไม่เปลี่ยนพื้นที่เดิน'),
       h('h3', {}, 'บ่อน้ำ ลาวา และน้ำวน'),
       h('div', { class: 'row bal-line' }, num('lavaWave', 0.1), num('whirlTwist', 0.1), num('whirlGlow', 0.1)),
       h('div', { class: 'muted' }, 'บ่อน้ำและลาวากระเพื่อมเฉพาะระดับสูง (บ่อน้ำแข็งนิ่งเสมอ แรงคลื่นใช้ค่า "แรงคลื่น" ด้านบน) · น้ำวน: ต่ำ = แถบสว่างหมุนเข้ากลาง สูง = + เกลียวบิดและกลางวนมืดเต้นช้า ๆ · คลื่นฟองรอบน้ำวนในห้องคราเคนโยกเบา ๆ ทั้งต่ำและสูง'),

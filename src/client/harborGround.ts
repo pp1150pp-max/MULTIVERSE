@@ -51,6 +51,8 @@ export const HARBOR_FRAG = /* glsl */ `
   // Shader water (docs/systems/shaders.md): level 0 = as before, 1 = two sliding layers, 2 = + waves, foam and glints.
   uniform float uShLevel, uPhase, uWave, uFoam;
   uniform vec2 uFlowA, uFlowB, uShift;
+  // 1 = the water ends in a torn paper edge over a waterfall (harborFalls.ts), at every level; 0 = cut off as before.
+  uniform float uFalls;
   varying vec2 vWorld;
   varying float vEdge;
   void main() {
@@ -94,7 +96,15 @@ export const HARBOR_FRAG = /* glsl */ `
     deck *= 1.0 - (smoothstep(0.2, 0.5, m.g) - smoothstep(0.5, 0.8, m.g)) * 0.3;
     vec3 c = mix(water, deck, onDeck);
     // The island's own shore fade (IslandOutline's aEdge) is kept: the water thins out at the rim of the world.
-    gl_FragColor = vec4(c * mix(0.82 + 0.18 * (1.0 - vEdge), 1.0, onDeck), 1.0);
+    c *= mix(0.82 + 0.18 * (1.0 - vEdge), 1.0, onDeck);
+    if (uFalls > 0.5 && vEdge < 0.5) {
+      // aEdge runs 0 at the shore to 1 about 1.4 units in: torn unevenly, with a white lip where the water goes over.
+      float torn = texture2D(uNoise, tile * 2.3).r * 0.6 + texture2D(uNoise, tile * 5.1).g * 0.4;
+      float rim = vEdge - (torn - 0.5) * 0.2;
+      if (rim < 0.03) discard;
+      c = mix(c, vec3(0.94, 0.98, 1.0), (1.0 - smoothstep(0.17, 0.21, rim)) * (1.0 - onDeck));
+    }
+    gl_FragColor = vec4(c, 1.0);
   }
 `;
 
@@ -122,6 +132,7 @@ export function harborUniforms(mask: THREE.Texture, half: number): Record<string
     uFlowA: { value: new THREE.Vector2() },
     uFlowB: { value: new THREE.Vector2() },
     uShift: { value: new THREE.Vector2() },
+    uFalls: { value: 0 },
   };
 }
 

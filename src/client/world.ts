@@ -23,6 +23,7 @@ import { assetSources, fxTex, groundTiles, sheets, skyArt, type GroundTile } fro
 import { CAM_RIGHT_RAW, ISO_RAW, TOWN2_PROP_RE } from '../shared/isoProjection';
 import { closeBias, IslandOutline, paintSky, paintSpace, PieceBatch } from './island';
 import { HARBOR_FRAG, harborUniforms, paintHarborMask, updateHarborWater } from './harborGround';
+import { HarborFalls } from './harborFalls';
 import { CloudSea, skyMood } from './cloudSea';
 import { gfxWater } from './gfxPrefs';
 import { frac, noiseTexture, turn } from './waterFx';
@@ -572,6 +573,9 @@ export class World {
   private poolFlow = 0;
   /** The land's broken shoreline. */
   private readonly outline: IslandOutline;
+  /** The shore as drawn: the outline, or the harbour's softer one over its waterfall. */
+  private readonly shore: IslandOutline;
+  private falls: HarborFalls | null = null;
   /** The props actually drawn: the rim forest has gaps in it, and nothing stands out over space. */
   private readonly props: PropSpec[];
   private readonly spaceTex: THREE.CanvasTexture;
@@ -584,6 +588,9 @@ export class World {
     this.bound = terrain.bound;
     this.pal = PALETTES[terrain.zone.theme];
     this.outline = new IslandOutline(this.half, this.bound, terrain.zone.seed + 21);
+    // The harbour's water pours off its rim (/admin harborFalls). Props still stand by the broken outline.
+    const pours = terrain.zone.town === 'harbor' && currentBalance().fxLayer.harborFalls;
+    this.shore = pours ? this.outline.softened() : this.outline;
     this.props = this.visibleProps(mulberry32(terrain.zone.seed + 23));
     // Floor 1 floats in space; floor 2 on the cloud sea (FLOOR2_SKY.md).
     this.backdrop = floorOf(terrain.zone) >= 2 ? paintSky() : paintSpace();
@@ -630,6 +637,11 @@ export class World {
       mask.generateMipmaps = false;
       this.groundTex = mask;
       this.groundUniforms = harborUniforms(mask, this.half);
+      this.groundUniforms.uFalls.value = pours ? 1 : 0;
+      if (pours) {
+        this.falls = new HarborFalls(this.shore, currentBalance().fxLayer.harborFallDepth);
+        this.add(this.falls.mesh);
+      }
     } else if (tiles.every(Boolean) && quads.flat().every(Boolean)) {
       const mask = new THREE.CanvasTexture(this.paintMask());
       mask.colorSpace = THREE.NoColorSpace;
@@ -678,7 +690,7 @@ export class World {
     }
     this.maskCtx = null;
     this.groundMesh = this.add(new THREE.Mesh(
-      this.ownGeo(this.outline.groundGeometry()),
+      this.ownGeo(this.shore.groundGeometry()),
       this.own(harbor
         ? new THREE.ShaderMaterial({ uniforms: this.groundUniforms!, vertexShader: GROUND_VERT, fragmentShader: HARBOR_FRAG, side: THREE.DoubleSide })
         : this.groundUniforms
@@ -824,7 +836,7 @@ export class World {
     ctx.fillRect(0, 0, MAP_SIZE, MAP_SIZE);
     this.bakeMapPieces(ctx);
 
-    const shore = this.outline.points();
+    const shore = this.shore.points();
     const shorePath = (dy = 0) => {
       ctx.beginPath();
       for (const [x, z] of shore) {
@@ -1393,6 +1405,7 @@ export class World {
     this.spaceTex.dispose();
     this.whirlpools?.dispose();
     this.cloudSea?.dispose();
+    this.falls?.dispose();
     this.warpPads?.dispose();
     this.treasure?.dispose();
   }
@@ -1411,6 +1424,7 @@ export class World {
     if (u.uShLevel) {
       this.harborFlow += dt * cfg.waterSpeed;
       updateHarborWater(u, level, this.harborFlow, cfg);
+      this.falls?.update(level > 0 ? this.harborFlow : 0);
       return;
     }
     // Pools move only at the high level. Lava churns slower and glows; ice stays still.
