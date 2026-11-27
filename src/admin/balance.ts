@@ -20,7 +20,7 @@ import {
 } from '../shared/balance';
 import { DROP_GOLD_MULT, type MonsterDef } from '../shared/data/monsters';
 import {
-  AUTO_ALLOW_NAME, AUTO_ALLOWS, AUTO_HOME_WAIT_NAME, AUTO_OFFLINE_NAME, AUTO_PRIORITY_LOOT_NAME, AUTO_AOE_GUARD_NAME, AUTO_DEFAULT_NAME, AUTO_LOOT_ORDERS, AUTO_NUM_NAME, AUTO_OUT_ACTIONS, AUTO_RANGE, AUTO_TARGET_MODES, autoDefaultValueName,
+  AUTO_ALLOW_NAME, AUTO_ALLOWS, AUTO_HOME_WAIT_NAME, AUTO_OFFLINE_NAME, AUTO_PRIORITY_LOOT_NAME, AUTO_SUMMARY_NAME, AUTO_AOE_GUARD_NAME, AUTO_DEFAULT_NAME, AUTO_LOOT_ORDERS, AUTO_NUM_NAME, AUTO_OUT_ACTIONS, AUTO_RANGE, AUTO_TARGET_MODES, autoDefaultValueName,
   type AutoAllow, type AutoDefaults,
 } from '../shared/autoTuning';
 import { FARM_IDS, NO_BOOST, ZONES, type MonsterBoost } from '../shared/data/zones';
@@ -1215,6 +1215,12 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         num('aoeMargin', 0.1),
       ),
       h('div', { class: 'muted' }, 'ทุกอาชีพ: Auto กดสกิลเมื่อสกิลนั้นถึงจริงเท่านั้น (ระยะสกิลตามที่ปรับ + ขนาดตัวมอน − ระยะเผื่อพลาด: มอนต้องเข้ามาลึกกว่าขอบสกิลเท่านี้ กันวืด ยิ่งมากยิ่งกดช้า) · วงรอบตัว = มีมอนในวง · ยิง/พุ่ง/ฟันด้านหน้า = เป้าอยู่ในระยะสกิล (ยิงระเบิดบวกวงระเบิด) · ตกที่จุด = ระยะร่าย + วงตก · บัฟ/สกิลวงที่ไม่มีดาเมจ กดตามเดิม · ไม่ถึง = ข้ามไปสกิลถัดไปในลำดับ ไม่มีสกิลไหนถึง = ตีธรรมดาต่อ (ไม่เดินเข้าไปเพิ่ม) · ปิดสวิตช์ = แบบเดิม กดทันทีที่ตีธรรมดาถึง'),
+      h('h3', {}, 'หน้าสรุปผล Auto'),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' }, h('input', { type: 'checkbox', checked: a.summary, onchange: (e: Event) => { a.summary = (e.target as HTMLInputElement).checked; refresh(); } }), ` ${AUTO_SUMMARY_NAME}`),
+        num('summaryMin', 1),
+      ),
+      h('div', { class: 'muted' }, 'เจ้าของ 2026-11-27: เปิด Auto แล้วไม่แตะเกม (ไม่กดคีย์ ไม่คลิก ไม่แตะจอ ไม่หมุนล้อ) ครบเวลานี้ = ขึ้นหน้าสรุป EXP เลเวล ทอง มอนที่ล่า ไอเทมแยกความหายาก หิน ยา ตาย ตั้งแต่แตะเกมครั้งล่าสุด · ตัวเลขนับต่อเรื่อย ๆ ไม่หยุด จนผู้เล่นกด ✕ หรือดับเบิลคลิก · ใช้ได้ทั้งตอนสลับแท็บและตอนหลุดแล้ว Auto ฟาร์มต่อ · ปิดสวิตช์ = ไม่ขึ้น (server ไม่ส่งตัวเลข)'),
       h('h3', {}, 'เดินต่อเมื่อสลับแท็บ (ไม่ใช่ Auto)'),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
