@@ -13,18 +13,21 @@ import { npcForgePane } from './ui/npcForgePane';
 import { npcStashPane } from './ui/npcStashPane';
 import { npcMarketPane } from './ui/npcMarketPane';
 import { npcCashPane } from './ui/npcCashPane';
+import { npcSeekerPane } from './ui/npcSeekerPane';
 import type { MarketTab } from './market';
 import type { NpcHostPane } from './ui/npcHostPane';
 
 /** The NPC windows that open inside the talk window, how to tell they are still open, and how to close them. */
-type HostKind = 'forge' | 'stash' | 'market' | 'cash';
-const HOST_KINDS: readonly HostKind[] = ['forge', 'stash', 'market', 'cash'];
+type HostKind = 'forge' | 'stash' | 'market' | 'cash' | 'seeker';
+const HOST_KINDS: readonly HostKind[] = ['forge', 'stash', 'market', 'cash', 'seeker'];
 const HOST_OPEN: Record<HostKind, (g: Game) => boolean> = {
   forge: (g) => g.hud.forgeWin.isOpen, stash: (g) => g.hud.stashWin.isOpen, market: (g) => g.hud.marketWin.isOpen, cash: (g) => g.cashShop.open,
+  seeker: (g) => g.quests.open,
 };
 const HOST_CLOSE: Record<HostKind, (g: Game) => void> = {
   forge: (g) => g.hud.forgeWin.closeForge(), stash: (g) => g.hud.stashWin.closeStash(), market: (g) => g.hud.marketWin.close(),
   cash: (g) => { if (g.cashShop.open) g.cashShop.toggle(false); },
+  seeker: (g) => { if (g.quests.open) g.quests.toggle(false); },
 };
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''): HTMLElementTagNameMap[K] {
@@ -101,12 +104,13 @@ export class NpcDialog {
     back.onclick = () => this.leavePane(true);
     this.shopPane = new NpcShopPane(g, (text) => this.say(text));
     const say = (text: string) => this.say(text);
-    this.hosts = { forge: npcForgePane(g, say), stash: npcStashPane(g, say), market: npcMarketPane(g, say), cash: npcCashPane(g, say) };
+    this.hosts = { forge: npcForgePane(g, say), stash: npcStashPane(g, say), market: npcMarketPane(g, say), cash: npcCashPane(g, say), seeker: npcSeekerPane(g, say) };
     g.hud.forgeWin.onTalk = (key, ...args) => { if (this.pane === 'forge') this.hosts.forge.line(key, ...args); };
     g.hud.stashWin.onTalk = (key, ...args) => { if (this.pane === 'stash') this.hosts.stash.line(key, ...args); };
     g.hud.marketWin.onTalk = (key, ...args) => { if (this.pane === 'market') this.hosts.market.line(key, ...args); };
     g.cashShop.onTalk = (key, ...args) => { if (this.pane === 'cash') this.hosts.cash.line(key, ...args); };
-    this.win.append(this.scene, this.face, this.answers, box, this.shopPane.root, this.hosts.forge.root, this.hosts.stash.root, this.hosts.market.root, this.hosts.cash.root, back, close);
+    g.quests.onTalk = (key, ...args) => { if (this.pane === 'seeker') this.hosts.seeker.line(key, ...args); };
+    this.win.append(this.scene, this.face, this.answers, box, this.shopPane.root, this.hosts.forge.root, this.hosts.stash.root, this.hosts.market.root, this.hosts.cash.root, this.hosts.seeker.root, back, close);
     document.getElementById('hud')!.append(this.win);
   }
 
@@ -242,6 +246,13 @@ export class NpcDialog {
     const near = !!n && Math.hypot(p.x - n.x, p.z - n.z) <= NPC_USE_RANGE;
     if (!(this.pane === 'cash' && this.open)) this.show('crystal', !near);
     if (this.pane !== 'cash') this.enterCash('crystal');
+  }
+
+  /** "เควสกุญแจบอส": the window grows into The Seeker's quests (owner 2026-11-28: the whole width, no bag). */
+  private enterSeeker(id: NpcId): void {
+    this.g.quests.toggle(true);
+    this.enterHost('seeker', id, '');
+    this.hosts.seeker.line('open');
   }
 
   /** The window grows into the cash shop (owner 2026-11-28: the whole width, no bag). */
@@ -390,7 +401,8 @@ export class NpcDialog {
     }
     switch (id) {
       case 'seeker':
-        out.push({ icon: 'key', label: 'เควสกุญแจบอส', run: () => this.openThen(id) });
+        // /admin "เควส The Seeker ในหน้าต่างคุย" off = the old quest window.
+        out.push({ icon: 'key', label: 'เควสกุญแจบอส', run: () => (currentBalance().npcTalk.seekerPane ? this.enterSeeker(id) : this.openThen(id)) });
         out.push({ icon: 'story', label: 'ฟังเรื่องราว', run: () => this.tell(g.hud.seekerLines, () => g.hud.seekerStoryDone()) });
         break;
       case 'navigator':
