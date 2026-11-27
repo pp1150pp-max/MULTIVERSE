@@ -32,7 +32,7 @@ import { ITEM_ONLY_STATS, RARITIES, RARITY_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LA
 import { FLOOR_GATE_LEVEL_MAX, FLOOR_GATE_LEVEL_MIN } from '../shared/floorGate';
 import { GEAR_KILLS_MAX, GEAR_KILLS_MIN, gearFloors, gearMaps } from '../shared/gearTuning';
 import { NPC_INFO, type NpcId } from '../shared/data/npcs';
-import { TALK_LINE_LEN, TALK_LINES_MAX, TALK_NPCS, TALK_NUM_KEYS, TALK_NUMS, type TalkNumKey } from '../shared/npcTalk';
+import { SHOP_LINE_KEYS, SHOP_LINES, TALK_LINE_LEN, TALK_LINES_MAX, TALK_NPCS, TALK_NUM_KEYS, TALK_NUMS, type ShopLineKey, type TalkNumKey } from '../shared/npcTalk';
 import { TUT_ACCEPT_GOLD, TUT_COUNT_MAX, TUT_GOLD_MAX, TUT_LINES_MAX, TUT_REWARD_KEYS, TUT_REWARD_NAME, TUT_STONES, tutRewardText, type TutRewardKey } from '../shared/tutorial';
 import type { MailAttachItem } from '../shared/mail';
 import { POTION_SIZES, potionName } from '../shared/data/potions';
@@ -1709,6 +1709,19 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       });
       return ta;
     };
+    const shopLines = (k: ShopLineKey): HTMLElement => {
+      const ta = h('textarea', { rows: '2', style: 'width:100%;font:inherit' }) as HTMLTextAreaElement;
+      ta.value = t.shop[k].join('\n');
+      const changed = (): boolean => JSON.stringify(t.shop[k]) !== JSON.stringify(ct.shop[k]);
+      ta.classList.toggle('bal-changed', changed());
+      ta.addEventListener('input', () => {
+        t.shop[k] = ta.value.split('\n').map((x) => x.trim()).filter(Boolean);
+        ta.classList.toggle('bal-bad', t.shop[k].length > TALK_LINES_MAX || t.shop[k].some((x) => x.length > TALK_LINE_LEN));
+        ta.classList.toggle('bal-changed', changed());
+        updateSummary();
+      });
+      return ta;
+    };
     talkCard.replaceChildren(
       h('h2', {}, 'หน้าต่างคุย NPC'),
       h('div', { class: 'muted' }, 'คลิก NPC = หน้าต่างคุย (ฉากสถานที่ของ NPC รูปครึ่งตัวซ้าย บทพูดล่าง ปุ่มคำตอบมีไอคอน) กดคำตอบแล้วเปิดหน้าต่างของ NPC (ร้าน เมนูช่างตีเหล็ก คลัง แท็บตลาด/กล่องรับของ แคชช็อป เควสกุญแจ) · ปิด = คลิกแล้วเปิดหน้าต่างของ NPC ทันทีแบบเดิม · คำพูดเหนือหัว: เดินเข้าใกล้ NPC แล้วมีคำพูดสั้น ๆ ลอยเหนือหัว · ฝั่งเบราว์เซอร์เท่านั้น มีผลทันที'),
@@ -1719,6 +1732,13 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         h('summary', {}, NPC_INFO[id].name),
         h('div', {}, 'ทักทาย (หน้าต่างคุย)'), lines('greet', id),
         h('div', {}, 'เหนือหัว'), lines('chat', id))),
+      h('details', { style: 'margin:4px 0' },
+        h('summary', {}, 'บทพูดในร้านพ่อค้า (ร้านในหน้าต่างคุย)'),
+        h('div', { class: 'muted' }, 'สุ่มทีละบรรทัดตอนเกิดเหตุการณ์ · {0} {1} = ค่าที่ใส่ให้ตามที่บอกข้างหัวข้อ · ว่างทั้งช่อง = พ่อค้าไม่พูดตอนนั้น'),
+        ...SHOP_LINE_KEYS.flatMap((k) => [
+          h('div', {}, `${SHOP_LINES[k].name}${SHOP_LINES[k].args ? ` (${SHOP_LINES[k].args})` : ''}`),
+          shopLines(k),
+        ])),
     );
   };
 

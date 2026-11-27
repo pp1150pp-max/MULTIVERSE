@@ -21,7 +21,28 @@ export interface NpcTalkConfig {
   greet: Record<NpcId, string[]>;
   /** The lines over its head. */
   chat: Record<NpcId, string[]>;
+  /** What the merchant says while shopping in the talk window (one picked at random); {0} {1} = the values SHOP_LINES names. */
+  shop: Record<ShopLineKey, string[]>;
 }
+
+/** The merchant's lines in the shop inside the talk window (npcShopPane.ts), with what {0} and {1} stand for. */
+export const SHOP_LINES = {
+  open: { name: 'เปิดร้าน (แท็บซื้อ)', args: '' },
+  openBuyback: { name: 'เปิดร้านที่แท็บซื้อคืน', args: '' },
+  pick: { name: 'ใส่ของลงตะกร้า', args: '{0} = ชื่อของ, {1} = ทองที่ได้' },
+  pickLegend: { name: 'ใส่ของตำนานลงตะกร้า', args: '{0} = ชื่อของ' },
+  rarity: { name: 'ใส่ตามความหายาก', args: '{0} = ระดับ, {1} = จำนวนชิ้น' },
+  sold: { name: 'ขายแล้ว', args: '{0} = ทองที่ได้' },
+  soldMany: { name: 'ขายตะกร้ามากกว่า 3 ชิ้น', args: '{0} = ทองที่ได้' },
+  bought: { name: 'ซื้อแล้ว', args: '{0} = ชื่อสินค้า, {1} = จำนวน' },
+  boughtBack: { name: 'ซื้อคืนแล้ว', args: '{0} = ชื่อของ' },
+  poor: { name: 'ทองไม่พอ', args: '' },
+  full: { name: 'กระเป๋าเต็ม', args: '' },
+  bound: { name: 'ของผูกตัว (ขายไม่ได้)', args: '' },
+  orb: { name: 'ลูกแก้ว (ขายไม่ได้)', args: '' },
+} as const;
+export type ShopLineKey = keyof typeof SHOP_LINES;
+export const SHOP_LINE_KEYS = Object.keys(SHOP_LINES) as ShopLineKey[];
 
 export interface NpcTalkTuning {
   on?: boolean;
@@ -32,6 +53,7 @@ export interface NpcTalkTuning {
   bubbleGap?: number;
   greet?: Partial<Record<NpcId, string[]>>;
   chat?: Partial<Record<NpcId, string[]>>;
+  shop?: Partial<Record<ShopLineKey, string[]>>;
 }
 
 /** Every NPC whose lines /admin can edit, in the order it lists them. */
@@ -97,6 +119,21 @@ export function codeNpcTalk(): NpcTalkConfig {
       navigator: ['ลมบนทะเลเมฆกำลังดี', 'เรือพร้อมออกเสมอสำหรับผู้กล้า'],
       stylist: ['แต่งตัวสวย ๆ ออกผจญภัยกัน!'],
     },
+    shop: {
+      open: ['เลือกดูได้ตามสบาย! อยากขายอะไรก็คลิกของในกระเป๋ามาได้เลย'],
+      openBuyback: ['อ้าว เปลี่ยนใจเหรอ? ของที่ขายไปซื้อคืนได้ แต่แพงขึ้น 20% นะ'],
+      pick: ['{0}… ข้าให้ {1} G'],
+      pickLegend: ['โอ้โห {0} ของตำนานเลยนี่! จะขายจริงเหรอ?'],
+      rarity: ['ของระดับ{0} {1} ชิ้น… ข้ารับหมด!'],
+      sold: ['ตกลง! นี่ {0} G ของเจ้า'],
+      soldMany: ['ว้าว ขนมาเยอะเลย! รับไป {0} G'],
+      bought: ['ขอบใจนะ! {0} ×{1} ใช้ให้คุ้มล่ะ'],
+      boughtBack: ['เอ้า คืนให้แล้ว {0} ดูแลให้ดีล่ะ'],
+      poor: ['ทองไม่พอนะ… ไปล่ามอนมาเพิ่มก่อนแล้วค่อยมาใหม่'],
+      full: ['กระเป๋าเต็มแล้ว! ขายอะไรออกก่อนสิ'],
+      bound: ['อันนี้ผูกกับตัวเจ้า ข้ารับซื้อไม่ได้หรอก'],
+      orb: ['ข้าไม่รับซื้อลูกแก้วนะ ลองเทรดหรือลงตลาดดู'],
+    },
   };
 }
 const CODE = codeNpcTalk();
@@ -112,6 +149,7 @@ export function mergeNpcTalk(t: NpcTalkTuning | undefined): NpcTalkConfig {
     if (t.greet?.[id]) c.greet[id] = [...t.greet[id]!];
     if (t.chat?.[id]) c.chat[id] = [...t.chat[id]!];
   }
+  for (const k of SHOP_LINE_KEYS) if (t.shop?.[k]) c.shop[k] = [...t.shop[k]!];
   return c;
 }
 
@@ -163,6 +201,20 @@ export function checkNpcTalkTuning(x: unknown, strict: boolean): { tuning: NpcTa
     }
     if (Object.keys(lines).length) out[part] = lines;
   }
+  if (x.shop !== undefined) {
+    const v = x.shop;
+    if (!isObj(v)) { const f = fail('บทพูดในร้านไม่ถูกต้อง'); if (f) return f; }
+    else {
+      const lines: Partial<Record<ShopLineKey, string[]>> = {};
+      for (const [k, raw] of Object.entries(v)) {
+        if (!(SHOP_LINE_KEYS as string[]).includes(k)) { const f = fail(`ไม่รู้จักบทพูดร้าน "${k.slice(0, 20)}"`); if (f) return f; continue; }
+        const c = checkLines(raw);
+        if (typeof c === 'string') { const f = fail(c); if (f) return f; continue; }
+        if (!sameLines(c, CODE.shop[k as ShopLineKey])) lines[k as ShopLineKey] = c;
+      }
+      if (Object.keys(lines).length) out.shop = lines;
+    }
+  }
   return { tuning: Object.keys(out).length ? out : undefined };
 }
 
@@ -177,6 +229,9 @@ export function npcTalkChanges(a: NpcTalkConfig, b: NpcTalkConfig): string[] {
   for (const id of TALK_NPCS) {
     if (!sameLines(a.greet[id], b.greet[id])) out.push(`บทพูดทักทาย ${id}: ${b.greet[id].length} บรรทัด (แก้ข้อความ)`);
     if (!sameLines(a.chat[id], b.chat[id])) out.push(`คำพูดเหนือหัว ${id}: ${b.chat[id].length} บรรทัด (แก้ข้อความ)`);
+  }
+  for (const k of SHOP_LINE_KEYS) {
+    if (!sameLines(a.shop[k], b.shop[k])) out.push(`บทพูดร้านพ่อค้า "${SHOP_LINES[k].name}": ${b.shop[k].length} บรรทัด (แก้ข้อความ)`);
   }
   return out;
 }

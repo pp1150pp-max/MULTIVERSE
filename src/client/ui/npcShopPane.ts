@@ -16,6 +16,8 @@ import { isBound, isItem, isOrbStone, isPotion, isStack, isStone, RARITIES, RARI
 import { COIN_ICON, potionIcon, stoneIcon } from '../icons';
 import { entryColor, POTION_COLOR, potionTotals } from './hudShared';
 import { isTouchMode } from '../touch/device';
+import { currentBalance } from '../../shared/balance';
+import type { ShopLineKey } from '../../shared/npcTalk';
 
 type MerTab = 'buy' | 'bb' | 'sell';
 /** Something on sale: a potion size, the phoenix feather or the return scroll. */
@@ -53,7 +55,7 @@ export class NpcShopPane {
   private readonly basket = new Map<number, SellPick>();
   private drawn = '';
 
-  constructor(private readonly g: Game, private readonly say: (html: string) => void) {
+  constructor(private readonly g: Game, private readonly say: (text: string) => void) {
     this.root = el('div', 'ns');
     this.medal = el('div', 'ns-medal');
     this.medalImg = el('img');
@@ -116,9 +118,20 @@ export class NpcShopPane {
     this.g.hud.hideTip();
   }
 
-  /** The bubble beside the medallion (the talk box is hidden while shopping). */
-  setLine(html: string): void {
-    this.bubble.innerHTML = html;
+  /**
+   * The merchant says one of his /admin lines for `key` (npcTalk.shop, picked at random), with {0} {1} filled in.
+   * Plain text: the lines are the owner's, shown to every player.
+   */
+  line(key: ShopLineKey, ...args: (string | number)[]): void {
+    const lines = currentBalance().npcTalk.shop[key];
+    if (!lines.length) return;
+    const raw = lines[Math.floor(Math.random() * lines.length)];
+    this.say(raw.replace(/\{(\d)\}/g, (m, d: string) => (args[Number(d)] !== undefined ? String(args[Number(d)]) : m)));
+  }
+
+  /** The bubble beside the medallion (the talk box is hidden while shopping). Plain text. */
+  setLine(text: string): void {
+    this.bubble.textContent = text;
     this.bubble.classList.remove('pop');
     void this.bubble.offsetWidth;
     this.bubble.classList.add('pop');
@@ -277,7 +290,7 @@ export class NpcShopPane {
       if (all) this.basket.delete(i);
       else this.basket.set(i, sellPickOf(bag[i]!, i));
     }
-    if (!all && idx.length) this.say(`ของระดับ<span class="hl">${RARITY_LABEL[r]}</span> ${idx.length} ชิ้น… ข้ารับหมด!`);
+    if (!all && idx.length) this.line('rarity', RARITY_LABEL[r], idx.length);
     this.redraw();
   }
 
@@ -312,15 +325,14 @@ export class NpcShopPane {
     if (!e) return;
     this.g.hud.hideTip();
     if (!sellable(e)) {
-      this.say(isStone(e) && isOrbStone(e.stone) ? 'ข้าไม่รับซื้อลูกแก้วนะ ลองเทรดหรือลงตลาดดู' : 'อันนี้<span class="hl">ผูกกับตัวเจ้า</span> ข้ารับซื้อไม่ได้หรอก');
+      this.line(isStone(e) && isOrbStone(e.stone) ? 'orb' : 'bound');
       return;
     }
     if (this.basket.has(i)) this.basket.delete(i);
     else {
       this.basket.set(i, sellPickOf(e, i));
-      this.say(isItem(e) && e.rarity === 'legendary'
-        ? `โอ้โห ${nameHtml(e)} ของตำนานเลยนี่! จะขายจริงเหรอ?`
-        : `${nameHtml(e)}… ข้าให้ <span class="hl">${fmt(slotValue(e))} G</span>`);
+      if (isItem(e) && e.rarity === 'legendary') this.line('pickLegend', entryName(e));
+      else this.line('pick', entryName(e), fmt(slotValue(e)));
     }
     this.tab = 'sell';
     this.redraw();
@@ -337,7 +349,7 @@ export class NpcShopPane {
       if (g.player.bag[i] !== e) return;
       g.backend.sell(i, n);
       this.basket.delete(i);
-      this.say(`ตกลง! ${nameHtml(e)} ได้ <span class="hl">${fmt(n && isStack(e) ? Math.round(slotValue(e) * n / e.count) : slotValue(e))} G</span>`);
+      this.line('sold', fmt(n && isStack(e) ? Math.round(slotValue(e) * n / e.count) : slotValue(e)));
     };
     if (isStack(e) && e.count > 1) {
       const unit = isPotion(e) ? 'ขวด' : stoneUnit(e.stone);
@@ -372,7 +384,7 @@ export class NpcShopPane {
     this.confirm(`ขาย ${picks.length} ชิ้น`, picks.map(([, e]) => e), total, this.warnings(picks.map(([, e]) => e)), () => {
       this.g.backend.sellMany(picks.map(([i, e]) => sellPickOf(e, i)));
       this.basket.clear();
-      this.say(picks.length > 3 ? `ว้าว ขนมาเยอะเลย! รับไป <span class="hl">${fmt(total)} G</span>` : `ตกลง! นี่ <span class="hl">${fmt(total)} G</span> ของเจ้า`);
+      this.line(picks.length > 3 ? 'soldMany' : 'sold', fmt(total));
     });
   }
 
@@ -380,15 +392,15 @@ export class NpcShopPane {
     const p = this.g.player;
     const it = this.goodInfo(gd);
     const max = Math.min(99, it.room, Math.floor(p.gold / it.price));
-    if (it.room < 1) return this.say('กระเป๋าเต็มแล้ว! ขายอะไรออกก่อนสิ');
-    if (max < 1) return this.say('ทองไม่พอนะ… ไป<span class="hl">ล่ามอน</span>มาเพิ่มก่อนแล้วค่อยมาใหม่');
+    if (it.room < 1) return this.line('full');
+    if (max < 1) return this.line('poor');
     const stack = gd.kind === 'pot' ? POTION_STACK : STONE_STACK;
     this.askAmount(`<span class="ns-cardic" style="--rc:${it.color}">${it.icon}</span><div class="nm">${it.name}</div>`, `${it.sub} · ช่องละ ${stack}`, max, 1,
       (n) => n * it.price, (n) => {
         if (gd.kind === 'pot') this.g.backend.buyPotion(gd.potion, gd.size, n);
         else if (gd.kind === 'phoenix') this.g.backend.buyPhoenix(n);
         else this.g.backend.buyReturnScroll(n);
-        this.say(`ขอบใจนะ! <span class="hl">${it.name} ×${n}</span> ใช้ให้คุ้มล่ะ`);
+        this.line('bought', it.name, n);
       }, 'ซื้อ', stack);
   }
 
@@ -398,12 +410,12 @@ export class NpcShopPane {
     if (!entry) return;
     const price = buybackPrice(entry);
     g.hud.hideTip();
-    if (g.player.gold < price) return this.say('ทองไม่พอซื้อคืนนะ');
-    if (!g.player.hasBagSpace('gear')) return this.say('กระเป๋าเต็มแล้ว! ขายอะไรออกก่อนสิ');
+    if (g.player.gold < price) return this.line('poor');
+    if (!g.player.hasBagSpace('gear')) return this.line('full');
     this.confirm('ซื้อคืน', [entry.item], price, [], () => {
       if (g.player.buyback[i]?.item.uid !== entry.item.uid) return;
       g.backend.buyBack(i, entry.item.uid);
-      this.say(`เอ้า คืนให้แล้ว ${nameHtml(entry.item)} ดูแลให้ดีล่ะ`);
+      this.line('boughtBack', entryName(entry.item));
     }, 'จ่าย');
   }
 

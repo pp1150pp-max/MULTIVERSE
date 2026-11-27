@@ -77,7 +77,7 @@ export class NpcDialog {
     close.onclick = () => this.close();
     const back = el('button', 'nt-back', '◀ กลับไปคุย');
     back.onclick = () => this.leaveShop(true);
-    this.shopPane = new NpcShopPane(g, (html) => this.say(html, true));
+    this.shopPane = new NpcShopPane(g, (text) => this.say(text));
     this.win.append(this.scene, this.face, this.answers, box, this.shopPane.root, back, close);
     document.getElementById('hud')!.append(this.win);
   }
@@ -146,15 +146,11 @@ export class NpcDialog {
     }));
   }
 
-  /** What the NPC says: in the text box, or (shopping) the bubble beside the medallion. `html` = trusted markup of ours. */
-  private say(line: string, html = false): void {
-    if (html) this.text.innerHTML = line;
-    else this.text.textContent = line;
+  /** What the NPC says: in the text box, and (shopping) the bubble beside the medallion. Plain text. */
+  private say(line: string): void {
+    this.text.textContent = line;
     this.next.classList.toggle('hidden', !this.story);
-    if (this.shopping) {
-      if (html) this.shopPane.setLine(line);
-      else this.shopPane.setLine(this.text.innerHTML);
-    }
+    if (this.shopping) this.shopPane.setLine(line);
   }
 
   /** Whether the merchant's shop shows inside this window (/admin: talk window on and "ร้านพ่อค้าในหน้าต่างคุย" on). */
@@ -181,9 +177,7 @@ export class NpcDialog {
     const look = npcLook(id, this.g.backend.zone.town);
     this.shopPane.open(tab, this.face.classList.contains('hidden') ? '' : this.face.src, !!look.portrait);
     this.win.classList.add('shop');
-    this.say(tab === 'bb'
-      ? 'อ้าว เปลี่ยนใจเหรอ? ของที่ขายไปซื้อคืนได้ แต่แพงขึ้น 20% นะ'
-      : 'เลือกดูได้ตามสบาย! อยากขายอะไรก็คลิกของในกระเป๋ามาได้เลย', true);
+    this.shopPane.line(tab === 'bb' ? 'openBuyback' : 'open');
   }
 
   /** Back from the shop: `talk` = to the talk window (◀), else the window is closing. */

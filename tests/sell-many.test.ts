@@ -7,7 +7,7 @@ import { sellValue } from '../src/shared/data/enhance';
 import { makeItem } from '../src/shared/data/items';
 import { anyStackValue } from '../src/shared/data/potions';
 import type { BagEntry, Item } from '../src/shared/types';
-import { checkNpcTalkTuning, codeNpcTalk, mergeNpcTalk, npcTalkChanges } from '../src/shared/npcTalk';
+import { checkNpcTalkTuning, codeNpcTalk, mergeNpcTalk, npcTalkChanges, SHOP_LINE_KEYS } from '../src/shared/npcTalk';
 import { finish, ok } from './check';
 
 const sim = new Sim(Object.values(ZONES)[0]);
@@ -84,5 +84,16 @@ ok('tuning' in t2 && t2.tuning === undefined, 'on (the code value) is not saved'
 ok('error' in checkNpcTalkTuning({ shopPane: 'x' }, true), 'not on/off: refused');
 ok(mergeNpcTalk({ shopPane: false }).shopPane === false && mergeNpcTalk({}).shopPane === true, 'merge');
 ok(npcTalkChanges(codeNpcTalk(), mergeNpcTalk({ shopPane: false })).some((l) => l.includes('ร้านพ่อค้าในหน้าต่างคุย')), 'audit line');
+
+// The merchant's shop lines (npcTalk.shop), edited on /admin.
+ok(SHOP_LINE_KEYS.every((k) => codeNpcTalk().shop[k].length > 0), 'every shop line has a code default');
+const t3 = checkNpcTalkTuning({ shop: { sold: ['  เอาไป {0} G  ', ''] } }, true);
+ok('tuning' in t3 && JSON.stringify(t3.tuning?.shop) === JSON.stringify({ sold: ['เอาไป {0} G'] }), 'a changed line is saved trimmed, empty rows dropped');
+const t4 = checkNpcTalkTuning({ shop: { sold: codeNpcTalk().shop.sold } }, true);
+ok('tuning' in t4 && t4.tuning === undefined, 'the code lines are not saved');
+ok('error' in checkNpcTalkTuning({ shop: { nope: ['x'] } }, true), 'unknown line key refused');
+ok('error' in checkNpcTalkTuning({ shop: { sold: ['x'.repeat(200)] } }, true), 'too long a line refused');
+ok(mergeNpcTalk({ shop: { poor: ['ไม่มีตังค์'] } }).shop.poor[0] === 'ไม่มีตังค์' && mergeNpcTalk({}).shop.poor[0] === codeNpcTalk().shop.poor[0], 'merge shop lines');
+ok(npcTalkChanges(codeNpcTalk(), mergeNpcTalk({ shop: { poor: ['ไม่มีตังค์'] } })).some((l) => l.includes('บทพูดร้านพ่อค้า')), 'shop line audit');
 
 finish('sell-many');
