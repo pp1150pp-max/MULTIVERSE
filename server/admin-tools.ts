@@ -116,6 +116,7 @@ function accountRows(db: Db, world: GameWorld): AdminAccountRow[] {
   const online = new Set(world.onlineAccounts());
   const now = Date.now();
   const google = new Map(db.googleLinks().map((l) => [l.accountId, l.email]));
+  const withPassword = db.passwordAccounts();
   return db.adminAccounts().map((a) => {
     const chars = a.chars.map((c) => {
       const live = world.livePlayer(c.id);
@@ -139,6 +140,7 @@ function accountRows(db: Db, world: GameWorld): AdminAccountRow[] {
       stashSize: stash ? stash.size : a.stashSize,
       bannedUntil: banned ? a.banUntil : null,
       google: google.get(a.id) ?? null,
+      password: withPassword.has(a.id),
       banReason: banned ? a.banReason : null,
     };
   });

@@ -71,6 +71,7 @@ export async function renderUsers(): Promise<void> {
       return h('tr', { class: 'click', onclick: () => void openAccount(r.accountId) },
         cell('ชื่อผู้ใช้', h('span', {}, r.guest ? `Guest · ${r.names[0] ?? ''}` : r.username,
           r.bannedUntil ? h('span', { class: 'tag ban' }, 'แบน') : null,
+          !r.guest && r.password ? h('span', { class: 'tag', title: 'เข้าได้ด้วยชื่อผู้ใช้ + รหัสผ่าน' }, '🔑') : null,
           r.google ? h('span', { class: 'tag', title: `Google: ${r.google}` }, 'G') : null), 'head'),
         cell('ประเภท', r.guest ? 'Guest' : 'บัญชีจริง'),
         cell('สิทธิ์', r.role ? h('span', { class: 'role' }, roleLabel(r.role)) : '–'),
