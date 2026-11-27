@@ -214,4 +214,9 @@ export const EN_GAME: Record<string, string> = {
   'ความเร็วเคลื่อนที่': 'Move speed',
   'หีบสมบัติ': 'Treasure chest',
   'ศาลเจ้า': 'Shrine',
+  '{0} G + ของ {1} ชิ้น{2}': '{0} G + {1} items{2}',
+  'ส้ม {0}': 'orange {0}',
+  'ม่วง {0}': 'purple {0}',
+  'เปิดหีบสมบัติได้ {0} — ตกรอบหีบ เก็บได้เฉพาะคุณ (หีบนี้กลับมาใน {1})': 'Opened a treasure chest: {0} — on the ground round it, only you can pick them up (this chest is back in {1})',
+  'ของในหีบ: {0}': 'In the chest: {0}',
 };

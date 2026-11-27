@@ -72,7 +72,14 @@ ok(!sim.chestHere(chest.id) && sim.chestsGone().includes(chest.id), 'opened: the
 const mid = (zone.levels[0] + zone.levels[1]) / 2;
 const got = p.gold - gold0;
 ok(got >= Math.floor(cfg.goldPerLevel * mid * 0.7) && got <= Math.ceil(cfg.goldPerLevel * mid * 1.3), `gold ${got} within 50 × Lv ${mid} ± 30%`);
-ok(p.bag.some((e) => !!e), 'one prize went into the bag');
+{
+  const mine = sim.loots.filter((l) => l.owner === p.id && Math.hypot(l.x - chest.x, l.z - chest.z) < 4);
+  const purple = mine.filter((l) => l.kind.type === 'item' && l.kind.item.rarity === 'epic').length;
+  ok(mine.length === cfg.pieces, `${cfg.pieces} pieces on the ground round the chest (${mine.length})`);
+  ok(purple >= cfg.epicSure, `at least ${cfg.epicSure} purple (${purple})`);
+  ok(mine.every((l) => l.ownerUntil > sim.time + 30) && !mine[0].canTake(sim.players.find((x) => x !== p) ?? ({ id: -1, partyId: null } as never), sim.time), 'only the opener may take them while they lie there');
+  ok(p.bag.every((e) => !e), 'nothing went straight into the bag');
+}
 
 // Someone else (a guest: guests may open chests too) can't open it now.
 const g = sim.addPlayer({ name: 'Guest', classId: 'gunslinger', level: 3, exp: 0, gold: 0, equipment: {}, bag: [] });
@@ -87,17 +94,23 @@ ok(sim.startChest(g, chest.id), 'the guest can open the chest once it is back');
 run(cfg.openSec + 0.3);
 ok(!sim.chestHere(chest.id) && g.gold > 0, 'the guest got the gold');
 
-// Bag full: the prize lies at the chest, for the opener only.
+// The table's odds: purple 15%, orange 5%, rolled again for every piece (many chests: about that share of the rolled pieces).
 {
   const s2 = new Sim(zone);
-  const q = s2.addPlayer({ name: 'Full', classId: 'mage', level: 5, exp: 0, gold: 0, equipment: {}, bag: [] });
-  q.bag = q.bag.map(() => ({ stone: 'drill', count: 10 }) as never);
+  const q = s2.addPlayer({ name: 'Many', classId: 'mage', level: 5, exp: 0, gold: 0, equipment: {}, bag: [] });
   q.x = chest.x; q.z = chest.z + 1;
-  s2.monsters = [];
-  const before = s2.loots.length;
-  s2.openChest(q, chest);
-  const drop = s2.loots[s2.loots.length - 1];
-  ok(s2.loots.length === before + 1 && drop.owner === q.id && drop.ownerUntil > s2.time + 30, 'bag full: dropped at the chest, only the opener may take it while it lies there');
+  let rolled = 0, purple = 0, orange = 0;
+  for (let i = 0; i < 400; i++) {
+    s2.loots = [];
+    s2.openChest(q, chest);
+    const items = s2.loots.map((l) => (l.kind.type === 'item' ? l.kind.item.rarity : ''));
+    rolled += items.length - cfg.epicSure;
+    purple += items.filter((x) => x === 'epic').length - cfg.epicSure;
+    orange += items.filter((x) => x === 'legendary').length;
+  }
+  ok(Math.abs(purple / rolled - 0.15) < 0.03, `rolled purple ≈ 15% (${((purple / rolled) * 100).toFixed(1)}%)`);
+  ok(Math.abs(orange / rolled - 0.05) < 0.02, `orange ≈ 5% (${((orange / rolled) * 100).toFixed(1)}%)`);
+  ok('error' in checkTreasureTuning({ pieces: 3, epicSure: 5 }, true), 'more sure purples than pieces: refused');
 }
 
 // ---- shrines

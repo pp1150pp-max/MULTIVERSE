@@ -1069,21 +1069,28 @@ export class Sim {
     const gold = chestGold(cfg, this.zone.levels, r);
     p.gold += gold;
     const key = this.zone.lair ? BOSS_KEY[this.zone.lair.boss] : undefined;
-    const row = rollChestRow(chestOdds(cfg, !!key), r);
-    const got = row ? this.chestPrize(p, row, key, r) : null;
-    const fits = !got || p.canFit(got.kind);
-    const parts = [`${gold.toLocaleString()} G`, ...(got ? [fits ? got.text : `${got.text} (กระเป๋าเต็ม ตกที่พื้น)`] : [])];
-    if (got) {
-      if (fits) this.giveLootKind(p, got.kind);
-      else {
-        // Only the opener may pick it up, for as long as it lies there (owner 2026-11-27).
-        const [x, z] = this.lootSpot(c.x, c.z, 0.8);
-        this.loots.push(new Loot(this.newId(), x, z, c.x, c.z, got.kind, { owner: p.id, ownerParty: null, ownerUntil: this.time + DROP_LIFE + 5 }));
-      }
+    // Pieces on the ground around the chest (owner 2026-11-27: 10, 1 surely purple, the rest rolled, repeats allowed). Only the
+    // opener may pick them up, for as long as they lie there.
+    const odds = chestOdds(cfg, !!key);
+    const epic = cfg.rows.find((x) => x.prize.kind === 'gear' && x.prize.rarity === 'epic');
+    const got: { kind: LootKind; text: string; color: string }[] = [];
+    for (let i = 0; i < cfg.pieces; i++) {
+      const row = i < cfg.epicSure && epic ? epic : rollChestRow(odds, r);
+      const g = row ? this.chestPrize(p, row, key, r) : null;
+      if (!g) continue;
+      got.push(g);
+      const [x, z] = this.lootSpot(c.x, c.z, 0.7 + r() * 1.6);
+      this.loots.push(new Loot(this.newId(), x, z, c.x, c.z, g.kind, { owner: p.id, ownerParty: null, ownerUntil: this.time + DROP_LIFE + 5 }));
     }
+    const count = (rar: string) => got.filter((g) => g.kind.type === 'item' && g.kind.item.rarity === rar).length;
+    const [purple, orange] = [count('epic'), count('legendary')];
+    const best = orange ? got.find((g) => g.kind.type === 'item' && g.kind.item.rarity === 'legendary') : got.find((g) => g.kind.type === 'item' && g.kind.item.rarity === 'epic');
+    const rare = [orange ? `ส้ม ${orange}` : '', purple ? `ม่วง ${purple}` : ''].filter(Boolean).join(' ');
+    const summary = `${gold.toLocaleString()} G + ของ ${got.length} ชิ้น${rare ? ` (${rare})` : ''}`;
     this.fx('burst', c.x, 0.8, c.z, '#ffd24a', 26, 4);
-    this.text(p.x, p.topY, p.z, `📦 ${parts.join(' + ')}`, 'lvl', 1.6, p.id);
-    this.log(`เปิดหีบสมบัติได้ ${parts.join(' + ')} (หีบนี้กลับมาใน ${fmtWait(cfg.chestRespawn)})`, got?.color ?? '#f2c230', p.id);
+    this.text(p.x, p.topY, p.z, `📦 ${summary}`, 'lvl', 1.6, p.id);
+    this.log(`เปิดหีบสมบัติได้ ${summary} — ตกรอบหีบ เก็บได้เฉพาะคุณ (หีบนี้กลับมาใน ${fmtWait(cfg.chestRespawn)})`, best?.color ?? '#f2c230', p.id);
+    if (got.length) this.log(`ของในหีบ: ${got.map((g) => g.text).join(', ')}`, best?.color ?? '#f2c230', p.id);
     this.afterChange(p);
     this.events.push({ t: 'save', to: p.id });
     return true;
@@ -1106,14 +1113,6 @@ export class Sim {
       case 'key':
         return key ? stone(key) : null;
     }
-  }
-
-  /** Puts a drop kind that fits (canFit) straight into the bag. */
-  private giveLootKind(p: Player, k: LootKind): void {
-    if (k.type === 'gold') p.gold += k.amount;
-    else if (k.type === 'item') p.addToBag(k.item);
-    else if (k.type === 'potion') p.addPotions(k.pot, k.size, k.count);
-    else p.addStones(k.stone, k.count);
   }
 
   /**

@@ -1624,7 +1624,7 @@ export class Hud {
     for (const k of SHRINE_BUFFS) {
       const sb = shrineBuffs[k];
       if (!sb || sb.left <= 0 || (k === 'exp' && b.buffTotal)) continue;
-      parts.push(`<div class="buff" style="--bc:#f070c0"><span class="gi">${SHRINE_BUFF_ICON[k]}</span><span>${SHRINE_BUFF_NAME[k]} +${sb.pct}%</span></div>`);
+      parts.push(`<div class="buff" style="--bc:#f070c0"><img class="gi" src="${imgUrl(`assets/sprites/icons/shrine_buff_${k}.png`)}" alt="" draggable="false" onerror="this.outerHTML='${SHRINE_BUFF_ICON[k]}'"><span>${SHRINE_BUFF_NAME[k]} +${sb.pct}%</span></div>`);
       titles.push([`พรจากศาลเจ้า: ${SHRINE_BUFF_NAME[k]} +${sb.pct}%`, `เหลือ ${hms(sb.left)} · หายเมื่อตาย`].map((l) => t(l)).join('\n'));
     }
     const box = $('hud-buffs');

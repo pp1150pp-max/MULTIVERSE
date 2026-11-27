@@ -833,6 +833,13 @@ export class Game {
     return best;
   }
 
+  /** The chest we are opening now ('' = none): the one in reach while our opening bar runs. */
+  private openingChest(): string {
+    if (this.player.chestT <= 0) return '';
+    const t = this.treasureNear();
+    return t?.kind === 'chest' ? t.id : '';
+  }
+
   /** The line over a chest or shrine within reach. */
   private treasurePrompt(tr: { kind: 'chest' | 'shrine'; id: string; buff?: ShrineKind }, key: string): string {
     const p = this.player;
@@ -1019,7 +1026,7 @@ export class Game {
     this.hazardViews.update(this.backend.hazards, this.backend.time, p);
     this.world.update(dt, p.x, p.z);
     const tz = this.backend.terrain.zone.id;
-    this.world.treasure?.update(performance.now() / 1000, this.backend.chestsGone, (id) => (p.shrineCd[`${tz}:${id}`] ?? 0) > 0, currentBalance().treasure);
+    this.world.treasure?.update(performance.now() / 1000, this.backend.chestsGone, (id) => (p.shrineCd[`${tz}:${id}`] ?? 0) > 0, currentBalance().treasure, this.openingChest());
     this.updateCamera(dt);
     this.cosmetics.update();
     this.cashShop.update();

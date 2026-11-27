@@ -25,12 +25,15 @@ export interface ChestRowDef {
 
 const row = (id: string, name: string, prize: ChestPrize, pct: number | null, count = 1): ChestRowDef => ({ id, name, prize, pct, count });
 
-/** The owner's table (2026-11-27, "ใช้ตามที่เสนอ"). One row comes out of every chest. Order here is the order in /admin. */
+/**
+ * The owner's table (2026-11-27, "ใช้ตามที่เสนอ"; purple 15% and orange 5% the same day). Every chest drops TreasureConfig.pieces
+ * pieces: epicSure of them are always purple gear, each of the others is one roll of this table (repeats allowed). Order = /admin.
+ */
 export const CHEST_ROWS: readonly ChestRowDef[] = [
   row('gear_uncommon', 'อุปกรณ์เขียว (ดี)', { kind: 'gear', rarity: 'uncommon' }, 30),
   row('gear_rare', 'อุปกรณ์ฟ้า (หายาก)', { kind: 'gear', rarity: 'rare' }, 15),
-  row('gear_epic', 'อุปกรณ์ม่วง (มหากาพย์)', { kind: 'gear', rarity: 'epic' }, 3),
-  row('gear_legendary', 'อุปกรณ์ส้ม (ตำนาน)', { kind: 'gear', rarity: 'legendary' }, 0.5),
+  row('gear_epic', 'อุปกรณ์ม่วง (มหากาพย์)', { kind: 'gear', rarity: 'epic' }, 15),
+  row('gear_legendary', 'อุปกรณ์ส้ม (ตำนาน)', { kind: 'gear', rarity: 'legendary' }, 5),
   row('stone_reroll_values', 'หินสุ่มค่า', { kind: 'stone', stone: 'reroll_values' }, 6),
   row('stone_reroll_stat', 'หินสุ่มสเตตัส', { kind: 'stone', stone: 'reroll_stat' }, 6),
   row('stone_enhance', 'หินตีบวก', { kind: 'stone', stone: 'enhance' }, 3),
@@ -55,6 +58,8 @@ export interface TreasureConfig {
   /** Chests can be opened / shrines touched at all (off: they are not drawn and do nothing). */
   chests: boolean;
   shrines: boolean;
+  /** The glow round chests and shrines (owner 2026-11-27 "ให้มีออร่าด้วย"): a light on the ground, a turning ring, rising sparks. */
+  aura: boolean;
   /** Seconds before an opened chest is back at its spot. */
   chestRespawn: number;
   /** Seconds a player stands at the chest to open it (moving, attacking or being hit stops it; 0 = at once). */
@@ -64,6 +69,9 @@ export interface TreasureConfig {
   /** Gold in every chest: this × the middle level of the map's band, ± goldSpread %. */
   goldPerLevel: number;
   goldSpread: number;
+  /** Pieces one chest drops on the ground around it (owner 2026-11-27: 10), and how many of them are surely purple gear (1). */
+  pieces: number;
+  epicSure: number;
   /** A shrine's buff: how long it lasts, and the seconds before the same player can use the same shrine again. */
   buffSec: number;
   shrineCd: number;
@@ -74,7 +82,7 @@ export interface TreasureConfig {
   rows: ChestRow[];
 }
 
-type NumKey = Exclude<keyof TreasureConfig, 'chests' | 'shrines' | 'rows'>;
+type NumKey = Exclude<keyof TreasureConfig, 'chests' | 'shrines' | 'aura' | 'rows'>;
 /** Each number's name in /admin, its range and the step of its field. */
 export const TREASURE_NUMS: Record<NumKey, { name: string; range: [number, number]; step: number }> = {
   chestRespawn: { name: 'หีบเกิดใหม่หลังถูกเปิด (วิ)', range: [10, 86400], step: 1 },
@@ -82,6 +90,8 @@ export const TREASURE_NUMS: Record<NumKey, { name: string; range: [number, numbe
   range: { name: 'ระยะกดหีบ/ศาล (หน่วย)', range: [1, 6], step: 0.1 },
   goldPerLevel: { name: 'ทองในหีบ (× เลเวลกลางของแมพ)', range: [0, 100000], step: 1 },
   goldSpread: { name: 'ทองแกว่ง ± (%)', range: [0, 100], step: 1 },
+  pieces: { name: 'ของต่อหีบ (ชิ้น ตกพื้นรอบหีบ)', range: [1, 30], step: 1 },
+  epicSure: { name: 'ในนั้นเป็นอุปกรณ์ม่วงแน่นอน (ชิ้น)', range: [0, 30], step: 1 },
   buffSec: { name: 'บัฟศาลเจ้านาน (วิ)', range: [5, 3600], step: 1 },
   shrineCd: { name: 'ใช้ศาลเดิมซ้ำได้อีกใน (วิ ต่อคน)', range: [0, 86400], step: 1 },
   atkPct: { name: 'บัฟพลังโจมตี (%)', range: [0, 200], step: 1 },
@@ -102,8 +112,8 @@ export type TreasureTuning = Partial<Omit<TreasureConfig, 'rows'>> & { rows?: Re
 /** The values in code (owner 2026-11-27). */
 export function codeTreasure(): TreasureConfig {
   return {
-    chests: true, shrines: true,
-    chestRespawn: 600, openSec: 1.5, range: 2.5, goldPerLevel: 50, goldSpread: 30,
+    chests: true, shrines: true, aura: true,
+    chestRespawn: 600, openSec: 1.5, range: 2.5, goldPerLevel: 50, goldSpread: 30, pieces: 10, epicSure: 1,
     buffSec: 180, shrineCd: 600, atkPct: 15, speedPct: 20, expPct: 30,
     rows: CHEST_ROWS.map((r) => ({ ...r, prize: { ...r.prize }, on: true })),
   };
@@ -123,15 +133,15 @@ export function checkTreasureTuning(x: unknown, strict: boolean): { tuning: Trea
   if (!x || typeof x !== 'object' || Array.isArray(x)) return strict ? { error: 'ค่าหีบสมบัติ/ศาลเจ้าไม่ถูกต้อง' } : { tuning: undefined };
   const o = x as Record<string, unknown>;
   if (strict) {
-    const extra = Object.keys(o).find((k) => k !== 'chests' && k !== 'shrines' && k !== 'rows' && !(NUM_KEYS as string[]).includes(k));
+    const extra = Object.keys(o).find((k) => k !== 'chests' && k !== 'shrines' && k !== 'aura' && k !== 'rows' && !(NUM_KEYS as string[]).includes(k));
     if (extra) return { error: `หีบสมบัติ/ศาลเจ้า: ไม่รู้จักค่า "${extra.slice(0, 20)}"` };
   }
   const code = codeTreasure();
   const out: TreasureTuning = {};
-  for (const k of ['chests', 'shrines'] as const) {
+  for (const k of ['chests', 'shrines', 'aura'] as const) {
     const v = o[k];
     if (v === undefined) continue;
-    if (typeof v !== 'boolean') { if (strict) return { error: `สวิตช์${k === 'chests' ? 'หีบสมบัติ' : 'ศาลเจ้า'}ต้องเป็นเปิด/ปิด` }; } else if (v !== code[k]) out[k] = v;
+    if (typeof v !== 'boolean') { if (strict) return { error: `สวิตช์${k === 'chests' ? 'หีบสมบัติ' : k === 'shrines' ? 'ศาลเจ้า' : 'ออร่าหีบ/ศาล'}ต้องเป็นเปิด/ปิด` }; } else if (v !== code[k]) out[k] = v;
   }
   for (const k of NUM_KEYS) {
     const v = o[k];
@@ -178,6 +188,8 @@ export function checkTreasureTuning(x: unknown, strict: boolean): { tuning: Trea
   }
   const fixed = mergeTreasure(out).rows.filter((r) => r.on && r.pct !== null).reduce((a, r) => a + (r.pct ?? 0), 0);
   if (strict && fixed > 100 + 1e-9) return { error: `โอกาสของในหีบที่ตั้งไว้รวมกัน ${+fixed.toFixed(4)}% เกิน 100%` };
+  const m = mergeTreasure(out);
+  if (strict && m.epicSure > m.pieces) return { error: `อุปกรณ์ม่วงแน่นอน (${m.epicSure}) มากกว่าของต่อหีบ (${m.pieces}) ไม่ได้` };
   return { tuning: Object.keys(out).length ? out : undefined };
 }
 
@@ -187,6 +199,7 @@ export function treasureChanges(a: TreasureConfig, b: TreasureConfig): string[] 
   const onOff = (v: boolean) => (v ? 'เปิด' : 'ปิด');
   if (a.chests !== b.chests) out.push(`หีบสมบัติ ${onOff(a.chests)} → ${onOff(b.chests)}`);
   if (a.shrines !== b.shrines) out.push(`ศาลเจ้า ${onOff(a.shrines)} → ${onOff(b.shrines)}`);
+  if (a.aura !== b.aura) out.push(`ออร่าหีบ/ศาล ${onOff(a.aura)} → ${onOff(b.aura)}`);
   for (const k of NUM_KEYS) if (a[k] !== b[k]) out.push(`หีบ/ศาล: ${TREASURE_NUMS[k].name} ${a[k]} → ${b[k]}`);
   const pct = (x: number | null) => (x === null ? 'แบ่งส่วนที่เหลือ' : `${x}%`);
   b.rows.forEach((r, i) => {

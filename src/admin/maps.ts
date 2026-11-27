@@ -57,6 +57,7 @@ async function renderTreasure(view: HTMLElement, h: H, api: Api, onSaved: (tunin
   const msg = h('div', { class: 'msg' });
   const chestsOn = h('input', { type: 'checkbox', checked: cur.chests });
   const shrinesOn = h('input', { type: 'checkbox', checked: cur.shrines });
+  const auraOn = h('input', { type: 'checkbox', checked: cur.aura });
   const keys = Object.keys(TREASURE_NUMS) as (keyof typeof TREASURE_NUMS)[];
   const inputs = Object.fromEntries(keys.map((k) => {
     const d = TREASURE_NUMS[k];
@@ -110,6 +111,7 @@ async function renderTreasure(view: HTMLElement, h: H, api: Api, onSaved: (tunin
     const t: TreasureTuning = {};
     if (chestsOn.checked !== code.chests) t.chests = chestsOn.checked;
     if (shrinesOn.checked !== code.shrines) t.shrines = shrinesOn.checked;
+    if (auraOn.checked !== code.aura) t.aura = auraOn.checked;
     for (const k of keys) {
       const n = Number(inputs[k].value);
       if (Number.isFinite(n) && n !== code[k]) t[k] = n;
@@ -133,17 +135,18 @@ async function renderTreasure(view: HTMLElement, h: H, api: Api, onSaved: (tunin
   };
   view.replaceChildren(
     h('h3', {}, 'หีบสมบัติ + ศาลเจ้า'),
-    h('div', { class: 'muted me-hint' }, 'วางจุดหีบ/ศาลในตัวแก้แมพด้านบน (เครื่องมือ 📍 NPC / ประตู → "＋ เพิ่มหีบสมบัติ" / "＋ เพิ่มศาลเจ้า" เฉพาะแมพฟาร์มชั้น 1) · หีบ: คนแรกที่เปิดได้ทอง + ของ 1 อย่างจากตาราง แล้วหีบหายไปจนเกิดใหม่ · ศาล: แตะแล้วได้บัฟ 1 อย่าง (ตามที่ตั้งในศาล หรือสุ่ม) ใช้ศาลเดิมซ้ำได้ตามคูลดาวน์ต่อคน · Auto Play ไม่เปิดหีบ/ไม่ใช้ศาล · Guest ใช้ได้ · ค่าในวงเล็บ = ค่าในโค้ด'),
+    h('div', { class: 'muted me-hint' }, 'วางจุดหีบ/ศาลในตัวแก้แมพด้านบน (เครื่องมือ 📍 NPC / ประตู → "＋ เพิ่มหีบสมบัติ" / "＋ เพิ่มศาลเจ้า" เฉพาะแมพฟาร์มชั้น 1) · หีบ: คนแรกที่เปิดได้ทอง + ของตามจำนวน "ของต่อหีบ" ตกรอบหีบ (ม่วงแน่นอนตามที่ตั้ง ที่เหลือสุ่มจากตาราง ออกซ้ำได้) แล้วหีบหายไปจนเกิดใหม่ · ศาล: แตะแล้วได้บัฟ 1 อย่าง (ตามที่ตั้งในศาล หรือสุ่ม) ใช้ศาลเดิมซ้ำได้ตามคูลดาวน์ต่อคน · Auto Play ไม่เปิดหีบ/ไม่ใช้ศาล · Guest ใช้ได้ · ค่าในวงเล็บ = ค่าในโค้ด'),
     h('div', { class: 'row bal-line' },
       h('label', { title: `ค่าในโค้ด: ${code.chests ? 'เปิด' : 'ปิด'}` }, chestsOn, ' เปิดหีบสมบัติ (ปิด = หีบไม่แสดง เปิดไม่ได้)'),
-      h('label', { title: `ค่าในโค้ด: ${code.shrines ? 'เปิด' : 'ปิด'}` }, shrinesOn, ' เปิดศาลเจ้า (ปิด = ใช้ไม่ได้ บัฟที่ได้ไปแล้วอยู่จนหมดเวลา)')),
+      h('label', { title: `ค่าในโค้ด: ${code.shrines ? 'เปิด' : 'ปิด'}` }, shrinesOn, ' เปิดศาลเจ้า (ปิด = ใช้ไม่ได้ บัฟที่ได้ไปแล้วอยู่จนหมดเวลา)'),
+      h('label', { title: `ค่าในโค้ด: ${code.aura ? 'เปิด' : 'ปิด'}` }, auraOn, ' ออร่ารอบหีบ/ศาล (แสงบนพื้น วงหมุน ประกายลอยขึ้น สีตามบัฟ หีบสีทอง)')),
     h('div', { class: 'me-grid2' }, ...keys.map((k) => h('label', { title: `${TREASURE_NUMS[k].range[0]}–${TREASURE_NUMS[k].range[1]}` }, `${TREASURE_NUMS[k].name} (${code[k]}) `, inputs[k]))),
-    h('h4', {}, 'ของในหีบ (ได้ทองทุกหีบ + สุ่ม 1 แถว)'),
+    h('h4', {}, 'ของในหีบ (ได้ทองทุกหีบ + ของแต่ละชิ้นที่ไม่ใช่ม่วงแน่นอนสุ่ม 1 แถว ออกซ้ำได้)'),
     h('table', { class: 'tbl' },
       h('tr', {}, h('th', {}, 'เปิด'), h('th', {}, 'ของ'), h('th', {}, 'โอกาส %'), h('th', {}, 'จำนวน'), h('th', {}, ''), h('th', {}, 'ค่าในโค้ด')),
       ...rowInputs.map((x, i) => h('tr', {}, h('td', {}, x.on), h('td', {}, code.rows[i].name), h('td', {}, x.pct), h('td', {}, x.count), h('td', {}, x.real), h('td', { class: 'muted' }, codeRow(i))))),
     sumNote,
-    h('div', { class: 'muted' }, 'อุปกรณ์สุ่มตามเลเวลของคนเปิด (ไม่เกินช่วงเลเวลของแมพ) และอาชีพของคนเปิด · กุญแจ = กุญแจบอสของแมพนั้น · กระเป๋าเต็ม = ของตกที่หีบ เก็บได้เฉพาะคนเปิด'),
+    h('div', { class: 'muted' }, 'อุปกรณ์สุ่มตามเลเวลของคนเปิด (ไม่เกินช่วงเลเวลของแมพ) และอาชีพของคนเปิด · กุญแจ = กุญแจบอสของแมพนั้น · ของทุกชิ้นตกพื้นรอบหีบ เก็บได้เฉพาะคนเปิด (30 วิ แล้วหายแบบของดรอปทั่วไป) · ทองเข้ากระเป๋าเลย'),
     h('div', { class: 'row' }, save, reset, msg),
   );
 }
