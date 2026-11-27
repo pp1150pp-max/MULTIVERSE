@@ -18,6 +18,7 @@ import { setTryOn, tryingOn, tryOnBlocked } from './cosLook';
 import { stoneIcon } from './icons';
 import { imgUrl } from './img';
 import { playSound } from './audio/sfx';
+import type { CashLineKey } from '../shared/npcTalk';
 
 type Tab = 'featured' | 'cos' | 'use' | 'stone' | 'vip';
 const TABS: [Tab, string][] = [['featured', 'แนะนำ'], ['cos', 'ของแต่งตัว'], ['use', 'ของใช้'], ['stone', 'หิน'], ['vip', 'VIP']];
@@ -126,6 +127,10 @@ export class CashShopUI {
   /** The top-up dialog: waiting for the server, and its last answer. */
   private topupBusy = false;
   private topupMsg: { text: string; ok: boolean } | null = null;
+  /** Shown inside the NPC talk window (npcCashPane.ts, owner 2026-11-28). */
+  private inTalk = false;
+  /** The talk window's crystal merchant says something about what just happened (npcTalk.cash lines). */
+  onTalk: ((key: CashLineKey, ...args: (string | number)[]) => void) | null = null;
 
   constructor(private readonly g: Game) {
     this.win = el('div', 'panel hidden');
@@ -180,11 +185,26 @@ export class CashShopUI {
 
   toggle(force?: boolean): void {
     const show = force ?? !this.open;
+    // /admin "แคชช็อปในหน้าต่างคุย" (owner 2026-11-28): opening from anywhere (the top icon too) goes through the
+    // crystal merchant's talk window, which calls openInTalk.
+    if (show && !this.inTalk && this.g.npcDialog.cashInTalk) return this.g.npcDialog.openCash();
+    if (!show) this.inTalk = false;
     this.win.classList.toggle('hidden', !show);
     this.setPeek(null);
     if (!show) this.closeModal();
     this.drawn = '';
     this.update();
+  }
+
+  /** Opens the window inside the NPC talk window (npcDialog moves it in). */
+  openInTalk(): void {
+    this.inTalk = true;
+    this.toggle(true);
+  }
+
+  /** Whether the shop sells now (else it can only be looked at). */
+  get saleOpen(): boolean {
+    return cashCatalogNow().open;
   }
 
   /** Opens on the ของแต่งตัว tab at `slot` (the cosmetics window's "ซื้อในแคชช็อป"). */
@@ -306,7 +326,10 @@ export class CashShopUI {
     this.update();
     const r = await this.g.backend.cashBuy(vipItemId(p.days), 1, p.price);
     this.vipBusy = false;
-    if (r.ok) playSound('cash_buy');
+    if (r.ok) {
+      playSound('cash_buy');
+      this.onTalk?.('vip', fmt(p.days));
+    }
     this.g.hud.log(r.msg, r.ok ? '#7ae8ff' : '#ffcf6a');
     this.drawn = '';
     this.update();
@@ -356,6 +379,7 @@ export class CashShopUI {
   }
 
   private showPackages(on: boolean): void {
+    if (on && !this.packages) this.onTalk?.('topup');
     this.packages = on;
     this.topupMsg = null;
     if (on) this.buying = null;
@@ -414,7 +438,10 @@ export class CashShopUI {
         this.trying = !this.trying;
         setTryOn(this.trying ? { [c.slot]: c.id } : null);
         // The window covers the character: step aside while trying on (the bar brings it back).
-        if (this.trying) this.setPeek(c.name);
+        if (this.trying) {
+          this.setPeek(c.name);
+          this.onTalk?.('tryOn', c.name);
+        }
         // A level-up effect plays once on your character to look at (only you see it).
         if (this.trying && c.slot === 'levelup') this.g.fx.levelUpWith(c.id, this.g.player.x, this.g.player.z, this.g.player.id);
         // A dash effect plays once as if you had just dashed there; pressing dash while trying it on shows it too.
@@ -459,7 +486,10 @@ export class CashShopUI {
     b.busy = false;
     b.ok = r.ok;
     b.msg = r.msg;
-    if (r.ok) playSound('cash_buy');
+    if (r.ok) {
+      playSound('cash_buy');
+      this.onTalk?.('bought', entryName(e));
+    }
     this.g.hud.log(r.msg, r.ok ? '#7ae8ff' : '#ffcf6a');
     this.drawn = '';
     this.update();

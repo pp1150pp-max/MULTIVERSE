@@ -19,6 +19,7 @@ import {
 import { COIN_ICON, emptySlotIcon, itemIcon, stoneIcon } from './icons';
 import { CARD_GROUP_NAME, CARD_GROUPS, CARD_IDS, CARD_RARITIES, type CardGroup } from '../shared/data/cards';
 import { playSound } from './audio/sfx';
+import type { MarketLineKey } from '../shared/npcTalk';
 
 /** What the window needs from the HUD. */
 export interface MarketHost {
@@ -32,7 +33,10 @@ export interface MarketHost {
   markInventory(): void;
 }
 
-type Tab = 'buy' | 'sell' | 'box';
+export type MarketTab = 'buy' | 'sell' | 'box';
+type Tab = MarketTab;
+/** What the talk window's broker says after a market action went through. */
+const TALK_AFTER: Partial<Record<string, MarketLineKey>> = { mktBuy: 'bought', mktList: 'listed', mktCancel: 'cancelled', mktClaim: 'claimed', mktClaimAll: 'claimed' };
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -44,6 +48,8 @@ const FLOOD_RETRY_MS = 150;
 
 export class MarketWindow {
   isOpen = false;
+  /** The talk window's broker says something about what just happened (npcTalk.market lines); null = nobody listens. */
+  onTalk: ((key: MarketLineKey, ...args: (string | number)[]) => void) | null = null;
   private tab: Tab = 'buy';
   // Buy filters, kept while the window is closed and opened again (this play session).
   private kind: MarketKind | null = null;
@@ -125,10 +131,11 @@ export class MarketWindow {
 
   // ------------------------------------------------------------ open / close
 
-  open(): void {
+  /** Opens the window. `inTalk` = inside the NPC talk window (npcMarketPane.ts): no bag window beside it. */
+  open(inTalk = false): void {
     this.isOpen = true;
     $('market').classList.remove('hidden');
-    this.host.toggleBag(true);
+    if (!inTalk) this.host.toggleBag(true);
     this.showTab(this.tab);
     this.refreshMine();
     if (this.tab !== 'buy') this.search(this.page);
@@ -171,14 +178,23 @@ export class MarketWindow {
     if (!e) return;
     if (!marketSellable(e)) {
       this.say('ยาลงขายในตลาดไม่ได้ (ขายให้พ่อค้าแทน)', ERR);
+      this.onTalk?.('notSellable');
       return;
     }
     if (this.g.backend.guest) {
       this.say('Guest ซื้อขายในตลาดไม่ได้ — สมัครสมาชิกเพื่อใช้ตลาด', ERR);
+      this.onTalk?.('guest');
       return;
     }
     this.showTab('sell');
     this.pick(i);
+    this.onTalk?.('pick', isItem(e) ? e.name : STONE_NAME[e.stone]);
+  }
+
+  /** Shows a tab ("buy", "sell", "box"), as its button would. */
+  openTab(t: Tab): void {
+    if (this.isOpen) this.showTab(t);
+    else this.tab = t;
   }
 
   get bagHint(): string {
@@ -294,7 +310,11 @@ export class MarketWindow {
       if (!r.ok && !r.msg) return false;
       this.say(r.msg ?? '', r.ok ? GOLD : ERR);
       if (r.msg) this.host.log(r.msg, r.ok ? GOLD : ERR);
-      if (r.ok) playSound('trade');
+      if (r.ok) {
+        playSound('trade');
+        const said = TALK_AFTER[c.a];
+        if (said) this.onTalk?.(said);
+      }
       if (r.mine) {
         this.mine = r.mine;
         this.renderMine();

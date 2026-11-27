@@ -17,6 +17,7 @@ import { FUSE_COUNT, cardFloor, fuseBlock, fuseInfo } from '../../shared/cardFus
 import { CARD_DEFAULTS, CARD_RARITY_NAME, cardName, isCardId, type CardId } from '../../shared/data/cards';
 import { isStone } from '../../shared/types';
 import { cardIcon } from '../icons';
+import type { ForgeLineKey } from '../../shared/npcTalk';
 
 
 /** The blacksmith's menus: enhance, the two rerolls, drilling (card plan PR 2) and card fusion (card plan 6.1). */
@@ -67,6 +68,8 @@ export class ForgeWindow {
   private rerollPrev: { uid: string; lines: StatLine[] } | null = null;
   /** The cards in the fusion's 3 slots (repeats allowed). */
   private fuseSel: CardId[] = [];
+  /** The talk window's blacksmith says something about what just happened (npcTalk.forge lines); null = nobody listens. */
+  onTalk: ((key: ForgeLineKey, ...args: (string | number)[]) => void) | null = null;
 
   constructor(private readonly g: Game, private readonly host: ForgeHost) {
     $('forge-close').onclick = () => this.closeForge();
@@ -122,8 +125,8 @@ export class ForgeWindow {
 
   // ------------------------------------------------------------ blacksmith
 
-  /** Opens the window (hud.ts closes the other NPC windows first). */
-  openForge(): void {
+  /** Opens the window (hud.ts closes the other NPC windows first). `inTalk` = inside the NPC talk window: no bag window. */
+  openForge(inTalk = false): void {
     this.forgeOpen = true;
     // Owner: the slot starts empty and the bag opens beside it, ready to drag from.
     this.forgeSel = null;
@@ -131,8 +134,23 @@ export class ForgeWindow {
     this.forgeResult('', '');
     $('forge-rates').classList.add('hidden');
     $('forge').classList.remove('hidden');
-    this.host.toggleBag(true);
+    if (!inTalk) this.host.toggleBag(true);
     this.renderForge();
+  }
+
+  /** The menu open now (enhance, a reroll, drill, fuse). */
+  get mode(): ForgeMode {
+    return this.forgeMode;
+  }
+
+  /** The label of a menu, as its button reads ("ตีบวก", "สุ่มค่าตัวเลข"…). */
+  modeLabel(mode = this.forgeMode): string {
+    return document.querySelector<HTMLElement>(`#forge-menu [data-mode="${mode}"]`)?.textContent?.trim() ?? mode;
+  }
+
+  /** The uid of the item in the slot (null = empty). */
+  get selected(): string | null {
+    return this.forgeSel;
   }
 
   closeForge(): void {
@@ -176,9 +194,19 @@ export class ForgeWindow {
     }
     if (entry?.uid !== this.forgeSel) this.rerollPrev = null;
     if (this.forgeAuto && entry?.uid !== this.forgeAuto.uid) this.stopForgeAuto('เปลี่ยนอุปกรณ์');
+    const changed = !!entry && entry.uid !== this.forgeSel;
     this.forgeSel = entry?.uid ?? null;
     this.forgeResult('', '');
     this.renderForge();
+    if (changed && entry) this.talkAbout(itemName(entry));
+  }
+
+  /** After an item goes in: what the blacksmith says (it can't be done for gold/stones, or just the item). */
+  private talkAbout(name: string): void {
+    const why = $('forge-go').textContent ?? '';
+    if (why.includes('ทองไม่พอ')) this.onTalk?.('poor');
+    else if (/ไม่พอ|ไม่มี/.test(why)) this.onTalk?.('noStone');
+    else this.onTalk?.('place', name);
   }
 
   /** The result that shows over the slot after an attempt (cls: ok / fail, '' clears it). */
@@ -306,6 +334,8 @@ export class ForgeWindow {
     if (!this.forgeAuto) return;
     this.forgeAuto = null;
     this.host.log(`🔨 ตีบวก Auto หยุด: ${why}`, '#c9a8ff');
+    if (why === 'ทองไม่พอ') this.onTalk?.('poor');
+    else if (/ไม่พอ|หมด$/.test(why)) this.onTalk?.('noStone');
     if (this.forgeOpen && !this.enhancing) this.renderForge();
   }
 
@@ -476,6 +506,7 @@ export class ForgeWindow {
     }
     this.rerollPrev = { uid: item.uid, lines: before };
     this.forgeResult('ok', `${REROLL_NAME[kind]}แล้ว`);
+    this.onTalk?.('reroll', REROLL_NAME[kind]);
     this.host.markInventory();
     this.renderForge();
   }
@@ -516,8 +547,13 @@ export class ForgeWindow {
     const [out] = await Promise.all([this.g.backend.drill(item.uid), this.swingHammer(), this.forgeCdDone()])
       .finally(() => (this.enhancing = false));
     if (!out) this.forgeResult('fail', 'เจาะไม่สำเร็จ');
-    else if (socketCount(out) > 0) this.forgeResult('ok', `เจาะสำเร็จ! ได้ ${socketCount(out)} ช่อง`);
-    else this.forgeResult('fail', 'เจาะแล้ว… ไม่ได้ช่อง');
+    else if (socketCount(out) > 0) {
+      this.forgeResult('ok', `เจาะสำเร็จ! ได้ ${socketCount(out)} ช่อง`);
+      this.onTalk?.('drillOk', socketCount(out));
+    } else {
+      this.forgeResult('fail', 'เจาะแล้ว… ไม่ได้ช่อง');
+      this.onTalk?.('drillNone');
+    }
     this.host.markInventory();
     this.renderForge();
   }
@@ -639,6 +675,7 @@ export class ForgeWindow {
     this.fuseSel = [];
     if (got && isCardId(got)) {
       this.forgeResult('ok', `ได้${cardName(got)}!`);
+      this.onTalk?.('fuse', cardName(got));
       openCardView(got, gameSocketHost(this.g));
     } else this.forgeResult('fail', 'รวมการ์ดไม่สำเร็จ');
     this.host.markInventory();
@@ -705,7 +742,9 @@ export class ForgeWindow {
     // Short enough for one line on the narrow stage (owner 2026-11-18); forgeResult shrinks it if it still isn't.
     if (result === 'success') {
       this.forgeResult('ok', `สำเร็จ! ระดับขึ้นเป็น +${plusOf(item)}`);
+      this.onTalk?.('success', `+${plusOf(item)}`);
     } else {
+      this.onTalk?.(result === 'drop' ? 'drop' : result === 'saved' ? 'saved' : 'fail', `+${plusOf(item)}`);
       this.forgeResult('fail', result === 'drop' ? `ล้มเหลว! ระดับลดลงเหลือ +${plusOf(item)}`
         : result === 'saved' ? `ล้มเหลว… หินกันระดับลด ยังเป็น +${plusOf(item)}`
         : 'ล้มเหลว… ระดับเท่าเดิม');
