@@ -463,6 +463,7 @@ export class CashShopUI {
     const line = b.msg || err || '';
     if (line) box.append(el('div', b.msg && b.ok ? 'cash-msg ok' : 'cash-msg', line));
     const btns = el('div', 'cash-dialog-btns');
+    if (b.msg && b.ok) btns.dataset.done = '1';
     btns.append(
       button(b.busy ? 'กำลังซื้อ…' : 'ยืนยันการซื้อ', () => void this.buy(e, b.qty), 'primary', !!err || b.busy),
       button(b.msg && b.ok ? 'ปิด' : 'ยกเลิก', () => {
